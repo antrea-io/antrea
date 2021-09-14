@@ -30,6 +30,7 @@ import (
 	cnitypes "github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types/current"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent/interfacestore"
@@ -42,6 +43,8 @@ import (
 const (
 	notFoundHNSEndpoint = "The endpoint was not found"
 )
+
+type postInterfaceCreateHook func() error
 
 type ifConfigurator struct {
 	hnsNetwork *hcsshim.HNSNetwork
@@ -106,6 +109,7 @@ func (ic *ifConfigurator) configureContainerLink(
 	brSriovVFDeviceID string,
 	podSriovVFDeviceID string,
 	result *current.Result,
+	containerAccess *containerAccessArbitrator,
 ) error {
 	if brSriovVFDeviceID != "" {
 		return fmt.Errorf("OVS hardware offload is not supported on windows")
@@ -152,9 +156,19 @@ func (ic *ifConfigurator) configureContainerLink(
 	ifaceIdx := 1
 	containerIP.Interface = &ifaceIdx
 
-	ifaceName := fmt.Sprintf("vEthernet (%s)", endpoint.Name)
-	if err := util.SetInterfaceMTU(ifaceName, mtu); err != nil {
-		return fmt.Errorf("failed to configure MTU on container interface '%s': %v", ifaceName, err)
+	// MTU is configured only when the infrastructure container is created.
+	if containerID == infraContainerID {
+		// Configure MTU in another separate goroutine to ensure it is executed after the host interface is created.
+		// The reasons include, 1) for containerd runtime, the interface is created by containerd after the CNI
+		// CmdAdd request is returned; 2) for Docker runtime, the interface is created after hcsshim.HotAttachEndpoint,
+		// and the hcsshim call is not synchronized from the observation.
+		return ic.addPostInterfaceCreateHook(infraContainerID, epName, containerAccess, func() error {
+			ifaceName := fmt.Sprintf("%s (%s)", util.ContainerVNICPrefix, epName)
+			if err := util.SetInterfaceMTU(ifaceName, mtu); err != nil {
+				return fmt.Errorf("failed to configure MTU on container interface '%s': %v", ifaceName, err)
+			}
+			return nil
+		})
 	}
 	return nil
 }
@@ -364,7 +378,7 @@ func (ic *ifConfigurator) removeHNSEndpoint(endpoint *hcsshim.HNSEndpoint, conta
 	return nil
 }
 
-// isValidHostNamespace checks if the hostNamespace is valid or not. When the runtime is docker, the hostNamespace
+// isValidHostNamespace checks if the hostNamespace is valid or not. When using Docker runtime, the hostNamespace
 // is not set, and Windows HCN should use a default value "00000000-0000-0000-0000-000000000000". An error returns
 // when removing HostComputeEndpoint in this namespace. This field is set with a valid value when containerd is used.
 func isValidHostNamespace(hostNamespace string) bool {
@@ -503,4 +517,44 @@ func (ic *ifConfigurator) getInterceptedInterfaces(
 // getOVSInterfaceType returns "internal". Windows uses internal OVS interface for container vNIC.
 func (ic *ifConfigurator) getOVSInterfaceType() int {
 	return internalOVSInterfaceType
+}
+
+func (ic *ifConfigurator) addPostInterfaceCreateHook(containerID, endpointName string, containerAccess *containerAccessArbitrator, hook postInterfaceCreateHook) error {
+	if containerAccess == nil {
+		return fmt.Errorf("container lock cannot be null")
+	}
+	expectedEP, ok := ic.getEndpoint(endpointName)
+	if !ok {
+		return fmt.Errorf("failed to find HNSEndpoint %s", endpointName)
+	}
+	go func() {
+		ifaceName := fmt.Sprintf("vEthernet (%s)", endpointName)
+		var err error
+		pollErr := wait.PollImmediate(time.Second, 60*time.Second, func() (bool, error) {
+			containerAccess.lockContainer(containerID)
+			defer containerAccess.unlockContainer(containerID)
+			currentEP, ok := ic.getEndpoint(endpointName)
+			if !ok {
+				klog.InfoS("HNSEndpoint doesn't exist in cache, exit current goroutine", "HNSEndpoint Name", endpointName)
+				return true, nil
+			}
+			if currentEP.Id != expectedEP.Id {
+				klog.InfoS("Detected HNSEndpoint change, exit current goroutine", "HNSEndpoint Name", endpointName)
+				return true, nil
+			}
+			if !util.HostInterfaceExists(ifaceName) {
+				klog.InfoS("Waiting for interface to be created", "interface name", ifaceName)
+				return false, nil
+			}
+			if err = hook(); err != nil {
+				return false, err
+			}
+			return true, nil
+		})
+
+		if pollErr != nil {
+			klog.ErrorS(err, "Failed to execute postInterfaceCreateHook", "interface name", ifaceName)
+		}
+	}()
+	return nil
 }
