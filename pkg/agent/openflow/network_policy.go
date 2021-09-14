@@ -1113,8 +1113,11 @@ func (c *client) getPolicyRuleConjunction(ruleID uint32) *policyRuleConjunction 
 
 func (c *client) GetPolicyInfoFromConjunction(ruleID uint32) (string, string) {
 	conjunction := c.getPolicyRuleConjunction(ruleID)
+	if conjunction == nil {
+		return "", ""
+	}
 	priorities := conjunction.ActionFlowPriorities()
-	if conjunction == nil || len(priorities) == 0 {
+	if len(priorities) == 0 {
 		return "", ""
 	}
 	return conjunction.npRef.ToString(), priorities[0]
@@ -1304,9 +1307,12 @@ type flowUpdates struct {
 
 // getMatchFlowUpdates calculates the update for conjuctiveMatchFlows in a policyRuleConjunction to be
 // installed on a new priority.
-func (c *client) getMatchFlowUpdates(conj *policyRuleConjunction, newPriority uint16) (add, del []binding.Flow) {
+func getMatchFlowUpdates(conj *policyRuleConjunction, newPriority uint16) (add, del []binding.Flow) {
 	allClause := []*clause{conj.fromClause, conj.toClause, conj.serviceClause}
 	for _, c := range allClause {
+		if c == nil {
+			continue
+		}
 		for _, ctx := range c.matches {
 			f := ctx.flow
 			updatedFlow := f.CopyToBuilder(newPriority, true).Done()
@@ -1367,16 +1373,19 @@ func (c *client) updateConjunctionActionFlows(conj *policyRuleConjunction, updat
 // updateConjunctionMatchFlows updates the conjuctiveMatchFlows in a policyRuleConjunction.
 func (c *client) updateConjunctionMatchFlows(conj *policyRuleConjunction, newPriority uint16) {
 	allClause := []*clause{conj.fromClause, conj.toClause, conj.serviceClause}
-	for _, clause := range allClause {
-		for i, ctx := range clause.matches {
+	for _, cl := range allClause {
+		if cl == nil {
+			continue
+		}
+		for i, ctx := range cl.matches {
 			delete(c.globalConjMatchFlowCache, ctx.generateGlobalMapKey())
 			f := ctx.flow
 			updatedFlow := f.CopyToBuilder(newPriority, true).Done()
-			clause.matches[i].flow = updatedFlow
-			clause.matches[i].priority = &newPriority
+			cl.matches[i].flow = updatedFlow
+			cl.matches[i].priority = &newPriority
 		}
 		// update the globalConjMatchFlowCache so that the keys are updated
-		for _, ctx := range clause.matches {
+		for _, ctx := range cl.matches {
 			c.globalConjMatchFlowCache[ctx.generateGlobalMapKey()] = ctx
 		}
 	}
@@ -1412,7 +1421,7 @@ func (c *client) calculateFlowUpdates(updates map[uint16]uint16, table binding.T
 					}
 				}
 			}
-			matchFlowAdd, matchFlowDel := c.getMatchFlowUpdates(conj, newPriority)
+			matchFlowAdd, matchFlowDel := getMatchFlowUpdates(conj, newPriority)
 			addFlows = append(addFlows, matchFlowAdd...)
 			delFlows = append(delFlows, matchFlowDel...)
 		}
