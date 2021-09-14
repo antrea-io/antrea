@@ -107,7 +107,7 @@ func (data *TestData) getWireGuardPeerEndpointsWithHandshake(nodeName string) ([
 }
 
 func testPodConnectivity(t *testing.T, data *TestData) {
-	podInfos, deletePods := createPodsOnDifferentNodes(t, data, "differentnodes")
+	podInfos, deletePods := createPodsOnDifferentNodes(t, data, testNamespace, "differentnodes")
 	defer deletePods()
 	numPods := 2
 	data.runPingMesh(t, podInfos[:numPods], agnhostContainerName)
@@ -137,7 +137,7 @@ func testServiceConnectivity(t *testing.T, data *TestData) {
 	// nodeIP() returns IPv6 address if this is a IPv6 cluster.
 	clientPodNodeIP := nodeIP(0)
 	serverPodNode := nodeName(1)
-	svc, cleanup := data.createAgnhostServiceAndBackendPods(t, svcName, serverPodNode, corev1.ServiceTypeNodePort)
+	svc, cleanup := data.createAgnhostServiceAndBackendPods(t, svcName, testNamespace, serverPodNode, corev1.ServiceTypeNodePort)
 	defer cleanup()
 
 	// Create the a hostNetwork Pod on a Node different from the service's backend Pod, so the service traffic will be transferred across the tunnel.

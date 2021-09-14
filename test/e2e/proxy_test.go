@@ -483,7 +483,7 @@ func testProxyServiceSessionAffinity(ipFamily *corev1.IPFamily, ingressIPs []str
 	defer data.deletePodAndWait(defaultTimeout, nginx, testNamespace)
 	require.NoError(t, err)
 	require.NoError(t, data.podWaitForRunning(defaultTimeout, nginx, testNamespace))
-	svc, err := data.createNginxClusterIPService(nginx, true, ipFamily)
+	svc, err := data.createNginxClusterIPService(nginx, testNamespace, true, ipFamily)
 	defer data.deleteServiceAndWait(defaultTimeout, nginx)
 	require.NoError(t, err)
 	_, err = data.createNginxLoadBalancerService(true, ingressIPs, ipFamily)
@@ -560,7 +560,7 @@ func testProxyHairpin(ipFamily *corev1.IPFamily, data *TestData, t *testing.T) {
 	defer data.deletePodAndWait(defaultTimeout, busybox, testNamespace)
 	require.NoError(t, err)
 	require.NoError(t, data.podWaitForRunning(defaultTimeout, busybox, testNamespace))
-	svc, err := data.createService(busybox, 80, 80, map[string]string{"antrea-e2e": busybox}, false, false, corev1.ServiceTypeClusterIP, ipFamily)
+	svc, err := data.createService(busybox, testNamespace, 80, 80, map[string]string{"antrea-e2e": busybox}, false, false, corev1.ServiceTypeClusterIP, ipFamily)
 	defer data.deleteServiceAndWait(defaultTimeout, busybox)
 	require.NoError(t, err)
 
@@ -607,7 +607,7 @@ func testProxyEndpointLifeCycle(ipFamily *corev1.IPFamily, data *TestData, t *te
 	require.NoError(t, data.createNginxPodOnNode(nginx, testNamespace, nodeName, false))
 	nginxIPs, err := data.podWaitForIPs(defaultTimeout, nginx, testNamespace)
 	require.NoError(t, err)
-	_, err = data.createNginxClusterIPService(nginx, false, ipFamily)
+	_, err = data.createNginxClusterIPService(nginx, testNamespace, false, ipFamily)
 	defer data.deleteServiceAndWait(defaultTimeout, nginx)
 	require.NoError(t, err)
 
@@ -707,7 +707,7 @@ func testProxyServiceLifeCycle(ipFamily *corev1.IPFamily, ingressIPs []string, d
 	} else {
 		nginxIP = nginxIPs.ipv4.String()
 	}
-	svc, err := data.createNginxClusterIPService(nginx, false, ipFamily)
+	svc, err := data.createNginxClusterIPService(nginx, testNamespace, false, ipFamily)
 	defer data.deleteServiceAndWait(defaultTimeout, nginx)
 	require.NoError(t, err)
 	_, err = data.createNginxLoadBalancerService(false, ingressIPs, ipFamily)

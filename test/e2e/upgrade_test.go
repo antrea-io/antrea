@@ -64,7 +64,7 @@ func TestUpgrade(t *testing.T) {
 	namespace := randName("test-namespace-")
 
 	t.Logf("Creating namespace '%s'", namespace)
-	if err := data.createNamespace(namespace); err != nil {
+	if err := data.createNamespace(namespace, nil); err != nil {
 		t.Fatalf("Error when creating namespace '%s'", namespace)
 	}
 	defer data.deleteNamespace(namespace, defaultTimeout)

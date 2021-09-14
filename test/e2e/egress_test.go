@@ -126,7 +126,7 @@ ip netns exec %[1]s /agnhost netexec
 			}); err != nil {
 				t.Fatalf("Failed to create server Pod: %v", err)
 			}
-			defer deletePodWrapper(t, data, tt.fakeServer)
+			defer deletePodWrapper(t, data, testNamespace, tt.fakeServer)
 			if err := data.podWaitForRunning(defaultTimeout, tt.fakeServer, testNamespace); err != nil {
 				t.Fatalf("Error when waiting for Pod '%s' to be in the Running state", tt.fakeServer)
 			}
@@ -136,14 +136,14 @@ ip netns exec %[1]s /agnhost netexec
 			if err := data.createBusyboxPodOnNode(localPod, testNamespace, egressNode, false); err != nil {
 				t.Fatalf("Failed to create local Pod: %v", err)
 			}
-			defer deletePodWrapper(t, data, localPod)
+			defer deletePodWrapper(t, data, testNamespace, localPod)
 			if err := data.podWaitForRunning(defaultTimeout, localPod, testNamespace); err != nil {
 				t.Fatalf("Error when waiting for Pod '%s' to be in the Running state", localPod)
 			}
 			if err := data.createBusyboxPodOnNode(remotePod, testNamespace, workerNodeName(1), false); err != nil {
 				t.Fatalf("Failed to create remote Pod: %v", err)
 			}
-			defer deletePodWrapper(t, data, remotePod)
+			defer deletePodWrapper(t, data, testNamespace, remotePod)
 			if err := data.podWaitForRunning(defaultTimeout, remotePod, testNamespace); err != nil {
 				t.Fatalf("Error when waiting for Pod '%s' to be in the Running state", remotePod)
 			}

@@ -332,8 +332,8 @@ func NPLTestPodAddMultiPort(t *testing.T) {
 	selector := make(map[string]string)
 	selector["app"] = "agnhost"
 	ipFamily := corev1.IPv4Protocol
-	testData.createServiceWithAnnotations("agnhost1", 80, 80, defaultProtocolTCP, selector, false, false, corev1.ServiceTypeClusterIP, &ipFamily, annotation)
-	testData.createServiceWithAnnotations("agnhost2", 80, 8080, defaultProtocolTCP, selector, false, false, corev1.ServiceTypeClusterIP, &ipFamily, annotation)
+	testData.createServiceWithAnnotations("agnhost1", testNamespace, 80, 80, defaultProtocolTCP, selector, false, false, corev1.ServiceTypeClusterIP, &ipFamily, annotation)
+	testData.createServiceWithAnnotations("agnhost2", testNamespace, 80, 8080, defaultProtocolTCP, selector, false, false, corev1.ServiceTypeClusterIP, &ipFamily, annotation)
 	targetProtocols := sets.NewString(protocolToString(defaultProtocolTCP))
 	targetPortsProtocols := map[int]sets.String{80: targetProtocols, 8080: targetProtocols}
 
@@ -396,8 +396,8 @@ func NPLTestPodAddMultiProtocol(t *testing.T) {
 	selector := make(map[string]string)
 	selector["app"] = "agnhost"
 	ipFamily := corev1.IPv4Protocol
-	testData.createServiceWithAnnotations("agnhost1", 80, 8080, defaultProtocolTCP, selector, false, false, corev1.ServiceTypeClusterIP, &ipFamily, annotation)
-	testData.createServiceWithAnnotations("agnhost2", 80, 8080, svcProtocolUDP, selector, false, false, corev1.ServiceTypeClusterIP, &ipFamily, annotation)
+	testData.createServiceWithAnnotations("agnhost1", testNamespace, 80, 8080, defaultProtocolTCP, selector, false, false, corev1.ServiceTypeClusterIP, &ipFamily, annotation)
+	testData.createServiceWithAnnotations("agnhost2", testNamespace, 80, 8080, svcProtocolUDP, selector, false, false, corev1.ServiceTypeClusterIP, &ipFamily, annotation)
 	targetProtocols := sets.NewString(protocolToString(defaultProtocolTCP), protocolToString(svcProtocolUDP))
 	targetPortsProtocols := map[int]sets.String{8080: targetProtocols}
 

@@ -65,7 +65,7 @@ func testPodAssignIP(t *testing.T, data *TestData) {
 	if err := data.createBusyboxPodOnNode(podName, testNamespace, "", false); err != nil {
 		t.Fatalf("Error when creating busybox test Pod: %v", err)
 	}
-	defer deletePodWrapper(t, data, podName)
+	defer deletePodWrapper(t, data, testNamespace, podName)
 
 	t.Logf("Checking Pod networking")
 	if podIPs, err := data.podWaitForIPs(defaultTimeout, podName, testNamespace); err != nil {
@@ -272,7 +272,7 @@ func testIPAMRestart(t *testing.T, data *TestData) {
 	var err error
 	defer func() {
 		for _, pod := range pods {
-			deletePodWrapper(t, data, pod)
+			deletePodWrapper(t, data, testNamespace, pod)
 		}
 	}()
 
@@ -731,7 +731,7 @@ func testGratuitousARP(t *testing.T, data *TestData) {
 	if err := data.createBusyboxPodOnNode(podName, testNamespace, nodeName, false); err != nil {
 		t.Fatalf("Error when creating Pod '%s': %v", podName, err)
 	}
-	defer deletePodWrapper(t, data, podName)
+	defer deletePodWrapper(t, data, testNamespace, podName)
 
 	antreaPodName, err := data.getAntreaPodOnNode(nodeName)
 	if err != nil {

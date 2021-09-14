@@ -53,18 +53,18 @@ func TestConnectivity(t *testing.T) {
 	})
 	t.Run("testPodConnectivityAfterAntreaRestart", func(t *testing.T) {
 		skipIfHasWindowsNodes(t)
-		testPodConnectivityAfterAntreaRestart(t, data)
+		testPodConnectivityAfterAntreaRestart(t, data, testNamespace)
 	})
 	t.Run("testOVSRestartSameNode", func(t *testing.T) {
 		skipIfProviderIs(t, "kind", "test not valid for the netdev datapath type")
 		skipIfNotIPv4Cluster(t)
 		skipIfHasWindowsNodes(t)
-		testOVSRestartSameNode(t, data)
+		testOVSRestartSameNode(t, data, testNamespace)
 	})
 	t.Run("testOVSFlowReplay", func(t *testing.T) {
 		skipIfProviderIs(t, "kind", "stopping OVS daemons create connectivity issues")
 		skipIfHasWindowsNodes(t)
-		testOVSFlowReplay(t, data)
+		testOVSFlowReplay(t, data, testNamespace)
 	})
 	t.Run("testPingLargeMTU", func(t *testing.T) {
 		skipIfNumNodesLessThan(t, 2)
@@ -77,7 +77,11 @@ func waitForPodIPs(t *testing.T, data *TestData, podInfos []podInfo) map[string]
 	podIPs := make(map[string]*PodIPs)
 	for _, pi := range podInfos {
 		podName := pi.name
-		if podIP, err := data.podWaitForIPs(defaultTimeout, podName, testNamespace); err != nil {
+		podNamespace := testNamespace
+		if pi.namespace != "" {
+			podNamespace = pi.namespace
+		}
+		if podIP, err := data.podWaitForIPs(defaultTimeout, podName, podNamespace); err != nil {
 			t.Fatalf("Error when waiting for IP for Pod '%s': %v", podName, err)
 		} else {
 			podIPs[podName] = podIP
@@ -98,7 +102,11 @@ func (data *TestData) runPingMesh(t *testing.T, podInfos []podInfo, ctrname stri
 			if pi1.name == pi2.name {
 				continue
 			}
-			if err := data.runPingCommandFromTestPod(pi1, testNamespace, podIPs[pi2.name], ctrname, pingCount, 0); err != nil {
+			podNamespace := testNamespace
+			if pi1.namespace != "" {
+				podNamespace = pi1.namespace
+			}
+			if err := data.runPingCommandFromTestPod(pi1, podNamespace, podIPs[pi2.name], ctrname, pingCount, 0); err != nil {
 				t.Errorf("Ping '%s' -> '%s': ERROR (%v)", pi1.name, pi2.name, err)
 			} else {
 				t.Logf("Ping '%s' -> '%s': OK", pi1.name, pi2.name)
@@ -125,7 +133,7 @@ func (data *TestData) testPodConnectivitySameNode(t *testing.T) {
 		if err := data.createAgnhostPodOnNode(podInfos[i].name, testNamespace, workerNode, false); err != nil {
 			t.Fatalf("Error when creating agnhost test Pod '%s': %v", podInfos[i], err)
 		}
-		defer deletePodWrapper(t, data, podInfos[i].name)
+		defer deletePodWrapper(t, data, testNamespace, podInfos[i].name)
 	}
 
 	data.runPingMesh(t, podInfos, agnhostContainerName)
@@ -137,16 +145,16 @@ func testPodConnectivityOnSameNode(t *testing.T, data *TestData) {
 	data.testPodConnectivitySameNode(t)
 }
 
-func (data *TestData) testHostPortPodConnectivity(t *testing.T) {
+func (data *TestData) testHostPortPodConnectivity(t *testing.T, clientNamespace, serverNamespace string) {
 	// Create a server Pod with hostPort set to 80.
 	hpPodName := randName("test-host-port-pod-")
 	hpPodPort := int32(80)
-	if err := data.createServerPod(hpPodName, testNamespace, "", hpPodPort, true, false); err != nil {
+	if err := data.createServerPod(hpPodName, serverNamespace, "", hpPodPort, true, false); err != nil {
 		t.Fatalf("Error when creating HostPort server Pod: %v", err)
 	}
-	defer deletePodWrapper(t, data, hpPodName)
+	defer deletePodWrapper(t, data, serverNamespace, hpPodName)
 	// Retrieve the IP Address of the Node on which the Pod is scheduled.
-	hpPod, err := data.podWaitFor(defaultTimeout, hpPodName, testNamespace, func(pod *corev1.Pod) (bool, error) {
+	hpPod, err := data.podWaitFor(defaultTimeout, hpPodName, serverNamespace, func(pod *corev1.Pod) (bool, error) {
 		return pod.Status.Phase == corev1.PodRunning, nil
 	})
 	if err != nil {
@@ -155,40 +163,40 @@ func (data *TestData) testHostPortPodConnectivity(t *testing.T) {
 	hpPodHostIP := hpPod.Status.HostIP
 	// Create client Pod to test connectivity.
 	clientName := randName("test-client-")
-	if err := data.createBusyboxPodOnNode(clientName, testNamespace, "", false); err != nil {
+	if err := data.createBusyboxPodOnNode(clientName, clientNamespace, "", false); err != nil {
 		t.Fatalf("Error when creating test client Pod: %v", err)
 	}
-	defer deletePodWrapper(t, data, clientName)
-	if _, err := data.podWaitForIPs(defaultTimeout, clientName, testNamespace); err != nil {
+	defer deletePodWrapper(t, data, clientNamespace, clientName)
+	if _, err := data.podWaitForIPs(defaultTimeout, clientName, clientNamespace); err != nil {
 		t.Fatalf("Error when waiting for IP for Pod '%s': %v", clientName, err)
 	}
 
-	if err = data.runNetcatCommandFromTestPod(clientName, testNamespace, hpPodHostIP, hpPodPort); err != nil {
+	if err = data.runNetcatCommandFromTestPod(clientName, clientNamespace, hpPodHostIP, hpPodPort); err != nil {
 		t.Fatalf("Pod %s should be able to connect %s, but was not able to connect", clientName, net.JoinHostPort(hpPodHostIP, fmt.Sprint(hpPodPort)))
 	}
 }
 
 // testHostPortPodConnectivity checks that a Pod with hostPort set is reachable.
 func testHostPortPodConnectivity(t *testing.T, data *TestData) {
-	data.testHostPortPodConnectivity(t)
+	data.testHostPortPodConnectivity(t, testNamespace, testNamespace)
 }
 
 // createPodsOnDifferentNodes creates agnhost Pods through a DaemonSet. This function returns information of the created
 // Pods as well as a function which will delete the Pods when called. Since Pods can be on Nodes of different OSes, podInfo
 // slice instead of PodName slice is used to inform caller of correct commands and options. Linux and Windows Pods are
 // alternating in this podInfo slice so that the test can cover different connectivity cases between different OSes.
-func createPodsOnDifferentNodes(t *testing.T, data *TestData, tag string) (podInfos []podInfo, cleanup func() error) {
+func createPodsOnDifferentNodes(t *testing.T, data *TestData, namespace, tag string) (podInfos []podInfo, cleanup func() error) {
 	dsName := "connectivity-test" + tag
-	_, cleanup, err := data.createDaemonSet(dsName, testNamespace, agnhostContainerName, agnhostImage, []string{"sleep", "3600"}, nil)
+	_, cleanup, err := data.createDaemonSet(dsName, namespace, agnhostContainerName, agnhostImage, []string{"sleep", "3600"}, nil)
 	if err != nil {
 		t.Fatalf("Error when creating DaemonSet '%s': %v", dsName, err)
 	}
-	if err := data.waitForDaemonSetPods(defaultTimeout, dsName, testNamespace); err != nil {
+	if err := data.waitForDaemonSetPods(defaultTimeout, dsName, namespace); err != nil {
 		t.Fatalf("Error when waiting for DaemonSet Pods to get IPs: %v", err)
 	}
 
 	piMap := map[string][]podInfo{"linux": {}, "windows": {}}
-	pods, err := data.clientset.CoreV1().Pods(testNamespace).List(context.TODO(), metav1.ListOptions{
+	pods, err := data.clientset.CoreV1().Pods(namespace).List(context.TODO(), metav1.ListOptions{
 		LabelSelector: "antrea-e2e=" + dsName,
 	})
 	if err != nil {
@@ -197,7 +205,7 @@ func createPodsOnDifferentNodes(t *testing.T, data *TestData, tag string) (podIn
 
 	for _, p := range pods.Items {
 		os := clusterInfo.nodesOS[p.Spec.NodeName]
-		piMap[os] = append(piMap[os], podInfo{p.Name, os, p.Spec.NodeName})
+		piMap[os] = append(piMap[os], podInfo{p.Name, os, p.Spec.NodeName, namespace})
 	}
 	var linIdx, winIdx int
 	for linIdx != len(piMap["linux"]) && winIdx != len(piMap["windows"]) {
@@ -227,7 +235,7 @@ func (data *TestData) testPodConnectivityDifferentNodes(t *testing.T) {
 		// subnet, all Nodes should have a Pod.
 		numPods = maxPods
 	}
-	podInfos, deletePods := createPodsOnDifferentNodes(t, data, "differentnodes")
+	podInfos, deletePods := createPodsOnDifferentNodes(t, data, testNamespace, "differentnodes")
 	defer deletePods()
 
 	if len(podInfos) > maxPods {
@@ -285,9 +293,9 @@ func (data *TestData) redeployAntrea(t *testing.T, option deployAntreaOptions) {
 
 // testPodConnectivityAfterAntreaRestart checks that restarting antrea-agent does not create
 // connectivity issues between Pods.
-func testPodConnectivityAfterAntreaRestart(t *testing.T, data *TestData) {
+func testPodConnectivityAfterAntreaRestart(t *testing.T, data *TestData, namespace string) {
 	numPods := 2 // can be increased
-	podInfos, deletePods := createPodsOnDifferentNodes(t, data, "antrearestart")
+	podInfos, deletePods := createPodsOnDifferentNodes(t, data, namespace, "antrearestart")
 	defer deletePods()
 
 	data.runPingMesh(t, podInfos[:numPods], agnhostContainerName)
@@ -305,10 +313,10 @@ func testPodConnectivityAfterAntreaRestart(t *testing.T, data *TestData) {
 // take some time for the Agent to replay the flows. This will not impact this test, since we are
 // just testing L2 connectivity betwwen 2 Pods on the same Node, and the default behavior of the
 // br-int bridge is to implement normal L2 forwarding.
-func testOVSRestartSameNode(t *testing.T, data *TestData) {
+func testOVSRestartSameNode(t *testing.T, data *TestData, namespace string) {
 	workerNode := workerNodeName(1)
 	t.Logf("Creating two busybox test Pods on '%s'", workerNode)
-	podNames, podIPs, cleanupFn := createTestBusyboxPods(t, data, 2, testNamespace, workerNode)
+	podNames, podIPs, cleanupFn := createTestBusyboxPods(t, data, 2, namespace, workerNode)
 	defer cleanupFn()
 
 	resCh := make(chan error, 1)
@@ -319,7 +327,7 @@ func testOVSRestartSameNode(t *testing.T, data *TestData) {
 		// utility in busybox does not let us choose a smaller interval than 1 second.
 		count := 25
 		cmd := fmt.Sprintf("arping -c %d %s", count, podIPs[1].ipv4.String())
-		stdout, stderr, err := data.runCommandFromPod(testNamespace, podNames[0], busyboxContainerName, strings.Fields(cmd))
+		stdout, stderr, err := data.runCommandFromPod(namespace, podNames[0], busyboxContainerName, strings.Fields(cmd))
 		if err != nil {
 			return fmt.Errorf("error when running arping command: %v - stdout: %s - stderr: %s", err, stdout, stderr)
 		}
@@ -362,21 +370,22 @@ func testOVSRestartSameNode(t *testing.T, data *TestData) {
 // replaying flows. More precisely this test checks that we have the same number of flows and groups
 // after deleting them and force-restarting the OVS daemons. We also make sure that Pod connectivity
 // still works.
-func testOVSFlowReplay(t *testing.T, data *TestData) {
+func testOVSFlowReplay(t *testing.T, data *TestData, namespace string) {
 	numPods := 2
 	podInfos := make([]podInfo, numPods)
 	for i := range podInfos {
-		podInfos[i].name = randName(fmt.Sprintf("test-pod-%d-", i))
+		podInfos[i].name = generateTestPodName(i, namespace)
+		podInfos[i].namespace = namespace
 	}
 	workerNode := workerNodeName(1)
 
 	t.Logf("Creating %d busybox test Pods on '%s'", numPods, workerNode)
 	for i := range podInfos {
 		podInfos[i].os = clusterInfo.nodesOS[workerNode]
-		if err := data.createBusyboxPodOnNode(podInfos[i].name, testNamespace, workerNode, false); err != nil {
+		if err := data.createBusyboxPodOnNode(podInfos[i].name, namespace, workerNode, false); err != nil {
 			t.Fatalf("Error when creating busybox test Pod '%s': %v", podInfos[i].name, err)
 		}
-		defer deletePodWrapper(t, data, podInfos[i].name)
+		defer deletePodWrapper(t, data, namespace, podInfos[i].name)
 	}
 
 	data.runPingMesh(t, podInfos, busyboxContainerName)
@@ -456,7 +465,7 @@ func testOVSFlowReplay(t *testing.T, data *TestData) {
 func testPingLargeMTU(t *testing.T, data *TestData) {
 	skipIfNumNodesLessThan(t, 2)
 
-	podInfos, deletePods := createPodsOnDifferentNodes(t, data, "largemtu")
+	podInfos, deletePods := createPodsOnDifferentNodes(t, data, testNamespace, "largemtu")
 	defer deletePods()
 	podIPs := waitForPodIPs(t, data, podInfos)
 
