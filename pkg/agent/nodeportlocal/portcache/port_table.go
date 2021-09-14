@@ -69,7 +69,8 @@ type LocalPortOpener interface {
 type localPortOpener struct{}
 
 type PortTable struct {
-	Table           map[int]NodePortData
+	Table           map[int]*NodePortData
+	PodTable        map[string]*NodePortData
 	StartPort       int
 	EndPort         int
 	PodPortRules    rules.PodPortRules
@@ -79,7 +80,8 @@ type PortTable struct {
 
 func NewPortTable(start, end int) (*PortTable, error) {
 	ptable := PortTable{StartPort: start, EndPort: end}
-	ptable.Table = make(map[int]NodePortData)
+	ptable.Table = make(map[int]*NodePortData)
+	ptable.PodTable = make(map[string]*NodePortData)
 	ptable.PodPortRules = rules.InitRules()
 	ptable.LocalPortOpener = &localPortOpener{}
 	if err := ptable.PodPortRules.Init(); err != nil {
@@ -91,23 +93,24 @@ func NewPortTable(start, end int) (*PortTable, error) {
 func (pt *PortTable) CleanupAllEntries() {
 	pt.tableLock.Lock()
 	defer pt.tableLock.Unlock()
-	pt.Table = make(map[int]NodePortData)
+	pt.Table = make(map[int]*NodePortData)
+	pt.PodTable = make(map[string]*NodePortData)
 }
 
 func (pt *PortTable) GetEntry(nodeport int) *NodePortData {
 	pt.tableLock.RLock()
 	defer pt.tableLock.RUnlock()
 	data, _ := pt.Table[nodeport]
-	return &data
+	return data
 }
 
 func (pt *PortTable) GetDataForPodIP(ip string) []NodePortData {
 	pt.tableLock.RLock()
 	defer pt.tableLock.RUnlock()
 	var allData []NodePortData
-	for _, data := range pt.Table {
-		if data.PodIP == ip {
-			allData = append(allData, data)
+	for i := range pt.Table {
+		if (*pt.Table[i]).PodIP == ip {
+			allData = append(allData, *pt.Table[i])
 		}
 	}
 	return allData
@@ -120,12 +123,17 @@ func (pt *PortTable) GetEntryByPodIPPortProtocol(ip string, port int, protocol s
 }
 
 func (pt *PortTable) getEntryByPodIPPortProtocol(ip string, port int, protocol string) *NodePortData {
-	for _, data := range pt.Table {
-		if data.PodIP == ip && data.PodPort == port && data.HasProtocol(protocol) {
-			return &data
-		}
+	data, _ := pt.PodTable[podIPPortFormat(ip, port)]
+	if data != nil && data.HasProtocol(protocol) {
+		return data
 	}
 	return nil
+}
+
+func (pt *PortTable) getEntryByPodIPPort(ip string, port int) *NodePortData {
+	pt.tableLock.RLock()
+	defer pt.tableLock.RUnlock()
+	return pt.PodTable[podIPPortFormat(ip, port)]
 }
 
 func (pt *PortTable) isNodePortAvilableForPodIPProtocol(ip string, nodeport int, podPort int, protocol string) bool {
@@ -180,7 +188,7 @@ func (pt *PortTable) AddRule(podIP string, podPort int, protocol string) (int, e
 		}
 		pt.Table[nodePort] = entry
 	} else {
-		pt.Table[nodePort] = NodePortData{
+		pt.Table[nodePort] = &NodePortData{
 			NodePort: nodePort,
 			PodIP:    podIP,
 			PodPort:  podPort,
@@ -190,6 +198,7 @@ func (pt *PortTable) AddRule(podIP string, podPort int, protocol string) (int, e
 			}},
 		}
 	}
+	pt.PodTable[podIPPortFormat(podIP, podPort)] = pt.Table[nodePort]
 	return nodePort, nil
 }
 
@@ -205,6 +214,7 @@ func (pt *PortTable) DeleteRule(podIP string, podPort int, protocol string) erro
 	}
 	if len(data.Protocols) == 0 {
 		delete(pt.Table, data.NodePort)
+		delete(pt.PodTable, podIPPortFormat(podIP, podPort))
 	}
 	return nil
 }
@@ -222,12 +232,12 @@ func (pt *PortTable) syncRules() error {
 	pt.tableLock.Lock()
 	defer pt.tableLock.Unlock()
 	nplPorts := make([]rules.PodNodePort, 0, len(pt.Table))
-	for _, data := range pt.Table {
-		for _, protocol := range data.Protocols {
+	for i := range pt.Table {
+		for _, protocol := range (*pt.Table[i]).Protocols {
 			nplPorts = append(nplPorts, rules.PodNodePort{
-				NodePort: data.NodePort,
-				PodPort:  data.PodPort,
-				PodIP:    data.PodIP,
+				NodePort: (*pt.Table[i]).NodePort,
+				PodPort:  (*pt.Table[i]).PodPort,
+				PodIP:    (*pt.Table[i]).PodIP,
 				Protocol: protocol.Protocol,
 			})
 		}
@@ -260,7 +270,7 @@ func (pt *PortTable) RestoreRules(allNPLPorts []rules.PodNodePort, synced chan<-
 			}
 			pt.Table[nplPort.NodePort] = entry
 		} else {
-			pt.Table[nplPort.NodePort] = NodePortData{
+			pt.Table[nplPort.NodePort] = &NodePortData{
 				NodePort: nplPort.NodePort,
 				PodPort:  nplPort.PodPort,
 				PodIP:    nplPort.PodIP,
@@ -270,6 +280,7 @@ func (pt *PortTable) RestoreRules(allNPLPorts []rules.PodNodePort, synced chan<-
 				}},
 			}
 		}
+		pt.PodTable[podIPPortFormat(nplPort.PodIP, nplPort.PodPort)] = pt.Table[nplPort.NodePort]
 	}
 	// retry mechanism as iptables-restore can fail if other components (in Antrea or other
 	// software) are accessing iptables.
@@ -286,6 +297,11 @@ func (pt *PortTable) RestoreRules(allNPLPorts []rules.PodNodePort, synced chan<-
 		}
 	}()
 	return nil
+}
+
+// podIPPortFormat formats the ip, port to string ip:port.
+func podIPPortFormat(ip string, port int) string {
+	return fmt.Sprintf("%s:%d", ip, port)
 }
 
 // openLocalPort binds to the provided port.
