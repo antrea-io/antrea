@@ -87,6 +87,16 @@ func skipIfProxyAllDisabled(t *testing.T, data *TestData) {
 	}
 }
 
+func skipIfProxyAllEnabled(t *testing.T, data *TestData) {
+	isProxyAll, err := data.isProxyAll()
+	if err != nil {
+		t.Fatalf("Error getting option antreaProxy.proxyAll value")
+	}
+	if isProxyAll {
+		t.Skipf("Skipping test because option antreaProxy.proxyAll is enabled")
+	}
+}
+
 func skipIfKubeProxyEnabled(t *testing.T, data *TestData) {
 	_, err := data.clientset.AppsV1().DaemonSets(kubeNamespace).Get(context.TODO(), "kube-proxy", metav1.GetOptions{})
 	if err == nil {

@@ -55,6 +55,7 @@ func Test_getGatesResponse(t *testing.T) {
 				{Component: "agent", Name: "NetworkPolicyStats", Status: "Enabled", Version: "BETA"},
 				{Component: "agent", Name: "NodePortLocal", Status: "Enabled", Version: "BETA"},
 				{Component: "agent", Name: "Multicast", Status: "Disabled", Version: "ALPHA"},
+				{Component: "agent", Name: "ServiceExternalIP", Status: "Disabled", Version: "ALPHA"},
 			},
 		},
 	}
@@ -140,6 +141,7 @@ func TestHandleFunc(t *testing.T) {
 				{Component: "controller", Name: "Traceflow", Status: "Enabled", Version: "BETA"},
 				{Component: "controller", Name: "NetworkPolicyStats", Status: "Enabled", Version: "BETA"},
 				{Component: "controller", Name: "NodeIPAM", Status: "Disabled", Version: "ALPHA"},
+				{Component: "controller", Name: "ServiceExternalIP", Status: "Disabled", Version: "ALPHA"},
 				{Component: "agent", Name: "AntreaPolicy", Status: "Enabled", Version: "BETA"},
 				{Component: "agent", Name: "AntreaProxy", Status: "Enabled", Version: "BETA"},
 				{Component: "agent", Name: "Egress", Status: "Disabled", Version: "ALPHA"},
@@ -148,6 +150,7 @@ func TestHandleFunc(t *testing.T) {
 				{Component: "agent", Name: "FlowExporter", Status: "Disabled", Version: "ALPHA"},
 				{Component: "agent", Name: "NetworkPolicyStats", Status: "Enabled", Version: "BETA"},
 				{Component: "agent", Name: "NodePortLocal", Status: "Enabled", Version: "BETA"},
+				{Component: "agent", Name: "ServiceExternalIP", Status: "Disabled", Version: "ALPHA"},
 			},
 		},
 	}
@@ -192,6 +195,7 @@ func Test_getControllerGatesResponse(t *testing.T) {
 				{Component: "controller", Name: "Traceflow", Status: "Enabled", Version: "BETA"},
 				{Component: "controller", Name: "NetworkPolicyStats", Status: "Enabled", Version: "BETA"},
 				{Component: "controller", Name: "NodeIPAM", Status: "Disabled", Version: "ALPHA"},
+				{Component: "controller", Name: "ServiceExternalIP", Status: "Disabled", Version: "ALPHA"},
 			},
 		},
 	}

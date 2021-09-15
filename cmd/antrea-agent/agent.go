@@ -36,6 +36,7 @@ import (
 	"antrea.io/antrea/pkg/agent/controller/egress"
 	"antrea.io/antrea/pkg/agent/controller/networkpolicy"
 	"antrea.io/antrea/pkg/agent/controller/noderoute"
+	"antrea.io/antrea/pkg/agent/controller/serviceexternalip"
 	"antrea.io/antrea/pkg/agent/controller/traceflow"
 	"antrea.io/antrea/pkg/agent/flowexporter"
 	"antrea.io/antrea/pkg/agent/flowexporter/exporter"
@@ -77,7 +78,7 @@ const informerDefaultResync = 12 * time.Hour
 const resyncPeriodDisabled = 0 * time.Minute
 
 // The devices that should be excluded from NodePort.
-var excludeNodePortDevices = []string{"antrea-egress0", "kube-ipvs0"}
+var excludeNodePortDevices = []string{"antrea-egress0", "antrea-ingress0", "kube-ipvs0"}
 
 // run starts Antrea agent with the given options and waits for termination signal.
 func run(o *Options) error {
@@ -97,6 +98,8 @@ func run(o *Options) error {
 	traceflowInformer := crdInformerFactory.Crd().V1alpha1().Traceflows()
 	egressInformer := crdInformerFactory.Crd().V1alpha2().Egresses()
 	nodeInformer := informerFactory.Core().V1().Nodes()
+	serviceInformer := informerFactory.Core().V1().Services()
+	endpointsInformer := informerFactory.Core().V1().Endpoints()
 	externalIPPoolInformer := crdInformerFactory.Crd().V1alpha2().ExternalIPPools()
 
 	// Create Antrea Clientset for the given config.
@@ -310,26 +313,44 @@ func run(o *Options) error {
 	}
 
 	var externalIPPoolController *externalippool.ExternalIPPoolController
+	var externalIPController *serviceexternalip.ServiceExternalIPController
 	var memberlistCluster *memberlist.Cluster
 	var localIPDetector ipassigner.LocalIPDetector
 
-	if features.DefaultFeatureGate.Enabled(features.Egress) {
+	if features.DefaultFeatureGate.Enabled(features.Egress) || features.DefaultFeatureGate.Enabled(features.ServiceExternalIP) {
 		externalIPPoolController = externalippool.NewExternalIPPoolController(
 			crdClient, externalIPPoolInformer,
 		)
 		localIPDetector = ipassigner.NewLocalIPDetector()
-		memberlistCluster, err = memberlist.NewCluster(o.config.ClusterMembershipPort,
+
+		memberlistCluster, err = memberlist.NewCluster(nodeTransportIP, o.config.ClusterMembershipPort,
 			nodeConfig.Name, nodeInformer, externalIPPoolInformer,
 		)
 		if err != nil {
-			return fmt.Errorf("error creating new MemberList cluster: %v", err)
+			return fmt.Errorf("error creating new memberlist cluster: %v", err)
 		}
+	}
+	if features.DefaultFeatureGate.Enabled(features.Egress) {
 		egressController, err = egress.NewEgressController(
 			ofClient, antreaClientProvider, crdClient, ifaceStore, routeClient, nodeConfig.Name, nodeTransportIP,
 			memberlistCluster, egressInformer, nodeInformer, localIPDetector,
 		)
 		if err != nil {
 			return fmt.Errorf("error creating new Egress controller: %v", err)
+		}
+	}
+	if features.DefaultFeatureGate.Enabled(features.ServiceExternalIP) {
+		externalIPController, err = serviceexternalip.NewServiceExternalIPController(
+			nodeConfig.Name,
+			nodeTransportIP,
+			k8sClient,
+			memberlistCluster,
+			serviceInformer,
+			endpointsInformer,
+			localIPDetector,
+		)
+		if err != nil {
+			return fmt.Errorf("error creating new ServiceExternalIP controller: %v", err)
 		}
 	}
 
@@ -507,11 +528,18 @@ func run(o *Options) error {
 		go podWatchController.Run(stopCh)
 	}
 
-	if features.DefaultFeatureGate.Enabled(features.Egress) {
+	if features.DefaultFeatureGate.Enabled(features.Egress) || features.DefaultFeatureGate.Enabled(features.ServiceExternalIP) {
 		go externalIPPoolController.Run(stopCh)
 		go localIPDetector.Run(stopCh)
 		go memberlistCluster.Run(stopCh)
+	}
+
+	if features.DefaultFeatureGate.Enabled(features.Egress) {
 		go egressController.Run(stopCh)
+	}
+
+	if features.DefaultFeatureGate.Enabled(features.ServiceExternalIP) {
+		go externalIPController.Run(stopCh)
 	}
 
 	if features.DefaultFeatureGate.Enabled(features.NetworkPolicyStats) {
