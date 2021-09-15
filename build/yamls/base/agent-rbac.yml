@@ -37,7 +37,14 @@ rules:
     verbs:
       - get
       - watch
-      - list
+      - list  
+  - apiGroups:
+      - ""
+    resources:
+      - services/status
+    verbs:
+      - update
+      - patch
   - apiGroups:
       - discovery.k8s.io
     resources:

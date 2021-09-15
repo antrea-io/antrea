@@ -76,6 +76,10 @@ const (
 	// alpha: v1.4
 	// Enable flexible IPAM for Pods.
 	AntreaIPAM featuregate.Feature = "AntreaIPAM"
+
+	// alpha: v1.5
+	// Enable controlling Services with ExternalIP.
+	ServiceExternalIP featuregate.Feature = "ServiceExternalIP"
 )
 
 var (
@@ -100,6 +104,7 @@ var (
 		NetworkPolicyStats: {Default: true, PreRelease: featuregate.Beta},
 		NodePortLocal:      {Default: true, PreRelease: featuregate.Beta},
 		NodeIPAM:           {Default: false, PreRelease: featuregate.Alpha},
+		ServiceExternalIP:  {Default: false, PreRelease: featuregate.Alpha},
 	}
 
 	// UnsupportedFeaturesOnWindows records the features not supported on
@@ -113,9 +118,10 @@ var (
 	// can have different FeatureSpecs between Linux and Windows, we should
 	// still define a separate defaultAntreaFeatureGates map for Windows.
 	unsupportedFeaturesOnWindows = map[featuregate.Feature]struct{}{
-		NodePortLocal: {},
-		Egress:        {},
-		AntreaIPAM:    {},
+		NodePortLocal:     {},
+		Egress:            {},
+		AntreaIPAM:        {},
+		ServiceExternalIP: {},
 	}
 )
 

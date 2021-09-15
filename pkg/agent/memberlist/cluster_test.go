@@ -22,7 +22,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/groupcache/consistenthash"
 	"github.com/hashicorp/memberlist"
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/core/v1"
@@ -34,6 +33,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 
 	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/agent/consistenthash"
 	"antrea.io/antrea/pkg/apis"
 	crdv1a2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
 	fakeversioned "antrea.io/antrea/pkg/client/clientset/versioned/fake"
@@ -57,7 +57,7 @@ func newFakeCluster(nodeConfig *config.NodeConfig, stopCh <-chan struct{}, i int
 	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, 0)
 	ipPoolInformer := crdInformerFactory.Crd().V1alpha2().ExternalIPPools()
 
-	cluster, err := NewCluster(port, nodeConfig.Name, nodeInformer, ipPoolInformer)
+	cluster, err := NewCluster(nil, port, nodeConfig.Name, nodeInformer, ipPoolInformer)
 	if err != nil {
 		return nil, err
 	}
@@ -537,6 +537,71 @@ func TestCluster_ShouldSelectEgress(t *testing.T) {
 				selected, err := fakeCluster.ShouldSelectIP(fakeEgress.Spec.EgressIP, fakeEgress.Spec.ExternalIPPool)
 				assert.NoError(t, err)
 				assert.Equal(t, node == tCase.expectedNode, selected, "Selected Node for Egress not match")
+			}
+		})
+	}
+}
+
+func TestCluster_SelectNodeForIP(t *testing.T) {
+	testCases := []struct {
+		name         string
+		nodeNum      int
+		ip           string
+		expectedNode string
+		filters      []func(string) bool
+	}{
+		{
+			name:         "Select Node from 0 Nodes",
+			nodeNum:      0,
+			ip:           "1.1.1.1",
+			expectedNode: "",
+			filters:      nil,
+		},
+		{
+			name:         "Select Node from 1 Nodes",
+			nodeNum:      1,
+			ip:           "1.1.1.1",
+			expectedNode: "node-0",
+			filters:      nil,
+		},
+		{
+			name:         "Select Node from 3 Nodes",
+			nodeNum:      3,
+			ip:           "1.1.1.1",
+			expectedNode: "node-1",
+			filters:      nil,
+		},
+		{
+			name:         "Select Node from 10 Nodes",
+			nodeNum:      10,
+			ip:           "1.1.1.1",
+			expectedNode: "node-1",
+			filters:      nil,
+		},
+		{
+			name:         "Select Node from 100 Nodes",
+			nodeNum:      100,
+			ip:           "1.1.1.1",
+			expectedNode: "node-79",
+			filters:      nil,
+		},
+	}
+	for _, tCase := range testCases {
+		t.Run(tCase.name, func(t *testing.T) {
+			fakeEIPName := "fakeExternalIPPool"
+			consistentHashMap := newNodeConsistentHashMap()
+			consistentHashMap.Add(genNodes(tCase.nodeNum)...)
+
+			fakeCluster := &Cluster{
+				consistentHashMap: map[string]*consistenthash.Map{fakeEIPName: consistentHashMap},
+			}
+
+			for i := 0; i < tCase.nodeNum; i++ {
+				node := fmt.Sprintf("node-%d", i)
+				fakeCluster.nodeName = node
+				selected, err := fakeCluster.ShouldSelectIP(tCase.ip, fakeEIPName, tCase.filters...)
+				assert.NoError(t, err)
+				assert.Equal(t, node == tCase.expectedNode, selected, "Selected Node not match")
 			}
 		})
 	}

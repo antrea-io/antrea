@@ -42,6 +42,7 @@ import (
 	"antrea.io/antrea/pkg/controller/crdmirroring/crdhandler"
 	"antrea.io/antrea/pkg/controller/egress"
 	egressstore "antrea.io/antrea/pkg/controller/egress/store"
+	"antrea.io/antrea/pkg/controller/externalip"
 	"antrea.io/antrea/pkg/controller/externalippool"
 	"antrea.io/antrea/pkg/controller/grouping"
 	"antrea.io/antrea/pkg/controller/metrics"
@@ -234,11 +235,19 @@ func run(o *Options) error {
 
 	var egressController *egress.EgressController
 	var externalIPPoolController *externalippool.ExternalIPPoolController
-	if features.DefaultFeatureGate.Enabled(features.Egress) {
+	var externalIPController *externalip.ExternalIPController
+	if features.DefaultFeatureGate.Enabled(features.Egress) || features.DefaultFeatureGate.Enabled(features.ServiceExternalIP) {
 		externalIPPoolController = externalippool.NewExternalIPPoolController(
 			crdClient, externalIPPoolInformer,
 		)
+	}
+
+	if features.DefaultFeatureGate.Enabled(features.Egress) {
 		egressController = egress.NewEgressController(crdClient, groupEntityIndex, egressInformer, externalIPPoolController, egressGroupStore)
+	}
+
+	if features.DefaultFeatureGate.Enabled(features.ServiceExternalIP) {
+		externalIPController = externalip.NewExternalIPController(client, serviceInformer, externalIPPoolController)
 	}
 
 	var traceflowController *traceflow.Controller
@@ -373,10 +382,12 @@ func run(o *Options) error {
 			go eeMirroringController.Run(stopCh)
 		}
 	}
-
-	if features.DefaultFeatureGate.Enabled(features.Egress) {
+	if features.DefaultFeatureGate.Enabled(features.Egress) || features.DefaultFeatureGate.Enabled(features.ServiceExternalIP) {
 		go externalIPPoolController.Run(stopCh)
-		go egressController.Run(stopCh)
+	}
+
+	if features.DefaultFeatureGate.Enabled(features.ServiceExternalIP) {
+		go externalIPController.Run(stopCh)
 	}
 
 	<-stopCh

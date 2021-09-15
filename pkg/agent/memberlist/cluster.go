@@ -17,11 +17,11 @@ package memberlist
 import (
 	"fmt"
 	"io/ioutil"
+	"net"
 	"reflect"
 	"sync"
 	"time"
 
-	"github.com/golang/groupcache/consistenthash"
 	"github.com/hashicorp/memberlist"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -35,6 +35,7 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 
+	"antrea.io/antrea/pkg/agent/consistenthash"
 	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
 	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha2"
 	crdlister "antrea.io/antrea/pkg/client/listers/crd/v1alpha2"
@@ -75,7 +76,13 @@ var mapNodeEventType = map[memberlist.NodeEventType]nodeEventType{
 	memberlist.NodeUpdate: nodeEventTypeUpdate,
 }
 
-type clusterNodeEventHandler func(objName string)
+type ClusterNodeEventHandler func(objName string)
+
+type Interface interface {
+	SelectNodeForIP(ip, externalIPPool string, fillters ...func(string) bool) (string, error)
+	AliveNodes() sets.String
+	AddClusterEventHandler(handler ClusterNodeEventHandler)
+}
 
 // Cluster implements ClusterInterface.
 type Cluster struct {
@@ -97,7 +104,7 @@ type Cluster struct {
 	// For example, when a new Node joins the cluster, each Node should compute whether it should still hold all
 	// its existing Egresses, and when a Node leaves the cluster,
 	// each Node should check whether it is now responsible for some of the Egresses from that Node.
-	clusterNodeEventHandlers []clusterNodeEventHandler
+	clusterNodeEventHandlers []ClusterNodeEventHandler
 
 	nodeInformer     coreinformers.NodeInformer
 	nodeLister       corelisters.NodeLister
@@ -113,6 +120,7 @@ type Cluster struct {
 
 // NewCluster returns a new *Cluster.
 func NewCluster(
+	nodeIP net.IP,
 	clusterBindPort int,
 	nodeName string,
 	nodeInformer coreinformers.NodeInformer,
@@ -138,6 +146,7 @@ func NewCluster(
 	conf.Name = c.nodeName
 	conf.BindPort = c.bindPort
 	conf.AdvertisePort = c.bindPort
+	conf.AdvertiseAddr = nodeIP.String()
 	conf.Events = &memberlist.ChannelEventDelegate{Ch: nodeEventCh}
 	conf.LogOutput = ioutil.Discard
 	klog.V(1).InfoS("New memberlist cluster", "config", conf)
@@ -395,7 +404,7 @@ func (c *Cluster) syncConsistentHash(eipName string) error {
 		if err != nil {
 			return fmt.Errorf("listing Nodes error: %v", err)
 		}
-		aliveNodes := c.aliveNodes()
+		aliveNodes := c.AliveNodes()
 		// Node alive and Node labels match ExternalIPPool nodeSelector.
 		var aliveAndMatchedNodes []string
 		for _, node := range nodes {
@@ -449,8 +458,8 @@ func (c *Cluster) handleClusterNodeEvents(nodeEvent *memberlist.NodeEvent) {
 	}
 }
 
-// aliveNodes returns the list of nodeNames in the cluster.
-func (c *Cluster) aliveNodes() sets.String {
+// AliveNodes returns the list of nodeNames in the cluster.
+func (c *Cluster) AliveNodes() sets.String {
 	nodes := sets.NewString()
 	for _, node := range c.mList.Members() {
 		nodes.Insert(node.Name)
@@ -462,7 +471,7 @@ func (c *Cluster) aliveNodes() sets.String {
 // ExternalIPPool. The local Node in the cluster holds the same consistent hash ring for each ExternalIPPool,
 // consistentHash.Get gets the closest item (Node name) in the hash to the provided key (IP), if the name of
 // the local Node is equal to the name of the selected Node, returns true.
-func (c *Cluster) ShouldSelectIP(ip, externalIPPool string) (bool, error) {
+func (c *Cluster) ShouldSelectIP(ip, externalIPPool string, fillters ...func(string) bool) (bool, error) {
 	if externalIPPool == "" || ip == "" {
 		return false, nil
 	}
@@ -472,11 +481,29 @@ func (c *Cluster) ShouldSelectIP(ip, externalIPPool string) (bool, error) {
 	if !ok {
 		return false, fmt.Errorf("local Node consistentHashMap has not synced, ExternalIPPool %s", externalIPPool)
 	}
-	node := consistentHash.Get(ip)
-	if node == "" {
-		klog.Warningf("No valid Node chosen for IP %s in externalIPPool %s", ip, externalIPPool)
+	node := consistentHash.GetWithFilters(ip, fillters...)
+	if node == "" && len(fillters) > 0 {
+		return false, fmt.Errorf("no valid Node chosen for IP %s in externalIPPool %s", ip, externalIPPool)
 	}
 	return node == c.nodeName, nil
+}
+
+// SelectNodeForIP returns the closest item (Node name) in the hash to the provided key (IP) and ExternalIPPool.
+func (c *Cluster) SelectNodeForIP(ip, externalIPPool string, fillters ...func(string) bool) (string, error) {
+	if externalIPPool == "" || ip == "" {
+		return "", fmt.Errorf("IP and externalIPPool cannot be empty")
+	}
+	c.consistentHashRWMutex.RLock()
+	defer c.consistentHashRWMutex.RUnlock()
+	consistentHash, ok := c.consistentHashMap[externalIPPool]
+	if !ok {
+		return "", fmt.Errorf("local Node consistentHashMap has not synced, ExternalIPPool %s", externalIPPool)
+	}
+	node := consistentHash.GetWithFilters(ip, fillters...)
+	if node == "" {
+		return "", fmt.Errorf("no valid Node chosen for IP %s in externalIPPool %s", ip, externalIPPool)
+	}
+	return node, nil
 }
 
 func (c *Cluster) notify(objName string) {
@@ -487,6 +514,6 @@ func (c *Cluster) notify(objName string) {
 
 // AddClusterEventHandler adds a clusterNodeEventHandler, which will run when consistentHashMap is updated,
 // due to an ExternalIPPool or Node event.
-func (c *Cluster) AddClusterEventHandler(handler clusterNodeEventHandler) {
+func (c *Cluster) AddClusterEventHandler(handler ClusterNodeEventHandler) {
 	c.clusterNodeEventHandlers = append(c.clusterNodeEventHandlers, handler)
 }

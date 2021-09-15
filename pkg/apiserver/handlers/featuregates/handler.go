@@ -29,8 +29,8 @@ import (
 	"antrea.io/antrea/pkg/util/env"
 )
 
-var controllerGates = sets.NewString("Traceflow", "AntreaPolicy", "Egress", "NetworkPolicyStats", "NodeIPAM")
-var agentGates = sets.NewString("AntreaPolicy", "AntreaProxy", "Egress", "EndpointSlice", "Traceflow", "FlowExporter", "NetworkPolicyStats", "NodePortLocal", "AntreaIPAM")
+var controllerGates = sets.NewString("Traceflow", "AntreaPolicy", "Egress", "NetworkPolicyStats", "NodeIPAM", "LoadBalancer")
+var agentGates = sets.NewString("AntreaPolicy", "AntreaProxy", "Egress", "EndpointSlice", "Traceflow", "FlowExporter", "NetworkPolicyStats", "NodePortLocal", "AntreaIPAM", "LoadBalancer")
 
 type (
 	Config struct {

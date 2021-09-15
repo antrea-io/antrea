@@ -3457,6 +3457,13 @@ rules:
   - watch
   - list
 - apiGroups:
+  - ""
+  resources:
+  - services/status
+  verbs:
+  - update
+  - patch
+- apiGroups:
   - discovery.k8s.io
   resources:
   - endpointslices
@@ -3612,7 +3619,6 @@ rules:
   resources:
   - pods
   - namespaces
-  - services
   - configmaps
   verbs:
   - get
@@ -3626,6 +3632,17 @@ rules:
   - get
   - watch
   - list
+  - patch
+- apiGroups:
+  - ""
+  resources:
+  - services
+  - services/status
+  verbs:
+  - get
+  - watch
+  - list
+  - update
   - patch
 - apiGroups:
   - networking.k8s.io
