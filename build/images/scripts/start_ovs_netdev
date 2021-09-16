@@ -35,7 +35,7 @@ function add_br_phy {
     inet6=$(ip -6 addr show eth0 | grep_allow_no_match global | awk '{ print $2 }')
     gw=$(ip route | grep default | awk '{ print $3 }')
     gw6=$(ip -6 route | grep_allow_no_match default | awk '{ print $3 }')
-    # eth0 may be assigned an IPv6 address even if IPv6 is disabled in the kernel
+    # eth0 may be assigned an IPv6 address even if IPv6 is deactivated in the kernel
     # we must ensure IPv6 is enabled before we can add IPv6 addresses
     ipv6enabled=$(sysctl net.ipv6.conf.all.disable_ipv6 --values)
     ovs-vsctl add-br br-phy \
@@ -118,7 +118,7 @@ function quit {
     # when OVS is stopped.
     del_br_phy
     stop_ovs
-    # kill background sleep process
+    # stop background sleep process
     if [ "$SLEEP_PID" != "" ]; then kill $SLEEP_PID > /dev/null 2>&1 || true; fi
     exit 0
 }

@@ -48,7 +48,7 @@ where:
   modify-node: modify kind node with name NODE_NAME
   --pod-cidr: specifies pod cidr used in kind cluster, default is $POD_CIDR
   --encap-mode: inter-node pod traffic encap mode, default is encap
-  --no-proxy: disable Antrea proxy
+  --no-proxy: deactivate Antrea proxy
   --antrea-cni: specifies install Antrea CNI in kind cluster, default is true
   --prometheus: create RBAC resources for Prometheus, default is false
   --num-workers: specifies number of worker nodes in kind cluster, default is $NUM_WORKERS

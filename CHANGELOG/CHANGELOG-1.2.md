@@ -21,7 +21,7 @@
 - Use GroupMemberSet.Merge instead of GroupMemberSet.Union to reduce CPU usage and memory footprint in the Agent's policy controller. ([#2467](https://github.com/antrea-io/antrea/pull/2467), [@tnqn])
 - When checking for the existence of an iptables chain, stop listing all the chains and searching through them; this change reduces the Agent's memory footprint. ([#2458](https://github.com/antrea-io/antrea/pull/2458), [@tnqn])
 - Tolerate more failures for the Agent's readiness probe, as the Agent may stay disconnected from the Controller for a long time in some scenarios. ([#2535](https://github.com/antrea-io/antrea/pull/2535), [@tnqn])
-- When listing NetworkPolicyStats through the Controller API, return an empty list if the `NetworkPolicyStats` Feature Gate is disabled, instead of returning an error. ([#2386](https://github.com/antrea-io/antrea/pull/2386), [@PeterEltgroth])
+- When listing NetworkPolicyStats through the Controller API, return an empty list if the `NetworkPolicyStats` Feature Gate is deactivated, instead of returning an error. ([#2386](https://github.com/antrea-io/antrea/pull/2386), [@PeterEltgroth])
 
 ### Fixed
 
@@ -62,7 +62,7 @@ The NetworkPolicyStats feature is graduated from Alpha to Beta and is therefore 
 
 ### Fixed
 
-- Fix inter-Node ClusterIP Service access when AntreaProxy is disabled. ([#2318](https://github.com/antrea-io/antrea/pull/2318), [@tnqn])
+- Fix inter-Node ClusterIP Service access when AntreaProxy is deactivated. ([#2318](https://github.com/antrea-io/antrea/pull/2318), [@tnqn])
 - Fix duplicate group ID allocation in AntreaProxy when using a combination of IPv4 and IPv6 Services in dual-stack clusters; this was causing Service connectivity issues. ([#2317](https://github.com/antrea-io/antrea/pull/2317), [@hongliangl])
 - Fix intra-Node ClusterIP Service access when both the AntreaProxy and Egress features are enabled. ([#2332](https://github.com/antrea-io/antrea/pull/2332), [@tnqn])
 - Fix deadlock when initializing the GroupEntityIndex (in the Antrea Controller) with many groups; this was preventing correct distribution and enforcement of NetworkPolicies. ([#2376](https://github.com/antrea-io/antrea/pull/2376), [@tnqn])

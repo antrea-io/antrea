@@ -42,7 +42,7 @@ SLEEP_PID=
 function quit {
     log_info $CONTAINER_NAME "Stopping OVS IPSec before quit"
     stop_agents
-    # kill background sleep process
+    # stop background sleep process
     if [ "$SLEEP_PID" != "" ]; then kill $SLEEP_PID > /dev/null 2>&1 || true; fi
     exit 0
 }

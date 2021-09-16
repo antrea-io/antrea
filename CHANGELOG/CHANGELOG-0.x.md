@@ -16,7 +16,7 @@
 
 ### Fixed
 
-- Fix inter-Node ClusterIP Service access when AntreaProxy is disabled. ([#2318](https://github.com/antrea-io/antrea/pull/2318), [@tnqn])
+- Fix inter-Node ClusterIP Service access when AntreaProxy is deactivated. ([#2318](https://github.com/antrea-io/antrea/pull/2318), [@tnqn])
 - Fix duplicate group ID allocation in AntreaProxy when using a combination of IPv4 and IPv6 Services in dual-stack clusters; this was causing Service connectivity issues. ([#2317](https://github.com/antrea-io/antrea/pull/2317), [@hongliangl])
 - Fix invalid clean-up of the HNS Endpoint during Pod deletion, when Docker is used as the container runtime. ([#2306](https://github.com/antrea-io/antrea/pull/2306), [@wenyingd]) [Windows]
 - Fix race condition on Windows when retrieving the local HNS Network created by Antrea for containers. ([#2253](https://github.com/antrea-io/antrea/pull/2253), [@tnqn]) [Windows]
@@ -134,7 +134,7 @@ Includes all the changes from [0.12.1].
 
 - Change permissions for the "/var/run/antrea" directory created by the Antrea Agent on each Node to prevent non-root users from accessing it; among other things, it includes the socket file used to send CNI commands to the Agent. ([#1770](https://github.com/antrea-io/antrea/pull/1770), [@jianjuns])
 - Add multi-table support to the "antctl get ovsflows" command, to dump flows from multiple tables at once. ([#1708](https://github.com/antrea-io/antrea/pull/1708), [@weiqiangt])
-- Change the sanity check performed by the Antrea Agent to validate that the Hyper-V dependency is satisfied. ([#1741](https://github.com/antrea-io/antrea/pull/1741), [@ruicao93])
+- Change the confidence check performed by the Antrea Agent to validate that the Hyper-V dependency is satisfied. ([#1741](https://github.com/antrea-io/antrea/pull/1741), [@ruicao93])
 - Periodically verify that the static iptables rules required by Antrea are present and install missing rules if any. ([#1751](https://github.com/antrea-io/antrea/pull/1751), [@siddhant94])
 - Update Mellanox/sriovnet dependency to version v1.0.2 to support OVS hardware offload to Mellanox devices with Kernel versions 5.8 and above. ([#1845](https://github.com/antrea-io/antrea/pull/1845), [@Mmduh-483])
 - Remove dependency on [juju](https://github.com/juju) libraries, which are distributed under an LGPL v3 license. ([#1796](https://github.com/antrea-io/antrea/pull/1796), [@antoninbas])
@@ -265,7 +265,7 @@ Support for Prometheus metrics is graduated from Alpha to Beta and Antrea metric
 - Add "name" field for individual rules in Antrea-native policy CRDs and auto-generate rule names when they are not provided by the user. ([#1330](https://github.com/antrea-io/antrea/pull/1330) [#1451](https://github.com/antrea-io/antrea/pull/1451), [@GraysonWu])
 - Add "baseline" tier for Antrea-native policies: policies in that tier are enforced after (i.e. with a lower precedence) than K8s network policies. ([#1450](https://github.com/antrea-io/antrea/pull/1450), [@Dyanngg])
 - Add support for Antrea-native policies to the "antctl get netpol" command. ([#1301](https://github.com/antrea-io/antrea/pull/1301), [@GraysonWu])
-- Add config option to disable SNAT for Pod-to-External traffic in noEncap mode, in case the Pod CIDR is routable in the Node network. ([#1394](https://github.com/antrea-io/antrea/pull/1394), [@jianjuns])
+- Add config option to deactivate SNAT for Pod-to-External traffic in noEncap mode, in case the Pod CIDR is routable in the Node network. ([#1394](https://github.com/antrea-io/antrea/pull/1394), [@jianjuns])
 - Add NetworkPolicy information (Namespace and Name of the NetworkPolicy allowing the connection) to the IPFIX flow records exported by the Agent when FlowExporter is enabled. ([#1268](https://github.com/antrea-io/antrea/pull/1268), [@srikartati])
 - Support for the FlowExporter feature for Windows Nodes. ([#1321](https://github.com/antrea-io/antrea/pull/1321), [@dreamtalen]) [Windows]
 - Add support for Pod [Traffic Shaping] by leveraging the upstream [bandwidth plugin], maintained by the CNI project. ([#1414](https://github.com/antrea-io/antrea/pull/1414), [@tnqn])
@@ -326,7 +326,7 @@ Support for Prometheus metrics is graduated from Alpha to Beta and Antrea metric
 - Ensure that the "appliedTo" and "priority" fields are required in the OpenAPI spec for the ClusterNetworkPolicy CRD. ([#1359](https://github.com/antrea-io/antrea/pull/1359), [@abhiraut])
 - Always restart OVS services on Windows in case of failure. ([#1495](https://github.com/antrea-io/antrea/pull/1495), [@ruicao93]) [Windows]
 - Validate the Agent configuration on startup and log an error message if any enabled feature is not supported by the OS (in particular on Windows Nodes). ([#1468](https://github.com/antrea-io/antrea/pull/1468), [@jianjuns])
-- Add sanity checks for IPsec and log helpful error messages if some packages or components are missing. ([#1430](https://github.com/antrea-io/antrea/pull/1430), [@antoninbas])
+- Add confidence checks for IPsec and log helpful error messages if some packages or components are missing. ([#1430](https://github.com/antrea-io/antrea/pull/1430), [@antoninbas])
 - Fix reference Kibana dashboard configuration file for FlowExporter feature: some IPFIX IE names did not match the names from the Antrea registry. ([#1370](https://github.com/antrea-io/antrea/pull/1370), [@zyiou])
 
 ## 0.10.1 - 2020-09-30
@@ -425,7 +425,7 @@ Starting with Antrea 0.10.0, K8s version >= 1.16 is required.
 - Fail the CNI ADD request if the OF port value returned by OVS is -1, which indicates an error during interface creation. ([#1112](https://github.com/antrea-io/antrea/pull/1112), [@tnqn])
 - Resubmit traffic for which Antrea Proxy has performed DNAT to the correct table so that ClusterNetworkPolicies can be enforced correctly. ([#1119](https://github.com/antrea-io/antrea/pull/1119), [@weiqiangt] [@yktsubo])
 - Update Windows OVS package so that the dependency on Microsoft Visual C++ can be resolved during installation. ([#1099](https://github.com/antrea-io/antrea/pull/1099), [@ruicao93]) [Windows]
-- Temporarily ignore sanity checks when issuing a Traceflow request from the Octant UI since the current version of Octant does not support reporting the errors to the user; instead the Traceflow CRD is created and its "Status" field can be used to troubleshoot. ([#1097](https://github.com/antrea-io/antrea/pull/1097), [@ZhangYW18])
+- Temporarily ignore confidence checks when issuing a Traceflow request from the Octant UI since the current version of Octant does not support reporting the errors to the user; instead the Traceflow CRD is created and its "Status" field can be used to troubleshoot. ([#1097](https://github.com/antrea-io/antrea/pull/1097), [@ZhangYW18])
 - Revert all priority updates to policy flows if flow installation / modification fails on OVS. ([#1095](https://github.com/antrea-io/antrea/issues/1095), [@Dyanngg])
 - Fix the Antrea manifest for EKS (antrea-eks.yml) published for each release. ([#1090](https://github.com/antrea-io/antrea/pull/1090), [@antoninbas])
 
@@ -523,7 +523,7 @@ Starting with Antrea 0.10.0, K8s version >= 1.16 is required.
 - Move Octant plugin to a new "plugins/" folder and make it its own Go module. ([#838](https://github.com/antrea-io/antrea/pull/838), [@mengdie-song])
 - Update antrea-cni to support CNI version 0.4.0. ([#784](https://github.com/antrea-io/antrea/pull/784), [@moshe010])
 - Change gateway and tunnel interface names to antrea-gw0 and antrea-tun0 respectively. ([#854](https://github.com/antrea-io/antrea/pull/854), [@jianjuns])
-- Make antrea-agent Pod tolerant of "NoExecute" taints to prevent unwanted evictions. ([#815](https://github.com/antrea-io/antrea/pull/815), [@tnqn])
+- Make antrea-agent Pod tolerant of "NoExecute" taints to prevent unwanted removals. ([#815](https://github.com/antrea-io/antrea/pull/815), [@tnqn])
 - Use "Feature Gates" to control enabling / disabling experimental features instead of introducing separate temporary configuration parameters. ([#847](https://github.com/antrea-io/antrea/pull/847), [@tnqn])
 - Upgrade K8s API version used by Antrea to 1.18. ([#838](https://github.com/antrea-io/antrea/pull/838), [@mengdie-song])
 - Create controller-ca ConfigMap in the same Namespace as the Controller Deployment, instead of hard-coding it to "kube-system". ([#876](https://github.com/antrea-io/antrea/issues/876), [@jianjuns])

@@ -30,7 +30,7 @@ the egress IP when leaving that Node.
 You may be interested in using this capability if any of the following apply:
 
 - A consistent IP address is desired when specific Pods connect to services
-  outside of the cluster, for source tracing in audit logs, or whitelisting
+  outside of the cluster, for source tracing in audit logs, or approving
   by source IP in external firewall, etc.
 
 - You want to force outgoing external connections to leave the cluster via

@@ -74,7 +74,7 @@ spec:
                   echo "Waiting for aws-k8s-agent"
               done
 
-              # Fetch running containers from aws-k8s-agent and kill them
+              # Fetch running containers from aws-k8s-agent and stop them
               echo "\n"
               for container_id in $(cat /var/run/aws-node/ipam.json | jq -r '.allocations | .[] | .containerID'); do
                   echo "Restarting container with ID: ${container_id}"

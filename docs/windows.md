@@ -239,7 +239,7 @@ get-service ovsdb-server
 get-service ovs-vswitchd
 ```
 
-#### 2. Disable Windows Firewall
+#### 2. Deactivate Windows Firewall
 
 ```powershell
 Set-NetFirewallProfile -Profile Domain,Public,Private -Enabled False
@@ -388,7 +388,7 @@ curl.exe -LO https://github.com/antrea-io/antrea/releases/download/<TAG>/Start.p
 
 1. HNS Network is not persistent on Windows. So after the Windows Node reboots,
 the HNS Network created by antrea-agent is removed, and the Open vSwitch
-Extension is disabled by default. In this case, the stale OVS bridge and ports
+Extension is deactivated by default. In this case, the stale OVS bridge and ports
 should be removed. A help script [Clean-AntreaNetwork.ps1](https://raw.githubusercontent.com/antrea-io/antrea/main/hack/windows/Clean-AntreaNetwork.ps1)
 can be used to clean the OVS bridge.
 

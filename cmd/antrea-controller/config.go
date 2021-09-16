@@ -38,7 +38,7 @@ type NodeIPAMConfig struct {
 }
 
 type ControllerConfig struct {
-	// FeatureGates is a map of feature names to bools that enable or disable experimental features.
+	// FeatureGates is a map of feature names to bools that enable or deactivate experimental features.
 	FeatureGates map[string]bool `yaml:"featureGates,omitempty"`
 	// clientConnection specifies the kubeconfig file and client connection settings for the
 	// antrea-controller to communicate with the Kubernetes apiserver.

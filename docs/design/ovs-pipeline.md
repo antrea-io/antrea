@@ -44,7 +44,7 @@
 **This document currently makes the following assumptions:**
 
 * Antrea is used in encap mode (an overlay network is created between all Nodes)
-* AntreaProxy is disabled
+* AntreaProxy is deactivated
 * All the Nodes are Linux Nodes
 
 ## Dumping the Flows

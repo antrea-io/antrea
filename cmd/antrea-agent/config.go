@@ -19,7 +19,7 @@ import (
 )
 
 type AgentConfig struct {
-	// featureGates is a map of feature names to bools that enable or disable experimental features.
+	// featureGates is a map of feature names to bools that enable or deactivate experimental features.
 	FeatureGates map[string]bool `yaml:"featureGates,omitempty"`
 
 	CNISocket string `yaml:"cniSocket,omitempty"`

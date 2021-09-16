@@ -97,7 +97,7 @@ renaming process were as follows:
 To achieve our 3rd goal, we introduced a new Kubernetes controller in the Antrea
 Controller, in charge of mirroring "old" Custom Resources (created using the
 `*.antrea.tanzu.vmware.com` API groups) to the new (`*.antrea.io`) API. This new
-mirroring controller is enabled by default, but can be disabled by setting
+mirroring controller is enabled by default, but can be deactivated by setting
 `legacyCRDMirroring` to `false` in the `antrea-controller` configuration
 options. Thanks to this controller, the Antrea components (Agent and Controller)
 only need to watch Custom Resources created with the new API group. If any
@@ -186,7 +186,7 @@ the legacy Antrea CRDs:
    mirrored Custom Resources should be available for the application to access.
 
 8. At this stage, if all applications have been updated, legacy CRD mirroring
-   can be disabled in the Antrea Controller configuration.
+   can be deactivated in the Antrea Controller configuration.
 
 Note that for CRDs which are "owned" by Antrea, `AntreaAgentInfo` and
 `AntreaControllerInfo`, resources are automatically created by the Antrea

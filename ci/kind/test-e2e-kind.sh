@@ -25,9 +25,9 @@ function echoerr {
 _usage="Usage: $0 [--encap-mode <mode>] [--ip-family <v4|v6>] [--no-proxy] [--np] [--coverage] [--help|-h]
         --encap-mode                  Traffic encapsulation mode. (default is 'encap').
         --ip-family                   Configures the ipFamily for the KinD cluster.
-        --no-proxy                    Disables Antrea proxy.
+        --no-proxy                    Deactivates Antrea proxy.
         --endpointslice               Enables Antrea proxy and EndpointSlice support.
-        --no-np                       Disables Antrea-native policies.
+        --no-np                       Deactivates Antrea-native policies.
         --skip                        A comma-separated list of keywords, with which tests should be skipped.
         --coverage                    Enables measure Antrea code coverage when run e2e tests on kind.
         --help, -h                    Print this message and exit.

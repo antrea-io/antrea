@@ -407,7 +407,7 @@ func testOVSFlowReplay(t *testing.T, data *TestData) {
 	numFlows1, numGroups1 := countFlows(), countGroups()
 
 	// This is necessary because "ovs-ctl restart" saves and restores OpenFlow flows for the
-	// bridge. An alternative may be to kill the antrea-ovs container running on that Node.
+	// bridge. An alternative may be to stop the antrea-ovs container running on that Node.
 	t.Logf("Deleting flows / groups and restarting OVS daemons on Node '%s'", workerNode)
 	delFlowsAndGroups := func() {
 		cmd := []string{"ovs-ofctl", "del-flows", defaultBridgeName}
