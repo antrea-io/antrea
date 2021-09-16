@@ -87,6 +87,9 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: spec.nodeName
+            # For using noEncap or hybrid traffic mode without AntreaProxy
+            - name: ALLOW_NO_ENCAP_WITHOUT_ANTREA_PROXY
+              value: "true"
           ports:
             - containerPort: 10350
               name: api

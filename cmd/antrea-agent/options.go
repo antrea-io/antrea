@@ -27,6 +27,7 @@ import (
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/apis"
 	"antrea.io/antrea/pkg/cni"
+	"antrea.io/antrea/pkg/util/env"
 	"antrea.io/antrea/pkg/features"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 	"antrea.io/antrea/pkg/util/flowexport"
@@ -135,8 +136,16 @@ func (o *Options) validate(args []string) error {
 	}
 
 	if encapMode.SupportsNoEncap() {
-		if !features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
+		// When use NoEncap traffic mode without Antrea Proxy, Pod-to-Service traffic is handled by iptables/ipvs in
+		// root netns, if the endpoint is not local the DNATed traffic will be output to physical network directly
+		// without going back to OVS for Egress NetworkPolicy enforcement, which breaks basic security functionality.
+		// It is not allowed to use in principle, But can force support NoEncap with ALLOW_NO_ENCAP_WITHOUT_ANTREA_PROXY
+		// environment parameter for performance.
+		if !features.DefaultFeatureGate.Enabled(features.AntreaProxy) && !env.GetAllowNoEncapWithoutAntreaProxy() {
 			return fmt.Errorf("TrafficEncapMode %s requires AntreaProxy to be enabled", o.config.TrafficEncapMode)
+		}
+		if env.GetAllowNoEncapWithoutAntreaProxy(){
+			klog.Warningf("NoEncap traffic mode has been allowed without Antrea Proxy.")
 		}
 		if encryptionMode != config.TrafficEncryptionModeNone {
 			return fmt.Errorf("TrafficEncryptionMode %s may only be enabled in %s mode", encryptionMode, config.TrafficEncapModeEncap)

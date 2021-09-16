@@ -4373,6 +4373,8 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: spec.nodeName
+        - name: ALLOW_NO_ENCAP_WITHOUT_ANTREA_PROXY
+          value: "true"
         image: projects.registry.vmware.com/antrea/antrea-ubuntu:latest
         imagePullPolicy: IfNotPresent
         livenessProbe:
