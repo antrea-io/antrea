@@ -98,9 +98,22 @@ data:
     #trafficEncapMode: encap
 
     # The name of the interface on Node which is used for tunneling or routing the traffic across Nodes.
-    # If there are multiple IP addresses configured on the interface, the first one is used.
-    # The interface configured with Node IP is used if this parameter is not set.
+    # If there are multiple IP addresses configured on the interface, the first one is used. The IP
+    # address used for tunneling or routing traffic to remote Nodes is decided in the following order of
+    # preference (from highest to lowest):
+    # 1. transportInterface
+    # 2. transportInterfaceCIDRs
+    # 3. The Node IP
     #transportInterface:
+
+    # The network CIDRs of the interface on Node which is used for tunneling or routing the traffic across
+    # Nodes. If there are multiple interfaces configured the same network CIDR, the first one is used. The
+    # IP address used for tunneling or routing traffic to remote Nodes is decided in the following order of
+    # preference (from highest to lowest):
+    # 1. transportInterface
+    # 2. transportInterfaceCIDRs
+    # 3. The Node IP
+    #transportInterfaceCIDRs: [<IPv4 CIDR>,<IPv6 CIDR>]
   antrea-cni.conflist: |
     {
         "cniVersion":"0.3.0",
@@ -119,7 +132,7 @@ kind: ConfigMap
 metadata:
   labels:
     app: antrea
-  name: antrea-windows-config-74ctmgh7mf
+  name: antrea-windows-config-4hbbk65bdk
   namespace: kube-system
 ---
 apiVersion: apps/v1
@@ -207,7 +220,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-windows-config-74ctmgh7mf
+          name: antrea-windows-config-4hbbk65bdk
         name: antrea-windows-config
       - configMap:
           defaultMode: 420

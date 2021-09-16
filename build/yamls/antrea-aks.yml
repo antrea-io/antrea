@@ -3919,9 +3919,22 @@ data:
     #tlsMinVersion:
 
     # The name of the interface on Node which is used for tunneling or routing the traffic across Nodes.
-    # If there are multiple IP addresses configured on the interface, the first one is used.
-    # The interface configured with Node IP is used if this parameter is not set.
+    # If there are multiple IP addresses configured on the interface, the first one is used. The IP
+    # address used for tunneling or routing traffic to remote Nodes is decided in the following order of
+    # preference (from highest to lowest):
+    # 1. transportInterface
+    # 2. transportInterfaceCIDRs
+    # 3. The Node IP
     #transportInterface:
+
+    # The network CIDRs of the interface on Node which is used for tunneling or routing the traffic across
+    # Nodes. If there are multiple interfaces configured the same network CIDR, the first one is used. The
+    # IP address used for tunneling or routing traffic to remote Nodes is decided in the following order of
+    # preference (from highest to lowest):
+    # 1. transportInterface
+    # 2. transportInterfaceCIDRs
+    # 3. The Node IP
+    #transportInterfaceCIDRs: [<IPv4 CIDR>,<IPv6 CIDR>]
 
     # Option antreaProxy contains AntreaProxy related configuration options.
     antreaProxy:
@@ -4041,7 +4054,7 @@ metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-2cg6khh44b
+  name: antrea-config-dtc759g79k
   namespace: kube-system
 ---
 apiVersion: v1
@@ -4112,7 +4125,7 @@ spec:
             fieldRef:
               fieldPath: spec.serviceAccountName
         - name: ANTREA_CONFIG_MAP_NAME
-          value: antrea-config-2cg6khh44b
+          value: antrea-config-dtc759g79k
         image: projects.registry.vmware.com/antrea/antrea-ubuntu:latest
         imagePullPolicy: IfNotPresent
         livenessProbe:
@@ -4163,7 +4176,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-2cg6khh44b
+          name: antrea-config-dtc759g79k
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -4444,7 +4457,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-2cg6khh44b
+          name: antrea-config-dtc759g79k
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d

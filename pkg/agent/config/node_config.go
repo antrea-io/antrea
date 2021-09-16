@@ -141,6 +141,7 @@ type NetworkConfig struct {
 	TrafficEncryptionMode TrafficEncryptionModeType
 	IPSecPSK              string
 	TransportIface        string
+	TransportIfaceCIDRs   []string
 }
 
 // IsIPv4Enabled returns true if the cluster network supports IPv4.
