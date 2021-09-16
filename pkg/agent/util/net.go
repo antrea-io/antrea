@@ -24,6 +24,7 @@ import (
 	"strings"
 
 	"k8s.io/apimachinery/pkg/util/sets"
+	utilnet "k8s.io/utils/net"
 
 	"antrea.io/antrea/pkg/util/ip"
 )
@@ -178,6 +179,57 @@ func GetIPNetDeviceByName(ifaceName string) (v4IPNet *net.IPNet, v6IPNet *net.IP
 	}
 	if v4IPNet != nil || v6IPNet != nil {
 		return v4IPNet, v6IPNet, link, nil
+	}
+	return nil, nil, nil, fmt.Errorf("unable to find local IP and device")
+}
+
+func GetIPNetDeviceByCIDRs(cidrsList []string) (v4IPNet, v6IPNet *net.IPNet, link *net.Interface, err error) {
+	cidrs, err := utilnet.ParseCIDRs(cidrsList)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	dualStack, err := utilnet.IsDualStackCIDRs(cidrs)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	if len(cidrs) > 1 && !dualStack {
+		return nil, nil, nil, fmt.Errorf("len of cidrs is %v and they are not configured as dual stack (at least one from each IPFamily)", len(cidrs))
+	}
+
+	if len(cidrs) > 2 {
+		return nil, nil, nil, fmt.Errorf("length of cidrs is %v more than max allowed of 2", len(cidrs))
+	}
+
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	for _, i := range ifaces {
+		addresses, err := i.Addrs()
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		for _, addr := range addresses {
+			ipNet, ok := addr.(*net.IPNet)
+			if !ok || !ipNet.IP.IsGlobalUnicast() {
+				continue
+			}
+			for _, cidr := range cidrs {
+				if !cidr.Contains(ipNet.IP) {
+					continue
+				}
+				if v4IPNet == nil && ipNet.IP.To4() != nil {
+					v4IPNet = ipNet
+				} else if v6IPNet == nil && ipNet.IP.To4() == nil {
+					v6IPNet = ipNet
+				}
+			}
+		}
+		if v4IPNet != nil || v6IPNet != nil {
+			return v4IPNet, v6IPNet, &i, nil
+		}
 	}
 	return nil, nil, nil, fmt.Errorf("unable to find local IP and device")
 }
