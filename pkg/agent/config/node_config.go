@@ -44,6 +44,18 @@ const (
 	IPv6ExtraOverhead = 20
 )
 
+var (
+	// VirtualServiceIPv4 / VirtualServiceIPv6 are used in the following situations:
+	// - Use the virtual IP to perform SNAT for packets of Service from Antrea gateway and the Endpoint is not on
+	//   local Pod CIDR or any remote Pod CIDRs. It is used in OVS flow of table serviceConntrackCommitTable.
+	// - Use the virtual IP to perform DNAT for packets of NodePort on host. It is used in iptables rules on host.
+	// - Use the virtual IP as onlink routing entry gateway in host routing entry.
+	// - Use the virtual IP as destination IP in host routing entry. It is used to forward DNATed NodePort packets
+	//   or replied SNATed Service packets back to Antrea gateway.
+	VirtualServiceIPv4 = net.ParseIP("169.254.169.253")
+	VirtualServiceIPv6 = net.ParseIP("fc01::aabb:ccdd:eeff")
+)
+
 type GatewayConfig struct {
 	// Name is the name of host gateway, e.g. antrea-gw0.
 	Name string

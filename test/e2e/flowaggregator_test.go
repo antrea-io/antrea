@@ -454,12 +454,12 @@ func testHelper(t *testing.T, data *TestData, podAIPs, podBIPs, podCIPs, podDIPs
 	t.Run("ToExternalFlows", func(t *testing.T) {
 		// Creating an agnhost server as a host network Pod
 		serverPodPort := int32(80)
-		_, serverIPs, cleanupFunc := createAndWaitForPod(t, data, func(name string, ns string, nodeName string) error {
+		_, serverIPs, cleanupFunc := createAndWaitForPod(t, data, func(name string, ns string, nodeName string, hostNetwork bool) error {
 			return data.createServerPod(name, testNamespace, "", serverPodPort, false, true)
-		}, "test-server-", "", testNamespace)
+		}, "test-server-", "", testNamespace, false)
 		defer cleanupFunc()
 
-		clientName, clientIPs, cleanupFunc := createAndWaitForPod(t, data, data.createBusyboxPodOnNode, "test-client-", nodeName(0), testNamespace)
+		clientName, clientIPs, cleanupFunc := createAndWaitForPod(t, data, data.createBusyboxPodOnNode, "test-client-", nodeName(0), testNamespace, false)
 		defer cleanupFunc()
 
 		if !isIPv6 {
@@ -1000,12 +1000,12 @@ func createPerftestServices(data *TestData, isIPv6 bool) (svcB *corev1.Service, 
 		svcIPFamily = corev1.IPv6Protocol
 	}
 
-	svcB, err = data.createService("perftest-b", iperfPort, iperfPort, map[string]string{"antrea-e2e": "perftest-b"}, false, corev1.ServiceTypeClusterIP, &svcIPFamily)
+	svcB, err = data.createService("perftest-b", iperfPort, iperfPort, map[string]string{"antrea-e2e": "perftest-b"}, false, false, corev1.ServiceTypeClusterIP, &svcIPFamily)
 	if err != nil {
 		return nil, nil, fmt.Errorf("Error when creating perftest-b Service: %v", err)
 	}
 
-	svcC, err = data.createService("perftest-c", iperfPort, iperfPort, map[string]string{"antrea-e2e": "perftest-c"}, false, corev1.ServiceTypeClusterIP, &svcIPFamily)
+	svcC, err = data.createService("perftest-c", iperfPort, iperfPort, map[string]string{"antrea-e2e": "perftest-c"}, false, false, corev1.ServiceTypeClusterIP, &svcIPFamily)
 	if err != nil {
 		return nil, nil, fmt.Errorf("Error when creating perftest-c Service: %v", err)
 	}

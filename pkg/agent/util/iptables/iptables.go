@@ -41,6 +41,7 @@ const (
 	ConnTrackTarget  = "CT"
 	NoTrackTarget    = "NOTRACK"
 	SNATTarget       = "SNAT"
+	DNATTarget       = "DNAT"
 
 	PreRoutingChain  = "PREROUTING"
 	ForwardChain     = "FORWARD"

@@ -28,6 +28,7 @@ NUM_WORKERS=2
 SUBNETS=""
 ENCAP_MODE=""
 PROXY=true
+KUBE_PROXY_MODE="iptables"
 PROMETHEUS=false
 
 THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
@@ -49,6 +50,7 @@ where:
   --pod-cidr: specifies pod cidr used in kind cluster, default is $POD_CIDR
   --encap-mode: inter-node pod traffic encap mode, default is encap
   --no-proxy: disable Antrea proxy
+  --no-kube-proxy: disable Kube proxy
   --antrea-cni: specifies install Antrea CNI in kind cluster, default is true
   --prometheus: create RBAC resources for Prometheus, default is false
   --num-workers: specifies number of worker nodes in kind cluster, default is $NUM_WORKERS
@@ -80,6 +82,13 @@ function modify {
   peerName=$(docker run --net=host antrea/ethtool:latest ip link | grep ^"$peerIdx": | awk -F[:@] '{ print $2 }' | cut -c 2-)
   echo "Disabling TX checksum offload for node $node ($peerName)"
   docker run --net=host --privileged antrea/ethtool:latest ethtool -K "$peerName" tx off
+  # In Kind cluster, DNAT operation is configured by Docker as all DNS requests from Pod CoreDNS are NAT'd to the Docker
+  # DNS embedded resolver, which is running on localhost. When kube-proxy is enabled, parameter net.ipv4.conf.all.route_localnet
+  # is set to 1 by kube-proxy. This setting ensures that the DNS response can be forwarded back to Pod CoreDNS, otherwise
+  # DNS response from Docker DNS embedded resolver will be discarded. When kube-proxy is disabled, to ensure that DNS
+  # response can be forwarded back to Pod CoreDNS, we also set parameter net.ipv4.conf.all.route_localnet to 1 through
+  # the following command:
+  docker exec "$node" sysctl -w net.ipv4.conf.all.route_localnet=1
 }
 
 function configure_networks {
@@ -244,6 +253,7 @@ networking:
   disableDefaultCNI: true
   podSubnet: $POD_CIDR
   ipFamily: $IP_FAMILY
+  kubeProxyMode: $KUBE_PROXY_MODE
 nodes:
 - role: control-plane
 EOF
@@ -338,6 +348,10 @@ while [[ $# -gt 0 ]]
       ;;
     --no-proxy)
       PROXY=false
+      shift
+      ;;
+    --no-kube-proxy)
+      KUBE_PROXY_MODE="none"
       shift
       ;;
     --prometheus)
