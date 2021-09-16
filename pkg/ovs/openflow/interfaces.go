@@ -71,6 +71,10 @@ const (
 	NxmFieldIPToS       = "NXM_OF_IP_TOS"
 	NxmFieldXXReg       = "NXM_NX_XXREG"
 	NxmFieldPktMark     = "NXM_NX_PKT_MARK"
+	NxmFieldSrcIPv4     = "NXM_OF_IP_SRC"
+	NxmFieldDstIPv4     = "NXM_OF_IP_DST"
+	NxmFieldSrcIPv6     = "NXM_NX_IPV6_SRC"
+	NxmFieldDstIPv6     = "NXM_NX_IPV6_DST"
 )
 
 const (

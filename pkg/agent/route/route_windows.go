@@ -29,6 +29,7 @@ import (
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/util"
 	"antrea.io/antrea/pkg/agent/util/winfirewall"
+	binding "antrea.io/antrea/pkg/ovs/openflow"
 )
 
 const (
@@ -44,17 +45,19 @@ type Client struct {
 	fwClient       *winfirewall.Client
 	bridgeInfIndex int
 	noSNAT         bool
+	proxyAll       bool
 }
 
 // NewClient returns a route client.
 // Todo: remove param serviceCIDR after kube-proxy is replaced by Antrea Proxy completely.
-func NewClient(serviceCIDR *net.IPNet, networkConfig *config.NetworkConfig, noSNAT bool) (*Client, error) {
+func NewClient(serviceCIDR *net.IPNet, networkConfig *config.NetworkConfig, noSNAT, proxyAll bool) (*Client, error) {
 	return &Client{
 		networkConfig: networkConfig,
 		serviceCIDR:   serviceCIDR,
 		hostRoutes:    &sync.Map{},
 		fwClient:      winfirewall.NewClient(),
 		noSNAT:        noSNAT,
+		proxyAll:      proxyAll,
 	}, nil
 }
 
@@ -244,5 +247,25 @@ func (c *Client) AddSNATRule(snatIP net.IP, mark uint32) error {
 }
 
 func (c *Client) DeleteSNATRule(mark uint32) error {
+	return nil
+}
+
+func (c *Client) AddNodePort(nodePortAddresses []net.IP, port uint16, protocol binding.Protocol) error {
+	return nil
+}
+
+func (c *Client) DeleteNodePort(nodePortAddresses []net.IP, port uint16, protocol binding.Protocol) error {
+	return nil
+}
+
+func (c *Client) AddClusterIPRoute(svcIP net.IP) error {
+	return nil
+}
+
+func (c *Client) AddLoadBalancer(externalIPs []string) error {
+	return nil
+}
+
+func (c *Client) DeleteLoadBalancer(externalIPs []string) error {
 	return nil
 }

@@ -26,6 +26,7 @@ _usage="Usage: $0 [--encap-mode <mode>] [--ip-family <v4|v6>] [--no-proxy] [--np
         --encap-mode                  Traffic encapsulation mode. (default is 'encap').
         --ip-family                   Configures the ipFamily for the KinD cluster.
         --no-proxy                    Disables Antrea proxy.
+        --proxy-all                   Enables Antrea proxy with all Service support.
         --endpointslice               Enables Antrea proxy and EndpointSlice support.
         --no-np                       Disables Antrea-native policies.
         --skip                        A comma-separated list of keywords, with which tests should be skipped.
@@ -53,6 +54,7 @@ trap "quit" INT EXIT
 mode=""
 ipfamily="v4"
 proxy=true
+proxy_all=false
 endpointslice=false
 np=true
 coverage=false
@@ -64,6 +66,10 @@ key="$1"
 case $key in
     --no-proxy)
     proxy=false
+    shift
+    ;;
+    --proxy-all)
+    proxy_all=true
     shift
     ;;
     --ip-family)
@@ -105,6 +111,13 @@ manifest_args=""
 if ! $proxy; then
     manifest_args="$manifest_args --no-proxy"
 fi
+if $proxy_all; then
+    if ! $proxy; then
+      echoerr "--proxy-all requires AntreaProxy, so it cannot be used with --no-proxy"
+      exit 1
+    fi
+    manifest_args="$manifest_args --proxy-all"
+fi
 if $endpointslice; then
     manifest_args="$manifest_args --endpointslice"
 fi
@@ -132,6 +145,9 @@ else
     COMMON_IMAGES_LIST+=("projects.registry.vmware.com/antrea/antrea-ubuntu:latest")
     COMMON_IMAGES_LIST+=("projects.registry.vmware.com/antrea/flow-aggregator:latest")
 fi
+if $proxy_all; then
+    COMMON_IMAGES_LIST+=("k8s.gcr.io/echoserver:1.10")
+fi
 
 printf -v COMMON_IMAGES "%s " "${COMMON_IMAGES_LIST[@]}"
 
@@ -145,10 +161,12 @@ function run_test {
     echoerr "invalid value for --ip-family \"$ipfamily\", expected \"v4\" or \"v6\""
     exit 1
   fi
+  if $proxy_all; then
+    args="$args --no-kube-proxy"
+  fi
 
   echo "creating test bed with args $args"
   eval "timeout 600 $TESTBED_CMD create kind --antrea-cni false $args"
-
 
   if $coverage; then
       $YML_CMD --kind --encap-mode $current_mode $manifest_args | docker exec -i kind-control-plane dd of=/root/antrea-coverage.yml
@@ -159,7 +177,16 @@ function run_test {
       $YML_CMD --kind --encap-mode $current_mode --wireguard-go $manifest_args | docker exec -i kind-control-plane dd of=/root/antrea-wireguard-go.yml
       $FLOWAGGREGATOR_YML_CMD | docker exec -i kind-control-plane dd of=/root/flow-aggregator.yml
   fi
-
+  if $proxy_all; then
+      apiserver=$(docker exec -i kind-control-plane kubectl get endpoints kubernetes --no-headers | awk '{print $2}')
+      if $coverage; then
+        docker exec -i kind-control-plane sed -i.bak -E "s/^[[:space:]]*#kubeAPIServerOverride[[:space:]]*:[[:space:]]*[a-z\"]+[[:space:]]*$/    kubeAPIServerOverride: \"$apiserver\"/" /root/antrea-coverage.yml
+        docker exec -i kind-control-plane sed -i.bak -E "s/^[[:space:]]*#kubeAPIServerOverride[[:space:]]*:[[:space:]]*[a-z\"]+[[:space:]]*$/    kubeAPIServerOverride: \"$apiserver\"/" /root/antrea-wireguard-go-coverage.yml
+      else
+        docker exec -i kind-control-plane sed -i.bak -E "s/^[[:space:]]*#kubeAPIServerOverride[[:space:]]*:[[:space:]]*[a-z\"]+[[:space:]]*$/    kubeAPIServerOverride: \"$apiserver\"/" /root/antrea.yml
+        docker exec -i kind-control-plane sed -i.bak -E "s/^[[:space:]]*#kubeAPIServerOverride[[:space:]]*:[[:space:]]*[a-z\"]+[[:space:]]*$/    kubeAPIServerOverride: \"$apiserver\"/" /root/antrea-wireguard-go.yml
+      fi
+  fi
   sleep 1
 
   if $coverage; then

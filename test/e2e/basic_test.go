@@ -62,7 +62,7 @@ func testPodAssignIP(t *testing.T, data *TestData) {
 	podName := randName("test-pod-")
 
 	t.Logf("Creating a busybox test Pod")
-	if err := data.createBusyboxPodOnNode(podName, testNamespace, ""); err != nil {
+	if err := data.createBusyboxPodOnNode(podName, testNamespace, "", false); err != nil {
 		t.Fatalf("Error when creating busybox test Pod: %v", err)
 	}
 	defer deletePodWrapper(t, data, podName)
@@ -278,7 +278,7 @@ func testIPAMRestart(t *testing.T, data *TestData) {
 
 	createPodAndGetIP := func(podName string) (*PodIPs, error) {
 		t.Logf("Creating a busybox test Pod '%s' and waiting for IP", podName)
-		if err := data.createBusyboxPodOnNode(podName, testNamespace, nodeName); err != nil {
+		if err := data.createBusyboxPodOnNode(podName, testNamespace, nodeName, false); err != nil {
 			t.Fatalf("Error when creating busybox test Pod '%s': %v", podName, err)
 			return nil, err
 		}
@@ -389,6 +389,16 @@ func testReconcileGatewayRoutesOnStartup(t *testing.T, data *TestData, isIPv6 bo
 			}
 			if route.peerPodGW = net.ParseIP(matches[2]); route.peerPodGW == nil {
 				return nil, fmt.Errorf("%s is not a valid IP", matches[2])
+			}
+			// For gateway routes, the Antrea Node controller will not clean the route whose gateway is virtual Service IP.
+			// When running all e2e tests together, AntreaProxy could be installed and uninstalled several times.
+			// After uninstalling AntreaProxy, the route which is used to route ClusterIP to gateway still exists.
+			// When installing AntreaProxy again, a new route which used to route ClusterIP to gateway will be installed.
+			// The old route will be an orphan route, but Antrea Node controller cannot clean it because the func `Reconcile`
+			// of Antrea Node controller will not clean the route whose gateway is virtual Service IP. In short, the number
+			// of gateway routes is uncertain because there may be orphan routes, so it should not be counted.
+			if route.peerPodGW.Equal(config.VirtualServiceIPv4) || route.peerPodGW.Equal(config.VirtualServiceIPv6) {
+				continue
 			}
 			routes = append(routes, route)
 		}
@@ -718,7 +728,7 @@ func testGratuitousARP(t *testing.T, data *TestData) {
 	nodeName := workerNodeName(1)
 
 	t.Logf("Creating Pod '%s' on '%s'", podName, nodeName)
-	if err := data.createBusyboxPodOnNode(podName, testNamespace, nodeName); err != nil {
+	if err := data.createBusyboxPodOnNode(podName, testNamespace, nodeName, false); err != nil {
 		t.Fatalf("Error when creating Pod '%s': %v", podName, err)
 	}
 	defer deletePodWrapper(t, data, podName)

@@ -425,7 +425,7 @@ func createTestBusyboxPods(tb testing.TB, data *TestData, num int, ns string, no
 	createPodAndGetIP := func() (string, *PodIPs, error) {
 		podName := randName("test-pod-")
 		tb.Logf("Creating a busybox test Pod '%s' and waiting for IP", podName)
-		if err := data.createBusyboxPodOnNode(podName, ns, nodeName); err != nil {
+		if err := data.createBusyboxPodOnNode(podName, ns, nodeName, false); err != nil {
 			tb.Errorf("Error when creating busybox test Pod '%s': %v", podName, err)
 			return "", nil, err
 		}

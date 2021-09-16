@@ -155,7 +155,7 @@ func (data *TestData) testHostPortPodConnectivity(t *testing.T) {
 	hpPodHostIP := hpPod.Status.HostIP
 	// Create client Pod to test connectivity.
 	clientName := randName("test-client-")
-	if err := data.createBusyboxPodOnNode(clientName, testNamespace, ""); err != nil {
+	if err := data.createBusyboxPodOnNode(clientName, testNamespace, "", false); err != nil {
 		t.Fatalf("Error when creating test client Pod: %v", err)
 	}
 	defer deletePodWrapper(t, data, clientName)
@@ -368,7 +368,7 @@ func testOVSFlowReplay(t *testing.T, data *TestData) {
 	t.Logf("Creating %d busybox test Pods on '%s'", numPods, workerNode)
 	for i := range podInfos {
 		podInfos[i].os = clusterInfo.nodesOS[workerNode]
-		if err := data.createBusyboxPodOnNode(podInfos[i].name, testNamespace, workerNode); err != nil {
+		if err := data.createBusyboxPodOnNode(podInfos[i].name, testNamespace, workerNode, false); err != nil {
 			t.Fatalf("Error when creating busybox test Pod '%s': %v", podInfos[i].name, err)
 		}
 		defer deletePodWrapper(t, data, podInfos[i].name)
