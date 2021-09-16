@@ -331,7 +331,7 @@ the [Antrea IPsec deployment yaml](/build/yamls/antrea-ipsec.yml), which creates
 a Kubernetes Secret to save the PSK value and populates it to the
 `ANTREA_IPSEC_PSK` environment variable of the Antrea Agent container.
 
-When IPsec is enabled, Antrea Agent will create a separate GRE tunnel port on
+When IPsec is enabled, Antrea Agent will create a separate tunnel port on
 the OVS bridge for each remote Node, and write the PSK string and the remote
 Node IP address to two OVS interface options of the tunnel interface. Then
 `ovs-monitor-ipsec` can detect the tunnel and create IPsec Security Policies
