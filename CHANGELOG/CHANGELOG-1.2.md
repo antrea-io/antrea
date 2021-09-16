@@ -1,5 +1,22 @@
 # Changelog 1.2
 
+## 1.2.3 - 2021-09-24
+
+### Changed
+
+- Support returning partial supportbundle results when some Nodes fail to respond. ([#2788](https://github.com/antrea-io/antrea/pull/2788), [@hangyan])
+- Remove restriction that only GRE tunnels can be used when enabling IPsec: VXLAN can also be used, and so can Geneve (if the Linux kernel version for the Nodes is recent enough). ([#2764](https://github.com/antrea-io/antrea/pull/2764), [@luolanzone])
+- Reduce memory usage of antctl when collecting supportbundle. ([#2821](https://github.com/antrea-io/antrea/pull/2821), [@tnqn])
+
+### Fixed
+
+- Fix nil pointer error when collecting a supportbundle on a Node for which the antrea-agent container image does not include "iproute2"; this does not affect the standard antrea/antrea-ubuntu container image. ([#2789](https://github.com/antrea-io/antrea/pull/2789), [@liu4480])
+- When creating an IPsec OVS tunnel port to a remote Node, handle the case where the port already exists but with a stale config graciously: delete the existing port first, then recreate it. ([#2765](https://github.com/antrea-io/antrea/pull/2765), [@luolanzone])
+- Fix panic in the Antrea Controller when it processes ClusterGroups that are used by multiple ClusterNetworkPolicies. ([#2768](https://github.com/antrea-io/antrea/pull/2768), [@tnqn])
+- Fix nil pointer error when antrea-agent updates OpenFlow priorities of Antrea-native policies without Service ports. ([#2758](https://github.com/antrea-io/antrea/pull/2758), [@wenyingd])
+- Fix Pod-to-Service access on Windows when the Endpoints are not non-hostNetwork Pods (e.g. the `kubernetes` Service). ([#2702](https://github.com/antrea-io/antrea/pull/2702), [@wenyingd]) [Windows]
+- Fix container network interface MTU configuration error when using containerd as the runtime on Windows. ([#2773](https://github.com/antrea-io/antrea/pull/2773), [@wenyingd]) [Windows]
+
 ## 1.2.2 - 2021-08-16
 
 ### Changed
@@ -94,6 +111,7 @@ The NetworkPolicyStats feature is graduated from Alpha to Beta and is therefore 
 [@GraysonWu]: https://github.com/GraysonWu
 [@hangyan]: https://github.com/hangyan
 [@hongliangl]: https://github.com/hongliangl
+[@liu4480]: https://github.com/liu4480
 [@luolanzone]: https://github.com/luolanzone
 [@lzhecheng]: https://github.com/lzhecheng
 [@monotosh-avi]: https://github.com/monotosh-avi
