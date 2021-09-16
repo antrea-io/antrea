@@ -33,6 +33,8 @@ const (
 	antreaCloudEKSEnvKey = "ANTREA_CLOUD_EKS"
 
 	defaultAntreaNamespace = "kube-system"
+
+	allowNoEncapWithoutAntreaProxyEnvKey = "ALLOW_NO_ENCAP_WITHOUT_ANTREA_PROXY"
 )
 
 // GetNodeName returns the node's name used in Kubernetes, based on the priority:
@@ -120,4 +122,10 @@ func GetAntreaNamespace() string {
 		namespace = defaultAntreaNamespace
 	}
 	return namespace
+}
+
+// GetAllowNoEncapWithoutAntreaProxy returns whether AntreaProxy can be disabled for traffic
+// modes which support noEncap.
+func GetAllowNoEncapWithoutAntreaProxy() bool {
+	return getBoolEnvVar(allowNoEncapWithoutAntreaProxyEnvKey, false)
 }
