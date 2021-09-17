@@ -126,12 +126,14 @@ func (n *NetworkPolicyController) deleteCNP(old interface{}) {
 	n.deleteDereferencedAddressGroups(oldInternalNP)
 }
 
-// reprocessCNP is triggered by Namespace ADD/UPDATE/DELETE events when they impact the
-// per-namespace rules of a CNP.
-func (n *NetworkPolicyController) reprocessCNP(cnp *crdv1alpha1.ClusterNetworkPolicy) {
+// reprocessCNP is triggered when a CNP may be impacted by non-ClusterNetworkPolicy events, including Namespace events
+// (for per-namespace rules) and ClusterGroup events (for ClusterGroup reference).
+func (n *NetworkPolicyController) reprocessCNP(cnp *crdv1alpha1.ClusterNetworkPolicy, enqueueAppliedToGroup bool) {
 	key := internalNetworkPolicyKeyFunc(cnp)
 	n.internalNetworkPolicyMutex.Lock()
 	oldInternalNPObj, exist, _ := n.internalNetworkPolicyStore.Get(key)
+	// The internal NetworkPolicy may haven't been created yet. It's fine to skip processing this CNP as addCNP will
+	// create it eventually.
 	if !exist {
 		klog.V(2).Infof("Cannot find the original internal NetworkPolicy, skip reprocessCNP")
 		n.internalNetworkPolicyMutex.Unlock()
@@ -145,6 +147,11 @@ func (n *NetworkPolicyController) reprocessCNP(cnp *crdv1alpha1.ClusterNetworkPo
 	curInternalNP.SpanMeta = oldInternalNP.SpanMeta
 	n.internalNetworkPolicyStore.Update(curInternalNP)
 	n.internalNetworkPolicyMutex.Unlock()
+	if enqueueAppliedToGroup {
+		for _, atg := range curInternalNP.AppliedToGroups {
+			n.enqueueAppliedToGroup(atg)
+		}
+	}
 	// Enqueue addressGroup keys to update their Node span.
 	for _, rule := range curInternalNP.Rules {
 		for _, addrGroupName := range rule.From.AddressGroups {
@@ -196,7 +203,7 @@ func (n *NetworkPolicyController) addNamespace(obj interface{}) {
 	affectedACNPs := n.filterPerNamespaceRuleACNPsByNSLabels(namespace.Labels)
 	for cnpName := range affectedACNPs {
 		if cnp, err := n.cnpLister.Get(cnpName); err == nil {
-			n.reprocessCNP(cnp)
+			n.reprocessCNP(cnp, false)
 		}
 	}
 }
@@ -213,7 +220,7 @@ func (n *NetworkPolicyController) updateNamespace(oldObj, curObj interface{}) {
 	affectedACNPs := utilsets.SymmetricDifference(affectedACNPsByOldLabels, affectedACNPsByCurLabels)
 	for cnpName := range affectedACNPs {
 		if cnp, err := n.cnpLister.Get(cnpName); err == nil {
-			n.reprocessCNP(cnp)
+			n.reprocessCNP(cnp, false)
 		}
 	}
 }
@@ -243,7 +250,7 @@ func (n *NetworkPolicyController) deleteNamespace(old interface{}) {
 			klog.Errorf("Error getting Antrea ClusterNetworkPolicy %s", cnpName)
 			continue
 		}
-		n.reprocessCNP(cnp)
+		n.reprocessCNP(cnp, false)
 	}
 }
 
