@@ -143,9 +143,9 @@ func newController(objects ...runtime.Object) (*fake.Clientset, *networkPolicyCo
 
 // newControllerWithoutEventHandler creates a networkPolicyController that doesn't register event handlers so that the
 // tests can call event handlers in their own ways.
-func newControllerWithoutEventHandler(objects ...runtime.Object) (*fake.Clientset, *networkPolicyController) {
-	client := newClientset(objects...)
-	crdClient := fakeversioned.NewSimpleClientset()
+func newControllerWithoutEventHandler(k8sObjects, crdObjects []runtime.Object) (*fake.Clientset, *networkPolicyController) {
+	client := newClientset(k8sObjects...)
+	crdClient := fakeversioned.NewSimpleClientset(crdObjects...)
 	informerFactory := informers.NewSharedInformerFactory(client, informerDefaultResync)
 	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, informerDefaultResync)
 	appliedToGroupStore := store.NewAppliedToGroupStore()
@@ -153,7 +153,10 @@ func newControllerWithoutEventHandler(objects ...runtime.Object) (*fake.Clientse
 	internalNetworkPolicyStore := store.NewNetworkPolicyStore()
 	internalGroupStore := store.NewGroupStore()
 	networkPolicyInformer := informerFactory.Networking().V1().NetworkPolicies()
-	cgStore := crdInformerFactory.Crd().V1alpha2().ClusterGroups().Informer().GetStore()
+	tierInformer := crdInformerFactory.Crd().V1alpha1().Tiers()
+	cnpInformer := crdInformerFactory.Crd().V1alpha1().ClusterNetworkPolicies()
+	anpInformer := crdInformerFactory.Crd().V1alpha1().NetworkPolicies()
+	cgInformer := crdInformerFactory.Crd().V1alpha3().ClusterGroups()
 	groupEntityIndex := grouping.NewGroupEntityIndex()
 	npController := &NetworkPolicyController{
 		kubeClient:                 client,
@@ -161,6 +164,18 @@ func newControllerWithoutEventHandler(objects ...runtime.Object) (*fake.Clientse
 		networkPolicyInformer:      networkPolicyInformer,
 		networkPolicyLister:        networkPolicyInformer.Lister(),
 		networkPolicyListerSynced:  networkPolicyInformer.Informer().HasSynced,
+		tierInformer:               tierInformer,
+		tierLister:                 tierInformer.Lister(),
+		tierListerSynced:           tierInformer.Informer().HasSynced,
+		cnpInformer:                cnpInformer,
+		cnpLister:                  cnpInformer.Lister(),
+		cnpListerSynced:            cnpInformer.Informer().HasSynced,
+		anpInformer:                anpInformer,
+		anpLister:                  anpInformer.Lister(),
+		anpListerSynced:            anpInformer.Informer().HasSynced,
+		cgInformer:                 cgInformer,
+		cgLister:                   cgInformer.Lister(),
+		cgListerSynced:             cgInformer.Informer().HasSynced,
 		addressGroupStore:          addressGroupStore,
 		appliedToGroupStore:        appliedToGroupStore,
 		internalNetworkPolicyStore: internalNetworkPolicyStore,
@@ -171,14 +186,17 @@ func newControllerWithoutEventHandler(objects ...runtime.Object) (*fake.Clientse
 		internalGroupQueue:         workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "internalGroup"),
 		groupingInterface:          groupEntityIndex,
 	}
+	npController.tierInformer.Informer().AddIndexers(tierIndexers)
+	npController.cnpInformer.Informer().AddIndexers(cnpIndexers)
+	npController.anpInformer.Informer().AddIndexers(anpIndexers)
 	return client, &networkPolicyController{
 		npController,
 		informerFactory.Core().V1().Namespaces().Informer().GetStore(),
 		informerFactory.Core().V1().Services().Informer().GetStore(),
 		informerFactory.Networking().V1().NetworkPolicies().Informer().GetStore(),
-		crdInformerFactory.Crd().V1alpha1().ClusterNetworkPolicies().Informer().GetStore(),
-		crdInformerFactory.Crd().V1alpha1().Tiers().Informer().GetStore(),
-		cgStore,
+		cnpInformer.Informer().GetStore(),
+		tierInformer.Informer().GetStore(),
+		cgInformer.Informer().GetStore(),
 		appliedToGroupStore,
 		addressGroupStore,
 		internalNetworkPolicyStore,
