@@ -128,10 +128,6 @@ cleanup_ovs_run_files
 
 start_ovs $hw_offload
 
-# Restrict read permissions for "others"
-# See discussion in https://github.com/antrea-io/antrea/issues/1292
-chmod 0640 $OVS_DB_FILE
-
 # Check OVS status every 30 seconds
 CHECK_OVS_INTERVAL=30
 # Run logrotate every hour
