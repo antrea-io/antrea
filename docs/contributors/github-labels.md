@@ -34,6 +34,7 @@ The labels in this list originated within Kubernetes at
 | area/flow-visibility/elk           | Issues or PRs related to the reference ELK configuration for flow visualization | Any |
 | area/flow-visibility/export        | Issues or PRs related to the Flow Exporter functions in the Agent | Any |
 | area/github-membership             | Categorizes an issue as a membership request to join the antrea-io Github organization | Any |
+| area/grouping                      | Issues or PRs related to ClusterGroup, Group API | Any |
 | area/ipam                          | Issues or PRs related to IP address management (IPAM) | Any |
 | area/interface                     | Issues or PRs related to network interfaces | Any |
 | area/licensing                     | Issues or PRs related to Antrea licensing | Any |
@@ -42,15 +43,14 @@ The labels in this list originated within Kubernetes at
 | area/monitoring/logging            | Issues or PRs related to logging | Any |
 | area/monitoring/mirroring          | Issues or PRs related to mirroring | Any |
 | area/monitoring/traffic-analysis   | Issues or PRs related to traffic analysis | Any |
+| area/network-policy                | Issues or PRs related to network policy | Any |
 | area/network-policy/action         | Issues or PRs related to network policy actions | Any |
+| area/network-policy/agent          | Issues or PRs related to the network policy agents | Any |
 | area/network-policy/api            | Issues or PRs related to the network policy API | Any |
-| area/network-polciy/failsafe       | Issues or PRs related to network policy failsafes | Any |
+| area/network-policy/controller     | Issues or PRs related to the network policy controller | Any |
 | area/network-policy/lifecycle      | Issues or PRs related to the network policy lifecycle | Any |
 | area/network-policy/match          | Issues or PRs related to matching packets | Any |
-| area/network-policy/named-set      | Issues or PRs releatd to network policy named sets | Any |
 | area/network-policy/precedence     | Issues or PRs related to network policy precedence | Any |
-| area/network-policy/scope          | Issues or PRs related to network policy scope (namespace, global, etc.) | Any |
-| area/network-policy/staging        | Issues or PRs related to staging network policies | Any |
 | area/octant                        | Issues or PRs related to Octant | Any |
 | area/ops                           | Issues or PRs related to features which support network operations and troubleshooting | Any |
 | area/ops/traceflow                 | Issues or PRs related to the Traceflow feature | Any |
