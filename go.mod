@@ -3,7 +3,7 @@ module antrea.io/antrea
 go 1.17
 
 require (
-	antrea.io/libOpenflow v0.2.0
+	antrea.io/libOpenflow v0.5.1
 	antrea.io/ofnet v0.1.0
 	github.com/Mellanox/sriovnet v1.0.2
 	github.com/Microsoft/go-winio v0.4.16-0.20201130162521-d1ffc52c7331
@@ -14,7 +14,7 @@ require (
 	github.com/cenk/hub v1.0.1 // indirect
 	github.com/cenkalti/hub v1.0.1 // indirect
 	github.com/cenkalti/rpc2 v0.0.0-20180727162946-9642ea02d0aa // indirect
-	github.com/cheggaaa/pb/v3 v3.0.4
+	github.com/cheggaaa/pb/v3 v3.0.8
 	github.com/confluentinc/bincover v0.1.0
 	github.com/containernetworking/cni v0.8.1
 	github.com/containernetworking/plugins v0.8.7
@@ -86,7 +86,7 @@ require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/emicklei/go-restful v2.9.5+incompatible // indirect
 	github.com/evanphx/json-patch v4.9.0+incompatible // indirect
-	github.com/fatih/color v1.7.0 // indirect
+	github.com/fatih/color v1.10.0 // indirect
 	github.com/go-logr/logr v0.4.0 // indirect
 	github.com/go-openapi/jsonpointer v0.19.3 // indirect
 	github.com/go-openapi/jsonreference v0.19.3 // indirect
@@ -107,9 +107,9 @@ require (
 	github.com/josharian/native v0.0.0-20200817173448-b6b71def0850 // indirect
 	github.com/json-iterator/go v1.1.10 // indirect
 	github.com/mailru/easyjson v0.7.0 // indirect
-	github.com/mattn/go-colorable v0.1.2 // indirect
-	github.com/mattn/go-isatty v0.0.10 // indirect
-	github.com/mattn/go-runewidth v0.0.7 // indirect
+	github.com/mattn/go-colorable v0.1.8 // indirect
+	github.com/mattn/go-isatty v0.0.12 // indirect
+	github.com/mattn/go-runewidth v0.0.12 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.2-0.20181231171920-c182affec369 // indirect
 	github.com/mdlayher/genetlink v1.0.0 // indirect
 	github.com/mdlayher/netlink v1.4.0 // indirect
@@ -124,6 +124,7 @@ require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/prometheus/client_model v0.2.0 // indirect
 	github.com/prometheus/procfs v0.2.0 // indirect
+	github.com/rivo/uniseg v0.2.0 // indirect
 	github.com/safchain/ethtool v0.0.0-20190326074333-42ed695e3de8 // indirect
 	github.com/sean-/seed v0.0.0-20170313163322-e2103e2c3529 // indirect
 	github.com/ti-mo/netfilter v0.3.1 // indirect
