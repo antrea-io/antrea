@@ -46,8 +46,4 @@ $GOPATH/bin/informer-gen \
   --output-package "${ANTREA_PKG}/multicluster/pkg/client/informers" \
   --go-header-file hack/boilerplate.go.txt
 
-$GOPATH/bin/deepcopy-gen \
-  --input-dirs "${ANTREA_PKG}/multicluster/apis/multicluster/v1alpha1" \
-  -O zz_generated.deepcopy \
-  --go-header-file hack/boilerplate.go.txt
 
