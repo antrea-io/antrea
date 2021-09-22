@@ -261,7 +261,7 @@ function deliver_antrea_windows {
         WORKER_NAME=$(govc vm.info -vm.ip ${IP} -json | jq -r '.VirtualMachines[0].Name')
         echo "==== Reverting Windows VM ${WORKER_NAME} ====="
         govc snapshot.revert -vm.ip ${IP} win-initial
-        govc vm.power -on ${WORKER_NAME} || true
+        govc vm.power -reset=true ${WORKER_NAME} || true
         # Some tests need us.gcr.io/k8s-artifacts-prod/e2e-test-images/agnhost:2.13 image but it is not for windows/amd64 10.0.17763
         # Use e2eteam/agnhost:2.13 instead
         harbor_images=("sigwindowstools-kube-proxy:v1.18.0" "agnhost:2.13" "agnhost:2.13" "e2eteam-jessie-dnsutils:1.0" "e2eteam-pause:3.2")
