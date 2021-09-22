@@ -3,7 +3,7 @@ function Get-WebFileIfNotExist($Path, $URL) {
         return
     }
     Write-Host "Downloading $URL to $PATH"
-    curl.exe -sLo $Path $URL
+    curl.exe -sSLo $Path $URL
 }
 
 function New-DirectoryIfNotExist($Path)
