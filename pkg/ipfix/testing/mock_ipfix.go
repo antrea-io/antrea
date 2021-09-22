@@ -178,6 +178,34 @@ func (mr *MockIPFIXCollectingProcessMockRecorder) GetMsgChan() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMsgChan", reflect.TypeOf((*MockIPFIXCollectingProcess)(nil).GetMsgChan))
 }
 
+// GetNumConnToCollector mocks base method
+func (m *MockIPFIXCollectingProcess) GetNumConnToCollector() int64 {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetNumConnToCollector")
+	ret0, _ := ret[0].(int64)
+	return ret0
+}
+
+// GetNumConnToCollector indicates an expected call of GetNumConnToCollector
+func (mr *MockIPFIXCollectingProcessMockRecorder) GetNumConnToCollector() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNumConnToCollector", reflect.TypeOf((*MockIPFIXCollectingProcess)(nil).GetNumConnToCollector))
+}
+
+// GetNumRecordsReceived mocks base method
+func (m *MockIPFIXCollectingProcess) GetNumRecordsReceived() int64 {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetNumRecordsReceived")
+	ret0, _ := ret[0].(int64)
+	return ret0
+}
+
+// GetNumRecordsReceived indicates an expected call of GetNumRecordsReceived
+func (mr *MockIPFIXCollectingProcessMockRecorder) GetNumRecordsReceived() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNumRecordsReceived", reflect.TypeOf((*MockIPFIXCollectingProcess)(nil).GetNumRecordsReceived))
+}
+
 // Start mocks base method
 func (m *MockIPFIXCollectingProcess) Start() {
 	m.ctrl.T.Helper()
@@ -279,6 +307,20 @@ func (m *MockIPFIXAggregationProcess) GetExpiryFromExpirePriorityQueue() time.Du
 func (mr *MockIPFIXAggregationProcessMockRecorder) GetExpiryFromExpirePriorityQueue() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetExpiryFromExpirePriorityQueue", reflect.TypeOf((*MockIPFIXAggregationProcess)(nil).GetExpiryFromExpirePriorityQueue))
+}
+
+// GetNumFlows mocks base method
+func (m *MockIPFIXAggregationProcess) GetNumFlows() int64 {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetNumFlows")
+	ret0, _ := ret[0].(int64)
+	return ret0
+}
+
+// GetNumFlows indicates an expected call of GetNumFlows
+func (mr *MockIPFIXAggregationProcessMockRecorder) GetNumFlows() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNumFlows", reflect.TypeOf((*MockIPFIXAggregationProcess)(nil).GetNumFlows))
 }
 
 // IsAggregatedRecordIPv4 mocks base method

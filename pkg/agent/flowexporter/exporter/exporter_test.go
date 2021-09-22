@@ -16,20 +16,25 @@ package exporter
 
 import (
 	"net"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/golang/mock/gomock"
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/assert"
 	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
 	ipfixentitiestesting "github.com/vmware/go-ipfix/pkg/entities/testing"
+	"github.com/vmware/go-ipfix/pkg/exporter"
 	"github.com/vmware/go-ipfix/pkg/registry"
 	ipfixregistry "github.com/vmware/go-ipfix/pkg/registry"
+	"k8s.io/component-base/metrics/legacyregistry"
 
 	"antrea.io/antrea/pkg/agent/flowexporter"
 	"antrea.io/antrea/pkg/agent/flowexporter/connections"
 	connectionstest "antrea.io/antrea/pkg/agent/flowexporter/connections/testing"
 	"antrea.io/antrea/pkg/agent/flowexporter/priorityqueue"
+	"antrea.io/antrea/pkg/agent/metrics"
 	ipfixtest "antrea.io/antrea/pkg/ipfix/testing"
 )
 
@@ -256,6 +261,39 @@ func testSendDataSet(t *testing.T, v4Enabled bool, v6Enabled bool) {
 	if v6Enabled {
 		sendDataSet(elemListv6, testTemplateIDv6, *connv6)
 	}
+}
+
+func TestFlowExporter_initFlowExporter(t *testing.T) {
+	metrics.InitializeConnectionMetrics()
+	udpAddr, err := net.ResolveUDPAddr("udp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("error when resolving UDP address: %v", err)
+	}
+	conn, err := net.ListenUDP("udp", udpAddr)
+	if err != nil {
+		t.Fatalf("error when creating a local server: %v", err)
+	}
+	defer conn.Close()
+	exp := &flowExporter{
+		process: nil,
+		exporterInput: exporter.ExporterInput{
+			CollectorProtocol: conn.LocalAddr().Network(),
+			CollectorAddress:  conn.LocalAddr().String(),
+		},
+	}
+	err = exp.initFlowExporter()
+	assert.NoError(t, err)
+	checkTotalReconnectionsMetric(t)
+}
+
+func checkTotalReconnectionsMetric(t *testing.T) {
+	expected := `
+	# HELP antrea_agent_flow_collector_reconnection_count [ALPHA] Number of re-connections between Flow Exporter and flow collector. This metric gets updated whenever the connection is re-established between the Flow Exporter and the flow collector (e.g. the Flow Aggregator).
+	# TYPE antrea_agent_flow_collector_reconnection_count gauge
+	antrea_agent_flow_collector_reconnection_count 1
+	`
+	err := testutil.GatherAndCompare(legacyregistry.DefaultGatherer, strings.NewReader(expected), "antrea_agent_flow_collector_reconnection_count")
+	assert.NoError(t, err)
 }
 
 func getElemList(ianaIE []string, antreaIE []string) []ipfixentities.InfoElementWithValue {
