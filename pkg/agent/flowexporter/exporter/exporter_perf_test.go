@@ -53,27 +53,27 @@ go test -test.v -run=BenchmarkExport -test.benchmem -bench=BenchmarkExportConntr
 goos: linux
 goarch: amd64
 pkg: antrea.io/antrea/pkg/agent/flowexporter/exporter
-BenchmarkExportConntrackConns-2   	     100	   3484688 ns/op	  527820 B/op	    8214 allocs/op
---- BENCH: BenchmarkExportConntrackConns-2
-    exporter_perf_test.go:92:
+cpu: Intel(R) Core(TM) i7-8750H CPU @ 2.20GHz
+BenchmarkExportConntrackConns
+    exporter_perf_test.go:95:
         Summary:
         Number of conntrack connections: 20000
         Number of dying conntrack connections: 2000
-        Total connections received: 19698
-    exporter_perf_test.go:92:
+        Total connections received: 19564
+    exporter_perf_test.go:95:
         Summary:
         Number of conntrack connections: 20000
         Number of dying conntrack connections: 2000
-        Total connections received: 18509
-	... [output truncated]
+        Total connections received: 18259
+BenchmarkExportConntrackConns-2   	     100	   3174982 ns/op	  328104 B/op	    3262 allocs/op
 PASS
-ok  	antrea.io/antrea/pkg/agent/flowexporter/exporter	1.134s
+ok  	antrea.io/antrea/pkg/agent/flowexporter/exporter	1.249s
 Reference value:
 	#conns
-	20000     100	   3484688 ns/op	  527820 B/op	    8214 allocs/op
-	30000     100 	   5868374 ns/op	  788098 B/op	   12313 allocs/op
-	40000     100	   7300047 ns/op	 1047562 B/op	   16392 allocs/op
-	50000     100	   9312464 ns/op	 1308313 B/op	   20503 allocs/op
+	20000     100	   3174982 ns/op	  328104 B/op	    3262 allocs/op
+	30000     100	   5074667 ns/op	  489624 B/op	    4874 allocs/op
+	40000     100	   5910591 ns/op	  649683 B/op	    6442 allocs/op
+	50000     100	   8435327 ns/op	  811341 B/op	    8057 allocs/op
 */
 func BenchmarkExportConntrackConns(b *testing.B) {
 	disableLogToStderr()
@@ -101,27 +101,27 @@ go test -test.v -run=BenchmarkExport -test.benchmem -bench=BenchmarkExportDenyCo
 goos: linux
 goarch: amd64
 pkg: antrea.io/antrea/pkg/agent/flowexporter/exporter
-BenchmarkExportDenyConns-2   	     100	   3714699 ns/op	  507942 B/op	    7037 allocs/op
---- BENCH: BenchmarkExportDenyConns-2
-    exporter_perf_test.go:135:
+cpu: Intel(R) Core(TM) i7-8750H CPU @ 2.20GHz
+BenchmarkExportDenyConns
+    exporter_perf_test.go:143:
         Summary:
         Number of deny connections: 20000
         Number of idle deny connections: 2000
-        Total connections received: 19742
-    exporter_perf_test.go:135:
+        Total connections received: 19218
+    exporter_perf_test.go:143:
         Summary:
         Number of deny connections: 20000
         Number of idle deny connections: 2000
-        Total connections received: 19671
-	... [output truncated]
+        Total connections received: 19237
+BenchmarkExportDenyConns-2   	     100	   3133778 ns/op	  322203 B/op	    3474 allocs/op
 PASS
-ok  	antrea.io/antrea/pkg/agent/flowexporter/exporter	1.331s
+ok  	antrea.io/antrea/pkg/agent/flowexporter/exporter	1.238s
 Reference value:
 	#conns
-	20000   100	   3714699 ns/op	  507942 B/op	    7037 allocs/op
-	30000   100	   5073132 ns/op	  755810 B/op	   10488 allocs/op
-	40000   100	   7874295 ns/op	 1004996 B/op	   13965 allocs/op
-	50000   100	   8681581 ns/op	 1257332 B/op	   17527 allocs/op
+	20000   100	   3133778 ns/op	  322203 B/op	    3474 allocs/op
+	30000   100	   4813561 ns/op	  480075 B/op	    5175 allocs/op
+	40000   100	   6772657 ns/op	  637599 B/op	    6860 allocs/op
+	50000   100	   7078690 ns/op	  795104 B/op	    8549 allocs/op
 */
 func BenchmarkExportDenyConns(b *testing.B) {
 	disableLogToStderr()

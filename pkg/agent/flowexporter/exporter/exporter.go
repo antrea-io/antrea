@@ -305,7 +305,10 @@ func (exp *flowExporter) sendTemplateSet(isIPv6 bool) (int, error) {
 		if err != nil {
 			return 0, fmt.Errorf("%s not present. returned error: %v", ie, err)
 		}
-		ieWithValue := ipfixentities.NewInfoElementWithValue(element, nil)
+		ieWithValue, err := ipfixentities.DecodeAndCreateInfoElementWithValue(element, nil)
+		if err != nil {
+			return 0, fmt.Errorf("error when creating information element: %v", err)
+		}
 		elements = append(elements, ieWithValue)
 	}
 	for _, ie := range IANAReverseInfoElements {
@@ -313,7 +316,10 @@ func (exp *flowExporter) sendTemplateSet(isIPv6 bool) (int, error) {
 		if err != nil {
 			return 0, fmt.Errorf("%s not present. returned error: %v", ie, err)
 		}
-		ieWithValue := ipfixentities.NewInfoElementWithValue(element, nil)
+		ieWithValue, err := ipfixentities.DecodeAndCreateInfoElementWithValue(element, nil)
+		if err != nil {
+			return 0, fmt.Errorf("error when creating information element: %v", err)
+		}
 		elements = append(elements, ieWithValue)
 	}
 	for _, ie := range AntreaInfoElements {
@@ -321,7 +327,10 @@ func (exp *flowExporter) sendTemplateSet(isIPv6 bool) (int, error) {
 		if err != nil {
 			return 0, fmt.Errorf("information element %s is not present in Antrea registry", ie)
 		}
-		ieWithValue := ipfixentities.NewInfoElementWithValue(element, nil)
+		ieWithValue, err := ipfixentities.DecodeAndCreateInfoElementWithValue(element, nil)
+		if err != nil {
+			return 0, fmt.Errorf("error when creating information element: %v", err)
+		}
 		elements = append(elements, ieWithValue)
 	}
 	exp.ipfixSet.ResetSet()
@@ -361,136 +370,136 @@ func (exp *flowExporter) addConnToSet(conn *flowexporter.Connection) error {
 	}
 	// Iterate over all infoElements in the list
 	for i := range eL {
-		ie := &eL[i]
-		switch ieName := ie.Element.Name; ieName {
+		ie := eL[i]
+		switch ieName := ie.GetInfoElement().Name; ieName {
 		case "flowStartSeconds":
-			ie.Value = uint32(conn.StartTime.Unix())
+			ie.SetUnsigned32Value(uint32(conn.StartTime.Unix()))
 		case "flowEndSeconds":
-			ie.Value = uint32(conn.StopTime.Unix())
+			ie.SetUnsigned32Value(uint32(conn.StopTime.Unix()))
 		case "flowEndReason":
 			if flowexporter.IsConnectionDying(conn) {
-				ie.Value = ipfixregistry.EndOfFlowReason
+				ie.SetUnsigned8Value(ipfixregistry.EndOfFlowReason)
 			} else if conn.IsActive {
-				ie.Value = ipfixregistry.ActiveTimeoutReason
+				ie.SetUnsigned8Value(ipfixregistry.ActiveTimeoutReason)
 			} else {
-				ie.Value = ipfixregistry.IdleTimeoutReason
+				ie.SetUnsigned8Value(ipfixregistry.IdleTimeoutReason)
 			}
 		case "sourceIPv4Address":
-			ie.Value = conn.FlowKey.SourceAddress
+			ie.SetIPAddressValue(conn.FlowKey.SourceAddress)
 		case "destinationIPv4Address":
-			ie.Value = conn.FlowKey.DestinationAddress
+			ie.SetIPAddressValue(conn.FlowKey.DestinationAddress)
 		case "sourceIPv6Address":
-			ie.Value = conn.FlowKey.SourceAddress
+			ie.SetIPAddressValue(conn.FlowKey.SourceAddress)
 		case "destinationIPv6Address":
-			ie.Value = conn.FlowKey.DestinationAddress
+			ie.SetIPAddressValue(conn.FlowKey.DestinationAddress)
 		case "sourceTransportPort":
-			ie.Value = conn.FlowKey.SourcePort
+			ie.SetUnsigned16Value(conn.FlowKey.SourcePort)
 		case "destinationTransportPort":
-			ie.Value = conn.FlowKey.DestinationPort
+			ie.SetUnsigned16Value(conn.FlowKey.DestinationPort)
 		case "protocolIdentifier":
-			ie.Value = conn.FlowKey.Protocol
+			ie.SetUnsigned8Value(conn.FlowKey.Protocol)
 		case "packetTotalCount":
-			ie.Value = conn.OriginalPackets
+			ie.SetUnsigned64Value(conn.OriginalPackets)
 		case "octetTotalCount":
-			ie.Value = conn.OriginalBytes
+			ie.SetUnsigned64Value(conn.OriginalBytes)
 		case "packetDeltaCount":
 			deltaPkts := int64(conn.OriginalPackets) - int64(conn.PrevPackets)
 			if deltaPkts < 0 {
 				klog.InfoS("Packet delta count for connection should not be negative", "packet delta count", deltaPkts)
 			}
-			ie.Value = uint64(deltaPkts)
+			ie.SetUnsigned64Value(uint64(deltaPkts))
 		case "octetDeltaCount":
 			deltaBytes := int64(conn.OriginalBytes) - int64(conn.PrevBytes)
 			if deltaBytes < 0 {
 				klog.InfoS("Byte delta count for connection should not be negative", "byte delta count", deltaBytes)
 			}
-			ie.Value = uint64(deltaBytes)
+			ie.SetUnsigned64Value(uint64(deltaBytes))
 		case "reversePacketTotalCount":
-			ie.Value = conn.ReversePackets
+			ie.SetUnsigned64Value(conn.ReversePackets)
 		case "reverseOctetTotalCount":
-			ie.Value = conn.ReverseBytes
+			ie.SetUnsigned64Value(conn.ReverseBytes)
 		case "reversePacketDeltaCount":
 			deltaPkts := int64(conn.ReversePackets) - int64(conn.PrevReversePackets)
 			if deltaPkts < 0 {
 				klog.InfoS("Packet delta count for connection should not be negative", "packet delta count", deltaPkts)
 			}
-			ie.Value = uint64(deltaPkts)
+			ie.SetUnsigned64Value(uint64(deltaPkts))
 		case "reverseOctetDeltaCount":
 			deltaBytes := int64(conn.ReverseBytes) - int64(conn.PrevReverseBytes)
 			if deltaBytes < 0 {
 				klog.InfoS("Byte delta count for connection should not be negative", "byte delta count", deltaBytes)
 			}
-			ie.Value = uint64(deltaBytes)
+			ie.SetUnsigned64Value(uint64(deltaBytes))
 		case "sourcePodNamespace":
-			ie.Value = conn.SourcePodNamespace
+			ie.SetStringValue(conn.SourcePodNamespace)
 		case "sourcePodName":
-			ie.Value = conn.SourcePodName
+			ie.SetStringValue(conn.SourcePodName)
 		case "sourceNodeName":
 			// Add nodeName for only local pods whose pod names are resolved.
 			if conn.SourcePodName != "" {
-				ie.Value = exp.nodeName
+				ie.SetStringValue(exp.nodeName)
 			} else {
-				ie.Value = ""
+				ie.SetStringValue("")
 			}
 		case "destinationPodNamespace":
-			ie.Value = conn.DestinationPodNamespace
+			ie.SetStringValue(conn.DestinationPodNamespace)
 		case "destinationPodName":
-			ie.Value = conn.DestinationPodName
+			ie.SetStringValue(conn.DestinationPodName)
 		case "destinationNodeName":
 			// Add nodeName for only local pods whose pod names are resolved.
 			if conn.DestinationPodName != "" {
-				ie.Value = exp.nodeName
+				ie.SetStringValue(exp.nodeName)
 			} else {
-				ie.Value = ""
+				ie.SetStringValue("")
 			}
 		case "destinationClusterIPv4":
 			if conn.DestinationServicePortName != "" {
-				ie.Value = conn.DestinationServiceAddress
+				ie.SetIPAddressValue(conn.DestinationServiceAddress)
 			} else {
 				// Sending dummy IP as IPFIX collector expects constant length of data for IP field.
 				// We should probably think of better approach as this involves customization of IPFIX collector to ignore
 				// this dummy IP address.
-				ie.Value = net.IP{0, 0, 0, 0}
+				ie.SetIPAddressValue(net.IP{0, 0, 0, 0})
 			}
 		case "destinationClusterIPv6":
 			if conn.DestinationServicePortName != "" {
-				ie.Value = conn.DestinationServiceAddress
+				ie.SetIPAddressValue(conn.DestinationServiceAddress)
 			} else {
 				// Same as destinationClusterIPv4.
-				ie.Value = net.ParseIP("::")
+				ie.SetIPAddressValue(net.ParseIP("::"))
 			}
 		case "destinationServicePort":
 			if conn.DestinationServicePortName != "" {
-				ie.Value = conn.DestinationServicePort
+				ie.SetUnsigned16Value(conn.DestinationServicePort)
 			} else {
-				ie.Value = uint16(0)
+				ie.SetUnsigned16Value(uint16(0))
 			}
 		case "destinationServicePortName":
-			ie.Value = conn.DestinationServicePortName
+			ie.SetStringValue(conn.DestinationServicePortName)
 		case "ingressNetworkPolicyName":
-			ie.Value = conn.IngressNetworkPolicyName
+			ie.SetStringValue(conn.IngressNetworkPolicyName)
 		case "ingressNetworkPolicyNamespace":
-			ie.Value = conn.IngressNetworkPolicyNamespace
+			ie.SetStringValue(conn.IngressNetworkPolicyNamespace)
 		case "ingressNetworkPolicyType":
-			ie.Value = conn.IngressNetworkPolicyType
+			ie.SetUnsigned8Value(conn.IngressNetworkPolicyType)
 		case "ingressNetworkPolicyRuleName":
-			ie.Value = conn.IngressNetworkPolicyRuleName
+			ie.SetStringValue(conn.IngressNetworkPolicyRuleName)
 		case "ingressNetworkPolicyRuleAction":
-			ie.Value = conn.IngressNetworkPolicyRuleAction
+			ie.SetUnsigned8Value(conn.IngressNetworkPolicyRuleAction)
 		case "egressNetworkPolicyName":
-			ie.Value = conn.EgressNetworkPolicyName
+			ie.SetStringValue(conn.EgressNetworkPolicyName)
 		case "egressNetworkPolicyNamespace":
-			ie.Value = conn.EgressNetworkPolicyNamespace
+			ie.SetStringValue(conn.EgressNetworkPolicyNamespace)
 		case "egressNetworkPolicyType":
-			ie.Value = conn.EgressNetworkPolicyType
+			ie.SetUnsigned8Value(conn.EgressNetworkPolicyType)
 		case "egressNetworkPolicyRuleName":
-			ie.Value = conn.EgressNetworkPolicyRuleName
+			ie.SetStringValue(conn.EgressNetworkPolicyRuleName)
 		case "egressNetworkPolicyRuleAction":
-			ie.Value = conn.EgressNetworkPolicyRuleAction
+			ie.SetUnsigned8Value(conn.EgressNetworkPolicyRuleAction)
 		case "tcpState":
-			ie.Value = conn.TCPState
+			ie.SetStringValue(conn.TCPState)
 		case "flowType":
-			ie.Value = exp.findFlowType(*conn)
+			ie.SetUnsigned8Value(exp.findFlowType(*conn))
 		}
 	}
 	err := exp.ipfixSet.AddRecord(eL, templateID)
