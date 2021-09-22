@@ -270,12 +270,12 @@ function deliver_antrea_windows {
             ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "docker pull -q ${DOCKER_REGISTRY}/antrea/${harbor_images[i]} && docker tag ${DOCKER_REGISTRY}/antrea/${harbor_images[i]} ${antrea_images[i]}" || true
         done
 
+        for i in `seq 24`; do
+            sleep 5
+            ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "W32tm /resync /force" | grep successfully && break
+        done
         # Use a script to run antrea agent in windows Network Policy cases
         if [ "$TESTCASE" == "windows-networkpolicy" ]; then
-            for i in `seq 24`; do
-                sleep 5
-                ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "W32tm /resync /force" | grep successfully && break
-            done
             ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "powershell stop-service kubelet"
             ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "powershell restart-service docker"
             ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "powershell start-service kubelet"
@@ -497,7 +497,7 @@ function run_conformance_windows {
     echo "====== Run test with e2e.test ======"
     export KUBE_TEST_REPO_LIST=${WORKDIR}/repo_list
     if [ "$TESTCASE" == "windows-networkpolicy" ]; then
-        ginkgo -p -nodes 8 --seed=1592804472 --noColor $E2ETEST_PATH -- --provider=skeleton --ginkgo.focus="$WINDOWS_NETWORKPOLICY_FOCUS" --ginkgo.skip="$WINDOWS_NETWORKPOLICY_SKIP" > windows_conformance_result_no_color.txt || true
+        ginkgo --noColor $E2ETEST_PATH -- --provider=skeleton --ginkgo.focus="$WINDOWS_NETWORKPOLICY_FOCUS" --ginkgo.skip="$WINDOWS_NETWORKPOLICY_SKIP" > windows_conformance_result_no_color.txt || true
     else
         ginkgo --noColor $E2ETEST_PATH -- --provider=skeleton --node-os-distro=windows --ginkgo.focus="$WINDOWS_CONFORMANCE_FOCUS" --ginkgo.skip="$WINDOWS_CONFORMANCE_SKIP" > windows_conformance_result_no_color.txt || true
     fi
