@@ -1,0 +1,111 @@
+maintainers:
+- antoninbas
+- jianjuns
+- tnqn
+- salv-orlando
+
+# Any antrea-io org member can add themselves to this list by opening a PR.
+reviewers:
+  area/api:
+  - antoninbas
+  - jianjuns
+  area/component/octant:
+  - mengdie-song
+  area/flow-visibility*:
+  - dreamtalen
+  - zyiou
+  area/grouping:
+  - Dyanngg
+  area/ipam:
+  - annakhm
+  - gran-vmv
+  - ksamoray
+  area/multi-cluster:
+  - luolanzone
+  area/network-policy*:
+  - Dyanngg
+  - GraysonWu
+  - qiyueyao
+  area/network-policy/api:
+  - antoninbas
+  - Dyanngg
+  - GraysonWu
+  - jianjuns
+  area/octant:
+  - mengdie-song
+  area/ops/traceflow:
+  - gran-vmv
+  area/OS/windows:
+  - lzhecheng
+  area/ovs*:
+  - antoninbas
+  - GraysonWu
+  area/proxy*:
+  - hongliangl
+  area/proxy/nodeport:
+  - chauhanshubham
+  - monotosh-avi
+  area/transit/encryption:
+  - luolanzone
+  - xliuxu
+  area/test/*:
+  - lzhecheng
+  area/transit/ipv6:
+  - wenyingd
+  - lzhecheng
+
+# Any approver is also a reviewer.
+# Maintainers can promote reviewers to approvers.
+# If an area has reviewers but no approvers, approver list will default to maintainers.
+approvers:
+  area/api:
+  - tnqn
+  area/arch/arm:
+  - antoninbas
+  area/build-release:
+  - antoninbas
+  area/component/antctl:
+  - antoninbas
+  - jianjuns
+  - tnqn
+  area/component/cni:
+  - tnqn
+  area/flow-visibility*:
+  - antoninbas
+  - srikartati
+  area/grouping:
+  - abhiraut
+  - tnqn
+  area/ipam:
+  - jianjuns
+  area/multi-cluster:
+  - abhiraut
+  area/network-policy*:
+  - abhiraut
+  - tnqn
+  area/network-policy/api:
+  - abhiraut
+  - tnqn
+  area/ops/traceflow:
+  - antoninbas
+  - jianjuns
+  area/OS/windows:
+  - wenyingd
+  - tnqn
+  area/ovs*:
+  - jianjuns
+  - tnqn
+  - wenyingd
+  area/proxy*:
+  - tnqn
+  area/proxy/nodeport:
+  - antoninbas
+  area/test/*:
+  - antoninbas
+  area/test/infra:
+  - antoninbas
+  - edwardbadboy
+  area/test/jenkins:
+  - antoninbas
+  - edwardbadboy
+  - lzhecheng
