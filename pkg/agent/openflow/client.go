@@ -442,6 +442,9 @@ func (c *client) InstallNodeFlows(hostname string,
 		} else {
 			flows = append(flows, c.l3FwdFlowToRemoteViaRouting(localGatewayMAC, remoteGatewayMAC, cookie.Node, tunnelPeerIP, peerPodCIDR)...)
 		}
+		if c.enableEgress {
+			flows = append(flows, c.snatSkipNodeFlow(tunnelPeerIP, cookie.Node))
+		}
 	}
 	if ipsecTunOFPort != 0 {
 		// When IPSec tunnel is enabled, packets received from the remote Node are

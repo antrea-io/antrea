@@ -2015,6 +2015,21 @@ func (c *client) localProbeFlow(localGatewayIPs []net.IP, category cookie.Catego
 	return flows
 }
 
+// snatSkipNodeFlow installs a flow to skip SNAT for traffic to the transport IP of the a remote Node.
+func (c *client) snatSkipNodeFlow(nodeIP net.IP, category cookie.Category) binding.Flow {
+	l3FwdTable := c.pipeline[l3ForwardingTable]
+	nextTable := l3FwdTable.GetNext()
+	ipProto := getIPProtocol(nodeIP)
+	// This flow is for the traffic to the remote Node IP.
+	return l3FwdTable.BuildFlow(priorityNormal).
+		MatchProtocol(ipProto).
+		MatchRegMark(FromLocalRegMark).
+		MatchDstIP(nodeIP).
+		Action().GotoTable(nextTable).
+		Cookie(c.cookieAllocator.Request(category).Raw()).
+		Done()
+}
+
 // snatCommonFlows installs the default flows for performing SNAT for traffic to
 // the external network. The flows identify the packets to external, and send
 // them to snatTable, where SNAT IPs are looked up for the packets.
