@@ -44,6 +44,10 @@ const (
 	notFoundHNSEndpoint = "The endpoint was not found"
 )
 
+var (
+	hnsMutex sync.Mutex
+)
+
 type postInterfaceCreateHook func() error
 
 type ifConfigurator struct {
@@ -218,6 +222,8 @@ func (ic *ifConfigurator) createContainerLink(endpointName string, result *curre
 		IPAddress:        containerIP.Address.IP,
 		AdditionalParams: ovsAttachInfo,
 	}
+	hnsMutex.Lock()
+	defer hnsMutex.Unlock()
 	hnsEP, err := epRequest.Create()
 	if err != nil {
 		return nil, err
@@ -267,6 +273,8 @@ func parseOVSPortInterfaceConfigFromHNSEndpoint(ep *hcsshim.HNSEndpoint) *interf
 //   - Docker runtime: HNS API
 //   - Containerd runtime: HCS API
 func attachContainerLink(ep *hcsshim.HNSEndpoint, containerID, sandbox, containerIFDev string) (*current.Interface, error) {
+	hnsMutex.Lock()
+	defer hnsMutex.Unlock()
 	var attached bool
 	var err error
 	var hcnEp *hcn.HostComputeEndpoint
@@ -340,6 +348,8 @@ func (ic *ifConfigurator) removeHNSEndpoint(endpoint *hcsshim.HNSEndpoint, conta
 	deleteCh := make(chan error)
 	// Remove HNSEndpoint.
 	go func() {
+		hnsMutex.Lock()
+		defer hnsMutex.Unlock()
 		hcnEndpoint, _ := hcn.GetEndpointByID(endpoint.Id)
 		if hcnEndpoint != nil && isValidHostNamespace(hcnEndpoint.HostComputeNamespace) {
 			err := hcn.RemoveNamespaceEndpoint(hcnEndpoint.HostComputeNamespace, hcnEndpoint.Id)
