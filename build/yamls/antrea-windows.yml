@@ -5,12 +5,12 @@ data:
     # wins will rename the binary when executing it. So we need to copy the binary everytime before running it.
     mkdir -force /host/k/antrea/bin
     cp /k/antrea/bin/* /host/k/antrea/bin/
-    C:/k/antrea/utils/wins.exe cli process run --path /k/antrea/bin/antrea-agent.exe --args "--config=/k/antrea/etc/antrea-agent.conf --logtostderr=false --log_dir=/k/antrea/logs/ --alsologtostderr --log_file_max_size=100 --log_file_max_num=4" --envs "KUBERNETES_SERVICE_HOST=$env:KUBERNETES_SERVICE_HOST KUBERNETES_SERVICE_PORT=$env:KUBERNETES_SERVICE_PORT ANTREA_SERVICE_HOST=$env:ANTREA_SERVICE_HOST ANTREA_SERVICE_PORT=$env:ANTREA_SERVICE_PORT NODE_NAME=$env:NODE_NAME KUBE_DNS_SERVICE_HOST=$env:KUBE_DNS_SERVICE_HOST KUBE_DNS_SERVICE_PORT=$env:KUBE_DNS_SERVICE_PORT"
+    C:/k/antrea/utils/wins.exe cli process run --path /k/antrea/bin/antrea-agent.exe --args "--config=/k/antrea/etc/antrea-agent.conf --logtostderr=false --log_dir=/k/antrea/logs/ --alsologtostderr --log_file_max_size=100 --log_file_max_num=4" --envs "HCSSHIM_TIMEOUT_SYSCALLWATCHER=5 KUBERNETES_SERVICE_HOST=$env:KUBERNETES_SERVICE_HOST KUBERNETES_SERVICE_PORT=$env:KUBERNETES_SERVICE_PORT ANTREA_SERVICE_HOST=$env:ANTREA_SERVICE_HOST ANTREA_SERVICE_PORT=$env:ANTREA_SERVICE_PORT NODE_NAME=$env:NODE_NAME KUBE_DNS_SERVICE_HOST=$env:KUBE_DNS_SERVICE_HOST KUBE_DNS_SERVICE_PORT=$env:KUBE_DNS_SERVICE_PORT"
 kind: ConfigMap
 metadata:
   labels:
     app: antrea
-  name: antrea-agent-windows-5kkc4t55t4
+  name: antrea-agent-windows-9d25b25mfb
   namespace: kube-system
 ---
 apiVersion: v1
@@ -228,7 +228,7 @@ spec:
         name: antrea-windows-config
       - configMap:
           defaultMode: 420
-          name: antrea-agent-windows-5kkc4t55t4
+          name: antrea-agent-windows-9d25b25mfb
         name: antrea-agent-windows
       - hostPath:
           path: /etc/cni/net.d

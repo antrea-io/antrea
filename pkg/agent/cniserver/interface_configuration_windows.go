@@ -270,7 +270,8 @@ func attachContainerLink(ep *hcsshim.HNSEndpoint, containerID, sandbox, containe
 	var attached bool
 	var err error
 	var hcnEp *hcn.HostComputeEndpoint
-	if isDockerContainer(sandbox) {
+	isDocker := isDockerContainer(sandbox)
+	if isDocker {
 		// Docker runtime
 		attached, err = ep.IsAttached(containerID)
 		if err != nil {
@@ -293,27 +294,36 @@ func attachContainerLink(ep *hcsshim.HNSEndpoint, containerID, sandbox, containe
 		}
 	}
 
-	if attached {
-		klog.V(2).Infof("HNS Endpoint %s already attached on container %s", ep.Id, containerID)
-	} else {
-		if hcnEp == nil {
-			// Docker runtime
-			if err := hcsshim.HotAttachEndpoint(containerID, ep.Id); err != nil {
-				if isInfraContainer(sandbox) || hcsshim.ErrComputeSystemDoesNotExist != err {
-					return nil, err
-				}
-			}
-		} else {
-			// Containerd runtime
-			if err := hcnEp.NamespaceAttach(sandbox); err != nil {
-				return nil, err
-			}
-		}
-	}
 	containerIface := &current.Interface{
 		Name:    containerIFDev,
 		Mac:     ep.MacAddress,
 		Sandbox: sandbox,
+	}
+
+	if attached {
+		klog.V(2).Infof("HNS Endpoint %s already attached on container %s", ep.Id, containerID)
+		return containerIface, nil
+	}
+
+	if isDocker {
+		// Docker runtime
+		if pollErr := wait.PollImmediate(2*time.Second, 60*time.Second, func() (bool, error) {
+			if err = hcsshim.HotAttachEndpoint(containerID, ep.Id); err != nil {
+				if err == hcsshim.ErrComputeSystemDoesNotExist {
+					return false, err
+				}
+				klog.ErrorS(err, "Failed to attach endpoint to container, will retry later", "endpoint", ep.Id, "container", containerID)
+				return false, nil
+			}
+			return true, nil
+		}); pollErr != nil {
+			return nil, err
+		}
+	} else {
+		// Containerd runtime
+		if err := hcnEp.NamespaceAttach(sandbox); err != nil {
+			return nil, err
+		}
 	}
 	return containerIface, nil
 }
