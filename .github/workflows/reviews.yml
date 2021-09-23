@@ -1,0 +1,37 @@
+name: Test
+on:
+  # The pull_request_target workflow trigger presents a security risk when
+  # combined with an explicit checkout of an untrusted PR. This is not the case
+  # here: actions/checkout will checkout the code in the PR base branch.
+  pull_request_target:
+    branches:
+    - main
+    types: ["opened", "synchronize", "reopened", "labeled", "unlabeled", "ready_for_review", "review_request_removed"]
+  pull_request_review:
+    branches:
+    - main
+
+permissions:
+  pull-requests: write
+
+jobs:
+  test:
+    runs-on: [ubuntu-latest]
+    steps:
+    - name: Check-out code
+      uses: actions/checkout@v2
+    - uses: antrea-io/review-manager@v0.3.0
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        area_ownership_file: '.github/AREA-OWNERS'
+        min_approving_reviews_total: 2
+        min_approving_reviews_per_area: 1
+        fail_if_cannot_be_merged: false # temporary for initial testing
+        label_on_success: 'can-be-merged'
+        require_area_label: false
+        succeed_if_maintainer_approves: false
+        maintainers_are_universal_approvers: true
+        ignore_if_not_labelled_with: 'review-manager-test' # temporary for initial testing
+        require_enough_available_approvers_for_area: false
+        support_label_regex: true
+        request_reviews_from_maintainers_if_needed: true
