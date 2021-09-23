@@ -29,7 +29,7 @@ import (
 	"antrea.io/antrea/pkg/agent/flowexporter"
 	"antrea.io/antrea/pkg/agent/flowexporter/connections"
 	connectionstest "antrea.io/antrea/pkg/agent/flowexporter/connections/testing"
-	"antrea.io/antrea/pkg/agent/flowexporter/flowrecords"
+	"antrea.io/antrea/pkg/agent/flowexporter/priorityqueue"
 	ipfixtest "antrea.io/antrea/pkg/ipfix/testing"
 )
 
@@ -165,14 +165,14 @@ func testSendDataSet(t *testing.T, v4Enabled bool, v6Enabled bool) {
 	mockDataSet := ipfixentitiestesting.NewMockSet(ctrl)
 	mockIPFIXRegistry := ipfixtest.NewMockIPFIXRegistry(ctrl)
 
-	var recordv4, recordv6 flowexporter.FlowRecord
+	var connv4, connv6 *flowexporter.Connection
 	var elemListv4, elemListv6 []ipfixentities.InfoElementWithValue
 	if v4Enabled {
-		recordv4 = getFlowRecord(getConnection(false, true, 302, 6, "ESTABLISHED"), false, true)
+		connv4 = getConnection(false, true, 302, 6, "ESTABLISHED")
 		elemListv4 = getElemList(IANAInfoElementsIPv4, AntreaInfoElementsIPv4)
 	}
 	if v6Enabled {
-		recordv6 = getFlowRecord(getConnection(true, true, 302, 6, "ESTABLISHED"), true, true)
+		connv6 = getConnection(true, true, 302, 6, "ESTABLISHED")
 		elemListv6 = getElemList(IANAInfoElementsIPv6, AntreaInfoElementsIPv6)
 	}
 	flowExp := &flowExporter{
@@ -187,7 +187,9 @@ func testSendDataSet(t *testing.T, v4Enabled bool, v6Enabled bool) {
 		ipfixSet:       mockDataSet,
 	}
 
-	sendDataSet := func(elemList []ipfixentities.InfoElementWithValue, templateID uint16, record flowexporter.FlowRecord) {
+	sendDataSet := func(elemList []ipfixentities.InfoElementWithValue, templateID uint16, conn flowexporter.Connection) {
+		mockDataSet.EXPECT().ResetSet()
+		mockDataSet.EXPECT().PrepareSet(ipfixentities.Data, templateID).Return(nil)
 		mockDataSet.EXPECT().AddRecord(gomock.AssignableToTypeOf(elemList), templateID).DoAndReturn(
 			func(elements []ipfixentities.InfoElementWithValue, templateID uint16) interface{} {
 				for i, ieWithValue := range elements {
@@ -198,17 +200,18 @@ func testSendDataSet(t *testing.T, v4Enabled bool, v6Enabled bool) {
 			},
 		)
 		mockIPFIXExpProc.EXPECT().SendSet(mockDataSet).Return(0, nil)
-		err := flowExp.addRecordToSet(record)
+
+		err := flowExp.addConnToSet(&conn)
 		assert.NoError(t, err, "Error when adding record to data set")
 		_, err = flowExp.sendDataSet()
 		assert.NoError(t, err, "Error in sending data set")
 	}
 
 	if v4Enabled {
-		sendDataSet(elemListv4, testTemplateIDv4, recordv4)
+		sendDataSet(elemListv4, testTemplateIDv4, *connv4)
 	}
 	if v6Enabled {
-		sendDataSet(elemListv6, testTemplateIDv6, recordv6)
+		sendDataSet(elemListv6, testTemplateIDv6, *connv6)
 	}
 }
 
@@ -296,7 +299,7 @@ func getConnection(isIPv6 bool, isPresent bool, statusFlag uint32, protoID uint8
 	return conn
 }
 
-func getDenyConnection(isIPv6 bool, isActive bool, protoID uint8) *flowexporter.Connection {
+func getDenyConnection(isIPv6 bool, protoID uint8) *flowexporter.Connection {
 	var tuple, _ flowexporter.Tuple
 	if !isIPv6 {
 		tuple = flowexporter.Tuple{SourceAddress: net.IP{1, 2, 3, 4}, DestinationAddress: net.IP{4, 3, 2, 1}, Protocol: 6, SourcePort: 65280, DestinationPort: 255}
@@ -306,27 +309,9 @@ func getDenyConnection(isIPv6 bool, isActive bool, protoID uint8) *flowexporter.
 		tuple = flowexporter.Tuple{SourceAddress: srcIP, DestinationAddress: dstIP, Protocol: protoID, SourcePort: 65280, DestinationPort: 255}
 	}
 	conn := &flowexporter.Connection{
-		FlowKey:        tuple,
-		LastExportTime: time.Now().Add(-testIdleFlowTimeout),
-	}
-	if isActive {
-		conn.LastExportTime = time.Now().Add(-testActiveFlowTimeout)
-		conn.DeltaPackets = uint64(1)
+		FlowKey: tuple,
 	}
 	return conn
-}
-
-func getFlowRecord(conn *flowexporter.Connection, isIPv6 bool, isActive bool) flowexporter.FlowRecord {
-	flowRecord := &flowexporter.FlowRecord{
-		Conn:               *conn,
-		PrevPackets:        0,
-		PrevBytes:          0,
-		PrevReversePackets: 0,
-		PrevReverseBytes:   0,
-		IsIPv6:             isIPv6,
-		IsActive:           isActive,
-	}
-	return *flowRecord
 }
 
 func TestFlowExporter_sendFlowRecords(t *testing.T) {
@@ -350,15 +335,13 @@ func testSendFlowRecords(t *testing.T, v4Enabled bool, v6Enabled bool) {
 	if v6Enabled {
 		elemListv6 = getElemList(IANAInfoElementsIPv6, AntreaInfoElementsIPv6)
 	}
+
 	flowExp := &flowExporter{
-		elementsListv4:    elemListv4,
-		elementsListv6:    elemListv6,
-		templateIDv4:      testTemplateIDv4,
-		templateIDv6:      testTemplateIDv6,
-		v4Enabled:         true,
-		activeFlowTimeout: testActiveFlowTimeout,
-		idleFlowTimeout:   testIdleFlowTimeout,
-	}
+		elementsListv4: elemListv4,
+		elementsListv6: elemListv6,
+		templateIDv4:   testTemplateIDv4,
+		templateIDv6:   testTemplateIDv6,
+		v4Enabled:      true}
 
 	if v4Enabled {
 		runSendFlowRecordTests(t, flowExp, false)
@@ -377,139 +360,197 @@ func runSendFlowRecordTests(t *testing.T, flowExp *flowExporter, isIPv6 bool) {
 	flowExp.process = mockIPFIXExpProc
 	flowExp.ipfixSet = mockDataSet
 	mockConnDumper := connectionstest.NewMockConnTrackDumper(ctrl)
-	flowExp.conntrackConnStore = connections.NewConntrackConnectionStore(mockConnDumper, flowrecords.NewFlowRecords(), nil, !isIPv6, isIPv6, nil, nil, 1, 1)
+	startTime := time.Now()
 
 	tests := []struct {
 		name               string
+		isDenyConn         bool
 		isConnPresent      bool
-		isRecordActive     bool
-		packetDifference   uint64
-		lastExportTimeDiff time.Duration
 		tcpState           string
 		statusFlag         uint32
 		protoID            uint8
-		isDenyConnActive   bool
+		originalPackets    uint64
+		reversePackets     uint64
+		prevPackets        uint64
+		prevReversePackets uint64
+		activeExpireTime   time.Time
+		idleExpireTime     time.Time
 	}{
 		{
-			"active flow record",
+			"conntrack connection being active time out",
+			false,
 			true,
-			true,
-			0x2, // non-zero number for active records
-			testActiveFlowTimeout,
 			"SYN_SENT",
-			0x4,
+			4,
 			6,
-			true,
+			1,
+			1,
+			0,
+			0,
+			startTime.Add(-testActiveFlowTimeout),
+			startTime.Add(10 * testIdleFlowTimeout),
 		},
 		{
-			"idle flow record",
-			true,
-			true,
-			0x0, // zero for idle records
-			testIdleFlowTimeout,
-			"ESTABLISHED",
-			302,
-			6,
+			"conntrack connection being idle time out and becoming inactive",
 			false,
-		},
-		{
-			"idle flow record that is still inactive",
 			true,
-			false,
-			0x0,
-			testIdleFlowTimeout,
-			"",
-			0x204,
-			17,
-			false,
-		},
-		{
-			"idle flow record becomes active",
-			true,
-			true,
-			0x0,
-			testActiveFlowTimeout,
 			"SYN_SENT",
-			302,
+			4,
 			6,
-			true,
+			0,
+			0,
+			0,
+			0,
+			startTime.Add(10 * testActiveFlowTimeout),
+			startTime.Add(-testIdleFlowTimeout),
 		},
 		{
-			"idle flow record for deleted connection",
+			"conntrack connection with deleted connection",
 			false,
-			true,
-			0x1,
-			testIdleFlowTimeout,
+			false,
 			"TIME_WAIT",
-			0x204,
+			204,
 			6,
+			0,
+			0,
+			0,
+			0,
+			startTime.Add(-testActiveFlowTimeout),
+			startTime.Add(-testIdleFlowTimeout),
+		},
+		{
+			"deny connection being active time out",
+			true,
 			false,
+			"TIME_WAIT",
+			204,
+			6,
+			1,
+			0,
+			0,
+			0,
+			startTime.Add(-testActiveFlowTimeout),
+			startTime.Add(10 * testIdleFlowTimeout),
+		},
+		{
+			"deny connection being active time out and becoming inactive",
+			true,
+			false,
+			"TIME_WAIT",
+			204,
+			6,
+			1,
+			0,
+			1,
+			0,
+			startTime.Add(-testActiveFlowTimeout),
+			startTime.Add(10 * testIdleFlowTimeout),
+		},
+		{
+			"deny connection being idle time out",
+			true,
+			false,
+			"TIME_WAIT",
+			204,
+			6,
+			0,
+			0,
+			0,
+			0,
+			startTime.Add(10 * testActiveFlowTimeout),
+			startTime.Add(-testIdleFlowTimeout),
 		},
 	}
-	for _, tt := range tests {
+	for id, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			conn := getConnection(isIPv6, tt.isConnPresent, tt.statusFlag, tt.protoID, tt.tcpState)
-			connKey := flowexporter.NewConnectionKey(conn)
-			flowExp.conntrackConnStore.AddOrUpdateConn(conn)
-			flowExp.flowRecords = flowrecords.NewFlowRecords()
-			err := flowExp.conntrackConnStore.ForAllConnectionsDo(flowExp.flowRecords.AddOrUpdateFlowRecord)
-			assert.NoError(t, err)
+			conntrackPQ := priorityqueue.NewExpirePriorityQueue(testActiveFlowTimeout, testIdleFlowTimeout)
+			denyPQ := priorityqueue.NewExpirePriorityQueue(testActiveFlowTimeout, testIdleFlowTimeout)
+			flowExp.conntrackPriorityQueue = conntrackPQ
+			flowExp.denyPriorityQueue = denyPQ
+			flowExp.conntrackConnStore = connections.NewConntrackConnectionStore(mockConnDumper, nil, !isIPv6, isIPv6, nil, nil, 1, conntrackPQ, 1)
+			flowExp.denyConnStore = connections.NewDenyConnectionStore(nil, nil, denyPQ, 0)
 			flowExp.numDataSetsSent = 0
+			var conn, denyConn *flowexporter.Connection
+			var connKey flowexporter.ConnectionKey
+			var pqItem *flowexporter.ItemToExpire
 
-			denyConn := getDenyConnection(isIPv6, tt.isDenyConnActive, tt.protoID)
-			flowExp.denyConnStore = connections.NewDenyConnectionStore(nil, nil, 0)
-			flowExp.denyConnStore.AddOrUpdateConn(denyConn, denyConn.LastExportTime, denyConn.DeltaBytes)
-			assert.Equal(t, getNumOfConnections(flowExp.denyConnStore), 1)
-
-			// Get the flow record and update it.
-			flowRec, exists := flowExp.flowRecords.GetFlowRecordFromMap(&connKey)
-			if !exists {
-				t.Fatal("flow record is expected to be in the record map")
+			if !tt.isDenyConn {
+				// Prepare connection map
+				conn = getConnection(isIPv6, tt.isConnPresent, tt.statusFlag, tt.protoID, tt.tcpState)
+				connKey = flowexporter.NewConnectionKey(conn)
+				conn.OriginalPackets = tt.originalPackets
+				conn.ReversePackets = tt.reversePackets
+				flowExp.conntrackConnStore.AddOrUpdateConn(conn)
+				assert.Equalf(t, getNumOfConntrackConns(flowExp.conntrackConnStore), 1, "connection is expected to be in the connection map")
+				assert.Equalf(t, flowExp.conntrackPriorityQueue.Len(), 1, "pqItem is expected to be in the expire priority queue")
+				conn.PrevPackets = tt.prevPackets
+				conn.PrevReversePackets = tt.prevReversePackets
+				pqItem = flowExp.conntrackPriorityQueue.KeyToItem[connKey]
+				pqItem.ActiveExpireTime = tt.activeExpireTime
+				pqItem.IdleExpireTime = tt.idleExpireTime
+			} else {
+				// Prepare deny connection map
+				denyConn = getDenyConnection(isIPv6, tt.protoID)
+				connKey = flowexporter.NewConnectionKey(denyConn)
+				flowExp.denyConnStore.AddOrUpdateConn(denyConn, time.Now(), uint64(60))
+				assert.Equalf(t, getNumOfDenyConns(flowExp.denyConnStore), 1, "deny connection is expected to be in the connection map")
+				assert.Equalf(t, flowExp.denyPriorityQueue.Len(), 1, "pqItem is expected to be in the expire priority queue")
+				denyConn.PrevPackets = tt.prevPackets
+				pqItem = flowExp.denyPriorityQueue.KeyToItem[connKey]
+				pqItem.ActiveExpireTime = tt.activeExpireTime
+				pqItem.IdleExpireTime = tt.idleExpireTime
 			}
-			flowRec.IsActive = tt.isRecordActive
-			flowRec.PrevPackets = flowRec.Conn.OriginalPackets - tt.packetDifference
-			flowRec.PrevReversePackets = flowRec.Conn.ReversePackets - tt.packetDifference
-			flowRec.LastExportTime = time.Now().Add(-tt.lastExportTimeDiff)
-			flowExp.flowRecords.AddFlowRecordToMap(&connKey, flowRec)
 
-			count := 1
-			if tt.isRecordActive {
-				count += 1
-			}
+			mockDataSet.EXPECT().ResetSet()
 			if !isIPv6 {
-				mockDataSet.EXPECT().PrepareSet(ipfixentities.Data, flowExp.templateIDv4).Times(count).Return(nil)
-				mockDataSet.EXPECT().AddRecord(flowExp.elementsListv4, flowExp.templateIDv4).Times(count).Return(nil)
+				mockDataSet.EXPECT().PrepareSet(ipfixentities.Data, flowExp.templateIDv4).Return(nil)
+				mockDataSet.EXPECT().AddRecord(flowExp.elementsListv4, flowExp.templateIDv4).Return(nil)
 			} else {
-				mockDataSet.EXPECT().PrepareSet(ipfixentities.Data, flowExp.templateIDv6).Times(count).Return(nil)
-				mockDataSet.EXPECT().AddRecord(flowExp.elementsListv6, flowExp.templateIDv6).Times(count).Return(nil)
+				mockDataSet.EXPECT().PrepareSet(ipfixentities.Data, flowExp.templateIDv6).Return(nil)
+				mockDataSet.EXPECT().AddRecord(flowExp.elementsListv6, flowExp.templateIDv6).Return(nil)
 			}
-			mockIPFIXExpProc.EXPECT().SendSet(mockDataSet).Times(count).Return(0, nil)
-			mockDataSet.EXPECT().ResetSet().Times(count)
-
-			err = flowExp.sendFlowRecords()
+			mockIPFIXExpProc.EXPECT().SendSet(mockDataSet).Return(0, nil)
+			_, err := flowExp.sendFlowRecords()
 			assert.NoError(t, err)
-			assert.Equalf(t, uint64(count), flowExp.numDataSetsSent, "%v data sets should have been sent.", count)
-			if tt.isDenyConnActive {
-				connection, exist := flowExp.denyConnStore.GetConnByKey(connKey)
-				assert.True(t, exist)
-				assert.Equal(t, uint64(0), connection.DeltaPackets)
-				assert.Equal(t, uint64(0), connection.DeltaBytes)
-			} else {
-				assert.Equal(t, getNumOfConnections(flowExp.denyConnStore), 0)
-			}
-			if tt.isRecordActive && flowexporter.IsConnectionDying(conn) {
-				err = flowExp.conntrackConnStore.ForAllConnectionsDo(flowExp.flowRecords.AddOrUpdateFlowRecord)
-				assert.NoError(t, err)
-				_, recPresent := flowExp.flowRecords.GetFlowRecordFromMap(&connKey)
-				assert.Falsef(t, recPresent, "record should not be in the map")
-				connection, _ := flowExp.conntrackConnStore.GetConnByKey(connKey)
-				assert.True(t, connection.DyingAndDoneExport)
+			assert.Equalf(t, uint64(1), flowExp.numDataSetsSent, "1 data set should have been sent.")
+
+			switch id {
+			case 0: // conntrack connection being active time out
+				assert.True(t, pqItem.ActiveExpireTime.After(startTime))
+				assert.Equal(t, conn.OriginalPackets, conn.PrevPackets)
+				assert.Equalf(t, 1, flowExp.conntrackPriorityQueue.Len(), "Length of expire priority queue should be 1")
+			case 1: // conntrack connection being idle time out and becoming inactive
+				assert.False(t, conn.IsActive)
+				assert.Equalf(t, 0, flowExp.conntrackPriorityQueue.Len(), "Length of expire priority queue should be 0")
+			case 2: // conntrack connection with deleted connection
+				assert.True(t, conn.ReadyToDelete)
+				assert.Equalf(t, 0, flowExp.conntrackPriorityQueue.Len(), "Length of expire priority queue should be 0")
+			case 3: // deny connection being active time out
+				assert.True(t, pqItem.ActiveExpireTime.After(startTime))
+				assert.Equal(t, denyConn.OriginalPackets, denyConn.PrevPackets)
+				assert.Equalf(t, 1, flowExp.denyPriorityQueue.Len(), "Length of expire priority queue should be 1")
+			case 4: // deny connection being active time out and becoming inactive
+				assert.False(t, denyConn.IsActive)
+				assert.Equalf(t, 0, flowExp.denyPriorityQueue.Len(), "Length of expire priority queue should be 0")
+			case 5: // deny connection being idle time out
+				assert.Equal(t, true, denyConn.ReadyToDelete)
+				assert.Equalf(t, 0, flowExp.denyPriorityQueue.Len(), "Length of expire priority queue should be 0")
 			}
 		})
 	}
 }
 
-func getNumOfConnections(connStore *connections.DenyConnectionStore) int {
+func getNumOfConntrackConns(connStore *connections.ConntrackConnectionStore) int {
+	count := 0
+	countNumOfConns := func(key flowexporter.ConnectionKey, conn *flowexporter.Connection) error {
+		count++
+		return nil
+	}
+	connStore.ForAllConnectionsDo(countNumOfConns)
+	return count
+}
+
+func getNumOfDenyConns(connStore *connections.DenyConnectionStore) int {
 	count := 0
 	countNumOfConns := func(key flowexporter.ConnectionKey, conn *flowexporter.Connection) error {
 		count++

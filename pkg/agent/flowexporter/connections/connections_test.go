@@ -23,7 +23,9 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"antrea.io/antrea/pkg/agent/flowexporter"
+	connectionstest "antrea.io/antrea/pkg/agent/flowexporter/connections/testing"
 	interfacestoretest "antrea.io/antrea/pkg/agent/interfacestore/testing"
+	"antrea.io/antrea/pkg/agent/metrics"
 )
 
 const (
@@ -68,7 +70,7 @@ func TestConnectionStore_ForAllConnectionsDo(t *testing.T) {
 	}
 	// Create connectionStore
 	mockIfaceStore := interfacestoretest.NewMockInterfaceStore(ctrl)
-	connStore := NewConnectionStore(mockIfaceStore, nil, testStaleConnectionTimeout)
+	connStore := NewConnectionStore(mockIfaceStore, nil, nil, testStaleConnectionTimeout)
 	// Add flows to the Connection store
 	for i, flow := range testFlows {
 		connStore.connections[*testFlowKeys[i]] = flow
@@ -87,4 +89,37 @@ func TestConnectionStore_ForAllConnectionsDo(t *testing.T) {
 		assert.Equal(t, conn.IsPresent, false, "isActive flag should be reset")
 		assert.Equal(t, conn.OriginalPackets, uint64(0), "OriginalPackets should be reset")
 	}
+}
+
+func TestConnectionStore_DeleteConnWithoutLock(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	metrics.InitializeConnectionMetrics()
+	// test on deny connection store
+	mockIfaceStore := interfacestoretest.NewMockInterfaceStore(ctrl)
+	denyConnStore := NewDenyConnectionStore(mockIfaceStore, nil, nil, testStaleConnectionTimeout)
+	tuple := flowexporter.Tuple{SourceAddress: net.IP{1, 2, 3, 4}, DestinationAddress: net.IP{4, 3, 2, 1}, Protocol: 6, SourcePort: 65280, DestinationPort: 255}
+	conn := &flowexporter.Connection{
+		FlowKey: tuple,
+	}
+	connKey := flowexporter.NewConnectionKey(conn)
+	denyConnStore.connections[connKey] = conn
+
+	// For testing purposes, set the metric
+	metrics.TotalDenyConnections.Set(1)
+	denyConnStore.deleteConnWithoutLock(connKey)
+	_, exists := denyConnStore.GetConnByKey(connKey)
+	assert.Equal(t, false, exists, "connection should be deleted in connection store")
+	checkDenyConnectionMetrics(t, len(denyConnStore.connections))
+
+	// test on conntrack connection store
+	mockConnDumper := connectionstest.NewMockConnTrackDumper(ctrl)
+	conntrackConnStore := NewConntrackConnectionStore(mockConnDumper, mockIfaceStore, true, false, nil, nil, testPollInterval, nil, testStaleConnectionTimeout)
+	conntrackConnStore.connections[connKey] = conn
+
+	metrics.TotalAntreaConnectionsInConnTrackTable.Set(1)
+	conntrackConnStore.deleteConnWithoutLock(connKey)
+	_, exists = conntrackConnStore.GetConnByKey(connKey)
+	assert.Equal(t, false, exists, "connection should be deleted in connection store")
+	checkAntreaConnectionMetrics(t, len(conntrackConnStore.connections))
 }

@@ -21,6 +21,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent/flowexporter"
+	"antrea.io/antrea/pkg/agent/flowexporter/priorityqueue"
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/metrics"
 	"antrea.io/antrea/pkg/agent/proxy"
@@ -32,9 +33,9 @@ type DenyConnectionStore struct {
 }
 
 func NewDenyConnectionStore(ifaceStore interfacestore.InterfaceStore,
-	proxier proxy.Proxier, staleConnectionTimeout time.Duration) *DenyConnectionStore {
+	proxier proxy.Proxier, expirePriorityQueue *priorityqueue.ExpirePriorityQueue, staleConnectionTimeout time.Duration) *DenyConnectionStore {
 	return &DenyConnectionStore{
-		connectionStore: NewConnectionStore(ifaceStore, proxier, staleConnectionTimeout),
+		connectionStore: NewConnectionStore(ifaceStore, proxier, expirePriorityQueue, staleConnectionTimeout),
 	}
 }
 
@@ -48,9 +49,10 @@ func (ds *DenyConnectionStore) RunPeriodicDeletion(stopCh <-chan struct{}) {
 			break
 		case <-pollTicker.C:
 			deleteIfStaleConn := func(key flowexporter.ConnectionKey, conn *flowexporter.Connection) error {
-				// Delete the connection if it was not exported in last five minutes.
-				if time.Since(conn.LastExportTime) >= ds.staleConnectionTimeout {
-					delete(ds.connections, key)
+				if conn.ReadyToDelete || time.Since(conn.LastExportTime) >= ds.staleConnectionTimeout {
+					if err := ds.deleteConnWithoutLock(key); err != nil {
+						return err
+					}
 				}
 				return nil
 			}
@@ -66,46 +68,67 @@ func (ds *DenyConnectionStore) AddOrUpdateConn(conn *flowexporter.Connection, ti
 	connKey := flowexporter.NewConnectionKey(conn)
 	ds.mutex.Lock()
 	defer ds.mutex.Unlock()
+
 	if _, exist := ds.connections[connKey]; exist {
-		conn.DeltaBytes += bytes
+		if conn.ReadyToDelete {
+			return
+		}
 		conn.OriginalBytes += bytes
-		conn.DeltaPackets += 1
 		conn.OriginalPackets += 1
 		conn.StopTime = timeSeen
-		klog.V(2).Infof("Deny connection with flowKey %v has been updated.", connKey)
-		return
-	}
-	conn.StartTime = timeSeen
-	conn.StopTime = timeSeen
-	conn.LastExportTime = timeSeen
-	conn.DeltaBytes = bytes
-	conn.OriginalBytes = bytes
-	conn.DeltaPackets = uint64(1)
-	conn.OriginalPackets = uint64(1)
-	ds.fillPodInfo(conn)
-	protocolStr := ip.IPProtocolNumberToString(conn.FlowKey.Protocol, "UnknownProtocol")
-	serviceStr := fmt.Sprintf("%s:%d/%s", conn.DestinationServiceAddress, conn.DestinationServicePort, protocolStr)
-	ds.fillServiceInfo(conn, serviceStr)
-	metrics.TotalDenyConnections.Inc()
-	ds.connections[connKey] = conn
-}
-
-// ResetConnStatsWithoutLock resets DeltaBytes and DeltaPackets of connection
-// after exporting without grabbing the lock. Caller is expected to grab lock.
-func (ds *DenyConnectionStore) ResetConnStatsWithoutLock(connKey flowexporter.ConnectionKey) {
-	conn, exist := ds.connections[connKey]
-	if !exist {
-		klog.Warningf("Connection with key %s does not exist in deny connection store.", connKey)
+		conn.IsActive = true
+		existingItem, exists := ds.expirePriorityQueue.KeyToItem[connKey]
+		if !exists {
+			ds.expirePriorityQueue.AddItemToQueue(connKey, conn)
+		} else {
+			ds.connectionStore.expirePriorityQueue.Update(existingItem, existingItem.ActiveExpireTime,
+				time.Now().Add(ds.connectionStore.expirePriorityQueue.IdleFlowTimeout))
+		}
+		klog.V(4).InfoS("Deny connection has been updated", "connection", conn)
 	} else {
-		conn.DeltaBytes = 0
-		conn.DeltaPackets = 0
-		conn.LastExportTime = time.Now()
+		conn.StartTime = timeSeen
+		conn.StopTime = timeSeen
+		conn.OriginalBytes = bytes
+		conn.OriginalPackets = uint64(1)
+		ds.fillPodInfo(conn)
+		protocolStr := ip.IPProtocolNumberToString(conn.FlowKey.Protocol, "UnknownProtocol")
+		serviceStr := fmt.Sprintf("%s:%d/%s", conn.DestinationServiceAddress, conn.DestinationServicePort, protocolStr)
+		ds.fillServiceInfo(conn, serviceStr)
+		metrics.TotalDenyConnections.Inc()
+		conn.IsActive = true
+		ds.connections[connKey] = conn
+		ds.expirePriorityQueue.AddItemToQueue(connKey, conn)
+		klog.V(4).InfoS("New deny connection added", "connection", conn)
 	}
 }
 
-// DeleteConnWithoutLock deletes the connection from the connection map given
+func (ds *DenyConnectionStore) GetExpiredConns(expiredConns []flowexporter.Connection, currTime time.Time, maxSize int) ([]flowexporter.Connection, time.Duration) {
+	ds.AcquireConnStoreLock()
+	defer ds.ReleaseConnStoreLock()
+	for i := 0; i < maxSize; i++ {
+		pqItem := ds.connectionStore.expirePriorityQueue.GetTopExpiredItem(currTime)
+		if pqItem == nil {
+			break
+		}
+		expiredConns = append(expiredConns, *pqItem.Conn)
+		if pqItem.IdleExpireTime.Before(currTime) {
+			// If a deny connection item is idle time out, we set the ReadyToDelete
+			// flag to true to do the deletion later.
+			pqItem.Conn.ReadyToDelete = true
+		}
+		if pqItem.Conn.OriginalPackets <= pqItem.Conn.PrevPackets {
+			// If a deny connection doesn't have increase in packet count,
+			// we consider the connection to be inactive.
+			pqItem.Conn.IsActive = false
+		}
+		ds.UpdateConnAndQueue(pqItem, currTime)
+	}
+	return expiredConns, ds.connectionStore.expirePriorityQueue.GetExpiryFromExpirePriorityQueue()
+}
+
+// deleteConnWithoutLock deletes the connection from the connection map given
 // the connection key without grabbing the lock. Caller is expected to grab lock.
-func (ds *DenyConnectionStore) DeleteConnWithoutLock(connKey flowexporter.ConnectionKey) error {
+func (ds *DenyConnectionStore) deleteConnWithoutLock(connKey flowexporter.ConnectionKey) error {
 	_, exists := ds.connections[connKey]
 	if !exists {
 		return fmt.Errorf("connection with key %v doesn't exist in map", connKey)
