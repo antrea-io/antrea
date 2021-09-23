@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -51,6 +52,7 @@ type ifConfigurator struct {
 }
 
 func newInterfaceConfigurator(ovsDatapathType ovsconfig.OVSDatapathType, isOvsHardwareOffloadEnabled bool) (*ifConfigurator, error) {
+	os.Setenv("HCSSHIM_TIMEOUT_SYSCALLWATCHER", "10")
 	hnsNetwork, err := hcsshim.GetHNSNetworkByName(util.LocalHNSNetwork)
 	if err != nil {
 		return nil, err
@@ -336,40 +338,19 @@ func (ic *ifConfigurator) removeContainerLink(containerID, epName string) error 
 // removeHNSEndpoint removes the HNSEndpoint from HNS and local cache.
 func (ic *ifConfigurator) removeHNSEndpoint(endpoint *hcsshim.HNSEndpoint, containerID string) error {
 	epName := endpoint.Name
-	deleteCh := make(chan error)
-	// Remove HNSEndpoint.
-	go func() {
-		hcnEndpoint, _ := hcn.GetEndpointByID(endpoint.Id)
-		if hcnEndpoint != nil && isValidHostNamespace(hcnEndpoint.HostComputeNamespace) {
-			err := hcn.RemoveNamespaceEndpoint(hcnEndpoint.HostComputeNamespace, hcnEndpoint.Id)
-			if err != nil {
-				klog.Errorf("Failed to remove HostComputeEndpoint %s from HostComputeNameSpace %s: %v", hcnEndpoint.Name, hcnEndpoint.HostComputeNamespace, err)
-				deleteCh <- err
-				return
-			}
-		}
-		_, err := endpoint.Delete()
-		if err != nil && strings.Contains(err.Error(), notFoundHNSEndpoint) {
-			err = nil
-		}
-		if err != nil {
-			klog.Errorf("Failed to delete container interface %s: %v", containerID, err)
-		}
-		deleteCh <- err
-	}()
 
-	// Deleting HNS Endpoint is blocking in some corner cases. It might be a bug in Windows HNS service. To avoid
-	// hanging in cniserver, add timeout control in HNSEndpoint deletion.
-	select {
-	case err := <-deleteCh:
+	hcnEndpoint, _ := hcn.GetEndpointByID(endpoint.Id)
+	if hcnEndpoint != nil && isValidHostNamespace(hcnEndpoint.HostComputeNamespace) {
+		err := hcn.RemoveNamespaceEndpoint(hcnEndpoint.HostComputeNamespace, hcnEndpoint.Id)
 		if err != nil {
-			if !strings.Contains(err.Error(), notFoundHNSEndpoint) {
-				klog.Errorf("Failed to delete container interface %s: %v", containerID, err)
-				return err
-			}
+			klog.Errorf("Failed to remove HostComputeEndpoint %s from HostComputeNameSpace %s: %v", hcnEndpoint.Name, hcnEndpoint.HostComputeNamespace, err)
+			return err
 		}
-	case <-time.After(1 * time.Second):
-		return fmt.Errorf("timeout when deleting HNSEndpoint %s", epName)
+	}
+	_, err := endpoint.Delete()
+	if err != nil && !strings.Contains(err.Error(), notFoundHNSEndpoint) {
+		klog.Errorf("Failed to delete container interface %s: %v", containerID, err)
+		return err
 	}
 
 	// Delete HNSEndpoint from local cache.
