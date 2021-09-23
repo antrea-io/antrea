@@ -22,7 +22,6 @@ import (
 type ConnectionKey [5]string
 
 type ConnectionMapCallBack func(key ConnectionKey, conn *Connection) error
-type FlowRecordCallBack func(key ConnectionKey, record FlowRecord) error
 
 type Tuple struct {
 	SourceAddress      net.IP
@@ -41,11 +40,13 @@ type Connection struct {
 	// was updated last.
 	// For established connections: StopTime is latest time when it was polled.
 	StopTime time.Time
+	// LastExportTime is used to decide whether a connection is stale.
+	LastExportTime time.Time
+	IsActive       bool
 	// IsPresent flag helps in cleaning up connections when they are not in conntrack table anymore.
 	IsPresent bool
-	// DyingAndDoneExport marks whether the related flow records are already exported or not so that we can
-	// safely delete the connection from the connection map.
-	DyingAndDoneExport bool
+	// ReadyToDelete marks whether we can safely delete the connection from the connection map.
+	ReadyToDelete      bool
 	Zone               uint16
 	Mark               uint32
 	StatusFlag         uint32
@@ -53,7 +54,6 @@ type Connection struct {
 	// TODO: Have a separate field for protocol. No need to keep it in Tuple.
 	FlowKey                        Tuple
 	OriginalPackets, OriginalBytes uint64
-	ReversePackets, ReverseBytes   uint64
 	// Fields specific to Antrea
 	SourcePodNamespace             string
 	SourcePodName                  string
@@ -72,22 +72,18 @@ type Connection struct {
 	EgressNetworkPolicyType        uint8
 	EgressNetworkPolicyRuleName    string
 	EgressNetworkPolicyRuleAction  uint8
-	TCPState                       string
-	// fields specific to deny connections
-	// DeltaBytes and DeltaPackets are octetDeltaCount and packetDeltaCount over each active
-	// flow timeout duration.
-	DeltaBytes, DeltaPackets uint64
-	LastExportTime           time.Time
+	PrevPackets, PrevBytes         uint64
+	// Fields specific to conntrack connections
+	ReversePackets, ReverseBytes         uint64
+	PrevReversePackets, PrevReverseBytes uint64
+	TCPState                             string
+	PrevTCPState                         string
 }
 
-type FlowRecord struct {
-	Conn               Connection
-	PrevPackets        uint64
-	PrevBytes          uint64
-	PrevReversePackets uint64
-	PrevReverseBytes   uint64
-	IsIPv6             bool
-	LastExportTime     time.Time
-	DyingAndDoneExport bool
-	IsActive           bool
+type ItemToExpire struct {
+	Conn             *Connection
+	ActiveExpireTime time.Time
+	IdleExpireTime   time.Time
+	// Index in the priority queue (heap)
+	Index int
 }

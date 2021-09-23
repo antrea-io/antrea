@@ -30,7 +30,7 @@ import (
 	"antrea.io/antrea/pkg/agent/flowexporter"
 	"antrea.io/antrea/pkg/agent/flowexporter/connections"
 	connectionstest "antrea.io/antrea/pkg/agent/flowexporter/connections/testing"
-	"antrea.io/antrea/pkg/agent/flowexporter/flowrecords"
+	"antrea.io/antrea/pkg/agent/flowexporter/priorityqueue"
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	interfacestoretest "antrea.io/antrea/pkg/agent/interfacestore/testing"
 	"antrea.io/antrea/pkg/agent/openflow"
@@ -40,6 +40,8 @@ import (
 
 const (
 	testPollInterval           = 0 // Not used in the test, hence 0.
+	testActiveFlowTimeout      = 2 * time.Second
+	testIdleFlowTimeout        = 1 * time.Second
 	testStaleConnectionTimeout = 5 * time.Minute
 )
 
@@ -112,7 +114,8 @@ func TestConnectionStoreAndFlowRecords(t *testing.T) {
 	ifStoreMock := interfacestoretest.NewMockInterfaceStore(ctrl)
 	npQuerier := queriertest.NewMockAgentNetworkPolicyInfoQuerier(ctrl)
 	// TODO: Enhance the integration test by testing service.
-	conntrackConnStore := connections.NewConntrackConnectionStore(connDumperMock, flowrecords.NewFlowRecords(), ifStoreMock, true, false, nil, npQuerier, testPollInterval, testStaleConnectionTimeout)
+	pq := priorityqueue.NewExpirePriorityQueue(testActiveFlowTimeout, testIdleFlowTimeout)
+	conntrackConnStore := connections.NewConntrackConnectionStore(connDumperMock, ifStoreMock, true, false, nil, npQuerier, testPollInterval, pq, testStaleConnectionTimeout)
 	// Expect calls for connStore.poll and other callees
 	connDumperMock.EXPECT().DumpFlows(uint16(openflow.CtZone)).Return(testConns, 0, nil)
 	connDumperMock.EXPECT().GetMaxConnections().Return(0, nil)
