@@ -30,6 +30,7 @@ type ResourceImportFilterStatus struct {
 	// TBD.
 }
 
+// +genclient
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
 
