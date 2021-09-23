@@ -27,6 +27,7 @@ const (
 	WellKnownClusterClaimClusterSet = "clusterSet.k8s.io"
 )
 
+// +genclient
 //+kubebuilder:object:root=true
 
 // ClusterClaim is the Schema for the clusterclaims API
