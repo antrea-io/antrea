@@ -349,6 +349,9 @@ func (ic *ifConfigurator) removeHNSEndpoint(endpoint *hcsshim.HNSEndpoint, conta
 				return
 			}
 		}
+		if err := hcsshim.HotDetachEndpoint(containerID, endpoint.Id); err != nil {
+			klog.ErrorS(err, "Failed to detach HNSEndpoint", "endpointID", endpoint.Id, "containerID", containerID)
+		}
 		_, err := endpoint.Delete()
 		if err != nil && strings.Contains(err.Error(), notFoundHNSEndpoint) {
 			err = nil
@@ -369,7 +372,7 @@ func (ic *ifConfigurator) removeHNSEndpoint(endpoint *hcsshim.HNSEndpoint, conta
 				return err
 			}
 		}
-	case <-time.After(1 * time.Second):
+	case <-time.After(3 * time.Second):
 		return fmt.Errorf("timeout when deleting HNSEndpoint %s", epName)
 	}
 
