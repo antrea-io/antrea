@@ -114,6 +114,10 @@ data:
     # 2. transportInterfaceCIDRs
     # 3. The Node IP
     #transportInterfaceCIDRs: [<IPv4 CIDR>,<IPv6 CIDR>]
+
+    # Provide the address of Kubernetes apiserver, to override any value provided in kubeconfig or InClusterConfig.
+    # Defaults to "". It must be a host string, a host:port pair, or a URL to the base of the apiserver.
+    #kubeAPIServerOverride: ""
   antrea-cni.conflist: |
     {
         "cniVersion":"0.3.0",
@@ -132,7 +136,7 @@ kind: ConfigMap
 metadata:
   labels:
     app: antrea
-  name: antrea-windows-config-4hbbk65bdk
+  name: antrea-windows-config-d7h2mhk8h8
   namespace: kube-system
 ---
 apiVersion: apps/v1
@@ -220,7 +224,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-windows-config-4hbbk65bdk
+          name: antrea-windows-config-d7h2mhk8h8
         name: antrea-windows-config
       - configMap:
           defaultMode: 420
