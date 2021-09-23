@@ -434,6 +434,123 @@ func (s *CNIServer) CmdAdd(ctx context.Context, request *cnipb.CniCmdRequest) (*
 			return s.ipamFailureResponse(err), nil
 		}
 	}
+
+	if cniConfig.K8S_POD_NAMESPACE == "antrea-ipam-test" {
+		switch {
+		case strings.HasPrefix(string(cniConfig.K8S_POD_NAME), "test-antrea-ipam-pod-0-"):
+			ipamResult.IPs[0] = &current.IPConfig{
+				Version:   "4",
+				Interface: nil,
+				Address: net.IPNet{
+					IP:   net.ParseIP("192.168.240.103"),
+					Mask: net.IPv4Mask(255, 255, 255, 0),
+				},
+				Gateway: net.ParseIP("192.168.240.1"),
+			}
+		case strings.HasPrefix(string(cniConfig.K8S_POD_NAME), "test-antrea-ipam-pod-1-"):
+			ipamResult.IPs[0] = &current.IPConfig{
+				Version:   "4",
+				Interface: nil,
+				Address: net.IPNet{
+					IP:   net.ParseIP("192.168.240.104"),
+					Mask: net.IPv4Mask(255, 255, 255, 0),
+				},
+				Gateway: net.ParseIP("192.168.240.1"),
+			}
+		case strings.HasPrefix(string(cniConfig.K8S_POD_NAME), "test-client-"):
+			ipamResult.IPs[0] = &current.IPConfig{
+				Version:   "4",
+				Interface: nil,
+				Address: net.IPNet{
+					IP:   net.ParseIP("192.168.240.105"),
+					Mask: net.IPv4Mask(255, 255, 255, 0),
+				},
+				Gateway: net.ParseIP("192.168.240.1"),
+			}
+		case strings.HasPrefix(string(cniConfig.K8S_POD_NAME), "test-host-port-pod-"):
+			ipamResult.IPs[0] = &current.IPConfig{
+				Version:   "4",
+				Interface: nil,
+				Address: net.IPNet{
+					IP:   net.ParseIP("192.168.240.106"),
+					Mask: net.IPv4Mask(255, 255, 255, 0),
+				},
+				Gateway: net.ParseIP("192.168.240.1"),
+			}
+		case strings.HasPrefix(string(cniConfig.K8S_POD_NAME), "nginx-false"):
+			ipamResult.IPs[0] = &current.IPConfig{
+				Version:   "4",
+				Interface: nil,
+				Address: net.IPNet{
+					IP:   net.ParseIP("192.168.240.107"),
+					Mask: net.IPv4Mask(255, 255, 255, 0),
+				},
+				Gateway: net.ParseIP("192.168.240.1"),
+			}
+		case strings.HasPrefix(string(cniConfig.K8S_POD_NAME), "client-0-"):
+			ipamResult.IPs[0] = &current.IPConfig{
+				Version:   "4",
+				Interface: nil,
+				Address: net.IPNet{
+					IP:   net.ParseIP("192.168.240.108"),
+					Mask: net.IPv4Mask(255, 255, 255, 0),
+				},
+				Gateway: net.ParseIP("192.168.240.1"),
+			}
+		case strings.HasPrefix(string(cniConfig.K8S_POD_NAME), "client-1-"):
+			ipamResult.IPs[0] = &current.IPConfig{
+				Version:   "4",
+				Interface: nil,
+				Address: net.IPNet{
+					IP:   net.ParseIP("192.168.240.109"),
+					Mask: net.IPv4Mask(255, 255, 255, 0),
+				},
+				Gateway: net.ParseIP("192.168.240.1"),
+			}
+		case string(cniConfig.K8S_POD_NAME) == "agnhost":
+			ipamResult.IPs[0] = &current.IPConfig{
+				Version:   "4",
+				Interface: nil,
+				Address: net.IPNet{
+					IP:   net.ParseIP("192.168.240.110"),
+					Mask: net.IPv4Mask(255, 255, 255, 0),
+				},
+				Gateway: net.ParseIP("192.168.240.1"),
+			}
+		case string(cniConfig.K8S_POD_NAME) == "agnhost-client":
+			ipamResult.IPs[0] = &current.IPConfig{
+				Version:   "4",
+				Interface: nil,
+				Address: net.IPNet{
+					IP:   net.ParseIP("192.168.240.111"),
+					Mask: net.IPv4Mask(255, 255, 255, 0),
+				},
+				Gateway: net.ParseIP("192.168.240.1"),
+			}
+		case strings.HasPrefix(string(cniConfig.K8S_POD_NAME), "connectivity-test"):
+			podIP := net.ParseIP(s.nodeConfig.NodeIPv4Addr.IP.String()).To4()
+			podIP[3] += 90
+			ipamResult.IPs[0] = &current.IPConfig{
+				Version:   "4",
+				Interface: nil,
+				Address: net.IPNet{
+					IP:   podIP,
+					Mask: net.IPv4Mask(255, 255, 255, 0),
+				},
+				Gateway: net.ParseIP("192.168.240.1"),
+			}
+		}
+		if len(ipamResult.IPs) == 1 && ipamResult.IPs[0].Gateway.Equal(net.ParseIP("192.168.240.1")) {
+			ipamResult.Routes = append(ipamResult.Routes, &cnitypes.Route{
+				Dst: net.IPNet{
+					IP:   net.ParseIP("0.0.0.0"),
+					Mask: net.IPv4Mask(0, 0, 0, 0),
+				},
+				GW: net.ParseIP("192.168.240.1"),
+			})
+		}
+	}
+
 	klog.Infof("Requested ip addresses for container %v: %v", cniConfig.ContainerId, ipamResult)
 	result.IPs = ipamResult.IPs
 	result.Routes = ipamResult.Routes
