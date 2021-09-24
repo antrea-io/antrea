@@ -166,7 +166,8 @@ Here are the trigger phrases for individual checks:
 
 Here are the trigger phrases for groups of checks:
 
-* `/test-all`: Linux IPv4 and Windows tests
+* `/test-all`: Linux IPv4 tests
+* `/test-windows-all`: Windows IPv4 tests
 * `/test-ipv6-all`: Linux dual stack tests
 * `/test-ipv6-only-all`: Linux IPv6 only tests
 
