@@ -190,7 +190,7 @@ metadata:
     component: antrea-controller
 spec:
   strategy:
-    # Ensure the existing Pod is killed before the new one is created.
+    # Ensure the existing Pod is stopped before the new one is created.
     type: Recreate
   selector:
     matchLabels:
