@@ -16,7 +16,6 @@ package supportbundle
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -34,7 +33,9 @@ import (
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/time/rate"
 	"gopkg.in/yaml.v2"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	k8sruntime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
@@ -390,31 +391,39 @@ func createControllerClient(k8sClientset kubernetes.Interface, antreaClientset a
 	return controllerClient, nil
 }
 
-func getClusterInfo(k8sClient kubernetes.Interface) (io.Reader, error) {
+func getClusterInfo(w io.Writer, k8sClient kubernetes.Interface) error {
 	g := new(errgroup.Group)
 	var writeLock sync.Mutex
-	w := new(bytes.Buffer)
-	format := func(obj interface{}, comment string) error {
+
+	output := func(list k8sruntime.Object, comment string) error {
 		writeLock.Lock()
 		defer writeLock.Unlock()
 		if _, err := fmt.Fprintf(w, "#%s\n", comment); err != nil {
 			return err
 		}
-		var jsonObj map[string]interface{}
-		var buf bytes.Buffer
-		if err := json.NewEncoder(&buf).Encode(obj); err != nil {
-			return err
-		}
-		if err := yaml.Unmarshal(buf.Bytes(), &jsonObj); err != nil {
-			return err
-		}
-		if err := yaml.NewEncoder(w).Encode(jsonObj); err != nil {
-			return err
-		}
-		if _, err := fmt.Fprintln(w, "---"); err != nil {
-			return err
-		}
-		return nil
+		err := meta.EachListItem(list, func(obj k8sruntime.Object) error {
+			var jsonObj interface{}
+			data, err := json.Marshal(obj)
+			if err != nil {
+				return err
+			}
+			if err = yaml.Unmarshal(data, &jsonObj); err != nil {
+				return err
+			}
+			data, err = yaml.Marshal(jsonObj)
+			if err != nil {
+				return err
+			}
+			_, err = w.Write(data)
+			if err != nil {
+				return err
+			}
+			if _, err = fmt.Fprintln(w, "---"); err != nil {
+				return err
+			}
+			return nil
+		})
+		return err
 	}
 
 	g.Go(func() error {
@@ -422,7 +431,7 @@ func getClusterInfo(k8sClient kubernetes.Interface) (io.Reader, error) {
 		if err != nil {
 			return err
 		}
-		if err := format(pods, "pods"); err != nil {
+		if err := output(pods, "pods"); err != nil {
 			return err
 		}
 		return nil
@@ -432,7 +441,7 @@ func getClusterInfo(k8sClient kubernetes.Interface) (io.Reader, error) {
 		if err != nil {
 			return err
 		}
-		if err := format(nodes, "nodes"); err != nil {
+		if err := output(nodes, "nodes"); err != nil {
 			return err
 		}
 		return nil
@@ -442,7 +451,7 @@ func getClusterInfo(k8sClient kubernetes.Interface) (io.Reader, error) {
 		if err != nil {
 			return err
 		}
-		if err := format(deployments, "deployments"); err != nil {
+		if err := output(deployments, "deployments"); err != nil {
 			return err
 		}
 		return nil
@@ -452,7 +461,7 @@ func getClusterInfo(k8sClient kubernetes.Interface) (io.Reader, error) {
 		if err != nil {
 			return err
 		}
-		if err := format(replicas, "replicas"); err != nil {
+		if err := output(replicas, "replicas"); err != nil {
 			return err
 		}
 		return nil
@@ -462,7 +471,7 @@ func getClusterInfo(k8sClient kubernetes.Interface) (io.Reader, error) {
 		if err != nil {
 			return err
 		}
-		if err := format(daemonsets, "daemonsets"); err != nil {
+		if err := output(daemonsets, "daemonsets"); err != nil {
 			return err
 		}
 		return nil
@@ -472,12 +481,12 @@ func getClusterInfo(k8sClient kubernetes.Interface) (io.Reader, error) {
 		if err != nil {
 			return err
 		}
-		if err := format(configs, "configs"); err != nil {
+		if err := output(configs, "configs"); err != nil {
 			return err
 		}
 		return nil
 	})
-	return w, g.Wait()
+	return g.Wait()
 }
 
 func controllerRemoteRunE(cmd *cobra.Command, args []string) error {
@@ -561,15 +570,14 @@ func controllerRemoteRunE(cmd *cobra.Command, args []string) error {
 	bar := barTmpl.Start(amount)
 	defer bar.Finish()
 	defer bar.Set("prefix", "Finish ")
-	if reader, err := getClusterInfo(k8sClientset); err != nil {
+	f, err := os.Create(filepath.Join(option.dir, "clusterinfo"))
+	if err != nil {
 		return err
-	} else {
-		f, err := os.Create(filepath.Join(option.dir, "clusterinfo"))
-		if err != nil {
-			return err
-		}
-		defer f.Close()
-		io.Copy(f, reader)
+	}
+	defer f.Close()
+	err = getClusterInfo(f, k8sClientset)
+	if err != nil {
+		return err
 	}
 
 	results := requestAll(agentClients, controllerClient, bar)
