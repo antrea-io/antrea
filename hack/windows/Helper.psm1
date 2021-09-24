@@ -1,9 +1,10 @@
 function Get-WebFileIfNotExist($Path, $URL) {
-    if (Test-Path $Path) {
-        return
+    $count=0
+    while (!(Test-Path $Path) -and ($count -ne 3)) {
+        $count++
+        Write-Host "Downloading $URL to $PATH"
+        curl.exe -sLo $Path $URL
     }
-    Write-Host "Downloading $URL to $PATH"
-    curl.exe -sLo $Path $URL
 }
 
 function New-DirectoryIfNotExist($Path)
