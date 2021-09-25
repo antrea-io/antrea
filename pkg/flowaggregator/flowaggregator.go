@@ -487,20 +487,22 @@ func (fa *flowAggregator) sendTemplateSet(isIPv6 bool) (int, error) {
 		ie := ipfixentities.NewInfoElementWithValue(element, nil)
 		elements = append(elements, ie)
 	}
-	for _, ie := range antreaSourceStatsElementList {
-		element, err := fa.registry.GetInfoElement(ie, ipfixregistry.AntreaEnterpriseID)
+	for i := range antreaSourceStatsElementList {
+		// Add Antrea source stats fields
+		ieName := antreaSourceStatsElementList[i]
+		element, err := fa.registry.GetInfoElement(ieName, ipfixregistry.AntreaEnterpriseID)
 		if err != nil {
-			return 0, fmt.Errorf("%s not present. returned error: %v", ie, err)
+			return 0, fmt.Errorf("%s not present. returned error: %v", ieName, err)
 		}
 		ie := ipfixentities.NewInfoElementWithValue(element, nil)
 		elements = append(elements, ie)
-	}
-	for _, ie := range antreaDestinationStatsElementList {
-		element, err := fa.registry.GetInfoElement(ie, ipfixregistry.AntreaEnterpriseID)
+		// Add Antrea destination stats fields
+		ieName = antreaDestinationStatsElementList[i]
+		element, err = fa.registry.GetInfoElement(ieName, ipfixregistry.AntreaEnterpriseID)
 		if err != nil {
-			return 0, fmt.Errorf("%s not present. returned error: %v", ie, err)
+			return 0, fmt.Errorf("%s not present. returned error: %v", ieName, err)
 		}
-		ie := ipfixentities.NewInfoElementWithValue(element, nil)
+		ie = ipfixentities.NewInfoElementWithValue(element, nil)
 		elements = append(elements, ie)
 	}
 	for _, ie := range antreaLabelsElementList {

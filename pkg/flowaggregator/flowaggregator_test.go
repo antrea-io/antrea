@@ -194,13 +194,13 @@ func TestFlowAggregator_sendTemplateSet(t *testing.T) {
 			elemList = append(elemList, ipfixentities.NewInfoElementWithValue(ipfixentities.NewInfoElement(ie, 0, 0, ipfixregistry.AntreaEnterpriseID, 0), nil))
 			mockIPFIXRegistry.EXPECT().GetInfoElement(ie, ipfixregistry.AntreaEnterpriseID).Return(elemList[i+len(ianaInfoElements)+len(ianaReverseInfoElements)].Element, nil)
 		}
-		for i, ie := range antreaSourceStatsElementList {
-			elemList = append(elemList, ipfixentities.NewInfoElementWithValue(ipfixentities.NewInfoElement(ie, 0, 0, ipfixregistry.AntreaEnterpriseID, 0), nil))
-			mockIPFIXRegistry.EXPECT().GetInfoElement(ie, ipfixregistry.AntreaEnterpriseID).Return(elemList[i+len(ianaInfoElements)+len(ianaReverseInfoElements)+len(antreaInfoElements)].Element, nil)
-		}
-		for i, ie := range antreaDestinationStatsElementList {
-			elemList = append(elemList, ipfixentities.NewInfoElementWithValue(ipfixentities.NewInfoElement(ie, 0, 0, ipfixregistry.AntreaEnterpriseID, 0), nil))
-			mockIPFIXRegistry.EXPECT().GetInfoElement(ie, ipfixregistry.AntreaEnterpriseID).Return(elemList[i+len(ianaInfoElements)+len(ianaReverseInfoElements)+len(antreaInfoElements)+len(antreaSourceStatsElementList)].Element, nil)
+		for i := range antreaSourceStatsElementList {
+			ieName := antreaSourceStatsElementList[i]
+			elemList = append(elemList, ipfixentities.NewInfoElementWithValue(ipfixentities.NewInfoElement(ieName, 0, 0, ipfixregistry.AntreaEnterpriseID, 0), nil))
+			mockIPFIXRegistry.EXPECT().GetInfoElement(ieName, ipfixregistry.AntreaEnterpriseID).Return(elemList[i*2+len(ianaInfoElements)+len(ianaReverseInfoElements)+len(antreaInfoElements)].Element, nil)
+			ieName = antreaDestinationStatsElementList[i]
+			elemList = append(elemList, ipfixentities.NewInfoElementWithValue(ipfixentities.NewInfoElement(ieName, 0, 0, ipfixregistry.AntreaEnterpriseID, 0), nil))
+			mockIPFIXRegistry.EXPECT().GetInfoElement(ieName, ipfixregistry.AntreaEnterpriseID).Return(elemList[i*2+1+len(ianaInfoElements)+len(ianaReverseInfoElements)+len(antreaInfoElements)].Element, nil)
 		}
 		for i, ie := range antreaLabelsElementList {
 			elemList = append(elemList, ipfixentities.NewInfoElementWithValue(ipfixentities.NewInfoElement(ie, 0, 0, ipfixregistry.AntreaEnterpriseID, 0), nil))
