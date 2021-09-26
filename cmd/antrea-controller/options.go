@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net"
-	"strings"
 
 	"github.com/spf13/pflag"
 	"gopkg.in/yaml.v2"
@@ -88,10 +87,9 @@ func (o *Options) validate(args []string) error {
 
 func (o *Options) validateNodeIPAMControllerOptions() error {
 	// Validate ClusterCIDRs
-	cidrSplit := strings.Split(strings.TrimSpace(o.config.NodeIPAM.ClusterCIDRs), ",")
-	cidrs, err := netutils.ParseCIDRs(cidrSplit)
+	cidrs, err := netutils.ParseCIDRs(o.config.NodeIPAM.ClusterCIDRs)
 	if err != nil {
-		return fmt.Errorf("cluster CIDRs %s is invalid", o.config.NodeIPAM.ClusterCIDRs)
+		return fmt.Errorf("cluster CIDRs %v is invalid", o.config.NodeIPAM.ClusterCIDRs)
 	}
 
 	hasIP4, hasIP6 := false, false
@@ -116,17 +114,17 @@ func (o *Options) validateNodeIPAMControllerOptions() error {
 		}
 	}
 
-	// Validate ServiceCIDR and SecondaryServiceCIDR. Service CIDRs can be empty when there is no overlap with ClusterCIDR
+	// Validate ServiceCIDR and ServiceCIDRv6. Service CIDRs can be empty when there is no overlap with ClusterCIDR
 	if o.config.NodeIPAM.ServiceCIDR != "" {
 		_, _, err = net.ParseCIDR(o.config.NodeIPAM.ServiceCIDR)
 		if err != nil {
 			return fmt.Errorf("service CIDR %s is invalid", o.config.NodeIPAM.ServiceCIDR)
 		}
 	}
-	if o.config.NodeIPAM.SecondaryServiceCIDR != "" {
-		_, _, err = net.ParseCIDR(o.config.NodeIPAM.SecondaryServiceCIDR)
+	if o.config.NodeIPAM.ServiceCIDRv6 != "" {
+		_, _, err = net.ParseCIDR(o.config.NodeIPAM.ServiceCIDRv6)
 		if err != nil {
-			return fmt.Errorf("secondary service CIDR %s is invalid", o.config.NodeIPAM.SecondaryServiceCIDR)
+			return fmt.Errorf("secondary service CIDR %s is invalid", o.config.NodeIPAM.ServiceCIDRv6)
 		}
 	}
 	return nil
