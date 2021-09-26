@@ -467,11 +467,15 @@ func (c *client) UninstallNodeFlows(hostname string) error {
 func (c *client) InstallPodFlows(interfaceName string, podInterfaceIPs []net.IP, podInterfaceMAC net.HardwareAddr, ofPort uint32) error {
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
-
 	localGatewayMAC := c.nodeConfig.GatewayConfig.MAC
+	skipHairpin := false
+	if !c.enableProxy {
+		// If AntreaProxy is disabled, flows on table l2ForwardingCalcTable should skip table hairpinMarkTable.
+		skipHairpin = true
+	}
 	flows := []binding.Flow{
 		c.podClassifierFlow(ofPort, cookie.Pod),
-		c.l2ForwardCalcFlow(podInterfaceMAC, ofPort, false, cookie.Pod),
+		c.l2ForwardCalcFlow(podInterfaceMAC, ofPort, skipHairpin, cookie.Pod),
 	}
 
 	// Add support for IPv4 ARP responder.
@@ -565,8 +569,15 @@ func (c *client) InstallEndpointFlows(protocol binding.Protocol, endpoints []pro
 		portVal := portToUint16(endpointPort)
 		cacheKey := generateEndpointFlowCacheKey(endpoint.IP(), endpointPort, protocol)
 		flows = append(flows, c.endpointDNATFlow(endpointIP, portVal, protocol))
-		if endpoint.GetIsLocal() {
-			flows = append(flows, c.hairpinSNATFlow(endpointIP))
+		// Only install hairpin flows for Pods, as Antrea gateway interface hairpin flow is installed by function InstallGatewayFlows.
+		// If the Endpoint is host network, skip installing hairpin flows for it.
+		if endpoint.GetIsLocal() && !(c.nodeConfig.GatewayConfig.IPv4.Equal(endpointIP) || c.nodeConfig.GatewayConfig.IPv6.Equal(endpointIP)) {
+			ofPort, ok := c.ifaceStore.GetInterfaceByIP(endpointIP.String())
+			if !ok {
+				klog.Warningf("there is no OVS port with such IP %s, skip installing hairpin flow for it", endpointIP.String())
+			} else {
+				flows = append(flows, c.hairpinMarkFlow(getIPProtocol(endpointIP), uint32(ofPort.OFPort), false))
+			}
 		}
 		keyToFlows[cacheKey] = flows
 	}
@@ -623,26 +634,18 @@ func (c *client) InstallDefaultServiceFlows(nodePortAddressesIPv4, nodePortAddre
 		c.l2ForwardOutputServiceHairpinFlow(),
 	}
 	if c.IsIPv4Enabled() {
-		flows = append(flows, c.serviceHairpinResponseDNATFlow(binding.ProtocolIP))
 		flows = append(flows, c.serviceLBBypassFlows(binding.ProtocolIP)...)
 		flows = append(flows, c.l3FwdServiceDefaultFlowsViaGW(binding.ProtocolIP, cookie.Service)...)
 		if c.proxyAll {
-			// The output interface of a packet is the same as where it is from, and the action of the packet should be
-			// IN_PORT, rather than output. When a packet of Service is from Antrea gateway and its Endpoint is on host
-			// network, it needs hairpin mark (by setting a register, it will be matched at table L2ForwardingOutTable).
-			flows = append(flows, c.serviceHairpinRegSetFlows(binding.ProtocolIP))
 			// These flows are used to match the first packet of NodePort. The flows will set a bit of a register to mark
 			// the Service type of the packet as NodePort. The mark will be consumed in table serviceLBTable to match NodePort
 			flows = append(flows, c.serviceClassifierFlows(nodePortAddressesIPv4, binding.ProtocolIP)...)
 		}
 	}
 	if c.IsIPv6Enabled() {
-		flows = append(flows, c.serviceHairpinResponseDNATFlow(binding.ProtocolIPv6))
 		flows = append(flows, c.serviceLBBypassFlows(binding.ProtocolIPv6)...)
 		flows = append(flows, c.l3FwdServiceDefaultFlowsViaGW(binding.ProtocolIPv6, cookie.Service)...)
 		if c.proxyAll {
-			// As IPv4 above.
-			flows = append(flows, c.serviceHairpinRegSetFlows(binding.ProtocolIPv6))
 			// As IPv4 above.
 			flows = append(flows, c.serviceClassifierFlows(nodePortAddressesIPv6, binding.ProtocolIPv6)...)
 		}
@@ -666,10 +669,14 @@ func (c *client) InstallClusterServiceCIDRFlows(serviceNets []*net.IPNet) error 
 func (c *client) InstallGatewayFlows() error {
 	gatewayConfig := c.nodeConfig.GatewayConfig
 	gatewayIPs := []net.IP{}
-
+	skipHairpin := false
+	if !c.enableProxy {
+		// If AntreaProxy is disabled, flows on table l2ForwardingCalcTable should skip table hairpinMarkTable.
+		skipHairpin = true
+	}
 	flows := []binding.Flow{
 		c.gatewayClassifierFlow(cookie.Default),
-		c.l2ForwardCalcFlow(gatewayConfig.MAC, config.HostGatewayOFPort, true, cookie.Default),
+		c.l2ForwardCalcFlow(gatewayConfig.MAC, config.HostGatewayOFPort, skipHairpin, cookie.Default),
 	}
 	flows = append(flows, c.gatewayIPSpoofGuardFlows(cookie.Default)...)
 
@@ -677,9 +684,15 @@ func (c *client) InstallGatewayFlows() error {
 	if gatewayConfig.IPv4 != nil {
 		gatewayIPs = append(gatewayIPs, gatewayConfig.IPv4)
 		flows = append(flows, c.gatewayARPSpoofGuardFlow(gatewayConfig.IPv4, gatewayConfig.MAC, cookie.Default))
+		if c.enableProxy {
+			flows = append(flows, c.hairpinMarkFlow(binding.ProtocolIP, uint32(config.HostGatewayOFPort), true))
+		}
 	}
 	if gatewayConfig.IPv6 != nil {
 		gatewayIPs = append(gatewayIPs, gatewayConfig.IPv6)
+		if c.enableProxy {
+			flows = append(flows, c.hairpinMarkFlow(binding.ProtocolIPv6, uint32(config.HostGatewayOFPort), true))
+		}
 	}
 
 	// Add flow to ensure the liveness check packet could be forwarded correctly.

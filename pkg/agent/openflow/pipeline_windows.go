@@ -102,7 +102,7 @@ func (c *client) hostBridgeUplinkFlows(localSubnet net.IPNet, category cookie.Ca
 			MatchDstIPNet(localSubnet).
 			Action().LoadRegMark(FromUplinkRegMark).
 			Action().LoadRegMark(RewriteMACRegMark).
-			Action().GotoTable(serviceHairpinTable).
+			Action().GotoTable(snatConntrackTable).
 			Cookie(c.cookieAllocator.Request(category).Raw()).
 			Done())
 	}

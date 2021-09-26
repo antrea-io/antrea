@@ -100,10 +100,16 @@ func run(o *Options) error {
 	}
 	defer ovsdbConnection.Close()
 
+	// Create an ifaceStore that caches network interfaces managed by this node.
+	ifaceStore := interfacestore.NewInterfaceStore()
+
 	ovsDatapathType := ovsconfig.OVSDatapathType(o.config.OVSDatapathType)
 	ovsBridgeClient := ovsconfig.NewOVSBridge(o.config.OVSBridge, ovsDatapathType, ovsdbConnection)
 	ovsBridgeMgmtAddr := ofconfig.GetMgmtAddress(o.config.OVSRunDir, o.config.OVSBridge)
-	ofClient := openflow.NewClient(o.config.OVSBridge, ovsBridgeMgmtAddr, ovsDatapathType,
+	ofClient := openflow.NewClient(o.config.OVSBridge,
+		ovsBridgeMgmtAddr,
+		ovsDatapathType,
+		ifaceStore,
 		features.DefaultFeatureGate.Enabled(features.AntreaProxy),
 		features.DefaultFeatureGate.Enabled(features.AntreaPolicy),
 		features.DefaultFeatureGate.Enabled(features.Egress),
@@ -138,9 +144,6 @@ func run(o *Options) error {
 	if err != nil {
 		return fmt.Errorf("error creating route client: %v", err)
 	}
-
-	// Create an ifaceStore that caches network interfaces managed by this node.
-	ifaceStore := interfacestore.NewInterfaceStore()
 
 	// networkReadyCh is used to notify that the Node's network is ready.
 	// Functions that rely on the Node's network should wait for the channel to close.
