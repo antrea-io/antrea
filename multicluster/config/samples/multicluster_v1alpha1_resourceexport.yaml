@@ -1,7 +1,38 @@
 apiVersion: multicluster.crd.antrea.io/v1alpha1
 kind: ResourceExport
 metadata:
-  name: resourceexport-sample
+  name: test-cluster-west-nginx-kube-system-service
+  namespace: antrea-mcs-ns
 spec:
-  # Add fields here
-  foo: bar
+  clusterID: test-cluster-west
+  name: nginx
+  namespace: kube-system
+  kind: Service
+  service:
+    serviceSpec:
+      ports: 
+      - name: tcp80
+        port: 80
+        protocol: TCP
+---
+apiVersion: multicluster.crd.antrea.io/v1alpha1
+kind: ResourceExport
+metadata:
+  name: test-cluster-west-nginx-kube-system-endpoints
+  namespace: antrea-mcs-ns
+spec:
+  clusterID: test-cluster-west
+  name: nginx
+  namespace: kube-system
+  kind: Endpoints
+  endpoints:
+    subsets:
+    - addresses:
+      - ip: 192.168.225.49
+        nodeName: node-1
+      - ip: 192.168.225.51
+        nodeName: node-2
+      ports:
+      - name: tcp8080
+        port: 8080
+        protocol: TCP

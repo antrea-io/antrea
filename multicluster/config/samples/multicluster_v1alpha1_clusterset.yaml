@@ -1,7 +1,14 @@
 apiVersion: multicluster.crd.antrea.io/v1alpha1
 kind: ClusterSet
 metadata:
-  name: clusterset-sample
+    name: test-clusterset
+    namespace: kube-system
 spec:
-  # Add fields here
-  foo: bar
+    leaders:
+      - clusterID: test-cluster-leader
+        secret: "leader-access-token"
+        server: "https://172.18.0.2:6443"
+    members:
+      - clusterID: test-cluster-east
+      - clusterID: test-cluster-west
+    namespace: antrea-mcs-ns
