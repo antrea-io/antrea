@@ -1,0 +1,9 @@
+# action.yml
+name: 'Offensive Words Check'
+description: 'Checks if diff includes changes have any undesired offensive words'
+outputs:
+  has_offensive_words:
+    description: 'Whether (yes/no) the diff contains any undesired offensive words'
+runs:
+  using: 'docker'
+  image: 'Dockerfile'

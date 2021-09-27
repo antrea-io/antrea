@@ -25,6 +25,21 @@ jobs:
     outputs:
       has_changes: ${{ steps.check_diff.outputs.has_changes }}
 
+  check-terminology:
+    name: Check if new commit contains any offensive words
+    runs-on: [ubuntu-latest]
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+    - uses: antrea-io/antrea/ci/gh-actions/check-termimology@main
+      id: check_terminology
+    - name: Get the check_terminology output
+      if: ${{ steps.check_terminology.outputs.has_offensive_words == 'yes' }}
+      run: |
+        echo "The commit contains offensive words, please check https://github.com/antrea-io/antrea/blob/main/docs/inclusive-terminology.md to choose an alternative word."
+        exit 1
+
   build:
     needs: check-changes
     if: ${{ needs.check-changes.outputs.has_changes == 'yes' || github.event_name == 'push' }}
