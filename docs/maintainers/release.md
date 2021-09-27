@@ -12,7 +12,8 @@ release. We use `<TAG>` as a placeholder for the release tag (e.g. `v1.4.0`).
      release can either do the cherry-picking directly or ask the person who
      contributed the fix to do it.
 
-2. Open a PR against the appropriate release branch with the following commits:
+2. Open a PR (labelled with `kind/release`) against the appropriate release
+   branch with the following commits:
    - a commit to update the [CHANGELOG](../../CHANGELOG). *For a minor release*,
      all significant changes and all bug fixes since the first version of the
      previous minor release should be mentioned, even bug fixes which have
@@ -59,11 +60,15 @@ release. We use `<TAG>` as a placeholder for the release tag (e.g. `v1.4.0`).
    no need to upload any assets as this will be done automatically by a Github
    workflow, after you create the release.
 
-6. After a while (time for the Github workflows to complete), check that:
-   - the docker image has been pushed to
-     [dockerhub](https://hub.docker.com/u/antrea) with the correct tag.
+6. After a while (time for the relevant Github workflows to complete), check that:
+   - the Docker image has been pushed to
+     [dockerhub](https://hub.docker.com/u/antrea) with the correct tag. This is
+     handled by a Github worfklow defined in a separate Github repository and it
+     can take some time for this workflow to complete. See this
+     [document](antrea-docker-image.md) for more information.
    - the assets have been uploaded to the release (`antctl` binaries and yaml
-     manifests). In particular, the following link should work:
+     manifests). This is handled by the `Upload assets to release` workflow. In
+     particular, the following link should work:
      `https://github.com/antrea-io/antrea/releases/download/<TAG>/antrea.yml`.
 
 7. After the appropriate Github workflow completes, a bot will automatically
@@ -73,6 +78,6 @@ release. We use `<TAG>` as a placeholder for the release tag (e.g. `v1.4.0`).
 
 8. *For a minor release* Finally, open a PR against the main branch with a
    single commit, to update [VERSION](../../VERSION) to the next minor version
-   (+ `-dev` suffix). For example, if the release was for `v1.4.0`, the VERSION
-   file should be updated to `v1.5.0-dev`. After a patch release, the VERSION
-   file in the main branch is never updated.
+   (with `-dev` suffix). For example, if the release was for `v1.4.0`, the
+   VERSION file should be updated to `v1.5.0-dev`. After a patch release, the
+   VERSION file in the main branch is never updated.

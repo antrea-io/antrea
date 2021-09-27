@@ -22,6 +22,7 @@ docs/gke-installation.md
 docs/ipsec-tunnel.md
 docs/kind.md
 docs/kubernetes-installers.md
+docs/maintainers/antrea-docker-image.md
 docs/maintainers/build-kubemark.md
 docs/maintainers/getting-started-gif.md
 docs/maintainers/release.md
