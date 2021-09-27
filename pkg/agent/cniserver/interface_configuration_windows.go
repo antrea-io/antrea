@@ -157,13 +157,14 @@ func (ic *ifConfigurator) configureContainerLink(
 	containerIP.Interface = &ifaceIdx
 
 	// MTU is configured only when the infrastructure container is created.
-	if containerID == infraContainerID {
+	if containerID == infraContainerID && !found {
 		// Configure MTU in another separate goroutine to ensure it is executed after the host interface is created.
 		// The reasons include, 1) for containerd runtime, the interface is created by containerd after the CNI
 		// CmdAdd request is returned; 2) for Docker runtime, the interface is created after hcsshim.HotAttachEndpoint,
 		// and the hcsshim call is not synchronized from the observation.
 		return ic.addPostInterfaceCreateHook(infraContainerID, epName, containerAccess, func() error {
 			ifaceName := fmt.Sprintf("%s (%s)", util.ContainerVNICPrefix, epName)
+			klog.InfoS("Setting interface mtu", "interface", ifaceName)
 			if err := util.SetInterfaceMTU(ifaceName, mtu); err != nil {
 				return fmt.Errorf("failed to configure MTU on container interface '%s': %v", ifaceName, err)
 			}
@@ -310,7 +311,11 @@ func attachContainerLink(ep *hcsshim.HNSEndpoint, containerID, sandbox, containe
 		if pollErr := wait.PollImmediate(2*time.Second, 60*time.Second, func() (bool, error) {
 			if err = hcsshim.HotAttachEndpoint(containerID, ep.Id); err != nil {
 				if err == hcsshim.ErrComputeSystemDoesNotExist {
-					return false, err
+					if isInfraContainer(sandbox) {
+						return false, err
+					}
+					klog.ErrorS(err, "Workload container didn't exist, skip attaching endpoint to it", "endpoint", ep.Id, "container", containerID)
+					return true, nil
 				}
 				klog.ErrorS(err, "Failed to attach endpoint to container, will retry later", "endpoint", ep.Id, "container", containerID)
 				return false, nil
@@ -379,7 +384,7 @@ func (ic *ifConfigurator) removeHNSEndpoint(endpoint *hcsshim.HNSEndpoint, conta
 				return err
 			}
 		}
-	case <-time.After(1 * time.Second):
+	case <-time.After(5 * time.Second):
 		return fmt.Errorf("timeout when deleting HNSEndpoint %s", epName)
 	}
 
@@ -556,9 +561,11 @@ func (ic *ifConfigurator) addPostInterfaceCreateHook(containerID, endpointName s
 				klog.InfoS("Waiting for interface to be created", "interface name", ifaceName)
 				return false, nil
 			}
+			klog.InfoS("Executing hook", "interface name", ifaceName)
 			if err = hook(); err != nil {
 				return false, err
 			}
+			klog.InfoS("Executed hook", "interface name", ifaceName)
 			return true, nil
 		})
 

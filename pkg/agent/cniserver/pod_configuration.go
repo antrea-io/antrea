@@ -451,7 +451,7 @@ func (pc *podConfigurator) reconcile(pods []corev1.Pod, containerAccess *contain
 func (pc *podConfigurator) connectInterfaceToOVSCommon(ovsPortName string, containerConfig *interfacestore.InterfaceConfig) error {
 	// create OVS Port and add attach container configuration into external_ids
 	containerID := containerConfig.ContainerID
-	klog.V(2).Infof("Adding OVS port %s for container %s", ovsPortName, containerID)
+	klog.V(0).Infof("Adding OVS port %s for container %s", ovsPortName, containerID)
 	ovsAttachInfo := BuildOVSPortExternalIDs(containerConfig)
 	portUUID, err := pc.createOVSPort(ovsPortName, ovsAttachInfo)
 	if err != nil {
