@@ -74,9 +74,11 @@ The labels in this list originated within Kubernetes at
 | area/test/community                | Issues or PRs related to community testing | Any |
 | area/test/e2e                      | Issues or PRs related to Antrea specific end-to-end testing. | Any |
 | area/test/infra                    | Issues or PRs related to test infrastructure (Jenkins configuration, Ansible playbook, Kind wrappers, ...) | Any |
-| area/transit/encapsulation         | Issues or PRs related to encapsulation | Any |
 | area/transit/addressing            | Issues or PRs related to IP addressing category (unicast, multicast, broadcast, anycast) | Any |
+| area/transit/egress                | Issues or PRs related to Egress (SNAT for traffic egressing the cluster) | Any |
+| area/transit/encapsulation         | Issues or PRs related to encapsulation | Any |
 | area/transit/encryption            | Issues or PRs related to transit encryption (IPSec, SSL) | Any |
+| area/transit/ipv6                  | Issues or PRs related to IPv6 | Any |
 | area/transit/qos                   | Issues or PRs related to transit qos or policing | Any |
 | area/transit/routing               | Issues or PRs related to routing and forwarding | Any |
 | kind/api-change                    | Categorizes issue or PR as related to adding, removing, or otherwise changing an API. | Any |
