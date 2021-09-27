@@ -50,6 +50,9 @@ reviewers:
   - xliuxu
   area/test/*:
   - lzhecheng
+  area/transit/egress:
+  - antoninbas
+  - wenqiq
   area/transit/ipv6:
   - wenyingd
   - lzhecheng
@@ -109,3 +112,6 @@ approvers:
   - antoninbas
   - edwardbadboy
   - lzhecheng
+  area/transit/egress:
+  - jianjuns
+  - tnqn
