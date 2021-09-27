@@ -17,7 +17,6 @@ package memberlist
 import (
 	"fmt"
 	"io/ioutil"
-	"net"
 	"reflect"
 	"sync"
 	"time"
@@ -81,8 +80,6 @@ type clusterNodeEventHandler func(objName string)
 // Cluster implements ClusterInterface.
 type Cluster struct {
 	bindPort int
-	// IP addr of local Node.
-	localNodeIP net.IP
 	// Name of local Node. Node name must be unique in the cluster.
 	nodeName string
 
@@ -117,7 +114,6 @@ type Cluster struct {
 // NewCluster returns a new *Cluster.
 func NewCluster(
 	clusterBindPort int,
-	localNodeIP net.IP,
 	nodeName string,
 	nodeInformer coreinformers.NodeInformer,
 	externalIPPoolInformer crdinformers.ExternalIPPoolInformer,
@@ -126,7 +122,6 @@ func NewCluster(
 	nodeEventCh := make(chan memberlist.NodeEvent, 1024)
 	c := &Cluster{
 		bindPort:                        clusterBindPort,
-		localNodeIP:                     localNodeIP,
 		nodeName:                        nodeName,
 		consistentHashMap:               make(map[string]*consistenthash.Map),
 		nodeEventsCh:                    nodeEventCh,

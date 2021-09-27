@@ -23,7 +23,7 @@ import (
 type ipAssigner struct {
 }
 
-func NewIPAssigner(nodeIPAddr net.IP, dummyDeviceName string) (*ipAssigner, error) {
+func NewIPAssigner(nodeTransportIPAddr net.IP, dummyDeviceName string) (*ipAssigner, error) {
 	return nil, nil
 }
 
