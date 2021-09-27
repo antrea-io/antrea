@@ -43,7 +43,7 @@ import (
 
 const (
 	metricNamespaceAntrea = "antrea"
-	nodeIpamSubsystem = "node_ipam_controller"
+	nodeIpamSubsystem     = "node_ipam_controller"
 )
 
 var (
