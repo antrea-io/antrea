@@ -60,6 +60,9 @@ func (pc *podConfigurator) connectInterfaceToOVS(
 	//   HNSEndpoint/HostComputeEndpoint, the current implementation will still work. It will choose the synchronized
 	//   way to create OVS port.
 	if util.HostInterfaceExists(hostIfAlias) {
+		hnsMutex.Lock()
+		defer hnsMutex.Unlock()
+
 		return containerConfig, pc.connectInterfaceToOVSCommon(ovsPortName, containerConfig)
 	}
 	return containerConfig, pc.connectInterfaceToOVSAsync(containerConfig, containerAccess)
