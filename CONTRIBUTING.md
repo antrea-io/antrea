@@ -163,6 +163,7 @@ Here are the trigger phrases for individual checks:
 * `/test-ipv6-only-e2e`: Linux IPv6 only e2e tests
 * `/test-ipv6-only-conformance`: Linux IPv6 only conformance tests
 * `/test-ipv6-only-networkpolicy`: Linux IPv6 only networkpolicy tests
+* `/test-flexible-ipam-e2e`: Flexible IPAM e2e tests
 
 Here are the trigger phrases for groups of checks:
 
