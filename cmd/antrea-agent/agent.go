@@ -186,6 +186,7 @@ func run(o *Options) error {
 	}
 	nodeConfig := agentInitializer.GetNodeConfig()
 
+
 	nodeRouteController := noderoute.NewNodeRouteController(
 		k8sClient,
 		informerFactory,
