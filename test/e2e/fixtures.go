@@ -44,7 +44,7 @@ func skipIfNotAntreaIPAMTest(tb testing.TB) {
 
 func skipIfAntreaIPAMTest(tb testing.TB) {
 	if testOptions.enableAntreaIPAM {
-		tb.Skipf("Skipping test %s when run AntreaIPAM test", tb.Name())
+		tb.Skipf("Skipping test when running AntreaIPAM: %s", tb.Name())
 	}
 }
 

@@ -301,15 +301,17 @@ func (o *Options) validateAntreaIPAMConfig() error {
 	if features.DefaultFeatureGate.Enabled(features.AntreaIPAM) {
 		// AntreaIPAM will bridge uplink to OVS bridge, which is not compatible with OVSDatapathSystem 'netdev'
 		if o.config.OVSDatapathType != string(ovsconfig.OVSDatapathSystem) {
-			return fmt.Errorf("AntreaIPAM requires 'system' OVSDatapathType")
+			return fmt.Errorf("AntreaIPAM requires 'system' OVSDatapathType, current: %s",
+				o.config.OVSDatapathType)
 		}
 		if o.config.TrafficEncapMode != config.TrafficEncapModeNoEncap.String() {
-			return fmt.Errorf("AntreaIPAM requires 'NoEncap' TrafficEncapMode")
+			return fmt.Errorf("AntreaIPAM requires 'noEncap' TrafficEncapMode, current: %s",
+				o.config.TrafficEncapMode)
 		}
 		// TODO(gran): support SNAT for Per-Node IPAM Pods
 		// SNAT needs to be updated to bypass traffic from AntreaIPAM Pod to Per-Node IPAM Pod
 		if !o.config.NoSNAT {
-			return fmt.Errorf("AntreaIPAM requires NoSNAT")
+			return fmt.Errorf("AntreaIPAM requires noSNAT")
 		}
 	}
 	return nil
