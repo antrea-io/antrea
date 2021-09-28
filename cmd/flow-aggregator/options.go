@@ -151,18 +151,18 @@ func (o *Options) validate(args []string) error {
 	}
 	// Validate all parameters related to Kafka flow export. These are optional.
 	// We process the parameters only if the Kafka broker address is given.
-	if o.config.KafkaParams.KafkaBrokerAddress != "" {
-		if o.config.KafkaParams.KafkaProtoSchema == "" {
+	if o.config.KafkaParams.BrokerAddress != "" {
+		if o.config.KafkaParams.ProtoSchema == "" {
 			o.kakfaProtoSchema = defaultKafkaProtoSchema
-		} else if o.config.KafkaParams.KafkaProtoSchema != defaultKafkaProtoSchema {
+		} else if o.config.KafkaParams.ProtoSchema != defaultKafkaProtoSchema {
 			return fmt.Errorf("kafka flow export supports only one proto schema: %v", defaultKafkaProtoSchema)
 		} else {
-			o.kakfaProtoSchema = o.config.KafkaParams.KafkaProtoSchema
+			o.kakfaProtoSchema = o.config.KafkaParams.ProtoSchema
 		}
-		if o.config.KafkaParams.KafkaBrokerTopic == "" {
+		if o.config.KafkaParams.Topic == "" {
 			o.kakfaBrokerTopic = defaultKafkaTopic
 		} else {
-			o.kakfaBrokerTopic = o.config.KafkaParams.KafkaBrokerTopic
+			o.kakfaBrokerTopic = o.config.KafkaParams.Topic
 		}
 	}
 	return nil

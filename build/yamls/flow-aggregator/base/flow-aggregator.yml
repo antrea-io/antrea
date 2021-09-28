@@ -171,5 +171,5 @@ spec:
       - name: flow-aggregator-kafka-tls
         secret:
           secretName: flow-aggregator-kafka-tls
-          defaultMode: 0400
+          defaultMode: 256
           optional: true

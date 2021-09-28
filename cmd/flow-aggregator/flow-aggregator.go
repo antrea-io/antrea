@@ -122,10 +122,10 @@ func run(o *Options) error {
 	}
 	klog.Infof("Flow aggregator Observation Domain ID: %d", observationDomainID)
 	var producerInput *producer.ProducerInput
-	if o.config.KafkaParams.KafkaBrokerAddress != "" {
+	if o.config.KafkaParams.BrokerAddress != "" {
 		// Retrieve TLS certificates from user provided K8s secrets.
 		var caCertPath, tlsCertPath, tlsKeyPath string
-		if o.config.KafkaParams.KafkaTLSEnable {
+		if o.config.KafkaParams.EnableTLS {
 			caCertPath = path.Join(certDir, CACertFile)
 			tlsCertPath = path.Join(certDir, TLSCertFile)
 			tlsKeyPath = path.Join(certDir, TLSKeyFile)
@@ -147,14 +147,14 @@ func run(o *Options) error {
 		}
 
 		producerInput = &producer.ProducerInput{
-			KafkaBrokers:       []string{o.config.KafkaParams.KafkaBrokerAddress},
+			KafkaBrokers:       []string{o.config.KafkaParams.BrokerAddress},
 			KafkaLogErrors:     true,
 			KafkaTopic:         o.kakfaBrokerTopic,
-			KafkaTLSEnabled:    o.config.KafkaParams.KafkaTLSEnable,
+			KafkaTLSEnabled:    o.config.KafkaParams.EnableTLS,
 			KafkaCAFile:        caCertPath,
 			KafkaTLSCertFile:   tlsCertPath,
 			KafkaTLSKeyFile:    tlsKeyPath,
-			KafkaTLSSkipVerify: o.config.KafkaParams.KafkaTLSSkipVerify,
+			KafkaTLSSkipVerify: o.config.KafkaParams.TLSSkipVerify,
 			KafkaVersion:       sarama.DefaultVersion,
 		}
 		// Depending on the proto schema, pick a convertor. Currently supporting

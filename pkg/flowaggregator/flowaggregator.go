@@ -422,7 +422,7 @@ func (fa *flowAggregator) flowRecordExpiryCheck(stopCh <-chan struct{}) {
 				if fa.kafkaProducer.GetSaramaProducer() == nil {
 					err := fa.kafkaProducer.InitSaramaProducer()
 					if err != nil {
-						klog.ErrorS(err, "Error when initializing kafka producer", "retry timeout", fa.activeFlowRecordTimeout)
+						klog.ErrorS(err, "Error when initializing Kafka producer", "retry timeout", fa.activeFlowRecordTimeout)
 					} else {
 						klog.InfoS("Initialized the Kafka producer")
 					}
@@ -487,7 +487,7 @@ func (fa *flowAggregator) sendFlowKeyRecord(key ipfixintermediate.FlowKey, recor
 
 	if fa.kafkaProducer != nil {
 		if fa.kafkaProducer.GetSaramaProducer() != nil {
-			klog.V(4).InfoS("Sending flow record over kafka channel")
+			klog.V(4).InfoS("Sending flow record over Kafka channel")
 			fa.kafkaProducer.PublishRecord(record.Record)
 		}
 	}

@@ -116,19 +116,10 @@ const (
 
 	nameSuffixLength int = 8
 
-<<<<<<< HEAD
 	agnhostImage        = "projects.registry.vmware.com/antrea/agnhost:2.26"
 	busyboxImage        = "projects.registry.vmware.com/library/busybox"
 	nginxImage          = "projects.registry.vmware.com/antrea/nginx"
 	perftoolImage       = "projects.registry.vmware.com/antrea/perftool"
-	ipfixCollectorImage = "projects.registry.vmware.com/antrea/ipfix-collector:v0.5.10"
-	ipfixCollectorPort  = "4739"
-=======
-	agnhostImage  = "projects.registry.vmware.com/antrea/agnhost:2.26"
-	busyboxImage  = "projects.registry.vmware.com/library/busybox"
-	nginxImage    = "projects.registry.vmware.com/antrea/nginx"
-	perftoolImage = "projects.registry.vmware.com/antrea/perftool"
->>>>>>> Support Kafka flow export in the Flow Aggregator
 
 	nginxLBService = "nginx-loadbalancer"
 
@@ -766,7 +757,6 @@ func (data *TestData) mutateFlowAggregatorConfigMap(ipfixCollector, kafkaCollect
 	if err != nil {
 		return err
 	}
-<<<<<<< HEAD
 
 	var flowAggregatorConf flowaggregatorconfig.FlowAggregatorConfig
 	if err := yaml.Unmarshal([]byte(configMap.Data[flowAggregatorConfName]), &flowAggregatorConf); err != nil {
@@ -777,17 +767,7 @@ func (data *TestData) mutateFlowAggregatorConfigMap(ipfixCollector, kafkaCollect
 	flowAggregatorConf.ActiveFlowRecordTimeout = aggregatorActiveFlowRecordTimeout.String()
 	flowAggregatorConf.InactiveFlowRecordTimeout = aggregatorInactiveFlowRecordTimeout.String()
 	flowAggregatorConf.RecordContents.PodLabels = true
-=======
-	flowAggregatorConf := configMap.Data[flowAggregatorConfName]
-	flowAggregatorConf = strings.Replace(flowAggregatorConf, "#externalFlowCollectorAddr: \"\"", fmt.Sprintf("externalFlowCollectorAddr: \"%s\"", ipfixCollector), 1)
-	flowAggregatorConf = strings.Replace(flowAggregatorConf, "#activeFlowRecordTimeout: 60s", fmt.Sprintf("activeFlowRecordTimeout: %v", aggregatorActiveFlowRecordTimeout), 1)
-	flowAggregatorConf = strings.Replace(flowAggregatorConf, "#inactiveFlowRecordTimeout: 90s", fmt.Sprintf("inactiveFlowRecordTimeout: %v", aggregatorInactiveFlowRecordTimeout), 1)
-<<<<<<< HEAD
-	flowAggregatorConf = strings.Replace(flowAggregatorConf, "#podLabels: false", fmt.Sprintf("podLabels: %v", true), 1)
-=======
-	flowAggregatorConf = strings.Replace(flowAggregatorConf, "#kafkaBrokerAddress: \"\"", fmt.Sprintf("kafkaBrokerAddress: \"%s\"", kafkaCollector), 1)
->>>>>>> Support Kafka flow export in the Flow Aggregator
->>>>>>> Support Kafka flow export in the Flow Aggregator
+	flowAggregatorConf.KafkaParams.BrokerAddress = kafkaCollector
 	if testOptions.providerName == "kind" {
 		// In Kind cluster, there are issues with DNS name resolution on worker nodes.
 		// We will use flow aggregator service cluster IP to generate the server certificate for tls communication

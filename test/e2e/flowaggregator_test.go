@@ -600,7 +600,6 @@ func testHelper(t *testing.T, data *TestData, podAIPs, podBIPs, podCIPs, podDIPs
 }
 
 func checkRecordsForFlows(t *testing.T, data *TestData, srcIP string, dstIP string, isIPv6 bool, isIntraNode bool, checkService bool, checkK8sNetworkPolicy bool, checkAntreaNetworkPolicy bool, checkBandwidth bool, isIPFIXRecord bool) {
-	timeStart := time.Now()
 	var cmdStr string
 	if !isIPv6 {
 		cmdStr = fmt.Sprintf("iperf3 -c %s -t %d", dstIP, iperfTimeSec)
@@ -631,9 +630,9 @@ func checkRecordsForFlows(t *testing.T, data *TestData, srcIP string, dstIP stri
 	var collectorOutput string
 	var recordSlices []string
 	if isIPFIXRecord {
-		collectorOutput, recordSlices = getIPFIXCollectorOutput(t, data, srcIP, dstIP, srcPort, timeStart, checkService, true, isIPv6)
+		collectorOutput, recordSlices = getIPFIXCollectorOutput(t, data, srcIP, dstIP, srcPort, checkService, true, isIPv6)
 	} else {
-		collectorOutput, recordSlices = getKafkaCollectorOutput(t, data, srcIP, dstIP, srcPort, timeStart, checkService, true, isIPv6)
+		collectorOutput, recordSlices = getKafkaCollectorOutput(t, data, srcIP, dstIP, srcPort, checkService, true, isIPv6)
 	}
 	// Iterate over recordSlices and build some results to test with expected results
 	dataRecordsCount := 0
@@ -737,7 +736,7 @@ func checkRecordsForToExternalFlows(t *testing.T, data *TestData, srcNodeName st
 	stdout, stderr, err := data.runCommandFromPod(testNamespace, srcPodName, busyboxContainerName, strings.Fields(cmd))
 	require.NoErrorf(t, err, "Error when running wget command, stdout: %s, stderr: %s", stdout, stderr)
 
-	_, recordSlices := getIPFIXCollectorOutput(t, data, srcIP, dstIP, "", timeStart, false, false, isIPv6)
+	_, recordSlices := getIPFIXCollectorOutput(t, data, srcIP, dstIP, "", false, false, isIPv6)
 	for _, record := range recordSlices {
 		if strings.Contains(record, srcIP) && strings.Contains(record, dstIP) {
 			checkPodAndNodeData(t, record, srcPodName, srcNodeName, "", "", true)
@@ -765,8 +764,8 @@ func checkRecordsForDenyFlows(t *testing.T, data *TestData, testFlow1, testFlow2
 	_, _, err = data.runCommandFromPod(testNamespace, testFlow2.srcPodName, "", []string{"timeout", "2", "bash", "-c", cmdStr2})
 	assert.Error(t, err)
 
-	_, recordSlices1 := getIPFIXCollectorOutput(t, data, testFlow1.srcIP, testFlow1.dstIP, "", timeStart, false, false, isIPv6)
-	_, recordSlices2 := getIPFIXCollectorOutput(t, data, testFlow2.srcIP, testFlow2.dstIP, "", timeStart, false, false, isIPv6)
+	_, recordSlices1 := getIPFIXCollectorOutput(t, data, testFlow1.srcIP, testFlow1.dstIP, "", false, false, isIPv6)
+	_, recordSlices2 := getIPFIXCollectorOutput(t, data, testFlow2.srcIP, testFlow2.dstIP, "", false, false, isIPv6)
 	recordSlices := append(recordSlices1, recordSlices2...)
 	src_flow1, dst_flow1 := matchSrcAndDstAddress(testFlow1.srcIP, testFlow1.dstIP, false, isIPv6)
 	src_flow2, dst_flow2 := matchSrcAndDstAddress(testFlow2.srcIP, testFlow2.dstIP, false, isIPv6)
@@ -898,7 +897,7 @@ func getUnit64FieldFromRecord(t *testing.T, record, field string, isIPFIXRecord 
 // received all the expected records for a given flow with source IP, destination IP
 // and source port. We send source port to ignore the control flows during the
 // iperf test.
-func getIPFIXCollectorOutput(t *testing.T, data *TestData, srcIP, dstIP, srcPort string, timeStart time.Time, isDstService bool, checkAllRecords bool, isIPv6 bool) (string, []string) {
+func getIPFIXCollectorOutput(t *testing.T, data *TestData, srcIP, dstIP, srcPort string, isDstService bool, checkAllRecords bool, isIPv6 bool) (string, []string) {
 	// Get the IPFIX collector Pod.
 	listOptions := metav1.ListOptions{
 		LabelSelector: "app=ipfix-collector",
@@ -921,7 +920,7 @@ func getIPFIXCollectorOutput(t *testing.T, data *TestData, srcIP, dstIP, srcPort
 		src, dst := matchSrcAndDstAddress(srcIP, dstIP, isDstService, isIPv6)
 		if checkAllRecords {
 			for _, record := range recordSlices {
-	flowStartTime := int64(getUnit64FieldFromRecord(t, record, "flowStartSeconds", true))
+				flowStartTime := int64(getUnit64FieldFromRecord(t, record, "flowStartSeconds", true))
 				if strings.Contains(record, src) && strings.Contains(record, dst) && strings.Contains(record, srcPort) {
 					exportTime := int64(getUnit64FieldFromRecord(t, record, "flowEndSeconds", true))
 					if exportTime >= flowStartTime+iperfTimeSec {
@@ -941,7 +940,7 @@ func getIPFIXCollectorOutput(t *testing.T, data *TestData, srcIP, dstIP, srcPort
 // we have received all the expected records for a given flow with source IP, destination IP
 // and source port. We send source port to ignore the control flows during the
 // iperf test.
-func getKafkaCollectorOutput(t *testing.T, data *TestData, srcIP, dstIP, srcPort string, timeStart time.Time, isDstService bool, checkAllRecords bool, isIPv6 bool) (string, []string) {
+func getKafkaCollectorOutput(t *testing.T, data *TestData, srcIP, dstIP, srcPort string, isDstService bool, checkAllRecords bool, isIPv6 bool) (string, []string) {
 	// Get the Kafka consumer Pod.
 	listOptions := metav1.ListOptions{
 		LabelSelector: "app=kafka-consumer",
@@ -965,9 +964,10 @@ func getKafkaCollectorOutput(t *testing.T, data *TestData, srcIP, dstIP, srcPort
 		src, dst := matchSrcAndDstAddress(srcIP, dstIP, isDstService, isIPv6)
 		if checkAllRecords {
 			for _, record := range recordSlices {
+				flowStartTime := int64(getUnit64FieldFromRecord(t, record, "flowStartSeconds", true))
 				exportTime := int64(getUnit64FieldFromRecord(t, record, "TimeFlowEndInSecs", false))
 				if strings.Contains(record, src) && strings.Contains(record, dst) && strings.Contains(record, srcPort) {
-					if exportTime >= timeStart.Unix()+iperfTimeSec {
+					if exportTime >= flowStartTime+iperfTimeSec {
 						return true, nil
 					}
 				}
@@ -977,7 +977,7 @@ func getKafkaCollectorOutput(t *testing.T, data *TestData, srcIP, dstIP, srcPort
 			return strings.Contains(collectorOutput, srcIP) && strings.Contains(collectorOutput, dstIP) && strings.Contains(collectorOutput, srcPort), nil
 		}
 	})
-	require.NoErrorf(t, err, "Kafka collector did not receive the expected records with iperf time start: %s iperf source port: %s", timeStart.String(), srcPort)
+	require.NoErrorf(t, err, "Kafka collector did not receive the expected records with iperf source port: %s", srcPort)
 	return collectorOutput, recordSlices
 }
 
