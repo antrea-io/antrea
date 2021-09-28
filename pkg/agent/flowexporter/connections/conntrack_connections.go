@@ -49,22 +49,20 @@ type ConntrackConnectionStore struct {
 
 func NewConntrackConnectionStore(
 	connTrackDumper ConnTrackDumper,
-	ifaceStore interfacestore.InterfaceStore,
 	v4Enabled bool,
 	v6Enabled bool,
-	proxier proxy.Proxier,
 	npQuerier querier.AgentNetworkPolicyInfoQuerier,
-	pollInterval time.Duration,
-	expirePriorityQueue *priorityqueue.ExpirePriorityQueue,
-	staleConnectionTimeout time.Duration,
+	ifaceStore interfacestore.InterfaceStore,
+	proxier proxy.Proxier,
+	o *flowexporter.FlowExporterOptions,
 ) *ConntrackConnectionStore {
 	return &ConntrackConnectionStore{
 		connDumper:           connTrackDumper,
 		v4Enabled:            v4Enabled,
 		v6Enabled:            v6Enabled,
 		networkPolicyQuerier: npQuerier,
-		pollInterval:         pollInterval,
-		connectionStore:      NewConnectionStore(ifaceStore, proxier, expirePriorityQueue, staleConnectionTimeout),
+		pollInterval:         o.PollInterval,
+		connectionStore:      NewConnectionStore(ifaceStore, proxier, o),
 	}
 }
 
@@ -289,4 +287,8 @@ func (cs *ConntrackConnectionStore) deleteConnWithoutLock(connKey flowexporter.C
 	delete(cs.connections, connKey)
 	metrics.TotalAntreaConnectionsInConnTrackTable.Dec()
 	return nil
+}
+
+func (cs *ConntrackConnectionStore) GetPriorityQueue() *priorityqueue.ExpirePriorityQueue {
+	return cs.connectionStore.expirePriorityQueue
 }

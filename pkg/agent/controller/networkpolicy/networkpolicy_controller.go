@@ -119,7 +119,6 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 	antreaProxyEnabled bool,
 	statusManagerEnabled bool,
 	loggingEnabled bool,
-	denyConnStore *connections.DenyConnectionStore,
 	asyncRuleDeleteInterval time.Duration,
 	dnsServerOverride string) (*Controller, error) {
 	idAllocator := newIDAllocator(asyncRuleDeleteInterval, dnsInterceptRuleID)
@@ -131,7 +130,6 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 		antreaProxyEnabled:   antreaProxyEnabled,
 		statusManagerEnabled: statusManagerEnabled,
 		loggingEnabled:       loggingEnabled,
-		denyConnStore:        denyConnStore,
 	}
 	if antreaPolicyEnabled {
 		var err error
@@ -406,6 +404,10 @@ func (c *Controller) GetRuleByFlowID(ruleFlowID uint32) *types.PolicyRule {
 func (c *Controller) GetControllerConnectionStatus() bool {
 	// When the watchers are connected, controller connection status is true. Otherwise, it is false.
 	return c.addressGroupWatcher.isConnected() && c.appliedToGroupWatcher.isConnected() && c.networkPolicyWatcher.isConnected()
+}
+
+func (c *Controller) SetDenyConnStore(denyConnStore *connections.DenyConnectionStore) {
+	c.denyConnStore = denyConnStore
 }
 
 // Run begins watching and processing Antrea AddressGroups, AppliedToGroups

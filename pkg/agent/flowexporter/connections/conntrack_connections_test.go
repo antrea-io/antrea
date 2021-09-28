@@ -32,7 +32,6 @@ import (
 
 	"antrea.io/antrea/pkg/agent/flowexporter"
 	connectionstest "antrea.io/antrea/pkg/agent/flowexporter/connections/testing"
-	"antrea.io/antrea/pkg/agent/flowexporter/priorityqueue"
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	interfacestoretest "antrea.io/antrea/pkg/agent/interfacestore/testing"
 	"antrea.io/antrea/pkg/agent/metrics"
@@ -211,9 +210,7 @@ func TestConntrackConnectionStore_AddOrUpdateConn(t *testing.T) {
 	mockProxier := proxytest.NewMockProxier(ctrl)
 	mockConnDumper := connectionstest.NewMockConnTrackDumper(ctrl)
 	npQuerier := queriertest.NewMockAgentNetworkPolicyInfoQuerier(ctrl)
-	pq := priorityqueue.NewExpirePriorityQueue(testActiveFlowTimeout, testIdleFlowTimeout)
-	conntrackConnStore := NewConntrackConnectionStore(mockConnDumper, mockIfaceStore, true, false,
-		mockProxier, npQuerier, testPollInterval, pq, testStaleConnectionTimeout)
+	conntrackConnStore := NewConntrackConnectionStore(mockConnDumper, true, false, npQuerier, mockIfaceStore, mockProxier, testFlowExporterOptions)
 
 	for _, c := range tc {
 		t.Run(c.name, func(t *testing.T) {
@@ -296,7 +293,7 @@ func TestConnectionStore_DeleteConnectionByKey(t *testing.T) {
 	metrics.TotalAntreaConnectionsInConnTrackTable.Set(float64(len(testFlows)))
 	// Create connectionStore
 	mockIfaceStore := interfacestoretest.NewMockInterfaceStore(ctrl)
-	connStore := NewConntrackConnectionStore(nil, mockIfaceStore, true, false, nil, nil, testPollInterval, nil, testStaleConnectionTimeout)
+	connStore := NewConntrackConnectionStore(nil, true, false, nil, mockIfaceStore, nil, testFlowExporterOptions)
 	// Add flows to the connection store.
 	for i, flow := range testFlows {
 		connStore.connections[*testFlowKeys[i]] = flow
@@ -320,7 +317,7 @@ func TestConnectionStore_MetricSettingInPoll(t *testing.T) {
 	// Create connectionStore
 	mockIfaceStore := interfacestoretest.NewMockInterfaceStore(ctrl)
 	mockConnDumper := connectionstest.NewMockConnTrackDumper(ctrl)
-	conntrackConnStore := NewConntrackConnectionStore(mockConnDumper, mockIfaceStore, true, false, nil, nil, testPollInterval, nil, testStaleConnectionTimeout)
+	conntrackConnStore := NewConntrackConnectionStore(mockConnDumper, true, false, nil, mockIfaceStore, nil, testFlowExporterOptions)
 	// Hard-coded conntrack occupancy metrics for test
 	TotalConnections := 0
 	MaxConnections := 300000

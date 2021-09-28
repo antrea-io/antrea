@@ -33,7 +33,6 @@ import (
 
 	"antrea.io/antrea/pkg/agent/flowexporter"
 	connectionstest "antrea.io/antrea/pkg/agent/flowexporter/connections/testing"
-	"antrea.io/antrea/pkg/agent/flowexporter/priorityqueue"
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	interfacestoretest "antrea.io/antrea/pkg/agent/interfacestore/testing"
 	"antrea.io/antrea/pkg/agent/openflow"
@@ -105,9 +104,7 @@ func setupConntrackConnStore(b *testing.B) (*ConntrackConnectionStore, *connecti
 	mockProxier.EXPECT().GetServiceByIP(serviceStr).Return(servicePortName, true).AnyTimes()
 
 	npQuerier := queriertest.NewMockAgentNetworkPolicyInfoQuerier(ctrl)
-	pq := priorityqueue.NewExpirePriorityQueue(testActiveFlowTimeout, testIdleFlowTimeout)
-	return NewConntrackConnectionStore(mockConnDumper, mockIfaceStore, true, false, mockProxier,
-		npQuerier, testPollInterval, pq, testStaleConnectionTimeout), mockConnDumper
+	return NewConntrackConnectionStore(mockConnDumper, true, false, npQuerier, mockIfaceStore, nil, testFlowExporterOptions), mockConnDumper
 }
 
 func generateConns() []*flowexporter.Connection {

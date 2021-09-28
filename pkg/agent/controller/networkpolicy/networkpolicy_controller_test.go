@@ -56,7 +56,7 @@ func newTestController() (*Controller, *fake.Clientset, *mockReconciler) {
 	ch2 := make(chan string, 100)
 	groupCounters := []proxytypes.GroupCounter{proxytypes.NewGroupCounter(false, ch2)}
 	controller, _ := NewNetworkPolicyController(&antreaClientGetter{clientset}, nil, nil, "node1", ch, groupCounters, ch2,
-		true, true, true, true, nil, testAsyncDeleteInterval, "8.8.8.8:53")
+		true, true, true, true, testAsyncDeleteInterval, "8.8.8.8:53")
 	reconciler := newMockReconciler()
 	controller.reconciler = reconciler
 	controller.antreaPolicyLogger = nil

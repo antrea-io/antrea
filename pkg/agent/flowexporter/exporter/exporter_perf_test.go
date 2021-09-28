@@ -32,6 +32,7 @@ import (
 	"github.com/vmware/go-ipfix/pkg/registry"
 	"k8s.io/klog/v2"
 
+	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/flowexporter"
 	"antrea.io/antrea/pkg/agent/flowexporter/connections"
 	"antrea.io/antrea/pkg/agent/flowexporter/priorityqueue"
@@ -144,7 +145,7 @@ func BenchmarkExportDenyConns(b *testing.B) {
 
 }
 
-func setupExporter(isConntrackConn bool) (*flowExporter, error) {
+func setupExporter(isConntrackConn bool) (*FlowExporter, error) {
 	var err error
 	collectorAddr, err := startLocalServer()
 	if err != nil {
@@ -152,17 +153,19 @@ func setupExporter(isConntrackConn bool) (*flowExporter, error) {
 	}
 
 	// create connection store and generate connections
-	conntrackPQ := priorityqueue.NewExpirePriorityQueue(testActiveFlowTimeout, testIdleFlowTimeout)
-	denyPQ := priorityqueue.NewExpirePriorityQueue(testActiveFlowTimeout, testIdleFlowTimeout)
-	denyConnStore := connections.NewDenyConnectionStore(nil, nil, denyPQ, 0)
-	conntrackConnStore := connections.NewConntrackConnectionStore(nil, nil, true, false, nil, nil, 1, conntrackPQ, 1)
+	o := &flowexporter.FlowExporterOptions{
+		FlowCollectorAddr:      collectorAddr.String(),
+		FlowCollectorProto:     collectorAddr.Network(),
+		ActiveFlowTimeout:      testActiveFlowTimeout,
+		IdleFlowTimeout:        testIdleFlowTimeout,
+		StaleConnectionTimeout: 1,
+		PollInterval:           1}
+	exp, _ := NewFlowExporter(nil, nil, nil, nil, config.TrafficEncapModeEncap, nil, nil, nil, nil, false, nil, o)
 	if isConntrackConn {
-		addConns(conntrackConnStore, conntrackPQ)
+		addConns(exp.conntrackConnStore, exp.conntrackConnStore.GetPriorityQueue())
 	} else {
-		addDenyConns(denyConnStore, denyPQ)
+		addDenyConns(exp.denyConnStore, exp.denyConnStore.GetPriorityQueue())
 	}
-
-	exp, _ := NewFlowExporter(conntrackConnStore, denyConnStore, collectorAddr.String(), collectorAddr.Network(), true, false, nil, nil, false, conntrackPQ, denyPQ)
 	return exp, err
 }
 

@@ -33,7 +33,6 @@ import (
 	"antrea.io/antrea/pkg/agent/flowexporter"
 	"antrea.io/antrea/pkg/agent/flowexporter/connections"
 	connectionstest "antrea.io/antrea/pkg/agent/flowexporter/connections/testing"
-	"antrea.io/antrea/pkg/agent/flowexporter/priorityqueue"
 	"antrea.io/antrea/pkg/agent/metrics"
 	ipfixtest "antrea.io/antrea/pkg/ipfix/testing"
 )
@@ -68,7 +67,7 @@ func testSendTemplateSet(t *testing.T, v4Enabled bool, v6Enabled bool) {
 
 	mockIPFIXExpProc := ipfixtest.NewMockIPFIXExportingProcess(ctrl)
 	mockIPFIXRegistry := ipfixtest.NewMockIPFIXRegistry(ctrl)
-	flowExp := &flowExporter{
+	flowExp := &FlowExporter{
 		process:      mockIPFIXExpProc,
 		templateIDv4: testTemplateIDv4,
 		templateIDv6: testTemplateIDv6,
@@ -85,7 +84,7 @@ func testSendTemplateSet(t *testing.T, v4Enabled bool, v6Enabled bool) {
 	}
 }
 
-func sendTemplateSet(t *testing.T, ctrl *gomock.Controller, mockIPFIXExpProc *ipfixtest.MockIPFIXExportingProcess, mockIPFIXRegistry *ipfixtest.MockIPFIXRegistry, flowExp *flowExporter, isIPv6 bool) {
+func sendTemplateSet(t *testing.T, ctrl *gomock.Controller, mockIPFIXExpProc *ipfixtest.MockIPFIXExportingProcess, mockIPFIXRegistry *ipfixtest.MockIPFIXRegistry, flowExp *FlowExporter, isIPv6 bool) {
 	var mockTempSet *ipfixentitiestesting.MockSet
 	mockTempSet = ipfixentitiestesting.NewMockSet(ctrl)
 	flowExp.ipfixSet = mockTempSet
@@ -231,7 +230,7 @@ func testSendDataSet(t *testing.T, v4Enabled bool, v6Enabled bool) {
 		connv6 = getConnection(true, true, 302, 6, "ESTABLISHED")
 		elemListv6 = getElemList(IANAInfoElementsIPv6, AntreaInfoElementsIPv6)
 	}
-	flowExp := &flowExporter{
+	flowExp := &FlowExporter{
 		process:        mockIPFIXExpProc,
 		elementsListv4: elemListv4,
 		elementsListv6: elemListv6,
@@ -274,7 +273,7 @@ func TestFlowExporter_initFlowExporter(t *testing.T) {
 		t.Fatalf("error when creating a local server: %v", err)
 	}
 	defer conn.Close()
-	exp := &flowExporter{
+	exp := &FlowExporter{
 		process: nil,
 		exporterInput: exporter.ExporterInput{
 			CollectorProtocol: conn.LocalAddr().Network(),
@@ -418,7 +417,7 @@ func testSendFlowRecords(t *testing.T, v4Enabled bool, v6Enabled bool) {
 		elemListv6 = getElemList(IANAInfoElementsIPv6, AntreaInfoElementsIPv6)
 	}
 
-	flowExp := &flowExporter{
+	flowExp := &FlowExporter{
 		elementsListv4: elemListv4,
 		elementsListv6: elemListv6,
 		templateIDv4:   testTemplateIDv4,
@@ -433,7 +432,7 @@ func testSendFlowRecords(t *testing.T, v4Enabled bool, v6Enabled bool) {
 	}
 }
 
-func runSendFlowRecordTests(t *testing.T, flowExp *flowExporter, isIPv6 bool) {
+func runSendFlowRecordTests(t *testing.T, flowExp *FlowExporter, isIPv6 bool) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -545,12 +544,17 @@ func runSendFlowRecordTests(t *testing.T, flowExp *flowExporter, isIPv6 bool) {
 	}
 	for id, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			conntrackPQ := priorityqueue.NewExpirePriorityQueue(testActiveFlowTimeout, testIdleFlowTimeout)
-			denyPQ := priorityqueue.NewExpirePriorityQueue(testActiveFlowTimeout, testIdleFlowTimeout)
-			flowExp.conntrackPriorityQueue = conntrackPQ
-			flowExp.denyPriorityQueue = denyPQ
-			flowExp.conntrackConnStore = connections.NewConntrackConnectionStore(mockConnDumper, nil, !isIPv6, isIPv6, nil, nil, 1, conntrackPQ, 1)
-			flowExp.denyConnStore = connections.NewDenyConnectionStore(nil, nil, denyPQ, 0)
+			o := &flowexporter.FlowExporterOptions{
+				FlowCollectorAddr:      "",
+				FlowCollectorProto:     "",
+				ActiveFlowTimeout:      testActiveFlowTimeout,
+				IdleFlowTimeout:        testIdleFlowTimeout,
+				StaleConnectionTimeout: 1,
+				PollInterval:           1}
+			flowExp.conntrackConnStore = connections.NewConntrackConnectionStore(mockConnDumper, !isIPv6, isIPv6, nil, nil, nil, o)
+			flowExp.denyConnStore = connections.NewDenyConnectionStore(nil, nil, o)
+			flowExp.conntrackPriorityQueue = flowExp.conntrackConnStore.GetPriorityQueue()
+			flowExp.denyPriorityQueue = flowExp.denyConnStore.GetPriorityQueue()
 			flowExp.numDataSetsSent = 0
 			var conn, denyConn *flowexporter.Connection
 			var connKey flowexporter.ConnectionKey

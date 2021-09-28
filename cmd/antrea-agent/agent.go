@@ -32,9 +32,8 @@ import (
 	"antrea.io/antrea/pkg/agent/controller/networkpolicy"
 	"antrea.io/antrea/pkg/agent/controller/noderoute"
 	"antrea.io/antrea/pkg/agent/controller/traceflow"
-	"antrea.io/antrea/pkg/agent/flowexporter/connections"
+	"antrea.io/antrea/pkg/agent/flowexporter"
 	"antrea.io/antrea/pkg/agent/flowexporter/exporter"
-	"antrea.io/antrea/pkg/agent/flowexporter/priorityqueue"
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/metrics"
 	npl "antrea.io/antrea/pkg/agent/nodeportlocal"
@@ -258,14 +257,6 @@ func run(o *Options) error {
 	statusManagerEnabled := antreaPolicyEnabled
 	loggingEnabled := antreaPolicyEnabled
 
-	var denyConnStore *connections.DenyConnectionStore
-	var denyPriorityQueue *priorityqueue.ExpirePriorityQueue
-	if features.DefaultFeatureGate.Enabled(features.FlowExporter) {
-		denyPriorityQueue = priorityqueue.NewExpirePriorityQueue(o.activeFlowTimeout, o.idleFlowTimeout)
-		denyConnStore = connections.NewDenyConnectionStore(ifaceStore, proxier, denyPriorityQueue, o.staleConnectionTimeout)
-		go denyConnStore.RunPeriodicDeletion(stopCh)
-	}
-
 	networkPolicyController, err := networkpolicy.NewNetworkPolicyController(
 		antreaClientProvider,
 		ofClient,
@@ -278,7 +269,6 @@ func run(o *Options) error {
 		antreaProxyEnabled,
 		statusManagerEnabled,
 		loggingEnabled,
-		denyConnStore,
 		asyncRuleDeleteInterval,
 		o.config.DNSServerOverride)
 	if err != nil {
@@ -362,6 +352,34 @@ func run(o *Options) error {
 
 	if err := antreaClientProvider.RunOnce(); err != nil {
 		return err
+	}
+
+	var flowExporter *exporter.FlowExporter
+	if features.DefaultFeatureGate.Enabled(features.FlowExporter) {
+		flowExporterOptions := &flowexporter.FlowExporterOptions{
+			FlowCollectorAddr:      o.flowCollectorAddr,
+			FlowCollectorProto:     o.flowCollectorProto,
+			ActiveFlowTimeout:      o.activeFlowTimeout,
+			IdleFlowTimeout:        o.idleFlowTimeout,
+			StaleConnectionTimeout: o.staleConnectionTimeout,
+			PollInterval:           o.pollInterval}
+		flowExporter, err = exporter.NewFlowExporter(
+			ifaceStore,
+			proxier,
+			k8sClient,
+			nodeRouteController,
+			networkConfig.TrafficEncapMode,
+			nodeConfig,
+			serviceCIDRNet,
+			serviceCIDRNetv6,
+			&ovsDatapathType,
+			features.DefaultFeatureGate.Enabled(features.AntreaProxy),
+			networkPolicyController,
+			flowExporterOptions)
+		if err != nil {
+			return fmt.Errorf("error when creating IPFIX flow exporter: %v", err)
+		}
+		networkPolicyController.SetDenyConnStore(flowExporter.GetDenyConnStore())
 	}
 
 	// Start the NPL agent.
@@ -479,41 +497,8 @@ func run(o *Options) error {
 		go ofClient.StartPacketInHandler(packetInReasons, stopCh)
 	}
 
-	// Initialize flow exporter to start go routines to poll conntrack flows and export IPFIX flow records
-	var conntrackPriorityQueue *priorityqueue.ExpirePriorityQueue
+	// Start the goroutine to periodically export IPFIX flow records.
 	if features.DefaultFeatureGate.Enabled(features.FlowExporter) {
-		v4Enabled := config.IsIPv4Enabled(nodeConfig, networkConfig.TrafficEncapMode)
-		v6Enabled := config.IsIPv6Enabled(nodeConfig, networkConfig.TrafficEncapMode)
-		isNetworkPolicyOnly := networkConfig.TrafficEncapMode.IsNetworkPolicyOnly()
-
-		conntrackPriorityQueue = priorityqueue.NewExpirePriorityQueue(o.activeFlowTimeout, o.idleFlowTimeout)
-		conntrackConnStore := connections.NewConntrackConnectionStore(
-			connections.InitializeConnTrackDumper(nodeConfig, serviceCIDRNet, serviceCIDRNetv6, ovsDatapathType, features.DefaultFeatureGate.Enabled(features.AntreaProxy)),
-			ifaceStore,
-			v4Enabled,
-			v6Enabled,
-			proxier,
-			networkPolicyController,
-			o.pollInterval,
-			conntrackPriorityQueue,
-			o.staleConnectionTimeout)
-		go conntrackConnStore.Run(stopCh)
-
-		flowExporter, err := exporter.NewFlowExporter(
-			conntrackConnStore,
-			denyConnStore,
-			o.flowCollectorAddr,
-			o.flowCollectorProto,
-			v4Enabled,
-			v6Enabled,
-			k8sClient,
-			nodeRouteController,
-			isNetworkPolicyOnly,
-			conntrackPriorityQueue,
-			denyPriorityQueue)
-		if err != nil {
-			return fmt.Errorf("error when creating IPFIX flow exporter: %v", err)
-		}
 		go flowExporter.Run(stopCh)
 	}
 
