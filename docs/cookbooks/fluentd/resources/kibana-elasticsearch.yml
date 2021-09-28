@@ -1,0 +1,193 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kube-logging
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: elastic-storage
+  namespace: kube-logging
+provisioner: kubernetes.io/no-provisioner
+volumeBindingMode: Immediate
+reclaimPolicy: Delete
+allowVolumeExpansion: True
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: elasticsearch-pvc
+  namespace: kube-logging
+spec:
+  storageClassName: elastic-storage
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: elasticsearch-pv
+  namespace: kube-logging
+spec:
+  storageClassName: elastic-storage
+  capacity:
+    storage: 2Gi
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    path: "/data/elasticsearch/"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: elasticsearch
+  namespace: kube-logging
+  labels:
+    app: elasticsearch
+spec:
+  selector:
+    app: elasticsearch
+  ports:
+    - port: 9200
+      targetPort: 9200
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: elasticsearch
+  namespace: kube-logging
+  labels:
+    app: elasticsearch
+spec:
+  selector:
+    matchLabels:
+      app: elasticsearch
+  serviceName: elasticsearch
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: elasticsearch
+    spec:
+      initContainers:
+        - name: init-sysctl
+          image: busybox:1.27.2
+          command:
+            - sysctl
+            - -w
+            - vm.max_map_count=262144
+          securityContext:
+            privileged: true
+      containers:
+        - name: es-data
+          image: docker.elastic.co/elasticsearch/elasticsearch-oss:7.8.0
+          env:
+            - name: ES_JAVA_OPTS
+              value: "-Xms512m -Xmx1g"
+            - name: cluster.name
+              value: "kube-logging"
+            - name: bootstrap.memory_lock
+              value: "false"
+            - name: network.host
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: http.port
+              value: "9200"
+            - name: discovery.type
+              value: "single-node"
+            - name: indices.query.bool.max_clause_count
+              value: "8192"
+            - name: search.max_buckets
+              value: "100000"
+            - name: action.destructive_requires_name
+              value: "true"
+          ports:
+            - containerPort: 9200
+              name: http
+            - containerPort: 9300
+              name: transport
+          livenessProbe:
+            tcpSocket:
+              port: transport
+            initialDelaySeconds: 90
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /_cluster/health
+              port: http
+            initialDelaySeconds: 90
+            timeoutSeconds: 20
+          volumeMounts:
+            - name: es-data
+              mountPath: /data
+      nodeSelector:
+        kubernetes.io/os: linux
+        kubernetes.io/arch: amd64
+      volumes:
+        - name: es-data
+          persistentVolumeClaim:
+            claimName: elasticsearch-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kibana
+  namespace: kube-logging
+  labels:
+    app: kibana
+spec:
+  type: NodePort
+  selector:
+    app: kibana
+  ports:
+    - port: 5601
+      targetPort: 5601
+      nodePort: 30007
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kibana
+  namespace: kube-logging
+  labels:
+    app: kibana
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kibana
+  template:
+    metadata:
+      labels:
+        app: kibana
+    spec:
+      containers:
+        - name: kibana
+          image: docker.elastic.co/kibana/kibana-oss:7.8.0
+          env:
+            - name: action.destructive_requires_name
+              value: "true"
+            - name: SERVER_HOST
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: SERVER_PORT
+              value: "5601"
+            - name: ELASTICSEARCH_URL
+              value: "http://elasticsearch:9200"
+            - name: KIBANA_DEFAULTAPPID
+              value: "dashboard/3b331b30-b987-11ea-b16e-fb06687c3589"
+            - name: LOGGING_QUIET
+              value: "true"
+            - name: KIBANA_AUTOCOMPLETETERMINATEAFTER
+              value: "100000"
+          ports:
+            - containerPort: 5601
+              name: http
+      nodeSelector:
+        kubernetes.io/os: linux
+        kubernetes.io/arch: amd64

@@ -29,6 +29,7 @@
 - [ClusterGroup](#clustergroup)
   - [The ClusterGroup resource](#the-clustergroup-resource)
   - [kubectl commands for ClusterGroup](#kubectl-commands-for-clustergroup)
+- [Audit logging for Antrea-native policies](#audit-logging-for-antrea-native-policies)
 - [Select Namespace by Name](#select-namespace-by-name)
   - [K8s clusters with version 1.21 and above](#k8s-clusters-with-version-121-and-above)
   - [K8s clusters with version 1.20 and below](#k8s-clusters-with-version-120-and-below)
@@ -876,6 +877,12 @@ The following kubectl commands can be used to retrieve CG resources:
     # Use short name with API Group
     kubectl get cg.crd.antrea.io
 ```
+
+## Audit logging for Antrea-native policies
+
+Logs are recorded in `/var/log/antrea/networkpolicy` when `enableLogging` is configured.
+Fluentd can be used to assist with analyzing the logs. Refer to the
+[Fluentd cookbook](cookbooks/fluentd) for documentation.
 
 ## Select Namespace by Name
 
