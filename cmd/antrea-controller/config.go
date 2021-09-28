@@ -24,11 +24,11 @@ type NodeIPAMConfig struct {
 	EnableNodeIPAM bool `yaml:"enableNodeIPAM,omitempty"`
 	// CIDR Ranges for Pods in cluster. Value can contain a single CIDR range, or multiple ranges, separated by commas.
 	// The CIDRs could be either IPv4 or IPv6. Value ignored when EnableNodeIPAM is false.
-	ClusterCIDRs string `yaml:"clusterCIDRs,omitempty"`
+	ClusterCIDRs []string `yaml:"clusterCIDRs,omitempty"`
 	// CIDR Ranges for Services in cluster. It is not necessary to specify it when there is no overlap with clusterCIDRs.
 	// Value ignored when EnableNodeIPAM is false.
-	ServiceCIDR          string `yaml:"serviceCIDR,omitempty"`
-	SecondaryServiceCIDR string `yaml:"secondaryServiceCIDR,omitempty"`
+	ServiceCIDR   string `yaml:"serviceCIDR,omitempty"`
+	ServiceCIDRv6 string `yaml:"serviceCIDRv6,omitempty"`
 	// Mask size for IPv4 Node CIDR in IPv4 or dual-stack cluster. Value ignored when EnableNodeIPAM is false
 	// or when IPv4 Pod CIDR is not configured.
 	NodeCIDRMaskSizeIPv4 int `yaml:"nodeCIDRMaskSizeIPv4,omitempty"`

@@ -20,7 +20,6 @@ import (
 	"net"
 	"os"
 	"path"
-	"strings"
 	"time"
 
 	apiextensionclientset "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
@@ -339,16 +338,15 @@ func run(o *Options) error {
 		go networkPolicyStatusController.Run(stopCh)
 	}
 	if features.DefaultFeatureGate.Enabled(features.NodeIPAM) && o.config.NodeIPAM.EnableNodeIPAM {
-		cidrSplit := strings.Split(strings.TrimSpace(o.config.NodeIPAM.ClusterCIDRs), ",")
-		clusterCIDRs, _ := netutils.ParseCIDRs(cidrSplit)
+		clusterCIDRs, _ := netutils.ParseCIDRs(o.config.NodeIPAM.ClusterCIDRs)
 		_, serviceCIDR, _ := net.ParseCIDR(o.config.NodeIPAM.ServiceCIDR)
-		_, secondaryServiceCIDR, _ := net.ParseCIDR(o.config.NodeIPAM.SecondaryServiceCIDR)
+		_, serviceCIDRv6, _ := net.ParseCIDR(o.config.NodeIPAM.ServiceCIDRv6)
 		err = startNodeIPAM(
 			client,
 			informerFactory,
 			clusterCIDRs,
 			serviceCIDR,
-			secondaryServiceCIDR,
+			serviceCIDRv6,
 			o.config.NodeIPAM.NodeCIDRMaskSizeIPv4,
 			o.config.NodeIPAM.NodeCIDRMaskSizeIPv6,
 			stopCh)
@@ -395,7 +393,7 @@ func startNodeIPAM(client clientset.Interface,
 	informerFactory informers.SharedInformerFactory,
 	clusterCIDRs []*net.IPNet,
 	serviceCIDR *net.IPNet,
-	secondaryServiceCIDR *net.IPNet,
+	serviceCIDRv6 *net.IPNet,
 	nodeCIDRMaskSizeIPv4 int,
 	nodeCIDRMaskSizeIPv6 int,
 	stopCh <-chan struct{}) error {
@@ -406,7 +404,7 @@ func startNodeIPAM(client clientset.Interface,
 		client,
 		clusterCIDRs,
 		serviceCIDR,
-		secondaryServiceCIDR,
+		serviceCIDRv6,
 		nodeCIDRMaskSizes,
 		ipam.RangeAllocatorType,
 	)
