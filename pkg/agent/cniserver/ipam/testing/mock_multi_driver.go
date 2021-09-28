@@ -51,54 +51,54 @@ func (m *MockIPAMMultiDriver) EXPECT() *MockIPAMMultiDriverMockRecorder {
 }
 
 // Add mocks base method
-func (m *MockIPAMMultiDriver) Add(arg0 *invoke.Args, arg1 []byte) (*current.Result, error) {
+func (m *MockIPAMMultiDriver) Add(arg0 *invoke.Args, arg1 []byte, arg2 interface{}) (*current.Result, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Add", arg0, arg1)
+	ret := m.ctrl.Call(m, "Add", arg0, arg1, arg2)
 	ret0, _ := ret[0].(*current.Result)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Add indicates an expected call of Add
-func (mr *MockIPAMMultiDriverMockRecorder) Add(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockIPAMMultiDriverMockRecorder) Add(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Add", reflect.TypeOf((*MockIPAMMultiDriver)(nil).Add), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Add", reflect.TypeOf((*MockIPAMMultiDriver)(nil).Add), arg0, arg1, arg2)
 }
 
 // Check mocks base method
-func (m *MockIPAMMultiDriver) Check(arg0 *invoke.Args, arg1 []byte) error {
+func (m *MockIPAMMultiDriver) Check(arg0 *invoke.Args, arg1 []byte, arg2 interface{}) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Check", arg0, arg1)
+	ret := m.ctrl.Call(m, "Check", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Check indicates an expected call of Check
-func (mr *MockIPAMMultiDriverMockRecorder) Check(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockIPAMMultiDriverMockRecorder) Check(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Check", reflect.TypeOf((*MockIPAMMultiDriver)(nil).Check), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Check", reflect.TypeOf((*MockIPAMMultiDriver)(nil).Check), arg0, arg1, arg2)
 }
 
 // Del mocks base method
-func (m *MockIPAMMultiDriver) Del(arg0 *invoke.Args, arg1 []byte) error {
+func (m *MockIPAMMultiDriver) Del(arg0 *invoke.Args, arg1 []byte, arg2 interface{}) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Del", arg0, arg1)
+	ret := m.ctrl.Call(m, "Del", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Del indicates an expected call of Del
-func (mr *MockIPAMMultiDriverMockRecorder) Del(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockIPAMMultiDriverMockRecorder) Del(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Del", reflect.TypeOf((*MockIPAMMultiDriver)(nil).Del), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Del", reflect.TypeOf((*MockIPAMMultiDriver)(nil).Del), arg0, arg1, arg2)
 }
 
 // We don't record a call to Owns, since its a helper method, and rely on functional calls
 // such as Add, Del in testing
-func (m *MockIPAMMultiDriver) Owns(arg0 *invoke.Args, k8sArgs *argtypes.K8sArgs, arg2 []byte) bool {
+func (m *MockIPAMMultiDriver) Owns(arg0 *invoke.Args, k8sArgs *argtypes.K8sArgs, arg2 []byte) (bool, interface{}, error) {
 	if m.ownsFunc == nil {
-		return true
+		return true, nil, nil
 	}
 
-	return m.ownsFunc(k8sArgs)
+	return m.ownsFunc(k8sArgs), nil, nil
 }

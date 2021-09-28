@@ -46,10 +46,10 @@ type IPAMConfig struct {
 }
 
 type IPAMDriver interface {
-	Owns(args *invoke.Args, k8sArgs *argtypes.K8sArgs, networkConfig []byte) bool
-	Add(args *invoke.Args, networkConfig []byte) (*current.Result, error)
-	Del(args *invoke.Args, networkConfig []byte) error
-	Check(args *invoke.Args, networkConfig []byte) error
+	Owns(args *invoke.Args, k8sArgs *argtypes.K8sArgs, networkConfig []byte) (bool, interface{}, error)
+	Add(args *invoke.Args, networkConfig []byte, driverData interface{}) (*current.Result, error)
+	Del(args *invoke.Args, networkConfig []byte, driverData interface{}) error
+	Check(args *invoke.Args, networkConfig []byte, driverData interface{}) error
 }
 
 var ipamResults = sync.Map{}
@@ -89,8 +89,12 @@ func ExecIPAMAdd(cniArgs *cnipb.CniCmdArgs, k8sArgs *argtypes.K8sArgs, ipamType 
 	for _, driver := range drivers {
 		// Detect a driver that owns this request(f.e. based on ipam annotation
 		// of namespace or pod that initiated the request
-		if driver.Owns(args, k8sArgs, cniArgs.NetworkConfiguration) {
-			result, err := driver.Add(args, cniArgs.NetworkConfiguration)
+		owns, data, err := driver.Owns(args, k8sArgs, cniArgs.NetworkConfiguration)
+		if err != nil {
+			return nil, err
+		}
+		if owns {
+			result, err := driver.Add(args, cniArgs.NetworkConfiguration, data)
 			if err != nil {
 				return nil, err
 			}
@@ -108,8 +112,12 @@ func ExecIPAMDelete(cniArgs *cnipb.CniCmdArgs, k8sArgs *argtypes.K8sArgs, ipamTy
 	for _, driver := range drivers {
 		// Detect a driver that owns this request(f.e. based on ipam annotation
 		// of namespace or pod that initiated the request
-		if driver.Owns(args, k8sArgs, cniArgs.NetworkConfiguration) {
-			err := driver.Del(args, cniArgs.NetworkConfiguration)
+		owns, data, err := driver.Owns(args, k8sArgs, cniArgs.NetworkConfiguration)
+		if err != nil {
+			return err
+		}
+		if owns {
+			err := driver.Del(args, cniArgs.NetworkConfiguration, data)
 			if err != nil {
 				return err
 			}
@@ -126,8 +134,12 @@ func ExecIPAMCheck(cniArgs *cnipb.CniCmdArgs, k8sArgs *argtypes.K8sArgs, ipamTyp
 	for _, driver := range drivers {
 		// Detect a driver that owns this request(f.e. based on ipam annotation
 		// of namespace or pod that initiated the request
-		if driver.Owns(args, k8sArgs, cniArgs.NetworkConfiguration) {
-			return driver.Check(args, cniArgs.NetworkConfiguration)
+		owns, data, err := driver.Owns(args, k8sArgs, cniArgs.NetworkConfiguration)
+		if err != nil {
+			return err
+		}
+		if owns {
+			return driver.Check(args, cniArgs.NetworkConfiguration, data)
 		}
 	}
 	return fmt.Errorf("No suitable IPAM driver found")

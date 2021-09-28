@@ -36,7 +36,7 @@ type IPAMDelegator struct {
 	pluginType string
 }
 
-func (d *IPAMDelegator) Add(args *invoke.Args, networkConfig []byte) (*current.Result, error) {
+func (d *IPAMDelegator) Add(args *invoke.Args, networkConfig []byte, data interface{}) (*current.Result, error) {
 	var success = false
 	defer func() {
 		if !success {
@@ -61,7 +61,7 @@ func (d *IPAMDelegator) Add(args *invoke.Args, networkConfig []byte) (*current.R
 	return ipamResult, nil
 }
 
-func (d *IPAMDelegator) Del(args *invoke.Args, networkConfig []byte) error {
+func (d *IPAMDelegator) Del(args *invoke.Args, networkConfig []byte, data interface{}) error {
 	args.Command = "DEL"
 	if err := delegateNoResult(d.pluginType, networkConfig, args); err != nil {
 		return err
@@ -70,7 +70,7 @@ func (d *IPAMDelegator) Del(args *invoke.Args, networkConfig []byte) error {
 	return nil
 }
 
-func (d *IPAMDelegator) Check(args *invoke.Args, networkConfig []byte) error {
+func (d *IPAMDelegator) Check(args *invoke.Args, networkConfig []byte, data interface{}) error {
 	args.Command = "CHECK"
 	if err := delegateNoResult(d.pluginType, networkConfig, args); err != nil {
 		return err
@@ -78,8 +78,9 @@ func (d *IPAMDelegator) Check(args *invoke.Args, networkConfig []byte) error {
 	return nil
 }
 
-func (d *IPAMDelegator) Owns(args *invoke.Args, k8sArgs *argtypes.K8sArgs, networkConfig []byte) bool {
-	return true
+func (d *IPAMDelegator) Owns(args *invoke.Args, k8sArgs *argtypes.K8sArgs, networkConfig []byte) (bool, interface{}, error) {
+	// IPAM Delegator always owns the request
+	return true, nil, nil
 }
 
 var defaultExec = &invoke.DefaultExec{

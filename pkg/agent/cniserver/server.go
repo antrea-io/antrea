@@ -43,6 +43,7 @@ import (
 	"antrea.io/antrea/pkg/agent/util"
 	cnipb "antrea.io/antrea/pkg/apis/cni/v1beta1"
 	"antrea.io/antrea/pkg/cni"
+	"antrea.io/antrea/pkg/features"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 )
 
@@ -239,6 +240,11 @@ func (s *CNIServer) checkRequestMessage(request *cnipb.CniCmdRequest) (*CNIConfi
 	if !isValid {
 		klog.Errorf("Unsupported IPAM type %s", ipamType)
 		return cniConfig, s.unsupportedFieldResponse("ipam/type", ipamType)
+	}
+	if features.DefaultFeatureGate.Enabled(features.AntreaIPAM) {
+		// With AnteaIPAM feature enabled, Antrea ignores IPAM type from request
+		cniConfig.IPAM.Type = ipam.AntreaIPAMType
+
 	}
 	return cniConfig, nil
 }

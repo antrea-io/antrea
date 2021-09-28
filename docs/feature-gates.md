@@ -210,8 +210,9 @@ there is a risk of conflicts in CIDR allocation between the two.
 
 `AntreaIPAM` is a feature that allows flexible control over Pod IP Addressing. This can
 be achieved by configuring custom resource `IPPool` with desired set of IP ranges.
-The pool can be annotated to Namespace, Deployment or StatefulSet, and Antrea will manage
-IP address assignment for corresponding Pods according to pool definition.
+The pool can be annotated to Namespace, and Antrea will manage IP address assignment for
+corresponding Pods according to pool spec. In future, support will be extended to
+Deployments and StatefulSets, as well as requesting specific IP via Pod annotation.
 
 Note that IP pool annotation can not be updated, but rather re-created. IP Pool can be
 extended, but cannot be shrunk if already assigned to a resource.
@@ -236,7 +237,7 @@ spec:
 ```
 
 ```yaml
-kind: Deployment
+kind: Namespace
 metadata:
   annotations:
     ipam.antrea.io/ippools: 'pool1'

@@ -151,14 +151,14 @@ func TestIPAMService(t *testing.T) {
 	requestMsg, _ := newRequest(args, networkCfg, "", t)
 
 	expectOwns := func() {
-		ipamMock.EXPECT().Owns(gomock.Any(), gomock.Any(), gomock.Any()).Return(true)
+		ipamMock.EXPECT().Owns(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil, nil)
 	}
 
 	t.Run("Error on ADD", func(t *testing.T) {
 		expectOwns()
-		ipamMock.EXPECT().Add(gomock.Any(), gomock.Any()).Return(nil, fmt.Errorf("IPAM add error"))
+		ipamMock.EXPECT().Add(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, fmt.Errorf("IPAM add error"))
 		expectOwns()
-		ipamMock.EXPECT().Del(gomock.Any(), gomock.Any()).Return(nil)
+		ipamMock.EXPECT().Del(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 		response, err := cniServer.CmdAdd(cxt, requestMsg)
 		require.Nil(t, err, "expected no rpc error")
 		checkErrorResponse(t, response, cnipb.ErrorCode_IPAM_FAILURE, "IPAM add error")
@@ -167,19 +167,19 @@ func TestIPAMService(t *testing.T) {
 	t.Run("Error on DEL", func(t *testing.T) {
 		// Prepare cached IPAM result which will be deleted later.
 		expectOwns()
-		ipamMock.EXPECT().Add(gomock.Any(), gomock.Any()).Times(1)
+		ipamMock.EXPECT().Add(gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
 		cniConfig, _ := cniServer.checkRequestMessage(requestMsg)
 		_, err := ipam.ExecIPAMAdd(cniConfig.CniCmdArgs, cniConfig.K8sArgs, cniConfig.IPAM.Type, cniConfig.getInfraContainer())
 		require.Nil(t, err, "expected no Add error")
 		expectOwns()
-		ipamMock.EXPECT().Del(gomock.Any(), gomock.Any()).Return(fmt.Errorf("IPAM delete error"))
+		ipamMock.EXPECT().Del(gomock.Any(), gomock.Any(), gomock.Any()).Return(fmt.Errorf("IPAM delete error"))
 		response, err := cniServer.CmdDel(cxt, requestMsg)
 		require.Nil(t, err, "expected no rpc error")
 		checkErrorResponse(t, response, cnipb.ErrorCode_IPAM_FAILURE, "IPAM delete error")
 
 		// Cached result would be removed after a successful retry of IPAM DEL.
 		expectOwns()
-		ipamMock.EXPECT().Del(gomock.Any(), gomock.Any()).Return(nil)
+		ipamMock.EXPECT().Del(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 		err = ipam.ExecIPAMDelete(cniConfig.CniCmdArgs, cniConfig.K8sArgs, cniConfig.IPAM.Type, cniConfig.getInfraContainer())
 		require.Nil(t, err, "expected no Del error")
 
@@ -187,7 +187,7 @@ func TestIPAMService(t *testing.T) {
 
 	t.Run("Error on CHECK", func(t *testing.T) {
 		expectOwns()
-		ipamMock.EXPECT().Check(gomock.Any(), gomock.Any()).Return(fmt.Errorf("IPAM check error"))
+		ipamMock.EXPECT().Check(gomock.Any(), gomock.Any(), gomock.Any()).Return(fmt.Errorf("IPAM check error"))
 		response, err := cniServer.CmdCheck(cxt, requestMsg)
 		require.Nil(t, err, "expected no rpc error")
 		checkErrorResponse(t, response, cnipb.ErrorCode_IPAM_FAILURE, "IPAM check error")
@@ -195,15 +195,15 @@ func TestIPAMService(t *testing.T) {
 
 	expectAddTimes := func(n int) {
 		for i := 0; i < n; i++ {
-			ipamMock.EXPECT().Owns(gomock.Any(), gomock.Any(), gomock.Any()).Return(true)
-			ipamMock.EXPECT().Add(gomock.Any(), gomock.Any()).Times(1)
+			ipamMock.EXPECT().Owns(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil, nil)
+			ipamMock.EXPECT().Add(gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
 		}
 	}
 
 	expectDelTimes := func(n int) {
 		for i := 0; i < n; i++ {
-			ipamMock.EXPECT().Owns(gomock.Any(), gomock.Any(), gomock.Any()).Return(true)
-			ipamMock.EXPECT().Del(gomock.Any(), gomock.Any()).Times(1)
+			ipamMock.EXPECT().Owns(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil, nil)
+			ipamMock.EXPECT().Del(gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
 		}
 	}
 
@@ -275,16 +275,16 @@ func TestIPAMServiceMultiDriver(t *testing.T) {
 	requestMsgB, _ := newRequest(argsPodB, networkCfg, "", t)
 
 	t.Run("Error on ADD for first registered driver", func(t *testing.T) {
-		mockDriverA.EXPECT().Add(gomock.Any(), gomock.Any()).Return(nil, fmt.Errorf("IPAM add error"))
-		mockDriverA.EXPECT().Del(gomock.Any(), gomock.Any()).Return(nil)
+		mockDriverA.EXPECT().Add(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, fmt.Errorf("IPAM add error"))
+		mockDriverA.EXPECT().Del(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 		response, err := cniServer.CmdAdd(cxt, requestMsgA)
 		require.Nil(t, err, "expected no rpc error")
 		checkErrorResponse(t, response, cnipb.ErrorCode_IPAM_FAILURE, "IPAM add error")
 	})
 
 	t.Run("Error on ADD for second registered driver", func(t *testing.T) {
-		mockDriverB.EXPECT().Add(gomock.Any(), gomock.Any()).Return(nil, fmt.Errorf("IPAM add error"))
-		mockDriverB.EXPECT().Del(gomock.Any(), gomock.Any()).Return(nil)
+		mockDriverB.EXPECT().Add(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, fmt.Errorf("IPAM add error"))
+		mockDriverB.EXPECT().Del(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 		response, err := cniServer.CmdAdd(cxt, requestMsgB)
 		require.Nil(t, err, "expected no rpc error")
 		checkErrorResponse(t, response, cnipb.ErrorCode_IPAM_FAILURE, "IPAM add error")
@@ -292,18 +292,18 @@ func TestIPAMServiceMultiDriver(t *testing.T) {
 
 	t.Run("Error on DEL for first registered driver", func(t *testing.T) {
 		// Prepare cached IPAM result which will be deleted later.
-		mockDriverA.EXPECT().Add(gomock.Any(), gomock.Any()).Times(1)
+		mockDriverA.EXPECT().Add(gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
 		cniConfig, _ := cniServer.checkRequestMessage(requestMsgA)
 		_, err := ipam.ExecIPAMAdd(cniConfig.CniCmdArgs, cniConfig.K8sArgs, cniConfig.IPAM.Type, cniConfig.getInfraContainer())
 		require.Nil(t, err, "expected no Add error")
 
-		mockDriverA.EXPECT().Del(gomock.Any(), gomock.Any()).Return(fmt.Errorf("IPAM delete error"))
+		mockDriverA.EXPECT().Del(gomock.Any(), gomock.Any(), gomock.Any()).Return(fmt.Errorf("IPAM delete error"))
 		response, err := cniServer.CmdDel(cxt, requestMsgA)
 		require.Nil(t, err, "expected no rpc error")
 		checkErrorResponse(t, response, cnipb.ErrorCode_IPAM_FAILURE, "IPAM delete error")
 
 		// Cached result would be removed after a successful retry of IPAM DEL.
-		mockDriverA.EXPECT().Del(gomock.Any(), gomock.Any()).Return(nil)
+		mockDriverA.EXPECT().Del(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 		err = ipam.ExecIPAMDelete(cniConfig.CniCmdArgs, cniConfig.K8sArgs, cniConfig.IPAM.Type, cniConfig.getInfraContainer())
 		require.Nil(t, err, "expected no Del error")
 
@@ -311,32 +311,32 @@ func TestIPAMServiceMultiDriver(t *testing.T) {
 
 	t.Run("Error on DEL for second registered driver", func(t *testing.T) {
 		// Prepare cached IPAM result which will be deleted later.
-		mockDriverB.EXPECT().Add(gomock.Any(), gomock.Any()).Times(1)
+		mockDriverB.EXPECT().Add(gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
 		cniConfig, _ := cniServer.checkRequestMessage(requestMsgB)
 		_, err := ipam.ExecIPAMAdd(cniConfig.CniCmdArgs, cniConfig.K8sArgs, cniConfig.IPAM.Type, cniConfig.getInfraContainer())
 		require.Nil(t, err, "expected no Add error")
 
-		mockDriverB.EXPECT().Del(gomock.Any(), gomock.Any()).Return(fmt.Errorf("IPAM delete error"))
+		mockDriverB.EXPECT().Del(gomock.Any(), gomock.Any(), gomock.Any()).Return(fmt.Errorf("IPAM delete error"))
 		response, err := cniServer.CmdDel(cxt, requestMsgB)
 		require.Nil(t, err, "expected no rpc error")
 		checkErrorResponse(t, response, cnipb.ErrorCode_IPAM_FAILURE, "IPAM delete error")
 
 		// Cached result would be removed after a successful retry of IPAM DEL.
-		mockDriverB.EXPECT().Del(gomock.Any(), gomock.Any()).Return(nil)
+		mockDriverB.EXPECT().Del(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 		err = ipam.ExecIPAMDelete(cniConfig.CniCmdArgs, cniConfig.K8sArgs, cniConfig.IPAM.Type, cniConfig.getInfraContainer())
 		require.Nil(t, err, "expected no Del error")
 
 	})
 
 	t.Run("Error on CHECK for first registered driver", func(t *testing.T) {
-		mockDriverA.EXPECT().Check(gomock.Any(), gomock.Any()).Return(fmt.Errorf("IPAM check error"))
+		mockDriverA.EXPECT().Check(gomock.Any(), gomock.Any(), gomock.Any()).Return(fmt.Errorf("IPAM check error"))
 		response, err := cniServer.CmdCheck(cxt, requestMsgA)
 		require.Nil(t, err, "expected no rpc error")
 		checkErrorResponse(t, response, cnipb.ErrorCode_IPAM_FAILURE, "IPAM check error")
 	})
 
 	t.Run("Error on CHECK for second registered driver", func(t *testing.T) {
-		mockDriverB.EXPECT().Check(gomock.Any(), gomock.Any()).Return(fmt.Errorf("IPAM check error"))
+		mockDriverB.EXPECT().Check(gomock.Any(), gomock.Any(), gomock.Any()).Return(fmt.Errorf("IPAM check error"))
 		response, err := cniServer.CmdCheck(cxt, requestMsgB)
 		require.Nil(t, err, "expected no rpc error")
 		checkErrorResponse(t, response, cnipb.ErrorCode_IPAM_FAILURE, "IPAM check error")
