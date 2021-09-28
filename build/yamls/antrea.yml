@@ -4038,14 +4038,14 @@ data:
     # Enable the integrated Node IPAM controller within the Antrea controller.
     #  enableNodeIPAM: false
 
-    # CIDR Ranges for Pods in cluster. Value can contain a single CIDR range, or multiple ranges, separated by commas.
+    # CIDR Ranges for Pods in cluster. String array containing single CIDR range, or multiple ranges.
     # The CIDRs could be either IPv4 or IPv6. Value ignored when enableNodeIPAM is false.
-    #  clusterCIDRs:
+    #  clusterCIDRs: []
 
     # CIDR Ranges for Services in cluster. It is not necessary to specify it when there is no overlap with clusterCIDRs.
     # Value ignored when enableNodeIPAM is false.
     #  serviceCIDR:
-    #  secondaryServiceCIDR:
+    #  serviceCIDRv6:
 
     # Mask size for IPv4 Node CIDR in IPv4 or dual-stack cluster. Value ignored when enableNodeIPAM is false
     # or when IPv4 Pod CIDR is not configured. Valid range is 16 to 30.
@@ -4059,7 +4059,7 @@ metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-dhb74b822t
+  name: antrea-config-bmthb2m52d
   namespace: kube-system
 ---
 apiVersion: v1
@@ -4130,7 +4130,7 @@ spec:
             fieldRef:
               fieldPath: spec.serviceAccountName
         - name: ANTREA_CONFIG_MAP_NAME
-          value: antrea-config-dhb74b822t
+          value: antrea-config-bmthb2m52d
         image: projects.registry.vmware.com/antrea/antrea-ubuntu:latest
         imagePullPolicy: IfNotPresent
         livenessProbe:
@@ -4181,7 +4181,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-dhb74b822t
+          name: antrea-config-bmthb2m52d
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -4462,7 +4462,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-dhb74b822t
+          name: antrea-config-bmthb2m52d
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d
