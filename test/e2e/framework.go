@@ -1394,11 +1394,11 @@ func validatePodIP(podNetworkCIDR string, ip net.IP) (bool, error) {
 func (data *TestData) createService(serviceName string, port, targetPort int32, selector map[string]string, affinity, nodeLocalExternal bool,
 	serviceType corev1.ServiceType, ipFamily *corev1.IPFamily) (*corev1.Service, error) {
 	annotation := make(map[string]string)
-	return data.createServiceWithAnnotations(serviceName, port, targetPort, corev1.ProtocolTCP, selector, affinity, serviceType, ipFamily, annotation)
+	return data.createServiceWithAnnotations(serviceName, port, targetPort, corev1.ProtocolTCP, selector, affinity, nodeLocalExternal, serviceType, ipFamily, annotation)
 }
 
 // createService creates a service with Annotation
-func (data *TestData) createServiceWithAnnotations(serviceName string, port, targetPort int32, protocol corev1.Protocol, selector map[string]string, affinity bool,
+func (data *TestData) createServiceWithAnnotations(serviceName string, port, targetPort int32, protocol corev1.Protocol, selector map[string]string, affinity, nodeLocalExternal bool,
 	serviceType corev1.ServiceType, ipFamily *corev1.IPFamily, annotations map[string]string) (*corev1.Service, error) {
 	affinityType := corev1.ServiceAffinityNone
 	var ipFamilies []corev1.IPFamily
@@ -1438,7 +1438,7 @@ func (data *TestData) createServiceWithAnnotations(serviceName string, port, tar
 
 // createNginxClusterIPServiceWithAnnotations creates nginx service with Annotation
 func (data *TestData) createNginxClusterIPServiceWithAnnotations(affinity bool, ipFamily *corev1.IPFamily, annotation map[string]string) (*corev1.Service, error) {
-	return data.createServiceWithAnnotations("nginx", 80, 80, corev1.ProtocolTCP, map[string]string{"app": "nginx"}, affinity, corev1.ServiceTypeClusterIP, ipFamily, annotation)
+	return data.createServiceWithAnnotations("nginx", 80, 80, corev1.ProtocolTCP, map[string]string{"app": "nginx"}, affinity, false, corev1.ServiceTypeClusterIP, ipFamily, annotation)
 }
 
 // createNginxClusterIPService creates a nginx service with the given name.

@@ -23,9 +23,9 @@ import (
 	"sync"
 	"time"
 
-	"antrea.io/antrea/pkg/agent/nodeportlocal/rules"
-
 	"k8s.io/klog/v2"
+
+	"antrea.io/antrea/pkg/agent/nodeportlocal/rules"
 )
 
 type ProtocolSocketData struct {
@@ -54,7 +54,7 @@ func (d *NodePortData) DeleteProtocol(protocol string) error {
 		if p.Protocol == protocol {
 			d.Protocols = append(d.Protocols[:i], d.Protocols[i+1:]...)
 			if err := p.socket.Close(); err != nil {
-				return fmt.Errorf("Error when releasing local port %d: %v", d.NodePort, err)
+				return fmt.Errorf("error when releasing local port %d: %v", d.NodePort, err)
 			}
 			return nil
 		}
@@ -69,19 +69,19 @@ type LocalPortOpener interface {
 type localPortOpener struct{}
 
 type PortTable struct {
-	Table           map[int]*NodePortData
-	PodTable        map[string]*NodePortData
-	StartPort       int
-	EndPort         int
-	PodPortRules    rules.PodPortRules
-	LocalPortOpener LocalPortOpener
-	tableLock       sync.RWMutex
+	NodePortTable    map[int]*NodePortData
+	PodEndpointTable map[string]*NodePortData
+	StartPort        int
+	EndPort          int
+	PodPortRules     rules.PodPortRules
+	LocalPortOpener  LocalPortOpener
+	tableLock        sync.RWMutex
 }
 
 func NewPortTable(start, end int) (*PortTable, error) {
 	ptable := PortTable{StartPort: start, EndPort: end}
-	ptable.Table = make(map[int]*NodePortData)
-	ptable.PodTable = make(map[string]*NodePortData)
+	ptable.NodePortTable = make(map[int]*NodePortData)
+	ptable.PodEndpointTable = make(map[string]*NodePortData)
 	ptable.PodPortRules = rules.InitRules()
 	ptable.LocalPortOpener = &localPortOpener{}
 	if err := ptable.PodPortRules.Init(); err != nil {
@@ -93,37 +93,34 @@ func NewPortTable(start, end int) (*PortTable, error) {
 func (pt *PortTable) CleanupAllEntries() {
 	pt.tableLock.Lock()
 	defer pt.tableLock.Unlock()
-	pt.Table = make(map[int]*NodePortData)
-	pt.PodTable = make(map[string]*NodePortData)
+	pt.NodePortTable = make(map[int]*NodePortData)
+	pt.PodEndpointTable = make(map[string]*NodePortData)
 }
 
-func (pt *PortTable) GetEntry(nodeport int) *NodePortData {
-	pt.tableLock.RLock()
-	defer pt.tableLock.RUnlock()
-	data, _ := pt.Table[nodeport]
-	return data
-}
-
-func (pt *PortTable) GetDataForPodIP(ip string) []NodePortData {
-	pt.tableLock.RLock()
-	defer pt.tableLock.RUnlock()
-	var allData []NodePortData
-	for i := range pt.Table {
-		if (*pt.Table[i]).PodIP == ip {
-			allData = append(allData, *pt.Table[i])
-		}
-	}
-	return allData
-}
-
-func (pt *PortTable) GetEntryByPodIPPortProtocol(ip string, port int, protocol string) *NodePortData {
+func (pt *PortTable) GetEntry(ip string, port int, protocol string) *NodePortData {
 	pt.tableLock.RLock()
 	defer pt.tableLock.RUnlock()
 	return pt.getEntryByPodIPPortProtocol(ip, port, protocol)
 }
 
+func (pt *PortTable) GetDataForPodIP(ip string) []NodePortData {
+	pt.tableLock.RLock()
+	defer pt.tableLock.RUnlock()
+	return pt.getDataForPodIP(ip)
+}
+
+func (pt *PortTable) getDataForPodIP(ip string) []NodePortData {
+	var allData []NodePortData
+	for i := range pt.NodePortTable {
+		if pt.NodePortTable[i].PodIP == ip {
+			allData = append(allData, *pt.NodePortTable[i])
+		}
+	}
+	return allData
+}
+
 func (pt *PortTable) getEntryByPodIPPortProtocol(ip string, port int, protocol string) *NodePortData {
-	data, _ := pt.PodTable[podIPPortFormat(ip, port)]
+	data := pt.PodEndpointTable[podIPPortFormat(ip, port)]
 	if data != nil && data.HasProtocol(protocol) {
 		return data
 	}
@@ -131,13 +128,11 @@ func (pt *PortTable) getEntryByPodIPPortProtocol(ip string, port int, protocol s
 }
 
 func (pt *PortTable) getEntryByPodIPPort(ip string, port int) *NodePortData {
-	pt.tableLock.RLock()
-	defer pt.tableLock.RUnlock()
-	return pt.PodTable[podIPPortFormat(ip, port)]
+	return pt.PodEndpointTable[podIPPortFormat(ip, port)]
 }
 
-func (pt *PortTable) isNodePortAvilableForPodIPProtocol(ip string, nodeport int, podPort int, protocol string) bool {
-	val, ok := pt.Table[nodeport]
+func (pt *PortTable) isNodePortAvailableForPodIPProtocol(ip string, nodeport int, podPort int, protocol string) bool {
+	val, ok := pt.NodePortTable[nodeport]
 	// A given nodeport, is marked unavailable if an entry for it already exists in the PortTable Table and
 	// the nodeport suggested is being used by another Pod or,
 	// the nodeport suggested for a Pod has a different podPort binding or,
@@ -151,19 +146,25 @@ func (pt *PortTable) isNodePortAvilableForPodIPProtocol(ip string, nodeport int,
 }
 
 func (pt *PortTable) getFreePort(podIP string, podPort int, protocol string) (int, Closeable, error) {
-	for i := pt.StartPort; i <= pt.EndPort; i++ {
-		// This ensures that the NodePort `i` is not taken by any other Pods,
-		// irrespective of the protocol.
-		if !pt.isNodePortAvilableForPodIPProtocol(podIP, i, podPort, protocol) {
-			continue
+	npdata := pt.getEntryByPodIPPort(podIP, podPort)
+	err := fmt.Errorf("no free port found")
+	if npdata != nil && pt.isNodePortAvailableForPodIPProtocol(podIP, npdata.NodePort, podPort, protocol) {
+		// Check whether a NodePort is assigned to a Pod. Open the socket for the new protocol on NodePort.
+		socket, err := pt.LocalPortOpener.OpenLocalPort(npdata.NodePort, protocol)
+		if err == nil {
+			return npdata.NodePort, socket, nil
 		}
-		socket, err := pt.LocalPortOpener.OpenLocalPort(i, protocol)
-		if err != nil {
-			continue
+	} else {
+		// Try fetching a new NodePort, that is not yet assigned to any Pod.
+		for i := pt.StartPort; i <= pt.EndPort; i++ {
+			if _, ok := pt.NodePortTable[i]; !ok {
+				if socket, socketError := pt.LocalPortOpener.OpenLocalPort(i, protocol); socketError == nil {
+					return i, socket, nil
+				}
+			}
 		}
-		return i, socket, nil
 	}
-	return 0, nil, fmt.Errorf("no free port found")
+	return 0, nil, err
 }
 
 func (pt *PortTable) AddRule(podIP string, podPort int, protocol string) (int, error) {
@@ -179,16 +180,16 @@ func (pt *PortTable) AddRule(podIP string, podPort int, protocol string) (int, e
 		}
 		return 0, err
 	}
-	if entry, ok := pt.Table[nodePort]; ok {
+	if entry, ok := pt.NodePortTable[nodePort]; ok {
 		if !entry.HasProtocol(protocol) {
 			entry.Protocols = append(entry.Protocols, ProtocolSocketData{
 				Protocol: protocol,
 				socket:   socket,
 			})
 		}
-		pt.Table[nodePort] = entry
+		pt.NodePortTable[nodePort] = entry
 	} else {
-		pt.Table[nodePort] = &NodePortData{
+		pt.NodePortTable[nodePort] = &NodePortData{
 			NodePort: nodePort,
 			PodIP:    podIP,
 			PodPort:  podPort,
@@ -198,7 +199,7 @@ func (pt *PortTable) AddRule(podIP string, podPort int, protocol string) (int, e
 			}},
 		}
 	}
-	pt.PodTable[podIPPortFormat(podIP, podPort)] = pt.Table[nodePort]
+	pt.PodEndpointTable[podIPPortFormat(podIP, podPort)] = pt.NodePortTable[nodePort]
 	return nodePort, nil
 }
 
@@ -213,14 +214,31 @@ func (pt *PortTable) DeleteRule(podIP string, podPort int, protocol string) erro
 		return err
 	}
 	if len(data.Protocols) == 0 {
-		delete(pt.Table, data.NodePort)
-		delete(pt.PodTable, podIPPortFormat(podIP, podPort))
+		delete(pt.NodePortTable, data.NodePort)
+		delete(pt.PodEndpointTable, podIPPortFormat(podIP, podPort))
+	}
+	return nil
+}
+
+func (pt *PortTable) DeleteRulesForPod(podIP string) error {
+	pt.tableLock.Lock()
+	defer pt.tableLock.Unlock()
+	data := pt.getDataForPodIP(podIP)
+	for _, d := range data {
+		nodeport := d.NodePort
+		for _, p := range d.Protocols {
+			if err := pt.PodPortRules.DeleteRule(nodeport, podIP, d.PodPort, p.Protocol); err != nil {
+				return err
+			}
+		}
+		delete(pt.NodePortTable, nodeport)
+		delete(pt.PodEndpointTable, podIPPortFormat(podIP, d.PodPort))
 	}
 	return nil
 }
 
 func (pt *PortTable) RuleExists(podIP string, podPort int, protocol string) bool {
-	data := pt.GetEntryByPodIPPortProtocol(podIP, podPort, protocol)
+	data := pt.GetEntry(podIP, podPort, protocol)
 	if data != nil {
 		return true
 	}
@@ -231,13 +249,13 @@ func (pt *PortTable) RuleExists(podIP string, podPort int, protocol string) bool
 func (pt *PortTable) syncRules() error {
 	pt.tableLock.Lock()
 	defer pt.tableLock.Unlock()
-	nplPorts := make([]rules.PodNodePort, 0, len(pt.Table))
-	for i := range pt.Table {
-		for _, protocol := range (*pt.Table[i]).Protocols {
+	nplPorts := make([]rules.PodNodePort, 0, len(pt.NodePortTable))
+	for i := range pt.NodePortTable {
+		for _, protocol := range (*pt.NodePortTable[i]).Protocols {
 			nplPorts = append(nplPorts, rules.PodNodePort{
-				NodePort: (*pt.Table[i]).NodePort,
-				PodPort:  (*pt.Table[i]).PodPort,
-				PodIP:    (*pt.Table[i]).PodIP,
+				NodePort: (*pt.NodePortTable[i]).NodePort,
+				PodPort:  (*pt.NodePortTable[i]).PodPort,
+				PodIP:    (*pt.NodePortTable[i]).PodIP,
 				Protocol: protocol.Protocol,
 			})
 		}
@@ -261,16 +279,16 @@ func (pt *PortTable) RestoreRules(allNPLPorts []rules.PodNodePort, synced chan<-
 			klog.ErrorS(err, "Cannot bind to local port, skipping it", "port", nplPort.NodePort)
 			continue
 		}
-		if entry, ok := pt.Table[nplPort.NodePort]; ok {
+		if entry, ok := pt.NodePortTable[nplPort.NodePort]; ok {
 			if !entry.HasProtocol(nplPort.Protocol) {
 				entry.Protocols = append(entry.Protocols, ProtocolSocketData{
 					Protocol: nplPort.Protocol,
 					socket:   socket,
 				})
 			}
-			pt.Table[nplPort.NodePort] = entry
+			pt.NodePortTable[nplPort.NodePort] = entry
 		} else {
-			pt.Table[nplPort.NodePort] = &NodePortData{
+			pt.NodePortTable[nplPort.NodePort] = &NodePortData{
 				NodePort: nplPort.NodePort,
 				PodPort:  nplPort.PodPort,
 				PodIP:    nplPort.PodIP,
@@ -280,7 +298,7 @@ func (pt *PortTable) RestoreRules(allNPLPorts []rules.PodNodePort, synced chan<-
 				}},
 			}
 		}
-		pt.PodTable[podIPPortFormat(nplPort.PodIP, nplPort.PodPort)] = pt.Table[nplPort.NodePort]
+		pt.PodEndpointTable[podIPPortFormat(nplPort.PodIP, nplPort.PodPort)] = pt.NodePortTable[nplPort.NodePort]
 	}
 	// retry mechanism as iptables-restore can fail if other components (in Antrea or other
 	// software) are accessing iptables.

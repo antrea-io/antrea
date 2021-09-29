@@ -388,14 +388,9 @@ func (c *NPLController) deletePodIPFromCache(key string) {
 }
 
 func (c *NPLController) deleteAllPortRulesIfAny(podIP string) error {
-	data := c.portTable.GetDataForPodIP(podIP)
-	for _, d := range data {
-		for _, proto := range d.Protocols {
-			err := c.portTable.DeleteRule(d.PodIP, int(d.PodPort), proto.Protocol)
-			if err != nil {
-				return err
-			}
-		}
+	err := c.portTable.DeleteRulesForPod(podIP)
+	if err != nil {
+		return err
 	}
 	return nil
 }
@@ -492,7 +487,7 @@ func (c *NPLController) handleAddUpdatePod(key string, obj interface{}) error {
 			return fmt.Errorf("failed to parse port number and protocol from %s for Pod %s: %v", targetPortProto, key, err)
 		}
 		podPorts[targetPortProto] = struct{}{}
-		portData := c.portTable.GetEntryByPodIPPortProtocol(podIP, port, protocol)
+		portData := c.portTable.GetEntry(podIP, port, protocol)
 		if portData == nil {
 			if hport, ok := hostPorts[targetPortProto]; ok {
 				nodePort = hport
