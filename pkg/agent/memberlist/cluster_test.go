@@ -58,7 +58,7 @@ func newFakeCluster(nodeConfig *config.NodeConfig, stopCh <-chan struct{}, i int
 	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, 0)
 	ipPoolInformer := crdInformerFactory.Crd().V1alpha2().ExternalIPPools()
 
-	cluster, err := NewCluster(port, nodeConfig.NodeIPv4Addr.IP, nodeConfig.Name, nodeInformer, ipPoolInformer)
+	cluster, err := NewCluster(port, nodeConfig.Name, nodeInformer, ipPoolInformer)
 	if err != nil {
 		return nil, err
 	}
