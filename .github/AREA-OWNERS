@@ -115,3 +115,9 @@ approvers:
   area/transit/egress:
   - jianjuns
   - tnqn
+  kind/release:
+  - abhiraut
+  - antoninbas
+  - jianjuns
+  - tnqn
+  - salv-orlando
