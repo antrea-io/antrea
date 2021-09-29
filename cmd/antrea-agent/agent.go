@@ -262,17 +262,17 @@ func run(o *Options) error {
 	}
 
 	var egressController *egress.EgressController
-	var nodeIP net.IP
-	if nodeConfig.NodeIPv4Addr != nil {
-		nodeIP = nodeConfig.NodeIPv4Addr.IP
-	} else if nodeConfig.NodeIPv6Addr != nil {
-		nodeIP = nodeConfig.NodeIPv6Addr.IP
+	var nodeTransportIP net.IP
+	if nodeConfig.NodeTransportIPv4Addr != nil {
+		nodeTransportIP = nodeConfig.NodeTransportIPv4Addr.IP
+	} else if nodeConfig.NodeTransportIPv6Addr != nil {
+		nodeTransportIP = nodeConfig.NodeTransportIPv6Addr.IP
 	} else {
-		return fmt.Errorf("invalid NodeIPAddr in Node config: %v", nodeConfig)
+		return fmt.Errorf("invalid Node Transport IPAddr in Node config: %v", nodeConfig)
 	}
 	if features.DefaultFeatureGate.Enabled(features.Egress) {
 		egressController, err = egress.NewEgressController(
-			ofClient, antreaClientProvider, crdClient, ifaceStore, routeClient, nodeConfig.Name, nodeIP,
+			ofClient, antreaClientProvider, crdClient, ifaceStore, routeClient, nodeConfig.Name, nodeTransportIP,
 			o.config.ClusterMembershipPort, egressInformer, nodeInformer, externalIPPoolInformer,
 		)
 		if err != nil {

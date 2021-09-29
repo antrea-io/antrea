@@ -47,16 +47,16 @@ type ipAssigner struct {
 }
 
 // NewIPAssigner returns an *ipAssigner.
-func NewIPAssigner(nodeIPAddr net.IP, dummyDeviceName string) (*ipAssigner, error) {
-	nodeIPs := new(ip.DualStackIPs)
-	if nodeIPAddr.To4() == nil {
-		nodeIPs.IPv6 = nodeIPAddr
+func NewIPAssigner(nodeTransportIPAddr net.IP, dummyDeviceName string) (*ipAssigner, error) {
+	nodeTransportIPs := new(ip.DualStackIPs)
+	if nodeTransportIPAddr.To4() == nil {
+		nodeTransportIPs.IPv6 = nodeTransportIPAddr
 	} else {
-		nodeIPs.IPv4 = nodeIPAddr
+		nodeTransportIPs.IPv4 = nodeTransportIPAddr
 	}
-	_, _, egressInterface, err := util.GetIPNetDeviceFromIP(nodeIPs)
+	_, _, egressInterface, err := util.GetIPNetDeviceFromIP(nodeTransportIPs)
 	if err != nil {
-		return nil, fmt.Errorf("get IPNetDevice from ip %v error: %+v", nodeIPAddr, err)
+		return nil, fmt.Errorf("get IPNetDevice from ip %v error: %+v", nodeTransportIPAddr, err)
 	}
 
 	dummyDevice, err := ensureDummyDevice(dummyDeviceName)
