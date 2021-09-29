@@ -90,6 +90,7 @@ The labels in this list originated within Kubernetes at
 | kind/documentation                 | Categorizes issue or PR as related to a documentation.    | Any                |
 | kind/failing-test                  | Categorizes issue or PR as related to a consistently or frequently failing test | Any |
 | kind/feature                       | Categorizes issue or PR as related to a new feature.      | Any                |
+| kind/release                       | Categorizes a PR used to create a new release (with CHANGELOG and VERSION updates) | Maintainers |
 | kind/support                       | Categorizes issue or PR as related to a support question. | Any |
 | kind/task                          | Categorizes issue or PR as related to a routine task that needs to be performed. | Any |
 | lifecycle/active                   | Indicates that an issue or PR is actively being worked on by a contributor. | Any |
