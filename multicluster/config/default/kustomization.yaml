@@ -72,3 +72,11 @@ vars:
     kind: Service
     version: v1
     name: webhook-service
+
+generatorOptions:
+  disableNameSuffixHash: true
+
+configMapGenerator:
+- name: manager-config
+  files:
+  - configmap/controller_manager_config.yaml

@@ -1,4 +1,4 @@
 FROM gcr.io/distroless/static:nonroot as product
 WORKDIR /
-COPY ./bin/manager /
+COPY ./bin/antrea-multicluster-controller /
 USER 65532:65532

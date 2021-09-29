@@ -39,7 +39,11 @@ help: ## Display this help.
 
 manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects.
 	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=controller-role webhook paths="./..." output:crd:artifacts:config=config/crd/bases
-	$(KUSTOMIZE) build config/default > config/multi-cluster.yaml
+#	$(KUSTOMIZE) build config/default > config/multi-cluster.yaml
+	@echo "===> Generating dev manifest for Antrea Multicluster Controller <==="
+	$(CURDIR)/hack/generate-manifest.sh -l -m > build/yamls/antrea-multicluster.yml
+	$(CURDIR)/hack/generate-manifest.sh -l > build/yamls/antrea-multicluster-leader-only.yml
+	$(CURDIR)/hack/generate-manifest.sh -m > build/yamls/antrea-multicluster-member-only.yml
 
 generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
 	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
@@ -59,14 +63,14 @@ test: manifests generate fmt vet ## Run tests.
 ##@ Build
 
 build: generate fmt vet ## Build manager binary.
-	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o bin/manager main.go
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o bin/antrea-multicluster-controller antrea.io/antrea/multicluster/cmd/...
 
 run: manifests generate fmt vet ## Run a controller from your host.
 	go run ./main.go
 
 #docker-build: test ## Build docker image with the manager.
 docker-build: build ## Build docker image with the manager.
-	docker build --target product -f build/Dockerfile -t ${IMG} .
+	docker build --target product -f build/images/Dockerfile -t ${IMG} .
 
 docker-push: ## Push docker image with the manager.
 	docker push ${IMG}

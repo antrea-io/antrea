@@ -1,0 +1,8 @@
+resources:
+- ../../default
+
+configMapGenerator:
+- behavior: merge
+  name: manager-config
+  files:
+  - controller_manager_config.yaml

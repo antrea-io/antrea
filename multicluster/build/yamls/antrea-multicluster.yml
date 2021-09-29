@@ -1675,6 +1675,7 @@ data:
     member: true
 kind: ConfigMap
 metadata:
+  annotations: {}
   labels:
     app: antrea
   name: antrea-multicluster-manager-config

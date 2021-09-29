@@ -1671,10 +1671,11 @@ data:
     leaderElection:
       leaderElect: true
       resourceName: 6536456a.crd.antrea.io
-    leader: true
+    leader: false
     member: true
 kind: ConfigMap
 metadata:
+  annotations: {}
   labels:
     app: antrea
   name: antrea-multicluster-manager-config

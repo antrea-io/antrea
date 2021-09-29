@@ -19,9 +19,7 @@ spec:
         runAsNonRoot: true
       containers:
       - command:
-        - /manager
-        args:
-        - --leader-elect
+        - /antrea-multicluster-controller
         image: antrea/antrea-multicluster-controller:latest
         imagePullPolicy: IfNotPresent
         name: manager
