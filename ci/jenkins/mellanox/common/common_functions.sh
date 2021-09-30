@@ -201,7 +201,7 @@ multus_install(){
     build_github_project "multus-cni" "sudo docker build -t $MULTUS_CNI_HARBOR_IMAGE ."
 
     change_k8s_resource "DaemonSet" "kube-multus-ds" "spec.template.spec.containers[0].image"\
-        "$MULTUS_CNI_HARBOR_IMAGE" "$WORKSPACE/multus-cni/images/multus-daemonset.yml"
+        "$MULTUS_CNI_HARBOR_IMAGE" "$WORKSPACE/multus-cni/deployments/multus-daemonset.yml"
 }
 
 multus_configuration() {
@@ -210,9 +210,9 @@ multus_configuration() {
     local arch=$(get_arch)
     date
     sleep 30
-    sed -i 's;/etc/cni/net.d/multus.d/multus.kubeconfig;/etc/kubernetes/admin.conf;g' $WORKSPACE/multus-cni/images/multus-daemonset.yml
+    sed -i 's;/etc/cni/net.d/multus.d/multus.kubeconfig;/etc/kubernetes/admin.conf;g' $WORKSPACE/multus-cni/deployments/multus-daemonset.yml
 
-    kubectl create -f $WORKSPACE/multus-cni/images/multus-daemonset.yml
+    kubectl create -f $WORKSPACE/multus-cni/deployments/multus-daemonset.yml
 
     kubectl -n kube-system get ds
     rc=$?
