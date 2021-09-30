@@ -48,12 +48,13 @@ var (
 	node2 = "node2"
 	node3 = "node3"
 	// Fake Pods
-	podFoo1                 = newPod("default", "podFoo1", map[string]string{"app": "foo"}, node1, "1.1.1.1")
-	podFoo2                 = newPod("default", "podFoo2", map[string]string{"app": "foo"}, node2, "1.1.2.1")
-	podBar1                 = newPod("default", "podBar1", map[string]string{"app": "bar"}, node1, "1.1.1.2")
-	podFoo1InOtherNamespace = newPod("other", "podFoo1", map[string]string{"app": "foo"}, node1, "1.1.1.3")
-	podUnscheduled          = newPod("default", "podUnscheduled", map[string]string{"app": "foo"}, "", "")
-	podNonIP                = newPod("default", "podNonIP", map[string]string{"app": "foo"}, "node1", "")
+	podFoo1                 = newPod("default", "podFoo1", map[string]string{"app": "foo"}, node1, "1.1.1.1", false)
+	podFoo2                 = newPod("default", "podFoo2", map[string]string{"app": "foo"}, node2, "1.1.2.1", false)
+	podBar1                 = newPod("default", "podBar1", map[string]string{"app": "bar"}, node1, "1.1.1.2", false)
+	podFoo1InOtherNamespace = newPod("other", "podFoo1", map[string]string{"app": "foo"}, node1, "1.1.1.3", false)
+	podUnscheduled          = newPod("default", "podUnscheduled", map[string]string{"app": "foo"}, "", "", false)
+	podNonIP                = newPod("default", "podNonIP", map[string]string{"app": "foo"}, "node1", "", false)
+	podWithHostNetwork      = newPod("default", "podHostNetwork", map[string]string{"app": "bar"}, node1, "172.16.100.1", true)
 	// Fake Namespaces
 	nsDefault = newNamespace("default", map[string]string{"company": "default"})
 	nsOther   = newNamespace("other", map[string]string{"company": "other"})
@@ -101,7 +102,7 @@ func newNamespace(name string, labels map[string]string) *v1.Namespace {
 	}
 }
 
-func newPod(namespace, name string, labels map[string]string, nodeName string, ip string) *v1.Pod {
+func newPod(namespace, name string, labels map[string]string, nodeName string, ip string, hostNetwork bool) *v1.Pod {
 	pod := &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: namespace,
@@ -109,7 +110,8 @@ func newPod(namespace, name string, labels map[string]string, nodeName string, i
 			Labels:    labels,
 		},
 		Spec: v1.PodSpec{
-			NodeName: nodeName,
+			NodeName:    nodeName,
+			HostNetwork: hostNetwork,
 		},
 	}
 	if len(ip) > 0 {
@@ -294,7 +296,7 @@ func TestAddEgress(t *testing.T) {
 			defer close(stopCh)
 			var fakeObjects []runtime.Object
 			fakeObjects = append(fakeObjects, nsDefault, nsOther)
-			fakeObjects = append(fakeObjects, podFoo1, podFoo2, podBar1, podFoo1InOtherNamespace, podUnscheduled, podNonIP)
+			fakeObjects = append(fakeObjects, podFoo1, podFoo2, podBar1, podFoo1InOtherNamespace, podUnscheduled, podNonIP, podWithHostNetwork)
 			var fakeCRDObjects []runtime.Object
 			fakeCRDObjects = append(fakeCRDObjects, eipFoo1)
 			controller := newController(fakeObjects, fakeCRDObjects)
