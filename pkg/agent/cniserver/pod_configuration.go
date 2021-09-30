@@ -20,7 +20,6 @@ import (
 	"net"
 	"strings"
 
-	cnitypes "github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/containernetworking/cni/pkg/version"
 	corev1 "k8s.io/api/core/v1"
@@ -41,13 +40,6 @@ type vethPair struct {
 	name      string
 	ifIndex   int
 	peerIndex int
-}
-
-type k8sArgs struct {
-	cnitypes.CommonArgs
-	K8S_POD_NAME               cnitypes.UnmarshallableString
-	K8S_POD_NAMESPACE          cnitypes.UnmarshallableString
-	K8S_POD_INFRA_CONTAINER_ID cnitypes.UnmarshallableString
 }
 
 const (

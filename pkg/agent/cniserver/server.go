@@ -34,6 +34,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent/cniserver/ipam"
+	argtypes "antrea.io/antrea/pkg/agent/cniserver/types"
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/openflow"
@@ -141,7 +142,7 @@ type NetworkConfig struct {
 type CNIConfig struct {
 	*NetworkConfig
 	*cnipb.CniCmdArgs
-	*k8sArgs
+	*argtypes.K8sArgs
 }
 
 // updateResultIfaceConfig processes the result from the IPAM plugin and does the following:
@@ -198,8 +199,8 @@ func (s *CNIServer) loadNetworkConfig(request *cnipb.CniCmdRequest) (*CNIConfig,
 	if err := json.Unmarshal(request.CniArgs.NetworkConfiguration, cniConfig); err != nil {
 		return cniConfig, err
 	}
-	cniConfig.k8sArgs = &k8sArgs{}
-	if err := cnitypes.LoadArgs(request.CniArgs.Args, cniConfig.k8sArgs); err != nil {
+	cniConfig.K8sArgs = &argtypes.K8sArgs{}
+	if err := cnitypes.LoadArgs(request.CniArgs.Args, cniConfig.K8sArgs); err != nil {
 		return cniConfig, err
 	}
 	if !s.isChaining {
@@ -349,7 +350,7 @@ func (s *CNIServer) parsePrevResultFromRequest(networkConfig *NetworkConfig) (*c
 
 // validatePrevResult validates container and host interfaces configuration
 // the return value is nil if prevResult is valid
-func (s *CNIServer) validatePrevResult(cfgArgs *cnipb.CniCmdArgs, k8sCNIArgs *k8sArgs, prevResult *current.Result, sriovVFDeviceID string) *cnipb.CniCmdResponse {
+func (s *CNIServer) validatePrevResult(cfgArgs *cnipb.CniCmdArgs, k8sCNIArgs *argtypes.K8sArgs, prevResult *current.Result, sriovVFDeviceID string) *cnipb.CniCmdResponse {
 	containerID := cfgArgs.ContainerId
 	netNS := s.hostNetNsPath(cfgArgs.Netns)
 
@@ -427,7 +428,7 @@ func (s *CNIServer) CmdAdd(ctx context.Context, request *cnipb.CniCmdRequest) (*
 		}
 	} else {
 		// Request IP Address from IPAM driver.
-		ipamResult, err = ipam.ExecIPAMAdd(cniConfig.CniCmdArgs, cniConfig.IPAM.Type, infraContainer)
+		ipamResult, err = ipam.ExecIPAMAdd(cniConfig.CniCmdArgs, cniConfig.K8sArgs, cniConfig.IPAM.Type, infraContainer)
 		if err != nil {
 			klog.Errorf("Failed to request IP addresses for container %v: %v", cniConfig.ContainerId, err)
 			return s.ipamFailureResponse(err), nil
@@ -481,7 +482,7 @@ func (s *CNIServer) CmdDel(_ context.Context, request *cnipb.CniCmdRequest) (
 		return s.interceptDel(cniConfig)
 	}
 	// Release IP to IPAM driver
-	if err := ipam.ExecIPAMDelete(cniConfig.CniCmdArgs, cniConfig.IPAM.Type, infraContainer); err != nil {
+	if err := ipam.ExecIPAMDelete(cniConfig.CniCmdArgs, cniConfig.K8sArgs, cniConfig.IPAM.Type, infraContainer); err != nil {
 		klog.Errorf("Failed to delete IP addresses for container %v: %v", cniConfig.ContainerId, err)
 		return s.ipamFailureResponse(err), nil
 	}
@@ -512,7 +513,7 @@ func (s *CNIServer) CmdCheck(_ context.Context, request *cnipb.CniCmdRequest) (
 		return s.interceptCheck(cniConfig)
 	}
 
-	if err := ipam.ExecIPAMCheck(cniConfig.CniCmdArgs, cniConfig.IPAM.Type); err != nil {
+	if err := ipam.ExecIPAMCheck(cniConfig.CniCmdArgs, cniConfig.K8sArgs, cniConfig.IPAM.Type); err != nil {
 		klog.Errorf("Failed to check IPAM configuration for container %v: %v", cniConfig.ContainerId, err)
 		return s.ipamFailureResponse(err), nil
 	}
@@ -521,7 +522,7 @@ func (s *CNIServer) CmdCheck(_ context.Context, request *cnipb.CniCmdRequest) (
 	if valid, _ := version.GreaterThanOrEqualTo(cniVersion, "0.4.0"); valid {
 		if prevResult, response := s.parsePrevResultFromRequest(cniConfig.NetworkConfig); response != nil {
 			return response, nil
-		} else if response := s.validatePrevResult(cniConfig.CniCmdArgs, cniConfig.k8sArgs, prevResult, cniConfig.DeviceID); response != nil {
+		} else if response := s.validatePrevResult(cniConfig.CniCmdArgs, cniConfig.K8sArgs, prevResult, cniConfig.DeviceID); response != nil {
 			return response, nil
 		}
 	}
