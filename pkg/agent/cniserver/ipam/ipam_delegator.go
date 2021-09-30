@@ -23,6 +23,8 @@ import (
 	"github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types/current"
 	"k8s.io/klog/v2"
+
+	argtypes "antrea.io/antrea/pkg/agent/cniserver/types"
 )
 
 const (
@@ -74,6 +76,10 @@ func (d *IPAMDelegator) Check(args *invoke.Args, networkConfig []byte) error {
 		return err
 	}
 	return nil
+}
+
+func (d *IPAMDelegator) Owns(args *invoke.Args, k8sArgs *argtypes.K8sArgs, networkConfig []byte) bool {
+	return true
 }
 
 var defaultExec = &invoke.DefaultExec{
