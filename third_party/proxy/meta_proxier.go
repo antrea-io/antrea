@@ -67,6 +67,11 @@ func (proxier *metaProxier) SyncLoop() {
 	proxier.ipv4Proxier.SyncLoop()    // never returns
 }
 
+// SyncedOnce returns true if the proxier has synced rules at least once.
+func (proxier *metaProxier) SyncedOnce() bool {
+	return proxier.ipv4Proxier.SyncedOnce() && proxier.ipv6Proxier.SyncedOnce()
+}
+
 // OnServiceAdd is called whenever creation of new service object is observed.
 func (proxier *metaProxier) OnServiceAdd(service *v1.Service) {
 	proxier.ipv4Proxier.OnServiceAdd(service)

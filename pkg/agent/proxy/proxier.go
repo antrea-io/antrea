@@ -101,6 +101,10 @@ type proxier struct {
 	// oversizeServiceSet records the Services that have more than 800 Endpoints.
 	oversizeServiceSet sets.String
 
+	// syncedOnce returns true if the proxier has synced rules at least once.
+	syncedOnce      bool
+	syncedOnceMutex sync.RWMutex
+
 	runner               *k8sproxy.BoundedFrequencyRunner
 	stopChan             <-chan struct{}
 	ofClient             openflow.Client
@@ -110,6 +114,12 @@ type proxier struct {
 	isIPv6               bool
 	proxyAll             bool
 	endpointSliceEnabled bool
+}
+
+func (p *proxier) SyncedOnce() bool {
+	p.syncedOnceMutex.RLock()
+	defer p.syncedOnceMutex.RUnlock()
+	return p.syncedOnce
 }
 
 func endpointKey(endpoint k8sproxy.Endpoint, protocol binding.Protocol) string {
@@ -595,6 +605,10 @@ func (p *proxier) syncProxyRules() {
 		metrics.ServicesInstalledTotal.Set(float64(len(p.serviceMap)))
 		metrics.EndpointsInstalledTotal.Set(float64(counter))
 	}
+
+	p.syncedOnceMutex.Lock()
+	defer p.syncedOnceMutex.Unlock()
+	p.syncedOnce = true
 }
 
 func (p *proxier) SyncLoop() {

@@ -19,6 +19,7 @@ import (
 	"net"
 	"time"
 
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/informers"
 	"k8s.io/klog/v2"
 
@@ -365,6 +366,20 @@ func run(o *Options) error {
 
 	if features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
 		go proxier.GetProxyProvider().Run(stopCh)
+
+		// If AntreaProxy is configured to proxy all Service traffic, we need to wait for it to sync at least once
+		// before moving forward. Components that rely on Service availability should run after it, otherwise accessing
+		// Service would fail.
+		if o.config.AntreaProxy.ProxyAll {
+			klog.InfoS("Waiting for AntreaProxy to be ready")
+			if err := wait.PollUntil(time.Second, func() (bool, error) {
+				klog.V(2).InfoS("Checking if AntreaProxy is ready")
+				return proxier.GetProxyProvider().SyncedOnce(), nil
+			}, stopCh); err != nil {
+				return fmt.Errorf("error when waiting for AntreaProxy to be ready: %v", err)
+			}
+			klog.InfoS("AntreaProxy is ready")
+		}
 	}
 
 	agentQuerier := querier.NewAgentQuerier(

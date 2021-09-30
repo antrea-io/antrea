@@ -56,6 +56,10 @@ type Provider interface {
 	// This is expected to run as a goroutine or as the main loop of the app.
 	// It does not return.
 	SyncLoop()
+
+	// SyncedOnce returns true if the proxier has synced rules at least once.
+	SyncedOnce() bool
+
 	Run(stopCh <-chan struct{})
 }
 
