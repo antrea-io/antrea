@@ -1,0 +1,33 @@
+name: Update release docs in antrea.io website
+
+on:
+  release:
+    types:
+      - created
+
+jobs:
+  get-version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.get-version.outputs.version }}
+    steps:
+    - name: Extract version from Github ref
+      id: get-version
+      env:
+        TAG: ${{ github.ref }}
+      run: |
+        version=${TAG:10}
+        echo "::set-output name=version::$version"
+
+  trigger:
+    name: Trigger release docs update
+    runs-on: ubuntu-latest
+    needs: get-version
+    steps:
+    - uses: benc-uk/workflow-dispatch@v1
+      with:
+        repo: antrea-io/website
+        ref: refs/heads/main
+        workflow: Update website source
+        token: ${{ secrets.ANTREA_WEBSITE_WORKFLOW_DISPATCH_PAT }}
+        inputs: ${{ format('{{ "antrea-repository":"antrea-io/antrea", "antrea-ref":"{0}" }}', needs.get-version.outputs.version) }}
