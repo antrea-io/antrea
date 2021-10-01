@@ -40,6 +40,10 @@ const (
 	testIdleFlowTimeout   = 1 * time.Second
 )
 
+func init() {
+	registry.LoadRegistry()
+}
+
 func TestFlowExporter_sendTemplateSet(t *testing.T) {
 	for _, tc := range []struct {
 		v4Enabled bool
@@ -90,13 +94,13 @@ func sendTemplateSet(t *testing.T, ctrl *gomock.Controller, mockIPFIXExpProc *ip
 		antreaIE = AntreaInfoElementsIPv6
 	}
 	for i, ie := range ianaIE {
-		mockIPFIXRegistry.EXPECT().GetInfoElement(ie, ipfixregistry.IANAEnterpriseID).Return(elemList[i].Element, nil)
+		mockIPFIXRegistry.EXPECT().GetInfoElement(ie, ipfixregistry.IANAEnterpriseID).Return(elemList[i].GetInfoElement(), nil)
 	}
 	for i, ie := range IANAReverseInfoElements {
-		mockIPFIXRegistry.EXPECT().GetInfoElement(ie, ipfixregistry.IANAReversedEnterpriseID).Return(elemList[i+len(ianaIE)].Element, nil)
+		mockIPFIXRegistry.EXPECT().GetInfoElement(ie, ipfixregistry.IANAReversedEnterpriseID).Return(elemList[i+len(ianaIE)].GetInfoElement(), nil)
 	}
 	for i, ie := range antreaIE {
-		mockIPFIXRegistry.EXPECT().GetInfoElement(ie, ipfixregistry.AntreaEnterpriseID).Return(elemList[i+len(ianaIE)+len(IANAReverseInfoElements)].Element, nil)
+		mockIPFIXRegistry.EXPECT().GetInfoElement(ie, ipfixregistry.AntreaEnterpriseID).Return(elemList[i+len(ianaIE)+len(IANAReverseInfoElements)].GetInfoElement(), nil)
 	}
 	if !isIPv6 {
 		mockTempSet.EXPECT().AddRecord(elemList, testTemplateIDv4).Return(nil)
@@ -131,15 +135,62 @@ func getElementList(isIPv6 bool) []ipfixentities.InfoElementWithValue {
 		antreaIE = AntreaInfoElementsIPv6
 	}
 	for _, ie := range ianaIE {
-		elemList = append(elemList, ipfixentities.NewInfoElementWithValue(ipfixentities.NewInfoElement(ie, 0, 0, ipfixregistry.IANAEnterpriseID, 0), nil))
+		elemList = append(elemList, createElement(ie, ipfixregistry.IANAEnterpriseID))
 	}
 	for _, ie := range IANAReverseInfoElements {
-		elemList = append(elemList, ipfixentities.NewInfoElementWithValue(ipfixentities.NewInfoElement(ie, 0, 0, ipfixregistry.IANAReversedEnterpriseID, 0), nil))
+		elemList = append(elemList, createElement(ie, ipfixregistry.IANAReversedEnterpriseID))
 	}
 	for _, ie := range antreaIE {
-		elemList = append(elemList, ipfixentities.NewInfoElementWithValue(ipfixentities.NewInfoElement(ie, 0, 0, ipfixregistry.AntreaEnterpriseID, 0), nil))
+		elemList = append(elemList, createElement(ie, ipfixregistry.AntreaEnterpriseID))
 	}
 	return elemList
+}
+
+type elementListMatcher struct {
+	elements []ipfixentities.InfoElementWithValue
+}
+
+func ElementListMatcher(elementList []ipfixentities.InfoElementWithValue) gomock.Matcher {
+	return elementListMatcher{elementList}
+}
+
+func (em elementListMatcher) Matches(arg interface{}) bool {
+	elements, _ := arg.([]ipfixentities.InfoElementWithValue)
+	for i, ieWithValue := range elements {
+		if ieWithValue.GetInfoElement().Name != em.elements[i].GetInfoElement().Name {
+			return false
+		}
+		switch elements[i].GetInfoElement().DataType {
+		case ipfixentities.Unsigned8:
+			if ieWithValue.GetUnsigned8Value() != em.elements[i].GetUnsigned8Value() {
+				return false
+			}
+		case ipfixentities.Unsigned16:
+			if ieWithValue.GetUnsigned16Value() != em.elements[i].GetUnsigned16Value() {
+				return false
+			}
+		case ipfixentities.Unsigned32:
+			if ieWithValue.GetUnsigned32Value() != em.elements[i].GetUnsigned32Value() {
+				return false
+			}
+		case ipfixentities.Unsigned64:
+			if ieWithValue.GetUnsigned64Value() != em.elements[i].GetUnsigned64Value() {
+				return false
+			}
+		case ipfixentities.String:
+			if ieWithValue.GetStringValue() != em.elements[i].GetStringValue() {
+				return false
+			}
+		case ipfixentities.Ipv4Address, ipfixentities.Ipv6Address:
+			if ieWithValue.GetIPAddressValue().String() != em.elements[i].GetIPAddressValue().String() {
+				return false
+			}
+		}
+	}
+	return true
+}
+func (em elementListMatcher) String() string {
+	return ""
 }
 
 // TestFlowExporter_sendDataRecord tests essentially if element names in the switch-case matches globals
@@ -190,15 +241,7 @@ func testSendDataSet(t *testing.T, v4Enabled bool, v6Enabled bool) {
 	sendDataSet := func(elemList []ipfixentities.InfoElementWithValue, templateID uint16, conn flowexporter.Connection) {
 		mockDataSet.EXPECT().ResetSet()
 		mockDataSet.EXPECT().PrepareSet(ipfixentities.Data, templateID).Return(nil)
-		mockDataSet.EXPECT().AddRecord(gomock.AssignableToTypeOf(elemList), templateID).DoAndReturn(
-			func(elements []ipfixentities.InfoElementWithValue, templateID uint16) interface{} {
-				for i, ieWithValue := range elements {
-					assert.Equal(t, ieWithValue.Element.Name, elemList[i].Element.Name)
-					assert.Equal(t, ieWithValue.Value, elemList[i].Value)
-				}
-				return nil
-			},
-		)
+		mockDataSet.EXPECT().AddRecord(ElementListMatcher(elemList), templateID).Return(nil)
 		mockIPFIXExpProc.EXPECT().SendSet(mockDataSet).Return(0, nil)
 
 		err := flowExp.addConnToSet(&conn)
@@ -220,44 +263,45 @@ func getElemList(ianaIE []string, antreaIE []string) []ipfixentities.InfoElement
 	// Need only element name and other fields are set to dummy values
 	elemList := make([]ipfixentities.InfoElementWithValue, len(ianaIE)+len(IANAReverseInfoElements)+len(antreaIE))
 	for i, ie := range ianaIE {
-		elemList[i] = ipfixentities.NewInfoElementWithValue(ipfixentities.NewInfoElement(ie, 0, 0, 0, 0), nil)
+		elemList[i] = createElement(ie, ipfixregistry.IANAEnterpriseID)
 	}
 	for i, ie := range IANAReverseInfoElements {
-		elemList[i+len(ianaIE)] = ipfixentities.NewInfoElementWithValue(ipfixentities.NewInfoElement(ie, 0, 0, ipfixregistry.IANAReversedEnterpriseID, 0), nil)
+		elemList[i+len(ianaIE)] = createElement(ie, ipfixregistry.IANAReversedEnterpriseID)
 	}
 	for i, ie := range antreaIE {
-		elemList[i+len(ianaIE)+len(IANAReverseInfoElements)] = ipfixentities.NewInfoElementWithValue(ipfixentities.NewInfoElement(ie, 0, 0, 0, 0), nil)
+		elemList[i+len(ianaIE)+len(IANAReverseInfoElements)] = createElement(ie, ipfixregistry.AntreaEnterpriseID)
 	}
 
 	for i, ie := range elemList {
-		switch ieName := ie.Element.Name; ieName {
+		switch ieName := ie.GetInfoElement().Name; ieName {
 		case "flowStartSeconds":
-			elemList[i] = ipfixentities.NewInfoElementWithValue(ie.Element, uint32(time.Time{}.Unix()))
+			ie.SetUnsigned32Value(uint32(time.Time{}.Unix()))
 		case "flowEndSeconds":
-			elemList[i] = ipfixentities.NewInfoElementWithValue(ie.Element, uint32(time.Now().Unix()))
+			ie.SetUnsigned32Value(uint32(time.Now().Unix()))
 		case "flowEndReason":
-			elemList[i] = ipfixentities.NewInfoElementWithValue(ie.Element, uint8(0))
+			ie.SetUnsigned8Value(uint8(0))
 		case "sourceIPv4Address", "destinationIPv4Address", "sourceIPv6Address", "destinationIPv6Address":
-			elemList[i] = ipfixentities.NewInfoElementWithValue(ie.Element, net.ParseIP(""))
+			ie.SetIPAddressValue(net.ParseIP(""))
 		case "destinationClusterIPv4":
-			elemList[i] = ipfixentities.NewInfoElementWithValue(ie.Element, net.IP{0, 0, 0, 0})
+			ie.SetIPAddressValue(net.IP{0, 0, 0, 0})
 		case "destinationClusterIPv6":
-			elemList[i] = ipfixentities.NewInfoElementWithValue(ie.Element, net.ParseIP("::"))
+			ie.SetIPAddressValue(net.ParseIP("::"))
 		case "sourceTransportPort", "destinationTransportPort", "destinationServicePort":
-			elemList[i] = ipfixentities.NewInfoElementWithValue(ie.Element, uint16(0))
+			ie.SetUnsigned16Value(uint16(0))
 		case "protocolIdentifier":
-			elemList[i] = ipfixentities.NewInfoElementWithValue(ie.Element, uint8(0))
+			ie.SetUnsigned8Value(uint8(0))
 		case "packetTotalCount", "octetTotalCount", "packetDeltaCount", "octetDeltaCount", "reversePacketTotalCount", "reverseOctetTotalCount", "reversePacketDeltaCount", "reverseOctetDeltaCount":
-			elemList[i] = ipfixentities.NewInfoElementWithValue(ie.Element, uint64(0))
+			ie.SetUnsigned64Value(uint64(0))
 		case "sourcePodName", "sourcePodNamespace", "sourceNodeName", "destinationPodName", "destinationPodNamespace", "destinationNodeName", "destinationServicePortName":
-			elemList[i] = ipfixentities.NewInfoElementWithValue(ie.Element, "")
+			ie.SetStringValue("")
 		case "ingressNetworkPolicyName", "ingressNetworkPolicyNamespace", "egressNetworkPolicyName", "egressNetworkPolicyNamespace":
-			elemList[i] = ipfixentities.NewInfoElementWithValue(ie.Element, "")
+			ie.SetStringValue("")
 		case "ingressNetworkPolicyRuleName", "egressNetworkPolicyRuleName":
-			elemList[i] = ipfixentities.NewInfoElementWithValue(ie.Element, "")
+			ie.SetStringValue("")
 		case "ingressNetworkPolicyType", "egressNetworkPolicyType", "ingressNetworkPolicyRuleAction", "egressNetworkPolicyRuleAction":
-			elemList[i] = ipfixentities.NewInfoElementWithValue(ie.Element, uint8(0))
+			ie.SetUnsigned8Value(uint8(0))
 		}
+		elemList[i] = ie
 	}
 	return elemList
 }
@@ -558,4 +602,10 @@ func getNumOfDenyConns(connStore *connections.DenyConnectionStore) int {
 	}
 	connStore.ForAllConnectionsDo(countNumOfConns)
 	return count
+}
+
+func createElement(name string, enterpriseID uint32) ipfixentities.InfoElementWithValue {
+	element, _ := ipfixregistry.GetInfoElement(name, enterpriseID)
+	ieWithValue, _ := ipfixentities.DecodeAndCreateInfoElementWithValue(element, nil)
+	return ieWithValue
 }
