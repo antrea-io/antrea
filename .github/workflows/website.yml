@@ -1,0 +1,24 @@
+name: Update main docs in antrea.io website
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '**.md'
+      - 'docs/**'
+      - 'pkg/apis/**'
+      - 'hack/**'
+
+jobs:
+  trigger:
+    name: Trigger main docs update
+    runs-on: ubuntu-latest
+    steps:
+    - uses: benc-uk/workflow-dispatch@v1
+      with:
+        repo: antrea-io/website
+        ref: refs/heads/main
+        workflow: Update website source
+        token: ${{ secrets.ANTREA_WEBSITE_WORKFLOW_DISPATCH_PAT }}
+        inputs: ${{ format('{{ "antrea-repository":"antrea-io/antrea", "antrea-ref":"main" }}') }}
