@@ -17,7 +17,7 @@ require (
 	github.com/cheggaaa/pb/v3 v3.0.8
 	github.com/confluentinc/bincover v0.1.0
 	github.com/containernetworking/cni v0.8.1
-	github.com/containernetworking/plugins v0.8.7
+	github.com/containernetworking/plugins v0.9.1
 	github.com/coreos/go-iptables v0.6.0
 	github.com/elazarl/goproxy v0.0.0-20190911111923-ecfe977594f1 // indirect
 	github.com/go-openapi/spec v0.19.5
