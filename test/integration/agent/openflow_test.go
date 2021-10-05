@@ -607,7 +607,6 @@ func TestProxyServiceFlows(t *testing.T) {
 		}
 		ofTestUtils.CheckGroupExists(t, ovsCtlClient, groupID, "select", expGroupBuckets, false)
 	}
-
 }
 
 func installServiceFlows(t *testing.T, gid uint32, svc svcConfig, endpointList []k8sproxy.Endpoint, stickyMaxAgeSeconds uint16) {

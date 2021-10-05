@@ -276,7 +276,7 @@ func (i *Initializer) restoreHostRoutes() error {
 func GetTransportIPNetDeviceByName(ifaceName string, ovsBridgeName string) (*net.IPNet, *net.IPNet, *net.Interface, error) {
 	// Find transport Interface in the order: ifaceName -> "vEthernet (ifaceName)" -> br-int. Return immediately if
 	// an interface using the specified name exists. Using "vEthernet (ifaceName)" or br-int is for restart agent case.
-	for _, name := range []string{ifaceName, fmt.Sprintf("vEthernet (%s)", ifaceName), ovsBridgeName} {
+	for _, name := range []string{ifaceName, fmt.Sprintf("%s (%s)", util.ContainerVNICPrefix, ifaceName), ovsBridgeName} {
 		ipNet, _, link, err := util.GetIPNetDeviceByName(name)
 		if err == nil {
 			return ipNet, nil, link, nil

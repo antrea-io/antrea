@@ -45,7 +45,7 @@ const (
 	commandRetryTimeout  = 5 * time.Second
 	commandRetryInterval = time.Second
 
-	DefaultMetric = 256
+	MetricDefault = 256
 )
 
 type Route struct {
@@ -523,7 +523,7 @@ func NewNetRoute(route *Route) error {
 }
 
 func RemoveNetRoute(route *Route) error {
-	cmd := fmt.Sprintf("Remove-NetRoute -InterfaceIndex %v -DestinationPrefix %v -NextHop  %v -Verbose -Confirm:$false",
+	cmd := fmt.Sprintf("Remove-NetRoute -InterfaceIndex %v -DestinationPrefix %v -NextHop %v -Verbose -Confirm:$false",
 		route.LinkIndex, route.DestinationSubnet.String(), route.GatewayAddress.String())
 	_, err := ps.RunCommand(cmd)
 	return err

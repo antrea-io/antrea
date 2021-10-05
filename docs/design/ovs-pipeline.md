@@ -16,7 +16,7 @@
   of the appropriate remote gateway. This enables each vSwitch to act as a
   "proxy" for the local gateway when receiving tunnelled traffic and directly
   take care of the packet forwarding. At the moment, we use an hard-coded value
-  of aa:bb:cc:dd:ee:ff.
+  of `aa:bb:cc:dd:ee:ff`.
 * *Antrea-native Policies*: Antrea ClusterNetworkPolicy and Antrea NetworkPolicy
   CRDs, as documented [here](../antrea-network-policy.md).
 * *`normal` action*: OpenFlow defines this action to submit a packet to "the

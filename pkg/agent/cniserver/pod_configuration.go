@@ -542,10 +542,8 @@ func (pc *podConfigurator) disconnectInterceptedInterface(podName, podNamespace,
 		return nil
 	}
 	for _, ip := range containerConfig.IPs {
-		if err := pc.routeClient.UnMigrateRoutesFromGw(&net.IPNet{
-			IP:   ip,
-			Mask: net.CIDRMask(32, 32),
-		}, ""); err != nil {
+		ipNet := util.NewIPNet(ip)
+		if err := pc.routeClient.UnMigrateRoutesFromGw(ipNet, ""); err != nil {
 			return fmt.Errorf("connectInterceptedInterface failed to migrate: %w", err)
 		}
 	}

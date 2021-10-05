@@ -89,12 +89,12 @@ func testClusterIPCases(t *testing.T, data *TestData, url string, nodes, pods []
 
 func testClusterIPFromPod(t *testing.T, data *TestData, url, podName string) {
 	_, _, err := data.runCommandFromPod(testNamespace, podName, busyboxContainerName, []string{"wget", "-O", "-", url, "-T", "1"})
-	require.NoError(t, err, "Service ClusterIP should be able to be connected from Pod")
+	require.NoError(t, err, "Pod should be able to connect Service ClusterIP")
 }
 
 func testClusterIPFromNode(t *testing.T, url, nodeName string) {
 	_, _, _, err := RunCommandOnNode(nodeName, strings.Join([]string{"wget", "-O", "-", url, "-T", "1"}, " "))
-	require.NoError(t, err, "Service ClusterIP should be able to be connected from Node")
+	require.NoError(t, err, "Node should be able to connect Service ClusterIP")
 }
 
 // TestNodePortWindows tests NodePort Service on Windows Node. It is a temporary test to replace upstream Kubernetes one:

@@ -432,6 +432,8 @@ func (c *client) InstallNodeFlows(hostname string,
 		} else {
 			// Since broadcast is not supported in IPv6, ARP should happen only with IPv4 address, and ARP responder flows
 			// only work for IPv4 addresses.
+			// arpResponderFlow() adds a flow to resolve peer gateway IPs to GlobalVirtualMAC.
+			// This flow replies to ARP requests sent from the local gateway asking for the MAC address of a remote peer gateway. It ensures that the local Node can reach any remote Pod.
 			flows = append(flows, c.arpResponderFlow(peerGatewayIP, cookie.Node))
 		}
 		// tunnelPeerIP is the Node Internal Address. In a dual-stack setup, one Node has 2 Node Internal
