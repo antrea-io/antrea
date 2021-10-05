@@ -303,7 +303,7 @@ Insert following line in kubelet service script `c:\k\StartKubelet.ps1` to invok
 * Example2: Create a ScheduledJob that runs at startup.
 
 ```powershell
-$trigger = New-JobTrigger -AtStartup
+$trigger = New-JobTrigger -AtStartup -RandomDelay 00:00:30 
 $options = New-ScheduledJobOption -RunElevated
 Register-ScheduledJob -Name PrepareAntreaAgent -Trigger $trigger  -ScriptBlock { Invoke-Expression C:\k\antrea\Prepare-AntreaAgent.ps1 } -ScheduledJobOption $options
 ```
