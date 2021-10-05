@@ -19,9 +19,11 @@ import (
 	"net"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 )
 
 func TestClusterIPv4(t *testing.T) {
@@ -43,10 +45,17 @@ func testClusterIP(t *testing.T, isIPv6 bool) {
 	defer teardownTest(t, data)
 
 	nodes := []string{nodeName(0), nodeName(1)}
-	var busyboxes []string
+	clients := make(map[string]string)
 	for idx, node := range nodes {
-		podName, _, _ := createAndWaitForPod(t, data, data.createBusyboxPodOnNode, fmt.Sprintf("busybox-%d-", idx), node, testNamespace, false)
-		busyboxes = append(busyboxes, podName)
+		podName, _, _ := createAndWaitForPod(t, data, data.createAgnhostPodOnNode, fmt.Sprintf("client-%d-", idx), node, testNamespace, false)
+		require.NoError(t, err)
+		clients[node] = podName
+	}
+	hostNetworkClients := make(map[string]string)
+	for idx, node := range nodes {
+		podName, _, _ := createAndWaitForPod(t, data, data.createAgnhostPodOnNode, fmt.Sprintf("hostnet-client-%d-", idx), node, testNamespace, false)
+		require.NoError(t, err)
+		hostNetworkClients[node] = podName
 	}
 
 	nginx := fmt.Sprintf("nginx-%v", isIPv6)
@@ -62,39 +71,48 @@ func testClusterIP(t *testing.T, isIPv6 bool) {
 
 	createAndWaitForPod(t, data, data.createNginxPodOnNode, nginx, nodeName(0), testNamespace, false)
 	t.Run("Non-HostNetwork Endpoints", func(t *testing.T) {
-		testClusterIPCases(t, data, url, nodes, busyboxes)
+		testClusterIPCases(t, data, url, clients, hostNetworkClients)
 	})
 
 	require.NoError(t, data.deletePod(testNamespace, nginx))
 	createAndWaitForPod(t, data, data.createNginxPodOnNode, hostNginx, nodeName(0), testNamespace, true)
 	t.Run("HostNetwork Endpoints", func(t *testing.T) {
-		testClusterIPCases(t, data, url, nodes, busyboxes)
+		testClusterIPCases(t, data, url, clients, hostNetworkClients)
 	})
 }
 
-func testClusterIPCases(t *testing.T, data *TestData, url string, nodes, pods []string) {
+func testClusterIPCases(t *testing.T, data *TestData, url string, clients, hostNetworkClients map[string]string) {
 	t.Run("All Nodes can access Service ClusterIP", func(t *testing.T) {
 		skipIfProxyAllDisabled(t, data)
 		skipIfKubeProxyEnabled(t, data)
-		for _, node := range nodes {
-			testClusterIPFromNode(t, url, node)
+		for node, pod := range clients {
+			testClusterIPFromPod(t, data, url, node, pod, true)
 		}
 	})
 	t.Run("Pods from all Nodes can access Service ClusterIP", func(t *testing.T) {
-		for _, pod := range pods {
-			testClusterIPFromPod(t, data, url, pod)
+		for node, pod := range clients {
+			testClusterIPFromPod(t, data, url, node, pod, false)
 		}
 	})
 }
 
-func testClusterIPFromPod(t *testing.T, data *TestData, url, podName string) {
-	_, _, err := data.runCommandFromPod(testNamespace, podName, busyboxContainerName, []string{"wget", "-O", "-", url, "-T", "1"})
-	require.NoError(t, err, "Pod should be able to connect Service ClusterIP")
-}
-
-func testClusterIPFromNode(t *testing.T, url, nodeName string) {
-	_, _, _, err := RunCommandOnNode(nodeName, strings.Join([]string{"wget", "-O", "-", url, "-T", "1"}, " "))
-	require.NoError(t, err, "Node should be able to connect Service ClusterIP")
+func testClusterIPFromPod(t *testing.T, data *TestData, url, nodeName, podName string, hostNetwork bool) {
+	cmd := []string{"/agnhost", "connect", url, "--timeout=1s", "--protocol=tcp"}
+	err := wait.PollImmediate(1*time.Second, 5*time.Second, func() (bool, error) {
+		t.Logf(strings.Join(cmd, " "))
+		stdout, stderr, err := data.runCommandFromPod(testNamespace, podName, agnhostContainerName, cmd)
+		t.Logf("stdout: %s - stderr: %s - err: %v", stdout, stderr, err)
+		if err == nil {
+			return true, nil
+		}
+		return false, nil
+	})
+	if err != nil {
+		t.Errorf(
+			"Pod '%s' on Node '%s' (hostNetwork: %t) should be able to connect to Service ClusterIP",
+			podName, nodeName, hostNetwork,
+		)
+	}
 }
 
 // TestNodePortWindows tests NodePort Service on Windows Node. It is a temporary test to replace upstream Kubernetes one:
@@ -119,7 +137,7 @@ func TestNodePortWindows(t *testing.T) {
 	// It doesn't need to be the control-plane for e2e test and other Linux workers will work as well. However, in this
 	// e2e framework, nodeName(0)/Control-plane Node is guaranteed to be a Linux one.
 	clientName := "agnhost-client"
-	require.NoError(t, data.createAgnhostPodOnNode(clientName, testNamespace, nodeName(0)))
+	require.NoError(t, data.createAgnhostPodOnNode(clientName, testNamespace, nodeName(0), false))
 	defer data.deletePodAndWait(defaultTimeout, clientName, testNamespace)
 	_, err = data.podWaitForIPs(defaultTimeout, clientName, testNamespace)
 	require.NoError(t, err)
