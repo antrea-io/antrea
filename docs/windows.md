@@ -297,7 +297,7 @@ Insert following line in kubelet service script `c:\k\StartKubelet.ps1` to invok
 `Prepare-AntreaAgent.ps1` when starting kubelet service:
 
 ```powershell
-& C:\k\Prepare-AntreaAgent.ps1
+& C:\k\antrea\Prepare-AntreaAgent.ps1
 ```
 
 * Example2: Create a ScheduledJob that runs at startup.
