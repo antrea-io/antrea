@@ -20,6 +20,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"k8s.io/apimachinery/pkg/util/clock"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 
@@ -183,9 +185,9 @@ func TestIdAllocatorWorker(t *testing.T) {
 		name                    string
 		args                    []uint32
 		testAsyncDeleteInterval time.Duration
+		expectedDeleteInterval  time.Duration
 		rule                    *types.PolicyRule
 		expectedID              uint32
-		expectedErr             error
 	}{
 		{
 			// testMinAsyncDeleteInterval(100ms) is larger than testAsyncDeleteInterval(50ms),
@@ -193,9 +195,9 @@ func TestIdAllocatorWorker(t *testing.T) {
 			"delete-rule-with-test-min-async-delete-interval",
 			nil,
 			50 * time.Millisecond,
+			100 * time.Millisecond,
 			rule,
 			1,
-			nil,
 		},
 		{
 			// testAsyncDeleteInterval(200ms) is larger than testMinAsyncDeleteInterval(100ms),
@@ -203,50 +205,52 @@ func TestIdAllocatorWorker(t *testing.T) {
 			"delete-rule-with-test-async-delete-interval",
 			nil,
 			200 * time.Millisecond,
+			200 * time.Millisecond,
 			rule,
 			1,
-			nil,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			startTime := time.Now()
+			expectedDeleteTime := startTime.Add(tt.expectedDeleteInterval)
+			fakeClock := clock.NewFakeClock(startTime)
 			minAsyncDeleteInterval = testMinAsyncDeleteInterval
 			testAsyncDeleteInterval = tt.testAsyncDeleteInterval
-			a := newIDAllocator(testAsyncDeleteInterval, tt.args...)
-			actualErr := a.allocateForRule(tt.rule)
-			if actualErr != tt.expectedErr {
-				t.Fatalf("Got error %v, expected %v", actualErr, tt.expectedErr)
-			}
+			a := newIDAllocatorWithCustomClock(fakeClock, testAsyncDeleteInterval, tt.args...)
+			require.NoError(t, a.allocateForRule(tt.rule), "Error allocating ID for rule")
 			stopCh := make(chan struct{})
 			defer close(stopCh)
-			defer a.deleteQueue.ShutDown()
-			go wait.Until(a.worker, 50*time.Millisecond, stopCh)
+			go a.runWorker(stopCh)
 
 			a.forgetRule(tt.rule.FlowID)
 
-			startTime := time.Now()
-			var elapsedTime time.Duration
-			conditionFunc := func() (bool, error) {
+			ruleHasBeenDeleted := func() bool {
 				a.Lock()
 				defer a.Unlock()
-				if startTime.IsZero() {
-					startTime = time.Now()
-				}
-				if len(a.availableSlice) > 0 {
-					elapsedTime = time.Since(startTime)
-					return true, nil
-				}
-				return false, nil
+				return len(a.availableSlice) > 0
 			}
 
-			if err := wait.PollImmediate(50*time.Millisecond, time.Second, conditionFunc); err != nil {
-				t.Fatalf("Expect the rule with id %v to be deleted from async rule cache", tt.expectedID)
-			}
+			fakeClock.SetTime(expectedDeleteTime.Add(-10 * time.Millisecond))
+
+			// We wait for a small duration and ensure that the rule is not deleted.
+			err := wait.PollImmediate(10*time.Millisecond, 100*time.Millisecond, func() (bool, error) {
+				return ruleHasBeenDeleted(), nil
+			})
+			require.Error(t, err, "Rule ID was unexpectedly released")
 			_, exists, err := a.getRuleFromAsyncCache(tt.expectedID)
-			assert.Falsef(t, exists, "Rule should not be present in asyncRuleCache")
-			assert.NoErrorf(t, err, "getRuleFromAsyncCache should not return any error")
-			// Delta accounts for both deletion time of rule after adding it to deleteQueue and time taken to run the condition function once the poll happens.
-			assert.InDeltaf(t, int64(elapsedTime)/int64(time.Millisecond), int64(a.deleteInterval)/int64(time.Millisecond), 100, "rule should be in cache for about %v", a.deleteInterval)
+			require.NoError(t, err)
+			assert.True(t, exists, "Rule should be present in asyncRuleCache")
+
+			fakeClock.SetTime(expectedDeleteTime.Add(10 * time.Millisecond))
+
+			err = wait.PollImmediate(10*time.Millisecond, 1*time.Second, func() (bool, error) {
+				return ruleHasBeenDeleted(), nil
+			})
+			require.NoError(t, err, "Rule ID was not released")
+			_, exists, err = a.getRuleFromAsyncCache(tt.expectedID)
+			require.NoError(t, err)
+			assert.False(t, exists, "Rule should not be present in asyncRuleCache")
 		})
 	}
 }
