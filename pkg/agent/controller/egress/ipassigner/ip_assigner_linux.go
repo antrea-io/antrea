@@ -112,7 +112,7 @@ func (a *ipAssigner) AssignIP(ip string) error {
 	if parsedIP == nil {
 		return fmt.Errorf("invalid IP %s", ip)
 	}
-	addr := netlink.NewIPNet(parsedIP)
+	addr := util.NewIPNet(parsedIP)
 
 	if err := func() error {
 		a.mutex.Lock()
@@ -163,7 +163,7 @@ func (a *ipAssigner) UnassignIP(ip string) error {
 		return nil
 	}
 
-	addr := netlink.NewIPNet(parsedIP)
+	addr := util.NewIPNet(parsedIP)
 	if err := netlink.AddrDel(a.dummyDevice, &netlink.Addr{IPNet: addr}); err != nil {
 		return fmt.Errorf("failed to delete IP %v from interface %s: %v", ip, a.dummyDevice.Attrs().Name, err)
 	}

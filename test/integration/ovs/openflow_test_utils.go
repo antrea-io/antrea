@@ -51,20 +51,24 @@ type ExpectFlow struct {
 	ActStr   string
 }
 
+func (f ExpectFlow) flowStr(id uint8) string {
+	return fmt.Sprintf("table=%d,%s actions=%s", id, f.MatchStr, f.ActStr)
+}
+
 func CheckFlowExists(t *testing.T, ovsCtlClient ovsctl.OVSCtlClient, tableID uint8, exist bool, flows []*ExpectFlow) []string {
 	flowList, _ := OfctlDumpTableFlows(ovsCtlClient, tableID)
 
 	for _, flow := range flows {
 		found := OfctlFlowMatch(flowList, tableID, flow)
 		if exist && !found {
-			t.Errorf("Failed to install flow:\n%v", flow)
+			t.Errorf("Failed to install flow: %s", flow.flowStr(tableID))
 		}
 		if !exist && found {
-			t.Errorf("Failed to uninstall flow:\n%v", flow)
+			t.Errorf("Failed to uninstall flow: %s", flow.flowStr(tableID))
 		}
 	}
 	if t.Failed() {
-		t.Errorf("Existing flows:\n%v", flowList)
+		t.Errorf("Existing flows:\n%s", strings.Join(flowList, "\n"))
 	}
 	return flowList
 }

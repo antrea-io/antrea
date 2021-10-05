@@ -119,7 +119,7 @@ func (c *Client) AddRoutes(podCIDR *net.IPNet, nodeName string, peerNodeIP, peer
 	obj, found := c.hostRoutes.Load(podCIDR.String())
 	route := &util.Route{
 		DestinationSubnet: podCIDR,
-		RouteMetric:       util.DefaultMetric,
+		RouteMetric:       util.MetricDefault,
 	}
 	if c.networkConfig.NeedsTunnelToPeer(peerNodeIP, c.nodeConfig.NodeTransportIPv4Addr) {
 		route.LinkIndex = c.nodeConfig.GatewayConfig.LinkIndex

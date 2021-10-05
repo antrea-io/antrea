@@ -354,3 +354,12 @@ func GetAllNodeAddresses(excludeDevices []string) ([]net.IP, []net.IP, error) {
 	}
 	return nodeAddressesIPv4, nodeAddressesIPv6, nil
 }
+
+// Copied from github.com/vishvananda/netlink/netlink.go
+// NewIPNet generates an IPNet from an ip address using a netmask of 32 or 128.
+func NewIPNet(ip net.IP) *net.IPNet {
+	if ip.To4() != nil {
+		return &net.IPNet{IP: ip, Mask: net.CIDRMask(32, 32)}
+	}
+	return &net.IPNet{IP: ip, Mask: net.CIDRMask(128, 128)}
+}

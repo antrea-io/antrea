@@ -550,10 +550,7 @@ func TestRouteTablePolicyOnly(t *testing.T) {
 	gwName := nodeConfig.GatewayConfig.Name
 	gwIPOut, err := ExecOutputTrim(fmt.Sprintf("ip addr show %s", gwName))
 	assert.NoError(t, err)
-	gwIP := net.IPNet{
-		IP:   nodeConfig.NodeIPv4Addr.IP,
-		Mask: net.CIDRMask(32, 32),
-	}
+	gwIP := util.NewIPNet(nodeConfig.NodeIPv4Addr.IP)
 	assert.Contains(t, gwIPOut, gwIP.String())
 
 	cLink := &netlink.Dummy{}

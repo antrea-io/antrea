@@ -66,8 +66,8 @@ for reduced size and higher efficiency.
 
 The Antrea Controller API server also leverages Kubernetes Service for:
 
-- service discovery, and
-- authentication and authorization.
+- Service discovery
+- Authentication and authorization
 
 The Controller API endpoint is exposed through a Kubernetes ClusterIP type
 Service. Antrea Agent gets the Service's ClusterIP from the Service environment
@@ -85,7 +85,7 @@ API - `antctl` connects and authenticates to the Kubernetes API, which will
 proxy the `antctl` API requests to the Antrea Controller. In this way, `antctl`
 can be executed on any machine that can reach the Kubernetes API, and it can
 also leverage the `kubectl` configuration (`kubeconfig` file) to discover the
-Kubernetes API and authentication information. See also the [`antctl` section](#antctl).
+Kubernetes API and authentication information. See also the [antctl section](#antctl).
 
 ### Antrea Agent
 
@@ -114,7 +114,7 @@ Antrea Agent also exposes a REST API on a local HTTP endpoint for `antctl`.
 The two OVS daemons - `ovsdb-server` and `ovs-vswitchd` run in a separate
 container, called `antrea-ovs`, of the Antrea Agent DaemonSet.
 
-### `antrea-cni`
+### antrea-cni
 
 `antrea-cni` is the [CNI](https://github.com/containernetworking/cni) plugin
 binary of Antrea. It is executed by `kubelet` for each CNI command. It is a
@@ -122,7 +122,7 @@ simple gRPC client which issues an RPC to Antrea Agent for each CNI command. The
 Agent performs the actual work (sets up networking for the Pod) and returns the
 result or an error to `antrea-cni`.
 
-### `antctl`
+### antctl
 
 `antctl` is a command-line tool for Antrea. At the moment, it can show basic
 runtime information for both Antrea Controller and Antrea Agent, for debugging

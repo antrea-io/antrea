@@ -92,6 +92,10 @@ const (
 	ipv6MulticastAddr = "FF00::/8"
 	// IPv6 link-local prefix
 	ipv6LinkLocalAddr = "FE80::/10"
+
+	// Operation field values in ARP packets
+	arpOpRequest = uint16(1)
+	arpOpReply   = uint16(2)
 )
 
 type ofAction int32
@@ -1317,11 +1321,11 @@ func (c *client) l3FwdServiceDefaultFlowsViaGW(ipProto binding.Protocol, categor
 // gateway MAC.
 func (c *client) arpResponderFlow(peerGatewayIP net.IP, category cookie.Category) binding.Flow {
 	return c.pipeline[arpResponderTable].BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolARP).
-		MatchARPOp(1).
+		MatchARPOp(arpOpRequest).
 		MatchARPTpa(peerGatewayIP).
 		Action().Move(binding.NxmFieldSrcMAC, binding.NxmFieldDstMAC).
 		Action().SetSrcMAC(globalVirtualMAC).
-		Action().LoadARPOperation(2).
+		Action().LoadARPOperation(arpOpReply).
 		Action().Move(binding.NxmFieldARPSha, binding.NxmFieldARPTha).
 		Action().SetARPSha(globalVirtualMAC).
 		Action().Move(binding.NxmFieldARPSpa, binding.NxmFieldARPTpa).
@@ -1335,10 +1339,10 @@ func (c *client) arpResponderFlow(peerGatewayIP net.IP, category cookie.Category
 // This flow is used in policy-only mode, where traffic are routed via IP not MAC.
 func (c *client) arpResponderStaticFlow(category cookie.Category) binding.Flow {
 	return c.pipeline[arpResponderTable].BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolARP).
-		MatchARPOp(1).
+		MatchARPOp(arpOpRequest).
 		Action().Move(binding.NxmFieldSrcMAC, binding.NxmFieldDstMAC).
 		Action().SetSrcMAC(globalVirtualMAC).
-		Action().LoadARPOperation(2).
+		Action().LoadARPOperation(arpOpReply).
 		Action().Move(binding.NxmFieldARPSha, binding.NxmFieldARPTha).
 		Action().SetARPSha(globalVirtualMAC).
 		Action().Move(binding.NxmFieldARPTpa, SwapField.GetNXFieldName()).

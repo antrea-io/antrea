@@ -32,7 +32,7 @@ const (
 	// is not in "cluster-cidr". The request packets need to be SNAT'd(set src IP to local Node IP)
 	// after have been DNAT'd(set dst IP to endpoint IP).
 	// For example, the endpoint Pod may run in hostNetwork mode and the IP of the endpoint
-	// will is the current Node IP.
+	// will be the current Node IP.
 	// We need to use a different ct_zone to track the SNAT'd connection because OVS
 	// does not support doing both DNAT and SNAT in the same ct_zone.
 	//
