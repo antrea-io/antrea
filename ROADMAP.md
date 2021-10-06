@@ -38,9 +38,10 @@ network.
 
 * **Flexible IPAM**
 So far Antrea leverages K8s NodeIPAM for IPAM which allocates a single subnet
-for each K8s Node. In future, Antrea will implement its own IPAM, and support
-more IPAM strategies besides subnet per Node, like IP pool per Node or
-per Namespace.
+for each K8s Node. NodeIPAM can either run as part of the Antrea Controller, or
+run within kube-controller-manager.
+In future, Antrea will implement its own IPAM, and support more IPAM strategies
+besides subnet per Node, like multiple IP pools per Node or per Namespace.
 
 * **Egress policy**
 Antrea released alpha support for [Egress](docs/feature-gates.md#egress) in
