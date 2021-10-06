@@ -1389,6 +1389,23 @@ rules:
   - patch
 ---
 apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  labels:
+    app: antrea
+  name: antrea-multicluster-secret-viewer-role
+  namespace: kube-system
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - get
+  - list
+  - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   creationTimestamp: null
@@ -1584,6 +1601,32 @@ kind: ClusterRole
 metadata:
   labels:
     app: antrea
+  name: antrea-multicluster-memberclusterannounce-editor-role
+rules:
+- apiGroups:
+  - multicluster.crd.antrea.io
+  resources:
+  - memberclusterannounces
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - multicluster.crd.antrea.io
+  resources:
+  - memberclusterannounces/status
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app: antrea
   name: antrea-multicluster-metrics-reader
 rules:
 - nonResourceURLs:
@@ -1622,6 +1665,22 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
   name: antrea-multicluster-leader-election-role
+subjects:
+- kind: ServiceAccount
+  name: antrea-multicluster-controller
+  namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  labels:
+    app: antrea
+  name: antrea-multicluster-secret-viewer-rolebinding
+  namespace: kube-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: antrea-multicluster-secret-viewer-role
 subjects:
 - kind: ServiceAccount
   name: antrea-multicluster-controller

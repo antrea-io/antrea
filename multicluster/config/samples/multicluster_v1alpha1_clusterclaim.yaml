@@ -1,7 +1,15 @@
 apiVersion: multicluster.crd.antrea.io/v1alpha1
 kind: ClusterClaim
 metadata:
-  name: clusterclaim-sample
-spec:
-  # Add fields here
-  foo: bar
+  name: leaderclusterid
+  namespace: member-ns-one
+name: id.k8s.io
+value: test-leader
+---
+apiVersion: multicluster.crd.antrea.io/v1alpha1
+kind: ClusterClaim
+metadata:
+  name: leaderclustersetid
+  namespace: member-ns-one
+name: clusterSet.k8s.io
+value: test-clusterset

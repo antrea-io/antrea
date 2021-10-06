@@ -18,11 +18,11 @@ package main
 
 import (
 	"fmt"
+	"k8s.io/klog/v2/klogr"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
-
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -52,6 +52,7 @@ func run(o *Options) error {
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), o.options)
+
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
 		return fmt.Errorf("unable to start manager, err: %v", err)
@@ -72,8 +73,10 @@ func run(o *Options) error {
 		return fmt.Errorf("unable to create MemberClusterAnnounce controller, err: %v", err)
 	}
 	if err = (&multiclustercontrollers.ClusterSetReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Client:   mgr.GetClient(),
+		Scheme:   mgr.GetScheme(),
+		Log:      klogr.New().WithName("controllers"),
+		IsLeader: o.leader,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "ClusterSet")
 		return fmt.Errorf("unable to create ClusterSet controller, err: %v", err)

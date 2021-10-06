@@ -24,6 +24,8 @@ const (
 	// Identify this cluster.
 	WellKnownClusterClaimID = "id.k8s.io"
 	// Identify a clusterSet that this cluster is member of.
+	// TODO: change this to all lowercase when we remove the
+	// additional Name field in the ClusterClaim resource
 	WellKnownClusterClaimClusterSet = "clusterSet.k8s.io"
 )
 
@@ -34,6 +36,8 @@ const (
 type ClusterClaim struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
+	// TODO: Remove the name as it is already part of ObjectMeta and its
+	// confusing to have two names
 	// Name of the ClusterClaim.
 	Name string `json:"name,omitempty"`
 	// Value of the ClusterClaim.
