@@ -45,7 +45,7 @@ require (
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/hashicorp/yamux v0.0.0-20181012175058-2f1d1f20f75d // indirect
 	github.com/imdario/mergo v0.3.11 // indirect
-	github.com/json-iterator/go v1.1.10 // indirect
+	github.com/json-iterator/go v1.1.11 // indirect
 	github.com/magiconair/properties v1.8.1 // indirect
 	github.com/mattn/go-colorable v0.1.8 // indirect
 	github.com/mattn/go-isatty v0.0.12 // indirect
@@ -72,7 +72,7 @@ require (
 	golang.org/x/net v0.0.0-20210504132125-bbd867fde50d // indirect
 	golang.org/x/oauth2 v0.0.0-20200902213428-5d25da1a8d43 // indirect
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c // indirect
-	golang.org/x/sys v0.0.0-20210510120138-977fb7262007 // indirect
+	golang.org/x/sys v0.0.0-20210603081109-ebe580a85c40 // indirect
 	golang.org/x/term v0.0.0-20210220032956-6a3ed077a48d // indirect
 	golang.org/x/text v0.3.6 // indirect
 	golang.org/x/time v0.0.0-20210220033141-f8bda1e9f3ba // indirect
