@@ -487,7 +487,12 @@ func (c *NPLController) handleAddUpdatePod(key string, obj interface{}) error {
 			return fmt.Errorf("failed to parse port number and protocol from %s for Pod %s: %v", targetPortProto, key, err)
 		}
 		podPorts[targetPortProto] = struct{}{}
-		portData := c.portTable.GetEntry(podIP, port, protocol)
+		portData := c.portTable.GetEntry(podIP, port)
+		if portData != nil && !portData.HasProtocol(protocol) {
+			// If the PortTable has an entry for the Pod but does not have an
+			// entry with protocol, we enforce AddRule for the missing Protocol.
+			portData = nil
+		}
 		if portData == nil {
 			if hport, ok := hostPorts[targetPortProto]; ok {
 				nodePort = hport

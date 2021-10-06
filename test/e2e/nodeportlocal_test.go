@@ -136,7 +136,7 @@ func protocolToString(p corev1.Protocol) string {
 
 func checkForNPLRuleInIPTables(t *testing.T, data *TestData, r *require.Assertions, antreaPod string, rules []nplRuleData, present bool) {
 	cmd := []string{"iptables", "-t", "nat", "-S"}
-	t.Logf("Verifying iptables rules %v", rules)
+	t.Logf("Verifying iptables rules %v, present: %v", rules, present)
 	const timeout = 30 * time.Second
 	err := wait.Poll(time.Second, timeout, func() (bool, error) {
 		stdout, _, err := data.runCommandFromPod(antreaNamespace, antreaPod, agentContainerName, cmd)

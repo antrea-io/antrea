@@ -54,7 +54,7 @@ func (d *NodePortData) DeleteProtocol(protocol string) error {
 		if p.Protocol == protocol {
 			d.Protocols = append(d.Protocols[:i], d.Protocols[i+1:]...)
 			if err := p.socket.Close(); err != nil {
-				return fmt.Errorf("error when releasing local port %d: %v", d.NodePort, err)
+				return fmt.Errorf("error when releasing local port %d with protocol %s: %v", d.NodePort, p.Protocol, err)
 			}
 			return nil
 		}
@@ -97,10 +97,10 @@ func (pt *PortTable) CleanupAllEntries() {
 	pt.PodEndpointTable = make(map[string]*NodePortData)
 }
 
-func (pt *PortTable) GetEntry(ip string, port int, protocol string) *NodePortData {
+func (pt *PortTable) GetEntry(ip string, port int) *NodePortData {
 	pt.tableLock.RLock()
 	defer pt.tableLock.RUnlock()
-	return pt.getEntryByPodIPPortProtocol(ip, port, protocol)
+	return pt.getEntryByPodIPPort(ip, port)
 }
 
 func (pt *PortTable) GetDataForPodIP(ip string) []NodePortData {
@@ -117,14 +117,6 @@ func (pt *PortTable) getDataForPodIP(ip string) []NodePortData {
 		}
 	}
 	return allData
-}
-
-func (pt *PortTable) getEntryByPodIPPortProtocol(ip string, port int, protocol string) *NodePortData {
-	data := pt.PodEndpointTable[podIPPortFormat(ip, port)]
-	if data != nil && data.HasProtocol(protocol) {
-		return data
-	}
-	return nil
 }
 
 func (pt *PortTable) getEntryByPodIPPort(ip string, port int) *NodePortData {
@@ -206,7 +198,12 @@ func (pt *PortTable) AddRule(podIP string, podPort int, protocol string) (int, e
 func (pt *PortTable) DeleteRule(podIP string, podPort int, protocol string) error {
 	pt.tableLock.Lock()
 	defer pt.tableLock.Unlock()
-	data := pt.getEntryByPodIPPortProtocol(podIP, podPort, protocol)
+	data := pt.getEntryByPodIPPort(podIP, podPort)
+	if data == nil || data != nil && !data.HasProtocol(protocol) {
+		// Delete not required when either the PortTable entry does not exist
+		// or the Protocol in the entry does not exist.
+		return nil
+	}
 	if err := pt.PodPortRules.DeleteRule(data.NodePort, podIP, podPort, protocol); err != nil {
 		return err
 	}
@@ -230,6 +227,9 @@ func (pt *PortTable) DeleteRulesForPod(podIP string) error {
 			if err := pt.PodPortRules.DeleteRule(nodeport, podIP, d.PodPort, p.Protocol); err != nil {
 				return err
 			}
+			if err := p.socket.Close(); err != nil {
+				return fmt.Errorf("error when releasing local port %d with protocol %s: %v", d.NodePort, p.Protocol, err)
+			}
 		}
 		delete(pt.NodePortTable, nodeport)
 		delete(pt.PodEndpointTable, podIPPortFormat(podIP, d.PodPort))
@@ -238,8 +238,11 @@ func (pt *PortTable) DeleteRulesForPod(podIP string) error {
 }
 
 func (pt *PortTable) RuleExists(podIP string, podPort int, protocol string) bool {
-	data := pt.GetEntry(podIP, podPort, protocol)
+	data := pt.GetEntry(podIP, podPort)
 	if data != nil {
+		if !data.HasProtocol(protocol) {
+			return false
+		}
 		return true
 	}
 	return false
