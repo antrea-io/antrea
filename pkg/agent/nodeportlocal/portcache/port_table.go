@@ -120,7 +120,11 @@ func (pt *PortTable) getDataForPodIP(ip string) []NodePortData {
 }
 
 func (pt *PortTable) getEntryByPodIPPort(ip string, port int) *NodePortData {
-	return pt.PodEndpointTable[podIPPortFormat(ip, port)]
+	if data, ok := pt.PodEndpointTable[podIPPortFormat(ip, port)]; ok {
+		dataCopy := *data
+		return &dataCopy
+	}
+	return nil
 }
 
 func (pt *PortTable) isNodePortAvailableForPodIPProtocol(ip string, nodeport int, podPort int, protocol string) bool {
