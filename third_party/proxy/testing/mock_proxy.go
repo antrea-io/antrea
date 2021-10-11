@@ -167,3 +167,17 @@ func (mr *MockProviderMockRecorder) SyncLoop() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SyncLoop", reflect.TypeOf((*MockProvider)(nil).SyncLoop))
 }
+
+// SyncedOnce mocks base method
+func (m *MockProvider) SyncedOnce() bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SyncedOnce")
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// SyncedOnce indicates an expected call of SyncedOnce
+func (mr *MockProviderMockRecorder) SyncedOnce() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SyncedOnce", reflect.TypeOf((*MockProvider)(nil).SyncedOnce))
+}

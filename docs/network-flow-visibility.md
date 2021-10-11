@@ -220,8 +220,9 @@ We support following connection metrics as Prometheus metrics that are exposed
 through [Antrea Agent apiserver endpoint](prometheus-integration.md):
 `antrea_agent_conntrack_total_connection_count`,
 `antrea_agent_conntrack_antrea_connection_count`,
-`antrea_agent_denied_connection_count` and
-`antrea_agent_conntrack_max_connection_count`
+`antrea_agent_denied_connection_count`,
+`antrea_agent_conntrack_max_connection_count`, and
+`antrea_agent_flow_collector_reconnection_count`
 
 ## Flow Aggregator
 

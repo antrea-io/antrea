@@ -187,6 +187,8 @@ type flowAggregator struct {
 	observationDomainID         uint32
 	podInformer                 coreinformers.PodInformer
 	sendJSONRecord              bool
+	numRecordsExported          int64
+	numRecordsReceived          int64
 }
 
 func NewFlowAggregator(
@@ -381,7 +383,7 @@ func (fa *flowAggregator) Run(stopCh <-chan struct{}, wg *sync.WaitGroup) {
 
 func (fa *flowAggregator) flowRecordExpiryCheck(stopCh <-chan struct{}) {
 	expireTimer := time.NewTimer(fa.activeFlowRecordTimeout)
-
+	logTicker := time.NewTicker(time.Minute)
 	for {
 		select {
 		case <-stopCh:
@@ -413,6 +415,12 @@ func (fa *flowAggregator) flowRecordExpiryCheck(stopCh <-chan struct{}) {
 			}
 			// Get the new expiry and reset the timer.
 			expireTimer.Reset(fa.aggregationProcess.GetExpiryFromExpirePriorityQueue())
+		case <-logTicker.C:
+			// Add visibility of processing stats of Flow Aggregator
+			klog.V(4).InfoS("Total number of records received", "count", fa.collectingProcess.GetNumRecordsReceived())
+			klog.V(4).InfoS("Total number of records exported", "count", fa.numRecordsExported)
+			klog.V(4).InfoS("Total number of flows stored in Flow Aggregator", "count", fa.aggregationProcess.GetNumFlows())
+			klog.V(4).InfoS("Number of exporters connected with Flow Aggregator", "count", fa.collectingProcess.GetNumConnToCollector())
 		}
 	}
 }
@@ -450,6 +458,7 @@ func (fa *flowAggregator) sendFlowKeyRecord(key ipfixintermediate.FlowKey, recor
 	}
 
 	klog.V(4).Infof("Data set sent successfully: %d Bytes sent", sentBytes)
+	fa.numRecordsExported = fa.numRecordsExported + 1
 	return nil
 }
 
