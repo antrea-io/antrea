@@ -388,11 +388,7 @@ func (c *NPLController) deletePodIPFromCache(key string) {
 }
 
 func (c *NPLController) deleteAllPortRulesIfAny(podIP string) error {
-	err := c.portTable.DeleteRulesForPod(podIP)
-	if err != nil {
-		return err
-	}
-	return nil
+	return c.portTable.DeleteRulesForPod(podIP)
 }
 
 // handleRemovePod removes rules from port table and

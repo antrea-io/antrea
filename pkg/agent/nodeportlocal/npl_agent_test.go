@@ -263,11 +263,11 @@ func setUpWithTestServiceAndPod(t *testing.T, tc *testConfig, customNodePort *in
 	// teardown and that the test will not proceed.
 	value, err := testData.pollForPodAnnotation(testPod.Name, true)
 	require.NoError(t, err, "Poll for annotation check failed")
-	expectedAnnotation := &ExpectedNPLAnnotation{}
-	expectedAnnotation.addExpectedAnnotation(defaultPort, protocolTCP)
-	testData.checkAnnotationValue(value, expectedAnnotation)
+	expectedAnnotations := &ExpectedNPLAnnotations{}
+	expectedAnnotations.addExpectedAnnotation(defaultPort, protocolTCP)
+	testData.checkAnnotationValue(value, expectedAnnotations)
 	assert.Equal(t, nodePort, value[0].NodePort)
-	require.True(t, testData.portTable.RuleExists(defaultPodIP, defaultPort, protocolTCP))
+	assert.True(t, testData.portTable.RuleExists(defaultPodIP, defaultPort, protocolTCP))
 
 	return testData, testSvc, testPod
 }
@@ -295,20 +295,22 @@ func (t *testData) pollForPodAnnotation(podName string, found bool) ([]nplk8s.NP
 		return !exists, nil
 	})
 
-	if data == "" {
+	if err != nil {
 		return []nplk8s.NPLAnnotation{}, err
+	}
+	if data == "" {
+		return []nplk8s.NPLAnnotation{}, nil
 	}
 	var nplValue []nplk8s.NPLAnnotation
 	err = json.Unmarshal([]byte(data), &nplValue)
-	require.NoError(t, err, "Error when unmarshalling NPL annotation")
 	return nplValue, err
 }
 
-type ExpectedNPLAnnotation struct {
+type ExpectedNPLAnnotations struct {
 	annotations []nplk8s.NPLAnnotation
 }
 
-func (a *ExpectedNPLAnnotation) addExpectedAnnotation(podPort int, protocols ...string) {
+func (a *ExpectedNPLAnnotations) addExpectedAnnotation(podPort int, protocols ...string) {
 	for i, annotation := range a.annotations {
 		if annotation.PodPort == podPort {
 			annotation.Protocols = append(annotation.Protocols, protocols...)
@@ -324,15 +326,15 @@ func (a *ExpectedNPLAnnotation) addExpectedAnnotation(podPort int, protocols ...
 // verifies that the correct number of NPL entries is present and that they include the expected
 // Node IP and Pod Port. It then returns the parsed annotations, in case the test needs to run some
 // validation on the Node Port values.
-func (t *testData) checkAnnotationValue(nplValue []nplk8s.NPLAnnotation, expectedValue *ExpectedNPLAnnotation) []nplk8s.NPLAnnotation {
+func (t *testData) checkAnnotationValue(nplValue []nplk8s.NPLAnnotation, expectedValue *ExpectedNPLAnnotations) []nplk8s.NPLAnnotation {
 	var expectedPorts, existingPorts []int
 	for _, nplAnnotation := range nplValue {
 		existingPorts = append(existingPorts, nplAnnotation.PodPort)
-		for _, expectedAnnotation := range (*expectedValue).annotations {
-			if expectedAnnotation.PodPort == nplAnnotation.PodPort {
+		for _, expectedAnnotations := range (*expectedValue).annotations {
+			if expectedAnnotations.PodPort == nplAnnotation.PodPort {
 				assert.Equal(t, defaultHostIP, nplAnnotation.NodeIP)
-				assert.ElementsMatch(t, expectedAnnotation.Protocols, nplAnnotation.Protocols)
-				expectedPorts = append(expectedPorts, expectedAnnotation.PodPort)
+				assert.ElementsMatch(t, expectedAnnotations.Protocols, nplAnnotation.Protocols)
+				expectedPorts = append(expectedPorts, expectedAnnotations.PodPort)
 			}
 		}
 	}
@@ -514,10 +516,10 @@ func TestAddMultiPortPodSvc(t *testing.T) {
 
 	value, err := testData.pollForPodAnnotation(testPod.Name, true)
 	require.NoError(t, err, "Poll for annotation check failed")
-	expectedAnnotation := &ExpectedNPLAnnotation{}
-	expectedAnnotation.addExpectedAnnotation(defaultPort, protocolTCP)
-	expectedAnnotation.addExpectedAnnotation(newPort, protocolTCP)
-	testData.checkAnnotationValue(value, expectedAnnotation)
+	expectedAnnotations := &ExpectedNPLAnnotations{}
+	expectedAnnotations.addExpectedAnnotation(defaultPort, protocolTCP)
+	expectedAnnotations.addExpectedAnnotation(newPort, protocolTCP)
+	testData.checkAnnotationValue(value, expectedAnnotations)
 	assert.True(t, testData.portTable.RuleExists(defaultPodIP, defaultPort, protocolTCP))
 	assert.True(t, testData.portTable.RuleExists(defaultPodIP, newPort, protocolTCP))
 }
@@ -543,9 +545,9 @@ func TestAddMultiPortPodSinglePortSvc(t *testing.T) {
 
 	value, err := testData.pollForPodAnnotation(testPod.Name, true)
 	require.NoError(t, err, "Poll for annotation check failed")
-	expectedAnnotation := &ExpectedNPLAnnotation{}
-	expectedAnnotation.addExpectedAnnotation(defaultPort, protocolTCP)
-	testData.checkAnnotationValue(value, expectedAnnotation)
+	expectedAnnotations := &ExpectedNPLAnnotations{}
+	expectedAnnotations.addExpectedAnnotation(defaultPort, protocolTCP)
+	testData.checkAnnotationValue(value, expectedAnnotations)
 	assert.True(t, testData.portTable.RuleExists(defaultPodIP, defaultPort, protocolTCP))
 	assert.False(t, testData.portTable.RuleExists(defaultPodIP, newPort2, protocolTCP))
 }
@@ -566,9 +568,9 @@ func TestPodAddHostPort(t *testing.T) {
 
 	value, err := testData.pollForPodAnnotation(testPod.Name, true)
 	require.NoError(t, err, "Poll for annotation check failed")
-	expectedAnnotation := &ExpectedNPLAnnotation{}
-	expectedAnnotation.addExpectedAnnotation(defaultPort, protocolTCP)
-	testData.checkAnnotationValue(value, expectedAnnotation)
+	expectedAnnotations := &ExpectedNPLAnnotations{}
+	expectedAnnotations.addExpectedAnnotation(defaultPort, protocolTCP)
+	testData.checkAnnotationValue(value, expectedAnnotations)
 	assert.Equal(t, hostPort, value[0].NodePort)
 	assert.False(t, testData.portTable.RuleExists(defaultPodIP, defaultPort, protocolTCP))
 }
@@ -593,9 +595,9 @@ func TestPodAddHostPortMultiProtocol(t *testing.T) {
 
 	value, err := testData.pollForPodAnnotation(testPod.Name, true)
 	require.NoError(t, err, "Poll for annotation check failed")
-	expectedAnnotation := &ExpectedNPLAnnotation{}
-	expectedAnnotation.addExpectedAnnotation(defaultPort, protocolTCP)
-	testData.checkAnnotationValue(value, expectedAnnotation)
+	expectedAnnotations := &ExpectedNPLAnnotations{}
+	expectedAnnotations.addExpectedAnnotation(defaultPort, protocolTCP)
+	testData.checkAnnotationValue(value, expectedAnnotations)
 	assert.Equal(t, hostPort, value[0].NodePort)
 	assert.False(t, testData.portTable.RuleExists(defaultPodIP, defaultPort, protocolTCP))
 }
@@ -615,9 +617,9 @@ func TestPodAddHostPortWrongProtocol(t *testing.T) {
 
 	value, err := testData.pollForPodAnnotation(testPod.Name, true)
 	require.NoError(t, err, "Poll for annotation check failed")
-	expectedAnnotation := &ExpectedNPLAnnotation{}
-	expectedAnnotation.addExpectedAnnotation(defaultPort, protocolTCP)
-	testData.checkAnnotationValue(value, expectedAnnotation)
+	expectedAnnotations := &ExpectedNPLAnnotations{}
+	expectedAnnotations.addExpectedAnnotation(defaultPort, protocolTCP)
+	testData.checkAnnotationValue(value, expectedAnnotations)
 	assert.True(t, testData.portTable.RuleExists(defaultPodIP, defaultPort, protocolTCP))
 }
 
@@ -661,16 +663,16 @@ func TestMultiplePods(t *testing.T) {
 
 	pod1Value, err := testData.pollForPodAnnotation(testPod1.Name, true)
 	require.NoError(t, err, "Poll for annotation check failed")
-	expectedAnnotationPod1 := &ExpectedNPLAnnotation{}
-	expectedAnnotationPod1.addExpectedAnnotation(defaultPort, protocolTCP)
-	testData.checkAnnotationValue(pod1Value, expectedAnnotationPod1)
+	expectedAnnotationsPod1 := &ExpectedNPLAnnotations{}
+	expectedAnnotationsPod1.addExpectedAnnotation(defaultPort, protocolTCP)
+	testData.checkAnnotationValue(pod1Value, expectedAnnotationsPod1)
 	assert.True(t, testData.portTable.RuleExists(testPod1.Status.PodIP, defaultPort, protocolTCP))
 
 	pod2Value, err := testData.pollForPodAnnotation(testPod2.Name, true)
-	assert.NoError(t, err, "Poll for annotation check failed")
-	expectedAnnotationPod2 := &ExpectedNPLAnnotation{}
-	expectedAnnotationPod2.addExpectedAnnotation(defaultPort, protocolTCP)
-	testData.checkAnnotationValue(pod2Value, expectedAnnotationPod2)
+	require.NoError(t, err, "Poll for annotation check failed")
+	expectedAnnotationsPod2 := &ExpectedNPLAnnotations{}
+	expectedAnnotationsPod2.addExpectedAnnotation(defaultPort, protocolTCP)
+	testData.checkAnnotationValue(pod2Value, expectedAnnotationsPod2)
 	assert.NotEqual(t, pod1Value[0].NodePort, pod2Value[0].NodePort)
 	assert.True(t, testData.portTable.RuleExists(testPod2.Status.PodIP, defaultPort, protocolTCP))
 }
@@ -708,18 +710,18 @@ func TestMultipleProtocols(t *testing.T) {
 	defer testData.tearDown()
 
 	pod1Value, err := testData.pollForPodAnnotation(testPod1.Name, true)
-	assert.NoError(t, err, "Poll for annotation check failed")
-	expectedAnnotation := &ExpectedNPLAnnotation{}
-	expectedAnnotation.addExpectedAnnotation(defaultPort, protocolTCP)
-	testData.checkAnnotationValue(pod1Value, expectedAnnotation)
+	require.NoError(t, err, "Poll for annotation check failed")
+	expectedAnnotations := &ExpectedNPLAnnotations{}
+	expectedAnnotations.addExpectedAnnotation(defaultPort, protocolTCP)
+	testData.checkAnnotationValue(pod1Value, expectedAnnotations)
 
 	// Check the annotation for pod2: protocol should be UDP and the NodePort
 	// assigned to pod2 should be different from the one assigned to pod1.
 	pod2Value, err := testData.pollForPodAnnotation(testPod2.Name, true)
-	assert.NoError(t, err, "Poll for annotation check failed")
-	expectedAnnotationPod2 := &ExpectedNPLAnnotation{}
-	expectedAnnotationPod2.addExpectedAnnotation(defaultPort, protocolUDP)
-	testData.checkAnnotationValue(pod2Value, expectedAnnotationPod2)
+	require.NoError(t, err, "Poll for annotation check failed")
+	expectedAnnotationsPod2 := &ExpectedNPLAnnotations{}
+	expectedAnnotationsPod2.addExpectedAnnotation(defaultPort, protocolUDP)
+	testData.checkAnnotationValue(pod2Value, expectedAnnotationsPod2)
 	assert.NotEqual(t, pod1Value[0].NodePort, pod2Value[0].NodePort)
 	assert.True(t, testData.portTable.RuleExists(testPod2.Status.PodIP, defaultPort, protocolUDP))
 
@@ -741,8 +743,8 @@ func TestMultipleProtocols(t *testing.T) {
 
 	pod2ValueUpdate, err := testData.pollForPodAnnotation(testPod2.Name, true)
 	require.NoError(t, err, "Poll for annotation check failed")
-	expectedAnnotationPod2.addExpectedAnnotation(defaultPort, protocolTCP)
-	testData.checkAnnotationValue(pod2ValueUpdate, expectedAnnotationPod2)
+	expectedAnnotationsPod2.addExpectedAnnotation(defaultPort, protocolTCP)
+	testData.checkAnnotationValue(pod2ValueUpdate, expectedAnnotationsPod2)
 	assert.Equal(t, pod2Value[0].NodePort, pod2ValueUpdate[0].NodePort)
 }
 
@@ -756,10 +758,10 @@ func TestMultipleServicesSameBackendPod(t *testing.T) {
 
 	value, err := testData.pollForPodAnnotation(testPod.Name, true)
 	require.NoError(t, err, "Poll for annotation check failed")
-	expectedAnnotation := &ExpectedNPLAnnotation{}
-	expectedAnnotation.addExpectedAnnotation(defaultPort, protocolTCP)
-	expectedAnnotation.addExpectedAnnotation(9090, protocolTCP)
-	testData.checkAnnotationValue(value, expectedAnnotation)
+	expectedAnnotations := &ExpectedNPLAnnotations{}
+	expectedAnnotations.addExpectedAnnotation(defaultPort, protocolTCP)
+	expectedAnnotations.addExpectedAnnotation(9090, protocolTCP)
+	testData.checkAnnotationValue(value, expectedAnnotations)
 	assert.NotEqual(t, value[0].NodePort, value[1].NodePort)
 	assert.True(t, testData.portTable.RuleExists(testPod.Status.PodIP, defaultPort, protocolTCP))
 	assert.True(t, testData.portTable.RuleExists(testPod.Status.PodIP, 9090, protocolTCP))
@@ -781,9 +783,9 @@ func TestInitInvalidPod(t *testing.T) {
 
 	value, err := testData.pollForPodAnnotation(testPod.Name, true)
 	require.NoError(t, err, "Poll for annotation check failed")
-	expectedAnnotation := &ExpectedNPLAnnotation{}
-	expectedAnnotation.addExpectedAnnotation(defaultPort, protocolTCP)
-	testData.checkAnnotationValue(value, expectedAnnotation)
+	expectedAnnotations := &ExpectedNPLAnnotations{}
+	expectedAnnotations.addExpectedAnnotation(defaultPort, protocolTCP)
+	testData.checkAnnotationValue(value, expectedAnnotations)
 	assert.True(t, testData.portTable.RuleExists(testPod.Status.PodIP, defaultPort, protocolTCP))
 }
 
@@ -810,9 +812,9 @@ func TestNodePortAlreadyBoundTo(t *testing.T) {
 
 	value, err := testData.pollForPodAnnotation(testPod.Name, true)
 	require.NoError(t, err, "Poll for annotation check failed")
-	expectedAnnotation := &ExpectedNPLAnnotation{}
-	expectedAnnotation.addExpectedAnnotation(defaultPort, protocolTCP)
-	testData.checkAnnotationValue(value, expectedAnnotation)
+	expectedAnnotations := &ExpectedNPLAnnotations{}
+	expectedAnnotations.addExpectedAnnotation(defaultPort, protocolTCP)
+	testData.checkAnnotationValue(value, expectedAnnotations)
 	assert.Equal(t, nodePort, value[0].NodePort)
 }
 
