@@ -30,6 +30,7 @@ import (
 	"antrea.io/antrea/pkg/agent/flowexporter"
 	"antrea.io/antrea/pkg/agent/flowexporter/connections"
 	"antrea.io/antrea/pkg/agent/flowexporter/priorityqueue"
+	"antrea.io/antrea/pkg/agent/metrics"
 	"antrea.io/antrea/pkg/agent/openflow"
 	"antrea.io/antrea/pkg/ipfix"
 	"antrea.io/antrea/pkg/util/env"
@@ -286,6 +287,7 @@ func (exp *flowExporter) initFlowExporter() error {
 		}
 		klog.V(2).Infof("Initialized flow exporter for IPv6 flow records and sent %d bytes size of template record", sentBytes)
 	}
+	metrics.ReconnectionsToFlowCollector.Inc()
 	return nil
 }
 

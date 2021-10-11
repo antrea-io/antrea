@@ -146,6 +146,16 @@ var (
 		},
 	)
 
+	ReconnectionsToFlowCollector = metrics.NewGauge(
+		&metrics.GaugeOpts{
+			Namespace:      metricNamespaceAntrea,
+			Subsystem:      metricSubsystemAgent,
+			Name:           "flow_collector_reconnection_count",
+			Help:           "Number of re-connections between Flow Exporter and flow collector. This metric gets updated whenever the connection is re-established between the Flow Exporter and the flow collector (e.g. the Flow Aggregator).",
+			StabilityLevel: metrics.ALPHA,
+		},
+	)
+
 	MaxConnectionsInConnTrackTable = metrics.NewGauge(
 		&metrics.GaugeOpts{
 			Namespace:      metricNamespaceAntrea,
@@ -168,40 +178,40 @@ func InitializePrometheusMetrics() {
 
 func InitializePodMetrics() {
 	if err := legacyregistry.Register(PodCount); err != nil {
-		klog.Error("Failed to register antrea_agent_local_pod_count with Prometheus")
+		klog.ErrorS(err, "Failed to register metrics with Prometheus", "metrics", "antrea_agent_local_pod_count")
 	}
 }
 
 func InitializeNetworkPolicyMetrics() {
 	if err := legacyregistry.Register(EgressNetworkPolicyRuleCount); err != nil {
-		klog.Error("Failed to register antrea_agent_egress_networkpolicy_rule_count with Prometheus")
+		klog.ErrorS(err, "Failed to register metrics with Prometheus", "metrics", "antrea_agent_egress_networkpolicy_rule_count")
 	}
 
 	if err := legacyregistry.Register(IngressNetworkPolicyRuleCount); err != nil {
-		klog.Error("Failed to register antrea_agent_ingress_networkpolicy_rule_count with Prometheus")
+		klog.ErrorS(err, "Failed to register metrics with Prometheus", "metrics", "antrea_agent_ingress_networkpolicy_rule_count")
 	}
 
 	if err := legacyregistry.Register(NetworkPolicyCount); err != nil {
-		klog.Error("Failed to register antrea_agent_networkpolicy_count with Prometheus")
+		klog.ErrorS(err, "Failed to register metrics with Prometheus", "metrics", "antrea_agent_networkpolicy_count")
 	}
 }
 
 func InitializeOVSMetrics() {
 	if err := legacyregistry.Register(OVSTotalFlowCount); err != nil {
-		klog.Error("Failed to register antrea_agent_ovs_total_flow_count with Prometheus")
+		klog.ErrorS(err, "Failed to register metrics with Prometheus", "metrics", "antrea_agent_ovs_total_flow_count")
 	}
 	if err := legacyregistry.Register(OVSFlowCount); err != nil {
-		klog.Error("Failed to register antrea_agent_ovs_flow_count with Prometheus")
+		klog.ErrorS(err, "Failed to register metrics with Prometheus", "metrics", "antrea_agent_ovs_flow_count")
 	}
 
 	if err := legacyregistry.Register(OVSFlowOpsCount); err != nil {
-		klog.Error("Failed to register antrea_agent_ovs_flow_ops_count with Prometheus")
+		klog.ErrorS(err, "Failed to register metrics with Prometheus", "metrics", "antrea_agent_ovs_flow_ops_count")
 	}
 	if err := legacyregistry.Register(OVSFlowOpsErrorCount); err != nil {
-		klog.Error("Failed to register antrea_agent_ovs_flow_ops_error_count with Prometheus")
+		klog.ErrorS(err, "Failed to register metrics with Prometheus", "metrics", "antrea_agent_ovs_flow_ops_error_count")
 	}
 	if err := legacyregistry.Register(OVSFlowOpsLatency); err != nil {
-		klog.Error("Failed to register antrea_agent_ovs_flow_ops_latency_milliseconds with Prometheus")
+		klog.ErrorS(err, "Failed to register metrics with Prometheus", "metrics", "antrea_agent_ovs_flow_ops_latency_milliseconds")
 	}
 	// Initialize OpenFlow operations metrics with label add, modify and delete
 	// since those metrics won't come out until observation.
@@ -215,15 +225,18 @@ func InitializeOVSMetrics() {
 
 func InitializeConnectionMetrics() {
 	if err := legacyregistry.Register(TotalConnectionsInConnTrackTable); err != nil {
-		klog.Errorf("Failed to register antrea_agent_conntrack_total_connection_count with error: %v", err)
+		klog.ErrorS(err, "Failed to register metrics with Prometheus", "metrics", "antrea_agent_conntrack_total_connection_count")
 	}
 	if err := legacyregistry.Register(TotalAntreaConnectionsInConnTrackTable); err != nil {
-		klog.Errorf("Failed to register antrea_agent_conntrack_antrea_connection_count with error: %v", err)
+		klog.ErrorS(err, "Failed to register metrics with Prometheus", "metrics", "antrea_agent_conntrack_antrea_connection_count")
 	}
 	if err := legacyregistry.Register(TotalDenyConnections); err != nil {
-		klog.Errorf("Failed to register antrea_agent_denied_connection_count with error: %v", err)
+		klog.ErrorS(err, "Failed to register metrics with Prometheus", "metrics", "antrea_agent_denied_connection_count")
+	}
+	if err := legacyregistry.Register(ReconnectionsToFlowCollector); err != nil {
+		klog.ErrorS(err, "Failed to register metrics with Prometheus", "metrics", "antrea_agent_flow_collector_reconnection_count")
 	}
 	if err := legacyregistry.Register(MaxConnectionsInConnTrackTable); err != nil {
-		klog.Errorf("Failed to register antrea_agent_conntrack_max_connection_count with error: %v", err)
+		klog.ErrorS(err, "Failed to register metrics with Prometheus", "metrics", "antrea_agent_conntrack_max_connection_count")
 	}
 }

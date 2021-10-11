@@ -28,6 +28,8 @@ type IPFIXCollectingProcess interface {
 	Start()
 	Stop()
 	GetMsgChan() chan *ipfixentities.Message
+	GetNumRecordsReceived() int64
+	GetNumConnToCollector() int64
 }
 
 type ipfixCollectingProcess struct {
@@ -55,4 +57,12 @@ func (cp *ipfixCollectingProcess) Stop() {
 
 func (cp *ipfixCollectingProcess) GetMsgChan() chan *ipfixentities.Message {
 	return cp.CollectingProcess.GetMsgChan()
+}
+
+func (cp *ipfixCollectingProcess) GetNumRecordsReceived() int64 {
+	return int64(cp.CollectingProcess.GetNumOfRecordsReceived())
+}
+
+func (cp *ipfixCollectingProcess) GetNumConnToCollector() int64 {
+	return int64(cp.CollectingProcess.GetNumOfConnToCollector())
 }
