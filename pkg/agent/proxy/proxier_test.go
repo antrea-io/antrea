@@ -114,7 +114,7 @@ func NewFakeProxier(routeClient route.Interface, ofClient openflow.Client, nodeP
 
 	p := &proxier{
 		endpointsChanges:         newEndpointsChangesTracker(hostname, false, isIPv6),
-		serviceChanges:           newServiceChangesTracker(recorder, ipFamily),
+		serviceChanges:           newServiceChangesTracker(recorder, ipFamily, []string{"kube-system/kube-dns", "192.168.1.2"}),
 		serviceMap:               k8sproxy.ServiceMap{},
 		serviceInstalledMap:      k8sproxy.ServiceMap{},
 		endpointsInstalledMap:    types.EndpointsMap{},
@@ -132,7 +132,7 @@ func NewFakeProxier(routeClient route.Interface, ofClient openflow.Client, nodeP
 	return p
 }
 
-func testClusterIP(t *testing.T, svcIP net.IP, epIP net.IP, isIPv6 bool) {
+func testClusterIP(t *testing.T, svcIP net.IP, epIP net.IP, isIPv6 bool, extraSvcs []*corev1.Service, extraEps []*corev1.Endpoints) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockOFClient := ofmock.NewMockClient(ctrl)
@@ -145,31 +145,30 @@ func testClusterIP(t *testing.T, svcIP net.IP, epIP net.IP, isIPv6 bool) {
 		Port:           "80",
 		Protocol:       corev1.ProtocolTCP,
 	}
-	makeServiceMap(fp,
-		makeTestService(svcPortName.Namespace, svcPortName.Name, func(svc *corev1.Service) {
-			svc.Spec.ClusterIP = svcIP.String()
-			svc.Spec.Ports = []corev1.ServicePort{{
+
+	allServices := append(extraSvcs, makeTestService(svcPortName.Namespace, svcPortName.Name, func(svc *corev1.Service) {
+		svc.Spec.ClusterIP = svcIP.String()
+		svc.Spec.Ports = []corev1.ServicePort{{
+			Name:     svcPortName.Port,
+			Port:     int32(svcPort),
+			Protocol: corev1.ProtocolTCP,
+		}}
+	}))
+	makeServiceMap(fp, allServices...)
+
+	allEps := append(extraEps, makeTestEndpoints(svcPortName.Namespace, svcPortName.Name, func(ept *corev1.Endpoints) {
+		ept.Subsets = []corev1.EndpointSubset{{
+			Addresses: []corev1.EndpointAddress{{
+				IP: epIP.String(),
+			}},
+			Ports: []corev1.EndpointPort{{
 				Name:     svcPortName.Port,
 				Port:     int32(svcPort),
 				Protocol: corev1.ProtocolTCP,
-			}}
-		}),
-	)
-
-	makeEndpointsMap(fp,
-		makeTestEndpoints(svcPortName.Namespace, svcPortName.Name, func(ept *corev1.Endpoints) {
-			ept.Subsets = []corev1.EndpointSubset{{
-				Addresses: []corev1.EndpointAddress{{
-					IP: epIP.String(),
-				}},
-				Ports: []corev1.EndpointPort{{
-					Name:     svcPortName.Port,
-					Port:     int32(svcPort),
-					Protocol: corev1.ProtocolTCP,
-				}},
-			}}
-		}),
-	)
+			}},
+		}}
+	}))
+	makeEndpointsMap(fp, allEps...)
 
 	groupID, _ := fp.groupCounter.Get(svcPortName, false)
 	mockOFClient.EXPECT().InstallServiceGroup(groupID, false, gomock.Any()).Times(1)
@@ -394,11 +393,70 @@ func TestNodePortIPv6ExternalLocal(t *testing.T) {
 }
 
 func TestClusterIPv4(t *testing.T) {
-	testClusterIP(t, svcIPv4, ep1IPv4, false)
+	testClusterIP(t, svcIPv4, ep1IPv4, false, []*corev1.Service{}, []*corev1.Endpoints{})
 }
 
 func TestClusterIPv6(t *testing.T) {
-	testClusterIP(t, svcIPv6, ep1IPv6, true)
+	testClusterIP(t, svcIPv6, ep1IPv6, true, []*corev1.Service{}, []*corev1.Endpoints{})
+}
+
+func TestClusterSkipServices(t *testing.T) {
+	svc1Port := 53
+	svc1PortName := k8sproxy.ServicePortName{
+		NamespacedName: makeNamespaceName("kube-system", "kube-dns"),
+		Port:           "53",
+		Protocol:       corev1.ProtocolTCP,
+	}
+	svc2Port := 88
+	svc2PortName := k8sproxy.ServicePortName{
+		NamespacedName: makeNamespaceName("kube-system", "test"),
+		Port:           "88",
+		Protocol:       corev1.ProtocolTCP,
+	}
+	svc1 := makeTestService(svc1PortName.Namespace, svc1PortName.Name, func(svc *corev1.Service) {
+		svc.Spec.ClusterIP = "10.96.10.12"
+		svc.Spec.Ports = []corev1.ServicePort{{
+			Name:     svc1PortName.Port,
+			Port:     int32(svc1Port),
+			Protocol: corev1.ProtocolTCP,
+		}}
+	})
+	svc2 := makeTestService(svc2PortName.Namespace, svc2PortName.Name, func(svc *corev1.Service) {
+		svc.Spec.ClusterIP = "192.168.1.2"
+		svc.Spec.Ports = []corev1.ServicePort{{
+			Name:     svc2PortName.Port,
+			Port:     int32(svc2Port),
+			Protocol: corev1.ProtocolTCP,
+		}}
+	})
+	svcs := []*corev1.Service{svc1, svc2}
+
+	ep1 := makeTestEndpoints(svc1PortName.Namespace, svc1PortName.Name, func(ept *corev1.Endpoints) {
+		ept.Subsets = []corev1.EndpointSubset{{
+			Addresses: []corev1.EndpointAddress{{
+				IP: "172.16.1.2",
+			}},
+			Ports: []corev1.EndpointPort{{
+				Name:     svc1PortName.Port,
+				Port:     int32(svc1Port),
+				Protocol: corev1.ProtocolTCP,
+			}},
+		}}
+	})
+	ep2 := makeTestEndpoints(svc2PortName.Namespace, svc2PortName.Name, func(ept *corev1.Endpoints) {
+		ept.Subsets = []corev1.EndpointSubset{{
+			Addresses: []corev1.EndpointAddress{{
+				IP: "172.16.1.3",
+			}},
+			Ports: []corev1.EndpointPort{{
+				Name:     svc2PortName.Port,
+				Port:     int32(svc2Port),
+				Protocol: corev1.ProtocolTCP,
+			}},
+		}}
+	})
+	eps := []*corev1.Endpoints{ep1, ep2}
+	testClusterIP(t, svcIPv4, ep1IPv4, false, svcs, eps)
 }
 
 func TestDualStackService(t *testing.T) {
@@ -1027,7 +1085,7 @@ func TestMetrics(t *testing.T) {
 				endpointsInstallMetric = metrics.EndpointsInstalledTotalV6.GaugeMetric
 				servicesInstallMetric = metrics.ServicesInstalledTotalV6.GaugeMetric
 			}
-			testClusterIP(t, net.ParseIP(tc.svcIP), net.ParseIP(tc.epIP), tc.isIPv6)
+			testClusterIP(t, net.ParseIP(tc.svcIP), net.ParseIP(tc.epIP), tc.isIPv6, []*corev1.Service{}, []*corev1.Endpoints{})
 			v, err := testutil.GetCounterMetricValue(endpointsUpdateTotalMetric)
 			assert.NoError(t, err)
 			assert.Equal(t, 0, int(v))

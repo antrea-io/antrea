@@ -232,6 +232,10 @@ func (o *Options) setDefaults() {
 }
 
 func (o *Options) validateAntreaProxyConfig() error {
+	if !features.DefaultFeatureGate.Enabled(features.AntreaProxy) && len(o.config.AntreaProxy.SkipServices) > 0 {
+		klog.InfoS("skipServices will be ignored because AntreaProxy is disabled", "skipServices", o.config.AntreaProxy.SkipServices)
+	}
+
 	if o.config.AntreaProxy.ProxyAll {
 		for _, nodePortAddress := range o.config.AntreaProxy.NodePortAddresses {
 			if _, _, err := net.ParseCIDR(nodePortAddress); err != nil {

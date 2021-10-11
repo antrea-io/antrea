@@ -267,18 +267,25 @@ type ServiceChangeTracker struct {
 	makeServiceInfo         makeServicePortFunc
 	processServiceMapChange processServiceMapChangeFunc
 	ipFamily                v1.IPFamily
-
-	recorder record.EventRecorder
+	recorder                record.EventRecorder
+	// skipServices indicates the service list for which we should skip proxying
+	// it will be initialized from antrea-agent.conf
+	skipServices sets.String
 }
 
 // NewServiceChangeTracker initializes a ServiceChangeTracker
-func NewServiceChangeTracker(makeServiceInfo makeServicePortFunc, ipFamily v1.IPFamily, recorder record.EventRecorder, processServiceMapChange processServiceMapChangeFunc) *ServiceChangeTracker {
+func NewServiceChangeTracker(makeServiceInfo makeServicePortFunc,
+	ipFamily v1.IPFamily,
+	recorder record.EventRecorder,
+	processServiceMapChange processServiceMapChangeFunc,
+	skipServices []string) *ServiceChangeTracker {
 	return &ServiceChangeTracker{
 		items:                   make(map[types.NamespacedName]*serviceChange),
 		makeServiceInfo:         makeServiceInfo,
 		recorder:                recorder,
 		ipFamily:                ipFamily,
 		processServiceMapChange: processServiceMapChange,
+		skipServices:            sets.NewString(skipServices...),
 	}
 }
 
@@ -358,7 +365,7 @@ func (sct *ServiceChangeTracker) serviceToServiceMap(service *v1.Service) Servic
 		return nil
 	}
 
-	if utilproxy.ShouldSkipService(service) {
+	if utilproxy.ShouldSkipService(service, sct.skipServices) {
 		return nil
 	}
 

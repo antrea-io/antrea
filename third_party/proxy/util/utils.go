@@ -46,6 +46,7 @@ import (
 
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/tools/record"
 	utilnet "k8s.io/utils/net"
 
@@ -66,7 +67,7 @@ type Resolver interface {
 }
 
 // ShouldSkipService checks if a given service should skip proxying
-func ShouldSkipService(service *v1.Service) bool {
+func ShouldSkipService(service *v1.Service, skipServices sets.String) bool {
 	// if ClusterIP is "None" or empty, skip proxying
 	if service.Spec.ClusterIP == v1.ClusterIPNone || service.Spec.ClusterIP == "" {
 		klog.V(3).Infof("Skipping service %s in namespace %s due to clusterIP = %q", service.Name, service.Namespace, service.Spec.ClusterIP)
@@ -77,6 +78,14 @@ func ShouldSkipService(service *v1.Service) bool {
 		klog.V(3).Infof("Skipping service %s in namespace %s due to Type=ExternalName", service.Name, service.Namespace)
 		return true
 	}
+	if skipServices.Len() == 0 {
+		return false
+	}
+	if skipServices.Has(service.Namespace+"/"+service.Name) || skipServices.Has(service.Spec.ClusterIP) {
+		klog.InfoS("Skipping service because it matches skipServices list", "service", klog.KObj(service))
+		return true
+	}
+
 	return false
 }
 

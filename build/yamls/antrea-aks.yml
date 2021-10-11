@@ -3948,6 +3948,10 @@ data:
       # (e.g. 1.2.3.0/24, 1.2.3.4/32). An empty string slice is meant to select all host IPv4/IPv6 addresses.
       # Note that the option is only valid when proxyAll is true.
       #nodePortAddresses: []
+      # An array of string values to specify a list of Services which should be ignored by AntreaProxy (traffic to these
+      # Services will not be load-balanced). Values can be a valid ClusterIP (e.g. 10.11.1.2) or a Service name
+      # with Namespace (e.g. kube-system/kube-dns)
+      #skipServices: []
   antrea-cni.conflist: |
     {
         "cniVersion":"0.3.0",
@@ -4054,7 +4058,7 @@ metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-b72h88gb7b
+  name: antrea-config-4d7ch86gch
   namespace: kube-system
 ---
 apiVersion: v1
@@ -4125,7 +4129,7 @@ spec:
             fieldRef:
               fieldPath: spec.serviceAccountName
         - name: ANTREA_CONFIG_MAP_NAME
-          value: antrea-config-b72h88gb7b
+          value: antrea-config-4d7ch86gch
         image: projects.registry.vmware.com/antrea/antrea-ubuntu:latest
         imagePullPolicy: IfNotPresent
         livenessProbe:
@@ -4176,7 +4180,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-b72h88gb7b
+          name: antrea-config-4d7ch86gch
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -4457,7 +4461,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-b72h88gb7b
+          name: antrea-config-4d7ch86gch
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d

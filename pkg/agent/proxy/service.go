@@ -31,8 +31,8 @@ type serviceChangesTracker struct {
 	initialized bool
 }
 
-func newServiceChangesTracker(recorder record.EventRecorder, ipFamily v1.IPFamily) *serviceChangesTracker {
-	return &serviceChangesTracker{tracker: k8sproxy.NewServiceChangeTracker(types.NewServiceInfo, ipFamily, recorder, nil)}
+func newServiceChangesTracker(recorder record.EventRecorder, ipFamily v1.IPFamily, skipServices []string) *serviceChangesTracker {
+	return &serviceChangesTracker{tracker: k8sproxy.NewServiceChangeTracker(types.NewServiceInfo, ipFamily, recorder, nil, skipServices)}
 }
 
 func (sh *serviceChangesTracker) OnServiceSynced() {

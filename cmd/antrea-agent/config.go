@@ -186,6 +186,10 @@ type AntreaProxyConfig struct {
 	// A string array of values which specifies the host IPv4/IPv6 addresses for NodePorts. Values may be valid IP blocks.
 	// (e.g. 1.2.3.0/24, 1.2.3.4/32). An empty string slice is meant to select all host IPv4/IPv6 addresses.
 	NodePortAddresses []string `yaml:"nodePortAddresses,omitempty"`
+	// An array of string values to specify a list of Services which should be ignored by AntreaProxy (traffic to these
+	// Services will not be load-balanced). Values can be a valid ClusterIP (e.g. 10.11.1.2) or a Service name
+	// with Namespace (e.g. kube-system/kube-dns)
+	SkipServices []string `yaml:"skipServices,omitempty"`
 }
 
 type WireGuardConfig struct {
