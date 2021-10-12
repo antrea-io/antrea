@@ -36,10 +36,8 @@ const (
 type ClusterClaim struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
-	// TODO: Remove the name as it is already part of ObjectMeta and its
-	// confusing to have two names
 	// Name of the ClusterClaim.
-	Name string `json:"name,omitempty"`
+	Name string `json:"name,omitempty"` // TODO: Remove the name as it is already part of ObjectMeta and its confusing to have two names
 	// Value of the ClusterClaim.
 	Value string `json:"value,omitempty"`
 }

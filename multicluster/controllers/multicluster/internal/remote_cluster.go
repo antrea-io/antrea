@@ -107,6 +107,7 @@ func NewRemoteCluster(clusterID common.ClusterID, clusterSetID common.ClusterSet
 		Scheme:             scheme,
 		MetricsBindAddress: "0",
 		Logger:             log.WithName("controller-runtime"),
+		Namespace:          clusterSetNamespace,
 	})
 	if err != nil {
 		log.V(1).Error(err, "unable to create new manager")
