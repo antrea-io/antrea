@@ -41,8 +41,8 @@ type NodePortData struct {
 }
 
 func (d *NodePortData) HasProtocol(protocol string) bool {
-	for _, p := range d.Protocols {
-		if p.Protocol == protocol {
+	for _, protocolSocketData := range d.Protocols {
+		if protocolSocketData.Protocol == protocol {
 			return true
 		}
 	}
@@ -50,12 +50,12 @@ func (d *NodePortData) HasProtocol(protocol string) bool {
 }
 
 func (d *NodePortData) DeleteProtocol(protocol string) error {
-	for i, p := range d.Protocols {
-		if p.Protocol == protocol {
-			d.Protocols = append(d.Protocols[:i], d.Protocols[i+1:]...)
-			if err := p.socket.Close(); err != nil {
-				return fmt.Errorf("error when releasing local port %d with protocol %s: %v", d.NodePort, p.Protocol, err)
+	for i, protocolSocketData := range d.Protocols {
+		if protocolSocketData.Protocol == protocol {
+			if err := protocolSocketData.socket.Close(); err != nil {
+				return fmt.Errorf("error when releasing local port %d with protocol %s: %v", d.NodePort, protocolSocketData.Protocol, err)
 			}
+			d.Protocols = append(d.Protocols[:i], d.Protocols[i+1:]...)
 			return nil
 		}
 	}
@@ -213,19 +213,21 @@ func (pt *PortTable) DeleteRule(podIP string, podPort int, protocol string) erro
 func (pt *PortTable) DeleteRulesForPod(podIP string) error {
 	pt.tableLock.Lock()
 	defer pt.tableLock.Unlock()
-	data := pt.getDataForPodIP(podIP)
-	for _, d := range data {
-		nodeport := d.NodePort
-		for _, p := range d.Protocols {
-			if err := pt.PodPortRules.DeleteRule(nodeport, podIP, d.PodPort, p.Protocol); err != nil {
+	podEntries := pt.getDataForPodIP(podIP)
+	for _, podEntry := range podEntries {
+		for i := 0; i < len(podEntry.Protocols); i++ {
+			protocolSocketData := podEntry.Protocols[i]
+			if err := pt.PodPortRules.DeleteRule(podEntry.NodePort, podIP, podEntry.PodPort, protocolSocketData.Protocol); err != nil {
 				return err
 			}
-			if err := p.socket.Close(); err != nil {
-				return fmt.Errorf("error when releasing local port %d with protocol %s: %v", d.NodePort, p.Protocol, err)
+			if err := protocolSocketData.socket.Close(); err != nil {
+				return fmt.Errorf("error when releasing local port %d with protocol %s: %v", podEntry.NodePort, protocolSocketData.Protocol, err)
 			}
+			podEntry.Protocols = append(podEntry.Protocols[:i], podEntry.Protocols[i+1:]...)
+			i--
 		}
-		delete(pt.NodePortTable, nodeport)
-		delete(pt.PodEndpointTable, podIPPortFormat(podIP, d.PodPort))
+		delete(pt.NodePortTable, podEntry.NodePort)
+		delete(pt.PodEndpointTable, podIPPortFormat(podIP, podEntry.PodPort))
 	}
 	return nil
 }
@@ -247,11 +249,12 @@ func (pt *PortTable) syncRules() error {
 	defer pt.tableLock.Unlock()
 	nplPorts := make([]rules.PodNodePort, 0, len(pt.NodePortTable))
 	for i := range pt.NodePortTable {
-		for _, protocol := range (*pt.NodePortTable[i]).Protocols {
+		entry := *pt.NodePortTable[i]
+		for _, protocol := range entry.Protocols {
 			nplPorts = append(nplPorts, rules.PodNodePort{
-				NodePort: (*pt.NodePortTable[i]).NodePort,
-				PodPort:  (*pt.NodePortTable[i]).PodPort,
-				PodIP:    (*pt.NodePortTable[i]).PodIP,
+				NodePort: entry.NodePort,
+				PodPort:  entry.PodPort,
+				PodIP:    entry.PodIP,
 				Protocol: protocol.Protocol,
 			})
 		}

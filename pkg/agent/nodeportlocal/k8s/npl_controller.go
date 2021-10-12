@@ -526,7 +526,7 @@ func (c *NPLController) handleAddUpdatePod(key string, obj interface{}) error {
 			for _, proto := range data.Protocols {
 				if _, exists := podPorts[util.BuildPortProto(fmt.Sprint(data.PodPort), proto.Protocol)]; !exists {
 					if err := c.portTable.DeleteRule(podIP, int(data.PodPort), proto.Protocol); err != nil {
-						return fmt.Errorf("failed to delete rule for Pod IP %s, Pod Port %d: %v", podIP, data.PodPort, err)
+						return fmt.Errorf("failed to delete rule for Pod IP %s, Pod Port %d, Protocol %s: %v", podIP, data.PodPort, proto.Protocol, err)
 					}
 				}
 			}
