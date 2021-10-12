@@ -39,13 +39,14 @@ import (
 	multiclusterv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
 	multiclustercontrollers "antrea.io/antrea/multicluster/controllers/multicluster"
 	"antrea.io/antrea/pkg/apiserver/certificate"
+	"antrea.io/antrea/pkg/util/env"
 	// +kubebuilder:scaffold:imports
 )
 
 var (
-	setupLog           = ctrl.Log.WithName("setup")
-	validationWebhooks = []string{"antrea-multicluster-validating-webhook-configuration"}
-	mutationWebhooks   = []string{"antrea-multicluster-mutating-webhook-configuration"}
+	setupLog                      = ctrl.Log.WithName("setup")
+	validationWebhooksNamePattern = "antrea-multicluster-%s%svalidating-webhook-configuration"
+	mutationWebhooksNamePattern   = "antrea-multicluster-%s%smutating-webhook-configuration"
 )
 
 const (
@@ -62,6 +63,21 @@ func init() {
 	//+kubebuilder:scaffold:scheme
 }
 
+func getValidationWebhooks(isLeader bool) []string {
+	if isLeader {
+		return []string{fmt.Sprintf(validationWebhooksNamePattern, env.GetPodNamespace(), "-")}
+	}
+	return []string{fmt.Sprintf(validationWebhooksNamePattern, "", "")}
+}
+
+func getMutationWebhooks(isLeader bool) []string {
+	if isLeader {
+		return []string{fmt.Sprintf(mutationWebhooksNamePattern, env.GetPodNamespace(), "-")}
+	}
+	return []string{fmt.Sprintf(mutationWebhooksNamePattern, "", "")}
+
+}
+
 func run(o *Options) error {
 	opts := zap.Options{
 		Development: true,
@@ -76,7 +92,7 @@ func run(o *Options) error {
 	}
 
 	secureServing := genericoptions.NewSecureServingOptions().WithLoopback()
-	caCertController, err := certificate.ApplyServerCert(o.SelfSignedCert, client, aggregatorClient, apiExtensionClient, secureServing, getCAConifg())
+	caCertController, err := certificate.ApplyServerCert(o.SelfSignedCert, client, aggregatorClient, apiExtensionClient, secureServing, getCAConifg(o.leader))
 	if err != nil {
 		return fmt.Errorf("error applying server cert: %v", err)
 	}
@@ -88,6 +104,11 @@ func run(o *Options) error {
 		o.options.CertDir = selfSignedCertDir
 	} else {
 		o.options.CertDir = certDir
+	}
+	// TODO: These leader checks should go once we have a separate command for leader and member controller
+	if o.leader {
+		// on the leader we want the reconciler to run for a given namspace instead of cluster scope
+		o.options.Namespace = env.GetPodNamespace()
 	}
 	mgr, err := ctrl.NewManager(k8sConfig, o.options)
 	if err != nil {
@@ -205,7 +226,7 @@ func createClients(kubeConfig *rest.Config) (
 	return client, aggregatorClient, apiExtensionClient, nil
 }
 
-func getCAConifg() certificate.CAConfig {
+func getCAConifg(isLeader bool) certificate.CAConfig {
 	return certificate.CAConfig{
 		CAConfigMapName: configMapName,
 		// the key pair name has to be "tls" https://github.com/kubernetes-sigs/controller-runtime/blob/master/pkg/manager/manager.go#L221
@@ -214,8 +235,8 @@ func getCAConifg() certificate.CAConfig {
 		AntreaServiceName:          serviceName,
 		SelfSignedCertDir:          selfSignedCertDir,
 		APIServiceNames:            []string{},
-		MutationWebhooks:           mutationWebhooks,
-		ValidatingWebhooks:         validationWebhooks,
+		MutationWebhooks:           getMutationWebhooks(isLeader),
+		ValidatingWebhooks:         getValidationWebhooks(isLeader),
 		OptionalMutationWebhooks:   []string{},
 		CrdsWithConversionWebhooks: []string{},
 		CertReadyTimeout:           2 * time.Minute,
