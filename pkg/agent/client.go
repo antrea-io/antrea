@@ -154,7 +154,7 @@ func inClusterConfig(caBundle []byte) (*rest.Config, error) {
 
 	tlsClientConfig := rest.TLSClientConfig{
 		CAData:     caBundle,
-		ServerName: cert.GetAntreaServerNames()[0],
+		ServerName: cert.GetAntreaServerNames(cert.DefaultServiceName)[0],
 	}
 
 	return &rest.Config{

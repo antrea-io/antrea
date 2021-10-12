@@ -18,7 +18,6 @@ import (
 
 	multiclusterv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
 	"antrea.io/antrea/multicluster/controllers/multicluster/common"
-
 )
 
 var (
@@ -80,7 +79,7 @@ type remoteCluster struct {
  * A remote cluster is a leader in the ClusterSet Spec. This creates a remoteCluster instance which will
  * use the secret and access credentials for the leader to connect to its common area.
  */
-func  NewRemoteCluster(clusterID common.ClusterID, clusterSetID common.ClusterSetID, url string, secretName string,
+func NewRemoteCluster(clusterID common.ClusterID, clusterSetID common.ClusterSetID, url string, secretName string,
 	scheme *runtime.Scheme, log logr.Logger, remoteClusterManager RemoteClusterManager, clusterSetNamespace string,
 	configNamespace string) (common.CommonArea, error) {
 	log = log.WithName("remote-cluster-" + string(clusterID))
