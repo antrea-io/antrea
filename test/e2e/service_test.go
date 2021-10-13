@@ -53,7 +53,7 @@ func testClusterIP(t *testing.T, isIPv6 bool) {
 	}
 	hostNetworkClients := make(map[string]string)
 	for idx, node := range nodes {
-		podName, _, _ := createAndWaitForPod(t, data, data.createAgnhostPodOnNode, fmt.Sprintf("hostnet-client-%d-", idx), node, testNamespace, false)
+		podName, _, _ := createAndWaitForPod(t, data, data.createAgnhostPodOnNode, fmt.Sprintf("hostnet-client-%d-", idx), node, testNamespace, true)
 		require.NoError(t, err)
 		hostNetworkClients[node] = podName
 	}
@@ -85,7 +85,7 @@ func testClusterIPCases(t *testing.T, data *TestData, url string, clients, hostN
 	t.Run("All Nodes can access Service ClusterIP", func(t *testing.T) {
 		skipIfProxyAllDisabled(t, data)
 		skipIfKubeProxyEnabled(t, data)
-		for node, pod := range clients {
+		for node, pod := range hostNetworkClients {
 			testClusterIPFromPod(t, data, url, node, pod, true)
 		}
 	})
