@@ -39,6 +39,7 @@ jobs:
       with:
         # Check out the pull request HEAD
         ref: ${{ github.event.pull_request.head.sha }}
+        token: ${{ secrets.ANTREA_BOT_WRITE_PAT }}
     - name: Run go mod tidy
       # the checks above (Github actor and PR labels) ensure that a malicious
       # actor cannot open a PR with a modified "tidy" Makefile target and
