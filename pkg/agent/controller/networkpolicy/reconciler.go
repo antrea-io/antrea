@@ -21,11 +21,9 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent/interfacestore"
@@ -238,9 +236,7 @@ func newReconciler(ofClient openflow.Client,
 // RunIDAllocatorWorker runs the worker that deletes the rules from the cache in
 // idAllocator.
 func (r *reconciler) RunIDAllocatorWorker(stopCh <-chan struct{}) {
-	defer r.idAllocator.deleteQueue.ShutDown()
-	go wait.Until(r.idAllocator.worker, time.Second, stopCh)
-	<-stopCh
+	r.idAllocator.runWorker(stopCh)
 }
 
 // Reconcile checks whether the provided rule have been enforced or not, and
