@@ -13,3 +13,14 @@
     verbs:
     - get
     - update
+- op: add
+  path: /rules/0
+  value:
+    apiGroups:
+    - ""
+    resources:
+    - secrets
+    verbs:
+    - get
+    - list
+    - watch

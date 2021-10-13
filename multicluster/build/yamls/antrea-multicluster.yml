@@ -1409,6 +1409,14 @@ metadata:
   name: antrea-multicluster-controller-role
 rules:
 - apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
   - admissionregistration.k8s.io
   resourceNames:
   - antrea-multicluster-mutating-webhook-configuration
@@ -1419,6 +1427,32 @@ rules:
   verbs:
   - get
   - update
+- apiGroups:
+  - ""
+  resources:
+  - endpoints
+  verbs:
+  - get
+  - list
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - nodes
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - services
+  verbs:
+  - get
+  - list
+  - update
+  - watch
 - apiGroups:
   - multicluster.crd.antrea.io
   resources:
@@ -1601,6 +1635,18 @@ rules:
   - get
   - patch
   - update
+- apiGroups:
+  - multicluster.x-k8s.io
+  resources:
+  - serviceexports
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -1627,38 +1673,6 @@ rules:
   - memberclusterannounces/status
   verbs:
   - get
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  labels:
-    app: antrea
-  name: antrea-multicluster-metrics-reader
-rules:
-- nonResourceURLs:
-  - /metrics
-  verbs:
-  - get
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  labels:
-    app: antrea
-  name: antrea-multicluster-proxy-role
-rules:
-- apiGroups:
-  - authentication.k8s.io
-  resources:
-  - tokenreviews
-  verbs:
-  - create
-- apiGroups:
-  - authorization.k8s.io
-  resources:
-  - subjectaccessreviews
-  verbs:
-  - create
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -1707,21 +1721,6 @@ subjects:
   name: antrea-multicluster-controller
   namespace: kube-system
 ---
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  labels:
-    app: antrea
-  name: antrea-multicluster-proxy-rolebinding
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: antrea-multicluster-proxy-role
-subjects:
-- kind: ServiceAccount
-  name: antrea-multicluster-controller
-  namespace: kube-system
----
 apiVersion: v1
 data:
   controller_manager_config.yaml: |
@@ -1745,23 +1744,6 @@ metadata:
     app: antrea
   name: antrea-multicluster-manager-config
   namespace: kube-system
----
-apiVersion: v1
-kind: Service
-metadata:
-  labels:
-    app: antrea
-    control-plane: antrea-multicluster-controller
-  name: antrea-multicluster-controller-metrics-service
-  namespace: kube-system
-spec:
-  ports:
-  - name: https
-    port: 8443
-    targetPort: https
-  selector:
-    app: antrea
-    control-plane: antrea-multicluster-controller
 ---
 apiVersion: v1
 kind: Service

@@ -80,7 +80,7 @@ type remoteCluster struct {
  * use the secret and access credentials for the leader to connect to its common area.
  */
 func NewRemoteCluster(clusterID common.ClusterID, clusterSetID common.ClusterSetID, url string, secretName string,
-	scheme *runtime.Scheme, log logr.Logger, remoteClusterManager RemoteClusterManager, clusterSetNamespace string,
+	scheme *runtime.Scheme, log logr.Logger, remoteClusterManager *RemoteClusterManager, clusterSetNamespace string,
 	configNamespace string) (common.CommonArea, error) {
 	log = log.WithName("remote-cluster-" + string(clusterID))
 	log.Info("Create remote cluster for", "cluster", clusterID)
@@ -127,10 +127,10 @@ func NewRemoteCluster(clusterID common.ClusterID, clusterSetID common.ClusterSet
 		scheme:               scheme,
 		Namespace:            clusterSetNamespace,
 		connected:            false,
-		remoteClusterManager: remoteClusterManager,
+		remoteClusterManager: *remoteClusterManager,
 	}
 
-	remoteClusterManager.AddRemoteCluster(cluster)
+	(*remoteClusterManager).AddRemoteCluster(cluster)
 
 	return cluster, nil
 }
@@ -174,6 +174,11 @@ func getSecretCACrtAndToken(namespace string, secretName string) ([]byte, []byte
 	}
 
 	return caData, token, nil
+}
+
+// SetSecretClient is for testing purpose
+func SetSecretClient(client client.Client) {
+	secretClient = client
 }
 
 func (r *remoteCluster) SendMemberAnnounce() error {

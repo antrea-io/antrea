@@ -18,9 +18,8 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"time"
-
-	"k8s.io/klog/v2/klogr"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
@@ -31,10 +30,12 @@ import (
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	"k8s.io/client-go/rest"
+	"k8s.io/klog/v2/klogr"
 	aggregatorclientset "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	k8smcsv1alpha1 "sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
 
 	multiclusterv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
 	multiclustercontrollers "antrea.io/antrea/multicluster/controllers/multicluster"
@@ -57,7 +58,7 @@ const (
 
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
-
+	utilruntime.Must(k8smcsv1alpha1.AddToScheme(scheme))
 	utilruntime.Must(multiclusterv1alpha1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 }
@@ -109,15 +110,29 @@ func run(o *Options) error {
 		setupLog.Error(err, "unable to create controller", "controller", "MemberClusterAnnounce")
 		return fmt.Errorf("unable to create MemberClusterAnnounce controller, err: %v", err)
 	}
-	if err = (&multiclustercontrollers.ClusterSetReconciler{
+
+	clusterSetReconciler := &multiclustercontrollers.ClusterSetReconciler{
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
 		Log:      klogr.New().WithName("controllers"),
 		IsLeader: o.leader,
-	}).SetupWithManager(mgr); err != nil {
+	}
+	if err = clusterSetReconciler.SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "ClusterSet")
 		return fmt.Errorf("unable to create ClusterSet controller, err: %v", err)
 	}
+
+	remoteMgr := &(clusterSetReconciler.RemoteClusterManager)
+	localMgr := &(clusterSetReconciler.LocalClusterManager)
+	svcExportReconciler := multiclustercontrollers.NewServiceExportReconciler(
+		mgr.GetClient(),
+		mgr.GetScheme(),
+		remoteMgr)
+	if err = svcExportReconciler.SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "ServiceExport")
+		os.Exit(1)
+	}
+
 	if err = (&multiclustercontrollers.ResourceExportFilterReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
@@ -144,12 +159,14 @@ func run(o *Options) error {
 		setupLog.Error(err, "unable to create webhook", "webhook", "MemberClusterAnnounce")
 		return fmt.Errorf("unable to create MemberClusterAnnounce webhook, err: %v", err)
 	}
-	if err = (&multiclustercontrollers.ResourceExportReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
+	resExportReconciler := multiclustercontrollers.NewResourceExportReconciler(
+		mgr.GetClient(),
+		mgr.GetScheme(),
+		localMgr,
+	)
+	if err = resExportReconciler.SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "ResourceExport")
-		return fmt.Errorf("unable to create ResourceExport controller, err: %v", err)
+		os.Exit(1)
 	}
 	if err = (&multiclustercontrollers.ResourceImportReconciler{
 		Client: mgr.GetClient(),

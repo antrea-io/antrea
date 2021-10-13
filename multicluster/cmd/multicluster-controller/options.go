@@ -15,11 +15,12 @@
 package main
 
 import (
-	mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
 	"encoding/json"
 	"fmt"
-	"github.com/spf13/pflag"
 	"io/ioutil"
+
+	mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
+	"github.com/spf13/pflag"
 	"k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -48,7 +49,7 @@ func (o *Options) complete(args []string) error {
 		// TODO: remove this and just use the options from ctrlConfig
 		options, err = options.AndFrom(ctrl.ConfigFile().AtPath(o.configFile).OfKind(ctrlConfig))
 		if err != nil {
-			return fmt.Errorf("fail to load options from configuration file %s", o.configFile)
+			return fmt.Errorf("fail to load options from configuration file %s, err: %v", o.configFile, err)
 		}
 		o.options = options
 		data, err := ioutil.ReadFile(o.configFile)

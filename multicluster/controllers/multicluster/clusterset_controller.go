@@ -206,18 +206,16 @@ func (r *ClusterSetReconciler) updateMultiClusterSetOnMemberCluster(clusterSet *
 	if r.RemoteClusterManager == nil {
 		r.RemoteClusterManager = internal.NewRemoteClusterManager(r.clusterSetID, r.Log, r.clusterID)
 		go func() {
-			r.Log.Info("Starting remote cluster manager", "clusterSetID", r.clusterSetID)
-			var err error
-			err = r.RemoteClusterManager.Start()
+			err := r.RemoteClusterManager.Start()
 			if err != nil {
 				r.Log.Error(err, "Error starting remote cluster manager")
+				r.mutex.Lock()
+				r.RemoteClusterManager = nil
+				r.clusterSetID = common.INVALID_CLUSTER_SET_ID
+				r.clusterID = common.INVALID_CLUSTER_ID
+				r.clusterSetConfig = nil
+				r.mutex.Unlock()
 			}
-			r.mutex.Lock()
-			r.RemoteClusterManager = nil
-			r.clusterSetID = common.INVALID_CLUSTER_SET_ID
-			r.clusterID = common.INVALID_CLUSTER_ID
-			r.clusterSetConfig = nil
-			r.mutex.Unlock()
 		}()
 	}
 
@@ -257,7 +255,7 @@ func (r *ClusterSetReconciler) updateMultiClusterSetOnMemberCluster(clusterSet *
 			defer wg.Done()
 
 			_, err := internal.NewRemoteCluster(clusterID, r.clusterSetID, url, secretName, r.Scheme,
-				r.Log, r.RemoteClusterManager, clusterSet.Spec.Namespace, clusterSet.GetNamespace())
+				r.Log, &r.RemoteClusterManager, clusterSet.Spec.Namespace, clusterSet.GetNamespace())
 			if err != nil {
 				r.Log.Error(err, "Unable to create remote cluster", "clusterID", clusterID)
 			} else {
