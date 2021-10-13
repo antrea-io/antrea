@@ -1,4 +1,4 @@
-name: Test
+name: Review manager
 on:
   # The pull_request_target workflow trigger presents a security risk when
   # combined with an explicit checkout of an untrusted PR. This is not the case
@@ -20,14 +20,14 @@ jobs:
     steps:
     - name: Check-out code
       uses: actions/checkout@v2
-    - uses: antrea-io/review-manager@v0.3.0
+    - uses: antrea-io/review-manager@v0.3.1
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
         area_ownership_file: '.github/AREA-OWNERS'
         min_approving_reviews_total: 2
         min_approving_reviews_per_area: 1
         fail_if_cannot_be_merged: false # temporary for initial testing
-        label_on_success: 'can-be-merged'
+        label_on_success: '' # cannot use a label as pull_request_review workflows do not have a write token
         require_area_label: false
         succeed_if_maintainer_approves: false
         maintainers_are_universal_approvers: true
