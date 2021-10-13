@@ -372,7 +372,7 @@ func NPLTestPodAddMultiPort(t *testing.T) {
 	checkNPLRulesForPod(t, testData, r, nplAnnotations, antreaPod, testPodIP, false)
 }
 
-// NPLTestPodAddMultiProtocol tests NodePortLocal functionalities for a Pod with single port multiple protocols.
+// NPLTestPodAddMultiProtocol tests NodePortLocal functionalities for a Pod using a single port with multiple protocols.
 func NPLTestPodAddMultiProtocol(t *testing.T) {
 	r := require.New(t)
 

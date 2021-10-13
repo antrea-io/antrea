@@ -215,16 +215,15 @@ func (pt *PortTable) DeleteRulesForPod(podIP string) error {
 	defer pt.tableLock.Unlock()
 	podEntries := pt.getDataForPodIP(podIP)
 	for _, podEntry := range podEntries {
-		for i := 0; i < len(podEntry.Protocols); i++ {
-			protocolSocketData := podEntry.Protocols[i]
+		for len(podEntry.Protocols) > 0 {
+			protocolSocketData := podEntry.Protocols[0]
 			if err := pt.PodPortRules.DeleteRule(podEntry.NodePort, podIP, podEntry.PodPort, protocolSocketData.Protocol); err != nil {
 				return err
 			}
 			if err := protocolSocketData.socket.Close(); err != nil {
 				return fmt.Errorf("error when releasing local port %d with protocol %s: %v", podEntry.NodePort, protocolSocketData.Protocol, err)
 			}
-			podEntry.Protocols = append(podEntry.Protocols[:i], podEntry.Protocols[i+1:]...)
-			i--
+			podEntry.Protocols = podEntry.Protocols[1:]
 		}
 		delete(pt.NodePortTable, podEntry.NodePort)
 		delete(pt.PodEndpointTable, podIPPortFormat(podIP, podEntry.PodPort))
