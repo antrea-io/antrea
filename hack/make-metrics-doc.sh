@@ -19,6 +19,9 @@
 # When a doc filename parameter is specified, the script updates the metrics list within the document with the metrics
 # from the Kind deployment.
 
+set -eo pipefail
+THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+
 function exit_handler() {
     echo "Cleaning up..."
     if [ -f $certfile ]; then
@@ -26,8 +29,6 @@ function exit_handler() {
         $THIS_DIR/../ci/kind/kind-setup.sh destroy kind
     fi
 }
-
-trap exit_handler INT EXIT
 
 function get_metrics_url() {
         pod_name=$1
@@ -73,18 +74,34 @@ function format_metrics() {
         done
 }
 
-if [ "$1" == "-h" ] || [ "$1" == "--help" ]; then
-        echo 'Usage: make-metrics-doc.sh [-h|--help|<metrics_document>]'
-        exit 0
-fi
-metrics_doc=$1
+function print_usage {
+    echo 'Usage: make-metrics-doc.sh [-h|--help|<metrics_document>]'
+    exit 0
+}
+
+metrics_doc=""
+while [[ $# -gt 0 ]]
+do
+key="$1"
+
+case $key in
+    -h|--help)
+    print_usage
+    exit 0
+    ;;
+    *)    # unknown option
+    metrics_doc="$1"
+    break
+    ;;
+esac
+done
+
 if [ "$metrics_doc" != "" ] && [ ! -f $metrics_doc ]; then
         echo "Metrics document not found at $metrics_doc"
         exit 1
 fi
 
-set -eo pipefail
-THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+trap exit_handler INT EXIT
 
 # Initialize a Kind Antrea cluster
 $THIS_DIR/../ci/kind/kind-setup.sh create kind --prometheus --num-workers 0
@@ -94,7 +111,9 @@ kubectl -n kube-system wait --for=condition=ready --timeout=120s pod -l app=antr
 sleep 30
 
 # Extract Antrea credentials
-certfile=$(mktemp /tmp/cacert.XXXXXX.ca)
+certfile=$(mktemp /tmp/cacert.XXXXXX)
+mv "${certfile}" "${certfile}.ca"
+certfile="${certfile}.ca"
 secret_name=$(kubectl get serviceaccounts -n monitoring prometheus -o jsonpath="{.secrets[*].name}")
 kubectl get secrets -n monitoring $secret_name -o jsonpath="{.data.ca\.crt}" | base64 -d > $certfile
 token=$(kubectl get secrets -n monitoring $secret_name --template "{{.data.token}}" | base64 -d)
