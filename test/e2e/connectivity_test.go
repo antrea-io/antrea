@@ -122,7 +122,7 @@ func (data *TestData) testPodConnectivitySameNode(t *testing.T) {
 	t.Logf("Creating %d agnhost Pods on '%s'", numPods, workerNode)
 	for i := range podInfos {
 		podInfos[i].os = clusterInfo.nodesOS[workerNode]
-		if err := data.createAgnhostPodOnNode(podInfos[i].name, testNamespace, workerNode); err != nil {
+		if err := data.createAgnhostPodOnNode(podInfos[i].name, testNamespace, workerNode, false); err != nil {
 			t.Fatalf("Error when creating agnhost test Pod '%s': %v", podInfos[i], err)
 		}
 		defer deletePodWrapper(t, data, podInfos[i].name)
