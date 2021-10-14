@@ -39,9 +39,10 @@ const (
 
 // NPLAnnotation is the structure used for setting NodePortLocal annotation on the Pods.
 type NPLAnnotation struct {
-	PodPort  int    `json:"podPort"`
-	NodeIP   string `json:"nodeIP"`
-	NodePort int    `json:"nodePort"`
+	PodPort   int      `json:"podPort"`
+	NodeIP    string   `json:"nodeIP"`
+	NodePort  int      `json:"nodePort"`
+	Protocols []string `json:"protocols"`
 }
 
 func toJSON(serialize interface{}) string {
