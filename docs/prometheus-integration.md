@@ -157,9 +157,9 @@ when a flow is rejected/dropped by network policy.
 - **antrea_agent_egress_networkpolicy_rule_count:** Number of egress
 NetworkPolicy rules on local Node which are managed by the Antrea Agent.
 - **antrea_agent_flow_collector_reconnection_count:** Number of re-connections
-between Flow Exporter and flow collector. This metric gets updated whenever the
-connection is re-established between the Flow Exporter and the flow collector
-(e.g.  the Flow Aggregator).
+between Flow Exporter and flow collector. This metric gets updated whenever
+the connection is re-established between the Flow Exporter and the flow
+collector (e.g. the Flow Aggregator).
 - **antrea_agent_ingress_networkpolicy_rule_count:** Number of ingress
 NetworkPolicy rules on local Node which are managed by the Antrea Agent.
 - **antrea_agent_local_pod_count:** Number of Pods on local Node which are

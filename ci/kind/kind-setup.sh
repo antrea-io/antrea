@@ -257,7 +257,7 @@ networking:
 nodes:
 - role: control-plane
 EOF
-  for i in $(seq 1 $NUM_WORKERS); do
+  for (( i=0; i<$NUM_WORKERS; i++ )); do
     echo -e "- role: worker" >> $config_file
   done
   kind create cluster --name $CLUSTER_NAME --config $config_file
