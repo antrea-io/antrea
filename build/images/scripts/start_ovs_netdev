@@ -118,7 +118,7 @@ function quit {
     # when OVS is stopped.
     del_br_phy
     stop_ovs
-    # kill background sleep process
+    # terminate background sleep process
     if [ "$SLEEP_PID" != "" ]; then kill $SLEEP_PID > /dev/null 2>&1 || true; fi
     exit 0
 }

@@ -31,7 +31,7 @@ Set-NetIPInterface -ifAlias $INTERFACE_TO_ADD_SERVICE_IP -Forwarding Enabled
 
 if ($StopKubeProxyOnCreation) {
   # Restart kube-proxy to ensure that the newly created interface can be used.
-  # Kill kube-proxy and the process will be automatically restarted by the kube-proxy Pod.
+  # Terminate kube-proxy and the process will be automatically restarted by the kube-proxy Pod.
   Write-Host "stopping running kube-proxy process if exists..."
   taskkill /fi "IMAGENAME eq rancher-wins-kube-proxy.exe" /f
 }
