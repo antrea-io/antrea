@@ -130,6 +130,7 @@ func run(o *Options) error {
 	go flowAggregator.Run(stopCh, &wg)
 
 	informerFactory.Start(stopCh)
+	informerFactory.WaitForCacheSync(stopCh)
 
 	<-stopCh
 	klog.Infof("Stopping flow aggregator")
