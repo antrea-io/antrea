@@ -226,7 +226,7 @@ func testDeletePod(t *testing.T, data *TestData) {
 	podName := randName("test-pod-")
 
 	t.Logf("Creating an agnhost test Pod on '%s'", nodeName)
-	if err := data.createAgnhostPodOnNode(podName, testNamespace, nodeName); err != nil {
+	if err := data.createAgnhostPodOnNode(podName, testNamespace, nodeName, false); err != nil {
 		t.Fatalf("Error when creating agnhost test Pod: %v", err)
 	}
 	if err := data.podWaitForRunning(defaultTimeout, podName, testNamespace); err != nil {
