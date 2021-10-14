@@ -63,17 +63,17 @@ func (mr *MockPodPortRulesMockRecorder) AddAllRules(arg0 interface{}) *gomock.Ca
 }
 
 // AddRule mocks base method
-func (m *MockPodPortRules) AddRule(arg0 int, arg1 string, arg2 int) error {
+func (m *MockPodPortRules) AddRule(arg0 int, arg1 string, arg2 int, arg3 string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AddRule", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "AddRule", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // AddRule indicates an expected call of AddRule
-func (mr *MockPodPortRulesMockRecorder) AddRule(arg0, arg1, arg2 interface{}) *gomock.Call {
+func (mr *MockPodPortRulesMockRecorder) AddRule(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddRule", reflect.TypeOf((*MockPodPortRules)(nil).AddRule), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddRule", reflect.TypeOf((*MockPodPortRules)(nil).AddRule), arg0, arg1, arg2, arg3)
 }
 
 // DeleteAllRules mocks base method
@@ -91,17 +91,17 @@ func (mr *MockPodPortRulesMockRecorder) DeleteAllRules() *gomock.Call {
 }
 
 // DeleteRule mocks base method
-func (m *MockPodPortRules) DeleteRule(arg0 int, arg1 string, arg2 int) error {
+func (m *MockPodPortRules) DeleteRule(arg0 int, arg1 string, arg2 int, arg3 string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteRule", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "DeleteRule", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // DeleteRule indicates an expected call of DeleteRule
-func (mr *MockPodPortRulesMockRecorder) DeleteRule(arg0, arg1, arg2 interface{}) *gomock.Call {
+func (mr *MockPodPortRulesMockRecorder) DeleteRule(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteRule", reflect.TypeOf((*MockPodPortRules)(nil).DeleteRule), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteRule", reflect.TypeOf((*MockPodPortRules)(nil).DeleteRule), arg0, arg1, arg2, arg3)
 }
 
 // Init mocks base method
