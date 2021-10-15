@@ -29,6 +29,7 @@ import (
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/openflow"
 	"antrea.io/antrea/pkg/agent/route"
+	"antrea.io/antrea/pkg/agent/secondarynetwork/cnipodcache"
 	"antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/agent/util"
 	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
@@ -65,6 +66,8 @@ type podConfigurator struct {
 	// entityUpdates is a channel for notifying updates of local endpoints / entities (most notably Pod)
 	// to other components which may benefit from this information, i.e NetworkPolicyController.
 	entityUpdates chan<- types.EntityReference
+	// consumed by secondary network creation.
+	podInfoStore cnipodcache.CNIPodInfoStore
 }
 
 func newPodConfigurator(
@@ -76,6 +79,7 @@ func newPodConfigurator(
 	ovsDatapathType ovsconfig.OVSDatapathType,
 	isOvsHardwareOffloadEnabled bool,
 	entityUpdates chan<- types.EntityReference,
+	podInfoStore cnipodcache.CNIPodInfoStore,
 ) (*podConfigurator, error) {
 	ifConfigurator, err := newInterfaceConfigurator(ovsDatapathType, isOvsHardwareOffloadEnabled)
 	if err != nil {
@@ -89,6 +93,7 @@ func newPodConfigurator(
 		gatewayMAC:      gatewayMAC,
 		ifConfigurator:  ifConfigurator,
 		entityUpdates:   entityUpdates,
+		podInfoStore:    podInfoStore,
 	}, nil
 }
 
