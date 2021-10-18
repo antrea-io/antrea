@@ -31,16 +31,15 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 
 	"antrea.io/antrea/pkg/agent/nodeportlocal/k8s"
+	npltesting "antrea.io/antrea/pkg/agent/nodeportlocal/testing"
 )
 
 const (
-	defaultStartPort   = 61000
-	defaultEndPort     = 62000
-	updatedStartPort   = 63000
-	updatedEndPort     = 64000
-	defaultTargetPort  = 80
-	defaultProtocolTCP = corev1.ProtocolTCP
-	svcProtocolUDP     = corev1.ProtocolUDP
+	defaultStartPort  = 61000
+	defaultEndPort    = 62000
+	updatedStartPort  = 63000
+	updatedEndPort    = 64000
+	defaultTargetPort = 80
 )
 
 type nplRuleData struct {
@@ -48,6 +47,10 @@ type nplRuleData struct {
 	podPort  int
 	podIP    string
 	protocol string
+}
+
+func newExpectedNPLAnnotations(nplStartPort, nplEndPort int) *npltesting.ExpectedNPLAnnotations {
+	return npltesting.NewExpectedNPLAnnotations(nil, nplStartPort, nplEndPort)
 }
 
 // TestNodePortLocal is the top-level test which contains all subtests for
@@ -235,24 +238,6 @@ func updateNPLPortRangeInConfigmap(t *testing.T, data *TestData, newStartPort, n
 	}
 }
 
-func validatePortsInAnnotation(t *testing.T, r *require.Assertions, nplAnnotations []k8s.NPLAnnotation, start, end int, targetPortsProtocols map[int]sets.String) {
-	require.Equal(t, len(targetPortsProtocols), len(nplAnnotations))
-	for i := range nplAnnotations {
-		podPort := nplAnnotations[i].PodPort
-		protocols := sets.NewString(nplAnnotations[i].Protocols...)
-		targetProtocols, podPortInTargetPort := targetPortsProtocols[podPort]
-		r.True(podPortInTargetPort, "Port %d in Pod annotation not found in set target ports :%v from Services", podPort, targetPortsProtocols)
-		r.True(protocols.Equal(targetProtocols), "Protocols %v in Pod annotation not found in set target protocols :%v from Services", protocols, targetProtocols)
-		delete(targetPortsProtocols, podPort)
-
-		nodePort := nplAnnotations[i].NodePort
-		if nodePort > end || nodePort < start {
-			t.Fatalf("Node port %d not in range: %d - %d", nodePort, start, end)
-		}
-	}
-	r.Emptyf(targetPortsProtocols, "Target ports %v not found in Pod annotation", targetPortsProtocols)
-}
-
 func testNPLAddPod(t *testing.T, data *TestData) {
 	enableNPLInConfigmap(t, data)
 	t.Run("NPLTestMultiplePods", NPLTestMultiplePods)
@@ -294,13 +279,12 @@ func NPLTestMultiplePods(t *testing.T) {
 	antreaPod, err := testData.getAntreaPodOnNode(node)
 	r.NoError(err, "Error when getting Antrea Agent Pod on Node '%s'", node)
 
-	targetProtocols := sets.NewString(protocolToString(defaultProtocolTCP))
+	expectedAnnotations := newExpectedNPLAnnotations(defaultStartPort, defaultEndPort).Add(nil, defaultTargetPort, "tcp")
 	for _, testPodName := range testPods {
-		targetPortsProtocols := map[int]sets.String{defaultTargetPort: targetProtocols}
 		nplAnnotations, testPodIP := getNPLAnnotations(t, testData, r, testPodName)
 
 		checkNPLRulesForPod(t, testData, r, nplAnnotations, antreaPod, testPodIP, true)
-		validatePortsInAnnotation(t, r, nplAnnotations, defaultStartPort, defaultEndPort, targetPortsProtocols)
+		expectedAnnotations.Check(t, nplAnnotations)
 		checkTrafficForNPL(testData, r, nplAnnotations, clientName)
 
 		testData.deletePod(testNamespace, testPodName)
@@ -320,10 +304,10 @@ func NPLTestPodAddMultiPort(t *testing.T) {
 	selector := make(map[string]string)
 	selector["app"] = "agnhost"
 	ipFamily := corev1.IPv4Protocol
-	testData.createServiceWithAnnotations("agnhost1", 80, 80, defaultProtocolTCP, selector, false, false, corev1.ServiceTypeClusterIP, &ipFamily, annotation)
-	testData.createServiceWithAnnotations("agnhost2", 80, 8080, defaultProtocolTCP, selector, false, false, corev1.ServiceTypeClusterIP, &ipFamily, annotation)
-	targetProtocols := sets.NewString(protocolToString(defaultProtocolTCP))
-	targetPortsProtocols := map[int]sets.String{80: targetProtocols, 8080: targetProtocols}
+	testData.createServiceWithAnnotations("agnhost1", 80, 80, corev1.ProtocolTCP, selector, false, false, corev1.ServiceTypeClusterIP, &ipFamily, annotation)
+	testData.createServiceWithAnnotations("agnhost2", 80, 8080, corev1.ProtocolTCP, selector, false, false, corev1.ServiceTypeClusterIP, &ipFamily, annotation)
+	expectedAnnotations := newExpectedNPLAnnotations(defaultStartPort, defaultEndPort).
+		Add(nil, 80, "tcp").Add(nil, 8080, "tcp")
 
 	podcmd := "porter"
 
@@ -339,12 +323,12 @@ func NPLTestPodAddMultiPort(t *testing.T) {
 		{
 			Name:          "http1",
 			ContainerPort: 80,
-			Protocol:      defaultProtocolTCP,
+			Protocol:      corev1.ProtocolTCP,
 		},
 		{
 			Name:          "http2",
 			ContainerPort: 8080,
-			Protocol:      defaultProtocolTCP,
+			Protocol:      corev1.ProtocolTCP,
 		},
 	}, false, nil)
 
@@ -363,7 +347,7 @@ func NPLTestPodAddMultiPort(t *testing.T) {
 	r.NoError(err, "Error when getting Antrea Agent Pod on Node '%s'", node)
 
 	checkNPLRulesForPod(t, testData, r, nplAnnotations, antreaPod, testPodIP, true)
-	validatePortsInAnnotation(t, r, nplAnnotations, defaultStartPort, defaultEndPort, targetPortsProtocols)
+	expectedAnnotations.Check(t, nplAnnotations)
 	checkTrafficForNPL(testData, r, nplAnnotations, clientName)
 
 	testData.deletePod(testNamespace, testPodName)
@@ -384,10 +368,10 @@ func NPLTestPodAddMultiProtocol(t *testing.T) {
 	selector := make(map[string]string)
 	selector["app"] = "agnhost"
 	ipFamily := corev1.IPv4Protocol
-	testData.createServiceWithAnnotations("agnhost1", 80, 8080, defaultProtocolTCP, selector, false, false, corev1.ServiceTypeClusterIP, &ipFamily, annotation)
-	testData.createServiceWithAnnotations("agnhost2", 80, 8080, svcProtocolUDP, selector, false, false, corev1.ServiceTypeClusterIP, &ipFamily, annotation)
-	targetProtocols := sets.NewString(protocolToString(defaultProtocolTCP), protocolToString(svcProtocolUDP))
-	targetPortsProtocols := map[int]sets.String{8080: targetProtocols}
+	testData.createServiceWithAnnotations("agnhost1", 80, 8080, corev1.ProtocolTCP, selector, false, false, corev1.ServiceTypeClusterIP, &ipFamily, annotation)
+	testData.createServiceWithAnnotations("agnhost2", 80, 8080, corev1.ProtocolUDP, selector, false, false, corev1.ServiceTypeClusterIP, &ipFamily, annotation)
+	expectedAnnotations := newExpectedNPLAnnotations(defaultStartPort, defaultEndPort).
+		Add(nil, 8080, "tcp").Add(nil, 8080, "udp")
 
 	// Creating a Pod using agnhost image to support multiple protocols, instead of nginx.
 	cmd := []string{"/bin/bash", "-c"}
@@ -419,7 +403,8 @@ func NPLTestPodAddMultiProtocol(t *testing.T) {
 	r.NoError(err, "Error when getting Antrea Agent Pod on Node '%s'", node)
 
 	checkNPLRulesForPod(t, testData, r, nplAnnotations, antreaPod, testPodIP, true)
-	validatePortsInAnnotation(t, r, nplAnnotations, defaultStartPort, defaultEndPort, targetPortsProtocols)
+
+	expectedAnnotations.Check(t, nplAnnotations)
 	checkTrafficForNPL(testData, r, nplAnnotations, clientName)
 
 	testData.deletePod(testNamespace, testPodName)
@@ -437,8 +422,7 @@ func NPLTestLocalAccess(t *testing.T) {
 	annotation[k8s.NPLEnabledAnnotationKey] = "true"
 	ipFamily := corev1.IPv4Protocol
 	testData.createNginxClusterIPServiceWithAnnotations(false, &ipFamily, annotation)
-	targetProtocols := sets.NewString(protocolToString(defaultProtocolTCP))
-	targetPortsProtocols := map[int]sets.String{defaultTargetPort: targetProtocols}
+	expectedAnnotations := newExpectedNPLAnnotations(defaultStartPort, defaultEndPort).Add(nil, defaultTargetPort, "tcp")
 
 	node := nodeName(0)
 
@@ -459,7 +443,7 @@ func NPLTestLocalAccess(t *testing.T) {
 	nplAnnotations, testPodIP := getNPLAnnotations(t, testData, r, testPodName)
 
 	checkNPLRulesForPod(t, testData, r, nplAnnotations, antreaPod, testPodIP, true)
-	validatePortsInAnnotation(t, r, nplAnnotations, defaultStartPort, defaultEndPort, targetPortsProtocols)
+	expectedAnnotations.Check(t, nplAnnotations)
 	checkTrafficForNPL(testData, r, nplAnnotations, clientName)
 
 	testData.deletePod(testNamespace, testPodName)
@@ -510,7 +494,7 @@ func testNPLMultiplePodsAgentRestart(t *testing.T, data *TestData) {
 		nodePort: nplAnnotations[0].NodePort,
 		podIP:    testPodIP,
 		podPort:  nplAnnotations[0].PodPort,
-		protocol: protocolToString(defaultProtocolTCP),
+		protocol: protocolToString(corev1.ProtocolTCP),
 	}
 	deleteNPLRuleFromIPTables(t, data, r, antreaPod, ruleToDelete)
 
@@ -520,13 +504,12 @@ func testNPLMultiplePodsAgentRestart(t *testing.T, data *TestData) {
 	antreaPod, err = data.getAntreaPodOnNode(node)
 	r.NoError(err, "Error when getting Antrea Agent Pod on Node '%s'", node)
 
-	targetProtocols := sets.NewString(protocolToString(defaultProtocolTCP))
+	expectedAnnotations := newExpectedNPLAnnotations(defaultStartPort, defaultEndPort).Add(nil, defaultTargetPort, "tcp")
 	for _, testPodName := range testPods {
-		targetPortsProtocols := map[int]sets.String{defaultTargetPort: targetProtocols}
 		nplAnnotations, testPodIP := getNPLAnnotations(t, data, r, testPodName)
 
 		checkNPLRulesForPod(t, data, r, nplAnnotations, antreaPod, testPodIP, true)
-		validatePortsInAnnotation(t, r, nplAnnotations, defaultStartPort, defaultEndPort, targetPortsProtocols)
+		expectedAnnotations.Check(t, nplAnnotations)
 		checkTrafficForNPL(data, r, nplAnnotations, clientName)
 	}
 
@@ -584,13 +567,12 @@ func testNPLChangePortRangeAgentRestart(t *testing.T, data *TestData) {
 	antreaPod, err := data.getAntreaPodOnNode(node)
 	r.NoError(err, "Error when getting Antrea Agent Pod on Node '%s'", node)
 
-	targetProtocols := sets.NewString(protocolToString(defaultProtocolTCP))
+	expectedAnnotations := newExpectedNPLAnnotations(updatedStartPort, updatedEndPort).Add(nil, defaultTargetPort, "tcp")
 	for _, testPodName := range testPods {
-		targetPortsProtocols := map[int]sets.String{defaultTargetPort: targetProtocols}
 		nplAnnotations, testPodIP := getNPLAnnotations(t, data, r, testPodName)
 
 		checkNPLRulesForPod(t, data, r, nplAnnotations, antreaPod, testPodIP, true)
-		validatePortsInAnnotation(t, r, nplAnnotations, updatedStartPort, updatedEndPort, targetPortsProtocols)
+		expectedAnnotations.Check(t, nplAnnotations)
 		checkTrafficForNPL(data, r, nplAnnotations, clientName)
 	}
 

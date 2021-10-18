@@ -129,10 +129,12 @@ func (pt *PortTable) getEntryByPodIPPort(ip string, port int) *NodePortData {
 }
 
 func (pt *PortTable) getFreePort(podIP string, podPort int, protocol string) (int, Closeable, error) {
+	klog.V(2).InfoS("Looking for free Node port", "podIP", podIP, "podPort", podPort, "protocol", protocol)
 	for i := pt.StartPort; i <= pt.EndPort; i++ {
 		if _, ok := pt.NodePortTable[i]; !ok {
 			socket, err := pt.LocalPortOpener.OpenLocalPort(i, protocol)
 			if err != nil {
+				klog.V(4).InfoS("Local port cannot be opened, moving on to the next one", "port", i, "protocol", protocol)
 				continue
 			}
 			return i, socket, nil
@@ -165,7 +167,8 @@ func (pt *PortTable) AddRule(podIP string, podPort int, protocol string) (int, e
 	} else {
 		socket, err = pt.LocalPortOpener.OpenLocalPort(npData.NodePort, protocol)
 		if err != nil {
-			return 0, err
+			return 0, fmt.Errorf("Local port %d was previously allocated for %s:%d but is not available for protocol %s: %v",
+				npData.NodePort, podIP, podPort, protocol, err)
 		}
 		nodePort = npData.NodePort
 	}
@@ -332,7 +335,6 @@ func (lpo *localPortOpener) OpenLocalPort(port int, protocol string) (Closeable,
 		network = "tcp4"
 		listener, err := net.Listen(network, fmt.Sprintf(":%d", port))
 		if err != nil {
-			klog.V(2).ErrorS(err, "Error while trying to open port")
 			return nil, err
 		}
 		socket = listener
@@ -340,16 +342,14 @@ func (lpo *localPortOpener) OpenLocalPort(port int, protocol string) (Closeable,
 		network = "udp4"
 		addr, err := net.ResolveUDPAddr(network, fmt.Sprintf(":%d", port))
 		if err != nil {
-			klog.V(2).ErrorS(err, "Error while trying to open port")
 			return nil, err
 		}
 		conn, err := net.ListenUDP(network, addr)
 		if err != nil {
-			klog.V(2).ErrorS(err, "Error while trying to open port")
 			return nil, err
 		}
 		socket = conn
 	}
-
+	klog.V(2).InfoS("Opened local port", "port", port)
 	return socket, nil
 }
