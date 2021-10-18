@@ -19,6 +19,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"math/rand"
 	"net"
 	"os"
@@ -632,6 +633,41 @@ func (data *TestData) deployAntreaCommon(yamlFile string, extraOptions string, w
 		return fmt.Errorf("error when deploying Antrea; is %s available on the control-plane Node?", yamlFile)
 	}
 	rc, stdout, stderr, err := provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl -n %s rollout status deploy/%s --timeout=%v", antreaNamespace, antreaDeployment, defaultTimeout))
+	rc2, stdout2, stderr2, err2 := provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("curl -k https://10.96.0.1:443/api/v1/namespaces/kube-system/configmaps/extension-apiserver-authentication?timeout=10s"))
+	log.Printf("k8s apiserver: rc: %v - stdout: %v - stderr: %v - err: %v\n", rc2, stdout2, stderr2, err2)
+	rc2, stdout2, stderr2, err2 = provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("ip a"))
+	log.Printf("antrea addresses: rc: %v - stdout: %v - stderr: %v - err: %v\n", rc2, stdout2, stderr2, err2)
+	rc2, stdout2, stderr2, err2 = provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("ip r"))
+	log.Printf("antrea routes: rc: %v - stdout: %v - stderr: %v - err: %v\n", rc2, stdout2, stderr2, err2)
+	rc2, stdout2, stderr2, err2 = provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("ip n"))
+	log.Printf("antrea arp: rc: %v - stdout: %v - stderr: %v - err: %v\n", rc2, stdout2, stderr2, err2)
+	rc2, stdout2, stderr2, err2 = provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("iptables-save"))
+	log.Printf("antrea iptables: rc: %v - stdout: %v - stderr: %v - err: %v\n", rc2, stdout2, stderr2, err2)
+	rc2, stdout2, stderr2, err2 = provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl -n %s get po -owide", antreaNamespace))
+	log.Printf("antrea status: rc: %v - stdout: %v - stderr: %v - err: %v\n", rc2, stdout2, stderr2, err2)
+	rc2, stdout2, stderr2, err2 = provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("cat /var/log/antrea/antrea-controller.INFO"))
+	log.Printf("antrea controller file log: rc: %v - stdout: %v - stderr: %v - err: %v\n", rc2, stdout2, stderr2, err2)
+	agentPod, err2 := data.getAntreaPodOnNode(controlPlaneNodeName())
+	if err2 == nil {
+		rc2, stdout2, stderr2, err2 = provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl -n %s exec %s -c antrea-agent -- ovs-ofctl -O OpenFlow13 dump-flows br-int", antreaNamespace, agentPod))
+		log.Printf("antrea agent flows: rc: %v - stdout: %v - stderr: %v - err: %v\n", rc2, stdout2, stderr2, err2)
+		rc2, stdout2, stderr2, err2 = provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl -n %s logs %s -c antrea-agent", antreaNamespace, agentPod))
+		log.Printf("antrea agent k8s log: rc: %v - stdout: %v - stderr: %v - err: %v\n", rc2, stdout2, stderr2, err2)
+		rc2, stdout2, stderr2, err2 = provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl -n %s logs %s -c antrea-ovs", antreaNamespace, agentPod))
+		log.Printf("antrea ovs k8s log: rc: %v - stdout: %v - stderr: %v - err: %v\n", rc2, stdout2, stderr2, err2)
+	} else {
+		log.Printf("get antrea agent failed: err: %v\n", err2)
+	}
+	controllerPod, err2 := data.getAntreaController()
+	if err2 == nil {
+		rc2, stdout2, stderr2, err2 = provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl -n %s logs %s", antreaNamespace, controllerPod.Name))
+		log.Printf("antrea controller k8s log: rc: %v - stdout: %v - stderr: %v - err: %v\n", rc2, stdout2, stderr2, err2)
+	} else {
+		log.Printf("get antrea controller failed: err: %v\n", err2)
+	}
+	if err == nil && rc == 0 {
+		err = fmt.Errorf("force error")
+	}
 	if err != nil || rc != 0 {
 		return fmt.Errorf("error when waiting for antrea-controller rollout to complete - rc: %v - stdout: %v - stderr: %v - err: %v", rc, stdout, stderr, err)
 	}

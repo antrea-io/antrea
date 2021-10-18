@@ -417,6 +417,7 @@ func run(o *Options) error {
 	if err != nil {
 		return fmt.Errorf("error generating Cipher Suite list: %v", err)
 	}
+	time.Sleep(time.Second * 5)
 	apiServer, err := apiserver.New(
 		agentQuerier,
 		networkPolicyController,
