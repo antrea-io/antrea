@@ -51,4 +51,7 @@ type FlowAggregatorConfig struct {
 	// Provide format for records sent to the configured flow collector. Supported formats are IPFIX and JSON.
 	// Defaults to "IPFIX"
 	RecordFormat string `yaml:"recordFormat,omitempty"`
+	// recordContents enables configuring some fields in the flow records, A field can
+	// be either included (true) or excluded (false) by providing a bool value.
+	RecordContents map[string]bool `yaml:"recordContents,omitempty"`
 }

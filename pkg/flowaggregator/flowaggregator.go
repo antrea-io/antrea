@@ -183,6 +183,7 @@ type flowAggregator struct {
 	registry                    ipfix.IPFIXRegistry
 	set                         ipfixentities.Set
 	flowAggregatorAddress       string
+	includePodLabels            bool
 	k8sClient                   kubernetes.Interface
 	observationDomainID         uint32
 	podInformer                 coreinformers.PodInformer
@@ -198,6 +199,7 @@ func NewFlowAggregator(
 	inactiveFlowRecTimeout time.Duration,
 	aggregatorTransportProtocol AggregatorTransportProtocol,
 	flowAggregatorAddress string,
+	includePodLabels bool,
 	k8sClient kubernetes.Interface,
 	observationDomainID uint32,
 	podInformer coreinformers.PodInformer,
@@ -214,6 +216,7 @@ func NewFlowAggregator(
 		registry:                    registry,
 		set:                         ipfixentities.NewSet(false),
 		flowAggregatorAddress:       flowAggregatorAddress,
+		includePodLabels:            includePodLabels,
 		k8sClient:                   k8sClient,
 		observationDomainID:         observationDomainID,
 		podInformer:                 podInformer,
@@ -440,11 +443,10 @@ func (fa *flowAggregator) sendFlowKeyRecord(key ipfixintermediate.FlowKey, recor
 		fa.fillK8sMetadata(key, record.Record)
 		fa.aggregationProcess.SetCorrelatedFieldsFilled(record)
 	}
-	if !fa.aggregationProcess.AreExternalFieldsFilled(*record) {
+	if fa.includePodLabels && !fa.aggregationProcess.AreExternalFieldsFilled(*record) {
 		fa.fillPodLabels(key, record.Record)
 		fa.aggregationProcess.SetExternalFieldsFilled(record)
 	}
-
 	if err := fa.set.AddRecord(record.Record.GetOrderedElementList(), templateID); err != nil {
 		return err
 	}
@@ -531,16 +533,18 @@ func (fa *flowAggregator) sendTemplateSet(isIPv6 bool) (int, error) {
 		}
 		elements = append(elements, ie)
 	}
-	for _, ie := range antreaLabelsElementList {
-		element, err := fa.registry.GetInfoElement(ie, ipfixregistry.AntreaEnterpriseID)
-		if err != nil {
-			return 0, fmt.Errorf("%s not present. returned error: %v", ie, err)
+	if fa.includePodLabels {
+		for _, ie := range antreaLabelsElementList {
+			element, err := fa.registry.GetInfoElement(ie, ipfixregistry.AntreaEnterpriseID)
+			if err != nil {
+				return 0, fmt.Errorf("error when getting InformationElement %s from registry: %v", ie, err)
+			}
+			ie, err := ipfixentities.DecodeAndCreateInfoElementWithValue(element, nil)
+			if err != nil {
+				return 0, err
+			}
+			elements = append(elements, ie)
 		}
-		ie, err := ipfixentities.DecodeAndCreateInfoElementWithValue(element, nil)
-		if err != nil {
-			return 0, err
-		}
-		elements = append(elements, ie)
 	}
 	fa.set.ResetSet()
 	if err := fa.set.PrepareSet(ipfixentities.Template, templateID); err != nil {

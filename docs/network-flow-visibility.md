@@ -290,6 +290,12 @@ flow-aggregator.conf: |
   # Provide format for records sent to the configured flow collector.
   # Supported formats are IPFIX and JSON.
   #recordFormat: "IPFIX"
+
+  # recordContents enables configuring some fields in the flow records, A field can
+  # be either included (true) or excluded (false) by providing a bool value.
+  recordContents:
+    # Determine whether source and destination Pod labels will be included in the flow records.
+    #podLabels: false
 ```
 
 Please note that the default values for `flowExportInterval`, `aggregatorTransportProtocol`,
@@ -298,6 +304,10 @@ respectively. Please make sure that `aggregatorTransportProtocol` and protocol o
 `agent-agent.conf` are set to `tls` to guarantee secure communication works properly. Protocol of
 `flowCollectorAddr` and `aggregatorTransportProtocol` must always match, so TLS must either be enabled for
 both sides or disabled for both sides. Please modify the parameters as per your requirements.
+
+Please note that the default value for `podLabels` is `false`, which
+indicates source and destination Pod labels will not be included in the flow
+records. If you would like to include them, you can modify the value to true.
 
 ### IPFIX Information Elements (IEs) in an Aggregated Flow Record
 
