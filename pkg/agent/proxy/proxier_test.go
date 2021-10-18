@@ -357,6 +357,7 @@ func testNodePort(t *testing.T, nodePortAddresses []net.IP, svcIP, ep1IP, ep2IP 
 	mockOFClient.EXPECT().InstallServiceFlows(groupID, gomock.Any(), uint16(svcNodePort), bindingProtocol, uint16(0), nodeLocalExternal, corev1.ServiceTypeNodePort).Times(1)
 	mockRouteClient.EXPECT().AddClusterIPRoute(svcIP).Times(1)
 	mockRouteClient.EXPECT().AddNodePort(gomock.Any(), uint16(svcNodePort), bindingProtocol).Times(1)
+	mockOFClient.EXPECT().InstallLoadBalancerServiceFromOutsideFlows(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	fp.syncProxyRules()
 }
@@ -806,7 +807,8 @@ func testSessionAffinity(t *testing.T, svcExternalIPs net.IP, svcIP net.IP, isIP
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockOFClient := ofmock.NewMockClient(ctrl)
-	fp := NewFakeProxier(nil, mockOFClient, nil, isIPv6, false)
+	mockRouteClient := routemock.NewMockInterface(ctrl)
+	fp := NewFakeProxier(mockRouteClient, mockOFClient, nil, isIPv6, false)
 
 	svcPort := 80
 	svcNodePort := 3001

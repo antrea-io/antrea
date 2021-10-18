@@ -196,7 +196,8 @@ func run(o *Options) error {
 		ifaceStore,
 		networkConfig,
 		nodeConfig,
-		agentInitializer.GetWireGuardClient())
+		agentInitializer.GetWireGuardClient(),
+		o.config.AntreaProxy.ProxyAll)
 
 	var proxier proxy.Proxier
 	if features.DefaultFeatureGate.Enabled(features.AntreaProxy) {

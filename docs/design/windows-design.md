@@ -210,8 +210,43 @@ Kube-proxy userspace mode is configured to provide NodePort Service function. A 
 "HNS Internal NIC" is provided to kube-proxy to configure Service addresses. The OpenFlow entries for the
 NodePort Service traffic on Windows are the same as those on Linux.
 
-The ClusterIP Service function is implemented by Antrea leveraging OVS. Antrea installs OpenFlow entries
-to select the backend endpoint and performs DNAT on the traffic.
+AntreaProxy implements the ClusterIP Service function. Antrea Agent installs routes to send ClusterIP Service
+traffic from host network to the OVS bridge. For each Service, it adds a route that routes the traffic via a
+virtual IP (169.254.169.253), and it also adds a route to indicate that the virtual IP is reachable via
+antrea-gw0. The reason to add a virtual IP, rather than routing the traffic directly to antrea-gw0, is that
+then only one neighbor cache entry needs to be added, which resolves the virtual IP to a virtual MAC.
+
+When a Service's endpoints are in hostNetwork or external network, a request packet will have its
+destination IP DNAT'd to the selected endpoint IP and its source IP will be SNAT'd to the
+virtual IP (169.254.169.253). Such SNAT is needed for sending the reply packets back to the OVS pipeline
+from the host network, whose destination IP was the Node IP before d-SNATed to the virtual IP.
+Check the packet forwarding path described below.
+
+For a request packet from host, it will enter OVS pipeline via antrea-gw0 and exit via antrea-gw0
+as well to host network. On Windows host, with the help of NetNat, the request packet's source IP will
+be SNAT'd again to Node IP.
+
+The reply packets are the reverse for both situations regardless of whether the endpoint is in
+ClusterCIDR or not.
+
+The following path is an example of host accessing a Service whose endpoint is a hostNetwork Pod on
+another Node. The request packet is like:
+
+```text
+host -> antrea-gw0 -> OVS pipeline -> antrea-gw0 -> host NetNat -> br-int -> OVS pipeline -> peer Node
+                           |                            |
+                   DNAT(peer Node IP)              SNAT(Node IP)
+                    SNAT(virtual IP)
+```
+
+The forwarding path of a reply packet is like:
+
+```text
+peer Node -> OVS pipeline -> br-int -> host NetNat -> antrea-gw0 -> OVS pipeline -> antrea-gw0 -> host
+                                           |                              |
+                                   d-SNAT(virtual IP)          d-SNAT(antrea-gw0 IP)
+                                                                d-DNAT(Service IP)
+```
 
 ### External Traffic
 

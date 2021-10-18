@@ -462,6 +462,7 @@ func TestReconcile(t *testing.T) {
 		addedRoutes      []peer
 		desiredPeerCIDRs []string
 		desiredNodeIPs   []string
+		desiredServices  map[string]bool
 		// expectations
 		expRoutes map[string]netlink.Link
 	}{
@@ -474,6 +475,7 @@ func TestReconcile(t *testing.T) {
 			},
 			desiredPeerCIDRs: []string{"10.10.20.0/24"},
 			desiredNodeIPs:   []string{remotePeerIP.String()},
+			desiredServices:  map[string]bool{"200.200.10.10": true},
 			expRoutes:        map[string]netlink.Link{"10.10.20.0/24": gwLink, "10.10.30.0/24": nil},
 		},
 		{
@@ -485,6 +487,7 @@ func TestReconcile(t *testing.T) {
 			},
 			desiredPeerCIDRs: []string{"10.10.20.0/24"},
 			desiredNodeIPs:   []string{localPeerIP.String()},
+			desiredServices:  map[string]bool{"200.200.10.10": true},
 			expRoutes:        map[string]netlink.Link{"10.10.20.0/24": nodeLink, "10.10.30.0/24": nil},
 		},
 		{
@@ -498,6 +501,7 @@ func TestReconcile(t *testing.T) {
 			},
 			desiredPeerCIDRs: []string{"10.10.20.0/24", "10.10.40.0/24"},
 			desiredNodeIPs:   []string{localPeerIP.String(), remotePeerIP.String()},
+			desiredServices:  map[string]bool{"200.200.10.10": true},
 			expRoutes:        map[string]netlink.Link{"10.10.20.0/24": nodeLink, "10.10.30.0/24": nil, "10.10.40.0/24": gwLink, "10.10.50.0/24": nil},
 		},
 	}
@@ -515,7 +519,7 @@ func TestReconcile(t *testing.T) {
 			assert.NoError(t, routeClient.AddRoutes(peerNet, tc.nodeName, route.peerIP, peerGwIP), "adding routes failed")
 		}
 
-		assert.NoError(t, routeClient.Reconcile(tc.desiredPeerCIDRs), "reconcile failed")
+		assert.NoError(t, routeClient.Reconcile(tc.desiredPeerCIDRs, tc.desiredServices), "reconcile failed")
 
 		for dst, uplink := range tc.expRoutes {
 			expNum := 0

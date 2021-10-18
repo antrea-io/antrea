@@ -492,6 +492,13 @@ func (p *proxier) installServices() {
 							continue
 						}
 					}
+					// If previous Service which has ClusterIP should be removed, remove ClusterIP routes.
+					if svcInfo.ClusterIP() != nil {
+						if err := p.routeClient.DeleteClusterIPRoute(pSvcInfo.ClusterIP()); err != nil {
+							klog.ErrorS(err, "Failed to remove ClusterIP Service routes", "Service", svcPortName)
+							continue
+						}
+					}
 				}
 			}
 

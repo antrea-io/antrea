@@ -118,6 +118,14 @@ data:
     # Provide the address of Kubernetes apiserver, to override any value provided in kubeconfig or InClusterConfig.
     # Defaults to "". It must be a host string, a host:port pair, or a URL to the base of the apiserver.
     #kubeAPIServerOverride: ""
+
+    # Option antreaProxy contains AntreaProxy related configuration options.
+    antreaProxy:
+      # ProxyAll tells antrea-agent to proxy ClusterIP Service traffic, regardless of where they come from.
+      # Therefore, running kube-proxy is no longer required. This requires the AntreaProxy feature to be enabled.
+      # Note that this option is experimental. If kube-proxy is removed, option kubeAPIServerOverride must be used to access
+      # apiserver directly.
+      #proxyAll: false
   antrea-cni.conflist: |
     {
         "cniVersion":"0.3.0",
@@ -136,7 +144,7 @@ kind: ConfigMap
 metadata:
   labels:
     app: antrea
-  name: antrea-windows-config-d7h2mhk8h8
+  name: antrea-windows-config-25k48fh55f
   namespace: kube-system
 ---
 apiVersion: apps/v1
@@ -224,7 +232,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-windows-config-d7h2mhk8h8
+          name: antrea-windows-config-25k48fh55f
         name: antrea-windows-config
       - configMap:
           defaultMode: 420
