@@ -36,8 +36,6 @@ var (
 	FromBridgeRegMark  = binding.NewRegMark(PktSourceField, 5)
 	// reg0[16]: Mark to indicate the ofPort number of an interface is found.
 	OFPortFoundRegMark = binding.NewOneBitRegMark(0, 16, "OFPortFound")
-	// reg0[17]: Mark to indicate the packet needs to be SNATed with Node's IP.
-	SNATNodeIPRegMark = binding.NewOneBitRegMark(0, 17, "SNATWithNodeIP")
 	// reg0[18]: Mark to indicate the packet needs DNAT to virtual IP.
 	// If a packet uses HairpinRegMark, it will be output to the port where it enters OVS pipeline in L2ForwardingOutTable.
 	HairpinRegMark = binding.NewOneBitRegMark(0, 18, "Hairpin")

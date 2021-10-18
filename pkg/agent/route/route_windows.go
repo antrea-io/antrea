@@ -27,6 +27,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/agent/openflow"
 	"antrea.io/antrea/pkg/agent/util"
 	"antrea.io/antrea/pkg/agent/util/winfirewall"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
@@ -35,6 +36,10 @@ import (
 const (
 	inboundFirewallRuleName  = "Antrea: accept packets from local Pods"
 	outboundFirewallRuleName = "Antrea: accept packets to local Pods"
+)
+
+var (
+	virtualServiceIPv4Net = util.NewIPNet(config.VirtualServiceIPv4)
 )
 
 type Client struct {
@@ -88,13 +93,32 @@ func (c *Client) Initialize(nodeConfig *config.NodeConfig, done func()) error {
 			return err
 		}
 	}
+
+	if c.proxyAll {
+		if err := c.initServiceIPRoutes(); err != nil {
+			return fmt.Errorf("failed to initialize Service IP routes: %v", err)
+		}
+	}
 	done()
+
 	return nil
 }
 
-// Reconcile removes the orphaned routes and related configuration based on the desired podCIDRs. Only the route
-// entries on the host gateway interface are stored in the cache.
-func (c *Client) Reconcile(podCIDRs []string) error {
+func (c *Client) initServiceIPRoutes() error {
+	if config.IsIPv4Enabled(c.nodeConfig, c.networkConfig.TrafficEncapMode) {
+		if err := c.addVirtualServiceIPRoute(false); err != nil {
+			return err
+		}
+	}
+	if config.IsIPv6Enabled(c.nodeConfig, c.networkConfig.TrafficEncapMode) {
+		return fmt.Errorf("IPv6 is not supported on Windows")
+	}
+	return nil
+}
+
+// Reconcile removes the orphaned routes and related configuration based on the desired podCIDRs and Service IPs. Only
+// the route entries on the host gateway interface are stored in the cache.
+func (c *Client) Reconcile(podCIDRs []string, svcIPs map[string]bool) error {
 	desiredPodCIDRs := sets.NewString(podCIDRs...)
 	routes, err := c.listRoutes()
 	if err != nil {
@@ -102,6 +126,10 @@ func (c *Client) Reconcile(podCIDRs []string) error {
 	}
 	for dst, rt := range routes {
 		if desiredPodCIDRs.Has(dst) {
+			c.hostRoutes.Store(dst, rt)
+			continue
+		}
+		if _, ok := svcIPs[dst]; ok {
 			c.hostRoutes.Store(dst, rt)
 			continue
 		}
@@ -150,7 +178,7 @@ func (c *Client) AddRoutes(podCIDR *net.IPNet, nodeName string, peerNodeIP, peer
 		return nil
 	}
 
-	if err := util.NewNetRoute(route); err != nil {
+	if err := util.ReplaceNetRoute(route); err != nil {
 		return err
 	}
 
@@ -177,6 +205,105 @@ func (c *Client) DeleteRoutes(podCIDR *net.IPNet) error {
 	return nil
 }
 
+// addVirtualServiceIPRoute adds routes on a Windows Node for redirecting ClusterIP Service traffic
+// from host network to OVS via antrea-gw0.
+func (c *Client) addVirtualServiceIPRoute(isIPv6 bool) error {
+	linkIndex := c.nodeConfig.GatewayConfig.LinkIndex
+
+	// This route is for 2 purposes:
+	// - If for each ClusterIP Service, a route is installed to direct traffic to antrea-gw0, there will be too many
+	//   neighbor cache entries. While with one virtual IP to antrea-gw0 and ClusterIP Services to the virtual IP,
+	//   there will be only one neighbor cache entry.
+	// - For ClusterIP Service requests from host, reply traffic needs a route entry to route packet to VirtualServiceIPv4
+	//   via antrea-gw0. If the NextHop of a route is antrea-gw0, then set it as 0.0.0.0. As a result, on-link/0.0.0.0
+	//   is in PersistentStore.
+	vRoute := &util.Route{
+		LinkIndex:         linkIndex,
+		DestinationSubnet: virtualServiceIPv4Net,
+		GatewayAddress:    net.IPv4zero,
+		RouteMetric:       util.MetricHigh,
+	}
+	if err := util.ReplaceNetRoute(vRoute); err != nil {
+		return err
+	}
+	klog.InfoS("Added virtual Service IP route", "route", vRoute)
+
+	// ClusterIP Service replies will be sent to OVS bridge via openflow.GlobalVirtualMAC. This NetNeighbor is for
+	// creating a neighbor cache entry to config.VirtualServiceIPv4.
+	vNeighbor := &util.Neighbor{
+		LinkIndex:        linkIndex,
+		IPAddress:        config.VirtualServiceIPv4,
+		LinkLayerAddress: openflow.GlobalVirtualMAC,
+	}
+	if err := util.ReplaceNetNeighbor(vNeighbor); err != nil {
+		return err
+	}
+	klog.InfoS("Added virtual Service IP neighbor", "neighbor", vNeighbor)
+	return nil
+}
+
+// TODO: Follow the code style in Linux that maintains one Service CIDR.
+func (c *Client) AddClusterIPRoute(svcIP net.IP) error {
+	obj, found := c.hostRoutes.Load(svcIP.String())
+	svcIPNet := util.NewIPNet(svcIP)
+
+	// Route: Service IP -> VirtualServiceIPv4 (169.254.169.253)
+	route := &util.Route{
+		LinkIndex:         c.nodeConfig.GatewayConfig.LinkIndex,
+		DestinationSubnet: svcIPNet,
+		GatewayAddress:    config.VirtualServiceIPv4,
+		RouteMetric:       util.MetricHigh,
+	}
+	if found {
+		existingRoute := obj.(*util.Route)
+		if existingRoute.GatewayAddress.Equal(route.GatewayAddress) && existingRoute.RouteMetric == route.RouteMetric {
+			klog.V(2).InfoS("Service route already exists", "DestinationIP", route.DestinationSubnet,
+				"Gateway", route.GatewayAddress, "RouteMetric", route.RouteMetric)
+			return nil
+		}
+		// Remove the existing route if gateway or metric is not as expected.
+		if err := util.RemoveNetRoute(existingRoute); err != nil {
+			return fmt.Errorf("failed to delete existing Service route entry, DestinationIP: %s, Gateway: %s, RouteMetric: %d, err: %v",
+				existingRoute.DestinationSubnet, existingRoute.GatewayAddress, existingRoute.RouteMetric, err)
+		}
+	}
+
+	if err := util.ReplaceNetRoute(route); err != nil {
+		return err
+	}
+	// Remove the Service route on host by kube-proxy.
+	// TODO: When kube-proxy restarts, the following NetIPInterface will be created again. This problem will be completely
+	// solved when kube-proxy is removed.
+	if err := util.RemoveInterfaceAddress(fmt.Sprintf("%s (HNS Internal NIC)", util.ContainerVNICPrefix), svcIP); err != nil {
+		// We need to clean up routes just added if failure here.
+		if routeErr := util.RemoveNetRoute(route); routeErr != nil {
+			return fmt.Errorf("failed to remove Service route after failure to remove NetIPAddress: %v", routeErr)
+		}
+		return err
+	}
+
+	c.hostRoutes.Store(route.DestinationSubnet.String(), route)
+	klog.V(2).InfoS("Added Service route", "ServiceIP", route.DestinationSubnet, "GatewayIP", route.GatewayAddress)
+	return nil
+}
+
+func (c *Client) DeleteClusterIPRoute(svcIP net.IP) error {
+	svcIPNet := util.NewIPNet(svcIP)
+	obj, found := c.hostRoutes.Load(svcIPNet.String())
+	if !found {
+		klog.V(2).InfoS("Service route does not exist", "DestinationIP", svcIP)
+		return nil
+	}
+
+	rt := obj.(*util.Route)
+	if err := util.RemoveNetRoute(rt); err != nil {
+		return err
+	}
+	c.hostRoutes.Delete(svcIP.String())
+	klog.V(2).InfoS("Deleted Service route from host gateway", "DestinationIP", svcIP)
+	return nil
+}
+
 // MigrateRoutesToGw is not supported on Windows.
 func (c *Client) MigrateRoutesToGw(linkName string) error {
 	return errors.New("MigrateRoutesToGw is unsupported on Windows")
@@ -189,7 +316,6 @@ func (c *Client) UnMigrateRoutesFromGw(route *net.IPNet, linkName string) error 
 
 // Run is not supported on Windows and returns immediately.
 func (c *Client) Run(stopCh <-chan struct{}) {
-	return
 }
 
 func (c *Client) listRoutes() (map[string]*util.Route, error) {
@@ -216,12 +342,12 @@ func (c *Client) listRoutes() (map[string]*util.Route, error) {
 		}
 		// Windows adds an active route entry for the local broadcast address automatically when a new IP address
 		// is configured on the interface. This route entry should be ignored in the list.
-		if rt.DestinationSubnet.IP.Equal(util.GetLocalBroadcastIP(rt.DestinationSubnet)) {
+		if !rt.GatewayAddress.Equal(config.VirtualServiceIPv4) && rt.DestinationSubnet.IP.Equal(util.GetLocalBroadcastIP(rt.DestinationSubnet)) {
 			continue
 		}
-		// Skip Service corresponding routes. These route entries are added by kube-proxy. If these route entries
-		// are removed in Reconcile, the host can't access the Service.
-		if c.serviceCIDR.Contains(rt.DestinationSubnet.IP) {
+		// If the GatewayAddress equals VirtualServiceIPv4, the route is for ClusterIP Service traffic from the host.
+		// Otherwise, the route is added by kube-proxy, which is needed to access the Service.
+		if !rt.GatewayAddress.Equal(config.VirtualServiceIPv4) && c.serviceCIDR.Contains(rt.DestinationSubnet.IP) {
 			continue
 		}
 		rtMap[rt.DestinationSubnet.String()] = &rt
@@ -255,10 +381,6 @@ func (c *Client) AddNodePort(nodePortAddresses []net.IP, port uint16, protocol b
 }
 
 func (c *Client) DeleteNodePort(nodePortAddresses []net.IP, port uint16, protocol binding.Protocol) error {
-	return nil
-}
-
-func (c *Client) AddClusterIPRoute(svcIP net.IP) error {
 	return nil
 }
 

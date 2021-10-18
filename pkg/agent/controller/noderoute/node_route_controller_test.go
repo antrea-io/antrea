@@ -72,7 +72,7 @@ func newController(t *testing.T, networkConfig *config.NetworkConfig) (*fakeCont
 	c := NewNodeRouteController(clientset, informerFactory, ofClient, ovsClient, routeClient, interfaceStore, networkConfig, &config.NodeConfig{GatewayConfig: &config.GatewayConfig{
 		IPv4: nil,
 		MAC:  gatewayMAC,
-	}}, nil)
+	}}, nil, false)
 	return &fakeController{
 		Controller:      c,
 		clientset:       clientset,
