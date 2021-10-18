@@ -275,19 +275,43 @@ function copy_image {
   ${SSH_WITH_ANTREA_CI_KEY} -n capv@${IP} "sudo crictl images | grep '<none>' | awk '{print \$3}' | xargs -r crictl rmi"
 }
 
-function run_codecov {
+# We run the function in a subshell with "set -e" to ensure that it exists in
+# case of error (e.g. integrity check), no matter the context in which the
+# function is called.
+function run_codecov { (set -e
     flag=$1
     file=$2
     dir=$3
     remote=$4
     ip=$5
 
+    rm -f trustedkeys.gpg codecov
+    # This is supposed to be a one-time step, but there should be no harm in
+    # getting the key every time. It does not come from the codecov.io
+    # website. Anyway, this is needed when the VM is re-created for every test.
+    curl https://keybase.io/codecovsecurity/pgp_keys.asc | gpg --no-default-keyring --keyring trustedkeys.gpg --import
+    curl -Os https://uploader.codecov.io/latest/linux/codecov
+    curl -Os https://uploader.codecov.io/latest/linux/codecov.SHA256SUM
+    curl -Os https://uploader.codecov.io/latest/linux/codecov.SHA256SUM.sig
+
+    # Check that the sha256 matches the signature
+    gpgv codecov.SHA256SUM.sig codecov.SHA256SUM
+    # Then check the integrity of the codecov binary
+    shasum -a 256 -c codecov.SHA256SUM
+
+    chmod +x codecov
+
     if [[ $remote == true ]]; then
-        ${SSH_WITH_UTILS_KEY} -n jenkins@${ip} "curl -s https://codecov.io/bash | env -i bash -s -- -c -t ${CODECOV_TOKEN} -F ${flag} -f ${file}"
-    else
-        curl -s https://codecov.io/bash | env -i bash -s -- -c -t ${CODECOV_TOKEN} -F ${flag} -f ${file} -s ${dir}
+        ${SCP_WITH_UTILS_KEY} codecov jenkins@${ip}:~
     fi
-}
+
+    if [[ $remote == true ]]; then
+        ${SSH_WITH_UTILS_KEY} -n jenkins@${ip} "env -i bash -s -- -c -t ${CODECOV_TOKEN} -F ${flag} -f ${file}"
+    else
+        env -i bash -s -- -c -t ${CODECOV_TOKEN} -F ${flag} -f ${file} -s ${dir}
+    fi
+    rm -f trustedkeys.gpg codecov
+)}
 
 function deliver_antrea {
     echo "====== Building Antrea for the Following Commit ======"
@@ -635,6 +659,7 @@ pushd "$THIS_DIR" > /dev/null
 SCP_WITH_ANTREA_CI_KEY="scp -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i ${GIT_CHECKOUT_DIR}/jenkins/key/antrea-ci-key"
 SSH_WITH_ANTREA_CI_KEY="ssh -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i ${GIT_CHECKOUT_DIR}/jenkins/key/antrea-ci-key"
 SSH_WITH_UTILS_KEY="ssh -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i ${WORKDIR}/utils/key"
+SCP_WITH_UTILS_KEY="scp -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i ${WORKDIR}/utils/key"
 
 clean_tmp
 if [[ "$RUN_GARBAGE_COLLECTION" == true ]]; then
