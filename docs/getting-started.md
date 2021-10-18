@@ -166,10 +166,10 @@ CRDs, which provide advanced features including: policy priority, tiering, deny
 action, external entity, and policy statistics. For more information on usage of
 Antrea Network Policies, refer to the [Antrea Network Policy document](antrea-network-policy.md).
 
-### IPsec Encryption
+### Traffic Encryption
 
-Antrea supports encrypting GRE tunnel traffic with IPsec. To deploy Antrea with
-IPsec encryption enabled, please refer to [this guide](ipsec-tunnel.md).
+Antrea supports encrypting traffic between Linux Nodes using IPsec or WireGuard.
+To deploy Antrea with traffic encryption enabled, please refer to [this guide](traffic-encryption.md).
 
 ### Network Flow Visibility
 

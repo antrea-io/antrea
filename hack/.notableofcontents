@@ -19,7 +19,6 @@ docs/eks-installation.md
 docs/feature-gates.md
 docs/getting-started.md
 docs/gke-installation.md
-docs/ipsec-tunnel.md
 docs/kind.md
 docs/kubernetes-installers.md
 docs/maintainers/antrea-docker-image.md
@@ -34,4 +33,5 @@ docs/os-issues.md
 docs/ovs-offload.md
 docs/prometheus-integration.md
 docs/security.md
+docs/traffic-encryption.md
 docs/windows.md
