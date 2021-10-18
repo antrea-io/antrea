@@ -243,7 +243,7 @@ func (c *Client) addVirtualServiceIPRoute(isIPv6 bool) error {
 }
 
 // TODO: Follow the code style in Linux that maintains one Service CIDR.
-func (c *Client) AddClusterIPRoute(svcIP net.IP) error {
+func (c *Client) addServiceRoute(svcIP net.IP) error {
 	obj, found := c.hostRoutes.Load(svcIP.String())
 	svcIPNet := util.NewIPNet(svcIP)
 
@@ -271,23 +271,13 @@ func (c *Client) AddClusterIPRoute(svcIP net.IP) error {
 	if err := util.ReplaceNetRoute(route); err != nil {
 		return err
 	}
-	// Remove the Service route on host by kube-proxy.
-	// TODO: When kube-proxy restarts, the following NetIPInterface will be created again. This problem will be completely
-	// solved when kube-proxy is removed.
-	if err := util.RemoveInterfaceAddress(fmt.Sprintf("%s (HNS Internal NIC)", util.ContainerVNICPrefix), svcIP); err != nil {
-		// We need to clean up routes just added if failure here.
-		if routeErr := util.RemoveNetRoute(route); routeErr != nil {
-			return fmt.Errorf("failed to remove Service route after failure to remove NetIPAddress: %v", routeErr)
-		}
-		return err
-	}
 
 	c.hostRoutes.Store(route.DestinationSubnet.String(), route)
 	klog.V(2).InfoS("Added Service route", "ServiceIP", route.DestinationSubnet, "GatewayIP", route.GatewayAddress)
 	return nil
 }
 
-func (c *Client) DeleteClusterIPRoute(svcIP net.IP) error {
+func (c *Client) deleteServiceRoute(svcIP net.IP) error {
 	svcIPNet := util.NewIPNet(svcIP)
 	obj, found := c.hostRoutes.Load(svcIPNet.String())
 	if !found {
@@ -302,6 +292,14 @@ func (c *Client) DeleteClusterIPRoute(svcIP net.IP) error {
 	c.hostRoutes.Delete(svcIP.String())
 	klog.V(2).InfoS("Deleted Service route from host gateway", "DestinationIP", svcIP)
 	return nil
+}
+
+func (c *Client) AddClusterIPRoute(svcIP net.IP) error {
+	return c.addServiceRoute(svcIP)
+}
+
+func (c *Client) DeleteClusterIPRoute(svcIP net.IP) error {
+	return c.deleteServiceRoute(svcIP)
 }
 
 // MigrateRoutesToGw is not supported on Windows.
@@ -385,9 +383,19 @@ func (c *Client) DeleteNodePort(nodePortAddresses []net.IP, port uint16, protoco
 }
 
 func (c *Client) AddLoadBalancer(externalIPs []string) error {
+	for _, svcIPStr := range externalIPs {
+		if err := c.addServiceRoute(net.ParseIP(svcIPStr)); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
 func (c *Client) DeleteLoadBalancer(externalIPs []string) error {
+	for _, svcIPStr := range externalIPs {
+		if err := c.deleteServiceRoute(net.ParseIP(svcIPStr)); err != nil {
+			return err
+		}
+	}
 	return nil
 }
