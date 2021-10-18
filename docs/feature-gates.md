@@ -176,7 +176,7 @@ Refer to this [document](node-port-local.md) for more information.
 #### Requirements for this Feature
 
 This feature is currently only supported for Nodes running Linux with IPv4
-addresses. Only TCP Service ports are supported.
+addresses. Only TCP & UDP Service ports are supported (not SCTP).
 
 ### Egress
 
