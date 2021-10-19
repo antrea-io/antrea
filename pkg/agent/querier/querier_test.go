@@ -50,6 +50,7 @@ func TestAgentQuerierGetAgentInfo(t *testing.T) {
 	ofClient.EXPECT().GetFlowTableStatus().Return([]binding.TableStatus{
 		{
 			ID:        1,
+			Name:      "1",
 			FlowCount: 2,
 		},
 	}).AnyTimes()

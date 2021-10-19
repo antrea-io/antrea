@@ -149,7 +149,7 @@ func (mr *MockBridgeMockRecorder) CreateMeter(arg0, arg1 interface{}) *gomock.Ca
 }
 
 // CreateTable mocks base method
-func (m *MockBridge) CreateTable(arg0, arg1 openflow.TableIDType, arg2 openflow.MissActionType) openflow.Table {
+func (m *MockBridge) CreateTable(arg0 openflow.Table, arg1 byte, arg2 openflow.MissActionType) openflow.Table {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "CreateTable", arg0, arg1, arg2)
 	ret0, _ := ret[0].(openflow.Table)
@@ -219,7 +219,7 @@ func (mr *MockBridgeMockRecorder) DeleteMeterAll() *gomock.Call {
 }
 
 // DeleteTable mocks base method
-func (m *MockBridge) DeleteTable(arg0 openflow.TableIDType) bool {
+func (m *MockBridge) DeleteTable(arg0 byte) bool {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "DeleteTable", arg0)
 	ret0, _ := ret[0].(bool)
@@ -355,10 +355,10 @@ func (mr *MockTableMockRecorder) BuildFlow(arg0 interface{}) *gomock.Call {
 }
 
 // GetID mocks base method
-func (m *MockTable) GetID() openflow.TableIDType {
+func (m *MockTable) GetID() byte {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetID")
-	ret0, _ := ret[0].(openflow.TableIDType)
+	ret0, _ := ret[0].(byte)
 	return ret0
 }
 
@@ -382,11 +382,25 @@ func (mr *MockTableMockRecorder) GetMissAction() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMissAction", reflect.TypeOf((*MockTable)(nil).GetMissAction))
 }
 
+// GetName mocks base method
+func (m *MockTable) GetName() string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetName")
+	ret0, _ := ret[0].(string)
+	return ret0
+}
+
+// GetName indicates an expected call of GetName
+func (mr *MockTableMockRecorder) GetName() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetName", reflect.TypeOf((*MockTable)(nil).GetName))
+}
+
 // GetNext mocks base method
-func (m *MockTable) GetNext() openflow.TableIDType {
+func (m *MockTable) GetNext() byte {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetNext")
-	ret0, _ := ret[0].(openflow.TableIDType)
+	ret0, _ := ret[0].(byte)
 	return ret0
 }
 
@@ -394,6 +408,30 @@ func (m *MockTable) GetNext() openflow.TableIDType {
 func (mr *MockTableMockRecorder) GetNext() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNext", reflect.TypeOf((*MockTable)(nil).GetNext))
+}
+
+// SetMissAction mocks base method
+func (m *MockTable) SetMissAction(arg0 openflow.MissActionType) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SetMissAction", arg0)
+}
+
+// SetMissAction indicates an expected call of SetMissAction
+func (mr *MockTableMockRecorder) SetMissAction(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetMissAction", reflect.TypeOf((*MockTable)(nil).SetMissAction), arg0)
+}
+
+// SetNext mocks base method
+func (m *MockTable) SetNext(arg0 byte) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SetNext", arg0)
+}
+
+// SetNext indicates an expected call of SetNext
+func (mr *MockTableMockRecorder) SetNext(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetNext", reflect.TypeOf((*MockTable)(nil).SetNext), arg0)
 }
 
 // Status mocks base method
@@ -624,7 +662,7 @@ func (m *MockAction) EXPECT() *MockActionMockRecorder {
 }
 
 // CT mocks base method
-func (m *MockAction) CT(arg0 bool, arg1 openflow.TableIDType, arg2 int) openflow.CTAction {
+func (m *MockAction) CT(arg0 bool, arg1 byte, arg2 int) openflow.CTAction {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "CT", arg0, arg1, arg2)
 	ret0, _ := ret[0].(openflow.CTAction)
@@ -680,7 +718,7 @@ func (mr *MockActionMockRecorder) Drop() *gomock.Call {
 }
 
 // GotoTable mocks base method
-func (m *MockAction) GotoTable(arg0 openflow.TableIDType) openflow.FlowBuilder {
+func (m *MockAction) GotoTable(arg0 byte) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GotoTable", arg0)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
@@ -708,7 +746,7 @@ func (mr *MockActionMockRecorder) Group(arg0 interface{}) *gomock.Call {
 }
 
 // Learn mocks base method
-func (m *MockAction) Learn(arg0 openflow.TableIDType, arg1, arg2, arg3 uint16, arg4 uint64) openflow.LearnAction {
+func (m *MockAction) Learn(arg0 byte, arg1, arg2, arg3 uint16, arg4 uint64) openflow.LearnAction {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Learn", arg0, arg1, arg2, arg3, arg4)
 	ret0, _ := ret[0].(openflow.LearnAction)
@@ -932,7 +970,7 @@ func (mr *MockActionMockRecorder) OutputToRegField(arg0 interface{}) *gomock.Cal
 }
 
 // Resubmit mocks base method
-func (m *MockAction) Resubmit(arg0 uint16, arg1 openflow.TableIDType) openflow.FlowBuilder {
+func (m *MockAction) Resubmit(arg0 uint16, arg1 byte) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Resubmit", arg0, arg1)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
@@ -946,7 +984,7 @@ func (mr *MockActionMockRecorder) Resubmit(arg0, arg1 interface{}) *gomock.Call 
 }
 
 // ResubmitToTable mocks base method
-func (m *MockAction) ResubmitToTable(arg0 openflow.TableIDType) openflow.FlowBuilder {
+func (m *MockAction) ResubmitToTable(arg0 byte) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ResubmitToTable", arg0)
 	ret0, _ := ret[0].(openflow.FlowBuilder)

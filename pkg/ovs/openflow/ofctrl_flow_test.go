@@ -6,12 +6,16 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-var testField = NewRegField(1, 0, 15, "testField")
+var (
+	testField = NewRegField(1, 0, 15, "testField")
+	t0        = uint8(0)
+	t1        = uint8(1)
+)
 
 func TestCopyToBuilder(t *testing.T) {
 	table := &ofTable{
-		id:   0,
-		next: 1,
+		id:   t0,
+		next: t1,
 	}
 	mark := NewCTMark(12345, 0, 31)
 	oriFlow := table.BuildFlow(uint16(100)).MatchProtocol(ProtocolIP).
@@ -20,7 +24,7 @@ func TestCopyToBuilder(t *testing.T) {
 		MatchCTStateNew(true).MatchCTStateTrk(true).
 		Action().CT(
 		true,
-		1,
+		t1,
 		0x1234).
 		LoadToCtMark(mark).
 		MoveToLabel(NxmFieldSrcMAC, &Range{0, 47}, &Range{0, 47}).CTDone().
@@ -35,8 +39,8 @@ func TestCopyToBuilder(t *testing.T) {
 
 func TestCopyToBuilder_Drop(t *testing.T) {
 	table := &ofTable{
-		id:   0,
-		next: 1,
+		id:   t0,
+		next: t1,
 	}
 	oriFlow := table.BuildFlow(uint16(100)).MatchProtocol(ProtocolIP).
 		Cookie(uint64(1004)).

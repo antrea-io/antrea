@@ -69,7 +69,7 @@ var (
 		Priority:      nil,
 		Name:          "",
 		FlowID:        uint32(0),
-		TableID:       ofclient.IngressRuleTable,
+		TableID:       ofclient.IngressRuleTable.GetID(),
 		PolicyRef:     &np1,
 		EnableLogging: false,
 	}
@@ -83,7 +83,7 @@ var (
 		Priority:      &priority,
 		Name:          "allow",
 		FlowID:        uint32(0),
-		TableID:       ofclient.EgressRuleTable,
+		TableID:       ofclient.EgressRuleTable.GetID(),
 		PolicyRef:     &np2,
 		EnableLogging: false,
 	}

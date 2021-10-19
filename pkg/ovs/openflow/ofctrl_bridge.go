@@ -23,8 +23,9 @@ const (
 type ofTable struct {
 	// sync.RWMutex protects ofTable status from concurrent modification and reading.
 	sync.RWMutex
-	id         TableIDType
-	next       TableIDType
+	id         uint8
+	name       string
+	next       uint8
 	missAction MissActionType
 	flowCount  uint
 	updateTime time.Time
@@ -32,8 +33,12 @@ type ofTable struct {
 	*ofctrl.Table
 }
 
-func (t *ofTable) GetID() TableIDType {
+func (t *ofTable) GetID() uint8 {
 	return t.id
+}
+
+func (t *ofTable) GetName() string {
+	return t.name
 }
 
 func (t *ofTable) Status() TableStatus {
@@ -42,6 +47,7 @@ func (t *ofTable) Status() TableStatus {
 
 	return TableStatus{
 		ID:         uint(t.id),
+		Name:       t.name,
 		FlowCount:  t.flowCount,
 		UpdateTime: t.updateTime,
 	}
@@ -51,8 +57,16 @@ func (t *ofTable) GetMissAction() MissActionType {
 	return t.missAction
 }
 
-func (t *ofTable) GetNext() TableIDType {
+func (t *ofTable) GetNext() uint8 {
 	return t.next
+}
+
+func (t *ofTable) SetNext(next uint8) {
+	t.next = next
+}
+
+func (t *ofTable) SetMissAction(action MissActionType) {
+	t.missAction = action
 }
 
 func (t *ofTable) UpdateStatus(flowCountDelta int) {
@@ -113,11 +127,10 @@ func (t *ofTable) DumpFlows(cookieID, cookieMask uint64) (map[uint64]*FlowStates
 	return flowStats, nil
 }
 
-func newOFTable(id, next TableIDType, missAction MissActionType) *ofTable {
+func NewOFTable(id uint8, name string) Table {
 	return &ofTable{
-		id:         id,
-		next:       next,
-		missAction: missAction,
+		id:   id,
+		name: name,
 	}
 }
 
@@ -129,7 +142,7 @@ type OFBridge struct {
 	// sync.RWMutex protects tableCache from concurrent modification and iteration.
 	sync.RWMutex
 	// tableCache is used to cache ofTables.
-	tableCache map[TableIDType]*ofTable
+	tableCache map[uint8]*ofTable
 
 	// ofSwitch is the target OFSwitch.
 	ofSwitch *ofctrl.OFSwitch
@@ -145,7 +158,8 @@ type OFBridge struct {
 	// connected is an internal channel to notify if connected to the OFSwitch or not. It is used only in Connect method.
 	connected chan bool
 	// pktConsumers is a map from PacketIn reason to the channel that is used to publish the PacketIn message.
-	pktConsumers sync.Map
+	pktConsumers      sync.Map
+	multipartReplyChs map[uint32]chan *openflow13.MultipartReply
 }
 
 func (b *OFBridge) CreateGroup(id GroupIDType) Group {
@@ -202,19 +216,22 @@ func (b *OFBridge) DeleteMeterAll() error {
 	return nil
 }
 
-func (b *OFBridge) CreateTable(id, next TableIDType, missAction MissActionType) Table {
-	t := newOFTable(id, next, missAction)
-
+func (b *OFBridge) CreateTable(table Table, next uint8, missAction MissActionType) Table {
+	table.SetNext(next)
+	table.SetMissAction(missAction)
+	t, ok := table.(*ofTable)
+	if !ok {
+		return nil
+	}
 	b.Lock()
 	defer b.Unlock()
-
-	b.tableCache[id] = t
+	b.tableCache[t.id] = t
 	return t
 }
 
 // DeleteTable removes the table from ofctrl.OFSwitch, and remove from local cache.
-func (b *OFBridge) DeleteTable(id TableIDType) bool {
-	err := b.ofSwitch.DeleteTable(uint8(id))
+func (b *OFBridge) DeleteTable(id uint8) bool {
+	err := b.ofSwitch.DeleteTable(id)
 	if err != nil {
 		return false
 	}
@@ -269,6 +286,9 @@ func (b *OFBridge) SwitchConnected(sw *ofctrl.OFSwitch) {
 // MultipartReply is a callback when multipartReply message is received on ofctrl.OFSwitch is connected.
 // Client uses this method to handle the reply message if it has customized MultipartRequest message.
 func (b *OFBridge) MultipartReply(sw *ofctrl.OFSwitch, rep *openflow13.MultipartReply) {
+	if ch, ok := b.multipartReplyChs[rep.Xid]; ok {
+		ch <- rep
+	}
 }
 
 func (b *OFBridge) SwitchDisconnected(sw *ofctrl.OFSwitch) {
@@ -284,15 +304,17 @@ func (b *OFBridge) initialize() {
 		if id == 0 {
 			table.Table = b.ofSwitch.DefaultTable()
 		} else {
-			ofTable, err := b.ofSwitch.NewTable(uint8(id))
+			ofTable, err := b.ofSwitch.NewTable(id)
 			if err != nil && err.Error() == ofTableExistsError {
-				ofTable = b.ofSwitch.GetTable(uint8(id))
+				ofTable = b.ofSwitch.GetTable(id)
 			}
 			table.Table = ofTable
 		}
 		// reset flow counts, which is needed for reconnections
 		table.ResetStatus()
 	}
+
+	b.queryTableFeatures()
 
 	metrics.OVSTotalFlowCount.Set(0)
 }
@@ -629,13 +651,75 @@ func (b *OFBridge) RetryInterval() time.Duration {
 	return b.retryInterval
 }
 
+func (b *OFBridge) queryTableFeatures() {
+	mpartRequest := &openflow13.MultipartRequest{
+		Header: openflow13.NewOfp13Header(),
+		Type:   openflow13.MultipartType_TableFeatures,
+		Flags:  0,
+	}
+	mpartRequest.Header.Type = openflow13.Type_MultiPartRequest
+	mpartRequest.Header.Length = mpartRequest.Len()
+	// Use a buffer for the channel to avoid blocking the OpenFlow connection inbound channel, since it takes time when
+	// sending the Multipart Request messages to modify the tables' names. The buffer size "20" is the observed number
+	// of the Multipart Reply messages sent from OVS.
+	tableFeatureCh := make(chan *openflow13.MultipartReply, 20)
+	b.multipartReplyChs[mpartRequest.Xid] = tableFeatureCh
+	go func() {
+		// Delete the channel which is used to receive the MultipartReply message after all tables' features are received.
+		defer func() {
+			delete(b.multipartReplyChs, mpartRequest.Xid)
+		}()
+		b.processTableFeatures(tableFeatureCh)
+	}()
+	b.ofSwitch.Send(mpartRequest)
+}
+
+func (b *OFBridge) processTableFeatures(ch chan *openflow13.MultipartReply) {
+	header := openflow13.NewOfp13Header()
+	header.Type = openflow13.Type_MultiPartRequest
+	// Since the initial MultipartRequest doesn't specify any table ID, OVS will reply all tables' (except the hidden one)
+	// features in the reply. Here we complete the loop after we receive all the reply messages, while the reply message
+	// is configured with Flags=0.
+	for {
+		select {
+		case rpl := <-ch:
+			request := &openflow13.MultipartRequest{
+				Header: header,
+				Type:   openflow13.MultipartType_TableFeatures,
+				Flags:  rpl.Flags,
+			}
+			// A MultipartReply message may have one or many OFPTableFeatures messages, and MultipartReply.Body is a
+			// slice of these messages.
+			for _, body := range rpl.Body {
+				tableFeature := body.(*openflow13.OFPTableFeatures)
+				// Modify table name if the table is in the pipeline, otherwise use the default table features.
+				// OVS doesn't allow to skip any table except the hidden table (always the last table) in a table_features
+				// request. So use the existing table features for the tables that Antrea doesn't define in the pipeline.
+				if t, ok := b.tableCache[tableFeature.TableID]; ok {
+					// Set table name with the configured value.
+					copy(tableFeature.Name[0:], t.name)
+				}
+				request.Body = append(request.Body, tableFeature)
+			}
+			request.Length = request.Len()
+			b.ofSwitch.Send(request)
+			// OVS uses "Flags=0" in the last MultipartReply message to indicate all tables' features have been sent.
+			// Here use this mark to identify all related messages are received and complete the loop.
+			if rpl.Flags == 0 {
+				break
+			}
+		}
+	}
+}
+
 func NewOFBridge(br string, mgmtAddr string) Bridge {
 	s := &OFBridge{
-		bridgeName:    br,
-		mgmtAddr:      mgmtAddr,
-		tableCache:    make(map[TableIDType]*ofTable),
-		retryInterval: 1 * time.Second,
-		pktConsumers:  sync.Map{},
+		bridgeName:        br,
+		mgmtAddr:          mgmtAddr,
+		tableCache:        make(map[uint8]*ofTable),
+		retryInterval:     1 * time.Second,
+		pktConsumers:      sync.Map{},
+		multipartReplyChs: make(map[uint32]chan *openflow13.MultipartReply),
 	}
 	s.controller = ofctrl.NewController(s)
 	return s

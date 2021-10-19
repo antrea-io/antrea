@@ -217,7 +217,7 @@ type Client interface {
 
 	// ReassignFlowPriorities takes a list of priority updates, and update the actionFlows to replace
 	// the old priority with the desired one, for each priority update on that table.
-	ReassignFlowPriorities(updates map[uint16]uint16, table binding.TableIDType) error
+	ReassignFlowPriorities(updates map[uint16]uint16, table uint8) error
 
 	// SubscribePacketIn subscribes to packet in messages for the given reason. Packets
 	// will be placed in the queue and if the queue is full, the packet in messages

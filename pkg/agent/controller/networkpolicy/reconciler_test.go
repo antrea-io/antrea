@@ -611,7 +611,7 @@ func TestReconcileWithTransientError(t *testing.T) {
 			To:        ipsToOFAddresses(sets.NewString("1.1.1.1")),
 			Service:   []v1beta2.Service{serviceTCP80, serviceTCP8080},
 			PolicyRef: &np1,
-			TableID:   openflow.EgressRuleTable,
+			TableID:   openflow.EgressRuleTable.GetID(),
 		},
 		{
 			Direction: v1beta2.DirectionOut,
@@ -619,7 +619,7 @@ func TestReconcileWithTransientError(t *testing.T) {
 			To:        ipsToOFAddresses(sets.NewString("1.1.1.2")),
 			Service:   []v1beta2.Service{serviceTCP443, serviceTCP8080},
 			PolicyRef: &np1,
-			TableID:   openflow.EgressRuleTable,
+			TableID:   openflow.EgressRuleTable.GetID(),
 		},
 		{
 			Direction: v1beta2.DirectionOut,
@@ -627,7 +627,7 @@ func TestReconcileWithTransientError(t *testing.T) {
 			To:        append(ipsToOFAddresses(sets.NewString("1.1.1.3")), openflow.NewIPNetAddress(ipNet)),
 			Service:   []v1beta2.Service{serviceTCP8080},
 			PolicyRef: &np1,
-			TableID:   openflow.EgressRuleTable,
+			TableID:   openflow.EgressRuleTable.GetID(),
 		},
 	}
 	for _, policyRule := range policyRules {

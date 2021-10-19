@@ -91,7 +91,7 @@ func (f *ofFlow) KeyString() string {
 }
 
 func (f *ofFlow) MatchString() string {
-	repr := fmt.Sprintf("table=%d", f.table.GetID())
+	repr := fmt.Sprintf("table=%d", f.table.id)
 	if f.protocol != "" {
 		repr = fmt.Sprintf("%s,%s", repr, f.protocol)
 	}

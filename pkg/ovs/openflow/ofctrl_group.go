@@ -123,8 +123,8 @@ func (b *bucketBuilder) LoadRegMark(mark *RegMark) BucketBuilder {
 }
 
 // ResubmitToTable is an action to resubmit packet to the specified table when the bucket is selected.
-func (b *bucketBuilder) ResubmitToTable(tableID TableIDType) BucketBuilder {
-	b.bucket.AddAction(openflow13.NewNXActionResubmitTableAction(openflow13.OFPP_IN_PORT, uint8(tableID)))
+func (b *bucketBuilder) ResubmitToTable(tableID uint8) BucketBuilder {
+	b.bucket.AddAction(openflow13.NewNXActionResubmitTableAction(openflow13.OFPP_IN_PORT, tableID))
 	return b
 }
 

@@ -220,7 +220,7 @@ func TestReplayFlowsNetworkPolicyFlows(t *testing.T) {
 		Service:   []v1beta2.Service{npPort1},
 		Action:    &defaultAction,
 		FlowID:    ruleID,
-		TableID:   ofClient.IngressRuleTable,
+		TableID:   ofClient.IngressRuleTable.GetID(),
 		PolicyRef: &v1beta2.NetworkPolicyReference{
 			Type:      v1beta2.K8sNetworkPolicy,
 			Namespace: "ns1",
@@ -405,7 +405,7 @@ func TestNetworkPolicyFlows(t *testing.T) {
 		Service:   []v1beta2.Service{npPort1},
 		Action:    &defaultAction,
 		FlowID:    ruleID,
-		TableID:   ofClient.IngressRuleTable,
+		TableID:   ofClient.IngressRuleTable.GetID(),
 		PolicyRef: &v1beta2.NetworkPolicyReference{
 			Type:      v1beta2.K8sNetworkPolicy,
 			Namespace: "ns1",
@@ -445,7 +445,7 @@ func TestNetworkPolicyFlows(t *testing.T) {
 		Service:   []v1beta2.Service{npPort2},
 		Action:    &defaultAction,
 		FlowID:    ruleID2,
-		TableID:   ofClient.IngressRuleTable,
+		TableID:   ofClient.IngressRuleTable.GetID(),
 		PolicyRef: &v1beta2.NetworkPolicyReference{
 			Type:      v1beta2.K8sNetworkPolicy,
 			Namespace: "ns1",
@@ -773,9 +773,9 @@ func checkConjunctionFlows(t *testing.T, ruleTable uint8, dropTable uint8, allow
 
 	conjunctionActionMatch := fmt.Sprintf("priority=%d,conj_id=%d,ip", priority-10, ruleID)
 	conjReg := 6
-	nextTable := ofClient.IngressMetricTable
-	if ruleTable == uint8(ofClient.EgressRuleTable) {
-		nextTable = ofClient.EgressMetricTable
+	nextTable := ofClient.IngressMetricTable.GetID()
+	if ruleTable == ofClient.EgressRuleTable.GetID() {
+		nextTable = ofClient.EgressMetricTable.GetID()
 	}
 
 	flow := &ofTestUtils.ExpectFlow{MatchStr: conjunctionActionMatch, ActStr: fmt.Sprintf("load:0x%x->NXM_NX_REG%d[],ct(commit,table=%d,zone=65520,exec(load:0x%x->NXM_NX_CT_LABEL[0..31])", ruleID, conjReg, nextTable, ruleID)}

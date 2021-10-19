@@ -125,7 +125,7 @@ func formatFlowDump(rawFlows []string) []string {
 }
 
 func OfctlDumpFlows(ovsCtlClient ovsctl.OVSCtlClient, args ...string) ([]string, error) {
-	rawFlows, err := ovsCtlClient.DumpFlows(args...)
+	rawFlows, err := ovsCtlClient.DumpFlowsWithoutTableNames(args...)
 	if err != nil {
 		return nil, err
 	}
@@ -133,7 +133,7 @@ func OfctlDumpFlows(ovsCtlClient ovsctl.OVSCtlClient, args ...string) ([]string,
 }
 
 func OfctlDumpTableFlows(ovsCtlClient ovsctl.OVSCtlClient, table uint8) ([]string, error) {
-	rawFlows, err := ovsCtlClient.DumpTableFlows(table)
+	rawFlows, err := ovsCtlClient.DumpFlowsWithoutTableNames(fmt.Sprintf("table=%d", table))
 	if err != nil {
 		return nil, err
 	}

@@ -94,19 +94,19 @@ func getMatchRegField(matchers *ofctrl.Matchers, field *binding.RegField) *ofctr
 
 // getMatch receives ofctrl matchers and table id, match field.
 // Modifies match field to Ingress/Egress register based on tableID.
-func getMatch(matchers *ofctrl.Matchers, tableID binding.TableIDType, disposition uint32) *ofctrl.MatchField {
+func getMatch(matchers *ofctrl.Matchers, tableID uint8, disposition uint32) *ofctrl.MatchField {
 	// Get match from CNPDenyConjIDReg if disposition is not allow.
 	if disposition != openflow.DispositionAllow {
 		return getMatchRegField(matchers, openflow.CNPDenyConjIDField)
 	}
 	// Get match from ingress/egress reg if disposition is allow
 	for _, table := range append(openflow.GetAntreaPolicyEgressTables(), openflow.EgressRuleTable) {
-		if tableID == table {
+		if tableID == table.GetID() {
 			return getMatchRegField(matchers, openflow.TFEgressConjIDField)
 		}
 	}
 	for _, table := range append(openflow.GetAntreaPolicyIngressTables(), openflow.IngressRuleTable) {
-		if tableID == table {
+		if tableID == table.GetID() {
 			return getMatchRegField(matchers, openflow.TFIngressConjIDField)
 		}
 	}
@@ -130,7 +130,7 @@ func getNetworkPolicyInfo(pktIn *ofctrl.PacketIn, c *Controller, ob *logInfo) er
 	matchers := pktIn.GetMatches()
 	var match *ofctrl.MatchField
 	// Get table name
-	tableID := binding.TableIDType(pktIn.TableId)
+	tableID := pktIn.TableId
 	ob.tableName = openflow.GetFlowTableName(tableID)
 
 	// Get disposition Allow or Drop
@@ -326,7 +326,7 @@ func (c *Controller) storeDenyConnection(pktIn *ofctrl.PacketIn) error {
 	matchers := pktIn.GetMatches()
 	var match *ofctrl.MatchField
 	// Get table ID
-	tableID := binding.TableIDType(pktIn.TableId)
+	tableID := pktIn.TableId
 	// Get disposition Allow, Drop or Reject
 	match = getMatchRegField(matchers, openflow.APDispositionField)
 	id, err := getInfoInReg(match, openflow.APDispositionField.GetRange().ToNXRange())
@@ -363,10 +363,10 @@ func (c *Controller) storeDenyConnection(pktIn *ofctrl.PacketIn) error {
 		}
 	} else {
 		// For K8s NetworkPolicy implicit drop action, we cannot get name/namespace.
-		if tableID == openflow.IngressDefaultTable {
+		if tableID == openflow.IngressDefaultTable.GetID() {
 			denyConn.IngressNetworkPolicyType = registry.PolicyTypeK8sNetworkPolicy
 			denyConn.IngressNetworkPolicyRuleAction = flowexporter.RuleActionToUint8(disposition)
-		} else if tableID == openflow.EgressDefaultTable {
+		} else if tableID == openflow.EgressDefaultTable.GetID() {
 			denyConn.EgressNetworkPolicyType = registry.PolicyTypeK8sNetworkPolicy
 			denyConn.EgressNetworkPolicyRuleAction = flowexporter.RuleActionToUint8(disposition)
 		}
@@ -375,18 +375,18 @@ func (c *Controller) storeDenyConnection(pktIn *ofctrl.PacketIn) error {
 	return nil
 }
 
-func isAntreaPolicyIngressTable(tableID binding.TableIDType) bool {
+func isAntreaPolicyIngressTable(tableID uint8) bool {
 	for _, table := range openflow.GetAntreaPolicyIngressTables() {
-		if table == tableID {
+		if table.GetID() == tableID {
 			return true
 		}
 	}
 	return false
 }
 
-func isAntreaPolicyEgressTable(tableID binding.TableIDType) bool {
+func isAntreaPolicyEgressTable(tableID uint8) bool {
 	for _, table := range openflow.GetAntreaPolicyEgressTables() {
-		if table == tableID {
+		if table.GetID() == tableID {
 			return true
 		}
 	}

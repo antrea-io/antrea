@@ -166,7 +166,7 @@ func TestInstallPolicyRuleFlows(t *testing.T) {
 		Action:    &defaultAction,
 		Priority:  nil,
 		FlowID:    ruleID1,
-		TableID:   EgressRuleTable,
+		TableID:   EgressRuleTable.GetID(),
 		PolicyRef: &v1beta2.NetworkPolicyReference{
 			Type:      v1beta2.K8sNetworkPolicy,
 			Namespace: "ns1",
@@ -199,7 +199,7 @@ func TestInstallPolicyRuleFlows(t *testing.T) {
 		Action:    &defaultAction,
 		To:        parseAddresses([]string{"0.0.0.0/0"}),
 		FlowID:    ruleID2,
-		TableID:   EgressRuleTable,
+		TableID:   EgressRuleTable.GetID(),
 		PolicyRef: &v1beta2.NetworkPolicyReference{
 			Type:      v1beta2.K8sNetworkPolicy,
 			Namespace: "ns1",
@@ -243,7 +243,7 @@ func TestInstallPolicyRuleFlows(t *testing.T) {
 		Action:    &defaultAction,
 		Service:   []v1beta2.Service{npPort1, npPort2},
 		FlowID:    ruleID3,
-		TableID:   EgressRuleTable,
+		TableID:   EgressRuleTable.GetID(),
 		PolicyRef: &v1beta2.NetworkPolicyReference{
 			Type:      v1beta2.K8sNetworkPolicy,
 			Namespace: "ns1",
@@ -306,7 +306,7 @@ func TestBatchInstallPolicyRuleFlows(t *testing.T) {
 					From:      parseAddresses([]string{"192.168.1.40", "192.168.1.50"}),
 					To:        parseAddresses([]string{"0.0.0.0/0"}),
 					FlowID:    uint32(10),
-					TableID:   EgressRuleTable,
+					TableID:   EgressRuleTable.GetID(),
 					PolicyRef: &v1beta2.NetworkPolicyReference{
 						Type:      v1beta2.K8sNetworkPolicy,
 						Namespace: "ns1",
@@ -322,7 +322,7 @@ func TestBatchInstallPolicyRuleFlows(t *testing.T) {
 					To:      parseAddresses([]string{"0.0.0.0/0"}),
 					Service: []v1beta2.Service{{Protocol: &protocolTCP, Port: &port8080}},
 					FlowID:  uint32(11),
-					TableID: EgressRuleTable,
+					TableID: EgressRuleTable.GetID(),
 					PolicyRef: &v1beta2.NetworkPolicyReference{
 						Type:      v1beta2.K8sNetworkPolicy,
 						Namespace: "ns1",
@@ -335,52 +335,52 @@ func TestBatchInstallPolicyRuleFlows(t *testing.T) {
 				cookiePolicy := c.cookieAllocator.Request(cookie.Policy).Raw()
 				cookieDefault := c.cookieAllocator.Request(cookie.Default).Raw()
 				return []binding.Flow{
-					c.pipeline[EgressRuleTable].BuildFlow(priorityLow).Cookie(cookiePolicy).
+					EgressRuleTable.BuildFlow(priorityLow).Cookie(cookiePolicy).
 						MatchProtocol(binding.ProtocolIP).MatchConjID(10).
 						Action().LoadToRegField(TFEgressConjIDField, 10).
-						Action().CT(true, EgressMetricTable, CtZone).LoadToLabelField(10, EgressRuleCTLabel).CTDone().Done(),
-					c.pipeline[EgressRuleTable].BuildFlow(priorityLow).Cookie(cookiePolicy).
+						Action().CT(true, EgressMetricTable.GetID(), CtZone).LoadToLabelField(10, EgressRuleCTLabel).CTDone().Done(),
+					EgressRuleTable.BuildFlow(priorityLow).Cookie(cookiePolicy).
 						MatchProtocol(binding.ProtocolIP).MatchConjID(11).
 						Action().LoadToRegField(TFEgressConjIDField, 11).
-						Action().CT(true, EgressMetricTable, CtZone).LoadToLabelField(11, EgressRuleCTLabel).CTDone().Done(),
-					c.pipeline[EgressRuleTable].BuildFlow(priorityNormal).Cookie(cookiePolicy).
+						Action().CT(true, EgressMetricTable.GetID(), CtZone).LoadToLabelField(11, EgressRuleCTLabel).CTDone().Done(),
+					EgressRuleTable.BuildFlow(priorityNormal).Cookie(cookiePolicy).
 						MatchProtocol(binding.ProtocolIP).MatchSrcIP(net.ParseIP("192.168.1.40")).
 						Action().Conjunction(10, 1, 2).
 						Action().Conjunction(11, 1, 3).Done(),
-					c.pipeline[EgressRuleTable].BuildFlow(priorityNormal).Cookie(cookiePolicy).
+					EgressRuleTable.BuildFlow(priorityNormal).Cookie(cookiePolicy).
 						MatchProtocol(binding.ProtocolIP).MatchSrcIP(net.ParseIP("192.168.1.50")).
 						Action().Conjunction(10, 1, 2).Done(),
-					c.pipeline[EgressRuleTable].BuildFlow(priorityNormal).Cookie(cookiePolicy).
+					EgressRuleTable.BuildFlow(priorityNormal).Cookie(cookiePolicy).
 						MatchProtocol(binding.ProtocolIP).MatchSrcIP(net.ParseIP("192.168.1.51")).
 						Action().Conjunction(11, 1, 3).Done(),
-					c.pipeline[EgressRuleTable].BuildFlow(priorityNormal).Cookie(cookiePolicy).
+					EgressRuleTable.BuildFlow(priorityNormal).Cookie(cookiePolicy).
 						MatchProtocol(binding.ProtocolIP).MatchDstIPNet(*ip.MustParseCIDR("0.0.0.0/0")).
 						Action().Conjunction(10, 2, 2).
 						Action().Conjunction(11, 2, 3).Done(),
-					c.pipeline[EgressRuleTable].BuildFlow(priorityNormal).Cookie(cookiePolicy).
+					EgressRuleTable.BuildFlow(priorityNormal).Cookie(cookiePolicy).
 						MatchProtocol(binding.ProtocolTCP).MatchDstPort(8080, nil).
 						Action().Conjunction(11, 3, 3).Done(),
-					c.pipeline[EgressDefaultTable].BuildFlow(priorityNormal).Cookie(cookieDefault).
+					EgressDefaultTable.BuildFlow(priorityNormal).Cookie(cookieDefault).
 						MatchProtocol(binding.ProtocolIP).MatchSrcIP(net.ParseIP("192.168.1.40")).
 						Action().Drop().Done(),
-					c.pipeline[EgressDefaultTable].BuildFlow(priorityNormal).Cookie(cookieDefault).
+					EgressDefaultTable.BuildFlow(priorityNormal).Cookie(cookieDefault).
 						MatchProtocol(binding.ProtocolIP).MatchSrcIP(net.ParseIP("192.168.1.50")).
 						Action().Drop().Done(),
-					c.pipeline[EgressDefaultTable].BuildFlow(priorityNormal).Cookie(cookieDefault).
+					EgressDefaultTable.BuildFlow(priorityNormal).Cookie(cookieDefault).
 						MatchProtocol(binding.ProtocolIP).MatchSrcIP(net.ParseIP("192.168.1.51")).
 						Action().Drop().Done(),
-					c.pipeline[EgressMetricTable].BuildFlow(priorityNormal).Cookie(cookiePolicy).
+					EgressMetricTable.BuildFlow(priorityNormal).Cookie(cookiePolicy).
 						MatchProtocol(binding.ProtocolIP).MatchCTStateNew(true).MatchCTLabelField(0, uint64(10)<<32, EgressRuleCTLabel).
-						Action().GotoTable(l3ForwardingTable).Done(),
-					c.pipeline[EgressMetricTable].BuildFlow(priorityNormal).Cookie(cookiePolicy).
+						Action().GotoTable(L3ForwardingTable.GetID()).Done(),
+					EgressMetricTable.BuildFlow(priorityNormal).Cookie(cookiePolicy).
 						MatchProtocol(binding.ProtocolIP).MatchCTStateNew(false).MatchCTLabelField(0, uint64(10)<<32, EgressRuleCTLabel).
-						Action().GotoTable(l3ForwardingTable).Done(),
-					c.pipeline[EgressMetricTable].BuildFlow(priorityNormal).Cookie(cookiePolicy).
+						Action().GotoTable(L3ForwardingTable.GetID()).Done(),
+					EgressMetricTable.BuildFlow(priorityNormal).Cookie(cookiePolicy).
 						MatchProtocol(binding.ProtocolIP).MatchCTStateNew(true).MatchCTLabelField(0, uint64(11)<<32, EgressRuleCTLabel).
-						Action().GotoTable(l3ForwardingTable).Done(),
-					c.pipeline[EgressMetricTable].BuildFlow(priorityNormal).Cookie(cookiePolicy).
+						Action().GotoTable(L3ForwardingTable.GetID()).Done(),
+					EgressMetricTable.BuildFlow(priorityNormal).Cookie(cookiePolicy).
 						MatchProtocol(binding.ProtocolIP).MatchCTStateNew(false).MatchCTLabelField(0, uint64(11)<<32, EgressRuleCTLabel).
-						Action().GotoTable(l3ForwardingTable).Done(),
+						Action().GotoTable(L3ForwardingTable.GetID()).Done(),
 				}
 			},
 		},
@@ -394,7 +394,7 @@ func TestBatchInstallPolicyRuleFlows(t *testing.T) {
 					Priority:  &priority100,
 					To:        []types.Address{NewOFPortAddress(1), NewOFPortAddress(2)},
 					FlowID:    uint32(10),
-					TableID:   AntreaPolicyIngressRuleTable,
+					TableID:   AntreaPolicyIngressRuleTable.GetID(),
 					PolicyRef: &v1beta2.NetworkPolicyReference{
 						Type:      v1beta2.AntreaNetworkPolicy,
 						Namespace: "ns1",
@@ -411,7 +411,7 @@ func TestBatchInstallPolicyRuleFlows(t *testing.T) {
 					To:       []types.Address{NewOFPortAddress(1), NewOFPortAddress(3)},
 					Service:  []v1beta2.Service{{Protocol: &protocolTCP, Port: &port8080}},
 					FlowID:   uint32(11),
-					TableID:  AntreaPolicyIngressRuleTable,
+					TableID:  AntreaPolicyIngressRuleTable.GetID(),
 					PolicyRef: &v1beta2.NetworkPolicyReference{
 						Type:      v1beta2.AntreaNetworkPolicy,
 						Namespace: "ns1",
@@ -428,7 +428,7 @@ func TestBatchInstallPolicyRuleFlows(t *testing.T) {
 					To:       []types.Address{NewOFPortAddress(1)},
 					Service:  []v1beta2.Service{{Protocol: &protocolTCP, Port: &port8080}},
 					FlowID:   uint32(12),
-					TableID:  AntreaPolicyIngressRuleTable,
+					TableID:  AntreaPolicyIngressRuleTable.GetID(),
 					PolicyRef: &v1beta2.NetworkPolicyReference{
 						Type:      v1beta2.AntreaNetworkPolicy,
 						Namespace: "ns1",
@@ -440,62 +440,62 @@ func TestBatchInstallPolicyRuleFlows(t *testing.T) {
 			expectedFlowsFn: func(c *client) []binding.Flow {
 				cookiePolicy := c.cookieAllocator.Request(cookie.Policy).Raw()
 				return []binding.Flow{
-					c.pipeline[AntreaPolicyIngressRuleTable].BuildFlow(priority100).Cookie(cookiePolicy).
+					AntreaPolicyIngressRuleTable.BuildFlow(priority100).Cookie(cookiePolicy).
 						MatchProtocol(binding.ProtocolIP).MatchConjID(10).
 						Action().LoadToRegField(TFIngressConjIDField, 10).
-						Action().CT(true, IngressMetricTable, CtZone).LoadToLabelField(10, IngressRuleCTLabel).CTDone().Done(),
-					c.pipeline[AntreaPolicyIngressRuleTable].BuildFlow(priority100).Cookie(cookiePolicy).
+						Action().CT(true, IngressMetricTable.GetID(), CtZone).LoadToLabelField(10, IngressRuleCTLabel).CTDone().Done(),
+					AntreaPolicyIngressRuleTable.BuildFlow(priority100).Cookie(cookiePolicy).
 						MatchConjID(11).
 						Action().LoadToRegField(CNPDenyConjIDField, 11).
 						Action().LoadRegMark(CnpDenyRegMark).
-						Action().GotoTable(IngressMetricTable).Done(),
-					c.pipeline[AntreaPolicyIngressRuleTable].BuildFlow(priority200).Cookie(cookiePolicy).
+						Action().GotoTable(IngressMetricTable.GetID()).Done(),
+					AntreaPolicyIngressRuleTable.BuildFlow(priority200).Cookie(cookiePolicy).
 						MatchConjID(12).
 						Action().LoadToRegField(CNPDenyConjIDField, 12).
 						Action().LoadRegMark(CnpDenyRegMark).
-						Action().GotoTable(IngressMetricTable).Done(),
-					c.pipeline[AntreaPolicyIngressRuleTable].BuildFlow(priority100).Cookie(cookiePolicy).
+						Action().GotoTable(IngressMetricTable.GetID()).Done(),
+					AntreaPolicyIngressRuleTable.BuildFlow(priority100).Cookie(cookiePolicy).
 						MatchProtocol(binding.ProtocolIP).MatchSrcIP(net.ParseIP("192.168.1.40")).
 						Action().Conjunction(10, 1, 2).
 						Action().Conjunction(11, 1, 3).Done(),
-					c.pipeline[AntreaPolicyIngressRuleTable].BuildFlow(priority200).Cookie(cookiePolicy).
+					AntreaPolicyIngressRuleTable.BuildFlow(priority200).Cookie(cookiePolicy).
 						MatchProtocol(binding.ProtocolIP).MatchSrcIP(net.ParseIP("192.168.1.40")).
 						Action().Conjunction(12, 1, 3).Done(),
-					c.pipeline[AntreaPolicyIngressRuleTable].BuildFlow(priority100).Cookie(cookiePolicy).
+					AntreaPolicyIngressRuleTable.BuildFlow(priority100).Cookie(cookiePolicy).
 						MatchProtocol(binding.ProtocolIP).MatchSrcIP(net.ParseIP("192.168.1.50")).
 						Action().Conjunction(10, 1, 2).Done(),
-					c.pipeline[AntreaPolicyIngressRuleTable].BuildFlow(priority100).Cookie(cookiePolicy).
+					AntreaPolicyIngressRuleTable.BuildFlow(priority100).Cookie(cookiePolicy).
 						MatchProtocol(binding.ProtocolIP).MatchSrcIP(net.ParseIP("192.168.1.51")).
 						Action().Conjunction(11, 1, 3).Done(),
-					c.pipeline[AntreaPolicyIngressRuleTable].BuildFlow(priority100).Cookie(cookiePolicy).
+					AntreaPolicyIngressRuleTable.BuildFlow(priority100).Cookie(cookiePolicy).
 						MatchRegFieldWithValue(TargetOFPortField, uint32(1)).
 						Action().Conjunction(10, 2, 2).
 						Action().Conjunction(11, 2, 3).Done(),
-					c.pipeline[AntreaPolicyIngressRuleTable].BuildFlow(priority200).Cookie(cookiePolicy).
+					AntreaPolicyIngressRuleTable.BuildFlow(priority200).Cookie(cookiePolicy).
 						MatchRegFieldWithValue(TargetOFPortField, uint32(1)).
 						Action().Conjunction(12, 2, 3).Done(),
-					c.pipeline[AntreaPolicyIngressRuleTable].BuildFlow(priority100).Cookie(cookiePolicy).
+					AntreaPolicyIngressRuleTable.BuildFlow(priority100).Cookie(cookiePolicy).
 						MatchRegFieldWithValue(TargetOFPortField, uint32(2)).
 						Action().Conjunction(10, 2, 2).Done(),
-					c.pipeline[AntreaPolicyIngressRuleTable].BuildFlow(priority100).Cookie(cookiePolicy).
+					AntreaPolicyIngressRuleTable.BuildFlow(priority100).Cookie(cookiePolicy).
 						MatchRegFieldWithValue(TargetOFPortField, uint32(3)).
 						Action().Conjunction(11, 2, 3).Done(),
-					c.pipeline[AntreaPolicyIngressRuleTable].BuildFlow(priority100).Cookie(cookiePolicy).
+					AntreaPolicyIngressRuleTable.BuildFlow(priority100).Cookie(cookiePolicy).
 						MatchProtocol(binding.ProtocolTCP).MatchDstPort(8080, nil).
 						Action().Conjunction(11, 3, 3).Done(),
-					c.pipeline[AntreaPolicyIngressRuleTable].BuildFlow(priority200).Cookie(cookiePolicy).
+					AntreaPolicyIngressRuleTable.BuildFlow(priority200).Cookie(cookiePolicy).
 						MatchProtocol(binding.ProtocolTCP).MatchDstPort(8080, nil).
 						Action().Conjunction(12, 3, 3).Done(),
-					c.pipeline[IngressMetricTable].BuildFlow(priorityNormal).Cookie(cookiePolicy).
+					IngressMetricTable.BuildFlow(priorityNormal).Cookie(cookiePolicy).
 						MatchProtocol(binding.ProtocolIP).MatchCTStateNew(true).MatchCTLabelField(0, 10, IngressRuleCTLabel).
-						Action().GotoTable(conntrackCommitTable).Done(),
-					c.pipeline[IngressMetricTable].BuildFlow(priorityNormal).Cookie(cookiePolicy).
+						Action().GotoTable(ConntrackCommitTable.GetID()).Done(),
+					IngressMetricTable.BuildFlow(priorityNormal).Cookie(cookiePolicy).
 						MatchProtocol(binding.ProtocolIP).MatchCTStateNew(false).MatchCTLabelField(0, 10, IngressRuleCTLabel).
-						Action().GotoTable(conntrackCommitTable).Done(),
-					c.pipeline[IngressMetricTable].BuildFlow(priorityNormal).Cookie(cookiePolicy).
+						Action().GotoTable(ConntrackCommitTable.GetID()).Done(),
+					IngressMetricTable.BuildFlow(priorityNormal).Cookie(cookiePolicy).
 						MatchRegMark(CnpDenyRegMark).MatchRegFieldWithValue(CNPDenyConjIDField, 11).
 						Action().Drop().Done(),
-					c.pipeline[IngressMetricTable].BuildFlow(priorityNormal).Cookie(cookiePolicy).
+					IngressMetricTable.BuildFlow(priorityNormal).Cookie(cookiePolicy).
 						MatchRegMark(CnpDenyRegMark).MatchRegFieldWithValue(CNPDenyConjIDField, 12).
 						Action().Drop().Done(),
 				}
@@ -563,7 +563,7 @@ func BenchmarkBatchInstallPolicyRuleFlows(b *testing.B) {
 			Priority:  &priority100,
 			To:        []types.Address{NewOFPortAddress(1), NewOFPortAddress(int32(i))},
 			FlowID:    uint32(i),
-			TableID:   AntreaPolicyIngressRuleTable,
+			TableID:   AntreaPolicyIngressRuleTable.GetID(),
 			PolicyRef: &v1beta2.NetworkPolicyReference{
 				Type:      v1beta2.AntreaNetworkPolicy,
 				Namespace: "ns1",
@@ -620,7 +620,7 @@ func TestConjMatchFlowContextKeyConflict(t *testing.T) {
 	err = c.applyConjunctiveMatchFlows(flowChange2)
 	require.Nil(t, err, "no error expect in applyConjunctiveMatchFlows")
 
-	expectedMatchKey := fmt.Sprintf("table:%d,priority:%s,type:%v,value:%s", EgressRuleTable, strconv.Itoa(int(priorityNormal)), MatchDstIPNet, ipNet.String())
+	expectedMatchKey := fmt.Sprintf("table:%d,priority:%s,type:%v,value:%s", EgressRuleTable.GetID(), strconv.Itoa(int(priorityNormal)), MatchDstIPNet, ipNet.String())
 	ctx, found := c.globalConjMatchFlowCache[expectedMatchKey]
 	assert.True(t, found)
 	assert.Equal(t, 2, len(ctx.actions))
@@ -648,7 +648,7 @@ func TestInstallPolicyRuleFlowsInDualStackCluster(t *testing.T) {
 		Action:    &defaultAction,
 		Priority:  nil,
 		FlowID:    ruleID1,
-		TableID:   EgressRuleTable,
+		TableID:   EgressRuleTable.GetID(),
 		PolicyRef: &v1beta2.NetworkPolicyReference{
 			Type:      v1beta2.K8sNetworkPolicy,
 			Namespace: "ns1",
@@ -681,7 +681,7 @@ func TestInstallPolicyRuleFlowsInDualStackCluster(t *testing.T) {
 		Action:    &defaultAction,
 		To:        parseAddresses([]string{"0.0.0.0/0"}),
 		FlowID:    ruleID2,
-		TableID:   EgressRuleTable,
+		TableID:   EgressRuleTable.GetID(),
 		PolicyRef: &v1beta2.NetworkPolicyReference{
 			Type:      v1beta2.K8sNetworkPolicy,
 			Namespace: "ns1",
@@ -724,7 +724,7 @@ func TestInstallPolicyRuleFlowsInDualStackCluster(t *testing.T) {
 		Action:    &defaultAction,
 		Service:   []v1beta2.Service{npPort1, npPort2},
 		FlowID:    ruleID3,
-		TableID:   EgressRuleTable,
+		TableID:   EgressRuleTable.GetID(),
 		PolicyRef: &v1beta2.NetworkPolicyReference{
 			Type:      v1beta2.K8sNetworkPolicy,
 			Namespace: "ns1",
@@ -936,11 +936,13 @@ func parseAddresses(addrs []string) []types.Address {
 	return addresses
 }
 
-func createMockTable(ctrl *gomock.Controller, tableID binding.TableIDType, nextTable binding.TableIDType, missAction binding.MissActionType) *mocks.MockTable {
+func createMockTable(ctrl *gomock.Controller, tableID uint8, nextTable uint8, missAction binding.MissActionType) *mocks.MockTable {
 	table := mocks.NewMockTable(ctrl)
 	table.EXPECT().GetID().Return(tableID).AnyTimes()
 	table.EXPECT().GetNext().Return(nextTable).AnyTimes()
 	table.EXPECT().GetMissAction().Return(missAction).AnyTimes()
+	table.EXPECT().GetName().Return("table").AnyTimes()
+	ofTableCache.Update(table)
 	return table
 }
 
@@ -951,19 +953,12 @@ func prepareClient(ctrl *gomock.Controller) *client {
 	)
 	bridge := mocks.NewMockBridge(ctrl)
 	bridge.EXPECT().AddFlowsInBundle(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
-	cnpOutTable = createMockTable(ctrl, AntreaPolicyEgressRuleTable, EgressRuleTable, binding.TableMissActionNext)
-	outTable = createMockTable(ctrl, EgressRuleTable, EgressDefaultTable, binding.TableMissActionNext)
-	outDropTable = createMockTable(ctrl, EgressDefaultTable, EgressMetricTable, binding.TableMissActionNext)
-	metricTable = createMockTable(ctrl, EgressMetricTable, l3ForwardingTable, binding.TableMissActionNext)
-	outAllowTable = createMockTable(ctrl, l3ForwardingTable, l2ForwardingCalcTable, binding.TableMissActionNext)
+	cnpOutTable = createMockTable(ctrl, AntreaPolicyEgressRuleTable.GetID(), EgressRuleTable.GetID(), binding.TableMissActionNext)
+	outTable = createMockTable(ctrl, EgressRuleTable.GetID(), EgressDefaultTable.GetID(), binding.TableMissActionNext)
+	outDropTable = createMockTable(ctrl, EgressDefaultTable.GetID(), EgressMetricTable.GetID(), binding.TableMissActionNext)
+	metricTable = createMockTable(ctrl, EgressMetricTable.GetID(), L3ForwardingTable.GetID(), binding.TableMissActionNext)
+	outAllowTable = createMockTable(ctrl, L3ForwardingTable.GetID(), L2ForwardingCalcTable.GetID(), binding.TableMissActionNext)
 	c = &client{
-		pipeline: map[binding.TableIDType]binding.Table{
-			AntreaPolicyEgressRuleTable: cnpOutTable,
-			EgressRuleTable:             outTable,
-			EgressDefaultTable:          outDropTable,
-			EgressMetricTable:           metricTable,
-			l3ForwardingTable:           outAllowTable,
-		},
 		policyCache:              policyCache,
 		globalConjMatchFlowCache: map[string]*conjMatchFlowContext{},
 		bridge:                   bridge,
@@ -1104,8 +1099,8 @@ func TestNetworkPolicyMetrics(t *testing.T) {
 			mockOVSClient := ovsctltest.NewMockOVSCtlClient(ctrl)
 			c.ovsctlClient = mockOVSClient
 			gomock.InOrder(
-				mockOVSClient.EXPECT().DumpTableFlows(uint8(EgressMetricTable)).Return(tt.egressFlows, nil),
-				mockOVSClient.EXPECT().DumpTableFlows(uint8(IngressMetricTable)).Return(tt.ingressFlows, nil),
+				mockOVSClient.EXPECT().DumpTableFlows(EgressMetricTable.GetID()).Return(tt.egressFlows, nil),
+				mockOVSClient.EXPECT().DumpTableFlows(IngressMetricTable.GetID()).Return(tt.ingressFlows, nil),
 			)
 			got := c.NetworkPolicyMetrics()
 			assert.Equal(t, tt.want, got)
@@ -1137,7 +1132,7 @@ func TestGetMatchFlowUpdates(t *testing.T) {
 			Priority:  &priority100,
 			To:        []types.Address{NewOFPortAddress(1), NewOFPortAddress(2)},
 			FlowID:    uint32(10),
-			TableID:   AntreaPolicyEgressRuleTable,
+			TableID:   AntreaPolicyEgressRuleTable.GetID(),
 			PolicyRef: &v1beta2.NetworkPolicyReference{
 				Type:      v1beta2.AntreaNetworkPolicy,
 				Namespace: "ns1",
@@ -1154,7 +1149,7 @@ func TestGetMatchFlowUpdates(t *testing.T) {
 			To:       []types.Address{NewOFPortAddress(1), NewOFPortAddress(3)},
 			Service:  []v1beta2.Service{{Protocol: &protocolTCP, Port: &port8080}},
 			FlowID:   uint32(11),
-			TableID:  AntreaPolicyEgressRuleTable,
+			TableID:  AntreaPolicyEgressRuleTable.GetID(),
 			PolicyRef: &v1beta2.NetworkPolicyReference{
 				Type:      v1beta2.AntreaNetworkPolicy,
 				Namespace: "ns1",
@@ -1171,7 +1166,7 @@ func TestGetMatchFlowUpdates(t *testing.T) {
 			To:       []types.Address{NewOFPortAddress(1)},
 			Service:  []v1beta2.Service{{Protocol: &protocolTCP, Port: &port8080}},
 			FlowID:   uint32(12),
-			TableID:  AntreaPolicyEgressRuleTable,
+			TableID:  AntreaPolicyEgressRuleTable.GetID(),
 			PolicyRef: &v1beta2.NetworkPolicyReference{
 				Type:      v1beta2.AntreaNetworkPolicy,
 				Namespace: "ns1",
@@ -1186,6 +1181,6 @@ func TestGetMatchFlowUpdates(t *testing.T) {
 		priority100: 101,
 		priority200: 202,
 	}
-	err = c.ReassignFlowPriorities(updatedPriorities, AntreaPolicyEgressRuleTable)
+	err = c.ReassignFlowPriorities(updatedPriorities, AntreaPolicyEgressRuleTable.GetID())
 	assert.Nil(t, err)
 }

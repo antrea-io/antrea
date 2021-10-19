@@ -561,7 +561,7 @@ func (mr *MockClientMockRecorder) NewDNSpacketInConjunction(arg0 interface{}) *g
 }
 
 // ReassignFlowPriorities mocks base method
-func (m *MockClient) ReassignFlowPriorities(arg0 map[uint16]uint16, arg1 openflow.TableIDType) error {
+func (m *MockClient) ReassignFlowPriorities(arg0 map[uint16]uint16, arg1 byte) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ReassignFlowPriorities", arg0, arg1)
 	ret0, _ := ret[0].(error)
