@@ -65,6 +65,7 @@ type Neighbor struct {
 	LinkIndex        int
 	IPAddress        net.IP
 	LinkLayerAddress net.HardwareAddr
+	State            string
 }
 
 func (n Neighbor) String() string {
@@ -661,10 +662,10 @@ func CreateNetNatOnHost(subnetCIDR *net.IPNet) error {
 // GetNetNeighbor gets neighbor cache entries with Get-NetNeighbor.
 func GetNetNeighbor(neighbor *Neighbor) ([]Neighbor, error) {
 	cmd := fmt.Sprintf("Get-NetNeighbor -InterfaceIndex %d -IPAddress %s -ErrorAction Ignore | Format-Table -HideTableHeaders", neighbor.LinkIndex, neighbor.IPAddress.String())
-	neighborsStr, err := ps.RunCommand(cmd)
-	if err != nil {
-		return nil, err
-	}
+	// If no such neighbor exists, exit code will be 1 and RunCommand() returns error.
+	// Since Get-NetNeighbor ignores error, it should be ignored.
+	neighborsStr, _ := ps.RunCommand(cmd)
+
 	parsed := parseGetNetCmdResult(neighborsStr, 5)
 	var neighbors []Neighbor
 	for _, items := range parsed {
@@ -685,6 +686,7 @@ func GetNetNeighbor(neighbor *Neighbor) ([]Neighbor, error) {
 			LinkIndex:        idx,
 			IPAddress:        dstIP,
 			LinkLayerAddress: mac,
+			State:            items[3],
 		}
 		neighbors = append(neighbors, neighbor)
 	}
@@ -694,14 +696,6 @@ func GetNetNeighbor(neighbor *Neighbor) ([]Neighbor, error) {
 // NewNetNeighbor creates a new neighbor cache entry with New-NetNeighbor.
 func NewNetNeighbor(neighbor *Neighbor) error {
 	cmd := fmt.Sprintf("New-NetNeighbor -InterfaceIndex %d -IPAddress %s -LinkLayerAddress %s -State Permanent",
-		neighbor.LinkIndex, neighbor.IPAddress, neighbor.LinkLayerAddress)
-	_, err := ps.RunCommand(cmd)
-	return err
-}
-
-// SetNetNeighbor modifies a neighbor cache entry with Set-NetNeighbor.
-func SetNetNeighbor(neighbor *Neighbor) error {
-	cmd := fmt.Sprintf("Set-NetNeighbor -InterfaceIndex %d -IPAddress %s -LinkLayerAddress %s -State Permanent",
 		neighbor.LinkIndex, neighbor.IPAddress, neighbor.LinkLayerAddress)
 	_, err := ps.RunCommand(cmd)
 	return err
@@ -721,7 +715,7 @@ func ReplaceNetNeighbor(neighbor *Neighbor) error {
 	}
 	found := false
 	for _, n := range neighbors {
-		if n.LinkLayerAddress.String() == neighbor.LinkLayerAddress.String() {
+		if n.LinkLayerAddress.String() == neighbor.LinkLayerAddress.String() && n.State == "Permanent" {
 			found = true
 			break
 		}
@@ -729,7 +723,7 @@ func ReplaceNetNeighbor(neighbor *Neighbor) error {
 	if found {
 		return nil
 	}
-	if err := SetNetNeighbor(neighbor); err != nil {
+	if err := NewNetNeighbor(neighbor); err != nil {
 		return err
 	}
 	return nil
