@@ -15,8 +15,6 @@
 package querier
 
 import (
-	"strconv"
-
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientset "k8s.io/client-go/kubernetes"
@@ -136,7 +134,7 @@ func (aq agentQuerier) getOVSFlowTable() map[string]int32 {
 	flowTable := make(map[string]int32)
 	flowTableStatus := aq.ofClient.GetFlowTableStatus()
 	for _, tableStatus := range flowTableStatus {
-		flowTable[strconv.Itoa(int(tableStatus.ID))] = int32(tableStatus.FlowCount)
+		flowTable[tableStatus.Name] = int32(tableStatus.FlowCount)
 	}
 	return flowTable
 }

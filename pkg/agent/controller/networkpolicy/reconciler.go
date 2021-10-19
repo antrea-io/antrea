@@ -188,7 +188,7 @@ type reconciler struct {
 	idAllocator *idAllocator
 
 	// priorityAssigners provides interfaces to manage OF priorities for each OVS table.
-	priorityAssigners map[binding.TableIDType]*tablePriorityAssigner
+	priorityAssigners map[uint8]*tablePriorityAssigner
 	// ipv4Enabled tells if IPv4 is supported on this Node or not.
 	ipv4Enabled bool
 	// ipv6Enabled tells is IPv6 is supported on this Node or not.
@@ -206,14 +206,14 @@ func newReconciler(ofClient openflow.Client,
 	idAllocator *idAllocator,
 	fqdnController *fqdnController,
 ) *reconciler {
-	priorityAssigners := map[binding.TableIDType]*tablePriorityAssigner{}
+	priorityAssigners := map[uint8]*tablePriorityAssigner{}
 	for _, table := range openflow.GetAntreaPolicyBaselineTierTables() {
-		priorityAssigners[table] = &tablePriorityAssigner{
+		priorityAssigners[table.GetID()] = &tablePriorityAssigner{
 			assigner: newPriorityAssigner(true),
 		}
 	}
 	for _, table := range openflow.GetAntreaPolicyMultiTierTables() {
-		priorityAssigners[table] = &tablePriorityAssigner{
+		priorityAssigners[table.GetID()] = &tablePriorityAssigner{
 			assigner: newPriorityAssigner(false),
 		}
 	}
@@ -275,28 +275,28 @@ func (r *reconciler) Reconcile(rule *CompletedRule) error {
 // getOFRuleTable retreives the OpenFlow table to install the CompletedRule.
 // The decision is made based on whether the rule is created for a CNP/ANP, and
 // the Tier of that NetworkPolicy.
-func (r *reconciler) getOFRuleTable(rule *CompletedRule) binding.TableIDType {
+func (r *reconciler) getOFRuleTable(rule *CompletedRule) uint8 {
 	if !rule.isAntreaNetworkPolicyRule() {
 		if rule.Direction == v1beta2.DirectionIn {
-			return openflow.IngressRuleTable
+			return openflow.IngressRuleTable.GetID()
 		}
-		return openflow.EgressRuleTable
+		return openflow.EgressRuleTable.GetID()
 	}
-	var ruleTables []binding.TableIDType
+	var ruleTables []binding.Table
 	if rule.Direction == v1beta2.DirectionIn {
 		ruleTables = openflow.GetAntreaPolicyIngressTables()
 	} else {
 		ruleTables = openflow.GetAntreaPolicyEgressTables()
 	}
 	if *rule.TierPriority != baselineTierPriority {
-		return ruleTables[0]
+		return ruleTables[0].GetID()
 	}
-	return ruleTables[1]
+	return ruleTables[1].GetID()
 }
 
 // getOFPriority retrieves the OFPriority for the input CompletedRule to be installed,
 // and re-arranges installed priorities on OVS if necessary.
-func (r *reconciler) getOFPriority(rule *CompletedRule, table binding.TableIDType, pa *tablePriorityAssigner) (*uint16, bool, error) {
+func (r *reconciler) getOFPriority(rule *CompletedRule, tableID uint8, pa *tablePriorityAssigner) (*uint16, bool, error) {
 	if !rule.isAntreaNetworkPolicyRule() {
 		klog.V(2).Infof("Assigning default priority for k8s NetworkPolicy.")
 		return nil, true, nil
@@ -322,7 +322,7 @@ func (r *reconciler) getOFPriority(rule *CompletedRule, table binding.TableIDTyp
 		}
 		// Re-assign installed priorities on OVS
 		if len(priorityUpdates) > 0 {
-			err := r.ofClient.ReassignFlowPriorities(priorityUpdates, table)
+			err := r.ofClient.ReassignFlowPriorities(priorityUpdates, tableID)
 			if err != nil {
 				revertFunc()
 				return nil, registered, err
@@ -340,7 +340,7 @@ func (r *reconciler) getOFPriority(rule *CompletedRule, table binding.TableIDTyp
 func (r *reconciler) BatchReconcile(rules []*CompletedRule) error {
 	var rulesToInstall []*CompletedRule
 	var priorities []*uint16
-	prioritiesByTable := map[binding.TableIDType][]*uint16{}
+	prioritiesByTable := map[uint8][]*uint16{}
 	for _, rule := range rules {
 		if _, exists := r.lastRealizeds.Load(rule.ID); exists {
 			klog.Errorf("rule %s already realized during the initialization phase", rule.ID)
@@ -378,7 +378,7 @@ func (r *reconciler) BatchReconcile(rules []*CompletedRule) error {
 // registerOFPriorities constructs a Priority type for each CompletedRule in the input list,
 // and registers those Priorities with appropriate tablePriorityAssigner based on Tier.
 func (r *reconciler) registerOFPriorities(rules []*CompletedRule) error {
-	prioritiesToRegister := map[binding.TableIDType][]types.Priority{}
+	prioritiesToRegister := map[uint8][]types.Priority{}
 	for _, rule := range rules {
 		if rule.isAntreaNetworkPolicyRule() {
 			ruleTable := r.getOFRuleTable(rule)
@@ -399,7 +399,7 @@ func (r *reconciler) registerOFPriorities(rules []*CompletedRule) error {
 }
 
 // add converts CompletedRule to PolicyRule(s) and invokes installOFRule to install them.
-func (r *reconciler) add(rule *CompletedRule, ofPriority *uint16, table binding.TableIDType) error {
+func (r *reconciler) add(rule *CompletedRule, ofPriority *uint16, table uint8) error {
 	klog.V(2).Infof("Adding new rule %v", rule)
 	ofRuleByServicesMap, lastRealized := r.computeOFRulesForAdd(rule, ofPriority, table)
 	for svcKey, ofRule := range ofRuleByServicesMap {
@@ -420,7 +420,7 @@ func (r *reconciler) add(rule *CompletedRule, ofPriority *uint16, table binding.
 	return nil
 }
 
-func (r *reconciler) computeOFRulesForAdd(rule *CompletedRule, ofPriority *uint16, table binding.TableIDType) (
+func (r *reconciler) computeOFRulesForAdd(rule *CompletedRule, ofPriority *uint16, table uint8) (
 	map[servicesKey]*types.PolicyRule, *lastRealized) {
 	lastRealized := newLastRealized(rule)
 	// TODO: Handle the case that the following processing fails or partially succeeds.
@@ -566,7 +566,7 @@ func (r *reconciler) batchAdd(rules []*CompletedRule, ofPriorities []*uint16) er
 
 // update calculates the difference of Addresses between oldRule and newRule,
 // and invokes Openflow client's methods to reconcile them.
-func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule, ofPriority *uint16, table binding.TableIDType) error {
+func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule, ofPriority *uint16, table uint8) error {
 	klog.V(2).Infof("Updating existing rule %v", newRule)
 	// staleOFIDs tracks servicesKey that are no long needed.
 	// Firstly fill it with the last realized ofIDs.
@@ -754,7 +754,7 @@ func (r *reconciler) updateOFRule(ofID uint32, addedFrom []types.Address, addedT
 	return nil
 }
 
-func (r *reconciler) uninstallOFRule(ofID uint32, table binding.TableIDType) error {
+func (r *reconciler) uninstallOFRule(ofID uint32, table uint8) error {
 	klog.V(2).Infof("Uninstalling ofRule %d", ofID)
 	stalePriorities, err := r.ofClient.UninstallPolicyRuleFlows(ofID)
 	if err != nil {

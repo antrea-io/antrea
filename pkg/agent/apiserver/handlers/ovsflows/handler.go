@@ -30,6 +30,12 @@ import (
 	"antrea.io/antrea/pkg/querier"
 )
 
+var (
+	// Use function variables for tests.
+	getFlowTableName = openflow.GetFlowTableName
+	getFlowTableID   = openflow.GetFlowTableID
+)
+
 // Response is the response struct of ovsflows command.
 type Response struct {
 	Flow string `json:"flow,omitempty"`
@@ -50,12 +56,12 @@ func dumpMatchedFlows(aq agentquerier.AgentQuerier, flowKeys []string) ([]Respon
 	return resps, nil
 }
 
-func dumpFlows(aq agentquerier.AgentQuerier, table binding.TableIDType) ([]Response, error) {
+func dumpFlows(aq agentquerier.AgentQuerier, table uint8) ([]Response, error) {
 	resps := []Response{}
 	var flowStrs []string
 	var err error
 	if table != binding.TableIDAll {
-		flowStrs, err = aq.GetOVSCtlClient().DumpTableFlows(uint8(table))
+		flowStrs, err = aq.GetOVSCtlClient().DumpTableFlows(table)
 	} else {
 		flowStrs, err = aq.GetOVSCtlClient().DumpFlows()
 	}
@@ -89,16 +95,16 @@ func getTableFlows(aq agentquerier.AgentQuerier, tables string) ([]Response, err
 	var resps []Response
 	for _, tableSeg := range strings.Split(tables, ",") {
 		tableSeg = strings.TrimSpace(tableSeg)
-		var tableNumber binding.TableIDType
+		var tableNumber uint8
 		// Table nubmer is a 8-bit unsigned integer.
 		n, err := strconv.ParseUint(tableSeg, 10, 8)
 		if err == nil {
-			tableNumber = binding.TableIDType(n)
-			if openflow.GetFlowTableName(tableNumber) == "" {
+			tableNumber = uint8(n)
+			if getFlowTableName(tableNumber) == "" {
 				return nil, nil
 			}
 		} else {
-			tableNumber = openflow.GetFlowTableNumber(tableSeg)
+			tableNumber = getFlowTableID(tableSeg)
 			if tableNumber == binding.TableIDAll {
 				return nil, nil
 			}

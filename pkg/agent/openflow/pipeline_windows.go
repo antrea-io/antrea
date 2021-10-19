@@ -49,11 +49,10 @@ var (
 
 func (c *client) snatMarkFlows(snatIP net.IP, mark uint32) []binding.Flow {
 	snatIPRange := &binding.IPRange{StartIP: snatIP, EndIP: snatIP}
-	ctCommitTable := c.pipeline[conntrackCommitTable]
-	nextTable := ctCommitTable.GetNext()
+	nextTable := ConntrackCommitTable.GetNext()
 	flows := []binding.Flow{
 		c.snatIPFromTunnelFlow(snatIP, mark),
-		ctCommitTable.BuildFlow(priorityNormal).
+		ConntrackCommitTable.BuildFlow(priorityNormal).
 			MatchProtocol(binding.ProtocolIP).
 			MatchCTStateNew(true).MatchCTStateTrk(true).MatchCTStateDNAT(false).
 			MatchPktMark(mark, &types.SNATIPMarkMask).
@@ -65,7 +64,7 @@ func (c *client) snatMarkFlows(snatIP net.IP, mark uint32) []binding.Flow {
 	}
 
 	if c.enableProxy {
-		flows = append(flows, ctCommitTable.BuildFlow(priorityNormal).
+		flows = append(flows, ConntrackCommitTable.BuildFlow(priorityNormal).
 			MatchProtocol(binding.ProtocolIP).
 			MatchCTStateNew(true).MatchCTStateTrk(true).MatchCTStateDNAT(true).
 			MatchPktMark(mark, &types.SNATIPMarkMask).
@@ -83,12 +82,12 @@ func (c *client) snatMarkFlows(snatIP net.IP, mark uint32) []binding.Flow {
 // outside.
 func (c *client) hostBridgeUplinkFlows(localSubnet net.IPNet, category cookie.Category) (flows []binding.Flow) {
 	flows = []binding.Flow{
-		c.pipeline[ClassifierTable].BuildFlow(priorityNormal).
+		ClassifierTable.BuildFlow(priorityNormal).
 			MatchInPort(config.UplinkOFPort).
 			Action().Output(config.BridgeOFPort).
 			Cookie(c.cookieAllocator.Request(category).Raw()).
 			Done(),
-		c.pipeline[ClassifierTable].BuildFlow(priorityNormal).
+		ClassifierTable.BuildFlow(priorityNormal).
 			MatchInPort(config.BridgeOFPort).
 			Action().Output(config.UplinkOFPort).
 			Cookie(c.cookieAllocator.Request(category).Raw()).
@@ -96,13 +95,13 @@ func (c *client) hostBridgeUplinkFlows(localSubnet net.IPNet, category cookie.Ca
 	}
 	if c.networkConfig.TrafficEncapMode.SupportsNoEncap() {
 		// If NoEncap is enabled, the reply packets from remote Pod can be forwarded to local Pod directly.
-		// by explicitly resubmitting them to serviceHairpinTable and marking "macRewriteMark" at same time.
-		flows = append(flows, c.pipeline[ClassifierTable].BuildFlow(priorityHigh).MatchProtocol(binding.ProtocolIP).
+		// by explicitly resubmitting them to ServiceHairpinTable and marking "macRewriteMark" at same time.
+		flows = append(flows, ClassifierTable.BuildFlow(priorityHigh).MatchProtocol(binding.ProtocolIP).
 			MatchInPort(config.UplinkOFPort).
 			MatchDstIPNet(localSubnet).
 			Action().LoadRegMark(FromUplinkRegMark).
 			Action().LoadRegMark(RewriteMACRegMark).
-			Action().GotoTable(serviceHairpinTable).
+			Action().GotoTable(ServiceHairpinTable.GetID()).
 			Cookie(c.cookieAllocator.Request(category).Raw()).
 			Done())
 	}
@@ -113,13 +112,12 @@ func (c *client) l3FwdFlowToRemoteViaRouting(localGatewayMAC net.HardwareAddr, r
 	category cookie.Category, peerIP net.IP, peerPodCIDR *net.IPNet) []binding.Flow {
 	if c.networkConfig.NeedsDirectRoutingToPeer(peerIP, c.nodeConfig.NodeTransportIPv4Addr) && remoteGatewayMAC != nil {
 		ipProto := getIPProtocol(peerIP)
-		l3FwdTable := c.pipeline[l3ForwardingTable]
 		// It enhances Windows Noencap mode performance by bypassing host network.
-		flows := []binding.Flow{c.pipeline[l2ForwardingCalcTable].BuildFlow(priorityNormal).
+		flows := []binding.Flow{L2ForwardingCalcTable.BuildFlow(priorityNormal).
 			MatchDstMAC(remoteGatewayMAC).
 			Action().LoadToRegField(TargetOFPortField, config.UplinkOFPort).
 			Action().LoadRegMark(OFPortFoundRegMark).
-			Action().GotoTable(conntrackCommitTable).
+			Action().GotoTable(ConntrackCommitTable.GetID()).
 			Cookie(c.cookieAllocator.Request(category).Raw()).
 			Done(),
 			// Output the reply packet to the uplink interface if the destination is another Node's IP.
@@ -127,11 +125,11 @@ func (c *client) l3FwdFlowToRemoteViaRouting(localGatewayMAC net.HardwareAddr, r
 			// packet enters OVS from the uplink interface, the reply should go back in the same path. Otherwise,
 			// Windows host will perform stateless SNAT on the reply, and the packets are possibly dropped on peer
 			// Node because of the wrong source address.
-			l3FwdTable.BuildFlow(priorityNormal).MatchProtocol(ipProto).
+			L3ForwardingTable.BuildFlow(priorityNormal).MatchProtocol(ipProto).
 				MatchDstIP(peerIP).
 				MatchCTStateRpl(true).MatchCTStateTrk(true).
 				Action().SetDstMAC(remoteGatewayMAC).
-				Action().GotoTable(l3FwdTable.GetNext()).
+				Action().GotoTable(L3ForwardingTable.GetNext()).
 				Cookie(c.cookieAllocator.Request(category).Raw()).
 				Done(),
 		}

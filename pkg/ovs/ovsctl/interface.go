@@ -36,6 +36,9 @@ type TracingRequest struct {
 type OVSCtlClient interface {
 	// DumpFlows returns flows of the bridge.
 	DumpFlows(args ...string) ([]string, error)
+	// DumpFlowsWithoutTableNames returns flows of the bridge, and the table is shown as uint8 value in the result.
+	// This function is only used in test.
+	DumpFlowsWithoutTableNames(args ...string) ([]string, error)
 	// DumpMatchedFlows returns the flow which exactly matches the matchStr.
 	DumpMatchedFlow(matchStr string) (string, error)
 	// DumpTableFlows returns all flows in the table.

@@ -28,12 +28,28 @@ func (c *ovsCtlClient) DumpFlows(args ...string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
+	return c.parseFlowEntries(flowDump)
+}
 
+func (c *ovsCtlClient) DumpFlowsWithoutTableNames(args ...string) ([]string, error) {
+	flowDump, err := c.RunOfctlCmd("dump-flows", append(args, "--no-names")...)
+	if err != nil {
+		return nil, err
+	}
+	return c.parseFlowEntries(flowDump)
+}
+
+func (c *ovsCtlClient) parseFlowEntries(flowDump []byte) ([]string, error) {
 	scanner := bufio.NewScanner(strings.NewReader(string(flowDump)))
 	scanner.Split(bufio.ScanLines)
 	flowList := []string{}
 	for scanner.Scan() {
-		flowList = append(flowList, trimFlowStr(scanner.Text()))
+		flow := trimFlowStr(scanner.Text())
+		// Skip the non-flow line, which is printed when using parameter "--no-names" in tests.
+		if strings.Contains(flow, "NXST_FLOW reply") || strings.Contains(flow, "OFPST_FLOW reply") {
+			continue
+		}
+		flowList = append(flowList, flow)
 	}
 	return flowList, nil
 }
