@@ -35,6 +35,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/rand"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 )
 
@@ -420,6 +421,7 @@ func BenchmarkSyncAddressGroup(b *testing.B) {
 	defer close(stopCh)
 	_, c := newController(objs...)
 	c.informerFactory.Start(stopCh)
+	cache.WaitForCacheSync(stopCh, c.networkPolicyInformer.Informer().HasSynced)
 	go c.groupingInterface.Run(stopCh)
 
 	for c.appliedToGroupQueue.Len() > 0 {
@@ -432,6 +434,7 @@ func BenchmarkSyncAddressGroup(b *testing.B) {
 		c.syncInternalNetworkPolicy(key.(string))
 		c.internalNetworkPolicyQueue.Done(key)
 	}
+	klog.InfoS("AddressGroupQueue", "len", c.addressGroupQueue.Len())
 	key, _ := c.addressGroupQueue.Get()
 	b.ReportAllocs()
 	b.ResetTimer()
