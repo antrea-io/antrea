@@ -234,6 +234,7 @@ func (c *Client) addVirtualServiceIPRoute(isIPv6 bool) error {
 		LinkIndex:        linkIndex,
 		IPAddress:        config.VirtualServiceIPv4,
 		LinkLayerAddress: openflow.GlobalVirtualMAC,
+		State:            "Permanent",
 	}
 	if err := util.ReplaceNetNeighbor(vNeighbor); err != nil {
 		return err
