@@ -3,20 +3,11 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.4.1
+  creationTimestamp: null
   labels:
     app: antrea
   name: clusterclaims.multicluster.crd.antrea.io
 spec:
-  conversion:
-    strategy: Webhook
-    webhook:
-      clientConfig:
-        service:
-          name: antrea-multicluster-webhook-service
-          namespace: kube-system
-          path: /convert
-      conversionReviewVersions:
-      - v1
   group: multicluster.crd.antrea.io
   names:
     kind: ClusterClaim
@@ -59,20 +50,11 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.4.1
+  creationTimestamp: null
   labels:
     app: antrea
   name: clustersets.multicluster.crd.antrea.io
 spec:
-  conversion:
-    strategy: Webhook
-    webhook:
-      clientConfig:
-        service:
-          name: antrea-multicluster-webhook-service
-          namespace: kube-system
-          path: /convert
-      conversionReviewVersions:
-      - v1
   group: multicluster.crd.antrea.io
   names:
     kind: ClusterSet
@@ -224,20 +206,11 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.4.1
+  creationTimestamp: null
   labels:
     app: antrea
   name: memberclusterannounces.multicluster.crd.antrea.io
 spec:
-  conversion:
-    strategy: Webhook
-    webhook:
-      clientConfig:
-        service:
-          name: antrea-multicluster-webhook-service
-          namespace: kube-system
-          path: /convert
-      conversionReviewVersions:
-      - v1
   group: multicluster.crd.antrea.io
   names:
     kind: MemberClusterAnnounce
@@ -332,20 +305,11 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.4.1
+  creationTimestamp: null
   labels:
     app: antrea
   name: resourceexports.multicluster.crd.antrea.io
 spec:
-  conversion:
-    strategy: Webhook
-    webhook:
-      clientConfig:
-        service:
-          name: antrea-multicluster-webhook-service
-          namespace: kube-system
-          path: /convert
-      conversionReviewVersions:
-      - v1
   group: multicluster.crd.antrea.io
   names:
     kind: ResourceExport
@@ -769,20 +733,11 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.4.1
+  creationTimestamp: null
   labels:
     app: antrea
   name: resourceimports.multicluster.crd.antrea.io
 spec:
-  conversion:
-    strategy: Webhook
-    webhook:
-      clientConfig:
-        service:
-          name: antrea-multicluster-webhook-service
-          namespace: kube-system
-          path: /convert
-      conversionReviewVersions:
-      - v1
   group: multicluster.crd.antrea.io
   names:
     kind: ResourceImport
@@ -1819,19 +1774,12 @@ spec:
         securityContext:
           allowPrivilegeEscalation: false
         volumeMounts:
-        - mountPath: /tmp/k8s-webhook-server/serving-certs
-          name: cert
-          readOnly: true
         - mountPath: /controller_manager_config.yaml
           name: manager-config
           subPath: controller_manager_config.yaml
       serviceAccountName: antrea-multicluster-controller
       terminationGracePeriodSeconds: 10
       volumes:
-      - name: cert
-        secret:
-          defaultMode: 420
-          secretName: webhook-server-cert
       - configMap:
           name: antrea-multicluster-manager-config
         name: manager-config
