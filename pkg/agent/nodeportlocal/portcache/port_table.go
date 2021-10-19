@@ -267,7 +267,6 @@ func (pt *PortTable) AddRule(podIP string, podPort int, protocol string) (int, e
 	npData := pt.getEntryByPodIPPort(podIP, podPort)
 	exists := (npData != nil)
 	if !exists {
-		var protocols []ProtocolSocketData
 		nodePort, protocols, err := pt.getFreePort(podIP, podPort)
 		if err != nil {
 			return 0, err
@@ -308,7 +307,7 @@ func (pt *PortTable) DeleteRule(podIP string, podPort int, protocol string) erro
 	defer pt.tableLock.Unlock()
 	data := pt.getEntryByPodIPPort(podIP, podPort)
 	if data == nil {
-		// Delete not required when either the PortTable entry does not exist
+		// Delete not required when the PortTable entry does not exist
 		return nil
 	}
 	numProtocolsInUse := 0
@@ -330,7 +329,7 @@ func (pt *PortTable) DeleteRule(podIP string, podPort int, protocol string) erro
 		numProtocolsInUse--
 	}
 	if numProtocolsInUse == 0 {
-		// Node port is no needed anymore: close all sockets and delete
+		// Node port is not needed anymore: close all sockets and delete
 		// table entries.
 		if err := data.CloseSockets(); err != nil {
 			return err
@@ -376,10 +375,12 @@ func (pt *PortTable) syncRules() error {
 	pt.tableLock.Lock()
 	defer pt.tableLock.Unlock()
 	nplPorts := make([]rules.PodNodePort, 0, len(pt.NodePortTable))
+	protocols := make([]string, 0, len(supportedProtocols))
 	for _, npData := range pt.NodePortTable {
-		protocols := make([]string, 0, len(supportedProtocols))
 		for _, protocol := range npData.Protocols {
-			protocols = append(protocols, protocol.Protocol)
+			if protocol.State == stateInUse {
+				protocols = append(protocols, protocol.Protocol)
+			}
 		}
 		nplPorts = append(nplPorts, rules.PodNodePort{
 			NodePort:  npData.NodePort,
@@ -387,6 +388,7 @@ func (pt *PortTable) syncRules() error {
 			PodIP:     npData.PodIP,
 			Protocols: protocols,
 		})
+		protocols = protocols[:0] // reuse slice
 	}
 	return pt.PodPortRules.AddAllRules(nplPorts)
 }
