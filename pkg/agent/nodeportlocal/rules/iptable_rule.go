@@ -97,9 +97,11 @@ func (ipt *iptablesRules) AddAllRules(nplList []PodNodePort) error {
 	writeLine(iptablesData, "*nat")
 	writeLine(iptablesData, iptables.MakeChainLine(NodePortLocalChain))
 	for _, nplData := range nplList {
-		destination := nplData.PodIP + ":" + fmt.Sprint(nplData.PodPort)
-		rule := buildRuleForPod(nplData.NodePort, destination, nplData.Protocol)
-		writeLine(iptablesData, append([]string{"-A", NodePortLocalChain}, rule...)...)
+		for _, protocol := range nplData.Protocols {
+			destination := nplData.PodIP + ":" + fmt.Sprint(nplData.PodPort)
+			rule := buildRuleForPod(nplData.NodePort, destination, protocol)
+			writeLine(iptablesData, append([]string{"-A", NodePortLocalChain}, rule...)...)
+		}
 	}
 	writeLine(iptablesData, "COMMIT")
 	if err := ipt.table.Restore(iptablesData.Bytes(), false, false); err != nil {

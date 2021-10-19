@@ -46,12 +46,15 @@ import (
 )
 
 func newPortTable(mockIPTables rules.PodPortRules, mockPortOpener portcache.LocalPortOpener) *portcache.PortTable {
-	ptable := portcache.PortTable{StartPort: defaultStartPort, EndPort: defaultEndPort}
-	ptable.NodePortTable = make(map[int]*portcache.NodePortData)
-	ptable.PodEndpointTable = make(map[string]*portcache.NodePortData)
-	ptable.PodPortRules = mockIPTables
-	ptable.LocalPortOpener = mockPortOpener
-	return &ptable
+	return &portcache.PortTable{
+		NodePortTable:    make(map[int]*portcache.NodePortData),
+		PodEndpointTable: make(map[string]*portcache.NodePortData),
+		StartPort:        defaultStartPort,
+		EndPort:          defaultEndPort,
+		PortSearchStart:  defaultStartPort,
+		PodPortRules:     mockIPTables,
+		LocalPortOpener:  mockPortOpener,
+	}
 }
 
 const (
@@ -351,7 +354,7 @@ func TestSvcTypeUpdate(t *testing.T) {
 	defer testData.tearDown()
 
 	// Update Service type to NodePort.
-	testSvc.Spec.Type = "NodePort"
+	testSvc.Spec.Type = corev1.ServiceTypeNodePort
 	testData.updateServiceOrFail(testSvc)
 
 	// Check that annotation and the rule are removed.
@@ -360,7 +363,7 @@ func TestSvcTypeUpdate(t *testing.T) {
 	assert.False(t, testData.portTable.RuleExists(defaultPodIP, defaultPort, protocolTCP))
 
 	// Update Service type to ClusterIP.
-	testSvc.Spec.Type = "ClusterIP"
+	testSvc.Spec.Type = corev1.ServiceTypeClusterIP
 	testData.updateServiceOrFail(testSvc)
 
 	_, err = testData.pollForPodAnnotation(testPod.Name, true)
@@ -747,14 +750,19 @@ var (
 // TestNodePortAlreadyBoundTo validates that when a port is already bound to, a different port will
 // be selected for NPL.
 func TestNodePortAlreadyBoundTo(t *testing.T) {
-	var nodePort int
+	nodePort1 := defaultStartPort
+	nodePort2 := nodePort1 + 1
 	testConfig := newTestConfig().withCustomPortOpenerExpectations(func(mockPortOpener *portcachetesting.MockLocalPortOpener) {
 		gomock.InOrder(
-			mockPortOpener.EXPECT().OpenLocalPort(gomock.Any(), gomock.Any()).Return(nil, portTakenError),
-			mockPortOpener.EXPECT().OpenLocalPort(gomock.Any(), protocolTCP).DoAndReturn(func(port int, protocol string) (portcache.Closeable, error) {
-				nodePort = port
-				return &fakeSocket{}, nil
-			}),
+			// Based on the implementation, we know that TCP is checked first...
+			// 1. port1 is checked for TCP availability -> success
+			mockPortOpener.EXPECT().OpenLocalPort(nodePort1, protocolTCP).Return(&fakeSocket{}, nil),
+			// 2. port1 is checked for UDP availability (even if the Service uses TCP only) -> error
+			mockPortOpener.EXPECT().OpenLocalPort(nodePort1, protocolUDP).Return(nil, portTakenError),
+			// 3. port2 is checked for TCP availability -> success
+			mockPortOpener.EXPECT().OpenLocalPort(nodePort2, protocolTCP).Return(&fakeSocket{}, nil),
+			// 4. port2 is checked for UDP availability -> success
+			mockPortOpener.EXPECT().OpenLocalPort(nodePort2, protocolUDP).Return(&fakeSocket{}, nil),
 		)
 	})
 	customNodePort := defaultStartPort + 1
@@ -763,7 +771,7 @@ func TestNodePortAlreadyBoundTo(t *testing.T) {
 
 	value, err := testData.pollForPodAnnotation(testPod.Name, true)
 	require.NoError(t, err, "Poll for annotation check failed")
-	expectedAnnotations := newExpectedNPLAnnotations().Add(&nodePort, defaultPort, protocolTCP)
+	expectedAnnotations := newExpectedNPLAnnotations().Add(&nodePort2, defaultPort, protocolTCP)
 	expectedAnnotations.Check(t, value)
 }
 
