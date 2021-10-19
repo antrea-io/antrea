@@ -486,13 +486,14 @@ func benchmarkInit(b *testing.B, namespaces []*corev1.Namespace, networkPolicies
 	b.ResetTimer()
 
 	bench := func() {
+		b.StopTimer()
 		stopCh := make(chan struct{})
 		defer close(stopCh)
 		_, c := newControllerWithoutEventHandler(objs, nil)
 		c.informerFactory.Start(stopCh)
 		c.crdInformerFactory.Start(stopCh)
-		go func() {
-			c.groupingInterface.Run(stopCh)
+		go c.groupingInterface.Run(stopCh)
+		defer func() {
 			c.addressGroupStore.Stop()
 			c.appliedToGroupStore.Stop()
 			c.internalGroupStore.Stop()
@@ -500,7 +501,6 @@ func benchmarkInit(b *testing.B, namespaces []*corev1.Namespace, networkPolicies
 		}()
 		c.informerFactory.WaitForCacheSync(stopCh)
 		c.crdInformerFactory.WaitForCacheSync(stopCh)
-		defer b.StopTimer()
 		b.StartTimer()
 
 		for _, namespace := range namespaces {
@@ -527,6 +527,11 @@ func benchmarkInit(b *testing.B, namespaces []*corev1.Namespace, networkPolicies
 			c.syncAddressGroup(key.(string))
 			c.addressGroupQueue.Done(key)
 		}
+		// We stop the time for deferred functions, even if they should
+		// all execute quickly. Note that StopTimer() can be called
+		// several times in a row without issue, even if the timer is
+		// not restarted in-between.
+		b.StopTimer()
 	}
 
 	for i := 0; i < b.N; i++ {
