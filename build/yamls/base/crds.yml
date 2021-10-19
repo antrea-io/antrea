@@ -49,6 +49,7 @@ spec:
                               type: array
                               items:
                                 type: string
+                                pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
                       matchLabels:
                         x-kubernetes-preserve-unknown-fields: true
                   namespaceSelector:
@@ -72,6 +73,7 @@ spec:
                               type: array
                               items:
                                 type: string
+                                pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
                       matchLabels:
                         x-kubernetes-preserve-unknown-fields: true
               egressIP:
@@ -679,6 +681,7 @@ spec:
                                   type: array
                                   items:
                                     type: string
+                                    pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
                           matchLabels:
                             x-kubernetes-preserve-unknown-fields: true
                       namespaceSelector:
@@ -702,6 +705,7 @@ spec:
                                   type: array
                                   items:
                                     type: string
+                                    pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
                           matchLabels:
                             x-kubernetes-preserve-unknown-fields: true
                       group:
@@ -740,6 +744,7 @@ spec:
                                         type: array
                                         items:
                                           type: string
+                                          pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
                                 matchLabels:
                                   x-kubernetes-preserve-unknown-fields: true
                             namespaceSelector:
@@ -763,6 +768,7 @@ spec:
                                         type: array
                                         items:
                                           type: string
+                                          pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
                                 matchLabels:
                                   x-kubernetes-preserve-unknown-fields: true
                             group:
@@ -808,6 +814,7 @@ spec:
                                         type: array
                                         items:
                                           type: string
+                                          pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
                                 matchLabels:
                                   x-kubernetes-preserve-unknown-fields: true
                             namespaceSelector:
@@ -831,6 +838,7 @@ spec:
                                         type: array
                                         items:
                                           type: string
+                                          pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
                                 matchLabels:
                                   x-kubernetes-preserve-unknown-fields: true
                             namespaces:
@@ -884,6 +892,7 @@ spec:
                                         type: array
                                         items:
                                           type: string
+                                          pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
                                 matchLabels:
                                   x-kubernetes-preserve-unknown-fields: true
                             namespaceSelector:
@@ -907,6 +916,7 @@ spec:
                                         type: array
                                         items:
                                           type: string
+                                          pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
                                 matchLabels:
                                   x-kubernetes-preserve-unknown-fields: true
                             group:
@@ -952,6 +962,7 @@ spec:
                                         type: array
                                         items:
                                           type: string
+                                          pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
                                 matchLabels:
                                   x-kubernetes-preserve-unknown-fields: true
                             namespaceSelector:
@@ -975,6 +986,7 @@ spec:
                                         type: array
                                         items:
                                           type: string
+                                          pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
                                 matchLabels:
                                   x-kubernetes-preserve-unknown-fields: true
                             namespaces:
@@ -1095,6 +1107,7 @@ spec:
                                   type: array
                                   items:
                                     type: string
+                                    pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
                           matchLabels:
                             x-kubernetes-preserve-unknown-fields: true
                 ingress:
@@ -1131,6 +1144,7 @@ spec:
                                         type: array
                                         items:
                                           type: string
+                                          pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
                                 matchLabels:
                                   x-kubernetes-preserve-unknown-fields: true
                       # Ensure that Action field allows only ALLOW, DROP and REJECT values
@@ -1174,6 +1188,7 @@ spec:
                                         type: array
                                         items:
                                           type: string
+                                          pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
                                 matchLabels:
                                   x-kubernetes-preserve-unknown-fields: true
                             namespaceSelector:
@@ -1197,6 +1212,7 @@ spec:
                                         type: array
                                         items:
                                           type: string
+                                          pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
                                 matchLabels:
                                   x-kubernetes-preserve-unknown-fields: true
                             externalEntitySelector:
@@ -1220,6 +1236,7 @@ spec:
                                         type: array
                                         items:
                                           type: string
+                                          pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
                                 matchLabels:
                                   x-kubernetes-preserve-unknown-fields: true
                             ipBlock:
@@ -1266,6 +1283,7 @@ spec:
                                         type: array
                                         items:
                                           type: string
+                                          pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
                                 matchLabels:
                                   x-kubernetes-preserve-unknown-fields: true
                       # Ensure that Action field allows only ALLOW, DROP and REJECT values
@@ -1309,6 +1327,7 @@ spec:
                                         type: array
                                         items:
                                           type: string
+                                          pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
                                 matchLabels:
                                   x-kubernetes-preserve-unknown-fields: true
                             namespaceSelector:
@@ -1332,6 +1351,7 @@ spec:
                                         type: array
                                         items:
                                           type: string
+                                          pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
                                 matchLabels:
                                   x-kubernetes-preserve-unknown-fields: true
                             externalEntitySelector:
@@ -1355,6 +1375,7 @@ spec:
                                         type: array
                                         items:
                                           type: string
+                                          pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
                                 matchLabels:
                                   x-kubernetes-preserve-unknown-fields: true
                             ipBlock:
@@ -1488,6 +1509,7 @@ spec:
                             type: array
                             items:
                               type: string
+                              pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
                     matchLabels:
                       x-kubernetes-preserve-unknown-fields: true
                 namespaceSelector:
@@ -1511,6 +1533,7 @@ spec:
                             type: array
                             items:
                               type: string
+                              pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
                     matchLabels:
                       x-kubernetes-preserve-unknown-fields: true
                 externalEntitySelector:
@@ -1534,6 +1557,7 @@ spec:
                             type: array
                             items:
                               type: string
+                              pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
                     matchLabels:
                       x-kubernetes-preserve-unknown-fields: true
                 ipBlock:
@@ -1606,6 +1630,7 @@ spec:
                             type: array
                             items:
                               type: string
+                              pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
                     matchLabels:
                       x-kubernetes-preserve-unknown-fields: true
                 namespaceSelector:
@@ -1629,6 +1654,7 @@ spec:
                             type: array
                             items:
                               type: string
+                              pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
                     matchLabels:
                       x-kubernetes-preserve-unknown-fields: true
                 externalEntitySelector:
@@ -1652,6 +1678,7 @@ spec:
                             type: array
                             items:
                               type: string
+                              pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
                     matchLabels:
                       x-kubernetes-preserve-unknown-fields: true
                 ipBlocks:
@@ -2046,6 +2073,7 @@ spec:
                                   type: array
                                   items:
                                     type: string
+                                    pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
                           matchLabels:
                             x-kubernetes-preserve-unknown-fields: true
                       namespaceSelector:
@@ -2069,6 +2097,7 @@ spec:
                                   type: array
                                   items:
                                     type: string
+                                    pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
                           matchLabels:
                             x-kubernetes-preserve-unknown-fields: true
                       group:
@@ -2107,6 +2136,7 @@ spec:
                                         type: array
                                         items:
                                           type: string
+                                          pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
                                 matchLabels:
                                   x-kubernetes-preserve-unknown-fields: true
                             namespaceSelector:
@@ -2130,6 +2160,7 @@ spec:
                                         type: array
                                         items:
                                           type: string
+                                          pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
                                 matchLabels:
                                   x-kubernetes-preserve-unknown-fields: true
                             group:
@@ -2175,6 +2206,7 @@ spec:
                                         type: array
                                         items:
                                           type: string
+                                          pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
                                 matchLabels:
                                   x-kubernetes-preserve-unknown-fields: true
                             namespaceSelector:
@@ -2198,6 +2230,7 @@ spec:
                                         type: array
                                         items:
                                           type: string
+                                          pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
                                 matchLabels:
                                   x-kubernetes-preserve-unknown-fields: true
                             namespaces:
@@ -2251,6 +2284,7 @@ spec:
                                         type: array
                                         items:
                                           type: string
+                                          pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
                                 matchLabels:
                                   x-kubernetes-preserve-unknown-fields: true
                             namespaceSelector:
@@ -2274,6 +2308,7 @@ spec:
                                         type: array
                                         items:
                                           type: string
+                                          pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
                                 matchLabels:
                                   x-kubernetes-preserve-unknown-fields: true
                             group:
@@ -2319,6 +2354,7 @@ spec:
                                         type: array
                                         items:
                                           type: string
+                                          pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
                                 matchLabels:
                                   x-kubernetes-preserve-unknown-fields: true
                             namespaceSelector:
@@ -2342,6 +2378,7 @@ spec:
                                         type: array
                                         items:
                                           type: string
+                                          pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
                                 matchLabels:
                                   x-kubernetes-preserve-unknown-fields: true
                             namespaces:
@@ -2461,6 +2498,7 @@ spec:
                                   type: array
                                   items:
                                     type: string
+                                    pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
                           matchLabels:
                             x-kubernetes-preserve-unknown-fields: true
                 ingress:
@@ -2497,6 +2535,7 @@ spec:
                                         type: array
                                         items:
                                           type: string
+                                          pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
                                 matchLabels:
                                   x-kubernetes-preserve-unknown-fields: true
                       # Ensure that Action field allows only ALLOW, DROP and REJECT values
@@ -2540,6 +2579,7 @@ spec:
                                         type: array
                                         items:
                                           type: string
+                                          pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
                                 matchLabels:
                                   x-kubernetes-preserve-unknown-fields: true
                             namespaceSelector:
@@ -2563,6 +2603,7 @@ spec:
                                         type: array
                                         items:
                                           type: string
+                                          pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
                                 matchLabels:
                                   x-kubernetes-preserve-unknown-fields: true
                             externalEntitySelector:
@@ -2586,6 +2627,7 @@ spec:
                                         type: array
                                         items:
                                           type: string
+                                          pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
                                 matchLabels:
                                   x-kubernetes-preserve-unknown-fields: true
                             ipBlock:
@@ -2632,6 +2674,7 @@ spec:
                                         type: array
                                         items:
                                           type: string
+                                          pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
                                 matchLabels:
                                   x-kubernetes-preserve-unknown-fields: true
                       # Ensure that Action field allows only ALLOW, DROP and REJECT values
@@ -2675,6 +2718,7 @@ spec:
                                         type: array
                                         items:
                                           type: string
+                                          pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
                                 matchLabels:
                                   x-kubernetes-preserve-unknown-fields: true
                             namespaceSelector:
@@ -2698,6 +2742,7 @@ spec:
                                         type: array
                                         items:
                                           type: string
+                                          pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
                                 matchLabels:
                                   x-kubernetes-preserve-unknown-fields: true
                             externalEntitySelector:
@@ -2721,6 +2766,7 @@ spec:
                                         type: array
                                         items:
                                           type: string
+                                          pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
                                 matchLabels:
                                   x-kubernetes-preserve-unknown-fields: true
                             ipBlock:
@@ -2854,6 +2900,7 @@ spec:
                             type: array
                             items:
                               type: string
+                              pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
                     matchLabels:
                       x-kubernetes-preserve-unknown-fields: true
                 namespaceSelector:
@@ -2877,6 +2924,7 @@ spec:
                             type: array
                             items:
                               type: string
+                              pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
                     matchLabels:
                       x-kubernetes-preserve-unknown-fields: true
                 externalEntitySelector:
@@ -2900,6 +2948,7 @@ spec:
                             type: array
                             items:
                               type: string
+                              pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
                     matchLabels:
                       x-kubernetes-preserve-unknown-fields: true
                 ipBlock:
