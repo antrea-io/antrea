@@ -223,7 +223,7 @@
      - build-discarder:
          artifact-days-to-keep: -1
          artifact-num-to-keep: -1
-         days-to-keep: 7
+         days-to-keep: 30
          num-to-keep: 30
      - github:
          url: '{repo_url}'
@@ -264,7 +264,7 @@
      - build-discarder:
          artifact-days-to-keep: -1
          artifact-num-to-keep: -1
-         days-to-keep: 7
+         days-to-keep: 30
          num-to-keep: 30
      - github:
          url: '{repo_url}'
