@@ -15,6 +15,7 @@
 package ipam
 
 import (
+	"fmt"
 	"strings"
 	"sync"
 	"time"
@@ -71,11 +72,18 @@ func NewAntreaIPAMController(kubeClient clientset.Interface,
 	return &c
 }
 
-var antreaIPAMController *AntreaIPAMController
-
 func InitializeAntreaIPAMController(kubeClient clientset.Interface, crdClient clientsetversioned.Interface, informerFactory informers.SharedInformerFactory) (*AntreaIPAMController, error) {
 
-	antreaIPAMController = NewAntreaIPAMController(kubeClient, crdClient, informerFactory, 0)
+	antreaIPAMController := NewAntreaIPAMController(kubeClient, crdClient, informerFactory, 0)
+
+	// Order of init causes antreaIPAMDriver to be initialized first
+	// After controller is initialized by agent init, we need to make it
+	// know to the driver
+	if antreaIPAMDriver == nil {
+		return nil, fmt.Errorf("Antrea IPAM driver failed to initialize")
+	}
+
+	antreaIPAMDriver.setController(antreaIPAMController)
 
 	return antreaIPAMController, nil
 }

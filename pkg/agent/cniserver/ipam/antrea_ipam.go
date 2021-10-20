@@ -19,6 +19,7 @@ import (
 	"net"
 
 	"github.com/containernetworking/cni/pkg/invoke"
+	cnitypes "github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types/current"
 	"k8s.io/klog/v2"
 
@@ -34,18 +35,15 @@ const (
 
 // Antrea IPAM driver would allocate IP addresses according to object IPAM annotation,
 // if present. If annotation is not present, the driver will delegate functionality
-// to traditional IPAM driver specified in pluginType
+// to traditional IPAM driver.
 type AntreaIPAM struct {
+	controller *AntreaIPAMController
 }
 
-func generateCIDRMask(ip net.IP, prefixLength int) net.IPMask {
-	ipAddrBits := 32
-	if ip.To4() == nil {
-		ipAddrBits = 128
-	}
-
-	return net.CIDRMask(int(prefixLength), ipAddrBits)
-}
+// Global variable is needed to work around order of initialization
+// Controller will be assigned to the driver after it is initialized
+// by agent init.
+var antreaIPAMDriver *AntreaIPAM
 
 type antreaIPAMRequest struct {
 	// TODO: Support two allocators for IPv4 and IPv6 pools
@@ -58,8 +56,8 @@ func (d *antreaIPAMRequest) getResource() string {
 	return fmt.Sprintf("Kind:%s", k8s.NamespacedName(d.namespace, d.podName))
 }
 
-func NewantreaIPAMRequest(poolName string, namespace string, podName string) (antreaIPAMRequest, error) {
-	allocator, err := poolallocator.NewIPPoolAllocator(poolName, antreaIPAMController.crdClient)
+func (d *AntreaIPAM) newAntreaIPAMRequest(poolName string, namespace string, podName string) (antreaIPAMRequest, error) {
+	allocator, err := poolallocator.NewIPPoolAllocator(poolName, d.controller.crdClient)
 	if err != nil {
 		return antreaIPAMRequest{}, err
 	}
@@ -70,6 +68,10 @@ func NewantreaIPAMRequest(poolName string, namespace string, podName string) (an
 		namespace: namespace,
 		podName:   podName,
 	}, nil
+}
+
+func (d *AntreaIPAM) setController(controller *AntreaIPAMController) {
+	d.controller = controller
 }
 
 func (d *AntreaIPAM) validateRequest(data interface{}) (*antreaIPAMRequest, error) {
@@ -85,6 +87,16 @@ func (d *AntreaIPAM) validateRequest(data interface{}) (*antreaIPAMRequest, erro
 	}
 
 	return &request, nil
+}
+
+// Helper to generate mask based on prefix length
+func generateCIDRMask(ip net.IP, prefixLength int) net.IPMask {
+	ipAddrBits := 32
+	if ip.To4() == nil {
+		ipAddrBits = 128
+	}
+
+	return net.CIDRMask(int(prefixLength), ipAddrBits)
 }
 
 // Add allocates next available IP address from associated IP Pool
@@ -105,10 +117,19 @@ func (d *AntreaIPAM) Add(args *invoke.Args, networkConfig []byte, data interface
 	klog.V(4).Infof("IP %s (GW %s) allocated for pod %s", ip.String(), subnetInfo.Gateway, request.podName)
 
 	result := current.Result{CNIVersion: current.ImplementedSpecVersion}
+	gwIP := net.ParseIP(subnetInfo.Gateway)
+	defaultRoute := &cnitypes.Route{
+		Dst: net.IPNet{
+			IP:   net.ParseIP("0.0.0.0"),
+			Mask: net.IPv4Mask(0, 0, 0, 0),
+		},
+		GW: gwIP,
+	}
 	ipConfig := &current.IPConfig{
 		Address: net.IPNet{IP: ip, Mask: generateCIDRMask(ip, int(subnetInfo.PrefixLength))},
-		Gateway: net.ParseIP(subnetInfo.Gateway),
+		Gateway: gwIP,
 	}
+	result.Routes = append(result.Routes, defaultRoute)
 	result.IPs = append(result.IPs, ipConfig)
 	return &result, nil
 }
@@ -148,7 +169,7 @@ func (d *AntreaIPAM) Check(args *invoke.Args, networkConfig []byte, data interfa
 // of today). If annotation is not present, or annotated IP Pool not found, the driver
 // will not own the request and fall back to next IPAM driver.
 func (d *AntreaIPAM) Owns(args *invoke.Args, k8sArgs *argtypes.K8sArgs, networkConfig []byte) (bool, interface{}, error) {
-	if antreaIPAMController == nil {
+	if d.controller == nil {
 		klog.Warningf("Antrea IPAM driver failed to initialize due to inconsistent configuration. Falling back to default IPAM")
 		return false, nil, nil
 	}
@@ -158,12 +179,12 @@ func (d *AntreaIPAM) Owns(args *invoke.Args, k8sArgs *argtypes.K8sArgs, networkC
 	// supported as well
 	namespace := string(k8sArgs.K8S_POD_NAMESPACE)
 	klog.V(2).Infof("Inspecting IPAM annotation for namespace %s", namespace)
-	poolNames, shouldOwn := antreaIPAMController.getIPPoolsByNamespace(namespace)
+	poolNames, shouldOwn := d.controller.getIPPoolsByNamespace(namespace)
 	if shouldOwn {
 		// Only one pool is supported as of today
 		// TODO - support a pool for each IP version
 		ipPool := poolNames[0]
-		request, err := NewantreaIPAMRequest(ipPool, namespace, string(k8sArgs.K8S_POD_NAME))
+		request, err := d.newAntreaIPAMRequest(ipPool, namespace, string(k8sArgs.K8S_POD_NAME))
 		if err != nil {
 			return true, nil, fmt.Errorf("Antrea IPAM driver failed to initialize IP allocator for pool %s", ipPool)
 		}
@@ -174,7 +195,10 @@ func (d *AntreaIPAM) Owns(args *invoke.Args, k8sArgs *argtypes.K8sArgs, networkC
 
 func init() {
 	// Antrea driver must come first
-	if err := RegisterIPAMDriver(AntreaIPAMType, &AntreaIPAM{}); err != nil {
+	// NOTE: this is global variable that requires follow-up setup post agent Init
+	antreaIPAMDriver = &AntreaIPAM{}
+
+	if err := RegisterIPAMDriver(AntreaIPAMType, antreaIPAMDriver); err != nil {
 		klog.Errorf("Failed to register IPAM plugin on type %s", AntreaIPAMType)
 	}
 
