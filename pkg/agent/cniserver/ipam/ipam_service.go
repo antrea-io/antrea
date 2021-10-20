@@ -19,7 +19,7 @@ import (
 	"sync"
 
 	"github.com/containernetworking/cni/pkg/invoke"
-	"github.com/containernetworking/cni/pkg/types/current"
+	current "github.com/containernetworking/cni/pkg/types/100"
 
 	cnipb "antrea.io/antrea/pkg/apis/cni/v1beta1"
 )

@@ -19,7 +19,7 @@ import (
 	"strings"
 
 	"github.com/containernetworking/cni/pkg/types"
-	"github.com/containernetworking/cni/pkg/types/current"
+	current "github.com/containernetworking/cni/pkg/types/100"
 )
 
 func GenerateIPAMResult(cniVersion string, ipConfig []string, routeConfig []string, dnsConfig []string) *current.Result {
@@ -56,16 +56,15 @@ func parseIPs(ips []string) []*current.IPConfig {
 		configs := strings.Split(ipc, ",")
 		addr := strings.Trim(configs[0], " ")
 		gw := strings.Trim(configs[1], " ")
-		version := strings.Trim(configs[2], " ")
-		ipConfigs = append(ipConfigs, parseIPConfig(addr, gw, version))
+		ipConfigs = append(ipConfigs, parseIPConfig(addr, gw))
 	}
 	return ipConfigs
 }
 
-func parseIPConfig(ipAddress string, gw string, version string) *current.IPConfig {
+func parseIPConfig(ipAddress string, gw string) *current.IPConfig {
 	ip, ipv4Net, _ := net.ParseCIDR(ipAddress)
 	ipv4Net.IP = ip
-	ipConfig := &current.IPConfig{Version: version, Address: *ipv4Net}
+	ipConfig := &current.IPConfig{Address: *ipv4Net}
 	if gw != "" {
 		gateway := net.ParseIP(gw)
 		ipConfig.Gateway = gateway

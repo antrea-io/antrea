@@ -21,7 +21,7 @@ package testing
 
 import (
 	invoke "github.com/containernetworking/cni/pkg/invoke"
-	current "github.com/containernetworking/cni/pkg/types/current"
+	types100 "github.com/containernetworking/cni/pkg/types/100"
 	gomock "github.com/golang/mock/gomock"
 	reflect "reflect"
 )
@@ -50,10 +50,10 @@ func (m *MockIPAMDriver) EXPECT() *MockIPAMDriverMockRecorder {
 }
 
 // Add mocks base method
-func (m *MockIPAMDriver) Add(arg0 *invoke.Args, arg1 []byte) (*current.Result, error) {
+func (m *MockIPAMDriver) Add(arg0 *invoke.Args, arg1 []byte) (*types100.Result, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Add", arg0, arg1)
-	ret0, _ := ret[0].(*current.Result)
+	ret0, _ := ret[0].(*types100.Result)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

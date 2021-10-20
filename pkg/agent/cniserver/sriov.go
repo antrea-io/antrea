@@ -24,7 +24,7 @@ import (
 	"path"
 	"time"
 
-	"github.com/containernetworking/cni/pkg/types/current"
+	current "github.com/containernetworking/cni/pkg/types/100"
 	sriovcniutils "github.com/k8snetworkplumbingwg/sriov-cni/pkg/utils"
 	"google.golang.org/grpc"
 	"k8s.io/klog/v2"

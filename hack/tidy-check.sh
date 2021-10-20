@@ -35,7 +35,7 @@ TARGET_GO_VERSION_PATTERN="go$TARGET_GO_VERSION*"
 # if Go environment variable is set, use it as it is, otherwise default to "go"
 : "${GO:=go}"
 
-TIDY_COMMAND="cd $PROJECT_RELATIVE_DIR && $GO mod tidy >> /dev/null 2>&1"
+TIDY_COMMAND="cd $PROJECT_RELATIVE_DIR && $GO mod tidy -compat=1.17 >> /dev/null 2>&1"
 
 function echoerr {
   >&2 echo "$@"

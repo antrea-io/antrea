@@ -21,7 +21,7 @@ import (
 	"strings"
 
 	cnitypes "github.com/containernetworking/cni/pkg/types"
-	"github.com/containernetworking/cni/pkg/types/current"
+	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/cni/pkg/version"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -368,7 +368,7 @@ func (pc *podConfigurator) validateOVSInterfaceConfig(containerID string, contai
 		}
 
 		for _, ipc := range ips {
-			if ipc.Version == "4" {
+			if ipc.Address.IP.To4() != nil {
 				ipv4Addr := util.GetIPv4Addr(containerConfig.IPs)
 				if ipv4Addr != nil && ipv4Addr.Equal(ipc.Address.IP) {
 					return nil

@@ -172,9 +172,9 @@ endif
 .PHONY: docker-tidy
 docker-tidy: $(DOCKER_CACHE)
 	@rm -f go.sum
-	@$(DOCKER_ENV) $(GO) mod tidy
+	@$(DOCKER_ENV) $(GO) mod tidy -compat=1.17
 	@rm -f plugins/octant/go.sum
-	@$(DOCKER_ENV) bash -c "cd plugins/octant && $(GO) mod tidy"
+	@$(DOCKER_ENV) bash -c "cd plugins/octant && $(GO) mod tidy -compat=1.17"
 	@chmod -R 0755 $<
 	@chmod 0644 go.sum plugins/octant/go.sum
 
@@ -209,9 +209,9 @@ antctl-release:
 .PHONY: tidy
 tidy:
 	@rm -f go.sum
-	@$(GO) mod tidy
+	@$(GO) mod tidy -compat=1.17
 	@rm -f plugins/octant/go.sum
-	@cd plugins/octant && $(GO) mod tidy
+	@cd plugins/octant && $(GO) mod tidy -compat=1.17
 
 .PHONY: .linux-test-integration
 .linux-test-integration: .coverage

@@ -30,7 +30,7 @@ import (
 	"text/template"
 
 	"github.com/containernetworking/cni/pkg/types"
-	"github.com/containernetworking/cni/pkg/types/current"
+	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
@@ -689,7 +689,7 @@ func TestAntreaServerFunc(t *testing.T) {
 				subnet: "10.1.2.0/24",
 			}},
 			expGatewayCIDRs: []string{"10.1.2.1/24"},
-			addresses:       []string{"10.1.2.100/24,10.1.2.1,4"},
+			addresses:       []string{"10.1.2.100/24,10.1.2.1"},
 			Routes:          []string{"10.0.0.0/8,10.1.2.1", "0.0.0.0/0,10.1.2.1"},
 		},
 		{
@@ -700,7 +700,7 @@ func TestAntreaServerFunc(t *testing.T) {
 				subnet: "10.1.2.0/24",
 			}},
 			expGatewayCIDRs: []string{"10.1.2.1/24"},
-			addresses:       []string{"10.1.2.100/24,10.1.2.1,4"},
+			addresses:       []string{"10.1.2.100/24,10.1.2.1"},
 			Routes:          []string{"10.0.0.0/8,10.1.2.1", "0.0.0.0/0,10.1.2.1"},
 			validateMetrics: true,
 		},
@@ -739,7 +739,7 @@ func setupChainTest(
 	}
 
 	err = netNS.Do(func(hostNS ns.NetNS) error {
-		hostVeth, containerVeth, err = ip.SetupVethWithName(IFName, "", 1500, hostNS)
+		hostVeth, containerVeth, err = ip.SetupVethWithName(IFName, "", 1500, "", hostNS)
 		return err
 	})
 	if err != nil {

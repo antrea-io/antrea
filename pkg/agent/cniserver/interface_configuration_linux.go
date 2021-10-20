@@ -24,7 +24,7 @@ import (
 
 	"github.com/Mellanox/sriovnet"
 	cnitypes "github.com/containernetworking/cni/pkg/types"
-	"github.com/containernetworking/cni/pkg/types/current"
+	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/containernetworking/plugins/pkg/ipam"
 	"github.com/containernetworking/plugins/pkg/ns"
@@ -254,7 +254,7 @@ func (ic *ifConfigurator) configureContainerLinkVeth(
 
 	if err := ns.WithNetNSPath(containerNetNS, func(hostNS ns.NetNS) error {
 		klog.V(2).Infof("Creating veth devices (%s, %s) for container %s", containerIfaceName, hostIfaceName, containerID)
-		hostVeth, containerVeth, err := ip.SetupVethWithName(containerIfaceName, hostIfaceName, mtu, hostNS)
+		hostVeth, containerVeth, err := ip.SetupVethWithName(containerIfaceName, hostIfaceName, mtu, "", hostNS)
 		if err != nil {
 			return fmt.Errorf("failed to create veth devices for container %s: %v", containerID, err)
 		}
@@ -301,7 +301,7 @@ func (ic *ifConfigurator) advertiseContainerAddr(containerNetNS string, containe
 		}
 		var targetIP net.IP
 		for _, ipc := range result.IPs {
-			if ipc.Version == "4" {
+			if ipc.Address.IP.To4() != nil {
 				targetIP = ipc.Address.IP
 			}
 		}

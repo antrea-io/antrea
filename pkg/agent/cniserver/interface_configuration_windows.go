@@ -28,7 +28,7 @@ import (
 	"github.com/Microsoft/hcsshim"
 	"github.com/Microsoft/hcsshim/hcn"
 	cnitypes "github.com/containernetworking/cni/pkg/types"
-	"github.com/containernetworking/cni/pkg/types/current"
+	current "github.com/containernetworking/cni/pkg/types/100"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
@@ -91,7 +91,7 @@ func (ic *ifConfigurator) delEndpoint(name string) {
 // findContainerIPConfig finds a valid IPv4 address since IPv6 is not supported for Windows at this stage.
 func findContainerIPConfig(ips []*current.IPConfig) (*current.IPConfig, error) {
 	for _, ipc := range ips {
-		if ipc.Version == "4" {
+		if ipc.Address.IP.To4() != nil {
 			return ipc, nil
 		}
 	}

@@ -28,7 +28,7 @@ import (
 	"testing"
 
 	cnitypes "github.com/containernetworking/cni/pkg/types"
-	"github.com/containernetworking/cni/pkg/types/current"
+	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -62,7 +62,7 @@ const (
 
 var routes = []string{"10.0.0.0/8,10.1.2.1", "0.0.0.0/0,10.1.2.1"}
 var dns = []string{"192.168.100.1"}
-var ips = []string{"10.1.2.100/24,10.1.2.1,4"}
+var ips = []string{"10.1.2.100/24,10.1.2.1"}
 var args = cniservertest.GenerateCNIArgs(testPodName, testPodNamespace, testPodInfraContainerID)
 var testNodeConfig *config.NodeConfig
 var gwIPv4 net.IP
@@ -243,7 +243,7 @@ func TestValidatePrevResult(t *testing.T) {
 	k8sPodArgs := &k8sArgs{}
 	cnitypes.LoadArgs(args, k8sPodArgs)
 	networkCfg.PrevResult = nil
-	ips := []string{"10.1.2.100/24,10.1.2.1,4"}
+	ips := []string{"10.1.2.100/24,10.1.2.1"}
 	routes := []string{"10.0.0.0/8,10.1.2.1", "0.0.0.0/0,10.1.2.1"}
 	dns := []string{"192.168.100.1"}
 	ipamResult := ipamtest.GenerateIPAMResult(cniVersion, ips, routes, dns)
@@ -349,7 +349,7 @@ func TestParsePrevResultFromRequest(t *testing.T) {
 func TestUpdateResultIfaceConfig(t *testing.T) {
 	require := require.New(t)
 
-	testIps := []string{"192.168.1.100/24, , 4", "fd74:ca9b:172:18::8/64, , 6"}
+	testIps := []string{"192.168.1.100/24, ", "fd74:ca9b:172:18::8/64, "}
 
 	require.Equal(gwIPv4, testNodeConfig.GatewayConfig.IPv4)
 	require.Equal(gwIPv6, testNodeConfig.GatewayConfig.IPv6)
@@ -399,7 +399,7 @@ func TestValidateOVSInterface(t *testing.T) {
 	podConfigurator := &podConfigurator{ifaceStore: ifaceStore}
 	containerID := uuid.New().String()
 	containerMACStr := "11:22:33:44:55:66"
-	containerIP := []string{"10.1.2.100/24,10.1.2.1,4"}
+	containerIP := []string{"10.1.2.100/24,10.1.2.1"}
 	result := ipamtest.GenerateIPAMResult(supportedCNIVersion, containerIP, routes, dns)
 	containerIface := &current.Interface{Name: ifname, Sandbox: netns, Mac: containerMACStr}
 	hostIfaceName := util.GenerateContainerInterfaceName(testPodName, testPodNamespace, containerID)
