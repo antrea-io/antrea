@@ -19,6 +19,7 @@ package portcache
 
 import (
 	"fmt"
+	"io"
 	"net"
 	"sync"
 	"time"
@@ -51,7 +52,7 @@ const (
 type ProtocolSocketData struct {
 	Protocol string
 	State    protocolSocketState
-	socket   Closeable
+	socket   io.Closer
 }
 
 type NodePortData struct {
@@ -102,7 +103,7 @@ func (d *NodePortData) CloseSockets() error {
 }
 
 type LocalPortOpener interface {
-	OpenLocalPort(port int, protocol string) (Closeable, error)
+	OpenLocalPort(port int, protocol string) (io.Closer, error)
 }
 
 type localPortOpener struct{}
@@ -375,8 +376,8 @@ func (pt *PortTable) syncRules() error {
 	pt.tableLock.Lock()
 	defer pt.tableLock.Unlock()
 	nplPorts := make([]rules.PodNodePort, 0, len(pt.NodePortTable))
-	protocols := make([]string, 0, len(supportedProtocols))
 	for _, npData := range pt.NodePortTable {
+		protocols := make([]string, 0, len(supportedProtocols))
 		for _, protocol := range npData.Protocols {
 			if protocol.State == stateInUse {
 				protocols = append(protocols, protocol.Protocol)
@@ -388,7 +389,6 @@ func (pt *PortTable) syncRules() error {
 			PodIP:     npData.PodIP,
 			Protocols: protocols,
 		})
-		protocols = protocols[:0] // reuse slice
 	}
 	return pt.PodPortRules.AddAllRules(nplPorts)
 }
@@ -452,10 +452,10 @@ func podIPPortFormat(ip string, port int) string {
 // openLocalPort binds to the provided port.
 // This is inspired by the openLocalPort function in kube-proxy:
 // https://github.com/kubernetes/kubernetes/blob/86f8c3ee91b6faec437f97e3991107747d7fc5e8/pkg/proxy/iptables/proxier.go#L1664
-func (lpo *localPortOpener) OpenLocalPort(port int, protocol string) (Closeable, error) {
+func (lpo *localPortOpener) OpenLocalPort(port int, protocol string) (io.Closer, error) {
 	// For now, NodePortLocal only supports IPv4 and TCP/UDP.
 	var network string
-	var socket Closeable
+	var socket io.Closer
 	switch protocol {
 	case "tcp":
 		network = "tcp4"

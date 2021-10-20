@@ -45,18 +45,6 @@ import (
 	npltesting "antrea.io/antrea/pkg/agent/nodeportlocal/testing"
 )
 
-func newPortTable(mockIPTables rules.PodPortRules, mockPortOpener portcache.LocalPortOpener) *portcache.PortTable {
-	return &portcache.PortTable{
-		NodePortTable:    make(map[int]*portcache.NodePortData),
-		PodEndpointTable: make(map[string]*portcache.NodePortData),
-		StartPort:        defaultStartPort,
-		EndPort:          defaultEndPort,
-		PortSearchStart:  defaultStartPort,
-		PodPortRules:     mockIPTables,
-		LocalPortOpener:  mockPortOpener,
-	}
-}
-
 const (
 	defaultPodName        = "test-pod"
 	defaultSvcName        = "test-svc"
@@ -72,6 +60,18 @@ const (
 	defaultStartPort      = 61000
 	defaultEndPort        = 65000
 )
+
+func newPortTable(mockIPTables rules.PodPortRules, mockPortOpener portcache.LocalPortOpener) *portcache.PortTable {
+	return &portcache.PortTable{
+		NodePortTable:    make(map[int]*portcache.NodePortData),
+		PodEndpointTable: make(map[string]*portcache.NodePortData),
+		StartPort:        defaultStartPort,
+		EndPort:          defaultEndPort,
+		PortSearchStart:  defaultStartPort,
+		PodPortRules:     mockIPTables,
+		LocalPortOpener:  mockPortOpener,
+	}
+}
 
 type fakeSocket struct{}
 
