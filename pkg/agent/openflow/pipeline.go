@@ -1348,7 +1348,6 @@ func (c *client) l3FwdServiceDefaultFlowsViaGW(ipProto binding.Protocol, categor
 			MatchCTMark(ServiceCTMark).
 			MatchCTStateTrk(true).
 			MatchRegMark(RewriteMACRegMark).
-			MatchRegMark(NotAntreaIPAMRegMark).
 			Action().SetDstMAC(gatewayMAC).
 			Action().GotoTable(l3DecTTLTable).
 			Cookie(c.cookieAllocator.Request(category).Raw()).
