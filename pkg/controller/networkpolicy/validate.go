@@ -487,7 +487,7 @@ func (v *antreaPolicyValidator) validatePeers(ingress, egress []crdv1alpha1.Rule
 			if !features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
 				return fmt.Sprintf("`toServices` can only be used when AntreaProxy is enabled"), false
 			}
-			if rule.To != nil || rule.Ports != nil {
+			if (rule.To != nil && len(rule.To) > 0) || rule.Ports != nil {
 				return fmt.Sprintf("`toServices` can't be used with `to` or `ports`"), false
 			}
 		}

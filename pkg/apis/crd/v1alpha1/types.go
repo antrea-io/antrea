@@ -364,7 +364,7 @@ type Rule struct {
 	// or Ports. If this field and To are both empty or missing, this rule matches all
 	// destinations.
 	// +optional
-	ToServices []ServiceReference `json:"toServices"`
+	ToServices []ServiceReference `json:"toServices,omitempty"`
 	// Name describes the intention of this rule.
 	// Name should be unique within the policy.
 	// +optional

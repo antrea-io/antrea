@@ -281,6 +281,7 @@ func (b *ClusterNetworkPolicySpecBuilder) AddToServicesRule(svcRefs []crdv1alpha
 		appliedTos = append(appliedTos, b.GetAppliedToPeer(at.PodSelector, at.NSSelector, at.PodSelectorMatchExp, at.NSSelectorMatchExp, at.Group))
 	}
 	newRule := crdv1alpha1.Rule{
+		To:         make([]crdv1alpha1.NetworkPolicyPeer, 0),
 		ToServices: svcRefs,
 		Action:     &action,
 		Name:       name,
