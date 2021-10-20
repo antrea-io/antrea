@@ -67,6 +67,17 @@ func TestEgress(t *testing.T) {
 	t.Run("testEgressUpdateEgressIP", func(t *testing.T) { testEgressUpdateEgressIP(t, data) })
 	t.Run("testEgressUpdateNodeSelector", func(t *testing.T) { testEgressUpdateNodeSelector(t, data) })
 	t.Run("testEgressNodeFailure", func(t *testing.T) { testEgressNodeFailure(t, data) })
+	t.Run("testCreateExternalIPPool", func(t *testing.T) { testCreateExternalIPPool(t, data) })
+}
+
+func testCreateExternalIPPool(t *testing.T, data *TestData) {
+	eip := v1alpha2.ExternalIPPool{
+		ObjectMeta: metav1.ObjectMeta{Name: "fakeExternalIPPool"},
+		Spec:       v1alpha2.ExternalIPPoolSpec{NodeSelector: metav1.LabelSelector{MatchLabels: map[string]string{"env": "pro-"}}},
+	}
+
+	_, err := data.crdClient.CrdV1alpha2().ExternalIPPools().Create(context.TODO(), &eip, metav1.CreateOptions{})
+	assert.Error(t, err, "Should fail to create ExternalIPPool")
 }
 
 func testEgressClientIP(t *testing.T, data *TestData) {
