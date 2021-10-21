@@ -64,7 +64,7 @@ Your feedback is more than welcome!
 every two weeks on Tuesday at 5AM GMT+1 (United Kingdom time). See Antrea team calendar for localized times.
     - [Meeting minutes](https://github.com/antrea-io/antrea/wiki/Community-Meetings)
     - [Meeting recordings](https://www.youtube.com/playlist?list=PLuzde2hYeDBdw0BuQCYbYqxzoJYY1hfwv)
-  + [Antrea office hours](https://VMware.zoom.us/j/94245798791?pwd=RzRNVXYxdDJnNjZnNjBiUVFHZGlXdz09),
+  + [Antrea live office hours](https://antrea.io/live),
 every two weeks on Tuesday at 10PM GMT+1 (United Kingdom time). See Antrea team calendar for localized times.
 * Join our mailing lists to always stay up-to-date with Antrea development:
   + [projectantrea-announce](https://groups.google.com/forum/#!forum/projectantrea-announce)
