@@ -35,6 +35,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/rand"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 )
 
@@ -251,9 +252,12 @@ func testComputeNetworkPolicy(t *testing.T, maxExecutionTime time.Duration, name
 	// Everything is ready, now start timing.
 	start := time.Now()
 	c.informerFactory.Start(stopCh)
-	c.informerFactory.WaitForCacheSync(stopCh)
+	c.crdInformerFactory.Start(stopCh)
 	go c.groupingInterface.Run(stopCh)
 	go c.groupingController.Run(stopCh)
+	c.informerFactory.WaitForCacheSync(stopCh)
+	c.crdInformerFactory.WaitForCacheSync(stopCh)
+	cache.WaitForCacheSync(stopCh, c.groupingInterfaceSynced)
 	go c.Run(stopCh)
 
 	// Block until all computation is done.
@@ -406,6 +410,7 @@ func newNetworkPolicy(namespace, name string, podSelector, ingressPodSelector, i
 }
 
 func BenchmarkSyncAddressGroup(b *testing.B) {
+	disableLogToStderr()
 	namespace := "default"
 	labels := map[string]string{"app-1": "scale-1"}
 	getObjects := func() ([]*corev1.Namespace, []*networkingv1.NetworkPolicy, []*corev1.Pod) {
@@ -420,7 +425,15 @@ func BenchmarkSyncAddressGroup(b *testing.B) {
 	defer close(stopCh)
 	_, c := newController(objs...)
 	c.informerFactory.Start(stopCh)
+	c.crdInformerFactory.Start(stopCh)
+	go c.groupingController.Run(stopCh)
 	go c.groupingInterface.Run(stopCh)
+	// wait for cache syncs
+	// after that, event handlers should have been called to enqueue AppliedToGroups and
+	// InternalNetworkPolicies.
+	c.informerFactory.WaitForCacheSync(stopCh)
+	c.crdInformerFactory.WaitForCacheSync(stopCh)
+	cache.WaitForCacheSync(stopCh, c.groupingInterfaceSynced)
 
 	for c.appliedToGroupQueue.Len() > 0 {
 		key, _ := c.appliedToGroupQueue.Get()
@@ -469,40 +482,60 @@ func benchmarkInit(b *testing.B, namespaces []*corev1.Namespace, networkPolicies
 	disableLogToStderr()
 
 	objs := toRunTimeObjects(namespaces, networkPolicies, pods)
-	stopCh := make(chan struct{})
-	defer close(stopCh)
-	_, c := newControllerWithoutEventHandler(objs, nil)
-	c.informerFactory.Start(stopCh)
-	c.informerFactory.WaitForCacheSync(stopCh)
-
 	b.ReportAllocs()
 	b.ResetTimer()
 
-	go c.groupingInterface.Run(stopCh)
+	bench := func() {
+		b.StopTimer()
+		stopCh := make(chan struct{})
+		defer close(stopCh)
+		_, c := newControllerWithoutEventHandler(objs, nil)
+		c.informerFactory.Start(stopCh)
+		c.crdInformerFactory.Start(stopCh)
+		go c.groupingInterface.Run(stopCh)
+		defer func() {
+			c.addressGroupStore.Stop()
+			c.appliedToGroupStore.Stop()
+			c.internalGroupStore.Stop()
+			c.internalNetworkPolicyStore.Stop()
+		}()
+		c.informerFactory.WaitForCacheSync(stopCh)
+		c.crdInformerFactory.WaitForCacheSync(stopCh)
+		b.StartTimer()
 
-	for _, namespace := range namespaces {
-		c.groupingInterface.AddNamespace(namespace)
+		for _, namespace := range namespaces {
+			c.groupingInterface.AddNamespace(namespace)
+		}
+		for _, pod := range pods {
+			c.groupingInterface.AddPod(pod)
+		}
+		for _, networkPolicy := range networkPolicies {
+			c.addNetworkPolicy(networkPolicy)
+		}
+		for c.appliedToGroupQueue.Len() > 0 {
+			key, _ := c.appliedToGroupQueue.Get()
+			c.syncAppliedToGroup(key.(string))
+			c.appliedToGroupQueue.Done(key)
+		}
+		for c.internalNetworkPolicyQueue.Len() > 0 {
+			key, _ := c.internalNetworkPolicyQueue.Get()
+			c.syncInternalNetworkPolicy(key.(string))
+			c.internalNetworkPolicyQueue.Done(key)
+		}
+		for c.addressGroupQueue.Len() > 0 {
+			key, _ := c.addressGroupQueue.Get()
+			c.syncAddressGroup(key.(string))
+			c.addressGroupQueue.Done(key)
+		}
+		// We stop the time for deferred functions, even if they should
+		// all execute quickly. Note that StopTimer() can be called
+		// several times in a row without issue, even if the timer is
+		// not restarted in-between.
+		b.StopTimer()
 	}
-	for _, pod := range pods {
-		c.groupingInterface.AddPod(pod)
-	}
-	for _, networkPolicy := range networkPolicies {
-		c.addNetworkPolicy(networkPolicy)
-	}
-	for c.appliedToGroupQueue.Len() > 0 {
-		key, _ := c.appliedToGroupQueue.Get()
-		c.syncAppliedToGroup(key.(string))
-		c.appliedToGroupQueue.Done(key)
-	}
-	for c.internalNetworkPolicyQueue.Len() > 0 {
-		key, _ := c.internalNetworkPolicyQueue.Get()
-		c.syncInternalNetworkPolicy(key.(string))
-		c.internalNetworkPolicyQueue.Done(key)
-	}
-	for c.addressGroupQueue.Len() > 0 {
-		key, _ := c.addressGroupQueue.Get()
-		c.syncAddressGroup(key.(string))
-		c.addressGroupQueue.Done(key)
+
+	for i := 0; i < b.N; i++ {
+		bench()
 	}
 }
 
