@@ -146,6 +146,7 @@ func testPodConnectivityOnSameNode(t *testing.T, data *TestData) {
 }
 
 func (data *TestData) testHostPortPodConnectivity(t *testing.T, clientNamespace, serverNamespace string) {
+	skipIfNotAntreaIPAMTest(t)
 	// Create a server Pod with hostPort set to 80.
 	hpPodName := randName("test-host-port-pod-")
 	hpPodPort := int32(80)
@@ -174,6 +175,7 @@ func (data *TestData) testHostPortPodConnectivity(t *testing.T, clientNamespace,
 	if err = data.runNetcatCommandFromTestPod(clientName, clientNamespace, hpPodHostIP, hpPodPort); err != nil {
 		t.Fatalf("Pod %s should be able to connect %s, but was not able to connect", clientName, net.JoinHostPort(hpPodHostIP, fmt.Sprint(hpPodPort)))
 	}
+	time.Sleep(time.Hour * 5)
 }
 
 // testHostPortPodConnectivity checks that a Pod with hostPort set is reachable.
