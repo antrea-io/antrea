@@ -484,7 +484,7 @@ func (c *NPLController) handleAddUpdatePod(key string, obj interface{}) error {
 		}
 		podPorts[targetPortProto] = struct{}{}
 		portData := c.portTable.GetEntry(podIP, port)
-		if portData != nil && !portData.HasProtocol(protocol) {
+		if portData != nil && !portData.ProtocolInUse(protocol) {
 			// If the PortTable has an entry for the Pod but does not have an
 			// entry with protocol, we enforce AddRule for the missing Protocol.
 			portData = nil
@@ -592,14 +592,12 @@ func (c *NPLController) waitForRulesInitialization() {
 				klog.V(2).InfoS("Found NodePortLocal annotation for which the allocated port doesn't fall into the configured range", "pod", klog.KObj(pod))
 				continue
 			}
-			for _, protocol := range npl.Protocols {
-				allNPLPorts = append(allNPLPorts, rules.PodNodePort{
-					NodePort: npl.NodePort,
-					PodPort:  npl.PodPort,
-					PodIP:    pod.Status.PodIP,
-					Protocol: protocol,
-				})
-			}
+			allNPLPorts = append(allNPLPorts, rules.PodNodePort{
+				NodePort:  npl.NodePort,
+				PodPort:   npl.PodPort,
+				PodIP:     pod.Status.PodIP,
+				Protocols: npl.Protocols,
+			})
 		}
 	}
 

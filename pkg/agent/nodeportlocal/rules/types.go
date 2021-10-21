@@ -14,10 +14,10 @@
 
 package rules
 
-// PodNodePort contains the Node Port, Pod Port, Protocol and the Pod IP for NodePortLocal.
+// PodNodePort contains the Node Port, Pod IP, Pod Port and Protocols for NodePortLocal.
 type PodNodePort struct {
-	NodePort int
-	PodPort  int
-	PodIP    string
-	Protocol string
+	NodePort  int
+	PodPort   int
+	PodIP     string
+	Protocols []string
 }
