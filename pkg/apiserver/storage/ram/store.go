@@ -351,3 +351,7 @@ func (s *store) dispatchEvent(event antreastorage.InternalEvent) {
 		watcher.Stop()
 	}
 }
+
+func (s *store) Stop() {
+	close(s.stopCh)
+}

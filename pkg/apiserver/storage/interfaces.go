@@ -81,4 +81,6 @@ type Interface interface {
 
 	// GetWatchersNum gets the number of watchers for the store.
 	GetWatchersNum() int
+
+	Stop()
 }
