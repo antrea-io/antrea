@@ -805,6 +805,18 @@ spec:
                             type: object
                         type: object
                       type: array
+                    toServices:
+                      items:
+                        properties:
+                          name:
+                            type: string
+                          namespace:
+                            type: string
+                        required:
+                        - name
+                        - namespace
+                        type: object
+                      type: array
                   required:
                   - action
                   type: object
@@ -1953,6 +1965,17 @@ spec:
                               matchLabels:
                                 x-kubernetes-preserve-unknown-fields: true
                             type: object
+                        type: object
+                      type: array
+                    toServices:
+                      items:
+                        properties:
+                          name:
+                            type: string
+                          namespace:
+                            type: string
+                        required:
+                        - name
                         type: object
                       type: array
                   required:

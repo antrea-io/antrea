@@ -168,9 +168,15 @@ func (n *NetworkPolicyController) processAntreaNetworkPolicy(np *crdv1alpha1.Net
 			appliedToGroupNamesForRule = append(appliedToGroupNamesForRule, atGroup)
 			appliedToGroupNamesSet.Insert(atGroup)
 		}
+		var peers *controlplane.NetworkPolicyPeer
+		if egressRule.ToServices != nil {
+			peers = n.svcRefToPeerForCRD(egressRule.ToServices, np.Namespace)
+		} else {
+			peers = n.toAntreaPeerForCRD(egressRule.To, np, controlplane.DirectionOut, namedPortExists)
+		}
 		rules = append(rules, controlplane.NetworkPolicyRule{
 			Direction:       controlplane.DirectionOut,
-			To:              *n.toAntreaPeerForCRD(egressRule.To, np, controlplane.DirectionOut, namedPortExists),
+			To:              *peers,
 			Services:        services,
 			Name:            egressRule.Name,
 			Action:          egressRule.Action,

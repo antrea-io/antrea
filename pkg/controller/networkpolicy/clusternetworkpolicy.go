@@ -325,7 +325,11 @@ func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *crdv1alpha1.C
 				}
 				ruleATGNames := n.processClusterAppliedTo(ruleAppliedTos, atgNamesSet)
 				klog.V(4).Infof("Adding a new cluster-level rule with appliedTos %v for %s", ruleATGNames, cnp.Name)
-				addRule(n.toAntreaPeerForCRD(clusterPeers, cnp, direction, namedPortExists), direction, ruleATGNames)
+				if cnpRule.ToServices != nil {
+					addRule(n.svcRefToPeerForCRD(cnpRule.ToServices, ""), direction, ruleATGNames)
+				} else {
+					addRule(n.toAntreaPeerForCRD(clusterPeers, cnp, direction, namedPortExists), direction, ruleATGNames)
+				}
 			}
 			if len(perNSPeers) > 0 {
 				if len(cnp.Spec.AppliedTo) > 0 {

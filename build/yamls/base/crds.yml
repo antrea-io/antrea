@@ -1004,6 +1004,18 @@ spec:
                               type: string
                             fqdn:
                               type: string
+                      toServices:
+                        type: array
+                        items:
+                          type: object
+                          required:
+                          - name
+                          - namespace
+                          properties:
+                            name:
+                              type: string
+                            namespace:
+                              type: string
                       name:
                         type: string
                       enableLogging:
@@ -1385,6 +1397,17 @@ spec:
                                   type: string
                                   format: cidr
                             fqdn:
+                              type: string
+                      toServices:
+                        type: array
+                        items:
+                          type: object
+                          required:
+                          - name
+                          properties:
+                            name:
+                              type: string
+                            namespace:
                               type: string
                       name:
                         type: string
