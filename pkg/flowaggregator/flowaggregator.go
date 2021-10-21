@@ -157,8 +157,8 @@ const (
 	tcpTransport         = "tcp"
 	collectorAddress     = "0.0.0.0:4739"
 
-	// PodInfo index name for Pod cache.
-	podInfoIndex = "podInfo"
+	// PodIP index name for Pod cache.
+	podIPIndex = "podIP"
 )
 
 type AggregatorTransportProtocol string
@@ -222,11 +222,11 @@ func NewFlowAggregator(
 		podInformer:                 podInformer,
 		sendJSONRecord:              sendJSONRecord,
 	}
-	podInformer.Informer().AddIndexers(cache.Indexers{podInfoIndex: podInfoIndexFunc})
+	podInformer.Informer().AddIndexers(cache.Indexers{podIPIndex: podIPIndexFunc})
 	return fa
 }
 
-func podInfoIndexFunc(obj interface{}) ([]string, error) {
+func podIPIndexFunc(obj interface{}) ([]string, error) {
 	pod, ok := obj.(*corev1.Pod)
 	if !ok {
 		return nil, fmt.Errorf("obj is not pod: %+v", obj)
@@ -444,7 +444,7 @@ func (fa *flowAggregator) sendFlowKeyRecord(key ipfixintermediate.FlowKey, recor
 		fa.aggregationProcess.SetCorrelatedFieldsFilled(record)
 	}
 	if fa.includePodLabels && !fa.aggregationProcess.AreExternalFieldsFilled(*record) {
-		fa.fillPodLabels(key, record.Record)
+		fa.fillPodLabels(record.Record)
 		fa.aggregationProcess.SetExternalFieldsFilled(record)
 	}
 	if err := fa.set.AddRecord(record.Record.GetOrderedElementList(), templateID); err != nil {
@@ -564,11 +564,15 @@ func (fa *flowAggregator) fillK8sMetadata(key ipfixintermediate.FlowKey, record 
 	// fill source Pod info when sourcePodName is empty
 	if sourcePodName, _, exist := record.GetInfoElementWithValue("sourcePodName"); exist {
 		if sourcePodName.GetStringValue() == "" {
-			pods, err := fa.podInformer.Informer().GetIndexer().ByIndex(podInfoIndex, key.SourceAddress)
-			if err == nil && len(pods) > 0 {
+			pods, err := fa.podInformer.Informer().GetIndexer().ByIndex(podIPIndex, key.SourceAddress)
+			if err != nil {
+				klog.Warning(err)
+			} else if len(pods) == 0 {
+				klog.InfoS("No Pod objects found for source Pod address", "SourceAddress", key.SourceAddress)
+			} else {
 				pod, ok := pods[0].(*corev1.Pod)
 				if !ok {
-					klog.Warningf("Invalid Pod obj in cache")
+					klog.InfoS("Invalid Pod obj in cache")
 				}
 				sourcePodName.SetStringValue(pod.Name)
 				if sourcePodNamespace, _, exist := record.GetInfoElementWithValue("sourcePodNamespace"); exist {
@@ -577,19 +581,21 @@ func (fa *flowAggregator) fillK8sMetadata(key ipfixintermediate.FlowKey, record 
 				if sourceNodeName, _, exist := record.GetInfoElementWithValue("sourceNodeName"); exist {
 					sourceNodeName.SetStringValue(pod.Spec.NodeName)
 				}
-			} else {
-				klog.Warning(err)
 			}
 		}
 	}
 	// fill destination Pod info when destinationPodName is empty
 	if destinationPodName, _, exist := record.GetInfoElementWithValue("destinationPodName"); exist {
 		if destinationPodName.GetStringValue() == "" {
-			pods, err := fa.podInformer.Informer().GetIndexer().ByIndex(podInfoIndex, key.DestinationAddress)
-			if len(pods) > 0 && err == nil {
+			pods, err := fa.podInformer.Informer().GetIndexer().ByIndex(podIPIndex, key.DestinationAddress)
+			if err != nil {
+				klog.Warning(err)
+			} else if len(pods) == 0 {
+				klog.InfoS("No Pod objects found for destination Pod address", "DestinationAddress", key.DestinationAddress)
+			} else {
 				pod, ok := pods[0].(*corev1.Pod)
 				if !ok {
-					klog.Warningf("Invalid Pod obj in cache")
+					klog.InfoS("Invalid Pod obj in cache")
 				}
 				destinationPodName.SetStringValue(pod.Name)
 				if destinationPodNamespace, _, exist := record.GetInfoElementWithValue("destinationPodNamespace"); exist {
@@ -598,61 +604,74 @@ func (fa *flowAggregator) fillK8sMetadata(key ipfixintermediate.FlowKey, record 
 				if destinationNodeName, _, exist := record.GetInfoElementWithValue("destinationNodeName"); exist {
 					destinationNodeName.SetStringValue(pod.Spec.NodeName)
 				}
-			} else {
-				klog.Warning(err)
 			}
 		}
 	}
 }
 
-func (fa *flowAggregator) fetchPodLabels(podAddress string) string {
-	pods, err := fa.podInformer.Informer().GetIndexer().ByIndex(podInfoIndex, podAddress)
+func (fa *flowAggregator) fetchPodLabels(podNs string, podName string) string {
+	pod, err := fa.podInformer.Lister().Pods(podNs).Get(podName)
 	if err != nil {
-		klog.Warning(err)
+		klog.InfoS("Get Pod object failed in podLister", "podNs", podNs, "podName", podName, "error", err)
 		return ""
-	} else if len(pods) == 0 {
-		klog.InfoS("No Pod objects found for Pod Address", "podAddress", podAddress)
-		return ""
-	}
-	pod, ok := pods[0].(*corev1.Pod)
-	if !ok {
-		klog.Warningf("Invalid Pod obj in cache")
 	}
 	labelsJSON, err := json.Marshal(pod.GetLabels())
 	if err != nil {
-		klog.Warningf("JSON encoding of Pod labels failed: %v", err)
+		klog.InfoS("JSON encoding of Pod labels failed", "error", err)
 		return ""
 	}
 	return string(labelsJSON)
 }
 
-func (fa *flowAggregator) fillPodLabels(key ipfixintermediate.FlowKey, record ipfixentities.Record) {
-	podLabelString := fa.fetchPodLabels(key.SourceAddress)
+func (fa *flowAggregator) fillPodLabels(record ipfixentities.Record) {
+	var srcPodName string
+	var srcPodNs string
+	if sourcePodName, _, exist := record.GetInfoElementWithValue("sourcePodName"); exist {
+		srcPodName = sourcePodName.GetStringValue()
+	}
+	if sourcePodNamespace, _, exist := record.GetInfoElementWithValue("sourcePodNamespace"); exist {
+		srcPodNs = sourcePodNamespace.GetStringValue()
+	}
+	var srcPodLabelString string
+	if srcPodName != "" && srcPodNs != "" {
+		srcPodLabelString = fa.fetchPodLabels(srcPodNs, srcPodName)
+	}
 	sourcePodLabelsElement, err := fa.registry.GetInfoElement("sourcePodLabels", ipfixregistry.AntreaEnterpriseID)
 	if err == nil {
-		sourcePodLabelsIE, err := ipfixentities.DecodeAndCreateInfoElementWithValue(sourcePodLabelsElement, bytes.NewBufferString(podLabelString).Bytes())
+		sourcePodLabelsIE, err := ipfixentities.DecodeAndCreateInfoElementWithValue(sourcePodLabelsElement, bytes.NewBufferString(srcPodLabelString).Bytes())
 		if err != nil {
-			klog.Warningf("Create sourcePodLabels InfoElementWithValue failed: %v", err)
+			klog.InfoS("Create sourcePodLabels InfoElementWithValue failed", "error", err)
 		}
 		err = record.AddInfoElement(sourcePodLabelsIE)
 		if err != nil {
-			klog.Warningf("Add sourcePodLabels InfoElementWithValue failed: %v", err)
+			klog.InfoS("Add sourcePodLabels InfoElementWithValue failed", "error", err)
 		}
 	} else {
-		klog.Warningf("Get sourcePodLabels InfoElement failed: %v", err)
+		klog.InfoS("Get sourcePodLabels InfoElement failed", "error", err)
 	}
-	podLabelString = fa.fetchPodLabels(key.DestinationAddress)
+	var dstPodName string
+	var dstPodNs string
+	if destinationPodName, _, exist := record.GetInfoElementWithValue("destinationPodName"); exist {
+		dstPodName = destinationPodName.GetStringValue()
+	}
+	if destinationPodNamespace, _, exist := record.GetInfoElementWithValue("destinationPodNamespace"); exist {
+		dstPodNs = destinationPodNamespace.GetStringValue()
+	}
+	var dstPodLabelString string
+	if dstPodName != "" && dstPodNs != "" {
+		dstPodLabelString = fa.fetchPodLabels(dstPodNs, dstPodName)
+	}
 	destinationPodLabelsElement, err := fa.registry.GetInfoElement("destinationPodLabels", ipfixregistry.AntreaEnterpriseID)
 	if err == nil {
-		destinationPodLabelsIE, err := ipfixentities.DecodeAndCreateInfoElementWithValue(destinationPodLabelsElement, bytes.NewBufferString(podLabelString).Bytes())
+		destinationPodLabelsIE, err := ipfixentities.DecodeAndCreateInfoElementWithValue(destinationPodLabelsElement, bytes.NewBufferString(dstPodLabelString).Bytes())
 		if err != nil {
-			klog.Warningf("Create destinationPodLabelsIE InfoElementWithValue failed: %v", err)
+			klog.InfoS("Create destinationPodLabelsIE InfoElementWithValue failed", "error", err)
 		}
 		err = record.AddInfoElement(destinationPodLabelsIE)
 		if err != nil {
-			klog.Warningf("Add destinationPodLabels InfoElementWithValue failed: %v", err)
+			klog.InfoS("Add destinationPodLabels InfoElementWithValue failed", "error", err)
 		}
 	} else {
-		klog.Warningf("Get destinationPodLabels InfoElement failed: %v", err)
+		klog.InfoS("Get destinationPodLabels InfoElement failed", "error", err)
 	}
 }
