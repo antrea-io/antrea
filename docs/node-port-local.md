@@ -23,13 +23,14 @@ directly to backend Pods.
 
 ## Prerequisites
 
-NodePortLocal was introduced in v0.13 as an alpha feature. As with other alpha
-features, a feature gate, `NodePortLocal`, must be enabled on the antrea-agent
-for the feature to work.
+NodePortLocal was introduced in v0.13 as an alpha feature, and was graduated to
+beta in v1.4, at which time it was enabled by default. Prior to v1.4, a feature
+gate, `NodePortLocal`, must be enabled on the antrea-agent for the feature to
+work.
 
 ## Usage
 
-In addition to enabling the NodePortLocal feature gate, the value of
+In addition to enabling the NodePortLocal feature gate (if needed), the value of
 `nplPortRange` can be set in the Antrea Agent configuration through the
 ConfigMap. Ports from a Node will be allocated from the range of ports specified
 in `nplPortRange`. If the value of `nplPortRange` is not specified, the range
@@ -141,4 +142,4 @@ mapped.
 ## Limitations
 
 This feature is currently only supported for Nodes running Linux with IPv4
-addresses. Only TCP Service ports are supported.
+addresses. Only TCP & UDP Service ports are supported (not SCTP).

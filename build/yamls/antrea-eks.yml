@@ -3850,7 +3850,7 @@ data:
     #  Traceflow: true
 
     # Enable NodePortLocal feature to make the pods reachable externally through NodePort
-    #  NodePortLocal: false
+    #  NodePortLocal: true
 
     # Enable Antrea ClusterNetworkPolicy feature to complement K8s NetworkPolicy for cluster admins
     # to define security policies which apply to the entire cluster, and Antrea NetworkPolicy
@@ -4135,7 +4135,7 @@ metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-dttf6969bm
+  name: antrea-config-6tct677678
   namespace: kube-system
 ---
 apiVersion: v1
@@ -4206,7 +4206,7 @@ spec:
             fieldRef:
               fieldPath: spec.serviceAccountName
         - name: ANTREA_CONFIG_MAP_NAME
-          value: antrea-config-dttf6969bm
+          value: antrea-config-6tct677678
         image: projects.registry.vmware.com/antrea/antrea-ubuntu:latest
         imagePullPolicy: IfNotPresent
         livenessProbe:
@@ -4257,7 +4257,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-dttf6969bm
+          name: antrea-config-6tct677678
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -4540,7 +4540,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-dttf6969bm
+          name: antrea-config-6tct677678
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d

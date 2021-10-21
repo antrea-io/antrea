@@ -1817,6 +1817,10 @@ func (data *TestData) GetGatewayInterfaceName(antreaNamespace string) (string, e
 	return antreaDefaultGW, nil
 }
 
+// mutateAntreaConfigMap will perform the specified updates on the antrea-agent config and the
+// antrea-controller config by updating the antrea-config ConfigMap. It will then restart Agents and
+// Controller if needed. Note that if the specified updates do not result in any actual change to
+// the ConfigMap, this function is a complete no-op.
 func (data *TestData) mutateAntreaConfigMap(controllerChanges []configChange, agentChanges []configChange, restartController, restartAgent bool) error {
 	configMap, err := data.GetAntreaConfigMap(antreaNamespace)
 	if err != nil {
@@ -1827,24 +1831,32 @@ func (data *TestData) mutateAntreaConfigMap(controllerChanges []configChange, ag
 	for _, c := range controllerChanges {
 		controllerConf = replaceFieldValue(controllerConf, c)
 	}
+	controllerConfChanged := controllerConf != configMap.Data["antrea-controller.conf"]
 	configMap.Data["antrea-controller.conf"] = controllerConf
+
 	agentConf := configMap.Data["antrea-agent.conf"]
 	for _, c := range agentChanges {
 		agentConf = replaceFieldValue(agentConf, c)
 	}
+	agentConfChanged := agentConf != configMap.Data["antrea-agent.conf"]
 	configMap.Data["antrea-agent.conf"] = agentConf
+
+	if !agentConfChanged && !controllerConfChanged {
+		// no config was changed, no need to call Update or restart anything
+		return nil
+	}
 
 	if _, err := data.clientset.CoreV1().ConfigMaps(antreaNamespace).Update(context.TODO(), configMap, metav1.UpdateOptions{}); err != nil {
 		return fmt.Errorf("failed to update ConfigMap %s: %v", configMap.Name, err)
 	}
-	if restartAgent {
+	if restartAgent && agentConfChanged {
 		err = data.restartAntreaAgentPods(defaultTimeout)
 		if err != nil {
 			return fmt.Errorf("error when restarting antrea-agent Pod: %v", err)
 		}
 	}
 	// controller should be restarted after agents in case of dataplane disruption caused by agent restart on Kind cluster.
-	if restartController {
+	if restartController && controllerConfChanged {
 		_, err = data.restartAntreaControllerPod(defaultTimeout)
 		if err != nil {
 			return fmt.Errorf("error when restarting antrea-controller Pod: %v", err)
