@@ -790,7 +790,8 @@ func NewProxier(
 	routeClient route.Interface,
 	nodePortAddresses []net.IP,
 	proxyAllEnabled bool,
-	skipServices []string) *proxier {
+	skipServices []string,
+	groupCounter types.GroupCounter) *proxier {
 	recorder := record.NewBroadcaster().NewRecorder(
 		runtime.NewScheme(),
 		corev1.EventSource{Component: componentName, Host: hostname},
@@ -816,7 +817,7 @@ func NewProxier(
 		endpointReferenceCounter: map[string]int{},
 		serviceStringMap:         map[string]k8sproxy.ServicePortName{},
 		oversizeServiceSet:       sets.NewString(),
-		groupCounter:             types.NewGroupCounter(isIPv6),
+		groupCounter:             groupCounter,
 		ofClient:                 ofClient,
 		routeClient:              routeClient,
 		nodePortAddresses:        nodePortAddresses,
@@ -875,13 +876,15 @@ func NewDualStackProxier(
 	nodePortAddressesIPv4 []net.IP,
 	nodePortAddressesIPv6 []net.IP,
 	proxyAllEnabled bool,
-	skipServices []string) *metaProxierWrapper {
+	skipServices []string,
+	v4groupCounter types.GroupCounter,
+	v6groupCounter types.GroupCounter) *metaProxierWrapper {
 
 	// Create an IPv4 instance of the single-stack proxier.
-	ipv4Proxier := NewProxier(hostname, informerFactory, ofClient, false, routeClient, nodePortAddressesIPv4, proxyAllEnabled, skipServices)
+	ipv4Proxier := NewProxier(hostname, informerFactory, ofClient, false, routeClient, nodePortAddressesIPv4, proxyAllEnabled, skipServices, v4groupCounter)
 
 	// Create an IPv6 instance of the single-stack proxier.
-	ipv6Proxier := NewProxier(hostname, informerFactory, ofClient, true, routeClient, nodePortAddressesIPv6, proxyAllEnabled, skipServices)
+	ipv6Proxier := NewProxier(hostname, informerFactory, ofClient, true, routeClient, nodePortAddressesIPv6, proxyAllEnabled, skipServices, v6groupCounter)
 
 	// Create a meta-proxier that dispatch calls between the two
 	// single-stack proxier instances.

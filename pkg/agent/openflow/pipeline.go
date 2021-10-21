@@ -1873,6 +1873,8 @@ func (c *client) addFlowMatch(fb binding.FlowBuilder, matchKey *types.MatchKey, 
 		if portValue.Value > 0 {
 			fb = fb.MatchSrcPort(portValue.Value, portValue.Mask)
 		}
+	case MatchServiceGroupID:
+		fb = fb.MatchRegFieldWithValue(ServiceGroupIDField, matchValue.(uint32))
 	}
 	return fb
 }
@@ -2255,7 +2257,9 @@ func (c *client) serviceLBFlow(groupID binding.GroupIDType, svcIP net.IP, svcPor
 			flowBuilder = flowBuilder.Action().LoadRegMark(ServiceNeedSNATRegMark)
 		}
 	}
-	return flowBuilder.Action().Group(groupID).Done()
+	return flowBuilder.
+		Action().LoadToRegField(ServiceGroupIDField, uint32(groupID)).
+		Action().Group(groupID).Done()
 }
 
 // endpointDNATFlow generates the flow which transforms the Service Cluster IP

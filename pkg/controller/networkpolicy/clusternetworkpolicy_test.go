@@ -51,6 +51,21 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 		},
 	}
 
+	svcA := v1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "svcA",
+			Namespace: "nsA",
+		},
+		Spec: v1.ServiceSpec{
+			Ports: []v1.ServicePort{
+				{
+					Port:       80,
+					TargetPort: int80,
+				},
+			},
+		},
+	}
+
 	allowAction := crdv1alpha1.RuleActionAllow
 	dropAction := crdv1alpha1.RuleActionDrop
 	protocolTCP := controlplane.ProtocolTCP
@@ -885,6 +900,58 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 			expectedAppliedToGroups: 2,
 			expectedAddressGroups:   2,
 		},
+		{
+			name: "rule-with-to-service",
+			inputPolicy: &crdv1alpha1.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "cnpK", UID: "uidK"},
+				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
+					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+						{PodSelector: &selectorA},
+					},
+					Priority: p10,
+					Egress: []crdv1alpha1.Rule{
+						{
+							ToServices: []crdv1alpha1.ServiceReference{
+								{
+									Namespace: "nsA",
+									Name:      "svcA",
+								},
+							},
+							Action: &dropAction,
+						},
+					},
+				},
+			},
+			expectedPolicy: &antreatypes.NetworkPolicy{
+				UID:  "uidK",
+				Name: "uidK",
+				SourceRef: &controlplane.NetworkPolicyReference{
+					Type: controlplane.AntreaClusterNetworkPolicy,
+					Name: "cnpK",
+					UID:  "uidK",
+				},
+				Priority:     &p10,
+				TierPriority: &DefaultTierPriority,
+				Rules: []controlplane.NetworkPolicyRule{
+					{
+						Direction: controlplane.DirectionOut,
+						To: controlplane.NetworkPolicyPeer{
+							ToServices: []controlplane.ServiceReference{
+								{
+									Namespace: "nsA",
+									Name:      "svcA",
+								},
+							},
+						},
+						Priority: 0,
+						Action:   &dropAction,
+					},
+				},
+				AppliedToGroups: []string{getNormalizedUID(toGroupSelector("", &selectorA, nil, nil).NormalizedName)},
+			},
+			expectedAppliedToGroups: 1,
+			expectedAddressGroups:   0,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -893,6 +960,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 			c.cgStore.Add(&cgA)
 			c.namespaceStore.Add(&nsA)
 			c.namespaceStore.Add(&nsB)
+			c.serviceStore.Add(&svcA)
 			if tt.inputPolicy.Spec.Tier != "" {
 				c.tierStore.Add(&tierA)
 			}
@@ -907,6 +975,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 			assert.ElementsMatch(t, tt.expectedPolicy.PerNamespaceSelectors, actualPolicy.PerNamespaceSelectors)
 			assert.ElementsMatch(t, tt.expectedPolicy.AppliedToGroups, actualPolicy.AppliedToGroups)
 			assert.Equal(t, tt.expectedAppliedToGroups, len(c.appliedToGroupStore.List()))
+			assert.Equal(t, tt.expectedAddressGroups, len(c.addressGroupStore.List()))
 		})
 	}
 }

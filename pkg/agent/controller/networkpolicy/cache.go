@@ -32,6 +32,7 @@ import (
 	v1beta "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	"antrea.io/antrea/pkg/querier"
+	"antrea.io/antrea/pkg/util/k8s"
 )
 
 const (
@@ -39,6 +40,7 @@ const (
 	appliedToGroupIndex = "appliedToGroup"
 	addressGroupIndex   = "addressGroup"
 	policyIndex         = "policy"
+	toServicesIndex     = "toServices"
 )
 
 // rule is the struct stored in ruleCache, it contains necessary information
@@ -156,6 +158,10 @@ type ruleCache struct {
 
 	// entityUpdates is a channel for receiving entity (e.g. Pod) updates from CNIServer.
 	entityUpdates <-chan antreatypes.EntityReference
+
+	// groupIDUpdates is a channel for receiving groupID for Service is assigned
+	// or released events from groupCounters.
+	groupIDUpdates <-chan string
 }
 
 func (c *ruleCache) getNetworkPolicies(npFilter *querier.NetworkPolicyQueryFilter) []v1beta.NetworkPolicy {
@@ -318,11 +324,23 @@ func policyIndexFunc(obj interface{}) ([]string, error) {
 	return []string{string(rule.PolicyUID)}, nil
 }
 
+// toServicesIndexFunc knows how to get NamespacedNames of Services referred in
+// ToServices field of a *rule. It's provided to cache.Indexer to build an index of
+// NetworkPolicy.
+func toServicesIndexFunc(obj interface{}) ([]string, error) {
+	rule := obj.(*rule)
+	toSvcNamespacedName := sets.String{}
+	for _, svc := range rule.To.ToServices {
+		toSvcNamespacedName.Insert(k8s.NamespacedName(svc.Namespace, svc.Name))
+	}
+	return toSvcNamespacedName.UnsortedList(), nil
+}
+
 // newRuleCache returns a new *ruleCache.
-func newRuleCache(dirtyRuleHandler func(string), podUpdate <-chan antreatypes.EntityReference) *ruleCache {
+func newRuleCache(dirtyRuleHandler func(string), podUpdate <-chan antreatypes.EntityReference, serviceGroupIDUpdate <-chan string) *ruleCache {
 	rules := cache.NewIndexer(
 		ruleKeyFunc,
-		cache.Indexers{addressGroupIndex: addressGroupIndexFunc, appliedToGroupIndex: appliedToGroupIndexFunc, policyIndex: policyIndexFunc},
+		cache.Indexers{addressGroupIndex: addressGroupIndexFunc, appliedToGroupIndex: appliedToGroupIndexFunc, policyIndex: policyIndexFunc, toServicesIndex: toServicesIndexFunc},
 	)
 	cache := &ruleCache{
 		appliedToSetByGroup: make(map[string]v1beta.GroupMemberSet),
@@ -331,8 +349,10 @@ func newRuleCache(dirtyRuleHandler func(string), podUpdate <-chan antreatypes.En
 		rules:               rules,
 		dirtyRuleHandler:    dirtyRuleHandler,
 		entityUpdates:       podUpdate,
+		groupIDUpdates:      serviceGroupIDUpdate,
 	}
 	go cache.processEntityUpdates()
+	go cache.processGroupIDUpdates()
 	return cache
 }
 
@@ -360,6 +380,24 @@ func (c *ruleCache) processEntityUpdates() {
 					}
 				}
 			}()
+		}
+	}
+}
+
+// processGroupIDUpdates is an infinite loop that takes Service groupID
+// update events from the channel, finds out rules that refer this Service in
+// ToServices field and use dirtyRuleHandler to re-queue these rules.
+func (c *ruleCache) processGroupIDUpdates() {
+	for {
+		select {
+		case svcStr := <-c.groupIDUpdates:
+			toSvcRules, err := c.rules.ByIndex(toServicesIndex, svcStr)
+			if err != nil {
+				continue
+			}
+			for _, toSvcRule := range toSvcRules {
+				c.dirtyRuleHandler(toSvcRule.(*rule).ID)
+			}
 		}
 	}
 }

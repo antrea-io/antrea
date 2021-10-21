@@ -29,6 +29,7 @@ import (
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/openflow"
 	openflowtest "antrea.io/antrea/pkg/agent/openflow/testing"
+	proxytypes "antrea.io/antrea/pkg/agent/proxy/types"
 	"antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/agent/util"
 	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
@@ -99,7 +100,9 @@ func newCIDR(cidrStr string) *net.IPNet {
 
 func newTestReconciler(t *testing.T, controller *gomock.Controller, ifaceStore interfacestore.InterfaceStore, ofClient *openflowtest.MockClient) *reconciler {
 	f, _ := newMockFQDNController(t, controller, nil)
-	r := newReconciler(ofClient, ifaceStore, newIDAllocator(testAsyncDeleteInterval), f)
+	ch := make(chan string, 100)
+	groupCounters := []proxytypes.GroupCounter{proxytypes.NewGroupCounter(false, ch)}
+	r := newReconciler(ofClient, ifaceStore, newIDAllocator(testAsyncDeleteInterval), f, groupCounters)
 	return r
 }
 

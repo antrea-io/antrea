@@ -51,7 +51,7 @@ func (c *fakeNetworkPolicyControl) getNetworkPolicyStatus() *v1beta2.NetworkPoli
 }
 
 func newTestStatusController() (*StatusController, *ruleCache, *fakeNetworkPolicyControl) {
-	ruleCache := newRuleCache(func(s string) {}, make(<-chan types.EntityReference))
+	ruleCache := newRuleCache(func(s string) {}, make(<-chan types.EntityReference), make(chan string, 100))
 	statusControl := &fakeNetworkPolicyControl{}
 	statusController := newStatusController(nil, testNode1, ruleCache)
 	statusController.statusControlInterface = statusControl

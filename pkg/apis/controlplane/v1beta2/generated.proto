@@ -232,6 +232,10 @@ message NetworkPolicyPeer {
   // A list of exact FQDN names or FQDN wildcard expressions.
   // This field can only be possibly set for NetworkPolicyPeer of egress rules.
   repeated string fqdns = 3;
+
+  // A list of ServiceReference.
+  // This field can only be possibly set for NetworkPolicyPeer of egress rules.
+  repeated ServiceReference toServices = 4;
 }
 
 message NetworkPolicyReference {

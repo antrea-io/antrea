@@ -263,7 +263,8 @@ func TestRuleCacheAddAddressGroup(t *testing.T) {
 func newFakeRuleCache() (*ruleCache, *dirtyRuleRecorder, chan types.EntityReference) {
 	recorder := newDirtyRuleRecorder()
 	ch := make(chan types.EntityReference, 100)
-	c := newRuleCache(recorder.Record, ch)
+	ch2 := make(chan string, 100)
+	c := newRuleCache(recorder.Record, ch, ch2)
 	return c, recorder, ch
 }
 
