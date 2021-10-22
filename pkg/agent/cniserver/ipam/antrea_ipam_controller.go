@@ -88,7 +88,7 @@ func InitializeAntreaIPAMController(kubeClient clientset.Interface, crdClient cl
 }
 
 // Run starts to watch and process Namespace updates for the Node where Antrea Agent
-// is running, and maintain a mapping between namespace name and IPAM annotations.
+// is running, and maintain a mapping between Namespace name and IPAM annotations.
 func (c *AntreaIPAMController) Run(stopCh <-chan struct{}) {
 	defer func() {
 		klog.V(2).Infof("Shutting down %s", controllerName)

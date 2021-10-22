@@ -47,16 +47,20 @@ var antreaIPAMDriver *AntreaIPAM
 
 type antreaIPAMRequest struct {
 	// TODO: Support two allocators for IPv4 and IPv6 pools
-	allocator *poolallocator.IPPoolAllocator
-	namespace string
-	podName   string
+	// TODO: Consider multiple interface case
+	allocator   *poolallocator.IPPoolAllocator
+	namespace   string
+	podName     string
+	containerID string
 }
 
+// Resource needs to be unique since it is used as identifier in Del.
+// Therefore Container ID is used, while Pod/Namespace are shown for visibility.
 func (d *antreaIPAMRequest) getResource() string {
-	return fmt.Sprintf("Kind:%s", k8s.NamespacedName(d.namespace, d.podName))
+	return fmt.Sprintf("Container:%s Pod:%s", d.containerID, k8s.NamespacedName(d.namespace, d.podName))
 }
 
-func (d *AntreaIPAM) newAntreaIPAMRequest(poolName string, namespace string, podName string) (antreaIPAMRequest, error) {
+func (d *AntreaIPAM) newAntreaIPAMRequest(poolName string, namespace string, podName string, containerID string) (antreaIPAMRequest, error) {
 	allocator, err := poolallocator.NewIPPoolAllocator(poolName, d.controller.crdClient)
 	if err != nil {
 		return antreaIPAMRequest{}, err
@@ -64,9 +68,10 @@ func (d *AntreaIPAM) newAntreaIPAMRequest(poolName string, namespace string, pod
 
 	klog.V(2).Infof("Pod %s in namespace %s associated with IP Pool %s", podName, namespace, poolName)
 	return antreaIPAMRequest{
-		allocator: allocator,
-		namespace: namespace,
-		podName:   podName,
+		allocator:   allocator,
+		namespace:   namespace,
+		podName:     podName,
+		containerID: containerID,
 	}, nil
 }
 
@@ -79,11 +84,11 @@ func (d *AntreaIPAM) validateRequest(data interface{}) (*antreaIPAMRequest, erro
 	if !ok {
 		// Should never happen since we expect Owns to return
 		// data consistent with current driver
-		panic(fmt.Errorf("Unexpected data type received in Antrea IPAM driver"))
+		panic(fmt.Errorf("unexpected data type received in Antrea IPAM driver"))
 	}
 
 	if request.allocator == nil {
-		return nil, fmt.Errorf("Failed to initialize pool allocator")
+		return nil, fmt.Errorf("failed to initialize pool allocator")
 	}
 
 	return &request, nil
@@ -156,7 +161,13 @@ func (d *AntreaIPAM) Del(args *invoke.Args, networkConfig []byte, data interface
 		return err
 	}
 
-	return request.allocator.ReleaseResource(request.getResource())
+	err = request.allocator.ReleaseResource(request.getResource())
+	if err != nil {
+		// Don't fail Del due to state inconsistency, otherwise agent will retry
+		klog.Warningf("Antrea IPAM Del failed: %v", err)
+	}
+
+	return nil
 }
 
 // Check verifues IP associated with resource is tracked in IP Pool status
@@ -172,7 +183,7 @@ func (d *AntreaIPAM) Check(args *invoke.Args, networkConfig []byte, data interfa
 	}
 
 	if !found {
-		return fmt.Errorf("No IP Address is associated with pod %s", request.podName)
+		return fmt.Errorf("no IP Address is associated with pod %s", request.podName)
 	}
 
 	return nil
@@ -198,7 +209,7 @@ func (d *AntreaIPAM) Owns(args *invoke.Args, k8sArgs *argtypes.K8sArgs, networkC
 		// Only one pool is supported as of today
 		// TODO - support a pool for each IP version
 		ipPool := poolNames[0]
-		request, err := d.newAntreaIPAMRequest(ipPool, namespace, string(k8sArgs.K8S_POD_NAME))
+		request, err := d.newAntreaIPAMRequest(ipPool, namespace, string(k8sArgs.K8S_POD_NAME), args.ContainerID)
 		if err != nil {
 			return true, nil, fmt.Errorf("Antrea IPAM driver failed to initialize IP allocator for pool %s", ipPool)
 		}

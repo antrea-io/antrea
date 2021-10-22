@@ -38,12 +38,11 @@ func newIPPoolAllocator(poolName string, initObjects []runtime.Object) *IPPoolAl
 	return allocator
 }
 
-func validateAllocationSequence(t *testing.T, allocator *IPPoolAllocator, subnetInfo crdv1a2.SubnetInfo, ipList []string) {
-	// Allocate the 2 available IPs from first range then switch to second range
+func validateAllocationSequence(t *testing.T, allocator *IPPoolAllocator, subnetInfo crdv1a2.SubnetInfo, ipList []string, resourceBase string) {
 	i := 1
 	for _, expectedIP := range ipList {
 		klog.Info("Validating allocation for ", expectedIP)
-		ip, returnInfo, err := allocator.AllocateNext(crdv1a2.IPPoolUsageStateAllocated, fmt.Sprintf("fakePod%d", i))
+		ip, returnInfo, err := allocator.AllocateNext(crdv1a2.IPPoolUsageStateAllocated, fmt.Sprintf("%s%d", resourceBase, i))
 		require.NoError(t, err)
 		assert.Equal(t, net.ParseIP(expectedIP), ip)
 		assert.Equal(t, subnetInfo, returnInfo)
@@ -72,16 +71,16 @@ func TestAllocateIP(t *testing.T) {
 	allocator := newIPPoolAllocator(poolName, []runtime.Object{&pool})
 
 	// Allocate specific IP from the range
-	returnInfo, err := allocator.AllocateIP(net.ParseIP("10.2.2.101"), crdv1a2.IPPoolUsageStateAllocated, "fakePod")
+	returnInfo, err := allocator.AllocateIP(net.ParseIP("10.2.2.101"), crdv1a2.IPPoolUsageStateAllocated, "fake1")
 	assert.Equal(t, subnetInfo, returnInfo)
 	require.NoError(t, err)
 
 	// Validate IP outside the range is not allocated
-	returnInfo, err = allocator.AllocateIP(net.ParseIP("10.2.2.121"), crdv1a2.IPPoolUsageStateAllocated, "fakePod")
+	returnInfo, err = allocator.AllocateIP(net.ParseIP("10.2.2.121"), crdv1a2.IPPoolUsageStateAllocated, "fake2")
 	require.Error(t, err)
 
 	// Make sure IP allocated above is not allocated again
-	validateAllocationSequence(t, allocator, subnetInfo, []string{"10.2.2.100", "10.2.2.102"})
+	validateAllocationSequence(t, allocator, subnetInfo, []string{"10.2.2.100", "10.2.2.102"}, "fakePod")
 
 	// Validate error is returned if IP is already allocated
 	_, err = allocator.AllocateIP(net.ParseIP("10.2.2.102"), crdv1a2.IPPoolUsageStateAllocated, "fakePod")
@@ -109,7 +108,7 @@ func TestAllocateNext(t *testing.T) {
 
 	allocator := newIPPoolAllocator(poolName, []runtime.Object{&pool})
 
-	validateAllocationSequence(t, allocator, subnetInfo, []string{"10.2.2.100", "10.2.2.101"})
+	validateAllocationSequence(t, allocator, subnetInfo, []string{"10.2.2.100", "10.2.2.101"}, "fakePod")
 }
 
 // This test verifies correct behavior in case of update conflict. Allocation should be retiried
@@ -158,7 +157,7 @@ func TestAllocateConflict(t *testing.T) {
 
 	allocator, _ := NewIPPoolAllocator(poolName, crdClient)
 
-	validateAllocationSequence(t, allocator, subnetInfo, []string{"10.2.2.101"})
+	validateAllocationSequence(t, allocator, subnetInfo, []string{"10.2.2.101"}, "fakePod")
 	assert.Equal(t, updateCount, 3)
 }
 
@@ -187,7 +186,7 @@ func TestAllocateNextMultiRange(t *testing.T) {
 	allocator := newIPPoolAllocator(poolName, []runtime.Object{&pool})
 
 	// Allocate the 2 available IPs from first range then switch to second range
-	validateAllocationSequence(t, allocator, subnetInfo, []string{"10.2.2.100", "10.2.2.101", "10.2.2.1", "10.2.2.2"})
+	validateAllocationSequence(t, allocator, subnetInfo, []string{"10.2.2.100", "10.2.2.101", "10.2.2.1", "10.2.2.2"}, "fakePod")
 }
 
 func TestAllocateNextMultiRangeExausted(t *testing.T) {
@@ -218,7 +217,7 @@ func TestAllocateNextMultiRangeExausted(t *testing.T) {
 	allocator := newIPPoolAllocator(poolName, []runtime.Object{&pool})
 
 	// Allocate all available IPs
-	validateAllocationSequence(t, allocator, subnetInfo, []string{"10.2.2.100", "10.2.2.101", "10.2.2.200"})
+	validateAllocationSequence(t, allocator, subnetInfo, []string{"10.2.2.100", "10.2.2.101", "10.2.2.200"}, "fakePod")
 
 	// Allocate next IP and get error
 	_, _, err := allocator.AllocateNext(crdv1a2.IPPoolUsageStateAllocated, "fakePod")
@@ -250,7 +249,7 @@ func TestAllocateReleaseSequence(t *testing.T) {
 	allocator := newIPPoolAllocator(poolName, []runtime.Object{&pool})
 
 	// Allocate the single available IPs from first range then 3 IPs from second range
-	validateAllocationSequence(t, allocator, subnetInfo, []string{"2001::1000", "2001::1", "2001::2", "2001::3"})
+	validateAllocationSequence(t, allocator, subnetInfo, []string{"2001::1000", "2001::1", "2001::2", "2001::3"}, "fakePod")
 
 	// Release first IP from first range and middle IP from second range
 	for _, ipToRelease := range []string{"2001::1000", "2001::2"} {
@@ -258,7 +257,7 @@ func TestAllocateReleaseSequence(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	validateAllocationSequence(t, allocator, subnetInfo, []string{"2001::1000", "2001::2", "2001::4"})
+	validateAllocationSequence(t, allocator, subnetInfo, []string{"2001::1000", "2001::2", "2001::4"}, "nicePod")
 }
 
 func TestReleaseResource(t *testing.T) {
@@ -286,7 +285,7 @@ func TestReleaseResource(t *testing.T) {
 	allocator := newIPPoolAllocator(poolName, []runtime.Object{&pool})
 
 	// Allocate the single available IPs from first range then 3 IPs from second range
-	validateAllocationSequence(t, allocator, subnetInfo, []string{"2001::1000", "2001::1", "2001::2", "2001::3", "2001::4"})
+	validateAllocationSequence(t, allocator, subnetInfo, []string{"2001::1000", "2001::1", "2001::2", "2001::3", "2001::4"}, "fakePod")
 
 	// Release first IP from first range and middle IP from second range
 	for _, podName := range []string{"fakePod2", "fakePod4"} {
@@ -294,5 +293,5 @@ func TestReleaseResource(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	validateAllocationSequence(t, allocator, subnetInfo, []string{"2001::1", "2001::3", "2001::5"})
+	validateAllocationSequence(t, allocator, subnetInfo, []string{"2001::1", "2001::3", "2001::5"}, "nicePod")
 }

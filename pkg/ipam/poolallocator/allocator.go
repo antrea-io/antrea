@@ -30,8 +30,8 @@ import (
 
 // IPPoolAllocator is responsible for allocating IPs from IP set defined in IPPool CRD.
 // The will update CRD usage accordingly.
-// Pool Allocator assumes that pool with allocated IPs can not be deleted, and can not
-// be updated so that allocated IPs no longer belong to the pool.
+// Pool Allocator assumes that pool with allocated IPs can not be deleted. Pool ranges can
+// only be extended.
 type IPPoolAllocator struct {
 	// Name of IP Pool custom resource
 	ipPoolName string
@@ -193,7 +193,7 @@ func (a *IPPoolAllocator) AllocateIP(ip net.IP, state v1alpha2.IPPoolUsageState,
 	})
 
 	if err != nil {
-		klog.Errorf("Failed to allocate IP address %s from pool %s: %+v", ip, a.ipPoolName, err)
+		klog.Errorf("failed to allocate IP address %s from pool %s: %+v", ip, a.ipPoolName, err)
 	}
 	return subnetSpec, err
 }
@@ -205,8 +205,19 @@ func (a *IPPoolAllocator) AllocateIP(ip net.IP, state v1alpha2.IPPoolUsageState,
 func (a *IPPoolAllocator) AllocateNext(state v1alpha2.IPPoolUsageState, resource string) (net.IP, v1alpha2.SubnetInfo, error) {
 	var subnetSpec v1alpha2.SubnetInfo
 	var ip net.IP
+	// Same resource can not ask for allocation twice without release
+	// This needs to be verified even at the expence of another API call
+	exists, err := a.HasResource(resource)
+	if err != nil {
+		return ip, subnetSpec, err
+	}
+
+	if exists {
+		return ip, subnetSpec, fmt.Errorf("resource %s was already allocated and address from IP Pool %s", resource, a.ipPoolName)
+	}
+
 	// Retry on CRD update conflict which is caused by multiple agents updating a pool at same time.
-	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+	err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		ipPool, allocators, err := a.readPoolAndInitIPAllocators()
 		if err != nil {
 			return err
@@ -224,7 +235,7 @@ func (a *IPPoolAllocator) AllocateNext(state v1alpha2.IPPoolUsageState, resource
 
 		if index == len(allocators) {
 			// Failed to find matching range
-			return fmt.Errorf("Failed to allocate IP: Pool %s is exausted", a.ipPoolName)
+			return fmt.Errorf("failed to allocate IP: Pool %s is exausted", a.ipPoolName)
 		}
 
 		subnetSpec = ipPool.Spec.IPRanges[index].SubnetInfo
@@ -232,7 +243,7 @@ func (a *IPPoolAllocator) AllocateNext(state v1alpha2.IPPoolUsageState, resource
 	})
 
 	if err != nil {
-		klog.Errorf("Failed to allocate from pool %s: %+v", a.ipPoolName, err)
+		klog.Errorf("failed to allocate from pool %s: %+v", a.ipPoolName, err)
 	}
 	return ip, subnetSpec, err
 }
@@ -260,7 +271,7 @@ func (a *IPPoolAllocator) Release(ip net.IP) error {
 	})
 
 	if err != nil {
-		klog.Errorf("Failed to release IP address %s from pool %s: %+v", ip, a.ipPoolName, err)
+		klog.Errorf("failed to release IP address %s from pool %s: %+v", ip, a.ipPoolName, err)
 	}
 	return err
 }
@@ -286,16 +297,16 @@ func (a *IPPoolAllocator) ReleaseResource(resource string) error {
 		}
 
 		klog.V(4).Infof("IP pool %s state: %+v", a.ipPoolName, ipPool.Status.Usage)
-		return fmt.Errorf("Failed to find record of IP allocated to resource %s in pool %s", resource, a.ipPoolName)
+		return fmt.Errorf("failed to find record of IP allocated to resource %s in pool %s", resource, a.ipPoolName)
 	})
 
 	if err != nil {
-		klog.Errorf("Failed to release IP address for resource %s from pool %s: %+v", resource, a.ipPoolName, err)
+		klog.Errorf("failed to release IP address for resource %s from pool %s: %+v", resource, a.ipPoolName, err)
 	}
 	return err
 }
 
-// HasResource checks whether an IP was associated with specified resource. It returns error if the resource is not present in state or in case CRD failed to update its state.
+// HasResource checks whether an IP was associated with specified resource. It returns error if the resource is crd fails to be retrieved.
 func (a *IPPoolAllocator) HasResource(resource string) (bool, error) {
 
 	ipPool, err := a.crdClient.CrdV1alpha2().IPPools().Get(context.TODO(), a.ipPoolName, metav1.GetOptions{})
