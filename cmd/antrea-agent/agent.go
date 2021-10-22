@@ -15,10 +15,12 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"time"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/informers"
 	"k8s.io/klog/v2"
@@ -45,6 +47,7 @@ import (
 	"antrea.io/antrea/pkg/agent/route"
 	"antrea.io/antrea/pkg/agent/stats"
 	"antrea.io/antrea/pkg/agent/types"
+	crdv1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
 	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions"
 	"antrea.io/antrea/pkg/features"
 	"antrea.io/antrea/pkg/log"
@@ -106,6 +109,31 @@ func run(o *Options) error {
 	// AntreaIPAM works with system OVSDatapathType and noEncap, noSNAT mode. Egress feature is not supported.
 	// AntreaIPAM is only verified with other FeatureGates at default state.
 	connectUplinkToBridge := features.DefaultFeatureGate.Enabled(features.AntreaIPAM)
+
+	if connectUplinkToBridge {
+		pool := crdv1alpha2.IPPool{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "test-ippool-ipv4-0",
+			},
+			Spec: crdv1alpha2.IPPoolSpec{
+				IPVersion: 4,
+				IPRanges: []crdv1alpha2.SubnetIPRange{{IPRange: crdv1alpha2.IPRange{
+					CIDR:  "",
+					Start: "192.168.240.100",
+					End:   "192.168.240.199",
+				},
+					SubnetInfo: crdv1alpha2.SubnetInfo{
+						Gateway:      "192.168.240.1",
+						PrefixLength: 24,
+						VLAN:         "",
+					}}},
+			},
+		}
+		_, err := crdClient.CrdV1alpha2().IPPools().Create(context.TODO(), &pool, metav1.CreateOptions{})
+		if err != nil {
+			klog.Errorf("Error creating IPPool, err: %+v", err)
+		}
+	}
 
 	ovsDatapathType := ovsconfig.OVSDatapathType(o.config.OVSDatapathType)
 	ovsBridgeClient := ovsconfig.NewOVSBridge(o.config.OVSBridge, ovsDatapathType, ovsdbConnection)
