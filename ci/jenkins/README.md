@@ -113,6 +113,14 @@ DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
 ./ci/jenkins/test.sh --testcase windows-networkpolicy --registry ${DOCKER_REGISTRY}
 ```
 
+* windows e2e with proxyAll enabled: e2e tests in a Windows setup with proxyAll enabled.
+
+```shell
+#!/bin/bash
+DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
+./ci/jenkins/test.sh --testcase windows-e2e --registry ${DOCKER_REGISTRY} --proxyall
+```
+
 * [whole-conformance [daily]](https://jenkins.antrea-ci.rocks/job/antrea-whole-conformance-for-pull-request/):
   community tests using sonobuoy, with certified-conformance mode.
 
