@@ -630,8 +630,7 @@ func parseGetNetCmdResult(result string, itemNum int) [][]string {
 	return parsed
 }
 
-func CreateNetNatOnHost(subnetCIDR *net.IPNet) error {
-	netNatName := "antrea-nat"
+func NewNetNat(netNatName string, subnetCIDR *net.IPNet) error {
 	cmd := fmt.Sprintf(`Get-NetNat -Name %s | Select-Object InternalIPInterfaceAddressPrefix | Format-Table -HideTableHeaders`, netNatName)
 	if internalNet, err := ps.RunCommand(cmd); err != nil {
 		if !strings.Contains(err.Error(), "No MSFT_NetNat objects found") {
@@ -656,6 +655,75 @@ func CreateNetNatOnHost(subnetCIDR *net.IPNet) error {
 		return err
 	}
 	return nil
+}
+
+func ReplaceNetNatStaticMapping(netNatName string, externalIPAddr string, externalPort uint16, internalIPAddr string, internalPort uint16, proto string) error {
+	staticMappingStr, err := GetNetNatStaticMapping(netNatName, externalIPAddr, externalPort, proto)
+	if err != nil {
+		return err
+	}
+	parsed := parseGetNetCmdResult(staticMappingStr, 6)
+	if len(parsed) > 0 {
+		items := parsed[0]
+		if items[4] == internalIPAddr && items[5] == strconv.Itoa(int(internalPort)) {
+			return nil
+		}
+		firstCol := strings.Split(items[0], ";")
+		id, err := strconv.Atoi(firstCol[1])
+		if err != nil {
+			return err
+		}
+		if err := RemoveNetNatStaticMappingByID(netNatName, id); err != nil {
+			return err
+		}
+	}
+	return AddNetNatStaticMapping(netNatName, externalIPAddr, externalPort, internalIPAddr, internalPort, proto)
+}
+
+// GetNetNatStaticMapping checks if a NetNatStaticMapping exists.
+func GetNetNatStaticMapping(netNatName string, externalIPAddr string, externalPort uint16, proto string) (string, error) {
+	cmd := fmt.Sprintf("Get-NetNatStaticMapping -NatName %s", netNatName) +
+		fmt.Sprintf("|? ExternalIPAddress -EQ %s", externalIPAddr) +
+		fmt.Sprintf("|? ExternalPort -EQ %d", externalPort) +
+		fmt.Sprintf("|? Protocol -EQ %s", proto) +
+		"| Format-Table -HideTableHeaders"
+	staticMappingStr, err := ps.RunCommand(cmd)
+	if err != nil && !strings.Contains(err.Error(), "No MSFT_NetNatStaticMapping objects found") {
+		return "", err
+	}
+	return staticMappingStr, nil
+}
+
+// AddNetNatStaticMapping adds a static mapping to a NAT instance.
+func AddNetNatStaticMapping(netNatName string, externalIPAddr string, externalPort uint16, internalIPAddr string, internalPort uint16, proto string) error {
+	cmd := fmt.Sprintf("Add-NetNatStaticMapping -NatName %s -ExternalIPAddress %s -ExternalPort %d -InternalIPAddress %s -InternalPort %d -Protocol %s",
+		netNatName, externalIPAddr, externalPort, internalIPAddr, internalPort, proto)
+	_, err := ps.RunCommand(cmd)
+	return err
+}
+
+func RemoveNetNatStaticMapping(netNatName string, externalIPAddr string, externalPort uint16, proto string) error {
+	staticMappingStr, err := GetNetNatStaticMapping(netNatName, externalIPAddr, externalPort, proto)
+	if err != nil {
+		return err
+	}
+	parsed := parseGetNetCmdResult(staticMappingStr, 6)
+	if len(parsed) == 0 {
+		return nil
+	}
+
+	firstCol := strings.Split(parsed[0][0], ";")
+	id, err := strconv.Atoi(firstCol[1])
+	if err != nil {
+		return err
+	}
+	return RemoveNetNatStaticMappingByID(netNatName, id)
+}
+
+func RemoveNetNatStaticMappingByID(netNatName string, id int) error {
+	cmd := fmt.Sprintf("Remove-NetNatStaticMapping -NatName %s -StaticMappingID %d -Confirm:$false", netNatName, id)
+	_, err := ps.RunCommand(cmd)
+	return err
 }
 
 // GetNetNeighbor gets neighbor cache entries with Get-NetNeighbor.
