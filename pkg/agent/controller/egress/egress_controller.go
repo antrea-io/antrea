@@ -208,11 +208,9 @@ func NewEgressController(
 	}})
 	c.egressInformer.AddEventHandlerWithResyncPeriod(
 		cache.ResourceEventHandlerFuncs{
-			AddFunc: c.enqueueEgress,
-			UpdateFunc: func(old, cur interface{}) {
-				c.enqueueEgress(cur)
-			},
-			DeleteFunc: c.enqueueEgress,
+			AddFunc:    c.addEgress,
+			UpdateFunc: c.updateEgress,
+			DeleteFunc: c.deleteEgress,
 		},
 		resyncPeriod,
 	)
@@ -221,9 +219,32 @@ func NewEgressController(
 	return c, nil
 }
 
-func (c *EgressController) enqueueEgress(obj interface{}) {
-	egress, isEgress := obj.(*crdv1a2.Egress)
-	if !isEgress {
+// addEgress processes Egress ADD events.
+func (c *EgressController) addEgress(obj interface{}) {
+	egress := obj.(*crdv1a2.Egress)
+	if egress.Spec.EgressIP == "" {
+		return
+	}
+	c.queue.Add(egress.Name)
+	klog.V(2).InfoS("Processed Egress ADD event", "egress", klog.KObj(egress))
+}
+
+// updateEgress processes Egress UPDATE events.
+func (c *EgressController) updateEgress(old, cur interface{}) {
+	oldEgress := old.(*crdv1a2.Egress)
+	curEgress := cur.(*crdv1a2.Egress)
+	// Ignore handling the Egress Status change if Egress IP already has been assigned on current node.
+	if curEgress.Status.EgressNode == c.nodeName && oldEgress.GetGeneration() == curEgress.GetGeneration() {
+		return
+	}
+	c.queue.Add(curEgress.Name)
+	klog.V(2).InfoS("Processed Egress UPDATE event", "egress", klog.KObj(curEgress))
+}
+
+// deleteEgress processes Egress DELETE events.
+func (c *EgressController) deleteEgress(obj interface{}) {
+	egress, ok := obj.(*crdv1a2.Egress)
+	if !ok {
 		deletedState, ok := obj.(cache.DeletedFinalStateUnknown)
 		if !ok {
 			klog.Errorf("Received unexpected object: %v", obj)
@@ -236,6 +257,7 @@ func (c *EgressController) enqueueEgress(obj interface{}) {
 		}
 	}
 	c.queue.Add(egress.Name)
+	klog.V(2).InfoS("Processed Egress DELETE event", "egress", klog.KObj(egress))
 }
 
 func (c *EgressController) onLocalIPUpdate(ip string, added bool) {
@@ -248,8 +270,9 @@ func (c *EgressController) onLocalIPUpdate(ip string, added bool) {
 	} else {
 		klog.Infof("Detected Egress IP address %s deleted from this Node", ip)
 	}
-	for _, egress := range egresses {
-		c.enqueueEgress(egress)
+	for _, obj := range egresses {
+		egress := obj.(*crdv1a2.Egress)
+		c.queue.Add(egress.Name)
 	}
 }
 
