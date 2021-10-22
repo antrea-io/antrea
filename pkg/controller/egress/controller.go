@@ -575,7 +575,9 @@ func (c *EgressController) updateEgress(old, cur interface{}) {
 		groupSelector := antreatypes.NewGroupSelector("", curEgress.Spec.AppliedTo.PodSelector, curEgress.Spec.AppliedTo.NamespaceSelector, nil)
 		c.groupingInterface.AddGroup(egressGroupType, curEgress.Name, groupSelector)
 	}
-	c.queue.Add(curEgress.Name)
+	if oldEgress.GetGeneration() != curEgress.GetGeneration() {
+		c.queue.Add(curEgress.Name)
+	}
 }
 
 // deleteEgress processes Egress DELETE events and deletes corresponding EgressGroup.

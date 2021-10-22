@@ -160,7 +160,11 @@ func NewCluster(
 		cache.ResourceEventHandlerFuncs{
 			AddFunc: c.enqueueExternalIPPool,
 			UpdateFunc: func(oldObj, newObj interface{}) {
-				c.enqueueExternalIPPool(newObj)
+				oldExternalIPPool := oldObj.(*v1alpha2.ExternalIPPool)
+				curExternalIPPool := newObj.(*v1alpha2.ExternalIPPool)
+				if !reflect.DeepEqual(oldExternalIPPool.Spec.NodeSelector, curExternalIPPool.Spec.NodeSelector) {
+					c.enqueueExternalIPPool(newObj)
+				}
 			},
 			DeleteFunc: c.enqueueExternalIPPool,
 		},
