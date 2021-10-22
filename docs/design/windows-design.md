@@ -212,13 +212,13 @@ NodePort Service traffic on Windows are the same as those on Linux.
 
 AntreaProxy implements the ClusterIP Service function. Antrea Agent installs routes to send ClusterIP Service
 traffic from host network to the OVS bridge. For each Service, it adds a route that routes the traffic via a
-virtual IP (169.254.169.253), and it also adds a route to indicate that the virtual IP is reachable via
+virtual IP (169.254.0.253), and it also adds a route to indicate that the virtual IP is reachable via
 antrea-gw0. The reason to add a virtual IP, rather than routing the traffic directly to antrea-gw0, is that
 then only one neighbor cache entry needs to be added, which resolves the virtual IP to a virtual MAC.
 
 When a Service's endpoints are in hostNetwork or external network, a request packet will have its
 destination IP DNAT'd to the selected endpoint IP and its source IP will be SNAT'd to the
-virtual IP (169.254.169.253). Such SNAT is needed for sending the reply packets back to the OVS pipeline
+virtual IP (169.254.0.253). Such SNAT is needed for sending the reply packets back to the OVS pipeline
 from the host network, whose destination IP was the Node IP before d-SNATed to the virtual IP.
 Check the packet forwarding path described below.
 

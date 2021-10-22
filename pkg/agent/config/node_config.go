@@ -52,7 +52,10 @@ var (
 	// - Use the virtual IP as onlink routing entry gateway in host routing entry.
 	// - Use the virtual IP as destination IP in host routing entry. It is used to forward DNATed NodePort packets
 	//   or replied SNATed Service packets back to Antrea gateway.
-	VirtualServiceIPv4 = net.ParseIP("169.254.169.253")
+	// - Use the virtual IP for InternalIPAddress parameter of Add-NetNatStaticMapping.
+	//   The IP cannot be one used in the network, and cannot be within the 169.254.1.0 - 169.254.254.255 range
+	//   according to https://datatracker.ietf.org/doc/html/rfc3927#section-2.1
+	VirtualServiceIPv4 = net.ParseIP("169.254.0.253")
 	VirtualServiceIPv6 = net.ParseIP("fc01::aabb:ccdd:eeff")
 )
 

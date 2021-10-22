@@ -36,6 +36,9 @@ import (
 const (
 	inboundFirewallRuleName  = "Antrea: accept packets from local Pods"
 	outboundFirewallRuleName = "Antrea: accept packets to local Pods"
+
+	antreaNat         = "antrea-nat"
+	antreaNatNodePort = "antrea-nat-nodeport"
 )
 
 var (
@@ -88,7 +91,7 @@ func (c *Client) Initialize(nodeConfig *config.NodeConfig, done func()) error {
 		return err
 	}
 	if !c.noSNAT {
-		err := util.CreateNetNatOnHost(nodeConfig.PodIPv4CIDR)
+		err := util.NewNetNat(antreaNat, nodeConfig.PodIPv4CIDR)
 		if err != nil {
 			return err
 		}
@@ -205,8 +208,8 @@ func (c *Client) DeleteRoutes(podCIDR *net.IPNet) error {
 	return nil
 }
 
-// addVirtualServiceIPRoute adds routes on a Windows Node for redirecting ClusterIP Service traffic
-// from host network to OVS via antrea-gw0.
+// addVirtualServiceIPRoute adds routes on a Windows Node for redirecting ClusterIP and NodePort
+// Service traffic from host network to OVS via antrea-gw0.
 func (c *Client) addVirtualServiceIPRoute(isIPv6 bool) error {
 	linkIndex := c.nodeConfig.GatewayConfig.LinkIndex
 
@@ -217,6 +220,7 @@ func (c *Client) addVirtualServiceIPRoute(isIPv6 bool) error {
 	// - For ClusterIP Service requests from host, reply traffic needs a route entry to route packet to VirtualServiceIPv4
 	//   via antrea-gw0. If the NextHop of a route is antrea-gw0, then set it as 0.0.0.0. As a result, on-link/0.0.0.0
 	//   is in PersistentStore.
+	// - For NodePort Service, it is the same.
 	vRoute := &util.Route{
 		LinkIndex:         linkIndex,
 		DestinationSubnet: virtualServiceIPv4Net,
@@ -228,7 +232,7 @@ func (c *Client) addVirtualServiceIPRoute(isIPv6 bool) error {
 	}
 	klog.InfoS("Added virtual Service IP route", "route", vRoute)
 
-	// ClusterIP Service replies will be sent to OVS bridge via openflow.GlobalVirtualMAC. This NetNeighbor is for
+	// Service replies will be sent to OVS bridge via openflow.GlobalVirtualMAC. This NetNeighbor is for
 	// creating a neighbor cache entry to config.VirtualServiceIPv4.
 	vNeighbor := &util.Neighbor{
 		LinkIndex:        linkIndex,
@@ -239,6 +243,13 @@ func (c *Client) addVirtualServiceIPRoute(isIPv6 bool) error {
 		return err
 	}
 	klog.InfoS("Added virtual Service IP neighbor", "neighbor", vNeighbor)
+
+	// For NodePort Service, a new NetNat for NetNatStaticMapping is needed.
+	err := util.NewNetNat(antreaNatNodePort, virtualServiceIPv4Net)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -247,7 +258,7 @@ func (c *Client) addServiceRoute(svcIP net.IP) error {
 	obj, found := c.hostRoutes.Load(svcIP.String())
 	svcIPNet := util.NewIPNet(svcIP)
 
-	// Route: Service IP -> VirtualServiceIPv4 (169.254.169.253)
+	// Route: Service IP -> VirtualServiceIPv4 (169.254.0.253)
 	route := &util.Route{
 		LinkIndex:         c.nodeConfig.GatewayConfig.LinkIndex,
 		DestinationSubnet: svcIPNet,
@@ -374,12 +385,13 @@ func (c *Client) DeleteSNATRule(mark uint32) error {
 	return nil
 }
 
+// TODO: nodePortAddresses is not supported currently.
 func (c *Client) AddNodePort(nodePortAddresses []net.IP, port uint16, protocol binding.Protocol) error {
-	return nil
+	return util.ReplaceNetNatStaticMapping(antreaNatNodePort, "0.0.0.0", port, config.VirtualServiceIPv4.String(), port, string(protocol))
 }
 
 func (c *Client) DeleteNodePort(nodePortAddresses []net.IP, port uint16, protocol binding.Protocol) error {
-	return nil
+	return util.RemoveNetNatStaticMapping(antreaNatNodePort, "0.0.0.0", port, string(protocol))
 }
 
 func (c *Client) AddLoadBalancer(externalIPs []string) error {
