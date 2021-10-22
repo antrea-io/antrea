@@ -30,6 +30,8 @@ import (
 
 // IPPoolAllocator is responsible for allocating IPs from IP set defined in IPPool CRD.
 // The will update CRD usage accordingly.
+// Pool Allocator assumes that pool with allocated IPs can not be deleted, and can not
+// be updated so that allocated IPs no longer belong to the pool.
 type IPPoolAllocator struct {
 	// Name of IP Pool custom resource
 	ipPoolName string
@@ -106,6 +108,7 @@ func (a *IPPoolAllocator) readPoolAndInitIPAllocators() (*v1alpha2.IPPool, ipall
 	return ipPool, allocators, nil
 }
 
+// Update pool status to contain newly allocated IP
 func (a *IPPoolAllocator) appendPoolUsage(ipPool *v1alpha2.IPPool, ip net.IP, state v1alpha2.IPPoolUsageState, resource string) error {
 	newPool := ipPool.DeepCopy()
 	usageEntry := v1alpha2.IPPoolUsage{
@@ -125,6 +128,7 @@ func (a *IPPoolAllocator) appendPoolUsage(ipPool *v1alpha2.IPPool, ip net.IP, st
 
 }
 
+// Update pool status to delete released IP
 func (a *IPPoolAllocator) removePoolUsage(ipPool *v1alpha2.IPPool, ip net.IP) error {
 
 	ipString := ip.String()

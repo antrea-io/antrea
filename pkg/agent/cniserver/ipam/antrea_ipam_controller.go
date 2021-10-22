@@ -73,7 +73,6 @@ func NewAntreaIPAMController(kubeClient clientset.Interface,
 }
 
 func InitializeAntreaIPAMController(kubeClient clientset.Interface, crdClient clientsetversioned.Interface, informerFactory informers.SharedInformerFactory) (*AntreaIPAMController, error) {
-
 	antreaIPAMController := NewAntreaIPAMController(kubeClient, crdClient, informerFactory, 0)
 
 	// Order of init causes antreaIPAMDriver to be initialized first

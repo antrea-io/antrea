@@ -89,14 +89,36 @@ func (d *AntreaIPAM) validateRequest(data interface{}) (*antreaIPAMRequest, erro
 	return &request, nil
 }
 
-// Helper to generate mask based on prefix length
-func generateCIDRMask(ip net.IP, prefixLength int) net.IPMask {
+// Helper to generate IP config and default route, taking IP version into account
+func generateIPConfig(ip net.IP, prefixLength int, gwIP net.IP) (*current.IPConfig, *cnitypes.Route) {
+	ipVersion := "4"
 	ipAddrBits := 32
-	if ip.To4() == nil {
-		ipAddrBits = 128
+	dstNet := net.IPNet{
+		IP:   net.ParseIP("0.0.0.0"),
+		Mask: net.CIDRMask(0, ipAddrBits),
 	}
 
-	return net.CIDRMask(int(prefixLength), ipAddrBits)
+	if ip.To4() == nil {
+		ipVersion = "6"
+		ipAddrBits = 128
+
+		dstNet = net.IPNet{
+			IP:   net.ParseIP("::0"),
+			Mask: net.CIDRMask(0, ipAddrBits),
+		}
+	}
+
+	defaultRoute := cnitypes.Route{
+		Dst: dstNet,
+		GW:  gwIP,
+	}
+	ipConfig := current.IPConfig{
+		Version: ipVersion,
+		Address: net.IPNet{IP: ip, Mask: net.CIDRMask(int(prefixLength), ipAddrBits)},
+		Gateway: gwIP,
+	}
+
+	return &ipConfig, &defaultRoute
 }
 
 // Add allocates next available IP address from associated IP Pool
@@ -118,17 +140,9 @@ func (d *AntreaIPAM) Add(args *invoke.Args, networkConfig []byte, data interface
 
 	result := current.Result{CNIVersion: current.ImplementedSpecVersion}
 	gwIP := net.ParseIP(subnetInfo.Gateway)
-	defaultRoute := &cnitypes.Route{
-		Dst: net.IPNet{
-			IP:   net.ParseIP("0.0.0.0"),
-			Mask: net.IPv4Mask(0, 0, 0, 0),
-		},
-		GW: gwIP,
-	}
-	ipConfig := &current.IPConfig{
-		Address: net.IPNet{IP: ip, Mask: generateCIDRMask(ip, int(subnetInfo.PrefixLength))},
-		Gateway: gwIP,
-	}
+
+	ipConfig, defaultRoute := generateIPConfig(ip, int(subnetInfo.PrefixLength), gwIP)
+
 	result.Routes = append(result.Routes, defaultRoute)
 	result.IPs = append(result.IPs, ipConfig)
 	return &result, nil
