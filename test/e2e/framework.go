@@ -121,6 +121,11 @@ const (
 	exporterIdleFlowExportTimeout       = 1 * time.Second
 	aggregatorActiveFlowRecordTimeout   = 3500 * time.Millisecond
 	aggregatorInactiveFlowRecordTimeout = 6 * time.Second
+
+	agnhostNodePortClusterServiceLabel = "agnhost-nodeport-cluster-svc"
+	agnhostNodePortLocalServiceLabel   = "agnhost-nodeport-local-svc"
+	agnhostLBClusterServiceLabel       = "agnhost-lb-cluster-svc"
+	agnhostLBLocalServiceLabel         = "agnhost-lb-local-svc"
 )
 
 type ClusterNode struct {
@@ -352,6 +357,16 @@ func nodeIP(idx int) string {
 		return ""
 	}
 	return node.ip()
+}
+
+// nodeOS returns OS string with the provided Node name. If such Node doesn't exist, nodeOS returns
+// an empty string.
+func nodeOS(node string) string {
+	os, ok := clusterInfo.nodesOS[node]
+	if !ok {
+		return ""
+	}
+	return os
 }
 
 func labelNodeRoleControlPlane() string {
@@ -1495,13 +1510,13 @@ func (data *TestData) createNginxClusterIPService(name, namespace string, affini
 }
 
 // createAgnhostNodePortService creates a NodePort agnhost service with the given name.
-func (data *TestData) createAgnhostNodePortService(serviceName string, affinity, nodeLocalExternal bool, ipFamily *corev1.IPFamily) (*corev1.Service, error) {
-	return data.createService(serviceName, testNamespace, 8080, 8080, map[string]string{"app": "agnhost"}, affinity, nodeLocalExternal, corev1.ServiceTypeNodePort, ipFamily)
+func (data *TestData) createAgnhostNodePortService(serviceName, label string, port int32, affinity, nodeLocalExternal bool, ipFamily *corev1.IPFamily) (*corev1.Service, error) {
+	return data.createService(serviceName, testNamespace, port, 8080, map[string]string{"app": label}, affinity, nodeLocalExternal, corev1.ServiceTypeNodePort, ipFamily)
 }
 
 // createAgnhostLoadBalancerService creates a LoadBalancer agnhost service with the given name.
-func (data *TestData) createAgnhostLoadBalancerService(serviceName string, affinity, nodeLocalExternal bool, ingressIPs []string, ipFamily *corev1.IPFamily) (*corev1.Service, error) {
-	svc, err := data.createService(serviceName, testNamespace, 8080, 8080, map[string]string{"app": "agnhost"}, affinity, nodeLocalExternal, corev1.ServiceTypeLoadBalancer, ipFamily)
+func (data *TestData) createAgnhostLoadBalancerService(serviceName, label string, port int32, affinity, nodeLocalExternal bool, ingressIPs []string, ipFamily *corev1.IPFamily) (*corev1.Service, error) {
+	svc, err := data.createService(serviceName, testNamespace, port, 8080, map[string]string{"app": label}, affinity, nodeLocalExternal, corev1.ServiceTypeLoadBalancer, ipFamily)
 	if err != nil {
 		return svc, err
 	}

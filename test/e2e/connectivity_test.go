@@ -129,7 +129,7 @@ func (data *TestData) testPodConnectivitySameNode(t *testing.T) {
 
 	t.Logf("Creating %d agnhost Pods on '%s'", numPods, workerNode)
 	for i := range podInfos {
-		podInfos[i].os = clusterInfo.nodesOS[workerNode]
+		podInfos[i].os = nodeOS(workerNode)
 		if err := data.createAgnhostPodOnNode(podInfos[i].name, testNamespace, workerNode, false); err != nil {
 			t.Fatalf("Error when creating agnhost test Pod '%s': %v", podInfos[i], err)
 		}
@@ -204,7 +204,7 @@ func createPodsOnDifferentNodes(t *testing.T, data *TestData, namespace, tag str
 	}
 
 	for _, p := range pods.Items {
-		os := clusterInfo.nodesOS[p.Spec.NodeName]
+		os := nodeOS(p.Spec.NodeName)
 		piMap[os] = append(piMap[os], podInfo{p.Name, os, p.Spec.NodeName, namespace})
 	}
 	var linIdx, winIdx int
@@ -381,7 +381,7 @@ func testOVSFlowReplay(t *testing.T, data *TestData, namespace string) {
 
 	t.Logf("Creating %d busybox test Pods on '%s'", numPods, workerNode)
 	for i := range podInfos {
-		podInfos[i].os = clusterInfo.nodesOS[workerNode]
+		podInfos[i].os = nodeOS(workerNode)
 		if err := data.createBusyboxPodOnNode(podInfos[i].name, namespace, workerNode, false); err != nil {
 			t.Fatalf("Error when creating busybox test Pod '%s': %v", podInfos[i].name, err)
 		}
