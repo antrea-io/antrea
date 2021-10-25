@@ -3929,6 +3929,10 @@ data:
     #  The port for WireGuard to receive traffic.
     #  port: 51820
 
+    egress:
+    #  exceptCIDRs is the CIDR ranges to which outbound Pod traffic will not be SNAT'd by Egresses.
+    #  exceptCIDRs: []
+
     # ClusterIP CIDR range for IPv6 Services. It's required when using kube-proxy to provide IPv6 Service in a Dual-Stack
     # cluster or an IPv6 only cluster. The value should be the same as the configuration for kube-apiserver specified by
     # --service-cluster-ip-range. When AntreaProxy is enabled, this parameter is not needed.
@@ -4131,7 +4135,7 @@ metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-4d7ch86gch
+  name: antrea-config-dttf6969bm
   namespace: kube-system
 ---
 apiVersion: v1
@@ -4202,7 +4206,7 @@ spec:
             fieldRef:
               fieldPath: spec.serviceAccountName
         - name: ANTREA_CONFIG_MAP_NAME
-          value: antrea-config-4d7ch86gch
+          value: antrea-config-dttf6969bm
         image: projects.registry.vmware.com/antrea/antrea-ubuntu:latest
         imagePullPolicy: IfNotPresent
         livenessProbe:
@@ -4253,7 +4257,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-4d7ch86gch
+          name: antrea-config-dttf6969bm
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -4534,7 +4538,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-4d7ch86gch
+          name: antrea-config-dttf6969bm
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d

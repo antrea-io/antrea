@@ -313,6 +313,7 @@ type client struct {
 	replayMutex   sync.RWMutex
 	nodeConfig    *config.NodeConfig
 	networkConfig *config.NetworkConfig
+	egressConfig  *config.EgressConfig
 	gatewayOFPort uint32
 	// ovsDatapathType is the type of the datapath used by the bridge.
 	ovsDatapathType ovsconfig.OVSDatapathType
@@ -1990,7 +1991,7 @@ func (c *client) snatSkipNodeFlow(nodeIP net.IP, category cookie.Category) bindi
 // snatCommonFlows installs the default flows for performing SNAT for traffic to
 // the external network. The flows identify the packets to external, and send
 // them to SNATTable, where SNAT IPs are looked up for the packets.
-func (c *client) snatCommonFlows(nodeIP net.IP, localSubnet net.IPNet, localGatewayMAC net.HardwareAddr, category cookie.Category) []binding.Flow {
+func (c *client) snatCommonFlows(nodeIP net.IP, localSubnet net.IPNet, localGatewayMAC net.HardwareAddr, exceptCIDRs []net.IPNet, category cookie.Category) []binding.Flow {
 	nextTable := L3ForwardingTable.GetNext()
 	ipProto := getIPProtocol(localSubnet.IP)
 	flows := []binding.Flow{
@@ -2041,6 +2042,15 @@ func (c *client) snatCommonFlows(nodeIP net.IP, localSubnet net.IPNet, localGate
 			Action().Drop().
 			Cookie(c.cookieAllocator.Request(category).Raw()).
 			Done(),
+	}
+	for _, cidr := range exceptCIDRs {
+		flows = append(flows, L3ForwardingTable.BuildFlow(priorityNormal).
+			MatchProtocol(ipProto).
+			MatchRegMark(FromLocalRegMark).
+			MatchDstIPNet(cidr).
+			Action().GotoTable(nextTable).
+			Cookie(c.cookieAllocator.Request(category).Raw()).
+			Done())
 	}
 	return flows
 }
@@ -2376,11 +2386,11 @@ func (c *client) decTTLFlows(category cookie.Category) []binding.Flow {
 }
 
 // externalFlows returns the flows needed to enable SNAT for external traffic.
-func (c *client) externalFlows(nodeIP net.IP, localSubnet net.IPNet, localGatewayMAC net.HardwareAddr) []binding.Flow {
+func (c *client) externalFlows(nodeIP net.IP, localSubnet net.IPNet, localGatewayMAC net.HardwareAddr, exceptCIDRs []net.IPNet) []binding.Flow {
 	if !c.enableEgress {
 		return nil
 	}
-	return c.snatCommonFlows(nodeIP, localSubnet, localGatewayMAC, cookie.SNAT)
+	return c.snatCommonFlows(nodeIP, localSubnet, localGatewayMAC, exceptCIDRs, cookie.SNAT)
 }
 
 // policyConjKeyFuncKeyFunc knows how to get key of a *policyRuleConjunction.

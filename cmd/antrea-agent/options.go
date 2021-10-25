@@ -156,6 +156,14 @@ func (o *Options) validate(args []string) error {
 	if err := o.validateFlowExporterConfig(); err != nil {
 		return fmt.Errorf("failed to validate flow exporter config: %v", err)
 	}
+	if features.DefaultFeatureGate.Enabled(features.Egress) {
+		for _, cidr := range o.config.Egress.ExceptCIDRs {
+			_, _, err := net.ParseCIDR(cidr)
+			if err != nil {
+				return fmt.Errorf("Egress Except CIDR %s is invalid", cidr)
+			}
+		}
+	}
 	return nil
 }
 

@@ -242,7 +242,8 @@ func TestReplayFlowsNetworkPolicyFlows(t *testing.T) {
 }
 
 func testExternalFlows(t *testing.T, config *testConfig) {
-	if err := c.InstallExternalFlows(); err != nil {
+	exceptCIDRs := []net.IPNet{}
+	if err := c.InstallExternalFlows(exceptCIDRs); err != nil {
 		t.Errorf("Failed to install OpenFlow entries to allow Pod to communicate to the external addresses: %v", err)
 	}
 

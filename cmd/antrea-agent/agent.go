@@ -136,6 +136,14 @@ func run(o *Options) error {
 	wireguardConfig := &config.WireGuardConfig{
 		Port: o.config.WireGuard.Port,
 	}
+	exceptCIDRs := []net.IPNet{}
+	for _, cidr := range o.config.Egress.ExceptCIDRs {
+		_, exceptCIDR, _ := net.ParseCIDR(cidr)
+		exceptCIDRs = append(exceptCIDRs, *exceptCIDR)
+	}
+	egressConfig := &config.EgressConfig{
+		ExceptCIDRs: exceptCIDRs,
+	}
 	routeClient, err := route.NewClient(serviceCIDRNet, networkConfig, o.config.NoSNAT, o.config.AntreaProxy.ProxyAll)
 	if err != nil {
 		return fmt.Errorf("error creating route client: %v", err)
@@ -175,6 +183,7 @@ func run(o *Options) error {
 		serviceCIDRNetv6,
 		networkConfig,
 		wireguardConfig,
+		egressConfig,
 		networkReadyCh,
 		stopCh,
 		features.DefaultFeatureGate.Enabled(features.AntreaProxy),
