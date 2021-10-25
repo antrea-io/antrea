@@ -15,7 +15,10 @@
 package main
 
 import (
+	"fmt"
 	"net"
+	"strconv"
+	"strings"
 
 	"antrea.io/antrea/pkg/agent/util"
 )
@@ -52,4 +55,26 @@ func getAvailableNodePortAddresses(nodePortAddressesFromConfig []string, exclude
 	}
 
 	return nodePortAddressesIPv4, nodePortAddressesIPv6, nil
+}
+
+// parsePortRange parses a port range ("<start>-<end>") and checks that it is  valid.
+func parsePortRange(portRangeStr string) (start, end int, err error) {
+	portsRange := strings.Split(portRangeStr, "-")
+	if len(portsRange) != 2 {
+		return 0, 0, fmt.Errorf("wrong port range format: %s", portRangeStr)
+	}
+
+	if start, err = strconv.Atoi(portsRange[0]); err != nil {
+		return 0, 0, err
+	}
+
+	if end, err = strconv.Atoi(portsRange[1]); err != nil {
+		return 0, 0, err
+	}
+
+	if end <= start {
+		return 0, 0, fmt.Errorf("start port must be less than end port: %s", portRangeStr)
+	}
+
+	return start, end, nil
 }

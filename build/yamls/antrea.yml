@@ -3849,7 +3849,7 @@ data:
     # Enable traceflow which provides packet tracing feature to diagnose network issue.
     #  Traceflow: true
 
-    # Enable NodePortLocal feature to make the pods reachable externally through NodePort
+    # Enable NodePortLocal feature to make the Pods reachable externally through NodePort
     #  NodePortLocal: true
 
     # Enable Antrea ClusterNetworkPolicy feature to complement K8s NetworkPolicy for cluster admins
@@ -3982,10 +3982,16 @@ data:
     # Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
     #idleFlowExportTimeout: "15s"
 
-    # Provide the port range used by NodePortLocal. When the NodePortLocal feature is enabled, a port from that range will be assigned
-    # whenever a Pod's container defines a specific port to be exposed (each container can define a list of ports as pod.spec.containers[].ports),
-    # and all Node traffic directed to that port will be forwarded to the Pod.
-    #nplPortRange: 61000-62000
+    nodePortLocal:
+    # Enable NodePortLocal, a feature used to make Pods reachable using port forwarding on the host. To
+    # enable this feature, you need to set "enable" to true, and ensure that the NodePortLocal feature
+    # gate is also enabled (which is the default).
+    #  enable: false
+    # Provide the port range used by NodePortLocal. When the NodePortLocal feature is enabled, a port
+    # from that range will be assigned whenever a Pod's container defines a specific port to be exposed
+    # (each container can define a list of ports as pod.spec.containers[].ports), and all Node traffic
+    # directed to that port will be forwarded to the Pod.
+    #  portRange: 61000-62000
 
     # Provide the address of Kubernetes apiserver, to override any value provided in kubeconfig or InClusterConfig.
     # Defaults to "". It must be a host string, a host:port pair, or a URL to the base of the apiserver.
@@ -4140,7 +4146,7 @@ metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-2g7f2mtf97
+  name: antrea-config-7ddkdg8fcf
   namespace: kube-system
 ---
 apiVersion: v1
@@ -4211,7 +4217,7 @@ spec:
             fieldRef:
               fieldPath: spec.serviceAccountName
         - name: ANTREA_CONFIG_MAP_NAME
-          value: antrea-config-2g7f2mtf97
+          value: antrea-config-7ddkdg8fcf
         image: projects.registry.vmware.com/antrea/antrea-ubuntu:latest
         imagePullPolicy: IfNotPresent
         livenessProbe:
@@ -4262,7 +4268,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-2g7f2mtf97
+          name: antrea-config-7ddkdg8fcf
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -4543,7 +4549,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-2g7f2mtf97
+          name: antrea-config-7ddkdg8fcf
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d

@@ -122,7 +122,7 @@ func run(o *Options) error {
 	_, encapMode := config.GetTrafficEncapModeFromStr(o.config.TrafficEncapMode)
 	_, encryptionMode := config.GetTrafficEncryptionModeFromStr(o.config.TrafficEncryptionMode)
 	if o.config.EnableIPSecTunnel {
-		klog.Warning("enableIPSecTunnel is deprecated, use trafficEncryptionMode instead.")
+		klog.InfoS("enableIPSecTunnel is deprecated, use trafficEncryptionMode instead.")
 		encryptionMode = config.TrafficEncryptionModeIPSec
 	}
 	networkConfig := &config.NetworkConfig{
@@ -347,11 +347,12 @@ func run(o *Options) error {
 	}
 
 	// Start the NPL agent.
-	if features.DefaultFeatureGate.Enabled(features.NodePortLocal) {
+	if features.DefaultFeatureGate.Enabled(features.NodePortLocal) && o.config.NodePortLocal.Enable {
 		nplController, err := npl.InitializeNPLAgent(
 			k8sClient,
 			informerFactory,
-			o.config.NPLPortRange,
+			o.nplStartPort,
+			o.nplEndPort,
 			nodeConfig.Name)
 		if err != nil {
 			return fmt.Errorf("failed to start NPL agent: %v", err)
