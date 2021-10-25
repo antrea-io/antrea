@@ -337,17 +337,17 @@ func (mr *MockClientMockRecorder) InstallEndpointFlows(arg0, arg1 interface{}) *
 }
 
 // InstallExternalFlows mocks base method
-func (m *MockClient) InstallExternalFlows() error {
+func (m *MockClient) InstallExternalFlows(arg0 []net.IPNet) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "InstallExternalFlows")
+	ret := m.ctrl.Call(m, "InstallExternalFlows", arg0)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // InstallExternalFlows indicates an expected call of InstallExternalFlows
-func (mr *MockClientMockRecorder) InstallExternalFlows() *gomock.Call {
+func (mr *MockClientMockRecorder) InstallExternalFlows(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallExternalFlows", reflect.TypeOf((*MockClient)(nil).InstallExternalFlows))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallExternalFlows", reflect.TypeOf((*MockClient)(nil).InstallExternalFlows), arg0)
 }
 
 // InstallGatewayFlows mocks base method

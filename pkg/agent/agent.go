@@ -88,6 +88,7 @@ type Initializer struct {
 	networkConfig   *config.NetworkConfig
 	nodeConfig      *config.NodeConfig
 	wireGuardConfig *config.WireGuardConfig
+	egressConfig    *config.EgressConfig
 	enableProxy     bool
 	// networkReadyCh should be closed once the Node's network is ready.
 	// The CNI server will wait for it before handling any CNI Add requests.
@@ -111,6 +112,7 @@ func NewInitializer(
 	serviceCIDRv6 *net.IPNet,
 	networkConfig *config.NetworkConfig,
 	wireGuardConfig *config.WireGuardConfig,
+	egressConfig *config.EgressConfig,
 	networkReadyCh chan<- struct{},
 	stopCh <-chan struct{},
 	enableProxy bool,
@@ -132,6 +134,7 @@ func NewInitializer(
 		serviceCIDRv6:         serviceCIDRv6,
 		networkConfig:         networkConfig,
 		wireGuardConfig:       wireGuardConfig,
+		egressConfig:          egressConfig,
 		networkReadyCh:        networkReadyCh,
 		stopCh:                stopCh,
 		enableProxy:           enableProxy,
@@ -385,7 +388,7 @@ func (i *Initializer) initOpenFlowPipeline() error {
 
 	// Install OpenFlow entries to enable Pod traffic to external IP
 	// addresses.
-	if err := i.ofClient.InstallExternalFlows(); err != nil {
+	if err := i.ofClient.InstallExternalFlows(i.egressConfig.ExceptCIDRs); err != nil {
 		klog.Errorf("Failed to install openflow entries for external connectivity: %v", err)
 		return err
 	}

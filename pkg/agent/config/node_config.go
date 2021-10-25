@@ -95,6 +95,10 @@ type WireGuardConfig struct {
 	MTU int
 }
 
+type EgressConfig struct {
+	ExceptCIDRs []net.IPNet
+}
+
 // Local Node configurations retrieved from K8s API or host networking state.
 type NodeConfig struct {
 	// The Node's name used in Kubernetes.
@@ -130,6 +134,8 @@ type NodeConfig struct {
 	UplinkNetConfig *AdapterNetConfig
 	// The config of the WireGuard interface.
 	WireGuardConfig *WireGuardConfig
+	// The config of the Egress interface.
+	EgressConfig *EgressConfig
 }
 
 func (n *NodeConfig) String() string {

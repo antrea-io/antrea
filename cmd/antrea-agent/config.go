@@ -176,6 +176,8 @@ type AgentConfig struct {
 	TransportInterfaceCIDRs []string `yaml:"transportInterfaceCIDRs,omitempty"`
 	// AntreaProxy contains AntreaProxy related configuration options.
 	AntreaProxy AntreaProxyConfig `yaml:"antreaProxy,omitempty"`
+	// Egress related configurations.
+	Egress EgressConfig `yaml:"egress"`
 }
 
 type AntreaProxyConfig struct {
@@ -195,4 +197,8 @@ type AntreaProxyConfig struct {
 type WireGuardConfig struct {
 	// The port for the WireGuard to receive traffic. Defaults to 51820.
 	Port int `yaml:"port,omitempty"`
+}
+
+type EgressConfig struct {
+	ExceptCIDRs []string `yaml:"exceptCIDRs,omitempty"`
 }
