@@ -29,15 +29,12 @@ import (
 	"github.com/Microsoft/hcsshim/hcn"
 	cnitypes "github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types/current"
-	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
 
-	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/util"
 	cnipb "antrea.io/antrea/pkg/apis/cni/v1beta1"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
-	"antrea.io/antrea/pkg/util/k8s"
 )
 
 const (
@@ -181,44 +178,13 @@ func (ic *ifConfigurator) createContainerLink(endpointName string, result *curre
 	if err != nil {
 		return nil, err
 	}
-	containerIPStr, err := parseContainerIPs(result.IPs)
-	if err != nil {
-		klog.Errorf("Failed to find container %s IP", containerID)
-	}
-	// Save interface config to HNSEndpoint. It's used for creating missing OVS
-	// ports during antrea-agent boot stage. The change is introduced mainly for
-	// Containerd support. When working with Containerd runtime, antrea-agent creates
-	// OVS ports in an asynchronous way. So the OVS ports can be lost if antrea-agent
-	// gets stopped/restarted before port creation completes.
-	//
-	// The interface config will be rebuilt based on the params saved in the "AdditionalParams"
-	// field of HNSEndpoint.
-	//   - endpointName: the name of the host interface without Hyper-V prefix(vEthernet).
-	//     The name is same as the OVS port name and HNSEndpoint name.
-	//   - containerID: used as the goroutine lock to avoid concurrency issue.
-	//   - podName and PodNamespace: Used to identify the owner of the HNSEndpoint.
-	//   - Other params will be passed to OVS port.
-	ifaceConfig := interfacestore.NewContainerInterface(
-		endpointName,
-		containerID,
-		podName,
-		podNamespace,
-		nil,
-		containerIPStr)
-	ovsAttachInfoData := BuildOVSPortExternalIDs(ifaceConfig)
-	ovsAttachInfo := make(map[string]string)
-	for k, v := range ovsAttachInfoData {
-		valueStr, _ := v.(string)
-		ovsAttachInfo[k] = valueStr
-	}
 	epRequest := &hcsshim.HNSEndpoint{
-		Name:             endpointName,
-		VirtualNetwork:   ic.hnsNetwork.Id,
-		DNSServerList:    strings.Join(result.DNS.Nameservers, ","),
-		DNSSuffix:        strings.Join(result.DNS.Search, ","),
-		GatewayAddress:   containerIP.Gateway.String(),
-		IPAddress:        containerIP.Address.IP,
-		AdditionalParams: ovsAttachInfo,
+		Name:           endpointName,
+		VirtualNetwork: ic.hnsNetwork.Id,
+		DNSServerList:  strings.Join(result.DNS.Nameservers, ","),
+		DNSSuffix:      strings.Join(result.DNS.Search, ","),
+		GatewayAddress: containerIP.Gateway.String(),
+		IPAddress:      containerIP.Address.IP,
 	}
 	hnsEP, err := epRequest.Create()
 	if err != nil {
@@ -227,40 +193,6 @@ func (ic *ifConfigurator) createContainerLink(endpointName string, result *curre
 	// Add the new created Endpoint into local cache.
 	ic.addEndpoint(hnsEP)
 	return hnsEP, nil
-}
-
-func (ic *ifConfigurator) getInterfaceConfigForPods(pods sets.String) map[string]*interfacestore.InterfaceConfig {
-	interfaces := make(map[string]*interfacestore.InterfaceConfig)
-	ic.epCache.Range(func(key, value interface{}) bool {
-		ep, _ := value.(*hcsshim.HNSEndpoint)
-		ifConfig := parseOVSPortInterfaceConfigFromHNSEndpoint(ep)
-		if ifConfig == nil {
-			return true
-		}
-		namespacedName := k8s.NamespacedName(ifConfig.PodNamespace, ifConfig.PodName)
-		if pods.Has(namespacedName) {
-			interfaces[namespacedName] = ifConfig
-		}
-		return true
-	})
-	return interfaces
-}
-
-func parseOVSPortInterfaceConfigFromHNSEndpoint(ep *hcsshim.HNSEndpoint) *interfacestore.InterfaceConfig {
-	portData := &ovsconfig.OVSPortData{
-		Name:        ep.Name,
-		ExternalIDs: ep.AdditionalParams,
-	}
-	ifaceConfig := ParseOVSPortInterfaceConfig(portData, nil, false)
-	if ifaceConfig != nil {
-		var err error
-		ifaceConfig.MAC, err = net.ParseMAC(ep.MacAddress)
-		if err != nil {
-			klog.Errorf("Failed to parse MAC address from HNSEndpoint %s: %v", ep.MacAddress, err)
-			return nil
-		}
-	}
-	return ifaceConfig
 }
 
 // attachContainerLink takes the result of the IPAM plugin, and adds the appropriate IP
@@ -515,7 +447,11 @@ func (ic *ifConfigurator) getInterceptedInterfaces(
 }
 
 // getOVSInterfaceType returns "internal". Windows uses internal OVS interface for container vNIC.
-func (ic *ifConfigurator) getOVSInterfaceType() int {
+func (ic *ifConfigurator) getOVSInterfaceType(ovsPortName string) int {
+	ifaceName := fmt.Sprintf("vEthernet (%s)", ovsPortName)
+	if !util.HostInterfaceExists(ifaceName) {
+		return defaultOVSInterfaceType
+	}
 	return internalOVSInterfaceType
 }
 
@@ -535,15 +471,15 @@ func (ic *ifConfigurator) addPostInterfaceCreateHook(containerID, endpointName s
 			defer containerAccess.unlockContainer(containerID)
 			currentEP, ok := ic.getEndpoint(endpointName)
 			if !ok {
-				klog.InfoS("HNSEndpoint doesn't exist in cache, exit current goroutine", "HNSEndpoint Name", endpointName)
+				klog.InfoS("HNSEndpoint doesn't exist in cache, exit current goroutine", "HNSEndpoint", endpointName)
 				return true, nil
 			}
 			if currentEP.Id != expectedEP.Id {
-				klog.InfoS("Detected HNSEndpoint change, exit current goroutine", "HNSEndpoint Name", endpointName)
+				klog.InfoS("Detected HNSEndpoint change, exit current goroutine", "HNSEndpoint", endpointName)
 				return true, nil
 			}
 			if !util.HostInterfaceExists(ifaceName) {
-				klog.InfoS("Waiting for interface to be created", "interface name", ifaceName)
+				klog.InfoS("Waiting for interface to be created", "interface", ifaceName)
 				return false, nil
 			}
 			if err = hook(); err != nil {
@@ -553,7 +489,11 @@ func (ic *ifConfigurator) addPostInterfaceCreateHook(containerID, endpointName s
 		})
 
 		if pollErr != nil {
-			klog.ErrorS(err, "Failed to execute postInterfaceCreateHook", "interface name", ifaceName)
+			if err != nil {
+				klog.ErrorS(err, "Failed to execute postInterfaceCreateHook", "interface", ifaceName)
+			} else {
+				klog.ErrorS(pollErr, "Failed to wait for host interface creation in 1min", "interface", ifaceName)
+			}
 		}
 	}()
 	return nil

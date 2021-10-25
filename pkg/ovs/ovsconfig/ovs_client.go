@@ -578,18 +578,30 @@ func (br *OVSBridge) createPort(name, ifName, ifType string, ofPortRequest int32
 // wait the ofport is set on the interface, and so could be blocked for 5
 // seconds. If the "wait" operation times out or the interface is not found, or
 // the ofport is invalid, value 0 and an error will be returned.
-func (br *OVSBridge) GetOFPort(ifName string) (int32, Error) {
+// If waitUntilValid is true, the function will wait the ofport is not -1 with
+// 5 seconds timeout. This parameter is used after the interface type is changed
+// by the client.
+func (br *OVSBridge) GetOFPort(ifName string, waitUntilValid bool) (int32, Error) {
 	tx := br.ovsdb.Transaction(openvSwitchSchema)
 
+	// If an OVS port is newly created, the ofport field is expected to change from empty to a int value.
+	invalidRow := map[string]interface{}{
+		"ofport": helpers.MakeOVSDBSet(map[string]interface{}{}),
+	}
+	// If an OVS port is updated from invalid status to valid, the ofport field is expected to change from "-1" to a
+	// value that is larger than 0.
+	if waitUntilValid {
+		invalidRow = map[string]interface{}{
+			"ofport": []interface{}{"set", []int32{-1}},
+		}
+	}
 	tx.Wait(dbtransaction.Wait{
 		Table:   "Interface",
 		Timeout: uint64(defaultGetPortTimeout / time.Millisecond), // The unit of timeout is millisecond
 		Columns: []string{"ofport"},
 		Until:   "!=",
-		Rows: []interface{}{map[string]interface{}{
-			"ofport": helpers.MakeOVSDBSet(map[string]interface{}{}),
-		}},
-		Where: [][]interface{}{{"name", "==", ifName}},
+		Rows:    []interface{}{invalidRow},
+		Where:   [][]interface{}{{"name", "==", ifName}},
 	})
 	tx.Select(dbtransaction.Select{
 		Table:   "Interface",
@@ -878,4 +890,24 @@ func (br *OVSBridge) getHardwareOffload() (bool, Error) {
 
 func (br *OVSBridge) GetOVSDatapathType() OVSDatapathType {
 	return br.datapathType
+}
+
+// SetInterfaceType modifies the OVS Interface type to the given ifType.
+// This function is used on Windows when the Pod interface is created after the OVS port creation.
+func (br *OVSBridge) SetInterfaceType(name, ifType string) Error {
+	// Update Interface type, and the caller ensures the host Interface exists.
+	tx1 := br.ovsdb.Transaction(openvSwitchSchema)
+	tx1.Update(dbtransaction.Update{
+		Table: "Interface",
+		Where: [][]interface{}{{"name", "==", name}},
+		Row: map[string]interface{}{
+			"type": ifType,
+		},
+	})
+	_, err, temporary := tx1.Commit()
+	if err != nil {
+		klog.Error("Transaction failed: ", err)
+		return NewTransactionError(err, temporary)
+	}
+	return nil
 }

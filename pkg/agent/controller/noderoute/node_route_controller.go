@@ -672,7 +672,7 @@ func (c *Controller) createIPSecTunnelPort(nodeName string, nodeIP net.IP) (int3
 		c.interfaceStore.AddInterface(interfaceConfig)
 	}
 	// GetOFPort will wait for up to 1 second for OVSDB to report the OFPort number.
-	ofPort, err := c.ovsBridgeClient.GetOFPort(interfaceConfig.InterfaceName)
+	ofPort, err := c.ovsBridgeClient.GetOFPort(interfaceConfig.InterfaceName, false)
 	if err != nil {
 		// Could be a temporary OVSDB connection failure or timeout.
 		// Let NodeRouteController retry at errors.
