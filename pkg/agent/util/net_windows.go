@@ -65,6 +65,7 @@ type Neighbor struct {
 	LinkIndex        int
 	IPAddress        net.IP
 	LinkLayerAddress net.HardwareAddr
+	State            string
 }
 
 func (n Neighbor) String() string {
@@ -728,11 +729,12 @@ func RemoveNetNatStaticMappingByID(netNatName string, id int) error {
 
 // GetNetNeighbor gets neighbor cache entries with Get-NetNeighbor.
 func GetNetNeighbor(neighbor *Neighbor) ([]Neighbor, error) {
-	cmd := fmt.Sprintf("Get-NetNeighbor -InterfaceIndex %d -IPAddress %s -ErrorAction Ignore | Format-Table -HideTableHeaders", neighbor.LinkIndex, neighbor.IPAddress.String())
+	cmd := fmt.Sprintf("Get-NetNeighbor -InterfaceIndex %d -IPAddress %s | Format-Table -HideTableHeaders", neighbor.LinkIndex, neighbor.IPAddress.String())
 	neighborsStr, err := ps.RunCommand(cmd)
-	if err != nil {
+	if err != nil && !strings.Contains(err.Error(), "No matching MSFT_NetNeighbor objects") {
 		return nil, err
 	}
+
 	parsed := parseGetNetCmdResult(neighborsStr, 5)
 	var neighbors []Neighbor
 	for _, items := range parsed {
@@ -753,6 +755,7 @@ func GetNetNeighbor(neighbor *Neighbor) ([]Neighbor, error) {
 			LinkIndex:        idx,
 			IPAddress:        dstIP,
 			LinkLayerAddress: mac,
+			State:            items[3],
 		}
 		neighbors = append(neighbors, neighbor)
 	}
@@ -767,10 +770,9 @@ func NewNetNeighbor(neighbor *Neighbor) error {
 	return err
 }
 
-// SetNetNeighbor modifies a neighbor cache entry with Set-NetNeighbor.
-func SetNetNeighbor(neighbor *Neighbor) error {
-	cmd := fmt.Sprintf("Set-NetNeighbor -InterfaceIndex %d -IPAddress %s -LinkLayerAddress %s -State Permanent",
-		neighbor.LinkIndex, neighbor.IPAddress, neighbor.LinkLayerAddress)
+func RemoveNetNeighbor(neighbor *Neighbor) error {
+	cmd := fmt.Sprintf("Remove-NetNeighbor -InterfaceIndex %d -IPAddress %s -Confirm:$false",
+		neighbor.LinkIndex, neighbor.IPAddress)
 	_, err := ps.RunCommand(cmd)
 	return err
 }
@@ -787,18 +789,13 @@ func ReplaceNetNeighbor(neighbor *Neighbor) error {
 		}
 		return nil
 	}
-	found := false
 	for _, n := range neighbors {
-		if n.LinkLayerAddress.String() == neighbor.LinkLayerAddress.String() {
-			found = true
-			break
+		if n.LinkLayerAddress.String() == neighbor.LinkLayerAddress.String() && n.State == neighbor.State {
+			return nil
 		}
 	}
-	if found {
-		return nil
-	}
-	if err := SetNetNeighbor(neighbor); err != nil {
+	if err := RemoveNetNeighbor(neighbor); err != nil {
 		return err
 	}
-	return nil
+	return NewNetNeighbor(neighbor)
 }
