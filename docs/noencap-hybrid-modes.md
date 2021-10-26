@@ -30,9 +30,9 @@ described in the [Google Cloud documentation](https://cloud.google.com/vpc/docs/
 
 If the Node network does allow Pod IPs sent out from the Nodes, you can
 configure Antrea to run in the `Hybrid` mode by setting the `trafficEncapMode`
-config option of `antrea-agent` to `hybrid`. The `trafficEncapMode` config
-option is defined in `antrea-agent.conf` of the `antrea` ConfigMap in the
-[Antrea deployment YAML](https://github.com/antrea-io/antrea/blob/main/build/yamls/antrea.yml).
+config parameter of `antrea-agent` to `hybrid`. The `trafficEncapMode` config
+parameter is defined in `antrea-agent.conf` of the `antrea` ConfigMap in the
+[Antrea deployment yaml](https://github.com/antrea-io/antrea/blob/main/build/yamls/antrea.yml).
 
 ```yaml
   antrea-agent.conf: |
@@ -41,7 +41,7 @@ option is defined in `antrea-agent.conf` of the `antrea` ConfigMap in the
     ... ...
 ```
 
-After changing the config option, you can deploy Antrea in `Hybrid` mode with
+After changing the config parameter, you can deploy Antrea in `Hybrid` mode with
 the usual command:
 
 ```bash
@@ -75,14 +75,14 @@ configure Antrea and kube-router to work together.
 
 When the Node network can support forwarding and routing of Pod traffic, Antrea
 can be configured to run in the `NoEncap` mode, by setting the `trafficEncapMode`
-config option of `antrea-agent` to `noEncap`. By default, Antrea performs SNAT
+config parameter of `antrea-agent` to `noEncap`. By default, Antrea performs SNAT
 (source network address translation) for the outbound connections from a Pod to
 outside of the Pod network, using the Node's IP address as the SNAT IP. In the
 `NoEncap` mode, as the Node network knows about Pod IP addresses, the SNAT by
 Antrea might be unnecessary. In this case, you can disable it by setting the
-`noSNAT` config option to `true`. The `trafficEncapMode` and `noSNAT` config
-options are defined in `antrea-agent.conf` of the `antrea` ConfigMap in the
-[Antrea deployment YAML](https://github.com/antrea-io/antrea/blob/main/build/yamls/antrea.yml).
+`noSNAT` config parameter to `true`. The `trafficEncapMode` and `noSNAT` config
+parameters are defined in `antrea-agent.conf` of the `antrea` ConfigMap in the
+[Antrea deployment yaml](https://github.com/antrea-io/antrea/blob/main/build/yamls/antrea.yml).
 
 ```yaml
   antrea-agent.conf: |
@@ -93,8 +93,8 @@ options are defined in `antrea-agent.conf` of the `antrea` ConfigMap in the
     ... ...
 ```
 
-After changing the options, you can deploy Antrea in `noEncap` mode by applying
-the deployment YAML.
+After changing the parameters, you can deploy Antrea in `noEncap` mode by applying
+the deployment yaml.
 
 ### Using kube-router for BGP
 
@@ -107,7 +107,7 @@ To deploy kube-router in advertisement-only mode, first download the
 curl -LO https://raw.githubusercontent.com/cloudnativelabs/kube-router/v0.4.0/daemonset/generic-kuberouter-only-advertise-routes.yaml
 ```
 
-Then edit the YAML file and set the following kube-router arguments:
+Then edit the yaml file and set the following kube-router arguments:
 
 ```yaml
 - "--run-router=true"

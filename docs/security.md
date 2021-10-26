@@ -26,8 +26,8 @@ remove access to the `/var/run/antrea/` directory for non-root users
 If a malicious Pod can gain read access to this file, or, prior to Antrea v0.10,
 if an attacker can gain access to the host, they can potentially access
 sensitive information stored in the database, most notably the Pre-Shared Key
-(PSK) used to configure [IPsec tunnels](ipsec-tunnel.md), which is stored in
-plaintext in the database. If a PSK is leaked, an attacker can mount a
+(PSK) used to configure [IPsec tunnels](traffic-encryption.md), which is stored
+in plaintext in the database. If a PSK is leaked, an attacker can mount a
 man-in-the-middle attack and intercept tunnel traffic.
 
 If a malicious Pod can gain write access to this file, it can modify the
