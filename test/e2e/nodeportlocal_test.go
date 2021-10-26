@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v2"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -58,12 +59,28 @@ func skipIfNodePortLocalDisabled(tb testing.TB) {
 	skipIfFeatureDisabled(tb, features.NodePortLocal, true, false)
 }
 
-// setNPLPortRangeInConfigmap will update the nplPortRange in the antrea-agent
-// config if needed.
-func setNPLPortRangeInConfigmap(t *testing.T, data *TestData, newStartPort, newEndPort int) {
-	ac := []configChange{
-		{"nplPortRange", fmt.Sprintf("%d-%d", newStartPort, newEndPort), false},
+func configureNPLForAgent(t *testing.T, data *TestData, startPort, endPort int) {
+	configureNPL := func(content string) string {
+		var cfg interface{}
+		if err := yaml.Unmarshal([]byte(content), &cfg); err != nil {
+			t.Fatalf("Failed to unmarshal Agent config: %v", err)
+		}
+		nplConfig := map[string]interface{}{
+			"enable":    true,
+			"portRange": fmt.Sprintf("%d-%d", startPort, endPort),
+		}
+		cfg.(map[interface{}]interface{})["nodePortLocal"] = nplConfig
+		b, err := yaml.Marshal(&cfg)
+		if err != nil {
+			t.Fatalf("Failed to marshal Agent config: %v", err)
+		}
+		return string(b)
 	}
+
+	ac := []configChange{
+		&configChangeRaw{configureNPL},
+	}
+
 	if err := data.mutateAntreaConfigMap(nil, ac, false, true); err != nil {
 		t.Fatalf("Failed to update NodePortLocal port range: %v", err)
 	}
@@ -81,7 +98,7 @@ func TestNodePortLocal(t *testing.T) {
 	}
 	defer teardownTest(t, data)
 	skipIfNodePortLocalDisabled(t)
-	setNPLPortRangeInConfigmap(t, data, defaultStartPort, defaultEndPort)
+	configureNPLForAgent(t, data, defaultStartPort, defaultEndPort)
 	t.Run("testNPLAddPod", func(t *testing.T) { testNPLAddPod(t, data) })
 	t.Run("testNPLMultiplePodsAgentRestart", func(t *testing.T) { testNPLMultiplePodsAgentRestart(t, data) })
 	t.Run("testNPLChangePortRangeAgentRestart", func(t *testing.T) { testNPLChangePortRangeAgentRestart(t, data) })
@@ -558,7 +575,7 @@ func testNPLChangePortRangeAgentRestart(t *testing.T, data *TestData) {
 		}
 	}
 
-	setNPLPortRangeInConfigmap(t, data, updatedStartPort, updatedEndPort)
+	configureNPLForAgent(t, data, updatedStartPort, updatedEndPort)
 
 	antreaPod, err := data.getAntreaPodOnNode(node)
 	r.NoError(err, "Error when getting Antrea Agent Pod on Node '%s'", node)

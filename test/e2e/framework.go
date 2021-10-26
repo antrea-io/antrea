@@ -188,10 +188,40 @@ type TestData struct {
 	logsDirForTestCase string
 }
 
-type configChange struct {
-	field         string
-	value         string
-	isFeatureGate bool
+type configChange interface {
+	ApplyChange(content string) string
+}
+
+type configChangeParam struct {
+	field string
+	value string
+}
+
+func (cg *configChangeParam) ApplyChange(content string) string {
+	r := regexp.MustCompile(fmt.Sprintf(`(?m)#?.*%s:.*$`, cg.field))
+	return r.ReplaceAllString(content, fmt.Sprintf("%s: %s", cg.field, cg.value))
+}
+
+type configChangeFeatureGate struct {
+	name    string
+	enabled bool
+}
+
+func (cg *configChangeFeatureGate) ApplyChange(content string) string {
+	r := regexp.MustCompile(fmt.Sprintf(`(?m)#?  %s:.*$`, cg.name))
+	value := "false"
+	if cg.enabled {
+		value = "true"
+	}
+	return r.ReplaceAllString(content, fmt.Sprintf("  %s: %s", cg.name, value))
+}
+
+type configChangeRaw struct {
+	fn func(content string) string
+}
+
+func (cg *configChangeRaw) ApplyChange(content string) string {
+	return cg.fn(content)
 }
 
 var testData *TestData
@@ -656,13 +686,13 @@ func (data *TestData) deployAntrea(option deployAntreaOptions) error {
 func (data *TestData) deployAntreaFlowExporter(ipfixCollector string) error {
 	// Enable flow exporter feature and add related config params to antrea agent configmap.
 	ac := []configChange{
-		{"FlowExporter", "true", true},
-		{"flowPollInterval", "\"1s\"", false},
-		{"activeFlowExportTimeout", fmt.Sprintf("\"%v\"", exporterActiveFlowExportTimeout), false},
-		{"idleFlowExportTimeout", fmt.Sprintf("\"%v\"", exporterIdleFlowExportTimeout), false},
+		&configChangeFeatureGate{"FlowExporter", true},
+		&configChangeParam{"flowPollInterval", "\"1s\""},
+		&configChangeParam{"activeFlowExportTimeout", fmt.Sprintf("\"%v\"", exporterActiveFlowExportTimeout)},
+		&configChangeParam{"idleFlowExportTimeout", fmt.Sprintf("\"%v\"", exporterIdleFlowExportTimeout)},
 	}
 	if ipfixCollector != "" {
-		ac = append(ac, configChange{"flowCollectorAddr", fmt.Sprintf("\"%s\"", ipfixCollector), false})
+		ac = append(ac, &configChangeParam{"flowCollectorAddr", fmt.Sprintf("\"%s\"", ipfixCollector)})
 	}
 	return data.mutateAntreaConfigMap(nil, ac, false, true)
 }
@@ -1828,15 +1858,15 @@ func (data *TestData) mutateAntreaConfigMap(controllerChanges []configChange, ag
 	}
 
 	controllerConf := configMap.Data["antrea-controller.conf"]
-	for _, c := range controllerChanges {
-		controllerConf = replaceFieldValue(controllerConf, c)
+	for _, cg := range controllerChanges {
+		controllerConf = cg.ApplyChange(controllerConf)
 	}
 	controllerConfChanged := controllerConf != configMap.Data["antrea-controller.conf"]
 	configMap.Data["antrea-controller.conf"] = controllerConf
 
 	agentConf := configMap.Data["antrea-agent.conf"]
-	for _, c := range agentChanges {
-		agentConf = replaceFieldValue(agentConf, c)
+	for _, cg := range agentChanges {
+		agentConf = cg.ApplyChange(agentConf)
 	}
 	agentConfChanged := agentConf != configMap.Data["antrea-agent.conf"]
 	configMap.Data["antrea-agent.conf"] = agentConf
@@ -1863,18 +1893,6 @@ func (data *TestData) mutateAntreaConfigMap(controllerChanges []configChange, ag
 		}
 	}
 	return nil
-}
-
-func replaceFieldValue(content string, c configChange) string {
-	var res string
-	if c.isFeatureGate {
-		r := regexp.MustCompile(fmt.Sprintf(`(?m)#?  %s:.*$`, c.field))
-		res = r.ReplaceAllString(content, fmt.Sprintf("  %s: %s", c.field, c.value))
-	} else {
-		r := regexp.MustCompile(fmt.Sprintf(`(?m)#?.*%s:.*$`, c.field))
-		res = r.ReplaceAllString(content, fmt.Sprintf("%s: %s", c.field, c.value))
-	}
-	return res
 }
 
 // gracefulExitAntreaController copies the Antrea controller binary coverage data file out before terminating the Pod
