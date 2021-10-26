@@ -173,6 +173,8 @@ func (o *Options) validate(args []string) error {
 		}
 		o.nplStartPort = startPort
 		o.nplEndPort = endPort
+	} else if o.config.NodePortLocal.Enable {
+		klog.InfoS("The nodePortLocal.enable config option is set to true, but it will be ignored because the NodePortLocal feature gate is disabled")
 	}
 	return nil
 }

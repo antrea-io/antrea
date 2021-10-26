@@ -57,7 +57,7 @@ func getAvailableNodePortAddresses(nodePortAddressesFromConfig []string, exclude
 	return nodePortAddressesIPv4, nodePortAddressesIPv6, nil
 }
 
-// parsePortRange parses a port range ("<start>-<end>") and checks that it is  valid.
+// parsePortRange parses a port range ("<start>-<end>") and checks that it is valid.
 func parsePortRange(portRangeStr string) (start, end int, err error) {
 	portsRange := strings.Split(portRangeStr, "-")
 	if len(portsRange) != 2 {
@@ -73,7 +73,7 @@ func parsePortRange(portRangeStr string) (start, end int, err error) {
 	}
 
 	if end <= start {
-		return 0, 0, fmt.Errorf("start port must be less than end port: %s", portRangeStr)
+		return 0, 0, fmt.Errorf("start port must be smaller than end port: %s", portRangeStr)
 	}
 
 	return start, end, nil
