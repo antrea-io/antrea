@@ -103,17 +103,6 @@ func (o *Options) validate(args []string) error {
 		return fmt.Errorf("no positional arguments are supported")
 	}
 
-	// Validate service CIDR configuration
-	_, _, err := net.ParseCIDR(o.config.ServiceCIDR)
-	if err != nil {
-		return fmt.Errorf("Service CIDR %s is invalid", o.config.ServiceCIDR)
-	}
-	if o.config.ServiceCIDRv6 != "" {
-		_, _, err := net.ParseCIDR(o.config.ServiceCIDRv6)
-		if err != nil {
-			return fmt.Errorf("Service CIDR v6 %s is invalid", o.config.ServiceCIDRv6)
-		}
-	}
 	if o.config.TunnelType != ovsconfig.VXLANTunnel && o.config.TunnelType != ovsconfig.GeneveTunnel &&
 		o.config.TunnelType != ovsconfig.GRETunnel && o.config.TunnelType != ovsconfig.STTTunnel {
 		return fmt.Errorf("tunnel type %s is invalid", o.config.TunnelType)
@@ -131,8 +120,7 @@ func (o *Options) validate(args []string) error {
 	}
 
 	// Check if the enabled features are supported on the OS.
-	err = o.checkUnsupportedFeatures()
-	if err != nil {
+	if err := o.checkUnsupportedFeatures(); err != nil {
 		return err
 	}
 
@@ -219,8 +207,10 @@ func (o *Options) setDefaults() {
 	if o.config.HostProcPathPrefix == "" {
 		o.config.HostProcPathPrefix = defaultHostProcPathPrefix
 	}
-	if o.config.ServiceCIDR == "" {
-		o.config.ServiceCIDR = defaultServiceCIDR
+	if !features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
+		if o.config.ServiceCIDR == "" {
+			o.config.ServiceCIDR = defaultServiceCIDR
+		}
 	}
 	if o.config.APIPort == 0 {
 		o.config.APIPort = apis.AntreaAgentAPIPort
@@ -264,8 +254,19 @@ func (o *Options) setDefaults() {
 }
 
 func (o *Options) validateAntreaProxyConfig() error {
-	if !features.DefaultFeatureGate.Enabled(features.AntreaProxy) && len(o.config.AntreaProxy.SkipServices) > 0 {
-		klog.InfoS("skipServices will be ignored because AntreaProxy is disabled", "skipServices", o.config.AntreaProxy.SkipServices)
+	if !features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
+		// Validate service CIDR configuration if AntreaProxy is not enabled.
+		if _, _, err := net.ParseCIDR(o.config.ServiceCIDR); err != nil {
+			return fmt.Errorf("Service CIDR %s is invalid", o.config.ServiceCIDR)
+		}
+		if o.config.ServiceCIDRv6 != "" {
+			if _, _, err := net.ParseCIDR(o.config.ServiceCIDRv6); err != nil {
+				return fmt.Errorf("Service CIDR v6 %s is invalid", o.config.ServiceCIDRv6)
+			}
+		}
+		if len(o.config.AntreaProxy.SkipServices) > 0 {
+			klog.InfoS("skipServices will be ignored because AntreaProxy is disabled", "skipServices", o.config.AntreaProxy.SkipServices)
+		}
 	}
 
 	if o.config.AntreaProxy.ProxyAll {

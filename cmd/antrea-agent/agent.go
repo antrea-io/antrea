@@ -149,7 +149,7 @@ func run(o *Options) error {
 	egressConfig := &config.EgressConfig{
 		ExceptCIDRs: exceptCIDRs,
 	}
-	routeClient, err := route.NewClient(serviceCIDRNet, networkConfig, o.config.NoSNAT, o.config.AntreaProxy.ProxyAll, connectUplinkToBridge)
+	routeClient, err := route.NewClient(networkConfig, o.config.NoSNAT, o.config.AntreaProxy.ProxyAll, connectUplinkToBridge)
 	if err != nil {
 		return fmt.Errorf("error creating route client: %v", err)
 	}

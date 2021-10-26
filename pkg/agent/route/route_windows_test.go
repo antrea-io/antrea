@@ -42,7 +42,6 @@ func TestRouteOperation(t *testing.T) {
 	hostGateway := "Loopback Pseudo-Interface 1"
 	gwLink := getNetLinkIndex("Loopback Pseudo-Interface 1")
 
-	_, serviceCIDR, _ := net.ParseCIDR("1.1.0.0/16")
 	peerNodeIP1 := net.ParseIP("10.0.0.2")
 	peerNodeIP2 := net.ParseIP("10.0.0.3")
 	gwIP1 := net.ParseIP("192.168.2.1")
@@ -51,7 +50,7 @@ func TestRouteOperation(t *testing.T) {
 	gwIP2 := net.ParseIP("192.168.3.1")
 	_, destCIDR2, _ := net.ParseCIDR(dest2)
 
-	client, err := NewClient(serviceCIDR, &config.NetworkConfig{}, true, false, false)
+	client, err := NewClient(&config.NetworkConfig{}, true, false, false)
 	svcStr1 := "1.1.0.10"
 	svcIP1 := net.ParseIP(svcStr1)
 	svcIPNet1 := util.NewIPNet(svcIP1)

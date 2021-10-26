@@ -90,7 +90,6 @@ type Client struct {
 	nodeConfig    *config.NodeConfig
 	networkConfig *config.NetworkConfig
 	noSNAT        bool
-	serviceCIDR   *net.IPNet
 	ipt           *iptables.Client
 	// nodeRoutes caches ip routes to remote Pods. It's a map of podCIDR to routes.
 	nodeRoutes sync.Map
@@ -117,11 +116,8 @@ type Client struct {
 }
 
 // NewClient returns a route client.
-// TODO: remove param serviceCIDR after kube-proxy is replaced by Antrea Proxy. This param is not used in this file;
-// leaving it here is to be compatible with the implementation on Windows.
-func NewClient(serviceCIDR *net.IPNet, networkConfig *config.NetworkConfig, noSNAT, proxyAll, connectUplinkToBridge bool) (*Client, error) {
+func NewClient(networkConfig *config.NetworkConfig, noSNAT, proxyAll, connectUplinkToBridge bool) (*Client, error) {
 	return &Client{
-		serviceCIDR:           serviceCIDR,
 		networkConfig:         networkConfig,
 		noSNAT:                noSNAT,
 		proxyAll:              proxyAll,
