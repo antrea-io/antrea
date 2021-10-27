@@ -105,6 +105,7 @@ const (
 
 	agnhostImage        = "projects.registry.vmware.com/antrea/agnhost:2.26"
 	busyboxImage        = "projects.registry.vmware.com/library/busybox"
+	winBusyboxImage     = "e2eteam/busybox:1.29"
 	nginxImage          = "projects.registry.vmware.com/antrea/nginx"
 	perftoolImage       = "projects.registry.vmware.com/antrea/perftool"
 	ipfixCollectorImage = "projects.registry.vmware.com/antrea/ipfix-collector:v0.5.8"
@@ -1028,11 +1029,30 @@ func (data *TestData) createPodOnNodeInNamespace(name, ns string, nodeName, ctrN
 	return nil
 }
 
+func forcePodToLinuxNode(pod *corev1.Pod) {
+	pod.Spec.NodeSelector = map[string]string{
+		"kubernetes.io/os": "linux",
+	}
+}
+
+func forcePodToWindowsNode(pod *corev1.Pod) {
+	pod.Spec.NodeSelector = map[string]string{
+		"kubernetes.io/os": "windows",
+	}
+}
+
 // createBusyboxPodOnNode creates a Pod in the test namespace with a single busybox container. The
 // Pod will be scheduled on the specified Node (if nodeName is not empty).
 func (data *TestData) createBusyboxPodOnNode(name string, ns string, nodeName string, hostNetwork bool) error {
 	sleepDuration := 3600 // seconds
-	return data.createPodOnNode(name, ns, nodeName, busyboxImage, []string{"sleep", strconv.Itoa(sleepDuration)}, nil, nil, nil, hostNetwork, nil)
+	return data.createPodOnNode(name, ns, nodeName, busyboxImage, []string{"sleep", strconv.Itoa(sleepDuration)}, nil, nil, nil, hostNetwork, forcePodToLinuxNode)
+}
+
+// createBusyboxPodOnWindowsNode creates a Pod in the test namespace with a single busybox container. The
+// Pod will be scheduled on the specified windows Node (if nodeName is not empty).
+func (data *TestData) createBusyboxPodOnWindowsNode(name string, ns string, nodeName string) error {
+	sleepDuration := 3600 // seconds
+	return data.createPodOnNode(name, ns, nodeName, winBusyboxImage, []string{"sleep", strconv.Itoa(sleepDuration)}, nil, nil, nil, false, forcePodToWindowsNode)
 }
 
 // createNginxPodOnNode creates a Pod in the test namespace with a single nginx container. The

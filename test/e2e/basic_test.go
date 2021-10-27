@@ -61,12 +61,26 @@ func TestBasic(t *testing.T) {
 func testPodAssignIP(t *testing.T, data *TestData) {
 	podName := randName("test-pod-")
 
-	t.Logf("Creating a busybox test Pod")
+	t.Logf("Creating a busybox test Pod on linux node")
 	if err := data.createBusyboxPodOnNode(podName, testNamespace, "", false); err != nil {
 		t.Fatalf("Error when creating busybox test Pod: %v", err)
 	}
 	defer deletePodWrapper(t, data, podName)
+	waitAndCheckPodIPs(t, data, podName)
 
+	if len(clusterInfo.windowsNodes) > 0 {
+		podName := randName("test-pod-")
+		t.Logf("Creating a busybox test Pod on windows node")
+		if err := data.createBusyboxPodOnWindowsNode(podName, testNamespace, ""); err != nil {
+			t.Fatalf("Error when creating windows busybox test Pod: %v", err)
+		}
+		defer deletePodWrapper(t, data, podName)
+		waitAndCheckPodIPs(t, data, podName)
+	}
+}
+
+// waitAndCheckPodIPs wait for pod to running and check it's ips
+func waitAndCheckPodIPs(t *testing.T, data *TestData, podName string) {
 	t.Logf("Checking Pod networking")
 	if podIPs, err := data.podWaitForIPs(defaultTimeout, podName, testNamespace); err != nil {
 		t.Errorf("Error when waiting for Pod IP: %v", err)
