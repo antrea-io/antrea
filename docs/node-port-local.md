@@ -32,7 +32,7 @@ work.
 ## Usage
 
 In addition to enabling the NodePortLocal feature gate (if needed), you need to
-ensure that the `nodePortLocal.enable` flag is set so true in the Antrea Agent
+ensure that the `nodePortLocal.enable` flag is set to true in the Antrea Agent
 configuration. The `nodePortLocal.portRange` parameter can also be set to change
 the range from which Node ports will be allocated. Otherwise, the default range
 of `61000-62000` will be used by default. When using the NodePortLocal feature,
