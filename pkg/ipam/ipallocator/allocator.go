@@ -49,10 +49,12 @@ type SingleIPAllocator struct {
 	allocated *big.Int
 	// count is the number of currently allocated elements in the range.
 	count int
+	// IPs inside the cidr not available for allocation
+	reservedIPs []net.IP
 }
 
 // NewCIDRAllocator creates an IPAllocator based on the provided CIDR.
-func NewCIDRAllocator(cidr string) (*SingleIPAllocator, error) {
+func NewCIDRAllocator(cidr string, reservedIPs []string) (*SingleIPAllocator, error) {
 	ip, ipNet, err := net.ParseCIDR(cidr)
 	if err != nil {
 		return nil, err
@@ -61,10 +63,6 @@ func NewCIDRAllocator(cidr string) (*SingleIPAllocator, error) {
 	// Start from "x.x.x.1".
 	base.Add(base, big.NewInt(1))
 	max := utilnet.RangeSize(ipNet) - 1
-	if ip.To4() != nil {
-		// Don't use the IPv4 network's broadcast address.
-		max--
-	}
 	if max < 0 {
 		return nil, fmt.Errorf("no available IP in %s", cidr)
 	}
@@ -73,12 +71,18 @@ func NewCIDRAllocator(cidr string) (*SingleIPAllocator, error) {
 		max = 65536
 	}
 
+	var parsedReservedIPs []net.IP
+	for _, reservedIP := range reservedIPs {
+		parsedReservedIPs = append(parsedReservedIPs, net.ParseIP(reservedIP))
+	}
+
 	allocator := &SingleIPAllocator{
-		ipRangeStr: cidr,
-		base:       base,
-		max:        int(max),
-		allocated:  big.NewInt(0),
-		count:      0,
+		ipRangeStr:  cidr,
+		base:        base,
+		max:         int(max),
+		allocated:   big.NewInt(0),
+		count:       0,
+		reservedIPs: parsedReservedIPs,
 	}
 	return allocator, nil
 }
@@ -120,11 +124,25 @@ func (a *SingleIPAllocator) Name() string {
 	return a.ipRangeStr
 }
 
+func (a *SingleIPAllocator) checkReserved(ip net.IP) error {
+	for _, reservedIP := range a.reservedIPs {
+		if reservedIP.Equal(ip) {
+			return fmt.Errorf("IP %v is reserved and not available for allocation", ip)
+		}
+	}
+	return nil
+}
+
 // AllocateIP allocates the specified IP. It returns error if the IP is not in the range or already allocated.
 func (a *SingleIPAllocator) AllocateIP(ip net.IP) error {
 	offset := int(big.NewInt(0).Sub(utilnet.BigForIP(ip), a.base).Int64())
 	if offset < 0 || offset >= a.max {
 		return fmt.Errorf("IP %v is not in the ipset", ip)
+	}
+
+	err := a.checkReserved(ip)
+	if err != nil {
+		return err
 	}
 
 	a.mutex.Lock()
@@ -146,9 +164,12 @@ func (a *SingleIPAllocator) AllocateNext() (net.IP, error) {
 	}
 	for i := 0; i < a.max; i++ {
 		if a.allocated.Bit(i) == 0 {
+			ip := utilnet.AddIPOffset(a.base, i)
+			if a.checkReserved(ip) != nil {
+				continue
+			}
 			a.allocated.SetBit(a.allocated, i, 1)
 			a.count++
-			ip := utilnet.AddIPOffset(a.base, i)
 			return ip, nil
 		}
 	}

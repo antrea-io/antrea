@@ -30,6 +30,7 @@ import (
 	"antrea.io/antrea/pkg/agent/util"
 	"antrea.io/antrea/pkg/agent/util/winfirewall"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
+	iputil "antrea.io/antrea/pkg/util/ip"
 )
 
 const (
@@ -216,7 +217,7 @@ func (c *Client) listRoutes() (map[string]*util.Route, error) {
 		}
 		// Windows adds an active route entry for the local broadcast address automatically when a new IP address
 		// is configured on the interface. This route entry should be ignored in the list.
-		if rt.DestinationSubnet.IP.Equal(util.GetLocalBroadcastIP(rt.DestinationSubnet)) {
+		if rt.DestinationSubnet.IP.Equal(iputil.GetLocalBroadcastIP(rt.DestinationSubnet)) {
 			continue
 		}
 		// Skip Service corresponding routes. These route entries are added by kube-proxy. If these route entries
