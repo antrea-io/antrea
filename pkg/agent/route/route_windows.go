@@ -354,11 +354,6 @@ func (c *Client) listRoutes() (map[string]*util.Route, error) {
 		if !rt.GatewayAddress.Equal(config.VirtualServiceIPv4) && rt.DestinationSubnet.IP.Equal(util.GetLocalBroadcastIP(rt.DestinationSubnet)) {
 			continue
 		}
-		// If the GatewayAddress equals VirtualServiceIPv4, the route is for ClusterIP Service traffic from the host.
-		// Otherwise, the route is added by kube-proxy, which is needed to access the Service.
-		if !rt.GatewayAddress.Equal(config.VirtualServiceIPv4) && c.serviceCIDR.Contains(rt.DestinationSubnet.IP) {
-			continue
-		}
 		rtMap[rt.DestinationSubnet.String()] = &rt
 	}
 	return rtMap, nil

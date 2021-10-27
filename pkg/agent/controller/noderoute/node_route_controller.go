@@ -205,10 +205,8 @@ func (c *Controller) removeStaleGatewayRoutes() error {
 
 		svcs, err := c.svcLister.List(labels.Everything())
 		for _, svc := range svcs {
-			if svc.Spec.Type == corev1.ServiceTypeClusterIP {
-				for _, ip := range svc.Spec.ClusterIPs {
-					desiredClusterIPSvcIPs[ip] = true
-				}
+			for _, ip := range svc.Spec.ClusterIPs {
+				desiredClusterIPSvcIPs[ip] = true
 			}
 		}
 		if err != nil {
