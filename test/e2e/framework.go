@@ -23,6 +23,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
@@ -51,6 +52,9 @@ import (
 
 	"antrea.io/antrea/pkg/agent/config"
 	crdclientset "antrea.io/antrea/pkg/client/clientset/versioned"
+	agentconfig "antrea.io/antrea/pkg/config/agent"
+	controllerconfig "antrea.io/antrea/pkg/config/controller"
+	flowaggregatorconfig "antrea.io/antrea/pkg/config/flowaggregator"
 	"antrea.io/antrea/pkg/features"
 	legacycrdclientset "antrea.io/antrea/pkg/legacyclient/clientset/versioned"
 	"antrea.io/antrea/test/e2e/providers"
@@ -186,42 +190,6 @@ type TestData struct {
 	crdClient          crdclientset.Interface
 	legacyCrdClient    legacycrdclientset.Interface
 	logsDirForTestCase string
-}
-
-type configChange interface {
-	ApplyChange(content string) string
-}
-
-type configChangeParam struct {
-	field string
-	value string
-}
-
-func (cg *configChangeParam) ApplyChange(content string) string {
-	r := regexp.MustCompile(fmt.Sprintf(`(?m)#?.*%s:.*$`, cg.field))
-	return r.ReplaceAllString(content, fmt.Sprintf("%s: %s", cg.field, cg.value))
-}
-
-type configChangeFeatureGate struct {
-	name    string
-	enabled bool
-}
-
-func (cg *configChangeFeatureGate) ApplyChange(content string) string {
-	r := regexp.MustCompile(fmt.Sprintf(`(?m)#?  %s:.*$`, cg.name))
-	value := "false"
-	if cg.enabled {
-		value = "true"
-	}
-	return r.ReplaceAllString(content, fmt.Sprintf("  %s: %s", cg.name, value))
-}
-
-type configChangeRaw struct {
-	fn func(content string) string
-}
-
-func (cg *configChangeRaw) ApplyChange(content string) string {
-	return cg.fn(content)
 }
 
 var testData *TestData
@@ -685,14 +653,14 @@ func (data *TestData) deployAntrea(option deployAntreaOptions) error {
 // deployAntreaFlowExporter deploys Antrea with flow exporter config params enabled.
 func (data *TestData) deployAntreaFlowExporter(ipfixCollector string) error {
 	// Enable flow exporter feature and add related config params to antrea agent configmap.
-	ac := []configChange{
-		&configChangeFeatureGate{"FlowExporter", true},
-		&configChangeParam{"flowPollInterval", "\"1s\""},
-		&configChangeParam{"activeFlowExportTimeout", fmt.Sprintf("\"%v\"", exporterActiveFlowExportTimeout)},
-		&configChangeParam{"idleFlowExportTimeout", fmt.Sprintf("\"%v\"", exporterIdleFlowExportTimeout)},
-	}
-	if ipfixCollector != "" {
-		ac = append(ac, &configChangeParam{"flowCollectorAddr", fmt.Sprintf("\"%s\"", ipfixCollector)})
+	ac := func(config *agentconfig.AgentConfig) {
+		config.FeatureGates["FlowExporter"] = true
+		config.FlowPollInterval = "1s"
+		config.ActiveFlowExportTimeout = exporterActiveFlowExportTimeout.String()
+		config.IdleFlowExportTimeout = exporterIdleFlowExportTimeout.String()
+		if ipfixCollector != "" {
+			config.FlowCollectorAddr = ipfixCollector
+		}
 	}
 	return data.mutateAntreaConfigMap(nil, ac, false, true)
 }
@@ -727,18 +695,27 @@ func (data *TestData) mutateFlowAggregatorConfigMap(ipfixCollector string, faClu
 	if err != nil {
 		return err
 	}
-	flowAggregatorConf := configMap.Data[flowAggregatorConfName]
-	flowAggregatorConf = strings.Replace(flowAggregatorConf, "#externalFlowCollectorAddr: \"\"", fmt.Sprintf("externalFlowCollectorAddr: \"%s\"", ipfixCollector), 1)
-	flowAggregatorConf = strings.Replace(flowAggregatorConf, "#activeFlowRecordTimeout: 60s", fmt.Sprintf("activeFlowRecordTimeout: %v", aggregatorActiveFlowRecordTimeout), 1)
-	flowAggregatorConf = strings.Replace(flowAggregatorConf, "#inactiveFlowRecordTimeout: 90s", fmt.Sprintf("inactiveFlowRecordTimeout: %v", aggregatorInactiveFlowRecordTimeout), 1)
-	flowAggregatorConf = strings.Replace(flowAggregatorConf, "#podLabels: false", fmt.Sprintf("podLabels: %v", true), 1)
+
+	var flowAggregatorConf flowaggregatorconfig.FlowAggregatorConfig
+	if err := yaml.Unmarshal([]byte(configMap.Data[flowAggregatorConfName]), &flowAggregatorConf); err != nil {
+		return fmt.Errorf("failed to unmarshal FlowAggregator config from ConfigMap: %v", err)
+	}
+
+	flowAggregatorConf.ExternalFlowCollectorAddr = ipfixCollector
+	flowAggregatorConf.ActiveFlowRecordTimeout = aggregatorActiveFlowRecordTimeout.String()
+	flowAggregatorConf.InactiveFlowRecordTimeout = aggregatorInactiveFlowRecordTimeout.String()
+	flowAggregatorConf.RecordContents.PodLabels = true
 	if testOptions.providerName == "kind" {
 		// In Kind cluster, there are issues with DNS name resolution on worker nodes.
 		// We will use flow aggregator service cluster IP to generate the server certificate for tls communication
-		faAddress := fmt.Sprintf("flowAggregatorAddress: %s", faClusterIP)
-		flowAggregatorConf = strings.Replace(flowAggregatorConf, "#flowAggregatorAddress: \"flow-aggregator.flow-aggregator.svc\"", faAddress, 1)
+		flowAggregatorConf.FlowAggregatorAddress = faClusterIP
 	}
-	configMap.Data[flowAggregatorConfName] = flowAggregatorConf
+
+	b, err := yaml.Marshal(&flowAggregatorConf)
+	if err != nil {
+		return fmt.Errorf("failed to marshal FlowAggregator config")
+	}
+	configMap.Data[flowAggregatorConfName] = string(b)
 	if _, err := data.clientset.CoreV1().ConfigMaps(flowAggregatorNamespace).Update(context.TODO(), configMap, metav1.UpdateOptions{}); err != nil {
 		return fmt.Errorf("failed to update ConfigMap %s: %v", configMap.Name, err)
 	}
@@ -1851,25 +1828,78 @@ func (data *TestData) GetGatewayInterfaceName(antreaNamespace string) (string, e
 // antrea-controller config by updating the antrea-config ConfigMap. It will then restart Agents and
 // Controller if needed. Note that if the specified updates do not result in any actual change to
 // the ConfigMap, this function is a complete no-op.
-func (data *TestData) mutateAntreaConfigMap(controllerChanges []configChange, agentChanges []configChange, restartController, restartAgent bool) error {
+func (data *TestData) mutateAntreaConfigMap(
+	controllerChanges func(config *controllerconfig.ControllerConfig),
+	agentChanges func(config *agentconfig.AgentConfig),
+	restartController bool,
+	restartAgent bool,
+) error {
 	configMap, err := data.GetAntreaConfigMap(antreaNamespace)
 	if err != nil {
 		return err
 	}
 
-	controllerConf := configMap.Data["antrea-controller.conf"]
-	for _, cg := range controllerChanges {
-		controllerConf = cg.ApplyChange(controllerConf)
-	}
-	controllerConfChanged := controllerConf != configMap.Data["antrea-controller.conf"]
-	configMap.Data["antrea-controller.conf"] = controllerConf
+	// for each config (Agent and Controller), we unmarshal twice and apply changes on one of
+	// the copy. We use the unchanged copy to detect whether any actual change was made to the
+	// config by the client-provided functions (controllerConfOut and agentChanges).
 
-	agentConf := configMap.Data["antrea-agent.conf"]
-	for _, cg := range agentChanges {
-		agentConf = cg.ApplyChange(agentConf)
+	getControllerConf := func() (*controllerconfig.ControllerConfig, error) {
+		var controllerConf controllerconfig.ControllerConfig
+		if err := yaml.Unmarshal([]byte(configMap.Data["antrea-controller.conf"]), &controllerConf); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal Controller config from ConfigMap: %v", err)
+		}
+		return &controllerConf, nil
 	}
-	agentConfChanged := agentConf != configMap.Data["antrea-agent.conf"]
-	configMap.Data["antrea-agent.conf"] = agentConf
+
+	controllerConfChanged := false
+	if controllerChanges != nil {
+		controllerConfIn, err := getControllerConf()
+		if err != nil {
+			return err
+		}
+		controllerConfOut, err := getControllerConf()
+		if err != nil {
+			return err
+		}
+
+		controllerChanges(controllerConfOut)
+		controllerConfChanged = !reflect.DeepEqual(controllerConfIn, controllerConfOut)
+
+		b, err := yaml.Marshal(controllerConfOut)
+		if err != nil {
+			return fmt.Errorf("failed to marshal Controller config: %v", err)
+		}
+		configMap.Data["antrea-controller.conf"] = string(b)
+	}
+
+	getAgentConf := func() (*agentconfig.AgentConfig, error) {
+		var agentConf agentconfig.AgentConfig
+		if err := yaml.Unmarshal([]byte(configMap.Data["antrea-agent.conf"]), &agentConf); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal Agent config from ConfigMap: %v", err)
+		}
+		return &agentConf, nil
+	}
+
+	agentConfChanged := false
+	if agentChanges != nil {
+		agentConfIn, err := getAgentConf()
+		if err != nil {
+			return err
+		}
+		agentConfOut, err := getAgentConf()
+		if err != nil {
+			return err
+		}
+
+		agentChanges(agentConfOut)
+		agentConfChanged = !reflect.DeepEqual(agentConfIn, agentConfOut)
+
+		b, err := yaml.Marshal(agentConfOut)
+		if err != nil {
+			return fmt.Errorf("failed to marshal Agent config: %v", err)
+		}
+		configMap.Data["antrea-agent.conf"] = string(b)
+	}
 
 	if !agentConfChanged && !controllerConfChanged {
 		// no config was changed, no need to call Update or restart anything

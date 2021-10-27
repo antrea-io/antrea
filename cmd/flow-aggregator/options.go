@@ -24,6 +24,7 @@ import (
 	"github.com/spf13/pflag"
 	"gopkg.in/yaml.v2"
 
+	flowaggregatorconfig "antrea.io/antrea/pkg/config/flowaggregator"
 	"antrea.io/antrea/pkg/flowaggregator"
 	"antrea.io/antrea/pkg/util/flowexport"
 )
@@ -42,7 +43,7 @@ type Options struct {
 	// The path of configuration file.
 	configFile string
 	// The configuration object
-	config *FlowAggregatorConfig
+	config *flowaggregatorconfig.FlowAggregatorConfig
 	// IPFIX flow collector address
 	externalFlowCollectorAddr string
 	// IPFIX flow collector transport protocol
@@ -63,7 +64,7 @@ type Options struct {
 
 func newOptions() *Options {
 	return &Options{
-		config: new(FlowAggregatorConfig),
+		config: new(flowaggregatorconfig.FlowAggregatorConfig),
 	}
 }
 
@@ -135,18 +136,16 @@ func (o *Options) validate(args []string) error {
 	} else {
 		o.format = o.config.RecordFormat
 	}
-	if includePodLabels, ok := o.config.RecordContents["podLabels"]; ok {
-		o.includePodLabels = includePodLabels
-	}
+	o.includePodLabels = o.config.RecordContents.PodLabels
 	return nil
 }
 
-func (o *Options) loadConfigFromFile(file string) (*FlowAggregatorConfig, error) {
+func (o *Options) loadConfigFromFile(file string) (*flowaggregatorconfig.FlowAggregatorConfig, error) {
 	data, err := ioutil.ReadFile(file)
 	if err != nil {
 		return nil, err
 	}
-	c := FlowAggregatorConfig{}
+	c := flowaggregatorconfig.FlowAggregatorConfig{}
 	err = yaml.UnmarshalStrict(data, &c)
 	if err != nil {
 		return nil, err

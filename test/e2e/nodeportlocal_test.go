@@ -26,13 +26,13 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-	"gopkg.in/yaml.v2"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 
 	"antrea.io/antrea/pkg/agent/nodeportlocal/k8s"
 	npltesting "antrea.io/antrea/pkg/agent/nodeportlocal/testing"
+	agentconfig "antrea.io/antrea/pkg/config/agent"
 	"antrea.io/antrea/pkg/features"
 )
 
@@ -60,29 +60,13 @@ func skipIfNodePortLocalDisabled(tb testing.TB) {
 }
 
 func configureNPLForAgent(t *testing.T, data *TestData, startPort, endPort int) {
-	configureNPL := func(content string) string {
-		var cfg interface{}
-		if err := yaml.Unmarshal([]byte(content), &cfg); err != nil {
-			t.Fatalf("Failed to unmarshal Agent config: %v", err)
-		}
-		nplConfig := map[string]interface{}{
-			"enable":    true,
-			"portRange": fmt.Sprintf("%d-%d", startPort, endPort),
-		}
-		cfg.(map[interface{}]interface{})["nodePortLocal"] = nplConfig
-		b, err := yaml.Marshal(&cfg)
-		if err != nil {
-			t.Fatalf("Failed to marshal Agent config: %v", err)
-		}
-		return string(b)
-	}
-
-	ac := []configChange{
-		&configChangeRaw{configureNPL},
+	ac := func(config *agentconfig.AgentConfig) {
+		config.NodePortLocal.Enable = true
+		config.NodePortLocal.PortRange = fmt.Sprintf("%d-%d", startPort, endPort)
 	}
 
 	if err := data.mutateAntreaConfigMap(nil, ac, false, true); err != nil {
-		t.Fatalf("Failed to update NodePortLocal port range: %v", err)
+		t.Fatalf("Failed to update NodePortLocal config: %v", err)
 	}
 }
 

@@ -24,6 +24,8 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"antrea.io/antrea/pkg/apis"
+	agentconfig "antrea.io/antrea/pkg/config/agent"
+	controllerconfig "antrea.io/antrea/pkg/config/controller"
 )
 
 const (
@@ -84,13 +86,13 @@ func (data *TestData) configureTLS(t *testing.T, cipherSuites []uint16, tlsMinVe
 		}
 	}
 
-	cc := []configChange{
-		&configChangeParam{"tlsCipherSuites", cipherSuitesStr},
-		&configChangeParam{"tlsMinVersion", tlsMinVersion},
+	cc := func(config *controllerconfig.ControllerConfig) {
+		config.TLSCipherSuites = cipherSuitesStr
+		config.TLSMinVersion = tlsMinVersion
 	}
-	ac := []configChange{
-		&configChangeParam{"tlsCipherSuites", cipherSuitesStr},
-		&configChangeParam{"tlsMinVersion", tlsMinVersion},
+	ac := func(config *agentconfig.AgentConfig) {
+		config.TLSCipherSuites = cipherSuitesStr
+		config.TLSMinVersion = tlsMinVersion
 	}
 	if err := data.mutateAntreaConfigMap(cc, ac, true, true); err != nil {
 		t.Fatalf("Failed to configure Cipher Suites and TLSMinVersion: %v", err)

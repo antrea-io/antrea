@@ -1,4 +1,4 @@
-// Copyright 2020 Antrea Authors
+// Copyright 2021 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,9 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package config
 
-import "antrea.io/antrea/pkg/flowaggregator"
+import (
+	"antrea.io/antrea/pkg/flowaggregator"
+)
 
 type FlowAggregatorConfig struct {
 	// Provide the flow collector address as string with format <IP>:<port>[:<proto>], where proto is tcp or udp.
@@ -51,7 +53,11 @@ type FlowAggregatorConfig struct {
 	// Provide format for records sent to the configured flow collector. Supported formats are IPFIX and JSON.
 	// Defaults to "IPFIX"
 	RecordFormat string `yaml:"recordFormat,omitempty"`
-	// recordContents enables configuring some fields in the flow records, A field can
-	// be either included (true) or excluded (false) by providing a bool value.
-	RecordContents map[string]bool `yaml:"recordContents,omitempty"`
+	// recordContents enables configuring some fields in the flow records. Fields can be
+	// excluded to reduce record size.
+	RecordContents RecordContentsConfig `yaml:"recordContents,omitempty"`
+}
+
+type RecordContentsConfig struct {
+	PodLabels bool `yaml:"podLabels,omitempty"`
 }

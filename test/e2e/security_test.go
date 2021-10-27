@@ -33,6 +33,7 @@ import (
 	"antrea.io/antrea/pkg/apis"
 	"antrea.io/antrea/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/pkg/apiserver/certificate"
+	controllerconfig "antrea.io/antrea/pkg/config/controller"
 )
 
 const (
@@ -63,8 +64,8 @@ func TestSecurity(t *testing.T) {
 func testUserProvidedCert(t *testing.T, data *TestData) {
 	// Re-configure antrea-controller to use user-provided cert.
 	// Note antrea-controller must be restarted to take effect.
-	cc := []configChange{
-		&configChangeParam{"selfSignedCert", "false"},
+	cc := func(config *controllerconfig.ControllerConfig) {
+		config.SelfSignedCert = false
 	}
 	if err := data.mutateAntreaConfigMap(cc, nil, false, false); err != nil {
 		t.Fatalf("Failed to update ConfigMap: %v", err)

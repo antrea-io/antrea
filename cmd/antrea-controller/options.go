@@ -25,6 +25,7 @@ import (
 	netutils "k8s.io/utils/net"
 
 	"antrea.io/antrea/pkg/apis"
+	controllerconfig "antrea.io/antrea/pkg/config/controller"
 	"antrea.io/antrea/pkg/features"
 )
 
@@ -41,12 +42,12 @@ type Options struct {
 	// The path of configuration file.
 	configFile string
 	// The configuration object
-	config *ControllerConfig
+	config *controllerconfig.ControllerConfig
 }
 
 func newOptions() *Options {
 	return &Options{
-		config: &ControllerConfig{
+		config: &controllerconfig.ControllerConfig{
 			EnablePrometheusMetrics: true,
 			SelfSignedCert:          true,
 			LegacyCRDMirroring:      true,

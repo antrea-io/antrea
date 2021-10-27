@@ -291,8 +291,9 @@ flow-aggregator.conf: |
   # Supported formats are IPFIX and JSON.
   #recordFormat: "IPFIX"
 
-  # recordContents enables configuring some fields in the flow records, A field can
-  # be either included (true) or excluded (false) by providing a bool value.
+  # recordContents enables configuring some fields in the flow records. Fields can
+  # be excluded to reduce record size, but some features or external tooling may
+  # depend on these fields.
   recordContents:
     # Determine whether source and destination Pod labels will be included in the flow records.
     #podLabels: false
