@@ -65,6 +65,8 @@ type Options struct {
 	idleFlowTimeout time.Duration
 	// Stale connection timeout to delete connections if they are not exported.
 	staleConnectionTimeout time.Duration
+	nplStartPort           int
+	nplEndPort             int
 }
 
 func newOptions() *Options {
@@ -164,6 +166,16 @@ func (o *Options) validate(args []string) error {
 			}
 		}
 	}
+	if features.DefaultFeatureGate.Enabled(features.NodePortLocal) {
+		startPort, endPort, err := parsePortRange(o.config.NodePortLocal.PortRange)
+		if err != nil {
+			return fmt.Errorf("NodePortLocal portRange is not valid: %v", err)
+		}
+		o.nplStartPort = startPort
+		o.nplEndPort = endPort
+	} else if o.config.NodePortLocal.Enable {
+		klog.InfoS("The nodePortLocal.enable config option is set to true, but it will be ignored because the NodePortLocal feature gate is disabled")
+	}
 	return nil
 }
 
@@ -233,8 +245,13 @@ func (o *Options) setDefaults() {
 	}
 
 	if features.DefaultFeatureGate.Enabled(features.NodePortLocal) {
-		if o.config.NPLPortRange == "" {
-			o.config.NPLPortRange = defaultNPLPortRange
+		switch {
+		case o.config.NodePortLocal.PortRange != "":
+		case o.config.NPLPortRange != "":
+			klog.InfoS("The nplPortRange option is deprecated, please use nodePortLocal.portRange instead")
+			o.config.NodePortLocal.PortRange = o.config.NPLPortRange
+		default:
+			o.config.NodePortLocal.PortRange = defaultNPLPortRange
 		}
 	}
 }

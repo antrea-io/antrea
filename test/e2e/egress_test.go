@@ -52,10 +52,10 @@ func TestEgress(t *testing.T) {
 	skipIfEncapModeIsNot(t, data, config.TrafficEncapModeEncap)
 
 	cc := []configChange{
-		{"Egress", "true", true},
+		&configChangeFeatureGate{"Egress", true},
 	}
 	ac := []configChange{
-		{"Egress", "true", true},
+		&configChangeFeatureGate{"Egress", true},
 	}
 
 	if err := data.mutateAntreaConfigMap(cc, ac, true, true); err != nil {

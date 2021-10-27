@@ -6,6 +6,7 @@
 - [What is NodePortLocal?](#what-is-nodeportlocal)
 - [Prerequisites](#prerequisites)
 - [Usage](#usage)
+  - [Usage pre Antrea v1.4](#usage-pre-antrea-v14)
   - [Usage pre Antrea v1.2](#usage-pre-antrea-v12)
 - [Limitations](#limitations)
 <!-- /toc -->
@@ -23,23 +24,42 @@ directly to backend Pods.
 
 ## Prerequisites
 
-NodePortLocal was introduced in v0.13 as an alpha feature. As with other alpha
-features, a feature gate, `NodePortLocal`, must be enabled on the antrea-agent
-for the feature to work.
+NodePortLocal was introduced in v0.13 as an alpha feature, and was graduated to
+beta in v1.4, at which time it was enabled by default. Prior to v1.4, a feature
+gate, `NodePortLocal`, must be enabled on the antrea-agent for the feature to
+work.
 
 ## Usage
 
-In addition to enabling the NodePortLocal feature gate, the value of
-`nplPortRange` can be set in the Antrea Agent configuration through the
-ConfigMap. Ports from a Node will be allocated from the range of ports specified
-in `nplPortRange`. If the value of `nplPortRange` is not specified, the range
-`61000-62000` will be used by default.
+In addition to enabling the NodePortLocal feature gate (if needed), you need to
+ensure that the `nodePortLocal.enable` flag is set to true in the Antrea Agent
+configuration. The `nodePortLocal.portRange` parameter can also be set to change
+the range from which Node ports will be allocated. Otherwise, the default range
+of `61000-62000` will be used by default. When using the NodePortLocal feature,
+your `antrea-agent` ConfigMap should look like this:
+
+```yaml
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: antrea-config-dcfb6k2hkm
+  namespace: kube-system
+data:
+  antrea-agent.conf: |
+    featureGates:
+      # True by default starting with Antrea v1.4
+      # NodePortLocal: true
+    nodePortLocal:
+      enable: true
+      # Uncomment if you need to change the port range.
+      # portRange: 61000-62000
+```
 
 Pods can be selected for `NodePortLocal` by tagging a Service with annotation:
 `nodeportlocal.antrea.io/enabled: "true"`. Consequently, `NodePortLocal` is
 enabled for all the Pods which are selected by the Service through a selector,
 and the ports of these Pods will be reachable through Node ports allocated from
-the `nplPortRange`. The selected Pods will be annotated with the details about
+the port range. The selected Pods will be annotated with the details about
 allocated Node port(s) for the Pod.
 
 For example, given the following Service and Deployment definitions:
@@ -99,6 +119,13 @@ metadata:
 This annotation indicates that port 8080 of the Pod can be reached through port
 61002 of the Node with IP Address 10.10.10.10.
 
+### Usage pre Antrea v1.4
+
+Prior to the Antrea v1.4 minor release, the `nodePortLocal` option group in the
+Antrea Agent configuration did not exist. To enable the NodePortLocal feature,
+one simply needed to enable the feature gate, and the port range could be
+configured using the (now deprecated) `nplPortRange` parameter.
+
 ### Usage pre Antrea v1.2
 
 Prior to the Antrea v1.2 minor release, the NodePortLocal feature suffered from
@@ -141,4 +168,4 @@ mapped.
 ## Limitations
 
 This feature is currently only supported for Nodes running Linux with IPv4
-addresses. Only TCP Service ports are supported.
+addresses. Only TCP & UDP Service ports are supported (not SCTP).

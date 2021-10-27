@@ -15,29 +15,54 @@
 package e2e
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v2"
 )
 
-func TestReplaceFieldValue(t *testing.T) {
+func TestConfigChange(t *testing.T) {
 	content := `
+featureGates:
 #  featureGateField0:
 #field0:
 # field1: abc
+field2:
+  nestedField: 7
 `
-	cs := []configChange{
-		{"featureGateField0", "123", true},
-		{"field0", "456", false},
-		{"field1", "789", false},
+
+	changeField2 := func(content string) string {
+		var cfg interface{}
+		require.NoError(t, yaml.Unmarshal([]byte(content), &cfg))
+		newField := map[string]interface{}{
+			"nestedField":  8,
+			"nestedField2": true,
+		}
+		cfg.(map[interface{}]interface{})["field2"] = newField
+		b, err := yaml.Marshal(&cfg)
+		require.NoError(t, err)
+		return string(b)
+	}
+
+	cgs := []configChange{
+		&configChangeFeatureGate{"featureGateField0", true},
+		&configChangeParam{"field0", "456"},
+		&configChangeParam{"field1", "789"},
+		&configChangeRaw{changeField2},
 	}
 	expected := `
-  featureGateField0: 123
+featureGates:
+  featureGateField0: true
 field0: 456
 field1: 789
+field2:
+  nestedField: 8
+  nestedField2: true
 `
-	for _, c := range cs {
-		content = replaceFieldValue(content, c)
+	for _, cg := range cgs {
+		content = cg.ApplyChange(content)
 	}
-	assert.Equal(t, expected, content)
+	assert.Equal(t, strings.TrimSpace(expected), strings.TrimSpace(content))
 }

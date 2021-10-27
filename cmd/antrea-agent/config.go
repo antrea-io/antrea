@@ -100,7 +100,7 @@ type AgentConfig struct {
 	//                   variable: ANTREA_IPSEC_PSK.
 	// - wireguard:      Enable WireGuard for tunnel traffic encryption.
 	TrafficEncryptionMode string `yaml:"trafficEncryptionMode,omitempty"`
-	// WireGuerd related configurations.
+	// WireGuard related configurations.
 	WireGuard WireGuardConfig `yaml:"wireGuard"`
 	// APIPort is the port for the antrea-agent APIServer to serve on.
 	// Defaults to 10350.
@@ -144,10 +144,10 @@ type AgentConfig struct {
 	// Defaults to "15s". Valid time units are "ns", "us" (or "µs"), "ms", "s",
 	// "m", "h".
 	IdleFlowExportTimeout string `yaml:"idleFlowExportTimeout,omitempty"`
-	// Provide the port range used by NodePortLocal. When the NodePortLocal feature is enabled, a port from that range will be assigned
-	// whenever a Pod's container defines a specific port to be exposed (each container can define a list of ports as pod.spec.containers[].ports),
-	// and all Node traffic directed to that port will be forwarded to the Pod.
+	// Deprecated. Use the NodePortLocal config options instead.
 	NPLPortRange string `yaml:"nplPortRange,omitempty"`
+	// NodePortLocal (NPL) configuration options.
+	NodePortLocal NodePortLocalConfig `yaml:"nodePortLocal,omitempty"`
 	// Provide the address of Kubernetes apiserver, to override any value provided in kubeconfig or InClusterConfig.
 	// Defaults to "". It must be a host string, a host:port pair, or a URL to the base of the apiserver.
 	KubeAPIServerOverride string `yaml:"kubeAPIServerOverride,omitempty"`
@@ -197,6 +197,19 @@ type AntreaProxyConfig struct {
 type WireGuardConfig struct {
 	// The port for the WireGuard to receive traffic. Defaults to 51820.
 	Port int `yaml:"port,omitempty"`
+}
+
+type NodePortLocalConfig struct {
+	// Enable NodePortLocal, a feature used to make Pods reachable using port forwarding on the
+	// host. To enable this feature, you need to set "enable" to true, and ensure that the
+	// NodePortLocal feature gate is also enabled (which is the default).
+	Enable bool `yaml:"enable,omitempty"`
+	// Provide the port range used by NodePortLocal. When the NodePortLocal feature is enabled,
+	// a port from that range will be assigned whenever a Pod's container defines a specific
+	// port to be exposed (each container can define a list of ports as
+	// pod.spec.containers[].ports), and all Node traffic directed to that port will be
+	// forwarded to the Pod.
+	PortRange string `yaml:"portRange,omitempty"`
 }
 
 type EgressConfig struct {

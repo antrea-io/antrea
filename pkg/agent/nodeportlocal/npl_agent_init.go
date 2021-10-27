@@ -23,7 +23,6 @@ import (
 
 	nplk8s "antrea.io/antrea/pkg/agent/nodeportlocal/k8s"
 	"antrea.io/antrea/pkg/agent/nodeportlocal/portcache"
-	"antrea.io/antrea/pkg/agent/nodeportlocal/util"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
@@ -40,12 +39,14 @@ const resyncPeriod = 0 * time.Minute
 // InitializeNPLAgent initializes the NodePortLocal agent.
 // It sets up event handlers to handle Pod add, update and delete events.
 // When a Pod gets created, a free Node port is obtained from the port table cache and a DNAT rule is added to NAT traffic to the Pod's ip:port.
-func InitializeNPLAgent(kubeClient clientset.Interface, informerFactory informers.SharedInformerFactory, portRange, nodeName string) (*nplk8s.NPLController, error) {
-	start, end, err := util.ParsePortsRange(portRange)
-	if err != nil {
-		return nil, fmt.Errorf("error while fetching port range: %v", err)
-	}
-	portTable, err := portcache.NewPortTable(start, end)
+func InitializeNPLAgent(
+	kubeClient clientset.Interface,
+	informerFactory informers.SharedInformerFactory,
+	startPort int,
+	endPort int,
+	nodeName string,
+) (*nplk8s.NPLController, error) {
+	portTable, err := portcache.NewPortTable(startPort, endPort)
 	if err != nil {
 		return nil, fmt.Errorf("error when initializing NodePortLocal port table: %v", err)
 	}
