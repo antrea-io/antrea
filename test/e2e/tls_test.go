@@ -85,12 +85,12 @@ func (data *TestData) configureTLS(t *testing.T, cipherSuites []uint16, tlsMinVe
 	}
 
 	cc := []configChange{
-		{"tlsCipherSuites", cipherSuitesStr, false},
-		{"tlsMinVersion", tlsMinVersion, false},
+		&configChangeParam{"tlsCipherSuites", cipherSuitesStr},
+		&configChangeParam{"tlsMinVersion", tlsMinVersion},
 	}
 	ac := []configChange{
-		{"tlsCipherSuites", cipherSuitesStr, false},
-		{"tlsMinVersion", tlsMinVersion, false},
+		&configChangeParam{"tlsCipherSuites", cipherSuitesStr},
+		&configChangeParam{"tlsMinVersion", tlsMinVersion},
 	}
 	if err := data.mutateAntreaConfigMap(cc, ac, true, true); err != nil {
 		t.Fatalf("Failed to configure Cipher Suites and TLSMinVersion: %v", err)
