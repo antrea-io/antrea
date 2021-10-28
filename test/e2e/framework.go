@@ -1848,6 +1848,10 @@ func (data *TestData) mutateAntreaConfigMap(
 		if err := yaml.Unmarshal([]byte(configMap.Data["antrea-controller.conf"]), &controllerConf); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal Controller config from ConfigMap: %v", err)
 		}
+		// as a convenience, we initialize the FeatureGates map if it is nil
+		if controllerConf.FeatureGates == nil {
+			controllerConf.FeatureGates = make(map[string]bool)
+		}
 		return &controllerConf, nil
 	}
 
@@ -1876,6 +1880,10 @@ func (data *TestData) mutateAntreaConfigMap(
 		var agentConf agentconfig.AgentConfig
 		if err := yaml.Unmarshal([]byte(configMap.Data["antrea-agent.conf"]), &agentConf); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal Agent config from ConfigMap: %v", err)
+		}
+		// as a convenience, we initialize the FeatureGates map if it is nil
+		if agentConf.FeatureGates == nil {
+			agentConf.FeatureGates = make(map[string]bool)
 		}
 		return &agentConf, nil
 	}
