@@ -94,6 +94,7 @@ var allowedPaths = []string{
 	"/validate/clustergroup",
 	"/validate/externalippool",
 	"/validate/egress",
+	"/validate/ippool",
 	"/convert/clustergroup",
 }
 
