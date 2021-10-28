@@ -159,7 +159,7 @@ func (a *SingleIPAllocator) AllocateIP(ip net.IP) error {
 func (a *SingleIPAllocator) AllocateNext() (net.IP, error) {
 	a.mutex.Lock()
 	defer a.mutex.Unlock()
-	if a.count >= a.max {
+	if a.count >= (a.max - len(a.reservedIPs)) {
 		return nil, fmt.Errorf("no available IP")
 	}
 	for i := 0; i < a.max; i++ {
