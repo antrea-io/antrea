@@ -192,7 +192,7 @@ func TestAllocateNextMultiRange(t *testing.T) {
 	allocator := newIPPoolAllocator(poolName, []runtime.Object{&pool})
 
 	// Allocate the 2 available IPs from first range then switch to second range
-	validateAllocationSequence(t, allocator, subnetInfo, []string{"10.2.2.100", "10.2.2.101", "10.2.2.1", "10.2.2.2"})
+	validateAllocationSequence(t, allocator, subnetInfo, []string{"10.2.2.100", "10.2.2.101", "10.2.2.2", "10.2.2.3"})
 }
 
 func TestAllocateNextMultiRangeExausted(t *testing.T) {
@@ -255,7 +255,7 @@ func TestAllocateReleaseSequence(t *testing.T) {
 	allocator := newIPPoolAllocator(poolName, []runtime.Object{&pool})
 
 	// Allocate the single available IPs from first range then 3 IPs from second range
-	validateAllocationSequence(t, allocator, subnetInfo, []string{"2001::1000", "2001::1", "2001::2", "2001::3"})
+	validateAllocationSequence(t, allocator, subnetInfo, []string{"2001::1000", "2001::2", "2001::3", "2001::4"})
 
 	// Release first IP from first range and middle IP from second range
 	for _, ipToRelease := range []string{"2001::1000", "2001::2"} {
@@ -263,5 +263,5 @@ func TestAllocateReleaseSequence(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	validateAllocationSequence(t, allocator, subnetInfo, []string{"2001::1000", "2001::2", "2001::4"})
+	validateAllocationSequence(t, allocator, subnetInfo, []string{"2001::1000", "2001::2", "2001::5"})
 }
