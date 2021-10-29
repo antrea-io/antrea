@@ -52,14 +52,14 @@ func TestWireGuard(t *testing.T) {
 
 	if !providerIsKind {
 		ac := func(config *agentconfig.AgentConfig) {
-			config.TrafficEncapMode = "wireguard"
+			config.TrafficEncryptionMode = "wireguard"
 		}
 		if err := data.mutateAntreaConfigMap(nil, ac, false, true); err != nil {
 			t.Fatalf("Failed to enable WireGuard tunnel: %v", err)
 		}
 		defer func() {
 			ac := func(config *agentconfig.AgentConfig) {
-				config.TrafficEncapMode = "none"
+				config.TrafficEncryptionMode = "none"
 			}
 			if err := data.mutateAntreaConfigMap(nil, ac, false, true); err != nil {
 				t.Fatalf("Failed to disable WireGuard tunnel: %v", err)
