@@ -45,6 +45,7 @@ import (
 	"antrea.io/antrea/pkg/controller/metrics"
 	antreatypes "antrea.io/antrea/pkg/controller/types"
 	"antrea.io/antrea/pkg/ipam/ipallocator"
+	iputil "antrea.io/antrea/pkg/util/ip"
 )
 
 const (
@@ -239,9 +240,16 @@ func (c *EgressController) createOrUpdateIPAllocator(ipPool *egressv1alpha2.Exte
 		var ipAllocator *ipallocator.SingleIPAllocator
 		var err error
 		if ipRange.CIDR != "" {
-			ipAllocator, err = ipallocator.NewCIDRAllocator(ipRange.CIDR)
+			_, ipNet, parseErr := net.ParseCIDR(ipRange.CIDR)
+			if parseErr != nil {
+				klog.ErrorS(err, "Failed to create IPAllocator", "ipRange", ipRange)
+				continue
+			}
+			// exclude broadcast address from allocation
+			reservedIPs := []net.IP{iputil.GetLocalBroadcastIP(ipNet)}
+			ipAllocator, err = ipallocator.NewCIDRAllocator(ipNet, reservedIPs)
 		} else {
-			ipAllocator, err = ipallocator.NewIPRangeAllocator(ipRange.Start, ipRange.End)
+			ipAllocator, err = ipallocator.NewIPRangeAllocator(net.ParseIP(ipRange.Start), net.ParseIP(ipRange.End))
 		}
 		if err != nil {
 			klog.ErrorS(err, "Failed to create IPAllocator", "ipRange", ipRange)

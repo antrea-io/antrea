@@ -19,7 +19,6 @@ package util
 
 import (
 	"bufio"
-	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -427,15 +426,6 @@ func enableHNSOnOVS(hnsNet *hcsshim.HNSNetwork) error {
 		return err
 	}
 	return err
-}
-
-// GetLocalBroadcastIP returns the last IP address in a subnet. This IP is always working as the broadcast address in
-// the subnet on Windows, and an active route entry that uses it as the destination is added by default when a new IP is
-// configured on the interface.
-func GetLocalBroadcastIP(ipNet *net.IPNet) net.IP {
-	lastAddr := make(net.IP, len(ipNet.IP.To4()))
-	binary.BigEndian.PutUint32(lastAddr, binary.BigEndian.Uint32(ipNet.IP.To4())|^binary.BigEndian.Uint32(net.IP(ipNet.Mask).To4()))
-	return lastAddr
 }
 
 // GetDefaultGatewayByInterfaceIndex returns the default gateway configured on the specified interface.

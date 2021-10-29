@@ -22,6 +22,7 @@ import (
 	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
 	crdclientset "antrea.io/antrea/pkg/client/clientset/versioned"
 	"antrea.io/antrea/pkg/ipam/ipallocator"
+	iputil "antrea.io/antrea/pkg/util/ip"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/util/retry"
@@ -57,13 +58,27 @@ func (a *IPPoolAllocator) initIPAllocators(ipPool *v1alpha2.IPPool) (ipallocator
 	// Initialize a list of IP allocators based on pool spec
 	for _, ipRange := range ipPool.Spec.IPRanges {
 		if len(ipRange.CIDR) > 0 {
-			allocator, err := ipallocator.NewCIDRAllocator(ipRange.CIDR)
+			// Reserve gateway address and broadcast address
+			reservedIPs := []net.IP{net.ParseIP(ipRange.SubnetInfo.Gateway)}
+			_, ipNet, err := net.ParseCIDR(ipRange.CIDR)
+			if err != nil {
+				return nil, err
+			}
+
+			size, bits := ipNet.Mask.Size()
+			if int32(size) == ipRange.SubnetInfo.PrefixLength && bits == 32 {
+				// Allocation CIDR covers entire subnet, thus we need
+				// to reserve broadcast IP as well for IPv4
+				reservedIPs = append(reservedIPs, iputil.GetLocalBroadcastIP(ipNet))
+			}
+
+			allocator, err := ipallocator.NewCIDRAllocator(ipNet, reservedIPs)
 			if err != nil {
 				return nil, err
 			}
 			allocators = append(allocators, allocator)
 		} else {
-			allocator, err := ipallocator.NewIPRangeAllocator(ipRange.Start, ipRange.End)
+			allocator, err := ipallocator.NewIPRangeAllocator(net.ParseIP(ipRange.Start), net.ParseIP(ipRange.End))
 			if err != nil {
 				return allocators, err
 			}
