@@ -22,13 +22,18 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func newCIDRAllocator(cidr string) *SingleIPAllocator {
-	allocator, _ := NewCIDRAllocator(cidr)
+func newCIDRAllocator(cidr string, reservedIPs []string) *SingleIPAllocator {
+	_, ipNet, _ := net.ParseCIDR(cidr)
+	var parsedIPs []net.IP
+	for _, ip := range reservedIPs {
+		parsedIPs = append(parsedIPs, net.ParseIP(ip))
+	}
+	allocator, _ := NewCIDRAllocator(ipNet, parsedIPs)
 	return allocator
 }
 
 func newIPRangeAllocator(start, end string) *SingleIPAllocator {
-	allocator, _ := NewIPRangeAllocator(start, end)
+	allocator, _ := NewIPRangeAllocator(net.ParseIP(start), net.ParseIP(end))
 	return allocator
 }
 
@@ -43,17 +48,17 @@ func TestAllocateNext(t *testing.T) {
 	}{
 		{
 			name:        "IPv4-CIDR-prefix-24",
-			ipAllocator: newCIDRAllocator("10.10.10.0/24"),
+			ipAllocator: newCIDRAllocator("10.10.10.0/24", []string{"10.10.10.255"}),
 			wantNum:     254,
 			wantFirst:   net.ParseIP("10.10.10.1"),
 			wantLast:    net.ParseIP("10.10.10.254"),
 		},
 		{
 			name:        "IPv4-CIDR-prefix-30",
-			ipAllocator: newCIDRAllocator("10.10.10.128/30"),
-			wantNum:     2,
+			ipAllocator: newCIDRAllocator("10.10.10.128/30", nil),
+			wantNum:     3,
 			wantFirst:   net.ParseIP("10.10.10.129"),
-			wantLast:    net.ParseIP("10.10.10.130"),
+			wantLast:    net.ParseIP("10.10.10.131"),
 		},
 		{
 			name:        "IPv4-range",
@@ -64,7 +69,7 @@ func TestAllocateNext(t *testing.T) {
 		},
 		{
 			name:        "IPv4-multiple",
-			ipAllocator: MultiIPAllocator{newIPRangeAllocator("1.1.1.10", "1.1.1.20"), newCIDRAllocator("10.10.10.128/30")},
+			ipAllocator: MultiIPAllocator{newIPRangeAllocator("1.1.1.10", "1.1.1.20"), newCIDRAllocator("10.10.10.128/30", []string{"10.10.10.131"})},
 			wantNum:     13,
 			wantFirst:   net.ParseIP("1.1.1.10"),
 			wantLast:    net.ParseIP("10.10.10.130"),
@@ -100,7 +105,7 @@ func TestAllocateIP(t *testing.T) {
 	}{
 		{
 			name:         "IPv4-duplicate",
-			ipAllocator:  newCIDRAllocator("10.10.10.0/24"),
+			ipAllocator:  newCIDRAllocator("10.10.10.0/24", nil),
 			allocatedIP1: net.ParseIP("10.10.10.1"),
 			allocatedIP2: net.ParseIP("10.10.10.1"),
 			wantErr1:     false,
@@ -108,17 +113,25 @@ func TestAllocateIP(t *testing.T) {
 		},
 		{
 			name:         "IPv4-no-duplicate",
-			ipAllocator:  MultiIPAllocator{newIPRangeAllocator("1.1.1.10", "1.1.1.20"), newCIDRAllocator("10.10.10.128/30")},
+			ipAllocator:  MultiIPAllocator{newIPRangeAllocator("1.1.1.10", "1.1.1.20"), newCIDRAllocator("10.10.10.128/30", nil)},
 			allocatedIP1: net.ParseIP("1.1.1.10"),
-			allocatedIP2: net.ParseIP("10.10.10.129"),
+			allocatedIP2: net.ParseIP("10.10.10.130"),
 			wantErr1:     false,
 			wantErr2:     false,
 		},
 		{
 			name:         "IPv4-out-of-scope",
-			ipAllocator:  MultiIPAllocator{newIPRangeAllocator("1.1.1.10", "1.1.1.20"), newCIDRAllocator("10.10.10.128/30")},
+			ipAllocator:  MultiIPAllocator{newIPRangeAllocator("1.1.1.10", "1.1.1.20"), newCIDRAllocator("10.10.10.128/30", []string{"10.10.10.128"})},
 			allocatedIP1: net.ParseIP("1.1.1.21"),
 			allocatedIP2: net.ParseIP("10.10.10.127"),
+			wantErr1:     true,
+			wantErr2:     true,
+		},
+		{
+			name:         "IPv4-reserved",
+			ipAllocator:  MultiIPAllocator{newCIDRAllocator("10.10.10.128/30", []string{"10.10.10.1", "10.10.10.5"})},
+			allocatedIP1: net.ParseIP("10.10.10.1"),
+			allocatedIP2: net.ParseIP("10.10.10.5"),
 			wantErr1:     true,
 			wantErr2:     true,
 		},
@@ -148,11 +161,11 @@ func TestAllocateRelease(t *testing.T) {
 	}{
 		{
 			name:        "IPv4-single",
-			ipAllocator: newCIDRAllocator("10.10.10.0/24"),
+			ipAllocator: newCIDRAllocator("10.10.10.0/24", []string{"10.10.10.1", "10.10.10.255"}),
 		},
 		{
 			name:        "IPv4-multiple",
-			ipAllocator: MultiIPAllocator{newIPRangeAllocator("1.1.1.10", "1.1.1.20"), newCIDRAllocator("10.10.10.128/30")},
+			ipAllocator: MultiIPAllocator{newIPRangeAllocator("1.1.1.10", "1.1.1.20"), newCIDRAllocator("10.10.10.128/30", nil)},
 		},
 	}
 	for _, tt := range tests {
@@ -184,13 +197,13 @@ func TestHas(t *testing.T) {
 	}{
 		{
 			name:        "IPv4-single",
-			ipAllocator: newCIDRAllocator("10.10.10.0/24"),
+			ipAllocator: newCIDRAllocator("10.10.10.0/24", nil),
 			ip:          net.ParseIP("10.10.10.0"),
 			expectedHas: false,
 		},
 		{
 			name:        "IPv4-multiple",
-			ipAllocator: MultiIPAllocator{newIPRangeAllocator("1.1.1.10", "1.1.1.20"), newCIDRAllocator("10.10.10.128/30")},
+			ipAllocator: MultiIPAllocator{newIPRangeAllocator("1.1.1.10", "1.1.1.20"), newCIDRAllocator("10.10.10.128/30", nil)},
 			ip:          net.ParseIP("10.10.10.130"),
 			expectedHas: true,
 		},
@@ -203,6 +216,6 @@ func TestHas(t *testing.T) {
 }
 
 func TestName(t *testing.T) {
-	ma := MultiIPAllocator{newIPRangeAllocator("1.1.1.10", "1.1.1.20"), newCIDRAllocator("10.10.10.128/30")}
+	ma := MultiIPAllocator{newIPRangeAllocator("1.1.1.10", "1.1.1.20"), newCIDRAllocator("10.10.10.128/30", nil)}
 	assert.Equal(t, []string{"1.1.1.10-1.1.1.20", "10.10.10.128/30"}, ma.Names())
 }
