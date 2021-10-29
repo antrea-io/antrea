@@ -24,6 +24,9 @@ import (
 	"k8s.io/klog/v2"
 )
 
+// The devices that should be excluded from Egress.
+var excludeEgressDevices = []string{"kube-ipvs0"}
+
 type localIPDetector struct {
 	mutex         sync.RWMutex
 	localIPs      sets.String
@@ -86,10 +89,28 @@ func (d *localIPDetector) listAndWatchIPAddresses(stopCh <-chan struct{}) {
 		klog.Errorf("Failed to list IP addresses on the Node")
 		return
 	}
+
+	// List existing excluding devices first.
+	excludeLinkIndexes := sets.NewInt()
+	for _, deviceName := range excludeEgressDevices {
+		link, err := netlink.LinkByName(deviceName)
+		if err != nil {
+			if _, ok := err.(netlink.LinkNotFoundError); !ok {
+				klog.ErrorS(err, "Failed to find dev", "deviceName", deviceName)
+			}
+			continue
+		}
+		excludeLinkIndexes.Insert(link.Attrs().Index)
+	}
+
 	ips := sets.NewString()
 	for _, addr := range addresses {
-		ips.Insert(addr.IP.String())
+		// Ignore IP Addresses events of excluded devices.
+		if !excludeLinkIndexes.Has(addr.LinkIndex) {
+			ips.Insert(addr.IP.String())
+		}
 	}
+
 	klog.V(4).Infof("Listed existing IP address: %v", ips)
 	// Find IP addresses removed or added during the period it was not watching and call eventHandlers to process them.
 	addedAddresses, deletedAddresses := func() (sets.String, sets.String) {
@@ -119,6 +140,12 @@ func (d *localIPDetector) listAndWatchIPAddresses(stopCh <-chan struct{}) {
 				return
 			}
 			klog.V(4).Infof("Received IP address update: %v", addrUpdate)
+
+			// Ignore IP Addresses events of excluded devices.
+			if excludeLinkIndexes.Has(addrUpdate.LinkIndex) {
+				continue
+			}
+
 			ip := addrUpdate.LinkAddress.IP.String()
 			d.mutex.Lock()
 			if addrUpdate.NewAddr {
