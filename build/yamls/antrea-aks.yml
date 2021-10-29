@@ -1830,7 +1830,7 @@ spec:
                     owner:
                       properties:
                         pod:
-                          peroperties:
+                          properties:
                             containerID:
                               type: string
                             name:

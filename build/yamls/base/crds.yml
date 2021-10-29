@@ -283,7 +283,7 @@ spec:
                       owner:
                         properties:
                           pod:
-                            peroperties:
+                            properties:
                               name:
                                 type: string
                               namespace:
