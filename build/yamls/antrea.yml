@@ -1778,14 +1778,24 @@ spec:
             type: object
           status:
             properties:
-              usage:
+              ipAddresses:
                 items:
                   properties:
                     ipAddress:
                       type: string
-                    resource:
-                      type: string
-                    state:
+                    owner:
+                      properties:
+                        pod:
+                          peroperties:
+                            containerID:
+                              type: string
+                            name:
+                              type: string
+                            namespace:
+                              type: string
+                          type: object
+                      type: object
+                    phase:
                       type: string
                   type: object
                 type: array
