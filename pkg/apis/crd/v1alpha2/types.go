@@ -337,25 +337,35 @@ type SubnetIPRange struct {
 }
 
 type IPPoolStatus struct {
-	Usage []IPPoolUsage `json:"usage,omitempty"`
+	IPAddresses []IPAddressState `json:"ipAddresses,omitempty"`
 	// TODO: add usage statistics
 }
 
-type IPPoolUsageState string
+type IPAddressPhase string
 
 const (
-	IPPoolUsageStateAllocated    IPPoolUsageState = "Allocated"
-	IPPoolUsageStatePreallocated IPPoolUsageState = "Preallocated"
+	IPAddressPhaseAllocated    IPAddressPhase = "Allocated"
+	IPAddressPhasePreallocated IPAddressPhase = "Preallocated"
 )
 
-type IPPoolUsage struct {
+type IPAddressState struct {
 	// IP Address this entry is tracking
 	IPAddress string `json:"ipAddress"`
 	// Allocation state - either Allocated or Preallocated
-	State IPPoolUsageState `json:"state"`
-	// Resource this IP Address is allocated to
-	Resource string `json:"resource"`
+	Phase IPAddressPhase `json:"phase"`
+	// Owner this IP Address is allocated to
+	Owner IPAddressOwner `json:"owner"`
 	// TODO: add usage statistics (consistent with ExternalIPPool status)
+}
+
+type IPAddressOwner struct {
+	Pod *PodOwner `json:"pod,omitempty"`
+}
+
+type PodOwner struct {
+	Name        string `json:"name"`
+	Namespace   string `json:"namespace"`
+	ContainerID string `json:"containerID"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

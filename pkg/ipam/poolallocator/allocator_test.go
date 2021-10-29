@@ -31,6 +31,14 @@ import (
 	"k8s.io/klog/v2"
 )
 
+var fakePodOwner = crdv1a2.IPAddressOwner{
+	Pod: &crdv1a2.PodOwner{
+		Name:        "",
+		Namespace:   "",
+		ContainerID: "fake-containerID",
+	},
+}
+
 func newIPPoolAllocator(poolName string, initObjects []runtime.Object) *IPPoolAllocator {
 	crdClient := fakeversioned.NewSimpleClientset(initObjects...)
 	allocator, _ := NewIPPoolAllocator(poolName, crdClient)
@@ -41,7 +49,7 @@ func validateAllocationSequence(t *testing.T, allocator *IPPoolAllocator, subnet
 	// Allocate the 2 available IPs from first range then switch to second range
 	for _, expectedIP := range ipList {
 		klog.Info("Validating allocation for ", expectedIP)
-		ip, returnInfo, err := allocator.AllocateNext(crdv1a2.IPPoolUsageStateAllocated, "fakePod")
+		ip, returnInfo, err := allocator.AllocateNext(crdv1a2.IPAddressPhaseAllocated, fakePodOwner)
 		require.NoError(t, err)
 		assert.Equal(t, net.ParseIP(expectedIP), ip)
 		assert.Equal(t, subnetInfo, returnInfo)
@@ -69,19 +77,19 @@ func TestAllocateIP(t *testing.T) {
 	allocator := newIPPoolAllocator(poolName, []runtime.Object{&pool})
 
 	// Allocate specific IP from the range
-	returnInfo, err := allocator.AllocateIP(net.ParseIP("10.2.2.101"), crdv1a2.IPPoolUsageStateAllocated, "fakePod")
+	returnInfo, err := allocator.AllocateIP(net.ParseIP("10.2.2.101"), crdv1a2.IPAddressPhaseAllocated, fakePodOwner)
 	assert.Equal(t, subnetInfo, returnInfo)
 	require.NoError(t, err)
 
 	// Validate IP outside the range is not allocated
-	returnInfo, err = allocator.AllocateIP(net.ParseIP("10.2.2.121"), crdv1a2.IPPoolUsageStateAllocated, "fakePod")
+	returnInfo, err = allocator.AllocateIP(net.ParseIP("10.2.2.121"), crdv1a2.IPAddressPhaseAllocated, fakePodOwner)
 	require.Error(t, err)
 
 	// Make sure IP allocated above is not allocated again
 	validateAllocationSequence(t, allocator, subnetInfo, []string{"10.2.2.100", "10.2.2.102"})
 
 	// Validate error is returned if IP is already allocated
-	_, err = allocator.AllocateIP(net.ParseIP("10.2.2.102"), crdv1a2.IPPoolUsageStateAllocated, "fakePod")
+	_, err = allocator.AllocateIP(net.ParseIP("10.2.2.102"), crdv1a2.IPAddressPhaseAllocated, fakePodOwner)
 	require.Error(t, err)
 
 }
@@ -143,11 +151,11 @@ func TestAllocateConflict(t *testing.T) {
 	// after update conflict, return pool status that simulates simultaneous allocation
 	// by another agent
 	crdClient.AddReactor("get", "ippools", func(action k8stesting.Action) (bool, runtime.Object, error) {
-		if updateCount > 0 && len(pool.Status.Usage) == 0 {
-			pool.Status.Usage = append(pool.Status.Usage, crdv1a2.IPPoolUsage{
+		if updateCount > 0 && len(pool.Status.IPAddresses) == 0 {
+			pool.Status.IPAddresses = append(pool.Status.IPAddresses, crdv1a2.IPAddressState{
 				IPAddress: "10.2.2.100",
-				State:     crdv1a2.IPPoolUsageStateAllocated,
-				Resource:  "another-pod",
+				Phase:     crdv1a2.IPAddressPhaseAllocated,
+				Owner:     crdv1a2.IPAddressOwner{Pod: &crdv1a2.PodOwner{ContainerID: "another-containerID"}},
 			})
 		}
 		return true, &pool, nil
@@ -218,7 +226,7 @@ func TestAllocateNextMultiRangeExausted(t *testing.T) {
 	validateAllocationSequence(t, allocator, subnetInfo, []string{"10.2.2.100", "10.2.2.101", "10.2.2.200"})
 
 	// Allocate next IP and get error
-	_, _, err := allocator.AllocateNext(crdv1a2.IPPoolUsageStateAllocated, "fakePod")
+	_, _, err := allocator.AllocateNext(crdv1a2.IPAddressPhaseAllocated, fakePodOwner)
 	require.Error(t, err)
 }
 
