@@ -17,7 +17,7 @@ Antrea NodeIPAM controller can be executed in scenarios where the
 NodeIPAMController is disabled in kube-controller-manager.
 
 Note that running Antrea NodeIPAM while NodeIPAMController runs within 
-kube-controller-manager would cause conflicts and result with an unstable 
+kube-controller-manager would cause conflicts and result in an unstable 
 behavior.   
 
 ### Configuration
