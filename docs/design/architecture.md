@@ -169,6 +169,9 @@ gateway IP and assigns it to the `antrea-gw0` port, and invokes the
 to allocate IPs from the subnet to all local Pods. A local Pod is assigned an IP
 when the CNI ADD command is received for that Pod.
 
+`NodeIPAMController` can run in `kube-controller-manager` context, or within
+the context of Antrea Controller.
+
 For every remote Node, Antrea Agent adds an OVS flow to send the traffic to that
 Node through the appropriate tunnel. The flow matches the packets' destination
 IP against each Node's subnet.
