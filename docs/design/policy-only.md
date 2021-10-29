@@ -1,4 +1,4 @@
-# Running Antrea In Policy Only Mode
+# Running Antrea in `networkPolicyOnly` Mode
 
 Antrea supports chaining with routed CNI implementations such as EKS CNI. In this mode, Antrea
 enforces Kubernetes NetworkPolicy, and delegates Pod IP management and network connectivity to the
