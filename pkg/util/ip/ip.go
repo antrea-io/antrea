@@ -16,6 +16,7 @@ package ip
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
 	"net"
 	"sort"
@@ -197,4 +198,13 @@ func MustIPv6(s string) net.IP {
 		panic(fmt.Errorf("invalid IPv6 address: %s", s))
 	}
 	return ip
+}
+
+// GetLocalBroadcastIP returns the last IP address in a subnet. This IP is always working as the broadcast address in
+// the subnet on Windows, and an active route entry that uses it as the destination is added by default when a new IP is
+// configured on the interface.
+func GetLocalBroadcastIP(ipNet *net.IPNet) net.IP {
+	lastAddr := make(net.IP, len(ipNet.IP.To4()))
+	binary.BigEndian.PutUint32(lastAddr, binary.BigEndian.Uint32(ipNet.IP.To4())|^binary.BigEndian.Uint32(net.IP(ipNet.Mask).To4()))
+	return lastAddr
 }
