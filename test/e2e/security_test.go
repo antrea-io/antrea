@@ -65,7 +65,8 @@ func testUserProvidedCert(t *testing.T, data *TestData) {
 	// Re-configure antrea-controller to use user-provided cert.
 	// Note antrea-controller must be restarted to take effect.
 	cc := func(config *controllerconfig.ControllerConfig) {
-		config.SelfSignedCert = false
+		config.SelfSignedCert = new(bool)
+		*config.SelfSignedCert = false
 	}
 	if err := data.mutateAntreaConfigMap(cc, nil, false, false); err != nil {
 		t.Fatalf("Failed to update ConfigMap: %v", err)

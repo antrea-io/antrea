@@ -72,9 +72,7 @@ type Options struct {
 
 func newOptions() *Options {
 	return &Options{
-		config: &agentconfig.AgentConfig{
-			EnablePrometheusMetrics: true,
-		},
+		config: &agentconfig.AgentConfig{},
 	}
 }
 
@@ -225,6 +223,10 @@ func (o *Options) setDefaults() {
 	}
 	if o.config.ClusterMembershipPort == 0 {
 		o.config.ClusterMembershipPort = apis.AntreaAgentClusterMembershipPort
+	}
+	if o.config.EnablePrometheusMetrics == nil {
+		o.config.EnablePrometheusMetrics = new(bool)
+		*o.config.EnablePrometheusMetrics = true
 	}
 	if o.config.WireGuard.Port == 0 {
 		o.config.WireGuard.Port = apis.WireGuardListenPort

@@ -177,7 +177,7 @@ func run(o *Options) error {
 	var tierMirroringController *crdmirroring.Controller
 	var cgMirroringController *crdmirroring.Controller
 	var eeMirroringController *crdmirroring.Controller
-	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) && o.config.LegacyCRDMirroring {
+	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) && *o.config.LegacyCRDMirroring {
 		anpMirroringHandler := crdhandler.NewNetworkPolicyHandler(anpInformer.Lister(),
 			legacyANPInformer.Lister(),
 			crdClient,
@@ -241,7 +241,7 @@ func run(o *Options) error {
 	}
 
 	var traceflowMirroringController *crdmirroring.Controller
-	if features.DefaultFeatureGate.Enabled(features.Traceflow) && o.config.LegacyCRDMirroring {
+	if features.DefaultFeatureGate.Enabled(features.Traceflow) && *o.config.LegacyCRDMirroring {
 		tfMirroringHandler := crdhandler.NewTraceflowHandler(tfInformer.Lister(),
 			legacyTFInformer.Lister(),
 			crdClient.CrdV1alpha1().Traceflows(),
@@ -268,7 +268,7 @@ func run(o *Options) error {
 		client,
 		aggregatorClient,
 		apiExtensionClient,
-		o.config.SelfSignedCert,
+		*o.config.SelfSignedCert,
 		o.config.APIPort,
 		addressGroupStore,
 		appliedToGroupStore,
@@ -281,7 +281,7 @@ func run(o *Options) error {
 		networkPolicyStatusController,
 		egressController,
 		statsAggregator,
-		o.config.EnablePrometheusMetrics,
+		*o.config.EnablePrometheusMetrics,
 		cipherSuites,
 		cipher.TLSVersionMap[o.config.TLSMinVersion])
 	if err != nil {
@@ -326,7 +326,7 @@ func run(o *Options) error {
 		go statsAggregator.Run(stopCh)
 	}
 
-	if o.config.EnablePrometheusMetrics {
+	if *o.config.EnablePrometheusMetrics {
 		metrics.InitializePrometheusMetrics()
 	}
 
@@ -355,7 +355,7 @@ func run(o *Options) error {
 		}
 	}
 
-	if o.config.LegacyCRDMirroring {
+	if *o.config.LegacyCRDMirroring {
 		if features.DefaultFeatureGate.Enabled(features.Traceflow) {
 			go traceflowMirroringController.Run(stopCh)
 		}

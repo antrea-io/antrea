@@ -64,7 +64,7 @@ type Options struct {
 
 func newOptions() *Options {
 	return &Options{
-		config: new(flowaggregatorconfig.FlowAggregatorConfig),
+		config: &flowaggregatorconfig.FlowAggregatorConfig{},
 	}
 }
 

@@ -47,11 +47,7 @@ type Options struct {
 
 func newOptions() *Options {
 	return &Options{
-		config: &controllerconfig.ControllerConfig{
-			EnablePrometheusMetrics: true,
-			SelfSignedCert:          true,
-			LegacyCRDMirroring:      true,
-		},
+		config: &controllerconfig.ControllerConfig{},
 	}
 }
 
@@ -143,6 +139,18 @@ func (o *Options) loadConfigFromFile() error {
 func (o *Options) setDefaults() {
 	if o.config.APIPort == 0 {
 		o.config.APIPort = apis.AntreaControllerAPIPort
+	}
+	if o.config.EnablePrometheusMetrics == nil {
+		o.config.EnablePrometheusMetrics = new(bool)
+		*o.config.EnablePrometheusMetrics = true
+	}
+	if o.config.SelfSignedCert == nil {
+		o.config.SelfSignedCert = new(bool)
+		*o.config.SelfSignedCert = true
+	}
+	if o.config.LegacyCRDMirroring == nil {
+		o.config.LegacyCRDMirroring = new(bool)
+		*o.config.LegacyCRDMirroring = true
 	}
 	if o.config.NodeIPAM.NodeCIDRMaskSizeIPv4 == 0 {
 		o.config.NodeIPAM.NodeCIDRMaskSizeIPv4 = ipamIPv4MaskDefault
