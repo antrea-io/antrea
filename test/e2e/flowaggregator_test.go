@@ -118,6 +118,7 @@ const (
 	testIngressRuleName            = "test-ingress-rule-name"
 	testEgressRuleName             = "test-egress-rule-name"
 	iperfTimeSec                   = 12
+	retryLimit                     = 3
 )
 
 var (
@@ -211,9 +212,9 @@ func testHelper(t *testing.T, data *TestData, podAIPs, podBIPs, podCIPs, podDIPs
 			}
 		}()
 		if !isIPv6 {
-			checkRecordsForFlows(t, data, podAIPs.ipv4.String(), podBIPs.ipv4.String(), isIPv6, true, false, true, false, checkBandwidth)
+			checkRecordsForFlowsWithRetry(t, data, podAIPs.ipv4.String(), podBIPs.ipv4.String(), isIPv6, true, false, true, false, checkBandwidth)
 		} else {
-			checkRecordsForFlows(t, data, podAIPs.ipv6.String(), podBIPs.ipv6.String(), isIPv6, true, false, true, false, checkBandwidth)
+			checkRecordsForFlowsWithRetry(t, data, podAIPs.ipv6.String(), podBIPs.ipv6.String(), isIPv6, true, false, true, false, checkBandwidth)
 		}
 	})
 
@@ -337,9 +338,9 @@ func testHelper(t *testing.T, data *TestData, podAIPs, podBIPs, podCIPs, podDIPs
 			}
 		}()
 		if !isIPv6 {
-			checkRecordsForFlows(t, data, podAIPs.ipv4.String(), podCIPs.ipv4.String(), isIPv6, false, false, false, true, checkBandwidth)
+			checkRecordsForFlowsWithRetry(t, data, podAIPs.ipv4.String(), podCIPs.ipv4.String(), isIPv6, false, false, false, true, checkBandwidth)
 		} else {
-			checkRecordsForFlows(t, data, podAIPs.ipv6.String(), podCIPs.ipv6.String(), isIPv6, false, false, false, true, checkBandwidth)
+			checkRecordsForFlowsWithRetry(t, data, podAIPs.ipv6.String(), podCIPs.ipv6.String(), isIPv6, false, false, false, true, checkBandwidth)
 		}
 	})
 
@@ -480,9 +481,9 @@ func testHelper(t *testing.T, data *TestData, podAIPs, podBIPs, podCIPs, podDIPs
 		// For IPv4-only and IPv6-only cluster, IP family of Service IP will be same as Pod IPs.
 		isServiceIPv6 := net.ParseIP(svcB.Spec.ClusterIP).To4() == nil
 		if isServiceIPv6 {
-			checkRecordsForFlows(t, data, podAIPs.ipv6.String(), svcB.Spec.ClusterIP, isServiceIPv6, true, true, false, false, checkBandwidth)
+			checkRecordsForFlowsWithRetry(t, data, podAIPs.ipv6.String(), svcB.Spec.ClusterIP, isServiceIPv6, true, true, false, false, checkBandwidth)
 		} else {
-			checkRecordsForFlows(t, data, podAIPs.ipv4.String(), svcB.Spec.ClusterIP, isServiceIPv6, true, true, false, false, checkBandwidth)
+			checkRecordsForFlowsWithRetry(t, data, podAIPs.ipv4.String(), svcB.Spec.ClusterIP, isServiceIPv6, true, true, false, false, checkBandwidth)
 		}
 	})
 
@@ -494,50 +495,112 @@ func testHelper(t *testing.T, data *TestData, podAIPs, podBIPs, podCIPs, podDIPs
 		// For IPv4-only and IPv6-only cluster, IP family of Service IP will be same as Pod IPs.
 		isServiceIPv6 := net.ParseIP(svcC.Spec.ClusterIP).To4() == nil
 		if isServiceIPv6 {
-			checkRecordsForFlows(t, data, podAIPs.ipv6.String(), svcC.Spec.ClusterIP, isServiceIPv6, false, true, false, false, checkBandwidth)
+			checkRecordsForFlowsWithRetry(t, data, podAIPs.ipv6.String(), svcC.Spec.ClusterIP, isServiceIPv6, false, true, false, false, checkBandwidth)
 		} else {
-			checkRecordsForFlows(t, data, podAIPs.ipv4.String(), svcC.Spec.ClusterIP, isServiceIPv6, false, true, false, false, checkBandwidth)
+			checkRecordsForFlowsWithRetry(t, data, podAIPs.ipv4.String(), svcC.Spec.ClusterIP, isServiceIPv6, false, true, false, false, checkBandwidth)
 		}
 	})
 }
 
-func checkRecordsForFlows(t *testing.T, data *TestData, srcIP string, dstIP string, isIPv6 bool, isIntraNode bool, checkService bool, checkK8sNetworkPolicy bool, checkAntreaNetworkPolicy bool, checkBandwidth bool) {
-	timeStart := time.Now()
-	timeStartSec := timeStart.Unix()
-	var cmdStr string
-	if !isIPv6 {
-		cmdStr = fmt.Sprintf("iperf3 -c %s -t %d", dstIP, iperfTimeSec)
-	} else {
-		cmdStr = fmt.Sprintf("iperf3 -6 -c %s -t %d", dstIP, iperfTimeSec)
-	}
-	stdout, _, err := data.runCommandFromPod(testNamespace, "perftest-a", "perftool", []string{"bash", "-c", cmdStr})
-	if err != nil {
-		t.Errorf("Error when running iperf3 client: %v", err)
-	}
-	bwSlice, srcPort := getBandwidthAndSourcePort(stdout)
-	require.Equal(t, 2, len(bwSlice), "bandwidth value and / or bandwidth unit are not available")
-	// bandwidth from iperf output
-	bandwidthInFloat, err := strconv.ParseFloat(bwSlice[0], 64)
-	require.NoErrorf(t, err, "Error when converting iperf bandwidth %s to float64 type", bwSlice[0])
+func checkRecordsForFlowsWithRetry(t *testing.T, data *TestData, srcIP string, dstIP string, isIPv6 bool, isIntraNode bool, checkService bool, checkK8sNetworkPolicy bool, checkAntreaNetworkPolicy bool, checkBandwidth bool) {
+	tryTimes := 0
 	var bandwidthInMbps float64
-	if strings.Contains(bwSlice[1], "Mbits") {
-		bandwidthInMbps = bandwidthInFloat
-	} else if strings.Contains(bwSlice[1], "Gbits") {
-		bandwidthInMbps = bandwidthInFloat * float64(1024)
-	} else {
-		t.Fatalf("Unit of the traffic bandwidth reported by iperf should either be Mbits or Gbits, failing the test.")
-	}
-
-	collectorOutput, recordSlices := getCollectorOutput(t, srcIP, dstIP, srcPort, timeStart, checkService, true, isIPv6)
-	// Iterate over recordSlices and build some results to test with expected results
-	dataRecordsCount := 0
-	var octetTotalCount uint64
+	var timeStart time.Time
+	var timeStartSec int64
+	var srcPort string
+	var collectorOutput string
+	var recordSlices []string
 	src, dst := matchSrcAndDstAddress(srcIP, dstIP, checkService, isIPv6)
+	for {
+		tryTimes++
+		timeStart = time.Now()
+		timeStartSec = timeStart.Unix()
+		var cmdStr string
+		if !isIPv6 {
+			cmdStr = fmt.Sprintf("iperf3 -c %s -t %d", dstIP, iperfTimeSec)
+		} else {
+			cmdStr = fmt.Sprintf("iperf3 -6 -c %s -t %d", dstIP, iperfTimeSec)
+		}
+		stdout, _, err := data.runCommandFromPod(testNamespace, "perftest-a", "perftool", []string{"bash", "-c", cmdStr})
+		if err != nil {
+			if tryTimes < retryLimit {
+				t.Logf("Error when running iperf3 client: %v, retrying", err)
+				continue
+			}
+			t.Fatalf("Error when running iperf3 client: %v, failing the tests", err)
+		}
+		bwSlice, srcPort := getBandwidthAndSourcePort(stdout)
+		if len(bwSlice) != 2 {
+			if tryTimes < retryLimit {
+				t.Logf("bandwidth value and / or bandwidth unit are not available, retrying")
+				continue
+			}
+			t.Fatalf("bandwidth value and / or bandwidth unit are not available, failing the test")
+		}
+		// bandwidth from iperf output
+		bandwidthInFloat, err := strconv.ParseFloat(bwSlice[0], 64)
+		if err != nil {
+			if tryTimes < retryLimit {
+				t.Logf("Error when converting iperf bandwidth %s to float64 type, retrying", bwSlice[0])
+				continue
+
+			}
+			t.Fatalf("Error when converting iperf bandwidth %s to float64 type, failing the test", bwSlice[0])
+		}
+		if strings.Contains(bwSlice[1], "Mbits") {
+			bandwidthInMbps = bandwidthInFloat
+		} else if strings.Contains(bwSlice[1], "Gbits") {
+			bandwidthInMbps = bandwidthInFloat * float64(1024)
+		} else {
+			if tryTimes < retryLimit {
+				t.Logf("Unit of the traffic bandwidth reported by iperf should either be Mbits or Gbits, retrying")
+				continue
+			}
+			t.Fatalf("Unit of the traffic bandwidth reported by iperf should either be Mbits or Gbits, failing the test")
+		}
+		collectorOutput, recordSlices = getCollectorOutput(t, srcIP, dstIP, srcPort, timeStart, checkService, true, isIPv6)
+		dataRecordsCount := 0
+		includingPodLabels := true
+		for _, record := range recordSlices {
+			// Check the source port along with source and destination IPs as there
+			// are flow records for control flows during the iperf with same IPs
+			// and destination port.
+			// Check the export time as collector may have flow records for previous tries.
+			exportTime := int64(getUnit64FieldFromRecord(t, record, "flowEndSeconds"))
+			if strings.Contains(record, src) && strings.Contains(record, dst) && strings.Contains(record, srcPort) && exportTime >= timeStartSec {
+				dataRecordsCount = dataRecordsCount + 1
+				includingPodLabels = includingPodLabels && strings.Contains(record, fmt.Sprintf("{\"antrea-e2e\":\"%s\",\"app\":\"perftool\"}", "perftest-a"))
+				if isIntraNode {
+					includingPodLabels = includingPodLabels && strings.Contains(record, fmt.Sprintf("{\"antrea-e2e\":\"%s\",\"app\":\"perftool\"}", "perftest-b"))
+				} else {
+					includingPodLabels = includingPodLabels && strings.Contains(record, fmt.Sprintf("{\"antrea-e2e\":\"%s\",\"app\":\"perftool\"}", "perftest-c"))
+				}
+			}
+		}
+		if dataRecordsCount < expectedNumDataRecords {
+			if tryTimes < retryLimit {
+				t.Logf("IPFIX collector didn't receive expected number of flow records, retrying")
+				continue
+			}
+			t.Fatalf("IPFIX collector should receive expected number of flow records, failing the test. Considered records: %s \n Collector output: %s", recordSlices, collectorOutput)
+		}
+		if !includingPodLabels {
+			if tryTimes < retryLimit {
+				t.Logf("Record does not have correct Pod labels, retrying")
+				continue
+			}
+			t.Fatalf("Record does not have correct Pod labels, failing the test")
+		}
+		break
+	}
+	var octetTotalCount uint64
+	dataRecordsCount := 0
 	for _, record := range recordSlices {
 		// Check the source port along with source and destination IPs as there
-		// are flow records for control flows during the iperf  with same IPs
+		// are flow records for control flows during the iperf with same IPs
 		// and destination port.
-		if strings.Contains(record, src) && strings.Contains(record, dst) && strings.Contains(record, srcPort) {
+		exportTime := int64(getUnit64FieldFromRecord(t, record, "flowEndSeconds"))
+		if strings.Contains(record, src) && strings.Contains(record, dst) && strings.Contains(record, srcPort) && exportTime >= timeStartSec {
 			dataRecordsCount = dataRecordsCount + 1
 			// Check if record has both Pod name of source and destination Pod.
 			if isIntraNode {
