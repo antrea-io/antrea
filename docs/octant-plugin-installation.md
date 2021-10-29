@@ -74,20 +74,20 @@ detailed installation instructions.
 
 You can follow the steps listed below to install octant and antrea-octant-plugin on linux.
 
-1. Get and install Octant v0.16.1.
+1. Get and install Octant v0.24.0.
 
-    Depending on your linux operating system, to install Octant v0.16.1, you can use either
+    Depending on your linux operating system, to install Octant v0.24.0, you can use either
 
     ```bash
-    wget https://github.com/vmware-tanzu/octant/releases/download/v0.16.1/octant_0.16.1_Linux-64bit.deb
-    dpkg -i octant_0.16.1_Linux-64bit.deb
+    wget https://github.com/vmware-tanzu/octant/releases/download/v0.24.0/octant_0.24.0_Linux-64bit.deb
+    dpkg -i octant_0.24.0_Linux-64bit.deb
     ```
 
     or
 
     ```bash
-    wget https://github.com/vmware-tanzu/octant/releases/download/v0.16.1/octant_0.16.1_Linux-64bit.rpm
-    rpm -i octant_0.16.1_Linux-64bit.rpm
+    wget https://github.com/vmware-tanzu/octant/releases/download/v0.24.0/octant_0.24.0_Linux-64bit.rpm
+    rpm -i octant_0.24.0_Linux-64bit.rpm
     ```
 
 2. Export your kubeconfig path (file location depends on your setup) to environment variable $KUBECONFIG,
