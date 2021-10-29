@@ -8,6 +8,14 @@ manifest.
 
 ## Ensuring requirements are satisfied
 
+### NodeIPAM
+
+Antrea relies on `NodeIPAM` for per-Node CIDR allocation. `NodeIPAM` can run
+within the Kubernetes `kube-controller-manager`, or within the Antrea
+Controller.
+
+#### NodeIPAM within kube-controller-manager
+
 When using `kubeadm` to create the Kubernetes cluster, passing
 `--pod-network-cidr=<CIDR Range for Pods>` to `kubeadm init` will enable
 `NodeIpamController`. Clusters created with kubeadm will always have
@@ -28,6 +36,13 @@ with the following flags:
 * To enable masquerading of traffic for Service cluster IP via iptables,
 `kube-proxy` should be started with the `--cluster-cidr=<CIDR Range for Pods>`
 flag.
+
+#### NodeIPAM within Antrea Controller
+
+For further info about running NodeIPAM within Antrea Controller, see
+[Antrea IPAM Capabilities](antrea-ipam.md)
+
+### Open vSwitch
 
 As for OVS, when using the built-in kernel module, kernel version >= 4.6 is
 required. On the other hand, when building it from OVS sources, OVS
