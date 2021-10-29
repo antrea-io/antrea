@@ -219,6 +219,12 @@ extended, but cannot be shrunk if already assigned to a resource.
 Traditional `Subnet per Node` IPAM will continue to be used for resources without IP pool
 annotation, or when `AntreaIPAM` feature is disabled.
 
+#### Requirements for this Feature
+
+In Antrea 1.4, AntreaIPAM can only work with Linux+IPv4, system OVSDatapathType and
+noEncap, noSNAT mode.
+AntreaIPAM is only verified with other FeatureGates at default state.
+
 Usage example:
 
 ```yaml
