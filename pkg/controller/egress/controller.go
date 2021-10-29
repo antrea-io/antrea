@@ -246,10 +246,10 @@ func (c *EgressController) createOrUpdateIPAllocator(ipPool *egressv1alpha2.Exte
 				continue
 			}
 			// exclude broadcast address from allocation
-			reservedIPs := []string{iputil.GetLocalBroadcastIP(ipNet).String()}
-			ipAllocator, err = ipallocator.NewCIDRAllocator(ipRange.CIDR, reservedIPs)
+			reservedIPs := []net.IP{iputil.GetLocalBroadcastIP(ipNet)}
+			ipAllocator, err = ipallocator.NewCIDRAllocator(ipNet, reservedIPs)
 		} else {
-			ipAllocator, err = ipallocator.NewIPRangeAllocator(ipRange.Start, ipRange.End)
+			ipAllocator, err = ipallocator.NewIPRangeAllocator(net.ParseIP(ipRange.Start), net.ParseIP(ipRange.End))
 		}
 		if err != nil {
 			klog.ErrorS(err, "Failed to create IPAllocator", "ipRange", ipRange)

@@ -59,7 +59,7 @@ func (a *IPPoolAllocator) initIPAllocators(ipPool *v1alpha2.IPPool) (ipallocator
 	for _, ipRange := range ipPool.Spec.IPRanges {
 		if len(ipRange.CIDR) > 0 {
 			// Reserve gateway address and broadcast address
-			reservedIPs := []string{ipRange.SubnetInfo.Gateway}
+			reservedIPs := []net.IP{net.ParseIP(ipRange.SubnetInfo.Gateway)}
 			_, ipNet, err := net.ParseCIDR(ipRange.CIDR)
 			if err != nil {
 				return nil, err
@@ -69,16 +69,16 @@ func (a *IPPoolAllocator) initIPAllocators(ipPool *v1alpha2.IPPool) (ipallocator
 			if int32(size) == ipRange.SubnetInfo.PrefixLength && bits == 32 {
 				// Allocation CIDR covers entire subnet, thus we need
 				// to reserve broadcast IP as well for IPv4
-				reservedIPs = append(reservedIPs, iputil.GetLocalBroadcastIP(ipNet).String())
+				reservedIPs = append(reservedIPs, iputil.GetLocalBroadcastIP(ipNet))
 			}
 
-			allocator, err := ipallocator.NewCIDRAllocator(ipRange.CIDR, reservedIPs)
+			allocator, err := ipallocator.NewCIDRAllocator(ipNet, reservedIPs)
 			if err != nil {
 				return nil, err
 			}
 			allocators = append(allocators, allocator)
 		} else {
-			allocator, err := ipallocator.NewIPRangeAllocator(ipRange.Start, ipRange.End)
+			allocator, err := ipallocator.NewIPRangeAllocator(net.ParseIP(ipRange.Start), net.ParseIP(ipRange.End))
 			if err != nil {
 				return allocators, err
 			}

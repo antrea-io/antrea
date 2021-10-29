@@ -54,53 +54,36 @@ type SingleIPAllocator struct {
 }
 
 // NewCIDRAllocator creates an IPAllocator based on the provided CIDR.
-func NewCIDRAllocator(cidr string, reservedIPs []string) (*SingleIPAllocator, error) {
-	ip, ipNet, err := net.ParseCIDR(cidr)
-	if err != nil {
-		return nil, err
-	}
-	base := utilnet.BigForIP(ip)
+func NewCIDRAllocator(cidr *net.IPNet, reservedIPs []net.IP) (*SingleIPAllocator, error) {
+	base := utilnet.BigForIP(cidr.IP)
 	// Start from "x.x.x.1".
 	base.Add(base, big.NewInt(1))
-	max := utilnet.RangeSize(ipNet) - 1
+	max := utilnet.RangeSize(cidr) - 1
 	if max < 0 {
-		return nil, fmt.Errorf("no available IP in %s", cidr)
+		return nil, fmt.Errorf("no available IP in %s", cidr.String())
 	}
 	// In case a big range occupies too much memory, allow at most 65536 IP for each IP range.
 	if max > 65536 {
 		max = 65536
 	}
 
-	var parsedReservedIPs []net.IP
-	for _, reservedIP := range reservedIPs {
-		parsedReservedIPs = append(parsedReservedIPs, net.ParseIP(reservedIP))
-	}
-
 	allocator := &SingleIPAllocator{
-		ipRangeStr:  cidr,
+		ipRangeStr:  cidr.String(),
 		base:        base,
 		max:         int(max),
 		allocated:   big.NewInt(0),
 		count:       0,
-		reservedIPs: parsedReservedIPs,
+		reservedIPs: reservedIPs,
 	}
 	return allocator, nil
 }
 
 // NewIPRangeAllocator creates an IPAllocator based on the provided start IP and end IP.
 // The start IP and end IP are inclusive.
-func NewIPRangeAllocator(startIP, endIP string) (*SingleIPAllocator, error) {
-	ipRangeStr := fmt.Sprintf("%s-%s", startIP, endIP)
-	ip := net.ParseIP(startIP)
-	if ip == nil {
-		return nil, fmt.Errorf("invalid start IP %s", startIP)
-	}
-	base := utilnet.BigForIP(ip)
-	ip = net.ParseIP(endIP)
-	if ip == nil {
-		return nil, fmt.Errorf("invalid end IP %s", endIP)
-	}
-	offset := big.NewInt(0).Sub(utilnet.BigForIP(ip), base).Int64()
+func NewIPRangeAllocator(startIP, endIP net.IP) (*SingleIPAllocator, error) {
+	ipRangeStr := fmt.Sprintf("%s-%s", startIP.String(), endIP.String())
+	base := utilnet.BigForIP(startIP)
+	offset := big.NewInt(0).Sub(utilnet.BigForIP(endIP), base).Int64()
 	if offset < 0 {
 		return nil, fmt.Errorf("invalid IP range %s", ipRangeStr)
 	}

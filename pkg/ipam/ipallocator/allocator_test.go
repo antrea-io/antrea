@@ -23,12 +23,17 @@ import (
 )
 
 func newCIDRAllocator(cidr string, reservedIPs []string) *SingleIPAllocator {
-	allocator, _ := NewCIDRAllocator(cidr, reservedIPs)
+	_, ipNet, _ := net.ParseCIDR(cidr)
+	var parsedIPs []net.IP
+	for _, ip := range reservedIPs {
+		parsedIPs = append(parsedIPs, net.ParseIP(ip))
+	}
+	allocator, _ := NewCIDRAllocator(ipNet, parsedIPs)
 	return allocator
 }
 
 func newIPRangeAllocator(start, end string) *SingleIPAllocator {
-	allocator, _ := NewIPRangeAllocator(start, end)
+	allocator, _ := NewIPRangeAllocator(net.ParseIP(start), net.ParseIP(end))
 	return allocator
 }
 
