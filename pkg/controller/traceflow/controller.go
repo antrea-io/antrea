@@ -289,6 +289,7 @@ func (c *Controller) startTraceflow(tf *crdv1alpha1.Traceflow) error {
 	return err
 }
 
+// checkTraceflowStatus is only called for Traceflows in the Running phase
 func (c *Controller) checkTraceflowStatus(tf *crdv1alpha1.Traceflow) error {
 	succeeded := false
 	if tf.Spec.LiveTraffic && tf.Spec.DroppedOnly {
@@ -338,12 +339,20 @@ func (c *Controller) checkTraceflowStatus(tf *crdv1alpha1.Traceflow) error {
 		return c.updateTraceflowStatus(tf, crdv1alpha1.Succeeded, "", 0)
 	}
 
-	timeoutSeconds := int64(tf.Spec.Timeout)
-	if timeoutSeconds == 0 {
-		timeoutSeconds = int64(defaultTimeoutDuration.Seconds())
+	var timeout time.Duration
+	if tf.Spec.Timeout != 0 {
+		timeout = time.Duration(tf.Spec.Timeout) * time.Second
+	} else {
+		timeout = defaultTimeoutDuration
 	}
-	// CreationTimestamp is of second accuracy.
-	if time.Now().Unix() > tf.CreationTimestamp.Unix()+timeoutSeconds {
+	startTime := tf.Status.StartTime.Time
+	if startTime.IsZero() {
+		// a fallback that should not be needed in general since we are in the Running phase
+		// when upgrading Antrea from a previous version, the field would be empty
+		klog.V(2).InfoS("StartTime field in Traceflow Status should not be empty", "Traceflow", klog.KObj(tf))
+		startTime = tf.CreationTimestamp.Time
+	}
+	if startTime.Add(timeout).Before(time.Now()) {
 		c.deallocateTagForTF(tf)
 		return c.updateTraceflowStatus(tf, crdv1alpha1.Failed, traceflowTimeout, 0)
 	}
@@ -353,6 +362,9 @@ func (c *Controller) checkTraceflowStatus(tf *crdv1alpha1.Traceflow) error {
 func (c *Controller) updateTraceflowStatus(tf *crdv1alpha1.Traceflow, phase crdv1alpha1.TraceflowPhase, reason string, dataPlaneTag uint8) error {
 	update := tf.DeepCopy()
 	update.Status.Phase = phase
+	if phase == crdv1alpha1.Running && tf.Status.StartTime.IsZero() {
+		update.Status.StartTime = metav1.Now()
+	}
 	update.Status.DataplaneTag = dataPlaneTag
 	if reason != "" {
 		update.Status.Reason = reason

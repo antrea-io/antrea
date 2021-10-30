@@ -23,6 +23,7 @@ import (
 type TraceflowPhase string
 
 const (
+	// Pending is not used anymore
 	Pending   TraceflowPhase = "Pending"
 	Running   TraceflowPhase = "Running"
 	Succeeded TraceflowPhase = "Succeeded"
@@ -221,6 +222,8 @@ type TraceflowStatus struct {
 	Phase TraceflowPhase `json:"phase,omitempty"`
 	// Reason is a message indicating the reason of the traceflow's current phase.
 	Reason string `json:"reason,omitempty"`
+	// StartTime is the time at which the Traceflow as started by the Antrea Controller.
+	StartTime metav1.Time `json:"startTime,omitempty"`
 	// DataplaneTag is a tag to identify a traceflow session across Nodes.
 	DataplaneTag uint8 `json:"dataplaneTag,omitempty"`
 	// Results is the collection of all observations on different nodes.
