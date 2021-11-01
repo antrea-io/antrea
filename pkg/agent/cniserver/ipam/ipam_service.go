@@ -46,10 +46,9 @@ type IPAMConfig struct {
 }
 
 type IPAMDriver interface {
-	Owns(args *invoke.Args, k8sArgs *argtypes.K8sArgs, networkConfig []byte) bool
-	Add(args *invoke.Args, networkConfig []byte) (*current.Result, error)
-	Del(args *invoke.Args, networkConfig []byte) error
-	Check(args *invoke.Args, networkConfig []byte) error
+	Add(args *invoke.Args, k8sArgs *argtypes.K8sArgs, networkConfig []byte) (bool, *current.Result, error)
+	Del(args *invoke.Args, k8sArgs *argtypes.K8sArgs, networkConfig []byte) (bool, error)
+	Check(args *invoke.Args, k8sArgs *argtypes.K8sArgs, networkConfig []byte) (bool, error)
 }
 
 var ipamResults = sync.Map{}
@@ -87,16 +86,16 @@ func ExecIPAMAdd(cniArgs *cnipb.CniCmdArgs, k8sArgs *argtypes.K8sArgs, ipamType 
 
 	drivers := ipamDrivers[ipamType]
 	for _, driver := range drivers {
-		// Detect a driver that owns this request(f.e. based on ipam annotation
-		// of namespace or pod that initiated the request
-		if driver.Owns(args, k8sArgs, cniArgs.NetworkConfiguration) {
-			result, err := driver.Add(args, cniArgs.NetworkConfiguration)
-			if err != nil {
-				return nil, err
-			}
-			ipamResults.Store(resultKey, result)
-			return result, nil
+		owns, result, err := driver.Add(args, k8sArgs, cniArgs.NetworkConfiguration)
+		if !owns {
+			// the driver does not own this request - continue to next one
+			continue
 		}
+		if err != nil {
+			return nil, err
+		}
+		ipamResults.Store(resultKey, result)
+		return result, nil
 	}
 
 	return nil, fmt.Errorf("No suitable IPAM driver found")
@@ -106,16 +105,16 @@ func ExecIPAMDelete(cniArgs *cnipb.CniCmdArgs, k8sArgs *argtypes.K8sArgs, ipamTy
 	args := argsFromEnv(cniArgs)
 	drivers := ipamDrivers[ipamType]
 	for _, driver := range drivers {
-		// Detect a driver that owns this request(f.e. based on ipam annotation
-		// of namespace or pod that initiated the request
-		if driver.Owns(args, k8sArgs, cniArgs.NetworkConfiguration) {
-			err := driver.Del(args, cniArgs.NetworkConfiguration)
-			if err != nil {
-				return err
-			}
-			ipamResults.Delete(resultKey)
-			return nil
+		owns, err := driver.Del(args, k8sArgs, cniArgs.NetworkConfiguration)
+		if !owns {
+			// the driver does not own this request - continue to next one
+			continue
 		}
+		if err != nil {
+			return err
+		}
+		ipamResults.Delete(resultKey)
+		return nil
 	}
 	return fmt.Errorf("No suitable IPAM driver found")
 }
@@ -124,11 +123,14 @@ func ExecIPAMCheck(cniArgs *cnipb.CniCmdArgs, k8sArgs *argtypes.K8sArgs, ipamTyp
 	args := argsFromEnv(cniArgs)
 	drivers := ipamDrivers[ipamType]
 	for _, driver := range drivers {
-		// Detect a driver that owns this request(f.e. based on ipam annotation
-		// of namespace or pod that initiated the request
-		if driver.Owns(args, k8sArgs, cniArgs.NetworkConfiguration) {
-			return driver.Check(args, cniArgs.NetworkConfiguration)
+		owns, err := driver.Check(args, k8sArgs, cniArgs.NetworkConfiguration)
+		if !owns {
+			// the driver does not own this request - continue to next one
+			continue
 		}
+
+		return err
+
 	}
 	return fmt.Errorf("No suitable IPAM driver found")
 }

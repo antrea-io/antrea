@@ -51,58 +51,47 @@ func (m *MockIPAMDriver) EXPECT() *MockIPAMDriverMockRecorder {
 }
 
 // Add mocks base method
-func (m *MockIPAMDriver) Add(arg0 *invoke.Args, arg1 []byte) (*current.Result, error) {
+func (m *MockIPAMDriver) Add(arg0 *invoke.Args, arg1 *types.K8sArgs, arg2 []byte) (bool, *current.Result, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Add", arg0, arg1)
-	ret0, _ := ret[0].(*current.Result)
+	ret := m.ctrl.Call(m, "Add", arg0, arg1, arg2)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(*current.Result)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
+}
+
+// Add indicates an expected call of Add
+func (mr *MockIPAMDriverMockRecorder) Add(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Add", reflect.TypeOf((*MockIPAMDriver)(nil).Add), arg0, arg1, arg2)
+}
+
+// Check mocks base method
+func (m *MockIPAMDriver) Check(arg0 *invoke.Args, arg1 *types.K8sArgs, arg2 []byte) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Check", arg0, arg1, arg2)
+	ret0, _ := ret[0].(bool)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// Add indicates an expected call of Add
-func (mr *MockIPAMDriverMockRecorder) Add(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Add", reflect.TypeOf((*MockIPAMDriver)(nil).Add), arg0, arg1)
-}
-
-// Check mocks base method
-func (m *MockIPAMDriver) Check(arg0 *invoke.Args, arg1 []byte) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Check", arg0, arg1)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
 // Check indicates an expected call of Check
-func (mr *MockIPAMDriverMockRecorder) Check(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockIPAMDriverMockRecorder) Check(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Check", reflect.TypeOf((*MockIPAMDriver)(nil).Check), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Check", reflect.TypeOf((*MockIPAMDriver)(nil).Check), arg0, arg1, arg2)
 }
 
 // Del mocks base method
-func (m *MockIPAMDriver) Del(arg0 *invoke.Args, arg1 []byte) error {
+func (m *MockIPAMDriver) Del(arg0 *invoke.Args, arg1 *types.K8sArgs, arg2 []byte) (bool, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Del", arg0, arg1)
-	ret0, _ := ret[0].(error)
-	return ret0
+	ret := m.ctrl.Call(m, "Del", arg0, arg1, arg2)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // Del indicates an expected call of Del
-func (mr *MockIPAMDriverMockRecorder) Del(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockIPAMDriverMockRecorder) Del(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Del", reflect.TypeOf((*MockIPAMDriver)(nil).Del), arg0, arg1)
-}
-
-// Owns mocks base method
-func (m *MockIPAMDriver) Owns(arg0 *invoke.Args, arg1 *types.K8sArgs, arg2 []byte) bool {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Owns", arg0, arg1, arg2)
-	ret0, _ := ret[0].(bool)
-	return ret0
-}
-
-// Owns indicates an expected call of Owns
-func (mr *MockIPAMDriverMockRecorder) Owns(arg0, arg1, arg2 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Owns", reflect.TypeOf((*MockIPAMDriver)(nil).Owns), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Del", reflect.TypeOf((*MockIPAMDriver)(nil).Del), arg0, arg1, arg2)
 }
