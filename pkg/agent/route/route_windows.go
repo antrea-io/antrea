@@ -59,7 +59,7 @@ type Client struct {
 
 // NewClient returns a route client.
 // Todo: remove param serviceCIDR after kube-proxy is replaced by Antrea Proxy completely.
-func NewClient(serviceCIDR *net.IPNet, networkConfig *config.NetworkConfig, noSNAT, proxyAll bool) (*Client, error) {
+func NewClient(serviceCIDR *net.IPNet, networkConfig *config.NetworkConfig, noSNAT, proxyAll, connectUplinkToBridge bool) (*Client, error) {
 	return &Client{
 		networkConfig: networkConfig,
 		serviceCIDR:   serviceCIDR,
@@ -406,5 +406,13 @@ func (c *Client) DeleteLoadBalancer(externalIPs []string) error {
 			return err
 		}
 	}
+	return nil
+}
+
+func (c *Client) AddLocalAntreaFlexibleIPAMPodRule(podAddresses []net.IP) error {
+	return nil
+}
+
+func (c *Client) DeleteLocalAntreaFlexibleIPAMPodRule(podAddresses []net.IP) error {
 	return nil
 }

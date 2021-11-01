@@ -51,7 +51,7 @@ func TestRouteOperation(t *testing.T) {
 	gwIP2 := net.ParseIP("192.168.3.1")
 	_, destCIDR2, _ := net.ParseCIDR(dest2)
 
-	client, err := NewClient(serviceCIDR, &config.NetworkConfig{}, true, false)
+	client, err := NewClient(serviceCIDR, &config.NetworkConfig{}, true, false, false)
 	svcStr1 := "1.1.0.10"
 	svcIP1 := net.ParseIP(svcStr1)
 	svcIPNet1 := util.NewIPNet(svcIP1)

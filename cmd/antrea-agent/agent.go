@@ -102,6 +102,11 @@ func run(o *Options) error {
 	}
 	defer ovsdbConnection.Close()
 
+	// Enable AntreaIPAM will set connectUplinkToBridge to True. Currently only Linux+IPv4 is supported.
+	// AntreaIPAM works with system OVSDatapathType and noEncap, noSNAT mode. Egress feature is not supported.
+	// AntreaIPAM is only verified with other FeatureGates at default state.
+	connectUplinkToBridge := features.DefaultFeatureGate.Enabled(features.AntreaIPAM)
+
 	ovsDatapathType := ovsconfig.OVSDatapathType(o.config.OVSDatapathType)
 	ovsBridgeClient := ovsconfig.NewOVSBridge(o.config.OVSBridge, ovsDatapathType, ovsdbConnection)
 	ovsBridgeMgmtAddr := ofconfig.GetMgmtAddress(o.config.OVSRunDir, o.config.OVSBridge)
@@ -110,7 +115,8 @@ func run(o *Options) error {
 		features.DefaultFeatureGate.Enabled(features.AntreaPolicy),
 		features.DefaultFeatureGate.Enabled(features.Egress),
 		features.DefaultFeatureGate.Enabled(features.FlowExporter),
-		o.config.AntreaProxy.ProxyAll)
+		o.config.AntreaProxy.ProxyAll,
+		connectUplinkToBridge)
 
 	_, serviceCIDRNet, _ := net.ParseCIDR(o.config.ServiceCIDR)
 	var serviceCIDRNetv6 *net.IPNet
@@ -144,7 +150,7 @@ func run(o *Options) error {
 	egressConfig := &config.EgressConfig{
 		ExceptCIDRs: exceptCIDRs,
 	}
-	routeClient, err := route.NewClient(serviceCIDRNet, networkConfig, o.config.NoSNAT, o.config.AntreaProxy.ProxyAll)
+	routeClient, err := route.NewClient(serviceCIDRNet, networkConfig, o.config.NoSNAT, o.config.AntreaProxy.ProxyAll, connectUplinkToBridge)
 	if err != nil {
 		return fmt.Errorf("error creating route client: %v", err)
 	}
@@ -189,8 +195,8 @@ func run(o *Options) error {
 		features.DefaultFeatureGate.Enabled(features.AntreaProxy),
 		o.config.AntreaProxy.ProxyAll,
 		nodePortAddressesIPv4,
-		nodePortAddressesIPv6)
-
+		nodePortAddressesIPv6,
+		connectUplinkToBridge)
 	err = agentInitializer.Initialize()
 	if err != nil {
 		return fmt.Errorf("error initializing agent: %v", err)
@@ -342,6 +348,14 @@ func run(o *Options) error {
 	//  and initial NetworkPolicies so that no packets will be mishandled.
 	if err := agentInitializer.FlowRestoreComplete(); err != nil {
 		return err
+	}
+	// BridgeUplinkToOVSBridge is required if connectUplinkToBridge is true, and must be run immediately after FlowRestoreComplete
+	if connectUplinkToBridge {
+		// Restore network config before shutdown. ovsdbConnection must be alive when restore.
+		defer agentInitializer.RestoreOVSBridge()
+		if err := agentInitializer.BridgeUplinkToOVSBridge(); err != nil {
+			return fmt.Errorf("error bridging uplink to OVS bridge: %w", err)
+		}
 	}
 
 	if err := antreaClientProvider.RunOnce(); err != nil {
