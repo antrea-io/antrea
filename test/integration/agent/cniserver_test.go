@@ -572,6 +572,7 @@ func newTester() *cmdAddDelTester {
 		testNodeConfig,
 		k8sFake.NewSimpleClientset(),
 		false,
+		false,
 		nil,
 		tester.networkReadyCh)
 	tester.server.Initialize(ovsServiceMock, ofServiceMock, ifaceStore, make(chan antreatypes.EntityReference, 100))
@@ -600,8 +601,7 @@ func cmdAddDelCheckTest(testNS ns.NetNS, tc testCase, dataDir string) {
 	tester.setNS(testNS, targetNS)
 
 	ipamResult := ipamtest.GenerateIPAMResult("0.4.0", tc.addresses, tc.Routes, tc.DNS)
-	ipamMock.EXPECT().Owns(mock.Any(), mock.Any(), mock.Any()).Return(true).AnyTimes()
-	ipamMock.EXPECT().Add(mock.Any(), mock.Any()).Return(ipamResult, nil).AnyTimes()
+	ipamMock.EXPECT().Add(mock.Any(), mock.Any(), mock.Any()).Return(true, ipamResult, nil).AnyTimes()
 
 	// Mock ovs output while get ovs port external configuration
 	ovsPortname := util.GenerateContainerInterfaceName(testPod, testPodNamespace, ContainerID)
@@ -667,10 +667,8 @@ func TestAntreaServerFunc(t *testing.T) {
 		dataDir, err = ioutil.TempDir("", "antrea_server_test")
 		require.Nil(t, err)
 
-		ipamMock.EXPECT().Owns(mock.Any(), mock.Any(), mock.Any()).Return(true).AnyTimes()
-		ipamMock.EXPECT().Del(mock.Any(), mock.Any()).Return(nil).AnyTimes()
-		ipamMock.EXPECT().Owns(mock.Any(), mock.Any(), mock.Any()).Return(true).AnyTimes()
-		ipamMock.EXPECT().Check(mock.Any(), mock.Any()).Return(nil).AnyTimes()
+		ipamMock.EXPECT().Del(mock.Any(), mock.Any(), mock.Any()).Return(true, nil).AnyTimes()
+		ipamMock.EXPECT().Check(mock.Any(), mock.Any(), mock.Any()).Return(true, nil).AnyTimes()
 
 		ovsServiceMock.EXPECT().GetPortList().Return([]ovsconfig.OVSPortData{}, nil).AnyTimes()
 		ovsServiceMock.EXPECT().IsHardwareOffloadEnabled().Return(false).AnyTimes()
@@ -735,6 +733,7 @@ func setupChainTest(
 			testNodeConfig,
 			k8sFake.NewSimpleClientset(),
 			true,
+			false,
 			routeMock,
 			networkReadyCh)
 	} else {
