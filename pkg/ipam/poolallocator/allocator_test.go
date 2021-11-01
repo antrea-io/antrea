@@ -15,9 +15,11 @@
 package poolallocator
 
 import (
+	"fmt"
 	"net"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -31,11 +33,13 @@ import (
 	"k8s.io/klog/v2"
 )
 
+var testNamespace = "test"
+
 var fakePodOwner = crdv1a2.IPAddressOwner{
 	Pod: &crdv1a2.PodOwner{
-		Name:        "",
-		Namespace:   "",
-		ContainerID: "fake-containerID",
+		Name:        "fakePod",
+		Namespace:   testNamespace,
+		ContainerID: uuid.New().String(),
 	},
 }
 
@@ -46,13 +50,21 @@ func newIPPoolAllocator(poolName string, initObjects []runtime.Object) *IPPoolAl
 }
 
 func validateAllocationSequence(t *testing.T, allocator *IPPoolAllocator, subnetInfo crdv1a2.SubnetInfo, ipList []string) {
-	// Allocate the 2 available IPs from first range then switch to second range
+	i := 1
 	for _, expectedIP := range ipList {
 		klog.Info("Validating allocation for ", expectedIP)
-		ip, returnInfo, err := allocator.AllocateNext(crdv1a2.IPAddressPhaseAllocated, fakePodOwner)
+		owner := crdv1a2.IPAddressOwner{
+			Pod: &crdv1a2.PodOwner{
+				Name:        fmt.Sprintf("fakePod%d", i),
+				Namespace:   testNamespace,
+				ContainerID: uuid.New().String(),
+			},
+		}
+		ip, returnInfo, err := allocator.AllocateNext(crdv1a2.IPAddressPhaseAllocated, owner)
 		require.NoError(t, err)
 		assert.Equal(t, net.ParseIP(expectedIP), ip)
 		assert.Equal(t, subnetInfo, returnInfo)
+		i += 1
 	}
 }
 
@@ -264,4 +276,84 @@ func TestAllocateReleaseSequence(t *testing.T) {
 	}
 
 	validateAllocationSequence(t, allocator, subnetInfo, []string{"2001::1000", "2001::2", "2001::5"})
+}
+
+func TestReleaseResource(t *testing.T) {
+	poolName := "fakePool"
+	ipRange1 := crdv1a2.IPRange{
+		Start: "2001::1000",
+		End:   "2001::1000",
+	}
+	ipRange2 := crdv1a2.IPRange{CIDR: "2001::0/124"}
+	subnetInfo := crdv1a2.SubnetInfo{
+		Gateway:      "2001::1",
+		PrefixLength: 64,
+	}
+	subnetRange1 := crdv1a2.SubnetIPRange{IPRange: ipRange1,
+		SubnetInfo: subnetInfo}
+	subnetRange2 := crdv1a2.SubnetIPRange{IPRange: ipRange2,
+		SubnetInfo: subnetInfo}
+
+	pool := crdv1a2.IPPool{
+		ObjectMeta: metav1.ObjectMeta{Name: poolName},
+		Spec: crdv1a2.IPPoolSpec{
+			IPRanges: []crdv1a2.SubnetIPRange{subnetRange1, subnetRange2}},
+	}
+
+	allocator := newIPPoolAllocator(poolName, []runtime.Object{&pool})
+
+	// Allocate the single available IPs from first range then 3 IPs from second range
+	validateAllocationSequence(t, allocator, subnetInfo, []string{"2001::1000", "2001::2", "2001::3", "2001::4", "2001::5"})
+
+	// Release first IP from first range and middle IP from second range
+	for _, podName := range []string{"fakePod2", "fakePod4"} {
+		err := allocator.ReleasePod(testNamespace, podName)
+		require.NoError(t, err)
+	}
+
+	validateAllocationSequence(t, allocator, subnetInfo, []string{"2001::2", "2001::4", "2001::6"})
+}
+
+func TestHas(t *testing.T) {
+	owner := crdv1a2.IPAddressOwner{
+		Pod: &crdv1a2.PodOwner{
+			Name:        "fakePod",
+			Namespace:   testNamespace,
+			ContainerID: "fakeContainer",
+		},
+	}
+	poolName := "fakePool"
+	ipRange1 := crdv1a2.IPRange{
+		Start: "2001::1000",
+		End:   "2001::1000",
+	}
+	subnetInfo := crdv1a2.SubnetInfo{
+		Gateway:      "2001::1",
+		PrefixLength: 64,
+	}
+	subnetRange1 := crdv1a2.SubnetIPRange{IPRange: ipRange1,
+		SubnetInfo: subnetInfo}
+
+	pool := crdv1a2.IPPool{
+		ObjectMeta: metav1.ObjectMeta{Name: poolName},
+		Spec: crdv1a2.IPPoolSpec{
+			IPRanges: []crdv1a2.SubnetIPRange{subnetRange1}},
+	}
+
+	allocator := newIPPoolAllocator(poolName, []runtime.Object{&pool})
+
+	_, _, err := allocator.AllocateNext(crdv1a2.IPAddressPhaseAllocated, owner)
+	require.NoError(t, err)
+	has, err := allocator.HasPod(testNamespace, "fakePod")
+	require.NoError(t, err)
+	assert.True(t, has)
+	has, err = allocator.HasPod(testNamespace, "realPod")
+	require.NoError(t, err)
+	assert.False(t, has)
+	has, err = allocator.HasContainer("fakeContainer")
+	require.NoError(t, err)
+	assert.True(t, has)
+	has, err = allocator.HasContainer("realContainer")
+	require.NoError(t, err)
+	assert.False(t, has)
 }

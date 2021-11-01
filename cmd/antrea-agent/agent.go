@@ -26,7 +26,7 @@ import (
 	"antrea.io/antrea/pkg/agent"
 	"antrea.io/antrea/pkg/agent/apiserver"
 	"antrea.io/antrea/pkg/agent/cniserver"
-	_ "antrea.io/antrea/pkg/agent/cniserver/ipam"
+	"antrea.io/antrea/pkg/agent/cniserver/ipam"
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/controller/egress"
 	"antrea.io/antrea/pkg/agent/controller/networkpolicy"
@@ -285,12 +285,14 @@ func run(o *Options) error {
 	if networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {
 		isChaining = true
 	}
+	antreaIPAM := features.DefaultFeatureGate.Enabled(features.AntreaIPAM)
 	cniServer := cniserver.New(
 		o.config.CNISocket,
 		o.config.HostProcPathPrefix,
 		nodeConfig,
 		k8sClient,
 		isChaining,
+		antreaIPAM,
 		routeClient,
 		networkReadyCh)
 	err = cniServer.Initialize(ovsBridgeClient, ofClient, ifaceStore, entityUpdates)
@@ -335,6 +337,18 @@ func run(o *Options) error {
 			return fmt.Errorf("failed to start NPL agent: %v", err)
 		}
 		go nplController.Run(stopCh)
+	}
+
+	// Start the Antrea IPAM agent.
+	if features.DefaultFeatureGate.Enabled(features.AntreaIPAM) {
+		ipamController, err := ipam.InitializeAntreaIPAMController(
+			k8sClient,
+			crdClient,
+			informerFactory)
+		if err != nil {
+			return fmt.Errorf("failed to start Antrea IPAM agent: %v", err)
+		}
+		go ipamController.Run(stopCh)
 	}
 
 	log.StartLogFileNumberMonitor(stopCh)

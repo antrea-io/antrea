@@ -108,6 +108,7 @@ type CNIServer struct {
 	containerAccess      *containerAccessArbitrator
 	podConfigurator      *podConfigurator
 	isChaining           bool
+	antreaIPAM           bool
 	routeClient          route.Interface
 	// networkReadyCh notifies that the network is ready so new Pods can be created. Therefore, CmdAdd waits for it.
 	networkReadyCh <-chan struct{}
@@ -239,6 +240,11 @@ func (s *CNIServer) checkRequestMessage(request *cnipb.CniCmdRequest) (*CNIConfi
 	if !isValid {
 		klog.Errorf("Unsupported IPAM type %s", ipamType)
 		return cniConfig, s.unsupportedFieldResponse("ipam/type", ipamType)
+	}
+	if s.antreaIPAM {
+		// With AnteaIPAM feature enabled, Antrea ignores IPAM type from request
+		cniConfig.IPAM.Type = ipam.AntreaIPAMType
+
 	}
 	return cniConfig, nil
 }
@@ -535,6 +541,7 @@ func New(
 	nodeConfig *config.NodeConfig,
 	kubeClient clientset.Interface,
 	isChaining bool,
+	antreaIPAM bool,
 	routeClient route.Interface,
 	networkReadyCh <-chan struct{},
 ) *CNIServer {
@@ -547,6 +554,7 @@ func New(
 		kubeClient:           kubeClient,
 		containerAccess:      newContainerAccessArbitrator(),
 		isChaining:           isChaining,
+		antreaIPAM:           antreaIPAM,
 		routeClient:          routeClient,
 		networkReadyCh:       networkReadyCh,
 	}

@@ -33,6 +33,7 @@ rules:
     resources:
       - endpoints
       - services
+      - namespaces
     verbs:
       - get
       - watch
@@ -159,10 +160,17 @@ rules:
       - crd.antrea.io
     resources:
       - externalippools
+      - ippools
     verbs:
       - get
       - watch
       - list
+  - apiGroups:
+      - crd.antrea.io
+    resources:
+      - ippools/status
+    verbs:
+      - update
 ---
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
