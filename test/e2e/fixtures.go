@@ -399,9 +399,9 @@ func teardownTest(tb testing.TB, data *TestData) {
 	}
 }
 
-func deletePodWrapper(tb testing.TB, data *TestData, name string) {
+func deletePodWrapper(tb testing.TB, data *TestData, namespace, name string) {
 	tb.Logf("Deleting Pod '%s'", name)
-	if err := data.deletePod(testNamespace, name); err != nil {
+	if err := data.deletePod(namespace, name); err != nil {
 		tb.Logf("Error when deleting Pod: %v", err)
 	}
 }
@@ -421,7 +421,7 @@ func createTestBusyboxPods(tb testing.TB, data *TestData, num int, ns string, no
 		for _, podName := range podNames {
 			wg.Add(1)
 			go func(name string) {
-				deletePodWrapper(tb, data, name)
+				deletePodWrapper(tb, data, ns, name)
 				wg.Done()
 			}(podName)
 		}
