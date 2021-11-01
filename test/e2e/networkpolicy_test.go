@@ -349,7 +349,7 @@ func testDefaultDenyIngressPolicy(t *testing.T, data *TestData) {
 	_, serverIPs, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "test-server-", serverNode, testNamespace, false)
 	defer cleanupFunc()
 
-	service, err := data.createService("nginx", serverPort, serverPort, map[string]string{"app": "nginx"}, false, false, corev1.ServiceTypeNodePort, nil)
+	service, err := data.createService("nginx", testNamespace, serverPort, serverPort, map[string]string{"app": "nginx"}, false, false, corev1.ServiceTypeNodePort, nil)
 	if err != nil {
 		t.Fatalf("Error when creating nginx NodePort service: %v", err)
 	}
@@ -938,7 +938,7 @@ func createAndWaitForPod(t *testing.T, data *TestData, createFunc func(name stri
 		t.Fatalf("Error when creating busybox test Pod: %v", err)
 	}
 	cleanupFunc := func() {
-		deletePodWrapper(t, data, name)
+		deletePodWrapper(t, data, testNamespace, name)
 	}
 	podIP, err := data.podWaitForIPs(defaultTimeout, name, ns)
 	if err != nil {
