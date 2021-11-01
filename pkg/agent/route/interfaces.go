@@ -73,4 +73,11 @@ type Interface interface {
 
 	// Run starts the sync loop.
 	Run(stopCh <-chan struct{})
+
+	// AddLocalAntreaFlexibleIPAMPodRule is used to add IP to target ip set when an AntreaFlexibleIPAM Pod is added. An entry is added
+	// for every Pod IP.
+	AddLocalAntreaFlexibleIPAMPodRule(podAddresses []net.IP) error
+
+	// DeleteLocalAntreaFlexibleIPAMPodRule is used to delete related IP set entries when an AntreaFlexibleIPAM Pod is deleted.
+	DeleteLocalAntreaFlexibleIPAMPodRule(podAddresses []net.IP) error
 }
