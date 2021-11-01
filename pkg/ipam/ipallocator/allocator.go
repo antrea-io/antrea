@@ -238,7 +238,7 @@ func (ma MultiIPAllocator) Used() int {
 func (ma MultiIPAllocator) Total() int {
 	total := 0
 	for _, a := range ma {
-		total += a.max
+		total += a.max - len(a.reservedIPs)
 	}
 	return total
 }
