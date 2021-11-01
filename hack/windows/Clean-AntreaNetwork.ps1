@@ -4,9 +4,12 @@
 
   .PARAMETER OVSInstallDir
   OVS installation directory. It is the path argument when using Install-OVS.ps1. The default path is "C:\openvswitch".
+  .PARAMETER RenewIPConfig
+  Renew the ipconfig on the host. The default value is $false.
 #>
 Param(
-    [parameter(Mandatory = $false)] [string] $OVSInstallDir = "C:\openvswitch"
+    [parameter(Mandatory = $false)] [string] $OVSInstallDir = "C:\openvswitch",
+    [parameter(Mandatory = $false)] [bool] $RenewIPConfig   = $false
 )
 
 # Replace the path using the actual path where ovs-vswitchd.pid locates. It is always under path $OVSInstallDir\var\run\openvswitch.
@@ -139,4 +142,6 @@ ResetOVSService "ovs-vswitchd"
 RemoveNetworkAdapter "br-int"
 RemoveNetworkAdapter "antrea-gw0"
 ClearHyperVBindingOnAdapter($uplink)
-ipconfig /renew
+if ($RenewIPConfig) {
+    ipconfig /renew
+}
