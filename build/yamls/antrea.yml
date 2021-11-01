@@ -4940,6 +4940,28 @@ webhooks:
     scope: Cluster
   sideEffects: None
   timeoutSeconds: 5
+- admissionReviewVersions:
+  - v1
+  - v1beta1
+  clientConfig:
+    service:
+      name: antrea
+      namespace: kube-system
+      path: /validate/ippool
+  name: ippoolvalidator.antrea.io
+  rules:
+  - apiGroups:
+    - crd.antrea.io
+    apiVersions:
+    - v1alpha2
+    operations:
+    - UPDATE
+    - DELETE
+    resources:
+    - ippools
+    scope: Cluster
+  sideEffects: None
+  timeoutSeconds: 5
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingWebhookConfiguration
