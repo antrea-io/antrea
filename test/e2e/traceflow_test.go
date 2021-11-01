@@ -336,6 +336,11 @@ func testTraceflowIntraNode(t *testing.T, data *TestData) {
 		t.Fatal(err)
 	}
 
+	expectedTTL := int32(64)
+	if testOptions.enableAntreaIPAM {
+		// AntreaIPAM will always overwrite dstMAC and decrease TTL
+		expectedTTL = 63
+	}
 	testcases := []testcase{
 		{
 			name:      "intraNodeTraceflowIPv4",
@@ -643,7 +648,7 @@ func testTraceflowIntraNode(t *testing.T, data *TestData) {
 				SrcIP:    pod0IPv4Str,
 				DstIP:    dstPodIPv4Str,
 				Length:   84, // default ping packet length.
-				IPHeader: v1alpha1.IPHeader{Protocol: 1, TTL: 64, Flags: 2},
+				IPHeader: v1alpha1.IPHeader{Protocol: 1, TTL: expectedTTL, Flags: 2},
 				TransportHeader: v1alpha1.TransportHeader{
 					ICMP: &v1alpha1.ICMPEchoRequestHeader{},
 				},
@@ -695,7 +700,7 @@ func testTraceflowIntraNode(t *testing.T, data *TestData) {
 				SrcIP:    pod0IPv4Str,
 				DstIP:    pod1IPv4Str,
 				Length:   84, // default ping packet length.
-				IPHeader: v1alpha1.IPHeader{Protocol: 1, TTL: 64, Flags: 2},
+				IPHeader: v1alpha1.IPHeader{Protocol: 1, TTL: expectedTTL, Flags: 2},
 				TransportHeader: v1alpha1.TransportHeader{
 					ICMP: &v1alpha1.ICMPEchoRequestHeader{},
 				},

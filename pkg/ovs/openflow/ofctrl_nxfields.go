@@ -45,6 +45,11 @@ func NewOneBitRegMark(id int, bit uint32, name string) *RegMark {
 	return &RegMark{value: 1, field: field}
 }
 
+func NewOneBitZeroRegMark(id int, bit uint32, name string) *RegMark {
+	field := NewRegField(id, bit, bit, name)
+	return &RegMark{value: 0, field: field}
+}
+
 func NewRegMark(field *RegField, value uint32) *RegMark {
 	return &RegMark{value: value, field: field}
 }
