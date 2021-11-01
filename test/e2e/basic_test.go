@@ -46,36 +46,42 @@ func TestBasic(t *testing.T) {
 	}
 	defer teardownTest(t, data)
 
-	t.Run("testPodAssignIP", func(t *testing.T) { testPodAssignIP(t, data) })
-	t.Run("testDeletePod", func(t *testing.T) { testDeletePod(t, data) })
+	t.Run("testPodAssignIP", func(t *testing.T) { testPodAssignIP(t, data, testNamespace, "", "") })
+	t.Run("testDeletePod", func(t *testing.T) { testDeletePod(t, data, testNamespace) })
 	t.Run("testAntreaGracefulExit", func(t *testing.T) { testAntreaGracefulExit(t, data) })
-	t.Run("testIPAMRestart", func(t *testing.T) { testIPAMRestart(t, data) })
+	t.Run("testIPAMRestart", func(t *testing.T) { testIPAMRestart(t, data, testNamespace) })
 	t.Run("testDeletePreviousRoundFlowsOnStartup", func(t *testing.T) { testDeletePreviousRoundFlowsOnStartup(t, data) })
-	t.Run("testGratuitousARP", func(t *testing.T) { testGratuitousARP(t, data) })
+	t.Run("testGratuitousARP", func(t *testing.T) { testGratuitousARP(t, data, testNamespace) })
 	t.Run("testClusterIdentity", func(t *testing.T) { testClusterIdentity(t, data) })
 }
 
 // testPodAssignIP verifies that Antrea allocates IP addresses properly to new Pods. It does this by
 // deploying a busybox Pod, then waiting for the K8s apiserver to report the new IP address for that
 // Pod, and finally verifying that the IP address is in the Pod Network CIDR for the cluster.
-func testPodAssignIP(t *testing.T, data *TestData) {
+func testPodAssignIP(t *testing.T, data *TestData, namespace string, podV4NetworkCIDR, podV6NetworkCIDR string) {
 	podName := randName("test-pod-")
 
 	t.Logf("Creating a busybox test Pod")
-	if err := data.createBusyboxPodOnNode(podName, testNamespace, "", false); err != nil {
+	if err := data.createBusyboxPodOnNode(podName, namespace, "", false); err != nil {
 		t.Fatalf("Error when creating busybox test Pod: %v", err)
 	}
-	defer deletePodWrapper(t, data, podName)
+	defer deletePodWrapper(t, data, namespace, podName)
 
 	t.Logf("Checking Pod networking")
-	if podIPs, err := data.podWaitForIPs(defaultTimeout, podName, testNamespace); err != nil {
+	if podIPs, err := data.podWaitForIPs(defaultTimeout, podName, namespace); err != nil {
 		t.Errorf("Error when waiting for Pod IP: %v", err)
 	} else {
-		if clusterInfo.podV4NetworkCIDR != "" {
-			checkPodIP(t, clusterInfo.podV4NetworkCIDR, podIPs.ipv4)
+		if podV4NetworkCIDR == "" {
+			podV4NetworkCIDR = clusterInfo.podV4NetworkCIDR
 		}
-		if clusterInfo.podV6NetworkCIDR != "" {
-			checkPodIP(t, clusterInfo.podV6NetworkCIDR, podIPs.ipv6)
+		if podV4NetworkCIDR != "" {
+			checkPodIP(t, podV4NetworkCIDR, podIPs.ipv4)
+		}
+		if podV6NetworkCIDR == "" {
+			podV6NetworkCIDR = clusterInfo.podV6NetworkCIDR
+		}
+		if podV6NetworkCIDR != "" {
+			checkPodIP(t, podV6NetworkCIDR, podIPs.ipv6)
 		}
 	}
 }
@@ -94,7 +100,7 @@ func checkPodIP(t *testing.T, podNetworkCIDR string, podIP *net.IP) {
 	}
 }
 
-func (data *TestData) testDeletePod(t *testing.T, podName string, nodeName string, isWindowsNode bool) {
+func (data *TestData) testDeletePod(t *testing.T, podName string, nodeName string, namespace string, isWindowsNode bool) {
 	var antreaPodName string
 	var err error
 	if antreaPodName, err = data.getAntreaPodOnNode(nodeName); err != nil {
@@ -104,12 +110,12 @@ func (data *TestData) testDeletePod(t *testing.T, podName string, nodeName strin
 
 	var stdout string
 	if isWindowsNode {
-		antctlCmd := fmt.Sprintf("C:/k/antrea/bin/antctl.exe get podinterface %s -n %s -o json", podName, testNamespace)
+		antctlCmd := fmt.Sprintf("C:/k/antrea/bin/antctl.exe get podinterface %s -n %s -o json", podName, namespace)
 		envCmd := fmt.Sprintf("export POD_NAME=antrea-agent;export KUBERNETES_SERVICE_HOST=%s;export KUBERNETES_SERVICE_PORT=%d", clusterInfo.k8sServiceHost, clusterInfo.k8sServicePort)
 		cmd := fmt.Sprintf("%s && %s", envCmd, antctlCmd)
 		_, stdout, _, err = RunCommandOnNode(nodeName, cmd)
 	} else {
-		cmds := []string{"antctl", "get", "podinterface", podName, "-n", testNamespace, "-o", "json"}
+		cmds := []string{"antctl", "get", "podinterface", podName, "-n", namespace, "-o", "json"}
 		stdout, _, err = runAntctl(antreaPodName, cmds, data)
 	}
 	if err != nil {
@@ -178,6 +184,15 @@ func (data *TestData) testDeletePod(t *testing.T, podName string, nodeName strin
 			return err == nil
 		}
 	}
+	if namespace == testAntreaIPAMNamespace {
+		doesIPAllocationExist = func(podIP string) bool {
+			_, isAllocated, _, err := checkIPPoolAllocation(t, data, "test-ippool-ipv4-0", podIP)
+			if err != nil {
+				t.Fatalf("Cannot check IPPool allocation: %v", err)
+			}
+			return err == nil && isAllocated
+		}
+	}
 
 	t.Logf("Checking that the veth interface and the OVS port exist")
 	if !doesInterfaceExist() {
@@ -193,7 +208,7 @@ func (data *TestData) testDeletePod(t *testing.T, podName string, nodeName strin
 	}
 
 	t.Logf("Deleting Pod '%s'", podName)
-	if err := data.deletePodAndWait(defaultTimeout, podName, testNamespace); err != nil {
+	if err := data.deletePodAndWait(defaultTimeout, podName, namespace); err != nil {
 		t.Fatalf("Error when deleting Pod: %v", err)
 	}
 
@@ -213,7 +228,7 @@ func (data *TestData) testDeletePod(t *testing.T, podName string, nodeName strin
 
 // testDeletePod creates a Pod, then deletes it, and checks that the veth interface (in the Node
 // network namespace) and the OVS port for the container get removed.
-func testDeletePod(t *testing.T, data *TestData) {
+func testDeletePod(t *testing.T, data *TestData, namespace string) {
 	isWindows := false
 	nodeIdx := 0
 
@@ -226,14 +241,14 @@ func testDeletePod(t *testing.T, data *TestData) {
 	podName := randName("test-pod-")
 
 	t.Logf("Creating an agnhost test Pod on '%s'", nodeName)
-	if err := data.createAgnhostPodOnNode(podName, testNamespace, nodeName, false); err != nil {
+	if err := data.createAgnhostPodOnNode(podName, namespace, nodeName, false); err != nil {
 		t.Fatalf("Error when creating agnhost test Pod: %v", err)
 	}
-	if err := data.podWaitForRunning(defaultTimeout, podName, testNamespace); err != nil {
+	if err := data.podWaitForRunning(defaultTimeout, podName, namespace); err != nil {
 		t.Fatalf("Error when waiting for Pod '%s' to be in the Running state", podName)
 	}
 
-	data.testDeletePod(t, podName, nodeName, isWindows)
+	data.testDeletePod(t, podName, nodeName, namespace, isWindows)
 }
 
 // testAntreaGracefulExit verifies that Antrea Pods can terminate gracefully.
@@ -263,7 +278,7 @@ func testAntreaGracefulExit(t *testing.T, data *TestData) {
 // its IP address, restarting the Antrea agent, then creating a second Pod and retrieving its IP
 // address. If the 2 IP addresses match, then it is an error. This is not a perfect test, as it
 // assumes that IP addresses are assigned in-order and not randomly.
-func testIPAMRestart(t *testing.T, data *TestData) {
+func testIPAMRestart(t *testing.T, data *TestData, namespace string) {
 	nodeName := nodeName(0)
 	podName1 := randName("test-pod-")
 	podName2 := randName("test-pod-")
@@ -272,18 +287,18 @@ func testIPAMRestart(t *testing.T, data *TestData) {
 	var err error
 	defer func() {
 		for _, pod := range pods {
-			deletePodWrapper(t, data, pod)
+			deletePodWrapper(t, data, namespace, pod)
 		}
 	}()
 
 	createPodAndGetIP := func(podName string) (*PodIPs, error) {
 		t.Logf("Creating a busybox test Pod '%s' and waiting for IP", podName)
-		if err := data.createBusyboxPodOnNode(podName, testNamespace, nodeName, false); err != nil {
+		if err := data.createBusyboxPodOnNode(podName, namespace, nodeName, false); err != nil {
 			t.Fatalf("Error when creating busybox test Pod '%s': %v", podName, err)
 			return nil, err
 		}
 		pods = append(pods, podName)
-		podIP, err := data.podWaitForIPs(defaultTimeout, podName, testNamespace)
+		podIP, err := data.podWaitForIPs(defaultTimeout, podName, namespace)
 		if err != nil {
 			return nil, err
 		}
@@ -722,23 +737,23 @@ func testDeletePreviousRoundFlowsOnStartup(t *testing.T, data *TestData) {
 // testGratuitousARP verifies that we receive 3 GARP packets after a Pod is up.
 // There might be ARP packets other than GARP sent if there is any unintentional
 // traffic. So we just check the number of ARP packets is greater than 3.
-func testGratuitousARP(t *testing.T, data *TestData) {
+func testGratuitousARP(t *testing.T, data *TestData, namespace string) {
 	skipIfNotIPv4Cluster(t)
 	podName := randName("test-pod-")
 	nodeName := workerNodeName(1)
 
 	t.Logf("Creating Pod '%s' on '%s'", podName, nodeName)
-	if err := data.createBusyboxPodOnNode(podName, testNamespace, nodeName, false); err != nil {
+	if err := data.createBusyboxPodOnNode(podName, namespace, nodeName, false); err != nil {
 		t.Fatalf("Error when creating Pod '%s': %v", podName, err)
 	}
-	defer deletePodWrapper(t, data, podName)
+	defer deletePodWrapper(t, data, namespace, podName)
 
 	antreaPodName, err := data.getAntreaPodOnNode(nodeName)
 	if err != nil {
 		t.Fatalf("Error when retrieving the name of the Antrea Pod running on Node '%s': %v", nodeName, err)
 	}
 
-	podIP, err := data.podWaitForIPs(defaultTimeout, podName, testNamespace)
+	podIP, err := data.podWaitForIPs(defaultTimeout, podName, namespace)
 	if err != nil {
 		t.Fatalf("Error when waiting for IP for Pod '%s': %v", podName, err)
 	}

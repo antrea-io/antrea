@@ -1123,14 +1123,14 @@ func testTraceflowInterNode(t *testing.T, data *TestData) {
 	if nginxIP.ipv4 != nil {
 		nginxIPv4Str = nginxIP.ipv4.String()
 		ipv4Protocol := corev1.IPv4Protocol
-		svcIPv4, err := data.createNginxClusterIPService("nginx-ipv4", false, &ipv4Protocol)
+		svcIPv4, err := data.createNginxClusterIPService("nginx-ipv4", testNamespace, false, &ipv4Protocol)
 		require.NoError(t, err)
 		svcIPv4Name = svcIPv4.Name
 	}
 	if nginxIP.ipv6 != nil {
 		nginxIPv6Str = nginxIP.ipv6.String()
 		ipv6Protocol := corev1.IPv6Protocol
-		svcIPv6, err := data.createNginxClusterIPService("nginx-ipv6", false, &ipv6Protocol)
+		svcIPv6, err := data.createNginxClusterIPService("nginx-ipv6", testNamespace, false, &ipv6Protocol)
 		require.NoError(t, err)
 		svcIPv6Name = svcIPv6.Name
 	}
@@ -2163,13 +2163,13 @@ func runTestTraceflow(t *testing.T, data *TestData, tc testcase) {
 			}
 		} else {
 			dstPod := tc.tf.Spec.Destination.Pod
-			podIPs := waitForPodIPs(t, data, []podInfo{{dstPod, "linux", ""}})
+			podIPs := waitForPodIPs(t, data, []podInfo{{dstPod, "linux", "", ""}})
 			dstPodIPs = podIPs[dstPod]
 		}
 		// Give a little time for Nodes to install OVS flows.
 		time.Sleep(time.Second * 2)
 		// Send an ICMP echo packet from the source Pod to the destination.
-		if err := data.runPingCommandFromTestPod(podInfo{srcPod, "linux", ""}, testNamespace, dstPodIPs, busyboxContainerName, 2, 0); err != nil {
+		if err := data.runPingCommandFromTestPod(podInfo{srcPod, "linux", "", ""}, testNamespace, dstPodIPs, busyboxContainerName, 2, 0); err != nil {
 			t.Logf("Ping '%s' -> '%v' failed: ERROR (%v)", srcPod, *dstPodIPs, err)
 		}
 	}
