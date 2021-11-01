@@ -304,64 +304,6 @@ func (b *ofPacketOutBuilder) AddResubmitAction(inPort *uint16, table *uint8) Pac
 	return b
 }
 
-type PacketOutType int
-
-const (
-	// RejectPodLocal represents this packetOut is used to reject Pod-to-Pod traffic
-	// and for this response, the srcPod and the dstPod are on the same Node.
-	RejectPodLocal PacketOutType = iota
-	// RejectPodRemoteToLocal represents this packetOut is used to reject Pod-to-Pod
-	// traffic and for this response, the srcPod is on a remote Node and the dstPod is
-	// on the local Node.
-	RejectPodRemoteToLocal
-	// RejectLocalToRemote represents this packetOut is used to reject traffic and for
-	// this response, the srcPod is on the local Node and the dstPod is on a remote Node.
-	// While generating rejection from local to remote, there is no difference between
-	// Service traffic and Pod traffic.
-	RejectLocalToRemote
-	// RejectServiceLocal represents this packetOut is used to reject Service traffic,
-	// when AntreaProxy is enabled. The EndpointPod and the dstPod of the reject
-	// response are on the same Node.
-	RejectServiceLocal
-	// RejectServiceRemoteToLocal represents this packetOut is used to reject Service
-	// traffic, when AntreaProxy is enabled. The EndpointPod is on a remote Node and
-	// the dstPod of the reject response is on the local Node.
-	RejectServiceRemoteToLocal
-	// RejectNoAPServiceLocal represents this packetOut is used to reject Service
-	// traffic, when AntreaProxy is disabled. The EndpointPod and the dstPod of the
-	// reject response are on the same Node.
-	RejectNoAPServiceLocal
-	// RejectNoAPServiceRemoteToLocal represents this packetOut is used to reject
-	// Service traffic, when AntreaProxy is disabled. The EndpointPod is on a remote
-	// Node and the dstPod of the reject response is on the local Node.
-	RejectNoAPServiceRemoteToLocal
-)
-
-func GetPacketOutType(isServiceTraffic, antreaProxyEnabled, srcIsLocal, dstIsLocal bool) PacketOutType {
-	if !isServiceTraffic {
-		if srcIsLocal {
-			if dstIsLocal {
-				return RejectPodLocal
-			}
-			return RejectLocalToRemote
-		}
-		return RejectPodRemoteToLocal
-	}
-	if !antreaProxyEnabled {
-		if srcIsLocal {
-			return RejectNoAPServiceLocal
-		}
-		return RejectNoAPServiceRemoteToLocal
-	}
-	if srcIsLocal {
-		if dstIsLocal {
-			return RejectServiceLocal
-		}
-		return RejectLocalToRemote
-	}
-	return RejectServiceRemoteToLocal
-}
-
 func (b *ofPacketOutBuilder) Done() *ofctrl.PacketOut {
 	if b.pktOut.IPHeader != nil && b.pktOut.IPv6Header != nil {
 		klog.Errorf("Invalid PacketOutBuilder: IP header and IPv6 header are not allowed to exist at the same time")

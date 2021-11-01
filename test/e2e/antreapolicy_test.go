@@ -1832,7 +1832,6 @@ func testACNPRejectIngress(t *testing.T, protocol v1.Protocol) {
 }
 
 func testRejectServiceTraffic(t *testing.T, data *TestData) {
-
 	clientName := "agnhost-client"
 	require.NoError(t, data.createAgnhostPodOnNode(clientName, testNamespace, nodeName(0), false))
 	defer data.deletePodAndWait(defaultTimeout, clientName, testNamespace)

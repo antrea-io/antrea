@@ -172,20 +172,20 @@ func (k *KubernetesUtils) Probe(ns1, pod1, ns2, pod2 string, port int32, protoco
 
 // ProbeAddr execs into a Pod and checks its connectivity to an arbitrary destination
 // address.
-func (k *KubernetesUtils) ProbeAddr(ns, podLabel, pod, dstAddr string, port int32, protocol v1.Protocol) (PodConnectivityMark, error) {
-	fromPods, err := k.GetPodsByLabel(ns, podLabel, pod)
+func (k *KubernetesUtils) ProbeAddr(ns, podLabelKey, podLabelValue, dstAddr string, port int32, protocol v1.Protocol) (PodConnectivityMark, error) {
+	fromPods, err := k.GetPodsByLabel(ns, podLabelKey, podLabelValue)
 	if err != nil {
 		return Error, fmt.Errorf("unable to get Pods from Namespace %s: %v", ns, err)
 	}
 	if len(fromPods) == 0 {
-		return Error, fmt.Errorf("no Pod of label pod=%s in Namespace %s found", pod, ns)
+		return Error, fmt.Errorf("no Pod of label podLabelKey=%s podLabelValue=%s in Namespace %s found", podLabelKey, podLabelValue, ns)
 	}
 	fromPod := fromPods[0]
 	// If it's an IPv6 address, add "[]" around it.
 	if strings.Contains(dstAddr, ":") {
 		dstAddr = fmt.Sprintf("[%s]", dstAddr)
 	}
-	connectivity := k.probe(&fromPod, fmt.Sprintf("%s/%s", ns, pod), dstAddr, dstAddr, port, protocol)
+	connectivity := k.probe(&fromPod, fmt.Sprintf("%s/%s", ns, podLabelValue), dstAddr, dstAddr, port, protocol)
 	return connectivity, nil
 }
 

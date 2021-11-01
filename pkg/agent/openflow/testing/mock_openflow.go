@@ -599,7 +599,7 @@ func (mr *MockClientMockRecorder) ReplayFlows() *gomock.Call {
 }
 
 // SendICMPPacketOut mocks base method
-func (m *MockClient) SendICMPPacketOut(arg0, arg1, arg2, arg3 string, arg4, arg5 uint32, arg6 bool, arg7, arg8 byte, arg9 []byte, arg10 openflow.PacketOutType) error {
+func (m *MockClient) SendICMPPacketOut(arg0, arg1, arg2, arg3 string, arg4, arg5 uint32, arg6 bool, arg7, arg8 byte, arg9 []byte, arg10 func(openflow.PacketOutBuilder) openflow.PacketOutBuilder) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "SendICMPPacketOut", arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10)
 	ret0, _ := ret[0].(error)
@@ -613,7 +613,7 @@ func (mr *MockClientMockRecorder) SendICMPPacketOut(arg0, arg1, arg2, arg3, arg4
 }
 
 // SendTCPPacketOut mocks base method
-func (m *MockClient) SendTCPPacketOut(arg0, arg1, arg2, arg3 string, arg4, arg5 uint32, arg6 bool, arg7, arg8 uint16, arg9 uint32, arg10 byte, arg11 openflow.PacketOutType) error {
+func (m *MockClient) SendTCPPacketOut(arg0, arg1, arg2, arg3 string, arg4, arg5 uint32, arg6 bool, arg7, arg8 uint16, arg9 uint32, arg10 byte, arg11 func(openflow.PacketOutBuilder) openflow.PacketOutBuilder) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "SendTCPPacketOut", arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11)
 	ret0, _ := ret[0].(error)
@@ -641,7 +641,7 @@ func (mr *MockClientMockRecorder) SendTraceflowPacket(arg0, arg1, arg2, arg3 int
 }
 
 // SendUDPPacketOut mocks base method
-func (m *MockClient) SendUDPPacketOut(arg0, arg1, arg2, arg3 string, arg4, arg5 uint32, arg6 bool, arg7, arg8 uint16, arg9 []byte, arg10 bool) error {
+func (m *MockClient) SendUDPPacketOut(arg0, arg1, arg2, arg3 string, arg4, arg5 uint32, arg6 bool, arg7, arg8 uint16, arg9 []byte, arg10 func(openflow.PacketOutBuilder) openflow.PacketOutBuilder) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "SendUDPPacketOut", arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10)
 	ret0, _ := ret[0].(error)

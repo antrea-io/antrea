@@ -264,7 +264,7 @@ type Client interface {
 		tcpDstPort uint16,
 		tcpAckNum uint32,
 		tcpFlag uint8,
-		packetOutType binding.PacketOutType) error
+		mutatePacketOut func(builder binding.PacketOutBuilder) binding.PacketOutBuilder) error
 	// SendICMPPacketOut sends ICMP packet as a packet-out to OVS.
 	SendICMPPacketOut(
 		srcMAC string,
@@ -277,7 +277,7 @@ type Client interface {
 		icmpType uint8,
 		icmpCode uint8,
 		icmpData []byte,
-		packetOutType binding.PacketOutType) error
+		mutatePacketOut func(builder binding.PacketOutBuilder) binding.PacketOutBuilder) error
 	// SendUDPPacketOut sends UDP packet as a packet-out to OVS.
 	SendUDPPacketOut(
 		srcMAC string,
@@ -290,7 +290,7 @@ type Client interface {
 		udpSrcPort uint16,
 		udpDstPort uint16,
 		udpData []byte,
-		isDNSResponse bool) error
+		mutatePacketOut func(builder binding.PacketOutBuilder) binding.PacketOutBuilder) error
 	// NewDNSpacketInConjunction creates a policyRuleConjunction for the dns response interception flows.
 	NewDNSpacketInConjunction(id uint32) error
 	// AddAddressToDNSConjunction adds addresses to the toAddresses of the dns packetIn conjunction,
@@ -1072,7 +1072,7 @@ func (c *client) SendTCPPacketOut(
 	tcpDstPort uint16,
 	tcpAckNum uint32,
 	tcpFlag uint8,
-	packetOutType binding.PacketOutType) error {
+	mutatePacketOut func(builder binding.PacketOutBuilder) binding.PacketOutBuilder) error {
 	// Generate a base IP PacketOutBuilder.
 	packetOutBuilder, err := setBasePacketOutBuilder(c.bridge.BuildPacketOut(), srcMAC, dstMAC, srcIP, dstIP, inPort, outPort)
 	if err != nil {
@@ -1090,7 +1090,9 @@ func (c *client) SendTCPPacketOut(
 	packetOutBuilder = packetOutBuilder.SetTCPAckNum(tcpAckNum)
 	packetOutBuilder = packetOutBuilder.SetTCPFlags(tcpFlag)
 
-	packetOutBuilder = addActionsToPacketOut(packetOutBuilder, packetOutType)
+	if mutatePacketOut != nil {
+		packetOutBuilder = mutatePacketOut(packetOutBuilder)
+	}
 
 	packetOutObj := packetOutBuilder.Done()
 	return c.bridge.SendPacketOut(packetOutObj)
@@ -1108,7 +1110,7 @@ func (c *client) SendICMPPacketOut(
 	icmpType uint8,
 	icmpCode uint8,
 	icmpData []byte,
-	packetOutType binding.PacketOutType) error {
+	mutatePacketOut func(builder binding.PacketOutBuilder) binding.PacketOutBuilder) error {
 	// Generate a base IP PacketOutBuilder.
 	packetOutBuilder, err := setBasePacketOutBuilder(c.bridge.BuildPacketOut(), srcMAC, dstMAC, srcIP, dstIP, inPort, outPort)
 	if err != nil {
@@ -1125,7 +1127,9 @@ func (c *client) SendICMPPacketOut(
 	packetOutBuilder = packetOutBuilder.SetICMPCode(icmpCode)
 	packetOutBuilder = packetOutBuilder.SetICMPData(icmpData)
 
-	packetOutBuilder = addActionsToPacketOut(packetOutBuilder, packetOutType)
+	if mutatePacketOut != nil {
+		packetOutBuilder = mutatePacketOut(packetOutBuilder)
+	}
 
 	packetOutObj := packetOutBuilder.Done()
 	return c.bridge.SendPacketOut(packetOutObj)
@@ -1143,7 +1147,7 @@ func (c *client) SendUDPPacketOut(
 	udpSrcPort uint16,
 	udpDstPort uint16,
 	udpData []byte,
-	isDNSResponse bool) error {
+	mutatePacketOut func(builder binding.PacketOutBuilder) binding.PacketOutBuilder) error {
 	// Generate a base IP PacketOutBuilder.
 	packetOutBuilder, err := setBasePacketOutBuilder(c.bridge.BuildPacketOut(), srcMAC, dstMAC, srcIP, dstIP, inPort, outPort)
 	if err != nil {
@@ -1160,21 +1164,10 @@ func (c *client) SendUDPPacketOut(
 		SetUDPDstPort(udpDstPort).
 		SetUDPData(udpData)
 
-	if isDNSResponse {
-		packetOutBuilder = packetOutBuilder.AddLoadRegMark(CustomReasonDNSRegMark)
+	if mutatePacketOut != nil {
+		packetOutBuilder = mutatePacketOut(packetOutBuilder)
 	}
+
 	packetOutObj := packetOutBuilder.Done()
 	return c.bridge.SendPacketOut(packetOutObj)
-}
-
-func addActionsToPacketOut(packetOutBuilder binding.PacketOutBuilder, packetOutType binding.PacketOutType) binding.PacketOutBuilder {
-	switch packetOutType {
-	case binding.RejectServiceLocal:
-		tableID := ConntrackTable.GetID()
-		packetOutBuilder = packetOutBuilder.AddResubmitAction(nil, &tableID)
-	case binding.RejectLocalToRemote:
-		tableID := L3ForwardingTable.GetID()
-		packetOutBuilder = packetOutBuilder.AddResubmitAction(nil, &tableID)
-	}
-	return packetOutBuilder
 }

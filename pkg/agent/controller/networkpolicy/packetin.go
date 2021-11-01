@@ -15,7 +15,6 @@
 package networkpolicy
 
 import (
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"time"
@@ -26,28 +25,10 @@ import (
 	"github.com/vmware/go-ipfix/pkg/registry"
 	"k8s.io/klog/v2"
 
-	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/flowexporter"
-	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/openflow"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 	"antrea.io/antrea/pkg/util/ip"
-)
-
-const (
-	IPv4HdrLen uint16 = 20
-	IPv6HdrLen uint16 = 40
-
-	ICMPUnusedHdrLen uint16 = 4
-
-	TCPAck uint8 = 0b010000
-	TCPRst uint8 = 0b000100
-
-	ICMPDstUnreachableType         uint8 = 3
-	ICMPDstHostAdminProhibitedCode uint8 = 10
-
-	ICMPv6DstUnreachableType     uint8 = 1
-	ICMPv6DstAdminProhibitedCode uint8 = 1
 )
 
 // HandlePacketIn is the packetin handler registered to openflow by Antrea network
@@ -198,135 +179,6 @@ func (c *Controller) logPacket(pktIn *ofctrl.PacketIn) error {
 	// Log the ob info to corresponding file w/ deduplication
 	c.antreaPolicyLogger.LogDedupPacket(ob)
 	return nil
-}
-
-// rejectRequest sends reject response to the requesting client, based on the
-// packet-in message.
-func (c *Controller) rejectRequest(pktIn *ofctrl.PacketIn) error {
-	// Get ethernet data.
-	srcMAC := pktIn.Data.HWDst.String()
-	dstMAC := pktIn.Data.HWSrc.String()
-
-	var (
-		srcIP  string
-		dstIP  string
-		prot   uint8
-		isIPv6 bool
-	)
-	switch ipPkt := pktIn.Data.Data.(type) {
-	case *protocol.IPv4:
-		// Get IP data.
-		srcIP = ipPkt.NWDst.String()
-		dstIP = ipPkt.NWSrc.String()
-		prot = ipPkt.Protocol
-		isIPv6 = false
-	case *protocol.IPv6:
-		// Get IP data.
-		srcIP = ipPkt.NWDst.String()
-		dstIP = ipPkt.NWSrc.String()
-		prot = ipPkt.NextHeader
-		isIPv6 = true
-	}
-
-	sIface, srcFound := c.ifaceStore.GetInterfaceByIP(srcIP)
-	dIface, dstFound := c.ifaceStore.GetInterfaceByIP(dstIP)
-	isSvcTraffic := c.isServiceTraffic(pktIn, c.antreaProxyEnabled, dstMAC, dstFound)
-	packetOutType := binding.GetPacketOutType(isSvcTraffic, c.antreaProxyEnabled, srcFound, dstFound)
-	inPort, outPort := getRejectOFPort(packetOutType, sIface, dIface)
-
-	if prot == protocol.Type_TCP {
-		// Get TCP data.
-		oriTCPSrcPort, oriTCPDstPort, oriTCPSeqNum, _, _, err := binding.GetTCPHeaderData(pktIn.Data.Data)
-		if err != nil {
-			return err
-		}
-		// While sending TCP reject packet-out, switch original src/dst port,
-		// set the ackNum as original seqNum+1 and set the flag as ack+rst.
-		return c.ofClient.SendTCPPacketOut(
-			srcMAC,
-			dstMAC,
-			srcIP,
-			dstIP,
-			inPort,
-			outPort,
-			isIPv6,
-			oriTCPDstPort,
-			oriTCPSrcPort,
-			oriTCPSeqNum+1,
-			TCPAck|TCPRst,
-			packetOutType)
-	}
-	// Use ICMP host administratively prohibited for ICMP, UDP, SCTP reject.
-	icmpType := ICMPDstUnreachableType
-	icmpCode := ICMPDstHostAdminProhibitedCode
-	ipHdrLen := IPv4HdrLen
-	if isIPv6 {
-		icmpType = ICMPv6DstUnreachableType
-		icmpCode = ICMPv6DstAdminProhibitedCode
-		ipHdrLen = IPv6HdrLen
-	}
-	ipHdr, _ := pktIn.Data.Data.MarshalBinary()
-	icmpData := make([]byte, int(ICMPUnusedHdrLen+ipHdrLen+8))
-	// Put ICMP unused header in Data prop and set it to zero.
-	binary.BigEndian.PutUint32(icmpData[:ICMPUnusedHdrLen], 0)
-	copy(icmpData[ICMPUnusedHdrLen:], ipHdr[:ipHdrLen+8])
-	return c.ofClient.SendICMPPacketOut(
-		srcMAC,
-		dstMAC,
-		srcIP,
-		dstIP,
-		inPort,
-		outPort,
-		isIPv6,
-		icmpType,
-		icmpCode,
-		icmpData,
-		packetOutType)
-}
-
-// isServiceTraffic uses ServiceEPStateField to decide if this is a Service
-// traffic, when AntreaProxy is enabled. And when AntreaProxy is disabled, if the
-// destination IP of the reject response packet is on the local Node, but the
-// source MAC is antrea-gw's MAC, then this is a rejection of Service traffic.
-// Because this response is heading to kube-proxy.
-func (c *Controller) isServiceTraffic(pktIn *ofctrl.PacketIn, antreaProxyEnabled bool, dstMAC string, isDstLocal bool) bool {
-	if antreaProxyEnabled {
-		matches := pktIn.GetMatches()
-		match := getMatchRegField(matches, openflow.ServiceEPStateField)
-		if match != nil {
-			svcEpstate, err := getInfoInReg(match, openflow.ServiceEPStateField.GetRange().ToNXRange())
-			return err == nil && svcEpstate&openflow.EpSelectedRegMark.GetValue() == openflow.EpSelectedRegMark.GetValue()
-		}
-	}
-	gwIfaces := c.ifaceStore.GetInterfacesByType(interfacestore.GatewayInterface)
-	return isDstLocal && dstMAC == gwIfaces[0].MAC.String()
-}
-
-// getRejectOFPort sets the inPort and outPort of a packetOut based on the packetOutType.
-func getRejectOFPort(packetOutType binding.PacketOutType, sIface, dIface *interfacestore.InterfaceConfig) (uint32, uint32) {
-	inPort := uint32(config.HostGatewayOFPort)
-	outPort := uint32(0)
-	switch packetOutType {
-	case binding.RejectPodLocal:
-		inPort = uint32(sIface.OFPort)
-		outPort = uint32(dIface.OFPort)
-	case binding.RejectServiceLocal:
-		inPort = uint32(sIface.OFPort)
-	case binding.RejectPodRemoteToLocal:
-		inPort = config.HostGatewayOFPort
-		outPort = uint32(dIface.OFPort)
-	case binding.RejectServiceRemoteToLocal:
-		inPort = config.HostGatewayOFPort
-	case binding.RejectLocalToRemote:
-		inPort = uint32(sIface.OFPort)
-	case binding.RejectNoAPServiceLocal:
-		inPort = uint32(sIface.OFPort)
-		outPort = config.HostGatewayOFPort
-	case binding.RejectNoAPServiceRemoteToLocal:
-		inPort = config.DefaultTunOFPort
-		outPort = config.HostGatewayOFPort
-	}
-	return inPort, outPort
 }
 
 func (c *Controller) storeDenyConnection(pktIn *ofctrl.PacketIn) error {
