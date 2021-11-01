@@ -16,6 +16,11 @@ override:
   licenses: ["Apache-2.0"]
 - path: "github.com/docker/spdystream"
   licenses: ["Apache-2.0"]
+# go-digest uses a dual-license: Apache-2.0 for the code and CC-BY-SA-4.0 for
+# the docs. This is causing the license checker to fail. Since we only depend on
+# the code, we can override the license to Apache-2.0 and keep things simple.
+- path: "github.com/opencontainers/go-digest"
+  licenses: ["Apache-2.0"]
 
 exceptions:
   unresolvableLicense:
