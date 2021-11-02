@@ -547,6 +547,19 @@ func TestSyncEgressIP(t *testing.T) {
 			expectErr:                  true,
 		},
 		{
+			name:                   "[IPv6]Egress with empty EgressIP and proper ExternalIPPool",
+			existingExternalIPPool: newExternalIPPool("ipPoolA", "2021:2::aaa0/124", "", ""),
+			inputEgress: &v1alpha2.Egress{
+				ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
+				Spec: v1alpha2.EgressSpec{
+					ExternalIPPool: "ipPoolA",
+				},
+			},
+			expectedEgressIP:           "2021:2::aaa1",
+			expectedExternalIPPoolUsed: 1,
+			expectErr:                  false,
+		},
+		{
 			name:                   "Egress with non-empty EgressIP and proper ExternalIPPool",
 			existingExternalIPPool: newExternalIPPool("ipPoolA", "1.1.1.0/24", "", ""),
 			inputEgress: &v1alpha2.Egress{
