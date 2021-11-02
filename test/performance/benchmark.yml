@@ -9,28 +9,29 @@ benchmarks:
   - name: "BenchmarkInitXLargeScaleWithSmallNamespaces"
     package: "./pkg/controller/networkpolicy"
     threshold: 0.3
-    version_requirement: ">1.3.0"
+    versionRequirement: ">1.3.0"
   - name: "BenchmarkInitXLargeScaleWithLargeNamespaces"
     package: "./pkg/controller/networkpolicy"
     threshold: 0.2
-    version_requirement: ">1.3.0"
+    versionRequirement: ">1.3.0"
   - name: "BenchmarkInitXLargeScaleWithOneNamespace"
     package: "./pkg/controller/networkpolicy"
     threshold: 0.3
-    version_requirement: ">1.3.0"
+    versionRequirement: ">1.3.0"
   - name: "BenchmarkInitXLargeScaleWithNetpolPerPod"
     package: "./pkg/controller/networkpolicy"
     threshold: 0.15
-    version_requirement: ">1.3.0"
+    versionRequirement: ">1.3.0"
   - name: "BenchmarkInitXLargeScaleWithClusterScopedNetpol"
     package: "./pkg/controller/networkpolicy"
-    version_requirement: ">1.3.0"
+    versionRequirement: ">1.3.0"
   - name: "BenchmarkSyncAddressGroup"
     package: "./pkg/controller/networkpolicy"
-    version_requirement: ">1.3.0"
+    versionRequirement: ">1.3.0"
   - name: "BenchmarkCluster_ShouldSelect/Select_Node_from_1000_alive_Nodes-nodeSelectedForEgress"
     package: "./pkg/agent/memberlist"
-    version_requirement: ">1.2.0"
+    versionRequirement: ">1.2.0"
+    threshold: 0.2
   - name: "BenchmarkRuleCacheUnionAddressGroups"
     package: "./pkg/agent/controller/networkpolicy"
     threshold: 0.15
@@ -46,7 +47,7 @@ benchmarks:
     package: "./pkg/agent/controller/networkpolicy"
   - name: "BenchmarkPoll"
     package: "./pkg/agent/flowexporter/connections"
-    version_requirement: ">1.3.0"
+    versionRequirement: ">1.3.0"
   - name: "BenchmarkExportConntrackConns"
     package: "./pkg/agent/flowexporter/exporter"
     threshold: 0.2
