@@ -28,7 +28,7 @@ function Get-GithubLatestReleaseTag($Owner, $Repo) {
     return $null
 }
 
-$Owner = "vmware-tanzu"
+$Owner = "antrea-io"
 $Repo = "antrea"
 $helper = "$AntreaHome\Helper.psm1"
 
