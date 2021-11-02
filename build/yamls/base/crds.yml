@@ -873,7 +873,7 @@ spec:
                       # Ensure that Action field allows only ALLOW, DROP and REJECT values
                       action:
                         type: string
-                        enum: ['Allow', 'Drop', 'Reject']
+                        enum: ['Allow', 'Drop', 'Reject', 'Pass']
                       ports:
                         type: array
                         items:
@@ -1021,7 +1021,7 @@ spec:
                       # Ensure that Action field allows only ALLOW, DROP and REJECT values
                       action:
                         type: string
-                        enum: ['Allow', 'Drop', 'Reject']
+                        enum: ['Allow', 'Drop', 'Reject', 'Pass']
                       ports:
                         type: array
                         items:
@@ -1259,7 +1259,7 @@ spec:
                       # Ensure that Action field allows only ALLOW, DROP and REJECT values
                       action:
                         type: string
-                        enum: ['Allow', 'Drop', 'Reject']
+                        enum: ['Allow', 'Drop', 'Reject', 'Pass']
                       ports:
                         type: array
                         items:
@@ -1398,7 +1398,7 @@ spec:
                       # Ensure that Action field allows only ALLOW, DROP and REJECT values
                       action:
                         type: string
-                        enum: ['Allow', 'Drop', 'Reject']
+                        enum: ['Allow', 'Drop', 'Reject', 'Pass']
                       ports:
                         type: array
                         items:
@@ -2290,7 +2290,7 @@ spec:
                       # Ensure that Action field allows only ALLOW, DROP and REJECT values
                       action:
                         type: string
-                        enum: ['Allow', 'Drop', 'Reject']
+                        enum: ['Allow', 'Drop', 'Reject', 'Pass']
                       ports:
                         type: array
                         items:
@@ -2438,7 +2438,7 @@ spec:
                       # Ensure that Action field allows only ALLOW, DROP and REJECT values
                       action:
                         type: string
-                        enum: ['Allow', 'Drop', 'Reject']
+                        enum: ['Allow', 'Drop', 'Reject', 'Pass']
                       ports:
                         type: array
                         items:
@@ -2663,7 +2663,7 @@ spec:
                       # Ensure that Action field allows only ALLOW, DROP and REJECT values
                       action:
                         type: string
-                        enum: ['Allow', 'Drop', 'Reject']
+                        enum: ['Allow', 'Drop', 'Reject', 'Pass']
                       ports:
                         type: array
                         items:
@@ -2802,7 +2802,7 @@ spec:
                       # Ensure that Action field allows only ALLOW, DROP and REJECT values
                       action:
                         type: string
-                        enum: ['Allow', 'Drop', 'Reject']
+                        enum: ['Allow', 'Drop', 'Reject', 'Pass']
                       ports:
                         type: array
                         items:
