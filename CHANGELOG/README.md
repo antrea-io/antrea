@@ -10,6 +10,7 @@ stages](https://github.com/kubernetes/community/blob/master/contributors/devel/s
 Some experimental features can be enabled / disabled using [Feature
 Gates](../docs/feature-gates.md).
 
+- [CHANGELOG-1.4](CHANGELOG-1.4.md)
 - [CHANGELOG-1.3](CHANGELOG-1.3.md)
 - [CHANGELOG-1.2](CHANGELOG-1.2.md)
 - [CHANGELOG-1.1](CHANGELOG-1.1.md)
