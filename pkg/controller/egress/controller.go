@@ -230,33 +230,38 @@ func (c *EgressController) createOrUpdateIPAllocator(ipPool *egressv1alpha2.Exte
 	}
 
 	for _, ipRange := range ipPool.Spec.IPRanges {
-		ipRangeStr := ipRange.CIDR
-		if ipRangeStr == "" {
-			ipRangeStr = fmt.Sprintf("%s-%s", ipRange.Start, ipRange.End)
-		}
-		// The ipRange is already in the allocator.
-		if existingIPRanges.Has(ipRangeStr) {
-			continue
-		}
-		var ipAllocator *ipallocator.SingleIPAllocator
-		var err error
-		if ipRange.CIDR != "" {
-			_, ipNet, parseErr := net.ParseCIDR(ipRange.CIDR)
-			if parseErr != nil {
-				klog.ErrorS(err, "Failed to create IPAllocator", "ipRange", ipRange)
-				continue
+		ipAllocator, err := func() (*ipallocator.SingleIPAllocator, error) {
+			if ipRange.CIDR != "" {
+				_, ipNet, err := net.ParseCIDR(ipRange.CIDR)
+				if err != nil {
+					return nil, err
+				}
+				// Must use normalized IPNet string to check if the IP range exists. Otherwise non-strict CIDR like
+				// 192.168.0.1/24 will be considered new even if it doesn't change.
+				// Validating or normalizing the input CIDR should be a better solution but the externalIPPools that
+				// have been created will still have this issue, so we just normalize the CIDR when using it.
+				if existingIPRanges.Has(ipNet.String()) {
+					return nil, nil
+				}
+				// Don't use the IPv4 network's broadcast address.
+				var reservedIPs []net.IP
+				if utilnet.IsIPv4CIDR(ipNet) {
+					reservedIPs = append(reservedIPs, iputil.GetLocalBroadcastIP(ipNet))
+				}
+				return ipallocator.NewCIDRAllocator(ipNet, reservedIPs)
+			} else {
+				if existingIPRanges.Has(fmt.Sprintf("%s-%s", ipRange.Start, ipRange.End)) {
+					return nil, nil
+				}
+				return ipallocator.NewIPRangeAllocator(net.ParseIP(ipRange.Start), net.ParseIP(ipRange.End))
 			}
-			// Don't use the IPv4 network's broadcast address.
-			var reservedIPs []net.IP
-			if utilnet.IsIPv4CIDR(ipNet) {
-				reservedIPs = append(reservedIPs, iputil.GetLocalBroadcastIP(ipNet))
-			}
-			ipAllocator, err = ipallocator.NewCIDRAllocator(ipNet, reservedIPs)
-		} else {
-			ipAllocator, err = ipallocator.NewIPRangeAllocator(net.ParseIP(ipRange.Start), net.ParseIP(ipRange.End))
-		}
+		}()
 		if err != nil {
 			klog.ErrorS(err, "Failed to create IPAllocator", "ipRange", ipRange)
+			continue
+		}
+		// The IP range already exists in multiIPAllocator.
+		if ipAllocator == nil {
 			continue
 		}
 		multiIPAllocator = append(multiIPAllocator, ipAllocator)
