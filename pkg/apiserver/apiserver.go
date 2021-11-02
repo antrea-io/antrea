@@ -54,6 +54,7 @@ import (
 	"antrea.io/antrea/pkg/apiserver/registry/system/supportbundle"
 	"antrea.io/antrea/pkg/apiserver/storage"
 	"antrea.io/antrea/pkg/controller/egress"
+	"antrea.io/antrea/pkg/controller/externalippool"
 	"antrea.io/antrea/pkg/controller/ipam"
 	controllernetworkpolicy "antrea.io/antrea/pkg/controller/networkpolicy"
 	"antrea.io/antrea/pkg/controller/querier"
@@ -101,6 +102,7 @@ type ExtraConfig struct {
 	endpointQuerier               controllernetworkpolicy.EndpointQuerier
 	networkPolicyController       *controllernetworkpolicy.NetworkPolicyController
 	egressController              *egress.EgressController
+	externalIPPoolController      *externalippool.ExternalIPPoolController
 	caCertController              *certificate.CACertController
 	statsAggregator               *stats.Aggregator
 	networkPolicyStatusController *controllernetworkpolicy.StatusController
@@ -308,8 +310,8 @@ func installHandlers(c *ExtraConfig, s *genericapiserver.GenericAPIServer) {
 	}
 
 	if features.DefaultFeatureGate.Enabled(features.Egress) {
-		s.Handler.NonGoRestfulMux.HandleFunc("/validate/externalippool", webhook.HandlerForValidateFunc(c.egressController.ValidateExternalIPPool))
 		s.Handler.NonGoRestfulMux.HandleFunc("/validate/egress", webhook.HandlerForValidateFunc(c.egressController.ValidateEgress))
+		s.Handler.NonGoRestfulMux.HandleFunc("/validate/externalippool", webhook.HandlerForValidateFunc(c.externalIPPoolController.ValidateExternalIPPool))
 	}
 
 	if features.DefaultFeatureGate.Enabled(features.AntreaIPAM) {

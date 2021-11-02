@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package egress
+package ipassigner
 
 import (
 	"sync"
@@ -31,7 +31,7 @@ type localIPDetector struct {
 	mutex         sync.RWMutex
 	localIPs      sets.String
 	cacheSynced   bool
-	eventHandlers []eventHandler
+	eventHandlers []LocalIPEventHandler
 }
 
 func NewLocalIPDetector() *localIPDetector {
@@ -51,7 +51,7 @@ func (d *localIPDetector) HasSynced() bool {
 	return d.cacheSynced
 }
 
-func (d *localIPDetector) AddEventHandler(handler eventHandler) {
+func (d *localIPDetector) AddEventHandler(handler LocalIPEventHandler) {
 	d.eventHandlers = append(d.eventHandlers, handler)
 }
 

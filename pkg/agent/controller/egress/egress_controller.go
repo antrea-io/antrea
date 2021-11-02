@@ -37,8 +37,8 @@ import (
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent"
-	"antrea.io/antrea/pkg/agent/controller/egress/ipassigner"
 	"antrea.io/antrea/pkg/agent/interfacestore"
+	"antrea.io/antrea/pkg/agent/ipassigner"
 	"antrea.io/antrea/pkg/agent/memberlist"
 	"antrea.io/antrea/pkg/agent/openflow"
 	"antrea.io/antrea/pkg/agent/route"
@@ -121,7 +121,7 @@ type EgressController struct {
 	queue              workqueue.RateLimitingInterface
 
 	// Use an interface for IP detector to enable testing.
-	localIPDetector LocalIPDetector
+	localIPDetector ipassigner.LocalIPDetector
 	ifaceStore      interfacestore.InterfaceStore
 	nodeName        string
 	idAllocator     *idAllocator
@@ -152,12 +152,11 @@ func NewEgressController(
 	routeClient route.Interface,
 	nodeName string,
 	nodeTransportIP net.IP,
-	clusterPort int,
+	cluster *memberlist.Cluster,
 	egressInformer crdinformers.EgressInformer,
 	nodeInformer coreinformers.NodeInformer,
-	externalIPPoolInformer crdinformers.ExternalIPPoolInformer,
+	localIPDetector ipassigner.LocalIPDetector,
 ) (*EgressController, error) {
-	localIPDetector := NewLocalIPDetector()
 	c := &EgressController{
 		ofClient:             ofClient,
 		routeClient:          routeClient,
@@ -175,18 +174,13 @@ func NewEgressController(
 		egressBindings:       map[string]*egressBinding{},
 		localIPDetector:      localIPDetector,
 		idAllocator:          newIDAllocator(minEgressMark, maxEgressMark),
+		cluster:              cluster,
 	}
 	ipAssigner, err := ipassigner.NewIPAssigner(nodeTransportIP, egressDummyDevice)
 	if err != nil {
 		return nil, fmt.Errorf("initializing egressIP assigner failed: %v", err)
 	}
 	c.ipAssigner = ipAssigner
-
-	cluster, err := memberlist.NewCluster(clusterPort, nodeName, nodeInformer, externalIPPoolInformer)
-	if err != nil {
-		return nil, fmt.Errorf("initializing memberlist cluster failed: %v", err)
-	}
-	c.cluster = cluster
 
 	c.egressInformer.AddIndexers(cache.Indexers{egressIPIndex: func(obj interface{}) ([]string, error) {
 		egress, ok := obj.(*crdv1a2.Egress)
@@ -214,7 +208,7 @@ func NewEgressController(
 		},
 		resyncPeriod,
 	)
-	localIPDetector.AddEventHandler(c.onLocalIPUpdate)
+	c.localIPDetector.AddEventHandler(c.onLocalIPUpdate)
 	c.cluster.AddClusterEventHandler(c.enqueueEgressesByExternalIPPool)
 	return c, nil
 }
@@ -303,8 +297,6 @@ func (c *EgressController) Run(stopCh <-chan struct{}) {
 	}
 
 	c.removeStaleEgressIPs()
-
-	go c.cluster.Run(stopCh)
 
 	go wait.NonSlidingUntil(c.watchEgressGroup, 5*time.Second, stopCh)
 
@@ -618,7 +610,7 @@ func (c *EgressController) syncEgress(egressName string) error {
 		eState = c.newEgressState(egressName, egress.Spec.EgressIP)
 	}
 
-	localNodeSelected, err := c.cluster.ShouldSelectEgress(egress)
+	localNodeSelected, err := c.cluster.ShouldSelectIP(egress.Spec.EgressIP, egress.Spec.ExternalIPPool)
 	if err != nil {
 		return err
 	}
