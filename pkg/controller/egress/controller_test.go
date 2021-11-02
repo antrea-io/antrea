@@ -706,6 +706,58 @@ func TestSyncEgressIP(t *testing.T) {
 	}
 }
 
+func TestCreateOrUpdateIPAllocator(t *testing.T) {
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+	controller := newController(nil, nil)
+	controller.informerFactory.Start(stopCh)
+	controller.crdInformerFactory.Start(stopCh)
+	controller.informerFactory.WaitForCacheSync(stopCh)
+	controller.crdInformerFactory.WaitForCacheSync(stopCh)
+
+	ipPool := newExternalIPPool("ipPoolA", "1.1.1.0/30", "", "")
+	changed := controller.createOrUpdateIPAllocator(ipPool)
+	assert.True(t, changed)
+	allocator, exists := controller.getIPAllocator(ipPool.Name)
+	require.True(t, exists)
+	assert.Equal(t, 1, len(allocator))
+	assert.Equal(t, 2, allocator.Total())
+
+	// Append a non-strict CIDR, it should handle it correctly.
+	ipPool.Spec.IPRanges = append(ipPool.Spec.IPRanges, corev1a2.IPRange{CIDR: "1.1.2.1/30"})
+	changed = controller.createOrUpdateIPAllocator(ipPool)
+	assert.True(t, changed)
+	allocator, exists = controller.getIPAllocator(ipPool.Name)
+	require.True(t, exists)
+	assert.Equal(t, 2, len(allocator))
+	assert.Equal(t, 4, allocator.Total())
+
+	ipPool.Spec.IPRanges = append(ipPool.Spec.IPRanges, corev1a2.IPRange{Start: "1.1.3.1", End: "1.1.3.10"})
+	changed = controller.createOrUpdateIPAllocator(ipPool)
+	assert.True(t, changed)
+	allocator, exists = controller.getIPAllocator(ipPool.Name)
+	require.True(t, exists)
+	assert.Equal(t, 3, len(allocator))
+	assert.Equal(t, 14, allocator.Total())
+
+	// IPv6 CIDR shouldn't exclude broadcast address, so total should be increased by 15.
+	ipPool.Spec.IPRanges = append(ipPool.Spec.IPRanges, corev1a2.IPRange{CIDR: "2021:3::aaa1/124"})
+	changed = controller.createOrUpdateIPAllocator(ipPool)
+	assert.True(t, changed)
+	allocator, exists = controller.getIPAllocator(ipPool.Name)
+	require.True(t, exists)
+	assert.Equal(t, 4, len(allocator))
+	assert.Equal(t, 29, allocator.Total())
+
+	// When there is no change, the method should do nothing and the return value should be false.
+	changed = controller.createOrUpdateIPAllocator(ipPool)
+	assert.False(t, changed)
+	allocator, exists = controller.getIPAllocator(ipPool.Name)
+	require.True(t, exists)
+	assert.Equal(t, 4, len(allocator))
+	assert.Equal(t, 29, allocator.Total())
+}
+
 func checkExternalIPPoolUsed(t *testing.T, controller *egressController, poolName string, used int) {
 	ipAllocator, exists := controller.getIPAllocator(poolName)
 	require.True(t, exists)
