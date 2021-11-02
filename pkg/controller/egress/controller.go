@@ -34,6 +34,7 @@ import (
 	"k8s.io/client-go/util/retry"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
+	utilnet "k8s.io/utils/net"
 
 	"antrea.io/antrea/pkg/apis/controlplane"
 	egressv1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
@@ -245,8 +246,11 @@ func (c *EgressController) createOrUpdateIPAllocator(ipPool *egressv1alpha2.Exte
 				klog.ErrorS(err, "Failed to create IPAllocator", "ipRange", ipRange)
 				continue
 			}
-			// exclude broadcast address from allocation
-			reservedIPs := []net.IP{iputil.GetLocalBroadcastIP(ipNet)}
+			// Don't use the IPv4 network's broadcast address.
+			var reservedIPs []net.IP
+			if utilnet.IsIPv4CIDR(ipNet) {
+				reservedIPs = append(reservedIPs, iputil.GetLocalBroadcastIP(ipNet))
+			}
 			ipAllocator, err = ipallocator.NewCIDRAllocator(ipNet, reservedIPs)
 		} else {
 			ipAllocator, err = ipallocator.NewIPRangeAllocator(net.ParseIP(ipRange.Start), net.ParseIP(ipRange.End))
