@@ -1838,10 +1838,10 @@ func testRejectServiceTraffic(t *testing.T, data *TestData) {
 	_, err := data.podWaitForIPs(defaultTimeout, clientName, testNamespace)
 	require.NoError(t, err)
 
-	svc1, cleanup1 := data.createAgnhostServiceAndBackendPods(t, "s1", nodeName(0), v1.ServiceTypeClusterIP)
+	svc1, cleanup1 := data.createAgnhostServiceAndBackendPods(t, "s1", testNamespace, nodeName(0), v1.ServiceTypeClusterIP)
 	defer cleanup1()
 
-	svc2, cleanup2 := data.createAgnhostServiceAndBackendPods(t, "s2", nodeName(1), v1.ServiceTypeClusterIP)
+	svc2, cleanup2 := data.createAgnhostServiceAndBackendPods(t, "s2", testNamespace, nodeName(1), v1.ServiceTypeClusterIP)
 	defer cleanup2()
 
 	testcases := []podToAddrTestStep{
