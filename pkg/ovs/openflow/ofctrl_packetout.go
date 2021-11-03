@@ -298,6 +298,12 @@ func (b *ofPacketOutBuilder) AddLoadRegMark(mark *RegMark) PacketOutBuilder {
 	return b.AddLoadAction(name, uint64(mark.value), mark.field.rng)
 }
 
+func (b *ofPacketOutBuilder) AddResubmitAction(inPort *uint16, table *uint8) PacketOutBuilder {
+	act := ofctrl.NewResubmit(inPort, table)
+	b.pktOut.Actions = append(b.pktOut.Actions, act)
+	return b
+}
+
 func (b *ofPacketOutBuilder) Done() *ofctrl.PacketOut {
 	if b.pktOut.IPHeader != nil && b.pktOut.IPv6Header != nil {
 		klog.Errorf("Invalid PacketOutBuilder: IP header and IPv6 header are not allowed to exist at the same time")

@@ -258,13 +258,13 @@ type Client interface {
 		srcIP string,
 		dstIP string,
 		inPort uint32,
-		outPort int32,
+		outPort uint32,
 		isIPv6 bool,
 		tcpSrcPort uint16,
 		tcpDstPort uint16,
 		tcpAckNum uint32,
 		tcpFlag uint8,
-		isReject bool) error
+		mutatePacketOut func(builder binding.PacketOutBuilder) binding.PacketOutBuilder) error
 	// SendICMPPacketOut sends ICMP packet as a packet-out to OVS.
 	SendICMPPacketOut(
 		srcMAC string,
@@ -272,12 +272,12 @@ type Client interface {
 		srcIP string,
 		dstIP string,
 		inPort uint32,
-		outPort int32,
+		outPort uint32,
 		isIPv6 bool,
 		icmpType uint8,
 		icmpCode uint8,
 		icmpData []byte,
-		isReject bool) error
+		mutatePacketOut func(builder binding.PacketOutBuilder) binding.PacketOutBuilder) error
 	// SendUDPPacketOut sends UDP packet as a packet-out to OVS.
 	SendUDPPacketOut(
 		srcMAC string,
@@ -285,12 +285,12 @@ type Client interface {
 		srcIP string,
 		dstIP string,
 		inPort uint32,
-		outPort int32,
+		outPort uint32,
 		isIPv6 bool,
 		udpSrcPort uint16,
 		udpDstPort uint16,
 		udpData []byte,
-		isDNSResponse bool) error
+		mutatePacketOut func(builder binding.PacketOutBuilder) binding.PacketOutBuilder) error
 	// NewDNSpacketInConjunction creates a policyRuleConjunction for the dns response interception flows.
 	NewDNSpacketInConjunction(id uint32) error
 	// AddAddressToDNSConjunction adds addresses to the toAddresses of the dns packetIn conjunction,
@@ -1048,7 +1048,7 @@ func (c *client) IsIPv6Enabled() bool {
 }
 
 // setBasePacketOutBuilder sets base IP properties of a packetOutBuilder which can have more packet data added.
-func setBasePacketOutBuilder(packetOutBuilder binding.PacketOutBuilder, srcMAC string, dstMAC string, srcIP string, dstIP string, inPort uint32, outPort int32) (binding.PacketOutBuilder, error) {
+func setBasePacketOutBuilder(packetOutBuilder binding.PacketOutBuilder, srcMAC string, dstMAC string, srcIP string, dstIP string, inPort uint32, outPort uint32) (binding.PacketOutBuilder, error) {
 	// Set ethernet header.
 	parsedSrcMAC, err := net.ParseMAC(srcMAC)
 	if err != nil {
@@ -1077,8 +1077,8 @@ func setBasePacketOutBuilder(packetOutBuilder binding.PacketOutBuilder, srcMAC s
 	packetOutBuilder = packetOutBuilder.SetTTL(128)
 
 	packetOutBuilder = packetOutBuilder.SetInport(inPort)
-	if outPort != -1 {
-		packetOutBuilder = packetOutBuilder.SetOutport(uint32(outPort))
+	if outPort != 0 {
+		packetOutBuilder = packetOutBuilder.SetOutport(outPort)
 	}
 
 	return packetOutBuilder, nil
@@ -1091,13 +1091,13 @@ func (c *client) SendTCPPacketOut(
 	srcIP string,
 	dstIP string,
 	inPort uint32,
-	outPort int32,
+	outPort uint32,
 	isIPv6 bool,
 	tcpSrcPort uint16,
 	tcpDstPort uint16,
 	tcpAckNum uint32,
 	tcpFlag uint8,
-	isReject bool) error {
+	mutatePacketOut func(builder binding.PacketOutBuilder) binding.PacketOutBuilder) error {
 	// Generate a base IP PacketOutBuilder.
 	packetOutBuilder, err := setBasePacketOutBuilder(c.bridge.BuildPacketOut(), srcMAC, dstMAC, srcIP, dstIP, inPort, outPort)
 	if err != nil {
@@ -1115,9 +1115,8 @@ func (c *client) SendTCPPacketOut(
 	packetOutBuilder = packetOutBuilder.SetTCPAckNum(tcpAckNum)
 	packetOutBuilder = packetOutBuilder.SetTCPFlags(tcpFlag)
 
-	// Reject response packet should bypass ConnTrack
-	if isReject {
-		packetOutBuilder = packetOutBuilder.AddLoadRegMark(CustomReasonRejectRegMark)
+	if mutatePacketOut != nil {
+		packetOutBuilder = mutatePacketOut(packetOutBuilder)
 	}
 
 	packetOutObj := packetOutBuilder.Done()
@@ -1131,12 +1130,12 @@ func (c *client) SendICMPPacketOut(
 	srcIP string,
 	dstIP string,
 	inPort uint32,
-	outPort int32,
+	outPort uint32,
 	isIPv6 bool,
 	icmpType uint8,
 	icmpCode uint8,
 	icmpData []byte,
-	isReject bool) error {
+	mutatePacketOut func(builder binding.PacketOutBuilder) binding.PacketOutBuilder) error {
 	// Generate a base IP PacketOutBuilder.
 	packetOutBuilder, err := setBasePacketOutBuilder(c.bridge.BuildPacketOut(), srcMAC, dstMAC, srcIP, dstIP, inPort, outPort)
 	if err != nil {
@@ -1153,9 +1152,8 @@ func (c *client) SendICMPPacketOut(
 	packetOutBuilder = packetOutBuilder.SetICMPCode(icmpCode)
 	packetOutBuilder = packetOutBuilder.SetICMPData(icmpData)
 
-	// Reject response packet should bypass ConnTrack
-	if isReject {
-		packetOutBuilder = packetOutBuilder.AddLoadRegMark(CustomReasonRejectRegMark)
+	if mutatePacketOut != nil {
+		packetOutBuilder = mutatePacketOut(packetOutBuilder)
 	}
 
 	packetOutObj := packetOutBuilder.Done()
@@ -1169,12 +1167,12 @@ func (c *client) SendUDPPacketOut(
 	srcIP string,
 	dstIP string,
 	inPort uint32,
-	outPort int32,
+	outPort uint32,
 	isIPv6 bool,
 	udpSrcPort uint16,
 	udpDstPort uint16,
 	udpData []byte,
-	isDNSResponse bool) error {
+	mutatePacketOut func(builder binding.PacketOutBuilder) binding.PacketOutBuilder) error {
 	// Generate a base IP PacketOutBuilder.
 	packetOutBuilder, err := setBasePacketOutBuilder(c.bridge.BuildPacketOut(), srcMAC, dstMAC, srcIP, dstIP, inPort, outPort)
 	if err != nil {
@@ -1191,9 +1189,10 @@ func (c *client) SendUDPPacketOut(
 		SetUDPDstPort(udpDstPort).
 		SetUDPData(udpData)
 
-	if isDNSResponse {
-		packetOutBuilder = packetOutBuilder.AddLoadRegMark(CustomReasonDNSRegMark)
+	if mutatePacketOut != nil {
+		packetOutBuilder = mutatePacketOut(packetOutBuilder)
 	}
+
 	packetOutObj := packetOutBuilder.Done()
 	return c.bridge.SendPacketOut(packetOutObj)
 }

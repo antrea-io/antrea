@@ -70,6 +70,8 @@ type Controller struct {
 	// antreaPolicyEnabled indicates whether Antrea NetworkPolicy and
 	// ClusterNetworkPolicy are enabled.
 	antreaPolicyEnabled bool
+	// antreaProxyEnabled indicates whether Antrea proxy is enabled.
+	antreaProxyEnabled bool
 	// statusManagerEnabled indicates whether a statusManager is configured.
 	statusManagerEnabled bool
 	// loggingEnabled indicates where Antrea policy audit logging is enabled.
@@ -114,6 +116,7 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 	groupCounters []proxytypes.GroupCounter,
 	groupIDUpdates <-chan string,
 	antreaPolicyEnabled bool,
+	antreaProxyEnabled bool,
 	statusManagerEnabled bool,
 	loggingEnabled bool,
 	denyConnStore *connections.DenyConnectionStore,
@@ -125,6 +128,7 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 		queue:                workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "networkpolicyrule"),
 		ofClient:             ofClient,
 		antreaPolicyEnabled:  antreaPolicyEnabled,
+		antreaProxyEnabled:   antreaProxyEnabled,
 		statusManagerEnabled: statusManagerEnabled,
 		loggingEnabled:       loggingEnabled,
 		denyConnStore:        denyConnStore,

@@ -810,18 +810,21 @@ func (f *fqdnController) sendDNSPacketout(pktIn *ofctrl.PacketIn) error {
 			klog.ErrorS(err, "Failed to get UDP header data")
 			return err
 		}
+		mutatePacketOut := func(packetOutBuilder binding.PacketOutBuilder) binding.PacketOutBuilder {
+			return packetOutBuilder.AddLoadRegMark(openflow.CustomReasonDNSRegMark)
+		}
 		return f.ofClient.SendUDPPacketOut(
 			pktIn.Data.HWSrc.String(),
 			pktIn.Data.HWDst.String(),
 			srcIP,
 			dstIP,
 			uint32(config.HostGatewayOFPort),
-			-1,
+			0,
 			isIPv6,
 			udpSrcPort,
 			udpDstPort,
 			packetData,
-			true)
+			mutatePacketOut)
 	}
 	return nil
 }

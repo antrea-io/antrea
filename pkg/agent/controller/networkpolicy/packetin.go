@@ -15,7 +15,6 @@
 package networkpolicy
 
 import (
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"time"
@@ -26,27 +25,10 @@ import (
 	"github.com/vmware/go-ipfix/pkg/registry"
 	"k8s.io/klog/v2"
 
-	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/flowexporter"
 	"antrea.io/antrea/pkg/agent/openflow"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 	"antrea.io/antrea/pkg/util/ip"
-)
-
-const (
-	IPv4HdrLen uint16 = 20
-	IPv6HdrLen uint16 = 40
-
-	ICMPUnusedHdrLen uint16 = 4
-
-	TCPAck uint8 = 0b010000
-	TCPRst uint8 = 0b000100
-
-	ICMPDstUnreachableType         uint8 = 3
-	ICMPDstHostAdminProhibitedCode uint8 = 10
-
-	ICMPv6DstUnreachableType     uint8 = 1
-	ICMPv6DstAdminProhibitedCode uint8 = 1
 )
 
 // HandlePacketIn is the packetin handler registered to openflow by Antrea network
@@ -197,98 +179,6 @@ func (c *Controller) logPacket(pktIn *ofctrl.PacketIn) error {
 	// Log the ob info to corresponding file w/ deduplication
 	c.antreaPolicyLogger.LogDedupPacket(ob)
 	return nil
-}
-
-// rejectRequest sends reject response to the requesting client, based on the
-// packet-in message.
-func (c *Controller) rejectRequest(pktIn *ofctrl.PacketIn) error {
-	// Get ethernet data.
-	srcMAC := pktIn.Data.HWDst
-	dstMAC := pktIn.Data.HWSrc
-
-	var (
-		srcIP  string
-		dstIP  string
-		prot   uint8
-		isIPv6 bool
-	)
-	switch ipPkt := pktIn.Data.Data.(type) {
-	case *protocol.IPv4:
-		// Get IP data.
-		srcIP = ipPkt.NWDst.String()
-		dstIP = ipPkt.NWSrc.String()
-		prot = ipPkt.Protocol
-		isIPv6 = false
-	case *protocol.IPv6:
-		// Get IP data.
-		srcIP = ipPkt.NWDst.String()
-		dstIP = ipPkt.NWSrc.String()
-		prot = ipPkt.NextHeader
-		isIPv6 = true
-	}
-
-	// Get the OpenFlow ports.
-	// 1. If we found the Interface of the src, it means the server is on this node.
-	// 	  We set `in_port` to the OF port of the Interface we found to simulate the reject
-	// 	  response from the server.
-	// 2. If we didn't find the Interface of the src, it means the server is outside
-	//    this node. We set `in_port` to the OF port of `antrea-gw0` to simulate the reject
-	//    response from external.
-	// 3. We don't need to set the output port. The pipeline will take care of it.
-	sIface, srcFound := c.ifaceStore.GetInterfaceByIP(srcIP)
-	inPort := uint32(config.HostGatewayOFPort)
-	if srcFound {
-		inPort = uint32(sIface.OFPort)
-	}
-
-	if prot == protocol.Type_TCP {
-		// Get TCP data.
-		oriTCPSrcPort, oriTCPDstPort, oriTCPSeqNum, _, _, err := binding.GetTCPHeaderData(pktIn.Data.Data)
-		if err != nil {
-			return err
-		}
-		// While sending TCP reject packet-out, switch original src/dst port,
-		// set the ackNum as original seqNum+1 and set the flag as ack+rst.
-		return c.ofClient.SendTCPPacketOut(
-			srcMAC.String(),
-			dstMAC.String(),
-			srcIP,
-			dstIP,
-			inPort,
-			-1,
-			isIPv6,
-			oriTCPDstPort,
-			oriTCPSrcPort,
-			oriTCPSeqNum+1,
-			TCPAck|TCPRst,
-			true)
-	}
-	// Use ICMP host administratively prohibited for ICMP, UDP, SCTP reject.
-	icmpType := ICMPDstUnreachableType
-	icmpCode := ICMPDstHostAdminProhibitedCode
-	ipHdrLen := IPv4HdrLen
-	if isIPv6 {
-		icmpType = ICMPv6DstUnreachableType
-		icmpCode = ICMPv6DstAdminProhibitedCode
-		ipHdrLen = IPv6HdrLen
-	}
-	ipHdr, _ := pktIn.Data.Data.MarshalBinary()
-	icmpData := make([]byte, int(ICMPUnusedHdrLen+ipHdrLen+8))
-	// Put ICMP unused header in Data prop and set it to zero.
-	binary.BigEndian.PutUint32(icmpData[:ICMPUnusedHdrLen], 0)
-	copy(icmpData[ICMPUnusedHdrLen:], ipHdr[:ipHdrLen+8])
-	return c.ofClient.SendICMPPacketOut(
-		srcMAC.String(),
-		dstMAC.String(),
-		srcIP,
-		dstIP,
-		inPort,
-		-1,
-		isIPv6,
-		icmpType,
-		icmpCode,
-		icmpData,
-		true)
 }
 
 func (c *Controller) storeDenyConnection(pktIn *ofctrl.PacketIn) error {
