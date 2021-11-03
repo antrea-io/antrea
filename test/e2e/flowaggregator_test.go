@@ -510,10 +510,11 @@ func checkRecordsForFlows(t *testing.T, data *TestData, srcIP string, dstIP stri
 	} else {
 		cmdStr = fmt.Sprintf("iperf3 -6 -c %s -t %d", dstIP, iperfTimeSec)
 	}
-	stdout, _, err := data.runCommandFromPod(testNamespace, "perftest-a", "perftool", []string{"bash", "-c", cmdStr})
+	stdout, stderr, err := data.runCommandFromPod(testNamespace, "perftest-a", "perftool", []string{"bash", "-c", cmdStr})
 	if err != nil {
 		t.Errorf("Error when running iperf3 client: %v", err)
 	}
+	t.Logf("iperf output stdout=%s stderr=%s", stdout, stderr)
 	bwSlice, srcPort := getBandwidthAndSourcePort(stdout)
 	require.Equal(t, 2, len(bwSlice), "bandwidth value and / or bandwidth unit are not available")
 	// bandwidth from iperf output
@@ -527,6 +528,16 @@ func checkRecordsForFlows(t *testing.T, data *TestData, srcIP string, dstIP stri
 	} else {
 		t.Fatalf("Unit of the traffic bandwidth reported by iperf should either be Mbits or Gbits, failing the test.")
 	}
+
+	antreaPod, _ := data.getAntreaPodOnNode(controlPlaneNodeName())
+	stdout, stderr, err = data.runCommandFromPod(antreaNamespace, antreaPod, ovsContainerName, []string{"ovs-ofctl", "dump-flows", defaultBridgeName})
+	if err != nil {
+		t.Errorf("Error when collecting flows: %v", err)
+	}
+	if testOptions.enableAntreaIPAM{
+		t.Logf("FlexibleIPAM code: applied, FlexibleIPAM enabled: true")
+	}
+	t.Logf("ovs-ofctl output stdout=%s stderr=%s", stdout, stderr)
 
 	collectorOutput, recordSlices := getCollectorOutput(t, srcIP, dstIP, srcPort, timeStart, checkService, true, isIPv6)
 	// Iterate over recordSlices and build some results to test with expected results
@@ -603,7 +614,7 @@ func checkRecordsForFlows(t *testing.T, data *TestData, srcIP string, dstIP stri
 	}
 	// Checking only data records as data records cannot be decoded without template
 	// record.
-	assert.GreaterOrEqualf(t, dataRecordsCount, expectedNumDataRecords, "IPFIX collector should receive expected number of flow records. Considered records: %s \n Collector output: %s", recordSlices, collectorOutput)
+	assert.GreaterOrEqualf(t, dataRecordsCount, expectedNumDataRecords, fmt.Sprintf("IPFIX collector should receive expected number of flow records. Considered records: %s \n Collector output: %s", recordSlices, collectorOutput))
 }
 
 func checkRecordsForToExternalFlows(t *testing.T, data *TestData, srcNodeName string, srcPodName string, srcIP string, dstIP string, dstPort int32, isIPv6 bool) {
