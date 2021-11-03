@@ -1,0 +1,74 @@
+command: go
+benchtime: 10s
+threshold: 0.1
+compare: "ns/op,B/op"
+cpu: 2
+benchmem: true
+timeout: 10m
+benchmarks:
+  - name: "BenchmarkInitXLargeScaleWithSmallNamespaces"
+    package: "./pkg/controller/networkpolicy"
+    threshold: 0.3
+    versionRequirement: ">1.3.0"
+  - name: "BenchmarkInitXLargeScaleWithLargeNamespaces"
+    package: "./pkg/controller/networkpolicy"
+    threshold: 0.2
+    versionRequirement: ">1.3.0"
+  - name: "BenchmarkInitXLargeScaleWithOneNamespace"
+    package: "./pkg/controller/networkpolicy"
+    threshold: 0.3
+    versionRequirement: ">1.3.0"
+  - name: "BenchmarkInitXLargeScaleWithNetpolPerPod"
+    package: "./pkg/controller/networkpolicy"
+    threshold: 0.15
+    versionRequirement: ">1.3.0"
+  - name: "BenchmarkInitXLargeScaleWithClusterScopedNetpol"
+    package: "./pkg/controller/networkpolicy"
+    versionRequirement: ">1.3.0"
+  - name: "BenchmarkSyncAddressGroup"
+    package: "./pkg/controller/networkpolicy"
+    versionRequirement: ">1.3.0"
+  - name: "BenchmarkCluster_ShouldSelect/Select_Node_from_1000_alive_Nodes-nodeSelectedForEgress"
+    package: "./pkg/agent/memberlist"
+    versionRequirement: ">1.2.0"
+    threshold: 0.2
+  - name: "BenchmarkRuleCacheUnionAddressGroups"
+    package: "./pkg/agent/controller/networkpolicy"
+    threshold: 0.15
+  - name: "BenchmarkNormalizeServices"
+    package: "./pkg/agent/controller/networkpolicy"
+  - name: "BenchmarkGroupPodsByServicesWithNamedPort"
+    package: "./pkg/agent/controller/networkpolicy"
+    threshold: 0.3
+  - name: "BenchmarkGroupPodsByServicesWithoutNamedPort"
+    package: "./pkg/agent/controller/networkpolicy"
+    threshold: 0.3
+  - name: "BenchmarkSyncHandler"
+    package: "./pkg/agent/controller/networkpolicy"
+  - name: "BenchmarkPoll"
+    package: "./pkg/agent/flowexporter/connections"
+    versionRequirement: ">1.3.0"
+  - name: "BenchmarkExportConntrackConns"
+    package: "./pkg/agent/flowexporter/exporter"
+    threshold: 0.2
+    benchtime: 10x
+  - name: "BenchmarkCompareNPLAnnotationLists/EqualSameOrder"
+    package: "./pkg/agent/nodeportlocal/k8s"
+    threshold: 0.2
+  - name: "BenchmarkCompareNPLAnnotationLists/EqualDifferentOrder"
+    package: "./pkg/agent/nodeportlocal/k8s"
+    threshold: 0.2
+  - name: "BenchmarkCompareNPLAnnotationLists/NotEqualSameLength"
+    package: "./pkg/agent/nodeportlocal/k8s"
+    threshold: 0.3
+  - name: "BenchmarkCompareNPLAnnotationLists/NotEqualDifferentLength"
+    package: "./pkg/agent/nodeportlocal/k8s"
+  - name: "BenchmarkBatchInstallPolicyRuleFlows"
+    package: "./pkg/agent/openflow"
+  - name: "BenchmarkIDAllocate"
+    package: "./pkg/agent/openflow/cookie"
+    threshold: 0.2
+  - name: "BenchmarkNormalizeGroupMemberPod"
+    package: "./pkg/apis/controlplane"
+  - name: "BenchmarkSymmetricDifferenceString"
+    package: "./pkg/util/sets"
