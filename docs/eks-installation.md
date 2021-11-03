@@ -98,8 +98,8 @@ kubectl -n kube-system delete daemonset aws-node
 ### 3. Install Antrea
 
 First, download the Antrea deployment yaml. Note that `encap` mode support for
-EKS was added in release 1.3.0, which means you cannot pick a release older
-than 1.3.0. For any given release `<TAG>` (e.g. `v1.3.0`), get the Antrea
+EKS was added in release 1.4.0, which means you cannot pick a release older
+than 1.4.0. For any given release `<TAG>` (e.g. `v1.4.0`), get the Antrea
 deployment yaml at:
 
 ```text
