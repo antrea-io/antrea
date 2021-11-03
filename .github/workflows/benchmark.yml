@@ -1,0 +1,43 @@
+name: Go Benchmark Test
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  check-changes:
+    name: Check whether tests need to be run based on diff
+    runs-on: [ ubuntu-latest ]
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+      - uses: antrea-io/antrea/ci/gh-actions/has-changes@main
+        id: check_diff
+        with:
+          args: pkg/*
+    outputs:
+      has_changes: ${{ steps.check_diff.outputs.has_changes }}
+
+  go-benchmark-checks:
+    needs: check-changes
+    if: ${{ needs.check-changes.outputs.has_changes == 'yes' || github.event_name == 'push' }}
+    name: GoBenchmark
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Go 1.17
+        uses: actions/setup-go@v2
+        with:
+          go-version: 1.17
+
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+
+      - name: Install benchci
+        run: curl -sfL https://raw.githubusercontent.com/antrea-io/benchci/main/install.sh | sudo sh -s -- -b /usr/local/bin
+
+      - name: Run benchmark
+        run: benchci -config test/performance/benchmark.yml
