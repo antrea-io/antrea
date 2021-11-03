@@ -252,6 +252,7 @@ func run(o *Options) error {
 	// after rule deletion.
 	asyncRuleDeleteInterval := o.pollInterval
 	antreaPolicyEnabled := features.DefaultFeatureGate.Enabled(features.AntreaPolicy)
+	antreaProxyEnabled := features.DefaultFeatureGate.Enabled(features.AntreaProxy)
 	// In Antrea agent, status manager and audit logging will automatically be enabled
 	// if AntreaPolicy feature is enabled.
 	statusManagerEnabled := antreaPolicyEnabled
@@ -274,6 +275,7 @@ func run(o *Options) error {
 		groupCounters,
 		groupIDUpdates,
 		antreaPolicyEnabled,
+		antreaProxyEnabled,
 		statusManagerEnabled,
 		loggingEnabled,
 		denyConnStore,
