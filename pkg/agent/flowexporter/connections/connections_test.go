@@ -29,9 +29,20 @@ import (
 )
 
 const (
+	testActiveFlowTimeout      = 3 * time.Second
+	testIdleFlowTimeout        = 1 * time.Second
 	testPollInterval           = 0 // Not used in these tests, hence 0.
 	testStaleConnectionTimeout = 5 * time.Minute
 )
+
+var testFlowExporterOptions = &flowexporter.FlowExporterOptions{
+	FlowCollectorAddr:      "",
+	FlowCollectorProto:     "",
+	ActiveFlowTimeout:      testActiveFlowTimeout,
+	IdleFlowTimeout:        testIdleFlowTimeout,
+	StaleConnectionTimeout: testStaleConnectionTimeout,
+	PollInterval:           testPollInterval,
+}
 
 func TestConnectionStore_ForAllConnectionsDo(t *testing.T) {
 	ctrl := gomock.NewController(t)
@@ -70,7 +81,7 @@ func TestConnectionStore_ForAllConnectionsDo(t *testing.T) {
 	}
 	// Create connectionStore
 	mockIfaceStore := interfacestoretest.NewMockInterfaceStore(ctrl)
-	connStore := NewConnectionStore(mockIfaceStore, nil, nil, testStaleConnectionTimeout)
+	connStore := NewConnectionStore(mockIfaceStore, nil, testFlowExporterOptions)
 	// Add flows to the Connection store
 	for i, flow := range testFlows {
 		connStore.connections[*testFlowKeys[i]] = flow
@@ -97,7 +108,7 @@ func TestConnectionStore_DeleteConnWithoutLock(t *testing.T) {
 	metrics.InitializeConnectionMetrics()
 	// test on deny connection store
 	mockIfaceStore := interfacestoretest.NewMockInterfaceStore(ctrl)
-	denyConnStore := NewDenyConnectionStore(mockIfaceStore, nil, nil, testStaleConnectionTimeout)
+	denyConnStore := NewDenyConnectionStore(mockIfaceStore, nil, testFlowExporterOptions)
 	tuple := flowexporter.Tuple{SourceAddress: net.IP{1, 2, 3, 4}, DestinationAddress: net.IP{4, 3, 2, 1}, Protocol: 6, SourcePort: 65280, DestinationPort: 255}
 	conn := &flowexporter.Connection{
 		FlowKey: tuple,
@@ -114,7 +125,7 @@ func TestConnectionStore_DeleteConnWithoutLock(t *testing.T) {
 
 	// test on conntrack connection store
 	mockConnDumper := connectionstest.NewMockConnTrackDumper(ctrl)
-	conntrackConnStore := NewConntrackConnectionStore(mockConnDumper, mockIfaceStore, true, false, nil, nil, testPollInterval, nil, testStaleConnectionTimeout)
+	conntrackConnStore := NewConntrackConnectionStore(mockConnDumper, true, false, nil, mockIfaceStore, nil, testFlowExporterOptions)
 	conntrackConnStore.connections[connKey] = conn
 
 	metrics.TotalAntreaConnectionsInConnTrackTable.Set(1)

@@ -87,3 +87,12 @@ type ItemToExpire struct {
 	// Index in the priority queue (heap)
 	Index int
 }
+
+type FlowExporterOptions struct {
+	FlowCollectorAddr      string
+	FlowCollectorProto     string
+	ActiveFlowTimeout      time.Duration
+	IdleFlowTimeout        time.Duration
+	StaleConnectionTimeout time.Duration
+	PollInterval           time.Duration
+}

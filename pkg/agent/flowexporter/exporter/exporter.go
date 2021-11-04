@@ -26,13 +26,18 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 
+	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/controller/noderoute"
 	"antrea.io/antrea/pkg/agent/flowexporter"
 	"antrea.io/antrea/pkg/agent/flowexporter/connections"
 	"antrea.io/antrea/pkg/agent/flowexporter/priorityqueue"
+	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/metrics"
 	"antrea.io/antrea/pkg/agent/openflow"
+	"antrea.io/antrea/pkg/agent/proxy"
 	"antrea.io/antrea/pkg/ipfix"
+	"antrea.io/antrea/pkg/ovs/ovsconfig"
+	"antrea.io/antrea/pkg/querier"
 	"antrea.io/antrea/pkg/util/env"
 )
 
@@ -96,7 +101,7 @@ var (
 	AntreaInfoElementsIPv6 = append(antreaInfoElementsCommon, []string{"destinationClusterIPv6"}...)
 )
 
-type flowExporter struct {
+type FlowExporter struct {
 	conntrackConnStore     *connections.ConntrackConnectionStore
 	denyConnStore          *connections.DenyConnectionStore
 	process                ipfix.IPFIXExportingProcess
@@ -143,10 +148,9 @@ func prepareExporterInputArgs(collectorAddr, collectorProto, nodeName string) ex
 	return expInput
 }
 
-func NewFlowExporter(connStore *connections.ConntrackConnectionStore, denyConnStore *connections.DenyConnectionStore,
-	collectorAddr string, collectorProto string, v4Enabled bool, v6Enabled bool, k8sClient kubernetes.Interface,
-	nodeRouteController *noderoute.Controller, isNetworkPolicyOnly bool, conntrackPriorityQueue *priorityqueue.ExpirePriorityQueue,
-	denyPriorityQueue *priorityqueue.ExpirePriorityQueue) (*flowExporter, error) {
+func NewFlowExporter(ifaceStore interfacestore.InterfaceStore, proxier proxy.Proxier, k8sClient kubernetes.Interface, nodeRouteController *noderoute.Controller,
+	trafficEncapMode config.TrafficEncapModeType, nodeConfig *config.NodeConfig, serviceCIDRNet, serviceCIDRNetv6 *net.IPNet, ovsDatapathType *ovsconfig.OVSDatapathType,
+	proxyEnabled bool, npQuerier querier.AgentNetworkPolicyInfoQuerier, o *flowexporter.FlowExporterOptions) (*FlowExporter, error) {
 	// Initialize IPFIX registry
 	registry := ipfix.NewIPFIXRegistry()
 	registry.LoadRegistry()
@@ -156,10 +160,17 @@ func NewFlowExporter(connStore *connections.ConntrackConnectionStore, denyConnSt
 	if err != nil {
 		return nil, err
 	}
-	expInput := prepareExporterInputArgs(collectorAddr, collectorProto, nodeName)
+	expInput := prepareExporterInputArgs(o.FlowCollectorAddr, o.FlowCollectorProto, nodeName)
 
-	return &flowExporter{
-		conntrackConnStore:     connStore,
+	v4Enabled := config.IsIPv4Enabled(nodeConfig, trafficEncapMode)
+	v6Enabled := config.IsIPv6Enabled(nodeConfig, trafficEncapMode)
+
+	connTrackDumper := connections.InitializeConnTrackDumper(nodeConfig, serviceCIDRNet, serviceCIDRNetv6, *ovsDatapathType, proxyEnabled)
+	denyConnStore := connections.NewDenyConnectionStore(ifaceStore, proxier, o)
+	conntrackConnStore := connections.NewConntrackConnectionStore(connTrackDumper, v4Enabled, v6Enabled, npQuerier, ifaceStore, proxier, o)
+
+	return &FlowExporter{
+		conntrackConnStore:     conntrackConnStore,
 		denyConnStore:          denyConnStore,
 		registry:               registry,
 		v4Enabled:              v4Enabled,
@@ -168,15 +179,25 @@ func NewFlowExporter(connStore *connections.ConntrackConnectionStore, denyConnSt
 		ipfixSet:               ipfixentities.NewSet(false),
 		k8sClient:              k8sClient,
 		nodeRouteController:    nodeRouteController,
-		isNetworkPolicyOnly:    isNetworkPolicyOnly,
+		isNetworkPolicyOnly:    trafficEncapMode.IsNetworkPolicyOnly(),
 		nodeName:               nodeName,
-		conntrackPriorityQueue: conntrackPriorityQueue,
-		denyPriorityQueue:      denyPriorityQueue,
+		conntrackPriorityQueue: conntrackConnStore.GetPriorityQueue(),
+		denyPriorityQueue:      denyConnStore.GetPriorityQueue(),
 		expiredConns:           make([]flowexporter.Connection, 0, maxConnsToExport*2),
 	}, nil
 }
 
-func (exp *flowExporter) Run(stopCh <-chan struct{}) {
+func (exp *FlowExporter) GetDenyConnStore() *connections.DenyConnectionStore {
+	return exp.denyConnStore
+}
+
+func (exp *FlowExporter) Run(stopCh <-chan struct{}) {
+	// Start the goroutine to periodically delete stale deny connections.
+	go exp.denyConnStore.RunPeriodicDeletion(stopCh)
+
+	// Start the goroutine to poll conntrack flows.
+	go exp.conntrackConnStore.Run(stopCh)
+
 	defaultTimeout := exp.conntrackPriorityQueue.ActiveFlowTimeout
 	expireTimer := time.NewTimer(defaultTimeout)
 	for {
@@ -222,7 +243,7 @@ func (exp *flowExporter) Run(stopCh <-chan struct{}) {
 	}
 }
 
-func (exp *flowExporter) sendFlowRecords() (time.Duration, error) {
+func (exp *FlowExporter) sendFlowRecords() (time.Duration, error) {
 	currTime := time.Now()
 	var expireTime1, expireTime2 time.Duration
 	exp.expiredConns, expireTime1 = exp.conntrackConnStore.GetExpiredConns(exp.expiredConns, currTime, maxConnsToExport)
@@ -240,7 +261,7 @@ func (exp *flowExporter) sendFlowRecords() (time.Duration, error) {
 	return nextExpireTime, nil
 }
 
-func (exp *flowExporter) initFlowExporter() error {
+func (exp *FlowExporter) initFlowExporter() error {
 	var err error
 	if exp.exporterInput.IsEncrypted {
 		// if CA certificate, client certificate and key do not exist during initialization,
@@ -291,7 +312,7 @@ func (exp *flowExporter) initFlowExporter() error {
 	return nil
 }
 
-func (exp *flowExporter) sendTemplateSet(isIPv6 bool) (int, error) {
+func (exp *FlowExporter) sendTemplateSet(isIPv6 bool) (int, error) {
 	elements := make([]ipfixentities.InfoElementWithValue, 0)
 
 	IANAInfoElements := IANAInfoElementsIPv4
@@ -358,7 +379,7 @@ func (exp *flowExporter) sendTemplateSet(isIPv6 bool) (int, error) {
 	return sentBytes, nil
 }
 
-func (exp *flowExporter) addConnToSet(conn *flowexporter.Connection) error {
+func (exp *FlowExporter) addConnToSet(conn *flowexporter.Connection) error {
 	exp.ipfixSet.ResetSet()
 
 	eL := exp.elementsListv4
@@ -511,7 +532,7 @@ func (exp *flowExporter) addConnToSet(conn *flowexporter.Connection) error {
 	return nil
 }
 
-func (exp *flowExporter) sendDataSet() (int, error) {
+func (exp *FlowExporter) sendDataSet() (int, error) {
 	sentBytes, err := exp.process.SendSet(exp.ipfixSet)
 	if err != nil {
 		return 0, fmt.Errorf("error when sending data set: %v", err)
@@ -520,7 +541,7 @@ func (exp *flowExporter) sendDataSet() (int, error) {
 	return sentBytes, nil
 }
 
-func (exp *flowExporter) findFlowType(conn flowexporter.Connection) uint8 {
+func (exp *FlowExporter) findFlowType(conn flowexporter.Connection) uint8 {
 	// TODO: support Pod-To-External flows in network policy only mode.
 	if exp.isNetworkPolicyOnly {
 		if conn.SourcePodName == "" || conn.DestinationPodName == "" {
@@ -547,7 +568,7 @@ func (exp *flowExporter) findFlowType(conn flowexporter.Connection) uint8 {
 	return 0
 }
 
-func (exp *flowExporter) exportConn(conn *flowexporter.Connection) error {
+func (exp *FlowExporter) exportConn(conn *flowexporter.Connection) error {
 	// TODO: more records per data set will be supported when go-ipfix supports size check when adding records
 	if err := exp.addConnToSet(conn); err != nil {
 		return err
