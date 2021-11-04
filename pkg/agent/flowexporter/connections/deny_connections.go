@@ -32,10 +32,9 @@ type DenyConnectionStore struct {
 	connectionStore
 }
 
-func NewDenyConnectionStore(ifaceStore interfacestore.InterfaceStore,
-	proxier proxy.Proxier, expirePriorityQueue *priorityqueue.ExpirePriorityQueue, staleConnectionTimeout time.Duration) *DenyConnectionStore {
+func NewDenyConnectionStore(ifaceStore interfacestore.InterfaceStore, proxier proxy.Proxier, o *flowexporter.FlowExporterOptions) *DenyConnectionStore {
 	return &DenyConnectionStore{
-		connectionStore: NewConnectionStore(ifaceStore, proxier, expirePriorityQueue, staleConnectionTimeout),
+		connectionStore: NewConnectionStore(ifaceStore, proxier, o),
 	}
 }
 
@@ -136,4 +135,8 @@ func (ds *DenyConnectionStore) deleteConnWithoutLock(connKey flowexporter.Connec
 	delete(ds.connections, connKey)
 	metrics.TotalDenyConnections.Dec()
 	return nil
+}
+
+func (ds *DenyConnectionStore) GetPriorityQueue() *priorityqueue.ExpirePriorityQueue {
+	return ds.connectionStore.expirePriorityQueue
 }

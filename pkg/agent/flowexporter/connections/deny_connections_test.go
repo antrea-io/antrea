@@ -29,16 +29,10 @@ import (
 	"k8s.io/component-base/metrics/legacyregistry"
 
 	"antrea.io/antrea/pkg/agent/flowexporter"
-	"antrea.io/antrea/pkg/agent/flowexporter/priorityqueue"
 	interfacestoretest "antrea.io/antrea/pkg/agent/interfacestore/testing"
 	"antrea.io/antrea/pkg/agent/metrics"
 	proxytest "antrea.io/antrea/pkg/agent/proxy/testing"
 	k8sproxy "antrea.io/antrea/third_party/proxy"
-)
-
-const (
-	testActiveFlowTimeout = 3 * time.Second
-	testIdleFlowTimeout   = 1 * time.Second
 )
 
 func TestDenyConnectionStore_AddOrUpdateConn(t *testing.T) {
@@ -75,8 +69,7 @@ func TestDenyConnectionStore_AddOrUpdateConn(t *testing.T) {
 	mockIfaceStore.EXPECT().GetInterfaceByIP(tuple.SourceAddress.String()).Return(nil, false)
 	mockIfaceStore.EXPECT().GetInterfaceByIP(tuple.DestinationAddress.String()).Return(nil, false)
 
-	pq := priorityqueue.NewExpirePriorityQueue(testActiveFlowTimeout, testIdleFlowTimeout)
-	denyConnStore := NewDenyConnectionStore(mockIfaceStore, mockProxier, pq, testStaleConnectionTimeout)
+	denyConnStore := NewDenyConnectionStore(mockIfaceStore, mockProxier, testFlowExporterOptions)
 
 	denyConnStore.AddOrUpdateConn(&testFlow, refTime.Add(-(time.Second * 20)), uint64(60))
 	expConn := testFlow
@@ -84,7 +77,7 @@ func TestDenyConnectionStore_AddOrUpdateConn(t *testing.T) {
 	actualConn, ok := denyConnStore.GetConnByKey(flowexporter.NewConnectionKey(&testFlow))
 	assert.Equal(t, ok, true, "deny connection should be there in deny connection store")
 	assert.Equal(t, expConn, *actualConn, "deny connections should be equal")
-	assert.Equal(t, 1, pq.Len(), "Length of the expire priority queue should be 1")
+	assert.Equal(t, 1, denyConnStore.connectionStore.expirePriorityQueue.Len(), "Length of the expire priority queue should be 1")
 	checkDenyConnectionMetrics(t, len(denyConnStore.connections))
 
 	denyConnStore.AddOrUpdateConn(&testFlow, refTime.Add(-(time.Second * 10)), uint64(60))
@@ -95,7 +88,7 @@ func TestDenyConnectionStore_AddOrUpdateConn(t *testing.T) {
 	assert.Equal(t, ok, true, "deny connection should be there in deny connection store")
 	assert.Equal(t, expConn, *actualConn, "deny connections should be equal")
 	assert.True(t, actualConn.IsActive)
-	assert.Equal(t, 1, pq.Len())
+	assert.Equal(t, 1, denyConnStore.connectionStore.expirePriorityQueue.Len())
 	checkDenyConnectionMetrics(t, len(denyConnStore.connections))
 }
 

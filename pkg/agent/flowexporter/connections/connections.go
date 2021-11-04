@@ -45,15 +45,13 @@ type connectionStore struct {
 func NewConnectionStore(
 	ifaceStore interfacestore.InterfaceStore,
 	proxier proxy.Proxier,
-	expirePriorityQueue *priorityqueue.ExpirePriorityQueue,
-	staleConnectionTimeout time.Duration,
-) connectionStore {
+	o *flowexporter.FlowExporterOptions) connectionStore {
 	return connectionStore{
 		connections:            make(map[flowexporter.ConnectionKey]*flowexporter.Connection),
 		ifaceStore:             ifaceStore,
 		antreaProxier:          proxier,
-		expirePriorityQueue:    expirePriorityQueue,
-		staleConnectionTimeout: staleConnectionTimeout,
+		expirePriorityQueue:    priorityqueue.NewExpirePriorityQueue(o.ActiveFlowTimeout, o.IdleFlowTimeout),
+		staleConnectionTimeout: o.StaleConnectionTimeout,
 	}
 }
 
