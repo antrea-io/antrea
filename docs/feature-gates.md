@@ -44,6 +44,7 @@ example, to enable `AntreaProxy` on Linux, edit the Agent configuration in the
 | `NodePortLocal`         | Agent              | `true`  | Beta  | v0.13         | v1.4         | N/A        | Yes                | Important user-facing change in v1.2.0 |
 | `Egress`                | Agent + Controller | `false` | Alpha | v1.0          | N/A          | N/A        | Yes                |       |
 | `NodeIPAM`              | Controller         | `false` | Alpha | v1.4          | N/A          | N/A        | Yes                |       |
+| `AntreaIPAM`            | Agent + Controller | `false` | Alpha | v1.4          | N/A          | N/A        | Yes                |       |
 
 ## Description and Requirements of Features
 
@@ -218,14 +219,8 @@ Note that IP pool annotation can not be updated, but rather re-created. IP Pool 
 extended, but cannot be shrunk if already assigned to a resource. The IP ranges of IP
 Pools must not overlap, otherwise it would lead to undefined behavior.
 
-Traditional `Subnet per Node` IPAM will continue to be used for resources without IP pool
+Regular `Subnet per Node` IPAM will continue to be used for resources without IP pool
 annotation, or when `AntreaIPAM` feature is disabled.
-
-#### Requirements for this Feature
-
-In Antrea 1.4, AntreaIPAM can only work with Linux+IPv4, system OVSDatapathType and
-noEncap, noSNAT mode.
-AntreaIPAM is only verified with other FeatureGates at default state.
 
 Usage example:
 
@@ -250,8 +245,26 @@ metadata:
     ipam.antrea.io/ippools: 'pool1'
 ```
 
+#### Data path change for this feature
+
+When `AntreaIPAM` is enabled, `antrea-agent` will connect the Node's network interface
+to the OVS bridge at startup, and it will detach the interface from the OVS bridge and
+restore its configurations at exit. Node may lose network connection when `antrea-agent`
+or OVS daemons are stopped unexpectedly, which can be recovered by rebooting the Node.
+`AntreaIPAM` Pods' traffic will not be routed by local Node's network stack.
+
+All traffic to a local Pod will be sent to the Pod's OVS port directly, after the
+destination MAC is rewritten to the Pod's MAC address. This includes `AntreaIPAM` Pods
+and regular `Subnet per Node` IPAM Pods, even they are not in the same subnets.
+Inter-Node traffic will be sent to the Node network from the source Node, and forwarded
+to the destination Node by the Node network.
+
 #### Requirements for this Feature
 
-This feature is currently supported on Linux Nodes only. Annotation of single IP pool
-is supported. In future, annotation of up to two pools of different IP versions will be
-supported.
+In Antrea 1.4, this feature is supported on Linux Nodes, with IPv4, `system` OVS datapath
+type, and `noEncap`, `noSNAT` traffic mode.
+
+The IPs in the `IPPools` must be in the same "underlay" subnet as the Node IP, because
+inter-Node traffic of AntreaIPAM Pods is forwarded by the Node network. Only a single IP
+pool can be included in the Namespace annotation. In the future, annotation of up to two
+pools for IPv4 and IPv6 respectively will be supported.
