@@ -126,6 +126,11 @@ data:
       # Note that this option is experimental. If kube-proxy is removed, option kubeAPIServerOverride must be used to access
       # apiserver directly.
       #proxyAll: false
+
+      # An array of strings which specifies the host IPv4/IPv6 addresses for NodePort. Values can be valid IP blocks.
+      # (e.g. 1.2.3.0/24, 1.2.3.4/32). An empty string slice is meant to select all host IPv4/IPv6 addresses.
+      # Note that the option is only valid when proxyAll is true.
+      #nodePortAddresses: []
   antrea-cni.conflist: |
     {
         "cniVersion":"0.3.0",
@@ -144,7 +149,7 @@ kind: ConfigMap
 metadata:
   labels:
     app: antrea
-  name: antrea-windows-config-25k48fh55f
+  name: antrea-windows-config-22hf89hkhb
   namespace: kube-system
 ---
 apiVersion: apps/v1
@@ -232,7 +237,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-windows-config-25k48fh55f
+          name: antrea-windows-config-22hf89hkhb
         name: antrea-windows-config
       - configMap:
           defaultMode: 420

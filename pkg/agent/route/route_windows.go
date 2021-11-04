@@ -382,13 +382,28 @@ func (c *Client) DeleteSNATRule(mark uint32) error {
 	return nil
 }
 
-// TODO: nodePortAddresses is not supported currently.
 func (c *Client) AddNodePort(nodePortAddresses []net.IP, port uint16, protocol binding.Protocol) error {
-	return util.ReplaceNetNatStaticMapping(antreaNatNodePort, "0.0.0.0", port, config.VirtualServiceIPv4.String(), port, string(protocol))
+	if len(nodePortAddresses) == 0 {
+		return util.ReplaceNetNatStaticMapping(antreaNatNodePort, "0.0.0.0", port, config.VirtualServiceIPv4.String(), port, string(protocol))
+	}
+	for _, addr := range nodePortAddresses {
+		if err := util.ReplaceNetNatStaticMapping(antreaNatNodePort, addr.String(), port, config.VirtualServiceIPv4.String(), port, string(protocol)); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (c *Client) DeleteNodePort(nodePortAddresses []net.IP, port uint16, protocol binding.Protocol) error {
-	return util.RemoveNetNatStaticMapping(antreaNatNodePort, "0.0.0.0", port, string(protocol))
+	if len(nodePortAddresses) == 0 {
+		return util.RemoveNetNatStaticMapping(antreaNatNodePort, "0.0.0.0", port, string(protocol))
+	}
+	for _, addr := range nodePortAddresses {
+		if err := util.RemoveNetNatStaticMapping(antreaNatNodePort, addr.String(), port, string(protocol)); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (c *Client) AddLoadBalancer(externalIPs []string) error {

@@ -4142,7 +4142,7 @@ data:
       # Note that this option is experimental. If kube-proxy is removed, option kubeAPIServerOverride must be used to access
       # apiserver directly.
       #proxyAll: false
-      # A string array of values which specifies the host IPv4/IPv6 addresses for NodePort. Values can be valid IP blocks.
+      # An array of strings which specifies the host IPv4/IPv6 addresses for NodePort. Values can be valid IP blocks.
       # (e.g. 1.2.3.0/24, 1.2.3.4/32). An empty string slice is meant to select all host IPv4/IPv6 addresses.
       # Note that the option is only valid when proxyAll is true.
       #nodePortAddresses: []
@@ -4261,7 +4261,7 @@ metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-2k4k228tc7
+  name: antrea-config-9f62kb958h
   namespace: kube-system
 ---
 apiVersion: v1
@@ -4341,7 +4341,7 @@ spec:
             fieldRef:
               fieldPath: spec.serviceAccountName
         - name: ANTREA_CONFIG_MAP_NAME
-          value: antrea-config-2k4k228tc7
+          value: antrea-config-9f62kb958h
         image: projects.registry.vmware.com/antrea/antrea-ubuntu:latest
         imagePullPolicy: IfNotPresent
         livenessProbe:
@@ -4392,7 +4392,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-2k4k228tc7
+          name: antrea-config-9f62kb958h
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -4708,7 +4708,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-2k4k228tc7
+          name: antrea-config-9f62kb958h
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d
