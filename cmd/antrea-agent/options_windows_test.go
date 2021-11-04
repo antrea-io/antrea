@@ -23,23 +23,24 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"antrea.io/antrea/pkg/agent/config"
+	agentconfig "antrea.io/antrea/pkg/config/agent"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 )
 
 func TestCheckUnsupportedFeatures(t *testing.T) {
 	testCases := []struct {
 		desc   string
-		config AgentConfig
+		config agentconfig.AgentConfig
 		pass   bool
 	}{
 		{
 			"default",
-			AgentConfig{},
+			agentconfig.AgentConfig{},
 			true,
 		},
 		{
 			"feature gates",
-			AgentConfig{
+			agentconfig.AgentConfig{
 				FeatureGates: map[string]bool{
 					"AntreaProxy":        false,
 					"AntreaPolicy":       true,
@@ -52,32 +53,32 @@ func TestCheckUnsupportedFeatures(t *testing.T) {
 		},
 		{
 			"netdev datapath",
-			AgentConfig{OVSDatapathType: string(ovsconfig.OVSDatapathNetdev)},
+			agentconfig.AgentConfig{OVSDatapathType: string(ovsconfig.OVSDatapathNetdev)},
 			false,
 		},
 		{
 			"noEncap mode",
-			AgentConfig{TrafficEncapMode: config.TrafficEncapModeNoEncap.String()},
+			agentconfig.AgentConfig{TrafficEncapMode: config.TrafficEncapModeNoEncap.String()},
 			true,
 		},
 		{
 			"GRE tunnel",
-			AgentConfig{TunnelType: ovsconfig.GRETunnel},
+			agentconfig.AgentConfig{TunnelType: ovsconfig.GRETunnel},
 			false,
 		},
 		{
 			"IPsec encryption",
-			AgentConfig{TrafficEncryptionMode: config.TrafficEncryptionModeIPSec.String()},
+			agentconfig.AgentConfig{TrafficEncryptionMode: config.TrafficEncryptionModeIPSec.String()},
 			false,
 		},
 		{
 			"WireGuard encryption",
-			AgentConfig{TrafficEncryptionMode: config.TrafficEncryptionModeWireGuard.String()},
+			agentconfig.AgentConfig{TrafficEncryptionMode: config.TrafficEncryptionModeWireGuard.String()},
 			false,
 		},
 		{
 			"hybrid mode and GRE tunnel",
-			AgentConfig{TrafficEncapMode: config.TrafficEncapModeHybrid.String(), TunnelType: ovsconfig.GRETunnel},
+			agentconfig.AgentConfig{TrafficEncapMode: config.TrafficEncapModeHybrid.String(), TunnelType: ovsconfig.GRETunnel},
 			false,
 		},
 	}

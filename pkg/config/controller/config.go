@@ -1,4 +1,4 @@
-// Copyright 2019 Antrea Authors
+// Copyright 2021 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package config
 
 import (
 	componentbaseconfig "k8s.io/component-base/config"
@@ -48,7 +48,7 @@ type ControllerConfig struct {
 	APIPort int `yaml:"apiPort,omitempty"`
 	// Enable metrics exposure via Prometheus. Initializes Prometheus metrics listener
 	// Defaults to true.
-	EnablePrometheusMetrics bool `yaml:"enablePrometheusMetrics,omitempty"`
+	EnablePrometheusMetrics *bool `yaml:"enablePrometheusMetrics,omitempty"`
 	// Indicates whether to use auto-generated self-signed TLS certificate.
 	// If false, A Secret named "antrea-controller-tls" must be provided with the following keys:
 	//   ca.crt: <CA certificate>
@@ -57,13 +57,13 @@ type ControllerConfig struct {
 	// And the Secret must be mounted to directory "/var/run/antrea/antrea-controller-tls" of the
 	// antrea-controller container.
 	// Defaults to true.
-	SelfSignedCert bool `yaml:"selfSignedCert,omitempty"`
+	SelfSignedCert *bool `yaml:"selfSignedCert,omitempty"`
 	// Cipher suites to use.
 	TLSCipherSuites string `yaml:"tlsCipherSuites,omitempty"`
 	// TLS min version.
 	TLSMinVersion string `yaml:"tlsMinVersion,omitempty"`
 	// Legacy CRD mirroring.
-	LegacyCRDMirroring bool `yaml:"legacyCRDMirroring,omitempty"`
+	LegacyCRDMirroring *bool `yaml:"legacyCRDMirroring,omitempty"`
 	// NodeIPAM Configuration
 	NodeIPAM NodeIPAMConfig `yaml:"nodeIPAM"`
 }

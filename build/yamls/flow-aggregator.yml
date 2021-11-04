@@ -170,8 +170,9 @@ data:
     # Supported formats are IPFIX and JSON.
     #recordFormat: "IPFIX"
 
-    # recordContents enables configuring some fields in the flow records, A field can
-    # be either included (true) or excluded (false) by providing a bool value.
+    # recordContents enables configuring some fields in the flow records. Fields can
+    # be excluded to reduce record size, but some features or external tooling may
+    # depend on these fields.
     recordContents:
       # Determine whether source and destination Pod labels will be included in the flow records.
       #podLabels: false
@@ -180,7 +181,7 @@ metadata:
   annotations: {}
   labels:
     app: flow-aggregator
-  name: flow-aggregator-configmap-5df2dmbm8h
+  name: flow-aggregator-configmap-tmdcht5g8c
   namespace: flow-aggregator
 ---
 apiVersion: v1
@@ -248,7 +249,7 @@ spec:
       serviceAccountName: flow-aggregator
       volumes:
       - configMap:
-          name: flow-aggregator-configmap-5df2dmbm8h
+          name: flow-aggregator-configmap-tmdcht5g8c
         name: flow-aggregator-config
       - hostPath:
           path: /var/log/antrea/flow-aggregator
