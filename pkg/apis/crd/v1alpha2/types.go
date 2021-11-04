@@ -226,6 +226,8 @@ type EgressSpec struct {
 	// If it is non-empty, the EgressIP will be assigned to a Node specified by the pool automatically and will failover
 	// to a different Node when the Node becomes unreachable.
 	ExternalIPPool string `json:"externalIPPool"`
+	// The Bandwidth limit of the selected workloads traffic.
+	Bandwidth string `json:"bandwidth,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

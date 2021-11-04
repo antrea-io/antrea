@@ -83,6 +83,8 @@ spec:
                 - format: ipv6
               externalIPPool:
                 type: string
+              bandwidth:
+                type: string
           status:
             type: object
             properties:

@@ -48,6 +48,7 @@ import (
 	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha2"
 	crdlisters "antrea.io/antrea/pkg/client/listers/crd/v1alpha2"
 	"antrea.io/antrea/pkg/controller/metrics"
+	bandwidthutil "antrea.io/antrea/pkg/util/bandwidth"
 	"antrea.io/antrea/pkg/util/k8s"
 )
 
@@ -64,6 +65,12 @@ const (
 	minEgressMark = 1
 	// maxEgressMark is the maximum mark of Egress IPs can be configured on a Node.
 	maxEgressMark = 255
+
+	// minEgressMeter is the minimum meter id of Egress Meters can be configured on a Node.
+	// Since meter already has been used in other Antrea features, so reserve 1-10 for other Antrea features.
+	minEgressMeter = 11
+	// maxEgressMeter is the maximum meter id of Egress Meters can be configured on a Node.
+	maxEgressMeter = 65535
 
 	egressIPIndex       = "egressIP"
 	externalIPPoolIndex = "externalIPPool"
@@ -86,6 +93,10 @@ type egressState struct {
 	ofPorts sets.Int32
 	// The actual Pods of the Egress. Used to identify stale Pods when updating or deleting an Egress.
 	pods sets.String
+	// The Meter ID of the Egress bandwidth limit flow rule.
+	meterID uint32
+	// The Bandwidth limit of the selected workloads traffic.
+	bandwidth uint32
 }
 
 // egressIPState keeps the actual state of an Egress IP. It's maintained separately from egressState because
@@ -121,10 +132,11 @@ type EgressController struct {
 	queue              workqueue.RateLimitingInterface
 
 	// Use an interface for IP detector to enable testing.
-	localIPDetector LocalIPDetector
-	ifaceStore      interfacestore.InterfaceStore
-	nodeName        string
-	idAllocator     *idAllocator
+	localIPDetector  LocalIPDetector
+	ifaceStore       interfacestore.InterfaceStore
+	nodeName         string
+	markIDAllocator  *idAllocator
+	meterIDAllocator *idAllocator
 
 	egressGroups      map[string]sets.String
 	egressGroupsMutex sync.RWMutex
@@ -174,7 +186,8 @@ func NewEgressController(
 		egressIPStates:       map[string]*egressIPState{},
 		egressBindings:       map[string]*egressBinding{},
 		localIPDetector:      localIPDetector,
-		idAllocator:          newIDAllocator(minEgressMark, maxEgressMark),
+		markIDAllocator:      newIDAllocator(minEgressMark, maxEgressMark),
+		meterIDAllocator:     newIDAllocator(minEgressMeter, maxEgressMeter),
 	}
 	ipAssigner, err := ipassigner.NewIPAssigner(nodeTransportIP, egressDummyDevice)
 	if err != nil {
@@ -394,7 +407,7 @@ func (c *EgressController) realizeEgressIP(egressName, egressIP string) (uint32,
 	if isLocalIP {
 		// Ensure the Egress IP has a mark allocated when it's a local IP.
 		if ipState.mark == 0 {
-			ipState.mark, err = c.idAllocator.allocate()
+			ipState.mark, err = c.markIDAllocator.allocate()
 			if err != nil {
 				return 0, fmt.Errorf("error allocating mark for IP %s: %v", egressIP, err)
 			}
@@ -427,7 +440,7 @@ func (c *EgressController) realizeEgressIP(egressName, egressIP string) (uint32,
 			ipState.flowsInstalled = false
 		}
 		if ipState.mark != 0 {
-			err := c.idAllocator.release(ipState.mark)
+			err := c.markIDAllocator.release(ipState.mark)
 			if err != nil {
 				return 0, fmt.Errorf("error releasing mark for IP %s: %v", egressIP, err)
 			}
@@ -468,9 +481,58 @@ func (c *EgressController) unrealizeEgressIP(egressName, egressIP string) error 
 			}
 			ipState.flowsInstalled = false
 		}
-		c.idAllocator.release(ipState.mark)
+		c.markIDAllocator.release(ipState.mark)
 	}
 	delete(c.egressIPStates, egressIP)
+	return nil
+}
+
+// realizeEgressMeter realizes an Egress meterID and add meter rate limit flow.
+func (c *EgressController) realizeEgressMeter(egressName string, bandwidth uint32, podNum int, eState *egressState) error {
+	c.egressStatesMutex.Lock()
+	defer c.egressStatesMutex.Unlock()
+
+	var err error
+	if bandwidth != 0 && bandwidth != eState.bandwidth && podNum != 0 {
+		if eState.meterID == 0 {
+			eState.meterID, err = c.meterIDAllocator.allocate()
+			if err != nil {
+				return fmt.Errorf("error allocating meter id for Egress %s: %v", egressName, err)
+			}
+		}
+		if err := c.ofClient.AddMeterFlow(eState.meterID, bandwidth); err != nil {
+			return err
+		}
+		eState.bandwidth = bandwidth
+		// Since the bandwidth has been updated, need to add SNAT flows for pods again, so clean the egressState
+		// ofPorts cache.
+		eState.ofPorts = sets.NewInt32()
+	}
+	if eState.bandwidth != 0 && (bandwidth == 0 || podNum == 0) {
+		// Reset egressState bandwidth when Egress bandwidth has been removed or related Pods is None.
+		eState.meterID, eState.bandwidth = 0, 0
+		// Since the bandwidth has been remove, need to add SNAT flows for pods again, so clean the egressState
+		// ofPorts cache.
+		eState.ofPorts = sets.NewInt32()
+	}
+	return nil
+}
+
+// unrealizeEgressMeter unrealizes an Egress meterID and delete meter rate limit flow.
+func (c *EgressController) unrealizeEgressMeter(meterID uint32, eState *egressState) error {
+	c.egressStatesMutex.Lock()
+	defer c.egressStatesMutex.Unlock()
+	if meterID == 0 {
+		return nil
+	}
+	if err := c.ofClient.DeleteMeterFlow(meterID); err != nil {
+		return err
+	}
+	if err := c.meterIDAllocator.release(meterID); err != nil {
+		return err
+	}
+	// Reset egressState bandwidth when delete meter rate limit flow
+	eState.meterID, eState.bandwidth = 0, 0
 	return nil
 }
 
@@ -654,10 +716,6 @@ func (c *EgressController) syncEgress(egressName string) error {
 		return fmt.Errorf("update Egress %s status error: %v", egressName, err)
 	}
 
-	// Copy the previous ofPorts and Pods. They will be used to identify stale ofPorts and Pods.
-	staleOFPorts := eState.ofPorts.Union(nil)
-	stalePods := eState.pods.Union(nil)
-
 	// Get a copy of the desired Pods.
 	pods := func() sets.String {
 		c.egressGroupsMutex.RLock()
@@ -669,7 +727,25 @@ func (c *EgressController) syncEgress(egressName string) error {
 		return pods.Union(nil)
 	}()
 
+	bandwidth, err := bandwidthutil.ParseBandwidth(egress.Spec.Bandwidth, bandwidthutil.Kilo)
+	if err != nil {
+		return err
+	}
+
+	// Copy the previous meterID. It will be used to identify stale meter flow.
+	staleMeter := eState.meterID
+
+	// Realize the latest meterID and add meter rate limit flow.
+	if err := c.realizeEgressMeter(egress.Name, bandwidth, len(pods), eState); err != nil {
+		return err
+	}
+
 	egressIP := net.ParseIP(eState.egressIP)
+
+	// Copy the previous ofPorts and Pods. They will be used to identify stale ofPorts and Pods.
+	staleOFPorts := eState.ofPorts.Union(nil)
+	stalePods := eState.pods.Union(nil)
+
 	// Install SNAT flows for desired Pods.
 	for pod := range pods {
 		eState.pods.Insert(pod)
@@ -694,7 +770,7 @@ func (c *EgressController) syncEgress(egressName string) error {
 			staleOFPorts.Delete(ofPort)
 			continue
 		}
-		if err := c.ofClient.InstallPodSNATFlows(uint32(ofPort), egressIP, mark); err != nil {
+		if err := c.ofClient.InstallPodSNATFlows(uint32(ofPort), egressIP, mark, eState.meterID); err != nil {
 			return err
 		}
 		eState.ofPorts.Insert(ofPort)
@@ -703,6 +779,13 @@ func (c *EgressController) syncEgress(egressName string) error {
 	// Uninstall SNAT flows for stale Pods.
 	if err := c.uninstallPodFlows(egressName, eState, staleOFPorts, stalePods); err != nil {
 		return err
+	}
+
+	// Uninstall SNAT stale meter flow.
+	if staleMeter != 0 && staleMeter != eState.meterID {
+		if err := c.unrealizeEgressMeter(staleMeter, eState); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -718,6 +801,10 @@ func (c *EgressController) uninstallEgress(egressName string, eState *egressStat
 	}
 	// Unassign the Egress IP from the local Node if it was assigned by the agent.
 	if err := c.ipAssigner.UnassignIP(eState.egressIP); err != nil {
+		return err
+	}
+	// Release the Egress Meter and uninstall meter rate limit flow if the Bandwidth has been configured.
+	if err := c.unrealizeEgressMeter(eState.meterID, eState); err != nil {
 		return err
 	}
 	// Remove the Egress's state.

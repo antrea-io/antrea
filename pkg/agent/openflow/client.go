@@ -20,6 +20,7 @@ import (
 	"net"
 
 	"antrea.io/libOpenflow/protocol"
+	"antrea.io/ofnet/ofctrl"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/klog/v2"
 
@@ -176,7 +177,7 @@ type Client interface {
 	// tunnel destination, and the packets should be SNAT'd on the remote
 	// Node. As of now, a Pod can be configured to use only a single SNAT
 	// IP in a single address family (IPv4 or IPv6).
-	InstallPodSNATFlows(ofPort uint32, snatIP net.IP, snatMark uint32) error
+	InstallPodSNATFlows(ofPort uint32, snatIP net.IP, snatMark, meterId uint32) error
 
 	// UninstallPodSNATFlows removes the SNAT flows for the local Pod.
 	UninstallPodSNATFlows(ofPort uint32) error
@@ -299,6 +300,10 @@ type Client interface {
 	AddAddressToDNSConjunction(id uint32, addrs []types.Address) error
 	// DeleteAddressFromDNSConjunction removes addresses from the toAddresses of the dns packetIn conjunction.
 	DeleteAddressFromDNSConjunction(id uint32, addrs []types.Address) error
+	// AddMeterFlow adds meter QoS flow
+	AddMeterFlow(id uint32, rate uint32) error
+	// DeleteMeterFlow adds meter QoS flow
+	DeleteMeterFlow(id uint32) error
 }
 
 // GetFlowTableStatus returns an array of flow table status.
@@ -837,12 +842,13 @@ func (c *client) UninstallSNATMarkFlows(mark uint32) error {
 	return c.deleteFlows(c.snatFlowCache, cacheKey)
 }
 
-func (c *client) InstallPodSNATFlows(ofPort uint32, snatIP net.IP, snatMark uint32) error {
-	flows := []binding.Flow{c.snatRuleFlow(ofPort, snatIP, snatMark, c.nodeConfig.GatewayConfig.MAC)}
+func (c *client) InstallPodSNATFlows(ofPort uint32, snatIP net.IP, snatMark, meterId uint32) error {
+	var flows []binding.Flow
+	flows = []binding.Flow{c.snatRuleFlow(ofPort, snatIP, snatMark, meterId, c.nodeConfig.GatewayConfig.MAC)}
 	cacheKey := fmt.Sprintf("p%x", ofPort)
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
-	return c.addFlows(c.snatFlowCache, cacheKey, flows)
+	return c.modifyFlows(c.snatFlowCache, cacheKey, flows)
 }
 
 func (c *client) UninstallPodSNATFlows(ofPort uint32) error {
@@ -1180,4 +1186,32 @@ func (c *client) SendUDPPacketOut(
 	}
 	packetOutObj := packetOutBuilder.Done()
 	return c.bridge.SendPacketOut(packetOutObj)
+}
+
+// AddMeterFlow adds meter QoS flow.
+func (c *client) AddMeterFlow(id uint32, rate uint32) error {
+	if !c.ovsMetersAreSupported {
+		return fmt.Errorf("OVS Meter is not supported")
+	}
+	c.replayMutex.RLock()
+	defer c.replayMutex.RUnlock()
+	meter := c.bridge.CreateMeter(binding.MeterIDType(id), ofctrl.MeterBurst|ofctrl.MeterKbps).ResetMeterBands()
+	return meter.MeterBand().
+		MeterType(ofctrl.MeterDrop).
+		Rate(rate).
+		Burst(2 * rate).
+		Done().Add()
+}
+
+// DeleteMeterFlow adds meter QoS flow.
+func (c *client) DeleteMeterFlow(id uint32) error {
+	if !c.ovsMetersAreSupported {
+		return fmt.Errorf("OVS Meter is not supported")
+	}
+	c.replayMutex.RLock()
+	defer c.replayMutex.RUnlock()
+	if !c.bridge.DeleteMeter(binding.MeterIDType(id)) {
+		return fmt.Errorf("meter %d delete failed", id)
+	}
+	return nil
 }

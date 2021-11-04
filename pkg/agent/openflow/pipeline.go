@@ -2073,30 +2073,34 @@ func (c *client) snatIPFromTunnelFlow(snatIP net.IP, mark uint32) binding.Flow {
 // the SNAT IP exists on the local Node, it sets the packet mark with the ID of
 // the SNAT IP, for the traffic from the ofPort to external; if the SNAT IP is
 // on a remote Node, it tunnels the packets to the SNAT IP.
-func (c *client) snatRuleFlow(ofPort uint32, snatIP net.IP, snatMark uint32, localGatewayMAC net.HardwareAddr) binding.Flow {
+func (c *client) snatRuleFlow(ofPort uint32, snatIP net.IP, snatMark, meterId uint32, localGatewayMAC net.HardwareAddr) binding.Flow {
+	var flowBuilder binding.FlowBuilder
 	ipProto := getIPProtocol(snatIP)
 	if snatMark != 0 {
 		// Local SNAT IP.
-		return SNATTable.BuildFlow(priorityNormal).
+		flowBuilder = SNATTable.BuildFlow(priorityNormal).
 			MatchProtocol(ipProto).
 			MatchCTStateNew(true).MatchCTStateTrk(true).
 			MatchInPort(ofPort).
 			Action().LoadPktMarkRange(snatMark, snatPktMarkRange).
 			Action().GotoTable(SNATTable.GetNext()).
-			Cookie(c.cookieAllocator.Request(cookie.SNAT).Raw()).
-			Done()
+			Cookie(c.cookieAllocator.Request(cookie.SNAT).Raw())
+	} else {
+		// SNAT IP should be on a remote Node.
+		flowBuilder = SNATTable.BuildFlow(priorityNormal).
+			MatchProtocol(ipProto).
+			MatchInPort(ofPort).
+			Action().SetSrcMAC(localGatewayMAC).
+			Action().SetDstMAC(GlobalVirtualMAC).
+			// Set tunnel destination to the SNAT IP.
+			Action().SetTunnelDst(snatIP).
+			Action().GotoTable(L3DecTTLTable.GetID()).
+			Cookie(c.cookieAllocator.Request(cookie.SNAT).Raw())
 	}
-	// SNAT IP should be on a remote Node.
-	return SNATTable.BuildFlow(priorityNormal).
-		MatchProtocol(ipProto).
-		MatchInPort(ofPort).
-		Action().SetSrcMAC(localGatewayMAC).
-		Action().SetDstMAC(GlobalVirtualMAC).
-		// Set tunnel destination to the SNAT IP.
-		Action().SetTunnelDst(snatIP).
-		Action().GotoTable(L3DecTTLTable.GetID()).
-		Cookie(c.cookieAllocator.Request(cookie.SNAT).Raw()).
-		Done()
+	if c.ovsMetersAreSupported && meterId != 0 {
+		flowBuilder.Action().Meter(meterId)
+	}
+	return flowBuilder.Done()
 }
 
 // loadBalancerServiceFromOutsideFlow generates the flow to forward LoadBalancer service traffic from outside node

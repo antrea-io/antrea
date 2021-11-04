@@ -25,6 +25,7 @@ import (
 	"k8s.io/klog/v2"
 
 	crdv1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
+	bandwidthutil "antrea.io/antrea/pkg/util/bandwidth"
 )
 
 func (c *EgressController) ValidateExternalIPPool(review *admv1.AdmissionReview) *admv1.AdmissionResponse {
@@ -100,6 +101,10 @@ func (c *EgressController) ValidateEgress(review *admv1.AdmissionReview) *admv1.
 	}
 
 	shouldAllow := func(oldEgress, newEgress *crdv1alpha2.Egress) (bool, string) {
+		// Allow it if Egress Bandwidth is valid.
+		if _, err := bandwidthutil.ParseBandwidth(newEgress.Spec.Bandwidth, bandwidthutil.Kilo); err != nil {
+			return false, fmt.Sprintf("Bandwidth %s is not valid, %v", newEgress.Spec.Bandwidth, err)
+		}
 		// Allow it if EgressIP and ExternalIPPool don't change.
 		if newEgress.Spec.EgressIP == oldEgress.Spec.EgressIP && newEgress.Spec.ExternalIPPool == oldEgress.Spec.ExternalIPPool {
 			return true, ""

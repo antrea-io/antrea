@@ -1434,10 +1434,10 @@ func TestSNATFlows(t *testing.T) {
 
 	c.InstallSNATMarkFlows(snatIP, snatMark)
 	c.InstallSNATMarkFlows(snatIPV6, snatMarkV6)
-	c.InstallPodSNATFlows(podOFPort, snatIP, snatMark)
-	c.InstallPodSNATFlows(podOFPortRemote, snatIP, 0)
-	c.InstallPodSNATFlows(podOFPortV6, snatIPV6, snatMarkV6)
-	c.InstallPodSNATFlows(podOFPortRemoteV6, snatIPV6, 0)
+	c.InstallPodSNATFlows(podOFPort, snatIP, snatMark, 0)
+	c.InstallPodSNATFlows(podOFPortRemote, snatIP, 0, 0)
+	c.InstallPodSNATFlows(podOFPortV6, snatIPV6, snatMarkV6, 0)
+	c.InstallPodSNATFlows(podOFPortRemoteV6, snatIPV6, 0, 0)
 	for _, tableFlow := range expectedFlows {
 		ofTestUtils.CheckFlowExists(t, ovsCtlClient, tableFlow.tableID, true, tableFlow.flows)
 	}
