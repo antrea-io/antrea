@@ -88,7 +88,7 @@ func run(o *Options) error {
 	antreaClientProvider := agent.NewAntreaClientProvider(o.config.AntreaClientConnection, k8sClient)
 
 	// Register Antrea Agent metrics if EnablePrometheusMetrics is set
-	if o.config.EnablePrometheusMetrics {
+	if *o.config.EnablePrometheusMetrics {
 		metrics.InitializePrometheusMetrics()
 	}
 
@@ -476,7 +476,7 @@ func run(o *Options) error {
 		agentQuerier,
 		networkPolicyController,
 		o.config.APIPort,
-		o.config.EnablePrometheusMetrics,
+		*o.config.EnablePrometheusMetrics,
 		o.config.ClientConnection.Kubeconfig,
 		cipherSuites,
 		cipher.TLSVersionMap[o.config.TLSMinVersion])

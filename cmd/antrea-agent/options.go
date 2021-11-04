@@ -28,6 +28,7 @@ import (
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/apis"
 	"antrea.io/antrea/pkg/cni"
+	agentconfig "antrea.io/antrea/pkg/config/agent"
 	"antrea.io/antrea/pkg/features"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 	"antrea.io/antrea/pkg/util/flowexport"
@@ -53,7 +54,7 @@ type Options struct {
 	// The path of configuration file.
 	configFile string
 	// The configuration object
-	config *AgentConfig
+	config *agentconfig.AgentConfig
 	// IPFIX flow collector address
 	flowCollectorAddr string
 	// IPFIX flow collector protocol
@@ -72,9 +73,7 @@ type Options struct {
 
 func newOptions() *Options {
 	return &Options{
-		config: &AgentConfig{
-			EnablePrometheusMetrics: true,
-		},
+		config: &agentconfig.AgentConfig{},
 	}
 }
 
@@ -228,6 +227,10 @@ func (o *Options) setDefaults() {
 	}
 	if o.config.ClusterMembershipPort == 0 {
 		o.config.ClusterMembershipPort = apis.AntreaAgentClusterMembershipPort
+	}
+	if o.config.EnablePrometheusMetrics == nil {
+		o.config.EnablePrometheusMetrics = new(bool)
+		*o.config.EnablePrometheusMetrics = true
 	}
 	if o.config.WireGuard.Port == 0 {
 		o.config.WireGuard.Port = apis.WireGuardListenPort

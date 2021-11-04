@@ -1,4 +1,4 @@
-// Copyright 2019 Antrea Authors
+// Copyright 2021 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package config
 
 import (
 	componentbaseconfig "k8s.io/component-base/config"
@@ -112,7 +112,7 @@ type AgentConfig struct {
 
 	// Enable metrics exposure via Prometheus. Initializes Prometheus metrics listener
 	// Defaults to true.
-	EnablePrometheusMetrics bool `yaml:"enablePrometheusMetrics,omitempty"`
+	EnablePrometheusMetrics *bool `yaml:"enablePrometheusMetrics,omitempty"`
 	// Provide the IPFIX collector address as a string with format <HOST>:[<PORT>][:<PROTO>].
 	// HOST can either be the DNS name or the IP of the Flow Collector. For example,
 	// "flow-aggregator.flow-aggregator.svc" can be provided as DNS name to connect

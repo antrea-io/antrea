@@ -27,6 +27,7 @@ import (
 
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/apis"
+	agentconfig "antrea.io/antrea/pkg/config/agent"
 )
 
 // TestWireGuard checks that Pod traffic across two Nodes over the WireGuard tunnel by creating
@@ -51,15 +52,15 @@ func TestWireGuard(t *testing.T) {
 	defer teardownTest(t, data)
 
 	if !providerIsKind {
-		ac := []configChange{
-			&configChangeParam{"trafficEncryptionMode", "wireguard"},
+		ac := func(config *agentconfig.AgentConfig) {
+			config.TrafficEncryptionMode = "wireguard"
 		}
 		if err := data.mutateAntreaConfigMap(nil, ac, false, true); err != nil {
 			t.Fatalf("Failed to enable WireGuard tunnel: %v", err)
 		}
 		defer func() {
-			ac = []configChange{
-				&configChangeParam{"trafficEncryptionMode", "none"},
+			ac := func(config *agentconfig.AgentConfig) {
+				config.TrafficEncryptionMode = "none"
 			}
 			if err := data.mutateAntreaConfigMap(nil, ac, false, true); err != nil {
 				t.Fatalf("Failed to disable WireGuard tunnel: %v", err)
