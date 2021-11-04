@@ -22,6 +22,7 @@ reviewers:
   - ksamoray
   area/multi-cluster:
   - luolanzone
+  - aravindakidambi
   area/network-policy*:
   - Dyanngg
   - GraysonWu
