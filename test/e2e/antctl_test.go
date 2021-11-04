@@ -39,10 +39,11 @@ func TestAntctl(t *testing.T) {
 	skipIfHasWindowsNodes(t)
 	skipIfNotRequired(t, "mode-irrelevant")
 
-	data, err := setupTest(t)
+	data, _, _, err := setupTestWithIPFIXCollector(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
+	defer teardownFlowAggregator(t, data)
 	defer teardownTest(t, data)
 
 	t.Run("testAntctlAgentLocalAccess", func(t *testing.T) {
