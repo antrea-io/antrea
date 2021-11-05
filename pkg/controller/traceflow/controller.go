@@ -345,8 +345,10 @@ func (c *Controller) checkTraceflowStatus(tf *crdv1alpha1.Traceflow) error {
 	} else {
 		timeout = defaultTimeoutDuration
 	}
-	startTime := tf.Status.StartTime.Time
-	if startTime.IsZero() {
+	var startTime time.Time
+	if tf.Status.StartTime != nil {
+		startTime = tf.Status.StartTime.Time
+	} else {
 		// a fallback that should not be needed in general since we are in the Running phase
 		// when upgrading Antrea from a previous version, the field would be empty
 		klog.V(2).InfoS("StartTime field in Traceflow Status should not be empty", "Traceflow", klog.KObj(tf))
@@ -362,8 +364,9 @@ func (c *Controller) checkTraceflowStatus(tf *crdv1alpha1.Traceflow) error {
 func (c *Controller) updateTraceflowStatus(tf *crdv1alpha1.Traceflow, phase crdv1alpha1.TraceflowPhase, reason string, dataPlaneTag uint8) error {
 	update := tf.DeepCopy()
 	update.Status.Phase = phase
-	if phase == crdv1alpha1.Running && tf.Status.StartTime.IsZero() {
-		update.Status.StartTime = metav1.Now()
+	if phase == crdv1alpha1.Running && tf.Status.StartTime == nil {
+		t := metav1.Now()
+		update.Status.StartTime = &t
 	}
 	update.Status.DataplaneTag = dataPlaneTag
 	if reason != "" {
