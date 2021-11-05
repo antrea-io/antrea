@@ -1225,13 +1225,32 @@ func (c *client) l3FwdFlowToGateway(localGatewayIPs []net.IP, localGatewayMAC ne
 	//  AntreaProxy is enabled by default). One example is a Pod accessing a NodePort Service for which
 	//  externalTrafficPolicy is set to Local, using the local Node's IP address.
 	for _, proto := range c.ipProtocols {
+		// The following two OpenFlow entries are a workaround for issue: https://github.com/antrea-io/antrea/issues/2981.
+		// The issue is a Windows OVS bug, which identifies a reply packet as "new" in conntrack, and mark the connection
+		// with "FromGatewayCTMark". The OVS datapath might drop the packet if the reply packet is actually form
+		// antrea-gw0 because the input_port and output port number are the same. This workaround doesn't write the
+		// dst MAC if the reply packet of a connection marked with "FromGatewayCTMark" but it enters OVS from antrea-gw0.
 		flows = append(flows, L3ForwardingTable.BuildFlow(priorityHigh).MatchProtocol(proto).
+			MatchRegMark(FromLocalRegMark).
 			MatchCTMark(FromGatewayCTMark).
 			MatchCTStateRpl(true).MatchCTStateTrk(true).
 			Action().SetDstMAC(localGatewayMAC).
 			Action().GotoTable(L3ForwardingTable.GetNext()).
 			Cookie(c.cookieAllocator.Request(category).Raw()).
-			Done())
+			Done(),
+		)
+
+		if c.networkConfig.TrafficEncapMode.SupportsEncap() {
+			flows = append(flows, L3ForwardingTable.BuildFlow(priorityHigh).MatchProtocol(proto).
+				MatchRegMark(FromTunnelRegMark).
+				MatchCTMark(FromGatewayCTMark).
+				MatchCTStateRpl(true).MatchCTStateTrk(true).
+				Action().SetDstMAC(localGatewayMAC).
+				Action().GotoTable(L3ForwardingTable.GetNext()).
+				Cookie(c.cookieAllocator.Request(category).Raw()).
+				Done())
+		}
+
 		if c.connectUplinkToBridge {
 			flows = append(flows, L3ForwardingTable.BuildFlow(priorityHigh).MatchProtocol(proto).
 				MatchCTMark(FromBridgeCTMark).
