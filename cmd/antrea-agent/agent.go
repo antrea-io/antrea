@@ -219,10 +219,10 @@ func run(o *Options) error {
 	v4GroupCounter := proxytypes.NewGroupCounter(false, groupIDUpdates)
 	v6GroupCounter := proxytypes.NewGroupCounter(true, groupIDUpdates)
 
+	v4Enabled := config.IsIPv4Enabled(nodeConfig, networkConfig.TrafficEncapMode)
+	v6Enabled := config.IsIPv6Enabled(nodeConfig, networkConfig.TrafficEncapMode)
 	var proxier proxy.Proxier
 	if features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
-		v4Enabled := config.IsIPv4Enabled(nodeConfig, networkConfig.TrafficEncapMode)
-		v6Enabled := config.IsIPv6Enabled(nodeConfig, networkConfig.TrafficEncapMode)
 		proxyAll := o.config.AntreaProxy.ProxyAll
 		skipServices := o.config.AntreaProxy.SkipServices
 
@@ -370,9 +370,11 @@ func run(o *Options) error {
 			nodeRouteController,
 			networkConfig.TrafficEncapMode,
 			nodeConfig,
+			v4Enabled,
+			v6Enabled,
 			serviceCIDRNet,
 			serviceCIDRNetv6,
-			&ovsDatapathType,
+			ovsDatapathType,
 			features.DefaultFeatureGate.Enabled(features.AntreaProxy),
 			networkPolicyController,
 			flowExporterOptions)

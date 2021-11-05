@@ -29,13 +29,14 @@ import (
 	"time"
 
 	"github.com/golang/mock/gomock"
+	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
 	"github.com/vmware/go-ipfix/pkg/registry"
 	"k8s.io/klog/v2"
 
-	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/flowexporter"
 	"antrea.io/antrea/pkg/agent/flowexporter/connections"
 	"antrea.io/antrea/pkg/agent/flowexporter/priorityqueue"
+	"antrea.io/antrea/pkg/ipfix"
 )
 
 const (
@@ -145,6 +146,39 @@ func BenchmarkExportDenyConns(b *testing.B) {
 
 }
 
+func NewFlowExporterForTest(o *flowexporter.FlowExporterOptions) *FlowExporter {
+	// Initialize IPFIX registry
+	registry := ipfix.NewIPFIXRegistry()
+	registry.LoadRegistry()
+
+	// Prepare input args for IPFIX exporting process.
+	nodeName := "test-node"
+	expInput := prepareExporterInputArgs(o.FlowCollectorAddr, o.FlowCollectorProto, nodeName)
+
+	v4Enabled := true
+	v6Enabled := false
+
+	denyConnStore := connections.NewDenyConnectionStore(nil, nil, o)
+	conntrackConnStore := connections.NewConntrackConnectionStore(nil, v4Enabled, v6Enabled, nil, nil, nil, o)
+
+	return &FlowExporter{
+		conntrackConnStore:     conntrackConnStore,
+		denyConnStore:          denyConnStore,
+		registry:               registry,
+		v4Enabled:              v4Enabled,
+		v6Enabled:              v6Enabled,
+		exporterInput:          expInput,
+		ipfixSet:               ipfixentities.NewSet(false),
+		k8sClient:              nil,
+		nodeRouteController:    nil,
+		isNetworkPolicyOnly:    false,
+		nodeName:               nodeName,
+		conntrackPriorityQueue: conntrackConnStore.GetPriorityQueue(),
+		denyPriorityQueue:      denyConnStore.GetPriorityQueue(),
+		expiredConns:           make([]flowexporter.Connection, 0, maxConnsToExport*2),
+	}
+}
+
 func setupExporter(isConntrackConn bool) (*FlowExporter, error) {
 	var err error
 	collectorAddr, err := startLocalServer()
@@ -160,7 +194,7 @@ func setupExporter(isConntrackConn bool) (*FlowExporter, error) {
 		IdleFlowTimeout:        testIdleFlowTimeout,
 		StaleConnectionTimeout: 1,
 		PollInterval:           1}
-	exp, _ := NewFlowExporter(nil, nil, nil, nil, config.TrafficEncapModeEncap, nil, nil, nil, nil, false, nil, o)
+	exp := NewFlowExporterForTest(o)
 	if isConntrackConn {
 		addConns(exp.conntrackConnStore, exp.conntrackConnStore.GetPriorityQueue())
 	} else {
