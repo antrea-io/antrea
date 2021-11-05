@@ -23,6 +23,15 @@ set -o pipefail
 
 TOOL_VERSION=$(head hack/mdtoc-version)
 
+GO_VERSION="$(${GO} version | awk '{print $3}')"
+function version_lt() { test "$(printf '%s\n' "$@" | sort -rV | head -n 1)" != "$1"; }
+
+if version_lt "${GO_VERSION}" "go1.16"; then
+    # See https://golang.org/doc/go-get-install-deprecation
+    echo "Running this script requires Go >= 1.16, please upgrade"
+    exit 1
+fi
+
 # cd to the root path
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 cd "${ROOT}"
@@ -37,12 +46,8 @@ exitHandler() (
 )
 trap exitHandler EXIT
 
-# perform go get in a temp dir as we are not tracking this version in a go module
-# if we do the go get in the repo, it will create / update a go.mod and go.sum
-cd "${TMP_DIR}"
-GO111MODULE=on GOBIN="${TMP_DIR}" go get "github.com/tallclair/mdtoc@${TOOL_VERSION}"
+GOBIN="${TMP_DIR}" ${GO} install "github.com/tallclair/mdtoc@${TOOL_VERSION}"
 export PATH="${TMP_DIR}:${PATH}"
-cd "${ROOT}"
 
 # Update tables of contents if necessary.
 find docs -name '*.md' | grep -Fxvf hack/.notableofcontents | xargs mdtoc --inplace

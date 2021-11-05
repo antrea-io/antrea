@@ -1,0 +1,102 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: fluentd
+  namespace: kube-logging
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: fluentd
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - pods
+      - namespaces
+    verbs:
+      - get
+      - list
+      - watch
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: fluentd
+roleRef:
+  kind: ClusterRole
+  name: fluentd
+  apiGroup: rbac.authorization.k8s.io
+subjects:
+  - kind: ServiceAccount
+    name: fluentd
+    namespace: kube-logging
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: fluentd
+  namespace: kube-logging
+  labels:
+    k8s-app: fluentd-logging
+    version: v1
+spec:
+  selector:
+    matchLabels:
+      k8s-app: fluentd-logging
+      version: v1
+  template:
+    metadata:
+      labels:
+        k8s-app: fluentd-logging
+        version: v1
+    spec:
+      serviceAccount: fluentd
+      serviceAccountName: fluentd
+      tolerations:
+        - key: node-role.kubernetes.io/master
+          effect: NoSchedule
+      containers:
+        - name: fluentd
+          image: fluent/fluentd-kubernetes-daemonset:v1.8.1-debian-elasticsearch7-1.3
+          env:
+            - name:  FLUENT_ELASTICSEARCH_HOST
+              value: "elasticsearch.kube-logging.svc.cluster.local"
+            - name:  FLUENT_ELASTICSEARCH_PORT
+              value: "9200"
+            - name: FLUENT_ELASTICSEARCH_SCHEME
+              value: "http"
+            - name: FLUENT_ELASTICSEARCH_LOGSTASH_INDEX_NAME
+              value: "fluentd"
+            - name: FLUENT_ELASTICSEARCH_LOGSTASH_PREFIX
+              value: "fluentd"
+            - name: FLUENT_ELASTICSEARCH_SSL_VERIFY
+              value: "false"
+            - name: FLUENTD_SYSTEMD_CONF
+              value: disable
+          resources:
+            limits:
+              memory: 200Mi
+            requests:
+              cpu: 100m
+              memory: 200Mi
+          volumeMounts:
+            - name: config-volume
+              mountPath: /fluentd/etc/kubernetes.conf
+              subPath: kubernetes.conf
+            - name: varlog
+              mountPath: /var/log
+            - name: dockercontainerlogdirectory
+              mountPath: /var/log/pods
+              readOnly: true
+      terminationGracePeriodSeconds: 30
+      volumes:
+        - name: config-volume
+          configMap:
+            name: fluentd-conf
+        - name: varlog
+          hostPath:
+            path: /var/log
+        - name: dockercontainerlogdirectory
+          hostPath:
+            path: /var/log/pods
