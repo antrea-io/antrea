@@ -391,7 +391,7 @@ verify:
 .PHONY: toc
 toc:
 	@echo "===> Generating Table of Contents for Antrea docs <==="
-	$(CURDIR)/hack/update-toc.sh
+	GO=$(GO) $(CURDIR)/hack/update-toc.sh
 
 .PHONE: markdownlint
 markdownlint:

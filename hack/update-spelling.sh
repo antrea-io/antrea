@@ -32,7 +32,7 @@ exitHandler() (
 trap exitHandler EXIT
 
 cd "${TMP_DIR}"
-GO111MODULE=on GOBIN="${TMP_DIR}" go get "github.com/client9/misspell/cmd/misspell@${TOOL_VERSION}"
+GO111MODULE=on GOBIN="${TMP_DIR}" go install "github.com/client9/misspell/cmd/misspell@${TOOL_VERSION}"
 export PATH="${TMP_DIR}:${PATH}"
 cd "${ROOT}"
 
