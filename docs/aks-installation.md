@@ -1,12 +1,20 @@
-# Deploying Antrea on AKS
+# Deploying Antrea on AKS and AKS Engine
 
-This document describes steps to deploy Antrea in NetworkPolicy only mode to an Azure AKS cluster.
+This document describes steps to deploy Antrea to an AKS cluster or an AKS
+Engine cluster.
 
-## AKS Prerequisites
+## Deploy Antrea to an AKS cluster
+
+Antrea can be deployed to an AKS cluster in `networkPolicyOnly` mode, in which
+Antrea enforces NetworkPolicies and implements other services for the AKS
+cluster, while Azure CNI takes care of Pod IPAM and traffic routing across Nodes.
+For more information about `networkPolicyOnly` mode, refer to [this design document](design/policy-only.md).
+
+### AKS Prerequisites
 
 Install the Azure Cloud CLI. Refer to [Azure CLI installation guide](https://docs.microsoft.com/en-us/cli/azure/install-azure-cli?view=azure-cli-latest)
 
-## Creating the cluster
+### Creating the cluster
 
 You can use any method to create an AKS cluster. The example given here is using the Azure Cloud CLI.
 
@@ -42,7 +50,7 @@ You can use any method to create an AKS cluster. The example given here is using
     aks-nodepool1-84330359-vmss000001   Ready    agent   6m25s   v1.16.10
     ```
 
-## Deploying Antrea
+### Deploying Antrea
 
 1. Prepare the Cluster Nodes
 
@@ -101,3 +109,62 @@ you should be able to see these Pods running in your cluster:
     pod "metrics-server-85c57978c6-pwzcx" deleted
     pod "tunnelfront-649ff5fb55-5lxg7" deleted
     ```
+
+## Deploy Antrea to an AKS Engine cluster
+
+Antrea is an integrated CNI of AKS Engine, and can be installed in
+`networkPolicyOnly` mode or `encap` mode to an AKS Engine cluster as part of the
+AKS Engine cluster deployment. To learn basics of AKS Engine cluster deployment,
+please refer to [AKS Engine Quickstart Guide](https://github.com/Azure/aks-engine/blob/master/docs/tutorials/quickstart.md).
+
+### Deploying Antrea in `networkPolicyOnly` mode
+
+To configure Antrea to enforce NetworkPolicies for the AKS Engine cluster,
+`"networkPolicy": "antrea"` needs to be set in `kubernetesConfig` of the AKS
+Engine cluster definition (Azure CNI will be used as the `networkPlugin`):
+
+```json
+  "apiVersion": "vlabs",
+  "properties": {
+    "orchestratorProfile": {
+      "kubernetesConfig": {
+        "networkPolicy": "antrea"
+      }
+    }
+  }
+```
+
+You can use the deployment template
+[`examples/networkpolicy/kubernetes-antrea.json`](https://github.com/Azure/aks-engine/blob/master/examples/networkpolicy/kubernetes-antrea.json)
+to deploy an AKS Engine cluster with Antrea in `networkPolicyOnly` mode:
+
+```bash
+$ aks-engine deploy --dns-prefix <dns-prefix> \
+    --resource-group <reource-group> \
+    --location westus2 \
+    --api-model examples/networkpolicy/kubernetes-antrea.json \
+    --auto-suffix
+```
+
+### Deploying Antrea in `encap` mode
+
+To deploy Antrea in `encap` mode for an AKS Engine cluster, both
+`"networkPlugin": "antrea"` and `"networkPolicy": "antrea"` need to be set in
+`kubernetesConfig` of the AKS Engine cluster definition:
+
+```json
+  "apiVersion": "vlabs",
+  "properties": {
+    "orchestratorProfile": {
+      "kubernetesConfig": {
+        "networkPlugin": "antrea",
+        "networkPolicy": "antrea"
+      }
+    }
+  }
+```
+
+You can add `"networkPlugin": "antrea"` to the deployment template
+[`examples/networkpolicy/kubernetes-antrea.json`](https://github.com/Azure/aks-engine/blob/master/examples/networkpolicy/kubernetes-antrea.json),
+and use the template to deploy an AKS Engine cluster with Antrea in `encap`
+mode.
