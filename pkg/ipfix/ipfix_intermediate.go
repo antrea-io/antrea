@@ -96,5 +96,5 @@ func (ap *ipfixAggregationProcess) AreExternalFieldsFilled(record ipfixintermedi
 }
 
 func (ap *ipfixAggregationProcess) GetNumFlows() int64 {
-	return int64(ap.AggregationProcess.GetNumberOfFlows())
+	return ap.AggregationProcess.GetNumFlows()
 }

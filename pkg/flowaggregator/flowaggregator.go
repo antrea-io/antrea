@@ -341,7 +341,6 @@ func (fa *flowAggregator) initExportingProcess() error {
 			CollectorProtocol:   fa.externalFlowCollectorProto,
 			ObservationDomainID: fa.observationDomainID,
 			TempRefTimeout:      0,
-			PathMTU:             0,
 			IsEncrypted:         false,
 			SendJSONRecord:      fa.sendJSONRecord,
 		}
@@ -352,7 +351,6 @@ func (fa *flowAggregator) initExportingProcess() error {
 			CollectorProtocol:   fa.externalFlowCollectorProto,
 			ObservationDomainID: fa.observationDomainID,
 			TempRefTimeout:      1800,
-			PathMTU:             0,
 			IsEncrypted:         false,
 			SendJSONRecord:      fa.sendJSONRecord,
 		}

@@ -60,9 +60,9 @@ func (cp *ipfixCollectingProcess) GetMsgChan() chan *ipfixentities.Message {
 }
 
 func (cp *ipfixCollectingProcess) GetNumRecordsReceived() int64 {
-	return int64(cp.CollectingProcess.GetNumOfRecordsReceived())
+	return cp.CollectingProcess.GetNumRecordsReceived()
 }
 
 func (cp *ipfixCollectingProcess) GetNumConnToCollector() int64 {
-	return int64(cp.CollectingProcess.GetNumOfConnToCollector())
+	return cp.CollectingProcess.GetNumConnToCollector()
 }
