@@ -815,22 +815,7 @@ func (c *client) Initialize(roundInfo types.RoundInfo, nodeConfig *config.NodeCo
 func (c *client) InstallExternalFlows(exceptCIDRs []net.IPNet) error {
 	localGatewayMAC := c.nodeConfig.GatewayConfig.MAC
 
-	var flows []binding.Flow
-	var ipv4CIDRs []net.IPNet
-	var ipv6CIDRs []net.IPNet
-	for _, cidr := range exceptCIDRs {
-		if cidr.IP.To4() == nil {
-			ipv6CIDRs = append(ipv6CIDRs, cidr)
-		} else {
-			ipv4CIDRs = append(ipv4CIDRs, cidr)
-		}
-	}
-	if c.nodeConfig.NodeIPv4Addr != nil && c.nodeConfig.PodIPv4CIDR != nil {
-		flows = c.externalFlows(c.nodeConfig.NodeIPv4Addr.IP, *c.nodeConfig.PodIPv4CIDR, localGatewayMAC, ipv4CIDRs)
-	}
-	if c.nodeConfig.NodeIPv6Addr != nil && c.nodeConfig.PodIPv6CIDR != nil {
-		flows = append(flows, c.externalFlows(c.nodeConfig.NodeIPv6Addr.IP, *c.nodeConfig.PodIPv6CIDR, localGatewayMAC, ipv6CIDRs)...)
-	}
+	flows := c.externalFlows(localGatewayMAC, exceptCIDRs)
 	if err := c.ofEntryOperations.AddAll(flows); err != nil {
 		return fmt.Errorf("failed to install flows for external communication: %v", err)
 	}

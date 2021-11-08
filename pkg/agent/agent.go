@@ -610,11 +610,11 @@ func (i *Initializer) configureGatewayInterface(gatewayIface *interfacestore.Int
 	gatewayIface.IPs = []net.IP{}
 	if i.networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {
 		// Assign IP to gw as required by SpoofGuard.
-		if i.nodeConfig.NodeIPv4Addr != nil {
+		if i.nodeConfig.NodeTransportIPv4Addr != nil {
 			i.nodeConfig.GatewayConfig.IPv4 = i.nodeConfig.NodeTransportIPv4Addr.IP
 			gatewayIface.IPs = append(gatewayIface.IPs, i.nodeConfig.NodeTransportIPv4Addr.IP)
 		}
-		if i.nodeConfig.NodeIPv6Addr != nil {
+		if i.nodeConfig.NodeTransportIPv6Addr != nil {
 			i.nodeConfig.GatewayConfig.IPv6 = i.nodeConfig.NodeTransportIPv6Addr.IP
 			gatewayIface.IPs = append(gatewayIface.IPs, i.nodeConfig.NodeTransportIPv6Addr.IP)
 		}

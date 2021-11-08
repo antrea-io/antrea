@@ -33,6 +33,7 @@ import (
 	"antrea.io/antrea/pkg/agent/metrics"
 	"antrea.io/antrea/pkg/agent/openflow/cookie"
 	"antrea.io/antrea/pkg/agent/types"
+	"antrea.io/antrea/pkg/agent/util"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 	"antrea.io/antrea/pkg/ovs/ovsctl"
@@ -2088,59 +2089,30 @@ func (c *client) snatSkipNodeFlow(nodeIP net.IP, category cookie.Category) bindi
 // snatCommonFlows installs the default flows for performing SNAT for traffic to
 // the external network. The flows identify the packets to external, and send
 // them to SNATTable, where SNAT IPs are looked up for the packets.
-func (c *client) snatCommonFlows(nodeIP net.IP, localSubnet net.IPNet, localGatewayMAC net.HardwareAddr, exceptCIDRs []net.IPNet, category cookie.Category) []binding.Flow {
+func (c *client) snatCommonFlows(localSubnets []net.IPNet, localGatewayMAC net.HardwareAddr, exceptCIDRs []net.IPNet, category cookie.Category) []binding.Flow {
 	nextTable := L3ForwardingTable.GetNext()
-	ipProto := getIPProtocol(localSubnet.IP)
-	flows := []binding.Flow{
-		// First install flows for traffic that should bypass SNAT.
-		// This flow is for traffic to the local Pod subnet that don't need MAC rewriting (L2 forwarding case). Other
-		// traffic to the local Pod subnet will be handled by L3 forwarding rules.
-		L3ForwardingTable.BuildFlow(priorityNormal).
-			MatchProtocol(ipProto).
-			MatchRegFieldWithValue(RewriteMACRegMark.GetField(), 0).
-			MatchDstIPNet(localSubnet).
-			Action().GotoTable(nextTable).
-			Cookie(c.cookieAllocator.Request(category).Raw()).
-			Done(),
-		// This flow is for the traffic to the local Node IP.
-		L3ForwardingTable.BuildFlow(priorityNormal).
-			MatchProtocol(ipProto).
-			MatchRegMark(FromLocalRegMark).
-			MatchDstIP(nodeIP).
-			Action().GotoTable(nextTable).
-			Cookie(c.cookieAllocator.Request(category).Raw()).
-			Done(),
-		// The return traffic of connections to a local Pod through the gateway interface (so FromGatewayCTMark is set)
-		// should bypass SNAT too. But it has been covered by the gatewayCT related flow generated in l3FwdFlowToGateway
-		// which forwards all reply traffic for such connections back to the gateway interface with the high priority.
-
-		// Send the traffic to external to SNATTable.
-		L3ForwardingTable.BuildFlow(priorityLow).
-			MatchProtocol(ipProto).
-			MatchRegMark(FromLocalRegMark).
-			Action().GotoTable(SNATTable.GetID()).
-			Cookie(c.cookieAllocator.Request(category).Raw()).
-			Done(),
-		// For the traffic tunneled from remote Nodes, rewrite the
-		// destination MAC to the gateway interface MAC.
-		L3ForwardingTable.BuildFlow(priorityLow).
-			MatchProtocol(ipProto).
-			MatchRegMark(FromTunnelRegMark).
-			Action().SetDstMAC(localGatewayMAC).
-			Action().GotoTable(SNATTable.GetID()).
-			Cookie(c.cookieAllocator.Request(category).Raw()).
-			Done(),
-
-		// Drop the traffic from remote Nodes if no matched SNAT policy.
-		SNATTable.BuildFlow(priorityLow).
-			MatchProtocol(ipProto).
-			MatchCTStateNew(true).MatchCTStateTrk(true).
-			MatchRegMark(FromTunnelRegMark).
-			Action().Drop().
-			Cookie(c.cookieAllocator.Request(category).Raw()).
-			Done(),
+	protocols := make(map[binding.Protocol]bool)
+	var flows []binding.Flow
+	// First, install flows for traffic that should bypass SNAT.
+	// These flows are for traffic to the local Pod subnet that don't need MAC rewriting (L2 forwarding case). Other
+	// traffic to the local Pod subnet will be handled by L3 forwarding rules.
+	for _, localSubnet := range localSubnets {
+		ipProto := getIPProtocol(localSubnet.IP)
+		flows = append(flows,
+			L3ForwardingTable.BuildFlow(priorityNormal).
+				MatchProtocol(ipProto).
+				MatchRegFieldWithValue(RewriteMACRegMark.GetField(), 0).
+				MatchDstIPNet(localSubnet).
+				Action().GotoTable(nextTable).
+				Cookie(c.cookieAllocator.Request(category).Raw()).
+				Done(),
+		)
+		protocols[ipProto] = true
 	}
+	// Install flows for the exceptCIDRs to bypass SNAT.
+	// The traffic to the local Node addresses should also bypass SNAT, and these addresses are added into the exceptCIDRs.
 	for _, cidr := range exceptCIDRs {
+		ipProto := getIPProtocol(cidr.IP)
 		flows = append(flows, L3ForwardingTable.BuildFlow(priorityNormal).
 			MatchProtocol(ipProto).
 			MatchRegMark(FromLocalRegMark).
@@ -2148,6 +2120,40 @@ func (c *client) snatCommonFlows(nodeIP net.IP, localSubnet net.IPNet, localGate
 			Action().GotoTable(nextTable).
 			Cookie(c.cookieAllocator.Request(category).Raw()).
 			Done())
+	}
+	// The return traffic of connections to a local Pod through the gateway interface (so FromGatewayCTMark is set)
+	// should bypass SNAT too. But it has been covered by the gatewayCT related flow generated in l3FwdFlowToGateway
+	// which forwards all reply traffic for such connections back to the gateway interface with the high priority.
+
+	// Second, install flows to send the traffic to SNATTable.
+	flows = append(flows,
+		// Send the traffic to external to SNATTable.
+		L3ForwardingTable.BuildFlow(priorityLow).
+			MatchRegMark(FromLocalRegMark).
+			Action().GotoTable(SNATTable.GetID()).
+			Cookie(c.cookieAllocator.Request(category).Raw()).
+			Done(),
+		// For the traffic tunneled from remote Nodes, rewrite the
+		// destination MAC to the gateway interface MAC.
+		L3ForwardingTable.BuildFlow(priorityLow).
+			MatchRegMark(FromTunnelRegMark).
+			Action().SetDstMAC(localGatewayMAC).
+			Action().GotoTable(SNATTable.GetID()).
+			Cookie(c.cookieAllocator.Request(category).Raw()).
+			Done(),
+	)
+
+	// Third, drop the traffic from remote Nodes if no matched SNAT policy.
+	for ipProto := range protocols {
+		flows = append(flows,
+			SNATTable.BuildFlow(priorityLow).
+				MatchProtocol(ipProto).
+				MatchCTStateNew(true).MatchCTStateTrk(true).
+				MatchRegMark(FromTunnelRegMark).
+				Action().Drop().
+				Cookie(c.cookieAllocator.Request(category).Raw()).
+				Done(),
+		)
 	}
 	return flows
 }
@@ -2483,11 +2489,38 @@ func (c *client) decTTLFlows(category cookie.Category) []binding.Flow {
 }
 
 // externalFlows returns the flows needed to enable SNAT for external traffic.
-func (c *client) externalFlows(nodeIP net.IP, localSubnet net.IPNet, localGatewayMAC net.HardwareAddr, exceptCIDRs []net.IPNet) []binding.Flow {
+func (c *client) externalFlows(localGatewayMAC net.HardwareAddr, exceptCIDRs []net.IPNet) []binding.Flow {
 	if !c.enableEgress {
 		return nil
 	}
-	return c.snatCommonFlows(nodeIP, localSubnet, localGatewayMAC, exceptCIDRs, cookie.SNAT)
+
+	// Add the Node's management IP and transport IP into the exceptCIDRs
+	if c.nodeConfig.NodeIPv4Addr != nil {
+		nodeIPv4 := util.NewIPNet(c.nodeConfig.NodeIPv4Addr.IP)
+		exceptCIDRs = append(exceptCIDRs, *nodeIPv4)
+		if c.nodeConfig.NodeTransportIPv4Addr != nil && !c.nodeConfig.NodeTransportIPv4Addr.IP.Equal(c.nodeConfig.NodeIPv4Addr.IP) {
+			transportIPv4 := util.NewIPNet(c.nodeConfig.NodeTransportIPv4Addr.IP)
+			exceptCIDRs = append(exceptCIDRs, *transportIPv4)
+		}
+	}
+	if c.nodeConfig.NodeIPv6Addr != nil {
+		nodeIPv6 := util.NewIPNet(c.nodeConfig.NodeIPv6Addr.IP)
+		exceptCIDRs = append(exceptCIDRs, *nodeIPv6)
+		if c.nodeConfig.NodeTransportIPv6Addr != nil && !c.nodeConfig.NodeTransportIPv6Addr.IP.Equal(c.nodeConfig.NodeIPv6Addr.IP) {
+			transportIPv6 := util.NewIPNet(c.nodeConfig.NodeTransportIPv6Addr.IP)
+			exceptCIDRs = append(exceptCIDRs, *transportIPv6)
+		}
+
+	}
+	// Parse local subnets.
+	var localSubnets []net.IPNet
+	if c.nodeConfig.PodIPv4CIDR != nil {
+		localSubnets = append(localSubnets, *c.nodeConfig.PodIPv4CIDR)
+	}
+	if c.nodeConfig.PodIPv6CIDR != nil {
+		localSubnets = append(localSubnets, *c.nodeConfig.PodIPv6CIDR)
+	}
+	return c.snatCommonFlows(localSubnets, localGatewayMAC, exceptCIDRs, cookie.SNAT)
 }
 
 // policyConjKeyFuncKeyFunc knows how to get key of a *policyRuleConjunction.

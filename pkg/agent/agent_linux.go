@@ -47,14 +47,16 @@ func (i *Initializer) prepareOVSBridge() error {
 	klog.Infof("Preparing OVS bridge for AntreaFlexibleIPAM")
 	// Get uplink network configuration.
 	// TODO(gran): support IPv6
-	_, _, adapter, err := util.GetIPNetDeviceFromIP(&utilip.DualStackIPs{IPv4: i.nodeConfig.NodeIPv4Addr.IP})
+	// Use the transport IP to configure the uplink interface. The transport IP is the Node's IP if there is only one
+	// interface on the Node or the transport interface is not configured.
+	_, _, adapter, err := util.GetIPNetDeviceFromIP(&utilip.DualStackIPs{IPv4: i.nodeConfig.NodeTransportIPv4Addr.IP})
 	if err != nil {
 		return err
 	}
 	uplinkNetConfig := i.nodeConfig.UplinkNetConfig
 	uplinkNetConfig.Name = adapter.Name
 	uplinkNetConfig.MAC = adapter.HardwareAddr
-	uplinkNetConfig.IP = i.nodeConfig.NodeIPv4Addr
+	uplinkNetConfig.IP = i.nodeConfig.NodeTransportIPv4Addr
 	uplinkNetConfig.Index = adapter.Index
 	// Gateway and DNSServers are not configured at adapter in Linux
 	// Limitation: dynamic DNS servers will be lost after DHCP lease expired
