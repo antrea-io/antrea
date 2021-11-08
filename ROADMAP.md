@@ -20,9 +20,12 @@ Windows, and improve Antrea Agent and OVS installation on Windows Nodes.
 
 * **Antrea NetworkPolicy enhancements**
 Antrea added support for [Antrea-native policies](docs/antrea-network-policy.md)
-in addition to K8s NetworkPolicy since version 0.8.0. We already support
-Antrea (Namespace scoped) NetworkPolicy, ClusterNetworkPolicy, ClusterGroup, and
-tiering, but will continue to add more advanced NetworkPolicy features.
+in addition to K8s NetworkPolicy since version 0.8.0, and already supports
+Antrea (Namespace scoped) NetworkPolicy, ClusterNetworkPolicy, ClusterGroup,
+Tier, and features including traffic statistics, traffic logging, policy
+realization status, `Drop` and `Reject` actions, policy priority, `AppliedTo`
+at rule level, Namespace isolation, FQDN and Service as egress rule destination.
+We will continue to add more advanced NetworkPolicy features.
 
 * **Network diagnostics and observability**
 Network diagnostics and observability is one area we want to focus on. Antrea
@@ -43,33 +46,30 @@ run within kube-controller-manager.
 In future, Antrea will implement its own IPAM, and support more IPAM strategies
 besides subnet per Node, like multiple IP pools per Node or per Namespace.
 
-* **Egress policy**
-Antrea released alpha support for [Egress](docs/feature-gates.md#egress) in
-version 1.0.0. Users can choose a specific SNAT IP for a selected set of Pods
-with an Egress CRD, and then the egress traffic from the Pods to external
-network will be SNAT'd using the SNAT IP. This feature is very useful for
-services in the Node or external network to identify the source of Pod traffic
-based on SNAT IP and enforce specific policies on the traffic. However, the
-Egress feature still has several major limitations which need to be addressed.
-For example, today the SNAT IPs used in Egresses must be manually configured on
-the Nodes, and there is no auto-failover of Egress Nodes. Also check the
-[egress policy proposal](https://github.com/antrea-io/antrea/issues/667) to
-learn more.
-
 * **NFV and Telco use cases**
 We plan to explore and provide support for NFV and Telco use cases. We will add
 native Pod multi-interface support in Antrea, and support Pod interfaces on
 SRIOV devices, OVS DPDK bridge, overlay network, and Network Service Chaining.
-
-* **K8s Node security**
-So far Antrea focuses on K8s Pod networking and security, but we would like to
-extend Antrea-native NetworkPolicies to cover protection of K8s Nodes too.
 
 * **L7 security policy and visibility**
 Enhance Antrea to provide application level security and visibility to K8s
 workloads. This includes extending Antrea-native NetworkPolicies to support L7 /
 application protocols (HTTP, DNS, etc.), and extending Antrea diagnostics and
 observability features to get into application level visibility.
+
+* **Multi-cluster networking**
+We would extend Antrea from CNI of a single Kubernetes cluster to multi-cluster
+networking, and implement multi-cluster features like multi-cluster Services,
+cross-cluster connectivity, multi-cluster NetworkPolicies.
+
+* **Analytics**
+With the network flows exported by Antrea, we plan to further build an analytics
+solution that consumes the network flows, and provides traffic analysis,
+NetworkPolicy recommendation, security and network performance monitoring.
+
+* **K8s Node security**
+So far Antrea focuses on K8s Pod networking and security, but we would like to
+extend Antrea-native NetworkPolicies to cover protection of K8s Nodes too.
 
 * **NetworkPolicy scale and performance tests**
 Evaluate and benchmark the NetworkPolicy implementation performance at a large
