@@ -31,7 +31,8 @@ NodeIPAM dictionary contains the following items:
 controller. Default is false.
 
 - `clusterCIDRs`: CIDR Ranges for Pods in cluster. String array containing single
-CIDR range, or multiple ranges. The CIDRs could be either IPv4 or IPv6.
+CIDR range, or multiple ranges. The CIDRs could be either IPv4 or IPv6. Example
+values: `[172.100.0.0/16]`, `[172.100.0.0/20, 172.100.32.0/20, fd00:172:100::/64]`.
 
 - `serviceCIDR`: CIDR Range for IPv4 Services in cluster. It is not necessary to
 specify it when there is no overlap with clusterCIDRs.
