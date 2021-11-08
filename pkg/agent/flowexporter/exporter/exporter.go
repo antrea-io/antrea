@@ -143,7 +143,6 @@ func prepareExporterInputArgs(collectorAddr, collectorProto, nodeName string) ex
 		expInput.IsEncrypted = false
 		expInput.CollectorProtocol = collectorProto
 	}
-	expInput.PathMTU = 0
 
 	return expInput
 }
