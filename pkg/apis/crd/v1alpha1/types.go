@@ -23,6 +23,7 @@ import (
 type TraceflowPhase string
 
 const (
+	// Pending is not used anymore
 	Pending   TraceflowPhase = "Pending"
 	Running   TraceflowPhase = "Running"
 	Succeeded TraceflowPhase = "Succeeded"
@@ -221,6 +222,13 @@ type TraceflowStatus struct {
 	Phase TraceflowPhase `json:"phase,omitempty"`
 	// Reason is a message indicating the reason of the traceflow's current phase.
 	Reason string `json:"reason,omitempty"`
+	// StartTime is the time at which the Traceflow as started by the Antrea Controller.
+	// Before K8s v1.20, null values (field not set) are not pruned, and a CR where a
+	// metav1.Time field is not set would fail OpenAPI validation (type string). The
+	// recommendation seems to be to use a pointer instead, and the field will be omitted when
+	// serializing.
+	// See https://github.com/kubernetes/kubernetes/issues/86811
+	StartTime *metav1.Time `json:"startTime,omitempty"`
 	// DataplaneTag is a tag to identify a traceflow session across Nodes.
 	DataplaneTag uint8 `json:"dataplaneTag,omitempty"`
 	// Results is the collection of all observations on different nodes.

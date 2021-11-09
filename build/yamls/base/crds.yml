@@ -560,6 +560,8 @@ spec:
                   type: integer
                 phase:
                   type: string
+                startTime:
+                  type: string
                 results:
                   type: array
                   items:
@@ -2023,6 +2025,8 @@ spec:
                 dataplaneTag:
                   type: integer
                 phase:
+                  type: string
+                startTime:
                   type: string
                 results:
                   type: array
