@@ -22,10 +22,11 @@ type NodeIPAMConfig struct {
 	// Enable the integrated node IPAM controller within the Antrea controller.
 	// Defaults to false.
 	EnableNodeIPAM bool `yaml:"enableNodeIPAM,omitempty"`
-	// CIDR Ranges for Pods in cluster. Value can contain a single CIDR range, or multiple ranges, separated by commas.
-	// The CIDRs could be either IPv4 or IPv6. Value ignored when EnableNodeIPAM is false.
+	// CIDR ranges for Pods in cluster. String array containing single CIDR range, or multiple ranges. The CIDRs could
+	// be either IPv4 or IPv6. At most one CIDR may be specified for each IP family. Value ignored when EnableNodeIPAM
+	// is false.
 	ClusterCIDRs []string `yaml:"clusterCIDRs,omitempty"`
-	// CIDR Ranges for Services in cluster. It is not necessary to specify it when there is no overlap with clusterCIDRs.
+	// CIDR ranges for Services in cluster. It is not necessary to specify it when there is no overlap with clusterCIDRs.
 	// Value ignored when EnableNodeIPAM is false.
 	ServiceCIDR   string `yaml:"serviceCIDR,omitempty"`
 	ServiceCIDRv6 string `yaml:"serviceCIDRv6,omitempty"`
