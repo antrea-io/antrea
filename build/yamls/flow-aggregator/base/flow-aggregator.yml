@@ -24,7 +24,17 @@ rules:
     verbs: ["get", "list", "watch"]
   - apiGroups: [""]
     resources: ["configmaps"]
-    verbs: ["create"]
+    verbs: ["create", "get", "list", "watch"]
+  # This is the content of built-in role kube-system/extension-apiserver-authentication-reader.
+  # But it doesn't have list/watch permission before K8s v1.17.0 so the extension apiserver (antrea-agent) will
+  # have permission issue after bumping up apiserver library to a version that supports dynamic authentication.
+  # See https://github.com/kubernetes/kubernetes/pull/85375
+  # To support K8s clusters older than v1.17.0, we grant the required permissions directly instead of relying on
+  # the extension-apiserver-authentication role.
+  - apiGroups: [""]
+    resourceNames: ["extension-apiserver-authentication"]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "watch"]
   - apiGroups: [""]
     resources: ["secrets"]
     resourceNames: ["flow-aggregator-client-tls"]
@@ -130,6 +140,11 @@ spec:
         - --v=0
         name: flow-aggregator
         image: flow-aggregator
+        env:
+          - name: POD_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.name
         ports:
           - containerPort: 4739
         volumeMounts:

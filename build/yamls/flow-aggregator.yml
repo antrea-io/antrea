@@ -68,6 +68,19 @@ rules:
   - configmaps
   verbs:
   - create
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resourceNames:
+  - extension-apiserver-authentication
+  resources:
+  - configmaps
+  verbs:
+  - get
+  - list
+  - watch
 - apiGroups:
   - ""
   resourceNames:
@@ -176,6 +189,20 @@ data:
     recordContents:
       # Determine whether source and destination Pod labels will be included in the flow records.
       #podLabels: false
+
+    # apiServer contains APIServer related configuration options.
+    apiServer:
+      # The port for the flow-aggregator APIServer to serve on.
+      #apiPort: 10348
+
+      # Comma-separated list of Cipher Suites. If omitted, the default Go Cipher Suites will be used.
+      # https://golang.org/pkg/crypto/tls/#pkg-constants
+      # Note that TLS1.3 Cipher Suites cannot be added to the list. But the apiserver will always
+      # prefer TLS1.3 Cipher Suites whenever possible.
+      #tlsCipherSuites:
+
+      # TLS min version from: VersionTLS10, VersionTLS11, VersionTLS12, VersionTLS13.
+      #tlsMinVersion:
 kind: ConfigMap
 metadata:
   annotations: {}
@@ -231,6 +258,11 @@ spec:
         - --log_file_max_size=100
         - --log_file_max_num=4
         - --v=0
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
         image: projects.registry.vmware.com/antrea/flow-aggregator:latest
         imagePullPolicy: IfNotPresent
         name: flow-aggregator

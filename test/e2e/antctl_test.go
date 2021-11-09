@@ -67,12 +67,18 @@ func antctlOutput(stdout, stderr string) string {
 // runAntctl runs antctl commands on antrea Pods, the controller, or agents.
 func runAntctl(podName string, cmds []string, data *TestData) (string, string, error) {
 	var containerName string
+	var namespace string
 	if strings.Contains(podName, "agent") {
 		containerName = "antrea-agent"
+		namespace = antreaNamespace
+	} else if strings.Contains(podName, "flow-aggregator") {
+		containerName = "flow-aggregator"
+		namespace = flowAggregatorNamespace
 	} else {
 		containerName = "antrea-controller"
+		namespace = antreaNamespace
 	}
-	stdout, stderr, err := data.runCommandFromPod(antreaNamespace, podName, containerName, cmds)
+	stdout, stderr, err := data.runCommandFromPod(namespace, podName, containerName, cmds)
 	// remove Bincover metadata if needed
 	if err == nil {
 		index := strings.Index(stdout, "START_BINCOVER_METADATA")

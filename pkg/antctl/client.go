@@ -32,6 +32,7 @@ import (
 	"antrea.io/antrea/pkg/antctl/runtime"
 	"antrea.io/antrea/pkg/apis"
 	controllerapiserver "antrea.io/antrea/pkg/apiserver"
+	flowaggregatorapiserver "antrea.io/antrea/pkg/flowaggregator/apiserver"
 )
 
 // requestOption describes options to issue requests.
@@ -85,6 +86,9 @@ func (c *client) resolveKubeconfig(opt *requestOption) (*rest.Config, error) {
 		} else if runtime.Mode == runtime.ModeController {
 			kubeconfig.Host = net.JoinHostPort("127.0.0.1", fmt.Sprint(apis.AntreaControllerAPIPort))
 			kubeconfig.BearerTokenFile = controllerapiserver.TokenPath
+		} else if runtime.Mode == runtime.ModeFlowAggregator {
+			kubeconfig.Host = net.JoinHostPort("127.0.0.1", fmt.Sprint(apis.FlowAggregatorAPIPort))
+			kubeconfig.BearerTokenFile = flowaggregatorapiserver.TokenPath
 		}
 	}
 	return kubeconfig, nil
@@ -94,6 +98,8 @@ func (c *client) request(opt *requestOption) (io.Reader, error) {
 	var e *endpoint
 	if runtime.Mode == runtime.ModeAgent {
 		e = opt.commandDefinition.agentEndpoint
+	} else if runtime.Mode == runtime.ModeFlowAggregator {
+		e = opt.commandDefinition.flowAggregatorEndpoint
 	} else {
 		e = opt.commandDefinition.controllerEndpoint
 	}

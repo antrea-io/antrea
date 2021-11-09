@@ -22,6 +22,7 @@
     - [Storage of Flow Records](#storage-of-flow-records)
     - [Correlation of Flow Records](#correlation-of-flow-records)
     - [Aggregation of Flow Records](#aggregation-of-flow-records)
+  - [Antctl support](#antctl-support)
 - [Quick deployment](#quick-deployment)
 - [Flow Collectors](#flow-collectors)
   - [Go-ipfix Collector](#go-ipfix-collector)
@@ -297,6 +298,20 @@ flow-aggregator.conf: |
   recordContents:
     # Determine whether source and destination Pod labels will be included in the flow records.
     #podLabels: false
+
+  # apiServer contains APIServer related configuration options.
+  apiServer:
+    # The port for the flow-aggregator APIServer to serve on.
+    #apiPort: 10348
+
+    # Comma-separated list of Cipher Suites. If omitted, the default Go Cipher Suites will be used.
+    # https://golang.org/pkg/crypto/tls/#pkg-constants
+    # Note that TLS1.3 Cipher Suites cannot be added to the list. But the apiserver will always
+    # prefer TLS1.3 Cipher Suites whenever possible.
+    #tlsCipherSuites:
+
+    # TLS min version from: VersionTLS10, VersionTLS11, VersionTLS12, VersionTLS13.
+    #tlsMinVersion:
 ```
 
 Please note that the default values for `flowExportInterval`, `aggregatorTransportProtocol`,
@@ -309,6 +324,10 @@ both sides or disabled for both sides. Please modify the parameters as per your 
 Please note that the default value for `podLabels` is `false`, which
 indicates source and destination Pod labels will not be included in the flow
 records. If you would like to include them, you can modify the value to true.
+
+Please note that the default value for  `apiPort` is `10348`, which is the port
+used to expose the Flow Aggregator's APIServer. Please modify the parameters as
+per your requirements.
 
 ### IPFIX Information Elements (IEs) in an Aggregated Flow Record
 
@@ -364,6 +383,12 @@ updated. For the purpose of updating flow statistics fields, Flow Aggregator int
 the [new fields](#ies-from-antrea-ie-registry) in Antrea Enterprise IPFIX registry
 corresponding to the Source Node and Destination Node, so that flow statistics from
 different Nodes can be preserved.
+
+### Antctl support
+
+antctl can access the Flow Aggregator API to dump flow records and print metrics
+about flow record processing. Refer to the
+[antctl documentation](antctl.md#flow-aggregator-commands) for more information.
 
 ## Quick deployment
 

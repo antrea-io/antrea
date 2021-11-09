@@ -355,9 +355,10 @@ func TestFormat(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			opt := &commandDefinition{
-				transformedResponse: tc.responseStruct,
-				controllerEndpoint:  &endpoint{addonTransform: tc.transform},
-				agentEndpoint:       &endpoint{addonTransform: tc.transform},
+				transformedResponse:    tc.responseStruct,
+				controllerEndpoint:     &endpoint{addonTransform: tc.transform},
+				agentEndpoint:          &endpoint{addonTransform: tc.transform},
+				flowAggregatorEndpoint: &endpoint{addonTransform: tc.transform},
 			}
 			var responseData []byte
 			responseData, err := json.Marshal(tc.rawResponseData)

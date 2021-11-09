@@ -323,6 +323,20 @@ func (mr *MockIPFIXAggregationProcessMockRecorder) GetNumFlows() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNumFlows", reflect.TypeOf((*MockIPFIXAggregationProcess)(nil).GetNumFlows))
 }
 
+// GetRecords mocks base method
+func (m *MockIPFIXAggregationProcess) GetRecords(arg0 *intermediate.FlowKey) []map[string]interface{} {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetRecords", arg0)
+	ret0, _ := ret[0].([]map[string]interface{})
+	return ret0
+}
+
+// GetRecords indicates an expected call of GetRecords
+func (mr *MockIPFIXAggregationProcessMockRecorder) GetRecords(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetRecords", reflect.TypeOf((*MockIPFIXAggregationProcess)(nil).GetRecords), arg0)
+}
+
 // IsAggregatedRecordIPv4 mocks base method
 func (m *MockIPFIXAggregationProcess) IsAggregatedRecordIPv4(arg0 intermediate.AggregationFlowRecord) bool {
 	m.ctrl.T.Helper()

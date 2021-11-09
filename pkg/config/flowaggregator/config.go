@@ -56,8 +56,20 @@ type FlowAggregatorConfig struct {
 	// recordContents enables configuring some fields in the flow records. Fields can be
 	// excluded to reduce record size.
 	RecordContents RecordContentsConfig `yaml:"recordContents,omitempty"`
+	// apiServer contains APIServer related configuration options.
+	APIServer APIServerConfig `yaml:"apiServer,omitempty"`
 }
 
 type RecordContentsConfig struct {
 	PodLabels bool `yaml:"podLabels,omitempty"`
+}
+
+type APIServerConfig struct {
+	// APIPort is the port for the antrea-agent APIServer to serve on.
+	// Defaults to 10348.
+	APIPort int `yaml:"apiPort,omitempty"`
+	// Cipher suites to use.
+	TLSCipherSuites string `yaml:"tlsCipherSuites,omitempty"`
+	// TLS min version.
+	TLSMinVersion string `yaml:"tlsMinVersion,omitempty"`
 }

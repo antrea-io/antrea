@@ -1,7 +1,7 @@
 # Antctl
 
 Antctl is the command-line tool for Antrea. At the moment, antctl supports
-running in two different modes:
+running in three different modes:
 
 * "controller mode": when run out-of-cluster or from within the Antrea
   Controller Pod, antctl can connect to the Antrea Controller and query
@@ -10,6 +10,9 @@ running in two different modes:
   the Antrea Agent and query information local to that Agent (e.g. the set of
   computed NetworkPolicies received by that Agent from the Antrea Controller, as
   opposed to the entire set of computed policies).
+* "flowaggregator mode": when run from within a Flow Aggregator Pod, antctl can
+  connect to the Flow Aggregator and query information from it (e.g. flow records
+  related statistics).
 
 ## Table of Contents
 
@@ -27,6 +30,9 @@ running in two different modes:
   - [OVS packet tracing](#ovs-packet-tracing)
   - [Traceflow](#traceflow)
   - [Antctl Proxy](#antctl-proxy)
+  - [Flow Aggregator commands](#flow-aggregator-commands)
+    - [Dumping flow records](#dumping-flow-records)
+    - [Record metrics](#record-metrics)
 <!-- /toc -->
 
 ## Installation
@@ -82,9 +88,11 @@ troubleshooting the Antrea system.
 ### Showing or changing log verbosity level
 
 Starting from version 0.10.0, Antrea supports showing or changing the log
-verbosity level of Antrea Controller or Agent using the `antctl log-level`
-command. The command can only run locally inside the `antrea-controller` or
-`antrea-agent` container.
+verbosity level of Antrea Controller or Antrea Agent using the `antctl log-level`
+command. Starting from version 1.5, Antrea supports showing or changing the
+log verbosity level of the Flow Aggregator using the `antctl log-level` command.
+The command can only run locally inside the `antrea-controller`, `antrea-agent`
+or `flow-aggregator` container.
 
 The following command prints the current log verbosity level:
 
@@ -500,3 +508,121 @@ This feature is useful if one wants to use the Go
 [pprof](https://golang.org/pkg/net/http/pprof/) tool to collect runtime
 profiling data about the Antrea components. Please refer to this
 [document](troubleshooting.md#profiling-antrea-components) for more information.
+
+### Flow Aggregator commands
+
+antctl supports dumping the flow records handled by the Flow Aggregator, and
+printing metrics about flow record processing. These commands are only available
+when you exec into the Flow Aggregator Pod.
+
+#### Dumping flow records
+
+antctl supports dumping flow records stored in the Flow Aggregator. The
+`antctl get flowrecords` command can dump all matching flow records. It supports
+the 5-tuple flow key or a subset of the 5-tuple as a filter. A 5-tuple flow key
+contains Source IP, Destination IP, Source Port, Destination Port and Transport
+Protocol. If the filter is empty, all flow records will be dumped.
+
+The command provides a compact display of the flow records in the default table
+output format, which contains the flow key, source pod name, destination pod name,
+source pod namespace, destination pod namespace and destination service name for
+each flow record. Using the `json` or `yaml` antctl output format will include
+output flow record information in a structured format, and will include more
+information about each flow record. `antctl get flowrecords --help` shows the
+usage of the command. This section lists a few dumping flow records command
+examples.
+
+```bash
+# Get the list of all flow records
+antctl get flowrecords
+# Get the list of flow records with a complete filter and output in json format
+antctl get flowrecords --srcip 10.0.0.1 --dstip 10.0.0.2 --proto 6 --srcport 1234 --dstport 5678 -o json
+# Get the list of flow records with a partial filter, e.g. source address and source port
+antctl get flowrecords --srcip 10.0.0.1 --srcport 1234
+```
+
+Example outputs of dumping flow records:
+
+```bash
+$ antctl get flowrecords --srcip 10.10.1.4 --dstip 10.10.0.2
+SRC_IP    DST_IP    SPORT DPORT PROTO SRC_POD                          DST_POD                  SRC_NS          DST_NS      SERVICE                 
+10.10.1.4 10.10.0.2 38581 53    17    flow-aggregator-67dc8ddfc8-zx8sg coredns-78fcd69978-7vc6k flow-aggregator kube-system kube-system/kube-dns:dns
+10.10.1.4 10.10.0.2 56505 53    17    flow-aggregator-67dc8ddfc8-zx8sg coredns-78fcd69978-7vc6k flow-aggregator kube-system kube-system/kube-dns:dns
+
+$ antctl get flowrecords --srcip 10.10.0.1 --srcport 50497 -o json
+[
+  {
+    "destinationClusterIPv4": "0.0.0.0",
+    "destinationIPv4Address": "10.10.1.2",
+    "destinationNodeName": "k8s-node-worker-1",
+    "destinationPodName": "coredns-78fcd69978-x2twv",
+    "destinationPodNamespace": "kube-system",
+    "destinationServicePort": 0,
+    "destinationServicePortName": "",
+    "destinationTransportPort": 53,
+    "egressNetworkPolicyName": "",
+    "egressNetworkPolicyNamespace": "",
+    "egressNetworkPolicyRuleAction": 0,
+    "egressNetworkPolicyRuleName": "",
+    "egressNetworkPolicyType": 0,
+    "flowEndReason": 3,
+    "flowEndSeconds": 1635546893,
+    "flowStartSeconds": 1635546867,
+    "flowType": 2,
+    "ingressNetworkPolicyName": "",
+    "ingressNetworkPolicyNamespace": "",
+    "ingressNetworkPolicyRuleAction": 0,
+    "ingressNetworkPolicyRuleName": "",
+    "ingressNetworkPolicyType": 0,
+    "octetDeltaCount": 99,
+    "octetDeltaCountFromDestinationNode": 99,
+    "octetDeltaCountFromSourceNode": 0,
+    "octetTotalCount": 99,
+    "octetTotalCountFromDestinationNode": 99,
+    "octetTotalCountFromSourceNode": 0,
+    "packetDeltaCount": 1,
+    "packetDeltaCountFromDestinationNode": 1,
+    "packetDeltaCountFromSourceNode": 0,
+    "packetTotalCount": 1,
+    "packetTotalCountFromDestinationNode": 1,
+    "packetTotalCountFromSourceNode": 0,
+    "protocolIdentifier": 17,
+    "reverseOctetDeltaCount": 192,
+    "reverseOctetDeltaCountFromDestinationNode": 192,
+    "reverseOctetDeltaCountFromSourceNode": 0,
+    "reverseOctetTotalCount": 192,
+    "reverseOctetTotalCountFromDestinationNode": 192,
+    "reverseOctetTotalCountFromSourceNode": 0,
+    "reversePacketDeltaCount": 1,
+    "reversePacketDeltaCountFromDestinationNode": 1,
+    "reversePacketDeltaCountFromSourceNode": 0,
+    "reversePacketTotalCount": 1,
+    "reversePacketTotalCountFromDestinationNode": 1,
+    "reversePacketTotalCountFromSourceNode": 0,
+    "sourceIPv4Address": "10.10.0.1",
+    "sourceNodeName": "",
+    "sourcePodName": "",
+    "sourcePodNamespace": "",
+    "sourceTransportPort": 50497,
+    "tcpState": ""
+  }
+]
+```
+
+#### Record metrics
+
+Flow Aggregator supports printing record metrics. The `antctl get recordmetrics`
+command can print all metrics related to the Flow Aggregator. The metrics include
+the following:
+
+* number of records received by the collector process in the Flow Aggregator
+* number of records exported by the Flow Aggregator
+* number of active flows that are being tracked
+* number of exporters connected to the Flow Aggregator
+
+Example outputs of record metrics:
+
+```bash
+RECORDS-EXPORTED RECORDS-RECEIVED FLOWS EXPORTERS-CONNECTED
+46               118              7     2      
+```
