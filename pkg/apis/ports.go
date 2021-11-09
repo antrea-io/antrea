@@ -15,6 +15,9 @@
 package apis
 
 const (
+	// FlowAggregatorAPIPort is the default port for the flow-aggregator APIServer.
+	// The Flow Aggregator is a K8s service, and its API server is exposed through this port.
+	FlowAggregatorAPIPort = 10348
 	// AntreaControllerAPIPort is the default port for the antrea-controller APIServer.
 	AntreaControllerAPIPort = 10349
 	// AntreaAgentAPIPort is the default port for the antrea-agent APIServer.

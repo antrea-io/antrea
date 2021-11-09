@@ -38,10 +38,13 @@ import (
 	controllerinforest "antrea.io/antrea/pkg/apiserver/registry/system/controllerinfo"
 	"antrea.io/antrea/pkg/client/clientset/versioned/scheme"
 	controllernetworkpolicy "antrea.io/antrea/pkg/controller/networkpolicy"
+	"antrea.io/antrea/pkg/flowaggregator/apiserver/handlers/flowrecords"
+	"antrea.io/antrea/pkg/flowaggregator/apiserver/handlers/recordmetrics"
 )
 
-// CommandList defines all commands that could be used in the antctl for both agents
-// and controller. The unit test "TestCommandListValidation" ensures it to be valid.
+// CommandList defines all commands that could be used in the antctl for agents，
+// controller or flow-aggregator. The unit test "TestCommandListValidation"
+// ensures it to be valid.
 var CommandList = &commandList{
 	definitions: []commandDefinition{
 		{
@@ -66,7 +69,14 @@ var CommandList = &commandList{
 				// print the antctl client version even if request to Agent fails
 				requestErrorFallback: fallbackversion.RequestErrorFallback,
 			},
-
+			flowAggregatorEndpoint: &endpoint{
+				nonResourceEndpoint: &nonResourceEndpoint{
+					path: "/version",
+				},
+				addonTransform: version.FlowAggregatorTransform,
+				// print the antctl client version even if request to Flow Aggregator fails
+				requestErrorFallback: fallbackversion.RequestErrorFallback,
+			},
 			transformedResponse: reflect.TypeOf(version.Response{}),
 		},
 		{
@@ -92,6 +102,19 @@ var CommandList = &commandList{
 				},
 			},
 			agentEndpoint: &endpoint{
+				nonResourceEndpoint: &nonResourceEndpoint{
+					path: "/loglevel",
+					params: []flagInfo{
+						{
+							name:  "level",
+							usage: "The integer log verbosity level to set",
+							arg:   true,
+						},
+					},
+					outputType: single,
+				},
+			},
+			flowAggregatorEndpoint: &endpoint{
 				nonResourceEndpoint: &nonResourceEndpoint{
 					path: "/loglevel",
 					params: []flagInfo{
@@ -430,6 +453,60 @@ var CommandList = &commandList{
 				},
 			},
 			transformedResponse: reflect.TypeOf(controllernetworkpolicy.EndpointQueryResponse{}),
+		},
+		{
+			use:   "flowrecords",
+			short: "Print the matching flow records in the flow aggregator",
+			long:  "Print the matching flow records in the flow aggregator. It supports the 5-tuple flow key or a subset of the 5-tuple as a filter.",
+			example: `  Get the list of flow records with a complete filter and output in json format
+  $ antctl get flowrecords --srcip 10.0.0.1 --dstip 10.0.0.2 --proto 6 --srcport 1234 --dstport 5678 -o json
+  Get the list of flow records with a partial filter, e.g. source address and source port
+  $ antctl get flowrecords --srcip 10.0.0.1 --srcport 1234
+  Get the list of all flow records
+  $ antctl get flowrecords`,
+			commandGroup: get,
+			flowAggregatorEndpoint: &endpoint{
+				nonResourceEndpoint: &nonResourceEndpoint{
+					path: "/flowrecords",
+					params: []flagInfo{
+						{
+							name:  "srcip",
+							usage: "Get flow records with the source IP address.",
+						},
+						{
+							name:  "dstip",
+							usage: "Get flow records with the destination IP address.",
+						},
+						{
+							name:  "proto",
+							usage: "Get flow records with the protocol identifier.",
+						},
+						{
+							name:  "srcport",
+							usage: "Get flow records with the source port.",
+						},
+						{
+							name:  "dstport",
+							usage: "Get flow records with the destination port.",
+						},
+					},
+					outputType: multiple,
+				},
+			},
+			transformedResponse: reflect.TypeOf(flowrecords.Response{}),
+		},
+		{
+			use:          "recordmetrics",
+			short:        "Print record metrics related to flow aggregator",
+			long:         "Print record metrics related to flow aggregator. It includes number of records received, number of records exported, number of flows stored and number of exporters connected to the flow aggregator.",
+			commandGroup: get,
+			flowAggregatorEndpoint: &endpoint{
+				nonResourceEndpoint: &nonResourceEndpoint{
+					path:       "/recordmetrics",
+					outputType: single,
+				},
+			},
+			transformedResponse: reflect.TypeOf(recordmetrics.Response{}),
 		},
 	},
 	rawCommands: []rawCommand{

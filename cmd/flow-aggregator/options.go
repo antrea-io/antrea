@@ -24,6 +24,7 @@ import (
 	"github.com/spf13/pflag"
 	"gopkg.in/yaml.v2"
 
+	"antrea.io/antrea/pkg/apis"
 	flowaggregatorconfig "antrea.io/antrea/pkg/config/flowaggregator"
 	"antrea.io/antrea/pkg/flowaggregator"
 	"antrea.io/antrea/pkg/util/flowexport"
@@ -137,6 +138,9 @@ func (o *Options) validate(args []string) error {
 		o.format = o.config.RecordFormat
 	}
 	o.includePodLabels = o.config.RecordContents.PodLabels
+	if o.config.APIServer.APIPort == 0 {
+		o.config.APIServer.APIPort = apis.FlowAggregatorAPIPort
+	}
 	return nil
 }
 

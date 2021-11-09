@@ -200,9 +200,10 @@ type commandDefinition struct {
 	long    string
 	example string // It will be filled with generated examples if it is not provided.
 	// commandGroup represents the group of the command.
-	commandGroup       commandGroup
-	controllerEndpoint *endpoint
-	agentEndpoint      *endpoint
+	commandGroup           commandGroup
+	controllerEndpoint     *endpoint
+	agentEndpoint          *endpoint
+	flowAggregatorEndpoint *endpoint
 	// transformedResponse is the final response struct of the command. If the
 	// AddonTransform is set, TransformedResponse is not needed to be used as the
 	// response struct of the handler, but it is still needed to guide the formatter.
@@ -215,6 +216,8 @@ func (cd *commandDefinition) namespaced() bool {
 		return cd.agentEndpoint != nil && cd.agentEndpoint.resourceEndpoint != nil && cd.agentEndpoint.resourceEndpoint.namespaced
 	} else if runtime.Mode == runtime.ModeController {
 		return cd.controllerEndpoint != nil && cd.controllerEndpoint.resourceEndpoint != nil && cd.controllerEndpoint.resourceEndpoint.namespaced
+	} else if runtime.Mode == runtime.ModeFlowAggregator {
+		return cd.flowAggregatorEndpoint != nil && cd.flowAggregatorEndpoint.resourceEndpoint != nil && cd.flowAggregatorEndpoint.resourceEndpoint.namespaced
 	}
 	return false
 }
@@ -224,6 +227,8 @@ func (cd *commandDefinition) getAddonTransform() func(reader io.Reader, single b
 		return cd.agentEndpoint.addonTransform
 	} else if runtime.Mode == runtime.ModeController && cd.controllerEndpoint != nil {
 		return cd.controllerEndpoint.addonTransform
+	} else if runtime.Mode == runtime.ModeFlowAggregator && cd.flowAggregatorEndpoint != nil {
+		return cd.flowAggregatorEndpoint.addonTransform
 	}
 	return nil
 }
@@ -243,6 +248,13 @@ func (cd *commandDefinition) getEndpoint() endpointResponder {
 			}
 			return cd.controllerEndpoint.nonResourceEndpoint
 		}
+	} else if runtime.Mode == runtime.ModeFlowAggregator {
+		if cd.flowAggregatorEndpoint != nil {
+			if cd.flowAggregatorEndpoint.resourceEndpoint != nil {
+				return cd.flowAggregatorEndpoint.resourceEndpoint
+			}
+			return cd.flowAggregatorEndpoint.nonResourceEndpoint
+		}
 	}
 	return nil
 }
@@ -255,6 +267,10 @@ func (cd *commandDefinition) getRequestErrorFallback() func() (io.Reader, error)
 	} else if runtime.Mode == runtime.ModeController {
 		if cd.controllerEndpoint != nil {
 			return cd.controllerEndpoint.requestErrorFallback
+		}
+	} else if runtime.Mode == runtime.ModeFlowAggregator {
+		if cd.flowAggregatorEndpoint != nil {
+			return cd.flowAggregatorEndpoint.requestErrorFallback
 		}
 	}
 	return nil
@@ -302,7 +318,7 @@ func (cd *commandDefinition) validate() []error {
 	if cd.transformedResponse == nil {
 		errs = append(errs, fmt.Errorf("%s: command does not define output struct", cd.use))
 	}
-	if cd.agentEndpoint == nil && cd.controllerEndpoint == nil {
+	if cd.agentEndpoint == nil && cd.controllerEndpoint == nil && cd.flowAggregatorEndpoint == nil {
 		errs = append(errs, fmt.Errorf("%s: command does not define any supported component", cd.use))
 	}
 	if cd.agentEndpoint != nil && cd.agentEndpoint.nonResourceEndpoint != nil && cd.agentEndpoint.resourceEndpoint != nil {
@@ -316,6 +332,12 @@ func (cd *commandDefinition) validate() []error {
 	}
 	if cd.controllerEndpoint != nil && cd.controllerEndpoint.nonResourceEndpoint == nil && cd.controllerEndpoint.resourceEndpoint == nil {
 		errs = append(errs, fmt.Errorf("%s: command for controller must define one endpoint", cd.use))
+	}
+	if cd.flowAggregatorEndpoint != nil && cd.flowAggregatorEndpoint.nonResourceEndpoint != nil && cd.flowAggregatorEndpoint.resourceEndpoint != nil {
+		errs = append(errs, fmt.Errorf("%s: command for flow aggregator can only define one endpoint", cd.use))
+	}
+	if cd.flowAggregatorEndpoint != nil && cd.flowAggregatorEndpoint.nonResourceEndpoint == nil && cd.flowAggregatorEndpoint.resourceEndpoint == nil {
+		errs = append(errs, fmt.Errorf("%s: command for flow aggregator must define one endpoint", cd.use))
 	}
 	empty := struct{}{}
 	existingFlags := map[string]struct{}{"output": empty, "help": empty, "kubeconfig": empty, "timeout": empty, "verbose": empty}
