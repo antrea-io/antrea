@@ -49,7 +49,6 @@ var (
 type Client struct {
 	nodeConfig     *config.NodeConfig
 	networkConfig  *config.NetworkConfig
-	serviceCIDR    *net.IPNet
 	hostRoutes     *sync.Map
 	fwClient       *winfirewall.Client
 	bridgeInfIndex int
@@ -58,11 +57,9 @@ type Client struct {
 }
 
 // NewClient returns a route client.
-// Todo: remove param serviceCIDR after kube-proxy is replaced by Antrea Proxy completely.
-func NewClient(serviceCIDR *net.IPNet, networkConfig *config.NetworkConfig, noSNAT, proxyAll, connectUplinkToBridge bool) (*Client, error) {
+func NewClient(networkConfig *config.NetworkConfig, noSNAT, proxyAll, connectUplinkToBridge bool) (*Client, error) {
 	return &Client{
 		networkConfig: networkConfig,
-		serviceCIDR:   serviceCIDR,
 		hostRoutes:    &sync.Map{},
 		fwClient:      winfirewall.NewClient(),
 		noSNAT:        noSNAT,
