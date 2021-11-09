@@ -104,7 +104,7 @@ fi
 trap exit_handler INT EXIT
 
 # Initialize a Kind Antrea cluster
-$THIS_DIR/../ci/kind/kind-setup.sh create kind --prometheus --num-workers 0
+$THIS_DIR/../ci/kind/kind-setup.sh create kind --prometheus --num-workers 0 --antrea-cni
 
 # Wait for Antrea components to be ready, allow Antrea inits to complete
 kubectl -n kube-system wait --for=condition=ready --timeout=120s pod -l app=antrea

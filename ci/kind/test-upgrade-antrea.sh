@@ -162,7 +162,7 @@ DOCKER_IMAGES+=("projects.registry.vmware.com/antrea/antrea-ubuntu:latest")
 
 echo "Creating Kind cluster"
 IMAGES="${DOCKER_IMAGES[@]}"
-$THIS_DIR/kind-setup.sh create kind --antrea-cni false --images "$IMAGES"
+$THIS_DIR/kind-setup.sh create kind --images "$IMAGES"
 
 # When running this script as part of a Github Action, we do *not* want to use
 # the pre-installed version of kustomize, as it is a snap and cannot access

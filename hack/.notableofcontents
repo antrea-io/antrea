@@ -20,7 +20,6 @@ docs/eks-installation.md
 docs/feature-gates.md
 docs/getting-started.md
 docs/gke-installation.md
-docs/kind.md
 docs/kubernetes-installers.md
 docs/maintainers/antrea-docker-image.md
 docs/maintainers/build-kubemark.md

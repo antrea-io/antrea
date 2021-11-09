@@ -21,7 +21,7 @@
 CLUSTER_NAME=""
 ANTREA_IMAGE="projects.registry.vmware.com/antrea/antrea-ubuntu:latest"
 IMAGES=$ANTREA_IMAGE
-ANTREA_CNI=true
+ANTREA_CNI=false
 POD_CIDR="10.10.0.0/16"
 IP_FAMILY="ipv4"
 NUM_WORKERS=2
@@ -39,7 +39,7 @@ function echoerr {
 }
 
 _usage="
-Usage: $0 create CLUSTER_NAME [--pod-cidr POD_CIDR] [--antrea-cni true|false ] [--num-workers NUM_WORKERS] [--images IMAGES] [--subnets SUBNETS] [--ip-family ipv4|ipv6]
+Usage: $0 create CLUSTER_NAME [--pod-cidr POD_CIDR] [--antrea-cni] [--num-workers NUM_WORKERS] [--images IMAGES] [--subnets SUBNETS] [--ip-family ipv4|ipv6]
                   destroy CLUSTER_NAME
                   modify-node NODE_NAME
                   help
@@ -51,7 +51,7 @@ where:
   --encap-mode: inter-node pod traffic encap mode, default is encap
   --no-proxy: disable Antrea proxy
   --no-kube-proxy: disable Kube proxy
-  --antrea-cni: specifies install Antrea CNI in kind cluster, default is true
+  --antrea-cni: install Antrea CNI in Kind cluster; by default the cluster is created without a CNI installed
   --prometheus: create RBAC resources for Prometheus, default is false
   --num-workers: specifies number of worker nodes in kind cluster, default is $NUM_WORKERS
   --images: specifies images loaded to kind cluster, default is $IMAGES
@@ -231,8 +231,17 @@ function create {
   fi
 
   if [[ "$IP_FAMILY" != "ipv4" ]] && [[ "$IP_FAMILY" != "ipv6" ]]; then
-    echoerr "invalid value for --ip-family \"$IP_FAMILY\", expected \"ipv4\" or \"ipv6\""
+    echoerr "Invalid value for --ip-family \"$IP_FAMILY\", expected \"ipv4\" or \"ipv6\""
     exit 1
+  fi
+
+  if [[ $ANTREA_CNI != true ]] && [[ $PROMETHEUS == true ]]; then
+    echoerr "Cannot use --prometheus without --antrea-cni"
+    exit 1
+  fi
+
+  if [[ $ANTREA_CNI != true ]] && [[ $ENCAP_MODE != "" ]]; then
+    echoerr "Using --encap-mode without --antrea-cni has no effect"
   fi
 
   set +e
@@ -367,8 +376,8 @@ while [[ $# -gt 0 ]]
       shift 2
       ;;
     --antrea-cni)
-      ANTREA_CNI="$2"
-      shift 2
+      ANTREA_CNI=true
+      shift
       ;;
     --num-workers)
       NUM_WORKERS="$2"
