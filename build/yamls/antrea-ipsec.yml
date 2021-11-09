@@ -2954,6 +2954,8 @@ spec:
                       type: integer
                   type: object
                 type: array
+              startTime:
+                type: string
             type: object
         required:
         - spec
@@ -3132,6 +3134,8 @@ spec:
                       type: integer
                   type: object
                 type: array
+              startTime:
+                type: string
             type: object
         required:
         - spec
