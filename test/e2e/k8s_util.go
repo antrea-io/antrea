@@ -87,11 +87,17 @@ func (k *KubernetesUtils) GetPodsByLabel(ns string, key string, val string) ([]v
 func (k *KubernetesUtils) probe(
 	pod *v1.Pod,
 	podName string,
+	containerName string,
 	dstAddr string,
 	dstName string,
 	port int32,
 	protocol v1.Protocol,
 ) PodConnectivityMark {
+	protocolStr := map[v1.Protocol]string{
+		v1.ProtocolTCP:  "tcp",
+		v1.ProtocolUDP:  "udp",
+		v1.ProtocolSCTP: "sctp",
+	}
 	// There seems to be an issue when running Antrea in Kind where tunnel traffic is dropped at
 	// first. This leads to the first test being run consistently failing. To avoid this issue
 	// until it is resolved, we try to connect 3 times.
@@ -99,34 +105,39 @@ func (k *KubernetesUtils) probe(
 	cmd := []string{
 		"/bin/sh",
 		"-c",
+		fmt.Sprintf("for i in $(seq 1 3); do /agnhost connect %s:%d --timeout=1s --protocol=%s; done;", dstAddr, port, protocolStr[protocol]),
 	}
-	switch protocol {
-	case v1.ProtocolTCP:
-		cmd = append(cmd, fmt.Sprintf("for i in $(seq 1 3); do /agnhost connect %s:%d --timeout=1s --protocol=tcp && exit 0 || true; done; exit 1", dstAddr, port))
-	case v1.ProtocolUDP:
-		cmd = append(cmd, fmt.Sprintf("for i in $(seq 1 3); do /agnhost connect %s:%d --timeout=1s --protocol=udp && exit 0 || true; done; exit 1", dstAddr, port))
-	case v1.ProtocolSCTP:
-		cmd = append(cmd, fmt.Sprintf("for i in $(seq 1 3); do /agnhost connect %s:%d --timeout=1s --protocol=sctp && exit 0 || true; done; exit 1", dstAddr, port))
-	}
-	// HACK: inferring container name as c80, c81, etc, for simplicity.
-	containerName := fmt.Sprintf("c%v", port)
 	log.Tracef("Running: kubectl exec %s -c %s -n %s -- %s", pod.Name, containerName, pod.Namespace, strings.Join(cmd, " "))
 	stdout, stderr, err := k.runCommandFromPod(pod.Namespace, pod.Name, containerName, cmd)
-	var curConnectivity PodConnectivityMark
 	if err != nil {
 		// log this error as trace since may be an expected failure
 		log.Tracef("%s -> %s: error when running command: err - %v /// stdout - %s /// stderr - %s", podName, dstName, err, stdout, stderr)
-		// do not return an error
-		if strings.Contains(stderr, "TIMEOUT") {
-			curConnectivity = Dropped
-		} else {
-			curConnectivity = Rejected
+		// If err != nil and stderr == "", then it means this probe failed because of
+		// the command instead of connectivity. For example, container name doesn't exist.
+		if stderr == "" {
+			return Error
 		}
-	} else {
-		curConnectivity = Connected
+		return decideProbeResult(stderr, 3)
 	}
+	return Connected
+}
 
-	return curConnectivity
+// decideProbeResult uses the probe stderr to decide the connectivity.
+func decideProbeResult(stderr string, probeNum int) PodConnectivityMark {
+	countConnected := probeNum - strings.Count(stderr, "\n")
+	countDropped := strings.Count(stderr, "TIMEOUT")
+	countRejected := strings.Count(stderr, "REFUSED") + strings.Count(stderr, "no route to host")
+
+	if countRejected == 0 && countConnected > 0 {
+		return Connected
+	}
+	if countConnected == 0 && countRejected > 0 {
+		return Rejected
+	}
+	if countDropped == probeNum {
+		return Dropped
+	}
+	return Error
 }
 
 // Probe execs into a Pod and checks its connectivity to another Pod. Of course it
@@ -160,7 +171,9 @@ func (k *KubernetesUtils) Probe(ns1, pod1, ns2, pod2 string, port int32, protoco
 		if strings.Contains(toIP, ":") {
 			toIP = fmt.Sprintf("[%s]", toIP)
 		}
-		curConnectivity := k.probe(&fromPod, fmt.Sprintf("%s/%s", ns1, pod1), toIP, fmt.Sprintf("%s/%s", ns2, pod2), port, protocol)
+		// HACK: inferring container name as c80, c81, etc, for simplicity.
+		containerName := fmt.Sprintf("c%v", port)
+		curConnectivity := k.probe(&fromPod, fmt.Sprintf("%s/%s", ns1, pod1), containerName, toIP, fmt.Sprintf("%s/%s", ns2, pod2), port, protocol)
 		if connectivity == Unknown {
 			connectivity = curConnectivity
 		} else if connectivity != curConnectivity {
@@ -181,11 +194,12 @@ func (k *KubernetesUtils) ProbeAddr(ns, podLabelKey, podLabelValue, dstAddr stri
 		return Error, fmt.Errorf("no Pod of label podLabelKey=%s podLabelValue=%s in Namespace %s found", podLabelKey, podLabelValue, ns)
 	}
 	fromPod := fromPods[0]
+	containerName := fromPod.Spec.Containers[0].Name
 	// If it's an IPv6 address, add "[]" around it.
 	if strings.Contains(dstAddr, ":") {
 		dstAddr = fmt.Sprintf("[%s]", dstAddr)
 	}
-	connectivity := k.probe(&fromPod, fmt.Sprintf("%s/%s", ns, podLabelValue), dstAddr, dstAddr, port, protocol)
+	connectivity := k.probe(&fromPod, fmt.Sprintf("%s/%s", ns, podLabelValue), containerName, dstAddr, dstAddr, port, protocol)
 	return connectivity, nil
 }
 
