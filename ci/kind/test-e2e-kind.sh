@@ -166,7 +166,7 @@ function run_test {
   fi
 
   echo "creating test bed with args $args"
-  eval "timeout 600 $TESTBED_CMD create kind --antrea-cni false $args"
+  eval "timeout 600 $TESTBED_CMD create kind $args"
 
   if $coverage; then
       $YML_CMD --kind --encap-mode $current_mode $manifest_args | docker exec -i kind-control-plane dd of=/root/antrea-coverage.yml
