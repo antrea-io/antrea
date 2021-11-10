@@ -146,14 +146,14 @@ func testDeleteSingleFlow(t *testing.T, ovsCtlClient ovsctl.OVSCtlClient, table 
 		}
 	}
 	dumpTable := table.GetID()
-	CheckFlowExists(t, ovsCtlClient, dumpTable, true, expectFlows)
+	CheckFlowExists(t, ovsCtlClient, "", dumpTable, true, expectFlows)
 
 	err := flows[0].Delete()
 	if err != nil {
 		t.Fatalf("Failed to delete 'match-all' flow")
 	}
-	CheckFlowExists(t, ovsCtlClient, dumpTable, false, []*ExpectFlow{expectFlows[0]})
-	flowList := CheckFlowExists(t, ovsCtlClient, dumpTable, true, []*ExpectFlow{expectFlows[1]})
+	CheckFlowExists(t, ovsCtlClient, "", dumpTable, false, []*ExpectFlow{expectFlows[0]})
+	flowList := CheckFlowExists(t, ovsCtlClient, "", dumpTable, true, []*ExpectFlow{expectFlows[1]})
 	if len(flowList) != 1 {
 		t.Errorf("Failed to delete flow with strict mode")
 	}
@@ -161,7 +161,7 @@ func testDeleteSingleFlow(t *testing.T, ovsCtlClient ovsctl.OVSCtlClient, table 
 	if err != nil {
 		t.Fatalf("Failed to delete 'match-all' flow")
 	}
-	CheckFlowExists(t, ovsCtlClient, dumpTable, false, []*ExpectFlow{expectFlows[1]})
+	CheckFlowExists(t, ovsCtlClient, "", dumpTable, false, []*ExpectFlow{expectFlows[1]})
 }
 
 type tableFlows struct {
@@ -208,11 +208,11 @@ func TestOFctrlFlow(t *testing.T) {
 		}
 
 		dumpTable := myTable.GetID()
-		flowList := CheckFlowExists(t, ovsCtlClient, dumpTable, true, expectflows)
+		flowList := CheckFlowExists(t, ovsCtlClient, "", dumpTable, true, expectflows)
 
 		// Test: DumpTableStatus
 		for _, tableStates := range bridge.DumpTableStatus() {
-			if tableStates.ID == uint(dumpTable) {
+			if tableStates.ID == uint(myTable.GetID()) {
 				if int(tableStates.FlowCount) != len(flowList) {
 					t.Errorf("Flow count of table %d in the cache is incorrect, expect: %d, actual %d", dumpTable, len(flowList), tableStates.FlowCount)
 				}
@@ -233,14 +233,14 @@ func TestOFctrlFlow(t *testing.T) {
 				t.Errorf("Failed to uninstall flow1 %v", err)
 			}
 		}
-		CheckFlowExists(t, ovsCtlClient, dumpTable, false, expectflows[0:2])
+		CheckFlowExists(t, ovsCtlClient, "", dumpTable, false, expectflows[0:2])
 
 		// Test: DeleteFlowsByCookie
 		err = bridge.DeleteFlowsByCookie(dumpCookieID, dumpCookieMask)
 		if err != nil {
 			t.Errorf("Failed to DeleteFlowsByCookie: %v", err)
 		}
-		flowList, _ = OfctlDumpTableFlows(ovsCtlClient, myTable.GetID())
+		flowList, _ = OfctlDumpTableFlowsWithoutName(ovsCtlClient, myTable.GetID())
 		if len(flowList) > 0 {
 			t.Errorf("Failed to delete flows by CookieID")
 		}
@@ -346,7 +346,7 @@ func TestTransactions(t *testing.T) {
 	err = bridge.AddFlowsInBundle(flows, nil, nil)
 	require.Nil(t, err, fmt.Sprintf("Failed to add flows in a transaction: %v", err))
 	dumpTable := table.GetID()
-	flowList := CheckFlowExists(t, ovsCtlClient, dumpTable, true, expectflows)
+	flowList := CheckFlowExists(t, ovsCtlClient, "", dumpTable, true, expectflows)
 
 	// Test: DumpTableStatus
 	for _, tableStates := range bridge.DumpTableStatus() {
@@ -361,7 +361,7 @@ func TestTransactions(t *testing.T) {
 	err = bridge.AddFlowsInBundle(nil, nil, flows)
 	require.Nil(t, err, fmt.Sprintf("Failed to delete flows in a transaction: %v", err))
 	dumpTable = table.GetID()
-	flowList = CheckFlowExists(t, ovsCtlClient, dumpTable, false, expectflows)
+	flowList = CheckFlowExists(t, ovsCtlClient, "", dumpTable, false, expectflows)
 
 	for _, tableStates := range bridge.DumpTableStatus() {
 		if tableStates.ID == uint(dumpTable) {
@@ -556,12 +556,12 @@ func TestBundleWithGroupAndFlow(t *testing.T) {
 	expectedGroupBuckets := []string{bucket0, bucket1}
 	err = bridge.AddOFEntriesInBundle([]binding.OFEntry{flow, group}, nil, nil)
 	require.Nil(t, err)
-	CheckFlowExists(t, ovsCtlClient, table.GetID(), true, expectedFlows)
+	CheckFlowExists(t, ovsCtlClient, "", table.GetID(), true, expectedFlows)
 	CheckGroupExists(t, ovsCtlClient, groupID, "select", expectedGroupBuckets, true)
 
 	err = bridge.AddOFEntriesInBundle(nil, nil, []binding.OFEntry{flow, group})
 	require.Nil(t, err)
-	CheckFlowExists(t, ovsCtlClient, table.GetID(), false, expectedFlows)
+	CheckFlowExists(t, ovsCtlClient, "", table.GetID(), false, expectedFlows)
 	CheckGroupExists(t, ovsCtlClient, groupID, "select", expectedGroupBuckets, false)
 }
 
@@ -691,7 +691,7 @@ func TestTLVMap(t *testing.T) {
 		},
 	}
 	ovsCtlClient := ovsctl.NewClient(br)
-	CheckFlowExists(t, ovsCtlClient, table.GetID(), true, expectedFlows)
+	CheckFlowExists(t, ovsCtlClient, "", table.GetID(), true, expectedFlows)
 }
 
 func TestMoveTunMetadata(t *testing.T) {
@@ -724,7 +724,7 @@ func TestMoveTunMetadata(t *testing.T) {
 		},
 	}
 	ovsCtlClient := ovsctl.NewClient(br)
-	CheckFlowExists(t, ovsCtlClient, table.GetID(), true, expectedFlows)
+	CheckFlowExists(t, ovsCtlClient, "", table.GetID(), true, expectedFlows)
 }
 
 func TestFlowWithCTMatchers(t *testing.T) {
@@ -779,12 +779,12 @@ func TestFlowWithCTMatchers(t *testing.T) {
 		err = f.Add()
 		assert.Nil(t, err, "no error returned when adding flow")
 	}
-	CheckFlowExists(t, ofctlClient, table.GetID(), true, expectFlows)
+	CheckFlowExists(t, ofctlClient, "", table.GetID(), true, expectFlows)
 	for _, f := range []binding.Flow{flow1, flow2} {
 		err = f.Delete()
 		assert.Nil(t, err, "no error returned when deleting flow")
 	}
-	CheckFlowExists(t, ofctlClient, table.GetID(), false, expectFlows)
+	CheckFlowExists(t, ofctlClient, "", table.GetID(), false, expectFlows)
 }
 
 func TestNoteAction(t *testing.T) {
@@ -832,10 +832,10 @@ func TestNoteAction(t *testing.T) {
 
 	err = flow1.Add()
 	assert.Nil(t, err, "expected no error when adding flow")
-	CheckFlowExists(t, ofctlClient, table.GetID(), true, expectFlows)
+	CheckFlowExists(t, ofctlClient, "", table.GetID(), true, expectFlows)
 	err = flow1.Delete()
 	assert.Nil(t, err, "expected no error when deleting flow")
-	CheckFlowExists(t, ofctlClient, table.GetID(), false, expectFlows)
+	CheckFlowExists(t, ofctlClient, "", table.GetID(), false, expectFlows)
 }
 
 func prepareFlows(table binding.Table) ([]binding.Flow, []*ExpectFlow) {
