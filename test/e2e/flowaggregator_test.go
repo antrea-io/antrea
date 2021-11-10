@@ -502,18 +502,23 @@ func testHelper(t *testing.T, data *TestData, podAIPs, podBIPs, podCIPs, podDIPs
 }
 
 func checkRecordsForFlows(t *testing.T, data *TestData, srcIP string, dstIP string, isIPv6 bool, isIntraNode bool, checkService bool, checkK8sNetworkPolicy bool, checkAntreaNetworkPolicy bool, checkBandwidth bool) {
-	timeStart := time.Now()
-	timeStartSec := timeStart.Unix()
+
 	var cmdStr string
 	if !isIPv6 {
 		cmdStr = fmt.Sprintf("iperf3 -c %s -t %d", dstIP, iperfTimeSec)
 	} else {
 		cmdStr = fmt.Sprintf("iperf3 -6 -c %s -t %d", dstIP, iperfTimeSec)
 	}
+	timeStart := time.Now()
+	timeStartSec := timeStart.Unix()
+	timeStartPod, _, _ := data.runCommandFromPod(testNamespace, "perftest-a", "perftool", []string{"bash", "-c", "date +%s"})
 	stdout, _, err := data.runCommandFromPod(testNamespace, "perftest-a", "perftool", []string{"bash", "-c", cmdStr})
 	if err != nil {
 		t.Errorf("Error when running iperf3 client: %v", err)
 	}
+	timeEnd := time.Now().Unix()
+	timeEndPod, _, _ := data.runCommandFromPod(testNamespace, "perftest-a", "perftool", []string{"bash", "-c", "date +%s"})
+	t.Logf("iperf started at %d(host time) %s(pod time), end at at %d(host time) %s(pod time), output stdout=%s", timeStartSec, timeStartPod, timeEnd, timeEndPod, stdout)
 	bwSlice, srcPort := getBandwidthAndSourcePort(stdout)
 	require.Equal(t, 2, len(bwSlice), "bandwidth value and / or bandwidth unit are not available")
 	// bandwidth from iperf output
@@ -582,13 +587,15 @@ func checkRecordsForFlows(t *testing.T, data *TestData, srcIP string, dstIP stri
 			if checkBandwidth && !strings.Contains(record, "octetDeltaCount: 0") {
 				exportTime := int64(getUnit64FieldFromRecord(t, record, "flowEndSeconds"))
 				curOctetTotalCount := getUnit64FieldFromRecord(t, record, "octetTotalCountFromSourceNode")
+				flowStartTime := int64(getUnit64FieldFromRecord(t, record, "flowStartSeconds"))
+				t.Logf("Data record with flowStartSeconds %d, flowEndSeconds %d, totalCount %d", flowStartTime, exportTime, curOctetTotalCount)
 				if curOctetTotalCount > octetTotalCount {
 					octetTotalCount = curOctetTotalCount
 				}
 				curOctetDeltaCount := getUnit64FieldFromRecord(t, record, "octetDeltaCountFromSourceNode")
 				// Check the bandwidth using octetDeltaCountFromSourceNode, if this record
 				// is neither the first record nor the last in the stream of records.
-				if curOctetDeltaCount != curOctetTotalCount && exportTime < timeStartSec+iperfTimeSec {
+				if curOctetDeltaCount != curOctetTotalCount && exportTime < flowStartTime+iperfTimeSec {
 					t.Logf("Check the bandwidth using octetDeltaCountFromSourceNode %d in data record.", curOctetDeltaCount)
 					// This middle record should aggregate two records from Flow Exporter
 					checkBandwidthByInterval(t, bandwidthInMbps, curOctetDeltaCount, float64(2*exporterActiveFlowExportTimeout/time.Second), "octetDeltaCountFromSourceNode")
@@ -774,9 +781,11 @@ func getCollectorOutput(t *testing.T, srcIP, dstIP, srcPort string, timeStart ti
 		src, dst := matchSrcAndDstAddress(srcIP, dstIP, isDstService, isIPv6)
 		if checkAllRecords {
 			for _, record := range recordSlices {
+				flowStartTime := int64(getUnit64FieldFromRecord(t, record, "flowStartSeconds"))
 				exportTime := int64(getUnit64FieldFromRecord(t, record, "flowEndSeconds"))
 				if strings.Contains(record, src) && strings.Contains(record, dst) && strings.Contains(record, srcPort) {
-					if exportTime >= timeStart.Unix()+iperfTimeSec {
+					if exportTime >= flowStartTime+iperfTimeSec {
+						t.Logf("Flow passed condition with flowStartSeconds %d, flowEndSeconds %d, srcPort %s on host time %d", flowStartTime, exportTime, srcPort, timeStart.Unix())
 						return true, nil
 					}
 				}
