@@ -53,7 +53,7 @@ var (
 	APDispositionField      = binding.NewRegField(0, 21, 22, "APDisposition")
 	DispositionAllowRegMark = binding.NewRegMark(APDispositionField, DispositionAllow)
 	DispositionDropRegMark  = binding.NewRegMark(APDispositionField, DispositionDrop)
-	DisposttionPassRegMark  = binding.NewRegMark(APDispositionField, DispositionPass)
+	DispositionPassRegMark  = binding.NewRegMark(APDispositionField, DispositionPass)
 	// reg0[24..27]: Field to indicate the reasons of sending packet to the controller.
 	// Marks in this field include,
 	//   - 0b0001: logging

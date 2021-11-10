@@ -1751,21 +1751,21 @@ func (c *client) conjunctionActionDenyFlow(conjunctionID uint32, table binding.T
 		Done()
 }
 
-func (c *client) conjunctionActionPassFlow(conjunctionID uint32, table binding.Table, priority *uint16, disposition uint32, enableLogging bool) binding.Flow {
+func (c *client) conjunctionActionPassFlow(conjunctionID uint32, table binding.Table, priority *uint16, enableLogging bool) binding.Flow {
 	ofPriority := *priority
+	conjReg := TFIngressConjIDField
 	nextTable := IngressRuleTable
 	tableID := table.GetID()
 	if _, ok := egressTables[tableID]; ok {
+		conjReg = TFEgressConjIDField
 		nextTable = EgressRuleTable
 	}
-	flowBuilder := table.BuildFlow(ofPriority).
-		MatchConjID(conjunctionID).
-		Action().LoadRegMark(DisposttionPassRegMark)
+	flowBuilder := table.BuildFlow(ofPriority).MatchConjID(conjunctionID).
+		Action().LoadToRegField(conjReg, conjunctionID)
 	if enableLogging {
-		customReason := CustomReasonLogging
 		flowBuilder = flowBuilder.
-			Action().LoadToRegField(APDispositionField, disposition).
-			Action().LoadToRegField(CustomReasonField, uint32(customReason)).
+			Action().LoadRegMark(DispositionPassRegMark).
+			Action().LoadRegMark(CustomReasonLoggingRegMark).
 			Action().SendToController(uint8(PacketInReasonNP))
 	}
 	return flowBuilder.Action().GotoTable(nextTable.GetID()).

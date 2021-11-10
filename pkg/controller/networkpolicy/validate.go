@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"regexp"
 	"strconv"
+	"strings"
 
 	admv1 "k8s.io/api/admission/v1"
 	authenticationv1 "k8s.io/api/authentication/v1"
@@ -396,6 +397,10 @@ func (v *antreaPolicyValidator) createValidate(curObj interface{}, userInfo auth
 	if !allowed {
 		return reason, allowed
 	}
+	reason, allowed = v.validateTierForPassAction(tier, ingress, egress)
+	if !allowed {
+		return reason, allowed
+	}
 	if ruleNameUnique := v.validateRuleName(ingress, egress); !ruleNameUnique {
 		return "rules names must be unique within the policy", false
 	}
@@ -513,6 +518,24 @@ func (v *antreaPolicyValidator) validateTierForPolicy(tier string) (string, bool
 	return "", true
 }
 
+// validateTierForPassAction validates that rules with pass action are not created in the Baseline Tier.
+func (v *antreaPolicyValidator) validateTierForPassAction(tier string, ingress, egress []crdv1alpha1.Rule) (string, bool) {
+	if strings.ToLower(tier) != baselineTierName {
+		return "", true
+	}
+	for _, rule := range ingress {
+		if *rule.Action == crdv1alpha1.RuleActionPass {
+			return fmt.Sprintf("`Pass` action should not be set for Baseline Tier policy rules"), false
+		}
+	}
+	for _, rule := range egress {
+		if *rule.Action == crdv1alpha1.RuleActionPass {
+			return fmt.Sprintf("`Pass` action should not be set for Baseline Tier policy rules"), false
+		}
+	}
+	return "", true
+}
+
 // validateFQDNSelectors validates the toFQDN field set in Antrea-native policy egress rules are valid.
 func (v *antreaPolicyValidator) validateFQDNSelectors(egressRules []crdv1alpha1.Rule) (string, bool) {
 	for _, r := range egressRules {
@@ -561,6 +584,10 @@ func (v *antreaPolicyValidator) updateValidate(curObj, oldObj interface{}, userI
 	}
 	if err := v.validatePort(ingress, egress); err != nil {
 		return err.Error(), false
+	}
+	reason, allowed = v.validateTierForPassAction(tier, ingress, egress)
+	if !allowed {
+		return reason, allowed
 	}
 	return v.validateTierForPolicy(tier)
 }

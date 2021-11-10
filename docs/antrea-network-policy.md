@@ -10,10 +10,11 @@
   - [kubectl commands for Tier](#kubectl-commands-for-tier)
 - [Antrea ClusterNetworkPolicy](#antrea-clusternetworkpolicy)
   - [The Antrea ClusterNetworkPolicy resource](#the-antrea-clusternetworkpolicy-resource)
-    - [ACNP with stand alone selectors](#acnp-with-stand-alone-selectors)
+    - [ACNP with stand-alone selectors](#acnp-with-stand-alone-selectors)
     - [ACNP with ClusterGroup reference](#acnp-with-clustergroup-reference)
     - [ACNP for complete Pod isolation in selected Namespaces](#acnp-for-complete-pod-isolation-in-selected-namespaces)
-    - [ACNP for default Namespace isolation](#acnp-for-default-namespace-isolation)
+    - [ACNP for strict Namespace isolation](#acnp-for-strict-namespace-isolation)
+    - [ACNP for default zero-trust cluster security posture](#acnp-for-default-zero-trust-cluster-security-posture)
     - [ACNP for toServices rule](#acnp-for-toservices-rule)
   - [Behavior of <em>to</em> and <em>from</em> selectors](#behavior-of-to-and-from-selectors)
   - [Key differences from K8s NetworkPolicy](#key-differences-from-k8s-networkpolicy)
@@ -139,7 +140,7 @@ K8s NetworkPolicies. If a Pod becomes isolated because a K8s NetworkPolicy is ap
 to it, and the policy does not explicitly allow communications with another Pod,
 this behavior cannot be changed by creating an Antrea-native policy with an "allow"
 action in the "baseline" tier. For this reason, it generally does not make sense to
-create policies in the "baseline" tier with the "allow" action。
+create policies in the "baseline" tier with the "allow" action.
 
 ### kubectl commands for Tier
 
@@ -188,7 +189,7 @@ rule belonging to a K8s NetworkPolicy.
 
 Example ClusterNetworkPolicies might look like these:
 
-#### ACNP with stand alone selectors
+#### ACNP with stand-alone selectors
 
 ```yaml
 apiVersion: crd.antrea.io/v1alpha1
@@ -296,24 +297,24 @@ spec:
       enableLogging: true
 ```
 
-#### ACNP for default Namespace isolation
+#### ACNP for strict Namespace isolation
 
 ```yaml
 apiVersion: crd.antrea.io/v1alpha1
 kind: ClusterNetworkPolicy
 metadata:
-  name: default-ns-isolation
+  name: strict-ns-isolation
 spec:
-  priority: 2
-  tier: baseline
+  priority: 5
+  tier: securityops
   appliedTo:
     - namespaceSelector: {}       # Selects all Namespaces in the cluster
   ingress:
-    - action: Allow
+    - action: Pass
       from:
         - namespaces:
-            match: self           # Allow from Pods from same Namespace
-      name: AllowFromSameNS
+            match: self           # Skip ACNP evaluation for traffic from Pods in the same Namespace
+      name: PassFromSameNS
       enableLogging: false
     - action: Drop
       from:
@@ -321,17 +322,39 @@ spec:
       name: DropFromAllOtherNS
       enableLogging: true
   egress:
-    - action: Allow
+    - action: Pass
       to:
         - namespaces:
-            match: self           # Allow to Pods from same Namespace
-      name: AllowToSameNS
+            match: self           # Skip ACNP evaluation for traffic to Pods in the same Namespace
+      name: PassToSameNS
       enableLogging: false
     - action: Drop
       to:
         - namespaceSelector: {}   # Drop to Pods from all other Namespaces
       name: DropToAllOtherNS
       enableLogging: true
+```
+
+#### ACNP for default zero-trust cluster security posture
+
+```yaml
+apiVersion: crd.antrea.io/v1alpha1
+kind: ClusterNetworkPolicy
+metadata:
+  name: default-cluster-deny
+spec:
+  priority: 1
+  tier: baseline
+  appliedTo:
+    - namespaceSelector: {}       # Selects all Namespaces in the cluster
+  ingress:
+    - action: Drop
+      from:
+        - namespaceSelector: {}
+  egress:
+    - action: Drop
+      to:
+        - namespaceSelector: {}
 ```
 
 #### ACNP for toServices rule
@@ -397,11 +420,25 @@ field can be set with the name of the Tier CRD to which this policy must be
 associated with. If not set, the ACNP is associated with the lowest priority
 default tier i.e. the "application" Tier.
 
-**ingress**: Each ClusterNetworkPolicy may consist of zero or more ordered
-set of ingress rules. Each rule, depending on the `action` field of the rule,
-allows or drops traffic which matches all `from`, `ports` sections.
-Under `ports`, the optional field `endPort` can only be set when a numerical `port`
-is set to represent a range of ports from `port` to `endPort` inclusive.
+**action**: Each ingress or egress rule of a ClusterNetworkPolicy must have the
+`action` field set. As of now, the available actions are ["Allow", "Drop", "Reject", "Pass"].
+When the rule action is "Allow" or "Drop", Antrea will allow or drop traffic which
+matches both `from/to` and `ports` sections of that rule, given that traffic does not
+match a higher precedence rule in the cluster (ACNP rules created in higher order
+Tiers or policy instances in the same Tier with lower priority number). If a "Reject"
+rule is matched, the client initiating the traffic will receive `ICMP host administratively
+prohibited` code for ICMP, UDP and SCTP request, or an explicit reject response for
+TCP request, instead of timeout. A "Pass" rule, on the other hand, skips this packet
+for further ACNP rule evaluations (all ACNP rules that has lower priority than the
+current "Pass" rule will be skipped, except for the Baseline Tier rules), and delegates
+the decision to developer created namespaced NetworkPolicies. If no NetworkPolicy matches
+this traffic, then the Baseline Tier rules will still be matched against. Note that the
+"Pass" action does not make sense when configured in Baseline Tier ACNP rules, and such
+configurations will be rejected by the admission controller.
+
+**ingress**: Each ClusterNetworkPolicy may consist of zero or more ordered set of
+ingress rules. Under `ports`, the optional field `endPort` can only be set when a
+numerical `port` is set to represent a range of ports from `port` to `endPort` inclusive.
 Also, each rule has an optional `name` field, which should be unique within
 the policy describing the intention of this rule. If `name` is not provided for
 a rule, it will be auto-generated by Antrea. The auto-generated name will be
@@ -447,7 +484,7 @@ ClusterGroup.
 The [third example](#acnp-for-complete-pod-isolation-in-selected-namespaces) policy contains a single rule,
 which drops all egress traffic initiated by any Pod in Namespaces that have `app` set to
 `no-network-access-required`.
-The [fifth example](#acnp-for-toservices-rule) policy contains a single rule,
+The [sixth example](#acnp-for-toservices-rule) policy contains a single rule,
 which drops traffic from "role: client" labeled Pods from "env: prod" labeled Namespaces to Service svcNamespace/svcName
 via ClusterIP.
 Note that an empty `to` + an empty `toServices` in the egress rule means that
@@ -512,7 +549,7 @@ that the corresponding `podSelector` (or all Pods if `podSelector` is not set)
 should only select Pods belonging to the same Namespace as the workload targeted
 (either through a policy-level AppliedTo or a rule-level Applied-To) by the current
 ingress or egress rule. This enables policy writers to create per-Namespace rules within a
-single policy. See the [example](#acnp-for-default-namespace-isolation) YAML above. This field is
+single policy. See the [example](#acnp-for-strict-namespace-isolation) YAML above. This field is
 optional and cannot be set along with a `namespaceSelector` within the same peer.
 
 **group**: A `group` refers to a ClusterGroup to which this ingress/egress peer, or
@@ -622,7 +659,7 @@ spec:
 
 ### Key differences from Antrea ClusterNetworkPolicy
 
-Antrea NetworkPolicy shares it's spec with ClusterNetworkPolicy. However,
+Antrea NetworkPolicy shares its spec with ClusterNetworkPolicy. However,
 the following documents some of the key differences between the two Antrea
 policy CRDs.
 
@@ -730,7 +767,7 @@ In addition to `podSelector` and `namespaceSelector`, ClusterGroup also supports
 following ways to select endpoints:
 
 - Pod grouping by `serviceReference`. ClusterGroup specified by `serviceReference` will
-contain the same Pod members that are currently selected by the Service's selector.
+  contain the same Pod members that are currently selected by the Service's selector.
 - `ipBlock` or `ipBlocks` to share IPBlocks between ACNPs.
 - `childGroups` to select other ClusterGroups by name.
 
@@ -806,17 +843,17 @@ status:
 There are a few __restrictions__ on how ClusterGroups can be configured:
 
 - A ClusterGroup is a cluster-scoped resource and therefore can only be set in an Antrea
-ClusterNetworkPolicy's `appliedTo` and `to`/`from` peers.
+  ClusterNetworkPolicy's `appliedTo` and `to`/`from` peers.
 - For the `childGroup` field, currently only one level of nesting is supported:
-If a ClusterGroup has childGroups, it cannot be selected as a childGroup by other ClusterGroups.
+  If a ClusterGroup has childGroups, it cannot be selected as a childGroup by other ClusterGroups.
 - ClusterGroup must exist before another ClusterGroup can select it by name as its childGroup.
-A ClusterGroup cannot be deleted if it is referred to by other ClusterGroup as childGroup.
-This restriction may be lifted in future releases.
+  A ClusterGroup cannot be deleted if it is referred to by other ClusterGroup as childGroup.
+  This restriction may be lifted in future releases.
 - At most one of `podSelector`, `serviceReference`, `ipBlock`, `ipBlocks` or `childGroups`
-can be set for a ClusterGroup, i.e. a single ClusterGroup can either group workloads,
-represent IP CIDRs or select other ClusterGroups. A parent ClusterGroup can select different
-types of ClusterGroups (Pod/Service/CIDRs), but as mentioned above, it cannot select a
-ClusterGroup that has childGroups itself.
+  can be set for a ClusterGroup, i.e. a single ClusterGroup can either group workloads,
+  represent IP CIDRs or select other ClusterGroups. A parent ClusterGroup can select different
+  types of ClusterGroups (Pod/Service/CIDRs), but as mentioned above, it cannot select a
+  ClusterGroup that has childGroups itself.
 
 **spec**: The ClusterGroup `spec` has all the information needed to define a
 cluster-wide group.
