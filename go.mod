@@ -165,6 +165,11 @@ require (
 	sigs.k8s.io/yaml v1.2.0 // indirect
 )
 
-// hcshim repo is modifed to add "AdditionalParams" field to HNSEndpoint struct.
-// We will use this replace before pushing the change to hcshim upstream repo.
-replace github.com/Microsoft/hcsshim v0.8.9 => github.com/ruicao93/hcsshim v0.8.10-0.20210114035434-63fe00c1b9aa
+replace (
+	// hcshim repo is modifed to add "AdditionalParams" field to HNSEndpoint struct.
+	// We will use this replace before pushing the change to hcshim upstream repo.
+	github.com/Microsoft/hcsshim v0.8.9 => github.com/ruicao93/hcsshim v0.8.10-0.20210114035434-63fe00c1b9aa
+	// Newer version of github.com/googleapis/gnostic make use of newer gopkg.in/yaml(v3), which conflicts with
+	// explicit imports of gopkg.in/yaml.v2.
+	github.com/googleapis/gnostic v0.5.5 => github.com/googleapis/gnostic v0.4.1
+)
