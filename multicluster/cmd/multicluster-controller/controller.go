@@ -17,14 +17,12 @@ limitations under the License.
 package main
 
 import (
-	"flag"
-	"os"
+	"fmt"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
-	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -37,7 +35,6 @@ import (
 )
 
 var (
-	scheme   = runtime.NewScheme()
 	setupLog = ctrl.Log.WithName("setup")
 )
 
@@ -48,37 +45,16 @@ func init() {
 	//+kubebuilder:scaffold:scheme
 }
 
-func main() {
-	var metricsAddr string
-	var enableLeaderElection bool
-	var probeAddr string
-	var config string
-	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
-	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
-	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
-		"Enable leader election for controller manager. "+
-			"Enabling this will ensure there is only one active controller manager.")
-	flag.StringVar(&config, "config", "", "Configuration file path.")
-
+func run(o *Options) error {
 	opts := zap.Options{
 		Development: true,
 	}
-	opts.BindFlags(flag.CommandLine)
-	flag.Parse()
-
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-		Scheme:                 scheme,
-		MetricsBindAddress:     metricsAddr,
-		Port:                   9443,
-		HealthProbeBindAddress: probeAddr,
-		LeaderElection:         enableLeaderElection,
-		LeaderElectionID:       "6536456a.crd.antrea.io",
-	})
+	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), o.options)
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
-		os.Exit(1)
+		return fmt.Errorf("unable to start manager, err: %v", err)
 	}
 
 	if err = (&multiclustercontrollers.ClusterClaimReconciler{
@@ -86,84 +62,85 @@ func main() {
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "ClusterClaim")
-		os.Exit(1)
+		return fmt.Errorf("unable to create ClusterClaim controller, err: %v", err)
 	}
 	if err = (&multiclustercontrollers.MemberClusterAnnounceReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "MemberClusterAnnounce")
-		os.Exit(1)
+		return fmt.Errorf("unable to create MemberClusterAnnounce controller, err: %v", err)
 	}
 	if err = (&multiclustercontrollers.ClusterSetReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "ClusterSet")
-		os.Exit(1)
+		return fmt.Errorf("unable to create ClusterSet controller, err: %v", err)
 	}
 	if err = (&multiclustercontrollers.ResourceExportFilterReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "ResourceExportFilter")
-		os.Exit(1)
+		return fmt.Errorf("unable to create ResourceExportFilter controller, err: %v", err)
 	}
 	if err = (&multiclustercontrollers.ResourceImportFilterReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "ResourceImportFilter")
-		os.Exit(1)
+		return fmt.Errorf("unable to create ResourceImportFilter controller, err: %v", err)
 	}
 	if err = (&multiclusterv1alpha1.ClusterClaim{}).SetupWebhookWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create webhook", "webhook", "ClusterClaim")
-		os.Exit(1)
+		return fmt.Errorf("unable to create ClusterClaim webhook, err: %v", err)
 	}
 	if err = (&multiclusterv1alpha1.ClusterSet{}).SetupWebhookWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create webhook", "webhook", "ClusterSet")
-		os.Exit(1)
+		return fmt.Errorf("unable to create ClusterSet webhook, err: %v", err)
 	}
 	if err = (&multiclusterv1alpha1.MemberClusterAnnounce{}).SetupWebhookWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create webhook", "webhook", "MemberClusterAnnounce")
-		os.Exit(1)
+		return fmt.Errorf("unable to create MemberClusterAnnounce webhook, err: %v", err)
 	}
 	if err = (&multiclustercontrollers.ResourceExportReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "ResourceExport")
-		os.Exit(1)
+		return fmt.Errorf("unable to create ResourceExport controller, err: %v", err)
 	}
 	if err = (&multiclustercontrollers.ResourceImportReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "ResourceImport")
-		os.Exit(1)
+		return fmt.Errorf("unable to create ResourceImport controller, err: %v", err)
 	}
 	if err = (&multiclusterv1alpha1.ResourceImport{}).SetupWebhookWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create webhook", "webhook", "ResourceImport")
-		os.Exit(1)
+		return fmt.Errorf("unable to create ResourceImport webhook, err: %v", err)
 	}
 	if err = (&multiclusterv1alpha1.ResourceExport{}).SetupWebhookWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create webhook", "webhook", "ResourceExport")
-		os.Exit(1)
+		return fmt.Errorf("unable to create ResourceExport webhook, err: %v", err)
 	}
 	//+kubebuilder:scaffold:builder
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
 		setupLog.Error(err, "unable to set up health check")
-		os.Exit(1)
+		return fmt.Errorf("unable to set up health check, err: %v", err)
 	}
 	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
 		setupLog.Error(err, "unable to set up ready check")
-		os.Exit(1)
+		return fmt.Errorf("unable to set up ready check, err: %v", err)
 	}
 
 	setupLog.Info("starting manager")
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		setupLog.Error(err, "problem running manager")
-		os.Exit(1)
+		return fmt.Errorf("problem running manager, err: %v", err)
 	}
+	return nil
 }
