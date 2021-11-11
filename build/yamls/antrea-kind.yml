@@ -1760,6 +1760,103 @@ kind: CustomResourceDefinition
 metadata:
   labels:
     app: antrea
+  name: ippools.crd.antrea.io
+spec:
+  group: crd.antrea.io
+  names:
+    kind: IPPool
+    plural: ippools
+    shortNames:
+    - ipp
+    singular: ippool
+  scope: Cluster
+  versions:
+  - name: v1alpha2
+    schema:
+      openAPIV3Schema:
+        properties:
+          spec:
+            properties:
+              ipRanges:
+                items:
+                  oneOf:
+                  - required:
+                    - cidr
+                    - gateway
+                    - prefixLength
+                  - required:
+                    - start
+                    - end
+                    - gateway
+                    - prefixLength
+                  properties:
+                    cidr:
+                      format: cidr
+                      type: string
+                    end:
+                      oneOf:
+                      - format: ipv4
+                      - format: ipv6
+                      type: string
+                    gateway:
+                      oneOf:
+                      - format: ipv4
+                      - format: ipv6
+                      type: string
+                    prefixLength:
+                      type: integer
+                    start:
+                      oneOf:
+                      - format: ipv4
+                      - format: ipv6
+                      type: string
+                    vlan:
+                      type: string
+                  type: object
+                type: array
+              ipVersion:
+                type: integer
+            required:
+            - ipVersion
+            - ipRanges
+            type: object
+          status:
+            properties:
+              ipAddresses:
+                items:
+                  properties:
+                    ipAddress:
+                      type: string
+                    owner:
+                      properties:
+                        pod:
+                          properties:
+                            containerID:
+                              type: string
+                            name:
+                              type: string
+                            namespace:
+                              type: string
+                          type: object
+                      type: object
+                    phase:
+                      type: string
+                  type: object
+                type: array
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  labels:
+    app: antrea
   name: networkpolicies.crd.antrea.io
 spec:
   group: crd.antrea.io
@@ -2857,6 +2954,8 @@ spec:
                       type: integer
                   type: object
                 type: array
+              startTime:
+                type: string
             type: object
         required:
         - spec
@@ -3035,6 +3134,8 @@ spec:
                       type: integer
                   type: object
                 type: array
+              startTime:
+                type: string
             type: object
         required:
         - spec
@@ -3342,6 +3443,7 @@ rules:
   resources:
   - endpoints
   - services
+  - namespaces
   verbs:
   - get
   - watch
@@ -3462,10 +3564,17 @@ rules:
   - crd.antrea.io
   resources:
   - externalippools
+  - ippools
   verbs:
   - get
   - watch
   - list
+- apiGroups:
+  - crd.antrea.io
+  resources:
+  - ippools/status
+  verbs:
+  - update
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -3694,6 +3803,7 @@ rules:
   - crd.antrea.io
   resources:
   - externalippools
+  - ippools
   verbs:
   - get
   - watch
@@ -3849,8 +3959,8 @@ data:
     # Enable traceflow which provides packet tracing feature to diagnose network issue.
     #  Traceflow: true
 
-    # Enable NodePortLocal feature to make the pods reachable externally through NodePort
-    #  NodePortLocal: false
+    # Enable NodePortLocal feature to make the Pods reachable externally through NodePort
+    #  NodePortLocal: true
 
     # Enable Antrea ClusterNetworkPolicy feature to complement K8s NetworkPolicy for cluster admins
     # to define security policies which apply to the entire cluster, and Antrea NetworkPolicy
@@ -3866,6 +3976,10 @@ data:
 
     # Enable controlling SNAT IPs of Pod egress traffic.
     #  Egress: false
+
+    # Enable flexible IPAM mode for Antrea. This mode allows to assign IP Ranges to Namespaces,
+    # Deployments and StatefulSets via IP Pool annotation.
+    #  AntreaIPAM: false
 
     # Name of the OpenVSwitch bridge antrea-agent will create and use.
     # Make sure it doesn't conflict with your existing OpenVSwitch bridges.
@@ -3982,10 +4096,16 @@ data:
     # Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
     #idleFlowExportTimeout: "15s"
 
-    # Provide the port range used by NodePortLocal. When the NodePortLocal feature is enabled, a port from that range will be assigned
-    # whenever a Pod's container defines a specific port to be exposed (each container can define a list of ports as pod.spec.containers[].ports),
-    # and all Node traffic directed to that port will be forwarded to the Pod.
-    #nplPortRange: 61000-62000
+    nodePortLocal:
+    # Enable NodePortLocal, a feature used to make Pods reachable using port forwarding on the host. To
+    # enable this feature, you need to set "enable" to true, and ensure that the NodePortLocal feature
+    # gate is also enabled (which is the default).
+    #  enable: false
+    # Provide the port range used by NodePortLocal. When the NodePortLocal feature is enabled, a port
+    # from that range will be assigned whenever a Pod's container defines a specific port to be exposed
+    # (each container can define a list of ports as pod.spec.containers[].ports), and all Node traffic
+    # directed to that port will be forwarded to the Pod.
+    #  portRange: 61000-62000
 
     # Provide the address of Kubernetes apiserver, to override any value provided in kubeconfig or InClusterConfig.
     # Defaults to "". It must be a host string, a host:port pair, or a URL to the base of the apiserver.
@@ -4075,6 +4195,11 @@ data:
     # Run Kubernetes NodeIPAMController with Antrea.
     #  NodeIPAM: false
 
+    # Enable flexible IPAM mode for Antrea. This mode allows to assign IP Ranges to Namespaces,
+    # Deployments and StatefulSets via IP Pool annotation.
+    #  AntreaIPAM: false
+    #
+
     # The port for the antrea-controller APIServer to serve on.
     # Note that if it's set to another value, the `containerPort` of the `api` port of the
     # `antrea-controller` container must be set to the same value.
@@ -4140,7 +4265,7 @@ metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-59948499t6
+  name: antrea-config-f7ctgtgb6b
   namespace: kube-system
 ---
 apiVersion: v1
@@ -4211,7 +4336,7 @@ spec:
             fieldRef:
               fieldPath: spec.serviceAccountName
         - name: ANTREA_CONFIG_MAP_NAME
-          value: antrea-config-59948499t6
+          value: antrea-config-f7ctgtgb6b
         image: projects.registry.vmware.com/antrea/antrea-ubuntu:latest
         imagePullPolicy: IfNotPresent
         livenessProbe:
@@ -4262,7 +4387,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-59948499t6
+          name: antrea-config-f7ctgtgb6b
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -4539,7 +4664,7 @@ spec:
           type: CharDevice
         name: dev-tun
       - configMap:
-          name: antrea-config-59948499t6
+          name: antrea-config-f7ctgtgb6b
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d
@@ -4812,6 +4937,28 @@ webhooks:
     - UPDATE
     resources:
     - egresses
+    scope: Cluster
+  sideEffects: None
+  timeoutSeconds: 5
+- admissionReviewVersions:
+  - v1
+  - v1beta1
+  clientConfig:
+    service:
+      name: antrea
+      namespace: kube-system
+      path: /validate/ippool
+  name: ippoolvalidator.antrea.io
+  rules:
+  - apiGroups:
+    - crd.antrea.io
+    apiVersions:
+    - v1alpha2
+    operations:
+    - UPDATE
+    - DELETE
+    resources:
+    - ippools
     scope: Cluster
   sideEffects: None
   timeoutSeconds: 5
