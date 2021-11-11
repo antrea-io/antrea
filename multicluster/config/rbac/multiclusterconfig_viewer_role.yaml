@@ -1,0 +1,20 @@
+# permissions for end users to view multiclusterconfigs.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: multiclusterconfig-viewer-role
+rules:
+- apiGroups:
+  - multicluster.crd.antrea.io
+  resources:
+  - multiclusterconfigs
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - multicluster.crd.antrea.io
+  resources:
+  - multiclusterconfigs/status
+  verbs:
+  - get

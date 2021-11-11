@@ -4,7 +4,7 @@ apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
   labels:
-    control-plane: antrea-multicluster-controller
+    control-plane: antrea-mc-controller
   name: controller-metrics-monitor
   namespace: system
 spec:
@@ -17,4 +17,4 @@ spec:
         insecureSkipVerify: true
   selector:
     matchLabels:
-      control-plane: antrea-multicluster-controller
+      control-plane: antrea-mc-controller
