@@ -4,25 +4,23 @@ metadata:
   name: controller
   namespace: system
   labels:
-    control-plane: antrea-multicluster-controller
+    control-plane: antrea-mc-controller
 spec:
   selector:
     matchLabels:
-      control-plane: antrea-multicluster-controller
+      control-plane: antrea-mc-controller
   replicas: 1
   template:
     metadata:
       labels:
-        control-plane: antrea-multicluster-controller
+        control-plane: antrea-mc-controller
     spec:
       securityContext:
         runAsNonRoot: true
       containers:
       - command:
-        - /manager
-        args:
-        - --leader-elect
-        image: antrea/antrea-multicluster-controller:latest
+        - /antrea-mc-controller
+        image: antrea/antrea-mc-controller:latest
         imagePullPolicy: IfNotPresent
         name: manager
         securityContext:
