@@ -74,6 +74,7 @@ var (
 
 // Initializer knows how to setup host networking, OpenVSwitch, and Openflow.
 type Initializer struct {
+	clientNew             clientset.Interface
 	client                clientset.Interface
 	ovsBridgeClient       ovsconfig.OVSBridgeClient
 	ofClient              openflow.Client
