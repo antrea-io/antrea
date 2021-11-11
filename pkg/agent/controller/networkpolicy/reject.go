@@ -219,7 +219,6 @@ func getRejectOFPorts(rejectType RejectType, sIface, dIface *interfacestore.Inte
 	switch rejectType {
 	case RejectPodLocal:
 		inPort = uint32(sIface.OFPort)
-		outPort = uint32(dIface.OFPort)
 	case RejectServiceLocal:
 		inPort = uint32(sIface.OFPort)
 	case RejectPodRemoteToLocal:
@@ -248,6 +247,11 @@ func getRejectPacketOutMutateFunc(rejectType RejectType) func(binding.PacketOutB
 		mutatePacketOut = func(packetOutBuilder binding.PacketOutBuilder) binding.PacketOutBuilder {
 			return packetOutBuilder.AddResubmitAction(nil, &tableID)
 		}
+	case RejectPodLocal:
+		// When in AntreaIPAM mode, even srcPod and dstPod are on the same Node, MAC will
+		// still be re-written in L3ForwardingTable. So during rejection, we also need to
+		// let the reject response go thru L3ForwardingTable to re-write MAC.
+		fallthrough
 	case RejectLocalToRemote:
 		tableID := openflow.L3ForwardingTable.GetID()
 		mutatePacketOut = func(packetOutBuilder binding.PacketOutBuilder) binding.PacketOutBuilder {
