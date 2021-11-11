@@ -74,7 +74,7 @@ function Install-AntreaAgent {
     $AntreaAgent = "$AntreaHome\bin\antrea-agent.exe"
     $AntreaCNI = "$CNIPath\antrea.exe"
     $StopScript = "$AntreaHome\Stop.ps1"
-    $Owner = "vmware-tanzu"
+    $Owner = "antrea-io"
     $Repo = "antrea"
 
     $env:Path = "$KubernetesHome;" + $env:Path
