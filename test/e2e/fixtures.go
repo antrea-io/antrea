@@ -438,6 +438,18 @@ func deletePodWrapper(tb testing.TB, data *TestData, namespace, name string) {
 func createTestBusyboxPods(tb testing.TB, data *TestData, num int, ns string, nodeName string) (
 	podNames []string, podIPs []*PodIPs, cleanupFn func(),
 ) {
+	return createTestPods(tb, data, num, ns, nodeName, data.createBusyboxPodOnNode)
+}
+
+func createTestAgnhostPods(tb testing.TB, data *TestData, num int, ns string, nodeName string) (
+	podNames []string, podIPs []*PodIPs, cleanupFn func(),
+) {
+	return createTestPods(tb, data, num, ns, nodeName, data.createAgnhostPodOnNode)
+}
+
+func createTestPods(tb testing.TB, data *TestData, num int, ns string, nodeName string, createFunc func(string, string, string, bool) error) (
+	podNames []string, podIPs []*PodIPs, cleanupFn func(),
+) {
 	cleanupFn = func() {
 		var wg sync.WaitGroup
 		for _, podName := range podNames {
@@ -458,9 +470,9 @@ func createTestBusyboxPods(tb testing.TB, data *TestData, num int, ns string, no
 
 	createPodAndGetIP := func() (string, *PodIPs, error) {
 		podName := randName("test-pod-")
-		tb.Logf("Creating a busybox test Pod '%s' and waiting for IP", podName)
-		if err := data.createBusyboxPodOnNode(podName, ns, nodeName, false); err != nil {
-			tb.Errorf("Error when creating busybox test Pod '%s': %v", podName, err)
+		tb.Logf("Creating a test Pod '%s' and waiting for IP", podName)
+		if err := createFunc(podName, ns, nodeName, false); err != nil {
+			tb.Errorf("Error when creating test Pod '%s': %v", podName, err)
 			return "", nil, err
 		}
 		podIP, err := data.podWaitForIPs(defaultTimeout, podName, ns)
