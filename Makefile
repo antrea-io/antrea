@@ -319,9 +319,9 @@ endif
 build-windows:
 	@echo "===> Building Antrea bins and antrea/antrea-windows Docker image <==="
 ifneq ($(NO_PULL),)
-	docker build -t antrea/antrea-windows:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.build.windows $(DOCKER_BUILD_ARGS) .
+	docker build -t antrea/antrea-windows:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.build.windows $(DOCKER_BUILD_ARGS) . --network host
 else
-	docker build --pull -t antrea/antrea-windows:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.build.windows $(DOCKER_BUILD_ARGS) .
+	docker build --pull -t antrea/antrea-windows:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.build.windows $(DOCKER_BUILD_ARGS) . --network host
 endif
 	docker tag antrea/antrea-windows:$(DOCKER_IMG_VERSION) antrea/antrea-windows
 	docker tag antrea/antrea-windows:$(DOCKER_IMG_VERSION) projects.registry.vmware.com/antrea/antrea-windows

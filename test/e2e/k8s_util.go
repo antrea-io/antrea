@@ -103,7 +103,7 @@ func (k *KubernetesUtils) probe(
 	cmd := []string{
 		"/bin/sh",
 		"-c",
-		fmt.Sprintf("for i in $(seq 1 3); do /agnhost connect %s:%d --timeout=1s --protocol=%s; done;", dstAddr, port, protocolStr[protocol]),
+		fmt.Sprintf("for i in $(seq 1 3); do /agnhost connect %s:%d --timeout=2s --protocol=%s; done;", dstAddr, port, protocolStr[protocol]),
 	}
 	log.Tracef("Running: kubectl exec %s -c %s -n %s -- %s", pod.Name, containerName, pod.Namespace, strings.Join(cmd, " "))
 	stdout, stderr, err := k.runCommandFromPod(pod.Namespace, pod.Name, containerName, cmd)
@@ -127,13 +127,16 @@ func (k *KubernetesUtils) probe(
 func decideProbeResult(stderr string, probeNum int) PodConnectivityMark {
 	countConnected := probeNum - strings.Count(stderr, "\n")
 	countDropped := strings.Count(stderr, "TIMEOUT")
-	// For our UDP rejection cases, agnhost will return:
+	// On Linux, for UDP rejection cases, agnhost will return:
 	//   For IPv4: 'UNKNOWN: read udp [src]->[dst]: read: no route to host'
 	//   For IPv6: 'UNKNOWN: read udp [src]->[dst]: read: permission denied'
 	// To avoid incorrect identification, we use 'no route to host' and
 	// `permission denied`, instead of 'UNKNOWN' as key string.
-	// For our other protocols rejection cases, agnhost will return 'REFUSED'.
-	countRejected := strings.Count(stderr, "REFUSED") + strings.Count(stderr, "no route to host") + strings.Count(stderr, "permission denied")
+	// On Windows, for TCP rejection cases, agnhost will return:
+	//   'OTHER: dial tcp [dst]: connectex: No connection could be made because the target machine actively refused it.'
+	// Use 'actively refused it' as key string.
+	// For our other rejection cases, agnhost will return 'REFUSED'.
+	countRejected := strings.Count(stderr, "REFUSED") + strings.Count(stderr, "no route to host") + strings.Count(stderr, "permission denied") + strings.Count(stderr, "actively refused it")
 
 	if countRejected == 0 && countConnected > 0 {
 		return Connected
@@ -239,22 +242,32 @@ func (k *KubernetesUtils) CreateOrUpdateDeployment(ns, deploymentName string, re
 	log.Infof("Creating/updating Deployment '%s/%s'", ns, deploymentName)
 	makeContainerSpec := func(port int32, protocol v1.Protocol) v1.Container {
 		var args []string
+		var env []v1.EnvVar
 		switch protocol {
 		case v1.ProtocolTCP:
 			args = []string{fmt.Sprintf("/agnhost serve-hostname --tcp --http=false --port=%d", port)}
 		case v1.ProtocolUDP:
 			args = []string{fmt.Sprintf("/agnhost serve-hostname --udp --http=false --port=%d", port)}
 		case v1.ProtocolSCTP:
-			args = []string{"/agnhost porter"}
+			// SCTP is unsupported on windows/amd64
+			if len(clusterInfo.windowsNodes) == 0 {
+				args = []string{"/agnhost porter"}
+				env = append(env, v1.EnvVar{Name: fmt.Sprintf("SERVE_SCTP_PORT_%d", port), Value: "foo"})
+			}
 		default:
-			args = []string{fmt.Sprintf("/agnhost serve-hostname --udp --http=false --port=%d & /agnhost serve-hostname --tcp --http=false --port=%d & /agnhost porter", port, port)}
-
+			// SCTP is unsupported on windows/amd64
+			if len(clusterInfo.windowsNodes) == 0 {
+				args = []string{fmt.Sprintf("/agnhost serve-hostname --udp --http=false --port=%d & /agnhost serve-hostname --tcp --http=false --port=%d & /agnhost porter", port, port)}
+				env = append(env, v1.EnvVar{Name: fmt.Sprintf("SERVE_SCTP_PORT_%d", port), Value: "foo"})
+			} else {
+				args = []string{fmt.Sprintf("/agnhost serve-hostname --udp --http=false --port=%d & /agnhost serve-hostname --tcp --http=false --port=%d", port, port)}
+			}
 		}
 		return v1.Container{
 			Name:            fmt.Sprintf("c%d", port),
 			ImagePullPolicy: v1.PullIfNotPresent,
 			Image:           agnhostImage,
-			Env:             []v1.EnvVar{{Name: fmt.Sprintf("SERVE_SCTP_PORT_%d", port), Value: "foo"}},
+			Env:             env,
 			Command:         []string{"/bin/bash", "-c"},
 			Args:            args,
 			SecurityContext: &v1.SecurityContext{},
@@ -283,6 +296,7 @@ func (k *KubernetesUtils) CreateOrUpdateDeployment(ns, deploymentName string, re
 				},
 				Spec: v1.PodSpec{
 					TerminationGracePeriodSeconds: &zero,
+					NodeSelector: map[string]string{"kubernetes.io/os": "windows"},
 					Containers: []v1.Container{
 						makeContainerSpec(80, "ALL"),
 						makeContainerSpec(81, "ALL"),
@@ -812,9 +826,12 @@ func (k *KubernetesUtils) waitForHTTPServers(allPods []Pod) error {
 			return false
 		}
 
-		k.Validate(allPods, reachability, []int32{80, 81}, v1.ProtocolSCTP)
-		if _, wrong, _ := reachability.Summary(); wrong != 0 {
-			return false
+		// SCTP is unsupported on windows/amd64
+		if len(clusterInfo.windowsNodes) == 0 {
+			k.Validate(allPods, reachability, []int32{80, 81}, v1.ProtocolSCTP)
+			if _, wrong, _ := reachability.Summary(); wrong != 0 {
+				return false
+			}
 		}
 		return true
 	}

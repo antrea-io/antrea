@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
+	"time"
 
 	"antrea.io/libOpenflow/protocol"
 	ofutil "antrea.io/libOpenflow/util"
@@ -1118,6 +1119,7 @@ func (c *client) SendTCPPacketOut(
 	}
 
 	packetOutObj := packetOutBuilder.Done()
+	klog.Infof("send pkt %s", time.Now())
 	return c.bridge.SendPacketOut(packetOutObj)
 }
 

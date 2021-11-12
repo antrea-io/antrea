@@ -33,6 +33,7 @@ import (
 // policy agent controller. It performs the appropriate operations based on which
 // bits are set in the "custom reasons" field of the packet received from OVS.
 func (c *Controller) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
+	klog.Infof("pktIn received %s", time.Now())
 	if pktIn == nil {
 		return errors.New("empty packetin for Antrea Policy")
 	}
