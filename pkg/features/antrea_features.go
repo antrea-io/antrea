@@ -73,7 +73,7 @@ const (
 	// Run Kubernetes NodeIPAM with Antrea.
 	NodeIPAM featuregate.Feature = "NodeIPAM"
 
-	// alpha: v1.3
+	// alpha: v1.4
 	// Enable flexible IPAM for Pods.
 	AntreaIPAM featuregate.Feature = "AntreaIPAM"
 )

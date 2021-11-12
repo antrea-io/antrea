@@ -30,14 +30,15 @@ NodeIPAM dictionary contains the following items:
 - `enableNodeIPAM`: Enable the integrated NodeIPAM controller within the Antrea
 controller. Default is false.
 
-- `clusterCIDRs`: CIDR Ranges for Pods in cluster. String array containing single
-CIDR range, or multiple ranges. The CIDRs could be either IPv4 or IPv6. Example
-values: `[172.100.0.0/16]`, `[172.100.0.0/20, 172.100.32.0/20, fd00:172:100::/64]`.
+- `clusterCIDRs`: CIDR ranges for Pods in cluster. String array containing single
+CIDR range, or multiple ranges. The CIDRs could be either IPv4 or IPv6. At most
+one CIDR may be specified for each IP family. Example values:
+`[172.100.0.0/16]`, `[172.100.0.0/20, fd00:172:100::/60]`.
 
-- `serviceCIDR`: CIDR Range for IPv4 Services in cluster. It is not necessary to
+- `serviceCIDR`: CIDR range for IPv4 Services in cluster. It is not necessary to
 specify it when there is no overlap with clusterCIDRs.
 
-- `serviceCIDRv6`: CIDR Range for IPv6 Services in cluster. It is not necessary to
+- `serviceCIDRv6`: CIDR range for IPv6 Services in cluster. It is not necessary to
   specify it when there is no overlap with clusterCIDRs.
 
 - `nodeCIDRMaskSizeIPv4`: Mask size for IPv4 Node CIDR in IPv4 or dual-stack

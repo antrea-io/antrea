@@ -89,6 +89,13 @@ func (o *Options) validateNodeIPAMControllerOptions() error {
 		return fmt.Errorf("cluster CIDRs %v is invalid", o.config.NodeIPAM.ClusterCIDRs)
 	}
 
+	if len(cidrs) == 0 {
+		return fmt.Errorf("at least one cluster CIDR must be specified")
+	}
+	if len(cidrs) > 2 {
+		return fmt.Errorf("at most two cluster CIDRs may be specified")
+	}
+
 	hasIP4, hasIP6 := false, false
 	for _, cidr := range cidrs {
 		if cidr.IP.To4() == nil {
@@ -97,6 +104,12 @@ func (o *Options) validateNodeIPAMControllerOptions() error {
 			hasIP4 = true
 		}
 	}
+
+	dualStack := hasIP4 && hasIP6
+	if len(cidrs) > 1 && !dualStack {
+		return fmt.Errorf("at most one cluster CIDR may be specified for each IP family")
+	}
+
 	if hasIP4 {
 		if o.config.NodeIPAM.NodeCIDRMaskSizeIPv4 < ipamIPv4MaskLo || o.config.NodeIPAM.NodeCIDRMaskSizeIPv4 > ipamIPv4MaskHi {
 			return fmt.Errorf("node IPv4 CIDR mask size %d is invalid, should be between %d and %d",
