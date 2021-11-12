@@ -1,0 +1,7 @@
+FROM gcc:7.5.0
+
+LABEL maintainer="Antrea <projectantrea-dev@googlegroups.com>"
+LABEL description="A Docker image based on gcc 7.5.0 which is used for latency tests."
+
+RUN wget -q https://github.com/HewlettPackard/netperf/archive/refs/tags/netperf-2.5.0.tar.gz
+RUN tar zxf netperf-2.5.0.tar.gz && cd netperf-netperf-2.5.0 && ./configure && make && make install

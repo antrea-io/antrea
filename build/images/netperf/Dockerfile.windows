@@ -1,0 +1,9 @@
+FROM mcr.microsoft.com/windows/servercore:1809
+
+LABEL maintainer="Antrea <projectantrea-dev@googlegroups.com>"
+LABEL description="A Docker image based on Windows servercore 1809 which is used for latency tests."
+
+RUN mkdir netperf
+ADD netserver.exe /netperf/netserver.exe
+ADD netperf.exe /netperf/netperf.exe
+RUN setx path "%path%;C:\netperf"

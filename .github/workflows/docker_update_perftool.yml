@@ -1,0 +1,78 @@
+# Anyone with write permissions to the antrea-io/antrea Github repository can
+# trigger this workflow manually, but please check with a maintainer first. The
+# workflow will build and push the antrea/perftool and antrea/netperf image,
+# with multi-platform support.
+name: Manually update antrea/perftool Docker image
+
+on:
+  workflow_dispatch:
+    # It is unlikely that anyone will need to use non-default values for these inputs.
+    inputs:
+      antrea-ref:
+        description: 'The Git ref to use when checking-out the Antrea repository'
+        required: false
+        default: 'main'
+      docker-tag:
+        description: 'Tag for built Docker image'
+        required: false
+        default: 'latest'
+
+jobs:
+  build-ubuntu:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check-out code
+        uses: actions/checkout@v2
+        with:
+          ref: ${{ github.event.inputs.antrea-ref }}
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v1
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1
+      - name: Login to DockerHub
+        uses: docker/login-action@v1
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+      - name: Build and push Docker perftool image
+        uses: docker/build-push-action@v2
+        with:
+          context: build/images/perftool
+          platforms: linux/amd64,linux/arm64,linux/arm/v7
+          push: true
+          tags: antrea/perftool-ubuntu:${{ github.event.inputs.docker-tag }}
+      - name: Build and push Docker netperf image
+        uses: docker/build-push-action@v2
+        with:
+          context: build/images/perftool
+          platforms: linux/amd64,linux/arm64,linux/arm/v7
+          push: true
+          tags: antrea/netperf-ubuntu:${{ github.event.inputs.docker-tag }}
+  build-windows:
+    runs-on: windows-2019
+    steps:
+      - name: Check-out code
+        uses: actions/checkout@v2
+        with:
+          ref: ${{ github.event.inputs.antrea-ref }}
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v1
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1
+      - name: Login to DockerHub
+        uses: docker/login-action@v1
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+      - name: Build and push Docker perftool image
+        uses: docker/build-push-action@v2
+        with:
+          context: build/images/perftool
+          push: true
+          tags: antrea/perftool-windows:${{ github.event.inputs.docker-tag }}
+      - name: Build and push Docker netperf image
+        uses: docker/build-push-action@v2
+        with:
+          context: build/images/perftool
+          push: true
+          tags: antrea/netperf-windows:${{ github.event.inputs.docker-tag }}

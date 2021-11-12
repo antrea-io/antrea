@@ -560,7 +560,7 @@ func testProxyHairpin(ipFamily *corev1.IPFamily, data *TestData, t *testing.T) {
 	defer data.deletePodAndWait(defaultTimeout, busybox, testNamespace)
 	require.NoError(t, err)
 	require.NoError(t, data.podWaitForRunning(defaultTimeout, busybox, testNamespace))
-	svc, err := data.createService(busybox, testNamespace, 80, 80, map[string]string{"antrea-e2e": busybox}, false, false, corev1.ServiceTypeClusterIP, ipFamily)
+	svc, err := data.createService(busybox, testNamespace, []servicePorts{{port: 80, targetPort: 80}}, map[string]string{"antrea-e2e": busybox}, false, false, corev1.ServiceTypeClusterIP, ipFamily)
 	defer data.deleteServiceAndWait(defaultTimeout, busybox)
 	require.NoError(t, err)
 

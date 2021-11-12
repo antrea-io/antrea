@@ -1,0 +1,12 @@
+FROM mcr.microsoft.com/windows/servercore:1809
+
+LABEL maintainer="Antrea <projectantrea-dev@googlegroups.com>"
+LABEL description="A Docker image based on Windows servercore 1809 which is used for performance tests."
+
+RUN curl.exe -LO https://iperf.fr/download/windows/iperf-3.1.3-win64.zip
+RUN mkdir iperf-3.1.3-win64
+RUN tar -xzf iperf-3.1.3-win64.zip
+RUN del iperf-3.1.3-win64.zip
+RUN setx path "%path%;C:\iperf-3.1.3-win64"
+
+ENTRYPOINT "iperf3 -s"

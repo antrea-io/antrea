@@ -182,7 +182,7 @@ func (data *TestData) createAgnhostServiceAndBackendPods(t *testing.T, name, nam
 	require.NoError(t, err)
 	t.Logf("Created service Pod IPs %v", podIPs.ipStrings)
 	require.NoError(t, data.podWaitForRunning(defaultTimeout, name, namespace))
-	svc, err := data.createService(name, namespace, 80, 80, map[string]string{"app": "agnhost"}, false, false, svcType, &ipv4Protocol)
+	svc, err := data.createService(name, namespace, []servicePorts{{port: 80, targetPort: 80}}, map[string]string{"app": "agnhost"}, false, false, svcType, &ipv4Protocol)
 	require.NoError(t, err)
 
 	cleanup := func() {
