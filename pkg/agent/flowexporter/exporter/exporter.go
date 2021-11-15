@@ -148,8 +148,8 @@ func prepareExporterInputArgs(collectorAddr, collectorProto, nodeName string) ex
 }
 
 func NewFlowExporter(ifaceStore interfacestore.InterfaceStore, proxier proxy.Proxier, k8sClient kubernetes.Interface, nodeRouteController *noderoute.Controller,
-	trafficEncapMode config.TrafficEncapModeType, nodeConfig *config.NodeConfig, serviceCIDRNet, serviceCIDRNetv6 *net.IPNet, ovsDatapathType *ovsconfig.OVSDatapathType,
-	proxyEnabled bool, npQuerier querier.AgentNetworkPolicyInfoQuerier, o *flowexporter.FlowExporterOptions) (*FlowExporter, error) {
+	trafficEncapMode config.TrafficEncapModeType, nodeConfig *config.NodeConfig, v4Enabled, v6Enabled bool, serviceCIDRNet, serviceCIDRNetv6 *net.IPNet,
+	ovsDatapathType ovsconfig.OVSDatapathType, proxyEnabled bool, npQuerier querier.AgentNetworkPolicyInfoQuerier, o *flowexporter.FlowExporterOptions) (*FlowExporter, error) {
 	// Initialize IPFIX registry
 	registry := ipfix.NewIPFIXRegistry()
 	registry.LoadRegistry()
@@ -161,10 +161,7 @@ func NewFlowExporter(ifaceStore interfacestore.InterfaceStore, proxier proxy.Pro
 	}
 	expInput := prepareExporterInputArgs(o.FlowCollectorAddr, o.FlowCollectorProto, nodeName)
 
-	v4Enabled := config.IsIPv4Enabled(nodeConfig, trafficEncapMode)
-	v6Enabled := config.IsIPv6Enabled(nodeConfig, trafficEncapMode)
-
-	connTrackDumper := connections.InitializeConnTrackDumper(nodeConfig, serviceCIDRNet, serviceCIDRNetv6, *ovsDatapathType, proxyEnabled)
+	connTrackDumper := connections.InitializeConnTrackDumper(nodeConfig, serviceCIDRNet, serviceCIDRNetv6, ovsDatapathType, proxyEnabled)
 	denyConnStore := connections.NewDenyConnectionStore(ifaceStore, proxier, o)
 	conntrackConnStore := connections.NewConntrackConnectionStore(connTrackDumper, v4Enabled, v6Enabled, npQuerier, ifaceStore, proxier, o)
 
