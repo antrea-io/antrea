@@ -57,7 +57,7 @@ func NewAntreaClientProvider(config config.ClientConnectionConfiguration, kubeCl
 	antreaCAProvider, _ := dynamiccertificates.NewDynamicCAFromConfigMapController(
 		"antrea-ca",
 		cert.GetCAConfigMapNamespace(),
-		cert.CAConfigMapName,
+		cert.AntreaCAConfigMapName,
 		cert.CAConfigMapKey,
 		kubeClient)
 	antreaClientProvider := &antreaClientProvider{
@@ -154,7 +154,7 @@ func inClusterConfig(caBundle []byte) (*rest.Config, error) {
 
 	tlsClientConfig := rest.TLSClientConfig{
 		CAData:     caBundle,
-		ServerName: cert.GetAntreaServerNames()[0],
+		ServerName: cert.GetAntreaServerNames(cert.AntreaServiceName)[0],
 	}
 
 	return &rest.Config{

@@ -31,9 +31,7 @@ type Options struct {
 
 func newOptions() *Options {
 	return &Options{
-		// TODO: remove cert-manager dependency and
-		// use self signed cert in the future
-		SelfSignedCert: false,
+		SelfSignedCert: true,
 	}
 }
 
