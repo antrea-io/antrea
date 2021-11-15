@@ -31,6 +31,14 @@ const (
 	TunnelInterface
 	// UplinkInterface is used to mark current interface is for uplink port
 	UplinkInterface
+
+	AntreaInterfaceTypeKey = "antrea-type"
+	AntreaGateway          = "gateway"
+	AntreaContainer        = "container"
+	AntreaTunnel           = "tunnel"
+	AntreaUplink           = "uplink"
+	AntreaHost             = "host"
+	AntreaUnset            = ""
 )
 
 type InterfaceType uint8
