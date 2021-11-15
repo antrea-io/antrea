@@ -440,7 +440,7 @@ func createAPIServerConfig(kubeconfig string,
 	authentication := genericoptions.NewDelegatingAuthenticationOptions()
 	authorization := genericoptions.NewDelegatingAuthorizationOptions().WithAlwaysAllowPaths(allowedPaths...)
 
-	caCertController, err := certificate.ApplyServerCert(selfSignedCert, client, aggregatorClient, apiExtensionClient, secureServing)
+	caCertController, err := certificate.ApplyServerCert(selfSignedCert, client, aggregatorClient, apiExtensionClient, secureServing, apiserver.DefaultCAConfig())
 	if err != nil {
 		return nil, fmt.Errorf("error applying server cert: %v", err)
 	}

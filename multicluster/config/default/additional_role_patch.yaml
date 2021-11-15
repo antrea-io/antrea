@@ -1,0 +1,15 @@
+# additional permissions for controller.
+- op: add
+  path: /rules/0
+  value:
+    apiGroups:
+    - admissionregistration.k8s.io
+    resources:
+    - mutatingwebhookconfigurations
+    - validatingwebhookconfigurations
+    resourceNames:
+    - antrea-multicluster-mutating-webhook-configuration
+    - antrea-multicluster-validating-webhook-configuration
+    verbs:
+    - get
+    - update

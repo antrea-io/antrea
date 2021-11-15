@@ -18,24 +18,40 @@ package main
 
 import (
 	"fmt"
+	"time"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
+	apiextensionclientset "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	genericoptions "k8s.io/apiserver/pkg/server/options"
+	clientset "k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/rest"
+	aggregatorclientset "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	multiclusterv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
 	multiclustercontrollers "antrea.io/antrea/multicluster/controllers/multicluster"
+	"antrea.io/antrea/pkg/apiserver/certificate"
 	// +kubebuilder:scaffold:imports
 )
 
 var (
-	setupLog = ctrl.Log.WithName("setup")
+	setupLog           = ctrl.Log.WithName("setup")
+	validationWebhooks = []string{"antrea-multicluster-validating-webhook-configuration"}
+	mutationWebhooks   = []string{"antrea-multicluster-mutating-webhook-configuration"}
+)
+
+const (
+	selfSignedCertDir = "/var/run/antrea/multicluster-controller-self-signed"
+	certDir           = "/var/run/antrea/multicluster-controller-tls"
+	serviceName       = "antrea-multicluster-webhook-service"
+	configMapName     = "antrea-multicluster-ca"
 )
 
 func init() {
@@ -51,7 +67,28 @@ func run(o *Options) error {
 	}
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), o.options)
+	// build up cert controller to manage certificate for multicluster controller
+	k8sConfig := ctrl.GetConfigOrDie()
+	client, aggregatorClient, apiExtensionClient, err := createClients(k8sConfig)
+	if err != nil {
+		return fmt.Errorf("error creating K8s clients: %v", err)
+	}
+
+	secureServing := genericoptions.NewSecureServingOptions().WithLoopback()
+	caCertController, err := certificate.ApplyServerCert(o.SelfSignedCert, client, aggregatorClient, apiExtensionClient, secureServing, getCAConifg())
+	if err != nil {
+		return fmt.Errorf("error applying server cert: %v", err)
+	}
+	if err := caCertController.RunOnce(); err != nil {
+		return err
+	}
+
+	if o.SelfSignedCert {
+		o.options.CertDir = selfSignedCertDir
+	} else {
+		o.options.CertDir = certDir
+	}
+	mgr, err := ctrl.NewManager(k8sConfig, o.options)
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
 		return fmt.Errorf("unable to start manager, err: %v", err)
@@ -143,4 +180,39 @@ func run(o *Options) error {
 		return fmt.Errorf("problem running manager, err: %v", err)
 	}
 	return nil
+}
+
+// createClients creates kube clients from the given config.
+func createClients(kubeConfig *rest.Config) (
+	clientset.Interface, aggregatorclientset.Interface, apiextensionclientset.Interface, error) {
+	client, err := clientset.NewForConfig(kubeConfig)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	aggregatorClient, err := aggregatorclientset.NewForConfig(kubeConfig)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	// Create client for crd manipulations
+	apiExtensionClient, err := apiextensionclientset.NewForConfig(kubeConfig)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	return client, aggregatorClient, apiExtensionClient, nil
+}
+
+func getCAConifg() *certificate.CAConfig {
+	return &certificate.CAConfig{
+		CAConfigMapName: configMapName,
+		// the key pair name has to be "tls" https://github.com/kubernetes-sigs/controller-runtime/blob/master/pkg/manager/manager.go#L221
+		PairName:           "tls",
+		CertDir:            certDir,
+		ServiceName:        serviceName,
+		SelfSignedCertDir:  selfSignedCertDir,
+		MutationWebhooks:   mutationWebhooks,
+		ValidatingWebhooks: validationWebhooks,
+		CertReadyTimeout:   2 * time.Minute,
+		MaxRotateDuration:  time.Hour * (24 * 365),
+	}
 }
