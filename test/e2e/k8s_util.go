@@ -126,7 +126,13 @@ func (k *KubernetesUtils) probe(
 func decideProbeResult(stderr string, probeNum int) PodConnectivityMark {
 	countConnected := probeNum - strings.Count(stderr, "\n")
 	countDropped := strings.Count(stderr, "TIMEOUT")
-	countRejected := strings.Count(stderr, "REFUSED") + strings.Count(stderr, "no route to host")
+	// For our UDP rejection cases, agnhost will return:
+	//   For IPv4: 'UNKNOWN: read udp [src]->[dst]: read: no route to host'
+	//   For IPv6: 'UNKNOWN: read udp [src]->[dst]: read: permission denied'
+	// To avoid incorrect identification, we use 'no route to host' and
+	// `permission denied`, instead of 'UNKNOWN' as key string.
+	// For our other protocols rejection cases, agnhost will return 'REFUSED'.
+	countRejected := strings.Count(stderr, "REFUSED") + strings.Count(stderr, "no route to host") + strings.Count(stderr, "permission denied")
 
 	if countRejected == 0 && countConnected > 0 {
 		return Connected
