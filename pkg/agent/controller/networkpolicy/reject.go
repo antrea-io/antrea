@@ -121,9 +121,11 @@ func (c *Controller) rejectRequest(pktIn *ofctrl.PacketIn) error {
 		if c.antreaProxyEnabled {
 			matches := pktIn.GetMatches()
 			if match := getMatchRegField(matches, openflow.ServiceEPStateField); match != nil {
-				if svcEpstate, err := getInfoInReg(match, openflow.ServiceEPStateField.GetRange().ToNXRange()); err != nil {
-					return svcEpstate&openflow.EpSelectedRegMark.GetValue() == openflow.EpSelectedRegMark.GetValue()
+				svcEpstate, err := getInfoInReg(match, openflow.ServiceEPStateField.GetRange().ToNXRange())
+				if err != nil {
+					return false
 				}
+				return svcEpstate&openflow.EpSelectedRegMark.GetValue() == openflow.EpSelectedRegMark.GetValue()
 			}
 			return false
 		}
