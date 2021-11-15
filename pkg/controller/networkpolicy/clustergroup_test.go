@@ -946,9 +946,10 @@ func TestSyncInternalGroup(t *testing.T) {
 	assert.Equal(t, expectedInternalNetworkPolicy2, actualInternalNetworkPolicy2)
 
 	expectedInternalGroup := &antreatypes.Group{
-		UID:      cgUID,
-		Name:     cgName,
-		Selector: toGroupSelector("", nil, &selectorA, nil),
+		UID:             cgUID,
+		Name:            cgName,
+		Selector:        toGroupSelector("", nil, &selectorA, nil),
+		MembersComputed: corev1.ConditionTrue,
 	}
 	actualInternalGroup, exists, _ := npc.internalGroupStore.Get(internalGroupKeyFunc(cg))
 	require.True(t, exists)
