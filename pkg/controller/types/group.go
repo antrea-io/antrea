@@ -19,6 +19,7 @@ import (
 	"sort"
 	"strings"
 
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
@@ -104,6 +105,9 @@ type Group struct {
 	UID types.UID
 	// Name of the ClusterGroup for which this internal Group is created.
 	Name string
+	// MembersComputed knows whether the controller has computed the comprehensive members
+	// of the Group. It is updated during the syncInternalGroup process.
+	MembersComputed v1.ConditionStatus
 	// Selector describes how the internal group selects Pods to get their addresses.
 	// Selector is nil if Group is defined with ipBlock, or if it has ServiceReference
 	// and has not been processed by the controller yet / Service cannot be found.
