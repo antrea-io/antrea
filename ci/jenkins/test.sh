@@ -52,7 +52,7 @@ Run K8s e2e community tests (Conformance & Network Policy) or Antrea e2e tests o
 
         --kubeconfig             Path of cluster kubeconfig.
         --workdir                Home path for Go, vSphere information and antrea_logs during cluster setup. Default is $WORKDIR.
-        --testcase               Windows install OVS, Conformance and Network Policy or Antrea e2e testcases on a Windows or Linux cluster. It can also be flexible ipam e2e test.
+        --testcase               Windows install OVS, Conformance and Network Policy or Antrea e2e testcases on a Windows or Linux cluster. It can also be flexible ipam or multicluster e2e test.
         --registry               The docker registry to use instead of dockerhub.
         --proxyall               Enable proxyAll to test AntreaProxy.
         --flexible-ipam          Run tests in flexible ipam mode"
@@ -469,6 +469,11 @@ function deliver_antrea {
     fi
 }
 
+function deliver_multicluster_antrea{
+    # placeholder for multicluster e2e
+    echo "====== Building Antrea Multi-cluster for the Following Commit ======"
+}
+
 function generate_ssh_config {
     echo "=== Generate ssh-config ==="
     SSH_CONFIG_DST="${WORKDIR}/.ssh/config"
@@ -521,6 +526,11 @@ function run_e2e {
     set -e
 
     tar -zcf antrea-test-logs.tar.gz antrea-test-logs
+}
+
+function run_e2e_multicluster{
+    # placeholder for multicluster e2e
+    echo "====== Running Antrea Multi-cluster e2e Tests ======"
 }
 
 function run_conformance {
@@ -677,6 +687,9 @@ if [[ ${TESTCASE} =~ "windows" ]]; then
 elif [[ ${TESTCASE} =~ "e2e" ]]; then
     deliver_antrea
     run_e2e
+elif [[ ${TESTCASE} =~ "multicluster" ]]; then
+    deliver_multicluster_antrea
+    run_e2e_multicluster
 else
     deliver_antrea
     run_conformance
