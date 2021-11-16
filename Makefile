@@ -198,7 +198,8 @@ antctl-release:
 .linux-test-unit: .coverage
 	@echo
 	@echo "==> Running unit tests <=="
-	$(GO) test -race -coverprofile=.coverage/coverage-unit.txt -covermode=atomic -cover antrea.io/antrea/cmd/... antrea.io/antrea/pkg/...
+	$(GO) test -race -coverprofile=.coverage/coverage-unit.txt -covermode=atomic -cover antrea.io/antrea/cmd/... antrea.io/antrea/pkg/... \
+	 antrea.io/antrea/multicluster/cmd/... antrea.io/antrea/multicluster/controllers/...
 
 .PHONY: .windows-test-unit
 .windows-test-unit:
