@@ -17,9 +17,10 @@ package main
 import (
 	"fmt"
 
-	mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
 	"github.com/spf13/pflag"
 	ctrl "sigs.k8s.io/controller-runtime"
+
+	mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
 )
 
 type Options struct {
