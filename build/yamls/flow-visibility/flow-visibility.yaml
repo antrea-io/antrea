@@ -1,0 +1,209 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  labels:
+    app: flow-visibility
+  name: flow-visibility
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  labels:
+    app: flow-visibility
+  name: grafana-role
+  namespace: flow-visibility
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - services
+    verbs:
+      - get
+      - list
+      - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  labels:
+    app: flow-visibility
+  name: grafana-role-binding
+  namespace: flow-visibility
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: grafana-role
+subjects:
+  - kind: ServiceAccount
+    name: grafana
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: grafana-storage
+provisioner: kubernetes.io/no-provisioner
+volumeBindingMode: WaitForFirstConsumer
+reclaimPolicy: Delete
+allowVolumeExpansion: True
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: grafana-pvc
+  namespace: flow-visibility
+spec:
+  storageClassName: grafana-storage
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: grafana-pv
+  namespace: flow-visibility
+spec:
+  storageClassName: grafana-storage
+  capacity:
+    storage: 2Gi
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    path: "/data/grafana"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: clickhouse-secret
+  namespace: flow-visibility
+type: Opaque
+stringData:
+  username: clickhouse_operator
+  password: clickhouse_operator_password
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasource
+  namespace: flow-visibility
+data:
+  datasource.yaml: |-
+    apiVersion: 1
+    datasources:
+      - name: ClickHouse
+        type: grafana-clickhouse-datasource
+        access: proxy
+        url: http://clickhouse-clickhouse.flow-visibility.svc:8123
+        editable: true
+        jsonData:
+          server: clickhouse-clickhouse.flow-visibility.svc
+          port: 9000
+          username: $CH_USERNAME
+        secureJsonData:
+          password: $CH_PASSWORD
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: grafana
+  name: grafana
+  namespace: flow-visibility
+spec:
+  selector:
+    matchLabels:
+      app: grafana
+  template:
+    metadata:
+      labels:
+        app: grafana
+    spec:
+      securityContext:
+        fsGroup: 472
+        supplementalGroups:
+          - 0
+      containers:
+        - name: grafana
+          image: grafana/grafana:8.3.3
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: GF_INSTALL_PLUGINS
+              value: "https://github.com/antrea-io/antrea/releases/download/v1.6.0/grafana-sankey-plugin.zip;antreaflowvisibility-grafana-sankey-plugin,grafana-clickhouse-datasource"
+            - name: CH_USERNAME
+              valueFrom:
+                secretKeyRef: 
+                  name: clickhouse-secret
+                  key: username
+            - name: CH_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: clickhouse-secret
+                  key: password
+          ports:
+            - containerPort: 3000
+              name: http-grafana
+              protocol: TCP
+          readinessProbe:
+            failureThreshold: 3
+            httpGet:
+              path: /robots.txt
+              port: 3000
+              scheme: HTTP
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            successThreshold: 1
+            timeoutSeconds: 2
+          livenessProbe:
+            failureThreshold: 3
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            successThreshold: 1
+            tcpSocket:
+              port: 3000
+            timeoutSeconds: 1
+          resources:
+            requests:
+              cpu: 250m
+              memory: 750Mi
+          volumeMounts:
+            - mountPath: /data
+              name: grafana-pv
+            - mountPath: /etc/grafana/provisioning/datasources
+              name: grafana-datasources
+      volumes:
+        - name: grafana-pv
+          persistentVolumeClaim:
+            claimName: grafana-pvc
+        - name: grafana-datasources
+          configMap:
+            name: grafana-datasource
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana
+  namespace: flow-visibility
+spec:
+  ports:
+    - port: 3000
+      protocol: TCP
+      targetPort: http-grafana
+  selector:
+    app: grafana
+  sessionAffinity: None
+  type: LoadBalancer
+---
+apiVersion: clickhouse.altinity.com/v1
+kind: ClickHouseInstallation
+metadata:
+  name: clickhouse
+  namespace: flow-visibility
+spec:
+  configuration:
+    clusters:
+      - name: clickhouse
+        layout:
+          shardsCount: 1
+          replicasCount: 1
