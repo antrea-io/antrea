@@ -1,0 +1,31 @@
+{
+  "name": "antreaflowvisibility-grafana-sankey-plugin",
+  "version": "1.0.0",
+  "description": "",
+  "scripts": {
+    "build": "grafana-toolkit plugin:build",
+    "test": "grafana-toolkit plugin:test",
+    "dev": "grafana-toolkit plugin:dev",
+    "watch": "grafana-toolkit plugin:dev --watch",
+    "sign": "grafana-toolkit plugin:sign",
+    "start": "yarn watch"
+  },
+  "author": "antreaflowvisibility",
+  "license": "Apache-2.0",
+  "devDependencies": {
+    "@grafana/data": "latest",
+    "@grafana/toolkit": "^8.3.2",
+    "@grafana/ui": "latest",
+    "@types/enzyme-adapter-react-16": "^1.0.6",
+    "emotion": "10.0.27"
+  },
+  "engines": {
+    "node": ">=14"
+  },
+  "dependencies": {
+    "@types/jest": "^27.0.3",
+    "enzyme": "^3.11.0",
+    "enzyme-adapter-react-16": "^1.15.6",
+    "react-google-charts": "^3.0.15"
+  }
+}

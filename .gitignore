@@ -15,3 +15,7 @@ bin
 .idea/
 .vscode/
 vendor
+
+plugins/grafana-sankey-plugin/node_modules/
+plugins/grafana-sankey-plugin/dist/
+plugins/grafana-sankey-plugin/coverage/

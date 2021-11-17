@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="jest tests" tests="2" failures="0" errors="0" time="10.84">
+  <testsuite name="Sankey Diagram test" errors="0" failures="0" skipped="0" timestamp="2021-12-21T18:52:45" time="9.506" tests="2">
+    <testcase classname="Sankey Diagram test should return true" name="Sankey Diagram test should return true" time="0.003">
+    </testcase>
+    <testcase classname="Sankey Diagram test should render Chart" name="Sankey Diagram test should render Chart" time="0.009">
+    </testcase>
+  </testsuite>
+</testsuites>
