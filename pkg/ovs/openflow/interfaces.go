@@ -146,6 +146,34 @@ type Table interface {
 	GetNext() uint8
 	SetNext(next uint8)
 	SetMissAction(action MissActionType)
+	GetStageID() StageID
+}
+
+type StageID uint8
+
+const (
+	ClassifierStage StageID = iota
+	ValidationStage
+	PreRoutingStage
+	EgressSecurityStage
+	RoutingStage
+	PostRoutingStage
+	SwitchingStage
+	IngressSecurityStage
+	ConntrackStage
+	OutputStage
+
+	LastStage StageID = OutputStage
+)
+
+type Pipeline interface {
+	GetNextStage(id StageID) StageID
+	GetFirstTableInStage(id StageID) Table
+	ListTablesInStage(id StageID) []Table
+	GetFirstTable() Table
+	GetLastTable() Table
+	ListAllTables() []Table
+	IsLastTable(t Table) bool
 }
 
 type EntryType string
@@ -194,7 +222,7 @@ type Action interface {
 	Move(from, to string) FlowBuilder
 	MoveRange(fromName, toName string, from, to Range) FlowBuilder
 	Resubmit(port uint16, table uint8) FlowBuilder
-	ResubmitToTable(table uint8) FlowBuilder
+	ResubmitToTables(tables ...uint8) FlowBuilder
 	CT(commit bool, tableID uint8, zone int) CTAction
 	Drop() FlowBuilder
 	Output(port uint32) FlowBuilder
@@ -216,6 +244,8 @@ type Action interface {
 	Group(id GroupIDType) FlowBuilder
 	Learn(id uint8, priority uint16, idleTimeout, hardTimeout uint16, cookieID uint64) LearnAction
 	GotoTable(table uint8) FlowBuilder
+	NextTable() FlowBuilder
+	GotoStage(stage StageID) FlowBuilder
 	SendToController(reason uint8) FlowBuilder
 	Note(notes string) FlowBuilder
 	Meter(meterID uint32) FlowBuilder
