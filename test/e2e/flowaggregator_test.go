@@ -15,6 +15,7 @@
 package e2e
 
 import (
+	"encoding/json"
 	"fmt"
 	"net"
 	"regexp"
@@ -120,6 +121,7 @@ const (
 	testIngressRuleName            = "test-ingress-rule-name"
 	testEgressRuleName             = "test-egress-rule-name"
 	iperfTimeSec                   = 12
+	protocolIdentifierTCP          = 6
 )
 
 var (
@@ -183,36 +185,6 @@ func TestFlowAggregator(t *testing.T) {
 		t.Run("IPv6", func(t *testing.T) { testHelper(t, data, podAIPs, podBIPs, podCIPs, podDIPs, podEIPs, true) })
 	}
 
-	t.Run("testFlowAggregatorAntctl", func(t *testing.T) {
-		testFlowAggregatorAntctl(t, data)
-	})
-}
-
-// testFlowAggregatorAntctl ensures antctl is accessible in a Flow Aggregator Pod.
-func testFlowAggregatorAntctl(t *testing.T, data *TestData) {
-	flowAggPod, err := data.getFlowAggregator()
-	if err != nil {
-		t.Fatalf("Error when getting flow-aggregator Pod name: %v", err)
-	}
-	podName := flowAggPod.Name
-	for _, c := range antctl.CommandList.GetDebugCommands(runtime.ModeFlowAggregator) {
-		args := []string{}
-		if testOptions.enableCoverage {
-			antctlCovArgs := antctlCoverageArgs("antctl-coverage")
-			args = append(antctlCovArgs, c...)
-		} else {
-			args = append([]string{"antctl", "-v"}, c...)
-		}
-		t.Logf("args: %s", args)
-
-		cmd := strings.Join(args, " ")
-		t.Run(cmd, func(t *testing.T) {
-			stdout, stderr, err := runAntctl(podName, args, data)
-			if err != nil {
-				t.Fatalf("Error when running `antctl %s` from %s: %v\n%s", c, podName, err, antctlOutput(stdout, stderr))
-			}
-		})
-	}
 }
 
 func testHelper(t *testing.T, data *TestData, podAIPs, podBIPs, podCIPs, podDIPs, podEIPs *PodIPs, isIPv6 bool) {
@@ -532,6 +504,101 @@ func testHelper(t *testing.T, data *TestData, podAIPs, podBIPs, podCIPs, podDIPs
 			checkRecordsForFlows(t, data, podAIPs.ipv4.String(), svcC.Spec.ClusterIP, isServiceIPv6, false, true, false, false, checkBandwidth)
 		}
 	})
+
+	// Antctl tests ensure antctl is available in a Flow Aggregator Pod
+	// and check the output of antctl commands.
+	t.Run("Antctl", func(t *testing.T) {
+		skipIfNotRequired(t, "mode-irrelevant")
+		flowAggPod, err := data.getFlowAggregator()
+		if err != nil {
+			t.Fatalf("Error when getting flow-aggregator Pod: %v", err)
+		}
+		podName := flowAggPod.Name
+		for _, args := range antctl.CommandList.GetDebugCommands(runtime.ModeFlowAggregator) {
+			command := []string{}
+			if testOptions.enableCoverage {
+				antctlCovArgs := antctlCoverageArgs("antctl-coverage")
+				command = append(antctlCovArgs, args...)
+			} else {
+				command = append([]string{"antctl", "-v"}, args...)
+			}
+			t.Logf("Run command: %s", command)
+
+			t.Run(strings.Join(command, " "), func(t *testing.T) {
+				stdout, stderr, err := runAntctl(podName, command, data)
+				require.NoErrorf(t, err, "Error when running 'antctl %s' from %s: %v\n%s", args, podName, err, antctlOutput(stdout, stderr))
+			})
+		}
+		t.Run("GetFlowRecordsJson", func(t *testing.T) {
+			checkAntctlGetFlowRecordsJson(t, data, podName, podAIPs, podBIPs, isIPv6)
+		})
+	})
+}
+
+func checkAntctlGetFlowRecordsJson(t *testing.T, data *TestData, podName string, podAIPs, podBIPs *PodIPs, isIPv6 bool) {
+	// A shorter iperfTime that provides stable test results, at which the first record ready in the AggregationProcess but not sent.
+	const iperfTimeSecShort = 5
+	var cmdStr, srcIP, dstIP string
+	// trigger a flow with iperf
+	if !isIPv6 {
+		srcIP = podAIPs.ipv4.String()
+		dstIP = podBIPs.ipv4.String()
+		cmdStr = fmt.Sprintf("iperf3 -c %s -t %d", dstIP, iperfTimeSecShort)
+	} else {
+		srcIP = podAIPs.ipv6.String()
+		dstIP = podBIPs.ipv6.String()
+		cmdStr = fmt.Sprintf("iperf3 -6 -c %s -t %d", dstIP, iperfTimeSecShort)
+	}
+	stdout, _, err := data.runCommandFromPod(testNamespace, "perftest-a", "perftool", []string{"bash", "-c", cmdStr})
+	require.NoErrorf(t, err, "Error when running iperf3 client: %v", err)
+	_, srcPort, dstPort := getBandwidthAndPorts(stdout)
+
+	// run antctl command on flow aggregator to get flow records
+	var command []string
+	args := []string{"get", "flowrecords", "-o", "json", "--srcip", srcIP, "--srcport", srcPort}
+	if testOptions.enableCoverage {
+		antctlCovArgs := antctlCoverageArgs("antctl-coverage")
+		command = append(antctlCovArgs, args...)
+	} else {
+		command = append([]string{"antctl"}, args...)
+	}
+	t.Logf("Run command: %s", command)
+	stdout, stderr, err := runAntctl(podName, command, data)
+	require.NoErrorf(t, err, "Error when running 'antctl get flowrecords -o json' from %s: %v\n%s", podName, err, antctlOutput(stdout, stderr))
+
+	var records []map[string]interface{}
+	err = json.Unmarshal([]byte(stdout), &records)
+	require.NoErrorf(t, err, "Error when parsing flow records from antctl: %v", err)
+	require.Len(t, records, 1)
+
+	checkAntctlRecord(t, records[0], srcIP, dstIP, srcPort, dstPort, isIPv6)
+}
+
+func checkAntctlRecord(t *testing.T, record map[string]interface{}, srcIP, dstIP, srcPort, dstPort string, isIPv6 bool) {
+	assert := assert.New(t)
+	if isIPv6 {
+		assert.Equal(srcIP, record["sourceIPv6Address"], "The record from antctl does not have correct sourceIPv6Address")
+		assert.Equal(dstIP, record["destinationIPv6Address"], "The record from antctl does not have correct destinationIPv6Address")
+	} else {
+		assert.Equal(srcIP, record["sourceIPv4Address"], "The record from antctl does not have correct sourceIPv4Address")
+		assert.Equal(dstIP, record["destinationIPv4Address"], "The record from antctl does not have correct destinationIPv4Address")
+	}
+	srcPortNum, err := strconv.Atoi(srcPort)
+	require.NoErrorf(t, err, "error when converting the iperf srcPort to int type: %s", srcPort)
+	assert.EqualValues(srcPortNum, record["sourceTransportPort"], "The record from antctl does not have correct sourceTransportPort")
+	assert.Equal("perftest-a", record["sourcePodName"], "The record from antctl does not have correct sourcePodName")
+	assert.Equal("antrea-test", record["sourcePodNamespace"], "The record from antctl does not have correct sourcePodNamespace")
+	assert.Equal(controlPlaneNodeName(), record["sourceNodeName"], "The record from antctl does not have correct sourceNodeName")
+
+	dstPortNum, err := strconv.Atoi(dstPort)
+	require.NoErrorf(t, err, "error when converting the iperf dstPort to int type: %s", dstPort)
+	assert.EqualValues(dstPortNum, record["destinationTransportPort"], "The record from antctl does not have correct destinationTransportPort")
+	assert.Equal("perftest-b", record["destinationPodName"], "The record from antctl does not have correct destinationPodName")
+	assert.Equal("antrea-test", record["destinationPodNamespace"], "The record from antctl does not have correct destinationPodNamespace")
+	assert.Equal(controlPlaneNodeName(), record["destinationNodeName"], "The record from antctl does not have correct destinationNodeName")
+
+	assert.EqualValues(ipfixregistry.FlowTypeIntraNode, record["flowType"], "The record from antctl does not have correct flowType")
+	assert.EqualValues(protocolIdentifierTCP, record["protocolIdentifier"], "The record from antctl does not have correct protocolIdentifier")
 }
 
 func checkRecordsForFlows(t *testing.T, data *TestData, srcIP string, dstIP string, isIPv6 bool, isIntraNode bool, checkService bool, checkK8sNetworkPolicy bool, checkAntreaNetworkPolicy bool, checkBandwidth bool) {
@@ -542,10 +609,8 @@ func checkRecordsForFlows(t *testing.T, data *TestData, srcIP string, dstIP stri
 		cmdStr = fmt.Sprintf("iperf3 -6 -c %s -t %d", dstIP, iperfTimeSec)
 	}
 	stdout, _, err := data.runCommandFromPod(testNamespace, "perftest-a", "perftool", []string{"bash", "-c", cmdStr})
-	if err != nil {
-		t.Errorf("Error when running iperf3 client: %v", err)
-	}
-	bwSlice, srcPort := getBandwidthAndSourcePort(stdout)
+	require.NoErrorf(t, err, "Error when running iperf3 client: %v", err)
+	bwSlice, srcPort, _ := getBandwidthAndPorts(stdout)
 	require.Equal(t, 2, len(bwSlice), "bandwidth value and / or bandwidth unit are not available")
 	// bandwidth from iperf output
 	bandwidthInFloat, err := strconv.ParseFloat(bwSlice[0], 64)
@@ -1058,12 +1123,12 @@ func deletePerftestServices(t *testing.T, data *TestData) {
 	}
 }
 
-// getBandwidthAndSourcePort parses iperf commands output and returns bandwidth
-// and source port. Bandwidth is returned as a slice containing two strings (bandwidth
-// value and bandwidth unit).
-func getBandwidthAndSourcePort(iperfStdout string) ([]string, string) {
+// getBandwidthAndPorts parses iperf commands output and returns bandwidth,
+// source port and destination port. Bandwidth is returned as a slice containing
+// two strings (bandwidth value and bandwidth unit).
+func getBandwidthAndPorts(iperfStdout string) ([]string, string, string) {
 	var bandwidth []string
-	var srcPort string
+	var srcPort, dstPort string
 	outputLines := strings.Split(iperfStdout, "\n")
 	for _, line := range outputLines {
 		if strings.Contains(line, "sender") {
@@ -1073,9 +1138,10 @@ func getBandwidthAndSourcePort(iperfStdout string) ([]string, string) {
 		if strings.Contains(line, "connected") {
 			fields := strings.Fields(line)
 			srcPort = fields[5]
+			dstPort = fields[10]
 		}
 	}
-	return bandwidth, srcPort
+	return bandwidth, srcPort, dstPort
 }
 
 func matchSrcAndDstAddress(srcIP string, dstIP string, isDstService bool, isIPv6 bool) (string, string) {
