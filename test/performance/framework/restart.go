@@ -22,6 +22,7 @@ import (
 	appv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/test/performance/utils"
 )
@@ -50,6 +51,8 @@ func ScaleRestartAgent(ctx context.Context, data *ScaleData) error {
 		}); err != nil {
 			return false, err
 		}
+		klog.V(2).InfoS("Check agent restart", "DesiredNumberScheduled", ds.Status.DesiredNumberScheduled,
+			"NumberAvailable", ds.Status.NumberAvailable)
 		return ds.Status.DesiredNumberScheduled == ds.Status.NumberAvailable, nil
 	}, ctx.Done())
 }
