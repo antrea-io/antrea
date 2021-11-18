@@ -3,20 +3,11 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.4.1
+  creationTimestamp: null
   labels:
     app: antrea
   name: clusterclaims.multicluster.crd.antrea.io
 spec:
-  conversion:
-    strategy: Webhook
-    webhook:
-      clientConfig:
-        service:
-          name: antrea-mc-webhook-service
-          namespace: kube-system
-          path: /convert
-      conversionReviewVersions:
-      - v1
   group: multicluster.crd.antrea.io
   names:
     kind: ClusterClaim
@@ -59,20 +50,11 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.4.1
+  creationTimestamp: null
   labels:
     app: antrea
   name: clustersets.multicluster.crd.antrea.io
 spec:
-  conversion:
-    strategy: Webhook
-    webhook:
-      clientConfig:
-        service:
-          name: antrea-mc-webhook-service
-          namespace: kube-system
-          path: /convert
-      conversionReviewVersions:
-      - v1
   group: multicluster.crd.antrea.io
   names:
     kind: ClusterSet
@@ -224,20 +206,11 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.4.1
+  creationTimestamp: null
   labels:
     app: antrea
   name: memberclusterannounces.multicluster.crd.antrea.io
 spec:
-  conversion:
-    strategy: Webhook
-    webhook:
-      clientConfig:
-        service:
-          name: antrea-mc-webhook-service
-          namespace: kube-system
-          path: /convert
-      conversionReviewVersions:
-      - v1
   group: multicluster.crd.antrea.io
   names:
     kind: MemberClusterAnnounce
@@ -283,20 +256,11 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.4.1
+  creationTimestamp: null
   labels:
     app: antrea
   name: resourceexportfilters.multicluster.crd.antrea.io
 spec:
-  conversion:
-    strategy: Webhook
-    webhook:
-      clientConfig:
-        service:
-          name: antrea-mc-webhook-service
-          namespace: kube-system
-          path: /convert
-      conversionReviewVersions:
-      - v1
   group: multicluster.crd.antrea.io
   names:
     kind: ResourceExportFilter
@@ -341,20 +305,11 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.4.1
+  creationTimestamp: null
   labels:
     app: antrea
   name: resourceexports.multicluster.crd.antrea.io
 spec:
-  conversion:
-    strategy: Webhook
-    webhook:
-      clientConfig:
-        service:
-          name: antrea-mc-webhook-service
-          namespace: kube-system
-          path: /convert
-      conversionReviewVersions:
-      - v1
   group: multicluster.crd.antrea.io
   names:
     kind: ResourceExport
@@ -729,20 +684,11 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.4.1
+  creationTimestamp: null
   labels:
     app: antrea
   name: resourceimportfilters.multicluster.crd.antrea.io
 spec:
-  conversion:
-    strategy: Webhook
-    webhook:
-      clientConfig:
-        service:
-          name: antrea-mc-webhook-service
-          namespace: kube-system
-          path: /convert
-      conversionReviewVersions:
-      - v1
   group: multicluster.crd.antrea.io
   names:
     kind: ResourceImportFilter
@@ -787,20 +733,11 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.4.1
+  creationTimestamp: null
   labels:
     app: antrea
   name: resourceimports.multicluster.crd.antrea.io
 spec:
-  conversion:
-    strategy: Webhook
-    webhook:
-      clientConfig:
-        service:
-          name: antrea-mc-webhook-service
-          namespace: kube-system
-          path: /convert
-      conversionReviewVersions:
-      - v1
   group: multicluster.crd.antrea.io
   names:
     kind: ResourceImport
@@ -1199,16 +1136,48 @@ metadata:
   name: antrea-mc-controller-role
 rules:
 - apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
   - admissionregistration.k8s.io
   resourceNames:
-  - antrea-multicluster-mutating-webhook-configuration
-  - antrea-multicluster-validating-webhook-configuration
+  - antrea-mc-mutating-webhook-configuration
+  - antrea-mc-validating-webhook-configuration
   resources:
   - mutatingwebhookconfigurations
   - validatingwebhookconfigurations
   verbs:
   - get
   - update
+- apiGroups:
+  - ""
+  resources:
+  - endpoints
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - services
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
 - apiGroups:
   - multicluster.crd.antrea.io
   resources:
@@ -1391,6 +1360,26 @@ rules:
   - get
   - patch
   - update
+- apiGroups:
+  - multicluster.x-k8s.io
+  resources:
+  - serviceexports
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - multicluster.x-k8s.io
+  resources:
+  - serviceexports/status
+  verbs:
+  - get
+  - patch
+  - update
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -1472,9 +1461,9 @@ subjects:
 ---
 apiVersion: v1
 data:
-  controller_manager_config.yaml: |
-    apiVersion: controller-runtime.sigs.k8s.io/v1alpha1
-    kind: ControllerManagerConfig
+  controller_manager_config.yaml: |+
+    apiVersion: multicluster.crd.antrea.io/v1alpha1
+    kind: MultiClusterConfig
     health:
       healthProbeBindAddress: :8081
     metrics:
@@ -1484,11 +1473,15 @@ data:
     leaderElection:
       leaderElect: true
       resourceName: 6536456a.crd.antrea.io
+    member: true
+    leader: false
+
 kind: ConfigMap
 metadata:
+  annotations: {}
   labels:
     app: antrea
-  name: antrea-mc-manager-config
+  name: antrea-mc-manager-config-2hg6d27hhd
   namespace: kube-system
 ---
 apiVersion: v1
@@ -1589,7 +1582,7 @@ spec:
       terminationGracePeriodSeconds: 10
       volumes:
       - configMap:
-          name: antrea-mc-manager-config
+          name: antrea-mc-manager-config-2hg6d27hhd
         name: manager-config
 ---
 apiVersion: admissionregistration.k8s.io/v1

@@ -1,0 +1,14 @@
+apiVersion: multicluster.crd.antrea.io/v1alpha1
+kind: MultiClusterConfig
+health:
+  healthProbeBindAddress: :8081
+metrics:
+  bindAddress: 127.0.0.1:8080
+webhook:
+  port: 9443
+leaderElection:
+  leaderElect: true
+  resourceName: 6536456a.crd.antrea.io
+member: false
+leader: true
+

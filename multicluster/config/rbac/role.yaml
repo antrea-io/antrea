@@ -7,6 +7,30 @@ metadata:
   name: controller-role
 rules:
 - apiGroups:
+  - ""
+  resources:
+  - endpoints
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - services
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
   - multicluster.crd.antrea.io
   resources:
   - clusterclaims
@@ -184,6 +208,26 @@ rules:
   - multicluster.crd.antrea.io
   resources:
   - resourceimports/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - multicluster.x-k8s.io
+  resources:
+  - serviceexports
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - multicluster.x-k8s.io
+  resources:
+  - serviceexports/status
   verbs:
   - get
   - patch
