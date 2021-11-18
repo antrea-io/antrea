@@ -22,7 +22,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/sets"
 
+	"antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/util/ip"
 )
 
@@ -105,6 +107,221 @@ func TestGetNodeAddr(t *testing.T) {
 			addr, err := GetNodeAddrs(tt.node)
 			assert.Equal(t, tt.expectedErr, err)
 			assert.Equal(t, tt.expectedAddr, addr)
+		})
+	}
+}
+
+func TestGetNodeGatewayAddrs(t *testing.T) {
+	tests := []struct {
+		name         string
+		node         *corev1.Node
+		expectedAddr *ip.DualStackIPs
+		expectedErr  error
+	}{
+		{
+			name: "Node with PodCIDR",
+			node: &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "node0",
+				},
+				Spec: corev1.NodeSpec{PodCIDR: "192.168.0.0/24"},
+			},
+			expectedAddr: &ip.DualStackIPs{IPv4: net.ParseIP("192.168.0.1").To4()},
+			expectedErr:  nil,
+		},
+		{
+			name: "Node with PodCIDRs",
+			node: &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "node1",
+				},
+				Spec: corev1.NodeSpec{PodCIDRs: []string{"192.168.0.0/24", "2620:124:6020:1006::0/64"}},
+			},
+			expectedAddr: &ip.DualStackIPs{IPv4: net.ParseIP("192.168.0.1").To4(), IPv6: net.ParseIP("2620:124:6020:1006::1")},
+			expectedErr:  nil,
+		},
+		{
+			name: "Node without PodCIDR or PodCIDR",
+			node: &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "node2",
+				},
+			},
+			expectedAddr: nil,
+			expectedErr:  &net.ParseError{Type: "CIDR address", Text: ""},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			addr, err := GetNodeGatewayAddrs(tt.node)
+			assert.Equal(t, tt.expectedErr, err)
+			assert.Equal(t, tt.expectedAddr, addr)
+		})
+	}
+}
+
+func TestGetNodeAddrsFromAnnotations(t *testing.T) {
+	tests := []struct {
+		name         string
+		node         *corev1.Node
+		expectedAddr *ip.DualStackIPs
+		expectedErr  error
+	}{
+		{
+			name: "Node with IPv4 Annotation",
+			node: &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        "node0",
+					Annotations: map[string]string{types.NodeTransportAddressAnnotationKey: "192.168.0.1"},
+				},
+			},
+			expectedAddr: &ip.DualStackIPs{IPv4: net.ParseIP("192.168.0.1")},
+			expectedErr:  nil,
+		},
+		{
+			name: "Node with IPv4 and IPv6 Annotation",
+			node: &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        "node1",
+					Annotations: map[string]string{types.NodeTransportAddressAnnotationKey: "192.168.0.1,2620:124:6020:1006::1"},
+				},
+			},
+			expectedAddr: &ip.DualStackIPs{IPv4: net.ParseIP("192.168.0.1"), IPv6: net.ParseIP("2620:124:6020:1006::1")},
+			expectedErr:  nil,
+		},
+		{
+			name: "Node without Annotation",
+			node: &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "node2",
+				},
+			},
+			expectedAddr: nil,
+			expectedErr:  nil,
+		},
+		{
+			name: "Node with invalid Annotation",
+			node: &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        "node3",
+					Annotations: map[string]string{types.NodeTransportAddressAnnotationKey: ","},
+				},
+			},
+			expectedAddr: nil,
+			expectedErr:  fmt.Errorf("invalid annotation for ip-address on Node node3: ,"),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			addr, err := GetNodeAddrsFromAnnotations(tt.node, types.NodeTransportAddressAnnotationKey)
+			assert.Equal(t, tt.expectedErr, err)
+			assert.Equal(t, tt.expectedAddr, addr)
+		})
+	}
+}
+
+func TestGetNodeAllAddrs(t *testing.T) {
+	tests := []struct {
+		name          string
+		node          *corev1.Node
+		expectedAddrs sets.String
+		expectedErr   error
+	}{
+		{
+			name: "Node with IPs",
+			node: &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        "node0",
+					Annotations: map[string]string{types.NodeTransportAddressAnnotationKey: "172.16.0.1,1::1"},
+				},
+				Spec: corev1.NodeSpec{PodCIDRs: []string{"192.168.0.0/24", "2001::/64"}},
+				Status: corev1.NodeStatus{
+					Addresses: []corev1.NodeAddress{
+						{
+							Type:    corev1.NodeInternalIP,
+							Address: "10.176.10.10",
+						},
+					},
+				},
+			},
+			expectedAddrs: sets.NewString("172.16.0.1", "192.168.0.1", "10.176.10.10", "1::1", "2001::1"),
+			expectedErr:   nil,
+		},
+		{
+			name: "Node with duplicate IPs",
+			node: &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        "node1",
+					Annotations: map[string]string{types.NodeTransportAddressAnnotationKey: "1.1.1.1"},
+				},
+				Spec: corev1.NodeSpec{PodCIDR: "192.168.0.0/24"},
+				Status: corev1.NodeStatus{
+					Addresses: []corev1.NodeAddress{
+						{
+							Type:    corev1.NodeInternalIP,
+							Address: "1.1.1.1",
+						},
+					},
+				},
+			},
+			expectedAddrs: sets.NewString("192.168.0.1", "1.1.1.1"),
+			expectedErr:   nil,
+		},
+		{
+			name: "Node with invalid gateway IP",
+			node: &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "node2",
+				},
+				Spec: corev1.NodeSpec{PodCIDR: "x"},
+				Status: corev1.NodeStatus{
+					Addresses: []corev1.NodeAddress{
+						{
+							Type:    corev1.NodeInternalIP,
+							Address: "1.1.1.1",
+						},
+					},
+				},
+			},
+			expectedAddrs: sets.NewString("1.1.1.1"),
+			expectedErr:   &net.ParseError{Type: "CIDR address", Text: "x"},
+		},
+		{
+			name: "Node with invalid transport address annotation",
+			node: &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        "node3",
+					Annotations: map[string]string{types.NodeTransportAddressAnnotationKey: "x"},
+				},
+				Spec: corev1.NodeSpec{PodCIDR: "192.168.0.0/24"},
+				Status: corev1.NodeStatus{
+					Addresses: []corev1.NodeAddress{
+						{
+							Type:    corev1.NodeInternalIP,
+							Address: "1.1.1.1",
+						},
+					},
+				},
+			},
+			expectedAddrs: sets.NewString("1.1.1.1", "192.168.0.1"),
+			expectedErr:   fmt.Errorf("invalid annotation for ip-address on Node node3: x"),
+		},
+		{
+			name: "Node with none valid IPs",
+			node: &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "node4",
+				},
+			},
+			expectedAddrs: sets.NewString(),
+			expectedErr:   fmt.Errorf("Node node4 has neither external ip nor internal ip"),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			addr, err := GetNodeAllAddrs(tt.node)
+			assert.Equal(t, tt.expectedErr, err)
+			assert.Equal(t, tt.expectedAddrs, addr)
 		})
 	}
 }

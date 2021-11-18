@@ -24,8 +24,9 @@ import (
 )
 
 type Response struct {
-	Name string               `json:"name" yaml:"name"`
-	Pods []common.GroupMember `json:"pods,omitempty"`
+	Name  string               `json:"name" yaml:"name"`
+	Pods  []common.GroupMember `json:"pods,omitempty"`
+	Nodes []common.GroupMember `json:"nodes,omitempty"`
 }
 
 func listTransform(l interface{}, opts map[string]string) (interface{}, error) {
@@ -41,11 +42,16 @@ func listTransform(l interface{}, opts map[string]string) (interface{}, error) {
 
 func objectTransform(o interface{}, _ map[string]string) (interface{}, error) {
 	group := o.(*cpv1beta.AddressGroup)
-	var pods []common.GroupMember
-	for _, pod := range group.GroupMembers {
-		pods = append(pods, common.GroupMemberPodTransform(pod))
+	var pods, nodes []common.GroupMember
+	for _, member := range group.GroupMembers {
+		gm := common.GroupMemberTransform(member)
+		if member.Node != nil {
+			nodes = append(nodes, gm)
+			continue
+		}
+		pods = append(pods, gm)
 	}
-	return Response{Name: group.Name, Pods: pods}, nil
+	return Response{Name: group.Name, Pods: pods, Nodes: nodes}, nil
 }
 
 func Transform(reader io.Reader, single bool, opts map[string]string) (interface{}, error) {
@@ -61,10 +67,10 @@ func Transform(reader io.Reader, single bool, opts map[string]string) (interface
 var _ common.TableOutput = new(Response)
 
 func (r Response) GetTableHeader() []string {
-	return []string{"NAME", "POD-IPS"}
+	return []string{"NAME", "POD-IPS", "NODE-IPS"}
 }
 
-func (r Response) GetPodNames(maxColumnLength int) string {
+func (r Response) GetPodIPs(maxColumnLength int) string {
 	list := make([]string, len(r.Pods))
 	for i, pod := range r.Pods {
 		list[i] = pod.IP
@@ -72,8 +78,16 @@ func (r Response) GetPodNames(maxColumnLength int) string {
 	return common.GenerateTableElementWithSummary(list, maxColumnLength)
 }
 
+func (r Response) GetNodeIPs(maxColumnLength int) string {
+	list := make([]string, len(r.Nodes))
+	for i, node := range r.Nodes {
+		list[i] = node.IP
+	}
+	return common.GenerateTableElementWithSummary(list, maxColumnLength)
+}
+
 func (r Response) GetTableRow(maxColumnLength int) []string {
-	return []string{r.Name, r.GetPodNames(maxColumnLength)}
+	return []string{r.Name, r.GetPodIPs(maxColumnLength), r.GetNodeIPs(maxColumnLength)}
 }
 
 func (r Response) SortRows() bool {

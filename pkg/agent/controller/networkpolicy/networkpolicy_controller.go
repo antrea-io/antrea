@@ -377,7 +377,7 @@ func (c *Controller) GetNetworkPolicies(npFilter *querier.NetworkPolicyQueryFilt
 	return c.ruleCache.getNetworkPolicies(npFilter)
 }
 
-// GetAppliedToNetworkPolicies returns the NetworkPolicies applied to the Pod and match the filter.
+// GetAppliedNetworkPolicies returns the NetworkPolicies applied to the Pod and match the filter.
 func (c *Controller) GetAppliedNetworkPolicies(pod, namespace string, npFilter *querier.NetworkPolicyQueryFilter) []v1beta2.NetworkPolicy {
 	return c.ruleCache.getAppliedNetworkPolicies(pod, namespace, npFilter)
 }

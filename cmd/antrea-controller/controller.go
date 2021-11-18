@@ -145,6 +145,7 @@ func run(o *Options) error {
 		namespaceInformer,
 		serviceInformer,
 		networkPolicyInformer,
+		nodeInformer,
 		cnpInformer,
 		anpInformer,
 		tierInformer,

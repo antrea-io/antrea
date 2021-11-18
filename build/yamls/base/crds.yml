@@ -993,6 +993,30 @@ spec:
                               required:
                               - name
                               - namespace
+                            nodeSelector:
+                              type: object
+                              properties:
+                                matchExpressions:
+                                  items:
+                                    properties:
+                                      key:
+                                        type: string
+                                      operator:
+                                        enum:
+                                          - In
+                                          - NotIn
+                                          - Exists
+                                          - DoesNotExist
+                                        type: string
+                                      values:
+                                        items:
+                                          type: string
+                                          pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
+                                        type: array
+                                    type: object
+                                  type: array
+                                matchLabels:
+                                  x-kubernetes-preserve-unknown-fields: true
                       name:
                         type: string
                       enableLogging:
@@ -1164,6 +1188,30 @@ spec:
                               required:
                               - name
                               - namespace
+                            nodeSelector:
+                              type: object
+                              properties:
+                                matchExpressions:
+                                  items:
+                                    properties:
+                                      key:
+                                        type: string
+                                      operator:
+                                        enum:
+                                          - In
+                                          - NotIn
+                                          - Exists
+                                          - DoesNotExist
+                                        type: string
+                                      values:
+                                        items:
+                                          type: string
+                                          pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
+                                        type: array
+                                    type: object
+                                  type: array
+                                matchLabels:
+                                  x-kubernetes-preserve-unknown-fields: true
                       toServices:
                         type: array
                         items:
@@ -1418,6 +1466,30 @@ spec:
                                 cidr:
                                   type: string
                                   format: cidr
+                            nodeSelector:
+                              type: object
+                              properties:
+                                matchExpressions:
+                                  items:
+                                    properties:
+                                      key:
+                                        type: string
+                                      operator:
+                                        enum:
+                                          - In
+                                          - NotIn
+                                          - Exists
+                                          - DoesNotExist
+                                        type: string
+                                      values:
+                                        items:
+                                          type: string
+                                          pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
+                                        type: array
+                                    type: object
+                                  type: array
+                                matchLabels:
+                                  x-kubernetes-preserve-unknown-fields: true
                       name:
                         type: string
                       enableLogging:
@@ -1561,6 +1633,30 @@ spec:
                                   format: cidr
                             fqdn:
                               type: string
+                            nodeSelector:
+                              type: object
+                              properties:
+                                matchExpressions:
+                                  items:
+                                    properties:
+                                      key:
+                                        type: string
+                                      operator:
+                                        enum:
+                                          - In
+                                          - NotIn
+                                          - Exists
+                                          - DoesNotExist
+                                        type: string
+                                      values:
+                                        items:
+                                          type: string
+                                          pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
+                                        type: array
+                                    type: object
+                                  type: array
+                                matchLabels:
+                                  x-kubernetes-preserve-unknown-fields: true
                       toServices:
                         type: array
                         items:

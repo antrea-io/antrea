@@ -440,6 +440,10 @@ type NetworkPolicyPeer struct {
 	// Cannot be set with any other selector.
 	// +optional
 	ServiceAccount *NamespacedName `json:"serviceAccount,omitempty"`
+	// Select certain Nodes which match the label selector.
+	// A NodeSelector cannot be set in AppliedTo field or set with any other selector.
+	// +optional
+	NodeSelector *metav1.LabelSelector `json:"nodeSelector,omitempty"`
 }
 
 type PeerNamespaces struct {
