@@ -15,9 +15,13 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
 
 	"github.com/spf13/pflag"
+	"k8s.io/apimachinery/pkg/util/yaml"
+	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
@@ -28,6 +32,8 @@ type Options struct {
 	configFile     string
 	SelfSignedCert bool
 	options        ctrl.Options
+	leader         bool
+	member         bool
 }
 
 func newOptions() *Options {
@@ -38,16 +44,40 @@ func newOptions() *Options {
 
 func (o *Options) complete(args []string) error {
 	var err error
+	o.setDefaults()
 	options := ctrl.Options{Scheme: scheme}
 	ctrlConfig := &mcsv1alpha1.MultiClusterConfig{}
 	if len(o.configFile) > 0 {
+		// TODO: remove this and just use the options from ctrlConfig
 		options, err = options.AndFrom(ctrl.ConfigFile().AtPath(o.configFile).OfKind(ctrlConfig))
 		if err != nil {
 			return fmt.Errorf("fail to load options from configuration file %s", o.configFile)
 		}
 		o.options = options
+		data, err := ioutil.ReadFile(o.configFile)
+		if err != nil {
+			return err
+		}
+		jsonData, err := yaml.ToJSON(data)
+		if err != nil {
+			klog.Errorf("Error converting to json", string(data))
+			return err
+		}
+		err = json.Unmarshal(jsonData, &ctrlConfig)
+		if err != nil {
+			klog.Errorf("Error unmarshalling json", string(jsonData))
+			return err
+		}
+		o.leader = ctrlConfig.Leader
+		if o.leader {
+			klog.InfoS("Running as Leader Cluster of ClusterSet")
+		}
+		o.member = ctrlConfig.Member
+		if o.member {
+			klog.InfoS("Running as Member Cluster of ClusterSet")
+		}
+		return nil
 	}
-	o.setDefaults()
 	return nil
 }
 
@@ -64,4 +94,5 @@ func (o *Options) setDefaults() {
 		HealthProbeBindAddress: ":8081",
 		LeaderElection:         false,
 	}
+	o.member = true
 }

@@ -20,15 +20,17 @@ import (
 	"fmt"
 	"time"
 
-	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
-	// to ensure that exec-entrypoint and run can make use of them.
-	_ "k8s.io/client-go/plugin/pkg/client/auth"
-
 	apiextensionclientset "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
 	clientset "k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/klog/v2"
+	k8smcsv1alpha1 "sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
+
+	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
+	// to ensure that exec-entrypoint and run can make use of them.
+	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	"k8s.io/client-go/rest"
 	aggregatorclientset "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -38,44 +40,52 @@ import (
 	multiclusterv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
 	multiclustercontrollers "antrea.io/antrea/multicluster/controllers/multicluster"
 	"antrea.io/antrea/pkg/apiserver/certificate"
+	"antrea.io/antrea/pkg/util/env"
 	// +kubebuilder:scaffold:imports
 )
 
 var (
-	setupLog           = ctrl.Log.WithName("setup")
-	validationWebhooks = []string{"antrea-multicluster-validating-webhook-configuration"}
-	mutationWebhooks   = []string{"antrea-multicluster-mutating-webhook-configuration"}
+	validationWebhooksNamePattern = "%s%santrea-mc-validating-webhook-configuration"
+	mutationWebhooksNamePattern   = "%s%santrea-mc-mutating-webhook-configuration"
 )
 
 const (
 	selfSignedCertDir = "/var/run/antrea/multicluster-controller-self-signed"
 	certDir           = "/var/run/antrea/multicluster-controller-tls"
-	serviceName       = "antrea-multicluster-webhook-service"
-	configMapName     = "antrea-multicluster-ca"
+	serviceName       = "antrea-mc-webhook-service"
+	configMapName     = "antrea-mc-ca"
 )
 
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
-
+	utilruntime.Must(k8smcsv1alpha1.AddToScheme(scheme))
 	utilruntime.Must(multiclusterv1alpha1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 }
 
 func run(o *Options) error {
 	opts := zap.Options{
+		// TODO: disable `Development` option setting
 		Development: true,
 	}
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
-	// build up cert controller to manage certificate for multicluster controller
+	// build up cert controller to manage certificate for MC Controller
 	k8sConfig := ctrl.GetConfigOrDie()
 	client, aggregatorClient, apiExtensionClient, err := createClients(k8sConfig)
 	if err != nil {
 		return fmt.Errorf("error creating K8s clients: %v", err)
 	}
 
+	// TODO: These leader checks should go once we have a separate command for leader and member MC Controller
+	if o.leader {
+		// Manager runs in the Namespace instead of cluster scope, in leader deployment.
+		o.options.Namespace = env.GetPodNamespace()
+	}
+
 	secureServing := genericoptions.NewSecureServingOptions().WithLoopback()
-	caCertController, err := certificate.ApplyServerCert(o.SelfSignedCert, client, aggregatorClient, apiExtensionClient, secureServing, getCAConifg())
+	caCertController, err := certificate.ApplyServerCert(o.SelfSignedCert, client, aggregatorClient, apiExtensionClient,
+		secureServing, getCaConfig(o.options.Namespace))
 	if err != nil {
 		return fmt.Errorf("error applying server cert: %v", err)
 	}
@@ -88,96 +98,98 @@ func run(o *Options) error {
 	} else {
 		o.options.CertDir = certDir
 	}
+
 	mgr, err := ctrl.NewManager(k8sConfig, o.options)
 	if err != nil {
-		setupLog.Error(err, "unable to start manager")
-		return fmt.Errorf("unable to start manager, err: %v", err)
+		return fmt.Errorf("error starting manager: %v", err)
 	}
 
 	if err = (&multiclustercontrollers.ClusterClaimReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "ClusterClaim")
-		return fmt.Errorf("unable to create ClusterClaim controller, err: %v", err)
-	}
-	if err = (&multiclustercontrollers.MemberClusterAnnounceReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "MemberClusterAnnounce")
-		return fmt.Errorf("unable to create MemberClusterAnnounce controller, err: %v", err)
-	}
-	if err = (&multiclustercontrollers.ClusterSetReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "ClusterSet")
-		return fmt.Errorf("unable to create ClusterSet controller, err: %v", err)
-	}
-	if err = (&multiclustercontrollers.ResourceExportFilterReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "ResourceExportFilter")
-		return fmt.Errorf("unable to create ResourceExportFilter controller, err: %v", err)
-	}
-	if err = (&multiclustercontrollers.ResourceImportFilterReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "ResourceImportFilter")
-		return fmt.Errorf("unable to create ResourceImportFilter controller, err: %v", err)
+		return fmt.Errorf("error creating ClusterClaim controller: %v", err)
 	}
 	if err = (&multiclusterv1alpha1.ClusterClaim{}).SetupWebhookWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create webhook", "webhook", "ClusterClaim")
-		return fmt.Errorf("unable to create ClusterClaim webhook, err: %v", err)
+		return fmt.Errorf("error creating ClusterClaim webhook: %v", err)
+	}
+
+	clusterSetReconciler := &multiclustercontrollers.ClusterSetReconciler{
+		Client:   mgr.GetClient(),
+		Scheme:   mgr.GetScheme(),
+		IsLeader: o.leader,
+		IsMember: o.member,
+	}
+	if err = clusterSetReconciler.SetupWithManager(mgr); err != nil {
+		return fmt.Errorf("error creating ClusterSet controller: %v", err)
 	}
 	if err = (&multiclusterv1alpha1.ClusterSet{}).SetupWebhookWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create webhook", "webhook", "ClusterSet")
-		return fmt.Errorf("unable to create ClusterSet webhook, err: %v", err)
+		return fmt.Errorf("error creating ClusterSet webhook: %v", err)
 	}
-	if err = (&multiclusterv1alpha1.MemberClusterAnnounce{}).SetupWebhookWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create webhook", "webhook", "MemberClusterAnnounce")
-		return fmt.Errorf("unable to create MemberClusterAnnounce webhook, err: %v", err)
+
+	remoteMgr := &(clusterSetReconciler.RemoteCommonAreaManager)
+
+	if o.leader {
+		// Only leader runs the below controllers and webhooks.
+
+		if err = (&multiclusterv1alpha1.MemberClusterAnnounce{}).SetupWebhookWithManager(mgr); err != nil {
+			return fmt.Errorf("error creating MemberClusterAnnounce webhook: %v", err)
+		}
+
+		resExportReconciler := &multiclustercontrollers.ResourceExportReconciler{
+			Client: mgr.GetClient(),
+			Scheme: mgr.GetScheme()}
+		if err = resExportReconciler.SetupWithManager(mgr); err != nil {
+			return fmt.Errorf("error creating ResourceExport controller: %v", err)
+		}
+		if err = (&multiclusterv1alpha1.ResourceExport{}).SetupWebhookWithManager(mgr); err != nil {
+			return fmt.Errorf("error creating ResourceExport webhook: %v", err)
+		}
+
+		if err := (&multiclusterv1alpha1.ResourceImport{}).SetupWebhookWithManager(mgr); err != nil {
+			return fmt.Errorf("error creating ResourceImport webhook: %v", err)
+		}
+
+		if err = (&multiclustercontrollers.ResourceExportFilterReconciler{
+			Client: mgr.GetClient(),
+			Scheme: mgr.GetScheme(),
+		}).SetupWithManager(mgr); err != nil {
+			return fmt.Errorf("error creating ResourceExportFilter controller: %v", err)
+		}
 	}
-	if err = (&multiclustercontrollers.ResourceExportReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "ResourceExport")
-		return fmt.Errorf("unable to create ResourceExport controller, err: %v", err)
+
+	if o.member {
+		// Only member runs the below controllers and webhooks.
+		// NOTE: Member runs ResourceImportReconciler from CommonArea only.
+
+		svcExportReconciler := &multiclustercontrollers.ServiceExportReconciler{
+			Client:                  mgr.GetClient(),
+			Scheme:                  mgr.GetScheme(),
+			RemoteCommonAreaManager: remoteMgr}
+		if err = svcExportReconciler.SetupWithManager(mgr); err != nil {
+			return fmt.Errorf("unable to create ServiceExport controller, err: %v", err)
+		}
+
+		if err = (&multiclustercontrollers.ResourceImportFilterReconciler{
+			Client: mgr.GetClient(),
+			Scheme: mgr.GetScheme(),
+		}).SetupWithManager(mgr); err != nil {
+			return fmt.Errorf("unable to create ResourceImportFilter controller, err: %v", err)
+		}
 	}
-	if err = (&multiclustercontrollers.ResourceImportReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "ResourceImport")
-		return fmt.Errorf("unable to create ResourceImport controller, err: %v", err)
-	}
-	if err = (&multiclusterv1alpha1.ResourceImport{}).SetupWebhookWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create webhook", "webhook", "ResourceImport")
-		return fmt.Errorf("unable to create ResourceImport webhook, err: %v", err)
-	}
-	if err = (&multiclusterv1alpha1.ResourceExport{}).SetupWebhookWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create webhook", "webhook", "ResourceExport")
-		return fmt.Errorf("unable to create ResourceExport webhook, err: %v", err)
-	}
+
 	//+kubebuilder:scaffold:builder
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
-		setupLog.Error(err, "unable to set up health check")
-		return fmt.Errorf("unable to set up health check, err: %v", err)
+		return fmt.Errorf("error setting up health check: %v", err)
 	}
 	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
-		setupLog.Error(err, "unable to set up ready check")
-		return fmt.Errorf("unable to set up ready check, err: %v", err)
+		return fmt.Errorf("error setting up ready check: %v", err)
 	}
 
-	setupLog.Info("starting manager")
+	klog.InfoS("Starting Manager")
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
-		setupLog.Error(err, "problem running manager")
-		return fmt.Errorf("problem running manager, err: %v", err)
+		return fmt.Errorf("error running manager: %v", err)
 	}
 	return nil
 }
@@ -202,7 +214,7 @@ func createClients(kubeConfig *rest.Config) (
 	return client, aggregatorClient, apiExtensionClient, nil
 }
 
-func getCAConifg() *certificate.CAConfig {
+func getCaConfig(controllerNs string) *certificate.CAConfig {
 	return &certificate.CAConfig{
 		CAConfigMapName: configMapName,
 		// the key pair name has to be "tls" https://github.com/kubernetes-sigs/controller-runtime/blob/master/pkg/manager/manager.go#L221
@@ -210,9 +222,23 @@ func getCAConifg() *certificate.CAConfig {
 		CertDir:            certDir,
 		ServiceName:        serviceName,
 		SelfSignedCertDir:  selfSignedCertDir,
-		MutationWebhooks:   mutationWebhooks,
-		ValidatingWebhooks: validationWebhooks,
+		MutationWebhooks:   getMutationWebhooks(controllerNs),
+		ValidatingWebhooks: getValidationWebhooks(controllerNs),
 		CertReadyTimeout:   2 * time.Minute,
 		MaxRotateDuration:  time.Hour * (24 * 365),
 	}
+}
+
+func getValidationWebhooks(controllerNs string) []string {
+	if controllerNs != "" {
+		return []string{fmt.Sprintf(validationWebhooksNamePattern, controllerNs, "-")}
+	}
+	return []string{fmt.Sprintf(validationWebhooksNamePattern, "", "")}
+}
+
+func getMutationWebhooks(controllerNs string) []string {
+	if controllerNs != "" {
+		return []string{fmt.Sprintf(mutationWebhooksNamePattern, controllerNs, "-")}
+	}
+	return []string{fmt.Sprintf(mutationWebhooksNamePattern, "", "")}
 }
