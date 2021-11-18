@@ -114,6 +114,9 @@ func (n *NetworkPolicyController) toAntreaPeerForCRD(peers []v1alpha1.NetworkPol
 			}
 		} else if peer.FQDN != "" {
 			fqdns = append(fqdns, peer.FQDN)
+		} else if peer.ServiceAccount != nil {
+			normalizedUID := n.createAddressGroup(peer.ServiceAccount.Namespace, serviceAccountNameToPodSelector(peer.ServiceAccount.Name), nil, nil)
+			addressGroups = append(addressGroups, normalizedUID)
 		} else {
 			normalizedUID := n.createAddressGroup(np.GetNamespace(), peer.PodSelector, peer.NamespaceSelector, peer.ExternalEntitySelector)
 			addressGroups = append(addressGroups, normalizedUID)

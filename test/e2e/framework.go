@@ -2260,6 +2260,17 @@ func (data *TestData) createAgnhostPodOnNode(name string, ns string, nodeName st
 	return data.createPodOnNode(name, ns, nodeName, agnhostImage, []string{"sleep", strconv.Itoa(sleepDuration)}, nil, nil, nil, hostNetwork, nil)
 }
 
+// createAgnhostPodWithSAOnNode creates a Pod in the test namespace with a single
+// agnhost container and a specific ServiceAccount. The Pod will be scheduled on
+// the specified Node (if nodeName is not empty).
+func (data *TestData) createAgnhostPodWithSAOnNode(name string, ns string, nodeName string, hostNetwork bool, serviceAccountName string) error {
+	sleepDuration := 3600 // seconds
+	mutateFunc := func(pod *corev1.Pod) {
+		pod.Spec.ServiceAccountName = serviceAccountName
+	}
+	return data.createPodOnNode(name, ns, nodeName, agnhostImage, []string{"sleep", strconv.Itoa(sleepDuration)}, nil, nil, nil, hostNetwork, mutateFunc)
+}
+
 func (data *TestData) createAgnhostPodOnNodeWithAnnotations(name string, ns string, nodeName string, annotations map[string]string) error {
 	sleepDuration := 3600 // seconds
 	mutateFunc := func(pod *corev1.Pod) {

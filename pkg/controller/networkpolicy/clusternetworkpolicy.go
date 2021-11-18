@@ -24,6 +24,7 @@ import (
 
 	"antrea.io/antrea/pkg/apis/controlplane"
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	"antrea.io/antrea/pkg/controller/grouping"
 	"antrea.io/antrea/pkg/controller/networkpolicy/store"
 	antreatypes "antrea.io/antrea/pkg/controller/types"
 	utilsets "antrea.io/antrea/pkg/util/sets"
@@ -262,7 +263,7 @@ func (n *NetworkPolicyController) deleteNamespace(old interface{}) {
 // of an UPDATE event.
 func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *crdv1alpha1.ClusterNetworkPolicy) *antreatypes.NetworkPolicy {
 	hasPerNamespaceRule := hasPerNamespaceRule(cnp)
-	// If one of the ACNP rule is a per-namespace rule (a peer in that rule has namspaces.Match set
+	// If one of the ACNP rule is a per-namespace rule (a peer in that rule has namespaces.Match set
 	// to Self), the policy will need to be converted to appliedTo per rule policy, as the appliedTo
 	// will be different for rules created for each namespace.
 	appliedToPerRule := len(cnp.Spec.AppliedTo) == 0 || hasPerNamespaceRule
@@ -282,13 +283,20 @@ func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *crdv1alpha1.C
 	var atgForNamespace []string
 	if hasPerNamespaceRule && len(cnp.Spec.AppliedTo) > 0 {
 		for _, at := range cnp.Spec.AppliedTo {
-			affectedNS, selectors := n.getAffectedNamespacesForAppliedTo(at)
-			affectedNamespaceSelectors = append(affectedNamespaceSelectors, selectors...)
-			for _, ns := range affectedNS {
-				atg := n.createAppliedToGroup(ns, at.PodSelector, nil, at.ExternalEntitySelector)
+			if at.ServiceAccount != nil {
+				atg := n.createAppliedToGroup(at.ServiceAccount.Namespace, serviceAccountNameToPodSelector(at.ServiceAccount.Name), nil, nil)
 				atgNamesSet.Insert(atg)
-				clusterAppliedToAffectedNS = append(clusterAppliedToAffectedNS, ns)
+				clusterAppliedToAffectedNS = append(clusterAppliedToAffectedNS, at.ServiceAccount.Namespace)
 				atgForNamespace = append(atgForNamespace, atg)
+			} else {
+				affectedNS, selectors := n.getAffectedNamespacesForAppliedTo(at)
+				affectedNamespaceSelectors = append(affectedNamespaceSelectors, selectors...)
+				for _, ns := range affectedNS {
+					atg := n.createAppliedToGroup(ns, at.PodSelector, nil, at.ExternalEntitySelector)
+					atgNamesSet.Insert(atg)
+					clusterAppliedToAffectedNS = append(clusterAppliedToAffectedNS, ns)
+					atgForNamespace = append(atgForNamespace, atg)
+				}
 			}
 		}
 	}
@@ -341,13 +349,20 @@ func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *crdv1alpha1.C
 				} else {
 					// Create a rule for each affected Namespace of appliedTo at rule level
 					for _, at := range cnpRule.AppliedTo {
-						affectedNS, selectors := n.getAffectedNamespacesForAppliedTo(at)
-						affectedNamespaceSelectors = append(affectedNamespaceSelectors, selectors...)
-						for _, ns := range affectedNS {
-							atg := n.createAppliedToGroup(ns, at.PodSelector, nil, at.ExternalEntitySelector)
+						if at.ServiceAccount != nil {
+							atg := n.createAppliedToGroup(at.ServiceAccount.Namespace, serviceAccountNameToPodSelector(at.ServiceAccount.Name), nil, nil)
 							atgNamesSet.Insert(atg)
 							klog.V(4).Infof("Adding a new per-namespace rule with appliedTo %v for rule %d of %s", atg, idx, cnp.Name)
-							addRule(n.toNamespacedPeerForCRD(perNSPeers, ns), direction, []string{atg})
+							addRule(n.toNamespacedPeerForCRD(perNSPeers, at.ServiceAccount.Namespace), direction, []string{atg})
+						} else {
+							affectedNS, selectors := n.getAffectedNamespacesForAppliedTo(at)
+							affectedNamespaceSelectors = append(affectedNamespaceSelectors, selectors...)
+							for _, ns := range affectedNS {
+								atg := n.createAppliedToGroup(ns, at.PodSelector, nil, at.ExternalEntitySelector)
+								atgNamesSet.Insert(atg)
+								klog.V(4).Infof("Adding a new per-namespace rule with appliedTo %v for rule %d of %s", atg, idx, cnp.Name)
+								addRule(n.toNamespacedPeerForCRD(perNSPeers, ns), direction, []string{atg})
+							}
 						}
 					}
 				}
@@ -382,6 +397,14 @@ func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *crdv1alpha1.C
 	return internalNetworkPolicy
 }
 
+// serviceAccountNameToPodSelector returns a PodSelector which could be used to
+// select Pods based on their ServiceAccountName.
+func serviceAccountNameToPodSelector(saName string) *metav1.LabelSelector {
+	return &metav1.LabelSelector{
+		MatchLabels: map[string]string{grouping.CustomLabelKeyPrefix + grouping.CustomLabelKeyServiceAccount: saName},
+	}
+}
+
 // hasPerNamespaceRule returns true if there is at least one per-namespace rule
 func hasPerNamespaceRule(cnp *crdv1alpha1.ClusterNetworkPolicy) bool {
 	for _, ingress := range cnp.Spec.Ingress {
@@ -409,6 +432,8 @@ func (n *NetworkPolicyController) processClusterAppliedTo(appliedTo []crdv1alpha
 		var atg string
 		if at.Group != "" {
 			atg = n.processAppliedToGroupForCG(at.Group)
+		} else if at.ServiceAccount != nil {
+			atg = n.createAppliedToGroup(at.ServiceAccount.Namespace, serviceAccountNameToPodSelector(at.ServiceAccount.Name), nil, nil)
 		} else {
 			atg = n.createAppliedToGroup("", at.PodSelector, at.NamespaceSelector, at.ExternalEntitySelector)
 		}

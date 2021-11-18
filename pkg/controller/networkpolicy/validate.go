@@ -462,9 +462,35 @@ func (v *antreaPolicyValidator) validateAppliedTo(ingress, egress []crdv1alpha1.
 	if numAppliedToInRules > 0 && (numAppliedToInRules != len(ingress)+len(egress)) {
 		return "appliedTo field should either be set in all rules or in none of them", false
 	}
-	for _, eachSpecAppliedTo := range specAppliedTo {
-		if eachSpecAppliedTo.Group != "" && numFieldsSetInPeer(eachSpecAppliedTo) > 1 {
-			return "group cannot be set with other peers in appliedTo", false
+
+	checkAppliedTo := func(appliedTo []crdv1alpha1.NetworkPolicyPeer) (string, bool) {
+		for _, eachAppliedTo := range appliedTo {
+			appliedToFieldsNum := numFieldsSetInPeer(eachAppliedTo)
+			if eachAppliedTo.Group != "" && appliedToFieldsNum > 1 {
+				return "group cannot be set with other peers in appliedTo", false
+			}
+			if eachAppliedTo.ServiceAccount != nil && appliedToFieldsNum > 1 {
+				return "serviceAccount cannot be set with other peers in appliedTo", false
+			}
+		}
+		return "", true
+	}
+
+	reason, allowed := checkAppliedTo(specAppliedTo)
+	if !allowed {
+		return reason, allowed
+	}
+
+	for _, eachIngress := range ingress {
+		reason, allowed = checkAppliedTo(eachIngress.AppliedTo)
+		if !allowed {
+			return reason, allowed
+		}
+	}
+	for _, eachEgress := range egress {
+		reason, allowed = checkAppliedTo(eachEgress.AppliedTo)
+		if !allowed {
+			return reason, allowed
 		}
 	}
 	return "", true
@@ -478,8 +504,12 @@ func (v *antreaPolicyValidator) validatePeers(ingress, egress []crdv1alpha1.Rule
 			if peer.NamespaceSelector != nil && peer.Namespaces != nil {
 				return "namespaces and namespaceSelector cannot be set at the same time for a single NetworkPolicyPeer", false
 			}
-			if peer.Group != "" && numFieldsSetInPeer(peer) > 1 {
+			peerFieldsNum := numFieldsSetInPeer(peer)
+			if peer.Group != "" && peerFieldsNum > 1 {
 				return "group cannot be set with other peers in rules", false
+			}
+			if peer.ServiceAccount != nil && peerFieldsNum > 1 {
+				return "serviceAccount cannot be set with other peers in rules", false
 			}
 		}
 		return "", true
