@@ -15,14 +15,13 @@
 package config
 
 import (
-	"fmt"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestParseConfigs(t *testing.T) {
-	scaleList, err := ParseConfigs("/Users/wenqiq/GO/src/antrea/test/scale/scale.yaml")
-	if err != nil {
-		fmt.Println(err)
-	}
-	fmt.Println(scaleList)
+	scaleList, err := ParseConfigs("../scale.yaml")
+	assert.NoError(t, err)
+	assert.True(t, len(scaleList.Scales) >= 1)
 }

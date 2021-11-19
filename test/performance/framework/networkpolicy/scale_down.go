@@ -16,12 +16,13 @@ package networkpolicy
 
 import (
 	"context"
-	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
+
+	"antrea.io/antrea/test/performance/config"
 )
 
 // ScaleDown clean up NetworkPolicies in the namespaces list nss
@@ -34,7 +35,7 @@ func ScaleDown(ctx context.Context, nss []string, cs kubernetes.Interface) error
 		klog.V(2).InfoS("Deleted NetworkPolicies", "namespace", ns)
 	}
 
-	return wait.PollImmediate(10*time.Second, 1*time.Minute, func() (done bool, err error) {
+	return wait.PollImmediateUntil(config.WaitInterval, func() (done bool, err error) {
 		cleanCount := 0
 		staleNpNum := 0
 		for _, ns := range nss {
@@ -54,5 +55,5 @@ func ScaleDown(ctx context.Context, nss []string, cs kubernetes.Interface) error
 		}
 		klog.InfoS("Scale down NetworkPolicies", "allNamespaces", nss, "cleanedCount", cleanCount, "staleNpNum", staleNpNum)
 		return cleanCount == len(nss), nil
-	})
+	}, ctx.Done())
 }

@@ -17,7 +17,6 @@ package framework
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/google/uuid"
 	"golang.org/x/sync/errgroup"
@@ -27,6 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
 
+	"antrea.io/antrea/test/performance/config"
 	"antrea.io/antrea/test/performance/utils"
 )
 
@@ -129,7 +129,7 @@ func ScaleUpWorkloadPods(ctx context.Context, data *ScaleData) error {
 	}
 
 	// Waiting scale workload Pods to be ready
-	return wait.PollUntil(2*time.Second, func() (bool, error) {
+	return wait.PollUntil(config.WaitInterval, func() (bool, error) {
 		podsResult, err := data.kubernetesClientSet.
 			CoreV1().Pods(ScaleTestNamespacePrefix).
 			List(ctx, metav1.ListOptions{LabelSelector: fmt.Sprintf("%s=%s", AppLabelKey, AppLabelValue)})

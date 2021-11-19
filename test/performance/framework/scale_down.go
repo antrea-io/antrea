@@ -17,12 +17,13 @@ package framework
 import (
 	"context"
 	"strings"
-	"time"
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
+
+	"antrea.io/antrea/test/performance/config"
 )
 
 // ScaleDown delete pods/ns and verify if it gets deleted
@@ -43,7 +44,7 @@ func (data *ScaleData) ScaleDown(ctx context.Context) error {
 			return err
 		}
 	}
-	return wait.PollImmediate(10*time.Second, 1*time.Minute, func() (done bool, err error) {
+	return wait.PollImmediateUntil(config.WaitInterval, func() (done bool, err error) {
 		count := 0
 		for _, ns := range nssToDelete {
 			if err := data.kubernetesClientSet.CoreV1().Namespaces().Delete(ctx, ns, metav1.DeleteOptions{}); errors.IsNotFound(err) {
@@ -52,7 +53,7 @@ func (data *ScaleData) ScaleDown(ctx context.Context) error {
 		}
 		klog.InfoS("Waiting for clean up namespaces", "all", len(nssToDelete), "count", count)
 		return count == len(nssToDelete), nil
-	})
+	}, ctx.Done())
 }
 
 // ScaleDownOnlyPods delete pods only so it will get recreated inside same ns

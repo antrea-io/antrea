@@ -17,13 +17,13 @@ package framework
 //goland:noinspection ALL
 import (
 	"context"
-	"time"
 
 	appv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
 
+	"antrea.io/antrea/test/performance/config"
 	"antrea.io/antrea/test/performance/utils"
 )
 
@@ -39,8 +39,7 @@ func ScaleRestartAgent(ctx context.Context, data *ScaleData) error {
 	if err != nil {
 		return err
 	}
-	time.Sleep(3 * time.Second)
-	return wait.PollImmediateUntil(time.Second, func() (bool, error) {
+	return wait.PollImmediateUntil(config.WaitInterval, func() (bool, error) {
 		var ds *appv1.DaemonSet
 		if err := utils.DefaultRetry(func() error {
 			var err error
@@ -63,8 +62,7 @@ func RestartController(ctx context.Context, data *ScaleData) error {
 	if err != nil {
 		return err
 	}
-	time.Sleep(3 * time.Second)
-	return wait.PollImmediateUntil(time.Second, func() (bool, error) {
+	return wait.PollImmediateUntil(config.WaitInterval, func() (bool, error) {
 		var dp *appv1.Deployment
 		if err := utils.DefaultRetry(func() error {
 			var err error

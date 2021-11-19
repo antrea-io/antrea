@@ -18,15 +18,15 @@ package framework
 import (
 	"context"
 	"fmt"
-	"time"
-
-	"antrea.io/antrea/test/performance/framework/service"
-	"antrea.io/antrea/test/performance/utils"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
+
+	"antrea.io/antrea/test/performance/config"
+	"antrea.io/antrea/test/performance/framework/service"
+	"antrea.io/antrea/test/performance/utils"
 )
 
 func init() {
@@ -47,7 +47,7 @@ func ScaleService(ctx context.Context, data *ScaleData) error {
 		clientPod := data.clientPods[i]
 		readySvcs := sets.String{}
 		err := utils.DefaultRetry(func() error {
-			return wait.PollUntil(time.Second, func() (bool, error) {
+			return wait.PollImmediateUntil(config.WaitInterval, func() (bool, error) {
 				if readySvcs.Len() == len(svcs) {
 					return true, nil
 				}

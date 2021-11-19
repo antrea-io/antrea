@@ -154,17 +154,17 @@ func createTestPodClients(ctx context.Context, kClient kubernetes.Interface) err
 	}); err != nil {
 		return err
 	}
-	if err := wait.PollImmediate(time.Second, ShortTimeWait, func() (bool, error) {
+	if err := wait.PollImmediateUntil(config.WaitInterval, func() (bool, error) {
 		ds, err := kClient.AppsV1().DaemonSets(ScaleTestNamespacePrefix).
 			Get(ctx, ScaleTestClientDaemonSet, metav1.GetOptions{})
 		if err != nil {
 			return false, nil
 		}
 		return ds.Status.DesiredNumberScheduled == ds.Status.NumberReady, nil
-	}); err != nil {
+	}, ctx.Done()); err != nil {
 		return fmt.Errorf("error when waiting scale test clients to be ready: %w", err)
 	}
-	if err := wait.PollImmediate(time.Second, ShortTimeWait, func() (bool, error) {
+	if err := wait.PollImmediateUntil(config.WaitInterval, func() (bool, error) {
 		podList, err := kClient.CoreV1().Pods(ScaleTestNamespacePrefix).
 			List(ctx, metav1.ListOptions{LabelSelector: ScaleClientPodTemplateName})
 		if err != nil {
@@ -176,7 +176,7 @@ func createTestPodClients(ctx context.Context, kClient kubernetes.Interface) err
 			}
 		}
 		return true, nil
-	}); err != nil {
+	}, ctx.Done()); err != nil {
 		return fmt.Errorf("error when waiting scale test clients to get IP: %w", err)
 	}
 	return nil
@@ -257,7 +257,7 @@ func ScaleUp(ctx context.Context, kubeConfigPath, scaleConfigPath string) (*Scal
 			}
 		}
 		klog.Infof("Checking clean up exist scale test namespaces")
-		err = wait.PollImmediate(3*time.Second, 3*time.Minute, func() (bool, error) {
+		err = wait.PollImmediateUntil(config.WaitInterval, func() (bool, error) {
 			list, err := kClient.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
 			if err != nil {
 				return false, err
@@ -273,7 +273,7 @@ func ScaleUp(ctx context.Context, kubeConfigPath, scaleConfigPath string) (*Scal
 			}
 			klog.InfoS("Waiting for namespace clean up", "namespacesNum", len(list.Items))
 			return ok, nil
-		})
+		}, ctx.Done())
 		if err != nil {
 			return nil, err
 		}
@@ -289,7 +289,7 @@ func ScaleUp(ctx context.Context, kubeConfigPath, scaleConfigPath string) (*Scal
 		}
 
 		klog.Infof("Checking scale test client DaemonSet")
-		err = wait.PollImmediate(10*time.Second, 10*time.Minute, func() (bool, error) {
+		err = wait.PollImmediateUntil(config.WaitInterval, func() (bool, error) {
 			podList, err := kClient.CoreV1().Pods(ScaleTestNamespacePrefix).List(ctx, metav1.ListOptions{LabelSelector: ScaleClientPodTemplateName})
 			if err != nil {
 				return false, fmt.Errorf("error when getting scale test client pods: %w", err)
@@ -300,7 +300,7 @@ func ScaleUp(ctx context.Context, kubeConfigPath, scaleConfigPath string) (*Scal
 			}
 			klog.InfoS("Waiting test client DaemonSet Pods ready", "podsNum", len(podList.Items))
 			return false, nil
-		})
+		}, ctx.Done())
 		if err != nil {
 			return nil, err
 		}

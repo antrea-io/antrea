@@ -16,13 +16,14 @@ package service
 
 import (
 	"context"
-	"time"
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
+
+	"antrea.io/antrea/test/performance/config"
 )
 
 func ScaleDown(ctx context.Context, svcs []ServiceInfo, cs kubernetes.Interface) error {
@@ -32,7 +33,7 @@ func ScaleDown(ctx context.Context, svcs []ServiceInfo, cs kubernetes.Interface)
 		}
 		klog.V(2).InfoS("Deleted service", "serviceName", svc)
 	}
-	return wait.PollImmediate(10*time.Second, 1*time.Minute, func() (done bool, err error) {
+	return wait.PollImmediateUntil(config.WaitInterval, func() (done bool, err error) {
 		count := 0
 		for _, svc := range svcs {
 			if err := cs.CoreV1().Services(svc.NameSpace).Delete(ctx, svc.Name, metav1.DeleteOptions{}); errors.IsNotFound(err) {
@@ -41,5 +42,5 @@ func ScaleDown(ctx context.Context, svcs []ServiceInfo, cs kubernetes.Interface)
 		}
 		klog.InfoS("Scale down Services", "Services", len(svcs), "cleanedUpCount", count)
 		return count == len(svcs), nil
-	})
+	}, ctx.Done())
 }
