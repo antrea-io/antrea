@@ -19,6 +19,8 @@ import (
 	"net"
 	"time"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/informers"
 	"k8s.io/klog/v2"
@@ -418,14 +420,21 @@ func run(o *Options) error {
 
 	// Start the Antrea IPAM agent.
 	if features.DefaultFeatureGate.Enabled(features.AntreaIPAM) {
+		listOptions := func(options *metav1.ListOptions) {
+			options.FieldSelector = fields.OneTermEqualSelector("spec.nodeName", nodeConfig.Name).String()
+		}
+		localNodeInformerFactory := informers.NewSharedInformerFactoryWithOptions(k8sClient, informerDefaultResync, informers.WithTweakListOptions(listOptions))
+
 		ipamController, err := ipam.InitializeAntreaIPAMController(
 			k8sClient,
 			crdClient,
 			informerFactory,
+			localNodeInformerFactory,
 			crdInformerFactory)
 		if err != nil {
 			return fmt.Errorf("failed to start Antrea IPAM agent: %v", err)
 		}
+		go localNodeInformerFactory.Start(stopCh)
 		go ipamController.Run(stopCh)
 	}
 

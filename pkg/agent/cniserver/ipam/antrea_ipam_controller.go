@@ -16,6 +16,7 @@ package ipam
 
 import (
 	"fmt"
+	"net"
 	"strings"
 
 	"k8s.io/client-go/informers"
@@ -47,15 +48,18 @@ type AntreaIPAMController struct {
 	ipPoolLister      crdlisters.IPPoolLister
 	namespaceInformer coreinformers.NamespaceInformer
 	namespaceLister   corelisters.NamespaceLister
+	podInformer       coreinformers.PodInformer
+	podLister         corelisters.PodLister
 }
 
 func NewAntreaIPAMController(kubeClient clientset.Interface,
 	crdClient clientsetversioned.Interface,
-	informerFactory informers.SharedInformerFactory,
+	informerFactory, localNodeInformerFactory informers.SharedInformerFactory,
 	crdInformerFactory externalversions.SharedInformerFactory) *AntreaIPAMController {
 
 	namespaceInformer := informerFactory.Core().V1().Namespaces()
 	ipPoolInformer := crdInformerFactory.Crd().V1alpha2().IPPools()
+	podInformer := localNodeInformerFactory.Core().V1().Pods()
 	c := AntreaIPAMController{
 		kubeClient:        kubeClient,
 		crdClient:         crdClient,
@@ -63,13 +67,15 @@ func NewAntreaIPAMController(kubeClient clientset.Interface,
 		ipPoolLister:      ipPoolInformer.Lister(),
 		namespaceInformer: namespaceInformer,
 		namespaceLister:   namespaceInformer.Lister(),
+		podInformer:       podInformer,
+		podLister:         podInformer.Lister(),
 	}
 
 	return &c
 }
 
-func InitializeAntreaIPAMController(kubeClient clientset.Interface, crdClient clientsetversioned.Interface, informerFactory informers.SharedInformerFactory, crdInformerFactory externalversions.SharedInformerFactory) (*AntreaIPAMController, error) {
-	antreaIPAMController := NewAntreaIPAMController(kubeClient, crdClient, informerFactory, crdInformerFactory)
+func InitializeAntreaIPAMController(kubeClient clientset.Interface, crdClient clientsetversioned.Interface, informerFactory, localNodeInformerFactory informers.SharedInformerFactory, crdInformerFactory externalversions.SharedInformerFactory) (*AntreaIPAMController, error) {
+	antreaIPAMController := NewAntreaIPAMController(kubeClient, crdClient, informerFactory, localNodeInformerFactory, crdInformerFactory)
 
 	// Order of init causes antreaIPAMDriver to be initialized first
 	// After controller is initialized by agent init, we need to make it
@@ -91,34 +97,62 @@ func (c *AntreaIPAMController) Run(stopCh <-chan struct{}) {
 	}()
 
 	klog.InfoS("Starting", "controller", controllerName)
-	if !cache.WaitForNamedCacheSync(controllerName, stopCh, c.namespaceInformer.Informer().HasSynced, c.ipPoolInformer.Informer().HasSynced) {
+	if !cache.WaitForNamedCacheSync(controllerName, stopCh, c.namespaceInformer.Informer().HasSynced, c.ipPoolInformer.Informer().HasSynced, c.podInformer.Informer().HasSynced) {
 		return
 	}
 
 	<-stopCh
 }
 
-func (c *AntreaIPAMController) getIPPoolsByNamespace(namespace string) []string {
+func (c *AntreaIPAMController) getIPPoolsByPod(namespace, name string) ([]string, []net.IP, error) {
+	// Find IPPool by Pod
+	var IPs []net.IP
+	pod, err := c.podLister.Pods(namespace).Get(name)
+	if err != nil {
+		klog.Warningf("Get pod %s/%s failed, err=%+v", namespace, name, err)
+		return nil, nil, err
+	}
+	// Collect specified IPs if exist
+	IPStrings, _ := pod.Annotations[AntreaIPAMPodIPAnnotationKey]
+	IPStrings = strings.ReplaceAll(IPStrings, " ", "")
+	var ipErr error
+	if IPStrings != "" {
+		splittedIPStrings := strings.Split(IPStrings, AntreaIPAMAnnotationDelimiter)
+		for _, IPString := range splittedIPStrings {
+			IP := net.ParseIP(IPString)
+			if IPString != "" && IP == nil {
+				ipErr = fmt.Errorf("invalid IP annotation %s", IPStrings)
+				IPs = nil
+				break
+			}
+			IPs = append(IPs, IP)
+		}
+	}
+	annotations, exists := pod.Annotations[AntreaIPAMAnnotationKey]
+	if exists {
+		return strings.Split(annotations, AntreaIPAMAnnotationDelimiter), IPs, ipErr
+	}
+
+	// Find IPPool by Namespace
 	ns, err := c.namespaceLister.Get(namespace)
 	if err != nil {
-		return nil
+		return nil, nil, nil
 	}
-	annotations, exists := ns.Annotations[AntreaIPAMAnnotationKey]
+	annotations, exists = ns.Annotations[AntreaIPAMAnnotationKey]
 	if !exists {
-		return nil
+		return nil, nil, nil
 	}
-	return strings.Split(annotations, AntreaIPAMAnnotationDelimiter)
+	return strings.Split(annotations, AntreaIPAMAnnotationDelimiter), IPs, ipErr
 }
 
-func (c *AntreaIPAMController) getPoolAllocatorByNamespace(namespace string) (*poolallocator.IPPoolAllocator, error) {
-	poolNames := c.getIPPoolsByNamespace(namespace)
-	if len(poolNames) < 1 {
-		// This namespace does not contain IP Pool annotation
-		return nil, nil
+func (c *AntreaIPAMController) getPoolAllocatorByPod(namespace, podName string) (*poolallocator.IPPoolAllocator, []net.IP, error) {
+	poolNames, ips, err := c.getIPPoolsByPod(namespace, podName)
+	if err != nil || len(poolNames) < 1 {
+		return nil, nil, err
 	}
-
 	// Only one pool is supported as of today
 	// TODO - support a pool for each IP version
 	ipPool := poolNames[0]
-	return poolallocator.NewIPPoolAllocator(ipPool, c.crdClient, c.ipPoolLister)
+	allocator, err := poolallocator.NewIPPoolAllocator(ipPool, c.crdClient, c.ipPoolLister)
+	return allocator, ips, err
 }
