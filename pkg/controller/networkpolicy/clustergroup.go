@@ -208,6 +208,7 @@ func (c *NetworkPolicyController) syncInternalGroup(key string) error {
 		return nil
 	}
 	grp := grpObj.(*antreatypes.Group)
+	originalMembersComputedStatus := grp.MembersComputed
 	// Retrieve the ClusterGroup corresponding to this key.
 	cg, err := c.cgLister.Get(grp.Name)
 	if err != nil {
@@ -220,26 +221,46 @@ func (c *NetworkPolicyController) syncInternalGroup(key string) error {
 	} else {
 		c.groupingInterface.DeleteGroup(clusterGroupType, grp.Name)
 	}
-	if selectorUpdated {
-		// Update the internal Group object in the store with the new selector.
+
+	membersComputed, membersComputedStatus := true, v1.ConditionFalse
+	// Update the ClusterGroup status to Realized as Antrea has recognized the Group and
+	// processed its group members. The ClusterGroup is considered realized if:
+	//   1. It does not have child groups. The group members are immediately considered
+	//      computed during syncInternalGroup, as the group selector is finalized.
+	//   2. All its child groups are created and realized.
+	if len(grp.ChildGroups) > 0 {
+		for _, cgName := range grp.ChildGroups {
+			cg, found, _ := c.internalGroupStore.Get(cgName)
+			if !found || cg.(*antreatypes.Group).MembersComputed != v1.ConditionTrue {
+				membersComputed = false
+				break
+			}
+		}
+	}
+	if membersComputed {
+		klog.V(4).Infof("Updating GroupMembersComputed Status for group %s", cg.Name)
+		err = c.updateGroupStatus(cg, v1.ConditionTrue)
+		if err != nil {
+			klog.Errorf("Failed to update ClusterGroup %s GroupMembersComputed condition to %s: %v", cg.Name, v1.ConditionTrue, err)
+		} else {
+			membersComputedStatus = v1.ConditionTrue
+		}
+	}
+	if selectorUpdated || membersComputedStatus != originalMembersComputedStatus {
+		// Update the internal Group object in the store with the new selector and status.
 		updatedGrp := &antreatypes.Group{
 			UID:              grp.UID,
 			Name:             grp.Name,
+			MembersComputed:  membersComputedStatus,
 			Selector:         grp.Selector,
+			IPBlocks:         grp.IPBlocks,
 			ServiceReference: grp.ServiceReference,
 			ChildGroups:      grp.ChildGroups,
 		}
 		klog.V(2).Infof("Updating existing internal Group %s", key)
 		c.internalGroupStore.Update(updatedGrp)
 	}
-	// Update the ClusterGroup status to Realized as Antrea has recognized the Group and
-	// processed its group members.
-	err = c.updateGroupStatus(cg, v1.ConditionTrue)
-	if err != nil {
-		klog.Errorf("Failed to update ClusterGroup %s GroupMembersComputed condition to %s: %v", cg.Name, v1.ConditionTrue, err)
-		return err
-	}
-	return nil
+	return err
 }
 
 func (c *NetworkPolicyController) triggerParentGroupSync(grp string) {
