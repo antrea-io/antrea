@@ -15,6 +15,9 @@
 package ipam
 
 const (
-	AntreaIPAMAnnotationKey       = "ipam.antrea.io/ippools"
+	// AntreaIPAMAnnotationKey annotation can be added to Namespace and PodTemplate of StatefulSet/Deployment
+	AntreaIPAMAnnotationKey = "ipam.antrea.io/ippools"
+	// AntreaIPAMPodIPAnnotationKey annotation can be added to Pod
+	AntreaIPAMPodIPAnnotationKey  = "ipam.antrea.io/pod-ips"
 	AntreaIPAMAnnotationDelimiter = ","
 )

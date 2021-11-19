@@ -31,11 +31,14 @@ import (
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/informers"
+	coreinformers "k8s.io/client-go/informers/core/v1"
 	k8sfake "k8s.io/client-go/kubernetes/fake"
+	"k8s.io/client-go/tools/cache"
 
 	nplk8s "antrea.io/antrea/pkg/agent/nodeportlocal/k8s"
 	"antrea.io/antrea/pkg/agent/nodeportlocal/portcache"
@@ -237,17 +240,29 @@ func setUp(t *testing.T, tc *testConfig, objects ...runtime.Object) *testData {
 
 	// informerFactory is initialized and started from cmd/antrea-agent/agent.go
 	informerFactory := informers.NewSharedInformerFactory(data.k8sClient, resyncPeriod)
+	listOptions := func(options *metav1.ListOptions) {
+		options.FieldSelector = fields.OneTermEqualSelector("spec.nodeName", defaultNodeName).String()
+	}
+	localPodInformer := coreinformers.NewFilteredPodInformer(
+		data.k8sClient,
+		metav1.NamespaceAll,
+		resyncPeriod,
+		cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, // NamespaceIndex is used in NPLController.
+		listOptions,
+	)
 
-	c, err := InitController(data.k8sClient, informerFactory, data.portTable, defaultNodeName)
+	c, err := InitController(data.k8sClient, informerFactory, data.portTable, defaultNodeName, localPodInformer)
 	require.NoError(t, err)
 
 	data.runWrapper(c)
 	informerFactory.Start(data.stopCh)
+	go localPodInformer.Run(data.stopCh)
 
 	// Must wait for cache sync, otherwise resource creation events will be missing if the resources are created
 	// in-between list and watch call of an informer. This is because fake clientset doesn't support watching with
 	// resourceVersion. A watcher of fake clientset only gets events that happen after the watcher is created.
 	informerFactory.WaitForCacheSync(data.stopCh)
+	cache.WaitForNamedCacheSync("AntreaAgentNPLController", data.stopCh, localPodInformer.HasSynced)
 
 	return data
 }

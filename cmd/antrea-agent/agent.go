@@ -19,8 +19,12 @@ import (
 	"net"
 	"time"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/informers"
+	coreinformers "k8s.io/client-go/informers/core/v1"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent"
@@ -64,6 +68,10 @@ import (
 // Use the same default value as kube-controller-manager:
 // https://github.com/kubernetes/kubernetes/blob/release-1.17/pkg/controller/apis/config/v1alpha1/defaults.go#L120
 const informerDefaultResync = 12 * time.Hour
+
+// resyncPeriodDisabled is 0 to disable resyncing.
+// UpdateFunc event handler will be called only when the object is actually updated.
+const resyncPeriodDisabled = 0 * time.Minute
 
 // The devices that should be excluded from NodePort.
 var excludeNodePortDevices = []string{"antrea-egress0", "kube-ipvs0"}
@@ -404,31 +412,50 @@ func run(o *Options) error {
 		networkPolicyController.SetDenyConnStore(flowExporter.GetDenyConnStore())
 	}
 
-	// Start the NPL agent.
+	// Initialize localPodInformer for NPLAgent and AntreaIPAMController
+	var localPodInformer cache.SharedIndexInformer
+	if features.DefaultFeatureGate.Enabled(features.NodePortLocal) && o.config.NodePortLocal.Enable || features.DefaultFeatureGate.Enabled(features.AntreaIPAM) {
+		listOptions := func(options *metav1.ListOptions) {
+			options.FieldSelector = fields.OneTermEqualSelector("spec.nodeName", nodeConfig.Name).String()
+		}
+		localPodInformer = coreinformers.NewFilteredPodInformer(
+			k8sClient,
+			metav1.NamespaceAll,
+			resyncPeriodDisabled,
+			cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, // NamespaceIndex is used in NPLController.
+			listOptions,
+		)
+	}
+	// Initialize the NPL agent.
 	if features.DefaultFeatureGate.Enabled(features.NodePortLocal) && o.config.NodePortLocal.Enable {
 		nplController, err := npl.InitializeNPLAgent(
 			k8sClient,
 			informerFactory,
 			o.nplStartPort,
 			o.nplEndPort,
-			nodeConfig.Name)
+			nodeConfig.Name,
+			localPodInformer)
 		if err != nil {
 			return fmt.Errorf("failed to start NPL agent: %v", err)
 		}
 		go nplController.Run(stopCh)
 	}
-
-	// Start the Antrea IPAM agent.
+	// Initialize the Antrea IPAM agent.
 	if features.DefaultFeatureGate.Enabled(features.AntreaIPAM) {
 		ipamController, err := ipam.InitializeAntreaIPAMController(
 			k8sClient,
 			crdClient,
 			informerFactory,
+			localPodInformer,
 			crdInformerFactory)
 		if err != nil {
 			return fmt.Errorf("failed to start Antrea IPAM agent: %v", err)
 		}
 		go ipamController.Run(stopCh)
+	}
+	//  Start the localPodInformer
+	if localPodInformer != nil {
+		go localPodInformer.Run(stopCh)
 	}
 
 	log.StartLogFileNumberMonitor(stopCh)

@@ -22,6 +22,7 @@ import (
 
 	"k8s.io/client-go/informers"
 	clientset "k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/cache"
 )
 
 // InitializeNPLAgent starts NodePortLocal (NPL) agent.
@@ -32,6 +33,7 @@ func InitializeNPLAgent(
 	startPort int,
 	endPort int,
 	nodeName string,
+	podInformer cache.SharedIndexInformer,
 ) (*windowsCtrl, error) {
 	return nil, errors.New("Windows Platform not supported for NPL")
 }

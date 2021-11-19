@@ -125,7 +125,6 @@ func (c *NPLController) Run(stopCh <-chan struct{}) {
 	}()
 
 	klog.Infof("Starting %s", controllerName)
-	go c.podInformer.Run(stopCh)
 	if !cache.WaitForNamedCacheSync(controllerName, stopCh, c.podInformer.HasSynced, c.svcInformer.HasSynced) {
 		return
 	}
