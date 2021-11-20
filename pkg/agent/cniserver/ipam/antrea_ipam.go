@@ -169,7 +169,7 @@ func (d *AntreaIPAM) Check(args *invoke.Args, k8sArgs *argtypes.K8sArgs, network
 	}
 
 	if !found {
-		return true, fmt.Errorf("No IP Address association found for container %s", string(k8sArgs.K8S_POD_NAME))
+		return true, fmt.Errorf("no IP Address association found for container %s", string(k8sArgs.K8S_POD_NAME))
 	}
 
 	return true, nil

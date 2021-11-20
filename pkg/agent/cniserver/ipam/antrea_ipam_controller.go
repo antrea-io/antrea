@@ -32,8 +32,8 @@ const (
 	controllerName = "AntreaIPAMController"
 )
 
-// Antrea IPAM Controller maintains map of namespace annotations using
-// namespace informer. In future, which Antrea IPAM support expands,
+// Antrea IPAM Controller maintains map of Namespace annotations using
+// Namespace informer. In future, which Antrea IPAM support expands,
 // this controller can be used to store annotations for other objects,
 // such as Statefulsets.
 type AntreaIPAMController struct {

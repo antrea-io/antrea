@@ -132,7 +132,7 @@ func TestAntreaIPAMDriver(t *testing.T) {
 	cniArgsMap := make(map[string]*invoke.Args)
 	k8sArgsMap := make(map[string]*argtypes.K8sArgs)
 	for _, test := range []string{"apple1", "apple2", "orange1", "orange2", testNoAnnotation, testJunkAnnotation} {
-		// extract namespace by removing numerals
+		// extract Namespace by removing numerals
 		re := regexp.MustCompile("[0-9]$")
 		namespace := re.ReplaceAllString(test, "")
 		args := argtypes.K8sArgs{}
@@ -176,7 +176,7 @@ func TestAntreaIPAMDriver(t *testing.T) {
 		}
 	}
 
-	// Run several adds from two namespaces that have pool annotations
+	// Run several adds from two Namespaces that have pool annotations
 	ipv6Mask := "ffffffffffffffff0000000000000000"
 	testAdd("apple1", "10.2.2.100", "10.2.2.1", "ffffff00")
 	testAdd("orange1", "20::2", "20::1", ipv6Mask)
@@ -193,7 +193,7 @@ func TestAntreaIPAMDriver(t *testing.T) {
 	require.NotNil(t, err, "expected error in Add call due to non-existent pool")
 	assert.True(t, owns)
 
-	// Del two of the pods
+	// Del two of the Pods
 	testDel("apple1")
 	testDel("orange2")
 
@@ -212,7 +212,7 @@ func TestAntreaIPAMDriver(t *testing.T) {
 	assert.True(t, owns)
 	require.NoError(t, err, "expected no error in Del call")
 
-	// Make sure repeated Add works for pod that was previously released
+	// Make sure repeated Add works for Pod that was previously released
 	testAdd("apple1", "10.2.2.100", "10.2.2.1", "ffffff00")
 
 	// Make sure repeated call without previous container results in error

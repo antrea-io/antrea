@@ -102,7 +102,7 @@ func (a *IPPoolAllocator) initIPAllocators(ipPool *v1alpha2.IPPool) (ipallocator
 		err := allocators.AllocateIP(net.ParseIP(ip.IPAddress))
 		if err != nil {
 			// TODO - fix state if possible
-			return allocators, fmt.Errorf("Inconsistent state for IP Pool %s with IP %s", ipPool.Name, ip.IPAddress)
+			return allocators, fmt.Errorf("inconsistent state for IP Pool %s with IP %s", ipPool.Name, ip.IPAddress)
 		}
 	}
 
@@ -214,7 +214,7 @@ func (a *IPPoolAllocator) AllocateIP(ip net.IP, state v1alpha2.IPAddressPhase, o
 
 // AllocateNext allocates the next available IP. It returns error if pool is exausted,
 // or in case CRD failed to update its state.
-// In case of success, IP pool CRD status is updated with allocated IP/state/resourcei/container.
+// In case of success, IP pool CRD status is updated with allocated IP/state/resource/container.
 // AllocateIP returns subnet details for the requested IP, as defined in IP pool spec.
 func (a *IPPoolAllocator) AllocateNext(state v1alpha2.IPAddressPhase, owner v1alpha2.IPAddressOwner) (net.IP, v1alpha2.SubnetInfo, error) {
 	var subnetSpec v1alpha2.SubnetInfo
@@ -227,7 +227,7 @@ func (a *IPPoolAllocator) AllocateNext(state v1alpha2.IPAddressPhase, owner v1al
 	}
 
 	if exists {
-		return ip, subnetSpec, fmt.Errorf("Container %s was already allocated an address from IP Pool %s", owner.Pod.ContainerID, a.ipPoolName)
+		return ip, subnetSpec, fmt.Errorf("container %s was already allocated an address from IP Pool %s", owner.Pod.ContainerID, a.ipPoolName)
 	}
 
 	// Retry on CRD update conflict which is caused by multiple agents updating a pool at same time.
@@ -249,7 +249,7 @@ func (a *IPPoolAllocator) AllocateNext(state v1alpha2.IPAddressPhase, owner v1al
 
 		if index == len(allocators) {
 			// Failed to find matching range
-			return fmt.Errorf("Failed to allocate IP: Pool %s is exausted", a.ipPoolName)
+			return fmt.Errorf("failed to allocate IP: Pool %s is exausted", a.ipPoolName)
 		}
 
 		subnetSpec = ipPool.Spec.IPRanges[index].SubnetInfo
@@ -311,7 +311,7 @@ func (a *IPPoolAllocator) ReleasePod(namespace, podName string) error {
 		}
 
 		klog.V(4).InfoS("IP Pool state:", "name", a.ipPoolName, "allocation", ipPool.Status.IPAddresses)
-		return fmt.Errorf("Failed to find record of IP allocated to Pod:%s/%s in pool %s", namespace, podName, a.ipPoolName)
+		return fmt.Errorf("failed to find record of IP allocated to Pod:%s/%s in pool %s", namespace, podName, a.ipPoolName)
 	})
 
 	if err != nil {
