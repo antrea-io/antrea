@@ -17,6 +17,7 @@ package framework
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"golang.org/x/sync/errgroup"
@@ -108,6 +109,7 @@ func ScaleUpWorkloadPods(ctx context.Context, data *ScaleData) error {
 	gErr, _ := errgroup.WithContext(context.Background())
 	for i := 0; i < podNum; i++ {
 		index := i
+		time.Sleep(time.Duration(utils.GenRandInt()%100) * time.Millisecond)
 		gErr.Go(func() error {
 			podName := fmt.Sprintf("antrea-scale-test-pod-%s", uuid.New().String())
 			pod := newWorkloadPod(podName, true)

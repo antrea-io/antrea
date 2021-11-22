@@ -2,13 +2,13 @@ timeout: 15m
 ipv6: false
 real_node: true
 repeat_times: 1
-pods_num_per_node: 40
-svc_num_per_node: 10
-np_num_per_node: 20
+pods_num_per_node: 20
+svc_num_per_node: 5
+np_num_per_node: 10
 namespace_num: 10
 record_prometheus: false
 pre_workload: true
-teardown: false
+teardown: true
 scales:
   - name: "ScaleRestartAgent"
     package: "test/performance/framework"
