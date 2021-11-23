@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -100,9 +101,11 @@ func TestTraceflow(t *testing.T) {
 		}
 
 		tfc.kubeClient.CoreV1().Pods("ns1").Create(context.TODO(), &pod1, metav1.CreateOptions{})
+		createdPod, _ := tfc.waitForPodInNamespace("ns1", "pod1", time.Second)
+		require.NotNil(t, createdPod)
 		tfc.client.CrdV1alpha1().Traceflows().Create(context.TODO(), &tf1, metav1.CreateOptions{})
 		res, _ := tfc.waitForTraceflow("tf1", crdv1alpha1.Running, time.Second)
-		assert.NotNil(t, res)
+		require.NotNil(t, res)
 		// DataplaneTag should be allocated by Controller.
 		assert.True(t, res.Status.DataplaneTag > 0)
 		assert.Equal(t, numRunningTraceflows(), 1)
@@ -158,15 +161,33 @@ func TestTraceflow(t *testing.T) {
 		}
 
 		tfc.kubeClient.CoreV1().Pods("ns1").Create(context.TODO(), &pod2, metav1.CreateOptions{})
+		createdPod, _ := tfc.waitForPodInNamespace("ns1", "pod2", time.Second)
+		require.NotNil(t, createdPod)
 		tfc.client.CrdV1alpha1().Traceflows().Create(context.TODO(), &tf2, metav1.CreateOptions{})
 		res, _ := tfc.waitForTraceflow("tf2", crdv1alpha1.Failed, time.Second)
-		assert.NotNil(t, res)
+		require.NotNil(t, res)
 		// DataplaneTag should not be allocated by Controller.
 		assert.True(t, res.Status.DataplaneTag == 0)
 		assert.Equal(t, numRunningTraceflows(), 0)
 	})
 
 	close(stopCh)
+}
+
+func (tfc *traceflowController) waitForPodInNamespace(ns string, name string, timeout time.Duration) (*corev1.Pod, error) {
+	var pod *corev1.Pod
+	var err error
+	if err = wait.Poll(100*time.Millisecond, timeout, func() (bool, error) {
+		// Make sure dummy Pod is synced by informer
+		pod, err = tfc.podLister.Pods(ns).Get(name)
+		if err != nil {
+			return false, nil
+		}
+		return true, nil
+	}); err != nil {
+		return nil, err
+	}
+	return pod, nil
 }
 
 func (tfc *traceflowController) waitForTraceflow(name string, phase crdv1alpha1.TraceflowPhase, timeout time.Duration) (*crdv1alpha1.Traceflow, error) {
