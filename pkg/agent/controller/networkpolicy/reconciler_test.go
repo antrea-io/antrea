@@ -107,6 +107,7 @@ func newTestReconciler(t *testing.T, controller *gomock.Controller, ifaceStore i
 }
 
 func TestReconcilerForget(t *testing.T) {
+	prepareFeatureTables()
 	tests := []struct {
 		name              string
 		lastRealizeds     map[string]*lastRealized

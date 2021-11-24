@@ -161,8 +161,13 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1alpha1.Tracefl
 	}
 
 	// Collect Service DNAT and SNAT.
+	// If the packet of Service is DNATed only, ipDst != ctNwDst
+	// If the packet of Service is both DNATed and SNATed, if ipSrc is
+	gatewayIPv4 := c.nodeConfig.GatewayConfig.IPv4
+	gatewayIPv6 := c.nodeConfig.GatewayConfig.IPv6
 	if !tfState.receiverOnly {
-		if isValidCtNw(ctNwDst) && ipDst != ctNwDst {
+		if isValidCtNw(ctNwDst) && ipDst != ctNwDst ||
+			isValidCtNw(ctNwSrc) && ipSrc != ctNwSrc && (gatewayIPv4 != nil && ipSrc == gatewayIPv4.String() || gatewayIPv6 != nil && ipSrc == gatewayIPv6.String()) {
 			ob := &crdv1alpha1.Observation{
 				Component:       crdv1alpha1.ComponentLB,
 				Action:          crdv1alpha1.ActionForwarded,

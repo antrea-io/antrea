@@ -156,7 +156,6 @@ func getPodFlows(aq agentquerier.AgentQuerier, podName, namespace string) ([]Res
 
 	flowKeys := aq.GetOpenflowClient().GetPodFlowKeys(interfaces[0].InterfaceName)
 	return dumpMatchedFlows(aq, flowKeys)
-
 }
 
 func getServiceFlows(aq agentquerier.AgentQuerier, serviceName, namespace string) ([]Response, error) {

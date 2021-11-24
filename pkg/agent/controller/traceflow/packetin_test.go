@@ -28,7 +28,21 @@ import (
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 )
 
+func prepareFeatureTables() {
+	openflow.AntreaPolicyEgressRuleTable.SetOFTable(uint8(5))
+	openflow.EgressRuleTable.SetOFTable(uint8(6))
+	openflow.EgressDefaultTable.SetOFTable(uint8(7))
+	openflow.EgressMetricTable.SetOFTable(uint8(8))
+	openflow.AntreaPolicyIngressRuleTable.SetOFTable(uint8(12))
+	openflow.IngressRuleTable.SetOFTable(uint8(13))
+	openflow.IngressDefaultTable.SetOFTable(uint8(14))
+	openflow.IngressMetricTable.SetOFTable(uint8(15))
+	openflow.L2ForwardingOutTable.SetOFTable(uint8(17))
+}
+
 func Test_getNetworkPolicyObservation(t *testing.T) {
+	prepareFeatureTables()
+
 	type args struct {
 		tableID uint8
 		ingress bool

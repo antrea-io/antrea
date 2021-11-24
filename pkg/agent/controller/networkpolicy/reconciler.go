@@ -295,7 +295,7 @@ func (r *reconciler) getOFRuleTable(rule *CompletedRule) uint8 {
 		}
 		return openflow.EgressRuleTable.GetID()
 	}
-	var ruleTables []binding.Table
+	var ruleTables []*openflow.FeatureTable
 	if rule.Direction == v1beta2.DirectionIn {
 		ruleTables = openflow.GetAntreaPolicyIngressTables()
 	} else {

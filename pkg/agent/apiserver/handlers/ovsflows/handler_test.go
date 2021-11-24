@@ -25,12 +25,14 @@ import (
 
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	interfacestoretest "antrea.io/antrea/pkg/agent/interfacestore/testing"
+	"antrea.io/antrea/pkg/agent/openflow"
 	oftest "antrea.io/antrea/pkg/agent/openflow/testing"
 	proxytest "antrea.io/antrea/pkg/agent/proxy/testing"
 	agentquerier "antrea.io/antrea/pkg/agent/querier"
 	aqtest "antrea.io/antrea/pkg/agent/querier/testing"
 	cpv1beta "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
+	"antrea.io/antrea/pkg/ovs/ovsconfig"
 	ovsctltest "antrea.io/antrea/pkg/ovs/ovsctl/testing"
 	"antrea.io/antrea/pkg/querier"
 	queriertest "antrea.io/antrea/pkg/querier/testing"
@@ -130,6 +132,11 @@ func TestPodFlows(t *testing.T) {
 func TestServiceFlows(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
+
+	// Create openflow.Client to ensure the OVS tables are added into the cache.
+	bridgeName := "testbr"
+	bridgeMgmtAddr := binding.GetMgmtAddress(ovsconfig.DefaultOVSRunDir, bridgeName)
+	openflow.NewClient(bridgeName, bridgeMgmtAddr, ovsconfig.OVSDatapathSystem, true, false, false, false, false, false)
 
 	testcases := []testCase{
 		{
