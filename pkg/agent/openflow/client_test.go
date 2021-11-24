@@ -23,7 +23,6 @@ import (
 	"testing"
 	"time"
 
-	"antrea.io/ofnet/ofctrl"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -64,7 +63,7 @@ func installNodeFlows(ofClient Client, cacheKey string) (int, error) {
 	}
 	err := ofClient.InstallNodeFlows(hostName, peerConfigs, &utilip.DualStackIPs{IPv4: peerNodeIP}, 0, nil)
 	client := ofClient.(*client)
-	fCacheI, ok := client.nodeFlowCache.Load(hostName)
+	fCacheI, ok := client.featurePodConnectivity.nodeFlowCache.Load(hostName)
 	if ok {
 		return len(fCacheI.(flowCache)), err
 	}
@@ -78,7 +77,7 @@ func installPodFlows(ofClient Client, cacheKey string) (int, error) {
 	ofPort := uint32(10)
 	err := ofClient.InstallPodFlows(containerID, []net.IP{podIP}, podMAC, ofPort)
 	client := ofClient.(*client)
-	fCacheI, ok := client.podFlowCache.Load(containerID)
+	fCacheI, ok := client.featurePodConnectivity.podFlowCache.Load(containerID)
 	if ok {
 		return len(fCacheI.(flowCache)), err
 	}
@@ -109,6 +108,10 @@ func TestIdempotentFlowInstallation(t *testing.T) {
 			client.ofEntryOperations = m
 			client.nodeConfig = nodeConfig
 			client.networkConfig = networkConfig
+			templatesList := client.initializeFeatures(true)
+			for _, templates := range templatesList {
+				generatePipeline(templates)
+			}
 
 			m.EXPECT().AddAll(gomock.Any()).Return(nil).Times(1)
 			// Installing the flows should succeed, and all the flows should be added into the cache.
@@ -138,6 +141,10 @@ func TestIdempotentFlowInstallation(t *testing.T) {
 			client.ofEntryOperations = m
 			client.nodeConfig = nodeConfig
 			client.networkConfig = networkConfig
+			templatesList := client.initializeFeatures(true)
+			for _, templates := range templatesList {
+				generatePipeline(templates)
+			}
 
 			errorCall := m.EXPECT().AddAll(gomock.Any()).Return(errors.New("Bundle error")).Times(1)
 			m.EXPECT().AddAll(gomock.Any()).Return(nil).After(errorCall)
@@ -180,6 +187,10 @@ func TestFlowInstallationFailed(t *testing.T) {
 			client.ofEntryOperations = m
 			client.nodeConfig = nodeConfig
 			client.networkConfig = networkConfig
+			templatesList := client.initializeFeatures(true)
+			for _, templates := range templatesList {
+				generatePipeline(templates)
+			}
 
 			// We generate an error for AddAll call.
 			m.EXPECT().AddAll(gomock.Any()).Return(errors.New("Bundle error"))
@@ -215,6 +226,10 @@ func TestConcurrentFlowInstallation(t *testing.T) {
 			client.ofEntryOperations = m
 			client.nodeConfig = nodeConfig
 			client.networkConfig = networkConfig
+			templatesList := client.initializeFeatures(true)
+			for _, templates := range templatesList {
+				generatePipeline(templates)
+			}
 
 			var concurrentCalls atomic.Value // set to true if we observe concurrent calls
 			timeoutCh := make(chan struct{})
@@ -258,9 +273,6 @@ func TestConcurrentFlowInstallation(t *testing.T) {
 }
 
 func Test_client_InstallTraceflowFlows(t *testing.T) {
-	type ofSwitch struct {
-		ofctrl.OFSwitch
-	}
 	type fields struct {
 	}
 	type args struct {
@@ -404,16 +416,24 @@ func prepareTraceflowFlow(ctrl *gomock.Controller) *client {
 	c := ofClient.(*client)
 	c.cookieAllocator = cookie.NewAllocator(0)
 	c.nodeConfig = nodeConfig
-	m := ovsoftest.NewMockBridge(ctrl)
-	m.EXPECT().AddFlowsInBundle(gomock.Any(), nil, nil).Return(nil).Times(1)
-	c.bridge = m
+	m := oftest.NewMockOFEntryOperations(ctrl)
+	c.ofEntryOperations = m
+	c.nodeConfig = nodeConfig
+	c.networkConfig = networkConfig
+	templatesList := c.initializeFeatures(true)
+	for _, templates := range templatesList {
+		generatePipeline(templates)
+	}
+
+	m.EXPECT().AddAll(gomock.Any()).Return(nil).Times(1)
+	c.bridge = ovsoftest.NewMockBridge(ctrl)
 
 	mFlow := ovsoftest.NewMockFlow(ctrl)
 	ctx := &conjMatchFlowContext{dropFlow: mFlow}
 	mFlow.EXPECT().FlowProtocol().Return(binding.Protocol("ip"))
-	mFlow.EXPECT().CopyToBuilder(priorityNormal+2, false).Return(EgressDefaultTable.BuildFlow(priorityNormal + 2)).Times(1)
-	c.globalConjMatchFlowCache["mockContext"] = ctx
-	c.policyCache.Add(&policyRuleConjunction{metricFlows: []binding.Flow{c.denyRuleMetricFlow(123, false)}})
+	mFlow.EXPECT().CopyToBuilder(priorityNormal+2, false).Return(EgressDefaultTable.ofTable.BuildFlow(priorityNormal + 2)).Times(1)
+	c.featureNetworkPolicy.globalConjMatchFlowCache["mockContext"] = ctx
+	c.featureNetworkPolicy.policyCache.Add(&policyRuleConjunction{metricFlows: []binding.Flow{c.featureNetworkPolicy.denyRuleMetricFlow(123, false)}})
 	return c
 }
 

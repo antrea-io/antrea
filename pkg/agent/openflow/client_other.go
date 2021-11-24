@@ -32,11 +32,11 @@ func (c *client) InstallBridgeUplinkFlows() error {
 	}
 	// TODO(gran): support IPv6
 	if c.nodeConfig.PodIPv4CIDR != nil {
-		flows := c.hostBridgeUplinkFlows(*c.nodeConfig.PodIPv4CIDR, cookie.Default)
+		flows := c.featurePodConnectivity.hostBridgeUplinkFlows(*c.nodeConfig.PodIPv4CIDR, cookie.Default)
 		if err := c.ofEntryOperations.AddAll(flows); err != nil {
 			return err
 		}
-		c.hostNetworkingFlows = flows
+		c.featurePodConnectivity.hostNetworkingFlows = flows
 	}
 	return nil
 }

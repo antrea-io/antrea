@@ -28,11 +28,11 @@ import (
 )
 
 func (c *client) InstallBridgeUplinkFlows() error {
-	flows := c.hostBridgeUplinkFlows(*c.nodeConfig.PodIPv4CIDR, cookie.Default)
+	flows := c.featurePodConnectivity.hostBridgeUplinkFlows(cookie.Default, *c.nodeConfig.PodIPv4CIDR)
 	if err := c.ofEntryOperations.AddAll(flows); err != nil {
 		return err
 	}
-	c.hostNetworkingFlows = flows
+	c.featurePodConnectivity.hostNetworkingFlows = flows
 	return nil
 }
 
@@ -40,14 +40,14 @@ func (c *client) InstallLoadBalancerServiceFromOutsideFlows(svcIP net.IP, svcPor
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
 	var flows []binding.Flow
-	flows = append(flows, c.loadBalancerServiceFromOutsideFlow(svcIP, svcPort, protocol))
+	flows = append(flows, c.featureService.loadBalancerServiceFromOutsideFlow(svcIP, svcPort, protocol))
 	cacheKey := fmt.Sprintf("L%s%s%x", svcIP, protocol, svcPort)
-	return c.addFlows(c.serviceFlowCache, cacheKey, flows)
+	return c.addFlows(c.featureService.serviceFlowCache, cacheKey, flows)
 }
 
 func (c *client) UninstallLoadBalancerServiceFromOutsideFlows(svcIP net.IP, svcPort uint16, protocol binding.Protocol) error {
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
 	cacheKey := fmt.Sprintf("L%s%s%x", svcIP, protocol, svcPort)
-	return c.deleteFlows(c.serviceFlowCache, cacheKey)
+	return c.deleteFlows(c.featureService.serviceFlowCache, cacheKey)
 }
