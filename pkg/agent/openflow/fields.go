@@ -34,32 +34,49 @@ var (
 	FromLocalRegMark   = binding.NewRegMark(PktSourceField, 2)
 	FromUplinkRegMark  = binding.NewRegMark(PktSourceField, 4)
 	FromBridgeRegMark  = binding.NewRegMark(PktSourceField, 5)
-	// reg0[16]: Mark to indicate the ofPort number of an interface is found.
-	OFPortFoundRegMark = binding.NewOneBitRegMark(0, 16, "OFPortFound")
-	// reg0[18]: Mark to indicate the packet needs DNAT to virtual IP.
+	// reg0[4..7]: Field to mark the packet destination. Marks in this field include,
+	//   - 0: to local Pod
+	//   - 1: to remote Node
+	//   - 2: to external
+	PktDestinationField   = binding.NewRegField(0, 4, 7, "PacketDestination")
+	ToTunnelRegMark       = binding.NewRegMark(PktDestinationField, 0)
+	ToGatewayRegMark      = binding.NewRegMark(PktDestinationField, 1)
+	ToLocalRegMark        = binding.NewRegMark(PktDestinationField, 2)
+	ToUplinkRegMark       = binding.NewRegMark(PktDestinationField, 4)
+	PacketUnionField      = binding.NewRegField(0, 0, 7, "PacketUnion")
+	GatewayHairpinRegMark = binding.NewRegMark(PacketUnionField, (1<<4)|1)
+	// reg0[8]: Mark to indicate the ofPort number of an interface is found.
+	OFPortFoundRegMark = binding.NewOneBitRegMark(0, 8, "OFPortFound")
+	// reg0[9]: Mark to indicate the packet needs DNAT to virtual IP.
 	// If a packet uses HairpinRegMark, it will be output to the port where it enters OVS pipeline in L2ForwardingOutTable.
-	HairpinRegMark = binding.NewOneBitRegMark(0, 18, "Hairpin")
-	// reg0[19]: Mark to indicate the packet's MAC address needs to be rewritten.
-	RewriteMACRegMark = binding.NewOneBitRegMark(0, 19, "RewriteMAC")
-	// reg0[20]: Mark to indicate the packet is denied(Drop/Reject).
-	CnpDenyRegMark = binding.NewOneBitRegMark(0, 20, "CNPDeny")
-	// reg0[21..22]: Field to indicate disposition of Antrea Policy. It could have more bits to support more disposition
+	HairpinRegMark = binding.NewOneBitRegMark(0, 9, "Hairpin")
+	// reg0[10]: Field to indicate that which IP should be used for hairpin connections.
+	SNATWithGatewayIP        = binding.NewOneBitRegMark(0, 10, "SNATWithGatewayIP")
+	SNATWithVirtualIP        = binding.NewOneBitZeroRegMark(0, 10, "SNATWithVirtualIP")
+	HairpinSNATUnionField    = binding.NewRegField(0, 9, 10, "HairpinSNATUnion")
+	HairpinSNATWithVirtualIP = binding.NewRegMark(HairpinSNATUnionField, 1)
+	HairpinSNATWithGatewayIP = binding.NewRegMark(HairpinSNATUnionField, 3)
+	// reg0[11]: Mark to indicate the packet's MAC address needs to be rewritten.
+	RewriteMACRegMark = binding.NewOneBitRegMark(0, 11, "RewriteMAC")
+	// reg0[12]: Mark to indicate the packet is denied(Drop/Reject).
+	CnpDenyRegMark = binding.NewOneBitRegMark(0, 12, "CNPDeny")
+	// reg0[13..14]: Field to indicate disposition of Antrea Policy. It could have more bits to support more disposition
 	// that Antrea policy support in the future.
 	// Marks in this field include,
 	//   - 0b00: allow
 	//   - 0b01: drop
 	//   - 0b10: reject
-	APDispositionField      = binding.NewRegField(0, 21, 22, "APDisposition")
+	APDispositionField      = binding.NewRegField(0, 13, 14, "APDisposition")
 	DispositionAllowRegMark = binding.NewRegMark(APDispositionField, DispositionAllow)
 	DispositionDropRegMark  = binding.NewRegMark(APDispositionField, DispositionDrop)
 	DispositionRejRegMark   = binding.NewRegMark(APDispositionField, DispositionRej)
-	// reg0[24..27]: Field to indicate the reasons of sending packet to the controller.
+	// reg0[15..18]: Field to indicate the reasons of sending packet to the controller.
 	// Marks in this field include,
 	//   - 0b0001: logging
 	//   - 0b0010: reject
 	//   - 0b0100: deny (used by Flow Exporter)
 	//   - 0b1000: DNS packet (used by FQDN)
-	CustomReasonField          = binding.NewRegField(0, 24, 27, "PacketInReason")
+	CustomReasonField          = binding.NewRegField(0, 15, 18, "PacketInReason")
 	CustomReasonLoggingRegMark = binding.NewRegMark(CustomReasonField, CustomReasonLogging)
 	CustomReasonRejectRegMark  = binding.NewRegMark(CustomReasonField, CustomReasonReject)
 	CustomReasonDenyRegMark    = binding.NewRegMark(CustomReasonField, CustomReasonDeny)
@@ -68,8 +85,6 @@ var (
 	// reg1(NXM_NX_REG1)
 	// Field to cache the ofPort of the OVS interface where to output packet.
 	TargetOFPortField = binding.NewRegField(1, 0, 31, "TargetOFPort")
-	// ToGatewayRegMark marks that the output interface is Antrea gateway.
-	ToGatewayRegMark = binding.NewRegMark(TargetOFPortField, config.HostGatewayOFPort)
 	// ToBridgeRegMark marks that the output interface is OVS bridge.
 	ToBridgeRegMark = binding.NewRegMark(TargetOFPortField, config.BridgeOFPort)
 
@@ -103,16 +118,20 @@ var (
 	NodePortAddressField = binding.NewRegField(4, 19, 19, "NodePortAddress")
 	// ToNodePortAddressRegMark marks that the Service type as NodePort.
 	ToNodePortAddressRegMark = binding.NewRegMark(NodePortAddressField, 0b1)
-	// reg4[20]: Field to mark that whether the packet of Service NodePort/LoadBalancer from gateway requires SNAT.
-	ServiceSNATField = binding.NewRegField(4, 20, 20, "ServiceSNAT")
-	// ServiceNeedSNATRegMark marks that the packet of Service NodePort/LoadBalancer requires SNAT.
-	ServiceNeedSNATRegMark = binding.NewRegMark(ServiceSNATField, 0b1)
 	// reg4[16..19]: Field to store the union value of Endpoint state and the mark of whether Service type is NodePort.
 	NodePortUnionField = binding.NewRegField(4, 16, 19, "NodePortUnion")
 	// reg4[21]: Mark to indicate the packet is from local AntreaFlexibleIPAM Pod.
 	// NotAntreaFlexibleIPAMRegMark will be used with RewriteMACRegMark, thus the reg id must not be same due to the limitation of ofnet library.
 	AntreaFlexibleIPAMRegMark    = binding.NewOneBitRegMark(4, 21, "AntreaFlexibleIPAM")
 	NotAntreaFlexibleIPAMRegMark = binding.NewOneBitZeroRegMark(4, 21, "AntreaFlexibleIPAM")
+	// reg4[22..23]: Field to store the state of a connection of Service NodePort/LoadBalancer from gateway which
+	// requires SNAT or not.
+	//	- 0b01: connection requires SNAT and is not marked with a ct mark.
+	//	- 0b11: connection requires SNAT and is marked with a ct mark.
+	ServiceSNATStateField = binding.NewRegField(4, 22, 23, "ServiceSNAT")
+	NotRequireSNATRegMark = binding.NewRegMark(ServiceSNATStateField, 0b00)
+	RequireSNATRegMark    = binding.NewRegMark(ServiceSNATStateField, 0b01)
+	CTMarkedSNATRegMark   = binding.NewRegMark(ServiceSNATStateField, 0b11)
 
 	// reg5(NXM_NX_REG5)
 	// Field to cache the Egress conjunction ID hit by TraceFlow packet.
@@ -141,12 +160,24 @@ var (
 
 	// Mark to indicate the connection is initiated through the host gateway interface
 	// (i.e. for which the first packet of the connection was received through the gateway).
+	// This CT mark is only used in CtZone / CtZoneV6.
 	FromGatewayCTMark = binding.NewCTMark(0b1, 1, 1)
 	// Mark to indicate DNAT is performed on the connection for Service.
+	// This CT mark is both used in CtZone / CtZoneV6 and SNATCtZone / SNATCtZoneV6.
 	ServiceCTMark = binding.NewCTMark(0b1, 2, 2)
 	// Mark to indicate the connection is initiated through the host bridge interface
 	// (i.e. for which the first packet of the connection was received through the bridge).
-	FromBridgeCTMark = binding.NewCTMark(0x1, 3, 3)
+	// This CT mark is only used in CtZone / CtZoneV6.
+	FromBridgeCTMark = binding.NewCTMark(0xb1, 3, 3)
+	// Mark to indicate SNAT should be performed on the connection for Service.
+	// This CT mark is only used in CtZone / CtZoneV6.
+	ServiceSNATCTMark = binding.NewCTMark(0b1, 4, 4)
+	// Mark to indicate the connection is hairpin.
+	// This CT mark is only used in SNATCtZone / SNATCtZoneV6.
+	HairpinCTMark = binding.NewCTMark(0b1, 5, 5)
+	// Mark to indicate the connection is hairpin and Service.
+	// This CT mark is only used in SNATCtZone / SNATCtZoneV6.
+	UnionHairpinServiceCTMark = binding.NewCTMark(0b11, 4, 5)
 )
 
 // Fields using CT label.
