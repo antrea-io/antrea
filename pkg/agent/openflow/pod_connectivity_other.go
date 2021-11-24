@@ -27,40 +27,40 @@ import (
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 )
 
-func (c *client) snatMarkFlows(snatIP net.IP, mark uint32) []binding.Flow {
-	return []binding.Flow{c.snatIPFromTunnelFlow(snatIP, mark)}
-}
-
-// hostBridgeUplinkFlows generates the flows that forward traffic between the
-// bridge local port and the uplink port to support the host traffic.
+// Stage: ClassifierStage
+// Tables: ClassifierTable
+// Refactored from:
+//   - `func (c *client) hostBridgeUplinkFlows(localSubnet net.IPNet, category cookie.Category) (flows []binding.Flow)`
+// hostBridgeUplinkFlows generates the flows that forward traffic between the bridge local port and the uplink port to
+// support the host traffic.
 // TODO(gran): sync latest changes from pipeline_windows.go
-func (c *client) hostBridgeUplinkFlows(localSubnet net.IPNet, category cookie.Category) (flows []binding.Flow) {
+func (c *featurePodConnectivity) hostBridgeUplinkFlows(localSubnet net.IPNet, category cookie.Category) (flows []binding.Flow) {
 	flows = []binding.Flow{
-		ClassifierTable.BuildFlow(priorityNormal).
+		ClassifierTable.ofTable.BuildFlow(priorityNormal).
+			Cookie(c.cookieAllocator.Request(category).Raw()).
 			MatchInPort(config.UplinkOFPort).
 			Action().Output(config.BridgeOFPort).
-			Cookie(c.cookieAllocator.Request(category).Raw()).
 			Done(),
-		ClassifierTable.BuildFlow(priorityNormal).
+		ClassifierTable.ofTable.BuildFlow(priorityNormal).
+			Cookie(c.cookieAllocator.Request(category).Raw()).
 			MatchInPort(config.BridgeOFPort).
 			Action().Output(config.UplinkOFPort).
-			Cookie(c.cookieAllocator.Request(category).Raw()).
 			Done(),
 	}
 	// Do not forward packet to per-Node IPAM Pod directly to avoid traffic issue.
 	flows = append(flows,
 		// Handle incoming ARP request for AntreaFlexibleIPAM Pods.
-		ClassifierTable.BuildFlow(priorityHigh).
+		ARPSpoofGuardTable.ofTable.BuildFlow(priorityHigh).
+			Cookie(c.cookieAllocator.Request(category).Raw()).
 			MatchInPort(config.UplinkOFPort).
 			MatchProtocol(binding.ProtocolARP).
 			Action().Normal().
-			Cookie(c.cookieAllocator.Request(category).Raw()).
 			Done(),
-		ClassifierTable.BuildFlow(priorityHigh).
+		ARPSpoofGuardTable.ofTable.BuildFlow(priorityHigh).
+			Cookie(c.cookieAllocator.Request(category).Raw()).
 			MatchInPort(config.BridgeOFPort).
 			MatchProtocol(binding.ProtocolARP).
 			Action().Normal().
-			Cookie(c.cookieAllocator.Request(category).Raw()).
 			Done(),
 		// Handle packet to Node.
 		// Must use a separate flow to Output(config.BridgeOFPort), otherwise OVS will drop the packet:
@@ -68,31 +68,41 @@ func (c *client) hostBridgeUplinkFlows(localSubnet net.IPNet, category cookie.Ca
 		//   >> output port 4294967294 is out of range
 		//   Datapath actions: drop
 		// TODO(gran): support Traceflow
-		L2ForwardingCalcTable.BuildFlow(priorityNormal).
+		L2ForwardingCalcTable.ofTable.BuildFlow(priorityNormal).
+			Cookie(c.cookieAllocator.Request(category).Raw()).
 			MatchDstMAC(c.nodeConfig.UplinkNetConfig.MAC).
 			Action().LoadToRegField(TargetOFPortField, config.BridgeOFPort).
 			Action().LoadRegMark(OFPortFoundRegMark).
-			Action().GotoTable(ConntrackCommitTable.GetID()).
-			Cookie(c.cookieAllocator.Request(category).Raw()).
+			Action().GotoStage(binding.ConntrackStage).
 			Done(),
-		L2ForwardingOutTable.BuildFlow(priorityHigh).MatchProtocol(binding.ProtocolIP).
+		L2ForwardingOutTable.ofTable.BuildFlow(priorityHigh).
+			Cookie(c.cookieAllocator.Request(category).Raw()).
+			MatchProtocol(binding.ProtocolIP).
 			MatchRegMark(ToBridgeRegMark).
 			MatchRegMark(OFPortFoundRegMark).
 			Action().Output(config.BridgeOFPort).
-			Cookie(c.cookieAllocator.Request(category).Raw()).
 			Done(),
 		// Handle outgoing packet from AntreaFlexibleIPAM Pods. Broadcast is not supported.
-		L2ForwardingCalcTable.BuildFlow(priorityLow).
+		L2ForwardingCalcTable.ofTable.BuildFlow(priorityLow).
+			Cookie(c.cookieAllocator.Request(category).Raw()).
 			MatchRegMark(AntreaFlexibleIPAMRegMark).
 			Action().LoadToRegField(TargetOFPortField, config.UplinkOFPort).
 			Action().LoadRegMark(OFPortFoundRegMark).
-			Action().GotoTable(ConntrackCommitTable.GetID()).
-			Cookie(c.cookieAllocator.Request(category).Raw()).
+			Action().GotoStage(binding.ConntrackStage).
 			Done())
 	return flows
 }
 
-func (c *client) l3FwdFlowToRemoteViaRouting(localGatewayMAC net.HardwareAddr, remoteGatewayMAC net.HardwareAddr,
-	category cookie.Category, peerIP net.IP, peerPodCIDR *net.IPNet) []binding.Flow {
-	return []binding.Flow{c.l3FwdFlowToRemoteViaGW(localGatewayMAC, *peerPodCIDR, category, false)}
+// Stage: RoutingStage
+// Tables: L3ForwardingTable
+// Refactored from:
+//   - `func (c *client) l3FwdFlowToRemoteViaRouting(localGatewayMAC net.HardwareAddr, remoteGatewayMAC net.HardwareAddr,
+//	    category cookie.Category, peerIP net.IP, peerPodCIDR *net.IPNet) []binding.Flow`
+func (c *featurePodConnectivity) l3FwdFlowToRemoteViaRouting(
+	category cookie.Category,
+	localGatewayMAC net.HardwareAddr,
+	remoteGatewayMAC net.HardwareAddr,
+	peerIP net.IP,
+	peerPodCIDR *net.IPNet) []binding.Flow {
+	return []binding.Flow{c.l3FwdFlowToRemoteViaGW(category, localGatewayMAC, *peerPodCIDR, false)}
 }
