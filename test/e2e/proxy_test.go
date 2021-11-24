@@ -27,12 +27,13 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/features"
 )
 
 type expectTableFlows struct {
-	tableID int
-	flows   []string
+	tableName string
+	flows     []string
 }
 
 // TestProxy is the top-level test which contains all subtests for
@@ -50,9 +51,6 @@ func TestProxy(t *testing.T) {
 	t.Run("testProxyServiceSessionAffinityCase", func(t *testing.T) {
 		skipIfProviderIs(t, "kind", "#881 Does not work in Kind, needs to be investigated.")
 		testProxyServiceSessionAffinityCase(t, data)
-	})
-	t.Run("testProxyHairpinCase", func(t *testing.T) {
-		testProxyHairpinCase(t, data)
 	})
 	t.Run("testProxyEndpointLifeCycleCase", func(t *testing.T) {
 		testProxyEndpointLifeCycleCase(t, data)
@@ -115,20 +113,20 @@ func probeClientIPFromNode(node string, baseUrl string) (string, error) {
 	return host, err
 }
 
-func probeFromPod(data *TestData, pod string, url string) error {
-	_, _, err := data.runCommandFromPod(testNamespace, pod, busyboxContainerName, []string{"wget", "-O", "-", url, "-T", "1"})
+func probeFromPod(data *TestData, pod, container string, url string) error {
+	_, _, err := data.runCommandFromPod(testNamespace, pod, container, []string{"wget", "-O", "-", url, "-T", "1"})
 	return err
 }
 
-func probeHostnameFromPod(data *TestData, pod string, baseUrl string) (string, error) {
+func probeHostnameFromPod(data *TestData, pod, container string, baseUrl string) (string, error) {
 	url := fmt.Sprintf("%s/%s", baseUrl, "hostname")
-	hostname, _, err := data.runCommandFromPod(testNamespace, pod, busyboxContainerName, []string{"wget", "-O", "-", url, "-T", "1"})
+	hostname, _, err := data.runCommandFromPod(testNamespace, pod, container, []string{"wget", "-O", "-", url, "-T", "1"})
 	return hostname, err
 }
 
-func probeClientIPFromPod(data *TestData, pod string, baseUrl string) (string, error) {
+func probeClientIPFromPod(data *TestData, pod, container string, baseUrl string) (string, error) {
 	url := fmt.Sprintf("%s/%s", baseUrl, "clientip")
-	hostPort, _, err := data.runCommandFromPod(testNamespace, pod, busyboxContainerName, []string{"wget", "-O", "-", url, "-T", "1"})
+	hostPort, _, err := data.runCommandFromPod(testNamespace, pod, container, []string{"wget", "-O", "-", url, "-T", "1"})
 	if err != nil {
 		return "", err
 	}
@@ -234,7 +232,7 @@ func testLoadBalancerClusterFromNode(t *testing.T, data *TestData, nodes []strin
 
 func testLoadBalancerClusterFromPod(t *testing.T, data *TestData, pods []string, url string) {
 	for _, pod := range pods {
-		require.NoError(t, probeFromPod(data, pod, url), "Service LoadBalancer whose externalTrafficPolicy is Cluster should be able to be connected from Pod")
+		require.NoError(t, probeFromPod(data, pod, busyboxContainerName, url), "Service LoadBalancer whose externalTrafficPolicy is Cluster should be able to be connected from Pod")
 	}
 }
 
@@ -250,11 +248,11 @@ func testLoadBalancerLocalFromNode(t *testing.T, data *TestData, nodes []string,
 func testLoadBalancerLocalFromPod(t *testing.T, data *TestData, pods []string, url string, expectedClientIPs, expectedHostnames []string) {
 	errMsg := "Service NodePort whose externalTrafficPolicy is Local should be able to be connected from Pod"
 	for idx, pod := range pods {
-		hostname, err := probeHostnameFromPod(data, pod, url)
+		hostname, err := probeHostnameFromPod(data, pod, busyboxContainerName, url)
 		require.NoError(t, err, errMsg)
 		require.Equal(t, hostname, expectedHostnames[idx])
 
-		clientIP, err := probeClientIPFromPod(data, pod, url)
+		clientIP, err := probeClientIPFromPod(data, pod, busyboxContainerName, url)
 		require.NoError(t, err, errMsg)
 		require.Equal(t, clientIP, expectedClientIPs[idx])
 	}
@@ -413,7 +411,7 @@ func testNodePortClusterFromNode(t *testing.T, data *TestData, nodes, urls []str
 func testNodePortClusterFromPod(t *testing.T, data *TestData, pods, urls []string) {
 	for _, url := range urls {
 		for _, pod := range pods {
-			require.NoError(t, probeFromPod(data, pod, url), "Service NodePort whose externalTrafficPolicy is Cluster should be able to be connected from Pod")
+			require.NoError(t, probeFromPod(data, pod, busyboxContainerName, url), "Service NodePort whose externalTrafficPolicy is Cluster should be able to be connected from Pod")
 		}
 	}
 }
@@ -444,11 +442,11 @@ func testNodePortLocalFromNode(t *testing.T, data *TestData, nodes, urls, expect
 func testNodePortLocalFromPod(t *testing.T, data *TestData, pods, urls, expectedClientIPs, expectedHostnames []string) {
 	errMsg := "There should be no errors when accessing to Service NodePort whose externalTrafficPolicy is Local from Pod"
 	for idx, pod := range pods {
-		hostname, err := probeHostnameFromPod(data, pod, urls[idx])
+		hostname, err := probeHostnameFromPod(data, pod, busyboxContainerName, urls[idx])
 		require.NoError(t, err, errMsg)
 		require.Equal(t, hostname, expectedHostnames[idx])
 
-		clientIP, err := probeClientIPFromPod(data, pod, urls[idx])
+		clientIP, err := probeClientIPFromPod(data, pod, busyboxContainerName, urls[idx])
 		require.NoError(t, err, errMsg)
 		require.Equal(t, clientIP, expectedClientIPs[idx])
 	}
@@ -506,69 +504,228 @@ func testProxyServiceSessionAffinity(ipFamily *corev1.IPFamily, ingressIPs []str
 
 	agentName, err := data.getAntreaPodOnNode(nodeName)
 	require.NoError(t, err)
-	table40Output, _, err := data.runCommandFromPod(metav1.NamespaceSystem, agentName, "antrea-agent", []string{"ovs-ofctl", "dump-flows", defaultBridgeName, "table=40"})
+	tableSessionAffinityName := "SessionAffinity"
+	tableSessionAffinityOutput, _, err := data.runCommandFromPod(metav1.NamespaceSystem, agentName, "antrea-agent", []string{"ovs-ofctl", "dump-flows", defaultBridgeName, fmt.Sprintf("table=%s", tableSessionAffinityName)})
 	require.NoError(t, err)
 	if *ipFamily == corev1.IPv4Protocol {
-		require.Contains(t, table40Output, fmt.Sprintf("nw_dst=%s,tp_dst=80", svc.Spec.ClusterIP))
-		require.Contains(t, table40Output, fmt.Sprintf("load:0x%s->NXM_NX_REG3[]", strings.TrimLeft(hex.EncodeToString(nginxIP.ipv4.To4()), "0")))
+		require.Contains(t, tableSessionAffinityOutput, fmt.Sprintf("nw_dst=%s,tp_dst=80", svc.Spec.ClusterIP))
+		require.Contains(t, tableSessionAffinityOutput, fmt.Sprintf("load:0x%s->NXM_NX_REG3[]", strings.TrimLeft(hex.EncodeToString(nginxIP.ipv4.To4()), "0")))
 		for _, ingressIP := range ingressIPs {
-			require.Contains(t, table40Output, fmt.Sprintf("nw_dst=%s,tp_dst=80", ingressIP))
+			require.Contains(t, tableSessionAffinityOutput, fmt.Sprintf("nw_dst=%s,tp_dst=80", ingressIP))
 		}
 	} else {
-		require.Contains(t, table40Output, fmt.Sprintf("ipv6_dst=%s,tp_dst=80", svc.Spec.ClusterIP))
-		require.Contains(t, table40Output, fmt.Sprintf("load:0x%s->NXM_NX_XXREG3[0..63]", strings.TrimLeft(hex.EncodeToString([]byte(*nginxIP.ipv6)[8:16]), "0")))
-		require.Contains(t, table40Output, fmt.Sprintf("load:0x%s->NXM_NX_XXREG3[64..127]", strings.TrimLeft(hex.EncodeToString([]byte(*nginxIP.ipv6)[0:8]), "0")))
+		require.Contains(t, tableSessionAffinityOutput, fmt.Sprintf("ipv6_dst=%s,tp_dst=80", svc.Spec.ClusterIP))
+		require.Contains(t, tableSessionAffinityOutput, fmt.Sprintf("load:0x%s->NXM_NX_XXREG3[0..63]", strings.TrimLeft(hex.EncodeToString([]byte(*nginxIP.ipv6)[8:16]), "0")))
+		require.Contains(t, tableSessionAffinityOutput, fmt.Sprintf("load:0x%s->NXM_NX_XXREG3[64..127]", strings.TrimLeft(hex.EncodeToString([]byte(*nginxIP.ipv6)[0:8]), "0")))
 		for _, ingressIP := range ingressIPs {
-			require.Contains(t, table40Output, fmt.Sprintf("ipv6_dst=%s,tp_dst=80", ingressIP))
+			require.Contains(t, tableSessionAffinityOutput, fmt.Sprintf("ipv6_dst=%s,tp_dst=80", ingressIP))
 		}
-	}
-}
-func testProxyHairpinCase(t *testing.T, data *TestData) {
-	if len(clusterInfo.podV4NetworkCIDR) != 0 {
-		ipFamily := corev1.IPv4Protocol
-		testProxyHairpin(&ipFamily, data, t)
-	}
-	if len(clusterInfo.podV6NetworkCIDR) != 0 {
-		ipFamily := corev1.IPv6Protocol
-		testProxyHairpin(&ipFamily, data, t)
 	}
 }
 
-func TestProxyHairpin(t *testing.T) {
-	skipIfHasWindowsNodes(t)
+func TestProxyHairpinIPv4(t *testing.T) {
 	skipIfProxyDisabled(t)
+	skipIfNotIPv4Cluster(t)
+	testProxyHairpin(t, false)
+}
+
+func TestProxyHairpinIPv6(t *testing.T) {
+	skipIfProxyDisabled(t)
+	skipIfNotIPv6Cluster(t)
+	testProxyHairpin(t, true)
+}
+
+func testProxyHairpin(t *testing.T, isIPv6 bool) {
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
 	defer teardownTest(t, data)
 
-	if len(clusterInfo.podV4NetworkCIDR) != 0 {
-		ipFamily := corev1.IPv4Protocol
-		testProxyHairpin(&ipFamily, data, t)
+	node := nodeName(1)
+	workerNodeIP := workerNodeIPv4(1)
+	controllerNodeIP := controlPlaneNodeIPv4()
+	ipProtocol := corev1.IPv4Protocol
+	lbClusterIngressIP := []string{"192.168.240.1"}
+	lbLocalIngressIP := []string{"192.168.240.2"}
+	if isIPv6 {
+		workerNodeIP = workerNodeIPv6(1)
+		controllerNodeIP = controlPlaneNodeIPv6()
+		ipProtocol = corev1.IPv6Protocol
+		lbClusterIngressIP = []string{"fd75::aabb:ccdd:ef00"}
+		lbLocalIngressIP = []string{"fd75::aabb:ccdd:ef01"}
 	}
-	if len(clusterInfo.podV6NetworkCIDR) != 0 {
-		ipFamily := corev1.IPv6Protocol
-		testProxyHairpin(&ipFamily, data, t)
+
+	// Create a ClusterIP Service.
+	serviceClusterIP := fmt.Sprintf("clusterip-%v", isIPv6)
+	clusterIPSvc, err := data.createAgnhostClusterIPService(serviceClusterIP, true, &ipProtocol)
+	defer data.deleteServiceAndWait(defaultTimeout, serviceClusterIP)
+	require.NoError(t, err)
+
+	// Create two NodePort Services. The externalTrafficPolicy of one Service is Cluster, and the externalTrafficPolicy
+	// of another one is Local.
+	var nodePortCluster, nodePortLocal string
+	serviceNodePortCluster := fmt.Sprintf("nodeport-cluster-%v", isIPv6)
+	serviceNodePortLocal := fmt.Sprintf("nodeport-local-%v", isIPv6)
+	nodePortSvc, err := data.createAgnhostNodePortService(serviceNodePortCluster, true, false, &ipProtocol)
+	defer data.deleteServiceAndWait(defaultTimeout, serviceNodePortCluster)
+	require.NoError(t, err)
+	for _, port := range nodePortSvc.Spec.Ports {
+		if port.NodePort != 0 {
+			nodePortCluster = fmt.Sprint(port.NodePort)
+			break
+		}
 	}
+	require.NotEqual(t, "", nodePortCluster, "NodePort port number should not be empty")
+	nodePortSvc, err = data.createAgnhostNodePortService(serviceNodePortLocal, true, true, &ipProtocol)
+	require.NoError(t, err)
+	defer data.deleteServiceAndWait(defaultTimeout, serviceNodePortLocal)
+	for _, port := range nodePortSvc.Spec.Ports {
+		if port.NodePort != 0 {
+			nodePortLocal = fmt.Sprint(port.NodePort)
+			break
+		}
+	}
+	require.NotEqual(t, "", nodePortLocal, "NodePort port number should not be empty")
+
+	// Create two LoadBalancer Services. The externalTrafficPolicy of one Service is Cluster, and the externalTrafficPolicy
+	// of another one is Local.
+	serviceLBCluster := fmt.Sprintf("lb-cluster-%v", isIPv6)
+	serviceLBLocal := fmt.Sprintf("lb-local-%v", isIPv6)
+	_, err = data.createAgnhostLoadBalancerService(serviceLBCluster, true, false, lbClusterIngressIP, &ipProtocol)
+	require.NoError(t, err)
+	_, err = data.createAgnhostLoadBalancerService(serviceLBLocal, true, true, lbLocalIngressIP, &ipProtocol)
+	require.NoError(t, err)
+
+	// These are test urls.
+	port := "8080"
+	clusterIPUrl := net.JoinHostPort(clusterIPSvc.Spec.ClusterIP, port)
+	workerNodePortClusterUrl := net.JoinHostPort(workerNodeIP, nodePortCluster)
+	workerNodePortLocalUrl := net.JoinHostPort(workerNodeIP, nodePortLocal)
+	controllerNodePortClusterUrl := net.JoinHostPort(controllerNodeIP, nodePortCluster)
+	lbClusterUrl := net.JoinHostPort(lbClusterIngressIP[0], port)
+	lbLocalUrl := net.JoinHostPort(lbLocalIngressIP[0], port)
+
+	// These are expected client IP.
+	expectedGatewayIP, _ := nodeGatewayIPs(1)
+	expectedVirtualIP := config.VirtualServiceIPv4.String()
+	expectedControllerIP := controllerNodeIP
+	if isIPv6 {
+		_, expectedGatewayIP = nodeGatewayIPs(1)
+		expectedVirtualIP = config.VirtualServiceIPv6.String()
+	}
+
+	agnhost := fmt.Sprintf("agnhost-%v", isIPv6)
+	createAgnhostPod(t, data, agnhost, node, false)
+	t.Run("Non-HostNetwork Endpoints", func(t *testing.T) {
+		testProxyIntraNodeHairpinCases(data, t, expectedGatewayIP, agnhost, clusterIPUrl, workerNodePortClusterUrl, workerNodePortLocalUrl, lbClusterUrl, lbLocalUrl)
+		testProxyInterNodeHairpinCases(data, t, false, expectedControllerIP, nodeName(0), clusterIPUrl, controllerNodePortClusterUrl, lbClusterUrl)
+	})
+	require.NoError(t, data.deletePod(testNamespace, agnhost))
+
+	agnhostHost := fmt.Sprintf("agnhost-host-%v", isIPv6)
+	createAgnhostPod(t, data, agnhostHost, node, true)
+	t.Run("HostNetwork Endpoints", func(t *testing.T) {
+		skipIfProxyAllDisabled(t, data)
+		testProxyIntraNodeHairpinCases(data, t, expectedVirtualIP, agnhostHost, clusterIPUrl, workerNodePortClusterUrl, workerNodePortLocalUrl, lbClusterUrl, lbLocalUrl)
+		testProxyInterNodeHairpinCases(data, t, true, expectedControllerIP, nodeName(0), clusterIPUrl, controllerNodePortClusterUrl, lbClusterUrl)
+	})
 }
 
-func testProxyHairpin(ipFamily *corev1.IPFamily, data *TestData, t *testing.T) {
-	busybox := randName("busybox-")
-	nodeName := nodeName(1)
-	err := data.createPodOnNode(busybox, testNamespace, nodeName, busyboxImage, []string{"nc", "-lk", "-p", "80"}, nil, nil, []corev1.ContainerPort{{ContainerPort: 80, Protocol: corev1.ProtocolTCP}}, false, nil)
-	defer data.deletePodAndWait(defaultTimeout, busybox, testNamespace)
-	require.NoError(t, err)
-	require.NoError(t, data.podWaitForRunning(defaultTimeout, busybox, testNamespace))
-	svc, err := data.createService(busybox, testNamespace, 80, 80, map[string]string{"antrea-e2e": busybox}, false, false, corev1.ServiceTypeClusterIP, ipFamily)
-	defer data.deleteServiceAndWait(defaultTimeout, busybox)
-	require.NoError(t, err)
+// If a Pod is not on host network, when it accesses a ClusterIP/NodePort/LoadBalancer Service whose Endpoint is on itself,
+// that means a hairpin connection. Antrea gateway IP is used to SNAT the connection. The IP changes of the connection are:
+// - Pod :     Pod IP            -> Service IP
+// - OVS DNAT: Pod IP            -> Pod IP
+// - OVS SNAT: Antrea gateway IP -> Pod IP
+// - Pod :     Antrea gateway IP -> Pod IP
+//
+// If a Pod is on host network, when it accesses a ClusterIP/NodePort/LoadBalancer Service whose Endpoint is on itself
+// (this is equivalent to that a Node accesses a Cluster/NodePort/LoadBalancer whose Endpoint is host network and the
+// Endpoint is on this Node), that means a hairpin connection. A virtual IP is used to SNAT the connection to ensure
+// that the packet can be routed via Antrea gateway. The IP changes of the connection are:
+// - Antrea gateway: Antrea gateway IP  -> Service IP
+// - OVS DNAT:       Antrea gateway IP  -> Node IP
+// - OVS SNAT:       virtual IP         -> Node IP
+// - Antrea gateway: virtual IP         -> Node IP
+func testProxyIntraNodeHairpinCases(data *TestData, t *testing.T, expectedClientIP, pod, clusterIPUrl, nodePortClusterUrl, nodePortLocalUrl, lbClusterUrl, lbLocalUrl string) {
+	t.Run("IntraNode/ClusterIP", func(t *testing.T) {
+		clientIP, err := probeClientIPFromPod(data, pod, agnhostContainerName, clusterIPUrl)
+		require.NoError(t, err, "ClusterIP hairpin should be able to be connected")
+		require.Equal(t, expectedClientIP, clientIP)
+	})
+	t.Run("IntraNode/NodePort/ExternalTrafficPolicy:Cluster", func(t *testing.T) {
+		skipIfProxyAllDisabled(t, data)
+		clientIP, err := probeClientIPFromPod(data, pod, agnhostContainerName, nodePortClusterUrl)
+		require.NoError(t, err, "NodePort whose externalTrafficPolicy is Cluster hairpin should be able to be connected")
+		require.Equal(t, expectedClientIP, clientIP)
+	})
+	t.Run("IntraNode/NodePort/ExternalTrafficPolicy:Local", func(t *testing.T) {
+		skipIfProxyAllDisabled(t, data)
+		clientIP, err := probeClientIPFromPod(data, pod, agnhostContainerName, nodePortLocalUrl)
+		require.NoError(t, err, "NodePort whose externalTrafficPolicy is Local hairpin should be able to be connected")
+		require.Equal(t, expectedClientIP, clientIP)
+	})
+	t.Run("IntraNode/LoadBalancer/ExternalTrafficPolicy:Cluster", func(t *testing.T) {
+		clientIP, err := probeClientIPFromPod(data, pod, agnhostContainerName, lbClusterUrl)
+		require.NoError(t, err, "LoadBalancer whose externalTrafficPolicy is Cluster hairpin should be able to be connected")
+		require.Equal(t, expectedClientIP, clientIP)
+	})
+	t.Run("IntraNode/LoadBalancer/ExternalTrafficPolicy:Local", func(t *testing.T) {
+		clientIP, err := probeClientIPFromPod(data, pod, agnhostContainerName, lbLocalUrl)
+		require.NoError(t, err, "LoadBalancer whose externalTrafficPolicy is Local hairpin should be able to be connected")
+		require.Equal(t, expectedClientIP, clientIP)
+	})
+}
 
-	// Hold on to make sure that the Service is realized.
-	time.Sleep(3 * time.Second)
+// If client is Node A, when it accesses a ClusterIP/NodePort/LoadBalancer Service whose Endpoint is on Node B, below
+// cases are hairpin (assumed that feature AntreaIPAM is not enabled):
+// - Traffic mode: encap,    Endpoint network: host network,     OS: Linux/Windows
+// - Traffic mode: noEncap,  Endpoint network: not host network, OS: Linux (packets are routed via uplink interface)
+// - Traffic mode: noEncap,  Endpoint network: host network,     OS: Linux/Windows
+// The IP changes of the hairpin connections are:
+// - Node A Antrea gateway: Antrea gateway IP  -> Service IP
+// - OVS DNAT:              Antrea gateway IP  -> Endpoint IP
+// - OVS SNAT:              virtual IP         -> Endpoint IP
+// - Node A Antrea gateway: virtual IP         -> Endpoint IP
+// - Node A output:         Node A IP          -> Endpoint IP (another SNAT for virtual IP, otherwise reply packets can't be routed back).
+// - Node B:                Node A IP          -> Endpoint IP
+func testProxyInterNodeHairpinCases(data *TestData, t *testing.T, hostNetwork bool, expectedClientIP, node, clusterIPUrl, nodePortClusterUrl, lbClusterUrl string) {
+	skipIfAntreaIPAMTest(t)
+	currentEncapMode, err := data.GetEncapMode()
+	if err != nil {
+		t.Fatalf("Failed to get encap mode: %v", err)
+	}
+	if !hostNetwork {
+		if testOptions.providerName == "kind" && (currentEncapMode == config.TrafficEncapModeEncap || currentEncapMode == config.TrafficEncapModeHybrid) {
+			t.Skipf("Skipping test because inter-Node Pod traffic is encapsulated when testbed is Kind and traffic mode is encap/hybrid")
+		} else if currentEncapMode == config.TrafficEncapModeEncap {
+			t.Skipf("Skipping test because inter-Node Pod traffic is encapsulated when testbed is not Kind and traffic mode encap")
+		}
+	}
 
-	stdout, stderr, err := data.runCommandFromPod(testNamespace, busybox, busyboxContainerName, []string{"nc", svc.Spec.ClusterIP, "80", "-w", "1", "-e", "ls", "/"})
-	require.NoError(t, err, fmt.Sprintf("ipFamily: %v\nstdout: %s\nstderr: %s\n", *ipFamily, stdout, stderr))
+	t.Run("InterNode/ClusterIP", func(t *testing.T) {
+		clientIP, err := probeClientIPFromNode(node, clusterIPUrl)
+		require.NoError(t, err, "ClusterIP hairpin should be able to be connected")
+		require.Equal(t, expectedClientIP, clientIP)
+	})
+	t.Run("InterNode/NodePort/ExternalTrafficPolicy:Cluster", func(t *testing.T) {
+		skipIfProxyAllDisabled(t, data)
+		if !hostNetwork && currentEncapMode == config.TrafficEncapModeNoEncap {
+			skipIfHasWindowsNodes(t)
+		}
+		clientIP, err := probeClientIPFromNode(node, nodePortClusterUrl)
+		require.NoError(t, err, "NodePort whose externalTrafficPolicy is Cluster hairpin should be able to be connected")
+		require.Equal(t, expectedClientIP, clientIP)
+	})
+	t.Run("InterNode/LoadBalancer/ExternalTrafficPolicy:Cluster", func(t *testing.T) {
+		skipIfProxyAllDisabled(t, data)
+		if !hostNetwork && currentEncapMode == config.TrafficEncapModeNoEncap {
+			skipIfHasWindowsNodes(t)
+		}
+		clientIP, err := probeClientIPFromNode(node, lbClusterUrl)
+		require.NoError(t, err, "LoadBalancer whose externalTrafficPolicy is Cluster hairpin should be able to be connected")
+		require.Equal(t, expectedClientIP, clientIP)
+	})
 }
 
 func testProxyEndpointLifeCycleCase(t *testing.T, data *TestData) {
@@ -623,8 +780,8 @@ func testProxyEndpointLifeCycle(ipFamily *corev1.IPFamily, data *TestData, t *te
 		nginxIP = nginxIPs.ipv4.String()
 	}
 
-	keywords := make(map[int]string)
-	keywords[42] = fmt.Sprintf("nat(dst=%s)", net.JoinHostPort(nginxIP, "80")) // endpointNATTable
+	keywords := make(map[string]string)
+	keywords["EndpointDNAT"] = fmt.Sprintf("nat(dst=%s)", net.JoinHostPort(nginxIP, "80")) // endpointNATTable
 
 	var groupKeywords []string
 	if *ipFamily == corev1.IPv6Protocol {
@@ -633,8 +790,8 @@ func testProxyEndpointLifeCycle(ipFamily *corev1.IPFamily, data *TestData, t *te
 		groupKeywords = append(groupKeywords, fmt.Sprintf("0x%s->NXM_NX_REG3[]", strings.TrimPrefix(hex.EncodeToString(nginxIPs.ipv4.To4()), "0")))
 	}
 
-	for tableID, keyword := range keywords {
-		tableOutput, _, err := data.runCommandFromPod(metav1.NamespaceSystem, agentName, "antrea-agent", []string{"ovs-ofctl", "dump-flows", defaultBridgeName, fmt.Sprintf("table=%d", tableID)})
+	for tableName, keyword := range keywords {
+		tableOutput, _, err := data.runCommandFromPod(metav1.NamespaceSystem, agentName, "antrea-agent", []string{"ovs-ofctl", "dump-flows", defaultBridgeName, fmt.Sprintf("table=%s", tableName)})
 		require.NoError(t, err)
 		require.Contains(t, tableOutput, keyword)
 	}
@@ -650,8 +807,8 @@ func testProxyEndpointLifeCycle(ipFamily *corev1.IPFamily, data *TestData, t *te
 	// Wait for one second to make sure the pipeline to be updated.
 	time.Sleep(time.Second)
 
-	for tableID, keyword := range keywords {
-		tableOutput, _, err := data.runCommandFromPod(metav1.NamespaceSystem, agentName, "antrea-agent", []string{"ovs-ofctl", "dump-flows", defaultBridgeName, fmt.Sprintf("table=%d", tableID)})
+	for tableName, keyword := range keywords {
+		tableOutput, _, err := data.runCommandFromPod(metav1.NamespaceSystem, agentName, "antrea-agent", []string{"ovs-ofctl", "dump-flows", defaultBridgeName, fmt.Sprintf("table=%s", tableName)})
 		require.NoError(t, err)
 		require.NotContains(t, tableOutput, keyword)
 	}
@@ -732,18 +889,18 @@ func testProxyServiceLifeCycle(ipFamily *corev1.IPFamily, ingressIPs []string, d
 		}
 	}
 
-	table42Format := "nat(dst=%s:80)"
+	tableEndpointDNATFlowFormat := "nat(dst=%s:80)"
 	if *ipFamily == corev1.IPv6Protocol {
-		table42Format = "nat(dst=[%s]:80)"
+		tableEndpointDNATFlowFormat = "nat(dst=[%s]:80)"
 	}
 	expectedFlows := []expectTableFlows{
 		{
-			41, // serviceLBTable
+			"ServiceLB", // serviceLBTable
 			svcLBflows,
 		},
 		{
-			42,
-			[]string{fmt.Sprintf(table42Format, nginxIP)}, // endpointNATTable
+			"EndpointDNAT",
+			[]string{fmt.Sprintf(tableEndpointDNATFlowFormat, nginxIP)}, // endpointNATTable
 		},
 	}
 
@@ -757,7 +914,7 @@ func testProxyServiceLifeCycle(ipFamily *corev1.IPFamily, ingressIPs []string, d
 	require.NoError(t, err)
 	require.Contains(t, groupOutput, groupKeyword)
 	for _, expectedTable := range expectedFlows {
-		tableOutput, _, err := data.runCommandFromPod(metav1.NamespaceSystem, agentName, "antrea-agent", []string{"ovs-ofctl", "dump-flows", defaultBridgeName, fmt.Sprintf("table=%d", expectedTable.tableID)})
+		tableOutput, _, err := data.runCommandFromPod(metav1.NamespaceSystem, agentName, "antrea-agent", []string{"ovs-ofctl", "dump-flows", defaultBridgeName, fmt.Sprintf("table=%s", expectedTable.tableName)})
 		require.NoError(t, err)
 		for _, expectedFlow := range expectedTable.flows {
 			require.Contains(t, tableOutput, expectedFlow)
@@ -774,7 +931,7 @@ func testProxyServiceLifeCycle(ipFamily *corev1.IPFamily, ingressIPs []string, d
 	require.NoError(t, err)
 	require.NotContains(t, groupOutput, groupKeyword)
 	for _, expectedTable := range expectedFlows {
-		tableOutput, _, err := data.runCommandFromPod(metav1.NamespaceSystem, agentName, "antrea-agent", []string{"ovs-ofctl", "dump-flows", defaultBridgeName, fmt.Sprintf("table=%d", expectedTable.tableID)})
+		tableOutput, _, err := data.runCommandFromPod(metav1.NamespaceSystem, agentName, "antrea-agent", []string{"ovs-ofctl", "dump-flows", defaultBridgeName, fmt.Sprintf("table=%s", expectedTable.tableName)})
 		require.NoError(t, err)
 		for _, expectedFlow := range expectedTable.flows {
 			require.NotContains(t, tableOutput, expectedFlow)

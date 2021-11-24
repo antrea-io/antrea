@@ -438,7 +438,7 @@ func testTraceflowIntraNode(t *testing.T, data *TestData) {
 						},
 						{
 							Component:     v1alpha1.ComponentForwarding,
-							ComponentInfo: "Output",
+							ComponentInfo: "L2ForwardingOut",
 							Action:        v1alpha1.ActionDelivered,
 						},
 					},
@@ -488,7 +488,7 @@ func testTraceflowIntraNode(t *testing.T, data *TestData) {
 						},
 						{
 							Component:     v1alpha1.ComponentForwarding,
-							ComponentInfo: "Output",
+							ComponentInfo: "L2ForwardingOut",
 							Action:        v1alpha1.ActionDelivered,
 						},
 					},
@@ -533,7 +533,7 @@ func testTraceflowIntraNode(t *testing.T, data *TestData) {
 						},
 						{
 							Component:     v1alpha1.ComponentForwarding,
-							ComponentInfo: "Output",
+							ComponentInfo: "L2ForwardingOut",
 							Action:        v1alpha1.ActionDelivered,
 						},
 					},
@@ -638,7 +638,7 @@ func testTraceflowIntraNode(t *testing.T, data *TestData) {
 						},
 						{
 							Component:     v1alpha1.ComponentForwarding,
-							ComponentInfo: "Output",
+							ComponentInfo: "L2ForwardingOut",
 							Action:        v1alpha1.ActionDelivered,
 						},
 					},
@@ -802,7 +802,7 @@ func testTraceflowIntraNode(t *testing.T, data *TestData) {
 						},
 						{
 							Component:     v1alpha1.ComponentForwarding,
-							ComponentInfo: "Output",
+							ComponentInfo: "L2ForwardingOut",
 							Action:        v1alpha1.ActionDelivered,
 						},
 					},
@@ -852,7 +852,7 @@ func testTraceflowIntraNode(t *testing.T, data *TestData) {
 						},
 						{
 							Component:     v1alpha1.ComponentForwarding,
-							ComponentInfo: "Output",
+							ComponentInfo: "L2ForwardingOut",
 							Action:        v1alpha1.ActionDelivered,
 						},
 					},
@@ -897,7 +897,7 @@ func testTraceflowIntraNode(t *testing.T, data *TestData) {
 						},
 						{
 							Component:     v1alpha1.ComponentForwarding,
-							ComponentInfo: "Output",
+							ComponentInfo: "L2ForwardingOut",
 							Action:        v1alpha1.ActionDelivered,
 						},
 					},
@@ -970,7 +970,7 @@ func testTraceflowIntraNode(t *testing.T, data *TestData) {
 						},
 						{
 							Component:     v1alpha1.ComponentForwarding,
-							ComponentInfo: "Output",
+							ComponentInfo: "L2ForwardingOut",
 							Action:        v1alpha1.ActionDelivered,
 						},
 					},
@@ -1018,7 +1018,7 @@ func testTraceflowIntraNode(t *testing.T, data *TestData) {
 						},
 						{
 							Component:     v1alpha1.ComponentForwarding,
-							ComponentInfo: "Output",
+							ComponentInfo: "L2ForwardingOut",
 							Action:        v1alpha1.ActionDelivered,
 						},
 					},
@@ -1066,7 +1066,7 @@ func testTraceflowIntraNode(t *testing.T, data *TestData) {
 						},
 						{
 							Component:     v1alpha1.ComponentForwarding,
-							ComponentInfo: "Output",
+							ComponentInfo: "L2ForwardingOut",
 							Action:        v1alpha1.ActionDelivered,
 						},
 					},
@@ -1214,7 +1214,7 @@ func testTraceflowInterNode(t *testing.T, data *TestData) {
 						},
 						{
 							Component:     v1alpha1.ComponentForwarding,
-							ComponentInfo: "Output",
+							ComponentInfo: "L2ForwardingOut",
 							Action:        v1alpha1.ActionForwarded,
 						},
 					},
@@ -1228,7 +1228,7 @@ func testTraceflowInterNode(t *testing.T, data *TestData) {
 						},
 						{
 							Component:     v1alpha1.ComponentForwarding,
-							ComponentInfo: "Output",
+							ComponentInfo: "L2ForwardingOut",
 							Action:        v1alpha1.ActionDelivered,
 						},
 					},
@@ -1278,7 +1278,7 @@ func testTraceflowInterNode(t *testing.T, data *TestData) {
 						},
 						{
 							Component:     v1alpha1.ComponentForwarding,
-							ComponentInfo: "Output",
+							ComponentInfo: "L2ForwardingOut",
 							Action:        v1alpha1.ActionForwarded,
 						},
 					},
@@ -1292,7 +1292,7 @@ func testTraceflowInterNode(t *testing.T, data *TestData) {
 						},
 						{
 							Component:     v1alpha1.ComponentForwarding,
-							ComponentInfo: "Output",
+							ComponentInfo: "L2ForwardingOut",
 							Action:        v1alpha1.ActionDelivered,
 						},
 					},
@@ -1337,7 +1337,7 @@ func testTraceflowInterNode(t *testing.T, data *TestData) {
 						},
 						{
 							Component:     v1alpha1.ComponentForwarding,
-							ComponentInfo: "Output",
+							ComponentInfo: "L2ForwardingOut",
 							Action:        v1alpha1.ActionForwarded,
 						},
 					},
@@ -1351,7 +1351,7 @@ func testTraceflowInterNode(t *testing.T, data *TestData) {
 						},
 						{
 							Component:     v1alpha1.ComponentForwarding,
-							ComponentInfo: "Output",
+							ComponentInfo: "L2ForwardingOut",
 							Action:        v1alpha1.ActionDelivered,
 						},
 					},
@@ -1409,7 +1409,7 @@ func testTraceflowInterNode(t *testing.T, data *TestData) {
 						},
 						{
 							Component:     v1alpha1.ComponentForwarding,
-							ComponentInfo: "Output",
+							ComponentInfo: "L2ForwardingOut",
 							Action:        v1alpha1.ActionForwarded,
 						},
 					},
@@ -1423,7 +1423,7 @@ func testTraceflowInterNode(t *testing.T, data *TestData) {
 						},
 						{
 							Component:     v1alpha1.ComponentForwarding,
-							ComponentInfo: "Output",
+							ComponentInfo: "L2ForwardingOut",
 							Action:        v1alpha1.ActionDelivered,
 						},
 					},
@@ -1471,7 +1471,7 @@ func testTraceflowInterNode(t *testing.T, data *TestData) {
 						{
 							Component:       v1alpha1.ComponentLB,
 							Pod:             fmt.Sprintf("%s/%s", testNamespace, nginxPodName),
-							TranslatedSrcIP: "169.254.169.252",
+							TranslatedSrcIP: config.VirtualServiceIPv4.String(),
 							TranslatedDstIP: nginxIPv4Str,
 							Action:          v1alpha1.ActionForwarded,
 						},
@@ -1482,7 +1482,7 @@ func testTraceflowInterNode(t *testing.T, data *TestData) {
 						},
 						{
 							Component:     v1alpha1.ComponentForwarding,
-							ComponentInfo: "Output",
+							ComponentInfo: "L2ForwardingOut",
 							Action:        v1alpha1.ActionDelivered,
 						},
 					},
@@ -1525,7 +1525,7 @@ func testTraceflowInterNode(t *testing.T, data *TestData) {
 						},
 						{
 							Component:     v1alpha1.ComponentForwarding,
-							ComponentInfo: "Output",
+							ComponentInfo: "L2ForwardingOut",
 							Action:        v1alpha1.ActionForwarded,
 						},
 					},
@@ -1539,7 +1539,7 @@ func testTraceflowInterNode(t *testing.T, data *TestData) {
 						},
 						{
 							Component:     v1alpha1.ComponentForwarding,
-							ComponentInfo: "Output",
+							ComponentInfo: "L2ForwardingOut",
 							Action:        v1alpha1.ActionDelivered,
 						},
 					},
@@ -1591,7 +1591,7 @@ func testTraceflowInterNode(t *testing.T, data *TestData) {
 						},
 						{
 							Component:     v1alpha1.ComponentForwarding,
-							ComponentInfo: "Output",
+							ComponentInfo: "L2ForwardingOut",
 							Action:        v1alpha1.ActionForwarded,
 						},
 					},
@@ -1605,7 +1605,7 @@ func testTraceflowInterNode(t *testing.T, data *TestData) {
 						},
 						{
 							Component:     v1alpha1.ComponentForwarding,
-							ComponentInfo: "Output",
+							ComponentInfo: "L2ForwardingOut",
 							Action:        v1alpha1.ActionDelivered,
 						},
 					},
@@ -1656,7 +1656,7 @@ func testTraceflowInterNode(t *testing.T, data *TestData) {
 						},
 						{
 							Component:     v1alpha1.ComponentForwarding,
-							ComponentInfo: "Output",
+							ComponentInfo: "L2ForwardingOut",
 							Action:        v1alpha1.ActionForwarded,
 						},
 					},
@@ -1670,7 +1670,7 @@ func testTraceflowInterNode(t *testing.T, data *TestData) {
 						},
 						{
 							Component:     v1alpha1.ComponentForwarding,
-							ComponentInfo: "Output",
+							ComponentInfo: "L2ForwardingOut",
 							Action:        v1alpha1.ActionDelivered,
 						},
 					},
@@ -1715,7 +1715,7 @@ func testTraceflowInterNode(t *testing.T, data *TestData) {
 						},
 						{
 							Component:     v1alpha1.ComponentForwarding,
-							ComponentInfo: "Output",
+							ComponentInfo: "L2ForwardingOut",
 							Action:        v1alpha1.ActionForwarded,
 						},
 					},
@@ -1729,7 +1729,7 @@ func testTraceflowInterNode(t *testing.T, data *TestData) {
 						},
 						{
 							Component:     v1alpha1.ComponentForwarding,
-							ComponentInfo: "Output",
+							ComponentInfo: "L2ForwardingOut",
 							Action:        v1alpha1.ActionDelivered,
 						},
 					},
@@ -1787,7 +1787,7 @@ func testTraceflowInterNode(t *testing.T, data *TestData) {
 						},
 						{
 							Component:     v1alpha1.ComponentForwarding,
-							ComponentInfo: "Output",
+							ComponentInfo: "L2ForwardingOut",
 							Action:        v1alpha1.ActionForwarded,
 						},
 					},
@@ -1801,7 +1801,7 @@ func testTraceflowInterNode(t *testing.T, data *TestData) {
 						},
 						{
 							Component:     v1alpha1.ComponentForwarding,
-							ComponentInfo: "Output",
+							ComponentInfo: "L2ForwardingOut",
 							Action:        v1alpha1.ActionDelivered,
 						},
 					},
@@ -1849,7 +1849,7 @@ func testTraceflowInterNode(t *testing.T, data *TestData) {
 						{
 							Component:       v1alpha1.ComponentLB,
 							Pod:             fmt.Sprintf("%s/%s", testNamespace, nginxPodName),
-							TranslatedSrcIP: "fc00::aabb:ccdd:eeff",
+							TranslatedSrcIP: config.VirtualServiceIPv6.String(),
 							TranslatedDstIP: nginxIPv6Str,
 							Action:          v1alpha1.ActionForwarded,
 						},
@@ -1860,7 +1860,7 @@ func testTraceflowInterNode(t *testing.T, data *TestData) {
 						},
 						{
 							Component:     v1alpha1.ComponentForwarding,
-							ComponentInfo: "Output",
+							ComponentInfo: "L2ForwardingOut",
 							Action:        v1alpha1.ActionDelivered,
 						},
 					},
@@ -1908,7 +1908,7 @@ func testTraceflowInterNode(t *testing.T, data *TestData) {
 						},
 						{
 							Component:     v1alpha1.ComponentForwarding,
-							ComponentInfo: "Output",
+							ComponentInfo: "L2ForwardingOut",
 							Action:        v1alpha1.ActionForwarded,
 						},
 					},
@@ -1922,7 +1922,7 @@ func testTraceflowInterNode(t *testing.T, data *TestData) {
 						},
 						{
 							Component:     v1alpha1.ComponentForwarding,
-							ComponentInfo: "Output",
+							ComponentInfo: "L2ForwardingOut",
 							Action:        v1alpha1.ActionDelivered,
 						},
 					},
@@ -1981,7 +1981,7 @@ func testTraceflowExternalIP(t *testing.T, data *TestData) {
 					},
 					{
 						Component:     v1alpha1.ComponentForwarding,
-						ComponentInfo: "Output",
+						ComponentInfo: "L2ForwardingOut",
 						Action:        v1alpha1.ActionForwardedOutOfOverlay,
 					},
 				},
