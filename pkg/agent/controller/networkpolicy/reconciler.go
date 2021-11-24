@@ -217,6 +217,7 @@ func newReconciler(ofClient openflow.Client,
 	idAllocator *idAllocator,
 	fqdnController *fqdnController,
 	groupCounters []proxytypes.GroupCounter,
+	antreaPolicyEnabled bool,
 ) *reconciler {
 	priorityAssigners := map[uint8]*tablePriorityAssigner{}
 	for _, table := range openflow.GetAntreaPolicyBaselineTierTables() {
@@ -224,9 +225,11 @@ func newReconciler(ofClient openflow.Client,
 			assigner: newPriorityAssigner(true),
 		}
 	}
-	for _, table := range openflow.GetAntreaPolicyMultiTierTables() {
-		priorityAssigners[table.GetID()] = &tablePriorityAssigner{
-			assigner: newPriorityAssigner(false),
+	if antreaPolicyEnabled {
+		for _, table := range openflow.GetAntreaPolicyMultiTierTables() {
+			priorityAssigners[table.GetID()] = &tablePriorityAssigner{
+				assigner: newPriorityAssigner(false),
+			}
 		}
 	}
 	reconciler := &reconciler{

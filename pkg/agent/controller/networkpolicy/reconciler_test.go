@@ -102,7 +102,7 @@ func newTestReconciler(t *testing.T, controller *gomock.Controller, ifaceStore i
 	f, _ := newMockFQDNController(t, controller, nil)
 	ch := make(chan string, 100)
 	groupCounters := []proxytypes.GroupCounter{proxytypes.NewGroupCounter(false, ch)}
-	r := newReconciler(ofClient, ifaceStore, newIDAllocator(testAsyncDeleteInterval), f, groupCounters)
+	r := newReconciler(ofClient, ifaceStore, newIDAllocator(testAsyncDeleteInterval), f, groupCounters, true)
 	return r
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2020 Antrea Authors
+// Copyright 2021 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@ import (
 	"golang.org/x/time/rate"
 	"k8s.io/klog/v2"
 
-	"antrea.io/antrea/pkg/ovs/openflow"
+	binding "antrea.io/antrea/pkg/ovs/openflow"
 )
 
 type ofpPacketInReason uint8
@@ -58,29 +58,29 @@ func (c *client) RegisterPacketInHandler(packetHandlerReason uint8, packetHandle
 		klog.Errorf("Invalid controller to handle packetin.")
 		return
 	}
-	if c.packetInHandlers[packetHandlerReason] == nil {
-		c.packetInHandlers[packetHandlerReason] = map[string]PacketInHandler{}
+	if c.featureNetworkPolicy.packetInHandlers[packetHandlerReason] == nil {
+		c.featureNetworkPolicy.packetInHandlers[packetHandlerReason] = map[string]PacketInHandler{}
 	}
-	c.packetInHandlers[packetHandlerReason][packetHandlerName] = handler
+	c.featureNetworkPolicy.packetInHandlers[packetHandlerReason][packetHandlerName] = handler
 }
 
 // featureStartPacketIn contains packetin resources specifically for each feature that uses packetin.
 type featureStartPacketIn struct {
 	reason        uint8
 	stopCh        <-chan struct{}
-	packetInQueue *openflow.PacketInQueue
+	packetInQueue *binding.PacketInQueue
 }
 
 func newfeatureStartPacketIn(reason uint8, stopCh <-chan struct{}) *featureStartPacketIn {
 	featurePacketIn := featureStartPacketIn{reason: reason, stopCh: stopCh}
-	featurePacketIn.packetInQueue = openflow.NewPacketInQueue(PacketInQueueSize, rate.Limit(PacketInQueueRate))
+	featurePacketIn.packetInQueue = binding.NewPacketInQueue(PacketInQueueSize, rate.Limit(PacketInQueueRate))
 
 	return &featurePacketIn
 }
 
 // StartPacketInHandler is the starting point for processing feature packetin requests.
 func (c *client) StartPacketInHandler(packetInStartedReason []uint8, stopCh <-chan struct{}) {
-	if len(c.packetInHandlers) == 0 || len(packetInStartedReason) == 0 {
+	if len(c.featureNetworkPolicy.packetInHandlers) == 0 || len(packetInStartedReason) == 0 {
 		return
 	}
 
@@ -110,7 +110,7 @@ func (c *client) parsePacketIn(featurePacketIn *featureStartPacketIn) {
 			return
 		}
 		// Use corresponding handlers subscribed to the reason to handle PacketIn
-		for name, handler := range c.packetInHandlers[featurePacketIn.reason] {
+		for name, handler := range c.featureNetworkPolicy.packetInHandlers[featurePacketIn.reason] {
 			err := handler.HandlePacketIn(pktIn)
 			if err != nil {
 				klog.Errorf("PacketIn handler %s failed to process packet: %+v", name, err)
