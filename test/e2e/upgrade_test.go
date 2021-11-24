@@ -88,7 +88,8 @@ func TestUpgrade(t *testing.T) {
 		extraOptions = "--prune -l app=antrea --prune-whitelist=apiregistration.k8s.io/v1/APIService"
 	}
 	// Do not wait for agent rollout as its updateStrategy is set to OnDelete for upgrade test.
-	if err := data.deployAntreaCommon(*upgradeToYML, extraOptions, false); err != nil {
+	configuration := deployAntreaConfiguration{"AntreaUpgrade", []string{*upgradeToYML}, false}
+	if err := data.deployAntreaCommon(configuration, extraOptions, false); err != nil {
 		t.Fatalf("Error upgrading Antrea: %v", err)
 	}
 	if *controllerOnly == false {

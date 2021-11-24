@@ -85,6 +85,7 @@ const (
 	ovsContainerName           string = "antrea-ovs"
 	agentContainerName         string = "antrea-agent"
 	antreaYML                  string = "antrea.yml"
+	antreaWindowsYML           string = "antrea-windows.yml"
 	antreaIPSecYML             string = "antrea-ipsec.yml"
 	antreaWireGuardGoYML       string = "antrea-wireguard-go.yml"
 	antreaWireGuardGoCovYML    string = "antrea-wireguard-go-coverage.yml"
@@ -203,41 +204,46 @@ type PodIPs struct {
 	ipStrings []string
 }
 
-type deployAntreaOptions int
-
-const (
-	deployAntreaDefault deployAntreaOptions = iota
-	deployAntreaIPsec
-	deployAntreaWireGuardGo
-	deployAntreaCoverageOffset
-)
-
-func (o deployAntreaOptions) WithCoverage() deployAntreaOptions {
-	return o + deployAntreaCoverageOffset
+type deployAntreaConfiguration struct {
+	name          string
+	ymls          []string
+	windowsAgents bool
 }
 
-func (o deployAntreaOptions) DeployYML() string {
-	return deployAntreaOptionsYML[o]
+func (c deployAntreaConfiguration) withCoverage() deployAntreaConfiguration {
+	var covYMLMap = map[string]string{
+		antreaYML:            antreaCovYML,
+		antreaIPSecYML:       antreaIPSecCovYML,
+		antreaWireGuardGoYML: antreaWireGuardGoCovYML,
+	}
+	newConfig := deployAntreaConfiguration{
+		name: c.name,
+		ymls: []string{},
+	}
+	for i := range c.ymls {
+		yml := c.ymls[i]
+		if _, ok := covYMLMap[yml]; ok {
+			newConfig.ymls = append(newConfig.ymls, covYMLMap[yml])
+		} else {
+			newConfig.ymls = append(newConfig.ymls, yml)
+		}
+	}
+	return newConfig
 }
 
-func (o deployAntreaOptions) String() string {
-	return deployAntreaOptionsString[o]
+func (c deployAntreaConfiguration) getYML() []string {
+	return c.ymls
+}
+
+func (c deployAntreaConfiguration) hasWindowsAgents() bool {
+	return c.windowsAgents
 }
 
 var (
-	deployAntreaOptionsString = [...]string{
-		"AntreaDefault",
-		"AntreaWithIPSec",
-		"AntreaWithWireGuardGo",
-	}
-	deployAntreaOptionsYML = [...]string{
-		antreaYML,
-		antreaIPSecYML,
-		antreaWireGuardGoYML,
-		antreaCovYML,
-		antreaIPSecCovYML,
-		antreaWireGuardGoCovYML,
-	}
+	deployAntreaDefault     = deployAntreaConfiguration{"AntreaDefault", []string{antreaYML}, false}
+	deployAntreaWindows     = deployAntreaConfiguration{"AntreaWindows", []string{antreaYML, antreaWindowsYML}, true}
+	deployAntreaIPsec       = deployAntreaConfiguration{"AntreaWithIPSec", []string{antreaIPSecYML}, false}
+	deployAntreaWireGuardGo = deployAntreaConfiguration{"AntreaWithWireGuardGo", []string{antreaWireGuardGoYML}, false}
 )
 
 func (p PodIPs) String() string {
@@ -643,33 +649,54 @@ func (data *TestData) deleteTestNamespace(timeout time.Duration) error {
 }
 
 // deployAntreaCommon deploys Antrea using kubectl on the control-plane Node.
-func (data *TestData) deployAntreaCommon(yamlFile string, extraOptions string, waitForAgentRollout bool) error {
+func (data *TestData) deployAntreaCommon(configuration deployAntreaConfiguration, extraOptions string, waitForAgentRollout bool) error {
 	// TODO: use the K8s apiserver when server side apply is available?
 	// See https://kubernetes.io/docs/reference/using-api/api-concepts/#server-side-apply
-	rc, _, _, err := provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl apply %s -f %s", extraOptions, yamlFile))
-	if err != nil || rc != 0 {
-		return fmt.Errorf("error when deploying Antrea; is %s available on the control-plane Node?", yamlFile)
+	deployYML := func(yml string) error {
+		rc, _, _, err := provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl apply %s -f %s", extraOptions, yml))
+		if err != nil || rc != 0 {
+			return fmt.Errorf("error when deploying Antrea; is %s available on the control-plane Node?", yml)
+		}
+		return nil
 	}
+	rolloutAgent := func(ds string) error {
+		rc, stdout, stderr, err := provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl -n %s rollout status ds/%s --timeout=%v", antreaNamespace, ds, defaultTimeout))
+		if err != nil || rc != 0 {
+			return fmt.Errorf("error when waiting for antrea-agent (%s) rollout to complete - rc: %v - stdout: %v - stderr: %v - err: %v", ds, rc, stdout, stderr, err)
+		}
+		return nil
+	}
+
+	for _, yamlFile := range configuration.getYML() {
+		if err := deployYML(yamlFile); err != nil {
+			return err
+		}
+	}
+	if waitForAgentRollout {
+		if err := rolloutAgent(antreaDaemonSet); err != nil {
+			return err
+		}
+		if configuration.hasWindowsAgents() {
+			if err := rolloutAgent(antreaWindowsDaemonSet); err != nil {
+				return err
+			}
+		}
+	}
+
 	rc, stdout, stderr, err := provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl -n %s rollout status deploy/%s --timeout=%v", antreaNamespace, antreaDeployment, defaultTimeout))
 	if err != nil || rc != 0 {
 		return fmt.Errorf("error when waiting for antrea-controller rollout to complete - rc: %v - stdout: %v - stderr: %v - err: %v", rc, stdout, stderr, err)
-	}
-	if waitForAgentRollout {
-		rc, _, _, err = provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl -n %s rollout status ds/%s --timeout=%v", antreaNamespace, antreaDaemonSet, defaultTimeout))
-		if err != nil || rc != 0 {
-			return fmt.Errorf("error when waiting for antrea-agent rollout to complete - rc: %v - stdout: %v - stderr: %v - err: %v", rc, stdout, stderr, err)
-		}
 	}
 
 	return nil
 }
 
 // deployAntrea deploys Antrea with deploy options.
-func (data *TestData) deployAntrea(option deployAntreaOptions) error {
+func (data *TestData) deployAntrea(configuration deployAntreaConfiguration) error {
 	if testOptions.enableCoverage {
-		option = option.WithCoverage()
+		configuration = configuration.withCoverage()
 	}
-	return data.deployAntreaCommon(option.DeployYML(), "", true)
+	return data.deployAntreaCommon(configuration, "", true)
 }
 
 // deployAntreaFlowExporter deploys Antrea with flow exporter config params enabled.

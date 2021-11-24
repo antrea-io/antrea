@@ -250,16 +250,16 @@ func testPodConnectivityDifferentNodes(t *testing.T, data *TestData) {
 	data.testPodConnectivityDifferentNodes(t)
 }
 
-func (data *TestData) redeployAntrea(t *testing.T, option deployAntreaOptions) {
+func (data *TestData) redeployAntrea(t *testing.T, configuration deployAntreaConfiguration) {
 	var err error
 	// export logs before deleting Antrea
-	exportLogs(t, data, fmt.Sprintf("beforeRedeploy%s", option), false)
+	exportLogs(t, data, fmt.Sprintf("beforeRedeploy%s", configuration.name), false)
 	t.Logf("Deleting Antrea Agent DaemonSet")
 	if err = data.deleteAntrea(defaultTimeout); err != nil {
 		t.Fatalf("Error when deleting Antrea DaemonSet: %v", err)
 	}
 	t.Logf("Applying Antrea YAML")
-	err = data.deployAntrea(option)
+	err = data.deployAntrea(configuration)
 	if err != nil {
 		t.Fatalf("Error when applying Antrea YAML: %v", err)
 	}
