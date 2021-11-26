@@ -48,7 +48,7 @@ var (
 	fromGatewayMark = binding.NewRegMark(sourceField, 1)
 
 	marksReg      = 0
-	gatewayCTMark = binding.NewCTMark(0x20, 0, 7)
+	gatewayCTMark = binding.NewCTMark(0x1, 1, 1)
 	ctZone        = 0xfff0
 
 	count uint64
@@ -1019,9 +1019,9 @@ func prepareFlows(table binding.Table) ([]binding.Flow, []*ExpectFlow) {
 		&ExpectFlow{"priority=190,arp", "NORMAL"},
 		&ExpectFlow{"priority=200,tcp", fmt.Sprintf("learn(table=%d,idle_timeout=10,priority=190,delete_learned,cookie=0x1,eth_type=0x800,nw_proto=6,NXM_OF_TCP_DST[],NXM_NX_REG0[0..15]=0xfff,load:NXM_NX_REG0[0..15]->NXM_NX_REG0[0..15],load:0xffe->NXM_NX_REG0[16..31]),resubmit(,%d)", table.GetID(), table.GetID())},
 		&ExpectFlow{"priority=200,ip", fmt.Sprintf("ct(table=%d,zone=65520)", table.GetNext())},
-		&ExpectFlow{"priority=210,ct_state=-new+trk,ct_mark=0x20/0xff,ip,reg0=0x1/0xffff", gotoTableAction},
-		&ExpectFlow{"priority=200,ct_state=+new+trk,ip,reg0=0x1/0xffff", fmt.Sprintf("ct(commit,table=%d,zone=65520,exec(load:0x20->NXM_NX_CT_MARK[0..7])", table.GetNext())},
-		&ExpectFlow{"priority=200,ct_state=-new+trk,ct_mark=0x20/0xff,ip", fmt.Sprintf("load:0xaaaaaaaaaa11->NXM_OF_ETH_DST[],%s", gotoTableAction)},
+		&ExpectFlow{"priority=210,ct_state=-new+trk,ct_mark=0x2/0x2,ip,reg0=0x1/0xffff", gotoTableAction},
+		&ExpectFlow{"priority=200,ct_state=+new+trk,ip,reg0=0x1/0xffff", fmt.Sprintf("ct(commit,table=%d,zone=65520,exec(load:0x1->NXM_NX_CT_MARK[1])", table.GetNext())},
+		&ExpectFlow{"priority=200,ct_state=-new+trk,ct_mark=0x2/0x2,ip", fmt.Sprintf("load:0xaaaaaaaaaa11->NXM_OF_ETH_DST[],%s", gotoTableAction)},
 		&ExpectFlow{"priority=200,ct_state=+new+inv,ip", "drop"},
 		&ExpectFlow{"priority=190,ct_state=+new+trk,ip", fmt.Sprintf("ct(commit,table=%d,zone=65520)", table.GetNext())},
 		&ExpectFlow{"priority=200,ip,dl_dst=aa:bb:cc:dd:ee:ff,nw_dst=192.168.1.3", fmt.Sprintf("set_field:aa:aa:aa:aa:aa:11->eth_src,set_field:aa:aa:aa:aa:aa:13->eth_dst,dec_ttl,%s", gotoTableAction)},

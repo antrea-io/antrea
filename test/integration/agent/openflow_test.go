@@ -718,7 +718,7 @@ func expectedProxyServiceGroupAndFlows(gid uint32, svc svcConfig, endpointList [
 		unionVal := (0b010 << 16) + uint32(epPort)
 		epDNATFlows.flows = append(epDNATFlows.flows, &ofTestUtils.ExpectFlow{
 			MatchStr: fmt.Sprintf("priority=200,%s,reg3=%s,reg4=0x%x/0x7ffff", string(svc.protocol), epIP, unionVal),
-			ActStr:   fmt.Sprintf("ct(commit,table=50,zone=65520,nat(dst=%s:%d),exec(load:0x21->NXM_NX_CT_MARK[])", ep.IP(), epPort),
+			ActStr:   fmt.Sprintf("ct(commit,table=50,zone=65520,nat(dst=%s:%d),exec(load:0x1->NXM_NX_CT_MARK[2])", ep.IP(), epPort),
 		})
 
 		if ep.GetIsLocal() {
@@ -1201,11 +1201,11 @@ func prepareGatewayFlows(gwIPs []net.IP, gwMAC net.HardwareAddr, vMAC net.Hardwa
 				uint8(70),
 				[]*ofTestUtils.ExpectFlow{
 					{
-						MatchStr: fmt.Sprintf("priority=210,ct_state=+rpl+trk,ct_mark=0x20,%s,reg0=0x2/0xf", ipProtoStr),
+						MatchStr: fmt.Sprintf("priority=210,ct_state=+rpl+trk,ct_mark=0x2/0x2,%s,reg0=0x2/0xf", ipProtoStr),
 						ActStr:   fmt.Sprintf("set_field:%s->eth_dst,goto_table:80", gwMAC.String()),
 					},
 					{
-						MatchStr: fmt.Sprintf("priority=210,ct_state=+rpl+trk,ct_mark=0x20,%s,reg0=0/0xf", ipProtoStr),
+						MatchStr: fmt.Sprintf("priority=210,ct_state=+rpl+trk,ct_mark=0x2/0x2,%s,reg0=0/0xf", ipProtoStr),
 						ActStr:   fmt.Sprintf("set_field:%s->eth_dst,goto_table:80", gwMAC.String()),
 					},
 				},
@@ -1324,7 +1324,7 @@ func prepareDefaultFlows(config *testConfig) []expectTableFlows {
 			&ofTestUtils.ExpectFlow{MatchStr: "priority=190,ct_state=+inv+trk,ip", ActStr: "drop"},
 		)
 		table105Flows.flows = append(table105Flows.flows,
-			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ct_state=+new+trk,ip,reg0=0x1/0xf", ActStr: "ct(commit,table=108,zone=65520,exec(load:0x20->NXM_NX_CT_MARK[])"},
+			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ct_state=+new+trk,ip,reg0=0x1/0xf", ActStr: "ct(commit,table=108,zone=65520,exec(load:0x1->NXM_NX_CT_MARK[1])"},
 			&ofTestUtils.ExpectFlow{MatchStr: "priority=190,ct_state=+new+trk,ip", ActStr: "ct(commit,table=108,zone=65520)"},
 		)
 		table72Flows.flows = append(table72Flows.flows,
@@ -1340,7 +1340,7 @@ func prepareDefaultFlows(config *testConfig) []expectTableFlows {
 			&ofTestUtils.ExpectFlow{MatchStr: "priority=190,ct_state=+inv+trk,ipv6", ActStr: "drop"},
 		)
 		table105Flows.flows = append(table105Flows.flows,
-			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ct_state=+new+trk,ipv6,reg0=0x1/0xf", ActStr: "ct(commit,table=108,zone=65510,exec(load:0x20->NXM_NX_CT_MARK[])"},
+			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ct_state=+new+trk,ipv6,reg0=0x1/0xf", ActStr: "ct(commit,table=108,zone=65510,exec(load:0x1->NXM_NX_CT_MARK[1])"},
 			&ofTestUtils.ExpectFlow{MatchStr: "priority=190,ct_state=+new+trk,ipv6", ActStr: "ct(commit,table=108,zone=65510)"},
 		)
 		table72Flows.flows = append(table72Flows.flows,

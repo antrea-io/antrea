@@ -231,13 +231,14 @@ func (b *ofFlowBuilder) MatchCTStateSNAT(set bool) FlowBuilder {
 }
 
 func (b *ofFlowBuilder) MatchCTMark(mark *CtMark) FlowBuilder {
-	ctmarkKey := fmt.Sprintf("ct_mark=0x%x", mark.value)
-	b.ofFlow.Match.CtMark = mark.value
+	var ctmarkKey string
+	b.ofFlow.Match.CtMark = mark.GetValue()
 	if mark.isFullRange() {
 		b.ofFlow.Match.CtMarkMask = nil
+		ctmarkKey = fmt.Sprintf("ct_mark=0x%x", mark.value)
 	} else {
 		mask := mark.rng.ToNXRange().ToUint32Mask()
-		ctmarkKey = fmt.Sprintf("%s/0x%x", ctmarkKey, mask)
+		ctmarkKey = fmt.Sprintf("ct_mark=0x%x/0x%x", mark.GetValue(), mask)
 		b.ofFlow.Match.CtMarkMask = &mask
 	}
 	b.matchers = append(b.matchers, ctmarkKey)
