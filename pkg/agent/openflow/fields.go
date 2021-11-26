@@ -136,14 +136,17 @@ var (
 
 // Marks using CT.
 var (
+	//TODO: There is a bug in libOpenflow when CT_MARK range is from 0 to 0, and a wrong mask will be got,
+	// so bit 0 of CT_MARK is not used for now.
+
 	// Mark to indicate the connection is initiated through the host gateway interface
 	// (i.e. for which the first packet of the connection was received through the gateway).
-	FromGatewayCTMark = binding.NewCTMark(0x20, 0, 31)
+	FromGatewayCTMark = binding.NewCTMark(0b1, 1, 1)
 	// Mark to indicate DNAT is performed on the connection for Service.
-	ServiceCTMark = binding.NewCTMark(0x21, 0, 31)
+	ServiceCTMark = binding.NewCTMark(0b1, 2, 2)
 	// Mark to indicate the connection is initiated through the host bridge interface
 	// (i.e. for which the first packet of the connection was received through the bridge).
-	FromBridgeCTMark = binding.NewCTMark(0x22, 0, 31)
+	FromBridgeCTMark = binding.NewCTMark(0x1, 3, 3)
 )
 
 // Fields using CT label.

@@ -86,8 +86,10 @@ func (m *CtMark) GetRange() *Range {
 	return m.rng
 }
 
+// GetValue gets CT mark value with offset since CT mark is used by bit. E.g, CT_MARK_REG[3]==1, the return
+// value of this function is 0b1000.
 func (m *CtMark) GetValue() uint32 {
-	return m.value
+	return m.value << m.rng.Offset()
 }
 
 func (m *CtMark) isFullRange() bool {

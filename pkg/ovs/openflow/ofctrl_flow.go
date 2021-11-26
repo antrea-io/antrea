@@ -168,3 +168,7 @@ func (r *Range) ToNXRange() *openflow13.NXRange {
 func (r *Range) Length() uint32 {
 	return r[1] - r[0] + 1
 }
+
+func (r *Range) Offset() uint32 {
+	return r[0]
+}
