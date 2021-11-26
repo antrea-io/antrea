@@ -439,6 +439,7 @@ function deliver_antrea {
 }
 
 function run_integration {
+    flag=$1
     VM_NAME="antrea-integration-0"
     export GOVC_URL=${GOVC_URL}
     export GOVC_USERNAME=${GOVC_USERNAME}
@@ -448,11 +449,20 @@ function run_integration {
     VM_IP=$(govc vm.ip ${VM_NAME}) # wait for VM to be on
 
     set -x
-    echo "===== Run Integration tests ====="
-    # umask ensures that files are cloned with the correct permissions so that Docker caching can be leveraged
-    ${SSH_WITH_UTILS_KEY} -n jenkins@${VM_IP} "umask 0022 && git clone ${ghprbAuthorRepoGitUrl} antrea && cd antrea && git checkout ${GIT_BRANCH} && DOCKER_REGISTRY=${DOCKER_REGISTRY} ./build/images/ovs/build.sh --pull && NO_PULL=${NO_PULL} make docker-test-integration"
-    if [[ "$COVERAGE" == true ]]; then
+    if [[ ${flag} == "multicluster" ]];then
+      echo "===== Run Multi-cluster Integration tests ====="
+      # umask ensures that files are cloned with the correct permissions so that Docker caching can be leveraged
+      ${SSH_WITH_UTILS_KEY} -n jenkins@${VM_IP} "umask 0022 && git clone ${ghprbAuthorRepoGitUrl} antrea && cd antrea && git checkout ${GIT_BRANCH} && cd multicluster && make test-integration"
+      if [[ "$COVERAGE" == true ]]; then
+        run_codecov "mc-integration-tests" "antrea/multicluster/.coverage/coverage-integration.txt" "" true ${VM_IP}
+      fi
+    else
+      echo "===== Run Integration tests ====="
+      # umask ensures that files are cloned with the correct permissions so that Docker caching can be leveraged
+      ${SSH_WITH_UTILS_KEY} -n jenkins@${VM_IP} "umask 0022 && git clone ${ghprbAuthorRepoGitUrl} antrea && cd antrea && git checkout ${GIT_BRANCH} && DOCKER_REGISTRY=${DOCKER_REGISTRY} ./build/images/ovs/build.sh --pull && NO_PULL=${NO_PULL} make docker-test-integration"
+      if [[ "$COVERAGE" == true ]]; then
         run_codecov "integration-tests" "antrea/.coverage/coverage-integration.txt" "" true ${VM_IP}
+      fi
     fi
 }
 
@@ -675,8 +685,8 @@ if [[ "$RUN_CLEANUP_ONLY" == true ]]; then
     exit 0
 fi
 
-if [[ "$TESTCASE" != "e2e" && "$TESTCASE" != "conformance" && "$TESTCASE" != "all-features-conformance" && "$TESTCASE" != "whole-conformance" && "$TESTCASE" != "networkpolicy" && "$TESTCASE" != "integration" ]]; then
-    echoerr "testcase should be e2e, integration, conformance, whole-conformance or networkpolicy"
+if [[ "$TESTCASE" != "e2e" && "$TESTCASE" != "conformance" && "$TESTCASE" != "all-features-conformance" && "$TESTCASE" != "whole-conformance" && "$TESTCASE" != "networkpolicy" && "$TESTCASE" != "integration" && "$TESTCASE" != "multicluster-integration" ]]; then
+    echoerr "testcase should be e2e, integration, multicluster-integration, conformance, whole-conformance or networkpolicy"
     exit 1
 fi
 
@@ -694,6 +704,11 @@ fi
 
 if [[ "$TESTCASE" == "integration" ]]; then
     run_integration
+    exit 0
+fi
+
+if [[ "$TESTCASE" == "multicluster-integration" ]]; then
+    run_integration "multicluster"
     exit 0
 fi
 
