@@ -30,6 +30,18 @@ func NamespacedName(namespace, name string) string {
 	return namespace + "/" + name
 }
 
+// SplitNamespacedName splits conventional K8s resource name
+// to Namespace and Resource Name
+func SplitNamespacedName(name string) (string, string) {
+	tokens := strings.Split(name, "/")
+
+	if len(tokens) == 2 {
+		return tokens[0], tokens[1]
+	}
+
+	return "", tokens[0]
+}
+
 func ParseStatefulSetName(name string) (statefulSetName string, index int, err error) {
 	splittedName := strings.Split(name, "-")
 	if len(splittedName) < 2 {

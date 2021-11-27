@@ -3831,8 +3831,17 @@ rules:
   - crd.antrea.io
   resources:
   - externalippools/status
+  - ippools/status
   verbs:
   - update
+- apiGroups:
+  - apps
+  resources:
+  - statefulsets
+  verbs:
+  - get
+  - list
+  - watch
 - apiGroups:
   - clusterinformation.antrea.tanzu.vmware.com
   resources:

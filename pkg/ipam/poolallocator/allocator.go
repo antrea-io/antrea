@@ -181,6 +181,35 @@ func (a *IPPoolAllocator) updateIPAddressState(ipPool *v1alpha2.IPPool, ip net.I
 
 }
 
+func (a *IPPoolAllocator) appendPoolUsageForStatefulSet(ipPool *v1alpha2.IPPool, ips []net.IP, namespace, name string) error {
+	newPool := ipPool.DeepCopy()
+
+	for i, ip := range ips {
+		owner := v1alpha2.IPAddressOwner{
+			StatefulSet: &v1alpha2.StatefulSetOwner{
+				Namespace: namespace,
+				Name:      name,
+				Index:     i,
+			},
+		}
+		usageEntry := v1alpha2.IPAddressState{
+			IPAddress: ip.String(),
+			Phase:     v1alpha2.IPAddressPhasePreallocated,
+			Owner:     owner,
+		}
+
+		newPool.Status.IPAddresses = append(newPool.Status.IPAddresses, usageEntry)
+	}
+	_, err := a.crdClient.CrdV1alpha2().IPPools().UpdateStatus(context.TODO(), newPool, metav1.UpdateOptions{})
+	if err != nil {
+		klog.Warningf("IP Pool %s update with status %+v failed: %+v", newPool.Name, newPool.Status, err)
+		return err
+	}
+	klog.V(2).InfoS("IP Pool update succeeded", "pool", newPool.Name, "allocation", newPool.Status)
+	return nil
+
+}
+
 // removeIPAddressState updates ipPool status to delete released IP allocation, and keeps preallocation information
 func (a *IPPoolAllocator) removeIPAddressState(ipPool *v1alpha2.IPPool, ip net.IP) error {
 
@@ -306,7 +335,7 @@ func (a *IPPoolAllocator) AllocateNext(state v1alpha2.IPAddressPhase, owner v1al
 	})
 
 	if err != nil {
-		klog.Errorf("Failed to allocate from pool %s: %+v", a.ipPoolName, err)
+		klog.ErrorS(err, "Failed to allocate from IPPool", "IPPool", a.ipPoolName)
 	}
 	return ip, subnetSpec, err
 }
@@ -368,6 +397,32 @@ func (a *IPPoolAllocator) AllocateReservedOrNext(state v1alpha2.IPAddressPhase, 
 	return ip, subnetSpec, err
 }
 
+// AllocateStatefulSet pre-allocates continuous range of IPs for StatefulSet.
+// This functionality is useful when StatefulSet does not have a dedicated IP Pool assigned.
+// It returns error if such range is not available. In this case IPs for the StatefulSet will
+// be allocated on the fly, and there is no guarantee for continuous IPs.
+func (a *IPPoolAllocator) AllocateStatefulSet(namespace, name string, size int) error {
+	// Retry on CRD update conflict which is caused by multiple agents updating a pool at same time.
+	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		ipPool, allocators, err := a.getPoolAndInitIPAllocators()
+		if err != nil {
+			return err
+		}
+
+		ips, err := allocators.AllocateRange(size)
+		if err != nil {
+			return err
+		}
+
+		return a.appendPoolUsageForStatefulSet(ipPool, ips, namespace, name)
+	})
+
+	if err != nil {
+		klog.ErrorS(err, "Failed to allocate from IPPool", "IPPool", a.ipPoolName)
+	}
+	return err
+}
+
 // Release releases the provided IP. It returns error if the IP is not in the range or not allocated,
 // or in case CRD failed to update its state.
 // In case of success, IP pool CRD status is updated with released IP/state/resource.
@@ -391,12 +446,13 @@ func (a *IPPoolAllocator) Release(ip net.IP) error {
 	})
 
 	if err != nil {
-		klog.Errorf("Failed to release IP address %s from pool %s: %+v", ip, a.ipPoolName, err)
+		klog.ErrorS(err, "Failed to release IP address", "IPAddress", ip, "IPPool", a.ipPoolName)
 	}
 	return err
 }
 
-// ReleaseResource releases the IP associated with specified Pod. It returns error if the resource is not present in state or in case CRD failed to update its state.
+// ReleasePod releases the IP associated with specified Pod.
+// It returns error if the pod is not present in state or in case CRD failed to update state.
 // In case of success, IP pool CRD status is updated with released entry.
 func (a *IPPoolAllocator) ReleasePod(namespace, podName string) error {
 
@@ -421,7 +477,52 @@ func (a *IPPoolAllocator) ReleasePod(namespace, podName string) error {
 	})
 
 	if err != nil {
-		klog.Errorf("Failed to release IP address for Pod:%s/%s from pool %s: %+v", namespace, podName, a.ipPoolName, err)
+		klog.ErrorS(err, "Failed to release IP address", "Namespace", namespace, "Pod", podName, "IPPool", a.ipPoolName)
+	}
+	return err
+}
+
+// ReleaseStatefulSet releases all IPs associated with specified StatefulSet. It returns error
+// in case CRD failed to update its state.
+// In case of success, IP pool CRD status is updated with released entries.
+func (a *IPPoolAllocator) ReleaseStatefulSet(namespace, name string) error {
+
+	// Retry on CRD update conflict which is caused by multiple agents updating a pool at same time.
+	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		ipPool, err := a.getPool()
+
+		if err != nil {
+			return err
+		}
+
+		var updatedAdresses []v1alpha2.IPAddressState
+		for _, ip := range ipPool.Status.IPAddresses {
+			if ip.Owner.StatefulSet == nil || ip.Owner.StatefulSet.Namespace != namespace || ip.Owner.StatefulSet.Name != name {
+				updatedAdresses = append(updatedAdresses, ip)
+			}
+		}
+
+		if len(ipPool.Status.IPAddresses) == len(updatedAdresses) {
+			// no change
+			klog.V(4).InfoS("No reserved IPs found", "pool", ipPool.Name, "Namespace", namespace, "StatefulSet", name)
+			return nil
+		}
+
+		newPool := ipPool.DeepCopy()
+		newPool.Status.IPAddresses = updatedAdresses
+
+		_, err = a.crdClient.CrdV1alpha2().IPPools().UpdateStatus(context.TODO(), newPool, metav1.UpdateOptions{})
+		if err != nil {
+			klog.Warningf("IP Pool %s update failed: %+v", newPool.Name, err)
+			return err
+		}
+		klog.V(2).InfoS("IP Pool update successful", "pool", newPool.Name, "allocation", newPool.Status)
+		return nil
+
+	})
+
+	if err != nil {
+		klog.ErrorS(err, "Failed to release IP addresses", "Namespace", namespace, "StatefulSet", name, "IPPool", a.ipPoolName)
 	}
 	return err
 }
@@ -452,7 +553,7 @@ func (a *IPPoolAllocator) ReleaseContainerIfPresent(containerID string) error {
 	})
 
 	if err != nil {
-		klog.Errorf("Failed to release IP address for container %s from pool %s: %+v", containerID, a.ipPoolName, err)
+		klog.ErrorS(err, "Failed to release IP address", "Container", containerID, "IPPool", a.ipPoolName)
 	}
 	return err
 }

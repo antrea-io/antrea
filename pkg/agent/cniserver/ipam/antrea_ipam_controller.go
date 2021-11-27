@@ -19,6 +19,7 @@ import (
 	"net"
 	"strings"
 
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/informers"
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	clientset "k8s.io/client-go/kubernetes"
@@ -85,13 +86,13 @@ func podIndexFunc(obj interface{}) ([]string, error) {
 	if !ok {
 		return nil, fmt.Errorf("obj is not IPPool: %+v", obj)
 	}
-	indexes := make([]string, len(ipPool.Status.IPAddresses))
+	podNames := sets.NewString()
 	for _, IPAddress := range ipPool.Status.IPAddresses {
 		if IPAddress.Owner.Pod != nil {
-			indexes = append(indexes, k8s.NamespacedName(IPAddress.Owner.Pod.Namespace, IPAddress.Owner.Pod.Name))
+			podNames.Insert(k8s.NamespacedName(IPAddress.Owner.Pod.Namespace, IPAddress.Owner.Pod.Name))
 		}
 	}
-	return indexes, nil
+	return podNames.UnsortedList(), nil
 }
 
 func InitializeAntreaIPAMController(kubeClient clientset.Interface, crdClient clientsetversioned.Interface, informerFactory informers.SharedInformerFactory, podInformer cache.SharedIndexInformer, crdInformerFactory externalversions.SharedInformerFactory) (*AntreaIPAMController, error) {
