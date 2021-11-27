@@ -28,6 +28,13 @@ type IPAllocator interface {
 
 	AllocateNext() (net.IP, error)
 
+	// Allocate multiple IPs in one go. This routine will try to allocate continuus
+	// IP space starting from startIP, if specified. If continuus chunk is not
+	// available, other available IPs will be allocated.
+	// With bestEffort=true, AllocateChunk will succeed even if not enough IPs were
+	// available for allocation.
+	AllocateChunk(startIP net.IP, chunkSize int, bestEffort bool) ([]net.IP, error)
+
 	Release(ip net.IP) error
 
 	Used() int
@@ -118,7 +125,7 @@ func (a *SingleIPAllocator) checkReserved(ip net.IP) error {
 
 // AllocateIP allocates the specified IP. It returns error if the IP is not in the range or already allocated.
 func (a *SingleIPAllocator) AllocateIP(ip net.IP) error {
-	offset := int(big.NewInt(0).Sub(utilnet.BigForIP(ip), a.base).Int64())
+	offset := a.getOffset(ip)
 	if offset < 0 || offset >= a.max {
 		return fmt.Errorf("IP %v is not in the ipset", ip)
 	}
@@ -138,6 +145,20 @@ func (a *SingleIPAllocator) AllocateIP(ip net.IP) error {
 	return nil
 }
 
+func (a *SingleIPAllocator) allocateOffset(i int) (net.IP, bool) {
+	if a.allocated.Bit(i) == 0 {
+		ip := utilnet.AddIPOffset(a.base, i)
+		if a.checkReserved(ip) != nil {
+			return nil, false
+		}
+		a.allocated.SetBit(a.allocated, i, 1)
+		a.count++
+		return ip, true
+	}
+
+	return nil, false
+}
+
 // AllocateNext allocates an IP from the IP range. It returns error if no IP is available.
 func (a *SingleIPAllocator) AllocateNext() (net.IP, error) {
 	a.mutex.Lock()
@@ -145,23 +166,60 @@ func (a *SingleIPAllocator) AllocateNext() (net.IP, error) {
 	if a.count >= (a.max - len(a.reservedIPs)) {
 		return nil, fmt.Errorf("no available IP")
 	}
-	for i := 0; i < a.max; i++ {
-		if a.allocated.Bit(i) == 0 {
-			ip := utilnet.AddIPOffset(a.base, i)
-			if a.checkReserved(ip) != nil {
-				continue
-			}
-			a.allocated.SetBit(a.allocated, i, 1)
-			a.count++
+	for i := 0; i <= a.max; i++ {
+		if ip, ok := a.allocateOffset(i); ok {
 			return ip, nil
 		}
 	}
+
+	// we should never reach here
 	return nil, fmt.Errorf("no available IP")
+}
+
+// IP space starting from startIP, if specified. If continuus chunk is not
+// available, other available IPs will be allocated.
+// With bestEffort=true, AllocateChunk will succeed even if not enough IPs were
+// available for allocation. bestEffort=false functionality is used in MultiIPAllocator
+// to ensure race-safe allocation without the need to introduce an extra mutex.
+func (a *SingleIPAllocator) AllocateChunk(startIP net.IP, chunkSize int, bestEffort bool) ([]net.IP, error) {
+	a.mutex.Lock()
+	defer a.mutex.Unlock()
+	if (a.count+chunkSize > (a.max - len(a.reservedIPs))) && !bestEffort {
+		return nil, fmt.Errorf("not enough available IPs")
+	}
+
+	var ips []net.IP
+
+	allocateInRange := func(min, max int) {
+		for i := min; (i < max) && (chunkSize-len(ips)) > 0; i++ {
+			if ip, ok := a.allocateOffset(i); ok {
+				ips = append(ips, ip)
+			}
+		}
+	}
+
+	// first try to allocate a chunk from startIP onwards
+	offset := a.max
+	if startIP != nil {
+		offset = a.getOffset(startIP)
+		if (offset < 0) || (offset > a.max) {
+			return nil, fmt.Errorf("StartIP %s does not match allocator definition", startIP.String())
+		}
+		allocateInRange(offset, a.max)
+	}
+
+	// if not enough IPs allocated with StartIP, continue from beginning
+	allocateInRange(0, offset)
+
+	return ips, nil
+}
+func (a *SingleIPAllocator) getOffset(ip net.IP) int {
+	return int(big.NewInt(0).Sub(utilnet.BigForIP(ip), a.base).Int64())
 }
 
 // Release releases the provided IP. It returns error if the IP is not in the range or not allocated.
 func (a *SingleIPAllocator) Release(ip net.IP) error {
-	offset := int(big.NewInt(0).Sub(utilnet.BigForIP(ip), a.base).Int64())
+	offset := a.getOffset(ip)
 	if offset < 0 || offset >= a.max {
 		return fmt.Errorf("IP %v is not in the ipset", ip)
 	}
@@ -183,9 +241,16 @@ func (a *SingleIPAllocator) Used() int {
 	return a.count
 }
 
+// Used returns the number of the allocated IPs.
+func (a *SingleIPAllocator) Free() int {
+	a.mutex.RLock()
+	defer a.mutex.RUnlock()
+	return a.max - a.count - len(a.reservedIPs)
+}
+
 // Has returns whether the provided IP is in the range or not.
 func (a *SingleIPAllocator) Has(ip net.IP) bool {
-	offset := int(big.NewInt(0).Sub(utilnet.BigForIP(ip), a.base).Int64())
+	offset := a.getOffset(ip)
 	return offset >= 0 && offset < a.max
 }
 
@@ -218,6 +283,60 @@ func (ma MultiIPAllocator) AllocateNext() (net.IP, error) {
 	return nil, fmt.Errorf("cannot allocate IP in any range")
 }
 
+// IP space starting from startIP, if specified. If continuus chunk is not
+// available, other available IPs will be allocated, possibly from different
+// CIDRs/ranges.
+// With bestEffort=true, AllocateChunk will succeed even if not enough IPs were
+// available for allocation.
+func (ma MultiIPAllocator) AllocateChunk(startIP net.IP, chunkSize int, bestEffort bool) ([]net.IP, error) {
+	var ips []net.IP
+
+	if !bestEffort && (chunkSize > ma.Free()) {
+		return nil, fmt.Errorf("Not enough IPs to reserve chunk of size %d", chunkSize)
+	}
+
+	var firstAllocator *SingleIPAllocator
+	// Find the allocator to start from
+	if startIP != nil {
+		for _, a := range ma {
+			if a.Has(startIP) {
+				firstAllocator = a
+			}
+		}
+	}
+
+	// Try our best to allocate from startIP onwards
+	if firstAllocator != nil {
+		if startIPs, _ := firstAllocator.AllocateChunk(startIP, chunkSize, true); startIPs != nil {
+			ips = append(ips, startIPs...)
+			if len(ips) == chunkSize {
+				return ips, nil
+			}
+		}
+	}
+
+	// Not enough IPs allocated - proceed to other allocators
+	for _, a := range ma {
+		size := chunkSize - len(ips)
+		if nextIPs, _ := a.AllocateChunk(nil, size, true); nextIPs != nil {
+			ips = append(ips, nextIPs...)
+		}
+		if len(ips) == chunkSize {
+			return ips, nil
+		}
+	}
+
+	if bestEffort {
+		return ips, nil
+	}
+
+	// not enought IPs to reserve - release back IPs reserved so far
+	for _, ip := range ips {
+		ma.Release(ip)
+	}
+	return nil, fmt.Errorf("cannot allocate IP in any range")
+}
+
 func (ma MultiIPAllocator) Release(ip net.IP) error {
 	for _, a := range ma {
 		if err := a.Release(ip); err == nil {
@@ -233,6 +352,10 @@ func (ma MultiIPAllocator) Used() int {
 		used += a.Used()
 	}
 	return used
+}
+
+func (ma MultiIPAllocator) Free() int {
+	return ma.Total() - ma.Used()
 }
 
 func (ma MultiIPAllocator) Total() int {

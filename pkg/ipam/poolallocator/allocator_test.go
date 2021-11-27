@@ -129,6 +129,40 @@ func TestAllocateNext(t *testing.T) {
 	validateAllocationSequence(t, allocator, subnetInfo, []string{"10.2.2.100", "10.2.2.101"})
 }
 
+func TestAllocateReleaseStatefulSet(t *testing.T) {
+	poolName := "fakePool"
+	setName := "fakeSet"
+	ipRange := crdv1a2.IPRange{
+		Start: "10.2.2.100",
+		End:   "10.2.2.120",
+	}
+	subnetInfo := crdv1a2.SubnetInfo{
+		Gateway:      "10.2.2.1",
+		PrefixLength: 24,
+	}
+	subnetRange := crdv1a2.SubnetIPRange{IPRange: ipRange,
+		SubnetInfo: subnetInfo}
+
+	pool := crdv1a2.IPPool{
+		ObjectMeta: metav1.ObjectMeta{Name: poolName},
+		Spec:       crdv1a2.IPPoolSpec{IPRanges: []crdv1a2.SubnetIPRange{subnetRange}},
+	}
+
+	allocator := newIPPoolAllocator(poolName, []runtime.Object{&pool})
+	err := allocator.AllocateStatefulSet(testNamespace, setName, net.ParseIP("10.2.2.102"), 7)
+	require.NoError(t, err)
+
+	// Make sure reserved IPs are respected for next allocate
+	validateAllocationSequence(t, allocator, subnetInfo, []string{"10.2.2.100", "10.2.2.101", "10.2.2.109"})
+
+	// Release the set
+	err = allocator.ReleaseStatefulSet(testNamespace, setName)
+	require.NoError(t, err)
+
+	// Make sure reserved IPs are released
+	validateAllocationSequence(t, allocator, subnetInfo, []string{"10.2.2.102"})
+}
+
 // This test verifies correct behavior in case of update conflict. Allocation should be retiried
 // Taking into account the latest status
 func TestAllocateConflict(t *testing.T) {

@@ -359,13 +359,22 @@ type IPAddressState struct {
 }
 
 type IPAddressOwner struct {
-	Pod *PodOwner `json:"pod,omitempty"`
+	Pod         *PodOwner         `json:"pod,omitempty"`
+	StatefulSet *StatefulSetOwner `json:"statefulSet,omitempty"`
 }
 
+// Pod owner
 type PodOwner struct {
 	Name        string `json:"name"`
 	Namespace   string `json:"namespace"`
 	ContainerID string `json:"containerID"`
+}
+
+// StatefulSet owner
+type StatefulSetOwner struct {
+	Name      string `json:"name"`
+	Namespace string `json:"namespace"`
+	Index     int    `json:"index"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
