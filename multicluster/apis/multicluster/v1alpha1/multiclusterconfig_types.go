@@ -28,10 +28,6 @@ type MultiClusterConfig struct {
 	metav1.TypeMeta `json:",inline"`
 	// ControllerManagerConfigurationSpec returns the contfigurations for controllers
 	config.ControllerManagerConfigurationSpec `json:",inline"`
-	// Leader is a role of ClusterSet member cluster
-	Leader bool `json:"leader,omitempty"`
-	// Member is a role of ClusterSet member cluster
-	Member bool `json:"member,omitempty"`
 }
 
 func init() {

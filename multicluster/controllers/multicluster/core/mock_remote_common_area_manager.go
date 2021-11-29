@@ -22,8 +22,9 @@ package core
 import (
 	reflect "reflect"
 
-	common "antrea.io/antrea/multicluster/controllers/multicluster/common"
 	gomock "github.com/golang/mock/gomock"
+
+	common "antrea.io/antrea/multicluster/controllers/multicluster/common"
 )
 
 // MockRemoteCommonAreaManager is a mock of RemoteCommonAreaManager interface.

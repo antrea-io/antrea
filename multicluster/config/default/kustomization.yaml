@@ -40,7 +40,6 @@ patchesStrategicMerge:
 vars:
 
 configMapGenerator:
-- name: manager-config
-  behavior: create
-  files:
-    - configmap/controller_manager_config.yaml
+  - name: controller-config
+    files:
+      - configmap/controller_manager_config.yaml

@@ -35,23 +35,15 @@ import (
 	"antrea.io/antrea/multicluster/controllers/multicluster/core"
 )
 
-// ClusterSetReconciler reconciles a ClusterSet object
-// There will be one MC Controller running in each Namespace of the leader for multiple ClusterSet support.
-// So each MC Controller will only be handling a single ClusterSet in the given Namespace.
-// TODO: Split the reconciler for member and leader to avoid if checks. In case a cluster is both a
-//       member and a leader, 2 instances of the controller will need to be run, one as a leader,
-//       and the second as a member.
-type ClusterSetReconciler struct {
+// MemberClusterSetReconciler reconciles a ClusterSet object in the member cluster deployment.
+type MemberClusterSetReconciler struct {
 	client.Client
-	Scheme   *runtime.Scheme
-	IsLeader bool
-	IsMember bool
+	Scheme *runtime.Scheme
 
 	clusterSetConfig *multiclusterv1alpha1.ClusterSet
 	clusterSetID     common.ClusterSetID
 	clusterID        common.ClusterID
 
-	// These fields are only applicable on member cluster
 	RemoteCommonAreaManager core.RemoteCommonAreaManager
 }
 
@@ -59,23 +51,17 @@ type ClusterSetReconciler struct {
 //+kubebuilder:rbac:groups=multicluster.crd.antrea.io,resources=clustersets/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=multicluster.crd.antrea.io,resources=clustersets/finalizers,verbs=update
 
-// Reconcile ClusterSet CRD changes
-func (r *ClusterSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+// Reconcile ClusterSet changes
+func (r *MemberClusterSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	clusterSet := &multiclusterv1alpha1.ClusterSet{}
 	err := r.Get(ctx, req.NamespacedName, clusterSet)
 	if err != nil {
 		if !errors.IsNotFound(err) {
 			return ctrl.Result{}, err
 		}
-		// if errors.IsNotFound(err)
-		klog.InfoS("Received ClusterSet delete", "config", klog.KObj(clusterSet), "leader", r.IsLeader)
-		var stopErr, retErr error = nil, nil
-		if !r.IsLeader {
-			if stopErr = r.RemoteCommonAreaManager.Stop(); stopErr != nil {
-				multierr.Append(retErr, stopErr)
-			}
-			r.RemoteCommonAreaManager = nil
-		}
+		klog.InfoS("Received ClusterSet delete", "config", klog.KObj(clusterSet))
+		stopErr := r.RemoteCommonAreaManager.Stop()
+		r.RemoteCommonAreaManager = nil
 		r.clusterSetConfig = nil
 		r.clusterID = common.InvalidClusterID
 		r.clusterSetID = common.InvalidClusterSetID
@@ -83,33 +69,33 @@ func (r *ClusterSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		return ctrl.Result{}, stopErr
 	}
 
-	klog.InfoS("Received ClusterSet add/update", "config", klog.KObj(clusterSet), "leader", r.IsLeader)
+	klog.InfoS("Received ClusterSet add/update", "config", klog.KObj(clusterSet))
 
-	// Handle create or update.
-	// If create,
-	//   if leader, make sure the local ClusterClaim is part of the leader config
-	//   if not leader, make sure the local ClusterClaim is part of the member config
-	if err = r.validateLocalClusterClaim(clusterSet); err != nil {
+	// Handle create or update
+	// If create, make sure the local ClusterClaim is part of the member config
+	clusterId, clusterSetId, err := validateLocalClusterClaim(r.Client, clusterSet)
+	if err != nil {
 		return ctrl.Result{}, err
 	}
+	if err = validateConfigExists(clusterId, clusterSet.Spec.Members); err != nil {
+		err = fmt.Errorf("local cluster %s is not defined as member in ClusterSet", clusterId)
+		return ctrl.Result{}, err
+	}
+	r.clusterID = clusterId
+	r.clusterSetID = clusterSetId
+	r.clusterSetConfig = clusterSet.DeepCopy()
 
-	// If update,
-	//   if leader - nothing to do
-	//   if member - handle changes in leader spec.
-
-	// We need to initialize both LocalClusterClient and RemoteCommonAreaManager for member cluster only.
-	if r.IsMember {
-		err = r.updateMultiClusterSetOnMemberCluster(clusterSet)
-		if err != nil {
-			return ctrl.Result{}, err
-		}
+	// if update and if leaders have changed, handle accordingly, else, nothing to do.
+	err = r.updateMultiClusterSetOnMemberCluster(clusterSet)
+	if err != nil {
+		return ctrl.Result{}, err
 	}
 
 	return ctrl.Result{}, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *ClusterSetReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *MemberClusterSetReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&multiclusterv1alpha1.ClusterSet{}).
 		WithOptions(controller.Options{
@@ -118,76 +104,7 @@ func (r *ClusterSetReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-func (r *ClusterSetReconciler) validateLocalClusterClaim(clusterSet *multiclusterv1alpha1.ClusterSet) error {
-	// Read the ClusterClaim in the cluster
-	configNamespace := clusterSet.GetNamespace()
-
-	clusterClaimList := &multiclusterv1alpha1.ClusterClaimList{}
-	klog.InfoS("Validating ClusterClaim in", "Namespace", configNamespace)
-	if err := r.List(context.TODO(), clusterClaimList, client.InNamespace(configNamespace)); err != nil {
-		return err
-	}
-	if len(clusterClaimList.Items) == 0 {
-		return fmt.Errorf("ClusterClaim is not configured for the cluster")
-	}
-
-	var clusterSetClaimID, clusterClaimID string
-	wellKnownClusterSetClaimIDExist, wellKnownClusterClaimIDExist := false, false
-	for _, clusterClaim := range clusterClaimList.Items {
-		klog.InfoS("Processing ClusterClaim", "Name", clusterClaim.Name, "Value", clusterClaim.Value)
-		if clusterClaim.Name == multiclusterv1alpha1.WellKnownClusterClaimClusterSet {
-			wellKnownClusterSetClaimIDExist = true
-			clusterSetClaimID = clusterClaim.Value
-		} else if clusterClaim.Name == multiclusterv1alpha1.WellKnownClusterClaimID {
-			wellKnownClusterClaimIDExist = true
-			clusterClaimID = clusterClaim.Value
-		}
-	}
-
-	if !wellKnownClusterSetClaimIDExist {
-		return fmt.Errorf("ClaimClaim not configured for Name=%s", multiclusterv1alpha1.WellKnownClusterClaimClusterSet)
-	}
-
-	if !wellKnownClusterClaimIDExist {
-		return fmt.Errorf("ClaimClaim not configured for Name=%s", multiclusterv1alpha1.WellKnownClusterClaimID)
-	}
-
-	configExists := false
-	if r.IsLeader {
-		// Validate the Namespace is the same
-		if clusterSet.Spec.Namespace != clusterSet.GetNamespace() {
-			return fmt.Errorf("ClusterSet Namespace " + clusterSet.Spec.Namespace + " is different from " +
-				clusterSet.GetNamespace())
-		}
-		for _, leader := range clusterSet.Spec.Leaders {
-			if clusterClaimID == leader.ClusterID {
-				configExists = true
-				break
-			}
-		}
-		if !configExists {
-			return fmt.Errorf("local cluster is not defined as Leader in the ClusterSet")
-		}
-	} else {
-		for _, member := range clusterSet.Spec.Members {
-			if clusterClaimID == member.ClusterID {
-				configExists = true
-				break
-			}
-		}
-		if !configExists {
-			return fmt.Errorf("local cluster not defined as Member in ClusterSet")
-		}
-	}
-
-	r.clusterID = common.ClusterID(clusterClaimID)
-	r.clusterSetID = common.ClusterSetID(clusterSetClaimID)
-	r.clusterSetConfig = clusterSet.DeepCopy()
-
-	return nil
-}
-
-func (r *ClusterSetReconciler) updateMultiClusterSetOnMemberCluster(clusterSet *multiclusterv1alpha1.ClusterSet) error {
+func (r *MemberClusterSetReconciler) updateMultiClusterSetOnMemberCluster(clusterSet *multiclusterv1alpha1.ClusterSet) error {
 	if r.RemoteCommonAreaManager == nil {
 		r.RemoteCommonAreaManager = core.NewRemoteCommonAreaManager(r.clusterSetID, r.clusterID)
 		err := r.RemoteCommonAreaManager.Start()
@@ -255,7 +172,7 @@ func (r *ClusterSetReconciler) updateMultiClusterSetOnMemberCluster(clusterSet *
 // has an associated Secret which must be copied into the member cluster as an opaque secret.
 // Name of this secret is part of the ClusterSet spec for this leader. This method reads
 // the Secret given by that name.
-func (r *ClusterSetReconciler) getSecretForLeader(secretName string, secretNs string) (secretObj *v1.Secret) {
+func (r *MemberClusterSetReconciler) getSecretForLeader(secretName string, secretNs string) (secretObj *v1.Secret) {
 	secretNamespacedName := types.NamespacedName{
 		Namespace: secretNs,
 		Name:      secretName,

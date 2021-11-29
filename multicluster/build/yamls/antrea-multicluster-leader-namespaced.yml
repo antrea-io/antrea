@@ -479,7 +479,7 @@ subjects:
 ---
 apiVersion: v1
 data:
-  controller_manager_config.yaml: |+
+  controller_manager_config.yaml: |
     apiVersion: multicluster.crd.antrea.io/v1alpha1
     kind: MultiClusterConfig
     health:
@@ -491,15 +491,11 @@ data:
     leaderElection:
       leaderElect: true
       resourceName: 6536456a.crd.antrea.io
-    member: false
-    leader: true
-
 kind: ConfigMap
 metadata:
-  annotations: {}
   labels:
     app: antrea
-  name: antrea-mc-manager-config-2df2tkc7f5
+  name: antrea-mc-controller-config-kk4mdd82g2
   namespace: changeme
 ---
 apiVersion: v1
@@ -556,9 +552,10 @@ spec:
     spec:
       containers:
       - args:
-        - --config=controller_manager_config.yaml
+        - --config=/controller_manager_config.yaml
         command:
         - /antrea-mc-controller
+        - leader
         env:
         - name: POD_NAMESPACE
           valueFrom:
@@ -572,7 +569,7 @@ spec:
             port: 8081
           initialDelaySeconds: 15
           periodSeconds: 20
-        name: manager
+        name: antrea-mc-controller
         ports:
         - containerPort: 9443
           name: webhook-server
@@ -594,14 +591,14 @@ spec:
           allowPrivilegeEscalation: false
         volumeMounts:
         - mountPath: /controller_manager_config.yaml
-          name: manager-config
+          name: antrea-mc-controller-config
           subPath: controller_manager_config.yaml
       serviceAccountName: antrea-mc-controller
       terminationGracePeriodSeconds: 10
       volumes:
       - configMap:
-          name: antrea-mc-manager-config-2df2tkc7f5
-        name: manager-config
+          name: antrea-mc-controller-config-kk4mdd82g2
+        name: antrea-mc-controller-config
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: MutatingWebhookConfiguration

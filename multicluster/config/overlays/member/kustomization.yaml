@@ -17,11 +17,8 @@ patchesJson6902:
     name: controller-role
   path: additional_role_patch.yaml
 
-configMapGenerator:
-  - name: manager-config
-    behavior: merge
-    files:
-      - controller_manager_config.yaml
-
 configurations:
   - kustomizeconfig.yaml
+
+patchesStrategicMerge:
+  - manager_command_patch.yaml

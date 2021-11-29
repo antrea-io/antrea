@@ -20,12 +20,13 @@ import (
 	"fmt"
 	"time"
 
+	"sigs.k8s.io/controller-runtime/pkg/manager"
+
 	apiextensionclientset "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
 	clientset "k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/klog/v2"
 	k8smcsv1alpha1 "sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
@@ -40,7 +41,6 @@ import (
 	multiclusterv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
 	multiclustercontrollers "antrea.io/antrea/multicluster/controllers/multicluster"
 	"antrea.io/antrea/pkg/apiserver/certificate"
-	"antrea.io/antrea/pkg/util/env"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -61,137 +61,6 @@ func init() {
 	utilruntime.Must(k8smcsv1alpha1.AddToScheme(scheme))
 	utilruntime.Must(multiclusterv1alpha1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
-}
-
-func run(o *Options) error {
-	opts := zap.Options{
-		// TODO: disable `Development` option setting
-		Development: true,
-	}
-	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
-
-	// build up cert controller to manage certificate for MC Controller
-	k8sConfig := ctrl.GetConfigOrDie()
-	client, aggregatorClient, apiExtensionClient, err := createClients(k8sConfig)
-	if err != nil {
-		return fmt.Errorf("error creating K8s clients: %v", err)
-	}
-
-	// TODO: These leader checks should go once we have a separate command for leader and member MC Controller
-	if o.leader {
-		// Manager runs in the Namespace instead of cluster scope, in leader deployment.
-		o.options.Namespace = env.GetPodNamespace()
-	}
-
-	secureServing := genericoptions.NewSecureServingOptions().WithLoopback()
-	caCertController, err := certificate.ApplyServerCert(o.SelfSignedCert, client, aggregatorClient, apiExtensionClient,
-		secureServing, getCaConfig(o.options.Namespace))
-	if err != nil {
-		return fmt.Errorf("error applying server cert: %v", err)
-	}
-	if err := caCertController.RunOnce(); err != nil {
-		return err
-	}
-
-	if o.SelfSignedCert {
-		o.options.CertDir = selfSignedCertDir
-	} else {
-		o.options.CertDir = certDir
-	}
-
-	mgr, err := ctrl.NewManager(k8sConfig, o.options)
-	if err != nil {
-		return fmt.Errorf("error starting manager: %v", err)
-	}
-
-	if err = (&multiclustercontrollers.ClusterClaimReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
-		return fmt.Errorf("error creating ClusterClaim controller: %v", err)
-	}
-	if err = (&multiclusterv1alpha1.ClusterClaim{}).SetupWebhookWithManager(mgr); err != nil {
-		return fmt.Errorf("error creating ClusterClaim webhook: %v", err)
-	}
-
-	clusterSetReconciler := &multiclustercontrollers.ClusterSetReconciler{
-		Client:   mgr.GetClient(),
-		Scheme:   mgr.GetScheme(),
-		IsLeader: o.leader,
-		IsMember: o.member,
-	}
-	if err = clusterSetReconciler.SetupWithManager(mgr); err != nil {
-		return fmt.Errorf("error creating ClusterSet controller: %v", err)
-	}
-	if err = (&multiclusterv1alpha1.ClusterSet{}).SetupWebhookWithManager(mgr); err != nil {
-		return fmt.Errorf("error creating ClusterSet webhook: %v", err)
-	}
-
-	remoteMgr := &(clusterSetReconciler.RemoteCommonAreaManager)
-
-	if o.leader {
-		// Only leader runs the below controllers and webhooks.
-
-		if err = (&multiclusterv1alpha1.MemberClusterAnnounce{}).SetupWebhookWithManager(mgr); err != nil {
-			return fmt.Errorf("error creating MemberClusterAnnounce webhook: %v", err)
-		}
-
-		resExportReconciler := &multiclustercontrollers.ResourceExportReconciler{
-			Client: mgr.GetClient(),
-			Scheme: mgr.GetScheme()}
-		if err = resExportReconciler.SetupWithManager(mgr); err != nil {
-			return fmt.Errorf("error creating ResourceExport controller: %v", err)
-		}
-		if err = (&multiclusterv1alpha1.ResourceExport{}).SetupWebhookWithManager(mgr); err != nil {
-			return fmt.Errorf("error creating ResourceExport webhook: %v", err)
-		}
-
-		if err := (&multiclusterv1alpha1.ResourceImport{}).SetupWebhookWithManager(mgr); err != nil {
-			return fmt.Errorf("error creating ResourceImport webhook: %v", err)
-		}
-
-		if err = (&multiclustercontrollers.ResourceExportFilterReconciler{
-			Client: mgr.GetClient(),
-			Scheme: mgr.GetScheme(),
-		}).SetupWithManager(mgr); err != nil {
-			return fmt.Errorf("error creating ResourceExportFilter controller: %v", err)
-		}
-	}
-
-	if o.member {
-		// Only member runs the below controllers and webhooks.
-		// NOTE: Member runs ResourceImportReconciler from CommonArea only.
-
-		svcExportReconciler := &multiclustercontrollers.ServiceExportReconciler{
-			Client:                  mgr.GetClient(),
-			Scheme:                  mgr.GetScheme(),
-			RemoteCommonAreaManager: remoteMgr}
-		if err = svcExportReconciler.SetupWithManager(mgr); err != nil {
-			return fmt.Errorf("unable to create ServiceExport controller, err: %v", err)
-		}
-
-		if err = (&multiclustercontrollers.ResourceImportFilterReconciler{
-			Client: mgr.GetClient(),
-			Scheme: mgr.GetScheme(),
-		}).SetupWithManager(mgr); err != nil {
-			return fmt.Errorf("unable to create ResourceImportFilter controller, err: %v", err)
-		}
-	}
-
-	//+kubebuilder:scaffold:builder
-
-	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
-		return fmt.Errorf("error setting up health check: %v", err)
-	}
-	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
-		return fmt.Errorf("error setting up ready check: %v", err)
-	}
-
-	klog.InfoS("Starting Manager")
-	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
-		return fmt.Errorf("error running manager: %v", err)
-	}
-	return nil
 }
 
 // createClients creates kube clients from the given config.
@@ -241,4 +110,66 @@ func getMutationWebhooks(controllerNs string) []string {
 		return []string{fmt.Sprintf(mutationWebhooksNamePattern, controllerNs, "-")}
 	}
 	return []string{fmt.Sprintf(mutationWebhooksNamePattern, "", "")}
+}
+
+func setupManagerAndCertController(o *Options) (manager.Manager, error) {
+	opts := zap.Options{
+		// TODO: disable `Development` option setting
+		Development: true,
+	}
+
+	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
+
+	// build up cert controller to manage certificate for MC Controller
+	k8sConfig := ctrl.GetConfigOrDie()
+	client, aggregatorClient, apiExtensionClient, err := createClients(k8sConfig)
+	if err != nil {
+		return nil, fmt.Errorf("error creating K8s clients: %v", err)
+	}
+
+	secureServing := genericoptions.NewSecureServingOptions().WithLoopback()
+	caCertController, err := certificate.ApplyServerCert(o.SelfSignedCert, client, aggregatorClient, apiExtensionClient,
+		secureServing, getCaConfig(o.options.Namespace))
+	if err != nil {
+		return nil, fmt.Errorf("error applying server cert: %v", err)
+	}
+	if err := caCertController.RunOnce(); err != nil {
+		return nil, err
+	}
+
+	if o.SelfSignedCert {
+		o.options.CertDir = selfSignedCertDir
+	} else {
+		o.options.CertDir = certDir
+	}
+
+	mgr, err := ctrl.NewManager(k8sConfig, o.options)
+	if err != nil {
+		return nil, fmt.Errorf("error starting manager: %v", err)
+	}
+
+	if err = (&multiclustercontrollers.ClusterClaimReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		return nil, fmt.Errorf("error creating ClusterClaim controller: %v", err)
+	}
+	if err = (&multiclusterv1alpha1.ClusterClaim{}).SetupWebhookWithManager(mgr); err != nil {
+		return nil, fmt.Errorf("error create ClusterClaim webhook: %v", err)
+	}
+
+	if err = (&multiclusterv1alpha1.ClusterSet{}).SetupWebhookWithManager(mgr); err != nil {
+		return nil, fmt.Errorf("error creating ClusterSet webhook: %v", err)
+	}
+
+	//+kubebuilder:scaffold:builder
+
+	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
+		return nil, fmt.Errorf("error setting up health check: %v", err)
+	}
+	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
+		return nil, fmt.Errorf("error setting up ready check: %v", err)
+	}
+
+	return mgr, nil
 }

@@ -23,11 +23,12 @@ import (
 	context "context"
 	reflect "reflect"
 
-	common "antrea.io/antrea/multicluster/controllers/multicluster/common"
 	gomock "github.com/golang/mock/gomock"
 	meta "k8s.io/apimachinery/pkg/api/meta"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	client "sigs.k8s.io/controller-runtime/pkg/client"
+
+	common "antrea.io/antrea/multicluster/controllers/multicluster/common"
 )
 
 // MockRemoteCommonArea is a mock of RemoteCommonArea interface.

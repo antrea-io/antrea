@@ -9,5 +9,3 @@ webhook:
 leaderElection:
   leaderElect: true
   resourceName: 6536456a.crd.antrea.io
-member: false
-leader: false
