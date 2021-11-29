@@ -51,20 +51,26 @@ type ExpectFlow struct {
 	ActStr   string
 }
 
-func (f ExpectFlow) flowStr(id uint8) string {
-	return fmt.Sprintf("table=%d,%s actions=%s", id, f.MatchStr, f.ActStr)
+func (f ExpectFlow) flowStr(name string) string {
+	return fmt.Sprintf("table=%s,%s actions=%s", name, f.MatchStr, f.ActStr)
 }
 
-func CheckFlowExists(t *testing.T, ovsCtlClient ovsctl.OVSCtlClient, tableID uint8, exist bool, flows []*ExpectFlow) []string {
-	flowList, _ := OfctlDumpTableFlows(ovsCtlClient, tableID)
+func CheckFlowExists(t *testing.T, ovsCtlClient ovsctl.OVSCtlClient, tableName string, tableID uint8, exist bool, flows []*ExpectFlow) []string {
+	var flowList []string
+	if tableName != "" {
+		flowList, _ = OfctlDumpTableFlows(ovsCtlClient, tableName)
+	} else {
+		flowList, _ = OfctlDumpTableFlowsWithoutName(ovsCtlClient, tableID)
+		tableName = fmt.Sprintf("%d", tableID)
+	}
 
 	for _, flow := range flows {
-		found := OfctlFlowMatch(flowList, tableID, flow)
+		found := OfctlFlowMatch(flowList, tableName, flow)
 		if exist && !found {
-			t.Errorf("Failed to install flow: %s", flow.flowStr(tableID))
+			t.Errorf("Failed to install flow: %s", flow.flowStr(tableName))
 		}
 		if !exist && found {
-			t.Errorf("Failed to uninstall flow: %s", flow.flowStr(tableID))
+			t.Errorf("Failed to uninstall flow: %s", flow.flowStr(tableName))
 		}
 	}
 	if t.Failed() {
@@ -99,8 +105,8 @@ func CheckGroupExists(t *testing.T, ovsCtlClient ovsctl.OVSCtlClient, groupID bi
 	}
 }
 
-func OfctlFlowMatch(flowList []string, tableID uint8, flow *ExpectFlow) bool {
-	mtStr := fmt.Sprintf("table=%d, %s ", tableID, flow.MatchStr)
+func OfctlFlowMatch(flowList []string, tableName string, flow *ExpectFlow) bool {
+	mtStr := fmt.Sprintf("table=%s, %s ", tableName, flow.MatchStr)
 	aStr := fmt.Sprintf("actions=%s", flow.ActStr)
 	for _, flowEntry := range flowList {
 		if strings.Contains(flowEntry, mtStr) && strings.Contains(flowEntry, aStr) {
@@ -132,7 +138,15 @@ func OfctlDumpFlows(ovsCtlClient ovsctl.OVSCtlClient, args ...string) ([]string,
 	return formatFlowDump(rawFlows), nil
 }
 
-func OfctlDumpTableFlows(ovsCtlClient ovsctl.OVSCtlClient, table uint8) ([]string, error) {
+func OfctlDumpTableFlows(ovsCtlClient ovsctl.OVSCtlClient, table string) ([]string, error) {
+	rawFlows, err := ovsCtlClient.DumpFlows(fmt.Sprintf("table=%s", table))
+	if err != nil {
+		return nil, err
+	}
+	return formatFlowDump(rawFlows), nil
+}
+
+func OfctlDumpTableFlowsWithoutName(ovsCtlClient ovsctl.OVSCtlClient, table uint8) ([]string, error) {
 	rawFlows, err := ovsCtlClient.DumpFlowsWithoutTableNames(fmt.Sprintf("table=%d", table))
 	if err != nil {
 		return nil, err
