@@ -303,12 +303,9 @@ function run_codecov { (set -e
 
     if [[ $remote == true ]]; then
         ${SCP_WITH_UTILS_KEY} codecov jenkins@${ip}:~
-    fi
-
-    if [[ $remote == true ]]; then
-        ${SSH_WITH_UTILS_KEY} -n jenkins@${ip} "env -i bash -s -- -c -t ${CODECOV_TOKEN} -F ${flag} -f ${file}"
+        ${SSH_WITH_UTILS_KEY} -n jenkins@${ip} "~/codecov -c -t ${CODECOV_TOKEN} -F ${flag} -f ${file} -C ${GIT_COMMIT} -r antrea-io/antrea"
     else
-        env -i bash -s -- -c -t ${CODECOV_TOKEN} -F ${flag} -f ${file} -s ${dir}
+        ./codecov -c -t ${CODECOV_TOKEN} -F ${flag} -f ${file} -s ${dir} -C ${GIT_COMMIT} -r antrea-io/antrea
     fi
     rm -f trustedkeys.gpg codecov
 )}
@@ -455,7 +452,7 @@ function run_integration {
     # umask ensures that files are cloned with the correct permissions so that Docker caching can be leveraged
     ${SSH_WITH_UTILS_KEY} -n jenkins@${VM_IP} "umask 0022 && git clone ${ghprbAuthorRepoGitUrl} antrea && cd antrea && git checkout ${GIT_BRANCH} && DOCKER_REGISTRY=${DOCKER_REGISTRY} ./build/images/ovs/build.sh --pull && NO_PULL=${NO_PULL} make docker-test-integration"
     if [[ "$COVERAGE" == true ]]; then
-        run_codecov "integration-tests" ".coverage/coverage-integration.txt" "" true ${VM_IP}
+        run_codecov "integration-tests" "antrea/.coverage/coverage-integration.txt" "" true ${VM_IP}
     fi
 }
 
