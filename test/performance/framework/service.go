@@ -37,7 +37,7 @@ func init() {
 func ScaleService(ctx context.Context, data *ScaleData) error {
 	// Service numbers based on the Node number.
 	svcNum := data.Specification.SvcNumPerNode * data.nodesNum
-	svcs, err := service.ScaleUp(ctx, svcNum, data.kubernetesClientSet, ScaleTestNamespacePrefix, data.Specification.IPv6)
+	svcs, err := service.ScaleUp(ctx, svcNum, data.kubernetesClientSet, data.namespaces, data.Specification.IPv6)
 	if err != nil {
 		return fmt.Errorf("scale up services error: %v", err)
 	}

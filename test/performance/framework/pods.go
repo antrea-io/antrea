@@ -59,7 +59,7 @@ var (
 	}
 )
 
-func workloadPodTemplate(podName string, labels map[string]string, onRealNode bool) *corev1.Pod {
+func workloadPodTemplate(podName, ns string, labels map[string]string, onRealNode bool) *corev1.Pod {
 	var affinity *corev1.Affinity
 	var tolerations []corev1.Toleration
 	if onRealNode {
@@ -74,7 +74,7 @@ func workloadPodTemplate(podName string, labels map[string]string, onRealNode bo
 	return &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      podName,
-			Namespace: ScaleTestNamespacePrefix,
+			Namespace: ns,
 			Labels:    labels,
 		},
 		Spec: corev1.PodSpec{
@@ -86,7 +86,7 @@ func workloadPodTemplate(podName string, labels map[string]string, onRealNode bo
 	}
 }
 
-func newWorkloadPod(podName string, onRealNode bool) *corev1.Pod {
+func newWorkloadPod(podName, ns string, onRealNode bool) *corev1.Pod {
 	labels := map[string]string{
 		AppLabelKey: AppLabelValue,
 	}
@@ -100,52 +100,58 @@ func newWorkloadPod(podName string, onRealNode bool) *corev1.Pod {
 	if onRealNode {
 		labels[utils.PodOnRealNodeLabelKey] = ""
 	}
-	return workloadPodTemplate(podName, labels, onRealNode)
+	return workloadPodTemplate(podName, ns, labels, onRealNode)
 }
 
 func ScaleUpWorkloadPods(ctx context.Context, data *ScaleData) error {
 	// Creating workload Pods
-	podNum := data.nodesNum * data.Specification.PodsNumPerNode
-	gErr, _ := errgroup.WithContext(context.Background())
-	for i := 0; i < podNum; i++ {
-		index := i
-		time.Sleep(time.Duration(utils.GenRandInt()%100) * time.Millisecond)
-		gErr.Go(func() error {
-			podName := fmt.Sprintf("antrea-scale-test-pod-%s", uuid.New().String())
-			pod := newWorkloadPod(podName, true)
-			if !data.Specification.RealNode {
-				onRealNode := (index % data.nodesNum) >= data.simulateNodesNum
-				pod = newWorkloadPod(podName, onRealNode)
-			}
-			klog.V(2).InfoS("Creating Pods", "onRealNode", data.Specification.RealNode)
-			if _, err := data.kubernetesClientSet.CoreV1().
-				Pods(ScaleTestNamespacePrefix).Create(ctx, pod, metav1.CreateOptions{}); err != nil {
-				return err
-			}
-			return nil
-		})
-	}
-	klog.InfoS("Create workload Pods", "PodNum", podNum)
-	if err := gErr.Wait(); err != nil {
-		return err
-	}
-
-	// Waiting scale workload Pods to be ready
-	return wait.PollUntil(config.WaitInterval, func() (bool, error) {
-		podsResult, err := data.kubernetesClientSet.
-			CoreV1().Pods(ScaleTestNamespacePrefix).
-			List(ctx, metav1.ListOptions{LabelSelector: fmt.Sprintf("%s=%s", AppLabelKey, AppLabelValue)})
-		if err != nil {
-			klog.ErrorS(err, "Error when listing Pods")
-		} else {
-			var count int
-			for _, pod := range podsResult.Items {
-				if pod.Status.Phase == corev1.PodRunning && pod.Status.PodIP != "" {
-					count += 1
+	for _, ns := range data.namespaces {
+		podNum := data.nodesNum * data.Specification.PodsNumPerNode
+		gErr, _ := errgroup.WithContext(context.Background())
+		for i := 0; i < podNum; i++ {
+			index := i
+			time.Sleep(time.Duration(utils.GenRandInt()%100) * time.Millisecond)
+			gErr.Go(func() error {
+				podName := fmt.Sprintf("antrea-scale-test-pod-%s", uuid.New().String())
+				pod := newWorkloadPod(podName, ns, true)
+				if !data.Specification.RealNode {
+					onRealNode := (index % data.nodesNum) >= data.simulateNodesNum
+					pod = newWorkloadPod(podName, ns, onRealNode)
 				}
-			}
-			return count >= data.podsNum, nil
+				klog.V(2).InfoS("Creating Pods", "onRealNode", data.Specification.RealNode)
+				if _, err := data.kubernetesClientSet.CoreV1().
+					Pods(ns).Create(ctx, pod, metav1.CreateOptions{}); err != nil {
+					return err
+				}
+				return nil
+			})
 		}
-		return false, nil
-	}, ctx.Done())
+		klog.InfoS("Create workload Pods", "PodNum", podNum)
+		if err := gErr.Wait(); err != nil {
+			return err
+		}
+
+		// Waiting scale workload Pods to be ready
+		err := wait.PollUntil(config.WaitInterval, func() (bool, error) {
+			podsResult, err := data.kubernetesClientSet.
+				CoreV1().Pods(ns).
+				List(ctx, metav1.ListOptions{LabelSelector: fmt.Sprintf("%s=%s", AppLabelKey, AppLabelValue)})
+			if err != nil {
+				klog.ErrorS(err, "Error when listing Pods")
+			} else {
+				var count int
+				for _, pod := range podsResult.Items {
+					if pod.Status.Phase == corev1.PodRunning && pod.Status.PodIP != "" {
+						count += 1
+					}
+				}
+				return count >= data.podsNum, nil
+			}
+			return false, nil
+		}, ctx.Done())
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }

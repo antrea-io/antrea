@@ -116,23 +116,25 @@ type NetworkPolicyInfo struct {
 	Spec      netv1.NetworkPolicySpec
 }
 
-func ScaleUp(ctx context.Context, num int, cs kubernetes.Interface, ns string, ipv6 bool) (nps []NetworkPolicyInfo, err error) {
+func ScaleUp(ctx context.Context, num int, cs kubernetes.Interface, nss []string, ipv6 bool) (nps []NetworkPolicyInfo, err error) {
 	// ScaleUp networkPolicies
-	npsData, err := generateNetworkPolicies(cs, utils.GenRandInt()%2 == 0, num, ns)
-	if err != nil {
-		return nil, fmt.Errorf("error when generating network policies: %w", err)
-	}
-	klog.InfoS("Scale up NetworkPolicies", "Num", len(npsData))
-	for _, np := range npsData {
-		if err := utils.DefaultRetry(func() error {
-			newNP, err := cs.NetworkingV1().NetworkPolicies(ns).Create(ctx, np, metav1.CreateOptions{})
-			if err != nil {
-				return err
+	for _, ns := range nss {
+		npsData, err := generateNetworkPolicies(cs, utils.GenRandInt()%2 == 0, num, ns)
+		if err != nil {
+			return nil, fmt.Errorf("error when generating network policies: %w", err)
+		}
+		klog.InfoS("Scale up NetworkPolicies", "Num", len(npsData))
+		for _, np := range npsData {
+			if err := utils.DefaultRetry(func() error {
+				newNP, err := cs.NetworkingV1().NetworkPolicies(ns).Create(ctx, np, metav1.CreateOptions{})
+				if err != nil {
+					return err
+				}
+				nps = append(nps, NetworkPolicyInfo{Name: newNP.Name, Namespace: newNP.Namespace, Spec: newNP.Spec})
+				return nil
+			}); err != nil {
+				return nil, err
 			}
-			nps = append(nps, NetworkPolicyInfo{Name: newNP.Name, Namespace: newNP.Namespace, Spec: newNP.Spec})
-			return nil
-		}); err != nil {
-			return nil, err
 		}
 	}
 	return

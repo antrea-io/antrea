@@ -57,7 +57,7 @@ func main() {
 		klog.InfoS("Shutting down scale test", "durationTime", time.Since(startTime))
 	}()
 	if err := run(); err != nil {
-		klog.Fatal(err, "Test failed")
+		klog.Fatalf("Test failed: %v", err)
 	}
 }
 

@@ -17,9 +17,8 @@ package framework
 import (
 	"context"
 	"fmt"
-	"strings"
-	"time"
 
+	"github.com/google/uuid"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -30,13 +29,22 @@ import (
 
 	"antrea.io/antrea/pkg/antctl/runtime"
 	"antrea.io/antrea/test/performance/config"
+	"antrea.io/antrea/test/performance/framework/namespace"
 	"antrea.io/antrea/test/performance/utils"
 )
 
-const (
-	// ScaleTestNamespacePrefix is the Namespace of the scale test resources.
-	ScaleTestNamespacePrefix = "antrea-scale-test-ns"
+func init() {
+	suffix := uuid.New().String()
+	ScaleTestNamespaceBase = fmt.Sprintf("%s-%s", ScaleTestNamespacePrefix, suffix[:6])
+	klog.InfoS("Scale up namespace", "ScaleTestNamespaceBase", ScaleTestNamespaceBase)
+}
 
+var (
+	ScaleTestNamespacePrefix = "antrea-scale-ns"
+	ScaleTestNamespaceBase   = "antrea-scale-ns-xxxx"
+)
+
+const (
 	AppLabelKey   = "app"
 	AppLabelValue = "antrea-scale-test-workload"
 
@@ -49,8 +57,6 @@ const (
 	ScaleClientContainerName   = "antrea-scale-test-client"
 	ScaleClientPodTemplateName = "antrea-scale-test-client"
 	ScaleTestClientDaemonSet   = "antrea-scale-test-client-daemonset"
-
-	ShortTimeWait = time.Minute
 )
 
 var (
@@ -131,18 +137,19 @@ type ScaleData struct {
 	kubernetesClientSet kubernetes.Interface
 	kubeconfig          *rest.Config
 	clientPods          []corev1.Pod
+	namespaces          []string
 	Specification       *config.ScaleList
 	nodesNum            int
 	simulateNodesNum    int
 	podsNum             int
 }
 
-func createTestPodClients(ctx context.Context, kClient kubernetes.Interface) error {
+func createTestPodClients(ctx context.Context, kClient kubernetes.Interface, ns string) error {
 	if err := utils.DefaultRetry(func() error {
-		_, err := kClient.AppsV1().DaemonSets(ScaleTestNamespacePrefix).Create(ctx, &appsv1.DaemonSet{
+		_, err := kClient.AppsV1().DaemonSets(ns).Create(ctx, &appsv1.DaemonSet{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      ScaleTestClientDaemonSet,
-				Namespace: ScaleTestNamespacePrefix,
+				Namespace: ns,
 				Labels:    map[string]string{ScaleClientPodTemplateName: ""},
 			},
 			Spec: appsv1.DaemonSetSpec{
@@ -155,7 +162,7 @@ func createTestPodClients(ctx context.Context, kClient kubernetes.Interface) err
 		return err
 	}
 	if err := wait.PollImmediateUntil(config.WaitInterval, func() (bool, error) {
-		ds, err := kClient.AppsV1().DaemonSets(ScaleTestNamespacePrefix).
+		ds, err := kClient.AppsV1().DaemonSets(ns).
 			Get(ctx, ScaleTestClientDaemonSet, metav1.GetOptions{})
 		if err != nil {
 			return false, nil
@@ -165,8 +172,7 @@ func createTestPodClients(ctx context.Context, kClient kubernetes.Interface) err
 		return fmt.Errorf("error when waiting scale test clients to be ready: %w", err)
 	}
 	if err := wait.PollImmediateUntil(config.WaitInterval, func() (bool, error) {
-		podList, err := kClient.CoreV1().Pods(ScaleTestNamespacePrefix).
-			List(ctx, metav1.ListOptions{LabelSelector: ScaleClientPodTemplateName})
+		podList, err := kClient.CoreV1().Pods(ns).List(ctx, metav1.ListOptions{LabelSelector: ScaleClientPodTemplateName})
 		if err != nil {
 			return false, nil
 		}
@@ -180,6 +186,15 @@ func createTestPodClients(ctx context.Context, kClient kubernetes.Interface) err
 		return fmt.Errorf("error when waiting scale test clients to get IP: %w", err)
 	}
 	return nil
+}
+
+func checkNodeStatus(node corev1.Node) bool {
+	for _, condition := range node.Status.Conditions {
+		if condition.Type == corev1.NodeReady && condition.Status == corev1.ConditionTrue {
+			return true
+		}
+	}
+	return false
 }
 
 func validScaleSpecification(c *config.ScaleConfiguration) error {
@@ -235,70 +250,45 @@ func ScaleUp(ctx context.Context, kubeConfigPath, scaleConfigPath string) (*Scal
 		if v, ok := node.Labels[SimulatorNodeLabelKey]; ok && v == SimulatorNodeLabelValue {
 			simulateNodesNum += 1
 		}
+		if !checkNodeStatus(node) {
+			return nil, fmt.Errorf("check scale Node(%s) not Ready", node.Name)
+		}
 	}
 	td.nodesNum = len(nodes.Items)
 	td.podsNum = td.nodesNum * scaleConfig.PodsNumPerNode
 	td.simulateNodesNum = simulateNodesNum
 
 	klog.Infof("Preflight checks and clean up")
-	nsList, err := kClient.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return nil, err
-	}
-
 	if scaleConfig.PreWorkload {
-		klog.Infof("Deleting scale test namespaces")
-		for _, ns := range nsList.Items {
-			if !strings.HasPrefix(ns.Name, "antrea-scale-test") {
-				continue
-			}
-			if err := kClient.CoreV1().Namespaces().Delete(ctx, ns.Name, metav1.DeleteOptions{}); err != nil {
-				return nil, err
-			}
+		if err := td.ScaleDown(ctx); err != nil {
+			return nil, fmt.Errorf("deleting scale test namespaces error: %v", err)
 		}
-		klog.Infof("Checking clean up exist scale test namespaces")
-		err = wait.PollImmediateUntil(config.WaitInterval, func() (bool, error) {
-			list, err := kClient.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
-			if err != nil {
-				return false, err
-			}
-			ok := true
-			for _, ns := range list.Items {
-				if strings.HasPrefix(ns.Name, "antrea-scale-test") {
-					ok = false
-					if err := kClient.CoreV1().Namespaces().Delete(ctx, ns.Name, metav1.DeleteOptions{}); err != nil {
-						return false, nil
-					}
-				}
-			}
-			klog.InfoS("Waiting for namespace clean up", "namespacesNum", len(list.Items))
-			return ok, nil
-		}, ctx.Done())
+
+		nss, err := namespace.ScaleUp(ctx, td.kubernetesClientSet, ScaleTestNamespaceBase, td.Specification.NamespaceNum)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("scale up namespaces error: %v", err)
 		}
+		td.namespaces = nss
 
-		klog.Infof("Creating scale test namespaces")
-		if _, err := kClient.CoreV1().Namespaces().Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ScaleTestNamespacePrefix}}, metav1.CreateOptions{}); err != nil {
-			return nil, err
-		}
-
+		// TODO scale client Pod per ns
 		klog.Infof("Creating the scale test client DaemonSet")
-		if err := createTestPodClients(ctx, kClient); err != nil {
+		if err := createTestPodClients(ctx, kClient, nss[0]); err != nil {
 			return nil, err
 		}
 
 		klog.Infof("Checking scale test client DaemonSet")
+		expectClientNum := td.nodesNum - td.simulateNodesNum
 		err = wait.PollImmediateUntil(config.WaitInterval, func() (bool, error) {
-			podList, err := kClient.CoreV1().Pods(ScaleTestNamespacePrefix).List(ctx, metav1.ListOptions{LabelSelector: ScaleClientPodTemplateName})
+			podList, err := kClient.CoreV1().Pods(td.namespaces[0]).List(ctx, metav1.ListOptions{LabelSelector: ScaleClientPodTemplateName})
 			if err != nil {
 				return false, fmt.Errorf("error when getting scale test client pods: %w", err)
 			}
-			if len(podList.Items) == td.nodesNum-td.simulateNodesNum {
+			if len(podList.Items) == expectClientNum {
 				td.clientPods = podList.Items
 				return true, nil
 			}
-			klog.InfoS("Waiting test client DaemonSet Pods ready", "podsNum", len(podList.Items))
+			klog.InfoS("Waiting test client DaemonSet Pods ready", "podsNum", len(podList.Items),
+				"expectClientNum", expectClientNum)
 			return false, nil
 		}, ctx.Done())
 		if err != nil {

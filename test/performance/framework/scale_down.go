@@ -16,44 +16,13 @@ package framework
 
 import (
 	"context"
-	"strings"
 
-	"k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/klog/v2"
-
-	"antrea.io/antrea/test/performance/config"
+	"antrea.io/antrea/test/performance/framework/namespace"
 )
 
 // ScaleDown delete pods/ns and verify if it gets deleted
 func (data *ScaleData) ScaleDown(ctx context.Context) error {
-	allNS, err := data.kubernetesClientSet.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return err
-	}
-	var nssToDelete []string
-	for i := range allNS.Items {
-		toDeleteNs := allNS.Items[i]
-		if !strings.HasPrefix(toDeleteNs.Name, ScaleTestNamespacePrefix) {
-			continue
-		}
-		nssToDelete = append(nssToDelete, toDeleteNs.Name)
-		if err := data.kubernetesClientSet.CoreV1().Namespaces().Delete(ctx, toDeleteNs.Name, metav1.DeleteOptions{}); err != nil {
-			klog.InfoS("Delete namespace", "Name", toDeleteNs.Name)
-			return err
-		}
-	}
-	return wait.PollImmediateUntil(config.WaitInterval, func() (done bool, err error) {
-		count := 0
-		for _, ns := range nssToDelete {
-			if err := data.kubernetesClientSet.CoreV1().Namespaces().Delete(ctx, ns, metav1.DeleteOptions{}); errors.IsNotFound(err) {
-				count++
-			}
-		}
-		klog.InfoS("Waiting for clean up namespaces", "all", len(nssToDelete), "count", count)
-		return count == len(nssToDelete), nil
-	}, ctx.Done())
+	return namespace.ScaleDown(ctx, data.kubernetesClientSet, ScaleTestNamespacePrefix)
 }
 
 // ScaleDownOnlyPods delete pods only so it will get recreated inside same ns

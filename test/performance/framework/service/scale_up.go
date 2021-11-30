@@ -50,26 +50,28 @@ type ServiceInfo struct {
 	NameSpace string
 }
 
-func ScaleUp(ctx context.Context, num int, cs kubernetes.Interface, ns string, ipv6 bool) (svcs []ServiceInfo, err error) {
-	klog.InfoS("Scale up Services", "Num", num, "Namespace", ns)
-	for i := 0; i < num; i++ {
-		svc := generateService()
-		if ipv6 {
-			ipFamily := corev1.IPv6Protocol
-			svc.Spec.IPFamilies = []corev1.IPFamily{ipFamily}
-		}
-		if err := utils.DefaultRetry(func() error {
-			newSvc, err := cs.CoreV1().Services(ns).Create(ctx, svc, metav1.CreateOptions{})
-			if err != nil {
-				return err
+func ScaleUp(ctx context.Context, num int, cs kubernetes.Interface, nss []string, ipv6 bool) (svcs []ServiceInfo, err error) {
+	for _, ns := range nss {
+		klog.InfoS("Scale up Services", "Num", num, "Namespace", ns)
+		for i := 0; i < num; i++ {
+			svc := generateService()
+			if ipv6 {
+				ipFamily := corev1.IPv6Protocol
+				svc.Spec.IPFamilies = []corev1.IPFamily{ipFamily}
 			}
-			if newSvc.Spec.ClusterIP == "" {
-				return fmt.Errorf("service %s Spec.ClusterIP is empty", svc.Name)
+			if err := utils.DefaultRetry(func() error {
+				newSvc, err := cs.CoreV1().Services(ns).Create(ctx, svc, metav1.CreateOptions{})
+				if err != nil {
+					return err
+				}
+				if newSvc.Spec.ClusterIP == "" {
+					return fmt.Errorf("service %s Spec.ClusterIP is empty", svc.Name)
+				}
+				svcs = append(svcs, ServiceInfo{Name: newSvc.Name, IP: newSvc.Spec.ClusterIP, NameSpace: newSvc.Namespace})
+				return nil
+			}); err != nil {
+				return nil, err
 			}
-			svcs = append(svcs, ServiceInfo{Name: newSvc.Name, IP: newSvc.Spec.ClusterIP, NameSpace: newSvc.Namespace})
-			return nil
-		}); err != nil {
-			return nil, err
 		}
 	}
 	return
