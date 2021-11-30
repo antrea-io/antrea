@@ -18,6 +18,7 @@ $OVS_DB_SCHEMA_PATH = "$OVSInstallDir\usr\share\openvswitch\vswitch.ovsschema"
 # Replace the path using the actual path where OVS conf.db locates. It is always under path OVSInstallDir\etc\openvswitch.
 $OVSDB_CONF_DIR = "$OVSInstallDir\etc\openvswitch"
 $OVS_DB_PATH = "$OVSDB_CONF_DIR\conf.db"
+$OVS_BR_ADAPTER = "br-int"
 
 function GetHnsnetworkId($NetName) {
     $NetList= $(Get-HnsNetwork -ErrorAction SilentlyContinue)
@@ -80,7 +81,7 @@ function ResetOVSService() {
 }
 
 function RemoveNetworkAdapter($adapterName) {
-    $adapter = $(Get-NetAdapter $adapterName -ErrorAction Ignore)
+    $adapter = $(Get-NetAdapter "$adapterName" -ErrorAction Ignore)
     if ($adapter -ne $null) {
         Remove-NetIPAddress -IfAlias $adapterName -Confirm:$false
         Write-Host "Network adapter $adapter.Name is left on the Windows host with status $adapter.Status, please remove it manually."
@@ -105,7 +106,7 @@ function clearOVSBridge() {
         $BrIntDeleted = $false
         foreach ($RetryCount in $RetryCountRange) {
             Write-Host "Waiting for OVS bridge deletion complete ($RetryCount/$MaxRetryCount)..."
-            $BrIntAdapter = $(Get-NetAdapter br-int -ErrorAction SilentlyContinue)
+            $BrIntAdapter = $(Get-NetAdapter "$OVS_BR_ADAPTER" -ErrorAction SilentlyContinue)
             if ($BrIntAdapter -eq $null) {
                 $BrIntDeleted = $true
                 break
@@ -122,7 +123,7 @@ function clearOVSBridge() {
     }
 }
 
-$BrIntDeleted = $(Get-NetAdapter br-int) -Eq $null
+$BrIntDeleted = $(Get-NetAdapter "$OVS_BR_ADAPTER") -Eq $null
 if ($BrIntDeleted -eq $false) {
     clearOVSBridge
 }
@@ -139,7 +140,7 @@ if ($NetId -ne $null) {
 # This might happen after the Windows host is restarted abnormally, in which case some stale configurations block
 # ovs-vswitchd running, like the pid file and the misconfigurations in OVSDB.
 ResetOVSService "ovs-vswitchd"
-RemoveNetworkAdapter "br-int"
+RemoveNetworkAdapter $OVS_BR_ADAPTER
 RemoveNetworkAdapter "antrea-gw0"
 ClearHyperVBindingOnAdapter($uplink)
 if ($RenewIPConfig) {

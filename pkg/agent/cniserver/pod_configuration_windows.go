@@ -71,7 +71,7 @@ func (pc *podConfigurator) connectInterfaceToOVS(
 	// Use the outer veth interface name as the OVS port name.
 	ovsPortName := hostIface.Name
 	containerConfig := buildContainerConfig(ovsPortName, containerID, podName, podNameSpace, containerIface, ips)
-	hostIfAlias := fmt.Sprintf("%s (%s)", util.ContainerVNICPrefix, ovsPortName)
+	hostIfAlias := util.VirtualAdapterName(ovsPortName)
 	// - For Containerd runtime, the container interface is created after CNI replying the network setup result.
 	//   So for such case we need to use asynchronous way to wait for interface to be created: we create the OVS port
 	//   and set the OVS Interface type "" first, and change the OVS Interface type to "internal" to connect to the

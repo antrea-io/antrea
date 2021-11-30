@@ -8,208 +8,214 @@
    xmlns:xlink="http://www.w3.org/1999/xlink"
    xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
    xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
-   id="svg8"
-   version="1.1"
-   viewBox="0 0 160.96114 113.4893"
-   height="113.4893mm"
-   width="160.96114mm"
+   sodipodi:docname="hns_integration.svg"
    inkscape:version="1.0 (4035a4fb49, 2020-05-01)"
-   sodipodi:docname="hns_integration.svg">
+   width="160.96114mm"
+   height="113.4893mm"
+   viewBox="0 0 160.96114 113.4893"
+   version="1.1"
+   id="svg8">
   <defs
      id="defs2">
-    <rect
-       x="8.0144567"
-       y="24.050629"
-       width="37.421364"
-       height="62.010159"
-       id="rect1877" />
-    <marker
-       inkscape:stockid="Arrow1Mend"
-       orient="auto"
-       refY="0"
-       refX="0"
-       id="Arrow1Mend"
-       style="overflow:visible"
-       inkscape:isstock="true">
-      <path
-         id="path974"
-         d="M 0,0 5,-5 -12.5,0 5,5 Z"
-         style="fill:#000000;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:1pt;stroke-opacity:1"
-         transform="matrix(-0.4,0,0,-0.4,-4,0)" />
-    </marker>
-    <marker
-       inkscape:stockid="Arrow1Mstart"
-       orient="auto"
-       refY="0"
-       refX="0"
-       id="Arrow1Mstart"
-       style="overflow:visible"
-       inkscape:isstock="true">
-      <path
-         id="path971"
-         d="M 0,0 5,-5 -12.5,0 5,5 Z"
-         style="fill:#000000;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:1pt;stroke-opacity:1"
-         transform="matrix(0.4,0,0,0.4,4,0)" />
-    </marker>
+    <inkscape:path-effect
+       effect="spiro"
+       id="path-effect3297"
+       is_visible="true"
+       lpeversion="1" />
+    <inkscape:path-effect
+       effect="spiro"
+       id="path-effect3120"
+       is_visible="true"
+       lpeversion="1" />
     <marker
        inkscape:stockid="Arrow1Lend"
        orient="auto"
        refY="0"
        refX="0"
-       id="Arrow1Lend"
+       id="marker2933"
        style="overflow:visible"
        inkscape:isstock="true">
       <path
-         id="path968"
+         id="path2931"
          d="M 0,0 5,-5 -12.5,0 5,5 Z"
-         style="fill:#000000;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:1pt;stroke-opacity:1"
+         style="fill:#0104e9;fill-opacity:0.99;fill-rule:evenodd;stroke:#0104e9;stroke-width:1pt;stroke-opacity:0.99"
          transform="matrix(-0.8,0,0,-0.8,-10,0)" />
     </marker>
+    <inkscape:path-effect
+       lpeversion="1"
+       is_visible="true"
+       id="path-effect2929"
+       effect="spiro" />
     <marker
-       inkscape:stockid="Arrow1Lstart"
+       inkscape:collect="always"
+       inkscape:isstock="true"
+       style="overflow:visible"
+       id="marker2799"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="Arrow1Lend">
+      <path
+         transform="matrix(-0.8,0,0,-0.8,-10,0)"
+         style="fill:#00f200;fill-opacity:1;fill-rule:evenodd;stroke:#00f200;stroke-width:1pt;stroke-opacity:1"
+         d="M 0,0 5,-5 -12.5,0 5,5 Z"
+         id="path2797" />
+    </marker>
+    <inkscape:path-effect
+       lpeversion="1"
+       is_visible="true"
+       id="path-effect1861"
+       effect="spiro" />
+    <inkscape:path-effect
+       lpeversion="1"
+       is_visible="true"
+       id="path-effect1857"
+       effect="spiro" />
+    <inkscape:path-effect
+       lpeversion="1"
+       is_visible="true"
+       id="path-effect1853"
+       effect="spiro" />
+    <marker
+       inkscape:collect="always"
+       inkscape:stockid="Arrow1Lend"
        orient="auto"
        refY="0"
        refX="0"
-       id="marker1438"
+       id="marker1627"
        style="overflow:visible"
        inkscape:isstock="true">
       <path
-         id="path1436"
+         id="path1625"
          d="M 0,0 5,-5 -12.5,0 5,5 Z"
+         style="fill:#f42000;fill-opacity:1;fill-rule:evenodd;stroke:#f42000;stroke-width:1pt;stroke-opacity:1"
+         transform="matrix(-0.8,0,0,-0.8,-10,0)" />
+    </marker>
+    <inkscape:path-effect
+       lpeversion="1"
+       is_visible="true"
+       id="path-effect1623"
+       effect="spiro" />
+    <inkscape:path-effect
+       lpeversion="1"
+       is_visible="true"
+       id="path-effect1171"
+       effect="spiro" />
+    <inkscape:path-effect
+       lpeversion="1"
+       is_visible="true"
+       id="path-effect1167"
+       effect="spiro" />
+    <rect
+       id="rect1877"
+       height="62.010159"
+       width="37.421364"
+       y="24.050629"
+       x="8.0144567" />
+    <marker
+       inkscape:isstock="true"
+       style="overflow:visible"
+       id="Arrow1Mend"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="Arrow1Mend">
+      <path
+         transform="matrix(-0.4,0,0,-0.4,-4,0)"
          style="fill:#000000;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:1pt;stroke-opacity:1"
-         transform="matrix(0.8,0,0,0.8,10,0)" />
+         d="M 0,0 5,-5 -12.5,0 5,5 Z"
+         id="path974" />
     </marker>
     <marker
-       inkscape:stockid="Arrow1Lstart"
-       orient="auto"
-       refY="0"
-       refX="0"
-       id="Arrow1Lstart"
+       inkscape:isstock="true"
        style="overflow:visible"
-       inkscape:isstock="true">
+       id="Arrow1Mstart"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="Arrow1Mstart">
       <path
-         id="path965"
-         d="M 0,0 5,-5 -12.5,0 5,5 Z"
+         transform="matrix(0.4,0,0,0.4,4,0)"
          style="fill:#000000;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:1pt;stroke-opacity:1"
-         transform="matrix(0.8,0,0,0.8,10,0)" />
+         d="M 0,0 5,-5 -12.5,0 5,5 Z"
+         id="path971" />
+    </marker>
+    <marker
+       inkscape:collect="always"
+       inkscape:isstock="true"
+       style="overflow:visible"
+       id="Arrow1Lend"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="Arrow1Lend">
+      <path
+         transform="matrix(-0.8,0,0,-0.8,-10,0)"
+         style="fill:#0104e9;fill-opacity:0.99;fill-rule:evenodd;stroke:#0104e9;stroke-width:1pt;stroke-opacity:0.99"
+         d="M 0,0 5,-5 -12.5,0 5,5 Z"
+         id="path968" />
+    </marker>
+    <marker
+       inkscape:isstock="true"
+       style="overflow:visible"
+       id="marker1438"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="Arrow1Lstart">
+      <path
+         transform="matrix(0.8,0,0,0.8,10,0)"
+         style="fill:#000000;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:1pt;stroke-opacity:1"
+         d="M 0,0 5,-5 -12.5,0 5,5 Z"
+         id="path1436" />
+    </marker>
+    <marker
+       inkscape:isstock="true"
+       style="overflow:visible"
+       id="Arrow1Lstart"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="Arrow1Lstart">
+      <path
+         transform="matrix(0.8,0,0,0.8,10,0)"
+         style="fill:#000000;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:1pt;stroke-opacity:1"
+         d="M 0,0 5,-5 -12.5,0 5,5 Z"
+         id="path965" />
     </marker>
     <linearGradient
-       inkscape:collect="always"
-       id="linearGradient1247">
+       id="linearGradient1247"
+       inkscape:collect="always">
       <stop
-         style="stop-color:#000000;stop-opacity:1;"
+         id="stop1243"
          offset="0"
-         id="stop1243" />
+         style="stop-color:#000000;stop-opacity:1;" />
       <stop
-         style="stop-color:#000000;stop-opacity:0;"
+         id="stop1245"
          offset="1"
-         id="stop1245" />
+         style="stop-color:#000000;stop-opacity:0;" />
     </linearGradient>
     <radialGradient
-       inkscape:collect="always"
-       xlink:href="#linearGradient1247"
-       id="radialGradient1249"
-       cx="59.263988"
-       cy="50.016052"
-       fx="59.263988"
-       fy="50.016052"
-       r="6.3279467"
+       gradientUnits="userSpaceOnUse"
        gradientTransform="matrix(1,0,0,0.34560105,0,32.730451)"
-       gradientUnits="userSpaceOnUse" />
-    <marker
-       inkscape:isstock="true"
-       style="overflow:visible"
-       id="Arrow1Mstart-6"
-       refX="0"
-       refY="0"
-       orient="auto"
-       inkscape:stockid="Arrow1Mstart">
-      <path
-         transform="matrix(0.4,0,0,0.4,4,0)"
-         style="fill:#000000;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:1pt;stroke-opacity:1"
-         d="M 0,0 5,-5 -12.5,0 5,5 Z"
-         id="path971-7" />
-    </marker>
-    <marker
-       inkscape:isstock="true"
-       style="overflow:visible"
-       id="Arrow1Lend-2"
-       refX="0"
-       refY="0"
-       orient="auto"
-       inkscape:stockid="Arrow1Lend">
-      <path
-         transform="matrix(-0.8,0,0,-0.8,-10,0)"
-         style="fill:#000000;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:1pt;stroke-opacity:1"
-         d="M 0,0 5,-5 -12.5,0 5,5 Z"
-         id="path968-2" />
-    </marker>
-    <marker
-       inkscape:isstock="true"
-       style="overflow:visible"
-       id="Arrow1Mend-0"
-       refX="0"
-       refY="0"
-       orient="auto"
-       inkscape:stockid="Arrow1Mend">
-      <path
-         transform="matrix(-0.4,0,0,-0.4,-4,0)"
-         style="fill:#000000;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:1pt;stroke-opacity:1"
-         d="M 0,0 5,-5 -12.5,0 5,5 Z"
-         id="path974-5" />
-    </marker>
-    <marker
-       inkscape:isstock="true"
-       style="overflow:visible"
-       id="Arrow1Mstart-3"
-       refX="0"
-       refY="0"
-       orient="auto"
-       inkscape:stockid="Arrow1Mstart">
-      <path
-         transform="matrix(0.4,0,0,0.4,4,0)"
-         style="fill:#000000;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:1pt;stroke-opacity:1"
-         d="M 0,0 5,-5 -12.5,0 5,5 Z"
-         id="path971-5" />
-    </marker>
-    <marker
-       inkscape:isstock="true"
-       style="overflow:visible"
-       id="Arrow1Lend-1"
-       refX="0"
-       refY="0"
-       orient="auto"
-       inkscape:stockid="Arrow1Lend">
-      <path
-         transform="matrix(-0.8,0,0,-0.8,-10,0)"
-         style="fill:#000000;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:1pt;stroke-opacity:1"
-         d="M 0,0 5,-5 -12.5,0 5,5 Z"
-         id="path968-8" />
-    </marker>
-    <marker
-       inkscape:isstock="true"
-       style="overflow:visible"
-       id="Arrow1Mend-3"
-       refX="0"
-       refY="0"
-       orient="auto"
-       inkscape:stockid="Arrow1Mend">
-      <path
-         transform="matrix(-0.4,0,0,-0.4,-4,0)"
-         style="fill:#000000;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:1pt;stroke-opacity:1"
-         d="M 0,0 5,-5 -12.5,0 5,5 Z"
-         id="path974-9" />
-    </marker>
+       r="6.3279467"
+       fy="50.016052"
+       fx="59.263988"
+       cy="50.016052"
+       cx="59.263988"
+       id="radialGradient1249"
+       xlink:href="#linearGradient1247"
+       inkscape:collect="always" />
     <marker
        inkscape:stockid="Arrow1Mstart"
        orient="auto"
        refY="0"
        refX="0"
-       id="Arrow1Mstart-6-3"
+       id="Arrow1Mstart-6"
        style="overflow:visible"
        inkscape:isstock="true">
       <path
-         id="path971-7-4"
+         id="path971-7"
          d="M 0,0 5,-5 -12.5,0 5,5 Z"
          style="fill:#000000;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:1pt;stroke-opacity:1"
          transform="matrix(0.4,0,0,0.4,4,0)" />
@@ -219,11 +225,11 @@
        orient="auto"
        refY="0"
        refX="0"
-       id="Arrow1Lend-2-5"
+       id="Arrow1Lend-2"
        style="overflow:visible"
        inkscape:isstock="true">
       <path
-         id="path968-2-3"
+         id="path968-2"
          d="M 0,0 5,-5 -12.5,0 5,5 Z"
          style="fill:#000000;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:1pt;stroke-opacity:1"
          transform="matrix(-0.8,0,0,-0.8,-10,0)" />
@@ -233,41 +239,153 @@
        orient="auto"
        refY="0"
        refX="0"
-       id="Arrow1Mend-0-1"
+       id="Arrow1Mend-0"
        style="overflow:visible"
        inkscape:isstock="true">
       <path
-         id="path974-5-1"
+         id="path974-5"
          d="M 0,0 5,-5 -12.5,0 5,5 Z"
          style="fill:#000000;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:1pt;stroke-opacity:1"
          transform="matrix(-0.4,0,0,-0.4,-4,0)" />
+    </marker>
+    <marker
+       inkscape:stockid="Arrow1Mstart"
+       orient="auto"
+       refY="0"
+       refX="0"
+       id="Arrow1Mstart-3"
+       style="overflow:visible"
+       inkscape:isstock="true">
+      <path
+         id="path971-5"
+         d="M 0,0 5,-5 -12.5,0 5,5 Z"
+         style="fill:#000000;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:1pt;stroke-opacity:1"
+         transform="matrix(0.4,0,0,0.4,4,0)" />
+    </marker>
+    <marker
+       inkscape:stockid="Arrow1Lend"
+       orient="auto"
+       refY="0"
+       refX="0"
+       id="Arrow1Lend-1"
+       style="overflow:visible"
+       inkscape:isstock="true">
+      <path
+         id="path968-8"
+         d="M 0,0 5,-5 -12.5,0 5,5 Z"
+         style="fill:#000000;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:1pt;stroke-opacity:1"
+         transform="matrix(-0.8,0,0,-0.8,-10,0)" />
+    </marker>
+    <marker
+       inkscape:stockid="Arrow1Mend"
+       orient="auto"
+       refY="0"
+       refX="0"
+       id="Arrow1Mend-3"
+       style="overflow:visible"
+       inkscape:isstock="true">
+      <path
+         id="path974-9"
+         d="M 0,0 5,-5 -12.5,0 5,5 Z"
+         style="fill:#000000;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:1pt;stroke-opacity:1"
+         transform="matrix(-0.4,0,0,-0.4,-4,0)" />
+    </marker>
+    <marker
+       inkscape:isstock="true"
+       style="overflow:visible"
+       id="Arrow1Mstart-6-3"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="Arrow1Mstart">
+      <path
+         transform="matrix(0.4,0,0,0.4,4,0)"
+         style="fill:#000000;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:1pt;stroke-opacity:1"
+         d="M 0,0 5,-5 -12.5,0 5,5 Z"
+         id="path971-7-4" />
+    </marker>
+    <marker
+       inkscape:isstock="true"
+       style="overflow:visible"
+       id="Arrow1Lend-2-5"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="Arrow1Lend">
+      <path
+         transform="matrix(-0.8,0,0,-0.8,-10,0)"
+         style="fill:#000000;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:1pt;stroke-opacity:1"
+         d="M 0,0 5,-5 -12.5,0 5,5 Z"
+         id="path968-2-3" />
+    </marker>
+    <marker
+       inkscape:isstock="true"
+       style="overflow:visible"
+       id="Arrow1Mend-0-1"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="Arrow1Mend">
+      <path
+         transform="matrix(-0.4,0,0,-0.4,-4,0)"
+         style="fill:#000000;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:1pt;stroke-opacity:1"
+         d="M 0,0 5,-5 -12.5,0 5,5 Z"
+         id="path974-5-1" />
+    </marker>
+    <marker
+       inkscape:isstock="true"
+       style="overflow:visible"
+       id="marker2933-1"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="Arrow1Lend">
+      <path
+         transform="matrix(-0.8,0,0,-0.8,-10,0)"
+         style="fill:#00f200;fill-opacity:1;fill-rule:evenodd;stroke:#00f200;stroke-width:1pt;stroke-opacity:1"
+         d="M 0,0 5,-5 -12.5,0 5,5 Z"
+         id="path2931-2" />
+    </marker>
+    <marker
+       inkscape:isstock="true"
+       style="overflow:visible"
+       id="marker2933-8"
+       refX="0"
+       refY="0"
+       orient="auto"
+       inkscape:stockid="Arrow1Lend">
+      <path
+         transform="matrix(-0.8,0,0,-0.8,-10,0)"
+         style="fill:#f42000;fill-opacity:1;fill-rule:evenodd;stroke:#f42000;stroke-width:1pt;stroke-opacity:1"
+         d="M 0,0 5,-5 -12.5,0 5,5 Z"
+         id="path2931-7" />
     </marker>
   </defs>
   <sodipodi:namedview
-     fit-margin-bottom="0"
-     fit-margin-right="0"
-     fit-margin-left="0"
-     fit-margin-top="0"
-     inkscape:snap-page="true"
-     id="base"
-     pagecolor="#ffffff"
-     bordercolor="#666666"
-     borderopacity="1.0"
-     inkscape:pageopacity="0.0"
-     inkscape:pageshadow="2"
-     inkscape:zoom="1.8907251"
-     inkscape:cx="304.17853"
-     inkscape:cy="393.41167"
-     inkscape:document-units="mm"
-     inkscape:current-layer="layer1"
-     inkscape:document-rotation="0"
-     showgrid="false"
-     inkscape:window-width="1920"
-     inkscape:window-height="1002"
-     inkscape:window-x="-8"
-     inkscape:window-y="-8"
+     inkscape:snap-bbox="true"
      inkscape:window-maximized="1"
-     inkscape:snap-bbox="true" />
+     inkscape:window-y="-9"
+     inkscape:window-x="2391"
+     inkscape:window-height="1001"
+     inkscape:window-width="1920"
+     showgrid="false"
+     inkscape:document-rotation="0"
+     inkscape:current-layer="layer1"
+     inkscape:document-units="mm"
+     inkscape:cy="203.00853"
+     inkscape:cx="304.17853"
+     inkscape:zoom="1.8907251"
+     inkscape:pageshadow="2"
+     inkscape:pageopacity="0.0"
+     borderopacity="1.0"
+     bordercolor="#666666"
+     pagecolor="#ffffff"
+     id="base"
+     inkscape:snap-page="true"
+     fit-margin-top="0"
+     fit-margin-left="0"
+     fit-margin-right="0"
+     fit-margin-bottom="0" />
   <metadata
      id="metadata5">
     <rdf:RDF>
@@ -276,352 +394,462 @@
         <dc:format>image/svg+xml</dc:format>
         <dc:type
            rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
-        <dc:title></dc:title>
+        <dc:title />
       </cc:Work>
     </rdf:RDF>
   </metadata>
   <g
-     transform="translate(-32.0399,-13.279963)"
-     inkscape:label="图层 1"
+     id="layer1"
      inkscape:groupmode="layer"
-     id="layer1">
+     inkscape:label="图层 1"
+     transform="translate(-32.0399,-13.279963)">
     <rect
-       inkscape:export-ydpi="25.219645"
-       inkscape:export-xdpi="25.219645"
-       inkscape:export-filename="C:\Users\wenyingd\hns_integration.png"
-       y="31.850767"
-       x="69.623711"
-       height="25.650778"
-       width="30.735996"
-       id="rect103"
-       style="fill:#000000;fill-opacity:0;fill-rule:evenodd;stroke:#000000;stroke-width:0.36195;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
-    <text
-       transform="scale(1.0001383,0.99986171)"
-       inkscape:export-ydpi="25.219645"
-       inkscape:export-xdpi="25.219645"
-       inkscape:export-filename="C:\Users\wenyingd\hns_integration.png"
-       id="text107"
-       y="40.941078"
-       x="76.562126"
-       style="font-style:normal;font-weight:normal;font-size:4.93821px;line-height:1.25;font-family:sans-serif;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.264962;stroke-miterlimit:4;stroke-dasharray:none"
-       xml:space="preserve"><tspan
-         style="font-size:4.93821px;fill:#000000;fill-opacity:1;stroke-width:0.264962;stroke-miterlimit:4;stroke-dasharray:none"
-         y="40.941078"
-         x="76.562126"
-         id="tspan105"
-         sodipodi:role="line">Pod1</tspan></text>
-    <rect
-       inkscape:export-ydpi="25.219645"
-       inkscape:export-xdpi="25.219645"
-       inkscape:export-filename="C:\Users\wenyingd\hns_integration.png"
-       y="54.883751"
-       x="81.421623"
-       height="16.703526"
-       width="4.9482884"
-       id="rect1281"
-       style="fill:#000000;fill-opacity:0;stroke:#000000;stroke-width:0.491765;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
-    <text
-       transform="scale(1.0001383,0.99986171)"
-       inkscape:export-ydpi="25.219645"
-       inkscape:export-xdpi="25.219645"
-       inkscape:export-filename="C:\Users\wenyingd\hns_integration.png"
-       id="text1285"
-       y="62.586922"
-       x="70.415779"
-       style="font-style:normal;font-weight:normal;font-size:4.23275px;line-height:1.25;font-family:sans-serif;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.264546"
-       xml:space="preserve"><tspan
-         style="font-size:4.23275px;stroke-width:0.264546"
-         y="62.586922"
-         x="70.415779"
-         id="tspan1283"
-         sodipodi:role="line">HNS Endpoint</tspan></text>
-    <rect
-       inkscape:export-ydpi="25.219645"
-       inkscape:export-xdpi="25.219645"
-       inkscape:export-filename="C:\Users\wenyingd\hns_integration.png"
        style="fill:#000000;fill-opacity:0;fill-rule:evenodd;stroke:#000000;stroke-width:0.36195;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
-       id="rect103-8"
-       width="30.735998"
+       id="rect103"
+       width="30.735996"
        height="25.650778"
-       x="123.56006"
-       y="31.51103" />
-    <text
-       transform="scale(1.0001383,0.99986171)"
-       inkscape:export-ydpi="25.219645"
-       inkscape:export-xdpi="25.219645"
+       x="83.911224"
+       y="35.554935"
        inkscape:export-filename="C:\Users\wenyingd\hns_integration.png"
+       inkscape:export-xdpi="25.219645"
+       inkscape:export-ydpi="25.219645" />
+    <text
        xml:space="preserve"
        style="font-style:normal;font-weight:normal;font-size:4.93821px;line-height:1.25;font-family:sans-serif;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.264962;stroke-miterlimit:4;stroke-dasharray:none"
-       x="130.49101"
-       y="40.601295"
-       id="text107-4"><tspan
-         sodipodi:role="line"
-         id="tspan105-0"
-         x="130.49101"
-         y="40.601295"
-         style="font-size:4.93821px;fill:#000000;fill-opacity:1;stroke-width:0.264962;stroke-miterlimit:4;stroke-dasharray:none">Pod2</tspan></text>
-    <rect
-       inkscape:export-ydpi="25.219645"
-       inkscape:export-xdpi="25.219645"
+       x="90.84758"
+       y="44.645756"
+       id="text107"
        inkscape:export-filename="C:\Users\wenyingd\hns_integration.png"
-       style="fill:#000000;fill-opacity:0;stroke:#000000;stroke-width:0.491763;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
-       id="rect1281-8"
+       inkscape:export-xdpi="25.219645"
+       inkscape:export-ydpi="25.219645"
+       transform="scale(1.0001383,0.99986171)"><tspan
+         sodipodi:role="line"
+         id="tspan105"
+         x="90.84758"
+         y="44.645756"
+         style="font-size:4.93821px;fill:#000000;fill-opacity:1;stroke-width:0.264962;stroke-miterlimit:4;stroke-dasharray:none">Pod1</tspan></text>
+    <rect
+       style="fill:#000000;fill-opacity:0;stroke:#000000;stroke-width:0.491765;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+       id="rect1281"
        width="4.9482884"
        height="16.703526"
-       x="134.85027"
-       y="54.821964" />
-    <text
-       transform="scale(1.0001383,0.99986171)"
-       inkscape:export-ydpi="25.219645"
-       inkscape:export-xdpi="25.219645"
+       x="95.17997"
+       y="58.587921"
        inkscape:export-filename="C:\Users\wenyingd\hns_integration.png"
+       inkscape:export-xdpi="25.219645"
+       inkscape:export-ydpi="25.219645" />
+    <text
        xml:space="preserve"
        style="font-style:normal;font-weight:normal;font-size:4.23275px;line-height:1.25;font-family:sans-serif;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.264546"
-       x="126.74976"
-       y="62.781624"
-       id="text1285-7"><tspan
+       x="84.701233"
+       y="66.291618"
+       id="text1285"
+       inkscape:export-filename="C:\Users\wenyingd\hns_integration.png"
+       inkscape:export-xdpi="25.219645"
+       inkscape:export-ydpi="25.219645"
+       transform="scale(1.0001383,0.99986171)"><tspan
          sodipodi:role="line"
-         id="tspan1283-3"
-         x="126.74976"
-         y="62.781624"
+         id="tspan1283"
+         x="84.701233"
+         y="66.291618"
          style="font-size:4.23275px;stroke-width:0.264546">HNS Endpoint</tspan></text>
     <rect
-       inkscape:export-ydpi="25.219645"
-       inkscape:export-xdpi="25.219645"
+       y="35.215199"
+       x="137.84741"
+       height="25.650778"
+       width="30.735998"
+       id="rect103-8"
+       style="fill:#000000;fill-opacity:0;fill-rule:evenodd;stroke:#000000;stroke-width:0.36195;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
        inkscape:export-filename="C:\Users\wenyingd\hns_integration.png"
-       y="67.907761"
-       x="61.858479"
-       height="10.182252"
-       width="102.9276"
+       inkscape:export-xdpi="25.219645"
+       inkscape:export-ydpi="25.219645" />
+    <text
+       id="text107-4"
+       y="44.305973"
+       x="144.77667"
+       style="font-style:normal;font-weight:normal;font-size:4.93821px;line-height:1.25;font-family:sans-serif;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.264962;stroke-miterlimit:4;stroke-dasharray:none"
+       xml:space="preserve"
+       inkscape:export-filename="C:\Users\wenyingd\hns_integration.png"
+       inkscape:export-xdpi="25.219645"
+       inkscape:export-ydpi="25.219645"
+       transform="scale(1.0001383,0.99986171)"><tspan
+         style="font-size:4.93821px;fill:#000000;fill-opacity:1;stroke-width:0.264962;stroke-miterlimit:4;stroke-dasharray:none"
+         y="44.305973"
+         x="144.77667"
+         id="tspan105-0"
+         sodipodi:role="line">Pod2</tspan></text>
+    <rect
+       y="58.526134"
+       x="148.60841"
+       height="16.703526"
+       width="4.9482884"
+       id="rect1281-8"
+       style="fill:#000000;fill-opacity:0;stroke:#000000;stroke-width:0.491763;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+       inkscape:export-filename="C:\Users\wenyingd\hns_integration.png"
+       inkscape:export-xdpi="25.219645"
+       inkscape:export-ydpi="25.219645" />
+    <text
+       id="text1285-7"
+       y="66.48632"
+       x="141.0354"
+       style="font-style:normal;font-weight:normal;font-size:4.23275px;line-height:1.25;font-family:sans-serif;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.264546"
+       xml:space="preserve"
+       inkscape:export-filename="C:\Users\wenyingd\hns_integration.png"
+       inkscape:export-xdpi="25.219645"
+       inkscape:export-ydpi="25.219645"
+       transform="scale(1.0001383,0.99986171)"><tspan
+         style="font-size:4.23275px;stroke-width:0.264546"
+         y="66.48632"
+         x="141.0354"
+         id="tspan1283-3"
+         sodipodi:role="line">HNS Endpoint</tspan></text>
+    <rect
+       style="fill:#000000;fill-opacity:0;stroke:#000000;stroke-width:0.333427;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
        id="rect1317"
-       style="fill:#000000;fill-opacity:0;stroke:#000000;stroke-width:0.333126;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
-    <text
-       transform="scale(1.0001383,0.99986171)"
-       inkscape:export-ydpi="25.219645"
-       inkscape:export-xdpi="25.219645"
+       width="102.8833"
+       height="10.205026"
+       x="76.171417"
+       y="72.848633"
        inkscape:export-filename="C:\Users\wenyingd\hns_integration.png"
+       inkscape:export-xdpi="25.219645"
+       inkscape:export-ydpi="25.219645" />
+    <text
+       xml:space="preserve"
+       style="font-size:4.23275px;line-height:1.25;font-family:sans-serif;stroke-width:0.264546"
+       x="113.63938"
+       y="79.045654"
        id="text1321"
-       y="74.361252"
-       x="99.074104"
-       style="font-size:4.23275px;line-height:1.25;font-family:sans-serif;stroke-width:0.264546"
-       xml:space="preserve"><tspan
-         style="stroke-width:0.264546"
-         y="74.361252"
-         x="99.074104"
+       inkscape:export-filename="C:\Users\wenyingd\hns_integration.png"
+       inkscape:export-xdpi="25.219645"
+       inkscape:export-ydpi="25.219645"
+       transform="scale(1.0001383,0.99986171)"><tspan
+         sodipodi:role="line"
          id="tspan1319"
-         sodipodi:role="line">HNS Network</tspan></text>
+         x="113.63938"
+         y="79.045654"
+         style="stroke-width:0.264546">HNS Network</tspan></text>
     <rect
-       inkscape:export-ydpi="25.219645"
-       inkscape:export-xdpi="25.219645"
-       inkscape:export-filename="C:\Users\wenyingd\hns_integration.png"
-       style="fill:#000000;fill-opacity:0;stroke:#000000;stroke-width:0.332954;stroke-miterlimit:4;stroke-dasharray:1.33182, 0.332954;stroke-dashoffset:0;stroke-opacity:1"
+       y="83.013626"
+       x="40.46656"
+       height="7.0209899"
+       width="145.74223"
        id="rect1317-2"
-       width="102.9276"
-       height="10.182252"
-       x="61.828236"
-       y="79.338104" />
-    <text
-       transform="scale(1.0001383,0.99986171)"
-       inkscape:export-ydpi="25.219645"
-       inkscape:export-xdpi="25.219645"
+       style="fill:#000000;fill-opacity:0;stroke:#000000;stroke-width:0.328994;stroke-miterlimit:4;stroke-dasharray:1.31598, 0.328994;stroke-dashoffset:0;stroke-opacity:1"
        inkscape:export-filename="C:\Users\wenyingd\hns_integration.png"
+       inkscape:export-xdpi="25.219645"
+       inkscape:export-ydpi="25.219645" />
+    <text
+       xml:space="preserve"
+       style="font-size:4.23275px;line-height:1.25;font-family:sans-serif;stroke-width:0.264546"
+       x="111.46206"
+       y="88.466248"
        id="text1340"
-       y="85.82003"
-       x="97.176628"
-       style="font-size:4.23275px;line-height:1.25;font-family:sans-serif;stroke-width:0.264546"
-       xml:space="preserve"><tspan
-         style="stroke-width:0.264546"
-         y="85.82003"
-         x="97.176628"
+       inkscape:export-filename="C:\Users\wenyingd\hns_integration.png"
+       inkscape:export-xdpi="25.219645"
+       inkscape:export-ydpi="25.219645"
+       transform="scale(1.0001383,0.99986171)"><tspan
+         sodipodi:role="line"
          id="tspan1338"
-         sodipodi:role="line">Hyper-V Switch</tspan></text>
+         x="111.46206"
+         y="88.466248"
+         style="stroke-width:0.264546">Hyper-V Switch</tspan></text>
     <text
-       transform="scale(1.0001383,0.99986171)"
-       inkscape:export-ydpi="25.219645"
-       inkscape:export-xdpi="25.219645"
-       inkscape:export-filename="C:\Users\wenyingd\hns_integration.png"
+       xml:space="preserve"
+       style="font-size:4.23275px;line-height:1.25;font-family:sans-serif;stroke-width:0.264546"
+       x="115.16571"
+       y="87.937447"
        id="text1344"
-       y="84.232742"
-       x="100.88028"
-       style="font-size:4.23275px;line-height:1.25;font-family:sans-serif;stroke-width:0.264546"
-       xml:space="preserve"><tspan
-         style="stroke-width:0.264546"
-         y="84.232742"
-         x="100.88028"
+       inkscape:export-filename="C:\Users\wenyingd\hns_integration.png"
+       inkscape:export-xdpi="25.219645"
+       inkscape:export-ydpi="25.219645"
+       transform="scale(1.0001383,0.99986171)"><tspan
+         sodipodi:role="line"
          id="tspan1342"
-         sodipodi:role="line"> </tspan></text>
+         x="115.16571"
+         y="87.937447"
+         style="stroke-width:0.264546"> </tspan></text>
     <rect
-       inkscape:export-ydpi="25.219645"
-       inkscape:export-xdpi="25.219645"
-       inkscape:export-filename="C:\Users\wenyingd\hns_integration.png"
-       y="93.572952"
-       x="39.956791"
-       height="12.023802"
-       width="146.19644"
+       style="fill:#000000;fill-opacity:0;stroke:#000000;stroke-width:0.332954;stroke-miterlimit:4;stroke-dasharray:1.33182, 0.332954;stroke-dashoffset:0;stroke-opacity:1"
        id="rect1346"
-       style="fill:#000000;fill-opacity:0;stroke:#000000;stroke-width:0.332954;stroke-miterlimit:4;stroke-dasharray:1.33182, 0.332954;stroke-dashoffset:0;stroke-opacity:1" />
-    <text
-       transform="scale(1.0001383,0.99986171)"
-       inkscape:export-ydpi="25.219645"
-       inkscape:export-xdpi="25.219645"
+       width="146.19644"
+       height="12.023802"
+       x="39.956791"
+       y="93.572952"
        inkscape:export-filename="C:\Users\wenyingd\hns_integration.png"
+       inkscape:export-xdpi="25.219645"
+       inkscape:export-ydpi="25.219645" />
+    <text
+       xml:space="preserve"
+       style="font-size:4.23275px;line-height:1.25;font-family:sans-serif;stroke-width:0.264546"
+       x="109.69894"
+       y="102.15002"
        id="text1350"
-       y="101.8701"
-       x="100.34583"
-       style="font-size:4.23275px;line-height:1.25;font-family:sans-serif;stroke-width:0.264546"
-       xml:space="preserve"><tspan
-         style="stroke-width:0.264546"
-         y="101.8701"
-         x="100.34583"
+       inkscape:export-filename="C:\Users\wenyingd\hns_integration.png"
+       inkscape:export-xdpi="25.219645"
+       inkscape:export-ydpi="25.219645"
+       transform="scale(1.0001383,0.99986171)"><tspan
+         sodipodi:role="line"
          id="tspan1348"
-         sodipodi:role="line">br-int</tspan></text>
+         x="109.69894"
+         y="102.15002"
+         style="stroke-width:0.264546">br-int</tspan></text>
     <rect
-       inkscape:export-ydpi="25.219645"
-       inkscape:export-xdpi="25.219645"
-       inkscape:export-filename="C:\Users\wenyingd\hns_integration.png"
-       y="90.070816"
-       x="81.381821"
-       height="7.1963048"
-       width="5.0601392"
+       style="fill:#000000;fill-opacity:0;stroke:#000000;stroke-width:0.350933;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
        id="rect1352"
-       style="fill:#000000;fill-opacity:0;stroke:#000000;stroke-width:0.350933;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1" />
-    <rect
-       inkscape:export-ydpi="25.219645"
-       inkscape:export-xdpi="25.219645"
+       width="5.0601392"
+       height="7.1963048"
+       x="94.611"
+       y="90.070816"
        inkscape:export-filename="C:\Users\wenyingd\hns_integration.png"
-       style="fill:#000000;fill-opacity:0;stroke:#000000;stroke-width:0.332954;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+       inkscape:export-xdpi="25.219645"
+       inkscape:export-ydpi="25.219645" />
+    <rect
+       y="89.633858"
+       x="149.40211"
+       height="7.2142811"
+       width="4.543582"
        id="rect1352-8"
-       width="4.543582"
-       height="7.2142811"
-       x="136.17313"
-       y="90.692192" />
-    <rect
-       inkscape:export-ydpi="25.219645"
-       inkscape:export-xdpi="25.219645"
-       inkscape:export-filename="C:\Users\wenyingd\hns_integration.png"
        style="fill:#000000;fill-opacity:0;stroke:#000000;stroke-width:0.332954;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+       inkscape:export-filename="C:\Users\wenyingd\hns_integration.png"
+       inkscape:export-xdpi="25.219645"
+       inkscape:export-ydpi="25.219645" />
+    <rect
+       y="89.859192"
+       x="68.746033"
+       height="7.320888"
+       width="4.543582"
        id="rect1352-3"
-       width="4.543582"
-       height="7.2142811"
-       x="48.108513"
-       y="89.965797" />
-    <rect
-       inkscape:export-ydpi="25.219645"
-       inkscape:export-xdpi="25.219645"
+       style="fill:#000000;fill-opacity:0;stroke:#000000;stroke-width:0.335405;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
        inkscape:export-filename="C:\Users\wenyingd\hns_integration.png"
-       style="fill:#000000;fill-opacity:0;stroke:#000000;stroke-width:0.332954;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
-       id="rect1352-6"
-       width="4.543582"
-       height="7.2142811"
+       inkscape:export-xdpi="25.219645"
+       inkscape:export-ydpi="25.219645" />
+    <rect
+       y="102.52399"
        x="171.85429"
-       y="102.52399" />
-    <rect
-       inkscape:export-ydpi="25.219645"
-       inkscape:export-xdpi="25.219645"
+       height="7.2142811"
+       width="4.543582"
+       id="rect1352-6"
+       style="fill:#000000;fill-opacity:0;stroke:#000000;stroke-width:0.332954;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
        inkscape:export-filename="C:\Users\wenyingd\hns_integration.png"
-       style="fill:#000000;fill-opacity:0;stroke:#000000;stroke-width:0.290129;stroke-miterlimit:2.5;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
-       id="rect1352-1"
-       width="10.653181"
-       height="18.933298"
+       inkscape:export-xdpi="25.219645"
+       inkscape:export-ydpi="25.219645" />
+    <rect
+       y="105.48196"
        x="76.992424"
-       y="105.48196" />
-    <text
-       transform="scale(1.0001383,0.99986171)"
-       inkscape:export-ydpi="25.219645"
-       inkscape:export-xdpi="25.219645"
+       height="18.933298"
+       width="10.653181"
+       id="rect1352-1"
+       style="fill:#000000;fill-opacity:0;stroke:#000000;stroke-width:0.290129;stroke-miterlimit:2.5;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
        inkscape:export-filename="C:\Users\wenyingd\hns_integration.png"
-       id="text1389"
-       y="126.72273"
+       inkscape:export-xdpi="25.219645"
+       inkscape:export-ydpi="25.219645" />
+    <text
+       xml:space="preserve"
+       style="font-size:4.23275px;line-height:1.25;font-family:sans-serif;stroke-width:0.264546"
        x="72.019173"
-       style="font-size:4.23275px;line-height:1.25;font-family:sans-serif;stroke-width:0.264546"
-       xml:space="preserve"><tspan
-         style="stroke-width:0.264546"
-         y="126.72273"
-         x="72.019173"
+       y="126.72273"
+       id="text1389"
+       inkscape:export-filename="C:\Users\wenyingd\hns_integration.png"
+       inkscape:export-xdpi="25.219645"
+       inkscape:export-ydpi="25.219645"
+       transform="scale(1.0001383,0.99986171)"><tspan
+         sodipodi:role="line"
          id="tspan1387"
-         sodipodi:role="line">Ethernet0</tspan></text>
+         x="72.019173"
+         y="126.72273"
+         style="stroke-width:0.264546">Ethernet0</tspan></text>
     <text
-       transform="scale(1.0001383,0.99986171)"
-       inkscape:export-ydpi="25.219645"
-       inkscape:export-xdpi="25.219645"
-       inkscape:export-filename="C:\Users\wenyingd\hns_integration.png"
-       id="text1393"
-       y="113.45712"
+       xml:space="preserve"
+       style="font-size:4.23275px;line-height:1.25;font-family:sans-serif;stroke-width:0.264546"
        x="169.71419"
-       style="font-size:4.23275px;line-height:1.25;font-family:sans-serif;stroke-width:0.264546"
-       xml:space="preserve"><tspan
-         style="stroke-width:0.264546"
-         y="113.45712"
-         x="169.71419"
+       y="113.45712"
+       id="text1393"
+       inkscape:export-filename="C:\Users\wenyingd\hns_integration.png"
+       inkscape:export-xdpi="25.219645"
+       inkscape:export-ydpi="25.219645"
+       transform="scale(1.0001383,0.99986171)"><tspan
+         sodipodi:role="line"
          id="tspan1391"
-         sodipodi:role="line">tun0</tspan><tspan
-         id="tspan1395"
-         style="stroke-width:0.264546"
+         x="169.71419"
+         y="113.45712"
+         style="stroke-width:0.264546">tun0</tspan><tspan
+         sodipodi:role="line"
+         x="169.71419"
          y="118.74806"
-         x="169.71419"
-         sodipodi:role="line" /><tspan
-         id="tspan1397"
          style="stroke-width:0.264546"
+         id="tspan1395" /><tspan
+         sodipodi:role="line"
+         x="169.71419"
          y="124.039"
-         x="169.71419"
-         sodipodi:role="line" /></text>
-    <text
-       transform="scale(1.0001383,0.99986171)"
-       inkscape:export-ydpi="25.219645"
-       inkscape:export-xdpi="25.219645"
-       inkscape:export-filename="C:\Users\wenyingd\hns_integration.png"
-       id="text1401"
-       y="88.920052"
-       x="45.985481"
-       style="font-size:4.23275px;line-height:1.25;font-family:sans-serif;stroke-width:0.264546"
-       xml:space="preserve"><tspan
          style="stroke-width:0.264546"
-         y="88.920052"
-         x="45.985481"
+         id="tspan1397" /></text>
+    <text
+       xml:space="preserve"
+       style="font-size:4.23275px;line-height:1.25;font-family:sans-serif;stroke-width:0.264546"
+       x="66.620155"
+       y="100.95634"
+       id="text1401"
+       inkscape:export-filename="C:\Users\wenyingd\hns_integration.png"
+       inkscape:export-xdpi="25.219645"
+       inkscape:export-ydpi="25.219645"
+       transform="scale(1.0001383,0.99986171)"><tspan
+         sodipodi:role="line"
          id="tspan1399"
-         sodipodi:role="line">gw0</tspan></text>
+         x="66.620155"
+         y="100.95634"
+         style="stroke-width:0.264546">gw0</tspan></text>
     <path
-       inkscape:export-ydpi="25.219645"
-       inkscape:export-xdpi="25.219645"
-       inkscape:export-filename="C:\Users\wenyingd\hns_integration.png"
-       inkscape:transform-center-y="5.803562"
-       inkscape:transform-center-x="0.3137339"
+       style="fill:none;stroke:#000000;stroke-width:0.352;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;marker-start:url(#Arrow1Mstart-3);marker-mid:url(#Arrow1Lend-1);marker-end:url(#Arrow1Mend-3)"
+       d="m 97.296634,71.587272 c 0.322016,18.48354 0.322016,18.48354 0.322016,18.48354"
        id="path1420"
-       d="m 83.538292,71.587272 c 0.322016,18.48354 0.322016,18.48354 0.322016,18.48354"
-       style="fill:none;stroke:#000000;stroke-width:0.752393px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;marker-start:url(#Arrow1Mstart-3);marker-mid:url(#Arrow1Lend-1);marker-end:url(#Arrow1Mend-3)" />
-    <path
-       inkscape:export-ydpi="25.219645"
-       inkscape:export-xdpi="25.219645"
-       inkscape:export-filename="C:\Users\wenyingd\hns_integration.png"
-       style="fill:none;stroke:#000000;stroke-width:0.752393px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;marker-start:url(#Arrow1Mstart-6-3);marker-mid:url(#Arrow1Lend-2-5);marker-end:url(#Arrow1Mend-0-1)"
-       d="m 137.51848,70.966027 c 0.32201,18.483543 0.32201,18.483543 0.32201,18.483543"
-       id="path1420-4"
        inkscape:transform-center-x="0.3137339"
-       inkscape:transform-center-y="5.8035611" />
+       inkscape:transform-center-y="5.803562"
+       inkscape:export-filename="C:\Users\wenyingd\hns_integration.png"
+       inkscape:export-xdpi="25.219645"
+       inkscape:export-ydpi="25.219645" />
+    <path
+       inkscape:transform-center-y="5.8035611"
+       inkscape:transform-center-x="0.3137339"
+       id="path1420-4"
+       d="m 150.74773,70.966027 c 0.32201,18.483543 0.32201,18.483543 0.32201,18.483543"
+       style="fill:none;stroke:#000000;stroke-width:0.352;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;marker-start:url(#Arrow1Mstart-6-3);marker-mid:url(#Arrow1Lend-2-5);marker-end:url(#Arrow1Mend-0-1)"
+       inkscape:export-filename="C:\Users\wenyingd\hns_integration.png"
+       inkscape:export-xdpi="25.219645"
+       inkscape:export-ydpi="25.219645" />
+    <rect
+       style="fill:#000000;fill-opacity:0;stroke:#000000;stroke-width:0.298892;stroke-miterlimit:2.5;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+       id="rect1833"
+       width="160.66225"
+       height="104.62524"
+       x="32.189346"
+       y="13.429409"
+       inkscape:export-filename="C:\Users\wenyingd\hns_integration.png"
+       inkscape:export-xdpi="25.219645"
+       inkscape:export-ydpi="25.219645" />
+    <text
+       xml:space="preserve"
+       style="font-size:4.23275px;line-height:1.25;font-family:sans-serif;stroke-width:0.264546"
+       x="75.620781"
+       y="18.210194"
+       id="text1837"
+       inkscape:export-filename="C:\Users\wenyingd\hns_integration.png"
+       inkscape:export-xdpi="25.219645"
+       inkscape:export-ydpi="25.219645"
+       transform="scale(1.0001383,0.99986171)"><tspan
+         sodipodi:role="line"
+         id="tspan1835"
+         x="75.620781"
+         y="18.210194"
+         style="stroke-width:0.264546">Windows Node</tspan></text>
     <rect
        inkscape:export-ydpi="25.219645"
        inkscape:export-xdpi="25.219645"
        inkscape:export-filename="C:\Users\wenyingd\hns_integration.png"
-       y="13.429409"
-       x="32.189346"
-       height="104.62524"
-       width="160.66225"
-       id="rect1833"
-       style="fill:#000000;fill-opacity:0;stroke:#000000;stroke-width:0.298892;stroke-miterlimit:2.5;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1" />
+       style="fill:#000000;fill-opacity:0;stroke:#000000;stroke-width:0.332445;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+       id="rect1352-3-1"
+       width="4.3877029"
+       height="7.4476976"
+       x="46.300316"
+       y="89.68795" />
     <text
        transform="scale(1.0001383,0.99986171)"
        inkscape:export-ydpi="25.219645"
        inkscape:export-xdpi="25.219645"
        inkscape:export-filename="C:\Users\wenyingd\hns_integration.png"
-       id="text1837"
-       y="18.210194"
-       x="75.620781"
+       id="text1350-3"
+       y="101.47805"
+       x="43.116951"
        style="font-size:4.23275px;line-height:1.25;font-family:sans-serif;stroke-width:0.264546"
        xml:space="preserve"><tspan
          style="stroke-width:0.264546"
-         y="18.210194"
-         x="75.620781"
-         id="tspan1835"
-         sodipodi:role="line">Windows Node</tspan></text>
+         y="101.47805"
+         x="43.116951"
+         id="tspan1348-7"
+         sodipodi:role="line">br-int</tspan></text>
+    <path
+       sodipodi:nodetypes="cssssssscsc"
+       inkscape:original-d="m 96.551086,53.58196 c 2.006032,-8.116111 5.617454,16.613777 -0.279878,14.553501 -3.289519,-1.149216 -6.05047,31.111531 -10.688368,30.991456 -8.49509,-0.219936 -7.550019,-4.333235 -11.70163,-4.2634 -8.303223,0.13967 -3.871342,-13.48038 -2.378938,-27.147874 1.492404,-13.667491 -19.141145,189.282317 -20.01106,1.539314 -0.295423,-63.7576115 -1.39911,3.825222 -2.658812,9.935562 -1.259702,6.110339 7.277013,15.393388 6.437124,23.789371 -0.83989,8.39599 3.265473,-0.093 14.693436,0 11.427965,0.093 11.335206,4.33833 11.055064,7.13682 -0.280141,2.79848 37.799506,26.42829 -6.856938,27.42774"
+       inkscape:path-effect="#path-effect1171"
+       id="path1169"
+       d="m 96.551086,53.58196 c -0.446218,4.835807 -0.539841,9.704113 -0.279878,14.553501 0.31894,5.949561 1.163958,11.976536 -0.0093,17.817983 -0.586622,2.920723 -1.692699,5.76955 -3.48814,8.146763 -1.795441,2.377213 -4.312086,4.260582 -7.19094,5.02671 -2.143976,0.570561 -4.460933,0.506034 -6.551776,-0.235955 -2.090843,-0.741989 -3.942414,-2.166193 -5.149854,-4.027445 -1.263603,-1.947827 -1.796332,-4.297854 -1.886375,-6.617901 -0.09004,-2.320046 0.238505,-4.633872 0.576541,-6.930926 0.338035,-2.297053 0.687336,-4.605989 0.639119,-6.927281 -0.04822,-2.321293 -0.515635,-4.679667 -1.708223,-6.671766 -1.040094,-1.737372 -2.614495,-3.143457 -4.441477,-4.016609 -1.826982,-0.873151 -3.898479,-1.215096 -5.913415,-1.014375 -2.014936,0.200721 -3.968978,0.939288 -5.635635,2.089294 -1.666656,1.150005 -3.045251,2.706439 -4.020533,4.481004 -1.660241,3.020876 -2.117211,6.531335 -2.658812,9.935562 -0.703919,4.424478 -1.601408,8.915561 -0.959684,13.349487 0.320862,2.216963 1.037547,4.398099 2.275225,6.265191 1.237678,1.867093 3.017198,3.406943 5.121583,4.174693 2.31827,0.84578 4.869503,0.72426 7.321211,0.44345 2.451707,-0.28081 4.918962,-0.71033 7.372225,-0.44345 2.251472,0.24493 4.425515,1.08114 6.311765,2.3346 1.88625,1.25347 3.487363,2.91761 4.743299,4.80222 2.941485,4.41387 3.923186,10.08434 2.636727,15.23017 -1.286459,5.14583 -4.821121,9.68721 -9.493665,12.19757"
+       style="fill:none;stroke:#0104e9;stroke-width:0.265;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.99000001;marker-end:url(#Arrow1Lend)" />
+    <text
+       inkscape:transform-center-y="-1.399375"
+       inkscape:transform-center-x="-2.3789375"
+       id="text1619"
+       y="64.637024"
+       x="52.750648"
+       style="font-size:4.23333px;line-height:1.25;font-family:sans-serif;stroke-width:0.264583"
+       xml:space="preserve"><tspan
+         style="stroke-width:0.264583"
+         y="64.637024"
+         x="52.750648"
+         id="tspan1617"
+         sodipodi:role="line">NetNat</tspan></text>
+    <path
+       sodipodi:nodetypes="csssssc"
+       inkscape:original-d="m 99.629709,53.02221 c 0.166447,1.482336 -3.73245,29.340249 -1.180699,31.873961 1.058075,1.050595 2.77415,-1.781289 2.62151,11.111512 -0.15264,12.892797 18.50959,4.142837 20.66931,5.712777 3.44043,2.5009 11.21169,-2.915561 24.44372,-3.394177 13.23204,-0.478615 3.27628,-19.779218 3.72456,-28.759631 0.44827,-8.980414 1.4657,-13.734823 2.3381,-20.882504"
+       inkscape:path-effect="#path-effect1623"
+       id="path1621"
+       d="m 99.629709,53.02221 c -1.047541,10.586968 -1.442103,21.238506 -1.180699,31.873961 0.0475,1.932731 0.117592,3.873847 0.474996,5.773838 0.357405,1.899992 1.014952,3.770105 2.146514,5.337674 1.08774,1.506864 2.58693,2.69206 4.24219,3.537011 1.65526,0.844956 3.46503,1.359396 5.29883,1.661106 3.66758,0.60341 7.41425,0.36914 11.12829,0.51466 4.2315,0.16579 8.4482,0.82654 12.68008,0.67067 2.11594,-0.0779 4.23448,-0.36296 6.25267,-1.00342 2.01819,-0.64046 3.93705,-1.645072 5.51097,-3.061427 1.87236,-1.684921 3.21067,-3.914556 4.03116,-6.296045 0.82048,-2.38149 1.13985,-4.914423 1.16428,-7.433171 0.0489,-5.037497 -1.05823,-10.009611 -1.47088,-15.030415 -0.57734,-7.024547 0.22153,-14.159579 2.3381,-20.882504"
+       style="fill:none;stroke:#f42000;stroke-width:0.265;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#marker1627)" />
+    <path
+       sodipodi:nodetypes="cssssccsc"
+       inkscape:original-d="m 156.86414,51.90271 c -1.72563,4.058452 -3.45152,8.303223 -5.17768,12.454438 -1.72616,4.151214 0.28014,10.635513 0.69968,15.812938 0.41955,5.177422 1.25971,8.396513 0.97957,12.734309 -0.28014,4.337799 6.53068,3.265475 9.09593,5.87738 2.56526,2.611905 6.7341,3.789155 9.39265,3.742215 2.65854,-0.0469 0.26331,2.60188 2.3621,4.9339 0,0 8.25658,4.15179 8.25631,4.19813 -2.6e-4,0.0464 2.33256,-1.21253 6.85694,1.25944"
+       inkscape:path-effect="#path-effect1861"
+       id="path1859"
+       d="m 156.86414,51.90271 c -2.91726,3.509756 -4.74696,7.910953 -5.17768,12.454438 -0.49858,5.259327 0.8319,10.531686 0.69968,15.812938 -0.0541,2.159345 -0.35267,4.308689 -0.36286,6.468687 -0.0102,2.159997 0.28884,4.379981 1.34243,6.265622 0.9053,1.620235 2.32902,2.911851 3.92781,3.854507 1.59879,0.942656 3.37229,1.554118 5.16812,2.022873 1.65135,0.431044 3.33433,0.747238 4.9577,1.273935 1.62338,0.5267 3.20761,1.28237 4.43495,2.46828 1.3394,1.29419 2.19388,3.07901 2.3621,4.9339 2.49637,1.84047 5.29845,3.26525 8.25631,4.19813 2.22194,0.70078 4.53099,1.12489 6.85694,1.25944"
+       style="fill:none;stroke:#00f200;stroke-width:0.265;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#marker2799)" />
+    <path
+       inkscape:original-d="m 67.654858,33.990712 c 2.703435,2.64e-4 5.286556,2.64e-4 7.929578,0"
+       inkscape:path-effect="#path-effect2929"
+       id="path2927"
+       d="m 67.654858,33.990712 h 7.929578"
+       style="fill:none;stroke:#0104e9;stroke-width:0.212649;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0.99;marker-end:url(#marker2933)" />
+    <path
+       style="fill:none;stroke:#00f200;stroke-width:0.212648;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#marker2933-1)"
+       d="m 67.654858,24.663088 h 7.929578"
+       id="path2927-4"
+       inkscape:path-effect="#path-effect3120"
+       inkscape:original-d="m 67.654858,24.663088 c 2.703435,2.64e-4 5.286556,2.64e-4 7.929578,0" />
+    <path
+       style="fill:none;stroke:#f42000;stroke-width:0.212648;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;marker-end:url(#marker2933-8)"
+       d="m 67.654858,29.171671 h 7.929577"
+       id="path2927-44"
+       inkscape:path-effect="#path-effect3297"
+       inkscape:original-d="m 67.654858,29.171671 c 2.703435,2.64e-4 5.286555,2.64e-4 7.929577,0" />
+    <text
+       id="text3445"
+       y="25.459154"
+       x="37.551434"
+       style="font-size:3.52778px;line-height:1.25;font-family:sans-serif;stroke-width:0.264583"
+       xml:space="preserve"><tspan
+         style="font-size:3.52778px;stroke-width:0.264583"
+         y="25.459154"
+         x="37.551434"
+         id="tspan3443"
+         sodipodi:role="line">Pod to local Pod</tspan></text>
+    <text
+       xml:space="preserve"
+       style="font-size:3.52777px;line-height:1.25;font-family:sans-serif;stroke-width:0.264583"
+       x="32.947491"
+       y="30.44227"
+       id="text3445-4"><tspan
+         sodipodi:role="line"
+         id="tspan3443-2"
+         x="32.947491"
+         y="30.44227"
+         style="font-size:3.52777px;stroke-width:0.264583">Pod to remote Pod</tspan></text>
+    <text
+       xml:space="preserve"
+       style="font-size:3.52777px;line-height:1.25;font-family:sans-serif;stroke-width:0.264583"
+       x="38.715954"
+       y="35.425392"
+       id="text3445-5"><tspan
+         sodipodi:role="line"
+         id="tspan3443-1"
+         x="38.715954"
+         y="35.425392"
+         style="font-size:3.52777px;stroke-width:0.264583">Pod to external</tspan></text>
   </g>
 </svg>

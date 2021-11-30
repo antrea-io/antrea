@@ -20,9 +20,10 @@ forwarded correctly.
 
 <img src="../assets/hns_integration.svg" width="600" alt="HNS Integration">
 
-SNAT based on OpenFlow is needed to make sure the containers can access the external address.
-The SNATed address is using the IP configured on the OVS bridge. Some additional OpenFlow entries
-are installed to assist in identifying and forwarding the external traffic.
+Windows NetNat is configured to make sure the Pods can access external addresses. The packet
+from a Pod to an external address is firstly output to antrea-gw0, and then SNAT is performed on the
+Windows host. The SNATed packet enters OVS from the OVS bridge interface and leaves the Windows host
+from the uplink interface directly.
 
 Antrea implements the Kubernetes ClusterIP Service leveraging OVS. Pod-to-ClusterIP-Service traffic
 is load-balanced and forwarded directly inside the OVS pipeline. And kube-proxy is running
@@ -99,10 +100,12 @@ port (provided with `local_ip` option). This local address is the one configured
 ### OVS bridge interface configuration
 
 Since OVS is also responsible for taking charge of the network of the host, an interface for the OVS bridge
-is required on which the host network settings are configured. It is created and enabled when creating
-the OVS bridge, and the MAC address should be changed to be the same as the uplink interface. Then the IP
-address and the route entries originally configured on the uplink interface should also be migrated to
-the interface.
+is required on which the host network settings are configured. The virtual network adapter which is created
+when creating the HNS Network is used as the OVS bridge interface. The virtual network adapter is renamed as
+the expected OVS bridge name, then the OVS bridge port is created. Hence, OVS can find the virtual network
+adapter with the name and attach it directly. Windows host has configured the virtual network adapter with
+IP, MAC and route entries which were originally on the uplink interface when creating the HNSNetwork, as a
+result, no extra manual IP/MAC/Route configurations on the OVS bridge are needed.
 
 The packets that are sent to/from the Windows host should be forwarded on this interface. So the OVS bridge
 is also a valid entry point into the OVS pipeline. A special ofport number 65534 (named as LOCAL) for the
