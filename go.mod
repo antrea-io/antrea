@@ -147,7 +147,3 @@ require (
 	sigs.k8s.io/structured-merge-diff/v4 v4.1.0 // indirect
 	sigs.k8s.io/yaml v1.2.0 // indirect
 )
-
-// hcshim repo is modifed to add "AdditionalParams" field to HNSEndpoint struct.
-// We will use this replace before pushing the change to hcshim upstream repo.
-replace github.com/Microsoft/hcsshim v0.8.9 => github.com/ruicao93/hcsshim v0.8.10-0.20210114035434-63fe00c1b9aa

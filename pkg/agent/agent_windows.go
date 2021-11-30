@@ -139,7 +139,7 @@ func (i *Initializer) prepareOVSBridge() error {
 
 	// Create local port.
 	brName := i.ovsBridgeClient.GetBridgeName()
-	if _, err = i.ovsBridgeClient.GetOFPort(brName); err == nil {
+	if _, err = i.ovsBridgeClient.GetOFPort(brName, false); err == nil {
 		klog.Infof("OVS bridge local port %s already exists, skip the configuration", brName)
 	} else {
 		// OVS does not receive "ofport_request" param when creating local port, so here use config.AutoAssignedOFPort=0
@@ -152,7 +152,7 @@ func (i *Initializer) prepareOVSBridge() error {
 	// If uplink is already exists, return.
 	uplinkNetConfig := i.nodeConfig.UplinkNetConfig
 	uplink := uplinkNetConfig.Name
-	if _, err := i.ovsBridgeClient.GetOFPort(uplink); err == nil {
+	if _, err := i.ovsBridgeClient.GetOFPort(uplink, false); err == nil {
 		klog.Infof("Uplink %s already exists, skip the configuration", uplink)
 		return err
 	}

@@ -590,6 +590,6 @@ func isVeth(link netlink.Link) bool {
 	return isVeth
 }
 
-func (ic *ifConfigurator) getOVSInterfaceType() int {
+func (ic *ifConfigurator) getOVSInterfaceType(ovsPortName string) int {
 	return defaultOVSInterfaceType
 }

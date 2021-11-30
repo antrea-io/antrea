@@ -80,7 +80,7 @@ func (i *Initializer) prepareOVSBridge() error {
 
 	// Create local port.
 	brName := i.ovsBridgeClient.GetBridgeName()
-	if _, err = i.ovsBridgeClient.GetOFPort(brName); err == nil {
+	if _, err = i.ovsBridgeClient.GetOFPort(brName, false); err == nil {
 		klog.Infof("OVS bridge local port %s already exists, skip the configuration", brName)
 		// If uplink is internal port, get the real uplink interface.
 		// This branch is used when antrea-agent get a hard restart (e.g. SIGKILL)
@@ -203,7 +203,7 @@ func (i *Initializer) BridgeUplinkToOVSBridge() error {
 
 	// If uplink is already exists, return.
 	uplink := uplinkNetConfig.Name
-	if _, err := i.ovsBridgeClient.GetOFPort(uplink); err == nil {
+	if _, err := i.ovsBridgeClient.GetOFPort(uplink, false); err == nil {
 		klog.Infof("Uplink %s already exists, skip the configuration", uplink)
 		return err
 	}
