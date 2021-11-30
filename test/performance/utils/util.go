@@ -19,6 +19,7 @@ import (
 	"math"
 	"math/big"
 	rand1 "math/rand"
+	"time"
 
 	"k8s.io/client-go/util/retry"
 )
@@ -61,4 +62,11 @@ func PickLabels(num int, realNode bool) map[string]string {
 		result[PodOnRealNodeLabelKey] = ""
 	}
 	return result
+}
+
+func CheckTimeout(start time.Time, duration time.Duration) bool {
+	if time.Since(start) > duration {
+		return true
+	}
+	return false
 }

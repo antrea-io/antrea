@@ -9,6 +9,7 @@ namespace_num: 1
 record_prometheus: false
 pre_workload: true
 teardown: false
+check_timeout: 20
 scales:
   - name: "ScaleRestartAgent"
     package: "test/performance/framework"

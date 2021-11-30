@@ -17,6 +17,7 @@ package framework
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"golang.org/x/time/rate"
 
@@ -42,10 +43,21 @@ func ScaleNetworkPolicy(ctx context.Context, data *ScaleData) error {
 		return utils.DefaultRetry(f)
 	}
 
+	baseIndex := 1
+	if len(nps) > 600 {
+		baseIndex = len(nps) / 600
+	}
+	start := time.Now()
 	for _, ns := range data.namespaces {
 		// Check connection of Pods in NetworkPolicies, workload Pods
 		rateLimiter := rate.NewLimiter(rate.Limit(10*len(data.clientPods)), len(data.clientPods)*20)
-		for _, np := range nps {
+		for i, np := range nps {
+			if utils.CheckTimeout(start, data.checkTimeout) {
+				break
+			}
+			if i%baseIndex != 0 {
+				continue
+			}
 			fromPod, ip, err := networkpolicy.SelectConnectPod(ctx, data.kubernetesClientSet, ns, np)
 			if err != nil || fromPod == nil || ip == "" {
 				continue
@@ -62,7 +74,13 @@ func ScaleNetworkPolicy(ctx context.Context, data *ScaleData) error {
 		}
 
 		// Check isolation of Pods in NetworkPolicies, client Pods to workload Pods
-		for _, np := range nps {
+		for i, np := range nps {
+			if utils.CheckTimeout(start, data.checkTimeout) {
+				break
+			}
+			if i%baseIndex != 0 {
+				continue
+			}
 			fromPod, ip, err := networkpolicy.SelectIsoPod(ctx, data.kubernetesClientSet, ns, np, data.clientPods)
 			if err != nil || fromPod == nil || ip == "" {
 				continue

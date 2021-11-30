@@ -34,6 +34,7 @@ type ScaleConfiguration struct {
 	RecordPrometheus bool `yaml:"record_prometheus"`
 	PreWorkload      bool `yaml:"pre_workload"`
 	NamespaceNum     int  `yaml:"namespace_num"`
+	CheckTimeout     int  `yaml:"check_timeout"`
 }
 
 type Scale struct {

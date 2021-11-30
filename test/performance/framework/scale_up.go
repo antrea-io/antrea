@@ -17,6 +17,7 @@ package framework
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	appsv1 "k8s.io/api/apps/v1"
@@ -142,6 +143,7 @@ type ScaleData struct {
 	nodesNum            int
 	simulateNodesNum    int
 	podsNum             int
+	checkTimeout        time.Duration
 }
 
 func createTestPodClients(ctx context.Context, kClient kubernetes.Interface, ns string) error {
@@ -257,6 +259,7 @@ func ScaleUp(ctx context.Context, kubeConfigPath, scaleConfigPath string) (*Scal
 	td.nodesNum = len(nodes.Items)
 	td.podsNum = td.nodesNum * scaleConfig.PodsNumPerNode
 	td.simulateNodesNum = simulateNodesNum
+	td.checkTimeout = time.Duration(scaleConfig.CheckTimeout) * time.Minute
 
 	klog.Infof("Preflight checks and clean up")
 	if scaleConfig.PreWorkload {

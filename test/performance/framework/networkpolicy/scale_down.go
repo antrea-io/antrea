@@ -28,9 +28,9 @@ import (
 // ScaleDown clean up NetworkPolicies in the namespaces list nss
 func ScaleDown(ctx context.Context, nss []string, cs kubernetes.Interface) error {
 	for _, ns := range nss {
-		if err := cs.NetworkingV1().NetworkPolicies(ns).DeleteCollection(ctx, metav1.DeleteOptions{}, metav1.ListOptions{}); err != nil {
+		if err := cs.NetworkingV1().NetworkPolicies(ns).DeleteCollection(
+			ctx, metav1.DeleteOptions{}, metav1.ListOptions{}); err != nil {
 			klog.ErrorS(err, "Deleted NetworkPolicies error", "namespace", ns)
-			return err
 		}
 		klog.V(2).InfoS("Deleted NetworkPolicies", "namespace", ns)
 	}
