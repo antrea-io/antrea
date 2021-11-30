@@ -292,7 +292,7 @@ func testCreatePort(t *testing.T, br *ovsconfig.OVSBridge, name string, ifType s
 
 	require.Nilf(t, err, "Failed to create %s port: %s", ifType, err)
 
-	ofPort, err := br.GetOFPort(name)
+	ofPort, err := br.GetOFPort(name, false)
 	if ifType != "" {
 		require.NoErrorf(t, err, "Failed to get ofport for %s port: %s", ifType, err)
 		assert.Equal(t, ofPortRequest, ofPort, "ofport does not match the requested value for %s port", ifType)

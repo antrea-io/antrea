@@ -252,18 +252,18 @@ func (mr *MockOVSBridgeClientMockRecorder) GetInterfaceOptions(arg0 interface{})
 }
 
 // GetOFPort mocks base method
-func (m *MockOVSBridgeClient) GetOFPort(arg0 string) (int32, ovsconfig.Error) {
+func (m *MockOVSBridgeClient) GetOFPort(arg0 string, arg1 bool) (int32, ovsconfig.Error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetOFPort", arg0)
+	ret := m.ctrl.Call(m, "GetOFPort", arg0, arg1)
 	ret0, _ := ret[0].(int32)
 	ret1, _ := ret[1].(ovsconfig.Error)
 	return ret0, ret1
 }
 
 // GetOFPort indicates an expected call of GetOFPort
-func (mr *MockOVSBridgeClientMockRecorder) GetOFPort(arg0 interface{}) *gomock.Call {
+func (mr *MockOVSBridgeClientMockRecorder) GetOFPort(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetOFPort", reflect.TypeOf((*MockOVSBridgeClient)(nil).GetOFPort), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetOFPort", reflect.TypeOf((*MockOVSBridgeClient)(nil).GetOFPort), arg0, arg1)
 }
 
 // GetOVSDatapathType mocks base method
@@ -408,4 +408,18 @@ func (m *MockOVSBridgeClient) SetInterfaceOptions(arg0 string, arg1 map[string]i
 func (mr *MockOVSBridgeClientMockRecorder) SetInterfaceOptions(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetInterfaceOptions", reflect.TypeOf((*MockOVSBridgeClient)(nil).SetInterfaceOptions), arg0, arg1)
+}
+
+// SetInterfaceType mocks base method
+func (m *MockOVSBridgeClient) SetInterfaceType(arg0, arg1 string) ovsconfig.Error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetInterfaceType", arg0, arg1)
+	ret0, _ := ret[0].(ovsconfig.Error)
+	return ret0
+}
+
+// SetInterfaceType indicates an expected call of SetInterfaceType
+func (mr *MockOVSBridgeClientMockRecorder) SetInterfaceType(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetInterfaceType", reflect.TypeOf((*MockOVSBridgeClient)(nil).SetInterfaceType), arg0, arg1)
 }

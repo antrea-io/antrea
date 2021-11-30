@@ -257,7 +257,7 @@ func (pc *podConfigurator) configureInterfaces(
 func (pc *podConfigurator) createOVSPort(ovsPortName string, ovsAttachInfo map[string]interface{}) (string, error) {
 	var portUUID string
 	var err error
-	switch pc.ifConfigurator.getOVSInterfaceType() {
+	switch pc.ifConfigurator.getOVSInterfaceType(ovsPortName) {
 	case internalOVSInterfaceType:
 		portUUID, err = pc.ovsBridgeClient.CreateInternalPort(ovsPortName, 0, ovsAttachInfo)
 	default:
@@ -402,9 +402,6 @@ func (pc *podConfigurator) reconcile(pods []corev1.Pod, containerAccess *contain
 	// desiredPods is the set of Pods that should be present, based on the
 	// current list of Pods got from the Kubernetes API.
 	desiredPods := sets.NewString()
-	// actualPods is the set of Pods that are present, based on the container
-	// interfaces got from the OVSDB.
-	actualPods := sets.NewString()
 	// knownInterfaces is the list of interfaces currently in the local cache.
 	knownInterfaces := pc.ifaceStore.GetInterfacesByType(interfacestore.ContainerInterface)
 
@@ -416,10 +413,16 @@ func (pc *podConfigurator) reconcile(pods []corev1.Pod, containerAccess *contain
 		desiredPods.Insert(k8s.NamespacedName(pod.Namespace, pod.Name))
 	}
 
+	missingIfConfigs := make([]*interfacestore.InterfaceConfig, 0)
 	for _, containerConfig := range knownInterfaces {
 		namespacedName := k8s.NamespacedName(containerConfig.PodNamespace, containerConfig.PodName)
-		actualPods.Insert(namespacedName)
 		if desiredPods.Has(namespacedName) {
+			// Find the OVS ports which are not connected to host interfaces. This is useful on Windows if the runtime is
+			// Containerd, because the host interface is created async from the OVS port.
+			if containerConfig.OFPort == -1 {
+				missingIfConfigs = append(missingIfConfigs, containerConfig)
+				continue
+			}
 			// This interface matches an existing Pod.
 			// We rely on the interface cache / store - which is initialized from the persistent
 			// OVSDB - to map the Pod to its interface configuration. The interface
@@ -442,9 +445,9 @@ func (pc *podConfigurator) reconcile(pods []corev1.Pod, containerAccess *contain
 			// interface should no longer be in store after the call to removeInterfaces
 		}
 	}
-
-	missingPods := desiredPods.Difference(actualPods)
-	pc.reconcileMissingPods(missingPods, containerAccess)
+	if len(missingIfConfigs) > 0 {
+		pc.reconcileMissingPods(missingIfConfigs, containerAccess)
+	}
 	return nil
 }
 
@@ -465,14 +468,12 @@ func (pc *podConfigurator) connectInterfaceToOVSCommon(ovsPortName string, conta
 	}()
 
 	// GetOFPort will wait for up to 1 second for OVSDB to report the OFPort number.
-	ofPort, err := pc.ovsBridgeClient.GetOFPort(ovsPortName)
+	ofPort, err := pc.ovsBridgeClient.GetOFPort(ovsPortName, false)
 	if err != nil {
 		return fmt.Errorf("failed to get of_port of OVS port %s: %v", ovsPortName, err)
 	}
-
 	klog.V(2).Infof("Setting up Openflow entries for container %s", containerID)
-	err = pc.ofClient.InstallPodFlows(ovsPortName, containerConfig.IPs, containerConfig.MAC, uint32(ofPort))
-	if err != nil {
+	if err := pc.ofClient.InstallPodFlows(ovsPortName, containerConfig.IPs, containerConfig.MAC, uint32(ofPort)); err != nil {
 		return fmt.Errorf("failed to add Openflow entries for container %s: %v", containerID, err)
 	}
 	containerConfig.OVSPortConfig = &interfacestore.OVSPortConfig{PortUUID: portUUID, OFPort: ofPort}

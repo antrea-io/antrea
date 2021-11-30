@@ -19,7 +19,6 @@ package cniserver
 
 import (
 	"github.com/containernetworking/cni/pkg/types/current"
-	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent/interfacestore"
@@ -41,8 +40,8 @@ func (pc *podConfigurator) connectInterfaceToOVS(
 	return containerConfig, pc.connectInterfaceToOVSCommon(ovsPortName, containerConfig)
 }
 
-func (pc *podConfigurator) reconcileMissingPods(pods sets.String, containerAccess *containerAccessArbitrator) {
-	for pod := range pods {
+func (pc *podConfigurator) reconcileMissingPods(ifConfigs []*interfacestore.InterfaceConfig, containerAccess *containerAccessArbitrator) {
+	for i := range ifConfigs {
 		// This should not happen since OVSDB is persisted on the Node.
 		// TODO: is there anything else we should be doing? Assuming that the Pod's
 		// interface still exists, we can repair the interface store since we can
@@ -52,6 +51,7 @@ func (pc *podConfigurator) reconcileMissingPods(pods sets.String, containerAcces
 		// we store in the cache, but this ID is not used for anything at the
 		// moment. However, if the interface does not exist, there is nothing we can
 		// do since we do not have the original CNI parameters.
-		klog.Warningf("Interface for Pod %s not found in the interface store", pod)
+		ifaceConfig := ifConfigs[i]
+		klog.Warningf("Interface for Pod %s/%s not found in the interface store", ifaceConfig.PodNamespace, ifaceConfig.PodName)
 	}
 }

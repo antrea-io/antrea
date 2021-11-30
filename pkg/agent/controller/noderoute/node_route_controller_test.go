@@ -338,8 +338,8 @@ func TestCreateIPSecTunnelPort(t *testing.T) {
 		node2PortName, ovsconfig.TunnelType("vxlan"), int32(0),
 		false, "", nodeIP2.String(), "changeme",
 		map[string]interface{}{ovsExternalIDNodeName: "xyz-k8s-0-2"}).Times(1)
-	c.ovsClient.EXPECT().GetOFPort(node1PortName).Return(int32(1), nil)
-	c.ovsClient.EXPECT().GetOFPort(node2PortName).Return(int32(2), nil)
+	c.ovsClient.EXPECT().GetOFPort(node1PortName, false).Return(int32(1), nil)
+	c.ovsClient.EXPECT().GetOFPort(node2PortName, false).Return(int32(2), nil)
 	c.ovsClient.EXPECT().DeletePort("123").Times(1)
 
 	tests := []struct {

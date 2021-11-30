@@ -43,7 +43,7 @@ type OVSBridgeClient interface {
 	CreateUplinkPort(name string, ofPortRequest int32, externalIDs map[string]interface{}) (string, Error)
 	DeletePort(portUUID string) Error
 	DeletePorts(portUUIDList []string) Error
-	GetOFPort(ifName string) (int32, Error)
+	GetOFPort(ifName string, waitUntilValid bool) (int32, Error)
 	GetPortData(portUUID, ifName string) (*OVSPortData, Error)
 	GetPortList() ([]OVSPortData, Error)
 	SetInterfaceMTU(name string, MTU int) error
@@ -54,4 +54,5 @@ type OVSBridgeClient interface {
 	GetBridgeName() string
 	IsHardwareOffloadEnabled() bool
 	GetOVSDatapathType() OVSDatapathType
+	SetInterfaceType(name, ifType string) Error
 }

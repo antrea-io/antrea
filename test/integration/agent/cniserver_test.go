@@ -607,7 +607,7 @@ func cmdAddDelCheckTest(testNS ns.NetNS, tc testCase, dataDir string) {
 	ovsPortname := util.GenerateContainerInterfaceName(testPod, testPodNamespace, ContainerID)
 	ovsPortUUID := uuid.New().String()
 	ovsServiceMock.EXPECT().CreatePort(ovsPortname, ovsPortname, mock.Any()).Return(ovsPortUUID, nil).AnyTimes()
-	ovsServiceMock.EXPECT().GetOFPort(ovsPortname).Return(int32(10), nil).AnyTimes()
+	ovsServiceMock.EXPECT().GetOFPort(ovsPortname, false).Return(int32(10), nil).AnyTimes()
 	ofServiceMock.EXPECT().InstallPodFlows(ovsPortname, mock.Any(), mock.Any(), mock.Any()).Return(nil)
 
 	close(tester.networkReadyCh)
@@ -827,7 +827,7 @@ func TestCNIServerChaining(t *testing.T) {
 		orderedCalls = append(orderedCalls,
 			routeMock.EXPECT().MigrateRoutesToGw(hostVeth.Name),
 			ovsServiceMock.EXPECT().CreatePort(ovsPortname, ovsPortname, mock.Any()).Return(ovsPortUUID, nil),
-			ovsServiceMock.EXPECT().GetOFPort(ovsPortname).Return(testContainerOFPort, nil),
+			ovsServiceMock.EXPECT().GetOFPort(ovsPortname, false).Return(testContainerOFPort, nil),
 			ofServiceMock.EXPECT().InstallPodFlows(ovsPortname, []net.IP{podIP}, containerIntf.HardwareAddr, mock.Any()),
 		)
 		mock.InOrder(orderedCalls...)
