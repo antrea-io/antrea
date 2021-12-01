@@ -2811,22 +2811,81 @@ func TestAntreaPolicyStatus(t *testing.T) {
 		CurrentNodesRealized: 2,
 		DesiredNodesRealized: 2,
 	}
-	err = wait.Poll(100*time.Millisecond, policyRealizedTimeout, func() (bool, error) {
-		anp, err := data.crdClient.CrdV1alpha1().NetworkPolicies(anp.Namespace).Get(context.TODO(), anp.Name, metav1.GetOptions{})
+	checkANPStatus(t, data, anp, expectedStatus)
+	checkACNPStatus(t, data, acnp, expectedStatus)
+}
+
+func TestAntreaPolicyStatusWithAppliedToPerRule(t *testing.T) {
+	skipIfHasWindowsNodes(t)
+
+	data, err := setupTest(t)
+	if err != nil {
+		t.Fatalf("Error when setting up test: %v", err)
+	}
+	defer teardownTest(t, data)
+	skipIfAntreaPolicyDisabled(t, data)
+
+	server0Name, _, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "server-0", controlPlaneNodeName())
+	defer cleanupFunc()
+	server1Name, _, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "server-1", workerNodeName(1))
+	defer cleanupFunc()
+
+	anpBuilder := &AntreaNetworkPolicySpecBuilder{}
+	anpBuilder = anpBuilder.SetName(testNamespace, "anp-applied-to-per-rule").
+		SetPriority(1.0)
+	anpBuilder.AddIngress(v1.ProtocolTCP, &p80, nil, nil, nil, map[string]string{"pod": "b"}, map[string]string{"ns": "x"},
+		nil, nil, []ANPAppliedToSpec{{PodSelector: map[string]string{"antrea-e2e": server0Name}}}, crdv1alpha1.RuleActionAllow, "")
+	anpBuilder.AddIngress(v1.ProtocolTCP, &p80, nil, nil, nil, map[string]string{"pod": "b"}, map[string]string{"ns": "x"},
+		nil, nil, []ANPAppliedToSpec{{PodSelector: map[string]string{"antrea-e2e": server1Name}}}, crdv1alpha1.RuleActionAllow, "")
+	anp := anpBuilder.Get()
+	log.Debugf("creating ANP %v", anp.Name)
+	anp, err = data.crdClient.CrdV1alpha1().NetworkPolicies(anp.Namespace).Create(context.TODO(), anp, metav1.CreateOptions{})
+	assert.NoError(t, err)
+	defer data.crdClient.CrdV1alpha1().NetworkPolicies(anp.Namespace).Delete(context.TODO(), anp.Name, metav1.DeleteOptions{})
+
+	anp = checkANPStatus(t, data, anp, crdv1alpha1.NetworkPolicyStatus{
+		Phase:                crdv1alpha1.NetworkPolicyRealized,
+		ObservedGeneration:   1,
+		CurrentNodesRealized: 2,
+		DesiredNodesRealized: 2,
+	})
+
+	// Remove the second ingress rule.
+	anp.Spec.Ingress = anp.Spec.Ingress[0:1]
+	_, err = data.crdClient.CrdV1alpha1().NetworkPolicies(anp.Namespace).Update(context.TODO(), anp, metav1.UpdateOptions{})
+	assert.NoError(t, err)
+	checkANPStatus(t, data, anp, crdv1alpha1.NetworkPolicyStatus{
+		Phase:                crdv1alpha1.NetworkPolicyRealized,
+		ObservedGeneration:   2,
+		CurrentNodesRealized: 1,
+		DesiredNodesRealized: 1,
+	})
+}
+
+func checkANPStatus(t *testing.T, data *TestData, anp *crdv1alpha1.NetworkPolicy, expectedStatus crdv1alpha1.NetworkPolicyStatus) *crdv1alpha1.NetworkPolicy {
+	err := wait.Poll(100*time.Millisecond, policyRealizedTimeout, func() (bool, error) {
+		var err error
+		anp, err = data.crdClient.CrdV1alpha1().NetworkPolicies(anp.Namespace).Get(context.TODO(), anp.Name, metav1.GetOptions{})
 		if err != nil {
 			return false, err
 		}
 		return anp.Status == expectedStatus, nil
 	})
 	assert.NoError(t, err, "Antrea NetworkPolicy failed to reach expected status")
-	err = wait.Poll(100*time.Millisecond, policyRealizedTimeout, func() (bool, error) {
-		anp, err := data.crdClient.CrdV1alpha1().ClusterNetworkPolicies().Get(context.TODO(), acnp.Name, metav1.GetOptions{})
+	return anp
+}
+
+func checkACNPStatus(t *testing.T, data *TestData, acnp *crdv1alpha1.ClusterNetworkPolicy, expectedStatus crdv1alpha1.NetworkPolicyStatus) *crdv1alpha1.ClusterNetworkPolicy {
+	err := wait.Poll(100*time.Millisecond, policyRealizedTimeout, func() (bool, error) {
+		var err error
+		acnp, err = data.crdClient.CrdV1alpha1().ClusterNetworkPolicies().Get(context.TODO(), acnp.Name, metav1.GetOptions{})
 		if err != nil {
 			return false, err
 		}
-		return anp.Status == expectedStatus, nil
+		return acnp.Status == expectedStatus, nil
 	})
 	assert.NoError(t, err, "Antrea ClusterNetworkPolicy failed to reach expected status")
+	return acnp
 }
 
 // waitForANPRealized waits untils an ANP is realized and returns, or times out. A policy is
