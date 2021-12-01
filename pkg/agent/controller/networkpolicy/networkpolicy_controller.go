@@ -204,7 +204,13 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 					policy.SourceRef.ToString())
 				return nil
 			}
-			c.ruleCache.UpdateNetworkPolicy(policy)
+			anyRuleUpdate := c.ruleCache.UpdateNetworkPolicy(policy)
+			// If there is any rule update, we ensure statusManager will resync the policy's status once, in case that
+			// the added/deleted/updated rule is not effective, in which case the rule's realization status is not
+			// changed but the whole policy's generation is changed.
+			if c.statusManagerEnabled && anyRuleUpdate && policy.SourceRef.Type != v1beta2.K8sNetworkPolicy {
+				c.statusManager.Resync(policy.UID)
+			}
 			return nil
 		},
 		DeleteFunc: func(obj runtime.Object) error {
@@ -694,25 +700,23 @@ loop:
 			if !ok {
 				return
 			}
+			klog.V(2).InfoS("Received event", "eventType", event.Type, "objectType", w.objectType, "object", event.Object)
 			switch event.Type {
 			case watch.Added:
 				if err := w.AddFunc(event.Object); err != nil {
 					klog.Errorf("Failed to handle added event: %v", err)
 					return
 				}
-				klog.V(2).Infof("Added %s (%#v)", w.objectType, event.Object)
 			case watch.Modified:
 				if err := w.UpdateFunc(event.Object); err != nil {
 					klog.Errorf("Failed to handle modified event: %v", err)
 					return
 				}
-				klog.V(2).Infof("Updated %s (%#v)", w.objectType, event.Object)
 			case watch.Deleted:
 				if err := w.DeleteFunc(event.Object); err != nil {
 					klog.Errorf("Failed to handle deleted event: %v", err)
 					return
 				}
-				klog.V(2).Infof("Removed %s (%#v)", w.objectType, event.Object)
 			default:
 				klog.Errorf("Unknown event: %v", event)
 				return
