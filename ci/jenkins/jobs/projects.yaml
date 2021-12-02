@@ -147,6 +147,13 @@
           - ${{sha1}}
           builders:
           - builder-integration
+          properties:
+          - throttle:
+              max-per-node: 1
+              max-total: 0
+              categories: integration
+              option: category
+              enabled: true
           trigger_phrase: null
           white_list_target_branches: []
           allow_whitelist_orgs_as_admins: false
@@ -190,6 +197,13 @@
           - ${{sha1}}
           builders:
           - builder-integration
+          properties:
+          - throttle:
+              max-per-node: 1
+              max-total: 0
+              categories: integration
+              option: category
+              enabled: true
           trigger_phrase: ^(?!Thanks for your PR).*/test-integration.*
           white_list_target_branches: []
           allow_whitelist_orgs_as_admins: true
