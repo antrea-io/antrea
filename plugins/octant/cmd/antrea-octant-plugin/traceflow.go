@@ -26,10 +26,14 @@ import (
 
 	"github.com/vmware-tanzu/octant/pkg/action"
 	"github.com/vmware-tanzu/octant/pkg/plugin/service"
+	"github.com/vmware-tanzu/octant/pkg/store"
 	"github.com/vmware-tanzu/octant/pkg/view/component"
 	"github.com/vmware-tanzu/octant/pkg/view/flexlayout"
 	"k8s.io/apimachinery/pkg/api/validation"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	"antrea.io/antrea/pkg/graphviz"
@@ -94,6 +98,61 @@ func getDstType(tf *crdv1alpha1.Traceflow) string {
 		return crdv1alpha1.DstTypeIPv4
 	}
 	return ""
+}
+
+func createTraceflow(ctx context.Context, client service.Dashboard, tf *crdv1alpha1.Traceflow) error {
+	obj, err := runtime.DefaultUnstructuredConverter.ToUnstructured(tf)
+	if err != nil {
+		return err
+	}
+	unstructuredObj := &unstructured.Unstructured{Object: obj}
+	unstructuredObj.SetGroupVersionKind(schema.GroupVersionKind{
+		Group:   "crd.antrea.io",
+		Version: "v1alpha1",
+		Kind:    "Traceflow",
+	})
+	return client.Create(ctx, unstructuredObj)
+}
+
+func deleteTraceflow(ctx context.Context, client service.Dashboard, name string) error {
+	return client.Delete(ctx, store.Key{
+		APIVersion: "crd.antrea.io/v1alpha1",
+		Kind:       "Traceflow",
+		Name:       name,
+	})
+}
+
+func getTraceflow(ctx context.Context, client service.Dashboard, name string) (*crdv1alpha1.Traceflow, error) {
+	unstructuredObj, err := client.Get(ctx, store.Key{
+		APIVersion: "crd.antrea.io/v1alpha1",
+		Kind:       "Traceflow",
+		Name:       name,
+	})
+	if err != nil {
+		return nil, err
+	}
+	var tf crdv1alpha1.Traceflow
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(unstructuredObj.Object, &tf); err != nil {
+		return nil, err
+	}
+	return &tf, nil
+}
+
+func listTraceflows(ctx context.Context, client service.Dashboard) ([]crdv1alpha1.Traceflow, error) {
+	unstructuredList, err := client.List(ctx, store.Key{
+		APIVersion: "crd.antrea.io/v1alpha1",
+		Kind:       "Traceflow",
+	})
+	if err != nil {
+		return nil, err
+	}
+	tfs := make([]crdv1alpha1.Traceflow, len(unstructuredList.Items))
+	for idx, unstructuredObj := range unstructuredList.Items {
+		if err := runtime.DefaultUnstructuredConverter.FromUnstructured(unstructuredObj.Object, &tfs[idx]); err != nil {
+			return nil, err
+		}
+	}
+	return tfs, nil
 }
 
 // actionHandler handlers clicks and actions from "Start New Trace", "Start New Live-traffic Trace",  "Generate Trace Graph", and "Run Trace Again" buttons
@@ -170,7 +229,7 @@ func (p *antreaOctantPlugin) actionHandler(request *service.ActionRequest) error
 		}
 
 		updateIPHeader(tf, hasSrcPort, hasDstPort, srcPort, dstPort)
-		p.createTfCR(tf, request, context.Background(), tfName)
+		p.createTfCR(tf, request, tfName)
 		return nil
 	case addLiveTfAction:
 		srcNamespace, err := checkNamespace(request)
@@ -291,7 +350,7 @@ func (p *antreaOctantPlugin) actionHandler(request *service.ActionRequest) error
 		}
 
 		updateIPHeader(tf, hasSrcPort, hasDstPort, srcPort, dstPort)
-		p.createTfCR(tf, request, context.Background(), tfName)
+		p.createTfCR(tf, request, tfName)
 		return nil
 	case showGraphAction:
 		traceName, err := request.Payload.StringSlice(traceNameCol)
@@ -303,8 +362,7 @@ func (p *antreaOctantPlugin) actionHandler(request *service.ActionRequest) error
 
 		name := traceName[0]
 		// Invoke GenGraph to show
-		ctx := context.Background()
-		tf, err := p.client.CrdV1alpha1().Traceflows().Get(ctx, name, metav1.GetOptions{})
+		tf, err := getTraceflow(request.Context(), request.DashboardClient, name)
 		if err != nil {
 			alertPrinter(request, invalidInputMsg+"failed to get traceflow CRD "+name,
 				"Failed to get traceflow CRD", nil, err)
@@ -325,7 +383,7 @@ func (p *antreaOctantPlugin) actionHandler(request *service.ActionRequest) error
 				`Failed to run traceflow again: Use 'START NEW TRACE' or 'START NEW LIVE-TRAFFIC TRACE' to 
 				run a traceflow before attempting to run a traceflow again.`,
 				action.DefaultAlertExpiration)
-			request.DashboardClient.SendAlert(request.Context(), request.ClientID, alert)
+			request.DashboardClient.SendAlert(request.Context(), request.ClientState.ClientID(), alert)
 			return nil
 		}
 		tf := &crdv1alpha1.Traceflow{}
@@ -336,7 +394,7 @@ func (p *antreaOctantPlugin) actionHandler(request *service.ActionRequest) error
 		tf.Name = string(temporaryRune[0 : len(p.lastTf.Name)-15])
 		tf.Name += time.Now().Format(TIME_FORMAT_YYYYMMDD_HHMMSS)
 
-		p.createTfCR(tf, request, context.Background(), tf.Name)
+		p.createTfCR(tf, request, tf.Name)
 		return nil
 	default:
 		log.Fatalf("Failed to find defined handler after receiving action request for %s\n", pluginName)
@@ -553,18 +611,19 @@ func alertPrinter(request *service.ActionRequest, logMsg string, alertMsg string
 		log.Printf(logMsg+", err: %s\n", errs)
 		alert = action.CreateAlert(action.AlertTypeError, fmt.Sprintf(alertMsg+", err: %s", errs), action.DefaultAlertExpiration)
 	} else if err != nil {
-		log.Printf(logMsg+", err: %#v\n", err)
-		alert = action.CreateAlert(action.AlertTypeError, fmt.Sprintf(alertMsg+", err: %#v", err), action.DefaultAlertExpiration)
+		log.Printf(logMsg+", err: %v\n", err)
+		alert = action.CreateAlert(action.AlertTypeError, fmt.Sprintf(alertMsg+", err: %v", err), action.DefaultAlertExpiration)
 	} else {
 		log.Println(logMsg)
 		alert = action.CreateAlert(action.AlertTypeError, alertMsg, action.DefaultAlertExpiration)
 	}
-	request.DashboardClient.SendAlert(request.Context(), request.ClientID, alert)
+	request.DashboardClient.SendAlert(request.Context(), request.ClientState.ClientID(), alert)
 }
 
-func (p *antreaOctantPlugin) createTfCR(tf *crdv1alpha1.Traceflow, request *service.ActionRequest, ctx context.Context, tfName string) {
+func (p *antreaOctantPlugin) createTfCR(tf *crdv1alpha1.Traceflow, request *service.ActionRequest, tfName string) {
 	log.Printf("Get user input successfully, traceflow: %+v\n", tf)
-	tf, err := p.client.CrdV1alpha1().Traceflows().Create(ctx, tf, metav1.CreateOptions{})
+	client := request.DashboardClient
+	err := createTraceflow(request.Context(), client, tf)
 	if err != nil {
 		alertPrinter(request, invalidInputMsg+"Failed to create traceflow CRD "+tfName,
 			"Failed to create traceflow CRD", nil, err)
@@ -573,18 +632,16 @@ func (p *antreaOctantPlugin) createTfCR(tf *crdv1alpha1.Traceflow, request *serv
 	log.Printf("Create traceflow CRD \"%s\" successfully, Traceflow Results: %+v\n", tfName, tf)
 	alert := action.CreateAlert(action.AlertTypeSuccess, fmt.Sprintf("Traceflow \"%s\" is created successfully",
 		tfName), action.DefaultAlertExpiration)
-	request.DashboardClient.SendAlert(request.Context(), request.ClientID, alert)
+	request.DashboardClient.SendAlert(request.Context(), request.ClientState.ClientID(), alert)
 	// Automatically delete the traceflow CRD after created for 300s(5min).
-	go func(tfName string) {
-		age := time.Second * 300
-		time.Sleep(age)
-		err := p.client.CrdV1alpha1().Traceflows().Delete(context.Background(), tfName, metav1.DeleteOptions{})
-		if err != nil {
+	const waitBeforeDelete = 300 * time.Second
+	time.AfterFunc(waitBeforeDelete, func() {
+		if err := deleteTraceflow(context.Background(), client, tf.Name); err != nil {
 			log.Printf("Failed to delete traceflow CRD \"%s\", err: %s\n", tfName, err)
 			return
 		}
-		log.Printf("Deleted traceflow CRD \"%s\" successfully after %.0f seconds\n", tfName, age.Seconds())
-	}(tf.Name)
+		log.Printf("Deleted traceflow CRD \"%s\" successfully after %v seconds\n", tfName, waitBeforeDelete)
+	})
 	p.lastTf = tf
 	p.graph, err = graphviz.GenGraph(p.lastTf)
 	if err != nil {
@@ -705,7 +762,7 @@ func (p *antreaOctantPlugin) traceflowHandler(request service.Request) (componen
 	}
 
 	// Construct the available list of traceflow CRD.
-	tfsItems := p.getSortedTfItems()
+	tfsItems := p.getSortedTfItems(request)
 	traceflowSelect := make([]component.InputChoice, len(tfsItems))
 	for i, t := range tfsItems {
 		traceflowSelect[i] = component.InputChoice{
@@ -750,8 +807,7 @@ func (p *antreaOctantPlugin) traceflowHandler(request service.Request) (componen
 	if p.lastTf.Name != "" {
 		// Invoke GenGraph to show
 		log.Printf("Generating content from CRD...\n")
-		ctx := context.Background()
-		tf, err := p.client.CrdV1alpha1().Traceflows().Get(ctx, p.lastTf.Name, metav1.GetOptions{})
+		tf, err := getTraceflow(request.Context(), request.DashboardClient(), p.lastTf.Name)
 		if err != nil {
 			log.Printf("Failed to get latest CRD, using traceflow results cache, last traceflow name: %s, err: %s\n", p.lastTf.Name, err)
 			p.graph, err = graphviz.GenGraph(p.lastTf)
@@ -806,7 +862,7 @@ func (p *antreaOctantPlugin) traceflowHandler(request service.Request) (componen
 
 // getTfTable gets the table for displaying Traceflow information
 func (p *antreaOctantPlugin) getTfTable(request service.Request) *component.Table {
-	tfsItems := p.getSortedTfItems()
+	tfsItems := p.getSortedTfItems(request)
 	tfRows := make([]component.TableRow, 0)
 	for idx := range tfsItems {
 		tf := &tfsItems[idx]
@@ -826,15 +882,14 @@ func (p *antreaOctantPlugin) getTfTable(request service.Request) *component.Tabl
 	return component.NewTableWithRows(traceflowTitle, "We couldn't find any traceflows!", tfCols, tfRows)
 }
 
-func (p *antreaOctantPlugin) getSortedTfItems() []crdv1alpha1.Traceflow {
-	ctx := context.Background()
-	tfs, err := p.client.CrdV1alpha1().Traceflows().List(ctx, metav1.ListOptions{ResourceVersion: "0"})
+func (p *antreaOctantPlugin) getSortedTfItems(request service.Request) []crdv1alpha1.Traceflow {
+	tfs, err := listTraceflows(request.Context(), request.DashboardClient())
 	if err != nil {
 		log.Fatalf("Failed to get traceflows: %v\n", err)
 		return nil
 	}
-	sort.Slice(tfs.Items, func(p, q int) bool {
-		return tfs.Items[p].CreationTimestamp.Unix() > tfs.Items[q].CreationTimestamp.Unix()
+	sort.Slice(tfs, func(p, q int) bool {
+		return tfs[p].CreationTimestamp.Unix() > tfs[q].CreationTimestamp.Unix()
 	})
-	return tfs.Items
+	return tfs
 }

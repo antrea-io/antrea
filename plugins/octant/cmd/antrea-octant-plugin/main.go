@@ -16,31 +16,27 @@ package main
 
 import (
 	"log"
-	"os"
-	"path/filepath"
 	"sync"
 
 	"github.com/vmware-tanzu/octant/pkg/navigation"
 	"github.com/vmware-tanzu/octant/pkg/plugin"
 	"github.com/vmware-tanzu/octant/pkg/plugin/service"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/tools/clientcmd"
 
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
-	clientset "antrea.io/antrea/pkg/client/clientset/versioned"
-)
-
-var (
-	pluginName = "antrea-octant-plugin"
 )
 
 const (
-	title = "Antrea"
+	title      = "Antrea"
+	pluginName = "antrea-octant-plugin"
+)
+
+var (
+	logger = service.NewLoggerHelper()
 )
 
 type antreaOctantPlugin struct {
-	client *clientset.Clientset
-	// tfMutex protects the Traceflow state in case of multiple client
+	// tfmutex protects the Traceflow state in case of multiple client
 	// sessions concurrently accessing the Traceflow functionality of the
 	// Antrea plugin.
 	tfMutex sync.Mutex
@@ -49,23 +45,8 @@ type antreaOctantPlugin struct {
 }
 
 func newAntreaOctantPlugin() *antreaOctantPlugin {
-	kubeconfig := os.Getenv("KUBECONFIG")
-	if kubeconfig == "" {
-		kubeconfig = filepath.Join(os.Getenv("HOME"), ".kube", "config")
-	}
-	// Create a k8s client.
-	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
-	if err != nil {
-		log.Fatalf("Failed to build kubeConfig %v", err)
-	}
-	client, err := clientset.NewForConfig(config)
-	if err != nil {
-		log.Fatalf("Failed to create K8s client for %s: %v", pluginName, err)
-	}
-
 	return &antreaOctantPlugin{
-		client: client,
-		graph:  "",
+		graph: "",
 		lastTf: &crdv1alpha1.Traceflow{
 			ObjectMeta: metav1.ObjectMeta{Name: ""},
 		},
@@ -94,6 +75,12 @@ func main() {
 		log.Fatal(err)
 	}
 
+	// TODO: at the moment it seems that plugin logging is buggy, so this is
+	// the only use of the logger in our plugin so far.
+	// When it is fixed, we should replace all usage of the Go standard
+	// library log with this logger for easier debugging.
+	// See https://github.com/vmware-tanzu/octant/issues/3012
+	logger.Info("antrea-octant-plugin is starting")
 	log.Printf("antrea-octant-plugin is starting")
 	p.Serve()
 }

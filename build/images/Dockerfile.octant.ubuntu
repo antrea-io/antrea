@@ -5,8 +5,24 @@ COPY . /antrea
 
 WORKDIR /antrea/plugins/octant
 
-RUN make octant-plugins
-
+# We disable cgo to avoid the following issue when building
+# github.com/containers/storage (an indirect dependency of Octant).
+# The code that requires cgo is not actually used by Octant / us, so there is no
+# issue associated with disabling cgo. Note that when  we build the plugin
+# binaries to upload them as release assets, cgo is always disabled.
+#14 69.00 # pkg-config --cflags  -- devmapper
+#14 69.00 Package devmapper was not found in the pkg-config search path.
+#14 69.00 Perhaps you should add the directory containing `devmapper.pc'
+#14 69.00 to the PKG_CONFIG_PATH environment variable
+#14 69.00 No package 'devmapper' found
+#14 69.00 pkg-config: exit status 1
+#14 79.65 # github.com/containers/storage/drivers/btrfs
+#14 79.65 /go/pkg/mod/github.com/containers/storage@v1.32.6/drivers/btrfs/btrfs.go:8:10: fatal error: btrfs/ioctl.h: No such file or directory
+#14 79.65     8 | #include <btrfs/ioctl.h>
+#14 79.65       |          ^~~~~~~~~~~~~~~
+#14 79.65 compilation terminated.
+#14 87.20 make: *** [Makefile:16: octant-plugins] Error 2
+RUN CGO_ENABLED=0 make octant-plugins
 
 FROM ubuntu:20.04
 
@@ -15,13 +31,13 @@ LABEL description="A docker image to deploy octant and antrea related octant plu
 
 USER root
 
-# Get and install octant v0.16.1
+# Get and install octant v0.24.0
 RUN apt-get update && \
     apt-get install -y --no-install-recommends wget ca-certificates && \
-    wget -q https://github.com/vmware-tanzu/octant/releases/download/v0.16.1/octant_0.16.1_Linux-64bit.deb && \
-    dpkg -i octant_0.16.1_Linux-64bit.deb && \
+    wget -q https://github.com/vmware-tanzu/octant/releases/download/v0.24.0/octant_0.24.0_Linux-64bit.deb && \
+    dpkg -i octant_0.24.0_Linux-64bit.deb && \
     apt-get remove -y wget ca-certificates && \
-    rm -rf octant_0.16.1_Linux-64bit.deb /var/cache/apt/* /var/lib/apt/lists/*
+    rm -rf octant_0.24.0_Linux-64bit.deb /var/cache/apt/* /var/lib/apt/lists/*
 
 # Install octant plugin for Antrea UI display
 RUN mkdir -p /root/.config/plugins/octant
