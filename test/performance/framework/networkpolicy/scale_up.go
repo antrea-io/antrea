@@ -21,6 +21,7 @@ import (
 	"github.com/google/uuid"
 	corev1 "k8s.io/api/core/v1"
 	netv1 "k8s.io/api/networking/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/kubernetes"
@@ -128,7 +129,11 @@ func ScaleUp(ctx context.Context, num int, cs kubernetes.Interface, nss []string
 			if err := utils.DefaultRetry(func() error {
 				newNP, err := cs.NetworkingV1().NetworkPolicies(ns).Create(ctx, np, metav1.CreateOptions{})
 				if err != nil {
-					return err
+					if errors.IsAlreadyExists(err) {
+						newNP, _ = cs.NetworkingV1().NetworkPolicies(ns).Get(ctx, np.Name, metav1.GetOptions{})
+					} else {
+						return err
+					}
 				}
 				nps = append(nps, NetworkPolicyInfo{Name: newNP.Name, Namespace: newNP.Namespace, Spec: newNP.Spec})
 				return nil

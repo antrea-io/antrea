@@ -20,6 +20,7 @@ import (
 
 	"github.com/google/uuid"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
@@ -60,9 +61,15 @@ func ScaleUp(ctx context.Context, num int, cs kubernetes.Interface, nss []string
 				svc.Spec.IPFamilies = []corev1.IPFamily{ipFamily}
 			}
 			if err := utils.DefaultRetry(func() error {
-				newSvc, err := cs.CoreV1().Services(ns).Create(ctx, svc, metav1.CreateOptions{})
+				var newSvc *corev1.Service
+				var err error
+				newSvc, err = cs.CoreV1().Services(ns).Create(ctx, svc, metav1.CreateOptions{})
 				if err != nil {
-					return err
+					if errors.IsAlreadyExists(err) {
+						newSvc, _ = cs.CoreV1().Services(ns).Get(ctx, svc.Name, metav1.GetOptions{})
+					} else {
+						return err
+					}
 				}
 				if newSvc.Spec.ClusterIP == "" {
 					return fmt.Errorf("service %s Spec.ClusterIP is empty", svc.Name)
