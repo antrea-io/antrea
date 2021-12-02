@@ -16,8 +16,20 @@ override:
   licenses: ["Apache-2.0"]
 - path: "github.com/docker/spdystream"
   licenses: ["Apache-2.0"]
+# go-digest uses a dual-license: Apache-2.0 for the code and CC-BY-SA-4.0 for
+# the docs. This is causing the license checker to fail. Since we only depend on
+# the code, we can override the license to Apache-2.0 and keep things simple.
+- path: "github.com/opencontainers/go-digest"
+  licenses: ["Apache-2.0"]
+# Same as above: code is distributed under Apache-2.0 and docs are distributed
+# under CC-BY-SA-4.0.
+- path: "github.com/docker/go-metrics"
+  licenses: ["Apache-2.0"]
 
 exceptions:
   unresolvableLicense:
   - path: "github.com/TomCodeLV/OVSDB-golang-lib"
     licenses: ["Apache-2.0"]
+  # Missing LICENSE file but Github license field set to MIT
+  - path: "github.com/BurntSushi/toml"
+    licenses: ["MIT"]

@@ -17,12 +17,16 @@ package main
 import (
 	"context"
 	"log"
+	"sort"
 	"strconv"
 	"strings"
 
 	"github.com/vmware-tanzu/octant/pkg/plugin/service"
+	"github.com/vmware-tanzu/octant/pkg/store"
 	"github.com/vmware-tanzu/octant/pkg/view/component"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+
+	crdv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 )
 
 const (
@@ -58,16 +62,36 @@ func (p *antreaOctantPlugin) agentHandler(request service.Request) (component.Co
 	}, nil
 }
 
+func listAntreaControllerInfos(ctx context.Context, client service.Dashboard, sortedByPodName bool) ([]crdv1beta1.AntreaControllerInfo, error) {
+	unstructuredList, err := client.List(ctx, store.Key{
+		APIVersion: "crd.antrea.io/v1beta1",
+		Kind:       "AntreaControllerInfo",
+	})
+	if err != nil {
+		return nil, err
+	}
+	controllers := make([]crdv1beta1.AntreaControllerInfo, len(unstructuredList.Items))
+	for idx, unstructuredObj := range unstructuredList.Items {
+		if err := runtime.DefaultUnstructuredConverter.FromUnstructured(unstructuredObj.Object, &controllers[idx]); err != nil {
+			return nil, err
+		}
+	}
+	if sortedByPodName {
+		sort.Slice(controllers, func(p, q int) bool {
+			return controllers[p].PodRef.Name < controllers[q].PodRef.Name
+		})
+	}
+	return controllers, nil
+}
+
 // getControllerTable gets the table for displaying Controller information
 func (p *antreaOctantPlugin) getControllerTable(request service.Request) *component.Table {
-	controllers, err := p.client.CrdV1beta1().AntreaControllerInfos().List(context.TODO(), metav1.ListOptions{
-		ResourceVersion: "0",
-	})
+	controllers, err := listAntreaControllerInfos(request.Context(), request.DashboardClient(), true)
 	if err != nil {
 		log.Fatalf("Failed to get AntreaControllerInfos %v", err)
 	}
 	controllerRows := make([]component.TableRow, 0)
-	for _, controller := range controllers.Items {
+	for _, controller := range controllers {
 		controllerRows = append(controllerRows, component.TableRow{
 			versionCol: component.NewText(controller.Version),
 			podCol: component.NewLink(controller.PodRef.Name, controller.PodRef.Name,
@@ -85,16 +109,36 @@ func (p *antreaOctantPlugin) getControllerTable(request service.Request) *compon
 	return component.NewTableWithRows(controllerTitle, "We couldn't find any Antrea controllers!", controllerCols, controllerRows)
 }
 
+func listAntreaAgentInfos(ctx context.Context, client service.Dashboard, sortedByPodName bool) ([]crdv1beta1.AntreaAgentInfo, error) {
+	unstructuredList, err := client.List(ctx, store.Key{
+		APIVersion: "crd.antrea.io/v1beta1",
+		Kind:       "AntreaAgentInfo",
+	})
+	if err != nil {
+		return nil, err
+	}
+	agents := make([]crdv1beta1.AntreaAgentInfo, len(unstructuredList.Items))
+	for idx, unstructuredObj := range unstructuredList.Items {
+		if err := runtime.DefaultUnstructuredConverter.FromUnstructured(unstructuredObj.Object, &agents[idx]); err != nil {
+			return nil, err
+		}
+	}
+	if sortedByPodName {
+		sort.Slice(agents, func(p, q int) bool {
+			return agents[p].PodRef.Name < agents[q].PodRef.Name
+		})
+	}
+	return agents, nil
+}
+
 // getAgentTable gets the table for displaying Agent information.
 func (p *antreaOctantPlugin) getAgentTable(request service.Request) *component.Table {
-	agents, err := p.client.CrdV1beta1().AntreaAgentInfos().List(context.TODO(), metav1.ListOptions{
-		ResourceVersion: "0",
-	})
+	agents, err := listAntreaAgentInfos(request.Context(), request.DashboardClient(), true)
 	if err != nil {
 		log.Fatalf("Failed to get AntreaAgentInfos %v", err)
 	}
 	agentRows := make([]component.TableRow, 0)
-	for _, agent := range agents.Items {
+	for _, agent := range agents {
 		agentRows = append(agentRows, component.TableRow{
 			versionCol: component.NewText(agent.Version),
 			podCol: component.NewLink(agent.PodRef.Name, agent.PodRef.Name,
