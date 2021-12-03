@@ -17,6 +17,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	corev1 "k8s.io/api/core/v1"
@@ -52,6 +53,7 @@ type ServiceInfo struct {
 }
 
 func ScaleUp(ctx context.Context, num int, cs kubernetes.Interface, nss []string, ipv6 bool) (svcs []ServiceInfo, err error) {
+	start := time.Now()
 	for _, ns := range nss {
 		klog.InfoS("Scale up Services", "Num", num, "Namespace", ns)
 		for i := 0; i < num; i++ {
@@ -74,12 +76,15 @@ func ScaleUp(ctx context.Context, num int, cs kubernetes.Interface, nss []string
 				if newSvc.Spec.ClusterIP == "" {
 					return fmt.Errorf("service %s Spec.ClusterIP is empty", svc.Name)
 				}
+				klog.InfoS("Create Service", "Name", newSvc.Name, "ClusterIP", newSvc.Spec.ClusterIP, "Namespace", ns)
 				svcs = append(svcs, ServiceInfo{Name: newSvc.Name, IP: newSvc.Spec.ClusterIP, NameSpace: newSvc.Namespace})
 				return nil
 			}); err != nil {
 				return nil, err
 			}
+			time.Sleep(time.Duration(utils.GenRandInt()%2000) * time.Millisecond)
 		}
 	}
+	klog.InfoS("Scale Service time", "Duration", time.Since(start))
 	return
 }

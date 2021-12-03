@@ -56,28 +56,24 @@ func ScaleService(ctx context.Context, data *ScaleData) error {
 			tmp := (int(utils.GenRandInt()) % (len(svcs) - 10)) + 10
 			checkSvcs = svcs[tmp-10 : tmp]
 		}
-		err := utils.DefaultRetry(func() error {
-			return wait.PollImmediateUntil(config.WaitInterval, func() (bool, error) {
-				if readySvcs.Len() == len(checkSvcs) {
-					return true, nil
+		if err := wait.PollImmediateUntil(3*config.WaitInterval, func() (bool, error) {
+			if readySvcs.Len() == len(checkSvcs) {
+				return true, nil
+			}
+			for _, svc := range checkSvcs {
+				svcKey := fmt.Sprintf("%s_%s", svc.NameSpace, svc.Name)
+				if _, ok := readySvcs[svcKey]; ok { // Skip the service if it is verified.
+					continue
 				}
-				for _, svc := range checkSvcs {
-					svcKey := fmt.Sprintf("%s_%s", svc.NameSpace, svc.Name)
-					if _, ok := readySvcs[svcKey]; ok { // Skip the service if it is verified.
-						continue
-					}
-					if err := PingIP(data.kubeconfig, data.kubernetesClientSet, &clientPod, svc.IP); err != nil {
-						return false, err
-					}
-					klog.V(2).InfoS("Check service", "svc", svc, "Pod", clientPod.Name)
-					readySvcs.Insert(svcKey)
+				if err := PingIP(data.kubeconfig, data.kubernetesClientSet, &clientPod, svc.IP); err != nil {
+					return false, err
 				}
-				return readySvcs.Len() == len(checkSvcs), nil
-			}, ctx.Done())
-		})
-		if err != nil {
+				klog.V(2).InfoS("Check service", "svc", svc, "Pod", clientPod.Name)
+				readySvcs.Insert(svcKey)
+			}
+			return readySvcs.Len() == len(checkSvcs), nil
+		}, ctx.Done()); err != nil {
 			klog.ErrorS(err, "Check readiness of service error", "ClientPodName", clientPod.Name)
-			return err
 		}
 	}
 
