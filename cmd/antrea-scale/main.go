@@ -23,6 +23,7 @@ import (
 	flag "github.com/spf13/pflag"
 	"k8s.io/klog/v2"
 
+	"antrea.io/antrea/test/performance/config"
 	"antrea.io/antrea/test/performance/framework"
 )
 
@@ -91,6 +92,7 @@ func run() error {
 			if err := tCase.Run(globalCtx, testData); err != nil {
 				return err
 			}
+			time.Sleep(config.WaitInterval)
 		}
 		klog.Infoln(strings.Repeat("==", 100))
 	}

@@ -27,6 +27,33 @@ import (
 	"antrea.io/antrea/test/performance/config"
 )
 
+func cleanedNs(ctx context.Context, cs kubernetes.Interface, ns string) bool {
+	if pods, err := cs.CoreV1().Pods(ns).List(ctx, metav1.ListOptions{}); err != nil || len(pods.Items) > 0 {
+		if err := cs.CoreV1().Pods(ns).DeleteCollection(ctx, metav1.DeleteOptions{}, metav1.ListOptions{}); err != nil {
+			klog.ErrorS(err, "Delete Pods error", "Namespace", ns)
+		}
+		return false
+	}
+	if nps, err := cs.NetworkingV1().NetworkPolicies(ns).List(ctx, metav1.ListOptions{}); err != nil || len(nps.Items) > 0 {
+		if err := cs.NetworkingV1().NetworkPolicies(ns).DeleteCollection(ctx, metav1.DeleteOptions{}, metav1.ListOptions{}); err != nil {
+			klog.ErrorS(err, "Delete NetworkPolicies error", "Namespace", ns)
+		}
+		return false
+	}
+	if svcs, err := cs.CoreV1().Services(ns).List(ctx, metav1.ListOptions{}); err != nil || len(svcs.Items) > 0 {
+		if err == nil && len(svcs.Items) > 0 {
+			for _, svc := range svcs.Items {
+				if err := cs.CoreV1().Services(ns).Delete(ctx, svc.Name, metav1.DeleteOptions{}); err != nil {
+					klog.ErrorS(err, "Delete Services error", "Namespace", ns, "Service", svc.Name)
+				}
+			}
+		}
+
+		return false
+	}
+	return true
+}
+
 // ScaleDown delete pods/ns and verify if it gets deleted
 func ScaleDown(ctx context.Context, cs kubernetes.Interface, nsPrefix string) error {
 	allNS, err := cs.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
@@ -50,6 +77,11 @@ func ScaleDown(ctx context.Context, cs kubernetes.Interface, nsPrefix string) er
 		for _, ns := range nssToDelete {
 			if err := cs.CoreV1().Namespaces().Delete(ctx, ns, metav1.DeleteOptions{}); errors.IsNotFound(err) {
 				count++
+				continue
+			}
+			if cleanedNs(ctx, cs, ns) {
+				// TODO force delete Namespace
+				klog.InfoS("Resources cleaned in Namespace", "Namespace", ns)
 			}
 		}
 		klog.InfoS("Waiting for clean up namespaces", "all", len(nssToDelete), "deletedCount", count)

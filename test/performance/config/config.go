@@ -21,7 +21,9 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-const WaitInterval = 3 * time.Second
+const (
+	WaitInterval = 3 * time.Second
+)
 
 type ScaleConfiguration struct {
 	TearDown         bool `yaml:"teardown"`
