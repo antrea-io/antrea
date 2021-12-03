@@ -1305,8 +1305,8 @@ func TestAddPod(t *testing.T) {
 				},
 			},
 			appGroupMatch:        false,
-			inAddressGroupMatch:  true,
-			outAddressGroupMatch: true,
+			inAddressGroupMatch:  false,
+			outAddressGroupMatch: false,
 			groupMatch:           false,
 		},
 		{
