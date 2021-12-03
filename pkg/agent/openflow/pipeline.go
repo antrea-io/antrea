@@ -218,6 +218,7 @@ const (
 	DispositionAllow = 0b00
 	DispositionDrop  = 0b01
 	DispositionRej   = 0b10
+	DispositionPass  = 0b11
 
 	// CustomReasonLogging is used when send packet-in to controller indicating this
 	// packet need logging.
@@ -239,6 +240,7 @@ var DispositionToString = map[uint32]string{
 	DispositionAllow: "Allow",
 	DispositionDrop:  "Drop",
 	DispositionRej:   "Reject",
+	DispositionPass:  "Pass",
 }
 
 var (
@@ -1745,6 +1747,28 @@ func (c *client) conjunctionActionDenyFlow(conjunctionID uint32, table binding.T
 
 	// We do not drop the packet immediately but send the packet to the metric table to update the rule metrics.
 	return flowBuilder.Action().GotoTable(metricTable.GetID()).
+		Cookie(c.cookieAllocator.Request(cookie.Policy).Raw()).
+		Done()
+}
+
+func (c *client) conjunctionActionPassFlow(conjunctionID uint32, table binding.Table, priority *uint16, enableLogging bool) binding.Flow {
+	ofPriority := *priority
+	conjReg := TFIngressConjIDField
+	nextTable := IngressRuleTable
+	tableID := table.GetID()
+	if _, ok := egressTables[tableID]; ok {
+		conjReg = TFEgressConjIDField
+		nextTable = EgressRuleTable
+	}
+	flowBuilder := table.BuildFlow(ofPriority).MatchConjID(conjunctionID).
+		Action().LoadToRegField(conjReg, conjunctionID)
+	if enableLogging {
+		flowBuilder = flowBuilder.
+			Action().LoadRegMark(DispositionPassRegMark).
+			Action().LoadRegMark(CustomReasonLoggingRegMark).
+			Action().SendToController(uint8(PacketInReasonNP))
+	}
+	return flowBuilder.Action().GotoTable(nextTable.GetID()).
 		Cookie(c.cookieAllocator.Request(cookie.Policy).Raw()).
 		Done()
 }

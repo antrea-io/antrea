@@ -488,6 +488,10 @@ const (
 	RuleActionAllow RuleAction = "Allow"
 	// RuleActionDrop describes that the traffic matching the rule must be dropped.
 	RuleActionDrop RuleAction = "Drop"
+	// RuleActionPass indicates that the traffic matching the rule will not be evalutated
+	// by Antrea NetworkPolicy or ClusterNetworkPolicy, but rather punt to K8s namespaced
+	// NetworkPolicy for evaluaion.
+	RuleActionPass RuleAction = "Pass"
 	// RuleActionReject indicates that the traffic matching the rule must be rejected and the
 	// client will receive a response.
 	RuleActionReject RuleAction = "Reject"

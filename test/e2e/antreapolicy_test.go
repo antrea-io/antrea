@@ -2389,13 +2389,13 @@ func testACNPNestedClusterGroupCreateAndUpdate(t *testing.T, data *TestData) {
 	executeTestsWithData(t, testCase, data)
 }
 
-func testACNPNamespaceIsolation(t *testing.T, data *TestData) {
+func testACNPNamespaceIsolation(t *testing.T) {
 	builder := &ClusterNetworkPolicySpecBuilder{}
 	builder = builder.SetName("test-acnp-ns-isolation").
 		SetTier("baseline").
 		SetPriority(1.0).
 		SetAppliedToGroup([]ACNPAppliedToSpec{{NSSelector: map[string]string{}}})
-	// deny ingress traffic except from own namespace
+	// deny ingress traffic except from own namespace, which is always allowed.
 	builder.AddIngress(v1.ProtocolTCP, nil, nil, nil, nil, nil, nil, nil, nil,
 		true, nil, crdv1alpha1.RuleActionAllow, "", "")
 	builder.AddIngress(v1.ProtocolTCP, nil, nil, nil, nil, nil, map[string]string{}, nil, nil,
@@ -2444,7 +2444,55 @@ func testACNPNamespaceIsolation(t *testing.T, data *TestData) {
 		{"ACNP Namespace isolation for all namespaces", []*TestStep{testStep1}},
 		{"ACNP Namespace isolation for namespace x", []*TestStep{testStep2}},
 	}
-	executeTestsWithData(t, testCase, data)
+	executeTests(t, testCase)
+}
+
+func testACNPStrictNamespacesIsolation(t *testing.T) {
+	builder := &ClusterNetworkPolicySpecBuilder{}
+	builder = builder.SetName("test-acnp-strict-ns-isolation").
+		SetTier("securityops").
+		SetPriority(1.0).
+		SetAppliedToGroup([]ACNPAppliedToSpec{{NSSelector: map[string]string{}}})
+	builder.AddIngress(v1.ProtocolTCP, nil, nil, nil, nil, nil, nil, nil, nil,
+		true, nil, crdv1alpha1.RuleActionPass, "", "")
+	builder.AddIngress(v1.ProtocolTCP, nil, nil, nil, nil, nil, map[string]string{}, nil, nil,
+		false, nil, crdv1alpha1.RuleActionDrop, "", "")
+	// deny ingress traffic except from own namespace, which is delegated to Namespace owners (who can create K8s
+	// NetworkPolicies to regulate intra-Namespace traffic)
+	reachability := NewReachability(allPods, Dropped)
+	reachability.ExpectAllSelfNamespace(Connected)
+	testStep1 := &TestStep{
+		"Namespace isolation, Port 80",
+		reachability,
+		[]metav1.Object{builder.Get()},
+		[]int32{80},
+		v1.ProtocolTCP,
+		0,
+		nil,
+	}
+
+	// Add a K8s namespaced NetworkPolicy in ns x that isolates all Pods in that namespace.
+	builder2 := &NetworkPolicySpecBuilder{}
+	builder2 = builder2.SetName("x", "default-deny-in-namespace-x")
+	builder2.SetTypeIngress()
+	reachability2 := NewReachability(allPods, Dropped)
+	reachability2.ExpectAllSelfNamespace(Connected)
+	reachability2.ExpectSelfNamespace("x", Dropped)
+	reachability2.ExpectSelf(allPods, Connected)
+	testStep2 := &TestStep{
+		"Namespace isolation with K8s NP, Port 80",
+		reachability2,
+		[]metav1.Object{builder2.Get()},
+		[]int32{80},
+		v1.ProtocolTCP,
+		0,
+		nil,
+	}
+
+	testCase := []*TestCase{
+		{"ACNP strict Namespace isolation for all namespaces", []*TestStep{testStep1, testStep2}},
+	}
+	executeTests(t, testCase)
 }
 
 func testFQDNPolicy(t *testing.T) {
@@ -3003,7 +3051,8 @@ func TestAntreaPolicy(t *testing.T) {
 		t.Run("Case=testANPMultipleAppliedToSingleRule", func(t *testing.T) { testANPMultipleAppliedTo(t, data, true) })
 		t.Run("Case=testANPMultipleAppliedToMultipleRules", func(t *testing.T) { testANPMultipleAppliedTo(t, data, false) })
 		t.Run("Case=AppliedToPerRule", func(t *testing.T) { testAppliedToPerRule(t) })
-		t.Run("Case=ACNPNamespaceIsolation", func(t *testing.T) { testACNPNamespaceIsolation(t, data) })
+		t.Run("Case=ACNPNamespaceIsolation", func(t *testing.T) { testACNPNamespaceIsolation(t) })
+		t.Run("Case=ACNPStrictNamespaceIsolation", func(t *testing.T) { testACNPStrictNamespacesIsolation(t) })
 		t.Run("Case=ACNPClusterGroupEgressRulePodsAToCGWithNsZ", func(t *testing.T) { testACNPEgressRulePodsAToCGWithNsZ(t) })
 		t.Run("Case=ACNPClusterGroupUpdate", func(t *testing.T) { testACNPClusterGroupUpdate(t) })
 		t.Run("Case=ACNPClusterGroupAppliedToDenyXBToCGWithYA", func(t *testing.T) { testACNPAppliedToDenyXBtoCGWithYA(t) })

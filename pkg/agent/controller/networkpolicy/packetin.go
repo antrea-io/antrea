@@ -77,11 +77,11 @@ func getMatchRegField(matchers *ofctrl.Matchers, field *binding.RegField) *ofctr
 // getMatch receives ofctrl matchers and table id, match field.
 // Modifies match field to Ingress/Egress register based on tableID.
 func getMatch(matchers *ofctrl.Matchers, tableID uint8, disposition uint32) *ofctrl.MatchField {
-	// Get match from CNPDenyConjIDReg if disposition is not allow.
-	if disposition != openflow.DispositionAllow {
+	// Get match from CNPDenyConjIDReg if disposition is Drop or Reject.
+	if disposition == openflow.DispositionDrop || disposition == openflow.DispositionRej {
 		return getMatchRegField(matchers, openflow.CNPDenyConjIDField)
 	}
-	// Get match from ingress/egress reg if disposition is allow
+	// Get match from ingress/egress reg if disposition is Allow or Pass.
 	for _, table := range append(openflow.GetAntreaPolicyEgressTables(), openflow.EgressRuleTable) {
 		if tableID == table.GetID() {
 			return getMatchRegField(matchers, openflow.TFEgressConjIDField)
