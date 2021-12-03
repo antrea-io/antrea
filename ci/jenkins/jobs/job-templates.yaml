@@ -48,6 +48,61 @@
     wrappers: '{wrappers}'
 
 - job-template:
+    name: '{name}-{test_name}-integration-for-pull-request'
+    node: '{node}'
+    block-downstream: false
+    block-upstream: false
+    builders: '{builders}'
+    concurrent: false
+    description: '{description}'
+    project-type: freestyle
+    properties:
+    - build-discarder:
+        artifact-days-to-keep: -1
+        artifact-num-to-keep: -1
+        days-to-keep: 7
+        num-to-keep: 30
+    - github:
+        url: 'https://github.com/{org_repo}'
+    - throttle:
+        max-per-node: 1
+        max-total: 0
+        categories: '{throttle_concurrent_builds_category}'
+        option: category
+        enabled: '{throttle_concurrent_builds_enabled}'
+    publishers: '{publishers}'
+    scm:
+    - git:
+        branches: '{branches}'
+        credentials-id: '{git_credentials_id}'
+        name: origin
+        refspec: +refs/heads/*:refs/remotes/origin/* +refs/pull/${{ghprbPullId}}/*:refs/remotes/origin/pr/${{ghprbPullId}}/*
+        url: 'https://github.com/{org_repo}'
+        wipe-workspace: true
+    triggers:
+    - github-pull-request:
+        admin-list: '{admin_list}'
+        allow-whitelist-orgs-as-admins: '{allow_whitelist_orgs_as_admins}'
+        auth-id: '{ghpr_auth}'
+        auto-close-on-fail: false
+        build-desc-template: null
+        github-hooks: true
+        only-trigger-phrase: '{only_trigger_phrase}'
+        org-list: '{org_list}'
+        permit-all: '{trigger_permit_all}'
+        trigger-phrase: '{trigger_phrase}'
+        white-list-target-branches: '{white_list_target_branches}'
+        white-list: '{white_list}'
+        status-context: '{status_context}'
+        status-url: '{status_url}'
+        success-status: '{success_status}'
+        failure-status: '{failure_status}'
+        error-status: '{error_status}'
+        triggered-status: '{triggered_status}'
+        started-status: '{started_status}'
+    wrappers: '{wrappers}'
+
+- job-template:
       name: '{name}-{test_name}-no-scm'
       node: '{node}'
       block-downstream: false
