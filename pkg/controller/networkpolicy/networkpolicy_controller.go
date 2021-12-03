@@ -1140,7 +1140,9 @@ func (n *NetworkPolicyController) getMemberSetForGroupType(groupType grouping.Gr
 	groupMemberSet := controlplane.GroupMemberSet{}
 	pods, externalEntities := n.groupingInterface.GetEntities(groupType, name)
 	for _, pod := range pods {
-		if len(pod.Status.PodIPs) == 0 {
+		// HostNetwork Pods should be excluded from group members
+		// https://github.com/antrea-io/antrea/issues/3078
+		if pod.Spec.HostNetwork == true || len(pod.Status.PodIPs) == 0 {
 			continue
 		}
 		groupMemberSet.Insert(podToGroupMember(pod, true))
