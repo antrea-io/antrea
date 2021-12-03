@@ -666,6 +666,7 @@ spec:
                       - Allow
                       - Drop
                       - Reject
+                      - Pass
                       type: string
                     appliedTo:
                       items:
@@ -829,6 +830,7 @@ spec:
                       - Allow
                       - Drop
                       - Reject
+                      - Pass
                       type: string
                     appliedTo:
                       items:
@@ -1105,6 +1107,7 @@ spec:
                       - Allow
                       - Drop
                       - Reject
+                      - Pass
                       type: string
                     appliedTo:
                       items:
@@ -1254,6 +1257,7 @@ spec:
                       - Allow
                       - Drop
                       - Reject
+                      - Pass
                       type: string
                     appliedTo:
                       items:
@@ -1934,6 +1938,7 @@ spec:
                       - Allow
                       - Drop
                       - Reject
+                      - Pass
                       type: string
                     appliedTo:
                       items:
@@ -2087,6 +2092,7 @@ spec:
                       - Allow
                       - Drop
                       - Reject
+                      - Pass
                       type: string
                     appliedTo:
                       items:
@@ -2328,6 +2334,7 @@ spec:
                       - Allow
                       - Drop
                       - Reject
+                      - Pass
                       type: string
                     appliedTo:
                       items:
@@ -2468,6 +2475,7 @@ spec:
                       - Allow
                       - Drop
                       - Reject
+                      - Pass
                       type: string
                     appliedTo:
                       items:

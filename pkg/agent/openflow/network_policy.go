@@ -957,6 +957,8 @@ func (c *client) calculateActionFlowChangesForRule(rule *types.PolicyRule) *poli
 		} else if rule.IsAntreaNetworkPolicyRule() && *rule.Action == crdv1alpha1.RuleActionReject {
 			metricFlows = append(metricFlows, c.denyRuleMetricFlow(ruleOfID, isIngress))
 			actionFlows = append(actionFlows, c.conjunctionActionDenyFlow(ruleOfID, ruleTable, rule.Priority, DispositionRej, rule.EnableLogging))
+		} else if rule.IsAntreaNetworkPolicyRule() && *rule.Action == crdv1alpha1.RuleActionPass {
+			actionFlows = append(actionFlows, c.conjunctionActionPassFlow(ruleOfID, ruleTable, rule.Priority, rule.EnableLogging))
 		} else {
 			metricFlows = append(metricFlows, c.allowRulesMetricFlows(ruleOfID, isIngress)...)
 			actionFlows = append(actionFlows, c.conjunctionActionFlow(ruleOfID, ruleTable, dropTable.GetNext(), rule.Priority, rule.EnableLogging)...)
