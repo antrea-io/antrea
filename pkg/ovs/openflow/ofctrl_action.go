@@ -305,8 +305,12 @@ func (a *ofFlowAction) Resubmit(ofPort uint16, tableID uint8) FlowBuilder {
 	return a.builder
 }
 
-func (a *ofFlowAction) ResubmitToTable(table uint8) FlowBuilder {
-	return a.Resubmit(openflow13.OFPP_IN_PORT, table)
+func (a *ofFlowAction) ResubmitToTables(tables ...uint8) FlowBuilder {
+	var fb FlowBuilder
+	for _, t := range tables {
+		fb = a.Resubmit(openflow13.OFPP_IN_PORT, t)
+	}
+	return fb
 }
 
 // DecTTL is an action to decrease TTL. It is used in routing functions implemented by Openflow.
@@ -572,5 +576,18 @@ func getFieldRange(name string) (*openflow13.MatchField, Range, error) {
 // GotoTable is an action to jump to the specified table.
 func (a *ofFlowAction) GotoTable(tableID uint8) FlowBuilder {
 	a.builder.ofFlow.Goto(tableID)
+	return a.builder
+}
+
+func (a *ofFlowAction) NextTable() FlowBuilder {
+	tableID := a.builder.ofFlow.table.next
+	a.builder.ofFlow.Goto(tableID)
+	return a.builder
+}
+
+func (a *ofFlowAction) GotoStage(stage StageID) FlowBuilder {
+	pipeline := pipelineCache[a.builder.ofFlow.table.pipelineID]
+	table := pipeline.GetFirstTableInStage(stage)
+	a.builder.ofFlow.Goto(table.GetID())
 	return a.builder
 }

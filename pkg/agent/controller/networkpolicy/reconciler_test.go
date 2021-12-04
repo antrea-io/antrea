@@ -103,11 +103,12 @@ func newTestReconciler(t *testing.T, controller *gomock.Controller, ifaceStore i
 	ch := make(chan string, 100)
 	groupIDAllocator := openflow.NewGroupAllocator(v6Enabled)
 	groupCounters := []proxytypes.GroupCounter{proxytypes.NewGroupCounter(groupIDAllocator, ch)}
-	r := newReconciler(ofClient, ifaceStore, newIDAllocator(testAsyncDeleteInterval), f, groupCounters, v4Enabled, v6Enabled)
+	r := newReconciler(ofClient, ifaceStore, newIDAllocator(testAsyncDeleteInterval), f, groupCounters, v4Enabled, v6Enabled, true)
 	return r
 }
 
 func TestReconcilerForget(t *testing.T) {
+	prepareMockTables()
 	tests := []struct {
 		name              string
 		lastRealizeds     map[string]*lastRealized

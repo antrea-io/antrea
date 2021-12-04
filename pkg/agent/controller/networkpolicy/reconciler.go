@@ -219,16 +219,19 @@ func newReconciler(ofClient openflow.Client,
 	groupCounters []proxytypes.GroupCounter,
 	v4Enabled bool,
 	v6Enabled bool,
+	antreaPolicyEnabled bool,
 ) *reconciler {
 	priorityAssigners := map[uint8]*tablePriorityAssigner{}
-	for _, table := range openflow.GetAntreaPolicyBaselineTierTables() {
-		priorityAssigners[table.GetID()] = &tablePriorityAssigner{
-			assigner: newPriorityAssigner(true),
+	if antreaPolicyEnabled {
+		for _, table := range openflow.GetAntreaPolicyBaselineTierTables() {
+			priorityAssigners[table.GetID()] = &tablePriorityAssigner{
+				assigner: newPriorityAssigner(true),
+			}
 		}
-	}
-	for _, table := range openflow.GetAntreaPolicyMultiTierTables() {
-		priorityAssigners[table.GetID()] = &tablePriorityAssigner{
-			assigner: newPriorityAssigner(false),
+		for _, table := range openflow.GetAntreaPolicyMultiTierTables() {
+			priorityAssigners[table.GetID()] = &tablePriorityAssigner{
+				assigner: newPriorityAssigner(false),
+			}
 		}
 	}
 	reconciler := &reconciler{
@@ -297,7 +300,7 @@ func (r *reconciler) getOFRuleTable(rule *CompletedRule) uint8 {
 		}
 		return openflow.EgressRuleTable.GetID()
 	}
-	var ruleTables []binding.Table
+	var ruleTables []*openflow.Table
 	if rule.Direction == v1beta2.DirectionIn {
 		ruleTables = openflow.GetAntreaPolicyIngressTables()
 	} else {

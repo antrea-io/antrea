@@ -36,7 +36,6 @@ import (
 	interfacestoretest "antrea.io/antrea/pkg/agent/interfacestore/testing"
 	"antrea.io/antrea/pkg/agent/metrics"
 	"antrea.io/antrea/pkg/agent/openflow"
-	ofclient "antrea.io/antrea/pkg/agent/openflow"
 	proxytest "antrea.io/antrea/pkg/agent/proxy/testing"
 	agenttypes "antrea.io/antrea/pkg/agent/types"
 	cpv1beta "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
@@ -83,7 +82,7 @@ var (
 		Priority:      nil,
 		Name:          "",
 		FlowID:        uint32(0),
-		TableID:       ofclient.IngressRuleTable.GetID(),
+		TableID:       uint8(10),
 		PolicyRef:     &np1,
 		EnableLogging: false,
 	}
