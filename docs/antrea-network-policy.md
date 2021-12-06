@@ -313,7 +313,7 @@ spec:
     - action: Pass
       from:
         - namespaces:
-            match: self           # Skip ACNP evaluation for traffic from Pods in the same Namespace
+            match: Self           # Skip ACNP evaluation for traffic from Pods in the same Namespace
       name: PassFromSameNS
       enableLogging: false
     - action: Drop
@@ -325,7 +325,7 @@ spec:
     - action: Pass
       to:
         - namespaces:
-            match: self           # Skip ACNP evaluation for traffic to Pods in the same Namespace
+            match: Self           # Skip ACNP evaluation for traffic to Pods in the same Namespace
       name: PassToSameNS
       enableLogging: false
     - action: Drop
@@ -544,7 +544,7 @@ particular Namespaces.
 
 **namespaces**: A `namespaces` field allows users to perform advanced matching on
 Namespace objects which cannot be done via label selectors. Currently, the
-`namespaces` field has only one matching strategy, `self`. If set to `self`, it indicates
+`namespaces` field has only one matching strategy, `Self`. If set to `Self`, it indicates
 that the corresponding `podSelector` (or all Pods if `podSelector` is not set)
 should only select Pods belonging to the same Namespace as the workload targeted
 (either through a policy-level AppliedTo or a rule-level Applied-To) by the current
