@@ -309,7 +309,7 @@ spec:
     - action: Allow
       from:
         - namespaces:
-            match: self           # Allow from Pods from same Namespace
+            match: Self           # Allow from Pods from same Namespace
       name: AllowFromSameNS
       enableLogging: false
     - action: Drop
@@ -321,7 +321,7 @@ spec:
     - action: Allow
       to:
         - namespaces:
-            match: self           # Allow to Pods from same Namespace
+            match: Self           # Allow to Pods from same Namespace
       name: AllowToSameNS
       enableLogging: false
     - action: Drop
@@ -468,7 +468,7 @@ particular Namespaces.
 
 **namespaces**: A `namespaces` field allows users to perform advanced matching on
 Namespace objects which cannot be done via label selectors. Currently, the
-`namespaces` field has only one matching strategy, `self`. If set to `self`, it indicates
+`namespaces` field has only one matching strategy, `Self`. If set to `Self`, it indicates
 that the corresponding `podSelector` (or all Pods if `podSelector` is not set)
 should only select Pods belonging to the same Namespace as the workload targeted
 (either through a policy-level AppliedTo or a rule-level Applied-To) by the current
