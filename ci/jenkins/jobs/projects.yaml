@@ -139,22 +139,18 @@
           publishers: []
           included_regions:
           - ci/jenkins/jobs/.*
-      - '{name}-{test_name}-for-pull-request':
-          test_name: integration
+      - '{name}-{test_name}-integration-for-pull-request':
+          test_name: auto
           node: 'antrea-test-node'
-          description: 'This is the {test_name} test for {name}.'
+          description: 'This is the {test_name} integration test for {name}.'
           branches:
           - ${{sha1}}
           builders:
           - builder-integration
-          properties:
-          - throttle:
-              max-per-node: 1
-              max-total: 0
-              categories: integration
-              option: category
-              enabled: true
           trigger_phrase: null
+          throttle_concurrent_builds_category:
+            - integration
+          throttle_concurrent_builds_enabled: 'true'
           white_list_target_branches: []
           allow_whitelist_orgs_as_admins: false
           admin_list: []
@@ -189,22 +185,18 @@
                   credential-id: CODECOV_TOKEN # Jenkins secret that stores codecov token
                   variable: CODECOV_TOKEN
           publishers: []
-      - '{name}-{test_name}-for-pull-request':
-          test_name: integration-manual
+      - '{name}-{test_name}-integration-for-pull-request':
+          test_name: manual
           node: 'antrea-test-node'
-          description: 'This is the {test_name} test for {name}.'
+          description: 'This is the {test_name} integration test for {name}.'
           branches:
           - ${{sha1}}
           builders:
           - builder-integration
-          properties:
-          - throttle:
-              max-per-node: 1
-              max-total: 0
-              categories: integration
-              option: category
-              enabled: true
           trigger_phrase: ^(?!Thanks for your PR).*/test-integration.*
+          throttle_concurrent_builds_category:
+            - integration
+          throttle_concurrent_builds_enabled: 'true'
           white_list_target_branches: []
           allow_whitelist_orgs_as_admins: true
           admin_list: '{antrea_admin_list}'
