@@ -552,8 +552,10 @@ func (i *Initializer) setupGatewayInterface() error {
 	// restarts.
 	klog.V(4).Infof("Setting gateway interface %s MTU to %d", i.hostGateway, i.nodeConfig.NodeMTU)
 
-	i.ovsBridgeClient.SetInterfaceMTU(i.hostGateway, i.nodeConfig.NodeMTU)
 	if err := i.configureGatewayInterface(gatewayIface); err != nil {
+		return err
+	}
+	if err := i.ovsBridgeClient.SetInterfaceMTU(i.hostGateway, i.nodeConfig.NodeMTU); err != nil {
 		return err
 	}
 
