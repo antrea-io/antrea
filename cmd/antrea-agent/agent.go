@@ -403,7 +403,8 @@ func run(o *Options) error {
 		ipamController, err := ipam.InitializeAntreaIPAMController(
 			k8sClient,
 			crdClient,
-			informerFactory)
+			informerFactory,
+			crdInformerFactory)
 		if err != nil {
 			return fmt.Errorf("failed to start Antrea IPAM agent: %v", err)
 		}
