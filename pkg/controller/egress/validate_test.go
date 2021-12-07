@@ -19,9 +19,11 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	admv1 "k8s.io/api/admission/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/tools/cache"
 
 	crdv1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
 )
@@ -29,68 +31,6 @@ import (
 func marshal(object runtime.Object) []byte {
 	raw, _ := json.Marshal(object)
 	return raw
-}
-
-func TestEgressControllerValidateExternalIPPool(t *testing.T) {
-	tests := []struct {
-		name             string
-		request          *admv1.AdmissionRequest
-		expectedResponse *admv1.AdmissionResponse
-	}{
-		{
-			name: "CREATE operation should be allowed",
-			request: &admv1.AdmissionRequest{
-				Name:      "foo",
-				Operation: "CREATE",
-				Object:    runtime.RawExtension{Raw: marshal(newExternalIPPool("foo", "10.10.10.0/24", "", ""))},
-			},
-			expectedResponse: &admv1.AdmissionResponse{Allowed: true},
-		},
-		{
-			name: "Deleting IPRange should not be allowed",
-			request: &admv1.AdmissionRequest{
-				Name:      "foo",
-				Operation: "UPDATE",
-				OldObject: runtime.RawExtension{Raw: marshal(newExternalIPPool("foo", "10.10.10.0/24", "10.10.20.1", "10.10.20.2"))},
-				Object:    runtime.RawExtension{Raw: marshal(newExternalIPPool("foo", "10.10.10.0/24", "", ""))},
-			},
-			expectedResponse: &admv1.AdmissionResponse{
-				Allowed: false,
-				Result: &metav1.Status{
-					Message: "existing IPRanges [10.10.20.1-10.10.20.2] cannot be deleted",
-				},
-			},
-		},
-		{
-			name: "Adding IPRange should be allowed",
-			request: &admv1.AdmissionRequest{
-				Name:      "foo",
-				Operation: "UPDATE",
-				OldObject: runtime.RawExtension{Raw: marshal(newExternalIPPool("foo", "10.10.10.0/24", "", ""))},
-				Object:    runtime.RawExtension{Raw: marshal(newExternalIPPool("foo", "10.10.10.0/24", "10.10.20.1", "10.10.20.2"))},
-			},
-			expectedResponse: &admv1.AdmissionResponse{Allowed: true},
-		},
-		{
-			name: "DELETE operation should be allowed",
-			request: &admv1.AdmissionRequest{
-				Name:      "foo",
-				Operation: "DELETE",
-				Object:    runtime.RawExtension{Raw: marshal(newExternalIPPool("foo", "10.10.10.0/24", "", ""))},
-			},
-			expectedResponse: &admv1.AdmissionResponse{Allowed: true},
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			c := newController(nil, nil)
-			review := &admv1.AdmissionReview{
-				Request: tt.request,
-			}
-			gotResponse := c.ValidateExternalIPPool(review)
-			assert.Equal(t, tt.expectedResponse, gotResponse)
-		})
-	}
 }
 
 func TestEgressControllerValidateEgress(t *testing.T) {
@@ -192,14 +132,24 @@ func TestEgressControllerValidateEgress(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			c := newController(nil, nil)
+			stopCh := make(chan struct{})
+			defer close(stopCh)
+			var objs []runtime.Object
 			if tt.existingExternalIPPool != nil {
-				c.createOrUpdateIPAllocator(tt.existingExternalIPPool)
+				objs = append(objs, tt.existingExternalIPPool)
 			}
+			controller := newController(nil, objs)
+			controller.informerFactory.Start(stopCh)
+			controller.crdInformerFactory.Start(stopCh)
+			controller.informerFactory.WaitForCacheSync(stopCh)
+			controller.crdInformerFactory.WaitForCacheSync(stopCh)
+			go controller.externalIPAllocator.Run(stopCh)
+			require.True(t, cache.WaitForCacheSync(stopCh, controller.externalIPAllocator.HasSynced))
+			controller.externalIPAllocator.RestoreIPAllocations(nil)
 			review := &admv1.AdmissionReview{
 				Request: tt.request,
 			}
-			gotResponse := c.ValidateEgress(review)
+			gotResponse := controller.ValidateEgress(review)
 			assert.Equal(t, tt.expectedResponse, gotResponse)
 		})
 	}
