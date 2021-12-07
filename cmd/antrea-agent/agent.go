@@ -35,6 +35,8 @@ import (
 	"antrea.io/antrea/pkg/agent/flowexporter"
 	"antrea.io/antrea/pkg/agent/flowexporter/exporter"
 	"antrea.io/antrea/pkg/agent/interfacestore"
+	"antrea.io/antrea/pkg/agent/ipassigner"
+	"antrea.io/antrea/pkg/agent/memberlist"
 	"antrea.io/antrea/pkg/agent/metrics"
 	npl "antrea.io/antrea/pkg/agent/nodeportlocal"
 	"antrea.io/antrea/pkg/agent/openflow"
@@ -45,6 +47,7 @@ import (
 	"antrea.io/antrea/pkg/agent/stats"
 	"antrea.io/antrea/pkg/agent/types"
 	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions"
+	"antrea.io/antrea/pkg/controller/externalippool"
 	"antrea.io/antrea/pkg/features"
 	"antrea.io/antrea/pkg/log"
 	"antrea.io/antrea/pkg/monitor"
@@ -291,10 +294,25 @@ func run(o *Options) error {
 	} else {
 		return fmt.Errorf("invalid Node Transport IPAddr in Node config: %v", nodeConfig)
 	}
+
+	var externalIPPoolController *externalippool.ExternalIPPoolController
+	var memberlistCluster *memberlist.Cluster
+	var localIPDetector ipassigner.LocalIPDetector
+
 	if features.DefaultFeatureGate.Enabled(features.Egress) {
+		externalIPPoolController = externalippool.NewExternalIPPoolController(
+			crdClient, externalIPPoolInformer,
+		)
+		localIPDetector = ipassigner.NewLocalIPDetector()
+		memberlistCluster, err = memberlist.NewCluster(o.config.ClusterMembershipPort,
+			nodeConfig.Name, nodeInformer, externalIPPoolInformer,
+		)
+		if err != nil {
+			return fmt.Errorf("error creating new MemberList cluster: %v", err)
+		}
 		egressController, err = egress.NewEgressController(
 			ofClient, antreaClientProvider, crdClient, ifaceStore, routeClient, nodeConfig.Name, nodeTransportIP,
-			o.config.ClusterMembershipPort, egressInformer, nodeInformer, externalIPPoolInformer,
+			memberlistCluster, egressInformer, nodeInformer, localIPDetector,
 		)
 		if err != nil {
 			return fmt.Errorf("error creating new Egress controller: %v", err)
@@ -426,6 +444,9 @@ func run(o *Options) error {
 	go networkPolicyController.Run(stopCh)
 
 	if features.DefaultFeatureGate.Enabled(features.Egress) {
+		go externalIPPoolController.Run(stopCh)
+		go localIPDetector.Run(stopCh)
+		go memberlistCluster.Run(stopCh)
 		go egressController.Run(stopCh)
 	}
 

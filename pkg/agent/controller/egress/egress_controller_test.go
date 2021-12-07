@@ -33,8 +33,9 @@ import (
 	k8stesting "k8s.io/client-go/testing"
 	"k8s.io/client-go/util/workqueue"
 
-	ipassignertest "antrea.io/antrea/pkg/agent/controller/egress/ipassigner/testing"
 	"antrea.io/antrea/pkg/agent/interfacestore"
+	"antrea.io/antrea/pkg/agent/ipassigner"
+	ipassignertest "antrea.io/antrea/pkg/agent/ipassigner/testing"
 	openflowtest "antrea.io/antrea/pkg/agent/openflow/testing"
 	routetest "antrea.io/antrea/pkg/agent/route/testing"
 	"antrea.io/antrea/pkg/agent/util"
@@ -65,7 +66,7 @@ func (d *fakeLocalIPDetector) Run(stopCh <-chan struct{}) {
 	<-stopCh
 }
 
-func (d *fakeLocalIPDetector) AddEventHandler(handler eventHandler) {
+func (d *fakeLocalIPDetector) AddEventHandler(handler ipassigner.LocalIPEventHandler) {
 	return
 }
 
@@ -73,7 +74,7 @@ func (d *fakeLocalIPDetector) HasSynced() bool {
 	return true
 }
 
-var _ LocalIPDetector = &fakeLocalIPDetector{}
+var _ ipassigner.LocalIPDetector = &fakeLocalIPDetector{}
 
 type antreaClientGetter struct {
 	clientset versioned.Interface

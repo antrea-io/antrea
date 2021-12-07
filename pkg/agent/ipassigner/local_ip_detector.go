@@ -12,27 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package egress
+package ipassigner
 
-// Not implemented yet. The feature gate verification will protect this from being run.
-type localIPDetector struct{}
+type LocalIPEventHandler func(ip string, added bool)
 
-func (d *localIPDetector) IsLocalIP(ip string) bool {
-	return false
-}
+type LocalIPDetector interface {
+	IsLocalIP(ip string) bool
 
-func (d *localIPDetector) Run(stopCh <-chan struct{}) {
-	return
-}
+	// Run starts the detector.
+	Run(stopCh <-chan struct{})
 
-func (d *localIPDetector) AddEventHandler(handler eventHandler) {
-	return
-}
+	// AddEventHandler registers an eventHandler of IP address update. It's not thread-safe and should be called before
+	// starting the detector.
+	AddEventHandler(handler LocalIPEventHandler)
 
-func (d *localIPDetector) HasSynced() bool {
-	return false
-}
-
-func NewLocalIPDetector() *localIPDetector {
-	return &localIPDetector{}
+	// HasSynced returns true if the cache has been initialized with the full lists of IP addresses.
+	HasSynced() bool
 }

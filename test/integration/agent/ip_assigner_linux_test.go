@@ -24,7 +24,7 @@ import (
 	"github.com/vishvananda/netlink"
 	"k8s.io/apimachinery/pkg/util/sets"
 
-	"antrea.io/antrea/pkg/agent/controller/egress/ipassigner"
+	"antrea.io/antrea/pkg/agent/ipassigner"
 )
 
 const dummyDeviceName = "antrea-dummy0"

@@ -12,72 +12,58 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package egress
+package externalippool
 
 import (
 	"encoding/json"
 	"fmt"
-	"net"
 
 	admv1 "k8s.io/api/admission/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2"
 
 	crdv1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
 )
 
-func (c *EgressController) ValidateEgress(review *admv1.AdmissionReview) *admv1.AdmissionResponse {
+func (c *ExternalIPPoolController) ValidateExternalIPPool(review *admv1.AdmissionReview) *admv1.AdmissionResponse {
 	var result *metav1.Status
 	var msg string
 	allowed := true
 
-	klog.V(2).Info("Validating Egress", "request", review.Request)
-	var newObj, oldObj crdv1alpha2.Egress
+	klog.V(2).Info("Validating ExternalIPPool", "request", review.Request)
+	var newObj, oldObj crdv1alpha2.ExternalIPPool
 	if review.Request.Object.Raw != nil {
 		if err := json.Unmarshal(review.Request.Object.Raw, &newObj); err != nil {
-			klog.ErrorS(err, "Error de-serializing current Egress")
+			klog.ErrorS(err, "Error de-serializing current ExternalIPPool")
 			return newAdmissionResponseForErr(err)
 		}
 	}
 	if review.Request.OldObject.Raw != nil {
 		if err := json.Unmarshal(review.Request.OldObject.Raw, &oldObj); err != nil {
-			klog.ErrorS(err, "Error de-serializing old Egress")
+			klog.ErrorS(err, "Error de-serializing old ExternalIPPool")
 			return newAdmissionResponseForErr(err)
 		}
 	}
 
-	shouldAllow := func(oldEgress, newEgress *crdv1alpha2.Egress) (bool, string) {
-		// Allow it if EgressIP and ExternalIPPool don't change.
-		if newEgress.Spec.EgressIP == oldEgress.Spec.EgressIP && newEgress.Spec.ExternalIPPool == oldEgress.Spec.ExternalIPPool {
-			return true, ""
-		}
-		// Only validate whether the specified Egress IP is in the Pool when they are both set.
-		if newEgress.Spec.EgressIP == "" || newEgress.Spec.ExternalIPPool == "" {
-			return true, ""
-		}
-		ip := net.ParseIP(newEgress.Spec.EgressIP)
-		if ip == nil {
-			return false, fmt.Sprintf("IP %s is not valid", newEgress.Spec.EgressIP)
-		}
-		if !c.externalIPAllocator.IPPoolExists(newEgress.Spec.ExternalIPPool) {
-			return false, fmt.Sprintf("ExternalIPPool %s does not exist", newEgress.Spec.ExternalIPPool)
-		}
-		if !c.externalIPAllocator.IPPoolHasIP(newEgress.Spec.ExternalIPPool, ip) {
-			return false, fmt.Sprintf("IP %s is not within the IP range", newEgress.Spec.EgressIP)
-		}
-		return true, ""
-	}
-
 	switch review.Request.Operation {
 	case admv1.Create:
-		klog.V(2).Info("Validating CREATE request for Egress")
-		allowed, msg = shouldAllow(&oldObj, &newObj)
+		// This shouldn't happen with the webhook configuration we include in the Antrea YAML manifests.
+		klog.V(2).Info("Validating CREATE request for ExternalIPPool")
+		// Always allow CREATE request.
 	case admv1.Update:
-		klog.V(2).Info("Validating UPDATE request for Egress")
-		allowed, msg = shouldAllow(&oldObj, &newObj)
+		klog.V(2).Info("Validating UPDATE request for ExternalIPPool")
+
+		oldIPRangeSet := getIPRangeSet(oldObj.Spec.IPRanges)
+		newIPRangeSet := getIPRangeSet(newObj.Spec.IPRanges)
+		deletedIPRanges := oldIPRangeSet.Difference(newIPRangeSet)
+		if deletedIPRanges.Len() > 0 {
+			allowed = false
+			msg = fmt.Sprintf("existing IPRanges %v cannot be deleted", deletedIPRanges.List())
+		}
 	case admv1.Delete:
 		// This shouldn't happen with the webhook configuration we include in the Antrea YAML manifests.
-		klog.V(2).Info("Validating DELETE request for Egress")
+		klog.V(2).Info("Validating DELETE request for ExternalIPPool")
 		// Always allow DELETE request.
 	}
 
@@ -90,6 +76,17 @@ func (c *EgressController) ValidateEgress(review *admv1.AdmissionReview) *admv1.
 		Allowed: allowed,
 		Result:  result,
 	}
+}
+func getIPRangeSet(ipRanges []crdv1alpha2.IPRange) sets.String {
+	set := sets.NewString()
+	for _, ipRange := range ipRanges {
+		ipRangeStr := ipRange.CIDR
+		if ipRangeStr == "" {
+			ipRangeStr = fmt.Sprintf("%s-%s", ipRange.Start, ipRange.End)
+		}
+		set.Insert(ipRangeStr)
+	}
+	return set
 }
 
 func newAdmissionResponseForErr(err error) *admv1.AdmissionResponse {
