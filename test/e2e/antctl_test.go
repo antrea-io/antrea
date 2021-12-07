@@ -222,7 +222,7 @@ func testAntctlVerboseMode(t *testing.T, data *TestData) {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			t.Logf("Running commnand `%s` on pod %s", tc.commands, podName)
+			t.Logf("Running command `%s` on pod %s", tc.commands, podName)
 			stdout, stderr, err := runAntctl(podName, tc.commands, data)
 			assert.Nil(t, err, antctlOutput(stdout, stderr))
 			if !tc.hasStderr {

@@ -114,8 +114,8 @@ func (cl *commandList) validate() []error {
 	return errs
 }
 
-// GetDebugCommands returns all commands supported by Controller or Agent that
-// are used for debugging purpose.
+// GetDebugCommands returns all commands supported by Controller, Agent or Flow Aggregator
+// that are used for debugging purpose.
 func (cl *commandList) GetDebugCommands(mode string) [][]string {
 	var allCommands [][]string
 	for _, def := range cl.definitions {
