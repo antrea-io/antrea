@@ -55,4 +55,5 @@ type OVSBridgeClient interface {
 	IsHardwareOffloadEnabled() bool
 	GetOVSDatapathType() OVSDatapathType
 	SetInterfaceType(name, ifType string) Error
+	SetPortExternalIDs(portName string, externalIDs map[string]interface{}) Error
 }

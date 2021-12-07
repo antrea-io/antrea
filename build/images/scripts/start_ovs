@@ -111,7 +111,7 @@ function quit {
     log_info $CONTAINER_NAME "Stopping OVS before quit"
     # sleep until uplink is removed from OVS during antrea-agent shutdown, and initial host network configuration has
     # been restored. The uplink is moved to the OVS bridge to support AntreaFlexibleIPAM mode.
-    while [ "`ovsdb-client dump Port|grep \"{antrea-uplink=\\\"true\\\"}\"`" != "" ]; do
+    while [ "`ovsdb-client dump Port|grep antrea-type=uplink`" != "" ]; do
       log_info $CONTAINER_NAME "Uplink found on OVS, wait 1s and retry..."
       sleep 1 &
       SLEEP_PID=$!
