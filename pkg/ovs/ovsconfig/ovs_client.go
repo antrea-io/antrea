@@ -911,3 +911,20 @@ func (br *OVSBridge) SetInterfaceType(name, ifType string) Error {
 	}
 	return nil
 }
+
+func (br *OVSBridge) SetPortExternalIDs(portName string, externalIDs map[string]interface{}) Error {
+	tx := br.ovsdb.Transaction(openvSwitchSchema)
+	tx.Update(dbtransaction.Update{
+		Table: "Port",
+		Where: [][]interface{}{{"name", "==", portName}},
+		Row: map[string]interface{}{
+			"external_ids": helpers.MakeOVSDBMap(externalIDs),
+		},
+	})
+	_, err, temporary := tx.Commit()
+	if err != nil {
+		klog.Error("Transaction failed", err)
+		return NewTransactionError(err, temporary)
+	}
+	return nil
+}

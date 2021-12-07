@@ -107,6 +107,23 @@ func TestInitstore(t *testing.T) {
 	if !found2 {
 		t.Errorf("Failed to load OVS port into local store")
 	}
+
+	// OVS port external_ids should be updated to set AntreaInterfaceTypeKey if it doesn't exist in OVSPortData.
+	delete(ovsPort1.ExternalIDs, interfacestore.AntreaInterfaceTypeKey)
+	delete(ovsPort2.ExternalIDs, interfacestore.AntreaInterfaceTypeKey)
+	initOVSPorts2 := []ovsconfig.OVSPortData{ovsPort1, ovsPort2}
+	mockOVSBridgeClient.EXPECT().GetPortList().Return(initOVSPorts2, nil)
+	updateExtIDsFunc := func(p ovsconfig.OVSPortData) map[string]interface{} {
+		extIDs := make(map[string]interface{})
+		for k, v := range p.ExternalIDs {
+			extIDs[k] = v
+		}
+		extIDs[interfacestore.AntreaInterfaceTypeKey] = interfacestore.AntreaContainer
+		return extIDs
+	}
+	mockOVSBridgeClient.EXPECT().SetPortExternalIDs(ovsPort1.Name, updateExtIDsFunc(ovsPort1)).Return(nil)
+	mockOVSBridgeClient.EXPECT().SetPortExternalIDs(ovsPort2.Name, updateExtIDsFunc(ovsPort2)).Return(nil)
+	initializer.initInterfaceStore()
 }
 
 func TestPersistRoundNum(t *testing.T) {

@@ -114,7 +114,10 @@ func (i *Initializer) prepareOVSBridge() error {
 	} else {
 		// OVS does not receive "ofport_request" param when creating local port, so here use config.AutoAssignedOFPort=0
 		// to ignore this param.
-		if _, err = i.ovsBridgeClient.CreateInternalPort(brName, config.AutoAssignedOFPort, nil); err != nil {
+		externalIDs := map[string]interface{}{
+			interfacestore.AntreaInterfaceTypeKey: interfacestore.AntreaHost,
+		}
+		if _, err = i.ovsBridgeClient.CreateInternalPort(brName, config.AutoAssignedOFPort, externalIDs); err != nil {
 			return err
 		}
 	}
@@ -208,7 +211,7 @@ func (i *Initializer) BridgeUplinkToOVSBridge() error {
 		return err
 	}
 	// Create uplink port.
-	uplinkPortUUId, err := i.ovsBridgeClient.CreateUplinkPort(uplink, config.UplinkOFPort, map[string]interface{}{"antrea-uplink": "true"})
+	uplinkPortUUId, err := i.ovsBridgeClient.CreateUplinkPort(uplink, config.UplinkOFPort, map[string]interface{}{interfacestore.AntreaInterfaceTypeKey: interfacestore.AntreaUplink})
 	if err != nil {
 		return fmt.Errorf("failed to add uplink port %s: err=%w", uplink, err)
 	}

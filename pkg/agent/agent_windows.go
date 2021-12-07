@@ -144,7 +144,10 @@ func (i *Initializer) prepareOVSBridge() error {
 	} else {
 		// OVS does not receive "ofport_request" param when creating local port, so here use config.AutoAssignedOFPort=0
 		// to ignore this param.
-		if _, err = i.ovsBridgeClient.CreateInternalPort(brName, config.AutoAssignedOFPort, nil); err != nil {
+		externalIDs := map[string]interface{}{
+			interfacestore.AntreaInterfaceTypeKey: interfacestore.AntreaHost,
+		}
+		if _, err = i.ovsBridgeClient.CreateInternalPort(brName, config.AutoAssignedOFPort, externalIDs); err != nil {
 			return err
 		}
 	}

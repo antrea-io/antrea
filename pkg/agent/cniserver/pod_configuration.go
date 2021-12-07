@@ -131,6 +131,7 @@ func BuildOVSPortExternalIDs(containerConfig *interfacestore.InterfaceConfig) ma
 	externalIDs[ovsExternalIDIP] = getContainerIPsString(containerConfig.IPs)
 	externalIDs[ovsExternalIDPodName] = containerConfig.PodName
 	externalIDs[ovsExternalIDPodNamespace] = containerConfig.PodNamespace
+	externalIDs[interfacestore.AntreaInterfaceTypeKey] = interfacestore.AntreaContainer
 	return externalIDs
 }
 
