@@ -663,22 +663,23 @@ func (c *ruleCache) ReplaceNetworkPolicies(policies []*v1beta.NetworkPolicy) {
 // It could happen that an existing NetworkPolicy is "added" again when the
 // watcher reconnects to the Apiserver, we use the same processing as
 // UpdateNetworkPolicy to ensure orphan rules are removed.
-func (c *ruleCache) AddNetworkPolicy(policy *v1beta.NetworkPolicy) error {
+func (c *ruleCache) AddNetworkPolicy(policy *v1beta.NetworkPolicy) {
 	metrics.NetworkPolicyCount.Inc()
 	c.policyMapLock.Lock()
 	defer c.policyMapLock.Unlock()
-	return c.updateNetworkPolicyLocked(policy)
+	c.updateNetworkPolicyLocked(policy)
 }
 
-// UpdateNetworkPolicy updates a cached *v1beta.NetworkPolicy.
+// UpdateNetworkPolicy updates a cached *v1beta.NetworkPolicy and returns whether there is any rule change.
 // The added rules and removed rules will be regarded as dirty.
-func (c *ruleCache) UpdateNetworkPolicy(policy *v1beta.NetworkPolicy) error {
+func (c *ruleCache) UpdateNetworkPolicy(policy *v1beta.NetworkPolicy) bool {
 	c.policyMapLock.Lock()
 	defer c.policyMapLock.Unlock()
 	return c.updateNetworkPolicyLocked(policy)
 }
 
-func (c *ruleCache) updateNetworkPolicyLocked(policy *v1beta.NetworkPolicy) error {
+// updateNetworkPolicyLocked returns whether there is any rule change.
+func (c *ruleCache) updateNetworkPolicyLocked(policy *v1beta.NetworkPolicy) bool {
 	c.policyMap[string(policy.UID)] = policy
 	existingRules, _ := c.rules.ByIndex(policyIndex, string(policy.UID))
 	ruleByID := map[string]interface{}{}
@@ -686,6 +687,7 @@ func (c *ruleCache) updateNetworkPolicyLocked(policy *v1beta.NetworkPolicy) erro
 		ruleByID[r.(*rule).ID] = r
 	}
 
+	anyRuleUpdate := false
 	maxPriority := getMaxPriority(policy)
 	for i := range policy.Rules {
 		r := toRule(&policy.Rules[i], policy, maxPriority)
@@ -703,6 +705,7 @@ func (c *ruleCache) updateNetworkPolicyLocked(policy *v1beta.NetworkPolicy) erro
 				metrics.EgressNetworkPolicyRuleCount.Inc()
 			}
 			c.dirtyRuleHandler(r.ID)
+			anyRuleUpdate = true
 		}
 	}
 
@@ -716,20 +719,21 @@ func (c *ruleCache) updateNetworkPolicyLocked(policy *v1beta.NetworkPolicy) erro
 			metrics.EgressNetworkPolicyRuleCount.Dec()
 		}
 		c.dirtyRuleHandler(ruleID)
+		anyRuleUpdate = true
 	}
-	return nil
+	return anyRuleUpdate
 }
 
 // DeleteNetworkPolicy deletes a cached *v1beta.NetworkPolicy.
 // All its rules will be regarded as dirty.
-func (c *ruleCache) DeleteNetworkPolicy(policy *v1beta.NetworkPolicy) error {
+func (c *ruleCache) DeleteNetworkPolicy(policy *v1beta.NetworkPolicy) {
 	c.policyMapLock.Lock()
 	defer c.policyMapLock.Unlock()
 
-	return c.deleteNetworkPolicyLocked(string(policy.UID))
+	c.deleteNetworkPolicyLocked(string(policy.UID))
 }
 
-func (c *ruleCache) deleteNetworkPolicyLocked(uid string) error {
+func (c *ruleCache) deleteNetworkPolicyLocked(uid string) {
 	delete(c.policyMap, uid)
 	existingRules, _ := c.rules.ByIndex(policyIndex, uid)
 	for _, r := range existingRules {
@@ -744,7 +748,6 @@ func (c *ruleCache) deleteNetworkPolicyLocked(uid string) error {
 		c.dirtyRuleHandler(ruleID)
 	}
 	metrics.NetworkPolicyCount.Dec()
-	return nil
 }
 
 // GetCompletedRule constructs a *CompletedRule for the provided ruleID.
