@@ -21,6 +21,7 @@ import (
 
 	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
 	crdclientset "antrea.io/antrea/pkg/client/clientset/versioned"
+	informers "antrea.io/antrea/pkg/client/listers/crd/v1alpha2"
 	"antrea.io/antrea/pkg/ipam/ipallocator"
 	iputil "antrea.io/antrea/pkg/util/ip"
 
@@ -37,27 +38,36 @@ type IPPoolAllocator struct {
 	// Name of IP Pool custom resource
 	ipPoolName string
 
-	// crd client to access the pool
+	// crd client to update the pool
 	crdClient crdclientset.Interface
+
+	// pool lister for reading the pool
+	ipPoolLister informers.IPPoolLister
 }
 
 // NewIPPoolAllocator creates an IPPoolAllocator based on the provided IP pool.
-func NewIPPoolAllocator(poolName string, client crdclientset.Interface) (*IPPoolAllocator, error) {
+func NewIPPoolAllocator(poolName string, client crdclientset.Interface, poolLister informers.IPPoolLister) (*IPPoolAllocator, error) {
 
 	// Validate the pool exists
 	// This has an extra roundtrip cost, however this would allow fallback to
 	// default IPAM driver if needed
-	_, err := client.CrdV1alpha2().IPPools().Get(context.TODO(), poolName, metav1.GetOptions{})
+	_, err := poolLister.Get(poolName)
 	if err != nil {
 		return nil, err
 	}
 
 	allocator := &IPPoolAllocator{
-		ipPoolName: poolName,
-		crdClient:  client,
+		ipPoolName:   poolName,
+		crdClient:    client,
+		ipPoolLister: poolLister,
 	}
 
 	return allocator, nil
+}
+
+func (a *IPPoolAllocator) readPool() (*v1alpha2.IPPool, error) {
+	pool, err := a.ipPoolLister.Get(a.ipPoolName)
+	return pool, err
 }
 
 // initAllocatorList reads IP Pool status and initializes a list of allocators based on
@@ -110,7 +120,7 @@ func (a *IPPoolAllocator) initIPAllocators(ipPool *v1alpha2.IPPool) (ipallocator
 }
 
 func (a *IPPoolAllocator) readPoolAndInitIPAllocators() (*v1alpha2.IPPool, ipallocator.MultiIPAllocator, error) {
-	ipPool, err := a.crdClient.CrdV1alpha2().IPPools().Get(context.TODO(), a.ipPoolName, metav1.GetOptions{})
+	ipPool, err := a.readPool()
 
 	if err != nil {
 		return nil, ipallocator.MultiIPAllocator{}, err
@@ -296,7 +306,7 @@ func (a *IPPoolAllocator) ReleasePod(namespace, podName string) error {
 
 	// Retry on CRD update conflict which is caused by multiple agents updating a pool at same time.
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		ipPool, err := a.crdClient.CrdV1alpha2().IPPools().Get(context.TODO(), a.ipPoolName, metav1.GetOptions{})
+		ipPool, err := a.readPool()
 
 		if err != nil {
 			return err
@@ -327,7 +337,7 @@ func (a *IPPoolAllocator) ReleaseContainerIfPresent(containerID string) error {
 
 	// Retry on CRD update conflict which is caused by multiple agents updating a pool at same time.
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		ipPool, err := a.crdClient.CrdV1alpha2().IPPools().Get(context.TODO(), a.ipPoolName, metav1.GetOptions{})
+		ipPool, err := a.readPool()
 
 		if err != nil {
 			return err
@@ -354,7 +364,7 @@ func (a *IPPoolAllocator) ReleaseContainerIfPresent(containerID string) error {
 // HasResource checks whether an IP was associated with specified pod. It returns error if the resource is crd fails to be retrieved.
 func (a *IPPoolAllocator) HasPod(namespace, podName string) (bool, error) {
 
-	ipPool, err := a.crdClient.CrdV1alpha2().IPPools().Get(context.TODO(), a.ipPoolName, metav1.GetOptions{})
+	ipPool, err := a.readPool()
 
 	if err != nil {
 		return false, err
@@ -371,7 +381,7 @@ func (a *IPPoolAllocator) HasPod(namespace, podName string) (bool, error) {
 // HasResource checks whether an IP was associated with specified container. It returns error if the resource is crd fails to be retrieved.
 func (a *IPPoolAllocator) HasContainer(containerID string) (bool, error) {
 
-	ipPool, err := a.crdClient.CrdV1alpha2().IPPools().Get(context.TODO(), a.ipPoolName, metav1.GetOptions{})
+	ipPool, err := a.readPool()
 
 	if err != nil {
 		return false, err
