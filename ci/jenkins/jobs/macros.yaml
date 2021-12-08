@@ -15,6 +15,16 @@
             DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
             ./ci/jenkins/test-vmc.sh --testcase integration --coverage --codecov-token "${CODECOV_TOKEN}" --registry ${DOCKER_REGISTRY}
 
+
+- builder:
+      name: builder-multicluster-integration
+      builders:
+        - shell: |-
+            #!/bin/bash
+            set -e
+            DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
+            ./ci/jenkins/test-vmc.sh --testcase multicluster-integration --coverage --codecov-token "${CODECOV_TOKEN}" --registry ${DOCKER_REGISTRY}
+
 - builder:
     name: builder-eks-cluster-cleanup
     builders:
