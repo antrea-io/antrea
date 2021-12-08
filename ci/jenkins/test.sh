@@ -121,7 +121,7 @@ export NO_PULL
 E2ETEST_PATH=${WORKDIR}/kubernetes/_output/dockerized/bin/linux/amd64/e2e.test
 
 function export_govc_env_var {
-    export GOVC_URL=$GOVC_URL
+    export GOVC_URL=$GOVC_URL_NEW
     export GOVC_USERNAME=$GOVC_USERNAME
     export GOVC_PASSWORD=$GOVC_PASSWORD
     export GOVC_INSECURE=1
