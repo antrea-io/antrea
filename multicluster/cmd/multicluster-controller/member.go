@@ -74,7 +74,7 @@ func runMember(o *Options) error {
 		return fmt.Errorf("error creating ResourceImportFilter controller: %v", err)
 	}
 
-	klog.InfoS("Starting Manager")
+	klog.InfoS("Member MC Controller Starting Manager")
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		return fmt.Errorf("error running Manager: %v", err)
 	}

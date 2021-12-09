@@ -145,9 +145,11 @@ func (r *MemberClusterSetReconciler) updateMultiClusterSetOnMemberCluster(cluste
 
 		klog.InfoS("Creating RemoteCommonArea", "Cluster", clusterID)
 		// Read secret to access the leader cluster. Assume secret is present in the same Namespace as the ClusterSet.
-		secret := r.getSecretForLeader(secretName, clusterSet.GetNamespace())
-		_, err := core.NewRemoteCommonArea(clusterID, r.clusterSetID, url, secret, r.Scheme,
-			r.Client, r.RemoteCommonAreaManager, clusterSet.Spec.Namespace)
+		secret, err := r.getSecretForLeader(secretName, clusterSet.GetNamespace())
+		if err == nil {
+			_, err = core.NewRemoteCommonArea(clusterID, r.clusterSetID, url, secret, r.Scheme,
+				r.Client, r.RemoteCommonAreaManager, clusterSet.Spec.Namespace)
+		}
 		if err != nil {
 			klog.ErrorS(err, "Unable to create RemoteCommonArea", "Cluster", clusterID)
 		} else {
@@ -172,12 +174,14 @@ func (r *MemberClusterSetReconciler) updateMultiClusterSetOnMemberCluster(cluste
 // has an associated Secret which must be copied into the member cluster as an opaque secret.
 // Name of this secret is part of the ClusterSet spec for this leader. This method reads
 // the Secret given by that name.
-func (r *MemberClusterSetReconciler) getSecretForLeader(secretName string, secretNs string) (secretObj *v1.Secret) {
+func (r *MemberClusterSetReconciler) getSecretForLeader(secretName string, secretNs string) (secretObj *v1.Secret, err error) {
+	secretObj = &v1.Secret{}
 	secretNamespacedName := types.NamespacedName{
 		Namespace: secretNs,
 		Name:      secretName,
 	}
-	if err := r.Get(context.TODO(), secretNamespacedName, secretObj); err != nil {
+	if err = r.Get(context.TODO(), secretNamespacedName, secretObj); err != nil {
+		klog.ErrorS(err, "Error reading secret", "Name", secretName, "Namespace", secretNs)
 		return
 	}
 	return
