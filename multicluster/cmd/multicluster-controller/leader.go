@@ -55,18 +55,9 @@ func runLeader(o *Options) error {
 		return err
 	}
 
-	clusterSetReconciler := &multiclustercontrollers.LeaderClusterSetReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-	}
-	if err = clusterSetReconciler.SetupWithManager(mgr); err != nil {
-		return fmt.Errorf("error creating ClusterSet controller: %v", err)
-	}
-
-	if err = (&multiclustercontrollers.MemberClusterAnnounceReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
+	memberClusterStatusManager := multiclustercontrollers.NewMemberClusterAnnounceReconciler(
+		mgr.GetClient(), mgr.GetScheme())
+	if err = memberClusterStatusManager.SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("error creating MemberClusterAnnounce controller: %v", err)
 	}
 	hookServer := mgr.GetWebhookServer()
@@ -74,6 +65,15 @@ func runLeader(o *Options) error {
 		&webhook.Admission{Handler: &memberClusterAnnounceValidator{
 			Client:    mgr.GetClient(),
 			namespace: env.GetPodNamespace()}})
+
+	clusterSetReconciler := &multiclustercontrollers.LeaderClusterSetReconciler{
+		Client:        mgr.GetClient(),
+		Scheme:        mgr.GetScheme(),
+		StatusManager: memberClusterStatusManager,
+	}
+	if err = clusterSetReconciler.SetupWithManager(mgr); err != nil {
+		return fmt.Errorf("error creating ClusterSet controller: %v", err)
+	}
 
 	resExportReconciler := &multiclustercontrollers.ResourceExportReconciler{
 		Client: mgr.GetClient(),

@@ -188,6 +188,7 @@ func (r *remoteCommonArea) SendMemberAnnounce() error {
 		}
 	}
 	if localClusterMemberAnnounceExist {
+		localClusterMemberAnnounce.LeaderClusterID = ""
 		if r.remoteCommonAreaManager.GetElectedLeaderClusterID() != common.InvalidClusterID {
 			localClusterMemberAnnounce.LeaderClusterID = string(r.remoteCommonAreaManager.GetElectedLeaderClusterID())
 		}
