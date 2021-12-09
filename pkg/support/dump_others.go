@@ -22,7 +22,6 @@ import (
 	"path"
 	"path/filepath"
 
-	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/util/iptables"
 	"antrea.io/antrea/pkg/util/logdir"
 )
@@ -48,11 +47,7 @@ func (d *agentDumper) DumpHostNetworkInfo(basedir string) error {
 }
 
 func (d *agentDumper) dumpIPTables(basedir string) error {
-	nodeConfig := d.aq.GetNodeConfig()
-	networkConfig := d.aq.GetNetworkConfig()
-	v4Enabled := config.IsIPv4Enabled(nodeConfig, networkConfig.TrafficEncapMode)
-	v6Enabled := config.IsIPv6Enabled(nodeConfig, networkConfig.TrafficEncapMode)
-	c, err := iptables.New(v4Enabled, v6Enabled)
+	c, err := iptables.New(d.v4Enabled, d.v6Enabled)
 	if err != nil {
 		return err
 	}

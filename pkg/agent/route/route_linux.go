@@ -394,10 +394,8 @@ func (c *Client) writeEKSMangleRule(iptablesData *bytes.Buffer) {
 // It's idempotent and can safely be called on every startup.
 func (c *Client) syncIPTables() error {
 	var err error
-	v4Enabled := config.IsIPv4Enabled(c.nodeConfig, c.networkConfig.TrafficEncapMode)
-	v6Enabled := config.IsIPv6Enabled(c.nodeConfig, c.networkConfig.TrafficEncapMode)
 
-	c.ipt, err = iptables.New(v4Enabled, v6Enabled)
+	c.ipt, err = iptables.New(c.networkConfig.IPv4Enabled, c.networkConfig.IPv6Enabled)
 	if err != nil {
 		return fmt.Errorf("error creating IPTables instance: %v", err)
 	}
@@ -443,7 +441,7 @@ func (c *Client) syncIPTables() error {
 		return true
 	})
 	// Use iptables-restore to configure IPv4 settings.
-	if v4Enabled {
+	if c.networkConfig.IPv4Enabled {
 		iptablesData := c.restoreIptablesData(c.nodeConfig.PodIPv4CIDR, antreaPodIPSet, localAntreaFlexibleIPAMPodIPSet, antreaNodePortIPSet, config.VirtualServiceIPv4, snatMarkToIPv4)
 		// Setting --noflush to keep the previous contents (i.e. non antrea managed chains) of the tables.
 		if err := c.ipt.Restore(iptablesData.Bytes(), false, false); err != nil {
@@ -452,7 +450,7 @@ func (c *Client) syncIPTables() error {
 	}
 
 	// Use ip6tables-restore to configure IPv6 settings.
-	if v6Enabled {
+	if c.networkConfig.IPv6Enabled {
 		iptablesData := c.restoreIptablesData(c.nodeConfig.PodIPv6CIDR, antreaPodIP6Set, localAntreaFlexibleIPAMPodIP6Set, antreaNodePortIP6Set, config.VirtualServiceIPv6, snatMarkToIPv6)
 		// Setting --noflush to keep the previous contents (i.e. non antrea managed chains) of the tables.
 		if err := c.ipt.Restore(iptablesData.Bytes(), false, true); err != nil {
@@ -668,12 +666,12 @@ func (c *Client) initIPRoutes() error {
 }
 
 func (c *Client) initServiceIPRoutes() error {
-	if config.IsIPv4Enabled(c.nodeConfig, c.networkConfig.TrafficEncapMode) {
+	if c.networkConfig.IPv4Enabled {
 		if err := c.addVirtualServiceIPRoute(false); err != nil {
 			return err
 		}
 	}
-	if config.IsIPv6Enabled(c.nodeConfig, c.networkConfig.TrafficEncapMode) {
+	if c.networkConfig.IPv6Enabled {
 		if err := c.addVirtualServiceIPRoute(true); err != nil {
 			return err
 		}

@@ -533,34 +533,6 @@ func (mr *MockClientMockRecorder) IsConnected() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsConnected", reflect.TypeOf((*MockClient)(nil).IsConnected))
 }
 
-// IsIPv4Enabled mocks base method
-func (m *MockClient) IsIPv4Enabled() bool {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "IsIPv4Enabled")
-	ret0, _ := ret[0].(bool)
-	return ret0
-}
-
-// IsIPv4Enabled indicates an expected call of IsIPv4Enabled
-func (mr *MockClientMockRecorder) IsIPv4Enabled() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsIPv4Enabled", reflect.TypeOf((*MockClient)(nil).IsIPv4Enabled))
-}
-
-// IsIPv6Enabled mocks base method
-func (m *MockClient) IsIPv6Enabled() bool {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "IsIPv6Enabled")
-	ret0, _ := ret[0].(bool)
-	return ret0
-}
-
-// IsIPv6Enabled indicates an expected call of IsIPv6Enabled
-func (mr *MockClientMockRecorder) IsIPv6Enabled() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsIPv6Enabled", reflect.TypeOf((*MockClient)(nil).IsIPv6Enabled))
-}
-
 // NetworkPolicyMetrics mocks base method
 func (m *MockClient) NetworkPolicyMetrics() map[uint32]*types.RuleMetric {
 	m.ctrl.T.Helper()

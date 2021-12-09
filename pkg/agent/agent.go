@@ -343,6 +343,9 @@ func (i *Initializer) Initialize() error {
 		return err
 	}
 
+	i.networkConfig.IPv4Enabled = config.IsIPv4Enabled(i.nodeConfig, i.networkConfig.TrafficEncapMode)
+	i.networkConfig.IPv6Enabled = config.IsIPv6Enabled(i.nodeConfig, i.networkConfig.TrafficEncapMode)
+
 	if err := i.prepareHostNetwork(); err != nil {
 		return err
 	}

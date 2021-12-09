@@ -217,6 +217,8 @@ func newReconciler(ofClient openflow.Client,
 	idAllocator *idAllocator,
 	fqdnController *fqdnController,
 	groupCounters []proxytypes.GroupCounter,
+	v4Enabled bool,
+	v6Enabled bool,
 ) *reconciler {
 	priorityAssigners := map[uint8]*tablePriorityAssigner{}
 	for _, table := range openflow.GetAntreaPolicyBaselineTierTables() {
@@ -240,8 +242,8 @@ func newReconciler(ofClient openflow.Client,
 	}
 	// Check if ofClient is nil or not to be compatible with unit tests.
 	if ofClient != nil {
-		reconciler.ipv4Enabled = ofClient.IsIPv4Enabled()
-		reconciler.ipv6Enabled = ofClient.IsIPv6Enabled()
+		reconciler.ipv4Enabled = v4Enabled
+		reconciler.ipv6Enabled = v6Enabled
 	}
 	return reconciler
 }

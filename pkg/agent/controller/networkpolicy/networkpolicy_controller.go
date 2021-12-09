@@ -120,7 +120,9 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 	statusManagerEnabled bool,
 	loggingEnabled bool,
 	asyncRuleDeleteInterval time.Duration,
-	dnsServerOverride string) (*Controller, error) {
+	dnsServerOverride string,
+	v4Enabled bool,
+	v6Enabled bool) (*Controller, error) {
 	idAllocator := newIDAllocator(asyncRuleDeleteInterval, dnsInterceptRuleID)
 	c := &Controller{
 		antreaClientProvider: antreaClientGetter,
@@ -133,14 +135,14 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 	}
 	if antreaPolicyEnabled {
 		var err error
-		if c.fqdnController, err = newFQDNController(ofClient, idAllocator, dnsServerOverride, c.enqueueRule); err != nil {
+		if c.fqdnController, err = newFQDNController(ofClient, idAllocator, dnsServerOverride, c.enqueueRule, v4Enabled, v6Enabled); err != nil {
 			return nil, err
 		}
 		if c.ofClient != nil {
 			c.ofClient.RegisterPacketInHandler(uint8(openflow.PacketInReasonNP), "dnsresponse", c.fqdnController)
 		}
 	}
-	c.reconciler = newReconciler(ofClient, ifaceStore, idAllocator, c.fqdnController, groupCounters)
+	c.reconciler = newReconciler(ofClient, ifaceStore, idAllocator, c.fqdnController, groupCounters, v4Enabled, v6Enabled)
 	c.ruleCache = newRuleCache(c.enqueueRule, entityUpdates, groupIDUpdates)
 	if statusManagerEnabled {
 		c.statusManager = newStatusController(antreaClientGetter, nodeName, c.ruleCache)

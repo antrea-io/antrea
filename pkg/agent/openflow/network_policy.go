@@ -781,7 +781,7 @@ func (c *clause) addAddrFlows(client *client, addrType types.AddressType, addres
 func (c *clause) addServiceFlows(client *client, ports []v1beta2.Service, priority *uint16, matchSrc bool) []*conjMatchFlowContextChange {
 	var conjMatchFlowContextChanges []*conjMatchFlowContextChange
 	for _, port := range ports {
-		matches := generateServicePortConjMatches(c.ruleTable.GetID(), port, priority, client.IsIPv4Enabled(), client.IsIPv6Enabled(), matchSrc)
+		matches := generateServicePortConjMatches(c.ruleTable.GetID(), port, priority, client.networkConfig.IPv4Enabled, client.networkConfig.IPv6Enabled, matchSrc)
 		for _, match := range matches {
 			ctxChange := c.addConjunctiveMatchFlow(client, match)
 			conjMatchFlowContextChanges = append(conjMatchFlowContextChanges, ctxChange)
@@ -994,7 +994,7 @@ func (c *client) addRuleToConjunctiveMatch(conj *policyRuleConjunction, rule *ty
 	}
 	if conj.serviceClause != nil {
 		for _, port := range rule.Service {
-			matches := generateServicePortConjMatches(conj.serviceClause.ruleTable.GetID(), port, rule.Priority, c.IsIPv4Enabled(), c.IsIPv6Enabled(), false)
+			matches := generateServicePortConjMatches(conj.serviceClause.ruleTable.GetID(), port, rule.Priority, c.networkConfig.IPv4Enabled, c.networkConfig.IPv6Enabled, false)
 			for _, match := range matches {
 				c.addActionToConjunctiveMatch(conj.serviceClause, match)
 			}

@@ -154,6 +154,8 @@ type NetworkConfig struct {
 	IPSecPSK              string
 	TransportIface        string
 	TransportIfaceCIDRs   []string
+	IPv4Enabled           bool
+	IPv6Enabled           bool
 }
 
 // IsIPv4Enabled returns true if the cluster network supports IPv4.

@@ -248,10 +248,6 @@ type Client interface {
 	StartPacketInHandler(packetInStartedReason []uint8, stopCh <-chan struct{})
 	// Get traffic metrics of each NetworkPolicy rule.
 	NetworkPolicyMetrics() map[uint32]*types.RuleMetric
-	// Returns if IPv4 is supported on this Node or not.
-	IsIPv4Enabled() bool
-	// Returns if IPv6 is supported on this Node or not.
-	IsIPv6Enabled() bool
 	// SendTCPPacketOut sends TCP packet as a packet-out to OVS.
 	SendTCPPacketOut(
 		srcMAC string,
@@ -652,7 +648,7 @@ func (c *client) InstallDefaultServiceFlows(nodePortAddressesIPv4, nodePortAddre
 		c.sessionAffinityReselectFlow(),
 		c.l2ForwardOutputServiceHairpinFlow(),
 	}
-	if c.IsIPv4Enabled() {
+	if c.networkConfig.IPv4Enabled {
 		flows = append(flows, c.serviceHairpinResponseDNATFlow(binding.ProtocolIP))
 		flows = append(flows, c.serviceLBBypassFlows(binding.ProtocolIP)...)
 		flows = append(flows, c.l3FwdServiceDefaultFlowsViaGW(binding.ProtocolIP, cookie.Service)...)
@@ -666,7 +662,7 @@ func (c *client) InstallDefaultServiceFlows(nodePortAddressesIPv4, nodePortAddre
 			flows = append(flows, c.serviceClassifierFlows(nodePortAddressesIPv4, binding.ProtocolIP)...)
 		}
 	}
-	if c.IsIPv6Enabled() {
+	if c.networkConfig.IPv6Enabled {
 		flows = append(flows, c.serviceHairpinResponseDNATFlow(binding.ProtocolIPv6))
 		flows = append(flows, c.serviceLBBypassFlows(binding.ProtocolIPv6)...)
 		flows = append(flows, c.l3FwdServiceDefaultFlowsViaGW(binding.ProtocolIPv6, cookie.Service)...)
@@ -786,10 +782,10 @@ func (c *client) Initialize(roundInfo types.RoundInfo, nodeConfig *config.NodeCo
 	c.nodeConfig = nodeConfig
 	c.networkConfig = networkConfig
 
-	if config.IsIPv4Enabled(nodeConfig, c.networkConfig.TrafficEncapMode) {
+	if networkConfig.IPv4Enabled {
 		c.ipProtocols = append(c.ipProtocols, binding.ProtocolIP)
 	}
-	if config.IsIPv6Enabled(nodeConfig, c.networkConfig.TrafficEncapMode) {
+	if networkConfig.IPv6Enabled {
 		c.ipProtocols = append(c.ipProtocols, binding.ProtocolIPv6)
 	}
 
@@ -1056,14 +1052,6 @@ func (c *client) UninstallTraceflowFlows(dataplaneTag uint8) error {
 // into geneve, and will be stored back to NXM_NX_REG9[28..31] when packet get decapsulated.
 func (c *client) InitialTLVMap() error {
 	return c.bridge.AddTLVMap(0x0104, 0x80, 4, 0)
-}
-
-func (c *client) IsIPv4Enabled() bool {
-	return config.IsIPv4Enabled(c.nodeConfig, c.networkConfig.TrafficEncapMode)
-}
-
-func (c *client) IsIPv6Enabled() bool {
-	return config.IsIPv6Enabled(c.nodeConfig, c.networkConfig.TrafficEncapMode)
 }
 
 // setBasePacketOutBuilder sets base IP properties of a packetOutBuilder which can have more packet data added.
