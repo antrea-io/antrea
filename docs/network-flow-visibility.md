@@ -262,10 +262,10 @@ value for this parameter in the following snippet.
 
 * If you have deployed the [go-ipfix collector](#deployment-steps),
 then please use the address:  
-`<Ipfix-Collector Cluster IP>:<port>:<TCP|UDP>`
+`<Ipfix-Collector Cluster IP>:<port>:<tcp|udp>`
 * If you have deployed the [ELK
 flow collector](#deployment-steps-1), then please use the address:  
-`<Logstash Cluster IP>:4739:<TCP|UDP>` for sending IPFIX messages, or `<Logstash Cluster IP>:4736:<TCP|UDP>`
+`<Logstash Cluster IP>:4739:<tcp|udp>` for sending IPFIX messages, or `<Logstash Cluster IP>:4736:<tcp|udp>`
 for sending JSON format records. Record format is specified with `recordFormat` (defaults
 to IPFIX) and must match the format expected by the collector.
 
