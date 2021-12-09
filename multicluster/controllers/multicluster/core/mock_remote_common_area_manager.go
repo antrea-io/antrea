@@ -24,6 +24,7 @@ import (
 
 	gomock "github.com/golang/mock/gomock"
 
+	v1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
 	common "antrea.io/antrea/multicluster/controllers/multicluster/common"
 )
 
@@ -88,6 +89,20 @@ func (m *MockRemoteCommonAreaManager) GetLocalClusterID() common.ClusterID {
 func (mr *MockRemoteCommonAreaManagerMockRecorder) GetLocalClusterID() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLocalClusterID", reflect.TypeOf((*MockRemoteCommonAreaManager)(nil).GetLocalClusterID))
+}
+
+// GetMemberClusterStatues mocks base method.
+func (m *MockRemoteCommonAreaManager) GetMemberClusterStatues() []v1alpha1.ClusterStatus {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetMemberClusterStatues")
+	ret0, _ := ret[0].([]v1alpha1.ClusterStatus)
+	return ret0
+}
+
+// GetMemberClusterStatues indicates an expected call of GetMemberClusterStatues.
+func (mr *MockRemoteCommonAreaManagerMockRecorder) GetMemberClusterStatues() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMemberClusterStatues", reflect.TypeOf((*MockRemoteCommonAreaManager)(nil).GetMemberClusterStatues))
 }
 
 // GetRemoteCommonAreas mocks base method.
