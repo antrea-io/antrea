@@ -318,7 +318,7 @@ spec:
       enableLogging: false
     - action: Drop
       from:
-        - namespaceSelector: {}   # Drop from Pods from other all Namespaces
+        - namespaceSelector: {}   # Drop from Pods from all other Namespaces
       name: DropFromAllOtherNS
       enableLogging: true
   egress:
@@ -349,12 +349,8 @@ spec:
     - namespaceSelector: {}       # Selects all Namespaces in the cluster
   ingress:
     - action: Drop
-      from:
-        - namespaceSelector: {}
   egress:
     - action: Drop
-      to:
-        - namespaceSelector: {}
 ```
 
 #### ACNP for toServices rule
