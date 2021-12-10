@@ -108,7 +108,7 @@ const (
 
 	nameSuffixLength int = 8
 
-	agnhostImage        = "projects.registry.vmware.com/antrea/agnhost:2.26"
+	agnhostImage        = "k8s.gcr.io/e2e-test-images/agnhost:2.29"
 	busyboxImage        = "projects.registry.vmware.com/library/busybox"
 	nginxImage          = "projects.registry.vmware.com/antrea/nginx"
 	perftoolImage       = "projects.registry.vmware.com/antrea/perftool"
@@ -1092,7 +1092,6 @@ func (data *TestData) createServerPod(name string, ns string, portName string, p
 // createCustomPod creates a Pod in given Namespace with custom labels.
 func (data *TestData) createServerPodWithLabels(name, ns string, portNum int32, labels map[string]string) error {
 	cmd := []string{"/agnhost", "serve-hostname", "--tcp", "--http=false", "--port", fmt.Sprintf("%d", portNum)}
-	image := "k8s.gcr.io/e2e-test-images/agnhost:2.29"
 	env := corev1.EnvVar{Name: fmt.Sprintf("SERVE_PORT_%d", portNum), Value: "foo"}
 	port := corev1.ContainerPort{ContainerPort: portNum}
 	containerName := fmt.Sprintf("c%v", portNum)
@@ -1101,7 +1100,7 @@ func (data *TestData) createServerPodWithLabels(name, ns string, portNum int32, 
 			pod.Labels[k] = v
 		}
 	}
-	return data.createPodOnNodeInNamespace(name, ns, "", containerName, image, cmd, nil, []corev1.EnvVar{env}, []corev1.ContainerPort{port}, false, mutateLabels)
+	return data.createPodOnNodeInNamespace(name, ns, "", containerName, agnhostImage, cmd, nil, []corev1.EnvVar{env}, []corev1.ContainerPort{port}, false, mutateLabels)
 }
 
 // deletePod deletes a Pod in the test namespace.

@@ -252,7 +252,7 @@ func (k *KubernetesUtils) CreateOrUpdateDeployment(ns, deploymentName string, re
 		return v1.Container{
 			Name:            fmt.Sprintf("c%d", port),
 			ImagePullPolicy: v1.PullIfNotPresent,
-			Image:           "k8s.gcr.io/e2e-test-images/agnhost:2.29",
+			Image:           agnhostImage,
 			Env:             []v1.EnvVar{{Name: fmt.Sprintf("SERVE_SCTP_PORT_%d", port), Value: "foo"}},
 			Command:         []string{"/bin/bash", "-c"},
 			Args:            args,
