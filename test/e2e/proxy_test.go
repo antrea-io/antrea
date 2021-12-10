@@ -37,6 +37,7 @@ const (
 	emptyEndpoint       agnhostEndpoint = ""
 	clientIPEndpoint    agnhostEndpoint = "clientip"
 	hostNetworkEndpoint agnhostEndpoint = "shell?cmd=echo+$hostnetwork"
+	nodeNameEndpoint agnhostEndpoint = "shell?cmd=echo+$nodeName"
 
 	expectedNonHostNetworkResult = "{\"output\":\"false\\n\"}"
 	expectedHostNetworkResult    = "{\"output\":\"true\\n\"}"
@@ -120,6 +121,15 @@ func probeClientIPEndpointFromNode(node string, url string) (string, error) {
 	return host, err
 }
 
+func probeNodeNameEndpointFromNode(node string, url string) (string, error) {
+	stdout, err := probeEndpointFromNode(node, url, nodeNameEndpoint)
+	if err != nil {
+		return "", err
+	}
+	host, _, err := net.SplitHostPort(stdout)
+	return host, err
+}
+
 func probeEndpointFromNode(node string, baseURL string, endpoint agnhostEndpoint) (string, error) {
 	url := fmt.Sprintf("%s/%s", baseURL, endpoint)
 	rc, stdout, stderr, err := RunCommandOnNode(node, fmt.Sprintf("curl --connect-timeout 5 --retry 5 --retry-connrefused '%s'", url))
@@ -136,6 +146,15 @@ func probeFromPod(data *TestData, pod string, os string, url string) error {
 
 func probeClientIPEndpointFromPod(data *TestData, pod string, os string, url string) (string, error) {
 	stdout, err := probeEndpointFromPod(data, pod, os, url, clientIPEndpoint)
+	if err != nil {
+		return "", err
+	}
+	host, _, err := net.SplitHostPort(stdout)
+	return host, err
+}
+
+func probeNodeNameEndpointFromPod(data *TestData, pod string, os string, url string) (string, error) {
+	stdout, err := probeEndpointFromPod(data, pod, os, url, nodeNameEndpoint)
 	if err != nil {
 		return "", err
 	}
@@ -215,10 +234,10 @@ func loadBalancerLocalTestCases(t *testing.T, data *TestData, localUrl string, n
 	}
 
 	t.Run("Client:Node", func(t *testing.T) {
-		testLoadBalancerLocalFromNode(t, data, nodes, localUrl, hostNetworkStr)
+		testLoadBalancerLocalFromNode(t, data, nodes, localUrl, hostNetworkStr, nodes)
 	})
 	t.Run("Client:Pod", func(t *testing.T) {
-		testLoadBalancerLocalFromPod(t, data, pods, podOSes, localUrl, expectedClientIPs, hostNetworkStr)
+		testLoadBalancerLocalFromPod(t, data, pods, podOSes, localUrl, expectedClientIPs, hostNetworkStr, nodes)
 	})
 }
 
@@ -340,18 +359,28 @@ func testLoadBalancerClusterFromPod(t *testing.T, data *TestData, pods, podOSes 
 	}
 }
 
-func testLoadBalancerLocalFromNode(t *testing.T, data *TestData, nodes []string, url string, expectedHostNetwork string) {
+func testLoadBalancerLocalFromNode(t *testing.T, data *TestData, nodes []string, url string, expectedHostNetwork string, expectedHostnames []string) {
 	skipIfKubeProxyEnabled(t, data)
-	for _, node := range nodes {
-		msg := fmt.Sprintf("Service LoadBalancer should be able to be connected from Node '%s' with url '%s/%s'", node, url, hostNetworkEndpoint)
+	for idx, node := range nodes {
+		nodeNameMsg := fmt.Sprintf("Service LoadBalancer should be able to be connected from Node '%s' with url '%s/%s'", node, url, nodeNameEndpoint)
+		nodeName, err := probeNodeNameEndpointFromNode(node, url)
+		require.NoError(t, err, nodeNameMsg)
+		require.Equal(t, expectedHostnames[idx], nodeName, nodeNameMsg)
+
+		hostNetworkMsg := fmt.Sprintf("Service LoadBalancer should be able to be connected from Node '%s' with url '%s/%s'", node, url, hostNetworkEndpoint)
 		hostNetwork, err := probeEndpointFromNode(node, url, hostNetworkEndpoint)
-		require.NoError(t, err, msg)
-		assert.Equal(t, expectedHostNetwork, hostNetwork, msg)
+		require.NoError(t, err, hostNetworkMsg)
+		assert.Equal(t, expectedHostNetwork, hostNetwork, hostNetworkMsg)
 	}
 }
 
-func testLoadBalancerLocalFromPod(t *testing.T, data *TestData, pods []string, podOSes []string, url string, expectedClientIPs []string, expectedHostNetwork string) {
+func testLoadBalancerLocalFromPod(t *testing.T, data *TestData, pods []string, podOSes []string, url string, expectedClientIPs []string, expectedHostNetwork string, expectedHostnames []string) {
 	for idx, pod := range pods {
+		nodeNameErrMsg := fmt.Sprintf("Service NodePort should be able to be connected from Pod '%s' with url '%s/%s'", pod, url, nodeNameEndpoint)
+		hostname, err := probeNodeNameEndpointFromPod(data, pod, podOSes[idx], url)
+		require.NoError(t, err, nodeNameErrMsg)
+		require.Equal(t, hostname, expectedHostnames[idx])
+
 		hostNetworkErrMsg := fmt.Sprintf("Service NodePort should be able to be connected from Pod '%s' with url '%s/%s'", pod, url, hostNetworkEndpoint)
 		hostNetwork, err := probeEndpointFromPod(data, pod, podOSes[idx], url, hostNetworkEndpoint)
 		require.NoError(t, err, hostNetworkErrMsg)
@@ -557,7 +586,9 @@ func createAgnhostPod(t *testing.T, data *TestData, podName string, node string,
 		},
 	}
 
-	envVars := []corev1.EnvVar{}
+	envVars := []corev1.EnvVar{
+		{Name: "nodeName", ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "spec.nodeName"}}},
+	}
 	if hostNetwork {
 		envVars = append(envVars, corev1.EnvVar{Name: "hostnetwork", Value: "true"})
 	} else {
