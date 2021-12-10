@@ -9,6 +9,8 @@
   - [Usage pre Antrea v1.4](#usage-pre-antrea-v14)
   - [Usage pre Antrea v1.2](#usage-pre-antrea-v12)
 - [Limitations](#limitations)
+- [Integrations with External Load Balancers](#integrations-with-external-load-balancers)
+  - [AVI](#avi)
 <!-- /toc -->
 
 ## What is NodePortLocal?
@@ -119,6 +121,11 @@ metadata:
 This annotation indicates that port 8080 of the Pod can be reached through port
 61002 of the Node with IP Address 10.10.10.10.
 
+NodePortLocal can only be used with Services of type `ClusterIP` or
+`LoadBalancer`. The `nodeportlocal.antrea.io` annotation has no effect for
+Services of type `NodePort` or `ExternalName`. The annotation also has no effect
+for Services with an empty or missing Selector.
+
 ### Usage pre Antrea v1.4
 
 Prior to the Antrea v1.4 minor release, the `nodePortLocal` option group in the
@@ -169,3 +176,15 @@ mapped.
 
 This feature is currently only supported for Nodes running Linux with IPv4
 addresses. Only TCP & UDP Service ports are supported (not SCTP).
+
+## Integrations with External Load Balancers
+
+### AVI
+
+When using AVI and the AVI Kubernetes Operator (AKO), the AKO `serviceType`
+configuration parameter can be set to `NodePortLocal`. After that, annotating
+Services manually with `nodeportlocal.antrea.io` is no longer required. AKO will
+automatically annotate Services of type `LoadBalancer`, along with backend
+ClusterIP Services used by Ingress resources (for which AVI is the Ingress
+class). For more information refer to the [AKO
+documentation](https://avinetworks.com/docs/ako/1.5/handling-objects/).
