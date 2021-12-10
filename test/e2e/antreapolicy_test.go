@@ -427,6 +427,46 @@ func testInvalidACNPAppliedToNotSetInAllRules(t *testing.T) {
 	}
 }
 
+func testInvalidACNPAppliedToGroupSetWithPodSelector(t *testing.T) {
+	invalidNpErr := fmt.Errorf("invalid Antrea ClusterNetworkPolicy with appliedTo set group with podSelector")
+	appTo := ACNPAppliedToSpec{
+		PodSelector: map[string]string{"pod": "b"},
+		Group:       "cgA",
+	}
+	builder := &ClusterNetworkPolicySpecBuilder{}
+	builder = builder.SetName("acnp-appto-set-group-with-psel").
+		SetPriority(1.0).
+		SetAppliedToGroup([]ACNPAppliedToSpec{appTo})
+	builder = builder.AddIngress(v1.ProtocolTCP, &p80, nil, nil, nil, map[string]string{"pod": "b"}, map[string]string{"ns": "x"},
+		nil, nil, false, nil, crdv1alpha1.RuleActionAllow, "", "")
+	acnp := builder.Get()
+	log.Debugf("creating ACNP %v", acnp.Name)
+	if _, err := k8sUtils.CreateOrUpdateACNP(acnp); err == nil {
+		// Above creation of ACNP must fail as it is an invalid spec.
+		failOnError(invalidNpErr, t)
+	}
+}
+
+func testInvalidACNPAppliedToGroupSetWithNSSelector(t *testing.T) {
+	invalidNpErr := fmt.Errorf("invalid Antrea ClusterNetworkPolicy with appliedTo set group with nsSelector")
+	appTo := ACNPAppliedToSpec{
+		NSSelector: map[string]string{"ns": "x"},
+		Group:      "cgA",
+	}
+	builder := &ClusterNetworkPolicySpecBuilder{}
+	builder = builder.SetName("acnp-appto-set-group-with-nssel").
+		SetPriority(1.0).
+		SetAppliedToGroup([]ACNPAppliedToSpec{appTo})
+	builder = builder.AddIngress(v1.ProtocolTCP, &p80, nil, nil, nil, map[string]string{"pod": "b"}, map[string]string{"ns": "x"},
+		nil, nil, false, nil, crdv1alpha1.RuleActionAllow, "", "")
+	acnp := builder.Get()
+	log.Debugf("creating ACNP %v", acnp.Name)
+	if _, err := k8sUtils.CreateOrUpdateACNP(acnp); err == nil {
+		// Above creation of ACNP must fail as it is an invalid spec.
+		failOnError(invalidNpErr, t)
+	}
+}
+
 func testInvalidACNPIngressPeerCGSetWithPodSelector(t *testing.T) {
 	cgA := "cgA"
 	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
@@ -487,6 +527,71 @@ func testInvalidACNPIngressPeerCGSetWithIPBlock(t *testing.T) {
 		// Above creation of ACNP must fail as it is an invalid spec.
 		failOnError(invalidNpErr, t)
 	}
+}
+
+func testInvalidACNPEgressPeerCGSetWithFQDN(t *testing.T) {
+	cgA := "cgA"
+	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
+	k8sUtils.CreateCG(cgA, &selectorA, nil, nil)
+	invalidNpErr := fmt.Errorf("invalid Antrea ClusterNetworkPolicy with group and fqdn in NetworkPolicyPeer set")
+	builder := &ClusterNetworkPolicySpecBuilder{}
+	builder = builder.SetName("acnp-egress-group-fqdn-set").
+		SetPriority(1.0).
+		SetAppliedToGroup([]ACNPAppliedToSpec{{PodSelector: map[string]string{"pod": "b"}}})
+	builder = builder.AddEgress(v1.ProtocolTCP, &p80, nil, nil, nil, nil, nil,
+		nil, nil, false, nil, crdv1alpha1.RuleActionAllow, "cgA", "")
+	builder.Spec.Egress[0].To[0].FQDN = "google.com"
+
+	acnp := builder.Get()
+	log.Debugf("creating ACNP %v", acnp.Name)
+	if _, err := k8sUtils.CreateOrUpdateACNP(acnp); err == nil {
+		// Above creation of ACNP must fail as it is an invalid spec.
+		failOnError(invalidNpErr, t)
+	}
+	failOnError(k8sUtils.CleanCGs(), t)
+}
+
+func testInvalidACNPIngressPeerCGSetWithNamespace(t *testing.T) {
+	cgA := "cgA"
+	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
+	k8sUtils.CreateCG(cgA, &selectorA, nil, nil)
+	invalidNpErr := fmt.Errorf("invalid Antrea ClusterNetworkPolicy with group and namespace in NetworkPolicyPeer set")
+	builder := &ClusterNetworkPolicySpecBuilder{}
+	builder = builder.SetName("acnp-ingress-group-ns-set").
+		SetPriority(1.0).
+		SetAppliedToGroup([]ACNPAppliedToSpec{{PodSelector: map[string]string{"pod": "b"}}})
+	builder = builder.AddIngress(v1.ProtocolTCP, &p80, nil, nil, nil, nil, nil,
+		nil, nil, true, nil, crdv1alpha1.RuleActionAllow, "cgA", "")
+	acnp := builder.Get()
+	log.Debugf("creating ACNP %v", acnp.Name)
+	if _, err := k8sUtils.CreateOrUpdateACNP(acnp); err == nil {
+		// Above creation of ACNP must fail as it is an invalid spec.
+		failOnError(invalidNpErr, t)
+	}
+	failOnError(k8sUtils.CleanCGs(), t)
+}
+
+func testInvalidACNPIngressPeerCGSetWithEESelector(t *testing.T) {
+	cgA := "cgA"
+	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
+	k8sUtils.CreateCG(cgA, &selectorA, nil, nil)
+	invalidNpErr := fmt.Errorf("invalid Antrea ClusterNetworkPolicy with group and external entity selector in NetworkPolicyPeer set")
+	builder := &ClusterNetworkPolicySpecBuilder{}
+	builder = builder.SetName("acnp-ingress-group-eeselector-set").
+		SetPriority(1.0).
+		SetAppliedToGroup([]ACNPAppliedToSpec{{PodSelector: map[string]string{"pod": "b"}}})
+	builder = builder.AddIngress(v1.ProtocolTCP, &p80, nil, nil, nil, nil, nil,
+		nil, nil, true, nil, crdv1alpha1.RuleActionAllow, "cgA", "")
+	builder.Spec.Ingress[0].From[0].ExternalEntitySelector = &metav1.LabelSelector{
+		MatchLabels: map[string]string{"foo2": "bar2"},
+	}
+	acnp := builder.Get()
+	log.Debugf("creating ACNP %v", acnp.Name)
+	if _, err := k8sUtils.CreateOrUpdateACNP(acnp); err == nil {
+		// Above creation of ACNP must fail as it is an invalid spec.
+		failOnError(invalidNpErr, t)
+	}
+	failOnError(k8sUtils.CleanCGs(), t)
 }
 
 func testInvalidACNPIngressPeerNamespacesSetWithNSSelector(t *testing.T) {
@@ -2989,9 +3094,14 @@ func TestAntreaPolicy(t *testing.T) {
 		t.Run("Case=ACNPIngressPeerCGSetWithIPBlock", func(t *testing.T) { testInvalidACNPIngressPeerCGSetWithIPBlock(t) })
 		t.Run("Case=ACNPIngressPeerCGSetWithPodSelector", func(t *testing.T) { testInvalidACNPIngressPeerCGSetWithPodSelector(t) })
 		t.Run("Case=ACNPIngressPeerCGSetWithNSSelector", func(t *testing.T) { testInvalidACNPIngressPeerCGSetWithNSSelector(t) })
+		t.Run("Case=ACNPEgressPeerCGSetWithFQDN", func(t *testing.T) { testInvalidACNPEgressPeerCGSetWithFQDN(t) })
+		t.Run("Case=ACNPIngressPeerCGSetWithNamespace", func(t *testing.T) { testInvalidACNPIngressPeerCGSetWithNamespace(t) })
+		t.Run("Case=ACNPIngressPeerCGSetWithEESelector", func(t *testing.T) { testInvalidACNPIngressPeerCGSetWithEESelector(t) })
 		t.Run("Case=ACNPIngressPeerNamespaceSetWithNSSelector", func(t *testing.T) { testInvalidACNPIngressPeerNamespacesSetWithNSSelector(t) })
 		t.Run("Case=ACNPSpecAppliedToRuleAppliedToSet", func(t *testing.T) { testInvalidACNPSpecAppliedToRuleAppliedToSet(t) })
 		t.Run("Case=ACNPAppliedToNotSetInAllRules", func(t *testing.T) { testInvalidACNPAppliedToNotSetInAllRules(t) })
+		t.Run("Case=ACNPAppliedToGroupSetWithPodSelector", func(t *testing.T) { testInvalidACNPAppliedToGroupSetWithPodSelector(t) })
+		t.Run("Case=ACNPAppliedToGroupSetWithNSSelector", func(t *testing.T) { testInvalidACNPAppliedToGroupSetWithNSSelector(t) })
 		t.Run("Case=ANPNoPriority", func(t *testing.T) { testInvalidANPNoPriority(t) })
 		t.Run("Case=ANPRuleNameNotUniqueDenied", func(t *testing.T) { testInvalidANPRuleNameNotUnique(t) })
 		t.Run("Case=ANPTierDoesNotExistDenied", func(t *testing.T) { testInvalidANPTierDoesNotExist(t) })

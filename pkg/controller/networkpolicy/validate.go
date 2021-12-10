@@ -17,6 +17,7 @@ package networkpolicy
 import (
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
@@ -461,6 +462,11 @@ func (v *antreaPolicyValidator) validateAppliedTo(ingress, egress []crdv1alpha1.
 	if numAppliedToInRules > 0 && (numAppliedToInRules != len(ingress)+len(egress)) {
 		return "appliedTo field should either be set in all rules or in none of them", false
 	}
+	for _, eachSpecAppliedTo := range specAppliedTo {
+		if eachSpecAppliedTo.Group != "" && numFieldsSetInPeer(eachSpecAppliedTo) > 1 {
+			return "group cannot be set with other peers in appliedTo", false
+		}
+	}
 	return "", true
 }
 
@@ -472,10 +478,7 @@ func (v *antreaPolicyValidator) validatePeers(ingress, egress []crdv1alpha1.Rule
 			if peer.NamespaceSelector != nil && peer.Namespaces != nil {
 				return "namespaces and namespaceSelector cannot be set at the same time for a single NetworkPolicyPeer", false
 			}
-			if peer.Group == "" {
-				continue
-			}
-			if peer.PodSelector != nil || peer.IPBlock != nil || peer.NamespaceSelector != nil {
+			if peer.Group != "" && numFieldsSetInPeer(peer) > 1 {
 				return "group cannot be set with other peers in rules", false
 			}
 		}
@@ -502,6 +505,18 @@ func (v *antreaPolicyValidator) validatePeers(ingress, egress []crdv1alpha1.Rule
 		}
 	}
 	return "", true
+}
+
+// numFieldsSetInPeer returns the number of fields in use of a peer.
+func numFieldsSetInPeer(peer crdv1alpha1.NetworkPolicyPeer) int {
+	num := 0
+	v := reflect.ValueOf(peer)
+	for i := 0; i < v.NumField(); i++ {
+		if !v.Field(i).IsZero() {
+			num++
+		}
+	}
+	return num
 }
 
 // validateTierForPolicy validates whether a referenced Tier exists.
