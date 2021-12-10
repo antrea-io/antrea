@@ -36,9 +36,6 @@ const (
 	groupJoin eventType = iota
 	groupLeave
 
-	// Use IGMPv3 for IGMP query message because it is the main version for IGMP.
-	// TODO: support sending IGMP query with both v2 and v3 messages
-	queryVersion      = 3
 	podInterfaceIndex = "podInterface"
 
 	// How long to wait before retrying the processing of a multicast group change.
@@ -48,6 +45,8 @@ const (
 
 var (
 	workerCount uint8 = 2
+	// Use IGMP v1, v2, and v3 query messages to snoop the multicast groups in which local Pods have joined.
+	queryVersions = []uint8{1, 2, 3}
 )
 
 type mcastGroupEvent struct {
@@ -131,7 +130,7 @@ func (c *Controller) updateGroupMemberStatus(obj interface{}, e *mcastGroupEvent
 // checkLastMember sends out a query message on the group to check if there are still members in the group. If no new
 // membership report is received in the max response time, the group is removed from groupCache.
 func (c *Controller) checkLastMember(group net.IP) {
-	err := c.igmpSnooper.queryIGMP(group, queryVersion)
+	err := c.igmpSnooper.queryIGMP(group, queryVersions)
 	if err != nil {
 		klog.ErrorS(err, "Failed to send IGMP query message", "group", group.String())
 		return
@@ -200,7 +199,7 @@ func (c *Controller) Initialize() error {
 func (c *Controller) Run(stopCh <-chan struct{}) {
 	// Periodically query Multicast Groups on OVS.
 	go wait.NonSlidingUntil(func() {
-		if err := c.igmpSnooper.queryIGMP(net.IPv4zero, queryVersion); err != nil {
+		if err := c.igmpSnooper.queryIGMP(net.IPv4zero, queryVersions); err != nil {
 			klog.ErrorS(err, "Failed to send IGMP query")
 		}
 	}, queryInterval, stopCh)

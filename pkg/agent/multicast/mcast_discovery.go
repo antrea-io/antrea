@@ -97,15 +97,17 @@ func (s *IGMPSnooper) parseSrcInterface(pktIn *ofctrl.PacketIn) (*interfacestore
 	return ifaceConfig, nil
 }
 
-func (s *IGMPSnooper) queryIGMP(group net.IP, version uint8) error {
-	igmp, err := generateIGMPQueryPacket(group, version)
-	if err != nil {
-		return err
+func (s *IGMPSnooper) queryIGMP(group net.IP, versions []uint8) error {
+	for _, version := range versions {
+		igmp, err := generateIGMPQueryPacket(group, version)
+		if err != nil {
+			return err
+		}
+		if err := s.ofClient.SendIGMPQueryPacketOut(igmpQueryDstMac, mcastAllHosts, openflow13.P_NORMAL, igmp); err != nil {
+			return err
+		}
+		klog.V(2).InfoS("Sent packetOut for IGMP query", "group", group.String(), "version", version)
 	}
-	if err := s.ofClient.SendIGMPQueryPacketOut(igmpQueryDstMac, mcastAllHosts, openflow13.P_NORMAL, igmp); err != nil {
-		return err
-	}
-	klog.V(2).InfoS("Sent packetOut form IGMP query", "group", group.String(), "version", version)
 	return nil
 }
 
