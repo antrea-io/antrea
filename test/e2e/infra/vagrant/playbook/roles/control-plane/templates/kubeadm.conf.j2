@@ -15,3 +15,11 @@ apiServer:
   - "{{ k8s_api_server_ip }}"
   extraArgs:
     feature-gates: "NetworkPolicyEndPort=true"
+---
+apiVersion: kubeproxy.config.k8s.io/v1alpha1
+kind: KubeProxyConfiguration
+mode: "{{ kube_proxy_mode }}"
+{% if kube_proxy_ipvs_strict_arp -%}
+ipvs:
+  strictARP: true
+{% endif %}
