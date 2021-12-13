@@ -17,6 +17,7 @@ package memberlist
 import (
 	"fmt"
 	"io/ioutil"
+	"net"
 	"reflect"
 	"sync"
 	"time"
@@ -115,6 +116,7 @@ type Cluster struct {
 func NewCluster(
 	clusterBindPort int,
 	nodeName string,
+	nodeIP net.IP,
 	nodeInformer coreinformers.NodeInformer,
 	externalIPPoolInformer crdinformers.ExternalIPPoolInformer,
 ) (*Cluster, error) {
@@ -138,6 +140,7 @@ func NewCluster(
 	conf.Name = c.nodeName
 	conf.BindPort = c.bindPort
 	conf.AdvertisePort = c.bindPort
+	conf.AdvertiseAddr = nodeIP.String()
 	conf.Events = &memberlist.ChannelEventDelegate{Ch: nodeEventCh}
 	conf.LogOutput = ioutil.Discard
 	klog.V(1).InfoS("New memberlist cluster", "config", conf)

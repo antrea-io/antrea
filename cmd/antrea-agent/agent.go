@@ -305,7 +305,7 @@ func run(o *Options) error {
 		)
 		localIPDetector = ipassigner.NewLocalIPDetector()
 		memberlistCluster, err = memberlist.NewCluster(o.config.ClusterMembershipPort,
-			nodeConfig.Name, nodeInformer, externalIPPoolInformer,
+			nodeConfig.Name, nodeTransportIP, nodeInformer, externalIPPoolInformer,
 		)
 		if err != nil {
 			return fmt.Errorf("error creating new MemberList cluster: %v", err)
