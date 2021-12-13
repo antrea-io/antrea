@@ -927,6 +927,8 @@ spec:
                           namespaces:
                             properties:
                               match:
+                                enum:
+                                - Self
                                 type: string
                             type: object
                           podSelector:
