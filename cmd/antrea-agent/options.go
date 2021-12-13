@@ -219,7 +219,12 @@ func (o *Options) setDefaults() {
 	if o.config.HostProcPathPrefix == "" {
 		o.config.HostProcPathPrefix = defaultHostProcPathPrefix
 	}
-	if !features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
+	if features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
+		if o.config.AntreaProxy.ProxyLoadBalancerIPs == nil {
+			o.config.AntreaProxy.ProxyLoadBalancerIPs = new(bool)
+			*o.config.AntreaProxy.ProxyLoadBalancerIPs = true
+		}
+	} else {
 		if o.config.ServiceCIDR == "" {
 			o.config.ServiceCIDR = defaultServiceCIDR
 		}

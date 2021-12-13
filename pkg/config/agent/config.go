@@ -192,6 +192,14 @@ type AntreaProxyConfig struct {
 	// Services will not be load-balanced). Values can be a valid ClusterIP (e.g. 10.11.1.2) or a Service name
 	// with Namespace (e.g. kube-system/kube-dns)
 	SkipServices []string `yaml:"skipServices,omitempty"`
+	// When ProxyLoadBalancerIPs is set to false, AntreaProxy no longer load-balances traffic destined to the
+	// External IPs of LoadBalancer Services. This is useful when the external LoadBalancer provides additional
+	// capabilities (e.g. TLS termination) and it is desirable for Pod-to-ExternalIP traffic to be sent to the
+	// external LoadBalancer instead of being load-balanced to an Endpoint directly by AntreaProxy.
+	// Note that setting ProxyLoadBalancerIPs to false usually only makes sense when ProxyAll is set to true and
+	// kube-proxy is removed from the cluser, otherwise kube-proxy will still load-balance this traffic.
+	// Defaults to true.
+	ProxyLoadBalancerIPs *bool `yaml:"proxyLoadBalancerIPs,omitempty"`
 }
 
 type WireGuardConfig struct {
