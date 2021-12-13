@@ -15,7 +15,9 @@
 package ipam
 
 const (
-	AntreaIPAMAnnotationKey       = "ipam.antrea.io/ippools"
-	AntreaIPAMPodIPAnnotationKey  = "ipam.antrea.io/pod-ips"
-	AntreaIPAMAnnotationDelimiter = ","
+	AntreaIPAMAnnotationKey            = "ipam.antrea.io/ippools"
+	AntreaIPAMPodIPAnnotationKey       = "ipam.antrea.io/pod-ips"
+	AntreaIPAMPersistIPAnnotationKey   = "ipam.antrea.io/persist-ips"
+	AntreaIPAMPersistIPAnnotationValue = "true"
+	AntreaIPAMAnnotationDelimiter      = ","
 )
