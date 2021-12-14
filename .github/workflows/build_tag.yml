@@ -74,6 +74,22 @@ jobs:
         echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
         docker push antrea/octant-antrea-ubuntu:"${VERSION}"
 
+  build-antrea-mc-controller:
+    runs-on: [ubuntu-latest]
+    needs: get-version
+    steps:
+    - uses: actions/checkout@v2
+    - name: Build antrea-mc-controller Docker image and push to registry
+      env:
+        DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+        DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+        VERSION: ${{ needs.get-version.outputs.version }}
+      run: |
+        cd multicluster
+        make antrea-mc-controller
+        echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+        docker push antrea/antrea-mc-controller:"${VERSION}"
+
   build-flow-aggregator:
     runs-on: [ubuntu-latest]
     needs: get-version
