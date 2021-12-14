@@ -11,12 +11,16 @@ else
 GOBIN=$(shell go env GOBIN)
 endif
 
+GO_VERSION         := $(shell head -n 1 ../build/images/deps/go-version)
+DOCKER_BUILD_ARGS = --build-arg GO_VERSION=$(GO_VERSION)
+
 # Setting SHELL to bash allows bash commands to be executed by recipes.
 # This is a requirement for 'setup-envtest.sh' in the test target.
 # Options are set to exit when a recipe line exits non-zero or a piped command fails.
 SHELL = /usr/bin/env bash -o pipefail
 .SHELLFLAGS = -ec
 
+.PHONY: all
 all: build
 
 ##@ General
@@ -69,9 +73,6 @@ run: manifests generate fmt vet ## Run a controller from your host.
 #docker-build: test ## Build docker image with the manager.
 docker-build: build ## Build docker image with the manager.
 	docker build --target product -f build/images/Dockerfile -t ${IMG} .
-
-docker-push: ## Push docker image with the manager.
-	docker push ${IMG}
 
 ##@ Deployment
 
