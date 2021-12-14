@@ -170,6 +170,14 @@ func (i *Initializer) prepareOVSBridge() error {
 	i.ifaceStore.AddInterface(uplinkInterface)
 	ovsCtlClient := ovsctl.NewClient(i.ovsBridge)
 
+	// Enable IP forwarding on the bridge local interface. Traffic from the uplink interface will be output to the bridge
+	// local interface directly. When an external client connects to a LoadBalancer type Service, and the packets of the
+	// connection are routed to the selected backend Pod via the bridge interface; if we do not enable IP forwarding on
+	// the bridge interface, the packet will be discarded on the bridge interface as the destination of the packet
+	// is not the Node.
+	if err = util.EnableIPForwarding(brName); err != nil {
+		return err
+	}
 	// Set the uplink with "no-flood" config, so that the IP of local Pods and "antrea-gw0" will not be leaked to the
 	// underlay network by the "normal" flow entry.
 	if err = ovsCtlClient.SetPortNoFlood(config.UplinkOFPort); err != nil {
