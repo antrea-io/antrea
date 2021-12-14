@@ -175,6 +175,7 @@ function run_sonobuoy() {
         $SONOBUOY run --wait \
                 $KUBECONFIG_OPTION \
                 $KUBE_CONFORMANCE_IMAGE_VERSION_OPTION \
+                --e2e-parallel=true \
                 --mode "certified-conformance" --image-pull-policy ${IMAGE_PULL_POLICY} \
                 --sonobuoy-image ${SONOBUOY_IMAGE} --systemd-logs-image ${SYSTEMD_LOGS_IMAGE} --e2e-repo-config ${CONFORMANCE_IMAGE_CONFIG_PATH}
     else
@@ -182,6 +183,7 @@ function run_sonobuoy() {
                 $KUBECONFIG_OPTION \
                 --e2e-parallel=true \
                 $KUBE_CONFORMANCE_IMAGE_VERSION_OPTION \
+                --e2e-parallel=true \
                 --e2e-focus "$focus_regex" --e2e-skip "$skip_regex" --image-pull-policy ${IMAGE_PULL_POLICY} \
                 --sonobuoy-image ${SONOBUOY_IMAGE} --systemd-logs-image ${SYSTEMD_LOGS_IMAGE} --e2e-repo-config ${CONFORMANCE_IMAGE_CONFIG_PATH}
     fi
