@@ -314,9 +314,6 @@ func (p *proxier) installLoadBalancerService(groupID binding.GroupIDType, loadBa
 			if err := p.ofClient.InstallServiceFlows(groupID, net.ParseIP(ingress), svcPort, protocol, affinityTimeout, nodeLocalExternal, corev1.ServiceTypeLoadBalancer); err != nil {
 				return fmt.Errorf("failed to install Service LoadBalancer load balancing flows: %w", err)
 			}
-			if err := p.ofClient.InstallLoadBalancerServiceFromOutsideFlows(net.ParseIP(ingress), svcPort, protocol); err != nil {
-				return fmt.Errorf("failed to install Service LoadBalancer flows: %w", err)
-			}
 		}
 	}
 	if p.proxyAll {
@@ -333,9 +330,6 @@ func (p *proxier) uninstallLoadBalancerService(loadBalancerIPStrings []string, s
 		if ingress != "" {
 			if err := p.ofClient.UninstallServiceFlows(net.ParseIP(ingress), svcPort, protocol); err != nil {
 				return fmt.Errorf("failed to remove Service LoadBalancer load balancing flows: %w", err)
-			}
-			if err := p.ofClient.UninstallLoadBalancerServiceFromOutsideFlows(net.ParseIP(ingress), svcPort, protocol); err != nil {
-				return fmt.Errorf("failed to remove Service LoadBalancer flows: %w", err)
 			}
 		}
 	}

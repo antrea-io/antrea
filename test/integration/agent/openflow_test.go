@@ -106,7 +106,8 @@ var (
 )
 
 func TestConnectivityFlows(t *testing.T) {
-	// Initialize ovs metrics (Prometheus) to test them
+	// Reset OVS metrics (Prometheus) and reinitialize them to test.
+	legacyregistry.Reset()
 	metrics.InitializeOVSMetrics()
 
 	// Hack the OS type if we run the test not on Windows Node.
@@ -123,6 +124,7 @@ func TestConnectivityFlows(t *testing.T) {
 		assert.Nil(t, err, fmt.Sprintf("Error while disconnecting from OVS bridge: %v", err))
 		err = ofTestUtils.DeleteOVSBridge(br)
 		assert.Nil(t, err, fmt.Sprintf("Error while deleting OVS bridge: %v", err))
+		ofClient.CleanOFTableCache()
 	}()
 
 	config := prepareConfiguration()
@@ -156,7 +158,8 @@ func TestConnectivityFlows(t *testing.T) {
 }
 
 func TestAntreaFlexibleIPAMConnectivityFlows(t *testing.T) {
-	// Initialize ovs metrics (Prometheus) to test them
+	// Reset OVS metrics (Prometheus) and reinitialize them to test.
+	legacyregistry.Reset()
 	metrics.InitializeOVSMetrics()
 
 	c = ofClient.NewClient(br, bridgeMgmtAddr, ovsconfig.OVSDatapathNetdev, true, false, true, false, false, true, false)
@@ -167,6 +170,7 @@ func TestAntreaFlexibleIPAMConnectivityFlows(t *testing.T) {
 		assert.Nil(t, err, fmt.Sprintf("Error while disconnecting from OVS bridge: %v", err))
 		err = ofTestUtils.DeleteOVSBridge(br)
 		assert.Nil(t, err, fmt.Sprintf("Error while deleting OVS bridge: %v", err))
+		ofClient.CleanOFTableCache()
 	}()
 
 	config := prepareConfiguration()
@@ -201,6 +205,10 @@ func TestAntreaFlexibleIPAMConnectivityFlows(t *testing.T) {
 }
 
 func TestReplayFlowsConnectivityFlows(t *testing.T) {
+	// Reset OVS metrics (Prometheus) and reinitialize them to test.
+	legacyregistry.Reset()
+	metrics.InitializeOVSMetrics()
+
 	c = ofClient.NewClient(br, bridgeMgmtAddr, ovsconfig.OVSDatapathNetdev, true, false, false, false, false, false, false)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge: %v", err))
@@ -210,6 +218,7 @@ func TestReplayFlowsConnectivityFlows(t *testing.T) {
 		assert.Nil(t, err, fmt.Sprintf("Error while disconnecting from OVS bridge: %v", err))
 		err = ofTestUtils.DeleteOVSBridge(br)
 		assert.Nil(t, err, fmt.Sprintf("Error while deleting OVS bridge: %v", err))
+		ofClient.CleanOFTableCache()
 	}()
 
 	config := prepareConfiguration()
@@ -237,6 +246,10 @@ func TestReplayFlowsConnectivityFlows(t *testing.T) {
 }
 
 func TestReplayFlowsNetworkPolicyFlows(t *testing.T) {
+	// Reset OVS metrics (Prometheus) and reinitialize them to test.
+	legacyregistry.Reset()
+	metrics.InitializeOVSMetrics()
+
 	c = ofClient.NewClient(br, bridgeMgmtAddr, ovsconfig.OVSDatapathNetdev, true, false, false, false, false, false, false)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge: %v", err))
@@ -249,6 +262,7 @@ func TestReplayFlowsNetworkPolicyFlows(t *testing.T) {
 		assert.Nil(t, err, fmt.Sprintf("Error while disconnecting from OVS bridge: %v", err))
 		err = ofTestUtils.DeleteOVSBridge(br)
 		assert.Nil(t, err, fmt.Sprintf("Error while deleting OVS bridge: %v", err))
+		ofClient.CleanOFTableCache()
 	}()
 
 	ruleID := uint32(100)
@@ -420,7 +434,8 @@ func testUninstallPodFlows(t *testing.T, config *testConfig) {
 }
 
 func TestNetworkPolicyFlows(t *testing.T) {
-	// Initialize ovs metrics (Prometheus) to test them
+	// Reset OVS metrics (Prometheus) and reinitialize them to test.
+	legacyregistry.Reset()
 	metrics.InitializeOVSMetrics()
 
 	c = ofClient.NewClient(br, bridgeMgmtAddr, ovsconfig.OVSDatapathNetdev, true, false, false, false, false, false, false)
@@ -435,6 +450,7 @@ func TestNetworkPolicyFlows(t *testing.T) {
 		assert.Nil(t, err, fmt.Sprintf("Error while disconnecting from OVS bridge: %v", err))
 		err = ofTestUtils.DeleteOVSBridge(br)
 		assert.Nil(t, err, fmt.Sprintf("Error while deleting OVS bridge: %v", err))
+		ofClient.CleanOFTableCache()
 	}()
 
 	ruleID := uint32(100)
@@ -530,7 +546,8 @@ func TestNetworkPolicyFlows(t *testing.T) {
 }
 
 func TestIPv6ConnectivityFlows(t *testing.T) {
-	// Initialize ovs metrics (Prometheus) to test them
+	// Reset OVS metrics (Prometheus) and reinitialize them to test.
+	legacyregistry.Reset()
 	metrics.InitializeOVSMetrics()
 
 	c = ofClient.NewClient(br, bridgeMgmtAddr, ovsconfig.OVSDatapathNetdev, true, false, true, false, false, false, false)
@@ -542,6 +559,7 @@ func TestIPv6ConnectivityFlows(t *testing.T) {
 		assert.Nil(t, err, fmt.Sprintf("Error while disconnecting from OVS bridge: %v", err))
 		err = ofTestUtils.DeleteOVSBridge(br)
 		assert.Nil(t, err, fmt.Sprintf("Error while deleting OVS bridge: %v", err))
+		ofClient.CleanOFTableCache()
 	}()
 	config := prepareIPv6Configuration()
 	t.Run("testInitialize", func(t *testing.T) {
@@ -575,6 +593,10 @@ type svcConfig struct {
 }
 
 func TestProxyServiceFlows(t *testing.T) {
+	// Reset OVS metrics (Prometheus) and reinitialize them to test.
+	legacyregistry.Reset()
+	metrics.InitializeOVSMetrics()
+
 	c = ofClient.NewClient(br, bridgeMgmtAddr, ovsconfig.OVSDatapathNetdev, true, false, false, false, false, false, false)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge %s", br))
@@ -587,6 +609,7 @@ func TestProxyServiceFlows(t *testing.T) {
 		assert.Nil(t, err, fmt.Sprintf("Error while disconnecting from OVS bridge: %v", err))
 		err = ofTestUtils.DeleteOVSBridge(br)
 		assert.Nil(t, err, fmt.Sprintf("Error while deleting OVS bridge: %v", err))
+		ofClient.CleanOFTableCache()
 	}()
 
 	endpoints := []k8sproxy.Endpoint{
@@ -1514,6 +1537,10 @@ func prepareSNATFlows(snatIP net.IP, mark, podOFPort, podOFPortRemote uint32, vM
 }
 
 func TestSNATFlows(t *testing.T) {
+	// Reset OVS metrics (Prometheus) and reinitialize them to test.
+	legacyregistry.Reset()
+	metrics.InitializeOVSMetrics()
+
 	c = ofClient.NewClient(br, bridgeMgmtAddr, ovsconfig.OVSDatapathNetdev, false, false, true, false, false, false, false)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge %s", br))
@@ -1527,6 +1554,7 @@ func TestSNATFlows(t *testing.T) {
 		assert.Nil(t, err, fmt.Sprintf("Error while disconnecting from OVS bridge: %v", err))
 		err = ofTestUtils.DeleteOVSBridge(br)
 		assert.Nil(t, err, fmt.Sprintf("Error while deleting OVS bridge: %v", err))
+		ofClient.CleanOFTableCache()
 	}()
 
 	snatIP := net.ParseIP("10.10.10.14")

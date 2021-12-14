@@ -42,7 +42,6 @@ import (
 
 var (
 	ClassifierTable              = binding.NewOFTable(0, "Classification")
-	UplinkTable                  = binding.NewOFTable(5, "Uplink")
 	SpoofGuardTable              = binding.NewOFTable(10, "SpoofGuard")
 	arpResponderTable            = binding.NewOFTable(20, "ARPResponder")
 	IPv6Table                    = binding.NewOFTable(21, "IPv6")
@@ -179,6 +178,23 @@ func GetTableList() []binding.Table {
 		tables = append(tables, t)
 	}
 	return tables
+}
+
+// CleanOFTableCache is used to reset ofTableCache and only used in integration tests. When all integration tests about
+// openflow run in batch, unexpected flows could be installed on OVS due to stale ofTableCache, which may cause some tests
+// to fail. For example, for TestFuncA, SNATTable is needed; for TestFuncB, SNATTable is not needed. If TestFuncB is run
+// after TestFuncA, since ofTableCache (SNATTable is added by TestFuncA) is not reset, default flow of SNATTable will also
+// be realized on OVS when running TestFuncB (see "func (c *client) defaultFlows() (flows []binding.Flow)"). Note that,
+// the unexpected flows are not included in the map tableCache of OFBridge defined in pkg/ovs/openflow/ofctrl_bridge.go,
+// because the bridge will be destroyed after every test. For some tests, function checkOVSFlowMetrics (defined in
+// test/integration/agent/openflow_test.go) is used to check the flow number of every installed table. The expected table
+// list is read from the map tableCache of OFBridge, but the actual table list is dumped from OVS bridge (including the
+// unexpected flow). They are different, and as a result, TestFuncB will fail.
+func CleanOFTableCache() {
+	objs := ofTableCache.List()
+	for i := 0; i < len(objs); i++ {
+		ofTableCache.Delete(objs[i])
+	}
 }
 
 func GetAntreaPolicyEgressTables() []binding.Table {
@@ -2225,20 +2241,6 @@ func (c *client) snatRuleFlow(ofPort uint32, snatIP net.IP, snatMark uint32, loc
 		Done()
 }
 
-// loadBalancerServiceFromOutsideFlow generates the flow to forward LoadBalancer service traffic from outside node
-// to gateway. kube-proxy will then handle the traffic.
-// This flow is for Windows Node only.
-func (c *client) loadBalancerServiceFromOutsideFlow(svcIP net.IP, svcPort uint16, protocol binding.Protocol) binding.Flow {
-	return UplinkTable.BuildFlow(priorityHigh).
-		MatchProtocol(protocol).
-		MatchDstPort(svcPort, nil).
-		MatchRegMark(FromUplinkRegMark).
-		MatchDstIP(svcIP).
-		Action().Output(config.HostGatewayOFPort).
-		Cookie(c.cookieAllocator.Request(cookie.Service).Raw()).
-		Done()
-}
-
 // serviceClassifierFlows generate the flows to match the first packet of Service NodePort and set a bit of a register
 // to mark the Service type as NodePort.
 func (c *client) serviceClassifierFlows(nodePortAddresses []net.IP, ipProtocol binding.Protocol) []binding.Flow {
@@ -2584,12 +2586,8 @@ func (c *client) generatePipeline() {
 	} else {
 		c.createOFTable(DNATTable, c.egressEntryTable, binding.TableMissActionNext)
 	}
-	// The default SNAT is implemented with OVS on Windows.
-	if c.enableEgress || runtime.IsWindowsPlatform() {
+	if c.enableEgress {
 		c.createOFTable(SNATTable, L2ForwardingCalcTable.GetID(), binding.TableMissActionNext)
-	}
-	if runtime.IsWindowsPlatform() || c.connectUplinkToBridge {
-		c.createOFTable(UplinkTable, SpoofGuardTable.GetID(), binding.TableMissActionNone)
 	}
 	if c.enableAntreaPolicy {
 		c.createOFTable(AntreaPolicyEgressRuleTable, EgressRuleTable.GetID(), binding.TableMissActionNext)

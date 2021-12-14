@@ -27,14 +27,10 @@ import (
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 )
 
-func (c *client) snatMarkFlows(snatIP net.IP, mark uint32) []binding.Flow {
-	return []binding.Flow{c.snatIPFromTunnelFlow(snatIP, mark)}
-}
-
 // hostBridgeUplinkFlows generates the flows that forward traffic between the
 // bridge local port and the uplink port to support the host traffic.
 // TODO(gran): sync latest changes from pipeline_windows.go
-func (c *client) hostBridgeUplinkFlows(localSubnet net.IPNet, category cookie.Category) (flows []binding.Flow) {
+func (c *client) hostBridgeUplinkFlows(localSubnetMap map[binding.Protocol]net.IPNet, category cookie.Category) (flows []binding.Flow) {
 	flows = []binding.Flow{
 		ClassifierTable.BuildFlow(priorityNormal).
 			MatchInPort(config.UplinkOFPort).

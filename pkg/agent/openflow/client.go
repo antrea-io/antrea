@@ -30,6 +30,7 @@ import (
 	"antrea.io/antrea/pkg/agent/util"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 	utilip "antrea.io/antrea/pkg/util/ip"
+	"antrea.io/antrea/pkg/util/runtime"
 	"antrea.io/antrea/third_party/proxy"
 )
 
@@ -113,13 +114,6 @@ type Client interface {
 	InstallServiceFlows(groupID binding.GroupIDType, svcIP net.IP, svcPort uint16, protocol binding.Protocol, affinityTimeout uint16, nodeLocalExternal bool, svcType v1.ServiceType) error
 	// UninstallServiceFlows removes flows installed by InstallServiceFlows.
 	UninstallServiceFlows(svcIP net.IP, svcPort uint16, protocol binding.Protocol) error
-	// InstallLoadBalancerServiceFromOutsideFlows installs flows for LoadBalancer Service traffic from outside node.
-	// The traffic is received from uplink port and will be forwarded to gateway by the installed flows. And then
-	// kube-proxy will handle the traffic.
-	// This function is only used for Windows platform.
-	InstallLoadBalancerServiceFromOutsideFlows(svcIP net.IP, svcPort uint16, protocol binding.Protocol) error
-	// UninstallLoadBalancerServiceFromOutsideFlows removes flows installed by InstallLoadBalancerServiceFromOutsideFlows.
-	UninstallLoadBalancerServiceFromOutsideFlows(svcIP net.IP, svcPort uint16, protocol binding.Protocol) error
 
 	// GetFlowTableStatus should return an array of flow table status, all existing flow tables should be included in the list.
 	GetFlowTableStatus() []binding.TableStatus
@@ -146,9 +140,7 @@ type Client interface {
 	// are removed from PolicyRule.From, else from PolicyRule.To.
 	DeletePolicyRuleAddress(ruleID uint32, addrType types.AddressType, addresses []types.Address, priority *uint16) error
 
-	// InstallBridgeUplinkFlows installs Openflow flows between bridge local port and uplink port to support
-	// host networking.
-	// This function is only used for Windows platform.
+	// InstallBridgeUplinkFlows installs Openflow flows between bridge local port and uplink port to support host networking.
 	InstallBridgeUplinkFlows() error
 
 	// InstallExternalFlows sets up flows to enable Pods to communicate to
@@ -160,8 +152,7 @@ type Client interface {
 
 	// InstallSNATMarkFlows installs flows for a local SNAT IP. On Linux, a
 	// single flow is added to mark the packets tunnelled from remote Nodes
-	// that should be SNAT'd with the SNAT IP. On Windows, an extra flow is
-	// added to perform SNAT for the marked packets with the SNAT IP.
+	// that should be SNAT'd with the SNAT IP.
 	InstallSNATMarkFlows(snatIP net.IP, mark uint32) error
 
 	// UninstallSNATMarkFlows removes the flows installed to set the packet
@@ -854,11 +845,11 @@ func (c *client) InstallExternalFlows(exceptCIDRs []net.IPNet) error {
 }
 
 func (c *client) InstallSNATMarkFlows(snatIP net.IP, mark uint32) error {
-	flows := c.snatMarkFlows(snatIP, mark)
+	flow := c.snatIPFromTunnelFlow(snatIP, mark)
 	cacheKey := fmt.Sprintf("s%x", mark)
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
-	return c.addFlows(c.snatFlowCache, cacheKey, flows)
+	return c.addFlows(c.snatFlowCache, cacheKey, []binding.Flow{flow})
 }
 
 func (c *client) UninstallSNATMarkFlows(mark uint32) error {
@@ -1258,4 +1249,20 @@ func (c *client) SendIGMPQueryPacketOut(
 	packetOutBuilder = packetOutBuilder.SetIPProtocol(binding.ProtocolIGMP).SetL4Packet(igmp)
 	packetOutObj := packetOutBuilder.Done()
 	return c.bridge.SendPacketOut(packetOutObj)
+}
+
+func (c *client) InstallBridgeUplinkFlows() error {
+	if runtime.IsWindowsPlatform() || c.connectUplinkToBridge {
+		podCIDRMap := make(map[binding.Protocol]net.IPNet)
+		if c.nodeConfig.PodIPv4CIDR != nil {
+			podCIDRMap[binding.ProtocolIP] = *c.nodeConfig.PodIPv4CIDR
+		}
+		//TODO: support IPv6
+		flows := c.hostBridgeUplinkFlows(podCIDRMap, cookie.Default)
+		if err := c.ofEntryOperations.AddAll(flows); err != nil {
+			return err
+		}
+		c.hostNetworkingFlows = flows
+	}
+	return nil
 }
