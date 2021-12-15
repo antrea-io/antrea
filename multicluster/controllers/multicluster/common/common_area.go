@@ -14,22 +14,21 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package v1alpha1
+package common
 
 import (
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	config "sigs.k8s.io/controller-runtime/pkg/config/v1alpha1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-//+kubebuilder:object:root=true
+// CommonArea is an interface that provides access to the common area of a ClusterSet.
+// Common Area of a ClusterSet is a Namespace in the leader cluster.
+type CommonArea interface {
+	// Client grants read/write to the namespace of the cluster that is backing this CommonArea.
+	client.Client
 
-// MultiClusterConfig is the Schema for the multiclusterconfigs API
-type MultiClusterConfig struct {
-	metav1.TypeMeta `json:",inline"`
-	// ControllerManagerConfigurationSpec returns the contfigurations for controllers
-	config.ControllerManagerConfigurationSpec `json:",inline"`
-}
+	// GetClusterID returns the clusterID of the cluster accessed by this CommonArea.
+	GetClusterID() ClusterID
 
-func init() {
-	SchemeBuilder.Register(&MultiClusterConfig{})
+	// GetNamespace returns the Namespace backing this CommonArea.
+	GetNamespace() string
 }

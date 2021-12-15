@@ -1,0 +1,19 @@
+# Prefix the cluster-scoped resource Name with Namespace;
+# so they can be applied multiple times for each instance
+# of MC Controller that runs in a given namespace.
+# During the kustomization process, the prefix will change
+# to the Namespace, "changme" is only a placeholder.
+apiVersion: builtin
+kind: PrefixSuffixTransformer
+metadata:
+  name: customPrefixer
+prefix: changeme-
+fieldSpecs:
+  - kind: ClusterRole
+    path: metadata/name
+  - kind: ClusterRoleBinding
+    path: metadata/name
+  - kind: MutatingWebhookConfiguration
+    path: metadata/name
+  - kind: ValidatingWebhookConfiguration
+    path: metadata/name
