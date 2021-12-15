@@ -18,6 +18,7 @@ import (
 	"fmt"
 
 	"github.com/spf13/pflag"
+	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
@@ -38,16 +39,21 @@ func newOptions() *Options {
 
 func (o *Options) complete(args []string) error {
 	var err error
+	o.setDefaults()
 	options := ctrl.Options{Scheme: scheme}
 	ctrlConfig := &mcsv1alpha1.MultiClusterConfig{}
 	if len(o.configFile) > 0 {
+		klog.InfoS("Loading config", "file", o.configFile)
 		options, err = options.AndFrom(ctrl.ConfigFile().AtPath(o.configFile).OfKind(ctrlConfig))
 		if err != nil {
+			klog.ErrorS(err, "Failed to load options")
 			return fmt.Errorf("fail to load options from configuration file %s", o.configFile)
 		}
 		o.options = options
+		klog.InfoS("Using config from file", "config", o.options)
+	} else {
+		klog.InfoS("Using default config", "config", o.options)
 	}
-	o.setDefaults()
 	return nil
 }
 

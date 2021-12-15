@@ -18,16 +18,17 @@
 package main
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/component-base/logs"
-	"k8s.io/klog/v2"
 )
 
 var (
 	scheme = runtime.NewScheme()
+	opts   = newOptions()
 )
 
 func main() {
@@ -35,6 +36,8 @@ func main() {
 	defer logs.FlushLogs()
 
 	command := newControllerCommand()
+	command.AddCommand(newLeaderCommand())
+	command.AddCommand(newMemberCommand())
 
 	if err := command.Execute(); err != nil {
 		logs.FlushLogs()
@@ -43,21 +46,14 @@ func main() {
 }
 
 func newControllerCommand() *cobra.Command {
-	opts := newOptions()
-
 	cmd := &cobra.Command{
 		Use:  "antrea-mc-controller",
 		Long: "The Antrea MultiCluster Controller.",
 		Run: func(cmd *cobra.Command, args []string) {
-			if err := opts.complete(args); err != nil {
-				klog.Fatalf("Failed to complete: %v", err)
-			}
-			if err := run(opts); err != nil {
-				klog.Fatalf("Error running controller: %v", err)
-			}
+			fmt.Println("Error: must be run in leader or member mode")
 		},
 	}
-	flags := cmd.Flags()
+	flags := cmd.PersistentFlags()
 	opts.addFlags(flags)
 	return cmd
 }

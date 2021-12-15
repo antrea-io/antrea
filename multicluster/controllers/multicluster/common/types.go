@@ -14,22 +14,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package v1alpha1
+package common
 
-import (
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	config "sigs.k8s.io/controller-runtime/pkg/config/v1alpha1"
+type ClusterID string
+type ClusterSetID string
+
+const (
+	InvalidClusterID    = ClusterID("invalid")
+	InvalidClusterSetID = ClusterSetID("invalid")
 )
-
-//+kubebuilder:object:root=true
-
-// MultiClusterConfig is the Schema for the multiclusterconfigs API
-type MultiClusterConfig struct {
-	metav1.TypeMeta `json:",inline"`
-	// ControllerManagerConfigurationSpec returns the contfigurations for controllers
-	config.ControllerManagerConfigurationSpec `json:",inline"`
-}
-
-func init() {
-	SchemeBuilder.Register(&MultiClusterConfig{})
-}

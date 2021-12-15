@@ -1,0 +1,50 @@
+namespace: changeme
+
+namePrefix: antrea-mc-
+
+bases:
+  - ../../default
+
+configurations:
+  - kustomizeconfig.yaml
+
+# MC controller in leader cluster runs in the scope of a single Namespace.
+# Convert the below cluster-role to role and cluster-role-binding to
+# role-binding.
+patchesJson6902:
+  - patch: |-
+      - op: replace
+        path: /kind
+        value: RoleBinding
+      - op: add
+        path: /metadata/namespace
+        value: changeme
+      - op: replace
+        path: /roleRef/kind
+        value: Role
+    target:
+      group: rbac.authorization.k8s.io
+      kind: ClusterRoleBinding
+      name: controller-rolebinding
+      version: v1
+  - patch: |-
+      - op: replace
+        path: /kind
+        value: Role
+      - op: add
+        path: /metadata/namespace
+        value: changeme
+    target:
+      group: rbac.authorization.k8s.io
+      kind: ClusterRole
+      name: controller-role
+      version: v1
+
+resources:
+  - webhook_rbac.yaml
+  - member_cluster_role.yaml
+  - member_cluster_rolebinding.yaml
+  - member_cluster_serviceaccount.yaml
+
+patchesStrategicMerge:
+  - manager_command_patch.yaml
