@@ -8,8 +8,20 @@
     - mutatingwebhookconfigurations
     - validatingwebhookconfigurations
     resourceNames:
-    - antrea-multicluster-mutating-webhook-configuration
-    - antrea-multicluster-validating-webhook-configuration
+    - mutating-webhook-configuration
+    - validating-webhook-configuration
     verbs:
     - get
     - update
+- op: add
+  path: /rules/0
+  value:
+    apiGroups:
+    - ""
+    resources:
+    - secrets
+    verbs:
+    - get
+    - list
+    - watch
+

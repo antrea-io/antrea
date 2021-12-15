@@ -17,10 +17,9 @@ spec:
     spec:
       containers:
       - command:
-        - /antrea-mc-controller
         image: antrea/antrea-mc-controller:latest
         imagePullPolicy: IfNotPresent
-        name: manager
+        name: antrea-mc-controller
         securityContext:
           allowPrivilegeEscalation: false
         env:

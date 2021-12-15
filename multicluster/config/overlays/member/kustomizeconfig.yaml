@@ -1,0 +1,14 @@
+nameReference:
+  - kind: MutatingWebhookConfiguration
+    version: v1
+    fieldSpecs:
+      - kind: ClusterRole
+        group: rbac.authorization.k8s.io
+        path: rules/resourceNames
+  - kind: ValidatingWebhookConfiguration
+    version: v1
+    fieldSpecs:
+      - kind: ClusterRole
+        group: rbac.authorization.k8s.io
+        path: rules/resourceNames
+

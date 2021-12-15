@@ -7,14 +7,14 @@ spec:
   template:
     spec:
       containers:
-      - name: manager
+      - name: antrea-mc-controller
         args:
-        - "--config=controller_manager_config.yaml"
+        - "--config=/controller_manager_config.yaml"
         volumeMounts:
-        - name: manager-config
+        - name: antrea-mc-controller-config
           mountPath: /controller_manager_config.yaml
           subPath: controller_manager_config.yaml
       volumes:
-      - name: manager-config
+      - name: antrea-mc-controller-config
         configMap:
-          name: manager-config
+          name: controller-config
