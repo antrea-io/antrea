@@ -48,6 +48,7 @@ Generate a YAML manifest for Antrea using Kustomize and print it to stdout.
         --wireguard-go                Generate a manifest with WireGuard (golang implementation) encryption enabled.
                                       This option will work only for Kind clusters (when using '--kind').
         --flexible-ipam               Generates a manifest for flexible ipam mode.
+        --multicast                   Generates a manifest for multicast.
         --help, -h                    Print this message and exit
 
 In 'release' mode, environment variables IMG_NAME and IMG_TAG must be set.
@@ -91,6 +92,7 @@ HW_OFFLOAD=false
 SRIOV=false
 WIREGUARD_GO=false
 FLEXIBLE_IPAM=false
+MULTICAST=false
 
 while [[ $# -gt 0 ]]
 do
@@ -189,6 +191,10 @@ case $key in
     ;;
     --flexible-ipam)
     FLEXIBLE_IPAM=true
+    shift
+    ;;
+    --multicast)
+    MULTICAST=true
     shift
     ;;
     -h|--help)
@@ -312,6 +318,12 @@ if $FLEXIBLE_IPAM; then
     sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*AntreaIPAM[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  AntreaIPAM: true/" antrea-agent.conf
     sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*trafficEncapMode[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/trafficEncapMode: noEncap/" antrea-agent.conf
     sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*noSNAT[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/noSNAT: true/" antrea-agent.conf
+fi
+
+if $MULTICAST; then
+    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*Multicast[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  Multicast: true/" antrea-agent.conf
+    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*externalMulticastInterfaces[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/externalMulticastInterfaces: [ens192,ens224]/" antrea-agent.conf
+    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*trafficEncapMode[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/trafficEncapMode: noEncap/" antrea-agent.conf
 fi
 
 if $ALLFEATURES; then

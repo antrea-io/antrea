@@ -46,13 +46,13 @@ CONTROL_PLANE_NODE_ROLE="master"
 CLEAN_STALE_IMAGES="docker system prune --force --all --filter until=48h"
 
 _usage="Usage: $0 [--kubeconfig <KubeconfigSavePath>] [--workdir <HomePath>]
-                  [--testcase <windows-install-ovs|windows-conformance|windows-networkpolicy|windows-e2e|e2e|conformance|networkpolicy>]
+                  [--testcase <windows-install-ovs|windows-conformance|windows-networkpolicy|windows-e2e|e2e|conformance|networkpolicy|multicast-e2e>]
 
 Run K8s e2e community tests (Conformance & Network Policy) or Antrea e2e tests on a remote (Jenkins) Windows or Linux cluster.
 
         --kubeconfig             Path of cluster kubeconfig.
         --workdir                Home path for Go, vSphere information and antrea_logs during cluster setup. Default is $WORKDIR.
-        --testcase               Windows install OVS, Conformance and Network Policy or Antrea e2e testcases on a Windows or Linux cluster. It can also be flexible ipam e2e test.
+        --testcase               Windows install OVS, Conformance and Network Policy or Antrea e2e testcases on a Windows or Linux cluster. It can also be flexible ipam or multicast e2e test.
         --registry               The docker registry to use instead of dockerhub.
         --proxyall               Enable proxyAll to test AntreaProxy.
         --flexible-ipam          Run tests in flexible ipam mode"
@@ -655,6 +655,10 @@ function clean_tmp() {
 export KUBECONFIG=${KUBECONFIG_PATH}
 if [[ $FLEXIBLE_IPAM == true ]]; then
     ./hack/generate-manifest.sh --flexible-ipam > build/yamls/antrea.yml
+fi
+
+if [[ $TESTCASE =~ "multicast" ]]; then
+    ./hack/generate-manifest.sh --multicast > build/yamls/antrea.yml
 fi
 
 clean_tmp
