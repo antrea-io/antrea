@@ -1,0 +1,53 @@
+nameReference:
+  # Since mutating webhook configuration name gets prefixed during kustomization,
+  # propagate the actual names into the corresponding cluster-role that is
+  # necessary for mcs-controller to have access to the webhook configuration.
+- kind: MutatingWebhookConfiguration
+  version: v1
+  fieldSpecs:
+    - kind: ClusterRole
+      group: rbac.authorization.k8s.io
+      path: rules/resourceNames
+  # Since validating webhook configuration name gets prefixed during kustomization,
+  # propagate the actual names into the corresponding cluster-role that is
+  # necessary for mcs-controller to have access to the webhook configuration.
+- kind: ValidatingWebhookConfiguration
+  version: v1
+  fieldSpecs:
+    - kind: ClusterRole
+      group: rbac.authorization.k8s.io
+      path: rules/resourceNames
+- kind: ServiceAccount
+  version: v1
+  fieldSpecs:
+    - kind: RoleBinding
+      group: rbac.authorization.k8s.io
+      path: subjects/name
+- kind: ServiceAccount
+  version: v1
+  fieldSpecs:
+    - kind: ClusterRoleBinding
+      group: rbac.authorization.k8s.io
+      path: subjects/name
+
+namespace:
+  # MC Controller in leader cluster runs one webhook in each Namespace;
+  # since MutatingWebhookConfiguration is cluster-scoped, this allows
+  # to limit the scope to the given Namespace in which the Controller runs.
+  - kind: MutatingWebhookConfiguration
+    group: admissionregistration.k8s.io
+    path: webhooks/namespaceSelector/matchLabels/kubernetes.io\/metadata.name
+    create: true
+  # MC Controller in leader cluster runs one webhook in each Namespace;
+  # since ValidatingWebhookConfiguration is cluster-scoped, this allows
+  # to limit the scope to the given Namespace in which the Controller runs.
+  - kind: ValidatingWebhookConfiguration
+    group: admissionregistration.k8s.io
+    path: webhooks/namespaceSelector/matchLabels/kubernetes.io\/metadata.name
+    create: true
+  - kind: RoleBinding
+    group:  rbac.authorization.k8s.io
+    path: subjects/namespace
+  - kind: ClusterRoleBinding
+    group: rbac.authorization.k8s.io
+    path: subjects/namespace
