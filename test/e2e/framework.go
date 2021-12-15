@@ -121,6 +121,8 @@ const (
 	exporterIdleFlowExportTimeout       = 1 * time.Second
 	aggregatorActiveFlowRecordTimeout   = 3500 * time.Millisecond
 	aggregatorInactiveFlowRecordTimeout = 6 * time.Second
+
+	statefulSetRestartAnnotationKey = "kubectl.kubernetes.io/restartedAt"
 )
 
 type ClusterNode struct {
@@ -2270,6 +2272,108 @@ func (data *TestData) waitForDaemonSetPods(timeout time.Duration, dsName string,
 			return false, err
 		}
 		if ds.Status.NumberReady != int32(clusterInfo.numNodes) {
+			return false, nil
+		}
+		return true, nil
+	})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (data *TestData) createStatefulSet(name string, ns string, size int32, ctrName string, image string, cmd []string, args []string, mutateFunc func(*appsv1.StatefulSet)) (*appsv1.StatefulSet, func() error, error) {
+	podSpec := corev1.PodSpec{
+		Tolerations: []corev1.Toleration{
+			controlPlaneNoScheduleToleration(),
+		},
+		Containers: []corev1.Container{
+			{
+				Name:            ctrName,
+				Image:           image,
+				ImagePullPolicy: corev1.PullIfNotPresent,
+				Command:         cmd,
+				Args:            args,
+			},
+		},
+	}
+	stsSpec := appsv1.StatefulSetSpec{
+		Selector: &metav1.LabelSelector{
+			MatchLabels: map[string]string{
+				"antrea-e2e": name,
+			},
+		},
+		Template: corev1.PodTemplateSpec{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: name,
+				Labels: map[string]string{
+					"antrea-e2e": name,
+				},
+			},
+			Spec: podSpec,
+		},
+		UpdateStrategy:       appsv1.StatefulSetUpdateStrategy{},
+		Replicas:             &size,
+		RevisionHistoryLimit: nil,
+	}
+	sts := &appsv1.StatefulSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+			Labels: map[string]string{
+				"antrea-e2e": name,
+			},
+		},
+		Spec: stsSpec,
+	}
+	mutateFunc(sts)
+	resSTS, err := data.clientset.AppsV1().StatefulSets(ns).Create(context.TODO(), sts, metav1.CreateOptions{})
+	if err != nil {
+		return nil, nil, err
+	}
+	cleanup := func() error {
+		return data.clientset.AppsV1().StatefulSets(ns).Delete(context.TODO(), name, metav1.DeleteOptions{})
+	}
+
+	return resSTS, cleanup, nil
+}
+
+func (data *TestData) updateStatefulSetSize(name string, ns string, size int32) (*appsv1.StatefulSet, error) {
+	sts, err := data.clientset.AppsV1().StatefulSets(ns).Get(context.TODO(), name, metav1.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+	sts.Spec.Replicas = &size
+	resSTS, err := data.clientset.AppsV1().StatefulSets(ns).Update(context.TODO(), sts, metav1.UpdateOptions{})
+	if err != nil {
+		return nil, err
+	}
+	return resSTS, nil
+}
+
+func (data *TestData) restartStatefulSet(name string, ns string) (*appsv1.StatefulSet, error) {
+	sts, err := data.clientset.AppsV1().StatefulSets(ns).Get(context.TODO(), name, metav1.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+	if sts.Annotations == nil {
+		sts.Annotations = map[string]string{}
+	}
+	// Modify StatefulSet annotation to trigger a restart for StatefulSet Pods.
+	sts.Annotations[statefulSetRestartAnnotationKey] = time.Now().UTC().Format(time.RFC3339)
+	resSTS, err := data.clientset.AppsV1().StatefulSets(ns).Update(context.TODO(), sts, metav1.UpdateOptions{})
+	if err != nil {
+		return nil, err
+	}
+	return resSTS, nil
+}
+
+func (data *TestData) waitForStatefulSetPods(timeout time.Duration, stsName string, namespace string) error {
+	err := wait.Poll(defaultInterval, timeout, func() (bool, error) {
+		sts, err := data.clientset.AppsV1().StatefulSets(namespace).Get(context.TODO(), stsName, metav1.GetOptions{})
+		if err != nil {
+			return false, err
+		}
+		if sts.Status.ReadyReplicas != *sts.Spec.Replicas {
 			return false, nil
 		}
 		return true, nil
