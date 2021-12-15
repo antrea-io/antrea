@@ -1,0 +1,35 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  creationTimestamp: null
+  labels:
+    app: antrea
+  name: controller-webhook-role
+rules:
+  - apiGroups:
+      - admissionregistration.k8s.io
+    resourceNames:
+      - mutating-webhook-configuration
+      - validating-webhook-configuration
+    resources:
+      - mutatingwebhookconfigurations
+      - validatingwebhookconfigurations
+    verbs:
+      - get
+      - update
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    app: antrea
+  name: controller-webhook-rolebinding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: controller-webhook-role
+subjects:
+  - kind: ServiceAccount
+    name: controller
+    namespace: changeme
+
