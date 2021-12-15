@@ -20,6 +20,7 @@ require (
 	github.com/containernetworking/plugins v0.8.7
 	github.com/coreos/go-iptables v0.6.0
 	github.com/elazarl/goproxy v0.0.0-20190911111923-ecfe977594f1 // indirect
+	github.com/go-logr/logr v0.4.0
 	github.com/go-openapi/spec v0.19.5
 	github.com/gogo/protobuf v1.3.2
 	github.com/golang/groupcache v0.0.0-20200121045136-8c9f03a8e57e
@@ -46,6 +47,7 @@ require (
 	github.com/ti-mo/conntrack v0.4.0
 	github.com/vishvananda/netlink v1.1.1-0.20210510164352-d17758a128bf
 	github.com/vmware/go-ipfix v0.5.10
+	go.uber.org/multierr v1.6.0
 	golang.org/x/crypto v0.0.0-20210503195802-e9a32991a82e
 	golang.org/x/exp v0.0.0-20200224162631-6cc2880d07d6
 	golang.org/x/mod v0.4.2
@@ -100,7 +102,6 @@ require (
 	github.com/fatih/color v1.10.0 // indirect
 	github.com/form3tech-oss/jwt-go v3.2.2+incompatible // indirect
 	github.com/fsnotify/fsnotify v1.4.9 // indirect
-	github.com/go-logr/logr v0.4.0 // indirect
 	github.com/go-logr/zapr v0.4.0 // indirect
 	github.com/go-openapi/jsonpointer v0.19.3 // indirect
 	github.com/go-openapi/jsonreference v0.19.3 // indirect
@@ -147,7 +148,6 @@ require (
 	go.etcd.io/etcd v0.5.0-alpha.5.0.20200910180754-dd1b699fc489 // indirect
 	go.opencensus.io v0.22.3 // indirect
 	go.uber.org/atomic v1.7.0 // indirect
-	go.uber.org/multierr v1.6.0 // indirect
 	go.uber.org/zap v1.17.0 // indirect
 	golang.org/x/oauth2 v0.0.0-20200107190931-bf48bf16ab8d // indirect
 	golang.org/x/term v0.0.0-20210220032956-6a3ed077a48d // indirect
