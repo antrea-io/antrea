@@ -3,13 +3,15 @@
 function usage() {
     echo "Usage: provision.sh [--ip-family <v4|v6>] [-l|--large] [-h|--help]
     Provisions the Vagrant VMs.
-    --ip-family <v4|v6|dual>  Deploy IPv4, IPv6 or dual-stack Kubernetes cluster.
-    --large                   Deploy large vagrant VMs with 2 vCPUs and 4096MB memory.
-                              By default, we deploy VMs with 2 vCPUs and 2048MB memory."
+    --ip-family <v4|v6|dual>           Deploy IPv4, IPv6 or dual-stack Kubernetes cluster.
+    --large                            Deploy large vagrant VMs with 2 vCPUs and 4096MB memory.
+                                       By default, we deploy VMs with 2 vCPUs and 2048MB memory.
+    --kube-proxy-mode <iptables|ipvs>  Which mode to use for kube-proxy (default is iptables)."
 }
 
 K8S_IP_FAMILY="v4"
 K8S_NODE_LARGE=false
+KUBE_PROXY_MODE="iptables"
 while [[ $# -gt 0 ]]
 do
 key="$1"
@@ -22,6 +24,10 @@ case $key in
     -l|--large)
     K8S_NODE_LARGE=true
     shift 1
+    ;;
+    --kube-proxy-mode)
+    KUBE_PROXY_MODE="$2"
+    shift 2
     ;;
     -h|--help)
     usage
@@ -39,6 +45,7 @@ pushd $THIS_DIR
 
 export K8S_NODE_LARGE
 export K8S_IP_FAMILY
+export KUBE_PROXY_MODE
 
 # A few important considerations for IPv6 clusters:
 # * there is no assumption that the host machine supports IPv6.
