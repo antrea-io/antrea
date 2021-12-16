@@ -663,30 +663,6 @@ webhooks:
     service:
       name: antrea-mc-webhook-service
       namespace: changeme
-      path: /mutate-multicluster-crd-antrea-io-v1alpha1-memberclusterannounce
-  failurePolicy: Fail
-  name: mmemberclusterannounce.kb.io
-  namespaceSelector:
-    matchLabels:
-      kubernetes.io/metadata.name: changeme
-  rules:
-  - apiGroups:
-    - multicluster.crd.antrea.io
-    apiVersions:
-    - v1alpha1
-    operations:
-    - CREATE
-    - UPDATE
-    resources:
-    - memberclusterannounces
-  sideEffects: None
-- admissionReviewVersions:
-  - v1
-  - v1beta1
-  clientConfig:
-    service:
-      name: antrea-mc-webhook-service
-      namespace: changeme
       path: /mutate-multicluster-crd-antrea-io-v1alpha1-resourceexport
   failurePolicy: Fail
   name: mresourceexport.kb.io
@@ -792,30 +768,6 @@ webhooks:
     service:
       name: antrea-mc-webhook-service
       namespace: changeme
-      path: /validate-multicluster-crd-antrea-io-v1alpha1-memberclusterannounce
-  failurePolicy: Fail
-  name: vmemberclusterannounce.kb.io
-  namespaceSelector:
-    matchLabels:
-      kubernetes.io/metadata.name: changeme
-  rules:
-  - apiGroups:
-    - multicluster.crd.antrea.io
-    apiVersions:
-    - v1alpha1
-    operations:
-    - CREATE
-    - UPDATE
-    resources:
-    - memberclusterannounces
-  sideEffects: None
-- admissionReviewVersions:
-  - v1
-  - v1beta1
-  clientConfig:
-    service:
-      name: antrea-mc-webhook-service
-      namespace: changeme
       path: /validate-multicluster-crd-antrea-io-v1alpha1-resourceexport
   failurePolicy: Fail
   name: vresourceexport.kb.io
@@ -856,4 +808,28 @@ webhooks:
     - UPDATE
     resources:
     - resourceimports
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  - v1beta1
+  clientConfig:
+    service:
+      name: antrea-mc-webhook-service
+      namespace: changeme
+      path: /validate-multicluster-crd-antrea-io-v1alpha1-memberclusterannounce
+  failurePolicy: Fail
+  name: vmemberclusterannounce.kb.io
+  namespaceSelector:
+    matchLabels:
+      kubernetes.io/metadata.name: changeme
+  rules:
+  - apiGroups:
+    - multicluster.crd.antrea.io
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - memberclusterannounces
   sideEffects: None
