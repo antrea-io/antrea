@@ -28,6 +28,7 @@ import (
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	client "sigs.k8s.io/controller-runtime/pkg/client"
 
+	v1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
 	common "antrea.io/antrea/multicluster/controllers/multicluster/common"
 )
 
@@ -151,6 +152,20 @@ func (m *MockRemoteCommonArea) GetNamespace() string {
 func (mr *MockRemoteCommonAreaMockRecorder) GetNamespace() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNamespace", reflect.TypeOf((*MockRemoteCommonArea)(nil).GetNamespace))
+}
+
+// GetStatus mocks base method.
+func (m *MockRemoteCommonArea) GetStatus() []v1alpha1.ClusterCondition {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetStatus")
+	ret0, _ := ret[0].([]v1alpha1.ClusterCondition)
+	return ret0
+}
+
+// GetStatus indicates an expected call of GetStatus.
+func (mr *MockRemoteCommonAreaMockRecorder) GetStatus() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetStatus", reflect.TypeOf((*MockRemoteCommonArea)(nil).GetStatus))
 }
 
 // IsConnected mocks base method.
