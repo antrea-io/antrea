@@ -35,9 +35,20 @@ end
 NODE_NETWORK_V4_PREFIX = "192.168.77."
 NODE_NETWORK_V6_PREFIX = "fd3b:fcf5:3e92:d732::"
 
-MEMORY = 2048
 if ENV['K8S_NODE_LARGE'] == "true"
   MEMORY = 4096
+else
+  MEMORY = 2048
+end
+
+KUBE_PROXY_MODE = ENV['KUBE_PROXY_MODE'] || "iptables"
+if KUBE_PROXY_MODE == "iptables"
+  KUBE_PROXY_IPVS_STRICT_ARP = false
+elsif KUBE_PROXY_MODE == "ipvs"
+  # For now, we always enable strict ARP, which is required to use MetalLB
+  KUBE_PROXY_IPVS_STRICT_ARP = true
+else
+  raise "KUBE_PROXY_MODE env variable should be one of 'iptables' or 'ipvs'"
 end
 
 Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
@@ -90,6 +101,8 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
         k8s_api_server_ip: (MODE == "v6") ? node_ipv6 : node_ipv4,
         k8s_ip_family: MODE,
         k8s_antrea_gw_ip: K8S_NODE_CP_GW_IP,
+        kube_proxy_mode: KUBE_PROXY_MODE,
+        kube_proxy_ipvs_strict_arp: KUBE_PROXY_IPVS_STRICT_ARP,
       }
     end
   end
