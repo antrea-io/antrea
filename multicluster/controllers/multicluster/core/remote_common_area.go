@@ -22,6 +22,8 @@ import (
 	"sync"
 	"time"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
@@ -37,6 +39,11 @@ import (
 
 const (
 	TimestampAnnotationKey = "touch-ts"
+)
+
+var (
+	ReasonDisconnected       = "Disconnected"
+	ReasonElectionInProgress = "LeaderElectionInProgress"
 )
 
 // RemoteCommonArea is an abstraction to connect to CommonArea of the Leader Cluster.
@@ -55,6 +62,8 @@ type RemoteCommonArea interface {
 
 	// StopWatching stops the Manager so the crud operations in RemoteCommonArea no longer invoke the reconcilers.
 	StopWatching()
+
+	GetStatus() []multiclusterv1alpha1.ClusterCondition
 }
 
 // remoteCommonArea implements the CommonArea interface and allows local cluster to read/write into
@@ -88,6 +97,9 @@ type remoteCommonArea struct {
 
 	// connected is a state to know whether the remoteCommonArea is connected or not.
 	connected bool
+
+	clusterStatus multiclusterv1alpha1.ClusterCondition
+	leaderStatus  multiclusterv1alpha1.ClusterCondition
 
 	// client that provides read/write access into the local cluster
 	localClusterClient client.Client
@@ -148,6 +160,14 @@ func NewRemoteCommonArea(clusterID common.ClusterID, clusterSetID common.Cluster
 		localClusterClient:      localClusterClient,
 		remoteCommonAreaManager: remoteCommonAreaManager,
 	}
+	remote.clusterStatus.Type = multiclusterv1alpha1.ClusterReady
+	remote.clusterStatus.Status = v1.ConditionUnknown
+	remote.clusterStatus.Message = "Leader cluster added"
+	remote.clusterStatus.LastTransitionTime = metav1.Now()
+	remote.leaderStatus.Type = multiclusterv1alpha1.ClusterIsElectedLeader
+	remote.leaderStatus.Status = v1.ConditionFalse
+	remote.leaderStatus.Message = "Leader cluster added"
+	remote.leaderStatus.LastTransitionTime = metav1.Now()
 
 	remoteCommonAreaManager.AddRemoteCommonArea(remote)
 
@@ -188,8 +208,11 @@ func (r *remoteCommonArea) SendMemberAnnounce() error {
 		}
 	}
 	if localClusterMemberAnnounceExist {
-		if r.remoteCommonAreaManager.GetElectedLeaderClusterID() != common.InvalidClusterID {
-			localClusterMemberAnnounce.LeaderClusterID = string(r.remoteCommonAreaManager.GetElectedLeaderClusterID())
+		localClusterMemberAnnounce.LeaderClusterID = ""
+		leaderID := r.remoteCommonAreaManager.GetElectedLeaderClusterID()
+		r.updateLeaderStatus(leaderID)
+		if leaderID != common.InvalidClusterID {
+			localClusterMemberAnnounce.LeaderClusterID = string(leaderID)
 		}
 
 		if localClusterMemberAnnounce.Annotations == nil {
@@ -231,6 +254,39 @@ func (r *remoteCommonArea) updateRemoteCommonAreaStatus(connected bool, err erro
 
 	// TODO: Tolerate transient failures so we dont oscillate between connected and disconnected.
 	r.connected = connected
+	r.clusterStatus.Status = v1.ConditionTrue
+	r.clusterStatus.Message = ""
+	r.clusterStatus.Reason = ""
+	r.clusterStatus.LastTransitionTime = metav1.Now()
+	if !connected {
+		r.clusterStatus.Status = v1.ConditionFalse
+		r.clusterStatus.Message = err.Error()
+		r.clusterStatus.Reason = ReasonDisconnected
+	}
+}
+
+func (r *remoteCommonArea) updateLeaderStatus(leaderID common.ClusterID) {
+	defer r.mutex.Unlock()
+	r.mutex.Lock()
+
+	if leaderID == common.InvalidClusterID {
+		if r.leaderStatus.Status != v1.ConditionUnknown {
+			r.leaderStatus.Status = v1.ConditionUnknown
+			r.leaderStatus.Message = ""
+			r.leaderStatus.Reason = ReasonElectionInProgress
+			r.leaderStatus.LastTransitionTime = metav1.Now()
+		}
+	} else if r.ClusterID == leaderID && r.leaderStatus.Status != v1.ConditionTrue {
+		r.leaderStatus.Status = v1.ConditionTrue
+		r.leaderStatus.Message = "This leader cluster is an elected leader for local cluster"
+		r.leaderStatus.Reason = ""
+		r.leaderStatus.LastTransitionTime = metav1.Now()
+	} else if r.ClusterID != leaderID && r.leaderStatus.Status != v1.ConditionFalse {
+		r.leaderStatus.Status = v1.ConditionFalse
+		r.leaderStatus.Message = "This leader cluster is not an elected leader for local cluster"
+		r.leaderStatus.Reason = ""
+		r.leaderStatus.LastTransitionTime = metav1.Now()
+	}
 }
 
 /**
@@ -353,4 +409,14 @@ func (r *remoteCommonArea) StopWatching() {
 	}
 	r.managerStopFunc()
 	r.managerStopFunc = nil
+}
+
+func (r *remoteCommonArea) GetStatus() []multiclusterv1alpha1.ClusterCondition {
+	defer r.mutex.Unlock()
+	r.mutex.Lock()
+
+	statues := make([]multiclusterv1alpha1.ClusterCondition, 0, 2)
+	statues = append(statues, r.clusterStatus) // This will be a copy
+	statues = append(statues, r.leaderStatus)  // This will be a copy
+	return statues
 }

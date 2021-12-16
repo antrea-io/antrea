@@ -19,10 +19,13 @@ package multicluster
 import (
 	"context"
 	"fmt"
+	"sync"
+	"time"
 
 	"go.uber.org/multierr"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
@@ -39,6 +42,7 @@ import (
 type MemberClusterSetReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
+	mutex  sync.Mutex
 
 	clusterSetConfig *multiclusterv1alpha1.ClusterSet
 	clusterSetID     common.ClusterSetID
@@ -55,6 +59,8 @@ type MemberClusterSetReconciler struct {
 func (r *MemberClusterSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	clusterSet := &multiclusterv1alpha1.ClusterSet{}
 	err := r.Get(ctx, req.NamespacedName, clusterSet)
+	defer r.mutex.Unlock()
+	r.mutex.Lock()
 	if err != nil {
 		if !errors.IsNotFound(err) {
 			return ctrl.Result{}, err
@@ -72,20 +78,27 @@ func (r *MemberClusterSetReconciler) Reconcile(ctx context.Context, req ctrl.Req
 	klog.InfoS("Received ClusterSet add/update", "config", klog.KObj(clusterSet))
 
 	// Handle create or update
-	// If create, make sure the local ClusterClaim is part of the member config
-	clusterId, clusterSetId, err := validateLocalClusterClaim(r.Client, clusterSet)
-	if err != nil {
-		return ctrl.Result{}, err
+	if r.clusterSetConfig == nil {
+		// If create, make sure the local ClusterClaim is part of the member config
+		clusterId, clusterSetId, err := validateLocalClusterClaim(r.Client, clusterSet)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+		if err = validateConfigExists(clusterId, clusterSet.Spec.Members); err != nil {
+			err = fmt.Errorf("local cluster %s is not defined as member in ClusterSet", clusterId)
+			return ctrl.Result{}, err
+		}
+		r.clusterID = clusterId
+		r.clusterSetID = clusterSetId
+	} else {
+		if string(r.clusterSetID) != clusterSet.Name {
+			return ctrl.Result{}, fmt.Errorf("ClusterSet Name %s cannot be changed to %s",
+				r.clusterSetID, req.Name)
+		}
 	}
-	if err = validateConfigExists(clusterId, clusterSet.Spec.Members); err != nil {
-		err = fmt.Errorf("local cluster %s is not defined as member in ClusterSet", clusterId)
-		return ctrl.Result{}, err
-	}
-	r.clusterID = clusterId
-	r.clusterSetID = clusterSetId
 	r.clusterSetConfig = clusterSet.DeepCopy()
 
-	// if update and if leaders have changed, handle accordingly, else, nothing to do.
+	// handle create and update
 	err = r.updateMultiClusterSetOnMemberCluster(clusterSet)
 	if err != nil {
 		return ctrl.Result{}, err
@@ -96,6 +109,14 @@ func (r *MemberClusterSetReconciler) Reconcile(ctx context.Context, req ctrl.Req
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *MemberClusterSetReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	// Update status periodically
+	go func() {
+		for {
+			<-time.After(time.Second * 30)
+			r.updateStatus()
+		}
+	}()
+
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&multiclusterv1alpha1.ClusterSet{}).
 		WithOptions(controller.Options{
@@ -132,6 +153,8 @@ func (r *MemberClusterSetReconciler) updateMultiClusterSetOnMemberCluster(cluste
 		} else {
 			// In the end currentLeaders will only have removed leaders
 			delete(currentLeaders, leaderID)
+			// TODO: Leader is updated, the leader url or secret could have changed,
+			// so, we need to recreate the RemoteCommonArea.
 		}
 	}
 
@@ -145,9 +168,11 @@ func (r *MemberClusterSetReconciler) updateMultiClusterSetOnMemberCluster(cluste
 
 		klog.InfoS("Creating RemoteCommonArea", "Cluster", clusterID)
 		// Read secret to access the leader cluster. Assume secret is present in the same Namespace as the ClusterSet.
-		secret := r.getSecretForLeader(secretName, clusterSet.GetNamespace())
-		_, err := core.NewRemoteCommonArea(clusterID, r.clusterSetID, url, secret, r.Scheme,
-			r.Client, r.RemoteCommonAreaManager, clusterSet.Spec.Namespace)
+		secret, err := r.getSecretForLeader(secretName, clusterSet.GetNamespace())
+		if err == nil {
+			_, err = core.NewRemoteCommonArea(clusterID, r.clusterSetID, url, secret, r.Scheme,
+				r.Client, r.RemoteCommonAreaManager, clusterSet.Spec.Namespace)
+		}
 		if err != nil {
 			klog.ErrorS(err, "Unable to create RemoteCommonArea", "Cluster", clusterID)
 		} else {
@@ -172,13 +197,91 @@ func (r *MemberClusterSetReconciler) updateMultiClusterSetOnMemberCluster(cluste
 // has an associated Secret which must be copied into the member cluster as an opaque secret.
 // Name of this secret is part of the ClusterSet spec for this leader. This method reads
 // the Secret given by that name.
-func (r *MemberClusterSetReconciler) getSecretForLeader(secretName string, secretNs string) (secretObj *v1.Secret) {
+func (r *MemberClusterSetReconciler) getSecretForLeader(secretName string, secretNs string) (secretObj *v1.Secret, err error) {
+	secretObj = &v1.Secret{}
 	secretNamespacedName := types.NamespacedName{
 		Namespace: secretNs,
 		Name:      secretName,
 	}
-	if err := r.Get(context.TODO(), secretNamespacedName, secretObj); err != nil {
+	if err = r.Get(context.TODO(), secretNamespacedName, secretObj); err != nil {
+		klog.ErrorS(err, "Error reading secret", "Name", secretName, "Namespace", secretNs)
 		return
 	}
 	return
+}
+
+func (r *MemberClusterSetReconciler) updateStatus() {
+	defer r.mutex.Unlock()
+	r.mutex.Lock()
+
+	if r.clusterSetConfig == nil {
+		// Nothing to do.
+		return
+	}
+
+	status := multiclusterv1alpha1.ClusterSetStatus{}
+	status.TotalClusters = int32(len(r.clusterSetConfig.Spec.Members) + len(r.clusterSetConfig.Spec.Leaders))
+	status.ObservedGeneration = r.clusterSetConfig.Generation
+	status.ClusterStatuses = r.RemoteCommonAreaManager.GetMemberClusterStatues()
+
+	overallCondition := multiclusterv1alpha1.ClusterSetCondition{
+		Type:               multiclusterv1alpha1.ClusterSetReady,
+		Status:             v1.ConditionUnknown,
+		Message:            "Leader not yet elected",
+		Reason:             "",
+		LastTransitionTime: metav1.Now(),
+	}
+	readyClusters := 0
+	for _, cluster := range status.ClusterStatuses {
+		connected := false
+		isLeader := false
+		for _, condition := range cluster.Conditions {
+			switch condition.Type {
+			case multiclusterv1alpha1.ClusterReady:
+				{
+					if condition.Status == v1.ConditionTrue {
+						connected = true
+						readyClusters += 1
+					}
+				}
+			case multiclusterv1alpha1.ClusterIsElectedLeader:
+				{
+					if condition.Status == v1.ConditionTrue {
+						isLeader = true
+					}
+				}
+			}
+		}
+		if connected && isLeader {
+			overallCondition.Status = v1.ConditionTrue
+			overallCondition.Message = ""
+			overallCondition.Reason = ""
+		}
+	}
+	if readyClusters == 0 {
+		overallCondition.Status = v1.ConditionFalse
+		overallCondition.LastTransitionTime = metav1.Now()
+		overallCondition.Message = "Disconnected from all leaders"
+	}
+	status.ReadyClusters = int32(readyClusters)
+
+	namespacedName := types.NamespacedName{
+		Namespace: r.clusterSetConfig.Namespace,
+		Name:      r.clusterSetConfig.Name,
+	}
+	clusterSet := &multiclusterv1alpha1.ClusterSet{}
+	err := r.Get(context.TODO(), namespacedName, clusterSet)
+	if err != nil {
+		klog.ErrorS(err, "failed to read ClusterSet", "Name", namespacedName)
+	}
+	status.Conditions = clusterSet.Status.Conditions
+	if (len(clusterSet.Status.Conditions) == 1 && clusterSet.Status.Conditions[0].Status != overallCondition.Status) ||
+		len(clusterSet.Status.Conditions) == 0 {
+		status.Conditions = []multiclusterv1alpha1.ClusterSetCondition{overallCondition}
+	}
+	clusterSet.Status = status
+	err = r.Status().Update(context.TODO(), clusterSet)
+	if err != nil {
+		klog.ErrorS(err, "failed to update Status of ClusterSet", "Name", namespacedName)
+	}
 }
