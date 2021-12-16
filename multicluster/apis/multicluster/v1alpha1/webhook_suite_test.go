@@ -107,9 +107,6 @@ var _ = BeforeSuite(func() {
 	err = (&ClusterSet{}).SetupWebhookWithManager(mgr)
 	Expect(err).NotTo(HaveOccurred())
 
-	err = (&MemberClusterAnnounce{}).SetupWebhookWithManager(mgr)
-	Expect(err).NotTo(HaveOccurred())
-
 	err = (&ResourceImport{}).SetupWebhookWithManager(mgr)
 	Expect(err).NotTo(HaveOccurred())
 
