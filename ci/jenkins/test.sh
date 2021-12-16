@@ -621,7 +621,10 @@ function run_install_windows_ovs {
     govc snapshot.revert -vm $OVS_VM_NAME initial
     govc vm.power -on $OVS_VM_NAME || true
     echo "===== Testing VM has been reverted and powered on ====="
+#    sleep 60
+
     IP=$(govc vm.ip $OVS_VM_NAME)
+    echo $IP
     scp -o StrictHostKeyChecking=no -i ${WORKDIR}/.ssh/id_rsa -T hack/windows/Install-OVS.ps1 Administrator@${IP}:
     ssh -o StrictHostKeyChecking=no -i ${WORKDIR}/.ssh/id_rsa -n Administrator@${IP} '/bin/bash -lc "cp Install-OVS.ps1 C:/k && powershell.exe -File C:/k/Install-OVS.ps1"'
 
