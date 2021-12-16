@@ -12,12 +12,12 @@ jobs:
       - uses: actions/stale@v4
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
-          stale-issue-message: 'This issue is stale because it has been open 180 days with no activity. Remove stale label or comment, or this will be closed in 180 days'
-          stale-pr-message: 'This PR is stale because it has been open 180 days with no activity. Remove stale label or comment, or this will be closed in 180 days'
+          stale-issue-message: 'This issue is stale because it has been open 90 days with no activity. Remove stale label or comment, or this will be closed in 90 days'
+          stale-pr-message: 'This PR is stale because it has been open 90 days with no activity. Remove stale label or comment, or this will be closed in 90 days'
           stale-issue-label: 'lifecycle/stale'
           stale-pr-label: 'lifecycle/stale'
-          days-before-stale: 180
-          days-before-close: 180
+          days-before-stale: 90
+          days-before-close: 90
           exempt-issue-labels: 'lifecycle/frozen'
           exempt-pr-labels: 'lifecycle/frozen'
           remove-stale-when-updated: true
