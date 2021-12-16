@@ -23,6 +23,7 @@ import (
 
 	"k8s.io/klog/v2"
 
+	multiclusterv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
 	"antrea.io/antrea/multicluster/controllers/multicluster/common"
 )
 
@@ -46,6 +47,7 @@ type RemoteCommonAreaManager interface {
 	GetElectedLeaderClusterID() common.ClusterID
 	// GetLocalClusterID returns local cluster ID
 	GetLocalClusterID() common.ClusterID
+	GetMemberClusterStatues() []multiclusterv1alpha1.ClusterStatus
 }
 
 // remoteCommonAreaManager implements the interface RemoteCommonAreaManager.
@@ -61,6 +63,8 @@ type remoteCommonAreaManager struct {
 	// remoteCommonAreas is a map of RemoteCommonArea.
 	// It is accessed only from the event-loop in a single goroutine context.
 	remoteCommonAreas map[common.ClusterID]RemoteCommonArea
+
+	remoteCommonAreaStatus map[common.ClusterID]multiclusterv1alpha1.ClusterCondition
 
 	// electedLeaderCluster is a RemoteCommonArea which is an elected-leader.
 	// It is access from 2 contexts and protected by the mutex
@@ -198,4 +202,20 @@ func (r *remoteCommonAreaManager) GetElectedLeaderClusterID() common.ClusterID {
 
 func (r *remoteCommonAreaManager) GetLocalClusterID() common.ClusterID {
 	return r.clusterID
+}
+
+func (r *remoteCommonAreaManager) GetMemberClusterStatues() []multiclusterv1alpha1.ClusterStatus {
+	statues := make([]multiclusterv1alpha1.ClusterStatus, 0)
+
+	r.clusterSyncMap.Range(func(k, v interface{}) bool {
+		id := k.(common.ClusterID)
+		statues = append(statues, multiclusterv1alpha1.ClusterStatus{
+			ClusterID:  string(id),
+			Conditions: v.(RemoteCommonArea).GetStatus(),
+		})
+
+		return true
+	})
+
+	return statues
 }

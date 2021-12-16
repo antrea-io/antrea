@@ -73,8 +73,13 @@ type ClusterConditionType string
 const (
 	// ClusterReady indicates whether Cluster is ready and connected.
 	ClusterReady ClusterConditionType = "Ready"
-	// ClusterIsLeader indicates whether Cluster is leader.
-	ClusterIsLeader ClusterConditionType = "IsLeader"
+	// ClusterIsElectedLeader indicates whether the leader cluster is the elected leader.
+	// Used in Member clusters only.
+	ClusterIsElectedLeader ClusterConditionType = "IsElectedLeader"
+	// ClusterImportsResources indicates whether the member cluster has elected the
+	// local cluster as the elected leader and imports resources from it.
+	// Used in Leader clusters only.
+	ClusterImportsResources ClusterConditionType = "ImportsResources"
 )
 
 // ClusterCondition indicates the readiness condition of a cluster.

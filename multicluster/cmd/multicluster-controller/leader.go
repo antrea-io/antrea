@@ -21,6 +21,7 @@ import (
 	"github.com/spf13/cobra"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	multiclusterv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
 	multiclustercontrollers "antrea.io/antrea/multicluster/controllers/multicluster"
@@ -54,22 +55,24 @@ func runLeader(o *Options) error {
 		return err
 	}
 
+	memberClusterStatusManager := multiclustercontrollers.NewMemberClusterAnnounceReconciler(
+		mgr.GetClient(), mgr.GetScheme())
+	if err = memberClusterStatusManager.SetupWithManager(mgr); err != nil {
+		return fmt.Errorf("error creating MemberClusterAnnounce controller: %v", err)
+	}
+	hookServer := mgr.GetWebhookServer()
+	hookServer.Register("/validate-multicluster-crd-antrea-io-v1alpha1-memberclusterannounce",
+		&webhook.Admission{Handler: &memberClusterAnnounceValidator{
+			Client:    mgr.GetClient(),
+			namespace: env.GetPodNamespace()}})
+
 	clusterSetReconciler := &multiclustercontrollers.LeaderClusterSetReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Client:        mgr.GetClient(),
+		Scheme:        mgr.GetScheme(),
+		StatusManager: memberClusterStatusManager,
 	}
 	if err = clusterSetReconciler.SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("error creating ClusterSet controller: %v", err)
-	}
-
-	if err = (&multiclustercontrollers.MemberClusterAnnounceReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
-		return fmt.Errorf("error creating MemberClusterAnnounce controller: %v", err)
-	}
-	if err = (&multiclusterv1alpha1.MemberClusterAnnounce{}).SetupWebhookWithManager(mgr); err != nil {
-		return fmt.Errorf("error creating MemberClusterAnnounce webhook: %v", err)
 	}
 
 	resExportReconciler := &multiclustercontrollers.ResourceExportReconciler{
@@ -94,7 +97,7 @@ func runLeader(o *Options) error {
 		return fmt.Errorf("error creating ResourceExportFilter controller: %v", err)
 	}
 
-	klog.InfoS("Starting Manager")
+	klog.InfoS("Leader MC Controller Starting Manager")
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		return fmt.Errorf("error running Manager: %v", err)
 	}
