@@ -14,6 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// memberclusterannounce_controller is for leader cluster only.
 package multicluster
 
 import (

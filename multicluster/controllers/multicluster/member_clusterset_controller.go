@@ -120,7 +120,7 @@ func (r *MemberClusterSetReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&multiclusterv1alpha1.ClusterSet{}).
 		WithOptions(controller.Options{
-			MaxConcurrentReconciles: 5, // TODO: Use a constant after merging with Lan's changes
+			MaxConcurrentReconciles: common.DefaultWorkerCount,
 		}).
 		Complete(r)
 }

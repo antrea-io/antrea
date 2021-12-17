@@ -30,7 +30,9 @@ coverage:
 
 ignore:
   - "**/testing/mock_*.go"
+  - "**/mock_*.go"
   - "**/*generate*.go"
   - "pkg/client"
+  - "**/pkg/client"
   - "**/*.pb.go"
   - "third_party"
