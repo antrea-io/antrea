@@ -2728,6 +2728,7 @@ data:
     # - vxlan
     # - gre
     # - stt
+    # Note that "gre" is not supported for IPv6 clusters (IPv6-only or dual-stack clusters).
     #tunnelType: geneve
 
     # Determines how tunnel traffic is encrypted. Currently encryption only works with encap mode.
@@ -2980,7 +2981,7 @@ kind: ConfigMap
 metadata:
   labels:
     app: antrea
-  name: antrea-config-557m769449
+  name: antrea-config-h6d7mmd9hg
   namespace: kube-system
 ---
 apiVersion: v1
@@ -3051,7 +3052,7 @@ spec:
             fieldRef:
               fieldPath: spec.serviceAccountName
         - name: ANTREA_CONFIG_MAP_NAME
-          value: antrea-config-557m769449
+          value: antrea-config-h6d7mmd9hg
         image: projects.registry.vmware.com/antrea/antrea-ubuntu:latest
         imagePullPolicy: IfNotPresent
         livenessProbe:
@@ -3102,7 +3103,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-557m769449
+          name: antrea-config-h6d7mmd9hg
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -3338,7 +3339,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-557m769449
+          name: antrea-config-h6d7mmd9hg
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d
