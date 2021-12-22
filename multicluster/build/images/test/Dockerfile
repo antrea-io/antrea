@@ -1,8 +1,7 @@
-ARG OVS_VERSION
-FROM antrea/openvswitch:${OVS_VERSION}
+FROM ubuntu:20.04
 
 LABEL maintainer="Antrea <projectantrea-dev@googlegroups.com>"
-LABEL description="A Docker image for Antrea integration tests."
+LABEL description="A Docker image for Antrea Multi-cluster integration tests."
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends iproute2 iptables ipset make wget gcc libc6-dev ca-certificates git && \
@@ -19,5 +18,4 @@ ENV PATH $GOPATH/bin:/usr/local/go/bin:$PATH
 
 WORKDIR $GOPATH
 
-COPY build/images/scripts/* /usr/local/bin/
 COPY build/images/test/test-integration /usr/local/bin/
