@@ -42,6 +42,8 @@ rules:
       - resourceexports/status
     verbs:
       - get
+      - patch
+      - update
   - apiGroups:
       - multicluster.crd.antrea.io
     resources:

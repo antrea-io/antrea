@@ -20,15 +20,15 @@ import (
 	"fmt"
 	"time"
 
+	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
+	// to ensure that exec-entrypoint and run can make use of them.
+	_ "k8s.io/client-go/plugin/pkg/client/auth"
+
 	apiextensionclientset "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
 	clientset "k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-
-	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
-	// to ensure that exec-entrypoint and run can make use of them.
-	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	"k8s.io/client-go/rest"
 	aggregatorclientset "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -113,7 +113,6 @@ func getMutationWebhooks(controllerNs string) []string {
 
 func setupManagerAndCertController(o *Options) (manager.Manager, error) {
 	opts := zap.Options{
-		// TODO: disable `Development` option setting
 		Development: true,
 	}
 
@@ -169,6 +168,5 @@ func setupManagerAndCertController(o *Options) (manager.Manager, error) {
 	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
 		return nil, fmt.Errorf("error setting up ready check: %v", err)
 	}
-
 	return mgr, nil
 }
