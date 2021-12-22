@@ -89,7 +89,7 @@ jobs:
         bash -s ${TCE_VERSION} linux
         tar xzvf ./tce-linux-amd64-${TCE_VERSION}.tar.gz
         cd tce-linux-amd64-${TCE_VERSION}
-        sudo ./install.sh
+        ./install.sh
     - name: Run e2e tests
       run: |
         mkdir log
