@@ -47,7 +47,7 @@ func (o *Options) complete(args []string) error {
 		options, err = options.AndFrom(ctrl.ConfigFile().AtPath(o.configFile).OfKind(ctrlConfig))
 		if err != nil {
 			klog.ErrorS(err, "Failed to load options")
-			return fmt.Errorf("fail to load options from configuration file %s", o.configFile)
+			return fmt.Errorf("failed to load options from configuration file %s", o.configFile)
 		}
 		o.options = options
 		klog.InfoS("Using config from file", "config", o.options)

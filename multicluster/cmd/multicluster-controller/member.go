@@ -23,6 +23,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	multiclustercontrollers "antrea.io/antrea/multicluster/controllers/multicluster"
+	"antrea.io/antrea/pkg/signals"
 )
 
 func newMemberCommand() *cobra.Command {
@@ -57,13 +58,21 @@ func runMember(o *Options) error {
 		return fmt.Errorf("error creating ClusterSet controller: %v", err)
 	}
 
-	svcExportReconciler := &multiclustercontrollers.ServiceExportReconciler{
-		Client:                  mgr.GetClient(),
-		Scheme:                  mgr.GetScheme(),
-		RemoteCommonAreaManager: &clusterSetReconciler.RemoteCommonAreaManager}
+	svcExportReconciler := multiclustercontrollers.NewServiceExportReconciler(
+		mgr.GetClient(),
+		mgr.GetScheme(),
+		&clusterSetReconciler.RemoteCommonAreaManager)
 	if err = svcExportReconciler.SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("error creating ServiceExport controller: %v", err)
 	}
+
+	stopCh := signals.RegisterSignalHandlers()
+	staleController := multiclustercontrollers.NewStaleController(
+		mgr.GetClient(),
+		mgr.GetScheme(),
+		&clusterSetReconciler.RemoteCommonAreaManager)
+
+	go staleController.Run(stopCh)
 	// Member runs ResourceImportReconciler from RemoteCommonArea only
 
 	// ResourceImportFilterReconciler is only run on the member cluster
