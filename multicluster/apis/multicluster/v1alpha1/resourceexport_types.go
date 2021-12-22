@@ -70,7 +70,12 @@ type ResourceExportSpec struct {
 type ResourceExportConditionType string
 
 const (
+	// ResourceExportFailure indicates ResourceExport has been converged into
+	// ResourceImport successfully.
 	ResourceExportSucceeded ResourceExportConditionType = "Succeeded"
+	// ResourceExportFailure indicates ResourceExport has some issues to be converged
+	// into ResourceImport.
+	ResourceExportFailure ResourceExportConditionType = "Failure"
 )
 
 // ResourceExportCondition indicates the readiness condition of the ResourceExport.

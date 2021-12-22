@@ -22,13 +22,9 @@ import (
 	"time"
 
 	"github.com/golang/mock/gomock"
-	"k8s.io/apimachinery/pkg/runtime"
-	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
-	k8sscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
-	k8smcsapi "sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
 
 	mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
 	"antrea.io/antrea/multicluster/controllers/multicluster/common"
@@ -36,7 +32,6 @@ import (
 )
 
 var (
-	scheme           = runtime.NewScheme()
 	fakeRemoteClient = fake.NewClientBuilder().WithScheme(scheme).Build()
 )
 
@@ -92,10 +87,4 @@ func TestMemberAnnounce(t *testing.T) {
 	}
 
 	remoteCommonAreaUnderTest.Stop()
-}
-
-func init() {
-	utilruntime.Must(mcsv1alpha1.AddToScheme(scheme))
-	utilruntime.Must(k8smcsapi.AddToScheme(scheme))
-	utilruntime.Must(k8sscheme.AddToScheme(scheme))
 }
