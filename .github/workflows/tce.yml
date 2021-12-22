@@ -10,7 +10,7 @@ on:
     - release-*
 
 env:
-  TCE_VERSION: v0.11.1
+  TCE_VERSION: v0.9.1
 
 jobs:
   check-changes:
@@ -94,7 +94,7 @@ jobs:
       run: |
         mkdir log
         mkdir test-e2e-encap-coverage
-        ANTREA_LOG_DIR=$PWD/log ANTREA_COV_DIR=$PWD/test-e2e-encap-coverage ./ci/kind/test-e2e-kind.sh --encap-mode encap --coverage
+        ANTREA_LOG_DIR=$PWD/log ANTREA_COV_DIR=$PWD/test-e2e-encap-coverage ./ci/tce/test-e2e-tce.sh --encap-mode encap --coverage
     - name: Tar coverage files
       run: tar -czf test-e2e-encap-coverage.tar.gz test-e2e-encap-coverage
     - name: Upload coverage for test-e2e-encap-coverage
