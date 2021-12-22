@@ -39,7 +39,7 @@ function print_usage {
 }
 
 
-TESTBED_CMD=$(dirname $0)"/kind-setup.sh"
+TESTBED_CMD=$(dirname $0)"/tce-setup.sh"
 YML_CMD=$(dirname $0)"/../../hack/generate-manifest.sh"
 FLOWAGGREGATOR_YML_CMD=$(dirname $0)"/../../hack/generate-manifest-flow-aggregator.sh"
 
