@@ -14,7 +14,7 @@
     state: present
 
 - name: Loading required kernel modules on boot
-  template: 
+  template:
     src: templates/containerd_modules.conf.j2
     dest: /etc/modules-load.d/containerd.conf
 
@@ -35,7 +35,7 @@
     state: present
     sysctl_file: /etc/sysctl.d/99-kubernetes-cri.conf
     reload: yes
-  with_items: 
+  with_items:
     - { name: net.bridge.bridge-nf-call-iptables, value: 1 }
     - { name: net.ipv4.ip_forward, value: 1 }
     - { name: net.bridge.bridge-nf-call-ip6tables, value: 1 }

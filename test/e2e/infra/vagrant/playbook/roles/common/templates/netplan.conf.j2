@@ -1,0 +1,20 @@
+---
+network:
+  version: 2
+  renderer: networkd
+  ethernets:
+    # this assumes that the private network created by Vagrant uses this inteface name
+    enp0s8:
+      addresses:
+{% if node_ipv4 != "" %}
+      - {{ node_ipv4 }}/24
+{% endif %}
+{% if node_ipv6 != "" %}
+      - {{ node_ipv6 }}/64
+{% endif %}
+{% if node_ipv6 != "" %}
+      routes:
+      # add a fake default route for IPv6: required for ClusterIP traffic even though it is DNATed
+      - to: ::/0
+        via: fd3b:fcf5:3e92:d732::200
+{% endif %}
