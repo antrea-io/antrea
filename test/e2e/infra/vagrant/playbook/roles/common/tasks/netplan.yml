@@ -1,0 +1,9 @@
+- name: Install netplan config file
+  template:
+    src: templates/netplan.conf.j2
+    dest: /etc/netplan/10-networks.yaml
+  register: netplan_config
+
+- name: Apply netplan
+  shell: netplan apply
+  when: netplan_config.changed
