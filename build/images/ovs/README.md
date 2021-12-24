@@ -2,7 +2,7 @@
 
 This directory contains utilities to build a Docker image which includes Open
 vSwitch (OVS) built from source. We build OVS from source because some features
-of Antrea (such as IPSec) require a recent version of OVS, more recent than the
+of Antrea (such as IPsec) require a recent version of OVS, more recent than the
 version included in Ubuntu 20.04. The built image is then used as the base image
 for the Antrea main Docker image.
 

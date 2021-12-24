@@ -26,9 +26,9 @@ import (
 )
 
 // TestIPSec is the top-level test which contains all subtests for
-// IPSec related test cases so they can share setup, teardown.
+// IPsec related test cases so they can share setup, teardown.
 func TestIPSec(t *testing.T) {
-	skipIfProviderIs(t, "kind", "IPSec tunnel does not work with Kind")
+	skipIfProviderIs(t, "kind", "IPsec tunnel does not work with Kind")
 	skipIfIPv6Cluster(t)
 	skipIfNumNodesLessThan(t, 2)
 	skipIfHasWindowsNodes(t)
@@ -73,10 +73,10 @@ func (data *TestData) readSecurityAssociationsStatus(nodeName string) (up int, c
 }
 
 // testIPSecTunnelConnectivity checks that Pod traffic across two Nodes over
-// the IPSec tunnel, by creating multiple Pods across distinct Nodes and having
+// the IPsec tunnel, by creating multiple Pods across distinct Nodes and having
 // them ping each other.
 func testIPSecTunnelConnectivity(t *testing.T, data *TestData) {
-	t.Logf("Redeploy Antrea with IPSec tunnel enabled")
+	t.Logf("Redeploy Antrea with IPsec tunnel enabled")
 	data.redeployAntrea(t, deployAntreaIPsec)
 
 	data.testPodConnectivityDifferentNodes(t)
@@ -92,7 +92,7 @@ func testIPSecTunnelConnectivity(t *testing.T, data *TestData) {
 		t.Logf("Found %d 'up' SecurityAssociation(s) for Node '%s'", up, nodeName)
 	}
 
-	// Restore normal Antrea deployment with IPSec disabled.
+	// Restore normal Antrea deployment with IPsec disabled.
 	data.redeployAntrea(t, deployAntreaDefault)
 }
 
@@ -100,7 +100,7 @@ func testIPSecTunnelConnectivity(t *testing.T, data *TestData) {
 // non-encrypted mode, the previously created tunnel ports are deleted
 // correctly.
 func testIPSecDeleteStaleTunnelPorts(t *testing.T, data *TestData) {
-	t.Logf("Redeploy Antrea with IPSec tunnel enabled")
+	t.Logf("Redeploy Antrea with IPsec tunnel enabled")
 	data.redeployAntrea(t, deployAntreaIPsec)
 
 	nodeName0 := nodeName(0)
@@ -132,7 +132,7 @@ func testIPSecDeleteStaleTunnelPorts(t *testing.T, data *TestData) {
 		t.Fatalf("Error while waiting for OVS tunnel port to be created")
 	}
 
-	t.Logf("Redeploy Antrea with IPSec tunnel disabled")
+	t.Logf("Redeploy Antrea with IPsec tunnel disabled")
 	data.redeployAntrea(t, deployAntreaDefault)
 
 	t.Logf("Checking that tunnel port has been deleted")

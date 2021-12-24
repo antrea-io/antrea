@@ -60,8 +60,8 @@ type Client interface {
 	InstallDefaultTunnelFlows() error
 
 	// InstallNodeFlows should be invoked when a connection to a remote Node is going to be set
-	// up. The hostname is used to identify the added flows. When IPSec tunnel is enabled,
-	// ipsecTunOFPort must be set to the OFPort number of the IPSec tunnel port to the remote Node;
+	// up. The hostname is used to identify the added flows. When IPsec tunnel is enabled,
+	// ipsecTunOFPort must be set to the OFPort number of the IPsec tunnel port to the remote Node;
 	// otherwise ipsecTunOFPort must be set to 0.
 	// InstallNodeFlows has all-or-nothing semantics(call succeeds if all the flows are installed
 	// successfully, otherwise no flows will be installed). Calls to InstallNodeFlows are idempotent.
@@ -468,9 +468,9 @@ func (c *client) InstallNodeFlows(hostname string,
 		}
 	}
 	if ipsecTunOFPort != 0 {
-		// When IPSec tunnel is enabled, packets received from the remote Node are
-		// input from the Node's IPSec tunnel port, not the default tunnel port. So,
-		// add a separate tunnelClassifierFlow for the IPSec tunnel port.
+		// When IPsec tunnel is enabled, packets received from the remote Node are
+		// input from the Node's IPsec tunnel port, not the default tunnel port. So,
+		// add a separate tunnelClassifierFlow for the IPsec tunnel port.
 		flows = append(flows, c.tunnelClassifierFlow(ipsecTunOFPort, cookie.Node))
 	}
 
