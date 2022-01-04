@@ -245,7 +245,8 @@ func (f *featureEgress) getRequiredTables() []*Table {
 
 func (f *featureMulticast) getRequiredTables() []*Table {
 	return []*Table{
-		MulticastTable,
+		MulticastRoutingTable,
+		MulticastOutputTable,
 	}
 }
 

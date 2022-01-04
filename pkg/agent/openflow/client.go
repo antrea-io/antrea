@@ -83,9 +83,9 @@ type Client interface {
 	// InstallServiceGroup installs a group for Service LB. Each endpoint
 	// is a bucket of the group. For now, each bucket has the same weight.
 	InstallServiceGroup(groupID binding.GroupIDType, withSessionAffinity bool, endpoints []proxy.Endpoint) error
-	// UninstallServiceGroup removes the group and its buckets that are
-	// installed by InstallServiceGroup.
-	UninstallServiceGroup(groupID binding.GroupIDType) error
+	// UninstallGroup removes the group and its buckets that are
+	// installed by InstallServiceGroup or InstallMulticastGroup.
+	UninstallGroup(groupID binding.GroupIDType) error
 
 	// InstallEndpointFlows installs flows for accessing Endpoints.
 	// If an Endpoint is on the current Node, then flows for hairpin and endpoint
@@ -269,11 +269,11 @@ type Client interface {
 	// InstallMulticastInitialFlows installs OpenFlow to packetIn the IGMP messages and output the Multicast traffic to
 	// antrea-gw0 so that local Pods could access external Multicast servers.
 	InstallMulticastInitialFlows(pktInReason uint8) error
-	// InstallMulticastFlow installs the flow to forward Multicast traffic normally, and output it to antrea-gw0
+	// InstallMulticastFlows installs the flow to forward Multicast traffic normally, and output it to antrea-gw0
 	// to ensure it can be forwarded to the external addresses.
-	InstallMulticastFlow(multicastIP net.IP) error
-	// UninstallMulticastFlow removes the flow matching the given multicastIP.
-	UninstallMulticastFlow(multicastIP net.IP) error
+	InstallMulticastFlows(multicastIP net.IP, groupID binding.GroupIDType) error
+	// UninstallMulticastFlows removes the flow matching the given multicastIP.
+	UninstallMulticastFlows(multicastIP net.IP) error
 	// SendIGMPQueryPacketOut sends the IGMPQuery packet as a packet-out to OVS from the gateway port.
 	SendIGMPQueryPacketOut(
 		dstMAC net.HardwareAddr,
@@ -292,6 +292,8 @@ type Client interface {
 
 	// UninstallTrafficControlReturnPortFlow removes the flow to classify the packets from a return port.
 	UninstallTrafficControlReturnPortFlow(returnOFPort uint32) error
+
+	InstallMulticastGroup(ofGroupID binding.GroupIDType, localReceivers []uint32) error
 }
 
 // GetFlowTableStatus returns an array of flow table status.
@@ -545,7 +547,7 @@ func (c *client) InstallServiceGroup(groupID binding.GroupIDType, withSessionAff
 	return nil
 }
 
-func (c *client) UninstallServiceGroup(groupID binding.GroupIDType) error {
+func (c *client) UninstallGroup(groupID binding.GroupIDType) error {
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
 	if !c.bridge.DeleteGroup(groupID) {
@@ -744,7 +746,7 @@ func (c *client) generatePipelines() {
 
 	if c.enableMulticast {
 		// TODO: add support for IPv6 protocol
-		c.featureMulticast = newFeatureMulticast(c.cookieAllocator, []binding.Protocol{binding.ProtocolIP})
+		c.featureMulticast = newFeatureMulticast(c.cookieAllocator, []binding.Protocol{binding.ProtocolIP}, c.bridge)
 		c.activatedFeatures = append(c.activatedFeatures, c.featureMulticast)
 	}
 	c.featureTraceflow = newFeatureTraceflow()
@@ -834,6 +836,9 @@ func (c *client) ReplayFlows() {
 	}
 
 	c.featureService.replayGroups()
+	if c.enableMulticast {
+		c.featureMulticast.replayGroups()
+	}
 
 	for _, activeFeature := range c.activatedFeatures {
 		if err := c.ofEntryOperations.AddAll(activeFeature.replayFlows()); err != nil {
@@ -1109,15 +1114,15 @@ func (c *client) InstallMulticastInitialFlows(pktInReason uint8) error {
 	return c.addFlows(c.featureMulticast.cachedFlows, cacheKey, flows)
 }
 
-func (c *client) InstallMulticastFlow(multicastIP net.IP) error {
-	flows := c.featureMulticast.localMulticastForwardFlow(multicastIP)
+func (c *client) InstallMulticastFlows(multicastIP net.IP, groupID binding.GroupIDType) error {
+	flows := c.featureMulticast.localMulticastForwardFlows(multicastIP, groupID)
 	cacheKey := fmt.Sprintf("multicast_%s", multicastIP.String())
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
 	return c.addFlows(c.featureMulticast.cachedFlows, cacheKey, flows)
 }
 
-func (c *client) UninstallMulticastFlow(multicastIP net.IP) error {
+func (c *client) UninstallMulticastFlows(multicastIP net.IP) error {
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
 	cacheKey := fmt.Sprintf("multicast_%s", multicastIP.String())
@@ -1172,4 +1177,15 @@ func (c *client) UninstallTrafficControlReturnPortFlow(returnOFPort uint32) erro
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
 	return c.deleteFlows(c.featurePodConnectivity.tcCachedFlows, cacheKey)
+}
+
+func (c *client) InstallMulticastGroup(groupID binding.GroupIDType, localReceivers []uint32) error {
+	c.replayMutex.RLock()
+	defer c.replayMutex.RUnlock()
+
+	targetPorts := append([]uint32{config.HostGatewayOFPort}, localReceivers...)
+	if err := c.featureMulticast.multicastReceiversGroup(groupID, targetPorts...); err != nil {
+		return err
+	}
+	return nil
 }

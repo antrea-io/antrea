@@ -28,7 +28,11 @@ import (
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/openflow"
+	"antrea.io/antrea/pkg/agent/types"
+	"antrea.io/antrea/pkg/agent/util"
+	binding "antrea.io/antrea/pkg/ovs/openflow"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
+	"antrea.io/antrea/pkg/util/channel"
 )
 
 type eventType uint8
@@ -59,10 +63,11 @@ type mcastGroupEvent struct {
 
 type GroupMemberStatus struct {
 	group net.IP
-	// localMembers is a set for the local Pod's interface name which has joined in the multicast group.
-	localMembers   sets.String
+	// localMembers is a map for the local Pod member and its last update time, key is the Pod's interface name,
+	// and value is its last update time.
+	localMembers   map[string]time.Time
 	lastIGMPReport time.Time
-	mutex          sync.RWMutex
+	ofGroupID      binding.GroupIDType
 }
 
 // eventHandler process the multicast Group membership report or leave messages.
@@ -82,7 +87,8 @@ func (c *Controller) addGroupMemberStatus(e *mcastGroupEvent) {
 	status := &GroupMemberStatus{
 		group:          e.group,
 		lastIGMPReport: e.time,
-		localMembers:   sets.NewString(e.iface.InterfaceName),
+		localMembers:   map[string]time.Time{e.iface.InterfaceName: e.time},
+		ofGroupID:      c.v4GroupAllocator.Allocate(),
 	}
 	c.groupCache.Add(status)
 	c.queue.Add(e.group.String())
@@ -97,29 +103,37 @@ func (c *Controller) addGroupMemberStatus(e *mcastGroupEvent) {
 // is sent out to check if there are still local members in the group.
 func (c *Controller) updateGroupMemberStatus(obj interface{}, e *mcastGroupEvent) {
 	status := obj.(*GroupMemberStatus)
-	status.mutex.Lock()
-	defer status.mutex.Unlock()
 	newStatus := &GroupMemberStatus{
 		group:          status.group,
-		localMembers:   status.localMembers.Union(nil),
+		localMembers:   make(map[string]time.Time),
 		lastIGMPReport: status.lastIGMPReport,
+		ofGroupID:      status.ofGroupID,
 	}
-	exist := status.localMembers.Has(e.iface.InterfaceName)
+	for m, t := range status.localMembers {
+		newStatus.localMembers[m] = t
+	}
+	_, exist := status.localMembers[e.iface.InterfaceName]
 	switch e.eType {
 	case groupJoin:
 		newStatus.lastIGMPReport = e.time
-		if !exist {
-			newStatus.localMembers.Insert(e.iface.InterfaceName)
-			klog.InfoS("Added member to multicast group", "group", e.group.String(), "member", e.iface.InterfaceName)
-		}
+		newStatus.localMembers[e.iface.InterfaceName] = e.time
 		c.groupCache.Update(newStatus)
-		c.queue.Add(newStatus.group.String())
+		if !exist {
+			klog.InfoS("Added member to multicast group", "group", e.group.String(), "member", e.iface.InterfaceName)
+			c.queue.Add(newStatus.group.String())
+		}
 	case groupLeave:
 		if exist {
-			newStatus.localMembers.Delete(e.iface.InterfaceName)
+			delete(newStatus.localMembers, e.iface.InterfaceName)
 			c.groupCache.Update(newStatus)
 			klog.InfoS("Deleted member from multicast group", "group", e.group.String(), "member", e.iface.InterfaceName)
-			if len(newStatus.localMembers) == 0 {
+			_, found := c.ifaceStore.GetInterfaceByName(e.iface.InterfaceName)
+			// Notify worker immediately about the member leave event if the member doesn't exist on the Node, or there are
+			// other local members in the multicast group.
+			if !found || len(newStatus.localMembers) > 0 {
+				c.queue.Add(newStatus.group.String())
+			} else {
+				// Check if all local members have left the multicast group.
 				klog.InfoS("Check last member in multicast group", "group", e.group.String(), "member", e.iface.InterfaceName)
 				c.checkLastMember(e.group)
 			}
@@ -139,28 +153,70 @@ func (c *Controller) checkLastMember(group net.IP) {
 	c.queue.AddAfter(group.String(), igmpMaxResponseTime)
 }
 
-// clearStaleGroups checks the stale groups which have not been updated for mcastGroupTimeout, and then notifies worker
+// clearStaleGroups checks the stale group members which have not been updated for mcastGroupTimeout, and then notifies worker
 // to remove them from groupCache.
 func (c *Controller) clearStaleGroups() {
 	now := time.Now()
 	for _, obj := range c.groupCache.List() {
 		status := obj.(*GroupMemberStatus)
-		status.mutex.RLock()
 		diff := now.Sub(status.lastIGMPReport)
-		status.mutex.RUnlock()
 		if diff > mcastGroupTimeout {
+			// Notify worker to remove the group from groupCache if all its members are not updated before mcastGroupTimeout.
 			c.queue.Add(status.group.String())
+		} else {
+			// Create a "leave" event for a local member if it is not updated before mcastGroupTimeout.
+			for member, lastUpdate := range status.localMembers {
+				if now.Sub(lastUpdate) > mcastGroupTimeout {
+					ifConfig := &interfacestore.InterfaceConfig{
+						InterfaceName: member,
+					}
+					event := &mcastGroupEvent{
+						group: status.group,
+						eType: groupLeave,
+						time:  now,
+						iface: ifConfig,
+					}
+					c.groupEventCh <- event
+				}
+			}
 		}
 	}
 }
 
+// removeLocalInterface searches the GroupMemberStatus which the deleted interface has joined, and then triggers a member
+// leave event so that Antrea can remove the corresponding interface from local multicast receivers on OVS. This function
+// should be called if the removed Pod receiver fails to send IGMP leave message before deletion.
+func (c *Controller) removeLocalInterface(e interface{}) {
+	podEvent := e.(types.PodUpdate)
+	// Ignore Pod creation event.
+	if podEvent.IsAdd {
+		return
+	}
+	interfaceName := util.GenerateContainerInterfaceName(podEvent.PodName, podEvent.PodNamespace, podEvent.ContainerID)
+	ifConfig := &interfacestore.InterfaceConfig{
+		InterfaceName: interfaceName,
+	}
+	groupStatuses := c.getGroupMemberStatusesByPod(interfaceName)
+	for _, g := range groupStatuses {
+		event := &mcastGroupEvent{
+			group: g.group,
+			eType: groupLeave,
+			time:  time.Now(),
+			iface: ifConfig,
+		}
+		c.groupEventCh <- event
+	}
+}
+
 type Controller struct {
-	ofClient     openflow.Client
-	nodeConfig   *config.NodeConfig
-	igmpSnooper  *IGMPSnooper
-	groupEventCh chan *mcastGroupEvent
-	groupCache   cache.Indexer
-	queue        workqueue.RateLimitingInterface
+	ofClient         openflow.Client
+	v4GroupAllocator openflow.GroupAllocator
+	ifaceStore       interfacestore.InterfaceStore
+	nodeConfig       *config.NodeConfig
+	igmpSnooper      *IGMPSnooper
+	groupEventCh     chan *mcastGroupEvent
+	groupCache       cache.Indexer
+	queue            workqueue.RateLimitingInterface
 	// installedGroups saves the groups which are configured on both OVS and the host.
 	installedGroups      sets.String
 	installedGroupsMutex sync.RWMutex
@@ -168,33 +224,39 @@ type Controller struct {
 	ovsBridgeClient      ovsconfig.OVSBridgeClient
 }
 
-func NewMulticastController(ofClient openflow.Client, nodeConfig *config.NodeConfig, ifaceStore interfacestore.InterfaceStore, multicastSocket RouteInterface, multicastInterfaces sets.String, ovsBridgeClient ovsconfig.OVSBridgeClient) *Controller {
+func NewMulticastController(ofClient openflow.Client,
+	v4GroupAllocator openflow.GroupAllocator,
+	nodeConfig *config.NodeConfig,
+	ifaceStore interfacestore.InterfaceStore,
+	multicastSocket RouteInterface,
+	multicastInterfaces sets.String,
+	ovsBridgeClient ovsconfig.OVSBridgeClient,
+	podUpdateSubscriber channel.Subscriber) *Controller {
 	eventCh := make(chan *mcastGroupEvent, workerCount)
 	groupSnooper := newSnooper(ofClient, ifaceStore, eventCh)
 	groupCache := cache.NewIndexer(getGroupEventKey, cache.Indexers{
 		podInterfaceIndex: podInterfaceIndexFunc,
 	})
 	multicastRouteClient := newRouteClient(nodeConfig, groupCache, multicastSocket, multicastInterfaces)
-	return &Controller{
-		ofClient:        ofClient,
-		nodeConfig:      nodeConfig,
-		igmpSnooper:     groupSnooper,
-		groupEventCh:    eventCh,
-		groupCache:      groupCache,
-		installedGroups: sets.NewString(),
-		queue:           workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "multicastgroup"),
-		mRouteClient:    multicastRouteClient,
-		ovsBridgeClient: ovsBridgeClient,
+	c := &Controller{
+		ofClient:         ofClient,
+		ifaceStore:       ifaceStore,
+		v4GroupAllocator: v4GroupAllocator,
+		nodeConfig:       nodeConfig,
+		igmpSnooper:      groupSnooper,
+		groupEventCh:     eventCh,
+		groupCache:       groupCache,
+		installedGroups:  sets.NewString(),
+		queue:            workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "multicastgroup"),
+		mRouteClient:     multicastRouteClient,
+		ovsBridgeClient:  ovsBridgeClient,
 	}
+	podUpdateSubscriber.Subscribe(c.removeLocalInterface)
+	return c
 }
 
 func (c *Controller) Initialize() error {
-	err := c.configureOVSMulticast()
-	if err != nil {
-		klog.ErrorS(err, "Failed to configure multicast for the OVS bridge")
-		return err
-	}
-	err = c.mRouteClient.Initialize()
+	err := c.mRouteClient.Initialize()
 	if err != nil {
 		return err
 	}
@@ -221,7 +283,6 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 
 	// Periodically check the group member status, and remove the groups in which no members exist
 	go wait.NonSlidingUntil(c.clearStaleGroups, queryInterval, stopCh)
-
 	go c.eventHandler(stopCh)
 
 	for i := 0; i < int(workerCount); i++ {
@@ -298,15 +359,28 @@ func (c *Controller) syncGroup(groupKey string) error {
 		return nil
 	}
 	status := obj.(*GroupMemberStatus)
+	memberPorts := make([]uint32, 0, len(status.localMembers))
+	for memberInterfaceName := range status.localMembers {
+		obj, found := c.ifaceStore.GetInterfaceByName(memberInterfaceName)
+		if !found {
+			klog.InfoS("Failed to find interface from cache", "interface", memberInterfaceName)
+			continue
+		}
+		memberPorts = append(memberPorts, uint32(obj.OFPort))
+	}
 	if c.groupHasInstalled(groupKey) {
-		status.mutex.Lock()
-		defer status.mutex.Unlock()
 		if c.groupIsStale(status) {
 			// Remove the multicast flow entry if no local Pod is in the group.
-			if err := c.ofClient.UninstallMulticastFlow(status.group); err != nil {
+			if err := c.ofClient.UninstallMulticastFlows(status.group); err != nil {
 				klog.ErrorS(err, "Failed to uninstall multicast flows", "group", groupKey)
 				return err
 			}
+			// Remove the multicast flow entry if no local Pod is in the group.
+			if err := c.ofClient.UninstallGroup(status.ofGroupID); err != nil {
+				klog.ErrorS(err, "Failed to uninstall multicast group", "group", groupKey)
+				return err
+			}
+			c.v4GroupAllocator.Release(status.ofGroupID)
 			err := c.mRouteClient.deleteInboundMrouteEntryByGroup(status.group)
 			if err != nil {
 				klog.ErrorS(err, "Cannot delete multicast group", "group", groupKey)
@@ -320,10 +394,22 @@ func (c *Controller) syncGroup(groupKey string) error {
 			c.delInstalledGroup(groupKey)
 			c.groupCache.Delete(status)
 			klog.InfoS("Removed multicast group from cache after all members left", "group", groupKey)
+			return nil
 		}
+		// Reinstall OpenFlow group because the local Pod receivers have changed.
+		if err := c.ofClient.InstallMulticastGroup(status.ofGroupID, memberPorts); err != nil {
+			return err
+		}
+		klog.V(2).InfoS("Updated OpenFlow group for local receivers", "group", groupKey, "ofGroup", status.ofGroupID, "localReceivers", memberPorts)
 		return nil
 	}
-	if err := c.ofClient.InstallMulticastFlow(status.group); err != nil {
+	// Install OpenFlow group for a new multicast group which has local Pod receivers joined.
+	if err := c.ofClient.InstallMulticastGroup(status.ofGroupID, memberPorts); err != nil {
+		return err
+	}
+	klog.V(2).InfoS("Installed OpenFlow group for local receivers", "group", groupKey, "ofGroup", status.ofGroupID, "localReceivers", memberPorts)
+	// Install OpenFlow flow to forward packets to local Pod receivers which are included in the group.
+	if err := c.ofClient.InstallMulticastFlows(status.group, status.ofGroupID); err != nil {
 		klog.ErrorS(err, "Failed to install multicast flows", "group", status.group)
 		return err
 	}
@@ -386,21 +472,6 @@ func podInterfaceIndexFunc(obj interface{}) ([]string, error) {
 		podInterfaces = append(podInterfaces, podInterface)
 	}
 	return podInterfaces, nil
-}
-
-func (c *Controller) configureOVSMulticast() error {
-	// Configure bridge to enable multicast snooping.
-	err := c.ovsBridgeClient.SetBridgeMcastSnooping(true)
-	if err != nil {
-		return err
-	}
-	// Disable flooding of unregistered multicast packets to all ports.
-	otherConfig := map[string]interface{}{"mcast-snooping-disable-flood-unregistered": "true"}
-	err = c.ovsBridgeClient.AddBridgeOtherConfig(otherConfig)
-	if err != nil {
-		return err
-	}
-	return nil
 }
 
 func getGroupEventKey(obj interface{}) (string, error) {

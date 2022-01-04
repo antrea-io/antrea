@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net"
 	"testing"
+	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
@@ -76,12 +77,12 @@ func TestProcessIGMPNocacheMsg(t *testing.T) {
 	mRoute.internalInterfaceVIF = uint16(0)
 	status1 := &GroupMemberStatus{
 		group:        net.ParseIP("224.3.3.8"),
-		localMembers: sets.NewString("aa"),
+		localMembers: map[string]time.Time{"aa": time.Now()},
 	}
 	mRoute.groupCache.Add(status1)
 	status2 := &GroupMemberStatus{
 		group:        net.ParseIP("224.3.3.9"),
-		localMembers: sets.NewString(),
+		localMembers: map[string]time.Time{},
 	}
 	mRoute.groupCache.Add(status2)
 	for _, m := range []struct {

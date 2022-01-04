@@ -579,11 +579,13 @@ func run(o *Options) error {
 		}
 		mcastController := multicast.NewMulticastController(
 			ofClient,
+			v4GroupIDAllocator,
 			nodeConfig,
 			ifaceStore,
 			multicastSocket,
 			sets.NewString(append(o.config.MulticastInterfaces, nodeConfig.NodeTransportInterfaceName)...),
-			ovsBridgeClient)
+			ovsBridgeClient,
+			podUpdateChannel)
 		if err := mcastController.Initialize(); err != nil {
 			return err
 		}

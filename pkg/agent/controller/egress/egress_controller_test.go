@@ -38,6 +38,7 @@ import (
 	ipassignertest "antrea.io/antrea/pkg/agent/ipassigner/testing"
 	openflowtest "antrea.io/antrea/pkg/agent/openflow/testing"
 	routetest "antrea.io/antrea/pkg/agent/route/testing"
+	"antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/agent/util"
 	cpv1b2 "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	crdv1a2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
@@ -582,7 +583,11 @@ func TestPodUpdateShouldSyncEgress(t *testing.T) {
 	c.mockIPAssigner.EXPECT().UnassignIP(fakeLocalEgressIP1)
 	// Mock CNIServer
 	addPodInterface(c.ifaceStore, "ns1", "pendingPod", 10)
-	c.podUpdateChannel.Notify("ns1/pendingPod")
+	ev := types.PodUpdate{
+		PodName:      "pendingPod",
+		PodNamespace: "ns1",
+	}
+	c.podUpdateChannel.Notify(ev)
 	require.NoError(t, wait.PollImmediate(10*time.Millisecond, time.Second, func() (done bool, err error) {
 		return c.queue.Len() == 1, nil
 	}))

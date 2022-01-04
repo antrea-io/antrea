@@ -28,6 +28,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent/metrics"
+	agenttypes "antrea.io/antrea/pkg/agent/types"
 	v1beta "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	"antrea.io/antrea/pkg/querier"
@@ -361,12 +362,12 @@ func newRuleCache(dirtyRuleHandler func(string), podUpdateSubscriber channel.Sub
 // done if antrea-controller has computed the Pods' policies and propagated
 // them to this Node by their labels and NodeName, instead of waiting for their
 // IPs are reported to kube-apiserver and processed by antrea-controller.
-func (c *ruleCache) processPodUpdate(pod string) {
-	namespace, name := k8s.SplitNamespacedName(pod)
+func (c *ruleCache) processPodUpdate(e interface{}) {
+	podEvent := e.(agenttypes.PodUpdate)
 	member := &v1beta.GroupMember{
 		Pod: &v1beta.PodReference{
-			Name:      name,
-			Namespace: namespace,
+			Name:      podEvent.PodName,
+			Namespace: podEvent.PodNamespace,
 		},
 	}
 	c.appliedToSetLock.RLock()

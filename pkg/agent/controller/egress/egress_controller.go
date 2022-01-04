@@ -41,6 +41,7 @@ import (
 	"antrea.io/antrea/pkg/agent/memberlist"
 	"antrea.io/antrea/pkg/agent/openflow"
 	"antrea.io/antrea/pkg/agent/route"
+	"antrea.io/antrea/pkg/agent/types"
 	cpv1b2 "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	crdv1a2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
 	clientsetversioned "antrea.io/antrea/pkg/client/clientset/versioned"
@@ -217,9 +218,11 @@ func NewEgressController(
 
 // processPodUpdate will be called when CNIServer publishes a Pod update event.
 // It triggers reconciling the effective Egress of the Pod.
-func (c *EgressController) processPodUpdate(pod string) {
+func (c *EgressController) processPodUpdate(e interface{}) {
 	c.egressBindingsMutex.Lock()
 	defer c.egressBindingsMutex.Unlock()
+	podEvent := e.(types.PodUpdate)
+	pod := k8s.NamespacedName(podEvent.PodNamespace, podEvent.PodName)
 	binding, exists := c.egressBindings[pod]
 	if !exists {
 		return
