@@ -177,7 +177,7 @@ func RemoveManagementInterface(networkName string) error {
 	var err error
 	var maxRetry = 3
 	var i = 0
-	cmd := fmt.Sprintf("Get-VMSwitch -Name %s  | Set-VMSwitch -AllowManagementOS $false ", networkName)
+	cmd := fmt.Sprintf("Get-VMSwitch -ComputerName $(hostname) -Name %s  | Set-VMSwitch -ComputerName $(hostname) -AllowManagementOS $false ", networkName)
 	// Retry the operation here because an error is returned at the first invocation.
 	for i < maxRetry {
 		_, err = ps.RunCommand(cmd)
@@ -398,7 +398,7 @@ func PrepareHNSNetwork(subnetCIDR *net.IPNet, nodeIPNet *net.IPNet, uplinkAdapte
 // EnableRSCOnVSwitch enables RSC in the vSwitch to reduce host CPU utilization and increase throughput for virtual
 // workloads by coalescing multiple TCP segments into fewer, but larger segments.
 func EnableRSCOnVSwitch(vSwitch string) error {
-	cmd := fmt.Sprintf("Get-VMSwitch -Name %s | Select-Object -Property SoftwareRscEnabled | Format-Table -HideTableHeaders", vSwitch)
+	cmd := fmt.Sprintf("Get-VMSwitch -ComputerName $(hostname) -Name %s | Select-Object -Property SoftwareRscEnabled | Format-Table -HideTableHeaders", vSwitch)
 	stdout, err := ps.RunCommand(cmd)
 	if err != nil {
 		return err
@@ -416,7 +416,7 @@ func EnableRSCOnVSwitch(vSwitch string) error {
 		klog.Infof("Receive Segment Coalescing (RSC) for vSwitch %s is already enabled", vSwitch)
 		return nil
 	}
-	cmd = fmt.Sprintf("Set-VMSwitch -Name %s -EnableSoftwareRsc $True", vSwitch)
+	cmd = fmt.Sprintf("Set-VMSwitch -ComputerName $(hostname) -Name %s -EnableSoftwareRsc $True", vSwitch)
 	_, err = ps.RunCommand(cmd)
 	if err != nil {
 		return err
