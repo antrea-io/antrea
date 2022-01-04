@@ -5,12 +5,11 @@ import kubernetes.client
 import random
 import string
 import uuid
-import yaml
-from ipaddress import ip_address, IPv4Address
+
+from policy_recommendation_utils import *
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import udf
 from pyspark.sql.types import StringType
-from re import sub
 
 # Column names of flow record table in Clickhouse database used in recommendation job 
 FLOW_TABLE_COLUMNS = [
@@ -30,6 +29,9 @@ NAMESPACE_ALLOW_LIST = [
     'flow-visibility'
 ]
 
+ROW_DELIMITER = "#"
+PEER_DELIMITER = "|"
+
 def get_flow_type(destinationServicePortName, destinationPodLabels):
     if destinationServicePortName != "":
         return "pod_to_svc"
@@ -39,65 +41,37 @@ def get_flow_type(destinationServicePortName, destinationPodLabels):
         return "pod_to_external"
 
 def map_flow_to_egress(flow):
-    src = "#".join([flow.sourcePodNamespace, flow.sourcePodLabels])
+    src = ROW_DELIMITER.join([flow.sourcePodNamespace, flow.sourcePodLabels])
     if flow.flowType == "pod_to_external":
-        dst = "#".join([flow.destinationIP, str(flow.destinationTransportPort), flow.protocolIdentifier])
+        dst = ROW_DELIMITER.join([flow.destinationIP, str(flow.destinationTransportPort), flow.protocolIdentifier])
     else:
-        dst = "#".join([flow.destinationPodNamespace, flow.destinationPodLabels, str(flow.destinationTransportPort), flow.protocolIdentifier])
+        dst = ROW_DELIMITER.join([flow.destinationPodNamespace, flow.destinationPodLabels, str(flow.destinationTransportPort), flow.protocolIdentifier])
     return (src, ("", dst))
 
 def map_flow_to_egress_svc(flow):
-    src = "#".join([flow.sourcePodNamespace, flow.sourcePodLabels])
-    dst = "#".join([flow.destinationServicePortName, str(flow.destinationTransportPort), flow.protocolIdentifier])
+    src = ROW_DELIMITER.join([flow.sourcePodNamespace, flow.sourcePodLabels])
+    dst = ROW_DELIMITER.join([flow.destinationServicePortName, str(flow.destinationTransportPort), flow.protocolIdentifier])
     return (src, dst)
 
 def map_flow_to_ingress(flow):
-    src = "#".join([flow.sourcePodNamespace, flow.sourcePodLabels, str(flow.destinationTransportPort), flow.protocolIdentifier])
-    dst = "#".join([flow.destinationPodNamespace, flow.destinationPodLabels])
+    src = ROW_DELIMITER.join([flow.sourcePodNamespace, flow.sourcePodLabels, str(flow.destinationTransportPort), flow.protocolIdentifier])
+    dst = ROW_DELIMITER.join([flow.destinationPodNamespace, flow.destinationPodLabels])
     return (dst, (src, ""))
 
 def combine_network_peers(a, b):
-    if a[0] != "" and b[0] != "":
-        new_src = '|'.join([a[0], b[0]])
-    elif a[0] != "":
+    if a[0] != "":
         new_src = a[0]
     else:
         new_src = b[0]
-    if a[1] != "" and b[1] != "":
-        new_dst = '|'.join([a[1], b[1]])
-    elif a[1] != "":
+    if a[1] != "":
         new_dst = a[1]
     else:
         new_dst = b[1]
     return (new_src, new_dst)
 
-def get_IP_version(IP):
-    return "v4" if type(ip_address(IP)) is IPv4Address else "v6"
-
-def camel(s):
-    s = sub(r"(_|-)+", " ", s).title().replace(" ", "")
-    if not s: return s
-    return s[0].lower() + s[1:]
-
-def camel_dict(d):
-    result = {}
-    for key, value in d.items():
-        if isinstance(value, list):
-            result[camel(key)] = list(map(
-                lambda x: camel_dict(x) if isinstance(x, dict) else x, value
-            ))
-        elif isinstance(value, dict) and key != "match_labels":
-            result[camel(key)] = camel_dict(value)
-        elif value != None:
-            result[camel(key)] = value
-    return result
-
-def dict_to_yaml(d):
-    return yaml.dump(yaml.load(json.dumps(camel_dict(d)), Loader=yaml.FullLoader))
-
 def generate_k8s_egress_rule(egress):
-    if len(egress.split("#")) == 4:
-        ns, labels, port, protocolIdentifier = egress.split("#")
+    if len(egress.split(ROW_DELIMITER)) == 4:
+        ns, labels, port, protocolIdentifier = egress.split(ROW_DELIMITER)
         egress_peer = kubernetes.client.V1NetworkPolicyPeer(
             namespace_selector = kubernetes.client.V1LabelSelector(
                 match_labels = {
@@ -108,8 +82,8 @@ def generate_k8s_egress_rule(egress):
                 match_labels = json.loads(labels)
             ),    
         )
-    elif len(egress.split("#")) == 3:
-        destinationIP, port, protocolIdentifier = egress.split("#")
+    elif len(egress.split(ROW_DELIMITER)) == 3:
+        destinationIP, port, protocolIdentifier = egress.split(ROW_DELIMITER)
         if get_IP_version(destinationIP) == "v4":
             cidr = destinationIP + "/32"
         else:
@@ -133,7 +107,7 @@ def generate_k8s_egress_rule(egress):
     return egress_rule
 
 def generate_k8s_ingress_rule(ingress):
-    ns, labels, port, protocolIdentifier = ingress.split("#")
+    ns, labels, port, protocolIdentifier = ingress.split(ROW_DELIMITER)
     ingress_peer = kubernetes.client.V1NetworkPolicyPeer(
         namespace_selector = kubernetes.client.V1LabelSelector(
             match_labels = {
@@ -159,15 +133,15 @@ def generate_policy_name(info):
 
 def generate_k8s_np(x):
     applied_to, (ingresses, egresses) = x
-    ingress_list = ingresses.split('|')
-    egress_list = egresses.split('|')
+    ingress_list = ingresses.split(PEER_DELIMITER)
+    egress_list = egresses.split(PEER_DELIMITER)
     egressRules = []
     for egress in egress_list:
-        if '#' in egress:
+        if ROW_DELIMITER in egress:
             egressRules.append(generate_k8s_egress_rule(egress))
     ingressRules = []
     for ingress in ingress_list:
-        if '#' in ingress:
+        if ROW_DELIMITER in ingress:
             ingressRules.append(generate_k8s_ingress_rule(ingress))
     if egressRules or ingressRules:
         policy_types = []
@@ -175,7 +149,7 @@ def generate_k8s_np(x):
             policy_types.append("Egress")
         if ingressRules:
             policy_types.append("Ingress")
-        ns, labels = applied_to.split("#")
+        ns, labels = applied_to.split(ROW_DELIMITER)
         np_name = generate_policy_name("recommend-k8s-np")
         np = kubernetes.client.V1NetworkPolicy(
             api_version = "networking.k8s.io/v1",
@@ -196,8 +170,8 @@ def generate_k8s_np(x):
     return dict_to_yaml(np.to_dict())
 
 def generate_anp_egress_rule(egress):
-    if len(egress.split("#")) == 4:
-        ns, labels, port, protocolIdentifier = egress.split("#")
+    if len(egress.split(ROW_DELIMITER)) == 4:
+        ns, labels, port, protocolIdentifier = egress.split(ROW_DELIMITER)
         egress_peer = antrea_crd.NetworkPolicyPeer(
             namespace_selector = kubernetes.client.V1LabelSelector(
                 match_labels = {
@@ -208,8 +182,8 @@ def generate_anp_egress_rule(egress):
                 match_labels = json.loads(labels)
             ),    
         )
-    elif len(egress.split("#")) == 3:
-        destinationIP, port, protocolIdentifier = egress.split("#")
+    elif len(egress.split(ROW_DELIMITER)) == 3:
+        destinationIP, port, protocolIdentifier = egress.split(ROW_DELIMITER)
         if get_IP_version(destinationIP) == "v4":
             cidr = destinationIP + "/32"
         else:
@@ -233,7 +207,7 @@ def generate_anp_egress_rule(egress):
     return egress_rule
 
 def generate_anp_ingress_rule(ingress):
-    ns, labels, port, protocolIdentifier = ingress.split("#")
+    ns, labels, port, protocolIdentifier = ingress.split(ROW_DELIMITER)
     ingress_peer = antrea_crd.NetworkPolicyPeer(
         namespace_selector = kubernetes.client.V1LabelSelector(
             match_labels = {
@@ -257,18 +231,18 @@ def generate_anp_ingress_rule(ingress):
 
 def generate_anp(network_peers):
     applied_to, (ingresses, egresses) = network_peers
-    ingress_list = ingresses.split('|')
-    egress_list = egresses.split('|')
+    ingress_list = ingresses.split(PEER_DELIMITER)
+    egress_list = egresses.split(PEER_DELIMITER)
     egressRules = []
     for egress in egress_list:
-        if '#' in egress:
+        if ROW_DELIMITER in egress:
             egressRules.append(generate_anp_egress_rule(egress))
     ingressRules = []
     for ingress in ingress_list:
-        if '#' in ingress:
+        if ROW_DELIMITER in ingress:
             ingressRules.append(generate_anp_ingress_rule(ingress))
     if egressRules or ingressRules:
-        ns, labels = applied_to.split("#")
+        ns, labels = applied_to.split(ROW_DELIMITER)
         np_name = generate_policy_name("recommend-allow-anp")
         np = antrea_crd.NetworkPolicy(
             kind = "NetworkPolicy",
@@ -312,7 +286,7 @@ def generate_svc_cg(destinationServicePortNameRow):
     return dict_to_yaml(svc_cg.to_dict())
 
 def generate_acnp_svc_egress_rule(egress):
-    svcPortName, port, protocolIdentifier = egress.split("#")
+    svcPortName, port, protocolIdentifier = egress.split(ROW_DELIMITER)
     ns, svc = svcPortName.partition(':')[0].split('/')
     egress_peer = antrea_crd.NetworkPolicyPeer(
         group = get_svc_cg_name(ns, svc)
@@ -330,12 +304,12 @@ def generate_acnp_svc_egress_rule(egress):
 
 def generate_svc_acnp(x):
     applied_to, egresses = x
-    egress_list = egresses.split('|')
+    egress_list = egresses.split(PEER_DELIMITER)
     egressRules = []
     for egress in egress_list:
         egressRules.append(generate_acnp_svc_egress_rule(egress))
     if egressRules:
-        ns, labels = applied_to.split("#")
+        ns, labels = applied_to.split(ROW_DELIMITER)
         np_name = generate_policy_name("recommend-svc-allow-acnp")
         np = antrea_crd.ClusterNetworkPolicy(
             kind = "ClusterNetworkPolicy",
@@ -370,7 +344,7 @@ def generate_reject_acnp(applied_to):
         )
     else:
         np_name = generate_policy_name("recommend-reject-acnp")
-        ns, labels = applied_to.split("#")
+        ns, labels = applied_to.split(ROW_DELIMITER)
         applied_to = antrea_crd.NetworkPolicyPeer(
             pod_selector = kubernetes.client.V1LabelSelector(
                 match_labels = json.loads(labels)
@@ -407,10 +381,10 @@ def generate_reject_acnp(applied_to):
 
 def recommend_k8s_policies(flows_df):
     egress_rdd = flows_df.rdd.map(map_flow_to_egress)\
-        .reduceByKey(lambda a, b: ("", a[1]+"|"+b[1]))
+        .reduceByKey(lambda a, b: ("", a[1]+PEER_DELIMITER+b[1]))
     ingress_rdd = flows_df.filter(flows_df.flowType != "pod_to_external")\
         .rdd.map(map_flow_to_ingress)\
-        .reduceByKey(lambda a, b: (a[0]+"|"+b[0], ""))
+        .reduceByKey(lambda a, b: (a[0]+PEER_DELIMITER+b[0], ""))
     network_peers_rdd = ingress_rdd.union(egress_rdd)\
                     .reduceByKey(combine_network_peers)
     k8s_np_rdd = network_peers_rdd.map(generate_k8s_np)
@@ -421,10 +395,10 @@ def recommend_antrea_policies(flows_df, option=1, deny_rules=True):
     # Recommend allow Antrea Network Policies for unprotected Pod-to-Pod & Pod-to-External flows
     unprotected_not_svc_flows_df = flows_df.filter(flows_df.flowType != "pod_to_svc")
     egress_rdd = unprotected_not_svc_flows_df.rdd.map(map_flow_to_egress)\
-        .reduceByKey(lambda a, b: ("", a[1]+"|"+b[1]))
+        .reduceByKey(lambda a, b: ("", a[1]+PEER_DELIMITER+b[1]))
     ingress_rdd = unprotected_not_svc_flows_df.filter(unprotected_not_svc_flows_df.flowType != "pod_to_external")\
         .rdd.map(map_flow_to_ingress)\
-        .reduceByKey(lambda a, b: (a[0]+"|"+b[0], ""))
+        .reduceByKey(lambda a, b: (a[0]+PEER_DELIMITER+b[0], ""))
     network_peers_rdd = ingress_rdd.union(egress_rdd)\
                     .reduceByKey(combine_network_peers)
     anp_rdd = network_peers_rdd.map(generate_anp)
@@ -434,7 +408,7 @@ def recommend_antrea_policies(flows_df, option=1, deny_rules=True):
     svc_df = unprotected_svc_flows_df.groupBy(["destinationServicePortName"]).agg({})
     svc_cg_list = svc_df.rdd.map(generate_svc_cg).collect()
     egress_svc_rdd = unprotected_svc_flows_df.rdd.map(map_flow_to_egress_svc)\
-        .reduceByKey(lambda a, b: a+"|"+b)
+        .reduceByKey(lambda a, b: a+PEER_DELIMITER+b)
     svc_acnp_rdd = egress_svc_rdd.map(generate_svc_acnp)
     svc_acnp_list = svc_acnp_rdd.collect()
     if deny_rules:
@@ -543,11 +517,48 @@ def write_recommendation_result(spark, result, recommendation_type, db_jdbc_addr
         .save()
 
 def initial_recommendation_job(spark, db_jdbc_address, table_name, limit=100, option=1, start_time=None, end_time=None, ns_allow_list=NAMESPACE_ALLOW_LIST):
+    """
+    Start an initial policy recommendation Spark job on a cluster having no recommendation before.
+
+    Args:
+        spark: Current SparkSession.
+        db_jdbc_address: Database address to fetch the flow records.
+        table_name: Name of the table storing flow records in database.
+        limit: Limit on the number of flow records fetched in database. Default value is 100, setting to 0 means unlimited.
+        option: Option of network isolation preference in policy recommendation. Currently we have 3 options and default value is 1:
+            1: Recommending allow ANP/ACNP policies, with default deny rules only on applied to Pod labels which have allow rules recommended.
+            2: Recommending allow ANP/ACNP policies, with default deny rules for whole cluster.
+            3: Recommending allow K8s network policies, with no deny rules at all.
+        start_time: The start time of the flow records considered for the policy recommendation. Default value is None, which means no limit of the start time of flow records.
+        end_time: The end time of the flow records considered for the policy recommendation. Default value is None, which means no limit of the end time of flow records.
+        ns_allow_list: List of default traffic allow namespaces. Default value is Antrea CNI related namespaces.
+
+    Returns:
+        A list of recommended policies, each recommended policy is a string of YAML format.
+    """
     sql_query = generate_sql_query(table_name, limit, start_time, end_time, True)
     unprotected_flows_df = read_flow_df(spark, db_jdbc_address, sql_query)
     return recommend_policies_for_ns_allow_list(ns_allow_list) + recommend_policies_for_unprotected_flows(unprotected_flows_df, option)
 
 def subsequent_recommendation_job(spark, db_jdbc_address, table_name, limit=100, option=1, start_time=None, end_time=None):
+    """
+    Start a subsequent policy recommendation Spark job on a cluster having recommendation before.
+
+    Args:
+        spark: Current SparkSession.
+        db_jdbc_address: Database address to fetch the flow records.
+        table_name: Name of the table storing flow records in database.
+        limit: Limit on the number of flow records fetched in database. Default value is 100, setting to 0 means unlimited.
+        option: Option of network isolation preference in policy recommendation. Currently we have 3 options and default value is 1:
+            1: Recommending allow ANP/ACNP policies, with default deny rules only on applied to Pod labels which have allow rules recommended.
+            2: Recommending allow ANP/ACNP policies, with default deny rules for whole cluster.
+            3: Recommending allow K8s network policies, with no deny rules at all.
+        start_time: The start time of the flow records considered for the policy recommendation. Default value is None, which means no limit of the start time of flow records.
+        end_time: The end time of the flow records considered for the policy recommendation. Default value is None, which means no limit of the end time of flow records.
+
+    Returns:
+        A list of recommended policies, each recommended policy is a string of YAML format.
+    """    
     recommend_policies = []
     sql_query = generate_sql_query(table_name, limit, start_time, end_time, True)
     unprotected_flows_df = read_flow_df(spark, db_jdbc_address, sql_query)
