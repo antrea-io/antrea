@@ -64,7 +64,7 @@ jobs:
         retention-days: 1 # minimum value, in case artifact deletion by 'artifact-cleanup' job fails
 
   test-e2e-encap:
-    name: E2e tests on a Kind cluster on Linux
+    name: E2e tests on a TCE cluster on Linux
     needs: [build-antrea-coverage-image, build-flow-aggregator-coverage-image]
     runs-on: [ubuntu-latest]
     steps:

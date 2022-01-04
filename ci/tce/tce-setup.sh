@@ -235,13 +235,13 @@ function create {
     exit 1
   fi
 
-  set +e
-  tanzu mc get | grep $CLUSTER_NAME > /dev/null 2>&1
-  if [[ $? -eq 0 ]]; then
-    echoerr "cluster $CLUSTER_NAME already created"
-    exit 0
-  fi
-  set -e
+#  set +e
+#  tanzu mc get | grep $CLUSTER_NAME > /dev/null 2>&1
+#  if [[ $? -eq 0 ]]; then
+#    echoerr "cluster $CLUSTER_NAME already created"
+#    exit 0
+#  fi
+#  set -e
 
   config_file="/tmp/tce-mc.yaml"
   cat <<EOF > $config_file
