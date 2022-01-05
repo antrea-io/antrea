@@ -160,6 +160,21 @@ func (mr *MockInterfaceStoreMockRecorder) GetInterfaceByName(arg0 interface{}) *
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetInterfaceByName", reflect.TypeOf((*MockInterfaceStore)(nil).GetInterfaceByName), arg0)
 }
 
+// GetInterfaceByOFPort mocks base method
+func (m *MockInterfaceStore) GetInterfaceByOFPort(arg0 uint32) (*interfacestore.InterfaceConfig, bool) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetInterfaceByOFPort", arg0)
+	ret0, _ := ret[0].(*interfacestore.InterfaceConfig)
+	ret1, _ := ret[1].(bool)
+	return ret0, ret1
+}
+
+// GetInterfaceByOFPort indicates an expected call of GetInterfaceByOFPort
+func (mr *MockInterfaceStoreMockRecorder) GetInterfaceByOFPort(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetInterfaceByOFPort", reflect.TypeOf((*MockInterfaceStore)(nil).GetInterfaceByOFPort), arg0)
+}
+
 // GetInterfaceKeysByType mocks base method
 func (m *MockInterfaceStore) GetInterfaceKeysByType(arg0 interfacestore.InterfaceType) []string {
 	m.ctrl.T.Helper()

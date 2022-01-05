@@ -42,7 +42,12 @@ const (
 
 	// PacketIn reasons
 	PacketInReasonTF ofpPacketInReason = 1
+	// PacketInReasonNP is used for the custom packetIn reasons for Network Policy, including: Logging, Reject, Deny.
+	// It is also used to mark the DNS Response packet.
 	PacketInReasonNP ofpPacketInReason = 0
+	// PacketInReasonMC shares PacketInReasonNP for IGMP packet_in message. This is because OVS "controller" action
+	// only correctly supports reason 0 or 1. Change to another value after the OVS action is corrected.
+	PacketInReasonMC = PacketInReasonNP
 	// PacketInQueueSize defines the size of PacketInQueue.
 	// When PacketInQueue reaches PacketInQueueSize, new packet-in will be dropped.
 	PacketInQueueSize = 200
@@ -111,6 +116,7 @@ func (c *client) parsePacketIn(featurePacketIn *featureStartPacketIn) {
 		}
 		// Use corresponding handlers subscribed to the reason to handle PacketIn
 		for name, handler := range c.packetInHandlers[featurePacketIn.reason] {
+			klog.V(2).InfoS("Received packetIn", "reason", featurePacketIn.reason, "handler", name)
 			err := handler.HandlePacketIn(pktIn)
 			if err != nil {
 				klog.Errorf("PacketIn handler %s failed to process packet: %+v", name, err)

@@ -20,6 +20,7 @@ import (
 	"net"
 
 	"antrea.io/libOpenflow/protocol"
+	"antrea.io/libOpenflow/util"
 	"antrea.io/ofnet/ofctrl"
 	"k8s.io/klog/v2"
 )
@@ -103,6 +104,8 @@ func (b *ofPacketOutBuilder) SetIPProtocol(proto Protocol) PacketOutBuilder {
 		b.pktOut.IPHeader.Protocol = 0x84
 	case ProtocolICMP:
 		b.pktOut.IPHeader.Protocol = protocol.Type_ICMP
+	case ProtocolIGMP:
+		b.pktOut.IPHeader.Protocol = protocol.Type_IGMP
 	default:
 		b.pktOut.IPHeader.Protocol = 0xff
 	}
@@ -286,6 +289,13 @@ func (b *ofPacketOutBuilder) SetOutport(outport uint32) PacketOutBuilder {
 	return b
 }
 
+// SetL4Packet sets the L4 packet of the packetOut message. It provides a generic function to create a packet
+// of protocol other than TCP/UDP/ICMP.
+func (b *ofPacketOutBuilder) SetL4Packet(packet util.Message) PacketOutBuilder {
+	b.pktOut.IPHeader.Data = packet
+	return b
+}
+
 // AddLoadAction loads the data to the target field at specified range when the packet is received by OVS Switch.
 func (b *ofPacketOutBuilder) AddLoadAction(name string, data uint64, rng *Range) PacketOutBuilder {
 	act, _ := ofctrl.NewNXLoadAction(name, data, rng.ToNXRange())
@@ -330,6 +340,18 @@ func (b *ofPacketOutBuilder) Done() *ofctrl.PacketOut {
 			b.pktOut.UDPHeader.Length = b.pktOut.UDPHeader.Len()
 			b.pktOut.UDPHeader.Checksum = b.udpHeaderChecksum()
 			b.pktOut.IPHeader.Length = 20 + b.pktOut.UDPHeader.Len()
+		} else if b.pktOut.IPHeader.Protocol == protocol.Type_IGMP {
+			if igmpv1or2, ok := b.pktOut.IPHeader.Data.(*protocol.IGMPv1or2); ok {
+				igmpv1or2.Checksum = 0
+				igmpv1or2.Checksum = b.igmpHeaderChecksum()
+			} else if igmpv3Query, ok := b.pktOut.IPHeader.Data.(*protocol.IGMPv3Query); ok {
+				igmpv3Query.Checksum = 0
+				igmpv3Query.Checksum = b.igmpHeaderChecksum()
+			} else if igmpv3Report, ok := b.pktOut.IPHeader.Data.(*protocol.IGMPv3MembershipReport); ok {
+				igmpv3Report.Checksum = 0
+				igmpv3Report.Checksum = b.igmpHeaderChecksum()
+			}
+			b.pktOut.IPHeader.Length = 20 + b.pktOut.IPHeader.Data.Len()
 		}
 		if b.pktOut.IPHeader.Id == 0 {
 			// #nosec G404: random number generator not used for security purposes
@@ -418,6 +440,12 @@ func (b *ofPacketOutBuilder) udpHeaderChecksum() uint16 {
 	if checksum == 0 {
 		checksum = 0xffff
 	}
+	return checksum
+}
+
+func (b *ofPacketOutBuilder) igmpHeaderChecksum() uint16 {
+	data, _ := b.pktOut.IPHeader.Data.MarshalBinary()
+	checksum := checksum(data)
 	return checksum
 }
 
