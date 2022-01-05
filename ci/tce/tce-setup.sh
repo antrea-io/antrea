@@ -255,6 +255,7 @@ LDAP_GROUP_SEARCH_USER_ATTRIBUTE: DN
 LDAP_USER_SEARCH_USERNAME: userPrincipalName
 SERVICE_CIDR: 100.64.0.0/13
 TKG_HTTP_PROXY_ENABLED: "false"
+CLUSTER_PLAN: dev
 EOF
   # for (( i=0; i<$NUM_WORKERS; i++ )); do
   #   echo -e "- role: worker" >> $config_file
