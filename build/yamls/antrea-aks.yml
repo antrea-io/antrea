@@ -1844,6 +1844,15 @@ spec:
                             namespace:
                               type: string
                           type: object
+                        statefulSet:
+                          properties:
+                            index:
+                              type: integer
+                            name:
+                              type: string
+                            namespace:
+                              type: string
+                          type: object
                       type: object
                     phase:
                       type: string
