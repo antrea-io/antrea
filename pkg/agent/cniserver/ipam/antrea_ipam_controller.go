@@ -26,6 +26,10 @@ import (
 	"k8s.io/klog/v2"
 
 	clientsetversioned "antrea.io/antrea/pkg/client/clientset/versioned"
+	"antrea.io/antrea/pkg/client/informers/externalversions"
+	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha2"
+	crdlisters "antrea.io/antrea/pkg/client/listers/crd/v1alpha2"
+	"antrea.io/antrea/pkg/ipam/poolallocator"
 )
 
 const (
@@ -39,18 +43,24 @@ const (
 type AntreaIPAMController struct {
 	kubeClient        clientset.Interface
 	crdClient         clientsetversioned.Interface
+	ipPoolInformer    crdinformers.IPPoolInformer
+	ipPoolLister      crdlisters.IPPoolLister
 	namespaceInformer coreinformers.NamespaceInformer
 	namespaceLister   corelisters.NamespaceLister
 }
 
 func NewAntreaIPAMController(kubeClient clientset.Interface,
 	crdClient clientsetversioned.Interface,
-	informerFactory informers.SharedInformerFactory) *AntreaIPAMController {
+	informerFactory informers.SharedInformerFactory,
+	crdInformerFactory externalversions.SharedInformerFactory) *AntreaIPAMController {
 
 	namespaceInformer := informerFactory.Core().V1().Namespaces()
+	ipPoolInformer := crdInformerFactory.Crd().V1alpha2().IPPools()
 	c := AntreaIPAMController{
 		kubeClient:        kubeClient,
 		crdClient:         crdClient,
+		ipPoolInformer:    ipPoolInformer,
+		ipPoolLister:      ipPoolInformer.Lister(),
 		namespaceInformer: namespaceInformer,
 		namespaceLister:   namespaceInformer.Lister(),
 	}
@@ -58,8 +68,8 @@ func NewAntreaIPAMController(kubeClient clientset.Interface,
 	return &c
 }
 
-func InitializeAntreaIPAMController(kubeClient clientset.Interface, crdClient clientsetversioned.Interface, informerFactory informers.SharedInformerFactory) (*AntreaIPAMController, error) {
-	antreaIPAMController := NewAntreaIPAMController(kubeClient, crdClient, informerFactory)
+func InitializeAntreaIPAMController(kubeClient clientset.Interface, crdClient clientsetversioned.Interface, informerFactory informers.SharedInformerFactory, crdInformerFactory externalversions.SharedInformerFactory) (*AntreaIPAMController, error) {
+	antreaIPAMController := NewAntreaIPAMController(kubeClient, crdClient, informerFactory, crdInformerFactory)
 
 	// Order of init causes antreaIPAMDriver to be initialized first
 	// After controller is initialized by agent init, we need to make it
@@ -81,7 +91,7 @@ func (c *AntreaIPAMController) Run(stopCh <-chan struct{}) {
 	}()
 
 	klog.InfoS("Starting", "controller", controllerName)
-	if !cache.WaitForNamedCacheSync(controllerName, stopCh, c.namespaceInformer.Informer().HasSynced) {
+	if !cache.WaitForNamedCacheSync(controllerName, stopCh, c.namespaceInformer.Informer().HasSynced, c.ipPoolInformer.Informer().HasSynced) {
 		return
 	}
 
@@ -98,4 +108,17 @@ func (c *AntreaIPAMController) getIPPoolsByNamespace(namespace string) []string 
 		return nil
 	}
 	return strings.Split(annotations, AntreaIPAMAnnotationDelimiter)
+}
+
+func (c *AntreaIPAMController) getPoolAllocatorByNamespace(namespace string) (*poolallocator.IPPoolAllocator, error) {
+	poolNames := c.getIPPoolsByNamespace(namespace)
+	if len(poolNames) < 1 {
+		// This namespace does not contain IP Pool annotation
+		return nil, nil
+	}
+
+	// Only one pool is supported as of today
+	// TODO - support a pool for each IP version
+	ipPool := poolNames[0]
+	return poolallocator.NewIPPoolAllocator(ipPool, c.crdClient, c.ipPoolLister)
 }

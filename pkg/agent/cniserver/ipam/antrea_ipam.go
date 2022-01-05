@@ -190,17 +190,14 @@ func (d *AntreaIPAM) owns(k8sArgs *argtypes.K8sArgs) (bool, *poolallocator.IPPoo
 	// supported as well
 	namespace := string(k8sArgs.K8S_POD_NAMESPACE)
 	klog.V(2).InfoS("Inspecting IPAM annotation", "namespace", namespace)
-	poolNames := d.controller.getIPPoolsByNamespace(namespace)
-	if len(poolNames) < 1 {
-		return false, nil, nil
-	}
-	// Only one pool is supported as of today
-	// TODO - support a pool for each IP version
-	ipPool := poolNames[0]
-	allocator, err := poolallocator.NewIPPoolAllocator(ipPool, d.controller.crdClient)
+	allocator, err := d.controller.getPoolAllocatorByNamespace(namespace)
 	if err != nil {
 		// Failed to find pool - error should be returned from this driver
 		return true, nil, err
+	}
+	if allocator == nil {
+		// No pool annotation for this namespace
+		return false, nil, nil
 	}
 	return true, allocator, nil
 }
