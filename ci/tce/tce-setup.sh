@@ -260,7 +260,7 @@ EOF
   # for (( i=0; i<$NUM_WORKERS; i++ )); do
   #   echo -e "- role: worker" >> $config_file
   # done
-  tanzu mc create --file $config_file
+  tanzu mc create --file $config_file -v=6
 
   tanzu mc get
   tanzu mc kubeconfig get $CLUSTER_NAME --admin
