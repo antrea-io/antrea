@@ -256,10 +256,14 @@ LDAP_USER_SEARCH_USERNAME: userPrincipalName
 SERVICE_CIDR: 100.64.0.0/13
 TKG_HTTP_PROXY_ENABLED: "false"
 EOF
-  for (( i=0; i<$NUM_WORKERS; i++ )); do
-    echo -e "- role: worker" >> $config_file
-  done
+  # for (( i=0; i<$NUM_WORKERS; i++ )); do
+  #   echo -e "- role: worker" >> $config_file
+  # done
   tanzu mc create --file $config_file
+
+  tanzu mc get
+  tanzu mc kubeconfig get $CLUSTER_NAME --admin
+  kubectl config use-context $CLUSTER_NAME-admin@$CLUSTER_NAME
 
   # force coredns to run on control-plane node because it
   # is attached to kind bridge and uses host dns.
