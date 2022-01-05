@@ -20,6 +20,7 @@ import (
 	"net"
 
 	"antrea.io/libOpenflow/protocol"
+	ofutil "antrea.io/libOpenflow/util"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/klog/v2"
 
@@ -299,6 +300,20 @@ type Client interface {
 	AddAddressToDNSConjunction(id uint32, addrs []types.Address) error
 	// DeleteAddressFromDNSConjunction removes addresses from the toAddresses of the dns packetIn conjunction.
 	DeleteAddressFromDNSConjunction(id uint32, addrs []types.Address) error
+	// InstallMulticastInitialFlows installs OpenFlow to packetIn the IGMP messages and output the Multicast traffic to
+	// antrea-gw0 so that local Pods could access external Multicast servers.
+	InstallMulticastInitialFlows(pktInReason uint8) error
+	// InstallMulticastFlow installs the flow to forward Multicast traffic normally, and output it to antrea-gw0
+	// to ensure it can be forwarded to the external addresses.
+	InstallMulticastFlow(multicastIP net.IP) error
+	// UninstallMulticastFlow removes the flow matching the given multicastIP.
+	UninstallMulticastFlow(multicastIP net.IP) error
+	// SendIGMPQueryPacketOut sends the IGMPQuery packet as a packet-out to OVS from the gateway port.
+	SendIGMPQueryPacketOut(
+		dstMAC net.HardwareAddr,
+		dstIP net.IP,
+		outPort uint32,
+		igmp ofutil.Message) error
 }
 
 // GetFlowTableStatus returns an array of flow table status.
@@ -1193,6 +1208,50 @@ func (c *client) SendUDPPacketOut(
 		packetOutBuilder = mutatePacketOut(packetOutBuilder)
 	}
 
+	packetOutObj := packetOutBuilder.Done()
+	return c.bridge.SendPacketOut(packetOutObj)
+}
+
+func (c *client) InstallMulticastInitialFlows(pktInReason uint8) error {
+	flows := c.igmpPktInFlows(pktInReason)
+	flows = append(flows, c.externalMulticastReceiverFlow())
+	cacheKey := fmt.Sprintf("multicast")
+	c.replayMutex.RLock()
+	defer c.replayMutex.RUnlock()
+	return c.addFlows(c.mcastFlowCache, cacheKey, flows)
+}
+
+func (c *client) InstallMulticastFlow(multicastIP net.IP) error {
+	flows := c.localMulticastForwardFlow(multicastIP)
+	cacheKey := fmt.Sprintf("multicast_%s", multicastIP.String())
+	c.replayMutex.RLock()
+	defer c.replayMutex.RUnlock()
+	return c.addFlows(c.mcastFlowCache, cacheKey, flows)
+}
+
+func (c *client) UninstallMulticastFlow(multicastIP net.IP) error {
+	c.replayMutex.RLock()
+	defer c.replayMutex.RUnlock()
+	cacheKey := fmt.Sprintf("multicast_%s", multicastIP.String())
+	return c.deleteFlows(c.mcastFlowCache, cacheKey)
+}
+
+func (c *client) SendIGMPQueryPacketOut(
+	dstMAC net.HardwareAddr,
+	dstIP net.IP,
+	outPort uint32,
+	igmp ofutil.Message) error {
+	// Generate a base IP PacketOutBuilder.
+	srcMAC := c.nodeConfig.GatewayConfig.MAC.String()
+	srcIP := c.nodeConfig.GatewayConfig.IPv4.String()
+	dstMACStr := dstMAC.String()
+	dstIPStr := dstIP.String()
+	packetOutBuilder, err := setBasePacketOutBuilder(c.bridge.BuildPacketOut(), srcMAC, dstMACStr, srcIP, dstIPStr, config.HostGatewayOFPort, outPort)
+	if err != nil {
+		return err
+	}
+	// Set protocol and L4 message.
+	packetOutBuilder = packetOutBuilder.SetIPProtocol(binding.ProtocolIGMP).SetL4Packet(igmp)
 	packetOutObj := packetOutBuilder.Done()
 	return c.bridge.SendPacketOut(packetOutObj)
 }
