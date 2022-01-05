@@ -660,7 +660,7 @@ func (c *Client) Reconcile(podCIDRs []string, svcIPs map[string]bool) error {
 			if desiredPodCIDRs.Has(entry) {
 				continue
 			}
-			klog.Infof("Deleting orphaned PodIP %s from ipset and route table", entry)
+			klog.Infof("Deleting orphaned Pod IP %s from ipset and route table", entry)
 			if err := ipset.DelEntry(ipsetName, entry); err != nil {
 				return err
 			}
@@ -714,7 +714,7 @@ func (c *Client) Reconcile(podCIDRs []string, svcIPs map[string]bool) error {
 		if desiredGWs.Has(neighIP) {
 			continue
 		}
-		// Don't delete the virtual Service IP neigh which is added by AntreaProxy.
+		// Don't delete the virtual Service IP neighbor which is added by AntreaProxy.
 		if actualNeigh.IP.Equal(config.VirtualServiceIPv6) {
 			continue
 		}
@@ -1023,7 +1023,7 @@ func (c *Client) addVirtualServiceIPRoute(isIPv6 bool) error {
 		mask = ipv6AddrLength
 	}
 
-	neigh := generateNeigh(svcIP, linkIndex)
+	neigh := generateNeigh(svcIP, linkIndex, isIPv6)
 	if err := netlink.NeighSet(neigh); err != nil {
 		return fmt.Errorf("failed to add new IP neighbour for %s: %v", svcIP, err)
 	}
@@ -1123,20 +1123,55 @@ func (c *Client) AddClusterIPRoute(svcIP net.IP) error {
 			} else {
 				c.clusterIPv4CIDR = newClusterIPCIDR
 			}
-			klog.V(4).InfoS("Created a route with new CLusterIP CIDR to route the ClusterIP to Antrea gateway", "CLusterIP CIDR", newClusterIPCIDR, "clusterIP", svcIP)
+			klog.V(4).InfoS("Created a route with new ClusterIP CIDR to route the ClusterIP to Antrea gateway", "ClusterIP CIDR", newClusterIPCIDR, "clusterIP", svcIP)
 		} else {
 			klog.V(4).InfoS("Route with current ClusterIP CIDR can route the ClusterIP to Antrea gateway", "ClusterIP CIDR", curClusterIPCIDR, "clusterIP", svcIP)
 		}
 	} else {
-		route := generateRoute(svcIP, mask, gw, linkIndex, scope)
-		if err := netlink.RouteReplace(route); err != nil {
-			return fmt.Errorf("failed to install new ClusterIP route: %w", err)
+		var matchedExistRoute *netlink.Route
+		var createNewRoute bool
+		newRoute := generateRoute(svcIP, mask, gw, linkIndex, scope)
+		routes, err := c.listIPRoutesOnGW()
+		if err != nil {
+			return fmt.Errorf("error listing ip routes: %v", err)
+		}
+		for i := range routes {
+			route := routes[i]
+			if route.Dst.Contains(svcIP) {
+				matchedExistRoute = &route
+				newRoute = &route
+				break
+			}
+
+			if containsCIDR(newRoute.Dst, route.Dst) {
+				matchedExistRoute = &route
+				createNewRoute = true
+				break
+			}
+		}
+		if matchedExistRoute == nil {
+			createNewRoute = true
+		}
+		if createNewRoute {
+			if err := netlink.RouteReplace(newRoute); err != nil {
+				return fmt.Errorf("failed to install new ClusterIP route: %w", err)
+			}
+			klog.V(4).InfoS("Created a route with new ClusterIP CIDR to route the ClusterIP to Antrea gateway", "ClusterIP CIDR", newRoute.Dst, "clusterIP", svcIP)
 		}
 
+		if matchedExistRoute != nil {
+			if createNewRoute {
+				if err = netlink.RouteDel(matchedExistRoute); err != nil {
+					return fmt.Errorf("failed to uninstall old route: %w", err)
+				}
+			} else {
+				klog.V(4).InfoS("Route with current ClusterIP CIDR can route the ClusterIP to Antrea gateway", "ClusterIP CIDR", newRoute.Dst, "clusterIP", svcIP)
+			}
+		}
 		if isIPv6 {
-			c.clusterIPv6CIDR = route.Dst
+			c.clusterIPv6CIDR = newRoute.Dst
 		} else {
-			c.clusterIPv4CIDR = route.Dst
+			c.clusterIPv4CIDR = newRoute.Dst
 		}
 	}
 
@@ -1296,9 +1331,9 @@ func generateRoute(ip net.IP, mask int, gw net.IP, linkIndex int, scope netlink.
 	return route
 }
 
-func generateNeigh(ip net.IP, linkIndex int) *netlink.Neigh {
+func generateNeigh(ip net.IP, linkIndex int, isIPv6 bool) *netlink.Neigh {
 	family := netlink.FAMILY_V4
-	if utilnet.IsIPv6(ip) {
+	if isIPv6 {
 		family = netlink.FAMILY_V6
 	}
 	return &netlink.Neigh{
@@ -1308,4 +1343,17 @@ func generateNeigh(ip net.IP, linkIndex int) *netlink.Neigh {
 		IP:           ip,
 		HardwareAddr: globalVMAC,
 	}
+}
+
+// containsCIDR return true if IPNet ipn1 contains ipn2 but not equal.
+func containsCIDR(ipn1, ipn2 *net.IPNet) bool {
+	if ipn1 == ipn2 {
+		return false
+	}
+	if ipn1 == nil || ipn2 == nil {
+		return false
+	}
+	m1, _ := ipn1.Mask.Size()
+	m2, _ := ipn2.Mask.Size()
+	return m1 <= m2 && ipn1.Contains(ipn2.IP) && !ipn1.IP.Equal(ipn2.IP)
 }
