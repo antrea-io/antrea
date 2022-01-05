@@ -260,12 +260,16 @@ EOF
   # for (( i=0; i<$NUM_WORKERS; i++ )); do
   #   echo -e "- role: worker" >> $config_file
   # done
-  tanzu mc create --file $config_file -v=6
+  # tanzu mc create --file $config_file -v=6
 
-  tanzu mc get
-  tanzu mc kubeconfig get $CLUSTER_NAME --admin
+  # tanzu mc get
+  # tanzu mc kubeconfig get $CLUSTER_NAME --admin
+
+
+  # standalone cluster solution
+  tanzu standalone-cluster create -i docker $CLUSTER_NAME -v=6
   kubectl config use-context $CLUSTER_NAME-admin@$CLUSTER_NAME
-
+  kubectl get pod -A
   # force coredns to run on control-plane node because it
   # is attached to kind bridge and uses host dns.
   # Worker Node may be configured to attach to custom bridges
@@ -282,7 +286,7 @@ EOF
   kubectl patch deployment coredns -p "$patch" -n kube-system
 
   configure_networks
-  load_images
+  #load_images
 
   nodes="$(kind get nodes --name $CLUSTER_NAME)"
   nodes="$(echo $nodes)"
