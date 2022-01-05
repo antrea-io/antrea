@@ -18,6 +18,7 @@ import (
 	"net"
 	"time"
 
+	"antrea.io/libOpenflow/util"
 	"antrea.io/ofnet/ofctrl"
 )
 
@@ -46,6 +47,7 @@ const (
 	ProtocolSCTPv6 Protocol = "sctpv6"
 	ProtocolICMP   Protocol = "icmp"
 	ProtocolICMPv6 Protocol = "icmpv6"
+	ProtocolIGMP   Protocol = "igmp"
 )
 
 const (
@@ -382,6 +384,7 @@ type PacketOutBuilder interface {
 	AddLoadAction(name string, data uint64, rng *Range) PacketOutBuilder
 	AddLoadRegMark(mark *RegMark) PacketOutBuilder
 	AddResubmitAction(inPort *uint16, table *uint8) PacketOutBuilder
+	SetL4Packet(packet util.Message) PacketOutBuilder
 	Done() *ofctrl.PacketOut
 }
 

@@ -487,6 +487,9 @@ func (b *ofFlowBuilder) MatchProtocol(protocol Protocol) FlowBuilder {
 	case ProtocolICMPv6:
 		b.Match.Ethertype = 0x86dd
 		b.Match.IpProto = 58
+	case ProtocolIGMP:
+		b.Match.Ethertype = 0x0800
+		b.Match.IpProto = 2
 	}
 	b.protocol = protocol
 	return b

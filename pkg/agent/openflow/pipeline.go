@@ -46,6 +46,7 @@ var (
 	SpoofGuardTable              = binding.NewOFTable(10, "SpoofGuard")
 	arpResponderTable            = binding.NewOFTable(20, "ARPResponder")
 	IPv6Table                    = binding.NewOFTable(21, "IPv6")
+	MulticastTable               = binding.NewOFTable(22, "Multicast")
 	ServiceHairpinTable          = binding.NewOFTable(23, "ServiceHairpin")
 	ServiceConntrackTable        = binding.NewOFTable(24, "ServiceConntrack") // serviceConntrackTable use a new ct_zone to transform SNAT'd connections.
 	ConntrackTable               = binding.NewOFTable(30, "ConntrackZone")
@@ -234,6 +235,7 @@ const (
 	// policy rules.
 	CustomReasonDeny = 0b100
 	CustomReasonDNS  = 0b1000
+	CustomReasonIGMP = 0b10000
 )
 
 var DispositionToString = map[uint32]string{
@@ -255,6 +257,10 @@ var (
 	GlobalVirtualMAC, _ = net.ParseMAC("aa:bb:cc:dd:ee:ff")
 	hairpinIP           = net.ParseIP("169.254.169.252").To4()
 	hairpinIPv6         = net.ParseIP("fc00::aabb:ccdd:eeff").To16()
+
+	mcastAllRouters = net.ParseIP("224.0.0.2")
+	igmpV3ReportDst = net.ParseIP("224.0.0.22")
+	_, mcastCIDR, _ = net.ParseCIDR("224.0.0.0/4")
 )
 
 type OFEntryOperations interface {
@@ -290,6 +296,7 @@ type client struct {
 	enableDenyTracking    bool
 	enableEgress          bool
 	enableWireGuard       bool
+	enableMulticast       bool
 	connectUplinkToBridge bool
 	roundInfo             types.RoundInfo
 	cookieAllocator       cookie.Allocator
@@ -297,7 +304,7 @@ type client struct {
 	egressEntryTable      uint8
 	ingressEntryTable     uint8
 	// Flow caches for corresponding deletions.
-	nodeFlowCache, podFlowCache, serviceFlowCache, snatFlowCache, tfFlowCache *flowCategoryCache
+	nodeFlowCache, podFlowCache, serviceFlowCache, snatFlowCache, tfFlowCache, mcastFlowCache *flowCategoryCache
 	// "fixed" flows installed by the agent after initialization and which do not change during
 	// the lifetime of the client.
 	gatewayFlows, defaultServiceFlows, defaultTunnelFlows, hostNetworkingFlows []binding.Flow
@@ -2542,8 +2549,11 @@ func (c *client) genPacketInMeter(meterID binding.MeterIDType, rate uint32) bind
 
 func (c *client) generatePipeline() {
 	c.createOFTable(ClassifierTable, SpoofGuardTable.GetID(), binding.TableMissActionDrop)
+	c.createOFTable(SpoofGuardTable, ConntrackTable.GetID(), binding.TableMissActionDrop)
+	c.createOFTable(IPv6Table, ConntrackTable.GetID(), binding.TableMissActionNext)
 	c.createOFTable(arpResponderTable, binding.LastTableID, binding.TableMissActionDrop)
 	c.createOFTable(ConntrackTable, ConntrackStateTable.GetID(), binding.TableMissActionNone)
+	c.createOFTable(ConntrackStateTable, DNATTable.GetID(), binding.TableMissActionNext)
 	c.createOFTable(EgressRuleTable, EgressDefaultTable.GetID(), binding.TableMissActionNext)
 	c.createOFTable(EgressDefaultTable, EgressMetricTable.GetID(), binding.TableMissActionNext)
 	c.createOFTable(EgressMetricTable, L3ForwardingTable.GetID(), binding.TableMissActionNext)
@@ -2554,10 +2564,12 @@ func (c *client) generatePipeline() {
 	c.createOFTable(IngressRuleTable, IngressDefaultTable.GetID(), binding.TableMissActionNext)
 	c.createOFTable(IngressDefaultTable, IngressMetricTable.GetID(), binding.TableMissActionNext)
 	c.createOFTable(IngressMetricTable, ConntrackCommitTable.GetID(), binding.TableMissActionNext)
+	c.createOFTable(ConntrackCommitTable, L2ForwardingOutTable.GetID(), binding.TableMissActionNext)
 	c.createOFTable(L2ForwardingOutTable, binding.LastTableID, binding.TableMissActionDrop)
 	if c.enableProxy {
-		SpoofGuardTable = c.createOFTable(SpoofGuardTable, ServiceHairpinTable.GetID(), binding.TableMissActionDrop)
-		IPv6Table = c.createOFTable(IPv6Table, ServiceHairpinTable.GetID(), binding.TableMissActionNext)
+		SpoofGuardTable.SetNext(ServiceHairpinTable.GetID())
+		IPv6Table.SetNext(ServiceHairpinTable.GetID())
+		ConntrackStateTable.SetNext(EndpointDNATTable.GetID())
 		if c.proxyAll {
 			ServiceHairpinTable = c.createOFTable(ServiceHairpinTable, ServiceConntrackTable.GetID(), binding.TableMissActionNext)
 			ServiceConntrackTable = c.createOFTable(ServiceConntrackTable, ConntrackTable.GetID(), binding.TableMissActionNext)
@@ -2566,18 +2578,13 @@ func (c *client) generatePipeline() {
 		} else {
 			ServiceHairpinTable = c.createOFTable(ServiceHairpinTable, ConntrackTable.GetID(), binding.TableMissActionNext)
 		}
-		ConntrackStateTable = c.createOFTable(ConntrackStateTable, EndpointDNATTable.GetID(), binding.TableMissActionNext)
 		SessionAffinityTable = c.createOFTable(SessionAffinityTable, binding.LastTableID, binding.TableMissActionNone)
 		ServiceLBTable = c.createOFTable(ServiceLBTable, EndpointDNATTable.GetID(), binding.TableMissActionNext)
 		EndpointDNATTable = c.createOFTable(EndpointDNATTable, c.egressEntryTable, binding.TableMissActionNext)
-		ConntrackCommitTable = c.createOFTable(ConntrackCommitTable, HairpinSNATTable.GetID(), binding.TableMissActionNext)
 		HairpinSNATTable = c.createOFTable(HairpinSNATTable, L2ForwardingOutTable.GetID(), binding.TableMissActionNext)
+		ConntrackCommitTable.SetNext(HairpinSNATTable.GetID())
 	} else {
-		c.createOFTable(SpoofGuardTable, ConntrackTable.GetID(), binding.TableMissActionDrop)
-		c.createOFTable(IPv6Table, ConntrackTable.GetID(), binding.TableMissActionNext)
-		c.createOFTable(ConntrackStateTable, DNATTable.GetID(), binding.TableMissActionNext)
 		c.createOFTable(DNATTable, c.egressEntryTable, binding.TableMissActionNext)
-		c.createOFTable(ConntrackCommitTable, L2ForwardingOutTable.GetID(), binding.TableMissActionNext)
 	}
 	// The default SNAT is implemented with OVS on Windows.
 	if c.enableEgress || runtime.IsWindowsPlatform() {
@@ -2590,6 +2597,13 @@ func (c *client) generatePipeline() {
 		c.createOFTable(AntreaPolicyEgressRuleTable, EgressRuleTable.GetID(), binding.TableMissActionNext)
 		c.createOFTable(AntreaPolicyIngressRuleTable, IngressRuleTable.GetID(), binding.TableMissActionNext)
 	}
+	if c.enableMulticast {
+		SpoofGuardTable.SetNext(MulticastTable.GetID())
+		c.createOFTable(MulticastTable, ConntrackTable.GetID(), binding.TableMissActionNext)
+		if c.enableProxy {
+			MulticastTable.SetNext(ServiceHairpinTable.GetID())
+		}
+	}
 }
 
 // createOFTable sets the missAction and the next table ID of the given table according to the pipeline. Then it creates the table on the bridge. At last, it adds the table into the ofTableCache.
@@ -2597,6 +2611,52 @@ func (c *client) createOFTable(table binding.Table, nextID uint8, missAction bin
 	c.bridge.CreateTable(table, nextID, missAction)
 	ofTableCache.Add(table)
 	return table
+}
+
+// igmpPktInFlows sets reg0[28] to mark the IGMP packet in MulticastTable and sends it to antrea-agent on MulticastTable.
+func (c *client) igmpPktInFlows(reason uint8) []binding.Flow {
+	var flows []binding.Flow
+	for _, dstIP := range []net.IP{mcastAllRouters, igmpV3ReportDst} {
+		// Set a custom reason for the IGMP packets, and then send it to antrea-agent and forward it normally in the
+		// OVS bridge, so that the OVS multicast db cache can be updated, and antrea-agent can identify the local multicast
+		// group and its members in the meanwhile.
+		flows = append(flows, MulticastTable.BuildFlow(priorityHigh).
+			MatchProtocol(binding.ProtocolIGMP).
+			MatchRegMark(FromLocalRegMark).
+			MatchDstIP(dstIP).
+			Action().LoadRegMark(CustomReasonIGMPRegMark).
+			Action().SendToController(reason).
+			Action().Normal().
+			Done())
+	}
+	return flows
+}
+
+// localMulticastForwardFlow forwards the multicast traffic with OVS action "normal", and outputs it to antrea-gw0 in
+// the meanwhile. So that the packet could be forwarded to local Pods which have joined the Multicast group and to the
+// external receivers. For the external multicast traffic accessing to the given multicastIP also hits this flow, and
+// the packet is not sent back to antrea-gw0 because OVS datapath will drop it when it finds the output port is the same
+// as the input port.
+func (c *client) localMulticastForwardFlow(multicastIP net.IP) []binding.Flow {
+	return []binding.Flow{
+		MulticastTable.BuildFlow(priorityNormal).
+			MatchProtocol(binding.ProtocolIP).
+			MatchDstIP(multicastIP).
+			Action().Output(config.HostGatewayOFPort).
+			Action().Normal().
+			Done(),
+	}
+}
+
+// externalMulticastReceiverFlow outputs the multicast traffic to antrea-gw0, so that local Pods can send multicast traffic
+// to access the external receivers. For the case that one or more local Pods have joined the target multicast group,
+// it is handled by the flows created by function "localMulticastForwardFlow" after local Pods report the IGMP membership.
+func (c *client) externalMulticastReceiverFlow() binding.Flow {
+	return MulticastTable.BuildFlow(priorityLow).
+		MatchProtocol(binding.ProtocolIP).
+		MatchDstIPNet(*mcastCIDR).
+		Action().Output(config.HostGatewayOFPort).
+		Done()
 }
 
 // NewClient is the constructor of the Client interface.
@@ -2608,7 +2668,8 @@ func NewClient(bridgeName string,
 	enableEgress bool,
 	enableDenyTracking bool,
 	proxyAll bool,
-	connectUplinkToBridge bool) Client {
+	connectUplinkToBridge bool,
+	enableMulticast bool) Client {
 	bridge := binding.NewOFBridge(bridgeName, mgmtAddr)
 	policyCache := cache.NewIndexer(
 		policyConjKeyFunc,
@@ -2621,6 +2682,7 @@ func NewClient(bridgeName string,
 		enableAntreaPolicy:       enableAntreaPolicy,
 		enableDenyTracking:       enableDenyTracking,
 		enableEgress:             enableEgress,
+		enableMulticast:          enableMulticast,
 		connectUplinkToBridge:    connectUplinkToBridge,
 		nodeFlowCache:            newFlowCategoryCache(),
 		podFlowCache:             newFlowCategoryCache(),
@@ -2642,6 +2704,9 @@ func NewClient(bridgeName string,
 	}
 	if enableEgress {
 		c.snatFlowCache = newFlowCategoryCache()
+	}
+	if enableMulticast {
+		c.mcastFlowCache = newFlowCategoryCache()
 	}
 	c.generatePipeline()
 	return c

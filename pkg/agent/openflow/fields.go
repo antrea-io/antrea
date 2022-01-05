@@ -56,15 +56,17 @@ var (
 	DispositionPassRegMark  = binding.NewRegMark(APDispositionField, DispositionPass)
 	// reg0[24..27]: Field to indicate the reasons of sending packet to the controller.
 	// Marks in this field include,
-	//   - 0b0001: logging
-	//   - 0b0010: reject
-	//   - 0b0100: deny (used by Flow Exporter)
-	//   - 0b1000: DNS packet (used by FQDN)
-	CustomReasonField          = binding.NewRegField(0, 24, 27, "PacketInReason")
+	//   - 0b00001: logging
+	//   - 0b00010: reject
+	//   - 0b00100: deny (used by Flow Exporter)
+	//   - 0b01000: DNS packet (used by FQDN)
+	//   - 0b10000: IGMP packet (used by Multicast)
+	CustomReasonField          = binding.NewRegField(0, 24, 28, "PacketInReason")
 	CustomReasonLoggingRegMark = binding.NewRegMark(CustomReasonField, CustomReasonLogging)
 	CustomReasonRejectRegMark  = binding.NewRegMark(CustomReasonField, CustomReasonReject)
 	CustomReasonDenyRegMark    = binding.NewRegMark(CustomReasonField, CustomReasonDeny)
 	CustomReasonDNSRegMark     = binding.NewRegMark(CustomReasonField, CustomReasonDNS)
+	CustomReasonIGMPRegMark    = binding.NewRegMark(CustomReasonField, CustomReasonIGMP)
 
 	// reg1(NXM_NX_REG1)
 	// Field to cache the ofPort of the OVS interface where to output packet.

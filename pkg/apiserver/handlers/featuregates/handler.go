@@ -30,7 +30,7 @@ import (
 )
 
 var controllerGates = sets.NewString("Traceflow", "AntreaPolicy", "Egress", "NetworkPolicyStats", "NodeIPAM")
-var agentGates = sets.NewString("AntreaPolicy", "AntreaProxy", "Egress", "EndpointSlice", "Traceflow", "FlowExporter", "NetworkPolicyStats", "NodePortLocal", "AntreaIPAM")
+var agentGates = sets.NewString("AntreaPolicy", "AntreaProxy", "Egress", "EndpointSlice", "Traceflow", "FlowExporter", "NetworkPolicyStats", "NodePortLocal", "AntreaIPAM", "Multicast")
 
 type (
 	Config struct {

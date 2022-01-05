@@ -38,6 +38,7 @@ import (
 	"antrea.io/antrea/pkg/agent/ipassigner"
 	"antrea.io/antrea/pkg/agent/memberlist"
 	"antrea.io/antrea/pkg/agent/metrics"
+	"antrea.io/antrea/pkg/agent/multicast"
 	npl "antrea.io/antrea/pkg/agent/nodeportlocal"
 	"antrea.io/antrea/pkg/agent/openflow"
 	"antrea.io/antrea/pkg/agent/proxy"
@@ -118,7 +119,8 @@ func run(o *Options) error {
 		features.DefaultFeatureGate.Enabled(features.Egress),
 		features.DefaultFeatureGate.Enabled(features.FlowExporter),
 		o.config.AntreaProxy.ProxyAll,
-		connectUplinkToBridge)
+		connectUplinkToBridge,
+		features.DefaultFeatureGate.Enabled(features.Multicast))
 
 	_, serviceCIDRNet, _ := net.ParseCIDR(o.config.ServiceCIDR)
 	var serviceCIDRNetv6 *net.IPNet
@@ -474,6 +476,14 @@ func run(o *Options) error {
 			}
 			klog.InfoS("AntreaProxy is ready")
 		}
+	}
+
+	if features.DefaultFeatureGate.Enabled(features.Multicast) {
+		mcastController := multicast.NewMulticastController(ofClient, nodeConfig, ifaceStore)
+		if err := mcastController.Initialize(); err != nil {
+			return err
+		}
+		go mcastController.Run(stopCh)
 	}
 
 	agentQuerier := querier.NewAgentQuerier(
