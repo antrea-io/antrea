@@ -291,6 +291,15 @@ spec:
                               containerID:
                                 type: string
                             type: object
+                          statefulSet:
+                            properties:
+                              name:
+                                type: string
+                              namespace:
+                                type: string
+                              index:
+                                type: integer
+                            type: object
                         type: object
                       phase:
                         type: string
