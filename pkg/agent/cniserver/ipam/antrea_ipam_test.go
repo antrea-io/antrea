@@ -17,6 +17,7 @@ package ipam
 import (
 	"regexp"
 	"testing"
+	"time"
 
 	"github.com/containernetworking/cni/pkg/invoke"
 	cnitypes "github.com/containernetworking/cni/pkg/types"
@@ -25,13 +26,16 @@ import (
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	k8suuid "k8s.io/apimachinery/pkg/util/uuid"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
 
 	cniservertest "antrea.io/antrea/pkg/agent/cniserver/testing"
 	argtypes "antrea.io/antrea/pkg/agent/cniserver/types"
 	crdv1a2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
-	fakecrd "antrea.io/antrea/pkg/client/clientset/versioned/fake"
+	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions"
+	fakepoolclient "antrea.io/antrea/pkg/ipam/poolallocator/testing"
 )
 
 var (
@@ -41,7 +45,8 @@ var (
 	testJunkAnnotation = "junk"
 )
 
-func initTestClients() (*fake.Clientset, *fakecrd.Clientset) {
+func createIPPools(crdClient *fakepoolclient.IPPoolClientset) {
+
 	ipRangeApple := crdv1a2.IPRange{
 		Start: "10.2.2.100",
 		End:   "10.2.2.200",
@@ -54,6 +59,14 @@ func initTestClients() (*fake.Clientset, *fakecrd.Clientset) {
 
 	subnetRangeApple := crdv1a2.SubnetIPRange{IPRange: ipRangeApple,
 		SubnetInfo: subnetInfoApple}
+
+	crdClient.InitPool(&crdv1a2.IPPool{
+		ObjectMeta: metav1.ObjectMeta{Name: testApple,
+			UID: k8suuid.NewUUID()},
+		Spec: crdv1a2.IPPoolSpec{
+			IPRanges: []crdv1a2.SubnetIPRange{subnetRangeApple},
+		},
+	})
 
 	ipRangeOrange := crdv1a2.IPRange{
 		Start: "20::2",
@@ -68,20 +81,17 @@ func initTestClients() (*fake.Clientset, *fakecrd.Clientset) {
 	subnetRangeOrange := crdv1a2.SubnetIPRange{IPRange: ipRangeOrange,
 		SubnetInfo: subnetInfoOrange}
 
-	crdClient := fakecrd.NewSimpleClientset(
-		&crdv1a2.IPPool{
-			ObjectMeta: metav1.ObjectMeta{Name: testApple},
-			Spec: crdv1a2.IPPoolSpec{
-				IPRanges: []crdv1a2.SubnetIPRange{subnetRangeApple},
-			},
+	crdClient.InitPool(&crdv1a2.IPPool{
+		ObjectMeta: metav1.ObjectMeta{Name: testOrange,
+			UID: k8suuid.NewUUID()},
+		Spec: crdv1a2.IPPoolSpec{
+			IPRanges: []crdv1a2.SubnetIPRange{subnetRangeOrange},
 		},
-		&crdv1a2.IPPool{
-			ObjectMeta: metav1.ObjectMeta{Name: testOrange},
-			Spec: crdv1a2.IPPoolSpec{
-				IPRanges: []crdv1a2.SubnetIPRange{subnetRangeOrange},
-			},
-		},
-	)
+	})
+}
+
+func initTestClients() (*fake.Clientset, *fakepoolclient.IPPoolClientset) {
+	crdClient := fakepoolclient.NewIPPoolClient()
 
 	k8sClient := fake.NewSimpleClientset(
 		&corev1.Namespace{
@@ -116,16 +126,23 @@ func TestAntreaIPAMDriver(t *testing.T) {
 
 	k8sClient, crdClient := initTestClients()
 
+	informerFactory := informers.NewSharedInformerFactory(k8sClient, 0)
+	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, 0)
+
+	antreaIPAMController, err := InitializeAntreaIPAMController(k8sClient, crdClient, informerFactory, crdInformerFactory)
+	require.NoError(t, err, "Expected no error in initialization for Antrea IPAM Controller")
+	informerFactory.Start(stopCh)
+
+	createIPPools(crdClient)
+
+	informerFactory.WaitForCacheSync(stopCh)
+
+	go antreaIPAMController.Run(stopCh)
+	crdInformerFactory.Start(stopCh)
+	crdInformerFactory.WaitForCacheSync(stopCh)
+
 	// Test the driver singleton that was assigned to global variable
 	testDriver := antreaIPAMDriver
-
-	informerFactory := informers.NewSharedInformerFactory(k8sClient, 0)
-	antreaIPAMController, err := InitializeAntreaIPAMController(k8sClient, crdClient, informerFactory)
-	require.NoError(t, err, "Expected no error in initialization for Antrea IPAM Controller")
-	go antreaIPAMController.Run(stopCh)
-
-	informerFactory.Start(stopCh)
-	informerFactory.WaitForCacheSync(stopCh)
 
 	networkConfig := []byte("'name': 'testCfg', 'cniVersion': '0.4.0', 'type': 'antrea', 'ipam': {'type': 'antrea-ipam'}}")
 
@@ -179,6 +196,8 @@ func TestAntreaIPAMDriver(t *testing.T) {
 	// Run several adds from two Namespaces that have pool annotations
 	ipv6Mask := "ffffffffffffffff0000000000000000"
 	testAdd("apple1", "10.2.2.100", "10.2.2.1", "ffffff00")
+
+	// introduce new IP Pool in mid-action
 	testAdd("orange1", "20::2", "20::1", ipv6Mask)
 	testAdd("orange2", "20::3", "20::1", ipv6Mask)
 	testAdd("apple2", "10.2.2.101", "10.2.2.1", "ffffff00")
@@ -197,11 +216,22 @@ func TestAntreaIPAMDriver(t *testing.T) {
 	testDel("apple1")
 	testDel("orange2")
 
+	// Verify last update was propagated to informer
+	err = wait.PollImmediate(100*time.Millisecond, 1*time.Second, func() (bool, error) {
+		owns, err := testDriver.Check(cniArgsMap["orange2"], k8sArgsMap["orange2"], networkConfig)
+		if err != nil {
+			// container already relelased
+			return true, nil
+		}
+		return !owns, nil
+	})
+
+	require.NoError(t, err, "orange2 pod was not released")
+
 	// Verify Check call according to the status
 	testCheck("apple1", false)
 	testCheck("apple2", true)
 	testCheck("orange1", true)
-	testCheck("orange2", false)
 
 	// Make sure Del call with irrelevant container ID is ignored
 	cniArgsBadContainer := &invoke.Args{
@@ -215,6 +245,6 @@ func TestAntreaIPAMDriver(t *testing.T) {
 	// Make sure repeated Add works for Pod that was previously released
 	testAdd("apple1", "10.2.2.100", "10.2.2.1", "ffffff00")
 
-	// Make sure repeated call without previous container results in error
-	testAddError("apple1")
+	// Make sure repeated call for previous container results in error
+	testAddError("apple2")
 }
