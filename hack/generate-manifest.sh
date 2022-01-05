@@ -50,6 +50,8 @@ Generate a YAML manifest for Antrea using Kustomize and print it to stdout.
         --flexible-ipam               Generates a manifest for flexible ipam mode.
         --whereabouts                 Generates a manifest which enables whereabouts configuration for secondary network IPAM.
         --help, -h                    Print this message and exit
+        --multicast                   Generates a manifest for multicast.
+        --multicast-interfaces        Multicast interface names (default is empty)
 
 In 'release' mode, environment variables IMG_NAME and IMG_TAG must be set.
 
@@ -93,6 +95,8 @@ SRIOV=false
 WHEREABOUTS=false
 WIREGUARD_GO=false
 FLEXIBLE_IPAM=false
+MULTICAST=false
+MULTICAST_INTERFACES=""
 
 while [[ $# -gt 0 ]]
 do
@@ -196,6 +200,14 @@ case $key in
     --whereabouts)
     WHEREABOUTS=true
     shift
+    ;;
+    --multicast)
+    MULTICAST=true
+    shift
+    ;;
+    --multicast-interfaces)
+    MULTICAST_INTERFACES="$2"
+    shift 2
     ;;
     -h|--help)
     print_usage
@@ -318,6 +330,12 @@ if $FLEXIBLE_IPAM; then
     sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*AntreaIPAM[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  AntreaIPAM: true/" antrea-agent.conf
     sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*trafficEncapMode[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/trafficEncapMode: noEncap/" antrea-agent.conf
     sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*noSNAT[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/noSNAT: true/" antrea-agent.conf
+fi
+
+if $MULTICAST; then
+    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*trafficEncapMode[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/trafficEncapMode: noEncap/" antrea-agent.conf
+    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*Multicast[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  Multicast: true/" antrea-agent.conf
+    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*multicastInterfaces[[:space:]]*:[[:space:]]*\[([a-zA-Z0-9]*,[[:space:]]*)*[a-zA-Z0-9]*\][[:space:]]*$/multicastInterfaces: [$MULTICAST_INTERFACES]/" antrea-agent.conf
 fi
 
 if $ALLFEATURES; then
