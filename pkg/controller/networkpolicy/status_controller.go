@@ -19,12 +19,14 @@ import (
 	"sync"
 	"time"
 
+	"k8s.io/apimachinery/pkg/api/errors"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/util/retry"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 
@@ -332,11 +334,27 @@ func (c *networkPolicyControl) UpdateAntreaNetworkPolicyStatus(namespace, name s
 	if anp.Status == *status {
 		return nil
 	}
-	metrics.AntreaNetworkPolicyStatusUpdates.Inc()
+
 	toUpdate := anp.DeepCopy()
-	toUpdate.Status = *status
-	_, err = c.antreaClient.CrdV1alpha1().NetworkPolicies(namespace).UpdateStatus(context.TODO(), toUpdate, v1.UpdateOptions{})
-	return err
+
+	var updateErr, getErr error
+	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		toUpdate.Status = *status
+		klog.V(2).InfoS("Updating Antrea NetworkPolicy", "NetworkPolicy", klog.KObj(toUpdate))
+		_, updateErr := c.antreaClient.CrdV1alpha1().NetworkPolicies(namespace).UpdateStatus(context.TODO(), toUpdate, v1.UpdateOptions{})
+		if updateErr != nil && errors.IsConflict(updateErr) {
+			if toUpdate, getErr = c.antreaClient.CrdV1alpha1().NetworkPolicies(namespace).Get(context.TODO(), name, v1.GetOptions{}); getErr != nil {
+				return getErr
+			}
+		}
+		// Return the error from UPDATE.
+		return updateErr
+	}); err != nil {
+		return err
+	}
+	klog.V(2).InfoS("Updated Antrea NetworkPolicy", "NetworkPolicy", klog.KObj(toUpdate))
+	metrics.AntreaNetworkPolicyStatusUpdates.Inc()
+	return updateErr
 }
 
 func (c *networkPolicyControl) UpdateAntreaClusterNetworkPolicyStatus(name string, status *crdv1alpha1.NetworkPolicyStatus) error {
@@ -349,9 +367,25 @@ func (c *networkPolicyControl) UpdateAntreaClusterNetworkPolicyStatus(name strin
 	if cnp.Status == *status {
 		return nil
 	}
-	metrics.AntreaClusterNetworkPolicyStatusUpdates.Inc()
+
 	toUpdate := cnp.DeepCopy()
-	toUpdate.Status = *status
-	_, err = c.antreaClient.CrdV1alpha1().ClusterNetworkPolicies().UpdateStatus(context.TODO(), toUpdate, v1.UpdateOptions{})
-	return err
+
+	var updateErr, getErr error
+	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		toUpdate.Status = *status
+		klog.V(2).InfoS("Updating Antrea ClusterNetworkPolicy", "ClusterNetworkPolicy", klog.KObj(toUpdate))
+		_, updateErr := c.antreaClient.CrdV1alpha1().ClusterNetworkPolicies().UpdateStatus(context.TODO(), toUpdate, v1.UpdateOptions{})
+		if updateErr != nil && errors.IsConflict(updateErr) {
+			if toUpdate, getErr = c.antreaClient.CrdV1alpha1().ClusterNetworkPolicies().Get(context.TODO(), name, v1.GetOptions{}); getErr != nil {
+				return getErr
+			}
+		}
+		// Return the error from UPDATE.
+		return updateErr
+	}); err != nil {
+		return err
+	}
+	klog.V(2).InfoS("Updated Antrea ClusterNetworkPolicy", "ClusterNetworkPolicy", klog.KObj(toUpdate))
+	metrics.AntreaClusterNetworkPolicyStatusUpdates.Inc()
+	return updateErr
 }
