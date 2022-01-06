@@ -80,7 +80,7 @@ func TestUpdateGroupMemberStatus(t *testing.T) {
 	}
 	mctrl.addGroupMemberStatus(event)
 	obj, _, _ := mctrl.groupCache.GetByKey(event.group.String())
-	mockOFClient.EXPECT().SendIGMPQueryPacketOut(igmpQueryDstMac, mcastAllHosts, uint32(openflow13.P_NORMAL), gomock.Any()).Times(1)
+	mockOFClient.EXPECT().SendIGMPQueryPacketOut(igmpQueryDstMac, mcastAllHosts, uint32(openflow13.P_NORMAL), gomock.Any()).Times(len(queryVersions))
 	for _, e := range []*mcastGroupEvent{
 		{group: mgroup, eType: groupJoin, time: event.time.Add(time.Second * 20), iface: if1},
 		{group: mgroup, eType: groupJoin, time: event.time.Add(time.Second * 40), iface: if1},
