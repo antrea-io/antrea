@@ -230,6 +230,30 @@
                   credential-id: CODECOV_TOKEN # Jenkins secret that stores codecov token
                   variable: CODECOV_TOKEN
           publishers: []
+      - '{name}-{test_name}-no-scm':
+          test_name: integration-skip
+          node: null
+          description: 'This is for marking PR as passed.'
+          branches:
+          - ${{sha1}}
+          builders: []
+          allow_whitelist_orgs_as_admins: true
+          admin_list: '{antrea_admin_list}'
+          org_list: '{antrea_org_list}'
+          white_list: '{antrea_white_list}'
+          only_trigger_phrase: true
+          trigger_permit_all: false
+          trigger_phrase: ^(?!Thanks for your PR).*/skip-(integration|all).*
+          white_list_target_branches: []
+          status_context: jenkins-integration-tests
+          status_url: --none--
+          success_status: Skipped test. Mark as succeeded.
+          failure_status: Skipped test. Mark as succeeded.
+          error_status: Skipped test. Mark as succeeded.
+          triggered_status: null
+          started_status: null
+          wrappers: []
+          publishers: []
       - '{name}-{test_name}-integration-for-pull-request':
           test_name: multicluster-manual
           node: 'antrea-test-node'
