@@ -136,7 +136,7 @@ func NewTunnelInterface(tunnelName string, tunnelType ovsconfig.TunnelType, loca
 	return &InterfaceConfig{InterfaceName: tunnelName, Type: TunnelInterface, TunnelInterfaceConfig: tunnelConfig}
 }
 
-// NewIPSecTunnelInterface creates InterfaceConfig for the IPSec tunnel to the
+// NewIPSecTunnelInterface creates InterfaceConfig for the IPsec tunnel to the
 // Node.
 func NewIPSecTunnelInterface(interfaceName string, tunnelType ovsconfig.TunnelType, nodeName string, nodeIP net.IP, psk string) *InterfaceConfig {
 	tunnelConfig := &TunnelInterfaceConfig{Type: tunnelType, NodeName: nodeName, RemoteIP: nodeIP, PSK: psk}

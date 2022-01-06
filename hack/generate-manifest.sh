@@ -26,7 +26,7 @@ Generate a YAML manifest for Antrea using Kustomize and print it to stdout.
         --encap-mode                  Traffic encapsulation mode. (default is 'encap')
         --kind                        Generate a manifest appropriate for running Antrea in a Kind cluster
         --cloud                       Generate a manifest appropriate for running Antrea in Public Cloud
-        --ipsec                       Generate a manifest with IPSec encryption of tunnel traffic enabled
+        --ipsec                       Generate a manifest with IPsec encryption of tunnel traffic enabled
         --all-features                Generate a manifest with all alpha features enabled
         --no-proxy                    Generate a manifest with Antrea proxy disabled
         --proxy-all                   Generate a manifest with Antrea proxy with all Service support enabled
@@ -299,7 +299,7 @@ fi
 
 if $IPSEC; then
     sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*trafficEncryptionMode[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/trafficEncryptionMode: ipsec/" antrea-agent.conf
-    # change the tunnel type to GRE which works better with IPSec encryption than other types.
+    # change the tunnel type to GRE which works better with IPsec encryption than other types.
     sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*tunnelType[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/tunnelType: gre/" antrea-agent.conf
 fi
 
@@ -377,7 +377,7 @@ if $IPSEC; then
     $KUSTOMIZE edit add base $BASE
     # create a K8s Secret to save the PSK (pre-shared key) for IKE authentication.
     $KUSTOMIZE edit add resource ipsecSecret.yml
-    # add a container to the Agent DaemonSet that runs the OVS IPSec and strongSwan daemons.
+    # add a container to the Agent DaemonSet that runs the OVS IPsec and strongSwan daemons.
     $KUSTOMIZE edit add patch --path ipsecContainer.yml
     # add an environment variable to the antrea-agent container for passing the PSK to Agent.
     $KUSTOMIZE edit add patch --path pskEnv.yml

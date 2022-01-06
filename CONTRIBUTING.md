@@ -13,6 +13,7 @@ to effectively get it merged upstream.
   - [Getting reviewers](#getting-reviewers)
   - [Getting your PR verified by CI](#getting-your-pr-verified-by-ci)
   - [Cherry-picks to release branches](#cherry-picks-to-release-branches)
+  - [Conventions for Writing Documentation](#conventions-for-writing-documentation)
   - [Inclusive Naming](#inclusive-naming)
   - [Building and testing your change](#building-and-testing-your-change)
   - [Reverting a commit](#reverting-a-commit)
@@ -130,6 +131,8 @@ To make it easier for reviewers to review your PR, consider the following:
    cannot be fixed automatically, an error message will be displayed so you can address the issue.
 3. Follow [git commit](https://chris.beams.io/posts/git-commit/) guidelines.
 4. Follow [logging](https://github.com/kubernetes/community/blob/master/contributors/devel/sig-instrumentation/logging.md) guidelines.
+5. Please refer to [Conventions for Writing Documentation](#conventions-for-writing-documentation) for
+spelling conventions when writing documentation or commenting code.
 
 If your PR fixes a bug or implements a new feature, add the appropriate test
 cases to our [automated test suite](ci/README.md) to guarantee enough
@@ -194,6 +197,11 @@ branches which are still maintained. If this is the case, one of the Antrea
 maintainers will let you know once your PR is approved. Please refer to the
 documentation on [cherry-picks](docs/contributors/cherry-picks.md) for more
 information.
+
+### Conventions for Writing Documentation
+
+* Short name of `IP Security` should be `IPsec` as per [rfc 6071](https://datatracker.ietf.org/doc/html/rfc6071).
+* Any Kubernetes object in log/comment should start with upper case, eg: Namespace, Pod, Service.
 
 ### Inclusive Naming
 

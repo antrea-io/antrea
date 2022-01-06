@@ -77,7 +77,7 @@ The labels in this list originated within Kubernetes at
 | area/transit/addressing            | Issues or PRs related to IP addressing category (unicast, multicast, broadcast, anycast) | Any |
 | area/transit/egress                | Issues or PRs related to Egress (SNAT for traffic egressing the cluster) | Any |
 | area/transit/encapsulation         | Issues or PRs related to encapsulation | Any |
-| area/transit/encryption            | Issues or PRs related to transit encryption (IPSec, SSL) | Any |
+| area/transit/encryption            | Issues or PRs related to transit encryption (IPsec, SSL) | Any |
 | area/transit/ipv6                  | Issues or PRs related to IPv6 | Any |
 | area/transit/qos                   | Issues or PRs related to transit qos or policing | Any |
 | area/transit/routing               | Issues or PRs related to routing and forwarding | Any |

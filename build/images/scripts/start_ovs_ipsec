@@ -40,7 +40,7 @@ function stop_agents {
 SLEEP_PID=
 
 function quit {
-    log_info $CONTAINER_NAME "Stopping OVS IPSec before quit"
+    log_info $CONTAINER_NAME "Stopping OVS IPsec before quit"
     stop_agents
     # terminate background sleep process
     if [ "$SLEEP_PID" != "" ]; then kill $SLEEP_PID > /dev/null 2>&1 || true; fi
@@ -63,7 +63,7 @@ while true; do
     wait $SLEEP_PID
 
     if ! check_ovs_ipsec_status ; then
-        log_warning $CONTAINER_NAME "OVS IPSec was stopped. Starting it again"
+        log_warning $CONTAINER_NAME "OVS IPsec was stopped. Starting it again"
 
         start_agents
     fi

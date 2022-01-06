@@ -380,8 +380,8 @@ func (br *OVSBridge) CreateTunnelPort(name string, tunnelType TunnelType, ofPort
 // If ofPortRequest is not zero, it will be passed to the OVS port creation.
 // If remoteIP is not empty, it will be set to the tunnel port interface
 // options; otherwise flow based tunneling will be configured.
-// psk is for the pre-shared key of IPSec ESP tunnel. If it is not empty, it
-// will be set to the tunnel port interface options. Flow based IPSec tunnel is
+// psk is for the pre-shared key of IPsec ESP tunnel. If it is not empty, it
+// will be set to the tunnel port interface options. Flow based IPsec tunnel is
 // not supported, so remoteIP must be provided too when psk is not empty.
 // If externalIDs is not nill, the IDs in it will be added to the port's
 // external_ids.
@@ -395,7 +395,7 @@ func (br *OVSBridge) CreateTunnelPortExt(
 	psk string,
 	externalIDs map[string]interface{}) (string, Error) {
 	if psk != "" && remoteIP == "" {
-		return "", newInvalidArgumentsError("IPSec tunnel can not be flow based. remoteIP must be set")
+		return "", newInvalidArgumentsError("IPsec tunnel can not be flow based. remoteIP must be set")
 	}
 	return br.createTunnelPort(name, tunnelType, ofPortRequest, csum, localIP, remoteIP, psk, externalIDs)
 }
@@ -478,7 +478,7 @@ func (br *OVSBridge) SetInterfaceOptions(name string, options map[string]interfa
 	return nil
 }
 
-// ParseTunnelInterfaceOptions reads remote IP, local IP, IPSec PSK, and csum
+// ParseTunnelInterfaceOptions reads remote IP, local IP, IPsec PSK, and csum
 // from the tunnel interface options and returns them.
 func ParseTunnelInterfaceOptions(portData *OVSPortData) (net.IP, net.IP, string, bool) {
 	if portData.Options == nil {

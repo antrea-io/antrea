@@ -4048,8 +4048,8 @@ data:
     # Determines how tunnel traffic is encrypted. Currently encryption only works with encap mode.
     # It has the following options:
     # - none (default):  Inter-node Pod traffic will not be encrypted.
-    # - ipsec:           Enable IPSec (ESP) encryption for Pod traffic across Nodes. Antrea uses
-    #                    Preshared Key (PSK) for IKE authentication. When IPSec tunnel is enabled,
+    # - ipsec:           Enable IPsec (ESP) encryption for Pod traffic across Nodes. Antrea uses
+    #                    Preshared Key (PSK) for IKE authentication. When IPsec tunnel is enabled,
     #                    the PSK value must be passed to Antrea Agent through an environment
     #                    variable: ANTREA_IPSEC_PSK.
     # - wireGuard:       Enable WireGuard for tunnel traffic encryption.
@@ -4288,7 +4288,7 @@ metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-557h844gdh
+  name: antrea-config-f6c667c75f
   namespace: kube-system
 ---
 apiVersion: v1
@@ -4368,7 +4368,7 @@ spec:
             fieldRef:
               fieldPath: spec.serviceAccountName
         - name: ANTREA_CONFIG_MAP_NAME
-          value: antrea-config-557h844gdh
+          value: antrea-config-f6c667c75f
         image: projects.registry.vmware.com/antrea/antrea-ubuntu:latest
         imagePullPolicy: IfNotPresent
         livenessProbe:
@@ -4419,7 +4419,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-557h844gdh
+          name: antrea-config-f6c667c75f
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -4735,7 +4735,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-557h844gdh
+          name: antrea-config-f6c667c75f
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d

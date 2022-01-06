@@ -549,8 +549,8 @@ func (c *Controller) addNodeRoute(nodeName string, node *corev1.Node) error {
 
 	var ipsecTunOFPort uint32
 	if c.networkConfig.TrafficEncryptionMode == config.TrafficEncryptionModeIPSec {
-		// Create a separate tunnel port for the Node, as OVS IPSec monitor needs to
-		// read PSK and remote IP from the Node's tunnel interface to create IPSec
+		// Create a separate tunnel port for the Node, as OVS IPsec monitor needs to
+		// read PSK and remote IP from the Node's tunnel interface to create IPsec
 		// security policies.
 		peerNodeIP := peerNodeIPs.IPv4
 		if peerNodeIP == nil {
@@ -622,7 +622,7 @@ func getPodCIDRsOnNode(node *corev1.Node) []string {
 	return []string{node.Spec.PodCIDR}
 }
 
-// createIPSecTunnelPort creates an IPSec tunnel port for the remote Node if the
+// createIPSecTunnelPort creates an IPsec tunnel port for the remote Node if the
 // tunnel does not exist, and returns the ofport number.
 func (c *Controller) createIPSecTunnelPort(nodeName string, nodeIP net.IP) (int32, error) {
 	portName := util.GenerateNodeTunnelInterfaceName(nodeName)
@@ -632,15 +632,15 @@ func (c *Controller) createIPSecTunnelPort(nodeName string, nodeIP net.IP) (int3
 	// tunnel port for which the configuration has changed, return error to requeue the Node.
 	if exists {
 		if !c.compareInterfaceConfig(interfaceConfig, nodeIP, portName) {
-			klog.InfoS("IPSec tunnel interface config doesn't match the cached one, deleting the stale IPSec tunnel port", "node", nodeName, "interface", interfaceConfig.InterfaceName)
+			klog.InfoS("IPsec tunnel interface config doesn't match the cached one, deleting the stale IPsec tunnel port", "node", nodeName, "interface", interfaceConfig.InterfaceName)
 			if err := c.ovsBridgeClient.DeletePort(interfaceConfig.PortUUID); err != nil {
-				return 0, fmt.Errorf("fail to delete the stale IPSec tunnel port %s: %v", interfaceConfig.InterfaceName, err)
+				return 0, fmt.Errorf("fail to delete the stale IPsec tunnel port %s: %v", interfaceConfig.InterfaceName, err)
 			}
 			c.interfaceStore.DeleteInterface(interfaceConfig)
 			exists = false
 		} else {
 			if interfaceConfig.OFPort != 0 {
-				klog.V(2).InfoS("Found cached IPSec tunnel interface", "node", nodeName, "interface", interfaceConfig.InterfaceName, "port", interfaceConfig.OFPort)
+				klog.V(2).InfoS("Found cached IPsec tunnel interface", "node", nodeName, "interface", interfaceConfig.InterfaceName, "port", interfaceConfig.OFPort)
 				return interfaceConfig.OFPort, nil
 			}
 		}
@@ -657,9 +657,9 @@ func (c *Controller) createIPSecTunnelPort(nodeName string, nodeIP net.IP) (int3
 			c.networkConfig.IPSecPSK,
 			ovsExternalIDs)
 		if err != nil {
-			return 0, fmt.Errorf("failed to create IPSec tunnel port for Node %s", nodeName)
+			return 0, fmt.Errorf("failed to create IPsec tunnel port for Node %s", nodeName)
 		}
-		klog.Infof("Created IPSec tunnel port %s for Node %s", portName, nodeName)
+		klog.Infof("Created IPsec tunnel port %s for Node %s", portName, nodeName)
 
 		ovsPortConfig := &interfacestore.OVSPortConfig{PortUUID: portUUID}
 		interfaceConfig = interfacestore.NewIPSecTunnelInterface(
@@ -676,14 +676,14 @@ func (c *Controller) createIPSecTunnelPort(nodeName string, nodeIP net.IP) (int3
 	if err != nil {
 		// Could be a temporary OVSDB connection failure or timeout.
 		// Let NodeRouteController retry at errors.
-		return 0, fmt.Errorf("failed to get of_port of IPSec tunnel port for Node %s", nodeName)
+		return 0, fmt.Errorf("failed to get of_port of IPsec tunnel port for Node %s", nodeName)
 	}
 	interfaceConfig.OFPort = ofPort
 	return ofPort, nil
 }
 
 // ParseTunnelInterfaceConfig initializes and returns an InterfaceConfig struct
-// for a tunnel interface. It reads tunnel type, remote IP, IPSec PSK from the
+// for a tunnel interface. It reads tunnel type, remote IP, IPsec PSK from the
 // OVS interface options, and NodeName from the OVS port external_ids.
 // nil is returned, if the OVS port and interface configurations are not valid
 // for a tunnel interface.
