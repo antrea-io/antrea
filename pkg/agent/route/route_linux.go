@@ -83,6 +83,8 @@ var (
 	// IPTablesSyncInterval is exported so that sync interval can be configured for running integration test with
 	// smaller values. It is meant to be used internally by Run.
 	IPTablesSyncInterval = 60 * time.Second
+	// Multicast CIDR is used to skip masquerade Pod to external packets for multicast traffic.
+	_, mcastCIDR, _ = net.ParseCIDR("224.0.0.0/4")
 )
 
 // Client takes care of routing container packets in host network, coordinating ip route, ip rule, iptables and ipset.
@@ -101,6 +103,7 @@ type Client struct {
 	iptablesInitialized   chan struct{}
 	proxyAll              bool
 	connectUplinkToBridge bool
+	multicastEnabled      bool
 	// serviceRoutes caches ip routes about Services.
 	serviceRoutes sync.Map
 	// serviceNeighbors caches neighbors.
@@ -116,11 +119,12 @@ type Client struct {
 }
 
 // NewClient returns a route client.
-func NewClient(networkConfig *config.NetworkConfig, noSNAT, proxyAll, connectUplinkToBridge bool) (*Client, error) {
+func NewClient(networkConfig *config.NetworkConfig, noSNAT, proxyAll, connectUplinkToBridge, multicastEnabled bool) (*Client, error) {
 	return &Client{
 		networkConfig:         networkConfig,
 		noSNAT:                noSNAT,
 		proxyAll:              proxyAll,
+		multicastEnabled:      multicastEnabled,
 		connectUplinkToBridge: connectUplinkToBridge,
 	}, nil
 }
@@ -561,6 +565,17 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet, podIPSet, localAntreaFl
 		}...)
 	}
 	writeLine(iptablesData, iptables.MakeChainLine(antreaPostRoutingChain))
+	// The masqueraded multicast traffic will become unicast so we
+	// stop traversing this antreaPostRoutingChain for multicast traffic.
+	if c.multicastEnabled && c.networkConfig.TrafficEncapMode.SupportsNoEncap() {
+		writeLine(iptablesData, []string{
+			"-A", antreaPostRoutingChain,
+			"-m", "comment", "--comment", `"Antrea: skip masquerade for multicast traffic"`,
+			"-s", podCIDR.String(),
+			"-d", mcastCIDR.String(),
+			"-j", iptables.ReturnTarget,
+		}...)
+	}
 	// Egress rules must be inserted before the default masquerade rule.
 	for snatMark, snatIP := range snatMarkToIP {
 		// Cannot reuse snatRuleSpec to generate the rule as it doesn't have "`" in the comment.
@@ -572,7 +587,6 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet, podIPSet, localAntreaFl
 			"-j", iptables.SNATTarget, "--to", snatIP.String(),
 		}...)
 	}
-
 	if !c.noSNAT {
 		writeLine(iptablesData, []string{
 			"-A", antreaPostRoutingChain,

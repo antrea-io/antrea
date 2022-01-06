@@ -28,6 +28,7 @@ import (
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/openflow"
+	"antrea.io/antrea/pkg/ovs/ovsconfig"
 )
 
 type eventType uint8
@@ -163,14 +164,17 @@ type Controller struct {
 	// installedGroups saves the groups which are configured on both OVS and the host.
 	installedGroups      sets.String
 	installedGroupsMutex sync.RWMutex
+	mRouteClient         *MRouteClient
+	ovsBridgeClient      ovsconfig.OVSBridgeClient
 }
 
-func NewMulticastController(ofClient openflow.Client, nodeConfig *config.NodeConfig, ifaceStore interfacestore.InterfaceStore) *Controller {
+func NewMulticastController(ofClient openflow.Client, nodeConfig *config.NodeConfig, ifaceStore interfacestore.InterfaceStore, multicastSocket RouteInterface, multicastInterfaces sets.String, ovsBridgeClient ovsconfig.OVSBridgeClient) *Controller {
 	eventCh := make(chan *mcastGroupEvent, workerCount)
 	groupSnooper := newSnooper(ofClient, ifaceStore, eventCh)
 	groupCache := cache.NewIndexer(getGroupEventKey, cache.Indexers{
 		podInterfaceIndex: podInterfaceIndexFunc,
 	})
+	multicastRouteClient := newRouteClient(nodeConfig, groupCache, multicastSocket, multicastInterfaces)
 	return &Controller{
 		ofClient:        ofClient,
 		nodeConfig:      nodeConfig,
@@ -179,16 +183,27 @@ func NewMulticastController(ofClient openflow.Client, nodeConfig *config.NodeCon
 		groupCache:      groupCache,
 		installedGroups: sets.NewString(),
 		queue:           workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "multicastgroup"),
+		mRouteClient:    multicastRouteClient,
+		ovsBridgeClient: ovsBridgeClient,
 	}
 }
 
 func (c *Controller) Initialize() error {
+	err := c.configureOVSMulticast()
+	if err != nil {
+		klog.ErrorS(err, "Failed to configure multicast for the OVS bridge")
+		return err
+	}
+	err = c.mRouteClient.Initialize()
+	if err != nil {
+		return err
+	}
 	// Install flows on OVS for IGMP packets and multicast traffic forwarding:
 	// 1) send the IGMP report messages to Antrea Agent,
 	// 2) forward the IMGP query messages to all local Pods,
 	// 3) forward the multicast traffic to antrea-gw0 if no local Pods have joined in the group, and this is to ensure
 	//    local Pods can access the external multicast receivers.
-	err := c.ofClient.InstallMulticastInitialFlows(uint8(openflow.PacketInReasonMC))
+	err = c.ofClient.InstallMulticastInitialFlows(uint8(openflow.PacketInReasonMC))
 	if err != nil {
 		klog.ErrorS(err, "Failed to install multicast initial flows")
 		return err
@@ -213,6 +228,7 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 		// Process multicast Group membership report or leave messages.
 		go wait.Until(c.worker, time.Second, stopCh)
 	}
+	go c.mRouteClient.run(stopCh)
 }
 
 func (c *Controller) worker() {
@@ -291,6 +307,16 @@ func (c *Controller) syncGroup(groupKey string) error {
 				klog.ErrorS(err, "Failed to uninstall multicast flows", "group", groupKey)
 				return err
 			}
+			err := c.mRouteClient.deleteInboundMrouteEntryByGroup(status.group)
+			if err != nil {
+				klog.ErrorS(err, "Cannot delete multicast group", "group", groupKey)
+				return err
+			}
+			err = c.mRouteClient.multicastInterfacesLeaveMgroup(status.group)
+			if err != nil {
+				klog.ErrorS(err, "Failed to leave multicast group for multicast interfaces", "group", groupKey)
+				return err
+			}
 			c.delInstalledGroup(groupKey)
 			c.groupCache.Delete(status)
 			klog.InfoS("Removed multicast group from cache after all members left", "group", groupKey)
@@ -299,6 +325,10 @@ func (c *Controller) syncGroup(groupKey string) error {
 	}
 	if err := c.ofClient.InstallMulticastFlow(status.group); err != nil {
 		klog.ErrorS(err, "Failed to install multicast flows", "group", status.group)
+		return err
+	}
+	if err := c.mRouteClient.multicastInterfacesJoinMgroup(status.group); err != nil {
+		klog.ErrorS(err, "Failed to join multicast group for multicast interfaces", "group", status.group)
 		return err
 	}
 	c.addInstalledGroup(groupKey)
@@ -356,6 +386,21 @@ func podInterfaceIndexFunc(obj interface{}) ([]string, error) {
 		podInterfaces = append(podInterfaces, podInterface)
 	}
 	return podInterfaces, nil
+}
+
+func (c *Controller) configureOVSMulticast() error {
+	// Configure bridge to enable multicast snooping.
+	err := c.ovsBridgeClient.SetBridgeMcastSnooping(true)
+	if err != nil {
+		return err
+	}
+	// Disable flooding of unregistered multicast packets to all ports.
+	otherConfig := map[string]interface{}{"mcast-snooping-disable-flood-unregistered": "true"}
+	err = c.ovsBridgeClient.AddBridgeOtherConfig(otherConfig)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func getGroupEventKey(obj interface{}) (string, error) {

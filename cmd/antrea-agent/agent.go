@@ -21,6 +21,7 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/informers"
 	coreinformers "k8s.io/client-go/informers/core/v1"
@@ -162,7 +163,7 @@ func run(o *Options) error {
 	egressConfig := &config.EgressConfig{
 		ExceptCIDRs: exceptCIDRs,
 	}
-	routeClient, err := route.NewClient(networkConfig, o.config.NoSNAT, o.config.AntreaProxy.ProxyAll, connectUplinkToBridge)
+	routeClient, err := route.NewClient(networkConfig, o.config.NoSNAT, o.config.AntreaProxy.ProxyAll, connectUplinkToBridge, features.DefaultFeatureGate.Enabled(features.Multicast))
 	if err != nil {
 		return fmt.Errorf("error creating route client: %v", err)
 	}
@@ -508,7 +509,17 @@ func run(o *Options) error {
 	}
 
 	if features.DefaultFeatureGate.Enabled(features.Multicast) {
-		mcastController := multicast.NewMulticastController(ofClient, nodeConfig, ifaceStore)
+		multicastSocket, err := multicast.CreateMulticastSocket()
+		if err != nil {
+			return fmt.Errorf("failed to create multicast socket")
+		}
+		mcastController := multicast.NewMulticastController(
+			ofClient,
+			nodeConfig,
+			ifaceStore,
+			multicastSocket,
+			sets.NewString(append(o.config.MulticastInterfaces, networkConfig.TransportIface)...),
+			ovsBridgeClient)
 		if err := mcastController.Initialize(); err != nil {
 			return err
 		}

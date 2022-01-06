@@ -57,7 +57,7 @@ type Client struct {
 }
 
 // NewClient returns a route client.
-func NewClient(networkConfig *config.NetworkConfig, noSNAT, proxyAll, connectUplinkToBridge bool) (*Client, error) {
+func NewClient(networkConfig *config.NetworkConfig, noSNAT, proxyAll, connectUplinkToBridge, multicastEnabled bool) (*Client, error) {
 	return &Client{
 		networkConfig: networkConfig,
 		hostRoutes:    &sync.Map{},

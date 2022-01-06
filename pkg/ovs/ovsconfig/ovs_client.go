@@ -801,7 +801,7 @@ func parseOvsVersion(ovsReturnRow interface{}) (string, Error) {
 }
 
 // AddOVSOtherConfig adds the given configs to the "other_config" column of
-// the single record of the "Open_vSwitch" table.
+// the single record in the "Open_vSwitch" table.
 // For each config, it will only be added if its key doesn't already exist.
 // No error is returned if configs already exist.
 func (br *OVSBridge) AddOVSOtherConfig(configs map[string]interface{}) Error {
@@ -843,7 +843,7 @@ func (br *OVSBridge) GetOVSOtherConfig() (map[string]string, Error) {
 }
 
 // DeleteOVSOtherConfig deletes the given configs from the "other_config" column of
-// the single record of the "Open_vSwitch" table.
+// the single record in the "Open_vSwitch" table.
 // For each config, it will only be deleted if its key exists and its value matches the stored one.
 // No error is returned if configs don't exist or don't match.
 func (br *OVSBridge) DeleteOVSOtherConfig(configs map[string]interface{}) Error {
@@ -853,6 +853,48 @@ func (br *OVSBridge) DeleteOVSOtherConfig(configs map[string]interface{}) Error 
 	tx.Mutate(dbtransaction.Mutate{
 		Table:     "Open_vSwitch",
 		Mutations: [][]interface{}{{"other_config", "delete", mutateSet}},
+	})
+
+	_, err, temporary := tx.Commit()
+	if err != nil {
+		klog.Error("Transaction failed: ", err)
+		return NewTransactionError(err, temporary)
+	}
+	return nil
+}
+
+// AddBridgeOtherConfig adds the given configs to the "other_config" column of
+// the single record in the "Bridge" table.
+// For each config, it will only be added if its key doesn't already exist.
+// No error is returned if configs already exist.
+func (br *OVSBridge) AddBridgeOtherConfig(configs map[string]interface{}) Error {
+	tx := br.ovsdb.Transaction(openvSwitchSchema)
+
+	mutateSet := helpers.MakeOVSDBMap(configs)
+	tx.Mutate(dbtransaction.Mutate{
+		Table:     "Bridge",
+		Mutations: [][]interface{}{{"other_config", "insert", mutateSet}},
+		Where:     [][]interface{}{{"name", "==", br.name}},
+	})
+
+	_, err, temporary := tx.Commit()
+	if err != nil {
+		klog.Error("Transaction failed: ", err)
+		return NewTransactionError(err, temporary)
+	}
+	return nil
+}
+
+// SetBridgeMcastSnooping configures bridge to enable multicast snooping
+func (br *OVSBridge) SetBridgeMcastSnooping(enabled bool) Error {
+	tx := br.ovsdb.Transaction(openvSwitchSchema)
+
+	tx.Update(dbtransaction.Update{
+		Table: "Bridge",
+		Row: map[string]interface{}{
+			"mcast_snooping_enable": enabled,
+		},
+		Where: [][]interface{}{{"name", "==", br.name}},
 	})
 
 	_, err, temporary := tx.Commit()
