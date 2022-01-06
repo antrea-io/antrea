@@ -94,8 +94,8 @@ type AgentConfig struct {
 	// Determines how tunnel traffic is encrypted.
 	// It has the following options:
 	// - none (default): Inter-node Pod traffic will not be encrypted.
-	// - ipsec:          Enable IPSec (ESP) encryption for Pod traffic across Nodes. Antrea uses
-	//                   Preshared Key (PSK) for IKE authentication. When IPSec tunnel is enabled,
+	// - ipsec:          Enable IPsec (ESP) encryption for Pod traffic across Nodes. Antrea uses
+	//                   Preshared Key (PSK) for IKE authentication. When IPsec tunnel is enabled,
 	//                   the PSK value must be passed to Antrea Agent through an environment
 	//                   variable: ANTREA_IPSEC_PSK.
 	// - wireguard:      Enable WireGuard for tunnel traffic encryption.

@@ -8,7 +8,7 @@ spec:
       containers:
         - name: antrea-agent
           env:
-            # Pre-shared key for IPSec IKE.
+            # Pre-shared key for IPsec IKE.
             - name: ANTREA_IPSEC_PSK
               valueFrom:
                 secretKeyRef:

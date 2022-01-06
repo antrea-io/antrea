@@ -51,7 +51,7 @@ const (
 //     IP, MAC, and OVS Port configurations.
 //  2) For host gateway port, the fields should include: name, IP, MAC, and OVS port
 //     configurations.
-//  3) For tunnel port, the fields include: name and tunnel type; and for an IPSec tunnel,
+//  3) For tunnel port, the fields include: name and tunnel type; and for an IPsec tunnel,
 //     additionally: remoteIP, PSK and remote Node name.
 // OVS Port configurations include PortUUID and OFPort.
 // Container interface is added into cache after invocation of cniserver.CmdAdd, and removed
@@ -59,7 +59,7 @@ const (
 // check previousResult with local cache.
 // Host gateway and the default tunnel interfaces are added into cache in node initialization
 // phase or retrieved from existing OVS ports.
-// An IPSec tunnel interface is added into the cache when IPSec encyption is enabled, and
+// An IPsec tunnel interface is added into the cache when IPsec encyption is enabled, and
 // NodeRouteController watches a new remote Node from K8s API, and is removed when the remote
 // Node is deleted.
 // Todo: add periodic task to sync local cache with container veth pair
