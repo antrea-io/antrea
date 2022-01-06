@@ -31,6 +31,7 @@ import (
 	agentconfig "antrea.io/antrea/pkg/config/agent"
 	"antrea.io/antrea/pkg/features"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
+	"antrea.io/antrea/pkg/util/env"
 	"antrea.io/antrea/pkg/util/flowexport"
 )
 
@@ -125,8 +126,19 @@ func (o *Options) validate(args []string) error {
 	}
 
 	if encapMode.SupportsNoEncap() {
+		// When using NoEncap traffic mode without AntreaProxy, Pod-to-Service traffic is handled by kube-proxy
+		// (iptables/ipvs) in the root netns. If the Endpoint is not local the DNATed traffic will be output to
+		// the physical network directly without going back to OVS for Egress NetworkPolicy enforcement, which
+		// breaks basic security functionality. Therefore, we usually do not allow the NoEncap traffic mode without
+		// AntreaProxy. But one can bypass this check and force this feature combination to be allowed, by defining
+		// the ALLOW_NO_ENCAP_WITHOUT_ANTREA_PROXY environment variable and setting it to true. This may lead to
+		// better performance when using NoEncap if Egress NetworkPolicy enforcement is not required.
 		if !features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
-			return fmt.Errorf("TrafficEncapMode %s requires AntreaProxy to be enabled", o.config.TrafficEncapMode)
+			if env.GetAllowNoEncapWithoutAntreaProxy() {
+				klog.InfoS("Disabling AntreaProxy in NoEncap mode will prevent Egress NetworkPolicy rules from being enforced correctly")
+			} else {
+				return fmt.Errorf("TrafficEncapMode %s requires AntreaProxy to be enabled", o.config.TrafficEncapMode)
+			}
 		}
 		if encryptionMode != config.TrafficEncryptionModeNone {
 			return fmt.Errorf("TrafficEncryptionMode %s may only be enabled in %s mode", encryptionMode, config.TrafficEncapModeEncap)
