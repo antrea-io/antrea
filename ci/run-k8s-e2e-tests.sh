@@ -188,14 +188,16 @@ function run_sonobuoy() {
 }
 
 function run_conformance() {
+    local e2e_skip="${DEFAULT_E2E_CONFORMANCE_SKIP}"
+
     if [[ "$RUN_E2E_FOCUS" != "" ]]; then
         echo "It is not allowed to specify focus when running conformance tests"
         exit 1
     fi
-    if [[ "$RUN_E2E_SKIP" == "" ]]; then
-        RUN_E2E_SKIP="${DEFAULT_E2E_CONFORMANCE_SKIP}"
+    if [[ "$RUN_E2E_SKIP" != "" ]]; then
+        e2e_skip="$RUN_E2E_SKIP"
     fi
-    run_sonobuoy "${DEFAULT_E2E_CONFORMANCE_FOCUS}" "${RUN_E2E_SKIP}"
+    run_sonobuoy "${DEFAULT_E2E_CONFORMANCE_FOCUS}" "${e2e_skip}"
 }
 
 function run_whole_conformance() {
@@ -203,14 +205,16 @@ function run_whole_conformance() {
 }
 
 function run_network_policy() {
+    local e2e_skip="${DEFAULT_E2E_NETWORKPOLICY_SKIP}"
+
     if [[ "$RUN_E2E_FOCUS" != "" ]]; then
         echo "It is not allowed to specify focus when running network policy tests"
         exit 1
     fi
-    if [[ "$RUN_E2E_SKIP" == "" ]]; then
-        RUN_E2E_SKIP="${DEFAULT_E2E_NETWORKPOLICY_SKIP}"
+    if [[ "$RUN_E2E_SKIP" != "" ]]; then
+        e2e_skip="$RUN_E2E_SKIP"
     fi
-    run_sonobuoy "${DEFAULT_E2E_NETWORKPOLICY_FOCUS}" "${RUN_E2E_SKIP}"
+    run_sonobuoy "${DEFAULT_E2E_NETWORKPOLICY_FOCUS}" "${e2e_skip}"
 }
 
 if [[ "$RUN_E2E_FOCUS" != "" ]]; then
