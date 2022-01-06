@@ -862,16 +862,16 @@ func (n *NetworkPolicyController) enqueueAppliedToGroup(key string) {
 // deleteDereferencedAddressGroups deletes the AddressGroup keys which are no
 // longer referenced by any internal NetworPolicy.
 func (n *NetworkPolicyController) deleteDereferencedAddressGroups(internalNP *antreatypes.NetworkPolicy) {
-	addressGroupKeys := []string{}
+	addressGroupKeys := sets.String{}
 	for _, rule := range internalNP.Rules {
 		// Populate AddressGroupKeys for ingress rules.
-		addressGroupKeys = append(addressGroupKeys, rule.From.AddressGroups...)
+		addressGroupKeys.Insert(rule.From.AddressGroups...)
 		// Populate AddressGroupKeys for egress rules.
-		addressGroupKeys = append(addressGroupKeys, rule.To.AddressGroups...)
+		addressGroupKeys.Insert(rule.To.AddressGroups...)
 	}
 	// Delete any AddressGroup key which is no longer referenced by any internal
 	// NetworkPolicy.
-	for _, key := range addressGroupKeys {
+	for key := range addressGroupKeys {
 		// Get all internal NetworkPolicy objects that refers this AddressGroup.
 		nps, err := n.internalNetworkPolicyStore.GetByIndex(store.AddressGroupIndex, key)
 		if err != nil {
