@@ -440,6 +440,7 @@ function deliver_antrea {
 
 function run_integration {
     VM_NAME="antrea-integration-0"
+    export GOVC_INSECURE=1
     export GOVC_URL=${GOVC_URL}
     export GOVC_USERNAME=${GOVC_USERNAME}
     export GOVC_PASSWORD=${GOVC_PASSWORD}
