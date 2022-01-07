@@ -73,6 +73,7 @@ type CapturedPacket struct {
 type Response struct {
 	Name           string                  `json:"name" yaml:"name"`                                         // Traceflow name
 	Phase          v1alpha1.TraceflowPhase `json:"phase,omitempty" yaml:"phase,omitempty"`                   // Traceflow phase
+	Reason         string                  `json:"reason,omitempty" yaml:"reason,omitempty"`                 // Traceflow phase reason
 	Source         string                  `json:"source,omitempty" yaml:"source,omitempty"`                 // Traceflow source, e.g. "default/pod0"
 	Destination    string                  `json:"destination,omitempty" yaml:"destination,omitempty"`       // Traceflow destination, e.g. "default/pod1"
 	NodeResults    []v1alpha1.NodeResult   `json:"results,omitempty" yaml:"results,omitempty"`               // Traceflow node results
@@ -384,6 +385,7 @@ func output(tf *v1alpha1.Traceflow) error {
 	r := Response{
 		Name:        tf.Name,
 		Phase:       tf.Status.Phase,
+		Reason:      tf.Status.Reason,
 		Source:      fmt.Sprintf("%s/%s", tf.Spec.Source.Namespace, tf.Spec.Source.Pod),
 		NodeResults: tf.Status.Results,
 	}
