@@ -41,7 +41,7 @@ import (
 
 	mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
 	"antrea.io/antrea/multicluster/controllers/multicluster/common"
-	"antrea.io/antrea/multicluster/controllers/multicluster/core"
+	"antrea.io/antrea/multicluster/controllers/multicluster/commonarea"
 )
 
 type (
@@ -65,7 +65,7 @@ type (
 	ServiceExportReconciler struct {
 		client.Client
 		Scheme                  *runtime.Scheme
-		remoteCommonAreaManager *core.RemoteCommonAreaManager
+		remoteCommonAreaManager *commonarea.RemoteCommonAreaManager
 		installedSvcs           cache.Indexer
 		installedEps            cache.Indexer
 		leaderNamespace         string
@@ -90,7 +90,7 @@ const (
 func NewServiceExportReconciler(
 	Client client.Client,
 	Scheme *runtime.Scheme,
-	remoteCommonAreaManager *core.RemoteCommonAreaManager) *ServiceExportReconciler {
+	remoteCommonAreaManager *commonarea.RemoteCommonAreaManager) *ServiceExportReconciler {
 	reconciler := &ServiceExportReconciler{
 		Client:                  Client,
 		Scheme:                  Scheme,
@@ -334,7 +334,7 @@ func (r *ServiceExportReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 }
 
 func (r *ServiceExportReconciler) handleServiceDeleteEvent(ctx context.Context, req ctrl.Request,
-	remoteCluster core.RemoteCommonArea) error {
+	remoteCluster commonarea.RemoteCommonArea) error {
 	svcResExportName := getResourceExportName(r.localClusterID, req, "service")
 	svcResExport := &mcsv1alpha1.ResourceExport{
 		ObjectMeta: metav1.ObjectMeta{
@@ -356,7 +356,7 @@ func (r *ServiceExportReconciler) handleServiceDeleteEvent(ctx context.Context, 
 }
 
 func (r *ServiceExportReconciler) handleEndpointDeleteEvent(ctx context.Context, req ctrl.Request,
-	remoteCluster core.RemoteCommonArea) error {
+	remoteCluster commonarea.RemoteCommonArea) error {
 	epResExportName := getResourceExportName(r.localClusterID, req, "endpoints")
 	epResExport := &mcsv1alpha1.ResourceExport{
 		ObjectMeta: metav1.ObjectMeta{
@@ -462,7 +462,7 @@ func (r *ServiceExportReconciler) serviceHandler(
 	svc *corev1.Service,
 	resName string,
 	re mcsv1alpha1.ResourceExport,
-	rc core.RemoteCommonArea) error {
+	rc commonarea.RemoteCommonArea) error {
 	kind := common.ServiceKind
 	sinfo := &svcInfo{
 		name:       svc.Name,
@@ -496,7 +496,7 @@ func (r *ServiceExportReconciler) endpointsHandler(
 	ep *corev1.Endpoints,
 	resName string,
 	re mcsv1alpha1.ResourceExport,
-	rc core.RemoteCommonArea) error {
+	rc commonarea.RemoteCommonArea) error {
 	kind := common.EndpointsKind
 	epInfo := &epInfo{
 		name:       ep.Name,
@@ -556,7 +556,7 @@ func (r *ServiceExportReconciler) updateOrCreateResourceExport(resName string,
 	req ctrl.Request,
 	newResExport *mcsv1alpha1.ResourceExport,
 	existResExport *mcsv1alpha1.ResourceExport,
-	rc core.RemoteCommonArea) error {
+	rc commonarea.RemoteCommonArea) error {
 	createResExport := reflect.DeepEqual(*existResExport, mcsv1alpha1.ResourceExport{})
 	resNamespaced := types.NamespacedName{Namespace: rc.GetNamespace(), Name: resName}
 	if createResExport {

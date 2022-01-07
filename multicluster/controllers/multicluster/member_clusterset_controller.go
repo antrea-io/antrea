@@ -35,7 +35,7 @@ import (
 
 	multiclusterv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
 	"antrea.io/antrea/multicluster/controllers/multicluster/common"
-	"antrea.io/antrea/multicluster/controllers/multicluster/core"
+	"antrea.io/antrea/multicluster/controllers/multicluster/commonarea"
 )
 
 // MemberClusterSetReconciler reconciles a ClusterSet object in the member cluster deployment.
@@ -48,7 +48,7 @@ type MemberClusterSetReconciler struct {
 	clusterSetID     common.ClusterSetID
 	clusterID        common.ClusterID
 
-	RemoteCommonAreaManager core.RemoteCommonAreaManager
+	RemoteCommonAreaManager commonarea.RemoteCommonAreaManager
 }
 
 //+kubebuilder:rbac:groups=multicluster.crd.antrea.io,resources=clustersets,verbs=get;list;watch;create;update;patch;delete
@@ -127,7 +127,7 @@ func (r *MemberClusterSetReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 func (r *MemberClusterSetReconciler) updateMultiClusterSetOnMemberCluster(clusterSet *multiclusterv1alpha1.ClusterSet) error {
 	if r.RemoteCommonAreaManager == nil {
-		r.RemoteCommonAreaManager = core.NewRemoteCommonAreaManager(r.clusterSetID, r.clusterID)
+		r.RemoteCommonAreaManager = commonarea.NewRemoteCommonAreaManager(r.clusterSetID, r.clusterID)
 		err := r.RemoteCommonAreaManager.Start()
 		if err != nil {
 			klog.ErrorS(err, "error starting RemoteCommonAreaManager")
@@ -143,7 +143,7 @@ func (r *MemberClusterSetReconciler) updateMultiClusterSetOnMemberCluster(cluste
 	newLeaders := clusterSet.Spec.Leaders
 
 	var addedLeaders []*multiclusterv1alpha1.MemberCluster
-	var removedLeaders map[common.ClusterID]core.RemoteCommonArea
+	var removedLeaders map[common.ClusterID]commonarea.RemoteCommonArea
 
 	for _, leader := range newLeaders {
 		leaderID := common.ClusterID(leader.ClusterID)
@@ -170,7 +170,7 @@ func (r *MemberClusterSetReconciler) updateMultiClusterSetOnMemberCluster(cluste
 		// Read secret to access the leader cluster. Assume secret is present in the same Namespace as the ClusterSet.
 		secret, err := r.getSecretForLeader(secretName, clusterSet.GetNamespace())
 		if err == nil {
-			_, err = core.NewRemoteCommonArea(clusterID, r.clusterSetID, url, secret, r.Scheme,
+			_, err = commonarea.NewRemoteCommonArea(clusterID, r.clusterSetID, url, secret, r.Scheme,
 				r.Client, r.RemoteCommonAreaManager, clusterSet.Spec.Namespace)
 		}
 		if err != nil {

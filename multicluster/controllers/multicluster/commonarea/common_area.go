@@ -14,10 +14,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package common
+package commonarea
 
 import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"antrea.io/antrea/multicluster/controllers/multicluster/common"
 )
 
 // CommonArea is an interface that provides access to the common area of a ClusterSet.
@@ -27,7 +29,7 @@ type CommonArea interface {
 	client.Client
 
 	// GetClusterID returns the clusterID of the cluster accessed by this CommonArea.
-	GetClusterID() ClusterID
+	GetClusterID() common.ClusterID
 
 	// GetNamespace returns the Namespace backing this CommonArea.
 	GetNamespace() string
