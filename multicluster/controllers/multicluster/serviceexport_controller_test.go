@@ -31,7 +31,7 @@ import (
 
 	mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
 	"antrea.io/antrea/multicluster/controllers/multicluster/common"
-	"antrea.io/antrea/multicluster/controllers/multicluster/core"
+	"antrea.io/antrea/multicluster/controllers/multicluster/commonarea"
 )
 
 var (
@@ -42,7 +42,7 @@ var (
 func TestServiceExportReconciler_handleDeleteEvent(t *testing.T) {
 	localClusterID = "cluster-a"
 	leaderNamespace = "default"
-	remoteMgr := core.NewRemoteCommonAreaManager("test-clusterset", common.ClusterID(localClusterID))
+	remoteMgr := commonarea.NewRemoteCommonAreaManager("test-clusterset", common.ClusterID(localClusterID))
 	go remoteMgr.Start()
 
 	existSvcResExport := &mcsv1alpha1.ResourceExport{
@@ -62,7 +62,7 @@ func TestServiceExportReconciler_handleDeleteEvent(t *testing.T) {
 	fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(exportedSvcNginx).Build()
 	fakeRemoteClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(existSvcResExport, existEpResExport).Build()
 
-	_ = core.NewFakeRemoteCommonArea(scheme, &remoteMgr, fakeRemoteClient, "leader-cluster", "default")
+	_ = commonarea.NewFakeRemoteCommonArea(scheme, &remoteMgr, fakeRemoteClient, "leader-cluster", "default")
 	r := NewServiceExportReconciler(fakeClient, scheme, &remoteMgr)
 	r.installedSvcs.Add(&svcInfo{
 		name:      svcNginx.Name,
@@ -97,7 +97,7 @@ func TestServiceExportReconciler_handleDeleteEvent(t *testing.T) {
 func TestServiceExportReconciler_ExportNotFoundService(t *testing.T) {
 	localClusterID = "cluster-a"
 	leaderNamespace = "default"
-	remoteMgr := core.NewRemoteCommonAreaManager("test-clusterset", common.ClusterID(localClusterID))
+	remoteMgr := commonarea.NewRemoteCommonAreaManager("test-clusterset", common.ClusterID(localClusterID))
 	go remoteMgr.Start()
 
 	existSvcExport := &k8smcsv1alpha1.ServiceExport{
@@ -110,7 +110,7 @@ func TestServiceExportReconciler_ExportNotFoundService(t *testing.T) {
 	fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(existSvcExport).Build()
 	fakeRemoteClient := fake.NewClientBuilder().WithScheme(scheme).Build()
 
-	_ = core.NewFakeRemoteCommonArea(scheme, &remoteMgr, fakeRemoteClient, "leader-cluster", "default")
+	_ = commonarea.NewFakeRemoteCommonArea(scheme, &remoteMgr, fakeRemoteClient, "leader-cluster", "default")
 	r := NewServiceExportReconciler(fakeClient, scheme, &remoteMgr)
 	if _, err := r.Reconcile(ctx, req); err != nil {
 		t.Errorf("ServiceExport Reconciler should update ServiceExport status to 'not_found_service' but got error = %v", err)
@@ -131,7 +131,7 @@ func TestServiceExportReconciler_ExportNotFoundService(t *testing.T) {
 func TestServiceExportReconciler_ExportMCSService(t *testing.T) {
 	localClusterID = "cluster-a"
 	leaderNamespace = "default"
-	remoteMgr := core.NewRemoteCommonAreaManager("test-clusterset", common.ClusterID(localClusterID))
+	remoteMgr := commonarea.NewRemoteCommonAreaManager("test-clusterset", common.ClusterID(localClusterID))
 	go remoteMgr.Start()
 
 	mcsSvc := svcNginx.DeepCopy()
@@ -146,7 +146,7 @@ func TestServiceExportReconciler_ExportMCSService(t *testing.T) {
 	fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(mcsSvc, existSvcExport).Build()
 	fakeRemoteClient := fake.NewClientBuilder().WithScheme(scheme).Build()
 
-	_ = core.NewFakeRemoteCommonArea(scheme, &remoteMgr, fakeRemoteClient, "leader-cluster", "default")
+	_ = commonarea.NewFakeRemoteCommonArea(scheme, &remoteMgr, fakeRemoteClient, "leader-cluster", "default")
 	r := NewServiceExportReconciler(fakeClient, scheme, &remoteMgr)
 	if _, err := r.Reconcile(ctx, req); err != nil {
 		t.Errorf("ServiceExport Reconciler should update ServiceExport status to 'imported_service' but got error = %v", err)
@@ -167,7 +167,7 @@ func TestServiceExportReconciler_ExportMCSService(t *testing.T) {
 func TestServiceExportReconciler_handleServiceExportCreateEvent(t *testing.T) {
 	localClusterID = "cluster-a"
 	leaderNamespace = "default"
-	remoteMgr := core.NewRemoteCommonAreaManager("test-clusterset", common.ClusterID(localClusterID))
+	remoteMgr := commonarea.NewRemoteCommonAreaManager("test-clusterset", common.ClusterID(localClusterID))
 	go remoteMgr.Start()
 
 	existSvcExport := &k8smcsv1alpha1.ServiceExport{
@@ -180,7 +180,7 @@ func TestServiceExportReconciler_handleServiceExportCreateEvent(t *testing.T) {
 	fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(svcNginx, epNginx, existSvcExport).Build()
 	fakeRemoteClient := fake.NewClientBuilder().WithScheme(scheme).Build()
 
-	_ = core.NewFakeRemoteCommonArea(scheme, &remoteMgr, fakeRemoteClient, "leader-cluster", "default")
+	_ = commonarea.NewFakeRemoteCommonArea(scheme, &remoteMgr, fakeRemoteClient, "leader-cluster", "default")
 	r := NewServiceExportReconciler(fakeClient, scheme, &remoteMgr)
 	if _, err := r.Reconcile(ctx, req); err != nil {
 		t.Errorf("ServiceExport Reconciler should create ResourceExports but got error = %v", err)
@@ -201,7 +201,7 @@ func TestServiceExportReconciler_handleServiceExportCreateEvent(t *testing.T) {
 func TestServiceExportReconciler_handleServiceUpdateEvent(t *testing.T) {
 	localClusterID = "cluster-a"
 	leaderNamespace = "default"
-	remoteMgr := core.NewRemoteCommonAreaManager("test-clusterset", common.ClusterID(localClusterID))
+	remoteMgr := commonarea.NewRemoteCommonAreaManager("test-clusterset", common.ClusterID(localClusterID))
 	go remoteMgr.Start()
 
 	existSvcExport := &k8smcsv1alpha1.ServiceExport{
@@ -258,7 +258,7 @@ func TestServiceExportReconciler_handleServiceUpdateEvent(t *testing.T) {
 	fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(newSvcNginx, newEpNginx, existSvcExport).Build()
 	fakeRemoteClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(existSvcRe, existEpRe).Build()
 
-	_ = core.NewFakeRemoteCommonArea(scheme, &remoteMgr, fakeRemoteClient, "leader-cluster", "default")
+	_ = commonarea.NewFakeRemoteCommonArea(scheme, &remoteMgr, fakeRemoteClient, "leader-cluster", "default")
 	r := NewServiceExportReconciler(fakeClient, scheme, &remoteMgr)
 	r.installedSvcs.Add(sinfo)
 	r.installedEps.Add(epInfo)
