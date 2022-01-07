@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package core
+package commonarea
 
 import (
 	"context"
@@ -48,7 +48,7 @@ var (
 
 // RemoteCommonArea is an abstraction to connect to CommonArea of the Leader Cluster.
 type RemoteCommonArea interface {
-	common.CommonArea
+	CommonArea
 
 	Start() (context.CancelFunc, error)
 
@@ -117,7 +117,7 @@ type remoteCommonArea struct {
 // connect to the leader cluster's CommonArea.
 func NewRemoteCommonArea(clusterID common.ClusterID, clusterSetID common.ClusterSetID, url string, secret *v1.Secret,
 	scheme *runtime.Scheme, localClusterClient client.Client, remoteCommonAreaManager RemoteCommonAreaManager,
-	clusterSetNamespace string) (common.CommonArea, error) {
+	clusterSetNamespace string) (CommonArea, error) {
 	klog.InfoS("Create a RemoteCommonArea", "Cluster", clusterID)
 
 	crtData, token, err := getSecretCACrtAndToken(secret)
