@@ -1702,13 +1702,15 @@ data:
     webhook:
       port: 9443
     leaderElection:
-      leaderElect: true
+      leaderElect: false
       resourceName: 6536456a.crd.antrea.io
+      leaseDuration: "30s"
+      renewDeadline: "20s"
 kind: ConfigMap
 metadata:
   labels:
     app: antrea
-  name: antrea-mc-controller-config-kk4mdd82g2
+  name: antrea-mc-controller-config-49875k4ht8
   namespace: kube-system
 ---
 apiVersion: v1
@@ -1810,7 +1812,7 @@ spec:
       terminationGracePeriodSeconds: 10
       volumes:
       - configMap:
-          name: antrea-mc-controller-config-kk4mdd82g2
+          name: antrea-mc-controller-config-49875k4ht8
         name: antrea-mc-controller-config
 ---
 apiVersion: admissionregistration.k8s.io/v1
