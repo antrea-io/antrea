@@ -29,11 +29,11 @@ import (
 
 	mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
 	"antrea.io/antrea/multicluster/controllers/multicluster/common"
-	"antrea.io/antrea/multicluster/controllers/multicluster/core"
+	"antrea.io/antrea/multicluster/controllers/multicluster/commonarea"
 )
 
 func TestStaleController_CleanupService(t *testing.T) {
-	remoteMgr := core.NewRemoteCommonAreaManager("test-clusterset", common.ClusterID(localClusterID))
+	remoteMgr := commonarea.NewRemoteCommonAreaManager("test-clusterset", common.ClusterID(localClusterID))
 	go remoteMgr.Start()
 
 	mcSvcNginx := svcNginx.DeepCopy()
@@ -92,7 +92,7 @@ func TestStaleController_CleanupService(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithLists(tt.existSvcList, tt.existSvcImpList).Build()
 			fakeRemoteClient := fake.NewClientBuilder().WithScheme(scheme).WithLists(tt.existResImpList).Build()
-			_ = core.NewFakeRemoteCommonArea(scheme, &remoteMgr, fakeRemoteClient, "leader-cluster", "default")
+			_ = commonarea.NewFakeRemoteCommonArea(scheme, &remoteMgr, fakeRemoteClient, "leader-cluster", "default")
 
 			c := NewStaleController(fakeClient, scheme, &remoteMgr)
 			if err := c.cleanup(); err != nil {
@@ -125,7 +125,7 @@ func TestStaleController_CleanupService(t *testing.T) {
 
 func TestStaleController_CleanupResourceExport(t *testing.T) {
 	localClusterID = "cluster-a"
-	remoteMgr := core.NewRemoteCommonAreaManager("test-clusterset", common.ClusterID(localClusterID))
+	remoteMgr := commonarea.NewRemoteCommonAreaManager("test-clusterset", common.ClusterID(localClusterID))
 	go remoteMgr.Start()
 
 	svcExpNginx := k8smcsv1alpha1.ServiceExport{
@@ -200,7 +200,7 @@ func TestStaleController_CleanupResourceExport(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithLists(tt.existSvcExpList).Build()
 			fakeRemoteClient := fake.NewClientBuilder().WithScheme(scheme).WithLists(tt.existResExpList).Build()
-			_ = core.NewFakeRemoteCommonArea(scheme, &remoteMgr, fakeRemoteClient, "leader-cluster", "default")
+			_ = commonarea.NewFakeRemoteCommonArea(scheme, &remoteMgr, fakeRemoteClient, "leader-cluster", "default")
 
 			c := NewStaleController(fakeClient, scheme, &remoteMgr)
 			if err := c.cleanup(); err != nil {

@@ -32,7 +32,7 @@ import (
 
 	mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
 	"antrea.io/antrea/multicluster/controllers/multicluster/common"
-	"antrea.io/antrea/multicluster/controllers/multicluster/core"
+	"antrea.io/antrea/multicluster/controllers/multicluster/commonarea"
 )
 
 // StaleController will clean up ServiceImport and MC Service if no corresponding ResourceImport
@@ -41,7 +41,7 @@ import (
 type StaleController struct {
 	client.Client
 	Scheme                  *runtime.Scheme
-	remoteCommonAreaManager *core.RemoteCommonAreaManager
+	remoteCommonAreaManager *commonarea.RemoteCommonAreaManager
 	// queue only ever has one item, but it has nice error handling backoff/retry semantics
 	queue workqueue.RateLimitingInterface
 }
@@ -49,7 +49,7 @@ type StaleController struct {
 func NewStaleController(
 	Client client.Client,
 	Scheme *runtime.Scheme,
-	remoteCommonAreaManager *core.RemoteCommonAreaManager) *StaleController {
+	remoteCommonAreaManager *commonarea.RemoteCommonAreaManager) *StaleController {
 	reconciler := &StaleController{
 		Client:                  Client,
 		Scheme:                  Scheme,
@@ -231,8 +231,8 @@ func (c *StaleController) RunOnce() error {
 
 // We should have only one remote common area at this moment,
 // so check and return the first common area.
-func getRemoteCommonArea(remoteMgr *core.RemoteCommonAreaManager) (core.RemoteCommonArea, error) {
-	var remoteCommonArea core.RemoteCommonArea
+func getRemoteCommonArea(remoteMgr *commonarea.RemoteCommonAreaManager) (commonarea.RemoteCommonArea, error) {
+	var remoteCommonArea commonarea.RemoteCommonArea
 	remoteCommonAreas := (*remoteMgr).GetRemoteCommonAreas()
 	if len(remoteCommonAreas) <= 0 {
 		return nil, errors.New("ClusterSet has not been initialized properly, no remote common area manager")
