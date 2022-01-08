@@ -482,11 +482,9 @@ def generate_sql_query(table_name, limit, start_time, end_time, unprotected):
     else:
         # Select user trusted denied flows when unprotected equals False
         sql_query += " WHERE trusted == 1"
-    if start_time and end_time:
-        sql_query += " AND flowEndSeconds >= '{}' AND flowEndSeconds < '{}'".format(start_time, end_time)
-    elif start_time:
+    if start_time:
         sql_query += " AND flowEndSeconds >= '{}'".format(start_time)
-    elif end_time:
+    if end_time:
         sql_query += " AND flowEndSeconds < '{}'".format(end_time)
     sql_query += " GROUP BY {}".format(", ".join(FLOW_TABLE_COLUMNS))
     if limit:
