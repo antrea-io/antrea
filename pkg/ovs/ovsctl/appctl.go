@@ -19,6 +19,7 @@ import (
 	"bytes"
 	"fmt"
 	"net"
+	"strconv"
 	"strings"
 
 	"k8s.io/klog/v2"
@@ -226,4 +227,45 @@ func (c *ovsCtlClient) GetDPFeatures() (map[DPFeature]bool, error) {
 		features[feature] = supported
 	}
 	return features, nil
+}
+
+func (c *ovsCtlClient) DeleteDPInterface(name string) error {
+	cmd := fmt.Sprintf("dpctl/show ovs-system")
+	out, err := c.runAppCtl(cmd, true)
+	if err == nil {
+		return nil
+	}
+	scanner := bufio.NewScanner(strings.NewReader(string(out)))
+	scanner.Split(bufio.ScanLines)
+	ports := make([]int, 0)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if !strings.Contains(line, fmt.Sprintf(": %s", name)) {
+			continue
+		}
+		fields := strings.Split(line, ":")
+		if len(fields) != 2 {
+			klog.InfoS("Unexpected output from dpif/show ovs-system", "line", line)
+			continue
+		}
+		portStr := strings.Split(fields[0], " ")[1]
+		portNo, err := strconv.Atoi(portStr)
+		if err != nil {
+			klog.InfoS("Unable to parse port number", "port", portStr)
+			continue
+		}
+		ports = append(ports, portNo)
+	}
+	if len(ports) == 0 {
+		return nil
+	}
+	for _, port := range ports {
+		cmd = fmt.Sprintf("dpctl/del-if ovs-system %d", port)
+		_, err := c.runAppCtl(cmd, true)
+		if err == nil || strings.Contains(err.Error(), "No such device") {
+			return nil
+		}
+		return err
+	}
+	return nil
 }

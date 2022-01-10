@@ -237,3 +237,145 @@ func DeleteOVSPort(brName, portName string) error {
 	cmd := exec.Command("ovs-vsctl", "--if-exists", "del-port", brName, portName)
 	return cmd.Run()
 }
+
+func getRoutesOnInterface(interfaceName string) ([]interface{}, error) {
+	link, err := netlink.LinkByName(interfaceName)
+	if err != nil {
+		return nil, err
+	}
+	rs, err := netlink.RouteList(link, netlink.FAMILY_ALL)
+	if err != nil {
+		return nil, err
+	}
+	var routes []interface{}
+	for _, r := range rs {
+		routes = append(routes, r)
+	}
+	return routes, nil
+}
+
+func MoveIFConfigurations(ips []*net.IPNet, routes []interface{}, mac net.HardwareAddr, mtu int, from string, to string) error {
+	toIF, err := netlink.LinkByName(to)
+	if err != nil {
+		return err
+	}
+	fromExists := true
+	fromIF, err := netlink.LinkByName(from)
+	if err != nil {
+		if _, ok := err.(netlink.LinkNotFoundError); !ok {
+			return err
+		}
+		fromExists = false
+	}
+	if fromExists {
+		if err := netlink.LinkSetHardwareAddr(toIF, mac); err != nil {
+			return err
+		}
+		if err := netlink.LinkSetMTU(toIF, mtu); err != nil {
+			return err
+		}
+		if err := netlink.LinkSetUp(toIF); err != nil {
+			return err
+		}
+		if err := removeUplinkIPRoutes(fromIF); err != nil {
+			return err
+		}
+	}
+	toIndex := toIF.Attrs().Index
+	// Copy the uplink interface's IP to the veth interface.
+	if err := ConfigureLinkAddresses(toIndex, ips); err != nil {
+		return err
+	}
+	// Copy the uplink interface's Route to the veth interface.
+	if err := copyRoutes(toIF, routes); err != nil {
+		return err
+	}
+	return nil
+}
+
+func RenameHostInterface(oriName string, newName string) error {
+	link, err := netlink.LinkByName(oriName)
+	if err != nil {
+		return err
+	}
+	if err := netlink.LinkSetDown(link); err != nil {
+		return err
+	}
+	defer func() {
+		netlink.LinkSetUp(link)
+	}()
+	if err := netlink.LinkSetName(link, newName); err != nil {
+		return err
+	}
+	return nil
+}
+
+func copyRoutes(toIF netlink.Link, routes []interface{}) error {
+	for _, r := range routes {
+		rt := r.(netlink.Route)
+		rt.LinkIndex = toIF.Attrs().Index
+		if err := netlink.RouteReplace(&rt); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// removeUplinkIPRoutes removes the IP and Routes from the uplink interface.
+func removeUplinkIPRoutes(uplinkIF netlink.Link) error {
+	addrs, err := netlink.AddrList(uplinkIF, netlink.FAMILY_ALL)
+	if err != nil {
+		return err
+	}
+	for _, addr := range addrs {
+		if err := netlink.AddrDel(uplinkIF, &addr); err != nil {
+			return err
+		}
+	}
+	return removeRoutesOnLink(uplinkIF)
+}
+
+func removeRoutesOnLink(link netlink.Link) error {
+	routes, err := netlink.RouteList(link, netlink.FAMILY_ALL)
+	if err != nil {
+		return err
+	}
+	for _, r := range routes {
+		if err := netlink.RouteDel(&r); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func HostInterfaceExists(ifName string) bool {
+	_, err := netlink.LinkByName(ifName)
+	if err == nil {
+		return true
+	}
+	if _, ok := err.(netlink.LinkNotFoundError); ok {
+		return false
+	}
+	klog.ErrorS(err, "Failed to find host interface", "name", ifName)
+	return false
+}
+
+func GetNetRoutesOnAdapter(linkIndex int) (string, []interface{}, error) {
+	link, err := netlink.LinkByIndex(linkIndex)
+	if err != nil {
+		return "", nil, err
+	}
+	rs, err := netlink.RouteList(link, netlink.FAMILY_ALL)
+	if err != nil {
+		return "", nil, err
+	}
+	var gw string
+	var routes []interface{}
+	for _, r := range rs {
+		if r.Gw != nil && r.Dst != nil && r.Dst.IP.IsUnspecified() {
+			gw = r.Gw.String()
+		}
+		routes = append(routes, r)
+	}
+	return gw, routes, nil
+}
