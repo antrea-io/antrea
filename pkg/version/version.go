@@ -65,8 +65,9 @@ func GetFullVersion() string {
 }
 
 // GetFullVersionWithRuntimeInfo returns the same version string as GetFullVersion but appends
-// "<GOOS>/<GOARCH>", where GOOS is the running program's operating system target (e.g. darwin,
-// linux) and GOARCH is the the running program's architecture target (e.g. amd64).
+// "<GOOS>/<GOARCH> <GOVERSION>", where GOOS is the running program's operating system target
+// (e.g. darwin, linux), GOARCH is the the running program's architecture target (e.g. amd64), and
+// GOVERSION is the Go version used to build the current binary.
 func GetFullVersionWithRuntimeInfo() string {
-	return fmt.Sprintf("%s %s/%s", GetFullVersion(), runtime.GOOS, runtime.GOARCH)
+	return fmt.Sprintf("%s %s/%s %s", GetFullVersion(), runtime.GOOS, runtime.GOARCH, runtime.Version())
 }
