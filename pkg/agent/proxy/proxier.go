@@ -114,6 +114,7 @@ type proxier struct {
 	isIPv6               bool
 	proxyAll             bool
 	endpointSliceEnabled bool
+	proxyLoadBalancerIPs bool
 }
 
 func (p *proxier) SyncedOnce() bool {
@@ -159,7 +160,7 @@ func (p *proxier) removeStaleServices() {
 			}
 		}
 		// Remove LoadBalancer flows and configurations.
-		if len(svcInfo.LoadBalancerIPStrings()) > 0 {
+		if p.proxyLoadBalancerIPs && len(svcInfo.LoadBalancerIPStrings()) > 0 {
 			if err := p.uninstallLoadBalancerService(svcInfo.LoadBalancerIPStrings(), uint16(svcInfo.Port()), svcInfo.OFProtocol); err != nil {
 				klog.ErrorS(err, "Failed to remove flows and configurations of Service", "Service", svcPortName)
 				continue
@@ -415,15 +416,17 @@ func (p *proxier) installServices() {
 		}
 
 		var deletedLoadBalancerIPs, addedLoadBalancerIPs []string
-		if pSvcInfo != nil {
-			deletedLoadBalancerIPs = smallSliceDifference(pSvcInfo.LoadBalancerIPStrings(), svcInfo.LoadBalancerIPStrings())
-			addedLoadBalancerIPs = smallSliceDifference(svcInfo.LoadBalancerIPStrings(), pSvcInfo.LoadBalancerIPStrings())
-		} else {
-			deletedLoadBalancerIPs = []string{}
-			addedLoadBalancerIPs = svcInfo.LoadBalancerIPStrings()
-		}
-		if len(deletedLoadBalancerIPs) > 0 || len(addedLoadBalancerIPs) > 0 {
-			needUpdateService = true
+		if p.proxyLoadBalancerIPs {
+			if pSvcInfo != nil {
+				deletedLoadBalancerIPs = smallSliceDifference(pSvcInfo.LoadBalancerIPStrings(), svcInfo.LoadBalancerIPStrings())
+				addedLoadBalancerIPs = smallSliceDifference(svcInfo.LoadBalancerIPStrings(), pSvcInfo.LoadBalancerIPStrings())
+			} else {
+				deletedLoadBalancerIPs = []string{}
+				addedLoadBalancerIPs = svcInfo.LoadBalancerIPStrings()
+			}
+			if len(deletedLoadBalancerIPs) > 0 || len(addedLoadBalancerIPs) > 0 {
+				needUpdateService = true
+			}
 		}
 
 		// If neither the Service nor Endpoints of the Service need to be updated, we skip.
@@ -535,27 +538,29 @@ func (p *proxier) installServices() {
 				}
 			}
 
-			// Service LoadBalancer flows can be partially updated.
-			var toDelete, toAdd []string
-			if needRemoval {
-				toDelete = pSvcInfo.LoadBalancerIPStrings()
-				toAdd = svcInfo.LoadBalancerIPStrings()
-			} else {
-				toDelete = deletedLoadBalancerIPs
-				toAdd = addedLoadBalancerIPs
-			}
-			// Remove LoadBalancer flows and configurations.
-			if len(toDelete) > 0 {
-				if err := p.uninstallLoadBalancerService(toDelete, uint16(pSvcInfo.Port()), pSvcInfo.OFProtocol); err != nil {
-					klog.ErrorS(err, "Failed to remove flows and configurations of Service", "Service", svcPortName)
-					continue
+			if p.proxyLoadBalancerIPs {
+				// Service LoadBalancer flows can be partially updated.
+				var toDelete, toAdd []string
+				if needRemoval {
+					toDelete = pSvcInfo.LoadBalancerIPStrings()
+					toAdd = svcInfo.LoadBalancerIPStrings()
+				} else {
+					toDelete = deletedLoadBalancerIPs
+					toAdd = addedLoadBalancerIPs
 				}
-			}
-			// Install LoadBalancer flows and configurations.
-			if len(toAdd) > 0 {
-				if err := p.installLoadBalancerService(nGroupID, toAdd, uint16(svcInfo.Port()), svcInfo.OFProtocol, uint16(svcInfo.StickyMaxAgeSeconds()), svcInfo.NodeLocalExternal()); err != nil {
-					klog.ErrorS(err, "Failed to install LoadBalancer flows and configurations of Service", "Service", svcPortName)
-					continue
+				// Remove LoadBalancer flows and configurations.
+				if len(toDelete) > 0 {
+					if err := p.uninstallLoadBalancerService(toDelete, uint16(pSvcInfo.Port()), pSvcInfo.OFProtocol); err != nil {
+						klog.ErrorS(err, "Failed to remove flows and configurations of Service", "Service", svcPortName)
+						continue
+					}
+				}
+				// Install LoadBalancer flows and configurations.
+				if len(toAdd) > 0 {
+					if err := p.installLoadBalancerService(nGroupID, toAdd, uint16(svcInfo.Port()), svcInfo.OFProtocol, uint16(svcInfo.StickyMaxAgeSeconds()), svcInfo.NodeLocalExternal()); err != nil {
+						klog.ErrorS(err, "Failed to install LoadBalancer flows and configurations of Service", "Service", svcPortName)
+						continue
+					}
 				}
 			}
 		}
@@ -791,6 +796,7 @@ func NewProxier(
 	nodePortAddresses []net.IP,
 	proxyAllEnabled bool,
 	skipServices []string,
+	proxyLoadBalancerIPs bool,
 	groupCounter types.GroupCounter) *proxier {
 	recorder := record.NewBroadcaster().NewRecorder(
 		runtime.NewScheme(),
@@ -824,6 +830,7 @@ func NewProxier(
 		isIPv6:                   isIPv6,
 		proxyAll:                 proxyAllEnabled,
 		endpointSliceEnabled:     endpointSliceEnabled,
+		proxyLoadBalancerIPs:     proxyLoadBalancerIPs,
 	}
 
 	p.serviceConfig.RegisterEventHandler(p)
@@ -877,14 +884,15 @@ func NewDualStackProxier(
 	nodePortAddressesIPv6 []net.IP,
 	proxyAllEnabled bool,
 	skipServices []string,
+	proxyLoadBalancerIPs bool,
 	v4groupCounter types.GroupCounter,
 	v6groupCounter types.GroupCounter) *metaProxierWrapper {
 
 	// Create an IPv4 instance of the single-stack proxier.
-	ipv4Proxier := NewProxier(hostname, informerFactory, ofClient, false, routeClient, nodePortAddressesIPv4, proxyAllEnabled, skipServices, v4groupCounter)
+	ipv4Proxier := NewProxier(hostname, informerFactory, ofClient, false, routeClient, nodePortAddressesIPv4, proxyAllEnabled, skipServices, proxyLoadBalancerIPs, v4groupCounter)
 
 	// Create an IPv6 instance of the single-stack proxier.
-	ipv6Proxier := NewProxier(hostname, informerFactory, ofClient, true, routeClient, nodePortAddressesIPv6, proxyAllEnabled, skipServices, v6groupCounter)
+	ipv6Proxier := NewProxier(hostname, informerFactory, ofClient, true, routeClient, nodePortAddressesIPv6, proxyAllEnabled, skipServices, proxyLoadBalancerIPs, v6groupCounter)
 
 	// Create a meta-proxier that dispatch calls between the two
 	// single-stack proxier instances.
