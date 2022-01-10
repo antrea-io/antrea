@@ -90,6 +90,19 @@ type ClusterGroupMembers struct {
 	metav1.ObjectMeta
 	EffectiveMembers  []GroupMember
 	EffectiveIPBlocks []IPNet
+	TotalMembers      int64
+	TotalPages        int64
+	CurrentPage       int64
+}
+
+// +k8s:conversion-gen:explicit-from=net/url.Values
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// PaginationGetOptions is used to retrieve page number and page limit info from the request.
+type PaginationGetOptions struct {
+	metav1.TypeMeta
+	Page  int64
+	Limit int64
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
