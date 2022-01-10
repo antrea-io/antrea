@@ -346,6 +346,7 @@ type IPAddressPhase string
 const (
 	IPAddressPhaseAllocated    IPAddressPhase = "Allocated"
 	IPAddressPhasePreallocated IPAddressPhase = "Preallocated"
+	IPAddressPhaseReserved     IPAddressPhase = "Reserved"
 )
 
 type IPAddressState struct {

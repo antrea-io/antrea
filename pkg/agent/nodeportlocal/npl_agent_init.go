@@ -24,10 +24,7 @@ import (
 	nplk8s "antrea.io/antrea/pkg/agent/nodeportlocal/k8s"
 	"antrea.io/antrea/pkg/agent/nodeportlocal/portcache"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/client-go/informers"
-	coreinformers "k8s.io/client-go/informers/core/v1"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 )
@@ -45,30 +42,19 @@ func InitializeNPLAgent(
 	startPort int,
 	endPort int,
 	nodeName string,
+	podInformer cache.SharedIndexInformer,
 ) (*nplk8s.NPLController, error) {
 	portTable, err := portcache.NewPortTable(startPort, endPort)
 	if err != nil {
 		return nil, fmt.Errorf("error when initializing NodePortLocal port table: %v", err)
 	}
 
-	return InitController(kubeClient, informerFactory, portTable, nodeName)
+	return InitController(kubeClient, informerFactory, portTable, nodeName, podInformer)
 }
 
 // InitController initializes the NPLController with appropriate Pod and Service Informers.
 // This function can be used independently while unit testing without using InitializeNPLAgent function.
-func InitController(kubeClient clientset.Interface, informerFactory informers.SharedInformerFactory, portTable *portcache.PortTable, nodeName string) (*nplk8s.NPLController, error) {
-	// Watch only the Pods which belong to the Node where the agent is running.
-	listOptions := func(options *metav1.ListOptions) {
-		options.FieldSelector = fields.OneTermEqualSelector("spec.nodeName", nodeName).String()
-	}
-	podInformer := coreinformers.NewFilteredPodInformer(
-		kubeClient,
-		metav1.NamespaceAll,
-		resyncPeriod,
-		cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, // NamespaceIndex is used in NPLController.
-		listOptions,
-	)
-
+func InitController(kubeClient clientset.Interface, informerFactory informers.SharedInformerFactory, portTable *portcache.PortTable, nodeName string, podInformer cache.SharedIndexInformer) (*nplk8s.NPLController, error) {
 	svcInformer := informerFactory.Core().V1().Services().Informer()
 
 	c := nplk8s.NewNPLController(kubeClient,
