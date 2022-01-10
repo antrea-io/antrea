@@ -393,7 +393,6 @@ func NPLTestPodAddMultiProtocol(t *testing.T) {
 	args := []string{
 		fmt.Sprintf("/agnhost serve-hostname --udp --http=false --port %d & /agnhost serve-hostname --tcp --http=false --port %d", 8080, 8080),
 	}
-	image := "k8s.gcr.io/e2e-test-images/agnhost:2.29"
 	port := corev1.ContainerPort{ContainerPort: 8080}
 	containerName := fmt.Sprintf("c%v", 8080)
 	mutateLabels := func(pod *corev1.Pod) {
@@ -401,7 +400,7 @@ func NPLTestPodAddMultiProtocol(t *testing.T) {
 			pod.Labels[k] = v
 		}
 	}
-	err := testData.createPodOnNodeInNamespace(testPodName, testNamespace, node, containerName, image, cmd, args, []corev1.EnvVar{}, []corev1.ContainerPort{port}, false, mutateLabels)
+	err := testData.createPodOnNodeInNamespace(testPodName, testNamespace, node, containerName, agnhostImage, cmd, args, []corev1.EnvVar{}, []corev1.ContainerPort{port}, false, mutateLabels)
 
 	r.NoError(err, "Error creating test Pod: %v", err)
 

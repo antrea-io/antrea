@@ -125,7 +125,7 @@ if ! $np; then
     manifest_args="$manifest_args --no-np"
 fi
 
-COMMON_IMAGES_LIST=("gcr.io/kubernetes-e2e-test-images/agnhost:2.8" \
+COMMON_IMAGES_LIST=("k8s.gcr.io/e2e-test-images/agnhost:2.29" \
                     "projects.registry.vmware.com/library/busybox"  \
                     "projects.registry.vmware.com/antrea/nginx" \
                     "projects.registry.vmware.com/antrea/perftool" \
