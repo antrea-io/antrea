@@ -99,7 +99,22 @@ func makeTestEndpoints(namespace, name string, eptFunc func(*corev1.Endpoints)) 
 	return ept
 }
 
-func NewFakeProxier(routeClient route.Interface, ofClient openflow.Client, nodePortAddresses []net.IP, isIPv6, proxyAllEnabled bool) *proxier {
+type proxyOptions struct {
+	proxyAllEnabled      bool
+	proxyLoadBalancerIPs bool
+}
+
+type proxyOptionsFn func(*proxyOptions)
+
+func withProxyAll(o *proxyOptions) {
+	o.proxyAllEnabled = true
+}
+
+func withoutProxyLoadBalancerIPs(o *proxyOptions) {
+	o.proxyLoadBalancerIPs = false
+}
+
+func NewFakeProxier(routeClient route.Interface, ofClient openflow.Client, nodePortAddresses []net.IP, isIPv6 bool, options ...proxyOptionsFn) *proxier {
 	hostname := "localhost"
 	eventBroadcaster := record.NewBroadcaster()
 	recorder := eventBroadcaster.NewRecorder(
@@ -110,6 +125,15 @@ func NewFakeProxier(routeClient route.Interface, ofClient openflow.Client, nodeP
 	ipFamily := corev1.IPv4Protocol
 	if isIPv6 {
 		ipFamily = corev1.IPv6Protocol
+	}
+
+	o := &proxyOptions{
+		proxyAllEnabled:      false,
+		proxyLoadBalancerIPs: true,
+	}
+
+	for _, fn := range options {
+		fn(o)
 	}
 
 	p := &proxier{
@@ -126,7 +150,8 @@ func NewFakeProxier(routeClient route.Interface, ofClient openflow.Client, nodeP
 		serviceStringMap:         map[string]k8sproxy.ServicePortName{},
 		isIPv6:                   isIPv6,
 		nodePortAddresses:        nodePortAddresses,
-		proxyAll:                 proxyAllEnabled,
+		proxyAll:                 o.proxyAllEnabled,
+		proxyLoadBalancerIPs:     o.proxyLoadBalancerIPs,
 	}
 	p.runner = k8sproxy.NewBoundedFrequencyRunner(componentName, p.syncProxyRules, time.Second, 30*time.Second, 2)
 	return p
@@ -137,7 +162,7 @@ func testClusterIP(t *testing.T, svcIP net.IP, epIP net.IP, isIPv6 bool, extraSv
 	defer ctrl.Finish()
 	mockOFClient := ofmock.NewMockClient(ctrl)
 	mockRouteClient := routemock.NewMockInterface(ctrl)
-	fp := NewFakeProxier(mockRouteClient, mockOFClient, nil, isIPv6, true)
+	fp := NewFakeProxier(mockRouteClient, mockOFClient, nil, isIPv6, withProxyAll)
 
 	svcPort := 80
 	svcPortName := k8sproxy.ServicePortName{
@@ -183,12 +208,16 @@ func testClusterIP(t *testing.T, svcIP net.IP, epIP net.IP, isIPv6 bool, extraSv
 	fp.syncProxyRules()
 }
 
-func testLoadBalancer(t *testing.T, nodePortAddresses []net.IP, svcIP, ep1IP, ep2IP, loadBalancerIP net.IP, isIPv6, nodeLocalExternal bool) {
+func testLoadBalancer(t *testing.T, nodePortAddresses []net.IP, svcIP, ep1IP, ep2IP, loadBalancerIP net.IP, isIPv6, nodeLocalExternal, proxyLoadBalancerIPs bool) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockOFClient := ofmock.NewMockClient(ctrl)
 	mockRouteClient := routemock.NewMockInterface(ctrl)
-	fp := NewFakeProxier(mockRouteClient, mockOFClient, nodePortAddresses, isIPv6, true)
+	options := []proxyOptionsFn{withProxyAll}
+	if !proxyLoadBalancerIPs {
+		options = append(options, withoutProxyLoadBalancerIPs)
+	}
+	fp := NewFakeProxier(mockRouteClient, mockOFClient, nodePortAddresses, isIPv6, options...)
 
 	svcPort := 80
 	svcNodePort := 30008
@@ -264,11 +293,17 @@ func testLoadBalancer(t *testing.T, nodePortAddresses []net.IP, svcIP, ep1IP, ep
 		groupID, _ = fp.groupCounter.Get(svcPortName, true)
 		mockOFClient.EXPECT().InstallServiceGroup(groupID, false, gomock.Any()).Times(1)
 	}
-	mockOFClient.EXPECT().InstallServiceFlows(groupID, loadBalancerIP, uint16(svcPort), bindingProtocol, uint16(0), nodeLocalExternal, corev1.ServiceTypeLoadBalancer).Times(1)
+	if proxyLoadBalancerIPs {
+		mockOFClient.EXPECT().InstallServiceFlows(groupID, loadBalancerIP, uint16(svcPort), bindingProtocol, uint16(0), nodeLocalExternal, corev1.ServiceTypeLoadBalancer).Times(1)
+	}
 	mockOFClient.EXPECT().InstallServiceFlows(groupID, gomock.Any(), uint16(svcNodePort), bindingProtocol, uint16(0), nodeLocalExternal, corev1.ServiceTypeNodePort).Times(1)
-	mockOFClient.EXPECT().InstallLoadBalancerServiceFromOutsideFlows(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	if proxyLoadBalancerIPs {
+		mockOFClient.EXPECT().InstallLoadBalancerServiceFromOutsideFlows(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	}
 	mockRouteClient.EXPECT().AddClusterIPRoute(svcIP).Times(1)
-	mockRouteClient.EXPECT().AddLoadBalancer([]string{loadBalancerIP.String()}).Times(1)
+	if proxyLoadBalancerIPs {
+		mockRouteClient.EXPECT().AddLoadBalancer([]string{loadBalancerIP.String()}).Times(1)
+	}
 	mockRouteClient.EXPECT().AddNodePort(nodePortAddresses, uint16(svcNodePort), bindingProtocol).Times(1)
 
 	fp.syncProxyRules()
@@ -279,7 +314,7 @@ func testNodePort(t *testing.T, nodePortAddresses []net.IP, svcIP, ep1IP, ep2IP 
 	defer ctrl.Finish()
 	mockOFClient := ofmock.NewMockClient(ctrl)
 	mockRouteClient := routemock.NewMockInterface(ctrl)
-	fp := NewFakeProxier(mockRouteClient, mockOFClient, nodePortAddresses, isIPv6, true)
+	fp := NewFakeProxier(mockRouteClient, mockOFClient, nodePortAddresses, isIPv6, withProxyAll)
 
 	svcPort := 80
 	svcNodePort := 31000
@@ -362,19 +397,23 @@ func testNodePort(t *testing.T, nodePortAddresses []net.IP, svcIP, ep1IP, ep2IP 
 }
 
 func TestLoadBalancerIPv4(t *testing.T) {
-	testLoadBalancer(t, nodePortAddressesIPv4, svcIPv4, ep1IPv4, nil, loadBalancerIPv4, false, false)
+	testLoadBalancer(t, nodePortAddressesIPv4, svcIPv4, ep1IPv4, nil, loadBalancerIPv4, false, false, true)
 }
 
 func TestLoadBalancerIPv4ExternalLocal(t *testing.T) {
-	testLoadBalancer(t, nodePortAddressesIPv4, svcIPv4, ep1IPv4, ep2IPv4, loadBalancerIPv4, false, true)
+	testLoadBalancer(t, nodePortAddressesIPv4, svcIPv4, ep1IPv4, ep2IPv4, loadBalancerIPv4, false, true, true)
 }
 
 func TestLoadBalancerIPv6(t *testing.T) {
-	testLoadBalancer(t, nodePortAddressesIPv6, svcIPv6, ep1IPv6, nil, loadBalancerIPv6, true, false)
+	testLoadBalancer(t, nodePortAddressesIPv6, svcIPv6, ep1IPv6, nil, loadBalancerIPv6, true, false, true)
 }
 
 func TestLoadBalancerIPv6ExternalLocal(t *testing.T) {
-	testLoadBalancer(t, nodePortAddressesIPv6, svcIPv6, ep1IPv6, ep2IPv6, loadBalancerIPv6, true, true)
+	testLoadBalancer(t, nodePortAddressesIPv6, svcIPv6, ep1IPv6, ep2IPv6, loadBalancerIPv6, true, true, true)
+}
+
+func TestLoadBalancerIPv4NoExternalIPs(t *testing.T) {
+	testLoadBalancer(t, nodePortAddressesIPv4, svcIPv4, ep1IPv4, nil, loadBalancerIPv4, false, false, false)
 }
 
 func TestNodePortIPv4(t *testing.T) {
@@ -465,8 +504,8 @@ func TestDualStackService(t *testing.T) {
 	defer ctrl.Finish()
 	mockOFClient := ofmock.NewMockClient(ctrl)
 	mockRouteClient := routemock.NewMockInterface(ctrl)
-	fpv4 := NewFakeProxier(mockRouteClient, mockOFClient, nil, false, false)
-	fpv6 := NewFakeProxier(mockRouteClient, mockOFClient, nil, true, false)
+	fpv4 := NewFakeProxier(mockRouteClient, mockOFClient, nil, false)
+	fpv6 := NewFakeProxier(mockRouteClient, mockOFClient, nil, true)
 	metaProxier := k8sproxy.NewMetaProxier(fpv4, fpv6)
 
 	svcPort := 80
@@ -541,7 +580,7 @@ func testClusterIPRemoval(t *testing.T, svcIP net.IP, epIP net.IP, isIPv6 bool) 
 	defer ctrl.Finish()
 	mockOFClient := ofmock.NewMockClient(ctrl)
 	mockRouteClient := routemock.NewMockInterface(ctrl)
-	fp := NewFakeProxier(mockRouteClient, mockOFClient, nil, isIPv6, true)
+	fp := NewFakeProxier(mockRouteClient, mockOFClient, nil, isIPv6, withProxyAll)
 
 	svcPort := 80
 	svcPortName := k8sproxy.ServicePortName{
@@ -607,7 +646,7 @@ func testClusterIPNoEndpoint(t *testing.T, svcIP net.IP, isIPv6 bool) {
 	defer ctrl.Finish()
 	mockOFClient := ofmock.NewMockClient(ctrl)
 	mockRouteClient := routemock.NewMockInterface(ctrl)
-	fp := NewFakeProxier(mockRouteClient, mockOFClient, nil, isIPv6, false)
+	fp := NewFakeProxier(mockRouteClient, mockOFClient, nil, isIPv6)
 
 	svcPort := 80
 	svcNodePort := 3001
@@ -645,7 +684,7 @@ func testClusterIPRemoveSamePortEndpoint(t *testing.T, svcIP net.IP, epIP net.IP
 	defer ctrl.Finish()
 	mockOFClient := ofmock.NewMockClient(ctrl)
 	mockRouteClient := routemock.NewMockInterface(ctrl)
-	fp := NewFakeProxier(mockRouteClient, mockOFClient, nil, isIPv6, false)
+	fp := NewFakeProxier(mockRouteClient, mockOFClient, nil, isIPv6)
 
 	svcPort := 80
 	svcPortName := k8sproxy.ServicePortName{
@@ -737,7 +776,7 @@ func testClusterIPRemoveEndpoints(t *testing.T, svcIP net.IP, epIP net.IP, isIPv
 	defer ctrl.Finish()
 	mockOFClient := ofmock.NewMockClient(ctrl)
 	mockRouteClient := routemock.NewMockInterface(ctrl)
-	fp := NewFakeProxier(mockRouteClient, mockOFClient, nil, isIPv6, false)
+	fp := NewFakeProxier(mockRouteClient, mockOFClient, nil, isIPv6)
 
 	svcPort := 80
 	svcPortName := k8sproxy.ServicePortName{
@@ -797,7 +836,7 @@ func testSessionAffinityNoEndpoint(t *testing.T, svcExternalIPs net.IP, svcIP ne
 	defer ctrl.Finish()
 	mockOFClient := ofmock.NewMockClient(ctrl)
 	mockRouteClient := routemock.NewMockInterface(ctrl)
-	fp := NewFakeProxier(mockRouteClient, mockOFClient, nil, isIPv6, false)
+	fp := NewFakeProxier(mockRouteClient, mockOFClient, nil, isIPv6)
 
 	svcPort := 80
 	svcNodePort := 3001
@@ -866,7 +905,7 @@ func testSessionAffinity(t *testing.T, svcExternalIPs net.IP, svcIP net.IP, isIP
 	defer ctrl.Finish()
 	mockOFClient := ofmock.NewMockClient(ctrl)
 	mockRouteClient := routemock.NewMockInterface(ctrl)
-	fp := NewFakeProxier(mockRouteClient, mockOFClient, nil, isIPv6, false)
+	fp := NewFakeProxier(mockRouteClient, mockOFClient, nil, isIPv6)
 
 	svcPort := 80
 	svcNodePort := 3001
@@ -914,7 +953,7 @@ func testPortChange(t *testing.T, svcIP net.IP, epIP net.IP, isIPv6 bool) {
 	defer ctrl.Finish()
 	mockOFClient := ofmock.NewMockClient(ctrl)
 	mockRouteClient := routemock.NewMockInterface(ctrl)
-	fp := NewFakeProxier(mockRouteClient, mockOFClient, nil, isIPv6, false)
+	fp := NewFakeProxier(mockRouteClient, mockOFClient, nil, isIPv6)
 
 	svcPort1 := 80
 	svcPort2 := 8080
@@ -988,7 +1027,7 @@ func TestServicesWithSameEndpoints(t *testing.T) {
 	defer ctrl.Finish()
 	mockOFClient := ofmock.NewMockClient(ctrl)
 	mockRouteClient := routemock.NewMockInterface(ctrl)
-	fp := NewFakeProxier(mockRouteClient, mockOFClient, nil, false, false)
+	fp := NewFakeProxier(mockRouteClient, mockOFClient, nil, false)
 	epIP := net.ParseIP("10.50.60.71")
 	svcIP1 := net.ParseIP("10.180.30.41")
 	svcIP2 := net.ParseIP("10.180.30.42")

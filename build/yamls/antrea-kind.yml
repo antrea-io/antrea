@@ -4176,6 +4176,13 @@ data:
       # Services will not be load-balanced). Values can be a valid ClusterIP (e.g. 10.11.1.2) or a Service name
       # with Namespace (e.g. kube-system/kube-dns)
       #skipServices: []
+      # When ProxyLoadBalancerIPs is set to false, AntreaProxy no longer load-balances traffic destined to the
+      # External IPs of LoadBalancer Services. This is useful when the external LoadBalancer provides additional
+      # capabilities (e.g. TLS termination) and it is desirable for Pod-to-ExternalIP traffic to be sent to the
+      # external LoadBalancer instead of being load-balanced to an Endpoint directly by AntreaProxy.
+      # Note that setting ProxyLoadBalancerIPs to false usually only makes sense when ProxyAll is set to true and
+      # kube-proxy is removed from the cluser, otherwise kube-proxy will still load-balance this traffic.
+      #proxyLoadBalancerIPs: true
   antrea-cni.conflist: |
     {
         "cniVersion":"0.3.0",
@@ -4288,7 +4295,7 @@ metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-mcf8bf8b2m
+  name: antrea-config-h5hctb5f9b
   namespace: kube-system
 ---
 apiVersion: v1
@@ -4359,7 +4366,7 @@ spec:
             fieldRef:
               fieldPath: spec.serviceAccountName
         - name: ANTREA_CONFIG_MAP_NAME
-          value: antrea-config-mcf8bf8b2m
+          value: antrea-config-h5hctb5f9b
         image: projects.registry.vmware.com/antrea/antrea-ubuntu:latest
         imagePullPolicy: IfNotPresent
         livenessProbe:
@@ -4410,7 +4417,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-mcf8bf8b2m
+          name: antrea-config-h5hctb5f9b
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -4687,7 +4694,7 @@ spec:
           type: CharDevice
         name: dev-tun
       - configMap:
-          name: antrea-config-mcf8bf8b2m
+          name: antrea-config-h5hctb5f9b
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d
