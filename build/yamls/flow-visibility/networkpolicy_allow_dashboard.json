@@ -1,0 +1,921 @@
+{
+  "__inputs": [
+    {
+      "name": "DS_CLICKHOUSE",
+      "label": "ClickHouse",
+      "description": "",
+      "type": "datasource",
+      "pluginId": "vertamedia-clickhouse-datasource",
+      "pluginName": "ClickHouse"
+    }
+  ],
+  "__elements": [],
+  "__requires": [
+    {
+      "type": "panel",
+      "id": "antreaflowvisibility-grafana-sankey-plugin",
+      "name": "grafana-sankey-plugin",
+      "version": "1.0.0"
+    },
+    {
+      "type": "grafana",
+      "id": "grafana",
+      "name": "Grafana",
+      "version": "8.3.3"
+    },
+    {
+      "type": "panel",
+      "id": "timeseries",
+      "name": "Time series",
+      "version": ""
+    },
+    {
+      "type": "datasource",
+      "id": "vertamedia-clickhouse-datasource",
+      "name": "ClickHouse",
+      "version": "2.4.2"
+    }
+  ],
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": "-- Grafana --",
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "target": {
+          "limit": 100,
+          "matchAny": false,
+          "tags": [],
+          "type": "dashboard"
+        },
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "iteration": 1642104078054,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "datasource": {
+        "type": "vertamedia-clickhouse-datasource",
+        "uid": "${DS_CLICKHOUSE}"
+      },
+      "gridPos": {
+        "h": 18,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "id": 13,
+      "options": {
+        "seriesCountSize": "sm",
+        "showSeriesCount": false,
+        "text": "Default value of text input option"
+      },
+      "pluginVersion": "7.5.2",
+      "targets": [
+        {
+          "database": "default",
+          "datasource": {
+            "type": "vertamedia-clickhouse-datasource",
+            "uid": "${DS_CLICKHOUSE}"
+          },
+          "dateColDataType": "",
+          "dateLoading": false,
+          "dateTimeColDataType": "flowEndSeconds",
+          "dateTimeType": "DATETIME",
+          "datetimeLoading": false,
+          "extrapolate": true,
+          "format": "time_series",
+          "formattedQuery": "SELECT $timeSeries as t, count() FROM $table WHERE $timeFilter GROUP BY t ORDER BY t",
+          "intervalFactor": 1,
+          "query": "SELECT\n    SUM(octetDeltaCount), \n    (egressNetworkPolicyName, ingressNetworkPolicyName) AS pair\nFROM $table\n\nWHERE $timeFilter\nAND egressNetworkPolicyName != '' OR ingressNetworkPolicyName != ''\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator', 'ipfix')\n\nGROUP BY pair\n",
+          "queryType": "randomWalk",
+          "rawQuery": "SELECT\n    SUM(octetDeltaCount), \n    (egressNetworkPolicyName, ingressNetworkPolicyName) AS pair\nFROM default.antrea\n\nWHERE flowEndSeconds >= toDateTime(1641938668) AND flowEndSeconds <= toDateTime(1641940468)\nAND egressNetworkPolicyName != '' OR ingressNetworkPolicyName != ''\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator', 'ipfix')\n\nGROUP BY pair",
+          "refId": "A",
+          "round": "0s",
+          "skip_comments": true,
+          "table": "antrea",
+          "tableLoading": false
+        }
+      ],
+      "title": "Throughput of Network Policy (Bytes)",
+      "transparent": true,
+      "type": "antreaflowvisibility-grafana-sankey-plugin"
+    },
+    {
+      "datasource": {
+        "type": "vertamedia-clickhouse-datasource",
+        "uid": "${DS_CLICKHOUSE}"
+      },
+      "gridPos": {
+        "h": 18,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "id": 12,
+      "options": {
+        "seriesCountSize": "sm",
+        "showSeriesCount": false,
+        "text": "Default value of text input option"
+      },
+      "pluginVersion": "7.5.2",
+      "targets": [
+        {
+          "database": "default",
+          "datasource": {
+            "type": "vertamedia-clickhouse-datasource",
+            "uid": "${DS_CLICKHOUSE}"
+          },
+          "dateColDataType": "",
+          "dateLoading": false,
+          "dateTimeColDataType": "flowEndSeconds",
+          "dateTimeType": "DATETIME",
+          "datetimeLoading": false,
+          "extrapolate": true,
+          "format": "time_series",
+          "formattedQuery": "SELECT $timeSeries as t, count() FROM $table WHERE $timeFilter GROUP BY t ORDER BY t",
+          "intervalFactor": 1,
+          "query": "SELECT\n    SUM(reverseOctetDeltaCount), \n    (egressNetworkPolicyName, ingressNetworkPolicyName) AS pair\nFROM $table\n\nWHERE $timeFilter\nAND egressNetworkPolicyName != '' OR ingressNetworkPolicyName != ''\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator', 'ipfix')\n\nGROUP BY pair\n",
+          "queryType": "randomWalk",
+          "rawQuery": "SELECT\n    SUM(reverseOctetDeltaCount), \n    (egressNetworkPolicyName, ingressNetworkPolicyName) AS pair\nFROM default.antrea\n\nWHERE flowEndSeconds >= toDateTime(1642102304) AND flowEndSeconds <= toDateTime(1642104104)\nAND egressNetworkPolicyName != '' OR ingressNetworkPolicyName != ''\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator', 'ipfix')\n\nGROUP BY pair",
+          "refId": "A",
+          "round": "0s",
+          "skip_comments": true,
+          "table": "antrea",
+          "tableLoading": false
+        }
+      ],
+      "title": "Reverse Throughput of Network Policy (Reverse Bytes)",
+      "transparent": true,
+      "type": "antreaflowvisibility-grafana-sankey-plugin"
+    },
+    {
+      "datasource": {
+        "type": "vertamedia-clickhouse-datasource",
+        "uid": "${DS_CLICKHOUSE}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineInterpolation": "linear",
+            "lineStyle": {
+              "fill": "solid"
+            },
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "always",
+            "spanNulls": true,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "decbytes"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 0,
+        "y": 18
+      },
+      "id": 2,
+      "interval": "60s",
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean"
+          ],
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "pluginVersion": "8.3.3",
+      "targets": [
+        {
+          "database": "default",
+          "datasource": {
+            "type": "vertamedia-clickhouse-datasource",
+            "uid": "${DS_CLICKHOUSE}"
+          },
+          "dateColDataType": "",
+          "dateLoading": false,
+          "dateTimeColDataType": "flowEndSeconds",
+          "dateTimeType": "DATETIME",
+          "datetimeLoading": false,
+          "extrapolate": true,
+          "format": "time_series",
+          "formattedQuery": "SELECT $timeSeries as t, count() FROM $table WHERE $timeFilter GROUP BY t ORDER BY t",
+          "hide": false,
+          "intervalFactor": 1,
+          "query": "SELECT\n    $timeSeries as t,\n    SUM(octetDeltaCount),\n    (egressNetworkPolicyName, ingressNetworkPolicyName) as pair\nFROM $table\n\nWHERE $timeFilter\nAND ingressNetworkPolicyName != '' OR egressNetworkPolicyName != ''\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator', 'ipfix')\n\nGROUP BY\n    pair,\n    t\nORDER BY t\n",
+          "queryType": "randomWalk",
+          "rawQuery": "SELECT\n    (intDiv(toUInt32(flowEndSeconds), 60) * 60) * 1000 as t,\n    SUM(octetDeltaCount),\n    (egressNetworkPolicyName, ingressNetworkPolicyName) as pair\nFROM default.antrea\n\nWHERE flowEndSeconds >= toDateTime(1641938647) AND flowEndSeconds <= toDateTime(1641940447)\nAND ingressNetworkPolicyName != '' OR egressNetworkPolicyName != ''\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator', 'ipfix')\n\nGROUP BY\n    pair,\n    t\nORDER BY t",
+          "refId": "A",
+          "round": "0s",
+          "skip_comments": true,
+          "table": "antrea",
+          "tableLoading": false
+        }
+      ],
+      "title": "Cumulative Bytes of Network Policy",
+      "transformations": [
+        {
+          "id": "groupBy",
+          "options": {
+            "fields": {
+              "Time": {
+                "aggregations": [],
+                "operation": "aggregate"
+              }
+            }
+          }
+        }
+      ],
+      "transparent": true,
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "vertamedia-clickhouse-datasource",
+        "uid": "${DS_CLICKHOUSE}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "always",
+            "spanNulls": true,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "decbytes"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 12,
+        "y": 18
+      },
+      "id": 7,
+      "interval": "60s",
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean"
+          ],
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "pluginVersion": "8.3.3",
+      "targets": [
+        {
+          "database": "default",
+          "datasource": {
+            "type": "vertamedia-clickhouse-datasource",
+            "uid": "${DS_CLICKHOUSE}"
+          },
+          "dateColDataType": "",
+          "dateLoading": false,
+          "dateTimeColDataType": "flowEndSeconds",
+          "dateTimeType": "DATETIME",
+          "datetimeLoading": false,
+          "extrapolate": true,
+          "format": "time_series",
+          "formattedQuery": "SELECT $timeSeries as t, count() FROM $table WHERE $timeFilter GROUP BY t ORDER BY t",
+          "hide": false,
+          "intervalFactor": 1,
+          "query": "SELECT\n    $timeSeries as t,\n    SUM(reverseOctetDeltaCount),\n    (egressNetworkPolicyName, ingressNetworkPolicyName) as pair\nFROM $table\n\nWHERE $timeFilter\nAND egressNetworkPolicyName != '' OR ingressNetworkPolicyName != ''\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator', 'ipfix')\n\nGROUP BY\n    pair,\n    t\nORDER BY t\n",
+          "queryType": "randomWalk",
+          "rawQuery": "SELECT\n    (intDiv(toUInt32(flowEndSeconds), 60) * 60) * 1000 as t,\n    SUM(reverseOctetDeltaCount),\n    (egressNetworkPolicyName, ingressNetworkPolicyName) as pair\nFROM default.antrea\n\nWHERE flowEndSeconds >= toDateTime(1641938737) AND flowEndSeconds <= toDateTime(1641940537)\nAND egressNetworkPolicyName != '' OR ingressNetworkPolicyName != ''\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator', 'ipfix')\n\nGROUP BY\n    pair,\n    t\nORDER BY t",
+          "refId": "A",
+          "round": "0s",
+          "skip_comments": true,
+          "table": "antrea",
+          "tableLoading": false
+        }
+      ],
+      "title": "Cumulative Reverse Bytes of Network Policy",
+      "transformations": [
+        {
+          "id": "groupBy",
+          "options": {
+            "fields": {
+              "Time": {
+                "aggregations": [],
+                "operation": "aggregate"
+              }
+            }
+          }
+        }
+      ],
+      "transparent": true,
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "vertamedia-clickhouse-datasource",
+        "uid": "${DS_CLICKHOUSE}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "always",
+            "spanNulls": true,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "bps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 0,
+        "y": 28
+      },
+      "id": 5,
+      "interval": "60s",
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean"
+          ],
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "pluginVersion": "8.3.3",
+      "targets": [
+        {
+          "database": "default",
+          "datasource": {
+            "type": "vertamedia-clickhouse-datasource",
+            "uid": "${DS_CLICKHOUSE}"
+          },
+          "dateColDataType": "",
+          "dateLoading": false,
+          "dateTimeColDataType": "flowEndSeconds",
+          "dateTimeType": "DATETIME",
+          "datetimeLoading": false,
+          "extrapolate": true,
+          "format": "time_series",
+          "formattedQuery": "SELECT $timeSeries as t, count() FROM $table WHERE $timeFilter GROUP BY t ORDER BY t",
+          "hide": false,
+          "intervalFactor": 1,
+          "query": "SELECT\n    $timeSeries as t,\n    AVG(throughput),\n    (egressNetworkPolicyName, ingressNetworkPolicyName) as pair\nFROM $table\n\nWHERE $timeFilter\nAND egressNetworkPolicyName != '' OR ingressNetworkPolicyName != ''\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator', 'ipfix')\n\nGROUP BY\n    pair,\n    t\nORDER BY t\n",
+          "queryType": "randomWalk",
+          "rawQuery": "SELECT\n    (intDiv(toUInt32(flowEndSeconds), 60) * 60) * 1000 as t,\n    AVG(throughput),\n    (egressNetworkPolicyName, ingressNetworkPolicyName) as pair\nFROM default.antrea\n\nWHERE flowEndSeconds >= toDateTime(1641938757) AND flowEndSeconds <= toDateTime(1641940557)\nAND egressNetworkPolicyName != '' OR ingressNetworkPolicyName != ''\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator', 'ipfix')\n\nGROUP BY\n    pair,\n    t\nORDER BY t",
+          "refId": "A",
+          "round": "0s",
+          "skip_comments": true,
+          "table": "antrea",
+          "tableLoading": false
+        }
+      ],
+      "title": "Throughput of Network Policy",
+      "transformations": [
+        {
+          "id": "groupBy",
+          "options": {
+            "fields": {
+              "Time": {
+                "aggregations": [],
+                "operation": "aggregate"
+              }
+            }
+          }
+        }
+      ],
+      "transparent": true,
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "vertamedia-clickhouse-datasource",
+        "uid": "${DS_CLICKHOUSE}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "always",
+            "spanNulls": true,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "bps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 12,
+        "y": 28
+      },
+      "id": 6,
+      "interval": "60s",
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean"
+          ],
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "pluginVersion": "8.3.3",
+      "targets": [
+        {
+          "database": "default",
+          "datasource": {
+            "type": "vertamedia-clickhouse-datasource",
+            "uid": "${DS_CLICKHOUSE}"
+          },
+          "dateColDataType": "",
+          "dateLoading": false,
+          "dateTimeColDataType": "flowEndSeconds",
+          "dateTimeType": "DATETIME",
+          "datetimeLoading": false,
+          "extrapolate": true,
+          "format": "time_series",
+          "formattedQuery": "SELECT $timeSeries as t, count() FROM $table WHERE $timeFilter GROUP BY t ORDER BY t",
+          "hide": false,
+          "intervalFactor": 1,
+          "query": "SELECT\n    $timeSeries as t,\n    AVG(reverseThroughput),\n    (egressNetworkPolicyName, ingressNetworkPolicyName) as pair\nFROM $table\n\nWHERE $timeFilter\nAND egressNetworkPolicyName != '' OR ingressNetworkPolicyName != ''\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator', 'ipfix')\n\nGROUP BY\n    pair,\n    t\nORDER BY t\n",
+          "queryType": "randomWalk",
+          "rawQuery": "SELECT\n    (intDiv(toUInt32(flowEndSeconds), 60) * 60) * 1000 as t,\n    AVG(reverseThroughput),\n    (egressNetworkPolicyName, ingressNetworkPolicyName) as pair\nFROM default.antrea\n\nWHERE flowEndSeconds >= toDateTime(1641938775) AND flowEndSeconds <= toDateTime(1641940575)\nAND egressNetworkPolicyName != '' OR ingressNetworkPolicyName != ''\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator', 'ipfix')\n\nGROUP BY\n    pair,\n    t\nORDER BY t",
+          "refId": "A",
+          "round": "0s",
+          "skip_comments": true,
+          "table": "antrea",
+          "tableLoading": false
+        }
+      ],
+      "title": "Reverse Throughput Network Policy",
+      "transformations": [
+        {
+          "id": "groupBy",
+          "options": {
+            "fields": {
+              "Time": {
+                "aggregations": [],
+                "operation": "aggregate"
+              }
+            }
+          }
+        }
+      ],
+      "transparent": true,
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "vertamedia-clickhouse-datasource",
+        "uid": "${DS_CLICKHOUSE}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "always",
+            "spanNulls": true,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "bps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 0,
+        "y": 38
+      },
+      "id": 15,
+      "interval": "60s",
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean"
+          ],
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "pluginVersion": "8.3.3",
+      "targets": [
+        {
+          "database": "default",
+          "datasource": {
+            "type": "vertamedia-clickhouse-datasource",
+            "uid": "${DS_CLICKHOUSE}"
+          },
+          "dateColDataType": "",
+          "dateLoading": false,
+          "dateTimeColDataType": "flowEndSeconds",
+          "dateTimeType": "DATETIME",
+          "datetimeLoading": false,
+          "extrapolate": true,
+          "format": "time_series",
+          "formattedQuery": "SELECT $timeSeries as t, count() FROM $table WHERE $timeFilter GROUP BY t ORDER BY t",
+          "hide": false,
+          "intervalFactor": 1,
+          "query": "SELECT\n    $timeSeries as t,\n    AVG(throughputFromSourceNode),\n    egressNetworkPolicyName\nFROM $table\n\nWHERE $timeFilter \nAND egressNetworkPolicyName != '' \nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator', 'ipfix')\n\nGROUP BY\n    egressNetworkPolicyName,\n    t\nORDER BY t\n",
+          "queryType": "randomWalk",
+          "rawQuery": "SELECT\n    (intDiv(toUInt32(flowEndSeconds), 60) * 60) * 1000 as t,\n    AVG(throughputFromSourceNode),\n    egressNetworkPolicyName\nFROM default.antrea\n\nWHERE flowEndSeconds >= toDateTime(1641938801) AND flowEndSeconds <= toDateTime(1641940601) \nAND egressNetworkPolicyName != '' \nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator', 'ipfix')\n\nGROUP BY\n    egressNetworkPolicyName,\n    t\nORDER BY t",
+          "refId": "A",
+          "round": "0s",
+          "skip_comments": true,
+          "table": "antrea",
+          "tableLoading": false
+        }
+      ],
+      "title": "Throughput of Egress Network Policy",
+      "transformations": [
+        {
+          "id": "groupBy",
+          "options": {
+            "fields": {
+              "Time": {
+                "aggregations": [],
+                "operation": "aggregate"
+              }
+            }
+          }
+        }
+      ],
+      "transparent": true,
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "vertamedia-clickhouse-datasource",
+        "uid": "${DS_CLICKHOUSE}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "always",
+            "spanNulls": true,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "bps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 12,
+        "y": 38
+      },
+      "id": 16,
+      "interval": "60s",
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean"
+          ],
+          "displayMode": "table",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "pluginVersion": "8.3.3",
+      "targets": [
+        {
+          "database": "default",
+          "datasource": {
+            "type": "vertamedia-clickhouse-datasource",
+            "uid": "${DS_CLICKHOUSE}"
+          },
+          "dateColDataType": "",
+          "dateLoading": false,
+          "dateTimeColDataType": "flowEndSeconds",
+          "dateTimeType": "DATETIME",
+          "datetimeLoading": false,
+          "extrapolate": true,
+          "format": "time_series",
+          "formattedQuery": "SELECT $timeSeries as t, count() FROM $table WHERE $timeFilter GROUP BY t ORDER BY t",
+          "hide": false,
+          "intervalFactor": 1,
+          "query": "SELECT\n    $timeSeries as t,\n    AVG(throughputFromDestinationNode),\n    ingressNetworkPolicyName\nFROM $table\n\nWHERE $timeFilter \nAND ingressNetworkPolicyName != '' \nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator', 'ipfix')\n\nGROUP BY\n    ingressNetworkPolicyName,\n    t\nORDER BY t\n",
+          "queryType": "randomWalk",
+          "rawQuery": "SELECT\n    (intDiv(toUInt32(flowEndSeconds), 60) * 60) * 1000 as t,\n    AVG(throughputFromDestinationNode),\n    ingressNetworkPolicyName\nFROM default.antrea\n\nWHERE flowEndSeconds >= toDateTime(1641938831) AND flowEndSeconds <= toDateTime(1641940631) \nAND ingressNetworkPolicyName != '' \nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator', 'ipfix')\n\nGROUP BY\n    ingressNetworkPolicyName,\n    t\nORDER BY t",
+          "refId": "A",
+          "round": "0s",
+          "skip_comments": true,
+          "table": "antrea",
+          "tableLoading": false
+        }
+      ],
+      "title": "Throughput of Ingress Network Policy",
+      "transformations": [
+        {
+          "id": "groupBy",
+          "options": {
+            "fields": {
+              "Time": {
+                "aggregations": [],
+                "operation": "aggregate"
+              }
+            }
+          }
+        }
+      ],
+      "transparent": true,
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "1m",
+  "schemaVersion": 34,
+  "style": "dark",
+  "tags": [],
+  "templating": {
+    "list": [
+      {
+        "datasource": {
+          "type": "vertamedia-clickhouse-datasource",
+          "uid": "PDEE91DDB90597936"
+        },
+        "filters": [],
+        "hide": 0,
+        "name": "Filter",
+        "skipUrlSync": false,
+        "type": "adhoc"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-30m",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "",
+  "title": "networkpolicy_allow_dashboard",
+  "uid": "kWk0EW1nz",
+  "version": 3,
+  "weekStart": ""
+}

@@ -1,0 +1,913 @@
+{
+    "__inputs": [
+        {
+            "name": "DS_CLICKHOUSE",
+            "label": "ClickHouse",
+            "description": "",
+            "type": "datasource",
+            "pluginId": "vertamedia-clickhouse-datasource",
+            "pluginName": "ClickHouse"
+        }
+    ],
+    "__elements": [],
+    "__requires": [
+        {
+            "type": "panel",
+            "id": "antreaflowvisibility-grafana-sankey-plugin",
+            "name": "grafana-sankey-plugin",
+            "version": "1.0.0"
+        },
+        {
+            "type": "grafana",
+            "id": "grafana",
+            "name": "Grafana",
+            "version": "8.3.3"
+        },
+        {
+            "type": "panel",
+            "id": "timeseries",
+            "name": "Time series",
+            "version": ""
+        },
+        {
+            "type": "datasource",
+            "id": "vertamedia-clickhouse-datasource",
+            "name": "ClickHouse",
+            "version": "2.4.2"
+        }
+    ],
+    "annotations": {
+        "list": [
+            {
+                "builtIn": 1,
+                "datasource": "-- Grafana --",
+                "enable": true,
+                "hide": true,
+                "iconColor": "rgba(0, 211, 255, 1)",
+                "name": "Annotations & Alerts",
+                "target": {
+                    "limit": 100,
+                    "matchAny": false,
+                    "tags": [],
+                    "type": "dashboard"
+                },
+                "type": "dashboard"
+            }
+        ]
+    },
+    "editable": true,
+    "fiscalYearStartMonth": 0,
+    "graphTooltip": 0,
+    "id": null,
+    "iteration": 1642104780017,
+    "links": [],
+    "liveNow": false,
+    "panels": [
+        {
+            "datasource": {
+                "type": "vertamedia-clickhouse-datasource",
+                "uid": "${DS_CLICKHOUSE}"
+            },
+            "gridPos": {
+                "h": 18,
+                "w": 12,
+                "x": 0,
+                "y": 0
+            },
+            "id": 13,
+            "options": {
+                "seriesCountSize": "sm",
+                "showSeriesCount": false,
+                "text": "Default value of text input option"
+            },
+            "pluginVersion": "7.5.2",
+            "targets": [
+                {
+                    "database": "default",
+                    "datasource": {
+                        "type": "vertamedia-clickhouse-datasource",
+                        "uid": "${DS_CLICKHOUSE}"
+                    },
+                    "dateColDataType": "",
+                    "dateLoading": false,
+                    "dateTimeColDataType": "flowEndSeconds",
+                    "dateTimeType": "DATETIME",
+                    "datetimeLoading": false,
+                    "extrapolate": true,
+                    "format": "time_series",
+                    "formattedQuery": "SELECT $timeSeries as t, count() FROM $table WHERE $timeFilter GROUP BY t ORDER BY t",
+                    "intervalFactor": 1,
+                    "query": "SELECT\n    SUM(octetDeltaCount), \n    (sourcePodName, destinationPodName, destinationIP) AS pair\nFROM $table\n\nWHERE $timeFilter\nAND flowType == 3\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-aggregator', 'ipfix')\n\nGROUP BY pair\n",
+                    "queryType": "randomWalk",
+                    "rawQuery": "SELECT\n    SUM(octetDeltaCount), \n    (sourcePodName, destinationPodName, destinationIP) AS pair\nFROM default.antrea\n\nWHERE flowEndSeconds >= toDateTime(1642102705) AND flowEndSeconds <= toDateTime(1642104505)\nAND flowType == 3\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-aggregator', 'ipfix')\n\nGROUP BY pair",
+                    "refId": "A",
+                    "round": "0s",
+                    "skip_comments": true,
+                    "table": "antrea",
+                    "tableLoading": false
+                }
+            ],
+            "title": "Throughput Pod-to-External (Bytes)",
+            "transparent": true,
+            "type": "antreaflowvisibility-grafana-sankey-plugin"
+        },
+        {
+            "datasource": {
+                "type": "vertamedia-clickhouse-datasource",
+                "uid": "${DS_CLICKHOUSE}"
+            },
+            "gridPos": {
+                "h": 18,
+                "w": 12,
+                "x": 12,
+                "y": 0
+            },
+            "id": 12,
+            "options": {
+                "seriesCountSize": "sm",
+                "showSeriesCount": false,
+                "text": "Default value of text input option"
+            },
+            "pluginVersion": "7.5.2",
+            "targets": [
+                {
+                    "database": "default",
+                    "datasource": {
+                        "type": "vertamedia-clickhouse-datasource",
+                        "uid": "${DS_CLICKHOUSE}"
+                    },
+                    "dateColDataType": "",
+                    "dateLoading": false,
+                    "dateTimeColDataType": "flowEndSeconds",
+                    "dateTimeType": "DATETIME",
+                    "datetimeLoading": false,
+                    "extrapolate": true,
+                    "format": "time_series",
+                    "formattedQuery": "SELECT $timeSeries as t, count() FROM $table WHERE $timeFilter GROUP BY t ORDER BY t",
+                    "intervalFactor": 1,
+                    "query": "SELECT\n    SUM(reverseOctetDeltaCount), \n    (sourcePodName, destinationPodName, destinationIP) AS pair\nFROM $table\n\nWHERE $timeFilter\nAND flowType == 3\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-aggregator', 'ipfix')\n\nGROUP BY pair\n",
+                    "queryType": "randomWalk",
+                    "rawQuery": "SELECT\n    SUM(reverseOctetDeltaCount), \n    (sourcePodName, destinationPodName, destinationIP) AS pair\nFROM default.antrea\n\nWHERE flowEndSeconds >= toDateTime(1642103039) AND flowEndSeconds <= toDateTime(1642104839)\nAND flowType == 3\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-aggregator', 'ipfix')\n\nGROUP BY pair",
+                    "refId": "A",
+                    "round": "0s",
+                    "skip_comments": true,
+                    "table": "antrea",
+                    "tableLoading": false
+                }
+            ],
+            "title": "Reverse Throughput Pod-to-External (Reverse Bytes)",
+            "transparent": true,
+            "type": "antreaflowvisibility-grafana-sankey-plugin"
+        },
+        {
+            "datasource": {
+                "type": "vertamedia-clickhouse-datasource",
+                "uid": "${DS_CLICKHOUSE}"
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "palette-classic"
+                    },
+                    "custom": {
+                        "axisLabel": "",
+                        "axisPlacement": "auto",
+                        "barAlignment": 0,
+                        "drawStyle": "line",
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "hideFrom": {
+                            "legend": false,
+                            "tooltip": false,
+                            "viz": false
+                        },
+                        "lineInterpolation": "linear",
+                        "lineStyle": {
+                            "fill": "solid"
+                        },
+                        "lineWidth": 1,
+                        "pointSize": 5,
+                        "scaleDistribution": {
+                            "type": "linear"
+                        },
+                        "showPoints": "always",
+                        "spanNulls": true,
+                        "stacking": {
+                            "group": "A",
+                            "mode": "none"
+                        },
+                        "thresholdsStyle": {
+                            "mode": "off"
+                        }
+                    },
+                    "mappings": [],
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "green",
+                                "value": null
+                            }
+                        ]
+                    },
+                    "unit": "decbytes"
+                },
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 10,
+                "w": 12,
+                "x": 0,
+                "y": 18
+            },
+            "id": 2,
+            "interval": "60s",
+            "options": {
+                "legend": {
+                    "calcs": [
+                        "mean"
+                    ],
+                    "displayMode": "table",
+                    "placement": "right"
+                },
+                "tooltip": {
+                    "mode": "single"
+                }
+            },
+            "pluginVersion": "8.3.3",
+            "targets": [
+                {
+                    "database": "default",
+                    "datasource": {
+                        "type": "vertamedia-clickhouse-datasource",
+                        "uid": "${DS_CLICKHOUSE}"
+                    },
+                    "dateColDataType": "",
+                    "dateLoading": false,
+                    "dateTimeColDataType": "flowEndSeconds",
+                    "dateTimeType": "DATETIME",
+                    "datetimeLoading": false,
+                    "extrapolate": true,
+                    "format": "time_series",
+                    "formattedQuery": "SELECT $timeSeries as t, count() FROM $table WHERE $timeFilter GROUP BY t ORDER BY t",
+                    "hide": false,
+                    "intervalFactor": 1,
+                    "query": "SELECT\n    $timeSeries as t,\n    SUM(octetDeltaCount),\n    (sourcePodName, destinationIP) as pair\nFROM $table\n\nWHERE $timeFilter\nAND flowType == 3\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator', 'ipfix')\n\nGROUP BY\n    pair,\n    t\nORDER BY t\n",
+                    "queryType": "randomWalk",
+                    "rawQuery": "SELECT\n    (intDiv(toUInt32(flowEndSeconds), 60) * 60) * 1000 as t,\n    SUM(octetDeltaCount),\n    (sourcePodName, destinationIP) as pair\nFROM default.antrea\n\nWHERE flowEndSeconds >= toDateTime(1641937813) AND flowEndSeconds <= toDateTime(1641939613)\nAND flowType == 3\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator', 'ipfix')\n\nGROUP BY\n    pair,\n    t\nORDER BY t",
+                    "refId": "A",
+                    "round": "0s",
+                    "skip_comments": true,
+                    "table": "antrea",
+                    "tableLoading": false
+                }
+            ],
+            "title": "Cumulative Bytes Pod-to-External",
+            "transformations": [
+                {
+                    "id": "groupBy",
+                    "options": {
+                        "fields": {
+                            "Time": {
+                                "aggregations": [],
+                                "operation": "aggregate"
+                            }
+                        }
+                    }
+                }
+            ],
+            "transparent": true,
+            "type": "timeseries"
+        },
+        {
+            "datasource": {
+                "type": "vertamedia-clickhouse-datasource",
+                "uid": "${DS_CLICKHOUSE}"
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "palette-classic"
+                    },
+                    "custom": {
+                        "axisLabel": "",
+                        "axisPlacement": "auto",
+                        "barAlignment": 0,
+                        "drawStyle": "line",
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "hideFrom": {
+                            "legend": false,
+                            "tooltip": false,
+                            "viz": false
+                        },
+                        "lineInterpolation": "linear",
+                        "lineWidth": 1,
+                        "pointSize": 5,
+                        "scaleDistribution": {
+                            "type": "linear"
+                        },
+                        "showPoints": "always",
+                        "spanNulls": true,
+                        "stacking": {
+                            "group": "A",
+                            "mode": "none"
+                        },
+                        "thresholdsStyle": {
+                            "mode": "off"
+                        }
+                    },
+                    "mappings": [],
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "green",
+                                "value": null
+                            }
+                        ]
+                    },
+                    "unit": "decbytes"
+                },
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 10,
+                "w": 12,
+                "x": 12,
+                "y": 18
+            },
+            "id": 7,
+            "interval": "60s",
+            "options": {
+                "legend": {
+                    "calcs": [
+                        "mean"
+                    ],
+                    "displayMode": "table",
+                    "placement": "right"
+                },
+                "tooltip": {
+                    "mode": "single"
+                }
+            },
+            "pluginVersion": "8.3.3",
+            "targets": [
+                {
+                    "database": "default",
+                    "datasource": {
+                        "type": "vertamedia-clickhouse-datasource",
+                        "uid": "${DS_CLICKHOUSE}"
+                    },
+                    "dateColDataType": "",
+                    "dateLoading": false,
+                    "dateTimeColDataType": "flowEndSeconds",
+                    "dateTimeType": "DATETIME",
+                    "datetimeLoading": false,
+                    "extrapolate": true,
+                    "format": "time_series",
+                    "formattedQuery": "SELECT $timeSeries as t, count() FROM $table WHERE $timeFilter GROUP BY t ORDER BY t",
+                    "hide": false,
+                    "intervalFactor": 1,
+                    "query": "SELECT\n    $timeSeries as t,\n    SUM(reverseOctetDeltaCount),\n    (sourcePodName, destinationIP) as pair\nFROM $table\n\nWHERE $timeFilter\nAND flowType == 3\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator', 'ipfix')\n\nGROUP BY\n    pair,\n    t\nORDER BY t",
+                    "queryType": "randomWalk",
+                    "rawQuery": "SELECT\n    (intDiv(toUInt32(flowEndSeconds), 60) * 60) * 1000 as t,\n    SUM(reverseOctetDeltaCount),\n    (sourcePodName, destinationIP) as pair\nFROM default.antrea\n\nWHERE flowEndSeconds >= toDateTime(1641937742) AND flowEndSeconds <= toDateTime(1641939542)\nAND flowType == 3\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator', 'ipfix')\n\nGROUP BY\n    pair,\n    t\nORDER BY t",
+                    "refId": "A",
+                    "round": "0s",
+                    "skip_comments": true,
+                    "table": "antrea",
+                    "tableLoading": false
+                }
+            ],
+            "title": "Cumulative Reverse Bytes Pod-to-External",
+            "transformations": [
+                {
+                    "id": "groupBy",
+                    "options": {
+                        "fields": {
+                            "Time": {
+                                "aggregations": [],
+                                "operation": "aggregate"
+                            }
+                        }
+                    }
+                }
+            ],
+            "transparent": true,
+            "type": "timeseries"
+        },
+        {
+            "datasource": {
+                "type": "vertamedia-clickhouse-datasource",
+                "uid": "${DS_CLICKHOUSE}"
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "palette-classic"
+                    },
+                    "custom": {
+                        "axisLabel": "",
+                        "axisPlacement": "auto",
+                        "barAlignment": 0,
+                        "drawStyle": "line",
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "hideFrom": {
+                            "legend": false,
+                            "tooltip": false,
+                            "viz": false
+                        },
+                        "lineInterpolation": "linear",
+                        "lineWidth": 1,
+                        "pointSize": 5,
+                        "scaleDistribution": {
+                            "type": "linear"
+                        },
+                        "showPoints": "always",
+                        "spanNulls": true,
+                        "stacking": {
+                            "group": "A",
+                            "mode": "none"
+                        },
+                        "thresholdsStyle": {
+                            "mode": "off"
+                        }
+                    },
+                    "mappings": [],
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "green",
+                                "value": null
+                            },
+                            {
+                                "color": "red",
+                                "value": 80
+                            }
+                        ]
+                    },
+                    "unit": "bps"
+                },
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 10,
+                "w": 12,
+                "x": 0,
+                "y": 28
+            },
+            "id": 5,
+            "interval": "60s",
+            "options": {
+                "legend": {
+                    "calcs": [
+                        "mean"
+                    ],
+                    "displayMode": "table",
+                    "placement": "right"
+                },
+                "tooltip": {
+                    "mode": "single"
+                }
+            },
+            "pluginVersion": "8.3.3",
+            "targets": [
+                {
+                    "database": "default",
+                    "datasource": {
+                        "type": "vertamedia-clickhouse-datasource",
+                        "uid": "${DS_CLICKHOUSE}"
+                    },
+                    "dateColDataType": "",
+                    "dateLoading": false,
+                    "dateTimeColDataType": "flowEndSeconds",
+                    "dateTimeType": "DATETIME",
+                    "datetimeLoading": false,
+                    "extrapolate": true,
+                    "format": "time_series",
+                    "formattedQuery": "SELECT $timeSeries as t, count() FROM $table WHERE $timeFilter GROUP BY t ORDER BY t",
+                    "hide": false,
+                    "intervalFactor": 1,
+                    "query": "SELECT\n    $timeSeries as t,\n    AVG(throughput),\n    (sourcePodName, destinationIP) as pair\nFROM $table\n\nWHERE $timeFilter\nAND flowType == 3\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator', 'ipfix')\n\nGROUP BY\n    pair,\n    t\nORDER BY t\n",
+                    "queryType": "randomWalk",
+                    "rawQuery": "SELECT\n    (intDiv(toUInt32(flowEndSeconds), 60) * 60) * 1000 as t,\n    AVG(throughput),\n    (sourcePodName, destinationIP) as pair\nFROM default.antrea\n\nWHERE flowEndSeconds >= toDateTime(1641937755) AND flowEndSeconds <= toDateTime(1641939555)\nAND flowType == 3\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator', 'ipfix')\n\nGROUP BY\n    pair,\n    t\nORDER BY t",
+                    "refId": "A",
+                    "round": "0s",
+                    "skip_comments": true,
+                    "table": "antrea",
+                    "tableLoading": false
+                }
+            ],
+            "title": "Throughput Pod-to-External",
+            "transformations": [
+                {
+                    "id": "groupBy",
+                    "options": {
+                        "fields": {
+                            "Time": {
+                                "aggregations": [],
+                                "operation": "aggregate"
+                            }
+                        }
+                    }
+                }
+            ],
+            "transparent": true,
+            "type": "timeseries"
+        },
+        {
+            "datasource": {
+                "type": "vertamedia-clickhouse-datasource",
+                "uid": "${DS_CLICKHOUSE}"
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "palette-classic"
+                    },
+                    "custom": {
+                        "axisLabel": "",
+                        "axisPlacement": "auto",
+                        "barAlignment": 0,
+                        "drawStyle": "line",
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "hideFrom": {
+                            "legend": false,
+                            "tooltip": false,
+                            "viz": false
+                        },
+                        "lineInterpolation": "linear",
+                        "lineWidth": 1,
+                        "pointSize": 5,
+                        "scaleDistribution": {
+                            "type": "linear"
+                        },
+                        "showPoints": "always",
+                        "spanNulls": true,
+                        "stacking": {
+                            "group": "A",
+                            "mode": "none"
+                        },
+                        "thresholdsStyle": {
+                            "mode": "off"
+                        }
+                    },
+                    "mappings": [],
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "green",
+                                "value": null
+                            },
+                            {
+                                "color": "red",
+                                "value": 80
+                            }
+                        ]
+                    },
+                    "unit": "bps"
+                },
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 10,
+                "w": 12,
+                "x": 12,
+                "y": 28
+            },
+            "id": 6,
+            "interval": "60s",
+            "options": {
+                "legend": {
+                    "calcs": [
+                        "mean"
+                    ],
+                    "displayMode": "table",
+                    "placement": "right"
+                },
+                "tooltip": {
+                    "mode": "single"
+                }
+            },
+            "pluginVersion": "8.3.3",
+            "targets": [
+                {
+                    "database": "default",
+                    "datasource": {
+                        "type": "vertamedia-clickhouse-datasource",
+                        "uid": "${DS_CLICKHOUSE}"
+                    },
+                    "dateColDataType": "",
+                    "dateLoading": false,
+                    "dateTimeColDataType": "flowEndSeconds",
+                    "dateTimeType": "DATETIME",
+                    "datetimeLoading": false,
+                    "extrapolate": true,
+                    "format": "time_series",
+                    "formattedQuery": "SELECT $timeSeries as t, count() FROM $table WHERE $timeFilter GROUP BY t ORDER BY t",
+                    "hide": false,
+                    "intervalFactor": 1,
+                    "query": "SELECT\n    $timeSeries as t,\n    AVG(reverseThroughput),\n    (sourcePodName, destinationIP) as pair\nFROM $table\n\nWHERE $timeFilter\nAND flowType == 3\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator', 'ipfix')\n\nGROUP BY\n    pair,\n    t\nORDER BY t\n",
+                    "queryType": "randomWalk",
+                    "rawQuery": "SELECT\n    (intDiv(toUInt32(flowEndSeconds), 60) * 60) * 1000 as t,\n    AVG(reverseThroughput),\n    (sourcePodName, destinationIP) as pair\nFROM default.antrea\n\nWHERE flowEndSeconds >= toDateTime(1641937764) AND flowEndSeconds <= toDateTime(1641939564)\nAND flowType == 3\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator', 'ipfix')\n\nGROUP BY\n    pair,\n    t\nORDER BY t",
+                    "refId": "A",
+                    "round": "0s",
+                    "skip_comments": true,
+                    "table": "antrea",
+                    "tableLoading": false
+                }
+            ],
+            "title": "Reverse Throughput Pod-to-External",
+            "transformations": [
+                {
+                    "id": "groupBy",
+                    "options": {
+                        "fields": {
+                            "Time": {
+                                "aggregations": [],
+                                "operation": "aggregate"
+                            }
+                        }
+                    }
+                }
+            ],
+            "transparent": true,
+            "type": "timeseries"
+        },
+        {
+            "datasource": {
+                "type": "vertamedia-clickhouse-datasource",
+                "uid": "${DS_CLICKHOUSE}"
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "palette-classic"
+                    },
+                    "custom": {
+                        "axisLabel": "",
+                        "axisPlacement": "auto",
+                        "barAlignment": 0,
+                        "drawStyle": "line",
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "hideFrom": {
+                            "legend": false,
+                            "tooltip": false,
+                            "viz": false
+                        },
+                        "lineInterpolation": "linear",
+                        "lineWidth": 1,
+                        "pointSize": 5,
+                        "scaleDistribution": {
+                            "type": "linear"
+                        },
+                        "showPoints": "always",
+                        "spanNulls": true,
+                        "stacking": {
+                            "group": "A",
+                            "mode": "none"
+                        },
+                        "thresholdsStyle": {
+                            "mode": "off"
+                        }
+                    },
+                    "mappings": [],
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "green",
+                                "value": null
+                            },
+                            {
+                                "color": "red",
+                                "value": 80
+                            }
+                        ]
+                    },
+                    "unit": "bps"
+                },
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 10,
+                "w": 12,
+                "x": 0,
+                "y": 38
+            },
+            "id": 15,
+            "interval": "60s",
+            "options": {
+                "legend": {
+                    "calcs": [
+                        "mean"
+                    ],
+                    "displayMode": "table",
+                    "placement": "right"
+                },
+                "tooltip": {
+                    "mode": "single"
+                }
+            },
+            "pluginVersion": "8.3.3",
+            "targets": [
+                {
+                    "database": "default",
+                    "datasource": {
+                        "type": "vertamedia-clickhouse-datasource",
+                        "uid": "${DS_CLICKHOUSE}"
+                    },
+                    "dateColDataType": "",
+                    "dateLoading": false,
+                    "dateTimeColDataType": "flowEndSeconds",
+                    "dateTimeType": "DATETIME",
+                    "datetimeLoading": false,
+                    "extrapolate": true,
+                    "format": "time_series",
+                    "formattedQuery": "SELECT $timeSeries as t, count() FROM $table WHERE $timeFilter GROUP BY t ORDER BY t",
+                    "hide": false,
+                    "intervalFactor": 1,
+                    "query": "SELECT\n    $timeSeries as t,\n    AVG(throughputFromSourceNode),\n    sourcePodName\nFROM $table\n\nWHERE $timeFilter \nAND flowType == 3\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator', 'ipfix')\n\nGROUP BY\n    sourcePodName,\n    t\nORDER BY t\n",
+                    "queryType": "randomWalk",
+                    "rawQuery": "SELECT\n    (intDiv(toUInt32(flowEndSeconds), 60) * 60) * 1000 as t,\n    AVG(throughputFromSourceNode),\n    sourcePodName\nFROM default.antrea\n\nWHERE flowEndSeconds >= toDateTime(1641937777) AND flowEndSeconds <= toDateTime(1641939577) \nAND flowType == 3\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator', 'ipfix')\n\nGROUP BY\n    sourcePodName,\n    t\nORDER BY t",
+                    "refId": "A",
+                    "round": "0s",
+                    "skip_comments": true,
+                    "table": "antrea",
+                    "tableLoading": false
+                }
+            ],
+            "title": "Throughput of Pod acting as Source",
+            "transformations": [
+                {
+                    "id": "groupBy",
+                    "options": {
+                        "fields": {
+                            "Time": {
+                                "aggregations": [],
+                                "operation": "aggregate"
+                            }
+                        }
+                    }
+                }
+            ],
+            "transparent": true,
+            "type": "timeseries"
+        },
+        {
+            "datasource": {
+                "type": "vertamedia-clickhouse-datasource",
+                "uid": "${DS_CLICKHOUSE}"
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "mode": "palette-classic"
+                    },
+                    "custom": {
+                        "axisLabel": "",
+                        "axisPlacement": "auto",
+                        "barAlignment": 0,
+                        "drawStyle": "line",
+                        "fillOpacity": 10,
+                        "gradientMode": "none",
+                        "hideFrom": {
+                            "legend": false,
+                            "tooltip": false,
+                            "viz": false
+                        },
+                        "lineInterpolation": "linear",
+                        "lineWidth": 1,
+                        "pointSize": 5,
+                        "scaleDistribution": {
+                            "type": "linear"
+                        },
+                        "showPoints": "always",
+                        "spanNulls": true,
+                        "stacking": {
+                            "group": "A",
+                            "mode": "none"
+                        },
+                        "thresholdsStyle": {
+                            "mode": "off"
+                        }
+                    },
+                    "mappings": [],
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "green",
+                                "value": null
+                            },
+                            {
+                                "color": "red",
+                                "value": 80
+                            }
+                        ]
+                    },
+                    "unit": "bps"
+                },
+                "overrides": []
+            },
+            "gridPos": {
+                "h": 10,
+                "w": 12,
+                "x": 12,
+                "y": 38
+            },
+            "id": 16,
+            "interval": "60s",
+            "options": {
+                "legend": {
+                    "calcs": [
+                        "mean"
+                    ],
+                    "displayMode": "table",
+                    "placement": "right"
+                },
+                "tooltip": {
+                    "mode": "single"
+                }
+            },
+            "pluginVersion": "8.3.3",
+            "targets": [
+                {
+                    "database": "default",
+                    "datasource": {
+                        "type": "vertamedia-clickhouse-datasource",
+                        "uid": "${DS_CLICKHOUSE}"
+                    },
+                    "dateColDataType": "",
+                    "dateLoading": false,
+                    "dateTimeColDataType": "flowEndSeconds",
+                    "dateTimeType": "DATETIME",
+                    "datetimeLoading": false,
+                    "extrapolate": true,
+                    "format": "time_series",
+                    "formattedQuery": "SELECT $timeSeries as t, count() FROM $table WHERE $timeFilter GROUP BY t ORDER BY t",
+                    "hide": false,
+                    "intervalFactor": 1,
+                    "query": "SELECT\n    $timeSeries as t,\n    AVG(reverseThroughputFromSourceNode),\n    sourcePodName\nFROM $table\n\nWHERE $timeFilter \nAND flowType == 3\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator', 'ipfix')\n\nGROUP BY\n    sourcePodName,\n    t\nORDER BY t\n",
+                    "queryType": "randomWalk",
+                    "rawQuery": "SELECT\n    (intDiv(toUInt32(flowEndSeconds), 60) * 60) * 1000 as t,\n    AVG(reverseThroughputFromSourceNode),\n    sourcePodName\nFROM default.antrea\n\nWHERE flowEndSeconds >= toDateTime(1641937797) AND flowEndSeconds <= toDateTime(1641939597) \nAND flowType == 3\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator', 'ipfix')\n\nGROUP BY\n    sourcePodName,\n    t\nORDER BY t",
+                    "refId": "A",
+                    "round": "0s",
+                    "skip_comments": true,
+                    "table": "antrea",
+                    "tableLoading": false
+                }
+            ],
+            "title": "Reverse Throughput of Pod acting as Source",
+            "transformations": [
+                {
+                    "id": "groupBy",
+                    "options": {
+                        "fields": {
+                            "Time": {
+                                "aggregations": [],
+                                "operation": "aggregate"
+                            }
+                        }
+                    }
+                }
+            ],
+            "transparent": true,
+            "type": "timeseries"
+        }
+    ],
+    "refresh": "",
+    "schemaVersion": 34,
+    "style": "dark",
+    "tags": [],
+    "templating": {
+        "list": [
+            {
+                "datasource": {
+                    "type": "vertamedia-clickhouse-datasource",
+                    "uid": "PDEE91DDB90597936"
+                },
+                "filters": [],
+                "hide": 0,
+                "name": "Filter",
+                "skipUrlSync": false,
+                "type": "adhoc"
+            }
+        ]
+    },
+    "time": {
+        "from": "now-30m",
+        "to": "now"
+    },
+    "timepicker": {},
+    "timezone": "",
+    "title": "pod_to_external_dashboard",
+    "uid": "K9SPrnJ7k",
+    "version": 4,
+    "weekStart": ""
+}
