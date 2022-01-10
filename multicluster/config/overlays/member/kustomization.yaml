@@ -22,3 +22,4 @@ configurations:
 
 patchesStrategicMerge:
   - manager_command_patch.yaml
+  - memberclusterannounce_webhook_patch.yaml

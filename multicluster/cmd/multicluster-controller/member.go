@@ -24,6 +24,7 @@ import (
 
 	multiclustercontrollers "antrea.io/antrea/multicluster/controllers/multicluster"
 	"antrea.io/antrea/pkg/signals"
+	"antrea.io/antrea/pkg/util/env"
 )
 
 func newMemberCommand() *cobra.Command {
@@ -51,8 +52,9 @@ func runMember(o *Options) error {
 	}
 
 	clusterSetReconciler := &multiclustercontrollers.MemberClusterSetReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Client:    mgr.GetClient(),
+		Scheme:    mgr.GetScheme(),
+		Namespace: env.GetPodNamespace(),
 	}
 	if err = clusterSetReconciler.SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("error creating ClusterSet controller: %v", err)

@@ -1909,11 +1909,34 @@ webhooks:
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingWebhookConfiguration
 metadata:
-  creationTimestamp: null
   labels:
     app: antrea
   name: antrea-mc-validating-webhook-configuration
 webhooks:
+- admissionReviewVersions:
+  - v1
+  - v1beta1
+  clientConfig:
+    service:
+      name: antrea-mc-webhook-service
+      namespace: kube-system
+      path: /validate-multicluster-crd-antrea-io-v1alpha1-memberclusterannounce
+  failurePolicy: Fail
+  name: vmemberclusterannounce.kb.io
+  namespaceSelector:
+    matchLabels:
+      kubernetes.io/metadata.name: kube-system
+  rules:
+  - apiGroups:
+    - multicluster.crd.antrea.io
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - memberclusterannounces
+  sideEffects: None
 - admissionReviewVersions:
   - v1
   - v1beta1
@@ -1997,25 +2020,4 @@ webhooks:
     - UPDATE
     resources:
     - resourceimports
-  sideEffects: None
-- admissionReviewVersions:
-  - v1
-  - v1beta1
-  clientConfig:
-    service:
-      name: antrea-mc-webhook-service
-      namespace: kube-system
-      path: /validate-multicluster-crd-antrea-io-v1alpha1-memberclusterannounce
-  failurePolicy: Fail
-  name: vmemberclusterannounce.kb.io
-  rules:
-  - apiGroups:
-    - multicluster.crd.antrea.io
-    apiVersions:
-    - v1alpha1
-    operations:
-    - CREATE
-    - UPDATE
-    resources:
-    - memberclusterannounces
   sideEffects: None
