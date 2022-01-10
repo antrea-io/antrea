@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"reflect"
 
 	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
 	crdclientset "antrea.io/antrea/pkg/client/clientset/versioned"
@@ -147,24 +148,62 @@ func (a *IPPoolAllocator) appendPoolUsage(ipPool *v1alpha2.IPPool, ip net.IP, st
 		klog.Warningf("IP Pool %s update with status %+v failed: %+v", newPool.Name, newPool.Status, err)
 		return err
 	}
-	klog.InfoS("IP Pool update successful", "pool", newPool.Name, "allocation", newPool.Status)
+	klog.InfoS("IP Pool update succeeded", "pool", newPool.Name, "allocation", newPool.Status)
 	return nil
 
 }
 
-// Update pool status to delete released IP
-func (a *IPPoolAllocator) removePoolUsage(ipPool *v1alpha2.IPPool, ip net.IP) error {
+// updateIPAddressState updates the status of the specified IP in the provided IPPool. It requires the IP is already in the IPAddresses list of the IPPool's status.
+func (a *IPPoolAllocator) updateIPAddressState(ipPool *v1alpha2.IPPool, ip net.IP, state v1alpha2.IPAddressPhase, owner v1alpha2.IPAddressOwner) error {
+	newPool := ipPool.DeepCopy()
+	ipString := ip.String()
+	found := false
+
+	for i, ipAddress := range newPool.Status.IPAddresses {
+		if ipAddress.IPAddress == ipString {
+			newPool.Status.IPAddresses[i].Phase = state
+			newPool.Status.IPAddresses[i].Owner = owner
+			found = true
+			break
+		}
+	}
+	if !found {
+		return fmt.Errorf("ip %s usage not found in pool %s", ipString, newPool.Name)
+	}
+
+	_, err := a.crdClient.CrdV1alpha2().IPPools().UpdateStatus(context.TODO(), newPool, metav1.UpdateOptions{})
+	if err != nil {
+		klog.Warningf("IP Pool %s update with status %+v failed: %+v", newPool.Name, newPool.Status, err)
+		return err
+	}
+	klog.InfoS("IP Pool update succeeded", "pool", newPool.Name, "allocation", newPool.Status)
+	return nil
+
+}
+
+// removeIPAddressState updates ipPool status to delete released IP allocation, and keeps preallocation information
+func (a *IPPoolAllocator) removeIPAddressState(ipPool *v1alpha2.IPPool, ip net.IP) error {
 
 	ipString := ip.String()
 	newPool := ipPool.DeepCopy()
 	var newList []v1alpha2.IPAddressState
-	for _, entry := range ipPool.Status.IPAddresses {
+	allocated := false
+	for i := range ipPool.Status.IPAddresses {
+		entry := ipPool.Status.IPAddresses[i]
 		if entry.IPAddress != ipString {
 			newList = append(newList, entry)
+		} else {
+			allocated = true
+			if entry.Owner.StatefulSet != nil {
+				entry = *entry.DeepCopy()
+				entry.Owner.Pod = nil
+				entry.Phase = v1alpha2.IPAddressPhaseReserved
+				newList = append(newList, entry)
+			}
 		}
 	}
 
-	if len(newList) == len(ipPool.Status.IPAddresses) {
+	if !allocated {
 		return fmt.Errorf("IP address %s was not allocated from IP pool %s", ip, ipPool.Name)
 	}
 
@@ -175,7 +214,7 @@ func (a *IPPoolAllocator) removePoolUsage(ipPool *v1alpha2.IPPool, ip net.IP) er
 		klog.Warningf("IP Pool %s update failed: %+v", newPool.Name, err)
 		return err
 	}
-	klog.InfoS("IP Pool update successful", "pool", newPool.Name, "allocation", newPool.Status)
+	klog.InfoS("IP Pool update succeeded", "pool", newPool.Name, "allocation", newPool.Status)
 	return nil
 
 }
@@ -230,7 +269,7 @@ func (a *IPPoolAllocator) AllocateNext(state v1alpha2.IPAddressPhase, owner v1al
 	var subnetSpec v1alpha2.SubnetInfo
 	var ip net.IP
 	// Same resource can not ask for allocation twice without release
-	// This needs to be verified even at the expence of another API call
+	// This needs to be verified even at the expense of another API call
 	exists, err := a.HasContainer(owner.Pod.ContainerID)
 	if err != nil {
 		return ip, subnetSpec, err
@@ -272,6 +311,63 @@ func (a *IPPoolAllocator) AllocateNext(state v1alpha2.IPAddressPhase, owner v1al
 	return ip, subnetSpec, err
 }
 
+// AllocateReservedOrNext allocates the reserved IP if it exists, else allocates next available IP.
+// It returns error if pool is exhausted, or in case it fails to update IPPool's state. In case of
+// success, IP pool status is updated with allocated IP/state/resource/container.
+// AllocateReservedOrNext returns subnet details for the requested IP, as defined in IP pool spec.
+func (a *IPPoolAllocator) AllocateReservedOrNext(state v1alpha2.IPAddressPhase, owner v1alpha2.IPAddressOwner) (net.IP, v1alpha2.SubnetInfo, error) {
+	var subnetSpec v1alpha2.SubnetInfo
+	var ip net.IP
+
+	ip, err := a.getReservedIP(owner)
+	if err != nil {
+		return ip, subnetSpec, err
+	}
+	if ip == nil {
+		// ip is not reserved, allocate next available ip
+		return a.AllocateNext(state, owner)
+	}
+
+	// Same resource can not ask for allocation twice without release
+	// This needs to be verified even at the expense of another API call
+	exists, err := a.HasContainer(owner.Pod.ContainerID)
+	if err != nil {
+		return ip, subnetSpec, err
+	}
+	if exists {
+		return ip, subnetSpec, fmt.Errorf("container %s was already allocated an address from IP Pool %s", owner.Pod.ContainerID, a.ipPoolName)
+	}
+
+	// Retry on CRD update conflict which is caused by multiple agents updating a pool at same time.
+	err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		ipPool, allocators, err := a.getPoolAndInitIPAllocators()
+		if err != nil {
+			return err
+		}
+
+		index := -1
+		for i, allocator := range allocators {
+			if allocator.Has(ip) {
+				index = i
+				break
+			}
+		}
+
+		if index == -1 {
+			// Failed to find matching range
+			return fmt.Errorf("IP %v does not belong to IP pool %s", ip, a.ipPoolName)
+		}
+
+		subnetSpec = ipPool.Spec.IPRanges[index].SubnetInfo
+		return a.updateIPAddressState(ipPool, ip, state, owner)
+	})
+
+	if err != nil {
+		klog.ErrorS(err, "Failed to allocate IP address", "ip", ip, "ipPool", a.ipPoolName)
+	}
+	return ip, subnetSpec, err
+}
+
 // Release releases the provided IP. It returns error if the IP is not in the range or not allocated,
 // or in case CRD failed to update its state.
 // In case of success, IP pool CRD status is updated with released IP/state/resource.
@@ -291,7 +387,7 @@ func (a *IPPoolAllocator) Release(ip net.IP) error {
 			return fmt.Errorf("IP %v does not belong to IP pool %s", ip, a.ipPoolName)
 		}
 
-		return a.removePoolUsage(ipPool, ip)
+		return a.removeIPAddressState(ipPool, ip)
 	})
 
 	if err != nil {
@@ -315,7 +411,7 @@ func (a *IPPoolAllocator) ReleasePod(namespace, podName string) error {
 		// Mark allocated IPs from pool status as unavailable
 		for _, ip := range ipPool.Status.IPAddresses {
 			if ip.Owner.Pod != nil && ip.Owner.Pod.Namespace == namespace && ip.Owner.Pod.Name == podName {
-				return a.removePoolUsage(ipPool, net.ParseIP(ip.IPAddress))
+				return a.removeIPAddressState(ipPool, net.ParseIP(ip.IPAddress))
 
 			}
 		}
@@ -346,7 +442,7 @@ func (a *IPPoolAllocator) ReleaseContainerIfPresent(containerID string) error {
 		// Mark allocated IPs from pool status as unavailable
 		for _, ip := range ipPool.Status.IPAddresses {
 			if ip.Owner.Pod != nil && ip.Owner.Pod.ContainerID == containerID {
-				return a.removePoolUsage(ipPool, net.ParseIP(ip.IPAddress))
+				return a.removeIPAddressState(ipPool, net.ParseIP(ip.IPAddress))
 
 			}
 		}
@@ -378,7 +474,7 @@ func (a *IPPoolAllocator) HasPod(namespace, podName string) (bool, error) {
 	return false, nil
 }
 
-// HasResource checks whether an IP was associated with specified container. It returns error if the resource is crd fails to be retrieved.
+// HasContainer checks whether an IP was associated with specified container. It returns error if the resource crd fails to be retrieved.
 func (a *IPPoolAllocator) HasContainer(containerID string) (bool, error) {
 
 	ipPool, err := a.getPool()
@@ -393,4 +489,21 @@ func (a *IPPoolAllocator) HasContainer(containerID string) (bool, error) {
 		}
 	}
 	return false, nil
+}
+
+// getReservedIP checks whether an IP was reserved with specified owner. It returns error if the resource crd fails to be retrieved.
+func (a *IPPoolAllocator) getReservedIP(reservedOwner v1alpha2.IPAddressOwner) (net.IP, error) {
+	ipPool, err := a.getPool()
+	if err != nil {
+		return nil, err
+	}
+
+	if reservedOwner.StatefulSet != nil {
+		for _, ip := range ipPool.Status.IPAddresses {
+			if reflect.DeepEqual(ip.Owner.StatefulSet, reservedOwner.StatefulSet) {
+				return net.ParseIP(ip.IPAddress), nil
+			}
+		}
+	}
+	return nil, nil
 }
