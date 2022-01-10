@@ -258,8 +258,6 @@ var (
 	hairpinIP           = net.ParseIP("169.254.169.252").To4()
 	hairpinIPv6         = net.ParseIP("fc00::aabb:ccdd:eeff").To16()
 
-	mcastAllRouters = net.ParseIP("224.0.0.2")
-	igmpV3ReportDst = net.ParseIP("224.0.0.22")
 	_, mcastCIDR, _ = net.ParseCIDR("224.0.0.0/4")
 )
 
@@ -2615,19 +2613,19 @@ func (c *client) createOFTable(table binding.Table, nextID uint8, missAction bin
 
 // igmpPktInFlows sets reg0[28] to mark the IGMP packet in MulticastTable and sends it to antrea-agent on MulticastTable.
 func (c *client) igmpPktInFlows(reason uint8) []binding.Flow {
-	var flows []binding.Flow
-	for _, dstIP := range []net.IP{mcastAllRouters, igmpV3ReportDst} {
+	flows := []binding.Flow{
 		// Set a custom reason for the IGMP packets, and then send it to antrea-agent and forward it normally in the
 		// OVS bridge, so that the OVS multicast db cache can be updated, and antrea-agent can identify the local multicast
 		// group and its members in the meanwhile.
-		flows = append(flows, MulticastTable.BuildFlow(priorityHigh).
+		// Do not set dst IP address because IGMPv1 report message uses target multicast group as IP destination in
+		// the packet.
+		MulticastTable.BuildFlow(priorityHigh).
 			MatchProtocol(binding.ProtocolIGMP).
 			MatchRegMark(FromLocalRegMark).
-			MatchDstIP(dstIP).
 			Action().LoadRegMark(CustomReasonIGMPRegMark).
 			Action().SendToController(reason).
 			Action().Normal().
-			Done())
+			Done(),
 	}
 	return flows
 }

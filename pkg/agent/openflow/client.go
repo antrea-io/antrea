@@ -937,6 +937,10 @@ func (c *client) ReplayFlows() {
 	c.serviceFlowCache.Range(installCachedFlows)
 
 	c.replayPolicyFlows()
+
+	if c.enableMulticast {
+		c.mcastFlowCache.Range(installCachedFlows)
+	}
 }
 
 func (c *client) deleteFlowsByRoundNum(roundNum uint64) error {
