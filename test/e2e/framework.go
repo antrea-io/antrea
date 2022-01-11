@@ -46,6 +46,7 @@ import (
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/remotecommand"
+	"k8s.io/client-go/util/retry"
 	"k8s.io/component-base/featuregate"
 	aggregatorclientset "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 	utilnet "k8s.io/utils/net"
@@ -61,6 +62,10 @@ import (
 )
 
 var AntreaConfigMap *corev1.ConfigMap
+
+var (
+	connectionLostError = fmt.Errorf("http2: client connection lost")
+)
 
 const (
 	defaultTimeout  = 90 * time.Second
@@ -122,7 +127,7 @@ const (
 	aggregatorActiveFlowRecordTimeout   = 3500 * time.Millisecond
 	aggregatorInactiveFlowRecordTimeout = 6 * time.Second
 
-	statefulSetRestartAnnotationKey = "kubectl.kubernetes.io/restartedAt"
+	statefulSetRestartAnnotationKey = "antrea-e2e/restartedAt"
 )
 
 type ClusterNode struct {
@@ -889,7 +894,7 @@ func (data *TestData) restartCoreDNSPods(timeout time.Duration) error {
 	if err := data.clientset.CoreV1().Pods(antreaNamespace).DeleteCollection(context.TODO(), deleteOptions, listOptions); err != nil {
 		return fmt.Errorf("error when deleting all CoreDNS Pods: %v", err)
 	}
-	return data.waitForCoreDNSPods(timeout)
+	return retryOnConnectionLostError(retry.DefaultRetry, func() error { return data.waitForCoreDNSPods(timeout) })
 }
 
 // checkCoreDNSPods checks that all the Pods for the CoreDNS deployment are ready. If not, it
@@ -2355,11 +2360,11 @@ func (data *TestData) restartStatefulSet(name string, ns string) (*appsv1.Statef
 	if err != nil {
 		return nil, err
 	}
-	if sts.Annotations == nil {
-		sts.Annotations = map[string]string{}
+	if sts.Spec.Template.Annotations == nil {
+		sts.Spec.Template.Annotations = map[string]string{}
 	}
-	// Modify StatefulSet annotation to trigger a restart for StatefulSet Pods.
-	sts.Annotations[statefulSetRestartAnnotationKey] = time.Now().UTC().Format(time.RFC3339)
+	// Modify StatefulSet PodTemplate annotation to trigger a restart for StatefulSet Pods.
+	sts.Spec.Template.Annotations[statefulSetRestartAnnotationKey] = time.Now().UTC().Format(time.RFC3339)
 	resSTS, err := data.clientset.AppsV1().StatefulSets(ns).Update(context.TODO(), sts, metav1.UpdateOptions{})
 	if err != nil {
 		return nil, err
@@ -2382,4 +2387,14 @@ func (data *TestData) waitForStatefulSetPods(timeout time.Duration, stsName stri
 		return err
 	}
 	return nil
+}
+
+func isConnectionLostError(err error) bool {
+	return strings.Contains(err.Error(), connectionLostError.Error())
+}
+
+// retryOnConnectionLostError allows the caller to retry fn in case the error is ConnectionLost.
+// e2e script might get ConnectionLost error when accessing k8s apiserver if AntreaIPAM is enabled and antrea-agent is restarted.
+func retryOnConnectionLostError(backoff wait.Backoff, fn func() error) error {
+	return retry.OnError(backoff, isConnectionLostError, fn)
 }
