@@ -218,14 +218,20 @@ func (c *Client) syncRoutes() error {
 		}
 		routeMap[r.Dst.String()] = r
 	}
+	restoreRoute := func(route *netlink.Route) bool {
+		r, ok := routeMap[route.Dst.String()]
+		if ok && routeEqual(route, r) {
+			return true
+		}
+		if err := netlink.RouteReplace(route); err != nil {
+			klog.Errorf("Failed to add route to the gateway: %v", err)
+			return false
+		}
+		return true
+	}
 	c.nodeRoutes.Range(func(_, v interface{}) bool {
 		for _, route := range v.([]*netlink.Route) {
-			r, ok := routeMap[route.Dst.String()]
-			if ok && routeEqual(route, r) {
-				continue
-			}
-			if err := netlink.RouteReplace(route); err != nil {
-				klog.Errorf("Failed to add route to the gateway: %v", err)
+			if !restoreRoute(route) {
 				return false
 			}
 		}
@@ -234,16 +240,32 @@ func (c *Client) syncRoutes() error {
 	if c.proxyAll {
 		c.serviceRoutes.Range(func(_, v interface{}) bool {
 			route := v.(*netlink.Route)
-			r, ok := routeMap[route.Dst.String()]
-			if ok && routeEqual(route, r) {
-				return true
-			}
-			if err := netlink.RouteReplace(route); err != nil {
-				klog.Errorf("Failed to add route to the gateway: %v", err)
-				return false
-			}
-			return true
+			return restoreRoute(route)
 		})
+	}
+	// These routes are installed automatically by the kernel when the address is configured on
+	// the interface (with "proto kernel"). If these routes are deleted manually by mistake, we
+	// restore them as part of this sync (without "proto kernel"). An alternative would be to
+	// flap the interface, but this seems like a better approach.
+	gwAutoconfRoutes := []*netlink.Route{}
+	if c.nodeConfig.PodIPv4CIDR != nil {
+		gwAutoconfRoutes = append(gwAutoconfRoutes, &netlink.Route{
+			LinkIndex: c.nodeConfig.GatewayConfig.LinkIndex,
+			Dst:       c.nodeConfig.PodIPv4CIDR,
+			Src:       c.nodeConfig.GatewayConfig.IPv4,
+			Scope:     netlink.SCOPE_LINK,
+		})
+	}
+	if c.nodeConfig.PodIPv6CIDR != nil {
+		gwAutoconfRoutes = append(gwAutoconfRoutes, &netlink.Route{
+			LinkIndex: c.nodeConfig.GatewayConfig.LinkIndex,
+			Dst:       c.nodeConfig.PodIPv6CIDR,
+			Src:       c.nodeConfig.GatewayConfig.IPv6,
+			Scope:     netlink.SCOPE_LINK,
+		})
+	}
+	for _, route := range gwAutoconfRoutes {
+		restoreRoute(route)
 	}
 	return nil
 }
