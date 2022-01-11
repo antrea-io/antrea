@@ -19,7 +19,6 @@ package multicluster
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
 
@@ -454,7 +453,6 @@ func svcPortsConverter(svcPort []corev1.ServicePort) []mcs.ServicePort {
 	var mcsSP []mcs.ServicePort
 	for _, v := range svcPort {
 		mcsSP = append(mcsSP, mcs.ServicePort{
-			Name:     strconv.Itoa(int(v.Port)) + strings.ToLower(string(v.Protocol)),
 			Port:     v.Port,
 			Protocol: v.Protocol,
 		})
