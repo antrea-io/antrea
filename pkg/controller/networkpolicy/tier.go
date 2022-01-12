@@ -19,11 +19,14 @@ package networkpolicy
 
 import (
 	"context"
+	"fmt"
+	"net/http"
 	"time"
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
 
 	secv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
@@ -124,6 +127,11 @@ var (
 // create the CR. InitializeTiers will be called as part of a Post-Start hook
 // of antrea-controller's APIServer.
 func (n *NetworkPolicyController) InitializeTiers() {
+	// If antrea api not running we should wait for some time.
+	if err := n.waitForAPI(); err != nil {
+		klog.ErrorS(err, "failed to wait for Antrea Tier API being ready")
+	}
+
 	for _, t := range systemGeneratedTiers {
 		// Check if Tier is already present.
 		oldTier, err := n.tierLister.Get(t.Name)
@@ -141,6 +149,25 @@ func (n *NetworkPolicyController) InitializeTiers() {
 		}
 		n.initTier(t)
 	}
+}
+
+// waitForAPI waits for the Antrea API /readyz endpoint to report "ok"
+func (n *NetworkPolicyController) waitForAPI() error {
+	req, err := http.NewRequest("GET", "/readyz", nil)
+	if err != nil {
+		return fmt.Errorf("failed to create GET request for api status: %v", err)
+	}
+	startTime := time.Now()
+	return wait.PollImmediate(time.Second, 10*time.Second, func() (bool, error) {
+		client := &http.Client{}
+		resp, _ := client.Do(req)
+		if resp != nil && resp.StatusCode != http.StatusOK {
+			klog.InfoS("Antrea API isn't ready yet. Waiting a little while")
+			return false, nil
+		}
+		klog.InfoS("Antrea API is ready", "duration", time.Since(startTime))
+		return true, nil
+	})
 }
 
 // initTier attempts to create system Tiers until they are created using an
