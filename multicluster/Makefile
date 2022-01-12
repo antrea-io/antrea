@@ -20,6 +20,9 @@ DOCKER_BUILD_ARGS = --build-arg GO_VERSION=$(GO_VERSION)
 SHELL = /usr/bin/env bash -o pipefail
 .SHELLFLAGS = -ec
 
+GO_VERSION         := $(shell head -n 1 ../build/images/deps/go-version)
+DOCKER_BUILD_ARGS = --build-arg GO_VERSION=$(GO_VERSION)
+
 .PHONY: all
 all: build
 
@@ -60,10 +63,21 @@ vet: ## Run go vet against code.
 .coverage:
 	mkdir -p $(CURDIR)/.coverage
 
-.PHONY: test-unit
+.PHONY: test-unit test-integration
 test-unit: fmt vet .coverage
+	@echo "==> Running unit tests <=="
 	go test -race -coverprofile=.coverage/coverage-unit.txt -covermode=atomic -cover antrea.io/antrea/multicluster/controllers/multicluster/...
-
+test-integration: .coverage
+	@echo "==> Running integration tests <=="
+ifneq ($(NO_LOCAL),)
+	@echo "===> Building Antrea Multi-cluster Integration Test Docker image <==="
+	docker build -t antrea/mc-test -f build/images/test/Dockerfile $(DOCKER_BUILD_ARGS) .
+	$(CURDIR)/hack/verify-tools.sh "/home/jenkins"
+	$(CURDIR)/hack/mc-integration-test.sh "/home/jenkins"
+else
+	$(CURDIR)/hack/verify-tools.sh
+	$(CURDIR)/hack/mc-integration-test.sh
+endif
 ##@ Build
 
 build: generate fmt vet ## Build manager binary.
