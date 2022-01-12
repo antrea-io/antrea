@@ -7,5 +7,7 @@ metrics:
 webhook:
   port: 9443
 leaderElection:
-  leaderElect: true
+  leaderElect: false
   resourceName: 6536456a.crd.antrea.io
+  leaseDuration: "30s"
+  renewDeadline: "20s"
