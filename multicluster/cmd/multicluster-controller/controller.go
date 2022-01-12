@@ -113,7 +113,7 @@ func getMutationWebhooks(controllerNs string) []string {
 
 func setupManagerAndCertController(o *Options) (manager.Manager, error) {
 	opts := zap.Options{
-		Development: true,
+		Development: false,
 	}
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))

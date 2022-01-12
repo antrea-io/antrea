@@ -16,6 +16,7 @@ package main
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/spf13/pflag"
 	"k8s.io/klog/v2"
@@ -63,11 +64,16 @@ func (o *Options) addFlags(fs *pflag.FlagSet) {
 }
 
 func (o *Options) setDefaults() {
+	// see https://github.com/operator-framework/operator-sdk/issues/1813
+	leaseDuration := 30 * time.Second
+	renewDeadline := 20 * time.Second
 	o.options = ctrl.Options{
 		Scheme:                 scheme,
 		MetricsBindAddress:     ":8080",
 		Port:                   9443,
 		HealthProbeBindAddress: ":8081",
 		LeaderElection:         false,
+		LeaseDuration:          &leaseDuration,
+		RenewDeadline:          &renewDeadline,
 	}
 }
