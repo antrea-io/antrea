@@ -238,7 +238,7 @@
           - ${{sha1}}
           builders:
           - builder-multicluster-integration
-          trigger_phrase: ^(?!Thanks for your PR).*/test-mc-integration.*
+          trigger_phrase: ^(?!Thanks for your PR).*/test-multicluster-integration.*
           throttle_concurrent_builds_category:
             - integration
           throttle_concurrent_builds_enabled: 'true'
@@ -249,11 +249,11 @@
           white_list: '{antrea_white_list}'
           only_trigger_phrase: true
           trigger_permit_all: true
-          status_context: jenkins-mc-integration-tests
+          status_context: jenkins-multicluster-integration-tests
           status_url: null
           success_status: Build finished.
-          failure_status: Failed. Add comment /test-mc-integration to re-trigger.
-          error_status: Failed. Add comment /test-mc-integration to re-trigger.
+          failure_status: Failed. Add comment /test-multicluster-integration to re-trigger.
+          error_status: Failed. Add comment /test-multicluster-integration to re-trigger.
           triggered_status: null
           started_status: null
           wrappers:

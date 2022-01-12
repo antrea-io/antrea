@@ -149,7 +149,7 @@ func epIndexerByLabelFunc(obj interface{}) ([]string, error) {
 // and also Endpoints/Services resource. It will create/update/remove ResourceExport
 // in a leader cluster for corresponding ServiceExport from a member cluster.
 func (r *ServiceExportReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	klog.InfoS("reconciling ServiceExport", "serviceexport", req.NamespacedName)
+	klog.V(2).InfoS("reconciling ServiceExport", "serviceexport", req.NamespacedName)
 	svcExportList := &k8smcsv1alpha1.ServiceExportList{}
 	err := r.Client.List(ctx, svcExportList, &client.ListOptions{})
 	if err != nil {
