@@ -178,7 +178,7 @@ func TestResourceExportReconciler_handleServiceExportCreateEvent(t *testing.T) {
 		Kind:      common.ServiceImportKind,
 		ServiceImport: &mcs.ServiceImport{
 			Spec: mcs.ServiceImportSpec{
-				Ports: svcPortsConverter(existResExport.Spec.Service.ServiceSpec.Ports),
+				Ports: SvcPortsConverter(existResExport.Spec.Service.ServiceSpec.Ports),
 				Type:  mcs.ClusterSetIP,
 			},
 		},
@@ -295,7 +295,7 @@ var (
 			Kind:      common.ServiceImportKind,
 			ServiceImport: &mcs.ServiceImport{
 				Spec: mcs.ServiceImportSpec{
-					Ports: svcPortsConverter([]corev1.ServicePort{svcPort80}),
+					Ports: SvcPortsConverter([]corev1.ServicePort{svcPort80}),
 					Type:  mcs.ClusterSetIP,
 				},
 			},
@@ -312,7 +312,7 @@ func TestResourceExportReconciler_handleSingleServiceUpdateEvent(t *testing.T) {
 		Kind:      common.ServiceImportKind,
 		ServiceImport: &mcs.ServiceImport{
 			Spec: mcs.ServiceImportSpec{
-				Ports: svcPortsConverter([]corev1.ServicePort{{
+				Ports: SvcPortsConverter([]corev1.ServicePort{{
 					Name:     "8080tcp",
 					Port:     8080,
 					Protocol: corev1.ProtocolTCP,

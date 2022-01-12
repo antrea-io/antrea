@@ -79,7 +79,7 @@ func NewResourceExportReconciler(
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.8.3/pkg/reconcile
 func (r *ResourceExportReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	klog.InfoS("reconciling ResourceExport", "resourceexport", req.NamespacedName)
+	klog.V(2).InfoS("reconciling ResourceExport", "resourceexport", req.NamespacedName)
 	var resExport mcsv1alpha1.ResourceExport
 	if err := r.Client.Get(ctx, req.NamespacedName, &resExport); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
@@ -123,7 +123,7 @@ func (r *ResourceExportReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return ctrl.Result{}, err
 	}
 
-	resImportName := getResourceImportName(&resExport)
+	resImportName := GetResourceImportName(&resExport)
 
 	if createResImport {
 		if err = r.Client.Create(ctx, resImport, &client.CreateOptions{}); err != nil {
@@ -152,7 +152,7 @@ func (r *ResourceExportReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 func (r *ResourceExportReconciler) handleUpdateEvent(ctx context.Context,
 	resImport *mcsv1alpha1.ResourceImport, resExport *mcsv1alpha1.ResourceExport) error {
-	resImpName := getResourceImportName(resExport)
+	resImpName := GetResourceImportName(resExport)
 
 	var err error
 	if err = r.Client.Update(ctx, resImport, &client.UpdateOptions{}); err != nil {
@@ -202,9 +202,9 @@ func (r *ResourceExportReconciler) handleDeleteEvent(ctx context.Context, resExp
 	if err != nil {
 		return err
 	}
-	resImportName := getResourceImportName(resExport)
+	resImportName := GetResourceImportName(resExport)
 
-	undeleteItems := removeDeletedResourceExports(reList.Items)
+	undeleteItems := RemoveDeletedResourceExports(reList.Items)
 	if len(undeleteItems) == 0 {
 		err = r.cleanUpResourceImport(ctx, resImportName, resExport)
 		if err != nil {
@@ -256,7 +256,7 @@ func (r *ResourceExportReconciler) getExistingResImport(ctx context.Context,
 	importedResName := resExport.Labels[common.SourceName]
 	var createResImport bool
 	existResImport := &mcsv1alpha1.ResourceImport{}
-	resImportName := getResourceImportName(&resExport)
+	resImportName := GetResourceImportName(&resExport)
 
 	err := r.Client.Get(ctx, resImportName, existResImport)
 	if err != nil {
@@ -293,14 +293,14 @@ func (r *ResourceExportReconciler) refreshServiceResourceImport(
 	if createResImport {
 		newResImport.Spec.ServiceImport = &mcs.ServiceImport{
 			Spec: mcs.ServiceImportSpec{
-				Ports: svcPortsConverter(resExport.Spec.Service.ServiceSpec.Ports),
+				Ports: SvcPortsConverter(resExport.Spec.Service.ServiceSpec.Ports),
 				Type:  mcs.ClusterSetIP,
 			},
 		}
 		return newResImport, true, nil
 	}
-	// TODO: check ClusterIPs difference if it is being used in ResourceImport later
-	convertedPorts := svcPortsConverter(resExport.Spec.Service.ServiceSpec.Ports)
+	// TODO: check ClusterIPs difference if it is being used in ResrouceImport later
+	convertedPorts := SvcPortsConverter(resExport.Spec.Service.ServiceSpec.Ports)
 	if !apiequality.Semantic.DeepEqual(newResImport.Spec.ServiceImport.Spec.Ports, convertedPorts) {
 		undeletedItems, err := r.getNotDeletedResourceExports(resExport)
 		if err != nil {
@@ -387,7 +387,7 @@ func (r *ResourceExportReconciler) getNotDeletedResourceExports(resExport *mcsv1
 	if err != nil {
 		return nil, err
 	}
-	return removeDeletedResourceExports(reList.Items), nil
+	return RemoveDeletedResourceExports(reList.Items), nil
 }
 
 func (r *ResourceExportReconciler) updateResourceExportStatus(resExport *mcsv1alpha1.ResourceExport, res resReason) {
@@ -449,7 +449,7 @@ func getLabelSelector(resExport *mcsv1alpha1.ResourceExport) labels.Selector {
 	return selector
 }
 
-func svcPortsConverter(svcPort []corev1.ServicePort) []mcs.ServicePort {
+func SvcPortsConverter(svcPort []corev1.ServicePort) []mcs.ServicePort {
 	var mcsSP []mcs.ServicePort
 	for _, v := range svcPort {
 		mcsSP = append(mcsSP, mcs.ServicePort{
@@ -460,7 +460,7 @@ func svcPortsConverter(svcPort []corev1.ServicePort) []mcs.ServicePort {
 	return mcsSP
 }
 
-func getResourceImportName(resExport *mcsv1alpha1.ResourceExport) types.NamespacedName {
+func GetResourceImportName(resExport *mcsv1alpha1.ResourceExport) types.NamespacedName {
 	return types.NamespacedName{
 		Namespace: resExport.Namespace,
 		Name:      resExport.Spec.Namespace + "-" + resExport.Spec.Name + "-" + strings.ToLower(resExport.Spec.Kind),
@@ -469,9 +469,9 @@ func getResourceImportName(resExport *mcsv1alpha1.ResourceExport) types.Namespac
 
 // We use finalizers as ResourceExport pre-delete hooks, which means when
 // we list the ResourceExports, it will also return deleted items.
-// removeDeletedResourceExports remove any ResourceExports with non-zero DeletionTimestamp
+// RemoveDeletedResourceExports remove any ResourceExports with non-zero DeletionTimestamp
 // which is actually deleted object.
-func removeDeletedResourceExports(items []mcsv1alpha1.ResourceExport) []mcsv1alpha1.ResourceExport {
+func RemoveDeletedResourceExports(items []mcsv1alpha1.ResourceExport) []mcsv1alpha1.ResourceExport {
 	undeleteItems := []mcsv1alpha1.ResourceExport{}
 	for _, i := range items {
 		if i.DeletionTimestamp.IsZero() {
