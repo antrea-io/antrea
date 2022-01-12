@@ -50,6 +50,10 @@ func (g *antreaClientGetter) GetAntreaClient() (versioned.Interface, error) {
 	return g.clientset, nil
 }
 
+func (g *antreaClientGetter) WaitForAntreaClientErrNil() error {
+	return nil
+}
+
 func newTestController() (*Controller, *fake.Clientset, *mockReconciler) {
 	clientset := &fake.Clientset{}
 	ch := make(chan agenttypes.EntityReference, 100)

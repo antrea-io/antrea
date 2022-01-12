@@ -60,23 +60,10 @@ func run() error {
 
 	go antreaClientProvider.Run(stopCh)
 
-	// Add loop to check whether client is ready
-	attempts := 0
-	if err := wait.PollImmediateUntil(200*time.Millisecond, func() (bool, error) {
-		if attempts%10 == 0 {
-			klog.Info("Waiting for Antrea client to be ready")
-		}
-		if _, err := antreaClientProvider.GetAntreaClient(); err != nil {
-			attempts++
-			return false, nil
-		}
-		return true, nil
-	}, stopCh); err != nil {
-		klog.Info("Stopped waiting for Antrea client")
-		return err
+	// Wait until the antrea client being ready
+	if err := antreaClientProvider.WaitForAntreaClientErrNil(); err != nil {
+		klog.ErrorS(err, "Failed to wait for antrea client being ready")
 	}
-
-	klog.Info("Antrea client is ready")
 
 	options := metav1.ListOptions{
 		FieldSelector: fields.OneTermEqualSelector("nodeName", nodeName).String(),

@@ -20,7 +20,9 @@ import (
 	"net"
 	"os"
 	"sync"
+	"time"
 
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apiserver/pkg/server/dynamiccertificates"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -35,6 +37,7 @@ import (
 // AntreaClientProvider provides a method to get Antrea client.
 type AntreaClientProvider interface {
 	GetAntreaClient() (versioned.Interface, error)
+	WaitForAntreaClientErrNil() error
 }
 
 // antreaClientProvider provides an AntreaClientProvider that can dynamically react to ConfigMap changes.
@@ -96,6 +99,19 @@ func (p *antreaClientProvider) GetAntreaClient() (versioned.Interface, error) {
 		return nil, fmt.Errorf("Antrea client is not ready")
 	}
 	return p.client, nil
+}
+
+// WaitForAntreaClientErrNil checks and waits for antrea client being ready
+func (p *antreaClientProvider) WaitForAntreaClientErrNil() error {
+	return wait.PollImmediate(200*time.Millisecond, 10*time.Second, func() (bool, error) {
+		p.mutex.RLock()
+		defer p.mutex.RUnlock()
+		if p.client == nil {
+			return false, nil
+		}
+		klog.Info("Antrea client is ready")
+		return true, nil
+	})
 }
 
 func (p *antreaClientProvider) updateAntreaClient() error {

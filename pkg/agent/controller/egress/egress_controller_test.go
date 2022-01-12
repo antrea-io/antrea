@@ -84,6 +84,10 @@ func (g *antreaClientGetter) GetAntreaClient() (versioned.Interface, error) {
 	return g.clientset, nil
 }
 
+func (g *antreaClientGetter) WaitForAntreaClientErrNil() error {
+	return nil
+}
+
 type fakeController struct {
 	*EgressController
 	mockController     *gomock.Controller

@@ -420,21 +420,10 @@ func (c *Controller) SetDenyConnStore(denyConnStore *connections.DenyConnectionS
 // and NetworkPolicies, and spawns workers that reconciles NetworkPolicy rules.
 // Run will not return until stopCh is closed.
 func (c *Controller) Run(stopCh <-chan struct{}) {
-	attempts := 0
-	if err := wait.PollImmediateUntil(200*time.Millisecond, func() (bool, error) {
-		if attempts%10 == 0 {
-			klog.Info("Waiting for Antrea client to be ready")
-		}
-		if _, err := c.antreaClientProvider.GetAntreaClient(); err != nil {
-			attempts++
-			return false, nil
-		}
-		return true, nil
-	}, stopCh); err != nil {
-		klog.Info("Stopped waiting for Antrea client")
-		return
+	// Wait until the antrea client being ready
+	if err := c.antreaClientProvider.WaitForAntreaClientErrNil(); err != nil {
+		klog.ErrorS(err, "Failed to wait for antrea client being ready")
 	}
-	klog.Info("Antrea client is ready")
 
 	// Use NonSlidingUntil so that normal reconnection (disconnected after
 	// running a while) can reconnect immediately while abnormal reconnection

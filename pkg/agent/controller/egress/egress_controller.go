@@ -285,6 +285,11 @@ func (c *EgressController) enqueueEgressesByExternalIPPool(eipName string) {
 // Run will create defaultWorkers workers (go routines) which will process the Egress events from the
 // workqueue.
 func (c *EgressController) Run(stopCh <-chan struct{}) {
+	// Wait until the antrea client being ready
+	if err := c.antreaClientProvider.WaitForAntreaClientErrNil(); err != nil {
+		klog.ErrorS(err, "Failed to wait for antrea client being ready")
+	}
+
 	defer c.queue.ShutDown()
 
 	klog.Infof("Starting %s", controllerName)
