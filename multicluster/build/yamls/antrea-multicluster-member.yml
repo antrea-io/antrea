@@ -1818,7 +1818,6 @@ spec:
 apiVersion: admissionregistration.k8s.io/v1
 kind: MutatingWebhookConfiguration
 metadata:
-  creationTimestamp: null
   labels:
     app: antrea
   name: antrea-mc-mutating-webhook-configuration
@@ -1833,6 +1832,9 @@ webhooks:
       path: /mutate-multicluster-crd-antrea-io-v1alpha1-clusterclaim
   failurePolicy: Fail
   name: mclusterclaim.kb.io
+  namespaceSelector:
+    matchLabels:
+      kubernetes.io/metadata.name: kube-system
   rules:
   - apiGroups:
     - multicluster.crd.antrea.io
@@ -1854,6 +1856,9 @@ webhooks:
       path: /mutate-multicluster-crd-antrea-io-v1alpha1-clusterset
   failurePolicy: Fail
   name: mclusterset.kb.io
+  namespaceSelector:
+    matchLabels:
+      kubernetes.io/metadata.name: kube-system
   rules:
   - apiGroups:
     - multicluster.crd.antrea.io
@@ -1865,53 +1870,10 @@ webhooks:
     resources:
     - clustersets
   sideEffects: None
-- admissionReviewVersions:
-  - v1
-  - v1beta1
-  clientConfig:
-    service:
-      name: antrea-mc-webhook-service
-      namespace: kube-system
-      path: /mutate-multicluster-crd-antrea-io-v1alpha1-resourceexport
-  failurePolicy: Fail
-  name: mresourceexport.kb.io
-  rules:
-  - apiGroups:
-    - multicluster.crd.antrea.io
-    apiVersions:
-    - v1alpha1
-    operations:
-    - CREATE
-    - UPDATE
-    resources:
-    - resourceexports
-  sideEffects: None
-- admissionReviewVersions:
-  - v1
-  - v1beta1
-  clientConfig:
-    service:
-      name: antrea-mc-webhook-service
-      namespace: kube-system
-      path: /mutate-multicluster-crd-antrea-io-v1alpha1-resourceimport
-  failurePolicy: Fail
-  name: mresourceimport.kb.io
-  rules:
-  - apiGroups:
-    - multicluster.crd.antrea.io
-    apiVersions:
-    - v1alpha1
-    operations:
-    - CREATE
-    - UPDATE
-    resources:
-    - resourceimports
-  sideEffects: None
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingWebhookConfiguration
 metadata:
-  creationTimestamp: null
   labels:
     app: antrea
   name: antrea-mc-validating-webhook-configuration
@@ -1926,6 +1888,9 @@ webhooks:
       path: /validate-multicluster-crd-antrea-io-v1alpha1-clusterclaim
   failurePolicy: Fail
   name: vclusterclaim.kb.io
+  namespaceSelector:
+    matchLabels:
+      kubernetes.io/metadata.name: kube-system
   rules:
   - apiGroups:
     - multicluster.crd.antrea.io
@@ -1947,6 +1912,9 @@ webhooks:
       path: /validate-multicluster-crd-antrea-io-v1alpha1-clusterset
   failurePolicy: Fail
   name: vclusterset.kb.io
+  namespaceSelector:
+    matchLabels:
+      kubernetes.io/metadata.name: kube-system
   rules:
   - apiGroups:
     - multicluster.crd.antrea.io
@@ -1957,67 +1925,4 @@ webhooks:
     - UPDATE
     resources:
     - clustersets
-  sideEffects: None
-- admissionReviewVersions:
-  - v1
-  - v1beta1
-  clientConfig:
-    service:
-      name: antrea-mc-webhook-service
-      namespace: kube-system
-      path: /validate-multicluster-crd-antrea-io-v1alpha1-resourceexport
-  failurePolicy: Fail
-  name: vresourceexport.kb.io
-  rules:
-  - apiGroups:
-    - multicluster.crd.antrea.io
-    apiVersions:
-    - v1alpha1
-    operations:
-    - CREATE
-    - UPDATE
-    resources:
-    - resourceexports
-  sideEffects: None
-- admissionReviewVersions:
-  - v1
-  - v1beta1
-  clientConfig:
-    service:
-      name: antrea-mc-webhook-service
-      namespace: kube-system
-      path: /validate-multicluster-crd-antrea-io-v1alpha1-resourceimport
-  failurePolicy: Fail
-  name: vresourceimport.kb.io
-  rules:
-  - apiGroups:
-    - multicluster.crd.antrea.io
-    apiVersions:
-    - v1alpha1
-    operations:
-    - CREATE
-    - UPDATE
-    resources:
-    - resourceimports
-  sideEffects: None
-- admissionReviewVersions:
-  - v1
-  - v1beta1
-  clientConfig:
-    service:
-      name: antrea-mc-webhook-service
-      namespace: kube-system
-      path: /validate-multicluster-crd-antrea-io-v1alpha1-memberclusterannounce
-  failurePolicy: Fail
-  name: vmemberclusterannounce.kb.io
-  rules:
-  - apiGroups:
-    - multicluster.crd.antrea.io
-    apiVersions:
-    - v1alpha1
-    operations:
-    - CREATE
-    - UPDATE
-    resources:
-    - memberclusterannounces
   sideEffects: None
