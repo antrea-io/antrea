@@ -59,7 +59,7 @@
     "fiscalYearStartMonth": 0,
     "graphTooltip": 0,
     "id": null,
-    "iteration": 1642104780017,
+    "iteration": 1642535929598,
     "links": [],
     "liveNow": false,
     "panels": [
@@ -97,13 +97,13 @@
                     "format": "time_series",
                     "formattedQuery": "SELECT $timeSeries as t, count() FROM $table WHERE $timeFilter GROUP BY t ORDER BY t",
                     "intervalFactor": 1,
-                    "query": "SELECT\n    SUM(octetDeltaCount), \n    (sourcePodName, destinationPodName, destinationIP) AS pair\nFROM $table\n\nWHERE $timeFilter\nAND flowType == 3\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-aggregator', 'ipfix')\n\nGROUP BY pair\n",
+                    "query": "SELECT SUM(octetDeltaCount), (sourcePodName, destinationIP) AS pair\nFROM $table\nWHERE $timeFilter\nAND flowType == 3\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-aggregator', 'flow-visibility')\nGROUP BY pair\n",
                     "queryType": "randomWalk",
-                    "rawQuery": "SELECT\n    SUM(octetDeltaCount), \n    (sourcePodName, destinationPodName, destinationIP) AS pair\nFROM default.antrea\n\nWHERE flowEndSeconds >= toDateTime(1642102705) AND flowEndSeconds <= toDateTime(1642104505)\nAND flowType == 3\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-aggregator', 'ipfix')\n\nGROUP BY pair",
+                    "rawQuery": "SELECT SUM(octetDeltaCount), (sourcePodName, destinationIP) AS pair\nFROM default.flows_pod_view\nWHERE flowEndSeconds >= toDateTime(1642534343) AND flowEndSeconds <= toDateTime(1642536143)\nAND flowType == 3\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-aggregator', 'flow-visibility')\nGROUP BY pair",
                     "refId": "A",
                     "round": "0s",
                     "skip_comments": true,
-                    "table": "antrea",
+                    "table": "flows_pod_view",
                     "tableLoading": false
                 }
             ],
@@ -145,13 +145,13 @@
                     "format": "time_series",
                     "formattedQuery": "SELECT $timeSeries as t, count() FROM $table WHERE $timeFilter GROUP BY t ORDER BY t",
                     "intervalFactor": 1,
-                    "query": "SELECT\n    SUM(reverseOctetDeltaCount), \n    (sourcePodName, destinationPodName, destinationIP) AS pair\nFROM $table\n\nWHERE $timeFilter\nAND flowType == 3\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-aggregator', 'ipfix')\n\nGROUP BY pair\n",
+                    "query": "SELECT SUM(reverseOctetDeltaCount), (sourcePodName, destinationIP) AS pair\nFROM $table\nWHERE $timeFilter\nAND flowType == 3\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-aggregator', 'flow-visibility')\nGROUP BY pair\n",
                     "queryType": "randomWalk",
-                    "rawQuery": "SELECT\n    SUM(reverseOctetDeltaCount), \n    (sourcePodName, destinationPodName, destinationIP) AS pair\nFROM default.antrea\n\nWHERE flowEndSeconds >= toDateTime(1642103039) AND flowEndSeconds <= toDateTime(1642104839)\nAND flowType == 3\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-aggregator', 'ipfix')\n\nGROUP BY pair",
+                    "rawQuery": "SELECT SUM(reverseOctetDeltaCount), (sourcePodName, destinationIP) AS pair\nFROM default.flows_pod_view\nWHERE flowEndSeconds >= toDateTime(1642534382) AND flowEndSeconds <= toDateTime(1642536182)\nAND flowType == 3\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-aggregator', 'flow-visibility')\nGROUP BY pair",
                     "refId": "A",
                     "round": "0s",
                     "skip_comments": true,
-                    "table": "antrea",
+                    "table": "flows_pod_view",
                     "tableLoading": false
                 }
             ],
@@ -252,13 +252,13 @@
                     "formattedQuery": "SELECT $timeSeries as t, count() FROM $table WHERE $timeFilter GROUP BY t ORDER BY t",
                     "hide": false,
                     "intervalFactor": 1,
-                    "query": "SELECT\n    $timeSeries as t,\n    SUM(octetDeltaCount),\n    (sourcePodName, destinationIP) as pair\nFROM $table\n\nWHERE $timeFilter\nAND flowType == 3\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator', 'ipfix')\n\nGROUP BY\n    pair,\n    t\nORDER BY t\n",
+                    "query": "SELECT $timeSeries as t, SUM(octetDeltaCount), (sourcePodName, destinationIP) as pair\nFROM $table\nWHERE $timeFilter\nAND flowType == 3\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nGROUP BY pair,t\nORDER BY t\n",
                     "queryType": "randomWalk",
-                    "rawQuery": "SELECT\n    (intDiv(toUInt32(flowEndSeconds), 60) * 60) * 1000 as t,\n    SUM(octetDeltaCount),\n    (sourcePodName, destinationIP) as pair\nFROM default.antrea\n\nWHERE flowEndSeconds >= toDateTime(1641937813) AND flowEndSeconds <= toDateTime(1641939613)\nAND flowType == 3\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator', 'ipfix')\n\nGROUP BY\n    pair,\n    t\nORDER BY t",
+                    "rawQuery": "SELECT (intDiv(toUInt32(flowEndSeconds), 60) * 60) * 1000 as t, SUM(octetDeltaCount), (sourcePodName, destinationIP) as pair\nFROM default.flows_pod_view\nWHERE flowEndSeconds >= toDateTime(1642534150) AND flowEndSeconds <= toDateTime(1642535950)\nAND flowType == 3\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nGROUP BY pair,t\nORDER BY t",
                     "refId": "A",
                     "round": "0s",
                     "skip_comments": true,
-                    "table": "antrea",
+                    "table": "flows_pod_view",
                     "tableLoading": false
                 }
             ],
@@ -369,13 +369,13 @@
                     "formattedQuery": "SELECT $timeSeries as t, count() FROM $table WHERE $timeFilter GROUP BY t ORDER BY t",
                     "hide": false,
                     "intervalFactor": 1,
-                    "query": "SELECT\n    $timeSeries as t,\n    SUM(reverseOctetDeltaCount),\n    (sourcePodName, destinationIP) as pair\nFROM $table\n\nWHERE $timeFilter\nAND flowType == 3\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator', 'ipfix')\n\nGROUP BY\n    pair,\n    t\nORDER BY t",
+                    "query": "SELECT $timeSeries as t, SUM(reverseOctetDeltaCount), (sourcePodName, destinationIP) as pair\nFROM $table\nWHERE $timeFilter\nAND flowType == 3\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nGROUP BY pair, t\nORDER BY t",
                     "queryType": "randomWalk",
-                    "rawQuery": "SELECT\n    (intDiv(toUInt32(flowEndSeconds), 60) * 60) * 1000 as t,\n    SUM(reverseOctetDeltaCount),\n    (sourcePodName, destinationIP) as pair\nFROM default.antrea\n\nWHERE flowEndSeconds >= toDateTime(1641937742) AND flowEndSeconds <= toDateTime(1641939542)\nAND flowType == 3\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator', 'ipfix')\n\nGROUP BY\n    pair,\n    t\nORDER BY t",
+                    "rawQuery": "SELECT (intDiv(toUInt32(flowEndSeconds), 60) * 60) * 1000 as t, SUM(reverseOctetDeltaCount), (sourcePodName, destinationIP) as pair\nFROM default.flows_pod_view\nWHERE flowEndSeconds >= toDateTime(1642534246) AND flowEndSeconds <= toDateTime(1642536046)\nAND flowType == 3\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nGROUP BY pair, t\nORDER BY t",
                     "refId": "A",
                     "round": "0s",
                     "skip_comments": true,
-                    "table": "antrea",
+                    "table": "flows_pod_view",
                     "tableLoading": false
                 }
             ],
@@ -490,13 +490,13 @@
                     "formattedQuery": "SELECT $timeSeries as t, count() FROM $table WHERE $timeFilter GROUP BY t ORDER BY t",
                     "hide": false,
                     "intervalFactor": 1,
-                    "query": "SELECT\n    $timeSeries as t,\n    AVG(throughput),\n    (sourcePodName, destinationIP) as pair\nFROM $table\n\nWHERE $timeFilter\nAND flowType == 3\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator', 'ipfix')\n\nGROUP BY\n    pair,\n    t\nORDER BY t\n",
+                    "query": "SELECT $timeSeries as t, SUM(throughput), (sourcePodName, destinationIP) as pair\nFROM $table\nWHERE $timeFilter\nAND flowType == 3\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nGROUP BY pair,t\nORDER BY t\n",
                     "queryType": "randomWalk",
-                    "rawQuery": "SELECT\n    (intDiv(toUInt32(flowEndSeconds), 60) * 60) * 1000 as t,\n    AVG(throughput),\n    (sourcePodName, destinationIP) as pair\nFROM default.antrea\n\nWHERE flowEndSeconds >= toDateTime(1641937755) AND flowEndSeconds <= toDateTime(1641939555)\nAND flowType == 3\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator', 'ipfix')\n\nGROUP BY\n    pair,\n    t\nORDER BY t",
+                    "rawQuery": "SELECT (intDiv(toUInt32(flowEndSeconds), 60) * 60) * 1000 as t, SUM(throughput), (sourcePodName, destinationIP) as pair\nFROM default.flows_pod_view\nWHERE flowEndSeconds >= toDateTime(1642534276) AND flowEndSeconds <= toDateTime(1642536076)\nAND flowType == 3\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nGROUP BY pair,t\nORDER BY t",
                     "refId": "A",
                     "round": "0s",
                     "skip_comments": true,
-                    "table": "antrea",
+                    "table": "flows_pod_view",
                     "tableLoading": false
                 }
             ],
@@ -611,259 +611,17 @@
                     "formattedQuery": "SELECT $timeSeries as t, count() FROM $table WHERE $timeFilter GROUP BY t ORDER BY t",
                     "hide": false,
                     "intervalFactor": 1,
-                    "query": "SELECT\n    $timeSeries as t,\n    AVG(reverseThroughput),\n    (sourcePodName, destinationIP) as pair\nFROM $table\n\nWHERE $timeFilter\nAND flowType == 3\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator', 'ipfix')\n\nGROUP BY\n    pair,\n    t\nORDER BY t\n",
+                    "query": "SELECT $timeSeries as t, AVG(reverseThroughput), (sourcePodName, destinationIP) as pair\nFROM $table\nWHERE $timeFilter\nAND flowType == 3\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nGROUP BY pair, t\nORDER BY t\n",
                     "queryType": "randomWalk",
-                    "rawQuery": "SELECT\n    (intDiv(toUInt32(flowEndSeconds), 60) * 60) * 1000 as t,\n    AVG(reverseThroughput),\n    (sourcePodName, destinationIP) as pair\nFROM default.antrea\n\nWHERE flowEndSeconds >= toDateTime(1641937764) AND flowEndSeconds <= toDateTime(1641939564)\nAND flowType == 3\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator', 'ipfix')\n\nGROUP BY\n    pair,\n    t\nORDER BY t",
+                    "rawQuery": true,
                     "refId": "A",
                     "round": "0s",
                     "skip_comments": true,
-                    "table": "antrea",
+                    "table": "flows_pod_view",
                     "tableLoading": false
                 }
             ],
             "title": "Reverse Throughput Pod-to-External",
-            "transformations": [
-                {
-                    "id": "groupBy",
-                    "options": {
-                        "fields": {
-                            "Time": {
-                                "aggregations": [],
-                                "operation": "aggregate"
-                            }
-                        }
-                    }
-                }
-            ],
-            "transparent": true,
-            "type": "timeseries"
-        },
-        {
-            "datasource": {
-                "type": "vertamedia-clickhouse-datasource",
-                "uid": "${DS_CLICKHOUSE}"
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "color": {
-                        "mode": "palette-classic"
-                    },
-                    "custom": {
-                        "axisLabel": "",
-                        "axisPlacement": "auto",
-                        "barAlignment": 0,
-                        "drawStyle": "line",
-                        "fillOpacity": 10,
-                        "gradientMode": "none",
-                        "hideFrom": {
-                            "legend": false,
-                            "tooltip": false,
-                            "viz": false
-                        },
-                        "lineInterpolation": "linear",
-                        "lineWidth": 1,
-                        "pointSize": 5,
-                        "scaleDistribution": {
-                            "type": "linear"
-                        },
-                        "showPoints": "always",
-                        "spanNulls": true,
-                        "stacking": {
-                            "group": "A",
-                            "mode": "none"
-                        },
-                        "thresholdsStyle": {
-                            "mode": "off"
-                        }
-                    },
-                    "mappings": [],
-                    "thresholds": {
-                        "mode": "absolute",
-                        "steps": [
-                            {
-                                "color": "green",
-                                "value": null
-                            },
-                            {
-                                "color": "red",
-                                "value": 80
-                            }
-                        ]
-                    },
-                    "unit": "bps"
-                },
-                "overrides": []
-            },
-            "gridPos": {
-                "h": 10,
-                "w": 12,
-                "x": 0,
-                "y": 38
-            },
-            "id": 15,
-            "interval": "60s",
-            "options": {
-                "legend": {
-                    "calcs": [
-                        "mean"
-                    ],
-                    "displayMode": "table",
-                    "placement": "right"
-                },
-                "tooltip": {
-                    "mode": "single"
-                }
-            },
-            "pluginVersion": "8.3.3",
-            "targets": [
-                {
-                    "database": "default",
-                    "datasource": {
-                        "type": "vertamedia-clickhouse-datasource",
-                        "uid": "${DS_CLICKHOUSE}"
-                    },
-                    "dateColDataType": "",
-                    "dateLoading": false,
-                    "dateTimeColDataType": "flowEndSeconds",
-                    "dateTimeType": "DATETIME",
-                    "datetimeLoading": false,
-                    "extrapolate": true,
-                    "format": "time_series",
-                    "formattedQuery": "SELECT $timeSeries as t, count() FROM $table WHERE $timeFilter GROUP BY t ORDER BY t",
-                    "hide": false,
-                    "intervalFactor": 1,
-                    "query": "SELECT\n    $timeSeries as t,\n    AVG(throughputFromSourceNode),\n    sourcePodName\nFROM $table\n\nWHERE $timeFilter \nAND flowType == 3\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator', 'ipfix')\n\nGROUP BY\n    sourcePodName,\n    t\nORDER BY t\n",
-                    "queryType": "randomWalk",
-                    "rawQuery": "SELECT\n    (intDiv(toUInt32(flowEndSeconds), 60) * 60) * 1000 as t,\n    AVG(throughputFromSourceNode),\n    sourcePodName\nFROM default.antrea\n\nWHERE flowEndSeconds >= toDateTime(1641937777) AND flowEndSeconds <= toDateTime(1641939577) \nAND flowType == 3\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator', 'ipfix')\n\nGROUP BY\n    sourcePodName,\n    t\nORDER BY t",
-                    "refId": "A",
-                    "round": "0s",
-                    "skip_comments": true,
-                    "table": "antrea",
-                    "tableLoading": false
-                }
-            ],
-            "title": "Throughput of Pod acting as Source",
-            "transformations": [
-                {
-                    "id": "groupBy",
-                    "options": {
-                        "fields": {
-                            "Time": {
-                                "aggregations": [],
-                                "operation": "aggregate"
-                            }
-                        }
-                    }
-                }
-            ],
-            "transparent": true,
-            "type": "timeseries"
-        },
-        {
-            "datasource": {
-                "type": "vertamedia-clickhouse-datasource",
-                "uid": "${DS_CLICKHOUSE}"
-            },
-            "fieldConfig": {
-                "defaults": {
-                    "color": {
-                        "mode": "palette-classic"
-                    },
-                    "custom": {
-                        "axisLabel": "",
-                        "axisPlacement": "auto",
-                        "barAlignment": 0,
-                        "drawStyle": "line",
-                        "fillOpacity": 10,
-                        "gradientMode": "none",
-                        "hideFrom": {
-                            "legend": false,
-                            "tooltip": false,
-                            "viz": false
-                        },
-                        "lineInterpolation": "linear",
-                        "lineWidth": 1,
-                        "pointSize": 5,
-                        "scaleDistribution": {
-                            "type": "linear"
-                        },
-                        "showPoints": "always",
-                        "spanNulls": true,
-                        "stacking": {
-                            "group": "A",
-                            "mode": "none"
-                        },
-                        "thresholdsStyle": {
-                            "mode": "off"
-                        }
-                    },
-                    "mappings": [],
-                    "thresholds": {
-                        "mode": "absolute",
-                        "steps": [
-                            {
-                                "color": "green",
-                                "value": null
-                            },
-                            {
-                                "color": "red",
-                                "value": 80
-                            }
-                        ]
-                    },
-                    "unit": "bps"
-                },
-                "overrides": []
-            },
-            "gridPos": {
-                "h": 10,
-                "w": 12,
-                "x": 12,
-                "y": 38
-            },
-            "id": 16,
-            "interval": "60s",
-            "options": {
-                "legend": {
-                    "calcs": [
-                        "mean"
-                    ],
-                    "displayMode": "table",
-                    "placement": "right"
-                },
-                "tooltip": {
-                    "mode": "single"
-                }
-            },
-            "pluginVersion": "8.3.3",
-            "targets": [
-                {
-                    "database": "default",
-                    "datasource": {
-                        "type": "vertamedia-clickhouse-datasource",
-                        "uid": "${DS_CLICKHOUSE}"
-                    },
-                    "dateColDataType": "",
-                    "dateLoading": false,
-                    "dateTimeColDataType": "flowEndSeconds",
-                    "dateTimeType": "DATETIME",
-                    "datetimeLoading": false,
-                    "extrapolate": true,
-                    "format": "time_series",
-                    "formattedQuery": "SELECT $timeSeries as t, count() FROM $table WHERE $timeFilter GROUP BY t ORDER BY t",
-                    "hide": false,
-                    "intervalFactor": 1,
-                    "query": "SELECT\n    $timeSeries as t,\n    AVG(reverseThroughputFromSourceNode),\n    sourcePodName\nFROM $table\n\nWHERE $timeFilter \nAND flowType == 3\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator', 'ipfix')\n\nGROUP BY\n    sourcePodName,\n    t\nORDER BY t\n",
-                    "queryType": "randomWalk",
-                    "rawQuery": "SELECT\n    (intDiv(toUInt32(flowEndSeconds), 60) * 60) * 1000 as t,\n    AVG(reverseThroughputFromSourceNode),\n    sourcePodName\nFROM default.antrea\n\nWHERE flowEndSeconds >= toDateTime(1641937797) AND flowEndSeconds <= toDateTime(1641939597) \nAND flowType == 3\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator', 'ipfix')\n\nGROUP BY\n    sourcePodName,\n    t\nORDER BY t",
-                    "refId": "A",
-                    "round": "0s",
-                    "skip_comments": true,
-                    "table": "antrea",
-                    "tableLoading": false
-                }
-            ],
-            "title": "Reverse Throughput of Pod acting as Source",
             "transformations": [
                 {
                     "id": "groupBy",
@@ -908,6 +666,6 @@
     "timezone": "",
     "title": "pod_to_external_dashboard",
     "uid": "K9SPrnJ7k",
-    "version": 4,
+    "version": 7,
     "weekStart": ""
 }
