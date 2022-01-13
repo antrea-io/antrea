@@ -41,8 +41,9 @@ import (
 // MemberClusterSetReconciler reconciles a ClusterSet object in the member cluster deployment.
 type MemberClusterSetReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
-	mutex  sync.Mutex
+	Scheme    *runtime.Scheme
+	Namespace string
+	mutex     sync.Mutex
 
 	clusterSetConfig *multiclusterv1alpha1.ClusterSet
 	clusterSetID     common.ClusterSetID
@@ -57,6 +58,10 @@ type MemberClusterSetReconciler struct {
 
 // Reconcile ClusterSet changes
 func (r *MemberClusterSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	if req.Namespace != r.Namespace {
+		klog.V(2).InfoS("Skip reconciling ClusterSet", "clusterset", req.String())
+		return ctrl.Result{}, nil
+	}
 	clusterSet := &multiclusterv1alpha1.ClusterSet{}
 	err := r.Get(ctx, req.NamespacedName, clusterSet)
 	defer r.mutex.Unlock()
