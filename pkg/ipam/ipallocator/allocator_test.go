@@ -215,6 +215,99 @@ func TestHas(t *testing.T) {
 	}
 }
 
+func TestAllocateRange(t *testing.T) {
+	tests := []struct {
+		name        string
+		ipAllocator IPAllocator
+		size        int
+		prevIPs     []net.IP
+		wantError   bool
+		wantFirst   net.IP
+		wantLast    net.IP
+	}{
+		{
+			name:        "IPv4-CIDR-Empty-OK",
+			ipAllocator: newCIDRAllocator("10.10.10.0/24", []string{"10.10.10.255"}),
+			wantError:   false,
+			size:        15,
+			wantFirst:   net.ParseIP("10.10.10.1"),
+			wantLast:    net.ParseIP("10.10.10.15"),
+		},
+		{
+			name:        "IPv4-CIDR-Middle-OK",
+			ipAllocator: newCIDRAllocator("10.10.10.0/24", nil),
+			wantError:   false,
+			prevIPs:     []net.IP{net.ParseIP("10.10.10.13"), net.ParseIP("10.10.10.30")},
+			size:        15,
+			wantFirst:   net.ParseIP("10.10.10.14"),
+			wantLast:    net.ParseIP("10.10.10.28"),
+		},
+		{
+			name:        "IPv4-Range-Error",
+			ipAllocator: newIPRangeAllocator("1.1.1.10", "1.1.1.20"),
+			wantError:   true,
+			prevIPs:     []net.IP{net.ParseIP("1.1.1.12"), net.ParseIP("1.1.1.16")},
+			size:        5,
+		},
+		{
+			name:        "IPv4-Multiple-OK",
+			ipAllocator: MultiIPAllocator{newIPRangeAllocator("1.1.1.10", "1.1.1.20"), newCIDRAllocator("10.10.10.128/30", nil)},
+			wantError:   false,
+			prevIPs:     []net.IP{net.ParseIP("1.1.1.12")},
+			size:        5,
+			wantFirst:   net.ParseIP("1.1.1.13"),
+			wantLast:    net.ParseIP("1.1.1.17"),
+		},
+		{
+			name:        "IPv4-Multiple-Second-OK",
+			ipAllocator: MultiIPAllocator{newIPRangeAllocator("1.1.1.10", "1.1.1.20"), newIPRangeAllocator("2.2.2.10", "2.2.2.30")},
+			wantError:   false,
+			prevIPs:     []net.IP{net.ParseIP("1.1.1.15"), net.ParseIP("2.2.2.15"), net.ParseIP("2.2.2.16")},
+			size:        10,
+			wantFirst:   net.ParseIP("2.2.2.17"),
+			wantLast:    net.ParseIP("2.2.2.26"),
+		},
+		{
+			name:        "IPv6-Multiple-Full-Range-OK",
+			ipAllocator: MultiIPAllocator{newIPRangeAllocator("1000::2", "1000::5"), newIPRangeAllocator("1000::10", "1000::12"), newIPRangeAllocator("1000::20", "1000::29")},
+			wantError:   false,
+			size:        10,
+			wantFirst:   net.ParseIP("1000::20"),
+			wantLast:    net.ParseIP("1000::29"),
+		},
+		{
+			name:        "IPv6-Multiple-Error",
+			ipAllocator: MultiIPAllocator{newIPRangeAllocator("1000::2", "1000::5"), newIPRangeAllocator("1000::10", "1000::12"), newIPRangeAllocator("1000::20", "1000::30")},
+			wantError:   true,
+			prevIPs:     []net.IP{net.ParseIP("1000::23"), net.ParseIP("1000::2d"), net.ParseIP("1000::30")},
+			size:        10,
+			wantFirst:   net.ParseIP("1000::20"),
+			wantLast:    net.ParseIP("1000::2a"),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// preallocate IPs for the test
+			for _, ip := range tt.prevIPs {
+				err := tt.ipAllocator.AllocateIP(ip)
+				require.NoError(t, err)
+			}
+			prevUsed := tt.ipAllocator.Used()
+			ips, err := tt.ipAllocator.AllocateRange(tt.size)
+			if tt.wantError {
+				require.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantFirst, ips[0])
+			assert.Equal(t, tt.wantLast, ips[len(ips)-1])
+			assert.Equal(t, prevUsed+len(ips), tt.ipAllocator.Used())
+		})
+	}
+}
+
 func TestName(t *testing.T) {
 	ma := MultiIPAllocator{newIPRangeAllocator("1.1.1.10", "1.1.1.20"), newCIDRAllocator("10.10.10.128/30", nil)}
 	assert.Equal(t, []string{"1.1.1.10-1.1.1.20", "10.10.10.128/30"}, ma.Names())

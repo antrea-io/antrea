@@ -358,3 +358,40 @@ func TestHas(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, has)
 }
+
+func TestAllocateReleaseStatefulSet(t *testing.T) {
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+
+	poolName := uuid.New().String()
+	setName := "fakeSet"
+	ipRange := crdv1a2.IPRange{
+		Start: "10.2.2.100",
+		End:   "10.2.2.120",
+	}
+	subnetInfo := crdv1a2.SubnetInfo{
+		Gateway:      "10.2.2.1",
+		PrefixLength: 24,
+	}
+	subnetRange := crdv1a2.SubnetIPRange{IPRange: ipRange,
+		SubnetInfo: subnetInfo}
+
+	pool := crdv1a2.IPPool{
+		ObjectMeta: metav1.ObjectMeta{Name: poolName},
+		Spec:       crdv1a2.IPPoolSpec{IPRanges: []crdv1a2.SubnetIPRange{subnetRange}},
+	}
+
+	allocator := newTestIPPoolAllocator(&pool, stopCh)
+	err := allocator.AllocateStatefulSet(testNamespace, setName, 7)
+	require.NoError(t, err)
+
+	// Make sure reserved IPs are respected for next allocate
+	validateAllocationSequence(t, allocator, subnetInfo, []string{"10.2.2.107", "10.2.2.108"})
+
+	// Release the set
+	err = allocator.ReleaseStatefulSet(testNamespace, setName)
+	require.NoError(t, err)
+
+	// Make sure reserved IPs are released
+	validateAllocationSequence(t, allocator, subnetInfo, []string{"10.2.2.100"})
+}
