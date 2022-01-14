@@ -52,7 +52,7 @@ Run K8s e2e community tests (Conformance & Network Policy) or Antrea e2e tests o
 
         --kubeconfig             Path of cluster kubeconfig.
         --workdir                Home path for Go, vSphere information and antrea_logs during cluster setup. Default is $WORKDIR.
-        --testcase               Windows install OVS, Conformance and Network Policy or Antrea e2e testcases on a Windows or Linux cluster. It can also be flexible ipam e2e test.
+        --testcase               Windows install OVS, Conformance and Network Policy or Antrea e2e test cases on a Windows or Linux cluster. It can also be flexible ipam e2e test.
         --registry               The docker registry to use instead of dockerhub.
         --proxyall               Enable proxyAll to test AntreaProxy.
         --flexible-ipam          Run tests in flexible ipam mode"
