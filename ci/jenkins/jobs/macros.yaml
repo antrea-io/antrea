@@ -113,7 +113,7 @@
           #!/bin/bash
           set -ex
           DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
-          ./ci/jenkins/test-vmc.sh --cluster-name "${JOB_NAME}-${BUILD_NUMBER}" --testcase e2e --coverage --codecov-token "${CODECOV_TOKEN}" --registry ${DOCKER_REGISTRY}
+          ./ci/jenkins/test-vmc.sh --cluster-name "$BUILD_TAG" --testcase e2e --coverage --codecov-token "${CODECOV_TOKEN}" --registry ${DOCKER_REGISTRY} --username "${CAPVC_USERNAME}" --password "${CAPVC_PASSWORD}"
 
 - builder:
     name: builder-conformance
@@ -122,7 +122,7 @@
           #!/bin/bash
           set -ex
           DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
-          ./ci/jenkins/test-vmc.sh --cluster-name "${{JOB_NAME}}-${{BUILD_NUMBER}}" --testcase '{conformance_type}' --coverage --codecov-token "${{CODECOV_TOKEN}}" --registry ${{DOCKER_REGISTRY}}
+          ./ci/jenkins/test-vmc.sh --cluster-name "$BUILD_TAG" --testcase '{conformance_type}' --coverage --codecov-token "${{CODECOV_TOKEN}}" --registry ${{DOCKER_REGISTRY}} --username "${{CAPVC_USERNAME}}" --password "${{CAPVC_PASSWORD}}"
 
 - builder:
     name: builder-elk-flow-collector

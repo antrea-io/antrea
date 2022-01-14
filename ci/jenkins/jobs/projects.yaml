@@ -341,7 +341,7 @@
           only_trigger_phrase: true
           trigger_permit_all: true
           status_context: jenkins-e2e
-          status_url: null
+          status_url: --none--
           success_status: Build finished.
           failure_status: Failed. Add comment /test-e2e to re-trigger.
           error_status: Failed. Add comment /test-e2e to re-trigger.
@@ -372,6 +372,12 @@
             - text:
                 credential-id: RESOURCEPOOLPATH
                 variable: RESOURCEPOOLPATH
+            - text:
+                credential-id: CAPVC_USERNAME
+                variable: CAPVC_USERNAME
+            - text:
+                credential-id: CAPVC_PASSWORD
+                variable: CAPVC_PASSWORD
           publishers:
           - archive:
               allow-empty: true
@@ -447,7 +453,7 @@
           only_trigger_phrase: true
           trigger_permit_all: true
           status_context: jenkins-conformance
-          status_url: null
+          status_url: --none--
           success_status: Build finished.
           failure_status: Failed. Add comment /test-conformance to re-trigger.
           error_status: Failed. Add comment /test-conformance to re-trigger.
@@ -478,6 +484,12 @@
             - text:
                 credential-id: RESOURCEPOOLPATH
                 variable: RESOURCEPOOLPATH
+            - text:
+                credential-id: CAPVC_USERNAME
+                variable: CAPVC_USERNAME
+            - text:
+                credential-id: CAPVC_PASSWORD
+                variable: CAPVC_PASSWORD
           publishers:
           - archive:
               allow-empty: true
@@ -553,7 +565,7 @@
           only_trigger_phrase: true
           trigger_permit_all: true
           status_context: jenkins-all-features-conformance
-          status_url: null
+          status_url: --none--
           success_status: Build finished.
           failure_status: Failed. Add comment /test-all-features-conformance to re-trigger.
           error_status: Failed. Add comment /test-all-features-conformance to re-trigger.
@@ -568,6 +580,13 @@
               fail: true
               timeout: 80
               type: absolute
+          - credentials-binding:
+            - text:
+                credential-id: CAPVC_USERNAME
+                variable: CAPVC_USERNAME
+            - text:
+                credential-id: CAPVC_PASSWORD
+                variable: CAPVC_PASSWORD
           publishers:
           - archive:
               allow-empty: true
@@ -618,7 +637,7 @@
           only_trigger_phrase: true
           trigger_permit_all: true
           status_context: jenkins-whole-conformance
-          status_url: null
+          status_url: --none--
           success_status: Build finished.
           failure_status: Failed. Add comment /test-whole-conformance to re-trigger.
           error_status: Failed. Add comment /test-whole-conformance to re-trigger.
@@ -649,6 +668,12 @@
             - text:
                 credential-id: RESOURCEPOOLPATH
                 variable: RESOURCEPOOLPATH
+            - text:
+                credential-id: CAPVC_USERNAME
+                variable: CAPVC_USERNAME
+            - text:
+                credential-id: CAPVC_PASSWORD
+                variable: CAPVC_PASSWORD
           publishers:
           - archive:
               allow-empty: true
@@ -724,7 +749,7 @@
           only_trigger_phrase: true
           trigger_permit_all: true
           status_context: jenkins-networkpolicy
-          status_url: null
+          status_url: --none--
           success_status: Build finished.
           failure_status: Failed. Add comment /test-networkpolicy to re-trigger.
           error_status: Failed. Add comment /test-networkpolicy to re-trigger.
@@ -755,6 +780,12 @@
             - text:
                 credential-id: RESOURCEPOOLPATH
                 variable: RESOURCEPOOLPATH
+            - text:
+                credential-id: CAPVC_USERNAME
+                variable: CAPVC_USERNAME
+            - text:
+                credential-id: CAPVC_PASSWORD
+                variable: CAPVC_PASSWORD
           publishers:
           - archive:
               allow-empty: true
