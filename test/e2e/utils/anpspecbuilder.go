@@ -207,6 +207,23 @@ func (b *AntreaNetworkPolicySpecBuilder) AddEgress(protoc v1.Protocol,
 	return b
 }
 
+func (b *AntreaNetworkPolicySpecBuilder) AddToServicesRule(svcRefs []crdv1alpha1.ServiceReference,
+	name string, ruleAppliedToSpecs []ANPAppliedToSpec, action crdv1alpha1.RuleAction) *AntreaNetworkPolicySpecBuilder {
+	var appliedTos []crdv1alpha1.NetworkPolicyPeer
+	for _, at := range ruleAppliedToSpecs {
+		appliedTos = append(appliedTos, b.GetAppliedToPeer(at.PodSelector, at.PodSelectorMatchExp))
+	}
+	newRule := crdv1alpha1.Rule{
+		To:         make([]crdv1alpha1.NetworkPolicyPeer, 0),
+		ToServices: svcRefs,
+		Action:     &action,
+		Name:       name,
+		AppliedTo:  appliedTos,
+	}
+	b.Spec.Egress = append(b.Spec.Egress, newRule)
+	return b
+}
+
 func (b *AntreaNetworkPolicySpecBuilder) AddEgressLogging() *AntreaNetworkPolicySpecBuilder {
 	for i, e := range b.Spec.Egress {
 		e.EnableLogging = true
