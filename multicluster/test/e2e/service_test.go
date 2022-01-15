@@ -16,10 +16,15 @@ package e2e
 
 import (
 	"fmt"
+	"strconv"
 	"testing"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+
+	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	antreae2e "antrea.io/antrea/test/e2e"
+	e2euttils "antrea.io/antrea/test/e2e/utils"
 )
 
 func TestConnectivity(t *testing.T) {
@@ -42,8 +47,10 @@ func testServiceExport(t *testing.T, data *TestData) {
 // we create a nginx in on cluster(east), and try to curl it in another cluster(west).
 // If we got status code 200, it means that the resources is exported by the east cluster
 // and imported by the west cluster.
+// TODO(yang): reorg test function contents
 func (data *TestData) testServiceExport(t *testing.T) {
 	podName := randName("test-nginx-")
+	clientPodName := "test-service-client"
 
 	if err := createPodWrapper(t, data, westCluster, multiClusterTestNamespace, podName, nginxImage, "nginx", nil, nil, nil, nil, false, nil); err != nil {
 		t.Fatalf("Error when creating nginx Pod in west cluster: %v", err)
@@ -93,6 +100,38 @@ func (data *TestData) testServiceExport(t *testing.T) {
 	westIP := svc.Spec.ClusterIP
 	if err := data.probeFromCluster(westCluster, westIP); err != nil {
 		t.Fatalf("Error when probe service from %s", westCluster)
+	}
+
+	if err := data.createPod(eastCluster, clientPodName, multiClusterTestNamespace, "client", agnhostImage,
+		[]string{"sleep", strconv.Itoa(3600)}, nil, nil, nil, false, nil); err != nil {
+		t.Fatalf("Error when creating client Pod in east cluster: %v", err)
+	}
+	defer deletePodWrapper(t, data, eastCluster, multiClusterTestNamespace, clientPodName)
+	_, err = data.podWaitFor(defaultTimeout, eastCluster, clientPodName, multiClusterTestNamespace, func(pod *corev1.Pod) (bool, error) {
+		return pod.Status.Phase == corev1.PodRunning, nil
+	})
+	if err != nil {
+		t.Fatalf("Error when waiting for Pod '%s' in east cluster: %v", clientPodName, err)
+	}
+
+	anpBuilder := &e2euttils.AntreaNetworkPolicySpecBuilder{}
+	anpBuilder = anpBuilder.SetName(multiClusterTestNamespace, "block-west-exported-service").
+		SetPriority(1.0).
+		SetAppliedToGroup([]e2euttils.ANPAppliedToSpec{{PodSelector: map[string]string{"app": "client"}}}).
+		AddToServicesRule([]crdv1alpha1.ServiceReference{{
+			Name:      fmt.Sprintf("antrea-mc-%s", westClusterTestService),
+			Namespace: multiClusterTestNamespace},
+		}, "", nil, crdv1alpha1.RuleActionDrop)
+	if _, err := createOrUpdateANP(data.getCRDClientOfCluster(eastCluster), anpBuilder.Get()); err != nil {
+		t.Fatalf("Error creating ANP %s: %v", anpBuilder.Name, err)
+	}
+	defer deleteANP(data.getCRDClientOfCluster(eastCluster), multiClusterTestNamespace, anpBuilder.Name)
+
+	connectivity := data.probe(eastCluster, multiClusterTestNamespace, clientPodName, "client", westIP, "westClusterServiceIP", 80, corev1.ProtocolTCP)
+	if connectivity == antreae2e.Error {
+		t.Errorf("Failure -- could not complete probe: %v", err)
+	} else if connectivity != antreae2e.Dropped {
+		t.Errorf("Failure -- wrong result from probing exported Service after applying toService AntreaNetworkPolicy. Expected: %v, Actual: %v", antreae2e.Dropped, connectivity)
 	}
 }
 
