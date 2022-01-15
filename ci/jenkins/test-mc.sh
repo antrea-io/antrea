@@ -261,11 +261,18 @@ function run_multicluster_e2e {
     docker tag "${DOCKER_REGISTRY}/antrea/nginx:latest" "nginx:latest"
     docker save nginx:latest -o "${WORKDIR}"/nginx.tar
 
+    docker pull "${DOCKER_REGISTRY}/antrea/agnhost:2.26"
+    docker tag "${DOCKER_REGISTRY}/antrea/agnhost:2.26" "agnhost:2.26"
+    docker save agnhost:2.26 -o "${WORKDIR}"/agnhost.tar
+
     for kubeconfig in ${membercluter_kubeconfigs[@]}
     do
         kubectl get nodes -o wide --no-headers=true "${kubeconfig}"| awk '{print $6}' | while read IP; do
             rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no" "${WORKDIR}"/nginx.tar jenkins@["${IP}"]:"${WORKDIR}"/nginx.tar
             ssh -o StrictHostKeyChecking=no -n jenkins@"${IP}" "${CLEAN_STALE_IMAGES}; docker load -i ${WORKDIR}/nginx.tar" || true
+
+            rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no" "${WORKDIR}"/agnhost.tar jenkins@["${IP}"]:"${WORKDIR}"/agnhost.tar
+            ssh -o StrictHostKeyChecking=no -n jenkins@"${IP}" "docker load -i ${WORKDIR}/agnhost.tar" || true
         done
 
     done
