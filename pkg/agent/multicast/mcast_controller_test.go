@@ -1,3 +1,6 @@
+//go:build linux
+// +build linux
+
 // Copyright 2021 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -29,14 +32,18 @@ import (
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	ifaceStoretest "antrea.io/antrea/pkg/agent/interfacestore/testing"
+	multicasttest "antrea.io/antrea/pkg/agent/multicast/testing"
 	openflowtest "antrea.io/antrea/pkg/agent/openflow/testing"
+	ovsconfigtest "antrea.io/antrea/pkg/ovs/ovsconfig/testing"
 )
 
 var (
-	mockOFClient   *openflowtest.MockClient
-	mockIfaceStore *ifaceStoretest.MockInterfaceStore
-	mgroup         = net.ParseIP("224.96.1.3")
-	if1            = &interfacestore.InterfaceConfig{
+	mockOFClient        *openflowtest.MockClient
+	mockMulticastSocket *multicasttest.MockRouteInterface
+	mockIfaceStore      *ifaceStoretest.MockInterfaceStore
+	ovsClient           *ovsconfigtest.MockOVSBridgeClient
+	mgroup              = net.ParseIP("224.96.1.3")
+	if1                 = &interfacestore.InterfaceConfig{
 		Type:          interfacestore.ContainerInterface,
 		InterfaceName: "if1",
 		IPs:           []net.IP{net.ParseIP("192.168.1.1")},
@@ -46,6 +53,8 @@ var (
 		InterfaceName: "if2",
 		IPs:           []net.IP{net.ParseIP("192.168.1.2")},
 	}
+	nodeIf1IP           = net.ParseIP("192.168.20.22")
+	externalInterfaceIP = net.ParseIP("192.168.50.23")
 )
 
 func TestAddGroupMemberStatus(t *testing.T) {
@@ -56,6 +65,11 @@ func TestAddGroupMemberStatus(t *testing.T) {
 		iface: if1,
 	}
 	mctrl := newMockMulticastController(t)
+	err := mctrl.initialize(t)
+	mctrl.mRouteClient.multicastInterfaceConfigs = []multicastInterfaceConfig{
+		{Name: if1.InterfaceName, IPv4Addr: &net.IPNet{IP: nodeIf1IP, Mask: net.IPv4Mask(255, 255, 255, 0)}},
+	}
+	assert.Nil(t, err)
 	mctrl.addGroupMemberStatus(event)
 	groupCache := mctrl.groupCache
 	compareGroupStatus(t, groupCache, event)
@@ -64,13 +78,16 @@ func TestAddGroupMemberStatus(t *testing.T) {
 	assert.True(t, ok)
 	assert.Equal(t, mgroup.String(), key)
 	mockOFClient.EXPECT().InstallMulticastFlow(mgroup).Times(1)
-	err := mctrl.syncGroup(key)
+	mockMulticastSocket.EXPECT().MulticastInterfaceJoinMgroup(mgroup.To4(), nodeIf1IP.To4(), if1.InterfaceName).Times(1)
+	err = mctrl.syncGroup(key)
 	assert.Nil(t, err)
 	mctrl.queue.Forget(obj)
 }
 
 func TestUpdateGroupMemberStatus(t *testing.T) {
 	mctrl := newMockMulticastController(t)
+	err := mctrl.initialize(t)
+	assert.Nil(t, err)
 	igmpMaxResponseTime = time.Second * 1
 	event := &mcastGroupEvent{
 		group: mgroup,
@@ -161,11 +178,11 @@ func TestCheckLastMember(t *testing.T) {
 func TestClearStaleGroups(t *testing.T) {
 	mctrl := newMockMulticastController(t)
 	workerCount = 1
-
-	mockOFClient.EXPECT().InstallMulticastInitialFlows(gomock.Any()).Times(1)
-	err := mctrl.Initialize()
+	err := mctrl.initialize(t)
 	assert.Nil(t, err)
-
+	mctrl.mRouteClient.multicastInterfaceConfigs = []multicastInterfaceConfig{
+		{Name: if1.InterfaceName, IPv4Addr: &net.IPNet{IP: nodeIf1IP, Mask: net.IPv4Mask(255, 255, 255, 0)}},
+	}
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
@@ -209,6 +226,7 @@ func TestClearStaleGroups(t *testing.T) {
 		mctrl.addInstalledGroup(g.group.String())
 	}
 	mockOFClient.EXPECT().UninstallMulticastFlow(gomock.Any()).Times(len(staleGroups))
+	mockMulticastSocket.EXPECT().MulticastInterfaceLeaveMgroup(gomock.Any(), gomock.Any(), gomock.Any()).Times(len(staleGroups))
 	mctrl.clearStaleGroups()
 	mctrl.queue.ShutDown()
 	wg.Wait()
@@ -245,7 +263,20 @@ func newMockMulticastController(t *testing.T) *Controller {
 	controller := gomock.NewController(t)
 	mockOFClient = openflowtest.NewMockClient(controller)
 	mockIfaceStore = ifaceStoretest.NewMockInterfaceStore(controller)
-	nodeConfig := &config.NodeConfig{}
+	mockMulticastSocket = multicasttest.NewMockRouteInterface(controller)
+	ovsClient = ovsconfigtest.NewMockOVSBridgeClient(controller)
+	addr := &net.IPNet{IP: nodeIf1IP, Mask: net.IPv4Mask(255, 255, 255, 0)}
+	nodeConfig := &config.NodeConfig{GatewayConfig: &config.GatewayConfig{Name: "antrea-gw0"}, NodeIPv4Addr: addr}
 	mockOFClient.EXPECT().RegisterPacketInHandler(gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
-	return NewMulticastController(mockOFClient, nodeConfig, mockIfaceStore)
+	mctrl := NewMulticastController(mockOFClient, nodeConfig, mockIfaceStore, mockMulticastSocket, sets.NewString(), ovsClient)
+	return mctrl
+}
+
+func (c *Controller) initialize(t *testing.T) error {
+	ovsClient.EXPECT().SetBridgeMcastSnooping(true).Times(1)
+	ovsClient.EXPECT().AddBridgeOtherConfig(map[string]interface{}{"mcast-snooping-disable-flood-unregistered": "true"}).Times(1)
+	mockOFClient.EXPECT().InstallMulticastInitialFlows(uint8(0)).Times(1)
+	mockMulticastSocket.EXPECT().AllocateVIFs(gomock.Any(), uint16(0)).Times(1).Return([]uint16{0}, nil)
+	mockMulticastSocket.EXPECT().AllocateVIFs(gomock.Any(), uint16(1)).Times(1).Return([]uint16{1, 2}, nil)
+	return c.Initialize()
 }

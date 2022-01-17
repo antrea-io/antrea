@@ -782,6 +782,7 @@ func (i *Initializer) initNodeLocalConfig() error {
 	}
 
 	var nodeIPv4Addr, nodeIPv6Addr, transportIPv4Addr, transportIPv6Addr *net.IPNet
+	var transportInterfaceName string
 	var localIntf *net.Interface
 	// Find the interface configured with Node IP and use it for Pod traffic.
 	ipAddrs, err := k8s.GetNodeAddrs(node)
@@ -794,9 +795,11 @@ func (i *Initializer) initNodeLocalConfig() error {
 	}
 	transportIPv4Addr = nodeIPv4Addr
 	transportIPv6Addr = nodeIPv6Addr
+	transportInterfaceName = localIntf.Name
 	if i.networkConfig.TransportIface != "" {
 		// Find the configured transport interface, and update its IP address in Node's annotation.
 		transportIPv4Addr, transportIPv6Addr, localIntf, err = getTransportIPNetDeviceByName(i.networkConfig.TransportIface, i.ovsBridge)
+		transportInterfaceName = localIntf.Name
 		if err != nil {
 			return fmt.Errorf("failed to get local IPNet device with transport interface %s: %v", i.networkConfig.TransportIface, err)
 		}
@@ -813,6 +816,7 @@ func (i *Initializer) initNodeLocalConfig() error {
 		}
 	} else if len(i.networkConfig.TransportIfaceCIDRs) > 0 {
 		transportIPv4Addr, transportIPv6Addr, localIntf, err = getIPNetDeviceByCIDRs(i.networkConfig.TransportIfaceCIDRs)
+		transportInterfaceName = localIntf.Name
 		if err != nil {
 			return fmt.Errorf("failed to get local IPNet device with transport Address CIDR %s: %v", i.networkConfig.TransportIfaceCIDRs, err)
 		}
@@ -834,6 +838,7 @@ func (i *Initializer) initNodeLocalConfig() error {
 			i.patchNodeAnnotations(nodeName, types.NodeTransportAddressAnnotationKey, nil)
 		}
 	}
+	i.networkConfig.TransportIface = transportInterfaceName
 
 	// Update the Node's MAC address in the annotations of the Node. The MAC address will be used for direct routing by
 	// OVS in noencap case on Windows Nodes. As a mixture of Linux and Windows nodes is possible, Linux Nodes' MAC
