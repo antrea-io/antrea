@@ -196,7 +196,7 @@ function deliver_antrea_multicluster {
     ${CLEAN_STALE_IMAGES}
 
     cp -f build/yamls/*.yml $WORKDIR
-    docker pull $DOCKER_REGISTRY/antrea/antrea-ubuntu:latest
+    DOCKER_REGISTRY="${DOCKER_REGISTRY}" ./hack/build-antrea-ubuntu-all.sh --pull
     echo "====== Delivering Antrea to all the Nodes ======"
     docker save -o ${WORKDIR}/antrea-ubuntu.tar $DOCKER_REGISTRY/antrea/antrea-ubuntu:latest
 
