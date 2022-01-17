@@ -158,6 +158,7 @@ MOCKGEN_TARGETS=(
   "pkg/agent/cniserver/ipam IPAMDriver testing"
   "pkg/agent/flowexporter/connections ConnTrackDumper,NetFilterConnTrack testing"
   "pkg/agent/interfacestore InterfaceStore testing"
+  "pkg/agent/multicast RouteInterface testing"
   "pkg/agent/nodeportlocal/portcache LocalPortOpener testing"
   "pkg/agent/nodeportlocal/rules PodPortRules testing"
   "pkg/agent/openflow Client,OFEntryOperations testing"
