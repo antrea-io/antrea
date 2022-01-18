@@ -109,10 +109,10 @@ type NodeConfig struct {
 	// be overridden by the discovered tunnel interface name from the OVS bridge.
 	DefaultTunName string
 	// The CIDR block from which to allocate IPv4 address to Pod.
-	// It's nil for the net workPolicyOnly trafficEncapMode which doesn't do IPAM.
+	// It's nil for the networkPolicyOnly trafficEncapMode which doesn't do IPAM.
 	PodIPv4CIDR *net.IPNet
 	// The CIDR block from where to allocate IPv6 address to Pod.
-	// It's nil for the net workPolicyOnly trafficEncapMode which doesn't do IPAM.
+	// It's nil for the networkPolicyOnly trafficEncapMode which doesn't do IPAM.
 	PodIPv6CIDR *net.IPNet
 	// The Node's IPv4 address used in Kubernetes. It has the network mask information.
 	NodeIPv4Addr *net.IPNet

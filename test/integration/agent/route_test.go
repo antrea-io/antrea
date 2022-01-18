@@ -31,6 +31,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/net/nettest"
+	"k8s.io/apimachinery/pkg/util/wait"
 
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/route"
@@ -442,6 +443,53 @@ func TestSyncRoutes(t *testing.T) {
 		assert.NoError(t, err, "error executing ip route command: %s", listCmd)
 		assert.Equal(t, expOutput, output, "error syncing route")
 	}
+}
+
+// TestSyncGatewayKernelRoute verifies that the route auto-configured by the kernel when an IP
+// address is assigned to the gateway is periodically sync'ed and restored if missing.
+func TestSyncGatewayKernelRoute(t *testing.T) {
+	skipIfNotInContainer(t)
+	gwLink := createDummyGW(t)
+	defer netlink.LinkDel(gwLink)
+	gwNet := &net.IPNet{
+		IP:   gwIP,
+		Mask: net.CIDRMask(24, 32), // /24
+	}
+	require.NoError(t, netlink.AddrAdd(gwLink, &netlink.Addr{IPNet: gwNet}), "configuring gw IP failed")
+
+	routeClient, err := route.NewClient(&config.NetworkConfig{TrafficEncapMode: config.TrafficEncapModeEncap}, false, false, false)
+	assert.NoError(t, err)
+	err = routeClient.Initialize(nodeConfig, func() {})
+	assert.NoError(t, err)
+
+	listCmd := fmt.Sprintf("ip route show table 0 exact %s", podCIDR)
+
+	err = wait.PollImmediate(100*time.Millisecond, 2*time.Second, func() (done bool, err error) {
+		expOutput, err := exec.Command("bash", "-c", listCmd).Output()
+		if err != nil {
+			return false, err
+		}
+		return len(expOutput) > 0, nil
+	})
+	require.NoError(t, err, "error when waiting for autoconf'd route")
+
+	delCmd := fmt.Sprintf("ip route del %s", podCIDR)
+	_, err = exec.Command("bash", "-c", delCmd).Output()
+	require.NoError(t, err, "error executing ip route command: %s", delCmd)
+
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+	route.IPTablesSyncInterval = 2 * time.Second
+	go routeClient.Run(stopCh)
+
+	err = wait.Poll(1*time.Second, 2*route.IPTablesSyncInterval, func() (done bool, err error) {
+		expOutput, err := exec.Command("bash", "-c", listCmd).Output()
+		if err != nil {
+			return false, err
+		}
+		return len(expOutput) > 0, nil
+	})
+	assert.NoError(t, err, "error when waiting for route to be restored")
 }
 
 func TestReconcile(t *testing.T) {
