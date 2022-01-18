@@ -209,59 +209,15 @@ there is a risk of conflicts in CIDR allocation between the two.
 
 ### AntreaIPAM
 
-`AntreaIPAM` is a feature that allows flexible control over Pod IP Addressing. This can
-be achieved by configuring custom resource `IPPool` with desired set of IP ranges.
-The pool can be annotated to Namespace, and Antrea will manage IP address assignment for
-corresponding Pods according to pool spec. In the future, support will be extended to
-Deployments and StatefulSets, as well as requesting specific IP via Pod annotation.
-
-Note that IP pool annotation can not be updated, but rather re-created. IP Pool can be
-extended, but cannot be shrunk if already assigned to a resource. The IP ranges of IP
-Pools must not overlap, otherwise it would lead to undefined behavior.
-
-Regular `Subnet per Node` IPAM will continue to be used for resources without IP pool
-annotation, or when `AntreaIPAM` feature is disabled.
-
-Usage example:
-
-```yaml
-apiVersion: "crd.antrea.io/v1alpha2"
-kind: IPPool
-metadata:
-  name: pool1
-spec:
-  ipVersion: 4
-  ipRanges:
-  - start: "10.2.0.12"
-    end: "10.2.0.20"
-    gateway: "10.2.0.1"
-    prefixLength: 24
-```
-
-```yaml
-kind: Namespace
-metadata:
-  annotations:
-    ipam.antrea.io/ippools: 'pool1'
-```
-
-#### Data path change for this feature
-
-When `AntreaIPAM` is enabled, `antrea-agent` will connect the Node's network interface
-to the OVS bridge at startup, and it will detach the interface from the OVS bridge and
-restore its configurations at exit. Node may lose network connection when `antrea-agent`
-or OVS daemons are stopped unexpectedly, which can be recovered by rebooting the Node.
-`AntreaIPAM` Pods' traffic will not be routed by local Node's network stack.
-
-All traffic to a local Pod will be sent to the Pod's OVS port directly, after the
-destination MAC is rewritten to the Pod's MAC address. This includes `AntreaIPAM` Pods
-and regular `Subnet per Node` IPAM Pods, even they are not in the same subnets.
-Inter-Node traffic will be sent to the Node network from the source Node, and forwarded
-to the destination Node by the Node network.
+`AntreaIPAM` feature allows flexible control over Pod IP addressing. This can be
+achieved by configuring `IPPool` CRD with a desired set of IP ranges. The `IPPool` can be
+annotated to Namespace, Pod and PodTemplate of StatefulSet/Deployment. Antrea will manage
+IP address assignment for corresponding Pods according to `IPPool` spec.
+Refer to this [document](antrea-ipam.md) for more information.
 
 #### Requirements for this Feature
 
-In Antrea 1.4, this feature is supported on Linux Nodes, with IPv4, `system` OVS datapath
+As of now, this feature is supported on Linux Nodes, with IPv4, `system` OVS datapath
 type, and `noEncap`, `noSNAT` traffic mode.
 
 The IPs in the `IPPools` must be in the same "underlay" subnet as the Node IP, because
