@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/rand"
 	"net"
 	"strings"
 
@@ -367,4 +368,14 @@ func NewIPNet(ip net.IP) *net.IPNet {
 		return &net.IPNet{IP: ip, Mask: net.CIDRMask(32, 32)}
 	}
 	return &net.IPNet{IP: ip, Mask: net.CIDRMask(128, 128)}
+}
+
+func RandomMAC() (net.HardwareAddr, error) {
+	buf := make([]byte, 6)
+	if _, err := rand.Read(buf); err != nil {
+		return nil, err
+	}
+	// Set the local bit
+	buf[0] |= 2
+	return buf[:6], nil
 }

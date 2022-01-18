@@ -136,6 +136,14 @@ var (
 		SecondaryNetwork:  {},
 		ServiceExternalIP: {},
 	}
+	// supportedFeaturesOnExternalNode records the features supported on a VM or a BM
+	// host. Antrea Agent checks the enabled features if it is running as VM
+	// or BM agent role, and fails the startup if an unsupported feature is
+	// enabled.
+	supportedFeaturesOnExternalNode = map[featuregate.Feature]struct{}{
+		AntreaPolicy:       {},
+		NetworkPolicyStats: {},
+	}
 )
 
 func init() {
@@ -150,4 +158,14 @@ func SupportedOnWindows(feature featuregate.Feature) bool {
 	}
 	_, exists = unsupportedFeaturesOnWindows[feature]
 	return !exists
+}
+
+// SupportedOnExternalNode checks whether a feature is supported on a VM or a BM host.
+func SupportedOnExternalNode(feature featuregate.Feature) bool {
+	_, exists := DefaultAntreaFeatureGates[feature]
+	if !exists {
+		return false
+	}
+	_, exists = supportedFeaturesOnExternalNode[feature]
+	return exists
 }

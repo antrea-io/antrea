@@ -2975,6 +2975,12 @@ data:
       # Note that setting ProxyLoadBalancerIPs to false usually only makes sense when ProxyAll is set to true and
       # kube-proxy is removed from the cluser, otherwise kube-proxy will still load-balance this traffic.
       #proxyLoadBalancerIPs: true
+
+    # The role in which Antrea Agent is working. Supported values:
+    # - Node (default)
+    # - VM
+    # - BM
+    #agentRole: Node
   antrea-cni.conflist: |
     {
         "cniVersion":"0.3.0",
@@ -3074,7 +3080,7 @@ kind: ConfigMap
 metadata:
   labels:
     app: antrea
-  name: antrea-config-82h2mk24gg
+  name: antrea-config-fcbgm4gh75
   namespace: kube-system
 ---
 apiVersion: v1
@@ -3145,7 +3151,7 @@ spec:
             fieldRef:
               fieldPath: spec.serviceAccountName
         - name: ANTREA_CONFIG_MAP_NAME
-          value: antrea-config-82h2mk24gg
+          value: antrea-config-fcbgm4gh75
         image: projects.registry.vmware.com/antrea/antrea-ubuntu:latest
         imagePullPolicy: IfNotPresent
         livenessProbe:
@@ -3196,7 +3202,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-82h2mk24gg
+          name: antrea-config-fcbgm4gh75
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -3435,7 +3441,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-82h2mk24gg
+          name: antrea-config-fcbgm4gh75
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d

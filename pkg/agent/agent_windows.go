@@ -27,13 +27,21 @@ import (
 
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/interfacestore"
+	"antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/agent/util"
 	"antrea.io/antrea/pkg/ovs/ovsctl"
 	"antrea.io/antrea/pkg/util/ip"
 )
 
-// prepareHostNetwork creates HNS Network for containers.
 func (i *Initializer) prepareHostNetwork() error {
+	if i.role == types.CNIAgent {
+		return i.prepareHnsNetworkAndOVSExtension()
+	}
+	return nil
+}
+
+// prepareHnsNetworkAndOVSExtension creates HNS Network for containers, and enables OVS Extension on it.
+func (i *Initializer) prepareHnsNetworkAndOVSExtension() error {
 	// If the HNS Network already exists, return immediately.
 	hnsNetwork, err := hcsshim.GetHNSNetworkByName(util.LocalHNSNetwork)
 	if err == nil {
@@ -104,9 +112,17 @@ func (i *Initializer) prepareHostNetwork() error {
 	return util.PrepareHNSNetwork(subnetCIDR, i.nodeConfig.NodeTransportIPv4Addr, adapter, i.nodeConfig.UplinkNetConfig.Gateway, dnsServers, i.nodeConfig.UplinkNetConfig.Routes, i.ovsBridge)
 }
 
-// prepareOVSBridge adds local port and uplink to ovs bridge.
-// This function will delete OVS bridge and HNS network created by antrea on failure.
+// prepareOVSBridge operates OVS bridge
 func (i *Initializer) prepareOVSBridge() error {
+	if i.role == types.CNIAgent {
+		return i.prepareOVSBridgeOnHNSNetwork()
+	}
+	return nil
+}
+
+// prepareOVSBridgeOnHNSNetwork adds local port and uplink to ovs bridge after OVS Extension is enabled on HNSNetwork.
+// This function will delete OVS bridge and HNS network created by antrea on failure.
+func (i *Initializer) prepareOVSBridgeOnHNSNetwork() error {
 	hnsNetwork, err := hcsshim.GetHNSNetworkByName(util.LocalHNSNetwork)
 	defer func() {
 		// prepareOVSBridge only works on windows platform. The operation has a chance to fail on the first time agent
@@ -120,8 +136,10 @@ func (i *Initializer) prepareOVSBridge() error {
 		if err := i.ovsBridgeClient.Delete(); err != nil {
 			klog.Errorf("Failed to delete OVS bridge: %v", err)
 		}
-		if err := util.DeleteHNSNetwork(util.LocalHNSNetwork); err != nil {
-			klog.Errorf("Failed to cleanup host networking: %v", err)
+		if i.role == types.CNIAgent {
+			if err := util.DeleteHNSNetwork(util.LocalHNSNetwork); err != nil {
+				klog.Errorf("Failed to cleanup host networking: %v", err)
+			}
 		}
 	}()
 	if err != nil {
@@ -136,7 +154,7 @@ func (i *Initializer) prepareOVSBridge() error {
 	datapathID := strings.Replace(hnsNetwork.SourceMac, ":", "", -1)
 	datapathID = "0000" + datapathID
 	if err = i.ovsBridgeClient.SetDatapathID(datapathID); err != nil {
-		klog.Errorf("Failed to set datapath_id %s: %v", datapathID, err)
+		klog.ErrorS(err, "Failed to set OVS bridge datapath_id", "datapathID", datapathID)
 		return err
 	}
 

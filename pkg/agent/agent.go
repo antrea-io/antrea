@@ -100,6 +100,7 @@ type Initializer struct {
 	nodePortAddressesIPv6 []net.IP
 	networkReadyCh        chan<- struct{}
 	stopCh                <-chan struct{}
+	role                  types.AgentRole
 }
 
 func NewInitializer(
@@ -118,6 +119,7 @@ func NewInitializer(
 	egressConfig *config.EgressConfig,
 	networkReadyCh chan<- struct{},
 	stopCh <-chan struct{},
+	role types.AgentRole,
 	enableProxy bool,
 	proxyAll bool,
 	nodePortAddressesIPv4 []net.IP,
@@ -140,6 +142,7 @@ func NewInitializer(
 		egressConfig:          egressConfig,
 		networkReadyCh:        networkReadyCh,
 		stopCh:                stopCh,
+		role:                  role,
 		enableProxy:           enableProxy,
 		proxyAll:              proxyAll,
 		nodePortAddressesIPv4: nodePortAddressesIPv4,
@@ -178,13 +181,15 @@ func (i *Initializer) setupOVSBridge() error {
 		return err
 	}
 
-	if err := i.setupDefaultTunnelInterface(); err != nil {
-		return err
-	}
-	// Set up host gateway interface
-	err := i.setupGatewayInterface()
-	if err != nil {
-		return err
+	if i.role == types.CNIAgent {
+		if err := i.setupDefaultTunnelInterface(); err != nil {
+			return err
+		}
+		// Set up host gateway interface
+		err := i.setupGatewayInterface()
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -341,12 +346,9 @@ func (i *Initializer) Initialize() error {
 	// wg is used to wait for the asynchronous initialization.
 	var wg sync.WaitGroup
 
-	if err := i.initNodeLocalConfig(); err != nil {
+	if err := i.initLocalConfig(); err != nil {
 		return err
 	}
-
-	i.networkConfig.IPv4Enabled = config.IsIPv4Enabled(i.nodeConfig, i.networkConfig.TrafficEncapMode)
-	i.networkConfig.IPv6Enabled = config.IsIPv6Enabled(i.nodeConfig, i.networkConfig.TrafficEncapMode)
 
 	if err := i.prepareHostNetwork(); err != nil {
 		return err
@@ -368,23 +370,30 @@ func (i *Initializer) Initialize() error {
 		}
 	}
 
-	wg.Add(1)
-	// routeClient.Initialize() should be after i.setupOVSBridge() which
-	// creates the host gateway interface.
-	if err := i.routeClient.Initialize(i.nodeConfig, wg.Done); err != nil {
-		return err
-	}
+	if i.role == types.CNIAgent {
+		wg.Add(1)
+		// routeClient.Initialize() should be after i.setupOVSBridge() which
+		// creates the host gateway interface.
+		if err := i.routeClient.Initialize(i.nodeConfig, wg.Done); err != nil {
+			return err
+		}
 
-	// Install OpenFlow entries on OVS bridge.
-	if err := i.initOpenFlowPipeline(); err != nil {
-		return err
-	}
+		// Install OpenFlow entries on OVS bridge.
+		if err := i.initOpenFlowPipeline(); err != nil {
+			return err
+		}
 
-	// The Node's network is ready only when both synchronous and asynchronous initialization are done.
-	go func() {
-		wg.Wait()
-		close(i.networkReadyCh)
-	}()
+		// The Node's network is ready only when both synchronous and asynchronous initialization are done.
+		go func() {
+			wg.Wait()
+			close(i.networkReadyCh)
+		}()
+	} else {
+		// Install OpenFlow entries on OVS bridge.
+		if err := i.initOpenFlowPipeline(); err != nil {
+			return err
+		}
+	}
 	klog.Infof("Agent initialized NodeConfig=%v, NetworkConfig=%v", i.nodeConfig, i.networkConfig)
 	return nil
 }
@@ -439,51 +448,8 @@ func (i *Initializer) initOpenFlowPipeline() error {
 		klog.Errorf("Failed to initialize openflow client: %v", err)
 		return err
 	}
-
-	// On Windows platform, host network flows are needed for host traffic.
-	if err := i.initHostNetworkFlows(); err != nil {
-		klog.Errorf("Failed to install openflow entries for host network: %v", err)
-		return err
-	}
-
-	// Install OpenFlow entries to enable Pod traffic to external IP
-	// addresses.
-	if err := i.ofClient.InstallExternalFlows(i.egressConfig.ExceptCIDRs); err != nil {
-		klog.Errorf("Failed to install openflow entries for external connectivity: %v", err)
-		return err
-	}
-
-	// Set up flow entries for gateway interface, including classifier, skip spoof guard check,
-	// L3 forwarding and L2 forwarding
-	if err := i.ofClient.InstallGatewayFlows(); err != nil {
-		klog.Errorf("Failed to setup openflow entries for gateway: %v", err)
-		return err
-	}
-
-	if i.networkConfig.TrafficEncapMode.SupportsEncap() {
-		// Set up flow entries for the default tunnel port interface.
-		if err := i.ofClient.InstallDefaultTunnelFlows(); err != nil {
-			klog.Errorf("Failed to setup openflow entries for tunnel interface: %v", err)
-			return err
-		}
-	}
-
-	if !i.enableProxy {
-		// Set up flow entries to enable Service connectivity. Upstream kube-proxy is leveraged to
-		// provide load-balancing, and the flows installed by this method ensure that traffic sent
-		// from local Pods to any Service address can be forwarded to the host gateway interface
-		// correctly. Otherwise packets might be dropped by egress rules before they are DNATed to
-		// backend Pods.
-		if err := i.ofClient.InstallClusterServiceCIDRFlows([]*net.IPNet{i.serviceCIDR, i.serviceCIDRv6}); err != nil {
-			klog.Errorf("Failed to setup OpenFlow entries for Service CIDRs: %v", err)
-			return err
-		}
-	} else {
-		// Set up flow entries to enable Service connectivity. The agent proxy handles
-		// ClusterIP Services while the upstream kube-proxy is leveraged to handle
-		// any other kinds of Services.
-		if err := i.ofClient.InstallDefaultServiceFlows(i.nodePortAddressesIPv4, i.nodePortAddressesIPv6); err != nil {
-			klog.Errorf("Failed to setup default OpenFlow entries for ClusterIP Services: %v", err)
+	if i.role == types.CNIAgent {
+		if err := i.installPodNodeInitialFlows(); err != nil {
 			return err
 		}
 	}
@@ -792,11 +758,7 @@ func (i *Initializer) enableTunnelCsum(tunnelPortName string) error {
 
 // initNodeLocalConfig retrieves node's subnet CIDR from node.spec.PodCIDR, which is used for IPAM and setup
 // host gateway interface.
-func (i *Initializer) initNodeLocalConfig() error {
-	nodeName, err := env.GetNodeName()
-	if err != nil {
-		return err
-	}
+func (i *Initializer) initNodeLocalConfig(nodeName string) error {
 	node, err := i.client.CoreV1().Nodes().Get(context.TODO(), nodeName, metav1.GetOptions{})
 	if err != nil {
 		return fmt.Errorf("failed to get Node with name %s from K8s: %w", nodeName, err)
@@ -1140,4 +1102,82 @@ func (i *Initializer) patchNodeAnnotations(nodeName, key string, value interface
 // with NetworkPolicyOnly mode on public cloud setup, e.g., AKS.
 func (i *Initializer) getNodeInterfaceFromIP(nodeIPs *utilip.DualStackIPs) (v4IPNet *net.IPNet, v6IPNet *net.IPNet, iface *net.Interface, err error) {
 	return getIPNetDeviceFromIP(nodeIPs, sets.NewString(i.hostGateway))
+}
+
+func (i *Initializer) initLocalConfig() error {
+	nodeName, err := env.GetNodeName()
+	if err != nil {
+		return err
+	}
+	if i.role == types.CNIAgent {
+		err := i.initNodeLocalConfig(nodeName)
+		if err != nil {
+			return err
+		}
+		i.networkConfig.IPv4Enabled = config.IsIPv4Enabled(i.nodeConfig, i.networkConfig.TrafficEncapMode)
+		i.networkConfig.IPv6Enabled = config.IsIPv6Enabled(i.nodeConfig, i.networkConfig.TrafficEncapMode)
+		return nil
+	}
+	return i.initVMBMLocalConfig(nodeName)
+}
+
+func (i *Initializer) initVMBMLocalConfig(nodeName string) error {
+	i.nodeConfig = &config.NodeConfig{
+		Name:      nodeName,
+		OVSBridge: i.ovsBridge,
+	}
+	// Only IPv4 is required in ExternalNode feature.
+	i.networkConfig.IPv4Enabled = true
+	return nil
+}
+
+func (i *Initializer) installPodNodeInitialFlows() error {
+	// On Windows platform, host network flows are needed for host traffic.
+	if err := i.initHostNetworkFlows(); err != nil {
+		klog.Errorf("Failed to install openflow entries for host network: %v", err)
+		return err
+	}
+
+	// Install OpenFlow entries to enable Pod traffic to external IP
+	// addresses.
+	if err := i.ofClient.InstallExternalFlows(i.egressConfig.ExceptCIDRs); err != nil {
+		klog.Errorf("Failed to install openflow entries for external connectivity: %v", err)
+		return err
+	}
+
+	// Set up flow entries for gateway interface, including classifier, skip spoof guard check,
+	// L3 forwarding and L2 forwarding
+	if err := i.ofClient.InstallGatewayFlows(); err != nil {
+		klog.Errorf("Failed to setup openflow entries for gateway: %v", err)
+		return err
+	}
+
+	if i.networkConfig.TrafficEncapMode.SupportsEncap() {
+		// Set up flow entries for the default tunnel port interface.
+		if err := i.ofClient.InstallDefaultTunnelFlows(); err != nil {
+			klog.Errorf("Failed to setup openflow entries for tunnel interface: %v", err)
+			return err
+		}
+	}
+
+	if !i.enableProxy {
+		// Set up flow entries to enable Service connectivity. Upstream kube-proxy is leveraged to
+		// provide load-balancing, and the flows installed by this method ensure that traffic sent
+		// from local Pods to any Service address can be forwarded to the host gateway interface
+		// correctly. Otherwise packets might be dropped by egress rules before they are DNATed to
+		// backend Pods.
+		if err := i.ofClient.InstallClusterServiceCIDRFlows([]*net.IPNet{i.serviceCIDR, i.serviceCIDRv6}); err != nil {
+			klog.Errorf("Failed to setup OpenFlow entries for Service CIDRs: %v", err)
+			return err
+		}
+	} else {
+		// Set up flow entries to enable Service connectivity. The agent proxy handles
+		// ClusterIP Services while the upstream kube-proxy is leveraged to handle
+		// any other kinds of Services.
+		if err := i.ofClient.InstallDefaultServiceFlows(i.nodePortAddressesIPv4, i.nodePortAddressesIPv6); err != nil {
+			klog.Errorf("Failed to setup default OpenFlow entries for ClusterIP Services: %v", err)
+			return err
+		}
+	}
+	return nil
 }

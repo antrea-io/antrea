@@ -131,6 +131,12 @@ data:
       # Note that this option is experimental. If kube-proxy is removed, option kubeAPIServerOverride must be used to access
       # apiserver directly.
       #proxyAll: false
+
+    # The role in which Antrea Agent is working. Supported values:
+    # - Node (default)
+    # - VM
+    # - BM
+    #agentRole: Node
   antrea-cni.conflist: |
     {
         "cniVersion":"0.3.0",
@@ -149,7 +155,7 @@ kind: ConfigMap
 metadata:
   labels:
     app: antrea
-  name: antrea-windows-config-mf82kffb45
+  name: antrea-windows-config-kf2tt95f47
   namespace: kube-system
 ---
 apiVersion: apps/v1
@@ -237,7 +243,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-windows-config-mf82kffb45
+          name: antrea-windows-config-kf2tt95f47
         name: antrea-windows-config
       - configMap:
           defaultMode: 420

@@ -24,6 +24,7 @@ import (
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/openflow"
 	"antrea.io/antrea/pkg/agent/proxy"
+	"antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 	"antrea.io/antrea/pkg/ovs/ovsctl"
@@ -54,6 +55,7 @@ type agentQuerier struct {
 	proxier                  proxy.Proxier
 	networkPolicyInfoQuerier querier.AgentNetworkPolicyInfoQuerier
 	apiPort                  int
+	role                     types.AgentRole
 }
 
 func NewAgentQuerier(
@@ -66,6 +68,7 @@ func NewAgentQuerier(
 	proxier proxy.Proxier,
 	networkPolicyInfoQuerier querier.AgentNetworkPolicyInfoQuerier,
 	apiPort int,
+	role types.AgentRole,
 ) *agentQuerier {
 	return &agentQuerier{
 		nodeConfig:               nodeConfig,
@@ -76,7 +79,9 @@ func NewAgentQuerier(
 		ovsBridgeClient:          ovsBridgeClient,
 		proxier:                  proxier,
 		networkPolicyInfoQuerier: networkPolicyInfoQuerier,
-		apiPort:                  apiPort}
+		apiPort:                  apiPort,
+		role:                     role,
+	}
 }
 
 // GetNodeConfig returns NodeConfig.

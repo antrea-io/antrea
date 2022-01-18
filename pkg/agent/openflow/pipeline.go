@@ -425,6 +425,9 @@ type client struct {
 	ipProtocols []binding.Protocol
 	// ovsctlClient is the interface for executing OVS "ovs-ofctl" and "ovs-appctl" commands.
 	ovsctlClient ovsctl.OVSCtlClient
+	// role is antrea agent running mode, and possible values include. The role can decide what features are loaded in
+	// the runtime.
+	role types.AgentRole
 }
 
 func (c *client) GetTunnelVirtualMAC() net.HardwareAddr {
@@ -2681,6 +2684,7 @@ func (f *featureMulticast) externalMulticastReceiverFlow() binding.Flow {
 func NewClient(bridgeName string,
 	mgmtAddr string,
 	ovsDatapathType ovsconfig.OVSDatapathType,
+	agentRole types.AgentRole,
 	enableProxy bool,
 	enableAntreaPolicy bool,
 	enableEgress bool,
@@ -2703,6 +2707,7 @@ func NewClient(bridgeName string,
 		ovsctlClient:          ovsctl.NewClient(bridgeName),
 		ovsDatapathType:       ovsDatapathType,
 		ovsMetersAreSupported: ovsMetersAreSupported(ovsDatapathType),
+		role:                  agentRole,
 	}
 	c.ofEntryOperations = c
 	return c

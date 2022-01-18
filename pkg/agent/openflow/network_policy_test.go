@@ -519,7 +519,7 @@ func TestBatchInstallPolicyRuleFlows(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 			mockOperations := oftest.NewMockOFEntryOperations(ctrl)
-			ofClient := NewClient(bridgeName, bridgeMgmtAddr, ovsconfig.OVSDatapathSystem, false, true, false, false, false, false, false)
+			ofClient := NewClient(bridgeName, bridgeMgmtAddr, ovsconfig.OVSDatapathSystem, types.CNIAgent, false, true, false, false, false, false, false)
 			c = ofClient.(*client)
 			c.cookieAllocator = cookie.NewAllocator(0)
 			c.ofEntryOperations = mockOperations

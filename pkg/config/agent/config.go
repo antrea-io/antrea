@@ -189,6 +189,11 @@ type AgentConfig struct {
 	AntreaProxy AntreaProxyConfig `yaml:"antreaProxy,omitempty"`
 	// Egress related configurations.
 	Egress EgressConfig `yaml:"egress"`
+	// The role in which Antrea Agent is working. Supported values:
+	// - Node (default)
+	// - VM
+	// - BM
+	AgentRole string `yaml:"agentRole,omitempty"`
 }
 
 type AntreaProxyConfig struct {

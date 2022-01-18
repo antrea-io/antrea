@@ -53,6 +53,7 @@ import (
 	"antrea.io/antrea/pkg/agent/secondarynetwork/cnipodcache"
 	"antrea.io/antrea/pkg/agent/secondarynetwork/podwatch"
 	"antrea.io/antrea/pkg/agent/stats"
+	"antrea.io/antrea/pkg/agent/types"
 	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions"
 	"antrea.io/antrea/pkg/controller/externalippool"
 	"antrea.io/antrea/pkg/features"
@@ -83,6 +84,8 @@ var excludeNodePortDevices = []string{"antrea-egress0", "antrea-ingress0", "kube
 // run starts Antrea agent with the given options and waits for termination signal.
 func run(o *Options) error {
 	klog.Infof("Starting Antrea agent (version %s)", version.GetFullVersion())
+	// Parse Agent role.
+	agentRole := types.GetAgentRole(o.config.AgentRole)
 
 	// Windows platform doesn't support Egress feature yet.
 	egressEnabled := features.DefaultFeatureGate.Enabled(features.Egress) && !runtime.IsWindowsPlatform()
@@ -126,7 +129,7 @@ func run(o *Options) error {
 	ovsDatapathType := ovsconfig.OVSDatapathType(o.config.OVSDatapathType)
 	ovsBridgeClient := ovsconfig.NewOVSBridge(o.config.OVSBridge, ovsDatapathType, ovsdbConnection)
 	ovsBridgeMgmtAddr := ofconfig.GetMgmtAddress(o.config.OVSRunDir, o.config.OVSBridge)
-	ofClient := openflow.NewClient(o.config.OVSBridge, ovsBridgeMgmtAddr, ovsDatapathType,
+	ofClient := openflow.NewClient(o.config.OVSBridge, ovsBridgeMgmtAddr, ovsDatapathType, agentRole,
 		features.DefaultFeatureGate.Enabled(features.AntreaProxy),
 		features.DefaultFeatureGate.Enabled(features.AntreaPolicy),
 		egressEnabled,
@@ -209,6 +212,7 @@ func run(o *Options) error {
 		egressConfig,
 		networkReadyCh,
 		stopCh,
+		agentRole,
 		features.DefaultFeatureGate.Enabled(features.AntreaProxy),
 		o.config.AntreaProxy.ProxyAll,
 		nodePortAddressesIPv4,
@@ -220,17 +224,20 @@ func run(o *Options) error {
 	}
 	nodeConfig := agentInitializer.GetNodeConfig()
 
-	nodeRouteController := noderoute.NewNodeRouteController(
-		k8sClient,
-		informerFactory,
-		ofClient,
-		ovsBridgeClient,
-		routeClient,
-		ifaceStore,
-		networkConfig,
-		nodeConfig,
-		agentInitializer.GetWireGuardClient(),
-		o.config.AntreaProxy.ProxyAll)
+	var nodeRouteController *noderoute.Controller
+	if agentRole == types.CNIAgent {
+		nodeRouteController = noderoute.NewNodeRouteController(
+			k8sClient,
+			informerFactory,
+			ofClient,
+			ovsBridgeClient,
+			routeClient,
+			ifaceStore,
+			networkConfig,
+			nodeConfig,
+			agentInitializer.GetWireGuardClient(),
+			o.config.AntreaProxy.ProxyAll)
+	}
 
 	var groupCounters []proxytypes.GroupCounter
 	groupIDUpdates := make(chan string, 100)
@@ -353,31 +360,35 @@ func run(o *Options) error {
 		}
 	}
 
-	isChaining := false
-	if networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {
-		isChaining = true
-	}
-	cniServer := cniserver.New(
-		o.config.CNISocket,
-		o.config.HostProcPathPrefix,
-		nodeConfig,
-		k8sClient,
-		isChaining,
-		enableBridgingMode, // activate AntreaIPAM in CNIServer when bridging mode is enabled
-		routeClient,
-		networkReadyCh)
-
+	isWorkerNode := agentRole == types.CNIAgent
+	var cniServer *cniserver.CNIServer
 	var cniPodInfoStore cnipodcache.CNIPodInfoStore
-	if features.DefaultFeatureGate.Enabled(features.SecondaryNetwork) {
-		cniPodInfoStore = cnipodcache.NewCNIPodInfoStore()
-		err = cniServer.Initialize(ovsBridgeClient, ofClient, ifaceStore, podUpdateChannel, cniPodInfoStore)
-		if err != nil {
-			return fmt.Errorf("error initializing CNI server with cniPodInfoStore cache: %v", err)
+	if isWorkerNode {
+		isChaining := false
+		if networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {
+			isChaining = true
 		}
-	} else {
-		err = cniServer.Initialize(ovsBridgeClient, ofClient, ifaceStore, podUpdateChannel, nil)
-		if err != nil {
-			return fmt.Errorf("error initializing CNI server: %v", err)
+		cniServer = cniserver.New(
+			o.config.CNISocket,
+			o.config.HostProcPathPrefix,
+			nodeConfig,
+			k8sClient,
+			isChaining,
+			enableBridgingMode, // activate AntreaIPAM in CNIServer when bridging mode is enabled
+			routeClient,
+			networkReadyCh)
+
+		if features.DefaultFeatureGate.Enabled(features.SecondaryNetwork) {
+			cniPodInfoStore = cnipodcache.NewCNIPodInfoStore()
+			err = cniServer.Initialize(ovsBridgeClient, ofClient, ifaceStore, podUpdateChannel, cniPodInfoStore)
+			if err != nil {
+				return fmt.Errorf("error initializing CNI server with cniPodInfoStore cache: %v", err)
+			}
+		} else {
+			err = cniServer.Initialize(ovsBridgeClient, ofClient, ifaceStore, podUpdateChannel, nil)
+			if err != nil {
+				return fmt.Errorf("error initializing CNI server: %v", err)
+			}
 		}
 	}
 
@@ -466,15 +477,15 @@ func run(o *Options) error {
 
 	log.StartLogFileNumberMonitor(stopCh)
 
-	go podUpdateChannel.Run(stopCh)
-
 	go routeClient.Run(stopCh)
 
-	go cniServer.Run(stopCh)
+	if isWorkerNode {
+		go podUpdateChannel.Run(stopCh)
+		go cniServer.Run(stopCh)
+		go nodeRouteController.Run(stopCh)
+	}
 
 	go antreaClientProvider.Run(stopCh)
-
-	go nodeRouteController.Run(stopCh)
 
 	go networkPolicyController.Run(stopCh)
 
@@ -599,7 +610,8 @@ func run(o *Options) error {
 		ovsBridgeClient,
 		proxier,
 		networkPolicyController,
-		o.config.APIPort)
+		o.config.APIPort,
+		agentRole)
 
 	agentMonitor := monitor.NewAgentMonitor(crdClient, agentQuerier)
 
@@ -618,7 +630,8 @@ func run(o *Options) error {
 		cipherSuites,
 		cipher.TLSVersionMap[o.config.TLSMinVersion],
 		v4Enabled,
-		v6Enabled)
+		v6Enabled,
+		!isWorkerNode)
 	if err != nil {
 		return fmt.Errorf("error when creating agent API server: %v", err)
 	}

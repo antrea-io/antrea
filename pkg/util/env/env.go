@@ -24,7 +24,10 @@ import (
 )
 
 const (
-	NodeNameEnvKey        = "NODE_NAME"
+	NodeNameEnvKey = "NODE_NAME"
+	// ExternalNodeEnvKey is an environment variable used in ExternalNode feature to tell the expected name with which
+	// antrea agent is running. This is also used in the shell where antctl is running on a VM host.
+	ExternalNodeEnvKey    = "EXTERNAL_NODE"
 	podNameEnvKey         = "POD_NAME"
 	podNamespaceEnvKey    = "POD_NAMESPACE"
 	svcAcctNameEnvKey     = "SERVICEACCOUNT_NAME"
@@ -40,22 +43,28 @@ const (
 // GetNodeName returns the node's name used in Kubernetes, based on the priority:
 // - Environment variable NODE_NAME, which should be set by Downward API
 // - OS's hostname
-func GetNodeName() (string, error) {
-	nodeName := os.Getenv(NodeNameEnvKey)
+func GetNodeName() (nodeName string, err error) {
+	defer func() {
+		if runtime.GOOS == "windows" {
+			nodeName = strings.ToLower(nodeName)
+		}
+	}()
+	nodeName = os.Getenv(NodeNameEnvKey)
 	if nodeName != "" {
-		return nodeName, nil
+		return
 	}
 	klog.Infof("Environment variable %s not found, using hostname instead", NodeNameEnvKey)
-	var err error
+	nodeName = os.Getenv(ExternalNodeEnvKey)
+	if nodeName != "" {
+		return
+	}
+	klog.Infof("Environment variable %s not found, using hostname instead", ExternalNodeEnvKey)
 	nodeName, err = os.Hostname()
 	if err != nil {
 		klog.Errorf("Failed to get local hostname: %v", err)
-		return "", err
+		return
 	}
-	if runtime.GOOS == "windows" {
-		return strings.ToLower(nodeName), nil
-	}
-	return nodeName, nil
+	return
 }
 
 // GetPodName returns name of the Pod where the code executes.

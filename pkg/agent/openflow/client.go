@@ -781,14 +781,26 @@ func (c *client) Initialize(roundInfo types.RoundInfo, nodeConfig *config.NodeCo
 // generatePipelines generates table list for every pipeline from all activated features. Note that, tables are not realized
 // in OVS bridge in this function.
 func (c *client) generatePipelines() {
-	c.featurePodConnectivity = newFeaturePodConnectivity(c.cookieAllocator,
-		c.ipProtocols,
-		c.nodeConfig,
-		c.networkConfig,
-		c.connectUplinkToBridge,
-		c.enableMulticast)
-	c.activatedFeatures = append(c.activatedFeatures, c.featurePodConnectivity)
-	c.traceableFeatures = append(c.traceableFeatures, c.featurePodConnectivity)
+	if c.role == types.CNIAgent {
+		c.featurePodConnectivity = newFeaturePodConnectivity(c.cookieAllocator,
+			c.ipProtocols,
+			c.nodeConfig,
+			c.networkConfig,
+			c.connectUplinkToBridge,
+			c.enableMulticast)
+		c.activatedFeatures = append(c.activatedFeatures, c.featurePodConnectivity)
+		c.traceableFeatures = append(c.traceableFeatures, c.featurePodConnectivity)
+
+		c.featureService = newFeatureService(c.cookieAllocator,
+			c.ipProtocols,
+			c.nodeConfig,
+			c.bridge,
+			c.enableProxy,
+			c.proxyAll,
+			c.connectUplinkToBridge)
+		c.activatedFeatures = append(c.activatedFeatures, c.featureService)
+		c.traceableFeatures = append(c.traceableFeatures, c.featureService)
+	}
 
 	c.featureNetworkPolicy = newFeatureNetworkPolicy(c.cookieAllocator,
 		c.ipProtocols,
@@ -799,16 +811,6 @@ func (c *client) generatePipelines() {
 		c.connectUplinkToBridge)
 	c.activatedFeatures = append(c.activatedFeatures, c.featureNetworkPolicy)
 	c.traceableFeatures = append(c.traceableFeatures, c.featureNetworkPolicy)
-
-	c.featureService = newFeatureService(c.cookieAllocator,
-		c.ipProtocols,
-		c.nodeConfig,
-		c.bridge,
-		c.enableProxy,
-		c.proxyAll,
-		c.connectUplinkToBridge)
-	c.activatedFeatures = append(c.activatedFeatures, c.featureService)
-	c.traceableFeatures = append(c.traceableFeatures, c.featureService)
 
 	if c.enableEgress {
 		c.featureEgress = newFeatureEgress(c.cookieAllocator, c.ipProtocols, c.nodeConfig)
@@ -917,7 +919,9 @@ func (c *client) ReplayFlows() {
 		klog.Errorf("Error during flow replay: %v", err)
 	}
 
-	c.featureService.replayGroups()
+	if c.featureService != nil {
+		c.featureService.replayGroups()
+	}
 
 	for _, activeFeature := range c.activatedFeatures {
 		if err := c.ofEntryOperations.AddAll(activeFeature.replayFlows()); err != nil {

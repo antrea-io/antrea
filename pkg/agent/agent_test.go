@@ -412,7 +412,7 @@ func TestInitNodeLocalConfig(t *testing.T) {
 			defer mockGetIPNetDeviceFromIP(nodeIPNet, ipDevice)()
 			defer mockNodeNameEnv(nodeName)()
 
-			require.NoError(t, initializer.initNodeLocalConfig())
+			require.NoError(t, initializer.initNodeLocalConfig(nodeName))
 			assert.Equal(t, expectedNodeConfig, *initializer.nodeConfig)
 			node, err := client.CoreV1().Nodes().Get(context.TODO(), nodeName, metav1.GetOptions{})
 			require.NoError(t, err)
