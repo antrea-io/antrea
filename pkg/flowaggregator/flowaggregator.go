@@ -121,11 +121,31 @@ var (
 		"sourcePodLabels",
 		"destinationPodLabels",
 	}
+	antreaFlowEndSecondsElementList = []string{
+		"flowEndSecondsFromSourceNode",
+		"flowEndSecondsFromDestinationNode",
+	}
+	antreaThroughputElementList = []string{
+		"throughput",
+		"reverseThroughput",
+	}
+	antreaSourceThroughputElementList = []string{
+		"throughputFromSourceNode",
+		"reverseThroughputFromSourceNode",
+	}
+	antreaDestinationThroughputElementList = []string{
+		"throughputFromDestinationNode",
+		"reverseThroughputFromDestinationNode",
+	}
 	aggregationElements = &ipfixintermediate.AggregationElements{
 		NonStatsElements:                   nonStatsElementList,
 		StatsElements:                      statsElementList,
 		AggregatedSourceStatsElements:      antreaSourceStatsElementList,
 		AggregatedDestinationStatsElements: antreaDestinationStatsElementList,
+		AntreaFlowEndSecondsElements:       antreaFlowEndSecondsElementList,
+		ThroughputElements:                 antreaThroughputElementList,
+		SourceThroughputElements:           antreaSourceThroughputElementList,
+		DestinationThroughputElements:      antreaDestinationThroughputElementList,
 	}
 
 	correlateFields = []string{
@@ -289,7 +309,8 @@ func (fa *flowAggregator) InitCollectingProcess() error {
 			IsEncrypted:   false,
 		}
 	}
-	cpInput.NumExtraElements = len(antreaSourceStatsElementList) + len(antreaDestinationStatsElementList) + len(antreaLabelsElementList)
+	cpInput.NumExtraElements = len(antreaSourceStatsElementList) + len(antreaDestinationStatsElementList) + len(antreaLabelsElementList) +
+		len(antreaFlowEndSecondsElementList) + len(antreaThroughputElementList) + len(antreaSourceThroughputElementList) + len(antreaDestinationThroughputElementList)
 	var err error
 	fa.collectingProcess, err = ipfix.NewIPFIXCollectingProcess(cpInput)
 	return err
@@ -457,7 +478,6 @@ func (fa *flowAggregator) sendFlowKeyRecord(key ipfixintermediate.FlowKey, recor
 	if err = fa.aggregationProcess.ResetStatElementsInRecord(record.Record); err != nil {
 		return err
 	}
-
 	klog.V(4).Infof("Data set sent successfully: %d Bytes sent", sentBytes)
 	fa.numRecordsExported = fa.numRecordsExported + 1
 	return nil
@@ -474,33 +494,21 @@ func (fa *flowAggregator) sendTemplateSet(isIPv6 bool) (int, error) {
 		templateID = fa.templateIDv6
 	}
 	for _, ie := range ianaInfoElements {
-		element, err := fa.registry.GetInfoElement(ie, ipfixregistry.IANAEnterpriseID)
-		if err != nil {
-			return 0, fmt.Errorf("%s not present. returned error: %v", ie, err)
-		}
-		ie, err := ipfixentities.DecodeAndCreateInfoElementWithValue(element, nil)
+		ie, err := fa.createInfoElementForTemplateSet(ie, ipfixregistry.IANAEnterpriseID)
 		if err != nil {
 			return 0, err
 		}
 		elements = append(elements, ie)
 	}
 	for _, ie := range ianaReverseInfoElements {
-		element, err := fa.registry.GetInfoElement(ie, ipfixregistry.IANAReversedEnterpriseID)
-		if err != nil {
-			return 0, fmt.Errorf("%s not present. returned error: %v", ie, err)
-		}
-		ie, err := ipfixentities.DecodeAndCreateInfoElementWithValue(element, nil)
+		ie, err := fa.createInfoElementForTemplateSet(ie, ipfixregistry.IANAReversedEnterpriseID)
 		if err != nil {
 			return 0, err
 		}
 		elements = append(elements, ie)
 	}
 	for _, ie := range antreaInfoElements {
-		element, err := fa.registry.GetInfoElement(ie, ipfixregistry.AntreaEnterpriseID)
-		if err != nil {
-			return 0, fmt.Errorf("%s not present. returned error: %v", ie, err)
-		}
-		ie, err := ipfixentities.DecodeAndCreateInfoElementWithValue(element, nil)
+		ie, err := fa.createInfoElementForTemplateSet(ie, ipfixregistry.AntreaEnterpriseID)
 		if err != nil {
 			return 0, err
 		}
@@ -511,22 +519,44 @@ func (fa *flowAggregator) sendTemplateSet(isIPv6 bool) (int, error) {
 	for i := range statsElementList {
 		// Add Antrea source stats fields
 		ieName := antreaSourceStatsElementList[i]
-		element, err := fa.registry.GetInfoElement(ieName, ipfixregistry.AntreaEnterpriseID)
-		if err != nil {
-			return 0, fmt.Errorf("%s not present. returned error: %v", ieName, err)
-		}
-		ie, err := ipfixentities.DecodeAndCreateInfoElementWithValue(element, nil)
+		ie, err := fa.createInfoElementForTemplateSet(ieName, ipfixregistry.AntreaEnterpriseID)
 		if err != nil {
 			return 0, err
 		}
 		elements = append(elements, ie)
 		// Add Antrea destination stats fields
 		ieName = antreaDestinationStatsElementList[i]
-		element, err = fa.registry.GetInfoElement(ieName, ipfixregistry.AntreaEnterpriseID)
+		ie, err = fa.createInfoElementForTemplateSet(ieName, ipfixregistry.AntreaEnterpriseID)
 		if err != nil {
-			return 0, fmt.Errorf("%s not present. returned error: %v", ieName, err)
+			return 0, err
 		}
-		ie, err = ipfixentities.DecodeAndCreateInfoElementWithValue(element, nil)
+		elements = append(elements, ie)
+	}
+	for _, ie := range antreaFlowEndSecondsElementList {
+		ie, err := fa.createInfoElementForTemplateSet(ie, ipfixregistry.AntreaEnterpriseID)
+		if err != nil {
+			return 0, err
+		}
+		elements = append(elements, ie)
+	}
+	for i := range antreaThroughputElementList {
+		// Add common throughput fields
+		ieName := antreaThroughputElementList[i]
+		ie, err := fa.createInfoElementForTemplateSet(ieName, ipfixregistry.AntreaEnterpriseID)
+		if err != nil {
+			return 0, err
+		}
+		elements = append(elements, ie)
+		// Add source node specific throughput fields
+		ieName = antreaSourceThroughputElementList[i]
+		ie, err = fa.createInfoElementForTemplateSet(ieName, ipfixregistry.AntreaEnterpriseID)
+		if err != nil {
+			return 0, err
+		}
+		elements = append(elements, ie)
+		// Add destination node specific throughput fields
+		ieName = antreaDestinationThroughputElementList[i]
+		ie, err = fa.createInfoElementForTemplateSet(ieName, ipfixregistry.AntreaEnterpriseID)
 		if err != nil {
 			return 0, err
 		}
@@ -534,11 +564,7 @@ func (fa *flowAggregator) sendTemplateSet(isIPv6 bool) (int, error) {
 	}
 	if fa.includePodLabels {
 		for _, ie := range antreaLabelsElementList {
-			element, err := fa.registry.GetInfoElement(ie, ipfixregistry.AntreaEnterpriseID)
-			if err != nil {
-				return 0, fmt.Errorf("error when getting InformationElement %s from registry: %v", ie, err)
-			}
-			ie, err := ipfixentities.DecodeAndCreateInfoElementWithValue(element, nil)
+			ie, err := fa.createInfoElementForTemplateSet(ie, ipfixregistry.AntreaEnterpriseID)
 			if err != nil {
 				return 0, err
 			}
@@ -667,4 +693,16 @@ func (fa *flowAggregator) GetRecordMetrics() querier.Metrics {
 		NumFlows:           fa.aggregationProcess.GetNumFlows(),
 		NumConnToCollector: fa.collectingProcess.GetNumConnToCollector(),
 	}
+}
+
+func (fa *flowAggregator) createInfoElementForTemplateSet(ieName string, enterpriseID uint32) (ipfixentities.InfoElementWithValue, error) {
+	element, err := fa.registry.GetInfoElement(ieName, enterpriseID)
+	if err != nil {
+		return nil, fmt.Errorf("%s not present. returned error: %v", ieName, err)
+	}
+	ie, err := ipfixentities.DecodeAndCreateInfoElementWithValue(element, nil)
+	if err != nil {
+		return nil, err
+	}
+	return ie, nil
 }
