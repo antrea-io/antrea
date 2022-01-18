@@ -110,6 +110,8 @@ were pushed to all the Nodes. You can then run the tests from the top-level
 directory with `go test -v -timeout=30m antrea.io/antrea/test/e2e`
 (the `-v` enables verbose output).
 
+### Running the tests with vagrant
+
 If you are running the test for the first time and are using the scripts we
 provide under `infra/vagrant` to provision your Kubernetes cluster, you will
 therefore need the following steps:
@@ -122,36 +124,42 @@ therefore need the following steps:
 If you need to test an updated version of Antrea, just run
 `./infra/vagrant/push_antrea.sh` and then run the tests again.
 
-By default, if a test case fails, we write some useful debug information to a
-temporary directory on disk. This information includes the detailed description
-(obtained with `kubectl describe`) and the logs (obtained with `kubectl logs`)
-of each Antrea Pod at the time the test case exited. When running the tests in
-verbose mode (i.e. with `-v`), the test logs will tell you the location of that
-temporary directory. You may also choose your own directory using
-`--logs-export-dir`. For example:
+### Running the tests with remote (existing K8s cluster)
 
-```bash
-mkdir antrea-test-logs
-go test -count=1 -v -run=TestDeletePod antrea.io/antrea/test/e2e --logs-export-dir `pwd`/antrea-test-logs
+If you already have a K8s cluster, these steps should be followed to run the e2e tests.
+
+First, you should provide the ssh information for each Node in the cluster. Here is an example:
+
+```text
+Host <Control-Plane-Node>
+    HostName <Control-Plane-IP>
+    Port 22
+    user ubuntu
+    IdentityFile /home/ubuntu/.ssh/id_rsa
+Host <Worker-Node>
+    HostName <Worker-Node-IP>
+    Port 22
+    user ubuntu
+    IdentityFile /home/ubuntu/.ssh/id_rsa
 ```
 
-If the user provides a log directory which was used for a previous run, existing
-contents (subdirectories for each test case) will be overridden.
-By default the description and logs for Antrea Pods are only written to disk if a
-test fails. You can choose to dump this information unconditionally with
-`--logs-export-on-success`.
+Make sure the `Host` entry for each Node matches the K8s Node name. The `Port` is the port used by the ssh service on the Node.
 
-### Testing the Prometheus Integration
+Besides, you should add the public key to `authorized_keys` of each Node and set `PubkeyAuthentication` of ssh service to `yes`.
 
-The Prometheus integration tests can be run as part of the e2e tests when
-enabled explicitly.
+Second, the kubeconfig of the cluster should be copied to the right location, e.g. `$HOME/.kube/config` or the path specified by `-remote.kubeconfig`.
 
-* To load Antrea into the cluster with Prometheus enabled, use:
-`./infra/vagrant/push_antrea.sh --prometheus`
-* To run the Prometheus tests within the e2e suite, use:
-`go test -v antrea.io/antrea/test/e2e --prometheus`
+Third, the `antrea.yml` (and `antrea-windows.yml` if the cluster has Windows Nodes) should be put under the `$HOME` directory of the control-plane Node.
 
-## Running the e2e tests on a Kind cluster
+Now you can start e2e tests using the command below:
+
+```bash
+go test -v antrea.io/antrea/test/e2e -provider=remote
+```
+
+You can specify ssh and kubeconfig locations with `-remote.sshconfig` and `-remote.kubeconfig`. The default location of `-remote.sshconfig` is `$HOME/.ssh/config` and the default location of `-remote.kubeconfig` is `$HOME/.kube/config`.
+
+### Running the e2e tests on a Kind cluster
 
 The simplest way is to run the following command:
 
@@ -191,6 +199,35 @@ You can load the new image into the kind cluster using the command below:
 ```bash
 kind load docker-image projects.registry.vmware.com/antrea/antrea-ubuntu:latest --name <kind_cluster_name>
 ```
+
+By default, if a test case fails, we write some useful debug information to a
+temporary directory on disk. This information includes the detailed description
+(obtained with `kubectl describe`) and the logs (obtained with `kubectl logs`)
+of each Antrea Pod at the time the test case exited. When running the tests in
+verbose mode (i.e. with `-v`), the test logs will tell you the location of that
+temporary directory. You may also choose your own directory using
+`--logs-export-dir`. For example:
+
+```bash
+mkdir antrea-test-logs
+go test -count=1 -v -run=TestDeletePod antrea.io/antrea/test/e2e --logs-export-dir `pwd`/antrea-test-logs
+```
+
+If the user provides a log directory which was used for a previous run, existing
+contents (subdirectories for each test case) will be overridden.
+By default the description and logs for Antrea Pods are only written to disk if a
+test fails. You can choose to dump this information unconditionally with
+`--logs-export-on-success`.
+
+### Testing the Prometheus Integration
+
+The Prometheus integration tests can be run as part of the e2e tests when
+enabled explicitly.
+
+* To load Antrea into the cluster with Prometheus enabled, use:
+`./infra/vagrant/push_antrea.sh --prometheus`
+* To run the Prometheus tests within the e2e suite, use:
+`go test -v antrea.io/antrea/test/e2e --prometheus`
 
 ## Running the performance test
 
