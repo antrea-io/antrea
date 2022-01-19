@@ -781,25 +781,28 @@ func (i *Initializer) initNodeLocalConfig() error {
 		return err
 	}
 
+	// nodeInterface is the interface that has K8s Node IP. transportInterface is the interface that is used for
+	// tunneling or routing the traffic across Nodes. It defaults to nodeInterface and can be overridden by the
+	// configuration parameters TransportInterface and TransportInterfaceCIDRs.
+	var nodeInterface, transportInterface *net.Interface
+	// nodeIPv4Addr and nodeIPv6Addr are the IP addresses of nodeInterface.
+	// transportIPv4Addr and transportIPv6Addr are the IP addresses of transportInterface.
 	var nodeIPv4Addr, nodeIPv6Addr, transportIPv4Addr, transportIPv6Addr *net.IPNet
-	var transportInterfaceName string
-	var localIntf *net.Interface
 	// Find the interface configured with Node IP and use it for Pod traffic.
 	ipAddrs, err := k8s.GetNodeAddrs(node)
 	if err != nil {
 		return fmt.Errorf("failed to obtain local IP addresses from K8s: %w", err)
 	}
-	nodeIPv4Addr, nodeIPv6Addr, localIntf, err = getIPNetDeviceFromIP(ipAddrs)
+	nodeIPv4Addr, nodeIPv6Addr, nodeInterface, err = getIPNetDeviceFromIP(ipAddrs)
 	if err != nil {
 		return fmt.Errorf("failed to get local IPNet device with IP %v: %v", ipAddrs, err)
 	}
 	transportIPv4Addr = nodeIPv4Addr
 	transportIPv6Addr = nodeIPv6Addr
-	transportInterfaceName = localIntf.Name
+	transportInterface = nodeInterface
 	if i.networkConfig.TransportIface != "" {
 		// Find the configured transport interface, and update its IP address in Node's annotation.
-		transportIPv4Addr, transportIPv6Addr, localIntf, err = getTransportIPNetDeviceByName(i.networkConfig.TransportIface, i.ovsBridge)
-		transportInterfaceName = localIntf.Name
+		transportIPv4Addr, transportIPv6Addr, transportInterface, err = getTransportIPNetDeviceByName(i.networkConfig.TransportIface, i.ovsBridge)
 		if err != nil {
 			return fmt.Errorf("failed to get local IPNet device with transport interface %s: %v", i.networkConfig.TransportIface, err)
 		}
@@ -815,8 +818,7 @@ func (i *Initializer) initNodeLocalConfig() error {
 			return err
 		}
 	} else if len(i.networkConfig.TransportIfaceCIDRs) > 0 {
-		transportIPv4Addr, transportIPv6Addr, localIntf, err = getIPNetDeviceByCIDRs(i.networkConfig.TransportIfaceCIDRs)
-		transportInterfaceName = localIntf.Name
+		transportIPv4Addr, transportIPv6Addr, transportInterface, err = getIPNetDeviceByCIDRs(i.networkConfig.TransportIfaceCIDRs)
 		if err != nil {
 			return fmt.Errorf("failed to get local IPNet device with transport Address CIDR %s: %v", i.networkConfig.TransportIfaceCIDRs, err)
 		}
@@ -838,32 +840,32 @@ func (i *Initializer) initNodeLocalConfig() error {
 			i.patchNodeAnnotations(nodeName, types.NodeTransportAddressAnnotationKey, nil)
 		}
 	}
-	i.networkConfig.TransportIface = transportInterfaceName
 
 	// Update the Node's MAC address in the annotations of the Node. The MAC address will be used for direct routing by
 	// OVS in noencap case on Windows Nodes. As a mixture of Linux and Windows nodes is possible, Linux Nodes' MAC
 	// addresses should be reported too to make them discoverable for Windows Nodes.
 	if i.networkConfig.TrafficEncapMode.SupportsNoEncap() {
 		klog.Infof("Updating Node MAC annotation")
-		if err := i.patchNodeAnnotations(nodeName, types.NodeMACAddressAnnotationKey, localIntf.HardwareAddr.String()); err != nil {
+		if err := i.patchNodeAnnotations(nodeName, types.NodeMACAddressAnnotationKey, transportInterface.HardwareAddr.String()); err != nil {
 			return err
 		}
 	}
 
 	i.nodeConfig = &config.NodeConfig{
-		Name:                  nodeName,
-		OVSBridge:             i.ovsBridge,
-		DefaultTunName:        defaultTunInterfaceName,
-		NodeIPv4Addr:          nodeIPv4Addr,
-		NodeIPv6Addr:          nodeIPv6Addr,
-		NodeTransportIPv4Addr: transportIPv4Addr,
-		NodeTransportIPv6Addr: transportIPv6Addr,
-		UplinkNetConfig:       new(config.AdapterNetConfig),
-		NodeLocalInterfaceMTU: localIntf.MTU,
-		WireGuardConfig:       i.wireGuardConfig,
+		Name:                       nodeName,
+		OVSBridge:                  i.ovsBridge,
+		DefaultTunName:             defaultTunInterfaceName,
+		NodeIPv4Addr:               nodeIPv4Addr,
+		NodeIPv6Addr:               nodeIPv6Addr,
+		NodeTransportInterfaceName: transportInterface.Name,
+		NodeTransportIPv4Addr:      transportIPv4Addr,
+		NodeTransportIPv6Addr:      transportIPv6Addr,
+		UplinkNetConfig:            new(config.AdapterNetConfig),
+		NodeTransportInterfaceMTU:  transportInterface.MTU,
+		WireGuardConfig:            i.wireGuardConfig,
 	}
 
-	mtu, err := i.getNodeMTU(localIntf)
+	mtu, err := i.getNodeMTU(transportInterface)
 	if err != nil {
 		return err
 	}
@@ -952,7 +954,7 @@ func (i *Initializer) initializeIPSec() error {
 
 // initializeWireguard checks if preconditions are met for using WireGuard and initializes WireGuard client or cleans up.
 func (i *Initializer) initializeWireGuard() error {
-	i.wireGuardConfig.MTU = i.nodeConfig.NodeLocalInterfaceMTU - config.WireGuardOverhead
+	i.wireGuardConfig.MTU = i.nodeConfig.NodeTransportInterfaceMTU - config.WireGuardOverhead
 	wgClient, err := wireguard.New(i.client, i.nodeConfig, i.wireGuardConfig)
 	if err != nil {
 		return err
@@ -1025,11 +1027,11 @@ func getRoundInfo(bridgeClient ovsconfig.OVSBridgeClient) types.RoundInfo {
 	return roundInfo
 }
 
-func (i *Initializer) getNodeMTU(localIntf *net.Interface) (int, error) {
+func (i *Initializer) getNodeMTU(transportInterface *net.Interface) (int, error) {
 	if i.mtu != 0 {
 		return i.mtu, nil
 	}
-	mtu := localIntf.MTU
+	mtu := transportInterface.MTU
 	// Make sure mtu is set on the interface.
 	if mtu <= 0 {
 		return 0, fmt.Errorf("Failed to fetch Node MTU : %v", mtu)

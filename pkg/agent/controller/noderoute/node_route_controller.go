@@ -782,7 +782,7 @@ func (c *Controller) getNodeTransportAddrs(node *corev1.Node) (*utilip.DualStack
 			}
 			return transportAddrs, nil
 		}
-		klog.InfoS("Transport address is not found, using NodeIP instead")
+		klog.InfoS("Transport address is not found, using NodeIP instead", "node", node.Name)
 	}
 	// Use NodeIP if the transport IP address is not set or not found.
 	peerNodeIPs, err := k8s.GetNodeAddrs(node)
