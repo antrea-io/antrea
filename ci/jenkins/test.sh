@@ -657,6 +657,16 @@ if [[ $FLEXIBLE_IPAM == true ]]; then
     ./hack/generate-manifest.sh --flexible-ipam > build/yamls/antrea.yml
 fi
 
+if [[ $TESTCASE =~ "multicast" ]]; then
+    CONTROL_NODE=$(kubectl get nodes | grep master |awk '{print $1}') 
+    EXTERNAL_INTERFACES=("ens224")
+    MULTICAST_INTERFACES=("ens224")
+    #IFS=',';EXTERNAL_INTERFACES_NAME="${EXTERNAL_INTERFACES[*]}";IFS=$'\t\n'
+    #IFS=',';MULTICAST_INTERFACES_NAME="${MULTICAST_INTERFACES[*]}";IFS=$'\t\n'
+    #kubectl annotate nodes $CONTROL_NODE external-interfaces=[$EXTERNAL_INTERFACES_NAME] --overwrite
+    #./hack/generate-manifest.sh --multicast --multicast-interfaces $MULTICAST_INTERFACES_NAME > build/yamls/antrea.yml
+fi
+
 clean_tmp
 if [[ ${TESTCASE} == "windows-install-ovs" ]]; then
     run_install_windows_ovs
