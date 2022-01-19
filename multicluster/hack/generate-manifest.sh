@@ -29,9 +29,6 @@ Generate a YAML manifest for Antrea MultiCluster using Kustomize and print it to
         --member  | -m                      Generate a manifest for a Cluster as member in a ClusterSet
         --help    | -h                      Print this message and exit
 
-This tool uses kustomize (https://github.com/kubernetes-sigs/kustomize) to generate manifests for
-Antrea MultiCluster Controller. please run 'make kustomize' first
-
 Environment variables IMG_NAME and IMG_TAG must be set when release mode is enabled.
 "
 
@@ -91,11 +88,19 @@ if [ "$MODE" == "release" ] && [ -z "$IMG_NAME" ]; then
     exit 1
 fi
 
-THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+WORK_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
-KUSTOMIZE=$THIS_DIR/../bin/kustomize
+source $WORK_DIR/../../hack/verify-kustomize.sh
 
-KUSTOMIZATION_DIR=$THIS_DIR/../config
+if [ -z "$KUSTOMIZE" ]; then
+    KUSTOMIZE="$(verify_kustomize)"
+elif ! $KUSTOMIZE version > /dev/null 2>&1; then
+    echoerr "$KUSTOMIZE does not appear to be a valid kustomize binary"
+    print_help
+    exit 1
+fi
+
+KUSTOMIZATION_DIR=$WORK_DIR/../config
 
 cd $KUSTOMIZATION_DIR
 

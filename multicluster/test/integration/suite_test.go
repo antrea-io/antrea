@@ -132,8 +132,9 @@ var _ = BeforeSuite(func() {
 	k8sClient.Create(ctx, testNS)
 	k8sClient.Create(ctx, testNSStale)
 	clusterSetReconciler := &multiclustercontrollers.MemberClusterSetReconciler{
-		Client: k8sManager.GetClient(),
-		Scheme: k8sManager.GetScheme(),
+		Client:    k8sManager.GetClient(),
+		Scheme:    k8sManager.GetScheme(),
+		Namespace: LeaderNamespace,
 	}
 	err = clusterSetReconciler.SetupWithManager(k8sManager)
 	Expect(err).ToNot(HaveOccurred())
