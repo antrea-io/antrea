@@ -30,7 +30,7 @@ func TestAntreaIPAMService(t *testing.T) {
 	defer teardownTest(t, data)
 
 	// Create AntreaIPAM IPPool and test Namespace
-	ippool, err := createIPPool(t, data, 0)
+	ippool, err := createIPPool(t, data, "0")
 	if err != nil {
 		t.Fatalf("Creating IPPool failed, err=%+v", err)
 	}

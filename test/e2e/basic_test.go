@@ -31,6 +31,7 @@ import (
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/podinterface"
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/openflow/cookie"
+	crdv1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
 	"antrea.io/antrea/pkg/clusteridentity"
 )
 
@@ -186,11 +187,11 @@ func (data *TestData) testDeletePod(t *testing.T, podName string, nodeName strin
 	}
 	if namespace == testAntreaIPAMNamespace {
 		doesIPAllocationExist = func(podIP string) bool {
-			_, isAllocated, _, err := checkIPPoolAllocation(t, data, "test-ippool-ipv4-0", podIP)
+			_, ipAddressState, err := checkIPPoolAllocation(t, data, "test-ippool-ipv4-0", podIP)
 			if err != nil {
 				t.Fatalf("Cannot check IPPool allocation: %v", err)
 			}
-			return err == nil && isAllocated
+			return err == nil && ipAddressState != nil && ipAddressState.Phase == crdv1alpha2.IPAddressPhaseAllocated
 		}
 	}
 
