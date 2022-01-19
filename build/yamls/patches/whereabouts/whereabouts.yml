@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: antrea-agent
+spec:
+  template:
+    spec:
+      initContainers:
+        - name: install-whereabouts-config
+          image: antrea
+          resources:
+            requests:
+              cpu: "100m"
+          command: ["install_whereabouts_config"]
+          volumeMounts:
+          - name: whereabouts-cni-conf
+            mountPath: /host/etc/cni/net.d/whereabouts.d
+          - name: whereabouts-secret
+            mountPath: /var/run/secrets/whereabouts
+      containers:
+        - name: antrea-agent
+          volumeMounts:
+          - name: whereabouts-cni-conf
+            mountPath: /host/etc/cni/net.d/whereabouts.d
+          - name: whereabouts-secret
+            mountPath: /var/run/secrets/whereabouts
+      volumes:
+      - hostPath:
+          path: /host/etc/cni/net.d/whereabouts.d
+        name: whereabouts-cni-conf
+      - name: whereabouts-secret
+        secret:
+          secretName: whereabouts-cni-secret

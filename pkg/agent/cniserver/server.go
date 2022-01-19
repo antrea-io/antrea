@@ -39,6 +39,7 @@ import (
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/openflow"
 	"antrea.io/antrea/pkg/agent/route"
+	"antrea.io/antrea/pkg/agent/secondarynetwork/cnipodcache"
 	"antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/agent/util"
 	cnipb "antrea.io/antrea/pkg/apis/cni/v1beta1"
@@ -99,17 +100,18 @@ func (arbitrator *containerAccessArbitrator) unlockContainer(containerKey string
 }
 
 type CNIServer struct {
-	cniSocket            string
-	supportedCNIVersions map[string]bool
-	serverVersion        string
-	nodeConfig           *config.NodeConfig
-	hostProcPathPrefix   string
-	kubeClient           clientset.Interface
-	containerAccess      *containerAccessArbitrator
-	podConfigurator      *podConfigurator
-	isChaining           bool
-	antreaIPAM           bool
-	routeClient          route.Interface
+	cniSocket               string
+	supportedCNIVersions    map[string]bool
+	serverVersion           string
+	nodeConfig              *config.NodeConfig
+	hostProcPathPrefix      string
+	kubeClient              clientset.Interface
+	containerAccess         *containerAccessArbitrator
+	podConfigurator         *podConfigurator
+	isChaining              bool
+	antreaIPAM              bool
+	routeClient             route.Interface
+	secondaryNetworkEnabled bool
 	// networkReadyCh notifies that the network is ready so new Pods can be created. Therefore, CmdAdd waits for it.
 	networkReadyCh <-chan struct{}
 }
@@ -378,6 +380,10 @@ func (s *CNIServer) validatePrevResult(cfgArgs *cnipb.CniCmdArgs, k8sCNIArgs *ar
 	return nil
 }
 
+func (s *CNIServer) GetPodConfigurator() *podConfigurator {
+	return s.podConfigurator
+}
+
 func (s *CNIServer) CmdAdd(ctx context.Context, request *cnipb.CniCmdRequest) (*cnipb.CniCmdResponse, error) {
 	klog.Infof("Received CmdAdd request %v", request)
 	cniConfig, response := s.checkRequestMessage(request)
@@ -468,6 +474,15 @@ func (s *CNIServer) CmdAdd(ctx context.Context, request *cnipb.CniCmdRequest) (*
 	klog.Infof("CmdAdd for container %v succeeded", cniConfig.ContainerId)
 	// mark success as true to avoid rollback
 	success = true
+
+	if s.secondaryNetworkEnabled {
+		// Go cache the CNI server info at CNIConfigInfo cache, for podWatch usage
+		cniInfo := &cnipodcache.CNIConfigInfo{CNIVersion: cniVersion, PodName: podName, PodNameSpace: podNamespace,
+			ContainerID: cniConfig.ContainerId, ContainerNetNS: netNS, PodCNIDeleted: false,
+			MTU: cniConfig.MTU}
+		s.podConfigurator.podInfoStore.AddCNIConfigInfo(cniInfo)
+	}
+
 	return resultToResponse(result), nil
 }
 
@@ -499,6 +514,16 @@ func (s *CNIServer) CmdDel(_ context.Context, request *cnipb.CniCmdRequest) (
 		return s.configInterfaceFailureResponse(err), nil
 	}
 	klog.Infof("CmdDel for container %v succeeded", cniConfig.ContainerId)
+	if s.secondaryNetworkEnabled {
+		podName := string(cniConfig.K8S_POD_NAME)
+		podNamespace := string(cniConfig.K8S_POD_NAMESPACE)
+		containerInfo := s.podConfigurator.podInfoStore.GetCNIConfigInfoByContainerID(podName, podNamespace, cniConfig.ContainerId)
+		if containerInfo != nil {
+			// Update PodCNIDeleted = true.
+			// This is to let Podwatch controller know that the CNI server cleaned up this Pod's primary network configuration.
+			s.podConfigurator.podInfoStore.SetPodCNIDeleted(containerInfo)
+		}
+	}
 	return &cnipb.CniCmdResponse{CniResult: []byte("")}, nil
 }
 
@@ -565,11 +590,20 @@ func (s *CNIServer) Initialize(
 	ofClient openflow.Client,
 	ifaceStore interfacestore.InterfaceStore,
 	entityUpdates chan<- types.EntityReference,
+	podInfoStore cnipodcache.CNIPodInfoStore,
 ) error {
 	var err error
+	// If podInfoStore is not nil, secondaryNetwork configuration is supported.
+	if podInfoStore != nil {
+		s.secondaryNetworkEnabled = true
+	} else {
+		s.secondaryNetworkEnabled = false
+	}
+
 	s.podConfigurator, err = newPodConfigurator(
 		ovsBridgeClient, ofClient, s.routeClient, ifaceStore, s.nodeConfig.GatewayConfig.MAC,
 		ovsBridgeClient.GetOVSDatapathType(), ovsBridgeClient.IsHardwareOffloadEnabled(), entityUpdates,
+		podInfoStore,
 	)
 	if err != nil {
 		return fmt.Errorf("error during initialize podConfigurator: %v", err)

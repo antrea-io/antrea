@@ -25,6 +25,8 @@ import (
 
 	crdclientset "antrea.io/antrea/pkg/client/clientset/versioned"
 	legacycrdclientset "antrea.io/antrea/pkg/legacyclient/clientset/versioned"
+
+	netdefclient "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/client/clientset/versioned/typed/k8s.cni.cncf.io/v1"
 )
 
 // CreateClients creates kube clients from the given config.
@@ -69,6 +71,21 @@ func CreateLegacyCRDClient(config componentbaseconfig.ClientConnectionConfigurat
 		return nil, err
 	}
 	return legacyCrdClient, nil
+}
+
+// CreateNetworkAttachDefClient creates net-attach-def client handle from the given config.
+func CreateNetworkAttachDefClient(config componentbaseconfig.ClientConnectionConfiguration, kubeAPIServerOverride string) (netdefclient.K8sCniCncfIoV1Interface, error) {
+	kubeConfig, err := createRestConfig(config, kubeAPIServerOverride)
+	if err != nil {
+		return nil, err
+	}
+
+	netAttachDefClient, err := netdefclient.NewForConfig(kubeConfig)
+	if err != nil {
+		return nil, err
+	}
+	return netAttachDefClient, nil
+
 }
 
 func createRestConfig(config componentbaseconfig.ClientConnectionConfiguration, kubeAPIServerOverride string) (*rest.Config, error) {

@@ -50,6 +50,8 @@ import (
 	proxytypes "antrea.io/antrea/pkg/agent/proxy/types"
 	"antrea.io/antrea/pkg/agent/querier"
 	"antrea.io/antrea/pkg/agent/route"
+	"antrea.io/antrea/pkg/agent/secondarynetwork/cnipodcache"
+	"antrea.io/antrea/pkg/agent/secondarynetwork/podwatch"
 	"antrea.io/antrea/pkg/agent/stats"
 	"antrea.io/antrea/pkg/agent/types"
 	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions"
@@ -345,9 +347,19 @@ func run(o *Options) error {
 		antreaIPAM,
 		routeClient,
 		networkReadyCh)
-	err = cniServer.Initialize(ovsBridgeClient, ofClient, ifaceStore, entityUpdates)
-	if err != nil {
-		return fmt.Errorf("error initializing CNI server: %v", err)
+
+	var cniPodInfoStore cnipodcache.CNIPodInfoStore
+	if features.DefaultFeatureGate.Enabled(features.SecondaryNetwork) {
+		cniPodInfoStore = cnipodcache.NewCNIPodInfoStore()
+		err = cniServer.Initialize(ovsBridgeClient, ofClient, ifaceStore, entityUpdates, cniPodInfoStore)
+		if err != nil {
+			return fmt.Errorf("error initializing CNI server with cniPodInfoStore cache: %v", err)
+		}
+	} else {
+		err = cniServer.Initialize(ovsBridgeClient, ofClient, ifaceStore, entityUpdates, nil)
+		if err != nil {
+			return fmt.Errorf("error initializing CNI server: %v", err)
+		}
 	}
 
 	var traceflowController *traceflow.Controller
@@ -474,6 +486,26 @@ func run(o *Options) error {
 	go nodeRouteController.Run(stopCh)
 
 	go networkPolicyController.Run(stopCh)
+
+	if features.DefaultFeatureGate.Enabled(features.SecondaryNetwork) {
+		// Create the NetworkAttachmentDefinition client, which handles access to secondary network object definition from the API Server.
+		netAttachDefClient, err := k8s.CreateNetworkAttachDefClient(o.config.ClientConnection, o.config.KubeAPIServerOverride)
+		if err != nil {
+			return fmt.Errorf("NetworkAttachmentDefinition client creation failed. %v", err)
+		}
+		// Initialize podController to handle secondary network configuration for Pods with k8s.v1.cni.cncf.io/networks Annotation defined.
+		podWatchController, err := podwatch.InitializePodController(
+			k8sClient,
+			netAttachDefClient,
+			informerFactory,
+			nodeConfig.Name,
+			cniPodInfoStore,
+			cniServer)
+		if err != nil {
+			return fmt.Errorf("failed to initialize Pod Controller for secondary network interface management: %v", err)
+		}
+		go podWatchController.Run(stopCh)
+	}
 
 	if features.DefaultFeatureGate.Enabled(features.Egress) {
 		go externalIPPoolController.Run(stopCh)
