@@ -1,6 +1,3 @@
-//go:build linux
-// +build linux
-
 // Copyright 2021 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -25,7 +22,6 @@ import (
 	"time"
 
 	"github.com/containernetworking/cni/pkg/types/current"
-	sriovcniutils "github.com/k8snetworkplumbingwg/sriov-cni/pkg/utils"
 	"google.golang.org/grpc"
 	"k8s.io/klog/v2"
 
@@ -84,34 +80,12 @@ func GetPodContainerDeviceIDs(podName string, podNamespace string) ([]string, er
 		}
 	}
 	klog.V(2).Infof("Pod container device IDs of %s/%s are: %v", podNamespace, podName, podDeviceIDs)
-	return []string{}, nil
+	return podDeviceIDs, nil
 }
 
-// getVFInfo takes in a VF's PCI device ID and returns its PF and VF ID.
-func getVFInfo(vfPCI string) (string, int, error) {
-	var vfID int
-
-	pf, err := sriovcniutils.GetPfName(vfPCI)
-	if err != nil {
-		return "", vfID, err
-	}
-
-	vfID, err = sriovcniutils.GetVfid(vfPCI, pf)
-	if err != nil {
-		return "", vfID, err
-	}
-
-	return pf, vfID, nil
-}
-
-// getVFLinkName returns a VF's network interface name given its PCI address.
-func getVFLinkName(pciAddress string) (string, error) {
-	return sriovcniutils.GetVFLinkNames(pciAddress)
-}
-
-// configureSecondaryInterface adds Secondary Interface support.
+// ConfigureSriovSecondaryInterface adds Secondary Interface support.
 // Limitation: only SR-IOV interface is supported as of now.
-func (pc *podConfigurator) configureSecondaryInterface(
+func (pc *podConfigurator) ConfigureSriovSecondaryInterface(
 	podName string,
 	podNameSpace string,
 	containerID string,

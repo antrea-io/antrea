@@ -80,6 +80,10 @@ const (
 	// alpha: v1.5
 	// Enable Multicast.
 	Multicast featuregate.Feature = "Multicast"
+
+	// alpha: v1.5
+	// Enable Secondary interface feature for Antrea.
+	SecondaryNetwork featuregate.Feature = "SecondaryNetwork"
 )
 
 var (
@@ -105,6 +109,7 @@ var (
 		NodePortLocal:      {Default: true, PreRelease: featuregate.Beta},
 		NodeIPAM:           {Default: false, PreRelease: featuregate.Alpha},
 		Multicast:          {Default: false, PreRelease: featuregate.Alpha},
+		SecondaryNetwork:   {Default: false, PreRelease: featuregate.Alpha},
 	}
 
 	// UnsupportedFeaturesOnWindows records the features not supported on
@@ -118,10 +123,11 @@ var (
 	// can have different FeatureSpecs between Linux and Windows, we should
 	// still define a separate defaultAntreaFeatureGates map for Windows.
 	unsupportedFeaturesOnWindows = map[featuregate.Feature]struct{}{
-		NodePortLocal: {},
-		Egress:        {},
-		AntreaIPAM:    {},
-		Multicast:     {},
+		NodePortLocal:    {},
+		Egress:           {},
+		AntreaIPAM:       {},
+		Multicast:        {},
+		SecondaryNetwork: {},
 	}
 )
 

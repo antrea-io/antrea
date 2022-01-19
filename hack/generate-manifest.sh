@@ -48,6 +48,7 @@ Generate a YAML manifest for Antrea using Kustomize and print it to stdout.
         --wireguard-go                Generate a manifest with WireGuard (golang implementation) encryption enabled.
                                       This option will work only for Kind clusters (when using '--kind').
         --flexible-ipam               Generates a manifest for flexible ipam mode.
+        --whereabouts                 Generates a manifest which enables whereabouts configuration for secondary network IPAM.
         --help, -h                    Print this message and exit
 
 In 'release' mode, environment variables IMG_NAME and IMG_TAG must be set.
@@ -89,6 +90,7 @@ SIMULATOR=false
 CUSTOM_ADM_CONTROLLER=false
 HW_OFFLOAD=false
 SRIOV=false
+WHEREABOUTS=false
 WIREGUARD_GO=false
 FLEXIBLE_IPAM=false
 
@@ -189,6 +191,10 @@ case $key in
     ;;
     --flexible-ipam)
     FLEXIBLE_IPAM=true
+    shift
+    ;;
+    --whereabouts)
+    WHEREABOUTS=true
     shift
     ;;
     -h|--help)
@@ -504,6 +510,17 @@ if $SRIOV; then
     $KUSTOMIZE edit add base $BASE
     $KUSTOMIZE edit add patch --path sriov.yml
     BASE=../sriov
+    cd ..
+fi
+
+if $WHEREABOUTS; then
+    mkdir whereabouts && cd whereabouts
+    cp ../../patches/whereabouts/*.yml .
+    touch kustomization.yml
+    $KUSTOMIZE edit add base $BASE
+    $KUSTOMIZE edit add patch --path whereabouts.yml
+    $KUSTOMIZE edit add resource whereabouts-rbac.yml
+    BASE=../whereabouts
     cd ..
 fi
 
