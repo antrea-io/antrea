@@ -87,9 +87,8 @@ func (i *Initializer) prepareHostNetwork() error {
 		return err
 	}
 	i.nodeConfig.UplinkNetConfig.DNSServers = dnsServers
-	// Save routes which are configured on the uplink interface.
-	// The routes on the host will be lost when moving the network configuration of the uplink interface
-	// to the OVS bridge local interface. The saved routes will be restored on host after that.
+	// Save routes which are configured on the uplink interface, and configure them on the management virtual adapter
+	// if Windows host doesn't move the configuration automatically.
 	if err = i.saveHostRoutes(); err != nil {
 		return err
 	}
@@ -98,7 +97,7 @@ func (i *Initializer) prepareHostNetwork() error {
 	if subnetCIDR == nil {
 		return fmt.Errorf("failed to find valid IPv4 PodCIDR")
 	}
-	return util.PrepareHNSNetwork(subnetCIDR, i.nodeConfig.NodeTransportIPv4Addr, adapter)
+	return util.PrepareHNSNetwork(subnetCIDR, i.nodeConfig.NodeTransportIPv4Addr, adapter, i.nodeConfig.UplinkNetConfig.Gateway, dnsServers, i.nodeConfig.UplinkNetConfig.Routes, i.ovsBridge)
 }
 
 // prepareOVSBridge adds local port and uplink to ovs bridge.
@@ -155,12 +154,13 @@ func (i *Initializer) prepareOVSBridge() error {
 	// If uplink is already exists, return.
 	uplinkNetConfig := i.nodeConfig.UplinkNetConfig
 	uplink := uplinkNetConfig.Name
-	if _, err := i.ovsBridgeClient.GetOFPort(uplink, false); err == nil {
+	if _, err = i.ovsBridgeClient.GetOFPort(uplink, false); err == nil {
 		klog.Infof("Uplink %s already exists, skip the configuration", uplink)
 		return err
 	}
 	// Create uplink port.
-	uplinkPortUUID, err := i.ovsBridgeClient.CreateUplinkPort(uplink, config.UplinkOFPort, nil)
+	var uplinkPortUUID string
+	uplinkPortUUID, err = i.ovsBridgeClient.CreateUplinkPort(uplink, config.UplinkOFPort, nil)
 	if err != nil {
 		klog.Errorf("Failed to add uplink port %s: %v", uplink, err)
 		return err
@@ -170,37 +170,9 @@ func (i *Initializer) prepareOVSBridge() error {
 	i.ifaceStore.AddInterface(uplinkInterface)
 	ovsCtlClient := ovsctl.NewClient(i.ovsBridge)
 
-	// Move network configuration of uplink interface to OVS bridge local interface.
-	// - The net configuration of uplink will be restored by OS if the attached HNS network is deleted.
-	// - When ovs-vswitchd is down, antrea-agent will disable OVS Extension. The OVS bridge local interface will work
-	//   like a normal interface on host and is responsible for forwarding host traffic.
-	if err = util.EnableHostInterface(brName); err != nil {
-		return err
-	}
-	if err = util.SetAdapterMACAddress(brName, &uplinkNetConfig.MAC); err != nil {
-		return err
-	}
-	// TODO: Configure IPv6 Address.
-	if err = util.ConfigureInterfaceAddressWithDefaultGateway(brName, uplinkNetConfig.IP, uplinkNetConfig.Gateway); err != nil {
-		if !strings.Contains(err.Error(), "Instance MSFT_NetIPAddress already exists") {
-			return err
-		}
-		err = nil
-		klog.V(4).Infof("Address: %s already exists when configuring IP on interface %s", uplinkNetConfig.IP.String(), brName)
-	}
-	// Restore the host routes which are lost when moving the network configuration of the uplink interface to OVS bridge interface.
-	if err = i.restoreHostRoutes(); err != nil {
-		return err
-	}
-
-	if uplinkNetConfig.DNSServers != "" {
-		if err = util.SetAdapterDNSServers(brName, uplinkNetConfig.DNSServers); err != nil {
-			return err
-		}
-	}
 	// Set the uplink with "no-flood" config, so that the IP of local Pods and "antrea-gw0" will not be leaked to the
 	// underlay network by the "normal" flow entry.
-	if err := ovsCtlClient.SetPortNoFlood(config.UplinkOFPort); err != nil {
+	if err = ovsCtlClient.SetPortNoFlood(config.UplinkOFPort); err != nil {
 		klog.Errorf("Failed to set the uplink port with no-flood config: %v", err)
 		return err
 	}
@@ -279,7 +251,7 @@ func (i *Initializer) restoreHostRoutes() error {
 func GetTransportIPNetDeviceByName(ifaceName string, ovsBridgeName string) (*net.IPNet, *net.IPNet, *net.Interface, error) {
 	// Find transport Interface in the order: ifaceName -> "vEthernet (ifaceName)" -> br-int. Return immediately if
 	// an interface using the specified name exists. Using "vEthernet (ifaceName)" or br-int is for restart agent case.
-	for _, name := range []string{ifaceName, fmt.Sprintf("%s (%s)", util.ContainerVNICPrefix, ifaceName), ovsBridgeName} {
+	for _, name := range []string{ifaceName, util.VirtualAdapterName(ifaceName), ovsBridgeName} {
 		ipNet, _, link, err := util.GetIPNetDeviceByName(name)
 		if err == nil {
 			return ipNet, nil, link, nil

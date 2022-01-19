@@ -31,6 +31,8 @@ const (
 	TunnelInterface
 	// UplinkInterface is used to mark current interface is for uplink port
 	UplinkInterface
+	// HostInterface is used to mark current interface is for host
+	HostInterface
 
 	AntreaInterfaceTypeKey = "antrea-type"
 	AntreaGateway          = "gateway"
@@ -147,6 +149,10 @@ func NewIPSecTunnelInterface(interfaceName string, tunnelType ovsconfig.TunnelTy
 func NewUplinkInterface(uplinkName string) *InterfaceConfig {
 	uplinkConfig := &InterfaceConfig{InterfaceName: uplinkName, Type: UplinkInterface}
 	return uplinkConfig
+}
+
+func NewHostInterface(hostInterfaceName string) *InterfaceConfig {
+	return &InterfaceConfig{InterfaceName: hostInterfaceName, Type: HostInterface}
 }
 
 // TODO: remove this method after IPv4/IPv6 dual-stack is supported completely.
