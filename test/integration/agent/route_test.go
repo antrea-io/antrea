@@ -457,7 +457,7 @@ func TestSyncGatewayKernelRoute(t *testing.T) {
 	}
 	require.NoError(t, netlink.AddrAdd(gwLink, &netlink.Addr{IPNet: gwNet}), "configuring gw IP failed")
 
-	routeClient, err := route.NewClient(&config.NetworkConfig{TrafficEncapMode: config.TrafficEncapModeEncap}, false, false, false)
+	routeClient, err := route.NewClient(&config.NetworkConfig{TrafficEncapMode: config.TrafficEncapModeEncap}, false, false, false, false)
 	assert.NoError(t, err)
 	err = routeClient.Initialize(nodeConfig, func() {})
 	assert.NoError(t, err)
