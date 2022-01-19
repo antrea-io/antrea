@@ -171,25 +171,22 @@ func EnableIPForwarding(ifaceName string) error {
 	return err
 }
 
-// RemoveManagementInterface removes the management interface of the HNS Network, and then the physical interface can be
-// added to the OVS bridge. This function is called only if Hyper-V feature is installed on the host.
-func RemoveManagementInterface(networkName string) error {
-	var err error
-	var maxRetry = 3
-	var i = 0
-	cmd := fmt.Sprintf("Get-VMSwitch -ComputerName $(hostname) -Name %s  | Set-VMSwitch -ComputerName $(hostname) -AllowManagementOS $false ", networkName)
-	// Retry the operation here because an error is returned at the first invocation.
-	for i < maxRetry {
-		_, err = ps.RunCommand(cmd)
-		if err == nil {
-			return nil
-		}
-		i++
+func RenameVMNetworkAdapter(networkName string, macStr, newName string, renameNetAdapter bool) error {
+	cmd := fmt.Sprintf(`$name=$(Get-VMNetworkAdapter -ManagementOS -ComputerName "$(hostname)" -SwitchName "%s" | ? MacAddress -EQ "%s").Name; Rename-VMNetworkAdapter -ManagementOS -ComputerName "$(hostname)" -Name "$name" -NewName "%s"`, networkName, macStr, newName)
+	if _, err := ps.RunCommand(cmd); err != nil {
+		return err
 	}
-	return err
+	if renameNetAdapter {
+		oriNetAdapterName := VirtualAdapterName(newName)
+		cmd = fmt.Sprintf(`Get-NetAdapter -Name "%s" | Rename-NetAdapter -NewName "%s"`, oriNetAdapterName, newName)
+		if _, err := ps.RunCommand(cmd); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
-// ConfigureMACAddress set specified MAC address on interface.
+// SetAdapterMACAddress sets specified MAC address on interface.
 func SetAdapterMACAddress(adapterName string, macConfig *net.HardwareAddr) error {
 	macAddr := strings.Replace(macConfig.String(), ":", "", -1)
 	cmd := fmt.Sprintf("Set-NetAdapterAdvancedProperty -Name %s -RegistryKeyword NetworkAddress -RegistryValue %s",
@@ -374,16 +371,66 @@ func ConfigureLinkAddresses(idx int, ipNets []*net.IPNet) error {
 }
 
 // PrepareHNSNetwork creates HNS Network for containers.
-func PrepareHNSNetwork(subnetCIDR *net.IPNet, nodeIPNet *net.IPNet, uplinkAdapter *net.Interface) error {
+func PrepareHNSNetwork(subnetCIDR *net.IPNet, nodeIPNet *net.IPNet, uplinkAdapter *net.Interface, nodeGateway string, dnsServers string, routes []interface{}, newName string) error {
 	klog.InfoS("Creating HNSNetwork", "name", LocalHNSNetwork, "subnet", subnetCIDR, "nodeIP", nodeIPNet, "adapter", uplinkAdapter)
 	hnsNet, err := CreateHNSNetwork(LocalHNSNetwork, subnetCIDR, nodeIPNet, uplinkAdapter)
 	if err != nil {
 		return fmt.Errorf("error creating HNSNetwork: %v", err)
 	}
 
+	success := false
+	defer func() {
+		if !success {
+			hnsNet.Delete()
+		}
+	}()
+
+	vNicName := VirtualAdapterName(uplinkAdapter.Name)
+	index, found, err := adapterIPExists(nodeIPNet.IP, vNicName)
+	if err != nil {
+		return err
+	}
+	// By default, "found" should be true after Windows creates the HNSNetwork. The following check is for some corner
+	// cases that Windows fails to move the physical adapter's IP address to the virtual network adapter, e.g., DHCP
+	// Server fails to allocate IP to new virtual network.
+	if !found {
+		klog.InfoS("Moving uplink configuration to the management virtual network adapter", "adapter", vNicName)
+		if err := ConfigureInterfaceAddressWithDefaultGateway(vNicName, nodeIPNet, nodeGateway); err != nil {
+			klog.ErrorS(err, "Failed to configure IP and gateway on the management virtual network adapter", "adapter", vNicName, "ip", nodeIPNet.String())
+			return err
+		}
+		if dnsServers != "" {
+			if err := SetAdapterDNSServers(vNicName, dnsServers); err != nil {
+				klog.ErrorS(err, "Failed to configure DNS servers on the management virtual network adapter", "adapter", vNicName, "dnsServers", dnsServers)
+				return err
+			}
+		}
+		for _, route := range routes {
+			rt := route.(Route)
+			newRt := Route{
+				LinkIndex:         index,
+				DestinationSubnet: rt.DestinationSubnet,
+				GatewayAddress:    rt.GatewayAddress,
+				RouteMetric:       rt.RouteMetric,
+			}
+			if err := NewNetRoute(&newRt); err != nil {
+				return err
+			}
+		}
+		klog.InfoS("Moved uplink configuration to the management virtual network adapter", "adapter", vNicName)
+	}
+	if newName != "" {
+		// Rename the vnic created by Windows host with the given newName, then it can be used by OVS when creating bridge port.
+		uplinkMACStr := strings.Replace(uplinkAdapter.HardwareAddr.String(), ":", "", -1)
+		// Rename NetAdapter in the meanwhile, then the network adapter can be treated as a host network adapter other than
+		// a vm network adapter.
+		if err = RenameVMNetworkAdapter(LocalHNSNetwork, uplinkMACStr, newName, true); err != nil {
+			return err
+		}
+	}
+
 	// Enable OVS Extension on the HNS Network. If an error occurs, delete the HNS Network and return the error.
-	if err = enableHNSOnOVS(hnsNet); err != nil {
-		hnsNet.Delete()
+	if err = EnableHNSNetworkExtension(hnsNet.Id, OVSExtensionID); err != nil {
 		return err
 	}
 
@@ -391,8 +438,24 @@ func PrepareHNSNetwork(subnetCIDR *net.IPNet, nodeIPNet *net.IPNet, uplinkAdapte
 		return err
 	}
 
-	klog.Infof("Created HNSNetwork with name %s id %s", hnsNet.Name, hnsNet.Id)
+	success = true
+	klog.InfoS("Created HNSNetwork", "name", hnsNet.Name, "id", hnsNet.Id)
 	return nil
+}
+
+func adapterIPExists(ip net.IP, adapter string) (int, bool, error) {
+	iface, err := net.InterfaceByName(adapter)
+	if err != nil {
+		return 0, false, err
+	}
+	cmd := fmt.Sprintf(`Get-NetIPAddress -IPAddress %s -InterfaceIndex %d`, ip.String(), iface.Index)
+	if _, err = ps.RunCommand(cmd); err != nil {
+		if strings.Contains(err.Error(), "No matching MSFT_NetIPAddress objects found") {
+			return iface.Index, false, nil
+		}
+		return 0, false, err
+	}
+	return iface.Index, true, nil
 }
 
 // EnableRSCOnVSwitch enables RSC in the vSwitch to reduce host CPU utilization and increase throughput for virtual
@@ -425,26 +488,6 @@ func EnableRSCOnVSwitch(vSwitch string) error {
 	return nil
 }
 
-func enableHNSOnOVS(hnsNet *hcsshim.HNSNetwork) error {
-	// Release OS management for HNS Network if Hyper-V is enabled.
-	hypervEnabled, err := WindowsHyperVEnabled()
-	if err != nil {
-		return err
-	}
-	if hypervEnabled {
-		if err := RemoveManagementInterface(LocalHNSNetwork); err != nil {
-			klog.Errorf("Failed to remove the interface managed by OS for HNSNetwork %s", LocalHNSNetwork)
-			return err
-		}
-	}
-
-	// Enable the HNS Network with OVS extension.
-	if err := EnableHNSNetworkExtension(hnsNet.Id, OVSExtensionID); err != nil {
-		return err
-	}
-	return err
-}
-
 // GetDefaultGatewayByInterfaceIndex returns the default gateway configured on the specified interface.
 func GetDefaultGatewayByInterfaceIndex(ifIndex int) (string, error) {
 	cmd := fmt.Sprintf("$(Get-NetRoute -InterfaceIndex %d -DestinationPrefix 0.0.0.0/0 ).NextHop", ifIndex)
@@ -470,7 +513,7 @@ func GetDNServersByInterfaceIndex(ifIndex int) (string, error) {
 
 // SetAdapterDNSServers configures DNSServers on network adapter.
 func SetAdapterDNSServers(adapterName, dnsServers string) error {
-	cmd := fmt.Sprintf("Set-DnsClientServerAddress -InterfaceAlias %s -ServerAddresses %s", adapterName, dnsServers)
+	cmd := fmt.Sprintf(`Set-DnsClientServerAddress -InterfaceAlias "%s" -ServerAddresses "%s"`, adapterName, dnsServers)
 	if _, err := ps.RunCommand(cmd); err != nil {
 		return err
 	}
@@ -788,4 +831,8 @@ func ReplaceNetNeighbor(neighbor *Neighbor) error {
 		return err
 	}
 	return NewNetNeighbor(neighbor)
+}
+
+func VirtualAdapterName(name string) string {
+	return fmt.Sprintf("%s (%s)", ContainerVNICPrefix, name)
 }

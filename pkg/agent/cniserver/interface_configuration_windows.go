@@ -162,7 +162,7 @@ func (ic *ifConfigurator) configureContainerLink(
 		// CmdAdd request is returned; 2) for Docker runtime, the interface is created after hcsshim.HotAttachEndpoint,
 		// and the hcsshim call is not synchronized from the observation.
 		return ic.addPostInterfaceCreateHook(infraContainerID, epName, containerAccess, func() error {
-			ifaceName := fmt.Sprintf("%s (%s)", util.ContainerVNICPrefix, epName)
+			ifaceName := util.VirtualAdapterName(epName)
 			if err := util.SetInterfaceMTU(ifaceName, mtu); err != nil {
 				return fmt.Errorf("failed to configure MTU on container interface '%s': %v", ifaceName, err)
 			}
@@ -345,7 +345,7 @@ func (ic *ifConfigurator) checkContainerInterface(
 			containerIface.Sandbox, sandboxID)
 	}
 	hnsEP := strings.Split(containerIface.Name, "_")[0]
-	containerIfaceName := fmt.Sprintf("%s (%s)", util.ContainerVNICPrefix, hnsEP)
+	containerIfaceName := util.VirtualAdapterName(hnsEP)
 	intf, err := net.InterfaceByName(containerIfaceName)
 	if err != nil {
 		klog.Errorf("Failed to get container %s interface: %v", containerID, err)
