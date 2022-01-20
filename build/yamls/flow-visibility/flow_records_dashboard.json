@@ -1,4 +1,47 @@
 {
+  "__inputs": [
+    {
+      "name": "DS_CLICKHOUSE",
+      "label": "ClickHouse",
+      "description": "",
+      "type": "datasource",
+      "pluginId": "vertamedia-clickhouse-datasource",
+      "pluginName": "ClickHouse"
+    }
+  ],
+  "__elements": [],
+  "__requires": [
+    {
+      "type": "grafana",
+      "id": "grafana",
+      "name": "Grafana",
+      "version": "8.3.3"
+    },
+    {
+      "type": "panel",
+      "id": "stat",
+      "name": "Stat",
+      "version": ""
+    },
+    {
+      "type": "panel",
+      "id": "table",
+      "name": "Table",
+      "version": ""
+    },
+    {
+      "type": "panel",
+      "id": "timeseries",
+      "name": "Time series",
+      "version": ""
+    },
+    {
+      "type": "datasource",
+      "id": "vertamedia-clickhouse-datasource",
+      "name": "ClickHouse",
+      "version": "2.4.2"
+    }
+  ],
   "annotations": {
     "list": [
       {
@@ -21,15 +64,15 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 1,
-  "iteration": 1642200837705,
+  "id": null,
+  "iteration": 1642716785558,
   "links": [],
   "liveNow": false,
   "panels": [
     {
       "datasource": {
         "type": "vertamedia-clickhouse-datasource",
-        "uid": "PDEE91DDB90597936"
+        "uid": "${DS_CLICKHOUSE}"
       },
       "fieldConfig": {
         "defaults": {
@@ -81,7 +124,7 @@
           "database": "default",
           "datasource": {
             "type": "vertamedia-clickhouse-datasource",
-            "uid": "ClickHouse"
+            "uid": "${DS_CLICKHOUSE}"
           },
           "dateColDataType": "",
           "dateLoading": false,
@@ -95,7 +138,7 @@
           "intervalFactor": 1,
           "query": "SELECT count()\nFROM $table\n",
           "queryType": "randomWalk",
-          "rawQuery": false,
+          "rawQuery": "SELECT count()\nFROM default.flows",
           "rawSql": "SELECT count(*) as count\nFROM (SELECT toInt64OrDefault(flowEndSeconds)*1000 as t FROM antrea)\nWHERE $__timeFilter(t)",
           "refId": "A",
           "round": "0s",
@@ -110,7 +153,7 @@
     {
       "datasource": {
         "type": "vertamedia-clickhouse-datasource",
-        "uid": "ClickHouse"
+        "uid": "${DS_CLICKHOUSE}"
       },
       "fieldConfig": {
         "defaults": {
@@ -172,6 +215,7 @@
         "y": 0
       },
       "id": 6,
+      "interval": "1s",
       "options": {
         "legend": {
           "calcs": [],
@@ -188,7 +232,7 @@
           "database": "default",
           "datasource": {
             "type": "vertamedia-clickhouse-datasource",
-            "uid": "ClickHouse"
+            "uid": "${DS_CLICKHOUSE}"
           },
           "dateColDataType": "",
           "dateLoading": false,
@@ -201,7 +245,7 @@
           "intervalFactor": 1,
           "query": "SELECT\n    $timeSeries as t,\n    count() as count\nFROM $table\n\nWHERE $timeFilter\n\nGROUP BY t\n\nORDER BY t\n",
           "queryType": "randomWalk",
-          "rawQuery": true,
+          "rawQuery": "SELECT\n    (intDiv(toUInt32(flowEndSeconds), 1) * 1) * 1000 as t,\n    count() as count\nFROM default.flows\n\nWHERE\n    flowEndSeconds >= toDateTime(1642711765) AND flowEndSeconds <= toDateTime(1642712665)\n    AND sourcePodNamespace = 'antrea-test'\nGROUP BY t\n\nORDER BY t\n",
           "rawSql": "SELECT count() as count, toDateTime(floor(toInt64OrDefault(flowEndSeconds)/60)*60) as t\nFROM antrea\nGROUP BY t\nORDER BY t",
           "refId": "A",
           "round": "0s",
@@ -216,7 +260,7 @@
     {
       "datasource": {
         "type": "vertamedia-clickhouse-datasource",
-        "uid": "PDEE91DDB90597936"
+        "uid": "${DS_CLICKHOUSE}"
       },
       "fieldConfig": {
         "defaults": {
@@ -226,7 +270,7 @@
           "custom": {
             "align": "auto",
             "displayMode": "auto",
-            "filterable": false
+            "filterable": true
           },
           "mappings": [],
           "thresholds": {
@@ -235,10 +279,6 @@
               {
                 "color": "green",
                 "value": null
-              },
-              {
-                "color": "red",
-                "value": 80
               }
             ]
           }
@@ -251,33 +291,682 @@
             },
             "properties": [
               {
-                "id": "custom.width"
-              },
-              {
                 "id": "mappings",
                 "value": [
                   {
                     "options": {
                       "1": {
                         "index": 0,
-                        "text": "intra-node"
+                        "text": "Intra-Node"
                       },
                       "2": {
                         "index": 1,
-                        "text": "inter-node"
+                        "text": "Inter-Node"
                       },
                       "3": {
                         "index": 2,
-                        "text": "to-external"
+                        "text": "To External"
                       },
                       "4": {
                         "index": 3,
-                        "text": "from-external"
+                        "text": "From External"
                       }
                     },
                     "type": "value"
                   }
                 ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "sourcePodNamespace"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 199
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "destinationPodName"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 183
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "options": {
+                      "0": {
+                        "index": 0,
+                        "text": "N/A"
+                      }
+                    },
+                    "type": "value"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "destinationPodNamespace"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 214
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "options": {
+                      "0": {
+                        "index": 0,
+                        "text": "N/A"
+                      }
+                    },
+                    "type": "value"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "destinationNodeName"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 183
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "options": {
+                      "0": {
+                        "index": 0,
+                        "text": "N/A"
+                      }
+                    },
+                    "type": "value"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "sourceNodeName"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 161
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "sourcePodName"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 149
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "destinationServicePort"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 184
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "destinationServicePortName"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 215
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "options": {
+                      "0": {
+                        "index": 0,
+                        "text": "N/A"
+                      }
+                    },
+                    "type": "value"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "ingressNetworkPolicyName"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 213
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "ingressNetworkPolicyNamespace"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 256
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "options": {
+                      "0": {
+                        "index": 0,
+                        "text": "N/A"
+                      }
+                    },
+                    "type": "value"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "ingressNetworkPolicyRuleName"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 243
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "options": {
+                      "0": {
+                        "index": 0,
+                        "text": "N/A"
+                      }
+                    },
+                    "type": "value"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "ingressNetworkPolicyRuleAction"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 249
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "options": {
+                      "0": {
+                        "index": 0,
+                        "text": "No Action"
+                      },
+                      "1": {
+                        "index": 1,
+                        "text": "Allow"
+                      },
+                      "2": {
+                        "index": 2,
+                        "text": "Drop"
+                      },
+                      "3": {
+                        "index": 3,
+                        "text": "Reject"
+                      }
+                    },
+                    "type": "value"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "ingressNetworkPolicyType"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 209
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "options": {
+                      "0": {
+                        "index": 3,
+                        "text": "N/A"
+                      },
+                      "1": {
+                        "index": 0,
+                        "text": "K8s NetworkPolicy"
+                      },
+                      "2": {
+                        "index": 1,
+                        "text": "Antrea NetworkPolicy"
+                      },
+                      "3": {
+                        "index": 2,
+                        "text": "Antrea ClusterNetworkPolicy"
+                      }
+                    },
+                    "type": "value"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "egressNetworkPolicyName"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 215
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "options": {
+                      "0": {
+                        "index": 0,
+                        "text": "N/A"
+                      }
+                    },
+                    "type": "value"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "egressNetworkPolicyRuleName"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 238
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "options": {
+                      "0": {
+                        "index": 0,
+                        "text": "N/A"
+                      }
+                    },
+                    "type": "value"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "egressNetworkPolicyNamespace"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 248
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "options": {
+                      "0": {
+                        "index": 0,
+                        "text": "N/A"
+                      }
+                    },
+                    "type": "value"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "egressNetworkPolicyType"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 207
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "options": {
+                      "0": {
+                        "index": 3,
+                        "text": "N/A"
+                      },
+                      "1": {
+                        "index": 0,
+                        "text": "K8s NetworkPolicy"
+                      },
+                      "2": {
+                        "index": 1,
+                        "text": "Antrea NetworkPolicy"
+                      },
+                      "3": {
+                        "index": 2,
+                        "text": "Antrea ClusterNetworkPolicy"
+                      }
+                    },
+                    "type": "value"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "destinationPodLabels"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 173
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "throughputFromSourceNode"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 230
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "throughputFromDestinationNode"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 251
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "reverseThroughputFromSourceNode"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 273
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "reverseThroughputFromDestinationNode"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 299
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "reverseOctetDeltaCount"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 186
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "reversePacketDeltaCount"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 196
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "reverseOctetTotalCount"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 191
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "reversePacketTotalCount"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 199
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "flowEndSecondsFromDestinationNode"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 283
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "flowEndSecondsFromSourceNode"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 255
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "protocolIdentifier"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "options": {
+                      "6": {
+                        "index": 0,
+                        "text": "TCP"
+                      },
+                      "17": {
+                        "index": 1,
+                        "text": "UDP"
+                      }
+                    },
+                    "type": "value"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "sourceTransportPort"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 170
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "destinationTransportPort"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 196
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "destinationClusterIP"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 168
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "egressNetworkPolicyRuleAction"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 244
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "options": {
+                      "0": {
+                        "index": 0,
+                        "text": "No Action"
+                      },
+                      "1": {
+                        "index": 1,
+                        "text": "Allow"
+                      },
+                      "2": {
+                        "index": 2,
+                        "text": "Drop"
+                      },
+                      "3": {
+                        "index": 3,
+                        "text": "Reject"
+                      }
+                    },
+                    "type": "value"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "reverseThroughput"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 161
               }
             ]
           }
@@ -307,7 +996,7 @@
           "database": "default",
           "datasource": {
             "type": "vertamedia-clickhouse-datasource",
-            "uid": "ClickHouse"
+            "uid": "${DS_CLICKHOUSE}"
           },
           "dateColDataType": "",
           "dateLoading": false,
@@ -320,7 +1009,7 @@
           "intervalFactor": 1,
           "query": "SELECT\n    $timeSeries as t,\n    *\nFROM $table\n\nWHERE $timeFilter\n\nORDER BY t\n",
           "queryType": "randomWalk",
-          "rawQuery": "SELECT\n    (intDiv(toUInt32(flowEndSeconds), 2) * 2) * 1000 as t,\n    *\nFROM default.flows\n\nWHERE flowEndSeconds >= toDateTime(1642186978) AND flowEndSeconds <= toDateTime(1642188778)\n\nORDER BY t",
+          "rawQuery": "SELECT\n    (intDiv(toUInt32(flowEndSeconds), 1) * 1) * 1000 as t,\n    *\nFROM default.flows\n\nWHERE flowEndSeconds >= toDateTime(1642715797) AND flowEndSeconds <= toDateTime(1642716697)\n\nORDER BY t",
           "rawSql": "SELECT * FROM antrea",
           "refId": "A",
           "round": "0s",
@@ -364,8 +1053,8 @@
   },
   "timepicker": {},
   "timezone": "",
-  "title": "Flow Records Dashboard",
+  "title": "flow_records_dashboard",
   "uid": "t1UGX7t7k",
-  "version": 9,
+  "version": 10,
   "weekStart": ""
 }
