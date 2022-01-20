@@ -547,7 +547,9 @@
           started_status: null
           wrappers: []
           publishers: []
-      - '{name}-{test_name}-for-pull-request':
+      - '{name}-{test_name}-for-pr':
+          # The cluster name of this job could be too long since job name is encoded in CAPI cluster name.
+          # Use the shorter name as a workaround.
           test_name: all-features-conformance
           node: 'antrea-test-node'
           description: 'This is the {test_name} test for {name}.'
