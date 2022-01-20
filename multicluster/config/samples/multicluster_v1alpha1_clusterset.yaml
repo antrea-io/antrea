@@ -1,0 +1,14 @@
+apiVersion: multicluster.crd.antrea.io/v1alpha1
+kind: ClusterSet
+metadata:
+    name: test-clusterset
+    namespace: antrea-mcs-ns
+spec:
+    leaders:
+      - clusterID: test-cluster-leader
+        secret: "leader-access-token"
+        server: "https://172.18.0.2:6443"
+    members:
+      - clusterID: test-cluster-east
+      - clusterID: test-cluster-west
+    namespace: antrea-mcs-ns

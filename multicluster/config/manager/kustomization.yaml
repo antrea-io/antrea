@@ -1,0 +1,6 @@
+resources:
+- manager.yaml
+
+generatorOptions:
+  disableNameSuffixHash: true
+  

@@ -1,0 +1,27 @@
+# additional permissions for controller.
+- op: add
+  path: /rules/0
+  value:
+    apiGroups:
+    - admissionregistration.k8s.io
+    resources:
+    - mutatingwebhookconfigurations
+    - validatingwebhookconfigurations
+    resourceNames:
+    - mutating-webhook-configuration
+    - validating-webhook-configuration
+    verbs:
+    - get
+    - update
+- op: add
+  path: /rules/0
+  value:
+    apiGroups:
+    - ""
+    resources:
+    - secrets
+    verbs:
+    - get
+    - list
+    - watch
+

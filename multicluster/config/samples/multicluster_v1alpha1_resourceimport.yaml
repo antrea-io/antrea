@@ -1,0 +1,44 @@
+apiVersion: multicluster.crd.antrea.io/v1alpha1
+kind: ResourceImport
+metadata:
+  name: nginx-kube-system-service
+  namespace: antrea-mcs-ns
+spec:
+  name: nginx
+  namespace: kube-system
+  kind: ServiceImport
+  serviceImport:
+    spec:
+      ports: 
+      - name: tcp80
+        port: 80
+        protocol: TCP
+      type: ClusterSetIP
+---
+apiVersion: multicluster.crd.antrea.io/v1alpha1
+kind: ResourceImport
+metadata:
+  name: nginx-kube-system-endpoints
+  namespace: antrea-mcs-ns
+spec:
+  name: nginx
+  namespace: kube-system
+  kind: EndPoints
+  endpoints:
+    subsets:
+    - addresses:
+      - ip: 192.168.225.49
+      - ip: 192.168.225.51
+      ports:
+      - name: tcp8080
+        port: 8080
+        protocol: TCP
+    - addresses:
+      - ip: 192.168.224.21
+        nodeName: node-one
+      - ip: 192.168.226.11
+        nodeName: node-two
+      ports:
+      - name: tcp8080
+        port: 8080
+        protocol: TCP

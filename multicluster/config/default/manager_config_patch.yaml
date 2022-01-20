@@ -1,0 +1,20 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: controller
+  namespace: system
+spec:
+  template:
+    spec:
+      containers:
+      - name: antrea-mc-controller
+        args:
+        - "--config=/controller_manager_config.yaml"
+        volumeMounts:
+        - name: antrea-mc-controller-config
+          mountPath: /controller_manager_config.yaml
+          subPath: controller_manager_config.yaml
+      volumes:
+      - name: antrea-mc-controller-config
+        configMap:
+          name: controller-config

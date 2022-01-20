@@ -5,10 +5,14 @@ on:
     branches:
       - main
       - release-*
+      # TODO: remove this before merging feature branch to main
+      - feature/multi-cluster
   push:
     branches:
       - main
       - release-*
+      # TODO: remove this before merging feature branch to main
+      - feature/multi-cluster
 
 jobs:
   check-changes:
@@ -106,6 +110,23 @@ jobs:
       run: |
         echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
         docker push antrea/octant-antrea-ubuntu:latest
+
+  build-antrea-mc-controller:
+    needs: check-changes
+    if: ${{ needs.check-changes.outputs.has_changes == 'yes' || github.event_name == 'push' }}
+    runs-on: [ubuntu-latest]
+    steps:
+    - uses: actions/checkout@v2
+    - name: Build antrea-mc-controller Docker image
+      run: make antrea-mc-controller
+    - name: Push antrea-mc-controller Docker image to registry
+      if: ${{ github.repository == 'antrea-io/antrea' && github.event_name == 'push' && github.ref == 'refs/heads/feature/multi-cluster' }}
+      env:
+        DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+        DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+      run: |
+        echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+        docker push antrea/antrea-mc-controller:latest
 
   build-netpol-tmp:
     needs: check-changes

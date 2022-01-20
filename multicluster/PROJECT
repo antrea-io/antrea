@@ -1,0 +1,99 @@
+domain: crd.antrea.io
+layout:
+- go.kubebuilder.io/v3
+multigroup: true
+projectName: multicluster
+repo: antrea.io/antrea/multicluster
+resources:
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: crd.antrea.io
+  group: multicluster
+  kind: ClusterClaim
+  path: antrea.io/antrea/multicluster/apis/multicluster/v1alpha1
+  version: v1alpha1
+  webhooks:
+    defaulting: true
+    validation: true
+    webhookVersion: v1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: crd.antrea.io
+  group: multicluster
+  kind: MemberClusterAnnounce
+  path: antrea.io/antrea/multicluster/apis/multicluster/v1alpha1
+  version: v1alpha1
+  webhooks:
+    defaulting: true
+    validation: true
+    webhookVersion: v1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: crd.antrea.io
+  group: multicluster
+  kind: ClusterSet
+  path: antrea.io/antrea/multicluster/apis/multicluster/v1alpha1
+  version: v1alpha1
+  webhooks:
+    defaulting: true
+    validation: true
+    webhookVersion: v1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: crd.antrea.io
+  group: multicluster
+  kind: ResourceExportFilter
+  path: antrea.io/antrea/multicluster/apis/multicluster/v1alpha1
+  version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: crd.antrea.io
+  group: multicluster
+  kind: ResourceImportFilter
+  path: antrea.io/antrea/multicluster/apis/multicluster/v1alpha1
+  version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: crd.antrea.io
+  group: multicluster
+  kind: ResourceExport
+  path: antrea.io/antrea/multicluster/apis/multicluster/v1alpha1
+  version: v1alpha1
+  webhooks:
+    defaulting: true
+    validation: true
+    webhookVersion: v1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: crd.antrea.io
+  group: multicluster
+  kind: ResourceImport
+  path: antrea.io/antrea/multicluster/apis/multicluster/v1alpha1
+  version: v1alpha1
+  webhooks:
+    defaulting: true
+    validation: true
+    webhookVersion: v1
+- api:
+    crdVersion: v1
+    namespaced: true
+  domain: crd.antrea.io
+  group: multicluster
+  kind: MultiClusterConfig
+  path: antrea.io/antrea/multicluster/apis/multicluster/v1alpha1
+  version: v1alpha1
+version: "3"

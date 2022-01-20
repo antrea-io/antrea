@@ -86,4 +86,11 @@ export IMG_NAME=projects.registry.vmware.com/antrea/antrea-windows
 export IMG_NAME=projects.registry.vmware.com/antrea/flow-aggregator
 ./hack/generate-manifest-flow-aggregator.sh --mode release > "$OUTPUT_DIR"/flow-aggregator.yml
 
+# Generate multicluster manifests
+export IMG_NAME=projects.registry.vmware.com/antrea/antrea-mc-controller
+cd multicluster
+./hack/generate-manifest.sh -g > "$OUTPUT_DIR"/antrea-multicluster-leader-global.yml
+./hack/generate-manifest.sh -r -l changeme > "$OUTPUT_DIR"/antrea-multicluster-leader-namespaced.yml
+./hack/generate-manifest.sh -r -m > "$OUTPUT_DIR"/antrea-multicluster-member.yml
+
 ls "$OUTPUT_DIR" | cat

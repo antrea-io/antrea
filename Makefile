@@ -198,7 +198,8 @@ antctl-release:
 .linux-test-unit: .coverage
 	@echo
 	@echo "==> Running unit tests <=="
-	$(GO) test -race -coverprofile=.coverage/coverage-unit.txt -covermode=atomic -cover antrea.io/antrea/cmd/... antrea.io/antrea/pkg/...
+	$(GO) test -race -coverprofile=.coverage/coverage-unit.txt -covermode=atomic -cover antrea.io/antrea/cmd/... antrea.io/antrea/pkg/... \
+	 antrea.io/antrea/multicluster/cmd/... antrea.io/antrea/multicluster/controllers/...
 
 .PHONY: .windows-test-unit
 .windows-test-unit:
@@ -357,6 +358,18 @@ octant-antrea-ubuntu:
 	docker tag antrea/octant-antrea-ubuntu:$(DOCKER_IMG_VERSION) antrea/octant-antrea-ubuntu
 	docker tag antrea/octant-antrea-ubuntu:$(DOCKER_IMG_VERSION) projects.registry.vmware.com/antrea/octant-antrea-ubuntu
 	docker tag antrea/octant-antrea-ubuntu:$(DOCKER_IMG_VERSION) projects.registry.vmware.com/antrea/octant-antrea-ubuntu:$(DOCKER_IMG_VERSION)
+
+.PHONY: antrea-mc-controller
+antrea-mc-controller:
+	@echo "===> Building antrea/antrea-mc-controller Docker image <==="
+ifneq ($(NO_PULL),)
+	docker build -t antrea/antrea-mc-controller:$(DOCKER_IMG_VERSION) -f multicluster/build/Dockerfile.build $(DOCKER_BUILD_ARGS) .
+else
+	docker build --pull -t antrea/antrea-mc-controller:$(DOCKER_IMG_VERSION) -f multicluster/build/Dockerfile.build $(DOCKER_BUILD_ARGS) .
+endif
+	docker tag antrea/antrea-mc-controller:$(DOCKER_IMG_VERSION) antrea/antrea-mc-controller
+	docker tag antrea/antrea-mc-controller:$(DOCKER_IMG_VERSION) projects.registry.vmware.com/antrea/antrea-mc-controller
+	docker tag antrea/antrea-mc-controller:$(DOCKER_IMG_VERSION) projects.registry.vmware.com/antrea/antrea-mc-controller:$(DOCKER_IMG_VERSION)
 
 .PHONY: flow-aggregator-image
 flow-aggregator-image:

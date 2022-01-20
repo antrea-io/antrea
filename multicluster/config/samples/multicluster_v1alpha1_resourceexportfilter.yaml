@@ -1,0 +1,7 @@
+apiVersion: multicluster.crd.antrea.io/v1alpha1
+kind: ResourceExportFilter
+metadata:
+  name: ResourceExportFilter-sample
+spec:
+  # Add fields here
+  foo: bar
