@@ -121,6 +121,15 @@ DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
 ./ci/jenkins/test.sh --testcase windows-e2e --registry ${DOCKER_REGISTRY} --proxyall
 ```
 
+* Multicast e2e: e2e tests in a multicast cluster
+
+```shell
+#!/bin/bash
+set -e
+DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
+./ci/jenkins/test.sh --testcase multicast-e2e --registry ${DOCKER_REGISTRY}
+```
+
 * [whole-conformance [daily]](https://jenkins.antrea-ci.rocks/job/antrea-whole-conformance-for-pull-request/):
   community tests using sonobuoy, with certified-conformance mode.
 
