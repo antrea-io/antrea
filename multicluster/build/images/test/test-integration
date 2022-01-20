@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+
+go test -coverpkg=antrea.io/antrea/multicluster/controllers/multicluster/... -coverprofile=multicluster/.coverage/coverage-integration.txt -covermode=atomic -cover antrea.io/antrea/multicluster/test/integration/...

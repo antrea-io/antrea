@@ -1,0 +1,28 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: cluster-admin-rolebinding
+  namespace: leader-ns
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+- kind: ServiceAccount
+  name: cluster-admin
+  namespace: leader-ns
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: cluster-admin
+  namespace: leader-ns
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: access-token
+  namespace: leader-ns
+  annotations:
+    kubernetes.io/service-account.name: cluster-admin
+type: kubernetes.io/service-account-token

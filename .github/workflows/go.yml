@@ -4,10 +4,12 @@ on:
     branches:
     - main
     - release-*
+    - feature/multi-cluster
   push:
     branches:
     - main
     - release-*
+    - feature/multi-cluster
 
 env:
   go-cache-name: go
@@ -115,6 +117,10 @@ jobs:
       run: GOARCH=arm make bin
     - name: Build antctl binaries
       run: make antctl
+    - name: Build Multi-cluster binaries
+      run: |
+        cd multicluster
+        make build
 
   windows-bin:
     name: Build Antrea Windows binaries

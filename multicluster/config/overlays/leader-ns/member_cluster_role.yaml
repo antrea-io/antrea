@@ -1,0 +1,62 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  labels:
+    app: antrea
+  name: member-cluster-role
+  namespace: changeme
+rules:
+  - apiGroups:
+      - multicluster.crd.antrea.io
+    resources:
+      - memberclusterannounces
+    verbs:
+      - create
+      - delete
+      - get
+      - list
+      - patch
+      - update
+      - watch
+  - apiGroups:
+      - multicluster.crd.antrea.io
+    resources:
+      - memberclusterannounces/status
+    verbs:
+      - get
+  - apiGroups:
+      - multicluster.crd.antrea.io
+    resources:
+      - resourceexports
+    verbs:
+      - create
+      - delete
+      - get
+      - list
+      - patch
+      - update
+      - watch
+  - apiGroups:
+      - multicluster.crd.antrea.io
+    resources:
+      - resourceexports/status
+    verbs:
+      - get
+      - patch
+      - update
+  - apiGroups:
+      - multicluster.crd.antrea.io
+    resources:
+      - resourceimports
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - multicluster.crd.antrea.io
+    resources:
+      - resourceimports/status
+    verbs:
+      - get
+      - patch
+      - update

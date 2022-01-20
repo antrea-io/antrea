@@ -1,0 +1,174 @@
+
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.4.1
+  creationTimestamp: null
+  name: clustersets.multicluster.crd.antrea.io
+spec:
+  group: multicluster.crd.antrea.io
+  names:
+    kind: ClusterSet
+    listKind: ClusterSetList
+    plural: clustersets
+    singular: clusterset
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: ClusterSet is the Schema for the clustersets API.
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: ClusterSetSpec defines the desired state of ClusterSet.
+            properties:
+              leaders:
+                description: Leaders include leader clusters known to the member clusters.
+                items:
+                  description: MemberCluster defines member cluster information.
+                  properties:
+                    clusterID:
+                      description: Identify member cluster in ClusterSet.
+                      type: string
+                    secret:
+                      description: Secret name to access API server of the member
+                        from the leader cluster.
+                      type: string
+                    server:
+                      description: API server of the destination cluster.
+                      type: string
+                    serviceAccount:
+                      description: ServiceAccount used by the member cluster to access
+                        into leader cluster.
+                      type: string
+                  type: object
+                type: array
+              members:
+                description: Members include member clusters known to the leader clusters.
+                  Used in leader cluster.
+                items:
+                  description: MemberCluster defines member cluster information.
+                  properties:
+                    clusterID:
+                      description: Identify member cluster in ClusterSet.
+                      type: string
+                    secret:
+                      description: Secret name to access API server of the member
+                        from the leader cluster.
+                      type: string
+                    server:
+                      description: API server of the destination cluster.
+                      type: string
+                    serviceAccount:
+                      description: ServiceAccount used by the member cluster to access
+                        into leader cluster.
+                      type: string
+                  type: object
+                type: array
+              namespace:
+                description: Namespace to connect to in leader clusters. Used in member
+                  cluster.
+                type: string
+            type: object
+          status:
+            description: ClusterSetStatus defines the observed state of ClusterSet.
+            properties:
+              clusterStatuses:
+                description: The status of individual member clusters.
+                items:
+                  properties:
+                    clusterID:
+                      description: ClusterID is the unique identifier of this cluster.
+                      type: string
+                    conditions:
+                      items:
+                        description: ClusterCondition indicates the readiness condition
+                          of a cluster.
+                        properties:
+                          lastTransitionTime:
+                            description: Last time the condition transited from one
+                              status to another.
+                            format: date-time
+                            type: string
+                          message:
+                            description: A human readable message indicating details
+                              about the transition.
+                            type: string
+                          reason:
+                            description: Unique, one-word, CamelCase reason for the
+                              condition's last transition.
+                            type: string
+                          status:
+                            description: Status of the condition, one of True, False,
+                              Unknown.
+                            type: string
+                          type:
+                            type: string
+                        type: object
+                      type: array
+                  type: object
+                type: array
+              conditions:
+                description: The overall condition of the cluster set.
+                items:
+                  description: ClusterSetCondition indicates the readiness condition
+                    of the clusterSet.
+                  properties:
+                    lastTransitionTime:
+                      description: Last time the condition transited from one status
+                        to another.
+                      format: date-time
+                      type: string
+                    message:
+                      description: A human readable message indicating details about
+                        the transition.
+                      type: string
+                    reason:
+                      description: Unique, one-word, CamelCase reason for the condition's
+                        last transition.
+                      type: string
+                    status:
+                      description: Status of the condition, one of True, False, Unknown.
+                      type: string
+                    type:
+                      type: string
+                  type: object
+                type: array
+              observedGeneration:
+                description: The generation observed by the controller.
+                format: int64
+                type: integer
+              readyClusters:
+                description: Total number of clusters ready and connected.
+                format: int32
+                type: integer
+              totalClusters:
+                description: Total number of member clusters configured in the set.
+                format: int32
+                type: integer
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []

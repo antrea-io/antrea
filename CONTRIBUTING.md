@@ -153,6 +153,7 @@ the repo. It's a Github security mechanism.
 Here are the trigger phrases for individual checks:
 
 * `/test-integration`: Integration tests
+* `/test-multicluster-integration`: Multi-cluster integration tests
 * `/test-e2e`: Linux IPv4 e2e tests
 * `/test-conformance`: Linux IPv4 conformance tests
 * `/test-networkpolicy`: Linux IPv4 networkpolicy tests

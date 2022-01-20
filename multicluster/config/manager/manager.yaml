@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: controller
+  namespace: system
+  labels:
+    control-plane: antrea-mc-controller
+spec:
+  selector:
+    matchLabels:
+      control-plane: antrea-mc-controller
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        control-plane: antrea-mc-controller
+    spec:
+      containers:
+      - command:
+        image: antrea/antrea-mc-controller:latest
+        imagePullPolicy: IfNotPresent
+        name: antrea-mc-controller
+        securityContext:
+          allowPrivilegeEscalation: false
+        env:
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8081
+          initialDelaySeconds: 15
+          periodSeconds: 20
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8081
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        resources:
+          limits:
+            cpu: 100m
+            memory: 30Mi
+          requests:
+            cpu: 100m
+            memory: 20Mi
+      serviceAccountName: controller
+      terminationGracePeriodSeconds: 10

@@ -16,6 +16,7 @@ package apiserver
 
 import (
 	"context"
+	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -316,5 +317,39 @@ func installHandlers(c *ExtraConfig, s *genericapiserver.GenericAPIServer) {
 
 	if features.DefaultFeatureGate.Enabled(features.AntreaIPAM) {
 		s.Handler.NonGoRestfulMux.HandleFunc("/validate/ippool", webhook.HandlerForValidateFunc(ipam.ValidateIPPool))
+	}
+}
+
+func DefaultCAConfig() *certificate.CAConfig {
+	return &certificate.CAConfig{
+		CAConfigMapName: certificate.AntreaCAConfigMapName,
+		APIServiceNames: []string{
+			"v1alpha1.stats.antrea.tanzu.vmware.com",
+			"v1beta2.controlplane.antrea.tanzu.vmware.com",
+			"v1beta1.system.antrea.tanzu.vmware.com",
+			"v1alpha1.stats.antrea.io",
+			"v1beta1.system.antrea.io",
+			"v1beta2.controlplane.antrea.io",
+		},
+		ValidatingWebhooks: []string{
+			"crdvalidator.antrea.tanzu.vmware.com",
+			"crdvalidator.antrea.io",
+		},
+		MutationWebhooks: []string{
+			"crdmutator.antrea.tanzu.vmware.com",
+			"crdmutator.antrea.io",
+		},
+		OptionalMutationWebhooks: []string{
+			"labelsmutator.antrea.io",
+		},
+		CRDsWithConversionWebhooks: []string{
+			"clustergroups.crd.antrea.io",
+		},
+		CertDir:           "/var/run/antrea/antrea-controller-tls",
+		SelfSignedCertDir: "/var/run/antrea/antrea-controller-self-signed",
+		CertReadyTimeout:  2 * time.Minute,
+		MaxRotateDuration: time.Hour * (24 * 365),
+		ServiceName:       certificate.AntreaServiceName,
+		PairName:          "antrea-controller",
 	}
 }
