@@ -1,0 +1,19 @@
+apiVersion: multicluster.x-k8s.io/v1alpha1
+kind: ServiceImport
+metadata:
+  name: kube-dns
+  namespace: kube-system
+spec:
+  ips:
+  - 10.100.160.70
+  ports:
+  - name: 53udp
+    port: 53
+    protocol: UDP
+  - name: 53tcp
+    port: 53
+    protocol: TCP
+  - name: 9153tcp
+    port: 9153
+    protocol: TCP
+  type: ClusterSetIP
