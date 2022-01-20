@@ -193,7 +193,7 @@
           - ${{sha1}}
           builders:
           - builder-integration
-          trigger_phrase: ^(?!Thanks for your PR).*/test-integration.*
+          trigger_phrase: ^(?!Thanks for your PR).*/test-integration($|\s).*
           throttle_concurrent_builds_category:
             - integration
           throttle_concurrent_builds_enabled: 'true'
@@ -243,7 +243,7 @@
           white_list: '{antrea_white_list}'
           only_trigger_phrase: true
           trigger_permit_all: false
-          trigger_phrase: ^(?!Thanks for your PR).*/skip-(integration|all).*
+          trigger_phrase: ^(?!Thanks for your PR).*/skip-(integration|all)($|\s).*
           white_list_target_branches: []
           status_context: jenkins-integration-tests
           status_url: --none--
@@ -262,7 +262,7 @@
           - ${{sha1}}
           builders:
           - builder-multicluster-integration
-          trigger_phrase: ^(?!Thanks for your PR).*/test-multicluster-integration.*
+          trigger_phrase: ^(?!Thanks for your PR).*/test-multicluster-integration($|\s).*
           throttle_concurrent_builds_category:
             - integration
           throttle_concurrent_builds_enabled: 'true'
@@ -332,7 +332,7 @@
           - ${{sha1}}
           builders:
             - builder-e2e
-          trigger_phrase: ^(?!Thanks for your PR).*/test-(e2e|all).*
+          trigger_phrase: ^(?!Thanks for your PR).*/test-(e2e|all)($|\s).*
           white_list_target_branches: []
           allow_whitelist_orgs_as_admins: true
           admin_list: '{antrea_admin_list}'
@@ -399,7 +399,7 @@
           white_list: '{antrea_white_list}'
           only_trigger_phrase: true
           trigger_permit_all: false
-          trigger_phrase: ^(?!Thanks for your PR).*/skip-(e2e|all).*
+          trigger_phrase: ^(?!Thanks for your PR).*/skip-(e2e|all)($|\s).*
           white_list_target_branches: []
           status_context: jenkins-e2e
           status_url: --none--
@@ -444,7 +444,7 @@
           builders:
             - builder-conformance:
                 conformance_type: 'conformance'
-          trigger_phrase: ^(?!Thanks for your PR).*/test-(conformance|all).*
+          trigger_phrase: ^(?!Thanks for your PR).*/test-(conformance|all)($|\s).*
           white_list_target_branches: []
           allow_whitelist_orgs_as_admins: true
           admin_list: '{antrea_admin_list}'
@@ -511,7 +511,7 @@
           white_list: '{antrea_white_list}'
           only_trigger_phrase: true
           trigger_permit_all: false
-          trigger_phrase: ^(?!Thanks for your PR).*/skip-(conformance|all).*
+          trigger_phrase: ^(?!Thanks for your PR).*/skip-(conformance|all)($|\s).*
           white_list_target_branches: []
           status_context: jenkins-conformance
           status_url: --none--
@@ -556,7 +556,7 @@
           builders:
             - builder-conformance:
                 conformance_type: 'all-features-conformance'
-          trigger_phrase: ^(?!Thanks for your PR).*/test-(all-features-conformance|all).*
+          trigger_phrase: ^(?!Thanks for your PR).*/test-(all-features-conformance|all)($|\s).*
           white_list_target_branches: []
           allow_whitelist_orgs_as_admins: true
           admin_list: '{antrea_admin_list}'
@@ -608,7 +608,7 @@
           white_list: '{antrea_white_list}'
           only_trigger_phrase: true
           trigger_permit_all: false
-          trigger_phrase: ^(?!Thanks for your PR).*/skip-(all-features-conformance|all).*
+          trigger_phrase: ^(?!Thanks for your PR).*/skip-(all-features-conformance|all)($|\s).*
           white_list_target_branches: []
           status_context: jenkins-all-features-conformance
           status_url: --none--
@@ -628,7 +628,7 @@
           builders:
             - builder-conformance:
                 conformance_type: 'whole-conformance'
-          trigger_phrase: .*/test-(whole-conformance).*
+          trigger_phrase: .*/test-(whole-conformance)($|\s).*
           white_list_target_branches: []
           allow_whitelist_orgs_as_admins: true
           admin_list: '{antrea_admin_list}'
@@ -695,7 +695,7 @@
           white_list: '{antrea_white_list}'
           only_trigger_phrase: true
           trigger_permit_all: false
-          trigger_phrase: .*/skip-(whole-conformance).*
+          trigger_phrase: .*/skip-(whole-conformance)($|\s).*
           white_list_target_branches: []
           status_context: jenkins-whole-conformance
           status_url: --none--
@@ -740,7 +740,7 @@
           builders:
             - builder-conformance:
                 conformance_type: 'networkpolicy'
-          trigger_phrase: ^(?!Thanks for your PR).*/test-(networkpolicy|all).*
+          trigger_phrase: ^(?!Thanks for your PR).*/test-(networkpolicy|all)($|\s).*
           white_list_target_branches: []
           allow_whitelist_orgs_as_admins: true
           admin_list: '{antrea_admin_list}'
@@ -807,7 +807,7 @@
           white_list: '{antrea_white_list}'
           only_trigger_phrase: true
           trigger_permit_all: false
-          trigger_phrase: ^(?!Thanks for your PR).*/skip-(networkpolicy|all).*
+          trigger_phrase: ^(?!Thanks for your PR).*/skip-(networkpolicy|all)($|\s).*
           white_list_target_branches: []
           status_context: jenkins-networkpolicy
           status_url: --none--
