@@ -26,6 +26,8 @@ docs/maintainers/build-kubemark.md
 docs/maintainers/getting-started-gif.md
 docs/maintainers/release.md
 docs/maintainers/updating-ovs-windows.md
+docs/multicluster/architecture.md
+docs/multicluster/getting-started.md
 docs/network-requirements.md
 docs/noencap-hybrid-modes.md
 docs/octant-plugin-installation.md
