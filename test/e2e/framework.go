@@ -85,6 +85,8 @@ const (
 	testNamespace              string = "antrea-test"
 	testAntreaIPAMNamespace    string = "antrea-ipam-test"
 	busyboxContainerName       string = "busybox"
+	mcjoinContainerName        string = "mcjoin"
+	tcpdumpContainerName       string = "netshoot"
 	agnhostContainerName       string = "agnhost"
 	controllerContainerName    string = "antrea-controller"
 	ovsContainerName           string = "antrea-ovs"
@@ -115,6 +117,8 @@ const (
 
 	agnhostImage        = "k8s.gcr.io/e2e-test-images/agnhost:2.29"
 	busyboxImage        = "projects.registry.vmware.com/library/busybox"
+	mcjoinImage         = "projects.registry.vmware.com/antrea/mcjoin:v2.9"
+	netshootImage       = "projects.registry.vmware.com/antrea/netshoot:v0.1"
 	nginxImage          = "projects.registry.vmware.com/antrea/nginx"
 	perftoolImage       = "projects.registry.vmware.com/antrea/perftool"
 	ipfixCollectorImage = "projects.registry.vmware.com/antrea/ipfix-collector:v0.5.11"
@@ -1071,6 +1075,20 @@ func (data *TestData) createBusyboxPodOnNode(name string, ns string, nodeName st
 	return data.createPodOnNode(name, ns, nodeName, busyboxImage, []string{"sleep", strconv.Itoa(sleepDuration)}, nil, nil, nil, hostNetwork, nil)
 }
 
+// createMcJoinPodOnNode creates a Pod in the test namespace with a single mcjoin container. The
+// Pod will be scheduled on the specified Node (if nodeName is not empty).
+func (data *TestData) createMcJoinPodOnNode(name string, ns string, nodeName string, hostNetwork bool) error {
+	sleepDuration := 3600 // seconds
+	return data.createPodOnNode(name, ns, nodeName, mcjoinImage, []string{"sleep", strconv.Itoa(sleepDuration)}, nil, nil, nil, hostNetwork, nil)
+}
+
+// createNetshootPodOnNode creates a Pod in the test namespace with a single netshoot container. The
+// Pod will be scheduled on the specified Node (if nodeName is not empty).
+func (data *TestData) createNetshootPodOnNode(name string, ns string, nodeName string, _ bool) error {
+	sleepDuration := 3600 // seconds
+	return data.createPodOnNode(name, ns, nodeName, netshootImage, []string{"sleep", strconv.Itoa(sleepDuration)}, nil, nil, nil, true, nil)
+}
+
 // createNginxPodOnNode creates a Pod in the test namespace with a single nginx container. The
 // Pod will be scheduled on the specified Node (if nodeName is not empty).
 func (data *TestData) createNginxPodOnNode(name string, ns string, nodeName string, hostNetwork bool) error {
@@ -1853,18 +1871,44 @@ func (data *TestData) GetAntreaConfigMap(antreaNamespace string) (*corev1.Config
 	return configMap, nil
 }
 
-func (data *TestData) GetGatewayInterfaceName(antreaNamespace string) (string, error) {
+func (data *TestData) getAgentConf(antreaNamespace string) (*agentconfig.AgentConfig, error) {
 	configMap, err := data.GetAntreaConfigMap(antreaNamespace)
+	if err != nil {
+		return nil, err
+	}
+	agentConfData := configMap.Data[antreaAgentConfName]
+	var agentConf agentconfig.AgentConfig
+	if err := yaml.Unmarshal([]byte(agentConfData), &agentConf); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal Agent config from ConfigMap: %v", configMap)
+	}
+	return &agentConf, nil
+}
+
+func (data *TestData) GetGatewayInterfaceName(antreaNamespace string) (string, error) {
+	agentConf, err := data.getAgentConf(antreaNamespace)
 	if err != nil {
 		return "", err
 	}
-	agentConfData := configMap.Data["antrea-agent.conf"]
-	for _, line := range strings.Split(agentConfData, "\n") {
-		if strings.HasPrefix(line, "hostGateway") {
-			return strings.Fields(line)[1], nil
-		}
+	if agentConf.HostGateway != "" {
+		return agentConf.HostGateway, nil
 	}
 	return antreaDefaultGW, nil
+}
+
+func (data *TestData) GetMulticastInterfaces(antreaNamespace string) ([]string, error) {
+	agentConf, err := data.getAgentConf(antreaNamespace)
+	if err != nil {
+		return []string{}, err
+	}
+	return agentConf.MulticastInterfaces, nil
+}
+
+func GetTransportInterface() (string, error) {
+	_, transportInterfaceUntrimmed, _, err := RunCommandOnNode(nodeName(0), fmt.Sprintf("ip -br addr show | grep %s | awk '{print $1}'", clusterInfo.nodes[0].ipv4Addr))
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(transportInterfaceUntrimmed), nil
 }
 
 // mutateAntreaConfigMap will perform the specified updates on the antrea-agent config and the
