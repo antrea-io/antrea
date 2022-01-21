@@ -227,7 +227,11 @@ do:
 
 The second step will compile the Antrea code in a `golang` container, and build
 a `Ubuntu 20.04` Docker image that includes all the generated binaries. [`Docker`](https://docs.docker.com/install)
-must be installed on your local machine in advance.
+must be installed on your local machine in advance. If you are a macOS user and
+cannot use [Docker Desktop](https://www.docker.com/products/docker-desktop) to
+contribute to Antrea for licensing reasons, check out this
+[document](docs/contributors/docker-desktop-alternatives.md) for possible
+alternatives.
 
 Alternatively, you can build the Antrea code in your local Go environment. The
 Antrea project uses the [Go modules support](https://github.com/golang/go/wiki/Modules) which was introduced in Go 1.11. It
