@@ -550,7 +550,7 @@ func run(o *Options) error {
 			nodeConfig,
 			ifaceStore,
 			multicastSocket,
-			sets.NewString(append(o.config.MulticastInterfaces, networkConfig.TransportIface)...),
+			sets.NewString(append(o.config.MulticastInterfaces, nodeConfig.NodeTransportInterfaceName)...),
 			ovsBridgeClient)
 		if err := mcastController.Initialize(); err != nil {
 			return err
