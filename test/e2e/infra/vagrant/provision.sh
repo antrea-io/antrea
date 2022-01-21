@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-
 function usage() {
     echo "Usage: provision.sh [--ip-family <v4|v6>] [-l|--large] [-h|--help]
     Provisions the Vagrant VMs.
-    --ip-family <v4|v6|dual>           Deploy IPv4, IPv6 or dual-stack Kubernetes cluster.
-    --large                            Deploy large vagrant VMs with 2 vCPUs and 4096MB memory.
-                                       By default, we deploy VMs with 2 vCPUs and 2048MB memory.
-    --kube-proxy-mode <iptables|ipvs>  Which mode to use for kube-proxy (default is iptables)."
+    --ip-family <v4|v6|dual>                Deploy IPv4, IPv6 or dual-stack Kubernetes cluster.
+    --large                                 Deploy large vagrant VMs with 2 vCPUs and 4096MB memory.
+                                            By default, we deploy VMs with 2 vCPUs and 2048MB memory.
+    --kube-proxy-mode <iptables|ipvs|none>  Which mode to use for kube-proxy (default is iptables).
+                                            Setting to 'none' will skip deploying kube-proxy."
 }
 
 K8S_IP_FAMILY="v4"
