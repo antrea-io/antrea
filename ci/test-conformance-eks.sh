@@ -21,7 +21,7 @@ function echoerr {
 }
 
 REGION="us-east-2"
-K8S_VERSION="1.17"
+K8S_VERSION="1.21"
 AWS_NODE_TYPE="t3.medium"
 SSH_KEY_PATH="$HOME/.ssh/id_rsa.pub"
 SSH_PRIVATE_KEY_PATH="$HOME/.ssh/id_rsa"
