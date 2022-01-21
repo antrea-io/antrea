@@ -31,6 +31,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/net/nettest"
+	"k8s.io/apimachinery/pkg/util/sets"
 
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/route"
@@ -54,7 +55,7 @@ var (
 		conn, _ := net.Dial("udp", "8.8.8.8:80")
 		defer conn.Close()
 		return conn.LocalAddr().(*net.UDPAddr).IP
-	}())
+	}(), sets.NewString())
 	nodeLink, _       = netlink.LinkByName(nodeIntf.Name)
 	localPeerIP       = ip.NextIP(nodeIP.IP)
 	remotePeerIP      = net.ParseIP("50.50.50.1")

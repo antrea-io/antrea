@@ -19,6 +19,8 @@ import (
 	"net"
 	"strings"
 	"testing"
+
+	"k8s.io/apimachinery/pkg/util/sets"
 )
 
 func TestGenerateContainerInterfaceName(t *testing.T) {
@@ -55,7 +57,7 @@ func TestGetDefaultLocalNodeAddr(t *testing.T) {
 	defer conn.Close()
 	ip := conn.LocalAddr().(*net.UDPAddr).IP
 
-	_, dev, err := GetIPNetDeviceFromIP(ip)
+	_, dev, err := GetIPNetDeviceFromIP(ip, sets.NewString())
 	if err != nil {
 		t.Error(err)
 	}

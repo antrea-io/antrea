@@ -48,7 +48,7 @@ func (i *Initializer) prepareHostNetwork() error {
 		return err
 	}
 	// Get uplink network configuration.
-	_, adapter, err := util.GetIPNetDeviceFromIP(i.nodeConfig.NodeIPAddr.IP)
+	_, adapter, err := i.getNodeInterfaceFromIP(i.nodeConfig.NodeIPAddr.IP)
 	if err != nil {
 		return err
 	}

@@ -27,6 +27,7 @@ import (
 	"github.com/containernetworking/plugins/pkg/ip"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	apitypes "k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/util/retry"
@@ -648,7 +649,7 @@ func (i *Initializer) initNodeLocalConfig() error {
 	if err != nil {
 		return fmt.Errorf("failed to obtain local IP address from K8s: %w", err)
 	}
-	localAddr, localIntf, err := getIPNetDeviceFromIP(ipAddr)
+	localAddr, localIntf, err := i.getNodeInterfaceFromIP(ipAddr)
 	if err != nil {
 		return fmt.Errorf("failed to get local IPNet device with IP %v: %v", ipAddr, err)
 	}
@@ -674,11 +675,12 @@ func (i *Initializer) initNodeLocalConfig() error {
 	}
 
 	i.nodeConfig = &config.NodeConfig{
-		Name:            nodeName,
-		OVSBridge:       i.ovsBridge,
-		DefaultTunName:  defaultTunInterfaceName,
-		NodeIPAddr:      localAddr,
-		UplinkNetConfig: new(config.AdapterNetConfig)}
+		Name:                       nodeName,
+		OVSBridge:                  i.ovsBridge,
+		DefaultTunName:             defaultTunInterfaceName,
+		NodeIPAddr:                 localAddr,
+		NodeTransportInterfaceName: localIntf.Name,
+		UplinkNetConfig:            new(config.AdapterNetConfig)}
 
 	mtu, err := i.getNodeMTU(localIntf)
 	if err != nil {
@@ -902,4 +904,11 @@ func (i *Initializer) allocateGatewayAddresses(localSubnets []*net.IPNet, gatewa
 	}
 
 	return nil
+}
+
+// getNodeInterfaceFromIP returns the IPv4/IPv6 configuration, and the associated interface according the give nodeIPs.
+// When searching the Node interface, antrea-gw0 is ignored because it is configured with the same address as Node IP
+// with NetworkPolicyOnly mode on public cloud setup, e.g., AKS.
+func (i *Initializer) getNodeInterfaceFromIP(nodeIPs net.IP) (*net.IPNet, *net.Interface, error) {
+	return getIPNetDeviceFromIP(nodeIPs, sets.NewString(i.hostGateway))
 }
