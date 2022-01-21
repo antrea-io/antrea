@@ -42,13 +42,13 @@ else
 end
 
 KUBE_PROXY_MODE = ENV['KUBE_PROXY_MODE'] || "iptables"
-if KUBE_PROXY_MODE == "iptables"
+if KUBE_PROXY_MODE == "iptables" || KUBE_PROXY_MODE == "none"
   KUBE_PROXY_IPVS_STRICT_ARP = false
 elsif KUBE_PROXY_MODE == "ipvs"
   # For now, we always enable strict ARP, which is required to use MetalLB
   KUBE_PROXY_IPVS_STRICT_ARP = true
 else
-  raise "KUBE_PROXY_MODE env variable should be one of 'iptables' or 'ipvs'"
+  raise "KUBE_PROXY_MODE env variable should be one of 'iptables', 'ipvs' or 'none'"
 end
 
 Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
