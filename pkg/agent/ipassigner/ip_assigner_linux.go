@@ -54,7 +54,7 @@ func NewIPAssigner(nodeTransportIPAddr net.IP, dummyDeviceName string) (*ipAssig
 	} else {
 		nodeTransportIPs.IPv4 = nodeTransportIPAddr
 	}
-	_, _, egressInterface, err := util.GetIPNetDeviceFromIP(nodeTransportIPs)
+	_, _, externalInterface, err := util.GetIPNetDeviceFromIP(nodeTransportIPs)
 	if err != nil {
 		return nil, fmt.Errorf("get IPNetDevice from ip %v error: %+v", nodeTransportIPAddr, err)
 	}
@@ -65,7 +65,7 @@ func NewIPAssigner(nodeTransportIPAddr net.IP, dummyDeviceName string) (*ipAssig
 	}
 
 	a := &ipAssigner{
-		externalInterface: egressInterface,
+		externalInterface: externalInterface,
 		dummyDevice:       dummyDevice,
 		assignedIPs:       sets.NewString(),
 	}

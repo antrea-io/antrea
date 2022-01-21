@@ -74,21 +74,17 @@ type ExternalIPPoolEventHandler func(externalIPPool string)
 
 type ExternalIPAllocator interface {
 	// AddEventHandler adds a consumer for ExternalIPPool events. It will block other consumers from allocating new IPs by
-	// AllocateIPFromPool() or AllocateIP() until it calls RestoreIPAllocations().
+	// AllocateIPFromPool() until it calls RestoreIPAllocations().
 	AddEventHandler(handler ExternalIPPoolEventHandler)
 	// RestoreIPAllocations is used to restore the previous allocated IPs after controller restarts. It will return the
 	// succeeded IP Allocations.
 	RestoreIPAllocations(allocations []IPAllocation) []IPAllocation
 	// AllocateIPFromPool allocates an IP from the given IP pool.
 	AllocateIPFromPool(externalIPPool string) (net.IP, error)
-	// AllocateIP allocates an IP from an available IP pool.
-	AllocateIP() (string, net.IP, error)
 	// IPPoolExists checks whether the IP pool exists.
 	IPPoolExists(externalIPPool string) bool
 	// IPPoolHasIP checks whether the IP pool contains the given IP.
 	IPPoolHasIP(externalIPPool string, ip net.IP) bool
-	// LocateIP finds which IP Pool contains the given IP.
-	LocateIP(ip net.IP) (string, error)
 	// UpdateIPAllocation marks the IP in the specified ExternalIPPool as occupied.
 	UpdateIPAllocation(externalIPPool string, ip net.IP) error
 	// ReleaseIP releases the IP to the IP pool.
@@ -281,21 +277,6 @@ func (c *ExternalIPPoolController) AllocateIPFromPool(ipPoolName string) (net.IP
 	return ip, nil
 }
 
-// AllocateIP allocate an IP from an available IP pool.
-func (c *ExternalIPPoolController) AllocateIP() (string, net.IP, error) {
-	c.handlersWaitGroup.Wait()
-	c.ipAllocatorMutex.RLock()
-	defer c.ipAllocatorMutex.RUnlock()
-	for pool, allocator := range c.ipAllocatorMap {
-		ip, err := allocator.AllocateNext()
-		if err == nil {
-			c.queue.Add(pool)
-			return pool, ip, nil
-		}
-	}
-	return "", nil, errors.New("no ExternalIPPool available")
-}
-
 // UpdateIPAllocation sets the IP in the specified ExternalIPPool.
 func (c *ExternalIPPoolController) UpdateIPAllocation(poolName string, ip net.IP) error {
 	ipAllocator, exists := c.getIPAllocator(poolName)
@@ -373,17 +354,6 @@ func (c *ExternalIPPoolController) IPPoolHasIP(poolName string, ip net.IP) bool 
 func (c *ExternalIPPoolController) IPPoolExists(pool string) bool {
 	_, exists := c.getIPAllocator(pool)
 	return exists
-}
-
-func (c *ExternalIPPoolController) LocateIP(ip net.IP) (string, error) {
-	c.ipAllocatorMutex.RLock()
-	defer c.ipAllocatorMutex.RUnlock()
-	for pool, allocator := range c.ipAllocatorMap {
-		if allocator.Has(ip) {
-			return pool, nil
-		}
-	}
-	return "", ErrExternalIPPoolNotFound
 }
 
 func (c *ExternalIPPoolController) worker() {

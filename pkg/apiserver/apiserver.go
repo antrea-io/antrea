@@ -310,9 +310,12 @@ func installHandlers(c *ExtraConfig, s *genericapiserver.GenericAPIServer) {
 		})
 	}
 
+	if features.DefaultFeatureGate.Enabled(features.Egress) || features.DefaultFeatureGate.Enabled(features.ServiceExternalIP) {
+		s.Handler.NonGoRestfulMux.HandleFunc("/validate/externalippool", webhook.HandlerForValidateFunc(c.externalIPPoolController.ValidateExternalIPPool))
+	}
+
 	if features.DefaultFeatureGate.Enabled(features.Egress) {
 		s.Handler.NonGoRestfulMux.HandleFunc("/validate/egress", webhook.HandlerForValidateFunc(c.egressController.ValidateEgress))
-		s.Handler.NonGoRestfulMux.HandleFunc("/validate/externalippool", webhook.HandlerForValidateFunc(c.externalIPPoolController.ValidateExternalIPPool))
 	}
 
 	if features.DefaultFeatureGate.Enabled(features.AntreaIPAM) {

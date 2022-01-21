@@ -84,6 +84,10 @@ const (
 	// alpha: v1.5
 	// Enable Secondary interface feature for Antrea.
 	SecondaryNetwork featuregate.Feature = "SecondaryNetwork"
+
+	// alpha: v1.5
+	// Enable controlling Services with ExternalIP.
+	ServiceExternalIP featuregate.Feature = "ServiceExternalIP"
 )
 
 var (
@@ -110,6 +114,7 @@ var (
 		NodeIPAM:           {Default: false, PreRelease: featuregate.Alpha},
 		Multicast:          {Default: false, PreRelease: featuregate.Alpha},
 		SecondaryNetwork:   {Default: false, PreRelease: featuregate.Alpha},
+		ServiceExternalIP:  {Default: false, PreRelease: featuregate.Alpha},
 	}
 
 	// UnsupportedFeaturesOnWindows records the features not supported on
@@ -123,11 +128,12 @@ var (
 	// can have different FeatureSpecs between Linux and Windows, we should
 	// still define a separate defaultAntreaFeatureGates map for Windows.
 	unsupportedFeaturesOnWindows = map[featuregate.Feature]struct{}{
-		NodePortLocal:    {},
-		Egress:           {},
-		AntreaIPAM:       {},
-		Multicast:        {},
-		SecondaryNetwork: {},
+		NodePortLocal:     {},
+		Egress:            {},
+		AntreaIPAM:        {},
+		Multicast:         {},
+		SecondaryNetwork:  {},
+		ServiceExternalIP: {},
 	}
 )
 
