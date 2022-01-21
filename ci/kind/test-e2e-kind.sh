@@ -127,7 +127,7 @@ fi
 
 COMMON_IMAGES_LIST=("k8s.gcr.io/e2e-test-images/agnhost:2.29" \
                     "projects.registry.vmware.com/library/busybox"  \
-                    "projects.registry.vmware.com/antrea/nginx" \
+                    "projects.registry.vmware.com/antrea/nginx:1.21.6-alpine" \
                     "projects.registry.vmware.com/antrea/perftool" \
                     "projects.registry.vmware.com/antrea/ipfix-collector:v0.5.11" \
                     "projects.registry.vmware.com/antrea/wireguard-go:0.0.20210424")
