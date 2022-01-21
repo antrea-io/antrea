@@ -305,14 +305,6 @@ func run(o *Options) error {
 	}
 
 	var egressController *egress.EgressController
-	var nodeTransportIP net.IP
-	if nodeConfig.NodeTransportIPv4Addr != nil {
-		nodeTransportIP = nodeConfig.NodeTransportIPv4Addr.IP
-	} else if nodeConfig.NodeTransportIPv6Addr != nil {
-		nodeTransportIP = nodeConfig.NodeTransportIPv6Addr.IP
-	} else {
-		return fmt.Errorf("invalid Node Transport IPAddr in Node config: %v", nodeConfig)
-	}
 
 	var externalIPPoolController *externalippool.ExternalIPPoolController
 	var externalIPController *serviceexternalip.ServiceExternalIPController
@@ -324,7 +316,14 @@ func run(o *Options) error {
 			crdClient, externalIPPoolInformer,
 		)
 		localIPDetector = ipassigner.NewLocalIPDetector()
-
+		var nodeTransportIP net.IP
+		if nodeConfig.NodeTransportIPv4Addr != nil {
+			nodeTransportIP = nodeConfig.NodeTransportIPv4Addr.IP
+		} else if nodeConfig.NodeTransportIPv6Addr != nil {
+			nodeTransportIP = nodeConfig.NodeTransportIPv6Addr.IP
+		} else {
+			return fmt.Errorf("invalid Node Transport IPAddr in Node config: %v", nodeConfig)
+		}
 		memberlistCluster, err = memberlist.NewCluster(nodeTransportIP, o.config.ClusterMembershipPort,
 			nodeConfig.Name, nodeInformer, externalIPPoolInformer,
 		)
@@ -334,7 +333,7 @@ func run(o *Options) error {
 	}
 	if features.DefaultFeatureGate.Enabled(features.Egress) {
 		egressController, err = egress.NewEgressController(
-			ofClient, antreaClientProvider, crdClient, ifaceStore, routeClient, nodeConfig.Name, nodeTransportIP,
+			ofClient, antreaClientProvider, crdClient, ifaceStore, routeClient, nodeConfig.Name, nodeConfig.NodeTransportInterfaceName,
 			memberlistCluster, egressInformer, nodeInformer, localIPDetector,
 		)
 		if err != nil {
@@ -344,7 +343,7 @@ func run(o *Options) error {
 	if features.DefaultFeatureGate.Enabled(features.ServiceExternalIP) {
 		externalIPController, err = serviceexternalip.NewServiceExternalIPController(
 			nodeConfig.Name,
-			nodeTransportIP,
+			nodeConfig.NodeTransportInterfaceName,
 			k8sClient,
 			memberlistCluster,
 			serviceInformer,
