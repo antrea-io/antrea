@@ -47,7 +47,7 @@ func (i *Initializer) prepareOVSBridge() error {
 	klog.Infof("Preparing OVS bridge for AntreaFlexibleIPAM")
 	// Get uplink network configuration.
 	// TODO(gran): support IPv6
-	_, _, adapter, err := util.GetIPNetDeviceFromIP(&utilip.DualStackIPs{IPv4: i.nodeConfig.NodeIPv4Addr.IP})
+	_, _, adapter, err := i.getNodeInterfaceFromIP(&utilip.DualStackIPs{IPv4: i.nodeConfig.NodeIPv4Addr.IP})
 	if err != nil {
 		return err
 	}

@@ -293,17 +293,9 @@ func run(o *Options) error {
 	}
 
 	var egressController *egress.EgressController
-	var nodeTransportIP net.IP
-	if nodeConfig.NodeTransportIPv4Addr != nil {
-		nodeTransportIP = nodeConfig.NodeTransportIPv4Addr.IP
-	} else if nodeConfig.NodeTransportIPv6Addr != nil {
-		nodeTransportIP = nodeConfig.NodeTransportIPv6Addr.IP
-	} else {
-		return fmt.Errorf("invalid Node Transport IPAddr in Node config: %v", nodeConfig)
-	}
 	if features.DefaultFeatureGate.Enabled(features.Egress) {
 		egressController, err = egress.NewEgressController(
-			ofClient, antreaClientProvider, crdClient, ifaceStore, routeClient, nodeConfig.Name, nodeTransportIP,
+			ofClient, antreaClientProvider, crdClient, ifaceStore, routeClient, nodeConfig.Name, nodeConfig.NodeTransportInterfaceName,
 			o.config.ClusterMembershipPort, egressInformer, nodeInformer, externalIPPoolInformer,
 		)
 		if err != nil {

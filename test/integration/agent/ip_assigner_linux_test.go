@@ -30,10 +30,10 @@ import (
 const dummyDeviceName = "antrea-dummy0"
 
 func TestIPAssigner(t *testing.T) {
-	nodeIPAddr := nodeIPv4.IP
-	require.NotNil(t, nodeIPAddr, "Get Node IP failed")
+	nodeLinkName := nodeIntf.Name
+	require.NotNil(t, nodeLinkName, "Get Node link failed")
 
-	ipAssigner, err := ipassigner.NewIPAssigner(nodeIPAddr, dummyDeviceName)
+	ipAssigner, err := ipassigner.NewIPAssigner(nodeLinkName, dummyDeviceName)
 	require.NoError(t, err, "Initializing IP assigner failed")
 
 	dummyDevice, err := netlink.LinkByName(dummyDeviceName)
@@ -65,7 +65,7 @@ func TestIPAssigner(t *testing.T) {
 	assert.Equal(t, desiredIPs, actualIPs, "Actual IPs don't match")
 
 	// NewIPAssigner should load existing IPs correctly.
-	newIPAssigner, err := ipassigner.NewIPAssigner(nodeIPAddr, dummyDeviceName)
+	newIPAssigner, err := ipassigner.NewIPAssigner(nodeLinkName, dummyDeviceName)
 	require.NoError(t, err, "Initializing new IP assigner failed")
 	assert.Equal(t, desiredIPs, newIPAssigner.AssignedIPs(), "Assigned IPs don't match")
 

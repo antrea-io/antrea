@@ -151,7 +151,7 @@ func NewEgressController(
 	ifaceStore interfacestore.InterfaceStore,
 	routeClient route.Interface,
 	nodeName string,
-	nodeTransportIP net.IP,
+	nodeTransportInterface string,
 	clusterPort int,
 	egressInformer crdinformers.EgressInformer,
 	nodeInformer coreinformers.NodeInformer,
@@ -176,7 +176,7 @@ func NewEgressController(
 		localIPDetector:      localIPDetector,
 		idAllocator:          newIDAllocator(minEgressMark, maxEgressMark),
 	}
-	ipAssigner, err := ipassigner.NewIPAssigner(nodeTransportIP, egressDummyDevice)
+	ipAssigner, err := ipassigner.NewIPAssigner(nodeTransportInterface, egressDummyDevice)
 	if err != nil {
 		return nil, fmt.Errorf("initializing egressIP assigner failed: %v", err)
 	}
