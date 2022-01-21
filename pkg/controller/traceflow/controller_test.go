@@ -75,6 +75,11 @@ func TestTraceflow(t *testing.T) {
 	stopCh := make(chan struct{})
 	tfc.informerFactory.Start(stopCh)
 	tfc.crdInformerFactory.Start(stopCh)
+	// Must wait for cache sync, otherwise resource creation events will be missing if the resources are created
+	// in-between list and watch call of an informer. This is because fake clientset doesn't support watching with
+	// resourceVersion. A watcher of fake clientset only gets events that happen after the watcher is created.
+	tfc.informerFactory.WaitForCacheSync(stopCh)
+	tfc.crdInformerFactory.WaitForCacheSync(stopCh)
 	go tfc.Run(stopCh)
 
 	numRunningTraceflows := func() int {
