@@ -68,7 +68,7 @@ func newController(crdObjects []runtime.Object) *controller {
 	}
 }
 
-func TestAllocateIP(t *testing.T) {
+func TestAllocateIPFromPool(t *testing.T) {
 	tests := []struct {
 		name        string
 		ipPools     []*antreacrds.ExternalIPPool
@@ -146,104 +146,6 @@ func TestAllocateIP(t *testing.T) {
 			ipGot, err := controller.AllocateIPFromPool(tt.allocateFrom)
 			assert.Equal(t, tt.expectError, err != nil)
 			assert.Equal(t, net.ParseIP(tt.expectedIP), ipGot)
-			for idx, pool := range tt.ipPools {
-				checkExternalIPPoolStatus(t, controller, pool.Name, tt.expectedIPPoolStatus[idx])
-			}
-		})
-	}
-}
-
-func TestAllocateIPFromPool(t *testing.T) {
-	tests := []struct {
-		name        string
-		ipPools     []*antreacrds.ExternalIPPool
-		allocatedIP []struct {
-			ip   string
-			pool string
-		}
-		expectedIPPool       string
-		expectedIP           string
-		expectError          bool
-		expectedIPPoolStatus []antreacrds.ExternalIPPoolUsage
-	}{
-		{
-			name: "allocate from proper IP pool",
-			ipPools: []*antreacrds.ExternalIPPool{
-				newExternalIPPool("eip1", "", "10.10.10.2", "10.10.10.3"),
-			},
-			allocatedIP:    nil,
-			expectedIPPool: "eip1",
-			expectedIP:     "10.10.10.2",
-			expectError:    false,
-			expectedIPPoolStatus: []antreacrds.ExternalIPPoolUsage{
-				{Total: 2, Used: 1},
-			},
-		},
-		{
-			name: "allocate from IP pools and one is full",
-			ipPools: []*antreacrds.ExternalIPPool{
-				newExternalIPPool("eip1", "", "10.10.10.2", "10.10.10.3"),
-				newExternalIPPool("eip2", "", "10.10.11.2", "10.10.11.3"),
-			},
-			allocatedIP: []struct {
-				ip   string
-				pool string
-			}{
-				{"10.10.10.2", "eip1"},
-				{"10.10.10.3", "eip1"},
-			},
-			expectedIPPool: "eip2",
-			expectedIP:     "10.10.11.2",
-			expectError:    false,
-			expectedIPPoolStatus: []antreacrds.ExternalIPPoolUsage{
-				{Total: 2, Used: 2},
-				{Total: 2, Used: 1},
-			},
-		},
-		{
-			name: "allocate from IP pools and all are full",
-			ipPools: []*antreacrds.ExternalIPPool{
-				newExternalIPPool("eip1", "", "10.10.10.2", "10.10.10.3"),
-				newExternalIPPool("eip2", "", "10.10.11.2", "10.10.11.3"),
-			},
-			allocatedIP: []struct {
-				ip   string
-				pool string
-			}{
-				{"10.10.10.2", "eip1"},
-				{"10.10.10.3", "eip1"},
-				{"10.10.11.2", "eip2"},
-				{"10.10.11.3", "eip2"},
-			},
-			expectedIPPool: "",
-			expectedIP:     "",
-			expectError:    true,
-			expectedIPPoolStatus: []antreacrds.ExternalIPPoolUsage{
-				{Total: 2, Used: 2},
-				{Total: 2, Used: 2},
-			},
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			stopCh := make(chan struct{})
-			defer close(stopCh)
-			var fakeCRDObjects []runtime.Object
-			for _, p := range tt.ipPools {
-				fakeCRDObjects = append(fakeCRDObjects, p)
-			}
-			controller := newController(fakeCRDObjects)
-			controller.crdInformerFactory.Start(stopCh)
-			controller.crdInformerFactory.WaitForCacheSync(stopCh)
-			go controller.Run(stopCh)
-			require.True(t, cache.WaitForCacheSync(stopCh, controller.HasSynced))
-			for _, alloc := range tt.allocatedIP {
-				require.NoError(t, controller.UpdateIPAllocation(alloc.pool, net.ParseIP(alloc.ip)))
-			}
-			ipPoolGot, ipGot, err := controller.AllocateIP()
-			assert.Equal(t, tt.expectError, err != nil)
-			assert.Equal(t, net.ParseIP(tt.expectedIP), ipGot)
-			assert.Equal(t, tt.expectedIPPool, ipPoolGot)
 			for idx, pool := range tt.ipPools {
 				checkExternalIPPoolStatus(t, controller, pool.Name, tt.expectedIPPoolStatus[idx])
 			}
@@ -549,65 +451,6 @@ func TestIPPoolHasIP(t *testing.T) {
 			require.True(t, cache.WaitForCacheSync(stopCh, controller.HasSynced))
 			exists := controller.IPPoolHasIP(tt.ipPoolToCheck, tt.ipToCheck)
 			assert.Equal(t, tt.expectedExists, exists)
-		})
-	}
-}
-
-func TestLocateIP(t *testing.T) {
-	tests := []struct {
-		name           string
-		ipPools        []*antreacrds.ExternalIPPool
-		ipToCheck      net.IP
-		expectedIPPool string
-		expectedError  bool
-	}{
-		{
-			name: "check for known IP 1",
-			ipPools: []*antreacrds.ExternalIPPool{
-				newExternalIPPool("eip1", "", "10.10.10.2", "10.10.10.3"),
-				newExternalIPPool("eip2", "", "10.10.11.2", "10.10.11.3"),
-			},
-			ipToCheck:      net.ParseIP("10.10.10.2"),
-			expectedIPPool: "eip1",
-			expectedError:  false,
-		},
-		{
-			name: "check for known IP 2",
-			ipPools: []*antreacrds.ExternalIPPool{
-				newExternalIPPool("eip1", "", "10.10.10.2", "10.10.10.3"),
-				newExternalIPPool("eip2", "", "10.10.11.2", "10.10.11.3"),
-			},
-			ipToCheck:      net.ParseIP("10.10.11.2"),
-			expectedIPPool: "eip2",
-			expectedError:  false,
-		},
-		{
-			name: "check for unknown IP",
-			ipPools: []*antreacrds.ExternalIPPool{
-				newExternalIPPool("eip1", "", "10.10.10.2", "10.10.10.3"),
-				newExternalIPPool("eip2", "", "10.10.11.2", "10.10.11.3"),
-			},
-			ipToCheck:      net.ParseIP("10.10.13.1"),
-			expectedIPPool: "",
-			expectedError:  true,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			stopCh := make(chan struct{})
-			defer close(stopCh)
-			var fakeCRDObjects []runtime.Object
-			for _, p := range tt.ipPools {
-				fakeCRDObjects = append(fakeCRDObjects, p)
-			}
-			controller := newController(fakeCRDObjects)
-			controller.crdInformerFactory.Start(stopCh)
-			controller.crdInformerFactory.WaitForCacheSync(stopCh)
-			go controller.Run(stopCh)
-			require.True(t, cache.WaitForCacheSync(stopCh, controller.HasSynced))
-			pool, err := controller.LocateIP(tt.ipToCheck)
-			assert.Equal(t, tt.expectedIPPool, pool)
-			assert.Equal(t, tt.expectedError, err != nil)
 		})
 	}
 }
