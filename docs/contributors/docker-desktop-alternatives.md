@@ -9,7 +9,7 @@ Machine (VM). This VM is typically managed by [Docker
 Desktop](https://www.docker.com/products/docker-desktop). Starting January 31
 2022, Docker Desktop requires a per user paid subscription for professional use
 in "large" companies (more than 250 employees or more than $10 million in annual
-revenue). See [https://www.docker.com/pricing/faq for details]. For developers
+revenue). See <https://www.docker.com/pricing/faq> for details. For developers
 who contribute to Antrea as an employee of such a company (and not in their own
 individual capacity), it is no longer possible to use Docker Desktop to build
 (and possibly run) Antrea Docker images locally, unless they have a Docker
@@ -37,7 +37,7 @@ To install and run Colima, follow these steps:
 * `docker context list` and check that the `colima` context is selected. You can
   use `docker context use desktop-linux` to go back to Docker Desktop.
 * `make` to build Antrea locally. Check that the `antrea-ubuntu` image is
-  available by listin all images with `docker images`.
+  available by listing all images with `docker images`.
 
 TODO: validate that Kind can be used with Colima without any issue.
 
