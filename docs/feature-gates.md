@@ -45,6 +45,8 @@ example, to enable `AntreaProxy` on Linux, edit the Agent configuration in the
 | `Egress`                | Agent + Controller | `false` | Alpha | v1.0          | N/A          | N/A        | Yes                |       |
 | `NodeIPAM`              | Controller         | `false` | Alpha | v1.4          | N/A          | N/A        | Yes                |       |
 | `AntreaIPAM`            | Agent + Controller | `false` | Alpha | v1.4          | N/A          | N/A        | Yes                |       |
+| `Multicast`             | Agent              | `false` | Alpha | v1.5          | N/A          | N/A        | Yes                |       |
+| `SecondaryNetwork`      | Agent              | `false` | Alpha | v1.5          | N/A          | N/A        | Yes                |       |
 
 ## Description and Requirements of Features
 
@@ -224,3 +226,31 @@ The IPs in the `IPPools` must be in the same "underlay" subnet as the Node IP, b
 inter-Node traffic of AntreaIPAM Pods is forwarded by the Node network. Only a single IP
 pool can be included in the Namespace annotation. In the future, annotation of up to two
 pools for IPv4 and IPv6 respectively will be supported.
+
+### Multicast
+
+The `Multicast` feature enables forwarding multicast traffic within the cluster
+network (i.e., between Pods) and between the external network and the cluster
+network.
+
+More documentation will be coming in the future.
+
+#### Requirements for this Feature
+
+This feature is only supported:
+
+* on Linux Nodes
+* for IPv4 traffic
+* in `noEncap` mode
+
+### SecondaryNetwork
+
+The `SecondaryNetwork` feature enables support for provisioning secondary
+network interfaces for Pods, by annotating them appropriately.
+
+More documentation will be coming in the future.
+
+#### Requirements for this Feature
+
+At the moment, Antrea can only create secondary network interfaces using SR-IOV
+VFs on baremetal Linux Nodes.
