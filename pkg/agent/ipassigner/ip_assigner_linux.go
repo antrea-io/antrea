@@ -26,7 +26,6 @@ import (
 	"antrea.io/antrea/pkg/agent/util"
 	"antrea.io/antrea/pkg/agent/util/arping"
 	"antrea.io/antrea/pkg/agent/util/ndp"
-	"antrea.io/antrea/pkg/util/ip"
 )
 
 // ipAssigner creates a dummy device and assigns IPs to it.
@@ -47,16 +46,10 @@ type ipAssigner struct {
 }
 
 // NewIPAssigner returns an *ipAssigner.
-func NewIPAssigner(nodeTransportIPAddr net.IP, dummyDeviceName string) (*ipAssigner, error) {
-	nodeTransportIPs := new(ip.DualStackIPs)
-	if nodeTransportIPAddr.To4() == nil {
-		nodeTransportIPs.IPv6 = nodeTransportIPAddr
-	} else {
-		nodeTransportIPs.IPv4 = nodeTransportIPAddr
-	}
-	_, _, externalInterface, err := util.GetIPNetDeviceFromIP(nodeTransportIPs)
+func NewIPAssigner(nodeTransportInterface string, dummyDeviceName string) (*ipAssigner, error) {
+	_, _, externalInterface, err := util.GetIPNetDeviceByName(nodeTransportInterface)
 	if err != nil {
-		return nil, fmt.Errorf("get IPNetDevice from ip %v error: %+v", nodeTransportIPAddr, err)
+		return nil, fmt.Errorf("get IPNetDevice from name %s error: %+v", nodeTransportInterface, err)
 	}
 
 	dummyDevice, err := ensureDummyDevice(dummyDeviceName)

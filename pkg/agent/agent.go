@@ -28,6 +28,7 @@ import (
 	"github.com/containernetworking/plugins/pkg/ip"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	apitypes "k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/util/retry"
@@ -47,6 +48,7 @@ import (
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 	"antrea.io/antrea/pkg/ovs/ovsctl"
 	"antrea.io/antrea/pkg/util/env"
+	utilip "antrea.io/antrea/pkg/util/ip"
 	"antrea.io/antrea/pkg/util/k8s"
 )
 
@@ -793,7 +795,7 @@ func (i *Initializer) initNodeLocalConfig() error {
 	if err != nil {
 		return fmt.Errorf("failed to obtain local IP addresses from K8s: %w", err)
 	}
-	nodeIPv4Addr, nodeIPv6Addr, nodeInterface, err = getIPNetDeviceFromIP(ipAddrs)
+	nodeIPv4Addr, nodeIPv6Addr, nodeInterface, err = i.getNodeInterfaceFromIP(ipAddrs)
 	if err != nil {
 		return fmt.Errorf("failed to get local IPNet device with IP %v: %v", ipAddrs, err)
 	}
@@ -1113,4 +1115,11 @@ func (i *Initializer) patchNodeAnnotations(nodeName, key string, value interface
 		return err
 	}
 	return nil
+}
+
+// getNodeInterfaceFromIP returns the IPv4/IPv6 configuration, and the associated interface according the give nodeIPs.
+// When searching the Node interface, antrea-gw0 is ignored because it is configured with the same address as Node IP
+// with NetworkPolicyOnly mode on public cloud setup, e.g., AKS.
+func (i *Initializer) getNodeInterfaceFromIP(nodeIPs *utilip.DualStackIPs) (v4IPNet *net.IPNet, v6IPNet *net.IPNet, iface *net.Interface, err error) {
+	return getIPNetDeviceFromIP(nodeIPs, sets.NewString(i.hostGateway))
 }

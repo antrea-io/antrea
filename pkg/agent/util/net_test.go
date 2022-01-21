@@ -20,6 +20,8 @@ import (
 	"strings"
 	"testing"
 
+	"k8s.io/apimachinery/pkg/util/sets"
+
 	"antrea.io/antrea/pkg/util/ip"
 )
 
@@ -58,7 +60,7 @@ func TestGetDefaultLocalNodeAddr(t *testing.T) {
 	localAddr := conn.LocalAddr().(*net.UDPAddr).IP
 
 	nodeIPs := &ip.DualStackIPs{IPv4: localAddr}
-	_, _, dev, err := GetIPNetDeviceFromIP(nodeIPs)
+	_, _, dev, err := GetIPNetDeviceFromIP(nodeIPs, sets.NewString())
 	if err != nil {
 		t.Error(err)
 	}

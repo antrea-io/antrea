@@ -111,8 +111,9 @@ func dialUnix(address string) (net.Conn, error) {
 	return net.Dial("unix", address)
 }
 
-// GetIPNetDeviceFromIP returns local IPs/masks and associated device from IP.
-func GetIPNetDeviceFromIP(localIPs *ip.DualStackIPs) (v4IPNet *net.IPNet, v6IPNet *net.IPNet, iface *net.Interface, err error) {
+// GetIPNetDeviceFromIP returns local IPs/masks and associated device from IP, and ignores the interfaces which have
+// names in the ignoredInterfaces.
+func GetIPNetDeviceFromIP(localIPs *ip.DualStackIPs, ignoredInterfaces sets.String) (v4IPNet *net.IPNet, v6IPNet *net.IPNet, iface *net.Interface, err error) {
 	linkList, err := net.Interfaces()
 	if err != nil {
 		return nil, nil, nil, err
@@ -129,19 +130,23 @@ func GetIPNetDeviceFromIP(localIPs *ip.DualStackIPs) (v4IPNet *net.IPNet, v6IPNe
 		return nil
 	}
 	for i := range linkList {
-		addrList, err := linkList[i].Addrs()
+		link := linkList[i]
+		if ignoredInterfaces.Has(link.Name) {
+			continue
+		}
+		addrList, err := link.Addrs()
 		if err != nil {
 			continue
 		}
 		for _, addr := range addrList {
 			if ipNet, ok := addr.(*net.IPNet); ok {
 				if ipNet.IP.Equal(localIPs.IPv4) {
-					if err := saveIface(&linkList[i]); err != nil {
+					if err := saveIface(&link); err != nil {
 						return nil, nil, nil, err
 					}
 					v4IPNet = ipNet
 				} else if ipNet.IP.Equal(localIPs.IPv6) {
-					if err := saveIface(&linkList[i]); err != nil {
+					if err := saveIface(&link); err != nil {
 						return nil, nil, nil, err
 					}
 					v6IPNet = ipNet
