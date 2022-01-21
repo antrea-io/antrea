@@ -373,15 +373,16 @@ func TestInitNodeLocalConfig(t *testing.T) {
 			client := fake.NewSimpleClientset(node)
 			ifaceStore := interfacestore.NewInterfaceStore()
 			expectedNodeConfig := config.NodeConfig{
-				Name:                  nodeName,
-				OVSBridge:             ovsBridge,
-				DefaultTunName:        defaultTunInterfaceName,
-				PodIPv4CIDR:           podCIDR,
-				NodeIPv4Addr:          nodeIPNet,
-				NodeTransportIPv4Addr: nodeIPNet,
-				NodeLocalInterfaceMTU: tt.expectedNodeLocalIfaceMTU,
-				NodeMTU:               tt.expectedMTU,
-				UplinkNetConfig:       new(config.AdapterNetConfig),
+				Name:                       nodeName,
+				OVSBridge:                  ovsBridge,
+				DefaultTunName:             defaultTunInterfaceName,
+				PodIPv4CIDR:                podCIDR,
+				NodeIPv4Addr:               nodeIPNet,
+				NodeTransportInterfaceName: ipDevice.Name,
+				NodeTransportIPv4Addr:      nodeIPNet,
+				NodeTransportInterfaceMTU:  tt.expectedNodeLocalIfaceMTU,
+				NodeMTU:                    tt.expectedMTU,
+				UplinkNetConfig:            new(config.AdapterNetConfig),
 			}
 
 			initializer := &Initializer{
@@ -396,11 +397,13 @@ func TestInitNodeLocalConfig(t *testing.T) {
 			}
 			if tt.transportIfName != "" {
 				initializer.networkConfig.TransportIface = tt.transportInterface.iface.Name
+				expectedNodeConfig.NodeTransportInterfaceName = tt.transportInterface.iface.Name
 				expectedNodeConfig.NodeTransportIPv4Addr = tt.transportInterface.ipV4Net
 				expectedNodeConfig.NodeTransportIPv6Addr = tt.transportInterface.ipV6Net
 				defer mockGetTransportIPNetDeviceByName(tt.transportInterface.ipV4Net, tt.transportInterface.ipV6Net, tt.transportInterface.iface)()
 			} else if len(tt.transportIfCIDRs) > 0 {
 				initializer.networkConfig.TransportIfaceCIDRs = tt.transportIfCIDRs
+				expectedNodeConfig.NodeTransportInterfaceName = tt.transportInterface.iface.Name
 				expectedNodeConfig.NodeTransportIPv4Addr = tt.transportInterface.ipV4Net
 				expectedNodeConfig.NodeTransportIPv6Addr = tt.transportInterface.ipV6Net
 				defer mockGetIPNetDeviceByCIDRs(tt.transportInterface.ipV4Net, tt.transportInterface.ipV6Net, tt.transportInterface.iface)()
