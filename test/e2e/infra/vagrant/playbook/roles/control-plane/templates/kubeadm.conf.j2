@@ -1,9 +1,13 @@
-apiVersion: kubeadm.k8s.io/v1beta2
+apiVersion: kubeadm.k8s.io/v1beta3
 kind: InitConfiguration
 nodeRegistration:
   name: "{{ node_name }}"
 localAPIEndpoint:
   advertiseAddress: "{{ k8s_api_server_ip }}"
+{% if kube_proxy_mode == 'none' %}
+skipPhases:
+- addon/kube-proxy
+{% endif %}
 ---
 apiVersion: kubeadm.k8s.io/v1beta2
 kind: ClusterConfiguration
@@ -16,10 +20,12 @@ apiServer:
   extraArgs:
     feature-gates: "NetworkPolicyEndPort=true"
 ---
+{% if kube_proxy_mode != 'none' %}
 apiVersion: kubeproxy.config.k8s.io/v1alpha1
 kind: KubeProxyConfiguration
 mode: "{{ kube_proxy_mode }}"
 {% if kube_proxy_ipvs_strict_arp %}
 ipvs:
   strictARP: true
+{% endif %}
 {% endif %}
