@@ -16,7 +16,6 @@ package interfacestore
 
 import (
 	"fmt"
-	"sync"
 
 	"k8s.io/client-go/tools/cache"
 
@@ -65,7 +64,6 @@ const (
 // Todo: add periodic task to sync local cache with container veth pair
 
 type interfaceCache struct {
-	sync.RWMutex
 	cache cache.Indexer
 }
 
@@ -97,8 +95,6 @@ func getInterfaceKey(obj interface{}) (string, error) {
 
 // AddInterface adds interfaceConfig into local cache.
 func (c *interfaceCache) AddInterface(interfaceConfig *InterfaceConfig) {
-	c.Lock()
-	defer c.Unlock()
 	c.cache.Add(interfaceConfig)
 
 	if interfaceConfig.Type == ContainerInterface {
@@ -108,8 +104,6 @@ func (c *interfaceCache) AddInterface(interfaceConfig *InterfaceConfig) {
 
 // DeleteInterface deletes interface from local cache.
 func (c *interfaceCache) DeleteInterface(interfaceConfig *InterfaceConfig) {
-	c.Lock()
-	defer c.Unlock()
 	c.cache.Delete(interfaceConfig)
 
 	if interfaceConfig.Type == ContainerInterface {
@@ -119,8 +113,6 @@ func (c *interfaceCache) DeleteInterface(interfaceConfig *InterfaceConfig) {
 
 // GetInterface retrieves interface from local cache given the interface key.
 func (c *interfaceCache) GetInterface(interfaceKey string) (*InterfaceConfig, bool) {
-	c.RLock()
-	defer c.RUnlock()
 	iface, found, _ := c.cache.GetByKey(interfaceKey)
 	if !found {
 		return nil, false
@@ -131,8 +123,6 @@ func (c *interfaceCache) GetInterface(interfaceKey string) (*InterfaceConfig, bo
 // GetInterfaceByName retrieves interface from local cache given the interface
 // name.
 func (c *interfaceCache) GetInterfaceByName(interfaceName string) (*InterfaceConfig, bool) {
-	c.RLock()
-	defer c.RUnlock()
 	interfaceConfigs, _ := c.cache.ByIndex(interfaceNameIndex, interfaceName)
 	if len(interfaceConfigs) == 0 {
 		return nil, false
@@ -142,8 +132,6 @@ func (c *interfaceCache) GetInterfaceByName(interfaceName string) (*InterfaceCon
 
 // GetInterfaceByIP retrieves interface from local cache given the interface IP.
 func (c *interfaceCache) GetInterfaceByIP(interfaceIP string) (*InterfaceConfig, bool) {
-	c.RLock()
-	defer c.RUnlock()
 	interfaceConfigs, _ := c.cache.ByIndex(interfaceIPIndex, interfaceIP)
 	if len(interfaceConfigs) == 0 {
 		return nil, false
@@ -152,15 +140,11 @@ func (c *interfaceCache) GetInterfaceByIP(interfaceIP string) (*InterfaceConfig,
 }
 
 func (c *interfaceCache) GetContainerInterfaceNum() int {
-	c.RLock()
-	defer c.RUnlock()
 	keys, _ := c.cache.IndexKeys(interfaceTypeIndex, ContainerInterface.String())
 	return len(keys)
 }
 
 func (c *interfaceCache) GetInterfacesByType(interfaceType InterfaceType) []*InterfaceConfig {
-	c.RLock()
-	defer c.RUnlock()
 	objs, _ := c.cache.ByIndex(interfaceTypeIndex, interfaceType.String())
 	interfaces := make([]*InterfaceConfig, len(objs))
 	for i := range objs {
@@ -170,22 +154,16 @@ func (c *interfaceCache) GetInterfacesByType(interfaceType InterfaceType) []*Int
 }
 
 func (c *interfaceCache) Len() int {
-	c.RLock()
-	defer c.RUnlock()
 	return len(c.cache.ListKeys())
 }
 
 func (c *interfaceCache) GetInterfaceKeysByType(interfaceType InterfaceType) []string {
-	c.RLock()
-	defer c.RUnlock()
 	keys, _ := c.cache.IndexKeys(interfaceTypeIndex, interfaceType.String())
 	return keys
 }
 
 // GetContainerInterface retrieves InterfaceConfig by the given container ID.
 func (c *interfaceCache) GetContainerInterface(containerID string) (*InterfaceConfig, bool) {
-	c.RLock()
-	defer c.RUnlock()
 	objs, _ := c.cache.ByIndex(containerIDIndex, containerID)
 	if len(objs) == 0 {
 		return nil, false
@@ -202,8 +180,6 @@ func (c *interfaceCache) GetInterfacesByEntity(name, namespace string) []*Interf
 // name temporarily when the previous Pod is being deleted and the new Pod is being created almost simultaneously.
 // https://github.com/antrea-io/antrea/issues/785#issuecomment-642051884
 func (c *interfaceCache) GetContainerInterfacesByPod(podName string, podNamespace string) []*InterfaceConfig {
-	c.RLock()
-	defer c.RUnlock()
 	objs, _ := c.cache.ByIndex(podIndex, k8s.NamespacedName(podNamespace, podName))
 	interfaces := make([]*InterfaceConfig, len(objs))
 	for i := range objs {
@@ -215,8 +191,6 @@ func (c *interfaceCache) GetContainerInterfacesByPod(podName string, podNamespac
 // GetNodeTunnelInterface retrieves InterfaceConfig for the tunnel to the Node.
 func (c *interfaceCache) GetNodeTunnelInterface(nodeName string) (*InterfaceConfig, bool) {
 	key := util.GenerateNodeTunnelInterfaceKey(nodeName)
-	c.RLock()
-	defer c.RUnlock()
 	obj, ok, _ := c.cache.GetByKey(key)
 	if !ok {
 		return nil, false
@@ -226,8 +200,6 @@ func (c *interfaceCache) GetNodeTunnelInterface(nodeName string) (*InterfaceConf
 
 // GetInterfaceByOFPort retrieves InterfaceConfig by the given ofPort number.
 func (c *interfaceCache) GetInterfaceByOFPort(ofPort uint32) (*InterfaceConfig, bool) {
-	c.RLock()
-	defer c.RUnlock()
 	ofportStr := fmt.Sprintf("%d", ofPort)
 	interfaceConfigs, _ := c.cache.ByIndex(ofPortIndex, ofportStr)
 	if len(interfaceConfigs) == 0 {
