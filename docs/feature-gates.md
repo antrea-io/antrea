@@ -47,6 +47,7 @@ example, to enable `AntreaProxy` on Linux, edit the Agent configuration in the
 | `AntreaIPAM`            | Agent + Controller | `false` | Alpha | v1.4          | N/A          | N/A        | Yes                |       |
 | `Multicast`             | Agent              | `false` | Alpha | v1.5          | N/A          | N/A        | Yes                |       |
 | `SecondaryNetwork`      | Agent              | `false` | Alpha | v1.5          | N/A          | N/A        | Yes                |       |
+| `ServiceExternalIP`     | Agent + Controller | `false` | Alpha | v1.5          | N/A          | N/A        | Yes                |       |
 
 ## Description and Requirements of Features
 
@@ -254,3 +255,23 @@ More documentation will be coming in the future.
 
 At the moment, Antrea can only create secondary network interfaces using SR-IOV
 VFs on baremetal Linux Nodes.
+
+### ServiceExternalIP
+
+The `ServiceExternalIP` feature enables a controller which can allocate external
+IPs for Services with type `LoadBalancer`. External IPs are allocated from an
+`ExternalIPPool` resource and each IP gets assigned to a Node selected by the
+`nodeSelector` of the pool automatically. That Node will receive Service traffic
+destined to that IP and distribute it among the backend Endpoints for the
+Service (through kube-proxy). To enable external IP allocation for a
+`LoadBalancer` Service, you need to annotate the Service with
+`"service.antrea.io/external-ip-pool": "<externalIPPool name>"` and define the
+appropriate `ExternalIPPool` resource.
+
+More documentation will be coming in the future.
+
+#### Requirements for this Feature
+
+This feature is currently only supported for Nodes running Linux. At the moment,
+it only works with kube-proxy and it requires Antrea ProxyAll to be disabled
+(which is the default Antrea configuration).
