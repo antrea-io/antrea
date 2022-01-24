@@ -17,6 +17,7 @@ package main
 import (
 	"fmt"
 	"hash/fnv"
+	"os"
 	"sync"
 	"time"
 
@@ -131,8 +132,8 @@ func run(o *Options) error {
 
 	if o.config.ClickHouse != nil {
 		chInput := clickhouseclient.ClickHouseInput{
-			Username: o.config.ClickHouse.Username,
-			Password: o.config.ClickHouse.Password,
+			Username: os.Getenv("CH_USERNAME"),
+			Password: os.Getenv("CH_PASSWORD"),
 			Database: o.config.ClickHouse.Database,
 			DbURL:    o.config.ClickHouse.DbURL,
 			Debug:    o.config.ClickHouse.Debug,

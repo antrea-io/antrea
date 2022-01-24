@@ -77,10 +77,6 @@ type APIServerConfig struct {
 }
 
 type ClickHouseConfig struct {
-	// Username is the username for ClickHouse client.
-	Username string `yaml:"username,omitempty"`
-	// Password is the password for ClickHouse client.
-	Password string `yaml:"password,omitempty"`
 	// Database is the name of database where antrea table is created.
 	Database string `yaml:"database,omitempty"`
 	// DbURL is the url to the database. TCP protocol is required.

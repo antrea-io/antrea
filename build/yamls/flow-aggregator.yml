@@ -144,6 +144,16 @@ subjects:
   namespace: flow-aggregator
 ---
 apiVersion: v1
+kind: Secret
+metadata:
+  name: clickhouse-secret
+  namespace: flow-aggregator
+type: Opaque
+stringData:
+  username: clickhouse_operator
+  password: clickhouse_operator_password
+---
+apiVersion: v1
 data:
   flow-aggregator.conf: |
     # Provide the flow collector address as string with format <IP>:<port>[:<proto>], where proto is tcp or udp.
@@ -206,10 +216,6 @@ data:
     
     # clickHouse contains ClickHouse related configuration options.
     #clickHouse:
-      # Username of ClickHouse client.
-      #username: "clickhouse_operator"
-      # Password of ClickHouse client.
-      #password: "clickhouse_operator_password"
       # DB name containing antrea table.
       #database: "default"
       # URL to ClickHouse DB.
@@ -277,6 +283,16 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: metadata.name
+        - name: CH_USERNAME
+          valueFrom:
+            secretKeyRef: 
+              name: clickhouse-secret
+              key: username
+        - name: CH_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: clickhouse-secret
+              key: password
         image: projects.registry.vmware.com/antrea/flow-aggregator:latest
         imagePullPolicy: IfNotPresent
         name: flow-aggregator
