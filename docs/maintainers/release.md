@@ -15,13 +15,14 @@ release. We use `<TAG>` as a placeholder for the release tag (e.g. `v1.4.0`).
 2. Open a PR (labelled with `kind/release`) against the appropriate release
    branch with the following commits:
    - a commit to update the [CHANGELOG](../../CHANGELOG). *For a minor release*,
-     all significant changes and all bug fixes since the first version of the
-     previous minor release should be mentioned, even bug fixes which have
-     already been included in some patch release. *For a patch release*, you
-     will mention all the bug fixes since the previous release with the same
-     minor version. The commit message must be *exactly* `"Update CHANGELOG for
-     <TAG> release"`, as a bot will look for this commit and cherry-pick it to
-     update the main branch (starting with Antrea v1.0). The
+     all significant changes and all bug fixes (labelled with
+     `action/release-note` since the first version of the previous minor release
+     should be mentioned, even bug fixes which have already been included in
+     some patch release. *For a patch release*, you will mention all the bug
+     fixes since the previous release with the same minor version. The commit
+     message must be *exactly* `"Update CHANGELOG for <TAG> release"`, as a bot
+     will look for this commit and cherry-pick it to update the main branch
+     (starting with Antrea v1.0). The
      [process-changelog.go](../../hack/release/process-changelog.go) script may
      be used to easily generate links to PRs and the Github profiles of PR
      authors.

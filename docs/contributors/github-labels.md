@@ -111,6 +111,8 @@ The labels in this list originated within Kubernetes at
 | triage/needs-information           | Indicates an issue needs more information in order to work on it. | Humans |
 | triage/not-reproducible            | Indicates an issue can not be reproduced as described. | Humans |
 | triage/unresolved                  | Indicates an issue that can not or will not be resolved. | Humans |
+| action/backport                    | Indicates a PR that requires backports. | Humans |
+| action/release-note                | Indicates a PR that should be included in release notes.  | Humans |
 
 ## Labels that apply only to issues
 
