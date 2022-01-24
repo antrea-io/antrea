@@ -1104,7 +1104,7 @@ func createPerftestServices(data *TestData, isIPv6 bool) (svcB *corev1.Service, 
 
 func deletePerftestServices(t *testing.T, data *TestData) {
 	for _, serviceName := range []string{"perftest-b", "perftest-c"} {
-		err := data.deleteService(serviceName)
+		err := data.deleteService(testNamespace, serviceName)
 		if err != nil {
 			t.Logf("Error when deleting %s Service: %v", serviceName, err)
 		}

@@ -399,7 +399,7 @@ func (s *CNIServer) CmdAdd(ctx context.Context, request *cnipb.CniCmdRequest) (*
 	}
 
 	cniVersion := cniConfig.CNIVersion
-	result := &current.Result{CNIVersion: cniVersion}
+	result := &ipam.IPAMResult{Result: current.Result{CNIVersion: cniVersion}}
 	netNS := s.hostNetNsPath(cniConfig.Netns)
 	isInfraContainer := isInfraContainer(netNS)
 
@@ -430,7 +430,7 @@ func (s *CNIServer) CmdAdd(ctx context.Context, request *cnipb.CniCmdRequest) (*
 		return resp, err
 	}
 
-	var ipamResult *current.Result
+	var ipamResult *ipam.IPAMResult
 	var err error
 	// Only allocate IP when handling CNI request from infra container.
 	// On windows platform, CNI plugin is called for all containers in a Pod.
@@ -449,12 +449,13 @@ func (s *CNIServer) CmdAdd(ctx context.Context, request *cnipb.CniCmdRequest) (*
 	klog.Infof("Requested ip addresses for container %v: %v", cniConfig.ContainerId, ipamResult)
 	result.IPs = ipamResult.IPs
 	result.Routes = ipamResult.Routes
+	result.VLANID = ipamResult.VLANID
 	// Ensure interface gateway setting and mapping relations between result.Interfaces and result.IPs
-	updateResultIfaceConfig(result, s.nodeConfig.GatewayConfig.IPv4, s.nodeConfig.GatewayConfig.IPv6)
+	updateResultIfaceConfig(&result.Result, s.nodeConfig.GatewayConfig.IPv4, s.nodeConfig.GatewayConfig.IPv6)
 	// Setup pod interfaces and connect to ovs bridge
 	podName := string(cniConfig.K8S_POD_NAME)
 	podNamespace := string(cniConfig.K8S_POD_NAMESPACE)
-	updateResultDNSConfig(result, cniConfig)
+	updateResultDNSConfig(&result.Result, cniConfig)
 	if err = s.podConfigurator.configureInterfaces(
 		podName,
 		podNamespace,
@@ -483,7 +484,7 @@ func (s *CNIServer) CmdAdd(ctx context.Context, request *cnipb.CniCmdRequest) (*
 		s.podConfigurator.podInfoStore.AddCNIConfigInfo(cniInfo)
 	}
 
-	return resultToResponse(result), nil
+	return resultToResponse(&result.Result), nil
 }
 
 func (s *CNIServer) CmdDel(_ context.Context, request *cnipb.CniCmdRequest) (

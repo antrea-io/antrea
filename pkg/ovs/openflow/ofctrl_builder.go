@@ -38,6 +38,17 @@ func (b *ofFlowBuilder) MatchTunMetadata(index int, data uint32) FlowBuilder {
 	return b
 }
 
+// MatchVLAN matches the VLAN VID. It holds the VLAN VID in its least significant 12 bits.
+func (b *ofFlowBuilder) MatchVLAN(nonVLAN bool, vlanID uint16, vlanMask *uint16) FlowBuilder {
+	// TODO(gran): correct matchStr
+	matchStr := fmt.Sprintf("dl_vlan=%d", vlanID)
+	b.matchers = append(b.matchers, matchStr)
+	b.Match.NonVlan = nonVLAN
+	b.Match.VlanId = &vlanID
+	b.Match.VlanMask = vlanMask
+	return b
+}
+
 func (b *ofFlowBuilder) SetHardTimeout(timout uint16) FlowBuilder {
 	b.ofFlow.HardTimeout = timout
 	return b
@@ -87,9 +98,6 @@ func (b *ofFlowBuilder) MatchXXReg(regID int, data []byte) FlowBuilder {
 func (b *ofFlowBuilder) matchRegRange(regID int, data uint32, rng *Range) FlowBuilder {
 	s := fmt.Sprintf("reg%d[%d..%d]=0x%x", regID, rng[0], rng[1], data)
 	b.matchers = append(b.matchers, s)
-	if rng[0] > 0 {
-		data <<= rng[0]
-	}
 	reg := &ofctrl.NXRegister{
 		ID:    regID,
 		Data:  data,

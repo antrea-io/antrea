@@ -78,7 +78,7 @@ func installPodFlows(ofClient Client, cacheKey string) (int, error) {
 	podMAC, _ := net.ParseMAC("AA:BB:CC:DD:EE:EE")
 	podIP := net.ParseIP("10.0.0.2")
 	ofPort := uint32(10)
-	err := ofClient.InstallPodFlows(containerID, []net.IP{podIP}, podMAC, ofPort)
+	err := ofClient.InstallPodFlows(containerID, []net.IP{podIP}, podMAC, ofPort, 0)
 	client := ofClient.(*client)
 	fCacheI, ok := client.featurePodConnectivity.podCachedFlows.Load(containerID)
 	if ok {

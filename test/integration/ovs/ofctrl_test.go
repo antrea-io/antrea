@@ -50,7 +50,7 @@ var (
 
 	marksReg      = 0
 	gatewayCTMark = binding.NewOneBitCTMark(1)
-	ctZone        = 0xfff0
+	ctZone        = 0x1000
 
 	count uint64
 
@@ -905,7 +905,7 @@ func prepareFlows(table binding.Table) ([]binding.Flow, []*ExpectFlow) {
 			Done(),
 		table.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
 			Cookie(getCookieID()).
-			Action().CT(false, table.GetNext(), ctZone).CTDone().
+			Action().CT(false, table.GetNext(), ctZone, nil).CTDone().
 			Done(),
 		table.BuildFlow(priorityNormal+10).MatchProtocol(binding.ProtocolIP).
 			Cookie(getCookieID()).
@@ -918,10 +918,7 @@ func prepareFlows(table binding.Table) ([]binding.Flow, []*ExpectFlow) {
 			Cookie(getCookieID()).
 			MatchRegMark(fromGatewayMark).
 			MatchCTStateNew(true).MatchCTStateTrk(true).
-			Action().CT(
-			true,
-			table.GetNext(),
-			ctZone).
+			Action().CT(true, table.GetNext(), ctZone, nil).
 			LoadToCtMark(gatewayCTMark).CTDone().
 			Done(),
 		table.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
@@ -939,7 +936,7 @@ func prepareFlows(table binding.Table) ([]binding.Flow, []*ExpectFlow) {
 		table.BuildFlow(priorityNormal-10).MatchProtocol(binding.ProtocolIP).
 			Cookie(getCookieID()).
 			MatchCTStateNew(true).MatchCTStateTrk(true).
-			Action().CT(true, table.GetNext(), ctZone).CTDone().
+			Action().CT(true, table.GetNext(), ctZone, nil).CTDone().
 			Done(),
 		table.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
 			Cookie(getCookieID()).
@@ -1023,12 +1020,12 @@ func prepareFlows(table binding.Table) ([]binding.Flow, []*ExpectFlow) {
 		&ExpectFlow{"priority=200,arp,arp_tpa=192.168.2.1,arp_op=1", "move:NXM_OF_ETH_SRC[]->NXM_OF_ETH_DST[],set_field:aa:bb:cc:dd:ee:ff->eth_src,load:0x2->NXM_OF_ARP_OP[],move:NXM_NX_ARP_SHA[]->NXM_NX_ARP_THA[],set_field:aa:bb:cc:dd:ee:ff->arp_sha,move:NXM_OF_ARP_SPA[]->NXM_OF_ARP_TPA[],set_field:192.168.2.1->arp_spa,IN_PORT"},
 		&ExpectFlow{"priority=190,arp", "NORMAL"},
 		&ExpectFlow{"priority=200,tcp", fmt.Sprintf("learn(table=%d,idle_timeout=10,priority=190,delete_learned,cookie=0x1,eth_type=0x800,nw_proto=6,NXM_OF_TCP_DST[],NXM_NX_REG0[0..15]=0xfff,load:NXM_NX_REG0[0..15]->NXM_NX_REG0[0..15],load:0xffe->NXM_NX_REG0[16..31]),goto_table:%d", table.GetID(), table.GetNext())},
-		&ExpectFlow{"priority=200,ip", fmt.Sprintf("ct(table=%d,zone=65520)", table.GetNext())},
+		&ExpectFlow{"priority=200,ip", fmt.Sprintf("ct(table=%d,zone=4096)", table.GetNext())},
 		&ExpectFlow{"priority=210,ct_state=-new+trk,ct_mark=0x2/0x2,ip,reg0=0x1/0xffff", gotoTableAction},
-		&ExpectFlow{"priority=200,ct_state=+new+trk,ip,reg0=0x1/0xffff", fmt.Sprintf("ct(commit,table=%d,zone=65520,exec(load:0x1->NXM_NX_CT_MARK[1])", table.GetNext())},
+		&ExpectFlow{"priority=200,ct_state=+new+trk,ip,reg0=0x1/0xffff", fmt.Sprintf("ct(commit,table=%d,zone=4096,exec(load:0x1->NXM_NX_CT_MARK[1])", table.GetNext())},
 		&ExpectFlow{"priority=200,ct_state=-new+trk,ct_mark=0x2/0x2,ip", fmt.Sprintf("load:0xaaaaaaaaaa11->NXM_OF_ETH_DST[],%s", gotoTableAction)},
 		&ExpectFlow{"priority=200,ct_state=+new+inv,ip", "drop"},
-		&ExpectFlow{"priority=190,ct_state=+new+trk,ip", fmt.Sprintf("ct(commit,table=%d,zone=65520)", table.GetNext())},
+		&ExpectFlow{"priority=190,ct_state=+new+trk,ip", fmt.Sprintf("ct(commit,table=%d,zone=4096)", table.GetNext())},
 		&ExpectFlow{"priority=200,ip,dl_dst=aa:bb:cc:dd:ee:ff,nw_dst=192.168.1.3", fmt.Sprintf("set_field:aa:aa:aa:aa:aa:11->eth_src,set_field:aa:aa:aa:aa:aa:13->eth_dst,dec_ttl,%s", gotoTableAction)},
 		&ExpectFlow{"priority=200,ip,nw_dst=192.168.2.0/24", fmt.Sprintf("dec_ttl,set_field:aa:aa:aa:aa:aa:11->eth_src,set_field:aa:bb:cc:dd:ee:ff->eth_dst,set_field:10.1.1.2->tun_dst,%s", gotoTableAction)},
 		&ExpectFlow{"priority=200,ipv6,ipv6_dst=fd74:ca9b:172:21::/64", fmt.Sprintf("dec_ttl,set_field:aa:aa:aa:aa:aa:11->eth_src,set_field:aa:bb:cc:dd:ee:ff->eth_dst,set_field:20:ca9b:172:35::3->tun_ipv6_dst,%s", gotoTableAction)},
@@ -1061,13 +1058,13 @@ func prepareNATflows(table binding.Table) ([]binding.Flow, []*ExpectFlow) {
 	dnatMark2 := binding.NewOneBitRegMark(marksReg, 20, "DNATMark2")
 	flows := []binding.Flow{
 		table.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
-			Action().CT(false, table.GetNext(), ctZone).NAT().CTDone().
+			Action().CT(false, table.GetNext(), ctZone, nil).NAT().CTDone().
 			Cookie(getCookieID()).
 			Done(),
 		table.BuildFlow(priorityNormal).
 			MatchProtocol(binding.ProtocolIP).
 			MatchRegMark(snatMark1).
-			Action().CT(true, table.GetNext(), ctZone).
+			Action().CT(true, table.GetNext(), ctZone, nil).
 			SNAT(natIPRange1, nil).
 			LoadToCtMark(snatCTMark).CTDone().
 			Cookie(getCookieID()).
@@ -1075,7 +1072,7 @@ func prepareNATflows(table binding.Table) ([]binding.Flow, []*ExpectFlow) {
 		table.BuildFlow(priorityNormal).
 			MatchProtocol(binding.ProtocolIP).
 			MatchRegMark(snatMark2).
-			Action().CT(true, table.GetNext(), ctZone).
+			Action().CT(true, table.GetNext(), ctZone, nil).
 			SNAT(natIPRange2, nil).
 			LoadToCtMark(snatCTMark).CTDone().
 			Cookie(getCookieID()).
@@ -1083,7 +1080,7 @@ func prepareNATflows(table binding.Table) ([]binding.Flow, []*ExpectFlow) {
 		table.BuildFlow(priorityNormal).
 			MatchProtocol(binding.ProtocolIP).
 			MatchRegMark(dnatMark1).
-			Action().CT(true, table.GetNext(), ctZone).
+			Action().CT(true, table.GetNext(), ctZone, nil).
 			DNAT(natIPRange1, nil).
 			LoadToCtMark(snatCTMark).CTDone().
 			Cookie(getCookieID()).
@@ -1091,7 +1088,7 @@ func prepareNATflows(table binding.Table) ([]binding.Flow, []*ExpectFlow) {
 		table.BuildFlow(priorityNormal).
 			MatchProtocol(binding.ProtocolIP).
 			MatchRegMark(dnatMark2).
-			Action().CT(true, table.GetNext(), ctZone).
+			Action().CT(true, table.GetNext(), ctZone, nil).
 			DNAT(natIPRange2, nil).
 			LoadToCtMark(snatCTMark).CTDone().
 			Cookie(getCookieID()).
@@ -1099,21 +1096,21 @@ func prepareNATflows(table binding.Table) ([]binding.Flow, []*ExpectFlow) {
 	}
 
 	flowStrs := []*ExpectFlow{
-		{"priority=200,ip", fmt.Sprintf("ct(table=%d,zone=65520,nat)", table.GetNext())},
+		{"priority=200,ip", fmt.Sprintf("ct(table=%d,zone=4096,nat)", table.GetNext())},
 		{"priority=200,ip,reg0=0x20000/0x20000",
-			fmt.Sprintf("ct(commit,table=%d,zone=65520,nat(src=%s),exec(load:0x40->NXM_NX_CT_MARK[0..7]))",
+			fmt.Sprintf("ct(commit,table=%d,zone=4096,nat(src=%s),exec(load:0x40->NXM_NX_CT_MARK[0..7]))",
 				table.GetNext(), natedIP1.String()),
 		},
 		{"priority=200,ip,reg0=0x40000/0x40000",
-			fmt.Sprintf("ct(commit,table=%d,zone=65520,nat(src=%s-%s),exec(load:0x40->NXM_NX_CT_MARK[0..7]))",
+			fmt.Sprintf("ct(commit,table=%d,zone=4096,nat(src=%s-%s),exec(load:0x40->NXM_NX_CT_MARK[0..7]))",
 				table.GetNext(), natedIP1.String(), natedIP2.String()),
 		},
 		{"priority=200,ip,reg0=0x80000/0x80000",
-			fmt.Sprintf("ct(commit,table=%d,zone=65520,nat(dst=%s),exec(load:0x40->NXM_NX_CT_MARK[0..7]))",
+			fmt.Sprintf("ct(commit,table=%d,zone=4096,nat(dst=%s),exec(load:0x40->NXM_NX_CT_MARK[0..7]))",
 				table.GetNext(), natedIP1.String()),
 		},
 		{"priority=200,ip,reg0=0x100000/0x100000",
-			fmt.Sprintf("ct(commit,table=%d,zone=65520,nat(dst=%s-%s),exec(load:0x40->NXM_NX_CT_MARK[0..7]))",
+			fmt.Sprintf("ct(commit,table=%d,zone=4096,nat(dst=%s-%s),exec(load:0x40->NXM_NX_CT_MARK[0..7]))",
 				table.GetNext(), natedIP1.String(), natedIP2.String()),
 		},
 	}

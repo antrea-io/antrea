@@ -26,6 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2"
 
+	"antrea.io/antrea/pkg/agent/cniserver/ipam"
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/openflow"
 	"antrea.io/antrea/pkg/agent/route"
@@ -110,7 +111,8 @@ func parseContainerIPs(ipcs []*current.IPConfig) ([]net.IP, error) {
 func buildContainerConfig(
 	interfaceName, containerID, podName, podNamespace string,
 	containerIface *current.Interface,
-	ips []*current.IPConfig) *interfacestore.InterfaceConfig {
+	ips []*current.IPConfig,
+	vlanID uint16) *interfacestore.InterfaceConfig {
 	containerIPs, err := parseContainerIPs(ips)
 	if err != nil {
 		klog.Errorf("Failed to find container %s IP", containerID)
@@ -123,7 +125,8 @@ func buildContainerConfig(
 		podName,
 		podNamespace,
 		containerMAC,
-		containerIPs)
+		containerIPs,
+		vlanID)
 }
 
 // BuildOVSPortExternalIDs parses OVS port external_ids from InterfaceConfig.
@@ -184,7 +187,8 @@ func ParseOVSPortInterfaceConfig(portData *ovsconfig.OVSPortData, portConfig *in
 		podName,
 		podNamespace,
 		containerMAC,
-		containerIPs)
+		containerIPs,
+		portData.VLANID)
 	interfaceConfig.OVSPortConfig = portConfig
 	return interfaceConfig
 }
@@ -197,11 +201,11 @@ func (pc *podConfigurator) configureInterfaces(
 	containerIFDev string,
 	mtu int,
 	sriovVFDeviceID string,
-	result *current.Result,
+	result *ipam.IPAMResult,
 	createOVSPort bool,
 	containerAccess *containerAccessArbitrator,
 ) error {
-	err := pc.ifConfigurator.configureContainerLink(podName, podNameSpace, containerID, containerNetNS, containerIFDev, mtu, sriovVFDeviceID, "", result, containerAccess)
+	err := pc.ifConfigurator.configureContainerLink(podName, podNameSpace, containerID, containerNetNS, containerIFDev, mtu, sriovVFDeviceID, "", &result.Result, containerAccess)
 	if err != nil {
 		return err
 	}
@@ -234,7 +238,7 @@ func (pc *podConfigurator) configureInterfaces(
 	}
 
 	var containerConfig *interfacestore.InterfaceConfig
-	if containerConfig, err = pc.connectInterfaceToOVS(podName, podNameSpace, containerID, hostIface, containerIface, result.IPs, containerAccess); err != nil {
+	if containerConfig, err = pc.connectInterfaceToOVS(podName, podNameSpace, containerID, hostIface, containerIface, result.IPs, result.VLANID, containerAccess); err != nil {
 		return fmt.Errorf("failed to connect to ovs for container %s: %v", containerID, err)
 	}
 	success = true
@@ -250,7 +254,7 @@ func (pc *podConfigurator) configureInterfaces(
 
 	// Note that the IP address should be advertised after Pod OpenFlow entries are installed, otherwise the packet might
 	// be dropped by OVS.
-	if err = pc.ifConfigurator.advertiseContainerAddr(containerNetNS, containerIface.Name, result); err != nil {
+	if err = pc.ifConfigurator.advertiseContainerAddr(containerNetNS, containerIface.Name, &result.Result); err != nil {
 		klog.Errorf("Failed to advertise IP address for container %s: %v", containerID, err)
 	}
 	// Mark the manipulation as success to cancel deferred operations.
@@ -259,14 +263,18 @@ func (pc *podConfigurator) configureInterfaces(
 	return nil
 }
 
-func (pc *podConfigurator) createOVSPort(ovsPortName string, ovsAttachInfo map[string]interface{}) (string, error) {
+func (pc *podConfigurator) createOVSPort(ovsPortName string, ovsAttachInfo map[string]interface{}, vlanID uint16) (string, error) {
 	var portUUID string
 	var err error
 	switch pc.ifConfigurator.getOVSInterfaceType(ovsPortName) {
 	case internalOVSInterfaceType:
 		portUUID, err = pc.ovsBridgeClient.CreateInternalPort(ovsPortName, 0, ovsAttachInfo)
 	default:
-		portUUID, err = pc.ovsBridgeClient.CreatePort(ovsPortName, ovsPortName, ovsAttachInfo)
+		if vlanID == 0 {
+			portUUID, err = pc.ovsBridgeClient.CreatePort(ovsPortName, ovsPortName, ovsAttachInfo)
+		} else {
+			portUUID, err = pc.ovsBridgeClient.CreateAccessPort(ovsPortName, ovsPortName, ovsAttachInfo, vlanID)
+		}
 	}
 	if err != nil {
 		klog.Errorf("Failed to add OVS port %s, remove from local cache: %v", ovsPortName, err)
@@ -438,6 +446,7 @@ func (pc *podConfigurator) reconcile(pods []corev1.Pod, containerAccess *contain
 				containerConfig.IPs,
 				containerConfig.MAC,
 				uint32(containerConfig.OFPort),
+				containerConfig.VLANID,
 			); err != nil {
 				klog.Errorf("Error when re-installing flows for Pod %s", namespacedName)
 			}
@@ -461,7 +470,7 @@ func (pc *podConfigurator) connectInterfaceToOVSCommon(ovsPortName string, conta
 	containerID := containerConfig.ContainerID
 	klog.V(2).Infof("Adding OVS port %s for container %s", ovsPortName, containerID)
 	ovsAttachInfo := BuildOVSPortExternalIDs(containerConfig)
-	portUUID, err := pc.createOVSPort(ovsPortName, ovsAttachInfo)
+	portUUID, err := pc.createOVSPort(ovsPortName, ovsAttachInfo, containerConfig.VLANID)
 	if err != nil {
 		return fmt.Errorf("failed to add OVS port for container %s: %v", containerID, err)
 	}
@@ -478,7 +487,7 @@ func (pc *podConfigurator) connectInterfaceToOVSCommon(ovsPortName string, conta
 		return fmt.Errorf("failed to get of_port of OVS port %s: %v", ovsPortName, err)
 	}
 	klog.V(2).Infof("Setting up Openflow entries for container %s", containerID)
-	if err := pc.ofClient.InstallPodFlows(ovsPortName, containerConfig.IPs, containerConfig.MAC, uint32(ofPort)); err != nil {
+	if err := pc.ofClient.InstallPodFlows(ovsPortName, containerConfig.IPs, containerConfig.MAC, uint32(ofPort), containerConfig.VLANID); err != nil {
 		return fmt.Errorf("failed to add Openflow entries for container %s: %v", containerID, err)
 	}
 	containerConfig.OVSPortConfig = &interfacestore.OVSPortConfig{PortUUID: portUUID, OFPort: ofPort}
@@ -534,7 +543,7 @@ func (pc *podConfigurator) connectInterceptedInterface(
 		return fmt.Errorf("connectInterceptedInterface failed to migrate: %w", err)
 	}
 	_, err = pc.connectInterfaceToOVS(podName, podNameSpace, containerID, hostIface,
-		containerIface, containerIPs, containerAccess)
+		containerIface, containerIPs, 0, containerAccess)
 	return err
 }
 

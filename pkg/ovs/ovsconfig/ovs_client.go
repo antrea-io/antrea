@@ -37,8 +37,9 @@ type OVSBridge struct {
 }
 
 type OVSPortData struct {
-	UUID string
-	Name string
+	UUID   string
+	Name   string
+	VLANID uint16
 	// Interface type.
 	IFType      string
 	IFName      string
@@ -365,7 +366,7 @@ func (br *OVSBridge) CreateInternalPort(name string, ofPortRequest int32, extern
 	if ofPortRequest < 0 || ofPortRequest > ofPortRequestMax {
 		return "", newInvalidArgumentsError(fmt.Sprint("invalid ofPortRequest value: ", ofPortRequest))
 	}
-	return br.createPort(name, name, "internal", ofPortRequest, externalIDs, nil)
+	return br.createPort(name, name, "internal", ofPortRequest, 0, externalIDs, nil)
 }
 
 // CreateTunnelPort creates a tunnel port with the specified name and type on
@@ -436,7 +437,7 @@ func (br *OVSBridge) createTunnelPort(
 		options["csum"] = "true"
 	}
 
-	return br.createPort(name, name, string(tunnelType), ofPortRequest, externalIDs, options)
+	return br.createPort(name, name, string(tunnelType), ofPortRequest, 0, externalIDs, options)
 }
 
 // GetInterfaceOptions returns the options of the provided interface.
@@ -508,7 +509,7 @@ func ParseTunnelInterfaceOptions(portData *OVSPortData) (net.IP, net.IP, string,
 
 // CreateUplinkPort creates uplink port.
 func (br *OVSBridge) CreateUplinkPort(name string, ofPortRequest int32, externalIDs map[string]interface{}) (string, Error) {
-	return br.createPort(name, name, "", ofPortRequest, externalIDs, nil)
+	return br.createPort(name, name, "", ofPortRequest, 0, externalIDs, nil)
 }
 
 // CreatePort creates a port with the specified name on the bridge, and connects
@@ -516,10 +517,19 @@ func (br *OVSBridge) CreateUplinkPort(name string, ofPortRequest int32, external
 // If externalIDs is not empty, the map key/value pairs will be set to the
 // port's external_ids.
 func (br *OVSBridge) CreatePort(name, ifDev string, externalIDs map[string]interface{}) (string, Error) {
-	return br.createPort(name, ifDev, "", 0, externalIDs, nil)
+	return br.createPort(name, ifDev, "", 0, 0, externalIDs, nil)
 }
 
-func (br *OVSBridge) createPort(name, ifName, ifType string, ofPortRequest int32, externalIDs, options map[string]interface{}) (string, Error) {
+// CreateAccessPort creates a port with the specified name and VLAN ID on the bridge, and connects
+// the interface specified by ifDev to the port.
+// If externalIDs is not empty, the map key/value pairs will be set to the
+// port's external_ids.
+// vlanID=0 will perform same behavior as CreatePort.
+func (br *OVSBridge) CreateAccessPort(name, ifDev string, externalIDs map[string]interface{}, vlanID uint16) (string, Error) {
+	return br.createPort(name, ifDev, "", 0, vlanID, externalIDs, nil)
+}
+
+func (br *OVSBridge) createPort(name, ifName, ifType string, ofPortRequest int32, vlanID uint16, externalIDs, options map[string]interface{}) (string, Error) {
 	var externalIDMap []interface{}
 	var optionMap []interface{}
 
@@ -550,9 +560,14 @@ func (br *OVSBridge) createPort(name, ifName, ifType string, ofPortRequest int32
 		}),
 		ExternalIDs: externalIDMap,
 	}
+	var portInterface interface{}
+	portInterface = port
+	if vlanID > 0 {
+		portInterface = AccessPort{Port: port, Tag: uint32(vlanID)}
+	}
 	portNamedUUID := tx.Insert(dbtransaction.Insert{
 		Table: "Port",
-		Row:   port,
+		Row:   portInterface,
 	})
 
 	mutateSet := helpers.MakeOVSDBSet(map[string]interface{}{
@@ -645,6 +660,9 @@ func buildMapFromOVSDBMap(data []interface{}) map[string]string {
 func buildPortDataCommon(port, intf map[string]interface{}, portData *OVSPortData) {
 	portData.Name = port["name"].(string)
 	portData.ExternalIDs = buildMapFromOVSDBMap(port["external_ids"].([]interface{}))
+	if tag, ok := port["tag"].(float64); ok {
+		portData.VLANID = uint16(tag)
+	}
 	portData.Options = buildMapFromOVSDBMap(intf["options"].([]interface{}))
 	portData.IFType = intf["type"].(string)
 	if ofPort, ok := intf["ofport"].(float64); ok {
@@ -662,7 +680,7 @@ func (br *OVSBridge) GetPortData(portUUID, ifName string) (*OVSPortData, Error) 
 	tx := br.ovsdb.Transaction(openvSwitchSchema)
 	tx.Select(dbtransaction.Select{
 		Table:   "Port",
-		Columns: []string{"name", "external_ids", "interfaces"},
+		Columns: []string{"name", "external_ids", "interfaces", "tag"},
 		Where:   [][]interface{}{{"_uuid", "==", []string{"uuid", portUUID}}},
 	})
 	tx.Select(dbtransaction.Select{
@@ -716,7 +734,7 @@ func (br *OVSBridge) GetPortList() ([]OVSPortData, Error) {
 	})
 	tx.Select(dbtransaction.Select{
 		Table:   "Port",
-		Columns: []string{"_uuid", "name", "external_ids", "interfaces"},
+		Columns: []string{"_uuid", "name", "external_ids", "interfaces", "tag"},
 	})
 	tx.Select(dbtransaction.Select{
 		Table:   "Interface",

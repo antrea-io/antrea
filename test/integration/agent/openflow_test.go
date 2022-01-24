@@ -73,6 +73,7 @@ type testPortConfig struct {
 	ips    []net.IP
 	mac    net.HardwareAddr
 	ofPort uint32
+	vlanID uint16
 }
 
 type testLocalPodConfig struct {
@@ -178,6 +179,17 @@ func TestAntreaFlexibleIPAMConnectivityFlows(t *testing.T) {
 	config := prepareConfiguration(true, false)
 	config.connectUplinkToBridge = true
 	config.localPods[0].ips = []net.IP{net.ParseIP("192.168.255.3")}
+	vlanID := uint16(100)
+	podMAC, _ := net.ParseMAC("aa:aa:aa:aa:aa:14")
+	config.localPods = append(config.localPods, &testLocalPodConfig{
+		name: "container-2",
+		testPortConfig: &testPortConfig{
+			ips:    []net.IP{net.ParseIP("192.168.255.3")},
+			mac:    podMAC,
+			ofPort: uint32(12),
+			vlanID: vlanID,
+		},
+	})
 	uplinkMAC, _ := net.ParseMAC("aa:aa:aa:aa:aa:00")
 	config.nodeConfig.UplinkNetConfig = &config1.AdapterNetConfig{
 		Name:  "fake-uplink",
@@ -415,11 +427,11 @@ func testUninstallNodeFlows(t *testing.T, config *testConfig) {
 func testInstallPodFlows(t *testing.T, config *testConfig) {
 	gatewayConfig := config.nodeConfig.GatewayConfig
 	for _, pod := range config.localPods {
-		err := c.InstallPodFlows(pod.name, pod.ips, pod.mac, pod.ofPort)
+		err := c.InstallPodFlows(pod.name, pod.ips, pod.mac, pod.ofPort, pod.vlanID)
 		if err != nil {
 			t.Fatalf("Failed to install Openflow entries for pod: %v", err)
 		}
-		for _, tableFlow := range preparePodFlows(pod.ips, pod.mac, pod.ofPort, gatewayConfig.MAC, config.globalMAC, config.nodeConfig, config.connectUplinkToBridge) {
+		for _, tableFlow := range preparePodFlows(pod.ips, pod.mac, pod.ofPort, gatewayConfig.MAC, config.globalMAC, config.nodeConfig, config.connectUplinkToBridge, pod.vlanID) {
 			ofTestUtils.CheckFlowExists(t, ovsCtlClient, tableFlow.tableName, 0, true, tableFlow.flows)
 		}
 	}
@@ -432,7 +444,7 @@ func testUninstallPodFlows(t *testing.T, config *testConfig) {
 		if err != nil {
 			t.Fatalf("Failed to uninstall Openflow entries for pod: %v", err)
 		}
-		for _, tableFlow := range preparePodFlows(pod.ips, pod.mac, pod.ofPort, gatewayConfig.MAC, config.globalMAC, config.nodeConfig, config.connectUplinkToBridge) {
+		for _, tableFlow := range preparePodFlows(pod.ips, pod.mac, pod.ofPort, gatewayConfig.MAC, config.globalMAC, config.nodeConfig, config.connectUplinkToBridge, pod.vlanID) {
 			ofTestUtils.CheckFlowExists(t, ovsCtlClient, tableFlow.tableName, 0, false, tableFlow.flows)
 		}
 	}
@@ -750,13 +762,13 @@ func expectedProxyServiceGroupAndFlows(gid uint32, svc svcConfig, endpointList [
 		unionVal := (0b010 << 16) + uint32(epPort)
 		epDNATFlows.flows = append(epDNATFlows.flows, &ofTestUtils.ExpectFlow{
 			MatchStr: fmt.Sprintf("priority=200,%s,reg3=%s,reg4=0x%x/0x7ffff", string(svc.protocol), epIP, unionVal),
-			ActStr:   fmt.Sprintf("ct(commit,table=EgressRule,zone=65520,nat(dst=%s:%d),exec(load:0x1->NXM_NX_CT_MARK[4],move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3])", ep.IP(), epPort),
+			ActStr:   fmt.Sprintf("ct(commit,table=EgressRule,zone=4096,nat(dst=%s:%d),exec(load:0x1->NXM_NX_CT_MARK[4],move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3])", ep.IP(), epPort),
 		})
 
 		if ep.GetIsLocal() {
 			hairpinFlows.flows = append(hairpinFlows.flows, &ofTestUtils.ExpectFlow{
 				MatchStr: fmt.Sprintf("priority=190,ct_state=+new+trk,ip,nw_src=%s,nw_dst=%s", ep.IP(), ep.IP()),
-				ActStr:   "ct(commit,table=SNATConntrackCommit,zone=65520,exec(load:0x1->NXM_NX_CT_MARK[5],load:0x1->NXM_NX_CT_MARK[6]))",
+				ActStr:   "ct(commit,table=SNATConntrackCommit,zone=4096,exec(load:0x1->NXM_NX_CT_MARK[5],load:0x1->NXM_NX_CT_MARK[6]))",
 			})
 		}
 	}
@@ -859,7 +871,7 @@ func checkConjunctionFlows(t *testing.T, ruleTable string, priority int, ruleID 
 		nextTable = ofClient.EgressMetricTable.GetName()
 	}
 
-	flow := &ofTestUtils.ExpectFlow{MatchStr: conjunctionActionMatch, ActStr: fmt.Sprintf("load:0x%x->NXM_NX_REG%d[],ct(commit,table=%s,zone=65520,exec(load:0x%x->NXM_NX_CT_LABEL[0..31])", ruleID, conjReg, nextTable, ruleID)}
+	flow := &ofTestUtils.ExpectFlow{MatchStr: conjunctionActionMatch, ActStr: fmt.Sprintf("load:0x%x->NXM_NX_REG%d[],ct(commit,table=%s,zone=4096,exec(load:0x%x->NXM_NX_CT_LABEL[0..31])", ruleID, conjReg, nextTable, ruleID)}
 	testFunc(t, ofTestUtils.OfctlFlowMatch(flowList, ruleTable, flow), "Failed to update conjunction action flow")
 
 	useIPv4 := false
@@ -1021,7 +1033,7 @@ func prepareConfiguration(enableIPv4, enableIPv6 bool) *testConfig {
 	}
 }
 
-func preparePodFlows(podIPs []net.IP, podMAC net.HardwareAddr, podOFPort uint32, gwMAC, vMAC net.HardwareAddr, nodeConfig *config1.NodeConfig, connectUplinkToBridge bool) []expectTableFlows {
+func preparePodFlows(podIPs []net.IP, podMAC net.HardwareAddr, podOFPort uint32, gwMAC, vMAC net.HardwareAddr, nodeConfig *config1.NodeConfig, connectUplinkToBridge bool, vlanID uint16) []expectTableFlows {
 	podIPv4 := util.GetIPv4Addr(podIPs)
 	isAntreaFlexibleIPAM := connectUplinkToBridge && podIPv4 != nil && !nodeConfig.PodIPv4CIDR.Contains(podIPv4)
 	actionNotAntreaFlexibleIPAMString := ""
@@ -1051,34 +1063,61 @@ func preparePodFlows(podIPs []net.IP, podMAC net.HardwareAddr, podOFPort uint32,
 		},
 	}
 
+	matchVlanVIDString := ""
+	matchVlanRegString := ""
+	vlanVIDString := "0"
+	if connectUplinkToBridge {
+		matchVlanVIDString = ",vlan_tci=0x0000/0x1fff"
+		matchVlanRegString = ",reg8=0/0xfff"
+		if vlanID > 0 {
+			matchVlanVIDString = fmt.Sprintf(",dl_vlan=%d", vlanID)
+			matchVlanRegString = fmt.Sprintf(",reg8=0x%x/0xfff", vlanID)
+			vlanVIDString = fmt.Sprintf("0x%x", vlanID)
+		}
+	}
+
 	if isAntreaFlexibleIPAM {
 		flows = append(flows, []expectTableFlows{{
 			"Classifier",
 			[]*ofTestUtils.ExpectFlow{
 				{
-					MatchStr: fmt.Sprintf("priority=210,in_port=%d,dl_dst=%s", 3, podMAC.String()),
-					ActStr:   fmt.Sprintf("load:0x4->NXM_NX_REG0[0..3],goto_table:SNATConntrackZone"),
+					MatchStr: fmt.Sprintf("priority=200,ip,in_port=%d%s,dl_dst=%s", 3, matchVlanVIDString, podMAC.String()),
+					ActStr:   fmt.Sprintf("load:0x1->NXM_NX_REG8[12..15],load:%s->NXM_NX_REG8[0..11],load:0x4->NXM_NX_REG0[0..3],goto_table:SNATConntrackZone", vlanVIDString),
 				},
 			},
-		},
-			{
+		}}...)
+		if vlanID == 0 {
+			flows = append(flows, []expectTableFlows{{
 				"Classifier",
 				[]*ofTestUtils.ExpectFlow{
 					{
-						MatchStr: fmt.Sprintf("priority=210,in_port=LOCAL,dl_dst=%s", podMAC.String()),
-						ActStr:   fmt.Sprintf("load:0x5->NXM_NX_REG0[0..3],goto_table:SNATConntrackZone"),
+						MatchStr: fmt.Sprintf("priority=200,ip,in_port=LOCAL,vlan_tci=0x0000/0x1fff,dl_dst=%s", podMAC.String()),
+						ActStr:   fmt.Sprintf("load:0x1->NXM_NX_REG8[12..15],load:0x5->NXM_NX_REG0[0..3],goto_table:SNATConntrackZone"),
 					},
 				},
 			}}...)
+		} else {
+			flows = append(flows, []expectTableFlows{{
+				"VLAN",
+				[]*ofTestUtils.ExpectFlow{
+					{
+						MatchStr: fmt.Sprintf("priority=190,reg1=0x%x,in_port=%d", 3, podOFPort),
+						ActStr:   fmt.Sprintf("push_vlan:0x8100,set_field:%d->vlan_vid,goto_table:Output", vlanID+4096),
+					},
+				},
+			}}...)
+		}
 	}
 
 	for _, podIP := range podIPs {
 		var ipProto, nwSrcField, nwDstField string
 		var nextTableForSpoofguard string
 		actionNotAntreaFlexibleIPAMString = ""
+		actionSetCtZoneField := ""
 		if !isAntreaFlexibleIPAM {
 			actionNotAntreaFlexibleIPAMString = fmt.Sprintf("set_field:%s->eth_src,", gwMAC)
 		}
+		vlanType := uint16(1)
 		if podIP.To4() != nil {
 			ipProto = "ip"
 			nwSrcField = "nw_src"
@@ -1099,6 +1138,10 @@ func preparePodFlows(podIPs []net.IP, podMAC net.HardwareAddr, podOFPort uint32,
 			nwSrcField = "ipv6_src"
 			nwDstField = "ipv6_dst"
 			nextTableForSpoofguard = "IPv6"
+			vlanType = 3
+		}
+		if isAntreaFlexibleIPAM {
+			actionSetCtZoneField = fmt.Sprintf("load:0x%x->NXM_NX_REG8[12..15],load:%s->NXM_NX_REG8[0..11],", vlanType, vlanVIDString)
 		}
 		flows = append(flows,
 			expectTableFlows{
@@ -1106,7 +1149,7 @@ func preparePodFlows(podIPs []net.IP, podMAC net.HardwareAddr, podOFPort uint32,
 				[]*ofTestUtils.ExpectFlow{
 					{
 						MatchStr: fmt.Sprintf("priority=200,%s,in_port=%d,dl_src=%s,%s=%s", ipProto, podOFPort, podMAC.String(), nwSrcField, podIP.String()),
-						ActStr:   fmt.Sprintf("goto_table:%s", nextTableForSpoofguard),
+						ActStr:   fmt.Sprintf("%sgoto_table:%s", actionSetCtZoneField, nextTableForSpoofguard),
 					},
 				},
 			},
@@ -1114,7 +1157,7 @@ func preparePodFlows(podIPs []net.IP, podMAC net.HardwareAddr, podOFPort uint32,
 				"L3Forwarding",
 				[]*ofTestUtils.ExpectFlow{
 					{
-						MatchStr: fmt.Sprintf("priority=200,%s%s,%s=%s", ipProto, matchRewriteMACMarkString, nwDstField, podIP.String()),
+						MatchStr: fmt.Sprintf("priority=200,%s%s%s,%s=%s", ipProto, matchVlanRegString, matchRewriteMACMarkString, nwDstField, podIP.String()),
 						ActStr:   fmt.Sprintf("%sset_field:%s->eth_dst,goto_table:L3DecTTL", actionNotAntreaFlexibleIPAMString, podMAC.String()),
 					},
 				},
@@ -1149,6 +1192,11 @@ func prepareGatewayFlows(gwIPs []net.IP, gwMAC net.HardwareAddr, vMAC net.Hardwa
 
 	for _, gwIP := range gwIPs {
 		var ipProtoStr, nwSrcStr, nwDstStr string
+		actionSetCtZoneField := ""
+		vlanType := uint16(1)
+		if connectUplinkToBridge {
+			actionSetCtZoneField = fmt.Sprintf("load:0x%x->NXM_NX_REG8[12..15],", vlanType)
+		}
 		if gwIP.To4() != nil {
 			ipProtoStr = "ip"
 			nwSrcStr = "nw_src"
@@ -1159,7 +1207,7 @@ func prepareGatewayFlows(gwIPs []net.IP, gwMAC net.HardwareAddr, vMAC net.Hardwa
 					[]*ofTestUtils.ExpectFlow{
 						{
 							MatchStr: fmt.Sprintf("priority=200,ip,in_port=%d", config1.HostGatewayOFPort),
-							ActStr:   "goto_table:SNATConntrackZone",
+							ActStr:   fmt.Sprintf("%sgoto_table:SNATConntrackZone", actionSetCtZoneField),
 						},
 					},
 				},
@@ -1269,7 +1317,7 @@ func prepareNodeFlows(peerSubnet net.IPNet, peerGwIP, peerNodeIP net.IP, vMAC, l
 			"L3Forwarding",
 			[]*ofTestUtils.ExpectFlow{
 				{
-					MatchStr: fmt.Sprintf("priority=200,%s,reg4=0x100000/0x100000,%s=%s", ipProtoStr, nwDstFieldName, peerSubnet.String()),
+					MatchStr: fmt.Sprintf("priority=200,%s,reg4=0x100000/0x100000,reg8=0/0xfff,%s=%s", ipProtoStr, nwDstFieldName, peerSubnet.String()),
 					ActStr:   fmt.Sprintf("set_field:%s->eth_dst,goto_table:L3DecTTL", peerNodeMAC.String()),
 				},
 			},
@@ -1294,6 +1342,19 @@ func prepareServiceHelperFlows() []expectTableFlows {
 }
 
 func prepareDefaultFlows(config *testConfig) []expectTableFlows {
+	outputStageTable := "Output"
+	ctZone := "4096"
+	ctZoneV6 := "12288"
+	matchVLANString := ""
+	tableVLANFlows := expectTableFlows{}
+	if config.connectUplinkToBridge {
+		outputStageTable = "VLAN"
+		ctZone = "NXM_NX_REG8[0..15]"
+		ctZoneV6 = "NXM_NX_REG8[0..15]"
+		tableVLANFlows.tableName = "VLAN"
+		tableVLANFlows.flows = append(tableVLANFlows.flows, &ofTestUtils.ExpectFlow{MatchStr: "priority=0", ActStr: "goto_table:Output"})
+		matchVLANString = ",reg8=0/0xfff"
+	}
 	tableARPResponderFlows := expectTableFlows{
 		tableName: "ARPResponder",
 	}
@@ -1303,7 +1364,7 @@ func prepareDefaultFlows(config *testConfig) []expectTableFlows {
 	}
 	tableConntrackCommitFlows := expectTableFlows{
 		tableName: "ConntrackCommit",
-		flows:     []*ofTestUtils.ExpectFlow{{MatchStr: "priority=0", ActStr: "goto_table:Output"}},
+		flows:     []*ofTestUtils.ExpectFlow{{MatchStr: "priority=0", ActStr: fmt.Sprintf("goto_table:%s", outputStageTable)}},
 	}
 	tableSNATConntrackCommitFlows := expectTableFlows{
 		tableName: "SNATConntrackCommit",
@@ -1337,14 +1398,14 @@ func prepareDefaultFlows(config *testConfig) []expectTableFlows {
 			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ip", ActStr: "ct(table=ConntrackZone,zone=65521,nat)"},
 		)
 		tableConntrackZoneFlows.flows = append(tableConntrackZoneFlows.flows,
-			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ip", ActStr: "ct(table=ConntrackState,zone=65520,nat)"},
+			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ip", ActStr: fmt.Sprintf("ct(table=ConntrackState,zone=%s,nat)", ctZone)},
 		)
 		tableConntrackStateFlows.flows = append(tableConntrackStateFlows.flows,
 			&ofTestUtils.ExpectFlow{MatchStr: "priority=190,ct_state=+inv+trk,ip", ActStr: "drop"},
 		)
 		tableConntrackCommitFlows.flows = append(tableConntrackCommitFlows.flows,
-			&ofTestUtils.ExpectFlow{MatchStr: "priority=210,ct_mark=0x10/0x10,ip", ActStr: "goto_table:Output"},
-			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ct_state=+new+trk,ip", ActStr: "ct(commit,table=Output,zone=65520,exec(move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))"},
+			&ofTestUtils.ExpectFlow{MatchStr: "priority=210,ct_mark=0x10/0x10,ip", ActStr: fmt.Sprintf("goto_table:%s", outputStageTable)},
+			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ct_state=+new+trk,ip", ActStr: fmt.Sprintf("ct(commit,table=%s,zone=%s,exec(move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))", outputStageTable, ctZone)},
 		)
 		tableSNATConntrackCommitFlows.flows = append(tableSNATConntrackCommitFlows.flows,
 			&ofTestUtils.ExpectFlow{
@@ -1366,11 +1427,11 @@ func prepareDefaultFlows(config *testConfig) []expectTableFlows {
 		)
 		podCIDR := config.nodeConfig.PodIPv4CIDR.String()
 		tableL3ForwardingFlows.flows = append(tableL3ForwardingFlows.flows,
-			&ofTestUtils.ExpectFlow{MatchStr: fmt.Sprintf("priority=190,ip,reg0=0/0x200,nw_dst=%s", podCIDR), ActStr: "goto_table:L2ForwardingCalc"},
+			&ofTestUtils.ExpectFlow{MatchStr: fmt.Sprintf("priority=190,ip,reg0=0/0x200%s,nw_dst=%s", matchVLANString, podCIDR), ActStr: "goto_table:L2ForwardingCalc"},
 		)
 		tableServiceMarkFlows.flows = append(tableServiceMarkFlows.flows,
-			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ct_state=+new+trk,ip,reg0=0x22/0xff", ActStr: "ct(commit,table=SNATConntrackCommit,zone=65520,exec(load:0x1->NXM_NX_CT_MARK[5],load:0x1->NXM_NX_CT_MARK[6]))"},
-			&ofTestUtils.ExpectFlow{MatchStr: "priority=190,ct_state=+new+trk,ip,reg0=0x2/0xf,reg4=0x200000/0x200000", ActStr: "ct(commit,table=SNATConntrackCommit,zone=65520,exec(load:0x1->NXM_NX_CT_MARK[5]))"},
+			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ct_state=+new+trk,ip,reg0=0x22/0xff", ActStr: fmt.Sprintf("ct(commit,table=SNATConntrackCommit,zone=%s,exec(load:0x1->NXM_NX_CT_MARK[5],load:0x1->NXM_NX_CT_MARK[6]))", ctZone)},
+			&ofTestUtils.ExpectFlow{MatchStr: "priority=190,ct_state=+new+trk,ip,reg0=0x2/0xf,reg4=0x200000/0x200000", ActStr: fmt.Sprintf("ct(commit,table=SNATConntrackCommit,zone=%s,exec(load:0x1->NXM_NX_CT_MARK[5]))", ctZone)},
 		)
 		tableL3DecTTLFlows.flows = append(tableL3DecTTLFlows.flows,
 			&ofTestUtils.ExpectFlow{MatchStr: "priority=210,ip,reg0=0x2/0xf", ActStr: "goto_table:ServiceMark"},
@@ -1382,14 +1443,14 @@ func prepareDefaultFlows(config *testConfig) []expectTableFlows {
 			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ipv6", ActStr: "ct(table=ConntrackZone,zone=65511,nat)"},
 		)
 		tableConntrackZoneFlows.flows = append(tableConntrackZoneFlows.flows,
-			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ipv6", ActStr: "ct(table=ConntrackState,zone=65510,nat)"},
+			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ipv6", ActStr: fmt.Sprintf("ct(table=ConntrackState,zone=%s,nat)", ctZoneV6)},
 		)
 		tableConntrackStateFlows.flows = append(tableConntrackStateFlows.flows,
 			&ofTestUtils.ExpectFlow{MatchStr: "priority=190,ct_state=+inv+trk,ipv6", ActStr: "drop"},
 		)
 		tableConntrackCommitFlows.flows = append(tableConntrackCommitFlows.flows,
 			&ofTestUtils.ExpectFlow{MatchStr: "priority=210,ct_mark=0x10/0x10,ipv6", ActStr: "goto_table:Output"},
-			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ct_state=+new+trk,ipv6", ActStr: "ct(commit,table=Output,zone=65510,exec(move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))"},
+			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ct_state=+new+trk,ipv6", ActStr: fmt.Sprintf("ct(commit,table=Output,zone=%s,exec(move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))", ctZoneV6)},
 		)
 		tableSNATConntrackCommitFlows.flows = append(tableSNATConntrackCommitFlows.flows,
 			&ofTestUtils.ExpectFlow{
@@ -1414,8 +1475,8 @@ func prepareDefaultFlows(config *testConfig) []expectTableFlows {
 			&ofTestUtils.ExpectFlow{MatchStr: fmt.Sprintf("priority=190,ipv6,reg0=0/0x200,ipv6_dst=%s", podCIDR), ActStr: "goto_table:L2ForwardingCalc"},
 		)
 		tableServiceMarkFlows.flows = append(tableServiceMarkFlows.flows,
-			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ct_state=+new+trk,ipv6,reg0=0x22/0xff", ActStr: "ct(commit,table=SNATConntrackCommit,zone=65510,exec(load:0x1->NXM_NX_CT_MARK[5],load:0x1->NXM_NX_CT_MARK[6]))"},
-			&ofTestUtils.ExpectFlow{MatchStr: "priority=190,ct_state=+new+trk,ipv6,reg0=0x2/0xf,reg4=0x200000/0x200000", ActStr: "ct(commit,table=SNATConntrackCommit,zone=65510,exec(load:0x1->NXM_NX_CT_MARK[5]))"},
+			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ct_state=+new+trk,ipv6,reg0=0x22/0xff", ActStr: "ct(commit,table=SNATConntrackCommit,zone=12288,exec(load:0x1->NXM_NX_CT_MARK[5],load:0x1->NXM_NX_CT_MARK[6]))"},
+			&ofTestUtils.ExpectFlow{MatchStr: "priority=190,ct_state=+new+trk,ipv6,reg0=0x2/0xf,reg4=0x200000/0x200000", ActStr: "ct(commit,table=SNATConntrackCommit,zone=12288,exec(load:0x1->NXM_NX_CT_MARK[5]))"},
 		)
 		tableL3DecTTLFlows.flows = append(tableL3DecTTLFlows.flows,
 			&ofTestUtils.ExpectFlow{MatchStr: "priority=210,ipv6,reg0=0x2/0xf", ActStr: "goto_table:ServiceMark"},
@@ -1440,6 +1501,7 @@ func prepareDefaultFlows(config *testConfig) []expectTableFlows {
 		tableL3DecTTLFlows,
 		tableSNATConntrackZoneFlows,
 		tableServiceMarkFlows,
+		tableVLANFlows,
 		{
 			"Classifier",
 			[]*ofTestUtils.ExpectFlow{{MatchStr: "priority=0", ActStr: "drop"}},

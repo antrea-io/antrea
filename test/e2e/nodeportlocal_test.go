@@ -366,8 +366,8 @@ func NPLTestPodAddMultiPort(t *testing.T) {
 	checkTrafficForNPL(testData, r, nplAnnotations, clientName)
 
 	testData.deletePod(testNamespace, testPodName)
-	testData.deleteService("agnhost1")
-	testData.deleteService("agnhost2")
+	testData.deleteService(testNamespace, "agnhost1")
+	testData.deleteService(testNamespace, "agnhost2")
 	checkNPLRulesForPod(t, testData, r, nplAnnotations, antreaPod, testPodIP, false)
 }
 
@@ -422,8 +422,8 @@ func NPLTestPodAddMultiProtocol(t *testing.T) {
 	checkTrafficForNPL(testData, r, nplAnnotations, clientName)
 
 	testData.deletePod(testNamespace, testPodName)
-	testData.deleteService("agnhost1")
-	testData.deleteService("agnhost2")
+	testData.deleteService(testNamespace, "agnhost1")
+	testData.deleteService(testNamespace, "agnhost2")
 	checkNPLRulesForPod(t, testData, r, nplAnnotations, antreaPod, testPodIP, false)
 }
 

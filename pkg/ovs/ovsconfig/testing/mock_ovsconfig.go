@@ -1,4 +1,4 @@
-// Copyright 2021 Antrea Authors
+// Copyright 2022 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -88,6 +88,21 @@ func (m *MockOVSBridgeClient) Create() ovsconfig.Error {
 func (mr *MockOVSBridgeClientMockRecorder) Create() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Create", reflect.TypeOf((*MockOVSBridgeClient)(nil).Create))
+}
+
+// CreateAccessPort mocks base method
+func (m *MockOVSBridgeClient) CreateAccessPort(arg0, arg1 string, arg2 map[string]interface{}, arg3 uint16) (string, ovsconfig.Error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateAccessPort", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(ovsconfig.Error)
+	return ret0, ret1
+}
+
+// CreateAccessPort indicates an expected call of CreateAccessPort
+func (mr *MockOVSBridgeClientMockRecorder) CreateAccessPort(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateAccessPort", reflect.TypeOf((*MockOVSBridgeClient)(nil).CreateAccessPort), arg0, arg1, arg2, arg3)
 }
 
 // CreateInternalPort mocks base method

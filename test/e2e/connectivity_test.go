@@ -27,6 +27,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/util/k8s"
 )
 
 const pingCount = 5
@@ -104,10 +105,14 @@ func (data *TestData) runPingMesh(t *testing.T, podInfos []podInfo, ctrname stri
 			if pi1.namespace != "" {
 				podNamespace = pi1.namespace
 			}
+			pod2Namespace := testNamespace
+			if pi1.namespace != "" {
+				pod2Namespace = pi2.namespace
+			}
 			if err := data.runPingCommandFromTestPod(pi1, podNamespace, podIPs[pi2.name], ctrname, pingCount, 0); err != nil {
-				t.Errorf("Ping '%s' -> '%s': ERROR (%v)", pi1.name, pi2.name, err)
+				t.Errorf("Ping '%s' -> '%s': ERROR (%v)", k8s.NamespacedName(podNamespace, pi1.name), k8s.NamespacedName(pod2Namespace, pi2.name), err)
 			} else {
-				t.Logf("Ping '%s' -> '%s': OK", pi1.name, pi2.name)
+				t.Logf("Ping '%s' -> '%s': OK", k8s.NamespacedName(podNamespace, pi1.name), k8s.NamespacedName(pod2Namespace, pi2.name))
 			}
 		}
 	}

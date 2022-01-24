@@ -131,6 +131,8 @@ function export_govc_env_var {
 
 function clean_antrea {
     echo "====== Cleanup Antrea Installation ======"
+    clean_up_one_ns "antrea-ipam-test-11"
+    clean_up_one_ns "antrea-ipam-test-12"
     clean_up_one_ns "antrea-ipam-test"
     clean_up_one_ns "antrea-test"
     kubectl get pod -n kube-system -l component=antrea-agent --no-headers=true | awk '{print $1}' | while read AGENTNAME; do
@@ -410,6 +412,8 @@ function deliver_antrea_windows {
 
 function deliver_antrea {
     echo "====== Cleanup Antrea Installation ======"
+    clean_up_one_ns "antrea-ipam-test-11"
+    clean_up_one_ns "antrea-ipam-test-12"
     clean_up_one_ns "antrea-ipam-test"
     clean_up_one_ns "antrea-test"
     kubectl delete daemonset antrea-agent -n kube-system || true

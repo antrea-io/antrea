@@ -49,6 +49,12 @@ func skipIfAntreaIPAMTest(tb testing.TB) {
 	}
 }
 
+func skipIfNamespaceIsNotEqual(tb testing.TB, actualNamespace, expectNamespace string) {
+	if actualNamespace != expectNamespace {
+		tb.Skipf("Skipping test when namespace is not: %s", expectNamespace)
+	}
+}
+
 func skipIfProviderIs(tb testing.TB, name string, reason string) {
 	if testOptions.providerName == name {
 		tb.Skipf("Skipping test for the '%s' provider: %s", name, reason)

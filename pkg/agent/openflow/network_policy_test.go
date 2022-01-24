@@ -350,11 +350,11 @@ func TestBatchInstallPolicyRuleFlows(t *testing.T) {
 					EgressRuleTable.ofTable.BuildFlow(priorityLow).Cookie(cookiePolicy).
 						MatchProtocol(binding.ProtocolIP).MatchConjID(10).
 						Action().LoadToRegField(TFEgressConjIDField, 10).
-						Action().CT(true, EgressMetricTable.GetID(), CtZone).LoadToLabelField(10, EgressRuleCTLabel).CTDone().Done(),
+						Action().CT(true, EgressMetricTable.GetID(), CtZone, nil).LoadToLabelField(10, EgressRuleCTLabel).CTDone().Done(),
 					EgressRuleTable.ofTable.BuildFlow(priorityLow).Cookie(cookiePolicy).
 						MatchProtocol(binding.ProtocolIP).MatchConjID(11).
 						Action().LoadToRegField(TFEgressConjIDField, 11).
-						Action().CT(true, EgressMetricTable.GetID(), CtZone).LoadToLabelField(11, EgressRuleCTLabel).CTDone().Done(),
+						Action().CT(true, EgressMetricTable.GetID(), CtZone, nil).LoadToLabelField(11, EgressRuleCTLabel).CTDone().Done(),
 					EgressRuleTable.ofTable.BuildFlow(priorityNormal).Cookie(cookiePolicy).
 						MatchProtocol(binding.ProtocolIP).MatchSrcIP(net.ParseIP("192.168.1.40")).
 						Action().Conjunction(10, 1, 2).
@@ -455,7 +455,7 @@ func TestBatchInstallPolicyRuleFlows(t *testing.T) {
 					AntreaPolicyIngressRuleTable.ofTable.BuildFlow(priority100).Cookie(cookiePolicy).
 						MatchProtocol(binding.ProtocolIP).MatchConjID(10).
 						Action().LoadToRegField(TFIngressConjIDField, 10).
-						Action().CT(true, IngressMetricTable.GetID(), CtZone).LoadToLabelField(10, IngressRuleCTLabel).CTDone().Done(),
+						Action().CT(true, IngressMetricTable.GetID(), CtZone, nil).LoadToLabelField(10, IngressRuleCTLabel).CTDone().Done(),
 					AntreaPolicyIngressRuleTable.ofTable.BuildFlow(priority100).Cookie(cookiePolicy).
 						MatchConjID(11).
 						Action().LoadToRegField(CNPDenyConjIDField, 11).
@@ -914,7 +914,7 @@ func newMockRuleFlowBuilder(ctrl *gomock.Controller) *mocks.MockFlowBuilder {
 	ruleCtAction := mocks.NewMockCTAction(ctrl)
 	ruleCtAction.EXPECT().LoadToLabelField(gomock.Any(), gomock.Any()).Return(ruleCtAction).AnyTimes()
 	ruleCtAction.EXPECT().CTDone().Return(ruleFlowBuilder).AnyTimes()
-	ruleAction.EXPECT().CT(true, gomock.Any(), gomock.Any()).Return(ruleCtAction).AnyTimes()
+	ruleAction.EXPECT().CT(true, gomock.Any(), gomock.Any(), nil).Return(ruleCtAction).AnyTimes()
 	ruleAction.EXPECT().GotoTable(gomock.Any()).Return(ruleFlowBuilder).AnyTimes()
 	ruleAction.EXPECT().LoadToRegField(gomock.Any(), gomock.Any()).Return(ruleFlowBuilder).AnyTimes()
 	ruleFlowBuilder.EXPECT().Action().Return(ruleAction).AnyTimes()

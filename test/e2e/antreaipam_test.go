@@ -39,7 +39,7 @@ import (
 
 var (
 	subnetIPv4RangesMap = map[string]crdv1alpha2.IPPool{
-		"0": {
+		testAntreaIPAMNamespace: {
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "test-ippool-ipv4-0",
 			},
@@ -75,6 +75,42 @@ var (
 					}}},
 			},
 		},
+		testAntreaIPAMNamespace11: {
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "test-ippool-ipv4-11",
+			},
+			Spec: crdv1alpha2.IPPoolSpec{
+				IPVersion: 4,
+				IPRanges: []crdv1alpha2.SubnetIPRange{{IPRange: crdv1alpha2.IPRange{
+					CIDR:  "",
+					Start: "192.168.241.100",
+					End:   "192.168.241.129",
+				},
+					SubnetInfo: crdv1alpha2.SubnetInfo{
+						Gateway:      "192.168.241.1",
+						PrefixLength: 24,
+						VLAN:         "11",
+					}}},
+			},
+		},
+		testAntreaIPAMNamespace12: {
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "test-ippool-ipv4-12",
+			},
+			Spec: crdv1alpha2.IPPoolSpec{
+				IPVersion: 4,
+				IPRanges: []crdv1alpha2.SubnetIPRange{{IPRange: crdv1alpha2.IPRange{
+					CIDR:  "",
+					Start: "192.168.242.100",
+					End:   "192.168.242.129",
+				},
+					SubnetInfo: crdv1alpha2.SubnetInfo{
+						Gateway:      "192.168.242.1",
+						PrefixLength: 24,
+						VLAN:         "12",
+					}}},
+			},
+		},
 	}
 )
 
@@ -88,74 +124,131 @@ func TestAntreaIPAM(t *testing.T) {
 	defer teardownTest(t, data)
 
 	// Create AntreaIPAM IPPool and test Namespace
-	ippool, err := createIPPool(t, data, "0")
-	if err != nil {
-		t.Fatalf("Creating IPPool failed, err=%+v", err)
+	var ipPools []string
+	for _, namespace := range []string{testAntreaIPAMNamespace, testAntreaIPAMNamespace11, testAntreaIPAMNamespace12} {
+		ipPool, err := createIPPool(t, data, namespace)
+		if err != nil {
+			t.Fatalf("Creating IPPool failed, err=%+v", err)
+		}
+		defer deleteIPPoolWrapper(t, data, ipPool.Name)
+		ipPools = append(ipPools, ipPool.Name)
+		annotations := map[string]string{}
+		annotations[ipam.AntreaIPAMAnnotationKey] = ipPool.Name
+		err = data.createNamespaceWithAnnotations(namespace, annotations)
+		if err != nil {
+			t.Fatalf("Creating AntreaIPAM Namespace failed, err=%+v", err)
+		}
+		defer deleteAntreaIPAMNamespace(t, data, namespace)
 	}
-	defer deleteIPPoolWrapper(t, data, ippool.Name)
-	annotations := map[string]string{}
-	annotations[ipam.AntreaIPAMAnnotationKey] = ippool.Name
-	err = data.createNamespaceWithAnnotations(testAntreaIPAMNamespace, annotations)
-	if err != nil {
-		t.Fatalf("Creating AntreaIPAM Namespace failed, err=%+v", err)
-	}
-	defer deleteAntreaIPAMNamespace(t, data)
 	// Create 2nd AntreaIPAM IPPool
-	ippool, err = createIPPool(t, data, "1")
+	ipPool, err := createIPPool(t, data, "1")
 	if err != nil {
 		t.Fatalf("Creating IPPool failed, err=%+v", err)
 	}
-	defer deleteIPPoolWrapper(t, data, ippool.Name)
+	defer deleteIPPoolWrapper(t, data, ipPool.Name)
+	ipPools = append(ipPools, ipPool.Name)
 
+	// connectivity test with antrea redeploy
 	t.Run("testAntreaIPAMPodConnectivityAfterAntreaRestart", func(t *testing.T) {
 		skipIfHasWindowsNodes(t)
 		testPodConnectivityAfterAntreaRestart(t, data, testAntreaIPAMNamespace)
+		checkIPPoolsEmpty(t, data, ipPools)
+	})
+	t.Run("testAntreaIPAMVLAN11PodConnectivityAfterAntreaRestart", func(t *testing.T) {
+		skipIfHasWindowsNodes(t)
+		testPodConnectivityAfterAntreaRestart(t, data, testAntreaIPAMNamespace11)
+		checkIPPoolsEmpty(t, data, ipPools)
 	})
 
 	// basic test
 	t.Run("testAntreaIPAMPodAssignIP", func(t *testing.T) { testPodAssignIP(t, data, testAntreaIPAMNamespace, "192.168.240.0/24", "") })
 	t.Run("testDeleteAntreaIPAMPod", func(t *testing.T) { testDeletePod(t, data, testAntreaIPAMNamespace) })
 	t.Run("testAntreaIPAMRestart", func(t *testing.T) { testIPAMRestart(t, data, testAntreaIPAMNamespace) })
-	t.Run("testAntreaIPAMGratuitousARP", func(t *testing.T) { testGratuitousARP(t, data, testAntreaIPAMNamespace) })
+	t.Run("testAntreaIPAMGratuitousARP", func(t *testing.T) {
+		testGratuitousARP(t, data, testAntreaIPAMNamespace)
+		testGratuitousARP(t, data, testAntreaIPAMNamespace11)
+		checkIPPoolsEmpty(t, data, ipPools)
+	})
 
 	// connectivity test
-	t.Run("testAntreaIPAMPodToAntreaIPAMHostPortPodConnectivity", func(t *testing.T) {
-		skipIfHasWindowsNodes(t)
-		data.testHostPortPodConnectivity(t, testAntreaIPAMNamespace, testAntreaIPAMNamespace)
-	})
 	t.Run("testAntreaIPAMPodConnectivitySameNode", func(t *testing.T) {
 		skipIfHasWindowsNodes(t)
 		testAntreaIPAMPodConnectivitySameNode(t, data)
-	})
-	t.Run("testAntreaIPAMHostPortPodConnectivity", func(t *testing.T) {
-		skipIfHasWindowsNodes(t)
-		data.testHostPortPodConnectivity(t, testNamespace, testAntreaIPAMNamespace)
+		checkIPPoolsEmpty(t, data, ipPools)
 	})
 	t.Run("testAntreaIPAMPodConnectivityDifferentNodes", func(t *testing.T) {
 		skipIfNumNodesLessThan(t, 2)
 		testAntreaIPAMPodConnectivityDifferentNodes(t, data)
+		checkIPPoolsEmpty(t, data, ipPools)
+	})
+	t.Run("testAntreaIPAMPodToAntreaIPAMHostPortPodConnectivity", func(t *testing.T) {
+		skipIfHasWindowsNodes(t)
+		data.testHostPortPodConnectivity(t, testAntreaIPAMNamespace, testAntreaIPAMNamespace)
+		checkIPPoolsEmpty(t, data, ipPools)
+	})
+	t.Run("testAntreaIPAMHostPortPodConnectivity", func(t *testing.T) {
+		skipIfHasWindowsNodes(t)
+		data.testHostPortPodConnectivity(t, testNamespace, testAntreaIPAMNamespace)
+		checkIPPoolsEmpty(t, data, ipPools)
 	})
 	t.Run("testAntreaIPAMPodToHostPortPodConnectivity", func(t *testing.T) {
 		skipIfHasWindowsNodes(t)
 		data.testHostPortPodConnectivity(t, testAntreaIPAMNamespace, testNamespace)
+		checkIPPoolsEmpty(t, data, ipPools)
+	})
+	t.Run("testAntreaIPAMVLAN11PodToAntreaIPAMVLAN11HostPortPodConnectivity", func(t *testing.T) {
+		skipIfHasWindowsNodes(t)
+		data.testHostPortPodConnectivity(t, testAntreaIPAMNamespace11, testAntreaIPAMNamespace11)
+		checkIPPoolsEmpty(t, data, ipPools)
+	})
+	t.Run("testAntreaIPAMVLAN11PodToAntreaIPAMVLAN12HostPortPodConnectivity", func(t *testing.T) {
+		skipIfHasWindowsNodes(t)
+		data.testHostPortPodConnectivity(t, testAntreaIPAMNamespace11, testAntreaIPAMNamespace12)
+		checkIPPoolsEmpty(t, data, ipPools)
+	})
+	t.Run("testAntreaIPAMPodToAntreaIPAMVLAN11HostPortPodConnectivity", func(t *testing.T) {
+		skipIfHasWindowsNodes(t)
+		data.testHostPortPodConnectivity(t, testAntreaIPAMNamespace, testAntreaIPAMNamespace11)
+		checkIPPoolsEmpty(t, data, ipPools)
+	})
+	t.Run("testAntreaIPAMVLAN11PodToAntreaIPAMHostPortPodConnectivity", func(t *testing.T) {
+		skipIfHasWindowsNodes(t)
+		data.testHostPortPodConnectivity(t, testAntreaIPAMNamespace11, testAntreaIPAMNamespace)
+		checkIPPoolsEmpty(t, data, ipPools)
+	})
+	t.Run("testAntreaIPAMVLAN11HostPortPodConnectivity", func(t *testing.T) {
+		skipIfHasWindowsNodes(t)
+		data.testHostPortPodConnectivity(t, testNamespace, testAntreaIPAMNamespace11)
+		checkIPPoolsEmpty(t, data, ipPools)
+	})
+	t.Run("testAntreaIPAMVLAN11PodToHostPortPodConnectivity", func(t *testing.T) {
+		skipIfHasWindowsNodes(t)
+		data.testHostPortPodConnectivity(t, testAntreaIPAMNamespace11, testNamespace)
+		checkIPPoolsEmpty(t, data, ipPools)
 	})
 	t.Run("testAntreaIPAMOVSRestartSameNode", func(t *testing.T) {
 		skipIfNotIPv4Cluster(t)
 		skipIfHasWindowsNodes(t)
 		testOVSRestartSameNode(t, data, testAntreaIPAMNamespace)
+		testOVSRestartSameNode(t, data, testAntreaIPAMNamespace11)
+		checkIPPoolsEmpty(t, data, ipPools)
 	})
 	t.Run("testAntreaIPAMOVSFlowReplay", func(t *testing.T) {
 		skipIfHasWindowsNodes(t)
 		testOVSFlowReplay(t, data, testAntreaIPAMNamespace)
+		testOVSFlowReplay(t, data, testAntreaIPAMNamespace11)
+		checkIPPoolsEmpty(t, data, ipPools)
 	})
 
 	// StatefulSet test
 	dedicatedIPPoolKey := "1"
 	t.Run("testAntreaIPAMStatefulSetDedicated", func(t *testing.T) {
 		testAntreaIPAMStatefulSet(t, data, &dedicatedIPPoolKey)
+		checkIPPoolsEmpty(t, data, ipPools)
 	})
 	t.Run("testAntreaIPAMStatefulSetShared", func(t *testing.T) {
 		testAntreaIPAMStatefulSet(t, data, nil)
+		checkIPPoolsEmpty(t, data, ipPools)
 	})
 }
 
@@ -187,22 +280,21 @@ func testAntreaIPAMPodConnectivitySameNode(t *testing.T, data *TestData) {
 
 func testAntreaIPAMPodConnectivityDifferentNodes(t *testing.T, data *TestData) {
 	maxNodes := 3
-	podInfos, deletePods := createPodsOnDifferentNodes(t, data, testNamespace, "differentnodes")
-	defer deletePods()
-	antreaIPAMPodInfos, deleteAntreaIPAMPods := createPodsOnDifferentNodes(t, data, testAntreaIPAMNamespace, "antreaipam-differentnodes")
-	defer deleteAntreaIPAMPods()
-
-	if len(podInfos) > maxNodes {
-		podInfos = podInfos[:maxNodes]
-		antreaIPAMPodInfos = antreaIPAMPodInfos[:maxNodes]
+	var podInfos []podInfo
+	for _, namespace := range []string{testNamespace, testAntreaIPAMNamespace, testAntreaIPAMNamespace11, testAntreaIPAMNamespace12} {
+		createdPodInfos, deletePods := createPodsOnDifferentNodes(t, data, namespace, "differentnodes")
+		defer deletePods()
+		if len(createdPodInfos) > maxNodes {
+			createdPodInfos = createdPodInfos[:maxNodes]
+		}
+		podInfos = append(podInfos, createdPodInfos...)
 	}
-	podInfos = append(podInfos, antreaIPAMPodInfos...)
 	data.runPingMesh(t, podInfos, agnhostContainerName)
 }
 
 func testAntreaIPAMStatefulSet(t *testing.T, data *TestData, dedicatedIPPoolKey *string) {
 	stsName := randName("sts-test-")
-	ipPoolName := subnetIPv4RangesMap["0"].Name
+	ipPoolName := subnetIPv4RangesMap[testAntreaIPAMNamespace].Name
 	if dedicatedIPPoolKey != nil {
 		ipPoolName = subnetIPv4RangesMap[*dedicatedIPPoolKey].Name
 	}
@@ -251,7 +343,7 @@ func testAntreaIPAMStatefulSet(t *testing.T, data *TestData, dedicatedIPPoolKey 
 	if err != nil {
 		t.Fatalf("Error when creating Pod '%s': %v", podName, err)
 	}
-	defer data.deletePodAndWait(defaultTimeout, testAntreaIPAMNamespace, podName)
+	defer data.deletePodAndWait(defaultTimeout, podName, testAntreaIPAMNamespace)
 	podIPs, err := data.podWaitForIPs(defaultTimeout, podName, testAntreaIPAMNamespace)
 	if err != nil {
 		t.Fatalf("Error when waiting Pod IPs: %v", err)
@@ -260,7 +352,7 @@ func testAntreaIPAMStatefulSet(t *testing.T, data *TestData, dedicatedIPPoolKey 
 	if err != nil {
 		t.Fatalf("Error when checking IPPoolAllocation: %v", err)
 	}
-	startIPString := subnetIPv4RangesMap["0"].Spec.IPRanges[0].Start
+	startIPString := subnetIPv4RangesMap[testAntreaIPAMNamespace].Spec.IPRanges[0].Start
 	offset := 2
 	if dedicatedIPPoolKey != nil {
 		startIPString = subnetIPv4RangesMap[*dedicatedIPPoolKey].Spec.IPRanges[0].Start
@@ -291,7 +383,7 @@ func testAntreaIPAMStatefulSet(t *testing.T, data *TestData, dedicatedIPPoolKey 
 	}
 	checkStatefulSetIPPoolAllocation(t, data, stsName, testAntreaIPAMNamespace, ipPoolName, ipOffsets, reservedIPOffsets)
 
-	data.deletePodAndWait(defaultTimeout, testAntreaIPAMNamespace, podName)
+	data.deletePodAndWait(defaultTimeout, podName, testAntreaIPAMNamespace)
 	_, err = data.restartStatefulSet(stsName, testAntreaIPAMNamespace)
 	if err != nil {
 		t.Fatalf("Error when restarting StatefulSet '%s': %v", stsName, err)
@@ -350,7 +442,7 @@ func checkStatefulSetIPPoolAllocation(tb testing.TB, data *TestData, name string
 	expectedIPAddressJson, _ := json.Marshal(expectedIPAddressMap)
 	tb.Logf("expectedIPAddressMap: %s", expectedIPAddressJson)
 
-	err = wait.Poll(time.Second*5, defaultTimeout, func() (bool, error) {
+	err = wait.Poll(time.Second*3, time.Second*15, func() (bool, error) {
 		ipPool, err := data.crdClient.CrdV1alpha2().IPPools().Get(context.TODO(), ipPoolName, metav1.GetOptions{})
 		if err != nil {
 			tb.Fatalf("Failed to get IPPool %s, err: %+v", ipPoolName, err)
@@ -386,9 +478,9 @@ func checkStatefulSetIPPoolAllocation(tb testing.TB, data *TestData, name string
 	require.Nil(tb, err)
 }
 
-func deleteAntreaIPAMNamespace(tb testing.TB, data *TestData) {
-	tb.Logf("Deleting '%s' K8s Namespace", testAntreaIPAMNamespace)
-	if err := data.deleteNamespace(testAntreaIPAMNamespace, defaultTimeout); err != nil {
+func deleteAntreaIPAMNamespace(tb testing.TB, data *TestData, namespace string) {
+	tb.Logf("Deleting '%s' K8s Namespace", namespace)
+	if err := data.deleteNamespace(namespace, defaultTimeout); err != nil {
 		tb.Logf("Error when tearing down test: %v", err)
 	}
 }
@@ -434,6 +526,27 @@ func checkIPPoolAllocation(tb testing.TB, data *TestData, ipPoolName, podIPStrin
 func deleteIPPoolWrapper(tb testing.TB, data *TestData, name string) {
 	tb.Logf("Deleting IPPool '%s'", name)
 	if err := data.crdClient.CrdV1alpha2().IPPools().Delete(context.TODO(), name, metav1.DeleteOptions{}); err != nil {
-		tb.Logf("Error when deleting IPPool: %v", err)
+		ipPool, _ := data.crdClient.CrdV1alpha2().IPPools().Get(context.TODO(), name, metav1.GetOptions{})
+		ipPoolJson, _ := json.Marshal(ipPool)
+		tb.Logf("Error when deleting IPPool, err: %v, data: %s", err, ipPoolJson)
 	}
+}
+
+func checkIPPoolsEmpty(tb testing.TB, data *TestData, names []string) {
+	count := 0
+	err := wait.PollImmediate(3*time.Second, defaultTimeout, func() (bool, error) {
+		for _, name := range names {
+			ipPool, _ := data.crdClient.CrdV1alpha2().IPPools().Get(context.TODO(), name, metav1.GetOptions{})
+			if len(ipPool.Status.IPAddresses) > 0 {
+				ipPoolJson, _ := json.Marshal(ipPool)
+				if count > 20 {
+					tb.Logf("IPPool is not empty, data: %s", ipPoolJson)
+				}
+				count += 1
+				return false, nil
+			}
+		}
+		return true, nil
+	})
+	require.Nil(tb, err)
 }
