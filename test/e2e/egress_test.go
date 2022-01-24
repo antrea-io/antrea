@@ -57,6 +57,9 @@ func TestEgress(t *testing.T) {
 	// Egress works for encap mode only.
 	skipIfEncapModeIsNot(t, data, config.TrafficEncapModeEncap)
 
+	if err := data.wrapAgentStartCommand(); err != nil {
+		t.Fatalf("Failed to wrap antrea-agent start command: %v", err)
+	}
 	t.Run("testEgressClientIP", func(t *testing.T) { testEgressClientIP(t, data) })
 	t.Run("testEgressCRUD", func(t *testing.T) { testEgressCRUD(t, data) })
 	t.Run("testEgressUpdateEgressIP", func(t *testing.T) { testEgressUpdateEgressIP(t, data) })
@@ -593,24 +596,17 @@ func testEgressNodeFailure(t *testing.T, data *TestData) {
 			case 6:
 				skipIfNotIPv6Cluster(t)
 			}
-			signalAgent := func(nodeName, signal string) {
-				cmd := fmt.Sprintf("pkill -%s antrea-agent", signal)
-				if testOptions.providerName != "kind" {
-					cmd = "sudo " + cmd
-				}
-				rc, stdout, stderr, err := data.RunCommandOnNode(nodeName, cmd)
-				if rc != 0 || err != nil {
-					t.Errorf("Error when running command '%s' on Node '%s', rc: %d, stdout: %s, stderr: %s, error: %v",
-						cmd, nodeName, rc, stdout, stderr, err)
-				}
-			}
 			pauseAgent := func(_, evictNode string) {
 				// Send "STOP" signal to antrea-agent.
-				signalAgent(evictNode, "STOP")
+				if err := data.signalAntreaAgent(evictNode, "STOP"); err != nil {
+					t.Errorf("Failed to stop antrea-agent on Node %q: %v", evictNode, err)
+				}
 			}
 			restoreAgent := func(_, evictNode string) {
 				// Send "CONT" signal to antrea-agent.
-				signalAgent(evictNode, "CONT")
+				if err := data.signalAntreaAgent(evictNode, "CONT"); err != nil {
+					t.Errorf("Failed to resume antrea-agent on Node %q: %v", evictNode, err)
+				}
 			}
 			// Egress IP migration may take a few seconds when it's caused by Node failure detection.
 			// Skip checking Egress IP on the evicted Node because Egress IP will be left on it (no running antrea-agent).
@@ -766,4 +762,25 @@ func (data *TestData) waitForEgressRealized(egress *v1alpha2.Egress) (*v1alpha2.
 		return nil, fmt.Errorf("wait for Egress %#v realized failed: %v", egress, err)
 	}
 	return egress, nil
+}
+
+func (data *TestData) signalAntreaAgent(nodeName, signal string) error {
+	agentName, err := data.getAntreaPodOnNode(nodeName)
+	if err != nil {
+		return err
+	}
+	stdout, stderr, err := data.RunCommandFromPod(metav1.NamespaceSystem, agentName, "antrea-agent", []string{"pgrep", "-o", "antrea-agent"})
+	if err != nil {
+		return fmt.Errorf("Error getting the pid of antrea-agent, stdout: %s, stderr: %s, error: %v", stdout, stderr, err)
+	}
+	pid := strings.TrimSpace(stdout)
+	if pid == "1" {
+		return fmt.Errorf("Cannot send signal to antrea-agent because its pid is 1")
+	}
+	cmd := fmt.Sprintf("kill -%s %s", signal, pid)
+	stdout, stderr, err = data.RunCommandFromPod(metav1.NamespaceSystem, agentName, "antrea-agent", strings.Split(cmd, " "))
+	if err != nil || stderr != "" {
+		return fmt.Errorf("Error when running command %q on Pod %q, stdout: %s, stderr: %s, error: %v", cmd, agentName, stdout, stderr, err)
+	}
+	return nil
 }

@@ -52,6 +52,9 @@ func TestServiceExternalIP(t *testing.T) {
 	}
 	defer teardownTest(t, data)
 
+	if err := data.wrapAgentStartCommand(); err != nil {
+		t.Fatalf("Failed to wrap antrea-agent start command: %v", err)
+	}
 	t.Run("testServiceWithExternalIPCRUD", func(t *testing.T) { testServiceWithExternalIPCRUD(t, data) })
 	t.Run("testServiceUpdateExternalIP", func(t *testing.T) { testServiceUpdateExternalIP(t, data) })
 	t.Run("testServiceExternalTrafficPolicyLocal", func(t *testing.T) { testServiceExternalTrafficPolicyLocal(t, data) })
@@ -471,26 +474,6 @@ func testServiceNodeFailure(t *testing.T, data *TestData) {
 			} else {
 				skipIfNotIPv4Cluster(t)
 			}
-			signalAgent := func(nodeName, signal string) {
-				cmd := fmt.Sprintf("pkill -%s antrea-agent", signal)
-				if testOptions.providerName != "kind" {
-					cmd = "sudo " + cmd
-				}
-				rc, stdout, stderr, err := data.RunCommandOnNode(nodeName, cmd)
-				if rc != 0 || err != nil {
-					t.Errorf("Error when running command '%s' on Node '%s', rc: %d, stdout: %s, stderr: %s, error: %v",
-						cmd, nodeName, rc, stdout, stderr, err)
-				}
-			}
-			pauseAgent := func(evictNode string) {
-				// Send "STOP" signal to antrea-agent.
-				signalAgent(evictNode, "STOP")
-			}
-			restoreAgent := func(evictNode string) {
-				// Send "CONT" signal to antrea-agent.
-				signalAgent(evictNode, "CONT")
-			}
-
 			nodeCandidates := sets.NewString(nodeName(0), nodeName(1))
 			matchExpressions := []metav1.LabelSelectorRequirement{
 				{
@@ -511,9 +494,9 @@ func testServiceNodeFailure(t *testing.T, data *TestData) {
 
 			service, originalNode, err := data.waitForServiceConfigured(service, tt.expectedIP, "")
 			assert.NoError(t, err)
-			pauseAgent(originalNode)
-			defer restoreAgent(originalNode)
-
+			err = data.signalAntreaAgent(originalNode, "STOP")
+			assert.NoError(t, err)
+			defer data.signalAntreaAgent(originalNode, "CONT")
 			var expectedMigratedNode string
 			if originalNode == nodeName(0) {
 				expectedMigratedNode = nodeName(1)
@@ -529,7 +512,8 @@ func testServiceNodeFailure(t *testing.T, data *TestData) {
 				return assigndNode == expectedMigratedNode, nil
 			})
 			assert.NoError(t, err)
-			restoreAgent(originalNode)
+			err = data.signalAntreaAgent(originalNode, "CONT")
+			assert.NoError(t, err)
 			_, _, err = data.waitForServiceConfigured(service, tt.expectedIP, originalNode)
 			assert.NoError(t, err)
 		})

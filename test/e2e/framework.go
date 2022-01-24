@@ -2803,3 +2803,37 @@ func getPingCommand(count int, size int, os string, ip *net.IP) []string {
 	}
 	return cmd
 }
+
+// wrapAgentStartCommand wraps the antrea-agent start command with /bin/sh to run the antrea-agent with pid other than 1.
+// It is helpful for some test cases such as Egress, which requires pausing and resuming the antrea-agent.
+func (data *TestData) wrapAgentStartCommand() error {
+	ds, err := data.clientset.AppsV1().DaemonSets(antreaNamespace).Get(context.TODO(), antreaDaemonSet, metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to retrieve Agent DaemonSet: %v", err)
+	}
+	update := false
+	for idx := range ds.Spec.Template.Spec.Containers {
+		if ds.Spec.Template.Spec.Containers[idx].Name == agentContainerName {
+			if len(ds.Spec.Template.Spec.Containers[idx].Command) == 1 &&
+				ds.Spec.Template.Spec.Containers[idx].Command[0] == "antrea-agent" {
+				ds.Spec.Template.Spec.Containers[idx].Command = []string{
+					"/bin/sh", "-c",
+				}
+				ds.Spec.Template.Spec.Containers[idx].Args = []string{
+					strings.Join(append([]string{"antrea-agent"}, ds.Spec.Template.Spec.Containers[idx].Args...), " "),
+				}
+				update = true
+			}
+		}
+	}
+	if update {
+		_, err = data.clientset.AppsV1().DaemonSets(antreaNamespace).Update(context.TODO(), ds, metav1.UpdateOptions{})
+		if err != nil {
+			return fmt.Errorf("failed to update Agent DaemonSet: %v", err)
+		}
+		if err := data.waitForAntreaDaemonSetPods(defaultTimeout); err != nil {
+			return err
+		}
+	}
+	return nil
+}
