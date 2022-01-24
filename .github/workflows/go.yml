@@ -4,12 +4,10 @@ on:
     branches:
     - main
     - release-*
-    - feature/multi-cluster
   push:
     branches:
     - main
     - release-*
-    - feature/multi-cluster
 
 env:
   go-cache-name: go
