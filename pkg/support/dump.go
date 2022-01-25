@@ -281,6 +281,8 @@ type agentDumper struct {
 	aq           agentquerier.AgentQuerier
 	npq          querier.AgentNetworkPolicyInfoQuerier
 	since        string
+	v4Enabled    bool
+	v6Enabled    bool
 }
 
 func (d *agentDumper) DumpAgentInfo(basedir string) error {
@@ -326,7 +328,7 @@ func (d *agentDumper) DumpOVSPorts(basedir string) error {
 	return writeFile(d.fs, filepath.Join(basedir, "ovsports"), "ports", []byte(strings.Join(portData, "\n")))
 }
 
-func NewAgentDumper(fs afero.Fs, executor exec.Interface, ovsCtlClient ovsctl.OVSCtlClient, aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolicyInfoQuerier, since string) AgentDumper {
+func NewAgentDumper(fs afero.Fs, executor exec.Interface, ovsCtlClient ovsctl.OVSCtlClient, aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolicyInfoQuerier, since string, v4Enabled, v6Enabled bool) AgentDumper {
 	return &agentDumper{
 		fs:           fs,
 		executor:     executor,
@@ -334,5 +336,7 @@ func NewAgentDumper(fs afero.Fs, executor exec.Interface, ovsCtlClient ovsctl.OV
 		aq:           aq,
 		npq:          npq,
 		since:        since,
+		v4Enabled:    v4Enabled,
+		v6Enabled:    v6Enabled,
 	}
 }

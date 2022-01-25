@@ -29,8 +29,6 @@ import (
 
 func newMockFQDNController(t *testing.T, controller *gomock.Controller, dnsServer *string) (*fqdnController, *openflowtest.MockClient) {
 	mockOFClient := openflowtest.NewMockClient(controller)
-	mockOFClient.EXPECT().IsIPv4Enabled().Return(true).AnyTimes()
-	mockOFClient.EXPECT().IsIPv6Enabled().Return(false).AnyTimes()
 	mockOFClient.EXPECT().NewDNSpacketInConjunction(gomock.Any()).Return(nil).AnyTimes()
 	dirtyRuleHandler := func(rule string) {}
 	dnsServerAddr := "8.8.8.8:53" // dummy DNS server, will not be used since we don't send any request in these tests
@@ -42,6 +40,8 @@ func newMockFQDNController(t *testing.T, controller *gomock.Controller, dnsServe
 		newIDAllocator(testAsyncDeleteInterval),
 		dnsServerAddr,
 		dirtyRuleHandler,
+		true,
+		false,
 	)
 	require.NoError(t, err)
 	return f, mockOFClient
