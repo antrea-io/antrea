@@ -74,7 +74,7 @@ func NewResourceExportReconciler(
 // Reconcile will process all kinds of ResourceExport. Service and Endpoint kinds of ResourceExport
 // will be handled in this file, and all other kinds will have their own handler files, eg: newkind_handler.go
 func (r *ResourceExportReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	klog.V(2).InfoS("reconciling ResourceExport", "resourceexport", req.NamespacedName)
+	klog.InfoS("reconciling ResourceExport", "resourceexport", req.NamespacedName)
 	var resExport mcsv1alpha1.ResourceExport
 	if err := r.Client.Get(ctx, req.NamespacedName, &resExport); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
@@ -85,10 +85,8 @@ func (r *ResourceExportReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		klog.V(2).InfoS("Reconciling Service type of ResourceExport", "resourceexport", req.NamespacedName)
 	case common.EndpointsKind:
 		klog.V(2).InfoS("Reconciling Endpoint type of ResourceExport", "resourceexport", req.NamespacedName)
-	// Developer can add more supported kinds here in the future.
-	// eg: add a new case and a new method 'handleNewKind' in a new file like 'newkind_handler.go'
-	//  case common.NewKind:
-	//    return r.handleNewKind(ctx, req, resExport)
+	case common.AntreaClusterNetworkPolicyKind:
+		klog.V(2).InfoS("Reconciling AntreaClusterNetworkPolicy type of ResourceExport", "resourceexport", req.NamespacedName)
 	default:
 		klog.InfoS("It's not expected kind, skip reconciling ResourceExport", "resourceexport", req.NamespacedName)
 		return ctrl.Result{}, nil
@@ -101,16 +99,18 @@ func (r *ResourceExportReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	// More details about using Finalizers, please refer to https://book.kubebuilder.io/reference/using-finalizers.html.
 	if !resExport.DeletionTimestamp.IsZero() {
 		if common.StringExistsInSlice(resExport.Finalizers, common.ResourceExportFinalizer) {
+			klog.Info("There are finalizers, handling delete event")
 			err := r.handleDeleteEvent(ctx, &resExport)
 			if err != nil {
 				return ctrl.Result{}, err
 			}
 			return r.deleteResourceExport(&resExport)
 		}
+		klog.Info("There are no finalizers, returning")
 		return ctrl.Result{}, nil
 	}
 
-	createResImport, existResImport, err := r.getExistingResImport(ctx, resExport)
+	createResImport, existingResImport, err := r.getExistingResImport(ctx, resExport)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -119,9 +119,11 @@ func (r *ResourceExportReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	resImport := &mcsv1alpha1.ResourceImport{}
 	switch resExport.Spec.Kind {
 	case common.ServiceKind:
-		resImport, changed, err = r.refreshServiceResourceImport(&resExport, existResImport, createResImport)
+		resImport, changed, err = r.refreshServiceResourceImport(&resExport, existingResImport, createResImport)
 	case common.EndpointsKind:
-		resImport, changed, err = r.refreshEndpointsResourceImport(&resExport, existResImport, createResImport)
+		resImport, changed, err = r.refreshEndpointsResourceImport(&resExport, existingResImport, createResImport)
+	case common.AntreaClusterNetworkPolicyKind:
+		resImport, changed, err = r.refreshACNPResourceImport(&resExport, existingResImport, createResImport)
 	}
 	if err != nil {
 		r.updateResourceExportStatus(&resExport, failed)
@@ -208,6 +210,7 @@ func (r *ResourceExportReconciler) handleDeleteEvent(ctx context.Context, resExp
 		return err
 	}
 	resImportName := GetResourceImportName(resExport)
+	klog.Infof("There is resImport to delete named %s", resImportName)
 
 	undeleteItems := RemoveDeletedResourceExports(reList.Items)
 	if len(undeleteItems) == 0 {
@@ -384,6 +387,32 @@ func (r *ResourceExportReconciler) refreshEndpointsResourceImport(
 	return newResImport, true, nil
 }
 
+func (r *ResourceExportReconciler) refreshACNPResourceImport(
+	resExport *mcsv1alpha1.ResourceExport,
+	resImport *mcsv1alpha1.ResourceImport,
+	createResImport bool) (*mcsv1alpha1.ResourceImport, bool, error) {
+	newResImport := resImport.DeepCopy()
+	newResImport.Spec.Name = resExport.Spec.Name
+	newResImport.Spec.Namespace = resExport.Spec.Namespace
+	newResImport.Spec.Kind = common.AntreaClusterNetworkPolicyKind
+	if createResImport {
+		newResImport.Spec.ClusterNetworkPolicy = resExport.Spec.ClusterNetworkPolicy
+		return newResImport, true, nil
+	}
+	if !apiequality.Semantic.DeepEqual(resExport.Spec.ClusterNetworkPolicy, resImport.Spec.ClusterNetworkPolicy) {
+		undeletedItems, err := r.getNotDeletedResourceExports(resExport)
+		if err != nil {
+			klog.ErrorS(err, "failed to list ResourceExports for ACNP, retry later")
+			return newResImport, false, err
+		}
+		if len(undeletedItems) == 1 && undeletedItems[0].Name == resExport.Name && undeletedItems[0].Namespace == resExport.Namespace {
+			newResImport.Spec.ClusterNetworkPolicy = resExport.Spec.ClusterNetworkPolicy
+			return newResImport, true, nil
+		}
+	}
+	return newResImport, false, nil
+}
+
 func (r *ResourceExportReconciler) getNotDeletedResourceExports(resExport *mcsv1alpha1.ResourceExport) ([]mcsv1alpha1.ResourceExport, error) {
 	reList := &mcsv1alpha1.ResourceExportList{}
 	err := r.Client.List(context.TODO(), reList, &client.ListOptions{
@@ -475,9 +504,15 @@ func SvcPortsConverter(svcPort []corev1.ServicePort) []mcs.ServicePort {
 }
 
 func GetResourceImportName(resExport *mcsv1alpha1.ResourceExport) types.NamespacedName {
+	if resExport.Spec.Namespace != "" {
+		return types.NamespacedName{
+			Namespace: resExport.Namespace,
+			Name:      resExport.Spec.Namespace + "-" + resExport.Spec.Name + "-" + strings.ToLower(resExport.Spec.Kind),
+		}
+	}
 	return types.NamespacedName{
 		Namespace: resExport.Namespace,
-		Name:      resExport.Spec.Namespace + "-" + resExport.Spec.Name + "-" + strings.ToLower(resExport.Spec.Kind),
+		Name:      resExport.Spec.Name + "-" + strings.ToLower(resExport.Spec.Kind),
 	}
 }
 

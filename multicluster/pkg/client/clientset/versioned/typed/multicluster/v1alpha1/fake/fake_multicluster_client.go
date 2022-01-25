@@ -27,6 +27,10 @@ type FakeMulticlusterV1alpha1 struct {
 	*testing.Fake
 }
 
+func (c *FakeMulticlusterV1alpha1) ACNPImports() v1alpha1.ACNPImportInterface {
+	return &FakeACNPImports{c}
+}
+
 func (c *FakeMulticlusterV1alpha1) ClusterClaims(namespace string) v1alpha1.ClusterClaimInterface {
 	return &FakeClusterClaims{c, namespace}
 }

@@ -31,11 +31,13 @@ import (
 
 	mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
 	"antrea.io/antrea/multicluster/controllers/multicluster/common"
+	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
 )
 
 var (
-	now       = metav1.Now()
-	svcLabels = map[string]string{
+	now         = metav1.Now()
+	dropAction  = v1alpha1.RuleActionDrop
+	svcLabels   = map[string]string{
 		common.SourceNamespace: "default",
 		common.SourceName:      "nginx",
 		common.SourceKind:      "Service",
@@ -54,6 +56,29 @@ var (
 		Namespace: "default",
 		Name:      "cluster-a-default-nginx-endpoints",
 	}}
+	acnpResReq = ctrl.Request{NamespacedName: types.NamespacedName{
+		Namespace: "default",
+		Name:      "test-acnp-export",
+	}}
+	isolationACNPSpec = &v1alpha1.ClusterNetworkPolicySpec{
+		Tier:     "securityops",
+		Priority: 1.0,
+		AppliedTo: []v1alpha1.NetworkPolicyPeer{
+			{NamespaceSelector: &metav1.LabelSelector{}},
+		},
+		Ingress: []v1alpha1.Rule{
+			{
+				Action: &dropAction,
+				From: []v1alpha1.NetworkPolicyPeer{
+					{
+						Namespaces: &v1alpha1.PeerNamespaces{
+							Match: v1alpha1.NamespaceMatchSelf,
+						},
+					},
+				},
+			},
+		},
+	}
 )
 
 func TestResourceExportReconciler_handleServiceExportDeleteEvent(t *testing.T) {
@@ -250,6 +275,40 @@ func TestResourceExportReconciler_handleEndpointExportCreateEvent(t *testing.T) 
 	r := NewResourceExportReconciler(fakeClient, scheme)
 	if _, err := r.Reconcile(ctx, epResReq); err != nil {
 		t.Errorf("ResourceExport Reconciler should handle Endpoints ResourceExport  create event successfully but got error = %v", err)
+	} else {
+		resImport := &mcsv1alpha1.ResourceImport{}
+		err := fakeClient.Get(ctx, namespacedName, resImport)
+		if err != nil {
+			t.Errorf("failed to get ResourceImport, got error = %v", err)
+		} else if !reflect.DeepEqual(resImport.Spec, expectedImportSpec) {
+			t.Errorf("expected ResourceImport Spec %v, but got %v", expectedImportSpec, resImport.Spec)
+		}
+	}
+}
+
+func TestResourceExportReconciler_handleACNPExportCreateEvent(t *testing.T) {
+	existingResExport := &mcsv1alpha1.ResourceExport{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace:  "default",
+			Name:       "test-acnp-export",
+			Finalizers: []string{common.ResourceExportFinalizer},
+		},
+		Spec: mcsv1alpha1.ResourceExportSpec{
+			Name:                 "test-acnp",
+			Kind:                 common.AntreaClusterNetworkPolicyKind,
+			ClusterNetworkPolicy: isolationACNPSpec,
+		},
+	}
+	expectedImportSpec := mcsv1alpha1.ResourceImportSpec{
+		Name:                 "test-acnp",
+		Kind:                 common.AntreaClusterNetworkPolicyKind,
+		ClusterNetworkPolicy: isolationACNPSpec,
+	}
+	namespacedName := GetResourceImportName(existingResExport)
+	fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(existingResExport).Build()
+	r := NewResourceExportReconciler(fakeClient, scheme)
+	if _, err := r.Reconcile(ctx, acnpResReq); err != nil {
+		t.Errorf("ResourceExport Reconciler should handle ACNP ResourceExport create event successfully but got error = %v", err)
 	} else {
 		resImport := &mcsv1alpha1.ResourceImport{}
 		err := fakeClient.Get(ctx, namespacedName, resImport)
