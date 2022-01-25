@@ -106,12 +106,12 @@ func (c *Client) Initialize(nodeConfig *config.NodeConfig, done func()) error {
 }
 
 func (c *Client) initServiceIPRoutes() error {
-	if config.IsIPv4Enabled(c.nodeConfig, c.networkConfig.TrafficEncapMode) {
+	if c.networkConfig.IPv4Enabled {
 		if err := c.addVirtualServiceIPRoute(false); err != nil {
 			return err
 		}
 	}
-	if config.IsIPv6Enabled(c.nodeConfig, c.networkConfig.TrafficEncapMode) {
+	if c.networkConfig.IPv6Enabled {
 		return fmt.Errorf("IPv6 is not supported on Windows")
 	}
 	return nil

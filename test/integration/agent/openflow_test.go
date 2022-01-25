@@ -329,7 +329,7 @@ func testReplayFlows(t *testing.T) {
 }
 
 func testInitialize(t *testing.T, config *testConfig) {
-	if _, err := c.Initialize(roundInfo, config.nodeConfig, &config1.NetworkConfig{TrafficEncapMode: config1.TrafficEncapModeEncap}); err != nil {
+	if _, err := c.Initialize(roundInfo, config.nodeConfig, &config1.NetworkConfig{TrafficEncapMode: config1.TrafficEncapModeEncap, IPv4Enabled: config.enableIPv4, IPv6Enabled: config.enableIPv6}); err != nil {
 		t.Errorf("Failed to initialize openflow client: %v", err)
 	}
 	for _, tableFlow := range prepareDefaultFlows(config) {
@@ -427,7 +427,7 @@ func TestNetworkPolicyFlows(t *testing.T) {
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge %s", br))
 
-	_, err = c.Initialize(roundInfo, &config1.NodeConfig{PodIPv4CIDR: podIPv4CIDR, PodIPv6CIDR: podIPv6CIDR, GatewayConfig: gwConfig}, &config1.NetworkConfig{TrafficEncapMode: config1.TrafficEncapModeEncap})
+	_, err = c.Initialize(roundInfo, &config1.NodeConfig{PodIPv4CIDR: podIPv4CIDR, PodIPv6CIDR: podIPv6CIDR, GatewayConfig: gwConfig}, &config1.NetworkConfig{TrafficEncapMode: config1.TrafficEncapModeEncap, IPv4Enabled: true, IPv6Enabled: true})
 	require.Nil(t, err, "Failed to initialize OFClient")
 
 	defer func() {
@@ -579,7 +579,7 @@ func TestProxyServiceFlows(t *testing.T) {
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge %s", br))
 
-	_, err = c.Initialize(roundInfo, &config1.NodeConfig{PodIPv4CIDR: podIPv4CIDR, PodIPv6CIDR: podIPv6CIDR, GatewayConfig: gwConfig}, &config1.NetworkConfig{TrafficEncapMode: config1.TrafficEncapModeEncap})
+	_, err = c.Initialize(roundInfo, &config1.NodeConfig{PodIPv4CIDR: podIPv4CIDR, PodIPv6CIDR: podIPv6CIDR, GatewayConfig: gwConfig}, &config1.NetworkConfig{TrafficEncapMode: config1.TrafficEncapModeEncap, IPv4Enabled: true})
 	require.Nil(t, err, "Failed to initialize OFClient")
 
 	defer func() {
@@ -1519,7 +1519,7 @@ func TestSNATFlows(t *testing.T) {
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge %s", br))
 
 	config := prepareConfiguration()
-	_, err = c.Initialize(roundInfo, config.nodeConfig, &config1.NetworkConfig{TrafficEncapMode: config1.TrafficEncapModeEncap})
+	_, err = c.Initialize(roundInfo, config.nodeConfig, &config1.NetworkConfig{TrafficEncapMode: config1.TrafficEncapModeEncap, IPv4Enabled: true, IPv6Enabled: true})
 	require.Nil(t, err, "Failed to initialize OFClient")
 
 	defer func() {

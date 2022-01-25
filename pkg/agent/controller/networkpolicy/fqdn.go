@@ -148,9 +148,11 @@ type fqdnController struct {
 	selectorItemToFQDN map[fqdnSelectorItem]sets.String
 	// selectorItemToRuleIDs maps fqdnToSelectorItem to the rules that contains the selector.
 	selectorItemToRuleIDs map[fqdnSelectorItem]sets.String
+	ipv4Enabled           bool
+	ipv6Enabled           bool
 }
 
-func newFQDNController(client openflow.Client, allocator *idAllocator, dnsServerOverride string, dirtyRuleHandler func(string)) (*fqdnController, error) {
+func newFQDNController(client openflow.Client, allocator *idAllocator, dnsServerOverride string, dirtyRuleHandler func(string), v4Enabled, v6Enabled bool) (*fqdnController, error) {
 	controller := &fqdnController{
 		ofClient:               client,
 		dirtyRuleHandler:       dirtyRuleHandler,
@@ -162,6 +164,8 @@ func newFQDNController(client openflow.Client, allocator *idAllocator, dnsServer
 		fqdnToSelectorItem:     map[string]map[fqdnSelectorItem]struct{}{},
 		selectorItemToFQDN:     map[fqdnSelectorItem]sets.String{},
 		selectorItemToRuleIDs:  map[fqdnSelectorItem]sets.String{},
+		ipv4Enabled:            v4Enabled,
+		ipv6Enabled:            v6Enabled,
 	}
 	if controller.ofClient != nil {
 		if err := controller.ofClient.NewDNSpacketInConjunction(dnsInterceptRuleID); err != nil {
@@ -584,14 +588,14 @@ func (f *fqdnController) parseDNSResponse(msg *dns.Msg) (string, map[string]net.
 	for _, ans := range msg.Answer {
 		switch r := ans.(type) {
 		case *dns.A:
-			if f.ofClient.IsIPv4Enabled() {
+			if f.ipv4Enabled {
 				responseIPs[r.A.String()] = r.A
 				if r.Header().Ttl < lowestTTL {
 					lowestTTL = r.Header().Ttl
 				}
 			}
 		case *dns.AAAA:
-			if f.ofClient.IsIPv6Enabled() {
+			if f.ipv6Enabled {
 				responseIPs[r.AAAA.String()] = r.AAAA
 				if r.Header().Ttl < lowestTTL {
 					lowestTTL = r.Header().Ttl
@@ -650,7 +654,7 @@ func (f *fqdnController) lookupIP(ctx context.Context, fqdn string) error {
 		return responseIPs
 	}
 
-	if f.ofClient.IsIPv4Enabled() {
+	if f.ipv4Enabled {
 		lookupTime := time.Now()
 		if ips, err := resolver.LookupIP(ctx, "ip4", fqdn); err == nil {
 			f.onDNSResponse(fqdn, makeResponseIPs(ips), defaultTTL, lookupTime, nil)
@@ -658,7 +662,7 @@ func (f *fqdnController) lookupIP(ctx context.Context, fqdn string) error {
 			v4ok = false
 		}
 	}
-	if f.ofClient.IsIPv6Enabled() {
+	if f.ipv6Enabled {
 		lookupTime := time.Now()
 		if ips, err := resolver.LookupIP(ctx, "ip6", fqdn); err == nil {
 			f.onDNSResponse(fqdn, makeResponseIPs(ips), defaultTTL, lookupTime, nil)
@@ -695,7 +699,7 @@ func (f *fqdnController) makeDNSRequest(ctx context.Context, fqdn string) error 
 		return r, nil
 	}
 	v4ok, v6ok := true, true
-	if f.ofClient.IsIPv4Enabled() {
+	if f.ipv4Enabled {
 		m := dns.Msg{}
 		m.SetQuestion(fqdnToQuery, dns.TypeA)
 		lookupTime := time.Now()
@@ -705,7 +709,7 @@ func (f *fqdnController) makeDNSRequest(ctx context.Context, fqdn string) error 
 			v4ok = false
 		}
 	}
-	if f.ofClient.IsIPv6Enabled() {
+	if f.ipv6Enabled {
 		m := dns.Msg{}
 		m.SetQuestion(fqdnToQuery, dns.TypeAAAA)
 		lookupTime := time.Now()

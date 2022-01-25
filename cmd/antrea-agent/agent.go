@@ -238,8 +238,8 @@ func run(o *Options) error {
 	v4GroupCounter := proxytypes.NewGroupCounter(false, groupIDUpdates)
 	v6GroupCounter := proxytypes.NewGroupCounter(true, groupIDUpdates)
 
-	v4Enabled := config.IsIPv4Enabled(nodeConfig, networkConfig.TrafficEncapMode)
-	v6Enabled := config.IsIPv6Enabled(nodeConfig, networkConfig.TrafficEncapMode)
+	v4Enabled := networkConfig.IPv4Enabled
+	v6Enabled := networkConfig.IPv6Enabled
 	var proxier proxy.Proxier
 	if features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
 		proxyAll := o.config.AntreaProxy.ProxyAll
@@ -290,7 +290,9 @@ func run(o *Options) error {
 		statusManagerEnabled,
 		loggingEnabled,
 		asyncRuleDeleteInterval,
-		o.config.DNSServerOverride)
+		o.config.DNSServerOverride,
+		v4Enabled,
+		v6Enabled)
 	if err != nil {
 		return fmt.Errorf("error creating new NetworkPolicy controller: %v", err)
 	}
@@ -612,7 +614,9 @@ func run(o *Options) error {
 		*o.config.EnablePrometheusMetrics,
 		o.config.ClientConnection.Kubeconfig,
 		cipherSuites,
-		cipher.TLSVersionMap[o.config.TLSMinVersion])
+		cipher.TLSVersionMap[o.config.TLSMinVersion],
+		v4Enabled,
+		v6Enabled)
 	if err != nil {
 		return fmt.Errorf("error when creating agent API server: %v", err)
 	}
