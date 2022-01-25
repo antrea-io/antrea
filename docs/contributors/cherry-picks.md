@@ -17,7 +17,7 @@ policy](../versioning.md#minor-releases-and-patch-releases).
 
 * A PR which was approved and merged into the main branch.
 * The PR was identified as a good candidate for backporting by an Antrea
-  maintainer: they will leave a comment on Github for the PR and provide a list
+  maintainer: they will label the PR with `action/backport` and comment a list
   of release branches to which the patch should be backported (example:
   [`release-1.0`](https://github.com/antrea-io/antrea/tree/release-1.0)).
 * Have the [Github CLI](https://cli.github.com/) installed (version >= 1.3) and
