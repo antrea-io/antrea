@@ -1,47 +1,4 @@
 {
-  "__inputs": [
-    {
-      "name": "DS_CLICKHOUSE",
-      "label": "ClickHouse",
-      "description": "",
-      "type": "datasource",
-      "pluginId": "vertamedia-clickhouse-datasource",
-      "pluginName": "ClickHouse"
-    }
-  ],
-  "__elements": [],
-  "__requires": [
-    {
-      "type": "grafana",
-      "id": "grafana",
-      "name": "Grafana",
-      "version": "8.3.3"
-    },
-    {
-      "type": "panel",
-      "id": "stat",
-      "name": "Stat",
-      "version": ""
-    },
-    {
-      "type": "panel",
-      "id": "table",
-      "name": "Table",
-      "version": ""
-    },
-    {
-      "type": "panel",
-      "id": "timeseries",
-      "name": "Time series",
-      "version": ""
-    },
-    {
-      "type": "datasource",
-      "id": "vertamedia-clickhouse-datasource",
-      "name": "ClickHouse",
-      "version": "2.4.2"
-    }
-  ],
   "annotations": {
     "list": [
       {
@@ -64,15 +21,15 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": null,
-  "iteration": 1642716785558,
+  "id": 9,
+  "iteration": 1643233998075,
   "links": [],
   "liveNow": false,
   "panels": [
     {
       "datasource": {
-        "type": "vertamedia-clickhouse-datasource",
-        "uid": "${DS_CLICKHOUSE}"
+        "type": "grafana-clickhouse-datasource",
+        "uid": "PDEE91DDB90597936"
       },
       "fieldConfig": {
         "defaults": {
@@ -123,8 +80,8 @@
         {
           "database": "default",
           "datasource": {
-            "type": "vertamedia-clickhouse-datasource",
-            "uid": "${DS_CLICKHOUSE}"
+            "type": "grafana-clickhouse-datasource",
+            "uid": "ClickHouse"
           },
           "dateColDataType": "",
           "dateLoading": false,
@@ -132,14 +89,14 @@
           "dateTimeType": "DATETIME",
           "datetimeLoading": false,
           "extrapolate": true,
-          "format": "table",
+          "format": 1,
           "formattedQuery": "SELECT $timeSeries as t, count() FROM $table WHERE $timeFilter GROUP BY t ORDER BY t",
           "interval": "",
           "intervalFactor": 1,
           "query": "SELECT count()\nFROM $table\n",
           "queryType": "randomWalk",
           "rawQuery": "SELECT count()\nFROM default.flows",
-          "rawSql": "SELECT count(*) as count\nFROM (SELECT toInt64OrDefault(flowEndSeconds)*1000 as t FROM antrea)\nWHERE $__timeFilter(t)",
+          "rawSql": "SELECT count(*) as count\nFROM flows\nWHERE $__timeFilter(flowEndMilli)",
           "refId": "A",
           "round": "0s",
           "skip_comments": true,
@@ -148,12 +105,13 @@
         }
       ],
       "title": "Flow Records Count",
+      "transparent": true,
       "type": "stat"
     },
     {
       "datasource": {
-        "type": "vertamedia-clickhouse-datasource",
-        "uid": "${DS_CLICKHOUSE}"
+        "type": "grafana-clickhouse-datasource",
+        "uid": "PDEE91DDB90597936"
       },
       "fieldConfig": {
         "defaults": {
@@ -215,7 +173,7 @@
         "y": 0
       },
       "id": 6,
-      "interval": "1s",
+      "interval": "60s",
       "options": {
         "legend": {
           "calcs": [],
@@ -231,8 +189,8 @@
         {
           "database": "default",
           "datasource": {
-            "type": "vertamedia-clickhouse-datasource",
-            "uid": "${DS_CLICKHOUSE}"
+            "type": "grafana-clickhouse-datasource",
+            "uid": "ClickHouse"
           },
           "dateColDataType": "",
           "dateLoading": false,
@@ -246,7 +204,7 @@
           "query": "SELECT\n    $timeSeries as t,\n    count() as count\nFROM $table\n\nWHERE $timeFilter\n\nGROUP BY t\n\nORDER BY t\n",
           "queryType": "randomWalk",
           "rawQuery": "SELECT\n    (intDiv(toUInt32(flowEndSeconds), 1) * 1) * 1000 as t,\n    count() as count\nFROM default.flows\n\nWHERE\n    flowEndSeconds >= toDateTime(1642711765) AND flowEndSeconds <= toDateTime(1642712665)\n    AND sourcePodNamespace = 'antrea-test'\nGROUP BY t\n\nORDER BY t\n",
-          "rawSql": "SELECT count() as count, toDateTime(floor(toInt64OrDefault(flowEndSeconds)/60)*60) as t\nFROM antrea\nGROUP BY t\nORDER BY t",
+          "rawSql": "SELECT count() as count, flowEndSeconds as time\nFROM flows\n-- WHERE $__timeFilter(flowEndMilli)\nGROUP BY time\nORDER BY time",
           "refId": "A",
           "round": "0s",
           "skip_comments": true,
@@ -255,12 +213,13 @@
         }
       ],
       "title": "Flow Records Count",
+      "transparent": true,
       "type": "timeseries"
     },
     {
       "datasource": {
-        "type": "vertamedia-clickhouse-datasource",
-        "uid": "${DS_CLICKHOUSE}"
+        "type": "grafana-clickhouse-datasource",
+        "uid": "PDEE91DDB90597936"
       },
       "fieldConfig": {
         "defaults": {
@@ -995,8 +954,8 @@
         {
           "database": "default",
           "datasource": {
-            "type": "vertamedia-clickhouse-datasource",
-            "uid": "${DS_CLICKHOUSE}"
+            "type": "grafana-clickhouse-datasource",
+            "uid": "ClickHouse"
           },
           "dateColDataType": "",
           "dateLoading": false,
@@ -1010,7 +969,7 @@
           "query": "SELECT\n    $timeSeries as t,\n    *\nFROM $table\n\nWHERE $timeFilter\n\nORDER BY t\n",
           "queryType": "randomWalk",
           "rawQuery": "SELECT\n    (intDiv(toUInt32(flowEndSeconds), 1) * 1) * 1000 as t,\n    *\nFROM default.flows\n\nWHERE flowEndSeconds >= toDateTime(1642715797) AND flowEndSeconds <= toDateTime(1642716697)\n\nORDER BY t",
-          "rawSql": "SELECT * FROM antrea",
+          "rawSql": "SELECT * \nFROM flows\n-- WHERE $__timeFilter(flowEndMilli)",
           "refId": "A",
           "round": "0s",
           "skip_comments": true,
@@ -1025,6 +984,7 @@
           "options": {}
         }
       ],
+      "transparent": true,
       "type": "table"
     }
   ],
@@ -1036,7 +996,7 @@
     "list": [
       {
         "datasource": {
-          "type": "vertamedia-clickhouse-datasource",
+          "type": "grafana-clickhouse-datasource",
           "uid": "PDEE91DDB90597936"
         },
         "filters": [],
@@ -1055,6 +1015,6 @@
   "timezone": "",
   "title": "flow_records_dashboard",
   "uid": "t1UGX7t7k",
-  "version": 10,
+  "version": 8,
   "weekStart": ""
 }

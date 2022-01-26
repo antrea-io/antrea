@@ -5,7 +5,7 @@
       "label": "ClickHouse",
       "description": "",
       "type": "datasource",
-      "pluginId": "vertamedia-clickhouse-datasource",
+      "pluginId": "grafana-clickhouse-datasource",
       "pluginName": "ClickHouse"
     }
   ],
@@ -24,16 +24,22 @@
       "version": "8.3.3"
     },
     {
+      "type": "datasource",
+      "id": "grafana-clickhouse-datasource",
+      "name": "ClickHouse",
+      "version": "0.9.7"
+    },
+    {
+      "type": "panel",
+      "id": "piechart",
+      "name": "Pie chart",
+      "version": ""
+    },
+    {
       "type": "panel",
       "id": "timeseries",
       "name": "Time series",
       "version": ""
-    },
-    {
-      "type": "datasource",
-      "id": "vertamedia-clickhouse-datasource",
-      "name": "ClickHouse",
-      "version": "2.4.2"
     }
   ],
   "annotations": {
@@ -59,13 +65,13 @@
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
   "id": null,
-  "iteration": 1642534794423,
+  "iteration": 1643233783284,
   "links": [],
   "liveNow": false,
   "panels": [
     {
       "datasource": {
-        "type": "vertamedia-clickhouse-datasource",
+        "type": "grafana-clickhouse-datasource",
         "uid": "${DS_CLICKHOUSE}"
       },
       "gridPos": {
@@ -86,7 +92,7 @@
         {
           "database": "default",
           "datasource": {
-            "type": "vertamedia-clickhouse-datasource",
+            "type": "grafana-clickhouse-datasource",
             "uid": "${DS_CLICKHOUSE}"
           },
           "dateColDataType": "",
@@ -95,12 +101,13 @@
           "dateTimeType": "DATETIME",
           "datetimeLoading": false,
           "extrapolate": true,
-          "format": "time_series",
+          "format": 1,
           "formattedQuery": "SELECT $timeSeries as t, count() FROM $table WHERE $timeFilter GROUP BY t ORDER BY t",
           "intervalFactor": 1,
           "query": "SELECT SUM(octetDeltaCount), (sourceNodeName, destinationNodeName) as pair\nFROM $table\nWHERE $timeFilter\nAND sourceNodeName != ''\nAND destinationNodeName != ''\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nGROUP BY pair\n",
           "queryType": "randomWalk",
           "rawQuery": false,
+          "rawSql": "select SUM(octetDeltaCount) as bytes, sourceNodeName as source, destinationNodeName as destination, destinationIP\nFrom flows\nWHERE flowType IN (1,2)\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nAND $__timeFilter(flowEndMilli)\nGROUP BY source, destination, destinationIP",
           "refId": "A",
           "round": "0s",
           "skip_comments": true,
@@ -108,13 +115,13 @@
           "tableLoading": false
         }
       ],
-      "title": "Node Throughput Diagram (Bytes)",
+      "title": "Cumulative Bytes of Node-to-Node",
       "transparent": true,
       "type": "antreaflowvisibility-grafana-sankey-plugin"
     },
     {
       "datasource": {
-        "type": "vertamedia-clickhouse-datasource",
+        "type": "grafana-clickhouse-datasource",
         "uid": "${DS_CLICKHOUSE}"
       },
       "gridPos": {
@@ -135,7 +142,7 @@
         {
           "database": "default",
           "datasource": {
-            "type": "vertamedia-clickhouse-datasource",
+            "type": "grafana-clickhouse-datasource",
             "uid": "${DS_CLICKHOUSE}"
           },
           "dateColDataType": "",
@@ -144,12 +151,13 @@
           "dateTimeType": "DATETIME",
           "datetimeLoading": false,
           "extrapolate": true,
-          "format": "time_series",
+          "format": 1,
           "formattedQuery": "SELECT $timeSeries as t, count() FROM $table WHERE $timeFilter GROUP BY t ORDER BY t",
           "intervalFactor": 1,
           "query": "SELECT SUM(reverseOctetDeltaCount), (sourceNodeName, destinationNodeName) as pair\nFROM $table\nWHERE $timeFilter\nAND sourceNodeName != ''\nAND destinationNodeName != ''\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nGROUP BY pair\n",
           "queryType": "randomWalk",
           "rawQuery": false,
+          "rawSql": "select SUM(reverseOctetDeltaCount) as bytes, sourceNodeName as source, destinationNodeName as destination, destinationIP\nFrom flows\nWHERE flowType IN (1,2)\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nAND $__timeFilter(flowEndMilli)\nGROUP BY source, destination, destinationIP",
           "refId": "A",
           "round": "0s",
           "skip_comments": true,
@@ -157,13 +165,13 @@
           "tableLoading": false
         }
       ],
-      "title": "Reverse Node Throughput Diagram (ReverseBytes)",
+      "title": "Cumulative Reverse Bytes of Node-to-Node",
       "transparent": true,
       "type": "antreaflowvisibility-grafana-sankey-plugin"
     },
     {
       "datasource": {
-        "type": "vertamedia-clickhouse-datasource",
+        "type": "grafana-clickhouse-datasource",
         "uid": "${DS_CLICKHOUSE}"
       },
       "fieldConfig": {
@@ -213,7 +221,7 @@
               }
             ]
           },
-          "unit": "decbytes"
+          "unit": "bps"
         },
         "overrides": []
       },
@@ -223,7 +231,7 @@
         "x": 0,
         "y": 18
       },
-      "id": 2,
+      "id": 18,
       "interval": "60s",
       "options": {
         "legend": {
@@ -242,26 +250,271 @@
         {
           "database": "default",
           "datasource": {
-            "type": "vertamedia-clickhouse-datasource",
+            "type": "grafana-clickhouse-datasource",
             "uid": "${DS_CLICKHOUSE}"
           },
           "dateColDataType": "",
           "dateLoading": false,
-          "dateTimeColDataType": "flowEndSecondsFromSourceNode",
+          "dateTimeColDataType": "flowEndSecondsFromDestinationNode",
           "dateTimeType": "DATETIME",
           "datetimeLoading": false,
           "extrapolate": true,
-          "format": "time_series",
+          "format": 2,
           "formattedQuery": "SELECT $timeSeries as t, count() FROM $table WHERE $timeFilter GROUP BY t ORDER BY t",
           "hide": false,
           "intervalFactor": 1,
-          "query": "SELECT $timeSeries as t, SUM(throughputFromSourceNode), sourceNodeName\nFROM $table\nWHERE $timeFilter\nAND sourceNodeName != ''\nAND destinationNodeName != ''\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nGROUP BY sourceNodeName, t\nORDER BY t\n",
+          "query": "SELECT $timeSeries as t, SUM(throughputFromDestinationNode), destinationNodeName\nFROM $table\nWHERE $timeFilter\nAND sourceNodeName != ''\nAND destinationNodeName != ''\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nGROUP BY destinationNodeName, t\nORDER BY t\n",
           "queryType": "randomWalk",
-          "rawQuery": "SELECT (intDiv(toUInt32(flowEndSecondsFromSourceNode), 60) * 60) * 1000 as t, SUM(throughputFromSourceNode), sourceNodeName\nFROM default.\".inner.flows_node_view\"\nWHERE flowEndSecondsFromSourceNode >= toDateTime(1642533250) AND flowEndSecondsFromSourceNode <= toDateTime(1642535050)\nAND sourceNodeName != ''\nAND destinationNodeName != ''\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nGROUP BY sourceNodeName, t\nORDER BY t",
+          "rawQuery": "SELECT (intDiv(toUInt32(flowEndSecondsFromDestinationNode), 60) * 60) * 1000 as t, SUM(throughputFromDestinationNode), destinationNodeName\nFROM default.flows_node_view\nWHERE flowEndSecondsFromDestinationNode >= toDateTime(1642533454) AND flowEndSecondsFromDestinationNode <= toDateTime(1642535254)\nAND sourceNodeName != ''\nAND destinationNodeName != ''\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nGROUP BY destinationNodeName, t\nORDER BY t",
+          "rawSql": "SELECT flowEndSeconds as time, CONCAT(sourceNodeName, '->', destinationNodeName) as pair, SUM(throughput) as Node\nFROM flows\nWHERE flowType IN (1,2)\nAND sourceNodeName != '' \nAND destinationNodeName != ''\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nAND $__timeFilter(flowEndMilli)\nGROUP BY time, pair\nORDER BY time",
           "refId": "A",
           "round": "0s",
           "skip_comments": true,
-          "table": ".inner.flows_node_view",
+          "table": "flows_node_view",
+          "tableLoading": false
+        }
+      ],
+      "title": "Throughput of Node-to-Node",
+      "transformations": [
+        {
+          "id": "groupBy",
+          "options": {
+            "fields": {
+              "Time": {
+                "aggregations": [],
+                "operation": "aggregate"
+              }
+            }
+          }
+        }
+      ],
+      "transparent": true,
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "${DS_CLICKHOUSE}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "always",
+            "spanNulls": true,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "bps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 12,
+        "y": 18
+      },
+      "id": 24,
+      "interval": "60s",
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean"
+          ],
+          "displayMode": "table",
+          "placement": "right"
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "pluginVersion": "8.3.3",
+      "targets": [
+        {
+          "database": "default",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "${DS_CLICKHOUSE}"
+          },
+          "dateColDataType": "",
+          "dateLoading": false,
+          "dateTimeColDataType": "flowEndSecondsFromDestinationNode",
+          "dateTimeType": "DATETIME",
+          "datetimeLoading": false,
+          "extrapolate": true,
+          "format": 2,
+          "formattedQuery": "SELECT $timeSeries as t, count() FROM $table WHERE $timeFilter GROUP BY t ORDER BY t",
+          "hide": false,
+          "intervalFactor": 1,
+          "query": "SELECT $timeSeries as t, SUM(throughputFromDestinationNode), destinationNodeName\nFROM $table\nWHERE $timeFilter\nAND sourceNodeName != ''\nAND destinationNodeName != ''\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nGROUP BY destinationNodeName, t\nORDER BY t\n",
+          "queryType": "randomWalk",
+          "rawQuery": "SELECT (intDiv(toUInt32(flowEndSecondsFromDestinationNode), 60) * 60) * 1000 as t, SUM(throughputFromDestinationNode), destinationNodeName\nFROM default.flows_node_view\nWHERE flowEndSecondsFromDestinationNode >= toDateTime(1642533454) AND flowEndSecondsFromDestinationNode <= toDateTime(1642535254)\nAND sourceNodeName != ''\nAND destinationNodeName != ''\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nGROUP BY destinationNodeName, t\nORDER BY t",
+          "rawSql": "SELECT flowEndSeconds as time, CONCAT(sourceNodeName, '->', destinationNodeName) as pair, SUM(reverseThroughput) as Node\nFROM flows\nWHERE flowType IN (1,2)\nAND sourceNodeName != '' \nAND destinationNodeName != ''\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nAND $__timeFilter(flowEndMilli)\nGROUP BY time, pair\nORDER BY time",
+          "refId": "A",
+          "round": "0s",
+          "skip_comments": true,
+          "table": "flows_node_view",
+          "tableLoading": false
+        }
+      ],
+      "title": "Reverse Throughput of Node-to-Node",
+      "transformations": [
+        {
+          "id": "groupBy",
+          "options": {
+            "fields": {
+              "Time": {
+                "aggregations": [],
+                "operation": "aggregate"
+              }
+            }
+          }
+        }
+      ],
+      "transparent": true,
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "${DS_CLICKHOUSE}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "always",
+            "spanNulls": true,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "bps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 0,
+        "y": 28
+      },
+      "id": 23,
+      "interval": "60s",
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean"
+          ],
+          "displayMode": "table",
+          "placement": "right"
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "pluginVersion": "8.3.3",
+      "targets": [
+        {
+          "database": "default",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "${DS_CLICKHOUSE}"
+          },
+          "dateColDataType": "",
+          "dateLoading": false,
+          "dateTimeColDataType": "flowEndSecondsFromDestinationNode",
+          "dateTimeType": "DATETIME",
+          "datetimeLoading": false,
+          "extrapolate": true,
+          "format": 2,
+          "formattedQuery": "SELECT $timeSeries as t, count() FROM $table WHERE $timeFilter GROUP BY t ORDER BY t",
+          "hide": false,
+          "intervalFactor": 1,
+          "query": "SELECT $timeSeries as t, SUM(throughputFromDestinationNode), destinationNodeName\nFROM $table\nWHERE $timeFilter\nAND sourceNodeName != ''\nAND destinationNodeName != ''\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nGROUP BY destinationNodeName, t\nORDER BY t\n",
+          "queryType": "randomWalk",
+          "rawQuery": "SELECT (intDiv(toUInt32(flowEndSecondsFromDestinationNode), 60) * 60) * 1000 as t, SUM(throughputFromDestinationNode), destinationNodeName\nFROM default.flows_node_view\nWHERE flowEndSecondsFromDestinationNode >= toDateTime(1642533454) AND flowEndSecondsFromDestinationNode <= toDateTime(1642535254)\nAND sourceNodeName != ''\nAND destinationNodeName != ''\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nGROUP BY destinationNodeName, t\nORDER BY t",
+          "rawSql": "SELECT flowEndSeconds as time, sourceNodeName, SUM(throughputFromSourceNode) as Node\nFROM flows\nWHERE flowType IN (1,2)\nAND sourceNodeName != '' \nAND destinationNodeName != ''\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nAND $__timeFilter(flowEndMilli)\nGROUP BY time, sourceNodeName\nORDER BY time",
+          "refId": "A",
+          "round": "0s",
+          "skip_comments": true,
+          "table": "flows_node_view",
           "tableLoading": false
         }
       ],
@@ -284,7 +537,7 @@
     },
     {
       "datasource": {
-        "type": "vertamedia-clickhouse-datasource",
+        "type": "grafana-clickhouse-datasource",
         "uid": "${DS_CLICKHOUSE}"
       },
       "fieldConfig": {
@@ -293,47 +546,13 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
             "hideFrom": {
               "legend": false,
               "tooltip": false,
               "viz": false
-            },
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "always",
-            "spanNulls": true,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
             }
           },
           "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          },
           "unit": "decbytes"
         },
         "overrides": []
@@ -342,70 +561,50 @@
         "h": 10,
         "w": 12,
         "x": 12,
-        "y": 18
+        "y": 28
       },
-      "id": 17,
+      "id": 21,
       "interval": "60s",
       "options": {
+        "displayLabels": [],
         "legend": {
-          "calcs": [
-            "mean"
-          ],
           "displayMode": "table",
-          "placement": "right"
+          "placement": "right",
+          "values": [
+            "percent",
+            "value"
+          ]
+        },
+        "pieType": "pie",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": true
         },
         "tooltip": {
           "mode": "single"
         }
       },
-      "pluginVersion": "8.3.3",
       "targets": [
         {
-          "database": "default",
           "datasource": {
-            "type": "vertamedia-clickhouse-datasource",
+            "type": "grafana-clickhouse-datasource",
             "uid": "${DS_CLICKHOUSE}"
           },
-          "dateColDataType": "",
-          "dateLoading": false,
-          "dateTimeColDataType": "flowEndSecondsFromSourceNode",
-          "dateTimeType": "DATETIME",
-          "datetimeLoading": false,
-          "extrapolate": true,
-          "format": "time_series",
-          "formattedQuery": "SELECT $timeSeries as t, count() FROM $table WHERE $timeFilter GROUP BY t ORDER BY t",
-          "hide": false,
-          "intervalFactor": 1,
-          "query": "SELECT $timeSeries as t, SUM(reverseThroughputFromSourceNode), sourceNodeName\nFROM $table\nWHERE $timeFilter\nAND sourceNodeName != ''\nAND destinationNodeName != ''\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nGROUP BY sourceNodeName, t\nORDER BY t\n",
-          "queryType": "randomWalk",
-          "rawQuery": false,
-          "refId": "A",
-          "round": "0s",
-          "skip_comments": true,
-          "table": "flows_node_view",
-          "tableLoading": false
+          "format": 1,
+          "rawSql": "SELECT SUM(octetDeltaCount), sourceNodeName\nFROM flows\nWHERE flowType IN (1,2)\nAND sourceNodeName != '' \nAND destinationNodeName != ''\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nAND $__timeFilter(flowEndMilli)\nGROUP BY sourceNodeName",
+          "refId": "A"
         }
       ],
-      "title": "Reverse Throughput From Node Acting as Source",
-      "transformations": [
-        {
-          "id": "groupBy",
-          "options": {
-            "fields": {
-              "Time": {
-                "aggregations": [],
-                "operation": "aggregate"
-              }
-            }
-          }
-        }
-      ],
+      "title": "Cumulative Bytes of Node acting as Source",
       "transparent": true,
-      "type": "timeseries"
+      "type": "piechart"
     },
     {
       "datasource": {
-        "type": "vertamedia-clickhouse-datasource",
+        "type": "grafana-clickhouse-datasource",
         "uid": "${DS_CLICKHOUSE}"
       },
       "fieldConfig": {
@@ -463,9 +662,9 @@
         "h": 10,
         "w": 12,
         "x": 0,
-        "y": 28
+        "y": 38
       },
-      "id": 18,
+      "id": 19,
       "interval": "60s",
       "options": {
         "legend": {
@@ -484,7 +683,7 @@
         {
           "database": "default",
           "datasource": {
-            "type": "vertamedia-clickhouse-datasource",
+            "type": "grafana-clickhouse-datasource",
             "uid": "${DS_CLICKHOUSE}"
           },
           "dateColDataType": "",
@@ -493,13 +692,14 @@
           "dateTimeType": "DATETIME",
           "datetimeLoading": false,
           "extrapolate": true,
-          "format": "time_series",
+          "format": 2,
           "formattedQuery": "SELECT $timeSeries as t, count() FROM $table WHERE $timeFilter GROUP BY t ORDER BY t",
           "hide": false,
           "intervalFactor": 1,
-          "query": "SELECT $timeSeries as t, SUM(throughputFromDestinationNode), destinationNodeName\nFROM $table\nWHERE $timeFilter\nAND sourceNodeName != ''\nAND destinationNodeName != ''\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nGROUP BY destinationNodeName, t\nORDER BY t\n",
+          "query": "SELECT $timeSeries as t, SUM(reverseThroughputFromDestinationNode), destinationNodeName\nFROM $table\nWHERE $timeFilter\nAND sourceNodeName != ''\nAND destinationNodeName != ''\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nGROUP BY destinationNodeName, t\nORDER BY t\n",
           "queryType": "randomWalk",
-          "rawQuery": "SELECT (intDiv(toUInt32(flowEndSecondsFromDestinationNode), 60) * 60) * 1000 as t, SUM(throughputFromDestinationNode), destinationNodeName\nFROM default.flows_node_view\nWHERE flowEndSecondsFromDestinationNode >= toDateTime(1642533454) AND flowEndSecondsFromDestinationNode <= toDateTime(1642535254)\nAND sourceNodeName != ''\nAND destinationNodeName != ''\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nGROUP BY destinationNodeName, t\nORDER BY t",
+          "rawQuery": "SELECT (intDiv(toUInt32(flowEndSecondsFromDestinationNode), 60) * 60) * 1000 as t, SUM(reverseThroughputFromDestinationNode), destinationNodeName\nFROM default.flows_node_view\nWHERE flowEndSecondsFromDestinationNode >= toDateTime(1642533497) AND flowEndSecondsFromDestinationNode <= toDateTime(1642535297)\nAND sourceNodeName != ''\nAND destinationNodeName != ''\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nGROUP BY destinationNodeName, t\nORDER BY t",
+          "rawSql": "SELECT flowEndSeconds as time, destinationNodeName, SUM(throughputFromDestinationNode) as Node\nFROM flows\nWHERE flowType IN (1,2)\nAND sourceNodeName != '' \nAND destinationNodeName != ''\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nAND $__timeFilter(flowEndMilli)\nGROUP BY time, destinationNodeName\nORDER BY time",
           "refId": "A",
           "round": "0s",
           "skip_comments": true,
@@ -526,7 +726,7 @@
     },
     {
       "datasource": {
-        "type": "vertamedia-clickhouse-datasource",
+        "type": "grafana-clickhouse-datasource",
         "uid": "${DS_CLICKHOUSE}"
       },
       "fieldConfig": {
@@ -535,47 +735,13 @@
             "mode": "palette-classic"
           },
           "custom": {
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
             "hideFrom": {
               "legend": false,
               "tooltip": false,
               "viz": false
-            },
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "always",
-            "spanNulls": true,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
             }
           },
           "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          },
           "unit": "decbytes"
         },
         "overrides": []
@@ -584,66 +750,44 @@
         "h": 10,
         "w": 12,
         "x": 12,
-        "y": 28
+        "y": 38
       },
-      "id": 19,
-      "interval": "60s",
+      "id": 22,
       "options": {
         "legend": {
-          "calcs": [
-            "mean"
-          ],
           "displayMode": "table",
-          "placement": "right"
+          "placement": "right",
+          "values": [
+            "percent",
+            "value"
+          ]
+        },
+        "pieType": "pie",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": true
         },
         "tooltip": {
           "mode": "single"
         }
       },
-      "pluginVersion": "8.3.3",
       "targets": [
         {
-          "database": "default",
           "datasource": {
-            "type": "vertamedia-clickhouse-datasource",
+            "type": "grafana-clickhouse-datasource",
             "uid": "${DS_CLICKHOUSE}"
           },
-          "dateColDataType": "",
-          "dateLoading": false,
-          "dateTimeColDataType": "flowEndSecondsFromDestinationNode",
-          "dateTimeType": "DATETIME",
-          "datetimeLoading": false,
-          "extrapolate": true,
-          "format": "time_series",
-          "formattedQuery": "SELECT $timeSeries as t, count() FROM $table WHERE $timeFilter GROUP BY t ORDER BY t",
-          "hide": false,
-          "intervalFactor": 1,
-          "query": "SELECT $timeSeries as t, SUM(reverseThroughputFromDestinationNode), destinationNodeName\nFROM $table\nWHERE $timeFilter\nAND sourceNodeName != ''\nAND destinationNodeName != ''\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nGROUP BY destinationNodeName, t\nORDER BY t\n",
-          "queryType": "randomWalk",
-          "rawQuery": "SELECT (intDiv(toUInt32(flowEndSecondsFromDestinationNode), 60) * 60) * 1000 as t, SUM(reverseThroughputFromDestinationNode), destinationNodeName\nFROM default.flows_node_view\nWHERE flowEndSecondsFromDestinationNode >= toDateTime(1642533497) AND flowEndSecondsFromDestinationNode <= toDateTime(1642535297)\nAND sourceNodeName != ''\nAND destinationNodeName != ''\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nGROUP BY destinationNodeName, t\nORDER BY t",
-          "refId": "A",
-          "round": "0s",
-          "skip_comments": true,
-          "table": "flows_node_view",
-          "tableLoading": false
+          "format": 1,
+          "rawSql": "SELECT SUM(octetDeltaCount), destinationNodeName\nFROM flows\nWHERE flowType IN (1,2)\nAND sourceNodeName != '' \nAND destinationNodeName != ''\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nAND $__timeFilter(flowEndMilli)\nGROUP BY destinationNodeName",
+          "refId": "A"
         }
       ],
-      "title": "Reverse Throughput of Node Acting as Destination",
-      "transformations": [
-        {
-          "id": "groupBy",
-          "options": {
-            "fields": {
-              "Time": {
-                "aggregations": [],
-                "operation": "aggregate"
-              }
-            }
-          }
-        }
-      ],
+      "title": "Cumulative Bytes of Node acting as Destination in Time Range",
       "transparent": true,
-      "type": "timeseries"
+      "type": "piechart"
     }
   ],
   "refresh": "",
@@ -654,7 +798,7 @@
     "list": [
       {
         "datasource": {
-          "type": "vertamedia-clickhouse-datasource",
+          "type": "grafana-clickhouse-datasource",
           "uid": "PDEE91DDB90597936"
         },
         "filters": [],
@@ -673,6 +817,6 @@
   "timezone": "",
   "title": "node_throughput_dashboard",
   "uid": "1F56RJh7z",
-  "version": 8,
+  "version": 30,
   "weekStart": ""
 }

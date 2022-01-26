@@ -5,7 +5,7 @@
       "label": "ClickHouse",
       "description": "",
       "type": "datasource",
-      "pluginId": "vertamedia-clickhouse-datasource",
+      "pluginId": "grafana-clickhouse-datasource",
       "pluginName": "ClickHouse"
     }
   ],
@@ -24,16 +24,22 @@
       "version": "8.3.3"
     },
     {
+      "type": "datasource",
+      "id": "grafana-clickhouse-datasource",
+      "name": "ClickHouse",
+      "version": "0.9.7"
+    },
+    {
+      "type": "panel",
+      "id": "piechart",
+      "name": "Pie chart",
+      "version": ""
+    },
+    {
       "type": "panel",
       "id": "timeseries",
       "name": "Time series",
       "version": ""
-    },
-    {
-      "type": "datasource",
-      "id": "vertamedia-clickhouse-datasource",
-      "name": "ClickHouse",
-      "version": "2.4.2"
     }
   ],
   "annotations": {
@@ -59,13 +65,13 @@
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
   "id": null,
-  "iteration": 1642547432376,
+  "iteration": 1643233757117,
   "links": [],
   "liveNow": false,
   "panels": [
     {
       "datasource": {
-        "type": "vertamedia-clickhouse-datasource",
+        "type": "grafana-clickhouse-datasource",
         "uid": "${DS_CLICKHOUSE}"
       },
       "gridPos": {
@@ -85,7 +91,7 @@
         {
           "database": "default",
           "datasource": {
-            "type": "vertamedia-clickhouse-datasource",
+            "type": "grafana-clickhouse-datasource",
             "uid": "${DS_CLICKHOUSE}"
           },
           "dateColDataType": "",
@@ -94,12 +100,13 @@
           "dateTimeType": "DATETIME",
           "datetimeLoading": false,
           "extrapolate": true,
-          "format": "time_series",
+          "format": 1,
           "formattedQuery": "SELECT $timeSeries as t, count() FROM $table WHERE $timeFilter GROUP BY t ORDER BY t",
           "intervalFactor": 1,
           "query": "SELECT SUM(octetDeltaCount), (egressNetworkPolicyName, ingressNetworkPolicyName) AS pair\nFROM $table\nWHERE $timeFilter\nAND (egressNetworkPolicyRuleAction == 1 OR ingressNetworkPolicyRuleAction == 1)\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nGROUP BY pair\n",
           "queryType": "randomWalk",
           "rawQuery": "SELECT SUM(octetDeltaCount), (egressNetworkPolicyName, ingressNetworkPolicyName) AS pair\nFROM default.flows_policy_view\nWHERE flowEndSeconds >= toDateTime(1642198255) AND flowEndSeconds <= toDateTime(1642200055)\nAND (egressNetworkPolicyRuleAction == 1 OR ingressNetworkPolicyRuleAction == 1)\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nGROUP BY pair",
+          "rawSql": "select SUM(octetDeltaCount) as bytes, egressNetworkPolicyName as source, ingressNetworkPolicyName as destination\nFrom flows\nWHERE sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nAND (egressNetworkPolicyRuleAction == 1 OR ingressNetworkPolicyRuleAction == 1)\nAND $__timeFilter(flowEndMilli)\nGROUP BY source, destination",
           "refId": "A",
           "round": "0s",
           "skip_comments": true,
@@ -107,13 +114,13 @@
           "tableLoading": false
         }
       ],
-      "title": "Throughput of Network Policy (Bytes)",
+      "title": "Cumulative Bytes of Network Policy ",
       "transparent": true,
       "type": "antreaflowvisibility-grafana-sankey-plugin"
     },
     {
       "datasource": {
-        "type": "vertamedia-clickhouse-datasource",
+        "type": "grafana-clickhouse-datasource",
         "uid": "${DS_CLICKHOUSE}"
       },
       "gridPos": {
@@ -133,7 +140,7 @@
         {
           "database": "default",
           "datasource": {
-            "type": "vertamedia-clickhouse-datasource",
+            "type": "grafana-clickhouse-datasource",
             "uid": "${DS_CLICKHOUSE}"
           },
           "dateColDataType": "",
@@ -142,244 +149,13 @@
           "dateTimeType": "DATETIME",
           "datetimeLoading": false,
           "extrapolate": true,
-          "format": "time_series",
+          "format": 1,
           "formattedQuery": "SELECT $timeSeries as t, count() FROM $table WHERE $timeFilter GROUP BY t ORDER BY t",
           "intervalFactor": 1,
           "query": "SELECT SUM(reverseOctetDeltaCount),  (egressNetworkPolicyName, ingressNetworkPolicyName) AS pair\nFROM $table\nWHERE $timeFilter\nAND (egressNetworkPolicyRuleAction == 1 OR ingressNetworkPolicyRuleAction == 1)\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nGROUP BY pair\n",
           "queryType": "randomWalk",
           "rawQuery": "SELECT SUM(reverseOctetDeltaCount),  (egressNetworkPolicyName, ingressNetworkPolicyName) AS pair\nFROM default.flows_policy_view\nWHERE flowEndSeconds >= toDateTime(1642198301) AND flowEndSeconds <= toDateTime(1642200101)\nAND (egressNetworkPolicyRuleAction == 1 OR ingressNetworkPolicyRuleAction == 1)\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nGROUP BY pair",
-          "refId": "A",
-          "round": "0s",
-          "skip_comments": true,
-          "table": "flows_policy_view",
-          "tableLoading": false
-        }
-      ],
-      "title": "Reverse Throughput of Network Policy (Reverse Bytes)",
-      "transparent": true,
-      "type": "antreaflowvisibility-grafana-sankey-plugin"
-    },
-    {
-      "datasource": {
-        "type": "vertamedia-clickhouse-datasource",
-        "uid": "${DS_CLICKHOUSE}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "lineInterpolation": "linear",
-            "lineStyle": {
-              "fill": "solid"
-            },
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "always",
-            "spanNulls": true,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          },
-          "unit": "decbytes"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 10,
-        "w": 12,
-        "x": 0,
-        "y": 18
-      },
-      "id": 2,
-      "interval": "60s",
-      "options": {
-        "legend": {
-          "calcs": [
-            "mean"
-          ],
-          "displayMode": "table",
-          "placement": "bottom"
-        },
-        "tooltip": {
-          "mode": "single"
-        }
-      },
-      "pluginVersion": "8.3.3",
-      "targets": [
-        {
-          "database": "default",
-          "datasource": {
-            "type": "vertamedia-clickhouse-datasource",
-            "uid": "${DS_CLICKHOUSE}"
-          },
-          "dateColDataType": "",
-          "dateLoading": false,
-          "dateTimeColDataType": "flowEndSeconds",
-          "dateTimeType": "DATETIME",
-          "datetimeLoading": false,
-          "extrapolate": true,
-          "format": "time_series",
-          "formattedQuery": "SELECT $timeSeries as t, count() FROM $table WHERE $timeFilter GROUP BY t ORDER BY t",
-          "hide": false,
-          "intervalFactor": 1,
-          "query": "SELECT $timeSeries as t, SUM(octetDeltaCount), (egressNetworkPolicyName, ingressNetworkPolicyName) as pair\nFROM $table\nWHERE $timeFilter\nAND (egressNetworkPolicyRuleAction == 1 OR ingressNetworkPolicyRuleAction == 1)\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nGROUP BY pair, t\nORDER BY t\n",
-          "queryType": "randomWalk",
-          "rawQuery": "SELECT (intDiv(toUInt32(flowEndSeconds), 60) * 60) * 1000 as t, SUM(octetDeltaCount), (egressNetworkPolicyName, ingressNetworkPolicyName) as pair\nFROM default.flows_policy_view\nWHERE flowEndSeconds >= toDateTime(1642198341) AND flowEndSeconds <= toDateTime(1642200141)\nAND (egressNetworkPolicyRuleAction == 1 OR ingressNetworkPolicyRuleAction == 1)\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nGROUP BY pair, t\nORDER BY t",
-          "refId": "A",
-          "round": "0s",
-          "skip_comments": true,
-          "table": "flows_policy_view",
-          "tableLoading": false
-        }
-      ],
-      "title": "Cumulative Bytes of Network Policy",
-      "transformations": [
-        {
-          "id": "groupBy",
-          "options": {
-            "fields": {
-              "Time": {
-                "aggregations": [],
-                "operation": "aggregate"
-              }
-            }
-          }
-        }
-      ],
-      "transparent": true,
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "vertamedia-clickhouse-datasource",
-        "uid": "${DS_CLICKHOUSE}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "always",
-            "spanNulls": true,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          },
-          "unit": "decbytes"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 10,
-        "w": 12,
-        "x": 12,
-        "y": 18
-      },
-      "id": 7,
-      "interval": "60s",
-      "options": {
-        "legend": {
-          "calcs": [
-            "mean"
-          ],
-          "displayMode": "table",
-          "placement": "bottom"
-        },
-        "tooltip": {
-          "mode": "single"
-        }
-      },
-      "pluginVersion": "8.3.3",
-      "targets": [
-        {
-          "database": "default",
-          "datasource": {
-            "type": "vertamedia-clickhouse-datasource",
-            "uid": "${DS_CLICKHOUSE}"
-          },
-          "dateColDataType": "",
-          "dateLoading": false,
-          "dateTimeColDataType": "flowEndSeconds",
-          "dateTimeType": "DATETIME",
-          "datetimeLoading": false,
-          "extrapolate": true,
-          "format": "time_series",
-          "formattedQuery": "SELECT $timeSeries as t, count() FROM $table WHERE $timeFilter GROUP BY t ORDER BY t",
-          "hide": false,
-          "intervalFactor": 1,
-          "query": "SELECT $timeSeries as t, SUM(reverseOctetDeltaCount), (egressNetworkPolicyName, ingressNetworkPolicyName) as pair\nFROM $table\nWHERE $timeFilter\nAND (egressNetworkPolicyRuleAction == 1 OR ingressNetworkPolicyRuleAction == 1)\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nGROUP BY pair,t\nORDER BY t\n",
-          "queryType": "randomWalk",
-          "rawQuery": "SELECT (intDiv(toUInt32(flowEndSeconds), 60) * 60) * 1000 as t, SUM(reverseOctetDeltaCount), (egressNetworkPolicyName, ingressNetworkPolicyName) as pair\nFROM default.flows_policy_view\nWHERE flowEndSeconds >= toDateTime(1642198373) AND flowEndSeconds <= toDateTime(1642200173)\nAND (egressNetworkPolicyRuleAction == 1 OR ingressNetworkPolicyRuleAction == 1)\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nGROUP BY pair,t\nORDER BY t",
+          "rawSql": "select SUM(reverseOctetDeltaCount) as bytes, egressNetworkPolicyName as source, ingressNetworkPolicyName as destination\nFrom flows\nWHERE sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nAND (egressNetworkPolicyRuleAction == 1 OR ingressNetworkPolicyRuleAction == 1)\nAND $__timeFilter(flowEndMilli)\nGROUP BY source, destination",
           "refId": "A",
           "round": "0s",
           "skip_comments": true,
@@ -388,25 +164,12 @@
         }
       ],
       "title": "Cumulative Reverse Bytes of Network Policy",
-      "transformations": [
-        {
-          "id": "groupBy",
-          "options": {
-            "fields": {
-              "Time": {
-                "aggregations": [],
-                "operation": "aggregate"
-              }
-            }
-          }
-        }
-      ],
       "transparent": true,
-      "type": "timeseries"
+      "type": "antreaflowvisibility-grafana-sankey-plugin"
     },
     {
       "datasource": {
-        "type": "vertamedia-clickhouse-datasource",
+        "type": "grafana-clickhouse-datasource",
         "uid": "${DS_CLICKHOUSE}"
       },
       "fieldConfig": {
@@ -464,7 +227,7 @@
         "h": 10,
         "w": 12,
         "x": 0,
-        "y": 28
+        "y": 18
       },
       "id": 5,
       "interval": "60s",
@@ -474,7 +237,7 @@
             "mean"
           ],
           "displayMode": "table",
-          "placement": "bottom"
+          "placement": "right"
         },
         "tooltip": {
           "mode": "single"
@@ -485,7 +248,7 @@
         {
           "database": "default",
           "datasource": {
-            "type": "vertamedia-clickhouse-datasource",
+            "type": "grafana-clickhouse-datasource",
             "uid": "${DS_CLICKHOUSE}"
           },
           "dateColDataType": "",
@@ -494,13 +257,14 @@
           "dateTimeType": "DATETIME",
           "datetimeLoading": false,
           "extrapolate": true,
-          "format": "time_series",
+          "format": 2,
           "formattedQuery": "SELECT $timeSeries as t, count() FROM $table WHERE $timeFilter GROUP BY t ORDER BY t",
           "hide": false,
           "intervalFactor": 1,
           "query": "SELECT $timeSeries as t, AVG(throughput), (egressNetworkPolicyName, ingressNetworkPolicyName) as pair\nFROM $table\nWHERE $timeFilter\nAND (egressNetworkPolicyRuleAction == 1 OR ingressNetworkPolicyRuleAction == 1)\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nGROUP BY pair, t\nORDER BY t\n",
           "queryType": "randomWalk",
           "rawQuery": "SELECT (intDiv(toUInt32(flowEndSeconds), 60) * 60) * 1000 as t, AVG(throughput), (egressNetworkPolicyName, ingressNetworkPolicyName) as pair\nFROM default.flows_policy_view\nWHERE flowEndSeconds >= toDateTime(1642546973) AND flowEndSeconds <= toDateTime(1642547273)\nAND (egressNetworkPolicyRuleAction == 1 OR ingressNetworkPolicyRuleAction == 1)\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nGROUP BY pair, t\nORDER BY t",
+          "rawSql": "SELECT flowEndSeconds as time, CONCAT(egressNetworkPolicyName, '->', ingressNetworkPolicyName) as pair, SUM(throughput) as np\nFROM flows\nWHERE sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nAND (egressNetworkPolicyRuleAction == 1 OR ingressNetworkPolicyRuleAction == 1)\nAND $__timeFilter(flowEndMilli)\nGROUP BY time, pair\nORDER BY time",
           "refId": "A",
           "round": "0s",
           "skip_comments": true,
@@ -527,7 +291,7 @@
     },
     {
       "datasource": {
-        "type": "vertamedia-clickhouse-datasource",
+        "type": "grafana-clickhouse-datasource",
         "uid": "${DS_CLICKHOUSE}"
       },
       "fieldConfig": {
@@ -585,7 +349,7 @@
         "h": 10,
         "w": 12,
         "x": 12,
-        "y": 28
+        "y": 18
       },
       "id": 6,
       "interval": "60s",
@@ -595,7 +359,7 @@
             "mean"
           ],
           "displayMode": "table",
-          "placement": "bottom"
+          "placement": "right"
         },
         "tooltip": {
           "mode": "single"
@@ -606,7 +370,7 @@
         {
           "database": "default",
           "datasource": {
-            "type": "vertamedia-clickhouse-datasource",
+            "type": "grafana-clickhouse-datasource",
             "uid": "${DS_CLICKHOUSE}"
           },
           "dateColDataType": "",
@@ -615,13 +379,14 @@
           "dateTimeType": "DATETIME",
           "datetimeLoading": false,
           "extrapolate": true,
-          "format": "time_series",
+          "format": 2,
           "formattedQuery": "SELECT $timeSeries as t, count() FROM $table WHERE $timeFilter GROUP BY t ORDER BY t",
           "hide": false,
           "intervalFactor": 1,
           "query": "SELECT $timeSeries as t, AVG(reverseThroughput), (egressNetworkPolicyName, ingressNetworkPolicyName) as pair\nFROM $table\nWHERE $timeFilter\nAND (egressNetworkPolicyRuleAction == 1 OR ingressNetworkPolicyRuleAction == 1)\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nGROUP BY pair, t\nORDER BY t\n",
           "queryType": "randomWalk",
           "rawQuery": "SELECT (intDiv(toUInt32(flowEndSeconds), 60) * 60) * 1000 as t, AVG(reverseThroughput), (egressNetworkPolicyName, ingressNetworkPolicyName) as pair\nFROM default.flows_policy_view\nWHERE flowEndSeconds >= toDateTime(1642198241) AND flowEndSeconds <= toDateTime(1642200041)\nAND (egressNetworkPolicyRuleAction == 1 OR ingressNetworkPolicyRuleAction == 1)\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nGROUP BY pair, t\nORDER BY t",
+          "rawSql": "SELECT flowEndSeconds as time, CONCAT(egressNetworkPolicyName, '->', ingressNetworkPolicyName) as pair, SUM(reverseThroughput) as np\nFROM flows\nWHERE sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nAND (egressNetworkPolicyRuleAction == 1 OR ingressNetworkPolicyRuleAction == 1)\nAND $__timeFilter(flowEndMilli)\nGROUP BY time, pair\nORDER BY time",
           "refId": "A",
           "round": "0s",
           "skip_comments": true,
@@ -648,7 +413,194 @@
     },
     {
       "datasource": {
-        "type": "vertamedia-clickhouse-datasource",
+        "type": "grafana-clickhouse-datasource",
+        "uid": "${DS_CLICKHOUSE}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "always",
+            "spanNulls": true,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "bps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 0,
+        "y": 28
+      },
+      "id": 15,
+      "interval": "60s",
+      "options": {
+        "legend": {
+          "calcs": [
+            "mean"
+          ],
+          "displayMode": "table",
+          "placement": "right"
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "pluginVersion": "8.3.3",
+      "targets": [
+        {
+          "database": "default",
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "${DS_CLICKHOUSE}"
+          },
+          "dateColDataType": "",
+          "dateLoading": false,
+          "dateTimeColDataType": "flowEndSecondsFromSourceNode",
+          "dateTimeType": "DATETIME",
+          "datetimeLoading": false,
+          "extrapolate": true,
+          "format": 2,
+          "formattedQuery": "SELECT $timeSeries as t, count() FROM $table WHERE $timeFilter GROUP BY t ORDER BY t",
+          "hide": false,
+          "intervalFactor": 1,
+          "query": "SELECT $timeSeries as t, SUM(throughputFromSourceNode), egressNetworkPolicyName\nFROM $table\nWHERE $timeFilter \nAND egressNetworkPolicyRuleAction == 1\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nGROUP BY egressNetworkPolicyName, t\nORDER BY t\n",
+          "queryType": "randomWalk",
+          "rawQuery": "SELECT (intDiv(toUInt32(flowEndSecondsFromSourceNode), 60) * 60) * 1000 as t, SUM(throughputFromSourceNode), egressNetworkPolicyName\nFROM default.flows_policy_view\nWHERE flowEndSecondsFromSourceNode >= toDateTime(1642547038) AND flowEndSecondsFromSourceNode <= toDateTime(1642547338) \nAND egressNetworkPolicyRuleAction == 1\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nGROUP BY egressNetworkPolicyName, t\nORDER BY t",
+          "rawSql": "SELECT flowEndSeconds as time, egressNetworkPolicyName, SUM(throughput) as np\nFROM flows\nWHERE sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nAND egressNetworkPolicyName != ''\nAND egressNetworkPolicyRuleAction == 1\nAND $__timeFilter(flowEndMilli)\nGROUP BY time, egressNetworkPolicyName\nORDER BY time",
+          "refId": "A",
+          "round": "0s",
+          "skip_comments": true,
+          "table": "flows_policy_view",
+          "tableLoading": false
+        }
+      ],
+      "title": "Throughput of Egress Network Policy",
+      "transformations": [
+        {
+          "id": "groupBy",
+          "options": {
+            "fields": {
+              "Time": {
+                "aggregations": [],
+                "operation": "aggregate"
+              }
+            }
+          }
+        }
+      ],
+      "transparent": true,
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "${DS_CLICKHOUSE}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          },
+          "mappings": [],
+          "unit": "decbytes"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 12,
+        "y": 28
+      },
+      "id": 18,
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "values": [
+            "percent",
+            "value"
+          ]
+        },
+        "pieType": "pie",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": true
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "${DS_CLICKHOUSE}"
+          },
+          "format": 1,
+          "rawSql": "SELECT SUM(octetDeltaCount) as np, egressNetworkPolicyName\nFROM flows\nWHERE sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nAND egressNetworkPolicyName != ''\nAND egressNetworkPolicyRuleAction == 1\nAND $__timeFilter(flowEndMilli)\nGROUP BY egressNetworkPolicyName",
+          "refId": "A"
+        }
+      ],
+      "title": "Cumulative Bytes of Egress Network Policy",
+      "transparent": true,
+      "type": "piechart"
+    },
+    {
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
         "uid": "${DS_CLICKHOUSE}"
       },
       "fieldConfig": {
@@ -708,127 +660,6 @@
         "x": 0,
         "y": 38
       },
-      "id": 15,
-      "interval": "60s",
-      "options": {
-        "legend": {
-          "calcs": [
-            "mean"
-          ],
-          "displayMode": "table",
-          "placement": "bottom"
-        },
-        "tooltip": {
-          "mode": "single"
-        }
-      },
-      "pluginVersion": "8.3.3",
-      "targets": [
-        {
-          "database": "default",
-          "datasource": {
-            "type": "vertamedia-clickhouse-datasource",
-            "uid": "${DS_CLICKHOUSE}"
-          },
-          "dateColDataType": "",
-          "dateLoading": false,
-          "dateTimeColDataType": "flowEndSecondsFromSourceNode",
-          "dateTimeType": "DATETIME",
-          "datetimeLoading": false,
-          "extrapolate": true,
-          "format": "time_series",
-          "formattedQuery": "SELECT $timeSeries as t, count() FROM $table WHERE $timeFilter GROUP BY t ORDER BY t",
-          "hide": false,
-          "intervalFactor": 1,
-          "query": "SELECT $timeSeries as t, SUM(throughputFromSourceNode), egressNetworkPolicyName\nFROM $table\nWHERE $timeFilter \nAND egressNetworkPolicyRuleAction == 1\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nGROUP BY egressNetworkPolicyName, t\nORDER BY t\n",
-          "queryType": "randomWalk",
-          "rawQuery": "SELECT (intDiv(toUInt32(flowEndSecondsFromSourceNode), 60) * 60) * 1000 as t, SUM(throughputFromSourceNode), egressNetworkPolicyName\nFROM default.flows_policy_view\nWHERE flowEndSecondsFromSourceNode >= toDateTime(1642547038) AND flowEndSecondsFromSourceNode <= toDateTime(1642547338) \nAND egressNetworkPolicyRuleAction == 1\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nGROUP BY egressNetworkPolicyName, t\nORDER BY t",
-          "refId": "A",
-          "round": "0s",
-          "skip_comments": true,
-          "table": "flows_policy_view",
-          "tableLoading": false
-        }
-      ],
-      "title": "Throughput of Egress Network Policy",
-      "transformations": [
-        {
-          "id": "groupBy",
-          "options": {
-            "fields": {
-              "Time": {
-                "aggregations": [],
-                "operation": "aggregate"
-              }
-            }
-          }
-        }
-      ],
-      "transparent": true,
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "vertamedia-clickhouse-datasource",
-        "uid": "${DS_CLICKHOUSE}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "always",
-            "spanNulls": true,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          },
-          "unit": "bps"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 10,
-        "w": 12,
-        "x": 12,
-        "y": 38
-      },
       "id": 16,
       "interval": "60s",
       "options": {
@@ -837,7 +668,7 @@
             "mean"
           ],
           "displayMode": "table",
-          "placement": "bottom"
+          "placement": "right"
         },
         "tooltip": {
           "mode": "single"
@@ -848,7 +679,7 @@
         {
           "database": "default",
           "datasource": {
-            "type": "vertamedia-clickhouse-datasource",
+            "type": "grafana-clickhouse-datasource",
             "uid": "${DS_CLICKHOUSE}"
           },
           "dateColDataType": "",
@@ -857,13 +688,14 @@
           "dateTimeType": "DATETIME",
           "datetimeLoading": false,
           "extrapolate": true,
-          "format": "time_series",
+          "format": 2,
           "formattedQuery": "SELECT $timeSeries as t, count() FROM $table WHERE $timeFilter GROUP BY t ORDER BY t",
           "hide": false,
           "intervalFactor": 1,
           "query": "SELECT $timeSeries as t, SUM(throughputFromDestinationNode), ingressNetworkPolicyName\nFROM $table\nWHERE $timeFilter \nAND ingressNetworkPolicyRuleAction == 1 \nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nGROUP BY ingressNetworkPolicyName, t\nORDER BY t\n",
           "queryType": "randomWalk",
           "rawQuery": "SELECT (intDiv(toUInt32(flowEndSecondsFromDestinationNode), 60) * 60) * 1000 as t, SUM(throughputFromDestinationNode), ingressNetworkPolicyName\nFROM default.flows_policy_view\nWHERE flowEndSecondsFromDestinationNode >= toDateTime(1642545439) AND flowEndSecondsFromDestinationNode <= toDateTime(1642547239) \nAND ingressNetworkPolicyRuleAction == 1 \nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nGROUP BY ingressNetworkPolicyName, t\nORDER BY t",
+          "rawSql": "SELECT flowEndSeconds as time, ingressNetworkPolicyName, SUM(throughput) as np\nFROM flows\nWHERE sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nAND ingressNetworkPolicyName != ''\nAND ingressNetworkPolicyRuleAction == 1\nAND $__timeFilter(flowEndMilli)\nGROUP BY time, ingressNetworkPolicyName\nORDER BY time",
           "refId": "A",
           "round": "0s",
           "skip_comments": true,
@@ -887,6 +719,71 @@
       ],
       "transparent": true,
       "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "grafana-clickhouse-datasource",
+        "uid": "${DS_CLICKHOUSE}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          },
+          "mappings": [],
+          "unit": "decbytes"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 12,
+        "x": 12,
+        "y": 38
+      },
+      "id": 19,
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "values": [
+            "percent",
+            "value"
+          ]
+        },
+        "pieType": "pie",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": true
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "grafana-clickhouse-datasource",
+            "uid": "${DS_CLICKHOUSE}"
+          },
+          "format": 1,
+          "rawSql": "SELECT SUM(octetDeltaCount) as np, ingressNetworkPolicyName\nFROM flows\nWHERE sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nAND ingressNetworkPolicyName != ''\nAND ingressNetworkPolicyRuleAction == 1\nAND $__timeFilter(flowEndMilli)\nGROUP BY ingressNetworkPolicyName",
+          "refId": "A"
+        }
+      ],
+      "title": "Cumulative Bytes of Ingress Network Policy",
+      "transparent": true,
+      "type": "piechart"
     }
   ],
   "refresh": "",
@@ -897,7 +794,7 @@
     "list": [
       {
         "datasource": {
-          "type": "vertamedia-clickhouse-datasource",
+          "type": "grafana-clickhouse-datasource",
           "uid": "PDEE91DDB90597936"
         },
         "filters": [],
@@ -916,6 +813,6 @@
   "timezone": "",
   "title": "networkpolicy_allow_dashboard",
   "uid": "kWk0EW1nz",
-  "version": 4,
+  "version": 21,
   "weekStart": ""
 }
