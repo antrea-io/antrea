@@ -1169,8 +1169,10 @@ type PodCondition func(*corev1.Pod) (bool, error)
 // podWaitFor polls the K8s apiserver until the specified Pod is found (in the test Namespace) and
 // the condition predicate is met (or until the provided timeout expires).
 func (data *TestData) podWaitFor(timeout time.Duration, name, namespace string, condition PodCondition) (*corev1.Pod, error) {
+	var pod *corev1.Pod
 	err := wait.Poll(defaultInterval, timeout, func() (bool, error) {
-		pod, err := data.clientset.CoreV1().Pods(namespace).Get(context.TODO(), name, metav1.GetOptions{})
+		var err error
+		pod, err = data.clientset.CoreV1().Pods(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 		if err != nil {
 			if errors.IsNotFound(err) {
 				return false, nil
@@ -1180,9 +1182,12 @@ func (data *TestData) podWaitFor(timeout time.Duration, name, namespace string, 
 		return condition(pod)
 	})
 	if err != nil {
+		if err == wait.ErrWaitTimeout && pod != nil {
+			return nil, fmt.Errorf("timed out waiting for the condition, Pod.Status: %s", pod.Status.String())
+		}
 		return nil, err
 	}
-	return data.clientset.CoreV1().Pods(namespace).Get(context.TODO(), name, metav1.GetOptions{})
+	return pod, nil
 }
 
 // podWaitForRunning polls the k8s apiserver until the specified Pod is in the "running" state (or
