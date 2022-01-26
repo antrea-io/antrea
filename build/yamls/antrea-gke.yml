@@ -4037,6 +4037,11 @@ data:
     # Enable multicast traffic. This feature is supported only with noEncap mode.
     #  Multicast: false
 
+    # Enable support for provisioning secondary network interfaces for Pods (using
+    # Pod annotations). At the moment, Antrea can only create secondary network
+    # interfaces using SR-IOV VFs on baremetal Nodes.
+    #  SecondaryNetwork: false
+
     # Enable managing external IPs of Services of LoadBalancer type.
     #  ServiceExternalIP: false
 
@@ -4333,7 +4338,7 @@ metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-b696bmff84
+  name: antrea-config-hcg89gk472
   namespace: kube-system
 ---
 apiVersion: v1
@@ -4404,7 +4409,7 @@ spec:
             fieldRef:
               fieldPath: spec.serviceAccountName
         - name: ANTREA_CONFIG_MAP_NAME
-          value: antrea-config-b696bmff84
+          value: antrea-config-hcg89gk472
         image: projects.registry.vmware.com/antrea/antrea-ubuntu:latest
         imagePullPolicy: IfNotPresent
         livenessProbe:
@@ -4455,7 +4460,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-b696bmff84
+          name: antrea-config-hcg89gk472
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -4739,7 +4744,7 @@ spec:
           path: /home/kubernetes/bin
         name: host-cni-bin
       - configMap:
-          name: antrea-config-b696bmff84
+          name: antrea-config-hcg89gk472
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d
