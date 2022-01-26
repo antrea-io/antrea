@@ -36,7 +36,7 @@ jobs:
     - uses: actions/checkout@v2
     - name: Build Antrea Docker image with code coverage support
       run: |
-        ./hack/build-antrea-ubuntu-all.sh --pull --coverage
+        ./hack/build-antrea-linux-all.sh --pull --coverage
     - name: Save Antrea image to tarball
       run:  docker save -o antrea-ubuntu.tar antrea/antrea-ubuntu-coverage:latest
     - name: Upload Antrea image for subsequent jobs

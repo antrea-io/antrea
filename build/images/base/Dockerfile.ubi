@@ -23,22 +23,13 @@ RUN set -eux; \
     wget -q -O - https://github.com/containernetworking/plugins/releases/download/$CNI_BINARIES_VERSION/cni-plugins-linux-${pluginsArch}-$CNI_BINARIES_VERSION.tgz | tar xz -C /opt/cni/bin $CNI_PLUGINS; \
     wget -q -O - https://downloads.antrea.io/whereabouts/$WHEREABOUTS_VERSION/whereabouts-linux-${pluginsArch}.tgz | tar xz -C /opt/cni/bin/ whereabouts-linux-${pluginsArch}/whereabouts --strip-components=1 --no-same-owner
 
-FROM antrea/openvswitch:${OVS_VERSION}
+FROM antrea/openvswitch-ubi:${OVS_VERSION}
 
 LABEL maintainer="Antrea <projectantrea-dev@googlegroups.com>"
-LABEL description="An Ubuntu based Docker base image for Antrea."
+LABEL description="An UBI8 based Docker base image for Antrea."
 
 USER root
 
-# See https://github.com/kubernetes-sigs/iptables-wrappers
-# /iptables-wrapper-installer.sh will have permissions of 600.
-# --chmod=700 doesn't work with older versions of Docker and requires DOCKER_BUILDKIT=1, so we use
-# chmod in the RUN command below instead.
-ADD https://raw.githubusercontent.com/kubernetes-sigs/iptables-wrappers/9e6ce59c864623ea71a6f7d59c35fcb13a919b87/iptables-wrapper-installer.sh /iptables-wrapper-installer.sh
-
-RUN apt-get update && apt-get install -y --no-install-recommends ipset jq && \
-    rm -rf /var/lib/apt/lists/* && \
-    chmod +x /iptables-wrapper-installer.sh && \
-    /iptables-wrapper-installer.sh
+RUN yum install ipset jq -y && yum clean all 
 
 COPY --from=cni-binaries /opt/cni/bin /opt/cni/bin
