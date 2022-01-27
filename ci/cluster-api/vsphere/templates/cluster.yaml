@@ -1,40 +1,94 @@
-apiVersion: cluster.x-k8s.io/v1beta1
+apiVersion: cluster.x-k8s.io/v1alpha3
 kind: Cluster
 metadata:
-  labels:
-    cluster.x-k8s.io/cluster-name: CLUSTERNAME
   name: CLUSTERNAME
   namespace: CLUSTERNAMESPACE
 spec:
   clusterNetwork:
     pods:
       cidrBlocks:
-      - 192.168.0.0/16
+      - 100.96.0.0/11
+    serviceDomain: cluster.local
+    services:
+      cidrBlocks:
+      - 100.64.0.0/13
   controlPlaneRef:
-    apiVersion: controlplane.cluster.x-k8s.io/v1beta1
+    apiVersion: controlplane.cluster.x-k8s.io/v1alpha3
     kind: KubeadmControlPlane
     name: CLUSTERNAME
   infrastructureRef:
-    apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+    apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
     kind: VSphereCluster
     name: CLUSTERNAME
 ---
-apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
+kind: HAProxyLoadBalancer
+metadata:
+  labels:
+    cluster.x-k8s.io/cluster-name: CLUSTERNAME
+  name: CLUSTERNAME
+  namespace: CLUSTERNAMESPACE
+spec:
+  user:
+    authorizedKeys:
+    - SSHAUTHORIZEDKEYS
+    name: capvs
+  virtualMachineConfiguration:
+    cloneMode: linkedClone
+    datacenter: DATACENTERNAME
+    datastore: WorkloadDatastore
+    diskGiB: 25
+    folder: antrea
+    memoryMiB: 8192
+    network:
+      devices:
+      - dhcp4: true
+        networkName: NETWORKNAME
+    numCPUs: 2
+    resourcePool: RESOURCEPOOLPATH
+    server: VCENTERNAME
+    template: capv-haproxy-v0.6.3
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
 kind: VSphereCluster
 metadata:
   name: CLUSTERNAME
   namespace: CLUSTERNAMESPACE
 spec:
-  controlPlaneEndpoint:
-    host: CONTROLVIP
-    port: 6443
-  identityRef:
-    kind: Secret
+  cloudProviderConfiguration:
+    global:
+      insecure: true
+      secretName: cloud-provider-vsphere-credentials
+      secretNamespace: kube-system
+    network:
+      name: NETWORKNAME
+    providerConfig:
+      cloud:
+        controllerImage: gcr.io/cloud-provider-vsphere/cpi/release/manager:v1.0.0
+      storage:
+        attacherImage: quay.io/k8scsi/csi-attacher:v2.0.0
+        controllerImage: gcr.io/cloud-provider-vsphere/csi/release/driver:v2.0.0
+        livenessProbeImage: quay.io/k8scsi/livenessprobe:v1.1.0
+        metadataSyncerImage: gcr.io/cloud-provider-vsphere/csi/release/syncer:v2.0.0
+        nodeDriverImage: gcr.io/cloud-provider-vsphere/csi/release/driver:v2.0.0
+        provisionerImage: quay.io/k8scsi/csi-provisioner:v1.4.0
+        registrarImage: quay.io/k8scsi/csi-node-driver-registrar:v1.2.0
+    virtualCenter:
+      VCENTERNAME:
+        datacenters: DATACENTERNAME
+    workspace:
+      datacenter: DATACENTERNAME
+      datastore: WorkloadDatastore
+      folder: antrea
+      resourcePool: RESOURCEPOOLPATH
+      server: VCENTERNAME
+  loadBalancerRef:
+    apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
+    kind: HAProxyLoadBalancer
     name: CLUSTERNAME
   server: VCENTERNAME
-  thumbprint: THUMBPRINTVALUE
 ---
-apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
 kind: VSphereMachineTemplate
 metadata:
   name: CLUSTERNAME
@@ -44,83 +98,49 @@ spec:
     spec:
       cloneMode: linkedClone
       datacenter: DATACENTERNAME
-      datastore: 208.1-20TB-NFS
+      datastore: WorkloadDatastore
       diskGiB: 25
-      folder: CI
+      folder: antrea
       memoryMiB: 8192
       network:
         devices:
         - dhcp4: true
           networkName: NETWORKNAME
-      numCPUs: 4
+      numCPUs: 2
       resourcePool: RESOURCEPOOLPATH
       server: VCENTERNAME
-      storagePolicyName: ""
       template: OVATEMPLATENAME
-      thumbprint: THUMBPRINTVALUE
 ---
-apiVersion: controlplane.cluster.x-k8s.io/v1beta1
+apiVersion: controlplane.cluster.x-k8s.io/v1alpha3
 kind: KubeadmControlPlane
 metadata:
   name: CLUSTERNAME
   namespace: CLUSTERNAMESPACE
 spec:
+  infrastructureTemplate:
+    apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
+    kind: VSphereMachineTemplate
+    name: CLUSTERNAME
   kubeadmConfigSpec:
-    files:
-    - content: |
-        apiVersion: v1
-        kind: Pod
-        metadata:
-          creationTimestamp: null
-          name: kube-vip
-          namespace: kube-system
-        spec:
-          containers:
-          - args:
-            - start
-            env:
-            - name: vip_arp
-              value: "true"
-            - name: vip_leaderelection
-              value: "true"
-            - name: vip_address
-              value: CONTROLVIP
-            - name: vip_interface
-              value: eth0
-            - name: vip_leaseduration
-              value: "15"
-            - name: vip_renewdeadline
-              value: "10"
-            - name: vip_retryperiod
-              value: "2"
-            image: ghcr.io/kube-vip/kube-vip:v0.3.5
-            imagePullPolicy: IfNotPresent
-            name: kube-vip
-            resources: {}
-            securityContext:
-              capabilities:
-                add:
-                - NET_ADMIN
-                - SYS_TIME
-            volumeMounts:
-            - mountPath: /etc/kubernetes/admin.conf
-              name: kubeconfig
-          hostNetwork: true
-          volumes:
-          - hostPath:
-              path: /etc/kubernetes/admin.conf
-              type: FileOrCreate
-            name: kubeconfig
-        status: {}
-      owner: root:root
-      path: /etc/kubernetes/manifests/kube-vip.yaml
+    clusterConfiguration:
+      apiServer:
+        extraArgs:
+          cloud-provider: external
+          feature-gates: SCTPSupport=true
+      controllerManager:
+        extraArgs:
+          cloud-provider: external
     initConfiguration:
       nodeRegistration:
         criSocket: /var/run/containerd/containerd.sock
+        kubeletExtraArgs:
+          cloud-provider: external
         name: '{{ ds.meta_data.hostname }}'
     joinConfiguration:
       nodeRegistration:
         criSocket: /var/run/containerd/containerd.sock
+        kubeletExtraArgs:
+          cloud-provider: external
         name: '{{ ds.meta_data.hostname }}'
     preKubeadmCommands:
     - hostname "{{ ds.meta_data.hostname }}"
@@ -128,22 +148,15 @@ spec:
     - echo "127.0.0.1   localhost" >>/etc/hosts
     - echo "127.0.0.1   {{ ds.meta_data.hostname }}" >>/etc/hosts
     - echo "{{ ds.meta_data.hostname }}" >/etc/hostname
-    - ip link set eth0 mtu 1442
-    useExperimentalRetryJoin: true
     users:
     - name: capv
       sshAuthorizedKeys:
       - SSHAUTHORIZEDKEYS
       sudo: ALL=(ALL) NOPASSWD:ALL
-  machineTemplate:
-    infrastructureRef:
-      apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
-      kind: VSphereMachineTemplate
-      name: CLUSTERNAME
   replicas: 1
   version: K8SVERSION
 ---
-apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
+apiVersion: bootstrap.cluster.x-k8s.io/v1alpha3
 kind: KubeadmConfigTemplate
 metadata:
   name: CLUSTERNAME-md-0
@@ -154,6 +167,8 @@ spec:
       joinConfiguration:
         nodeRegistration:
           criSocket: /var/run/containerd/containerd.sock
+          kubeletExtraArgs:
+            cloud-provider: external
           name: '{{ ds.meta_data.hostname }}'
       preKubeadmCommands:
       - hostname "{{ ds.meta_data.hostname }}"
@@ -161,14 +176,14 @@ spec:
       - echo "127.0.0.1   localhost" >>/etc/hosts
       - echo "127.0.0.1   {{ ds.meta_data.hostname }}" >>/etc/hosts
       - echo "{{ ds.meta_data.hostname }}" >/etc/hostname
-      - ip link set eth0 mtu 1442
+      useExperimentalRetryJoin: true
       users:
       - name: capv
         sshAuthorizedKeys:
         - SSHAUTHORIZEDKEYS
         sudo: ALL=(ALL) NOPASSWD:ALL
 ---
-apiVersion: cluster.x-k8s.io/v1beta1
+apiVersion: cluster.x-k8s.io/v1alpha3
 kind: MachineDeployment
 metadata:
   labels:
@@ -187,21 +202,12 @@ spec:
     spec:
       bootstrap:
         configRef:
-          apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
+          apiVersion: bootstrap.cluster.x-k8s.io/v1alpha3
           kind: KubeadmConfigTemplate
           name: CLUSTERNAME-md-0
       clusterName: CLUSTERNAME
       infrastructureRef:
-        apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+        apiVersion: infrastructure.cluster.x-k8s.io/v1alpha3
         kind: VSphereMachineTemplate
         name: CLUSTERNAME
       version: K8SVERSION
----
-apiVersion: v1
-kind: Secret
-metadata:
-  name: CLUSTERNAME
-  namespace: CLUSTERNAMESPACE
-stringData:
-  password: CLUSTERPASSWORD
-  username: CLUSTERUSERNAME

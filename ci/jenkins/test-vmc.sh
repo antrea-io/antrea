@@ -80,10 +80,6 @@ case $key in
     KUBECONFIG_PATH="$2"
     shift 2
     ;;
-    --k8s-version)
-    K8S_VERSION="$2"
-    shift 2
-    ;;
     --workdir)
     WORKDIR="$2"
     shift 2
@@ -98,14 +94,6 @@ case $key in
     ;;
     --registry)
     DOCKER_REGISTRY="$2"
-    shift 2
-    ;;
-    --username)
-    CLUSTER_USERNAME="$2"
-    shift 2
-    ;;
-    --password)
-    CLUSTER_PASSWORD="$2"
     shift 2
     ;;
     --garbage-collection)
@@ -180,12 +168,6 @@ function saveLogs() {
     kubectl get cluster-api -A -o yaml > ${CLUSTER_LOG_DIR}/cluster_api/cluster_api.yaml || true
 }
 
-function release_static_ip() {
-    echo '=== Releasing IP ==='
-    cat "$DEFAULT_WORKDIR/host-local.json" | CNI_COMMAND=DEL CNI_CONTAINERID="$CLUSTER" CNI_NETNS=/dev/null CNI_IFNAME=dummy0 CNI_PATH=. /usr/bin/host-local
-    echo Released IP
-}
-
 function setup_cluster() {
     export KUBECONFIG=$KUBECONFIG_PATH
     if [ -z $K8S_VERSION ]; then
@@ -196,11 +178,6 @@ function setup_cluster() {
     fi
     export OVA_TEMPLATE_NAME=${TEST_OS}-kube-${K8S_VERSION}
     rm -rf ${GIT_CHECKOUT_DIR}/jenkins || true
-
-    echo '=== Allocating IP ==='
-    cat "$DEFAULT_WORKDIR/host-local.json" | CNI_COMMAND=ADD CNI_CONTAINERID="$CLUSTER" CNI_NETNS=/dev/null CNI_IFNAME=dummy0 CNI_PATH=. /usr/bin/host-local > ip-result.json
-    CONTROL_VIP=$(cat ip-result.json | jq -r '.ips[0].address' | awk -F '/' '{print $1}')
-    echo Allocated "$CONTROL_VIP"
 
     echo '=== Generate key pair ==='
     mkdir -p ${GIT_CHECKOUT_DIR}/jenkins/key
@@ -215,9 +192,6 @@ function setup_cluster() {
     sed -i "s/OVATEMPLATENAME/${OVA_TEMPLATE_NAME}/g" ${GIT_CHECKOUT_DIR}/jenkins/out/cluster.yaml
     sed -i "s/CLUSTERNAME/${CLUSTER}/g" ${GIT_CHECKOUT_DIR}/jenkins/out/cluster.yaml
     sed -i "s|SSHAUTHORIZEDKEYS|${publickey}|g" ${GIT_CHECKOUT_DIR}/jenkins/out/cluster.yaml
-    sed -i "s/CLUSTERUSERNAME/${CLUSTER_USERNAME}/g" ${GIT_CHECKOUT_DIR}/jenkins/out/cluster.yaml
-    sed -i "s/CLUSTERPASSWORD/${CLUSTER_PASSWORD}/g" ${GIT_CHECKOUT_DIR}/jenkins/out/cluster.yaml
-    sed -i "s/CONTROLVIP/${CONTROL_VIP}/g" ${GIT_CHECKOUT_DIR}/jenkins/out/cluster.yaml
     sed -i "s/CLUSTERNAMESPACE/${CLUSTER}/g" ${GIT_CHECKOUT_DIR}/jenkins/out/namespace.yaml
 
     echo "=== network spec value substitution==="
@@ -232,8 +206,8 @@ function setup_cluster() {
     kubectl apply -f "${GIT_CHECKOUT_DIR}/jenkins/out/namespace.yaml"
     kubectl apply -f "${GIT_CHECKOUT_DIR}/jenkins/out/cluster.yaml"
 
-    echo '=== Wait for 20 min to get workload cluster secret ==='
-    for t in {1..20}
+    echo '=== Wait for 10 min to get workload cluster secret ==='
+    for t in {1..10}
     do
         sleep 1m
         echo '=== Get kubeconfig (try for 1m) ==='
@@ -254,10 +228,10 @@ function setup_cluster() {
         exit 1
     else
         export KUBECONFIG="${GIT_CHECKOUT_DIR}/jenkins/out/kubeconfig"
-        echo "=== Waiting for 20 minutes for all nodes to be up ==="
+        echo "=== Waiting for 10 minutes for all nodes to be up ==="
 
         set +e
-        for t in {1..20}
+        for t in {1..10}
         do
             sleep 1m
             echo "=== Get node (try for 1m) ==="
@@ -277,6 +251,10 @@ function setup_cluster() {
             exit 1
         fi
     fi
+    # Remove a taint on Node from capv: node.cloudprovider.kubernetes.io/uninitialized=true:NoSchedule
+    kubectl get node --no-headers=true --kubeconfig "${GIT_CHECKOUT_DIR}/jenkins/out/kubeconfig" | awk '{print $1}' | while read nodename; do
+        kubectl taint nodes $nodename node.cloudprovider.kubernetes.io/uninitialized=true:NoSchedule- || true
+    done
 }
 
 function copy_image {
@@ -422,7 +400,7 @@ function deliver_antrea {
         docker save -o flow-aggregator.tar projects.registry.vmware.com/antrea/flow-aggregator:${DOCKER_IMG_VERSION}
     fi
 
-    control_plane_ip="$(kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 ~ role {print $6}')"
+    control_plane_ip="$(kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 == role {print $6}')"
     ${SCP_WITH_ANTREA_CI_KEY} $GIT_CHECKOUT_DIR/build/yamls/*.yml capv@${control_plane_ip}:~
 
     IPs=($(kubectl get nodes -o wide --no-headers=true | awk '{print $6}' | xargs))
@@ -519,7 +497,7 @@ function run_e2e {
     done
 
     echo "=== Move kubeconfig to control-plane Node ==="
-    control_plane_ip="$(kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 ~ role {print $6}')"
+    control_plane_ip="$(kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 == role {print $6}')"
     ${SSH_WITH_ANTREA_CI_KEY} -n capv@${control_plane_ip} "if [ ! -d ".kube" ]; then mkdir .kube; fi"
     ${SCP_WITH_ANTREA_CI_KEY} $GIT_CHECKOUT_DIR/jenkins/out/kubeconfig capv@${control_plane_ip}:~/.kube/config
 
@@ -585,7 +563,7 @@ function run_conformance {
     kubectl rollout status --timeout=5m deployment.apps/antrea-controller -n kube-system
     kubectl rollout status --timeout=5m daemonset/antrea-agent -n kube-system
 
-    control_plane_ip="$(kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 ~ role {print $6}')"
+    control_plane_ip="$(kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 == role {print $6}')"
     echo "=== Move kubeconfig to control-plane Node ==="
     ${SSH_WITH_ANTREA_CI_KEY} -n capv@${control_plane_ip} "if [ ! -d ".kube" ]; then mkdir .kube; fi"
     ${SCP_WITH_ANTREA_CI_KEY} $GIT_CHECKOUT_DIR/jenkins/out/kubeconfig capv@${control_plane_ip}:~/.kube/config
@@ -642,8 +620,6 @@ function cleanup_cluster() {
     kubectl delete ns ${CLUSTER}
     rm -rf "${GIT_CHECKOUT_DIR}/jenkins"
     echo "=== Cleanup cluster ${CLUSTER} succeeded ==="
-
-    release_static_ip
 }
 
 function garbage_collection() {
