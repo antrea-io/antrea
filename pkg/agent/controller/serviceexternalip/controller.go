@@ -201,7 +201,11 @@ func (c *ServiceExternalIPController) enqueueServiceForEndpoints(obj interface{}
 	}
 	service, err := c.serviceLister.Services(endpoints.Namespace).Get(endpoints.Name)
 	if err != nil {
-		klog.ErrorS(err, "failed to get Service for Endpoint", "namespace", endpoints.Namespace, "name", endpoints.Name)
+		// The only possible error Lister.Get can return is NotFound.
+		// It's normal that some Endpoints don't have Service. For example, kube-scheduler and kube-controller-manager
+		// may use Endpoints for leader election. Even if the Endpoints should have a Service but it's not received yet,
+		// it's fine to ignore the error as the Service's add event will enqueue it.
+		klog.V(5).InfoS("Failed to get Service for Endpoints", "Endpoints", klog.KObj(endpoints), "err", err)
 		return
 	}
 	// we only care services with ServiceExternalTrafficPolicy setting to local.
