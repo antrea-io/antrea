@@ -449,7 +449,9 @@ func run(o *Options) error {
 
 	// Initialize localPodInformer for NPLAgent and AntreaIPAMController
 	var localPodInformer cache.SharedIndexInformer
-	if features.DefaultFeatureGate.Enabled(features.NodePortLocal) && o.config.NodePortLocal.Enable || features.DefaultFeatureGate.Enabled(features.AntreaIPAM) {
+	if features.DefaultFeatureGate.Enabled(features.NodePortLocal) && o.config.NodePortLocal.Enable ||
+		features.DefaultFeatureGate.Enabled(features.AntreaIPAM) ||
+		features.DefaultFeatureGate.Enabled(features.SecondaryNetwork) {
 		listOptions := func(options *metav1.ListOptions) {
 			options.FieldSelector = fields.OneTermEqualSelector("spec.nodeName", nodeConfig.Name).String()
 		}
@@ -461,6 +463,19 @@ func run(o *Options) error {
 			listOptions,
 		)
 	}
+
+	log.StartLogFileNumberMonitor(stopCh)
+
+	go routeClient.Run(stopCh)
+
+	go cniServer.Run(stopCh)
+
+	go antreaClientProvider.Run(stopCh)
+
+	go nodeRouteController.Run(stopCh)
+
+	go networkPolicyController.Run(stopCh)
+
 	// Initialize the NPL agent.
 	if features.DefaultFeatureGate.Enabled(features.NodePortLocal) && o.config.NodePortLocal.Enable {
 		nplController, err := npl.InitializeNPLAgent(
@@ -475,6 +490,7 @@ func run(o *Options) error {
 		}
 		go nplController.Run(stopCh)
 	}
+
 	// Initialize the Antrea IPAM agent.
 	if features.DefaultFeatureGate.Enabled(features.AntreaIPAM) {
 		ipamController, err := ipam.InitializeAntreaIPAMController(
@@ -488,25 +504,6 @@ func run(o *Options) error {
 		}
 		go ipamController.Run(stopCh)
 	}
-	//  Start the localPodInformer
-	if localPodInformer != nil {
-		go localPodInformer.Run(stopCh)
-	}
-
-	log.StartLogFileNumberMonitor(stopCh)
-
-	go routeClient.Run(stopCh)
-
-	go cniServer.Run(stopCh)
-
-	informerFactory.Start(stopCh)
-	crdInformerFactory.Start(stopCh)
-
-	go antreaClientProvider.Run(stopCh)
-
-	go nodeRouteController.Run(stopCh)
-
-	go networkPolicyController.Run(stopCh)
 
 	if features.DefaultFeatureGate.Enabled(features.SecondaryNetwork) {
 		// Create the NetworkAttachmentDefinition client, which handles access to secondary network object definition from the API Server.
@@ -514,19 +511,24 @@ func run(o *Options) error {
 		if err != nil {
 			return fmt.Errorf("NetworkAttachmentDefinition client creation failed. %v", err)
 		}
-		// Initialize podController to handle secondary network configuration for Pods with k8s.v1.cni.cncf.io/networks Annotation defined.
-		podWatchController, err := podwatch.InitializePodController(
+		// Create podController to handle secondary network configuration for Pods with k8s.v1.cni.cncf.io/networks Annotation defined.
+		podWatchController := podwatch.NewPodController(
 			k8sClient,
 			netAttachDefClient,
-			informerFactory,
+			localPodInformer,
 			nodeConfig.Name,
 			cniPodInfoStore,
 			cniServer)
-		if err != nil {
-			return fmt.Errorf("failed to initialize Pod Controller for secondary network interface management: %v", err)
-		}
 		go podWatchController.Run(stopCh)
 	}
+
+	//  Start the localPodInformer
+	if localPodInformer != nil {
+		go localPodInformer.Run(stopCh)
+	}
+
+	informerFactory.Start(stopCh)
+	crdInformerFactory.Start(stopCh)
 
 	if features.DefaultFeatureGate.Enabled(features.Egress) || features.DefaultFeatureGate.Enabled(features.ServiceExternalIP) {
 		go externalIPPoolController.Run(stopCh)

@@ -19,7 +19,6 @@ package nodeportlocal
 
 import (
 	"fmt"
-	"time"
 
 	nplk8s "antrea.io/antrea/pkg/agent/nodeportlocal/k8s"
 	"antrea.io/antrea/pkg/agent/nodeportlocal/portcache"
@@ -28,10 +27,6 @@ import (
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 )
-
-// Set resyncPeriod to 0 to disable resyncing.
-// UpdateFunc event handler will be called only when the object is actually updated.
-const resyncPeriod = 0 * time.Minute
 
 // InitializeNPLAgent initializes the NodePortLocal agent.
 // It sets up event handlers to handle Pod add, update and delete events.
@@ -49,20 +44,6 @@ func InitializeNPLAgent(
 		return nil, fmt.Errorf("error when initializing NodePortLocal port table: %v", err)
 	}
 
-	return InitController(kubeClient, informerFactory, portTable, nodeName, podInformer)
-}
-
-// InitController initializes the NPLController with appropriate Pod and Service Informers.
-// This function can be used independently while unit testing without using InitializeNPLAgent function.
-func InitController(kubeClient clientset.Interface, informerFactory informers.SharedInformerFactory, portTable *portcache.PortTable, nodeName string, podInformer cache.SharedIndexInformer) (*nplk8s.NPLController, error) {
 	svcInformer := informerFactory.Core().V1().Services().Informer()
-
-	c := nplk8s.NewNPLController(kubeClient,
-		podInformer,
-		svcInformer,
-		resyncPeriod,
-		portTable,
-		nodeName)
-
-	return c, nil
+	return nplk8s.NewNPLController(kubeClient, podInformer, svcInformer, portTable, nodeName), nil
 }
