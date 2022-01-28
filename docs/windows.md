@@ -184,6 +184,13 @@ spec:
       hostNetwork: true
 ```
 
+If the powershell version on your Window Node is earlier than v6.0,
+change the command from `pwsh` to `powershell` in kube-proxy.yml.
+
+```bash
+sed -i 's/pwsh/powershell/g' kube-proxy.yml
+```
+
 Then apply the `kube-proxy.yml`.
 
 ```bash
