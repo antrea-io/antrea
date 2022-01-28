@@ -262,6 +262,11 @@ if [ "$MODE" == "release" ] && $VERBOSE_LOG; then
     exit 1
 fi
 
+if $COVERAGE && $VERBOSE_LOG; then
+    echoerr "--coverage has enabled verbose log"
+    VERBOSE_LOG=false
+fi
+
 if ! $KIND && $ON_DELETE; then
     echoerr "--on-delete works only for Kind clusters"
     print_help

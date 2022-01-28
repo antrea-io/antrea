@@ -285,6 +285,9 @@ function deliver_antrea_windows {
     echo "====== Delivering Antrea to all the Nodes ======"
     export_govc_env_var
 
+    # Enable verbose log for troubleshooting.
+    sed -i "s/--v=0/--v=4/g" build/yamls/antrea.yml build/yamls/antrea-windows.yml
+
     if [[ "${PROXY_ALL}" == true ]]; then
         echo "====== Updating yaml files to enable proxyAll ======"
         KUBERNETES_SVC_EP_IP=$(kubectl get endpoints kubernetes -o jsonpath='{.subsets[0].addresses[0].ip}')
@@ -300,6 +303,7 @@ function deliver_antrea_windows {
     echo "===== Pull necessary images on Control-Plane node ====="
     harbor_images=("agnhost:2.13" "nginx:1.15-alpine")
     antrea_images=("e2eteam/agnhost:2.13" "docker.io/library/nginx:1.15-alpine")
+    common_images=("k8s.gcr.io/e2e-test-images/agnhost:2.29")
     for i in "${!harbor_images[@]}"; do
         docker pull -q "${DOCKER_REGISTRY}/antrea/${harbor_images[i]}"
         docker tag "${DOCKER_REGISTRY}/antrea/${harbor_images[i]}" "${antrea_images[i]}"
@@ -313,6 +317,10 @@ function deliver_antrea_windows {
         antrea_images=("e2eteam/agnhost:2.13" "docker.io/library/nginx:1.15-alpine")
         for i in "${!harbor_images[@]}"; do
             ssh -o StrictHostKeyChecking=no -n jenkins@${IP} "docker pull -q ${DOCKER_REGISTRY}/antrea/${harbor_images[i]} && docker tag ${DOCKER_REGISTRY}/antrea/${harbor_images[i]} ${antrea_images[i]}" || true
+        done
+        # Pull necessary images in advance to avoid transient error
+        for image in "${common_images[@]}"; do
+            ssh -o StrictHostKeyChecking=no -n jenkins@${IP} "docker pull -q ${image}" || true
         done
     done
 
@@ -349,6 +357,10 @@ function deliver_antrea_windows {
         antrea_images=("sigwindowstools/kube-proxy:v1.18.0" "e2eteam/agnhost:2.13" "us.gcr.io/k8s-artifacts-prod/e2e-test-images/agnhost:2.13" "e2eteam/jessie-dnsutils:1.0" "e2eteam/pause:3.2")
         for i in "${!harbor_images[@]}"; do
             ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "docker pull -q ${DOCKER_REGISTRY}/antrea/${harbor_images[i]} && docker tag ${DOCKER_REGISTRY}/antrea/${harbor_images[i]} ${antrea_images[i]}" || true
+        done
+        # Pull necessary images in advance to avoid transient error
+        for image in "${common_images[@]}"; do
+            ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "docker pull -q ${image}" || true
         done
 
         # Use a script to run antrea agent in windows Network Policy cases
@@ -421,6 +433,9 @@ function deliver_antrea {
     chmod -R g-w build/images/base
     DOCKER_REGISTRY="${DOCKER_REGISTRY}" ./hack/build-antrea-ubuntu-all.sh --pull
     make flow-aggregator-image
+
+    # Enable verbose log for troubleshooting.
+    sed -i "s/--v=0/--v=4/g" build/yamls/antrea.yml
 
     echo "=== Fill serviceCIDRv6 and serviceCIDR ==="
     # It is unnecessary for cluster with AntreaProxy enabled.
@@ -654,11 +669,11 @@ function clean_tmp() {
 
 export KUBECONFIG=${KUBECONFIG_PATH}
 if [[ $FLEXIBLE_IPAM == true ]]; then
-    ./hack/generate-manifest.sh --flexible-ipam > build/yamls/antrea.yml
+    ./hack/generate-manifest.sh --flexible-ipam --verbose-log > build/yamls/antrea.yml
 fi
 
 if [[ $TESTCASE =~ "multicast" ]]; then
-    ./hack/generate-manifest.sh --multicast --multicast-interfaces "ens224" > build/yamls/antrea.yml
+    ./hack/generate-manifest.sh --multicast --multicast-interfaces "ens224" --verbose-log > build/yamls/antrea.yml
 fi
 
 clean_tmp
