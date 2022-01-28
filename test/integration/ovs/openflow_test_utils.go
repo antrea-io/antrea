@@ -19,9 +19,18 @@ import (
 	"os/exec"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/stretchr/testify/require"
+	"k8s.io/apimachinery/pkg/util/wait"
 
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 	"antrea.io/antrea/pkg/ovs/ovsctl"
+)
+
+const (
+	openFlowCheckTimeout  = 500 * time.Millisecond
+	openFlowCheckInterval = 100 * time.Millisecond
 )
 
 func PrepareOVSBridge(brName string) error {
@@ -55,53 +64,67 @@ func (f ExpectFlow) flowStr(name string) string {
 	return fmt.Sprintf("table=%s,%s actions=%s", name, f.MatchStr, f.ActStr)
 }
 
-func CheckFlowExists(t *testing.T, ovsCtlClient ovsctl.OVSCtlClient, tableName string, tableID uint8, exist bool, flows []*ExpectFlow) []string {
+func CheckFlowExists(t *testing.T, ovsCtlClient ovsctl.OVSCtlClient, tableName string, tableID uint8, expectFound bool, flows []*ExpectFlow) []string {
 	var flowList []string
-	if tableName != "" {
-		flowList, _ = OfctlDumpTableFlows(ovsCtlClient, tableName)
-	} else {
-		flowList, _ = OfctlDumpTableFlowsWithoutName(ovsCtlClient, tableID)
-		tableName = fmt.Sprintf("%d", tableID)
-	}
+	var unexpectedFlows []*ExpectFlow
+	if err := wait.PollImmediate(openFlowCheckInterval, openFlowCheckTimeout, func() (done bool, err error) {
+		unexpectedFlows = unexpectedFlows[:0]
+		if tableName != "" {
+			flowList, err = OfctlDumpTableFlows(ovsCtlClient, tableName)
+		} else {
+			flowList, err = OfctlDumpTableFlowsWithoutName(ovsCtlClient, tableID)
+			tableName = fmt.Sprintf("%d", tableID)
+		}
+		require.NoError(t, err, "Error dumping flows")
 
-	for _, flow := range flows {
-		found := OfctlFlowMatch(flowList, tableName, flow)
-		if exist && !found {
-			t.Errorf("Failed to install flow: %s", flow.flowStr(tableName))
+		for _, flow := range flows {
+			found := OfctlFlowMatch(flowList, tableName, flow)
+			if found != expectFound {
+				unexpectedFlows = append(unexpectedFlows, flow)
+			}
 		}
-		if !exist && found {
-			t.Errorf("Failed to uninstall flow: %s", flow.flowStr(tableName))
+		return len(unexpectedFlows) == 0, nil
+	}); err != nil {
+		for _, flow := range unexpectedFlows {
+			if expectFound {
+				t.Errorf("Failed to install flow: %s", flow.flowStr(tableName))
+			} else {
+				t.Errorf("Failed to uninstall flow: %s", flow.flowStr(tableName))
+			}
 		}
-	}
-	if t.Failed() {
-		t.Errorf("Existing flows:\n%s", strings.Join(flowList, "\n"))
+		t.Logf("Existing flows:\n%s", strings.Join(flowList, "\n"))
 	}
 	return flowList
 }
 
-func CheckGroupExists(t *testing.T, ovsCtlClient ovsctl.OVSCtlClient, groupID binding.GroupIDType, groupType string, buckets []string, expectExists bool) {
-	// dump groups
-	groupList, err := OfCtlDumpGroups(ovsCtlClient)
-	if err != nil {
-		t.Errorf("Error dumping flows: Err %v", err)
-	}
+func CheckGroupExists(t *testing.T, ovsCtlClient ovsctl.OVSCtlClient, groupID binding.GroupIDType, groupType string, buckets []string, expectFound bool) {
 	var bucketStrs []string
 	for _, bucket := range buckets {
 		bucketStr := fmt.Sprintf("bucket=%s", bucket)
 		bucketStrs = append(bucketStrs, bucketStr)
 	}
 	groupStr := fmt.Sprintf("group_id=%d,type=%s,%s", groupID, groupType, strings.Join(bucketStrs, ","))
-	found := false
-	for _, groupElems := range groupList {
-		groupEntry := fmt.Sprintf("%s,bucket=", groupElems[0])
-		groupEntry = fmt.Sprintf("%s%s", groupEntry, strings.Join(groupElems[1:], ",bucket="))
-		if strings.Contains(groupEntry, groupStr) {
-			found = true
-			break
+	var groupList [][]string
+	if err := wait.PollImmediate(openFlowCheckInterval, openFlowCheckTimeout, func() (done bool, err error) {
+		groupList, err = OfCtlDumpGroups(ovsCtlClient)
+		require.NoError(t, err, "Error dumping groups")
+		found := false
+		for _, groupElems := range groupList {
+			groupEntry := fmt.Sprintf("%s,bucket=", groupElems[0])
+			groupEntry = fmt.Sprintf("%s%s", groupEntry, strings.Join(groupElems[1:], ",bucket="))
+			if strings.Contains(groupEntry, groupStr) {
+				found = true
+				break
+			}
 		}
-	}
-	if found != expectExists {
-		t.Errorf("Failed to find group:\n%v\nExisting groups:\n%v", groupStr, groupList)
+		return found == expectFound, nil
+	}); err != nil {
+		if expectFound {
+			t.Errorf("Failed to install group: %s", groupStr)
+		} else {
+			t.Errorf("Failed to uninstall group: %s", groupStr)
+		}
+		t.Logf("Existing groups:\n%s", groupList)
 	}
 }
 
