@@ -58,6 +58,8 @@ type FlowAggregatorConfig struct {
 	RecordContents RecordContentsConfig `yaml:"recordContents,omitempty"`
 	// apiServer contains APIServer related configuration options.
 	APIServer APIServerConfig `yaml:"apiServer,omitempty"`
+	// clickHouse contains ClickHouse related configuration options.
+	ClickHouse *ClickHouseConfig `yaml:"clickHouse,omitempty"`
 }
 
 type RecordContentsConfig struct {
@@ -72,4 +74,19 @@ type APIServerConfig struct {
 	TLSCipherSuites string `yaml:"tlsCipherSuites,omitempty"`
 	// TLS min version.
 	TLSMinVersion string `yaml:"tlsMinVersion,omitempty"`
+}
+
+type ClickHouseConfig struct {
+	// Username is the username for ClickHouse client.
+	Username string `yaml:"username,omitempty"`
+	// Password is the password for ClickHouse client.
+	Password string `yaml:"password,omitempty"`
+	// Database is the name of database where antrea table is created.
+	Database string `yaml:"database,omitempty"`
+	// DbURL is the url to the database. TCP protocol is required.
+	DbURL string `yaml:"dbUrl,omitempty"`
+	// Debug enables debug level log from clickhouse sql driver.
+	Debug bool `yaml:"debug,omitempty"`
+	// Compress enables lz4 compression when committing flow records. Defaults to true.
+	Compress *bool `yaml:"compress,omitempty"`
 }

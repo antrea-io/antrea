@@ -203,6 +203,21 @@ data:
 
       # TLS min version from: VersionTLS10, VersionTLS11, VersionTLS12, VersionTLS13.
       #tlsMinVersion:
+    
+    # clickHouse contains ClickHouse related configuration options.
+    #clickHouse:
+      # Username of ClickHouse client.
+      #username: "clickhouse_operator"
+      # Password of ClickHouse client.
+      #password: "clickhouse_operator_password"
+      # DB name containing antrea table.
+      #database: "default"
+      # URL to ClickHouse DB.
+      #dbUrl: "tcp://<click-house-svc>:9000"
+      # Enables DB driver debug log. 
+      #debug: false
+      # Enables LZ4 compresion for batch flow record insert. 
+      #compress: true
 kind: ConfigMap
 metadata:
   labels:

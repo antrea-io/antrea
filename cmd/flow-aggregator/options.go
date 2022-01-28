@@ -82,6 +82,7 @@ func (o *Options) complete(args []string) error {
 			return err
 		}
 		o.config = c
+		o.setDefaults()
 	}
 	return nil
 }
@@ -155,4 +156,11 @@ func (o *Options) loadConfigFromFile(file string) (*flowaggregatorconfig.FlowAgg
 		return nil, err
 	}
 	return &c, nil
+}
+
+func (o *Options) setDefaults() {
+	if o.config.ClickHouse.Compress == nil {
+		o.config.ClickHouse.Compress = new(bool)
+		*o.config.ClickHouse.Compress = true
+	}
 }

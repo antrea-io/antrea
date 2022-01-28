@@ -32,6 +32,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 
+	"antrea.io/antrea/pkg/flowaggregator/clickhouseclient"
 	"antrea.io/antrea/pkg/flowaggregator/querier"
 	"antrea.io/antrea/pkg/ipfix"
 )
@@ -196,6 +197,7 @@ type flowAggregator struct {
 	aggregatorTransportProtocol AggregatorTransportProtocol
 	collectingProcess           ipfix.IPFIXCollectingProcess
 	aggregationProcess          ipfix.IPFIXAggregationProcess
+	dbExportProcess             *clickhouseclient.ClickHouseExportProcess
 	activeFlowRecordTimeout     time.Duration
 	inactiveFlowRecordTimeout   time.Duration
 	exportingProcess            ipfix.IPFIXExportingProcess
@@ -330,6 +332,12 @@ func (fa *flowAggregator) InitAggregationProcess() error {
 	return err
 }
 
+func (fa *flowAggregator) InitDBExportProcess(chInput clickhouseclient.ClickHouseInput) error {
+	var err error
+	fa.dbExportProcess, err = clickhouseclient.NewClickHouseClient(chInput)
+	return err
+}
+
 func (fa *flowAggregator) createAndSendTemplate(isRecordIPv6 bool) error {
 	templateID := fa.exportingProcess.NewTemplateID()
 	recordIPFamily := "IPv4"
@@ -399,6 +407,10 @@ func (fa *flowAggregator) Run(stopCh <-chan struct{}, wg *sync.WaitGroup) {
 	defer fa.collectingProcess.Stop()
 	go fa.aggregationProcess.Start()
 	defer fa.aggregationProcess.Stop()
+	if fa.dbExportProcess != nil {
+		go fa.dbExportProcess.Start()
+		defer fa.dbExportProcess.Stop()
+	}
 	go fa.flowRecordExpiryCheck(stopCh)
 
 	<-stopCh
@@ -474,6 +486,9 @@ func (fa *flowAggregator) sendFlowKeyRecord(key ipfixintermediate.FlowKey, recor
 	sentBytes, err := fa.exportingProcess.SendSet(fa.set)
 	if err != nil {
 		return err
+	}
+	if fa.dbExportProcess != nil {
+		fa.dbExportProcess.CacheSet(fa.set)
 	}
 	if err = fa.aggregationProcess.ResetStatAndThroughputElementsInRecord(record.Record); err != nil {
 		return err

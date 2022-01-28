@@ -30,6 +30,7 @@ import (
 	"antrea.io/antrea/pkg/clusteridentity"
 	aggregator "antrea.io/antrea/pkg/flowaggregator"
 	"antrea.io/antrea/pkg/flowaggregator/apiserver"
+	"antrea.io/antrea/pkg/flowaggregator/clickhouseclient"
 	"antrea.io/antrea/pkg/log"
 	"antrea.io/antrea/pkg/signals"
 	"antrea.io/antrea/pkg/util/cipher"
@@ -127,6 +128,22 @@ func run(o *Options) error {
 	if err != nil {
 		return fmt.Errorf("error when creating aggregation process: %v", err)
 	}
+
+	if o.config.ClickHouse != nil {
+		chInput := clickhouseclient.ClickHouseInput{
+			Username: o.config.ClickHouse.Username,
+			Password: o.config.ClickHouse.Password,
+			Database: o.config.ClickHouse.Database,
+			DbURL:    o.config.ClickHouse.DbURL,
+			Debug:    o.config.ClickHouse.Debug,
+			Compress: o.config.ClickHouse.Compress,
+		}
+		err = flowAggregator.InitDBExportProcess(chInput)
+		if err != nil {
+			return fmt.Errorf("error when creating db export process: %v", err)
+		}
+	}
+
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go flowAggregator.Run(stopCh, &wg)
