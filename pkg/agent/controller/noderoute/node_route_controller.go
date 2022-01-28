@@ -532,7 +532,7 @@ func (c *Controller) addNodeRoute(nodeName string, node *corev1.Node) error {
 
 		peerPodCIDRAddr, peerPodCIDR, err := net.ParseCIDR(podCIDR)
 		if err != nil {
-			klog.Errorf("Failed to parse PodCIDR %s for Node %s", node.Spec.PodCIDR, nodeName)
+			klog.Errorf("Failed to parse PodCIDR %s for Node %s", podCIDR, nodeName)
 			return nil
 		}
 		peerGatewayIP := ip.NextIP(peerPodCIDRAddr)
