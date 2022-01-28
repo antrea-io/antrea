@@ -4,16 +4,16 @@ metadata:
   name: controller
   namespace: system
   labels:
-    control-plane: antrea-mc-controller
+    component: antrea-mc-controller
 spec:
   selector:
     matchLabels:
-      control-plane: antrea-mc-controller
+      component: antrea-mc-controller
   replicas: 1
   template:
     metadata:
       labels:
-        control-plane: antrea-mc-controller
+        component: antrea-mc-controller
     spec:
       containers:
       - command:
