@@ -36,7 +36,7 @@ run both member and leader controllers in one cluster.
      kubectl apply -f https://github.com/antrea-io/antrea/releases/download/<TAG>/antrea-multicluster-leader-global.yml
      ```
 
-   * To deploy the latest version (checkout and built from the `feature/multi-cluster` branch).
+   * To deploy the latest version (checkout and built from the `main` branch).
 
      ```bash
      kubectl apply -f multicluster/build/yamls/antrea-multicluster-leader-global.yml
@@ -54,7 +54,7 @@ manifest with new Namespace.
   sed 's/changeme/antrea-mcs-ns/g' antrea-multicluster-leader-namespaced.yml | kubectl apply -f -
   ```
   
-* To deploy the latest version (checkout and built from the `feature/multi-cluster` branch).
+* To deploy the latest version (checkout and built from the `main` branch).
   
   ```bash
   kubectl create ns antrea-mcs-ns
@@ -73,7 +73,7 @@ Namespace by default.
 kubectl apply -f https://github.com/antrea-io/antrea/releases/download/<TAG>/antrea-multicluster-member.yml
 ```
 
-* To deploy the latest version (checkout and built from the `feature/multi-cluster` branch).
+* To deploy the latest version (checkout and built from the `main` branch).
 
 ```bash
 kubectl apply -f multicluster/build/yamls/antrea-multicluster-member.yml

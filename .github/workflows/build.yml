@@ -5,14 +5,10 @@ on:
     branches:
       - main
       - release-*
-      # TODO: remove this before merging feature branch to main
-      - feature/multi-cluster
   push:
     branches:
       - main
       - release-*
-      # TODO: remove this before merging feature branch to main
-      - feature/multi-cluster
 
 jobs:
   check-changes:
@@ -120,7 +116,7 @@ jobs:
     - name: Build antrea-mc-controller Docker image
       run: make antrea-mc-controller
     - name: Push antrea-mc-controller Docker image to registry
-      if: ${{ github.repository == 'antrea-io/antrea' && github.event_name == 'push' && github.ref == 'refs/heads/feature/multi-cluster' }}
+      if: ${{ github.repository == 'antrea-io/antrea' && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
       env:
         DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
         DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
