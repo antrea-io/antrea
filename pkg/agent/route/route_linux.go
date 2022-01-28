@@ -694,7 +694,7 @@ func (c *Client) Reconcile(podCIDRs []string, svcIPs map[string]bool) error {
 			if desiredPodCIDRs.Has(entry) {
 				continue
 			}
-			klog.Infof("Deleting orphaned PodIP %s from ipset and route table", entry)
+			klog.Infof("Deleting orphaned Pod IP %s from ipset and route table", entry)
 			if err := ipset.DelEntry(ipsetName, entry); err != nil {
 				return err
 			}
@@ -748,7 +748,7 @@ func (c *Client) Reconcile(podCIDRs []string, svcIPs map[string]bool) error {
 		if desiredGWs.Has(neighIP) {
 			continue
 		}
-		// Don't delete the virtual Service IP neigh which is added by AntreaProxy.
+		// Don't delete the virtual Service IP neighbor which is added by AntreaProxy.
 		if actualNeigh.IP.Equal(config.VirtualServiceIPv6) {
 			continue
 		}
@@ -1157,7 +1157,7 @@ func (c *Client) AddClusterIPRoute(svcIP net.IP) error {
 			} else {
 				c.clusterIPv4CIDR = newClusterIPCIDR
 			}
-			klog.V(4).InfoS("Created a route with new CLusterIP CIDR to route the ClusterIP to Antrea gateway", "CLusterIP CIDR", newClusterIPCIDR, "clusterIP", svcIP)
+			klog.V(4).InfoS("Created a route with new ClusterIP CIDR to route the ClusterIP to Antrea gateway", "ClusterIP CIDR", newClusterIPCIDR, "clusterIP", svcIP)
 		} else {
 			klog.V(4).InfoS("Route with current ClusterIP CIDR can route the ClusterIP to Antrea gateway", "ClusterIP CIDR", curClusterIPCIDR, "clusterIP", svcIP)
 		}
