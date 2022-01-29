@@ -4,16 +4,8 @@ set -euo pipefail
 
 # Todo: check version and continue installation only for a newer version
 
-# Install Antrea configuration file
-install -m 644 /etc/antrea/antrea-cni.conflist /host/etc/cni/net.d/10-antrea.conflist
-
 # Install Antrea binary file
 install -m 755 /usr/local/bin/antrea-cni /host/opt/cni/bin/antrea
-
-# If more than one CNI config file exists, the file with the lowest name is
-# chosen i.e. existing 10-antrea.conf will be chosen over 10-antrea.conflist.
-# Hence, delete older 10-antrea.conf file.
-rm -f /host/etc/cni/net.d/10-antrea.conf
 
 # Install the loopback plugin.
 # It is required by kubelet on Linux when using docker as the container runtime.
@@ -29,6 +21,16 @@ install -m 755 /opt/cni/bin/bandwidth /host/opt/cni/bin/bandwidth
 
 # Install whereabouts IPAM binary file. Required for global IPAM support specific to CNF use cases.
 install -m 755 /opt/cni/bin/whereabouts /host/opt/cni/bin/whereabouts
+
+# Install Antrea configuration file.
+# Note that it needs to be executed after installing the above binaries because container runtimes such as cri-o may
+# watch the conf directory and try to validate the config and binaries immediately once there is a change.
+install -m 644 /etc/antrea/antrea-cni.conflist /host/etc/cni/net.d/10-antrea.conflist
+
+# If more than one CNI config file exists, the file with the lowest name is
+# chosen i.e. existing 10-antrea.conf will be chosen over 10-antrea.conflist.
+# Hence, delete older 10-antrea.conf file.
+rm -f /host/etc/cni/net.d/10-antrea.conf
 
 # Load the OVS kernel module
 modprobe openvswitch || (echo "Failed to load the OVS kernel module from the container, try running 'modprobe openvswitch' on your Nodes"; exit 1)
