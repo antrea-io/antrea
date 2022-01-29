@@ -280,7 +280,7 @@ metadata:
   name: isolate-all-pods-in-namespace
 spec:
   priority: 1
-  tier: securityOps
+  tier: securityops
   appliedTo:
     - namespaceSelector:
         matchLabels:
