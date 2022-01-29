@@ -265,42 +265,8 @@ func (c *NetworkPolicyController) triggerCNPUpdates(cg string) {
 		return
 	}
 	for _, obj := range cnps {
-		cnp := obj.(*crdv1alpha1.ClusterNetworkPolicy)
-		// Re-process ClusterNetworkPolicies which may be affected due to updates to CG.
-		curInternalNP := c.processClusterNetworkPolicy(cnp)
-		klog.V(2).Infof("Updating existing internal NetworkPolicy %s for %s", curInternalNP.Name, curInternalNP.SourceRef.ToString())
-		key := internalNetworkPolicyKeyFunc(cnp)
-		// Lock access to internal NetworkPolicy store such that concurrent access
-		// to an internal NetworkPolicy is not allowed. This will avoid the
-		// case in which an Update to an internal NetworkPolicy object may
-		// cause the SpanMeta member to be overridden with stale SpanMeta members
-		// from an older internal NetworkPolicy.
-		c.internalNetworkPolicyMutex.Lock()
-		oldInternalNPObj, _, _ := c.internalNetworkPolicyStore.Get(key)
-		oldInternalNP := oldInternalNPObj.(*antreatypes.NetworkPolicy)
-		// Must preserve old internal NetworkPolicy Spac.
-		curInternalNP.SpanMeta = oldInternalNP.SpanMeta
-		c.internalNetworkPolicyStore.Update(curInternalNP)
-		// Unlock the internal NetworkPolicy store.
-		c.internalNetworkPolicyMutex.Unlock()
-		// Enqueue addressGroup keys to update their group members.
-		// TODO: optimize this to avoid enqueueing address groups when not updated.
-		for _, atg := range curInternalNP.AppliedToGroups {
-			c.enqueueAppliedToGroup(atg)
-		}
-		for _, rule := range curInternalNP.Rules {
-			for _, addrGroupName := range rule.From.AddressGroups {
-				c.enqueueAddressGroup(addrGroupName)
-			}
-			for _, addrGroupName := range rule.To.AddressGroups {
-				c.enqueueAddressGroup(addrGroupName)
-			}
-		}
-		c.enqueueInternalNetworkPolicy(key)
-		c.deleteDereferencedAddressGroups(oldInternalNP)
-		for _, atg := range oldInternalNP.AppliedToGroups {
-			c.deleteDereferencedAppliedToGroup(atg)
-		}
+		// ClusterGroup may be used by AppliedToGroup, enqueuing them after reprocessing CNP.
+		c.reprocessCNP(obj.(*crdv1alpha1.ClusterNetworkPolicy), true)
 	}
 }
 
