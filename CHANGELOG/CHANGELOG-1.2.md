@@ -1,5 +1,26 @@
 # Changelog 1.2
 
+## 1.2.4 - 2022-04-29
+
+### Changed
+- Use iptables-wrapper in Antrea container. Now antrea-agent can work with distros that lack the iptables kernel module of "legacy" mode (ip_tables). ([#3276](https://github.com/antrea-io/antrea/pull/3276), [@antoninbas])
+- Reduce permissions of Antrea ServiceAccount for updating annotations. ([#3393](https://github.com/antrea-io/antrea/pull/3393), [@tnqn])
+- [Windows] Use uplink MAC as source MAC when transmitting packets to underlay network from Windows Nodes. Therefore, MAC address spoofing configuration like "Forged transmits" in VMware vSphere doesn't need to be enabled. ([#3516](https://github.com/antrea-io/antrea/pull/3516), [@wenyingd])
+
+### Fixed
+- Fix DNS resolution error of antrea-agent on AKS by using `ClusterFirst` dnsPolicy. ([#3701](https://github.com/antrea-io/antrea/pull/3701), [@tnqn])
+- Fix status report of Antrea-native policies with multiple rules that have different AppliedTo. ([#3074](https://github.com/antrea-io/antrea/pull/3074), [@tnqn])
+- Upgrade Go version to 1.17 to pick up security fix for CVE-2021-44716. ([#3189](https://github.com/antrea-io/antrea/pull/3189), [@antoninbas])
+- Fix NetworkPolicy resources dump for Agent's supportbundle. ([#3083](https://github.com/antrea-io/antrea/pull/3083), [@antoninbas])
+- Fix gateway interface MTU configuration error on Windows. ([#3043](https://github.com/antrea-io/antrea/pull/3043), [@lzhecheng]) [Windows]
+- Fix initialization error of antrea-agent on Windows by specifying hostname explicitly in VMSwitch commands. ([#3169](https://github.com/antrea-io/antrea/pull/3169), [@XinShuYang]) [Windows]
+- Ensure that the Windows Node name obtained from the environment or from hostname is converted to lower-case. ([#2672](https://github.com/antrea-io/antrea/pull/2672), [@shettyg]) [Windows]
+- Fix typos in the example YAML in antrea-network-policy doc. ([#3079](https://github.com/antrea-io/antrea/pull/3079) [#3092](https://github.com/antrea-io/antrea/pull/3092), [@antoninbas] [@Jexf])
+- Fix ipBlock referenced in nested ClusterGroup not processed correctly. ([#3383](https://github.com/antrea-io/antrea/pull/3383), [@Dyanngg])
+- Fix NetworkPolicy may not be enforced correctly after restarting a Node. ([#3467](https://github.com/antrea-io/antrea/pull/3467), [@tnqn])
+- Fix antrea-agent crash caused by interface detection in AKS/EKS with NetworkPolicyOnly mode. ([#3219](https://github.com/antrea-io/antrea/pull/3219), [@wenyingd])
+- Fix locally generated packets from Node net namespace might be SNATed mistakenly when Egress is enabled. ([#3430](https://github.com/antrea-io/antrea/pull/3430), [@tnqn])
+
 ## 1.2.3 - 2021-09-24
 
 ### Changed
@@ -103,20 +124,23 @@ The NetworkPolicyStats feature is graduated from Alpha to Beta and is therefore 
 [go-ipfix]: https://github.com/vmware/go-ipfix
 [whereabouts]: https://github.com/k8snetworkplumbingwg/whereabouts
 
-[@abhiraut]: https://github.com/abhiraut
-[@antoninbas]: https://github.com/antoninbas
 [@Dhruv-J]: https://github.com/Dhruv-J
-[@dreamtalen]: https://github.com/dreamtalen
 [@Dyanngg]: https://github.com/Dyanngg
 [@GraysonWu]: https://github.com/GraysonWu
+[@Jexf]: https://github.com/Jexf
+[@PeterEltgroth]: https://github.com/PeterEltgroth
+[@XinShuYang]: https://github.com/XinShuYang
+[@abhiraut]: https://github.com/abhiraut
+[@antoninbas]: https://github.com/antoninbas
+[@dreamtalen]: https://github.com/dreamtalen
 [@hangyan]: https://github.com/hangyan
 [@hongliangl]: https://github.com/hongliangl
 [@liu4480]: https://github.com/liu4480
 [@luolanzone]: https://github.com/luolanzone
 [@lzhecheng]: https://github.com/lzhecheng
 [@monotosh-avi]: https://github.com/monotosh-avi
-[@PeterEltgroth]: https://github.com/PeterEltgroth
 [@ramay1]: https://github.com/ramay1
+[@shettyg]: https://github.com/shettyg
 [@srikartati]: https://github.com/srikartati
 [@tnqn]: https://github.com/tnqn
 [@wenqiq]: https://github.com/wenqiq
