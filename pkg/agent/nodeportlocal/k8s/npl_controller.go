@@ -191,6 +191,15 @@ func (c *NPLController) checkDeletedSvc(obj interface{}) (*corev1.Service, error
 func validateNPLService(svc *corev1.Service) {
 	if svc.Spec.Type == corev1.ServiceTypeNodePort {
 		klog.InfoS("Service is of type NodePort and cannot be used for NodePortLocal, the NodePortLocal annotation will have no effect", "service", klog.KObj(svc))
+		return
+	}
+	if svc.Spec.Type == corev1.ServiceTypeExternalName {
+		klog.InfoS("Service is of type ExternalName and cannot be used for NodePortLocal, the NodePortLocal annotation will have no effect", "service", klog.KObj(svc))
+		return
+	}
+	if len(svc.Spec.Selector) == 0 {
+		klog.InfoS("Service does not have a selector, the NodePortLocal annotation will have no effect", "service", klog.KObj(svc))
+		return
 	}
 	for _, port := range svc.Spec.Ports {
 		if port.Protocol == corev1.ProtocolSCTP {
@@ -217,8 +226,8 @@ func (c *NPLController) enqueueSvcUpdate(oldObj, newObj interface{}) {
 	}
 
 	podKeys := sets.String{}
-	oldNPLEnabled := oldSvcAnnotation == "true" && oldSvc.Spec.Type != corev1.ServiceTypeNodePort
-	newNPLEnabled := newSvcAnnotation == "true" && newSvc.Spec.Type != corev1.ServiceTypeNodePort
+	oldNPLEnabled := oldSvcAnnotation == "true" && oldSvc.Spec.Type != corev1.ServiceTypeNodePort && oldSvc.Spec.Type != corev1.ServiceTypeExternalName
+	newNPLEnabled := newSvcAnnotation == "true" && newSvc.Spec.Type != corev1.ServiceTypeNodePort && newSvc.Spec.Type != corev1.ServiceTypeExternalName
 
 	if oldNPLEnabled != newNPLEnabled {
 		// Process Pods corresponding to Service with valid NPL annotation and Service type.
@@ -297,27 +306,27 @@ func (c *NPLController) getTargetPortsForServicesOfPod(obj interface{}) (sets.St
 	for _, service := range services {
 		svc, isSvc := service.(*corev1.Service)
 		// Selecting Services NOT of type NodePort, with Service selector matching Pod labels.
-		if isSvc && svc.Spec.Type != corev1.ServiceTypeNodePort {
-			if pod.Namespace == svc.Namespace &&
-				matchSvcSelectorPodLabels(svc.Spec.Selector, pod.GetLabels()) {
-				for _, port := range svc.Spec.Ports {
-					if port.Protocol == corev1.ProtocolSCTP {
-						// Not supported yet. A message is logged when the
-						// Service is processed.
-						continue
-					}
-					switch port.TargetPort.Type {
-					case intstr.Int:
-						// An entry of format <target-port>:<protocol> (e.g. 8080:TCP) is added for a target port in the set targetPortsInt.
-						// This is done to ensure that we can match with both port and protocol fields in container port of a Pod.
-						portProto := util.BuildPortProto(fmt.Sprint(port.TargetPort.IntVal), string(port.Protocol))
-						klog.V(4).Infof("Added target port in targetPortsInt set: %v", portProto)
-						targetPortsInt.Insert(portProto)
-					case intstr.String:
-						portProto := util.BuildPortProto(port.TargetPort.StrVal, string(port.Protocol))
-						klog.V(4).Infof("Added target port in targetPortsStr set: %v", portProto)
-						targetPortsStr.Insert(portProto)
-					}
+		if !isSvc || svc.Spec.Type == corev1.ServiceTypeNodePort || svc.Spec.Type == corev1.ServiceTypeExternalName {
+			continue
+		}
+		if pod.Namespace == svc.Namespace && matchSvcSelectorPodLabels(svc.Spec.Selector, pod.GetLabels()) {
+			for _, port := range svc.Spec.Ports {
+				if port.Protocol == corev1.ProtocolSCTP {
+					// Not supported yet. A message is logged when the
+					// Service is processed.
+					continue
+				}
+				switch port.TargetPort.Type {
+				case intstr.Int:
+					// An entry of format <target-port>:<protocol> (e.g. 8080:TCP) is added for a target port in the set targetPortsInt.
+					// This is done to ensure that we can match with both port and protocol fields in container port of a Pod.
+					portProto := util.BuildPortProto(fmt.Sprint(port.TargetPort.IntVal), string(port.Protocol))
+					klog.V(4).Infof("Added target port in targetPortsInt set: %v", portProto)
+					targetPortsInt.Insert(portProto)
+				case intstr.String:
+					portProto := util.BuildPortProto(port.TargetPort.StrVal, string(port.Protocol))
+					klog.V(4).Infof("Added target port in targetPortsStr set: %v", portProto)
+					targetPortsStr.Insert(portProto)
 				}
 			}
 		}
