@@ -121,6 +121,11 @@ metadata:
 This annotation indicates that port 8080 of the Pod can be reached through port
 61002 of the Node with IP Address 10.10.10.10.
 
+The `nodeportlocal.antrea.io` annotation is generated and managed by Antrea. It
+is not meant to be created or modified by users directly. A user-provided
+annotation is likely to be overwritten by Antrea, or may lead to unexpected
+behavior.
+
 NodePortLocal can only be used with Services of type `ClusterIP` or
 `LoadBalancer`. The `nodeportlocal.antrea.io` annotation has no effect for
 Services of type `NodePort` or `ExternalName`. The annotation also has no effect
