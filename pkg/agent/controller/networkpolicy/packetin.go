@@ -20,7 +20,6 @@ import (
 	"time"
 
 	"antrea.io/libOpenflow/openflow13"
-	"antrea.io/libOpenflow/protocol"
 	"antrea.io/ofnet/ofctrl"
 	"github.com/vmware/go-ipfix/pkg/registry"
 	"k8s.io/klog/v2"
@@ -28,7 +27,6 @@ import (
 	"antrea.io/antrea/pkg/agent/flowexporter"
 	"antrea.io/antrea/pkg/agent/openflow"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
-	"antrea.io/antrea/pkg/util/ip"
 )
 
 // HandlePacketIn is the packetin handler registered to openflow by Antrea network
@@ -105,80 +103,6 @@ func getInfoInReg(regMatch *ofctrl.MatchField, rng *openflow13.NXRange) (uint32,
 		return ofctrl.GetUint32ValueWithRange(regValue.Data, rng), nil
 	}
 	return regValue.Data, nil
-}
-
-// getNetworkPolicyInfo fills in tableName, npName, ofPriority, disposition of logInfo ob.
-func getNetworkPolicyInfo(pktIn *ofctrl.PacketIn, c *Controller, ob *logInfo) error {
-	matchers := pktIn.GetMatches()
-	var match *ofctrl.MatchField
-	// Get table name
-	tableID := pktIn.TableId
-	ob.tableName = openflow.GetFlowTableName(tableID)
-
-	// Get disposition Allow or Drop
-	match = getMatchRegField(matchers, openflow.APDispositionField)
-	info, err := getInfoInReg(match, openflow.APDispositionField.GetRange().ToNXRange())
-	if err != nil {
-		return fmt.Errorf("received error while unloading disposition from reg: %v", err)
-	}
-	ob.disposition = openflow.DispositionToString[info]
-
-	// Set match to corresponding ingress/egress reg according to disposition
-	match = getMatch(matchers, tableID, info)
-
-	// Get Network Policy full name and OF priority of the conjunction
-	info, err = getInfoInReg(match, nil)
-	if err != nil {
-		return fmt.Errorf("received error while unloading conjunction id from reg: %v", err)
-	}
-	ob.npRef, ob.ofPriority = c.ofClient.GetPolicyInfoFromConjunction(info)
-
-	return nil
-}
-
-// getPacketInfo fills in srcIP, destIP, pktLength, protocol of logInfo ob.
-func getPacketInfo(pktIn *ofctrl.PacketIn, ob *logInfo) error {
-	var prot uint8
-	switch ipPkt := pktIn.Data.Data.(type) {
-	case *protocol.IPv4:
-		ob.srcIP = ipPkt.NWSrc.String()
-		ob.destIP = ipPkt.NWDst.String()
-		ob.pktLength = ipPkt.Length
-		prot = ipPkt.Protocol
-	case *protocol.IPv6:
-		ob.srcIP = ipPkt.NWSrc.String()
-		ob.destIP = ipPkt.NWDst.String()
-		ob.pktLength = ipPkt.Length
-		prot = ipPkt.NextHeader
-	default:
-		return errors.New("unsupported packet-in: should be a valid IPv4 or IPv6 packet")
-	}
-
-	ob.protocolStr = ip.IPProtocolNumberToString(prot, "UnknownProtocol")
-
-	return nil
-}
-
-// logPacket retrieves information from openflow reg, controller cache, packet-in
-// packet to log. Log is deduplicated for non-Allow packets from record in logDeduplication.
-// Deduplication is safe guarded by logRecordDedupMap mutex.
-func (c *Controller) logPacket(pktIn *ofctrl.PacketIn) error {
-	ob := new(logInfo)
-
-	// Get Network Policy log info
-	err := getNetworkPolicyInfo(pktIn, c, ob)
-	if err != nil {
-		return fmt.Errorf("received error while retrieving NetworkPolicy info: %v", err)
-	}
-	// Get packet log info
-	err = getPacketInfo(pktIn, ob)
-	if err != nil {
-		return fmt.Errorf("received error while retrieving NetworkPolicy info: %v", err)
-	}
-
-	// Log the ob info to corresponding file w/ deduplication
-	c.antreaPolicyLogger.LogDedupPacket(ob)
-	return nil
 }
 
 func (c *Controller) storeDenyConnection(pktIn *ofctrl.PacketIn) error {
