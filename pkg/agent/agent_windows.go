@@ -263,8 +263,9 @@ func GetTransportIPNetDeviceByName(ifaceName string, ovsBridgeName string) (*net
 	return nil, nil, nil, fmt.Errorf("unable to find local IP and device")
 }
 
-// BridgeUplinkToOVSBridge returns immediately on Windows.
-func (i *Initializer) BridgeUplinkToOVSBridge() error { return nil }
+// ConnectUplinkToOVSBridge returns immediately on Windows. The uplink interface
+// will be connected to the bridge in prepareOVSBridge().
+func (i *Initializer) ConnectUplinkToOVSBridge() error { return nil }
 
 // RestoreOVSBridge returns immediately in Windows.
 // OVS is managed by system in Windows, network config can be retained after Antrea shutdown.

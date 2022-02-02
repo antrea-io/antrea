@@ -2597,8 +2597,8 @@ data:
     # Enable controlling SNAT IPs of Pod egress traffic.
     #  Egress: false
 
-    # Enable flexible IPAM mode for Antrea. This mode allows to assign IP Ranges to Namespaces,
-    # Deployments and StatefulSets via IP Pool annotation.
+    # Enable AntreaIPAM, which can allocate IP addresses from IPPools. AntreaIPAM is required by the
+    # bridging mode and allocates IPs to Pods in bridging mode.
     #  AntreaIPAM: false
 
     # Enable multicast traffic. This feature is supported only with noEncap mode.
@@ -2663,6 +2663,15 @@ data:
     #                    variable: ANTREA_IPSEC_PSK.
     # - wireGuard:       Enable WireGuard for tunnel traffic encryption.
     trafficEncryptionMode: ipsec
+
+    # Enable bridging mode of Pod network on Nodes, in which the Node's transport interface is connected
+    # to the OVS bridge, and cross-Node/VLAN traffic from AntreaIPAM Pods (Pods whose IP addresses are
+    # allocated by AntreaIPAM from IPPools) is sent to the underlay network via the uplink, and
+    # forwarded/routed by the underlay network.
+    # This option requires the `AntreaIPAM` feature gate to be enabled. At this moment, it supports only
+    # IPv4 and Linux Nodes, and can be enabled only when `ovsDatapathType` is `system`,
+    # `trafficEncapMode` is `noEncap`, and `noSNAT` is true.
+    #enableBridgingMode: false
 
     # Default MTU to use for the host gateway interface and the network interface of each Pod.
     # If omitted, antrea-agent will discover the MTU of the Node's primary interface and
@@ -2896,7 +2905,7 @@ metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-56dhk99g5f
+  name: antrea-config-49chg5d6md
   namespace: kube-system
 ---
 apiVersion: v1
@@ -2976,7 +2985,7 @@ spec:
             fieldRef:
               fieldPath: spec.serviceAccountName
         - name: ANTREA_CONFIG_MAP_NAME
-          value: antrea-config-56dhk99g5f
+          value: antrea-config-49chg5d6md
         image: projects.registry.vmware.com/antrea/antrea-ubuntu:latest
         imagePullPolicy: IfNotPresent
         livenessProbe:
@@ -3027,7 +3036,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-56dhk99g5f
+          name: antrea-config-49chg5d6md
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -3298,7 +3307,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-56dhk99g5f
+          name: antrea-config-49chg5d6md
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d

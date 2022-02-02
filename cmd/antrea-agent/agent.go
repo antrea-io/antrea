@@ -115,10 +115,9 @@ func run(o *Options) error {
 	}
 	defer ovsdbConnection.Close()
 
-	// Enable AntreaIPAM will set connectUplinkToBridge to True. Currently only Linux+IPv4 is supported.
-	// AntreaIPAM works with system OVSDatapathType and noEncap, noSNAT mode. Egress feature is not supported.
-	// AntreaIPAM is only verified with other FeatureGates at default state.
-	connectUplinkToBridge := features.DefaultFeatureGate.Enabled(features.AntreaIPAM)
+	enableBridgingMode := features.DefaultFeatureGate.Enabled(features.AntreaIPAM) && o.config.EnableBridgingMode
+	// Bridging mode will connect the uplink interface to the OVS bridge.
+	connectUplinkToBridge := enableBridgingMode
 
 	ovsDatapathType := ovsconfig.OVSDatapathType(o.config.OVSDatapathType)
 	ovsBridgeClient := ovsconfig.NewOVSBridge(o.config.OVSBridge, ovsDatapathType, ovsdbConnection)
@@ -355,14 +354,13 @@ func run(o *Options) error {
 	if networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {
 		isChaining = true
 	}
-	antreaIPAM := features.DefaultFeatureGate.Enabled(features.AntreaIPAM)
 	cniServer := cniserver.New(
 		o.config.CNISocket,
 		o.config.HostProcPathPrefix,
 		nodeConfig,
 		k8sClient,
 		isChaining,
-		antreaIPAM,
+		enableBridgingMode, // activate AntreaIPAM in CNIServer when bridging mode is enabled
 		routeClient,
 		networkReadyCh)
 
@@ -401,12 +399,12 @@ func run(o *Options) error {
 	if err := agentInitializer.FlowRestoreComplete(); err != nil {
 		return err
 	}
-	// BridgeUplinkToOVSBridge is required if connectUplinkToBridge is true, and must be run immediately after FlowRestoreComplete
+	// ConnectUplinkToOVSBridge must be run immediately after FlowRestoreComplete
 	if connectUplinkToBridge {
 		// Restore network config before shutdown. ovsdbConnection must be alive when restore.
 		defer agentInitializer.RestoreOVSBridge()
-		if err := agentInitializer.BridgeUplinkToOVSBridge(); err != nil {
-			return fmt.Errorf("error bridging uplink to OVS bridge: %w", err)
+		if err := agentInitializer.ConnectUplinkToOVSBridge(); err != nil {
+			return fmt.Errorf("failed to connect uplink to OVS bridge: %w", err)
 		}
 	}
 
@@ -444,10 +442,11 @@ func run(o *Options) error {
 		networkPolicyController.SetDenyConnStore(flowExporter.GetDenyConnStore())
 	}
 
-	// Initialize localPodInformer for NPLAgent and AntreaIPAMController
+	enableNodePortLocal := features.DefaultFeatureGate.Enabled(features.NodePortLocal) && o.config.NodePortLocal.Enable
+
+	// Initialize localPodInformer for NPLAgent, AntreaIPAMController, and secondary network controller.
 	var localPodInformer cache.SharedIndexInformer
-	if features.DefaultFeatureGate.Enabled(features.NodePortLocal) && o.config.NodePortLocal.Enable ||
-		features.DefaultFeatureGate.Enabled(features.AntreaIPAM) ||
+	if enableNodePortLocal || enableBridgingMode ||
 		features.DefaultFeatureGate.Enabled(features.SecondaryNetwork) {
 		listOptions := func(options *metav1.ListOptions) {
 			options.FieldSelector = fields.OneTermEqualSelector("spec.nodeName", nodeConfig.Name).String()
@@ -474,7 +473,7 @@ func run(o *Options) error {
 	go networkPolicyController.Run(stopCh)
 
 	// Initialize the NPL agent.
-	if features.DefaultFeatureGate.Enabled(features.NodePortLocal) && o.config.NodePortLocal.Enable {
+	if enableNodePortLocal {
 		nplController, err := npl.InitializeNPLAgent(
 			k8sClient,
 			informerFactory,
@@ -488,8 +487,9 @@ func run(o *Options) error {
 		go nplController.Run(stopCh)
 	}
 
-	// Initialize the Antrea IPAM agent.
-	if features.DefaultFeatureGate.Enabled(features.AntreaIPAM) {
+	// Now Antrea IPAM is used only by bridging mode, so we initialize AntreaIPAMController only
+	// when the bridging mode is enabled.
+	if enableBridgingMode {
 		ipamController, err := ipam.InitializeAntreaIPAMController(
 			k8sClient,
 			crdClient,

@@ -102,14 +102,21 @@ type AgentConfig struct {
 	TrafficEncryptionMode string `yaml:"trafficEncryptionMode,omitempty"`
 	// WireGuard related configurations.
 	WireGuard WireGuardConfig `yaml:"wireGuard"`
+	// Enable bridging mode of Pod network on Nodes, in which the Node's transport interface is connected
+	// to the OVS bridge, and cross-Node/VLAN traffic from AntreaIPAM Pods (Pods whose IP addresses are
+	// allocated by AntreaIPAM from IPPools) is sent to the underlay network via the uplink, and
+	// forwarded/routed by the underlay network.
+	// This option requires the `AntreaIPAM` feature gate to be enabled. At this moment, it supports only
+	// IPv4 and Linux Nodes, and can be enabled only when `ovsDatapathType` is `system`,
+	// `trafficEncapMode` is `noEncap`, and `noSNAT` is true.
+	EnableBridgingMode bool `yaml:"enableBridgingMode,omitempty"`
 	// APIPort is the port for the antrea-agent APIServer to serve on.
 	// Defaults to 10350.
 	APIPort int `yaml:"apiPort,omitempty"`
-
-	// ClusterMembershipPort is the server port used by the antrea-agent to run a gossip-based cluster membership protocol. Currently it's used only when the Egress feature is enabled.
+	// ClusterMembershipPort is the server port used by the antrea-agent to run a gossip-based cluster
+	// membership protocol. Currently it's used only when the Egress feature is enabled.
 	// Defaults to 10351.
 	ClusterMembershipPort int `yaml:"clusterPort,omitempty"`
-
 	// Enable metrics exposure via Prometheus. Initializes Prometheus metrics listener
 	// Defaults to true.
 	EnablePrometheusMetrics *bool `yaml:"enablePrometheusMetrics,omitempty"`
