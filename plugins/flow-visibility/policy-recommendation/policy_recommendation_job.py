@@ -1,9 +1,12 @@
 import antrea_crd
 import datetime
+import getopt
 import json
 import kubernetes.client
+import os
 import random
 import string
+import sys
 import uuid
 
 from policy_recommendation_utils import *
@@ -40,21 +43,29 @@ def get_flow_type(destinationServicePortName, destinationPodLabels):
     else:
         return "pod_to_external"
 
+def get_protocol_string(protocolIdentifier):
+    if protocolIdentifier == 6:
+        return "TCP"
+    elif protocolIdentifier == 17:
+        return "UDP"
+    else:
+        return "UNKNOWN"
+
 def map_flow_to_egress(flow):
     src = ROW_DELIMITER.join([flow.sourcePodNamespace, flow.sourcePodLabels])
     if flow.flowType == "pod_to_external":
-        dst = ROW_DELIMITER.join([flow.destinationIP, str(flow.destinationTransportPort), flow.protocolIdentifier])
+        dst = ROW_DELIMITER.join([flow.destinationIP, str(flow.destinationTransportPort), get_protocol_string(flow.protocolIdentifier)])
     else:
-        dst = ROW_DELIMITER.join([flow.destinationPodNamespace, flow.destinationPodLabels, str(flow.destinationTransportPort), flow.protocolIdentifier])
+        dst = ROW_DELIMITER.join([flow.destinationPodNamespace, flow.destinationPodLabels, str(flow.destinationTransportPort), get_protocol_string(flow.protocolIdentifier)])
     return (src, ("", dst))
 
 def map_flow_to_egress_svc(flow):
     src = ROW_DELIMITER.join([flow.sourcePodNamespace, flow.sourcePodLabels])
-    dst = ROW_DELIMITER.join([flow.destinationServicePortName, str(flow.destinationTransportPort), flow.protocolIdentifier])
+    dst = ROW_DELIMITER.join([flow.destinationServicePortName, str(flow.destinationTransportPort), get_protocol_string(flow.protocolIdentifier)])
     return (src, dst)
 
 def map_flow_to_ingress(flow):
-    src = ROW_DELIMITER.join([flow.sourcePodNamespace, flow.sourcePodLabels, str(flow.destinationTransportPort), flow.protocolIdentifier])
+    src = ROW_DELIMITER.join([flow.sourcePodNamespace, flow.sourcePodLabels, str(flow.destinationTransportPort), get_protocol_string(flow.protocolIdentifier)])
     dst = ROW_DELIMITER.join([flow.destinationPodNamespace, flow.destinationPodLabels])
     return (dst, (src, ""))
 
@@ -494,7 +505,10 @@ def generate_sql_query(table_name, limit, start_time, end_time, unprotected):
 def read_flow_df(spark, db_jdbc_address, sql_query):
     flow_df = spark.read \
         .format("jdbc") \
+        .option("driver", "ru.yandex.clickhouse.ClickHouseDriver") \
         .option("url", db_jdbc_address) \
+        .option("user", os.getenv("CH_USERNAME")) \
+        .option("password", os.getenv("CH_PASSWORD")) \
         .option("query",  sql_query)\
         .load()
     return flow_df.withColumn('flowType', udf(get_flow_type, StringType())("destinationServicePortName", "destinationPodLabels"))
@@ -510,11 +524,14 @@ def write_recommendation_result(spark, result, recommendation_type, db_jdbc_addr
     result_df.write\
         .mode("append") \
         .format("jdbc") \
+        .option("driver", "ru.yandex.clickhouse.ClickHouseDriver") \
         .option("url", db_jdbc_address) \
+        .option("user", os.getenv("CH_USERNAME")) \
+        .option("password", os.getenv("CH_PASSWORD")) \
         .option("dbtable", table_name) \
         .save()
 
-def initial_recommendation_job(spark, db_jdbc_address, table_name, limit=100, option=1, start_time=None, end_time=None, ns_allow_list=NAMESPACE_ALLOW_LIST):
+def initial_recommendation_job(spark, db_jdbc_address, table_name, limit=0, option=1, start_time=None, end_time=None, ns_allow_list=NAMESPACE_ALLOW_LIST):
     """
     Start an initial policy recommendation Spark job on a cluster having no recommendation before.
 
@@ -538,7 +555,7 @@ def initial_recommendation_job(spark, db_jdbc_address, table_name, limit=100, op
     unprotected_flows_df = read_flow_df(spark, db_jdbc_address, sql_query)
     return recommend_policies_for_ns_allow_list(ns_allow_list) + recommend_policies_for_unprotected_flows(unprotected_flows_df, option)
 
-def subsequent_recommendation_job(spark, db_jdbc_address, table_name, limit=100, option=1, start_time=None, end_time=None):
+def subsequent_recommendation_job(spark, db_jdbc_address, table_name, limit=0, option=1, start_time=None, end_time=None):
     """
     Start a subsequent policy recommendation Spark job on a cluster having recommendation before.
 
@@ -567,20 +584,108 @@ def subsequent_recommendation_job(spark, db_jdbc_address, table_name, limit=100,
         recommend_policies += recommend_policies_for_trusted_denied_flows(trusted_denied_flows_df)
     return recommend_policies
 
-def main():
-    spark = SparkSession.builder.getOrCreate()
-    # Argument values for development use only
-    db_jdbc_address = "jdbc:clickhouse://localhost:8123"
+def is_intstring(s):
+    try:
+        int(s)
+        return True
+    except ValueError:
+        return False
+
+def main(argv):
+    db_jdbc_address = "jdbc:clickhouse://clickhouse-clickhouse.flow-visibility.svc:8123"
     flow_table_name = "default.flows"
     result_table_name = "default.recommendations"
-    # Example usage for initial recommendation
-    result = initial_recommendation_job(spark, db_jdbc_address, flow_table_name, option=1)
-    print("Initial recommended completed, policy number: {}".format(len(result)))
-    write_recommendation_result(spark, result, 'initial', db_jdbc_address, result_table_name)
-    # Example usage for subsequent recommendation
-    result = subsequent_recommendation_job(spark, db_jdbc_address, flow_table_name, option=1, start_time="2021-12-01 00:00:00", end_time=None)
-    print("Subsequent recommended completed, policy number: {}".format(len(result)))
-    write_recommendation_result(spark, result, 'subsequent', db_jdbc_address, result_table_name)
+    recommendation_type = 'initial'
+    limit = 0
+    option = 1
+    start_time = ""
+    end_time = ""
+    ns_allow_list = NAMESPACE_ALLOW_LIST
+    help_message = """
+    Start the policy recommendation spark job.
+
+    Options:
+    -h, --help: Show help message.
+    -t, --type=initial: {initial|subsequent} Indicates this recommendation is an initial recommendion or a subsequent recommendation job.
+    -l, --limit=0: The limit on the number of flow records read from the database. 0 means no limit.
+    -o, --option=1: Option of network isolation preference in policy recommendation.
+        Currently we have 3 options:
+        1: Recommending allow ANP/ACNP policies, with default deny rules only on applied to Pod labels which have allow rules recommended.
+        2: Recommending allow ANP/ACNP policies, with default deny rules for whole cluster.
+        3: Recommending allow K8s network policies, with no deny rules at all.
+    -s, --start_time=None: The start time of the flow records considered for the policy recommendation. 
+        Format is YYYY-MM-DD hh:mm:ss in UTC timezone. Default value is None, which means no limit of the start time of flow records.
+    -e, --end_time=None: The end time of the flow records considered for the policy recommendation.
+        Format is YYYY-MM-DD hh:mm:ss in UTC timezone. Default value is None, which means no limit of the end time of flow records.
+    -n, --ns_allow_list=[]: List of default traffic allow namespaces.
+        Default value is a list of Antrea CNI related namespaces: ['kube-system', 'flow-aggregator', 'flow-visibility'].
+    
+    Usage Example:
+    python3 policy_recommendation_job.py -t initial -l 1000 -o 1 -s '2021-01-01 00:00:00' -e '2021-12-31 00:00:00' -n '["kube-system","flow-aggregator","flow-visibility"]'
+    """
+
+    try:
+        opts, _ = getopt.getopt(argv, "ht:l:o:s:e:n:", ["help", "type=", "limit=", "option=", "start_time=", "end_time=", "ns_allow_list="])
+    except getopt.GetoptError as e:
+        print("getopt.getopt ERROR: {}".format(e))
+        print(help_message)
+        sys.exit(2)
+    for opt, arg in opts:
+        if opt in ("-h", "--help"):
+            print(help_message)
+            sys.exit()
+        elif opt in ("-t", "--type"):
+            if arg not in ["initial", "subsequent"]:
+                print("Recommendation type should be 'initial' or 'subsequent'.")
+                print(help_message)
+                sys.exit(2)
+            recommendation_type = arg
+        elif opt in ("-l", "--limit"):
+            if not is_intstring(arg) or int(arg) < 0:
+                print("Limit should be an integer >= 0.")
+                print(help_message)
+                sys.exit(2)
+            limit = int(arg)
+        elif opt in ("-o", "--option"):
+            if not is_intstring(arg) or int(arg) not in [1, 2, 3]:
+                print("Option of network isolation preference should be 1 or 2 or 3.")
+                print(help_message)
+                sys.exit(2)
+            option = int(arg)
+        elif opt in ("-s", "--start_time"):
+            try:
+                datetime.datetime.strptime(arg, "%Y-%m-%d %H:%M:%S")
+            except ValueError:
+                print("start_time should be in 'YYYY-MM-DD hh:mm:ss' format.")
+                print(help_message)
+                sys.exit(2)
+            start_time = arg
+        elif opt in ("-e", "--end_time"):
+            try:
+                datetime.datetime.strptime(arg, "%Y-%m-%d %H:%M:%S")
+            except ValueError:
+                print("end_time should be in 'YYYY-MM-DD hh:mm:ss' format.")
+                print(help_message)
+                sys.exit(2)
+            end_time = arg
+        elif opt in ("-n", "--ns_allow_list"):
+            arg_list = json.loads(arg)
+            if not isinstance(arg_list, list):
+                print("ns_allow_list should be a list.")
+                print(help_message)
+                sys.exit(2)
+            ns_allow_list = arg_list
+    
+    spark = SparkSession.builder.getOrCreate()
+    if recommendation_type == 'initial':
+        result = initial_recommendation_job(spark, db_jdbc_address, flow_table_name, limit, option, start_time, end_time, ns_allow_list)
+        print("Initial recommended completed, policy number: {}".format(len(result)))
+        write_recommendation_result(spark, result, 'initial', db_jdbc_address, result_table_name)
+    else:
+        result = subsequent_recommendation_job(spark, db_jdbc_address, flow_table_name, limit, option, start_time, end_time)
+        print("Subsequent recommended completed, policy number: {}".format(len(result)))
+        write_recommendation_result(spark, result, 'subsequent', db_jdbc_address, result_table_name)
+    spark.stop()
 
 if __name__ == '__main__':
-    main()
+    main(sys.argv[1:])

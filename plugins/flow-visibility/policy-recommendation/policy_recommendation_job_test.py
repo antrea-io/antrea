@@ -118,7 +118,7 @@ flows_input = [
         '{"podname":"perftest-b"}',
         "",
         5201,
-        "TCP",
+        6,
         "pod_to_pod",
     ),
     (
@@ -129,7 +129,7 @@ flows_input = [
         '{"podname":"perftest-c"}',
         "antrea-e2e/perftestsvc:5201",
         5201,
-        "TCP",
+        6,
         "pod_to_svc",
     ),
     (
@@ -140,7 +140,7 @@ flows_input = [
         "",
         "",
         80,
-        "TCP",
+        6,
         "pod_to_external",
     ),
 ]
