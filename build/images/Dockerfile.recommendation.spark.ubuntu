@@ -1,0 +1,19 @@
+FROM gcr.io/spark-operator/spark-py:v3.1.1
+
+LABEL maintainer="Antrea <projectantrea-dev@googlegroups.com>"
+LABEL description="A docker image to deploy policy recommendation Spark job."
+
+WORKDIR /opt/spark/work-dir
+USER root
+
+RUN apt-get --allow-releaseinfo-change update && \
+    apt-get install -y --no-install-recommends wget ca-certificates && \
+    wget https://github.com/ClickHouse/clickhouse-jdbc/releases/download/v0.3.1/clickhouse-jdbc-0.3.1.jar -P /opt/spark/jars/
+
+RUN pip3 install --upgrade pip && \
+    pip3 install pyyaml && \
+    pip3 install kubernetes
+
+COPY plugins/flow-visibility/policy-recommendation/policy_recommendation_job.py /opt/spark/work-dir/policy_recommendation_job.py
+COPY plugins/flow-visibility/policy-recommendation/policy_recommendation_utils.py /opt/spark/work-dir/policy_recommendation_utils.py
+COPY plugins/flow-visibility/policy-recommendation/antrea_crd.py /opt/spark/work-dir/antrea_crd.py

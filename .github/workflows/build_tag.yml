@@ -88,3 +88,18 @@ jobs:
         make flow-aggregator-image
         echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
         docker push antrea/flow-aggregator:"${VERSION}"
+
+  build-recommendation-spark-image:
+    runs-on: [ubuntu-latest]
+    needs: get-version
+    steps:
+    - uses: actions/checkout@v2
+    - name: Build policy recommendation Spark job Docker image and push to registry
+      env:
+        DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+        DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+        VERSION: ${{ needs.get-version.outputs.version }}
+      run: |
+        make recommendation-spark-image
+        echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+        docker push antrea/recommendation-spark:"${VERSION}"

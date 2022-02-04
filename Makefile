@@ -380,6 +380,14 @@ else
 endif
 	docker tag antrea/flow-aggregator-coverage:$(DOCKER_IMG_VERSION) antrea/flow-aggregator-coverage
 
+.PHONY: recommendation-spark-image
+recommendation-spark-image:
+	@echo "===> Building antrea/recommendation-spark Docker image <==="
+	docker build --pull -t antrea/recommendation-spark:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.recommendation.spark.ubuntu $(DOCKER_BUILD_ARGS) .
+	docker tag antrea/recommendation-spark:$(DOCKER_IMG_VERSION) antrea/recommendation-spark
+	docker tag antrea/recommendation-spark:$(DOCKER_IMG_VERSION) projects.registry.vmware.com/antrea/recommendation-spark
+	docker tag antrea/recommendation-spark:$(DOCKER_IMG_VERSION) projects.registry.vmware.com/antrea/recommendation-spark:$(DOCKER_IMG_VERSION)
+
 .PHONY: verify
 verify:
 	@echo "===> Verifying spellings <==="

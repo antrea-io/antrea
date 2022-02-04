@@ -1,0 +1,47 @@
+apiVersion: "sparkoperator.k8s.io/v1beta2"
+kind: SparkApplication
+metadata:
+  name: pyspark-policy-recommendation
+  namespace: flow-visibility
+spec:
+  type: Python
+  pythonVersion: "3"
+  mode: cluster
+  image: "projects.registry.vmware.com/antrea/recommendation-spark:latest"
+  imagePullPolicy: IfNotPresent
+  mainApplicationFile: local:///opt/spark/work-dir/policy_recommendation_job.py
+  arguments: ["-t", "initial", "-o", "1"]
+  sparkVersion: "3.1.1"
+  restartPolicy:
+    type: OnFailure
+    onFailureRetries: 2
+    onFailureRetryInterval: 10
+    onSubmissionFailureRetries: 2
+    onSubmissionFailureRetryInterval: 10
+  driver:
+    cores: 1
+    coreLimit: "1200m"
+    memory: "512m"
+    labels:
+      version: 3.1.1
+    serviceAccount: spark
+    envSecretKeyRefs:
+      CH_USERNAME:
+        name: clickhouse-secret
+        key: username
+      CH_PASSWORD:
+        name: clickhouse-secret
+        key: password
+  executor:
+    cores: 1
+    instances: 1
+    memory: "512m"
+    labels:
+      version: 3.1.1
+    envSecretKeyRefs:
+      CH_USERNAME:
+        name: clickhouse-secret
+        key: username
+      CH_PASSWORD:
+        name: clickhouse-secret
+        key: password
