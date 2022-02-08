@@ -16,7 +16,7 @@
 - Add support for SR-IOV secondary network. Antrea can now create secondary network interfaces for Pods using SR-IOV VFs on bare metal Nodes. ([#2651](https://github.com/antrea-io/antrea/pull/2651), [@arunvelayutham]) [Alpha - Feature Gate: `SecondaryNetwork`]
 - Add support for allocating external IPs for Services of type LoadBalancer from an ExternalIPPool. ([#3147](https://github.com/antrea-io/antrea/pull/3147) [@Shengkai2000]) [Alpha - Feature Gate: `ServiceExternalIP`]
 - Add support for antctl in the flow aggregator Pod. ([#2878](https://github.com/antrea-io/antrea/pull/2878), [@yanjunz97])
-  * Support `antctl get log-level` for changing log verbosity level
+  * Support `antctl log-level` for changing log verbosity level
   * Support `antctl get flowrecords [-o json]` for dumping flow records
   * Support `antctl get recordmetrics` for dumping flow records metrics
 - Add support for the "Pass" action in Antrea-native policies to skip evaluation of further Antrea-native policy rules and delegate evaluation to Kubernetes NetworkPolicy. ([#2964](https://github.com/antrea-io/antrea/pull/2964), [@Dyanngg])
