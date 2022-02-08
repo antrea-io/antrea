@@ -29,18 +29,8 @@ import (
 	e2euttils "antrea.io/antrea/test/e2e/utils"
 )
 
-func testServiceExport(t *testing.T, data *MCTestData) {
-	data.testServiceExport(t)
-}
-
-// testServiceExport is used to test the connectivity of Multicluster Service between
-// member clusters. We create a nginx Pod and Service in one member cluster, and try to
-// curl it from a Pod in another cluster. If we get status code 200, it means that the
-// resources are exported and imported successfully in each member cluster.
-func (data *MCTestData) testServiceExport(t *testing.T) {
-	podName := randName("test-nginx-")
-	clientPodName := "test-service-client"
-
+func (data *MCTestData) setupTestResources(t *testing.T) string {
+	podName := randName(nginxPodName)
 	createPodAndService := func(clusterName, clusterServiceName string) {
 		if err := createPodWrapper(t, data, clusterName, multiClusterTestNamespace, podName, "", nginxImage, "nginx", nil, nil, nil, nil, false, nil); err != nil {
 			t.Fatalf("Error when creating nginx Pod in cluster %s: %v", clusterName, err)
@@ -50,31 +40,53 @@ func (data *MCTestData) testServiceExport(t *testing.T) {
 			t.Fatalf("Error when creating Service %s in cluster %s: %v", clusterServiceName, clusterName, err)
 		}
 	}
-	// Create Pod and Service in west cluster
+	// Create Pod and Service in west and ease cluster
 	createPodAndService(westCluster, westClusterTestService)
-	defer deletePodWrapper(t, data, westCluster, multiClusterTestNamespace, podName)
-	defer deleteServiceWrapper(t, testData, westCluster, multiClusterTestNamespace, westClusterTestService)
-
-	// Create Pod and Service in east cluster
 	createPodAndService(eastCluster, eastClusterTestService)
-	defer deletePodWrapper(t, data, eastCluster, multiClusterTestNamespace, podName)
-	defer deleteServiceWrapper(t, testData, eastCluster, multiClusterTestNamespace, eastClusterTestService)
+	return podName
+}
 
-	deployServiceExport := func(clusterName string) {
-		if err := data.deployServiceExport(clusterName); err != nil {
-			t.Fatalf("Error when deploy ServiceExport in cluster %s: %v", clusterName, err)
-		}
+func (data *MCTestData) tearDownTestResources(t *testing.T, podName string) {
+	deleteServiceWrapper(t, testData, westCluster, multiClusterTestNamespace, westClusterTestService)
+	deleteServiceWrapper(t, testData, eastCluster, multiClusterTestNamespace, eastClusterTestService)
+	deletePodWrapper(t, data, westCluster, multiClusterTestNamespace, podName)
+	deletePodWrapper(t, data, eastCluster, multiClusterTestNamespace, podName)
+}
+
+// Deploy service exports in east and west clusters
+func setUpServiceExport(data *MCTestData, t *testing.T) {
+	if err := data.deployServiceExport(westCluster); err != nil {
+		t.Fatalf("Error when deploy ServiceExport in west cluster: %v", err)
 	}
-
-	// Deploy ServiceExport in west cluster
-	deployServiceExport(westCluster)
-	defer data.deleteServiceExport(westCluster)
-
-	// Deploy ServiceExport in east cluster
-	deployServiceExport(eastCluster)
-	defer data.deleteServiceExport(eastCluster)
+	if err := data.deployServiceExport(eastCluster); err != nil {
+		t.Fatalf("Error when deploy ServiceExport in east cluster: %v", err)
+	}
 	time.Sleep(importServiceDelay)
+}
 
+func tearDownServiceExport(data *MCTestData) {
+	data.deleteServiceExport(westCluster)
+	data.deleteServiceExport(eastCluster)
+}
+
+// Try to curl the counter part services in east and west clusters.
+// If we get status code 200, it means that the resources is exported by the east cluster
+// and imported by the west cluster.
+func testProbeMCService(t *testing.T, data *MCTestData) {
+	data.testProbeMCService(t)
+}
+
+func testANP(t *testing.T, data *MCTestData) {
+	data.testANP(t)
+}
+
+func (data *MCTestData) testProbeMCService(t *testing.T) {
+	data.probeMCServiceFromCluster(t, eastCluster, westClusterTestService)
+	data.probeMCServiceFromCluster(t, westCluster, eastClusterTestService)
+}
+
+func (data *MCTestData) testANP(t *testing.T) {
+	clientPodName := "test-service-client"
 	svc, err := data.getService(eastCluster, multiClusterTestNamespace, fmt.Sprintf("antrea-mc-%s", westClusterTestService))
 	if err != nil {
 		t.Fatalf("Error when getting the imported service %s: %v", fmt.Sprintf("antrea-mc-%s", westClusterTestService), err)
@@ -141,6 +153,19 @@ func (data *MCTestData) testServiceExport(t *testing.T) {
 
 	// Verify that ACNP works fine with new Multicluster Service.
 	data.verifyMCServiceACNP(t, gwClientName, eastIP)
+}
+
+func (data *MCTestData) probeMCServiceFromCluster(t *testing.T, clusterName string, serviceName string) string {
+	svc, err := data.getService(clusterName, multiClusterTestNamespace, fmt.Sprintf("antrea-mc-%s", serviceName))
+	if err != nil {
+		t.Fatalf("Error when getting the imported service %s: %v", fmt.Sprintf("antrea-mc-%s", serviceName), err)
+	}
+
+	ip := svc.Spec.ClusterIP
+	if err := data.probeFromCluster(clusterName, ip); err != nil {
+		t.Fatalf("Error when probing service from %s", clusterName)
+	}
+	return ip
 }
 
 func (data *MCTestData) verifyMCServiceACNP(t *testing.T, clientPodName, eastIP string) {
@@ -251,4 +276,14 @@ func teardownGateway(t *testing.T, data *MCTestData) {
 			}
 		}
 	}
+}
+
+func (data *MCTestData) probeFromCluster(clusterName string, url string) error {
+	var rc int
+	var err error
+	rc, _, _, err = provider.RunCommandOnNode(clusterName, fmt.Sprintf("curl --connect-timeout 5 -s %s", url))
+	if err != nil || rc != 0 {
+		return fmt.Errorf("error when curl the url %s: %v", url, err)
+	}
+	return nil
 }

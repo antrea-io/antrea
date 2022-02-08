@@ -49,6 +49,7 @@ const (
 
 	nginxImage   = "projects.registry.vmware.com/antrea/nginx:1.21.6-alpine"
 	agnhostImage = "agnhost:2.26"
+	nginxPodName = "test-nginx-pod"
 )
 
 var provider providers.ProviderInterface
