@@ -11,8 +11,8 @@
     },
     "keywords": [],
     "logos": {
-      "small": "img/antrea_logo_stacked.svg",
-      "large": "img/antrea_logo_stacked.svg"
+      "small": "https://raw.githubusercontent.com/antrea-io/antrea/main/docs/assets/logo/antrea_logo_stacked.svg",
+      "large": "https://raw.githubusercontent.com/antrea-io/antrea/main/docs/assets/logo/antrea_logo_stacked.svg"
     },
     "links": [
       {
