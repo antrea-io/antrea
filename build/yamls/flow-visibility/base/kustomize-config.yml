@@ -1,0 +1,5 @@
+# These are the "extra" (non built-in) paths where Kustomize needs to look for variable
+# substitutions if needed. The value of the variable comes from the ConfigMap declaration. 
+varReference:
+- path: spec/templates/podTemplates/spec/volumes/configMap/name
+  kind: ClickHouseInstallation

@@ -37,21 +37,30 @@ export const SankeyPanel: React.FC<Props> = ({ options, data, width, height }) =
       })[0];
     let n = sources.length;
     for (let i = 0; i < n; i++) {
-      if (bytes[i] === 0) continue;
+      if (bytes[i] === 0) {
+        continue;
+      }
       let record = [];
       let source = sources[i];
       let destination = destinations[i];
-      record.push(source);
+      if (source === '') {
+        source = 'N/A';
+      }
       if (destination === '') {
-        record.push(destinationIPs[i]);
+        if (destinationIPs[i] === '') {
+          destination = 'N/A';
+        } else {
+          destination = destinationIPs[i];
+        }
       } else {
         // Google Chart will not be rendered if source is equal to destination.
         // Add an extra space to differentiate to-self traffic (e.g. intra-Node).
         if (source === destination) {
           destination = destination + ' ';
         }
-        record.push(destination);
       }
+      record.push(source);
+      record.push(destination);
       record.push(bytes[i]);
       if (i === 0) {
         result = [['From', 'To', 'Bytes']];

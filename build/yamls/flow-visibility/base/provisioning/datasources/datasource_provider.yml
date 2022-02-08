@@ -1,0 +1,13 @@
+apiVersion: 1
+datasources:
+  - name: ClickHouse
+    type: grafana-clickhouse-datasource
+    access: proxy
+    url: http://clickhouse-clickhouse.flow-visibility.svc:8123
+    editable: true
+    jsonData:
+      server: clickhouse-clickhouse.flow-visibility.svc
+      port: 9000
+      username: $CLICKHOUSE_USERNAME
+    secureJsonData:
+      password: $CLICKHOUSE_PASSWORD

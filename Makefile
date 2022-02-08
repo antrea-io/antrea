@@ -355,6 +355,7 @@ manifest:
 	$(CURDIR)/hack/generate-manifest-octant.sh --mode dev > build/yamls/antrea-octant.yml
 	$(CURDIR)/hack/generate-manifest-windows.sh --mode dev > build/yamls/antrea-windows.yml
 	$(CURDIR)/hack/generate-manifest-flow-aggregator.sh --mode dev > build/yamls/flow-aggregator.yml
+	$(CURDIR)/hack/generate-manifest-flow-visibility.sh > build/yamls/flow-visibility.yml
 
 .PHONY: manifest-scale
 manifest-scale:
