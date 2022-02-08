@@ -1,0 +1,42 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: clickhouse-secret
+type: Opaque
+stringData:
+  username: clickhouse_operator
+  password: clickhouse_operator_password
+---
+apiVersion: "clickhouse.altinity.com/v1"
+kind: "ClickHouseInstallation"
+metadata:
+  name: clickhouse
+  labels:
+    app: clickhouse
+spec:
+  configuration:
+    users:
+      clickhouse_operator/k8s_secret_password: flow-visibility/clickhouse-secret/password
+      clickhouse_operator/networks/ip: "::/0"
+    clusters:
+      - name: "clickhouse"
+        layout:
+          shardsCount: 1
+          replicasCount: 1
+  defaults:
+    templates:
+      podTemplate: pod-template
+  templates:
+    podTemplates:
+      - name: pod-template
+        spec:
+          containers:
+            - name: clickhouse
+              image: yandex/clickhouse-server:21.11
+              volumeMounts:
+                - name: clickhouse-configmap-volume
+                  mountPath: /docker-entrypoint-initdb.d
+          volumes:
+            - name: clickhouse-configmap-volume
+              configMap:
+                name: $(CLICKHOUSE_CONFIG_MAP_NAME)

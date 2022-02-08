@@ -28,11 +28,24 @@
   - [Go-ipfix Collector](#go-ipfix-collector)
     - [Deployment Steps](#deployment-steps)
     - [Output Flow Records](#output-flow-records)
-  - [ELK Flow Collector](#elk-flow-collector)
+  - [Grafana Flow Collector](#grafana-flow-collector)
     - [Purpose](#purpose)
-    - [About Elastic Stack](#about-elastic-stack)
+    - [About Grafana and ClickHouse](#about-grafana-and-clickhouse)
     - [Deployment Steps](#deployment-steps-1)
+      - [Credentials Configuration](#credentials-configuration)
     - [Pre-built Dashboards](#pre-built-dashboards)
+      - [Flow Records Dashboard](#flow-records-dashboard)
+      - [Pod-to-Pod Flows Dashboard](#pod-to-pod-flows-dashboard)
+      - [Pod-to-External Flows Dashboard](#pod-to-external-flows-dashboard)
+      - [Pod-to-Service Flows Dashboard](#pod-to-service-flows-dashboard)
+      - [Node-to-Node Flows Dashboard](#node-to-node-flows-dashboard)
+      - [Network-Policy Flows Dashboard](#network-policy-flows-dashboard)
+    - [Dashboards Customization](#dashboards-customization)
+  - [ELK Flow Collector (deprecated)](#elk-flow-collector-deprecated)
+    - [Purpose](#purpose-1)
+    - [About Elastic Stack](#about-elastic-stack)
+    - [Deployment Steps](#deployment-steps-2)
+    - [Pre-built Dashboards](#pre-built-dashboards-1)
       - [Overview](#overview-1)
       - [Pod-to-Pod Flows](#pod-to-pod-flows)
       - [Pod-to-External Flows](#pod-to-external-flows)
@@ -436,9 +449,9 @@ commands:
 
 ## Flow Collectors
 
-Here we list two choices the external configured flow collector: go-ipfix collector
-and ELK flow collector. For each collector, we introduce how to deploy it and how
-to output or visualize the collected flow records information.
+Here we list three choices the external configured flow collector: go-ipfix collector,
+Grafana flow collector and ELK flow collector. For each collector, we introduce how to
+deploy it and how to output or visualize the collected flow records information.
 
 ### Go-ipfix Collector
 
@@ -474,7 +487,254 @@ To output the flow records collected by the go-ipfix collector, use the command 
 kubectl logs <ipfix-collector-pod-name> -n ipfix
 ```
 
-### ELK Flow Collector
+### Grafana Flow Collector
+
+Grafana Flow Collector feature is only available for releases starting from Antrea v1.6.
+
+#### Purpose
+
+Antrea supports sending IPFIX flow records through the Flow Exporter and Flow Aggregator
+feature described above. The Grafana Flow Collector works as the visualization tool
+for flow records and flow-related information. We use ClickHouse as the data storage,
+which collects flow records data from the Flow Aggregator and load the data to Grafana.
+This document provides the guidelines for deploying the Grafana Flow Collector
+with support for Antrea-specific IPFIX fields in a Kubernetes cluster.
+
+#### About Grafana and ClickHouse
+
+[Grafana](https://grafana.com/grafana/) is an open-source platform for monitoring
+and observability. Grafana allows you to query, visualize, alert on and understand
+your metrics. [ClickHouse](https://clickhouse.com/) is an open-source, high performance
+columnar OLAP database management system for real-time analytics using SQL. We use
+ClickHouse as the data storage, and use Grafana as the data visualization and monitoring tool.
+
+#### Deployment Steps
+
+To deploy the Grafana Flow Collector, the first step is to install the ClickHouse
+Operator, which creates, configures and manages ClickHouse clusters. Check the [homepage](https://github.com/Altinity/clickhouse-operator)
+for more information about the ClickHouse Operator. Running the following command
+will install ClickHouse Operator into `kube-system` Namespace.
+
+```bash
+kubectl apply -f https://raw.githubusercontent.com/Altinity/clickhouse-operator/master/deploy/operator/clickhouse-operator-install-bundle.yaml
+```
+
+To deploy a released version of the Grafana Flow Collector, find a deployment manifest
+from the [list of releases](https://github.com/antrea-io/antrea/releases).
+For any given release <TAG> (v1.6.0 or later version), run the following command:
+
+```bash
+kubectl apply -f https://github.com/antrea-io/antrea/releases/download/<TAG>/flow-visibility.yml
+```
+
+To deploy the latest version of the Grafana Flow Collector (built from the main branch),
+use the checked-in [deployment yaml](/build/yamls/flow-visibility.yml):
+
+```bash
+kubectl apply -f https://raw.githubusercontent.com/antrea-io/antrea/main/build/yamls/flow-visibility.yml
+```
+
+Please refer to the [Flow Aggregator Configuration](#configuration-1) to learn about
+the ClickHouse configuration options.
+
+Run the following command to check if ClickHouse and Grafana are deployed properly:
+
+```bash
+kubectl get all -n flow-visibility                                                               
+```
+
+The expected results will be like:
+
+```bash  
+NAME                                  READY   STATUS    RESTARTS   AGE
+pod/chi-clickhouse-clickhouse-0-0-0   1/1     Running   0          1m
+pod/grafana-5c6c5b74f7-x4v5b          1/1     Running   0          1m
+
+NAME                                    TYPE           CLUSTER-IP       EXTERNAL-IP   PORT(S)                         AGE
+service/chi-clickhouse-clickhouse-0-0   ClusterIP      None             <none>        8123/TCP,9000/TCP,9009/TCP      1m
+service/clickhouse-clickhouse           LoadBalancer   10.105.198.192   <pending>     8123:30001/TCP,9000:31044/TCP   1m
+service/grafana                         LoadBalancer   10.97.171.150    <pending>     3000:31171/TCP                  1m
+
+NAME                      READY   UP-TO-DATE   AVAILABLE   AGE
+deployment.apps/grafana   1/1     1            1           1m
+
+NAME                                 DESIRED   CURRENT   READY   AGE
+replicaset.apps/grafana-5c6c5b74f7   1         1         1       1m
+
+NAME                                             READY   AGE
+statefulset.apps/chi-clickhouse-clickhouse-0-0   1/1     1m
+```
+
+Run the following commands to print the IP of the workder Node and the NodePort
+that Grafana is listening on:
+
+```bash
+NODE_NAME=$(kubectl get pod -l app=grafana -n flow-visibility -o jsonpath='{.items[0].spec.nodeName}')
+NODE_IP=$(kubectl get nodes ${NODE_NAME} -o jsonpath='{.status.addresses[0].address}')
+GRAFANA_NODEPORT=$(kubectl get svc grafana -n flow-visibility -o jsonpath='{.spec.ports[*].nodePort}')
+echo "=== Grafana Service is listening on ${NODE_IP}:${GRAFANA_NODEPORT} ==="
+```
+
+You can now open the Grafana dashboard in the browser using `http://[NodeIP]:[NodePort]`.
+You should be able to see a Grafana login page. Login credentials:
+
+- username: admin
+- password: admin
+
+To stop the Grafana Flow Collector, run the following commands:
+
+```shell
+kubectl delete -f flow-visibility.yml
+kubectl delete -f https://raw.githubusercontent.com/Altinity/clickhouse-operator/master/deploy/operator/clickhouse-operator-install-bundle.yaml -n kube-system
+```
+
+##### Credentials Configuration
+
+ClickHouse credentials are specified in [clickhouse.yml][clickhouse_manifest_yaml] as
+a resource of kind: a Secret. If the username `clickhouse_operator` has changed, please
+update the following section accordingly.
+
+```yaml
+apiVersion: "clickhouse.altinity.com/v1"
+kind: "ClickHouseInstallation"
+metadata:
+  name: clickhouse
+  labels:
+    app: clickhouse
+spec:
+  configuration:
+    users:
+      # replace clickhouse_operator by [new_username]
+      clickhouse_operator/k8s_secret_password: flow-visibility/clickhouse-secret/password
+      clickhouse_operator/networks/ip: "::/0"
+```
+
+ClickHouse credentials are also specified in [flow-aggregator.yml][flow_aggregator_manifest_yaml]
+as a resource of kind: a Secret. Please also make the corresponding changes.
+
+Grafana login credentials are specified in [grafana.yml][grafana_manifest_yaml] as
+resource of kind: a Secret.
+
+We recommend changing all the credentials above if you are going to run the Flow Collector
+in production. After making any credentials change, run the following command to generate
+a new manifest:
+
+```shell
+make manifest
+```
+
+#### Pre-built Dashboards
+
+The following dashboards are pre-built and are recommended for Antrea flow
+visualization. They can be found in the Home page of Grafana, by clicking
+the Magnifier button on the left menu bar.
+<img src="https://downloads.antrea.io/static/02152022/flow-visibility-grafana-intro-1.png" width="900" alt="Grafana Search Dashboards Guide">
+
+##### Flow Records Dashboard
+
+Flow Records Dashboard displays the number of flow records being captured in the
+selected time range. The detailed metadata of each of the records can be found
+in the table below.  
+
+<img src="https://downloads.antrea.io/static/02152022/flow-visibility-flow-records-1.png" width="900" alt="Flow Records Dashboard">
+
+Flow Records Dashboard provides time-range control. The selected time-range will
+be applied to all the panels in the dashboard. This feature is also available for
+all the other pre-built dashboards.
+
+<img src="https://downloads.antrea.io/static/02152022/flow-visibility-flow-records-3.png" width="900" alt="Flow Records Dashboard">
+
+Flow Records Dashboard allows us to add key/value filters that automatically apply
+to all the panels in the dashboard. This feature is also available for all the
+other pre-built dashboards.
+
+<img src="https://downloads.antrea.io/static/02152022/flow-visibility-flow-records-2.png" width="900" alt="Flow Records Dashboard">
+
+Besides the dashboard-wide filter, Flow Records Dashboard also provides column-based
+filters that apply to each table column.
+
+<img src="https://downloads.antrea.io/static/02152022/flow-visibility-flow-records-4.png" width="900" alt="Flow Records Dashboard">
+
+##### Pod-to-Pod Flows Dashboard
+
+Pod-to-Pod Flows Dashboard shows cumulative bytes and reverse bytes of Pod-to-Pod
+traffic in the selected time range, in the form of Sankey diagram. Corresponding
+source or destination Pod throughput is visualized using the line graphs. Pie charts
+visualize the cumulative traffic grouped by source or destination Pod Namespace.
+
+<img src="https://downloads.antrea.io/static/02152022/flow-visibility-pod-to-pod-1.png" width="900" alt="Pod-to-Pod Flows Dashboard">
+
+<img src="https://downloads.antrea.io/static/02152022/flow-visibility-pod-to-pod-2.png" width="900" alt="Pod-to-Pod Flows Dashboard">
+
+##### Pod-to-External Flows Dashboard
+
+Pod-to-External Flows Dashboard has similar visualization to Pod-to-Pod Flows
+Dashboard, visualizing the Pod-to-External flows. The destination of a traffic
+flow is represented by the destination IP address.
+
+<img src="https://downloads.antrea.io/static/02152022/flow-visibility-pod-to-external-1.png" width="900" alt="Pod-to-External Flows Dashboard">
+
+<img src="https://downloads.antrea.io/static/02152022/flow-visibility-pod-to-external-2.png" width="900" alt="Pod-to-External Flows Dashboard">
+
+##### Pod-to-Service Flows Dashboard
+
+Pod-to-Service Flows Dashboard shares the similar visualizations with Pod-to-Pod/External
+Flows Dashboard, visualizing the Pod-to-Service flows. The destination of a traffic
+is represented by the destination Service metadata.
+
+<img src="https://downloads.antrea.io/static/02152022/flow-visibility-pod-to-service-1.png" width="900" alt="Pod-to-Service Flows Dashboard">
+
+<img src="https://downloads.antrea.io/static/02152022/flow-visibility-pod-to-service-2.png" width="900" alt="Pod-to-Service Flows Dashboard">
+
+##### Node-to-Node Flows Dashboard
+
+Node-to-Node Flows Dashboard visualizes the Node-to-Node traffic, including intra-Node
+and inter-Node flows. Cumulative bytes are shown in the Sankey diagrams and pie charts,
+and throughput is shown in the line graphs.
+
+<img src="https://downloads.antrea.io/static/02152022/flow-visibility-node-to-node-1.png" width="900" alt="Node-to-Node Flows Dashboard">
+
+<img src="https://downloads.antrea.io/static/02152022/flow-visibility-node-to-node-2.png" width="900" alt="Node-to-Node Flows Dashboard">
+
+##### Network-Policy Flows Dashboard
+
+Network-Policy Flows Dashboard visualizes the traffic with NetworkPolicies enforced.
+Currently we only support the visualization of NetworkPolicies with `Allow` action.
+
+<img src="https://downloads.antrea.io/static/02152022/flow-visibility-np-1.png" width="900" alt="Network-Policy Flows Dashboard">
+
+<img src="https://downloads.antrea.io/static/02152022/flow-visibility-np-2.png" width="900" alt="Network-Policy Flows Dashboard">
+
+#### Dashboards Customization
+
+If you would like to make any changes to any of the pre-built dashboards, or build
+a new dashboard, please follow this [doc](https://grafana.com/docs/grafana/latest/dashboards/export-import/)
+for dashboard export and import. To generate a deployment manifest with the changes,
+please follow the following steps:
+
+1. Clone the repository. Exported dashboard JSON files should be placed under `antrea/build/yamls/flow-visibility/base/provisioning/dashboards`.
+1. If a new dashboard is added, edit [kustomization.yml][flow_visibility_kustomization_yaml]
+by adding the file in the following section:
+
+    ```yaml
+    - name: grafana-dashboard-config
+      files:
+      - provisioning/dashboards/flow_records_dashboard.json
+      - provisioning/dashboards/pod_to_pod_dashboard.json
+      - provisioning/dashboards/pod_to_service_dashboard.json
+      - provisioning/dashboards/pod_to_external_dashboard.json
+      - provisioning/dashboards/node_to_node_dashboard.json
+      - provisioning/dashboards/networkpolicy_allow_dashboard.json
+      - provisioning/dashboards/[new_dashboard_name].json
+    ```
+
+1. Generate the new YAML manifest by running:
+
+```bash
+./hack/generate-manifest-flow-visibility.sh > build/yamls/flow-visibility.yml
+```
+
+### ELK Flow Collector (deprecated)
 
 #### Purpose
 
@@ -634,3 +894,8 @@ With filters applied:
 
 <img src="https://downloads.antrea.io/static/03022021/flow-visualization-np-2.png" width="900" alt="Flow
 Visualization Network Policy Dashboard">
+
+[clickhouse_manifest_yaml]: ../build/yamls/flow-visibility/base/clickhouse.yml
+[flow_aggregator_manifest_yaml]: ../build/yamls/flow-aggregator/base/flow-aggregator.yml
+[grafana_manifest_yaml]: ../build/yamls/flow-visibility/base/grafana.yml
+[flow_visibility_kustomization_yaml]: ../build/yamls/flow-visibility/base/kustomization.yml
