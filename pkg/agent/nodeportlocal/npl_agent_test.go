@@ -238,6 +238,7 @@ func setUp(t *testing.T, tc *testConfig, objects ...runtime.Object) *testData {
 		portTable: newPortTable(mockIPTables, mockPortOpener),
 	}
 
+	resyncPeriod := 0 * time.Minute
 	// informerFactory is initialized and started from cmd/antrea-agent/agent.go
 	informerFactory := informers.NewSharedInformerFactory(data.k8sClient, resyncPeriod)
 	listOptions := func(options *metav1.ListOptions) {
@@ -250,9 +251,9 @@ func setUp(t *testing.T, tc *testConfig, objects ...runtime.Object) *testData {
 		cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, // NamespaceIndex is used in NPLController.
 		listOptions,
 	)
+	svcInformer := informerFactory.Core().V1().Services().Informer()
 
-	c, err := InitController(data.k8sClient, informerFactory, data.portTable, defaultNodeName, localPodInformer)
-	require.NoError(t, err)
+	c := nplk8s.NewNPLController(data.k8sClient, localPodInformer, svcInformer, data.portTable, defaultNodeName)
 
 	data.runWrapper(c)
 	informerFactory.Start(data.stopCh)

@@ -42,10 +42,14 @@ import (
 )
 
 const (
-	controllerName = "AntreaAgentNPLController"
+	controllerName = "NPLController"
 	minRetryDelay  = 2 * time.Second
 	maxRetryDelay  = 120 * time.Second
 	numWorkers     = 4
+
+	// Set resyncPeriod to 0 to disable resyncing.
+	// UpdateFunc event handler will be called only when the object is actually updated.
+	resyncPeriod = 0 * time.Minute
 )
 
 type NPLController struct {
@@ -63,7 +67,6 @@ type NPLController struct {
 func NewNPLController(kubeClient clientset.Interface,
 	podInformer cache.SharedIndexInformer,
 	svcInformer cache.SharedIndexInformer,
-	resyncPeriod time.Duration,
 	pt *portcache.PortTable,
 	nodeName string) *NPLController {
 	c := NPLController{
