@@ -170,7 +170,7 @@ func (p *proxier) removeStaleServices() {
 		if svcInfo.NodeLocalExternal() {
 			groupIDLocal, _ := p.groupCounter.Get(svcPortName, true)
 			if err := p.ofClient.UninstallServiceGroup(groupIDLocal); err != nil {
-				klog.ErrorS(err, "Failed to remove flows of Service", "Service", svcPortName)
+				klog.ErrorS(err, "Failed to remove Group of local Endpoints for Service", "Service", svcPortName)
 				continue
 			}
 			p.groupCounter.Recycle(svcPortName, true)
@@ -178,7 +178,7 @@ func (p *proxier) removeStaleServices() {
 		// Remove Service group which has all Endpoints.
 		groupID, _ := p.groupCounter.Get(svcPortName, false)
 		if err := p.ofClient.UninstallServiceGroup(groupID); err != nil {
-			klog.ErrorS(err, "Failed to remove flows of Service", "Service", svcPortName)
+			klog.ErrorS(err, "Failed to remove Group of all Endpoints for Service", "Service", svcPortName)
 			continue
 		}
 
@@ -370,7 +370,7 @@ func (p *proxier) installServices() {
 			pSvcInfo = installedSvcPort.(*types.ServiceInfo)
 			needRemoval = serviceIdentityChanged(svcInfo, pSvcInfo) || (svcInfo.SessionAffinityType() != pSvcInfo.SessionAffinityType())
 			needUpdateService = needRemoval || (svcInfo.StickyMaxAgeSeconds() != pSvcInfo.StickyMaxAgeSeconds())
-			needUpdateEndpoints = pSvcInfo.SessionAffinityType() != svcInfo.SessionAffinityType()
+			needUpdateEndpoints = pSvcInfo.SessionAffinityType() != svcInfo.SessionAffinityType() || pSvcInfo.NodeLocalExternal() != svcInfo.NodeLocalExternal()
 		} else { // Need to install.
 			needUpdateService = true
 		}
@@ -452,19 +452,32 @@ func (p *proxier) installServices() {
 				continue
 			}
 
-			// Install another group when Service externalTrafficPolicy is Local.
-			if p.proxyAll && svcInfo.NodeLocalExternal() {
-				groupIDLocal, _ := p.groupCounter.Get(svcPortName, true)
-				var localEndpointList []k8sproxy.Endpoint
-				for _, ed := range endpointUpdateList {
-					if !ed.GetIsLocal() {
+			if p.proxyAll {
+				if svcInfo.NodeLocalExternal() {
+					// Install another group when Service externalTrafficPolicy is Local.
+					groupIDLocal, _ := p.groupCounter.Get(svcPortName, true)
+					var localEndpointList []k8sproxy.Endpoint
+					for _, ed := range endpointUpdateList {
+						if !ed.GetIsLocal() {
+							continue
+						}
+						localEndpointList = append(localEndpointList, ed)
+					}
+					if err = p.ofClient.InstallServiceGroup(groupIDLocal, svcInfo.StickyMaxAgeSeconds() != 0, localEndpointList); err != nil {
+						klog.ErrorS(err, "Error when installing Group for Service whose externalTrafficPolicy is Local")
 						continue
 					}
-					localEndpointList = append(localEndpointList, ed)
-				}
-				if err = p.ofClient.InstallServiceGroup(groupIDLocal, svcInfo.StickyMaxAgeSeconds() != 0, localEndpointList); err != nil {
-					klog.ErrorS(err, "Error when installing Group for Service whose externalTrafficPolicy is Local")
-					continue
+				} else {
+					// Uninstall the group with only local Endpoints when Service externalTrafficPolicy is Cluster
+					// unconditionally. If the group doesn't exist on OVS, then the return value will be nil; if the
+					// group exists on OVS, and after it is uninstalled successfully, then the return value will be also
+					// nil.
+					groupIDLocal, _ := p.groupCounter.Get(svcPortName, true)
+					if err := p.ofClient.UninstallServiceGroup(groupIDLocal); err != nil {
+						klog.ErrorS(err, "Failed to remove Group of local Endpoints for Service", "Service", svcPortName)
+						continue
+					}
+					p.groupCounter.Recycle(svcPortName, true)
 				}
 			}
 
