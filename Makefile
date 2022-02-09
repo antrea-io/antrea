@@ -194,6 +194,14 @@ antctl: $(ANTCTL_BINARIES)
 antctl-release:
 	@$(GO) build -o $(BINDIR)/$(ANTCTL_BINARY_NAME) $(GOFLAGS) -ldflags '-s -w $(LDFLAGS)' antrea.io/antrea/cmd/antctl
 
+.PHONY: check-copyright
+check-copyright: 
+	@GO=$(GO) $(CURDIR)/hack/add-license.sh
+
+.PHONY: add-copyright
+add-copyright: 
+	@GO=$(GO) $(CURDIR)/hack/add-license.sh --add
+
 .PHONY: .linux-test-unit
 .linux-test-unit: .coverage
 	@echo
