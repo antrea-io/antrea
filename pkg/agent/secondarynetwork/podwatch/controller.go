@@ -26,11 +26,8 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/client-go/informers"
-	coreinformers "k8s.io/client-go/informers/core/v1"
 	clientset "k8s.io/client-go/kubernetes"
 	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
@@ -81,7 +78,6 @@ type PodController struct {
 func NewPodController(kubeClient clientset.Interface,
 	netAttachDefClient netdefclient.K8sCniCncfIoV1Interface,
 	podInformer cache.SharedIndexInformer,
-	resyncPeriod time.Duration,
 	nodeName string,
 	podCache cnipodcache.CNIPodInfoStore,
 	cniServer *cniserver.CNIServer) *PodController {
@@ -397,27 +393,4 @@ func parsePodSecondaryNetworkAnnotation(netObj string) ([]*SecondaryNetworkObjec
 		}
 	}
 	return secNetwork, nil
-}
-
-func InitializePodController(kubeClient clientset.Interface, netAttachDefClient netdefclient.K8sCniCncfIoV1Interface, informerFactory informers.SharedInformerFactory,
-	nodeName string, podInfoStore cnipodcache.CNIPodInfoStore, cniServer *cniserver.CNIServer) (*PodController, error) {
-	// Watch only the Pods which belong to the Node where the agent is running.
-	listOptions := func(options *metav1.ListOptions) {
-		options.FieldSelector = fields.OneTermEqualSelector("spec.nodeName", nodeName).String()
-	}
-	podInformer := coreinformers.NewFilteredPodInformer(
-		kubeClient,
-		metav1.NamespaceAll,
-		resyncPeriod,
-		cache.Indexers{},
-		listOptions,
-	)
-	c := NewPodController(kubeClient,
-		netAttachDefClient,
-		podInformer,
-		resyncPeriod,
-		nodeName,
-		podInfoStore,
-		cniServer)
-	return c, nil
 }
