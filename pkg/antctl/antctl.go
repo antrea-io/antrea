@@ -25,6 +25,7 @@ import (
 	fallbackversion "antrea.io/antrea/pkg/antctl/fallback/version"
 	"antrea.io/antrea/pkg/antctl/raw/featuregates"
 	"antrea.io/antrea/pkg/antctl/raw/proxy"
+	"antrea.io/antrea/pkg/antctl/raw/resourceimport"
 	"antrea.io/antrea/pkg/antctl/raw/supportbundle"
 	"antrea.io/antrea/pkg/antctl/raw/traceflow"
 	"antrea.io/antrea/pkg/antctl/transform/addressgroup"
@@ -529,6 +530,12 @@ var CommandList = &commandList{
 			cobraCommand:      featuregates.Command,
 			supportAgent:      true,
 			supportController: true,
+			commandGroup:      get,
+		},
+		{
+			cobraCommand:      resourceimport.Command,
+			supportAgent:      false,
+			supportController: false,
 			commandGroup:      get,
 		},
 	},
