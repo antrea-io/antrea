@@ -8,9 +8,6 @@ metadata:
     rbac.authorization.k8s.io/aggregate-to-admin: "true"
     rbac.authorization.k8s.io/aggregate-to-edit: "true"
 rules:
-- apiGroups: ["security.antrea.tanzu.vmware.com"]
-  resources: ["clusternetworkpolicies", "networkpolicies"]
-  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
 - apiGroups: ["crd.antrea.io"]
   resources: ["clusternetworkpolicies", "networkpolicies"]
   verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
@@ -23,9 +20,6 @@ metadata:
     # Add these permissions to the "view" default role.
     rbac.authorization.k8s.io/aggregate-to-view: "true"
 rules:
-- apiGroups: ["security.antrea.tanzu.vmware.com"]
-  resources: ["clusternetworkpolicies", "networkpolicies"]
-  verbs: ["get", "list", "watch"]
 - apiGroups: ["crd.antrea.io"]
   resources: ["clusternetworkpolicies", "networkpolicies"]
   verbs: ["get", "list", "watch"]
@@ -39,9 +33,6 @@ metadata:
     rbac.authorization.k8s.io/aggregate-to-admin: "true"
     rbac.authorization.k8s.io/aggregate-to-edit: "true"
 rules:
-- apiGroups: ["ops.antrea.tanzu.vmware.com"]
-  resources: ["traceflows"]
-  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
 - apiGroups: ["crd.antrea.io"]
   resources: ["traceflows"]
   verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
@@ -54,9 +45,6 @@ metadata:
     # Add these permissions to the "view" default role.
     rbac.authorization.k8s.io/aggregate-to-view: "true"
 rules:
-- apiGroups: ["ops.antrea.tanzu.vmware.com"]
-  resources: ["traceflows"]
-  verbs: ["get", "list", "watch"]
 - apiGroups: ["crd.antrea.io"]
   resources: ["traceflows"]
   verbs: ["get", "list", "watch"]
@@ -70,9 +58,6 @@ metadata:
     rbac.authorization.k8s.io/aggregate-to-admin: "true"
     rbac.authorization.k8s.io/aggregate-to-edit: "true"
 rules:
-- apiGroups: ["core.antrea.tanzu.vmware.com"]
-  resources: ["clustergroups"]
-  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
 - apiGroups: ["crd.antrea.io"]
   resources: ["clustergroups"]
   verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
@@ -85,9 +70,6 @@ metadata:
     # Add these permissions to the "view" default role.
     rbac.authorization.k8s.io/aggregate-to-view: "true"
 rules:
-- apiGroups: ["core.antrea.tanzu.vmware.com"]
-  resources: ["clustergroups"]
-  verbs: ["get", "list", "watch"]
 - apiGroups: ["crd.antrea.io"]
   resources: ["clustergroups"]
   verbs: ["get", "list", "watch"]

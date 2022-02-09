@@ -20,7 +20,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
-	legacysecv1alpha1 "antrea.io/antrea/pkg/legacyapis/security/v1alpha1"
 )
 
 type ClusterNetworkPolicySpecBuilder struct {
@@ -44,21 +43,6 @@ func (b *ClusterNetworkPolicySpecBuilder) Get() *crdv1alpha1.ClusterNetworkPolic
 		b.Spec.Egress = []crdv1alpha1.Rule{}
 	}
 	return &crdv1alpha1.ClusterNetworkPolicy{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: b.Name,
-		},
-		Spec: b.Spec,
-	}
-}
-
-func (b *ClusterNetworkPolicySpecBuilder) GetLegacy() *legacysecv1alpha1.ClusterNetworkPolicy {
-	if b.Spec.Ingress == nil {
-		b.Spec.Ingress = []crdv1alpha1.Rule{}
-	}
-	if b.Spec.Egress == nil {
-		b.Spec.Egress = []crdv1alpha1.Rule{}
-	}
-	return &legacysecv1alpha1.ClusterNetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: b.Name,
 		},

@@ -44,13 +44,6 @@ These are the API group versions which are curently available when using Antrea.
 
 | API group | API version | API Service? | Introduced in | Deprecated in / Planned Deprecation | Planned Removal |
 |---|---|---|---|---|---|
-| `clusterinformation.antrea.tanzu.vmware.com` | `v1beta1` | No | v0.3.0 | v1.0.0 | Dec 2021 |
-| `core.antrea.tanzu.vmware.com` | `v1alpha2` | No | v0.11.0 | v1.0.0 | Dec 2021 |
-| `controlplane.antrea.tanzu.vmware.com` | `v1beta2` | Yes | v0.11.0 | v1.0.0 | Dec 2021 |
-| `ops.antrea.tanzu.vmware.com` | `v1alpha1` | No | v0.8.0 | v1.0.0 | Dec 2021 |
-| `security.antrea.tanzu.vmware.com` | `v1alpha1` | No | v0.8.0 | v1.0.0 | Dec 2021 |
-| `stats.antrea.tanzu.vmware.com` | `v1alpha1` | Yes | v0.10.0 | v1.0.0 | Dec 2021 |
-| `system.antrea.tanzu.vmware.com` | `v1beta1` | Yes | v0.5.0 | v1.0.0 | Dec 2021 |
 | `controlplane.antrea.io` | `v1beta2` | Yes | v1.0.0 | N/A | N/A |
 | `stats.antrea.io` | `v1alpha1` | Yes | v1.0.0 | N/A | N/A |
 | `system.antrea.io` | `v1beta1` | Yes | v1.0.0 | N/A | N/A |
@@ -62,15 +55,31 @@ These are the API group versions which are curently available when using Antrea.
 | `core.antrea.tanzu.vmware.com` | `v1alpha1` | No | v0.8.0 | v0.11.0 | v0.11.0 |
 | `networking.antrea.tanzu.vmware.com` | `v1beta1` | Yes | v0.3.0 | v0.10.0 | v1.2.0 |
 | `controlplane.antrea.tanzu.vmware.com` | `v1beta1` | Yes | v0.10.0 | v0.11.0 | v1.3.0 |
+| `clusterinformation.antrea.tanzu.vmware.com` | `v1beta1` | No | v0.3.0 | v1.0.0 | v1.6.0 |
+| `core.antrea.tanzu.vmware.com` | `v1alpha2` | No | v0.11.0 | v1.0.0 | v1.6.0 |
+| `controlplane.antrea.tanzu.vmware.com` | `v1beta2` | Yes | v0.11.0 | v1.0.0 | v1.6.0 |
+| `ops.antrea.tanzu.vmware.com` | `v1alpha1` | No | v0.8.0 | v1.0.0 | v1.6.0 |
+| `security.antrea.tanzu.vmware.com` | `v1alpha1` | No | v0.8.0 | v1.0.0 | v1.6.0 |
+| `stats.antrea.tanzu.vmware.com` | `v1alpha1` | Yes | v0.10.0 | v1.0.0 | v1.6.0 |
+| `system.antrea.tanzu.vmware.com` | `v1beta1` | Yes | v0.5.0 | v1.0.0 | v1.6.0 |
 
 ## API renaming from `*.antrea.tanzu.vmware.com` to `*.antrea.io`
 
-For the v1.0 release, we undertook to rename all Antrea API to use the
+For the v1.0 release, we undertook to rename all Antrea APIs to use the
 `antrea.io` suffix instead of the `antrea.tanzu.vmware.com` suffix. For more
 information about the motivations behind this undertaking, please refer to
 [Github issue #1715](https://github.com/antrea-io/antrea/issues/1715).
 
-As part of this renaming, and to avoid proliferation of API groups, we have
+From the v1.6 release, all legacy APIs (ending with the
+`antrea.tanzu.vmware.com` suffix) have been completely removed. If you are
+running an Antrea version older than v1.0 and you want to upgrade to Antrea v1.6
+or greater and migrate your API resources, you will first need to do an
+intermediate upgrade to an Antrea version >= v1.0 and <= v1.5. You will then be
+able to migrate all your API resources to the new (`*.antrea.io`) API, by
+following the steps below. Finally, you will be able to upgrade to your desired
+Antrea version (>= v1.6).
+
+As part of the API renaming, and to avoid proliferation of API groups, we have
 decided to group all the Custom Resource Definitions (CRDs) defined by Antrea in
 a single API group: `crd.antrea.io`.
 
@@ -192,8 +201,17 @@ Note that for CRDs which are "owned" by Antrea, `AntreaAgentInfo` and
 `AntreaControllerInfo`, resources are automatically created by the Antrea
 components using both API versions.
 
-All legacy API groups are planned for removal in December 2021. All versions of
-Antrea released after that will no longer include support for legacy API groups
-and will no longer ship with the mirroring controller. We recommend that all
-applications using the Antrea API be upgraded before then using the procedure
-detailed above.
+### Deleting legacy Kubernetes resources after an upgrade
+
+After a successful upgrade from Antrea < v1.6 to Antrea >= v1.6, you may want to
+manually clean up legacy Kubernetes resources which were created by an old
+Antrea version but are no longer needed. Note that keeping these resource will
+not impact any Antrea functions.
+
+To delete these legacy resources (CRDs and webhooks), run:
+
+```bash
+kubectl get crds -o=name --no-headers=true | grep "antrea\.tanzu\.vmware\.com" | xargs  kubectl delete
+kubectl get mutatingwebhookconfigurations -o=name --no-headers=true | grep "antrea\.tanzu\.vmware\.com" | xargs  kubectl delete
+kubectl get validatingwebhookconfigurations -o=name --no-headers=true | grep "antrea\.tanzu\.vmware\.com" | xargs  kubectl delete
+```

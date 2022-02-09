@@ -57,7 +57,6 @@ import (
 	controllerconfig "antrea.io/antrea/pkg/config/controller"
 	flowaggregatorconfig "antrea.io/antrea/pkg/config/flowaggregator"
 	"antrea.io/antrea/pkg/features"
-	legacycrdclientset "antrea.io/antrea/pkg/legacyclient/clientset/versioned"
 	"antrea.io/antrea/test/e2e/providers"
 )
 
@@ -202,7 +201,6 @@ type TestData struct {
 	clientset          kubernetes.Interface
 	aggregatorClient   aggregatorclientset.Interface
 	crdClient          crdclientset.Interface
-	legacyCrdClient    legacycrdclientset.Interface
 	logsDirForTestCase string
 }
 
@@ -941,15 +939,10 @@ func (data *TestData) createClient() error {
 	if err != nil {
 		return fmt.Errorf("error when creating CRD client: %v", err)
 	}
-	legacyCrdClient, err := legacycrdclientset.NewForConfig(kubeConfig)
-	if err != nil {
-		return fmt.Errorf("error when creating legacy CRD client: %v", err)
-	}
 	data.kubeConfig = kubeConfig
 	data.clientset = clientset
 	data.aggregatorClient = aggregatorClient
 	data.crdClient = crdClient
-	data.legacyCrdClient = legacyCrdClient
 	return nil
 }
 

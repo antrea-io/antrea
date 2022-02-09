@@ -61,12 +61,6 @@ import (
 	"antrea.io/antrea/pkg/controller/querier"
 	"antrea.io/antrea/pkg/controller/stats"
 	"antrea.io/antrea/pkg/features"
-	legacycontrolplane "antrea.io/antrea/pkg/legacyapis/controlplane"
-	legacycpinstall "antrea.io/antrea/pkg/legacyapis/controlplane/install"
-	legacyapistats "antrea.io/antrea/pkg/legacyapis/stats"
-	legacystatsinstall "antrea.io/antrea/pkg/legacyapis/stats/install"
-	legacysysteminstall "antrea.io/antrea/pkg/legacyapis/system/install"
-	legacysystem "antrea.io/antrea/pkg/legacyapis/system/v1beta1"
 )
 
 var (
@@ -83,10 +77,6 @@ func init() {
 	cpinstall.Install(Scheme)
 	systeminstall.Install(Scheme)
 	statsinstall.Install(Scheme)
-
-	legacycpinstall.Install(Scheme)
-	legacysysteminstall.Install(Scheme)
-	legacystatsinstall.Install(Scheme)
 
 	// We need to add the options to empty v1, see sample-apiserver/pkg/apiserver/apiserver.go.
 	metav1.AddToGroupVersion(Scheme, schema.GroupVersion{Version: "v1"})
@@ -207,28 +197,6 @@ func installAPIGroup(s *APIServer, c completedConfig) error {
 	statsGroup.VersionedResourcesStorageMap["v1alpha1"] = statsStorage
 
 	groups := []*genericapiserver.APIGroupInfo{&cpGroup, &systemGroup, &statsGroup}
-
-	// legacy groups
-	legacyCPGroup := genericapiserver.NewDefaultAPIGroupInfo(legacycontrolplane.GroupName, Scheme, metav1.ParameterCodec, Codecs)
-	legacyCPv1beta2Storage := map[string]rest.Storage{}
-	legacyCPv1beta2Storage["addressgroups"] = addressGroupStorage
-	legacyCPv1beta2Storage["appliedtogroups"] = appliedToGroupStorage
-	legacyCPv1beta2Storage["networkpolicies"] = networkPolicyStorage
-	legacyCPv1beta2Storage["networkpolicies/status"] = networkPolicyStatusStorage
-	legacyCPv1beta2Storage["nodestatssummaries"] = nodeStatsSummaryStorage
-	legacyCPv1beta2Storage["groupassociations"] = groupAssociationStorage
-	legacyCPv1beta2Storage["clustergroupmembers"] = clusterGroupMembershipStorage
-	legacyCPGroup.VersionedResourcesStorageMap["v1beta2"] = legacyCPv1beta2Storage
-
-	legacySystemGroup := genericapiserver.NewDefaultAPIGroupInfo(legacysystem.GroupName, Scheme, metav1.ParameterCodec, Codecs)
-	legacySystemGroup.VersionedResourcesStorageMap["v1beta1"] = systemStorage
-
-	legacyStatsGroup := genericapiserver.NewDefaultAPIGroupInfo(legacyapistats.GroupName, Scheme, metav1.ParameterCodec, Codecs)
-	legacyStatsGroup.VersionedResourcesStorageMap["v1alpha1"] = statsStorage
-
-	// legacy API groups
-	groups = append(groups, &legacyCPGroup, &legacySystemGroup, &legacyStatsGroup)
-
 	for _, apiGroupInfo := range groups {
 		if err := s.GenericAPIServer.InstallAPIGroup(apiGroupInfo); err != nil {
 			return err
@@ -267,6 +235,9 @@ func CleanupDeprecatedAPIServices(aggregatorClient clientset.Interface) error {
 	deprecatedAPIServices := []string{
 		"v1beta1.networking.antrea.tanzu.vmware.com",
 		"v1beta1.controlplane.antrea.tanzu.vmware.com",
+		"v1alpha1.stats.antrea.tanzu.vmware.com",
+		"v1beta1.system.antrea.tanzu.vmware.com",
+		"v1beta2.controlplane.antrea.tanzu.vmware.com",
 	}
 	for _, as := range deprecatedAPIServices {
 		err := aggregatorClient.ApiregistrationV1().APIServices().Delete(context.TODO(), as, metav1.DeleteOptions{})
@@ -327,19 +298,14 @@ func DefaultCAConfig() *certificate.CAConfig {
 	return &certificate.CAConfig{
 		CAConfigMapName: certificate.AntreaCAConfigMapName,
 		APIServiceNames: []string{
-			"v1alpha1.stats.antrea.tanzu.vmware.com",
-			"v1beta2.controlplane.antrea.tanzu.vmware.com",
-			"v1beta1.system.antrea.tanzu.vmware.com",
 			"v1alpha1.stats.antrea.io",
 			"v1beta1.system.antrea.io",
 			"v1beta2.controlplane.antrea.io",
 		},
 		ValidatingWebhooks: []string{
-			"crdvalidator.antrea.tanzu.vmware.com",
 			"crdvalidator.antrea.io",
 		},
 		MutationWebhooks: []string{
-			"crdmutator.antrea.tanzu.vmware.com",
 			"crdmutator.antrea.io",
 		},
 		OptionalMutationWebhooks: []string{

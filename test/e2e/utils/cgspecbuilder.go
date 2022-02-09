@@ -20,7 +20,6 @@ import (
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	crdv1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
 	crdv1alpha3 "antrea.io/antrea/pkg/apis/crd/v1alpha3"
-	legacycorev1alpha2 "antrea.io/antrea/pkg/legacyapis/core/v1alpha2"
 )
 
 type ClusterGroupV1Alpha2SpecBuilder struct {
@@ -30,15 +29,6 @@ type ClusterGroupV1Alpha2SpecBuilder struct {
 
 func (b *ClusterGroupV1Alpha2SpecBuilder) Get() *crdv1alpha2.ClusterGroup {
 	return &crdv1alpha2.ClusterGroup{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: b.Name,
-		},
-		Spec: b.Spec,
-	}
-}
-
-func (b *ClusterGroupV1Alpha2SpecBuilder) GetLegacy() *legacycorev1alpha2.ClusterGroup {
-	return &legacycorev1alpha2.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: b.Name,
 		},

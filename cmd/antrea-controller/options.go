@@ -22,6 +22,7 @@ import (
 
 	"github.com/spf13/pflag"
 	"gopkg.in/yaml.v2"
+	"k8s.io/klog/v2"
 	netutils "k8s.io/utils/net"
 
 	"antrea.io/antrea/pkg/apis"
@@ -137,6 +138,11 @@ func (o *Options) validateNodeIPAMControllerOptions() error {
 			return fmt.Errorf("secondary service CIDR %s is invalid", o.config.NodeIPAM.ServiceCIDRv6)
 		}
 	}
+
+	if o.config.LegacyCRDMirroring != nil {
+		klog.InfoS("The legacyCRDMirroring config option is deprecated and will be ignored (no CRD mirroring)")
+	}
+
 	return nil
 }
 
@@ -160,10 +166,6 @@ func (o *Options) setDefaults() {
 	if o.config.SelfSignedCert == nil {
 		o.config.SelfSignedCert = new(bool)
 		*o.config.SelfSignedCert = true
-	}
-	if o.config.LegacyCRDMirroring == nil {
-		o.config.LegacyCRDMirroring = new(bool)
-		*o.config.LegacyCRDMirroring = true
 	}
 	if o.config.NodeIPAM.NodeCIDRMaskSizeIPv4 == 0 {
 		o.config.NodeIPAM.NodeCIDRMaskSizeIPv4 = ipamIPv4MaskDefault
