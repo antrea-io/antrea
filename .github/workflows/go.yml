@@ -185,7 +185,7 @@ jobs:
         config-file: 'hack/.md_links_config.json'
     - name: Markdownlint
       run: |
-        sudo npm install -g markdownlint-cli
+        sudo npm install -g markdownlint-cli@0.31.1
         make markdownlint
 
   benchmark:
