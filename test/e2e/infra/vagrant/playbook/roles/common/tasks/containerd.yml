@@ -61,3 +61,8 @@
     daemon_reload: yes
     state: restarted
   when: containerd_config.changed
+
+- name: Configure crictl
+  template:
+    src: templates/crictl.yaml.j2
+    dest: /etc/crictl.yaml
