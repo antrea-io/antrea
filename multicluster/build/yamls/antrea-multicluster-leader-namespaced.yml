@@ -527,7 +527,7 @@ kind: Service
 metadata:
   labels:
     app: antrea
-    control-plane: antrea-mc-controller
+    component: antrea-mc-controller
   name: antrea-mc-controller-metrics-service
   namespace: changeme
 spec:
@@ -537,7 +537,7 @@ spec:
     targetPort: https
   selector:
     app: antrea
-    control-plane: antrea-mc-controller
+    component: antrea-mc-controller
 ---
 apiVersion: v1
 kind: Service
@@ -552,14 +552,14 @@ spec:
     targetPort: 9443
   selector:
     app: antrea
-    control-plane: antrea-mc-controller
+    component: antrea-mc-controller
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   labels:
     app: antrea
-    control-plane: antrea-mc-controller
+    component: antrea-mc-controller
   name: antrea-mc-controller
   namespace: changeme
 spec:
@@ -567,12 +567,12 @@ spec:
   selector:
     matchLabels:
       app: antrea
-      control-plane: antrea-mc-controller
+      component: antrea-mc-controller
   template:
     metadata:
       labels:
         app: antrea
-        control-plane: antrea-mc-controller
+        component: antrea-mc-controller
     spec:
       containers:
       - args:
