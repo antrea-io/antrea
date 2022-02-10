@@ -211,7 +211,7 @@ not impact any Antrea functions.
 To delete these legacy resources (CRDs and webhooks), run:
 
 ```bash
-kubectl get crds -o=name --no-headers=true | grep "antrea\.tanzu\.vmware\.com" | xargs  kubectl delete
-kubectl get mutatingwebhookconfigurations -o=name --no-headers=true | grep "antrea\.tanzu\.vmware\.com" | xargs  kubectl delete
-kubectl get validatingwebhookconfigurations -o=name --no-headers=true | grep "antrea\.tanzu\.vmware\.com" | xargs  kubectl delete
+kubectl get crds -o=name --no-headers=true | grep "antrea\.tanzu\.vmware\.com" | xargs -r kubectl delete
+kubectl get mutatingwebhookconfigurations -o=name --no-headers=true | grep "antrea\.tanzu\.vmware\.com" | xargs -r kubectl delete
+kubectl get validatingwebhookconfigurations -o=name --no-headers=true | grep "antrea\.tanzu\.vmware\.com" | xargs -r kubectl delete
 ```

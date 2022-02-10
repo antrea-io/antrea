@@ -80,6 +80,11 @@ func (o *Options) validate(args []string) error {
 			return err
 		}
 	}
+
+	if o.config.LegacyCRDMirroring != nil {
+		klog.InfoS("The legacyCRDMirroring config option is deprecated and will be ignored (no CRD mirroring)")
+	}
+
 	return nil
 }
 
@@ -137,10 +142,6 @@ func (o *Options) validateNodeIPAMControllerOptions() error {
 		if err != nil {
 			return fmt.Errorf("secondary service CIDR %s is invalid", o.config.NodeIPAM.ServiceCIDRv6)
 		}
-	}
-
-	if o.config.LegacyCRDMirroring != nil {
-		klog.InfoS("The legacyCRDMirroring config option is deprecated and will be ignored (no CRD mirroring)")
 	}
 
 	return nil
