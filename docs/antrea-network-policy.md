@@ -802,7 +802,7 @@ status:
       lastTransitionTime: "2021-01-29T20:21:48Z"
 ```
 
-There are a few __restrictions__ on how ClusterGroups can be configured:
+There are a few **restrictions** on how ClusterGroups can be configured:
 
 - A ClusterGroup is a cluster-scoped resource and therefore can only be set in an Antrea
 ClusterNetworkPolicy's `appliedTo` and `to`/`from` peers.
