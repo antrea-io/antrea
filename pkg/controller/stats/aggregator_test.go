@@ -58,6 +58,37 @@ var (
 	}
 )
 
+// runWrapper wraps the Run method of the Aggregator and is used to avoid race conditions in tests.
+// It waits for the Aggregator to register all test policies (waits until Add event handlers have
+// been called for all test policies) before starting the Run method in a goroutine. It then
+// collects all the provided summaries. Finally it ensures that all the summaries have been
+// processed to completion by Run, before returning.
+// This method is not meant to be called in a goroutine, and will block until processing is
+// completed.
+func runWrapper(t *testing.T, a *Aggregator, policyCount int, summaries []*controlplane.NodeStatsSummary) {
+	stopCh := make(chan struct{})
+	doneCh := make(chan struct{})
+	err := wait.PollImmediate(100*time.Millisecond, time.Second, func() (done bool, err error) {
+		count := len(a.ListNetworkPolicyStats("")) + len(a.ListAntreaNetworkPolicyStats("")) + len(a.ListAntreaClusterNetworkPolicyStats())
+		return (count >= policyCount), nil
+	})
+	require.NoError(t, err, "Timeout while waiting for Add events to be processed by Aggregator")
+	go func() {
+		defer close(doneCh)
+		a.Run(stopCh)
+	}()
+	for _, summary := range summaries {
+		a.Collect(summary)
+	}
+	// Wait for all summaries to be consumed.
+	err = wait.PollImmediate(100*time.Millisecond, time.Second, func() (done bool, err error) {
+		return len(a.dataCh) == 0, nil
+	})
+	require.NoError(t, err, "Timeout while waiting for summaries to be consummed by Aggregator")
+	close(stopCh)
+	<-doneCh
+}
+
 func TestAggregatorCollectListGet(t *testing.T) {
 	tests := []struct {
 		name                                    string
@@ -494,16 +525,9 @@ func TestAggregatorCollectListGet(t *testing.T) {
 			a := NewAggregator(informerFactory.Networking().V1().NetworkPolicies(), crdInformerFactory.Crd().V1alpha1().ClusterNetworkPolicies(), crdInformerFactory.Crd().V1alpha1().NetworkPolicies())
 			informerFactory.Start(stopCh)
 			crdInformerFactory.Start(stopCh)
-			go a.Run(stopCh)
+			expectedPolicyCount := len(tt.expectedNetworkPolicyStats) + len(tt.expectedAntreaClusterNetworkPolicyStats) + len(tt.expectedAntreaNetworkPolicyStats)
+			runWrapper(t, a, expectedPolicyCount, tt.summaries)
 
-			for _, nodeSummaries := range tt.summaries {
-				a.Collect(nodeSummaries)
-			}
-			// Wait for all summaries being consumed.
-			err := wait.PollImmediate(100*time.Millisecond, time.Second, func() (done bool, err error) {
-				return len(a.dataCh) == 0, nil
-			})
-			require.NoError(t, err)
 			require.Equal(t, len(tt.expectedNetworkPolicyStats), len(a.ListNetworkPolicyStats("")))
 			for _, stats := range tt.expectedNetworkPolicyStats {
 				actualStats, exists := a.GetNetworkPolicyStats(stats.Namespace, stats.Name)
@@ -540,9 +564,8 @@ func TestDeleteNetworkPolicy(t *testing.T) {
 	a := NewAggregator(informerFactory.Networking().V1().NetworkPolicies(), crdInformerFactory.Crd().V1alpha1().ClusterNetworkPolicies(), crdInformerFactory.Crd().V1alpha1().NetworkPolicies())
 	informerFactory.Start(stopCh)
 	crdInformerFactory.Start(stopCh)
-	go a.Run(stopCh)
 
-	a.Collect(&controlplane.NodeStatsSummary{
+	summary := &controlplane.NodeStatsSummary{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "node-1",
 		},
@@ -586,12 +609,11 @@ func TestDeleteNetworkPolicy(t *testing.T) {
 				},
 			},
 		},
-	})
-	// Wait for all summaries being consumed.
-	err := wait.PollImmediate(100*time.Millisecond, time.Second, func() (done bool, err error) {
-		return len(a.dataCh) == 0, nil
-	})
-	require.NoError(t, err)
+	}
+
+	expectedPolicyCount := 3
+	runWrapper(t, a, expectedPolicyCount, []*controlplane.NodeStatsSummary{summary})
+
 	require.Equal(t, 1, len(a.ListNetworkPolicyStats("")))
 	require.Equal(t, 1, len(a.ListAntreaClusterNetworkPolicyStats()))
 	require.Equal(t, 1, len(a.ListAntreaNetworkPolicyStats("")))
@@ -600,7 +622,7 @@ func TestDeleteNetworkPolicy(t *testing.T) {
 	crdClient.CrdV1alpha1().ClusterNetworkPolicies().Delete(context.TODO(), cnp1.Name, metav1.DeleteOptions{})
 	crdClient.CrdV1alpha1().NetworkPolicies(anp1.Namespace).Delete(context.TODO(), anp1.Name, metav1.DeleteOptions{})
 	// Event handlers are asynchronous, it's supposed to finish very soon.
-	err = wait.PollImmediate(100*time.Millisecond, time.Second, func() (done bool, err error) {
+	err := wait.PollImmediate(100*time.Millisecond, time.Second, func() (done bool, err error) {
 		return len(a.ListNetworkPolicyStats("")) == 0 && len(a.ListAntreaClusterNetworkPolicyStats()) == 0 && len(a.ListAntreaNetworkPolicyStats("")) == 0, nil
 	})
 	assert.NoError(t, err)
