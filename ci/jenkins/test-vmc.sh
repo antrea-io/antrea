@@ -396,6 +396,9 @@ function deliver_antrea {
         antrea_yml="antrea-coverage.yml"
     fi
 
+    # Enable verbose log for troubleshooting.
+    sed -i "s/--v=0/--v=4/g" $GIT_CHECKOUT_DIR/build/yamls/$antrea_yml
+
     DOCKER_IMG_VERSION=$CLUSTER
     if [[ -n $OLD_ANTREA_VERSION ]]; then
         if [[ $OLD_ANTREA_VERSION == 'LATEST' ]]; then
@@ -574,7 +577,7 @@ function run_conformance {
         $GIT_CHECKOUT_DIR/hack/generate-manifest.sh --mode dev --all-features --coverage > $GIT_CHECKOUT_DIR/build/yamls/antrea-all-coverage.yml
         antrea_yml="antrea-all-coverage.yml"
       else
-        $GIT_CHECKOUT_DIR/hack/generate-manifest.sh --mode dev --all-features > $GIT_CHECKOUT_DIR/build/yamls/antrea-all.yml
+        $GIT_CHECKOUT_DIR/hack/generate-manifest.sh --mode dev --all-features --verbose-log > $GIT_CHECKOUT_DIR/build/yamls/antrea-all.yml
         antrea_yml="antrea-all.yml"
       fi
     fi
