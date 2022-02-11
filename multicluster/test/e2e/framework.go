@@ -60,7 +60,7 @@ const (
 
 	nameSuffixLength int = 8
 
-	nginxImage   = "nginx:latest"
+	nginxImage   = "projects.registry.vmware.com/antrea/nginx:1.21.6-alpine"
 	agnhostImage = "agnhost:2.26"
 )
 
