@@ -33,6 +33,8 @@ LEADER_CLUSTER_CONFIG="--kubeconfig=$MULTICLUSTER_KUBECONFIG_PATH/leader"
 EAST_CLUSTER_CONFIG="--kubeconfig=$MULTICLUSTER_KUBECONFIG_PATH/east"
 WEST_CLUSTER_CONFIG="--kubeconfig=$MULTICLUSTER_KUBECONFIG_PATH/west"
 
+NGINX_IMAGE=projects.registry.vmware.com/antrea/nginx:1.21.6-alpine
+
 CONTROL_PLANE_NODE_ROLE="control-plane,master"
 
 multicluster_kubeconfigs=($EAST_CLUSTER_CONFIG $LEADER_CLUSTER_CONFIG $WEST_CLUSTER_CONFIG)
@@ -257,9 +259,8 @@ function run_multicluster_e2e {
 
     wait_for_multicluster_controller_ready
 
-    docker pull "${DOCKER_REGISTRY}/antrea/nginx"
-    docker tag "${DOCKER_REGISTRY}/antrea/nginx:latest" "nginx:latest"
-    docker save nginx:latest -o "${WORKDIR}"/nginx.tar
+    docker pull $NGINX_IMAGE
+    docker save $NGINX_IMAGE -o "${WORKDIR}"/nginx.tar
 
     docker pull "${DOCKER_REGISTRY}/antrea/agnhost:2.26"
     docker tag "${DOCKER_REGISTRY}/antrea/agnhost:2.26" "agnhost:2.26"
