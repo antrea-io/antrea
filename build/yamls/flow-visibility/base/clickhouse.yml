@@ -41,7 +41,7 @@ spec:
         spec:
           containers:
             - name: clickhouse
-              image: yandex/clickhouse-server:21.11
+              image: projects.registry.vmware.com/antrea/flow-visibility-clickhouse-server:21.11
               volumeMounts:
                 - name: clickhouse-configmap-volume
                   mountPath: /docker-entrypoint-initdb.d
