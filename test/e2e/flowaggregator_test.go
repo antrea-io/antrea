@@ -129,6 +129,10 @@ const (
 	testEgressRuleName             = "test-egress-rule-name"
 	iperfTimeSec                   = 12
 	protocolIdentifierTCP          = 6
+	// Set target bandwidth(bits/sec) of iPerf traffic to a relatively small value
+	// (default unlimited for TCP), to reduce the variances caused by network performance
+	// during 12s, and make the throughput test more stable.
+	iperfBandwidth = "10m"
 )
 
 var (
@@ -611,9 +615,9 @@ func checkAntctlRecord(t *testing.T, record map[string]interface{}, srcIP, dstIP
 func checkRecordsForFlows(t *testing.T, data *TestData, srcIP string, dstIP string, isIPv6 bool, isIntraNode bool, checkService bool, checkK8sNetworkPolicy bool, checkAntreaNetworkPolicy bool, checkBandwidth bool) {
 	var cmdStr string
 	if !isIPv6 {
-		cmdStr = fmt.Sprintf("iperf3 -c %s -t %d", dstIP, iperfTimeSec)
+		cmdStr = fmt.Sprintf("iperf3 -c %s -t %d -b %s", dstIP, iperfTimeSec, iperfBandwidth)
 	} else {
-		cmdStr = fmt.Sprintf("iperf3 -6 -c %s -t %d", dstIP, iperfTimeSec)
+		cmdStr = fmt.Sprintf("iperf3 -6 -c %s -t %d -b %s", dstIP, iperfTimeSec, iperfBandwidth)
 	}
 	stdout, _, err := data.runCommandFromPod(testNamespace, "perftest-a", "perftool", []string{"bash", "-c", cmdStr})
 	require.NoErrorf(t, err, "Error when running iperf3 client: %v", err)
@@ -625,10 +629,8 @@ func checkRecordsForFlows(t *testing.T, data *TestData, srcIP string, dstIP stri
 	var bandwidthInMbps float64
 	if strings.Contains(bwSlice[1], "Mbits") {
 		bandwidthInMbps = bandwidthInFloat
-	} else if strings.Contains(bwSlice[1], "Gbits") {
-		bandwidthInMbps = bandwidthInFloat * float64(1024)
 	} else {
-		t.Fatalf("Unit of the traffic bandwidth reported by iperf should either be Mbits or Gbits, failing the test.")
+		t.Fatalf("Unit of the traffic bandwidth reported by iperf should be Mbits.")
 	}
 
 	collectorOutput, recordSlices := getCollectorOutput(t, srcIP, dstIP, srcPort, checkService, true, isIPv6)
@@ -684,19 +686,21 @@ func checkRecordsForFlows(t *testing.T, data *TestData, srcIP string, dstIP stri
 			if checkBandwidth && !strings.Contains(record, "throughput: 0") {
 				flowStartTime := int64(getUint64FieldFromRecord(t, record, "flowStartSeconds"))
 				exportTime := int64(getUint64FieldFromRecord(t, record, "flowEndSeconds"))
+				flowEndReason := int64(getUint64FieldFromRecord(t, record, "flowEndReason"))
 				var recBandwidth float64
-				// Check bandwidth with the field "throughput" except for the last record,
-				// as its throughput is significantly lower than the average Iperf throughput.
-				if exportTime < flowStartTime+iperfTimeSec {
+				// flowEndReason == 3 means the end of flow detected
+				if exportTime >= flowStartTime+iperfTimeSec || flowEndReason == 3 {
+					// Check average bandwidth on the last record.
+					octetTotalCount := getUint64FieldFromRecord(t, record, "octetTotalCount")
+					recBandwidth = float64(octetTotalCount) * 8 / float64(iperfTimeSec) / 1000000
+				} else {
+					// Check bandwidth with the field "throughput" except for the last record,
+					// as their throughput may be significantly lower than the average Iperf throughput.
 					throughput := getUint64FieldFromRecord(t, record, "throughput")
 					recBandwidth = float64(throughput) / 1000000
-				} else {
-					// Check average bandwidth after receiving all the records.
-					octetTotalCount := getUint64FieldFromRecord(t, record, "octetTotalCount")
-					recBandwidth = float64(octetTotalCount) * 8 / float64(exportTime-flowStartTime) / 1000000
 				}
-				t.Logf("Iperf throughput: %.2f Mbits/s, IPFIX record throughput: %.2f Mbits/s", bandwidthInMbps, recBandwidth)
-				assert.InDeltaf(recBandwidth, bandwidthInMbps, bandwidthInMbps*0.15, "Difference between Iperf bandwidth and IPFIX record bandwidth should be lower than 15%%")
+				t.Logf("Throughput check on record with flowEndSeconds-flowStartSeconds: %v, Iperf throughput: %.2f Mbits/s, IPFIX record throughput: %.2f Mbits/s", exportTime-flowStartTime, bandwidthInMbps, recBandwidth)
+				assert.InDeltaf(recBandwidth, bandwidthInMbps, bandwidthInMbps*0.15, "Difference between Iperf bandwidth and IPFIX record bandwidth should be lower than 15%%, record: %s", record)
 			}
 		}
 	}
@@ -852,7 +856,9 @@ func getUint64FieldFromRecord(t *testing.T, record string, field string) uint64 
 func getCollectorOutput(t *testing.T, srcIP, dstIP, srcPort string, isDstService bool, checkAllRecords bool, isIPv6 bool) (string, []string) {
 	var collectorOutput string
 	var recordSlices []string
-	err := wait.PollImmediate(500*time.Millisecond, aggregatorInactiveFlowRecordTimeout, func() (bool, error) {
+	// In the ToExternalFlows test, flow record will arrive 5.5s (exporterActiveFlowExportTimeout+aggregatorActiveFlowRecordTimeout) after executing wget command
+	// We set the timeout to 9s (5.5s plus one more aggregatorActiveFlowRecordTimeout) to make the ToExternalFlows test more stable
+	err := wait.PollImmediate(500*time.Millisecond, exporterActiveFlowExportTimeout+aggregatorActiveFlowRecordTimeout*2, func() (bool, error) {
 		var rc int
 		var err error
 		// `pod-running-timeout` option is added to cover scenarios where ipfix flow-collector has crashed after being deployed
@@ -867,8 +873,10 @@ func getCollectorOutput(t *testing.T, srcIP, dstIP, srcPort string, isDstService
 			for _, record := range recordSlices {
 				flowStartTime := int64(getUint64FieldFromRecord(t, record, "flowStartSeconds"))
 				exportTime := int64(getUint64FieldFromRecord(t, record, "flowEndSeconds"))
+				flowEndReason := int64(getUint64FieldFromRecord(t, record, "flowEndReason"))
 				if strings.Contains(record, src) && strings.Contains(record, dst) && strings.Contains(record, srcPort) {
-					if exportTime >= flowStartTime+iperfTimeSec {
+					// flowEndReason == 3 means the end of flow detected
+					if exportTime >= flowStartTime+iperfTimeSec || flowEndReason == 3 {
 						return true, nil
 					}
 				}
