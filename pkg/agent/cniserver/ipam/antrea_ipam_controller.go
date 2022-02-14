@@ -105,8 +105,6 @@ func InitializeAntreaIPAMController(kubeClient clientset.Interface, crdClient cl
 		return nil, fmt.Errorf("Antrea IPAM driver failed to initialize")
 	}
 
-	antreaIPAMDriver.setController(antreaIPAMController)
-
 	return antreaIPAMController, nil
 }
 
@@ -121,6 +119,7 @@ func (c *AntreaIPAMController) Run(stopCh <-chan struct{}) {
 	if !cache.WaitForNamedCacheSync(controllerName, stopCh, c.namespaceInformer.Informer().HasSynced, c.ipPoolInformer.Informer().HasSynced, c.podInformer.HasSynced) {
 		return
 	}
+	antreaIPAMDriver.setController(c)
 
 	<-stopCh
 }
@@ -204,14 +203,16 @@ ownerReferenceLoop:
 	return strings.Split(annotations, AntreaIPAMAnnotationDelimiter), ips, reservedOwner, ipErr
 }
 
-func (c *AntreaIPAMController) getPoolAllocatorByPod(namespace, podName string) (*poolallocator.IPPoolAllocator, []net.IP, *crdv1a2.IPAddressOwner, error) {
+func (c *AntreaIPAMController) getPoolAllocatorByPod(namespace, podName string) (mineType, *poolallocator.IPPoolAllocator, []net.IP, *crdv1a2.IPAddressOwner, error) {
 	poolNames, ips, reservedOwner, err := c.getIPPoolsByPod(namespace, podName)
-	if err != nil || len(poolNames) < 1 {
-		return nil, nil, nil, err
+	if err != nil {
+		return mineUnknown, nil, nil, nil, err
+	} else if len(poolNames) < 1 {
+		return mineFalse, nil, nil, nil, nil
 	}
 	// Only one pool is supported as of today
 	// TODO - support a pool for each IP version
 	ipPool := poolNames[0]
 	allocator, err := poolallocator.NewIPPoolAllocator(ipPool, c.crdClient, c.ipPoolLister)
-	return allocator, ips, reservedOwner, err
+	return mineTrue, allocator, ips, reservedOwner, err
 }
