@@ -233,6 +233,11 @@ if [ "$FLOW_AGGREGATOR" == "true" ]; then
     fi
 
     copyManifestToNodes "$FLOW_AGG_YML"
+
+    FLOW_VISIBILITY_CH_YML="/tmp/flow-visibility.yml"
+    echo "Generating manifest for flow visibility with only clickhouse operator and db"
+    $THIS_DIR/../../../../hack/generate-manifest-flow-visibility.sh --mode e2e > "${FLOW_VISIBILITY_CH_YML}"
+    copyManifestToNodes "$FLOW_VISIBILITY_CH_YML"
     if [[ $FLOW_COLLECTOR != "" ]]; then
         echo "Restarting Flow Aggregator deployment"
         ssh -F ssh-config k8s-node-control-plane kubectl -n flow-aggregator delete pod --all
