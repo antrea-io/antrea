@@ -237,8 +237,23 @@ func setupTestWithIPFIXCollector(tb testing.TB) (*TestData, bool, bool, error) {
 	}
 	ipfixCollectorAddr := fmt.Sprintf("%s:tcp", net.JoinHostPort(ipStr, ipfixCollectorPort))
 
-	tb.Logf("Applying flow aggregator YAML with ipfix collector address: %s", ipfixCollectorAddr)
-	if err := testData.deployFlowAggregator(ipfixCollectorAddr); err != nil {
+	tb.Logf("Deploying ClickHouse")
+	chPodIPs, err := testData.deployFlowVisibilityClickHouse()
+	if err != nil {
+		return testData, v4Enabled, v6Enabled, err
+	}
+	tb.Logf("ClickHouse Pod running on address: %s", chPodIPs.String())
+	var clickHouseIP string
+	if v6Enabled && chPodIPs.ipv6 != nil {
+		clickHouseIP = chPodIPs.ipv6.String()
+	} else {
+		clickHouseIP = chPodIPs.ipv4.String()
+	}
+	clickHouseAddr := fmt.Sprintf("tcp://%s", net.JoinHostPort(clickHouseIP, clickHousePort))
+
+	tb.Logf("Applying flow aggregator YAML with ipfix collector: %s and clickHouse: %s",
+		ipfixCollectorAddr, clickHouseAddr)
+	if err := testData.deployFlowAggregator(ipfixCollectorAddr, clickHouseAddr); err != nil {
 		return testData, v4Enabled, v6Enabled, err
 	}
 	tb.Logf("Enabling flow exporter in Antrea Agent")
@@ -323,6 +338,9 @@ func exportLogs(tb testing.TB, data *TestData, logsSubDir string, writeNodeLogs 
 	// dump the logs for flow-aggregator Pods to disk.
 	data.forAllMatchingPodsInNamespace("", flowAggregatorNamespace, writePodLogs)
 
+	// dump the logs for flow-visibility Pods to disk.
+	data.forAllMatchingPodsInNamespace("", flowVisibilityNamespace, writePodLogs)
+
 	// dump the output of "kubectl describe" for Antrea pods to disk.
 	data.forAllMatchingPodsInNamespace("app=antrea", antreaNamespace, func(nodeName, podName, nsName string) error {
 		w := getPodWriter(nodeName, podName, "describe")
@@ -389,6 +407,14 @@ func teardownFlowAggregator(tb testing.TB, data *TestData) {
 	tb.Logf("Deleting '%s' K8s Namespace", flowAggregatorNamespace)
 	if err := data.DeleteNamespace(flowAggregatorNamespace, defaultTimeout); err != nil {
 		tb.Logf("Error when tearing down flow aggregator: %v", err)
+	}
+
+	tb.Logf("Deleting '%s' K8s Namespace and ClickHouse Operator", flowVisibilityNamespace)
+	if err := data.DeleteNamespace(flowVisibilityNamespace, defaultTimeout); err != nil {
+		tb.Logf("Error when tearing down flow aggregator: %v", err)
+	}
+	if err := data.deleteClickHouseOperator(); err != nil {
+		tb.Logf("Error when removing ClickHouse Operator: %v", err)
 	}
 }
 

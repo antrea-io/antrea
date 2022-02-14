@@ -30,6 +30,7 @@ Generate a YAML manifest for Antrea using Helm and print it to stdout.
         --no-proxy                    Generate a manifest with Antrea proxy disabled
         --proxy-all                   Generate a manifest with Antrea proxy with all Service support enabled
         --endpointslice               Generate a manifest with EndpointSlice support enabled
+        --flow-exporter               Generate a manifest with FlowExporter support enabled
         --no-np                       Generate a manifest with Antrea-native policies disabled
         --tun (geneve|vxlan|gre|stt)  Choose encap tunnel type from geneve, gre, stt and vxlan (default is geneve)
         --verbose-log                 Generate a manifest with increased log-level (level 4) for Antrea agent and controller.
@@ -70,6 +71,7 @@ ALLFEATURES=false
 PROXY=true
 PROXY_ALL=false
 ENDPOINTSLICE=false
+FLOW_EXPORTER=false
 NP=true
 KEEP=false
 ENCAP_MODE=""
@@ -129,6 +131,10 @@ case $key in
     --endpointslice)
     PROXY=true
     ENDPOINTSLICE=true
+    shift
+    ;;
+    --flow-exporter)
+    FLOW_EXPORTER=true
     shift
     ;;
     --no-np)
@@ -309,6 +315,10 @@ fi
 
 if $ENDPOINTSLICE; then
     HELM_VALUES+=("featureGates.EndpointSlice=true")
+fi
+
+if $FLOW_EXPORTER; then
+    HELM_VALUES+=("featureGates.FlowExporter=true")
 fi
 
 if ! $NP; then

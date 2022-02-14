@@ -459,6 +459,9 @@ function deliver_antrea {
     echo "---" >> build/yamls/antrea.yml
     cat build/yamls/antrea-prometheus.yml >> build/yamls/antrea.yml
 
+    # Generate flow-visibility related files
+    ./hack/generate-manifest-flow-visibility.sh --mode e2e > build/yamls/flow-visibility.yml
+
     if [[ $FLEXIBLE_IPAM == true ]]; then
         control_plane_ip="$(kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 == role {print $6}')"
         scp -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i "${WORKDIR}/jenkins_id_rsa" build/yamls/*.yml jenkins@${control_plane_ip}:~

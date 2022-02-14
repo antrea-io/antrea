@@ -45,6 +45,7 @@ function print_usage {
 TESTBED_CMD=$(dirname $0)"/kind-setup.sh"
 YML_CMD=$(dirname $0)"/../../hack/generate-manifest.sh"
 FLOWAGGREGATOR_YML_CMD=$(dirname $0)"/../../hack/generate-manifest-flow-aggregator.sh"
+FLOW_VISIBILITY_CMD=$(dirname $0)"/../../hack/generate-manifest-flow-visibility.sh --mode e2e"
 
 function quit {
   result=$?
@@ -155,7 +156,11 @@ COMMON_IMAGES_LIST=("k8s.gcr.io/e2e-test-images/agnhost:2.29" \
                     "projects.registry.vmware.com/library/busybox"  \
                     "projects.registry.vmware.com/antrea/nginx:1.21.6-alpine" \
                     "projects.registry.vmware.com/antrea/perftool" \
-                    "projects.registry.vmware.com/antrea/ipfix-collector:v0.5.12")
+                    "projects.registry.vmware.com/antrea/ipfix-collector:v0.5.12" \
+                    "projects.registry.vmware.com/antrea/wireguard-go:0.0.20210424" \
+                    "projects.registry.vmware.com/antrea/clickhouse-operator:0.18.2" \
+                    "projects.registry.vmware.com/antrea/metrics-exporter:0.18.2" \
+                    "projects.registry.vmware.com/antrea/clickhouse-server:21.11")
 for image in "${COMMON_IMAGES_LIST[@]}"; do
     for i in `seq 3`; do
         docker pull $image && break
@@ -205,6 +210,7 @@ function run_test {
       $YML_CMD --ipsec $manifest_args | docker exec -i kind-control-plane dd of=/root/antrea-ipsec.yml
       $FLOWAGGREGATOR_YML_CMD | docker exec -i kind-control-plane dd of=/root/flow-aggregator.yml
   fi
+  $FLOW_VISIBILITY_CMD | docker exec -i kind-control-plane dd of=/root/flow-visibility.yml
   if $proxy_all; then
       apiserver=$(docker exec -i kind-control-plane kubectl get endpoints kubernetes --no-headers | awk '{print $2}')
       if $coverage; then

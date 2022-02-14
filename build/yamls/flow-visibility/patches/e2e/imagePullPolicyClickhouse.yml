@@ -1,0 +1,6 @@
+- op: add
+  path: /spec/templates/podTemplates/0/spec/containers/0/imagePullPolicy
+  value: IfNotPresent
+- op: add
+  path: /spec/templates/podTemplates/0/spec/containers/1/imagePullPolicy
+  value: IfNotPresent

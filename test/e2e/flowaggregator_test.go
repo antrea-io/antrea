@@ -127,6 +127,7 @@ const (
 	egressAntreaNetworkPolicyName  = "test-flow-aggregator-antrea-networkpolicy-egress"
 	testIngressRuleName            = "test-ingress-rule-name"
 	testEgressRuleName             = "test-egress-rule-name"
+	clickHousePodName              = "chi-clickhouse-clickhouse-0-0-0"
 	iperfTimeSec                   = 12
 	protocolIdentifierTCP          = 6
 	// Set target bandwidth(bits/sec) of iPerf traffic to a relatively small value
@@ -621,13 +622,18 @@ func checkRecordsForFlows(t *testing.T, data *TestData, srcIP string, dstIP stri
 		t.Fatalf("Unit of the traffic bandwidth reported by iperf should be Mbits.")
 	}
 
+	checkRecordsForFlowsCollector(t, data, srcIP, dstIP, srcPort, isIPv6, isIntraNode, checkService, checkK8sNetworkPolicy, checkAntreaNetworkPolicy, bandwidthInMbps)
+	checkRecordsForFlowsClickHouse(t, data, srcIP, dstIP, srcPort, isIntraNode, checkService, checkK8sNetworkPolicy, checkAntreaNetworkPolicy, bandwidthInMbps)
+}
+
+func checkRecordsForFlowsCollector(t *testing.T, data *TestData, srcIP, dstIP, srcPort string, isIPv6, isIntraNode, checkService, checkK8sNetworkPolicy, checkAntreaNetworkPolicy bool, bandwidthInMbps float64) {
 	collectorOutput, recordSlices := getCollectorOutput(t, srcIP, dstIP, srcPort, checkService, true, isIPv6, data)
 	// Iterate over recordSlices and build some results to test with expected results
 	dataRecordsCount := 0
 	src, dst := matchSrcAndDstAddress(srcIP, dstIP, checkService, isIPv6)
 	for _, record := range recordSlices {
 		// Check the source port along with source and destination IPs as there
-		// are flow records for control flows during the iperf  with same IPs
+		// are flow records for control flows during the iperf with same IPs
 		// and destination port.
 		if strings.Contains(record, src) && strings.Contains(record, dst) && strings.Contains(record, srcPort) {
 			dataRecordsCount = dataRecordsCount + 1
@@ -697,6 +703,76 @@ func checkRecordsForFlows(t *testing.T, data *TestData, srcIP string, dstIP stri
 	assert.GreaterOrEqualf(t, dataRecordsCount, expectedNumDataRecords, "IPFIX collector should receive expected number of flow records. Considered records: %s \n Collector output: %s", recordSlices, collectorOutput)
 }
 
+func checkRecordsForFlowsClickHouse(t *testing.T, data *TestData, srcIP, dstIP, srcPort string, isIntraNode, checkService, checkK8sNetworkPolicy, checkAntreaNetworkPolicy bool, bandwidthInMbps float64) {
+	// Check the source port along with source and destination IPs as there
+	// are flow records for control flows during the iperf with same IPs
+	// and destination port.
+	clickHouseRecords := getClickHouseOutput(t, data, srcIP, dstIP, srcPort, checkService, true)
+
+	for _, record := range clickHouseRecords {
+		// Check if record has both Pod name of source and destination Pod.
+		if isIntraNode {
+			checkPodAndNodeDataClickHouse(t, record, "perftest-a", controlPlaneNodeName(), "perftest-b", controlPlaneNodeName())
+			checkFlowTypeClickHouse(t, record, ipfixregistry.FlowTypeIntraNode)
+		} else {
+			checkPodAndNodeDataClickHouse(t, record, "perftest-a", controlPlaneNodeName(), "perftest-c", workerNodeName(1))
+			checkFlowTypeClickHouse(t, record, ipfixregistry.FlowTypeInterNode)
+		}
+		assert := assert.New(t)
+		if checkService {
+			if isIntraNode {
+				assert.Contains(record.DestinationServicePortName, "antrea-test/perftest-b", "Record with ServiceIP does not have Service name")
+			} else {
+				assert.Contains(record.DestinationServicePortName, "antrea-test/perftest-c", "Record with ServiceIP does not have Service name")
+			}
+		}
+		if checkK8sNetworkPolicy {
+			// Check if records have both ingress and egress network policies.
+			assert.Equal(record.IngressNetworkPolicyName, ingressAllowNetworkPolicyName, "Record does not have the correct NetworkPolicy name with the ingress rule")
+			assert.Equal(record.IngressNetworkPolicyNamespace, testNamespace, "Record does not have the correct NetworkPolicy Namespace with the ingress rule")
+			assert.Equal(record.IngressNetworkPolicyType, ipfixregistry.PolicyTypeK8sNetworkPolicy, "Record does not have the correct NetworkPolicy Type with the ingress rule")
+			assert.Equal(record.EgressNetworkPolicyName, egressAllowNetworkPolicyName, "Record does not have the correct NetworkPolicy name with the egress rule")
+			assert.Equal(record.EgressNetworkPolicyNamespace, testNamespace, "Record does not have the correct NetworkPolicy Namespace with the egress rule")
+			assert.Equal(record.EgressNetworkPolicyType, ipfixregistry.PolicyTypeK8sNetworkPolicy, "Record does not have the correct NetworkPolicy Type with the egress rule")
+		}
+		if checkAntreaNetworkPolicy {
+			// Check if records have both ingress and egress network policies.
+			assert.Equal(record.IngressNetworkPolicyName, ingressAntreaNetworkPolicyName, "Record does not have the correct NetworkPolicy name with the ingress rule")
+			assert.Equal(record.IngressNetworkPolicyNamespace, testNamespace, "Record does not have the correct NetworkPolicy Namespace with the ingress rule")
+			assert.Equal(record.IngressNetworkPolicyType, ipfixregistry.PolicyTypeAntreaNetworkPolicy, "Record does not have the correct NetworkPolicy Type with the ingress rule")
+			assert.Equal(record.IngressNetworkPolicyRuleName, testIngressRuleName, "Record does not have the correct NetworkPolicy RuleName with the ingress rule")
+			assert.Equal(record.IngressNetworkPolicyRuleAction, ipfixregistry.NetworkPolicyRuleActionAllow, "Record does not have the correct NetworkPolicy RuleAction with the ingress rule")
+			assert.Equal(record.EgressNetworkPolicyName, egressAntreaNetworkPolicyName, "Record does not have the correct NetworkPolicy name with the egress rule")
+			assert.Equal(record.EgressNetworkPolicyNamespace, testNamespace, "Record does not have the correct NetworkPolicy Namespace with the egress rule")
+			assert.Equal(record.EgressNetworkPolicyType, ipfixregistry.PolicyTypeAntreaNetworkPolicy, "Record does not have the correct NetworkPolicy Type with the egress rule")
+			assert.Equal(record.EgressNetworkPolicyRuleName, testEgressRuleName, "Record does not have the correct NetworkPolicy RuleName with the egress rule")
+			assert.Equal(record.EgressNetworkPolicyRuleAction, ipfixregistry.NetworkPolicyRuleActionAllow, "Record does not have the correct NetworkPolicy RuleAction with the egress rule")
+		}
+
+		// Skip the bandwidth check for the iperf control flow records which have 0 throughput.
+		if record.Throughput > 0 {
+			flowStartTime := record.FlowStartSeconds.Unix()
+			exportTime := record.FlowEndSeconds.Unix()
+			var recBandwidth float64
+			// flowEndReason == 3 means the end of flow detected
+			if exportTime >= flowStartTime+iperfTimeSec || record.FlowEndReason == 3 {
+				octetTotalCount := record.OctetTotalCount
+				recBandwidth = float64(octetTotalCount) * 8 / float64(exportTime-flowStartTime) / 1000000
+			} else {
+				// Check bandwidth with the field "throughput" except for the last record,
+				// as their throughput may be significantly lower than the average Iperf throughput.
+				throughput := record.Throughput
+				recBandwidth = float64(throughput) / 1000000
+			}
+			t.Logf("Throughput check on record with flowEndSeconds-flowStartSeconds: %v, Iperf throughput: %.2f Mbits/s, ClickHouse record throughput: %.2f Mbits/s", exportTime-flowStartTime, bandwidthInMbps, recBandwidth)
+			assert.InDeltaf(recBandwidth, bandwidthInMbps, bandwidthInMbps*0.15, "Difference between Iperf bandwidth and ClickHouse record bandwidth should be lower than 15%%, record: %v", record)
+		}
+
+	}
+	// Checking only data records as data records cannot be decoded without template record.
+	assert.GreaterOrEqualf(t, len(clickHouseRecords), expectedNumDataRecords, "ClickHouse should receive expected number of flow records. Considered records: %s", clickHouseRecords)
+}
+
 func checkRecordsForToExternalFlows(t *testing.T, data *TestData, srcNodeName string, srcPodName string, srcIP string, dstIP string, dstPort int32, isIPv6 bool) {
 	var cmd string
 	if !isIPv6 {
@@ -715,9 +791,20 @@ func checkRecordsForToExternalFlows(t *testing.T, data *TestData, srcNodeName st
 			assert.NotContains(t, record, "octetDeltaCount: 0", "octetDeltaCount should be non-zero")
 		}
 	}
+
+	clickHouseRecords := getClickHouseOutput(t, data, srcIP, dstIP, "", false, false)
+	for _, record := range clickHouseRecords {
+		checkPodAndNodeDataClickHouse(t, record, srcPodName, srcNodeName, "", "")
+		checkFlowTypeClickHouse(t, record, ipfixregistry.FlowTypeToExternal)
+		// Since the OVS userspace conntrack implementation doesn't maintain
+		// packet or byte counter statistics, skip the check for Kind clusters
+		if testOptions.providerName != "kind" {
+			assert.Greater(t, record.OctetDeltaCount, uint64(0), "octetDeltaCount should be non-zero")
+		}
+	}
 }
 
-func checkRecordsForDenyFlows(t *testing.T, data *TestData, testFlow1, testFlow2 testFlow, isIPv6 bool, isIntraNode bool, isANP bool) {
+func checkRecordsForDenyFlows(t *testing.T, data *TestData, testFlow1, testFlow2 testFlow, isIPv6, isIntraNode, isANP bool) {
 	var cmdStr1, cmdStr2 string
 	if !isIPv6 {
 		cmdStr1 = fmt.Sprintf("iperf3 -c %s -n 1", testFlow1.dstIP)
@@ -731,6 +818,11 @@ func checkRecordsForDenyFlows(t *testing.T, data *TestData, testFlow1, testFlow2
 	_, _, err = data.RunCommandFromPod(testNamespace, testFlow2.srcPodName, "", []string{"timeout", "2", "bash", "-c", cmdStr2})
 	assert.Error(t, err)
 
+	checkRecordsForDenyFlowsCollector(t, data, testFlow1, testFlow2, isIPv6, isIntraNode, isANP)
+	checkRecordsForDenyFlowsClickHouse(t, data, testFlow1, testFlow2, isIPv6, isIntraNode, isANP)
+}
+
+func checkRecordsForDenyFlowsCollector(t *testing.T, data *TestData, testFlow1, testFlow2 testFlow, isIPv6, isIntraNode, isANP bool) {
 	_, recordSlices1 := getCollectorOutput(t, testFlow1.srcIP, testFlow1.dstIP, "", false, false, isIPv6, data)
 	_, recordSlices2 := getCollectorOutput(t, testFlow2.srcIP, testFlow2.dstIP, "", false, false, isIPv6, data)
 	recordSlices := append(recordSlices1, recordSlices2...)
@@ -794,6 +886,61 @@ func checkRecordsForDenyFlows(t *testing.T, data *TestData, testFlow1, testFlow2
 	}
 }
 
+func checkRecordsForDenyFlowsClickHouse(t *testing.T, data *TestData, testFlow1, testFlow2 testFlow, isIPv6, isIntraNode, isANP bool) {
+	clickHouseRecords1 := getClickHouseOutput(t, data, testFlow1.srcIP, testFlow1.dstIP, "", false, false)
+	clickHouseRecords2 := getClickHouseOutput(t, data, testFlow2.srcIP, testFlow2.dstIP, "", false, false)
+	recordSlices := append(clickHouseRecords1, clickHouseRecords2...)
+	// Iterate over recordSlices and build some results to test with expected results
+	for _, record := range recordSlices {
+		var srcPodName, dstPodName string
+		if record.SourceIP == testFlow1.srcIP && record.DestinationIP == testFlow1.dstIP {
+			srcPodName = testFlow1.srcPodName
+			dstPodName = testFlow1.dstPodName
+		} else if record.SourceIP == testFlow2.srcIP && record.DestinationIP == testFlow2.dstIP {
+			srcPodName = testFlow2.srcPodName
+			dstPodName = testFlow2.dstPodName
+		}
+
+		if isIntraNode {
+			checkPodAndNodeDataClickHouse(t, record, srcPodName, controlPlaneNodeName(), dstPodName, controlPlaneNodeName())
+			checkFlowTypeClickHouse(t, record, ipfixregistry.FlowTypeIntraNode)
+		} else {
+			checkPodAndNodeDataClickHouse(t, record, srcPodName, controlPlaneNodeName(), dstPodName, workerNodeName(1))
+			checkFlowTypeClickHouse(t, record, ipfixregistry.FlowTypeInterNode)
+		}
+		assert := assert.New(t)
+		if !isANP { // K8s Network Policies
+			if (record.IngressNetworkPolicyRuleAction == ipfixregistry.NetworkPolicyRuleActionDrop) && (record.IngressNetworkPolicyName != ingressDropANPName) {
+				assert.Equal(record.DestinationIP, testFlow1.dstIP)
+			} else if (record.EgressNetworkPolicyRuleAction == ipfixregistry.NetworkPolicyRuleActionDrop) && (record.EgressNetworkPolicyName != egressDropANPName) {
+				assert.Equal(record.DestinationIP, testFlow2.dstIP)
+			}
+		} else { // Antrea Network Policies
+			if record.IngressNetworkPolicyRuleAction == ipfixregistry.NetworkPolicyRuleActionReject {
+				assert.Equal(record.IngressNetworkPolicyName, ingressRejectANPName, "Record does not have Antrea NetworkPolicy name with ingress reject rule")
+				assert.Equal(record.IngressNetworkPolicyNamespace, testNamespace, "Record does not have correct ingressNetworkPolicyNamespace")
+				assert.Equal(record.IngressNetworkPolicyType, ipfixregistry.PolicyTypeAntreaNetworkPolicy, "Record does not have the correct NetworkPolicy Type with the ingress reject rule")
+				assert.Equal(record.IngressNetworkPolicyRuleName, testIngressRuleName, "Record does not have the correct NetworkPolicy RuleName with the ingress reject rule")
+			} else if record.IngressNetworkPolicyRuleAction == ipfixregistry.NetworkPolicyRuleActionDrop {
+				assert.Equal(record.IngressNetworkPolicyName, ingressDropANPName, "Record does not have Antrea NetworkPolicy name with ingress drop rule")
+				assert.Equal(record.IngressNetworkPolicyNamespace, testNamespace, "Record does not have correct ingressNetworkPolicyNamespace")
+				assert.Equal(record.IngressNetworkPolicyType, ipfixregistry.PolicyTypeAntreaNetworkPolicy, "Record does not have the correct NetworkPolicy Type with the ingress drop rule")
+				assert.Equal(record.IngressNetworkPolicyRuleName, testIngressRuleName, "Record does not have the correct NetworkPolicy RuleName with the ingress drop rule")
+			} else if record.EgressNetworkPolicyRuleAction == ipfixregistry.NetworkPolicyRuleActionReject {
+				assert.Equal(record.EgressNetworkPolicyName, egressRejectANPName, "Record does not have Antrea NetworkPolicy name with egress reject rule")
+				assert.Equal(record.EgressNetworkPolicyNamespace, testNamespace, "Record does not have correct egressNetworkPolicyNamespace")
+				assert.Equal(record.EgressNetworkPolicyType, ipfixregistry.PolicyTypeAntreaNetworkPolicy, "Record does not have the correct NetworkPolicy Type with the egress reject rule")
+				assert.Equal(record.EgressNetworkPolicyRuleName, testEgressRuleName, "Record does not have the correct NetworkPolicy RuleName with the egress reject rule")
+			} else if record.EgressNetworkPolicyRuleAction == ipfixregistry.NetworkPolicyRuleActionDrop {
+				assert.Equal(record.EgressNetworkPolicyName, egressDropANPName, "Record does not have Antrea NetworkPolicy name with egress drop rule")
+				assert.Equal(record.EgressNetworkPolicyNamespace, testNamespace, "Record does not have correct egressNetworkPolicyNamespace")
+				assert.Equal(record.EgressNetworkPolicyType, ipfixregistry.PolicyTypeAntreaNetworkPolicy, "Record does not have the correct NetworkPolicy Type with the egress drop rule")
+				assert.Equal(record.EgressNetworkPolicyRuleName, testEgressRuleName, "Record does not have the correct NetworkPolicy RuleName with the egress drop rule")
+			}
+		}
+	}
+}
+
 func checkPodAndNodeData(t *testing.T, record, srcPod, srcNode, dstPod, dstNode string) {
 	assert := assert.New(t)
 	assert.Contains(record, srcPod, "Record with srcIP does not have Pod name: %s", srcPod)
@@ -813,8 +960,31 @@ func checkPodAndNodeData(t *testing.T, record, srcPod, srcNode, dstPod, dstNode 
 	}
 }
 
+func checkPodAndNodeDataClickHouse(t *testing.T, record *ClickHouseFullRow, srcPod, srcNode, dstPod, dstNode string) {
+	assert := assert.New(t)
+	assert.Equal(record.SourcePodName, srcPod, "Record with srcIP does not have Pod name: %s", srcPod)
+	assert.Equal(record.SourcePodNamespace, testNamespace, "Record does not have correct sourcePodNamespace: %s", testNamespace)
+	assert.Equal(record.SourceNodeName, srcNode, "Record does not have correct sourceNodeName: %s", srcNode)
+	// For Pod-To-External flow type, we send traffic to an external address,
+	// so we skip the verification of destination Pod info.
+	// Also, source Pod labels are different for Pod-To-External flow test.
+	if dstPod != "" {
+		assert.Equal(record.DestinationPodName, dstPod, "Record with dstIP does not have Pod name: %s", dstPod)
+		assert.Equal(record.DestinationPodNamespace, testNamespace, "Record does not have correct destinationPodNamespace: %s", testNamespace)
+		assert.Equal(record.DestinationNodeName, dstNode, "Record does not have correct destinationNodeName: %s", dstNode)
+		assert.Equal(record.SourcePodLabels, fmt.Sprintf("{\"antrea-e2e\":\"%s\",\"app\":\"perftool\"}", srcPod), "Record does not have correct label for source Pod")
+		assert.Equal(record.DestinationPodLabels, fmt.Sprintf("{\"antrea-e2e\":\"%s\",\"app\":\"perftool\"}", dstPod), "Record does not have correct label for destination Pod")
+	} else {
+		assert.Equal(record.SourcePodLabels, fmt.Sprintf("{\"antrea-e2e\":\"%s\",\"app\":\"busybox\"}", srcPod), "Record does not have correct label for source Pod")
+	}
+}
+
 func checkFlowType(t *testing.T, record string, flowType uint8) {
 	assert.Containsf(t, record, fmt.Sprintf("flowType: %d", flowType), "Record does not have correct flowType")
+}
+
+func checkFlowTypeClickHouse(t *testing.T, record *ClickHouseFullRow, flowType uint8) {
+	assert.Equal(t, record.FlowType, flowType, "Record does not have correct flowType")
 }
 
 func getUint64FieldFromRecord(t *testing.T, record string, field string) uint64 {
@@ -871,6 +1041,67 @@ func getCollectorOutput(t *testing.T, srcIP, dstIP, srcPort string, isDstService
 	})
 	require.NoErrorf(t, err, "IPFIX collector did not receive the expected records in collector output: %v iperf source port: %s", collectorOutput, srcPort)
 	return collectorOutput, recordSlices
+}
+
+// getClickHouseOutput queries clickhouse with built-in client and checks if we have
+// received all the expected records for a given flow with source IP, destination IP
+// and source port. We send source port to ignore the control flows during the iperf test.
+// Polling timeout is coded assuming IPFIX output has been checked first.
+func getClickHouseOutput(t *testing.T, data *TestData, srcIP, dstIP, srcPort string, isDstService, checkAllRecords bool) []*ClickHouseFullRow {
+	var flowRecords []*ClickHouseFullRow
+	var queryOutput string
+
+	query := fmt.Sprintf("SELECT * FROM flows WHERE (sourceIP = '%s') AND (destinationIP = '%s')", srcIP, dstIP)
+	if isDstService {
+		query = fmt.Sprintf("SELECT * FROM flows WHERE (sourceIP = '%s') AND (destinationClusterIP = '%s')", srcIP, dstIP)
+	}
+	if len(srcPort) > 0 {
+		query = fmt.Sprintf("%s AND (sourceTransportPort = %s)", query, srcPort)
+	}
+	cmd := []string{
+		"clickhouse-client",
+		"--date_time_output_format=iso",
+		"--format=JSONEachRow",
+		fmt.Sprintf("--query=%s", query),
+	}
+	// ClickHouse output expected to be checked after IPFIX collector.
+	// Waiting additional 4x commit interval to be adequate for 3 commit attempts.
+	err := wait.PollImmediate(500*time.Millisecond, aggregatorClickHouseCommitInterval*4, func() (bool, error) {
+		queryOutput, _, err := data.RunCommandFromPod(flowVisibilityNamespace, clickHousePodName, "clickhouse", cmd)
+		if err != nil {
+			return false, err
+		}
+
+		rows := strings.Split(queryOutput, "\n")
+		flowRecords = make([]*ClickHouseFullRow, 0, len(rows))
+		for _, row := range rows {
+			row = strings.TrimSpace(row)
+			if len(row) == 0 {
+				continue
+			}
+			flowRecord := ClickHouseFullRow{}
+			err = json.Unmarshal([]byte(row), &flowRecord)
+			if err != nil {
+				return false, err
+			}
+			flowRecords = append(flowRecords, &flowRecord)
+		}
+
+		if checkAllRecords {
+			for _, record := range flowRecords {
+				flowStartTime := record.FlowStartSeconds.Unix()
+				exportTime := record.FlowEndSeconds.Unix()
+				// flowEndReason == 3 means the end of flow detected
+				if exportTime >= flowStartTime+iperfTimeSec || record.FlowEndReason == 3 {
+					return true, nil
+				}
+			}
+			return false, nil
+		}
+		return len(flowRecords) > 0, nil
+	})
+	require.NoErrorf(t, err, "ClickHouse did not receive the expected records in query output: %v; query: %s", queryOutput, query)
+	return flowRecords
 }
 
 func getRecordsFromOutput(output string) []string {
@@ -1146,4 +1377,56 @@ func matchSrcAndDstAddress(srcIP string, dstIP string, isDstService bool, isIPv6
 		}
 	}
 	return srcField, dstField
+}
+
+type ClickHouseFullRow struct {
+	TimeInserted                         time.Time `json:"timeInserted"`
+	FlowStartSeconds                     time.Time `json:"flowStartSeconds"`
+	FlowEndSeconds                       time.Time `json:"flowEndSeconds"`
+	FlowEndSecondsFromSourceNode         time.Time `json:"flowEndSecondsFromSourceNode"`
+	FlowEndSecondsFromDestinationNode    time.Time `json:"flowEndSecondsFromDestinationNode"`
+	FlowEndReason                        uint8     `json:"flowEndReason"`
+	SourceIP                             string    `json:"sourceIP"`
+	DestinationIP                        string    `json:"destinationIP"`
+	SourceTransportPort                  uint16    `json:"sourceTransportPort"`
+	DestinationTransportPort             uint16    `json:"destinationTransportPort"`
+	ProtocolIdentifier                   uint8     `json:"protocolIdentifier"`
+	PacketTotalCount                     uint64    `json:"packetTotalCount,string"`
+	OctetTotalCount                      uint64    `json:"octetTotalCount,string"`
+	PacketDeltaCount                     uint64    `json:"packetDeltaCount,string"`
+	OctetDeltaCount                      uint64    `json:"octetDeltaCount,string"`
+	ReversePacketTotalCount              uint64    `json:"reversePacketTotalCount,string"`
+	ReverseOctetTotalCount               uint64    `json:"reverseOctetTotalCount,string"`
+	ReversePacketDeltaCount              uint64    `json:"reversePacketDeltaCount,string"`
+	ReverseOctetDeltaCount               uint64    `json:"reverseOctetDeltaCount,string"`
+	SourcePodName                        string    `json:"sourcePodName"`
+	SourcePodNamespace                   string    `json:"sourcePodNamespace"`
+	SourceNodeName                       string    `json:"sourceNodeName"`
+	DestinationPodName                   string    `json:"destinationPodName"`
+	DestinationPodNamespace              string    `json:"destinationPodNamespace"`
+	DestinationNodeName                  string    `json:"destinationNodeName"`
+	DestinationClusterIP                 string    `json:"destinationClusterIP"`
+	DestinationServicePort               uint16    `json:"destinationServicePort"`
+	DestinationServicePortName           string    `json:"destinationServicePortName"`
+	IngressNetworkPolicyName             string    `json:"ingressNetworkPolicyName"`
+	IngressNetworkPolicyNamespace        string    `json:"ingressNetworkPolicyNamespace"`
+	IngressNetworkPolicyRuleName         string    `json:"ingressNetworkPolicyRuleName"`
+	IngressNetworkPolicyRuleAction       uint8     `json:"ingressNetworkPolicyRuleAction"`
+	IngressNetworkPolicyType             uint8     `json:"ingressNetworkPolicyType"`
+	EgressNetworkPolicyName              string    `json:"egressNetworkPolicyName"`
+	EgressNetworkPolicyNamespace         string    `json:"egressNetworkPolicyNamespace"`
+	EgressNetworkPolicyRuleName          string    `json:"egressNetworkPolicyRuleName"`
+	EgressNetworkPolicyRuleAction        uint8     `json:"egressNetworkPolicyRuleAction"`
+	EgressNetworkPolicyType              uint8     `json:"egressNetworkPolicyType"`
+	TcpState                             string    `json:"tcpState"`
+	FlowType                             uint8     `json:"flowType"`
+	SourcePodLabels                      string    `json:"sourcePodLabels"`
+	DestinationPodLabels                 string    `json:"destinationPodLabels"`
+	Throughput                           uint64    `json:"throughput,string"`
+	ReverseThroughput                    uint64    `json:"reverseThroughput,string"`
+	ThroughputFromSourceNode             uint64    `json:"throughputFromSourceNode,string"`
+	ThroughputFromDestinationNode        uint64    `json:"throughputFromDestinationNode,string"`
+	ReverseThroughputFromSourceNode      uint64    `json:"reverseThroughputFromSourceNode,string"`
+	ReverseThroughputFromDestinationNode uint64    `json:"reverseThroughputFromDestinationNode,string"`
+	Trusted                              uint8     `json:"trusted"`
 }
