@@ -29,9 +29,15 @@ LABEL description="Takes care of building the Antrea binaries as part of buildin
 
 USER root
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    ipset \
-    jq \
- && rm -rf /var/lib/apt/lists/*
+# See https://github.com/kubernetes-sigs/iptables-wrappers
+# /iptables-wrapper-installer.sh will have permissions of 600.
+# --chmod=700 doesn't work with older versions of Docker and requires DOCKER_BUILDKIT=1, so we use
+# chmod in the RUN command below instead.
+ADD https://raw.githubusercontent.com/kubernetes-sigs/iptables-wrappers/9e6ce59c864623ea71a6f7d59c35fcb13a919b87/iptables-wrapper-installer.sh /iptables-wrapper-installer.sh
+
+RUN apt-get update && apt-get install -y --no-install-recommends ipset jq && \
+    rm -rf /var/lib/apt/lists/* && \
+    chmod +x /iptables-wrapper-installer.sh && \
+    /iptables-wrapper-installer.sh
 
 COPY --from=cni-binaries /opt/cni/bin /opt/cni/bin
