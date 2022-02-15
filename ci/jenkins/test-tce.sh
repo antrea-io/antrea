@@ -455,7 +455,7 @@ function install_tce() {
     export GOVC_URL=${GOVC_URL}
     export GOVC_USERNAME=${GOVC_USERNAME}
     export GOVC_PASSWORD=${GOVC_PASSWORD}
-    export GOVC_DATASTORE=${DATACENTERNAME}
+    export GOVC_DATACENTER=${DATACENTERNAME}
 
     VM_IP=$(govc vm.ip ${VM_NAME})
     govc snapshot.revert -vm.ip ${VM_IP} tce-init
@@ -475,7 +475,7 @@ function run_integration {
     export GOVC_URL=${GOVC_URL}
     export GOVC_USERNAME=${GOVC_USERNAME}
     export GOVC_PASSWORD=${GOVC_PASSWORD}
-    export GOVC_DATASTORE=${DATACENTERNAME}
+    export GOVC_DATACENTER=${DATACENTERNAME}
 
     VM_IP=$(govc vm.ip ${VM_NAME})
     govc snapshot.revert -vm.ip ${VM_IP} tce-init
