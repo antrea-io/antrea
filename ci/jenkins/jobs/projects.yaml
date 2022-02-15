@@ -227,9 +227,13 @@
                   credential-id: GOVC_PASSWORD
                   variable: GOVC_PASSWORD
               - text:
+                  credential-id: DATACENTERNAME
+                  variable: DATACENTERNAME
+              - text:
                   credential-id: CODECOV_TOKEN
                   variable: CODECOV_TOKEN
           publishers: []
+
       - '{name}-{test_name}-integration-for-pull-request':
           test_name: manual
           node: 'antrea-test-node'
