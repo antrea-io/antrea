@@ -7,7 +7,7 @@
   apt_repository:
     # kubernetes-xenial should work for Ubuntu 16.04+, there is no
     # kubernetes-bionic
-    repo: deb https://apt.kubernetes.io/ kubernetes-xenial main
+    repo: deb https://packages.cloud.google.com/apt/ kubernetes-xenial main
     state: present
     filename: kubernetes.list
 
