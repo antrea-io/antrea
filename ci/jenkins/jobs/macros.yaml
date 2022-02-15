@@ -23,6 +23,7 @@
       - shell: |-
           #!/bin/bash
           set -e
+          chmod a+x ./ci/jenkins/test-tce.sh
           DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
           ./ci/jenkins/test-tce.sh --testcase integration --coverage --codecov-token "${CODECOV_TOKEN}" --registry ${DOCKER_REGISTRY}
 

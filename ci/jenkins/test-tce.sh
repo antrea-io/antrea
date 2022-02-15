@@ -438,8 +438,18 @@ function deliver_antrea {
     done
 }
 
+function install_govc() {
+    which govc && exit 0
+    mkdir ~/govc
+    curl -L -o - "https://github.com/vmware/govmomi/releases/latest/download/govc_$(uname -s)_$(uname -m).tar.gz" | tar -C ~/govc ~ -xvzf - govc
+    export PATH=~/govc:$PATH
+}
+
+
 # install tce binary on the target host
 function install_tce() {
+    install_govc
+
     VM_NAME="antrea-tce-integration-0"
     export GOVC_INSECURE=1
     export GOVC_URL=${GOVC_URL}
