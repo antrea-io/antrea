@@ -440,9 +440,9 @@ function deliver_antrea {
 
 function install_govc() {
     which govc && exit 0
-    mkdir ~/govc
-    curl -L -o - "https://github.com/vmware/govmomi/releases/latest/download/govc_$(uname -s)_$(uname -m).tar.gz" | tar -C ~/govc ~ -xvzf - govc
-    export PATH=~/govc:$PATH
+    mkdir -p /tmp/govc
+    curl -L -o - "https://github.com/vmware/govmomi/releases/latest/download/govc_$(uname -s)_$(uname -m).tar.gz" | tar -C /tmp/govc  -xvzf - govc
+    export PATH=/tmp/govc:$PATH
 }
 
 
