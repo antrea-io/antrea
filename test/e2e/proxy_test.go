@@ -146,6 +146,14 @@ func probeClientIPFromPod(data *TestData, pod string, baseUrl string) (string, e
 	return host, err
 }
 
+func reverseStrs(strs []string) []string {
+	var res []string
+	for i := len(strs) - 1; i >= 0; i-- {
+		res = append(res, strs[i])
+	}
+	return res
+}
+
 func TestProxyLoadBalancerServiceIPv4(t *testing.T) {
 	skipIfNotIPv4Cluster(t)
 	testProxyLoadBalancerService(t, false)
@@ -359,13 +367,6 @@ func nodePortTestCases(t *testing.T, data *TestData, portStrCluster, portStrLoca
 		clusterUrls = append(clusterUrls, net.JoinHostPort(nodeIP, portStrCluster))
 		localUrls = append(localUrls, net.JoinHostPort(nodeIP, portStrLocal))
 	}
-	reverseStrs := func(strs []string) []string {
-		var res []string
-		for i := len(strs) - 1; i >= 0; i-- {
-			res = append(res, strs[i])
-		}
-		return res
-	}
 
 	t.Run("ExternalTrafficPolicy:Cluster/Client:Remote", func(t *testing.T) {
 		testNodePortClusterFromRemote(t, data, nodes, reverseStrs(clusterUrls))
@@ -434,11 +435,11 @@ func testNodePortLocalFromRemote(t *testing.T, data *TestData, nodes, urls, expe
 	for idx, node := range nodes {
 		hostname, err := probeHostnameFromNode(node, urls[idx])
 		require.NoError(t, err, errMsg)
-		require.Equal(t, hostname, expectedHostnames[idx])
+		require.Equal(t, expectedHostnames[idx], hostname)
 
 		clientIP, err := probeClientIPFromNode(node, urls[idx])
 		require.NoError(t, err, errMsg)
-		require.Equal(t, clientIP, expectedClientIPs[idx])
+		require.Equal(t, expectedClientIPs[idx], clientIP)
 	}
 }
 
@@ -447,7 +448,7 @@ func testNodePortLocalFromNode(t *testing.T, data *TestData, nodes, urls, expect
 	for idx, node := range nodes {
 		hostname, err := probeHostnameFromNode(node, urls[idx])
 		require.NoError(t, err, "Service NodePort whose externalTrafficPolicy is Local should be able to be connected rom Node")
-		require.Equal(t, hostname, expectedHostnames[idx])
+		require.Equal(t, expectedHostnames[idx], hostname)
 	}
 }
 
@@ -456,11 +457,11 @@ func testNodePortLocalFromPod(t *testing.T, data *TestData, pods, urls, expected
 	for idx, pod := range pods {
 		hostname, err := probeHostnameFromPod(data, pod, urls[idx])
 		require.NoError(t, err, errMsg)
-		require.Equal(t, hostname, expectedHostnames[idx])
+		require.Equal(t, expectedHostnames[idx], hostname)
 
 		clientIP, err := probeClientIPFromPod(data, pod, urls[idx])
 		require.NoError(t, err, errMsg)
-		require.Equal(t, clientIP, expectedClientIPs[idx])
+		require.Equal(t, expectedClientIPs[idx], clientIP)
 	}
 }
 
@@ -482,6 +483,75 @@ func TestProxyServiceSessionAffinity(t *testing.T) {
 		ipFamily := corev1.IPv6Protocol
 		testProxyServiceSessionAffinity(&ipFamily, []string{"fd75::aabb:ccdd:ef00", "fd75::aabb:ccdd:ef01"}, data, t)
 	}
+}
+
+func TestProxyExternalTrafficPolicyIPv4(t *testing.T) {
+	skipIfNotIPv4Cluster(t)
+	testProxyExternalTrafficPolicy(t, false)
+}
+
+func TestProxyExternalTrafficPolicyIPv6(t *testing.T) {
+	skipIfNotIPv6Cluster(t)
+	testProxyExternalTrafficPolicy(t, true)
+}
+
+func testProxyExternalTrafficPolicy(t *testing.T, isIPv6 bool) {
+	skipIfHasWindowsNodes(t)
+	skipIfNumNodesLessThan(t, 2)
+	skipIfProxyDisabled(t)
+	data, err := setupTest(t)
+	if err != nil {
+		t.Fatalf("Error when setting up test: %v", err)
+	}
+	defer teardownTest(t, data)
+	skipIfProxyAllDisabled(t, data)
+
+	svcName := fmt.Sprintf("nodeport-external-traffic-policy-test-ipv6-%v", isIPv6)
+	nodes := []string{nodeName(0), nodeName(1)}
+	nodeIPs := []string{controlPlaneNodeIPv4(), workerNodeIPv4(1)}
+	ipProtocol := corev1.IPv4Protocol
+	if isIPv6 {
+		nodeIPs = []string{controlPlaneNodeIPv6(), workerNodeIPv6(1)}
+		ipProtocol = corev1.IPv6Protocol
+	}
+
+	// Create agnhost Pods which are not on host network.
+	var podNames []string
+	for idx, node := range nodes {
+		podName := fmt.Sprintf("agnhost-%d-ipv6-%v", idx, isIPv6)
+		createAgnhostPod(t, data, podName, node, false)
+		podNames = append(podNames, podName)
+	}
+
+	// Create a NodePort Service whose externalTrafficPolicy is Cluster and backend Pods are created above.
+	var portStr string
+	nodePortSvc, err := data.createAgnhostNodePortService(svcName, false, false, &ipProtocol)
+	require.NoError(t, err)
+	for _, port := range nodePortSvc.Spec.Ports {
+		if port.NodePort != 0 {
+			portStr = fmt.Sprint(port.NodePort)
+			break
+		}
+	}
+	require.NotEqual(t, "", portStr, "NodePort port number should not be empty")
+
+	// Get test NodePort URLs.
+	var urls []string
+	for _, nodeIP := range nodeIPs {
+		urls = append(urls, net.JoinHostPort(nodeIP, portStr))
+	}
+
+	// Hold on to make sure that the Service is realized, then test the NodePort on each Node.
+	time.Sleep(2 * time.Second)
+	testNodePortClusterFromRemote(t, data, nodes, reverseStrs(urls))
+
+	// Update the NodePort Service's externalTrafficPolicy from Cluster to Local.
+	_, err = data.updateServiceExternalTrafficPolicy(svcName, true)
+	require.NoError(t, err)
+
+	// Hold on to make sure that the update of Service is realized, then test the NodePort on each Node.
+	time.Sleep(2 * time.Second)
+	testNodePortLocalFromRemote(t, data, nodes, reverseStrs(urls), nodeIPs, reverseStrs(podNames))
 }
 
 func testProxyServiceSessionAffinity(ipFamily *corev1.IPFamily, ingressIPs []string, data *TestData, t *testing.T) {
@@ -533,6 +603,7 @@ func testProxyServiceSessionAffinity(ipFamily *corev1.IPFamily, ingressIPs []str
 		}
 	}
 }
+
 func testProxyHairpinCase(t *testing.T, data *TestData) {
 	if len(clusterInfo.podV4NetworkCIDR) != 0 {
 		ipFamily := corev1.IPv4Protocol
