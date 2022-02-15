@@ -15,17 +15,19 @@
 package ipassigner
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"sync"
 
 	"github.com/vishvananda/netlink"
+	"golang.org/x/sys/unix"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2"
+	utilnet "k8s.io/utils/net"
 
+	"antrea.io/antrea/pkg/agent/ipassigner/responder"
 	"antrea.io/antrea/pkg/agent/util"
-	"antrea.io/antrea/pkg/agent/util/arping"
-	"antrea.io/antrea/pkg/agent/util/ndp"
 )
 
 // ipAssigner creates a dummy device and assigns IPs to it.
@@ -41,29 +43,45 @@ type ipAssigner struct {
 	// assignIPs caches the IPs that are assigned to the dummy device.
 	// TODO: Add a goroutine to ensure that the cache is in sync with the IPs assigned to the dummy device in case the
 	// IPs are removed by users accidentally.
-	assignedIPs sets.String
-	mutex       sync.RWMutex
+	assignedIPs  sets.String
+	mutex        sync.RWMutex
+	arpResponder responder.Responder
+	ndpResponder responder.Responder
 }
 
 // NewIPAssigner returns an *ipAssigner.
 func NewIPAssigner(nodeTransportInterface string, dummyDeviceName string) (*ipAssigner, error) {
-	_, _, externalInterface, err := util.GetIPNetDeviceByName(nodeTransportInterface)
+	ipv4, ipv6, externalInterface, err := util.GetIPNetDeviceByName(nodeTransportInterface)
 	if err != nil {
 		return nil, fmt.Errorf("get IPNetDevice from name %s error: %+v", nodeTransportInterface, err)
 	}
-
-	dummyDevice, err := ensureDummyDevice(dummyDeviceName)
-	if err != nil {
-		return nil, fmt.Errorf("error when ensuring dummy device exist: %v", err)
-	}
-
 	a := &ipAssigner{
 		externalInterface: externalInterface,
-		dummyDevice:       dummyDevice,
 		assignedIPs:       sets.NewString(),
 	}
-	if err := a.loadIPAddresses(); err != nil {
-		return nil, fmt.Errorf("error when loading IP addresses from the system: %v", err)
+	if ipv4 != nil {
+		arpResonder, err := responder.NewARPResponder(externalInterface)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create ARP responder for link %s: %v", externalInterface.Name, err)
+		}
+		a.arpResponder = arpResonder
+	}
+	if ipv6 != nil {
+		ndpResponder, err := responder.NewNDPResponder(externalInterface)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create NDP responder for link %s: %v", externalInterface.Name, err)
+		}
+		a.ndpResponder = ndpResponder
+	}
+	if dummyDeviceName != "" {
+		dummyDevice, err := ensureDummyDevice(dummyDeviceName)
+		if err != nil {
+			return nil, fmt.Errorf("error when ensuring dummy device exists: %v", err)
+		}
+		a.dummyDevice = dummyDevice
+		if err := a.loadIPAddresses(); err != nil {
+			return nil, fmt.Errorf("error when loading IP addresses from the system: %v", err)
+		}
 	}
 	return a, nil
 }
@@ -99,45 +117,45 @@ func (a *ipAssigner) loadIPAddresses() error {
 	return nil
 }
 
-// AssignIP ensures the provided IP is assigned to the dummy device.
+// AssignIP ensures the provided IP is assigned to the dummy device and the ARP/NDP responders.
 func (a *ipAssigner) AssignIP(ip string) error {
 	parsedIP := net.ParseIP(ip)
 	if parsedIP == nil {
 		return fmt.Errorf("invalid IP %s", ip)
 	}
-	addr := util.NewIPNet(parsedIP)
+	a.mutex.Lock()
+	defer a.mutex.Unlock()
 
-	if err := func() error {
-		a.mutex.Lock()
-		defer a.mutex.Unlock()
-
-		if a.assignedIPs.Has(ip) {
-			klog.V(2).InfoS("The IP is already assigned", "ip", ip)
-			return nil
-		}
-
-		if err := netlink.AddrAdd(a.dummyDevice, &netlink.Addr{IPNet: addr}); err != nil {
-			return fmt.Errorf("failed to add IP %v to interface %s: %v", ip, a.dummyDevice.Attrs().Name, err)
-		}
-		klog.InfoS("Assigned IP to interface", "ip", parsedIP, "interface", a.dummyDevice.Attrs().Name)
-
-		a.assignedIPs.Insert(ip)
+	if a.assignedIPs.Has(ip) {
+		klog.V(2).InfoS("The IP is already assigned", "ip", ip)
 		return nil
-	}(); err != nil {
-		return err
 	}
 
-	if addr.IP.To4() != nil {
-		if err := arping.GratuitousARPOverIface(addr.IP.To4(), a.externalInterface); err != nil {
-			return fmt.Errorf("failed to send gratuitous ARP: %v", err)
+	if a.dummyDevice != nil {
+		addr := util.NewIPNet(parsedIP)
+		if err := netlink.AddrAdd(a.dummyDevice, &netlink.Addr{IPNet: addr}); err != nil {
+			if !errors.Is(err, unix.EEXIST) {
+				return fmt.Errorf("failed to add IP %v to interface %s: %v", ip, a.dummyDevice.Attrs().Name, err)
+			} else {
+				klog.InfoS("IP was already assigned to interface", "ip", parsedIP, "interface", a.dummyDevice.Attrs().Name)
+			}
+		} else {
+			klog.InfoS("Assigned IP to interface", "ip", parsedIP, "interface", a.dummyDevice.Attrs().Name)
 		}
-		klog.V(2).InfoS("Sent gratuitous ARP", "ip", parsedIP)
-	} else {
-		if err := ndp.NeighborAdvertisement(addr.IP.To16(), a.externalInterface); err != nil {
-			return fmt.Errorf("failed to send neighbor advertisement: %v", err)
-		}
-		klog.V(2).InfoS("Sent NDP neighbor advertisement", "ip", parsedIP)
 	}
+
+	if utilnet.IsIPv4(parsedIP) && a.arpResponder != nil {
+		if err := a.arpResponder.AddIP(parsedIP); err != nil {
+			return fmt.Errorf("failed to assign IP %v to ARP responder: %v", ip, err)
+		}
+	}
+	if utilnet.IsIPv6(parsedIP) && a.ndpResponder != nil {
+		if err := a.ndpResponder.AddIP(parsedIP); err != nil {
+			return fmt.Errorf("failed to assign IP %v to NDP responder: %v", ip, err)
+		}
+	}
+
+	a.assignedIPs.Insert(ip)
 	return nil
 }
 
@@ -147,7 +165,6 @@ func (a *ipAssigner) UnassignIP(ip string) error {
 	if parsedIP == nil {
 		return fmt.Errorf("invalid IP %s", ip)
 	}
-
 	a.mutex.Lock()
 	defer a.mutex.Unlock()
 
@@ -156,11 +173,28 @@ func (a *ipAssigner) UnassignIP(ip string) error {
 		return nil
 	}
 
-	addr := util.NewIPNet(parsedIP)
-	if err := netlink.AddrDel(a.dummyDevice, &netlink.Addr{IPNet: addr}); err != nil {
-		return fmt.Errorf("failed to delete IP %v from interface %s: %v", ip, a.dummyDevice.Attrs().Name, err)
+	if a.dummyDevice != nil {
+		addr := util.NewIPNet(parsedIP)
+		if err := netlink.AddrDel(a.dummyDevice, &netlink.Addr{IPNet: addr}); err != nil {
+			if !errors.Is(err, unix.EADDRNOTAVAIL) {
+				return fmt.Errorf("failed to delete IP %v from interface %s: %v", ip, a.dummyDevice.Attrs().Name, err)
+			} else {
+				klog.InfoS("IP does not exist on interface", "ip", parsedIP, "interface", a.dummyDevice.Attrs().Name)
+			}
+		}
+		klog.InfoS("Deleted IP from interface", "ip", ip, "interface", a.dummyDevice.Attrs().Name)
 	}
-	klog.InfoS("Deleted IP from interface", "ip", ip, "interface", a.dummyDevice.Attrs().Name)
+
+	if utilnet.IsIPv4(parsedIP) && a.arpResponder != nil {
+		if err := a.arpResponder.RemoveIP(parsedIP); err != nil {
+			return fmt.Errorf("failed to remove IP %v from ARP responder: %v", ip, err)
+		}
+	}
+	if utilnet.IsIPv6(parsedIP) && a.ndpResponder != nil {
+		if err := a.ndpResponder.RemoveIP(parsedIP); err != nil {
+			return fmt.Errorf("failed to remove IP %v from NDP responder: %v", ip, err)
+		}
+	}
 
 	a.assignedIPs.Delete(ip)
 	return nil
@@ -172,4 +206,19 @@ func (a *ipAssigner) AssignedIPs() sets.String {
 	defer a.mutex.RUnlock()
 	// Return a copy.
 	return a.assignedIPs.Union(nil)
+}
+
+// Run starts the ARP responder and NDP responder.
+func (a *ipAssigner) Run(ch <-chan struct{}) {
+	// Start the ARP responder only when the dummy device is not created. The kernel will handle ARP requests
+	// for IPs assigned to the dummy devices by default.
+	// TODO: Check the arp_ignore sysctl parameter of the transport interface to determine whether to start
+	// the ARP responder or not.
+	if a.dummyDevice == nil && a.arpResponder != nil {
+		go a.arpResponder.Run(ch)
+	}
+	if a.ndpResponder != nil {
+		go a.ndpResponder.Run(ch)
+	}
+	<-ch
 }

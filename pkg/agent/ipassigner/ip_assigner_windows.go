@@ -36,3 +36,6 @@ func (a *ipAssigner) UnassignIP(ip string) error {
 func (a *ipAssigner) AssignedIPs() sets.String {
 	return nil
 }
+
+func (a *ipAssigner) Run(ch <-chan struct{}) {
+}

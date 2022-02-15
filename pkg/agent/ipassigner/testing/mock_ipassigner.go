@@ -76,6 +76,18 @@ func (mr *MockIPAssignerMockRecorder) AssignedIPs() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AssignedIPs", reflect.TypeOf((*MockIPAssigner)(nil).AssignedIPs))
 }
 
+// Run mocks base method
+func (m *MockIPAssigner) Run(arg0 <-chan struct{}) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "Run", arg0)
+}
+
+// Run indicates an expected call of Run
+func (mr *MockIPAssignerMockRecorder) Run(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Run", reflect.TypeOf((*MockIPAssigner)(nil).Run), arg0)
+}
+
 // UnassignIP mocks base method
 func (m *MockIPAssigner) UnassignIP(arg0 string) error {
 	m.ctrl.T.Helper()
