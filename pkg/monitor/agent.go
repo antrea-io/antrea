@@ -26,30 +26,21 @@ import (
 	agentquerier "antrea.io/antrea/pkg/agent/querier"
 	"antrea.io/antrea/pkg/apis/crd/v1beta1"
 	clientset "antrea.io/antrea/pkg/client/clientset/versioned"
-	legacyv1beta1 "antrea.io/antrea/pkg/legacyapis/clusterinformation/v1beta1"
-	legacyclientset "antrea.io/antrea/pkg/legacyclient/clientset/versioned"
 )
 
 type agentMonitor struct {
-	client       clientset.Interface
-	legacyClient legacyclientset.Interface
-	querier      agentquerier.AgentQuerier
+	client  clientset.Interface
+	querier agentquerier.AgentQuerier
 	// agentCRD is the desired state of agent monitoring CRD which agentMonitor expects.
 	agentCRD *v1beta1.AntreaAgentInfo
-	// legacyAgentCRD is the desired state of agent monitoring CRD which agentMonitor expects.
-	legacyAgentCRD *legacyv1beta1.AntreaAgentInfo
 }
 
 // NewAgentMonitor creates a new agent monitor.
-func NewAgentMonitor(client clientset.Interface,
-	legacyClient legacyclientset.Interface,
-	querier agentquerier.AgentQuerier) *agentMonitor {
+func NewAgentMonitor(client clientset.Interface, querier agentquerier.AgentQuerier) *agentMonitor {
 	return &agentMonitor{
-		client:         client,
-		legacyClient:   legacyClient,
-		querier:        querier,
-		agentCRD:       nil,
-		legacyAgentCRD: nil,
+		client:   client,
+		querier:  querier,
+		agentCRD: nil,
 	}
 }
 
@@ -60,9 +51,6 @@ func (monitor *agentMonitor) Run(stopCh <-chan struct{}) {
 
 	// Sync agent monitoring CRD every minute util stopCh is closed.
 	wait.Until(monitor.syncAgentCRD, time.Minute, stopCh)
-
-	// Sync legacy agent monitoring CRD every minute util stopCh is closed.
-	wait.Until(monitor.syncLegacyAgentCRD, time.Minute, stopCh)
 }
 
 func (monitor *agentMonitor) syncAgentCRD() {
@@ -120,81 +108,4 @@ func (monitor *agentMonitor) updateAgentCRD(partial bool) (*v1beta1.AntreaAgentI
 	monitor.querier.GetAgentInfo(monitor.agentCRD, partial)
 	klog.V(2).Infof("Updating agent monitoring CRD %+v, partial: %t", monitor.agentCRD, partial)
 	return monitor.client.CrdV1beta1().AntreaAgentInfos().Update(context.TODO(), monitor.agentCRD, metav1.UpdateOptions{})
-}
-
-func (monitor *agentMonitor) syncLegacyAgentCRD() {
-	var err error
-	if monitor.legacyAgentCRD != nil {
-		if monitor.legacyAgentCRD, err = monitor.updateLegacyAgentCRD(true); err == nil {
-			return
-		}
-		klog.Errorf("Failed to partially update agent monitoring CRD: %v", err)
-		monitor.legacyAgentCRD = nil
-	}
-
-	monitor.legacyAgentCRD, err = monitor.getLegacyAgentCRD()
-
-	if errors.IsNotFound(err) {
-		monitor.legacyAgentCRD, err = monitor.createLegacyAgentCRD()
-		if err != nil {
-			klog.Errorf("Failed to create agent monitoring CRD: %v", err)
-			monitor.legacyAgentCRD = nil
-		}
-		return
-	}
-
-	if err != nil {
-		klog.Errorf("Failed to get agent monitoring CRD: %v", err)
-		monitor.legacyAgentCRD = nil
-		return
-	}
-
-	monitor.legacyAgentCRD, err = monitor.updateLegacyAgentCRD(false)
-	if err != nil {
-		klog.Errorf("Failed to entirely update agent monitoring CRD: %v", err)
-		monitor.legacyAgentCRD = nil
-	}
-}
-
-// getLegacyAgentCRD is used to check the existence of agent monitoring CRD.
-// So when the pod restarts, it will update this monitoring CRD instead of creating a new one.
-func (monitor *agentMonitor) getLegacyAgentCRD() (*legacyv1beta1.AntreaAgentInfo, error) {
-	crdName := monitor.querier.GetNodeConfig().Name
-	klog.V(2).Infof("Getting legacy agent monitoring CRD %+v", crdName)
-	return monitor.legacyClient.ClusterinformationV1beta1().AntreaAgentInfos().Get(context.TODO(), crdName, metav1.GetOptions{})
-}
-
-// createLegacyAgentCRD creates a new agent CRD.
-func (monitor *agentMonitor) createLegacyAgentCRD() (*legacyv1beta1.AntreaAgentInfo, error) {
-	agentCRD := new(v1beta1.AntreaAgentInfo)
-	monitor.querier.GetAgentInfo(agentCRD, false)
-	legacyAgentCRD := agentInfoDeepCopy(agentCRD)
-	klog.V(2).Infof("Creating legacy agent monitoring CRD %+v", legacyAgentCRD)
-	return monitor.legacyClient.ClusterinformationV1beta1().AntreaAgentInfos().Create(context.TODO(), legacyAgentCRD, metav1.CreateOptions{})
-}
-
-// updateLegacyAgentCRD updates the monitoring CRD.
-func (monitor *agentMonitor) updateLegacyAgentCRD(partial bool) (*legacyv1beta1.AntreaAgentInfo, error) {
-	monitor.querier.GetAgentInfo(monitor.agentCRD, partial)
-	monitor.legacyAgentCRD = agentInfoDeepCopy(monitor.agentCRD)
-	klog.V(2).Infof("Updating legacy agent monitoring CRD %+v, partial: %t", monitor.legacyAgentCRD, partial)
-	return monitor.legacyClient.ClusterinformationV1beta1().AntreaAgentInfos().Update(context.TODO(), monitor.legacyAgentCRD, metav1.UpdateOptions{})
-}
-
-func agentInfoDeepCopy(aa *v1beta1.AntreaAgentInfo) *legacyv1beta1.AntreaAgentInfo {
-	laa := new(legacyv1beta1.AntreaAgentInfo)
-	laa.Name = aa.Name
-	laa.Version = aa.Version
-	laa.PodRef = *aa.PodRef.DeepCopy()
-	laa.NodeRef = *aa.NodeRef.DeepCopy()
-	laa.NodeSubnets = aa.NodeSubnets
-	laa.OVSInfo = *aa.OVSInfo.DeepCopy()
-	laa.NetworkPolicyControllerInfo = *aa.NetworkPolicyControllerInfo.DeepCopy()
-	laa.LocalPodNum = aa.LocalPodNum
-	laa.AgentConditions = []v1beta1.AgentCondition{}
-	for _, ac := range aa.AgentConditions {
-		laa.AgentConditions = append(laa.AgentConditions, *ac.DeepCopy())
-	}
-	laa.APIPort = aa.APIPort
-	return laa
 }
