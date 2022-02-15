@@ -15,3 +15,4 @@ bin
 .idea/
 .vscode/
 vendor
+ci/jenkins/jobs/defaults.yaml
