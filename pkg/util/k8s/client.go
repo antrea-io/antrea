@@ -24,7 +24,6 @@ import (
 	aggregatorclientset "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 
 	crdclientset "antrea.io/antrea/pkg/client/clientset/versioned"
-	legacycrdclientset "antrea.io/antrea/pkg/legacyclient/clientset/versioned"
 
 	netdefclient "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/client/clientset/versioned/typed/k8s.cni.cncf.io/v1"
 )
@@ -57,20 +56,6 @@ func CreateClients(config componentbaseconfig.ClientConnectionConfiguration, kub
 		return nil, nil, nil, nil, err
 	}
 	return client, aggregatorClient, crdClient, apiExtensionClient, nil
-}
-
-// CreateLegacyCRDClient creates legacyCRD client from the given config.
-func CreateLegacyCRDClient(config componentbaseconfig.ClientConnectionConfiguration, kubeAPIServerOverride string) (legacycrdclientset.Interface, error) {
-	kubeConfig, err := createRestConfig(config, kubeAPIServerOverride)
-	if err != nil {
-		return nil, err
-	}
-
-	legacyCrdClient, err := legacycrdclientset.NewForConfig(kubeConfig)
-	if err != nil {
-		return nil, err
-	}
-	return legacyCrdClient, nil
 }
 
 // CreateNetworkAttachDefClient creates net-attach-def client handle from the given config.

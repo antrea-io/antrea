@@ -11,7 +11,6 @@ metadata:
   name: antctl
 rules:
   - apiGroups:
-      - controlplane.antrea.tanzu.vmware.com
       - controlplane.antrea.io
     resources:
       - networkpolicies
@@ -21,7 +20,6 @@ rules:
       - get
       - list
   - apiGroups:
-      - stats.antrea.tanzu.vmware.com
       - stats.antrea.io
     resources:
       - networkpolicystats
@@ -31,7 +29,6 @@ rules:
       - get
       - list
   - apiGroups:
-      - system.antrea.tanzu.vmware.com
       - system.antrea.io
     resources:
       - controllerinfos
@@ -39,7 +36,6 @@ rules:
     verbs:
       - get
   - apiGroups:
-      - system.antrea.tanzu.vmware.com
       - system.antrea.io
     resources:
       - supportbundles
@@ -47,7 +43,6 @@ rules:
       - get
       - post
   - apiGroups:
-      - system.antrea.tanzu.vmware.com
       - system.antrea.io
     resources:
       - supportbundles/download

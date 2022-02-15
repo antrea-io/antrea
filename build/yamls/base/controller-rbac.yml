@@ -104,9 +104,6 @@ rules:
     resources:
       - apiservices
     resourceNames:
-      - v1alpha1.stats.antrea.tanzu.vmware.com
-      - v1beta1.system.antrea.tanzu.vmware.com
-      - v1beta2.controlplane.antrea.tanzu.vmware.com
       - v1alpha1.stats.antrea.io
       - v1beta1.system.antrea.io
       - v1beta2.controlplane.antrea.io
@@ -120,6 +117,9 @@ rules:
     resourceNames:
       - v1beta1.networking.antrea.tanzu.vmware.com
       - v1beta1.controlplane.antrea.tanzu.vmware.com
+      - v1alpha1.stats.antrea.tanzu.vmware.com
+      - v1beta1.system.antrea.tanzu.vmware.com
+      - v1beta2.controlplane.antrea.tanzu.vmware.com
     verbs:
       - delete
   - apiGroups:
@@ -128,8 +128,6 @@ rules:
       - mutatingwebhookconfigurations
       - validatingwebhookconfigurations
     resourceNames:
-      - crdmutator.antrea.tanzu.vmware.com
-      - crdvalidator.antrea.tanzu.vmware.com
       - labelsmutator.antrea.io
       - crdmutator.antrea.io
       - crdvalidator.antrea.io
@@ -250,94 +248,6 @@ rules:
       - get
       - list
       - watch
-  # Deprecated in v1.0.0.
-  - apiGroups:
-    - clusterinformation.antrea.tanzu.vmware.com
-    resources:
-      - antreacontrollerinfos
-    verbs:
-      - get
-      - create
-      - update
-      - delete
-  # Deprecated in v1.0.0.
-  - apiGroups:
-      - clusterinformation.antrea.tanzu.vmware.com
-    resources:
-      - antreaagentinfos
-    verbs:
-      - list
-      - delete
-  # Deprecated in v1.0.0.
-  - apiGroups:
-      - security.antrea.tanzu.vmware.com
-    resources:
-      - clusternetworkpolicies
-      - networkpolicies
-    verbs:
-      - get
-      - watch
-      - list
-      - update
-      - patch
-      - create
-      - delete
-  # Deprecated in v1.0.0.
-  - apiGroups:
-      - security.antrea.tanzu.vmware.com
-    resources:
-      - clusternetworkpolicies/status
-      - networkpolicies/status
-    verbs:
-      - update
-  # Deprecated in v1.0.0.
-  - apiGroups:
-      - security.antrea.tanzu.vmware.com
-    resources:
-      - tiers
-    verbs:
-      - get
-      - watch
-      - list
-      - update
-      - patch
-      - create
-      - delete
-  # Deprecated in v1.0.0.
-  - apiGroups:
-      - ops.antrea.tanzu.vmware.com
-    resources:
-      - traceflows
-      - traceflows/status
-    verbs:
-      - get
-      - watch
-      - list
-      - update
-      - patch
-      - create
-      - delete
-  # Deprecated in v1.0.0.
-  - apiGroups:
-      - core.antrea.tanzu.vmware.com
-    resources:
-      - externalentities
-      - clustergroups
-    verbs:
-      - get
-      - watch
-      - list
-      - update
-      - patch
-      - create
-      - delete
-  # Deprecated in v1.0.0.
-  - apiGroups:
-      - core.antrea.tanzu.vmware.com
-    resources:
-      - clustergroups/status
-    verbs:
-      - update
 ---
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
