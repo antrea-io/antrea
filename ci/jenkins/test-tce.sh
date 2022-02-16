@@ -254,7 +254,7 @@ function setup_cluster() {
 }
 
 
-func copy_image_to_tce_node {
+function copy_image_to_tce_node {
     filename=$1
     image=$2
     IP=$3
