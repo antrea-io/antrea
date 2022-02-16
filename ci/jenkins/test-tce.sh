@@ -253,6 +253,19 @@ function setup_cluster() {
     fi
 }
 
+
+func copy_image_to_tce_node {
+    filename=$1
+    image=$2
+    IP=$3
+    version=$4
+    need_cleanup=$5
+
+    $(SCP_WITH_UTILS_KEY) $filename jenkins@${IP}:~
+    $(SSH_WITH_UTILS_KEY) -n jenkins@${IP} "docker load -i ~/$filename"
+}
+
+
 function copy_image {
   filename=$1
   image=$2
@@ -385,8 +398,12 @@ function deliver_antrea {
     echo "---" >> $GIT_CHECKOUT_DIR/build/yamls/$antrea_yml
     cat $GIT_CHECKOUT_DIR/build/yamls/antrea-prometheus.yml >> $GIT_CHECKOUT_DIR/build/yamls/$antrea_yml
 
+
+    # this is where tce differ from the traditional cluster
+
+
     echo "====== Delivering Antrea to all the Nodes ======"
-    export KUBECONFIG=${GIT_CHECKOUT_DIR}/jenkins/out/kubeconfig
+    # export KUBECONFIG=${GIT_CHECKOUT_DIR}/jenkins/out/kubeconfig
 
     if [[ "$COVERAGE" == true ]]; then
         docker save -o antrea-ubuntu-coverage.tar antrea/antrea-ubuntu-coverage:${DOCKER_IMG_VERSION}
@@ -396,46 +413,57 @@ function deliver_antrea {
         docker save -o flow-aggregator.tar projects.registry.vmware.com/antrea/flow-aggregator:${DOCKER_IMG_VERSION}
     fi
 
-    control_plane_ip="$(kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 == role {print $6}')"
-    ${SCP_WITH_ANTREA_CI_KEY} $GIT_CHECKOUT_DIR/build/yamls/*.yml capv@${control_plane_ip}:~
+    # control_plane_ip="$(kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 == role {print $6}')"
+    # ${SCP_WITH_ANTREA_CI_KEY} $GIT_CHECKOUT_DIR/build/yamls/*.yml capv@${control_plane_ip}:~
 
-    IPs=($(kubectl get nodes -o wide --no-headers=true | awk '{print $6}' | xargs))
-    for i in "${!IPs[@]}"
-    do
-        ssh-keygen -f "/var/lib/jenkins/.ssh/known_hosts" -R ${IPs[$i]}
-        if [[ "$COVERAGE" == true ]]; then
-            copy_image antrea-ubuntu-coverage.tar docker.io/antrea/antrea-ubuntu-coverage ${IPs[$i]} ${DOCKER_IMG_VERSION} true
-            copy_image flow-aggregator-coverage.tar docker.io/antrea/flow-aggregator-coverage ${IPs[$i]} ${DOCKER_IMG_VERSION} true
-        else
-            copy_image antrea-ubuntu.tar projects.registry.vmware.com/antrea/antrea-ubuntu ${IPs[$i]} ${DOCKER_IMG_VERSION} true
-            copy_image flow-aggregator.tar projects.registry.vmware.com/antrea/flow-aggregator ${IPs[$i]} ${DOCKER_IMG_VERSION} true
-        fi
-    done
+    setup_govc_env
+    VM_NAME="antrea-tce-integration-0"
+    VM_IP=$(govc vm.ip ${VM_NAME})
+    $(SCP_WITH_UTILS_KEY) $GIT_CHECKOUT_DIR/build/yamls/*.yml jenkins@$
+
+    copy_image_to_tce_node antrea-ubuntu-coverage.tar docker.io/antrea/antrea-ubuntu-coverage ${VM_IP} ${DOCKER_IMG_VERSION} true
+    copy_iamge_to_tce_node flow-aggregator-coverage.tar docker.io/antrea/flow-aggregator-coverage ${VM_IP} ${DOCKER_IMG_VERSION} true
+
+
+
+
+    # IPs=($(kubectl get nodes -o wide --no-headers=true | awk '{print $6}' | xargs))
+    # for i in "${!IPs[@]}"
+    # do
+    #     ssh-keygen -f "/var/lib/jenkins/.ssh/known_hosts" -R ${IPs[$i]}
+    #     if [[ "$COVERAGE" == true ]]; then
+    #         copy_image antrea-ubuntu-coverage.tar docker.io/antrea/antrea-ubuntu-coverage ${IPs[$i]} ${DOCKER_IMG_VERSION} true
+    #         copy_image flow-aggregator-coverage.tar docker.io/antrea/flow-aggregator-coverage ${IPs[$i]} ${DOCKER_IMG_VERSION} true
+    #     else
+    #         copy_image antrea-ubuntu.tar projects.registry.vmware.com/antrea/antrea-ubuntu ${IPs[$i]} ${DOCKER_IMG_VERSION} true
+    #         copy_image flow-aggregator.tar projects.registry.vmware.com/antrea/flow-aggregator ${IPs[$i]} ${DOCKER_IMG_VERSION} true
+    #     fi
+    # done
 
     if [[ -z $OLD_ANTREA_VERSION ]]; then
         return 0
     fi
 
-    echo "====== Pulling old Antrea images ======"
-    if [[ ${DOCKER_REGISTRY} != "" ]]; then
-        docker pull ${DOCKER_REGISTRY}/antrea/antrea-ubuntu:$OLD_ANTREA_VERSION
-    else
-        docker pull antrea/antrea-ubuntu:$OLD_ANTREA_VERSION
-        docker tag antrea/antrea-ubuntu:$OLD_ANTREA_VERSION projects.registry.vmware.com/antrea/antrea-ubuntu:$OLD_ANTREA_VERSION
-    fi
+    # echo "====== Pulling old Antrea images ======"
+    # if [[ ${DOCKER_REGISTRY} != "" ]]; then
+    #     docker pull ${DOCKER_REGISTRY}/antrea/antrea-ubuntu:$OLD_ANTREA_VERSION
+    # else
+    #     docker pull antrea/antrea-ubuntu:$OLD_ANTREA_VERSION
+    #     docker tag antrea/antrea-ubuntu:$OLD_ANTREA_VERSION projects.registry.vmware.com/antrea/antrea-ubuntu:$OLD_ANTREA_VERSION
+    # fi
 
-    echo "====== Delivering old Antrea images to all the Nodes ======"
-    docker save -o antrea-ubuntu-old.tar projects.registry.vmware.com/antrea/antrea-ubuntu:$OLD_ANTREA_VERSION
-    node_num=$(kubectl get nodes --no-headers=true | wc -l)
-    antrea_image="antrea-ubuntu"
-    for i in "${!IPs[@]}"
-    do
-        # We want old-versioned Antrea agents to be more than half in cluster
-        if [[ $i -ge $((${node_num}/2)) ]]; then
-            # Tag old image to latest if we want Antrea agent to be old-versioned
-            copy_image antrea-ubuntu-old.tar projects.registry.vmware.com/antrea/antrea-ubuntu ${IPs[$i]} $OLD_ANTREA_VERSION false
-        fi
-    done
+    # echo "====== Delivering old Antrea images to all the Nodes ======"
+    # docker save -o antrea-ubuntu-old.tar projects.registry.vmware.com/antrea/antrea-ubuntu:$OLD_ANTREA_VERSION
+    # node_num=$(kubectl get nodes --no-headers=true | wc -l)
+    # antrea_image="antrea-ubuntu"
+    # for i in "${!IPs[@]}"
+    # do
+    #     # We want old-versioned Antrea agents to be more than half in cluster
+    #     if [[ $i -ge $((${node_num}/2)) ]]; then
+    #         # Tag old image to latest if we want Antrea agent to be old-versioned
+    #         copy_image antrea-ubuntu-old.tar projects.registry.vmware.com/antrea/antrea-ubuntu ${IPs[$i]} $OLD_ANTREA_VERSION false
+    #     fi
+    # done
 }
 
 function install_govc() {
@@ -445,19 +473,22 @@ function install_govc() {
     export PATH=/tmp/govc:$PATH
 }
 
-
-# install tce binary on the target host
-function install_tce() {
-    install_govc
-
-    VM_NAME="antrea-tce-integration-0"
+function setup_govc_env() {
     export GOVC_INSECURE=1
     export GOVC_URL=${GOVC_URL}
     export GOVC_USERNAME=${GOVC_USERNAME}
     export GOVC_PASSWORD=${GOVC_PASSWORD}
     export GOVC_DATACENTER=${DATACENTERNAME}
+}
 
 
+
+# We create a workload cluster on demand.
+function install_tce() {
+    install_govc
+
+    VM_NAME="antrea-tce-integration-0"
+    setup_govc_env
 
     VM_IP=$(govc vm.ip ${VM_NAME})
     # govc snapshot.revert -vm.ip ${VM_IP} tce-init
@@ -465,9 +496,13 @@ function install_tce() {
 
     set -x
     echo "===== Install tce bin ====="
-    ${SSH_WITH_UTILS_KEY} -n jenkins@${VM_IP} "curl -H 'Accept: application/vnd.github.v3.raw' \
-    -L https://api.github.com/repos/vmware-tanzu/community-edition/contents/hack/get-tce-release.sh | \
-    bash -s v0.9.1 linux"
+    # assume tce is installed and mc cluster existing.
+    # ${SSH_WITH_UTILS_KEY} -n jenkins@${VM_IP} 'curl -H "Accept: application/vnd.github.v3.raw" -L https://api.github.com/repos/vmware-tanzu/community-edition/contents/hack/get-tce-release.sh | bash -s v0.9.1 linux'
+    # ${SSH_WITH_UTILS_KEY} -n jenkins@${VM_IP} 'mkdir ~/bin && tar -zxvf tce-linux-amd64-v0.9.1.tar.gz && cd  tce-linux-amd64-v0.9.1/ && PATH=~/bin:$PATH ./install '
+    # ${SSH_WITH_UTILS_KEY} -n jenkins@${VM_IP} '~/bin/tanzu management-cluster create -i docker --name antrea-mc -v 10 --plan dev --ceip-participation=false'
+
+    ${SSH_WITH_UTILS_KEY} -n jenkins@${VM_IP} '~/bin/tanzu cluster get antrea-wc-0 || ~/bin/tanzu cluster create antrea-wc-0 --plan dev'
+
 }
 
 
@@ -734,6 +769,16 @@ if [[ "$TESTCASE" == "integration" ]]; then
     run_integration
     exit 0
 fi
+
+
+if [[ "$TESTCASE" == "tce-integration" ]]; then
+    install_tce
+    deliver_antrea
+    run_e2e
+    run_conformance
+    exit 0
+fi
+
 
 trap cleanup_cluster EXIT
 if [[ "$TESTCASE" == "e2e" ]]; then
