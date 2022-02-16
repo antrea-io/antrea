@@ -500,6 +500,7 @@ function install_tce() {
     # ${SSH_WITH_UTILS_KEY} -n jenkins@${VM_IP} 'curl -H "Accept: application/vnd.github.v3.raw" -L https://api.github.com/repos/vmware-tanzu/community-edition/contents/hack/get-tce-release.sh | bash -s v0.9.1 linux'
     # ${SSH_WITH_UTILS_KEY} -n jenkins@${VM_IP} 'mkdir ~/bin && tar -zxvf tce-linux-amd64-v0.9.1.tar.gz && cd  tce-linux-amd64-v0.9.1/ && PATH=~/bin:$PATH ./install '
     # ${SSH_WITH_UTILS_KEY} -n jenkins@${VM_IP} '~/bin/tanzu management-cluster create -i docker --name antrea-mc -v 10 --plan dev --ceip-participation=false'
+    chmod 600 ${WORKDIR}utils/key
 
     ${SSH_WITH_UTILS_KEY} -n jenkins@${VM_IP} '~/bin/tanzu cluster get antrea-wc-0 || ~/bin/tanzu cluster create antrea-wc-0 --plan dev'
 
