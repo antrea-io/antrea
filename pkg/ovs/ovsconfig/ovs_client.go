@@ -970,3 +970,10 @@ func (br *OVSBridge) SetPortExternalIDs(portName string, externalIDs map[string]
 	}
 	return nil
 }
+
+func (br *OVSBridge) CreatePatchPort(brName string, ifName string, peerIfName string) (string, Error) {
+       options := make(map[string]interface{})
+        options["peer"] = peerIfName
+       return br.createPort(brName, ifName, string("patch") , 4, nil, options)
+}
+

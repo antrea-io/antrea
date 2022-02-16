@@ -11,6 +11,7 @@ configMapGenerator:
 - files:
   - conf/antrea-controller.conf
   - conf/antrea-agent.conf
+  - conf/antrea-agent-secondary-network.conf
   - conf/antrea-cni.conflist
   name: antrea-config
 commonLabels:

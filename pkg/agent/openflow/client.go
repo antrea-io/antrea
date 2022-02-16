@@ -182,6 +182,19 @@ type Client interface {
 	// UninstallPodSNATFlows removes the SNAT flows for the local Pod.
 	UninstallPodSNATFlows(ofPort uint32) error
 
+	// InstallOpenFlowForSecondaryNetworkPodBridge sets up flows related to Secondary interface specific Pod bridge.
+        InstallDefaultFlowsForSecondaryNetworkPodBridge() error
+        // InstallOpenFlowForSecondaryNetworkPodBridge sets up flows related to Secondary interface specific Pod bridge.
+        InstallDefaultFlowsForSecondaryNetworkTunnelBridge() error
+        // InstallPodSecondaryNetworkFlows to be invoked for all the pods which has identified secondary interface configuration.
+        // This will configure below set of flows in 2 different OVS bridges.
+        // 1) At pod bridge, VLAN tagging all the gress packets specific to a port/interface.
+        // 2) At tunnel bridge, map VLAN to VNI mapping (Strip vlan tag and set mapped tunnel id)
+        // 3) At tunnel bridge, ingress packets to be retagged with vlan and push the frames to br1
+        InstallPodSecondaryNetworkFlows(interfaceName string, podVlan uint32, ofPort uint32) error
+        //Uninstall all the secondary network specific flows.
+        UninstallPodSecondaryNetworkFlows(interfaceName string, podVlan uint32, ofPort uint32) error
+
 	// Disconnect disconnects the connection between client and OFSwitch.
 	Disconnect() error
 
@@ -523,6 +536,40 @@ func (c *client) UninstallPodFlows(interfaceName string) error {
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
 	return c.deleteFlows(c.podFlowCache, interfaceName)
+}
+
+func (c *client) InstallPodSecondaryNetworkFlows(interfaceName string, podVlan uint32, ofPort uint32) error {
+        c.replayMutex.RLock()
+        defer c.replayMutex.RUnlock()
+
+//        flows := []binding.Flow{
+//                c.podSecondaryNetworkIntfBridgeFlow(interfaceName, ofPort, cookie.Pod),
+//                c.podSecondaryNetworkTunnelBridgeFlow(InterfaceMAC, ofPort, false, cookie.Pod),
+//        }
+
+//        return c.addFlows(c.podFlowCache, interfaceName, flows)
+return nil
+}
+
+func (c *client) UninstallPodSecondaryNetworkFlows(interfaceName string, podVlan uint32, ofPort uint32) error {
+        c.replayMutex.RLock()
+        defer c.replayMutex.RUnlock()
+
+//        flows := []binding.Flow{
+//                c.podSecondaryNetworkIntfBridgeFlow(interfaceName, ofPort, cookie.Pod),
+//                c.podSecondaryNetworkTunnelBridgeFlow(InterfaceMAC, ofPort, false, cookie.Pod),
+//        }
+
+//        return c.addFlows(c.podFlowCache, interfaceName, flows)
+return nil
+}
+
+func (c *client) InstallDefaultFlowsForSecondaryNetworkPodBridge() error {
+        return nil
+}
+
+func (c *client) InstallDefaultFlowsForSecondaryNetworkTunnelBridge() error {
+       return nil
 }
 
 func (c *client) getFlowKeysFromCache(cache *flowCategoryCache, cacheKey string) []string {

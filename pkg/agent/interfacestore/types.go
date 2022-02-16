@@ -33,6 +33,8 @@ const (
 	UplinkInterface
 	// HostInterface is used to mark current interface is for host
 	HostInterface
+        // PatchInterface is used to connect OVS bridge for secondary network config
+        PatchInterface
 
 	AntreaInterfaceTypeKey = "antrea-type"
 	AntreaGateway          = "gateway"
@@ -74,6 +76,12 @@ type TunnelInterfaceConfig struct {
 	Csum bool
 }
 
+type PatchInterfaceConfig struct {
+       InterfaceName     string
+       PeerInterfaceName string
+       Type              InterfaceType
+}
+
 type InterfaceConfig struct {
 	Type InterfaceType
 	// Unique name of the interface, also used for the OVS port name.
@@ -83,6 +91,7 @@ type InterfaceConfig struct {
 	*OVSPortConfig
 	*ContainerInterfaceConfig
 	*TunnelInterfaceConfig
+	*PatchInterfaceConfig
 }
 
 // InterfaceStore is a service interface to create local interfaces for container, host gateway, and tunnel port.
@@ -153,6 +162,11 @@ func NewUplinkInterface(uplinkName string) *InterfaceConfig {
 
 func NewHostInterface(hostInterfaceName string) *InterfaceConfig {
 	return &InterfaceConfig{InterfaceName: hostInterfaceName, Type: HostInterface}
+}
+
+func NewPatchInterface(interfaceName string, peerInterfaceName string) *InterfaceConfig {
+        patchInterfaceConfig := &PatchInterfaceConfig{InterfaceName: interfaceName, PeerInterfaceName: peerInterfaceName, Type: PatchInterface}
+        return &InterfaceConfig{InterfaceName: interfaceName, Type: PatchInterface, PatchInterfaceConfig: patchInterfaceConfig}
 }
 
 // TODO: remove this method after IPv4/IPv6 dual-stack is supported completely.

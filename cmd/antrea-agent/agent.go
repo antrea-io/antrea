@@ -53,6 +53,7 @@ import (
 	"antrea.io/antrea/pkg/agent/route"
 	"antrea.io/antrea/pkg/agent/secondarynetwork/cnipodcache"
 	"antrea.io/antrea/pkg/agent/secondarynetwork/podwatch"
+	secnetinfra "antrea.io/antrea/pkg/agent/secondarynetwork/infra"
 	"antrea.io/antrea/pkg/agent/stats"
 	"antrea.io/antrea/pkg/agent/types"
 	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions"
@@ -373,6 +374,12 @@ func run(o *Options) error {
 		if err != nil {
 			return fmt.Errorf("error initializing CNI server with cniPodInfoStore cache: %v", err)
 		}
+		// Initialize secondary network infrastructure (create OVS bridges and datapath configuration). 
+                secNetOpt := secnetinfra.NewSecondaryNetworkOptions(ifaceStore)
+                secNetOpt.LoadSecondaryNetworkConfigAndSetDefaults()
+                if err := secnetinfra.ConfigureSecondaryNetworkInfra(secNetOpt); err !=nil {
+                        return fmt.Errorf("Failed to configure secondary network infrastructure: %v", err)
+                }
 	} else {
 		err = cniServer.Initialize(ovsBridgeClient, ofClient, ifaceStore, entityUpdates, nil)
 		if err != nil {

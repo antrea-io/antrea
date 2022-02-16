@@ -29,6 +29,7 @@ const (
 	DefaultTunOFPort   = 1
 	HostGatewayOFPort  = 2
 	UplinkOFPort       = 3
+	OVSPatchOFPort     = 4
 	// 0xfffffffe is a reserved port number in OpenFlow protocol, which is dedicated for the Bridge interface.
 	BridgeOFPort = 0xfffffffe
 )
