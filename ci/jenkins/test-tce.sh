@@ -465,7 +465,7 @@ function install_tce() {
 
     set -x
     echo "===== Install tce bin ====="
-    $(SSH_WITH_UTILS_KEY) -n jenkins@${VM_IP} "curl -H "Accept: application/vnd.github.v3.raw" \
+    $(SSH_WITH_ANTREA_CI_KEY) -n jenkins@${VM_IP} "curl -H "Accept: application/vnd.github.v3.raw" \
     -L https://api.github.com/repos/vmware-tanzu/community-edition/contents/hack/get-tce-release.sh | \
     bash -s v0.9.1 linux"
 }
