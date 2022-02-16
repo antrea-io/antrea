@@ -422,7 +422,7 @@ function deliver_antrea {
     ${SCP_WITH_UTILS_KEY} $GIT_CHECKOUT_DIR/build/yamls/*.yml jenkins@${VM_IP}:~
 
     copy_image_to_tce_node antrea-ubuntu-coverage.tar docker.io/antrea/antrea-ubuntu-coverage ${VM_IP} ${DOCKER_IMG_VERSION} true
-    copy_iamge_to_tce_node flow-aggregator-coverage.tar docker.io/antrea/flow-aggregator-coverage ${VM_IP} ${DOCKER_IMG_VERSION} true
+    copy_image_to_tce_node flow-aggregator-coverage.tar docker.io/antrea/flow-aggregator-coverage ${VM_IP} ${DOCKER_IMG_VERSION} true
 
 
 
