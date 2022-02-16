@@ -746,7 +746,7 @@ if [[ "$RUN_CLEANUP_ONLY" == true ]]; then
     exit 0
 fi
 
-if [[ "$TESTCASE" != "e2e" && "$TESTCASE" != "conformance" && "$TESTCASE" != "all-features-conformance" && "$TESTCASE" != "whole-conformance" && "$TESTCASE" != "networkpolicy" && "$TESTCASE" != "integration" ]]; then
+if [[ "$TESTCASE" != "e2e" && "$TESTCASE" != "conformance" && "$TESTCASE" != "all-features-conformance" && "$TESTCASE" != "whole-conformance" && "$TESTCASE" != "networkpolicy" && "$TESTCASE" != "tce-integration" ]]; then
     echoerr "testcase should be e2e, integration, conformance, whole-conformance or networkpolicy"
     exit 1
 fi
