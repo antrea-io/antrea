@@ -419,7 +419,7 @@ function deliver_antrea {
     setup_govc_env
     VM_NAME="antrea-tce-integration-0"
     VM_IP=$(govc vm.ip ${VM_NAME})
-    $(SCP_WITH_UTILS_KEY) $GIT_CHECKOUT_DIR/build/yamls/*.yml jenkins@$
+    ${SCP_WITH_UTILS_KEY} $GIT_CHECKOUT_DIR/build/yamls/*.yml jenkins@${VM_IP}:~
 
     copy_image_to_tce_node antrea-ubuntu-coverage.tar docker.io/antrea/antrea-ubuntu-coverage ${VM_IP} ${DOCKER_IMG_VERSION} true
     copy_iamge_to_tce_node flow-aggregator-coverage.tar docker.io/antrea/flow-aggregator-coverage ${VM_IP} ${DOCKER_IMG_VERSION} true

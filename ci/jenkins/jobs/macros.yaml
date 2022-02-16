@@ -25,7 +25,7 @@
           set -e
           chmod a+x ./ci/jenkins/test-tce.sh
           DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
-          ./ci/jenkins/test-tce.sh --testcase tce-integration --coverage --codecov-token "${CODECOV_TOKEN}" --registry ${DOCKER_REGISTRY}
+          ./ci/jenkins/test-tce.sh --cluster-name "${JOB_NAME}-${BUILD_NUMBER}" --testcase tce-integration  --coverage --codecov-token "${CODECOV_TOKEN}" --registry ${DOCKER_REGISTRY}
 
 - builder:
       name: builder-multicluster-integration
