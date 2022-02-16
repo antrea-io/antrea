@@ -261,8 +261,8 @@ function copy_image_to_tce_node {
     version=$4
     need_cleanup=$5
 
-    $(SCP_WITH_UTILS_KEY) $filename jenkins@${IP}:~
-    $(SSH_WITH_UTILS_KEY) -n jenkins@${IP} "docker load -i ~/$filename"
+    ${SCP_WITH_UTILS_KEY} $filename jenkins@${IP}:~
+    ${SSH_WITH_UTILS_KEY} -n jenkins@${IP} "docker load -i ~/$filename"
 }
 
 
