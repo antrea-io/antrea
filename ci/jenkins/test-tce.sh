@@ -457,11 +457,11 @@ function install_tce() {
     export GOVC_PASSWORD=${GOVC_PASSWORD}
     export GOVC_DATACENTER=${DATACENTERNAME}
 
-    echo "Datacenter is ${GOVC_DATACENTER}"
+
 
     VM_IP=$(govc vm.ip ${VM_NAME})
-    govc snapshot.revert -vm.ip ${VM_IP} tce-init
-    VM_IP=$(govc vm.ip ${VM_NAME}) # wait for VM to be on
+    # govc snapshot.revert -vm.ip ${VM_IP} tce-init
+    # VM_IP=$(govc vm.ip ${VM_NAME}) # wait for VM to be on
 
     set -x
     echo "===== Install tce bin ====="
