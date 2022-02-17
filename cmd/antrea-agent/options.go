@@ -52,6 +52,7 @@ const (
 	defaultStaleConnectionTimeout  = 5 * time.Minute
 	defaultNPLPortRange            = "61000-62000"
 	defaultAgentRole               = string(types.CNIAgent)
+	defaultNamespace               = "default"
 )
 
 type Options struct {
@@ -451,5 +452,8 @@ func (o *Options) setExternalNodeDefaultOptions() {
 	}
 	if o.config.APIPort == 0 {
 		o.config.APIPort = apis.AntreaAgentAPIPort
+	}
+	if o.config.Namespace == "" {
+		o.config.Namespace = defaultNamespace
 	}
 }

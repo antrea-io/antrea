@@ -335,7 +335,7 @@ func toServicesIndexFunc(obj interface{}) ([]string, error) {
 }
 
 // newRuleCache returns a new *ruleCache.
-func newRuleCache(dirtyRuleHandler func(string), podUpdateSubscriber channel.Subscriber, serviceGroupIDUpdate <-chan string) *ruleCache {
+func newRuleCache(dirtyRuleHandler func(string), podUpdateSubscriber *channel.SubscribableChannel, entityUpdateSubscriber *channel.SubscribableChannel, serviceGroupIDUpdate <-chan string) *ruleCache {
 	rules := cache.NewIndexer(
 		ruleKeyFunc,
 		cache.Indexers{addressGroupIndex: addressGroupIndexFunc, appliedToGroupIndex: appliedToGroupIndexFunc, policyIndex: policyIndexFunc, toServicesIndex: toServicesIndexFunc},
@@ -349,7 +349,13 @@ func newRuleCache(dirtyRuleHandler func(string), podUpdateSubscriber channel.Sub
 		groupIDUpdates:      serviceGroupIDUpdate,
 	}
 	// Subscribe Pod update events from CNIServer.
-	podUpdateSubscriber.Subscribe(cache.processPodUpdate)
+	if podUpdateSubscriber != nil {
+		podUpdateSubscriber.Subscribe(cache.processPodUpdate)
+	}
+	// Subscribe ExternalEntity update events from ExternalEntityController
+	if entityUpdateSubscriber != nil {
+		entityUpdateSubscriber.Subscribe(cache.processEntityUpdate)
+	}
 	go cache.processGroupIDUpdates()
 	return cache
 }
@@ -374,6 +380,30 @@ func (c *ruleCache) processPodUpdate(pod string) {
 	for group, memberSet := range c.appliedToSetByGroup {
 		if memberSet.Has(member) {
 			c.onAppliedToGroupUpdate(group)
+		}
+	}
+}
+
+// processEntityUpdate will be called when ExternalEntityController publishes an ExternalEntity update event.
+// It finds out AppliedToGroups that contains this ExternalEntity and trigger reconciling
+// of related rules.
+// It can enforce NetworkPolicies to ExternalEntities after ExternalEntityInterface is realised in the interface store.
+func (c *ruleCache) processEntityUpdate(ee string) {
+	namespace, name := k8s.SplitNamespacedName(ee)
+	c.appliedToSetLock.RLock()
+	defer c.appliedToSetLock.RUnlock()
+	externalEntityEquals := func(ee *v1beta.ExternalEntityReference, namespace string, name string) bool {
+		if ee.Namespace == namespace && ee.Name == name {
+			return true
+		}
+		return false
+	}
+	for group, memberSet := range c.appliedToSetByGroup {
+		for _, member := range memberSet.Items() {
+			if externalEntityEquals(member.ExternalEntity, namespace, name) {
+				c.onAppliedToGroupUpdate(group)
+				break
+			}
 		}
 	}
 }

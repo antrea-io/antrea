@@ -18,6 +18,8 @@ import (
 	"net"
 	"strconv"
 
+	"k8s.io/apimachinery/pkg/util/sets"
+
 	"antrea.io/antrea/pkg/agent/util"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 )
@@ -31,8 +33,10 @@ const (
 	TunnelInterface
 	// UplinkInterface is used to mark current interface is for uplink port
 	UplinkInterface
-	// HostInterface is used to mark current interface is for host
+	// HostInterface is used to mark current interface is for host port
 	HostInterface
+	// ExternalEntityInterface is used to mark current interface is for ExternalEntity Endpoint
+	ExternalEntityInterface
 
 	AntreaInterfaceTypeKey = "antrea-type"
 	AntreaGateway          = "gateway"
@@ -74,6 +78,12 @@ type TunnelInterfaceConfig struct {
 	Csum bool
 }
 
+type EntityInterfaceConfig struct {
+	ExternalEntityKeyIPsMap map[string]sets.String
+	UplinkPort              *OVSPortConfig
+	HostIfaceIndex          int
+}
+
 type InterfaceConfig struct {
 	Type InterfaceType
 	// Unique name of the interface, also used for the OVS port name.
@@ -85,6 +95,7 @@ type InterfaceConfig struct {
 	*OVSPortConfig
 	*ContainerInterfaceConfig
 	*TunnelInterfaceConfig
+	*EntityInterfaceConfig
 }
 
 // InterfaceStore is a service interface to create local interfaces for container, host gateway, and tunnel port.

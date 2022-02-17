@@ -194,6 +194,10 @@ type AgentConfig struct {
 	// - VM
 	// - BM
 	AgentRole string `yaml:"agentRole,omitempty"`
+	// The namespace to create the ExternalEntity for the VM/BM object.
+	// The default value is "default".
+	// It is used only when AgentRole is VM or BM.
+	Namespace string `yaml:"namespace,omitempty"`
 }
 
 type AntreaProxyConfig struct {

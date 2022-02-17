@@ -51,7 +51,7 @@ func (c *fakeNetworkPolicyControl) getNetworkPolicyStatus() *v1beta2.NetworkPoli
 }
 
 func newTestStatusController() (*StatusController, *ruleCache, *fakeNetworkPolicyControl) {
-	ruleCache := newRuleCache(func(s string) {}, channel.NewSubscribableChannel("PodUpdate", 100), make(chan string, 100))
+	ruleCache := newRuleCache(func(s string) {}, channel.NewSubscribableChannel("PodUpdate", 100), nil, make(chan string, 100))
 	statusControl := &fakeNetworkPolicyControl{}
 	statusController := newStatusController(nil, testNode1, ruleCache)
 	statusController.statusControlInterface = statusControl

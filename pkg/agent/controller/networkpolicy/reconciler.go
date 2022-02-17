@@ -873,20 +873,22 @@ func (r *reconciler) GetRuleByFlowID(ruleFlowID uint32) (*types.PolicyRule, bool
 func (r *reconciler) getOFPorts(members v1beta2.GroupMemberSet) sets.Int32 {
 	ofPorts := sets.NewInt32()
 	for _, m := range members {
-		var entityName, ns string
+		var ifaces []*interfacestore.InterfaceConfig
+		var name, ns string
 		if m.Pod != nil {
-			entityName, ns = m.Pod.Name, m.Pod.Namespace
+			name, ns = m.Pod.Name, m.Pod.Namespace
+			ifaces = r.ifaceStore.GetContainerInterfacesByPod(name, ns)
 		} else if m.ExternalEntity != nil {
-			entityName, ns = m.ExternalEntity.Name, m.ExternalEntity.Namespace
+			name, ns = m.ExternalEntity.Name, m.ExternalEntity.Namespace
+			ifaces = r.ifaceStore.GetInterfacesByEntity(name, ns)
 		}
-		ifaces := r.ifaceStore.GetInterfacesByEntity(entityName, ns)
 		if len(ifaces) == 0 {
 			// This might be because the container has been deleted during realization or hasn't been set up yet.
-			klog.Infof("Can't find interface for %s/%s, skipping", ns, entityName)
+			klog.Infof("Can't find interface for %s/%s, skipping", ns, name)
 			continue
 		}
 		for _, iface := range ifaces {
-			klog.V(2).Infof("Got OFPort %v for %s/%s", iface.OFPort, ns, entityName)
+			klog.V(2).Infof("Got OFPort %v for %s/%s", iface.OFPort, ns, name)
 			ofPorts.Insert(iface.OFPort)
 		}
 	}
@@ -896,22 +898,24 @@ func (r *reconciler) getOFPorts(members v1beta2.GroupMemberSet) sets.Int32 {
 func (r *reconciler) getIPs(members v1beta2.GroupMemberSet) sets.String {
 	ips := sets.NewString()
 	for _, m := range members {
-		var entityName, ns string
+		var ifaces []*interfacestore.InterfaceConfig
+		var name, ns string
 		if m.Pod != nil {
-			entityName, ns = m.Pod.Name, m.Pod.Namespace
+			name, ns = m.Pod.Name, m.Pod.Namespace
+			ifaces = r.ifaceStore.GetContainerInterfacesByPod(name, ns)
 		} else if m.ExternalEntity != nil {
-			entityName, ns = m.ExternalEntity.Name, m.ExternalEntity.Namespace
+			name, ns = m.ExternalEntity.Name, m.ExternalEntity.Namespace
+			ifaces = r.ifaceStore.GetInterfacesByEntity(name, ns)
 		}
-		ifaces := r.ifaceStore.GetInterfacesByEntity(entityName, ns)
 		if len(ifaces) == 0 {
 			// This might be because the container has been deleted during realization or hasn't been set up yet.
-			klog.Infof("Can't find interface for %s/%s, skipping", ns, entityName)
+			klog.Infof("Can't find interface for %s/%s, skipping", ns, name)
 			continue
 		}
 		for _, iface := range ifaces {
 			for _, ipAddr := range iface.IPs {
 				if ipAddr != nil {
-					klog.V(2).Infof("Got IP %v for %s/%s", iface.IPs, ns, entityName)
+					klog.V(2).Infof("Got IP %v for %s/%s", iface.IPs, ns, name)
 					ips.Insert(ipAddr.String())
 				}
 			}

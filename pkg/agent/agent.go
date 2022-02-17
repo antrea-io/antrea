@@ -264,6 +264,11 @@ func (i *Initializer) initInterfaceStore() error {
 		}
 		return intf
 	}
+
+	//TODO: Implement parseHostInterfaceFunc to restore ExternalEntityInterface
+	parseHostInterfaceFunc := func(portData *ovsconfig.OVSPortData, portConfig *interfacestore.OVSPortConfig) (*interfacestore.InterfaceConfig, error) {
+		return nil, nil
+	}
 	ifaceList := make([]*interfacestore.InterfaceConfig, 0, len(ovsPorts))
 	for index := range ovsPorts {
 		port := &ovsPorts[index]
@@ -284,9 +289,17 @@ func (i *Initializer) initInterfaceStore() error {
 			case interfacestore.AntreaTunnel:
 				intf = parseTunnelInterfaceFunc(port, ovsPort)
 			case interfacestore.AntreaHost:
-				// Not load the host interface, because it is configured on the OVS bridge port, and we don't need a
-				// specific interface in the interfaceStore.
-				intf = nil
+				if port.Name == i.ovsBridge {
+					// Not load the host interface, because it is configured on the OVS bridge port, and we don't need a
+					// specific interface in the interfaceStore.
+					intf = nil
+				} else {
+					var err error
+					intf, err = parseHostInterfaceFunc(port, ovsPort)
+					if err != nil {
+						return err
+					}
+				}
 			case interfacestore.AntreaContainer:
 				// The port should be for a container interface.
 				intf = cniserver.ParseOVSPortInterfaceConfig(port, ovsPort, true)
