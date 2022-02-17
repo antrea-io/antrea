@@ -66,12 +66,21 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 		},
 	}
 
+	saA := v1.ServiceAccount{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "saA",
+			Namespace: nsA.Name,
+		},
+	}
+
 	allowAction := crdv1alpha1.RuleActionAllow
 	dropAction := crdv1alpha1.RuleActionDrop
 	protocolTCP := controlplane.ProtocolTCP
 	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
 	selectorB := metav1.LabelSelector{MatchLabels: map[string]string{"foo2": "bar2"}}
 	selectorC := metav1.LabelSelector{MatchLabels: map[string]string{"foo3": "bar3"}}
+	selectorD := metav1.LabelSelector{MatchLabels: map[string]string{"internal.antrea.io/service-account": saA.Name}}
+
 	labelSelectorA, _ := metav1.LabelSelectorAsSelector(&selectorA)
 	labelSelectorB, _ := metav1.LabelSelectorAsSelector(&selectorB)
 	cgA := crdv1alpha3.ClusterGroup{
@@ -951,6 +960,242 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 			},
 			expectedAppliedToGroups: 1,
 			expectedAddressGroups:   0,
+		},
+		{
+			name: "applied-to-with-service-account-namespaced-name",
+			inputPolicy: &crdv1alpha1.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "cnpL", UID: "uidL"},
+				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
+					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+						{
+							ServiceAccount: &crdv1alpha1.NamespacedName{
+								Name:      saA.Name,
+								Namespace: saA.Namespace,
+							},
+						},
+					},
+					Priority: p10,
+					Egress: []crdv1alpha1.Rule{
+						{
+							ToServices: []crdv1alpha1.ServiceReference{
+								{
+									Namespace: "nsA",
+									Name:      "svcA",
+								},
+							},
+							Action: &dropAction,
+						},
+					},
+				},
+			},
+			expectedPolicy: &antreatypes.NetworkPolicy{
+				UID:  "uidL",
+				Name: "uidL",
+				SourceRef: &controlplane.NetworkPolicyReference{
+					Type: controlplane.AntreaClusterNetworkPolicy,
+					Name: "cnpL",
+					UID:  "uidL",
+				},
+				Priority:     &p10,
+				TierPriority: &DefaultTierPriority,
+				Rules: []controlplane.NetworkPolicyRule{
+					{
+						Direction: controlplane.DirectionOut,
+						To: controlplane.NetworkPolicyPeer{
+							ToServices: []controlplane.ServiceReference{
+								{
+									Namespace: "nsA",
+									Name:      "svcA",
+								},
+							},
+						},
+						Priority: 0,
+						Action:   &dropAction,
+					},
+				},
+				AppliedToGroups: []string{getNormalizedUID(toGroupSelector("nsA", &selectorD, nil, nil).NormalizedName)},
+			},
+			expectedAppliedToGroups: 1,
+			expectedAddressGroups:   0,
+		},
+		{
+			name: "rule-with-service-account-namespaced-name",
+			inputPolicy: &crdv1alpha1.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "cnpP", UID: "uidP"},
+				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
+					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+						{
+							PodSelector: &selectorA,
+						},
+					},
+					Priority: p10,
+					Egress: []crdv1alpha1.Rule{
+						{
+							To: []crdv1alpha1.NetworkPolicyPeer{
+								{
+									ServiceAccount: &crdv1alpha1.NamespacedName{
+										Name:      saA.Name,
+										Namespace: saA.Namespace,
+									},
+								},
+							},
+							Action: &dropAction,
+						},
+					},
+				},
+			},
+			expectedPolicy: &antreatypes.NetworkPolicy{
+				UID:  "uidP",
+				Name: "uidP",
+				SourceRef: &controlplane.NetworkPolicyReference{
+					Type: controlplane.AntreaClusterNetworkPolicy,
+					Name: "cnpP",
+					UID:  "uidP",
+				},
+				Priority:     &p10,
+				TierPriority: &DefaultTierPriority,
+				Rules: []controlplane.NetworkPolicyRule{
+					{
+						Direction: controlplane.DirectionOut,
+						To: controlplane.NetworkPolicyPeer{
+							AddressGroups: []string{getNormalizedUID(toGroupSelector("nsA", &selectorD, nil, nil).NormalizedName)},
+						},
+						Priority: 0,
+						Action:   &dropAction,
+					},
+				},
+				AppliedToGroups: []string{getNormalizedUID(toGroupSelector("", &selectorA, nil, nil).NormalizedName)},
+			},
+			expectedAppliedToGroups: 1,
+			expectedAddressGroups:   1,
+		},
+		{
+			name: "rule-applied-to-with-service-account-namespaced-name",
+			inputPolicy: &crdv1alpha1.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "cnpQ", UID: "uidQ"},
+				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
+					Priority: p10,
+					Egress: []crdv1alpha1.Rule{
+						{
+							To: []crdv1alpha1.NetworkPolicyPeer{
+								{
+									PodSelector: &selectorA,
+								},
+							},
+							Action: &dropAction,
+							AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+								{
+									ServiceAccount: &crdv1alpha1.NamespacedName{
+										Name:      saA.Name,
+										Namespace: saA.Namespace,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedPolicy: &antreatypes.NetworkPolicy{
+				UID:  "uidQ",
+				Name: "uidQ",
+				SourceRef: &controlplane.NetworkPolicyReference{
+					Type: controlplane.AntreaClusterNetworkPolicy,
+					Name: "cnpQ",
+					UID:  "uidQ",
+				},
+				Priority:     &p10,
+				TierPriority: &DefaultTierPriority,
+				Rules: []controlplane.NetworkPolicyRule{
+					{
+						Direction: controlplane.DirectionOut,
+						To: controlplane.NetworkPolicyPeer{
+							AddressGroups: []string{getNormalizedUID(toGroupSelector("", &selectorA, nil, nil).NormalizedName)},
+						},
+						Priority:        0,
+						Action:          &dropAction,
+						AppliedToGroups: []string{getNormalizedUID(toGroupSelector("nsA", &selectorD, nil, nil).NormalizedName)},
+					},
+				},
+				AppliedToGroups:  []string{getNormalizedUID(toGroupSelector("nsA", &selectorD, nil, nil).NormalizedName)},
+				AppliedToPerRule: true,
+			},
+			expectedAppliedToGroups: 1,
+			expectedAddressGroups:   1,
+		},
+		{
+			name: "service-account-per-namespace-rule",
+			inputPolicy: &crdv1alpha1.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "cnpR", UID: "uidR"},
+				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
+					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+						{
+							ServiceAccount: &crdv1alpha1.NamespacedName{
+								Name:      saA.Name,
+								Namespace: saA.Namespace,
+							},
+						},
+					},
+					Priority: p10,
+					Egress: []crdv1alpha1.Rule{
+						{
+							To: []crdv1alpha1.NetworkPolicyPeer{
+								{
+									Namespaces: &crdv1alpha1.PeerNamespaces{
+										Match: crdv1alpha1.NamespaceMatchSelf,
+									},
+								},
+							},
+							Action: &dropAction,
+						},
+						{
+							To: []crdv1alpha1.NetworkPolicyPeer{
+								{
+									NamespaceSelector: &selectorB,
+								},
+							},
+							Action: &allowAction,
+						},
+					},
+				},
+			},
+			expectedPolicy: &antreatypes.NetworkPolicy{
+				UID:  "uidR",
+				Name: "uidR",
+				SourceRef: &controlplane.NetworkPolicyReference{
+					Type: controlplane.AntreaClusterNetworkPolicy,
+					Name: "cnpR",
+					UID:  "uidR",
+				},
+				Priority:     &p10,
+				TierPriority: &DefaultTierPriority,
+				Rules: []controlplane.NetworkPolicyRule{
+					{
+						Direction: controlplane.DirectionOut,
+						To: controlplane.NetworkPolicyPeer{
+							AddressGroups: []string{getNormalizedUID(toGroupSelector("nsA", nil, nil, nil).NormalizedName)},
+						},
+						Priority:        0,
+						Action:          &dropAction,
+						AppliedToGroups: []string{getNormalizedUID(toGroupSelector("nsA", &selectorD, nil, nil).NormalizedName)},
+					},
+					{
+						Direction: controlplane.DirectionOut,
+						To: controlplane.NetworkPolicyPeer{
+							AddressGroups: []string{getNormalizedUID(toGroupSelector("", nil, &selectorB, nil).NormalizedName)},
+						},
+						Priority:        1,
+						Action:          &allowAction,
+						AppliedToGroups: []string{getNormalizedUID(toGroupSelector("nsA", &selectorD, nil, nil).NormalizedName)},
+					},
+				},
+				AppliedToGroups: []string{
+					getNormalizedUID(toGroupSelector("nsA", &selectorD, nil, nil).NormalizedName),
+				},
+				AppliedToPerRule:      true,
+				PerNamespaceSelectors: []labels.Selector{},
+			},
+			expectedAppliedToGroups: 1,
+			expectedAddressGroups:   2,
 		},
 	}
 	for _, tt := range tests {

@@ -816,6 +816,16 @@ spec:
                             x-kubernetes-preserve-unknown-fields: true
                       group:
                         type: string
+                      serviceAccount:
+                        type: object
+                        properties:
+                          name:
+                            type: string
+                          namespace:
+                            type: string
+                        required:
+                        - name
+                        - namespace
                 ingress:
                   type: array
                   items:
@@ -879,6 +889,16 @@ spec:
                                   x-kubernetes-preserve-unknown-fields: true
                             group:
                               type: string
+                            serviceAccount:
+                              type: object
+                              properties:
+                                name:
+                                  type: string
+                                namespace:
+                                  type: string
+                              required:
+                              - name
+                              - namespace
                       # Ensure that Action field allows only ALLOW, DROP and REJECT values
                       action:
                         type: string
@@ -962,6 +982,16 @@ spec:
                                   format: cidr
                             group:
                               type: string
+                            serviceAccount:
+                              type: object
+                              properties:
+                                name:
+                                  type: string
+                                namespace:
+                                  type: string
+                              required:
+                              - name
+                              - namespace
                       name:
                         type: string
                       enableLogging:
@@ -1029,6 +1059,16 @@ spec:
                                   x-kubernetes-preserve-unknown-fields: true
                             group:
                               type: string
+                            serviceAccount:
+                              type: object
+                              properties:
+                                name:
+                                  type: string
+                                namespace:
+                                  type: string
+                              required:
+                              - name
+                              - namespace
                       # Ensure that Action field allows only ALLOW, DROP and REJECT values
                       action:
                         type: string
@@ -1112,6 +1152,16 @@ spec:
                               type: string
                             fqdn:
                               type: string
+                            serviceAccount:
+                              type: object
+                              properties:
+                                name:
+                                  type: string
+                                namespace:
+                                  type: string
+                              required:
+                              - name
+                              - namespace
                       toServices:
                         type: array
                         items:

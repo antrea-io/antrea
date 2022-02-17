@@ -468,6 +468,16 @@ spec:
                         matchLabels:
                           x-kubernetes-preserve-unknown-fields: true
                       type: object
+                    serviceAccount:
+                      properties:
+                        name:
+                          type: string
+                        namespace:
+                          type: string
+                      required:
+                      - name
+                      - namespace
+                      type: object
                   type: object
                 type: array
               egress:
@@ -532,6 +542,16 @@ spec:
                                 type: array
                               matchLabels:
                                 x-kubernetes-preserve-unknown-fields: true
+                            type: object
+                          serviceAccount:
+                            properties:
+                              name:
+                                type: string
+                              namespace:
+                                type: string
+                            required:
+                            - name
+                            - namespace
                             type: object
                         type: object
                       type: array
@@ -616,6 +636,16 @@ spec:
                               matchLabels:
                                 x-kubernetes-preserve-unknown-fields: true
                             type: object
+                          serviceAccount:
+                            properties:
+                              name:
+                                type: string
+                              namespace:
+                                type: string
+                            required:
+                            - name
+                            - namespace
+                            type: object
                         type: object
                       type: array
                     toServices:
@@ -697,6 +727,16 @@ spec:
                               matchLabels:
                                 x-kubernetes-preserve-unknown-fields: true
                             type: object
+                          serviceAccount:
+                            properties:
+                              name:
+                                type: string
+                              namespace:
+                                type: string
+                            required:
+                            - name
+                            - namespace
+                            type: object
                         type: object
                       type: array
                     enableLogging:
@@ -766,6 +806,16 @@ spec:
                                 type: array
                               matchLabels:
                                 x-kubernetes-preserve-unknown-fields: true
+                            type: object
+                          serviceAccount:
+                            properties:
+                              name:
+                                type: string
+                              namespace:
+                                type: string
+                            required:
+                            - name
+                            - namespace
                             type: object
                         type: object
                       type: array

@@ -434,6 +434,11 @@ type NetworkPolicyPeer struct {
 	//  Exact FQDNs, i.e. "google.com", "db-svc.default.svc.cluster.local"
 	//  Wildcard expressions, i.e. "*wayfair.com".
 	FQDN string `json:"fqdn,omitempty"`
+	// Select all Pods with the ServiceAccount matched by this field, as
+	// workloads in AppliedTo/To/From fields.
+	// Cannot be set with any other selector.
+	// +optional
+	ServiceAccount *NamespacedName `json:"serviceAccount,omitempty"`
 }
 
 type PeerNamespaces struct {
@@ -590,4 +595,11 @@ type TierList struct {
 	metav1.ListMeta `json:"metadata,omitempty"`
 
 	Items []Tier `json:"items"`
+}
+
+// NamespacedName refers to a Namespace scoped resource.
+// All fields must be used together.
+type NamespacedName struct {
+	Name      string `json:"name,omitempty"`
+	Namespace string `json:"namespace,omitempty"`
 }
