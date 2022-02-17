@@ -433,7 +433,7 @@ func run(o *Options) error {
 		}
 	} else {
 		externalEntityInformer := crdInformerFactory.Crd().V1alpha2().ExternalEntities()
-		externalEntityController, err = externalnode.NewExternalEntityController(ovsBridgeClient, ofClient, externalEntityInformer, ifaceStore, entityUpdateChannel, eeStoreReadyCh, o.config.Namespace)
+		externalEntityController, err = externalnode.NewExternalEntityController(ovsBridgeClient, ofClient, externalEntityInformer, ifaceStore, entityUpdateChannel, eeStoreReadyCh, o.config.Namespace, o.config.ReservedConnectionRules)
 		if err != nil {
 			return fmt.Errorf("error creating ExternalEntity controller: %v", err)
 		}

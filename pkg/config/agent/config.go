@@ -201,6 +201,11 @@ type AgentConfig struct {
 	// The default value is "default".
 	// It is used only when nodeType is externalNode.
 	Namespace string `yaml:"namespace,omitempty"`
+	// The reserved connections to skip the check from Antrea NetworkPolicy rules. Each rule contains these four items.
+	// direction (in|out), protocol(tcp/udp/icmp), remote IP or CIDR, dst port (ICMP doesn't require), and use ":" to
+	// split the items, e.g., "in:tcp:1.1.1.1:22"
+	// It is used only when AgentRole is VM or BM.
+	ReservedConnectionRules []string `yaml:"reservedConnectionRules,omitempty"`
 }
 
 type AntreaProxyConfig struct {

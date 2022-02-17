@@ -15,6 +15,7 @@
 package networkpolicy
 
 import (
+	"antrea.io/antrea/pkg/agent/config"
 	"context"
 	"testing"
 	"time"
@@ -42,6 +43,7 @@ func newMockFQDNController(t *testing.T, controller *gomock.Controller, dnsServe
 		dirtyRuleHandler,
 		true,
 		false,
+		config.K8sNode,
 	)
 	require.NoError(t, err)
 	return f, mockOFClient

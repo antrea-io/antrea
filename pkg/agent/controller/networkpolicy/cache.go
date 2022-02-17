@@ -336,7 +336,7 @@ func toServicesIndexFunc(obj interface{}) ([]string, error) {
 }
 
 // newRuleCache returns a new *ruleCache.
-func newRuleCache(dirtyRuleHandler func(string), podUpdateSubscriber channel.Subscriber, entityUpdateSubscriber channel.Subscriber, serviceGroupIDUpdate <-chan string) *ruleCache {
+func newRuleCache(dirtyRuleHandler func(string), podUpdateSubscriber *channel.SubscribableChannel, entityUpdateSubscriber *channel.SubscribableChannel, serviceGroupIDUpdate <-chan string) *ruleCache {
 	rules := cache.NewIndexer(
 		ruleKeyFunc,
 		cache.Indexers{addressGroupIndex: addressGroupIndexFunc, appliedToGroupIndex: appliedToGroupIndexFunc, policyIndex: policyIndexFunc, toServicesIndex: toServicesIndexFunc},
@@ -389,19 +389,26 @@ func (c *ruleCache) processPodUpdate(e interface{}) {
 // It finds out AppliedToGroups that contains this ExternalEntity and trigger reconciling
 // of related rules.
 // It can enforce NetworkPolicies to ExternalEntities after ExternalEntityInterface is realised in the interface store.
-func (c *ruleCache) processEntityUpdate(ee string) {
+func (c *ruleCache) processEntityUpdate(obj interface{}) {
+	ee := obj.(string)
 	namespace, name := k8s.SplitNamespacedName(ee)
-	member := &v1beta.GroupMember{
-		ExternalEntity: &v1beta.ExternalEntityReference{
-			Name:      name,
-			Namespace: namespace,
-		},
-	}
 	c.appliedToSetLock.RLock()
 	defer c.appliedToSetLock.RUnlock()
+	externalEntityEquals := func(expEntity *v1beta.ExternalEntityReference, actName, actNamespace string) bool {
+		if expEntity.Name != actName {
+			return false
+		}
+		if expEntity.Namespace != actNamespace {
+			return false
+		}
+		return true
+	}
 	for group, memberSet := range c.appliedToSetByGroup {
-		if memberSet.Has(member) {
-			c.onAppliedToGroupUpdate(group)
+		for _, m := range memberSet.Items() {
+			if externalEntityEquals(m.ExternalEntity, name, namespace) {
+				c.onAppliedToGroupUpdate(group)
+				break
+			}
 		}
 	}
 }

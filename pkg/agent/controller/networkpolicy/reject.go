@@ -109,49 +109,65 @@ func (c *Controller) rejectRequest(pktIn *ofctrl.PacketIn) error {
 
 	sIface, srcFound := c.ifaceStore.GetInterfaceByIP(srcIP)
 	dIface, dstFound := c.ifaceStore.GetInterfaceByIP(dstIP)
-	// isServiceTraffic checks if it's a Service traffic when the destination of the
-	// reject response is on local Node. When the destination of the reject response is
-	// remote, isServiceTraffic will always return false. Because there is no
-	// difference between Service traffic and Pod-to-Pod traffic in this case. They all
-	// belong to RejectLocalToRemote type and use the same logic to handle.
-	// There are two situations in which it can be determined that this is a service
-	// traffic:
-	// 1. When AntreaProxy is enabled, EpSelectedRegMark is set in ServiceEPStateField.
-	// 2. When AntreaProxy is disabled, dstIP of reject response is on the local Node
-	//    and dstMAC of reject response is antrea-gw's MAC. In this case, the reject
-	//    response is being generated for locally-originated traffic that went through
-	//    kube-proxy and was re-injected into the bridge through antrea-gw.
-	isServiceTraffic := func() bool {
-		if c.antreaProxyEnabled {
-			matches := pktIn.GetMatches()
-			if match := getMatchRegField(matches, openflow.ServiceEPStateField); match != nil {
-				svcEpstate, err := getInfoInReg(match, openflow.ServiceEPStateField.GetRange().ToNXRange())
-				if err != nil {
-					return false
-				}
-				return svcEpstate&openflow.EpSelectedRegMark.GetValue() == openflow.EpSelectedRegMark.GetValue()
+	var inPort, outPort uint32
+	var mutateFunc func(binding.PacketOutBuilder) binding.PacketOutBuilder
+	if c.nodeType == config.K8sNode {
+		// isServiceTraffic checks if it's a Service traffic when the destination of the
+		// reject response is on local Node. When the destination of the reject response is
+		// remote, isServiceTraffic will always return false. Because there is no
+		// difference between Service traffic and Pod-to-Pod traffic in this case. They all
+		// belong to RejectLocalToRemote type and use the same logic to handle.
+		// There are two situations in which it can be determined that this is a service
+		// traffic:
+		// 1. When AntreaProxy is enabled, EpSelectedRegMark is set in ServiceEPStateField.
+		// 2. When AntreaProxy is disabled, dstIP of reject response is on the local Node
+		//    and dstMAC of reject response is antrea-gw's MAC. In this case, the reject
+		//    response is being generated for locally-originated traffic that went through
+		//    kube-proxy and was re-injected into the bridge through antrea-gw.
+		isServiceTraffic := func() bool {
+			if c.nodeType == config.ExternalNode {
+				return false
 			}
-			return false
+			if c.antreaProxyEnabled {
+				matches := pktIn.GetMatches()
+				if match := getMatchRegField(matches, openflow.ServiceEPStateField); match != nil {
+					svcEpstate, err := getInfoInReg(match, openflow.ServiceEPStateField.GetRange().ToNXRange())
+					if err != nil {
+						return false
+					}
+					return svcEpstate&openflow.EpSelectedRegMark.GetValue() == openflow.EpSelectedRegMark.GetValue()
+				}
+				return false
+			}
+			gwIfaces := c.ifaceStore.GetInterfacesByType(interfacestore.GatewayInterface)
+			return dstFound && dstMAC == gwIfaces[0].MAC.String()
 		}
-		gwIfaces := c.ifaceStore.GetInterfacesByType(interfacestore.GatewayInterface)
-		return dstFound && dstMAC == gwIfaces[0].MAC.String()
+		packetOutType := getRejectType(isServiceTraffic(), c.antreaProxyEnabled, srcFound, dstFound)
+		if packetOutType == Unsupported {
+			return fmt.Errorf("error when generating reject response for the packet from: %s to %s: neither source nor destination are on this Node", dstIP, srcIP)
+		}
+		// When in AntreaIPAM mode, even though srcPod and dstPod are on the same Node, MAC
+		// will still be re-written in L3ForwardingTable. During rejection, the reject
+		// response will be directly sent to the dst OF port without go through
+		// L3ForwardingTable. So we need to re-write MAC here. There is no need to check
+		// whether AntreaIPAM mode is enabled. Because if AntreaIPAM mode is disabled,
+		// this re-write doesn't change anything.
+		if packetOutType == RejectPodLocal {
+			srcMAC = sIface.MAC.String()
+			dstMAC = dIface.MAC.String()
+		}
+		inPort, outPort = getRejectOFPorts(packetOutType, sIface, dIface)
+		mutateFunc = getRejectPacketOutMutateFunc(packetOutType)
+	} else if c.nodeType == config.ExternalNode {
+		getOFPortPair := func(iface *interfacestore.InterfaceConfig) (uint32, uint32) {
+			return uint32(iface.OFPort), uint32(iface.EntityInterfaceConfig.UplinkPort.OFPort)
+		}
+		if srcFound {
+			inPort, outPort = getOFPortPair(sIface)
+		} else if dstFound {
+			outPort, inPort = getOFPortPair(dIface)
+		}
 	}
-	packetOutType := getRejectType(isServiceTraffic(), c.antreaProxyEnabled, srcFound, dstFound)
-	if packetOutType == Unsupported {
-		return fmt.Errorf("error when generating reject response for the packet from: %s to %s: neither source nor destination are on this Node", dstIP, srcIP)
-	}
-	// When in AntreaIPAM mode, even though srcPod and dstPod are on the same Node, MAC
-	// will still be re-written in L3ForwardingTable. During rejection, the reject
-	// response will be directly sent to the dst OF port without go through
-	// L3ForwardingTable. So we need to re-write MAC here. There is no need to check
-	// whether AntreaIPAM mode is enabled. Because if AntreaIPAM mode is disabled,
-	// this re-write doesn't change anything.
-	if packetOutType == RejectPodLocal {
-		srcMAC = sIface.MAC.String()
-		dstMAC = dIface.MAC.String()
-	}
-	inPort, outPort := getRejectOFPorts(packetOutType, sIface, dIface)
-	mutateFunc := getRejectPacketOutMutateFunc(packetOutType)
 
 	if proto == protocol.Type_TCP {
 		// Get TCP data.
@@ -249,12 +265,19 @@ func getRejectOFPorts(rejectType RejectType, sIface, dIface *interfacestore.Inte
 	case RejectServiceLocal:
 		inPort = uint32(sIface.OFPort)
 	case RejectPodRemoteToLocal:
-		inPort = config.HostGatewayOFPort
+		if dIface.Type == interfacestore.ExternalEntityInterface {
+			inPort = uint32(dIface.EntityInterfaceConfig.UplinkPort.OFPort)
+		} else {
+			inPort = config.HostGatewayOFPort
+		}
 		outPort = uint32(dIface.OFPort)
 	case RejectServiceRemoteToLocal:
 		inPort = config.HostGatewayOFPort
 	case RejectLocalToRemote:
 		inPort = uint32(sIface.OFPort)
+		if sIface.Type == interfacestore.ExternalEntityInterface {
+			outPort = uint32(sIface.EntityInterfaceConfig.UplinkPort.OFPort)
+		}
 	case RejectNoAPServiceLocal:
 		inPort = uint32(sIface.OFPort)
 		outPort = config.HostGatewayOFPort

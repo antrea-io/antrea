@@ -150,9 +150,10 @@ type fqdnController struct {
 	selectorItemToRuleIDs map[fqdnSelectorItem]sets.String
 	ipv4Enabled           bool
 	ipv6Enabled           bool
+	nodeType              config.NodeType
 }
 
-func newFQDNController(client openflow.Client, allocator *idAllocator, dnsServerOverride string, dirtyRuleHandler func(string), v4Enabled, v6Enabled bool) (*fqdnController, error) {
+func newFQDNController(client openflow.Client, allocator *idAllocator, dnsServerOverride string, dirtyRuleHandler func(string), v4Enabled, v6Enabled bool, nodeType config.NodeType) (*fqdnController, error) {
 	controller := &fqdnController{
 		ofClient:               client,
 		dirtyRuleHandler:       dirtyRuleHandler,
@@ -166,6 +167,7 @@ func newFQDNController(client openflow.Client, allocator *idAllocator, dnsServer
 		selectorItemToRuleIDs:  map[fqdnSelectorItem]sets.String{},
 		ipv4Enabled:            v4Enabled,
 		ipv6Enabled:            v6Enabled,
+		nodeType:               nodeType,
 	}
 	if controller.ofClient != nil {
 		if err := controller.ofClient.NewDNSpacketInConjunction(dnsInterceptRuleID); err != nil {
@@ -817,12 +819,20 @@ func (f *fqdnController) sendDNSPacketout(pktIn *ofctrl.PacketIn) error {
 		mutatePacketOut := func(packetOutBuilder binding.PacketOutBuilder) binding.PacketOutBuilder {
 			return packetOutBuilder.AddLoadRegMark(openflow.CustomReasonDNSRegMark)
 		}
+		inPort := uint32(config.HostGatewayOFPort)
+		if f.nodeType == config.ExternalNode {
+			matches := pktIn.GetMatches()
+			ofPortField := matches.GetMatchByName("OXM_OF_IN_PORT")
+			if ofPortField != nil {
+				inPort = ofPortField.GetValue().(uint32)
+			}
+		}
 		return f.ofClient.SendUDPPacketOut(
 			pktIn.Data.HWSrc.String(),
 			pktIn.Data.HWDst.String(),
 			srcIP,
 			dstIP,
-			uint32(config.HostGatewayOFPort),
+			inPort,
 			0,
 			isIPv6,
 			udpSrcPort,

@@ -120,8 +120,8 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 	ofClient openflow.Client,
 	ifaceStore interfacestore.InterfaceStore,
 	nodeName string,
-	podUpdateSubscriber channel.Subscriber,
-	entityUpdateSubscriber channel.Subscriber,
+	podUpdateSubscriber *channel.SubscribableChannel,
+	entityUpdateSubscriber *channel.SubscribableChannel,
 	groupCounters []proxytypes.GroupCounter,
 	groupIDUpdates <-chan string,
 	nodeType config.NodeType,
@@ -149,7 +149,7 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 	}
 	if antreaPolicyEnabled {
 		var err error
-		if c.fqdnController, err = newFQDNController(ofClient, idAllocator, dnsServerOverride, c.enqueueRule, v4Enabled, v6Enabled); err != nil {
+		if c.fqdnController, err = newFQDNController(ofClient, idAllocator, dnsServerOverride, c.enqueueRule, v4Enabled, v6Enabled, nodeType); err != nil {
 			return nil, err
 		}
 		if c.ofClient != nil {
