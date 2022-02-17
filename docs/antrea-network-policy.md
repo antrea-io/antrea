@@ -36,6 +36,7 @@
   - [K8s clusters with version 1.20 and below](#k8s-clusters-with-version-120-and-below)
 - [FQDN based filtering](#fqdn-based-filtering)
 - [toServices instruction](#toservices-instruction)
+- [ServiceAccount based selection](#serviceaccount-based-selection)
 - [RBAC](#rbac)
 - [Notes](#notes)
 <!-- /toc -->
@@ -402,6 +403,8 @@ The [second example](#acnp-with-clustergroup-reference) policy applies to all ne
 "test-cg-with-db-selector" ClusterGroup.
 The [third example](#acnp-for-complete-pod-isolation-in-selected-namespaces) policy applies to all Pods in the
 Namespaces that matches label "app=no-network-access-required".
+`appliedTo' also supports ServiceAccount based selection. This allows users using ServiceAccount to select Pods.
+More details can be found in the [ServiceAccountSelector](#serviceaccount-based-selection) section.
 
 **priority**: The `priority` field determines the relative priority of the
 policy among all ClusterNetworkPolicies in the given cluster. This field is
@@ -456,6 +459,8 @@ The [third example](#acnp-for-complete-pod-isolation-in-selected-namespaces) pol
 which drops all ingress traffic towards any Pod in Namespaces that have label `app` set to
 `no-network-access-required`. Note that an empty `From` in the ingress rule means that
 this rule matches all ingress sources.
+Ingress `From` section also supports ServiceAccount based selection. This allows users to use ServiceAccount
+to select Pods. More details can be found in the [ServiceAccountSelector](#serviceaccount-based-selection) section.
 **Note**: The order in which the ingress rules are specified matters, i.e., rules will
 be enforced in the order in which they are written.
 
@@ -487,6 +492,8 @@ Note that an empty `to` + an empty `toServices` in the egress rule means that
 this rule matches all egress destinations.
 Egress `To` section also supports FQDN based filtering. This can be applied to exact FQDNs or
 wildcard expressions. More details can be found in the [FQDN](#fqdn-based-filtering) section.
+Egress `To` section also supports ServiceAccount based selection. This allows users to use ServiceAccount
+to select Pods. More details can be found in the [ServiceAccountSelector](#serviceaccount-based-selection) section.
 **Note**: The order in which the egress rules are specified matters, i.e., rules will
 be enforced in the order in which they are written.
 
@@ -1105,6 +1112,51 @@ This clusterIP based match has one caveat: directly access to the Endpoints of t
 `toServices`. To control the access to the backend Endpoints, you could use `ClusterGroup` with `ServiceReference`.
 Because `ClusterGroup` with `ServiceReference` is equivalent to a podSelector that selects all backend Endpoints Pods of
 the Service referred in `ServiceReference`.
+
+## ServiceAccount based selection
+
+Antrea ClusterNetworkPolicy accepts a `serviceAccount` field to select all Pods that have been assigned the
+ServiceAccount selected by this field. This field could be used in `appliedTo`, ingress `from` and egress `to` section.
+No matter `serviceAccount` is used in which sections, it cannot be used with any other fields.
+
+`serviceAccount` uses `namespace` + `name` to select the ServiceAccount with a specific name under a specific namespace.
+
+An example policy using `serviceAccount` could look like this:
+
+```yaml
+apiVersion: crd.antrea.io/v1alpha1
+kind: ClusterNetworkPolicy
+metadata:
+  name: acnp-service-account
+spec:
+    priority: 5
+    tier: securityops
+    appliedTo:
+      - serviceAccount:
+          name: sa-1
+          namespace: ns-1
+    egress:
+      - action: Drop
+        to:
+          - serviceAccount:
+              name: sa-2
+              namespace: ns-2
+        name: ServiceAccountEgressRule
+        enableLogging: false
+```
+
+In this example, the policy will be applied to all Pods whose ServiceAccount is in `ns-1` namespace and name as `sa-1`.
+Let's call those Pods "appliedToPods".
+The egress `to` section will select all Pods whose ServiceAccount is in `ns-2` namespace and name as `sa-2`.
+Let's call those Pods "egressPods".
+
+So after this policy is applied, traffic from "appliedToPods" to "egressPods" will be dropped.
+
+There is a CAVEAT after introducing `serviceAccount`:
+
+Antrea will use a reserved label key for internal processing `serviceAccount`.
+The reserved label looks like: `internal.antrea.io/service-account:[ServiceAccountName]`. Users should avoid using
+this label key in any entities whether a policy with `serviceAccount` is applied in the cluster.
 
 ## RBAC
 

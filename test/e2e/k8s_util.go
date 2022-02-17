@@ -391,6 +391,52 @@ func (k *KubernetesUtils) CleanServices(namespaces []string) error {
 	return nil
 }
 
+// BuildServiceAccount is a convenience function for building a corev1.SerivceAccount spec.
+func (k *KubernetesUtils) BuildServiceAccount(name, ns string, labels map[string]string) *v1.ServiceAccount {
+	serviceAccount := &v1.ServiceAccount{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: ns,
+			Labels:    labels,
+		},
+	}
+	return serviceAccount
+}
+
+// CreateOrUpdateServiceAccount is a convenience function for updating/creating ServiceAccount.
+func (k *KubernetesUtils) CreateOrUpdateServiceAccount(sa *v1.ServiceAccount) (*v1.ServiceAccount, error) {
+
+	log.Infof("Creating/updating ServiceAccount %s in ns %s", sa.Name, sa.Namespace)
+	saReturned, err := k.clientset.CoreV1().ServiceAccounts(sa.Namespace).Get(context.TODO(), sa.Name, metav1.GetOptions{})
+
+	if err != nil {
+		serviceAccount, err := k.clientset.CoreV1().ServiceAccounts(sa.Namespace).Create(context.TODO(), sa, metav1.CreateOptions{})
+		if err != nil {
+			log.Infof("Unable to create ServiceAccount %s/%s: %s", sa.Namespace, sa.Name, err)
+			return nil, err
+		}
+		return serviceAccount, nil
+	}
+	log.Debugf("ServiceAccount %s/%s already exists, updating", sa.Namespace, sa.Name)
+	saReturned.Labels = sa.Labels
+	serviceAccount, err := k.clientset.CoreV1().ServiceAccounts(sa.Namespace).Update(context.TODO(), saReturned, metav1.UpdateOptions{})
+	if err != nil {
+		log.Infof("Unable to update ServiceAccount %s/%s: %s", sa.Namespace, sa.Name, err)
+		return nil, err
+	}
+	return serviceAccount, nil
+}
+
+// DeleteServiceAccount is a convenience function for deleting a ServiceAccount by Namespace and name.
+func (k *KubernetesUtils) DeleteServiceAccount(ns, name string) error {
+	log.Infof("Deleting ServiceAccount %s in ns %s", name, ns)
+	err := k.clientset.CoreV1().ServiceAccounts(ns).Delete(context.TODO(), name, metav1.DeleteOptions{})
+	if err != nil {
+		return errors.Wrapf(err, "unable to delete ServiceAccount %s in ns %s", name, ns)
+	}
+	return nil
+}
+
 // CreateOrUpdateNetworkPolicy is a convenience function for updating/creating netpols. Updating is important since
 // some tests update a network policy to confirm that mutation works with a CNI.
 func (k *KubernetesUtils) CreateOrUpdateNetworkPolicy(netpol *v1net.NetworkPolicy) (*v1net.NetworkPolicy, error) {

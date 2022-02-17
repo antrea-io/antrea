@@ -35,6 +35,10 @@ import (
 const (
 	// Cluster scoped selectors are stored under empty Namespace in the selectorItemIndex.
 	emptyNamespace = ""
+	// Antrea could add custom labels using CustomLabelKeyPrefix+CustomLabelKeyXXX as
+	// the label key to entities for internal process.
+	CustomLabelKeyPrefix         = "internal.antrea.io/"
+	CustomLabelKeyServiceAccount = "service-account"
 )
 
 var (
@@ -358,9 +362,9 @@ func (i *GroupEntityIndex) deleteEntityFromLabelItem(label, entity string) *labe
 
 // createLabelItem creates a labelItem based on the provided entityItem.
 // It's called when there is no existing labelItem for a label set.
-func (i *GroupEntityIndex) createLabelItem(entityType entityType, eItem *entityItem) *labelItem {
+func (i *GroupEntityIndex) createLabelItem(entityType entityType, eItem *entityItem, labels map[string]string) *labelItem {
 	lItem := &labelItem{
-		labels:           eItem.entity.GetLabels(),
+		labels:           labels,
 		namespace:        eItem.entity.GetNamespace(),
 		entityType:       entityType,
 		entityItemKeys:   sets.NewString(),
@@ -397,16 +401,23 @@ func (i *GroupEntityIndex) createLabelItem(entityType entityType, eItem *entityI
 }
 
 func (i *GroupEntityIndex) AddPod(pod *v1.Pod) {
-	i.addEntity(podEntityType, pod)
+	// Create a new map to add custom labels to avoid changing the original labels and
+	// introducing data race.
+	labels := make(map[string]string, len(pod.Labels)+1)
+	for k, v := range pod.GetLabels() {
+		labels[k] = v
+	}
+	labels[CustomLabelKeyPrefix+CustomLabelKeyServiceAccount] = pod.Spec.ServiceAccountName
+	i.addEntity(podEntityType, pod, labels)
 }
 
 func (i *GroupEntityIndex) AddExternalEntity(ee *v1alpha2.ExternalEntity) {
-	i.addEntity(externalEntityType, ee)
+	i.addEntity(externalEntityType, ee, ee.Labels)
 }
 
-func (i *GroupEntityIndex) addEntity(entityType entityType, entity metav1.Object) {
+func (i *GroupEntityIndex) addEntity(entityType entityType, entity metav1.Object, labels map[string]string) {
 	eKey := getEntityItemKey(entityType, entity)
-	lKey := getLabelItemKey(entityType, entity)
+	lKey := getLabelItemKey(entityType, entity, labels)
 	var oldLabelItem *labelItem
 	var entityUpdated bool
 
@@ -443,7 +454,7 @@ func (i *GroupEntityIndex) addEntity(entityType entityType, entity metav1.Object
 	// Create a labelItem if it doesn't exist.
 	lItem, exists := i.labelItems[lKey]
 	if !exists {
-		lItem = i.createLabelItem(entityType, eItem)
+		lItem = i.createLabelItem(entityType, eItem, labels)
 	}
 	lItem.entityItemKeys.Insert(eKey)
 
@@ -763,8 +774,8 @@ func getEntityItemKeyByName(entityType entityType, namespace, name string) strin
 }
 
 // getLabelItemKey returns the label key used in labelItems.
-func getLabelItemKey(entityType entityType, obj metav1.Object) string {
-	return fmt.Sprint(entityType) + "/" + obj.GetNamespace() + "/" + labels.Set(obj.GetLabels()).String()
+func getLabelItemKey(entityType entityType, obj metav1.Object, allLabels map[string]string) string {
+	return fmt.Sprint(entityType) + "/" + obj.GetNamespace() + "/" + labels.Set(allLabels).String()
 }
 
 // getGroupItemKey returns the group key used in groupItems.
