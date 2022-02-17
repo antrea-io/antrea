@@ -336,7 +336,7 @@ func toServicesIndexFunc(obj interface{}) ([]string, error) {
 }
 
 // newRuleCache returns a new *ruleCache.
-func newRuleCache(dirtyRuleHandler func(string), podUpdateSubscriber channel.Subscriber, serviceGroupIDUpdate <-chan string) *ruleCache {
+func newRuleCache(dirtyRuleHandler func(string), podUpdateSubscriber channel.Subscriber, entityUpdateSubscriber channel.Subscriber, serviceGroupIDUpdate <-chan string) *ruleCache {
 	rules := cache.NewIndexer(
 		ruleKeyFunc,
 		cache.Indexers{addressGroupIndex: addressGroupIndexFunc, appliedToGroupIndex: appliedToGroupIndexFunc, policyIndex: policyIndexFunc, toServicesIndex: toServicesIndexFunc},
@@ -350,7 +350,13 @@ func newRuleCache(dirtyRuleHandler func(string), podUpdateSubscriber channel.Sub
 		groupIDUpdates:      serviceGroupIDUpdate,
 	}
 	// Subscribe Pod update events from CNIServer.
-	podUpdateSubscriber.Subscribe(cache.processPodUpdate)
+	if podUpdateSubscriber != nil {
+		podUpdateSubscriber.Subscribe(cache.processPodUpdate)
+	}
+	// Subscribe ExternalEntity update events from ExternalEntityController
+	if entityUpdateSubscriber != nil {
+		entityUpdateSubscriber.Subscribe(cache.processEntityUpdate)
+	}
 	go cache.processGroupIDUpdates()
 	return cache
 }
@@ -368,6 +374,27 @@ func (c *ruleCache) processPodUpdate(e interface{}) {
 		Pod: &v1beta.PodReference{
 			Name:      podEvent.PodName,
 			Namespace: podEvent.PodNamespace,
+		},
+	}
+	c.appliedToSetLock.RLock()
+	defer c.appliedToSetLock.RUnlock()
+	for group, memberSet := range c.appliedToSetByGroup {
+		if memberSet.Has(member) {
+			c.onAppliedToGroupUpdate(group)
+		}
+	}
+}
+
+// processEntityUpdate will be called when ExternalEntityController publishes an ExternalEntity update event.
+// It finds out AppliedToGroups that contains this ExternalEntity and trigger reconciling
+// of related rules.
+// It can enforce NetworkPolicies to ExternalEntities after ExternalEntityInterface is realised in the interface store.
+func (c *ruleCache) processEntityUpdate(ee string) {
+	namespace, name := k8s.SplitNamespacedName(ee)
+	member := &v1beta.GroupMember{
+		ExternalEntity: &v1beta.ExternalEntityReference{
+			Name:      name,
+			Namespace: namespace,
 		},
 	}
 	c.appliedToSetLock.RLock()

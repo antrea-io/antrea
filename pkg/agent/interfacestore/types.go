@@ -31,7 +31,7 @@ const (
 	TunnelInterface
 	// UplinkInterface is used to mark current interface is for uplink port
 	UplinkInterface
-	// HostInterface is used to mark current interface is for host
+	// HostInterface is used to mark current interface is for host port
 	HostInterface
 	// ExternalEntityInterface is used to mark current interface is for ExternalEntity Endpoint
 	ExternalEntityInterface

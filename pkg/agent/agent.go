@@ -37,6 +37,7 @@ import (
 	"antrea.io/antrea/pkg/agent/cniserver"
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/controller/noderoute"
+	"antrea.io/antrea/pkg/agent/externalnode"
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/openflow"
 	"antrea.io/antrea/pkg/agent/openflow/cookie"
@@ -279,9 +280,17 @@ func (i *Initializer) initInterfaceStore() error {
 			case interfacestore.AntreaTunnel:
 				intf = parseTunnelInterfaceFunc(port, ovsPort)
 			case interfacestore.AntreaHost:
-				// Not load the host interface, because it is configured on the OVS bridge port, and we don't need a
-				// specific interface in the interfaceStore.
-				intf = nil
+				if port.Name == i.ovsBridge {
+					// Not load the host interface, because it is configured on the OVS bridge port, and we don't need a
+					// specific interface in the interfaceStore.
+					intf = nil
+				} else {
+					var err error
+					intf, err = externalnode.ParseHostInterfaceConfig(i.ovsBridgeClient, port, ovsPort)
+					if err != nil {
+						return err
+					}
+				}
 			case interfacestore.AntreaContainer:
 				// The port should be for a container interface.
 				intf = cniserver.ParseOVSPortInterfaceConfig(port, ovsPort, true)

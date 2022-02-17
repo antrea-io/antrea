@@ -278,7 +278,7 @@ func newFakeRuleCache() (*ruleCache, *dirtyRuleRecorder, *channel.SubscribableCh
 	recorder := newDirtyRuleRecorder()
 	podUpdateChannel := channel.NewSubscribableChannel("PodUpdate", 100)
 	ch2 := make(chan string, 100)
-	c := newRuleCache(recorder.Record, podUpdateChannel, ch2)
+	c := newRuleCache(recorder.Record, podUpdateChannel, nil, ch2)
 	return c, recorder, podUpdateChannel
 }
 
