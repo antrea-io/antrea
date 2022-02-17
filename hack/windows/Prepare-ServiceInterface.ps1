@@ -25,7 +25,7 @@ if (Get-NetAdapter -InterfaceAlias $INTERFACE_TO_ADD_SERVICE_IP -ErrorAction Sil
     return
 }
 [Environment]::SetEnvironmentVariable("INTERFACE_TO_ADD_SERVICE_IP", $INTERFACE_TO_ADD_SERVICE_IP, [System.EnvironmentVariableTarget]::Machine)
-$hnsSwitchName = $(Get-VMSwitch -SwitchType Internal).Name
+$hnsSwitchName = $(Get-VMSwitch -ComputerName $(hostname) -SwitchType Internal).Name
 Add-VMNetworkAdapter -ManagementOS -Name $InterfaceAlias -SwitchName $hnsSwitchName
 Set-NetIPInterface -ifAlias $INTERFACE_TO_ADD_SERVICE_IP -Forwarding Enabled
 
