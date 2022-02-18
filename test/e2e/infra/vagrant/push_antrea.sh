@@ -121,7 +121,7 @@ function pushImgToNodes() {
     echo "Loading $IMG_NAME image in every node..."
     pids=()
     for name in "${ALL_HOSTS[@]}"; do
-        ssh -F ssh-config $name "sudo ctr -n=k8s.io image import /tmp/image.tar; rm -f /tmp/image.tar" &
+        ssh -F ssh-config $name "ctr -n=k8s.io image import /tmp/image.tar; rm -f /tmp/image.tar" &
         pids+=($!)
     done
     # Wait for all child processes to complete
