@@ -1,4 +1,3 @@
-#!/usr/bin/env bash
 # Copyright 2022 Antrea Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,10 +12,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+set -eo pipefail
+
+function echoerr {
+    >&2 echo "$@"
+}
 
 THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+pushd $THIS_DIR/.. > /dev/null
 
-pushd $THIS_DIR
+make add-copyright
+diff="$(git status --porcelain `find . -type f -name "*.go"` `find . -type f -name "*.sh"`)"
 
-vagrant destroy -f
-rm -rf playbook/kube
+if [ ! -z "$diff" ]; then
+    echoerr "The copyrights of some files are not generated"
+    echoerr "You can regenerate them with 'make add-copyright' and commit the changes"
+    exit 1
+fi
