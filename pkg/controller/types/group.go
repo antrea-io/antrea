@@ -41,7 +41,7 @@ type GroupSelector struct {
 	// If NamespaceSelector is set instead, it selects the GroupMembers in the Namespaces selected by NamespaceSelector.
 	// If Namespace and NamespaceSelector both are unset, it selects the GroupMembers in all the Namespaces.
 	PodSelector labels.Selector
-	// This is a label selector which selects Namespaces. It this field is set, Namespace can not be set.
+	// This is a label selector which selects Namespaces. If this field is set, Namespace can not be set.
 	NamespaceSelector labels.Selector
 	// This is a label selector which selects ExternalEntities. Within a group, ExternalEntitySelector cannot be
 	// set concurrently with PodSelector. If Namespace is also set, it selects the ExternalEntities in the Namespace.
@@ -69,16 +69,16 @@ func NewGroupSelector(namespace string, podSelector, nsSelector, extEntitySelect
 		nSelector, _ := metav1.LabelSelectorAsSelector(nsSelector)
 		groupSelector.NamespaceSelector = nSelector
 	}
-	name := generateNormalizedName(groupSelector.Namespace, groupSelector.PodSelector, groupSelector.NamespaceSelector, groupSelector.ExternalEntitySelector)
+	name := GenerateNormalizedName(groupSelector.Namespace, groupSelector.PodSelector, groupSelector.NamespaceSelector, groupSelector.ExternalEntitySelector)
 	groupSelector.NormalizedName = name
 	return &groupSelector
 }
 
-// generateNormalizedName generates a string, based on the selectors, in
+// GenerateNormalizedName generates a string, based on the selectors, in
 // the following format: "namespace=NamespaceName And podSelector=normalizedPodSelector".
 // Note: Namespace and nsSelector may or may not be set depending on the
 // selector. However, they cannot be set simultaneously.
-func generateNormalizedName(namespace string, podSelector, nsSelector, eeSelector labels.Selector) string {
+func GenerateNormalizedName(namespace string, podSelector, nsSelector, eeSelector labels.Selector) string {
 	normalizedName := []string{}
 	if nsSelector != nil {
 		normalizedName = append(normalizedName, fmt.Sprintf("namespaceSelector=%s", nsSelector.String()))
