@@ -538,25 +538,40 @@ function run_e2e {
     export PATH=$GOROOT/bin:$PATH
     export KUBECONFIG=$GIT_CHECKOUT_DIR/jenkins/out/kubeconfig
 
-    mkdir -p $GIT_CHECKOUT_DIR/test/e2e/infra/vagrant/playbook/kube
-    CLUSTER_KUBECONFIG="${GIT_CHECKOUT_DIR}/jenkins/out/kubeconfig"
-    CLUSTER_SSHCONFIG="${GIT_CHECKOUT_DIR}/jenkins/out/ssh-config"
 
-    echo "=== Generate ssh-config ==="
-    kubectl get nodes -o wide --no-headers=true | awk '{print $1}' | while read sshconfig_nodename; do
-        echo "Generating ssh-config for Node ${sshconfig_nodename}"
-        sshconfig_nodeip="$(kubectl get node "${sshconfig_nodename}" -o jsonpath='{.status.addresses[0].address}')"
-        cp "${GIT_CHECKOUT_DIR}/ci/jenkins/ssh-config" "${CLUSTER_SSHCONFIG}.new"
-        sed -i "s/SSHCONFIGNODEIP/${sshconfig_nodeip}/g" "${CLUSTER_SSHCONFIG}.new"
-        sed -i "s/SSHCONFIGNODENAME/${sshconfig_nodename}/g" "${CLUSTER_SSHCONFIG}.new"
-        echo "    IdentityFile ${GIT_CHECKOUT_DIR}/jenkins/key/antrea-ci-key" >> "${CLUSTER_SSHCONFIG}.new"
-        cat "${CLUSTER_SSHCONFIG}.new" >> "${CLUSTER_SSHCONFIG}"
-    done
 
-    echo "=== Move kubeconfig to control-plane Node ==="
-    control_plane_ip="$(kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 == role {print $6}')"
-    ${SSH_WITH_ANTREA_CI_KEY} -n capv@${control_plane_ip} "if [ ! -d ".kube" ]; then mkdir .kube; fi"
-    ${SCP_WITH_ANTREA_CI_KEY} $GIT_CHECKOUT_DIR/jenkins/out/kubeconfig capv@${control_plane_ip}:~/.kube/config
+    VM_NAME="antrea-tce-integration-0"
+    setup_govc_env
+    VM_IP=$(govc vm.ip ${VM_NAME})
+
+
+    ${SSH_WITH_UTILS_KEY} -n jenkins@${VM_IP} "tanzu cluster kubeconfig get antrea-wc-0 --admin && kubectl config use-context antrea-wc-0-admin@antrea-wc-0"
+
+
+    ######################################################################################################################################
+    # echo "=== Move kubeconfig to control-plane Node ==="                                                                               #
+    # control_plane_ip="$(kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 == role {print $6}')" #
+    # ${SSH_WITH_ANTREA_CI_KEY} -n capv@${control_plane_ip} "if [ ! -d ".kube" ]; then mkdir .kube; fi"                                  #
+    # ${SCP_WITH_ANTREA_CI_KEY} $GIT_CHECKOUT_DIR/jenkins/out/kubeconfig capv@${control_plane_ip}:~/.kube/config                         #
+    ######################################################################################################################################
+
+    antrea_yml="antrea-kind.yml"
+    ${SSH_WITH_UTILS_KEY} -n jenkins@${VM_IP} "kubectl apply -f ~/$antrea_yml"
+    ${SSH_WITH_UTILS_KEY} -n jenkins@${VM_IP} "kubectl rollout restart deployment/coredns -n kube-system"
+    ${SSH_WITH_UTILS_KEY} -n jenkins@${VM_IP} "kubectl rollout status --timeout=5m deployment/coredns -n kube-system"
+    ${SSH_WITH_UTILS_KEY} -n jenkins@${VM_IP} "kubectl rollout status --timeout=5m deployment.apps/antrea-controller -n kube-system"
+    ${SSH_WITH_UTILS_KEY} -n jenkins@${VM_IP} "kubectl rollout status --timeout=5m daemonset/antrea-agent -n kube-system"
+
+
+
+
+    tar -zcf antrea.tar.gz ${GIT_CHECKOUT_DIR}
+    ${SCP_WITH_UTILS_KEY} antrea.tar.gz jenkins@${VM_IP}:~
+    ${SSH_WITH_UTILS_KEY} -n jenkins@${VM_IP} "tar zxf antrea.tar.gz"
+    ${SSH_WITH_UTILS_KEY} -n jenkins@${VM_IP} "mkdir -p ~/go/src/antrea.io; mv antrea-tce-integration-for-pull-request ~/go/src/antrea.io/; cd ~/go/src/antrea.io/; mv antrea-tce-integration-for-pull-request antrea; cd antrea; export GOPATH=~/go/;  go mod edit -replace github.com/moby/spdystream=github.com/antoninbas/spdystream@v0.2.1 && go mod tidy;  "
+
+
+
 
     set +e
     mkdir -p ${GIT_CHECKOUT_DIR}/antrea-test-logs
@@ -588,6 +603,8 @@ function run_e2e {
         run_codecov "e2e-tests" "*.cov.out*" "${GIT_CHECKOUT_DIR}/e2e-coverage" false ""
     fi
 }
+
+
 
 function run_conformance {
     echo "====== Running Antrea Conformance Tests ======"
