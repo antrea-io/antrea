@@ -164,6 +164,8 @@ jobs:
       run: ./ci/check-codegen.sh
     - name: Check manifest
       run: ./ci/check-manifest.sh
+    - name: Check copyright
+      run: ./ci/check-copyright.sh
 
   verify:
     name: Verify docs and spelling
