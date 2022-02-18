@@ -26,6 +26,7 @@ import (
 	"antrea.io/antrea/pkg/apis/controlplane"
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	crdv1alpha3 "antrea.io/antrea/pkg/apis/crd/v1alpha3"
+	antreatypes "antrea.io/antrea/pkg/controller/types"
 )
 
 func TestToAntreaServicesForCRD(t *testing.T) {
@@ -150,7 +151,7 @@ func TestToAntreaPeerForCRD(t *testing.T) {
 	selectorC := metav1.LabelSelector{MatchLabels: map[string]string{"foo3": "bar3"}}
 	selectorAll := metav1.LabelSelector{}
 	matchAllPodsPeer := matchAllPeer
-	matchAllPodsPeer.AddressGroups = []string{getNormalizedUID(toGroupSelector("", nil, &selectorAll, nil).NormalizedName)}
+	matchAllPodsPeer.AddressGroups = []string{getNormalizedUID(antreatypes.NewGroupSelector("", nil, &selectorAll, nil).NormalizedName)}
 	// cgA with selector present in cache
 	cgA := crdv1alpha3.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{Name: "cgA", UID: "uidA"},
@@ -179,8 +180,8 @@ func TestToAntreaPeerForCRD(t *testing.T) {
 			},
 			outPeer: controlplane.NetworkPolicyPeer{
 				AddressGroups: []string{
-					getNormalizedUID(toGroupSelector("", &selectorA, &selectorB, nil).NormalizedName),
-					getNormalizedUID(toGroupSelector("", &selectorC, nil, nil).NormalizedName),
+					getNormalizedUID(antreatypes.NewGroupSelector("", &selectorA, &selectorB, nil).NormalizedName),
+					getNormalizedUID(antreatypes.NewGroupSelector("", &selectorC, nil, nil).NormalizedName),
 				},
 			},
 			direction: controlplane.DirectionIn,
@@ -198,8 +199,8 @@ func TestToAntreaPeerForCRD(t *testing.T) {
 			},
 			outPeer: controlplane.NetworkPolicyPeer{
 				AddressGroups: []string{
-					getNormalizedUID(toGroupSelector("", &selectorA, &selectorB, nil).NormalizedName),
-					getNormalizedUID(toGroupSelector("", &selectorC, nil, nil).NormalizedName),
+					getNormalizedUID(antreatypes.NewGroupSelector("", &selectorA, &selectorB, nil).NormalizedName),
+					getNormalizedUID(antreatypes.NewGroupSelector("", &selectorC, nil, nil).NormalizedName),
 				},
 			},
 			direction: controlplane.DirectionOut,
