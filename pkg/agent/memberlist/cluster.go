@@ -225,12 +225,12 @@ func (c *Cluster) handleUpdateNode(oldObj, newObj interface{}) {
 	node := newObj.(*corev1.Node)
 	oldNode := oldObj.(*corev1.Node)
 	if reflect.DeepEqual(node.GetLabels(), oldNode.GetLabels()) {
-		klog.V(2).InfoS("Processing Node UPDATE event error, labels not changed", "nodeName", node.Name)
+		klog.V(2).InfoS("Processed Node UPDATE event, labels not changed", "nodeName", node.Name)
 		return
 	}
 	oldMatches, newMatches := c.filterEIPsFromNodeLabels(oldNode), c.filterEIPsFromNodeLabels(node)
 	if oldMatches.Equal(newMatches) {
-		klog.V(2).InfoS("Processing Node UPDATE event error, Node cluster status not changed", "nodeName", node.Name)
+		klog.V(2).InfoS("Processed Node UPDATE event, Node cluster status not changed", "nodeName", node.Name)
 		return
 	}
 	affectedEIPs := oldMatches.Union(newMatches)

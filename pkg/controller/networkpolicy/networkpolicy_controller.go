@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"net"
 	"reflect"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -31,7 +30,6 @@ import (
 	v1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -427,31 +425,6 @@ func (n *NetworkPolicyController) GetConnectedAgentNum() int {
 	return n.appliedToGroupStore.GetWatchersNum()
 }
 
-// toGroupSelector converts the podSelector, namespaceSelector and externalEntitySelector
-// and NetworkPolicy Namespace to a networkpolicy.GroupSelector object.
-func toGroupSelector(namespace string, podSelector, nsSelector, extEntitySelector *metav1.LabelSelector) *antreatypes.GroupSelector {
-	groupSelector := antreatypes.GroupSelector{}
-	if podSelector != nil {
-		pSelector, _ := metav1.LabelSelectorAsSelector(podSelector)
-		groupSelector.PodSelector = pSelector
-	}
-	if extEntitySelector != nil {
-		eSelector, _ := metav1.LabelSelectorAsSelector(extEntitySelector)
-		groupSelector.ExternalEntitySelector = eSelector
-	}
-	if nsSelector == nil {
-		// No namespaceSelector indicates that the pods must be selected within
-		// the NetworkPolicy's Namespace.
-		groupSelector.Namespace = namespace
-	} else {
-		nSelector, _ := metav1.LabelSelectorAsSelector(nsSelector)
-		groupSelector.NamespaceSelector = nSelector
-	}
-	name := generateNormalizedName(groupSelector.Namespace, groupSelector.PodSelector, groupSelector.NamespaceSelector, groupSelector.ExternalEntitySelector)
-	groupSelector.NormalizedName = name
-	return &groupSelector
-}
-
 // getNormalizedUID generates a unique UUID based on a given string.
 // For example, it can be used to generate keys using normalized selectors
 // unique within the Namespace by adding the constant UID.
@@ -459,30 +432,9 @@ func getNormalizedUID(name string) string {
 	return uuid.NewV5(uuidNamespace, name).String()
 }
 
-// generateNormalizedName generates a string, based on the selectors, in
-// the following format: "namespace=NamespaceName And podSelector=normalizedPodSelector".
-// Note: Namespace and nsSelector may or may not be set depending on the
-// selector. However, they cannot be set simultaneously.
-func generateNormalizedName(namespace string, podSelector, nsSelector, eeSelector labels.Selector) string {
-	normalizedName := []string{}
-	if nsSelector != nil {
-		normalizedName = append(normalizedName, fmt.Sprintf("namespaceSelector=%s", nsSelector.String()))
-	} else if namespace != "" {
-		normalizedName = append(normalizedName, fmt.Sprintf("namespace=%s", namespace))
-	}
-	if podSelector != nil {
-		normalizedName = append(normalizedName, fmt.Sprintf("podSelector=%s", podSelector.String()))
-	}
-	if eeSelector != nil {
-		normalizedName = append(normalizedName, fmt.Sprintf("eeSelector=%s", eeSelector.String()))
-	}
-	sort.Strings(normalizedName)
-	return strings.Join(normalizedName, " And ")
-}
-
 // createAppliedToGroup creates an AppliedToGroup object in store if it is not created already.
 func (n *NetworkPolicyController) createAppliedToGroup(npNsName string, pSel, nSel, eSel *metav1.LabelSelector) string {
-	groupSelector := toGroupSelector(npNsName, pSel, nSel, eSel)
+	groupSelector := antreatypes.NewGroupSelector(npNsName, pSel, nSel, eSel)
 	appliedToGroupUID := getNormalizedUID(groupSelector.NormalizedName)
 	// Get or create a AppliedToGroup for the generated UID.
 	// Ignoring returned error (here and elsewhere in this file) as with the
@@ -509,7 +461,7 @@ func (n *NetworkPolicyController) createAppliedToGroup(npNsName string, pSel, nS
 // creates the object without actually populating the PodAddresses as the
 // affected GroupMembers are calculated during sync process.
 func (n *NetworkPolicyController) createAddressGroup(namespace string, podSelector, nsSelector, eeSelector *metav1.LabelSelector) string {
-	groupSelector := toGroupSelector(namespace, podSelector, nsSelector, eeSelector)
+	groupSelector := antreatypes.NewGroupSelector(namespace, podSelector, nsSelector, eeSelector)
 	normalizedUID := getNormalizedUID(groupSelector.NormalizedName)
 	// Get or create an AddressGroup for the generated UID.
 	_, found, _ := n.addressGroupStore.Get(normalizedUID)
