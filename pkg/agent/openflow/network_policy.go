@@ -525,7 +525,8 @@ type policyRuleConjunction struct {
 	serviceClause *clause
 	actionFlows   []binding.Flow
 	metricFlows   []binding.Flow
-	// NetworkPolicy reference information for debugging usage.
+	// NetworkPolicy reference information for debugging usage, its value can be nil
+	// for conjunctions that are not built for a specific NetworkPolicy, e.g. DNS packetin Conjunction.
 	npRef       *v1beta2.NetworkPolicyReference
 	ruleTableID uint8
 }
@@ -1455,6 +1456,11 @@ func (c *client) GetNetworkPolicyFlowKeys(npName, npNamespace string) []string {
 
 	for _, conjObj := range c.policyCache.List() {
 		conj := conjObj.(*policyRuleConjunction)
+		// If the NetworkPolicyReference in the policyRuleConjunction is nil then that entry in client's
+		// policyCache should be ignored because here we need to dump flows of NetworkPolicy.
+		if conj.npRef == nil {
+			continue
+		}
 		if conj.npRef.Name == npName && conj.npRef.Namespace == npNamespace {
 			// There can be duplicated flows added due to conjunctive matches
 			// shared by multiple policy rules (clauses).
