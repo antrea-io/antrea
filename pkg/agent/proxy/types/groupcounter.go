@@ -26,15 +26,14 @@ import (
 
 // GroupCounter generates and manages global unique group ID.
 type GroupCounter interface {
-	// Get generates a global unique group ID for a specific service.
-	// If the group ID of the service has been generated, then return the
-	// prior one. The bool return value indicates whether the groupID is newly
-	// generated.
+	// AllocateIfNotExist generates a global unique group ID for a Service if the group ID has not been generated, then
+	// return the group ID (newly allocated or already allocated).
+	AllocateIfNotExist(svcPortName k8sproxy.ServicePortName, isEndpointsLocal bool) binding.GroupIDType
+	// Get gets the group ID for the Service.
 	Get(svcPortName k8sproxy.ServicePortName, isEndpointsLocal bool) (binding.GroupIDType, bool)
-	// Recycle removes a Service Group ID mapping. The recycled groupID can be
-	// reused.
+	// Recycle removes the Service group ID mapping. The recycled group ID can be reused.
 	Recycle(svcPortName k8sproxy.ServicePortName, isEndpointsLocal bool) bool
-	// GetAllGroupIDs gets all groupID related to a Service.
+	// GetAllGroupIDs gets all group IDs related to the Service.
 	GetAllGroupIDs(svcNamespacedName string) []binding.GroupIDType
 }
 
@@ -84,26 +83,35 @@ func (c *groupCounter) deleteServicePortNameMap(svcNamespacedName string, svcKey
 	}
 }
 
-func (c *groupCounter) Get(svcPortName k8sproxy.ServicePortName, isEndpointsLocal bool) (binding.GroupIDType, bool) {
+func (c *groupCounter) AllocateIfNotExist(svcPortName k8sproxy.ServicePortName, isEndpointsLocal bool) binding.GroupIDType {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	key := keyString(svcPortName, isEndpointsLocal)
 	if id, ok := c.groupMap[key]; ok {
-		return id, false
-	} else if len(c.recycled) != 0 {
-		id = c.recycled[len(c.recycled)-1]
+		return id
+	}
+	if len(c.recycled) != 0 {
+		id := c.recycled[len(c.recycled)-1]
 		c.recycled = c.recycled[:len(c.recycled)-1]
 		c.groupMap[key] = id
 		c.updateServicePortNameMap(svcPortName.NamespacedName.String(), key)
 		c.groupIDUpdates <- svcPortName.NamespacedName.String()
-		return id, true
+		return id
 	} else {
 		c.groupIDCounter += 1
 		c.groupMap[key] = c.groupIDCounter
 		c.updateServicePortNameMap(svcPortName.NamespacedName.String(), key)
 		c.groupIDUpdates <- svcPortName.NamespacedName.String()
-		return c.groupIDCounter, true
+		return c.groupIDCounter
 	}
+}
+
+func (c *groupCounter) Get(svcPortName k8sproxy.ServicePortName, isEndpointsLocal bool) (binding.GroupIDType, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	key := keyString(svcPortName, isEndpointsLocal)
+	id, exist := c.groupMap[key]
+	return id, exist
 }
 
 func (c *groupCounter) Recycle(svcPortName k8sproxy.ServicePortName, isEndpointsLocal bool) bool {
