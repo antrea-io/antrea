@@ -168,23 +168,25 @@ func (p *proxier) removeStaleServices() {
 		}
 		// Remove Service group whose Endpoints are local.
 		if svcInfo.NodeLocalExternal() {
-			groupIDLocal, _ := p.groupCounter.Get(svcPortName, true)
-			if err := p.ofClient.UninstallServiceGroup(groupIDLocal); err != nil {
-				klog.ErrorS(err, "Failed to remove Group of local Endpoints for Service", "Service", svcPortName)
-				continue
+			if groupIDLocal, exist := p.groupCounter.Get(svcPortName, true); exist {
+				if err := p.ofClient.UninstallServiceGroup(groupIDLocal); err != nil {
+					klog.ErrorS(err, "Failed to remove Group of local Endpoints for Service", "Service", svcPortName)
+					continue
+				}
+				p.groupCounter.Recycle(svcPortName, true)
 			}
-			p.groupCounter.Recycle(svcPortName, true)
 		}
 		// Remove Service group which has all Endpoints.
-		groupID, _ := p.groupCounter.Get(svcPortName, false)
-		if err := p.ofClient.UninstallServiceGroup(groupID); err != nil {
-			klog.ErrorS(err, "Failed to remove Group of all Endpoints for Service", "Service", svcPortName)
-			continue
+		if groupID, exist := p.groupCounter.Get(svcPortName, false); exist {
+			if err := p.ofClient.UninstallServiceGroup(groupID); err != nil {
+				klog.ErrorS(err, "Failed to remove Group of all Endpoints for Service", "Service", svcPortName)
+				continue
+			}
+			p.groupCounter.Recycle(svcPortName, false)
 		}
 
 		delete(p.serviceInstalledMap, svcPortName)
 		p.deleteServiceByIP(svcInfo.String())
-		p.groupCounter.Recycle(svcPortName, false)
 	}
 }
 
@@ -351,7 +353,7 @@ func (p *proxier) uninstallLoadBalancerService(loadBalancerIPStrings []string, s
 func (p *proxier) installServices() {
 	for svcPortName, svcPort := range p.serviceMap {
 		svcInfo := svcPort.(*types.ServiceInfo)
-		groupID, _ := p.groupCounter.Get(svcPortName, false)
+		groupID := p.groupCounter.AllocateIfNotExist(svcPortName, false)
 		endpointsInstalled, ok := p.endpointsInstalledMap[svcPortName]
 		if !ok {
 			endpointsInstalled = map[string]k8sproxy.Endpoint{}
@@ -455,7 +457,7 @@ func (p *proxier) installServices() {
 			if p.proxyAll {
 				if svcInfo.NodeLocalExternal() {
 					// Install another group when Service externalTrafficPolicy is Local.
-					groupIDLocal, _ := p.groupCounter.Get(svcPortName, true)
+					groupIDLocal := p.groupCounter.AllocateIfNotExist(svcPortName, true)
 					var localEndpointList []k8sproxy.Endpoint
 					for _, ed := range endpointUpdateList {
 						if !ed.GetIsLocal() {
@@ -472,12 +474,13 @@ func (p *proxier) installServices() {
 					// unconditionally. If the group doesn't exist on OVS, then the return value will be nil; if the
 					// group exists on OVS, and after it is uninstalled successfully, then the return value will be also
 					// nil.
-					groupIDLocal, _ := p.groupCounter.Get(svcPortName, true)
-					if err := p.ofClient.UninstallServiceGroup(groupIDLocal); err != nil {
-						klog.ErrorS(err, "Failed to remove Group of local Endpoints for Service", "Service", svcPortName)
-						continue
+					if groupIDLocal, exist := p.groupCounter.Get(svcPortName, true); exist {
+						if err := p.ofClient.UninstallServiceGroup(groupIDLocal); err != nil {
+							klog.ErrorS(err, "Failed to remove Group of local Endpoints for Service", "Service", svcPortName)
+							continue
+						}
+						p.groupCounter.Recycle(svcPortName, true)
 					}
-					p.groupCounter.Recycle(svcPortName, true)
 				}
 			}
 
@@ -528,7 +531,7 @@ func (p *proxier) installServices() {
 			// group whose Endpoints are local.
 			nGroupID := groupID
 			if svcInfo.NodeLocalExternal() {
-				nGroupID, _ = p.groupCounter.Get(svcPortName, true)
+				nGroupID = p.groupCounter.AllocateIfNotExist(svcPortName, true)
 			}
 
 			if p.proxyAll {
@@ -792,9 +795,12 @@ func (p *proxier) GetServiceFlowKeys(serviceName, namespace string) ([]string, [
 		svcFlows := p.ofClient.GetServiceFlowKeys(svcInfo.ClusterIP(), uint16(svcInfo.Port()), svcInfo.OFProtocol, epList)
 		flows = append(flows, svcFlows...)
 
-		// TODO: This causes antctl command output incomplete groups, fix it latter.
-		groupID, _ := p.groupCounter.Get(svcPortName, false)
-		groups = append(groups, groupID)
+		if groupID, ok := p.groupCounter.Get(svcPortName, false); ok {
+			groups = append(groups, groupID)
+		}
+		if groupID, ok := p.groupCounter.Get(svcPortName, true); ok {
+			groups = append(groups, groupID)
+		}
 	}
 
 	return flows, groups, found
