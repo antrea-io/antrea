@@ -31,6 +31,7 @@ import (
 
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/agentinfo"
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/podinterface"
+	"antrea.io/antrea/pkg/antctl/output"
 	"antrea.io/antrea/pkg/antctl/runtime"
 	"antrea.io/antrea/pkg/antctl/transform/addressgroup"
 	"antrea.io/antrea/pkg/antctl/transform/appliedtogroup"
@@ -289,9 +290,8 @@ default   nginx-6db489d4b7-vgv7v Interface      127.0.0.1 07-16-76-00-02-86 port
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			opt := &commandDefinition{}
 			var outputBuf bytes.Buffer
-			err := opt.tableOutputForGetCommands(tc.rawResponseData, &outputBuf)
+			err := output.TableOutputForGetCommands(tc.rawResponseData, &outputBuf)
 			fmt.Println(outputBuf.String())
 			assert.Nil(t, err)
 			assert.Equal(t, tc.expected, outputBuf.String())
