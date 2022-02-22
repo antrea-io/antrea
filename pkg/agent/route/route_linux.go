@@ -683,6 +683,8 @@ func (c *Client) initServiceIPRoutes() error {
 // based on the desired podCIDRs. svcIPs are used for Windows only.
 func (c *Client) Reconcile(podCIDRs []string, svcIPs map[string]bool) error {
 	desiredPodCIDRs := sets.NewString(podCIDRs...)
+	// Get the peer IPv6 gateways from pod CIDRs
+	desiredIPv6GWs := getIPv6Gateways(podCIDRs)
 
 	// Remove orphaned podCIDRs from ipset.
 	for _, ipsetName := range []string{antreaPodIPSet, antreaPodIP6Set} {
@@ -722,6 +724,11 @@ func (c *Client) Reconcile(podCIDRs []string, svcIPs map[string]bool) error {
 		if desiredPodCIDRs.Has(route.Dst.String()) {
 			continue
 		}
+		// IPv6 doesn't support "on-link" route, routes to the peer IPv6 gateways need to
+		// be added separately. So don't delete such routes.
+		if desiredIPv6GWs.Has(route.Dst.IP.String()) {
+			continue
+		}
 		// Don't delete the routes which are added by AntreaProxy.
 		if c.isServiceRoute(&route) {
 			continue
@@ -733,10 +740,8 @@ func (c *Client) Reconcile(podCIDRs []string, svcIPs map[string]bool) error {
 		}
 	}
 
-	// Remove any unknown IPv6 neighbors on Antrea gateway.
-	desiredGWs := getIPv6Gateways(podCIDRs)
 	// Return immediately if there is no IPv6 gateway address configured on the Nodes.
-	if desiredGWs.Len() == 0 {
+	if desiredIPv6GWs.Len() == 0 {
 		return nil
 	}
 	// Remove orphaned IPv6 Neighbors from host network.
@@ -744,8 +749,9 @@ func (c *Client) Reconcile(podCIDRs []string, svcIPs map[string]bool) error {
 	if err != nil {
 		return err
 	}
+	// Remove any unknown IPv6 neighbors on Antrea gateway.
 	for neighIP, actualNeigh := range actualNeighbors {
-		if desiredGWs.Has(neighIP) {
+		if desiredIPv6GWs.Has(neighIP) {
 			continue
 		}
 		// Don't delete the virtual Service IP neighbor which is added by AntreaProxy.
