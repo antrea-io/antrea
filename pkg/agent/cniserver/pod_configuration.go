@@ -283,6 +283,9 @@ func (pc *podConfigurator) removeInterfaces(containerID string) error {
 		return nil
 	}
 
+	if err := pc.ifConfigurator.removeContainerLink(containerID, containerConfig.InterfaceName); err != nil {
+		return err
+	}
 	// Deleting veth devices and OVS port must be called after Openflows are uninstalled.
 	// Otherwise there could be a race condition:
 	// 1. Pod A's ofport was released
@@ -294,10 +297,6 @@ func (pc *podConfigurator) removeInterfaces(containerID string) error {
 	// step 4 can remove flows owned by Pod B by mistake.
 	// Note that deleting the interface attached to an OVS port can release the ofport.
 	if err := pc.disconnectInterfaceFromOVS(containerConfig); err != nil {
-		return err
-	}
-
-	if err := pc.ifConfigurator.removeContainerLink(containerID, containerConfig.InterfaceName); err != nil {
 		return err
 	}
 

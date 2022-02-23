@@ -263,6 +263,9 @@ func (ic *ifConfigurator) removeContainerLink(containerID, epName string) error 
 	if !found {
 		return nil
 	}
+	if err := util.RemoveVMNetworkAdapter(ep.Name); err != nil {
+		return err
+	}
 	return ic.removeHNSEndpoint(ep, containerID)
 }
 

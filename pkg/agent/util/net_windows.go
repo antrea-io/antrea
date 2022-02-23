@@ -836,3 +836,12 @@ func ReplaceNetNeighbor(neighbor *Neighbor) error {
 func VirtualAdapterName(name string) string {
 	return fmt.Sprintf("%s (%s)", ContainerVNICPrefix, name)
 }
+
+func RemoveVMNetworkAdapter(ifaceName string) error {
+	cmd := fmt.Sprintf(`Remove-VMNetworkAdapter -ManagementOS -ComputerName "$(hostname)" -Name "%s" -SwitchName "%s"`, ifaceName, LocalHNSNetwork)
+	_, err := ps.RunCommand(cmd)
+	if err != nil && !strings.Contains(err.Error(), "ObjectNotFound") {
+		return err
+	}
+	return nil
+}
