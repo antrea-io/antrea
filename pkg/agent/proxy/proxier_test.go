@@ -114,7 +114,7 @@ func withoutProxyLoadBalancerIPs(o *proxyOptions) {
 	o.proxyLoadBalancerIPs = false
 }
 
-func NewFakeProxier(routeClient route.Interface, ofClient openflow.Client, nodePortAddresses []net.IP, isIPv6 bool, options ...proxyOptionsFn) *proxier {
+func NewFakeProxier(routeClient route.Interface, ofClient openflow.Client, nodePortAddresses []net.IP, groupIDAllocator openflow.GroupAllocator, isIPv6 bool, options ...proxyOptionsFn) *proxier {
 	hostname := "localhost"
 	eventBroadcaster := record.NewBroadcaster()
 	recorder := eventBroadcaster.NewRecorder(
@@ -144,7 +144,7 @@ func NewFakeProxier(routeClient route.Interface, ofClient openflow.Client, nodeP
 		endpointsInstalledMap:    types.EndpointsMap{},
 		endpointReferenceCounter: map[string]int{},
 		endpointsMap:             types.EndpointsMap{},
-		groupCounter:             types.NewGroupCounter(isIPv6, make(chan string, 100)),
+		groupCounter:             types.NewGroupCounter(groupIDAllocator, make(chan string, 100)),
 		ofClient:                 ofClient,
 		routeClient:              routeClient,
 		serviceStringMap:         map[string]k8sproxy.ServicePortName{},
@@ -162,7 +162,8 @@ func testClusterIP(t *testing.T, svcIP net.IP, epIP net.IP, isIPv6 bool, extraSv
 	defer ctrl.Finish()
 	mockOFClient := ofmock.NewMockClient(ctrl)
 	mockRouteClient := routemock.NewMockInterface(ctrl)
-	fp := NewFakeProxier(mockRouteClient, mockOFClient, nil, isIPv6, withProxyAll)
+	groupAllocator := openflow.NewGroupAllocator(isIPv6)
+	fp := NewFakeProxier(mockRouteClient, mockOFClient, nil, groupAllocator, isIPv6, withProxyAll)
 
 	svcPort := 80
 	svcPortName := k8sproxy.ServicePortName{
@@ -214,11 +215,12 @@ func testLoadBalancer(t *testing.T, nodePortAddresses []net.IP, svcIP, ep1IP, ep
 	defer ctrl.Finish()
 	mockOFClient := ofmock.NewMockClient(ctrl)
 	mockRouteClient := routemock.NewMockInterface(ctrl)
+	groupAllocator := openflow.NewGroupAllocator(isIPv6)
 	options := []proxyOptionsFn{withProxyAll}
 	if !proxyLoadBalancerIPs {
 		options = append(options, withoutProxyLoadBalancerIPs)
 	}
-	fp := NewFakeProxier(mockRouteClient, mockOFClient, nodePortAddresses, isIPv6, options...)
+	fp := NewFakeProxier(mockRouteClient, mockOFClient, nodePortAddresses, groupAllocator, isIPv6, options...)
 
 	svcPort := 80
 	svcNodePort := 30008
@@ -281,7 +283,6 @@ func testLoadBalancer(t *testing.T, nodePortAddresses []net.IP, svcIP, ep1IP, ep
 		eps = append(eps, makeTestEndpoints(svcPortName.Namespace, svcPortName.Name, epFunc))
 	}
 	makeEndpointsMap(fp, eps...)
-
 	groupID, _ := fp.groupCounter.Get(svcPortName, false)
 	bindingProtocol := binding.ProtocolTCP
 	if isIPv6 {
@@ -317,7 +318,8 @@ func testNodePort(t *testing.T, nodePortAddresses []net.IP, svcIP, ep1IP, ep2IP 
 	defer ctrl.Finish()
 	mockOFClient := ofmock.NewMockClient(ctrl)
 	mockRouteClient := routemock.NewMockInterface(ctrl)
-	fp := NewFakeProxier(mockRouteClient, mockOFClient, nodePortAddresses, isIPv6, withProxyAll)
+	groupAllocator := openflow.NewGroupAllocator(isIPv6)
+	fp := NewFakeProxier(mockRouteClient, mockOFClient, nodePortAddresses, groupAllocator, isIPv6, withProxyAll)
 
 	svcPort := 80
 	svcNodePort := 31000
@@ -509,8 +511,10 @@ func TestDualStackService(t *testing.T) {
 	defer ctrl.Finish()
 	mockOFClient := ofmock.NewMockClient(ctrl)
 	mockRouteClient := routemock.NewMockInterface(ctrl)
-	fpv4 := NewFakeProxier(mockRouteClient, mockOFClient, nil, false)
-	fpv6 := NewFakeProxier(mockRouteClient, mockOFClient, nil, true)
+	ipv4GGroupAllocator := openflow.NewGroupAllocator(false)
+	ipv6GGroupAllocator := openflow.NewGroupAllocator(true)
+	fpv4 := NewFakeProxier(mockRouteClient, mockOFClient, nil, ipv4GGroupAllocator, false)
+	fpv6 := NewFakeProxier(mockRouteClient, mockOFClient, nil, ipv6GGroupAllocator, true)
 	metaProxier := k8sproxy.NewMetaProxier(fpv4, fpv6)
 
 	svcPort := 80
@@ -585,7 +589,8 @@ func testClusterIPRemoval(t *testing.T, svcIP net.IP, epIP net.IP, isIPv6 bool) 
 	defer ctrl.Finish()
 	mockOFClient := ofmock.NewMockClient(ctrl)
 	mockRouteClient := routemock.NewMockInterface(ctrl)
-	fp := NewFakeProxier(mockRouteClient, mockOFClient, nil, isIPv6, withProxyAll)
+	groupAllocator := openflow.NewGroupAllocator(isIPv6)
+	fp := NewFakeProxier(mockRouteClient, mockOFClient, nil, groupAllocator, isIPv6, withProxyAll)
 
 	svcPort := 80
 	svcPortName := k8sproxy.ServicePortName{
@@ -650,7 +655,8 @@ func testClusterIPNoEndpoint(t *testing.T, svcIP net.IP, isIPv6 bool) {
 	defer ctrl.Finish()
 	mockOFClient := ofmock.NewMockClient(ctrl)
 	mockRouteClient := routemock.NewMockInterface(ctrl)
-	fp := NewFakeProxier(mockRouteClient, mockOFClient, nil, isIPv6)
+	groupAllocator := openflow.NewGroupAllocator(isIPv6)
+	fp := NewFakeProxier(mockRouteClient, mockOFClient, nil, groupAllocator, isIPv6)
 
 	svcPort := 80
 	svcNodePort := 3001
@@ -688,7 +694,8 @@ func testClusterIPRemoveSamePortEndpoint(t *testing.T, svcIP net.IP, epIP net.IP
 	defer ctrl.Finish()
 	mockOFClient := ofmock.NewMockClient(ctrl)
 	mockRouteClient := routemock.NewMockInterface(ctrl)
-	fp := NewFakeProxier(mockRouteClient, mockOFClient, nil, isIPv6)
+	groupAllocator := openflow.NewGroupAllocator(isIPv6)
+	fp := NewFakeProxier(mockRouteClient, mockOFClient, nil, groupAllocator, isIPv6)
 
 	svcPort := 80
 	svcPortName := k8sproxy.ServicePortName{
@@ -780,7 +787,8 @@ func testClusterIPRemoveEndpoints(t *testing.T, svcIP net.IP, epIP net.IP, isIPv
 	defer ctrl.Finish()
 	mockOFClient := ofmock.NewMockClient(ctrl)
 	mockRouteClient := routemock.NewMockInterface(ctrl)
-	fp := NewFakeProxier(mockRouteClient, mockOFClient, nil, isIPv6)
+	groupAllocator := openflow.NewGroupAllocator(isIPv6)
+	fp := NewFakeProxier(mockRouteClient, mockOFClient, nil, groupAllocator, isIPv6)
 
 	svcPort := 80
 	svcPortName := k8sproxy.ServicePortName{
@@ -840,7 +848,8 @@ func testSessionAffinityNoEndpoint(t *testing.T, svcExternalIPs net.IP, svcIP ne
 	defer ctrl.Finish()
 	mockOFClient := ofmock.NewMockClient(ctrl)
 	mockRouteClient := routemock.NewMockInterface(ctrl)
-	fp := NewFakeProxier(mockRouteClient, mockOFClient, nil, isIPv6)
+	groupAllocator := openflow.NewGroupAllocator(isIPv6)
+	fp := NewFakeProxier(mockRouteClient, mockOFClient, nil, groupAllocator, isIPv6)
 
 	svcPort := 80
 	svcNodePort := 3001
@@ -909,7 +918,8 @@ func testSessionAffinity(t *testing.T, svcExternalIPs net.IP, svcIP net.IP, isIP
 	defer ctrl.Finish()
 	mockOFClient := ofmock.NewMockClient(ctrl)
 	mockRouteClient := routemock.NewMockInterface(ctrl)
-	fp := NewFakeProxier(mockRouteClient, mockOFClient, nil, isIPv6)
+	groupAllocator := openflow.NewGroupAllocator(isIPv6)
+	fp := NewFakeProxier(mockRouteClient, mockOFClient, nil, groupAllocator, isIPv6)
 
 	svcPort := 80
 	svcNodePort := 3001
@@ -940,7 +950,6 @@ func testSessionAffinity(t *testing.T, svcExternalIPs net.IP, svcIP net.IP, isIP
 		}),
 	)
 	makeEndpointsMap(fp)
-
 	fp.syncProxyRules()
 }
 
@@ -957,7 +966,8 @@ func testPortChange(t *testing.T, svcIP net.IP, epIP net.IP, isIPv6 bool) {
 	defer ctrl.Finish()
 	mockOFClient := ofmock.NewMockClient(ctrl)
 	mockRouteClient := routemock.NewMockInterface(ctrl)
-	fp := NewFakeProxier(mockRouteClient, mockOFClient, nil, isIPv6)
+	groupAllocator := openflow.NewGroupAllocator(isIPv6)
+	fp := NewFakeProxier(mockRouteClient, mockOFClient, nil, groupAllocator, isIPv6)
 
 	svcPort1 := 80
 	svcPort2 := 8080
@@ -1031,7 +1041,8 @@ func TestServicesWithSameEndpoints(t *testing.T) {
 	defer ctrl.Finish()
 	mockOFClient := ofmock.NewMockClient(ctrl)
 	mockRouteClient := routemock.NewMockInterface(ctrl)
-	fp := NewFakeProxier(mockRouteClient, mockOFClient, nil, false)
+	groupAllocator := openflow.NewGroupAllocator(false)
+	fp := NewFakeProxier(mockRouteClient, mockOFClient, nil, groupAllocator, false)
 	epIP := net.ParseIP("10.50.60.71")
 	svcIP1 := net.ParseIP("10.180.30.41")
 	svcIP2 := net.ParseIP("10.180.30.42")

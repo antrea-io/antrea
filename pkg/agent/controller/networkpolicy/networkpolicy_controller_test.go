@@ -32,6 +32,7 @@ import (
 	"k8s.io/component-base/metrics/legacyregistry"
 
 	"antrea.io/antrea/pkg/agent/metrics"
+	"antrea.io/antrea/pkg/agent/openflow"
 	proxytypes "antrea.io/antrea/pkg/agent/proxy/types"
 	agenttypes "antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
@@ -54,7 +55,8 @@ func newTestController() (*Controller, *fake.Clientset, *mockReconciler) {
 	clientset := &fake.Clientset{}
 	ch := make(chan agenttypes.EntityReference, 100)
 	ch2 := make(chan string, 100)
-	groupCounters := []proxytypes.GroupCounter{proxytypes.NewGroupCounter(false, ch2)}
+	groupIDAllocator := openflow.NewGroupAllocator(false)
+	groupCounters := []proxytypes.GroupCounter{proxytypes.NewGroupCounter(groupIDAllocator, ch2)}
 	controller, _ := NewNetworkPolicyController(&antreaClientGetter{clientset}, nil, nil, "node1", ch, groupCounters, ch2,
 		true, true, true, true, testAsyncDeleteInterval, "8.8.8.8:53", true, false)
 	reconciler := newMockReconciler()
