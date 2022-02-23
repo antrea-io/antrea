@@ -567,6 +567,10 @@ spec:
                           port:
                             x-kubernetes-int-or-string: true
                           protocol:
+                            enum:
+                            - TCP
+                            - UDP
+                            - SCTP
                             type: string
                         type: object
                       type: array
@@ -829,6 +833,10 @@ spec:
                           port:
                             x-kubernetes-int-or-string: true
                           protocol:
+                            enum:
+                            - TCP
+                            - UDP
+                            - SCTP
                             type: string
                         type: object
                       type: array
@@ -1020,6 +1028,10 @@ spec:
                     port:
                       x-kubernetes-int-or-string: true
                     protocol:
+                      enum:
+                      - TCP
+                      - UDP
+                      - SCTP
                       type: string
                   type: object
                 type: array
@@ -1369,6 +1381,10 @@ spec:
                           port:
                             x-kubernetes-int-or-string: true
                           protocol:
+                            enum:
+                            - TCP
+                            - UDP
+                            - SCTP
                             type: string
                         type: object
                       type: array
@@ -1606,6 +1622,10 @@ spec:
                           port:
                             x-kubernetes-int-or-string: true
                           protocol:
+                            enum:
+                            - TCP
+                            - UDP
+                            - SCTP
                             type: string
                         type: object
                       type: array
