@@ -41,7 +41,6 @@ import (
 	"antrea.io/antrea/pkg/agent/flowexporter"
 	"antrea.io/antrea/pkg/agent/flowexporter/exporter"
 	"antrea.io/antrea/pkg/agent/interfacestore"
-	"antrea.io/antrea/pkg/agent/ipassigner"
 	"antrea.io/antrea/pkg/agent/memberlist"
 	"antrea.io/antrea/pkg/agent/metrics"
 	"antrea.io/antrea/pkg/agent/multicast"
@@ -307,13 +306,11 @@ func run(o *Options) error {
 	var externalIPPoolController *externalippool.ExternalIPPoolController
 	var externalIPController *serviceexternalip.ServiceExternalIPController
 	var memberlistCluster *memberlist.Cluster
-	var localIPDetector ipassigner.LocalIPDetector
 
 	if features.DefaultFeatureGate.Enabled(features.Egress) || features.DefaultFeatureGate.Enabled(features.ServiceExternalIP) {
 		externalIPPoolController = externalippool.NewExternalIPPoolController(
 			crdClient, externalIPPoolInformer,
 		)
-		localIPDetector = ipassigner.NewLocalIPDetector()
 		var nodeTransportIP net.IP
 		if nodeConfig.NodeTransportIPv4Addr != nil {
 			nodeTransportIP = nodeConfig.NodeTransportIPv4Addr.IP
@@ -332,7 +329,7 @@ func run(o *Options) error {
 	if features.DefaultFeatureGate.Enabled(features.Egress) {
 		egressController, err = egress.NewEgressController(
 			ofClient, antreaClientProvider, crdClient, ifaceStore, routeClient, nodeConfig.Name, nodeConfig.NodeTransportInterfaceName,
-			memberlistCluster, egressInformer, nodeInformer, localIPDetector,
+			memberlistCluster, egressInformer, nodeInformer,
 		)
 		if err != nil {
 			return fmt.Errorf("error creating new Egress controller: %v", err)
@@ -346,7 +343,6 @@ func run(o *Options) error {
 			memberlistCluster,
 			serviceInformer,
 			endpointsInformer,
-			localIPDetector,
 		)
 		if err != nil {
 			return fmt.Errorf("error creating new ServiceExternalIP controller: %v", err)
@@ -531,7 +527,6 @@ func run(o *Options) error {
 
 	if features.DefaultFeatureGate.Enabled(features.Egress) || features.DefaultFeatureGate.Enabled(features.ServiceExternalIP) {
 		go externalIPPoolController.Run(stopCh)
-		go localIPDetector.Run(stopCh)
 		go memberlistCluster.Run(stopCh)
 	}
 

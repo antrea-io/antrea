@@ -23,7 +23,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
 	apimachinerytypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -51,9 +50,6 @@ const (
 
 	externalIPIndex     = "externalIP"
 	externalIPPoolIndex = "externalIPPool"
-
-	// ingressDummyDevice is the dummy device that holds the Service external IPs configured to the system by antrea-agent.
-	ingressDummyDevice = "antrea-ingress0"
 )
 
 type externalIPState struct {
@@ -78,9 +74,11 @@ type ServiceExternalIPController struct {
 	externalIPStates      map[apimachinerytypes.NamespacedName]externalIPState
 	externalIPStatesMutex sync.RWMutex
 
-	cluster         memberlist.Interface
-	ipAssigner      ipassigner.IPAssigner
-	localIPDetector ipassigner.LocalIPDetector
+	cluster    memberlist.Interface
+	ipAssigner ipassigner.IPAssigner
+
+	assignedIPs      map[string]sets.String
+	assignedIPsMutex sync.Mutex
 }
 
 func NewServiceExternalIPController(
@@ -90,7 +88,6 @@ func NewServiceExternalIPController(
 	cluster memberlist.Interface,
 	serviceInformer coreinformers.ServiceInformer,
 	endpointsInformer coreinformers.EndpointsInformer,
-	localIPDetector ipassigner.LocalIPDetector,
 ) (*ServiceExternalIPController, error) {
 	c := &ServiceExternalIPController{
 		nodeName:              nodeName,
@@ -104,9 +101,9 @@ func NewServiceExternalIPController(
 		endpointsLister:       endpointsInformer.Lister(),
 		endpointsListerSynced: endpointsInformer.Informer().HasSynced,
 		externalIPStates:      make(map[apimachinerytypes.NamespacedName]externalIPState),
-		localIPDetector:       localIPDetector,
+		assignedIPs:           make(map[string]sets.String),
 	}
-	ipAssigner, err := ipassigner.NewIPAssigner(nodeTransportInterface, ingressDummyDevice)
+	ipAssigner, err := ipassigner.NewIPAssigner(nodeTransportInterface, "")
 	if err != nil {
 		return nil, fmt.Errorf("initializing service external IP assigner failed: %v", err)
 	}
@@ -158,7 +155,6 @@ func NewServiceExternalIPController(
 		resyncPeriod,
 	)
 
-	c.localIPDetector.AddEventHandler(c.onLocalIPUpdate)
 	c.cluster.AddClusterEventHandler(c.enqueueServicesByExternalIPPool)
 	return c, nil
 }
@@ -236,6 +232,7 @@ func (c *ServiceExternalIPController) enqueueServicesByExternalIPPool(eipName st
 // workqueue.
 func (c *ServiceExternalIPController) Run(stopCh <-chan struct{}) {
 	defer c.queue.ShutDown()
+	go c.ipAssigner.Run(stopCh)
 
 	klog.Infof("Starting %s", controllerName)
 	defer klog.Infof("Shutting down %s", controllerName)
@@ -244,48 +241,10 @@ func (c *ServiceExternalIPController) Run(stopCh <-chan struct{}) {
 		return
 	}
 
-	c.removeStaleExternalIPs()
-
 	for i := 0; i < defaultWorkers; i++ {
 		go wait.Until(c.worker, time.Second, stopCh)
 	}
 	<-stopCh
-}
-
-// removeStaleExternalIPs unassigns stale external IPs that shouldn't be present on this Node.
-// This function will only delete IPs which are caused by Service changes when the agent on this Node was
-// not running. Those IPs should be deleted caused by migration will be deleted by processNextWorkItem.
-func (c *ServiceExternalIPController) removeStaleExternalIPs() {
-	desiredExternalIPs := sets.NewString()
-	services, _ := c.serviceLister.List(labels.Everything())
-	for _, service := range services {
-		if service.Spec.Type == corev1.ServiceTypeLoadBalancer &&
-			service.ObjectMeta.Annotations[types.ServiceExternalIPPoolAnnotationKey] != "" &&
-			len(service.Status.LoadBalancer.Ingress) != 0 {
-			desiredExternalIPs.Insert(service.Status.LoadBalancer.Ingress[0].IP)
-		}
-	}
-	actualExternalIPs := c.ipAssigner.AssignedIPs()
-	for ip := range actualExternalIPs.Difference(desiredExternalIPs) {
-		if err := c.ipAssigner.UnassignIP(ip); err != nil {
-			klog.ErrorS(err, "Failed to clean up stale service external IP", "ip", ip)
-		}
-	}
-}
-
-func (c *ServiceExternalIPController) onLocalIPUpdate(ip string, added bool) {
-	services, _ := c.serviceInformer.GetIndexer().ByIndex(externalIPIndex, ip)
-	if len(services) == 0 {
-		return
-	}
-	if added {
-		klog.Infof("Detected service external IP address %s added to this Node", ip)
-	} else {
-		klog.Infof("Detected service external IP address %s deleted from this Node", ip)
-	}
-	for _, s := range services {
-		c.enqueueService(s)
-	}
 }
 
 // worker is a long-running function that will continually call the processNextWorkItem function in
@@ -325,7 +284,7 @@ func (c *ServiceExternalIPController) deleteService(service apimachinerytypes.Na
 	if state, exist = c.externalIPStates[service]; !exist {
 		return nil
 	}
-	if err := c.ipAssigner.UnassignIP(state.ip); err != nil {
+	if err := c.unassignIP(state.ip, service); err != nil {
 		return err
 	}
 	delete(c.externalIPStates, service)
@@ -440,9 +399,41 @@ func (c *ServiceExternalIPController) syncService(key apimachinerytypes.Namespac
 				return err
 			}
 		}
-		return c.ipAssigner.AssignIP(currentExternalIP)
+		return c.assignIP(currentExternalIP, key)
 	}
-	return c.ipAssigner.UnassignIP(currentExternalIP)
+	return c.unassignIP(currentExternalIP, key)
+}
+
+func (c *ServiceExternalIPController) assignIP(ip string, service apimachinerytypes.NamespacedName) error {
+	c.assignedIPsMutex.Lock()
+	defer c.assignedIPsMutex.Unlock()
+	if _, ok := c.assignedIPs[ip]; !ok {
+		if err := c.ipAssigner.AssignIP(ip); err != nil {
+			return err
+		}
+		c.assignedIPs[ip] = sets.NewString(service.String())
+	} else {
+		c.assignedIPs[ip].Insert(service.String())
+	}
+	return nil
+}
+
+func (c *ServiceExternalIPController) unassignIP(ip string, service apimachinerytypes.NamespacedName) error {
+	c.assignedIPsMutex.Lock()
+	defer c.assignedIPsMutex.Unlock()
+	assigned, ok := c.assignedIPs[ip]
+	if !ok {
+		return nil
+	}
+	if assigned.Len() == 1 && assigned.Has(service.String()) {
+		if err := c.ipAssigner.UnassignIP(ip); err != nil {
+			return err
+		}
+		delete(c.assignedIPs, ip)
+		return nil
+	}
+	assigned.Delete(service.String())
+	return nil
 }
 
 // nodesHasHealthyServiceEndpoint returns the set of Nodes which has at least one healthy endpoint.

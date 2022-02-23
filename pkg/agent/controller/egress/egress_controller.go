@@ -155,7 +155,6 @@ func NewEgressController(
 	cluster *memberlist.Cluster,
 	egressInformer crdinformers.EgressInformer,
 	nodeInformer coreinformers.NodeInformer,
-	localIPDetector ipassigner.LocalIPDetector,
 ) (*EgressController, error) {
 	c := &EgressController{
 		ofClient:             ofClient,
@@ -172,7 +171,7 @@ func NewEgressController(
 		egressStates:         map[string]*egressState{},
 		egressIPStates:       map[string]*egressIPState{},
 		egressBindings:       map[string]*egressBinding{},
-		localIPDetector:      localIPDetector,
+		localIPDetector:      ipassigner.NewLocalIPDetector(),
 		idAllocator:          newIDAllocator(minEgressMark, maxEgressMark),
 		cluster:              cluster,
 	}
@@ -292,6 +291,7 @@ func (c *EgressController) Run(stopCh <-chan struct{}) {
 
 	go c.localIPDetector.Run(stopCh)
 
+	go c.ipAssigner.Run(stopCh)
 	if !cache.WaitForNamedCacheSync(controllerName, stopCh, c.egressListerSynced, c.localIPDetector.HasSynced) {
 		return
 	}
