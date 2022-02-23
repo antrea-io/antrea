@@ -73,7 +73,6 @@ func fakeHashFn(invert bool) func([]string) []string {
 var _ memberlist.Interface = (*fakeMemberlistCluster)(nil)
 
 func (f *fakeMemberlistCluster) AddClusterEventHandler(h memberlist.ClusterNodeEventHandler) {
-
 }
 
 func (f *fakeMemberlistCluster) AliveNodes() sets.String {
@@ -136,6 +135,7 @@ func newFakeController(t *testing.T, objs ...runtime.Object) *fakeController {
 		externalIPStates:      make(map[apimachinerytypes.NamespacedName]externalIPState),
 		cluster:               memberlistCluster,
 		ipAssigner:            mockIPAssigner,
+		assignedIPs:           make(map[string]sets.String),
 	}
 	return &fakeController{
 		ServiceExternalIPController: eipController,
@@ -207,6 +207,7 @@ func makeEndpoints(name, namespace string, addresses, notReadyAddresses map[stri
 func TestCreateService(t *testing.T) {
 	tests := []struct {
 		name                     string
+		previousExternalIPStates map[apimachinerytypes.NamespacedName]externalIPState
 		existingEndpoints        []*corev1.Endpoints
 		serviceToCreate          *corev1.Service
 		healthyNodes             []string
@@ -216,10 +217,11 @@ func TestCreateService(t *testing.T) {
 		expectError              bool
 	}{
 		{
-			name:              "new Service created and local Node selected",
-			existingEndpoints: nil,
-			serviceToCreate:   servicePolicyCluster,
-			healthyNodes:      []string{fakeNode1, fakeNode2},
+			name:                     "new Service created and local Node selected",
+			previousExternalIPStates: map[apimachinerytypes.NamespacedName]externalIPState{},
+			existingEndpoints:        nil,
+			serviceToCreate:          servicePolicyCluster,
+			healthyNodes:             []string{fakeNode1, fakeNode2},
 			expectedCalls: func(mockIPAssigner *ipassignertest.MockIPAssigner) {
 				mockIPAssigner.EXPECT().AssignIP(fakeServiceExternalIP1)
 			},
@@ -232,14 +234,13 @@ func TestCreateService(t *testing.T) {
 			expectError: false,
 		},
 		{
-			name:              "new Service created and local Node not selected",
-			existingEndpoints: nil,
-			serviceToCreate:   servicePolicyCluster,
-			healthyNodes:      []string{fakeNode1, fakeNode2},
-			overrideHashFn:    fakeHashFn(true),
-			expectedCalls: func(mockIPAssigner *ipassignertest.MockIPAssigner) {
-				mockIPAssigner.EXPECT().UnassignIP(fakeServiceExternalIP1)
-			},
+			name:                     "new Service created and local Node not selected",
+			previousExternalIPStates: map[apimachinerytypes.NamespacedName]externalIPState{},
+			existingEndpoints:        nil,
+			serviceToCreate:          servicePolicyCluster,
+			healthyNodes:             []string{fakeNode1, fakeNode2},
+			overrideHashFn:           fakeHashFn(true),
+			expectedCalls:            func(mockIPAssigner *ipassignertest.MockIPAssigner) {},
 			expectedExternalIPStates: map[apimachinerytypes.NamespacedName]externalIPState{
 				keyFor(servicePolicyCluster): {
 					ip:           fakeServiceExternalIP1,
@@ -249,7 +250,8 @@ func TestCreateService(t *testing.T) {
 			expectError: false,
 		},
 		{
-			name: "new Service created with ExternalTrafficPolicy=Local and local Node selected",
+			name:                     "new Service created with ExternalTrafficPolicy=Local and local Node selected",
+			previousExternalIPStates: map[apimachinerytypes.NamespacedName]externalIPState{},
 			existingEndpoints: []*corev1.Endpoints{
 				makeEndpoints(servicePolicyLocal.Name, servicePolicyLocal.Namespace,
 					map[string]string{
@@ -271,7 +273,8 @@ func TestCreateService(t *testing.T) {
 			expectError: false,
 		},
 		{
-			name: "new Service created with ExternalTrafficPolicy=Local and local Node not Selected",
+			name:                     "new Service created with ExternalTrafficPolicy=Local and local Node not Selected",
+			previousExternalIPStates: map[apimachinerytypes.NamespacedName]externalIPState{},
 			existingEndpoints: []*corev1.Endpoints{
 				makeEndpoints(servicePolicyLocal.Name, servicePolicyLocal.Namespace,
 					map[string]string{
@@ -287,9 +290,7 @@ func TestCreateService(t *testing.T) {
 			healthyNodes:    []string{fakeNode1, fakeNode2},
 			// invert the sorted string to select other Nodes.
 			overrideHashFn: fakeHashFn(true),
-			expectedCalls: func(mockIPAssigner *ipassignertest.MockIPAssigner) {
-				mockIPAssigner.EXPECT().UnassignIP(fakeServiceExternalIP1)
-			},
+			expectedCalls:  func(mockIPAssigner *ipassignertest.MockIPAssigner) {},
 			expectedExternalIPStates: map[apimachinerytypes.NamespacedName]externalIPState{
 				keyFor(servicePolicyLocal): {
 					ip:           fakeServiceExternalIP1,
@@ -299,7 +300,8 @@ func TestCreateService(t *testing.T) {
 			expectError: false,
 		},
 		{
-			name: "new Service created with ExternalTrafficPolicy=Local and local Node has no healthy endpoints",
+			name:                     "new Service created with ExternalTrafficPolicy=Local and local Node has no healthy endpoints",
+			previousExternalIPStates: map[apimachinerytypes.NamespacedName]externalIPState{},
 			existingEndpoints: []*corev1.Endpoints{
 				makeEndpoints(servicePolicyLocal.Name, servicePolicyLocal.Namespace,
 					map[string]string{
@@ -311,9 +313,7 @@ func TestCreateService(t *testing.T) {
 			},
 			serviceToCreate: servicePolicyLocal,
 			healthyNodes:    []string{fakeNode1, fakeNode2},
-			expectedCalls: func(mockIPAssigner *ipassignertest.MockIPAssigner) {
-				mockIPAssigner.EXPECT().UnassignIP(fakeServiceExternalIP1)
-			},
+			expectedCalls:   func(mockIPAssigner *ipassignertest.MockIPAssigner) {},
 			expectedExternalIPStates: map[apimachinerytypes.NamespacedName]externalIPState{
 				keyFor(servicePolicyLocal): {
 					ip:           fakeServiceExternalIP1,
@@ -323,7 +323,8 @@ func TestCreateService(t *testing.T) {
 			expectError: false,
 		},
 		{
-			name: "new Service created with ExternalTrafficPolicy=Local and no Nodes has healthy endpoints",
+			name:                     "new Service created with ExternalTrafficPolicy=Local and no Nodes has healthy endpoints",
+			previousExternalIPStates: map[apimachinerytypes.NamespacedName]externalIPState{},
 			existingEndpoints: []*corev1.Endpoints{
 				makeEndpoints(servicePolicyLocal.Name, servicePolicyLocal.Namespace,
 					nil,
@@ -332,12 +333,32 @@ func TestCreateService(t *testing.T) {
 						"2.3.4.6": fakeNode2,
 					}),
 			},
-			serviceToCreate: servicePolicyLocal,
-			healthyNodes:    []string{fakeNode1, fakeNode2},
-			expectedCalls: func(mockIPAssigner *ipassignertest.MockIPAssigner) {
-			},
+			serviceToCreate:          servicePolicyLocal,
+			healthyNodes:             []string{fakeNode1, fakeNode2},
+			expectedCalls:            func(mockIPAssigner *ipassignertest.MockIPAssigner) {},
 			expectedExternalIPStates: map[apimachinerytypes.NamespacedName]externalIPState{},
 			expectError:              true,
+		},
+		{
+			name:              "new Service created and local Node selected and IP already assigned by other Service",
+			existingEndpoints: nil,
+			previousExternalIPStates: map[apimachinerytypes.NamespacedName]externalIPState{
+				keyFor(servicePolicyLocal): {fakeServiceExternalIP1, fakeNode1},
+			},
+			serviceToCreate: servicePolicyCluster,
+			healthyNodes:    []string{fakeNode1, fakeNode2},
+			expectedCalls:   func(mockIPAssigner *ipassignertest.MockIPAssigner) {},
+			expectedExternalIPStates: map[apimachinerytypes.NamespacedName]externalIPState{
+				keyFor(servicePolicyLocal): {
+					ip:           fakeServiceExternalIP1,
+					assignedNode: fakeNode1,
+				},
+				keyFor(servicePolicyCluster): {
+					ip:           fakeServiceExternalIP1,
+					assignedNode: fakeNode1,
+				},
+			},
+			expectError: false,
 		},
 	}
 	for _, tt := range tests {
@@ -357,6 +378,13 @@ func TestCreateService(t *testing.T) {
 			if tt.overrideHashFn != nil {
 				c.fakeMemberlistCluster.hashFn = tt.overrideHashFn
 			}
+			c.externalIPStates = tt.previousExternalIPStates
+			for service, state := range tt.previousExternalIPStates {
+				if c.assignedIPs[state.ip] == nil {
+					c.assignedIPs[state.ip] = sets.NewString()
+				}
+				c.assignedIPs[state.ip].Insert(service.String())
+			}
 			tt.expectedCalls(c.mockIPAssigner)
 			err := c.syncService(keyFor(tt.serviceToCreate))
 			if tt.expectError {
@@ -370,11 +398,15 @@ func TestCreateService(t *testing.T) {
 }
 
 func TestUpdateService(t *testing.T) {
-	serviceExternlTrafficPolicyClusterUpdatedExternalIP := servicePolicyCluster.DeepCopy()
-	serviceExternlTrafficPolicyClusterUpdatedExternalIP.Status.LoadBalancer.Ingress[0].IP = fakeServiceExternalIP2
+	serviceExternalTrafficPolicyClusterUpdatedExternalIP := servicePolicyCluster.DeepCopy()
+	serviceExternalTrafficPolicyClusterUpdatedExternalIP.Status.LoadBalancer.Ingress[0].IP = fakeServiceExternalIP2
 
-	serviceExternalTrafficLocalWithNodeSelectd := servicePolicyLocal.DeepCopy()
-	serviceExternalTrafficLocalWithNodeSelectd.Status.LoadBalancer.Ingress[0].Hostname = fakeNode1
+	serviceExternalTrafficPolicyClusterWithSameExternalIP := servicePolicyCluster.DeepCopy()
+	serviceExternalTrafficPolicyClusterWithSameExternalIP.Name = "svc-same-eip"
+	serviceExternalTrafficPolicyClusterWithSameExternalIP.Status.LoadBalancer.Ingress[0].IP = fakeServiceExternalIP2
+
+	serviceExternalTrafficLocalWithNodeSelected := servicePolicyLocal.DeepCopy()
+	serviceExternalTrafficLocalWithNodeSelected.Status.LoadBalancer.Ingress[0].Hostname = fakeNode1
 
 	serviceExternalTrafficLocalUpdatedHostname := servicePolicyLocal.DeepCopy()
 	serviceExternalTrafficLocalUpdatedHostname.Status.LoadBalancer.Ingress[0].Hostname = fakeNode2
@@ -402,12 +434,12 @@ func TestUpdateService(t *testing.T) {
 		{
 			name:            "Service updated external IP and local Node selected",
 			endpoints:       nil,
-			serviceToUpdate: serviceExternlTrafficPolicyClusterUpdatedExternalIP,
+			serviceToUpdate: serviceExternalTrafficPolicyClusterUpdatedExternalIP,
 			previousExternalIPStates: map[apimachinerytypes.NamespacedName]externalIPState{
-				keyFor(serviceExternlTrafficPolicyClusterUpdatedExternalIP): {fakeServiceExternalIP1, fakeNode1},
+				keyFor(serviceExternalTrafficPolicyClusterUpdatedExternalIP): {fakeServiceExternalIP1, fakeNode1},
 			},
 			expectedExternalIPStates: map[apimachinerytypes.NamespacedName]externalIPState{
-				keyFor(serviceExternlTrafficPolicyClusterUpdatedExternalIP): {fakeServiceExternalIP2, fakeNode1},
+				keyFor(serviceExternalTrafficPolicyClusterUpdatedExternalIP): {fakeServiceExternalIP2, fakeNode1},
 			},
 			healthyNodes: []string{fakeNode1, fakeNode2},
 			expectedCalls: func(mockIPAssigner *ipassignertest.MockIPAssigner) {
@@ -417,20 +449,37 @@ func TestUpdateService(t *testing.T) {
 			expectError: false,
 		},
 		{
-			name:            "Service updated external IP and local Node not selected",
+			name:            "Service updated external IP and local Node selected but other Service still owns the assigned IP",
 			endpoints:       nil,
-			serviceToUpdate: serviceExternlTrafficPolicyClusterUpdatedExternalIP,
+			serviceToUpdate: serviceExternalTrafficPolicyClusterUpdatedExternalIP,
 			previousExternalIPStates: map[apimachinerytypes.NamespacedName]externalIPState{
-				keyFor(serviceExternlTrafficPolicyClusterUpdatedExternalIP): {fakeServiceExternalIP1, fakeNode1},
+				keyFor(serviceExternalTrafficPolicyClusterWithSameExternalIP): {fakeServiceExternalIP1, fakeNode1},
+				keyFor(serviceExternalTrafficPolicyClusterUpdatedExternalIP):  {fakeServiceExternalIP1, fakeNode1},
 			},
 			expectedExternalIPStates: map[apimachinerytypes.NamespacedName]externalIPState{
-				keyFor(serviceExternlTrafficPolicyClusterUpdatedExternalIP): {fakeServiceExternalIP2, fakeNode2},
+				keyFor(serviceExternalTrafficPolicyClusterWithSameExternalIP): {fakeServiceExternalIP1, fakeNode1},
+				keyFor(serviceExternalTrafficPolicyClusterUpdatedExternalIP):  {fakeServiceExternalIP2, fakeNode1},
+			},
+			healthyNodes: []string{fakeNode1, fakeNode2},
+			expectedCalls: func(mockIPAssigner *ipassignertest.MockIPAssigner) {
+				mockIPAssigner.EXPECT().AssignIP(fakeServiceExternalIP2)
+			},
+			expectError: false,
+		},
+		{
+			name:            "Service updated external IP and local Node not selected",
+			endpoints:       nil,
+			serviceToUpdate: serviceExternalTrafficPolicyClusterUpdatedExternalIP,
+			previousExternalIPStates: map[apimachinerytypes.NamespacedName]externalIPState{
+				keyFor(serviceExternalTrafficPolicyClusterUpdatedExternalIP): {fakeServiceExternalIP1, fakeNode1},
+			},
+			expectedExternalIPStates: map[apimachinerytypes.NamespacedName]externalIPState{
+				keyFor(serviceExternalTrafficPolicyClusterUpdatedExternalIP): {fakeServiceExternalIP2, fakeNode2},
 			},
 			healthyNodes:   []string{fakeNode1, fakeNode2},
 			overrideHashFn: fakeHashFn(true),
 			expectedCalls: func(mockIPAssigner *ipassignertest.MockIPAssigner) {
 				mockIPAssigner.EXPECT().UnassignIP(fakeServiceExternalIP1)
-				mockIPAssigner.EXPECT().UnassignIP(fakeServiceExternalIP2)
 			},
 			expectError: false,
 		},
@@ -439,7 +488,7 @@ func TestUpdateService(t *testing.T) {
 			endpoints:       nil,
 			serviceToUpdate: serviceChangedType,
 			previousExternalIPStates: map[apimachinerytypes.NamespacedName]externalIPState{
-				keyFor(serviceExternlTrafficPolicyClusterUpdatedExternalIP): {fakeServiceExternalIP1, fakeNode1},
+				keyFor(serviceExternalTrafficPolicyClusterUpdatedExternalIP): {fakeServiceExternalIP1, fakeNode1},
 			},
 			expectedExternalIPStates: map[apimachinerytypes.NamespacedName]externalIPState{},
 			healthyNodes:             []string{fakeNode1, fakeNode2},
@@ -453,7 +502,7 @@ func TestUpdateService(t *testing.T) {
 			endpoints:       nil,
 			serviceToUpdate: serviceChangedType,
 			previousExternalIPStates: map[apimachinerytypes.NamespacedName]externalIPState{
-				keyFor(serviceExternlTrafficPolicyClusterUpdatedExternalIP): {fakeServiceExternalIP1, fakeNode1},
+				keyFor(serviceExternalTrafficPolicyClusterUpdatedExternalIP): {fakeServiceExternalIP1, fakeNode1},
 			},
 			expectedExternalIPStates: map[apimachinerytypes.NamespacedName]externalIPState{},
 			healthyNodes:             []string{fakeNode1, fakeNode2},
@@ -503,7 +552,7 @@ func TestUpdateService(t *testing.T) {
 			expectError: false,
 		},
 		{
-			name: "local Node no longer have healy endpoints",
+			name: "local Node no longer have healthy endpoints",
 			endpoints: []*corev1.Endpoints{
 				makeEndpoints(servicePolicyLocal.Name, servicePolicyLocal.Namespace,
 					map[string]string{
@@ -512,7 +561,7 @@ func TestUpdateService(t *testing.T) {
 						"2.3.4.5": fakeNode1,
 					}),
 			},
-			serviceToUpdate: serviceExternalTrafficLocalWithNodeSelectd,
+			serviceToUpdate: serviceExternalTrafficLocalWithNodeSelected,
 			previousExternalIPStates: map[apimachinerytypes.NamespacedName]externalIPState{
 				keyFor(servicePolicyLocal): {fakeServiceExternalIP1, fakeNode1},
 			},
@@ -537,18 +586,16 @@ func TestUpdateService(t *testing.T) {
 				),
 			},
 			overrideHashFn:  fakeHashFn(true),
-			serviceToUpdate: serviceExternalTrafficLocalWithNodeSelectd,
+			serviceToUpdate: serviceExternalTrafficLocalWithNodeSelected,
 			previousExternalIPStates: map[apimachinerytypes.NamespacedName]externalIPState{
 				keyFor(servicePolicyLocal): {fakeServiceExternalIP1, fakeNode1},
 			},
 			expectedExternalIPStates: map[apimachinerytypes.NamespacedName]externalIPState{
 				keyFor(servicePolicyLocal): {fakeServiceExternalIP1, fakeNode1},
 			},
-			healthyNodes: []string{fakeNode1, fakeNode2},
-			expectedCalls: func(mockIPAssigner *ipassignertest.MockIPAssigner) {
-				mockIPAssigner.EXPECT().AssignIP(fakeServiceExternalIP1)
-			},
-			expectError: false,
+			healthyNodes:  []string{fakeNode1, fakeNode2},
+			expectedCalls: func(mockIPAssigner *ipassignertest.MockIPAssigner) {},
+			expectError:   false,
 		},
 		{
 			name: "other Node could promote itself as the new owner",
@@ -586,7 +633,7 @@ func TestUpdateService(t *testing.T) {
 				),
 			},
 			overrideHashFn:           fakeHashFn(true),
-			serviceToUpdate:          serviceExternalTrafficLocalWithNodeSelectd,
+			serviceToUpdate:          serviceExternalTrafficLocalWithNodeSelected,
 			previousExternalIPStates: map[apimachinerytypes.NamespacedName]externalIPState{},
 			expectedExternalIPStates: map[apimachinerytypes.NamespacedName]externalIPState{
 				keyFor(servicePolicyLocal): {fakeServiceExternalIP1, fakeNode1},
@@ -616,6 +663,12 @@ func TestUpdateService(t *testing.T) {
 			if tt.overrideHashFn != nil {
 				c.fakeMemberlistCluster.hashFn = tt.overrideHashFn
 			}
+			for service, state := range tt.previousExternalIPStates {
+				if c.assignedIPs[state.ip] == nil {
+					c.assignedIPs[state.ip] = sets.NewString()
+				}
+				c.assignedIPs[state.ip].Insert(service.String())
+			}
 			tt.expectedCalls(c.mockIPAssigner)
 			err := c.syncService(keyFor(tt.serviceToUpdate))
 			if tt.expectError {
@@ -624,62 +677,6 @@ func TestUpdateService(t *testing.T) {
 				assert.NoError(t, err)
 			}
 			assert.Equal(t, tt.expectedExternalIPStates, c.externalIPStates)
-		})
-	}
-}
-
-func TestStaleServiceExternalIPRemoval(t *testing.T) {
-	service3 := servicePolicyCluster.DeepCopy()
-	service3.Name = "svc3"
-	service3.Status.LoadBalancer.Ingress = []corev1.LoadBalancerIngress{
-		{IP: fakeServiceExternalIP2},
-	}
-	tests := []struct {
-		name             string
-		existingServices []*corev1.Service
-		assignedIPs      []string
-		expectedCalls    func(mockIPAssigner *ipassignertest.MockIPAssigner)
-	}{
-		{
-			name:             "should keep assigned IPs if corresponding Services are present",
-			existingServices: []*corev1.Service{servicePolicyCluster, service3},
-			assignedIPs:      []string{fakeNode1, fakeNode2},
-			expectedCalls: func(mockIPAssigner *ipassignertest.MockIPAssigner) {
-				mockIPAssigner.EXPECT().AssignedIPs().DoAndReturn(
-					func() interface{} {
-						return sets.NewString(fakeServiceExternalIP1, fakeServiceExternalIP2)
-					},
-				)
-			},
-		},
-		{
-			name:             "should cleanup stale assigned IPs",
-			existingServices: []*corev1.Service{servicePolicyCluster},
-			assignedIPs:      []string{fakeNode1, fakeNode2},
-			expectedCalls: func(mockIPAssigner *ipassignertest.MockIPAssigner) {
-				mockIPAssigner.EXPECT().AssignedIPs().DoAndReturn(
-					func() interface{} {
-						return sets.NewString(fakeServiceExternalIP1, fakeServiceExternalIP2)
-					},
-				)
-				mockIPAssigner.EXPECT().UnassignIP(fakeServiceExternalIP2)
-			},
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			objs := []runtime.Object{}
-			for _, s := range tt.existingServices {
-				objs = append(objs, s)
-			}
-			c := newFakeController(t, objs...)
-			defer c.mockController.Finish()
-			stopCh := make(chan struct{})
-			defer close(stopCh)
-			c.informerFactory.Start(stopCh)
-			c.informerFactory.WaitForCacheSync(stopCh)
-			tt.expectedCalls(c.mockIPAssigner)
-			c.removeStaleExternalIPs()
 		})
 	}
 }

@@ -108,6 +108,33 @@ func testServiceExternalTrafficPolicyLocal(t *testing.T, data *TestData) {
 			expectedNodeUpdated: nodeName(0),
 		},
 		{
+			name:    "endpoint created IPv6",
+			ipRange: v1alpha2.IPRange{CIDR: "2021:1::aaa0/124"},
+			nodeSelector: metav1.LabelSelector{
+				MatchExpressions: []metav1.LabelSelectorRequirement{
+					{
+						Key:      v1.LabelHostname,
+						Operator: metav1.LabelSelectorOpIn,
+						Values:   []string{nodeName(0), nodeName(1)},
+					},
+				},
+			},
+			expectedExternalIP:      "2021:1::aaa1",
+			originalEndpointSubsets: nil,
+			expectedNodeOrigin:      "",
+			updatedEndpointSubsets: []v1.EndpointSubset{
+				{
+					Addresses: []v1.EndpointAddress{
+						{
+							IP:       "2021:8::aaa1",
+							NodeName: stringPtr(nodeName(0)),
+						},
+					},
+				},
+			},
+			expectedNodeUpdated: nodeName(0),
+		},
+		{
 			name:    "endpoint changed",
 			ipRange: v1alpha2.IPRange{CIDR: "169.254.100.0/30"},
 			nodeSelector: metav1.LabelSelector{
@@ -136,6 +163,42 @@ func testServiceExternalTrafficPolicyLocal(t *testing.T, data *TestData) {
 					Addresses: []v1.EndpointAddress{
 						{
 							IP:       "192.168.100.1",
+							NodeName: stringPtr(nodeName(1)),
+						},
+					},
+				},
+			},
+			expectedNodeUpdated: nodeName(1),
+		},
+		{
+			name:    "endpoint changed IPv6",
+			ipRange: v1alpha2.IPRange{CIDR: "2021:1::aaa0/124"},
+			nodeSelector: metav1.LabelSelector{
+				MatchExpressions: []metav1.LabelSelectorRequirement{
+					{
+						Key:      v1.LabelHostname,
+						Operator: metav1.LabelSelectorOpIn,
+						Values:   []string{nodeName(0), nodeName(1)},
+					},
+				},
+			},
+			expectedExternalIP: "2021:1::aaa1",
+			originalEndpointSubsets: []v1.EndpointSubset{
+				{
+					Addresses: []v1.EndpointAddress{
+						{
+							IP:       "2021:8::aaa1",
+							NodeName: stringPtr(nodeName(0)),
+						},
+					},
+				},
+			},
+			expectedNodeOrigin: nodeName(0),
+			updatedEndpointSubsets: []v1.EndpointSubset{
+				{
+					Addresses: []v1.EndpointAddress{
+						{
+							IP:       "2021:8::aaa1",
 							NodeName: stringPtr(nodeName(1)),
 						},
 					},
@@ -222,6 +285,18 @@ func testServiceWithExternalIPCRUD(t *testing.T, data *TestData) {
 			expectedExternalIP: "169.254.100.1",
 			expectedNodes:      sets.NewString(nodeName(0)),
 			expectedTotal:      2,
+		},
+		{
+			name:    "single matching Node with IPv6 range",
+			ipRange: v1alpha2.IPRange{CIDR: "2021:1::aaa0/124"},
+			nodeSelector: metav1.LabelSelector{
+				MatchLabels: map[string]string{
+					v1.LabelHostname: nodeName(0),
+				},
+			},
+			expectedExternalIP: "2021:1::aaa1",
+			expectedNodes:      sets.NewString(nodeName(0)),
+			expectedTotal:      15,
 		},
 		{
 			name:    "two matching Nodes",
@@ -335,6 +410,15 @@ func testServiceUpdateExternalIP(t *testing.T, data *TestData) {
 			newIPRange:         v1alpha2.IPRange{CIDR: "169.254.101.0/30"},
 			newExternalIP:      "169.254.101.1",
 		},
+		{
+			name:               "different Nodes in IPv6 cluster",
+			originalNode:       nodeName(0),
+			newNode:            nodeName(1),
+			originalIPRange:    v1alpha2.IPRange{CIDR: "2021:2::aaa0/124"},
+			originalExternalIP: "2021:2::aaa1",
+			newIPRange:         v1alpha2.IPRange{CIDR: "2021:2::bbb0/124"},
+			newExternalIP:      "2021:2::bbb1",
+		},
 	}
 	for idx, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -390,6 +474,11 @@ func testServiceNodeFailure(t *testing.T, data *TestData) {
 			name:       "IPv4 cluster",
 			ipRange:    v1alpha2.IPRange{CIDR: "169.254.100.0/30"},
 			expectedIP: "169.254.100.1",
+		},
+		{
+			name:       "IPv6 cluster",
+			ipRange:    v1alpha2.IPRange{CIDR: "2021:4::aaa0/124"},
+			expectedIP: "2021:4::aaa1",
 		},
 	}
 	for _, tt := range tests {
@@ -470,12 +559,19 @@ func testExternalIPAccess(t *testing.T, data *TestData) {
 			clientName:      "eth-ipv4",
 			clientIP:        "169.254.170.1",
 			localIP:         "169.254.170.2",
-			clientIPMaskLen: 24,
+			clientIPMaskLen: 25,
+		},
+		{
+			name:            "IPv6 cluster",
+			externalIPCIDR:  "2021:4::aab0/124",
+			clientName:      "eth-ipv6",
+			clientIP:        "2021:4::aaa1",
+			localIP:         "2021:4::aaa2",
+			clientIPMaskLen: 124,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			skipIfProxyAllEnabled(t, data)
 			ipFamily := corev1.IPv4Protocol
 			if utilnet.IsIPv6CIDRString(tt.externalIPCIDR) {
 				skipIfNotIPv6Cluster(t)
@@ -491,6 +587,7 @@ func testExternalIPAccess(t *testing.T, data *TestData) {
 			// Create agnhost Pods on each Node.
 			for idx, node := range nodes {
 				createAgnhostPod(t, data, agnhosts[idx], node, false)
+				defer data.deletePodAndWait(defaultTimeout, agnhosts[idx], testNamespace)
 			}
 			var port int32 = 8080
 			externalIPTestCases := []struct {
@@ -533,6 +630,8 @@ func testExternalIPAccess(t *testing.T, data *TestData) {
 					}
 					service, err := data.createServiceWithAnnotations(et.serviceName, testNamespace, port, port, corev1.ProtocolTCP, map[string]string{"app": "agnhost"}, false, et.externalTrafficPolicyLocal, corev1.ServiceTypeLoadBalancer, &ipFamily, annotations)
 					require.NoError(t, err)
+					defer data.deleteService(service.Name)
+
 					externalIP, host, err := waitExternalIPConfigured(service)
 					require.NoError(t, err)
 
@@ -544,6 +643,7 @@ ip addr add %[3]s/%[4]d dev %[1]s-b && \
 ip link set dev %[1]s-b up && \
 ip netns exec %[1]s ip addr add %[2]s/%[4]d dev %[1]s-a && \
 ip netns exec %[1]s ip link set dev %[1]s-a up && \
+ip netns exec %[1]s ip route replace default via %[3]s && \
 ip netns exec %[1]s \
 sleep 3600`, tt.clientName, tt.clientIP, tt.localIP, tt.clientIPMaskLen)
 
@@ -611,7 +711,7 @@ func getServiceExternalIPAndHost(service *v1.Service) (string, string) {
 	return service.Status.LoadBalancer.Ingress[0].IP, service.Status.LoadBalancer.Ingress[0].Hostname
 }
 
-func (data *TestData) waitForServiceConfigured(service *v1.Service, expectedExternalIP string, waitForNodeConfigured bool, expectedNodeName string, otherNodes ...string) (*corev1.Service, error) {
+func (data *TestData) waitForServiceConfigured(service *v1.Service, expectedExternalIP string, waitForNodeConfigured bool, expectedNodeName string) (*corev1.Service, error) {
 	err := wait.PollImmediate(200*time.Millisecond, 15*time.Second, func() (done bool, err error) {
 		service, err = data.clientset.CoreV1().Services(service.Namespace).Get(context.TODO(), service.Name, metav1.GetOptions{})
 		if err != nil {
@@ -633,28 +733,6 @@ func (data *TestData) waitForServiceConfigured(service *v1.Service, expectedExte
 	if err != nil {
 		return service, fmt.Errorf("wait for Service %q configured failed: %v. Expected external IP %s on Node %s, actual status %#v",
 			service.Name, err, expectedExternalIP, expectedNodeName, service.Status)
-	}
-	err = wait.PollImmediate(200*time.Millisecond, 10*time.Second, func() (done bool, err error) {
-		// Make sure the IP is configured on the expected Node.
-		if expectedNodeName != "" {
-			exists, err := hasIP(data, expectedNodeName, expectedExternalIP)
-			if err != nil || !exists {
-				return false, fmt.Errorf("expected external IP %s to be assigned to Node %s: %v", expectedExternalIP, expectedNodeName, err)
-			}
-		}
-		// Make sure the IP is not configured on the other Nodes.
-		if len(otherNodes) != 0 {
-			for _, node := range otherNodes {
-				exists, err := hasIP(data, node, expectedExternalIP)
-				if err != nil || exists {
-					return false, fmt.Errorf("expected external IP %s not to be assigned to Node %s: %v", expectedExternalIP, expectedNodeName, err)
-				}
-			}
-		}
-		return true, nil
-	})
-	if err != nil {
-		return service, fmt.Errorf("wait for IP assigned to Node failed: %v", err)
 	}
 	return service, nil
 }

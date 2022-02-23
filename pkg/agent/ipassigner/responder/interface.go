@@ -1,4 +1,4 @@
-// Copyright 2021 Antrea Authors
+// Copyright 2022 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,18 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package ipassigner
+package responder
 
-import "k8s.io/apimachinery/pkg/util/sets"
+import "net"
 
-// IPAssigner provides methods to assign or unassign IP.
-type IPAssigner interface {
-	// AssignIP ensures the provided IP is assigned to the system.
-	AssignIP(ip string) error
-	// UnassignIP ensures the provided IP is not assigned to the system.
-	UnassignIP(ip string) error
-	// AssignedIPs return the IPs that are assigned to the system by this IPAssigner.
-	AssignedIPs() sets.String
-	// Run starts the IP assigner.
+// Responder is an interface to handle ARP (IPv4)/NS (IPv6) queries using raw sockets.
+type Responder interface {
+	// InterfaceName returns the name of the network interface which the raw sockets binds on.
+	InterfaceName() string
+	// AddIP assigns the IP to the responder.
+	AddIP(net.IP) error
+	// RemoveIP removes the IP from the responder.
+	RemoveIP(net.IP) error
+	// Run starts the responder.
 	Run(<-chan struct{})
 }
