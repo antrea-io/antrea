@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -1938,7 +1939,7 @@ func testAuditLoggingBasic(t *testing.T, data *TestData) {
 					}
 					expectedNumEntries += 1
 					// The audit log should contain log entry `... Drop <ofPriority> <x/a IP> <z/* IP> ...`
-					re := regexp.MustCompile(`Drop [0-9]+ ` + srcIPs[i] + ` ` + dstIPs[j])
+					re := regexp.MustCompile(`Drop [0-9]+ ` + srcIPs[i] + ` [0-9]+ ` + dstIPs[j] + ` ` + strconv.Itoa(int(p80)))
 					if re.MatchString(stdout) {
 						actualNumEntries += 1
 					} else {

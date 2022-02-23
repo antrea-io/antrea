@@ -19,13 +19,17 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"time"
 
+	"antrea.io/ofnet/ofctrl"
 	"gopkg.in/natefinch/lumberjack.v2"
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent/openflow"
+	binding "antrea.io/antrea/pkg/ovs/openflow"
+	"antrea.io/antrea/pkg/util/ip"
 	"antrea.io/antrea/pkg/util/logdir"
 )
 
@@ -65,7 +69,9 @@ type logInfo struct {
 	disposition string // Allow/Drop of the rule sending packetin
 	ofPriority  string // openflow priority of the flow sending packetin
 	srcIP       string // source IP of the traffic logged
+	srcPort     string // source port of the traffic logged
 	destIP      string // destination IP of the traffic logged
+	destPort    string // destination port of the traffic logged
 	pktLength   uint16 // packet length of packetin
 	protocolStr string // protocol of the traffic logged
 }
@@ -127,7 +133,7 @@ func (l *AntreaPolicyLogger) updateLogKey(logMsg string, bufferLength time.Durat
 // LogDedupPacket logs information in ob based on disposition and duplication conditions.
 func (l *AntreaPolicyLogger) LogDedupPacket(ob *logInfo) {
 	// Deduplicate non-Allow packet log.
-	logMsg := fmt.Sprintf("%s %s %s %s %s %s %d %s", ob.tableName, ob.npRef, ob.disposition, ob.ofPriority, ob.srcIP, ob.destIP, ob.pktLength, ob.protocolStr)
+	logMsg := fmt.Sprintf("%s %s %s %s %s %s %s %s %s %d", ob.tableName, ob.npRef, ob.disposition, ob.ofPriority, ob.srcIP, ob.srcPort, ob.destIP, ob.destPort, ob.protocolStr, ob.pktLength)
 	if ob.disposition == openflow.DispositionToString[openflow.DispositionAllow] {
 		l.anpLogger.Printf(logMsg)
 	} else {
@@ -169,4 +175,65 @@ func newAntreaPolicyLogger() (*AntreaPolicyLogger, error) {
 	}
 	klog.InfoS("Initialized Antrea-native Policy Logger for audit logging", "logFile", logFile)
 	return antreaPolicyLogger, nil
+}
+
+// getNetworkPolicyInfo fills in tableName, npName, ofPriority, disposition of logInfo ob.
+func getNetworkPolicyInfo(pktIn *ofctrl.PacketIn, c *Controller, ob *logInfo) error {
+	matchers := pktIn.GetMatches()
+	var match *ofctrl.MatchField
+	// Get table name.
+	tableID := pktIn.TableId
+	ob.tableName = openflow.GetFlowTableName(tableID)
+
+	// Get disposition Allow or Drop.
+	match = getMatchRegField(matchers, openflow.APDispositionField)
+	info, err := getInfoInReg(match, openflow.APDispositionField.GetRange().ToNXRange())
+	if err != nil {
+		return fmt.Errorf("received error while unloading disposition from reg: %v", err)
+	}
+	ob.disposition = openflow.DispositionToString[info]
+
+	// Set match to corresponding ingress/egress reg according to disposition.
+	match = getMatch(matchers, tableID, info)
+
+	// Get Network Policy full name and OF priority of the conjunction.
+	info, err = getInfoInReg(match, nil)
+	if err != nil {
+		return fmt.Errorf("received error while unloading conjunction id from reg: %v", err)
+	}
+	ob.npRef, ob.ofPriority = c.ofClient.GetPolicyInfoFromConjunction(info)
+
+	return nil
+}
+
+// logPacket retrieves information from openflow reg, controller cache, packet-in
+// packet to log. Log is deduplicated for non-Allow packets from record in logDeduplication.
+// Deduplication is safe guarded by logRecordDedupMap mutex.
+func (c *Controller) logPacket(pktIn *ofctrl.PacketIn) error {
+	ob := new(logInfo)
+	packet, err := binding.ParsePacketIn(pktIn)
+	if err != nil {
+		return fmt.Errorf("received error while parsing packetin: %v", err)
+	}
+
+	// Set Network Policy and packet info to log.
+	err = getNetworkPolicyInfo(pktIn, c, ob)
+	if err != nil {
+		return fmt.Errorf("received error while retrieving NetworkPolicy info: %v", err)
+	}
+	ob.srcIP = packet.SourceIP.String()
+	ob.destIP = packet.DestinationIP.String()
+	ob.pktLength = packet.IPLength
+	ob.protocolStr = ip.IPProtocolNumberToString(packet.IPProto, "UnknownProtocol")
+	if ob.protocolStr == "TCP" || ob.protocolStr == "UDP" {
+		ob.srcPort = strconv.Itoa(int(packet.SourcePort))
+		ob.destPort = strconv.Itoa(int(packet.DestinationPort))
+	} else {
+		// Placeholders for ICMP packets without port numbers.
+		ob.srcPort, ob.destPort = "<nil>", "<nil>"
+	}
+
+	// Log the ob info to corresponding file w/ deduplication.
+	c.antreaPolicyLogger.LogDedupPacket(ob)
+	return nil
 }

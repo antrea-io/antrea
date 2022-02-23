@@ -112,17 +112,22 @@ func newTestAntreaPolicyLogger(bufferLength time.Duration, clock Clock) (*Antrea
 }
 
 func newLogInfo(disposition string) (*logInfo, string) {
-	expected := fmt.Sprintf("AntreaPolicyIngressRule AntreaNetworkPolicy:default/test %s 0 0.0.0.0 1.1.1.1 60 TCP", disposition)
-	return &logInfo{
+	testLogInfo := &logInfo{
 		tableName:   "AntreaPolicyIngressRule",
 		npRef:       "AntreaNetworkPolicy:default/test",
 		ofPriority:  "0",
 		disposition: disposition,
 		srcIP:       "0.0.0.0",
+		srcPort:     "35402",
 		destIP:      "1.1.1.1",
-		pktLength:   60,
+		destPort:    "80",
 		protocolStr: "TCP",
-	}, expected
+		pktLength:   60,
+	}
+	expected := fmt.Sprintf("%s %s %s %s %s %s %s %s %s %d", testLogInfo.tableName, testLogInfo.npRef, testLogInfo.disposition,
+		testLogInfo.ofPriority, testLogInfo.srcIP, testLogInfo.srcPort, testLogInfo.destIP, testLogInfo.destPort,
+		testLogInfo.protocolStr, testLogInfo.pktLength)
+	return testLogInfo, expected
 }
 
 func sendMultiplePackets(antreaLogger *AntreaPolicyLogger, ob *logInfo, numPackets int, sendInterval time.Duration) {
