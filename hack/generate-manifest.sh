@@ -21,7 +21,7 @@ function echoerr {
 }
 
 _usage="Usage: $0 [--mode (dev|release)] [--encap-mode] [--ipsec] [--no-proxy] [--no-np] [--keep] [--tun (geneve|vxlan|gre|stt)] [--verbose-log] [--help|-h]
-Generate a YAML manifest for Antrea using Kustomize and print it to stdout.
+Generate a YAML manifest for Antrea using Helm and print it to stdout.
         --mode (dev|release)          Choose the configuration variant that you need (default is 'dev')
         --encap-mode                  Traffic encapsulation mode. (default is 'encap')
         --cloud                       Generate a manifest appropriate for running Antrea in Public Cloud
@@ -29,10 +29,8 @@ Generate a YAML manifest for Antrea using Kustomize and print it to stdout.
         --all-features                Generate a manifest with all alpha features enabled
         --no-proxy                    Generate a manifest with Antrea proxy disabled
         --proxy-all                   Generate a manifest with Antrea proxy with all Service support enabled
-        --no-legacy-crd               Generate a manifest without legacy CRD mirroring support enabled
         --endpointslice               Generate a manifest with EndpointSlice support enabled
         --no-np                       Generate a manifest with Antrea-native policies disabled
-        --keep                        Debug flag which will preserve the generated kustomization.yml
         --tun (geneve|vxlan|gre|stt)  Choose encap tunnel type from geneve, gre, stt and vxlan (default is geneve)
         --verbose-log                 Generate a manifest with increased log-level (level 4) for Antrea agent and controller.
                                       This option will work only in 'dev' mode.
@@ -53,11 +51,10 @@ In 'release' mode, environment variables IMG_NAME and IMG_TAG must be set.
 
 In 'dev' mode, environment variable IMG_NAME can be set to use a custom image.
 
-This tool uses kustomize (https://github.com/kubernetes-sigs/kustomize) to generate manifests for
-Antrea. You can set the KUSTOMIZE environment variable to the path of the kustomize binary you want
-us to use. Otherwise we will download the appropriate version of the kustomize binary and use
-it (this is the recommended approach since different versions of kustomize may create different
-output YAMLs)."
+This tool uses uses Helm 3 (https://helm.sh/) to generate manifests for Antrea. You can set the HELM
+environment variable to the path of the helm binary you want us to use. Otherwise we will download
+the appropriate version of the helm binary and use it (this is the recommended approach since
+different versions of helm may create different output YAMLs)."
 
 function print_usage {
     echoerr "$_usage"
@@ -72,7 +69,6 @@ IPSEC=false
 ALLFEATURES=false
 PROXY=true
 PROXY_ALL=false
-LEGACY_CRD=true
 ENDPOINTSLICE=false
 NP=true
 KEEP=false
@@ -128,10 +124,6 @@ case $key in
     --proxy-all)
     PROXY=true
     PROXY_ALL=true
-    shift
-    ;;
-    --no-legacy-crd)
-    LEGACY_CRD=false
     shift
     ;;
     --endpointslice)
@@ -277,264 +269,146 @@ fi
 
 THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
-source $THIS_DIR/verify-kustomize.sh
+source $THIS_DIR/verify-helm.sh
 
-if [ -z "$KUSTOMIZE" ]; then
-    KUSTOMIZE="$(verify_kustomize)"
-elif ! $KUSTOMIZE version > /dev/null 2>&1; then
-    echoerr "$KUSTOMIZE does not appear to be a valid kustomize binary"
+if [ -z "$HELM" ]; then
+    HELM="$(verify_helm)"
+elif ! $HELM version > /dev/null 2>&1; then
+    echoerr "$HELM does not appear to be a valid helm binary"
     print_help
     exit 1
 fi
 
-KUSTOMIZATION_DIR=$THIS_DIR/../build/yamls
-
-TMP_DIR=$(mktemp -d $KUSTOMIZATION_DIR/overlays.XXXXXXXX)
-
-pushd $TMP_DIR > /dev/null
-
-BASE=../../base
-
-# do all ConfigMap edits
-mkdir configMap && cd configMap
-# user is not expected to make changes directly to antrea-agent.conf and antrea-controller.conf,
-# but instead to the generated YAML manifest, so our regexs need not be too robust.
-cp $KUSTOMIZATION_DIR/base/conf/antrea-agent.conf antrea-agent.conf
-cp $KUSTOMIZATION_DIR/base/conf/antrea-controller.conf antrea-controller.conf
+TMP_DIR=$(mktemp -d $THIS_DIR/../build/yamls/chart-values.XXXXXXXX)
+HELM_VALUES=()
+HELM_VALUES_FILES=()
 
 if $IPSEC; then
-    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*trafficEncryptionMode[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/trafficEncryptionMode: ipsec/" antrea-agent.conf
-    # change the tunnel type to GRE which works better with IPsec encryption than other types.
-    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*tunnelType[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/tunnelType: gre/" antrea-agent.conf
+    HELM_VALUES+=("trafficEncryptionMode=ipsec" "tunnelType=gre")
 fi
 
 if $FLEXIBLE_IPAM; then
-    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*AntreaIPAM[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  AntreaIPAM: true/" antrea-controller.conf
-    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*AntreaIPAM[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  AntreaIPAM: true/" antrea-agent.conf
-    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*enableBridgingMode[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/enableBridgingMode: true/" antrea-agent.conf
-    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*trafficEncapMode[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/trafficEncapMode: noEncap/" antrea-agent.conf
-    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*noSNAT[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/noSNAT: true/" antrea-agent.conf
+    HELM_VALUES+=("featureGates.AntreaIPAM=true" "enableBridgingMode=true" "trafficEncapMode=noEncap" "noSNAT=true")
 fi
 
 if $MULTICAST; then
-    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*trafficEncapMode[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/trafficEncapMode: noEncap/" antrea-agent.conf
-    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*Multicast[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  Multicast: true/" antrea-agent.conf
-    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*multicastInterfaces[[:space:]]*:[[:space:]]*\[([a-zA-Z0-9]*,[[:space:]]*)*[a-zA-Z0-9]*\][[:space:]]*$/multicastInterfaces: [$MULTICAST_INTERFACES]/" antrea-agent.conf
+    HELM_VALUES+=("trafficEncapMode=noEncap" "featureGates.Multicast=true" "multicastInterfaces={$MULTICAST_INTERFACES}")
 fi
 
 if $ALLFEATURES; then
-    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*AntreaPolicy[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  AntreaPolicy: true/" antrea-agent.conf
-    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*FlowExporter[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  FlowExporter: true/" antrea-agent.conf
-    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*NetworkPolicyStats[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  NetworkPolicyStats: true/" antrea-agent.conf
-    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*EndpointSlice[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  EndpointSlice: true/" antrea-agent.conf
-    sed -i.bak -E "s/^[[:space:]]*#proxyAll[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  proxyAll: true/" antrea-agent.conf
+    HELM_VALUES+=("featureGates.FlowExporter=true" "featureGates.EndpointSlice=true" "antreaProxy.proxyAll=true")
 fi
 
 if ! $PROXY; then
-    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*AntreaProxy[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  AntreaProxy: false/" antrea-agent.conf
+    HELM_VALUES+=("featureGates.AntreaProxy=false")
 fi
 
 if $PROXY_ALL; then
-     sed -i.bak -E "s/^[[:space:]]*#proxyAll[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  proxyAll: true/" antrea-agent.conf
-fi
-
-if ! $LEGACY_CRD; then
-    sed -i.bak -E "s/^#legacyCRDMirroring[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/legacyCRDMirroring: false/" antrea-controller.conf
+    HELM_VALUES+=("antreaProxy.proxyAll=true")
 fi
 
 if $ENDPOINTSLICE; then
-    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*EndpointSlice[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  EndpointSlice: true/" antrea-agent.conf
+    HELM_VALUES+=("featureGates.EndpointSlice=true")
 fi
 
 if ! $NP; then
-    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*AntreaPolicy[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  AntreaPolicy: false/" antrea-controller.conf
-    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*AntreaPolicy[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  AntreaPolicy: false/" antrea-agent.conf
+    HELM_VALUES+=("featureGates.AntreaPolicy=false")
 fi
 
 if [[ $ENCAP_MODE != "" ]]; then
-    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*trafficEncapMode[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/trafficEncapMode: $ENCAP_MODE/" antrea-agent.conf
+    HELM_VALUES+=("trafficEncapMode=$ENCAP_MODE")
 fi
 
 if [[ $TUN_TYPE != "geneve" ]]; then
-    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*tunnelType[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/tunnelType: $TUN_TYPE/" antrea-agent.conf
-fi
-
-if [[ $CLOUD != "" ]]; then
-    # Delete the serviceCIDR parameter for the cloud (AKS, EKS, GKE) deployment yamls, because
-    # AntreaProxy is always enabled for the cloud managed K8s clusters, and the serviceCIDR
-    # parameter is not needed in this case.
-    # delete all blank lines after "#serviceCIDR:"
-    sed -i.bak '/#serviceCIDR:/,/^$/{/^$/d;}' antrea-agent.conf
-    # delete lines from "# ClusterIP CIDR range for Services" to "#serviceCIDR:"
-    sed -i.bak '/# ClusterIP CIDR range for Services/,/#serviceCIDR:/d' antrea-agent.conf
-fi
-
-# unfortunately 'kustomize edit add configmap' does not support specifying 'merge' as the behavior,
-# which is why we use a template kustomization file.
-sed -e "s/<AGENT_CONF_FILE>/antrea-agent.conf/; s/<CONTROLLER_CONF_FILE>/antrea-controller.conf/" ../../patches/kustomization.configMap.tpl.yml > kustomization.yml
-$KUSTOMIZE edit add base $BASE
-BASE=../configMap
-cd ..
-
-if $IPSEC; then
-    mkdir ipsec && cd ipsec
-    # we copy the patch files to avoid having to use the '--load-restrictor. flag when calling
-    # 'kustomize build'. See https://github.com/kubernetes-sigs/kustomize/blob/master/docs/FAQ.md#security-file-foo-is-not-in-or-below-bar
-    cp ../../patches/ipsec/*.yml .
-    touch kustomization.yml
-    $KUSTOMIZE edit add base $BASE
-    # create a K8s Secret to save the PSK (pre-shared key) for IKE authentication.
-    $KUSTOMIZE edit add resource ipsecSecret.yml
-    # add a container to the Agent DaemonSet that runs the OVS IPsec and strongSwan daemons.
-    $KUSTOMIZE edit add patch --path ipsecContainer.yml
-    # add an environment variable to the antrea-agent container for passing the PSK to Agent.
-    $KUSTOMIZE edit add patch --path pskEnv.yml
-    BASE=../ipsec
-    cd ..
+    HELM_VALUES+=("tunnelType=$TUN_TYPE")
 fi
 
 if $COVERAGE; then
-    mkdir coverage && cd coverage
-    cp ../../patches/coverage/*.yml .
-    touch kustomization.yml
-    $KUSTOMIZE edit add base $BASE
-    # this runs antrea-controller via the instrumented binary.
-    $KUSTOMIZE edit add patch --path startControllerCov.yml
-    # this runs antrea-agent via the instrumented binary.
-    $KUSTOMIZE edit add patch --path startAgentCov.yml
-    BASE=../coverage
-    cd ..
+    HELM_VALUES+=("testing.coverage=true")
 fi 
 
-if [[ $ENCAP_MODE == "networkPolicyOnly" ]] ; then
-    mkdir chaining && cd chaining
-    cp ../../patches/chaining/*.yml .
-    touch kustomization.yml
-    $KUSTOMIZE edit add base $BASE
-    # change initContainer script and add antrea to CNI chain
-    $KUSTOMIZE edit add patch --path installCni.yml
-    BASE=../chaining
-    cd ..
-fi
-
 if [[ $CLOUD == "GKE" ]]; then
-    mkdir gke && cd gke
-    cp ../../patches/gke/*.yml .
-    touch kustomization.yml
-    $KUSTOMIZE edit add base $BASE
-    $KUSTOMIZE edit add patch --path cniPath.yml
-    BASE=../gke
-    cd ..
+    HELM_VALUES+=("cni.hostBinPath=/home/kubernetes/bin")
 fi
 
 if [[ $CLOUD == "EKS" ]]; then
-    mkdir eks && cd eks
-    cp ../../patches/eks/*.yml .
-    touch kustomization.yml
-    $KUSTOMIZE edit add base $BASE
-    $KUSTOMIZE edit add patch --path eksEnv.yml
-    BASE=../eks
-    cd ..
+    HELM_VALUES+=("agent.antreaAgent.extraEnv.ANTREA_CLOUD_EKS=true")
 fi
 
 if $SIMULATOR; then
-    mkdir simulator && cd simulator
-    cp ../../patches/simulator/*.yml .
-    touch kustomization.yml
-    $KUSTOMIZE edit add base $BASE
-    $KUSTOMIZE edit add patch --path agentNodeAffinity.yml
-    $KUSTOMIZE edit add patch --path controllerNodeAffinity.yml
-    $KUSTOMIZE edit add resource antrea-agent-simulator.yml
-    BASE=../simulator
-    cd ..
+    HELM_VALUES+=("testing.simulator.enable=true")
 fi
 
 if $CUSTOM_ADM_CONTROLLER; then
-    mkdir admissioncontroller && cd admissioncontroller
-    cp ../../patches/admissioncontroller/*.yml .
-    touch kustomization.yml
-    $KUSTOMIZE edit add base $BASE
-    $KUSTOMIZE edit add resource webhook.yml
-    BASE=../admissioncontroller
-    cd ..
+    HELM_VALUES+=("webhooks.labelsMutator.enable=true")
 fi
 
 if $HW_OFFLOAD; then
-    mkdir hwoffload && cd hwoffload
-    cp ../../patches/hwoffload/hwOffload.yml .
-    touch kustomization.yml
-    $KUSTOMIZE edit add base $BASE
-    $KUSTOMIZE edit add patch --path hwOffload.yml
-    BASE=../hwoffload
-    cd ..
+    HELM_VALUES+=("ovs.hwOffload=true")
 fi
 
 if $SRIOV; then
-    mkdir sriov && cd sriov
-    cp ../../patches/sriov/sriov.yml .
-    touch kustomization.yml
-    $KUSTOMIZE edit add base $BASE
-    $KUSTOMIZE edit add patch --path sriov.yml
-    BASE=../sriov
-    cd ..
+    cat << EOF > $TMP_DIR/sriov.yml
+agent:
+  antreaAgent:
+    extraVolumeMounts:
+    - mountPath: /var/lib/kubelet
+      name: host-kubelet
+      readOnly: true
+  extraVolumes:
+  - hostPath:
+      path: /var/lib/kubelet
+    name: host-kubelet
+EOF
+    HELM_VALUES_FILES+=("$TMP_DIR/sriov.yml")
 fi
 
 if $WHEREABOUTS; then
-    mkdir whereabouts && cd whereabouts
-    cp ../../patches/whereabouts/*.yml .
-    touch kustomization.yml
-    $KUSTOMIZE edit add base $BASE
-    $KUSTOMIZE edit add patch --path whereabouts.yml
-    $KUSTOMIZE edit add resource whereabouts-rbac.yml
-    BASE=../whereabouts
-    cd ..
+    HELM_VALUES+=("whereabouts.enable=true")
 fi
-
-mkdir $MODE && cd $MODE
-touch kustomization.yml
-$KUSTOMIZE edit add base $BASE
-# ../../patches/$MODE may be empty so we use find and not simply cp
-find ../../patches/$MODE -name \*.yml -exec cp {} . \;
 
 if [ "$MODE" == "dev" ]; then
     if [[ -z "$IMG_NAME" ]]; then
         if $COVERAGE; then
-            IMG_NAME="antrea/antrea-ubuntu-coverage:latest"
-        else
-            IMG_NAME="projects.registry.vmware.com/antrea/antrea-ubuntu:latest"
+            HELM_VALUES+=("image.repository=antrea/antrea-ubuntu-coverage")
         fi
+    else
+        HELM_VALUES+=("image.repository=$IMG_NAME")
     fi
 
-    $KUSTOMIZE edit set image antrea=$IMG_NAME
-
-    $KUSTOMIZE edit add patch --path agentImagePullPolicy.yml
-    $KUSTOMIZE edit add patch --path controllerImagePullPolicy.yml
     if $VERBOSE_LOG; then
-        $KUSTOMIZE edit add patch --path agentVerboseLog.yml
-        $KUSTOMIZE edit add patch --path controllerVerboseLog.yml
-    fi
-
-    # only required because there is no good way at the moment to update the imagePullPolicy for all
-    # containers. See https://github.com/kubernetes-sigs/kustomize/issues/1493
-    if $IPSEC; then
-        $KUSTOMIZE edit add patch --path agentIpsecImagePullPolicy.yml
+        HELM_VALUES+=("logVerbosity=4")
     fi
 
     if $ON_DELETE; then
-        $KUSTOMIZE edit add patch --path onDeleteUpdateStrategy.yml
+        HELM_VALUES+=("agent.updateStrategy.type=OnDelete")
     fi
 fi
 
 if [ "$MODE" == "release" ]; then
-    $KUSTOMIZE edit set image antrea=$IMG_NAME:$IMG_TAG
+    HELM_VALUES+=("image.repository=$IMG_NAME,image.tag=$IMG_TAG")
 fi
 
-$KUSTOMIZE build
-
-popd > /dev/null
-
-if $KEEP; then
-    echoerr "Kustomization file is at $TMP_DIR/$MODE/kustomization.yml"
-else
-    rm -rf $TMP_DIR
+delim=""
+HELM_VALUES_OPTION=""
+for v in "${HELM_VALUES[@]}"; do
+    HELM_VALUES_OPTION="$HELM_VALUES_OPTION$delim$v"
+    delim=","
+done
+if [ "$HELM_VALUES_OPTION" != "" ]; then
+    HELM_VALUES_OPTION="--set $HELM_VALUES_OPTION"
 fi
+
+HELM_VALUES_FILES_OPTION=""
+for v in "${HELM_VALUES_FILES[@]}"; do
+    HELM_VALUES_FILES_OPTION="$HELM_VALUES_FILES_OPTION -f $v"
+done
+
+ANTREA_CHART="$THIS_DIR/../build/charts/antrea"
+$HELM template \
+      --namespace kube-system \
+      $HELM_VALUES_OPTION \
+      $HELM_VALUES_FILES_OPTION \
+      "$ANTREA_CHART"
+
+rm -rf $TMP_DIR

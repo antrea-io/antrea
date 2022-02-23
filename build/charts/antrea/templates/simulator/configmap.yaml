@@ -1,0 +1,11 @@
+{{- if .Values.testing.simulator.enable }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: node-configmap
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: antrea
+data:
+  content.type: test-cluster
+{{- end }}

@@ -1,0 +1,356 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: antrea-agent
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: antrea
+    component: antrea-agent
+spec:
+  selector:
+    matchLabels:
+      app: antrea
+      component: antrea-agent
+  {{- with .Values.agent.updateStrategy }}
+  updateStrategy: {{- toYaml . | nindent 4 }}
+  {{- end }}
+  template:
+    metadata:
+      annotations:
+        # Starting with v1.21, Kubernetes supports default container annotation.
+        # Using "kubectl logs/exec/attach/cp" doesn't have to specify "-c antrea-agent" when troubleshooting.
+        kubectl.kubernetes.io/default-container: antrea-agent
+        # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
+        # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- if eq .Values.trafficEncryptionMode "ipsec" }}
+        checksum/ipsec-secret: {{ include (print $.Template.BasePath "/agent/ipsec-secret.yaml") . | sha256sum }}
+        {{- end }}
+        {{- with .Values.agent.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        app: antrea
+        component: antrea-agent
+        {{- with .Values.agent.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      hostNetwork: true
+      dnsPolicy: {{ .Values.agent.dnsPolicy }}
+      priorityClassName: {{ .Values.agent.priorityClassName }}
+      {{- with .Values.agent.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.agent.tolerations }}
+      tolerations:
+        {{- toYaml . | trim | nindent 8 }}
+      {{- end }}
+      {{- if .Values.testing.simulator.enable }}
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: antrea/instance
+                operator: NotIn
+                values:
+                - simulator
+      {{- else }}
+      {{- with .Values.agent.affinity }}
+      affinity:
+        {{- toYaml . | trim | nindent 8 }}
+      {{- end }}
+      {{- end }}
+      serviceAccountName: antrea-agent
+      initContainers:
+        - name: install-cni
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          resources: {{- .Values.agent.installCNI.resources | toYaml | nindent 12 }}
+          {{- if eq .Values.trafficEncapMode "networkPolicyOnly" }}
+          command: ["install_cni_chaining"]
+          {{- else }}
+          command: ["install_cni"]
+          {{- end }}
+          securityContext:
+            capabilities:
+              add:
+                # SYS_MODULE is required to load the OVS kernel module.
+                - SYS_MODULE
+          env:
+            # SKIP_CNI_BINARIES takes in values as a comma separated list of
+            # binaries that need to be skipped for installation, e.g. "portmap, bandwidth".
+            - name: SKIP_CNI_BINARIES
+              value: {{ join "," .Values.cni.skipBinaries | quote }}
+          volumeMounts:
+          - name: antrea-config
+            mountPath: /etc/antrea/antrea-cni.conflist
+            subPath: antrea-cni.conflist
+            readOnly: true
+          - name: host-cni-conf
+            mountPath: /host/etc/cni/net.d
+          - name: host-cni-bin
+            mountPath: /host/opt/cni/bin
+          # For loading the OVS kernel module.
+          - name: host-lib-modules
+            mountPath: /lib/modules
+            readOnly: true
+          # For changing the default permissions of the run directory.
+          - name: host-var-run-antrea
+            mountPath: /var/run/antrea
+        {{- if .Values.whereabouts.enable }}
+        - name: install-whereabouts-config
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          resources:
+            requests:
+              cpu: "100m"
+          command: ["install_whereabouts_config"]
+          volumeMounts:
+          - name: whereabouts-cni-conf
+            mountPath: /host/etc/cni/net.d/whereabouts.d
+          - name: whereabouts-secret
+            mountPath: /var/run/secrets/whereabouts
+        {{- end }}
+      containers:
+        - name: antrea-agent
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- if ((.Values.testing).coverage) }}
+          command: ["/bin/sh"]
+          args: ["-c", "sleep 2; antrea-agent-coverage -test.run=TestBincoverRunMain -test.coverprofile=antrea-agent.cov.out -args-file=/agent-arg-file; while true; do sleep 5 & wait $!; done"]
+          {{- else}}
+          command: ["antrea-agent"]
+          # Log to both "/var/log/antrea/" and stderr (so "kubectl logs" can work).-
+          args:
+            - "--config=/etc/antrea/antrea-agent.conf"
+            - "--logtostderr=false"
+            - "--log_dir=/var/log/antrea"
+            - "--alsologtostderr"
+            - "--log_file_max_size={{ .Values.agent.antreaAgent.logFileMaxSize }}"
+            - "--log_file_max_num={{ .Values.agent.antreaAgent.logFileMaxNum }}"
+            {{- if .Values.logVerbosity }}
+            - "--v={{ .Values.logVerbosity }}"
+            {{- end }}
+            {{- with .Values.agent.antreaAgent.extraArgs }}
+            {{- toYaml . | trim | nindent 12 }}
+            {{- end }}
+          {{- end}}
+          env:
+            # Provide pod and node information for clusterinformation CRD.
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            {{- if eq .Values.trafficEncryptionMode "ipsec" }}
+            # Pre-shared key for IPsec IKE.
+            - name: ANTREA_IPSEC_PSK
+              valueFrom:
+                secretKeyRef:
+                  name: antrea-ipsec
+                  key: psk
+            {{- end }}
+            {{- range $k, $v := .Values.agent.antreaAgent.extraEnv }}
+            - name: {{ $k | quote }}
+              value: {{ $v | quote }}
+            {{- end }}
+          resources: {{- .Values.agent.antreaAgent.resources | toYaml | nindent 12 }}
+          ports:
+            - containerPort: 10350
+              name: api
+              protocol: TCP
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - container_liveness_probe agent
+            initialDelaySeconds: 5
+            timeoutSeconds: 5
+            periodSeconds: 10
+            failureThreshold: 5
+          readinessProbe:
+            httpGet:
+              host: localhost
+              path: /readyz
+              port: api
+              scheme: HTTPS
+            initialDelaySeconds: 5
+            timeoutSeconds: 5
+            periodSeconds: 10
+            # In large-scale clusters, it may take up to 40~50 seconds for the antrea-agent to reconnect to the antrea
+            # Service after the antrea-controller restarts. The antrea-agent shouldn't be reported as NotReady in this
+            # scenario, otherwise the DaemonSet controller would restart all agents at once, as opposed to performing a
+            # rolling update. Set failureThreshold to 8 so it can tolerate 70s of disconnection.
+            failureThreshold: 8
+          securityContext:
+            # antrea-agent needs to perform sysctl configuration.
+            privileged: true
+          volumeMounts:
+          - name: antrea-config
+            mountPath: /etc/antrea/antrea-agent.conf
+            subPath: antrea-agent.conf
+            readOnly: true
+          - name: host-var-run-antrea
+            mountPath: /var/run/antrea
+          - name: host-var-run-antrea
+            mountPath: /var/run/openvswitch
+            subPath: openvswitch
+          # host-local IPAM stores allocated IP addresses as files in /var/lib/cni/networks/$NETWORK_NAME.
+          # Mount a sub-directory of host-var-run-antrea to it for persistence of IP allocation.
+          - name: host-var-run-antrea
+            mountPath: /var/lib/cni
+            subPath: cni
+          # We need to mount both the /proc directory and the /var/run/netns directory so that
+          # antrea-agent can open the network namespace path when setting up Pod
+          # networking. Different container runtimes may use /proc or /var/run/netns when invoking
+          # the CNI commands. Docker uses /proc and containerd uses /var/run/netns.
+          - name: host-var-log-antrea
+            mountPath: /var/log/antrea
+          - name: host-proc
+            mountPath: /host/proc
+            readOnly: true
+          - name: host-var-run-netns
+            mountPath: /host/var/run/netns
+            readOnly: true
+            # When a container is created, a mount point for the network namespace is added under
+            # /var/run/netns on the host, which needs to be propagated to the antrea-agent container.
+            mountPropagation: HostToContainer
+          - name: xtables-lock
+            mountPath: /run/xtables.lock
+          {{- if .Values.whereabouts.enable }}
+          - name: whereabouts-cni-conf
+            mountPath: /host/etc/cni/net.d/whereabouts.d
+          - name: whereabouts-secret
+            mountPath: /var/run/secrets/whereabouts
+          {{- end }}
+          {{- with .Values.agent.antreaAgent.extraVolumeMounts }}
+          {{- toYaml . | trim | nindent 10 }}
+          {{- end }}
+        - name: antrea-ovs
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          resources: {{- .Values.agent.antreaOVS.resources | toYaml | nindent 12 }}
+          command: ["start_ovs"]
+          args:
+            - "--log_file_max_size={{ .Values.agent.antreaOVS.logFileMaxSize }}"
+            - "--log_file_max_num={{ .Values.agent.antreaOVS.logFileMaxNum }}"
+            {{- if .Values.logVerbosity }}
+            - "--v={{ .Values.logVerbosity }}"
+            {{- end }}
+            {{- if .Values.hwOffload }}
+            - "--hw-offload"
+            {{- end }}
+            {{- with .Values.agent.antreaOVS.extraArgs }}
+            {{- toYaml . | trim | nindent 12 }}
+            {{- end }}
+          securityContext:
+            # capabilities required by OVS daemons
+            capabilities:
+              add:
+                - SYS_NICE
+                - NET_ADMIN
+                - SYS_ADMIN
+                - IPC_LOCK
+          livenessProbe:
+            exec:
+              # docker CRI doesn't honor timeoutSeconds, add "timeout" to the command as a workaround.
+              # https://github.com/kubernetes/kubernetes/issues/51901
+              command:
+                - /bin/sh
+                - -c
+                - timeout 10 container_liveness_probe ovs
+            initialDelaySeconds: 5
+            timeoutSeconds: 10
+            periodSeconds: 10
+            failureThreshold: 5
+          volumeMounts:
+          - name: host-var-run-antrea
+            mountPath: /var/run/openvswitch
+            subPath: openvswitch
+          - name: host-var-log-antrea
+            mountPath: /var/log/openvswitch
+            subPath: openvswitch
+        {{- if eq .Values.trafficEncryptionMode "ipsec" }}
+        - name: antrea-ipsec
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          resources: {{- .Values.agent.antreaIPsec.resources | toYaml | nindent 12 }}
+          command: ["start_ovs_ipsec"]
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - timeout 5 container_liveness_probe ovs-ipsec
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          securityContext:
+            capabilities:
+              add:
+              - NET_ADMIN
+          volumeMounts:
+          - name: host-var-run-antrea
+            mountPath: /var/run/openvswitch
+            subPath: openvswitch
+          - name: host-var-log-antrea
+            mountPath: /var/log/openvswitch
+            subPath: openvswitch
+          - name: host-var-log-antrea
+            mountPath: /var/log/strongswan
+            subPath: strongswan
+        {{- end }}
+      volumes:
+        - name: antrea-config
+          configMap:
+            name: antrea-config
+        - name: host-cni-conf
+          hostPath:
+            path: /etc/cni/net.d
+        - name: host-cni-bin
+          hostPath:
+            path: {{ .Values.cni.hostBinPath }}
+        - name: host-proc
+          hostPath:
+            path: /proc
+        - name: host-var-run-netns
+          hostPath:
+            path: /var/run/netns
+        - name: host-var-run-antrea
+          hostPath:
+            path: /var/run/antrea
+            # we use subPath to create run subdirectories for different component (e.g. OVS) and
+            # subPath requires the base volume to exist
+            type: DirectoryOrCreate
+        - name: host-var-log-antrea
+          hostPath:
+            path: /var/log/antrea
+            # we use subPath to create logging subdirectories for different component (e.g. OVS)
+            type: DirectoryOrCreate
+        - name: host-lib-modules
+          hostPath:
+            path: /lib/modules
+        - name: xtables-lock
+          hostPath:
+            path: /run/xtables.lock
+            type: FileOrCreate
+        {{- with .Values.agent.extraVolumes }}
+        {{- toYaml . | trim | nindent 8 }}
+        {{- end }}
+        {{- if .Values.whereabouts.enable }}
+        - hostPath:
+            path: /host/etc/cni/net.d/whereabouts.d
+          name: whereabouts-cni-conf
+        - name: whereabouts-secret
+          secret:
+            secretName: whereabouts-cni-secret
+        {{- end }}

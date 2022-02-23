@@ -1,0 +1,187 @@
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: antrea-agent
+  labels:
+    app: antrea
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - nodes
+    verbs:
+      - get
+      - watch
+      - list
+  - apiGroups:
+      - ""
+    resources:
+      - nodes/status
+    verbs:
+      - patch
+  - apiGroups:
+      - ""
+    resources:
+      - pods
+    verbs:
+      - get
+      - watch
+      - list
+  - apiGroups:
+      - ""
+    resources:
+      - pods/status
+    verbs:
+      - patch
+  - apiGroups:
+      - ""
+    resources:
+      - endpoints
+      - services
+      - namespaces
+    verbs:
+      - get
+      - watch
+      - list  
+  - apiGroups:
+      - ""
+    resources:
+      - services/status
+    verbs:
+      - update
+  - apiGroups:
+      - discovery.k8s.io
+    resources:
+      - endpointslices
+    verbs:
+      - get
+      - watch
+      - list
+  - apiGroups:
+      - crd.antrea.io
+    resources:
+      - antreaagentinfos
+    verbs:
+      - get
+      - create
+      - update
+      - delete
+  - apiGroups:
+      - controlplane.antrea.io
+    resources:
+      - networkpolicies
+      - appliedtogroups
+      - addressgroups
+    verbs:
+      - get
+      - watch
+      - list
+  - apiGroups:
+      - controlplane.antrea.io
+    resources:
+      - egressgroups
+    verbs:
+      - get
+      - watch
+      - list
+  - apiGroups:
+      - controlplane.antrea.io
+    resources:
+      - nodestatssummaries
+    verbs:
+      - create
+  - apiGroups:
+      - controlplane.antrea.io
+    resources:
+      - networkpolicies/status
+    verbs:
+      - create
+      - get
+  - apiGroups:
+      - authentication.k8s.io
+    resources:
+      - tokenreviews
+    verbs:
+      - create
+  - apiGroups:
+      - authorization.k8s.io
+    resources:
+      - subjectaccessreviews
+    verbs:
+      - create
+  # This is the content of built-in role kube-system/extension-apiserver-authentication-reader.
+  # But it doesn't have list/watch permission before K8s v1.17.0 so the extension apiserver (antrea-agent) will
+  # have permission issue after bumping up apiserver library to a version that supports dynamic authentication.
+  # See https://github.com/kubernetes/kubernetes/pull/85375
+  # To support K8s clusters older than v1.17.0, we grant the required permissions directly instead of relying on
+  # the extension-apiserver-authentication role.
+  - apiGroups:
+      - ""
+    resourceNames:
+      - extension-apiserver-authentication
+    resources:
+      - configmaps
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - ""
+    resources:
+      - configmaps
+    resourceNames:
+      - antrea-ca
+    verbs:
+      - get
+      - watch
+      - list
+  - apiGroups:
+      - crd.antrea.io
+    resources:
+      - traceflows
+      - traceflows/status
+    verbs:
+      - get
+      - watch
+      - list
+      - update
+      - patch
+      - create
+      - delete
+  - apiGroups:
+      - crd.antrea.io
+    resources:
+      - egresses
+    verbs:
+      - get
+      - watch
+      - list
+  - apiGroups:
+      - crd.antrea.io
+    resources:
+      - egresses/status
+    verbs:
+      - update
+  - apiGroups:
+      - crd.antrea.io
+    resources:
+      - externalippools
+      - ippools
+    verbs:
+      - get
+      - watch
+      - list
+  - apiGroups:
+      - crd.antrea.io
+    resources:
+      - ippools/status
+    verbs:
+      - update
+  - apiGroups:
+      - k8s.cni.cncf.io
+    resources:
+      - network-attachment-definitions
+    verbs:
+      - get
+      - list
+      - watch

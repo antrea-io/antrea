@@ -1,0 +1,52 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: antreacontrollerinfos.crd.antrea.io
+  labels:
+    app: antrea
+spec:
+  group: crd.antrea.io
+  versions:
+    - name: v1beta1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          x-kubernetes-preserve-unknown-fields: true
+      additionalPrinterColumns:
+        - description: Health status of the Controller
+          jsonPath: ".controllerConditions[?(@.type=='ControllerHealthy')].status"
+          name: Healthy
+          type: string
+        - description: Last time the Healthy Condition was updated
+          jsonPath: ".controllerConditions[?(@.type=='ControllerHealthy')].lastHeartbeatTime"
+          name: Last Heartbeat
+          type: date
+        - description: Version of the Controller
+          jsonPath: ".version"
+          name: Version
+          type: string
+          priority: 1
+        - description: Number of Agents connected to the Controller
+          jsonPath: ".connectedAgentNum"
+          name: Connected Agents
+          type: integer
+          priority: 1
+        - description: Node on which the Controller is running
+          jsonPath: ".nodeRef.name"
+          name: Node
+          type: string
+          priority: 1
+        - description: Number of Network Policies computed by Controller
+          jsonPath: ".networkPolicyControllerInfo.networkPolicyNum"
+          name: Num Network Policies
+          type: integer
+          priority: 2
+  scope: Cluster
+  names:
+    plural: antreacontrollerinfos
+    singular: antreacontrollerinfo
+    kind: AntreaControllerInfo
+    shortNames:
+      - aci

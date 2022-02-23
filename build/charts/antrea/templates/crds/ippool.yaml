@@ -1,0 +1,109 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: ippools.crd.antrea.io
+  labels:
+    app: antrea
+spec:
+  group: crd.antrea.io
+  versions:
+    - name: v1alpha2
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          required:
+            - spec
+          properties:
+            spec:
+              required:
+                - ipVersion
+                - ipRanges
+              type: object
+              properties:
+                ipVersion:
+                  type: integer
+                ipRanges:
+                  items:
+                    oneOf:
+                      - required:
+                        - cidr
+                        - gateway
+                        - prefixLength
+                      - required:
+                        - start
+                        - end
+                        - gateway
+                        - prefixLength
+                    properties:
+                      cidr:
+                        format: cidr
+                        type: string
+                      start:
+                        oneOf:
+                          - format: ipv4
+                          - format: ipv6
+                        type: string
+                      end:
+                        oneOf:
+                          - format: ipv4
+                          - format: ipv6
+                        type: string
+                      gateway:
+                        oneOf:
+                          - format: ipv4
+                          - format: ipv6
+                        type: string
+                      prefixLength:
+                        type: integer
+                      vlan:
+                        type: integer
+                        minimum: 0
+                        maximum: 4094
+                    type: object
+                  type: array
+            status:
+              properties:
+                ipAddresses:
+                  items:
+                    properties:
+                      ipAddress:
+                        type: string
+                      owner:
+                        properties:
+                          pod:
+                            properties:
+                              name:
+                                type: string
+                              namespace:
+                                type: string
+                              containerID:
+                                type: string
+                              ifName:
+                                type: string
+                            type: object
+                          statefulSet:
+                            properties:
+                              name:
+                                type: string
+                              namespace:
+                                type: string
+                              index:
+                                type: integer
+                            type: object
+                        type: object
+                      phase:
+                        type: string
+                    type: object
+                  type: array
+              type: object
+      subresources:
+        status: {}
+  scope: Cluster
+  names:
+    plural: ippools
+    singular: ippool
+    kind: IPPool
+    shortNames:
+      - ipp

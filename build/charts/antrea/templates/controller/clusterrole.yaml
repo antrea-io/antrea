@@ -1,0 +1,244 @@
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: antrea-controller
+  labels:
+    app: antrea
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - pods
+      - services
+      - namespaces
+      - configmaps
+    verbs:
+      - get
+      - watch
+      - list
+  - apiGroups:
+      - ""
+    resources:
+      - nodes
+    verbs:
+      - get
+      - watch
+      - list
+      - patch
+  - apiGroups:
+      - ""
+    resources:
+      - services/status
+    verbs:
+      - update
+  - apiGroups:
+      - networking.k8s.io
+    resources:
+      - networkpolicies
+    verbs:
+      - get
+      - watch
+      - list
+  - apiGroups:
+      - authentication.k8s.io
+    resources:
+      - tokenreviews
+    verbs:
+      - create
+  - apiGroups:
+      - authorization.k8s.io
+    resources:
+      - subjectaccessreviews
+    verbs:
+      - create
+  - apiGroups:
+      - apiextensions.k8s.io
+    resources:
+      - customresourcedefinitions
+    verbs:
+      - get
+      - update
+  # This is the content of built-in role kube-system/extension-apiserver-authentication-reader.
+  # But it doesn't have list/watch permission before K8s v1.17.0 so the extension apiserver (antrea-controller) will
+  # have permission issue after bumping up apiserver library to a version that supports dynamic authentication.
+  # See https://github.com/kubernetes/kubernetes/pull/85375
+  # To support K8s clusters older than v1.17.0, we grant the required permissions directly instead of relying on
+  # the extension-apiserver-authentication role.
+  - apiGroups:
+      - ""
+    resourceNames:
+      - extension-apiserver-authentication
+    resources:
+      - configmaps
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - ""
+    resources:
+      - configmaps
+    resourceNames:
+      - antrea-ca
+      - antrea-cluster-identity
+    verbs:
+      - get
+      - update
+  - apiGroups:
+      - ""
+    resources:
+      - configmaps
+    verbs:
+      - create
+  - apiGroups:
+      - apiregistration.k8s.io
+    resources:
+      - apiservices
+    resourceNames:
+      - v1alpha1.stats.antrea.io
+      - v1beta1.system.antrea.io
+      - v1beta2.controlplane.antrea.io
+    verbs:
+      - get
+      - update
+  - apiGroups:
+      - apiregistration.k8s.io
+    resources:
+      - apiservices
+    resourceNames:
+      - v1beta1.networking.antrea.tanzu.vmware.com
+      - v1beta1.controlplane.antrea.tanzu.vmware.com
+      - v1alpha1.stats.antrea.tanzu.vmware.com
+      - v1beta1.system.antrea.tanzu.vmware.com
+      - v1beta2.controlplane.antrea.tanzu.vmware.com
+    verbs:
+      - delete
+  - apiGroups:
+      - admissionregistration.k8s.io
+    resources:
+      - mutatingwebhookconfigurations
+      - validatingwebhookconfigurations
+    resourceNames:
+      # always give permissions for labelsmutator.antrea.io, even when the
+      # feature is disabled, to avoid errors in antrea-controller when updating
+      # the CA cert.
+      - labelsmutator.antrea.io
+      - crdmutator.antrea.io
+      - crdvalidator.antrea.io
+    verbs:
+      - get
+      - update
+  - apiGroups:
+      - crd.antrea.io
+    resources:
+      - antreacontrollerinfos
+    verbs:
+      - get
+      - create
+      - update
+      - delete
+  - apiGroups:
+      - crd.antrea.io
+    resources:
+      - antreaagentinfos
+    verbs:
+      - list
+      - delete
+  - apiGroups:
+      - crd.antrea.io
+    resources:
+      - clusternetworkpolicies
+      - networkpolicies
+    verbs:
+      - get
+      - watch
+      - list
+      - update
+      - patch
+      - create
+      - delete
+  - apiGroups:
+      - crd.antrea.io
+    resources:
+      - clusternetworkpolicies/status
+      - networkpolicies/status
+    verbs:
+      - update
+  - apiGroups:
+      - crd.antrea.io
+    resources:
+      - tiers
+    verbs:
+      - get
+      - watch
+      - list
+      - update
+      - patch
+      - create
+      - delete
+  - apiGroups:
+      - crd.antrea.io
+    resources:
+      - traceflows
+      - traceflows/status
+    verbs:
+      - get
+      - watch
+      - list
+      - update
+      - patch
+      - create
+      - delete
+  - apiGroups:
+      - crd.antrea.io
+    resources:
+      - externalentities
+      - clustergroups
+    verbs:
+      - get
+      - watch
+      - list
+      - update
+      - patch
+      - create
+      - delete
+  - apiGroups:
+      - crd.antrea.io
+    resources:
+      - clustergroups/status
+    verbs:
+      - update
+  - apiGroups:
+      - crd.antrea.io
+    resources:
+      - egresses
+    verbs:
+      - get
+      - watch
+      - list
+      - update
+      - patch
+  - apiGroups:
+      - crd.antrea.io
+    resources:
+      - externalippools
+      - ippools
+    verbs:
+      - get
+      - watch
+      - list
+  - apiGroups:
+      - crd.antrea.io
+    resources:
+      - externalippools/status
+      - ippools/status
+    verbs:
+      - update
+  - apiGroups:
+      - apps
+    resources:
+      - statefulsets
+    verbs:
+      - get
+      - list
+      - watch
