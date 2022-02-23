@@ -231,8 +231,10 @@ func run(o *Options) error {
 
 	var groupCounters []proxytypes.GroupCounter
 	groupIDUpdates := make(chan string, 100)
-	v4GroupCounter := proxytypes.NewGroupCounter(false, groupIDUpdates)
-	v6GroupCounter := proxytypes.NewGroupCounter(true, groupIDUpdates)
+	v4GroupIDAllocator := openflow.NewGroupAllocator(false)
+	v4GroupCounter := proxytypes.NewGroupCounter(v4GroupIDAllocator, groupIDUpdates)
+	v6GroupIDAllocator := openflow.NewGroupAllocator(true)
+	v6GroupCounter := proxytypes.NewGroupCounter(v6GroupIDAllocator, groupIDUpdates)
 
 	v4Enabled := networkConfig.IPv4Enabled
 	v6Enabled := networkConfig.IPv6Enabled
