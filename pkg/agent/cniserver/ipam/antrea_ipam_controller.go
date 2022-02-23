@@ -148,6 +148,20 @@ func (c *AntreaIPAMController) getIPPoolsByPod(namespace, name string) ([]string
 		}
 		return nil, nil, nil, err
 	}
+
+	annotations, exists := pod.Annotations[AntreaIPAMAnnotationKey]
+	if !exists {
+		// Find IPPool by Namespace
+		ns, err := c.namespaceLister.Get(namespace)
+		if err != nil {
+			return nil, nil, nil, nil
+		}
+		annotations, exists = ns.Annotations[AntreaIPAMAnnotationKey]
+		if !exists {
+			return nil, nil, nil, nil
+		}
+	}
+
 	// Collect specified IPs if exist
 	ipStrings, _ := pod.Annotations[AntreaIPAMPodIPAnnotationKey]
 	ipStrings = strings.ReplaceAll(ipStrings, " ", "")
@@ -187,20 +201,6 @@ ownerReferenceLoop:
 		}
 	}
 
-	annotations, exists := pod.Annotations[AntreaIPAMAnnotationKey]
-	if exists {
-		return strings.Split(annotations, AntreaIPAMAnnotationDelimiter), ips, reservedOwner, ipErr
-	}
-
-	// Find IPPool by Namespace
-	ns, err := c.namespaceLister.Get(namespace)
-	if err != nil {
-		return nil, nil, nil, nil
-	}
-	annotations, exists = ns.Annotations[AntreaIPAMAnnotationKey]
-	if !exists {
-		return nil, nil, nil, nil
-	}
 	return strings.Split(annotations, AntreaIPAMAnnotationDelimiter), ips, reservedOwner, ipErr
 }
 
