@@ -475,7 +475,7 @@ func (fa *flowAggregator) sendFlowKeyRecord(key ipfixintermediate.FlowKey, recor
 	if err != nil {
 		return err
 	}
-	if err = fa.aggregationProcess.ResetStatElementsInRecord(record.Record); err != nil {
+	if err = fa.aggregationProcess.ResetStatAndThroughputElementsInRecord(record.Record); err != nil {
 		return err
 	}
 	klog.V(4).Infof("Data set sent successfully: %d Bytes sent", sentBytes)

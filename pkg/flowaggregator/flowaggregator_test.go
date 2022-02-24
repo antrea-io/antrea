@@ -147,7 +147,7 @@ func TestFlowAggregator_sendFlowKeyRecord(t *testing.T) {
 		mockRecord.EXPECT().GetOrderedElementList().Return(elementList)
 		mockDataSet.EXPECT().AddRecord(elementList, templateID).Return(nil)
 		mockIPFIXExpProc.EXPECT().SendSet(mockDataSet).Return(0, nil)
-		mockAggregationProcess.EXPECT().ResetStatElementsInRecord(mockRecord).Return(nil)
+		mockAggregationProcess.EXPECT().ResetStatAndThroughputElementsInRecord(mockRecord).Return(nil)
 		mockAggregationProcess.EXPECT().AreCorrelatedFieldsFilled(*tc.flowRecord).Return(false)
 		emptyStr := make([]byte, 0)
 		sourcePodNameElem, _ := ipfixentities.DecodeAndCreateInfoElementWithValue(ipfixentities.NewInfoElement("sourcePodName", 0, 0, ipfixregistry.AntreaEnterpriseID, 0), emptyStr)
