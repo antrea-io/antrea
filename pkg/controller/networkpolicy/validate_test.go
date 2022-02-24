@@ -23,6 +23,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	crdv1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
 )
 
 func TestValidateAntreaPolicy(t *testing.T) {
@@ -940,12 +941,140 @@ func TestValidateAntreaPolicy(t *testing.T) {
 			},
 			expectedReason: "",
 		},
+		{
+			name: "acnp-invalid-label-key-applied-to",
+			policy: &crdv1alpha1.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "acnp-invalid-label-key-applied-to",
+				},
+				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
+					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+						{
+							NamespaceSelector: &metav1.LabelSelector{
+								MatchLabels: map[string]string{"foo=": "bar"},
+							},
+						},
+					},
+				},
+			},
+			expectedReason: "Invalid label key: foo=: name part must consist of alphanumeric characters, '-', '_' or '.', and must start and end with an alphanumeric character (e.g. 'MyName',  or 'my.name',  or '123-abc', regex used for validation is '([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9]')",
+		},
+		{
+			name: "acnp-invalid-label-value-applied-to",
+			policy: &crdv1alpha1.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "acnp-invalid-label-value-applied-to",
+				},
+				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
+					Ingress: []crdv1alpha1.Rule{
+						{
+							Action: &allowAction,
+							From: []crdv1alpha1.NetworkPolicyPeer{
+								{
+									PodSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{"foo": "bar"},
+									},
+								},
+							},
+							AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+								{
+									NamespaceSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{"foo1": "bar="},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedReason: "Invalid label value: bar=: a valid label must be an empty string or consist of alphanumeric characters, '-', '_' or '.', and must start and end with an alphanumeric character (e.g. 'MyValue',  or 'my_value',  or '12345', regex used for validation is '(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?')",
+		},
+		{
+			name: "acnp-invalid-label-key-rule",
+			policy: &crdv1alpha1.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "acnp-invalid-label-key-rule",
+				},
+				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
+					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+						{
+							NamespaceSelector: &metav1.LabelSelector{
+								MatchLabels: map[string]string{"foo": "bar"},
+							},
+						},
+					},
+					Ingress: []crdv1alpha1.Rule{
+						{
+							Action: &allowAction,
+							From: []crdv1alpha1.NetworkPolicyPeer{
+								{
+									PodSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{"foo=": "bar1"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedReason: "Invalid label key: foo=: name part must consist of alphanumeric characters, '-', '_' or '.', and must start and end with an alphanumeric character (e.g. 'MyName',  or 'my.name',  or '123-abc', regex used for validation is '([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9]')",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, c := newController()
 			v := NewNetworkPolicyValidator(c.NetworkPolicyController)
 			actualReason, allowed := v.validateAntreaPolicy(tt.policy, nil, admv1.Create, authenticationv1.UserInfo{})
+			assert.Equal(t, tt.expectedReason, actualReason)
+			if tt.expectedReason == "" {
+				assert.True(t, allowed)
+			} else {
+				assert.False(t, allowed)
+			}
+		})
+	}
+}
+
+func TestValidateClusterAntreaGroup(t *testing.T) {
+	tests := []struct {
+		name           string
+		group          *crdv1alpha2.ClusterGroup
+		expectedReason string
+	}{
+		{
+			name: "cg-invalid-label-key",
+			group: &crdv1alpha2.ClusterGroup{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "cg-invalid-label-key",
+				},
+				Spec: crdv1alpha2.GroupSpec{
+					PodSelector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{"foo=": "bar"},
+					},
+				},
+			},
+			expectedReason: "Invalid label key: foo=: name part must consist of alphanumeric characters, '-', '_' or '.', and must start and end with an alphanumeric character (e.g. 'MyName',  or 'my.name',  or '123-abc', regex used for validation is '([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9]')",
+		},
+		{
+			name: "cg-invalid-label-value",
+			group: &crdv1alpha2.ClusterGroup{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "cg-invalid-label-value",
+				},
+				Spec: crdv1alpha2.GroupSpec{
+					PodSelector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{"foo": "bar="},
+					},
+				},
+			},
+			expectedReason: "Invalid label value: bar=: a valid label must be an empty string or consist of alphanumeric characters, '-', '_' or '.', and must start and end with an alphanumeric character (e.g. 'MyValue',  or 'my_value',  or '12345', regex used for validation is '(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?')",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, c := newController()
+			v := NewNetworkPolicyValidator(c.NetworkPolicyController)
+			actualReason, allowed := v.validateAntreaGroup(tt.group, nil, admv1.Create, authenticationv1.UserInfo{})
 			assert.Equal(t, tt.expectedReason, actualReason)
 			if tt.expectedReason == "" {
 				assert.True(t, allowed)
