@@ -96,7 +96,7 @@ func testInvalidCGServiceRefWithPodSelector(t *testing.T) {
 	invalidErr := fmt.Errorf("clustergroup created with serviceReference and podSelector")
 	cgName := "svcref-pod-selector"
 	pSel := &metav1.LabelSelector{MatchLabels: map[string]string{"pod": "x"}}
-	svcRef := &crdv1alpha3.ServiceReference{
+	svcRef := &crdv1alpha1.NamespacedName{
 		Namespace: "y",
 		Name:      "test-svc",
 	}
@@ -119,7 +119,7 @@ func testInvalidCGServiceRefWithNSSelector(t *testing.T) {
 	invalidErr := fmt.Errorf("clustergroup created with serviceReference and namespaceSelector")
 	cgName := "svcref-ns-selector"
 	nSel := &metav1.LabelSelector{MatchLabels: map[string]string{"ns": "y"}}
-	svcRef := &crdv1alpha3.ServiceReference{
+	svcRef := &crdv1alpha1.NamespacedName{
 		Namespace: "y",
 		Name:      "test-svc",
 	}
@@ -143,7 +143,7 @@ func testInvalidCGServiceRefWithIPBlock(t *testing.T) {
 	cgName := "ipb-svcref"
 	cidr := "10.0.0.10/32"
 	ipb := []crdv1alpha1.IPBlock{{CIDR: cidr}}
-	svcRef := &crdv1alpha3.ServiceReference{
+	svcRef := &crdv1alpha1.NamespacedName{
 		Namespace: "y",
 		Name:      "test-svc",
 	}
@@ -206,7 +206,7 @@ func testInvalidCGChildGroupWithPodSelector(t *testing.T) {
 func testInvalidCGChildGroupWithServiceReference(t *testing.T) {
 	invalidErr := fmt.Errorf("clustergroup created with childGroups and ServiceReference")
 	cgName := "child-group-svcref"
-	svcRef := &crdv1alpha3.ServiceReference{
+	svcRef := &crdv1alpha1.NamespacedName{
 		Namespace: "y",
 		Name:      "test-svc",
 	}

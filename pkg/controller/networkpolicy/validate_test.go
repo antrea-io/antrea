@@ -694,7 +694,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 									},
 								},
 							},
-							ToServices: []crdv1alpha1.ServiceReference{
+							ToServices: []crdv1alpha1.NamespacedName{
 								{
 									Name:      "foo",
 									Namespace: "bar",
@@ -728,7 +728,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 									Port: &int80,
 								},
 							},
-							ToServices: []crdv1alpha1.ServiceReference{
+							ToServices: []crdv1alpha1.NamespacedName{
 								{
 									Name:      "foo",
 									Namespace: "bar",
@@ -757,7 +757,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					Egress: []crdv1alpha1.Rule{
 						{
 							Action: &allowAction,
-							ToServices: []crdv1alpha1.ServiceReference{
+							ToServices: []crdv1alpha1.NamespacedName{
 								{
 									Name:      "foo",
 									Namespace: "bar",

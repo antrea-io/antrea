@@ -118,7 +118,7 @@ func (data *TestData) testServiceExport(t *testing.T) {
 	anpBuilder = anpBuilder.SetName(multiClusterTestNamespace, "block-west-exported-service").
 		SetPriority(1.0).
 		SetAppliedToGroup([]e2euttils.ANPAppliedToSpec{{PodSelector: map[string]string{"app": "client"}}}).
-		AddToServicesRule([]crdv1alpha1.ServiceReference{{
+		AddToServicesRule([]crdv1alpha1.NamespacedName{{
 			Name:      fmt.Sprintf("antrea-mc-%s", westClusterTestService),
 			Namespace: multiClusterTestNamespace},
 		}, "", nil, crdv1alpha1.RuleActionDrop)

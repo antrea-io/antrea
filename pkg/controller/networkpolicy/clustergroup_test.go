@@ -115,7 +115,7 @@ func TestProcessClusterGroup(t *testing.T) {
 			inputGroup: &crdv1alpha3.ClusterGroup{
 				ObjectMeta: metav1.ObjectMeta{Name: "cgE", UID: "uidE"},
 				Spec: crdv1alpha3.GroupSpec{
-					ServiceReference: &crdv1alpha3.ServiceReference{
+					ServiceReference: &crdv1alpha1.NamespacedName{
 						Name:      "test-svc",
 						Namespace: "test-ns",
 					},
@@ -334,7 +334,7 @@ func TestUpdateClusterGroup(t *testing.T) {
 			updatedGroup: &crdv1alpha3.ClusterGroup{
 				ObjectMeta: metav1.ObjectMeta{Name: "cgA", UID: "uidA"},
 				Spec: crdv1alpha3.GroupSpec{
-					ServiceReference: &crdv1alpha3.ServiceReference{
+					ServiceReference: &crdv1alpha1.NamespacedName{
 						Name:      "test-svc",
 						Namespace: "test-ns",
 					},

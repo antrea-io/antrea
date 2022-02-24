@@ -141,7 +141,7 @@ func (n *NetworkPolicyController) toNamespacedPeerForCRD(peers []v1alpha1.Networ
 // ServiceReference in ToServices field. For ANP, we will use the
 // defaultNamespace(policy Namespace) as the Namespace of ServiceReference that
 // doesn't set Namespace.
-func (n *NetworkPolicyController) svcRefToPeerForCRD(svcRefs []v1alpha1.ServiceReference, defaultNamespace string) *controlplane.NetworkPolicyPeer {
+func (n *NetworkPolicyController) svcRefToPeerForCRD(svcRefs []v1alpha1.NamespacedName, defaultNamespace string) *controlplane.NetworkPolicyPeer {
 	var controlplaneSvcRefs []controlplane.ServiceReference
 	for _, svcRef := range svcRefs {
 		curNS := defaultNamespace

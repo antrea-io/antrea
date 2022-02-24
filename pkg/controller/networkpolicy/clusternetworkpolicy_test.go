@@ -920,7 +920,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 					Priority: p10,
 					Egress: []crdv1alpha1.Rule{
 						{
-							ToServices: []crdv1alpha1.ServiceReference{
+							ToServices: []crdv1alpha1.NamespacedName{
 								{
 									Namespace: "nsA",
 									Name:      "svcA",
@@ -977,7 +977,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 					Priority: p10,
 					Egress: []crdv1alpha1.Rule{
 						{
-							ToServices: []crdv1alpha1.ServiceReference{
+							ToServices: []crdv1alpha1.NamespacedName{
 								{
 									Namespace: "nsA",
 									Name:      "svcA",
