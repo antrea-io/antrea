@@ -27,6 +27,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/apiserver/pkg/authentication/serviceaccount"
 	"k8s.io/klog/v2"
 
@@ -472,6 +473,9 @@ func (v *antreaPolicyValidator) validateAppliedTo(ingress, egress []crdv1alpha1.
 			if eachAppliedTo.ServiceAccount != nil && appliedToFieldsNum > 1 {
 				return "serviceAccount cannot be set with other peers in appliedTo", false
 			}
+			if reason, allowed := checkSelectorsLabels(eachAppliedTo.PodSelector, eachAppliedTo.NamespaceSelector, eachAppliedTo.ExternalEntitySelector); !allowed {
+				return reason, allowed
+			}
 		}
 		return "", true
 	}
@@ -511,6 +515,9 @@ func (v *antreaPolicyValidator) validatePeers(ingress, egress []crdv1alpha1.Rule
 			if peer.ServiceAccount != nil && peerFieldsNum > 1 {
 				return "serviceAccount cannot be set with other peers in rules", false
 			}
+			if reason, allowed := checkSelectorsLabels(peer.PodSelector, peer.NamespaceSelector, peer.ExternalEntitySelector); !allowed {
+				return reason, allowed
+			}
 		}
 		return "", true
 	}
@@ -547,6 +554,31 @@ func numFieldsSetInPeer(peer crdv1alpha1.NetworkPolicyPeer) int {
 		}
 	}
 	return num
+}
+
+// checkSelectorsLabels validates labels used in all selectors passed in.
+func checkSelectorsLabels(selectors ...*metav1.LabelSelector) (string, bool) {
+	validateLabels := func(labels map[string]string) (string, bool) {
+		for k, v := range labels {
+			err := validation.IsQualifiedName(k)
+			if err != nil {
+				return fmt.Sprintf("Invalid label key: %s: %s", k, strings.Join(err, "; ")), false
+			}
+			err = validation.IsValidLabelValue(v)
+			if err != nil {
+				return fmt.Sprintf("Invalid label value: %s: %s", v, strings.Join(err, "; ")), false
+			}
+		}
+		return "", true
+	}
+	for _, selector := range selectors {
+		if selector != nil {
+			if reason, allowed := validateLabels(selector.MatchLabels); !allowed {
+				return reason, allowed
+			}
+		}
+	}
+	return "", true
 }
 
 // validateTierForPolicy validates whether a referenced Tier exists.
@@ -706,6 +738,9 @@ func validateAntreaGroupSpec(s crdv1alpha2.GroupSpec) (string, bool) {
 	}
 	selector, serviceRef, ipBlock, ipBlocks, childGroups := 0, 0, 0, 0, 0
 	if s.NamespaceSelector != nil || s.ExternalEntitySelector != nil || s.PodSelector != nil {
+		if reason, allowed := checkSelectorsLabels(s.PodSelector, s.NamespaceSelector, s.ExternalEntitySelector); !allowed {
+			return reason, allowed
+		}
 		selector = 1
 	}
 	if s.IPBlock != nil {
