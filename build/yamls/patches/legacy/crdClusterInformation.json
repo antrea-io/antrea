@@ -1,7 +1,0 @@
-[
-	{
-		"op": "move",
-		"from": "/spec/versions/0/schema",
-		"path": "/spec/validation"
-	}
-]
