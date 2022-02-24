@@ -85,6 +85,33 @@ type NetworkPolicyStats struct {
 	TrafficStats TrafficStats `json:"trafficStats,omitempty" protobuf:"bytes,2,opt,name=trafficStats"`
 }
 
+// +genclient
+// +genclient:readonly
+// +genclient:nonNamespaced
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// MulticastGroup contains the mapping between multicast group and Pods.
+type MulticastGroup struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
+
+	// Group is the IP of the multicast group.
+	Group string `json:"group,omitempty" protobuf:"bytes,2,opt,name=group"`
+	// Pods is the list of Pods that have joined the multicast group.
+	Pods []PodReference `json:"pods" protobuf:"bytes,3,rep,name=pods"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// MulticastGroupList is a list of MulticastGroup.
+type MulticastGroupList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
+
+	// List of MulticastGroup.
+	Items []MulticastGroup `json:"items" protobuf:"bytes,2,rep,name=items"`
+}
+
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // NetworkPolicyStatsList is a list of NetworkPolicyStats.
@@ -94,6 +121,14 @@ type NetworkPolicyStatsList struct {
 
 	// List of NetworkPolicyStats.
 	Items []NetworkPolicyStats `json:"items" protobuf:"bytes,2,rep,name=items"`
+}
+
+// PodReference represents a Pod Reference.
+type PodReference struct {
+	// The name of this Pod.
+	Name string `json:"name,omitempty" protobuf:"bytes,1,opt,name=name"`
+	// The namespace of this Pod.
+	Namespace string `json:"namespace,omitempty" protobuf:"bytes,2,opt,name=namespace"`
 }
 
 // TrafficStats contains the traffic stats of a NetworkPolicy.

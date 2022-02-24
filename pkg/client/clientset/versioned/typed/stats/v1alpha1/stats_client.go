@@ -28,6 +28,7 @@ type StatsV1alpha1Interface interface {
 	RESTClient() rest.Interface
 	AntreaClusterNetworkPolicyStatsGetter
 	AntreaNetworkPolicyStatsGetter
+	MulticastGroupsGetter
 	NetworkPolicyStatsGetter
 }
 
@@ -42,6 +43,10 @@ func (c *StatsV1alpha1Client) AntreaClusterNetworkPolicyStats() AntreaClusterNet
 
 func (c *StatsV1alpha1Client) AntreaNetworkPolicyStats(namespace string) AntreaNetworkPolicyStatsInterface {
 	return newAntreaNetworkPolicyStats(c, namespace)
+}
+
+func (c *StatsV1alpha1Client) MulticastGroups() MulticastGroupInterface {
+	return newMulticastGroups(c)
 }
 
 func (c *StatsV1alpha1Client) NetworkPolicyStats(namespace string) NetworkPolicyStatsInterface {

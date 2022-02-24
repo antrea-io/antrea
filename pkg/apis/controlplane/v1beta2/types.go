@@ -342,6 +342,16 @@ type NodeStatsSummary struct {
 	AntreaClusterNetworkPolicies []NetworkPolicyStats `json:"antreaClusterNetworkPolicies,omitempty" protobuf:"bytes,3,rep,name=antreaClusterNetworkPolicies"`
 	// The TrafficStats of Antrea NetworkPolicies collected from the Node.
 	AntreaNetworkPolicies []NetworkPolicyStats `json:"antreaNetworkPolicies,omitempty" protobuf:"bytes,4,rep,name=antreaNetworkPolicies"`
+	// Multicast group information collected from the Node.
+	Multicast []MulticastGroupInfo `json:"multicast,omitempty" protobuf:"bytes,5,rep,name=multicast"`
+}
+
+// MulticastGroupInfo contains the list of Pods that have joined a multicast group, for a given Node.
+type MulticastGroupInfo struct {
+	// Group is the IP of the multicast group.
+	Group string `json:"group,omitempty" protobuf:"bytes,1,opt,name=group"`
+	// Pods is the list of Pods that have joined the multicast group.
+	Pods []PodReference `json:"pods,omitempty" protobuf:"bytes,2,rep,name=pods"`
 }
 
 // NetworkPolicyStats contains the information and traffic stats of a NetworkPolicy.
