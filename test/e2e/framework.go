@@ -380,6 +380,7 @@ func initProvider() error {
 		"vagrant": providers.NewVagrantProvider,
 		"kind":    providers.NewKindProvider,
 		"remote":  providers.NewRemoteProvider,
+		"tce":     providers.NewTCEProvider,
 	}
 	if fn, ok := providerFactory[testOptions.providerName]; ok {
 		newProvider, err := fn(testOptions.providerConfigPath)
