@@ -10,7 +10,8 @@ RUN go mod download
 
 COPY . /antrea
 
-RUN make antrea-agent antrea-controller antrea-cni antctl-ubuntu antrea-controller-instr-binary antrea-agent-instr-binary antctl-instr-binary
+RUN make antrea-agent antrea-controller antrea-cni antctl-linux antrea-controller-instr-binary antrea-agent-instr-binary antctl-instr-binary
+RUN mv bin/antctl-linux bin/antctl
 
 FROM antrea/base-ubuntu:${OVS_VERSION}
 
