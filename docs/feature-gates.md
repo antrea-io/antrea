@@ -159,6 +159,42 @@ cluster-access-dns    10         120       12210   2020-09-07T13:22:42Z
 NAMESPACE     NAME                  SESSIONS   PACKETS   BYTES   CREATED AT
 default       access-http           3          36        5199    2020-09-07T13:19:38Z
 foo           bar                   1          12        1221    2020-09-07T13:22:42Z
+
+# List per-rule statistics for Antrea ClusterNetworkPolicy cluster-access-dns.
+# Both Antrea NetworkPolicy and Antrea ClusterNetworkPolicy support per-rule statistics.
+> kubectl get antreaclusternetworkpolicystats cluster-access-dns -o json
+{
+    "apiVersion": "stats.antrea.io/v1alpha1",
+    "kind": "AntreaClusterNetworkPolicyStats",
+    "metadata": {
+        "creationTimestamp": "2022-02-24T09:04:53Z",
+        "name": "cluster-access-dns",
+        "uid": "940cf76a-d836-4e76-b773-d275370b9328"
+    },
+    "ruleTrafficStats": [
+        {
+            "name": "rule1",
+            "trafficStats": {
+                "bytes": 392,
+                "packets": 4,
+                "sessions": 1
+            }
+        },
+        {
+            "name": "rule2",
+            "trafficStats": {
+                "bytes": 111,
+                "packets": 2,
+                "sessions": 1
+            }
+        }
+    ],
+    "trafficStats": {
+        "bytes": 503,
+        "packets": 6,
+        "sessions": 2
+    }
+}
 ```
 
 #### Requirements for this Feature
