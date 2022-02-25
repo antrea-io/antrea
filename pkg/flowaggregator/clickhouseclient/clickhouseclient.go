@@ -28,9 +28,8 @@ import (
 )
 
 const (
-	maxQueueSize   = 1 << 19 // 524288. ~500MB assuming 1KiB per record
-	commitInterval = 1 * time.Second
-	insertQuery    = `INSERT INTO flows (
+	maxQueueSize = 1 << 19 // 524288. ~500MB assuming 1KB per record
+	insertQuery  = `INSERT INTO flows (
                    flowStartSeconds,
                    flowEndSeconds,
                    flowEndSecondsFromSourceNode,
@@ -83,30 +82,38 @@ const (
 )
 
 type ClickHouseExportProcess struct {
-	db        *sql.DB
-	dsn       string
-	deque     *deque.Deque
-	mutex     sync.RWMutex
+	// db holds sql connection struct to clickhouse db.
+	db *sql.DB
+	// dsn is data source name used for connection to clickhouse db.
+	dsn string
+	// deque buffers flows records between batch commits.
+	deque *deque.Deque
+	// mutex is for concurrency between adding and removing records from deque.
+	mutex sync.RWMutex
+	// queueSize is the max size of deque
 	queueSize int
+	// commitInterval is the interval between batch commits
+	commitInterval time.Duration
 	// stopChan is the channel to receive stop message
 	stopChan chan bool
 }
 
 type ClickHouseInput struct {
-	Username string
-	Password string
-	Database string
-	DbURL    string
-	Debug    bool
-	Compress *bool
+	Username       string
+	Password       string
+	Database       string
+	DatabaseURL    string
+	Debug          bool
+	Compress       *bool
+	CommitInterval time.Duration
 }
 
 func (ci *ClickHouseInput) getDataSourceName() (string, error) {
-	if len(ci.DbURL) == 0 || len(ci.Username) == 0 || len(ci.Password) == 0 {
+	if len(ci.DatabaseURL) == 0 || len(ci.Username) == 0 || len(ci.Password) == 0 {
 		return "", fmt.Errorf("URL, Username or Password missing for clickhouse DSN")
 	}
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("%s?username=%s&password=%s", ci.DbURL, ci.Username, ci.Password))
+	sb.WriteString(fmt.Sprintf("%s?username=%s&password=%s", ci.DatabaseURL, ci.Username, ci.Password))
 
 	if len(ci.Database) > 0 {
 		sb.WriteString("&database=")
@@ -180,7 +187,7 @@ func NewClickHouseClient(input ClickHouseInput) (*ClickHouseExportProcess, error
 	}
 	connect, err := sql.Open("clickhouse", dsn)
 	if err != nil {
-		klog.ErrorS(err, "Error when opening DB connection", "dbURL", input.DbURL)
+		klog.ErrorS(err, "Error when opening DB connection", "dbURL", input.DatabaseURL)
 		return nil, err
 	}
 
@@ -206,13 +213,14 @@ func NewClickHouseClient(input ClickHouseInput) (*ClickHouseExportProcess, error
 	_ = tx.Commit()
 
 	chClient := &ClickHouseExportProcess{
-		db:       connect,
-		dsn:      dsn,
-		deque:    deque.New(),
-		mutex:    sync.RWMutex{},
-		stopChan: make(chan bool),
+		db:             connect,
+		dsn:            dsn,
+		deque:          deque.New(),
+		mutex:          sync.RWMutex{},
+		queueSize:      maxQueueSize,
+		commitInterval: input.CommitInterval,
+		stopChan:       make(chan bool),
 	}
-	chClient.queueSize = maxQueueSize
 
 	return chClient, nil
 }
@@ -391,7 +399,7 @@ func (ch *ClickHouseExportProcess) getClickHouseFlowRow(record ipfixentities.Rec
 }
 
 func (ch *ClickHouseExportProcess) flowRecordPeriodicCommit() {
-	commitTicker := time.NewTicker(commitInterval)
+	commitTicker := time.NewTicker(ch.commitInterval)
 	logTicker := time.NewTicker(time.Minute)
 	committedRec := 0
 	for {
@@ -435,7 +443,6 @@ func (ch *ClickHouseExportProcess) batchCommitAll() (int, error) {
 	}
 
 	// populate items from deque
-	validCount := 0
 	for i := 0; i < currSize; i++ {
 		record, ok := ch.deque.At(i).(*ClickHouseFlowRow)
 		if !ok {
@@ -495,7 +502,6 @@ func (ch *ClickHouseExportProcess) batchCommitAll() (int, error) {
 			_ = tx.Rollback()
 			return 0, err
 		}
-		validCount += 1
 	}
 
 	if err := tx.Commit(); err != nil {
@@ -510,5 +516,5 @@ func (ch *ClickHouseExportProcess) batchCommitAll() (int, error) {
 		ch.deque.PopFront()
 	}
 
-	return validCount, nil
+	return currSize, nil
 }

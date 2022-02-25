@@ -743,7 +743,10 @@ func (data *TestData) mutateFlowAggregatorConfigMap(ipfixCollector string, faClu
 		return fmt.Errorf("failed to unmarshal FlowAggregator config from ConfigMap: %v", err)
 	}
 
-	flowAggregatorConf.ExternalFlowCollectorAddr = ipfixCollector
+	flowAggregatorConf.FlowCollector = flowaggregatorconfig.FlowCollectorConfig{
+		Enable:  true,
+		Address: ipfixCollector,
+	}
 	flowAggregatorConf.ActiveFlowRecordTimeout = aggregatorActiveFlowRecordTimeout.String()
 	flowAggregatorConf.InactiveFlowRecordTimeout = aggregatorInactiveFlowRecordTimeout.String()
 	flowAggregatorConf.RecordContents.PodLabels = true

@@ -39,12 +39,13 @@ func init() {
 
 func TestGetDataSourceName(t *testing.T) {
 	chInput := ClickHouseInput{
-		Username: "username",
-		Password: "password",
-		Database: "default",
-		DbURL:    "tcp://click-house-svc:9000",
-		Debug:    true,
-		Compress: new(bool),
+		Username:       "username",
+		Password:       "password",
+		Database:       "default",
+		DatabaseURL:    "tcp://click-house-svc:9000",
+		Debug:          true,
+		Compress:       new(bool),
+		CommitInterval: 1 * time.Second,
 	}
 	*chInput.Compress = true
 	dsn := "tcp://click-house-svc:9000?username=username&password=password&database=default&debug=true&compress=true"

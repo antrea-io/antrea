@@ -94,8 +94,8 @@ func run(o *Options) error {
 	podInformer := informerFactory.Core().V1().Pods()
 
 	var observationDomainID uint32
-	if o.config.ObservationDomainID != nil {
-		observationDomainID = *o.config.ObservationDomainID
+	if o.config.FlowCollector.ObservationDomainID != nil {
+		observationDomainID = *o.config.FlowCollector.ObservationDomainID
 	} else {
 		observationDomainID = genObservationDomainID(k8sClient)
 	}
@@ -130,14 +130,15 @@ func run(o *Options) error {
 		return fmt.Errorf("error when creating aggregation process: %v", err)
 	}
 
-	if o.config.ClickHouse != nil {
+	if o.config.ClickHouse.Enable {
 		chInput := clickhouseclient.ClickHouseInput{
-			Username: os.Getenv("CH_USERNAME"),
-			Password: os.Getenv("CH_PASSWORD"),
-			Database: o.config.ClickHouse.Database,
-			DbURL:    o.config.ClickHouse.DbURL,
-			Debug:    o.config.ClickHouse.Debug,
-			Compress: o.config.ClickHouse.Compress,
+			Username:       os.Getenv("CH_USERNAME"),
+			Password:       os.Getenv("CH_PASSWORD"),
+			Database:       o.config.ClickHouse.Database,
+			DatabaseURL:    o.config.ClickHouse.DatabaseURL,
+			Debug:          o.config.ClickHouse.Debug,
+			Compress:       o.config.ClickHouse.Compress,
+			CommitInterval: o.clickHouseCommitInterval,
 		}
 		err = flowAggregator.InitDBExportProcess(chInput)
 		if err != nil {
