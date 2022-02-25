@@ -358,12 +358,7 @@ func (c *EgressController) syncEgress(key string) error {
 	for _, pod := range pods {
 		// Ignore Pod if it's not scheduled or not running. And Egress does not support HostNetwork Pods, so also ignore
 		// Pod if it's HostNetwork Pod.
-		// TODO: If a Pod is scheduled but not running, it can be included in the EgressGroup so that the agent can
-		// install its SNAT rule right after the Pod's CNI request is processed, which just requires a notification from
-		// CNIServer to the agent's EgressController. However the current notification mechanism (the entityUpdate
-		// channel) allows only single consumer. Once it allows multiple consumers, we can change the condition to
-		// include scheduled Pods that have no IPs.
-		if pod.Spec.NodeName == "" || len(pod.Status.PodIPs) == 0 || pod.Spec.HostNetwork {
+		if pod.Spec.NodeName == "" || pod.Spec.HostNetwork {
 			continue
 		}
 		podNum++

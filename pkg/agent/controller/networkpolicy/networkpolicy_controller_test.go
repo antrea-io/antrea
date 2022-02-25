@@ -39,6 +39,7 @@ import (
 	"antrea.io/antrea/pkg/client/clientset/versioned"
 	"antrea.io/antrea/pkg/client/clientset/versioned/fake"
 	"antrea.io/antrea/pkg/querier"
+	"antrea.io/antrea/pkg/util/channel"
 )
 
 const testNamespace = "ns1"
@@ -53,11 +54,11 @@ func (g *antreaClientGetter) GetAntreaClient() (versioned.Interface, error) {
 
 func newTestController() (*Controller, *fake.Clientset, *mockReconciler) {
 	clientset := &fake.Clientset{}
-	ch := make(chan agenttypes.EntityReference, 100)
+	podUpdateChannel := channel.NewSubscribableChannel("PodUpdate", 100)
 	ch2 := make(chan string, 100)
 	groupIDAllocator := openflow.NewGroupAllocator(false)
 	groupCounters := []proxytypes.GroupCounter{proxytypes.NewGroupCounter(groupIDAllocator, ch2)}
-	controller, _ := NewNetworkPolicyController(&antreaClientGetter{clientset}, nil, nil, "node1", ch, groupCounters, ch2,
+	controller, _ := NewNetworkPolicyController(&antreaClientGetter{clientset}, nil, nil, "node1", podUpdateChannel, groupCounters, ch2,
 		true, true, true, true, testAsyncDeleteInterval, "8.8.8.8:53", true, false)
 	reconciler := newMockReconciler()
 	controller.reconciler = reconciler
