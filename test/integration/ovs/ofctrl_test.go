@@ -28,6 +28,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/time/rate"
+	"k8s.io/apimachinery/pkg/util/wait"
 
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
@@ -295,9 +296,12 @@ func TestOFctrlGroup(t *testing.T) {
 			}
 			// Check if the group could be added.
 			require.Nil(t, group.Add())
-			groups, err := OfCtlDumpGroups(ovsCtlClient)
-			require.Nil(t, err)
-			require.Len(t, groups, 1)
+			var groups [][]string
+			require.NoError(t, wait.PollImmediate(openFlowCheckInterval, openFlowCheckTimeout, func() (done bool, err error) {
+				groups, err = OfCtlDumpGroups(ovsCtlClient)
+				require.Nil(t, err)
+				return len(groups) == 1, nil
+			}), "Failed to install group")
 			dumpedGroup := groups[0]
 			for i, bucket := range buckets {
 				// Must have weight
@@ -317,9 +321,11 @@ func TestOFctrlGroup(t *testing.T) {
 			}
 			// Check if the group could be deleted.
 			require.Nil(t, group.Delete())
-			groups, err = OfCtlDumpGroups(ovsCtlClient)
-			require.Nil(t, err)
-			require.Len(t, groups, 0)
+			require.NoError(t, wait.PollImmediate(openFlowCheckInterval, openFlowCheckTimeout, func() (done bool, err error) {
+				groups, err = OfCtlDumpGroups(ovsCtlClient)
+				require.Nil(t, err)
+				return len(groups) == 0, nil
+			}), "Failed to delete group")
 		})
 	}
 }
