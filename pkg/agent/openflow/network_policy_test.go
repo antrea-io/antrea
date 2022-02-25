@@ -159,6 +159,11 @@ func TestInstallPolicyRuleFlows(t *testing.T) {
 	c.networkConfig = &config.NetworkConfig{IPv4Enabled: true}
 	c.ipProtocols = []binding.Protocol{binding.ProtocolIP}
 	defaultAction := crdv1alpha1.RuleActionAllow
+	// Create a policyRuleConjunction for the dns response interception flows
+	// to ensure nil NetworkPolicyReference is handled correctly by GetNetworkPolicyFlowKeys.
+	dnsID := uint32(1)
+	require.NoError(t, c.NewDNSpacketInConjunction(dnsID))
+
 	ruleID1 := uint32(101)
 	rule1 := &types.PolicyRule{
 		Direction: v1beta2.DirectionOut,
