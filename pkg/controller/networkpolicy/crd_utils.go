@@ -202,9 +202,8 @@ func (n *NetworkPolicyController) createAddressGroupForClusterGroupCRD(intGrp *a
 	}
 	// Create an AddressGroup object for this Cluster Group.
 	addressGroup := &antreatypes.AddressGroup{
-		UID:      intGrp.UID,
-		Name:     key,
-		Inverted: false,
+		UID:  intGrp.UID,
+		Name: key,
 	}
 	n.addressGroupStore.Create(addressGroup)
 	klog.V(2).Infof("Created new AddressGroup %v corresponding to ClusterGroup CRD %s", addressGroup.UID, intGrp.Name)

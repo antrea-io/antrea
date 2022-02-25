@@ -2230,7 +2230,7 @@ func testACNPNestedIPBlockClusterGroupCreateAndUpdate(t *testing.T) {
 			},
 		})
 	builder.AddIngress(v1.ProtocolTCP, &p80, nil, nil, nil, nil, nil,
-		nil, nil, false, nil, crdv1alpha1.RuleActionDrop, cgParentName, "", nil)
+		nil, nil, NoNSSpecifier, nil, crdv1alpha1.RuleActionDrop, cgParentName, "", nil)
 
 	reachability := NewReachability(allPods, Connected)
 	reachability.Expect("x/a", "y/a", Dropped)

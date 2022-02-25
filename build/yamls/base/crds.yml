@@ -974,6 +974,7 @@ spec:
                                 match:
                                   enum:
                                     - Self
+                                    - NotSelf
                                   type: string
                             ipBlock:
                               type: object

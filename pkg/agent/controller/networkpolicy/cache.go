@@ -345,13 +345,13 @@ func newRuleCache(dirtyRuleHandler func(string), podUpdateSubscriber channel.Sub
 		cache.Indexers{addressGroupIndex: addressGroupIndexFunc, appliedToGroupIndex: appliedToGroupIndexFunc, policyIndex: policyIndexFunc, toServicesIndex: toServicesIndexFunc},
 	)
 	cache := &ruleCache{
-		appliedToSetByGroup: make(map[string]v1beta.GroupMemberSet),
-		addressSetByGroup:   make(map[string]v1beta.GroupMemberSet),
+		appliedToSetByGroup:   make(map[string]v1beta.GroupMemberSet),
+		addressSetByGroup:     make(map[string]v1beta.GroupMemberSet),
 		invertedAddressGroups: make(map[string]struct{}),
-		policyMap:           make(map[string]*v1beta.NetworkPolicy),
-		rules:               rules,
-		dirtyRuleHandler:    dirtyRuleHandler,
-		groupIDUpdates:      serviceGroupIDUpdate,
+		policyMap:             make(map[string]*v1beta.NetworkPolicy),
+		rules:                 rules,
+		dirtyRuleHandler:      dirtyRuleHandler,
+		groupIDUpdates:        serviceGroupIDUpdate,
 	}
 	// Subscribe Pod update events from CNIServer.
 	podUpdateSubscriber.Subscribe(cache.processPodUpdate)
@@ -820,7 +820,7 @@ func (c *ruleCache) onAddressGroupUpdate(groupName string) {
 
 // unionAddressGroups gets the union of addresses of the provided address groups.
 // If any group is not found, false will be returned to indicate the set is not complete yet.
-// The third parameter indicates whether the union of addressGroups selects the address
+// The third return value indicates whether the union of addressGroups selects the address
 // complement of the returned group members.
 func (c *ruleCache) unionAddressGroups(groupNames []string) (v1beta.GroupMemberSet, bool, bool) {
 	c.addressSetLock.RLock()
@@ -846,7 +846,7 @@ func (c *ruleCache) unionAddressGroups(groupNames []string) (v1beta.GroupMemberS
 	if len(invertedAddrGroups) == 0 {
 		return set, true, false
 	}
-	// If there is a least one inverted addressGroup to be unioned, the unioned addressGroup
+	// If there is at least one inverted addressGroup to be unioned, the unioned addressGroup
 	// GroupMembers will be expressed as GroupMember complement. The resulting rule will read
 	// as, from/toAddress selected is everywhere except the GroupMembers listed.
 	for _, groupName := range invertedAddrGroups {

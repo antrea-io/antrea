@@ -1029,12 +1029,13 @@ func ofPortsToOFAddresses(ofPorts sets.Int32) []types.Address {
 func groupMembersToOFAddresses(groupMemberSet v1beta2.GroupMemberSet, inverted bool) []types.Address {
 	// Must not return nil as it means not restricted by addresses in Openflow implementation.
 	ips := make([]net.IP, 0, len(groupMemberSet))
+	addresses := make([]types.Address, 0, len(groupMemberSet))
 	for _, member := range groupMemberSet {
 		for _, ip := range member.IPs {
 			ips = append(ips, net.IP(ip))
+			addresses = append(addresses, openflow.NewIPAddress(net.IP(ip)))
 		}
 	}
-	addresses := ipsToAddresses(ips)
 	if inverted {
 		invertedCIDRs := ip.ComplementAddressesInCIDR(ips)
 		addresses = ipNetsToAddresses(invertedCIDRs)
@@ -1062,9 +1063,10 @@ func ipBlocksToOFAddresses(ipBlocks []v1beta2.IPBlock, ipv4Enabled, ipv6Enabled 
 			klog.Errorf("Error when determining diffCIDRs: %v", err)
 			continue
 		}
-		addresses = ipNetsToAddresses(diffCIDRs)
+		for _, d := range diffCIDRs {
+			addresses = append(addresses, openflow.NewIPNetAddress(*d))
+		}
 	}
-
 	return addresses
 }
 
@@ -1084,17 +1086,9 @@ func ipsToOFAddresses(ips sets.String) []types.Address {
 	return from
 }
 
-func ipsToAddresses(ips []net.IP) []types.Address {
-	addresses := make([]types.Address, 0, len(ips))
-	for _, ip := range ips {
-		addresses = append(addresses, openflow.NewIPAddress(ip))
-	}
-	return addresses
-}
-
-func ipNetsToAddresses(ipnets []*net.IPNet) []types.Address {
-	addresses := make([]types.Address, 0, len(ipnets))
-	for _, ip := range ipnets {
+func ipNetsToAddresses(ipNets []*net.IPNet) []types.Address {
+	addresses := make([]types.Address, 0, len(ipNets))
+	for _, ip := range ipNets {
 		addresses = append(addresses, openflow.NewIPNetAddress(*ip))
 	}
 	return addresses

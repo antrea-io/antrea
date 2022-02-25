@@ -785,6 +785,7 @@ spec:
                               match:
                                 enum:
                                 - Self
+                                - NotSelf
                                 type: string
                             type: object
                           podSelector:

@@ -2172,11 +2172,6 @@ rules:
   - get
   - watch
   - list
-- apiGroups:
-  - ""
-  resources:
-  - nodes/status
-  verbs:
   - patch
 - apiGroups:
   - ""
@@ -2186,11 +2181,6 @@ rules:
   - get
   - watch
   - list
-- apiGroups:
-  - ""
-  resources:
-  - pods/status
-  verbs:
   - patch
 - apiGroups:
   - ""
@@ -2208,6 +2198,7 @@ rules:
   - services/status
   verbs:
   - update
+  - patch
 - apiGroups:
   - discovery.k8s.io
   resources:
@@ -2366,7 +2357,6 @@ rules:
   - ""
   resources:
   - pods
-  - services
   - namespaces
   - configmaps
   verbs:
@@ -2385,9 +2375,14 @@ rules:
 - apiGroups:
   - ""
   resources:
+  - services
   - services/status
   verbs:
+  - get
+  - watch
+  - list
   - update
+  - patch
 - apiGroups:
   - networking.k8s.io
   resources:
@@ -2696,9 +2691,8 @@ data:
     # - system
     # - netdev
     # 'system' is the default value and corresponds to the kernel datapath. Use 'netdev' to run
-    # OVS in userspace mode (not fully supported yet). Userspace mode requires the tun device driver to
-    # be available.
-    #ovsDatapathType: system
+    # OVS in userspace mode. Userspace mode requires the tun device driver to be available.
+    ovsDatapathType: netdev
 
     # Name of the interface antrea-agent will create and use for host <--> pod communication.
     # Make sure it doesn't conflict with your existing interfaces.
@@ -2714,7 +2708,7 @@ data:
     # networkPolicyOnly: Antrea enforces NetworkPolicy only, and utilizes CNI chaining and delegates Pod
     #                    IPAM and connectivity to the primary CNI.
     #
-    trafficEncapMode: networkPolicyOnly
+    #trafficEncapMode: encap
 
     # Whether or not to SNAT (using the Node IP) the egress traffic from a Pod to the external network.
     # This option is for the noEncap traffic mode only, and the default value is false. In the noEncap
@@ -2729,7 +2723,6 @@ data:
     # - vxlan
     # - gre
     # - stt
-    # Note that "gre" is not supported for IPv6 clusters (IPv6-only or dual-stack clusters).
     #tunnelType: geneve
 
     # Determines how tunnel traffic is encrypted. Currently encryption only works with encap mode.
@@ -2764,6 +2757,11 @@ data:
     egress:
     #  exceptCIDRs is the CIDR ranges to which outbound Pod traffic will not be SNAT'd by Egresses.
     #  exceptCIDRs: []
+
+    # ClusterIP CIDR range for Services. It's required when AntreaProxy is not enabled, and should be
+    # set to the same value as the one specified by --service-cluster-ip-range for kube-apiserver. When
+    # AntreaProxy is enabled, this parameter is not needed and will be ignored if provided.
+    #serviceCIDR: 10.96.0.0/12
 
     # ClusterIP CIDR range for IPv6 Services. It's required when using kube-proxy to provide IPv6 Service in a Dual-Stack
     # cluster or an IPv6 only cluster. The value should be the same as the configuration for kube-apiserver specified by
@@ -2975,9 +2973,10 @@ data:
     #  nodeCIDRMaskSizeIPv6: 64
 kind: ConfigMap
 metadata:
+  annotations: {}
   labels:
     app: antrea
-  name: antrea-config-665mgk228m
+  name: antrea-config-c2kfgd59tm
   namespace: kube-system
 ---
 apiVersion: v1
@@ -3048,7 +3047,7 @@ spec:
             fieldRef:
               fieldPath: spec.serviceAccountName
         - name: ANTREA_CONFIG_MAP_NAME
-          value: antrea-config-665mgk228m
+          value: antrea-config-c2kfgd59tm
         image: projects.registry.vmware.com/antrea/antrea-ubuntu:latest
         imagePullPolicy: IfNotPresent
         livenessProbe:
@@ -3099,7 +3098,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-665mgk228m
+          name: antrea-config-c2kfgd59tm
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -3179,16 +3178,10 @@ spec:
     spec:
       containers:
       - args:
-        - --config
-        - /etc/antrea/antrea-agent.conf
-        - --logtostderr=false
-        - --log_dir=/var/log/antrea
-        - --alsologtostderr
-        - --log_file_max_size=100
-        - --log_file_max_num=4
-        - --v=0
+        - -c
+        - sleep 2; exec antrea-agent --config /etc/antrea/antrea-agent.conf
         command:
-        - antrea-agent
+        - /bin/sh
         env:
         - name: POD_NAME
           valueFrom:
@@ -3262,7 +3255,7 @@ spec:
         - --log_file_max_size=100
         - --log_file_max_num=4
         command:
-        - start_ovs
+        - start_ovs_netdev
         image: projects.registry.vmware.com/antrea/antrea-ubuntu:latest
         imagePullPolicy: IfNotPresent
         livenessProbe:
@@ -3287,6 +3280,8 @@ spec:
             - SYS_ADMIN
             - IPC_LOCK
         volumeMounts:
+        - mountPath: /dev/net/tun
+          name: dev-tun
         - mountPath: /var/run/openvswitch
           name: host-var-run-antrea
           subPath: openvswitch
@@ -3297,17 +3292,13 @@ spec:
       hostNetwork: true
       initContainers:
       - command:
-        - install_cni_chaining
+        - install_cni_kind
         image: projects.registry.vmware.com/antrea/antrea-ubuntu:latest
         imagePullPolicy: IfNotPresent
         name: install-cni
         resources:
           requests:
             cpu: 100m
-        securityContext:
-          capabilities:
-            add:
-            - SYS_MODULE
         volumeMounts:
         - mountPath: /etc/antrea/antrea-cni.conflist
           name: antrea-config
@@ -3334,8 +3325,12 @@ spec:
       - effect: NoExecute
         operator: Exists
       volumes:
+      - hostPath:
+          path: /dev/net/tun
+          type: CharDevice
+        name: dev-tun
       - configMap:
-          name: antrea-config-665mgk228m
+          name: antrea-config-c2kfgd59tm
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d

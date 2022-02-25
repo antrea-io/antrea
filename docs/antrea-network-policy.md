@@ -300,6 +300,8 @@ spec:
 
 #### ACNP for strict Namespace isolation
 
+Using `Pass` action in ingress or egress rules:
+
 ```yaml
 apiVersion: crd.antrea.io/v1alpha1
 kind: ClusterNetworkPolicy
@@ -334,6 +336,34 @@ spec:
         - namespaceSelector: {}   # Drop to Pods from all other Namespaces
       name: DropToAllOtherNS
       enableLogging: true
+```
+
+Using `NotSelf` Namespace matching in ingress or egress rules:
+
+```yaml
+apiVersion: crd.antrea.io/v1alpha1
+kind: ClusterNetworkPolicy
+metadata:
+  name: strict-ns-isolation
+spec:
+  priority: 1
+  tier: platform
+  appliedTo:
+    - namespaceSelector: {}       # Selects all Namespaces in the cluster
+  ingress:
+    - action: Drop
+      from:
+        - namespaces:
+            match: NotSelf           # Drop from Pods from all other NotSelf Namespaces
+      name: DropFromNotSelfNS
+      enableLogging: false
+  egress:
+    - action: Drop
+      to:
+        - namespaces:
+            match: NotSelf           # Drop to Pods from all other NotSelf Namespaces
+      name: DropToNotSelfNS
+      enableLogging: false
 ```
 
 #### ACNP for default zero-trust cluster security posture
@@ -547,12 +577,13 @@ particular Namespaces.
 
 **namespaces**: A `namespaces` field allows users to perform advanced matching on
 Namespace objects which cannot be done via label selectors. Currently, the
-`namespaces` field has only one matching strategy, `Self`. If set to `Self`, it indicates
-that the corresponding `podSelector` (or all Pods if `podSelector` is not set)
-should only select Pods belonging to the same Namespace as the workload targeted
-(either through a policy-level AppliedTo or a rule-level Applied-To) by the current
-ingress or egress rule. This enables policy writers to create per-Namespace rules within a
-single policy. See the [example](#acnp-for-strict-namespace-isolation) YAML above. This field is
+`namespaces` field has two matching strategies, `Self` and `NotSelf`. If set to `Self`,
+it indicates that for a given target Pod (selected by either the policy-level AppliedTo
+or the rule-level Applied-To) to apply the rule, the rule's `podSelector` should only select
+Pods in the same Namespace as the target Pod. If set to `NotSelf`, it should select Pods
+belonging to all other Namespaces except the one in the target Pod's own Namespace.
+This enables policy writers to create per-Namespace rules within a single policy.
+See the [example](#acnp-for-strict-namespace-isolation) YAML above. This field is
 optional and cannot be set along with a `namespaceSelector` within the same peer.
 
 **group**: A `group` refers to a ClusterGroup to which this ingress/egress peer, or

@@ -406,9 +406,10 @@ type NetworkPolicyPeer struct {
 	// ExternalEntitySelector. Cannot be set with Namespaces.
 	// +optional
 	NamespaceSelector *metav1.LabelSelector `json:"namespaceSelector,omitempty"`
-	// Select Pod/ExternalEntity from Namespaces matched by specifc criteria.
+	// Select Pod/ExternalEntity from Namespaces matched by specific criteria.
 	// Current supported criteria is match: Self, which selects from the same
-	// Namespace of the appliedTo workloads.
+	// Namespace of the appliedTo workloads; NotSelf, which selects from
+	// other Namespaces except the Namespace of the appliedTo workloads.
 	// Cannot be set with any other selector except PodSelector or
 	// ExternalEntitySelector. This field can only be set when NetworkPolicyPeer
 	// is created for ClusterNetworkPolicy ingress/egress rules.
