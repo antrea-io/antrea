@@ -25,8 +25,8 @@ DEFAULT_KUBECONFIG_PATH=$DEFAULT_WORKDIR/kube.conf
 WORKDIR=$DEFAULT_WORKDIR
 TESTCASE=""
 TEST_FAILURE=false
-DOCKER_REGISTRY=$(head -n1 "/var/lib/jenkins/antrea/ci/docker-registry")
-GO_VERSION=$(head -n1 "/var/lib/jenkins/antrea/build/images/deps/go-version")
+DOCKER_REGISTRY=$(head -n1 "${WORKSPACE}/ci/docker-registry")
+GO_VERSION=$(head -n1 "${WORKSPACE}/build/images/deps/go-version")
 IMAGE_PULL_POLICY="Always"
 MULTICLUSTER_KUBECONFIG_PATH=$WORKDIR/.kube
 LEADER_CLUSTER_CONFIG="--kubeconfig=$MULTICLUSTER_KUBECONFIG_PATH/leader"
@@ -115,11 +115,11 @@ function cleanup_multicluster_ns {
 function cleanup_multicluster_controller {
     echo "====== Cleanup Multicluster Controller Installation ======"
     kubeconfig=$1
-    for multicluster_yml in /var/lib/jenkins/antrea/multicluster/test/yamls/*.yml; do
+    for multicluster_yml in ${WORKSPACE}/multicluster/test/yamls/*.yml; do
         kubectl delete -f $multicluster_yml $kubeconfig --ignore-not-found=true  --timeout=30s || true
     done
 
-    for multicluster_yml in /var/lib/jenkins/antrea/multicluster/build/yamls/*.yml; do
+    for multicluster_yml in ${WORKSPACE}/multicluster/build/yamls/*.yml; do
         kubectl delete -f $multicluster_yml $kubeconfig --ignore-not-found=true --timeout=30s || true
     done
 }
@@ -277,17 +277,17 @@ function run_multicluster_e2e {
 
     done
 
-#    set +e
-#    mkdir -p `pwd`/antrea-multicluster-test-logs
-#    go test -v antrea.io/antrea/multicluster/test/e2e --logs-export-dir  `pwd`/antrea-multicluster-test-logs
-#    if [[ "$?" != "0" ]]; then
-#        TEST_FAILURE=true
-#    fi
-#    set -e
+    set +e
+    mkdir -p `pwd`/antrea-multicluster-test-logs
+    go test -v antrea.io/antrea/multicluster/test/e2e --logs-export-dir  `pwd`/antrea-multicluster-test-logs
+    if [[ "$?" != "0" ]]; then
+        TEST_FAILURE=true
+    fi
+    set -e
 }
 
-#trap clean_multicluster EXIT
-#clean_tmp
+trap clean_multicluster EXIT
+clean_tmp
 
 if [[ ${TESTCASE} =~ "e2e" ]]; then
     deliver_antrea_multicluster

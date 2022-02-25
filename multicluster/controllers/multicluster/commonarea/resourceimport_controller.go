@@ -380,20 +380,22 @@ func (r *ResourceImportReconciler) handleResImpUpdateForClusterNetworkPolicy(ctx
 	tierKind, tierName := &v1alpha1.Tier{}, acnpObj.Spec.Tier
 	err = r.localClusterClient.Get(ctx, types.NamespacedName{Namespace: "", Name: tierName}, tierKind)
 	tierNotFound := apierrors.IsNotFound(err)
-	if acnpNotFound && !tierNotFound {
-		if err = r.localClusterClient.Create(ctx, acnpObj, &client.CreateOptions{}); err != nil {
-			klog.ErrorS(err, "failed to create imported Antrea ClusterNetworkPolicy", "acnp", klog.KObj(acnpObj))
-			return ctrl.Result{}, err
+	if !tierNotFound {
+		if acnpNotFound {
+			if err = r.localClusterClient.Create(ctx, acnpObj, &client.CreateOptions{}); err != nil {
+				klog.ErrorS(err, "failed to create imported Antrea ClusterNetworkPolicy", "acnp", klog.KObj(acnpObj))
+				return ctrl.Result{}, err
+			}
+		} else if !apiequality.Semantic.DeepEqual(acnp.Spec, acnpObj.Spec) {
+			acnp.Spec = acnpObj.Spec
+			if err = r.localClusterClient.Update(ctx, acnp, &client.UpdateOptions{}); err != nil {
+				klog.ErrorS(err, "failed to update imported Antrea ClusterNetworkPolicy", "acnp", klog.KObj(acnpObj))
+				return ctrl.Result{}, err
+			}
 		}
-	} else if !acnpNotFound && tierNotFound {
+	} else if tierNotFound && !acnpNotFound {
 		if err = r.localClusterClient.Delete(ctx, acnpObj, &client.DeleteOptions{}); err != nil {
 			klog.ErrorS(err, "failed to delete imported Antrea ClusterNetworkPolicy that no longer have a valid Tier for the current cluster", "acnp", klog.KObj(acnpObj))
-			return ctrl.Result{}, err
-		}
-	} else if !apiequality.Semantic.DeepEqual(acnp.Spec, acnpObj.Spec) {
-		acnp.Spec = acnpObj.Spec
-		if err = r.localClusterClient.Update(ctx, acnp, &client.UpdateOptions{}); err != nil {
-			klog.ErrorS(err, "failed to update imported Antrea ClusterNetworkPolicy", "acnp", klog.KObj(acnpObj))
 			return ctrl.Result{}, err
 		}
 	}

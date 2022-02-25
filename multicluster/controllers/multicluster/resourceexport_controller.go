@@ -74,7 +74,7 @@ func NewResourceExportReconciler(
 // Reconcile will process all kinds of ResourceExport. Service and Endpoint kinds of ResourceExport
 // will be handled in this file, and all other kinds will have their own handler files, eg: newkind_handler.go
 func (r *ResourceExportReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	klog.InfoS("reconciling ResourceExport", "resourceexport", req.NamespacedName)
+	klog.V(2).InfoS("reconciling ResourceExport", "resourceexport", req.NamespacedName)
 	var resExport mcsv1alpha1.ResourceExport
 	if err := r.Client.Get(ctx, req.NamespacedName, &resExport); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
@@ -99,14 +99,12 @@ func (r *ResourceExportReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	// More details about using Finalizers, please refer to https://book.kubebuilder.io/reference/using-finalizers.html.
 	if !resExport.DeletionTimestamp.IsZero() {
 		if common.StringExistsInSlice(resExport.Finalizers, common.ResourceExportFinalizer) {
-			klog.Info("There are finalizers, handling delete event")
 			err := r.handleDeleteEvent(ctx, &resExport)
 			if err != nil {
 				return ctrl.Result{}, err
 			}
 			return r.deleteResourceExport(&resExport)
 		}
-		klog.Info("There are no finalizers, returning")
 		return ctrl.Result{}, nil
 	}
 

@@ -54,7 +54,6 @@ func (r *ResourceExport) Default() {
 	if namespaceLabelVal, exists := r.Labels[common.SourceNamespace]; !exists || namespaceLabelVal != "" {
 		r.Labels[common.SourceNamespace] = ""
 	}
-	// TODO: put sourceClusterID for leader cluster?
 	if kindLabelVal, exists := r.Labels[common.SourceKind]; !exists || kindLabelVal != common.AntreaClusterNetworkPolicyKind {
 		r.Labels[common.SourceKind] = common.AntreaClusterNetworkPolicyKind
 	}

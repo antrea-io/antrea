@@ -35,9 +35,9 @@ import (
 )
 
 var (
-	now         = metav1.Now()
-	dropAction  = v1alpha1.RuleActionDrop
-	svcLabels   = map[string]string{
+	now        = metav1.Now()
+	dropAction = v1alpha1.RuleActionDrop
+	svcLabels  = map[string]string{
 		common.SourceNamespace: "default",
 		common.SourceName:      "nginx",
 		common.SourceKind:      "Service",
