@@ -150,7 +150,7 @@ func (a *IPPoolAllocator) appendPoolUsage(ipPool *v1alpha2.IPPool, ip net.IP, st
 		klog.Warningf("IP Pool %s update with status %+v failed: %+v", newPool.Name, newPool.Status, err)
 		return err
 	}
-	klog.InfoS("IP Pool update succeeded", "pool", newPool.Name, "allocation", newPool.Status)
+	klog.V(2).InfoS("IP Pool update succeeded", "pool", newPool.Name, "allocation", newPool.Status)
 	return nil
 
 }
@@ -178,7 +178,7 @@ func (a *IPPoolAllocator) updateIPAddressState(ipPool *v1alpha2.IPPool, ip net.I
 		klog.Warningf("IP Pool %s update with status %+v failed: %+v", newPool.Name, newPool.Status, err)
 		return err
 	}
-	klog.InfoS("IP Pool update succeeded", "pool", newPool.Name, "allocation", newPool.Status)
+	klog.V(2).InfoS("IP Pool update succeeded", "pool", newPool.Name, "allocation", newPool.Status)
 	return nil
 
 }
@@ -245,7 +245,7 @@ func (a *IPPoolAllocator) removeIPAddressState(ipPool *v1alpha2.IPPool, ip net.I
 		klog.Warningf("IP Pool %s update failed: %+v", newPool.Name, err)
 		return err
 	}
-	klog.InfoS("IP Pool update succeeded", "pool", newPool.Name, "allocation", newPool.Status)
+	klog.V(2).InfoS("IP Pool update succeeded", "pool", newPool.Name, "allocation", newPool.Status)
 	return nil
 
 }

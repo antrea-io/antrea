@@ -72,35 +72,36 @@ const (
 	defaultInterval = 1 * time.Second
 
 	// antreaNamespace is the K8s Namespace in which all Antrea resources are running.
-	antreaNamespace            string = "kube-system"
-	kubeNamespace              string = "kube-system"
-	flowAggregatorNamespace    string = "flow-aggregator"
-	antreaConfigVolume         string = "antrea-config"
-	flowAggregatorConfigVolume string = "flow-aggregator-config"
-	antreaDaemonSet            string = "antrea-agent"
-	antreaWindowsDaemonSet     string = "antrea-agent-windows"
-	antreaDeployment           string = "antrea-controller"
-	flowAggregatorDeployment   string = "flow-aggregator"
-	antreaDefaultGW            string = "antrea-gw0"
-	testNamespace              string = "antrea-test"
-	testAntreaIPAMNamespace    string = "antrea-ipam-test"
-	testAntreaIPAMNamespace11  string = "antrea-ipam-test-11"
-	testAntreaIPAMNamespace12  string = "antrea-ipam-test-12"
-	busyboxContainerName       string = "busybox"
-	mcjoinContainerName        string = "mcjoin"
-	tcpdumpContainerName       string = "netshoot"
-	agnhostContainerName       string = "agnhost"
-	controllerContainerName    string = "antrea-controller"
-	ovsContainerName           string = "antrea-ovs"
-	agentContainerName         string = "antrea-agent"
-	antreaYML                  string = "antrea.yml"
-	antreaIPSecYML             string = "antrea-ipsec.yml"
-	antreaCovYML               string = "antrea-coverage.yml"
-	antreaIPSecCovYML          string = "antrea-ipsec-coverage.yml"
-	flowAggregatorYML          string = "flow-aggregator.yml"
-	flowAggregatorCovYML       string = "flow-aggregator-coverage.yml"
-	defaultBridgeName          string = "br-int"
-	monitoringNamespace        string = "monitoring"
+	antreaNamespace               string = "kube-system"
+	kubeNamespace                 string = "kube-system"
+	flowAggregatorNamespace       string = "flow-aggregator"
+	antreaConfigVolume            string = "antrea-config"
+	flowAggregatorConfigVolume    string = "flow-aggregator-config"
+	antreaDaemonSet               string = "antrea-agent"
+	antreaWindowsDaemonSet        string = "antrea-agent-windows"
+	antreaDeployment              string = "antrea-controller"
+	flowAggregatorDeployment      string = "flow-aggregator"
+	antreaDefaultGW               string = "antrea-gw0"
+	testNamespace                 string = "antrea-test"
+	testAntreaIPAMNamespace       string = "antrea-ipam-test"
+	testAntreaIPAMNamespace11     string = "antrea-ipam-test-11"
+	testAntreaIPAMNamespace12     string = "antrea-ipam-test-12"
+	testAntreaIPAMNamespaceExpand string = "antrea-ipam-test-expand"
+	busyboxContainerName          string = "busybox"
+	mcjoinContainerName           string = "mcjoin"
+	tcpdumpContainerName          string = "netshoot"
+	agnhostContainerName          string = "agnhost"
+	controllerContainerName       string = "antrea-controller"
+	ovsContainerName              string = "antrea-ovs"
+	agentContainerName            string = "antrea-agent"
+	antreaYML                     string = "antrea.yml"
+	antreaIPSecYML                string = "antrea-ipsec.yml"
+	antreaCovYML                  string = "antrea-coverage.yml"
+	antreaIPSecCovYML             string = "antrea-ipsec-coverage.yml"
+	flowAggregatorYML             string = "flow-aggregator.yml"
+	flowAggregatorCovYML          string = "flow-aggregator-coverage.yml"
+	defaultBridgeName             string = "br-int"
+	monitoringNamespace           string = "monitoring"
 
 	antreaControllerCovBinary string = "antrea-controller-coverage"
 	antreaAgentCovBinary      string = "antrea-agent-coverage"
@@ -2419,7 +2420,9 @@ func (data *TestData) createStatefulSet(name string, ns string, size int32, ctrN
 		},
 		Spec: stsSpec,
 	}
-	mutateFunc(sts)
+	if mutateFunc != nil {
+		mutateFunc(sts)
+	}
 	resSTS, err := data.clientset.AppsV1().StatefulSets(ns).Create(context.TODO(), sts, metav1.CreateOptions{})
 	if err != nil {
 		return nil, nil, err

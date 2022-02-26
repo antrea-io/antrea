@@ -28,7 +28,7 @@ type IPAllocator interface {
 
 	AllocateNext() (net.IP, error)
 
-	// Allocate range of continuous IPs in one go. If continuus chunk is not
+	// Allocate range of continuous IPs in one go. If continuous chunk is not
 	// available, error will be returned.
 	AllocateRange(size int) ([]net.IP, error)
 
@@ -295,7 +295,7 @@ func (ma MultiIPAllocator) AllocateRange(size int) ([]net.IP, error) {
 		}
 	}
 
-	return nil, fmt.Errorf("cannot allocate continuus IPs in any range")
+	return nil, fmt.Errorf("cannot allocate continuous IPs in any range")
 }
 
 func (ma MultiIPAllocator) Release(ip net.IP) error {
