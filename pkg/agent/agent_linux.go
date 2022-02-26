@@ -39,8 +39,8 @@ func (i *Initializer) prepareHostNetwork() error {
 	return nil
 }
 
-// prepareOVSBridge returns immediately on Linux if connectUplinkToBridge is false.
 func (i *Initializer) prepareOVSBridge() error {
+	// Return immediately on Linux if connectUplinkToBridge is false.
 	if !i.connectUplinkToBridge {
 		return nil
 	}
@@ -194,8 +194,8 @@ func (i *Initializer) restoreHostRoutesToInterface(ifaceName string) error {
 	return nil
 }
 
-// BridgeUplinkToOVSBridge returns immediately on Linux if connectUplinkToBridge is false.
-func (i *Initializer) BridgeUplinkToOVSBridge() error {
+func (i *Initializer) ConnectUplinkToOVSBridge() error {
+	// Return immediately on Linux if connectUplinkToBridge is false.
 	if !i.connectUplinkToBridge {
 		return nil
 	}
@@ -208,16 +208,16 @@ func (i *Initializer) BridgeUplinkToOVSBridge() error {
 	uplink := uplinkNetConfig.Name
 	if _, err := i.ovsBridgeClient.GetOFPort(uplink, false); err == nil {
 		klog.Infof("Uplink %s already exists, skip the configuration", uplink)
-		return err
+		return nil
 	}
 	// Create uplink port.
-	uplinkPortUUId, err := i.ovsBridgeClient.CreateUplinkPort(uplink, config.UplinkOFPort, map[string]interface{}{interfacestore.AntreaInterfaceTypeKey: interfacestore.AntreaUplink})
+	uplinkPortUUID, err := i.ovsBridgeClient.CreateUplinkPort(uplink, config.UplinkOFPort, map[string]interface{}{interfacestore.AntreaInterfaceTypeKey: interfacestore.AntreaUplink})
 	if err != nil {
 		return fmt.Errorf("failed to add uplink port %s: err=%w", uplink, err)
 	}
 	// Add newly created uplinkInterface to interface cache. This will be overwritten by initInterfaceStore.
 	uplinkInterface := interfacestore.NewUplinkInterface(uplink)
-	uplinkInterface.OVSPortConfig = &interfacestore.OVSPortConfig{uplinkPortUUId, config.UplinkOFPort} //nolint: govet
+	uplinkInterface.OVSPortConfig = &interfacestore.OVSPortConfig{uplinkPortUUID, config.UplinkOFPort} //nolint: govet
 	i.ifaceStore.AddInterface(uplinkInterface)
 
 	// Move network configuration of uplink interface to OVS bridge local interface.

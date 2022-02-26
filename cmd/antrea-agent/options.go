@@ -349,21 +349,26 @@ func (o *Options) validateFlowExporterConfig() error {
 }
 
 func (o *Options) validateAntreaIPAMConfig() error {
-	if features.DefaultFeatureGate.Enabled(features.AntreaIPAM) {
-		// AntreaIPAM will bridge uplink to OVS bridge, which is not compatible with OVSDatapathSystem 'netdev'
-		if o.config.OVSDatapathType != string(ovsconfig.OVSDatapathSystem) {
-			return fmt.Errorf("AntreaIPAM requires 'system' OVSDatapathType, current: %s",
-				o.config.OVSDatapathType)
-		}
-		if !strings.EqualFold(o.config.TrafficEncapMode, config.TrafficEncapModeNoEncap.String()) {
-			return fmt.Errorf("AntreaIPAM requires 'noEncap' TrafficEncapMode, current: %s",
-				o.config.TrafficEncapMode)
-		}
-		// TODO(gran): support SNAT for Per-Node IPAM Pods
-		// SNAT needs to be updated to bypass traffic from AntreaIPAM Pod to Per-Node IPAM Pod
-		if !o.config.NoSNAT {
-			return fmt.Errorf("AntreaIPAM requires noSNAT")
-		}
+	if !o.config.EnableBridgingMode {
+		return nil
+	}
+	if !features.DefaultFeatureGate.Enabled(features.AntreaIPAM) {
+		klog.InfoS("The enableBridgingMode option is set to true, but it will be ignored because the AntreaIPAM feature gate is disabled")
+		return nil
+	}
+	// Bridging mode will connect uplink to OVS bridge, which is not compatible with OVSDatapathSystem 'netdev'.
+	if o.config.OVSDatapathType != string(ovsconfig.OVSDatapathSystem) {
+		return fmt.Errorf("Bridging mode requires 'system' OVSDatapathType, current: %s",
+			o.config.OVSDatapathType)
+	}
+	if !strings.EqualFold(o.config.TrafficEncapMode, config.TrafficEncapModeNoEncap.String()) {
+		return fmt.Errorf("Bridging mode requires 'noEncap' TrafficEncapMode, current: %s",
+			o.config.TrafficEncapMode)
+	}
+	// TODO(gran): support SNAT for Per-Node IPAM Pods
+	// SNAT needs to be updated to bypass traffic from AntreaIPAM Pod to Per-Node IPAM Pod
+	if !o.config.NoSNAT {
+		return fmt.Errorf("Bridging mode requires noSNAT")
 	}
 	return nil
 }
