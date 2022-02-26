@@ -311,7 +311,7 @@ func testPodConnectivityAfterAntreaRestart(t *testing.T, data *TestData, namespa
 // ndetdev datapath, since in this case the datapath functionality is implemented by the
 // ovs-vswitchd daemon itself. When ovs-vswitchd restarts, datapath flows are flushed and it may
 // take some time for the Agent to replay the flows. This will not impact this test, since we are
-// just testing L2 connectivity betwwen 2 Pods on the same Node, and the default behavior of the
+// just testing L2 connectivity between 2 Pods on the same Node, and the default behavior of the
 // br-int bridge is to implement normal L2 forwarding.
 func testOVSRestartSameNode(t *testing.T, data *TestData, namespace string) {
 	workerNode := workerNodeName(1)
