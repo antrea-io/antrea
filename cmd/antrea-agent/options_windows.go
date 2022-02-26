@@ -53,6 +53,9 @@ func (o *Options) checkUnsupportedFeatures() error {
 	if encryptionMode != config.TrafficEncryptionModeNone {
 		unsupported = append(unsupported, "TrafficEncryptionMode: "+encryptionMode.String())
 	}
+	if o.config.EnableBridgingMode {
+		unsupported = append(unsupported, "EnableBridgingMode")
+	}
 	if unsupported != nil {
 		return fmt.Errorf("unsupported features on Windows: {%s}", strings.Join(unsupported, ", "))
 	}

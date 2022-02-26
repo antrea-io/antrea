@@ -46,7 +46,7 @@ Generate a YAML manifest for Antrea using Kustomize and print it to stdout.
         --sriov                       Generates a manifest which enables use of Kubelet API for SR-IOV device info.
         --wireguard-go                Generate a manifest with WireGuard (golang implementation) encryption enabled.
                                       This option will work only for Kind clusters (when using '--kind').
-        --flexible-ipam               Generates a manifest for flexible ipam mode.
+        --flexible-ipam               Generates a manifest with flexible IPAM enabled.
         --whereabouts                 Generates a manifest which enables whereabouts configuration for secondary network IPAM.
         --help, -h                    Print this message and exit
         --multicast                   Generates a manifest for multicast.
@@ -334,6 +334,7 @@ fi
 if $FLEXIBLE_IPAM; then
     sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*AntreaIPAM[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  AntreaIPAM: true/" antrea-controller.conf
     sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*AntreaIPAM[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  AntreaIPAM: true/" antrea-agent.conf
+    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*enableBridgingMode[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/enableBridgingMode: true/" antrea-agent.conf
     sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*trafficEncapMode[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/trafficEncapMode: noEncap/" antrea-agent.conf
     sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*noSNAT[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/noSNAT: true/" antrea-agent.conf
 fi
