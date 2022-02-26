@@ -34,7 +34,7 @@ jobs:
     - name: Build Antrea amd64 Docker image without pushing to registry
       if: ${{ github.repository != 'antrea-io/antrea' || github.event_name != 'push' || github.ref != 'refs/heads/main' }}
       run: |
-        ./hack/build-antrea-linux-all.sh --pull
+        ./hack/build-antrea-ubuntu-all.sh --pull
     - name: Build and push Antrea amd64 Docker image to registry
       if: ${{ github.repository == 'antrea-io/antrea' && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
       env:
@@ -42,7 +42,7 @@ jobs:
         DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
       run: |
         echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
-        ./hack/build-antrea-linux-all.sh --pull --push-base-images
+        ./hack/build-antrea-ubuntu-all.sh --pull --push-base-images
         docker tag antrea/antrea-ubuntu:latest antrea/antrea-ubuntu-amd64:latest
         docker push antrea/antrea-ubuntu-amd64:latest
     - name: Trigger Antrea arm builds and multi-arch manifest update
@@ -54,22 +54,6 @@ jobs:
         workflow: Build Antrea ARM images and push manifest
         token: ${{ secrets.ANTREA_BUILD_INFRA_WORKFLOW_DISPATCH_PAT }}
         inputs: ${{ format('{{ "antrea-repository":"antrea-io/antrea", "antrea-ref":"{0}", "docker-tag":"{1}" }}', github.ref, 'latest') }}
-
-  build-ubi:
-    needs: check-changes
-    if: ${{ needs.check-changes.outputs.has_changes == 'yes' || github.event_name == 'push' }}
-    runs-on: [ubuntu-latest]
-    steps:
-    - uses: actions/checkout@v2
-    - name: Build and push Antrea UBI8 Docker image to registry
-      if: ${{ github.repository == 'antrea-io/antrea' && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
-      env:
-        DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-        DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
-      run: |
-        echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
-        ./hack/build-antrea-linux-all.sh --pull --push-base-images --distro ubi
-        docker push antrea/antrea-ubi:latest
 
   build-scale:
     needs: check-changes

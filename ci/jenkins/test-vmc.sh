@@ -359,18 +359,18 @@ function deliver_antrea {
     # Pull images from Dockerhub first then try Harbor.
     for i in `seq 3`; do
         if [[ "$COVERAGE" == true ]]; then
-            VERSION="$CLUSTER" ./hack/build-antrea-linux-all.sh --pull --coverage && break
+            VERSION="$CLUSTER" ./hack/build-antrea-ubuntu-all.sh --pull --coverage && break
         else
-            VERSION="$CLUSTER" ./hack/build-antrea-linux-all.sh --pull && break
+            VERSION="$CLUSTER" ./hack/build-antrea-ubuntu-all.sh --pull && break
         fi
     done
     if [ $? -ne 0 ]; then
         echoerr "Failed to build antrea images with Dockerhub"
         for i in `seq 3`; do
             if [[ "$COVERAGE" == true ]]; then
-                VERSION="$CLUSTER" DOCKER_REGISTRY="${DOCKER_REGISTRY}" ./hack/build-antrea-linux-all.sh --pull --coverage && break
+                VERSION="$CLUSTER" DOCKER_REGISTRY="${DOCKER_REGISTRY}" ./hack/build-antrea-ubuntu-all.sh --pull --coverage && break
             else
-                VERSION="$CLUSTER" DOCKER_REGISTRY="${DOCKER_REGISTRY}" ./hack/build-antrea-linux-all.sh --pull && break
+                VERSION="$CLUSTER" DOCKER_REGISTRY="${DOCKER_REGISTRY}" ./hack/build-antrea-ubuntu-all.sh --pull && break
             fi
         done
         if [ $? -ne 0 ]; then

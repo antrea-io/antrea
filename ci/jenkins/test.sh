@@ -276,7 +276,7 @@ function deliver_antrea_windows {
     ${CLEAN_STALE_IMAGES}
     chmod -R g-w build/images/ovs
     chmod -R g-w build/images/base
-    DOCKER_REGISTRY="${DOCKER_REGISTRY}" ./hack/build-antrea-linux-all.sh --pull
+    DOCKER_REGISTRY="${DOCKER_REGISTRY}" ./hack/build-antrea-ubuntu-all.sh --pull
     if [[ "$TESTCASE" == "windows-networkpolicy-process" ]]; then
         make windows-bin
         make antctl-windows
@@ -431,7 +431,7 @@ function deliver_antrea {
     fi
     chmod -R g-w build/images/ovs
     chmod -R g-w build/images/base
-    DOCKER_REGISTRY="${DOCKER_REGISTRY}" ./hack/build-antrea-linux-all.sh --pull
+    DOCKER_REGISTRY="${DOCKER_REGISTRY}" ./hack/build-antrea-ubuntu-all.sh --pull
     make flow-aggregator-image
 
     # Enable verbose log for troubleshooting.
