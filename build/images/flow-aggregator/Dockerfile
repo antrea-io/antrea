@@ -5,8 +5,7 @@ WORKDIR /antrea
 
 COPY . /antrea
 
-RUN make flow-aggregator antctl-linux
-RUN mv bin/antctl-linux bin/antctl
+RUN make flow-aggregator antctl-ubuntu
 
 # Chose this base image so that a shell is available for users to exec into the container, run antctl and run tools like pprof easily
 FROM ubuntu:20.04
