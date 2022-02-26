@@ -147,8 +147,8 @@ func (data *TestData) testNodePort(t *testing.T, isWindows bool, namespace strin
 	// Unlike upstream Kubernetes Conformance, here the client is on a Linux Node (nodeName(0)).
 	// It doesn't need to be the control-plane for e2e test and other Linux workers will work as well. However, in this
 	// e2e framework, nodeName(0)/Control-plane Node is guaranteed to be a Linux one.
-	clientName := "agnhost-client"
-	require.NoError(t, data.createAgnhostPodOnNode(clientName, namespace, nodeName(0), false))
+	clientName := "busybox-client"
+	require.NoError(t, data.createBusyboxPodOnNode(clientName, namespace, nodeName(0), false))
 	defer data.deletePodAndWait(defaultTimeout, clientName, namespace)
 	podIPs, err := data.podWaitForIPs(defaultTimeout, clientName, namespace)
 	require.NoError(t, err)
@@ -156,15 +156,15 @@ func (data *TestData) testNodePort(t *testing.T, isWindows bool, namespace strin
 
 	nodeIP := clusterInfo.nodes[0].ip()
 	nodePort := int(svc.Spec.Ports[0].NodePort)
-	addr := fmt.Sprintf("http://%s:%d", nodeIP, nodePort)
+	url := fmt.Sprintf("http://%s:%d", nodeIP, nodePort)
 
-	cmd := append([]string{"curl", "--connect-timeout", "1", "--retry", "5", "--retry-connrefused"}, addr)
-	stdout, stderr, err := data.runCommandFromPod(namespace, clientName, agnhostContainerName, cmd)
+	cmd := []string{"wget", "-O", "-", url, "-T", "1", "-t", "5"}
+	stdout, stderr, err := data.runCommandFromPod(namespace, clientName, busyboxContainerName, cmd)
 	if err != nil {
 		t.Errorf("Error when running command '%s' from Pod '%s', stdout: %s, stderr: %s, error: %v",
 			strings.Join(cmd, " "), clientName, stdout, stderr, err)
 	} else {
-		t.Logf("curl from Pod '%s' to '%s' succeeded", clientName, addr)
+		t.Logf("wget from Pod '%s' to '%s' succeeded", clientName, url)
 	}
 }
 
