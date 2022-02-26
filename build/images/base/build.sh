@@ -23,12 +23,11 @@ function echoerr {
     >&2 echo "$@"
 }
 
-_usage="Usage: $0 [--pull] [--push] [--platform <PLATFORM>] [--distro [ubuntu|ubi]]
+_usage="Usage: $0 [--pull] [--push] [--platform <PLATFORM>]
 Build the antrea/base-ubuntu:<OVS_VERSION> image.
         --pull                  Always attempt to pull a newer version of the base images
         --push                  Push the built image to the registry
-        --platform <PLATFORM>   Target platform for the image if server is multi-platform capable
-        --distro <distro>       Target Linux distribution"
+        --platform <PLATFORM>   Target platform for the image if server is multi-platform capable"
 
 function print_usage {
     echoerr "$_usage"
@@ -37,7 +36,6 @@ function print_usage {
 PULL=false
 PUSH=false
 PLATFORM=""
-DISTRO="ubuntu"
 
 while [[ $# -gt 0 ]]
 do
@@ -54,10 +52,6 @@ case $key in
     ;;
     --platform)
     PLATFORM="$2"
-    shift 2
-    ;;
-    --distro)
-    DISTRO="$2"
     shift 2
     ;;
     -h|--help)
@@ -81,11 +75,6 @@ if [ "$PLATFORM" != "" ]; then
     PLATFORM_ARG="--platform $PLATFORM"
 fi
 
-if [ "$DISTRO" != "ubuntu" ] && [ "$DISTRO" != "ubi" ]; then
-    echoerr "Invalid distribution $DISTRO"
-    exit 1
-fi
-
 THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
 pushd $THIS_DIR > /dev/null
@@ -100,20 +89,11 @@ if $PULL; then
         docker pull ${DOCKER_REGISTRY}/antrea/ubuntu:20.04
         docker tag ${DOCKER_REGISTRY}/antrea/ubuntu:20.04 ubuntu:20.04
     fi
-
-    if [ "$DISTRO" == "ubuntu" ]; then
-        IMAGES_LIST=(
-            "antrea/openvswitch:$OVS_VERSION"
-            "antrea/cni-binaries:$CNI_BINARIES_VERSION"
-            "antrea/base-ubuntu:$OVS_VERSION"
-        )
-    elif [ "$DISTRO" == "ubi" ]; then
-        IMAGES_LIST=(
-            "antrea/openvswitch-ubi:$OVS_VERSION"
-            "antrea/cni-binaries:$CNI_BINARIES_VERSION"
-            "antrea/base-ubi:$OVS_VERSION"
-        )
-    fi
+    IMAGES_LIST=(
+        "antrea/openvswitch:$OVS_VERSION"
+        "antrea/cni-binaries:$CNI_BINARIES_VERSION"
+        "antrea/base-ubuntu:$OVS_VERSION"
+    )
     for image in "${IMAGES_LIST[@]}"; do
         if [[ ${DOCKER_REGISTRY} == "" ]]; then
             docker pull $PLATFORM_ARG "${image}" || true
@@ -133,26 +113,16 @@ docker build $PLATFORM_ARG --target cni-binaries \
        --build-arg CNI_BINARIES_VERSION=$CNI_BINARIES_VERSION \
        --build-arg OVS_VERSION=$OVS_VERSION .
 
-if [ "$DISTRO" == "ubuntu" ]; then
-    docker build $PLATFORM_ARG \
-           --cache-from antrea/cni-binaries:$CNI_BINARIES_VERSION \
-           --cache-from antrea/base-ubuntu:$OVS_VERSION \
-           -t antrea/base-ubuntu:$OVS_VERSION \
-           --build-arg CNI_BINARIES_VERSION=$CNI_BINARIES_VERSION \
-           --build-arg OVS_VERSION=$OVS_VERSION .
-elif [ "$DISTRO" == "ubi" ]; then
-    docker build $PLATFORM_ARG \
-           --cache-from antrea/cni-binaries:$CNI_BINARIES_VERSION \
-           --cache-from antrea/base-ubuntu:$OVS_VERSION \
-           -t antrea/base-ubi:$OVS_VERSION \
-           -f Dockerfile.ubi \
-           --build-arg CNI_BINARIES_VERSION=$CNI_BINARIES_VERSION \
-           --build-arg OVS_VERSION=$OVS_VERSION .
-fi
+docker build $PLATFORM_ARG \
+       --cache-from antrea/cni-binaries:$CNI_BINARIES_VERSION \
+       --cache-from antrea/base-ubuntu:$OVS_VERSION \
+       -t antrea/base-ubuntu:$OVS_VERSION \
+       --build-arg CNI_BINARIES_VERSION=$CNI_BINARIES_VERSION \
+       --build-arg OVS_VERSION=$OVS_VERSION .
 
 if $PUSH; then
     docker push antrea/cni-binaries:$CNI_BINARIES_VERSION
-    docker push antrea/base-$DISTRO:$OVS_VERSION
+    docker push antrea/base-ubuntu:$OVS_VERSION
 fi
 
 popd > /dev/null
