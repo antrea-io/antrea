@@ -20,15 +20,14 @@ function echoerr {
     >&2 echo "$@"
 }
 
-_usage="Usage: $0 [--pull] [--push-base-images] [--coverage] [--platform <PLATFORM>] [--distro [ubuntu|ubi]]
+_usage="Usage: $0 [--pull] [--push-base-images] [--coverage] [--platform <PLATFORM>]
 Build the antrea/antrea-ubuntu image, as well as all the base images in the build chain. This is
 typically used in CI to build the image with the latest version of all dependencies, taking into
 account changes to all Dockerfiles.
         --pull                  Always attempt to pull a newer version of the base images.
         --push-base-images      Push built images to the registry. Only base images will be pushed.
         --coverage              Build the image with support for code coverage.
-        --platform <PLATFORM>   Target platform for the images if server is multi-platform capable.
-        --distro <distro>       Target Linux distribution."
+        --platform <PLATFORM>   Target platform for the images if server is multi-platform capable."
 
 function print_usage {
     echoerr "$_usage"
@@ -38,7 +37,6 @@ PULL=false
 PUSH=false
 COVERAGE=false
 PLATFORM=""
-DISTRO="ubuntu"
 
 while [[ $# -gt 0 ]]
 do
@@ -59,10 +57,6 @@ case $key in
     ;;
     --platform)
     PLATFORM="$2"
-    shift 2
-    ;;
-    --distro)
-    DISTRO="$2"
     shift 2
     ;;
     -h|--help)
@@ -89,17 +83,6 @@ if [ "$PLATFORM" != "" ]; then
     ARGS="$ARGS --platform $PLATFORM"
     PLATFORM_ARG="--platform $PLATFORM"
 fi
-if [ "$DISTRO" != "ubuntu" ] && [ "$DISTRO" != "ubi" ]; then
-    echoerr "Invalid distribution $DISTRO"
-    exit 1
-fi
-if [ "$DISTRO" == "ubi" ]; then
-    if $COVERAGE ; then
-        echoerr "No coverage build for UBI8"
-        exit 1
-    fi
-    ARGS="$ARGS --distro ubi"
-fi
 
 OVS_VERSION=$(head -n 1 build/images/deps/ovs-version)
 CNI_BINARIES_VERSION=$(head -n 1 build/images/deps/cni-binaries-version)
@@ -120,21 +103,12 @@ if $PULL; then
         docker pull ${DOCKER_REGISTRY}/antrea/golang:$GO_VERSION
         docker tag ${DOCKER_REGISTRY}/antrea/golang:$GO_VERSION golang:$GO_VERSION
     fi
-    if [ "$DISTRO" == "ubuntu" ]; then
-        IMAGES_LIST=(
-            "antrea/openvswitch-debs:$OVS_VERSION"
-            "antrea/openvswitch:$OVS_VERSION"
-            "antrea/cni-binaries:$CNI_BINARIES_VERSION"
-            "antrea/base-ubuntu:$OVS_VERSION"
-        )
-    elif [ "$DISTRO" == "ubi" ]; then
-        IMAGES_LIST=(
-            "antrea/openvswitch-rpms:$OVS_VERSION"
-            "antrea/openvswitch-ubi:$OVS_VERSION"
-            "antrea/cni-binaries:$CNI_BINARIES_VERSION"
-            "antrea/base-ubi:$OVS_VERSION"
-        )
-    fi
+    IMAGES_LIST=(
+        "antrea/openvswitch-debs:$OVS_VERSION"
+        "antrea/openvswitch:$OVS_VERSION"
+        "antrea/cni-binaries:$CNI_BINARIES_VERSION"
+        "antrea/base-ubuntu:$OVS_VERSION"
+    )
     for image in "${IMAGES_LIST[@]}"; do
         if [[ ${DOCKER_REGISTRY} == "" ]]; then
             docker pull $PLATFORM_ARG "${image}" || true
@@ -157,14 +131,10 @@ cd build/images/base
 cd -
 
 export NO_PULL=1
-if [ "$DISTRO" == "ubuntu" ]; then
-    if $COVERAGE; then
-        make build-ubuntu-coverage
-    else
-        make
-    fi
-elif [ "$DISTRO" == "ubi" ]; then
-    make build-ubi
+if $COVERAGE; then
+    make build-ubuntu-coverage
+else
+    make
 fi
 
 popd > /dev/null

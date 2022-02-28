@@ -24,13 +24,13 @@ jobs:
     needs: get-version
     steps:
     - uses: actions/checkout@v2
-    - name: Build and push Antrea Ubuntu amd64 Docker image to registry
+    - name: Build and push Antrea amd64 Docker image to registry
       env:
         DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
         DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
         VERSION: ${{ needs.get-version.outputs.version }}
       run: |
-        ./hack/build-antrea-linux-all.sh --pull
+        ./hack/build-antrea-ubuntu-all.sh --pull
         echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
         docker tag antrea/antrea-ubuntu:"${VERSION}" antrea/antrea-ubuntu-amd64:"${VERSION}"
         docker push antrea/antrea-ubuntu-amd64:"${VERSION}"
@@ -42,21 +42,6 @@ jobs:
         workflow: Build Antrea ARM images and push manifest
         token: ${{ secrets.ANTREA_BUILD_INFRA_WORKFLOW_DISPATCH_PAT }}
         inputs: ${{ format('{{ "antrea-repository":"antrea-io/antrea", "antrea-ref":"{0}", "docker-tag":"{1}" }}', github.ref, needs.get-version.outputs.version) }}
-
-  build-ubi:
-    runs-on: [ubuntu-latest]
-    needs: get-version
-    steps:
-      - uses: actions/checkout@v2
-      - name: Build and push Antrea UBI8 amd64 Docker image to registry
-        env:
-          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
-          VERSION: ${{ needs.get-version.outputs.version }}
-        run: |
-          ./hack/build-antrea-linux-all.sh --pull --distro ubi
-          echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
-          docker push antrea/antrea-ubi:"${VERSION}"
 
   build-windows:
     runs-on: [windows-2019]

@@ -26,7 +26,7 @@ RUN set -eux; \
 FROM antrea/openvswitch:${OVS_VERSION}
 
 LABEL maintainer="Antrea <projectantrea-dev@googlegroups.com>"
-LABEL description="An Ubuntu based Docker base image for Antrea."
+LABEL description="Takes care of building the Antrea binaries as part of building the image."
 
 USER root
 

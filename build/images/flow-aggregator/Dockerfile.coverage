@@ -5,8 +5,7 @@ WORKDIR /antrea
 
 COPY . /antrea
 
-RUN make flow-aggregator antctl-linux flow-aggregator-instr-binary antctl-instr-binary
-RUN mv bin/antctl-linux bin/antctl
+RUN make flow-aggregator antctl-ubuntu flow-aggregator-instr-binary antctl-instr-binary
 
 FROM ubuntu:20.04
 
