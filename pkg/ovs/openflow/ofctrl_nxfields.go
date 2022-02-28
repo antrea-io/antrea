@@ -83,21 +83,35 @@ func NewXXRegField(id int, start, end uint32) *XXRegField {
 }
 
 func (m *CtMark) GetRange() *Range {
-	return m.rng
+	return m.field.rng
 }
 
 // GetValue gets CT mark value with offset since CT mark is used by bit. E.g, CT_MARK_REG[3]==1, the return
 // value of this function is 0b1000.
 func (m *CtMark) GetValue() uint32 {
-	return m.value << m.rng.Offset()
+	return m.value << m.field.rng.Offset()
 }
 
 func (m *CtMark) isFullRange() bool {
-	return m.rng.Length() == 32
+	return m.field.rng.Length() == 32
 }
 
-func NewCTMark(value uint32, start, end uint32) *CtMark {
-	return &CtMark{value: value, rng: &Range{start, end}}
+func NewCTMarkField(start, end uint32) *CtMarkField {
+	return &CtMarkField{rng: &Range{start, end}}
+}
+
+func NewOneBitCTMark(bit uint32) *CtMark {
+	field := NewCTMarkField(bit, bit)
+	return &CtMark{value: 1, field: field}
+}
+
+func NewOneBitZeroCTMark(bit uint32) *CtMark {
+	field := NewCTMarkField(bit, bit)
+	return &CtMark{value: 0, field: field}
+}
+
+func NewCTMark(field *CtMarkField, value uint32) *CtMark {
+	return &CtMark{value: value, field: field}
 }
 
 func NewCTLabel(start, end uint32, name string) *CtLabel {

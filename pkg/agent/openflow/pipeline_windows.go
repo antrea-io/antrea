@@ -44,7 +44,7 @@ const (
 
 var (
 	// snatCTMark indicates SNAT is performed for packets of the connection.
-	snatCTMark = binding.NewCTMark(0x40, 0, 31)
+	snatCTMark = binding.NewCTMark(binding.NewCTMarkField(0, 31), 0x40)
 )
 
 func (c *client) snatMarkFlows(snatIP net.IP, mark uint32) []binding.Flow {

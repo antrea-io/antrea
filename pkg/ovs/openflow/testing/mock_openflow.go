@@ -1,4 +1,4 @@
-// Copyright 2021 Antrea Authors
+// Copyright 2022 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -1228,6 +1228,20 @@ func (m *MockCTAction) LoadToMark(arg0 uint32) openflow.CTAction {
 func (mr *MockCTActionMockRecorder) LoadToMark(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadToMark", reflect.TypeOf((*MockCTAction)(nil).LoadToMark), arg0)
+}
+
+// MoveToCtMarkField mocks base method
+func (m *MockCTAction) MoveToCtMarkField(arg0 *openflow.RegField, arg1 *openflow.CtMarkField) openflow.CTAction {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MoveToCtMarkField", arg0, arg1)
+	ret0, _ := ret[0].(openflow.CTAction)
+	return ret0
+}
+
+// MoveToCtMarkField indicates an expected call of MoveToCtMarkField
+func (mr *MockCTActionMockRecorder) MoveToCtMarkField(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MoveToCtMarkField", reflect.TypeOf((*MockCTAction)(nil).MoveToCtMarkField), arg0, arg1)
 }
 
 // MoveToLabel mocks base method
