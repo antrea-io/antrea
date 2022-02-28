@@ -740,7 +740,7 @@ func expectedProxyServiceGroupAndFlows(gid uint32, svc svcConfig, endpointList [
 		unionVal := (0b010 << 16) + uint32(epPort)
 		epDNATFlows.flows = append(epDNATFlows.flows, &ofTestUtils.ExpectFlow{
 			MatchStr: fmt.Sprintf("priority=200,%s,reg3=%s,reg4=0x%x/0x7ffff", string(svc.protocol), epIP, unionVal),
-			ActStr:   fmt.Sprintf("ct(commit,table=EgressRule,zone=65520,nat(dst=%s:%d),exec(load:0x1->NXM_NX_CT_MARK[2])", ep.IP(), epPort),
+			ActStr:   fmt.Sprintf("ct(commit,table=EgressRule,zone=65520,nat(dst=%s:%d),exec(load:0x1->NXM_NX_CT_MARK[4],move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3])", ep.IP(), epPort),
 		})
 
 		if ep.GetIsLocal() {
@@ -1223,11 +1223,11 @@ func prepareGatewayFlows(gwIPs []net.IP, gwMAC net.HardwareAddr, vMAC net.Hardwa
 				"L3Forwarding",
 				[]*ofTestUtils.ExpectFlow{
 					{
-						MatchStr: fmt.Sprintf("priority=210,ct_state=+rpl+trk,ct_mark=0x2/0x2,%s,reg0=0x2/0xf", ipProtoStr),
+						MatchStr: fmt.Sprintf("priority=210,ct_state=+rpl+trk,ct_mark=0x1/0xf,%s,reg0=0x2/0xf", ipProtoStr),
 						ActStr:   fmt.Sprintf("set_field:%s->eth_dst,goto_table:L2Forwarding", gwMAC.String()),
 					},
 					{
-						MatchStr: fmt.Sprintf("priority=210,ct_state=+rpl+trk,ct_mark=0x2/0x2,%s,reg0=0/0xf", ipProtoStr),
+						MatchStr: fmt.Sprintf("priority=210,ct_state=+rpl+trk,ct_mark=0x1/0xf,%s,reg0=0/0xf", ipProtoStr),
 						ActStr:   fmt.Sprintf("set_field:%s->eth_dst,goto_table:L2Forwarding", gwMAC.String()),
 					},
 				},
@@ -1346,8 +1346,7 @@ func prepareDefaultFlows(config *testConfig) []expectTableFlows {
 			&ofTestUtils.ExpectFlow{MatchStr: "priority=190,ct_state=+inv+trk,ip", ActStr: "drop"},
 		)
 		table105Flows.flows = append(table105Flows.flows,
-			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ct_state=+new+trk,ip,reg0=0x1/0xf", ActStr: "ct(commit,table=HairpinSNAT,zone=65520,exec(load:0x1->NXM_NX_CT_MARK[1])"},
-			&ofTestUtils.ExpectFlow{MatchStr: "priority=190,ct_state=+new+trk,ip", ActStr: "ct(commit,table=HairpinSNAT,zone=65520)"},
+			&ofTestUtils.ExpectFlow{MatchStr: "priority=190,ct_state=+new+trk,ip", ActStr: "ct(commit,table=HairpinSNAT,zone=65520,exec(move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))"},
 		)
 		table72Flows.flows = append(table72Flows.flows,
 			&ofTestUtils.ExpectFlow{MatchStr: "priority=210,ip,reg0=0x1/0xf", ActStr: "goto_table:L2Forwarding"},
@@ -1362,8 +1361,7 @@ func prepareDefaultFlows(config *testConfig) []expectTableFlows {
 			&ofTestUtils.ExpectFlow{MatchStr: "priority=190,ct_state=+inv+trk,ipv6", ActStr: "drop"},
 		)
 		table105Flows.flows = append(table105Flows.flows,
-			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ct_state=+new+trk,ipv6,reg0=0x1/0xf", ActStr: "ct(commit,table=HairpinSNAT,zone=65510,exec(load:0x1->NXM_NX_CT_MARK[1])"},
-			&ofTestUtils.ExpectFlow{MatchStr: "priority=190,ct_state=+new+trk,ipv6", ActStr: "ct(commit,table=HairpinSNAT,zone=65510)"},
+			&ofTestUtils.ExpectFlow{MatchStr: "priority=190,ct_state=+new+trk,ipv6", ActStr: "ct(commit,table=HairpinSNAT,zone=65510,exec(move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))"},
 		)
 		table72Flows.flows = append(table72Flows.flows,
 			&ofTestUtils.ExpectFlow{MatchStr: "priority=210,ipv6,reg0=0x1/0xf", ActStr: "goto_table:L2Forwarding"},
@@ -1481,11 +1479,11 @@ func expectedExternalFlows(nodeIP net.IP, localSubnet *net.IPNet, gwMAC net.Hard
 					ActStr:   "goto_table:L2Forwarding",
 				},
 				{
-					MatchStr: fmt.Sprintf("priority=190,%s,reg0=0x2/0xf", ipProtoStr),
+					MatchStr: fmt.Sprintf("priority=190,ct_state=-rpl+trk,%s,reg0=0x2/0xf", ipProtoStr),
 					ActStr:   "goto_table:SNAT",
 				},
 				{
-					MatchStr: fmt.Sprintf("priority=190,%s,reg0=0/0xf", ipProtoStr),
+					MatchStr: fmt.Sprintf("priority=190,ct_state=-rpl+trk,%s,reg0=0/0xf", ipProtoStr),
 					ActStr:   fmt.Sprintf("set_field:%s->eth_dst,goto_table:SNAT", gwMAC.String()),
 				},
 			},

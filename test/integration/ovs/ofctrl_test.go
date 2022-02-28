@@ -49,7 +49,7 @@ var (
 	fromGatewayMark = binding.NewRegMark(sourceField, 1)
 
 	marksReg      = 0
-	gatewayCTMark = binding.NewCTMark(0x1, 1, 1)
+	gatewayCTMark = binding.NewOneBitCTMark(1)
 	ctZone        = 0xfff0
 
 	count uint64
@@ -1055,7 +1055,7 @@ func prepareNATflows(table binding.Table) ([]binding.Flow, []*ExpectFlow) {
 	natedIP2 := net.ParseIP("10.10.0.10")
 	natIPRange1 := &binding.IPRange{StartIP: natedIP1, EndIP: natedIP1}
 	natIPRange2 := &binding.IPRange{StartIP: natedIP1, EndIP: natedIP2}
-	snatCTMark := binding.NewCTMark(0x40, 0, 7)
+	snatCTMark := binding.NewCTMark(binding.NewCTMarkField(0, 7), 0x40)
 	snatMark1 := binding.NewOneBitRegMark(marksReg, 17, "SNATMark1")
 	snatMark2 := binding.NewOneBitRegMark(marksReg, 18, "SNATMark2")
 	dnatMark1 := binding.NewOneBitRegMark(marksReg, 19, "DNATMark1")

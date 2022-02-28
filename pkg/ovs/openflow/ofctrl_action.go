@@ -94,7 +94,7 @@ func (a *ofCTAction) LoadToMark(value uint32) CTAction {
 
 func (a *ofCTAction) LoadToCtMark(mark *CtMark) CTAction {
 	field, _, _ := getFieldRange(NxmFieldCtMark)
-	a.load(field, uint64(mark.value), mark.rng)
+	a.load(field, uint64(mark.value), mark.field.rng)
 	return a
 }
 
@@ -114,6 +114,14 @@ func (a *ofCTAction) MoveToLabel(fromName string, fromRng, labelRng *Range) CTAc
 	fromField, _ := openflow13.FindFieldHeaderByName(fromName, false)
 	toField, _ := openflow13.FindFieldHeaderByName(NxmFieldCtLabel, false)
 	a.move(fromField, toField, uint16(fromRng.Length()), uint16(fromRng[0]), uint16(labelRng[0]))
+	return a
+}
+
+// MoveToCtMarkField is an action to move data into ct_mark.
+func (a *ofCTAction) MoveToCtMarkField(fromRegField *RegField, ctMarkField *CtMarkField) CTAction {
+	fromField, _ := openflow13.FindFieldHeaderByName(fromRegField.GetNXFieldName(), false)
+	toField, _ := openflow13.FindFieldHeaderByName(NxmFieldCtMark, false)
+	a.move(fromField, toField, uint16(fromRegField.GetRange().Length()), uint16(fromRegField.GetRange()[0]), uint16(ctMarkField.rng[0]))
 	return a
 }
 

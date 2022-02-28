@@ -342,6 +342,7 @@ type CTAction interface {
 	LoadToCtMark(mark *CtMark) CTAction
 	LoadToLabelField(value uint64, labelField *CtLabel) CTAction
 	MoveToLabel(fromName string, fromRng, labelRng *Range) CTAction
+	MoveToCtMarkField(fromRegField *RegField, ctMark *CtMarkField) CTAction
 	// NAT action translates the packet in the way that the connection was committed into the conntrack zone, e.g., if
 	// a connection was committed with SNAT, the later packets would be translated with the earlier SNAT configurations.
 	NAT() CTAction
@@ -442,9 +443,15 @@ type RegMark struct {
 // XXRegField specifies a xxreg with a required bit range.
 type XXRegField RegField
 
+// CtMarkField specifies a bit range of a CT mark. rng is the range of bits taken by the field. The OF client could use a
+// CtMarkField to cache or match varied value.
+type CtMarkField struct {
+	rng *Range
+}
+
 // CtMark is used to indicate the connection characteristics.
 type CtMark struct {
-	rng   *Range
+	field *CtMarkField
 	value uint32
 }
 
