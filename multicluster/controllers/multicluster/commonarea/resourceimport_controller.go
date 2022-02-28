@@ -59,15 +59,17 @@ type ResourceImportReconciler struct {
 	client.Client
 	Scheme              *runtime.Scheme
 	localClusterClient  client.Client
+	localClusterID      string
 	remoteCommonArea    RemoteCommonArea
 	installedResImports cache.Indexer
 }
 
-func NewResourceImportReconciler(client client.Client, scheme *runtime.Scheme, localClusterClient client.Client, remoteCommonArea RemoteCommonArea) *ResourceImportReconciler {
+func NewResourceImportReconciler(client client.Client, scheme *runtime.Scheme, localClusterClient client.Client, localClusterID string, remoteCommonArea RemoteCommonArea) *ResourceImportReconciler {
 	return &ResourceImportReconciler{
 		Client:             client,
 		Scheme:             scheme,
 		localClusterClient: localClusterClient,
+		localClusterID:     localClusterID,
 		remoteCommonArea:   remoteCommonArea,
 		installedResImports: cache.NewIndexer(resImportIndexerKeyFunc, cache.Indexers{
 			resImportIndexer: resImportIndexerFunc,
@@ -173,7 +175,7 @@ func (r *ResourceImportReconciler) handleResImpUpdateForService(ctx context.Cont
 	if err != nil && !svcImpNotFound {
 		return ctrl.Result{}, err
 	}
-	svcImpObj := getMCServiceImport(resImp)
+	svcImpObj := getMCServiceImport(resImp, r.localClusterID)
 	// Set multi-cluster Service's ClusterIP as ServiceImport's ClusterSetIP
 	if svc.Spec.ClusterIP != "" {
 		svcImpObj.Spec.IPs = []string{svc.Spec.ClusterIP}
@@ -205,6 +207,7 @@ func (r *ResourceImportReconciler) handleResImpUpdateForService(ctx context.Cont
 
 	if !apiequality.Semantic.DeepEqual(svcImp.Spec, svcImpObj.Spec) {
 		svcImp.Spec = svcImpObj.Spec
+		addAnnotation(svcImp, r.localClusterID)
 		err = r.localClusterClient.Update(ctx, svcImp, &client.UpdateOptions{})
 		if err != nil {
 			klog.ErrorS(err, "failed to update ServiceImport", "serviceimport", svcImpName.String())
@@ -364,11 +367,12 @@ func getMCService(resImp *multiclusterv1alpha1.ResourceImport) *corev1.Service {
 	return mcs
 }
 
-func getMCServiceImport(resImp *multiclusterv1alpha1.ResourceImport) *k8smcsv1alpha1.ServiceImport {
+func getMCServiceImport(resImp *multiclusterv1alpha1.ResourceImport, clusterID string) *k8smcsv1alpha1.ServiceImport {
 	svcImp := &k8smcsv1alpha1.ServiceImport{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      resImp.Spec.Name,
-			Namespace: resImp.Spec.Namespace,
+			Name:        resImp.Spec.Name,
+			Namespace:   resImp.Spec.Namespace,
+			Annotations: map[string]string{common.AntreaMCClusterIDAnnotation: clusterID},
 		},
 		Spec: resImp.Spec.ServiceImport.Spec,
 	}
@@ -395,6 +399,15 @@ func removeLocalSubsets(local []corev1.EndpointSubset, allSubsets []corev1.Endpo
 		}
 	}
 	return newSubsets
+}
+
+func addAnnotation(svcImport *k8smcsv1alpha1.ServiceImport, localClusterID string) {
+	if svcImport.Annotations == nil {
+		svcImport.Annotations = make(map[string]string)
+	}
+	if _, ok := svcImport.Annotations[common.AntreaMCClusterIDAnnotation]; !ok {
+		svcImport.Annotations[common.AntreaMCClusterIDAnnotation] = localClusterID
+	}
 }
 
 // SetupWithManager sets up the controller with the ClusterManager

@@ -16,7 +16,8 @@ package common
 import corev1 "k8s.io/api/core/v1"
 
 const (
-	AntreaMCServiceAnnotation = "multicluster.antrea.io/imported-service"
+	AntreaMCServiceAnnotation   = "multicluster.antrea.io/imported-service"
+	AntreaMCClusterIDAnnotation = "multicluster.antrea.io/local-cluster-id"
 
 	AntreaMCSPrefix   = "antrea-mc-"
 	ServiceKind       = "Service"

@@ -330,6 +330,11 @@ func (r *ServiceExportReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			return ctrl.Result{}, err
 		}
 	}
+
+	if err = r.updateSvcExportAnnotation(&svcExport); err != nil {
+		// Ignore the error since it's not critical and we can update in next event.
+		klog.ErrorS(err, "Failed to update ServiceExport annotation", "serviceexport", klog.KObj(&svcExport))
+	}
 	return ctrl.Result{}, nil
 }
 
@@ -378,12 +383,21 @@ func (r *ServiceExportReconciler) handleEndpointDeleteEvent(ctx context.Context,
 	return nil
 }
 
+func (r *ServiceExportReconciler) updateSvcExportAnnotation(svcExport *k8smcsv1alpha1.ServiceExport) error {
+	addAnnotation(svcExport, r.localClusterID)
+	if err := r.Client.Update(ctx, svcExport, &client.UpdateOptions{}); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (r *ServiceExportReconciler) updateSvcExportStatus(ctx context.Context, req ctrl.Request, cause reason) error {
 	svcExport := &k8smcsv1alpha1.ServiceExport{}
 	err := r.Client.Get(ctx, req.NamespacedName, svcExport)
 	if err != nil {
 		return client.IgnoreNotFound(err)
 	}
+	addAnnotation(svcExport, r.localClusterID)
 	now := metav1.Now()
 	var res, message *string
 	switch cause {
@@ -578,6 +592,15 @@ func (r *ServiceExportReconciler) updateOrCreateResourceExport(resName string,
 	}
 
 	return nil
+}
+
+func addAnnotation(svcExport *k8smcsv1alpha1.ServiceExport, localClusterID string) {
+	if svcExport.Annotations == nil {
+		svcExport.Annotations = make(map[string]string)
+	}
+	if _, ok := svcExport.Annotations[common.AntreaMCClusterIDAnnotation]; !ok {
+		svcExport.Annotations[common.AntreaMCClusterIDAnnotation] = localClusterID
+	}
 }
 
 func getEndPointsAddress(ep *corev1.Endpoints) []string {
