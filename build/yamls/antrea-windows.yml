@@ -23,6 +23,11 @@ data:
     # Service traffic.
     #  AntreaProxy: true
 
+    # Enable EndpointSlice support in AntreaProxy. Don't enable this feature unless that EndpointSlice
+    # API version v1beta1 is supported and set as enabled in Kubernetes. If AntreaProxy is not enabled,
+    # this flag will not take effect.
+    #  EndpointSlice: false
+
     # Enable flowexporter which exports polled conntrack connections as IPFIX flow records from each agent to a configured collector.
     #  FlowExporter: false
 
@@ -144,7 +149,7 @@ kind: ConfigMap
 metadata:
   labels:
     app: antrea
-  name: antrea-windows-config-25k48fh55f
+  name: antrea-windows-config-mf82kffb45
   namespace: kube-system
 ---
 apiVersion: apps/v1
@@ -232,7 +237,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-windows-config-25k48fh55f
+          name: antrea-windows-config-mf82kffb45
         name: antrea-windows-config
       - configMap:
           defaultMode: 420
