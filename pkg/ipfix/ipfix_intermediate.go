@@ -31,7 +31,7 @@ type IPFIXAggregationProcess interface {
 	ForAllExpiredFlowRecordsDo(callback ipfixintermediate.FlowKeyRecordMapCallBack) error
 	GetExpiryFromExpirePriorityQueue() time.Duration
 	GetRecords(flowKey *ipfixintermediate.FlowKey) []map[string]interface{}
-	ResetStatElementsInRecord(record ipfixentities.Record) error
+	ResetStatAndThroughputElementsInRecord(record ipfixentities.Record) error
 	SetCorrelatedFieldsFilled(record *ipfixintermediate.AggregationFlowRecord)
 	AreCorrelatedFieldsFilled(record ipfixintermediate.AggregationFlowRecord) bool
 	IsAggregatedRecordIPv4(record ipfixintermediate.AggregationFlowRecord) bool
@@ -76,8 +76,8 @@ func (ap *ipfixAggregationProcess) GetRecords(flowKey *ipfixintermediate.FlowKey
 	return ap.AggregationProcess.GetRecords(flowKey)
 }
 
-func (ap *ipfixAggregationProcess) ResetStatElementsInRecord(record ipfixentities.Record) error {
-	return ap.AggregationProcess.ResetStatElementsInRecord(record)
+func (ap *ipfixAggregationProcess) ResetStatAndThroughputElementsInRecord(record ipfixentities.Record) error {
+	return ap.AggregationProcess.ResetStatAndThroughputElementsInRecord(record)
 }
 
 func (ap *ipfixAggregationProcess) SetCorrelatedFieldsFilled(record *ipfixintermediate.AggregationFlowRecord) {
