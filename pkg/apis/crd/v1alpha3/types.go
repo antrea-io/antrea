@@ -57,7 +57,7 @@ type GroupSpec struct {
 	// Select backend Pods of the referred Service.
 	// Cannot be set with any other selector or ipBlock.
 	// +optional
-	ServiceReference *ServiceReference `json:"serviceReference,omitempty"`
+	ServiceReference *v1alpha1.NamespacedName `json:"serviceReference,omitempty"`
 	// Select ExternalEntities from all Namespaces as workloads
 	// in AppliedTo/To/From fields. If set with NamespaceSelector,
 	// ExternalEntities are matched from Namespaces matched by the
@@ -85,14 +85,6 @@ type GroupCondition struct {
 // GroupStatus represents information about the status of a Group.
 type GroupStatus struct {
 	Conditions []GroupCondition `json:"conditions,omitempty"`
-}
-
-// ServiceReference represent reference to a v1.Service.
-type ServiceReference struct {
-	// Name of the Service
-	Name string `json:"name,omitempty"`
-	// Namespace of the Service
-	Namespace string `json:"namespace,omitempty"`
 }
 
 // ClusterGroupReference represent reference to a ClusterGroup.

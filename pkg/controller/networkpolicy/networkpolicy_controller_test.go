@@ -37,6 +37,7 @@ import (
 	"k8s.io/client-go/util/workqueue"
 
 	"antrea.io/antrea/pkg/apis/controlplane"
+	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
 	"antrea.io/antrea/pkg/apis/crd/v1alpha3"
 	"antrea.io/antrea/pkg/apiserver/storage"
@@ -1920,7 +1921,7 @@ func TestAddAndUpdateService(t *testing.T) {
 			Name: "cg-1",
 		},
 		Spec: v1alpha3.GroupSpec{
-			ServiceReference: &v1alpha3.ServiceReference{
+			ServiceReference: &v1alpha1.NamespacedName{
 				Name:      "test-svc-1",
 				Namespace: "test-ns",
 			},
@@ -1931,7 +1932,7 @@ func TestAddAndUpdateService(t *testing.T) {
 			Name: "cg-2",
 		},
 		Spec: v1alpha3.GroupSpec{
-			ServiceReference: &v1alpha3.ServiceReference{
+			ServiceReference: &v1alpha1.NamespacedName{
 				Name:      "test-svc-2",
 				Namespace: "test-ns",
 			},
@@ -2026,7 +2027,7 @@ func TestDeleteService(t *testing.T) {
 			Name: "test-cg",
 		},
 		Spec: v1alpha3.GroupSpec{
-			ServiceReference: &v1alpha3.ServiceReference{
+			ServiceReference: &v1alpha1.NamespacedName{
 				Name:      "test-svc",
 				Namespace: "test-ns",
 			},

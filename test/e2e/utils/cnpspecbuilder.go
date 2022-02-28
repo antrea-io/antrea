@@ -259,7 +259,7 @@ func (b *ClusterNetworkPolicySpecBuilder) AddFQDNRule(fqdn string,
 	return b
 }
 
-func (b *ClusterNetworkPolicySpecBuilder) AddToServicesRule(svcRefs []crdv1alpha1.ServiceReference,
+func (b *ClusterNetworkPolicySpecBuilder) AddToServicesRule(svcRefs []crdv1alpha1.NamespacedName,
 	name string, ruleAppliedToSpecs []ACNPAppliedToSpec, action crdv1alpha1.RuleAction) *ClusterNetworkPolicySpecBuilder {
 	var appliedTos []crdv1alpha1.NetworkPolicyPeer
 	for _, at := range ruleAppliedToSpecs {
