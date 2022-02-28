@@ -1,4 +1,4 @@
-// Copyright 2021 Antrea Authors
+// Copyright 2022 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -351,18 +351,18 @@ func (mr *MockIPFIXAggregationProcessMockRecorder) IsAggregatedRecordIPv4(arg0 i
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsAggregatedRecordIPv4", reflect.TypeOf((*MockIPFIXAggregationProcess)(nil).IsAggregatedRecordIPv4), arg0)
 }
 
-// ResetStatElementsInRecord mocks base method
-func (m *MockIPFIXAggregationProcess) ResetStatElementsInRecord(arg0 entities.Record) error {
+// ResetStatAndThroughputElementsInRecord mocks base method
+func (m *MockIPFIXAggregationProcess) ResetStatAndThroughputElementsInRecord(arg0 entities.Record) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ResetStatElementsInRecord", arg0)
+	ret := m.ctrl.Call(m, "ResetStatAndThroughputElementsInRecord", arg0)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// ResetStatElementsInRecord indicates an expected call of ResetStatElementsInRecord
-func (mr *MockIPFIXAggregationProcessMockRecorder) ResetStatElementsInRecord(arg0 interface{}) *gomock.Call {
+// ResetStatAndThroughputElementsInRecord indicates an expected call of ResetStatAndThroughputElementsInRecord
+func (mr *MockIPFIXAggregationProcessMockRecorder) ResetStatAndThroughputElementsInRecord(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResetStatElementsInRecord", reflect.TypeOf((*MockIPFIXAggregationProcess)(nil).ResetStatElementsInRecord), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResetStatAndThroughputElementsInRecord", reflect.TypeOf((*MockIPFIXAggregationProcess)(nil).ResetStatAndThroughputElementsInRecord), arg0)
 }
 
 // SetCorrelatedFieldsFilled mocks base method
