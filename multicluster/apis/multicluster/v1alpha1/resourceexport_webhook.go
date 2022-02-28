@@ -58,7 +58,7 @@ func (r *ResourceExport) Default() {
 		r.Labels[common.SourceKind] = common.AntreaClusterNetworkPolicyKind
 	}
 	if r.DeletionTimestamp.IsZero() && !common.StringExistsInSlice(r.Finalizers, common.ResourceExportFinalizer) {
-		r.Finalizers = []string{common.ResourceExportFinalizer}
+		r.Finalizers = append(r.Finalizers, common.ResourceExportFinalizer)
 	}
 }
 

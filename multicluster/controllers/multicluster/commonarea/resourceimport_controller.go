@@ -37,7 +37,6 @@ import (
 
 	multiclusterv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
 	"antrea.io/antrea/multicluster/controllers/multicluster/common"
-	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
 )
 
 const (
@@ -93,7 +92,7 @@ func NewResourceImportReconciler(client client.Client, scheme *runtime.Scheme, l
 // Reconcile will attempt to ensure that the imported Resource is installed in local cluster as per the
 // ResourceImport object.
 func (r *ResourceImportReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	klog.V(2).InfoS("reconciling ResourceImport", "resourceimport", req.NamespacedName)
+	klog.V(2).InfoS("Reconciling ResourceImport", "resourceimport", req.NamespacedName)
 	// TODO: Must check whether this ResourceImport must be reconciled by this member cluster. Check `spec.clusters` field.
 	if r.localClusterClient == nil {
 		return ctrl.Result{}, errors.New("localClusterClient has not been initialized properly, no local cluster client")
@@ -109,7 +108,7 @@ func (r *ResourceImportReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	if err != nil {
 		isDeleted = apierrors.IsNotFound(err)
 		if !isDeleted {
-			klog.InfoS("unable to fetch ResourceImport", "resourceimport", req.NamespacedName.String(), "err", err)
+			klog.InfoS("Unable to fetch ResourceImport", "resourceimport", req.NamespacedName.String(), "err", err)
 			return ctrl.Result{}, err
 		} else {
 			resImpObj, exist, err := r.installedResImports.GetByKey(req.NamespacedName.String())
@@ -351,133 +350,8 @@ func (r *ResourceImportReconciler) handleResImpDeleteForEndpoints(ctx context.Co
 	return ctrl.Result{}, nil
 }
 
-func (r *ResourceImportReconciler) handleResImpUpdateForClusterNetworkPolicy(ctx context.Context, resImp *multiclusterv1alpha1.ResourceImport) (ctrl.Result, error) {
-	acnpImpName := types.NamespacedName{
-		Namespace: "",
-		Name:      resImp.Spec.Name,
-	}
-	acnpName := types.NamespacedName{
-		Namespace: "",
-		Name:      common.AntreaMCSPrefix + resImp.Spec.Name,
-	}
-	klog.InfoS("Updating ACNP and ACNPImport corresponding to ResourceImport",
-		"acnp", acnpName.String(), "resourceimport", klog.KObj(resImp))
-
-	acnp := &v1alpha1.ClusterNetworkPolicy{}
-	err := r.localClusterClient.Get(ctx, acnpName, acnp)
-	acnpNotFound := apierrors.IsNotFound(err)
-	if err != nil && !acnpNotFound {
-		return ctrl.Result{}, err
-	}
-	if !acnpNotFound {
-		if _, ok := acnp.Annotations[common.AntreaMCACNPAnnotation]; !ok {
-			err := errors.New("unable to import Antrea ClusterNetworkPolicy which conflicts with existing one")
-			klog.ErrorS(err, "", "acnp", klog.KObj(acnp))
-			return ctrl.Result{}, err
-		}
-	}
-	acnpObj := getMCAntreaClusterPolicy(resImp)
-	tierKind, tierName := &v1alpha1.Tier{}, acnpObj.Spec.Tier
-	err = r.localClusterClient.Get(ctx, types.NamespacedName{Namespace: "", Name: tierName}, tierKind)
-	tierNotFound := apierrors.IsNotFound(err)
-	if !tierNotFound {
-		if acnpNotFound {
-			if err = r.localClusterClient.Create(ctx, acnpObj, &client.CreateOptions{}); err != nil {
-				klog.ErrorS(err, "failed to create imported Antrea ClusterNetworkPolicy", "acnp", klog.KObj(acnpObj))
-				return ctrl.Result{}, err
-			}
-		} else if !apiequality.Semantic.DeepEqual(acnp.Spec, acnpObj.Spec) {
-			acnp.Spec = acnpObj.Spec
-			if err = r.localClusterClient.Update(ctx, acnp, &client.UpdateOptions{}); err != nil {
-				klog.ErrorS(err, "failed to update imported Antrea ClusterNetworkPolicy", "acnp", klog.KObj(acnpObj))
-				return ctrl.Result{}, err
-			}
-		}
-	} else if tierNotFound && !acnpNotFound {
-		if err = r.localClusterClient.Delete(ctx, acnpObj, &client.DeleteOptions{}); err != nil {
-			klog.ErrorS(err, "failed to delete imported Antrea ClusterNetworkPolicy that no longer have a valid Tier for the current cluster", "acnp", klog.KObj(acnpObj))
-			return ctrl.Result{}, err
-		}
-	}
-	acnpImp := &multiclusterv1alpha1.ACNPImport{}
-	err = r.localClusterClient.Get(ctx, acnpImpName, acnpImp)
-	acnpImpNotFound := apierrors.IsNotFound(err)
-	if err != nil && !acnpImpNotFound {
-		klog.ErrorS(err, "failed to get existing ACNPImports")
-		return ctrl.Result{}, err
-	}
-	acnpImpObj := getACNPImport(resImp, tierNotFound)
-	if acnpImpNotFound {
-		err := r.localClusterClient.Create(ctx, acnpImpObj, &client.CreateOptions{})
-		if err != nil {
-			klog.ErrorS(err, "failed to create ACNPImport", "acnpimport", klog.KObj(acnpImpObj))
-			return ctrl.Result{}, err
-		}
-		r.installedResImports.Add(*resImp)
-	}
-	patchACNPImportStatus := false
-	if len(acnpImp.Status.Conditions) == 0 {
-		acnpImp.Status = acnpImpObj.Status
-		patchACNPImportStatus = true
-	} else {
-		if acnpImp.Status.Conditions[0].Status != acnpImpObj.Status.Conditions[0].Status {
-			acnpImp.Status = acnpImpObj.Status
-			patchACNPImportStatus = true
-		}
-	}
-	if patchACNPImportStatus {
-		if err := r.localClusterClient.Status().Update(ctx, acnpImp); err != nil {
-			klog.ErrorS(err, "failed to update acnpImport status", "acnpImport", klog.KObj(acnpImp))
-		}
-	}
-	return ctrl.Result{}, nil
-}
-
-func (r *ResourceImportReconciler) handleResImpDeleteForClusterNetworkPolicy(ctx context.Context, resImp *multiclusterv1alpha1.ResourceImport) (ctrl.Result, error) {
-	acnpImpName := types.NamespacedName{
-		Namespace: "",
-		Name:      resImp.Spec.Name,
-	}
-	acnpName := types.NamespacedName{
-		Namespace: "",
-		Name:      common.AntreaMCSPrefix + resImp.Spec.Name,
-	}
-	klog.InfoS("Deleting ACNP and ACNPImport corresponding to ResourceImport",
-		"acnp", acnpName.String(), "resourceimport", klog.KObj(resImp))
-
-	var err error
-	cleanupACNPImport := func() (ctrl.Result, error) {
-		acnpImp := &multiclusterv1alpha1.ACNPImport{}
-		err = r.localClusterClient.Get(ctx, acnpImpName, acnpImp)
-		if err != nil {
-			return ctrl.Result{}, client.IgnoreNotFound(err)
-		}
-		err = r.localClusterClient.Delete(ctx, acnpImp, &client.DeleteOptions{})
-		if err != nil {
-			return ctrl.Result{}, client.IgnoreNotFound(err)
-		}
-		return ctrl.Result{}, nil
-	}
-
-	acnp := &v1alpha1.ClusterNetworkPolicy{}
-	err = r.localClusterClient.Get(ctx, acnpName, acnp)
-	if err != nil {
-		if apierrors.IsNotFound(err) {
-			klog.V(2).InfoS("ACNP corresponding to ResourceImport has already been deleted",
-				"acnp", acnpName.String(), "resourceimport", klog.KObj(resImp))
-			return cleanupACNPImport()
-		}
-		return ctrl.Result{}, err
-	}
-	err = r.localClusterClient.Delete(ctx, acnp, &client.DeleteOptions{})
-	if err != nil {
-		return ctrl.Result{}, err
-	}
-	return cleanupACNPImport()
-}
-
 func getMCService(resImp *multiclusterv1alpha1.ResourceImport) *corev1.Service {
-	mcsPorts := []corev1.ServicePort{}
+	var mcsPorts []corev1.ServicePort
 	for _, p := range resImp.Spec.ServiceImport.Spec.Ports {
 		mcsPorts = append(mcsPorts, corev1.ServicePort{
 			Name:     p.Name,
@@ -511,57 +385,6 @@ func getMCServiceImport(resImp *multiclusterv1alpha1.ResourceImport, clusterID s
 		Spec: resImp.Spec.ServiceImport.Spec,
 	}
 	return svcImp
-}
-
-func getMCAntreaClusterPolicy(resImp *multiclusterv1alpha1.ResourceImport) *v1alpha1.ClusterNetworkPolicy {
-	if resImp.Spec.ClusterNetworkPolicy == nil {
-		return nil
-	}
-	return &v1alpha1.ClusterNetworkPolicy{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: common.AntreaMCSPrefix + resImp.Spec.Name,
-			Annotations: map[string]string{
-				common.AntreaMCACNPAnnotation: "true",
-			},
-		},
-		Spec: *resImp.Spec.ClusterNetworkPolicy,
-	}
-}
-
-func getACNPImport(resImp *multiclusterv1alpha1.ResourceImport, tierNotFound bool) *multiclusterv1alpha1.ACNPImport {
-	if resImp.Spec.ClusterNetworkPolicy == nil {
-		return nil
-	}
-	return &multiclusterv1alpha1.ACNPImport{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: resImp.Spec.Name,
-		},
-		Status: multiclusterv1alpha1.ACNPImportStatus{
-			Conditions: []multiclusterv1alpha1.ACNPImportCondition{
-				getACNPImportStatus(tierNotFound),
-			},
-		},
-	}
-}
-
-func getACNPImportStatus(tierNotFound bool) multiclusterv1alpha1.ACNPImportCondition {
-	tierNotFoundReason := "TierNotFound"
-	tierNotFoundMessage := "ACNP Tier does not exist in the importing cluster"
-	time := metav1.Now()
-	if tierNotFound {
-		return multiclusterv1alpha1.ACNPImportCondition{
-			Type:               multiclusterv1alpha1.ACNPImportRealizable,
-			Status:             corev1.ConditionFalse,
-			LastTransitionTime: &time,
-			Reason:             &tierNotFoundReason,
-			Message:            &tierNotFoundMessage,
-		}
-	}
-	return multiclusterv1alpha1.ACNPImportCondition{
-		Type:               multiclusterv1alpha1.ACNPImportRealizable,
-		Status:             corev1.ConditionTrue,
-		LastTransitionTime: &time,
-	}
 }
 
 func removeLocalSubsets(local []corev1.EndpointSubset, allSubsets []corev1.EndpointSubset) []corev1.EndpointSubset {

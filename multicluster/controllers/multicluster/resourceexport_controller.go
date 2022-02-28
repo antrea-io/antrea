@@ -74,7 +74,7 @@ func NewResourceExportReconciler(
 // Reconcile will process all kinds of ResourceExport. Service and Endpoint kinds of ResourceExport
 // will be handled in this file, and all other kinds will have their own handler files, eg: newkind_handler.go
 func (r *ResourceExportReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	klog.V(2).InfoS("reconciling ResourceExport", "resourceexport", req.NamespacedName)
+	klog.V(2).InfoS("Reconciling ResourceExport", "resourceexport", req.NamespacedName)
 	var resExport mcsv1alpha1.ResourceExport
 	if err := r.Client.Get(ctx, req.NamespacedName, &resExport); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
@@ -132,13 +132,13 @@ func (r *ResourceExportReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 	if createResImport {
 		if err = r.Client.Create(ctx, resImport, &client.CreateOptions{}); err != nil {
-			klog.ErrorS(err, "failed to create ResourceImport", "resourceimport", resImportName.String())
+			klog.ErrorS(err, "Failed to create ResourceImport", "resourceimport", resImportName.String())
 			return ctrl.Result{}, err
 		}
 		r.updateResourceExportStatus(&resExport, succeed)
-		klog.InfoS("create ResourceImport successfully", "resourceimport", resImportName.String())
+		klog.InfoS("Create ResourceImport successfully", "resourceimport", resImportName.String())
 	} else if changed {
-		klog.InfoS("update ResourceImport for ResoureExport", "resourceimport", resImportName.String(), "resourceexport", req.NamespacedName)
+		klog.InfoS("Update ResourceImport for ResoureExport", "resourceimport", resImportName.String(), "resourceexport", req.NamespacedName)
 		if err = r.handleUpdateEvent(ctx, resImport, &resExport); err != nil {
 			return ctrl.Result{}, err
 		}
@@ -161,13 +161,13 @@ func (r *ResourceExportReconciler) handleUpdateEvent(ctx context.Context,
 
 	var err error
 	if err = r.Client.Update(ctx, resImport, &client.UpdateOptions{}); err != nil {
-		klog.ErrorS(err, "failed to update ResourceImport", "resourceimport", resImpName.String())
+		klog.ErrorS(err, "Failed to update ResourceImport", "resourceimport", resImpName.String())
 		return err
 	}
 	latestResImport := &mcsv1alpha1.ResourceImport{}
 	err = r.Client.Get(ctx, resImpName, latestResImport)
 	if err != nil {
-		klog.ErrorS(err, "failed to get latest ResourceImport", "resourceimport", resImpName.String())
+		klog.ErrorS(err, "Failed to get latest ResourceImport", "resourceimport", resImpName.String())
 		return err
 	}
 
@@ -192,7 +192,7 @@ func (r *ResourceExportReconciler) handleUpdateEvent(ctx context.Context,
 		latestResImport.Status.ClusterStatuses = append(latestResImport.Status.ClusterStatuses, newStatus)
 	}
 	if err := r.Client.Status().Update(ctx, latestResImport, &client.UpdateOptions{}); err != nil {
-		klog.ErrorS(err, "failed to update ResourceImport Status", "resourceimport", resImpName.String())
+		klog.ErrorS(err, "Failed to update ResourceImport Status", "resourceimport", resImpName.String())
 		return err
 	}
 	return nil
@@ -208,7 +208,7 @@ func (r *ResourceExportReconciler) handleDeleteEvent(ctx context.Context, resExp
 		return err
 	}
 	resImportName := GetResourceImportName(resExport)
-	klog.Infof("There is resImport to delete named %s", resImportName)
+	klog.V(2).InfoS("Deleting ResourceImport created by ResourceExport", "resourceimport", resImportName.String(), "resourceexport", resExport.Name)
 
 	undeleteItems := RemoveDeletedResourceExports(reList.Items)
 	if len(undeleteItems) == 0 {
@@ -227,7 +227,7 @@ func (r *ResourceExportReconciler) handleDeleteEvent(ctx context.Context, resExp
 
 func (r *ResourceExportReconciler) cleanUpResourceImport(ctx context.Context,
 	resImp types.NamespacedName, re interface{}) error {
-	klog.InfoS("cleanup ResourceImport", "resourceimport", resImp.String())
+	klog.InfoS("Cleaning up ResourceImport", "resourceimport", resImp.String())
 	resImport := &mcsv1alpha1.ResourceImport{ObjectMeta: metav1.ObjectMeta{
 		Name:      resImp.Name,
 		Namespace: resImp.Namespace,
@@ -241,7 +241,7 @@ func (r *ResourceExportReconciler) updateEndpointResourceImport(ctx context.Cont
 	resImport := &mcsv1alpha1.ResourceImport{}
 	err := r.Client.Get(ctx, resImpName, resImport)
 	if err != nil {
-		klog.ErrorS(err, "failed to get ResourceImport", "resourceimport", resImpName)
+		klog.ErrorS(err, "Failed to get ResourceImport", "resourceimport", resImpName)
 		return client.IgnoreNotFound(err)
 	}
 	newResImport, changed, err := r.refreshEndpointsResourceImport(existRe, resImport, false)
@@ -267,7 +267,7 @@ func (r *ResourceExportReconciler) getExistingResImport(ctx context.Context,
 	err := r.Client.Get(ctx, resImportName, existResImport)
 	if err != nil {
 		if !apierrors.IsNotFound(err) {
-			klog.ErrorS(err, "failed to get ResourceImport", "resourceimport", resImportName.String())
+			klog.ErrorS(err, "Failed to get ResourceImport", "resourceimport", resImportName.String())
 			return createResImport, nil, err
 		}
 		existResImport = &mcsv1alpha1.ResourceImport{
@@ -310,7 +310,7 @@ func (r *ResourceExportReconciler) refreshServiceResourceImport(
 	if !apiequality.Semantic.DeepEqual(newResImport.Spec.ServiceImport.Spec.Ports, convertedPorts) {
 		undeletedItems, err := r.getNotDeletedResourceExports(resExport)
 		if err != nil {
-			klog.ErrorS(err, "failed to list ResourceExports, retry later")
+			klog.ErrorS(err, "Failed to list ResourceExports, retry later")
 			return newResImport, false, err
 		}
 		// When there is only one Service ResourceExport, ResourceImport should reflect the change
@@ -369,7 +369,7 @@ func (r *ResourceExportReconciler) refreshEndpointsResourceImport(
 		return newResImport, true, nil
 	}
 	// check all matched Endpoints ResourceExport and generate a new EndpointSubset
-	newSubsets := []corev1.EndpointSubset{}
+	var newSubsets []corev1.EndpointSubset
 	undeleteItems, err := r.getNotDeletedResourceExports(resExport)
 	if err != nil {
 		klog.ErrorS(err, "failed to list ResourceExports, retry later")
@@ -423,7 +423,7 @@ func (r *ResourceExportReconciler) getNotDeletedResourceExports(resExport *mcsv1
 }
 
 func (r *ResourceExportReconciler) updateResourceExportStatus(resExport *mcsv1alpha1.ResourceExport, res resReason) {
-	newConditions := []mcsv1alpha1.ResourceExportCondition{}
+	var newConditions []mcsv1alpha1.ResourceExportCondition
 	switch res {
 	case succeed:
 		newConditions = []mcsv1alpha1.ResourceExportCondition{
@@ -519,7 +519,7 @@ func GetResourceImportName(resExport *mcsv1alpha1.ResourceExport) types.Namespac
 // RemoveDeletedResourceExports remove any ResourceExports with non-zero DeletionTimestamp
 // which is actually deleted object.
 func RemoveDeletedResourceExports(items []mcsv1alpha1.ResourceExport) []mcsv1alpha1.ResourceExport {
-	undeleteItems := []mcsv1alpha1.ResourceExport{}
+	var undeleteItems []mcsv1alpha1.ResourceExport
 	for _, i := range items {
 		if i.DeletionTimestamp.IsZero() {
 			undeleteItems = append(undeleteItems, i)
