@@ -372,7 +372,7 @@ type Rule struct {
 	// or Ports. If this field and To are both empty or missing, this rule matches all
 	// destinations.
 	// +optional
-	ToServices []ServiceReference `json:"toServices,omitempty"`
+	ToServices []NamespacedName `json:"toServices,omitempty"`
 	// Name describes the intention of this rule.
 	// Name should be unique within the policy.
 	// +optional
@@ -475,14 +475,6 @@ type NetworkPolicyPort struct {
 	// It can only be specified when a numerical `port` is specified.
 	// +optional
 	EndPort *int32 `json:"endPort,omitempty"`
-}
-
-// ServiceReference represents a reference to a v1.Service.
-type ServiceReference struct {
-	// Name of the Service
-	Name string `json:"name"`
-	// Namespace of the Service
-	Namespace string `json:"namespace,omitempty"`
 }
 
 // RuleAction describes the action to be applied on traffic matching a rule.

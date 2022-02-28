@@ -190,7 +190,7 @@ func (b *AntreaNetworkPolicySpecBuilder) AddEgress(protoc v1.Protocol,
 	return b
 }
 
-func (b *AntreaNetworkPolicySpecBuilder) AddToServicesRule(svcRefs []crdv1alpha1.ServiceReference,
+func (b *AntreaNetworkPolicySpecBuilder) AddToServicesRule(svcRefs []crdv1alpha1.NamespacedName,
 	name string, ruleAppliedToSpecs []ANPAppliedToSpec, action crdv1alpha1.RuleAction) *AntreaNetworkPolicySpecBuilder {
 	var appliedTos []crdv1alpha1.NetworkPolicyPeer
 	for _, at := range ruleAppliedToSpecs {

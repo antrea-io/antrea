@@ -80,7 +80,7 @@ func (b *ClusterGroupV1Alpha2SpecBuilder) SetIPBlocks(ipBlocks []crdv1alpha1.IPB
 }
 
 func (b *ClusterGroupV1Alpha2SpecBuilder) SetServiceReference(svcNS, svcName string) *ClusterGroupV1Alpha2SpecBuilder {
-	svcRef := &crdv1alpha2.ServiceReference{
+	svcRef := &crdv1alpha1.NamespacedName{
 		Namespace: svcNS,
 		Name:      svcName,
 	}
@@ -151,7 +151,7 @@ func (b *ClusterGroupV1Alpha3SpecBuilder) SetIPBlocks(ipBlocks []crdv1alpha1.IPB
 }
 
 func (b *ClusterGroupV1Alpha3SpecBuilder) SetServiceReference(svcNS, svcName string) *ClusterGroupV1Alpha3SpecBuilder {
-	svcRef := &crdv1alpha3.ServiceReference{
+	svcRef := &crdv1alpha1.NamespacedName{
 		Namespace: svcNS,
 		Name:      svcName,
 	}
