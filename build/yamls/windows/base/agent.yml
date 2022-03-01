@@ -35,8 +35,6 @@ spec:
           image: antrea-windows
           name: antrea-agent
           volumeMounts:
-            - mountPath: /host
-              name: host
             - mountPath: \\.\pipe\rancher_wins
               name: wins
             - mountPath: /etc/antrea
@@ -45,6 +43,8 @@ spec:
               name: antrea-agent-windows
             - mountPath: /host/k/antrea/
               name: host-antrea-home
+            - mountPath: /var/log/antrea/
+              name: var-log-antrea
       hostNetwork: true
       initContainers:
         - command:
@@ -64,8 +64,8 @@ spec:
               name: host-cni-bin
             - mountPath: /host/k/antrea/
               name: host-antrea-home
-            - mountPath: /host
-              name: host
+            - mountPath: /host/var/run/secrets/
+              name: host-secrets-path
       nodeSelector:
         kubernetes.io/os: windows
       priorityClassName: system-node-critical
@@ -95,12 +95,17 @@ spec:
             path: /k/antrea
             type: DirectoryOrCreate
           name: host-antrea-home
-        - hostPath:
-            path: /
-          name: host
         - name: wins
           hostPath:
             path: \\.\pipe\rancher_wins
             type: null
+        - name: var-log-antrea
+          hostPath:
+            path: /var/log/antrea/
+            type: DirectoryOrCreate
+        - name: host-secrets-path
+          hostPath:
+            path: /var/run/secrets/
+            type: DirectoryOrCreate
   updateStrategy:
     type: RollingUpdate
