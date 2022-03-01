@@ -45,6 +45,8 @@ spec:
               name: antrea-agent-windows
             - mountPath: /host/k/antrea/
               name: host-antrea-home
+            - mountPath: /host/var/log/antrea/
+              name: host-antrea-log
       hostNetwork: true
       initContainers:
         - command:
@@ -64,6 +66,8 @@ spec:
               name: host-cni-bin
             - mountPath: /host/k/antrea/
               name: host-antrea-home
+            - mountPath: /host/var/log/antrea/
+              name: host-antrea-log
             - mountPath: /host
               name: host
       nodeSelector:
@@ -95,6 +99,10 @@ spec:
             path: /k/antrea
             type: DirectoryOrCreate
           name: host-antrea-home
+        - hostPath:
+            path: /var/log/antrea
+            type: DirectoryOrCreate
+          name: host-antrea-log
         - hostPath:
             path: /
           name: host
