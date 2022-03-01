@@ -93,6 +93,102 @@ func TestEgressControllerValidateExternalIPPool(t *testing.T) {
 			expectedResponse: &admv1.AdmissionResponse{Allowed: true},
 		},
 		{
+			name: "CREATE operation with CIDR partially overlap with IP range should not be allowed",
+			request: &admv1.AdmissionRequest{
+				Name:      "foo",
+				Operation: "CREATE",
+				Object: runtime.RawExtension{Raw: marshal(copyAndMutateIPPool(testIPPool, func(pool *crdv1alpha2.IPPool) {
+					pool.Spec.IPRanges = append(pool.Spec.IPRanges, crdv1alpha2.SubnetIPRange{
+						IPRange: crdv1alpha2.IPRange{
+							CIDR: "192.168.3.0/26",
+						},
+						SubnetInfo: crdv1alpha2.SubnetInfo{
+							Gateway:      "192.168.3.1",
+							PrefixLength: 24,
+						},
+					})
+				}))},
+			},
+			expectedResponse: &admv1.AdmissionResponse{
+				Allowed: false,
+				Result: &metav1.Status{
+					Message: "IPRanges [192.168.3.10-192.168.3.20,192.168.3.0/26] overlap",
+				},
+			},
+		},
+		{
+			name: "CREATE operation with CIDR contained within with IP range should not be allowed",
+			request: &admv1.AdmissionRequest{
+				Name:      "foo",
+				Operation: "CREATE",
+				Object: runtime.RawExtension{Raw: marshal(copyAndMutateIPPool(testIPPool, func(pool *crdv1alpha2.IPPool) {
+					pool.Spec.IPRanges = append(pool.Spec.IPRanges, crdv1alpha2.SubnetIPRange{
+						IPRange: crdv1alpha2.IPRange{
+							CIDR: "192.168.3.12/30",
+						},
+						SubnetInfo: crdv1alpha2.SubnetInfo{
+							Gateway:      "192.168.3.13",
+							PrefixLength: 24,
+						},
+					})
+				}))},
+			},
+			expectedResponse: &admv1.AdmissionResponse{
+				Allowed: false,
+				Result: &metav1.Status{
+					Message: "IPRanges [192.168.3.10-192.168.3.20,192.168.3.12/30] overlap",
+				},
+			},
+		},
+		{
+			name: "CREATE operation with mixed IP version should not be allowed",
+			request: &admv1.AdmissionRequest{
+				Name:      "foo",
+				Operation: "CREATE",
+				Object: runtime.RawExtension{Raw: marshal(copyAndMutateIPPool(testIPPool, func(pool *crdv1alpha2.IPPool) {
+					pool.Spec.IPRanges = append(pool.Spec.IPRanges, crdv1alpha2.SubnetIPRange{
+						IPRange: crdv1alpha2.IPRange{
+							CIDR: "10:2400::0/96",
+						},
+						SubnetInfo: crdv1alpha2.SubnetInfo{
+							Gateway:      "10:2400::01",
+							PrefixLength: 64,
+						},
+					})
+				}))},
+			},
+			expectedResponse: &admv1.AdmissionResponse{
+				Allowed: false,
+				Result: &metav1.Status{
+					Message: "Range is invalid. IP version of range 10:2400::0/96 differs from Pool IP version",
+				},
+			},
+		},
+		{
+			name: "CREATE operation with bad gateway not be allowed",
+			request: &admv1.AdmissionRequest{
+				Name:      "foo",
+				Operation: "CREATE",
+				Object: runtime.RawExtension{Raw: marshal(copyAndMutateIPPool(testIPPool, func(pool *crdv1alpha2.IPPool) {
+					pool.Spec.IPRanges = append(pool.Spec.IPRanges, crdv1alpha2.SubnetIPRange{
+						IPRange: crdv1alpha2.IPRange{
+							CIDR: "192.168.10.0/26",
+						},
+						SubnetInfo: crdv1alpha2.SubnetInfo{
+							Gateway:      "192.168.1.1",
+							PrefixLength: 24,
+						},
+					})
+				}))},
+			},
+			expectedResponse: &admv1.AdmissionResponse{
+				Allowed: false,
+				Result: &metav1.Status{
+					Message: "Range is invalid. CIDR 192.168.10.0/26 is not contained within subnet 192.168.1.1/24",
+				},
+			},
+		},
+		{
 			name: "Deleting IPRange should not be allowed",
 			request: &admv1.AdmissionRequest{
 				Name:      "foo",
@@ -145,6 +241,32 @@ func TestEgressControllerValidateExternalIPPool(t *testing.T) {
 				}))},
 			},
 			expectedResponse: &admv1.AdmissionResponse{Allowed: true},
+		},
+		{
+			name: "Adding overlapping IPRange should not be allowed",
+			request: &admv1.AdmissionRequest{
+				Name:      "foo",
+				Operation: "UPDATE",
+				OldObject: runtime.RawExtension{Raw: marshal(testIPPool)},
+				Object: runtime.RawExtension{Raw: marshal(copyAndMutateIPPool(testIPPool, func(pool *crdv1alpha2.IPPool) {
+					pool.Spec.IPRanges = append(pool.Spec.IPRanges, crdv1alpha2.SubnetIPRange{
+						IPRange: crdv1alpha2.IPRange{
+							Start: "192.168.3.10",
+							End:   "192.168.3.30",
+						},
+						SubnetInfo: crdv1alpha2.SubnetInfo{
+							Gateway:      "192.168.3.1",
+							PrefixLength: 24,
+						},
+					})
+				}))},
+			},
+			expectedResponse: &admv1.AdmissionResponse{
+				Allowed: false,
+				Result: &metav1.Status{
+					Message: "IPRanges [192.168.3.10-192.168.3.30,192.168.3.10-192.168.3.20] overlap",
+				},
+			},
 		},
 		{
 			name: "Deleting IPPool in use should not be allowed",
