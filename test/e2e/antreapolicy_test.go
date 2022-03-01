@@ -654,6 +654,8 @@ func testACNPAllowNoDefaultIsolation(t *testing.T, protocol AntreaPolicyProtocol
 		// investigating the issue and disabling the tests for IPv6 clusters in the
 		// meantime.
 		skipIfIPv6Cluster(t)
+		// SCTP is unsupported on windows/amd64
+		skipIfHasWindowsNodes(t)
 	}
 	builder := &ClusterNetworkPolicySpecBuilder{}
 	builder = builder.SetName("acnp-allow-x-ingress-y-egress-z").
@@ -691,6 +693,8 @@ func testACNPDropEgress(t *testing.T, protocol AntreaPolicyProtocol) {
 		// investigating the issue and disabling the tests for IPv6 clusters in the
 		// meantime.
 		skipIfIPv6Cluster(t)
+		// SCTP is unsupported on windows/amd64
+		skipIfHasWindowsNodes(t)
 	}
 	builder := &ClusterNetworkPolicySpecBuilder{}
 	builder = builder.SetName("acnp-deny-a-to-z-egress").
@@ -2187,6 +2191,13 @@ func testACNPRejectEgress(t *testing.T) {
 
 // testACNPRejectIngress tests that an ACNP is able to reject egress traffic from pods labelled A to namespace Z.
 func testACNPRejectIngress(t *testing.T, protocol AntreaPolicyProtocol) {
+	if protocol == ProtocolUDP {
+		// Our test framework use agnhost to do the probe. On Windows, agnhost can't
+		// recognize icmp reject packet for UDP connection. It will return:
+		//   'TIMEOUT: read udp [src]->[dst]: i/o timeout'
+		// for both drop and reject. Skip it for now.
+		skipIfHasWindowsNodes(t)
+	}
 	builder := &ClusterNetworkPolicySpecBuilder{}
 	builder = builder.SetName("acnp-reject-a-from-z-ingress").
 		SetPriority(1.0).
@@ -2595,7 +2606,12 @@ func testAuditLoggingBasic(t *testing.T, data *TestData) {
 	if err != nil {
 		t.Errorf("Error occurred when trying to get the Antrea Agent Pod running on Node %s: %v", nodeName, err)
 	}
-	cmd := []string{"cat", logDir + logfileName}
+	var cmd []string
+	if strings.Contains(nodeName, "win") {
+		cmd = []string{"pwsh", "-c", "cat", logDir + logfileName}
+	} else {
+		cmd = []string{"cat", logDir + logfileName}
+	}
 
 	if err := wait.Poll(1*time.Second, 10*time.Second, func() (bool, error) {
 		stdout, stderr, err := data.RunCommandFromPod(antreaNamespace, antreaPodName, "antrea-agent", cmd)
@@ -4184,7 +4200,6 @@ func waitForResourcesReady(t *testing.T, timeout time.Duration, objs ...metav1.O
 // TestAntreaPolicy is the top-level test which contains all subtests for
 // AntreaPolicy related test cases so they can share setup, teardown.
 func TestAntreaPolicy(t *testing.T) {
-	skipIfHasWindowsNodes(t)
 	skipIfAntreaPolicyDisabled(t)
 
 	data, err := setupTest(t)

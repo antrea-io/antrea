@@ -15,15 +15,14 @@
 package openflow
 
 import (
-	"fmt"
-	"math/rand"
-	"net"
-
 	"antrea.io/libOpenflow/openflow15"
 	"antrea.io/libOpenflow/protocol"
 	ofutil "antrea.io/libOpenflow/util"
+	"fmt"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/klog/v2"
+	"math/rand"
+	"net"
 
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/openflow/cookie"

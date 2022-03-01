@@ -15,11 +15,10 @@
 package openflow
 
 import (
-	"encoding/binary"
-	"fmt"
-
 	"antrea.io/libOpenflow/openflow15"
 	"antrea.io/ofnet/ofctrl"
+	"encoding/binary"
+	"fmt"
 	"golang.org/x/time/rate"
 	"k8s.io/klog/v2"
 
