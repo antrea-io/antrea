@@ -1,5 +1,10 @@
 # "Has Changes" Docker Action
 
+**This Action has been moved to its own
+  [repository](https://github.com/antrea-io/has-changes). This directory will be
+  removed in the near future. We preserve it for now so that existing PRs can be
+  merged without requiring a rebase.**
+
 This action sets a boolean output (`has_changes`) if the diff (`push` or
 `pull_request` event) includes changes outside of a provided list of paths.
 
