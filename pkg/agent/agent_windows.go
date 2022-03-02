@@ -278,3 +278,10 @@ func (i *Initializer) ConnectUplinkToOVSBridge() error { return nil }
 // RestoreOVSBridge returns immediately in Windows.
 // OVS is managed by system in Windows, network config can be retained after Antrea shutdown.
 func (i *Initializer) RestoreOVSBridge() {}
+
+func (i *Initializer) setInterfaceMTU(iface string, mtu int) error {
+	if err := i.ovsBridgeClient.SetInterfaceMTU(iface, mtu); err != nil {
+		return err
+	}
+	return util.SetInterfaceMTU(iface, mtu)
+}

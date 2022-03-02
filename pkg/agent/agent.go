@@ -637,7 +637,7 @@ func (i *Initializer) setupGatewayInterface() error {
 	if err := i.configureGatewayInterface(gatewayIface); err != nil {
 		return err
 	}
-	if err := i.ovsBridgeClient.SetInterfaceMTU(i.hostGateway, i.nodeConfig.NodeMTU); err != nil {
+	if err := i.setInterfaceMTU(i.hostGateway, i.nodeConfig.NodeMTU); err != nil {
 		return err
 	}
 
