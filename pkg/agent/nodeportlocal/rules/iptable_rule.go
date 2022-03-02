@@ -26,6 +26,12 @@ import (
 	"antrea.io/antrea/pkg/agent/util/iptables"
 )
 
+// InitRules initializes rules based on the underlying implementation
+func InitRules() PodPortRules {
+	// This can be extended based on the system capability.
+	return NewIPTableRules()
+}
+
 // NodePortLocalChain is the name of the chain in IPTABLES for Node Port Local
 const NodePortLocalChain = "ANTREA-NODE-PORT-LOCAL"
 

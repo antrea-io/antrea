@@ -17,7 +17,6 @@ package openflow
 import (
 	"encoding/binary"
 	"fmt"
-	"math"
 	"net"
 	"sort"
 	"sync"
@@ -28,12 +27,12 @@ import (
 	"antrea.io/ofnet/ofctrl"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/tools/cache"
-	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/metrics"
 	"antrea.io/antrea/pkg/agent/openflow/cookie"
 	"antrea.io/antrea/pkg/agent/types"
+	"antrea.io/antrea/pkg/agent/util"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 	"antrea.io/antrea/pkg/ovs/ovsctl"
 	"antrea.io/antrea/pkg/util/runtime"
@@ -376,14 +375,6 @@ type flowCache map[string]binding.Flow
 
 type flowCategoryCache struct {
 	sync.Map
-}
-
-func portToUint16(port int) uint16 {
-	if port > 0 && port <= math.MaxUint16 {
-		return uint16(port) // lgtm[go/incorrect-integer-conversion]
-	}
-	klog.Errorf("Port value %d out-of-bounds", port)
-	return 0
 }
 
 type client struct {
@@ -2398,7 +2389,7 @@ func (f *featureService) serviceEndpointGroup(groupID binding.GroupIDType, withS
 	for _, endpoint := range endpoints {
 		endpointPort, _ := endpoint.Port()
 		endpointIP := net.ParseIP(endpoint.IP())
-		portVal := portToUint16(endpointPort)
+		portVal := util.PortToUint16(endpointPort)
 		ipProtocol := getIPProtocol(endpointIP)
 
 		if ipProtocol == binding.ProtocolIP {

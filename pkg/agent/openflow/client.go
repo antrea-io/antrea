@@ -575,7 +575,7 @@ func (c *client) InstallEndpointFlows(protocol binding.Protocol, endpoints []pro
 		var flows []binding.Flow
 		endpointPort, _ := endpoint.Port()
 		endpointIP := net.ParseIP(endpoint.IP())
-		portVal := portToUint16(endpointPort)
+		portVal := util.PortToUint16(endpointPort)
 		cacheKey := generateEndpointFlowCacheKey(endpoint.IP(), endpointPort, protocol)
 		flows = append(flows, c.featureService.endpointDNATFlow(endpointIP, portVal, protocol))
 		if endpoint.GetIsLocal() {

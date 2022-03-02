@@ -20,10 +20,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net"
 	"strings"
 
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/klog/v2"
 	utilnet "k8s.io/utils/net"
 
 	"antrea.io/antrea/pkg/util/ip"
@@ -367,4 +369,12 @@ func NewIPNet(ip net.IP) *net.IPNet {
 		return &net.IPNet{IP: ip, Mask: net.CIDRMask(32, 32)}
 	}
 	return &net.IPNet{IP: ip, Mask: net.CIDRMask(128, 128)}
+}
+
+func PortToUint16(port int) uint16 {
+	if port > 0 && port <= math.MaxUint16 {
+		return uint16(port) // lgtm[go/incorrect-integer-conversion]
+	}
+	klog.Errorf("Port value %d out-of-bounds", port)
+	return 0
 }

@@ -136,7 +136,6 @@ var (
 	// can have different FeatureSpecs between Linux and Windows, we should
 	// still define a separate defaultAntreaFeatureGates map for Windows.
 	unsupportedFeaturesOnWindows = map[featuregate.Feature]struct{}{
-		NodePortLocal:     {},
 		Egress:            {},
 		AntreaIPAM:        {},
 		Multicast:         {},
