@@ -117,7 +117,7 @@ func TestRESTGet(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "cgC",
 				},
-				EffectiveMembers: []controlplane.GroupMember{},
+				EffectiveMembers: nil,
 			},
 			expectedErr: false,
 		},

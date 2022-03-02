@@ -53,12 +53,13 @@ func (r *REST) Get(ctx context.Context, name string, options *metav1.GetOptions)
 	if err != nil {
 		return nil, errors.NewInternalError(err)
 	}
-	effectiveMembers := make([]controlplane.GroupMember, 0, len(members))
-	for _, member := range members {
-		effectiveMembers = append(effectiveMembers, *member)
-	}
-	memberList := &controlplane.ClusterGroupMembers{
-		EffectiveMembers: effectiveMembers,
+	memberList := &controlplane.ClusterGroupMembers{}
+	if len(members) > 0 {
+		effectiveMembers := make([]controlplane.GroupMember, 0, len(members))
+		for _, member := range members {
+			effectiveMembers = append(effectiveMembers, *member)
+		}
+		memberList.EffectiveMembers = effectiveMembers
 	}
 	memberList.Name = name
 	return memberList, nil
