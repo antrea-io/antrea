@@ -108,9 +108,8 @@ func (n *NetworkPolicyController) toAntreaPeerForCRD(peers []v1alpha1.NetworkPol
 			normalizedUID, groupIPBlocks := n.processRefCG(peer.Group)
 			if normalizedUID != "" {
 				addressGroups = append(addressGroups, normalizedUID)
-			} else if len(groupIPBlocks) > 0 {
-				ipBlocks = append(ipBlocks, groupIPBlocks...)
 			}
+			ipBlocks = append(ipBlocks, groupIPBlocks...)
 		} else {
 			normalizedUID := n.createAddressGroup(np.GetNamespace(), peer.PodSelector, peer.NamespaceSelector, peer.ExternalEntitySelector)
 			addressGroups = append(addressGroups, normalizedUID)

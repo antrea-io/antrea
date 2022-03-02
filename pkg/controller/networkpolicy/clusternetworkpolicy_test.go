@@ -1515,11 +1515,27 @@ func TestProcessRefCG(t *testing.T) {
 			NamespaceSelector: &selectorA,
 		},
 	}
+	cgNested1 := crdv1alpha3.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{Name: "cgD", UID: "uidD"},
+		Spec: crdv1alpha3.GroupSpec{
+			ChildGroups: []crdv1alpha3.ClusterGroupReference{"cgB"},
+		},
+	}
+	cgNested2 := crdv1alpha3.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{Name: "cgE", UID: "uidE"},
+		Spec: crdv1alpha3.GroupSpec{
+			ChildGroups: []crdv1alpha3.ClusterGroupReference{"cgA", "cgB"},
+		},
+	}
 	_, npc := newController()
 	npc.addClusterGroup(&cgA)
 	npc.addClusterGroup(&cgB)
+	npc.addClusterGroup(&cgNested1)
+	npc.addClusterGroup(&cgNested2)
 	npc.cgStore.Add(&cgA)
 	npc.cgStore.Add(&cgB)
+	npc.cgStore.Add(&cgNested1)
+	npc.cgStore.Add(&cgNested2)
 	tests := []struct {
 		name        string
 		inputCG     string
@@ -1548,6 +1564,28 @@ func TestProcessRefCG(t *testing.T) {
 			name:       "cg-with-ipblock",
 			inputCG:    cgB.Name,
 			expectedAG: "",
+			expectedIPB: []controlplane.IPBlock{
+				{
+					CIDR:   *cidrIPNet,
+					Except: []controlplane.IPNet{},
+				},
+			},
+		},
+		{
+			name:       "nested-cg-with-ipblock",
+			inputCG:    cgNested1.Name,
+			expectedAG: "",
+			expectedIPB: []controlplane.IPBlock{
+				{
+					CIDR:   *cidrIPNet,
+					Except: []controlplane.IPNet{},
+				},
+			},
+		},
+		{
+			name:       "nested-cg-with-ipblock-and-selector",
+			inputCG:    cgNested2.Name,
+			expectedAG: cgNested2.Name,
 			expectedIPB: []controlplane.IPBlock{
 				{
 					CIDR:   *cidrIPNet,

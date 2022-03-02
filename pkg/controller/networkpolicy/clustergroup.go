@@ -71,7 +71,7 @@ func (n *NetworkPolicyController) updateClusterGroup(oldObj, curObj interface{})
 		for _, ipb := range newGroup.IPBlocks {
 			newIPBs.Insert(ipNetToCIDRStr(ipb.CIDR))
 		}
-		return oldIPBs.Equal(newIPBs)
+		return !oldIPBs.Equal(newIPBs)
 	}
 	childGroupsUpdated := func() bool {
 		oldChildGroups, newChildGroups := sets.String{}, sets.String{}
@@ -206,6 +206,7 @@ func (n *NetworkPolicyController) syncInternalGroup(key string) error {
 		return nil
 	}
 	grp := grpObj.(*antreatypes.Group)
+	defer n.triggerParentGroupSync(grp)
 	originalMembersComputedStatus := grp.MembersComputed
 	// Retrieve the ClusterGroup corresponding to this key.
 	cg, err := n.cgLister.Get(grp.Name)
@@ -213,6 +214,7 @@ func (n *NetworkPolicyController) syncInternalGroup(key string) error {
 		klog.Infof("Didn't find the ClusterGroup %s, skip processing of internal group", grp.Name)
 		return nil
 	}
+	defer n.triggerCNPUpdates(cg)
 	selectorUpdated := n.processServiceReference(grp)
 	if grp.Selector != nil {
 		n.groupingInterface.AddGroup(clusterGroupType, grp.Name, grp.Selector)
@@ -228,8 +230,8 @@ func (n *NetworkPolicyController) syncInternalGroup(key string) error {
 	//   2. All its child groups are created and realized.
 	if len(grp.ChildGroups) > 0 {
 		for _, cgName := range grp.ChildGroups {
-			cg, found, _ := n.internalGroupStore.Get(cgName)
-			if !found || cg.(*antreatypes.Group).MembersComputed != v1.ConditionTrue {
+			internalGroup, found, _ := n.internalGroupStore.Get(cgName)
+			if !found || internalGroup.(*antreatypes.Group).MembersComputed != v1.ConditionTrue {
 				membersComputed = false
 				break
 			}
@@ -417,7 +419,8 @@ func (n *NetworkPolicyController) GetGroupMembers(cgName string) (controlplane.G
 	groupObj, found, _ := n.internalGroupStore.Get(cgName)
 	if found {
 		group := groupObj.(*antreatypes.Group)
-		return n.getClusterGroupMemberSet(group), nil
+		member, _ := n.getClusterGroupMembers(group)
+		return member, nil
 	}
 	return controlplane.GroupMemberSet{}, fmt.Errorf("no internal Group with name %s is found", cgName)
 }
