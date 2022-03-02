@@ -91,10 +91,24 @@ jobs:
       run: |
         echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
         docker push antrea/antrea-ubuntu-simulator:latest
+    
+
+  check-windows-changes:
+     runs-on: [ubuntu-latest]
+     outputs:
+       all: ${{ steps.changed_window_files.outputs.all}
+     steps:
+     - uses: actions/checkout@v2
+       with:
+        fetch-depth: 0
+     - name: Get changed files
+       id: changed_window_files
+       run: |
+         echo "::set-ouput name=all::$(git diff --name-only --diff-filter=ACMRT ${{ github.event.pull_request.base.sha}} ${{ github.sha}} | xargs)"
 
   build-windows:
-    needs: check-changes
-    if: ${{ needs.check-changes.outputs.has_changes == 'yes' || github.event_name == 'push' }}
+    needs: [check-changes, check-windows-changes]
+    if: ${{ (needs.check-changes.outputs.has_changes == 'yes' || github.event_name == 'push') && (needs.check-windows-changes.outputs.all)}}
     runs-on: [windows-2019]
     steps:
     - uses: actions/checkout@v3
