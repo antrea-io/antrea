@@ -28,10 +28,10 @@ import (
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent/metrics"
-	antreatypes "antrea.io/antrea/pkg/agent/types"
 	v1beta "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	"antrea.io/antrea/pkg/querier"
+	"antrea.io/antrea/pkg/util/channel"
 	"antrea.io/antrea/pkg/util/k8s"
 )
 
@@ -155,9 +155,6 @@ type ruleCache struct {
 	rules cache.Indexer
 	// dirtyRuleHandler is a callback that is run upon finding a rule out-of-sync.
 	dirtyRuleHandler func(string)
-
-	// entityUpdates is a channel for receiving entity (e.g. Pod) updates from CNIServer.
-	entityUpdates <-chan antreatypes.EntityReference
 
 	// groupIDUpdates is a channel for receiving groupID for Service is assigned
 	// or released events from groupCounters.
@@ -337,7 +334,7 @@ func toServicesIndexFunc(obj interface{}) ([]string, error) {
 }
 
 // newRuleCache returns a new *ruleCache.
-func newRuleCache(dirtyRuleHandler func(string), podUpdate <-chan antreatypes.EntityReference, serviceGroupIDUpdate <-chan string) *ruleCache {
+func newRuleCache(dirtyRuleHandler func(string), podUpdateSubscriber channel.Subscriber, serviceGroupIDUpdate <-chan string) *ruleCache {
 	rules := cache.NewIndexer(
 		ruleKeyFunc,
 		cache.Indexers{addressGroupIndex: addressGroupIndexFunc, appliedToGroupIndex: appliedToGroupIndexFunc, policyIndex: policyIndexFunc, toServicesIndex: toServicesIndexFunc},
@@ -348,38 +345,34 @@ func newRuleCache(dirtyRuleHandler func(string), podUpdate <-chan antreatypes.En
 		policyMap:           make(map[string]*v1beta.NetworkPolicy),
 		rules:               rules,
 		dirtyRuleHandler:    dirtyRuleHandler,
-		entityUpdates:       podUpdate,
 		groupIDUpdates:      serviceGroupIDUpdate,
 	}
-	go cache.processEntityUpdates()
+	// Subscribe Pod update events from CNIServer.
+	podUpdateSubscriber.Subscribe(cache.processPodUpdate)
 	go cache.processGroupIDUpdates()
 	return cache
 }
 
-// processEntityUpdates is an infinite loop that takes entity (e.g. Pod)
-// update events from the channel, finds out AppliedToGroups that contains
-// this Pod and trigger reconciling of related rules.
+// processPodUpdate will be called when CNIServer publishes a Pod update event.
+// It finds out AppliedToGroups that contains this Pod and trigger reconciling
+// of related rules.
 // It can enforce NetworkPolicies to newly added Pods right after CNI ADD is
 // done if antrea-controller has computed the Pods' policies and propagated
 // them to this Node by their labels and NodeName, instead of waiting for their
 // IPs are reported to kube-apiserver and processed by antrea-controller.
-func (c *ruleCache) processEntityUpdates() {
-	for {
-		select {
-		case entity := <-c.entityUpdates:
-			func() {
-				member := &v1beta.GroupMember{
-					Pod:            entity.Pod,
-					ExternalEntity: entity.ExternalEntity,
-				}
-				c.appliedToSetLock.RLock()
-				defer c.appliedToSetLock.RUnlock()
-				for group, memberSet := range c.appliedToSetByGroup {
-					if memberSet.Has(member) {
-						c.onAppliedToGroupUpdate(group)
-					}
-				}
-			}()
+func (c *ruleCache) processPodUpdate(pod string) {
+	namespace, name := k8s.SplitNamespacedName(pod)
+	member := &v1beta.GroupMember{
+		Pod: &v1beta.PodReference{
+			Name:      name,
+			Namespace: namespace,
+		},
+	}
+	c.appliedToSetLock.RLock()
+	defer c.appliedToSetLock.RUnlock()
+	for group, memberSet := range c.appliedToSetByGroup {
+		if memberSet.Has(member) {
+			c.onAppliedToGroupUpdate(group)
 		}
 	}
 }

@@ -37,6 +37,7 @@ import (
 	"antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	"antrea.io/antrea/pkg/querier"
+	"antrea.io/antrea/pkg/util/channel"
 )
 
 const (
@@ -112,7 +113,7 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 	ofClient openflow.Client,
 	ifaceStore interfacestore.InterfaceStore,
 	nodeName string,
-	entityUpdates <-chan types.EntityReference,
+	podUpdateSubscriber channel.Subscriber,
 	groupCounters []proxytypes.GroupCounter,
 	groupIDUpdates <-chan string,
 	antreaPolicyEnabled bool,
@@ -143,7 +144,7 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 		}
 	}
 	c.reconciler = newReconciler(ofClient, ifaceStore, idAllocator, c.fqdnController, groupCounters, v4Enabled, v6Enabled)
-	c.ruleCache = newRuleCache(c.enqueueRule, entityUpdates, groupIDUpdates)
+	c.ruleCache = newRuleCache(c.enqueueRule, podUpdateSubscriber, groupIDUpdates)
 	if statusManagerEnabled {
 		c.statusManager = newStatusController(antreaClientGetter, nodeName, c.ruleCache)
 	}

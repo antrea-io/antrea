@@ -30,10 +30,9 @@ import (
 	"antrea.io/antrea/pkg/agent/openflow"
 	"antrea.io/antrea/pkg/agent/route"
 	"antrea.io/antrea/pkg/agent/secondarynetwork/cnipodcache"
-	"antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/agent/util"
-	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
+	"antrea.io/antrea/pkg/util/channel"
 	"antrea.io/antrea/pkg/util/k8s"
 )
 
@@ -63,9 +62,9 @@ type podConfigurator struct {
 	ifaceStore      interfacestore.InterfaceStore
 	gatewayMAC      net.HardwareAddr
 	ifConfigurator  *ifConfigurator
-	// entityUpdates is a channel for notifying updates of local endpoints / entities (most notably Pod)
-	// to other components which may benefit from this information, i.e NetworkPolicyController.
-	entityUpdates chan<- types.EntityReference
+	// podUpdateNotifier is used for notifying updates of local Pods to other components which may benefit from this
+	// information, i.e. NetworkPolicyController, EgressController.
+	podUpdateNotifier channel.Notifier
 	// consumed by secondary network creation.
 	podInfoStore cnipodcache.CNIPodInfoStore
 }
@@ -78,7 +77,7 @@ func newPodConfigurator(
 	gatewayMAC net.HardwareAddr,
 	ovsDatapathType ovsconfig.OVSDatapathType,
 	isOvsHardwareOffloadEnabled bool,
-	entityUpdates chan<- types.EntityReference,
+	podUpdateNotifier channel.Notifier,
 	podInfoStore cnipodcache.CNIPodInfoStore,
 ) (*podConfigurator, error) {
 	ifConfigurator, err := newInterfaceConfigurator(ovsDatapathType, isOvsHardwareOffloadEnabled)
@@ -86,14 +85,14 @@ func newPodConfigurator(
 		return nil, err
 	}
 	return &podConfigurator{
-		ovsBridgeClient: ovsBridgeClient,
-		ofClient:        ofClient,
-		routeClient:     routeClient,
-		ifaceStore:      ifaceStore,
-		gatewayMAC:      gatewayMAC,
-		ifConfigurator:  ifConfigurator,
-		entityUpdates:   entityUpdates,
-		podInfoStore:    podInfoStore,
+		ovsBridgeClient:   ovsBridgeClient,
+		ofClient:          ofClient,
+		routeClient:       routeClient,
+		ifaceStore:        ifaceStore,
+		gatewayMAC:        gatewayMAC,
+		ifConfigurator:    ifConfigurator,
+		podUpdateNotifier: podUpdateNotifier,
+		podInfoStore:      podInfoStore,
 	}, nil
 }
 
@@ -486,9 +485,7 @@ func (pc *podConfigurator) connectInterfaceToOVSCommon(ovsPortName string, conta
 	// Add containerConfig into local cache
 	pc.ifaceStore.AddInterface(containerConfig)
 	// Notify the Pod update event to required components.
-	pc.entityUpdates <- types.EntityReference{
-		Pod: &v1beta2.PodReference{Name: containerConfig.PodName, Namespace: containerConfig.PodNamespace},
-	}
+	pc.podUpdateNotifier.Notify(k8s.NamespacedName(containerConfig.PodNamespace, containerConfig.PodName))
 	return nil
 }
 

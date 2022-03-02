@@ -25,8 +25,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 
-	"antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/pkg/util/channel"
 )
 
 var (
@@ -260,12 +260,12 @@ func TestRuleCacheAddAddressGroup(t *testing.T) {
 	}
 }
 
-func newFakeRuleCache() (*ruleCache, *dirtyRuleRecorder, chan types.EntityReference) {
+func newFakeRuleCache() (*ruleCache, *dirtyRuleRecorder, *channel.SubscribableChannel) {
 	recorder := newDirtyRuleRecorder()
-	ch := make(chan types.EntityReference, 100)
+	podUpdateChannel := channel.NewSubscribableChannel("PodUpdate", 100)
 	ch2 := make(chan string, 100)
-	c := newRuleCache(recorder.Record, ch, ch2)
-	return c, recorder, ch
+	c := newRuleCache(recorder.Record, podUpdateChannel, ch2)
+	return c, recorder, podUpdateChannel
 }
 
 func TestRuleCacheReplaceAppliedToGroups(t *testing.T) {
@@ -1134,21 +1134,21 @@ func TestRuleCacheProcessPodUpdates(t *testing.T) {
 		name               string
 		rules              []*rule
 		podSetByGroup      map[string]v1beta2.GroupMemberSet
-		podUpdate          types.EntityReference
+		podUpdate          string
 		expectedDirtyRules sets.String
 	}{
 		{
 			"non-matching-group",
 			nil,
 			nil,
-			types.EntityReference{Pod: &v1beta2.PodReference{Name: "foo", Namespace: "bar"}},
+			"bar/foo",
 			sets.NewString(),
 		},
 		{
 			"matching-one-group-affecting-one-rule",
 			[]*rule{rule1, rule2},
 			map[string]v1beta2.GroupMemberSet{"group2": v1beta2.NewGroupMemberSet(newAppliedToGroupMember("pod1", "ns1"))},
-			types.EntityReference{Pod: &v1beta2.PodReference{Name: "pod1", Namespace: "ns1"}},
+			"ns1/pod1",
 			sets.NewString("rule2"),
 		},
 		{
@@ -1158,19 +1158,21 @@ func TestRuleCacheProcessPodUpdates(t *testing.T) {
 				"group1": v1beta2.NewGroupMemberSet(newAppliedToGroupMember("pod1", "ns1")),
 				"group2": v1beta2.NewGroupMemberSet(newAppliedToGroupMember("pod1", "ns1")),
 			},
-			types.EntityReference{Pod: &v1beta2.PodReference{Name: "pod1", Namespace: "ns1"}},
+			"ns1/pod1",
 			sets.NewString("rule1", "rule2"),
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			c, recorder, ch := newFakeRuleCache()
+			c, recorder, podUpdateNotifier := newFakeRuleCache()
 			c.appliedToSetByGroup = tt.podSetByGroup
 			for _, rule := range tt.rules {
 				c.rules.Add(rule)
 			}
-			ch <- tt.podUpdate
-
+			stopCh := make(chan struct{})
+			defer close(stopCh)
+			go podUpdateNotifier.Run(stopCh)
+			podUpdateNotifier.Notify(tt.podUpdate)
 			func() {
 				// Drain the channel with 10 ms timeout so we can know it's done.
 				for {

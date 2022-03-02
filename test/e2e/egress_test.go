@@ -161,12 +161,13 @@ ip netns exec %[1]s /agnhost netexec
 				t.Fatalf("Error when waiting for Pod '%s' to be in the Running state", remotePod)
 			}
 
+			serverIPStr := tt.serverIP
+			if utilnet.IsIPv6String(tt.localIP0) {
+				serverIPStr = fmt.Sprintf("[%s]", tt.serverIP)
+			}
+
 			// getClientIP gets the translated client IP by accessing the API that replies the request's client IP.
 			getClientIP := func(pod string) (string, string, error) {
-				serverIPStr := tt.serverIP
-				if utilnet.IsIPv6String(tt.localIP0) {
-					serverIPStr = fmt.Sprintf("[%s]", tt.serverIP)
-				}
 				cmd := []string{"wget", "-T", "3", "-O", "-", fmt.Sprintf("%s:8080/clientip", serverIPStr)}
 				return data.runCommandFromPod(testNamespace, pod, busyboxContainerName, cmd)
 			}
@@ -217,7 +218,7 @@ ip netns exec %[1]s /agnhost netexec
 			assertClientIP(localPod, tt.localIP0, tt.localIP1)
 			assertConnError(remotePod)
 
-			t.Logf("Creating an Egress applying to both Pods")
+			t.Logf("Creating an Egress applying to all e2e Pods")
 			matchExpressions := []metav1.LabelSelectorRequirement{
 				{
 					Key:      "antrea-e2e",
@@ -238,6 +239,27 @@ ip netns exec %[1]s /agnhost netexec
 				return egress.Status.EgressNode == egressNode, nil
 			})
 			assert.NoError(t, err, "Egress failed to reach expected status")
+
+			t.Log("Checking the client IP of a Pod whose Egress has been created in advance")
+			initialIPChecker := "initial-ip-checker"
+			clientIPStr := egress.Spec.EgressIP
+			if utilnet.IsIPv6String(clientIPStr) {
+				clientIPStr = fmt.Sprintf("[%s]", clientIPStr)
+			}
+			cmd = fmt.Sprintf("wget -T 3 -O - %s:8080/clientip | grep %s:", serverIPStr, clientIPStr)
+			if err := data.createPodOnNode(initialIPChecker, testNamespace, egressNode, busyboxImage, []string{"sh", "-c", cmd}, nil, nil, nil, false, func(pod *v1.Pod) {
+				pod.Spec.RestartPolicy = v1.RestartPolicyNever
+			}); err != nil {
+				t.Fatalf("Failed to create Pod initial-ip-checker: %v", err)
+			}
+			defer data.deletePod(testNamespace, initialIPChecker)
+			_, err = data.podWaitFor(timeout, initialIPChecker, testNamespace, func(pod *v1.Pod) (bool, error) {
+				if pod.Status.Phase == v1.PodFailed {
+					return false, fmt.Errorf("Pod terminated with failure")
+				}
+				return pod.Status.Phase == v1.PodSucceeded, nil
+			})
+			assert.NoError(t, err, "Failed to get expected client IP %s for Pod initial-ip-checker", initialIPChecker)
 
 			t.Log("Updating the Egress's AppliedTo to remotePod only")
 			egress.Spec.AppliedTo = v1alpha2.AppliedTo{
