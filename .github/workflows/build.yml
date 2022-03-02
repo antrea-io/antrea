@@ -96,7 +96,7 @@ jobs:
   check-windows-changes:
      runs-on: [ubuntu-latest]
      outputs:
-       all: ${{ steps.changed_window_files.outputs.all}
+       all: ${{ steps.changed_window_files.outputs.all}}
      steps:
      - uses: actions/checkout@v2
        with:
@@ -104,7 +104,7 @@ jobs:
      - name: Get changed files
        id: changed_window_files
        run: |
-         echo "::set-ouput name=all::$(git diff --name-only --diff-filter=ACMRT ${{ github.event.pull_request.base.sha}} ${{ github.sha}} | xargs)"
+         echo "::set-output name=all::$(git diff --name-only --diff-filter=ACMRT ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} | xargs)"
 
   build-windows:
     needs: [check-changes, check-windows-changes]
