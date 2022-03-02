@@ -47,42 +47,47 @@ cluster. Valid range is 16 to 30. Default is 24.
 - `nodeCIDRMaskSizeIPv6`: Mask size for IPv6 Node CIDR in IPv6 or dual-stack
 cluster. Valid range is 64 to 126. Default is 64.
 
-## Antrea Flexible-IPAM
+## Antrea Flexible IPAM
 
-Antrea supports flexible control over Pod IP addressing since version 1.4. This can be
-achieved by configuring `IPPool` CRD with a desired set of IP ranges. The `IPPool` can be
-annotated to Namespace, Pod and PodTemplate of StatefulSet/Deployment. Antrea will manage
-IP address assignment for corresponding Pods according to `IPPool` spec.
+Antrea supports flexible control over Pod IP addressing since version 1.4. Pod
+IP addresses can be allocated from an `IPPool`. When a Pod's IP is allocated
+from an IPPool, the traffic from the Pod to Pods on another Node or to external
+network will be sent to the underlay network through the Node's transport
+network interface, and will be forwarded/routed by the underlay network. We also
+call this forwarding mode `bridging mode`.
 
-Note that the IP pool annotation cannot be updated or deleted without recreating the
-resource. An `IPPool` can be extended, but cannot be shrunk if already assigned to a
-resource. The IP ranges of IPPools must not overlap, otherwise it would lead to undefined
-behavior.
+`IPPool` CRD defines a desired set of IP ranges. An `IPPool` can be annotated to
+Namespace, Pod and PodTemplate of StatefulSet/Deployment. Then Antrea will
+manage IP address assignment for corresponding Pods according to `IPPool` spec.
+Note that the IP pool annotation cannot be updated or deleted without recreating
+the resource. An `IPPool` can be extended, but cannot be shrunk if already
+assigned to a resource. The IP ranges of IPPools must not overlap, otherwise it
+would lead to undefined behavior.
 
-Regular `Subnet per Node` IPAM will continue to be used for resources without the IP pool
-annotation, or when `AntreaIPAM` feature is disabled.
+Regular `Subnet per Node` IPAM will continue to be used for resources without the
+IPPool annotation, or when the `AntreaIPAM` feature is disabled.
 
 ### Usage
 
-#### Enable AntreaIPAM feature gate
+#### Enable AntreaIPAM feature gate and bridging mode
 
-Users need to enable `AntreaIPAM` from the featureGates map defined in antrea.yml for
-both Controller and Agent:
+To enable flexible IPAM, you need to enable the `AntreaIPAM` feature gate for
+for both `antrea-controller` and `antrea-agent`, and set the `enableBridgingMode`
+configuration parameter of `antrea-agent` to `true`. The needed changes in the
+Antrea deployment YAML are:
 
 ```yaml
   antrea-controller.conf: |
     ...
     featureGates:
-    # Enable flexible IPAM mode for Antrea. This mode allows to assign IP Ranges to Namespaces,
-    # Deployments and StatefulSets via IP Pool annotation.
       AntreaIPAM: true
     ...
   antrea-agent.conf: |
     ...
     featureGates:
-    # Enable flexible IPAM mode for Antrea. This mode allows to assign IP Ranges to Namespaces,
-    # Deployments and StatefulSets via IP Pool annotation.
       AntreaIPAM: true
+    ...
+    enableBridgingMode: true
     ...
 ```
 
