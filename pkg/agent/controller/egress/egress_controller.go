@@ -30,7 +30,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/watch"
-	coreinformers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/client-go/util/workqueue"
@@ -48,6 +47,7 @@ import (
 	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha2"
 	crdlisters "antrea.io/antrea/pkg/client/listers/crd/v1alpha2"
 	"antrea.io/antrea/pkg/controller/metrics"
+	"antrea.io/antrea/pkg/util/channel"
 	"antrea.io/antrea/pkg/util/k8s"
 )
 
@@ -154,7 +154,7 @@ func NewEgressController(
 	nodeTransportInterface string,
 	cluster *memberlist.Cluster,
 	egressInformer crdinformers.EgressInformer,
-	nodeInformer coreinformers.NodeInformer,
+	podUpdateSubscriber channel.Subscriber,
 ) (*EgressController, error) {
 	c := &EgressController{
 		ofClient:             ofClient,
@@ -207,9 +207,24 @@ func NewEgressController(
 		},
 		resyncPeriod,
 	)
+	// Subscribe Pod update events from CNIServer to enforce Egress earlier, instead of waiting for their IPs are
+	// reported to kube-apiserver and processed by antrea-controller.
+	podUpdateSubscriber.Subscribe(c.processPodUpdate)
 	c.localIPDetector.AddEventHandler(c.onLocalIPUpdate)
 	c.cluster.AddClusterEventHandler(c.enqueueEgressesByExternalIPPool)
 	return c, nil
+}
+
+// processPodUpdate will be called when CNIServer publishes a Pod update event.
+// It triggers reconciling the effective Egress of the Pod.
+func (c *EgressController) processPodUpdate(pod string) {
+	c.egressBindingsMutex.Lock()
+	defer c.egressBindingsMutex.Unlock()
+	binding, exists := c.egressBindings[pod]
+	if !exists {
+		return
+	}
+	c.queue.Add(binding.effectiveEgress)
 }
 
 // addEgress processes Egress ADD events.

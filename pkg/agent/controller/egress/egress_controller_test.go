@@ -44,6 +44,7 @@ import (
 	"antrea.io/antrea/pkg/client/clientset/versioned"
 	fakeversioned "antrea.io/antrea/pkg/client/clientset/versioned/fake"
 	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions"
+	"antrea.io/antrea/pkg/util/channel"
 	"antrea.io/antrea/pkg/util/k8s"
 )
 
@@ -92,6 +93,7 @@ type fakeController struct {
 	crdClient          *fakeversioned.Clientset
 	crdInformerFactory crdinformers.SharedInformerFactory
 	mockIPAssigner     *ipassignertest.MockIPAssigner
+	podUpdateChannel   *channel.SubscribableChannel
 }
 
 func newFakeController(t *testing.T, initObjects []runtime.Object) *fakeController {
@@ -114,6 +116,8 @@ func newFakeController(t *testing.T, initObjects []runtime.Object) *fakeControll
 	addPodInterface(ifaceStore, "ns3", "pod3", 3)
 	addPodInterface(ifaceStore, "ns4", "pod4", 4)
 
+	podUpdateChannel := channel.NewSubscribableChannel("PodUpdate", 100)
+
 	egressController := &EgressController{
 		ofClient:             mockOFClient,
 		routeClient:          mockRouteClient,
@@ -133,6 +137,7 @@ func newFakeController(t *testing.T, initObjects []runtime.Object) *fakeControll
 		egressIPStates:       map[string]*egressIPState{},
 		ipAssigner:           mockIPAssigner,
 	}
+	podUpdateChannel.Subscribe(egressController.processPodUpdate)
 	return &fakeController{
 		EgressController:   egressController,
 		mockController:     controller,
@@ -141,6 +146,7 @@ func newFakeController(t *testing.T, initObjects []runtime.Object) *fakeControll
 		crdClient:          crdClient,
 		crdInformerFactory: crdInformerFactory,
 		mockIPAssigner:     mockIPAssigner,
+		podUpdateChannel:   podUpdateChannel,
 	}
 }
 
@@ -539,6 +545,51 @@ func TestSyncEgress(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestPodUpdateShouldSyncEgress(t *testing.T) {
+	egress := &crdv1a2.Egress{
+		ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
+		Spec:       crdv1a2.EgressSpec{EgressIP: fakeLocalEgressIP1},
+	}
+	egressGroup := &cpv1b2.EgressGroup{
+		ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
+		GroupMembers: []cpv1b2.GroupMember{
+			{Pod: &cpv1b2.PodReference{Name: "pod1", Namespace: "ns1"}},
+			{Pod: &cpv1b2.PodReference{Name: "pendingPod", Namespace: "ns1"}},
+		},
+	}
+	c := newFakeController(t, []runtime.Object{egress})
+	defer c.mockController.Finish()
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+	go c.podUpdateChannel.Run(stopCh)
+	c.crdInformerFactory.Start(stopCh)
+	c.crdInformerFactory.WaitForCacheSync(stopCh)
+
+	c.mockOFClient.EXPECT().InstallSNATMarkFlows(net.ParseIP(fakeLocalEgressIP1), uint32(1))
+	c.mockOFClient.EXPECT().InstallPodSNATFlows(uint32(1), net.ParseIP(fakeLocalEgressIP1), uint32(1))
+	c.mockRouteClient.EXPECT().AddSNATRule(net.ParseIP(fakeLocalEgressIP1), uint32(1))
+	c.mockIPAssigner.EXPECT().UnassignIP(fakeLocalEgressIP1)
+	c.addEgressGroup(egressGroup)
+	require.Equal(t, 1, c.queue.Len())
+	item, _ := c.queue.Get()
+	require.Equal(t, egress.Name, item)
+	require.NoError(t, c.syncEgress(item.(string)))
+	c.queue.Done(item)
+
+	c.mockOFClient.EXPECT().InstallPodSNATFlows(uint32(10), net.ParseIP(fakeLocalEgressIP1), uint32(1))
+	c.mockIPAssigner.EXPECT().UnassignIP(fakeLocalEgressIP1)
+	// Mock CNIServer
+	addPodInterface(c.ifaceStore, "ns1", "pendingPod", 10)
+	c.podUpdateChannel.Notify("ns1/pendingPod")
+	require.NoError(t, wait.PollImmediate(10*time.Millisecond, time.Second, func() (done bool, err error) {
+		return c.queue.Len() == 1, nil
+	}))
+	item, _ = c.queue.Get()
+	require.Equal(t, egress.Name, item)
+	require.NoError(t, c.syncEgress(item.(string)))
+	c.queue.Done(item)
 }
 
 func TestSyncOverlappingEgress(t *testing.T) {

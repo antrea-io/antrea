@@ -55,7 +55,7 @@ var (
 	podBar1                 = newPod("default", "podBar1", map[string]string{"app": "bar"}, node1, "1.1.1.2", false)
 	podFoo1InOtherNamespace = newPod("other", "podFoo1", map[string]string{"app": "foo"}, node1, "1.1.1.3", false)
 	podUnscheduled          = newPod("default", "podUnscheduled", map[string]string{"app": "foo"}, "", "", false)
-	podNonIP                = newPod("default", "podNonIP", map[string]string{"app": "foo"}, "node1", "", false)
+	podNonIP                = newPod("default", "podNonIP", map[string]string{"app": "foo"}, node1, "", false)
 	podWithHostNetwork      = newPod("default", "podHostNetwork", map[string]string{"app": "bar"}, node1, "172.16.100.1", true)
 	// Fake Namespaces
 	nsDefault = newNamespace("default", map[string]string{"company": "default"})
@@ -188,6 +188,7 @@ func TestAddEgress(t *testing.T) {
 					ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
 					GroupMembers: []controlplane.GroupMember{
 						{Pod: &controlplane.PodReference{Name: podFoo1.Name, Namespace: podFoo1.Namespace}},
+						{Pod: &controlplane.PodReference{Name: podNonIP.Name, Namespace: podNonIP.Namespace}},
 					},
 				},
 				node2: {
@@ -219,6 +220,7 @@ func TestAddEgress(t *testing.T) {
 					GroupMembers: []controlplane.GroupMember{
 						{Pod: &controlplane.PodReference{Name: podFoo1.Name, Namespace: podFoo1.Namespace}},
 						{Pod: &controlplane.PodReference{Name: podBar1.Name, Namespace: podBar1.Namespace}},
+						{Pod: &controlplane.PodReference{Name: podNonIP.Name, Namespace: podNonIP.Namespace}},
 					},
 				},
 				node2: {
@@ -250,6 +252,7 @@ func TestAddEgress(t *testing.T) {
 					GroupMembers: []controlplane.GroupMember{
 						{Pod: &controlplane.PodReference{Name: podFoo1.Name, Namespace: podFoo1.Namespace}},
 						{Pod: &controlplane.PodReference{Name: podFoo1InOtherNamespace.Name, Namespace: podFoo1InOtherNamespace.Namespace}},
+						{Pod: &controlplane.PodReference{Name: podNonIP.Name, Namespace: podNonIP.Namespace}},
 					},
 				},
 				node2: {
@@ -282,6 +285,7 @@ func TestAddEgress(t *testing.T) {
 					GroupMembers: []controlplane.GroupMember{
 						{Pod: &controlplane.PodReference{Name: podFoo1.Name, Namespace: podFoo1.Namespace}},
 						{Pod: &controlplane.PodReference{Name: podFoo1InOtherNamespace.Name, Namespace: podFoo1InOtherNamespace.Namespace}},
+						{Pod: &controlplane.PodReference{Name: podNonIP.Name, Namespace: podNonIP.Namespace}},
 					},
 				},
 				node2: {

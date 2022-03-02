@@ -53,11 +53,11 @@ import (
 	"antrea.io/antrea/pkg/agent/metrics"
 	openflowtest "antrea.io/antrea/pkg/agent/openflow/testing"
 	routetest "antrea.io/antrea/pkg/agent/route/testing"
-	antreatypes "antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/agent/util"
 	cnimsg "antrea.io/antrea/pkg/apis/cni/v1beta1"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 	ovsconfigtest "antrea.io/antrea/pkg/ovs/ovsconfig/testing"
+	"antrea.io/antrea/pkg/util/channel"
 )
 
 const (
@@ -575,7 +575,7 @@ func newTester() *cmdAddDelTester {
 		false,
 		routeMock,
 		tester.networkReadyCh)
-	tester.server.Initialize(ovsServiceMock, ofServiceMock, ifaceStore, make(chan antreatypes.EntityReference, 100), nil)
+	tester.server.Initialize(ovsServiceMock, ofServiceMock, ifaceStore, channel.NewSubscribableChannel("PodUpdate", 100), nil)
 	ctx := context.Background()
 	tester.ctx = ctx
 	return tester
@@ -799,7 +799,7 @@ func TestCNIServerChaining(t *testing.T) {
 			ifaceStore := interfacestore.NewInterfaceStore()
 			ovsServiceMock.EXPECT().IsHardwareOffloadEnabled().Return(false).AnyTimes()
 			ovsServiceMock.EXPECT().GetOVSDatapathType().Return(ovsconfig.OVSDatapathSystem).AnyTimes()
-			err = server.Initialize(ovsServiceMock, ofServiceMock, ifaceStore, make(chan antreatypes.EntityReference, 100), nil)
+			err = server.Initialize(ovsServiceMock, ofServiceMock, ifaceStore, channel.NewSubscribableChannel("PodUpdate", 100), nil)
 			testRequire.Nil(err)
 		}
 

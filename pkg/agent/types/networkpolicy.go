@@ -149,11 +149,3 @@ type BitRange struct {
 	Value uint16
 	Mask  *uint16
 }
-
-// EntityReference represents a reference to either a Pod or an ExternalEntity.
-type EntityReference struct {
-	// Pod maintains the reference to the Pod.
-	Pod *v1beta2.PodReference
-	// ExternalEntity maintains the reference to the ExternalEntity.
-	ExternalEntity *v1beta2.ExternalEntityReference
-}
