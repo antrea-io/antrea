@@ -62,7 +62,8 @@ func (r *REST) Get(ctx context.Context, name string, options *metav1.GetOptions)
 			effectiveIPBlocks = append(effectiveIPBlocks, ipb.CIDR)
 		}
 		memberList.EffectiveIPBlocks = effectiveIPBlocks
-	} else {
+	}
+	if len(groupMembers) > 0 {
 		effectiveMembers := make([]controlplane.GroupMember, 0, len(groupMembers))
 		for _, member := range groupMembers {
 			effectiveMembers = append(effectiveMembers, *member)
