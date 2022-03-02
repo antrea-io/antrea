@@ -101,7 +101,7 @@ func (o *Options) complete(args []string) error {
 // validate validates all the required options. It must be called after complete.
 func (o *Options) validate(args []string) error {
 	if len(args) != 0 {
-		return fmt.Errorf("no positional arguments are supported by antrea") //anju
+		return fmt.Errorf("no positional arguments are supported")
 	}
 
 	if o.config.TunnelType != ovsconfig.VXLANTunnel && o.config.TunnelType != ovsconfig.GeneveTunnel &&
