@@ -45,18 +45,10 @@ func NewIPTableRules() *iptablesRules {
 	return &iptRule
 }
 
-// Init initializes IPTABLES rules for NPL. Currently it deletes existing rules to ensure that no stale entries are present.
-func (ipt *iptablesRules) Init() error {
-	if err := ipt.initRules(); err != nil {
-		return fmt.Errorf("initialization of NPL iptables rules failed: %v", err)
-	}
-	return nil
-}
-
-// initRules creates the NPL chain and links it to the PREROUTING (for incoming
+// SyncFixedRules creates the NPL chain and links it to the PREROUTING (for incoming
 // traffic) and OUTPUT chain (for locally-generated traffic). All NPL DNAT rules
 // will be added to this chain.
-func (ipt *iptablesRules) initRules() error {
+func (ipt *iptablesRules) SyncFixedRules() error {
 	if err := ipt.table.EnsureChain(iptables.ProtocolIPv4, iptables.NATTable, NodePortLocalChain); err != nil {
 		return err
 	}

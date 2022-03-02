@@ -151,6 +151,25 @@ func (c *Client) ChainExists(protocol Protocol, table string, chain string) (boo
 	return true, nil
 }
 
+//Exists function checks whether rules are present in a particular chain
+func (c *Client) Exists(protocol Protocol, table, chain string, rulespec []string) (bool, error) {
+	for p := range c.ipts {
+		ipt := c.ipts[p]
+		if !matchProtocol(ipt, protocol) {
+			continue
+		}
+		exists, err := ipt.Exists(table, chain, rulespec...)
+		if err != nil {
+			return false, fmt.Errorf("error checking if rule exists: %s", err)
+		}
+		if !exists {
+			return false, nil
+		}
+		klog.V(2).InfoS("Rule exists", "chain", chain, "table", table, "protocol", p)
+	}
+	return true, nil
+}
+
 // AppendRule checks if target rule already exists with the protocol, appends it if not.
 func (c *Client) AppendRule(protocol Protocol, table string, chain string, ruleSpec []string) error {
 	for p := range c.ipts {

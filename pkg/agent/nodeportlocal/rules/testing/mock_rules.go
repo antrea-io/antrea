@@ -36,6 +36,10 @@ type MockPodPortRulesMockRecorder struct {
 	mock *MockPodPortRules
 }
 
+func (m *MockPodPortRules) SyncFixedRules() error {
+	return nil
+}
+
 // NewMockPodPortRules creates a new mock instance
 func NewMockPodPortRules(ctrl *gomock.Controller) *MockPodPortRules {
 	mock := &MockPodPortRules{ctrl: ctrl}

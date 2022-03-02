@@ -19,11 +19,11 @@ package rules
 
 // PodPortRules is an interface to abstract operations on rules for Pods
 type PodPortRules interface {
-	Init() error
 	AddRule(nodePort int, podIP string, podPort int, protocol string) error
 	DeleteRule(nodePort int, podIP string, podPort int, protocol string) error
 	DeleteAllRules() error
 	AddAllRules(nplList []PodNodePort) error
+	SyncFixedRules() error
 }
 
 // InitRules initializes rules based on the underlying implementation

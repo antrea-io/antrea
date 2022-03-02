@@ -53,30 +53,32 @@ const (
 )
 
 type NPLController struct {
-	portTable   *portcache.PortTable
-	kubeClient  clientset.Interface
-	queue       workqueue.RateLimitingInterface
-	podInformer cache.SharedIndexInformer
-	podLister   corelisters.PodLister
-	svcInformer cache.SharedIndexInformer
-	podToIP     map[string]string
-	nodeName    string
-	podIPLock   sync.RWMutex
+	portTable        *portcache.PortTable
+	kubeClient       clientset.Interface
+	queue            workqueue.RateLimitingInterface
+	podInformer      cache.SharedIndexInformer
+	podLister        corelisters.PodLister
+	svcInformer      cache.SharedIndexInformer
+	podToIP          map[string]string
+	nodeName         string
+	podIPLock        sync.RWMutex
+	SyncRuleInterval time.Duration
 }
 
 func NewNPLController(kubeClient clientset.Interface,
 	podInformer cache.SharedIndexInformer,
 	svcInformer cache.SharedIndexInformer,
 	pt *portcache.PortTable,
-	nodeName string) *NPLController {
+	nodeName string, syncRuleInterval time.Duration) *NPLController {
 	c := NPLController{
-		kubeClient:  kubeClient,
-		portTable:   pt,
-		podInformer: podInformer,
-		podLister:   corelisters.NewPodLister(podInformer.GetIndexer()),
-		svcInformer: svcInformer,
-		podToIP:     make(map[string]string),
-		nodeName:    nodeName,
+		kubeClient:       kubeClient,
+		portTable:        pt,
+		podInformer:      podInformer,
+		podLister:        corelisters.NewPodLister(podInformer.GetIndexer()),
+		svcInformer:      svcInformer,
+		podToIP:          make(map[string]string),
+		nodeName:         nodeName,
+		SyncRuleInterval: syncRuleInterval,
 	}
 
 	podInformer.AddEventHandlerWithResyncPeriod(
@@ -137,8 +139,31 @@ func (c *NPLController) Run(stopCh <-chan struct{}) {
 	for i := 0; i < numWorkers; i++ {
 		go wait.Until(c.Worker, time.Second, stopCh)
 	}
-
+	go c.SyncRules(stopCh)
 	<-stopCh
+}
+
+func NewTestingNPLController(portTable *portcache.PortTable, syncRuleInterval time.Duration) *NPLController {
+	// Only to be used in the Integration test and the Run method of NPLcontroller instance should not be called.
+	return &NPLController{
+		portTable:        portTable,
+		SyncRuleInterval: syncRuleInterval,
+	}
+}
+
+func (c *NPLController) SyncRules(stopCh <-chan struct{}) {
+	f := func() {
+		if err := c.portTable.PodPortRules.SyncFixedRules(); err != nil {
+			klog.V(3).ErrorS(err, "Error in syncing static rules.")
+			return
+		}
+		klog.V(3).Infof("Periodic syncing of npl iptables")
+		if err := c.portTable.SyncRules(); err != nil {
+			klog.V(3).ErrorS(err, "Error in syncing npl iptables periodically")
+			return
+		}
+	}
+	wait.Until(f, c.SyncRuleInterval, stopCh)
 }
 
 func (c *NPLController) syncPod(key string) error {

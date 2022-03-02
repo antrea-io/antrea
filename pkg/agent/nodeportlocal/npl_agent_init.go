@@ -19,6 +19,7 @@ package nodeportlocal
 
 import (
 	"fmt"
+	"time"
 
 	nplk8s "antrea.io/antrea/pkg/agent/nodeportlocal/k8s"
 	"antrea.io/antrea/pkg/agent/nodeportlocal/portcache"
@@ -27,6 +28,8 @@ import (
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 )
+
+const iptablesSyncInterval = 1 * time.Minute
 
 // InitializeNPLAgent initializes the NodePortLocal agent.
 // It sets up event handlers to handle Pod add, update and delete events.
@@ -45,5 +48,5 @@ func InitializeNPLAgent(
 	}
 
 	svcInformer := informerFactory.Core().V1().Services().Informer()
-	return nplk8s.NewNPLController(kubeClient, podInformer, svcInformer, portTable, nodeName), nil
+	return nplk8s.NewNPLController(kubeClient, podInformer, svcInformer, portTable, nodeName, iptablesSyncInterval), nil
 }

@@ -253,7 +253,7 @@ func setUp(t *testing.T, tc *testConfig, objects ...runtime.Object) *testData {
 	)
 	svcInformer := informerFactory.Core().V1().Services().Informer()
 
-	c := nplk8s.NewNPLController(data.k8sClient, localPodInformer, svcInformer, data.portTable, defaultNodeName)
+	c := nplk8s.NewNPLController(data.k8sClient, localPodInformer, svcInformer, data.portTable, defaultNodeName, iptablesSyncInterval)
 
 	data.runWrapper(c)
 	informerFactory.Start(data.stopCh)

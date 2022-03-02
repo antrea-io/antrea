@@ -129,7 +129,7 @@ func NewPortTable(start, end int) (*PortTable, error) {
 		PodPortRules:     rules.InitRules(),
 		LocalPortOpener:  &localPortOpener{},
 	}
-	if err := ptable.PodPortRules.Init(); err != nil {
+	if err := ptable.PodPortRules.SyncFixedRules(); err != nil {
 		return nil, err
 	}
 	return &ptable, nil
@@ -372,7 +372,7 @@ func (pt *PortTable) RuleExists(podIP string, podPort int, protocol string) bool
 }
 
 // syncRules ensures that contents of the port table matches the iptables rules present on the Node.
-func (pt *PortTable) syncRules() error {
+func (pt *PortTable) SyncRules() error {
 	pt.tableLock.Lock()
 	defer pt.tableLock.Unlock()
 	nplPorts := make([]rules.PodNodePort, 0, len(pt.NodePortTable))
@@ -410,7 +410,6 @@ func (pt *PortTable) RestoreRules(allNPLPorts []rules.PodNodePort, synced chan<-
 			closeSocketsOrRetry(protocols)
 			continue
 		}
-
 		npData := &NodePortData{
 			NodePort:  nplPort.NodePort,
 			PodPort:   nplPort.PodPort,
@@ -433,7 +432,7 @@ func (pt *PortTable) RestoreRules(allNPLPorts []rules.PodNodePort, synced chan<-
 		defer close(synced)
 		var backoffTime = 2 * time.Second
 		for {
-			if err := pt.syncRules(); err != nil {
+			if err := pt.SyncRules(); err != nil {
 				klog.ErrorS(err, "Failed to restore iptables rules", "backoff", backoffTime)
 				time.Sleep(backoffTime)
 				continue
