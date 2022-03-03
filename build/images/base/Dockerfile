@@ -36,7 +36,7 @@ USER root
 # chmod in the RUN command below instead.
 ADD https://raw.githubusercontent.com/kubernetes-sigs/iptables-wrappers/9e6ce59c864623ea71a6f7d59c35fcb13a919b87/iptables-wrapper-installer.sh /iptables-wrapper-installer.sh
 
-RUN apt-get update && apt-get install -y --no-install-recommends ipset jq && \
+RUN apt-get update && apt-get install -y --no-install-recommends ipset jq ethtool bridge-utils && \
     rm -rf /var/lib/apt/lists/* && \
     chmod +x /iptables-wrapper-installer.sh && \
     /iptables-wrapper-installer.sh

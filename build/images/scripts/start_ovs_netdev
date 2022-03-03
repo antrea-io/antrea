@@ -29,6 +29,14 @@ function grep_allow_no_match {
 
 # See http://docs.openvswitch.org/en/latest/howto/userspace-tunneling/
 function add_br_phy {
+    brctl addbr br0
+    ip link add dev veth0 type veth peer name veth1
+    brctl addif br0 veth0
+    ip link set br0 up
+    ip link set veth0 up
+    ip link set veth1 up
+    ethtool -K veth0 tx off
+
     log_info $CONTAINER_NAME "Creating OVS br-phy bridge for netdev datapath type"
     hwaddr=$(ip link show eth0 | grep link/ether | awk '{print $2}')
     inet=$(ip addr show eth0 | grep "inet " | awk '{ print $2 }')
@@ -41,10 +49,9 @@ function add_br_phy {
     ovs-vsctl add-br br-phy \
               -- set Bridge br-phy datapath_type=netdev \
               -- br-set-external-id br-phy bridge-id br-phy \
-              -- set bridge br-phy fail-mode=standalone \
-              other_config:hwaddr="$hwaddr"
+              -- set bridge br-phy fail-mode=standalone
 
-    ovs-vsctl --timeout 10 add-port br-phy eth0
+    ovs-vsctl --timeout 10 add-port br-phy veth1
     ip addr add "$inet" dev br-phy
     if [[ "$ipv6enabled" -eq 0 ]] && [[ -n "$inet6" ]]; then
       ip addr add "$inet6" dev br-phy
@@ -53,7 +60,8 @@ function add_br_phy {
     ip addr flush dev eth0 2>/dev/null
     ip link set eth0 up
     ip route add default via "$gw" dev br-phy
-    iptables -t raw -A PREROUTING -i eth0 -j DROP
+    brctl addif br0 eth0
+
     # While the below ip6tables rule should prevent duplicate packets, we
     # observed that it caused connectivity to the API server to fail from
     # outside the cluster. More investigation is required.
@@ -71,8 +79,11 @@ function del_br_phy {
     # we must ensure IPv6 is enabled before we can add IPv6 addresses
     ipv6enabled=$(sysctl net.ipv6.conf.all.disable_ipv6 --values)
     log_info $CONTAINER_NAME "Deleting OVS br-phy bridge"
-    ovs-vsctl del-port br-phy eth0
+    ovs-vsctl del-port br-phy veth1
     ovs-vsctl del-br br-phy
+    ip link del dev veth0
+    ip link set br0 down
+    brctl delbr br0
     ip addr add "$inet" dev eth0
     if [[ "$ipv6enabled" -eq 0 ]] && [[ -n "$inet6" ]]; then
       ip addr add "$inet6" dev eth0
