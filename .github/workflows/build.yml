@@ -112,7 +112,7 @@ jobs:
   
   build-windows:
     needs: [check-changes, check-windows-changes]
-    if: ${{ (needs.check-changes.outputs.has_changes == 'yes' || github.event_name == 'push') && (needs.check-windows-changes.outputs.any_changed)}}
+    if: ${{ (needs.check-changes.outputs.has_changes == 'yes' || github.event_name == 'push') && (needs.check-windows-changes.outputs.any_changed)=='true'}}
     runs-on: [windows-2019]
     steps:
     - uses: actions/checkout@v2
