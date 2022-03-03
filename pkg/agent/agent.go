@@ -1111,7 +1111,7 @@ func (i *Initializer) patchNodeAnnotations(nodeName, key string, value interface
 		},
 	})
 	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		_, err := i.client.CoreV1().Nodes().Patch(context.TODO(), nodeName, apitypes.MergePatchType, patch, metav1.PatchOptions{})
+		_, err := i.client.CoreV1().Nodes().Patch(context.TODO(), nodeName, apitypes.MergePatchType, patch, metav1.PatchOptions{}, "status")
 		return err
 	}); err != nil {
 		klog.ErrorS(err, "Failed to patch Node annotation", "key", key, "value", value)
