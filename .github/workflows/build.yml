@@ -104,7 +104,7 @@ jobs:
      - name: Get changed files
        id: changed_window_files
        run: |
-         echo "::set-output name=all::$(git diff --name-only --diff-filter=ACMRT ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} | grep -R '//go:build windows' --include=*_windows.go --include=winfirewall.go | xargs)"
+         echo "::set-output name=all::$(git diff --name-only --diff-filter=ACMRT ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} | grep -E -l "//go:build windows"  --include=*.go  --exclude=*_test.go | xargs)"
 
   build-windows:
     needs: [check-changes, check-windows-changes]
