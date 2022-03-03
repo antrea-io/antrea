@@ -299,3 +299,7 @@ func (i *Initializer) RestoreOVSBridge() {
 	}
 	klog.Infof("Finished to restore bridge config to uplink...")
 }
+
+func (i *Initializer) setInterfaceMTU(iface string, mtu int) error {
+	return i.ovsBridgeClient.SetInterfaceMTU(iface, mtu)
+}
