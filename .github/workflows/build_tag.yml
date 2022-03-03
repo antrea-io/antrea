@@ -23,7 +23,7 @@ jobs:
     runs-on: [ubuntu-latest]
     needs: get-version
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
     - name: Build and push Antrea Ubuntu amd64 Docker image to registry
       env:
         DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
@@ -47,7 +47,7 @@ jobs:
     runs-on: [ubuntu-latest]
     needs: get-version
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - name: Build and push Antrea UBI8 amd64 Docker image to registry
         env:
           DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
@@ -62,7 +62,7 @@ jobs:
     runs-on: [windows-2019]
     needs: get-version
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
     - name: Build Antrea Windows Docker image and push to registry
       env:
         DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
@@ -78,7 +78,7 @@ jobs:
     runs-on: [ubuntu-latest]
     needs: get-version
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
     - name: Build octant-antrea-ubuntu Docker image and push to registry
       env:
         DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
@@ -93,7 +93,7 @@ jobs:
     runs-on: [ubuntu-latest]
     needs: get-version
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
     - name: Build antrea-mc-controller Docker image and push to registry
       env:
         DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
@@ -109,7 +109,7 @@ jobs:
     runs-on: [ubuntu-latest]
     needs: get-version
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
     - name: Build flow-aggregator Docker image and push to registry
       env:
         DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
