@@ -54,7 +54,6 @@ import (
 	"antrea.io/antrea/pkg/agent/secondarynetwork/cnipodcache"
 	"antrea.io/antrea/pkg/agent/secondarynetwork/podwatch"
 	"antrea.io/antrea/pkg/agent/stats"
-	"antrea.io/antrea/pkg/agent/types"
 	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions"
 	"antrea.io/antrea/pkg/controller/externalippool"
 	"antrea.io/antrea/pkg/features"
@@ -63,6 +62,7 @@ import (
 	ofconfig "antrea.io/antrea/pkg/ovs/openflow"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 	"antrea.io/antrea/pkg/signals"
+	"antrea.io/antrea/pkg/util/channel"
 	"antrea.io/antrea/pkg/util/cipher"
 	"antrea.io/antrea/pkg/util/k8s"
 	"antrea.io/antrea/pkg/version"
@@ -261,10 +261,10 @@ func run(o *Options) error {
 		}
 	}
 
-	// entityUpdates is a channel for receiving entity updates from CNIServer and
-	// notifying NetworkPolicyController to reconcile rules related to the
-	// updated entities.
-	entityUpdates := make(chan types.EntityReference, 100)
+	// podUpdateChannel is a channel for receiving Pod updates from CNIServer and
+	// notifying NetworkPolicyController and EgressController to reconcile rules
+	// related to the updated Pods.
+	podUpdateChannel := channel.NewSubscribableChannel("PodUpdate", 100)
 	// We set flow poll interval as the time interval for rule deletion in the async
 	// rule cache, which is implemented as part of the idAllocator. This is to preserve
 	// the rule info for populating NetworkPolicy fields in the Flow Exporter even
@@ -282,7 +282,7 @@ func run(o *Options) error {
 		ofClient,
 		ifaceStore,
 		nodeConfig.Name,
-		entityUpdates,
+		podUpdateChannel,
 		groupCounters,
 		groupIDUpdates,
 		antreaPolicyEnabled,
@@ -333,7 +333,7 @@ func run(o *Options) error {
 	if features.DefaultFeatureGate.Enabled(features.Egress) {
 		egressController, err = egress.NewEgressController(
 			ofClient, antreaClientProvider, crdClient, ifaceStore, routeClient, nodeConfig.Name, nodeTransportIP,
-			memberlistCluster, egressInformer, nodeInformer, localIPDetector,
+			memberlistCluster, egressInformer, podUpdateChannel, localIPDetector,
 		)
 		if err != nil {
 			return fmt.Errorf("error creating new Egress controller: %v", err)
@@ -372,12 +372,12 @@ func run(o *Options) error {
 	var cniPodInfoStore cnipodcache.CNIPodInfoStore
 	if features.DefaultFeatureGate.Enabled(features.SecondaryNetwork) {
 		cniPodInfoStore = cnipodcache.NewCNIPodInfoStore()
-		err = cniServer.Initialize(ovsBridgeClient, ofClient, ifaceStore, entityUpdates, cniPodInfoStore)
+		err = cniServer.Initialize(ovsBridgeClient, ofClient, ifaceStore, podUpdateChannel, cniPodInfoStore)
 		if err != nil {
 			return fmt.Errorf("error initializing CNI server with cniPodInfoStore cache: %v", err)
 		}
 	} else {
-		err = cniServer.Initialize(ovsBridgeClient, ofClient, ifaceStore, entityUpdates, nil)
+		err = cniServer.Initialize(ovsBridgeClient, ofClient, ifaceStore, podUpdateChannel, nil)
 		if err != nil {
 			return fmt.Errorf("error initializing CNI server: %v", err)
 		}
@@ -494,6 +494,8 @@ func run(o *Options) error {
 	}
 
 	log.StartLogFileNumberMonitor(stopCh)
+
+	go podUpdateChannel.Run(stopCh)
 
 	go routeClient.Run(stopCh)
 

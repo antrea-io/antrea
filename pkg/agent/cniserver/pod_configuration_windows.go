@@ -24,9 +24,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent/interfacestore"
-	"antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/agent/util"
-	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	"antrea.io/antrea/pkg/util/k8s"
 )
 
@@ -51,9 +49,7 @@ func (pc *podConfigurator) connectInterfaceToOVSAsync(ifConfig *interfacestore.I
 		// Update interface config with the ofPort.
 		ifConfig.OVSPortConfig.OFPort = ofPort
 		// Notify the Pod update event to required components.
-		pc.entityUpdates <- types.EntityReference{
-			Pod: &v1beta2.PodReference{Name: ifConfig.PodName, Namespace: ifConfig.PodNamespace},
-		}
+		pc.podUpdateNotifier.Notify(k8s.NamespacedName(ifConfig.PodNamespace, ifConfig.PodName))
 		return nil
 	})
 }
