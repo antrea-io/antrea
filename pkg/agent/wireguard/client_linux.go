@@ -147,7 +147,7 @@ func (client *client) Init() error {
 		},
 	})
 	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		_, err := client.k8sClient.CoreV1().Nodes().Patch(context.TODO(), client.nodeName, apitypes.MergePatchType, patch, metav1.PatchOptions{})
+		_, err := client.k8sClient.CoreV1().Nodes().Patch(context.TODO(), client.nodeName, apitypes.MergePatchType, patch, metav1.PatchOptions{}, "status")
 		return err
 	}); err != nil {
 		return fmt.Errorf("error when patching the Node with the '%s' annotation: %w", types.NodeWireGuardPublicAnnotationKey, err)

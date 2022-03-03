@@ -75,7 +75,7 @@ func patchPod(value []NPLAnnotation, pod *corev1.Pod, kubeClient clientset.Inter
 
 	payloadBytes, _ := json.Marshal(newPayload)
 	if _, err := kubeClient.CoreV1().Pods(pod.Namespace).Patch(context.TODO(), pod.Name, types.MergePatchType,
-		payloadBytes, metav1.PatchOptions{}); err != nil {
+		payloadBytes, metav1.PatchOptions{}, "status"); err != nil {
 		return fmt.Errorf("unable to update NodePortLocal annotation for Pod %s/%s: %v", pod.Namespace,
 			pod.Name, err)
 	}

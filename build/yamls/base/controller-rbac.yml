@@ -14,6 +14,7 @@ rules:
       - ""
     resources:
       - pods
+      - services
       - namespaces
       - configmaps
     verbs:
@@ -32,14 +33,9 @@ rules:
   - apiGroups:
       - ""
     resources:
-      - services
       - services/status
     verbs:
-      - get
-      - watch
-      - list
       - update
-      - patch
   - apiGroups:
       - networking.k8s.io
     resources:
