@@ -2691,7 +2691,7 @@ data:
     # - netdev
     # 'system' is the default value and corresponds to the kernel datapath. Use 'netdev' to run
     # OVS in userspace mode. Userspace mode requires the tun device driver to be available.
-    #ovsDatapathType: system
+    ovsDatapathType: netdev
 
     # Name of the interface antrea-agent will create and use for host <--> pod communication.
     # Make sure it doesn't conflict with your existing interfaces.
@@ -2975,7 +2975,7 @@ metadata:
   annotations: {}
   labels:
     app: antrea
-  name: antrea-config-82b78c27h8
+  name: antrea-config-c2kfgd59tm
   namespace: kube-system
 ---
 apiVersion: v1
@@ -3046,7 +3046,7 @@ spec:
             fieldRef:
               fieldPath: spec.serviceAccountName
         - name: ANTREA_CONFIG_MAP_NAME
-          value: antrea-config-82b78c27h8
+          value: antrea-config-c2kfgd59tm
         image: projects.registry.vmware.com/antrea/antrea-ubuntu:latest
         imagePullPolicy: IfNotPresent
         livenessProbe:
@@ -3097,7 +3097,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-82b78c27h8
+          name: antrea-config-c2kfgd59tm
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -3177,16 +3177,10 @@ spec:
     spec:
       containers:
       - args:
-        - --config
-        - /etc/antrea/antrea-agent.conf
-        - --logtostderr=false
-        - --log_dir=/var/log/antrea
-        - --alsologtostderr
-        - --log_file_max_size=100
-        - --log_file_max_num=4
-        - --v=0
+        - -c
+        - sleep 2; exec antrea-agent --config /etc/antrea/antrea-agent.conf
         command:
-        - antrea-agent
+        - /bin/sh
         env:
         - name: POD_NAME
           valueFrom:
@@ -3260,7 +3254,7 @@ spec:
         - --log_file_max_size=100
         - --log_file_max_num=4
         command:
-        - start_ovs
+        - start_ovs_netdev
         image: projects.registry.vmware.com/antrea/antrea-ubuntu:latest
         imagePullPolicy: IfNotPresent
         livenessProbe:
@@ -3285,6 +3279,8 @@ spec:
             - SYS_ADMIN
             - IPC_LOCK
         volumeMounts:
+        - mountPath: /dev/net/tun
+          name: dev-tun
         - mountPath: /var/run/openvswitch
           name: host-var-run-antrea
           subPath: openvswitch
@@ -3295,17 +3291,13 @@ spec:
       hostNetwork: true
       initContainers:
       - command:
-        - install_cni
+        - install_cni_kind
         image: projects.registry.vmware.com/antrea/antrea-ubuntu:latest
         imagePullPolicy: IfNotPresent
         name: install-cni
         resources:
           requests:
             cpu: 100m
-        securityContext:
-          capabilities:
-            add:
-            - SYS_MODULE
         volumeMounts:
         - mountPath: /etc/antrea/antrea-cni.conflist
           name: antrea-config
@@ -3332,8 +3324,12 @@ spec:
       - effect: NoExecute
         operator: Exists
       volumes:
+      - hostPath:
+          path: /dev/net/tun
+          type: CharDevice
+        name: dev-tun
       - configMap:
-          name: antrea-config-82b78c27h8
+          name: antrea-config-c2kfgd59tm
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d

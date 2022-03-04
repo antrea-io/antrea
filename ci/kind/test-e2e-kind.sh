@@ -169,12 +169,12 @@ function run_test {
   eval "timeout 600 $TESTBED_CMD create kind $args"
 
   if $coverage; then
-      $YML_CMD --kind --encap-mode $current_mode $manifest_args | docker exec -i kind-control-plane dd of=/root/antrea-coverage.yml
-      $YML_CMD --kind --encap-mode $current_mode --wireguard-go $manifest_args | docker exec -i kind-control-plane dd of=/root/antrea-wireguard-go-coverage.yml
+      $YML_CMD --encap-mode $current_mode $manifest_args | docker exec -i kind-control-plane dd of=/root/antrea-coverage.yml
+      $YML_CMD --encap-mode $current_mode --wireguard-go $manifest_args | docker exec -i kind-control-plane dd of=/root/antrea-wireguard-go-coverage.yml
       $FLOWAGGREGATOR_YML_CMD --coverage | docker exec -i kind-control-plane dd of=/root/flow-aggregator-coverage.yml
   else
-      $YML_CMD --kind --encap-mode $current_mode $manifest_args | docker exec -i kind-control-plane dd of=/root/antrea.yml
-      $YML_CMD --kind --encap-mode $current_mode --wireguard-go $manifest_args | docker exec -i kind-control-plane dd of=/root/antrea-wireguard-go.yml
+      $YML_CMD --encap-mode $current_mode $manifest_args | docker exec -i kind-control-plane dd of=/root/antrea.yml
+      $YML_CMD --encap-mode $current_mode --wireguard-go $manifest_args | docker exec -i kind-control-plane dd of=/root/antrea-wireguard-go.yml
       $FLOWAGGREGATOR_YML_CMD | docker exec -i kind-control-plane dd of=/root/flow-aggregator.yml
   fi
   if $proxy_all; then

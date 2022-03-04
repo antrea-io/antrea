@@ -285,11 +285,11 @@ if "$WIREGUARD_GO" && "$IPSEC"; then
     exit 1
 fi
 
-if "$WIREGUARD_GO" && ! "$KIND"; then
-    echoerr "--wireguard-go works only for Kind clusters"
-    print_help
-    exit 1
-fi
+#if "$WIREGUARD_GO" && ! "$KIND"; then
+#    echoerr "--wireguard-go works only for Kind clusters"
+#    print_help
+#    exit 1
+#fi
 
 THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
@@ -507,6 +507,12 @@ if $KIND; then
     BASE=../kind
     cd ..
 fi
+
+# inject the wireguard-go container to run WireGuard in userspace
+#if $WIREGUARD_GO; then
+#    touch kustomization.yml
+#    $KUSTOMIZE edit add patch --path wireguardGo.yml
+#fi
 
 if $CUSTOM_ADM_CONTROLLER; then
     mkdir admissioncontroller && cd admissioncontroller

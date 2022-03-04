@@ -245,3 +245,14 @@ if [[ $errors -ne 0 ]]; then
     exit 1
 fi
 exit 0
+
+
+
+sonobuoy run --wait --kube-conformance-image --kube-conformance-image-version "auto" --e2e-focus "\[Conformance\]" --e2e-skip "\[Slow\]|\[Serial\]|\[Disruptive\]|\[Flaky\]|\[Feature:.+\]|\[sig-cli\]|\[sig-storage\]|\[sig-auth\]|\[sig-api-machinery\]|\[sig-apps\]|\[sig-node\]|\[sig-instrumentation\]" --image-pull-policy "Always" --sonobuoy-image "projects.registry.vmware.com/sonobuoy/sonobuoy:v0.20.0" --systemd-logs-image "projects.registry.vmware.com/sonobuoy/systemd-logs:v0.3" --e2e-repo-config /Users/gavinx/Downloads/mackindtest/antrea/ci/conformance-image-config.yaml
+
+sonobuoy run --wait --kube-conformance-image-version "auto" --e2e-focus "\[Conformance\]" --e2e-skip "\[Slow\]|\[Serial\]|\[Disruptive\]|\[Flaky\]|\[Feature:.+\]|\[sig-cli\]|\[sig-storage\]|\[sig-auth\]|\[sig-api-machinery\]|\[sig-apps\]|\[sig-node\]|\[sig-instrumentation\]" --image-pull-policy "Always" --sonobuoy-image "projects.registry.vmware.com/sonobuoy/sonobuoy:v0.20.0" --systemd-logs-image "projects.registry.vmware.com/sonobuoy/systemd-logs:v0.3" --e2e-repo-config /Users/gavinx/Downloads/mackindtest/antrea/ci/conformance-image-config.yaml
+
+sudo sonobuoy run --v 10 --wait --e2e-focus "\[Conformance\]" --e2e-skip "\[Slow\]|\[Serial\]|\[Disruptive\]|\[Flaky\]|\[Feature:.+\]|\[sig-cli\]|\[sig-storage\]|\[sig-auth\]|\[sig-api-machinery\]|\[sig-apps\]|\[sig-node\]|\[sig-instrumentation\]" --e2e-repo-config /Users/gavinx/Downloads/mackindtest/antrea/ci/conformance-image-config.yaml
+
+sudo /root/antrea/ci/run-k8s-e2e-tests.sh --e2e-network-policy --log-mode detail  --sonobuoy-image projects.registry.vmware.com/sonobuoy/sonobuoy:v0.20.0 --kube-conformance-image-version "auto"
+（linux）

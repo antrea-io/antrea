@@ -44,6 +44,7 @@ const (
 
 var (
 	virtualServiceIPv4Net = util.NewIPNet(config.VirtualServiceIPv4)
+	PodIPv4CIDR *net.IPNet
 )
 
 type Client struct {
