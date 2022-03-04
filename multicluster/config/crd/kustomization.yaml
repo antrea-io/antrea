@@ -9,7 +9,6 @@ resources:
 - bases/multicluster.crd.antrea.io_resourceimportfilters.yaml
 - bases/multicluster.crd.antrea.io_resourceexports.yaml
 - bases/multicluster.crd.antrea.io_resourceimports.yaml
-- bases/multicluster.crd.antrea.io_acnpimports.yaml
 - k8smcs/multicluster.x-k8s.io_serviceexports.yaml
 - k8smcs/multicluster.x-k8s.io_serviceimports.yaml
 #+kubebuilder:scaffold:crdkustomizeresource

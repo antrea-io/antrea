@@ -36,6 +36,16 @@ rules:
 - apiGroups:
   - ""
   resources:
+  - events
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
+- apiGroups:
+  - ""
+  resources:
   - services
   verbs:
   - create
@@ -65,26 +75,6 @@ rules:
   - get
   - list
   - watch
-- apiGroups:
-  - multicluster.crd.antrea.io
-  resources:
-  - acnpimports
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - multicluster.crd.antrea.io
-  resources:
-  - acnpimports/status
-  verbs:
-  - get
-  - patch
-  - update
 - apiGroups:
   - multicluster.crd.antrea.io
   resources:
@@ -356,6 +346,26 @@ metadata:
   name: antrea-mc-member-cluster-role
   namespace: changeme
 rules:
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - get
+  - list
+  - patch
+  - update
 - apiGroups:
   - multicluster.crd.antrea.io
   resources:

@@ -17,10 +17,6 @@ limitations under the License.
 
 package v1alpha1
 
-// ACNPImportListerExpansion allows custom methods to be added to
-// ACNPImportLister.
-type ACNPImportListerExpansion interface{}
-
 // ClusterClaimListerExpansion allows custom methods to be added to
 // ClusterClaimLister.
 type ClusterClaimListerExpansion interface{}

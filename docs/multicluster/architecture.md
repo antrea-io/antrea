@@ -98,7 +98,7 @@ ClusterSet to be applied with a consistent security posture (for example, all na
 clusters can only communicate with Pods in their own namespaces). For more information regarding
 Antrea ClusterNetworkPolicy(ACNP), refer to [this document](../antrea-network-policy.md).
 
-To achieve such ACNP copy-span, admins can, in the acting leader cluster of a Multi-cluster deployment, 
+To achieve such ACNP copy-span, admins can, in the acting leader cluster of a Multi-cluster deployment,
 create a ResourceExport of kind `AntreaClusterNetworkPolicy` which contains the ClusterNetworkPolicy spec
 they wish to be replicated. The ResourceExport should be created in the Namespace which implements the
 Common Area of the ClusterSet. In future releases, some additional tooling may become available to
@@ -132,8 +132,46 @@ spec:
 ```
 
 The above sample spec will create an ACNP in each member cluster which implements strict namespace
-isolation for that cluster. 
+isolation for that cluster.
 
 Note that because the Tier that an ACNP refers to must exist before the ACNP is applied, an importing
 cluster may fail to create the ACNP to be replicated, if the tier in the ResourceExport spec cannot be
-found in that particular cluster.
+found in that particular cluster. The ACNP creation status of each member cluster will be reported back
+to the Common Area as K8s Events, and can be checked by describing the ResourceImport of the original
+ResourceExport:
+
+```text
+kubectl describe resourceimport -A
+---
+Name:         strict-namespace-isolation-antreaclusternetworkpolicy
+Namespace:    antrea-mcs-ns
+API Version:  multicluster.crd.antrea.io/v1alpha1
+Kind:         ResourceImport
+Spec:
+  Clusternetworkpolicy:
+    Applied To:
+      Namespace Selector:
+    Ingress:
+      Action:          Pass
+      Enable Logging:  false
+      From:
+        Namespaces:
+          Match:  Self
+        Pod Selector:
+          Match Labels:
+            k8s-app:   kube-dns
+      Action:          Drop
+      Enable Logging:  false
+      From:
+        Namespace Selector:
+    Priority:  1
+    Tier:      random
+  Kind:        AntreaClusterNetworkPolicy
+  Name:        strict-namespace-isolation
+  ...
+Events:
+  Type    Reason               Age    From                       Message
+  ----    ------               ----   ----                       -------
+  Normal  ACNPImportSucceeded  2m11s  resourceimport-controller  ACNP successfully created in the importing cluster test-cluster-east
+  Warning ACNPImportFailed     2m11s  resourceimport-controller  ACNP Tier does not exist in the importing cluster test-cluster-west
+```

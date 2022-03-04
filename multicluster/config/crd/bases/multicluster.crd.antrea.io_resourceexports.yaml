@@ -239,6 +239,16 @@ spec:
                                 contains only "value". The requirements are ANDed.
                               type: object
                           type: object
+                        serviceAccount:
+                          description: Select all Pods with the ServiceAccount matched
+                            by this field, as workloads in AppliedTo/To/From fields.
+                            Cannot be set with any other selector.
+                          properties:
+                            name:
+                              type: string
+                            namespace:
+                              type: string
+                          type: object
                       type: object
                     type: array
                   egress:
@@ -458,6 +468,16 @@ spec:
                                       The requirements are ANDed.
                                     type: object
                                 type: object
+                              serviceAccount:
+                                description: Select all Pods with the ServiceAccount
+                                  matched by this field, as workloads in AppliedTo/To/From
+                                  fields. Cannot be set with any other selector.
+                                properties:
+                                  name:
+                                    type: string
+                                  namespace:
+                                    type: string
+                                type: object
                             type: object
                           type: array
                         enableLogging:
@@ -668,6 +688,16 @@ spec:
                                       and the values array contains only "value".
                                       The requirements are ANDed.
                                     type: object
+                                type: object
+                              serviceAccount:
+                                description: Select all Pods with the ServiceAccount
+                                  matched by this field, as workloads in AppliedTo/To/From
+                                  fields. Cannot be set with any other selector.
+                                properties:
+                                  name:
+                                    type: string
+                                  namespace:
+                                    type: string
                                 type: object
                             type: object
                           type: array
@@ -911,6 +941,16 @@ spec:
                                       The requirements are ANDed.
                                     type: object
                                 type: object
+                              serviceAccount:
+                                description: Select all Pods with the ServiceAccount
+                                  matched by this field, as workloads in AppliedTo/To/From
+                                  fields. Cannot be set with any other selector.
+                                properties:
+                                  name:
+                                    type: string
+                                  namespace:
+                                    type: string
+                                type: object
                             type: object
                           type: array
                         toServices:
@@ -921,17 +961,13 @@ spec:
                             can't be used with To or Ports. If this field and To are
                             both empty or missing, this rule matches all destinations.
                           items:
-                            description: ServiceReference represents a reference to
-                              a v1.Service.
+                            description: NamespacedName refers to a Namespace scoped
+                              resource. All fields must be used together.
                             properties:
                               name:
-                                description: Name of the Service
                                 type: string
                               namespace:
-                                description: Namespace of the Service
                                 type: string
-                            required:
-                            - name
                             type: object
                           type: array
                       required:
@@ -1155,6 +1191,16 @@ spec:
                                       The requirements are ANDed.
                                     type: object
                                 type: object
+                              serviceAccount:
+                                description: Select all Pods with the ServiceAccount
+                                  matched by this field, as workloads in AppliedTo/To/From
+                                  fields. Cannot be set with any other selector.
+                                properties:
+                                  name:
+                                    type: string
+                                  namespace:
+                                    type: string
+                                type: object
                             type: object
                           type: array
                         enableLogging:
@@ -1365,6 +1411,16 @@ spec:
                                       and the values array contains only "value".
                                       The requirements are ANDed.
                                     type: object
+                                type: object
+                              serviceAccount:
+                                description: Select all Pods with the ServiceAccount
+                                  matched by this field, as workloads in AppliedTo/To/From
+                                  fields. Cannot be set with any other selector.
+                                properties:
+                                  name:
+                                    type: string
+                                  namespace:
+                                    type: string
                                 type: object
                             type: object
                           type: array
@@ -1608,6 +1664,16 @@ spec:
                                       The requirements are ANDed.
                                     type: object
                                 type: object
+                              serviceAccount:
+                                description: Select all Pods with the ServiceAccount
+                                  matched by this field, as workloads in AppliedTo/To/From
+                                  fields. Cannot be set with any other selector.
+                                properties:
+                                  name:
+                                    type: string
+                                  namespace:
+                                    type: string
+                                type: object
                             type: object
                           type: array
                         toServices:
@@ -1618,17 +1684,13 @@ spec:
                             can't be used with To or Ports. If this field and To are
                             both empty or missing, this rule matches all destinations.
                           items:
-                            description: ServiceReference represents a reference to
-                              a v1.Service.
+                            description: NamespacedName refers to a Namespace scoped
+                              resource. All fields must be used together.
                             properties:
                               name:
-                                description: Name of the Service
                                 type: string
                               namespace:
-                                description: Namespace of the Service
                                 type: string
-                            required:
-                            - name
                             type: object
                           type: array
                       required:

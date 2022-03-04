@@ -7,6 +7,16 @@ metadata:
   namespace: changeme
 rules:
   - apiGroups:
+      - ""
+    resources:
+      - events
+    verbs:
+      - create
+      - get
+      - list
+      - patch
+      - update
+  - apiGroups:
       - multicluster.crd.antrea.io
     resources:
       - memberclusterannounces

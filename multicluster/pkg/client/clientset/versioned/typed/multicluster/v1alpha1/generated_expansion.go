@@ -17,8 +17,6 @@ limitations under the License.
 
 package v1alpha1
 
-type ACNPImportExpansion interface{}
-
 type ClusterClaimExpansion interface{}
 
 type ClusterSetExpansion interface{}

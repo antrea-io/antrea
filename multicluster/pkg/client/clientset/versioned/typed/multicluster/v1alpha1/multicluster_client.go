@@ -25,7 +25,6 @@ import (
 
 type MulticlusterV1alpha1Interface interface {
 	RESTClient() rest.Interface
-	ACNPImportsGetter
 	ClusterClaimsGetter
 	ClusterSetsGetter
 	MemberClusterAnnouncesGetter
@@ -38,10 +37,6 @@ type MulticlusterV1alpha1Interface interface {
 // MulticlusterV1alpha1Client is used to interact with features provided by the multicluster.crd.antrea.io group.
 type MulticlusterV1alpha1Client struct {
 	restClient rest.Interface
-}
-
-func (c *MulticlusterV1alpha1Client) ACNPImports() ACNPImportInterface {
-	return newACNPImports(c)
 }
 
 func (c *MulticlusterV1alpha1Client) ClusterClaims(namespace string) ClusterClaimInterface {

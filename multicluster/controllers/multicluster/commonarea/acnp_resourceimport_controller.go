@@ -1,12 +1,9 @@
 /*
 Copyright 2022 Antrea Authors.
-
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
-
     http://www.apache.org/licenses/LICENSE-2.0
-
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -19,6 +16,7 @@ package commonarea
 import (
 	"context"
 	"errors"
+	"math/rand"
 
 	corev1 "k8s.io/api/core/v1"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
@@ -34,16 +32,28 @@ import (
 	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
 )
 
+const (
+	nameSuffixLength       int    = 5
+	acnpImportStatusPrefix string = "acnp-import-status-"
+	acnpImportSucceeded    string = "ACNPImportSucceeded"
+	acnpImportFailed       string = "ACNPImportFailed"
+)
+
+var (
+	resourceImportAPIVersion     = "multicluster.crd.antrea.io/v1alpha1"
+	resourceImportKind           = "ResourceImport"
+	acnpEventReportingController = "resourceimport-controller"
+	// TODO(yang): add run-time pod suffix
+	acnpEventReportingInstance = "antrea-mc-controller"
+	lettersAndDigits           = []rune("abcdefghijklmnopqrstuvwxyz0123456789")
+)
+
 func (r *ResourceImportReconciler) handleResImpUpdateForClusterNetworkPolicy(ctx context.Context, resImp *multiclusterv1alpha1.ResourceImport) (ctrl.Result, error) {
-	acnpImpName := types.NamespacedName{
-		Namespace: "",
-		Name:      resImp.Spec.Name,
-	}
 	acnpName := types.NamespacedName{
 		Namespace: "",
 		Name:      common.AntreaMCSPrefix + resImp.Spec.Name,
 	}
-	klog.InfoS("Updating ACNP and ACNPImport corresponding to ResourceImport",
+	klog.InfoS("Updating ACNP corresponding to ResourceImport",
 		"acnp", acnpName.String(), "resourceimport", klog.KObj(resImp))
 
 	acnp := &v1alpha1.ClusterNetworkPolicy{}
@@ -86,85 +96,63 @@ func (r *ResourceImportReconciler) handleResImpUpdateForClusterNetworkPolicy(ctx
 			return ctrl.Result{}, err
 		}
 	}
-	acnpImp := &multiclusterv1alpha1.ACNPImport{}
-	err = r.localClusterClient.Get(ctx, acnpImpName, acnpImp)
-	acnpImpNotFound := apierrors.IsNotFound(err)
-	if err != nil && !acnpImpNotFound {
-		klog.ErrorS(err, "failed to get existing ACNPImports")
-		return ctrl.Result{}, err
+
+	statusEvent := &corev1.Event{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      randName(acnpImportStatusPrefix + r.localClusterID + "-"),
+			Namespace: resImp.Namespace,
+		},
+		InvolvedObject: corev1.ObjectReference{
+			APIVersion: resourceImportAPIVersion,
+			Kind:       resourceImportKind,
+			Name:       resImp.Name,
+			Namespace:  resImp.Namespace,
+			UID:        resImp.GetUID(),
+		},
+		FirstTimestamp:      metav1.Now(),
+		LastTimestamp:       metav1.Now(),
+		ReportingController: acnpEventReportingController,
+		ReportingInstance:   acnpEventReportingInstance,
+		Action:              "reconciled",
 	}
-	// acnpImport status will be realizable=False if Tier is not found on this member cluster, and realizable=True otherwise.
-	acnpImpObj, isRealizable := getACNPImport(resImp, tierNotFound)
-	if acnpImpNotFound {
-		err := r.localClusterClient.Create(ctx, acnpImpObj, &client.CreateOptions{})
-		if err != nil {
-			klog.ErrorS(err, "failed to create ACNPImport", "acnpimport", klog.KObj(acnpImpObj))
-			return ctrl.Result{}, err
-		}
-		r.installedResImports.Add(*resImp)
-	}
-	patchACNPImportStatus := false
-	if len(acnpImp.Status.Conditions) == 0 {
-		acnpImp.Status = acnpImpObj.Status
-		patchACNPImportStatus = true
+	if tierNotFound {
+		statusEvent.Type = corev1.EventTypeWarning
+		statusEvent.Reason = acnpImportFailed
+		statusEvent.Message = "ACNP Tier does not exist in the importing cluster " + r.localClusterID
 	} else {
-		for _, c := range acnpImp.Status.Conditions {
-			if c.Type == multiclusterv1alpha1.ACNPImportRealizable && c.Status != isRealizable {
-				acnpImp.Status = acnpImpObj.Status
-				patchACNPImportStatus = true
-			}
-		}
+		statusEvent.Type = corev1.EventTypeNormal
+		statusEvent.Reason = acnpImportSucceeded
+		statusEvent.Message = "ACNP successfully created in the importing cluster " + r.localClusterID
 	}
-	// Patch ACNPImport status if realizable state has changed.
-	if patchACNPImportStatus {
-		if err := r.localClusterClient.Status().Update(ctx, acnpImp); err != nil {
-			klog.ErrorS(err, "failed to update acnpImport status", "acnpImport", klog.KObj(acnpImp))
-		}
+	if err = r.remoteCommonArea.Create(ctx, statusEvent, &client.CreateOptions{}); err != nil {
+		klog.ErrorS(err, "failed to create acnp import event for resourceimport", "resImp", klog.KObj(resImp))
+		return ctrl.Result{}, err
 	}
 	return ctrl.Result{}, nil
 }
 
 func (r *ResourceImportReconciler) handleResImpDeleteForClusterNetworkPolicy(ctx context.Context, resImp *multiclusterv1alpha1.ResourceImport) (ctrl.Result, error) {
-	acnpImpName := types.NamespacedName{
-		Namespace: "",
-		Name:      resImp.Spec.Name,
-	}
 	acnpName := types.NamespacedName{
 		Namespace: "",
 		Name:      common.AntreaMCSPrefix + resImp.Spec.Name,
 	}
-	klog.InfoS("Deleting ACNP and ACNPImport corresponding to ResourceImport",
+	klog.InfoS("Deleting ACNP corresponding to ResourceImport",
 		"acnp", acnpName.String(), "resourceimport", klog.KObj(resImp))
 
-	var err error
-	cleanupACNPImport := func() (ctrl.Result, error) {
-		acnpImp := &multiclusterv1alpha1.ACNPImport{}
-		err = r.localClusterClient.Get(ctx, acnpImpName, acnpImp)
-		if err != nil {
-			return ctrl.Result{}, client.IgnoreNotFound(err)
-		}
-		err = r.localClusterClient.Delete(ctx, acnpImp, &client.DeleteOptions{})
-		if err != nil {
-			return ctrl.Result{}, client.IgnoreNotFound(err)
-		}
-		return ctrl.Result{}, nil
-	}
-
 	acnp := &v1alpha1.ClusterNetworkPolicy{}
-	err = r.localClusterClient.Get(ctx, acnpName, acnp)
+	err := r.localClusterClient.Get(ctx, acnpName, acnp)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			klog.V(2).InfoS("ACNP corresponding to ResourceImport has already been deleted",
 				"acnp", acnpName.String(), "resourceimport", klog.KObj(resImp))
-			return cleanupACNPImport()
+			return ctrl.Result{}, nil
 		}
 		return ctrl.Result{}, err
 	}
-	err = r.localClusterClient.Delete(ctx, acnp, &client.DeleteOptions{})
-	if err != nil {
+	if err = r.localClusterClient.Delete(ctx, acnp, &client.DeleteOptions{}); err != nil {
 		return ctrl.Result{}, err
 	}
-	return cleanupACNPImport()
+	return ctrl.Result{}, nil
 }
 
 func getMCAntreaClusterPolicy(resImp *multiclusterv1alpha1.ResourceImport) *v1alpha1.ClusterNetworkPolicy {
@@ -182,37 +170,16 @@ func getMCAntreaClusterPolicy(resImp *multiclusterv1alpha1.ResourceImport) *v1al
 	}
 }
 
-func getACNPImport(resImp *multiclusterv1alpha1.ResourceImport, tierNotFound bool) (*multiclusterv1alpha1.ACNPImport, corev1.ConditionStatus) {
-	if resImp.Spec.ClusterNetworkPolicy == nil {
-		return nil, corev1.ConditionFalse
+func randSeq(n int) string {
+	b := make([]rune, n)
+	for i := range b {
+		// #nosec G404: random number generator not used for security purposes
+		randIdx := rand.Intn(len(lettersAndDigits))
+		b[i] = lettersAndDigits[randIdx]
 	}
-	status, isRealizable := getACNPImportStatus(tierNotFound)
-	return &multiclusterv1alpha1.ACNPImport{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: resImp.Spec.Name,
-		},
-		Status: multiclusterv1alpha1.ACNPImportStatus{
-			Conditions: []multiclusterv1alpha1.ACNPImportCondition{status},
-		},
-	}, isRealizable
+	return string(b)
 }
 
-func getACNPImportStatus(tierNotFound bool) (multiclusterv1alpha1.ACNPImportCondition, corev1.ConditionStatus) {
-	tierNotFoundReason := "TierNotFound"
-	tierNotFoundMessage := "ACNP Tier does not exist in the importing cluster"
-	time := metav1.Now()
-	if tierNotFound {
-		return multiclusterv1alpha1.ACNPImportCondition{
-			Type:               multiclusterv1alpha1.ACNPImportRealizable,
-			Status:             corev1.ConditionFalse,
-			LastTransitionTime: &time,
-			Reason:             &tierNotFoundReason,
-			Message:            &tierNotFoundMessage,
-		}, corev1.ConditionFalse
-	}
-	return multiclusterv1alpha1.ACNPImportCondition{
-		Type:               multiclusterv1alpha1.ACNPImportRealizable,
-		Status:             corev1.ConditionTrue,
-		LastTransitionTime: &time,
-	}, corev1.ConditionTrue
+func randName(prefix string) string {
+	return prefix + randSeq(nameSuffixLength)
 }

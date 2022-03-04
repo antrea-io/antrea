@@ -21,7 +21,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -148,20 +147,7 @@ func TestResourceImportReconciler_handleCopySpanACNPCreateEvent(t *testing.T) {
 				} else if !tt.expectedSuccess && (err == nil || !apierrors.IsNotFound(err)) {
 					t.Errorf("ResourceImport Reconciler should not import an ACNP whose Tier does not exist in current cluster. Expected NotFound error. Actual err = %v", err)
 				}
-				acnpImport := &mcsv1alpha1.ACNPImport{}
-				if err := fakeClient.Get(ctx, types.NamespacedName{Namespace: "", Name: tt.acnpImportName}, acnpImport); err != nil {
-					t.Errorf("ResourceImport Reconciler should create ACNPImport for ACNP type resouc")
-				}
-				status := acnpImport.Status.Conditions
-				if len(status) > 0 && status[0].Type == mcsv1alpha1.ACNPImportRealizable {
-					if tt.expectedSuccess && status[0].Status != corev1.ConditionTrue {
-						t.Errorf("ACNPImport %v realizable status should be True but is %v instead", acnpImportName, status[0].Status)
-					} else if !tt.expectedSuccess && status[0].Status != corev1.ConditionFalse {
-						t.Errorf("ACNPImport %v realizable status should be False but is %v instead", acnpImportName, status[0].Status)
-					}
-				} else {
-					t.Errorf("No realizable status provided for ACNPImport %v", acnpImportName)
-				}
+				//TODO(yang): add Event creation tests
 			}
 		})
 	}
@@ -177,13 +163,8 @@ func TestResourceImportReconciler_handleCopySpanACNPDeleteEvent(t *testing.T) {
 			Name: common.AntreaMCSPrefix + acnpImportName,
 		},
 	}
-	existingACNPImport := &mcsv1alpha1.ACNPImport{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: acnpImportName,
-		},
-	}
 
-	fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(existingACNP, existingACNPImport).Build()
+	fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(existingACNP).Build()
 	fakeRemoteClient := fake.NewClientBuilder().WithScheme(scheme).Build()
 	remoteCluster := NewFakeRemoteCommonArea(scheme, &remoteMgr, fakeRemoteClient, "leader-cluster", "default")
 
@@ -196,10 +177,6 @@ func TestResourceImportReconciler_handleCopySpanACNPDeleteEvent(t *testing.T) {
 	acnp := &v1alpha1.ClusterNetworkPolicy{}
 	if err := fakeClient.Get(ctx, types.NamespacedName{Namespace: "", Name: common.AntreaMCSPrefix + acnpImportName}, acnp); !apierrors.IsNotFound(err) {
 		t.Errorf("ResourceImport Reconciler should delete ACNP successfully but got error = %v", err)
-	}
-	acnpImport := &mcsv1alpha1.ACNPImport{}
-	if err := fakeClient.Get(ctx, types.NamespacedName{Namespace: "", Name: acnpImportName}, acnpImport); !apierrors.IsNotFound(err) {
-		t.Errorf("ResourceImport Reconciler should delete ACNPImport successfully but got error = %v", err)
 	}
 }
 
@@ -233,32 +210,6 @@ func TestResourceImportReconciler_handleCopySpanACNPUpdateEvent(t *testing.T) {
 			},
 		},
 	}
-	existingACNPImport1 := &mcsv1alpha1.ACNPImport{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: acnpImportName,
-		},
-		Status: mcsv1alpha1.ACNPImportStatus{
-			Conditions: []mcsv1alpha1.ACNPImportCondition{
-				{
-					Type:   mcsv1alpha1.ACNPImportRealizable,
-					Status: corev1.ConditionTrue,
-				},
-			},
-		},
-	}
-	existingACNPImport2 := &mcsv1alpha1.ACNPImport{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "acnp-no-matching-tier",
-		},
-		Status: mcsv1alpha1.ACNPImportStatus{
-			Conditions: []mcsv1alpha1.ACNPImportCondition{
-				{
-					Type:   mcsv1alpha1.ACNPImportRealizable,
-					Status: corev1.ConditionFalse,
-				},
-			},
-		},
-	}
 	updatedResImport2 := &mcsv1alpha1.ResourceImport{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: leaderNamespace,
@@ -286,19 +237,6 @@ func TestResourceImportReconciler_handleCopySpanACNPUpdateEvent(t *testing.T) {
 			Priority: 1.0,
 			AppliedTo: []v1alpha1.NetworkPolicyPeer{
 				{NamespaceSelector: &metav1.LabelSelector{}},
-			},
-		},
-	}
-	existingACNPImport3 := &mcsv1alpha1.ACNPImport{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "valid-updated-to-no-valid",
-		},
-		Status: mcsv1alpha1.ACNPImportStatus{
-			Conditions: []mcsv1alpha1.ACNPImportCondition{
-				{
-					Type:   mcsv1alpha1.ACNPImportRealizable,
-					Status: corev1.ConditionTrue,
-				},
 			},
 		},
 	}
@@ -340,8 +278,7 @@ func TestResourceImportReconciler_handleCopySpanACNPUpdateEvent(t *testing.T) {
 		},
 	}
 
-	fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(existingACNP1, existingACNPImport1, existingACNPImport2,
-		existingACNP3, existingACNPImport3, existingACNP4, securityOpsTier).Build()
+	fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(existingACNP1, existingACNP3, existingACNP4, securityOpsTier).Build()
 	fakeRemoteClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(acnpResImport, updatedResImport2, updatedResImport3).Build()
 	remoteCluster := NewFakeRemoteCommonArea(scheme, &remoteMgr, fakeRemoteClient, "leader-cluster", "default")
 

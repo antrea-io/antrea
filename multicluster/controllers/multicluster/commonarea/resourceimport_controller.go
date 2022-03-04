@@ -81,13 +81,12 @@ func NewResourceImportReconciler(client client.Client, scheme *runtime.Scheme, l
 //+kubebuilder:rbac:groups=crd.antrea.io,resources=tiers,verbs=get;list;watch
 //+kubebuilder:rbac:groups=multicluster.crd.antrea.io,resources=resourceimports,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=multicluster.crd.antrea.io,resources=resourceimports/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=multicluster.crd.antrea.io,resources=acnpimports,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=multicluster.crd.antrea.io,resources=acnpimports/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=multicluster.crd.antrea.io,resources=resourceimports/finalizers,verbs=update
 //+kubebuilder:rbac:groups=multicluster.x-k8s.io,resources=serviceimports,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=multicluster.x-k8s.io,resources=serviceimports/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups="",resources=endpoints,verbs=get;list;watch;update;create;patch;delete
 //+kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch;update;create;patch;delete
+//+kubebuilder:rbac:groups="",resources=events,verbs=get;list;update;create;patch
 
 // Reconcile will attempt to ensure that the imported Resource is installed in local cluster as per the
 // ResourceImport object.
