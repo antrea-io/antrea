@@ -279,7 +279,7 @@ func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *crdv1alpha1.C
 	// If appliedTo is set at spec level and the ACNP has per-namespace rules, then each appliedTo needs
 	// to be split into appliedToGroups for each of its affected Namespace.
 	var clusterAppliedToAffectedNS []string
-	// atgForNamespace is the appliedToGroups splitted by Namespaces.
+	// atgForNamespace is the appliedToGroups split by Namespaces.
 	var atgForNamespace []string
 	if hasPerNamespaceRule && len(cnp.Spec.AppliedTo) > 0 {
 		for _, at := range cnp.Spec.AppliedTo {
@@ -515,6 +515,31 @@ func getUniqueNSSelectors(selectors []labels.Selector) []labels.Selector {
 	return selectors[:i]
 }
 
+// processInternalGroupForRule examines the internal group (and its childGroups if applicable)
+// to determine whether an addressGroup needs to be created, and returns any ipBlocks contained
+// by the internal Group as well.
+func (n *NetworkPolicyController) processInternalGroupForRule(group *antreatypes.Group) (bool, []controlplane.IPBlock) {
+	if len(group.IPBlocks) > 0 {
+		return false, group.IPBlocks
+	} else if len(group.ChildGroups) == 0 {
+		return true, nil
+	}
+	var ipBlocks []controlplane.IPBlock
+	createAddrGroup := false
+	for _, childName := range group.ChildGroups {
+		childGroup, found, _ := n.internalGroupStore.Get(childName)
+		if found {
+			child := childGroup.(*antreatypes.Group)
+			createChildAG, ipb := n.processInternalGroupForRule(child)
+			if createChildAG {
+				createAddrGroup = true
+			}
+			ipBlocks = append(ipBlocks, ipb...)
+		}
+	}
+	return createAddrGroup, ipBlocks
+}
+
 // processRefCG processes the ClusterGroup reference present in the rule and returns the
 // NetworkPolicyPeer with the corresponding AddressGroup or IPBlock.
 func (n *NetworkPolicyController) processRefCG(g string) (string, []controlplane.IPBlock) {
@@ -534,12 +559,17 @@ func (n *NetworkPolicyController) processRefCG(g string) (string, []controlplane
 		return "", nil
 	}
 	intGrp := ig.(*antreatypes.Group)
-	if len(intGrp.IPBlocks) > 0 {
-		return "", intGrp.IPBlocks
+	// The ClusterGroup referred in the rule might have childGroups defined using selectors
+	// or ipBlocks (or both). An addressGroup needs to be created as long as there is at least
+	// one childGroup defined by selectors, or the ClusterGroup itself is defined by selectors.
+	// In case of updates, the original addressGroup created will be de-referenced and cleaned
+	// up if the ClusterGroup becomes ipBlocks-only.
+	createAddrGroup, ipb := n.processInternalGroupForRule(intGrp)
+	if createAddrGroup {
+		agKey := n.createAddressGroupForClusterGroupCRD(intGrp)
+		return agKey, ipb
 	}
-	agKey := n.createAddressGroupForClusterGroupCRD(intGrp)
-	// Return if addressGroup was created or found.
-	return agKey, nil
+	return "", ipb
 }
 
 func (n *NetworkPolicyController) processAppliedToGroupForCG(g string) string {
