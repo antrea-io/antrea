@@ -31,7 +31,8 @@ func TestCopyToBuilder(t *testing.T) {
 		id:   t0,
 		next: t1,
 	}
-	mark := NewCTMark(12345, 0, 31)
+
+	mark := NewCTMark(NewCTMarkField(0, 31), 12345)
 	oriFlow := table.BuildFlow(uint16(100)).MatchProtocol(ProtocolIP).
 		Cookie(uint64(1004)).
 		MatchRegFieldWithValue(testField, 0x101).

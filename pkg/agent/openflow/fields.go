@@ -21,6 +21,12 @@ import (
 
 // Fields using reg.
 var (
+	fromTunnelVal  = uint32(0)
+	fromGatewayVal = uint32(1)
+	fromLocalVal   = uint32(2)
+	fromUplinkVal  = uint32(4)
+	fromBridgeVal  = uint32(5)
+
 	// reg0 (NXM_NX_REG0)
 	// reg0[0..3]: Field to mark the packet source. Marks in this field include,
 	//   - 0: from the tunnel port
@@ -29,11 +35,11 @@ var (
 	//   - 4: from the Bridge interface
 	//   - 5: from the uplink interface
 	PktSourceField     = binding.NewRegField(0, 0, 3, "PacketSource")
-	FromTunnelRegMark  = binding.NewRegMark(PktSourceField, 0)
-	FromGatewayRegMark = binding.NewRegMark(PktSourceField, 1)
-	FromLocalRegMark   = binding.NewRegMark(PktSourceField, 2)
-	FromUplinkRegMark  = binding.NewRegMark(PktSourceField, 4)
-	FromBridgeRegMark  = binding.NewRegMark(PktSourceField, 5)
+	FromTunnelRegMark  = binding.NewRegMark(PktSourceField, fromTunnelVal)
+	FromGatewayRegMark = binding.NewRegMark(PktSourceField, fromGatewayVal)
+	FromLocalRegMark   = binding.NewRegMark(PktSourceField, fromLocalVal)
+	FromUplinkRegMark  = binding.NewRegMark(PktSourceField, fromUplinkVal)
+	FromBridgeRegMark  = binding.NewRegMark(PktSourceField, fromBridgeVal)
 	// reg0[16]: Mark to indicate the ofPort number of an interface is found.
 	OFPortFoundRegMark = binding.NewOneBitRegMark(0, 16, "OFPortFound")
 	// reg0[18]: Mark to indicate the packet needs DNAT to virtual IP.
@@ -139,17 +145,18 @@ var (
 
 // Marks using CT.
 var (
-	//TODO: There is a bug in libOpenflow when CT_MARK range is from 0 to 0, and a wrong mask will be got,
-	// so bit 0 of CT_MARK is not used for now.
+	//TODO: There is a bug in libOpenflow when CT_MARK range is from 0 to 0, and a wrong mask will be got. As a result,
+	// don't just use bit 0 of CT_MARK.
 
-	// Mark to indicate the connection is initiated through the host gateway interface
-	// (i.e. for which the first packet of the connection was received through the gateway).
-	FromGatewayCTMark = binding.NewCTMark(0b1, 1, 1)
-	// Mark to indicate DNAT is performed on the connection for Service.
-	ServiceCTMark = binding.NewCTMark(0b1, 2, 2)
-	// Mark to indicate the connection is initiated through the host bridge interface
-	// (i.e. for which the first packet of the connection was received through the bridge).
-	FromBridgeCTMark = binding.NewCTMark(0x1, 3, 3)
+	// CTMark (NXM_NX_CT_MARK)
+	// CTMark[0..3]: Field to mark the source of the connection. This field has the same bits and positions as PktSourceField
+	// for persisting the value from reg0 to CTMark when committing the first packet of the connection with CT action.
+	ConnSourceCTMarkField = binding.NewCTMarkField(0, 3)
+	FromGatewayCTMark     = binding.NewCTMark(ConnSourceCTMarkField, fromGatewayVal)
+	FromBridgeCTMark      = binding.NewCTMark(ConnSourceCTMarkField, fromBridgeVal)
+
+	// CTMark[4]: Mark to indicate DNAT is performed on the connection for Service.
+	ServiceCTMark = binding.NewOneBitCTMark(4)
 )
 
 // Fields using CT label.

@@ -27,6 +27,9 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"antrea.io/antrea/pkg/agent/config"
+	agentconfig "antrea.io/antrea/pkg/config/agent"
+	controllerconfig "antrea.io/antrea/pkg/config/controller"
 	"antrea.io/antrea/pkg/features"
 )
 
@@ -379,6 +382,87 @@ func nodePortTestCases(t *testing.T, data *TestData, portStrCluster, portStrLoca
 	t.Run("ExternalTrafficPolicy:Local/Client:Pod", func(t *testing.T) {
 		testNodePortLocalFromPod(t, data, pods, localUrls, podIPs, hostnames)
 	})
+}
+
+func TestNodePortAndEgressWithTheSameBackendPod(t *testing.T) {
+	skipIfHasWindowsNodes(t)
+	skipIfNotIPv4Cluster(t)
+	skipIfNumNodesLessThan(t, 2)
+	skipIfProxyDisabled(t)
+
+	data, err := setupTest(t)
+	if err != nil {
+		t.Fatalf("Error when setting up test: %v", err)
+	}
+	defer teardownTest(t, data)
+	skipIfProxyAllDisabled(t, data)
+	skipIfEncapModeIsNot(t, data, config.TrafficEncapModeEncap) // Egress works for encap mode only.
+
+	cc := func(config *controllerconfig.ControllerConfig) {
+		config.FeatureGates["Egress"] = true
+	}
+	ac := func(config *agentconfig.AgentConfig) {
+		config.FeatureGates["Egress"] = true
+	}
+
+	if err := data.mutateAntreaConfigMap(cc, ac, true, true); err != nil {
+		t.Fatalf("Failed to enable Egress feature: %v", err)
+	}
+
+	// Create a NodePort Service.
+	nodePortIP := controlPlaneNodeIPv4()
+	ipProtocol := corev1.IPv4Protocol
+	var portStr string
+	nodePortSvc, err := data.createNginxNodePortService("test-nodeport-svc", true, false, &ipProtocol)
+	require.NoError(t, err)
+	for _, port := range nodePortSvc.Spec.Ports {
+		if port.NodePort != 0 {
+			portStr = fmt.Sprint(port.NodePort)
+			break
+		}
+	}
+	testNodePortURL := net.JoinHostPort(nodePortIP, portStr)
+
+	// Create an Egress whose external IP is on worker Node.
+	egressNodeIP := workerNodeIPv4(1)
+	egress := data.createEgress(t, "test-egress", nil, map[string]string{"app": "nginx"}, "", egressNodeIP)
+	defer data.crdClient.CrdV1alpha2().Egresses().Delete(context.TODO(), egress.Name, metav1.DeleteOptions{})
+
+	// Create the backend Pod on control plane Node.
+	backendPodName := "test-nodeport-egress-backend-pod"
+	require.NoError(t, data.createNginxPodOnNode(backendPodName, testNamespace, controlPlaneNodeName(), false))
+	defer deletePodWrapper(t, data, testNamespace, backendPodName)
+	if err := data.podWaitForRunning(defaultTimeout, backendPodName, testNamespace); err != nil {
+		t.Fatalf("Error when waiting for Pod '%s' to be in the Running state", backendPodName)
+	}
+
+	// Create another netns to fake an external network on the host network Pod.
+	testPod := "test-client"
+	testNetns := "test-ns"
+	cmd := fmt.Sprintf(`ip netns add %[1]s && \
+ip link add dev %[1]s-a type veth peer name %[1]s-b && \
+ip link set dev %[1]s-a netns %[1]s && \
+ip addr add %[3]s/%[4]d dev %[1]s-b && \
+ip link set dev %[1]s-b up && \
+ip netns exec %[1]s ip addr add %[2]s/%[4]d dev %[1]s-a && \
+ip netns exec %[1]s ip link set dev %[1]s-a up && \
+ip netns exec %[1]s ip route replace default via %[3]s && \
+sleep 3600
+`, testNetns, "1.1.1.1", "1.1.1.254", 24)
+	if err := data.createPodOnNode(testPod, testNamespace, controlPlaneNodeName(), agnhostImage, []string{"sh", "-c", cmd}, nil, nil, nil, true, func(pod *corev1.Pod) {
+		privileged := true
+		pod.Spec.Containers[0].SecurityContext = &corev1.SecurityContext{Privileged: &privileged}
+	}); err != nil {
+		t.Fatalf("Failed to create client Pod: %v", err)
+	}
+	defer deletePodWrapper(t, data, testNamespace, testPod)
+	if err := data.podWaitForRunning(defaultTimeout, testPod, testNamespace); err != nil {
+		t.Fatalf("Error when waiting for Pod '%s' to be in the Running state", testPod)
+	}
+	// Connect to NodePort on control plane Node in the fake external network.
+	cmd = fmt.Sprintf("ip netns exec %s curl --connect-timeout 1 --retry 5 --retry-connrefused %s", testNetns, testNodePortURL)
+	_, _, err = data.runCommandFromPod(testNamespace, testPod, agnhostContainerName, []string{"sh", "-c", cmd})
+	require.NoError(t, err, "Service NodePort should be able to be connected from external network when Egress is enabled")
 }
 
 func createAgnhostPod(t *testing.T, data *TestData, podName string, node string, hostNetwork bool) {
