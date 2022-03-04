@@ -237,7 +237,7 @@ func (b *ofFlowBuilder) MatchCTMark(mark *CtMark) FlowBuilder {
 		b.ofFlow.Match.CtMarkMask = nil
 		ctmarkKey = fmt.Sprintf("ct_mark=0x%x", mark.value)
 	} else {
-		mask := mark.rng.ToNXRange().ToUint32Mask()
+		mask := mark.field.rng.ToNXRange().ToUint32Mask()
 		ctmarkKey = fmt.Sprintf("ct_mark=0x%x/0x%x", mark.GetValue(), mask)
 		b.ofFlow.Match.CtMarkMask = &mask
 	}
