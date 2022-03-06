@@ -94,6 +94,8 @@ jobs:
     
 
   check-windows-changes:
+     needs: check-changes
+     if: ${{ needs.check-changes.outputs.has_changes == 'yes' || github.event_name == 'push' }}
      runs-on: [ubuntu-latest]
      steps:
      - uses: actions/checkout@v2
@@ -101,11 +103,11 @@ jobs:
           etch-depth: 0
      - name: Get changed files
        id: changed_window_files
-       uses:  tj-actions/changed-files@v13
+     - uses:  tj-actions/changed-files@v13
        with:
         files: |
-           *_windows.go
-           winfirewall.go
+          run: |
+           echo "grep -l "//go:build windows"  --include=*.go  --exclude=*_test.go "
      outputs:
       any_changed: ${{ steps.changed_window_files.outputs.any_changed}}
 
