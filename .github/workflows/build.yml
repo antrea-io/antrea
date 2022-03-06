@@ -93,30 +93,26 @@ jobs:
         docker push antrea/antrea-ubuntu-simulator:latest
     
 
-  check-windows-changes:
-     needs: check-changes
-     if: ${{ needs.check-changes.outputs.has_changes == 'yes' || github.event_name == 'push' }}
+  ccheck-windows-changes:
      runs-on: [ubuntu-latest]
+     outputs:
+       all: ${{ steps.changed_window_files.outputs.all}
      steps:
      - uses: actions/checkout@v2
        with:
-          etch-depth: 0
+        fetch-depth: 0
      - name: Get changed files
        id: changed_window_files
-     - uses:  tj-actions/changed-files@v13
-       with:
-        files: |
-          run: |
-           echo "grep -l "//go:build windows"  --include=*.go  --exclude=*_test.go "
-     outputs:
-      any_changed: ${{ steps.changed_window_files.outputs.any_changed}}
+       run: |
+         echo "::set-ouput name=all::$(git diff --name-only --diff-filter=ACMRT ${{ github.event.pull_request.base.sha}} ${{ github.sha}} | grep -l "//go:build windows"  --include=*.go  --exclude=*_test.go | xargs)"
+  
 
   
 
   
   build-windows:
     needs: [check-changes, check-windows-changes]
-    if: ${{ (needs.check-changes.outputs.has_changes == 'yes' || github.event_name == 'push') && (needs.check-windows-changes.outputs.any_changed)=='true'}}
+    if: ${{ (needs.check-changes.outputs.has_changes == 'yes' || github.event_name == 'push') && (needs.check-windows-changes.outputs.all)}}
     runs-on: [windows-2019]
     steps:
     - uses: actions/checkout@v2
