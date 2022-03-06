@@ -93,7 +93,7 @@ jobs:
         docker push antrea/antrea-ubuntu-simulator:latest
     
 
-  ccheck-windows-changes:
+  check-windows-changes:
      runs-on: [ubuntu-latest]
      outputs:
        all: ${{ steps.changed_window_files.outputs.all}}
