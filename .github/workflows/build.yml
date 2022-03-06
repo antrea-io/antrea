@@ -96,7 +96,7 @@ jobs:
   ccheck-windows-changes:
      runs-on: [ubuntu-latest]
      outputs:
-       all: ${{ steps.changed_window_files.outputs.all}
+       all: ${{ steps.changed_window_files.outputs.all}}
      steps:
      - uses: actions/checkout@v2
        with:
