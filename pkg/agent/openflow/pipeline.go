@@ -578,7 +578,7 @@ func (c *client) connectionTrackFlows(category cookie.Category) []binding.Flow {
 					// This flow is used to match the Service traffic from Antrea gateway. The Service traffic from gateway
 					// should enter table serviceConntrackCommitTable, otherwise it will be matched by other flows in
 					// table connectionTrackCommit.
-					ConntrackCommitTable.BuildFlow(priorityHigh).MatchProtocol(proto).
+					ConntrackCommitTable.BuildFlow(priorityNormal).MatchProtocol(proto).
 						MatchCTMark(ServiceCTMark).
 						MatchRegMark(FromGatewayRegMark).
 						Action().GotoTable(ServiceConntrackCommitTable.GetID()).
@@ -669,31 +669,6 @@ func (c *client) connectionTrackFlows(category cookie.Category) []binding.Flow {
 		flows = append(flows, c.kubeProxyFlows(category)...)
 	}
 
-	// TODO: following flows should move to function "kubeProxyFlows". Since another PR(#1198) is trying
-	//  to polish the relevant logic, code refactoring is needed after that PR is merged.
-	for _, proto := range c.ipProtocols {
-		ctZone := CtZone
-		if proto == binding.ProtocolIPv6 {
-			ctZone = CtZoneV6
-		}
-		flows = append(flows,
-			// Connections initiated through the gateway are marked with FromGatewayCTMark.
-			ConntrackCommitTable.BuildFlow(priorityNormal).MatchProtocol(proto).
-				MatchRegMark(FromGatewayRegMark).
-				MatchCTStateNew(true).MatchCTStateTrk(true).
-				Action().CT(true, ConntrackCommitTable.GetNext(), ctZone).LoadToCtMark(FromGatewayCTMark).CTDone().
-				Cookie(c.cookieAllocator.Request(category).Raw()).
-				Done(),
-			// Connections initiated through the bridge port are marked with FromBridgeCTMark.
-			ConntrackCommitTable.BuildFlow(priorityNormal).MatchProtocol(proto).
-				MatchRegMark(FromBridgeRegMark).
-				MatchCTStateNew(true).MatchCTStateTrk(true).
-				Action().CT(true, ConntrackCommitTable.GetNext(), ctZone).LoadToCtMark(FromBridgeCTMark).CTDone().
-				Cookie(c.cookieAllocator.Request(category).Raw()).
-				Done(),
-			// Add reject response packet bypass flow.
-		)
-	}
 	return flows
 }
 
@@ -742,7 +717,9 @@ func (c *client) conntrackBasicFlows(category cookie.Category) []binding.Flow {
 				Done(),
 			ConntrackCommitTable.BuildFlow(priorityLow).MatchProtocol(proto).
 				MatchCTStateNew(true).MatchCTStateTrk(true).
-				Action().CT(true, ConntrackCommitTable.GetNext(), ctZone).CTDone().
+				Action().CT(true, ConntrackCommitTable.GetNext(), ctZone).
+				MoveToCtMarkField(PktSourceField, ConnSourceCTMarkField).
+				CTDone().
 				Cookie(c.cookieAllocator.Request(category).Raw()).
 				Done(),
 		)
@@ -1325,8 +1302,8 @@ func (c *client) l3FwdServiceDefaultFlowsViaGW(ipProto binding.Protocol, categor
 		//	- NodePort/LoadBalancer request packets which pass through Antrea gateway and the Service Endpoint is not on
 		//    local Pod CIDR or any remote Pod CIDRs.
 		//	- ClusterIP request packets which are from Antrea gateway and the Service Endpoint is not on local Pod CIDR
-		// 	or any remote Pod CIDRs.
-		//  - NodePort/LoadBalancer/ClusterIP response packets.
+		// 	  or any remote Pod CIDRs.
+		//  - ClusterIP/NodePort/LoadBalancer response packets from external network.
 		// The matched packets should leave through Antrea gateway, however, they also enter through Antrea gateway. This
 		// is hairpin traffic.
 		// Skip traffic from AntreaFlexibleIPAM Pods.
@@ -2143,10 +2120,13 @@ func (c *client) snatCommonFlows(nodeIP net.IP, localSubnet net.IPNet, localGate
 		// should bypass SNAT too. But it has been covered by the gatewayCT related flow generated in l3FwdFlowToGateway
 		// which forwards all reply traffic for such connections back to the gateway interface with the high priority.
 
-		// Send the traffic to external to SNATTable.
+		// This generates the flow to match the requests packets sourced from local Pods and destined for external, then
+		// forward the packets to SNATTable.
 		L3ForwardingTable.BuildFlow(priorityLow).
 			MatchProtocol(ipProto).
 			MatchRegMark(FromLocalRegMark).
+			MatchCTStateRpl(false).
+			MatchCTStateTrk(true).
 			Action().GotoTable(SNATTable.GetID()).
 			Cookie(c.cookieAllocator.Request(category).Raw()).
 			Done(),
@@ -2155,6 +2135,8 @@ func (c *client) snatCommonFlows(nodeIP net.IP, localSubnet net.IPNet, localGate
 		L3ForwardingTable.BuildFlow(priorityLow).
 			MatchProtocol(ipProto).
 			MatchRegMark(FromTunnelRegMark).
+			MatchCTStateRpl(false).
+			MatchCTStateTrk(true).
 			Action().SetDstMAC(localGatewayMAC).
 			Action().GotoTable(SNATTable.GetID()).
 			Cookie(c.cookieAllocator.Request(category).Raw()).
@@ -2424,6 +2406,7 @@ func (c *client) endpointDNATFlow(endpointIP net.IP, endpointPort uint16, protoc
 			&binding.PortRange{StartPort: endpointPort, EndPort: endpointPort},
 		).
 		LoadToCtMark(ServiceCTMark).
+		MoveToCtMarkField(PktSourceField, ConnSourceCTMarkField).
 		CTDone().
 		Done()
 }
