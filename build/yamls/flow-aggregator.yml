@@ -205,7 +205,6 @@ data:
       #tlsMinVersion:
 kind: ConfigMap
 metadata:
-  annotations: {}
   labels:
     app: flow-aggregator
   name: flow-aggregator-configmap-g28c52f9kg

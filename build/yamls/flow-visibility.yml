@@ -53,7 +53,90 @@ subjects:
 ---
 apiVersion: v1
 data:
-  create_table.sh: "#!/usr/bin/env bash\n\n# Copyright 2022 Antrea Authors.\n#\n# Licensed under the Apache License, Version 2.0 (the \"License\");\n# you may not use this file except in compliance with the License.\n# You may obtain a copy of the License at\n#\n#      http://www.apache.org/licenses/LICENSE-2.0\n#\n# Unless required by applicable law or agreed to in writing, software\n# distributed under the License is distributed on an \"AS IS\" BASIS,\n# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n# See the License for the specific language governing permissions and\n# limitations under the License.\n\nset -e\nclickhouse client -n -h 127.0.0.1 <<-EOSQL\n\n    CREATE TABLE IF NOT EXISTS flows (\n        timeInserted DateTime DEFAULT now(),\n        flowStartSeconds DateTime,\n        flowEndSeconds DateTime,\n        flowEndSecondsFromSourceNode DateTime,\n        flowEndSecondsFromDestinationNode DateTime,\n        flowEndReason UInt8,\n        sourceIP String,\n        destinationIP String,\n        sourceTransportPort UInt16,\n        destinationTransportPort UInt16,\n        protocolIdentifier UInt8,\n        packetTotalCount UInt64,\n        octetTotalCount UInt64,\n        packetDeltaCount UInt64,\n        octetDeltaCount UInt64,\n        reversePacketTotalCount UInt64,\n        reverseOctetTotalCount UInt64,\n        reversePacketDeltaCount UInt64,\n        reverseOctetDeltaCount UInt64,\n        sourcePodName String,\n        sourcePodNamespace String,\n        sourceNodeName String,\n        destinationPodName String,\n        destinationPodNamespace String,\n        destinationNodeName String,\n        destinationClusterIP String,\n        destinationServicePort UInt16,\n        destinationServicePortName String,\n        ingressNetworkPolicyName String,\n        ingressNetworkPolicyNamespace String,\n        ingressNetworkPolicyRuleName String,\n        ingressNetworkPolicyRuleAction UInt8,\n        ingressNetworkPolicyType UInt8,\n        egressNetworkPolicyName String,\n        egressNetworkPolicyNamespace String,\n        egressNetworkPolicyRuleName String,\n        egressNetworkPolicyRuleAction UInt8,\n        egressNetworkPolicyType UInt8,\n        tcpState String,\n        flowType UInt8,\n        sourcePodLabels String,\n        destinationPodLabels String,\n        throughput UInt64,\n        reverseThroughput UInt64,\n        throughputFromSourceNode UInt64,\n        throughputFromDestinationNode UInt64,\n        reverseThroughputFromSourceNode UInt64,\n        reverseThroughputFromDestinationNode UInt64,\n        trusted UInt8 DEFAULT 0\n    ) engine=MergeTree\n    ORDER BY (timeInserted, flowEndSeconds);\n\n    CREATE MATERIALIZED VIEW flows_pod_view\n    ENGINE = SummingMergeTree\n    ORDER BY (\n        flowEndSeconds,\n        flowEndSecondsFromSourceNode,\n        flowEndSecondsFromDestinationNode,\n        sourcePodName,\n        destinationPodName,\n        destinationIP,\n        destinationServicePortName,\n        flowType,\n        sourcePodNamespace,\n        destinationPodNamespace)\n    POPULATE\n    AS SELECT\n        flowEndSeconds,\n        flowEndSecondsFromSourceNode,\n        flowEndSecondsFromDestinationNode,\n        sourcePodName,\n        destinationPodName,\n        destinationIP,\n        destinationServicePortName,\n        flowType,\n        sourcePodNamespace,\n        destinationPodNamespace,\n        sum(octetDeltaCount) AS octetDeltaCount,\n        sum(reverseOctetDeltaCount) AS reverseOctetDeltaCount,\n        sum(throughput) AS throughput,\n        sum(reverseThroughput) AS reverseThroughput,\n        sum(throughputFromSourceNode) AS throughputFromSourceNode,\n        sum(throughputFromDestinationNode) AS throughputFromDestinationNode\n    FROM flows\n    GROUP BY\n        flowEndSeconds,\n        flowEndSecondsFromSourceNode,\n        flowEndSecondsFromDestinationNode,\n        sourcePodName,\n        destinationPodName,\n        destinationIP,\n        destinationServicePortName,\n        flowType,\n        sourcePodNamespace,\n        destinationPodNamespace;\n\n    CREATE MATERIALIZED VIEW flows_node_view\n    ENGINE = SummingMergeTree\n    ORDER BY (\n        flowEndSeconds,\n        flowEndSecondsFromSourceNode,\n        flowEndSecondsFromDestinationNode,\n        sourceNodeName,\n        destinationNodeName,\n        sourcePodNamespace,\n        destinationPodNamespace)\n    POPULATE\n    AS SELECT\n        flowEndSeconds,\n        flowEndSecondsFromSourceNode,\n        flowEndSecondsFromDestinationNode,\n        sourceNodeName,\n        destinationNodeName,\n        sourcePodNamespace,\n        destinationPodNamespace,\n        sum(octetDeltaCount) AS octetDeltaCount,\n        sum(reverseOctetDeltaCount) AS reverseOctetDeltaCount,\n        sum(throughput) AS throughput,\n        sum(reverseThroughput) AS reverseThroughput,\n        sum(throughputFromSourceNode) AS throughputFromSourceNode,\n        sum(reverseThroughputFromSourceNode) AS reverseThroughputFromSourceNode,\n        sum(throughputFromDestinationNode) AS throughputFromDestinationNode,\n        sum(reverseThroughputFromDestinationNode) AS reverseThroughputFromDestinationNode\n    FROM flows\n    GROUP BY\n        flowEndSeconds,\n        flowEndSecondsFromSourceNode,\n        flowEndSecondsFromDestinationNode,\n        sourceNodeName,\n        destinationNodeName,\n        sourcePodNamespace,\n        destinationPodNamespace;\n\n    CREATE MATERIALIZED VIEW flows_policy_view\n    ENGINE = SummingMergeTree\n    ORDER BY (\n        flowEndSeconds,\n        flowEndSecondsFromSourceNode,\n        flowEndSecondsFromDestinationNode,\n        egressNetworkPolicyName,\n        egressNetworkPolicyRuleAction,\n        ingressNetworkPolicyName,\n        ingressNetworkPolicyRuleAction,\n        sourcePodNamespace,\n        destinationPodNamespace)\n    POPULATE\n    AS SELECT\n        flowEndSeconds,\n        flowEndSecondsFromSourceNode,\n        flowEndSecondsFromDestinationNode,\n        egressNetworkPolicyName,\n        egressNetworkPolicyRuleAction,\n        ingressNetworkPolicyName,\n        ingressNetworkPolicyRuleAction,\n        sourcePodNamespace,\n        destinationPodNamespace,\n        sum(octetDeltaCount) AS octetDeltaCount,\n        sum(reverseOctetDeltaCount) AS reverseOctetDeltaCount,\n        sum(throughput) AS throughput,\n        sum(reverseThroughput) AS reverseThroughput,\n        sum(throughputFromSourceNode) AS throughputFromSourceNode,\n        sum(reverseThroughputFromSourceNode) AS reverseThroughputFromSourceNode,\n        sum(throughputFromDestinationNode) AS throughputFromDestinationNode,\n        sum(reverseThroughputFromDestinationNode) AS reverseThroughputFromDestinationNode\n    FROM flows\n    GROUP BY\n        flowEndSeconds,\n        flowEndSecondsFromSourceNode,\n        flowEndSecondsFromDestinationNode,\n        egressNetworkPolicyName,\n        egressNetworkPolicyRuleAction,\n        ingressNetworkPolicyName,\n        ingressNetworkPolicyRuleAction,\n        sourcePodNamespace,\n        destinationPodNamespace;\n\n    CREATE TABLE IF NOT EXISTS recommendations (\n        id String,\n        type String,\n        timeCreated DateTime,\n        yamls String\n    ) engine=MergeTree\n    ORDER BY (timeCreated);\n    \nEOSQL\n"
+  create_table.sh: "#!/usr/bin/env bash\n\n# Copyright 2022 Antrea Authors.\n#\n#
+    Licensed under the Apache License, Version 2.0 (the \"License\");\n# you may not
+    use this file except in compliance with the License.\n# You may obtain a copy
+    of the License at\n#\n#      http://www.apache.org/licenses/LICENSE-2.0\n#\n#
+    Unless required by applicable law or agreed to in writing, software\n# distributed
+    under the License is distributed on an \"AS IS\" BASIS,\n# WITHOUT WARRANTIES
+    OR CONDITIONS OF ANY KIND, either express or implied.\n# See the License for the
+    specific language governing permissions and\n# limitations under the License.\n\nset
+    -e\nclickhouse client -n -h 127.0.0.1 <<-EOSQL\n\n    CREATE TABLE IF NOT EXISTS
+    flows (\n        timeInserted DateTime DEFAULT now(),\n        flowStartSeconds
+    DateTime,\n        flowEndSeconds DateTime,\n        flowEndSecondsFromSourceNode
+    DateTime,\n        flowEndSecondsFromDestinationNode DateTime,\n        flowEndReason
+    UInt8,\n        sourceIP String,\n        destinationIP String,\n        sourceTransportPort
+    UInt16,\n        destinationTransportPort UInt16,\n        protocolIdentifier
+    UInt8,\n        packetTotalCount UInt64,\n        octetTotalCount UInt64,\n        packetDeltaCount
+    UInt64,\n        octetDeltaCount UInt64,\n        reversePacketTotalCount UInt64,\n
+    \       reverseOctetTotalCount UInt64,\n        reversePacketDeltaCount UInt64,\n
+    \       reverseOctetDeltaCount UInt64,\n        sourcePodName String,\n        sourcePodNamespace
+    String,\n        sourceNodeName String,\n        destinationPodName String,\n
+    \       destinationPodNamespace String,\n        destinationNodeName String,\n
+    \       destinationClusterIP String,\n        destinationServicePort UInt16,\n
+    \       destinationServicePortName String,\n        ingressNetworkPolicyName String,\n
+    \       ingressNetworkPolicyNamespace String,\n        ingressNetworkPolicyRuleName
+    String,\n        ingressNetworkPolicyRuleAction UInt8,\n        ingressNetworkPolicyType
+    UInt8,\n        egressNetworkPolicyName String,\n        egressNetworkPolicyNamespace
+    String,\n        egressNetworkPolicyRuleName String,\n        egressNetworkPolicyRuleAction
+    UInt8,\n        egressNetworkPolicyType UInt8,\n        tcpState String,\n        flowType
+    UInt8,\n        sourcePodLabels String,\n        destinationPodLabels String,\n
+    \       throughput UInt64,\n        reverseThroughput UInt64,\n        throughputFromSourceNode
+    UInt64,\n        throughputFromDestinationNode UInt64,\n        reverseThroughputFromSourceNode
+    UInt64,\n        reverseThroughputFromDestinationNode UInt64,\n        trusted
+    UInt8 DEFAULT 0\n    ) engine=MergeTree\n    ORDER BY (timeInserted, flowEndSeconds);\n\n
+    \   CREATE MATERIALIZED VIEW flows_pod_view\n    ENGINE = SummingMergeTree\n    ORDER
+    BY (\n        flowEndSeconds,\n        flowEndSecondsFromSourceNode,\n        flowEndSecondsFromDestinationNode,\n
+    \       sourcePodName,\n        destinationPodName,\n        destinationIP,\n
+    \       destinationServicePortName,\n        flowType,\n        sourcePodNamespace,\n
+    \       destinationPodNamespace)\n    POPULATE\n    AS SELECT\n        flowEndSeconds,\n
+    \       flowEndSecondsFromSourceNode,\n        flowEndSecondsFromDestinationNode,\n
+    \       sourcePodName,\n        destinationPodName,\n        destinationIP,\n
+    \       destinationServicePortName,\n        flowType,\n        sourcePodNamespace,\n
+    \       destinationPodNamespace,\n        sum(octetDeltaCount) AS octetDeltaCount,\n
+    \       sum(reverseOctetDeltaCount) AS reverseOctetDeltaCount,\n        sum(throughput)
+    AS throughput,\n        sum(reverseThroughput) AS reverseThroughput,\n        sum(throughputFromSourceNode)
+    AS throughputFromSourceNode,\n        sum(throughputFromDestinationNode) AS throughputFromDestinationNode\n
+    \   FROM flows\n    GROUP BY\n        flowEndSeconds,\n        flowEndSecondsFromSourceNode,\n
+    \       flowEndSecondsFromDestinationNode,\n        sourcePodName,\n        destinationPodName,\n
+    \       destinationIP,\n        destinationServicePortName,\n        flowType,\n
+    \       sourcePodNamespace,\n        destinationPodNamespace;\n\n    CREATE MATERIALIZED
+    VIEW flows_node_view\n    ENGINE = SummingMergeTree\n    ORDER BY (\n        flowEndSeconds,\n
+    \       flowEndSecondsFromSourceNode,\n        flowEndSecondsFromDestinationNode,\n
+    \       sourceNodeName,\n        destinationNodeName,\n        sourcePodNamespace,\n
+    \       destinationPodNamespace)\n    POPULATE\n    AS SELECT\n        flowEndSeconds,\n
+    \       flowEndSecondsFromSourceNode,\n        flowEndSecondsFromDestinationNode,\n
+    \       sourceNodeName,\n        destinationNodeName,\n        sourcePodNamespace,\n
+    \       destinationPodNamespace,\n        sum(octetDeltaCount) AS octetDeltaCount,\n
+    \       sum(reverseOctetDeltaCount) AS reverseOctetDeltaCount,\n        sum(throughput)
+    AS throughput,\n        sum(reverseThroughput) AS reverseThroughput,\n        sum(throughputFromSourceNode)
+    AS throughputFromSourceNode,\n        sum(reverseThroughputFromSourceNode) AS
+    reverseThroughputFromSourceNode,\n        sum(throughputFromDestinationNode) AS
+    throughputFromDestinationNode,\n        sum(reverseThroughputFromDestinationNode)
+    AS reverseThroughputFromDestinationNode\n    FROM flows\n    GROUP BY\n        flowEndSeconds,\n
+    \       flowEndSecondsFromSourceNode,\n        flowEndSecondsFromDestinationNode,\n
+    \       sourceNodeName,\n        destinationNodeName,\n        sourcePodNamespace,\n
+    \       destinationPodNamespace;\n\n    CREATE MATERIALIZED VIEW flows_policy_view\n
+    \   ENGINE = SummingMergeTree\n    ORDER BY (\n        flowEndSeconds,\n        flowEndSecondsFromSourceNode,\n
+    \       flowEndSecondsFromDestinationNode,\n        egressNetworkPolicyName,\n
+    \       egressNetworkPolicyRuleAction,\n        ingressNetworkPolicyName,\n        ingressNetworkPolicyRuleAction,\n
+    \       sourcePodNamespace,\n        destinationPodNamespace)\n    POPULATE\n
+    \   AS SELECT\n        flowEndSeconds,\n        flowEndSecondsFromSourceNode,\n
+    \       flowEndSecondsFromDestinationNode,\n        egressNetworkPolicyName,\n
+    \       egressNetworkPolicyRuleAction,\n        ingressNetworkPolicyName,\n        ingressNetworkPolicyRuleAction,\n
+    \       sourcePodNamespace,\n        destinationPodNamespace,\n        sum(octetDeltaCount)
+    AS octetDeltaCount,\n        sum(reverseOctetDeltaCount) AS reverseOctetDeltaCount,\n
+    \       sum(throughput) AS throughput,\n        sum(reverseThroughput) AS reverseThroughput,\n
+    \       sum(throughputFromSourceNode) AS throughputFromSourceNode,\n        sum(reverseThroughputFromSourceNode)
+    AS reverseThroughputFromSourceNode,\n        sum(throughputFromDestinationNode)
+    AS throughputFromDestinationNode,\n        sum(reverseThroughputFromDestinationNode)
+    AS reverseThroughputFromDestinationNode\n    FROM flows\n    GROUP BY\n        flowEndSeconds,\n
+    \       flowEndSecondsFromSourceNode,\n        flowEndSecondsFromDestinationNode,\n
+    \       egressNetworkPolicyName,\n        egressNetworkPolicyRuleAction,\n        ingressNetworkPolicyName,\n
+    \       ingressNetworkPolicyRuleAction,\n        sourcePodNamespace,\n        destinationPodNamespace;\n\n
+    \   CREATE TABLE IF NOT EXISTS recommendations (\n        id String,\n        type
+    String,\n        timeCreated DateTime,\n        yamls String\n    ) engine=MergeTree\n
+    \   ORDER BY (timeCreated);\n    \nEOSQL\n"
 kind: ConfigMap
 metadata:
   name: clickhouse-mounted-configmap-44mdg7d2b2
@@ -4712,7 +4795,8 @@ spec:
       containers:
       - env:
         - name: GF_INSTALL_PLUGINS
-          value: https://downloads.antrea.io/artifacts/grafana-custom-plugins/grafana-sankey-plugin-1.0.0.zip;antreaflowvisibility-grafana-sankey-plugin,grafana-clickhouse-datasource 1.0.1
+          value: https://downloads.antrea.io/artifacts/grafana-custom-plugins/grafana-sankey-plugin-1.0.0.zip;antreaflowvisibility-grafana-sankey-plugin,grafana-clickhouse-datasource
+            1.0.1
         - name: CLICKHOUSE_USERNAME
           valueFrom:
             secretKeyRef:

@@ -2972,7 +2972,6 @@ data:
     #  nodeCIDRMaskSizeIPv6: 64
 kind: ConfigMap
 metadata:
-  annotations: {}
   labels:
     app: antrea
   name: antrea-config-tb4cm2bddc
