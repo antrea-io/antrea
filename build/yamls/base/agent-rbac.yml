@@ -18,6 +18,11 @@ rules:
       - get
       - watch
       - list
+  - apiGroups:
+      - ""
+    resources:
+      - nodes/status
+    verbs:
       - patch
   - apiGroups:
       - ""
@@ -27,6 +32,11 @@ rules:
       - get
       - watch
       - list
+  - apiGroups:
+      - ""
+    resources:
+      - pods/status
+    verbs:
       - patch
   - apiGroups:
       - ""
@@ -44,7 +54,6 @@ rules:
       - services/status
     verbs:
       - update
-      - patch
   - apiGroups:
       - discovery.k8s.io
     resources:

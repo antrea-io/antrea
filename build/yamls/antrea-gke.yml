@@ -2171,6 +2171,11 @@ rules:
   - get
   - watch
   - list
+- apiGroups:
+  - ""
+  resources:
+  - nodes/status
+  verbs:
   - patch
 - apiGroups:
   - ""
@@ -2180,6 +2185,11 @@ rules:
   - get
   - watch
   - list
+- apiGroups:
+  - ""
+  resources:
+  - pods/status
+  verbs:
   - patch
 - apiGroups:
   - ""
@@ -2197,7 +2207,6 @@ rules:
   - services/status
   verbs:
   - update
-  - patch
 - apiGroups:
   - discovery.k8s.io
   resources:
@@ -2356,6 +2365,7 @@ rules:
   - ""
   resources:
   - pods
+  - services
   - namespaces
   - configmaps
   verbs:
@@ -2374,14 +2384,9 @@ rules:
 - apiGroups:
   - ""
   resources:
-  - services
   - services/status
   verbs:
-  - get
-  - watch
-  - list
   - update
-  - patch
 - apiGroups:
   - networking.k8s.io
   resources:
