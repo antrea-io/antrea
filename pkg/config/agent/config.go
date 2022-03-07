@@ -37,7 +37,8 @@ type AgentConfig struct {
 	// - system
 	// - netdev
 	// 'system' is the default value and corresponds to the kernel datapath. Use 'netdev' to run
-	// OVS in userspace mode. Userspace mode requires the tun device driver to be available.
+	// OVS in userspace mode (not fully supported yet). Userspace mode requires the tun device
+	// driver to be available.
 	OVSDatapathType string `yaml:"ovsDatapathType,omitempty"`
 	// Runtime data directory used by Open vSwitch.
 	// Default value:

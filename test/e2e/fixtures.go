@@ -28,6 +28,7 @@ import (
 	"k8s.io/component-base/featuregate"
 
 	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/features"
 )
 
 func skipIfNotBenchmarkTest(tb testing.TB) {
@@ -144,6 +145,10 @@ func skipIfFeatureDisabled(tb testing.TB, feature featuregate.Feature, checkAgen
 			tb.Skipf("Skipping test because %s is not enabled in the Controller", feature)
 		}
 	}
+}
+
+func skipIfProxyDisabled(t *testing.T) {
+	skipIfFeatureDisabled(t, features.AntreaProxy, true /* checkAgent */, false /* checkController */)
 }
 
 func ensureAntreaRunning(data *TestData) error {

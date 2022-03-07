@@ -21,12 +21,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 
 	"antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/apis"
 	agentconfig "antrea.io/antrea/pkg/config/agent"
 )
 
@@ -37,11 +35,8 @@ func TestWireGuard(t *testing.T) {
 	skipIfNumNodesLessThan(t, 2)
 	skipIfHasWindowsNodes(t)
 	skipIfAntreaIPAMTest(t)
-	providerIsKind := testOptions.providerName == "kind"
-	if !providerIsKind {
-		for _, node := range clusterInfo.nodes {
-			skipIfMissingKernelModule(t, node.name, []string{"wireguard"})
-		}
+	for _, node := range clusterInfo.nodes {
+		skipIfMissingKernelModule(t, node.name, []string{"wireguard"})
 	}
 	data, err := setupTest(t)
 	skipIfEncapModeIsNot(t, data, config.TrafficEncapModeEncap)
@@ -51,25 +46,20 @@ func TestWireGuard(t *testing.T) {
 	}
 	defer teardownTest(t, data)
 
-	if !providerIsKind {
+	ac := func(config *agentconfig.AgentConfig) {
+		config.TrafficEncryptionMode = "wireguard"
+	}
+	if err := data.mutateAntreaConfigMap(nil, ac, false, true); err != nil {
+		t.Fatalf("Failed to enable WireGuard tunnel: %v", err)
+	}
+	defer func() {
 		ac := func(config *agentconfig.AgentConfig) {
-			config.TrafficEncryptionMode = "wireguard"
+			config.TrafficEncryptionMode = "none"
 		}
 		if err := data.mutateAntreaConfigMap(nil, ac, false, true); err != nil {
-			t.Fatalf("Failed to enable WireGuard tunnel: %v", err)
+			t.Fatalf("Failed to disable WireGuard tunnel: %v", err)
 		}
-		defer func() {
-			ac := func(config *agentconfig.AgentConfig) {
-				config.TrafficEncryptionMode = "none"
-			}
-			if err := data.mutateAntreaConfigMap(nil, ac, false, true); err != nil {
-				t.Fatalf("Failed to disable WireGuard tunnel: %v", err)
-			}
-		}()
-	} else {
-		data.redeployAntrea(t, deployAntreaWireGuardGo)
-		defer data.redeployAntrea(t, deployAntreaDefault)
-	}
+	}()
 
 	t.Run("testPodConnectivity", func(t *testing.T) { testPodConnectivity(t, data) })
 	t.Run("testServiceConnectivity", func(t *testing.T) { testServiceConnectivity(t, data) })
@@ -112,22 +102,6 @@ func testPodConnectivity(t *testing.T, data *TestData) {
 	defer deletePods()
 	numPods := 2
 	data.runPingMesh(t, podInfos[:numPods], agnhostContainerName)
-	// wg command is only available in WireGuard sidecar container.
-	if testOptions.providerName == "kind" {
-		nodeName0 := podInfos[0].nodeName
-		nodeName1 := podInfos[1].nodeName
-		endpoints, err := data.getWireGuardPeerEndpointsWithHandshake(nodeName0)
-		require.NoError(t, err)
-		t.Logf("Found peer endpoints %v with handshake established for Node '%s'", endpoints, nodeName0)
-		var nodeIP string
-		for _, n := range clusterInfo.nodes {
-			if n.name == nodeName1 {
-				nodeIP = n.ip()
-				break
-			}
-		}
-		assert.Contains(t, endpoints, fmt.Sprintf("%s:%d", nodeIP, apis.WireGuardListenPort))
-	}
 }
 
 // testServiceConnectivity verifies host-to-service can be transferred through the encrypted tunnel correctly.

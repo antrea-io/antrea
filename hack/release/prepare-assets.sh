@@ -75,7 +75,6 @@ export IMG_NAME=projects.registry.vmware.com/antrea/antrea-ubuntu
 ./hack/generate-manifest.sh --mode release --cloud EKS --encap-mode networkPolicyOnly > "$OUTPUT_DIR"/antrea-eks.yml
 ./hack/generate-manifest.sh --mode release --cloud GKE --encap-mode noEncap > "$OUTPUT_DIR"/antrea-gke.yml
 ./hack/generate-manifest.sh --mode release --cloud AKS --encap-mode networkPolicyOnly > "$OUTPUT_DIR"/antrea-aks.yml
-./hack/generate-manifest.sh --mode release --kind > "$OUTPUT_DIR"/antrea-kind.yml
 
 export IMG_NAME=projects.registry.vmware.com/antrea/octant-antrea-ubuntu
 ./hack/generate-manifest-octant.sh --mode release > "$OUTPUT_DIR"/antrea-octant.yml

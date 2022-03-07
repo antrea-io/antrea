@@ -28,11 +28,11 @@ import (
 // TestIPSec is the top-level test which contains all subtests for
 // IPsec related test cases so they can share setup, teardown.
 func TestIPSec(t *testing.T) {
-	skipIfProviderIs(t, "kind", "IPsec tunnel does not work with Kind")
 	skipIfIPv6Cluster(t)
 	skipIfNumNodesLessThan(t, 2)
 	skipIfHasWindowsNodes(t)
 	skipIfAntreaIPAMTest(t)
+	skipIfProviderIs(t, "kind", "IPsec tests take too long to run and do not work with multiple Docker bridges")
 
 	data, err := setupTest(t)
 	if err != nil {

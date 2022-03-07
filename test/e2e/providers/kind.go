@@ -61,26 +61,6 @@ func (provider *KindProvider) enableKubectlOnControlPlane() error {
 	return nil
 }
 
-// moveCoreDNSPodsToControlPlane ensures that all the CoreDNS Pods are scheduled on the control-plane Node
-// by patching the CoreDNS deployment with kubectl. Several of the e2e tests restart the Antrea
-// agent on a worker Node, which causes the datapath to break. If this happens when CoreDNS Pods are
-// scheduled on this specific worker Node, we observe that kube-apiserver cannot reach CoreDNS any
-// more, which may cause some subsequent tests to fail. Because we never restart the Antrea agent on
-// the control-plane Node, it helps to move the CoreDNS Pods to that Node. Note that CoreDNS Pods
-// still need to be restarted if a test restarts all Agent Pods (e.g. as part of a rolling update
-// when the Antrea YAML manifest is changed). This issue does not seem to affect clusters which use
-// the OVS kernel datapath as much.
-// TODO: revert changes at the end of tests?
-func (provider *KindProvider) moveCoreDNSPodsToControlPlane() error {
-	patch := `{"spec":{"template":{"spec":{"nodeName":"` + provider.controlPlaneNodeName + `"}}}}`
-	cmd := fmt.Sprintf("kubectl patch -v 8 deployment coredns -n kube-system -p %s", patch)
-	rc, stdout, _, err := provider.RunCommandOnControlPlaneNode(cmd)
-	if err != nil || rc != 0 {
-		return fmt.Errorf("error when scheduling CoreDNS Pods to '%s': %s", provider.controlPlaneNodeName, stdout)
-	}
-	return nil
-}
-
 // NewKindProvider returns an implementation of ProviderInterface which is suitable for a
 // Kubernetes test cluster created with Kind.
 // configPath is unused for the kind provider
@@ -95,9 +75,6 @@ func NewKindProvider(configPath string) (ProviderInterface, error) {
 	provider.controlPlaneNodeName = slicedOutput[len(slicedOutput)-1]
 
 	if err := provider.enableKubectlOnControlPlane(); err != nil {
-		return nil, err
-	}
-	if err := provider.moveCoreDNSPodsToControlPlane(); err != nil {
 		return nil, err
 	}
 	return provider, nil

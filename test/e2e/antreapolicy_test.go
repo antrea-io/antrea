@@ -634,7 +634,6 @@ func testACNPPriorityOverrideDefaultDeny(t *testing.T) {
 // testACNPAllowNoDefaultIsolation tests that no default isolation rules are created for Policies.
 func testACNPAllowNoDefaultIsolation(t *testing.T, protocol v1.Protocol) {
 	if protocol == v1.ProtocolSCTP {
-		skipIfProviderIs(t, "kind", "OVS userspace conntrack does not have the SCTP support for now.")
 		// SCTP testing is failing on our IPv6 CI testbeds at the moment. This seems to be
 		// related to an issue with ESX networking for SCTPv6 traffic when the Pods are on
 		// different Node VMs which are themselves on different ESX hosts. We are
@@ -672,7 +671,6 @@ func testACNPAllowNoDefaultIsolation(t *testing.T, protocol v1.Protocol) {
 // testACNPDropEgress tests that an ACNP is able to drop egress traffic from pods labelled A to namespace Z.
 func testACNPDropEgress(t *testing.T, protocol v1.Protocol) {
 	if protocol == v1.ProtocolSCTP {
-		skipIfProviderIs(t, "kind", "OVS userspace conntrack does not have the SCTP support for now.")
 		// SCTP testing is failing on our IPv6 CI testbeds at the moment. This seems to be
 		// related to an issue with ESX networking for SCTPv6 traffic when the Pods are on
 		// different Node VMs which are themselves on different ESX hosts. We are
@@ -2382,6 +2380,10 @@ func testACNPStrictNamespacesIsolation(t *testing.T) {
 func testFQDNPolicy(t *testing.T) {
 	// The ipv6-only test env doesn't have IPv6 access to the web.
 	skipIfNotIPv4Cluster(t)
+	// It is convenient to have higher log verbosity for FQDNtests for troubleshooting failures.
+	logLevel := log.GetLevel()
+	log.SetLevel(log.TraceLevel)
+	defer log.SetLevel(logLevel)
 	builder := &ClusterNetworkPolicySpecBuilder{}
 	builder = builder.SetName("test-acnp-drop-all-google").
 		SetTier("application").
@@ -2446,6 +2448,9 @@ func testFQDNPolicy(t *testing.T) {
 // For a headless Service, the Endpoints IP will be directly returned by the DNS
 // server. In this case, FQDN based policies can be enforced successfully.
 func testFQDNPolicyInClusterService(t *testing.T) {
+	logLevel := log.GetLevel()
+	log.SetLevel(log.TraceLevel)
+	defer log.SetLevel(logLevel)
 	var services []*v1.Service
 	if clusterInfo.podV4NetworkCIDR != "" {
 		ipv4Svc := k8sUtils.BuildService("ipv4-svc", "x", 80, 80, map[string]string{"pod": "a"}, nil)

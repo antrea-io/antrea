@@ -93,8 +93,6 @@ const (
 	agentContainerName         string = "antrea-agent"
 	antreaYML                  string = "antrea.yml"
 	antreaIPSecYML             string = "antrea-ipsec.yml"
-	antreaWireGuardGoYML       string = "antrea-wireguard-go.yml"
-	antreaWireGuardGoCovYML    string = "antrea-wireguard-go-coverage.yml"
 	antreaCovYML               string = "antrea-coverage.yml"
 	antreaIPSecCovYML          string = "antrea-ipsec-coverage.yml"
 	flowAggregatorYML          string = "flow-aggregator.yml"
@@ -218,7 +216,6 @@ type deployAntreaOptions int
 const (
 	deployAntreaDefault deployAntreaOptions = iota
 	deployAntreaIPsec
-	deployAntreaWireGuardGo
 	deployAntreaCoverageOffset
 )
 
@@ -238,15 +235,12 @@ var (
 	deployAntreaOptionsString = [...]string{
 		"AntreaDefault",
 		"AntreaWithIPSec",
-		"AntreaWithWireGuardGo",
 	}
 	deployAntreaOptionsYML = [...]string{
 		antreaYML,
 		antreaIPSecYML,
-		antreaWireGuardGoYML,
 		antreaCovYML,
 		antreaIPSecCovYML,
-		antreaWireGuardGoCovYML,
 	}
 )
 
@@ -744,11 +738,7 @@ func (data *TestData) mutateFlowAggregatorConfigMap(ipfixCollector string, faClu
 	flowAggregatorConf.ActiveFlowRecordTimeout = aggregatorActiveFlowRecordTimeout.String()
 	flowAggregatorConf.InactiveFlowRecordTimeout = aggregatorInactiveFlowRecordTimeout.String()
 	flowAggregatorConf.RecordContents.PodLabels = true
-	if testOptions.providerName == "kind" {
-		// In Kind cluster, there are issues with DNS name resolution on worker nodes.
-		// We will use flow aggregator service cluster IP to generate the server certificate for tls communication
-		flowAggregatorConf.FlowAggregatorAddress = faClusterIP
-	}
+	flowAggregatorConf.FlowAggregatorAddress = faClusterIP
 
 	b, err := yaml.Marshal(&flowAggregatorConf)
 	if err != nil {
@@ -2036,7 +2026,7 @@ func (data *TestData) mutateAntreaConfigMap(
 			return fmt.Errorf("error when restarting antrea-agent Pod: %v", err)
 		}
 	}
-	// controller should be restarted after agents in case of dataplane disruption caused by agent restart on Kind cluster.
+	// we currently restart the controller after the agents
 	if restartController && controllerConfChanged {
 		_, err = data.restartAntreaControllerPod(defaultTimeout)
 		if err != nil {
