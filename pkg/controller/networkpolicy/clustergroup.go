@@ -71,7 +71,7 @@ func (c *NetworkPolicyController) updateClusterGroup(oldObj, curObj interface{})
 		for _, ipb := range newGroup.IPBlocks {
 			newIPBs.Insert(ipb.CIDR.String())
 		}
-		return oldIPBs.Equal(newIPBs)
+		return !oldIPBs.Equal(newIPBs)
 	}
 	childGroupsUpdated := func() bool {
 		oldChildGroups, newChildGroups := sets.String{}, sets.String{}
@@ -230,8 +230,8 @@ func (c *NetworkPolicyController) syncInternalGroup(key string) error {
 	//   2. All its child groups are created and realized.
 	if len(grp.ChildGroups) > 0 {
 		for _, cgName := range grp.ChildGroups {
-			cg, found, _ := c.internalGroupStore.Get(cgName)
-			if !found || cg.(*antreatypes.Group).MembersComputed != v1.ConditionTrue {
+			internalGroup, found, _ := c.internalGroupStore.Get(cgName)
+			if !found || internalGroup.(*antreatypes.Group).MembersComputed != v1.ConditionTrue {
 				membersComputed = false
 				break
 			}
@@ -419,10 +419,8 @@ func (c *NetworkPolicyController) GetGroupMembers(cgName string) (controlplane.G
 	groupObj, found, _ := c.internalGroupStore.Get(cgName)
 	if found {
 		group := groupObj.(*antreatypes.Group)
-		if len(group.IPBlocks) > 0 {
-			return nil, group.IPBlocks, nil
-		}
-		return c.getClusterGroupMemberSet(group), nil, nil
+		member, ipb := c.getClusterGroupMembers(group)
+		return member, ipb, nil
 	}
 	return nil, nil, fmt.Errorf("no internal Group with name %s is found", cgName)
 }

@@ -1110,28 +1110,37 @@ func (n *NetworkPolicyController) getAddressGroupMemberSet(g *antreatypes.Addres
 	groupObj, found, _ := n.internalGroupStore.Get(g.Name)
 	if found {
 		// This AddressGroup is derived from a ClusterGroup.
+		// In case the ClusterGroup is defined by a mix of childGroup with selectors and
+		// childGroup with ipBlocks, this function only returns the aggregated GroupMemberSet
+		// computed from childGroup with selectors, as ipBlocks will be processed differently.
 		group := groupObj.(*antreatypes.Group)
-		return n.getClusterGroupMemberSet(group)
+		members, _ := n.getClusterGroupMembers(group)
+		return members
 	}
 	return n.getMemberSetForGroupType(addressGroupType, g.Name)
 }
 
-// getClusterGroupMemberSet knows how to construct a GroupMemberSet that contains
+// getClusterGroupMembers knows how to construct a GroupMemberSet and ipBlocks that contains
 // all the entities selected by a ClusterGroup. For ClusterGroup that has childGroups,
 // the members are computed as the union of all its childGroup's members.
-func (n *NetworkPolicyController) getClusterGroupMemberSet(group *antreatypes.Group) controlplane.GroupMemberSet {
-	if len(group.ChildGroups) == 0 {
-		return n.getMemberSetForGroupType(clusterGroupType, group.Name)
+func (n *NetworkPolicyController) getClusterGroupMembers(group *antreatypes.Group) (controlplane.GroupMemberSet, []controlplane.IPBlock) {
+	if len(group.IPBlocks) > 0 {
+		return nil, group.IPBlocks
+	} else if len(group.ChildGroups) == 0 {
+		return n.getMemberSetForGroupType(clusterGroupType, group.Name), nil
 	}
+	var ipBlocks []controlplane.IPBlock
 	groupMemberSet := controlplane.GroupMemberSet{}
 	for _, childName := range group.ChildGroups {
 		childGroup, found, _ := n.internalGroupStore.Get(childName)
 		if found {
 			child := childGroup.(*antreatypes.Group)
-			groupMemberSet.Merge(n.getMemberSetForGroupType(clusterGroupType, child.Name))
+			members, ipb := n.getClusterGroupMembers(child)
+			ipBlocks = append(ipBlocks, ipb...)
+			groupMemberSet.Merge(members)
 		}
 	}
-	return groupMemberSet
+	return groupMemberSet, ipBlocks
 }
 
 // getMemberSetForGroupType knows how to construct a GroupMemberSet for the given
