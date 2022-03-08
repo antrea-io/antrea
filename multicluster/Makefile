@@ -1,7 +1,7 @@
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
 # For controller-gen, float value is not allowed by default as it is considered dangerous
 # See https://github.com/kubernetes-sigs/controller-tools/issues/245
-# However the ResourceExport/Import refers to ACNP type definition and the priority field in ACNP spec is of type float64.
+# However the ResourceExport/Import refers to ACNP type definition and the priority field in ACNP spec is type float64.
 # Hence, before any ACNP spec bumps that changes the priorty field to a different type,
 # the allowDangerousTypes flag is needed for CRD manifests to generate correctly.
 CRD_OPTIONS ?= "crd:trivialVersions=true,allowDangerousTypes=true,preserveUnknownFields=false"

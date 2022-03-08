@@ -372,7 +372,7 @@ func (r *ResourceExportReconciler) refreshEndpointsResourceImport(
 	var newSubsets []corev1.EndpointSubset
 	undeleteItems, err := r.getNotDeletedResourceExports(resExport)
 	if err != nil {
-		klog.ErrorS(err, "failed to list ResourceExports, retry later")
+		klog.ErrorS(err, "Failed to list ResourceExports, retry later")
 		return newResImport, false, err
 	}
 	for _, re := range undeleteItems {
@@ -400,7 +400,7 @@ func (r *ResourceExportReconciler) refreshACNPResourceImport(
 	if !apiequality.Semantic.DeepEqual(resExport.Spec.ClusterNetworkPolicy, resImport.Spec.ClusterNetworkPolicy) {
 		undeletedItems, err := r.getNotDeletedResourceExports(resExport)
 		if err != nil {
-			klog.ErrorS(err, "failed to list ResourceExports for ACNP, retry later")
+			klog.ErrorS(err, "Failed to list ResourceExports for ACNP, retry later")
 			return newResImport, false, err
 		}
 		if len(undeletedItems) == 1 && undeletedItems[0].Name == resExport.Name && undeletedItems[0].Namespace == resExport.Namespace {

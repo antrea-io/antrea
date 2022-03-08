@@ -22,6 +22,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -30,9 +31,11 @@ import (
 	mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
 	"antrea.io/antrea/multicluster/controllers/multicluster/common"
 	"antrea.io/antrea/multicluster/controllers/multicluster/commonarea"
+	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
 )
 
 func TestStaleController_CleanupService(t *testing.T) {
+	localClusterID = "cluster-a"
 	remoteMgr := commonarea.NewRemoteCommonAreaManager("test-clusterset", common.ClusterID(localClusterID))
 	go remoteMgr.Start()
 
@@ -62,6 +65,7 @@ func TestStaleController_CleanupService(t *testing.T) {
 		Spec: mcsv1alpha1.ResourceImportSpec{
 			Name:      "non-nginx",
 			Namespace: "default",
+			Kind:      common.ServiceKind,
 		},
 	}
 	tests := []struct {
@@ -118,6 +122,94 @@ func TestStaleController_CleanupService(t *testing.T) {
 				}
 			} else {
 				t.Errorf("Should list ServiceImport successfully but got err = %v", err)
+			}
+		})
+	}
+}
+
+func TestStaleController_CleanupACNP(t *testing.T) {
+	localClusterID = "cluster-a"
+	remoteMgr := commonarea.NewRemoteCommonAreaManager("test-clusterset", common.ClusterID(localClusterID))
+	go remoteMgr.Start()
+
+	acnpImportName := "acnp-for-isolation"
+	acnpResImportName := leaderNamespace + "-" + acnpImportName
+	acnpResImport := mcsv1alpha1.ResourceImport{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "default",
+			Name:      acnpResImportName,
+		},
+		Spec: mcsv1alpha1.ResourceImportSpec{
+			Name: acnpImportName,
+			Kind: common.AntreaClusterNetworkPolicyKind,
+			ClusterNetworkPolicy: &v1alpha1.ClusterNetworkPolicySpec{
+				Tier:     "securityops",
+				Priority: 1.0,
+				AppliedTo: []v1alpha1.NetworkPolicyPeer{
+					{NamespaceSelector: &metav1.LabelSelector{}},
+				},
+			},
+		},
+	}
+	acnp1 := v1alpha1.ClusterNetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        common.AntreaMCSPrefix + acnpImportName,
+			Annotations: map[string]string{common.AntreaMCACNPAnnotation: "true"},
+		},
+	}
+	acnp2 := v1alpha1.ClusterNetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        common.AntreaMCSPrefix + "some-deleted-resimp",
+			Annotations: map[string]string{common.AntreaMCACNPAnnotation: "true"},
+		},
+	}
+	acnp3 := v1alpha1.ClusterNetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "non-mcs-acnp",
+		},
+	}
+	tests := []struct {
+		name                  string
+		existingACNPList      *v1alpha1.ClusterNetworkPolicyList
+		existResImpList       *mcsv1alpha1.ResourceImportList
+		expectedACNPRemaining sets.String
+	}{
+		{
+			name: "cleanup stale ACNP",
+			existingACNPList: &v1alpha1.ClusterNetworkPolicyList{
+				Items: []v1alpha1.ClusterNetworkPolicy{
+					acnp1, acnp2, acnp3,
+				},
+			},
+			existResImpList: &mcsv1alpha1.ResourceImportList{
+				Items: []mcsv1alpha1.ResourceImport{
+					acnpResImport,
+				},
+			},
+			expectedACNPRemaining: sets.NewString(common.AntreaMCSPrefix+acnpImportName, "non-mcs-acnp"),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithLists(tt.existingACNPList).Build()
+			fakeRemoteClient := fake.NewClientBuilder().WithScheme(scheme).WithLists(tt.existResImpList).Build()
+			_ = commonarea.NewFakeRemoteCommonArea(scheme, &remoteMgr, fakeRemoteClient, "leader-cluster", "default")
+
+			c := NewStaleController(fakeClient, scheme, &remoteMgr)
+			if err := c.cleanup(); err != nil {
+				t.Errorf("StaleController.cleanup() should clean up all stale ACNPs but got err = %v", err)
+			}
+			ctx := context.TODO()
+			acnpList := &v1alpha1.ClusterNetworkPolicyList{}
+			if err := fakeClient.List(ctx, acnpList, &client.ListOptions{}); err != nil {
+				t.Errorf("Error when listing the ACNPs after cleanup")
+			}
+			acnpRemaining := sets.NewString()
+			for _, acnp := range acnpList.Items {
+				acnpRemaining.Insert(acnp.Name)
+			}
+			if !acnpRemaining.Equal(tt.expectedACNPRemaining) {
+				t.Errorf("Unexpected stale ACNP cleanup result. Expected: %v, Actual: %v", tt.expectedACNPRemaining, acnpRemaining)
 			}
 		})
 	}

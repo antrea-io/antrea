@@ -90,88 +90,16 @@ IPs from all member clusters. The new created Antrea Multi-cluster Service is ju
 Kubernetes Service, so Pods in a member cluster can access the multi-cluster Service as usual without
 any extra setting.
 
-## Multi-cluster ClusterNetworkPolicy Replication (ACNP Copy-span)
+## Antrea Multi-cluster policy enforcement
 
-Antrea Multi-cluster admins can specify certain ClusterNetworkPolicies to be replicated across
-the entire ClusterSet. This is especially useful for ClusterSet admins who want all clusters in the
-ClusterSet to be applied with a consistent security posture (for example, all namespaces in all
-clusters can only communicate with Pods in their own namespaces). For more information regarding
-Antrea ClusterNetworkPolicy(ACNP), refer to [this document](../antrea-network-policy.md).
+At this moment, Antrea does not support Pod-level policy enforcement for cross-cluster traffic. Access
+towards Multi-cluster Services can be regulated with Antrea ClusterNetworkPolicy `toService` rules. In
+each member cluster, users can create an Antrea ClusterNetworkPolicy selecting Pods in that cluster, with
+the imported Mutli-cluster Service name and Namespace in an egress `toService` rule, and the Action to
+take for traffic matching this rule. For more information regarding Antrea ClusterNetworkPolicy (ACNP),
+refer to [this document](../antrea-network-policy.md).
 
-To achieve such ACNP copy-span, admins can, in the acting leader cluster of a Multi-cluster deployment,
-create a ResourceExport of kind `AntreaClusterNetworkPolicy` which contains the ClusterNetworkPolicy spec
-they wish to be replicated. The ResourceExport should be created in the Namespace which implements the
-Common Area of the ClusterSet. In future releases, some additional tooling may become available to
-automate the creation of such ResourceExport and make ACNP replication across cluster eaiser.
-
-```yaml
-apiVersion: multicluster.crd.antrea.io/v1alpha1
-kind: ResourceExport
-metadata:
-  name: strict-namespace-isolation-for-test-clusterset
-  namespace: antrea-mcs-ns          # Namespace that implements Common Area of test-clusterset
-spec:
-  kind: AntreaClusterNetworkPolicy  
-  name: strict-namespace-isolation  # In each importing cluster, an ACNP of name antrea-mc-strict-namespace-isolation will be created with the spec below
-  clusternetworkpolicy:
-    priority: 1
-    tier: securityops
-    appliedTo:
-      - namespaceSelector: {}       # Selects all Namespaces in the member cluster
-    ingress:
-      - action: Pass
-        from:
-        - namespaces:
-            match: Self            # Skip drop rule for traffic from Pods in the same Namespace
-        - podSelector:
-            matchLabels:
-              k8s-app: kube-dns    # Skip drop rule for traffic from the core-dns components
-      - action: Drop
-        from:
-        - namespaceSelector: {}    # Drop from Pods from all other Namespaces
-```
-
-The above sample spec will create an ACNP in each member cluster which implements strict namespace
-isolation for that cluster.
-
-Note that because the Tier that an ACNP refers to must exist before the ACNP is applied, an importing
-cluster may fail to create the ACNP to be replicated, if the tier in the ResourceExport spec cannot be
-found in that particular cluster. The ACNP creation status of each member cluster will be reported back
-to the Common Area as K8s Events, and can be checked by describing the ResourceImport of the original
-ResourceExport:
-
-```text
-kubectl describe resourceimport -A
----
-Name:         strict-namespace-isolation-antreaclusternetworkpolicy
-Namespace:    antrea-mcs-ns
-API Version:  multicluster.crd.antrea.io/v1alpha1
-Kind:         ResourceImport
-Spec:
-  Clusternetworkpolicy:
-    Applied To:
-      Namespace Selector:
-    Ingress:
-      Action:          Pass
-      Enable Logging:  false
-      From:
-        Namespaces:
-          Match:  Self
-        Pod Selector:
-          Match Labels:
-            k8s-app:   kube-dns
-      Action:          Drop
-      Enable Logging:  false
-      From:
-        Namespace Selector:
-    Priority:  1
-    Tier:      random
-  Kind:        AntreaClusterNetworkPolicy
-  Name:        strict-namespace-isolation
-  ...
-Events:
-  Type    Reason               Age    From                       Message
-  ----    ------               ----   ----                       -------
-  Normal  ACNPImportSucceeded  2m11s  resourceimport-controller  ACNP successfully created in the importing cluster test-cluster-east
-  Warning ACNPImportFailed     2m11s  resourceimport-controller  ACNP Tier does not exist in the importing cluster test-cluster-west
-```
+Multi-cluster admins can also specify certain ClusterNetworkPolicies to be replicated across the entire
+ClusterSet. The ACNP to be replicated should be created as a ResourceExport in the leader cluster, and
+the resource export/import pipeline will ensure member clusters receive this ACNP spec to be replicated.
+Each member cluster's Multi-cluster Controller will then create an ACNP in their respective clusters.

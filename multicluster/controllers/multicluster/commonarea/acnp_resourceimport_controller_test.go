@@ -21,10 +21,12 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
@@ -147,7 +149,15 @@ func TestResourceImportReconciler_handleCopySpanACNPCreateEvent(t *testing.T) {
 				} else if !tt.expectedSuccess && (err == nil || !apierrors.IsNotFound(err)) {
 					t.Errorf("ResourceImport Reconciler should not import an ACNP whose Tier does not exist in current cluster. Expected NotFound error. Actual err = %v", err)
 				}
-				//TODO(yang): add Event creation tests
+				if !tt.expectedSuccess {
+					errorList := &corev1.EventList{}
+					if err := fakeRemoteClient.List(ctx, errorList, &client.ListOptions{}); err != nil {
+						t.Errorf("Failed to list Events in remote Common Area")
+					}
+					if len(errorList.Items) == 0 {
+						t.Errorf("An event should be created for failed ACNP imports")
+					}
+				}
 			}
 		})
 	}

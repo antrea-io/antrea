@@ -33,6 +33,7 @@ import (
 	mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
 	"antrea.io/antrea/multicluster/controllers/multicluster/common"
 	"antrea.io/antrea/multicluster/controllers/multicluster/commonarea"
+	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 )
 
 // StaleController will clean up ServiceImport and MC Service if no corresponding ResourceImport
@@ -68,17 +69,29 @@ func (c *StaleController) cleanup() error {
 	if *c.remoteCommonAreaManager == nil {
 		return errors.New("ClusterSet has not been initialized properly, no available remote common area")
 	}
-
 	remoteCluster, err := getRemoteCommonArea(c.remoteCommonAreaManager)
 	if err != nil {
 		return err
 	}
-
 	localClusterID := string((*c.remoteCommonAreaManager).GetLocalClusterID())
 	if len(localClusterID) == 0 {
 		return errors.New("localClusterID is not initialized, retry later")
 	}
+	resImpList := &mcsv1alpha1.ResourceImportList{}
+	if err := remoteCluster.List(ctx, resImpList, &client.ListOptions{Namespace: remoteCluster.GetNamespace()}); err != nil {
+		return err
+	}
+	if err := c.cleanupStaleServiceResources(remoteCluster, localClusterID, resImpList); err != nil {
+		return err
+	}
+	if err := c.cleanupACNPResources(resImpList); err != nil {
+		return err
+	}
+	return nil
+}
 
+func (c *StaleController) cleanupStaleServiceResources(remoteCluster commonarea.RemoteCommonArea,
+	localClusterID string, resImpList *mcsv1alpha1.ResourceImportList) error {
 	svcImpList := &k8smcsv1alpha1.ServiceImportList{}
 	if err := c.List(ctx, svcImpList, &client.ListOptions{}); err != nil {
 		return err
@@ -86,11 +99,6 @@ func (c *StaleController) cleanup() error {
 
 	svcList := &corev1.ServiceList{}
 	if err := c.List(ctx, svcList, &client.ListOptions{}); err != nil {
-		return err
-	}
-
-	resImpList := &mcsv1alpha1.ResourceImportList{}
-	if err := remoteCluster.List(ctx, resImpList, &client.ListOptions{Namespace: remoteCluster.GetNamespace()}); err != nil {
 		return err
 	}
 
@@ -104,12 +112,11 @@ func (c *StaleController) cleanup() error {
 
 	for _, resImp := range resImpList.Items {
 		for k, svc := range mcsSvcItems {
-			if svc.Name == common.AntreaMCSPrefix+resImp.Spec.Name && svc.Namespace == resImp.Spec.Namespace {
+			if resImp.Spec.Kind == common.ServiceKind && svc.Name == common.AntreaMCSPrefix+resImp.Spec.Name && svc.Namespace == resImp.Spec.Namespace {
 				// Set the valid Service item as empty Service, then all left non-empty items should be removed.
 				mcsSvcItems[k] = corev1.Service{}
 			}
 		}
-
 		for n, svcImp := range svcImpItems {
 			if svcImp.Name == resImp.Spec.Name && svcImp.Namespace == resImp.Spec.Namespace {
 				svcImpItems[n] = k8smcsv1alpha1.ServiceImport{}
@@ -120,18 +127,17 @@ func (c *StaleController) cleanup() error {
 	for _, svc := range mcsSvcItems {
 		s := svc
 		if s.Name != "" {
-			klog.InfoS("clean up Service", "service", klog.KObj(&s))
+			klog.InfoS("Cleaning up stale Service", "service", klog.KObj(&s))
 			if err := c.Client.Delete(ctx, &s, &client.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
 				return err
 			}
 		}
 	}
-
 	for _, svcImp := range svcImpItems {
 		si := svcImp
 		if si.Name != "" {
-			klog.InfoS("clean up ServiceImport", "serviceimport", klog.KObj(&si))
-			if err = c.Client.Delete(ctx, &si, &client.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
+			klog.InfoS("Cleaning up stale ServiceImport", "serviceimport", klog.KObj(&si))
+			if err := c.Client.Delete(ctx, &si, &client.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
 				return err
 			}
 		}
@@ -167,10 +173,39 @@ func (c *StaleController) cleanup() error {
 	for _, r := range resExpItems {
 		re := r
 		if re.Name != "" {
-			klog.InfoS("clean up ResourceExport", "ResourceExport", klog.KObj(&re))
+			klog.InfoS("Cleaning up ResourceExport", "ResourceExport", klog.KObj(&re))
 			if err := remoteCluster.Delete(ctx, &re, &client.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
 				return err
 			}
+		}
+	}
+	return nil
+}
+
+func (c *StaleController) cleanupACNPResources(resImpList *mcsv1alpha1.ResourceImportList) error {
+	acnpList := &crdv1alpha1.ClusterNetworkPolicyList{}
+	if err := c.List(ctx, acnpList, &client.ListOptions{}); err != nil {
+		return err
+	}
+	staleMCACNPItems := map[string]crdv1alpha1.ClusterNetworkPolicy{}
+	for _, acnp := range acnpList.Items {
+		if _, ok := acnp.Annotations[common.AntreaMCACNPAnnotation]; ok {
+			staleMCACNPItems[acnp.Name] = acnp
+		}
+	}
+	for _, resImp := range resImpList.Items {
+		if resImp.Spec.Kind == common.AntreaClusterNetworkPolicyKind {
+			acnpNameFromResImp := common.AntreaMCSPrefix + resImp.Spec.Name
+			if _, ok := staleMCACNPItems[acnpNameFromResImp]; ok {
+				delete(staleMCACNPItems, acnpNameFromResImp)
+			}
+		}
+	}
+	for _, stalePolicy := range staleMCACNPItems {
+		acnp := stalePolicy
+		klog.InfoS("Cleaning up stale ACNP", "acnp", klog.KObj(&acnp))
+		if err := c.Client.Delete(ctx, &acnp, &client.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
+			return err
 		}
 	}
 	return nil

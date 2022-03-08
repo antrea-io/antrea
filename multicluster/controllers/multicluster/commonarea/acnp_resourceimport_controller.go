@@ -16,6 +16,7 @@ package commonarea
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math/rand"
 
 	corev1 "k8s.io/api/core/v1"
@@ -35,7 +36,6 @@ import (
 const (
 	nameSuffixLength       int    = 5
 	acnpImportStatusPrefix string = "acnp-import-status-"
-	acnpImportSucceeded    string = "ACNPImportSucceeded"
 	acnpImportFailed       string = "ACNPImportFailed"
 )
 
@@ -64,9 +64,10 @@ func (r *ResourceImportReconciler) handleResImpUpdateForClusterNetworkPolicy(ctx
 	}
 	if !acnpNotFound {
 		if _, ok := acnp.Annotations[common.AntreaMCACNPAnnotation]; !ok {
-			err := errors.New("unable to import Antrea ClusterNetworkPolicy which conflicts with existing one")
+			msg := "Unable to import Antrea ClusterNetworkPolicy which conflicts with existing one in cluster " + r.localClusterID
+			err := errors.New(msg)
 			klog.ErrorS(err, "", "acnp", klog.KObj(acnp))
-			return ctrl.Result{}, err
+			return ctrl.Result{}, r.reportStatusEvent(msg, ctx, resImp)
 		}
 	}
 	acnpObj := getMCAntreaClusterPolicy(resImp)
@@ -78,55 +79,30 @@ func (r *ResourceImportReconciler) handleResImpUpdateForClusterNetworkPolicy(ctx
 		// Create or update the ACNP if necessary.
 		if acnpNotFound {
 			if err = r.localClusterClient.Create(ctx, acnpObj, &client.CreateOptions{}); err != nil {
-				klog.ErrorS(err, "failed to create imported Antrea ClusterNetworkPolicy", "acnp", klog.KObj(acnpObj))
-				return ctrl.Result{}, err
+				msg := "Failed to create imported Antrea ClusterNetworkPolicy in cluster " + r.localClusterID
+				klog.ErrorS(err, msg, "acnp", klog.KObj(acnpObj))
+				return ctrl.Result{}, r.reportStatusEvent(msg, ctx, resImp)
 			}
+			r.installedResImports.Add(*resImp)
 		} else if !apiequality.Semantic.DeepEqual(acnp.Spec, acnpObj.Spec) {
 			acnp.Spec = acnpObj.Spec
 			if err = r.localClusterClient.Update(ctx, acnp, &client.UpdateOptions{}); err != nil {
-				klog.ErrorS(err, "failed to update imported Antrea ClusterNetworkPolicy", "acnp", klog.KObj(acnpObj))
-				return ctrl.Result{}, err
+				msg := "Failed to update imported Antrea ClusterNetworkPolicy in cluster " + r.localClusterID
+				klog.ErrorS(err, msg, "acnp", klog.KObj(acnpObj))
+				return ctrl.Result{}, r.reportStatusEvent(msg, ctx, resImp)
 			}
 		}
 	} else if tierNotFound && !acnpNotFound {
 		// The ACNP Tier does not exist, and the policy cannot be realized in this particular importing member cluster.
 		// If there is an ACNP previously created via import (which has a valid Tier by then), it should be cleaned up.
 		if err = r.localClusterClient.Delete(ctx, acnpObj, &client.DeleteOptions{}); err != nil {
-			klog.ErrorS(err, "failed to delete imported Antrea ClusterNetworkPolicy that no longer has a valid Tier for the current cluster", "acnp", klog.KObj(acnpObj))
-			return ctrl.Result{}, err
+			msg := "Failed to delete imported Antrea ClusterNetworkPolicy that no longer has a valid Tier for cluster " + r.localClusterID
+			klog.ErrorS(err, msg, "acnp", klog.KObj(acnpObj))
+			return ctrl.Result{}, r.reportStatusEvent(msg, ctx, resImp)
 		}
-	}
-
-	statusEvent := &corev1.Event{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      randName(acnpImportStatusPrefix + r.localClusterID + "-"),
-			Namespace: resImp.Namespace,
-		},
-		InvolvedObject: corev1.ObjectReference{
-			APIVersion: resourceImportAPIVersion,
-			Kind:       resourceImportKind,
-			Name:       resImp.Name,
-			Namespace:  resImp.Namespace,
-			UID:        resImp.GetUID(),
-		},
-		FirstTimestamp:      metav1.Now(),
-		LastTimestamp:       metav1.Now(),
-		ReportingController: acnpEventReportingController,
-		ReportingInstance:   acnpEventReportingInstance,
-		Action:              "reconciled",
-	}
-	if tierNotFound {
-		statusEvent.Type = corev1.EventTypeWarning
-		statusEvent.Reason = acnpImportFailed
-		statusEvent.Message = "ACNP Tier does not exist in the importing cluster " + r.localClusterID
-	} else {
-		statusEvent.Type = corev1.EventTypeNormal
-		statusEvent.Reason = acnpImportSucceeded
-		statusEvent.Message = "ACNP successfully created in the importing cluster " + r.localClusterID
-	}
-	if err = r.remoteCommonArea.Create(ctx, statusEvent, &client.CreateOptions{}); err != nil {
-		klog.ErrorS(err, "failed to create acnp import event for resourceimport", "resImp", klog.KObj(resImp))
-		return ctrl.Result{}, err
+	} else if tierNotFound {
+		msg := fmt.Sprintf("ACNP Tier %s does not exist in importing cluster %s", tierName, r.localClusterID)
+		return ctrl.Result{}, r.reportStatusEvent(msg, ctx, resImp)
 	}
 	return ctrl.Result{}, nil
 }
@@ -168,6 +144,38 @@ func getMCAntreaClusterPolicy(resImp *multiclusterv1alpha1.ResourceImport) *v1al
 		},
 		Spec: *resImp.Spec.ClusterNetworkPolicy,
 	}
+}
+
+func (r *ResourceImportReconciler) reportStatusEvent(errMsg string, ctx context.Context, resImp *multiclusterv1alpha1.ResourceImport) error {
+	if errMsg == "" {
+		return nil
+	}
+	statusEvent := &corev1.Event{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      randName(acnpImportStatusPrefix + r.localClusterID + "-"),
+			Namespace: resImp.Namespace,
+		},
+		Type:    corev1.EventTypeWarning,
+		Reason:  acnpImportFailed,
+		Message: errMsg,
+		InvolvedObject: corev1.ObjectReference{
+			APIVersion: resourceImportAPIVersion,
+			Kind:       resourceImportKind,
+			Name:       resImp.Name,
+			Namespace:  resImp.Namespace,
+			UID:        resImp.GetUID(),
+		},
+		FirstTimestamp:      metav1.Now(),
+		LastTimestamp:       metav1.Now(),
+		ReportingController: acnpEventReportingController,
+		ReportingInstance:   acnpEventReportingInstance,
+		Action:              "synced",
+	}
+	if err := r.remoteCommonArea.Create(ctx, statusEvent, &client.CreateOptions{}); err != nil {
+		klog.ErrorS(err, "Failed to create ACNP import event for ResourceImport", "resImp", klog.KObj(resImp))
+		return err
+	}
+	return nil
 }
 
 func randSeq(n int) string {
