@@ -15,6 +15,7 @@
 package networkpolicy
 
 import (
+	"net"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -76,11 +77,14 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 	allowAction := crdv1alpha1.RuleActionAllow
 	dropAction := crdv1alpha1.RuleActionDrop
 	protocolTCP := controlplane.ProtocolTCP
+	query := crdv1alpha1.IGMPQuery
+	report := crdv1alpha1.IGMPReportV1
 	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
 	selectorB := metav1.LabelSelector{MatchLabels: map[string]string{"foo2": "bar2"}}
 	selectorC := metav1.LabelSelector{MatchLabels: map[string]string{"foo3": "bar3"}}
 	selectorD := metav1.LabelSelector{MatchLabels: map[string]string{"internal.antrea.io/service-account": saA.Name}}
-
+	queryAddr := "224.0.0.1"
+	reportAddr := "225.1.2.3"
 	labelSelectorA, _ := metav1.LabelSelectorAsSelector(&selectorA)
 	labelSelectorB, _ := metav1.LabelSelectorAsSelector(&selectorB)
 	cgA := crdv1alpha3.ClusterGroup{
@@ -1253,6 +1257,124 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 			},
 			expectedAppliedToGroups: 1,
 			expectedAddressGroups:   1,
+		},
+		{
+			name: "rule-with-igmp-query",
+			inputPolicy: &crdv1alpha1.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "cnpL", UID: "uidL"},
+				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
+					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+						{PodSelector: &selectorA},
+					},
+					Priority: p10,
+					Ingress: []crdv1alpha1.Rule{
+						{
+							Action: &dropAction,
+							Protocols: []crdv1alpha1.NetworkPolicyProtocol{
+								{
+									IGMP: &crdv1alpha1.IGMPProtocol{
+										IGMPType:     &query,
+										GroupAddress: queryAddr,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedPolicy: &antreatypes.NetworkPolicy{
+				UID:  "uidL",
+				Name: "uidL",
+				SourceRef: &controlplane.NetworkPolicyReference{
+					Type: controlplane.AntreaClusterNetworkPolicy,
+					Name: "cnpL",
+					UID:  "uidL",
+				},
+				Priority:     &p10,
+				TierPriority: &DefaultTierPriority,
+				Rules: []controlplane.NetworkPolicyRule{
+					{
+						Direction: controlplane.DirectionIn,
+						Services: []controlplane.Service{
+							{
+								Protocol:     &protocolIGMP,
+								IGMPType:     &query,
+								GroupAddress: queryAddr,
+							},
+						},
+						Priority: 0,
+						Action:   &dropAction,
+						From: controlplane.NetworkPolicyPeer{
+							IPBlocks: []controlplane.IPBlock{
+								{CIDR: controlplane.IPNet{IP: controlplane.IPAddress(net.IPv4zero), PrefixLength: 0}},
+								{CIDR: controlplane.IPNet{IP: controlplane.IPAddress(net.IPv6zero), PrefixLength: 0}},
+							},
+						},
+					},
+				},
+				AppliedToGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", &selectorA, nil, nil, nil).NormalizedName)},
+			},
+			expectedAppliedToGroups: 1,
+			expectedAddressGroups:   0,
+		},
+		{
+			name: "rule-with-igmp-report",
+			inputPolicy: &crdv1alpha1.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "cnpL", UID: "uidL"},
+				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
+					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+						{PodSelector: &selectorA},
+					},
+					Priority: p10,
+					Egress: []crdv1alpha1.Rule{
+						{
+							Action: &dropAction,
+							Protocols: []crdv1alpha1.NetworkPolicyProtocol{
+								{
+									IGMP: &crdv1alpha1.IGMPProtocol{
+										IGMPType:     &report,
+										GroupAddress: reportAddr,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedPolicy: &antreatypes.NetworkPolicy{
+				UID:  "uidL",
+				Name: "uidL",
+				SourceRef: &controlplane.NetworkPolicyReference{
+					Type: controlplane.AntreaClusterNetworkPolicy,
+					Name: "cnpL",
+					UID:  "uidL",
+				},
+				Priority:     &p10,
+				TierPriority: &DefaultTierPriority,
+				Rules: []controlplane.NetworkPolicyRule{
+					{
+						Direction: controlplane.DirectionOut,
+						Services: []controlplane.Service{
+							{
+								Protocol:     &protocolIGMP,
+								IGMPType:     &report,
+								GroupAddress: reportAddr,
+							},
+						},
+						Priority: 0,
+						Action:   &dropAction,
+						To: controlplane.NetworkPolicyPeer{
+							IPBlocks: []controlplane.IPBlock{
+								{CIDR: controlplane.IPNet{IP: controlplane.IPAddress(net.IPv4zero), PrefixLength: 0}},
+								{CIDR: controlplane.IPNet{IP: controlplane.IPAddress(net.IPv6zero), PrefixLength: 0}},
+							},
+						},
+					},
+				},
+				AppliedToGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", &selectorA, nil, nil, nil).NormalizedName)},
+			},
+			expectedAppliedToGroups: 1,
+			expectedAddressGroups:   0,
 		},
 	}
 	for _, tt := range tests {

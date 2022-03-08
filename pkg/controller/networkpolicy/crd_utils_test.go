@@ -30,6 +30,10 @@ import (
 )
 
 func TestToAntreaServicesForCRD(t *testing.T) {
+	igmpQuery := int32(17)
+	igmpReport := int32(18)
+	queryStr := "224.0.0.1"
+	reportStr := "225.1.2.3"
 	tables := []struct {
 		ports              []crdv1alpha1.NetworkPolicyPort
 		protocols          []crdv1alpha1.NetworkPolicyProtocol
@@ -100,6 +104,40 @@ func TestToAntreaServicesForCRD(t *testing.T) {
 				},
 			},
 			expNamedPortExists: false,
+		},
+		{
+			protocols: []crdv1alpha1.NetworkPolicyProtocol{
+				{
+					IGMP: &crdv1alpha1.IGMPProtocol{
+						IGMPType:     &igmpQuery,
+						GroupAddress: queryStr,
+					},
+				},
+			},
+			expServices: []controlplane.Service{
+				{
+					Protocol:     &protocolIGMP,
+					IGMPType:     &igmpQuery,
+					GroupAddress: queryStr,
+				},
+			},
+		},
+		{
+			protocols: []crdv1alpha1.NetworkPolicyProtocol{
+				{
+					IGMP: &crdv1alpha1.IGMPProtocol{
+						IGMPType:     &igmpReport,
+						GroupAddress: reportStr,
+					},
+				},
+			},
+			expServices: []controlplane.Service{
+				{
+					Protocol:     &protocolIGMP,
+					IGMPType:     &igmpReport,
+					GroupAddress: reportStr,
+				},
+			},
 		},
 		{
 			protocols: []crdv1alpha1.NetworkPolicyProtocol{

@@ -98,9 +98,9 @@ var (
 	// reg3(NXM_NX_REG3)
 	// Field to store the selected Service Endpoint IP
 	EndpointIPField = binding.NewRegField(3, 0, 31, "EndpointIP")
-	// Field to store the conjunction ID which is for "deny" rule in CNP. It shares the same register with EndpointIPField,
+	// Field to store the conjunction ID which is for rule in CNP. It shares the same register with EndpointIPField,
 	// since the service selection will finish when a packet hitting NetworkPolicy related rules.
-	CNPDenyConjIDField = binding.NewRegField(3, 0, 31, "CNPDenyConjunctionID")
+	CNPConjIDField = binding.NewRegField(3, 0, 31, "CNPConjunctionID")
 
 	// reg4(NXM_NX_REG4)
 	// reg4[0..15]: Field to store the selected Service Endpoint port.

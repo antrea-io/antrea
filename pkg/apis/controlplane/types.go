@@ -269,6 +269,8 @@ const (
 	ProtocolSCTP Protocol = "SCTP"
 	// ProtocolICMP is the ICMP protocol.
 	ProtocolICMP Protocol = "ICMP"
+
+	ProtocolIGMP Protocol = "IGMP"
 )
 
 // Service describes a port to allow traffic on.
@@ -290,6 +292,10 @@ type Service struct {
 	// both are not specified and the Protocol is ICMP, this matches all ICMP traffic.
 	ICMPType *int32
 	ICMPCode *int32
+
+	// IGMPType and GroupAddress can only be specified when the Protocol is IGMP.
+	IGMPType     *int32
+	GroupAddress string
 }
 
 // NetworkPolicyPeer describes a peer of NetworkPolicyRules.
