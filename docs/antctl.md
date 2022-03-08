@@ -43,7 +43,7 @@ to connect to the Antrea Agent. Simply exec into the antrea-agent container for
 the appropriate antrea-agent Pod and run `antctl`:
 
 ```bash
-kubectl exec -it ANTREA-AGENT_POD_NAME -n kube-system -c antrea-agent bash
+kubectl exec -it ANTREA-AGENT_POD_NAME -n kube-system -c antrea-agent -- bash
 > antctl help
 ```
 

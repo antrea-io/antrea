@@ -42,7 +42,7 @@ To check the OVS daemon logs (e.g. if the `antrea-ovs` container logs indicate
 that one of the OVS daemons generated an error), you can use `kubectl exec`:
 
 ```bash
-kubectl exec -n kube-system <antrea-agent Pod name> -c antrea-ovs tail /var/log/openvswitch/<DAEMON>.log
+kubectl exec -n kube-system <antrea-agent Pod name> -c antrea-ovs -- tail /var/log/openvswitch/<DAEMON>.log
 ```
 
 The `antrea-controller` Pod and the list of `antrea-agent` Pods, along with the
@@ -147,7 +147,7 @@ agent with this command:
 
 ```bash
 # Get into the antrea-agent container
-kubectl exec -it <antrea-agent Pod name> -n kube-system -c antrea-agent bash
+kubectl exec -it <antrea-agent Pod name> -n kube-system -c antrea-agent -- bash
 # View the agent's NetworkPolicy
 antctl get networkpolicy
 ```
@@ -223,7 +223,7 @@ command line tools (e.g. `ovs-vsctl`, `ovs-ofctl`, `ovs-appctl`) in the
 container, for example:
 
 ```bash
-kubectl exec -n kube-system <antrea-agent Pod name> -c antrea-ovs ovs-vsctl show
+kubectl exec -n kube-system <antrea-agent Pod name> -c antrea-ovs -- ovs-vsctl show
 ```
 
 By default the host directory `/var/run/antrea/openvswitch/` is mounted to
