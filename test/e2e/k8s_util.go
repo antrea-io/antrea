@@ -218,18 +218,26 @@ func (k *KubernetesUtils) CreateOrUpdateNamespace(n string, labels map[string]st
 			Labels: labels,
 		},
 	}
+	log.Infof("Creating Namespace %s...", n)
 	nsr, err := k.clientset.CoreV1().Namespaces().Create(context.TODO(), ns, metav1.CreateOptions{})
 	if err == nil {
 		log.Infof("Created Namespace %s", n)
 		return nsr, nil
 	}
 
-	log.Debugf("Unable to create Namespace %s, let's try updating it instead (error: %s)", ns.Name, err)
+	log.Infof("Unable to create Namespace %s, let's try updating it instead (error: %s)", ns.Name, err)
 	nsr, err = k.clientset.CoreV1().Namespaces().Update(context.TODO(), ns, metav1.UpdateOptions{})
 	if err != nil {
-		log.Debugf("Unable to update Namespace %s: %s", ns, err)
+		log.Infof("Unable to update Namespace %s: %s", ns, err)
 	}
 
+	nsr, err = k.clientset.CoreV1().Namespaces().Get(context.TODO(), ns.Name, metav1.GetOptions{})
+	if err != nil {
+		log.Infof("Unable to get Namespace %s: %s", ns, err)
+	}
+	if nsr != nil {
+		log.Infof("Namespace %s status: %s", ns.Name, nsr)
+	}
 	return nsr, err
 }
 
