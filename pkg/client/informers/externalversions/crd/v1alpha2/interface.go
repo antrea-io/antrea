@@ -1,4 +1,4 @@
-// Copyright 2021 Antrea Authors
+// Copyright 2022 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,6 +24,8 @@ import (
 type Interface interface {
 	// ClusterGroups returns a ClusterGroupInformer.
 	ClusterGroups() ClusterGroupInformer
+	// ClusterNetworkPolicies returns a ClusterNetworkPolicyInformer.
+	ClusterNetworkPolicies() ClusterNetworkPolicyInformer
 	// Egresses returns a EgressInformer.
 	Egresses() EgressInformer
 	// ExternalEntities returns a ExternalEntityInformer.
@@ -32,6 +34,8 @@ type Interface interface {
 	ExternalIPPools() ExternalIPPoolInformer
 	// IPPools returns a IPPoolInformer.
 	IPPools() IPPoolInformer
+	// NetworkPolicies returns a NetworkPolicyInformer.
+	NetworkPolicies() NetworkPolicyInformer
 }
 
 type version struct {
@@ -48,6 +52,11 @@ func New(f internalinterfaces.SharedInformerFactory, namespace string, tweakList
 // ClusterGroups returns a ClusterGroupInformer.
 func (v *version) ClusterGroups() ClusterGroupInformer {
 	return &clusterGroupInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
+}
+
+// ClusterNetworkPolicies returns a ClusterNetworkPolicyInformer.
+func (v *version) ClusterNetworkPolicies() ClusterNetworkPolicyInformer {
+	return &clusterNetworkPolicyInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
 }
 
 // Egresses returns a EgressInformer.
@@ -68,4 +77,9 @@ func (v *version) ExternalIPPools() ExternalIPPoolInformer {
 // IPPools returns a IPPoolInformer.
 func (v *version) IPPools() IPPoolInformer {
 	return &iPPoolInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
+}
+
+// NetworkPolicies returns a NetworkPolicyInformer.
+func (v *version) NetworkPolicies() NetworkPolicyInformer {
+	return &networkPolicyInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }

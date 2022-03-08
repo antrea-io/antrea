@@ -21,6 +21,7 @@ import (
 
 	"antrea.io/antrea/pkg/apis/controlplane"
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	crdv1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
 	antreatypes "antrea.io/antrea/pkg/controller/types"
 )
 
@@ -28,7 +29,7 @@ import (
 // which can be consumed by agents to configure corresponding rules on the Nodes.
 func (n *NetworkPolicyController) addANP(obj interface{}) {
 	defer n.heartbeat("addANP")
-	np := obj.(*crdv1alpha1.NetworkPolicy)
+	np := obj.(*crdv1alpha2.NetworkPolicy)
 	klog.Infof("Processing Antrea NetworkPolicy %s/%s ADD event", np.Namespace, np.Name)
 	// Create an internal NetworkPolicy object corresponding to this
 	// NetworkPolicy and enqueue task to internal NetworkPolicy Workqueue.
@@ -43,14 +44,14 @@ func (n *NetworkPolicyController) addANP(obj interface{}) {
 // which can be consumed by agents to configure corresponding rules on the Nodes.
 func (n *NetworkPolicyController) updateANP(old, cur interface{}) {
 	defer n.heartbeat("updateANP")
-	curNP := cur.(*crdv1alpha1.NetworkPolicy)
+	curNP := cur.(*crdv1alpha2.NetworkPolicy)
 	klog.Infof("Processing Antrea NetworkPolicy %s/%s UPDATE event", curNP.Namespace, curNP.Name)
 	// Update an internal NetworkPolicy, corresponding to this NetworkPolicy and
 	// enqueue task to internal NetworkPolicy Workqueue.
 	curInternalNP := n.processAntreaNetworkPolicy(curNP)
 	klog.V(2).Infof("Updating existing internal NetworkPolicy %s for %s", curInternalNP.Name, curInternalNP.SourceRef.ToString())
 	// Retrieve old crdv1alpha1.NetworkPolicy object.
-	oldNP := old.(*crdv1alpha1.NetworkPolicy)
+	oldNP := old.(*crdv1alpha2.NetworkPolicy)
 	// Old and current NetworkPolicy share the same key.
 	key := internalNetworkPolicyKeyFunc(oldNP)
 	// Lock access to internal NetworkPolicy store such that concurrent access
@@ -123,7 +124,7 @@ func (n *NetworkPolicyController) deleteANP(old interface{}) {
 // instance to the caller wherein, it will be either stored as a new Object
 // in case of ADD event or modified and store the updated instance, in case
 // of an UPDATE event.
-func (n *NetworkPolicyController) processAntreaNetworkPolicy(np *crdv1alpha1.NetworkPolicy) *antreatypes.NetworkPolicy {
+func (n *NetworkPolicyController) processAntreaNetworkPolicy(np *crdv1alpha2.NetworkPolicy) *antreatypes.NetworkPolicy {
 	appliedToPerRule := len(np.Spec.AppliedTo) == 0
 	// appliedToGroupNames tracks all distinct appliedToGroups referred to by the Antrea NetworkPolicy,
 	// either in the spec section or in ingress/egress rules.
@@ -138,7 +139,7 @@ func (n *NetworkPolicyController) processAntreaNetworkPolicy(np *crdv1alpha1.Net
 	// Compute NetworkPolicyRule for Ingress Rule.
 	for idx, ingressRule := range np.Spec.Ingress {
 		// Set default action to ALLOW to allow traffic.
-		services, namedPortExists := toAntreaServicesForCRD(ingressRule.Ports)
+		services, namedPortExists := toAntreaServicesForCRD(ingressRule.Protocols)
 		var appliedToGroupNamesForRule []string
 		// Create AppliedToGroup for each AppliedTo present in the ingress rule.
 		for _, at := range ingressRule.AppliedTo {
@@ -160,7 +161,7 @@ func (n *NetworkPolicyController) processAntreaNetworkPolicy(np *crdv1alpha1.Net
 	// Compute NetworkPolicyRule for Egress Rule.
 	for idx, egressRule := range np.Spec.Egress {
 		// Set default action to ALLOW to allow traffic.
-		services, namedPortExists := toAntreaServicesForCRD(egressRule.Ports)
+		services, namedPortExists := toAntreaServicesForCRD(egressRule.Protocols)
 		var appliedToGroupNamesForRule []string
 		// Create AppliedToGroup for each AppliedTo present in the ingress rule.
 		for _, at := range egressRule.AppliedTo {

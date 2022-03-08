@@ -17,6 +17,7 @@ package networkpolicy
 import (
 	"encoding/json"
 	"fmt"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"reflect"
 	"regexp"
 	"strconv"
@@ -25,7 +26,6 @@ import (
 	admv1 "k8s.io/api/admission/v1"
 	authenticationv1 "k8s.io/api/authentication/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/validation"
 	"k8s.io/apiserver/pkg/authentication/serviceaccount"
@@ -187,7 +187,7 @@ func (v *NetworkPolicyValidator) Validate(ar *admv1.AdmissionReview) *admv1.Admi
 		msg, allowed = v.validateAntreaGroup(&curCG, &oldCG, op, ui)
 	case "ClusterNetworkPolicy":
 		klog.V(2).Info("Validating Antrea ClusterNetworkPolicy CRD")
-		var curCNP, oldCNP crdv1alpha1.ClusterNetworkPolicy
+		var curCNP, oldCNP crdv1alpha2.ClusterNetworkPolicy
 		if curRaw != nil {
 			if err := json.Unmarshal(curRaw, &curCNP); err != nil {
 				klog.Errorf("Error de-serializing current Antrea ClusterNetworkPolicy")
@@ -203,7 +203,7 @@ func (v *NetworkPolicyValidator) Validate(ar *admv1.AdmissionReview) *admv1.Admi
 		msg, allowed = v.validateAntreaPolicy(&curCNP, &oldCNP, op, ui)
 	case "NetworkPolicy":
 		klog.V(2).Info("Validating Antrea NetworkPolicy CRD")
-		var curANP, oldANP crdv1alpha1.NetworkPolicy
+		var curANP, oldANP crdv1alpha2.NetworkPolicy
 		if curRaw != nil {
 			if err := json.Unmarshal(curRaw, &curANP); err != nil {
 				klog.Errorf("Error de-serializing current Antrea NetworkPolicy")
@@ -261,21 +261,29 @@ func (v *NetworkPolicyValidator) validateAntreaPolicy(curObj, oldObj interface{}
 	return reason, allowed
 }
 
-// validatePort validates if ports is valid
-func (v *antreaPolicyValidator) validatePort(ingress, egress []crdv1alpha1.Rule) error {
-	isValid := func(rules []crdv1alpha1.Rule) error {
+// validateProtocol validates if field `protocols` is valid
+func (v *antreaPolicyValidator) validateProtocol(ingress, egress []crdv1alpha2.Rule) error {
+	isValid := func(rules []crdv1alpha2.Rule) error {
 		for _, rule := range rules {
-			for _, port := range rule.Ports {
-				if port.EndPort == nil {
+			for _, protocol := range rule.Protocols {
+				var l4Protocol *crdv1alpha2.L4Protocol
+				if protocol.TCP != nil {
+					l4Protocol = protocol.TCP
+				} else if protocol.UDP != nil {
+					l4Protocol = protocol.UDP
+				} else if protocol.SCTP != nil {
+					l4Protocol = protocol.SCTP
+				}
+				if l4Protocol == nil || l4Protocol.EndPort == nil {
 					continue
 				}
-				if port.Port == nil {
+				if l4Protocol.Port == nil {
 					return fmt.Errorf("if `endPort` is specified `port` must be specified")
 				}
-				if port.Port.Type == intstr.String {
+				if l4Protocol.Port.Type == intstr.String {
 					return fmt.Errorf("if `port` is a string `endPort` cannot be specified")
 				}
-				if *port.EndPort < port.Port.IntVal {
+				if *l4Protocol.EndPort < l4Protocol.Port.IntVal {
 					return fmt.Errorf("`endPort` should be greater than or equal to `port`")
 				}
 			}
@@ -379,17 +387,17 @@ func GetAdmissionResponseForErr(err error) *admv1.AdmissionResponse {
 // createValidate validates the CREATE events of Antrea-native policies,
 func (v *antreaPolicyValidator) createValidate(curObj interface{}, userInfo authenticationv1.UserInfo) (string, bool) {
 	var tier string
-	var ingress, egress []crdv1alpha1.Rule
+	var ingress, egress []crdv1alpha2.Rule
 	var specAppliedTo []crdv1alpha1.NetworkPolicyPeer
 	switch curObj.(type) {
-	case *crdv1alpha1.ClusterNetworkPolicy:
-		curCNP := curObj.(*crdv1alpha1.ClusterNetworkPolicy)
+	case *crdv1alpha2.ClusterNetworkPolicy:
+		curCNP := curObj.(*crdv1alpha2.ClusterNetworkPolicy)
 		tier = curCNP.Spec.Tier
 		ingress = curCNP.Spec.Ingress
 		egress = curCNP.Spec.Egress
 		specAppliedTo = curCNP.Spec.AppliedTo
-	case *crdv1alpha1.NetworkPolicy:
-		curANP := curObj.(*crdv1alpha1.NetworkPolicy)
+	case *crdv1alpha2.NetworkPolicy:
+		curANP := curObj.(*crdv1alpha2.NetworkPolicy)
 		tier = curANP.Spec.Tier
 		ingress = curANP.Spec.Ingress
 		egress = curANP.Spec.Egress
@@ -419,16 +427,16 @@ func (v *antreaPolicyValidator) createValidate(curObj interface{}, userInfo auth
 		return reason, allowed
 	}
 
-	if err := v.validatePort(ingress, egress); err != nil {
+	if err := v.validateProtocol(ingress, egress); err != nil {
 		return err.Error(), false
 	}
 	return "", true
 }
 
 // validateRuleName validates if the name of each rule is unique within a policy
-func (v *antreaPolicyValidator) validateRuleName(ingress, egress []crdv1alpha1.Rule) bool {
+func (v *antreaPolicyValidator) validateRuleName(ingress, egress []crdv1alpha2.Rule) bool {
 	uniqueRuleName := sets.NewString()
-	isUnique := func(rules []crdv1alpha1.Rule) bool {
+	isUnique := func(rules []crdv1alpha2.Rule) bool {
 		for _, rule := range rules {
 			if uniqueRuleName.Has(rule.Name) {
 				return false
@@ -440,9 +448,9 @@ func (v *antreaPolicyValidator) validateRuleName(ingress, egress []crdv1alpha1.R
 	return isUnique(ingress) && isUnique(egress)
 }
 
-func (v *antreaPolicyValidator) validateAppliedTo(ingress, egress []crdv1alpha1.Rule, specAppliedTo []crdv1alpha1.NetworkPolicyPeer) (string, bool) {
+func (v *antreaPolicyValidator) validateAppliedTo(ingress, egress []crdv1alpha2.Rule, specAppliedTo []crdv1alpha1.NetworkPolicyPeer) (string, bool) {
 	appliedToInSpec := len(specAppliedTo) != 0
-	countAppliedToInRules := func(rules []crdv1alpha1.Rule) int {
+	countAppliedToInRules := func(rules []crdv1alpha2.Rule) int {
 		num := 0
 		for _, rule := range rules {
 			if len(rule.AppliedTo) != 0 {
@@ -502,7 +510,7 @@ func (v *antreaPolicyValidator) validateAppliedTo(ingress, egress []crdv1alpha1.
 
 // validatePeers ensures that the NetworkPolicyPeer object set in rules are valid, i.e.
 // currently it ensures that a Group cannot be set with other stand-alone selectors or IPBlock.
-func (v *antreaPolicyValidator) validatePeers(ingress, egress []crdv1alpha1.Rule) (string, bool) {
+func (v *antreaPolicyValidator) validatePeers(ingress, egress []crdv1alpha2.Rule) (string, bool) {
 	checkPeers := func(peers []crdv1alpha1.NetworkPolicyPeer) (string, bool) {
 		for _, peer := range peers {
 			if peer.NamespaceSelector != nil && peer.Namespaces != nil {
@@ -532,8 +540,8 @@ func (v *antreaPolicyValidator) validatePeers(ingress, egress []crdv1alpha1.Rule
 			if !features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
 				return fmt.Sprintf("`toServices` can only be used when AntreaProxy is enabled"), false
 			}
-			if (rule.To != nil && len(rule.To) > 0) || rule.Ports != nil {
-				return fmt.Sprintf("`toServices` can't be used with `to` or `ports`"), false
+			if (rule.To != nil && len(rule.To) > 0) || rule.Protocols != nil {
+				return fmt.Sprintf("`toServices` can't be used with `to` or `protocols`"), false
 			}
 		}
 		msg, isValid := checkPeers(rule.To)
@@ -545,7 +553,7 @@ func (v *antreaPolicyValidator) validatePeers(ingress, egress []crdv1alpha1.Rule
 }
 
 // numFieldsSetInPeer returns the number of fields in use of a peer.
-func numFieldsSetInPeer(peer crdv1alpha1.NetworkPolicyPeer) int {
+func numFieldsSetInPeer(peer interface{}) int {
 	num := 0
 	v := reflect.ValueOf(peer)
 	for i := 0; i < v.NumField(); i++ {
@@ -596,7 +604,7 @@ func (v *antreaPolicyValidator) validateTierForPolicy(tier string) (string, bool
 }
 
 // validateTierForPassAction validates that rules with pass action are not created in the Baseline Tier.
-func (v *antreaPolicyValidator) validateTierForPassAction(tier string, ingress, egress []crdv1alpha1.Rule) (string, bool) {
+func (v *antreaPolicyValidator) validateTierForPassAction(tier string, ingress, egress []crdv1alpha2.Rule) (string, bool) {
 	if strings.ToLower(tier) != baselineTierName {
 		return "", true
 	}
@@ -614,7 +622,7 @@ func (v *antreaPolicyValidator) validateTierForPassAction(tier string, ingress, 
 }
 
 // validateFQDNSelectors validates the toFQDN field set in Antrea-native policy egress rules are valid.
-func (v *antreaPolicyValidator) validateFQDNSelectors(egressRules []crdv1alpha1.Rule) (string, bool) {
+func (v *antreaPolicyValidator) validateFQDNSelectors(egressRules []crdv1alpha2.Rule) (string, bool) {
 	for _, r := range egressRules {
 		for _, peer := range r.To {
 			if len(peer.FQDN) > 0 && !allowedFQDNChars.MatchString(peer.FQDN) {
@@ -628,17 +636,17 @@ func (v *antreaPolicyValidator) validateFQDNSelectors(egressRules []crdv1alpha1.
 // updateValidate validates the UPDATE events of Antrea-native policies.
 func (v *antreaPolicyValidator) updateValidate(curObj, oldObj interface{}, userInfo authenticationv1.UserInfo) (string, bool) {
 	var tier string
-	var ingress, egress []crdv1alpha1.Rule
+	var ingress, egress []crdv1alpha2.Rule
 	var specAppliedTo []crdv1alpha1.NetworkPolicyPeer
 	switch curObj.(type) {
-	case *crdv1alpha1.ClusterNetworkPolicy:
-		curCNP := curObj.(*crdv1alpha1.ClusterNetworkPolicy)
+	case *crdv1alpha2.ClusterNetworkPolicy:
+		curCNP := curObj.(*crdv1alpha2.ClusterNetworkPolicy)
 		tier = curCNP.Spec.Tier
 		ingress = curCNP.Spec.Ingress
 		egress = curCNP.Spec.Egress
 		specAppliedTo = curCNP.Spec.AppliedTo
-	case *crdv1alpha1.NetworkPolicy:
-		curANP := curObj.(*crdv1alpha1.NetworkPolicy)
+	case *crdv1alpha2.NetworkPolicy:
+		curANP := curObj.(*crdv1alpha2.NetworkPolicy)
 		tier = curANP.Spec.Tier
 		ingress = curANP.Spec.Ingress
 		egress = curANP.Spec.Egress
@@ -659,7 +667,7 @@ func (v *antreaPolicyValidator) updateValidate(curObj, oldObj interface{}, userI
 	if !allowed {
 		return reason, allowed
 	}
-	if err := v.validatePort(ingress, egress); err != nil {
+	if err := v.validateProtocol(ingress, egress); err != nil {
 		return err.Error(), false
 	}
 	reason, allowed = v.validateTierForPassAction(tier, ingress, egress)

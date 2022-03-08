@@ -1,4 +1,4 @@
-// Copyright 2021 Antrea Authors
+// Copyright 2022 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,10 +25,12 @@ import (
 type CrdV1alpha2Interface interface {
 	RESTClient() rest.Interface
 	ClusterGroupsGetter
+	ClusterNetworkPoliciesGetter
 	EgressesGetter
 	ExternalEntitiesGetter
 	ExternalIPPoolsGetter
 	IPPoolsGetter
+	NetworkPoliciesGetter
 }
 
 // CrdV1alpha2Client is used to interact with features provided by the crd.antrea.io group.
@@ -38,6 +40,10 @@ type CrdV1alpha2Client struct {
 
 func (c *CrdV1alpha2Client) ClusterGroups() ClusterGroupInterface {
 	return newClusterGroups(c)
+}
+
+func (c *CrdV1alpha2Client) ClusterNetworkPolicies() ClusterNetworkPolicyInterface {
+	return newClusterNetworkPolicies(c)
 }
 
 func (c *CrdV1alpha2Client) Egresses() EgressInterface {
@@ -54,6 +60,10 @@ func (c *CrdV1alpha2Client) ExternalIPPools() ExternalIPPoolInterface {
 
 func (c *CrdV1alpha2Client) IPPools() IPPoolInterface {
 	return newIPPools(c)
+}
+
+func (c *CrdV1alpha2Client) NetworkPolicies(namespace string) NetworkPolicyInterface {
+	return newNetworkPolicies(c, namespace)
 }
 
 // NewForConfig creates a new CrdV1alpha2Client for the given config.

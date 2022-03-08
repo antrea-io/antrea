@@ -245,21 +245,30 @@ const (
 	ProtocolUDP Protocol = "UDP"
 	// ProtocolSCTP is the SCTP protocol.
 	ProtocolSCTP Protocol = "SCTP"
+	// ProtocolICMP is the ICMP protocol.
+	ProtocolICMP Protocol = "ICMP"
 )
 
 // Service describes a port to allow traffic on.
 type Service struct {
-	// The protocol (TCP, UDP, or SCTP) which traffic must match. If not specified, this
+	// The protocol (TCP, UDP, SCTP, or ICMP) which traffic must match. If not specified, this
 	// field defaults to TCP.
 	// +optional
 	Protocol *Protocol `json:"protocol,omitempty" protobuf:"bytes,1,opt,name=protocol"`
-	// The port name or number on the given protocol. If not specified, this matches all port numbers.
+	// Port and EndPort can only be specified, when the Protocol is TCP, UDP, or SCTP.
+	// Port defines the port name or number on the given protocol. If not specified
+	// and the Protocol is TCP, UDP, or SCTP, this matches all port numbers.
 	// +optional
 	Port *intstr.IntOrString `json:"port,omitempty" protobuf:"bytes,2,opt,name=port"`
 	// EndPort defines the end of the port range, being the end included within the range.
 	// It can only be specified when a numerical `port` is specified.
 	// +optional
 	EndPort *int32 `json:"endPort,omitempty" protobuf:"bytes,3,opt,name=endPort"`
+	// ICMPType and ICMPCode can only be specified, when the Protocol is ICMP. If they
+	// both are not specified and the Protocol is ICMP, this matches all ICMP traffic.
+	// +optional
+	ICMPType *int32 `json:"icmpType,omitempty" protobuf:"bytes,4,opt,name=icmpType"`
+	ICMPCode *int32 `json:"icmpCode,omitempty" protobuf:"bytes,5,opt,name=icmpCode"`
 }
 
 // NetworkPolicyPeer describes a peer of NetworkPolicyRules.

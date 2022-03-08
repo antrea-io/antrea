@@ -344,14 +344,26 @@ func (b *ofFlowBuilder) MatchDstIPNet(ipnet net.IPNet) FlowBuilder {
 	return b
 }
 
+func (b *ofFlowBuilder) MatchICMPType(icmpType byte) FlowBuilder {
+	b.matchers = append(b.matchers, fmt.Sprintf("icmp_type=%d", icmpType))
+	b.Match.Icmp4Type = &icmpType
+	return b
+}
+
+func (b *ofFlowBuilder) MatchICMPCode(icmpCode byte) FlowBuilder {
+	b.matchers = append(b.matchers, fmt.Sprintf("icmp_code=%d", icmpCode))
+	b.Match.Icmp4Code = &icmpCode
+	return b
+}
+
 func (b *ofFlowBuilder) MatchICMPv6Type(icmp6Type byte) FlowBuilder {
-	b.matchers = append(b.matchers, fmt.Sprintf("icmp_type=%d", icmp6Type))
+	b.matchers = append(b.matchers, fmt.Sprintf("icmpv6_type=%d", icmp6Type))
 	b.Match.Icmp6Type = &icmp6Type
 	return b
 }
 
 func (b *ofFlowBuilder) MatchICMPv6Code(icmp6Code byte) FlowBuilder {
-	b.matchers = append(b.matchers, fmt.Sprintf("icmp_code=%d", icmp6Code))
+	b.matchers = append(b.matchers, fmt.Sprintf("icmpv6_code=%d", icmp6Code))
 	b.Match.Icmp6Code = &icmp6Code
 	return b
 }

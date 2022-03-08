@@ -25,7 +25,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
 
-	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	crdv1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
 )
 
 type NetworkPolicyMutator struct {
@@ -54,7 +54,7 @@ func (m *NetworkPolicyMutator) Mutate(ar *admv1.AdmissionReview) *admv1.Admissio
 	switch ar.Request.Kind.Kind {
 	case "ClusterNetworkPolicy":
 		klog.V(2).Info("Mutating Antrea ClusterNetworkPolicy CRD")
-		var curACNP, oldACNP crdv1alpha1.ClusterNetworkPolicy
+		var curACNP, oldACNP crdv1alpha2.ClusterNetworkPolicy
 		if curRaw != nil {
 			if err := json.Unmarshal(curRaw, &curACNP); err != nil {
 				klog.Errorf("Error de-serializing current Antrea ClusterNetworkPolicy")
@@ -70,7 +70,7 @@ func (m *NetworkPolicyMutator) Mutate(ar *admv1.AdmissionReview) *admv1.Admissio
 		msg, allowed, patch = m.mutateAntreaPolicy(op, curACNP.Spec.Ingress, curACNP.Spec.Egress, curACNP.Spec.Tier)
 	case "NetworkPolicy":
 		klog.V(2).Info("Mutating Antrea NetworkPolicy CRD")
-		var curANP, oldANP crdv1alpha1.NetworkPolicy
+		var curANP, oldANP crdv1alpha2.NetworkPolicy
 		if curRaw != nil {
 			if err := json.Unmarshal(curRaw, &curANP); err != nil {
 				klog.Errorf("Error de-serializing current Antrea NetworkPolicy")
@@ -108,7 +108,7 @@ func (m *NetworkPolicyMutator) Mutate(ar *admv1.AdmissionReview) *admv1.Admissio
 // mutateAntreaPolicy will auto-generate a name for this rule. In
 // addition to the rule names, it also mutates the Tier field to the default
 // tier name if it is unset.
-func (m *NetworkPolicyMutator) mutateAntreaPolicy(op admv1.Operation, ingress, egress []crdv1alpha1.Rule, tier string) (string, bool, []byte) {
+func (m *NetworkPolicyMutator) mutateAntreaPolicy(op admv1.Operation, ingress, egress []crdv1alpha2.Rule, tier string) (string, bool, []byte) {
 	allowed := true
 	reason := ""
 	var patch []byte
@@ -140,7 +140,7 @@ func (m *NetworkPolicyMutator) mutateAntreaPolicy(op admv1.Operation, ingress, e
 }
 
 // generateRuleNames generates unique rule names and returns a list of json paths and the corresponding list of generated names
-func generateRuleNames(prefix string, rules []crdv1alpha1.Rule) ([]string, []string) {
+func generateRuleNames(prefix string, rules []crdv1alpha2.Rule) ([]string, []string) {
 	var paths []string
 	var values []string
 	for idx, rule := range rules {
@@ -191,7 +191,7 @@ func createReplacePatch(paths []string, values []string) ([]byte, error) {
 const ruleNameSuffixLen = 7
 
 // hashRule calculates a string based on the rule's content.
-func hashRule(r crdv1alpha1.Rule) string {
+func hashRule(r crdv1alpha2.Rule) string {
 	hash := sha1.New() // #nosec G401: not used for security purposes
 	b, _ := json.Marshal(r)
 	hash.Write(b)

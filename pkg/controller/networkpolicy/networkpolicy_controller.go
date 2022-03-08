@@ -49,8 +49,10 @@ import (
 	"antrea.io/antrea/pkg/apiserver/storage"
 	"antrea.io/antrea/pkg/client/clientset/versioned"
 	secinformers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha1"
+	crdv1a2informers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha2"
 	crdv1a3informers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha3"
 	seclisters "antrea.io/antrea/pkg/client/listers/crd/v1alpha1"
+	crdv1a2listers "antrea.io/antrea/pkg/client/listers/crd/v1alpha2"
 	crdv1a3listers "antrea.io/antrea/pkg/client/listers/crd/v1alpha3"
 	"antrea.io/antrea/pkg/controller/grouping"
 	"antrea.io/antrea/pkg/controller/metrics"
@@ -144,17 +146,17 @@ type NetworkPolicyController struct {
 	// networkPolicyListerSynced is a function which returns true if the Network Policy shared informer has been synced at least once.
 	networkPolicyListerSynced cache.InformerSynced
 
-	cnpInformer secinformers.ClusterNetworkPolicyInformer
+	cnpInformer crdv1a2informers.ClusterNetworkPolicyInformer
 	// cnpLister is able to list/get AntreaClusterNetworkPolicies and is populated by the shared informer passed to
 	// NewClusterNetworkPolicyController.
-	cnpLister seclisters.ClusterNetworkPolicyLister
+	cnpLister crdv1a2listers.ClusterNetworkPolicyLister
 	// cnpListerSynced is a function which returns true if the AntreaClusterNetworkPolicies shared informer has been synced at least once.
 	cnpListerSynced cache.InformerSynced
 
-	anpInformer secinformers.NetworkPolicyInformer
+	anpInformer crdv1a2informers.NetworkPolicyInformer
 	// anpLister is able to list/get AntreaNetworkPolicies and is populated by the shared informer passed to
 	// NewNetworkPolicyController.
-	anpLister seclisters.NetworkPolicyLister
+	anpLister crdv1a2listers.NetworkPolicyLister
 	// anpListerSynced is a function which returns true if the AntreaNetworkPolicies shared informer has been synced at least once.
 	anpListerSynced cache.InformerSynced
 
@@ -225,14 +227,14 @@ var tierIndexers = cache.Indexers{
 
 var cnpIndexers = cache.Indexers{
 	TierIndex: func(obj interface{}) ([]string, error) {
-		cnp, ok := obj.(*secv1alpha1.ClusterNetworkPolicy)
+		cnp, ok := obj.(*v1alpha2.ClusterNetworkPolicy)
 		if !ok {
 			return []string{}, nil
 		}
 		return []string{cnp.Spec.Tier}, nil
 	},
 	ClusterGroupIndex: func(obj interface{}) ([]string, error) {
-		cnp, ok := obj.(*secv1alpha1.ClusterNetworkPolicy)
+		cnp, ok := obj.(*v1alpha2.ClusterNetworkPolicy)
 		if !ok {
 			return []string{}, nil
 		}
@@ -245,7 +247,7 @@ var cnpIndexers = cache.Indexers{
 		if len(cnp.Spec.Ingress) == 0 && len(cnp.Spec.Egress) == 0 {
 			return groupNames.List(), nil
 		}
-		appendGroups := func(rule secv1alpha1.Rule) {
+		appendGroups := func(rule v1alpha2.Rule) {
 			for _, peer := range rule.To {
 				if peer.Group != "" {
 					groupNames.Insert(peer.Group)
@@ -289,8 +291,8 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 	namespaceInformer coreinformers.NamespaceInformer,
 	serviceInformer coreinformers.ServiceInformer,
 	networkPolicyInformer networkinginformers.NetworkPolicyInformer,
-	cnpInformer secinformers.ClusterNetworkPolicyInformer,
-	anpInformer secinformers.NetworkPolicyInformer,
+	cnpInformer crdv1a2informers.ClusterNetworkPolicyInformer,
+	anpInformer crdv1a2informers.NetworkPolicyInformer,
 	tierInformer secinformers.TierInformer,
 	cgInformer crdv1a3informers.ClusterGroupInformer,
 	addressGroupStore storage.Interface,

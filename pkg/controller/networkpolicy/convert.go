@@ -16,6 +16,7 @@ package networkpolicy
 
 import (
 	"fmt"
+	"strings"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -65,5 +66,130 @@ func ConvertClusterGroupCRD(Object *unstructured.Unstructured, toVersion string)
 	}
 	return convertedObject, metav1.Status{
 		Status: metav1.StatusSuccess,
+	}
+}
+
+func translateV1A1NetworkPolicyPortToV1A2PeerProtocol(ports []interface{}) (protocols []interface{}) {
+	for _, eachPort := range ports {
+		mapPort := eachPort.(map[string]interface{})
+		protocol, _, _ := unstructured.NestedString(mapPort, "protocol")
+		if protocol == "" {
+			protocol = "TCP"
+		}
+
+		l4Protocol := make(map[string]interface{})
+		port, found, err := unstructured.NestedFieldNoCopy(mapPort, "port")
+		if err == nil && found && port != nil {
+			unstructured.SetNestedField(l4Protocol, port, "port")
+		}
+		endPort, found, err := unstructured.NestedFieldNoCopy(mapPort, "endPort")
+		if err == nil && found && endPort != nil {
+			unstructured.SetNestedField(l4Protocol, endPort, "endPort")
+		}
+
+		peerProtocol := make(map[string]interface{}, 1)
+		unstructured.SetNestedMap(peerProtocol, l4Protocol, strings.ToLower(protocol))
+		protocols = append(protocols, peerProtocol)
+	}
+	return
+}
+
+func convertV1A1RuleToV1A2Rule(rules []interface{}) {
+	for _, rule := range rules {
+		mapRule := rule.(map[string]interface{})
+		ports, found, err := unstructured.NestedSlice(mapRule, "ports")
+		if err == nil && found && len(ports) > 0 {
+			protocols := translateV1A1NetworkPolicyPortToV1A2PeerProtocol(ports)
+			unstructured.RemoveNestedField(mapRule, "ports")
+			unstructured.SetNestedSlice(mapRule, protocols, "protocols")
+		}
+	}
+}
+
+func ConvertClusterNetworkPolicyCRD(Object *unstructured.Unstructured, toVersion string) (*unstructured.Unstructured, metav1.Status) {
+	klog.V(2).Infof("Converting CRD for ClusterNetworkPolicy %s", Object.GetName())
+	convertedObject := Object.DeepCopy()
+	fromVersion := Object.GetAPIVersion()
+	if toVersion == fromVersion {
+		return nil, statusErrorWithMessage("conversion from a version to itself should not call the webhook: %s", toVersion)
+	}
+	switch Object.GetAPIVersion() {
+	case "crd.antrea.io/v1alpha1":
+		switch toVersion {
+		case "crd.antrea.io/v1alpha2":
+			ingressRules, found, err := unstructured.NestedFieldNoCopy(convertedObject.Object, "spec", "ingress")
+			if err == nil && found {
+				if ingressRulesSlice, ok := ingressRules.([]interface{}); ok {
+					convertV1A1RuleToV1A2Rule(ingressRulesSlice)
+				}
+			}
+			egressRules, found, err := unstructured.NestedFieldNoCopy(convertedObject.Object, "spec", "egress")
+			if err == nil && found {
+				if egressRulesSlice, ok := egressRules.([]interface{}); ok {
+					convertV1A1RuleToV1A2Rule(egressRulesSlice)
+				}
+			}
+		default:
+			return nil, statusErrorWithMessage("unexpected conversion version %q", toVersion)
+		}
+	case "crd.antrea.io/v1alpha2":
+		switch toVersion {
+		case "crd.antrea.io/v1alpha1":
+			return convertedObject, metav1.Status{
+				Status: metav1.StatusSuccess,
+			}
+		default:
+			return nil, statusErrorWithMessage("unexpected conversion version %q", toVersion)
+		}
+	default:
+		return nil, statusErrorWithMessage("unexpected conversion version %q", fromVersion)
+	}
+	return convertedObject, metav1.Status{
+		Status: metav1.StatusSuccess,
+	}
+}
+
+func ConvertNetworkPolicyCRD(Object *unstructured.Unstructured, toVersion string) (*unstructured.Unstructured, metav1.Status) {
+	klog.V(2).Infof("Converting CRD for NetworkPolicy %s", Object.GetName())
+	convertedObject := Object.DeepCopy()
+	fromVersion := Object.GetAPIVersion()
+	if toVersion == fromVersion {
+		return nil, statusErrorWithMessage("conversion from a version to itself should not call the webhook: %s", toVersion)
+	}
+	switch Object.GetAPIVersion() {
+	case "crd.antrea.io/v1alpha1":
+		switch toVersion {
+		case "crd.antrea.io/v1alpha2":
+			ingressRules, found, err := unstructured.NestedSlice(convertedObject.Object, "spec", "ingress")
+			if err == nil && found && len(ingressRules) > 0 {
+				convertV1A1RuleToV1A2Rule(ingressRules)
+			}
+			egressRules, found, err := unstructured.NestedSlice(convertedObject.Object, "spec", "egress")
+			if err == nil && found && len(egressRules) > 0 {
+				convertV1A1RuleToV1A2Rule(egressRules)
+			}
+		default:
+			return nil, statusErrorWithMessage("unexpected conversion version %q", toVersion)
+		}
+	case "crd.antrea.io/v1alpha2":
+		switch toVersion {
+		case "crd.antrea.io/v1alpha1":
+			return convertedObject, metav1.Status{
+				Status: metav1.StatusSuccess,
+			}
+		default:
+			return nil, statusErrorWithMessage("unexpected conversion version %q", toVersion)
+		}
+	default:
+		return nil, statusErrorWithMessage("unexpected conversion version %q", fromVersion)
+	}
+	return convertedObject, metav1.Status{
+		Status: metav1.StatusSuccess,
+	}
+}
+
+func ConvertExternalEntityCRD(Object *unstructured.Unstructured, toVersion string) (*unstructured.Unstructured, metav1.Status) {
+	return nil, metav1.Status{
+		Status: metav1.StatusFailure,
 	}
 }

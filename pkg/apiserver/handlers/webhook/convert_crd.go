@@ -108,6 +108,7 @@ func doConversionV1(convertRequest *v1.ConversionRequest, convert convertFunc) *
 func HandleCRDConversion(crdConvertFunc convertFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		klog.V(2).Info("Received request to convert CRD version")
+		klog.Infof("Received request to convert CRD version: %v", r.Body)
 		var body []byte
 		if r.Body != nil {
 			if data, err := ioutil.ReadAll(r.Body); err == nil {

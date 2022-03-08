@@ -1993,6 +1993,26 @@ func (c *client) addFlowMatch(fb binding.FlowBuilder, matchKey *types.MatchKey, 
 		if portValue.Value > 0 {
 			fb = fb.MatchSrcPort(portValue.Value, portValue.Mask)
 		}
+	case MatchICMPType:
+		fb = fb.MatchProtocol(matchKey.GetOFProtocol())
+		if matchValue != nil {
+			fb = fb.MatchICMPType(uint8(*matchValue.(*int32)))
+		}
+	case MatchICMPCode:
+		fb = fb.MatchProtocol(matchKey.GetOFProtocol())
+		if matchValue != nil {
+			fb = fb.MatchICMPCode(uint8(*matchValue.(*int32)))
+		}
+	case MatchICMPv6Type:
+		fb = fb.MatchProtocol(matchKey.GetOFProtocol())
+		if matchValue != nil {
+			fb = fb.MatchICMPv6Type(uint8(*matchValue.(*int32)))
+		}
+	case MatchICMPv6Code:
+		fb = fb.MatchProtocol(matchKey.GetOFProtocol())
+		if matchValue != nil {
+			fb = fb.MatchICMPv6Code(uint8(*matchValue.(*int32)))
+		}
 	case MatchServiceGroupID:
 		fb = fb.MatchRegFieldWithValue(ServiceGroupIDField, matchValue.(uint32))
 	}
@@ -2015,7 +2035,7 @@ func (c *client) conjunctionExceptionFlow(conjunctionID uint32, tableID uint8, n
 }
 
 // conjunctiveMatchFlow generates the flow to set conjunctive actions if the match condition is matched.
-func (c *client) conjunctiveMatchFlow(tableID uint8, matchKey *types.MatchKey, matchValue interface{}, priority *uint16, actions []*conjunctiveAction) binding.Flow {
+func (c *client) conjunctiveMatchFlow(tableID uint8, matchPairs []matchPair, priority *uint16, actions []*conjunctiveAction) binding.Flow {
 	var ofPriority uint16
 	if priority != nil {
 		ofPriority = *priority
@@ -2023,7 +2043,9 @@ func (c *client) conjunctiveMatchFlow(tableID uint8, matchKey *types.MatchKey, m
 		ofPriority = priorityNormal
 	}
 	fb := getTableByID(tableID).BuildFlow(ofPriority)
-	fb = c.addFlowMatch(fb, matchKey, matchValue)
+	for _, eachMatchPair := range matchPairs {
+		fb = c.addFlowMatch(fb, eachMatchPair.matchKey, eachMatchPair.matchValue)
+	}
 	if c.deterministic {
 		sort.Sort(conjunctiveActionsInOrder(actions))
 	}
@@ -2034,19 +2056,20 @@ func (c *client) conjunctiveMatchFlow(tableID uint8, matchKey *types.MatchKey, m
 }
 
 // defaultDropFlow generates the flow to drop packets if the match condition is matched.
-func (c *client) defaultDropFlow(table binding.Table, matchKey *types.MatchKey, matchValue interface{}) binding.Flow {
+func (c *client) defaultDropFlow(table binding.Table, matchPairs []matchPair) binding.Flow {
 	fb := table.BuildFlow(priorityNormal)
+	for _, eachMatchPair := range matchPairs {
+		fb = c.addFlowMatch(fb, eachMatchPair.matchKey, eachMatchPair.matchValue)
+	}
 	if c.enableDenyTracking {
-		return c.addFlowMatch(fb, matchKey, matchValue).
-			Action().Drop().
+		return fb.Action().Drop().
 			Action().LoadRegMark(DispositionDropRegMark).
 			Action().LoadRegMark(CustomReasonDenyRegMark).
 			Action().SendToController(uint8(PacketInReasonNP)).
 			Cookie(c.cookieAllocator.Request(cookie.Default).Raw()).
 			Done()
 	}
-	return c.addFlowMatch(fb, matchKey, matchValue).
-		Action().Drop().
+	return fb.Action().Drop().
 		Cookie(c.cookieAllocator.Request(cookie.Default).Raw()).
 		Done()
 }

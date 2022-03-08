@@ -32,10 +32,12 @@ import (
 
 	"antrea.io/antrea/pkg/apis/controlplane"
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	crdv1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
 	"antrea.io/antrea/pkg/apiserver/storage"
 	antreaclientset "antrea.io/antrea/pkg/client/clientset/versioned"
-	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha1"
+	crdv1a2informers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha2"
 	crdlisters "antrea.io/antrea/pkg/client/listers/crd/v1alpha1"
+	crdv1a2listers "antrea.io/antrea/pkg/client/listers/crd/v1alpha2"
 	"antrea.io/antrea/pkg/controller/metrics"
 	antreatypes "antrea.io/antrea/pkg/controller/types"
 )
@@ -73,7 +75,7 @@ type StatusController struct {
 	anpListerSynced cache.InformerSynced
 }
 
-func NewStatusController(antreaClient antreaclientset.Interface, internalNetworkPolicyStore storage.Interface, cnpInformer crdinformers.ClusterNetworkPolicyInformer, anpInformer crdinformers.NetworkPolicyInformer) *StatusController {
+func NewStatusController(antreaClient antreaclientset.Interface, internalNetworkPolicyStore storage.Interface, cnpInformer crdv1a2informers.ClusterNetworkPolicyInformer, anpInformer crdv1a2informers.NetworkPolicyInformer) *StatusController {
 	c := &StatusController{
 		npControlInterface: &networkPolicyControl{
 			antreaClient: antreaClient,
@@ -109,8 +111,8 @@ func NewStatusController(antreaClient antreaclientset.Interface, internalNetwork
 }
 
 func (c *StatusController) updateCNP(old, cur interface{}) {
-	curCNP := cur.(*crdv1alpha1.ClusterNetworkPolicy)
-	oldCNP := old.(*crdv1alpha1.ClusterNetworkPolicy)
+	curCNP := cur.(*crdv1alpha2.ClusterNetworkPolicy)
+	oldCNP := old.(*crdv1alpha2.ClusterNetworkPolicy)
 	if oldCNP.Status == curCNP.Status {
 		return
 	}
@@ -119,8 +121,8 @@ func (c *StatusController) updateCNP(old, cur interface{}) {
 }
 
 func (c *StatusController) updateANP(old, cur interface{}) {
-	curANP := cur.(*crdv1alpha1.NetworkPolicy)
-	oldANP := old.(*crdv1alpha1.NetworkPolicy)
+	curANP := cur.(*crdv1alpha2.NetworkPolicy)
+	oldANP := old.(*crdv1alpha2.NetworkPolicy)
 	if oldANP.Status == curANP.Status {
 		return
 	}
@@ -271,7 +273,7 @@ func (c *StatusController) syncHandler(key string) error {
 	// It means the NetworkPolicy hasn't been processed once. Set it to Pending to differentiate from NetworkPolicies
 	// that spans 0 Node.
 	if internalNP.SpanMeta.NodeNames == nil {
-		status := &crdv1alpha1.NetworkPolicyStatus{
+		status := &crdv1alpha2.NetworkPolicyStatus{
 			Phase:              crdv1alpha1.NetworkPolicyPending,
 			ObservedGeneration: internalNP.Generation,
 		}
@@ -299,7 +301,7 @@ func (c *StatusController) syncHandler(key string) error {
 		phase = crdv1alpha1.NetworkPolicyRealized
 	}
 
-	status := &crdv1alpha1.NetworkPolicyStatus{
+	status := &crdv1alpha2.NetworkPolicyStatus{
 		Phase:                phase,
 		ObservedGeneration:   internalNP.Generation,
 		CurrentNodesRealized: int32(currentNodes),
@@ -315,17 +317,17 @@ func (c *StatusController) syncHandler(key string) error {
 // networkPolicyControlInterface is an interface that knows how to update Antrea NetworkPolicy status.
 // It's created as an interface to allow testing.
 type networkPolicyControlInterface interface {
-	UpdateAntreaNetworkPolicyStatus(namespace, name string, status *crdv1alpha1.NetworkPolicyStatus) error
-	UpdateAntreaClusterNetworkPolicyStatus(name string, status *crdv1alpha1.NetworkPolicyStatus) error
+	UpdateAntreaNetworkPolicyStatus(namespace, name string, status *crdv1alpha2.NetworkPolicyStatus) error
+	UpdateAntreaClusterNetworkPolicyStatus(name string, status *crdv1alpha2.NetworkPolicyStatus) error
 }
 
 type networkPolicyControl struct {
 	antreaClient antreaclientset.Interface
-	cnpLister    crdlisters.ClusterNetworkPolicyLister
-	anpLister    crdlisters.NetworkPolicyLister
+	cnpLister    crdv1a2listers.ClusterNetworkPolicyLister
+	anpLister    crdv1a2listers.NetworkPolicyLister
 }
 
-func (c *networkPolicyControl) UpdateAntreaNetworkPolicyStatus(namespace, name string, status *crdv1alpha1.NetworkPolicyStatus) error {
+func (c *networkPolicyControl) UpdateAntreaNetworkPolicyStatus(namespace, name string, status *crdv1alpha2.NetworkPolicyStatus) error {
 	anp, err := c.anpLister.NetworkPolicies(namespace).Get(name)
 	if err != nil {
 		klog.Infof("Didn't find the original Antrea NetworkPolicy %s/%s, skip updating status", namespace, name)
@@ -341,9 +343,9 @@ func (c *networkPolicyControl) UpdateAntreaNetworkPolicyStatus(namespace, name s
 	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		toUpdate.Status = *status
 		klog.V(2).InfoS("Updating Antrea NetworkPolicy", "NetworkPolicy", klog.KObj(toUpdate))
-		_, updateErr := c.antreaClient.CrdV1alpha1().NetworkPolicies(namespace).UpdateStatus(context.TODO(), toUpdate, v1.UpdateOptions{})
+		_, updateErr := c.antreaClient.CrdV1alpha2().NetworkPolicies(namespace).UpdateStatus(context.TODO(), toUpdate, v1.UpdateOptions{})
 		if updateErr != nil && errors.IsConflict(updateErr) {
-			if toUpdate, getErr = c.antreaClient.CrdV1alpha1().NetworkPolicies(namespace).Get(context.TODO(), name, v1.GetOptions{}); getErr != nil {
+			if toUpdate, getErr = c.antreaClient.CrdV1alpha2().NetworkPolicies(namespace).Get(context.TODO(), name, v1.GetOptions{}); getErr != nil {
 				return getErr
 			}
 		}
@@ -357,7 +359,7 @@ func (c *networkPolicyControl) UpdateAntreaNetworkPolicyStatus(namespace, name s
 	return updateErr
 }
 
-func (c *networkPolicyControl) UpdateAntreaClusterNetworkPolicyStatus(name string, status *crdv1alpha1.NetworkPolicyStatus) error {
+func (c *networkPolicyControl) UpdateAntreaClusterNetworkPolicyStatus(name string, status *crdv1alpha2.NetworkPolicyStatus) error {
 	cnp, err := c.cnpLister.Get(name)
 	if err != nil {
 		klog.Infof("Didn't find the original Antrea ClusterNetworkPolicy %s, skip updating status", name)
@@ -374,9 +376,9 @@ func (c *networkPolicyControl) UpdateAntreaClusterNetworkPolicyStatus(name strin
 	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		toUpdate.Status = *status
 		klog.V(2).InfoS("Updating Antrea ClusterNetworkPolicy", "ClusterNetworkPolicy", klog.KObj(toUpdate))
-		_, updateErr := c.antreaClient.CrdV1alpha1().ClusterNetworkPolicies().UpdateStatus(context.TODO(), toUpdate, v1.UpdateOptions{})
+		_, updateErr := c.antreaClient.CrdV1alpha2().ClusterNetworkPolicies().UpdateStatus(context.TODO(), toUpdate, v1.UpdateOptions{})
 		if updateErr != nil && errors.IsConflict(updateErr) {
-			if toUpdate, getErr = c.antreaClient.CrdV1alpha1().ClusterNetworkPolicies().Get(context.TODO(), name, v1.GetOptions{}); getErr != nil {
+			if toUpdate, getErr = c.antreaClient.CrdV1alpha2().ClusterNetworkPolicies().Get(context.TODO(), name, v1.GetOptions{}); getErr != nil {
 				return getErr
 			}
 		}

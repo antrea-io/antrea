@@ -17,6 +17,7 @@ package v1alpha2
 import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 
 	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
 )
@@ -378,4 +379,188 @@ type IPPoolList struct {
 	metav1.ListMeta `json:"metadata,omitempty"`
 
 	Items []IPPool `json:"items"`
+}
+
+// +genclient
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+type NetworkPolicy struct {
+	metav1.TypeMeta `json:",inline"`
+	// Standard metadata of the object.
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	// Specification of the desired behavior of NetworkPolicy.
+	Spec NetworkPolicySpec `json:"spec"`
+	// Most recently observed status of the NetworkPolicy.
+	Status NetworkPolicyStatus `json:"status"`
+}
+
+// NetworkPolicySpec defines the desired state for NetworkPolicy.
+type NetworkPolicySpec struct {
+	// Tier specifies the tier to which this NetworkPolicy belongs to.
+	// The NetworkPolicy order will be determined based on the combination of the
+	// Tier's Priority and the NetworkPolicy's own Priority. If not specified,
+	// this policy will be created in the Application Tier right above the K8s
+	// NetworkPolicy which resides at the bottom.
+	Tier string `json:"tier,omitempty"`
+	// Priority specfies the order of the NetworkPolicy relative to other
+	// NetworkPolicies.
+	Priority float64 `json:"priority"`
+	// Select workloads on which the rules will be applied to. Cannot be set in
+	// conjunction with AppliedTo in each rule.
+	// +optional
+	AppliedTo []v1alpha1.NetworkPolicyPeer `json:"appliedTo,omitempty"`
+	// Set of ingress rules evaluated based on the order in which they are set.
+	// Currently Ingress rule supports setting the `From` field but not the `To`
+	// field within a Rule.
+	// +optional
+	Ingress []Rule `json:"ingress"`
+	// Set of egress rules evaluated based on the order in which they are set.
+	// Currently Egress rule supports setting the `To` field but not the `From`
+	// field within a Rule.
+	// +optional
+	Egress []Rule `json:"egress"`
+}
+
+// NetworkPolicyStatus represents information about the status of a NetworkPolicy.
+type NetworkPolicyStatus struct {
+	// The phase of a NetworkPolicy is a simple, high-level summary of the NetworkPolicy's status.
+	Phase v1alpha1.NetworkPolicyPhase `json:"phase"`
+	// The generation observed by Antrea.
+	ObservedGeneration int64 `json:"observedGeneration"`
+	// The number of nodes that have realized the NetworkPolicy.
+	CurrentNodesRealized int32 `json:"currentNodesRealized"`
+	// The total number of nodes that should realize the NetworkPolicy.
+	DesiredNodesRealized int32 `json:"desiredNodesRealized"`
+}
+
+// Rule describes the traffic allowed to/from the workloads selected by
+// Spec.AppliedTo. Based on the action specified in the rule, traffic is either
+// allowed or denied which exactly match the specified ports and protocol.
+type Rule struct {
+	// Action specifies the action to be applied on the rule.
+	Action *v1alpha1.RuleAction `json:"action"`
+	// Set of protocol with its specific spec allowed/denied by the rule. If this field
+	// is unset or empty, this rule match all protocols supported in PeerProtocol.
+	// +optional
+	Protocols []PeerProtocol `json:"protocols,omitempty"`
+	// Rule is matched if traffic originates from workloads selected by
+	// this field. If this field is empty, this rule matches all sources.
+	// +optional
+	From []v1alpha1.NetworkPolicyPeer `json:"from"`
+	// Rule is matched if traffic is intended for workloads selected by
+	// this field. This field can't be used with ToServices. If this field
+	// and ToServices are both empty or missing this rule matches all destinations.
+	// +optional
+	To []v1alpha1.NetworkPolicyPeer `json:"to"`
+	// Rule is matched if traffic is intended for a Service listed in this field.
+	// Currently only ClusterIP types Services are supported in this field. This field
+	// can only be used when AntreaProxy is enabled. This field can't be used with To
+	// or Ports. If this field and To are both empty or missing, this rule matches all
+	// destinations.
+	// +optional
+	ToServices []v1alpha1.NamespacedName `json:"toServices,omitempty"`
+	// Name describes the intention of this rule.
+	// Name should be unique within the policy.
+	// +optional
+	Name string `json:"name"`
+	// EnableLogging is used to indicate if agent should generate logs
+	// when rules are matched. Should be default to false.
+	EnableLogging bool `json:"enableLogging"`
+	// Select workloads on which this rule will be applied to. Cannot be set in
+	// conjunction with NetworkPolicySpec/ClusterNetworkPolicySpec.AppliedTo.
+	// +optional
+	AppliedTo []v1alpha1.NetworkPolicyPeer `json:"appliedTo,omitempty"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+type NetworkPolicyList struct {
+	metav1.TypeMeta `json:",inline"`
+	// +optional
+	metav1.ListMeta `json:"metadata,omitempty"`
+
+	Items []NetworkPolicy `json:"items"`
+}
+
+// +genclient
+// +genclient:nonNamespaced
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+type ClusterNetworkPolicy struct {
+	metav1.TypeMeta `json:",inline"`
+	// Standard metadata of the object.
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	// Specification of the desired behavior of ClusterNetworkPolicy.
+	Spec ClusterNetworkPolicySpec `json:"spec"`
+	// Most recently observed status of the NetworkPolicy.
+	Status NetworkPolicyStatus `json:"status"`
+}
+
+// ClusterNetworkPolicySpec defines the desired state for ClusterNetworkPolicy.
+type ClusterNetworkPolicySpec struct {
+	// Tier specifies the tier to which this ClusterNetworkPolicy belongs to.
+	// The ClusterNetworkPolicy order will be determined based on the
+	// combination of the Tier's Priority and the ClusterNetworkPolicy's own
+	// Priority. If not specified, this policy will be created in the Application
+	// Tier right above the K8s NetworkPolicy which resides at the bottom.
+	Tier string `json:"tier,omitempty"`
+	// Priority specfies the order of the ClusterNetworkPolicy relative to
+	// other AntreaClusterNetworkPolicies.
+	Priority float64 `json:"priority"`
+	// Select workloads on which the rules will be applied to. Cannot be set in
+	// conjunction with AppliedTo in each rule.
+	// +optional
+	AppliedTo []v1alpha1.NetworkPolicyPeer `json:"appliedTo,omitempty"`
+	// Set of ingress rules evaluated based on the order in which they are set.
+	// Currently Ingress rule supports setting the `From` field but not the `To`
+	// field within a Rule.
+	// +optional
+	Ingress []Rule `json:"ingress"`
+	// Set of egress rules evaluated based on the order in which they are set.
+	// Currently Egress rule supports setting the `To` field but not the `From`
+	// field within a Rule.
+	// +optional
+	Egress []Rule `json:"egress"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+type ClusterNetworkPolicyList struct {
+	metav1.TypeMeta `json:",inline"`
+	// +optional
+	metav1.ListMeta `json:"metadata,omitempty"`
+
+	Items []ClusterNetworkPolicy `json:"items"`
+}
+
+// PeerProtocol includes all protocols that are supported. All fields should be
+// used as a stand-alone field. To match all traffic with a specific protocol, set
+// the value of the corresponding field as an empty struct.
+type PeerProtocol struct {
+	TCP  *L4Protocol   `json:"tcp,omitempty"`
+	UDP  *L4Protocol   `json:"udp,omitempty"`
+	SCTP *L4Protocol   `json:"sctp,omitempty"`
+	ICMP *ICMPProtocol `json:"icmp,omitempty"`
+}
+
+type L4Protocol struct {
+	// The port on the given protocol. This can be either a numerical
+	// or named port on a Pod. If this field is not provided, this
+	// matches all port names and numbers.
+	// +optional
+	Port *intstr.IntOrString `json:"port,omitempty"`
+	// EndPort defines the end of the port range, being the end included within the range.
+	// It can only be specified when a numerical `port` is specified.
+	// +optional
+	EndPort *int32 `json:"endPort,omitempty"`
+}
+
+// ICMPProtocol matches ICMP traffic with specific ICMPType and/or ICMPCode. All
+// fields could be used alone or together. If all fields are not provided, this
+// matches all ICMP traffic.
+type ICMPProtocol struct {
+	ICMPType *int32 `json:"icmpType,omitempty"`
+	ICMPCode *int32 `json:"icmpCode,omitempty"`
 }

@@ -23,6 +23,7 @@ import (
 
 	"antrea.io/antrea/pkg/apis/controlplane"
 	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
 	"antrea.io/antrea/pkg/controller/networkpolicy/store"
 	antreatypes "antrea.io/antrea/pkg/controller/types"
 )
@@ -38,19 +39,44 @@ var (
 // toAntreaServicesForCRD converts a slice of v1alpha1.NetworkPolicyPort
 // objects to a slice of Antrea Service objects. A bool is returned along with
 // the Service objects to indicate whether any named port exists.
-func toAntreaServicesForCRD(npPorts []v1alpha1.NetworkPolicyPort) ([]controlplane.Service, bool) {
+func toAntreaServicesForCRD(npProtocols []v1alpha2.PeerProtocol) ([]controlplane.Service, bool) {
 	var antreaServices []controlplane.Service
 	var namedPortExists bool
-	for _, npPort := range npPorts {
-		if npPort.Port != nil && npPort.Port.Type == intstr.String {
-			namedPortExists = true
+	klog.Infof("npprotocol: %v", npProtocols)
+	for _, npProtocol := range npProtocols {
+		var l4Protocol *v1alpha2.L4Protocol
+		var curProtocol controlplane.Protocol
+		if npProtocol.TCP != nil {
+			curProtocol = controlplane.ProtocolTCP
+			l4Protocol = npProtocol.TCP
+		} else if npProtocol.UDP != nil {
+			curProtocol = controlplane.ProtocolUDP
+			l4Protocol = npProtocol.UDP
+		} else if npProtocol.SCTP != nil {
+			curProtocol = controlplane.ProtocolSCTP
+			l4Protocol = npProtocol.SCTP
 		}
-		antreaServices = append(antreaServices, controlplane.Service{
-			Protocol: toAntreaProtocol(npPort.Protocol),
-			Port:     npPort.Port,
-			EndPort:  npPort.EndPort,
-		})
+		if l4Protocol != nil {
+			if l4Protocol.Port != nil && l4Protocol.Port.Type == intstr.String {
+				namedPortExists = true
+			}
+			antreaServices = append(antreaServices, controlplane.Service{
+				Protocol: &curProtocol,
+				Port:     l4Protocol.Port,
+				EndPort:  l4Protocol.EndPort,
+			})
+			continue
+		}
+		if npProtocol.ICMP != nil {
+			curProtocol = controlplane.ProtocolICMP
+			antreaServices = append(antreaServices, controlplane.Service{
+				Protocol: &curProtocol,
+				ICMPType: npProtocol.ICMP.ICMPType,
+				ICMPCode: npProtocol.ICMP.ICMPCode,
+			})
+		}
 	}
+	klog.Infof("antrea service: %s", antreaServices)
 	return antreaServices, namedPortExists
 }
 

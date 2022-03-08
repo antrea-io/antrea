@@ -257,6 +257,8 @@ type FlowBuilder interface {
 	MatchConjID(value uint32) FlowBuilder
 	MatchDstPort(port uint16, portMask *uint16) FlowBuilder
 	MatchSrcPort(port uint16, portMask *uint16) FlowBuilder
+	MatchICMPType(icmpType byte) FlowBuilder
+	MatchICMPCode(icmpCode byte) FlowBuilder
 	MatchICMPv6Type(icmp6Type byte) FlowBuilder
 	MatchICMPv6Code(icmp6Code byte) FlowBuilder
 	MatchTunnelDst(dstIP net.IP) FlowBuilder

@@ -24,6 +24,7 @@ import (
 
 	"antrea.io/antrea/pkg/apis/controlplane"
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	crdv1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
 	"antrea.io/antrea/pkg/controller/grouping"
 	"antrea.io/antrea/pkg/controller/networkpolicy/store"
 	antreatypes "antrea.io/antrea/pkg/controller/types"
@@ -34,7 +35,7 @@ import (
 // which can be consumed by agents to configure corresponding rules on the Nodes.
 func (n *NetworkPolicyController) addCNP(obj interface{}) {
 	defer n.heartbeat("addCNP")
-	cnp := obj.(*crdv1alpha1.ClusterNetworkPolicy)
+	cnp := obj.(*crdv1alpha2.ClusterNetworkPolicy)
 	klog.Infof("Processing ClusterNetworkPolicy %s ADD event", cnp.Name)
 	// Create an internal NetworkPolicy object corresponding to this
 	// ClusterNetworkPolicy and enqueue task to internal NetworkPolicy Workqueue.
@@ -49,14 +50,14 @@ func (n *NetworkPolicyController) addCNP(obj interface{}) {
 // which can be consumed by agents to configure corresponding rules on the Nodes.
 func (n *NetworkPolicyController) updateCNP(old, cur interface{}) {
 	defer n.heartbeat("updateCNP")
-	curCNP := cur.(*crdv1alpha1.ClusterNetworkPolicy)
+	curCNP := cur.(*crdv1alpha2.ClusterNetworkPolicy)
 	klog.Infof("Processing ClusterNetworkPolicy %s UPDATE event", curCNP.Name)
 	// Update an internal NetworkPolicy, corresponding to this NetworkPolicy and
 	// enqueue task to internal NetworkPolicy Workqueue.
 	curInternalNP := n.processClusterNetworkPolicy(curCNP)
 	klog.V(2).Infof("Updating existing internal NetworkPolicy %s for %s", curInternalNP.Name, curInternalNP.SourceRef.ToString())
-	// Retrieve old crdv1alpha1.NetworkPolicy object.
-	oldCNP := old.(*crdv1alpha1.ClusterNetworkPolicy)
+	// Retrieve old crdv1alpha2.ClusterNetworkPolicy object.
+	oldCNP := old.(*crdv1alpha2.ClusterNetworkPolicy)
 	// Old and current NetworkPolicy share the same key.
 	key := internalNetworkPolicyKeyFunc(oldCNP)
 	// Lock access to internal NetworkPolicy store such that concurrent access
@@ -93,14 +94,14 @@ func (n *NetworkPolicyController) updateCNP(old, cur interface{}) {
 // deleteCNP receives ClusterNetworkPolicy DELETED events and deletes resources
 // which can be consumed by agents to delete corresponding rules on the Nodes.
 func (n *NetworkPolicyController) deleteCNP(old interface{}) {
-	cnp, ok := old.(*crdv1alpha1.ClusterNetworkPolicy)
+	cnp, ok := old.(*crdv1alpha2.ClusterNetworkPolicy)
 	if !ok {
 		tombstone, ok := old.(cache.DeletedFinalStateUnknown)
 		if !ok {
 			klog.Errorf("Error decoding object when deleting ClusterNetworkPolicy, invalid type: %v", old)
 			return
 		}
-		cnp, ok = tombstone.Obj.(*crdv1alpha1.ClusterNetworkPolicy)
+		cnp, ok = tombstone.Obj.(*crdv1alpha2.ClusterNetworkPolicy)
 		if !ok {
 			klog.Errorf("Error decoding object tombstone when deleting ClusterNetworkPolicy, invalid type: %v", tombstone.Obj)
 			return
@@ -129,7 +130,7 @@ func (n *NetworkPolicyController) deleteCNP(old interface{}) {
 
 // reprocessCNP is triggered when a CNP may be impacted by non-ClusterNetworkPolicy events, including Namespace events
 // (for per-namespace rules) and ClusterGroup events (for ClusterGroup reference).
-func (n *NetworkPolicyController) reprocessCNP(cnp *crdv1alpha1.ClusterNetworkPolicy, enqueueAppliedToGroup bool) {
+func (n *NetworkPolicyController) reprocessCNP(cnp *crdv1alpha2.ClusterNetworkPolicy, enqueueAppliedToGroup bool) {
 	key := internalNetworkPolicyKeyFunc(cnp)
 	n.internalNetworkPolicyMutex.Lock()
 	oldInternalNPObj, exist, _ := n.internalNetworkPolicyStore.Get(key)
@@ -256,12 +257,12 @@ func (n *NetworkPolicyController) deleteNamespace(old interface{}) {
 }
 
 // processClusterNetworkPolicy creates an internal NetworkPolicy instance
-// corresponding to the crdv1alpha1.ClusterNetworkPolicy object. This method
+// corresponding to the crdv1alpha2.ClusterNetworkPolicy object. This method
 // does not commit the internal NetworkPolicy in store, instead returns an
 // instance to the caller wherein, it will be either stored as a new Object
 // in case of ADD event or modified and store the updated instance, in case
 // of an UPDATE event.
-func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *crdv1alpha1.ClusterNetworkPolicy) *antreatypes.NetworkPolicy {
+func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *crdv1alpha2.ClusterNetworkPolicy) *antreatypes.NetworkPolicy {
 	hasPerNamespaceRule := hasPerNamespaceRule(cnp)
 	// If one of the ACNP rule is a per-namespace rule (a peer in that rule has namespaces.Match set
 	// to Self), the policy will need to be converted to appliedTo per rule policy, as the appliedTo
@@ -301,9 +302,9 @@ func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *crdv1alpha1.C
 		}
 	}
 	var rules []controlplane.NetworkPolicyRule
-	processRules := func(cnpRules []crdv1alpha1.Rule, direction controlplane.Direction) {
+	processRules := func(cnpRules []crdv1alpha2.Rule, direction controlplane.Direction) {
 		for idx, cnpRule := range cnpRules {
-			services, namedPortExists := toAntreaServicesForCRD(cnpRule.Ports)
+			services, namedPortExists := toAntreaServicesForCRD(cnpRule.Protocols)
 			clusterPeers, perNSPeers := splitPeersByScope(cnpRule, direction)
 			addRule := func(peer *controlplane.NetworkPolicyPeer, dir controlplane.Direction, ruleAppliedTos []string) {
 				rule := controlplane.NetworkPolicyRule{
@@ -406,7 +407,7 @@ func serviceAccountNameToPodSelector(saName string) *metav1.LabelSelector {
 }
 
 // hasPerNamespaceRule returns true if there is at least one per-namespace rule
-func hasPerNamespaceRule(cnp *crdv1alpha1.ClusterNetworkPolicy) bool {
+func hasPerNamespaceRule(cnp *crdv1alpha2.ClusterNetworkPolicy) bool {
 	for _, ingress := range cnp.Spec.Ingress {
 		for _, peer := range ingress.From {
 			if peer.Namespaces != nil && peer.Namespaces.Match == crdv1alpha1.NamespaceMatchSelf {
@@ -447,7 +448,7 @@ func (n *NetworkPolicyController) processClusterAppliedTo(appliedTo []crdv1alpha
 
 // splitPeersByScope splits the ClusterNetworkPolicy peers in the rule by whether the peer
 // is cluster-scoped or per-namespace.
-func splitPeersByScope(rule crdv1alpha1.Rule, dir controlplane.Direction) ([]crdv1alpha1.NetworkPolicyPeer, []crdv1alpha1.NetworkPolicyPeer) {
+func splitPeersByScope(rule crdv1alpha2.Rule, dir controlplane.Direction) ([]crdv1alpha1.NetworkPolicyPeer, []crdv1alpha1.NetworkPolicyPeer) {
 	var clusterPeers, perNSPeers []crdv1alpha1.NetworkPolicyPeer
 	peers := rule.From
 	if dir == controlplane.DirectionOut {

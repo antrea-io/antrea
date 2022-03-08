@@ -96,6 +96,8 @@ var allowedPaths = []string{
 	"/validate/egress",
 	"/validate/ippool",
 	"/convert/clustergroup",
+	"/convert/clusternetworkpolicy",
+	"/convert/networkpolicy",
 }
 
 // run starts Antrea Controller with the given options and waits for termination signal.
@@ -115,9 +117,9 @@ func run(o *Options) error {
 	serviceInformer := informerFactory.Core().V1().Services()
 	networkPolicyInformer := informerFactory.Networking().V1().NetworkPolicies()
 	nodeInformer := informerFactory.Core().V1().Nodes()
-	cnpInformer := crdInformerFactory.Crd().V1alpha1().ClusterNetworkPolicies()
+	cnpInformer := crdInformerFactory.Crd().V1alpha2().ClusterNetworkPolicies()
 	eeInformer := crdInformerFactory.Crd().V1alpha2().ExternalEntities()
-	anpInformer := crdInformerFactory.Crd().V1alpha1().NetworkPolicies()
+	anpInformer := crdInformerFactory.Crd().V1alpha2().NetworkPolicies()
 	tierInformer := crdInformerFactory.Crd().V1alpha1().Tiers()
 	tfInformer := crdInformerFactory.Crd().V1alpha1().Traceflows()
 	cgInformer := crdInformerFactory.Crd().V1alpha3().ClusterGroups()

@@ -1,4 +1,4 @@
-// Copyright 2021 Antrea Authors
+// Copyright 2022 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,6 +30,10 @@ func (c *FakeCrdV1alpha2) ClusterGroups() v1alpha2.ClusterGroupInterface {
 	return &FakeClusterGroups{c}
 }
 
+func (c *FakeCrdV1alpha2) ClusterNetworkPolicies() v1alpha2.ClusterNetworkPolicyInterface {
+	return &FakeClusterNetworkPolicies{c}
+}
+
 func (c *FakeCrdV1alpha2) Egresses() v1alpha2.EgressInterface {
 	return &FakeEgresses{c}
 }
@@ -44,6 +48,10 @@ func (c *FakeCrdV1alpha2) ExternalIPPools() v1alpha2.ExternalIPPoolInterface {
 
 func (c *FakeCrdV1alpha2) IPPools() v1alpha2.IPPoolInterface {
 	return &FakeIPPools{c}
+}
+
+func (c *FakeCrdV1alpha2) NetworkPolicies(namespace string) v1alpha2.NetworkPolicyInterface {
+	return &FakeNetworkPolicies{c, namespace}
 }
 
 // RESTClient returns a RESTClient that is used to communicate

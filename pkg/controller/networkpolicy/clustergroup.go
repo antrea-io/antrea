@@ -25,7 +25,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/apis/controlplane"
-	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	crdv1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
 	crdv1alpha3 "antrea.io/antrea/pkg/apis/crd/v1alpha3"
 	"antrea.io/antrea/pkg/controller/networkpolicy/store"
 	antreatypes "antrea.io/antrea/pkg/controller/types"
@@ -287,7 +287,7 @@ func (c *NetworkPolicyController) triggerCNPUpdates(cg string) {
 	}
 	for _, obj := range cnps {
 		// ClusterGroup may be used by AppliedToGroup, enqueuing them after reprocessing CNP.
-		c.reprocessCNP(obj.(*crdv1alpha1.ClusterNetworkPolicy), true)
+		c.reprocessCNP(obj.(*crdv1alpha2.ClusterNetworkPolicy), true)
 	}
 }
 

@@ -272,7 +272,10 @@ func installHandlers(c *ExtraConfig, s *genericapiserver.GenericAPIServer) {
 		s.Handler.NonGoRestfulMux.HandleFunc("/validate/clustergroup", webhook.HandlerForValidateFunc(v.Validate))
 
 		// Install handlers for CRD conversion between versions
+		klog.Infof("=============install convert handler")
 		s.Handler.NonGoRestfulMux.HandleFunc("/convert/clustergroup", webhook.HandleCRDConversion(controllernetworkpolicy.ConvertClusterGroupCRD))
+		s.Handler.NonGoRestfulMux.HandleFunc("/convert/clusternetworkpolicy", webhook.HandleCRDConversion(controllernetworkpolicy.ConvertClusterNetworkPolicyCRD))
+		s.Handler.NonGoRestfulMux.HandleFunc("/convert/networkpolicy", webhook.HandleCRDConversion(controllernetworkpolicy.ConvertNetworkPolicyCRD))
 
 		// Install a post start hook to initialize Tiers on start-up
 		s.AddPostStartHook("initialize-tiers", func(context genericapiserver.PostStartHookContext) error {
@@ -313,6 +316,8 @@ func DefaultCAConfig() *certificate.CAConfig {
 		},
 		CRDsWithConversionWebhooks: []string{
 			"clustergroups.crd.antrea.io",
+			"clusternetworkpolicies.crd.antrea.io",
+			"networkpolicies.crd.antrea.io",
 		},
 		CertDir:           "/var/run/antrea/antrea-controller-tls",
 		SelfSignedCertDir: "/var/run/antrea/antrea-controller-self-signed",
