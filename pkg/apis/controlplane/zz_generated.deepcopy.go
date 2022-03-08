@@ -942,6 +942,16 @@ func (in *Service) DeepCopyInto(out *Service) {
 		*out = new(int32)
 		**out = **in
 	}
+	if in.ICMPType != nil {
+		in, out := &in.ICMPType, &out.ICMPType
+		*out = new(int32)
+		**out = **in
+	}
+	if in.ICMPCode != nil {
+		in, out := &in.ICMPCode, &out.ICMPCode
+		*out = new(int32)
+		**out = **in
+	}
 	return
 }
 

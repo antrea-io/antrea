@@ -58,7 +58,7 @@ func (n *NetworkPolicyController) updateCNP(old, cur interface{}) {
 	// enqueue task to internal NetworkPolicy Workqueue.
 	curInternalNP := n.processClusterNetworkPolicy(curCNP)
 	klog.V(2).Infof("Updating existing internal NetworkPolicy %s for %s", curInternalNP.Name, curInternalNP.SourceRef.ToString())
-	// Retrieve old crdv1alpha1.NetworkPolicy object.
+	// Retrieve old crdv1alpha1.ClusterNetworkPolicy object.
 	oldCNP := old.(*crdv1alpha1.ClusterNetworkPolicy)
 	// Old and current NetworkPolicy share the same key.
 	key := internalNetworkPolicyKeyFunc(oldCNP)
@@ -381,7 +381,7 @@ func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *crdv1alpha1.C
 	var rules []controlplane.NetworkPolicyRule
 	processRules := func(cnpRules []crdv1alpha1.Rule, direction controlplane.Direction) {
 		for idx, cnpRule := range cnpRules {
-			services, namedPortExists := toAntreaServicesForCRD(cnpRule.Ports)
+			services, namedPortExists := toAntreaServicesForCRD(cnpRule.Ports, cnpRule.Protocols)
 			clusterPeers, perNSPeers := splitPeersByScope(cnpRule, direction)
 			addRule := func(peer *controlplane.NetworkPolicyPeer, dir controlplane.Direction, ruleAppliedTos []string) {
 				rule := controlplane.NetworkPolicyRule{

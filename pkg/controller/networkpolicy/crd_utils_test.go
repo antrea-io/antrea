@@ -32,6 +32,7 @@ import (
 func TestToAntreaServicesForCRD(t *testing.T) {
 	tables := []struct {
 		ports              []crdv1alpha1.NetworkPolicyPort
+		protocols          []crdv1alpha1.NetworkPolicyProtocol
 		expServices        []controlplane.Service
 		expNamedPortExists bool
 	}{
@@ -82,9 +83,84 @@ func TestToAntreaServicesForCRD(t *testing.T) {
 			},
 			expNamedPortExists: false,
 		},
+		{
+			protocols: []crdv1alpha1.NetworkPolicyProtocol{
+				{
+					ICMP: &crdv1alpha1.ICMPProtocol{
+						ICMPType: &icmpType8,
+						ICMPCode: &icmpCode0,
+					},
+				},
+			},
+			expServices: []controlplane.Service{
+				{
+					Protocol: &protocolICMP,
+					ICMPType: &icmpType8,
+					ICMPCode: &icmpCode0,
+				},
+			},
+			expNamedPortExists: false,
+		},
+		{
+			protocols: []crdv1alpha1.NetworkPolicyProtocol{
+				{
+					ICMP: &crdv1alpha1.ICMPProtocol{
+						ICMPType: &icmpType8,
+					},
+				},
+			},
+			expServices: []controlplane.Service{
+				{
+					Protocol: &protocolICMP,
+					ICMPType: &icmpType8,
+				},
+			},
+			expNamedPortExists: false,
+		},
+		{
+			protocols: []crdv1alpha1.NetworkPolicyProtocol{
+				{
+					ICMP: &crdv1alpha1.ICMPProtocol{},
+				},
+			},
+			expServices: []controlplane.Service{
+				{
+					Protocol: &protocolICMP,
+				},
+			},
+			expNamedPortExists: false,
+		},
+		{
+			ports: []crdv1alpha1.NetworkPolicyPort{
+				{
+					Protocol: &k8sProtocolTCP,
+					Port:     &int80,
+				},
+			},
+			protocols: []crdv1alpha1.NetworkPolicyProtocol{
+				{
+					ICMP: &crdv1alpha1.ICMPProtocol{
+						ICMPType: &icmpType8,
+						ICMPCode: &icmpCode0,
+					},
+				},
+			},
+			expServices: []controlplane.Service{
+				{
+					Protocol: toAntreaProtocol(&k8sProtocolTCP),
+					Port:     &int80,
+				},
+				{
+					Protocol: &protocolICMP,
+					ICMPType: &icmpType8,
+					ICMPCode: &icmpCode0,
+				},
+			},
+			expNamedPortExists: false,
+		},
 	}
 	for _, table := range tables {
-		services, namedPortExist := toAntreaServicesForCRD(table.ports)
+		services, namedPortExist := toAntreaServicesForCRD(table.ports, table.protocols)
 		assert.Equal(t, table.expServices, services)
 		assert.Equal(t, table.expNamedPortExists, namedPortExist)
 	}

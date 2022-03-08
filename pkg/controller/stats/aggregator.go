@@ -28,7 +28,7 @@ import (
 	"antrea.io/antrea/pkg/apis/controlplane"
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	statsv1alpha1 "antrea.io/antrea/pkg/apis/stats/v1alpha1"
-	crdvinformers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha1"
+	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha1"
 	"antrea.io/antrea/pkg/features"
 	"antrea.io/antrea/pkg/util/k8s"
 )
@@ -69,7 +69,7 @@ func uidIndexFunc(obj interface{}) ([]string, error) {
 	return []string{string(meta.GetUID())}, nil
 }
 
-func NewAggregator(networkPolicyInformer networkinginformers.NetworkPolicyInformer, cnpInformer crdvinformers.ClusterNetworkPolicyInformer, anpInformer crdvinformers.NetworkPolicyInformer) *Aggregator {
+func NewAggregator(networkPolicyInformer networkinginformers.NetworkPolicyInformer, cnpInformer crdinformers.ClusterNetworkPolicyInformer, anpInformer crdinformers.NetworkPolicyInformer) *Aggregator {
 	aggregator := &Aggregator{
 		networkPolicyStats: cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc, uidIndex: uidIndexFunc}),
 		dataCh:             make(chan *controlplane.NodeStatsSummary, 1000),

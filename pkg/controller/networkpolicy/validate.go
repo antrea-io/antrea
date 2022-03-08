@@ -418,7 +418,6 @@ func (v *antreaPolicyValidator) createValidate(curObj interface{}, userInfo auth
 	if !allowed {
 		return reason, allowed
 	}
-
 	if err := v.validatePort(ingress, egress); err != nil {
 		return err.Error(), false
 	}
@@ -535,8 +534,8 @@ func (v *antreaPolicyValidator) validatePeers(ingress, egress []crdv1alpha1.Rule
 			if !features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
 				return fmt.Sprintf("`toServices` can only be used when AntreaProxy is enabled"), false
 			}
-			if (rule.To != nil && len(rule.To) > 0) || rule.Ports != nil {
-				return fmt.Sprintf("`toServices` can't be used with `to` or `ports`"), false
+			if (rule.To != nil && len(rule.To) > 0) || rule.Ports != nil || rule.Protocols != nil {
+				return fmt.Sprintf("`toServices` can't be used with `to`, `ports` or `protocols`"), false
 			}
 		}
 		msg, isValid := checkPeers(rule.To)
