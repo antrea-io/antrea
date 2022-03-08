@@ -26,7 +26,8 @@ The MemberClusterAnnounce CRD declares a member cluster configuration to the lea
 
 The Common Area is an abstraction in the Antrea Multi-cluster implementation provides a storage
 interface for resource export/import that can be read/written by all member and leader clusters
-in the ClusterSet. The Common Area is implemented with a Namespace in the leader cluster
+in the ClusterSet. The Common Area is implemented with a Namespace in the leader cluster for a
+given ClusterSet.
 
 ## Antrea Multi-cluster Controller
 
@@ -88,3 +89,51 @@ The Service Ports definition will be the same as exported Services, the Endpoint
 IPs from all member clusters. The new created Antrea Multi-cluster Service is just like a regular
 Kubernetes Service, so Pods in a member cluster can access the multi-cluster Service as usual without
 any extra setting.
+
+## Multi-cluster ClusterNetworkPolicy Replication (ACNP Copy-span)
+
+Antrea Multi-cluster admins can specify certain ClusterNetworkPolicies to be replicated across
+the entire ClusterSet. This is especially useful for ClusterSet admins who want all clusters in the
+ClusterSet to be applied with a consistent security posture (for example, all namespaces in all
+clusters can only communicate with Pods in their own namespaces). For more information regarding
+Antrea ClusterNetworkPolicy(ACNP), refer to [this document](../antrea-network-policy.md).
+
+To achieve such ACNP copy-span, admins can, in the acting leader cluster of a Multi-cluster deployment, 
+create a ResourceExport of kind `AntreaClusterNetworkPolicy` which contains the ClusterNetworkPolicy spec
+they wish to be replicated. The ResourceExport should be created in the Namespace which implements the
+Common Area of the ClusterSet. In future releases, some additional tooling may become available to
+automate the creation of such ResourceExport and make ACNP replication across cluster eaiser.
+
+```yaml
+apiVersion: multicluster.crd.antrea.io/v1alpha1
+kind: ResourceExport
+metadata:
+  name: strict-namespace-isolation-for-test-clusterset
+  namespace: antrea-mcs-ns          # Namespace that implements Common Area of test-clusterset
+spec:
+  kind: AntreaClusterNetworkPolicy  
+  name: strict-namespace-isolation  # In each importing cluster, an ACNP of name antrea-mc-strict-namespace-isolation will be created with the spec below
+  clusternetworkpolicy:
+    priority: 1
+    tier: securityops
+    appliedTo:
+      - namespaceSelector: {}       # Selects all Namespaces in the member cluster
+    ingress:
+      - action: Pass
+        from:
+        - namespaces:
+            match: Self            # Skip drop rule for traffic from Pods in the same Namespace
+        - podSelector:
+            matchLabels:
+              k8s-app: kube-dns    # Skip drop rule for traffic from the core-dns components
+      - action: Drop
+        from:
+        - namespaceSelector: {}    # Drop from Pods from all other Namespaces
+```
+
+The above sample spec will create an ACNP in each member cluster which implements strict namespace
+isolation for that cluster. 
+
+Note that because the Tier that an ACNP refers to must exist before the ACNP is applied, an importing
+cluster may fail to create the ACNP to be replicated, if the tier in the ResourceExport spec cannot be
+found in that particular cluster.
