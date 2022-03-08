@@ -1,5 +1,19 @@
 # Changelog 1.5
 
+## 1.5.1 - 2022-03-07
+
+### Changed
+
+- Use iptables-wrapper in Antrea container. Now antrea-agent can work with distros that lack the iptables kernel module of "legacy" mode (ip_tables). ([#3308](https://github.com/antrea-io/antrea/pull/3308), [@antoninbas])
+- Reduce permissions of Antrea ServiceAccount for updating annotations. ([#3408](https://github.com/antrea-io/antrea/pull/3408), [@tnqn])
+
+### Fixed
+
+- Fix NodePort/LoadBalancer Service cannot be accessed when externalTrafficPolicy changed from Cluster to Local with proxyAll enabled. ([#3330](https://github.com/antrea-io/antrea/pull/3330), [@hongliangl])
+- Fix initial egress connections from Pods may go out with node IP rather than Egress IP. ([#3378](https://github.com/antrea-io/antrea/pull/3378), [@tnqn])
+- Fix NodePort Service access when an Egress selects the same Pod as the NodePort Service. ([#3397](https://github.com/antrea-io/antrea/pull/3397), [@hongliangl])
+- Fix ipBlock referenced in nested ClusterGroup not processed correctly. ([#3405](https://github.com/antrea-io/antrea/pull/3405), [@Dyanngg])
+
 ## 1.5.0 - 2022-01-21
 
 ### Added
@@ -81,6 +95,7 @@
 [@GraysonWu]: https://github.com/GraysonWu
 [@heanlan]: https://github.com/heanlan
 [@hjiajing]: https://github.com/hjiajing
+[@hongliangl]: https://github.com/hongliangl
 [@Jexf]: https://github.com/Jexf
 [@jianjuns]: https://github.com/jianjuns
 [@luolanzone]: https://github.com/luolanzone
