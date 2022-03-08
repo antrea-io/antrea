@@ -9,7 +9,7 @@
 
 ### Fixed
 
-- Fix NodePort/LoadBalancer Service cannot be accessed when externalTrafficPolicy changed from Cluster to Local with proxyAll enabled. ([#3380](https://github.com/antrea-io/antrea/pull/3380), [@hongliangl])
+- Fix NodePort/LoadBalancer Service cannot be accessed when externalTrafficPolicy changed from Cluster to Local with proxyAll enabled. ([#3330](https://github.com/antrea-io/antrea/pull/3330), [@hongliangl])
 - Fix initial egress connections from Pods may go out with node IP rather than Egress IP. ([#3378](https://github.com/antrea-io/antrea/pull/3378), [@tnqn])
 - Fix NodePort Service access when an Egress selects the same Pod as the NodePort Service. ([#3397](https://github.com/antrea-io/antrea/pull/3397), [@hongliangl])
 - Fix ipBlock referenced in nested ClusterGroup not processed correctly. ([#3405](https://github.com/antrea-io/antrea/pull/3405), [@Dyanngg])
