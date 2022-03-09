@@ -128,7 +128,7 @@ function cleanup_multicluster_antrea {
     echo "====== Cleanup Antrea controller and agent ======"
     kubeconfig=$1
     kubectl get pod -n kube-system -l component=antrea-agent --no-headers=true $kubeconfig | awk '{print $1}' | while read AGENTNAME; do
-       kubectl exec $AGENTNAME -c antrea-agent -n kube-system ${kubeconfig}  ovs-vsctl del-port br-int gw0 || true
+       kubectl exec $AGENTNAME -c antrea-agent -n kube-system ${kubeconfig} -- ovs-vsctl del-port br-int gw0 || true
     done
 
    for antrea_yml in ${WORKDIR}/*.yml; do
