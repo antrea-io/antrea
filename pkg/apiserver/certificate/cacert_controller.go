@@ -34,7 +34,6 @@ import (
 	"k8s.io/klog/v2"
 	"k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 
-	"antrea.io/antrea/pkg/features"
 	"antrea.io/antrea/pkg/util/env"
 )
 
@@ -118,17 +117,16 @@ func (c *CACertController) syncCACert() error {
 		return err
 	}
 
-	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
-		if err := c.syncMutatingWebhooks(caCert); err != nil {
-			return err
-		}
-		if err := c.syncValidatingWebhooks(caCert); err != nil {
-			return err
-		}
-		if err := c.syncConversionWebhooks(caCert); err != nil {
-			return err
-		}
+	if err := c.syncMutatingWebhooks(caCert); err != nil {
+		return err
 	}
+	if err := c.syncValidatingWebhooks(caCert); err != nil {
+		return err
+	}
+	if err := c.syncConversionWebhooks(caCert); err != nil {
+		return err
+	}
+
 	return nil
 }
 
