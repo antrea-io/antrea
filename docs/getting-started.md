@@ -155,6 +155,11 @@ information.
 To deploy Antrea in a [Kind](https://github.com/kubernetes-sigs/kind) cluster,
 please refer to this [guide](kind.md).
 
+### Deploying Antrea in Minikube
+
+To deploy Antrea in a [Minikube](https://github.com/kubernetes/minikube) cluster,
+please refer to this [guide](minikube.md).
+
 ### Deploying Antrea in AKS, EKS, and GKE
 
 Antrea can work with cloud managed Kubernetes services, and can be deployed to
