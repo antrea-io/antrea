@@ -39,7 +39,7 @@ func TestConnectivity(t *testing.T) {
 	})
 }
 
-func testServiceExport(t *testing.T, data *TestData) {
+func testServiceExport(t *testing.T, data *MCTestData) {
 	data.testServiceExport(t)
 }
 
@@ -48,7 +48,7 @@ func testServiceExport(t *testing.T, data *TestData) {
 // If we got status code 200, it means that the resources is exported by the east cluster
 // and imported by the west cluster.
 // TODO(yang): reorg test function contents
-func (data *TestData) testServiceExport(t *testing.T) {
+func (data *MCTestData) testServiceExport(t *testing.T) {
 	podName := randName("test-nginx-")
 	clientPodName := "test-service-client"
 
@@ -91,7 +91,7 @@ func (data *TestData) testServiceExport(t *testing.T) {
 
 	eastIP := svc.Spec.ClusterIP
 	if err := data.probeFromCluster(eastCluster, eastIP); err != nil {
-		t.Fatalf("Error when probe service from %s", eastCluster)
+		t.Fatalf("Error when probing service from %s", eastCluster)
 	}
 	svc, err = data.getService(westCluster, multiClusterTestNamespace, fmt.Sprintf("antrea-mc-%s", eastClusterTestService))
 	if err != nil {
@@ -99,7 +99,7 @@ func (data *TestData) testServiceExport(t *testing.T) {
 	}
 	westIP := svc.Spec.ClusterIP
 	if err := data.probeFromCluster(westCluster, westIP); err != nil {
-		t.Fatalf("Error when probe service from %s", westCluster)
+		t.Fatalf("Error when probing service from %s", westCluster)
 	}
 
 	if err := data.createPod(eastCluster, clientPodName, multiClusterTestNamespace, "client", agnhostImage,
@@ -122,20 +122,20 @@ func (data *TestData) testServiceExport(t *testing.T) {
 			Name:      fmt.Sprintf("antrea-mc-%s", westClusterTestService),
 			Namespace: multiClusterTestNamespace},
 		}, "", nil, crdv1alpha1.RuleActionDrop)
-	if _, err := createOrUpdateANP(data.getCRDClientOfCluster(eastCluster), anpBuilder.Get()); err != nil {
+	if _, err := data.createOrUpdateANP(eastCluster, anpBuilder.Get()); err != nil {
 		t.Fatalf("Error creating ANP %s: %v", anpBuilder.Name, err)
 	}
-	defer deleteANP(data.getCRDClientOfCluster(eastCluster), multiClusterTestNamespace, anpBuilder.Name)
+	defer data.deleteANP(eastCluster, multiClusterTestNamespace, anpBuilder.Name)
 
-	connectivity := data.probe(eastCluster, multiClusterTestNamespace, clientPodName, "client", westIP, "westClusterServiceIP", 80, corev1.ProtocolTCP)
+	connectivity := data.probeFromPodInCluster(eastCluster, multiClusterTestNamespace, clientPodName, "client", westIP, "westClusterServiceIP", 80, corev1.ProtocolTCP)
 	if connectivity == antreae2e.Error {
-		t.Errorf("Failure -- could not complete probe: %v", err)
+		t.Errorf("Failure -- could not complete probeFromPodInCluster: %v", err)
 	} else if connectivity != antreae2e.Dropped {
 		t.Errorf("Failure -- wrong result from probing exported Service after applying toService AntreaNetworkPolicy. Expected: %v, Actual: %v", antreae2e.Dropped, connectivity)
 	}
 }
 
-func (data *TestData) deployServiceExport(clusterName string) error {
+func (data *MCTestData) deployServiceExport(clusterName string) error {
 	var rc int
 	var err error
 	rc, _, _, err = provider.RunCommandOnNode(clusterName, fmt.Sprintf("kubectl apply -f %s", serviceExportYML))
@@ -146,7 +146,7 @@ func (data *TestData) deployServiceExport(clusterName string) error {
 	return nil
 }
 
-func (data *TestData) deleteServiceExport(clusterName string) error {
+func (data *MCTestData) deleteServiceExport(clusterName string) error {
 	var rc int
 	var err error
 	rc, _, _, err = provider.RunCommandOnNode(clusterName, fmt.Sprintf("kubectl delete -f %s", serviceExportYML))
@@ -157,7 +157,7 @@ func (data *TestData) deleteServiceExport(clusterName string) error {
 	return nil
 }
 
-func (data *TestData) probeFromCluster(clusterName string, url string) error {
+func (data *MCTestData) probeFromCluster(clusterName string, url string) error {
 	var rc int
 	var err error
 	rc, _, _, err = provider.RunCommandOnNode(clusterName, fmt.Sprintf("curl --connect-timeout 5 -s %s", url))

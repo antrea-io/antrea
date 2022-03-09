@@ -1,4 +1,4 @@
-// Copyright 2021 Antrea Authors
+// Copyright 2022 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,8 +15,6 @@
 package e2e
 
 import (
-	"bytes"
-	"context"
 	"fmt"
 	"math/rand"
 	"os"
@@ -25,18 +23,8 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/intstr"
-	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/kubernetes/scheme"
-	restclient "k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
-	"k8s.io/client-go/tools/remotecommand"
 
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
-	crdclientset "antrea.io/antrea/pkg/client/clientset/versioned"
 	antreae2e "antrea.io/antrea/test/e2e"
 	"antrea.io/antrea/test/e2e/providers"
 )
@@ -47,7 +35,6 @@ var (
 
 const (
 	defaultTimeout     = 90 * time.Second
-	defaultInterval    = 1 * time.Second
 	importServiceDelay = 10 * time.Second
 
 	multiClusterTestNamespace string = "antrea-multicluster-test"
@@ -75,24 +62,15 @@ type TestOptions struct {
 
 var testOptions TestOptions
 
-type TestData struct {
-	kubeconfigs map[string]*restclient.Config
-	clients     map[string]kubernetes.Interface
-	crdClients  map[string]crdclientset.Interface
-	clusters    []string
-
+type MCTestData struct {
+	clusters           []string
+	clusterTestDataMap map[string]antreae2e.TestData
 	logsDirForTestCase string
 }
 
-var testData *TestData
+var testData *MCTestData
 
-func (data *TestData) createClients() error {
-	data.clients = make(map[string]kubernetes.Interface)
-	data.kubeconfigs = make(map[string]*restclient.Config)
-	data.crdClients = make(map[string]crdclientset.Interface)
-	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
-	configOverrides := &clientcmd.ConfigOverrides{}
-
+func (data *MCTestData) createClients() error {
 	kubeConfigPaths := []string{
 		testOptions.leaderClusterKubeConfigPath,
 		testOptions.eastClusterKubeConfigPath,
@@ -101,106 +79,128 @@ func (data *TestData) createClients() error {
 	data.clusters = []string{
 		leaderCluster, eastCluster, westCluster,
 	}
+	data.clusterTestDataMap = map[string]antreae2e.TestData{}
 	for i, cluster := range data.clusters {
-		loadingRules.ExplicitPath = kubeConfigPaths[i]
-		kubeConfig, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, configOverrides).ClientConfig()
-		if err != nil {
-			return fmt.Errorf("error when building kube config of cluster %s: %v", cluster, err)
+		testData := antreae2e.TestData{}
+		if err := testData.CreateClient(kubeConfigPaths[i]); err != nil {
+			return fmt.Errorf("error initializing clients for cluster %s: %v", cluster, err)
 		}
-		clusterClient, err := kubernetes.NewForConfig(kubeConfig)
-		if err != nil {
-			return fmt.Errorf("error when creating Kubernetes client of cluster %s: %v", cluster, err)
-		}
-		crdClient, err := crdclientset.NewForConfig(kubeConfig)
-		if err != nil {
-			return fmt.Errorf("error when creating crd client of cluster %s: %v", cluster, err)
-		}
-		data.kubeconfigs[cluster] = kubeConfig
-		data.clients[cluster] = clusterClient
-		data.crdClients[cluster] = crdClient
+		data.clusterTestDataMap[cluster] = testData
 	}
 	return nil
 }
 
-func (data *TestData) createTestNamespace() error {
-	for _, client := range data.clients {
-		if err := createNamespace(client, multiClusterTestNamespace, nil); err != nil {
+func (data *MCTestData) initProviders() error {
+	for cluster, d := range data.clusterTestDataMap {
+		if err := d.InitProvider("remote", "multicluster"); err != nil {
+			log.Errorf("Failed to initialize provider for cluster %s", cluster)
+			return err
+		}
+	}
+	provider, _ = providers.NewRemoteProvider("multicluster")
+	return nil
+}
+
+func (data *MCTestData) createTestNamespaces() error {
+	for cluster, d := range data.clusterTestDataMap {
+		if err := d.CreateNamespace(multiClusterTestNamespace, nil); err != nil {
+			log.Errorf("Failed to create Namespace %s in cluster %s", multiClusterTestNamespace, cluster)
 			return err
 		}
 	}
 	return nil
 }
 
-func (data *TestData) deletePod(clusterName string, namespace string, name string) error {
-	client := data.getClientOfCluster(clusterName)
-	return deletePod(client, namespace, name)
-}
-
-func (data *TestData) deleteService(clusterName string, namespace string, name string) error {
-	client := data.getClientOfCluster(clusterName)
-	return deleteService(client, namespace, name)
-}
-
-func (data *TestData) deleteTestNamespace(timeout time.Duration) error {
-	return data.deleteNamespaceInAllClusters(multiClusterTestNamespace, timeout)
-}
-
-func (data *TestData) deleteNamespace(clusterName string, namespace string, timeout time.Duration) error {
-	client := data.getClientOfCluster(clusterName)
-	return deleteNamespace(client, namespace, timeout)
-}
-
-func (data *TestData) deleteNamespaceInAllClusters(namespace string, timeout time.Duration) error {
-	for _, client := range data.clients {
-		if err := deleteNamespace(client, namespace, timeout); err != nil {
+func (data *MCTestData) deletePod(clusterName, namespace, name string) error {
+	if d, ok := data.clusterTestDataMap[clusterName]; ok {
+		if err := d.DeletePod(namespace, name); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (data *TestData) createPod(clusterName string, name string, namespace string, ctrName string, image string, command []string,
+func (data *MCTestData) deleteService(clusterName, namespace, name string) error {
+	if d, ok := data.clusterTestDataMap[clusterName]; ok {
+		if err := d.DeleteService(namespace, name); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (data *MCTestData) getService(clusterName, namespace, name string) (*corev1.Service, error) {
+	if d, ok := data.clusterTestDataMap[clusterName]; ok {
+		return d.GetService(namespace, name)
+	}
+	return nil, fmt.Errorf("clusterName %s not found", clusterName)
+}
+
+func (data *MCTestData) deleteTestNamespaces(timeout time.Duration) error {
+	var failedClusters []string
+	for cluster, d := range data.clusterTestDataMap {
+		if err := d.DeleteNamespace(multiClusterTestNamespace, timeout); err != nil {
+			failedClusters = append(failedClusters, cluster)
+		}
+	}
+	if len(failedClusters) > 0 {
+		return fmt.Errorf("failed to delete Namespace %s in clusters %v", multiClusterTestNamespace, failedClusters)
+	}
+	return nil
+}
+
+func (data *MCTestData) deleteNamespace(clusterName, namespace string, timeout time.Duration) error {
+	if d, ok := data.clusterTestDataMap[clusterName]; ok {
+		if err := d.DeleteNamespace(namespace, timeout); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (data *MCTestData) createPod(clusterName, name, namespace, ctrName, image string, command []string,
 	args []string, env []corev1.EnvVar, ports []corev1.ContainerPort, hostNetwork bool, mutateFunc func(pod *corev1.Pod)) error {
-	client := data.getClientOfCluster(clusterName)
-	return createPod(client, name, namespace, ctrName, image, command, args, env, ports, hostNetwork, mutateFunc)
+	if d, ok := data.clusterTestDataMap[clusterName]; ok {
+		return d.CreatePodOnNodeInNamespace(name, namespace, "", ctrName, image, command, args, env, ports, hostNetwork, mutateFunc)
+	}
+	return fmt.Errorf("clusterName %s not found", clusterName)
 }
 
-func (data *TestData) getService(clusterName string, namespace string, serviceName string) (*corev1.Service, error) {
-	client := data.getClientOfCluster(clusterName)
-	return getService(client, namespace, serviceName)
-}
-
-func (data *TestData) createService(cluster string, serviceName string, namespace string, port int32, targetPort int32,
+func (data *MCTestData) createService(clusterName, serviceName, namespace string, port int32, targetPort int32,
 	protocol corev1.Protocol, selector map[string]string, affinity bool, nodeLocalExternal bool, serviceType corev1.ServiceType,
 	ipFamily *corev1.IPFamily, annotation map[string]string) (*corev1.Service, error) {
-	client := data.getClientOfCluster(cluster)
-	return createService(client, serviceName, namespace, port, targetPort, protocol, selector, affinity, nodeLocalExternal, serviceType, ipFamily, annotation)
+	if d, ok := data.clusterTestDataMap[clusterName]; ok {
+		svc, err := d.CreateServiceWithAnnotations(serviceName, namespace, port, targetPort, protocol, selector, affinity, nodeLocalExternal, serviceType, ipFamily, annotation)
+		if err != nil {
+			return nil, err
+		}
+		return svc, nil
+	}
+	return nil, fmt.Errorf("clusterName %s not found", clusterName)
 }
 
-func (data *TestData) getClientOfCluster(clusterName string) kubernetes.Interface {
-	return data.clients[clusterName]
+func (data *MCTestData) createOrUpdateANP(clusterName string, anp *crdv1alpha1.NetworkPolicy) (*crdv1alpha1.NetworkPolicy, error) {
+	if d, ok := data.clusterTestDataMap[clusterName]; ok {
+		return d.CreateOrUpdateANP(anp)
+	}
+	return nil, fmt.Errorf("clusterName %s not found", clusterName)
 }
 
-func (data *TestData) getCRDClientOfCluster(clusterName string) crdclientset.Interface {
-	return data.crdClients[clusterName]
+// deleteANP is a convenience function for deleting ANP by name and Namespace.
+func (data *MCTestData) deleteANP(clusterName, namespace, name string) error {
+	if d, ok := data.clusterTestDataMap[clusterName]; ok {
+		return d.DeleteANP(namespace, name)
+	}
+	return fmt.Errorf("clusterName %s not found", clusterName)
 }
-
-type PodCondition func(*corev1.Pod) (bool, error)
 
 // podWaitFor polls the K8s apiserver until the specified Pod is found (in the test Namespace) and
 // the condition predicate is met (or until the provided timeout expires).
-func (data *TestData) podWaitFor(timeout time.Duration, clusterName string, name string, namespace string, condition PodCondition) (*corev1.Pod, error) {
-	client := data.getClientOfCluster(clusterName)
-	return podWaitFor(client, timeout, name, namespace, condition)
-}
-
-func initProvider() error {
-	newProvider, err := providers.NewRemoteProvider("multicluster")
-	if err != nil {
-		return err
+func (data *MCTestData) podWaitFor(timeout time.Duration, clusterName, name, namespace string, condition antreae2e.PodCondition) (*corev1.Pod, error) {
+	if d, ok := data.clusterTestDataMap[clusterName]; ok {
+		return d.PodWaitFor(timeout, name, namespace, condition)
 	}
-	provider = newProvider
-	return nil
+	return nil, fmt.Errorf("clusterName %s not found", clusterName)
 }
 
 // A DNS-1123 subdomain must consist of lower case alphanumeric characters
@@ -220,124 +220,7 @@ func randName(prefix string) string {
 	return prefix + randSeq(nameSuffixLength)
 }
 
-func createNamespace(client kubernetes.Interface, namespace string, mutateFunc func(namespace2 *corev1.Namespace)) error {
-	ns := &corev1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: namespace,
-		},
-	}
-	if mutateFunc != nil {
-		mutateFunc(ns)
-	}
-
-	if ns, err := client.CoreV1().Namespaces().Create(context.TODO(), ns, metav1.CreateOptions{}); err != nil {
-		// Ignore error if the namespace already exists
-		if !errors.IsAlreadyExists(err) {
-			return fmt.Errorf("error when creating '%s' Namespace: %v", namespace, err)
-		}
-		// When namespace already exists, check phase
-		if ns.Status.Phase == corev1.NamespaceTerminating {
-			return fmt.Errorf("error when creating '%s' Namespace: namespace exists but is in 'Terminating' phase", namespace)
-		}
-	}
-	return nil
-}
-
-func deletePod(client kubernetes.Interface, namespace string, name string) error {
-	var gracePeriodSeconds int64 = 5
-	deleteOptions := metav1.DeleteOptions{
-		GracePeriodSeconds: &gracePeriodSeconds,
-	}
-
-	if err := client.CoreV1().Pods(namespace).Delete(context.TODO(), name, deleteOptions); err != nil {
-		if !errors.IsNotFound(err) {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func deleteService(client kubernetes.Interface, namespace string, name string) error {
-	var gracePeriodSeconds int64 = 5
-	deleteOptions := metav1.DeleteOptions{
-		GracePeriodSeconds: &gracePeriodSeconds,
-	}
-
-	return client.CoreV1().Services(namespace).Delete(context.TODO(), name, deleteOptions)
-}
-
-func deleteNamespace(client kubernetes.Interface, namespace string, timeout time.Duration) error {
-	var gracePeriodSeconds int64
-	var propagationPolicy = metav1.DeletePropagationForeground
-	deleteOptions := metav1.DeleteOptions{
-		GracePeriodSeconds: &gracePeriodSeconds,
-		PropagationPolicy:  &propagationPolicy,
-	}
-
-	if err := client.CoreV1().Namespaces().Delete(context.TODO(), namespace, deleteOptions); err != nil {
-		if errors.IsNotFound(err) {
-			// namespace does not exist, we return right away
-			return nil
-		}
-		return fmt.Errorf("error when deleting '%s' Namespace: %v", namespace, err)
-	}
-	err := wait.Poll(defaultInterval, timeout, func() (bool, error) {
-		if ns, err := client.CoreV1().Namespaces().Get(context.TODO(), namespace, metav1.GetOptions{}); err != nil {
-			if errors.IsNotFound(err) {
-				// Success
-				return true, nil
-			}
-			return false, fmt.Errorf("error when getting Namespace '%s' after delete: %v", namespace, err)
-		} else if ns.Status.Phase != corev1.NamespaceTerminating {
-			return false, fmt.Errorf("deleted Namespace '%s' should be in 'Terminating' phase", namespace)
-		}
-
-		// Keep trying
-		return false, nil
-	})
-
-	return err
-}
-
-func createPod(client kubernetes.Interface, name string, namespace string, ctrName string, image string, command []string,
-	args []string, env []corev1.EnvVar, ports []corev1.ContainerPort, hostNetwork bool, mutateFunc func(pod *corev1.Pod)) error {
-	podSpec := corev1.PodSpec{
-		Containers: []corev1.Container{
-			{
-				Name:            ctrName,
-				Image:           image,
-				ImagePullPolicy: corev1.PullIfNotPresent,
-				Command:         command,
-				Args:            args,
-				Env:             env,
-				Ports:           ports,
-			},
-		},
-		RestartPolicy: corev1.RestartPolicyNever,
-		HostNetwork:   hostNetwork,
-	}
-
-	pod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: name,
-			Labels: map[string]string{
-				"antrea-multicluster-e2e": name,
-				"app":                     ctrName,
-			},
-		},
-		Spec: podSpec,
-	}
-
-	if mutateFunc != nil {
-		mutateFunc(pod)
-	}
-
-	_, err := client.CoreV1().Pods(namespace).Create(context.TODO(), pod, metav1.CreateOptions{})
-	return err
-}
-
-func (data *TestData) probe(
+func (data *MCTestData) probeFromPodInCluster(
 	cluster string,
 	podNamespace string,
 	podName string,
@@ -374,156 +257,17 @@ func (data *TestData) probe(
 		if stderr == "" {
 			return antreae2e.Error
 		}
-		return decideProbeResult(stderr, 3)
+		return antreae2e.DecideProbeResult(stderr, 3)
 	}
 	return antreae2e.Connected
-}
-
-// decideProbeResult uses the probe stderr to decide the connectivity.
-func decideProbeResult(stderr string, probeNum int) antreae2e.PodConnectivityMark {
-	countConnected := probeNum - strings.Count(stderr, "\n")
-	countDropped := strings.Count(stderr, "TIMEOUT")
-	// For our UDP rejection cases, agnhost will return:
-	//   For IPv4: 'UNKNOWN: read udp [src]->[dst]: read: no route to host'
-	//   For IPv6: 'UNKNOWN: read udp [src]->[dst]: read: permission denied'
-	// To avoid incorrect identification, we use 'no route to host' and
-	// `permission denied`, instead of 'UNKNOWN' as key string.
-	// For our other protocols rejection cases, agnhost will return 'REFUSED'.
-	countRejected := strings.Count(stderr, "REFUSED") + strings.Count(stderr, "no route to host") + strings.Count(stderr, "permission denied")
-
-	if countRejected == 0 && countConnected > 0 {
-		return antreae2e.Connected
-	}
-	if countConnected == 0 && countRejected > 0 {
-		return antreae2e.Rejected
-	}
-	if countDropped == probeNum {
-		return antreae2e.Dropped
-	}
-	return antreae2e.Error
 }
 
 // Run the provided command in the specified Container for the given Pod and returns the contents of
 // stdout and stderr as strings. An error either indicates that the command couldn't be run or that
 // the command returned a non-zero error code.
-func (data *TestData) runCommandFromPod(cluster, podNamespace, podName, containerName string, cmd []string) (stdout string, stderr string, err error) {
-	request := data.clients[cluster].CoreV1().RESTClient().Post().
-		Namespace(podNamespace).
-		Resource("pods").
-		Name(podName).
-		SubResource("exec").
-		Param("container", containerName).
-		VersionedParams(&corev1.PodExecOptions{
-			Command: cmd,
-			Stdin:   false,
-			Stdout:  true,
-			Stderr:  true,
-			TTY:     false,
-		}, scheme.ParameterCodec)
-	exec, err := remotecommand.NewSPDYExecutor(data.kubeconfigs[cluster], "POST", request.URL())
-	if err != nil {
-		return "", "", err
+func (data *MCTestData) runCommandFromPod(clusterName, podNamespace, podName, containerName string, cmd []string) (stdout string, stderr string, err error) {
+	if d, ok := data.clusterTestDataMap[clusterName]; ok {
+		return d.RunCommandFromPod(podNamespace, podName, containerName, cmd)
 	}
-	var stdoutB, stderrB bytes.Buffer
-	if err := exec.Stream(remotecommand.StreamOptions{
-		Stdout: &stdoutB,
-		Stderr: &stderrB,
-	}); err != nil {
-		return stdoutB.String(), stderrB.String(), err
-	}
-	return stdoutB.String(), stderrB.String(), nil
-}
-
-func createService(client kubernetes.Interface, serviceName string, namespace string, port int32, targetPort int32,
-	protocol corev1.Protocol, selector map[string]string, affinity bool, nodeLocalExternal bool, serviceType corev1.ServiceType,
-	ipFamily *corev1.IPFamily, annotation map[string]string) (*corev1.Service, error) {
-	affinityType := corev1.ServiceAffinityNone
-	var ipFamilies []corev1.IPFamily
-	if ipFamily != nil {
-		ipFamilies = append(ipFamilies, *ipFamily)
-	}
-	if affinity {
-		affinityType = corev1.ServiceAffinityClientIP
-	}
-	service := corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      serviceName,
-			Namespace: namespace,
-			Labels: map[string]string{
-				"antrea-multicluster-e2e": serviceName,
-				"app":                     serviceName,
-			},
-			Annotations: annotation,
-		},
-		Spec: corev1.ServiceSpec{
-			SessionAffinity: affinityType,
-			Ports: []corev1.ServicePort{{
-				Port:       port,
-				TargetPort: intstr.FromInt(int(targetPort)),
-				Protocol:   protocol,
-			}},
-			Type:       serviceType,
-			Selector:   selector,
-			IPFamilies: ipFamilies,
-		},
-	}
-	if (serviceType == corev1.ServiceTypeNodePort || serviceType == corev1.ServiceTypeLoadBalancer) && nodeLocalExternal {
-		service.Spec.ExternalTrafficPolicy = corev1.ServiceExternalTrafficPolicyTypeLocal
-	}
-
-	return client.CoreV1().Services(namespace).Create(context.TODO(), &service, metav1.CreateOptions{})
-}
-
-func getService(client kubernetes.Interface, namespace string, serviceName string) (*corev1.Service, error) {
-	svc, err := client.CoreV1().Services(namespace).Get(context.TODO(), serviceName, metav1.GetOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("Error when Getting service %s/%s", namespace, serviceName)
-	}
-	return svc, err
-}
-
-func podWaitFor(client kubernetes.Interface, timeout time.Duration, name string, namespace string, condition PodCondition) (*corev1.Pod, error) {
-	err := wait.Poll(defaultInterval, timeout, func() (bool, error) {
-		pod, err := client.CoreV1().Pods(namespace).Get(context.TODO(), name, metav1.GetOptions{})
-		if err != nil {
-			if errors.IsNotFound(err) {
-				return false, nil
-			}
-			return false, fmt.Errorf("error when getting Pod '%s' in west clsuter: %v", name, err)
-		}
-		return condition(pod)
-	})
-	if err != nil {
-		return nil, err
-	}
-	return client.CoreV1().Pods(namespace).Get(context.TODO(), name, metav1.GetOptions{})
-}
-
-// createOrUpdateANP is a convenience function for updating/creating Antrea NetworkPolicies.
-func createOrUpdateANP(crdClient crdclientset.Interface, anp *crdv1alpha1.NetworkPolicy) (*crdv1alpha1.NetworkPolicy, error) {
-	log.Infof("Creating/updating Antrea NetworkPolicy %s/%s", anp.Namespace, anp.Name)
-	cnpReturned, err := crdClient.CrdV1alpha1().NetworkPolicies(anp.Namespace).Get(context.TODO(), anp.Name, metav1.GetOptions{})
-	if err != nil {
-		log.Debugf("Creating Antrea NetworkPolicy %s", anp.Name)
-		anp, err = crdClient.CrdV1alpha1().NetworkPolicies(anp.Namespace).Create(context.TODO(), anp, metav1.CreateOptions{})
-		if err != nil {
-			log.Debugf("Unable to create Antrea NetworkPolicy: %s", err)
-		}
-		return anp, err
-	} else if cnpReturned.Name != "" {
-		log.Debugf("Antrea NetworkPolicy with name %s already exists, updating", anp.Name)
-		anp, err = crdClient.CrdV1alpha1().NetworkPolicies(anp.Namespace).Update(context.TODO(), anp, metav1.UpdateOptions{})
-		return anp, err
-	}
-	return nil, fmt.Errorf("error occurred in creating/updating Antrea NetworkPolicy %s", anp.Name)
-}
-
-// deleteANP is a convenience function for deleting ANP by name and Namespace.
-func deleteANP(crdClient crdclientset.Interface, ns, name string) error {
-	log.Infof("Deleting Antrea NetworkPolicy '%s/%s'", ns, name)
-	err := crdClient.CrdV1alpha1().NetworkPolicies(ns).Delete(context.TODO(), name, metav1.DeleteOptions{})
-	if err != nil {
-		return fmt.Errorf("unable to delete Antrea NetworkPolicy %s: %v", name, err)
-	}
-	return nil
+	return "", "", fmt.Errorf("clusterName %s not found", clusterName)
 }

@@ -478,7 +478,7 @@ func checkStatefulSetIPPoolAllocation(tb testing.TB, data *TestData, name string
 
 func deleteAntreaIPAMNamespace(tb testing.TB, data *TestData, namespace string) {
 	tb.Logf("Deleting '%s' K8s Namespace", namespace)
-	if err := data.deleteNamespace(namespace, defaultTimeout); err != nil {
+	if err := data.DeleteNamespace(namespace, defaultTimeout); err != nil {
 		tb.Logf("Error when tearing down test: %v", err)
 	}
 }
