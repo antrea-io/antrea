@@ -218,8 +218,7 @@ function deliver_multicluster_controller {
     export PATH=${GOROOT}/bin:$PATH
 
     docker images | grep 'mc-controller' | awk '{print $3}' | xargs -r docker rmi || true
-    cd multicluster && mkdir -p bin && ln -s /usr/local/bin/kustomize ./bin/kustomize || true
-    make docker-build && cd ..
+    export NO_PULL=1;make antrea-mc-controller
 
     docker save antrea/antrea-mc-controller:latest -o "${WORKDIR}"/antrea-mcs.tar
     ./multicluster/hack/generate-manifest.sh -l antrea-mcs-ns >./multicluster/test/yamls/manifest.yml
