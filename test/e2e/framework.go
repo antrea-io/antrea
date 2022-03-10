@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/containernetworking/plugins/pkg/ip"
+	log "github.com/sirupsen/logrus"
 	"golang.org/x/mod/semver"
 	"gopkg.in/yaml.v2"
 	appsv1 "k8s.io/api/apps/v1"
@@ -622,6 +623,13 @@ func (data *TestData) deleteNamespace(namespace string, timeout time.Duration) e
 		GracePeriodSeconds: &gracePeriodSeconds,
 		PropagationPolicy:  &propagationPolicy,
 	}
+
+	// To log time statistics
+	startTime := time.Now()
+	defer func() {
+		log.Infof("Deleting Namespace %s took %v", namespace, time.Since(startTime))
+	}()
+
 	if err := data.clientset.CoreV1().Namespaces().Delete(context.TODO(), namespace, deleteOptions); err != nil {
 		if errors.IsNotFound(err) {
 			// namespace does not exist, we return right away
