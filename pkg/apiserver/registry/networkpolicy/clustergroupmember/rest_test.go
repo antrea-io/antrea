@@ -42,8 +42,8 @@ func (q fakeQuerier) GetGroupMembers(uid string) (controlplane.GroupMemberSet, [
 	return nil, nil, nil
 }
 
-func TestRESTGet(t *testing.T) {
-	members := map[string]controlplane.GroupMemberSet{
+func getTestMembersBasic() map[string]controlplane.GroupMemberSet {
+	return map[string]controlplane.GroupMemberSet{
 		"cgA": {
 			"memberKey1": &controlplane.GroupMember{
 				Pod: &controlplane.PodReference{
@@ -67,14 +67,54 @@ func TestRESTGet(t *testing.T) {
 			},
 		},
 	}
+}
+
+func getTestMembersPagination() map[string]controlplane.GroupMemberSet {
+	return map[string]controlplane.GroupMemberSet{
+		"cgA": {
+			"memberKey1": &controlplane.GroupMember{
+				Pod: &controlplane.PodReference{
+					Name:      "pod3",
+					Namespace: "ns1",
+				},
+				IPs: []controlplane.IPAddress{
+					[]byte{127, 10, 0, 1},
+				},
+			},
+			"memberKey2": &controlplane.GroupMember{
+				Pod: &controlplane.PodReference{
+					Name:      "pod2",
+					Namespace: "ns1",
+				},
+				IPs: []controlplane.IPAddress{
+					[]byte{127, 10, 0, 1},
+				},
+			},
+			"memberKey3": &controlplane.GroupMember{
+				Pod: &controlplane.PodReference{
+					Name:      "pod1",
+					Namespace: "ns1",
+				},
+				IPs: []controlplane.IPAddress{
+					[]byte{127, 10, 0, 1},
+				},
+			},
+		},
+	}
+}
+
+func getTestIPMembers() map[string][]controlplane.IPBlock {
 	testCIDR := controlplane.IPNet{
 		IP:           controlplane.IPAddress(net.ParseIP("10.0.0.1")),
 		PrefixLength: int32(24),
 	}
 	ipb := []controlplane.IPBlock{{CIDR: testCIDR}}
-	ipMembers := map[string][]controlplane.IPBlock{
+	return map[string][]controlplane.IPBlock{
 		"cgIPBlock": ipb,
 	}
+}
+
+func TestRESTGetBasic(t *testing.T) {
 	tests := []struct {
 		name        string
 		groupName   string
@@ -99,6 +139,9 @@ func TestRESTGet(t *testing.T) {
 						},
 					},
 				},
+				TotalMembers: 1,
+				TotalPages:   1,
+				CurrentPage:  1,
 			},
 			expectedErr: false,
 		},
@@ -120,6 +163,9 @@ func TestRESTGet(t *testing.T) {
 						},
 					},
 				},
+				TotalMembers: 1,
+				TotalPages:   1,
+				CurrentPage:  1,
 			},
 			expectedErr: false,
 		},
@@ -130,7 +176,9 @@ func TestRESTGet(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "cgC",
 				},
-				EffectiveMembers: nil,
+				TotalMembers: 0,
+				TotalPages:   0,
+				CurrentPage:  0,
 			},
 			expectedErr: false,
 		},
@@ -147,18 +195,171 @@ func TestRESTGet(t *testing.T) {
 						PrefixLength: int32(24),
 					},
 				},
+				TotalMembers: 0,
+				TotalPages:   0,
+				CurrentPage:  0,
 			},
 			expectedErr: false,
 		},
 	}
-	rest := NewREST(fakeQuerier{members: members, ipMembers: ipMembers})
+	rest := NewREST(fakeQuerier{members: getTestMembersBasic(), ipMembers: getTestIPMembers()})
 	for _, tt := range tests {
-		actualGroupList, err := rest.Get(request.NewDefaultContext(), tt.groupName, &metav1.GetOptions{})
+		actualGroupList, err := rest.Get(request.NewDefaultContext(), tt.groupName, &controlplane.PaginationGetOptions{})
 		if tt.expectedErr {
 			require.Error(t, err)
 		} else {
 			require.NoError(t, err)
 		}
+		assert.Equal(t, tt.expectedObj, actualGroupList)
+	}
+}
+
+func TestRESTGetPagination(t *testing.T) {
+	tests := []struct {
+		name              string
+		groupName         string
+		paginationOptions runtime.Object
+		expectedObj       runtime.Object
+		expectedErr       bool
+	}{
+		{
+			name:              "page1/2-group-member-pagination",
+			groupName:         "cgA",
+			paginationOptions: &controlplane.PaginationGetOptions{Page: 1, Limit: 2},
+			expectedObj: &controlplane.ClusterGroupMembers{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "cgA",
+				},
+				EffectiveMembers: []controlplane.GroupMember{
+					{
+						Pod: &controlplane.PodReference{
+							Name:      "pod1",
+							Namespace: "ns1",
+						},
+						IPs: []controlplane.IPAddress{
+							[]byte{127, 10, 0, 1},
+						},
+					},
+					{
+						Pod: &controlplane.PodReference{
+							Name:      "pod2",
+							Namespace: "ns1",
+						},
+						IPs: []controlplane.IPAddress{
+							[]byte{127, 10, 0, 1},
+						},
+					},
+				},
+				TotalMembers: 3,
+				TotalPages:   2,
+				CurrentPage:  1,
+			},
+			expectedErr: false,
+		},
+		{
+			name:              "page2/2-group-member-pagination",
+			groupName:         "cgA",
+			paginationOptions: &controlplane.PaginationGetOptions{Page: 2, Limit: 2},
+			expectedObj: &controlplane.ClusterGroupMembers{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "cgA",
+				},
+				EffectiveMembers: []controlplane.GroupMember{
+					{
+						Pod: &controlplane.PodReference{
+							Name:      "pod3",
+							Namespace: "ns1",
+						},
+						IPs: []controlplane.IPAddress{
+							[]byte{127, 10, 0, 1},
+						},
+					},
+				},
+				TotalMembers: 3,
+				TotalPages:   2,
+				CurrentPage:  2,
+			},
+			expectedErr: false,
+		},
+		{
+			name:              "exceed-page-group-member-pagination",
+			groupName:         "cgA",
+			paginationOptions: &controlplane.PaginationGetOptions{Page: 5, Limit: 2},
+			expectedObj: &controlplane.ClusterGroupMembers{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "cgA",
+				},
+				EffectiveMembers: []controlplane.GroupMember{},
+				TotalMembers:     3,
+				TotalPages:       2,
+				CurrentPage:      5,
+			},
+			expectedErr: false,
+		},
+		{
+			name:              "default-zero-group-member-pagination",
+			groupName:         "cgA",
+			paginationOptions: &controlplane.PaginationGetOptions{Page: 0, Limit: 0},
+			expectedObj: &controlplane.ClusterGroupMembers{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "cgA",
+				},
+				EffectiveMembers: []controlplane.GroupMember{
+					{
+						Pod: &controlplane.PodReference{
+							Name:      "pod1",
+							Namespace: "ns1",
+						},
+						IPs: []controlplane.IPAddress{
+							[]byte{127, 10, 0, 1},
+						},
+					},
+					{
+						Pod: &controlplane.PodReference{
+							Name:      "pod2",
+							Namespace: "ns1",
+						},
+						IPs: []controlplane.IPAddress{
+							[]byte{127, 10, 0, 1},
+						},
+					},
+					{
+						Pod: &controlplane.PodReference{
+							Name:      "pod3",
+							Namespace: "ns1",
+						},
+						IPs: []controlplane.IPAddress{
+							[]byte{127, 10, 0, 1},
+						},
+					},
+				},
+				TotalMembers: 3,
+				TotalPages:   1,
+				CurrentPage:  1,
+			},
+			expectedErr: false,
+		},
+		{
+			name:              "err-page-group-member-pagination",
+			groupName:         "cgA",
+			paginationOptions: &controlplane.PaginationGetOptions{Page: -1, Limit: 2},
+			expectedErr:       true,
+		},
+		{
+			name:              "err-limit-group-member-pagination",
+			groupName:         "cgA",
+			paginationOptions: &controlplane.PaginationGetOptions{Page: 1, Limit: -2},
+			expectedErr:       true,
+		},
+	}
+	rest := NewREST(fakeQuerier{members: getTestMembersPagination()})
+	for _, tt := range tests {
+		actualGroupList, err := rest.Get(request.NewDefaultContext(), tt.groupName, tt.paginationOptions)
+		if tt.expectedErr {
+			require.Error(t, err)
+			continue
+		}
+		require.NoError(t, err)
 		assert.Equal(t, tt.expectedObj, actualGroupList)
 	}
 }
