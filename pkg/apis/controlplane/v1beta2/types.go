@@ -93,6 +93,18 @@ type ClusterGroupMembers struct {
 	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
 	EffectiveMembers  []GroupMember `json:"effectiveMembers" protobuf:"bytes,2,rep,name=effectiveMembers"`
 	EffectiveIPBlocks []IPNet       `json:"effectiveIPBlocks" protobuf:"bytes,3,rep,name=effectiveIPBlocks"`
+	TotalMembers      int64         `json:"totalMembers" protobuf:"varint,4,opt,name=totalMembers"`
+	TotalPages        int64         `json:"totalPages" protobuf:"varint,5,opt,name=totalPages"`
+	CurrentPage       int64         `json:"currentPage" protobuf:"varint,6,opt,name=currentPage"`
+}
+
+// +k8s:conversion-gen:explicit-from=net/url.Values
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+type PaginationGetOptions struct {
+	metav1.TypeMeta `json:",inline"`
+	Page            int64 `json:"page" protobuf:"varint,1,opt,name=page"`
+	Limit           int64 `json:"limit" protobuf:"varint,2,opt,name=limit"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
