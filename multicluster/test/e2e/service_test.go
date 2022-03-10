@@ -27,18 +27,6 @@ import (
 	e2euttils "antrea.io/antrea/test/e2e/utils"
 )
 
-func TestConnectivity(t *testing.T) {
-	data, err := setupTest(t)
-	if err != nil {
-		t.Fatalf("Error when setting up test: %v", err)
-	}
-	defer teardownTest(t, data)
-
-	t.Run("testServiceExport", func(t *testing.T) {
-		testServiceExport(t, data)
-	})
-}
-
 func testServiceExport(t *testing.T, data *MCTestData) {
 	data.testServiceExport(t)
 }
