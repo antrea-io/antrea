@@ -272,41 +272,54 @@ kubectl apply -f https://raw.githubusercontent.com/antrea-io/antrea/main/build/y
 
 ### Configuration
 
-The following configuration parameters have to be provided through the Flow Aggregator
-ConfigMap. `externalFlowCollectorAddr` is a mandatory parameter. We provide an example
-value for this parameter in the following snippet.  
+The following configuration parameters have to be provided through the Flow
+Aggregator ConfigMap. Flow aggregator needs to be configured with at least one
+of the supported [Flow Collectors](#flow-collectors).
+`flowCollector` is mandatory for [go-ipfix collector](#deployment-steps) or
+[ELK flow collector](#deployment-steps-2), and `clickHouse` is mandatory for
+[Grafana Flow Collector](#grafana-flow-collector). We provide an example value
+for this parameter in the following snippet.  
 
 * If you have deployed the [go-ipfix collector](#deployment-steps),
-then please use the address:  
-`<Ipfix-Collector Cluster IP>:<port>:<tcp|udp>`
-* If you have deployed the [ELK
-flow collector](#deployment-steps-1), then please use the address:  
-`<Logstash Cluster IP>:4739:<tcp|udp>` for sending IPFIX messages, or `<Logstash Cluster IP>:4736:<tcp|udp>`
-for sending JSON format records. Record format is specified with `recordFormat` (defaults
-to IPFIX) and must match the format expected by the collector.
+then please set `flowCollector.enable` to `true` and use the address for
+`flowCollector.address`: `<Ipfix-Collector Cluster IP>:<port>:<tcp|udp>`
+* If you have deployed the [ELK flow collector](#deployment-steps-2), then
+please set `flowCollector.enable` to `true` and use the address for
+`flowCollector.address`:`<Logstash Cluster IP>:4739:<tcp|udp>` for sending
+IPFIX messages, or `<Logstash Cluster IP>:4736:<tcp|udp>` for sending JSON
+format records. Record format is specified with `flowCollector.recordFormat`
+(defaults to IPFIX) and must match the format expected by the collector.
+* If you have deployed the [Grafana Flow Collector](#grafana-flow-collector),
+then please enable the collector by setting `clickHouse.enable` to `true`. If
+it is deployed following the [deployment steps](#deployment-steps-1), the
+ClickHouse server is already exposed via a K8s Service, and no further
+configuration is required. If a different FQDN or IP is desired, please use
+the URL for `clickHouse.databaseURL` in the following format:
+`tcp://<ClickHouse server FQDN or IP>:<ClickHouse TCP port>`.
 
 ```yaml
-flow-aggregator.conf: |
-  # Provide the flow collector address as a string with format <IP>:<port>[:<proto>], where proto is tcp or udp.
-  # If no L4 transport proto is given, we consider tcp as default.
-  externalFlowCollectorAddr: "192.168.86.86:4739:tcp"
-  
-  # Provide flow export interval as a duration string. This determines how often the flow aggregator exports flow
-  # records to the flow collector.
-  # Flow export interval should be greater than or equal to 1s (one second).
+flow-aggregator.conf: |  
+  # Provide the active flow record timeout as a duration string. This determines
+  # how often the flow aggregator exports the active flow records to the flow
+  # collector. Thus, for flows with a continuous stream of packets, a flow record
+  # will be exported to the collector once the elapsed time since the last export
+  # event in the flow aggregator is equal to the value of this timeout.
   # Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
-  #flowExportInterval: 60s
+  #activeFlowRecordTimeout: 60s
+
+  # Provide the inactive flow record timeout as a duration string. This determines
+  # how often the flow aggregator exports the inactive flow records to the flow
+  # collector. A flow record is considered to be inactive if no matching record
+  # has been received by the flow aggregator in the specified interval.
+  # Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
+  #inactiveFlowRecordTimeout: 90s
   
   # Provide the transport protocol for the flow aggregator collecting process, which is tls, tcp or udp.
   #aggregatorTransportProtocol: "tls"
   
   # Provide DNS name or IP address of flow aggregator for generating TLS certificate. It must match
-  # the flowCollectorAddr parameter in the antrea-agent config.    
+  # the flowCollectorAddr parameter in the antrea-agent config.
   #flowAggregatorAddress: "flow-aggregator.flow-aggregator.svc"
-
-  # Provide format for records sent to the configured flow collector.
-  # Supported formats are IPFIX and JSON.
-  #recordFormat: "IPFIX"
 
   # recordContents enables configuring some fields in the flow records. Fields can
   # be excluded to reduce record size, but some features or external tooling may
@@ -328,22 +341,76 @@ flow-aggregator.conf: |
 
     # TLS min version from: VersionTLS10, VersionTLS11, VersionTLS12, VersionTLS13.
     #tlsMinVersion:
+  
+  # flowCollector contains external IPFIX or JSON collector related configuration options.
+  flowCollector:
+    # Enable is the switch to enable exporting flow records to external flow collector.
+    #enable: false
+  
+    # Provide the flow collector address as string with format <IP>:<port>[:<proto>], where proto is tcp or udp.
+    # If no L4 transport proto is given, we consider tcp as default.
+    address: "192.168.86.86:4739:tcp"
+  
+    # Provide the 32-bit Observation Domain ID which will uniquely identify this instance of the flow
+    # aggregator to an external flow collector. If omitted, an Observation Domain ID will be generated
+    # from the persistent cluster UUID generated by Antrea. Failing that (e.g. because the cluster UUID
+    # is not available), a value will be randomly generated, which may vary across restarts of the flow
+    # aggregator.
+    #observationDomainID:
+  
+    # Provide format for records sent to the configured flow collector.
+    # Supported formats are IPFIX and JSON.
+    #recordFormat: "IPFIX"
+  
+  # clickHouse contains ClickHouse related configuration options.
+  clickHouse:
+    # Enable is the switch to enable exporting flow records to ClickHouse.
+    #enable: false
+  
+    # Database is the name of database where Antrea "flows" table is created.
+    #database: "default"
+  
+    # DatabaseURL is the url to the database. TCP protocol is required.
+    #databaseURL: "tcp://clickhouse-clickhouse.flow-visibility.svc:9000"
+  
+    # Debug enables debug logs from ClickHouse sql driver.
+    #debug: false
+  
+    # Compress enables lz4 compression when committing flow records.
+    #compress: true
+  
+    # CommitInterval is the periodical interval between batch commit of flow records to DB.
+    # Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
+    # The minimum interval is 1s based on ClickHouse documentation for best performance.
+    #commitInterval: "8s"
 ```
 
-Please note that the default values for `flowExportInterval`, `aggregatorTransportProtocol`,
-and `flowAggregatorAddress` parameters are set to `60s`, `tls` and `flow-aggregator.flow-aggregator.svc`,
-respectively. Please make sure that `aggregatorTransportProtocol` and protocol of `flowCollectorAddr` in
-`agent-agent.conf` are set to `tls` to guarantee secure communication works properly. Protocol of
-`flowCollectorAddr` and `aggregatorTransportProtocol` must always match, so TLS must either be enabled for
-both sides or disabled for both sides. Please modify the parameters as per your requirements.
+Please note that the default values for `activeFlowRecordTimeout`,
+`inactiveFlowRecordTimeout`, `aggregatorTransportProtocol`, and
+`flowAggregatorAddress` parameters are set to `60s`, `90s`, `tls` and
+`flow-aggregator.flow-aggregator.svc`, respectively. Please make sure that
+`aggregatorTransportProtocol` and protocol of `flowCollectorAddr` in
+`agent-agent.conf` are set to `tls` to guarantee secure communication works
+properly. Protocol of `flowCollectorAddr` and `aggregatorTransportProtocol`
+must always match, so TLS must either be enabled for both sides or disabled
+for both sides. Please modify the parameters as per your requirements.
 
-Please note that the default value for `podLabels` is `false`, which
-indicates source and destination Pod labels will not be included in the flow
-records. If you would like to include them, you can modify the value to true.
+Please note that the default value for `recordContents.podLabels` is `false`,
+which indicates source and destination Pod labels will not be included in the
+flow records exported to `flowCollector` and `clickHouse`. If you would like
+to include them, you can modify the value to `true`.
 
-Please note that the default value for  `apiPort` is `10348`, which is the port
-used to expose the Flow Aggregator's APIServer. Please modify the parameters as
-per your requirements.
+Please note that the default value for `apiServer.apiPort` is `10348`, which
+is the port used to expose the Flow Aggregator's APIServer. Please modify the
+parameters as per your requirements.
+
+Please note that the default value for `clickHouse.commitInterval` is `8s`,
+which is based on experiment results to achieve best ClickHouse write
+performance and data retention. Based on ClickHouse recommendation for best
+performance, this interval is required be no shorter than `1s`. Also note
+that flow aggregator has a cache limit of ~500k records for ClickHouse-Grafana
+collector. If `clickHouse.commitInterval` is set to a value too large, there's
+a risk of losing records.
 
 ### IPFIX Information Elements (IEs) in an Aggregated Flow Record
 
