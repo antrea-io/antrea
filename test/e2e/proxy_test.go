@@ -119,19 +119,19 @@ func probeClientIPFromNode(node string, baseUrl string) (string, error) {
 }
 
 func probeFromPod(data *TestData, pod string, url string) error {
-	_, _, err := data.runCommandFromPod(testNamespace, pod, busyboxContainerName, []string{"wget", "-O", "-", url, "-T", "1", "-t", "5"})
+	_, _, err := data.runWgetCommandOnBusyboxWithRetry(pod, testNamespace, url, 5)
 	return err
 }
 
 func probeHostnameFromPod(data *TestData, pod string, baseUrl string) (string, error) {
 	url := fmt.Sprintf("%s/%s", baseUrl, "hostname")
-	hostname, _, err := data.runCommandFromPod(testNamespace, pod, busyboxContainerName, []string{"wget", "-O", "-", url, "-T", "1", "-t", "5"})
+	hostname, _, err := data.runWgetCommandOnBusyboxWithRetry(pod, testNamespace, url, 5)
 	return hostname, err
 }
 
 func probeClientIPFromPod(data *TestData, pod string, baseUrl string) (string, error) {
 	url := fmt.Sprintf("%s/%s", baseUrl, "clientip")
-	hostPort, _, err := data.runCommandFromPod(testNamespace, pod, busyboxContainerName, []string{"wget", "-O", "-", url, "-T", "1", "-t", "5"})
+	hostPort, _, err := data.runWgetCommandOnBusyboxWithRetry(pod, testNamespace, url, 5)
 	if err != nil {
 		return "", err
 	}
@@ -648,10 +648,10 @@ func testProxyServiceSessionAffinity(ipFamily *corev1.IPFamily, ingressIPs []str
 	require.NoError(t, data.createBusyboxPodOnNode(busyboxPod, testNamespace, nodeName, false))
 	defer data.deletePodAndWait(defaultTimeout, busyboxPod, testNamespace)
 	require.NoError(t, data.podWaitForRunning(defaultTimeout, busyboxPod, testNamespace))
-	stdout, stderr, err := data.runCommandFromPod(testNamespace, busyboxPod, busyboxContainerName, []string{"wget", "-O", "-", svc.Spec.ClusterIP, "-T", "1", "-t", "5"})
+	stdout, stderr, err := data.runWgetCommandOnBusyboxWithRetry(busyboxPod, testNamespace, svc.Spec.ClusterIP, 5)
 	require.NoError(t, err, fmt.Sprintf("ipFamily: %v\nstdout: %s\nstderr: %s\n", *ipFamily, stdout, stderr))
 	for _, ingressIP := range ingressIPs {
-		stdout, stderr, err := data.runCommandFromPod(testNamespace, busyboxPod, busyboxContainerName, []string{"wget", "-O", "-", ingressIP, "-T", "1", "-t", "5"})
+		stdout, stderr, err := data.runWgetCommandOnBusyboxWithRetry(busyboxPod, testNamespace, ingressIP, 5)
 		require.NoError(t, err, fmt.Sprintf("ipFamily: %v\nstdout: %s\nstderr: %s\n", *ipFamily, stdout, stderr))
 	}
 
