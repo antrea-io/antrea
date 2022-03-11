@@ -707,6 +707,7 @@ func checkRecordsForToExternalFlows(t *testing.T, data *TestData, srcNodeName st
 		if strings.Contains(record, srcIP) && strings.Contains(record, dstIP) {
 			checkPodAndNodeData(t, record, srcPodName, srcNodeName, "", "")
 			checkFlowType(t, record, ipfixregistry.FlowTypeToExternal)
+			assert.NotContains(t, record, "octetDeltaCount: 0", "octetDeltaCount should be non-zero")
 		}
 	}
 }
