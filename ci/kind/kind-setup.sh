@@ -41,12 +41,10 @@ function echoerr {
 _usage="
 Usage: $0 create CLUSTER_NAME [--pod-cidr POD_CIDR] [--antrea-cni] [--num-workers NUM_WORKERS] [--images IMAGES] [--subnets SUBNETS] [--ip-family ipv4|ipv6]
                   destroy CLUSTER_NAME
-                  modify-node NODE_NAME
                   help
 where:
   create: create a kind cluster with name CLUSTER_NAME
   destroy: delete a kind cluster with name CLUSTER_NAME
-  modify-node: modify kind node with name NODE_NAME
   --pod-cidr: specifies pod cidr used in kind cluster, default is $POD_CIDR
   --encap-mode: inter-node pod traffic encap mode, default is encap
   --no-proxy: disable Antrea proxy
@@ -74,17 +72,6 @@ function get_encap_mode {
     return
   fi
   echo "--encap-mode $ENCAP_MODE"
-}
-
-function modify {
-  node="$1"
-  # In Kind cluster, DNAT operation is configured by Docker as all DNS requests from Pod CoreDNS are NAT'd to the Docker
-  # DNS embedded resolver, which is running on localhost. When kube-proxy is enabled, parameter net.ipv4.conf.all.route_localnet
-  # is set to 1 by kube-proxy. This setting ensures that the DNS response can be forwarded back to Pod CoreDNS, otherwise
-  # DNS response from Docker DNS embedded resolver will be discarded. When kube-proxy is disabled, to ensure that DNS
-  # response can be forwarded back to Pod CoreDNS, we also set parameter net.ipv4.conf.all.route_localnet to 1 through
-  # the following command:
-  docker exec "$node" sysctl -w net.ipv4.conf.all.route_localnet=1
 }
 
 function configure_networks {
@@ -182,16 +169,6 @@ function configure_networks {
       echo "current ip $tmp_ip, wait for new node ip $node_ip"
       sleep 2
     done
-  done
-
-  nodes="$(kind get nodes --name $CLUSTER_NAME)"
-  nodes="$(echo $nodes)"
-  for node in $nodes; do
-    # disable tx checksum offload
-    # otherwise we observe that inter-Node tunnelled traffic crossing Docker networks is dropped
-    # because of an invalid outer checksum.
-    docker exec "$node" ethtool -K eth0 tx off
-    modify $node
   done
 }
 
@@ -295,12 +272,6 @@ EOF
   configure_networks
   load_images
 
-  nodes="$(kind get nodes --name $CLUSTER_NAME)"
-  nodes="$(echo $nodes)"
-  for node in $nodes; do
-    modify $node
-  done
-
   if [[ $ANTREA_CNI == true ]]; then
     cmd=$(dirname $0)
     cmd+="/../../hack/generate-manifest.sh"
@@ -343,10 +314,6 @@ while [[ $# -gt 0 ]]
     destroy)
       CLUSTER_NAME="$2"
       destroy
-      exit 0
-      ;;
-    modify-node)
-      modify "$2"
       exit 0
       ;;
     --pod-cidr)
