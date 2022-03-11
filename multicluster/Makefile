@@ -1,6 +1,3 @@
-
-# Image URL to use all building/pushing image targets
-IMG ?= antrea/antrea-mc-controller:latest
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
 CRD_OPTIONS ?= "crd:trivialVersions=true,preserveUnknownFields=false"
 
@@ -85,10 +82,6 @@ build: generate fmt vet ## Build manager binary.
 
 run: manifests generate fmt vet ## Run a controller from your host.
 	go run ./main.go
-
-#docker-build: test ## Build docker image with the manager.
-docker-build: build ## Build docker image with the manager.
-	docker build --target product -f build/images/Dockerfile -t ${IMG} .
 
 ##@ Deployment
 

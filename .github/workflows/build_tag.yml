@@ -100,7 +100,6 @@ jobs:
         DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
         VERSION: ${{ needs.get-version.outputs.version }}
       run: |
-        cd multicluster
         make antrea-mc-controller
         echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
         docker push antrea/antrea-mc-controller:"${VERSION}"
