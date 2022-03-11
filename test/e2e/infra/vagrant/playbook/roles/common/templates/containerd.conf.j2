@@ -1,7 +1,6 @@
 root = "/var/lib/containerd"
 state = "/run/containerd"
 oom_score = 0
-imports = ["/etc/containerd/runtime_*.toml", "./debug.toml"]
 
 [grpc]
   address = "/run/containerd/containerd.sock"
