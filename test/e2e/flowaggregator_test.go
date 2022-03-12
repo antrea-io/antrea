@@ -158,10 +158,15 @@ func TestFlowAggregator(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
-	// Execute teardownFlowAggregator later than teardownTest to ensure that the log
-	// of Flow Aggregator has been exported.
-	defer teardownFlowAggregator(t, data)
-	defer teardownTest(t, data)
+	defer func() {
+		teardownTest(t, data)
+		if err := data.disableAntreaFlowExporter(); err != nil {
+			t.Errorf("Failed to disable flow exporter in Antrea Agent: %v", err)
+		}
+		// Execute teardownFlowAggregator later than teardownTest to ensure that the log
+		// of Flow Aggregator has been exported.
+		teardownFlowAggregator(t, data)
+	}()
 
 	k8sUtils, err = NewKubernetesUtils(data)
 	if err != nil {

@@ -235,8 +235,8 @@ func setupTestWithIPFIXCollector(tb testing.TB) (*TestData, bool, bool, error) {
 	if err := testData.deployFlowAggregator(ipfixCollectorAddr); err != nil {
 		return testData, v4Enabled, v6Enabled, err
 	}
-	tb.Logf("Deploying flow exporter in Antrea Agent")
-	if err = testData.deployAntreaFlowExporter(""); err != nil {
+	tb.Logf("Enabling flow exporter in Antrea Agent")
+	if err = testData.enableAntreaFlowExporter(""); err != nil {
 		return testData, v4Enabled, v6Enabled, err
 	}
 

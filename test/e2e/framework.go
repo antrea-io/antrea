@@ -683,8 +683,8 @@ func (data *TestData) deployAntrea(option deployAntreaOptions) error {
 	return data.deployAntreaCommon(option.DeployYML(), "", true)
 }
 
-// deployAntreaFlowExporter deploys Antrea with flow exporter config params enabled.
-func (data *TestData) deployAntreaFlowExporter(ipfixCollector string) error {
+// enableAntreaFlowExporter redeploys Antrea with flow exporter config params enabled.
+func (data *TestData) enableAntreaFlowExporter(ipfixCollector string) error {
 	// Enable flow exporter feature and add related config params to antrea agent configmap.
 	ac := func(config *agentconfig.AgentConfig) {
 		config.FeatureGates["FlowExporter"] = true
@@ -694,6 +694,13 @@ func (data *TestData) deployAntreaFlowExporter(ipfixCollector string) error {
 		if ipfixCollector != "" {
 			config.FlowCollectorAddr = ipfixCollector
 		}
+	}
+	return data.mutateAntreaConfigMap(nil, ac, false, true)
+}
+
+func (data *TestData) disableAntreaFlowExporter() error {
+	ac := func(config *agentconfig.AgentConfig) {
+		config.FeatureGates["FlowExporter"] = false
 	}
 	return data.mutateAntreaConfigMap(nil, ac, false, true)
 }

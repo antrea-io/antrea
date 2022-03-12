@@ -57,7 +57,7 @@ func TestWireGuard(t *testing.T) {
 			config.TrafficEncryptionMode = "none"
 		}
 		if err := data.mutateAntreaConfigMap(nil, ac, false, true); err != nil {
-			t.Fatalf("Failed to disable WireGuard tunnel: %v", err)
+			t.Errorf("Failed to disable WireGuard tunnel: %v", err)
 		}
 	}()
 
