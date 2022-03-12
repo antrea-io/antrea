@@ -32,7 +32,6 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 
-	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/openflow"
 	"antrea.io/antrea/pkg/agent/types"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
@@ -150,9 +149,10 @@ type fqdnController struct {
 	selectorItemToRuleIDs map[fqdnSelectorItem]sets.String
 	ipv4Enabled           bool
 	ipv6Enabled           bool
+	gwPort                uint32
 }
 
-func newFQDNController(client openflow.Client, allocator *idAllocator, dnsServerOverride string, dirtyRuleHandler func(string), v4Enabled, v6Enabled bool) (*fqdnController, error) {
+func newFQDNController(client openflow.Client, allocator *idAllocator, dnsServerOverride string, dirtyRuleHandler func(string), v4Enabled, v6Enabled bool, gwPort uint32) (*fqdnController, error) {
 	controller := &fqdnController{
 		ofClient:               client,
 		dirtyRuleHandler:       dirtyRuleHandler,
@@ -166,6 +166,7 @@ func newFQDNController(client openflow.Client, allocator *idAllocator, dnsServer
 		selectorItemToRuleIDs:  map[fqdnSelectorItem]sets.String{},
 		ipv4Enabled:            v4Enabled,
 		ipv6Enabled:            v6Enabled,
+		gwPort:                 gwPort,
 	}
 	if controller.ofClient != nil {
 		if err := controller.ofClient.NewDNSpacketInConjunction(dnsInterceptRuleID); err != nil {
@@ -809,6 +810,16 @@ func (f *fqdnController) sendDNSPacketout(pktIn *ofctrl.PacketIn) error {
 		}
 	}
 	if prot == protocol.Type_UDP {
+		inPort := f.gwPort
+		if inPort == 0 {
+			// Use the original in_port number in the packetIn message to avoid an invalid input port number. Note that,
+			// this should not happen in container case as antrea-gw0 always exists. This check is for security.
+			matches := pktIn.GetMatches()
+			inPortField := matches.GetMatchByName("OXM_OF_IN_PORT")
+			if inPortField != nil {
+				inPort = inPortField.GetValue().(uint32)
+			}
+		}
 		udpSrcPort, udpDstPort, err := binding.GetUDPHeaderData(pktIn.Data.Data)
 		if err != nil {
 			klog.ErrorS(err, "Failed to get UDP header data")
@@ -822,7 +833,7 @@ func (f *fqdnController) sendDNSPacketout(pktIn *ofctrl.PacketIn) error {
 			pktIn.Data.HWDst.String(),
 			srcIP,
 			dstIP,
-			uint32(config.HostGatewayOFPort),
+			inPort,
 			0,
 			isIPv6,
 			udpSrcPort,

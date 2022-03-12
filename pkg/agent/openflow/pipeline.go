@@ -602,7 +602,7 @@ func (f *featurePodConnectivity) tunnelClassifierFlow(tunnelOFPort uint32) bindi
 func (f *featurePodConnectivity) gatewayClassifierFlow() binding.Flow {
 	return ClassifierTable.ofTable.BuildFlow(priorityNormal).
 		Cookie(f.cookieAllocator.Request(f.category).Raw()).
-		MatchInPort(config.HostGatewayOFPort).
+		MatchInPort(f.gatewayPort).
 		Action().LoadRegMark(FromGatewayRegMark).
 		Action().GotoStage(stageValidation).
 		Done()
@@ -636,7 +636,7 @@ func (f *featurePodConnectivity) podUplinkClassifierFlows(dstMAC net.HardwareAdd
 			// This generates the flow to mark the packets from uplink port.
 			ClassifierTable.ofTable.BuildFlow(priorityHigh).
 				Cookie(cookieID).
-				MatchInPort(config.UplinkOFPort).
+				MatchInPort(f.uplinkPort).
 				MatchDstMAC(dstMAC).
 				MatchVLAN(nonVLAN, vlanID, nil).
 				MatchProtocol(ipProtocol).
@@ -650,7 +650,7 @@ func (f *featurePodConnectivity) podUplinkClassifierFlows(dstMAC net.HardwareAdd
 				// This generates the flow to mark the packets from bridge local port.
 				ClassifierTable.ofTable.BuildFlow(priorityHigh).
 					Cookie(cookieID).
-					MatchInPort(config.BridgeOFPort).
+					MatchInPort(f.hostIfacePort).
 					MatchDstMAC(dstMAC).
 					MatchVLAN(true, 0, nil).
 					MatchProtocol(ipProtocol).
@@ -1026,7 +1026,7 @@ func (f *featurePodConnectivity) flowsToTrace(dataplaneTag uint8,
 			// SendToController and Output if output port is tunnel port.
 			fb := L2ForwardingOutTable.ofTable.BuildFlow(priorityNormal+3).
 				Cookie(cookieID).
-				MatchRegFieldWithValue(TargetOFPortField, config.DefaultTunOFPort).
+				MatchRegFieldWithValue(TargetOFPortField, f.tunnelPort).
 				MatchProtocol(ipProtocol).
 				MatchRegMark(OFPortFoundRegMark).
 				MatchIPDSCP(dataplaneTag).
@@ -1039,7 +1039,7 @@ func (f *featurePodConnectivity) flowsToTrace(dataplaneTag uint8,
 			// request is complete.
 			fb = L2ForwardingOutTable.ofTable.BuildFlow(priorityNormal+2).
 				Cookie(cookieID).
-				MatchRegFieldWithValue(TargetOFPortField, config.HostGatewayOFPort).
+				MatchRegFieldWithValue(TargetOFPortField, f.gatewayPort).
 				MatchProtocol(ipProtocol).
 				MatchRegMark(OFPortFoundRegMark).
 				MatchIPDSCP(dataplaneTag).
@@ -1052,7 +1052,7 @@ func (f *featurePodConnectivity) flowsToTrace(dataplaneTag uint8,
 			// traffic is expected to go out of the gateway port on the way to its destination.
 			fb := L2ForwardingOutTable.ofTable.BuildFlow(priorityNormal+2).
 				Cookie(cookieID).
-				MatchRegFieldWithValue(TargetOFPortField, config.HostGatewayOFPort).
+				MatchRegFieldWithValue(TargetOFPortField, f.gatewayPort).
 				MatchProtocol(ipProtocol).
 				MatchRegMark(OFPortFoundRegMark).
 				MatchIPDSCP(dataplaneTag).
@@ -1066,7 +1066,7 @@ func (f *featurePodConnectivity) flowsToTrace(dataplaneTag uint8,
 		if gatewayIP != nil {
 			fb := L2ForwardingOutTable.ofTable.BuildFlow(priorityNormal+3).
 				Cookie(cookieID).
-				MatchRegFieldWithValue(TargetOFPortField, config.HostGatewayOFPort).
+				MatchRegFieldWithValue(TargetOFPortField, f.gatewayPort).
 				MatchProtocol(ipProtocol).
 				MatchDstIP(gatewayIP).
 				MatchRegMark(OFPortFoundRegMark).
@@ -1565,7 +1565,7 @@ func (f *featurePodConnectivity) gatewayIPSpoofGuardFlows() []binding.Flow {
 		flows = append(flows, SpoofGuardTable.ofTable.BuildFlow(priorityNormal).
 			Cookie(cookieID).
 			MatchProtocol(ipProtocol).
-			MatchInPort(config.HostGatewayOFPort).
+			MatchInPort(f.gatewayPort).
 			Action().LoadRegMark(regMarksToLoad...).
 			Action().GotoTable(targetTables[ipProtocol]).
 			Done(),
@@ -1583,7 +1583,7 @@ func (f *featureService) serviceCIDRDNATFlows() []binding.Flow {
 			Cookie(cookieID).
 			MatchProtocol(ipProtocol).
 			MatchDstIPNet(serviceCIDR).
-			Action().LoadToRegField(TargetOFPortField, config.HostGatewayOFPort).
+			Action().LoadToRegField(TargetOFPortField, f.gatewayPort).
 			Action().LoadRegMark(OFPortFoundRegMark).
 			Action().GotoStage(stageConntrack).
 			Done())
@@ -2709,7 +2709,7 @@ func (f *featureMulticast) externalMulticastReceiverFlow() binding.Flow {
 		Cookie(f.cookieAllocator.Request(f.category).Raw()).
 		MatchProtocol(binding.ProtocolIP).
 		Action().LoadRegMark(OFPortFoundRegMark).
-		Action().LoadToRegField(TargetOFPortField, config.HostGatewayOFPort).
+		Action().LoadToRegField(TargetOFPortField, f.gatewayPort).
 		Action().GotoStage(stageOutput).
 		Done()
 }
@@ -2849,14 +2849,14 @@ func (f *featurePodConnectivity) hostBridgeLocalFlows() []binding.Flow {
 		// This generates the flow to forward the packets from uplink port to bridge local port.
 		ClassifierTable.ofTable.BuildFlow(priorityNormal).
 			Cookie(cookieID).
-			MatchInPort(config.UplinkOFPort).
-			Action().Output(config.BridgeOFPort).
+			MatchInPort(f.uplinkPort).
+			Action().Output(f.hostIfacePort).
 			Done(),
 		// This generates the flow to forward the packets from bridge local port to uplink port.
 		ClassifierTable.ofTable.BuildFlow(priorityNormal).
 			Cookie(cookieID).
-			MatchInPort(config.BridgeOFPort).
-			Action().Output(config.UplinkOFPort).
+			MatchInPort(f.hostIfacePort).
+			Action().Output(f.uplinkPort).
 			Done(),
 	}
 }
@@ -2867,7 +2867,7 @@ func (f *featurePodConnectivity) hostBridgeUplinkVLANFlows() []binding.Flow {
 	return []binding.Flow{
 		VLANTable.ofTable.BuildFlow(priorityLow).
 			Cookie(f.cookieAllocator.Request(f.category).Raw()).
-			MatchInPort(config.UplinkOFPort).
+			MatchInPort(f.uplinkPort).
 			MatchVLAN(false, 0, &vlanMask).
 			Action().PopVLAN().
 			Action().NextTable().
@@ -2880,7 +2880,7 @@ func (f *featurePodConnectivity) podVLANFlow(podOFPort uint32, vlanID uint16) bi
 	return VLANTable.ofTable.BuildFlow(priorityLow).
 		Cookie(f.cookieAllocator.Request(f.category).Raw()).
 		MatchInPort(podOFPort).
-		MatchRegMark(OutputToUplinkRegMark).
+		MatchRegFieldWithValue(TargetOFPortField, f.uplinkPort).
 		Action().PushVLAN(EtherTypeDot1q).
 		Action().SetVLAN(vlanID).
 		Action().NextTable().

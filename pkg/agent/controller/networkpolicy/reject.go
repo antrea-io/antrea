@@ -18,10 +18,10 @@ import (
 	"encoding/binary"
 	"fmt"
 
+	"antrea.io/libOpenflow/openflow13"
 	"antrea.io/libOpenflow/protocol"
 	"antrea.io/ofnet/ofctrl"
 
-	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/openflow"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
@@ -150,7 +150,14 @@ func (c *Controller) rejectRequest(pktIn *ofctrl.PacketIn) error {
 		srcMAC = sIface.MAC.String()
 		dstMAC = dIface.MAC.String()
 	}
-	inPort, outPort := getRejectOFPorts(packetOutType, sIface, dIface)
+	tunPort := c.tunPort
+	if tunPort == 0 {
+		// openflow13.P_CONTROLLER is used with noEncap mode when tunnel interface is not found.
+		// It won't cause a loop with openflow13.P_CONTROLLER because it is used as the input port but not output port
+		// in the packet out message.
+		tunPort = uint32(openflow13.P_CONTROLLER)
+	}
+	inPort, outPort := getRejectOFPorts(packetOutType, sIface, dIface, c.gwPort, tunPort)
 	mutateFunc := getRejectPacketOutMutateFunc(packetOutType)
 
 	if proto == protocol.Type_TCP {
@@ -239,8 +246,8 @@ func getRejectType(isServiceTraffic, antreaProxyEnabled, srcIsLocal, dstIsLocal 
 }
 
 // getRejectOFPorts returns the inPort and outPort of a packetOut based on the RejectType.
-func getRejectOFPorts(rejectType RejectType, sIface, dIface *interfacestore.InterfaceConfig) (uint32, uint32) {
-	inPort := uint32(config.HostGatewayOFPort)
+func getRejectOFPorts(rejectType RejectType, sIface, dIface *interfacestore.InterfaceConfig, gwOFPort, tunOFPort uint32) (uint32, uint32) {
+	inPort := gwOFPort
 	outPort := uint32(0)
 	switch rejectType {
 	case RejectPodLocal:
@@ -249,18 +256,18 @@ func getRejectOFPorts(rejectType RejectType, sIface, dIface *interfacestore.Inte
 	case RejectServiceLocal:
 		inPort = uint32(sIface.OFPort)
 	case RejectPodRemoteToLocal:
-		inPort = config.HostGatewayOFPort
+		inPort = gwOFPort
 		outPort = uint32(dIface.OFPort)
 	case RejectServiceRemoteToLocal:
-		inPort = config.HostGatewayOFPort
+		inPort = gwOFPort
 	case RejectLocalToRemote:
 		inPort = uint32(sIface.OFPort)
 	case RejectNoAPServiceLocal:
 		inPort = uint32(sIface.OFPort)
-		outPort = config.HostGatewayOFPort
+		outPort = gwOFPort
 	case RejectNoAPServiceRemoteToLocal:
-		inPort = config.DefaultTunOFPort
-		outPort = config.HostGatewayOFPort
+		inPort = tunOFPort
+		outPort = gwOFPort
 	}
 	return inPort, outPort
 }

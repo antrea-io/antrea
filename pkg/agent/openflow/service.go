@@ -42,6 +42,7 @@ type featureService struct {
 	nodePortAddresses      map[binding.Protocol][]net.IP
 	serviceCIDRs           map[binding.Protocol]net.IPNet
 	networkConfig          *config.NetworkConfig
+	gatewayPort            uint32
 
 	enableProxy           bool
 	proxyAll              bool
@@ -110,6 +111,7 @@ func newFeatureService(
 		nodePortAddresses:      nodePortAddresses,
 		serviceCIDRs:           serviceCIDRs,
 		gatewayMAC:             nodeConfig.GatewayConfig.MAC,
+		gatewayPort:            nodeConfig.GatewayConfig.OFPort,
 		networkConfig:          networkConfig,
 		enableProxy:            enableProxy,
 		proxyAll:               proxyAll,
