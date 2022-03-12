@@ -28,7 +28,6 @@ import (
 	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2"
 
-	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/openflow"
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
@@ -250,14 +249,16 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1alpha1.Tracefl
 		if pktIn.Data.Ethertype == protocol.IPv6_MSG {
 			gatewayIP = c.nodeConfig.GatewayConfig.IPv6
 		}
-		if c.networkConfig.TrafficEncapMode.SupportsEncap() && outputPort == config.DefaultTunOFPort {
+		gwPort := c.nodeConfig.GatewayConfig.OFPort
+		tunPort := c.nodeConfig.TunnelOFPort
+		if c.networkConfig.TrafficEncapMode.SupportsEncap() && outputPort == tunPort {
 			ob.TunnelDstIP = tunnelDstIP
 			ob.Action = crdv1alpha1.ActionForwarded
-		} else if ipDst == gatewayIP.String() && outputPort == config.HostGatewayOFPort {
+		} else if ipDst == gatewayIP.String() && outputPort == gwPort {
 			ob.Action = crdv1alpha1.ActionDelivered
-		} else if c.networkConfig.TrafficEncapMode.SupportsEncap() && outputPort == config.HostGatewayOFPort {
+		} else if c.networkConfig.TrafficEncapMode.SupportsEncap() && outputPort == gwPort {
 			ob.Action = crdv1alpha1.ActionForwardedOutOfOverlay
-		} else if outputPort == config.HostGatewayOFPort { // noEncap
+		} else if outputPort == gwPort { // noEncap
 			ob.Action = crdv1alpha1.ActionForwarded
 		} else {
 			// Output port is Pod port, packet is delivered.

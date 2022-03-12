@@ -608,11 +608,17 @@ func (i *Initializer) setupGatewayInterface() error {
 		}
 		gwPortUUID, err := i.ovsBridgeClient.CreateInternalPort(i.hostGateway, config.HostGatewayOFPort, externalIDs)
 		if err != nil {
-			klog.Errorf("Failed to create gateway port %s on OVS bridge: %v", i.hostGateway, err)
+			klog.ErrorS(err, "Failed to create gateway port on OVS bridge", "port", i.hostGateway)
 			return err
 		}
+		gwPort, err := i.ovsBridgeClient.GetOFPort(i.hostGateway, false)
+		if err != nil {
+			klog.ErrorS(err, "Failed to get gateway ofport", "port", i.hostGateway)
+			return err
+		}
+		klog.InfoS("Allocated OpenFlow port for gateway interface", "port", i.hostGateway, "ofPort", gwPort)
 		gatewayIface = interfacestore.NewGatewayInterface(i.hostGateway)
-		gatewayIface.OVSPortConfig = &interfacestore.OVSPortConfig{PortUUID: gwPortUUID, OFPort: config.HostGatewayOFPort}
+		gatewayIface.OVSPortConfig = &interfacestore.OVSPortConfig{PortUUID: gwPortUUID, OFPort: gwPort}
 		i.ifaceStore.AddInterface(gatewayIface)
 	} else {
 		klog.V(2).Infof("Gateway port %s already exists on OVS bridge", i.hostGateway)
@@ -657,7 +663,7 @@ func (i *Initializer) configureGatewayInterface(gatewayIface *interfacestore.Int
 		return err
 	}
 
-	i.nodeConfig.GatewayConfig = &config.GatewayConfig{Name: i.hostGateway, MAC: gwMAC}
+	i.nodeConfig.GatewayConfig = &config.GatewayConfig{Name: i.hostGateway, MAC: gwMAC, OFPort: uint32(gatewayIface.OFPort)}
 	gatewayIface.MAC = gwMAC
 	gatewayIface.IPs = []net.IP{}
 	if i.networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {
@@ -728,6 +734,7 @@ func (i *Initializer) setupDefaultTunnelInterface() error {
 				}
 				tunnelIface.TunnelInterfaceConfig.Csum = true
 			}
+			i.nodeConfig.TunnelOFPort = uint32(tunnelIface.OFPort)
 			return nil
 		}
 
@@ -755,12 +762,19 @@ func (i *Initializer) setupDefaultTunnelInterface() error {
 		}
 		tunnelPortUUID, err := i.ovsBridgeClient.CreateTunnelPortExt(tunnelPortName, i.networkConfig.TunnelType, config.DefaultTunOFPort, shouldEnableCsum, localIPStr, "", "", "", nil, externalIDs)
 		if err != nil {
-			klog.Errorf("Failed to create tunnel port %s type %s on OVS bridge: %v", tunnelPortName, i.networkConfig.TunnelType, err)
+			klog.ErrorS(err, "Failed to create tunnel port on OVS bridge", "port", tunnelPortName, "type", i.networkConfig.TunnelType)
 			return err
 		}
+		tunPort, err := i.ovsBridgeClient.GetOFPort(tunnelPortName, false)
+		if err != nil {
+			klog.ErrorS(err, "Failed to get tunnel ofport on OVS bridge", "port", tunnelPortName, "type", i.networkConfig.TunnelType)
+			return err
+		}
+		klog.InfoS("Allocated OpenFlow port for tunnel interface", "port", tunnelPortName, "ofPort", tunPort)
 		tunnelIface = interfacestore.NewTunnelInterface(tunnelPortName, i.networkConfig.TunnelType, localIP, shouldEnableCsum)
-		tunnelIface.OVSPortConfig = &interfacestore.OVSPortConfig{PortUUID: tunnelPortUUID, OFPort: config.DefaultTunOFPort}
+		tunnelIface.OVSPortConfig = &interfacestore.OVSPortConfig{PortUUID: tunnelPortUUID, OFPort: tunPort}
 		i.ifaceStore.AddInterface(tunnelIface)
+		i.nodeConfig.TunnelOFPort = uint32(tunPort)
 	}
 	return nil
 }
@@ -1125,4 +1139,25 @@ func (i *Initializer) patchNodeAnnotations(nodeName, key string, value interface
 // with NetworkPolicyOnly mode on public cloud setup, e.g., AKS.
 func (i *Initializer) getNodeInterfaceFromIP(nodeIPs *utilip.DualStackIPs) (v4IPNet *net.IPNet, v6IPNet *net.IPNet, iface *net.Interface, err error) {
 	return getIPNetDeviceFromIP(nodeIPs, sets.NewString(i.hostGateway))
+}
+
+// getFreeOFPort returns an OpenFlow port number which is not used by any existing OVS port. Note that, the returned port
+// is not saved in OVSDB yet before the real port is created, so it might introduce an issue for the same return value
+// if it is called multiple times before OVS port creation.
+func (i *Initializer) getFreeOFPort(startPort int) (int32, error) {
+	existingOFPorts := sets.NewInt32()
+	ports, err := i.ovsBridgeClient.GetPortList()
+	if err != nil {
+		return 0, err
+	}
+	for _, p := range ports {
+		existingOFPorts.Insert(p.OFPort)
+	}
+	port := int32(startPort)
+	for ; ; port++ {
+		if !existingOFPorts.Has(port) {
+			break
+		}
+	}
+	return port, nil
 }

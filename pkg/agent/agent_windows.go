@@ -158,19 +158,33 @@ func (i *Initializer) prepareOVSBridge() error {
 	// If uplink is already exists, return.
 	uplinkNetConfig := i.nodeConfig.UplinkNetConfig
 	uplink := uplinkNetConfig.Name
-	if _, err = i.ovsBridgeClient.GetOFPort(uplink, false); err == nil {
-		klog.Infof("Uplink %s already exists, skip the configuration", uplink)
-		return err
+	if ofport, err := i.ovsBridgeClient.GetOFPort(uplink, false); err == nil {
+		klog.InfoS("Uplink already exists, skip the configuration", "uplink", uplink, "port", ofport)
+		i.nodeConfig.UplinkNetConfig.OFPort = uint32(ofport)
+		i.nodeConfig.HostInterfaceOFPort = config.BridgeOFPort
+		return nil
 	}
 	// Create uplink port.
+	freePort, err := i.getFreeOFPort(config.UplinkOFPort)
+	if err != nil {
+		klog.ErrorS(err, "Failed to find a free port on OVS")
+		return err
+	}
 	var uplinkPortUUID string
-	uplinkPortUUID, err = i.ovsBridgeClient.CreateUplinkPort(uplink, config.UplinkOFPort, nil)
+	uplinkPortUUID, err = i.ovsBridgeClient.CreateUplinkPort(uplink, freePort, nil)
 	if err != nil {
 		klog.Errorf("Failed to add uplink port %s: %v", uplink, err)
 		return err
 	}
+	uplinkOFPort, err := i.ovsBridgeClient.GetOFPort(uplink, false)
+	if err != nil {
+		return fmt.Errorf("failed to get uplink ofport %s: err=%w", uplink, err)
+	}
+	klog.InfoS("Allocated OpenFlow port for uplink interface", "port", uplink, "ofPort", uplinkOFPort)
+	i.nodeConfig.UplinkNetConfig.OFPort = uint32(uplinkOFPort)
+	i.nodeConfig.HostInterfaceOFPort = config.BridgeOFPort
 	uplinkInterface := interfacestore.NewUplinkInterface(uplink)
-	uplinkInterface.OVSPortConfig = &interfacestore.OVSPortConfig{uplinkPortUUID, config.UplinkOFPort} //nolint: govet
+	uplinkInterface.OVSPortConfig = &interfacestore.OVSPortConfig{uplinkPortUUID, uplinkOFPort} //nolint: govet
 	i.ifaceStore.AddInterface(uplinkInterface)
 	ovsCtlClient := ovsctl.NewClient(i.ovsBridge)
 
@@ -184,7 +198,7 @@ func (i *Initializer) prepareOVSBridge() error {
 	}
 	// Set the uplink with "no-flood" config, so that the IP of local Pods and "antrea-gw0" will not be leaked to the
 	// underlay network by the "normal" flow entry.
-	if err = ovsCtlClient.SetPortNoFlood(config.UplinkOFPort); err != nil {
+	if err = ovsCtlClient.SetPortNoFlood(int(uplinkOFPort)); err != nil {
 		klog.Errorf("Failed to set the uplink port with no-flood config: %v", err)
 		return err
 	}

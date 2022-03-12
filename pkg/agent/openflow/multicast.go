@@ -30,6 +30,7 @@ type featureMulticast struct {
 	cookieAllocator cookie.Allocator
 	ipProtocols     []binding.Protocol
 	bridge          binding.Bridge
+	gatewayPort     uint32
 
 	cachedFlows        *flowCategoryCache
 	groupCache         sync.Map
@@ -42,7 +43,7 @@ func (f *featureMulticast) getFeatureName() string {
 	return "Multicast"
 }
 
-func newFeatureMulticast(cookieAllocator cookie.Allocator, ipProtocols []binding.Protocol, bridge binding.Bridge, anpEnabled bool) *featureMulticast {
+func newFeatureMulticast(cookieAllocator cookie.Allocator, ipProtocols []binding.Protocol, bridge binding.Bridge, anpEnabled bool, gwPort uint32) *featureMulticast {
 	return &featureMulticast{
 		cookieAllocator:    cookieAllocator,
 		ipProtocols:        ipProtocols,
@@ -51,6 +52,7 @@ func newFeatureMulticast(cookieAllocator cookie.Allocator, ipProtocols []binding
 		category:           cookie.Multicast,
 		groupCache:         sync.Map{},
 		enableAntreaPolicy: anpEnabled,
+		gatewayPort:        gwPort,
 	}
 }
 
