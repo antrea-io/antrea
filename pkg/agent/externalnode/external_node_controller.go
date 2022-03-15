@@ -363,7 +363,9 @@ func (c *ExternalNodeController) deleteExternalNode() error {
 		return err
 	}
 	c.syncedExternalNode = nil
-	return nil
+	// Remove any stale configuration that is related to the deleted ExternalNode
+	// and terminate the process if required.
+	return c.removeExternalNodeConfig()
 }
 
 func (c *ExternalNodeController) deleteInterfaces() error {

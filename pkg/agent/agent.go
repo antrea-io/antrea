@@ -46,6 +46,7 @@ import (
 	"antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/agent/util"
 	"antrea.io/antrea/pkg/agent/wireguard"
+	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	"antrea.io/antrea/pkg/client/clientset/versioned"
 	"antrea.io/antrea/pkg/features"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
@@ -168,7 +169,7 @@ func (i *Initializer) GetWireGuardClient() wireguard.Interface {
 // setupOVSBridge sets up the OVS bridge and create host gateway interface and tunnel port
 func (i *Initializer) setupOVSBridge() error {
 	if err := i.ovsBridgeClient.Create(); err != nil {
-		klog.Error("Failed to create OVS bridge: ", err)
+		klog.ErrorS(err, "Failed to create OVS bridge")
 		return err
 	}
 
@@ -295,7 +296,7 @@ func (i *Initializer) initInterfaceStore() error {
 					var err error
 					intf, err = externalnode.ParseHostInterfaceConfig(i.ovsBridgeClient, port, ovsPort)
 					if err != nil {
-						return err
+						return fmt.Errorf("failed to get interfaceConfig by port %s: %v", port.Name, err)
 					}
 				}
 			case interfacestore.AntreaContainer:
@@ -345,6 +346,7 @@ func (i *Initializer) initInterfaceStore() error {
 			}
 		}
 		if intf != nil {
+			klog.V(2).InfoS("Adding interface to cache", "interfaceName", intf.InterfaceName)
 			ifaceList = append(ifaceList, intf)
 		}
 	}
@@ -499,6 +501,12 @@ func (i *Initializer) initOpenFlowPipeline() error {
 	if err != nil {
 		klog.Errorf("Failed to initialize openflow client: %v", err)
 		return err
+	}
+
+	if i.nodeType == config.ExternalNode {
+		if err := i.installVMInitialFlows(); err != nil {
+			return err
+		}
 	}
 
 	go func() {
@@ -1185,9 +1193,10 @@ func (i *Initializer) initNodeLocalConfig() error {
 }
 
 func (i *Initializer) initVMLocalConfig(nodeName string) error {
+	var en *v1alpha1.ExternalNode
 	klog.InfoS("Initializing VM config", "ExternalNode", nodeName)
 	if err := wait.PollImmediateUntil(10*time.Second, func() (done bool, err error) {
-		_, err = i.crdClient.CrdV1alpha1().ExternalNodes(i.externalNodeNamespace).Get(context.TODO(), nodeName, metav1.GetOptions{})
+		en, err = i.crdClient.CrdV1alpha1().ExternalNodes(i.externalNodeNamespace).Get(context.TODO(), nodeName, metav1.GetOptions{})
 		if err != nil {
 			return false, nil
 		}
@@ -1197,10 +1206,8 @@ func (i *Initializer) initVMLocalConfig(nodeName string) error {
 		return err
 	}
 
-	i.nodeConfig = &config.NodeConfig{
-		Name:      nodeName,
-		Type:      config.ExternalNode,
-		OVSBridge: i.ovsBridge,
+	if err := i.setVMNodeConfig(en, nodeName); err != nil {
+		return err
 	}
 	klog.InfoS("Finished VM config initialization", "ExternalNode", nodeName)
 	return nil
@@ -1212,10 +1219,6 @@ func (i *Initializer) prepareOVSBridge() error {
 		return i.prepareOVSBridgeForK8sNode()
 	}
 	return i.prepareOVSBridgeForVM()
-}
-
-func (i *Initializer) prepareOVSBridgeForVM() error {
-	return i.setOVSDatapath()
 }
 
 // setOVSDatapath generates a static datapath ID for OVS bridge so that the OFSwitch identifier is not

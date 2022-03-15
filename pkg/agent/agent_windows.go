@@ -26,17 +26,20 @@ import (
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/agent/externalnode"
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/util"
+	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	"antrea.io/antrea/pkg/ovs/ovsctl"
 	"antrea.io/antrea/pkg/util/ip"
+	utilip "antrea.io/antrea/pkg/util/ip"
 )
 
 func (i *Initializer) prepareHostNetwork() error {
 	if i.nodeConfig.Type == config.K8sNode {
 		return i.prepareHNSNetworkAndOVSExtension()
 	}
-	return nil
+	return i.prepareVMNetworkAndOVSExtension()
 }
 
 // prepareHNSNetworkAndOVSExtension creates HNS Network for containers, and enables OVS Extension on it.
@@ -109,6 +112,70 @@ func (i *Initializer) prepareHNSNetworkAndOVSExtension() error {
 		return fmt.Errorf("failed to find valid IPv4 PodCIDR")
 	}
 	return util.PrepareHNSNetwork(subnetCIDR, i.nodeConfig.NodeTransportIPv4Addr, adapter, i.nodeConfig.UplinkNetConfig.Gateway, dnsServers, i.nodeConfig.UplinkNetConfig.Routes, i.ovsBridge)
+}
+
+func (i *Initializer) prepareVMNetworkAndOVSExtension() error {
+	klog.V(2).Info("Setting up VM network")
+	// Check whether VM Switch is created
+	exists, err := util.VMSwitchExists()
+	if err != nil {
+		return err
+	}
+	if exists {
+		vmSwitchIFName, err := util.GetVMSwitchInterfaceName()
+		if err != nil {
+			return err
+		}
+		klog.InfoS("Got existing VM switch teaming members", "interfaceName", vmSwitchIFName)
+		if i.nodeConfig.UplinkNetConfig.Name != util.GenHostInterfaceName(vmSwitchIFName) {
+			return fmt.Errorf("unexpected teaming interface %s found", vmSwitchIFName)
+		}
+		return nil
+	}
+
+	// Get the uplink interface configuration
+	uplinkIface, _, _, err := util.GetInterfaceConfig(i.nodeConfig.UplinkNetConfig.Name)
+	if err != nil {
+		return err
+	}
+
+	var success = false
+	hostIFName := i.nodeConfig.UplinkNetConfig.Name
+	uplinkIFName := util.GenerateUplinkInterfaceName(hostIFName)
+	klog.InfoS("Using the interface", "hostIFName", hostIFName, "uplinkIFName", uplinkIFName)
+	// Rename interfaceName to interfaceName~
+	if err = util.RenameInterface(hostIFName, uplinkIFName); err != nil {
+		return err
+	}
+
+	defer func() {
+		if !success {
+			if err = util.RenameInterface(uplinkIFName, hostIFName); err != nil {
+				klog.ErrorS(err, "Failed to rename interface back")
+			}
+		}
+	}()
+
+	klog.V(2).InfoS("Creating VM switch", "uplinkIFName", uplinkIFName)
+	if err = util.CreateVMSwitch(uplinkIFName); err != nil {
+		return fmt.Errorf("failed to create VM switch for interface %s: %v", uplinkIFName, err)
+	}
+
+	defer func() {
+		if !success {
+			if err = util.RemoveVMSwitch(); err != nil {
+				klog.ErrorS(err, "Failed to remove VMSwitch")
+			}
+		}
+	}()
+
+	uplinkMACStr := strings.Replace(uplinkIface.HardwareAddr.String(), ":", "", -1)
+	if err = util.RenameVMNetworkAdapter(util.LocalVMSwitch, uplinkMACStr, hostIFName, true); err != nil {
+		return fmt.Errorf("failed to rename VMNetworkAdapter as %s: %v", hostIFName, err)
+	}
+
+	success = true
+	return nil
 }
 
 // prepareOVSBridgeForK8sNode adds local port and uplink port to OVS bridge after OVS extension is enabled on HNSNetwork.
@@ -218,6 +285,78 @@ func (i *Initializer) prepareOVSBridgeOnHNSNetwork() error {
 	return nil
 }
 
+func (i *Initializer) prepareOVSBridgeForVM() error {
+	klog.InfoS("Performing OVS configuration", "hostIFName", i.nodeConfig.UplinkNetConfig.Name)
+	hostIFName := i.nodeConfig.UplinkNetConfig.Name
+	uplinkIFName := util.GenerateUplinkInterfaceName(hostIFName)
+	ovsPorts, ovsErr := i.ovsBridgeClient.GetPortList()
+	if ovsErr != nil {
+		return fmt.Errorf("failed to list OVS ports: %v", ovsErr)
+	}
+	for _, port := range ovsPorts {
+		if port.Name == hostIFName {
+			klog.Info("Uplink and host interface configuration exist in OVS")
+			return nil
+		}
+	}
+
+	success := false
+	uplinkExternalIDs := map[string]interface{}{
+		interfacestore.AntreaInterfaceTypeKey: interfacestore.AntreaUplink,
+	}
+	// TODO: Have a separate function for creation of pair ports
+	// Create uplink port on OVS.
+	uplinkUUID, ovsErr := i.ovsBridgeClient.CreatePort(uplinkIFName, uplinkIFName, uplinkExternalIDs)
+	if ovsErr != nil {
+		return fmt.Errorf("failed to create uplink port on OVS for %s: %v", uplinkIFName, ovsErr)
+	}
+
+	// Manual clean up of OVS configurations is required, when agent exits
+	// abruptly or when the auto cleanup operation fails.
+	defer func() {
+		if !success {
+			klog.InfoS("Deleting port on OVS", "uplinkUUID", uplinkUUID)
+			if ovsErr := i.ovsBridgeClient.DeletePort(uplinkUUID); ovsErr != nil {
+				klog.ErrorS(ovsErr, "Failed to delete port on OVS", "uplinkUUID", uplinkUUID)
+			}
+		}
+	}()
+
+	// Query the uplink port to check if its created
+	uplinkOFPort, ovsErr := i.ovsBridgeClient.GetOFPort(uplinkIFName, false)
+	if ovsErr != nil {
+		return fmt.Errorf("failed to get ofport on OVS for uplink interface %s: %v", uplinkIFName, ovsErr)
+	}
+	klog.InfoS("Added uplink port on OVS", "ofport", uplinkOFPort)
+	// ExternalEntity is not processed yet, so an empty name is set for entityName in OVSDB,
+	// which will be updated by ExternalNode controller.
+	attachInfo := externalnode.GetOVSAttachInfo(uplinkIFName, uplinkUUID, "", i.externalNodeNamespace, []string{""})
+	// Create host port on OVS.
+	hostIfUUID, ovsErr := i.ovsBridgeClient.CreateInternalPort(hostIFName, 0, "", attachInfo)
+	if ovsErr != nil {
+		return fmt.Errorf("failed to create host port on OVS for %s: %v", hostIFName, ovsErr)
+	}
+
+	// Manual clean up of OVS configurations is required, when agent exits abruptly.
+	defer func() {
+		if !success {
+			klog.InfoS("Deleting port on OVS", "hostIfUUID", hostIfUUID)
+			if ovsErr := i.ovsBridgeClient.DeletePort(hostIfUUID); ovsErr != nil {
+				klog.ErrorS(ovsErr, "Failed to delete port on OVS", "hostIfUUID", hostIfUUID)
+			}
+		}
+	}()
+
+	// Query the host port to check if its created
+	hostOFPort, ovsErr := i.ovsBridgeClient.GetOFPort(hostIFName, false)
+	if ovsErr != nil {
+		return fmt.Errorf("failed to get ofport for host interface %s: %v", hostIFName, ovsErr)
+	}
+	klog.InfoS("Added host port on OVS", "ofport", hostOFPort)
+	success = true
+	return i.setOVSDatapath()
+}
+
 // getTunnelLocalIP returns local_ip of tunnel port
 func (i *Initializer) getTunnelPortLocalIP() net.IP {
 	return i.nodeConfig.NodeTransportIPv4Addr.IP
@@ -306,4 +445,57 @@ func (i *Initializer) setInterfaceMTU(iface string, mtu int) error {
 		return err
 	}
 	return util.SetInterfaceMTU(iface, mtu)
+}
+
+func (i *Initializer) setVMNodeConfig(en *v1alpha1.ExternalNode, nodeName string) error {
+	// TODO: Handle for multiple interfaces
+	var uplinkInterface *net.Interface
+	foundNetDevice := false
+	for _, addr := range en.Spec.Interfaces[0].IPs {
+		var ipFilter *utilip.DualStackIPs
+		var err error
+		epIP := net.ParseIP(addr)
+		if epIP.To4() != nil {
+			ipFilter = &utilip.DualStackIPs{IPv4: epIP}
+		} else {
+			ipFilter = &utilip.DualStackIPs{IPv6: epIP}
+		}
+		_, _, uplinkInterface, err = util.GetIPNetDeviceFromIP(ipFilter, nil)
+		if err != nil {
+			klog.InfoS("Unable to get net device by IP", "IP", addr)
+		} else {
+			foundNetDevice = true
+			klog.V(2).InfoS("Net device found on the ExternalNode", "interfaceName", uplinkInterface.Name)
+			break
+		}
+	}
+	if !foundNetDevice {
+		return fmt.Errorf("failed to get net device for ExternalNode %s", en.Name)
+	}
+	i.nodeConfig = &config.NodeConfig{
+		Name:      nodeName,
+		Type:      config.ExternalNode,
+		OVSBridge: i.ovsBridge,
+		UplinkNetConfig: &config.AdapterNetConfig{
+			Name: uplinkInterface.Name,
+		},
+	}
+	return nil
+}
+
+// installVMFlows configures default flows between uplink and host port,
+// so that antrea-agent can connect to antrea-controller.
+func (i *Initializer) installVMInitialFlows() error {
+	hostIfConfig, found := i.ifaceStore.GetInterfaceByName(i.nodeConfig.UplinkNetConfig.Name)
+	if !found {
+		return fmt.Errorf("not found interfaceConfig by name %s", i.nodeConfig.UplinkNetConfig.Name)
+	}
+	hostIFName := hostIfConfig.InterfaceName
+	hostOFPort := hostIfConfig.OVSPortConfig.OFPort
+	uplinkOFPort := hostIfConfig.EntityInterfaceConfig.UplinkPort.OFPort
+	klog.InfoS("Installing host flows", "hostIFName", hostIFName, "hostOFPort", hostOFPort, "uplinkOFPort", uplinkOFPort)
+	if err := i.ofClient.InstallVMUplinkFlows(hostIFName, hostOFPort, uplinkOFPort); err != nil {
+		return fmt.Errorf("failed to install host fows for interface %s", hostIFName)
+	}
+	return nil
 }
