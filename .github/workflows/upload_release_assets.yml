@@ -155,15 +155,6 @@ jobs:
         asset_path: ./assets/antrea-aks.yml
         asset_name: antrea-aks.yml
         asset_content_type: application/octet-stream
-    - name: Upload antrea-kind.yml
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ github.event.release.upload_url }}
-        asset_path: ./assets/antrea-kind.yml
-        asset_name: antrea-kind.yml
-        asset_content_type: application/octet-stream
     - name: Upload antrea-octant.yml
       uses: actions/upload-release-asset@v1
       env:

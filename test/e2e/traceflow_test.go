@@ -44,10 +44,10 @@ type testcase struct {
 	expectedResults []v1alpha1.NodeResult
 	expectedPktCap  *v1alpha1.Packet
 	// required IP version, skip if not match, default is 0 (no restrict)
-	ipVersion  int
-	skipReason string
+	ipVersion int
 	// Source Pod to run ping for live-traffic Traceflow.
-	srcPod string
+	srcPod       string
+	skipIfNeeded func(t *testing.T)
 }
 
 // TestTraceflow is the top-level test which contains all subtests for
@@ -1088,15 +1088,6 @@ func testTraceflowIntraNode(t *testing.T, data *TestData) {
 
 // testTraceflowInterNode verifies if traceflow can trace inter nodes traffic with some NetworkPolicies set.
 func testTraceflowInterNode(t *testing.T, data *TestData) {
-	encapMode, err := data.GetEncapMode()
-	if err != nil {
-		t.Fatalf("Failed to retrieve encap mode: %v", err)
-	}
-	if encapMode != config.TrafficEncapModeNoEncap {
-		// https://github.com/antrea-io/antrea/issues/897
-		skipIfProviderIs(t, "kind", "Skipping inter-Node Traceflow test for Kind because of #897")
-	}
-
 	node1 := nodeName(0)
 	node2 := nodeName(1)
 
@@ -1359,7 +1350,10 @@ func testTraceflowInterNode(t *testing.T, data *TestData) {
 			},
 		},
 		{
-			name:      "serviceTraceflowIPv4",
+			name: "serviceTraceflowIPv4",
+			skipIfNeeded: func(t *testing.T) {
+				skipIfProxyDisabled(t)
+			},
 			ipVersion: 4,
 			tf: &v1alpha1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{
@@ -1431,7 +1425,10 @@ func testTraceflowInterNode(t *testing.T, data *TestData) {
 			},
 		},
 		{
-			name:      "hairpinServiceTraceflowIPv4",
+			name: "hairpinServiceTraceflowIPv4",
+			skipIfNeeded: func(t *testing.T) {
+				skipIfProxyDisabled(t)
+			},
 			ipVersion: 4,
 			tf: &v1alpha1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{
@@ -1613,9 +1610,11 @@ func testTraceflowInterNode(t *testing.T, data *TestData) {
 			},
 		},
 		{
-			name:       "interNodeUDPDstIPTraceflowIPv6",
-			skipReason: "IPv6 testbed issue prevents running this test, we suspect an ESX datapath issue",
-			ipVersion:  6,
+			name: "interNodeUDPDstIPTraceflowIPv6",
+			skipIfNeeded: func(t *testing.T) {
+				t.Skip("IPv6 testbed issue prevents running this test, we suspect an ESX datapath issue")
+			},
+			ipVersion: 6,
 			tf: &v1alpha1.Traceflow{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: randName(fmt.Sprintf("%s-%s-to-%s-", testNamespace, node1Pods[0], strings.ReplaceAll(dstPodIPv6Str, ":", "--"))),
@@ -2137,8 +2136,8 @@ func runTestTraceflow(t *testing.T, data *TestData, tc testcase) {
 	case 6:
 		skipIfNotIPv6Cluster(t)
 	}
-	if tc.skipReason != "" {
-		t.Skip(tc.skipReason)
+	if tc.skipIfNeeded != nil {
+		tc.skipIfNeeded(t)
 	}
 	if _, err := data.crdClient.CrdV1alpha1().Traceflows().Create(context.TODO(), tc.tf, metav1.CreateOptions{}); err != nil {
 		t.Fatalf("Error when creating traceflow: %v", err)

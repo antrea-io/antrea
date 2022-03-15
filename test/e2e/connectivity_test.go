@@ -56,13 +56,11 @@ func TestConnectivity(t *testing.T) {
 		testPodConnectivityAfterAntreaRestart(t, data, testNamespace)
 	})
 	t.Run("testOVSRestartSameNode", func(t *testing.T) {
-		skipIfProviderIs(t, "kind", "test not valid for the netdev datapath type")
 		skipIfNotIPv4Cluster(t)
 		skipIfHasWindowsNodes(t)
 		testOVSRestartSameNode(t, data, testNamespace)
 	})
 	t.Run("testOVSFlowReplay", func(t *testing.T) {
-		skipIfProviderIs(t, "kind", "stopping OVS daemons create connectivity issues")
 		skipIfHasWindowsNodes(t)
 		testOVSFlowReplay(t, data, testNamespace)
 	})
@@ -274,12 +272,6 @@ func (data *TestData) redeployAntrea(t *testing.T, option deployAntreaOptions) {
 	if err := data.waitForAntreaDaemonSetPods(defaultTimeout); err != nil {
 		t.Fatalf("Error when restarting Antrea: %v", err)
 	}
-	// Restart CoreDNS Pods to avoid issues caused by disrupting the datapath (when restarting
-	// Antrea Agent Pods).
-	t.Logf("Restarting CoreDNS Pods")
-	if err := data.restartCoreDNSPods(defaultTimeout); err != nil {
-		t.Fatalf("Error when restarting CoreDNS Pods: %v", err)
-	}
 
 	<-timer.C
 	containerRestarts, err := data.getAgentContainersRestartCount()
@@ -459,9 +451,7 @@ func testOVSFlowReplay(t *testing.T, data *TestData, namespace string) {
 	assert.Equal(t, numGroups1, numGroups2, "Mismatch in OVS group count after flow replay")
 }
 
-// testPingLargeMTU verifies that fragmented ICMP packets are handled correctly. Until OVS 2.12.0,
-// the conntrack implementation of the OVS userspace datapath did not support v4/v6 fragmentation
-// and this test was failing when Antrea was running on a Kind cluster.
+// testPingLargeMTU verifies that fragmented ICMP packets are handled correctly.
 func testPingLargeMTU(t *testing.T, data *TestData) {
 	skipIfNumNodesLessThan(t, 2)
 

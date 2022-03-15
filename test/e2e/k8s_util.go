@@ -96,10 +96,10 @@ func (k *KubernetesUtils) probe(
 		v1.ProtocolUDP:  "udp",
 		v1.ProtocolSCTP: "sctp",
 	}
-	// There seems to be an issue when running Antrea in Kind where tunnel traffic is dropped at
-	// first. This leads to the first test being run consistently failing. To avoid this issue
-	// until it is resolved, we try to connect 3 times.
-	// See https://github.com/antrea-io/antrea/issues/467.
+	// We try to connect 3 times. This dates back to when we were using the OVS netdev datapath
+	// for Kind clusters, as the first packet sent on a tunnel was always dropped
+	// (https://github.com/antrea-io/antrea/issues/467). We may be able to revisit this now that
+	// we use the OVS kernel datapath for Kind.
 	cmd := []string{
 		"/bin/sh",
 		"-c",

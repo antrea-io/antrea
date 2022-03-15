@@ -2695,7 +2695,8 @@ data:
     # - system
     # - netdev
     # 'system' is the default value and corresponds to the kernel datapath. Use 'netdev' to run
-    # OVS in userspace mode. Userspace mode requires the tun device driver to be available.
+    # OVS in userspace mode (not fully supported yet). Userspace mode requires the tun device driver to
+    # be available.
     #ovsDatapathType: system
 
     # Name of the interface antrea-agent will create and use for host <--> pod communication.
@@ -2979,7 +2980,7 @@ kind: ConfigMap
 metadata:
   labels:
     app: antrea
-  name: antrea-config-82b78c27h8
+  name: antrea-config-557m769449
   namespace: kube-system
 ---
 apiVersion: v1
@@ -3050,7 +3051,7 @@ spec:
             fieldRef:
               fieldPath: spec.serviceAccountName
         - name: ANTREA_CONFIG_MAP_NAME
-          value: antrea-config-82b78c27h8
+          value: antrea-config-557m769449
         image: projects.registry.vmware.com/antrea/antrea-ubuntu:latest
         imagePullPolicy: IfNotPresent
         livenessProbe:
@@ -3101,7 +3102,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-82b78c27h8
+          name: antrea-config-557m769449
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -3337,7 +3338,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-82b78c27h8
+          name: antrea-config-557m769449
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d

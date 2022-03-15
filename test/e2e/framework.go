@@ -93,8 +93,6 @@ const (
 	agentContainerName         string = "antrea-agent"
 	antreaYML                  string = "antrea.yml"
 	antreaIPSecYML             string = "antrea-ipsec.yml"
-	antreaWireGuardGoYML       string = "antrea-wireguard-go.yml"
-	antreaWireGuardGoCovYML    string = "antrea-wireguard-go-coverage.yml"
 	antreaCovYML               string = "antrea-coverage.yml"
 	antreaIPSecCovYML          string = "antrea-ipsec-coverage.yml"
 	flowAggregatorYML          string = "flow-aggregator.yml"
@@ -218,7 +216,6 @@ type deployAntreaOptions int
 const (
 	deployAntreaDefault deployAntreaOptions = iota
 	deployAntreaIPsec
-	deployAntreaWireGuardGo
 	deployAntreaCoverageOffset
 )
 
@@ -238,15 +235,12 @@ var (
 	deployAntreaOptionsString = [...]string{
 		"AntreaDefault",
 		"AntreaWithIPSec",
-		"AntreaWithWireGuardGo",
 	}
 	deployAntreaOptionsYML = [...]string{
 		antreaYML,
 		antreaIPSecYML,
-		antreaWireGuardGoYML,
 		antreaCovYML,
 		antreaIPSecCovYML,
-		antreaWireGuardGoCovYML,
 	}
 )
 
@@ -689,8 +683,8 @@ func (data *TestData) deployAntrea(option deployAntreaOptions) error {
 	return data.deployAntreaCommon(option.DeployYML(), "", true)
 }
 
-// deployAntreaFlowExporter deploys Antrea with flow exporter config params enabled.
-func (data *TestData) deployAntreaFlowExporter(ipfixCollector string) error {
+// enableAntreaFlowExporter redeploys Antrea with flow exporter config params enabled.
+func (data *TestData) enableAntreaFlowExporter(ipfixCollector string) error {
 	// Enable flow exporter feature and add related config params to antrea agent configmap.
 	ac := func(config *agentconfig.AgentConfig) {
 		config.FeatureGates["FlowExporter"] = true
@@ -704,29 +698,36 @@ func (data *TestData) deployAntreaFlowExporter(ipfixCollector string) error {
 	return data.mutateAntreaConfigMap(nil, ac, false, true)
 }
 
+func (data *TestData) disableAntreaFlowExporter() error {
+	ac := func(config *agentconfig.AgentConfig) {
+		config.FeatureGates["FlowExporter"] = false
+	}
+	return data.mutateAntreaConfigMap(nil, ac, false, true)
+}
+
 // deployFlowAggregator deploys the Flow Aggregator with ipfix collector address.
-func (data *TestData) deployFlowAggregator(ipfixCollector string) (string, error) {
+func (data *TestData) deployFlowAggregator(ipfixCollector string) error {
 	flowAggYaml := flowAggregatorYML
 	if testOptions.enableCoverage {
 		flowAggYaml = flowAggregatorCovYML
 	}
 	rc, _, _, err := provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl apply -f %s", flowAggYaml))
 	if err != nil || rc != 0 {
-		return "", fmt.Errorf("error when deploying the Flow Aggregator; %s not available on the control-plane Node", flowAggYaml)
+		return fmt.Errorf("error when deploying the Flow Aggregator; %s not available on the control-plane Node", flowAggYaml)
 	}
 	svc, err := data.clientset.CoreV1().Services(flowAggregatorNamespace).Get(context.TODO(), flowAggregatorDeployment, metav1.GetOptions{})
 	if err != nil {
-		return "", fmt.Errorf("unable to get service %v: %v", flowAggregatorDeployment, err)
+		return fmt.Errorf("unable to get service %v: %v", flowAggregatorDeployment, err)
 	}
 	if err = data.mutateFlowAggregatorConfigMap(ipfixCollector, svc.Spec.ClusterIP); err != nil {
-		return "", err
+		return err
 	}
 	if rc, _, _, err = provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl -n %s rollout status deployment/%s --timeout=%v", flowAggregatorNamespace, flowAggregatorDeployment, 2*defaultTimeout)); err != nil || rc != 0 {
 		_, stdout, _, _ := provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl -n %s describe pod", flowAggregatorNamespace))
 		_, logStdout, _, _ := provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl -n %s logs -l app=flow-aggregator", flowAggregatorNamespace))
-		return stdout, fmt.Errorf("error when waiting for the Flow Aggregator rollout to complete. kubectl describe output: %s, logs: %s", stdout, logStdout)
+		return fmt.Errorf("error when waiting for the Flow Aggregator rollout to complete. kubectl describe output: %s, logs: %s", stdout, logStdout)
 	}
-	return svc.Spec.ClusterIP, nil
+	return nil
 }
 
 func (data *TestData) mutateFlowAggregatorConfigMap(ipfixCollector string, faClusterIP string) error {
@@ -744,11 +745,6 @@ func (data *TestData) mutateFlowAggregatorConfigMap(ipfixCollector string, faClu
 	flowAggregatorConf.ActiveFlowRecordTimeout = aggregatorActiveFlowRecordTimeout.String()
 	flowAggregatorConf.InactiveFlowRecordTimeout = aggregatorInactiveFlowRecordTimeout.String()
 	flowAggregatorConf.RecordContents.PodLabels = true
-	if testOptions.providerName == "kind" {
-		// In Kind cluster, there are issues with DNS name resolution on worker nodes.
-		// We will use flow aggregator service cluster IP to generate the server certificate for tls communication
-		flowAggregatorConf.FlowAggregatorAddress = faClusterIP
-	}
 
 	b, err := yaml.Marshal(&flowAggregatorConf)
 	if err != nil {
@@ -2036,7 +2032,7 @@ func (data *TestData) mutateAntreaConfigMap(
 			return fmt.Errorf("error when restarting antrea-agent Pod: %v", err)
 		}
 	}
-	// controller should be restarted after agents in case of dataplane disruption caused by agent restart on Kind cluster.
+	// we currently restart the controller after the agents
 	if restartController && controllerConfChanged {
 		_, err = data.restartAntreaControllerPod(defaultTimeout)
 		if err != nil {

@@ -41,7 +41,6 @@ import (
 const waitEgressRealizedTimeout = 3 * time.Second
 
 func TestEgress(t *testing.T) {
-	skipIfProviderIs(t, "kind", "pkt_mark field is not properly supported for OVS userspace (netdev) datapath.")
 	skipIfHasWindowsNodes(t)
 	skipIfNumNodesLessThan(t, 2)
 	skipIfAntreaIPAMTest(t)

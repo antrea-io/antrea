@@ -129,8 +129,7 @@ COMMON_IMAGES_LIST=("k8s.gcr.io/e2e-test-images/agnhost:2.29" \
                     "projects.registry.vmware.com/library/busybox"  \
                     "projects.registry.vmware.com/antrea/nginx:1.21.6-alpine" \
                     "projects.registry.vmware.com/antrea/perftool" \
-                    "projects.registry.vmware.com/antrea/ipfix-collector:v0.5.12" \
-                    "projects.registry.vmware.com/antrea/wireguard-go:0.0.20210424")
+                    "projects.registry.vmware.com/antrea/ipfix-collector:v0.5.12")
 for image in "${COMMON_IMAGES_LIST[@]}"; do
     for i in `seq 3`; do
         docker pull $image && break
@@ -169,28 +168,28 @@ function run_test {
   eval "timeout 600 $TESTBED_CMD create kind $args"
 
   if $coverage; then
-      $YML_CMD --kind --encap-mode $current_mode $manifest_args | docker exec -i kind-control-plane dd of=/root/antrea-coverage.yml
-      $YML_CMD --kind --encap-mode $current_mode --wireguard-go $manifest_args | docker exec -i kind-control-plane dd of=/root/antrea-wireguard-go-coverage.yml
+      $YML_CMD --encap-mode $current_mode $manifest_args | docker exec -i kind-control-plane dd of=/root/antrea-coverage.yml
+      $YML_CMD --ipsec $manifest_args | docker exec -i kind-control-plane dd of=/root/antrea-ipsec-coverage.yml
       $FLOWAGGREGATOR_YML_CMD --coverage | docker exec -i kind-control-plane dd of=/root/flow-aggregator-coverage.yml
   else
-      $YML_CMD --kind --encap-mode $current_mode $manifest_args | docker exec -i kind-control-plane dd of=/root/antrea.yml
-      $YML_CMD --kind --encap-mode $current_mode --wireguard-go $manifest_args | docker exec -i kind-control-plane dd of=/root/antrea-wireguard-go.yml
+      $YML_CMD --encap-mode $current_mode $manifest_args | docker exec -i kind-control-plane dd of=/root/antrea.yml
+      $YML_CMD --ipsec $manifest_args | docker exec -i kind-control-plane dd of=/root/antrea-ipsec.yml
       $FLOWAGGREGATOR_YML_CMD | docker exec -i kind-control-plane dd of=/root/flow-aggregator.yml
   fi
   if $proxy_all; then
       apiserver=$(docker exec -i kind-control-plane kubectl get endpoints kubernetes --no-headers | awk '{print $2}')
       if $coverage; then
-        docker exec -i kind-control-plane sed -i.bak -E "s/^[[:space:]]*#kubeAPIServerOverride[[:space:]]*:[[:space:]]*[a-z\"]+[[:space:]]*$/    kubeAPIServerOverride: \"$apiserver\"/" /root/antrea-coverage.yml /root/antrea-wireguard-go-coverage.yml
+        docker exec -i kind-control-plane sed -i.bak -E "s/^[[:space:]]*#kubeAPIServerOverride[[:space:]]*:[[:space:]]*[a-z\"]+[[:space:]]*$/    kubeAPIServerOverride: \"$apiserver\"/" /root/antrea-coverage.yml /root/antrea-ipsec-coverage.yml
       else
-        docker exec -i kind-control-plane sed -i.bak -E "s/^[[:space:]]*#kubeAPIServerOverride[[:space:]]*:[[:space:]]*[a-z\"]+[[:space:]]*$/    kubeAPIServerOverride: \"$apiserver\"/" /root/antrea.yml /root/antrea-wireguard-go.yml
+        docker exec -i kind-control-plane sed -i.bak -E "s/^[[:space:]]*#kubeAPIServerOverride[[:space:]]*:[[:space:]]*[a-z\"]+[[:space:]]*$/    kubeAPIServerOverride: \"$apiserver\"/" /root/antrea.yml /root/antrea-ipsec.yml
       fi
   fi
   sleep 1
 
   if $coverage; then
-      go test -v -timeout=70m antrea.io/antrea/test/e2e -provider=kind --logs-export-dir=$ANTREA_LOG_DIR --coverage --coverage-dir $ANTREA_COV_DIR --skip=$skiplist
+      go test -v -timeout=80m antrea.io/antrea/test/e2e -provider=kind --logs-export-dir=$ANTREA_LOG_DIR --coverage --coverage-dir $ANTREA_COV_DIR --skip=$skiplist
   else
-      go test -v -timeout=65m antrea.io/antrea/test/e2e -provider=kind --logs-export-dir=$ANTREA_LOG_DIR --skip=$skiplist
+      go test -v -timeout=75m antrea.io/antrea/test/e2e -provider=kind --logs-export-dir=$ANTREA_LOG_DIR --skip=$skiplist
   fi
   $TESTBED_CMD destroy kind
 }
