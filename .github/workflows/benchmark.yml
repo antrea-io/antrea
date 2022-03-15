@@ -6,23 +6,7 @@ on:
       - main
 
 jobs:
-  check-changes:
-    name: Check whether tests need to be run based on diff
-    runs-on: [ ubuntu-latest ]
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-      - uses: antrea-io/has-changes@v1
-        id: check_diff
-        with:
-          args: pkg/*
-    outputs:
-      has_changes: ${{ steps.check_diff.outputs.has_changes }}
-
   go-benchmark-checks:
-    needs: check-changes
-    if: ${{ needs.check-changes.outputs.has_changes == 'yes' || github.event_name == 'push' }}
     name: GoBenchmark
     runs-on: ubuntu-latest
     steps:
