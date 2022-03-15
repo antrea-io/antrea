@@ -293,7 +293,7 @@ func MoveIFConfigurations(ips []*net.IPNet, routes []interface{}, mac net.Hardwa
 	return nil
 }
 
-func RenameHostInterface(oriName string, newName string) error {
+func renameHostInterface(oriName string, newName string) error {
 	link, err := netlink.LinkByName(oriName)
 	if err != nil {
 		return err

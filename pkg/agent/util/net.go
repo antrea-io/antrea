@@ -24,11 +24,14 @@ import (
 	"math"
 	"net"
 	"strings"
+	"time"
 
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
 	utilnet "k8s.io/utils/net"
 
+	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/util/ip"
 )
 
@@ -39,6 +42,7 @@ const (
 
 	FamilyIPv4 uint8 = 4
 	FamilyIPv6 uint8 = 6
+	PrefixPhy        = "phy-"
 )
 
 func generateInterfaceName(key string, name string, useHead bool) string {
@@ -404,4 +408,51 @@ func GetGlobalIPNetsByName(link *net.Interface) ([]*net.IPNet, error) {
 		}
 	}
 	return addrs, nil
+}
+
+func GenUplinkInterfaceName(hostIfName string) string {
+	return fmt.Sprintf("%s%s", PrefixPhy, hostIfName)
+}
+
+func GetUplinkConfig(uplinkIfName string) (*config.AdapterNetConfig, error) {
+	iface, err := net.InterfaceByName(uplinkIfName)
+	if err != nil {
+		klog.ErrorS(err, "Failed to get interface", "uplinkIfName", uplinkIfName)
+		return nil, err
+	}
+	addrs, err := GetGlobalIPNetsByName(iface)
+	if err != nil {
+		klog.ErrorS(err, "Failed to get address", "iface", iface)
+		return nil, err
+	}
+	gw, routes, err := GetNetRoutesOnAdapter(iface.Index)
+	if err != nil {
+		klog.ErrorS(err, "Failed to get routes", "iface.Index", iface.Index)
+		return nil, err
+	}
+	return &config.AdapterNetConfig{
+		Name:    uplinkIfName,
+		Index:   iface.Index,
+		MAC:     iface.HardwareAddr,
+		IPs:     addrs,
+		Routes:  routes,
+		Gateway: gw,
+		MTU:     iface.MTU,
+	}, nil
+}
+
+func RenameInterface(from, to string) error {
+	var renameErr error
+	pollErr := wait.Poll(time.Millisecond*100, time.Second, func() (done bool, err error) {
+		renameErr = renameHostInterface(from, to)
+		if renameErr != nil {
+			klog.InfoS("Unable to rename host interface name with error, retrying", "oldName", from, "newName", to, "err", renameErr)
+			return false, nil
+		}
+		return true, nil
+	})
+	if pollErr != nil {
+		return fmt.Errorf("failed to rename host interface name %s to %s", from, to)
+	}
+	return nil
 }

@@ -294,3 +294,11 @@ func (i *Initializer) RestoreOVSBridge() {
 func (i *Initializer) setInterfaceMTU(iface string, mtu int) error {
 	return i.ovsBridgeClient.SetInterfaceMTU(iface, mtu)
 }
+
+func (i *Initializer) prepareOVSConfigForVM() error {
+	return nil
+}
+
+func (i *Initializer) installVmOpenFlows() error {
+	return nil
+}
