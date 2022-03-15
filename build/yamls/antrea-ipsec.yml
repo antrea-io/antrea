@@ -2562,9 +2562,13 @@ data:
     #  AntreaProxy: true
 
     # Enable EndpointSlice support in AntreaProxy. Don't enable this feature unless that EndpointSlice
-    # API version v1beta1 is supported and set as enabled in Kubernetes. If AntreaProxy is not enabled,
+    # API version v1 is supported and set as enabled in Kubernetes. If AntreaProxy is not enabled,
     # this flag will not take effect.
     #  EndpointSlice: false
+
+    # Enable TopologyAwareHints in AntreaProxy. This requires AntreaProxy and EndpointSlice to be
+    # enabled, otherwise this flag will not take effect.
+    #  TopologyAwareHints: false
 
     # Enable traceflow which provides packet tracing feature to diagnose network issue.
     #  Traceflow: true
@@ -3701,7 +3705,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: df5271a5c42a550d3f8e73fbe8e5fad8d178884fb74d81c7322128187546db86
+        checksum/config: 1609abc57e2865390df7a7d99e4c3b342c7e097fa879fefe8e4315130eaa9019
         checksum/ipsec-secret: d0eb9c52d0cd4311b6d252a951126bf9bea27ec05590bed8a394f0f792dcb2a4
       labels:
         app: antrea
@@ -3987,7 +3991,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: df5271a5c42a550d3f8e73fbe8e5fad8d178884fb74d81c7322128187546db86
+        checksum/config: 1609abc57e2865390df7a7d99e4c3b342c7e097fa879fefe8e4315130eaa9019
       labels:
         app: antrea
         component: antrea-controller

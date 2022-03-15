@@ -41,6 +41,11 @@ const (
 	// flag will not take effect.
 	EndpointSlice featuregate.Feature = "EndpointSlice"
 
+	// alpha: v1.8
+	// Enable TopologyAwareHints in AntreaProxy. If EndpointSlice is not enabled, this
+	// flag will not take effect.
+	TopologyAwareHints featuregate.Feature = "TopologyAwareHints"
+
 	// alpha: v0.8
 	// beta: v0.11
 	// Enable antrea proxy which provides ServiceLB for in-cluster services in antrea agent.
@@ -121,6 +126,7 @@ var (
 		AntreaProxy:        {Default: true, PreRelease: featuregate.Beta},
 		Egress:             {Default: true, PreRelease: featuregate.Beta},
 		EndpointSlice:      {Default: false, PreRelease: featuregate.Alpha},
+		TopologyAwareHints: {Default: false, PreRelease: featuregate.Alpha},
 		Traceflow:          {Default: true, PreRelease: featuregate.Beta},
 		AntreaIPAM:         {Default: false, PreRelease: featuregate.Alpha},
 		FlowExporter:       {Default: false, PreRelease: featuregate.Alpha},

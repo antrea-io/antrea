@@ -34,9 +34,10 @@ example, to enable `AntreaProxy` on Linux, edit the Agent configuration in the
 ## List of Available Features
 
 | Feature Name            | Component          | Default | Stage | Alpha Release | Beta Release | GA Release | Extra Requirements | Notes |
-| ----------------------- | ------------------ | ------- | ----- | ------------- | ------------ | ---------- | ------------------ | ----- |
+| ----------------------- | ------------------ | ------- | ----- |---------------| ------------ | ---------- | ------------------ | ----- |
 | `AntreaProxy`           | Agent              | `true`  | Beta  | v0.8          | v0.11        | N/A        | Yes                | Must be enabled for Windows. |
 | `EndpointSlice`         | Agent              | `false` | Alpha | v0.13.0       | N/A          | N/A        | Yes                |       |
+| `TopologyAwareHints`    | Agent              | `false` | Alpha | v1.8          | N/A          | N/A        | Yes                |       |
 | `AntreaPolicy`          | Agent + Controller | `true`  | Beta  | v0.8          | v1.0         | N/A        | No                 | Agent side config required from v0.9.0+. |
 | `Traceflow`             | Agent + Controller | `true`  | Beta  | v0.8          | v0.11        | N/A        | Yes                |       |
 | `FlowExporter`          | Agent              | `false` | Alpha | v0.9          | N/A          | N/A        | Yes                |       |
@@ -89,6 +90,19 @@ and will not implement Cluster IP functionality as expected.
 
 When using the OVS built-in kernel module (which is the most common case), your
 kernel version must be >= 4.6 (as opposed to >= 4.4 without this feature).
+
+### TopologyAwareHints
+
+`TopologyAwareHints` enables TopologyAwareHints support in AntreaProxy. The feature
+TopologyAwareHints is at beta stage in Kubernetes 1.23 (beta), and it is enabled by
+default in Kubernetes 1.24. For AntreaProxy, traffic can be routed to the Endpoint
+which is closer to its origin with this feature. Refer to this
+[link](https://kubernetes.io/docs/concepts/services-networking/topology-aware-hints/)
+for more information.
+
+#### Requirements for this Feature
+
+Feature EndpointSlice is enabled.
 
 ### AntreaPolicy
 
