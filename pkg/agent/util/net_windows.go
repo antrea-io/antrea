@@ -41,6 +41,7 @@ const (
 	HNSNetworkType       = "Transparent"
 	LocalHNSNetwork      = "antrea-hnsnetwork"
 	OVSExtensionID       = "583CC151-73EC-4A6A-8B47-578297AD7623"
+	ovsExtensionName     = "Open vSwitch Extension"
 	namedPipePrefix      = `\\.\pipe\`
 	commandRetryTimeout  = 5 * time.Second
 	commandRetryInterval = time.Second
@@ -49,6 +50,7 @@ const (
 	MetricHigh    = 50
 
 	AntreaNatName = "antrea-nat"
+	LocalVMSwitch = "antrea-switch"
 )
 
 type Route struct {
@@ -202,7 +204,7 @@ func RenameVMNetworkAdapter(networkName string, macStr, newName string, renameNe
 // SetAdapterMACAddress sets specified MAC address on interface.
 func SetAdapterMACAddress(adapterName string, macConfig *net.HardwareAddr) error {
 	macAddr := strings.Replace(macConfig.String(), ":", "", -1)
-	cmd := fmt.Sprintf("Set-NetAdapterAdvancedProperty -Name %s -RegistryKeyword NetworkAddress -RegistryValue %s",
+	cmd := fmt.Sprintf(`Set-NetAdapterAdvancedProperty -Name "%s" -RegistryKeyword NetworkAddress -RegistryValue "%s"`,
 		adapterName, macAddr)
 	_, err := ps.RunCommand(cmd)
 	return err
@@ -896,12 +898,196 @@ func VirtualAdapterName(name string) string {
 	return fmt.Sprintf("%s (%s)", ContainerVNICPrefix, name)
 }
 
-// TODO: Implement GetInterfaceConfig for Windows
 func GetInterfaceConfig(ifName string) (*net.Interface, []*net.IPNet, []interface{}, error) {
-	return nil, nil, nil, nil
+	iface, err := net.InterfaceByName(ifName)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to get interface %s: %v", ifName, err)
+	}
+	addrs, err := GetIPNetsByLink(iface)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to get address for interface %s: %v", iface.Name, err)
+	}
+	routes, err := getRoutesOnInterface(iface.Index)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to get routes for interface index %d: %v", iface.Index, err)
+	}
+	return iface, addrs, routes, nil
 }
 
-// TODO: Implement RenameInterface for Windows
 func RenameInterface(from, to string) error {
+	var renameErr error
+	pollErr := wait.Poll(time.Millisecond*100, time.Second, func() (done bool, err error) {
+		renameErr = renameHostInterface(from, to)
+		if renameErr != nil {
+			klog.ErrorS(renameErr, "Failed to rename adapter, retrying")
+			return false, nil
+		}
+		return true, nil
+	})
+	if pollErr != nil {
+		return fmt.Errorf("failed to rename host interface name %s to %s", from, to)
+	}
 	return nil
+}
+
+func GetVMSwitchInterfaceName() (string, error) {
+	cmd := fmt.Sprintf(`Get-VMSwitchTeam -Name "%s" | select  NetAdapterInterfaceDescription |  Format-Table -HideTableHeaders`, LocalVMSwitch)
+	out, err := ps.RunCommand(cmd)
+	if err != nil {
+		return "", err
+	}
+	out = strings.TrimSpace(out)
+	// Remove the leading and trailing {} brackets
+	out = out[1 : len(out)-1]
+	cmd = fmt.Sprintf(`Get-NetAdapter -InterfaceDescription "%s" | select Name | Format-Table -HideTableHeaders`, out)
+	out, err = ps.RunCommand(cmd)
+	if err != nil {
+		return "", err
+	}
+	out = strings.TrimSpace(out)
+	return out, err
+}
+
+func VMSwitchExists() (bool, error) {
+	cmd := fmt.Sprintf(`Get-VMSwitch -Name "%s" -ComputerName $(hostname)`, LocalVMSwitch)
+	_, err := ps.RunCommand(cmd)
+	if err == nil {
+		return true, nil
+	}
+	if strings.Contains(err.Error(), fmt.Sprintf(`unable to find a virtual switch with name "%s"`, LocalVMSwitch)) {
+		return false, nil
+	}
+	return false, err
+}
+
+// CreateVMSwitch creates a virtual switch and enables openvswitch extension.
+// If switch exists and extension is enabled, then it will return no error.
+// Otherwise, it will throw an error.
+// TODO: Handle for multiple interfaces
+func CreateVMSwitch(ifName string) error {
+	exists, err := VMSwitchExists()
+	if err != nil {
+		return err
+	}
+	if !exists {
+		err := createVMSwitchWithTeaming(LocalVMSwitch, ifName)
+		if err != nil {
+			return err
+		}
+	}
+
+	enabled, err := isOVSExtensionEnabled()
+	if err != nil {
+		return err
+	}
+	if !enabled {
+		err := enableOVSExtension()
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func RemoveVMSwitch() error {
+	klog.InfoS("Deleting VM Switch", "switch", LocalVMSwitch)
+	exists, err := VMSwitchExists()
+	if err != nil {
+		return err
+	}
+	if exists {
+		cmd := fmt.Sprintf(`Remove-VMSwitch -Name "%s" -ComputerName $(hostname) -Force`, LocalVMSwitch)
+		_, err := ps.RunCommand(cmd)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func GenHostInterfaceName(upLinkIfName string) string {
+	return strings.TrimSuffix(upLinkIfName, bridgedUplinkSuffix)
+}
+
+// createVMSwitchWithTeaming creates VMSwitch and enables OVS extension.
+// Connection to VM is lost for few seconds
+func createVMSwitchWithTeaming(switchName, ifName string) error {
+	cmd := fmt.Sprintf(`New-VMSwitch -Name "%s" -NetAdapterName "%s" -EnableEmbeddedTeaming $true -AllowManagementOS $true -ComputerName $(hostname)| Enable-VMSwitchExtension "%s"`, switchName, ifName, ovsExtensionName)
+	_, err := ps.RunCommand(cmd)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func enableOVSExtension() error {
+	cmd := fmt.Sprintf(`Get-VMSwitch -Name "%s" -ComputerName $(hostname)| Enable-VMSwitchExtension "%s"`, LocalVMSwitch, ovsExtensionName)
+	_, err := ps.RunCommand(cmd)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func getRoutesOnInterface(linkIndex int) ([]interface{}, error) {
+	cmd := fmt.Sprintf("Get-NetRoute -InterfaceIndex %d -ErrorAction Ignore | Format-Table -HideTableHeaders", linkIndex)
+	rs, err := getNetRoutes(cmd)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get routes: %v", err)
+	}
+	var routes []interface{}
+	for _, r := range rs {
+		// Skip the routes automatically generated by Windows host when adding IP address on the network adapter.
+		if r.GatewayAddress != nil && r.GatewayAddress.IsUnspecified() {
+			continue
+		}
+		routes = append(routes, r)
+	}
+	return routes, nil
+}
+
+// parseOVSExtensionOutput parses the VM extension output
+// and returns the value of Enabled field
+func parseOVSExtensionOutput(s string) bool {
+	scanner := bufio.NewScanner(strings.NewReader(s))
+	for scanner.Scan() {
+		temp := strings.Fields(scanner.Text())
+		line := strings.Join(temp, "")
+		if strings.Contains(line, "Enabled") {
+			if strings.Contains(line, "True") {
+				return true
+			}
+			return false
+		}
+	}
+	return false
+}
+
+func isOVSExtensionEnabled() (bool, error) {
+	cmd := fmt.Sprintf(`Get-VMSwitchExtension -VMSwitchName "%s" -ComputerName $(hostname) | ? Id -EQ "%s"`, LocalVMSwitch, OVSExtensionID)
+	out, err := ps.RunCommand(cmd)
+	if err == nil {
+		if strings.Contains(out, ovsExtensionName) {
+			ok := parseOVSExtensionOutput(out)
+			if !ok {
+				return false, nil
+			} else {
+				return true, nil
+			}
+		} else {
+			return false, fmt.Errorf("open vswitch extension driver is not installed")
+		}
+
+	}
+	// Catch all the failures here and return appropriate message
+	if strings.Contains(err.Error(), fmt.Sprintf(`unable to find a virtual switch with name "%s"`, LocalVMSwitch)) {
+		return false, err
+	}
+	return false, err
+}
+
+func renameHostInterface(oriName string, newName string) error {
+	cmd := fmt.Sprintf(`Get-NetAdapter -Name "%s" | Rename-NetAdapter -NewName "%s"`, oriName, newName)
+	_, err := ps.RunCommand(cmd)
+	return err
 }

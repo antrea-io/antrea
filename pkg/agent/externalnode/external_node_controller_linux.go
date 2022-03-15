@@ -57,3 +57,7 @@ func (c *ExternalNodeController) moveIFConfigurations(adapterConfig *config.Adap
 	}
 	return nil
 }
+
+func (c *ExternalNodeController) removeExternalNodeConfig() error {
+	return nil
+}

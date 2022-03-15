@@ -30,6 +30,7 @@ import (
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/util"
+	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	utilip "antrea.io/antrea/pkg/util/ip"
 )
 
@@ -293,4 +294,21 @@ func (i *Initializer) RestoreOVSBridge() {
 
 func (i *Initializer) setInterfaceMTU(iface string, mtu int) error {
 	return i.ovsBridgeClient.SetInterfaceMTU(iface, mtu)
+}
+
+func (i *Initializer) setVMNodeConfig(en *v1alpha1.ExternalNode, nodeName string) error {
+	i.nodeConfig = &config.NodeConfig{
+		Name:      nodeName,
+		Type:      config.ExternalNode,
+		OVSBridge: i.ovsBridge,
+	}
+	return nil
+}
+
+func (i *Initializer) prepareOVSConfigForVM() error {
+	return nil
+}
+
+func (i *Initializer) installVMInitialFlows() error {
+	return nil
 }
