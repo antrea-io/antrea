@@ -20,11 +20,10 @@ function echoerr {
     >&2 echo "$@"
 }
 
-_usage="Usage: $0 [--mode (dev|release)] [--encap-mode] [--kind] [--ipsec] [--no-proxy] [--no-np] [--keep] [--tun (geneve|vxlan|gre|stt)] [--verbose-log] [--help|-h]
+_usage="Usage: $0 [--mode (dev|release)] [--encap-mode] [--ipsec] [--no-proxy] [--no-np] [--keep] [--tun (geneve|vxlan|gre|stt)] [--verbose-log] [--help|-h]
 Generate a YAML manifest for Antrea using Kustomize and print it to stdout.
         --mode (dev|release)          Choose the configuration variant that you need (default is 'dev')
         --encap-mode                  Traffic encapsulation mode. (default is 'encap')
-        --kind                        Generate a manifest appropriate for running Antrea in a Kind cluster
         --cloud                       Generate a manifest appropriate for running Antrea in Public Cloud
         --ipsec                       Generate a manifest with IPsec encryption of tunnel traffic enabled
         --all-features                Generate a manifest with all alpha features enabled
@@ -36,16 +35,14 @@ Generate a YAML manifest for Antrea using Kustomize and print it to stdout.
         --keep                        Debug flag which will preserve the generated kustomization.yml
         --tun (geneve|vxlan|gre|stt)  Choose encap tunnel type from geneve, gre, stt and vxlan (default is geneve)
         --verbose-log                 Generate a manifest with increased log-level (level 4) for Antrea agent and controller.
-                                      This option will work only with 'dev' mode.
+                                      This option will work only in 'dev' mode.
         --on-delete                   Generate a manifest with antrea-agent's update strategy set to OnDelete.
-                                      This option will work only for Kind clusters (when using '--kind').
+                                      This option will work only in 'dev' mode.
         --coverage                    Generates a manifest which supports measuring code coverage of Antrea binaries.
         --simulator                   Generates a manifest with antrea-agent simulator included
         --custom-adm-controller       Generates a manifest with custom Antrea admission controller to validate/mutate resources.
         --hw-offload                  Generates a manifest with hw-offload enabled in the antrea-ovs container.
         --sriov                       Generates a manifest which enables use of Kubelet API for SR-IOV device info.
-        --wireguard-go                Generate a manifest with WireGuard (golang implementation) encryption enabled.
-                                      This option will work only for Kind clusters (when using '--kind').
         --flexible-ipam               Generates a manifest with flexible IPAM enabled.
         --whereabouts                 Generates a manifest which enables whereabouts configuration for secondary network IPAM.
         --help, -h                    Print this message and exit
@@ -71,7 +68,6 @@ function print_help {
 }
 
 MODE="dev"
-KIND=false
 IPSEC=false
 ALLFEATURES=false
 PROXY=true
@@ -92,7 +88,6 @@ CUSTOM_ADM_CONTROLLER=false
 HW_OFFLOAD=false
 SRIOV=false
 WHEREABOUTS=false
-WIREGUARD_GO=false
 FLEXIBLE_IPAM=false
 MULTICAST=false
 MULTICAST_INTERFACES=""
@@ -115,7 +110,7 @@ case $key in
     shift 2
     ;;
     --kind)
-    KIND=true
+    # no-op
     shift
     ;;
     --ipsec)
@@ -190,10 +185,6 @@ case $key in
     SRIOV=true
     shift
     ;;   
-    --wireguard-go)
-    WIREGUARD_GO=true
-    shift
-    ;;
     --flexible-ipam)
     FLEXIBLE_IPAM=true
     shift
@@ -257,8 +248,14 @@ if [ "$MODE" == "release" ] && [ -z "$IMG_TAG" ]; then
     exit 1
 fi
 
-if [ "$MODE" == "release" ] && $VERBOSE_LOG; then
-    echoerr "--verbose-log works only with 'dev' mode"
+if [ "$MODE" != "dev" ] && $VERBOSE_LOG; then
+    echoerr "--verbose-log works only in 'dev' mode"
+    print_help
+    exit 1
+fi
+
+if [ "$MODE" != "dev" ] && $ON_DELETE; then
+    echoerr "--on-delete works only in 'dev' mode"
     print_help
     exit 1
 fi
@@ -268,26 +265,13 @@ if $COVERAGE && $VERBOSE_LOG; then
     VERBOSE_LOG=false
 fi
 
-if ! $KIND && $ON_DELETE; then
-    echoerr "--on-delete works only for Kind clusters"
-    print_help
-    exit 1
-fi
-
 if [[ "$ENCAP_MODE" != "" ]] && [[ "$ENCAP_MODE" != "encap" ]] && ! $PROXY; then
     echoerr "Cannot use '--no-proxy' when '--encap-mode' is not 'encap'"
     exit 1
 fi
 
-if "$WIREGUARD_GO" && "$IPSEC"; then
-    echoerr "Cannot use '--wireguard-go' together with '--ipsec'"
-    print_help
-    exit 1
-fi
-
-if "$WIREGUARD_GO" && ! "$KIND"; then
-    echoerr "--wireguard-go works only for Kind clusters"
-    print_help
+if [[ "$ENCAP_MODE" != "" ]] && [[ "$ENCAP_MODE" != "encap" ]] && $IPSEC; then
+    echoerr "Encap mode '$ENCAP_MODE' does not make sense with IPsec"
     exit 1
 fi
 
@@ -317,18 +301,11 @@ mkdir configMap && cd configMap
 # but instead to the generated YAML manifest, so our regexs need not be too robust.
 cp $KUSTOMIZATION_DIR/base/conf/antrea-agent.conf antrea-agent.conf
 cp $KUSTOMIZATION_DIR/base/conf/antrea-controller.conf antrea-controller.conf
-if $KIND; then
-    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*ovsDatapathType[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/ovsDatapathType: netdev/" antrea-agent.conf
-fi
 
 if $IPSEC; then
     sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*trafficEncryptionMode[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/trafficEncryptionMode: ipsec/" antrea-agent.conf
     # change the tunnel type to GRE which works better with IPsec encryption than other types.
     sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*tunnelType[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/tunnelType: gre/" antrea-agent.conf
-fi
-
-if $WIREGUARD_GO; then
-    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*trafficEncryptionMode[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/trafficEncryptionMode: wireguard/" antrea-agent.conf
 fi
 
 if $FLEXIBLE_IPAM; then
@@ -472,42 +449,6 @@ if $SIMULATOR; then
     cd ..
 fi
 
-if $KIND; then
-    mkdir kind && cd kind
-    cp ../../patches/kind/*.yml .
-    touch kustomization.yml
-    $KUSTOMIZE edit add base $BASE
-
-    # add tun device to antrea OVS container
-    $KUSTOMIZE edit add patch --path tunDevice.yml
-    # antrea-ovs should use start_ovs_netdev instead of start_ovs to ensure that the br-phy bridge
-    # is created.
-    $KUSTOMIZE edit add patch --path startOvs.yml
-    # this adds a small delay before running the antrea-agent process, to give the antrea-ovs
-    # container enough time to set up the br-phy bridge.
-    # workaround for https://github.com/antrea-io/antrea/issues/801
-    if $COVERAGE; then
-        cp ../../patches/coverage/startAgentCov.yml .
-        $KUSTOMIZE edit add patch --path startAgentCov.yml
-    else
-        $KUSTOMIZE edit add patch --path startAgent.yml
-    fi
-    # change initContainer script and remove SYS_MODULE capability
-    $KUSTOMIZE edit add patch --path installCni.yml
-
-    # inject the wireguard-go container to run WireGuard in userspace
-    if $WIREGUARD_GO; then
-        $KUSTOMIZE edit add patch --path wireguardGo.yml
-    fi
-
-    if $ON_DELETE; then
-        $KUSTOMIZE edit add patch --path onDeleteUpdateStrategy.yml
-    fi
-
-    BASE=../kind
-    cd ..
-fi
-
 if $CUSTOM_ADM_CONTROLLER; then
     mkdir admissioncontroller && cd admissioncontroller
     cp ../../patches/admissioncontroller/*.yml .
@@ -577,6 +518,10 @@ if [ "$MODE" == "dev" ]; then
     # containers. See https://github.com/kubernetes-sigs/kustomize/issues/1493
     if $IPSEC; then
         $KUSTOMIZE edit add patch --path agentIpsecImagePullPolicy.yml
+    fi
+
+    if $ON_DELETE; then
+        $KUSTOMIZE edit add patch --path onDeleteUpdateStrategy.yml
     fi
 fi
 

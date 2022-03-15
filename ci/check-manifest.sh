@@ -31,7 +31,6 @@ YAMLS=(
     "build/yamls/antrea-eks.yml"
     "build/yamls/antrea-gke.yml"
     "build/yamls/antrea-aks.yml"
-    "build/yamls/antrea-kind.yml"
     "build/yamls/antrea-octant.yml"
     "build/yamls/antrea-windows.yml"
     "build/yamls/flow-aggregator.yml"

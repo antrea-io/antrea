@@ -158,25 +158,15 @@ func TestFlowAggregator(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
-	// Execute teardownFlowAggregator later than teardownTest to ensure that the log
-	// of Flow Aggregator has been exported.
-	defer teardownFlowAggregator(t, data)
-	defer teardownTest(t, data)
-
-	if testOptions.providerName == "kind" {
-		// Currently, in Kind clusters, OVS userspace datapath does not support
-		// packet statistics in the conntrack entries. Because of that Flow Exporter
-		// at Antrea agent cannot consider flows to be active and keep sending active
-		// records. Currently, Flow Exporter sends two records for a iperf flow
-		// in kind cluster with a duration of 12s: 1. A new iperf connection gets
-		// idled out after exporter idle timeout, which is after 1s in the test.
-		// In this case, flow aggregator sends the record after 4.5s 2. When the
-		// connection dies and TCP state becomes TIME_WAIT, which is
-		// at 12s in the test. Here, Flow Aggregator sends the record at 15.5s.
-		// We will remove this workaround once OVS userspace datapath supports packet
-		// statistics in conntrack entries.
-		expectedNumDataRecords = 2
-	}
+	defer func() {
+		teardownTest(t, data)
+		if err := data.disableAntreaFlowExporter(); err != nil {
+			t.Errorf("Failed to disable flow exporter in Antrea Agent: %v", err)
+		}
+		// Execute teardownFlowAggregator later than teardownTest to ensure that the log
+		// of Flow Aggregator has been exported.
+		teardownFlowAggregator(t, data)
+	}()
 
 	k8sUtils, err = NewKubernetesUtils(data)
 	if err != nil {
@@ -207,8 +197,6 @@ func testHelper(t *testing.T, data *TestData, podAIPs, podBIPs, podCIPs, podDIPs
 	// Wait for the Service to be realized.
 	time.Sleep(3 * time.Second)
 
-	// OVS userspace implementation of conntrack doesn't maintain packet or byte counter statistics, so we ignore the bandwidth test in Kind cluster.
-	checkBandwidth := testOptions.providerName != "kind"
 	// IntraNodeFlows tests the case, where Pods are deployed on same Node
 	// and their flow information is exported as IPFIX flow records.
 	// K8s network policies are being tested here.
@@ -227,9 +215,9 @@ func testHelper(t *testing.T, data *TestData, podAIPs, podBIPs, podCIPs, podDIPs
 			}
 		}()
 		if !isIPv6 {
-			checkRecordsForFlows(t, data, podAIPs.ipv4.String(), podBIPs.ipv4.String(), isIPv6, true, false, true, false, checkBandwidth)
+			checkRecordsForFlows(t, data, podAIPs.ipv4.String(), podBIPs.ipv4.String(), isIPv6, true, false, true, false)
 		} else {
-			checkRecordsForFlows(t, data, podAIPs.ipv6.String(), podBIPs.ipv6.String(), isIPv6, true, false, true, false, checkBandwidth)
+			checkRecordsForFlows(t, data, podAIPs.ipv6.String(), podBIPs.ipv6.String(), isIPv6, true, false, true, false)
 		}
 	})
 
@@ -353,9 +341,9 @@ func testHelper(t *testing.T, data *TestData, podAIPs, podBIPs, podCIPs, podDIPs
 			}
 		}()
 		if !isIPv6 {
-			checkRecordsForFlows(t, data, podAIPs.ipv4.String(), podCIPs.ipv4.String(), isIPv6, false, false, false, true, checkBandwidth)
+			checkRecordsForFlows(t, data, podAIPs.ipv4.String(), podCIPs.ipv4.String(), isIPv6, false, false, false, true)
 		} else {
-			checkRecordsForFlows(t, data, podAIPs.ipv6.String(), podCIPs.ipv6.String(), isIPv6, false, false, false, true, checkBandwidth)
+			checkRecordsForFlows(t, data, podAIPs.ipv6.String(), podCIPs.ipv6.String(), isIPv6, false, false, false, true)
 		}
 	})
 
@@ -496,9 +484,9 @@ func testHelper(t *testing.T, data *TestData, podAIPs, podBIPs, podCIPs, podDIPs
 		// For IPv4-only and IPv6-only cluster, IP family of Service IP will be same as Pod IPs.
 		isServiceIPv6 := net.ParseIP(svcB.Spec.ClusterIP).To4() == nil
 		if isServiceIPv6 {
-			checkRecordsForFlows(t, data, podAIPs.ipv6.String(), svcB.Spec.ClusterIP, isServiceIPv6, true, true, false, false, checkBandwidth)
+			checkRecordsForFlows(t, data, podAIPs.ipv6.String(), svcB.Spec.ClusterIP, isServiceIPv6, true, true, false, false)
 		} else {
-			checkRecordsForFlows(t, data, podAIPs.ipv4.String(), svcB.Spec.ClusterIP, isServiceIPv6, true, true, false, false, checkBandwidth)
+			checkRecordsForFlows(t, data, podAIPs.ipv4.String(), svcB.Spec.ClusterIP, isServiceIPv6, true, true, false, false)
 		}
 	})
 
@@ -510,9 +498,9 @@ func testHelper(t *testing.T, data *TestData, podAIPs, podBIPs, podCIPs, podDIPs
 		// For IPv4-only and IPv6-only cluster, IP family of Service IP will be same as Pod IPs.
 		isServiceIPv6 := net.ParseIP(svcC.Spec.ClusterIP).To4() == nil
 		if isServiceIPv6 {
-			checkRecordsForFlows(t, data, podAIPs.ipv6.String(), svcC.Spec.ClusterIP, isServiceIPv6, false, true, false, false, checkBandwidth)
+			checkRecordsForFlows(t, data, podAIPs.ipv6.String(), svcC.Spec.ClusterIP, isServiceIPv6, false, true, false, false)
 		} else {
-			checkRecordsForFlows(t, data, podAIPs.ipv4.String(), svcC.Spec.ClusterIP, isServiceIPv6, false, true, false, false, checkBandwidth)
+			checkRecordsForFlows(t, data, podAIPs.ipv4.String(), svcC.Spec.ClusterIP, isServiceIPv6, false, true, false, false)
 		}
 	})
 
@@ -612,7 +600,7 @@ func checkAntctlRecord(t *testing.T, record map[string]interface{}, srcIP, dstIP
 	assert.EqualValues(protocolIdentifierTCP, record["protocolIdentifier"], "The record from antctl does not have correct protocolIdentifier")
 }
 
-func checkRecordsForFlows(t *testing.T, data *TestData, srcIP string, dstIP string, isIPv6 bool, isIntraNode bool, checkService bool, checkK8sNetworkPolicy bool, checkAntreaNetworkPolicy bool, checkBandwidth bool) {
+func checkRecordsForFlows(t *testing.T, data *TestData, srcIP string, dstIP string, isIPv6 bool, isIntraNode bool, checkService bool, checkK8sNetworkPolicy bool, checkAntreaNetworkPolicy bool) {
 	var cmdStr string
 	if !isIPv6 {
 		cmdStr = fmt.Sprintf("iperf3 -c %s -t %d -b %s", dstIP, iperfTimeSec, iperfBandwidth)
@@ -683,7 +671,7 @@ func checkRecordsForFlows(t *testing.T, data *TestData, srcIP string, dstIP stri
 			}
 
 			// Skip the bandwidth check for the iperf control flow records which have 0 throughput.
-			if checkBandwidth && !strings.Contains(record, "throughput: 0") {
+			if !strings.Contains(record, "throughput: 0") {
 				flowStartTime := int64(getUint64FieldFromRecord(t, record, "flowStartSeconds"))
 				exportTime := int64(getUint64FieldFromRecord(t, record, "flowEndSeconds"))
 				flowEndReason := int64(getUint64FieldFromRecord(t, record, "flowEndReason"))
@@ -724,11 +712,7 @@ func checkRecordsForToExternalFlows(t *testing.T, data *TestData, srcNodeName st
 		if strings.Contains(record, srcIP) && strings.Contains(record, dstIP) {
 			checkPodAndNodeData(t, record, srcPodName, srcNodeName, "", "")
 			checkFlowType(t, record, ipfixregistry.FlowTypeToExternal)
-			// Since the OVS userspace conntrack implementation doesn't maintain
-			// packet or byte counter statistics, skip the check for Kind clusters
-			if testOptions.providerName != "kind" {
-				assert.NotContains(t, record, "octetDeltaCount: 0", "octetDeltaCount should be non-zero")
-			}
+			assert.NotContains(t, record, "octetDeltaCount: 0", "octetDeltaCount should be non-zero")
 		}
 	}
 }

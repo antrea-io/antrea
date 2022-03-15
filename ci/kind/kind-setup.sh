@@ -78,10 +78,6 @@ function get_encap_mode {
 
 function modify {
   node="$1"
-  peerIdx=$(docker exec "$node" ip link | grep eth0 | awk -F[@:] '{ print $3 }' | cut -c 3-)
-  peerName=$(docker run --net=host antrea/ethtool:latest ip link | grep ^"$peerIdx": | awk -F[:@] '{ print $2 }' | cut -c 2-)
-  echo "Disabling TX checksum offload for node $node ($peerName)"
-  docker run --net=host --privileged antrea/ethtool:latest ethtool -K "$peerName" tx off
   # In Kind cluster, DNAT operation is configured by Docker as all DNS requests from Pod CoreDNS are NAT'd to the Docker
   # DNS embedded resolver, which is running on localhost. When kube-proxy is enabled, parameter net.ipv4.conf.all.route_localnet
   # is set to 1 by kube-proxy. This setting ensures that the DNS response can be forwarded back to Pod CoreDNS, otherwise
@@ -186,6 +182,16 @@ function configure_networks {
       echo "current ip $tmp_ip, wait for new node ip $node_ip"
       sleep 2
     done
+  done
+
+  nodes="$(kind get nodes --name $CLUSTER_NAME)"
+  nodes="$(echo $nodes)"
+  for node in $nodes; do
+    # disable tx checksum offload
+    # otherwise we observe that inter-Node tunnelled traffic crossing Docker networks is dropped
+    # because of an invalid outer checksum.
+    docker exec "$node" ethtool -K eth0 tx off
+    modify $node
   done
 }
 
@@ -301,8 +307,8 @@ EOF
     if [[ $PROXY == false ]]; then
       cmd+=" --no-proxy"
     fi
-    echo "$cmd --kind $(get_encap_mode) | kubectl apply --context kind-$CLUSTER_NAME -f -"
-    eval "$cmd --kind $(get_encap_mode) | kubectl apply --context kind-$CLUSTER_NAME -f -"
+    echo "$cmd $(get_encap_mode) | kubectl apply --context kind-$CLUSTER_NAME -f -"
+    eval "$cmd $(get_encap_mode) | kubectl apply --context kind-$CLUSTER_NAME -f -"
 
     if [[ $PROMETHEUS == true ]]; then
       kubectl apply --context kind-$CLUSTER_NAME -f $THIS_DIR/../../build/yamls/antrea-prometheus-rbac.yml

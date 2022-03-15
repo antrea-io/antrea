@@ -28,6 +28,7 @@ import (
 	"k8s.io/component-base/featuregate"
 
 	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/features"
 )
 
 func skipIfNotBenchmarkTest(tb testing.TB) {
@@ -146,6 +147,10 @@ func skipIfFeatureDisabled(tb testing.TB, feature featuregate.Feature, checkAgen
 	}
 }
 
+func skipIfProxyDisabled(t *testing.T) {
+	skipIfFeatureDisabled(t, features.AntreaProxy, true /* checkAgent */, false /* checkController */)
+}
+
 func ensureAntreaRunning(data *TestData) error {
 	log.Println("Applying Antrea YAML")
 	if err := data.deployAntrea(deployAntreaDefault); err != nil {
@@ -226,19 +231,12 @@ func setupTestWithIPFIXCollector(tb testing.TB) (*TestData, bool, bool, error) {
 	}
 	ipfixCollectorAddr := fmt.Sprintf("%s:tcp", net.JoinHostPort(ipStr, ipfixCollectorPort))
 
-	faClusterIPAddr := ""
 	tb.Logf("Applying flow aggregator YAML with ipfix collector address: %s", ipfixCollectorAddr)
-	faClusterIP, err := testData.deployFlowAggregator(ipfixCollectorAddr)
-	if err != nil {
+	if err := testData.deployFlowAggregator(ipfixCollectorAddr); err != nil {
 		return testData, v4Enabled, v6Enabled, err
 	}
-	if testOptions.providerName == "kind" {
-		// In Kind cluster, there are issues with DNS name resolution on worker nodes.
-		// Please note that CoreDNS services are forced on to control-plane Node.
-		faClusterIPAddr = fmt.Sprintf("%s:%s:tls", faClusterIP, ipfixCollectorPort)
-	}
-	tb.Logf("Deploying flow exporter with collector address: %s", faClusterIPAddr)
-	if err = testData.deployAntreaFlowExporter(faClusterIPAddr); err != nil {
+	tb.Logf("Enabling flow exporter in Antrea Agent")
+	if err = testData.enableAntreaFlowExporter(""); err != nil {
 		return testData, v4Enabled, v6Enabled, err
 	}
 

@@ -264,14 +264,6 @@ func (data *TestData) setupDifferentNamedPorts(t *testing.T) (checkFn func(), cl
 		preCheckFunc(server0IPs.ipv6.String(), server1IPs.ipv6.String())
 	}
 
-	if testOptions.providerName == "kind" {
-		// Due to netdev datapath bug, sometimes datapath flows are not flushed after new openflows that change the
-		// actions are installed, causing client1 to still be able to connect to the servers after creating a policy
-		// that disallows it. The test waits for 10 seconds so that the datapath flows will expire.
-		// See https://github.com/antrea-io/antrea/issues/1608 for more details.
-		time.Sleep(10 * time.Second)
-	}
-
 	// Create NetworkPolicy rule.
 	spec := &networkingv1.NetworkPolicySpec{
 		// Apply to two server Pods.
@@ -341,7 +333,7 @@ func (data *TestData) setupDifferentNamedPorts(t *testing.T) (checkFn func(), cl
 
 // testDefaultDenyIngressPolicy performs additional validation to the upstream test for deny-all policy:
 // 1. The traffic initiated from the host network namespace cannot be dropped.
-// 2. The traffic initiated externally that access the Pod via NodePort service can be dropped (skipped if provider is kind).
+// 2. The traffic initiated externally that access the Pod via NodePort service can be dropped.
 func testDefaultDenyIngressPolicy(t *testing.T, data *TestData) {
 	serverNode := workerNodeName(1)
 	serverNodeIP := workerNodeIP(1)
@@ -394,17 +386,13 @@ func testDefaultDenyIngressPolicy(t *testing.T, data *TestData) {
 		npCheck(client1Name, serverIPs.ipv6.String(), serverPort, false)
 	}
 
-	if testOptions.providerName == "kind" {
-		t.Logf("Skipped testing NodePort traffic for TestDefaultDenyIngressPolicy because pkt_mark is not properly supported on OVS netdev datapath")
-	} else {
-		if clusterInfo.podV4NetworkCIDR != "" {
-			npCheck(client2Name, serverIPs.ipv4.String(), serverPort, true)
-		}
-		if clusterInfo.podV6NetworkCIDR != "" {
-			npCheck(client2Name, serverIPs.ipv6.String(), serverPort, true)
-		}
-		npCheck(client2Name, serverNodeIP, service.Spec.Ports[0].NodePort, true)
+	if clusterInfo.podV4NetworkCIDR != "" {
+		npCheck(client2Name, serverIPs.ipv4.String(), serverPort, true)
 	}
+	if clusterInfo.podV6NetworkCIDR != "" {
+		npCheck(client2Name, serverIPs.ipv6.String(), serverPort, true)
+	}
+	npCheck(client2Name, serverNodeIP, service.Spec.Ports[0].NodePort, true)
 }
 
 func testDefaultDenyEgressPolicy(t *testing.T, data *TestData) {

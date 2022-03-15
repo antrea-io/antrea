@@ -183,7 +183,7 @@ Node. Before running the Go e2e tests, you will also need to copy the Antrea
 manifest to the control-plane Docker container:
 
 ```bash
-./hack/generate-manifest.sh --kind | docker exec -i kind-control-plane dd of=/root/antrea.yml
+./hack/generate-manifest.sh | docker exec -i kind-control-plane dd of=/root/antrea.yml
 go test -v antrea.io/antrea/test/e2e -provider=kind
 ```
 

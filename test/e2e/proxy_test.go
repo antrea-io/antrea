@@ -30,7 +30,6 @@ import (
 	"antrea.io/antrea/pkg/agent/config"
 	agentconfig "antrea.io/antrea/pkg/config/agent"
 	controllerconfig "antrea.io/antrea/pkg/config/controller"
-	"antrea.io/antrea/pkg/features"
 )
 
 type expectTableFlows struct {
@@ -51,7 +50,6 @@ func TestProxy(t *testing.T) {
 	defer teardownTest(t, data)
 
 	t.Run("testProxyServiceSessionAffinityCase", func(t *testing.T) {
-		skipIfProviderIs(t, "kind", "#881 Does not work in Kind, needs to be investigated.")
 		testProxyServiceSessionAffinityCase(t, data)
 	})
 	t.Run("testProxyHairpinCase", func(t *testing.T) {
@@ -63,10 +61,6 @@ func TestProxy(t *testing.T) {
 	t.Run("testProxyServiceLifeCycleCase", func(t *testing.T) {
 		testProxyServiceLifeCycleCase(t, data)
 	})
-}
-
-func skipIfProxyDisabled(t *testing.T) {
-	skipIfFeatureDisabled(t, features.AntreaProxy, true /* checkAgent */, false /* checkController */)
 }
 
 func testProxyServiceSessionAffinityCase(t *testing.T, data *TestData) {
@@ -540,7 +534,6 @@ func testNodePortLocalFromPod(t *testing.T, data *TestData, pods, urls, expected
 }
 
 func TestProxyServiceSessionAffinity(t *testing.T) {
-	skipIfProviderIs(t, "kind", "#881 Does not work in Kind, needs to be investigated.")
 	skipIfHasWindowsNodes(t)
 	skipIfProxyDisabled(t)
 	data, err := setupTest(t)

@@ -96,12 +96,6 @@ func TestUpgrade(t *testing.T) {
 		if err := data.restartAntreaAgentPods(defaultTimeout); err != nil {
 			t.Fatalf("Error when restarting Antrea: %v", err)
 		}
-		// Restart CoreDNS Pods to avoid issues caused by disrupting the datapath (when restarting
-		// Antrea Agent Pods).
-		t.Logf("Restarting CoreDNS Pods")
-		if err := data.restartCoreDNSPods(defaultTimeout); err != nil {
-			t.Fatalf("Error when restarting CoreDNS Pods: %v", err)
-		}
 	}
 
 	data.testPodConnectivitySameNode(t)

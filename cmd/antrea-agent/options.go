@@ -115,6 +115,9 @@ func (o *Options) validate(args []string) error {
 	if o.config.OVSDatapathType != string(ovsconfig.OVSDatapathSystem) && o.config.OVSDatapathType != string(ovsconfig.OVSDatapathNetdev) {
 		return fmt.Errorf("OVS datapath type %s is not supported", o.config.OVSDatapathType)
 	}
+	if o.config.OVSDatapathType == string(ovsconfig.OVSDatapathNetdev) {
+		klog.Info("OVS 'netdev' datapath is not fully supported at the moment")
+	}
 	ok, encapMode := config.GetTrafficEncapModeFromStr(o.config.TrafficEncapMode)
 	if !ok {
 		return fmt.Errorf("TrafficEncapMode %s is unknown", o.config.TrafficEncapMode)
