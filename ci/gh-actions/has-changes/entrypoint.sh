@@ -69,3 +69,20 @@ else
     echo "Setting 'has_changes' to 'no'"
     echo "::set-output name=has_changes::no"
 fi
+
+docs_changes=false
+for changed_file in $CHANGED_FILES; do
+
+    if [[ ("$changed_file" != *.md) || ("$changed_file" != .md_links_config.json) ]]; then
+          docs_changes=true
+        break
+    fi
+done
+
+if $docs_changes; then
+    echo "Setting 'docs_changes' to 'yes'"
+    echo "::set-output name=docs_changes::yes"
+else
+    echo "Setting 'docs_changes' to 'no'"
+    echo "::set-output name=docs_changes::no"
+fi

@@ -12,7 +12,23 @@ on:
 env:
   go-cache-name: go
 
+check-docs-changes:
+    name: Check whether tests need to be run based on diff
+    runs-on: [ubuntu-latest]
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+    - uses: antrea-io/has-changes@v1
+      id: check_diff
+      with:
+        args: docs/* ci/jenkins/* *.md hack/.notableofcontents
+    outputs:
+      docs_changes: ${{ steps.check_diff.outputs.docs_changes }}
+       
 jobs:
+  needs: check-docs-changes
+  if: ${{ needs.check-docs-changes.outputs.docs_changes == 'yes' }}
   test-unit:
     name: Unit test
     strategy:
@@ -51,6 +67,8 @@ jobs:
         name: codecov-unit-test
 
   golangci-lint:
+    needs: check-docs-changes
+    if: ${{ needs.check-docs-changes.outputs.docs_changes == 'yes' }}
     name: Golangci-lint
     strategy:
       matrix:
@@ -84,6 +102,8 @@ jobs:
       run: make golangci
 
   bin:
+    needs: check-docs-changes
+    if: ${{ needs.check-docs-changes.outputs.docs_changes == 'yes' }}
     name: Build Antrea and antctl binaries
     runs-on: [ubuntu-latest]
     steps:
@@ -121,6 +141,8 @@ jobs:
         make build
 
   windows-bin:
+    needs: check-docs-changes
+    if: ${{ needs.check-docs-changes.outputs.docs_changes == 'yes' }}
     name: Build Antrea Windows binaries
     runs-on: [ubuntu-latest]
     steps:
@@ -148,6 +170,8 @@ jobs:
       run: make windows-bin
 
   tidy-codegen-manifest:
+    needs: check-docs-changes
+    if: ${{ needs.check-docs-changes.outputs.docs_changes == 'yes' }}
     name: Check tidy, code generation and manifest
     runs-on: [ubuntu-latest]
     steps:
@@ -191,6 +215,8 @@ jobs:
         make markdownlint
 
   benchmark:
+    needs: check-docs-changes
+    if: ${{ needs.check-docs-changes.outputs.docs_changes == 'yes' }}
     name: Go benchmark test
     runs-on: [ubuntu-latest]
     steps:
