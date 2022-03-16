@@ -755,8 +755,8 @@ func (c *Client) Reconcile(podCIDRs []string, svcIPs map[string]bool) error {
 		if desiredIPv6GWs.Has(route.Dst.IP.String()) {
 			continue
 		}
-		// Don't delete the routes which are added by AntreaProxy.
-		if c.isServiceRoute(&route) {
+		// Don't delete the routes which are added by AntreaProxy when proxyAll is enabled.
+		if c.proxyAll && c.isServiceRoute(&route) {
 			continue
 		}
 
@@ -1091,7 +1091,7 @@ func (c *Client) addVirtualServiceIPRoute(isIPv6 bool) error {
 
 	neigh := generateNeigh(svcIP, linkIndex)
 	if err := netlink.NeighSet(neigh); err != nil {
-		return fmt.Errorf("failed to add new IP neighbour for %s: %v", svcIP, err)
+		return fmt.Errorf("failed to add new IP neighbour for %s: %w", svcIP, err)
 	}
 	c.serviceNeighbors.Store(svcIP.String(), neigh)
 
@@ -1162,48 +1162,68 @@ func (c *Client) AddClusterIPRoute(svcIP net.IP) error {
 		gw = config.VirtualServiceIPv6
 	}
 
+	// If the route exists and its destination CIDR contains the ClusterIP, there is no need to update the route.
+	if curClusterIPCIDR != nil && curClusterIPCIDR.Contains(svcIP) {
+		klog.V(4).InfoS("Route with current ClusterIP CIDR can route the ClusterIP to Antrea gateway", "ClusterIP CIDR", curClusterIPCIDR, "ClusterIP", svcIP)
+		return nil
+	}
+
+	var newClusterIPCIDR *net.IPNet
+	var err error
 	if curClusterIPCIDR != nil {
-		// If the route exists, check that whether the route can cover the ClusterIP.
-		if !curClusterIPCIDR.Contains(svcIP) {
-			// If not, generate a new destination ipNet.
-			newClusterIPCIDR, err := util.ExtendCIDRWithIP(curClusterIPCIDR, svcIP)
-			if err != nil {
-				return fmt.Errorf("extend route CIDR with error: %v", err)
-			}
-			// Generate a new route with new ClusterIP CIDR and install the route.
-			mask, _ = newClusterIPCIDR.Mask.Size()
-			route := generateRoute(newClusterIPCIDR.IP, mask, gw, linkIndex, scope)
-			if err = netlink.RouteReplace(route); err != nil {
-				return fmt.Errorf("failed to install new route: %w", err)
-			}
-
-			// Generate the current route by replacing the destination CIDR with current ClusterIP CIDR and delete the
-			// route.
-			route.Dst = curClusterIPCIDR
-			if err = netlink.RouteDel(route); err != nil {
-				return fmt.Errorf("failed to uninstall old route: %w", err)
-			}
-
-			if isIPv6 {
-				c.clusterIPv6CIDR = newClusterIPCIDR
-			} else {
-				c.clusterIPv4CIDR = newClusterIPCIDR
-			}
-			klog.V(4).InfoS("Created a route with new ClusterIP CIDR to route the ClusterIP to Antrea gateway", "ClusterIP CIDR", newClusterIPCIDR, "clusterIP", svcIP)
-		} else {
-			klog.V(4).InfoS("Route with current ClusterIP CIDR can route the ClusterIP to Antrea gateway", "ClusterIP CIDR", curClusterIPCIDR, "clusterIP", svcIP)
+		// If the route exists and its destination CIDR doesn't contain the ClusterIP, generate a new destination CIDR by
+		// enlarging the current destination CIDR with the ClusterIP.
+		if newClusterIPCIDR, err = util.ExtendCIDRWithIP(curClusterIPCIDR, svcIP); err != nil {
+			return fmt.Errorf("enlarge the destination CIDR with an error: %w", err)
 		}
 	} else {
-		route := generateRoute(svcIP, mask, gw, linkIndex, scope)
-		if err := netlink.RouteReplace(route); err != nil {
-			return fmt.Errorf("failed to install new ClusterIP route: %w", err)
-		}
+		// If the route doesn't exist, generate a new destination CIDR with the ClusterIP. Note that, this is the first
+		// ClusterIP since the route doesn't exist.
+		newClusterIPCIDR = &net.IPNet{IP: svcIP, Mask: net.CIDRMask(mask, mask)}
+	}
 
-		if isIPv6 {
-			c.clusterIPv6CIDR = route.Dst
-		} else {
-			c.clusterIPv4CIDR = route.Dst
+	// Generate a route with the new destination CIDR and install it.
+	newClusterIPCIDRMask, _ := newClusterIPCIDR.Mask.Size()
+	route := generateRoute(newClusterIPCIDR.IP, newClusterIPCIDRMask, gw, linkIndex, scope)
+	if err = netlink.RouteReplace(route); err != nil {
+		return fmt.Errorf("failed to install new ClusterIP route: %w", err)
+	}
+	// Store the new destination CIDR.
+	if isIPv6 {
+		c.clusterIPv6CIDR = route.Dst
+	} else {
+		c.clusterIPv4CIDR = route.Dst
+	}
+	klog.V(4).InfoS("Created a route to route the ClusterIP to Antrea gateway", "route", route, "ClusterIP", svcIP)
+
+	// Collect stale routes.
+	var staleRoutes []*netlink.Route
+	if curClusterIPCIDR != nil {
+		// If current destination CIDR is not nil, the route with current destination CIDR should be uninstalled.
+		route.Dst = curClusterIPCIDR
+		staleRoutes = []*netlink.Route{route}
+	} else {
+		// If current destination CIDR is nil, which means that Antrea Agent has just started, then all existing routes
+		// whose destination CIDR contains the first ClusterIP should be uninstalled, except the newly installed route.
+		// Note that, there may be multiple stale routes prior to this commit. When upgrading, all stale routes will be
+		// collected. After this commit, there will be only one stale route after Antrea Agent started.
+		routes, err := c.listIPRoutesOnGW()
+		if err != nil {
+			return fmt.Errorf("error listing ip routes: %w", err)
 		}
+		for i := 0; i < len(routes); i++ {
+			if routes[i].Gw.Equal(gw) && !routes[i].Dst.IP.Equal(svcIP) && routes[i].Dst.Contains(svcIP) {
+				staleRoutes = append(staleRoutes, &routes[i])
+			}
+		}
+	}
+
+	// Remove stale routes.
+	for _, rt := range staleRoutes {
+		if err = netlink.RouteDel(rt); err != nil {
+			return fmt.Errorf("failed to uninstall stale ClusterIP route %s: %w", rt.String(), err)
+		}
+		klog.V(4).InfoS("Uninstalled stale ClusterIP route successfully", "stale route", rt)
 	}
 
 	return nil
