@@ -400,6 +400,13 @@ func testReconcileGatewayRoutesOnStartup(t *testing.T, data *TestData, isIPv6 bo
 				continue
 			}
 			route := Route{}
+			mask := 32
+			if isIPv6 {
+				mask = 128
+			}
+			if net.ParseIP(matches[1]) != nil {
+				matches[1] = fmt.Sprintf("%s/%d", matches[1], mask)
+			}
 			if _, route.peerPodCIDR, err = net.ParseCIDR(matches[1]); err != nil {
 				return nil, fmt.Errorf("%s is not a valid net CIDR", matches[1])
 			}
