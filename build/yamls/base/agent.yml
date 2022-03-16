@@ -48,6 +48,11 @@ spec:
               add:
                 # SYS_MODULE is required to load the OVS kernel module.
                 - SYS_MODULE
+          env:
+            # SKIP_CNI_BINARIES takes in values as a comma separated list of
+            # binaries that need to be skipped for installation, e.g. "portmap, bandwidth".
+            - name: SKIP_CNI_BINARIES
+              value: ""
           volumeMounts:
           - name: antrea-config
             mountPath: /etc/antrea/antrea-cni.conflist
