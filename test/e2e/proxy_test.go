@@ -26,6 +26,7 @@ import (
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 
 	"antrea.io/antrea/pkg/agent/config"
 )
@@ -642,9 +643,6 @@ func testProxyServiceSessionAffinity(ipFamily *corev1.IPFamily, ingressIPs []str
 		require.NoError(t, err, fmt.Sprintf("ipFamily: %v\nstdout: %s\nstderr: %s\n", *ipFamily, stdout, stderr))
 	}
 
-	// Hold on to make sure that the Service is realized.
-	time.Sleep(3 * time.Second)
-
 	agentName, err := data.getAntreaPodOnNode(nodeName)
 	require.NoError(t, err)
 	tableSessionAffinityName := "SessionAffinity"
@@ -910,12 +908,8 @@ func testProxyEndpointLifeCycle(ipFamily *corev1.IPFamily, data *TestData, t *te
 	require.NoError(t, data.createNginxPodOnNode(nginx, data.testNamespace, nodeName, false))
 	nginxIPs, err := data.podWaitForIPs(defaultTimeout, nginx, data.testNamespace)
 	require.NoError(t, err)
-	_, err = data.createNginxClusterIPService(nginx, data.testNamespace, false, ipFamily)
-	defer data.deleteServiceAndWait(defaultTimeout, nginx, data.testNamespace)
+	svc, err := data.createNginxClusterIPService(nginx, data.testNamespace, false, ipFamily)
 	require.NoError(t, err)
-
-	// Hold on to make sure that the Service is realized.
-	time.Sleep(3 * time.Second)
 
 	agentName, err := data.getAntreaPodOnNode(nodeName)
 	require.NoError(t, err)
@@ -926,8 +920,22 @@ func testProxyEndpointLifeCycle(ipFamily *corev1.IPFamily, data *TestData, t *te
 		nginxIP = nginxIPs.ipv4.String()
 	}
 
-	keywords := make(map[string]string)
-	keywords["EndpointDNAT"] = fmt.Sprintf("nat(dst=%s)", net.JoinHostPort(nginxIP, "80")) // endpointNATTable
+	var svcflows []string
+	if *ipFamily == corev1.IPv6Protocol {
+		svcflows = append(svcflows, fmt.Sprintf("ipv6_dst=%s,tp_dst=80", svc.Spec.ClusterIP))
+	} else {
+		svcflows = append(svcflows, fmt.Sprintf("nw_dst=%s,tp_dst=80", svc.Spec.ClusterIP))
+	}
+	keywords := []expectTableFlows{
+		{
+			"ServiceLB",
+			svcflows,
+		},
+		{
+			"EndpointDNAT",
+			[]string{fmt.Sprintf("nat(dst=%s)", net.JoinHostPort(nginxIP, "80"))}, // endpointNATTable
+		},
+	}
 
 	var groupKeywords []string
 	if *ipFamily == corev1.IPv6Protocol {
@@ -936,34 +944,27 @@ func testProxyEndpointLifeCycle(ipFamily *corev1.IPFamily, data *TestData, t *te
 		groupKeywords = append(groupKeywords, fmt.Sprintf("0x%s->NXM_NX_REG3[]", strings.TrimPrefix(hex.EncodeToString(nginxIPs.ipv4.To4()), "0")))
 	}
 
-	for tableName, keyword := range keywords {
-		tableOutput, _, err := data.RunCommandFromPod(metav1.NamespaceSystem, agentName, "antrea-agent", []string{"ovs-ofctl", "dump-flows", defaultBridgeName, fmt.Sprintf("table=%s", tableName)})
-		require.NoError(t, err)
-		require.Contains(t, tableOutput, keyword)
+	for _, keyword := range keywords {
+		// Poll flows to make sure that it contain required flows.
+		require.NoError(t, pollFlows(t, data, agentName, keyword, true))
 	}
 
-	groupOutput, _, err := data.RunCommandFromPod(metav1.NamespaceSystem, agentName, "antrea-agent", []string{"ovs-ofctl", "dump-groups", defaultBridgeName})
-	require.NoError(t, err)
-	for _, k := range groupKeywords {
-		require.Contains(t, groupOutput, k)
-	}
+	// Poll groups to make sure that it contain required groups.
+	require.NoError(t, pollGroups(t, data, agentName, groupKeywords, true))
 
 	require.NoError(t, data.deletePodAndWait(defaultTimeout, nginx, data.testNamespace))
+	require.NoError(t, data.deleteService(data.testNamespace, nginx))
 
 	// Wait for one second to make sure the pipeline to be updated.
 	time.Sleep(time.Second)
 
-	for tableName, keyword := range keywords {
-		tableOutput, _, err := data.RunCommandFromPod(metav1.NamespaceSystem, agentName, "antrea-agent", []string{"ovs-ofctl", "dump-flows", defaultBridgeName, fmt.Sprintf("table=%s", tableName)})
-		require.NoError(t, err)
-		require.NotContains(t, tableOutput, keyword)
+	// Poll flows to make sure that it does not contain previously required flows.
+	for _, keyword := range keywords {
+		require.NoError(t, pollFlows(t, data, agentName, keyword, false))
 	}
 
-	groupOutput, _, err = data.RunCommandFromPod(metav1.NamespaceSystem, agentName, "antrea-agent", []string{"ovs-ofctl", "dump-groups", defaultBridgeName})
-	require.NoError(t, err)
-	for _, k := range groupKeywords {
-		require.NotContains(t, groupOutput, k)
-	}
+	// Poll groups to make sure that it does not contain previously required groups.
+	require.NoError(t, pollGroups(t, data, agentName, groupKeywords, false))
 }
 
 func testProxyServiceLifeCycleCase(t *testing.T, data *TestData) {
@@ -1020,9 +1021,6 @@ func testProxyServiceLifeCycle(ipFamily *corev1.IPFamily, ingressIPs []string, d
 	agentName, err := data.getAntreaPodOnNode(nodeName)
 	require.NoError(t, err)
 
-	// Hold on to make sure that the Service is realized.
-	time.Sleep(3 * time.Second)
-
 	var svcLBflows []string
 	if *ipFamily == corev1.IPv6Protocol {
 		svcLBflows = append(svcLBflows, fmt.Sprintf("ipv6_dst=%s,tp_dst=80", svc.Spec.ClusterIP))
@@ -1051,37 +1049,62 @@ func testProxyServiceLifeCycle(ipFamily *corev1.IPFamily, ingressIPs []string, d
 		},
 	}
 
-	var groupKeyword string
+	var groupKeywords []string
 	if *ipFamily == corev1.IPv6Protocol {
-		groupKeyword = fmt.Sprintf("set_field:0x%s->xxreg3,load:0x%x->NXM_NX_REG4[0..15]", strings.TrimLeft(hex.EncodeToString(nginxIPs.ipv6.To16()), "0"), 80)
+		groupKeywords = append(groupKeywords, fmt.Sprintf("set_field:0x%s->xxreg3,load:0x%x->NXM_NX_REG4[0..15]", strings.TrimLeft(hex.EncodeToString(nginxIPs.ipv6.To16()), "0"), 80))
 	} else {
-		groupKeyword = fmt.Sprintf("load:0x%s->NXM_NX_REG3[],load:0x%x->NXM_NX_REG4[0..15]", strings.TrimLeft(hex.EncodeToString(nginxIPs.ipv4.To4()), "0"), 80)
+		groupKeywords = append(groupKeywords, fmt.Sprintf("load:0x%s->NXM_NX_REG3[],load:0x%x->NXM_NX_REG4[0..15]", strings.TrimLeft(hex.EncodeToString(nginxIPs.ipv4.To4()), "0"), 80))
 	}
-	groupOutput, _, err := data.RunCommandFromPod(metav1.NamespaceSystem, agentName, "antrea-agent", []string{"ovs-ofctl", "dump-groups", defaultBridgeName})
-	require.NoError(t, err)
-	require.Contains(t, groupOutput, groupKeyword)
+
+	// Poll groups to make sure that it contain required groups.
+	require.NoError(t, pollGroups(t, data, agentName, groupKeywords, true))
+
+	// Poll flows to make sure that it contain required flows.
 	for _, expectedTable := range expectedFlows {
-		tableOutput, _, err := data.RunCommandFromPod(metav1.NamespaceSystem, agentName, "antrea-agent", []string{"ovs-ofctl", "dump-flows", defaultBridgeName, fmt.Sprintf("table=%s", expectedTable.tableName)})
-		require.NoError(t, err)
-		for _, expectedFlow := range expectedTable.flows {
-			require.Contains(t, tableOutput, expectedFlow)
-		}
+		require.NoError(t, pollFlows(t, data, agentName, expectedTable, true))
 	}
 
 	require.NoError(t, data.deleteService(data.testNamespace, nginx))
 	require.NoError(t, data.deleteService(data.testNamespace, nginxLBService))
 
-	// Hold on to make sure that the Service is realized.
-	time.Sleep(3 * time.Second)
+	// Poll groups to make sure that it does not contain previously required groups.
+	require.NoError(t, pollGroups(t, data, agentName, groupKeywords, false))
 
-	groupOutput, _, err = data.RunCommandFromPod(metav1.NamespaceSystem, agentName, "antrea-agent", []string{"ovs-ofctl", "dump-groups", defaultBridgeName})
-	require.NoError(t, err)
-	require.NotContains(t, groupOutput, groupKeyword)
+	// Poll flows to make sure that it does not contain previously required flows.
 	for _, expectedTable := range expectedFlows {
-		tableOutput, _, err := data.RunCommandFromPod(metav1.NamespaceSystem, agentName, "antrea-agent", []string{"ovs-ofctl", "dump-flows", defaultBridgeName, fmt.Sprintf("table=%s", expectedTable.tableName)})
-		require.NoError(t, err)
-		for _, expectedFlow := range expectedTable.flows {
-			require.NotContains(t, tableOutput, expectedFlow)
-		}
+		require.NoError(t, pollFlows(t, data, agentName, expectedTable, false))
 	}
+}
+
+// pollFlows make sure that required flows are present if required and absent when not required.
+func pollFlows(t *testing.T, data *TestData, agentName string, expectedTable expectTableFlows, required bool) error {
+	cmd := []string{"ovs-ofctl", "dump-flows", defaultBridgeName, fmt.Sprintf("table=%s", expectedTable.tableName)}
+	return poll(t, data, agentName, expectedTable.flows, cmd, required)
+}
+
+// pollGroups make sure that required groups are present if required and absent when not required.
+func pollGroups(t *testing.T, data *TestData, agentName string, expectedGroups []string, required bool) error {
+	cmd := []string{"ovs-ofctl", "dump-groups", defaultBridgeName}
+	return poll(t, data, agentName, expectedGroups, cmd, required)
+}
+
+// poll is a helper function for pollGroups and pollFlows.
+func poll(t *testing.T, data *TestData, agentName string, expected []string, cmd []string, required bool) error {
+	err := wait.Poll(1*time.Second, 3*time.Second, func() (bool, error) {
+		output, stderr, err := data.RunCommandFromPod(metav1.NamespaceSystem, agentName, "antrea-agent", cmd)
+		if err != nil {
+			t.Logf("Failed to run command %q on Pod %q: stdout: %s - stderr: %s - err: %v", cmd, agentName, output, stderr, err)
+			// keep trying.
+			return false, err
+		}
+		for _, i := range expected {
+			if (required == true) == strings.Contains(output, i) {
+				continue
+			}
+			// keep trying.
+			return false, err
+		}
+		return true, err
+	})
+	return err
 }
