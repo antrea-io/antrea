@@ -160,6 +160,9 @@ func (c *Controller) storeDenyConnection(pktIn *ofctrl.PacketIn) error {
 		rule := c.GetRuleByFlowID(ruleID)
 		if policy == nil || rule == nil {
 			klog.V(4).Infof("Cannot find NetworkPolicy or rule that has ruleID %v", ruleID)
+			// Ignore the connection if there is no matching NetworkPolicy or rule: the
+			// NetworkPolicy must have been deleted or updated.
+			return nil
 		}
 		// Get name and namespace for Antrea Network Policy or Antrea Cluster Network Policy
 		if isAntreaPolicyIngressTable(tableID) {
