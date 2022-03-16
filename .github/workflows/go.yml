@@ -13,44 +13,23 @@ env:
   go-cache-name: go
 
 jobs:
-
-  changedfiles:
+  check-changes:
+    name: Check whether tests need to be run based on diff
     runs-on: [ubuntu-latest]
-    outputs:
-      docs: ${{ steps.changes.outputs.docs }}
-      all: ${{ steps.changefiles.outputs.all }}
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v3
+    - uses: actions/checkout@v3
       with:
         fetch-depth: 0
-    - name: Get changed files
-      id: changes
-      run: |
-        echo "::set-output name=docs::$(git diff --name-only ${{ github.event.before }}..${{ github.event.after }} | xargs)"
-    - name: echo output
-      id: changefiles
-      run: |
-        docs_changes=false
-        for file in ${{ steps.changes.outputs.docs }}; do
-
-             echo "changed files are $file"
-            if [[ ("$changed_file" != *.md) || ("$changed_file" != .md_links_config.json) ]]; then
-                  docs_changes=true
-                  break
-            fi
-        done
-        if $docs_changes; then
-          echo "Setting 'docs_changes' to 'yes'"
-          echo "::set-output name=docs_changes::yes"
-        else
-          echo "Setting 'docs_changes' to 'no'"
-          echo "::set-output name=docs_changes::no"
-        fi
+    - uses: antrea-io/has-changes@v1
+      id: check_diff
+      with:
+        args: docs/* ci/jenkins/* *.md hack/.notableofcontents 
+    outputs:
+      has_changes: ${{ steps.check_diff.outputs.has_changes }}
 
   test-unit:
-    needs: changedfiles
-    if: ${{ needs.changedfiles.outputs.all == 'yes' }}
+    needs: check-changes
+    if: ${{ needs.check-changes.outputs.has_changes == 'yes' }}
     name: Unit test
     strategy:
       matrix:
@@ -88,8 +67,8 @@ jobs:
         name: codecov-unit-test
 
   golangci-lint:
-    needs: changedfiles
-    if: ${{ needs.changedfiles.outputs.all == 'yes' }}
+    needs: check-changes
+    if: ${{ needs.check-changes.outputs.has_changes == 'yes' }}
     name: Golangci-lint
     strategy:
       matrix:
@@ -123,8 +102,8 @@ jobs:
       run: make golangci
 
   bin:
-    needs: changedfiles
-    if: ${{ needs.changedfiles.outputs.all == 'yes' }}
+    needs: check-changes
+    if: ${{ needs.check-changes.outputs.has_changes == 'yes' }}
     name: Build Antrea and antctl binaries
     runs-on: [ubuntu-latest]
     steps:
@@ -162,8 +141,8 @@ jobs:
         make build
 
   windows-bin:
-    needs: changedfiles
-    if: ${{ needs.changedfiles.outputs.all == 'yes' }}
+    needs: check-changes
+    if: ${{ needs.check-changes.outputs.has_changes == 'yes' }}
     name: Build Antrea Windows binaries
     runs-on: [ubuntu-latest]
     steps:
@@ -191,8 +170,8 @@ jobs:
       run: make windows-bin
 
   tidy-codegen-manifest:
-    needs: changedfiles
-    if: ${{ needs.changedfiles.outputs.all == 'yes' }}
+    needs: check-changes
+    if: ${{ needs.check-changes.outputs.has_changes == 'yes' }}
     name: Check tidy, code generation and manifest
     runs-on: [ubuntu-latest]
     steps:
@@ -236,8 +215,8 @@ jobs:
         make markdownlint
 
   benchmark:
-    needs: changedfiles
-    if: ${{ needs.changedfiles.outputs.all == 'yes' }}
+    needs: check-changes
+    if: ${{ needs.check-changes.outputs.has_changes == 'yes' }}
     name: Go benchmark test
     runs-on: [ubuntu-latest]
     steps:
