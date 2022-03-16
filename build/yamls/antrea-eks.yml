@@ -3299,6 +3299,9 @@ spec:
       initContainers:
       - command:
         - install_cni_chaining
+        env:
+        - name: SKIP_CNI_BINARIES
+          value: ""
         image: projects.registry.vmware.com/antrea/antrea-ubuntu:latest
         imagePullPolicy: IfNotPresent
         name: install-cni

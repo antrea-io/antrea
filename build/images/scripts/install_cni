@@ -2,25 +2,38 @@
 
 set -euo pipefail
 
+# Fetching the list of the binaries that user wants to skip installing.
+IFS=',' read -r -a binaries <<< "$SKIP_CNI_BINARIES"
 # Todo: check version and continue installation only for a newer version
 
 # Install Antrea binary file
 install -m 755 /usr/local/bin/antrea-cni /host/opt/cni/bin/antrea
 
+# Checking the condition before installing the binaries, to ensure that user
+# does not want to skip the corressponding CNI binary file
+
 # Install the loopback plugin.
 # It is required by kubelet on Linux when using docker as the container runtime.
 # We replace the binary files even they are already present on the Node to make
 # sure expected versions are used.
-install -m 755 /opt/cni/bin/loopback /host/opt/cni/bin/loopback
+if [[ ! " ${binaries[*]} " =~ " loopback " ]]; then
+  install -m 755 /opt/cni/bin/loopback /host/opt/cni/bin/loopback
+fi
 
 # Install PortMap CNI binary file. It is required to support hostPort.
-install -m 755 /opt/cni/bin/portmap /host/opt/cni/bin/portmap
+if [[ ! " ${binaries[*]} " =~ " portmap " ]]; then
+  install -m 755 /opt/cni/bin/portmap /host/opt/cni/bin/portmap
+fi
 
 # Install bandwidth CNI binary file. It is required to support traffic shaping.
-install -m 755 /opt/cni/bin/bandwidth /host/opt/cni/bin/bandwidth
+if [[ ! " ${binaries[*]} " =~ " bandwidth " ]]; then
+  install -m 755 /opt/cni/bin/bandwidth /host/opt/cni/bin/bandwidth
+fi
 
 # Install whereabouts IPAM binary file. Required for global IPAM support specific to CNF use cases.
-install -m 755 /opt/cni/bin/whereabouts /host/opt/cni/bin/whereabouts
+if [[ ! " ${binaries[*]} " =~ " whereabouts " ]]; then
+  install -m 755 /opt/cni/bin/whereabouts /host/opt/cni/bin/whereabouts
+fi
 
 # Install Antrea configuration file.
 # Note that it needs to be executed after installing the above binaries because container runtimes such as cri-o may
