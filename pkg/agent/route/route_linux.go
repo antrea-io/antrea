@@ -729,8 +729,8 @@ func (c *Client) Reconcile(podCIDRs []string, svcIPs map[string]bool) error {
 		if desiredIPv6GWs.Has(route.Dst.IP.String()) {
 			continue
 		}
-		// Don't delete the routes which are added by AntreaProxy.
-		if c.isServiceRoute(&route) {
+		// Don't delete the routes which are added by AntreaProxy when proxyAll is enabled.
+		if c.proxyAll && c.isServiceRoute(&route) {
 			continue
 		}
 
