@@ -881,6 +881,37 @@ func TestReconcilerUpdate(t *testing.T) {
 			false,
 		},
 		{
+			"updating-egress-rule-with-duplicate-ip",
+			&CompletedRule{
+				rule: &rule{ID: "egress-rule", Direction: v1beta2.DirectionOut, SourceRef: &np1},
+				ToAddresses: v1beta2.NewGroupMemberSet(
+					newAddressGroupPodMember("pod1", "ns1", "1.1.1.1"),
+					newAddressGroupPodMember("pod2", "ns1", "1.1.1.1"),
+					newAddressGroupPodMember("pod3", "ns1", "1.1.1.2"),
+					newAddressGroupPodMember("pod4", "ns1", "1.1.1.2"),
+					newAddressGroupPodMember("pod5", "ns1", "1.1.1.3"),
+					newAddressGroupPodMember("pod6", "ns1", "1.1.1.3"),
+					newAddressGroupPodMember("pod7", "ns1", "1.1.1.4"),
+				),
+				TargetMembers: appliedToGroup1,
+			},
+			&CompletedRule{
+				rule: &rule{ID: "egress-rule", Direction: v1beta2.DirectionOut, SourceRef: &np1},
+				ToAddresses: v1beta2.NewGroupMemberSet(
+					newAddressGroupPodMember("pod1", "ns1", "1.1.1.1"),
+					newAddressGroupPodMember("pod5", "ns1", "1.1.1.5"),
+					newAddressGroupPodMember("pod8", "ns1", "1.1.1.4"),
+				),
+				TargetMembers: appliedToGroup2,
+			},
+			ipsToOFAddresses(sets.NewString("3.3.3.3")),
+			ipsToOFAddresses(sets.NewString("1.1.1.5")),
+			ipsToOFAddresses(sets.NewString("2.2.2.2")),
+			ipsToOFAddresses(sets.NewString("1.1.1.2", "1.1.1.3")),
+			false,
+			false,
+		},
+		{
 			"updating-egress-rule-deny-all",
 			&CompletedRule{
 				rule:          &rule{ID: "egress-rule", Direction: v1beta2.DirectionOut, SourceRef: &np1},
@@ -954,16 +985,16 @@ func TestReconcilerUpdate(t *testing.T) {
 				mockOFClient.EXPECT().UninstallPolicyRuleFlows(gomock.Any())
 			}
 			if len(tt.expectedAddedFrom) > 0 {
-				mockOFClient.EXPECT().AddPolicyRuleAddress(gomock.Any(), types.SrcAddress, gomock.Eq(tt.expectedAddedFrom), priority)
+				mockOFClient.EXPECT().AddPolicyRuleAddress(gomock.Any(), types.SrcAddress, gomock.InAnyOrder(tt.expectedAddedFrom), priority)
 			}
 			if len(tt.expectedAddedTo) > 0 {
-				mockOFClient.EXPECT().AddPolicyRuleAddress(gomock.Any(), types.DstAddress, gomock.Eq(tt.expectedAddedTo), priority)
+				mockOFClient.EXPECT().AddPolicyRuleAddress(gomock.Any(), types.DstAddress, gomock.InAnyOrder(tt.expectedAddedTo), priority)
 			}
 			if len(tt.expectedDeletedFrom) > 0 {
-				mockOFClient.EXPECT().DeletePolicyRuleAddress(gomock.Any(), types.SrcAddress, gomock.Eq(tt.expectedDeletedFrom), priority)
+				mockOFClient.EXPECT().DeletePolicyRuleAddress(gomock.Any(), types.SrcAddress, gomock.InAnyOrder(tt.expectedDeletedFrom), priority)
 			}
 			if len(tt.expectedDeletedTo) > 0 {
-				mockOFClient.EXPECT().DeletePolicyRuleAddress(gomock.Any(), types.DstAddress, gomock.Eq(tt.expectedDeletedTo), priority)
+				mockOFClient.EXPECT().DeletePolicyRuleAddress(gomock.Any(), types.DstAddress, gomock.InAnyOrder(tt.expectedDeletedTo), priority)
 			}
 			r := newTestReconciler(t, controller, ifaceStore, mockOFClient)
 			if err := r.Reconcile(tt.originalRule); (err != nil) != tt.wantErr {
