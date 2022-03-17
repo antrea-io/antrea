@@ -321,9 +321,11 @@ to the local Pods on their Nodes.
 
 ### IPsec encryption
 
-Antrea supports encrypting GRE tunnel traffic with IPsec ESP. The IPsec
-implementation leverages [OVS IPsec](http://docs.openvswitch.org/en/latest/tutorials/ipsec)
-and leverages [strongSwan](https://www.strongswan.org) as the IKE daemon.
+Antrea supports encrypting Pod traffic across Linux Nodes with IPsec ESP. The
+IPsec implementation leverages [OVS
+IPsec](http://docs.openvswitch.org/en/latest/tutorials/ipsec) and leverages
+[strongSwan](https://www.strongswan.org) as the IKE daemon. By default GRE
+tunnels are used but other tunnel types are also supported.
 
 To enable IPsec, an extra container -`antrea-ipsec` - must be added to the
 Antrea Agent DaemonSet, which runs the `ovs-monitor-ipsec` and strongSwan
