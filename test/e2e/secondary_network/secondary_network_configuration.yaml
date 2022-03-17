@@ -1,0 +1,13 @@
+sriov_conf:
+    networkinterface: enp175s0f0
+    numberofvfs: 24
+vir_net:
+    totalnumberofvirtualnetworks: 3
+    virtualnetworknames: ["virtual-network-instance1.yaml","virtual-network-instance2.yaml", "virtual-network-instance3.yaml"]
+create_pod:
+    numberofpods: 4
+    podnames: ["testpodsec1","testpodsec2","testpodsec3","testpodsec4"]
+    numberofvirtualnetworksperpod: [2,3,1,2]
+    podvirtualnetworknames: [["virtual-net1","virtual-net2"],["virtual-net3"],["virtual-net2"],["virtual-net2","virtual-net3"]]
+    podinterfacenames: [["eth1","eth2"],["eth1","eth2","eth3"],["eth2"],["eth2","eth3"]]
+    podyamlfiles: ["sanity1.yaml","sanity2.yaml","sanity3.yaml","sanity4.yaml"]
