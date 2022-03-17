@@ -18,7 +18,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	"math"
 	"math/big"
 	"net"
 	"sort"
@@ -284,7 +283,13 @@ func stepToCIDR(ipRangeStartInt *big.Int, step *big.Int, isIPv6 bool) *net.IPNet
 		maskMaxLength = V6BitLen
 	}
 	// Mask = mask max length - log2(step)
-	mask := maskMaxLength - int(math.Floor(math.Log(float64(step.Int64()))/math.Log(2)))
+	logStep := -1
+	stepToShift := new(big.Int).Set(step)
+	for stepToShift.Cmp(big.NewInt(0)) > 0 {
+		logStep += 1
+		stepToShift.Rsh(stepToShift, 1)
+	}
+	mask := maskMaxLength - logStep
 	return &net.IPNet{
 		IP:   bigIntToIP(ipRangeStartInt, isIPv6),
 		Mask: net.CIDRMask(mask, maskMaxLength),
