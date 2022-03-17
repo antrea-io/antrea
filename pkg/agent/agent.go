@@ -666,7 +666,7 @@ func (i *Initializer) initNodeLocalConfig() error {
 			},
 		})
 		if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-			_, err := i.client.CoreV1().Nodes().Patch(context.TODO(), nodeName, apitypes.MergePatchType, patch, metav1.PatchOptions{})
+			_, err := i.client.CoreV1().Nodes().Patch(context.TODO(), nodeName, apitypes.MergePatchType, patch, metav1.PatchOptions{}, "status")
 			return err
 		}); err != nil {
 			return err
