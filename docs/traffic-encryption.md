@@ -8,6 +8,10 @@ WireGuard. Traffic encryption is not supported on Windows Nodes yet.
 IPsec encyption works for all tunnel types supported by OVS including Geneve,
 GRE, VXLAN, and STT tunnel.
 
+Note that GRE is not supported for IPv6 clusters (IPv6-only or dual-stack
+clusters). For such clusters, please choose a different tunnel type such as
+Geneve or VXLAN.
+
 ### Prerequisites
 
 IPsec requires a set of Linux kernel modules. Check the required kernel modules
@@ -63,6 +67,10 @@ After updating the PSK value, deploy Antrea with:
 ```bash
 kubectl apply -f antrea-ipsec.yml
 ```
+
+By default, the deployment yaml uses GRE as the tunnel type, which you can
+change by editing the file. You will need to change the tunnel type to another
+one if your cluster supports IPv6.
 
 ## WireGuard
 

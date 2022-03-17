@@ -705,6 +705,23 @@ func (i *Initializer) setupDefaultTunnelInterface() error {
 		localIPStr = localIP.String()
 	}
 
+	// The correct OVS tunnel type to use GRE with an IPv6 overlay is
+	// "ip6gre" and not "gre". While it would be possible to support GRE for
+	// an IPv6-only cluster (by simply setting the tunnel type to "ip6gre"),
+	// things would be more complicated for a dual-stack cluster. For such a
+	// cluster, we have both IPv4 and IPv6 tunnels for inter-Node
+	// traffic. We would therefore need to create 2 default tunnel ports:
+	// one with type "gre" and one with type "ip6gre". This would introduce
+	// some complexity as the code currently assumes that we have a single
+	// default tunnel port. So for now, we just reject configurations that
+	// request a GRE tunnel when the Node network supports IPv6.
+	// See https://github.com/antrea-io/antrea/issues/3150
+	if i.networkConfig.TrafficEncapMode.SupportsEncap() &&
+		i.networkConfig.TunnelType == ovsconfig.GRETunnel &&
+		i.nodeConfig.NodeIPv6Addr != nil {
+		return fmt.Errorf("GRE tunnel type is not supported for IPv6 overlay")
+	}
+
 	// Enabling UDP checksum can greatly improve the performance for Geneve and
 	// VXLAN tunnels by triggering GRO on the receiver.
 	shouldEnableCsum := i.networkConfig.TunnelType == ovsconfig.GeneveTunnel || i.networkConfig.TunnelType == ovsconfig.VXLANTunnel
@@ -782,8 +799,7 @@ func (i *Initializer) initNodeLocalConfig() error {
 	}
 	node, err := i.client.CoreV1().Nodes().Get(context.TODO(), nodeName, metav1.GetOptions{})
 	if err != nil {
-		klog.Errorf("Failed to get node from K8s with name %s: %v", nodeName, err)
-		return err
+		return fmt.Errorf("failed to get Node with name %s from K8s: %w", nodeName, err)
 	}
 
 	// nodeInterface is the interface that has K8s Node IP. transportInterface is the interface that is used for
@@ -850,7 +866,7 @@ func (i *Initializer) initNodeLocalConfig() error {
 	// OVS in noencap case on Windows Nodes. As a mixture of Linux and Windows nodes is possible, Linux Nodes' MAC
 	// addresses should be reported too to make them discoverable for Windows Nodes.
 	if i.networkConfig.TrafficEncapMode.SupportsNoEncap() {
-		klog.Infof("Updating Node MAC annotation")
+		klog.InfoS("Updating Node MAC annotation")
 		if err := i.patchNodeAnnotations(nodeName, types.NodeMACAddressAnnotationKey, transportInterface.HardwareAddr.String()); err != nil {
 			return err
 		}
@@ -875,48 +891,47 @@ func (i *Initializer) initNodeLocalConfig() error {
 		return err
 	}
 	i.nodeConfig.NodeMTU = mtu
-	klog.Infof("Setting Node MTU=%d", mtu)
+	klog.InfoS("Setting Node MTU", "MTU", mtu)
 
 	if i.networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {
 		return nil
 	}
 
-	// Parse all PodCIDRs first, so that we could support IPv4/IPv6 dual-stack configurations.
+	// Parse all PodCIDRs first, so that we can support IPv4/IPv6 dual-stack configurations.
 	if node.Spec.PodCIDRs != nil {
 		for _, podCIDR := range node.Spec.PodCIDRs {
 			_, localSubnet, err := net.ParseCIDR(podCIDR)
 			if err != nil {
-				klog.Errorf("Failed to parse subnet from CIDR string %s: %v", node.Spec.PodCIDR, err)
+				klog.ErrorS(err, "Failed to parse subnet from Pod CIDR string", "CIDR", podCIDR)
 				return err
 			}
 			if localSubnet.IP.To4() != nil {
 				if i.nodeConfig.PodIPv4CIDR != nil {
-					klog.Warningf("One IPv4 PodCIDR is already configured on this Node, ignore the IPv4 Subnet CIDR %s", localSubnet.String())
+					klog.InfoS("One IPv4 PodCIDR is already configured on this Node, ignoring the IPv4 Subnet CIDR", "subnet", localSubnet)
 				} else {
 					i.nodeConfig.PodIPv4CIDR = localSubnet
-					klog.V(2).Infof("Configure IPv4 Subnet CIDR %s on this Node", localSubnet.String())
+					klog.V(2).InfoS("Configured IPv4 Subnet CIDR on this Node", "subnet", localSubnet)
 				}
 				continue
 			}
 			if i.nodeConfig.PodIPv6CIDR != nil {
-				klog.Warningf("One IPv6 PodCIDR is already configured on this Node, ignore the IPv6 subnet CIDR %s", localSubnet.String())
+				klog.InfoS("One IPv6 PodCIDR is already configured on this Node, ignoring the IPv6 Subnet CIDR", "subnet", localSubnet)
 			} else {
 				i.nodeConfig.PodIPv6CIDR = localSubnet
-				klog.V(2).Infof("Configure IPv6 Subnet CIDR %s on this Node", localSubnet.String())
+				klog.V(2).InfoS("Configured IPv6 Subnet CIDR on this Node", "subnet", localSubnet)
 			}
 		}
 		return nil
 	}
 	// Spec.PodCIDR can be empty due to misconfiguration.
 	if node.Spec.PodCIDR == "" {
-		klog.Errorf("Spec.PodCIDR is empty for Node %s. Please make sure --allocate-node-cidrs is enabled "+
-			"for kube-controller-manager and --cluster-cidr specifies a sufficient CIDR range", nodeName)
-		return fmt.Errorf("CIDR string is empty for node %s", nodeName)
+		klog.ErrorS(nil, "Spec.PodCIDR is empty for Node. Please make sure --allocate-node-cidrs is enabled "+
+			"for kube-controller-manager and --cluster-cidr specifies a sufficient CIDR range", "nodeName", nodeName)
+		return fmt.Errorf("CIDR string is empty for Node %s", nodeName)
 	}
 	_, localSubnet, err := net.ParseCIDR(node.Spec.PodCIDR)
 	if err != nil {
-		klog.Errorf("Failed to parse subnet from CIDR string %s: %v", node.Spec.PodCIDR, err)
-		return err
+		return fmt.Errorf("failed to parse subnet from CIDR string %s: %w", node.Spec.PodCIDR, err)
 	}
 	if localSubnet.IP.To4() != nil {
 		i.nodeConfig.PodIPv4CIDR = localSubnet
