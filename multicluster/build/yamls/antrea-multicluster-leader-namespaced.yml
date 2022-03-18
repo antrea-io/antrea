@@ -39,10 +39,6 @@ rules:
   - events
   verbs:
   - create
-  - get
-  - list
-  - patch
-  - update
 - apiGroups:
   - ""
   resources:
@@ -352,20 +348,6 @@ rules:
   - events
   verbs:
   - create
-  - get
-  - list
-  - patch
-  - update
-- apiGroups:
-  - ""
-  resources:
-  - events
-  verbs:
-  - create
-  - get
-  - list
-  - patch
-  - update
 - apiGroups:
   - multicluster.crd.antrea.io
   resources:

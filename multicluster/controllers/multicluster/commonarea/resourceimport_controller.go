@@ -86,7 +86,7 @@ func NewResourceImportReconciler(client client.Client, scheme *runtime.Scheme, l
 //+kubebuilder:rbac:groups=multicluster.x-k8s.io,resources=serviceimports/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups="",resources=endpoints,verbs=get;list;watch;update;create;patch;delete
 //+kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch;update;create;patch;delete
-//+kubebuilder:rbac:groups="",resources=events,verbs=get;list;update;create;patch
+//+kubebuilder:rbac:groups="",resources=events,verbs=create
 
 // Reconcile will attempt to ensure that the imported Resource is installed in local cluster as per the
 // ResourceImport object.

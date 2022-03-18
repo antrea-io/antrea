@@ -17,7 +17,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math/rand"
 
 	corev1 "k8s.io/api/core/v1"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
@@ -33,11 +32,7 @@ import (
 	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
 )
 
-const (
-	nameSuffixLength       int    = 5
-	acnpImportStatusPrefix string = "acnp-import-status-"
-	acnpImportFailed       string = "ACNPImportFailed"
-)
+const acnpImportFailed string = "ACNPImportFailed"
 
 var (
 	resourceImportAPIVersion     = "multicluster.crd.antrea.io/v1alpha1"
@@ -45,7 +40,6 @@ var (
 	acnpEventReportingController = "resourceimport-controller"
 	// TODO(yang): add run-time pod suffix
 	acnpEventReportingInstance = "antrea-mc-controller"
-	lettersAndDigits           = []rune("abcdefghijklmnopqrstuvwxyz0123456789")
 )
 
 func (r *ResourceImportReconciler) handleResImpUpdateForClusterNetworkPolicy(ctx context.Context, resImp *multiclusterv1alpha1.ResourceImport) (ctrl.Result, error) {
@@ -71,9 +65,14 @@ func (r *ResourceImportReconciler) handleResImpUpdateForClusterNetworkPolicy(ctx
 		}
 	}
 	acnpObj := getMCAntreaClusterPolicy(resImp)
-	tierKind, tierName := &v1alpha1.Tier{}, acnpObj.Spec.Tier
-	err = r.localClusterClient.Get(ctx, types.NamespacedName{Namespace: "", Name: tierName}, tierKind)
+	tierObj, tierName := &v1alpha1.Tier{}, acnpObj.Spec.Tier
+	err = r.localClusterClient.Get(ctx, types.NamespacedName{Namespace: "", Name: tierName}, tierObj)
 	tierNotFound := apierrors.IsNotFound(err)
+	if err != nil && !tierNotFound {
+		msg := fmt.Sprintf("Failed to get Tier %s in member cluster %s", tierName, r.localClusterID)
+		return ctrl.Result{}, r.reportStatusEvent(msg, ctx, resImp)
+	}
+	tierNotFoundMsg := fmt.Sprintf("ACNP Tier %s does not exist in importing cluster %s", tierName, r.localClusterID)
 	if !tierNotFound {
 		// If the ACNP Tier exists in the importing member cluster, then the policy is realizable.
 		// Create or update the ACNP if necessary.
@@ -92,7 +91,7 @@ func (r *ResourceImportReconciler) handleResImpUpdateForClusterNetworkPolicy(ctx
 				return ctrl.Result{}, r.reportStatusEvent(msg, ctx, resImp)
 			}
 		}
-	} else if tierNotFound && !acnpNotFound {
+	} else if !acnpNotFound {
 		// The ACNP Tier does not exist, and the policy cannot be realized in this particular importing member cluster.
 		// If there is an ACNP previously created via import (which has a valid Tier by then), it should be cleaned up.
 		if err = r.localClusterClient.Delete(ctx, acnpObj, &client.DeleteOptions{}); err != nil {
@@ -100,9 +99,9 @@ func (r *ResourceImportReconciler) handleResImpUpdateForClusterNetworkPolicy(ctx
 			klog.ErrorS(err, msg, "acnp", klog.KObj(acnpObj))
 			return ctrl.Result{}, r.reportStatusEvent(msg, ctx, resImp)
 		}
-	} else if tierNotFound {
-		msg := fmt.Sprintf("ACNP Tier %s does not exist in importing cluster %s", tierName, r.localClusterID)
-		return ctrl.Result{}, r.reportStatusEvent(msg, ctx, resImp)
+		return ctrl.Result{}, r.reportStatusEvent(tierNotFoundMsg, ctx, resImp)
+	} else {
+		return ctrl.Result{}, r.reportStatusEvent(tierNotFoundMsg, ctx, resImp)
 	}
 	return ctrl.Result{}, nil
 }
@@ -132,9 +131,6 @@ func (r *ResourceImportReconciler) handleResImpDeleteForClusterNetworkPolicy(ctx
 }
 
 func getMCAntreaClusterPolicy(resImp *multiclusterv1alpha1.ResourceImport) *v1alpha1.ClusterNetworkPolicy {
-	if resImp.Spec.ClusterNetworkPolicy == nil {
-		return nil
-	}
 	return &v1alpha1.ClusterNetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: common.AntreaMCSPrefix + resImp.Spec.Name,
@@ -147,12 +143,10 @@ func getMCAntreaClusterPolicy(resImp *multiclusterv1alpha1.ResourceImport) *v1al
 }
 
 func (r *ResourceImportReconciler) reportStatusEvent(errMsg string, ctx context.Context, resImp *multiclusterv1alpha1.ResourceImport) error {
-	if errMsg == "" {
-		return nil
-	}
+	t := metav1.Now()
 	statusEvent := &corev1.Event{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      randName(acnpImportStatusPrefix + r.localClusterID + "-"),
+			Name:      fmt.Sprintf("%v.%x", resImp.Name, t.UnixNano()),
 			Namespace: resImp.Namespace,
 		},
 		Type:    corev1.EventTypeWarning,
@@ -176,18 +170,4 @@ func (r *ResourceImportReconciler) reportStatusEvent(errMsg string, ctx context.
 		return err
 	}
 	return nil
-}
-
-func randSeq(n int) string {
-	b := make([]rune, n)
-	for i := range b {
-		// #nosec G404: random number generator not used for security purposes
-		randIdx := rand.Intn(len(lettersAndDigits))
-		b[i] = lettersAndDigits[randIdx]
-	}
-	return string(b)
-}
-
-func randName(prefix string) string {
-	return prefix + randSeq(nameSuffixLength)
 }

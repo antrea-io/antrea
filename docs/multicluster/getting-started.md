@@ -420,8 +420,8 @@ the ClusterSet to be applied with a consistent security posture (for example, al
 clusters can only communicate with Pods in their own namespaces). For more information regarding
 Antrea ClusterNetworkPolicy (ACNP), refer to [this document](../antrea-network-policy.md).
 
-To achieve such ACNP copy-span replication across clusters, admins can, in the acting leader cluster of
-a Multi-cluster deployment, create a ResourceExport of kind `AntreaClusterNetworkPolicy` which contains
+To achieve such ACNP replication across clusters, admins can, in the acting leader cluster of a
+Multi-cluster deployment, create a ResourceExport of kind `AntreaClusterNetworkPolicy` which contains
 the ClusterNetworkPolicy spec they wish to be replicated. The ResourceExport should be created in the
 Namespace which implements the  Common Area of the ClusterSet. In future releases, some additional tooling
 may become available to automate the creation of such ResourceExport and make ACNP replication easier.
