@@ -631,8 +631,8 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule, 
 				}
 				lastRealized.ofIDs[svcKey] = ofRule.FlowID
 			} else {
-				addedTo := groupMembersToOFAddresses(members.Difference(prevMembersByServicesMap[svcKey]))
-				deletedTo := groupMembersToOFAddresses(prevMembersByServicesMap[svcKey].Difference(members))
+				addedTo := ipsToOFAddresses(members.IPDifference(prevMembersByServicesMap[svcKey]))
+				deletedTo := ipsToOFAddresses(prevMembersByServicesMap[svcKey].IPDifference(members))
 				if err := r.updateOFRule(ofID, addedFrom, addedTo, deletedFrom, deletedTo, ofPriority); err != nil {
 					return err
 				}
