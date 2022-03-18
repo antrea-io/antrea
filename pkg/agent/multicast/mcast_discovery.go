@@ -118,6 +118,10 @@ func (s *IGMPSnooper) processPacketIn(pktIn *ofctrl.PacketIn) error {
 		return err
 	}
 	klog.V(2).InfoS("Received PacketIn for IGMP packet", "in_port", iface.OFPort)
+	podName := "unknown"
+	if iface.Type == interfacestore.ContainerInterface {
+		podName = iface.PodName
+	}
 	igmp, err := parseIGMPPacket(pktIn.Data)
 	if err != nil {
 		return err
@@ -127,7 +131,7 @@ func (s *IGMPSnooper) processPacketIn(pktIn *ofctrl.PacketIn) error {
 		fallthrough
 	case protocol.IGMPv2Report:
 		mgroup := igmp.(*protocol.IGMPv1or2).GroupAddress
-		klog.InfoS("Received IGMPv1or2 Report message", "group", mgroup.String(), "interface", iface.PodName)
+		klog.InfoS("Received IGMPv1or2 Report message", "group", mgroup.String(), "interface", iface.InterfaceName, "pod", podName)
 		event := &mcastGroupEvent{
 			group: mgroup,
 			eType: groupJoin,
@@ -139,10 +143,14 @@ func (s *IGMPSnooper) processPacketIn(pktIn *ofctrl.PacketIn) error {
 		msg := igmp.(*protocol.IGMPv3MembershipReport)
 		for _, gr := range msg.GroupRecords {
 			mgroup := gr.MulticastAddress
-			klog.InfoS("Received IGMPv3 Report message", "group", mgroup.String(), "interface", iface.PodName)
+			klog.InfoS("Received IGMPv3 Report message", "group", mgroup.String(), "interface", iface.InterfaceName, "pod", podName, "recordType", gr.Type, "sourceCount", gr.NumberOfSources)
+			evtType := groupJoin
+			if (gr.Type == protocol.IGMPIsIn || gr.Type == protocol.IGMPToIn) && gr.NumberOfSources == 0 {
+				evtType = groupLeave
+			}
 			event := &mcastGroupEvent{
 				group: mgroup,
-				eType: groupJoin,
+				eType: evtType,
 				time:  now,
 				iface: iface,
 			}
@@ -151,7 +159,7 @@ func (s *IGMPSnooper) processPacketIn(pktIn *ofctrl.PacketIn) error {
 
 	case protocol.IGMPv2LeaveGroup:
 		mgroup := igmp.(*protocol.IGMPv1or2).GroupAddress
-		klog.InfoS("Received IGMPv2 Leave message", "group", mgroup.String(), "interface", iface.PodName)
+		klog.InfoS("Received IGMPv2 Leave message", "group", mgroup.String(), "interface", iface.InterfaceName, "pod", podName)
 		event := &mcastGroupEvent{
 			group: mgroup,
 			eType: groupLeave,
