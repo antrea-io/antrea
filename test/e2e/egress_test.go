@@ -167,8 +167,8 @@ ip netns exec %[1]s /agnhost netexec
 
 			// getClientIP gets the translated client IP by accessing the API that replies the request's client IP.
 			getClientIP := func(pod string) (string, string, error) {
-				cmd := []string{"wget", "-T", "3", "-O", "-", fmt.Sprintf("%s:8080/clientip", serverIPStr)}
-				return data.runCommandFromPod(testNamespace, pod, busyboxContainerName, cmd)
+				url := fmt.Sprintf("%s:8080/clientip", serverIPStr)
+				return data.runWgetCommandOnBusyboxWithRetry(pod, testNamespace, url, 5)
 			}
 
 			// assertClientIP asserts the Pod is translated to the provided client IP.

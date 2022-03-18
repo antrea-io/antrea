@@ -1791,6 +1791,23 @@ func (data *TestData) runNetcatCommandFromTestPodWithProtocol(podName string, ns
 	return fmt.Errorf("nc stdout: <%v>, stderr: <%v>, err: <%v>", stdout, stderr, err)
 }
 
+func (data *TestData) runWgetCommandOnBusyboxWithRetry(podName, ns string, url string, maxAttempts int) (string, string, error) {
+	var stdout, stderr string
+	var err error
+	cmd := []string{"wget", "-O", "-", url, "-T", "1"}
+	for i := 0; i < maxAttempts; i++ {
+		stdout, stderr, err = data.runCommandFromPod(ns, podName, busyboxContainerName, cmd)
+		if err != nil {
+			if i < maxAttempts-1 {
+				time.Sleep(time.Second)
+			}
+		} else {
+			break
+		}
+	}
+	return stdout, stderr, err
+}
+
 func (data *TestData) doesOVSPortExist(antreaPodName string, portName string) (bool, error) {
 	cmd := []string{"ovs-vsctl", "port-to-br", portName}
 	_, stderr, err := data.runCommandFromPod(antreaNamespace, antreaPodName, ovsContainerName, cmd)

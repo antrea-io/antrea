@@ -158,11 +158,10 @@ func (data *TestData) testNodePort(t *testing.T, isWindows bool, namespace strin
 	nodePort := int(svc.Spec.Ports[0].NodePort)
 	url := fmt.Sprintf("http://%s:%d", nodeIP, nodePort)
 
-	cmd := []string{"wget", "-O", "-", url, "-T", "1", "-t", "5"}
-	stdout, stderr, err := data.runCommandFromPod(namespace, clientName, busyboxContainerName, cmd)
+	stdout, stderr, err := data.runWgetCommandOnBusyboxWithRetry(clientName, namespace, url, 5)
 	if err != nil {
-		t.Errorf("Error when running command '%s' from Pod '%s', stdout: %s, stderr: %s, error: %v",
-			strings.Join(cmd, " "), clientName, stdout, stderr, err)
+		t.Errorf("Error when running 'wget -O - %s' from Pod '%s', stdout: %s, stderr: %s, error: %v",
+			url, clientName, stdout, stderr, err)
 	} else {
 		t.Logf("wget from Pod '%s' to '%s' succeeded", clientName, url)
 	}
