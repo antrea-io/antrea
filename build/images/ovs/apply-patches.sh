@@ -88,6 +88,11 @@ if version_lt "$OVS_VERSION" "2.14.1" ; then
         git apply
 fi
 
+# This patch is necessary to ensure that ovs-monitor-ipsec generates a correct IPsec configuration
+# for strongSwan when using IPv6.
+curl https://github.com/openvswitch/ovs/commit/e59194b606078d90b73f86092f9b76385afa73f0.patch | \
+    git apply
+
 # OVS hardcodes the installation path to /usr/lib/python3.7/dist-packages/ but this location
 # does not seem to be in the Python path in Ubuntu 20.04. There may be a better way to do this,
 # but this seems like an acceptable workaround.
