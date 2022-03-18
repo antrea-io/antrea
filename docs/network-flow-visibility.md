@@ -548,7 +548,7 @@ The expected results will be like:
 
 ```bash  
 NAME                                  READY   STATUS    RESTARTS   AGE
-pod/chi-clickhouse-clickhouse-0-0-0   1/1     Running   0          1m
+pod/chi-clickhouse-clickhouse-0-0-0   2/2     Running   0          1m
 pod/grafana-5c6c5b74f7-x4v5b          1/1     Running   0          1m
 
 NAME                                    TYPE           CLUSTER-IP       EXTERNAL-IP   PORT(S)                         AGE
@@ -565,12 +565,6 @@ replicaset.apps/grafana-5c6c5b74f7   1         1         1       1m
 NAME                                             READY   AGE
 statefulset.apps/chi-clickhouse-clickhouse-0-0   1/1     1m
 
-
-NAME                               SCHEDULE    SUSPEND   ACTIVE   LAST SCHEDULE   AGE
-cronjob.batch/clickhouse-monitor   * * * * *   False     0        30s             1m
-
-NAME                                    COMPLETIONS   DURATION   AGE
-job.batch/clickhouse-monitor-27434986   1/1           6s         30s
 ```
 
 Run the following commands to print the IP of the workder Node and the NodePort
