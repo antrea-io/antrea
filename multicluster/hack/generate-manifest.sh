@@ -131,6 +131,8 @@ fi
 
 if [ "$MODE" == "release" ]; then
     $KUSTOMIZE edit set image antrea/antrea-mc-controller=$IMG_NAME:$IMG_TAG
+else
+    $KUSTOMIZE edit set image antrea/antrea-mc-controller=projects.registry.vmware.com/antrea/antrea-mc-controller:latest
 fi
 $KUSTOMIZE build
 rm -rf $TMP_DIR
