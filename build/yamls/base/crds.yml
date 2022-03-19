@@ -292,6 +292,8 @@ spec:
                                 type: string
                               containerID:
                                 type: string
+                              ifName:
+                                type: string
                             type: object
                           statefulSet:
                             properties:

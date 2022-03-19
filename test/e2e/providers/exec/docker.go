@@ -16,6 +16,7 @@ package exec
 
 import (
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os/exec"
 	"strings"
@@ -27,11 +28,20 @@ import (
 // RunDockerExecCommand runs the provided command on the specified host using "docker exec". Returns
 // the exit code of the command, along with the contents of stdout and stderr as strings. Note that
 // if the command returns a non-zero error code, this function does not report it as an error.
-func RunDockerExecCommand(container string, cmd string, workdir string) (
+func RunDockerExecCommand(container, cmd, workdir string, envs map[string]string, stdin string) (
 	code int, stdout string, stderr string, err error,
 ) {
-	args := make([]string, 0)
-	args = append(args, "exec", "-w", workdir, "-t", container)
+	args := []string{"exec"}
+	// Set environment variables.
+	for e, v := range envs {
+		args = append(args, "-e", e+"="+v)
+	}
+	if stdin != "" {
+		// Interactive mode to get input from stdin.
+		args = append(args, "-i")
+	}
+	args = append(args, "-w", workdir, container)
+
 	if strings.Contains(cmd, "/bin/sh") {
 		// Just split in to "/bin/sh" "-c" and "actual_cmd"
 		// This is useful for passing piped commands in to os/exec interface.
@@ -39,7 +49,9 @@ func RunDockerExecCommand(container string, cmd string, workdir string) (
 	} else {
 		args = append(args, strings.Fields(cmd)...)
 	}
+
 	dockerCmd := exec.Command("docker", args...)
+
 	stdoutPipe, err := dockerCmd.StdoutPipe()
 	if err != nil {
 		return 0, "", "", fmt.Errorf("error when connecting to stdout: %v", err)
@@ -48,10 +60,21 @@ func RunDockerExecCommand(container string, cmd string, workdir string) (
 	if err != nil {
 		return 0, "", "", fmt.Errorf("error when connecting to stderr: %v", err)
 	}
+	if stdin != "" {
+		stdinPipe, err := dockerCmd.StdinPipe()
+		if err != nil {
+			return 0, "", "", fmt.Errorf("error when connecting to stdin: %v", err)
+		}
+		_, err = io.WriteString(stdinPipe, stdin)
+		stdinPipe.Close()
+		if err != nil {
+			return 0, "", "", fmt.Errorf("error when writing to stdin: %v", err)
+		}
+	}
+
 	if err := dockerCmd.Start(); err != nil {
 		return 0, "", "", fmt.Errorf("error when starting command: %v", err)
 	}
-
 	stdoutBytes, _ := ioutil.ReadAll(stdoutPipe)
 	stderrBytes, _ := ioutil.ReadAll(stderrPipe)
 

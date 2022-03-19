@@ -121,7 +121,16 @@ func (provider *VagrantProvider) RunCommandOnNode(nodeName string, cmd string) (
 	if err != nil {
 		return 0, "", "", fmt.Errorf("error when retrieving SSH config for node '%s': %v", nodeName, err)
 	}
-	return exec.RunSSHCommand(host, config, cmd)
+	return exec.RunSSHCommand(host, config, cmd, nil, "", false)
+}
+
+func (provider *VagrantProvider) RunCommandOnNodeExt(nodeName, cmd string, envs map[string]string, stdin string, sudo bool) (
+	code int, stdout, stderr string, err error) {
+	host, config, err := GetSSHConfig(nodeName)
+	if err != nil {
+		return 0, "", "", fmt.Errorf("error when retrieving SSH config for node '%s': %v", nodeName, err)
+	}
+	return exec.RunSSHCommand(host, config, cmd, envs, stdin, sudo)
 }
 
 func (provider *VagrantProvider) GetKubeconfigPath() (string, error) {

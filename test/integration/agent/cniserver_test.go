@@ -142,7 +142,9 @@ const (
 	chainCNIConfStr = `{
 "cniVersion":"%s",
 "name":"azure",
-"prevResult":%s
+"type":"antrea",
+"prevResult":%s,
+"ipam":{"type":"unknown"}
 }`
 )
 
@@ -571,9 +573,8 @@ func newTester() *cmdAddDelTester {
 		"",
 		testNodeConfig,
 		k8sFake.NewSimpleClientset(),
-		false,
-		false,
 		routeMock,
+		false, false, false,
 		tester.networkReadyCh)
 	tester.server.Initialize(ovsServiceMock, ofServiceMock, ifaceStore, channel.NewSubscribableChannel("PodUpdate", 100), nil)
 	ctx := context.Background()
@@ -651,7 +652,7 @@ func TestAntreaServerFunc(t *testing.T) {
 	controller := mock.NewController(t)
 	defer controller.Finish()
 	ipamMock = ipamtest.NewMockIPAMDriver(controller)
-	_ = ipam.RegisterIPAMDriver("mock", ipamMock)
+	ipam.RegisterIPAMDriver("mock", ipamMock)
 	ovsServiceMock = ovsconfigtest.NewMockOVSBridgeClient(controller)
 	ofServiceMock = openflowtest.NewMockClient(controller)
 	routeMock = routetest.NewMockInterface(controller)
@@ -736,9 +737,8 @@ func setupChainTest(
 			"",
 			testNodeConfig,
 			k8sFake.NewSimpleClientset(),
-			true,
-			false,
 			routeMock,
+			true, false, false,
 			networkReadyCh)
 	} else {
 		server = inServer

@@ -44,7 +44,7 @@ var (
 				Name: "test-ippool-ipv4-0",
 			},
 			Spec: crdv1alpha2.IPPoolSpec{
-				IPVersion: 4,
+				IPVersion: crdv1alpha2.IPv4,
 				IPRanges: []crdv1alpha2.SubnetIPRange{{IPRange: crdv1alpha2.IPRange{
 					CIDR:  "",
 					Start: "192.168.240.100",
@@ -61,7 +61,7 @@ var (
 				Name: "test-ippool-ipv4-1",
 			},
 			Spec: crdv1alpha2.IPPoolSpec{
-				IPVersion: 4,
+				IPVersion: crdv1alpha2.IPv4,
 				IPRanges: []crdv1alpha2.SubnetIPRange{{IPRange: crdv1alpha2.IPRange{
 					CIDR:  "",
 					Start: "192.168.240.130",

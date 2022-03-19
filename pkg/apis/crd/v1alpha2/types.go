@@ -304,9 +304,16 @@ type IPPool struct {
 	Status IPPoolStatus `json:"status"`
 }
 
+type IPVersion int
+
+const (
+	IPv4 = IPVersion(4)
+	IPv6 = IPVersion(6)
+)
+
 type IPPoolSpec struct {
 	// IP Version for this IP pool - either 4 or 6
-	IPVersion int `json:"ipVersion"`
+	IPVersion IPVersion `json:"ipVersion"`
 	// List IP ranges, along with subnet definition.
 	IPRanges []SubnetIPRange `json:"ipRanges"`
 }
@@ -361,6 +368,9 @@ type PodOwner struct {
 	Name        string `json:"name"`
 	Namespace   string `json:"namespace"`
 	ContainerID string `json:"containerID"`
+	// Network interface name. Used when the IP is allocated for a secondary network interface
+	// of the Pod.
+	IFName string `json:"ifName,omitempty"`
 }
 
 // StatefulSet owner
