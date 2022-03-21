@@ -1,0 +1,19 @@
+ARG GO_VERSION
+FROM golang:${GO_VERSION} as clickhouse-monitor-build
+
+COPY . /antrea
+WORKDIR /antrea/plugins/flow-visibility/clickhouse-monitor
+
+# Statically links clickhouse-monitor-plugin binary.
+RUN CGO_ENABLED=0 make clickhouse-monitor-plugin
+
+FROM scratch
+
+LABEL maintainer="Antrea <projectantrea-dev@googlegroups.com>"
+LABEL description="A docker image to deploy the ClickHouse monitor plugin."
+
+ENV USER root
+
+COPY --from=clickhouse-monitor-build /antrea/plugins/flow-visibility/clickhouse-monitor/* /
+
+ENTRYPOINT ["/clickhouse-monitor"]

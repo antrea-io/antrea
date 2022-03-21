@@ -1,0 +1,14 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  labels:
+    app: clickhouse-monitor
+  name: clickhouse-monitor
+spec:
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: clickhouse-monitor
+            imagePullPolicy: IfNotPresent

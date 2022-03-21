@@ -182,3 +182,34 @@ jobs:
       run: |
         echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
         docker push antrea/flow-aggregator:latest
+
+  check-clickhouse-monitor-changes:
+    name: Check whether flow-visibility-clickhouse-monitor image needs to be built based on diff
+    runs-on: [ubuntu-latest]
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+    - uses: antrea-io/has-changes@v1
+      id: check_diff
+      with:
+        args: build/yamls/* ci/* cmd/* docs/* hack/* multicluster/* pkg/* test/* third_party/* plugins/octant/* plugins/grafana-sankey-plugin/* *.md
+    outputs:
+      has_changes: ${{ steps.check_diff.outputs.has_changes }}
+
+  build-flow-visibility-clickhouse-monitor:
+    needs: check-clickhouse-monitor-changes
+    if: ${{ needs.check-clickhouse-monitor-changes.outputs.has_changes == 'yes' || github.event_name == 'push' }}
+    runs-on: [ubuntu-latest]
+    steps:
+    - uses: actions/checkout@v2
+    - name: Build flow-visibility-clickhouse-monitor Docker image
+      run: make flow-visibility-clickhouse-monitor
+    - name: Push flow-visibility-clickhouse-monitor Docker image to registry
+      if: ${{ github.repository == 'antrea-io/antrea' && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+      env:
+        DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+        DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+      run: |
+        echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+        docker push antrea/flow-visibility-clickhouse-monitor:latest

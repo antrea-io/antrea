@@ -118,3 +118,18 @@ jobs:
         make flow-aggregator-image
         echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
         docker push antrea/flow-aggregator:"${VERSION}"
+
+  build-flow-visibility-clickhouse-monitor:
+    runs-on: [ubuntu-latest]
+    needs: get-version
+    steps:
+    - uses: actions/checkout@v2
+    - name: Build flow-visibility-clickhouse-monitor Docker image and push to registry
+      env:
+        DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+        DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+        VERSION: ${{ needs.get-version.outputs.version }}
+      run: |
+        make flow-visibility-clickhouse-monitor
+        echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+        docker push antrea/flow-visibility-clickhouse-monitor:"${VERSION}"

@@ -20,9 +20,11 @@ function echoerr {
     >&2 echo "$@"
 }
 
-_usage="Usage: $0 [--help|-h]
+_usage="Usage: $0 [--mode (dev|release)] [--keep] [--help|-h]
 Generate a YAML manifest for the Clickhouse-Grafana Flow-visibility Solution, using Kustomize, and
 print it to stdout.
+        --mode (dev|release)  Choose the configuration variant that you need (default is 'dev')
+        --keep                Debug flag which will preserve the generated kustomization.yml
 
 This tool uses kustomize (https://github.com/kubernetes-sigs/kustomize) to generate manifests for
 Clickhouse-Grafana Flow-visibility Solution. You can set the KUSTOMIZE environment variable to the
@@ -37,11 +39,22 @@ function print_help {
     echoerr "Try '$0 --help' for more information."
 }
 
+MODE="dev"
+KEEP=false
+
 while [[ $# -gt 0 ]]
 do
 key="$1"
 
 case $key in
+    --mode)
+    MODE="$2"
+    shift 2
+    ;;
+    --keep)
+    KEEP=true
+    shift
+    ;;
     -h|--help)
     print_usage
     exit 0
@@ -52,6 +65,24 @@ case $key in
     ;;
 esac
 done
+
+if [ "$MODE" != "dev" ] && [ "$MODE" != "release" ]; then
+    echoerr "--mode must be one of 'dev' or 'release'"
+    print_help
+    exit 1
+fi
+
+if [ "$MODE" == "release" ] && [ -z "$IMG_NAME" ]; then
+    echoerr "In 'release' mode, environment variable IMG_NAME must be set"
+    print_help
+    exit 1
+fi
+
+if [ "$MODE" == "release" ] && [ -z "$IMG_TAG" ]; then
+    echoerr "In 'release' mode, environment variable IMG_TAG must be set"
+    print_help
+    exit 1
+fi
 
 THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
@@ -67,6 +98,34 @@ fi
 
 KUSTOMIZATION_DIR=$THIS_DIR/../build/yamls/flow-visibility
 
-cd $KUSTOMIZATION_DIR/base
+TMP_DIR=$(mktemp -d $KUSTOMIZATION_DIR/overlays.XXXXXXXX)
+
+pushd $TMP_DIR > /dev/null
+
+BASE=../../base
+
+mkdir $MODE && cd $MODE
+touch kustomization.yml
+$KUSTOMIZE edit add base $BASE
+# ../../patches/$MODE may be empty so we use find and not simply cp
+find ../../patches/$MODE -name \*.yml -exec cp {} . \;
+
+if [ "$MODE" == "dev" ]; then
+    $KUSTOMIZE edit set image flow-visibility-clickhouse-monitor=projects.registry.vmware.com/antrea/flow-visibility-clickhouse-monitor:latest
+    $KUSTOMIZE edit add patch --path imagePullPolicy.yml
+fi
+
+if [ "$MODE" == "release" ]; then
+    $KUSTOMIZE edit set image flow-visibility-clickhouse-monitor=$IMG_NAME:$IMG_TAG
+fi
 
 $KUSTOMIZE build
+
+popd > /dev/null
+
+
+if $KEEP; then
+    echoerr "Kustomization file is at $TMP_DIR/$MODE/kustomization.yml"
+else
+    rm -rf $TMP_DIR
+fi
