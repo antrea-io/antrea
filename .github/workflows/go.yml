@@ -204,7 +204,7 @@ jobs:
     - name: Run verify scripts
       run: make verify
     - name: Checking for broken Markdown links
-      uses: antoninbas/github-action-markdown-link-check@1.0.9-pre
+      uses: gaurav-nelson/github-action-markdown-link-check@v1
       with:
         folder-path: './docs'
         file-path: './README.md, ./CHANGELOG.md, ./CONTRIBUTING.md, ./GOVERNANCE.md, ./MAINTAINERS.md, ./ROADMAP.md, ./SECURITY.md'
