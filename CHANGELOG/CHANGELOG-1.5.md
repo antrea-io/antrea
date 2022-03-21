@@ -1,5 +1,13 @@
 # Changelog 1.5
 
+## 1.5.2 - 2022-03-21
+
+### Fixed
+
+- Fix NetworkPolicy may not be enforced correctly after restarting a Node. ([#3467](https://github.com/antrea-io/antrea/pull/3467), [@tnqn])
+- Fix antrea-agent crash caused by interface detection in AKS/EKS with NetworkPolicyOnly mode. ([#3219](https://github.com/antrea-io/antrea/pull/3219), [@wenyingd])
+- Fix locally generated packets from Node net namespace might be SNATed mistakenly when Egress is enabled. ([#3430](https://github.com/antrea-io/antrea/pull/3430), [@tnqn])
+
 ## 1.5.1 - 2022-03-07
 
 ### Changed
