@@ -17,7 +17,6 @@ package serviceexternalip
 import (
 	"context"
 	"fmt"
-	"net"
 	"sync"
 	"time"
 
@@ -86,7 +85,7 @@ type ServiceExternalIPController struct {
 
 func NewServiceExternalIPController(
 	nodeName string,
-	nodeTransportIP net.IP,
+	nodeTransportInterface string,
 	client kubernetes.Interface,
 	cluster memberlist.Interface,
 	serviceInformer coreinformers.ServiceInformer,
@@ -107,7 +106,7 @@ func NewServiceExternalIPController(
 		externalIPStates:      make(map[apimachinerytypes.NamespacedName]externalIPState),
 		localIPDetector:       localIPDetector,
 	}
-	ipAssigner, err := ipassigner.NewIPAssigner(nodeTransportIP, ingressDummyDevice)
+	ipAssigner, err := ipassigner.NewIPAssigner(nodeTransportInterface, ingressDummyDevice)
 	if err != nil {
 		return nil, fmt.Errorf("initializing service external IP assigner failed: %v", err)
 	}

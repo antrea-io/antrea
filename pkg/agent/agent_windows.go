@@ -51,7 +51,7 @@ func (i *Initializer) prepareHostNetwork() error {
 	// Get uplink network configuration. The uplink interface is the one used for transporting Pod traffic across Nodes.
 	// Use the interface specified with "transportInterface" in the configuration if configured, otherwise the interface
 	// configured with NodeIP is used as uplink.
-	_, _, adapter, err := util.GetIPNetDeviceFromIP(&ip.DualStackIPs{IPv4: i.nodeConfig.NodeTransportIPv4Addr.IP})
+	_, _, adapter, err := i.getNodeInterfaceFromIP(&ip.DualStackIPs{IPv4: i.nodeConfig.NodeTransportIPv4Addr.IP})
 	if err != nil {
 		return err
 	}
