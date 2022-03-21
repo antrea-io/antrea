@@ -68,11 +68,14 @@ clickhouse client -n -h 127.0.0.1 <<-EOSQL
         reverseThroughputFromDestinationNode UInt64,
         trusted UInt8 DEFAULT 0
     ) engine=MergeTree
-    ORDER BY (timeInserted, flowEndSeconds);
+    ORDER BY (timeInserted, flowEndSeconds)
+    TTL timeInserted + INTERVAL 1 HOUR
+    SETTINGS merge_with_ttl_timeout = 3600;
 
     CREATE MATERIALIZED VIEW flows_pod_view
     ENGINE = SummingMergeTree
     ORDER BY (
+        timeInserted,
         flowEndSeconds,
         flowEndSecondsFromSourceNode,
         flowEndSecondsFromDestinationNode,
@@ -83,8 +86,11 @@ clickhouse client -n -h 127.0.0.1 <<-EOSQL
         flowType,
         sourcePodNamespace,
         destinationPodNamespace)
+    TTL timeInserted + INTERVAL 1 HOUR
+    SETTINGS merge_with_ttl_timeout = 3600
     POPULATE
     AS SELECT
+        timeInserted,
         flowEndSeconds,
         flowEndSecondsFromSourceNode,
         flowEndSecondsFromDestinationNode,
@@ -103,6 +109,7 @@ clickhouse client -n -h 127.0.0.1 <<-EOSQL
         sum(throughputFromDestinationNode) AS throughputFromDestinationNode
     FROM flows
     GROUP BY
+        timeInserted,
         flowEndSeconds,
         flowEndSecondsFromSourceNode,
         flowEndSecondsFromDestinationNode,
@@ -117,6 +124,7 @@ clickhouse client -n -h 127.0.0.1 <<-EOSQL
     CREATE MATERIALIZED VIEW flows_node_view
     ENGINE = SummingMergeTree
     ORDER BY (
+        timeInserted,
         flowEndSeconds,
         flowEndSecondsFromSourceNode,
         flowEndSecondsFromDestinationNode,
@@ -124,8 +132,11 @@ clickhouse client -n -h 127.0.0.1 <<-EOSQL
         destinationNodeName,
         sourcePodNamespace,
         destinationPodNamespace)
+    TTL timeInserted + INTERVAL 1 HOUR
+    SETTINGS merge_with_ttl_timeout = 3600
     POPULATE
     AS SELECT
+        timeInserted,
         flowEndSeconds,
         flowEndSecondsFromSourceNode,
         flowEndSecondsFromDestinationNode,
@@ -143,6 +154,7 @@ clickhouse client -n -h 127.0.0.1 <<-EOSQL
         sum(reverseThroughputFromDestinationNode) AS reverseThroughputFromDestinationNode
     FROM flows
     GROUP BY
+        timeInserted,
         flowEndSeconds,
         flowEndSecondsFromSourceNode,
         flowEndSecondsFromDestinationNode,
@@ -154,6 +166,7 @@ clickhouse client -n -h 127.0.0.1 <<-EOSQL
     CREATE MATERIALIZED VIEW flows_policy_view
     ENGINE = SummingMergeTree
     ORDER BY (
+        timeInserted,
         flowEndSeconds,
         flowEndSecondsFromSourceNode,
         flowEndSecondsFromDestinationNode,
@@ -163,8 +176,11 @@ clickhouse client -n -h 127.0.0.1 <<-EOSQL
         ingressNetworkPolicyRuleAction,
         sourcePodNamespace,
         destinationPodNamespace)
+    TTL timeInserted + INTERVAL 1 HOUR
+    SETTINGS merge_with_ttl_timeout = 3600
     POPULATE
     AS SELECT
+        timeInserted,
         flowEndSeconds,
         flowEndSecondsFromSourceNode,
         flowEndSecondsFromDestinationNode,
@@ -184,6 +200,7 @@ clickhouse client -n -h 127.0.0.1 <<-EOSQL
         sum(reverseThroughputFromDestinationNode) AS reverseThroughputFromDestinationNode
     FROM flows
     GROUP BY
+        timeInserted,
         flowEndSeconds,
         flowEndSecondsFromSourceNode,
         flowEndSecondsFromDestinationNode,

@@ -15,8 +15,37 @@ volumeBindingMode: WaitForFirstConsumer
 apiVersion: v1
 kind: ServiceAccount
 metadata:
+  labels:
+    app: flow-visibility
+  name: clickhouse-monitor
+  namespace: flow-visibility
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
   name: grafana
   namespace: flow-visibility
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  labels:
+    app: flow-visibility
+  name: clickhouse-monitor-role
+  namespace: flow-visibility
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  verbs:
+  - list
+- apiGroups:
+  - ""
+  resources:
+  - pods/log
+  verbs:
+  - get
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
@@ -34,6 +63,22 @@ rules:
   - get
   - list
   - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  labels:
+    app: flow-visibility
+  name: clickhouse-monitor-role-binding
+  namespace: flow-visibility
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: clickhouse-monitor-role
+subjects:
+- kind: ServiceAccount
+  name: clickhouse-monitor
+  namespace: flow-visibility
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -84,28 +129,32 @@ data:
     \       throughput UInt64,\n        reverseThroughput UInt64,\n        throughputFromSourceNode
     UInt64,\n        throughputFromDestinationNode UInt64,\n        reverseThroughputFromSourceNode
     UInt64,\n        reverseThroughputFromDestinationNode UInt64,\n        trusted
-    UInt8 DEFAULT 0\n    ) engine=MergeTree\n    ORDER BY (timeInserted, flowEndSeconds);\n\n
-    \   CREATE MATERIALIZED VIEW flows_pod_view\n    ENGINE = SummingMergeTree\n    ORDER
-    BY (\n        flowEndSeconds,\n        flowEndSecondsFromSourceNode,\n        flowEndSecondsFromDestinationNode,\n
-    \       sourcePodName,\n        destinationPodName,\n        destinationIP,\n
-    \       destinationServicePortName,\n        flowType,\n        sourcePodNamespace,\n
-    \       destinationPodNamespace)\n    POPULATE\n    AS SELECT\n        flowEndSeconds,\n
-    \       flowEndSecondsFromSourceNode,\n        flowEndSecondsFromDestinationNode,\n
-    \       sourcePodName,\n        destinationPodName,\n        destinationIP,\n
-    \       destinationServicePortName,\n        flowType,\n        sourcePodNamespace,\n
-    \       destinationPodNamespace,\n        sum(octetDeltaCount) AS octetDeltaCount,\n
-    \       sum(reverseOctetDeltaCount) AS reverseOctetDeltaCount,\n        sum(throughput)
-    AS throughput,\n        sum(reverseThroughput) AS reverseThroughput,\n        sum(throughputFromSourceNode)
-    AS throughputFromSourceNode,\n        sum(throughputFromDestinationNode) AS throughputFromDestinationNode\n
-    \   FROM flows\n    GROUP BY\n        flowEndSeconds,\n        flowEndSecondsFromSourceNode,\n
+    UInt8 DEFAULT 0\n    ) engine=MergeTree\n    ORDER BY (timeInserted, flowEndSeconds)\n
+    \   TTL timeInserted + INTERVAL 1 HOUR\n    SETTINGS merge_with_ttl_timeout =
+    3600;\n\n    CREATE MATERIALIZED VIEW flows_pod_view\n    ENGINE = SummingMergeTree\n
+    \   ORDER BY (\n        timeInserted,\n        flowEndSeconds,\n        flowEndSecondsFromSourceNode,\n
     \       flowEndSecondsFromDestinationNode,\n        sourcePodName,\n        destinationPodName,\n
     \       destinationIP,\n        destinationServicePortName,\n        flowType,\n
-    \       sourcePodNamespace,\n        destinationPodNamespace;\n\n    CREATE MATERIALIZED
-    VIEW flows_node_view\n    ENGINE = SummingMergeTree\n    ORDER BY (\n        flowEndSeconds,\n
+    \       sourcePodNamespace,\n        destinationPodNamespace)\n    TTL timeInserted
+    + INTERVAL 1 HOUR\n    SETTINGS merge_with_ttl_timeout = 3600\n    POPULATE\n
+    \   AS SELECT\n        timeInserted,\n        flowEndSeconds,\n        flowEndSecondsFromSourceNode,\n
+    \       flowEndSecondsFromDestinationNode,\n        sourcePodName,\n        destinationPodName,\n
+    \       destinationIP,\n        destinationServicePortName,\n        flowType,\n
+    \       sourcePodNamespace,\n        destinationPodNamespace,\n        sum(octetDeltaCount)
+    AS octetDeltaCount,\n        sum(reverseOctetDeltaCount) AS reverseOctetDeltaCount,\n
+    \       sum(throughput) AS throughput,\n        sum(reverseThroughput) AS reverseThroughput,\n
+    \       sum(throughputFromSourceNode) AS throughputFromSourceNode,\n        sum(throughputFromDestinationNode)
+    AS throughputFromDestinationNode\n    FROM flows\n    GROUP BY\n        timeInserted,\n
+    \       flowEndSeconds,\n        flowEndSecondsFromSourceNode,\n        flowEndSecondsFromDestinationNode,\n
+    \       sourcePodName,\n        destinationPodName,\n        destinationIP,\n
+    \       destinationServicePortName,\n        flowType,\n        sourcePodNamespace,\n
+    \       destinationPodNamespace;\n\n    CREATE MATERIALIZED VIEW flows_node_view\n
+    \   ENGINE = SummingMergeTree\n    ORDER BY (\n        timeInserted,\n        flowEndSeconds,\n
     \       flowEndSecondsFromSourceNode,\n        flowEndSecondsFromDestinationNode,\n
     \       sourceNodeName,\n        destinationNodeName,\n        sourcePodNamespace,\n
-    \       destinationPodNamespace)\n    POPULATE\n    AS SELECT\n        flowEndSeconds,\n
-    \       flowEndSecondsFromSourceNode,\n        flowEndSecondsFromDestinationNode,\n
+    \       destinationPodNamespace)\n    TTL timeInserted + INTERVAL 1 HOUR\n    SETTINGS
+    merge_with_ttl_timeout = 3600\n    POPULATE\n    AS SELECT\n        timeInserted,\n
+    \       flowEndSeconds,\n        flowEndSecondsFromSourceNode,\n        flowEndSecondsFromDestinationNode,\n
     \       sourceNodeName,\n        destinationNodeName,\n        sourcePodNamespace,\n
     \       destinationPodNamespace,\n        sum(octetDeltaCount) AS octetDeltaCount,\n
     \       sum(reverseOctetDeltaCount) AS reverseOctetDeltaCount,\n        sum(throughput)
@@ -113,24 +162,26 @@ data:
     AS throughputFromSourceNode,\n        sum(reverseThroughputFromSourceNode) AS
     reverseThroughputFromSourceNode,\n        sum(throughputFromDestinationNode) AS
     throughputFromDestinationNode,\n        sum(reverseThroughputFromDestinationNode)
-    AS reverseThroughputFromDestinationNode\n    FROM flows\n    GROUP BY\n        flowEndSeconds,\n
-    \       flowEndSecondsFromSourceNode,\n        flowEndSecondsFromDestinationNode,\n
+    AS reverseThroughputFromDestinationNode\n    FROM flows\n    GROUP BY\n        timeInserted,\n
+    \       flowEndSeconds,\n        flowEndSecondsFromSourceNode,\n        flowEndSecondsFromDestinationNode,\n
     \       sourceNodeName,\n        destinationNodeName,\n        sourcePodNamespace,\n
     \       destinationPodNamespace;\n\n    CREATE MATERIALIZED VIEW flows_policy_view\n
-    \   ENGINE = SummingMergeTree\n    ORDER BY (\n        flowEndSeconds,\n        flowEndSecondsFromSourceNode,\n
-    \       flowEndSecondsFromDestinationNode,\n        egressNetworkPolicyName,\n
-    \       egressNetworkPolicyRuleAction,\n        ingressNetworkPolicyName,\n        ingressNetworkPolicyRuleAction,\n
-    \       sourcePodNamespace,\n        destinationPodNamespace)\n    POPULATE\n
-    \   AS SELECT\n        flowEndSeconds,\n        flowEndSecondsFromSourceNode,\n
-    \       flowEndSecondsFromDestinationNode,\n        egressNetworkPolicyName,\n
-    \       egressNetworkPolicyRuleAction,\n        ingressNetworkPolicyName,\n        ingressNetworkPolicyRuleAction,\n
-    \       sourcePodNamespace,\n        destinationPodNamespace,\n        sum(octetDeltaCount)
-    AS octetDeltaCount,\n        sum(reverseOctetDeltaCount) AS reverseOctetDeltaCount,\n
-    \       sum(throughput) AS throughput,\n        sum(reverseThroughput) AS reverseThroughput,\n
-    \       sum(throughputFromSourceNode) AS throughputFromSourceNode,\n        sum(reverseThroughputFromSourceNode)
-    AS reverseThroughputFromSourceNode,\n        sum(throughputFromDestinationNode)
-    AS throughputFromDestinationNode,\n        sum(reverseThroughputFromDestinationNode)
-    AS reverseThroughputFromDestinationNode\n    FROM flows\n    GROUP BY\n        flowEndSeconds,\n
+    \   ENGINE = SummingMergeTree\n    ORDER BY (\n        timeInserted,\n        flowEndSeconds,\n
+    \       flowEndSecondsFromSourceNode,\n        flowEndSecondsFromDestinationNode,\n
+    \       egressNetworkPolicyName,\n        egressNetworkPolicyRuleAction,\n        ingressNetworkPolicyName,\n
+    \       ingressNetworkPolicyRuleAction,\n        sourcePodNamespace,\n        destinationPodNamespace)\n
+    \   TTL timeInserted + INTERVAL 1 HOUR\n    SETTINGS merge_with_ttl_timeout =
+    3600\n    POPULATE\n    AS SELECT\n        timeInserted,\n        flowEndSeconds,\n
+    \       flowEndSecondsFromSourceNode,\n        flowEndSecondsFromDestinationNode,\n
+    \       egressNetworkPolicyName,\n        egressNetworkPolicyRuleAction,\n        ingressNetworkPolicyName,\n
+    \       ingressNetworkPolicyRuleAction,\n        sourcePodNamespace,\n        destinationPodNamespace,\n
+    \       sum(octetDeltaCount) AS octetDeltaCount,\n        sum(reverseOctetDeltaCount)
+    AS reverseOctetDeltaCount,\n        sum(throughput) AS throughput,\n        sum(reverseThroughput)
+    AS reverseThroughput,\n        sum(throughputFromSourceNode) AS throughputFromSourceNode,\n
+    \       sum(reverseThroughputFromSourceNode) AS reverseThroughputFromSourceNode,\n
+    \       sum(throughputFromDestinationNode) AS throughputFromDestinationNode,\n
+    \       sum(reverseThroughputFromDestinationNode) AS reverseThroughputFromDestinationNode\n
+    \   FROM flows\n    GROUP BY\n        timeInserted,\n        flowEndSeconds,\n
     \       flowEndSecondsFromSourceNode,\n        flowEndSecondsFromDestinationNode,\n
     \       egressNetworkPolicyName,\n        egressNetworkPolicyRuleAction,\n        ingressNetworkPolicyName,\n
     \       ingressNetworkPolicyRuleAction,\n        sourcePodNamespace,\n        destinationPodNamespace;\n\n
@@ -139,7 +190,7 @@ data:
     \   ORDER BY (timeCreated);\n    \nEOSQL\n"
 kind: ConfigMap
 metadata:
-  name: clickhouse-mounted-configmap-44mdg7d2b2
+  name: clickhouse-mounted-configmap-dkbmg82ctg
   namespace: flow-visibility
 ---
 apiVersion: v1
@@ -4878,6 +4929,54 @@ spec:
           name: grafana-dashboard-config-gkkgc9d727
         name: grafana-dashboard-config
 ---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  labels:
+    app: clickhouse-monitor
+  name: clickhouse-monitor
+  namespace: flow-visibility
+spec:
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app: clickhouse-monitor
+        spec:
+          containers:
+          - env:
+            - name: CLICKHOUSE_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  key: username
+                  name: clickhouse-secret
+            - name: CLICKHOUSE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  key: password
+                  name: clickhouse-secret
+            - name: DB_URL
+              value: tcp://clickhouse-clickhouse.flow-visibility.svc:9000
+            - name: TABLE_NAME
+              value: default.flows
+            - name: MV_NAMES
+              value: default.flows_pod_view default.flows_node_view default.flows_policy_view
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: MONITOR_LABEL
+              value: app=clickhouse-monitor
+            image: projects.registry.vmware.com/antrea/flow-visibility-clickhouse-monitor:latest
+            imagePullPolicy: IfNotPresent
+            name: clickhouse-monitor
+          restartPolicy: OnFailure
+          serviceAccountName: clickhouse-monitor
+  schedule: '* * * * *'
+  successfulJobsHistoryLimit: 1
+---
 apiVersion: clickhouse.altinity.com/v1
 kind: ClickHouseInstallation
 metadata:
@@ -4908,7 +5007,13 @@ spec:
           volumeMounts:
           - mountPath: /docker-entrypoint-initdb.d
             name: clickhouse-configmap-volume
+          - mountPath: /var/lib/clickhouse
+            name: clickhouse-storage-volume
         volumes:
         - configMap:
-            name: clickhouse-mounted-configmap-44mdg7d2b2
+            name: clickhouse-mounted-configmap-dkbmg82ctg
           name: clickhouse-configmap-volume
+        - emptyDir:
+            medium: Memory
+            sizeLimit: 8Gi
+          name: clickhouse-storage-volume

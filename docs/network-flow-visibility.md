@@ -33,6 +33,7 @@
     - [About Grafana and ClickHouse](#about-grafana-and-clickhouse)
     - [Deployment Steps](#deployment-steps-1)
       - [Credentials Configuration](#credentials-configuration)
+      - [ClickHouse Performance Configuration](#clickhouse-performance-configuration)
     - [Pre-built Dashboards](#pre-built-dashboards)
       - [Flow Records Dashboard](#flow-records-dashboard)
       - [Pod-to-Pod Flows Dashboard](#pod-to-pod-flows-dashboard)
@@ -563,6 +564,13 @@ replicaset.apps/grafana-5c6c5b74f7   1         1         1       1m
 
 NAME                                             READY   AGE
 statefulset.apps/chi-clickhouse-clickhouse-0-0   1/1     1m
+
+
+NAME                               SCHEDULE    SUSPEND   ACTIVE   LAST SCHEDULE   AGE
+cronjob.batch/clickhouse-monitor   * * * * *   False     0        30s             1m
+
+NAME                                    COMPLETIONS   DURATION   AGE
+job.batch/clickhouse-monitor-27434986   1/1           6s         30s
 ```
 
 Run the following commands to print the IP of the workder Node and the NodePort
@@ -622,6 +630,38 @@ a new manifest:
 ```shell
 make manifest
 ```
+
+##### ClickHouse Performance Configuration
+
+The ClickHouse throughput depends on two factors - the storage size of the ClickHouse
+and the time interval between the batch commits to the ClickHouse. Larger storage
+size and longer commit interval provide higher throughput.
+
+Grafana flow collector supports the ClickHouse in-memory deployment with limited
+storage size. This is specified in [clickhouse.yml][clickhouse_manifest_yaml].
+The default value of storage size for the ClickHouse server is 8 GiB. Users
+can expect a linear growth in the ClickHouse throughput when they enlarge the
+storage size. For development or testing environment, you can decrease the storage
+size to 2GB. To deploy the ClickHouse with a different storage size, please
+modify the `sizeLimit` in the following section.
+
+```yaml
+- name: clickhouse-storage-volume
+  emptyDir:
+    medium: Memory
+    sizeLimit: 8Gi
+```
+
+After making the change, run the following command to generate a new manifest:
+
+```shell
+./hack/generate-manifest-flow-visibility.sh > build/yamls/flow-visibility.yml
+```
+
+The time interval between the batch commits to the ClickHouse is specified in the
+[Flow Aggregator Configuration](#configuration-1) as `commitInterval`. The
+ClickHouse throughput grows sightly when the commit interval grows from 1s to 8s.
+A commit interval larger than 8s provides little improvement on the throughput.
 
 #### Pre-built Dashboards
 

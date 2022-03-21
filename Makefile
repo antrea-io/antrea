@@ -354,7 +354,7 @@ manifest:
 	$(CURDIR)/hack/generate-manifest-octant.sh --mode dev > build/yamls/antrea-octant.yml
 	$(CURDIR)/hack/generate-manifest-windows.sh --mode dev > build/yamls/antrea-windows.yml
 	$(CURDIR)/hack/generate-manifest-flow-aggregator.sh --mode dev > build/yamls/flow-aggregator.yml
-	$(CURDIR)/hack/generate-manifest-flow-visibility.sh > build/yamls/flow-visibility.yml
+	$(CURDIR)/hack/generate-manifest-flow-visibility.sh --mode dev > build/yamls/flow-visibility.yml
 
 .PHONY: manifest-scale
 manifest-scale:
@@ -386,6 +386,14 @@ endif
 	docker tag antrea/antrea-mc-controller:$(DOCKER_IMG_VERSION) antrea/antrea-mc-controller
 	docker tag antrea/antrea-mc-controller:$(DOCKER_IMG_VERSION) projects.registry.vmware.com/antrea/antrea-mc-controller
 	docker tag antrea/antrea-mc-controller:$(DOCKER_IMG_VERSION) projects.registry.vmware.com/antrea/antrea-mc-controller:$(DOCKER_IMG_VERSION)
+
+.PHONY: flow-visibility-clickhouse-monitor
+flow-visibility-clickhouse-monitor:
+	@echo "===> Building antrea/flow-visibility-clickhouse-monitor Docker image <==="
+	docker build --pull -t antrea/flow-visibility-clickhouse-monitor:$(DOCKER_IMG_VERSION) -f build/images/flow-visibility/Dockerfile.clickhouse-monitor.ubuntu $(DOCKER_BUILD_ARGS) .
+	docker tag antrea/flow-visibility-clickhouse-monitor:$(DOCKER_IMG_VERSION) antrea/flow-visibility-clickhouse-monitor
+	docker tag antrea/flow-visibility-clickhouse-monitor:$(DOCKER_IMG_VERSION) projects.registry.vmware.com/antrea/flow-visibility-clickhouse-monitor
+	docker tag antrea/flow-visibility-clickhouse-monitor:$(DOCKER_IMG_VERSION) projects.registry.vmware.com/antrea/flow-visibility-clickhouse-monitor:$(DOCKER_IMG_VERSION)
 
 .PHONY: flow-aggregator-image
 flow-aggregator-image:
