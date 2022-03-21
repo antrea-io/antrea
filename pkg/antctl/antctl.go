@@ -24,6 +24,7 @@ import (
 	"antrea.io/antrea/pkg/agent/openflow"
 	fallbackversion "antrea.io/antrea/pkg/antctl/fallback/version"
 	"antrea.io/antrea/pkg/antctl/raw/featuregates"
+	"antrea.io/antrea/pkg/antctl/raw/multicluster"
 	"antrea.io/antrea/pkg/antctl/raw/proxy"
 	"antrea.io/antrea/pkg/antctl/raw/supportbundle"
 	"antrea.io/antrea/pkg/antctl/raw/traceflow"
@@ -530,6 +531,12 @@ var CommandList = &commandList{
 			supportAgent:      true,
 			supportController: true,
 			commandGroup:      get,
+		},
+		{
+			cobraCommand:      multicluster.GetCmd,
+			supportAgent:      false,
+			supportController: false,
+			commandGroup:      mc,
 		},
 	},
 	codec: scheme.Codecs,
