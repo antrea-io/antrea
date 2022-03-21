@@ -315,6 +315,14 @@ endif
 	docker tag antrea/antrea-ubi:$(DOCKER_IMG_VERSION) projects.registry.vmware.com/antrea/antrea-ubi
 	docker tag antrea/antrea-ubi:$(DOCKER_IMG_VERSION) projects.registry.vmware.com/antrea/antrea-ubi:$(DOCKER_IMG_VERSION)
 
+.PHONY: build-base-windows
+build-base-windows:
+	@echo "===> Building antrea/base-windows Docker image <==="
+	docker build -t antrea/base-windows:$(GO_VERSION) -f build/images/base-windows/Dockerfile $(DOCKER_BUILD_ARGS) .
+	docker tag antrea/base-windows:$(GO_VERSION) antrea/base-windows
+	docker tag antrea/base-windows:$(GO_VERSION) projects.registry.vmware.com/antrea/base-windows
+	docker tag antrea/base-windows:$(GO_VERSION) projects.registry.vmware.com/antrea/base-windows:$(GO_VERSION)
+
 .PHONY: build-windows
 build-windows:
 	@echo "===> Building Antrea bins and antrea/antrea-windows Docker image <==="
