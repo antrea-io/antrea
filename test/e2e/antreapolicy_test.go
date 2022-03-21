@@ -144,7 +144,7 @@ type CustomProbe struct {
 	ExpectConnectivity PodConnectivityMark
 }
 
-func initialize(t *testing.T, data *TestData) {
+func initialize(t *testing.T, data *TestData, suffix string) {
 	p80 = 80
 	p81 = 81
 	p8080 = 8080
@@ -152,7 +152,7 @@ func initialize(t *testing.T, data *TestData) {
 	p8082 = 8082
 	p8085 = 8085
 	pods = []string{"a", "b", "c"}
-	namespaces = []string{"x", "y", "z"}
+	namespaces = []string{"x"+suffix, "y"+suffix, "z"+suffix}
 	// This function "initialize" will be used more than once, and variable "allPods" is global.
 	// It should be empty every time when "initialize" is performed, otherwise there will be unexpected
 	// results.
@@ -2945,7 +2945,7 @@ func TestAntreaPolicy(t *testing.T) {
 	}
 	defer teardownTest(t, data)
 
-	initialize(t, data)
+	initialize(t, data, "")
 
 	t.Run("TestGroupValidateAntreaNativePolicies", func(t *testing.T) {
 		t.Run("Case=ACNPNoPriority", func(t *testing.T) { testInvalidACNPNoPriority(t) })
