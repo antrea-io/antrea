@@ -836,52 +836,77 @@ func (c *Client) AddRoutes(podCIDR *net.IPNet, nodeName string, nodeIP, nodeGwIP
 		return err
 	}
 	// Install routes to this Node.
-	route := &netlink.Route{
+	podCIDRRoute := &netlink.Route{
 		Dst: podCIDR,
 	}
 	var routes []*netlink.Route
+	requireNodeGwIPv6RouteAndNeigh := false
 	// If WireGuard is enabled, create a route via WireGuard device regardless of the traffic encapsulation modes.
 	if c.networkConfig.TrafficEncryptionMode == config.TrafficEncryptionModeWireGuard {
-		route.LinkIndex = c.nodeConfig.WireGuardConfig.LinkIndex
-		route.Scope = netlink.SCOPE_LINK
+		podCIDRRoute.LinkIndex = c.nodeConfig.WireGuardConfig.LinkIndex
+		podCIDRRoute.Scope = netlink.SCOPE_LINK
 		if podCIDR.IP.To4() != nil {
-			route.Src = c.nodeConfig.GatewayConfig.IPv4
+			podCIDRRoute.Src = c.nodeConfig.GatewayConfig.IPv4
 		} else {
-			route.Src = c.nodeConfig.GatewayConfig.IPv6
+			podCIDRRoute.Src = c.nodeConfig.GatewayConfig.IPv6
 		}
+		routes = append(routes, podCIDRRoute)
 	} else if c.networkConfig.NeedsTunnelToPeer(nodeIP, nodeTransportIPAddr) {
 		if podCIDR.IP.To4() == nil {
+			requireNodeGwIPv6RouteAndNeigh = true
 			// "on-link" is not identified in IPv6 route entries, so split the configuration into 2 entries.
-			routes = []*netlink.Route{
-				{
-					Dst:       &net.IPNet{IP: nodeGwIP, Mask: net.IPMask{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}},
-					LinkIndex: c.nodeConfig.GatewayConfig.LinkIndex,
-				},
-			}
+			// TODO: Kernel >= 4.16 supports adding IPv6 route with onlink flag. Delete this route after Kernel version
+			//       requirement bump in future.
+			routes = append(routes, &netlink.Route{
+				Dst:       &net.IPNet{IP: nodeGwIP, Mask: net.CIDRMask(128, 128)},
+				LinkIndex: c.nodeConfig.GatewayConfig.LinkIndex,
+			})
 		} else {
-			route.Flags = int(netlink.FLAG_ONLINK)
+			podCIDRRoute.Flags = int(netlink.FLAG_ONLINK)
 		}
-		route.LinkIndex = c.nodeConfig.GatewayConfig.LinkIndex
-		route.Gw = nodeGwIP
+		podCIDRRoute.LinkIndex = c.nodeConfig.GatewayConfig.LinkIndex
+		podCIDRRoute.Gw = nodeGwIP
+		routes = append(routes, podCIDRRoute)
 	} else if c.networkConfig.NeedsDirectRoutingToPeer(nodeIP, nodeTransportIPAddr) {
 		// NoEncap traffic to Node on the same subnet.
 		// Set the peerNodeIP as next hop.
-		route.Gw = nodeIP
+		podCIDRRoute.Gw = nodeIP
+		routes = append(routes, podCIDRRoute)
 	} else {
 		// NetworkPolicyOnly mode or NoEncap traffic to a Node on a different subnet.
 		// Routing should be handled by a route which is already present on the host.
-		return nil
+		klog.InfoS("Skip adding routes to peer", "node", nodeName, "ip", nodeIP, "podCIDR", podCIDR)
 	}
-	routes = append(routes, route)
-
 	for _, route := range routes {
 		if err := netlink.RouteReplace(route); err != nil {
 			return fmt.Errorf("failed to install route to peer %s (%s) with netlink. Route config: %s. Error: %v", nodeName, nodeIP, route.String(), err)
 		}
 	}
-
-	if podCIDR.IP.To4() == nil {
-		// Add IPv6 neighbor if the given podCIDR is using IPv6 address.
+	// Delete stale route and neigh to peer gateway.
+	if !requireNodeGwIPv6RouteAndNeigh && utilnet.IsIPv6(nodeGwIP) {
+		routeToNodeGwIPNetv6 := &netlink.Route{
+			Dst: &net.IPNet{IP: nodeGwIP, Mask: net.CIDRMask(128, 128)},
+		}
+		if err := netlink.RouteDel(routeToNodeGwIPNetv6); err == nil {
+			klog.InfoS("Deleted route to peer gateway", "node", nodeName, "nodeIP", nodeIP, "nodeGatewayIP", nodeGwIP)
+		} else if err != unix.ESRCH {
+			return fmt.Errorf("failed to delete route to peer gateway on Node %s (%s) with netlink. Route config: %s. Error: %v",
+				nodeName, nodeIP, routeToNodeGwIPNetv6, err)
+		}
+		neigh := &netlink.Neigh{
+			LinkIndex: c.nodeConfig.GatewayConfig.LinkIndex,
+			Family:    netlink.FAMILY_V6,
+			IP:        nodeGwIP,
+		}
+		if err := netlink.NeighDel(neigh); err == nil {
+			klog.InfoS("Deleted neigh to peer gateway", "node", nodeName, "nodeIP", nodeIP, "nodeGatewayIP", nodeGwIP)
+			c.nodeNeighbors.Delete(podCIDRStr)
+		} else if err != unix.ENOENT {
+			return fmt.Errorf("failed to delete neigh %v to gw %s: %v", neigh, c.nodeConfig.GatewayConfig.Name, err)
+		}
+	}
+	// Add IPv6 neighbor if the given podCIDR is using IPv6 address.
+	if requireNodeGwIPv6RouteAndNeigh && utilnet.IsIPv6(nodeGwIP) {
 		neigh := &netlink.Neigh{
 			LinkIndex:    c.nodeConfig.GatewayConfig.LinkIndex,
 			Family:       netlink.FAMILY_V6,
