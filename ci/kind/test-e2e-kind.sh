@@ -15,6 +15,7 @@
 # limitations under the License.
 
 # The script runs kind e2e tests with different traffic encapsulation modes.
+# demo
 
 set -eo pipefail
 
