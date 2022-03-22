@@ -26,5 +26,7 @@ var GetCmd = &cobra.Command{
 }
 
 func init() {
+	GetCmd.AddCommand(get.NewClusterSetCommand())
 	GetCmd.AddCommand(get.NewResourceImportCommand())
+	GetCmd.AddCommand(get.NewResourceExportCommand())
 }
