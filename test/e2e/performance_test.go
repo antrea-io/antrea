@@ -28,6 +28,8 @@ import (
 	networkv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
+
+	"antrea.io/antrea/pkg/agent/openflow"
 )
 
 const (
@@ -283,17 +285,17 @@ func WaitNetworkPolicyRealize(policyRules int, data *TestData) error {
 
 // checkRealize checks if all CIDR rules in the Network Policy have been realized as OVS flows. It counts the number of
 // flows installed in the ingressRuleTable of the OVS bridge of the control-plane Node. This relies on the implementation
-// knowledge that given a single ingress policy, the Antrea agent will install exactly one flow per CIDR rule in table 90.
-// checkRealize returns true when the number of flows exceeds the number of CIDR, because each table has a default flow
-// entry which is used for default matching.
+// knowledge that given a single ingress policy, the Antrea agent will install exactly one flow per CIDR rule in table
+// IngressRule. checkRealize returns true when the number of flows exceeds the number of CIDR, because each table has a
+// default flow entry which is used for default matching.
 // Since the check is done over SSH, the time measurement is not completely accurate.
 func checkRealize(policyRules int, data *TestData) (bool, error) {
 	antreaPodName, err := data.getAntreaPodOnNode(controlPlaneNodeName())
 	if err != nil {
 		return false, err
 	}
-	// table 90 is the ingressRuleTable where the rules in workload network policy is being applied to.
-	cmd := []string{"ovs-ofctl", "dump-flows", defaultBridgeName, "table=90"}
+	// table IngressRule is the ingressRuleTable where the rules in workload network policy is being applied to.
+	cmd := []string{"ovs-ofctl", "dump-flows", defaultBridgeName, fmt.Sprintf("table=%s", openflow.IngressRuleTable.GetName())}
 	stdout, _, err := data.runCommandFromPod(antreaNamespace, antreaPodName, "antrea-agent", cmd)
 	if err != nil {
 		return false, err

@@ -31,30 +31,30 @@ type Category uint64
 
 const (
 	Default Category = iota
-	Gateway
-	Node
-	Pod
+	PodConnectivity
+	NetworkPolicy
 	Service
-	Policy
-	SNAT
+	Egress
+	Multicast
+	Traceflow
 )
 
 func (c Category) String() string {
 	switch c {
 	case Default:
 		return "Default"
-	case Gateway:
-		return "Gateway"
-	case Node:
-		return "Node"
-	case Pod:
-		return "Pod"
+	case PodConnectivity:
+		return "PodConnectivity"
+	case NetworkPolicy:
+		return "NetworkPolicy"
 	case Service:
 		return "Service"
-	case Policy:
-		return "Policy"
-	case SNAT:
-		return "SNAT"
+	case Egress:
+		return "Egress"
+	case Multicast:
+		return "Multicast"
+	case Traceflow:
+		return "Traceflow"
 	default:
 		return "Invalid"
 	}

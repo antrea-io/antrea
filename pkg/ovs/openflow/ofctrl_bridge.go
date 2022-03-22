@@ -43,6 +43,8 @@ type ofTable struct {
 	missAction MissActionType
 	flowCount  uint
 	updateTime time.Time
+	stageID    StageID
+	pipelineID PipelineID
 
 	*ofctrl.Table
 }
@@ -81,6 +83,14 @@ func (t *ofTable) SetNext(next uint8) {
 
 func (t *ofTable) SetMissAction(action MissActionType) {
 	t.missAction = action
+}
+
+func (t *ofTable) GetStageID() StageID {
+	return t.stageID
+}
+
+func (t *ofTable) GetPipelineID() PipelineID {
+	return t.pipelineID
 }
 
 func (t *ofTable) UpdateStatus(flowCountDelta int) {
@@ -141,10 +151,13 @@ func (t *ofTable) DumpFlows(cookieID, cookieMask uint64) (map[uint64]*FlowStates
 	return flowStats, nil
 }
 
-func NewOFTable(id uint8, name string) Table {
+func NewOFTable(id uint8, name string, stageID StageID, pipelineID PipelineID, missAction MissActionType) Table {
 	return &ofTable{
-		id:   id,
-		name: name,
+		id:         id,
+		name:       name,
+		stageID:    stageID,
+		pipelineID: pipelineID,
+		missAction: missAction,
 	}
 }
 
@@ -737,4 +750,18 @@ func NewOFBridge(br string, mgmtAddr string) Bridge {
 	}
 	s.controller = ofctrl.NewController(s)
 	return s
+}
+
+var tableID uint8
+
+func NextTableID() (id uint8) {
+	id = tableID
+	tableID += 1
+	return
+}
+
+// ResetTableID is used to reset the initial tableID so that the table ID increases from 0.
+// This function is only for test.
+func ResetTableID() {
+	tableID = 0
 }
