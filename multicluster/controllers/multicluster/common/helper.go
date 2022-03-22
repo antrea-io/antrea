@@ -17,12 +17,14 @@ import corev1 "k8s.io/api/core/v1"
 
 const (
 	AntreaMCServiceAnnotation   = "multicluster.antrea.io/imported-service"
+	AntreaMCACNPAnnotation      = "multicluster.antrea.io/imported-acnp"
 	AntreaMCClusterIDAnnotation = "multicluster.antrea.io/local-cluster-id"
 
-	AntreaMCSPrefix   = "antrea-mc-"
-	ServiceKind       = "Service"
-	EndpointsKind     = "Endpoints"
-	ServiceImportKind = "ServiceImport"
+	AntreaMCSPrefix                = "antrea-mc-"
+	ServiceKind                    = "Service"
+	EndpointsKind                  = "Endpoints"
+	AntreaClusterNetworkPolicyKind = "AntreaClusterNetworkPolicy"
+	ServiceImportKind              = "ServiceImport"
 
 	SourceName      = "sourceName"
 	SourceNamespace = "sourceNamespace"

@@ -35,7 +35,7 @@ type clusterEvent struct {
 type RemoteCommonAreaManager interface {
 	// Start starts RemoteCommonAreaManager on an event loop which runs in a goroutine
 	Start() error
-	// Stop stop RemoteCommonAreaManager by terminating the event loop.
+	// Stop stops RemoteCommonAreaManager by terminating the event loop.
 	Stop() error
 	// AddRemoteCommonArea adds a RemoteCommonArea to RemoteCommonAreaManager.
 	AddRemoteCommonArea(remoteCommonArea RemoteCommonArea)

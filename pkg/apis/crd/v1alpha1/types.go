@@ -314,12 +314,12 @@ type NetworkPolicySpec struct {
 	// Currently Ingress rule supports setting the `From` field but not the `To`
 	// field within a Rule.
 	// +optional
-	Ingress []Rule `json:"ingress"`
+	Ingress []Rule `json:"ingress,omitempty"`
 	// Set of egress rules evaluated based on the order in which they are set.
 	// Currently Egress rule supports setting the `To` field but not the `From`
 	// field within a Rule.
 	// +optional
-	Egress []Rule `json:"egress"`
+	Egress []Rule `json:"egress,omitempty"`
 }
 
 // NetworkPolicyPhase defines the phase in which a NetworkPolicy is.
@@ -360,12 +360,12 @@ type Rule struct {
 	// Rule is matched if traffic originates from workloads selected by
 	// this field. If this field is empty, this rule matches all sources.
 	// +optional
-	From []NetworkPolicyPeer `json:"from"`
+	From []NetworkPolicyPeer `json:"from,omitempty"`
 	// Rule is matched if traffic is intended for workloads selected by
 	// this field. This field can't be used with ToServices. If this field
 	// and ToServices are both empty or missing this rule matches all destinations.
 	// +optional
-	To []NetworkPolicyPeer `json:"to"`
+	To []NetworkPolicyPeer `json:"to,omitempty"`
 	// Rule is matched if traffic is intended for a Service listed in this field.
 	// Currently only ClusterIP types Services are supported in this field. This field
 	// can only be used when AntreaProxy is enabled. This field can't be used with To
@@ -376,9 +376,10 @@ type Rule struct {
 	// Name describes the intention of this rule.
 	// Name should be unique within the policy.
 	// +optional
-	Name string `json:"name"`
+	Name string `json:"name,omitempty"`
 	// EnableLogging is used to indicate if agent should generate logs
 	// when rules are matched. Should be default to false.
+	// +optional
 	EnableLogging bool `json:"enableLogging"`
 	// Select workloads on which this rule will be applied to. Cannot be set in
 	// conjunction with NetworkPolicySpec/ClusterNetworkPolicySpec.AppliedTo.
@@ -538,12 +539,12 @@ type ClusterNetworkPolicySpec struct {
 	// Currently Ingress rule supports setting the `From` field but not the `To`
 	// field within a Rule.
 	// +optional
-	Ingress []Rule `json:"ingress"`
+	Ingress []Rule `json:"ingress,omitempty"`
 	// Set of egress rules evaluated based on the order in which they are set.
 	// Currently Egress rule supports setting the `To` field but not the `From`
 	// field within a Rule.
 	// +optional
-	Egress []Rule `json:"egress"`
+	Egress []Rule `json:"egress,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

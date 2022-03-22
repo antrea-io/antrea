@@ -138,7 +138,7 @@ function cleanup_multicluster_antrea {
 
 function clean_multicluster {
     echo "====== Cleanup Multicluster Antrea Installation in clusters ======"
-    for kubeconfig in ${multicluster_kubeconfigs[@]}
+    for kubeconfig in "${multicluster_kubeconfigs[@]}"
     do
         cleanup_multicluster_ns "antrea-multicluster-test" $kubeconfig
         cleanup_multicluster_ns "antrea-mcs-ns" $kubeconfig
@@ -174,7 +174,7 @@ function wait_for_multicluster_controller_ready {
     sed -i 's/antrea-mcs-ns/kube-system/g' ./multicluster/test/yamls/leader-access-token.yml
     echo "type: Opaque" >>./multicluster/test/yamls/leader-access-token.yml
 
-    for config in ${membercluter_kubeconfigs[@]};
+    for config in "${membercluter_kubeconfigs[@]}";
     do
         kubectl apply -f ./multicluster/build/yamls/antrea-multicluster-member.yml ${config}
         kubectl rollout status deployment/antrea-mc-controller -n kube-system ${config}
@@ -203,7 +203,7 @@ function deliver_antrea_multicluster {
     docker save -o ${WORKDIR}/antrea-ubuntu.tar $DOCKER_REGISTRY/antrea/antrea-ubuntu:latest
 
 
-    for kubeconfig in ${multicluster_kubeconfigs[@]}
+    for kubeconfig in "${multicluster_kubeconfigs[@]}"
     do
        kubectl get nodes -o wide --no-headers=true ${kubeconfig}| awk '{print $6}' | while read IP; do
             rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no" "${WORKDIR}"/antrea-ubuntu.tar jenkins@[${IP}]:${WORKDIR}/antrea-ubuntu.tar
@@ -225,7 +225,7 @@ function deliver_multicluster_controller {
     docker save projects.registry.vmware.com/antrea/antrea-mc-controller:latest -o "${WORKDIR}"/antrea-mcs.tar
     ./multicluster/hack/generate-manifest.sh -l antrea-mcs-ns >./multicluster/test/yamls/manifest.yml
 
-    for kubeconfig in ${multicluster_kubeconfigs[@]}
+    for kubeconfig in "${multicluster_kubeconfigs[@]}"
     do
         kubectl get nodes -o wide --no-headers=true "${kubeconfig}"| awk '{print $6}' | while read IP; do
             rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no" "${WORKDIR}"/antrea-mcs.tar jenkins@[${IP}]:${WORKDIR}/antrea-mcs.tar
@@ -237,7 +237,7 @@ function deliver_multicluster_controller {
     sed -i "s|<LEADER_CLUSTER_IP>|${leader_ip}|" ./multicluster/test/yamls/east-member-cluster.yml
     sed -i "s|<LEADER_CLUSTER_IP>|${leader_ip}|" ./multicluster/test/yamls/west-member-cluster.yml
 
-    for kubeconfig in ${membercluter_kubeconfigs[@]}
+    for kubeconfig in "${membercluter_kubeconfigs[@]}"
     do
        ip=$(kubectl get nodes -o wide --no-headers=true ${EAST_CLUSTER_CONFIG} | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 == role {print $6}')
        rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no" ./multicluster/test/yamls/test-east-serviceexport.yml jenkins@[${ip}]:${WORKDIR}/serviceexport.yml
@@ -265,7 +265,7 @@ function run_multicluster_e2e {
     docker tag "${DOCKER_REGISTRY}/antrea/agnhost:2.26" "agnhost:2.26"
     docker save agnhost:2.26 -o "${WORKDIR}"/agnhost.tar
 
-    for kubeconfig in ${membercluter_kubeconfigs[@]}
+    for kubeconfig in "${membercluter_kubeconfigs[@]}"
     do
         kubectl get nodes -o wide --no-headers=true "${kubeconfig}"| awk '{print $6}' | while read IP; do
             rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no" "${WORKDIR}"/nginx.tar jenkins@["${IP}"]:"${WORKDIR}"/nginx.tar

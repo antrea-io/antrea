@@ -29,6 +29,7 @@ import (
 	k8smcsapi "sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
 
 	mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
+	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 )
 
 var (
@@ -115,4 +116,5 @@ func init() {
 	utilruntime.Must(mcsv1alpha1.AddToScheme(scheme))
 	utilruntime.Must(k8smcsapi.AddToScheme(scheme))
 	utilruntime.Must(k8sscheme.AddToScheme(scheme))
+	utilruntime.Must(crdv1alpha1.AddToScheme(scheme))
 }
