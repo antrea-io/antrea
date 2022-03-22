@@ -1264,6 +1264,24 @@ func (c *client) l3FwdFlowToRemoteViaGW(
 		Done()
 }
 
+// l3FwdFlowToRemoteViaUplink generates the L3 forward flow to match the packets destined
+// for remote Pods via uplink. It is used when the cross-Node traffic does not require
+// encapsulation (in noEncap, networkPolicyOnly, or hybrid mode).
+func (c *client) l3FwdFlowToRemoteViaUplink(
+	remoteGatewayMAC net.HardwareAddr,
+	peerSubnet net.IPNet,
+	category cookie.Category) binding.Flow {
+	ipProto := getIPProtocol(peerSubnet.IP)
+	l3FwdTable := c.pipeline[l3ForwardingTable]
+	return l3FwdTable.BuildFlow(priorityNormal).MatchProtocol(ipProto).
+		MatchDstIPNet(peerSubnet).
+		Action().SetSrcMAC(c.nodeConfig.UplinkNetConfig.MAC).
+		Action().SetDstMAC(remoteGatewayMAC).
+		Action().GotoTable(l3FwdTable.GetNext()).
+		Cookie(c.cookieAllocator.Request(category).Raw()).
+		Done()
+}
+
 // arpResponderFlow generates the ARP responder flow entry that replies request comes from local gateway for peer
 // gateway MAC.
 func (c *client) arpResponderFlow(peerGatewayIP net.IP, category cookie.Category) binding.Flow {
