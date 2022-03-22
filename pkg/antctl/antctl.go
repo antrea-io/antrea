@@ -148,7 +148,7 @@ var CommandList = &commandList{
   Get the list of control plane NetworkPolicies with a specific source Type (supported by agent only)
   $ antctl get networkpolicy -T acnp
   Get the list of control plane NetworkPolicies applied to a Pod (supported by agent only)
-  $ antctl get networkpolicy -p pod1 -n ns1`,
+  $ antctl get networkpolicy -p ns1/pod1`,
 			commandGroup: get,
 			controllerEndpoint: &endpoint{
 				resourceEndpoint: &resourceEndpoint{
@@ -177,7 +177,7 @@ var CommandList = &commandList{
 						},
 						{
 							name:      "pod",
-							usage:     "Get NetworkPolicies applied to the Pod. If present, Namespace must be provided.",
+							usage:     "Get NetworkPolicies applied to the Pod. Pod format is podNamespace/podName.",
 							shorthand: "p",
 						},
 						{

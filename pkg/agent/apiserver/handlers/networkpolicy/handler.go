@@ -68,8 +68,12 @@ var mapToNetworkPolicyType = map[string]cpv1beta.NetworkPolicyType{
 // Create a Network Policy Filter from URL Query
 func newFilterFromURLQuery(query url.Values) (*querier.NetworkPolicyQueryFilter, string, error) {
 	namespace, pod := query.Get("namespace"), query.Get("pod")
-	if pod != "" && namespace == "" {
-		return nil, "", fmt.Errorf("with a pod name, namespace must be provided")
+	if pod != "" {
+		if !strings.Contains(pod, "/") {
+			return nil, "", fmt.Errorf("invalid pod option foramt. Expected format is podNamespace/podName")
+		} else if namespace != "" {
+			return nil, "", fmt.Errorf("namespace option should not be used with pod option")
+		}
 	}
 	strSourceType := strings.ToUpper(query.Get("type"))
 	npSourceType, ok := mapToNetworkPolicyType[strSourceType]
@@ -79,21 +83,12 @@ func newFilterFromURLQuery(query url.Values) (*querier.NetworkPolicyQueryFilter,
 	source := query.Get("source")
 	name := query.Get("name")
 	if name != "" && (source != "" || namespace != "" || pod != "" || strSourceType != "") {
-		return nil, "", fmt.Errorf("with a name, none of the other fields can be set")
-	}
-	// In case of getting policies applied to a specific Pod, the -n option is used to specify the
-	// Namespace of the Pod, not the Namespace of the orginating policy.
-	if pod != "" {
-		return &querier.NetworkPolicyQueryFilter{
-			SourceName: source,
-			Namespace:  "",
-			SourceType: npSourceType,
-		}, namespace + "/" + pod, nil
+		return nil, "", fmt.Errorf("with a policy name, none of the other options should be set")
 	}
 	return &querier.NetworkPolicyQueryFilter{
 		Name:       name,
 		SourceName: source,
 		Namespace:  namespace,
 		SourceType: npSourceType,
-	}, "", nil
+	}, pod, nil
 }
