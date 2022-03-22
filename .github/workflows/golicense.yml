@@ -20,7 +20,7 @@ jobs:
     - uses: actions/checkout@v3
       with:
         fetch-depth: 0
-    - uses: antrea-io/has-changes@v1
+    - uses: antrea-io/has-changes@v2
       id: check_diff
       with:
         args: docs/* ci/jenkins/* *.md hack/.notableofcontents
