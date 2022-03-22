@@ -1357,6 +1357,7 @@ func (f *featurePodConnectivity) l3FwdFlowToRemoteViaUplink(remoteGatewayMAC net
 			MatchProtocol(ipProtocol).
 			MatchRegMark(NotAntreaFlexibleIPAMRegMark).
 			MatchDstIPNet(peerSubnet).
+			Action().SetSrcMAC(f.nodeConfig.UplinkNetConfig.MAC).
 			Action().SetDstMAC(remoteGatewayMAC).
 			Action().GotoTable(L3DecTTLTable.GetID()).
 			Done()
