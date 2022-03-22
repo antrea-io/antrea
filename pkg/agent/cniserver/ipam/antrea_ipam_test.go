@@ -101,7 +101,7 @@ func createIPPools(crdClient *fakepoolclient.IPPoolClientset) {
 	subnetInfoPear := crdv1a2.SubnetInfo{
 		Gateway:      "10.2.3.1",
 		PrefixLength: 24,
-		VLAN:         "100",
+		VLAN:         100,
 	}
 	subnetRangePear := crdv1a2.SubnetIPRange{IPRange: ipRangePear,
 		SubnetInfo: subnetInfoPear}

@@ -53,7 +53,6 @@ var (
 					SubnetInfo: crdv1alpha2.SubnetInfo{
 						Gateway:      "192.168.240.1",
 						PrefixLength: 24,
-						VLAN:         "",
 					}}},
 			},
 		},
@@ -71,7 +70,6 @@ var (
 					SubnetInfo: crdv1alpha2.SubnetInfo{
 						Gateway:      "192.168.240.1",
 						PrefixLength: 24,
-						VLAN:         "",
 					}}},
 			},
 		},
@@ -89,7 +87,7 @@ var (
 					SubnetInfo: crdv1alpha2.SubnetInfo{
 						Gateway:      "192.168.241.1",
 						PrefixLength: 24,
-						VLAN:         "11",
+						VLAN:         11,
 					}}},
 			},
 		},
@@ -107,7 +105,7 @@ var (
 					SubnetInfo: crdv1alpha2.SubnetInfo{
 						Gateway:      "192.168.242.1",
 						PrefixLength: 24,
-						VLAN:         "12",
+						VLAN:         12,
 					}}},
 			},
 		},

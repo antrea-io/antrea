@@ -17,7 +17,6 @@ package ipam
 import (
 	"fmt"
 	"net"
-	"strconv"
 	"sync"
 	"time"
 
@@ -143,7 +142,7 @@ func (d *AntreaIPAM) Add(args *invoke.Args, k8sArgs *argtypes.K8sArgs, networkCo
 
 	klog.V(4).InfoS("IP allocation successful", "IP", ip.String(), "Pod", string(k8sArgs.K8S_POD_NAME))
 
-	result := IPAMResult{Result: current.Result{CNIVersion: current.ImplementedSpecVersion}, VLANID: parseVLANID(subnetInfo.VLAN)}
+	result := IPAMResult{Result: current.Result{CNIVersion: current.ImplementedSpecVersion}, VLANID: subnetInfo.VLAN & 0xfff}
 	gwIP := net.ParseIP(subnetInfo.Gateway)
 
 	ipConfig, defaultRoute := generateIPConfig(ip, int(subnetInfo.PrefixLength), gwIP)
@@ -241,11 +240,4 @@ func init() {
 	if err := RegisterIPAMDriver(AntreaIPAMType, &IPAMDelegator{pluginType: ipamHostLocal}); err != nil {
 		klog.Errorf("Failed to register IPAM plugin on type %s", ipamHostLocal)
 	}
-}
-
-func parseVLANID(vlanString string) uint16 {
-	if vlan, err := strconv.ParseUint(vlanString, 10, 12); err == nil {
-		return uint16(vlan)
-	}
-	return 0
 }

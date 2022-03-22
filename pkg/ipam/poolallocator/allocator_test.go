@@ -100,7 +100,7 @@ func TestAllocateIP(t *testing.T) {
 	subnetInfo := crdv1a2.SubnetInfo{
 		Gateway:      "10.2.2.1",
 		PrefixLength: 24,
-		VLAN:         "100",
+		VLAN:         100,
 	}
 	subnetRange := crdv1a2.SubnetIPRange{IPRange: ipRange,
 		SubnetInfo: subnetInfo}

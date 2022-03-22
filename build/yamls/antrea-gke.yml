@@ -1206,7 +1206,9 @@ spec:
                       - format: ipv6
                       type: string
                     vlan:
-                      type: string
+                      maximum: 4094
+                      minimum: 0
+                      type: integer
                   type: object
                 type: array
               ipVersion:
