@@ -222,7 +222,7 @@ function deliver_multicluster_controller {
     docker images | grep 'mc-controller' | awk '{print $3}' | xargs -r docker rmi || true
     export NO_PULL=1;make antrea-mc-controller
 
-    docker save antrea/antrea-mc-controller:latest -o "${WORKDIR}"/antrea-mcs.tar
+    docker save projects.registry.vmware.com/antrea/antrea-mc-controller:latest -o "${WORKDIR}"/antrea-mcs.tar
     ./multicluster/hack/generate-manifest.sh -l antrea-mcs-ns >./multicluster/test/yamls/manifest.yml
 
     for kubeconfig in ${multicluster_kubeconfigs[@]}
