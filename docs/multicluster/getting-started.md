@@ -10,7 +10,7 @@ For Antrea Multi-cluster, there is only one image `antrea/antrea-mc-controller:l
 you can pull the image from Docker Hub by default, or if you'd like to build image locally,
 you can follow the following steps to get the image ready on your local clusters.
 
-1. Go to `antrea/multi-cluster` folder, run `make docker-build`, and you will get a new image
+1. Go to `antrea` folder, run `make antrea-mc-controller`, and you will get a new image
   named `antrea/antrea-mc-controller:latest` locally.
 2. Run `docker save antrea/antrea-mc-controller:latest > antrea-mcs.tar` to save the image.
 3. Copy the image file `antrea-mcs.tar` to the Nodes of your local cluster.
