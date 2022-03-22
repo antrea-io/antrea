@@ -110,9 +110,9 @@ func probeClientIPFromNode(node string, baseUrl string, data *TestData) (string,
 func probeFromPod(data *TestData, pod, container string, url string) error {
 	var err error
 	if container == busyboxContainerName {
-		_, _, err = data.runWgetCommandOnBusyboxWithRetry(pod, testNamespace, url, 5)
+		_, _, err = data.runWgetCommandOnBusyboxWithRetry(pod, data.testNamespace, url, 5)
 	} else {
-		_, _, err = data.RunCommandFromPod(testNamespace, pod, container, []string{"wget", "-O", "-", url, "-T", "5"})
+		_, _, err = data.RunCommandFromPod(data.testNamespace, pod, container, []string{"wget", "-O", "-", url, "-T", "5"})
 	}
 	return err
 }
@@ -122,9 +122,9 @@ func probeHostnameFromPod(data *TestData, pod, container string, baseUrl string)
 	var err error
 	var hostname string
 	if container == busyboxContainerName {
-		hostname, _, err = data.runWgetCommandOnBusyboxWithRetry(pod, testNamespace, url, 5)
+		hostname, _, err = data.runWgetCommandOnBusyboxWithRetry(pod, data.testNamespace, url, 5)
 	} else {
-		hostname, _, err = data.RunCommandFromPod(testNamespace, pod, container, []string{"wget", "-O", "-", url, "-T", "5"})
+		hostname, _, err = data.RunCommandFromPod(data.testNamespace, pod, container, []string{"wget", "-O", "-", url, "-T", "5"})
 	}
 	return hostname, err
 }
@@ -134,9 +134,9 @@ func probeClientIPFromPod(data *TestData, pod, container string, baseUrl string)
 	var err error
 	var hostPort string
 	if container == busyboxContainerName {
-		hostPort, _, err = data.runWgetCommandOnBusyboxWithRetry(pod, testNamespace, url, 5)
+		hostPort, _, err = data.runWgetCommandOnBusyboxWithRetry(pod, data.testNamespace, url, 5)
 	} else {
-		hostPort, _, err = data.RunCommandFromPod(testNamespace, pod, container, []string{"wget", "-O", "-", url, "-T", "5"})
+		hostPort, _, err = data.RunCommandFromPod(data.testNamespace, pod, container, []string{"wget", "-O", "-", url, "-T", "5"})
 	}
 	if err != nil {
 		return "", err
@@ -167,6 +167,7 @@ func testProxyLoadBalancerService(t *testing.T, isIPv6 bool) {
 	skipIfProxyDisabled(t)
 	skipIfHasWindowsNodes(t)
 	skipIfNumNodesLessThan(t, 2)
+
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
@@ -178,7 +179,7 @@ func testProxyLoadBalancerService(t *testing.T, isIPv6 bool) {
 	nodes := []string{nodeName(0), nodeName(1)}
 	var busyboxes, busyboxIPs []string
 	for idx, node := range nodes {
-		podName, ips, _ := createAndWaitForPod(t, data, data.createBusyboxPodOnNode, fmt.Sprintf("busybox-%d-", idx), node, testNamespace, false)
+		podName, ips, _ := createAndWaitForPod(t, data, data.createBusyboxPodOnNode, fmt.Sprintf("busybox-%d-", idx), node, data.testNamespace, false)
 		busyboxes = append(busyboxes, podName)
 		if !isIPv6 {
 			busyboxIPs = append(busyboxIPs, ips.ipv4.String())
@@ -219,7 +220,7 @@ func testProxyLoadBalancerService(t *testing.T, isIPv6 bool) {
 	// Delete agnhost Pods which are not on host network and create new agnhost Pods which are on host network.
 	hostAgnhosts := []string{"agnhost-host-0", "agnhost-host-1"}
 	for idx, node := range nodes {
-		require.NoError(t, data.DeletePod(testNamespace, agnhosts[idx]))
+		require.NoError(t, data.DeletePod(data.testNamespace, agnhosts[idx]))
 		createAgnhostPod(t, data, hostAgnhosts[idx], node, true)
 	}
 	t.Run("HostNetwork Endpoints", func(t *testing.T) {
@@ -291,6 +292,7 @@ func testProxyNodePortService(t *testing.T, isIPv6 bool) {
 	skipIfHasWindowsNodes(t)
 	skipIfNumNodesLessThan(t, 2)
 	skipIfProxyDisabled(t)
+
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
@@ -309,7 +311,7 @@ func testProxyNodePortService(t *testing.T, isIPv6 bool) {
 	// Create a busybox Pod on every Node. The busybox Pod is used as a client.
 	var busyboxes, busyboxIPs []string
 	for idx, node := range nodes {
-		podName, ips, _ := createAndWaitForPod(t, data, data.createBusyboxPodOnNode, fmt.Sprintf("busybox-%d-", idx), node, testNamespace, false)
+		podName, ips, _ := createAndWaitForPod(t, data, data.createBusyboxPodOnNode, fmt.Sprintf("busybox-%d-", idx), node, data.testNamespace, false)
 		busyboxes = append(busyboxes, podName)
 		if !isIPv6 {
 			busyboxIPs = append(busyboxIPs, ips.ipv4.String())
@@ -352,7 +354,7 @@ func testProxyNodePortService(t *testing.T, isIPv6 bool) {
 	// Delete agnhost Pods which are not on host network and create new agnhost Pods which are on host network.
 	hostAgnhosts := []string{"agnhost-host-0", "agnhost-host-1"}
 	for idx, node := range nodes {
-		require.NoError(t, data.DeletePod(testNamespace, agnhosts[idx]))
+		require.NoError(t, data.DeletePod(data.testNamespace, agnhosts[idx]))
 		createAgnhostPod(t, data, hostAgnhosts[idx], node, true)
 	}
 	t.Run("HostNetwork Endpoints", func(t *testing.T) {
@@ -427,9 +429,9 @@ func TestNodePortAndEgressWithTheSameBackendPod(t *testing.T) {
 
 	// Create the backend Pod on control plane Node.
 	backendPodName := "test-nodeport-egress-backend-pod"
-	require.NoError(t, data.createNginxPodOnNode(backendPodName, testNamespace, controlPlaneNodeName(), false))
-	defer deletePodWrapper(t, data, testNamespace, backendPodName)
-	if err := data.podWaitForRunning(defaultTimeout, backendPodName, testNamespace); err != nil {
+	require.NoError(t, data.createNginxPodOnNode(backendPodName, data.testNamespace, controlPlaneNodeName(), false))
+	defer deletePodWrapper(t, data, data.testNamespace, backendPodName)
+	if err := data.podWaitForRunning(defaultTimeout, backendPodName, data.testNamespace); err != nil {
 		t.Fatalf("Error when waiting for Pod '%s' to be in the Running state", backendPodName)
 	}
 
@@ -446,19 +448,19 @@ ip netns exec %[1]s ip link set dev %[1]s-a up && \
 ip netns exec %[1]s ip route replace default via %[3]s && \
 sleep 3600
 `, testNetns, "1.1.1.1", "1.1.1.254", 24)
-	if err := data.createPodOnNode(testPod, testNamespace, controlPlaneNodeName(), agnhostImage, []string{"sh", "-c", cmd}, nil, nil, nil, true, func(pod *corev1.Pod) {
+	if err := data.createPodOnNode(testPod, data.testNamespace, controlPlaneNodeName(), agnhostImage, []string{"sh", "-c", cmd}, nil, nil, nil, true, func(pod *corev1.Pod) {
 		privileged := true
 		pod.Spec.Containers[0].SecurityContext = &corev1.SecurityContext{Privileged: &privileged}
 	}); err != nil {
 		t.Fatalf("Failed to create client Pod: %v", err)
 	}
-	defer deletePodWrapper(t, data, testNamespace, testPod)
-	if err := data.podWaitForRunning(defaultTimeout, testPod, testNamespace); err != nil {
+	defer deletePodWrapper(t, data, data.testNamespace, testPod)
+	if err := data.podWaitForRunning(defaultTimeout, testPod, data.testNamespace); err != nil {
 		t.Fatalf("Error when waiting for Pod '%s' to be in the Running state", testPod)
 	}
 	// Connect to NodePort on control plane Node in the fake external network.
 	cmd = fmt.Sprintf("ip netns exec %s curl --connect-timeout 1 --retry 5 --retry-connrefused %s", testNetns, testNodePortURL)
-	_, _, err = data.RunCommandFromPod(testNamespace, testPod, agnhostContainerName, []string{"sh", "-c", cmd})
+	_, _, err = data.RunCommandFromPod(data.testNamespace, testPod, agnhostContainerName, []string{"sh", "-c", cmd})
 	require.NoError(t, err, "Service NodePort should be able to be connected from external network when Egress is enabled")
 }
 
@@ -472,10 +474,10 @@ func createAgnhostPod(t *testing.T, data *TestData, podName string, node string,
 		},
 	}
 
-	require.NoError(t, data.createPodOnNode(podName, testNamespace, node, agnhostImage, []string{}, args, nil, ports, hostNetwork, nil))
-	_, err := data.podWaitForIPs(defaultTimeout, podName, testNamespace)
+	require.NoError(t, data.createPodOnNode(podName, data.testNamespace, node, agnhostImage, []string{}, args, nil, ports, hostNetwork, nil))
+	_, err := data.podWaitForIPs(defaultTimeout, podName, data.testNamespace)
 	require.NoError(t, err)
-	require.NoError(t, data.podWaitForRunning(defaultTimeout, podName, testNamespace))
+	require.NoError(t, data.podWaitForRunning(defaultTimeout, podName, data.testNamespace))
 }
 
 func testNodePortClusterFromRemote(t *testing.T, data *TestData, nodes, urls []string) {
@@ -539,6 +541,7 @@ func testNodePortLocalFromPod(t *testing.T, data *TestData, pods, urls, expected
 func TestProxyServiceSessionAffinity(t *testing.T) {
 	skipIfHasWindowsNodes(t)
 	skipIfProxyDisabled(t)
+
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
@@ -569,6 +572,7 @@ func testProxyExternalTrafficPolicy(t *testing.T, isIPv6 bool) {
 	skipIfHasWindowsNodes(t)
 	skipIfNumNodesLessThan(t, 2)
 	skipIfProxyDisabled(t)
+
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
@@ -628,26 +632,26 @@ func testProxyServiceSessionAffinity(ipFamily *corev1.IPFamily, ingressIPs []str
 	nodeName := nodeName(1)
 	nginx := randName("nginx-")
 
-	require.NoError(t, data.createNginxPodOnNode(nginx, testNamespace, nodeName, false))
-	nginxIP, err := data.podWaitForIPs(defaultTimeout, nginx, testNamespace)
-	defer data.deletePodAndWait(defaultTimeout, nginx, testNamespace)
+	require.NoError(t, data.createNginxPodOnNode(nginx, data.testNamespace, nodeName, false))
+	nginxIP, err := data.podWaitForIPs(defaultTimeout, nginx, data.testNamespace)
+	defer data.deletePodAndWait(defaultTimeout, nginx, data.testNamespace)
 	require.NoError(t, err)
-	require.NoError(t, data.podWaitForRunning(defaultTimeout, nginx, testNamespace))
-	svc, err := data.createNginxClusterIPService(nginx, testNamespace, true, ipFamily)
-	defer data.deleteServiceAndWait(defaultTimeout, nginx, testNamespace)
+	require.NoError(t, data.podWaitForRunning(defaultTimeout, nginx, data.testNamespace))
+	svc, err := data.createNginxClusterIPService(nginx, data.testNamespace, true, ipFamily)
+	defer data.deleteServiceAndWait(defaultTimeout, nginx, data.testNamespace)
 	require.NoError(t, err)
 	_, err = data.createNginxLoadBalancerService(true, ingressIPs, ipFamily)
-	defer data.deleteServiceAndWait(defaultTimeout, nginxLBService, testNamespace)
+	defer data.deleteServiceAndWait(defaultTimeout, nginxLBService, data.testNamespace)
 	require.NoError(t, err)
 
 	busyboxPod := randName("busybox-")
-	require.NoError(t, data.createBusyboxPodOnNode(busyboxPod, testNamespace, nodeName, false))
-	defer data.deletePodAndWait(defaultTimeout, busyboxPod, testNamespace)
-	require.NoError(t, data.podWaitForRunning(defaultTimeout, busyboxPod, testNamespace))
-	stdout, stderr, err := data.runWgetCommandOnBusyboxWithRetry(busyboxPod, testNamespace, svc.Spec.ClusterIP, 5)
+	require.NoError(t, data.createBusyboxPodOnNode(busyboxPod, data.testNamespace, nodeName, false))
+	defer data.deletePodAndWait(defaultTimeout, busyboxPod, data.testNamespace)
+	require.NoError(t, data.podWaitForRunning(defaultTimeout, busyboxPod, data.testNamespace))
+	stdout, stderr, err := data.runWgetCommandOnBusyboxWithRetry(busyboxPod, data.testNamespace, svc.Spec.ClusterIP, 5)
 	require.NoError(t, err, fmt.Sprintf("ipFamily: %v\nstdout: %s\nstderr: %s\n", *ipFamily, stdout, stderr))
 	for _, ingressIP := range ingressIPs {
-		stdout, stderr, err := data.runWgetCommandOnBusyboxWithRetry(busyboxPod, testNamespace, ingressIP, 5)
+		stdout, stderr, err := data.runWgetCommandOnBusyboxWithRetry(busyboxPod, data.testNamespace, ingressIP, 5)
 		require.NoError(t, err, fmt.Sprintf("ipFamily: %v\nstdout: %s\nstderr: %s\n", *ipFamily, stdout, stderr))
 	}
 
@@ -713,7 +717,7 @@ func testProxyHairpin(t *testing.T, isIPv6 bool) {
 	// Create a ClusterIP Service.
 	serviceClusterIP := fmt.Sprintf("clusterip-%v", isIPv6)
 	clusterIPSvc, err := data.createAgnhostClusterIPService(serviceClusterIP, true, &ipProtocol)
-	defer data.deleteServiceAndWait(defaultTimeout, serviceClusterIP, testNamespace)
+	defer data.deleteServiceAndWait(defaultTimeout, serviceClusterIP, data.testNamespace)
 	require.NoError(t, err)
 
 	// Create two NodePort Services. The externalTrafficPolicy of one Service is Cluster, and the externalTrafficPolicy
@@ -722,7 +726,7 @@ func testProxyHairpin(t *testing.T, isIPv6 bool) {
 	serviceNodePortCluster := fmt.Sprintf("nodeport-cluster-%v", isIPv6)
 	serviceNodePortLocal := fmt.Sprintf("nodeport-local-%v", isIPv6)
 	nodePortSvc, err := data.createAgnhostNodePortService(serviceNodePortCluster, true, false, &ipProtocol)
-	defer data.deleteServiceAndWait(defaultTimeout, serviceNodePortCluster, testNamespace)
+	defer data.deleteServiceAndWait(defaultTimeout, serviceNodePortCluster, data.testNamespace)
 	require.NoError(t, err)
 	for _, port := range nodePortSvc.Spec.Ports {
 		if port.NodePort != 0 {
@@ -733,7 +737,7 @@ func testProxyHairpin(t *testing.T, isIPv6 bool) {
 	require.NotEqual(t, "", nodePortCluster, "NodePort port number should not be empty")
 	nodePortSvc, err = data.createAgnhostNodePortService(serviceNodePortLocal, true, true, &ipProtocol)
 	require.NoError(t, err)
-	defer data.deleteServiceAndWait(defaultTimeout, serviceNodePortLocal, testNamespace)
+	defer data.deleteServiceAndWait(defaultTimeout, serviceNodePortLocal, data.testNamespace)
 	for _, port := range nodePortSvc.Spec.Ports {
 		if port.NodePort != 0 {
 			nodePortLocal = fmt.Sprint(port.NodePort)
@@ -775,7 +779,7 @@ func testProxyHairpin(t *testing.T, isIPv6 bool) {
 		testProxyIntraNodeHairpinCases(data, t, expectedGatewayIP, agnhost, clusterIPUrl, workerNodePortClusterUrl, workerNodePortLocalUrl, lbClusterUrl, lbLocalUrl)
 		testProxyInterNodeHairpinCases(data, t, false, expectedControllerIP, nodeName(0), clusterIPUrl, controllerNodePortClusterUrl, lbClusterUrl)
 	})
-	require.NoError(t, data.DeletePod(testNamespace, agnhost))
+	require.NoError(t, data.DeletePod(data.testNamespace, agnhost))
 
 	agnhostHost := fmt.Sprintf("agnhost-host-%v", isIPv6)
 	createAgnhostPod(t, data, agnhostHost, node, true)
@@ -896,6 +900,7 @@ func testProxyEndpointLifeCycleCase(t *testing.T, data *TestData) {
 func TestProxyEndpointLifeCycle(t *testing.T) {
 	skipIfHasWindowsNodes(t)
 	skipIfProxyDisabled(t)
+
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
@@ -915,11 +920,11 @@ func TestProxyEndpointLifeCycle(t *testing.T) {
 func testProxyEndpointLifeCycle(ipFamily *corev1.IPFamily, data *TestData, t *testing.T) {
 	nodeName := nodeName(1)
 	nginx := randName("nginx-")
-	require.NoError(t, data.createNginxPodOnNode(nginx, testNamespace, nodeName, false))
-	nginxIPs, err := data.podWaitForIPs(defaultTimeout, nginx, testNamespace)
+	require.NoError(t, data.createNginxPodOnNode(nginx, data.testNamespace, nodeName, false))
+	nginxIPs, err := data.podWaitForIPs(defaultTimeout, nginx, data.testNamespace)
 	require.NoError(t, err)
-	_, err = data.createNginxClusterIPService(nginx, testNamespace, false, ipFamily)
-	defer data.deleteServiceAndWait(defaultTimeout, nginx, testNamespace)
+	_, err = data.createNginxClusterIPService(nginx, data.testNamespace, false, ipFamily)
+	defer data.deleteServiceAndWait(defaultTimeout, nginx, data.testNamespace)
 	require.NoError(t, err)
 
 	// Hold on to make sure that the Service is realized.
@@ -956,7 +961,7 @@ func testProxyEndpointLifeCycle(ipFamily *corev1.IPFamily, data *TestData, t *te
 		require.Contains(t, groupOutput, k)
 	}
 
-	require.NoError(t, data.deletePodAndWait(defaultTimeout, nginx, testNamespace))
+	require.NoError(t, data.deletePodAndWait(defaultTimeout, nginx, data.testNamespace))
 
 	// Wait for one second to make sure the pipeline to be updated.
 	time.Sleep(time.Second)
@@ -988,6 +993,7 @@ func testProxyServiceLifeCycleCase(t *testing.T, data *TestData) {
 func TestProxyServiceLifeCycle(t *testing.T) {
 	skipIfHasWindowsNodes(t)
 	skipIfProxyDisabled(t)
+
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
@@ -1008,9 +1014,9 @@ func testProxyServiceLifeCycle(ipFamily *corev1.IPFamily, ingressIPs []string, d
 	nodeName := nodeName(1)
 	nginx := randName("nginx-")
 
-	require.NoError(t, data.createNginxPodOnNode(nginx, testNamespace, nodeName, false))
-	defer data.deletePodAndWait(defaultTimeout, nginx, testNamespace)
-	nginxIPs, err := data.podWaitForIPs(defaultTimeout, nginx, testNamespace)
+	require.NoError(t, data.createNginxPodOnNode(nginx, data.testNamespace, nodeName, false))
+	defer data.deletePodAndWait(defaultTimeout, nginx, data.testNamespace)
+	nginxIPs, err := data.podWaitForIPs(defaultTimeout, nginx, data.testNamespace)
 	require.NoError(t, err)
 	var nginxIP string
 	if *ipFamily == corev1.IPv6Protocol {
@@ -1018,11 +1024,11 @@ func testProxyServiceLifeCycle(ipFamily *corev1.IPFamily, ingressIPs []string, d
 	} else {
 		nginxIP = nginxIPs.ipv4.String()
 	}
-	svc, err := data.createNginxClusterIPService(nginx, testNamespace, false, ipFamily)
-	defer data.deleteServiceAndWait(defaultTimeout, nginx, testNamespace)
+	svc, err := data.createNginxClusterIPService(nginx, data.testNamespace, false, ipFamily)
+	defer data.deleteServiceAndWait(defaultTimeout, nginx, data.testNamespace)
 	require.NoError(t, err)
 	_, err = data.createNginxLoadBalancerService(false, ingressIPs, ipFamily)
-	defer data.deleteServiceAndWait(defaultTimeout, nginxLBService, testNamespace)
+	defer data.deleteServiceAndWait(defaultTimeout, nginxLBService, data.testNamespace)
 	require.NoError(t, err)
 	agentName, err := data.getAntreaPodOnNode(nodeName)
 	require.NoError(t, err)
@@ -1075,8 +1081,8 @@ func testProxyServiceLifeCycle(ipFamily *corev1.IPFamily, ingressIPs []string, d
 		}
 	}
 
-	require.NoError(t, data.deleteService(testNamespace, nginx))
-	require.NoError(t, data.deleteService(testNamespace, nginxLBService))
+	require.NoError(t, data.deleteService(data.testNamespace, nginx))
+	require.NoError(t, data.deleteService(data.testNamespace, nginxLBService))
 
 	// Hold on to make sure that the Service is realized.
 	time.Sleep(3 * time.Second)

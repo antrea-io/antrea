@@ -484,7 +484,7 @@ func (data *TestData) DeleteService(ns, name string) error {
 }
 
 // CleanServices is a convenience function for deleting Services in the cluster.
-func (data *TestData) CleanServices(namespaces []string) error {
+func (data *TestData) CleanServices(namespaces map[string]string) error {
 	for _, ns := range namespaces {
 		l, err := data.clientset.CoreV1().Services(ns).List(context.TODO(), metav1.ListOptions{})
 		if err != nil {
@@ -577,7 +577,7 @@ func (data *TestData) DeleteNetworkPolicy(ns, name string) error {
 }
 
 // CleanNetworkPolicies is a convenience function for deleting NetworkPolicies in the provided namespaces.
-func (data *TestData) CleanNetworkPolicies(namespaces []string) error {
+func (data *TestData) CleanNetworkPolicies(namespaces map[string]string) error {
 	for _, ns := range namespaces {
 		l, err := data.clientset.NetworkingV1().NetworkPolicies(ns).List(context.TODO(), metav1.ListOptions{})
 		if err != nil {
@@ -977,7 +977,7 @@ func (k *KubernetesUtils) Validate(allPods []Pod, reachability *Reachability, po
 	}
 }
 
-func (k *KubernetesUtils) Bootstrap(namespaces, pods []string) (*map[string][]string, error) {
+func (k *KubernetesUtils) Bootstrap(namespaces map[string]string, pods []string) (*map[string][]string, error) {
 	for _, ns := range namespaces {
 		_, err := k.CreateOrUpdateNamespace(ns, map[string]string{"ns": ns})
 		if err != nil {
@@ -1016,7 +1016,7 @@ func (k *KubernetesUtils) Bootstrap(namespaces, pods []string) (*map[string][]st
 	return &podIPs, nil
 }
 
-func (k *KubernetesUtils) Cleanup(namespaces []string) {
+func (k *KubernetesUtils) Cleanup(namespaces map[string]string) {
 	// Cleanup any cluster-scoped resources.
 	if err := k.CleanACNPs(); err != nil {
 		log.Errorf("Error when cleaning up ACNPs: %v", err)

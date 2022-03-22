@@ -54,16 +54,16 @@ func TestConnectivity(t *testing.T) {
 	})
 	t.Run("testPodConnectivityAfterAntreaRestart", func(t *testing.T) {
 		skipIfHasWindowsNodes(t)
-		testPodConnectivityAfterAntreaRestart(t, data, testNamespace)
+		testPodConnectivityAfterAntreaRestart(t, data, data.testNamespace)
 	})
 	t.Run("testOVSRestartSameNode", func(t *testing.T) {
 		skipIfNotIPv4Cluster(t)
 		skipIfHasWindowsNodes(t)
-		testOVSRestartSameNode(t, data, testNamespace)
+		testOVSRestartSameNode(t, data, data.testNamespace)
 	})
 	t.Run("testOVSFlowReplay", func(t *testing.T) {
 		skipIfHasWindowsNodes(t)
-		testOVSFlowReplay(t, data, testNamespace)
+		testOVSFlowReplay(t, data, data.testNamespace)
 	})
 	t.Run("testPingLargeMTU", func(t *testing.T) {
 		skipIfNumNodesLessThan(t, 2)
@@ -76,7 +76,7 @@ func waitForPodIPs(t *testing.T, data *TestData, podInfos []podInfo) map[string]
 	podIPs := make(map[string]*PodIPs)
 	for _, pi := range podInfos {
 		podName := pi.name
-		podNamespace := testNamespace
+		podNamespace := data.testNamespace
 		if pi.namespace != "" {
 			podNamespace = pi.namespace
 		}
@@ -101,11 +101,11 @@ func (data *TestData) runPingMesh(t *testing.T, podInfos []podInfo, ctrname stri
 			if pi1.name == pi2.name {
 				continue
 			}
-			podNamespace := testNamespace
+			podNamespace := data.testNamespace
 			if pi1.namespace != "" {
 				podNamespace = pi1.namespace
 			}
-			pod2Namespace := testNamespace
+			pod2Namespace := data.testNamespace
 			if pi2.namespace != "" {
 				pod2Namespace = pi2.namespace
 			}
@@ -133,10 +133,10 @@ func (data *TestData) testPodConnectivitySameNode(t *testing.T) {
 	t.Logf("Creating %d agnhost Pods on '%s'", numPods, workerNode)
 	for i := range podInfos {
 		podInfos[i].os = clusterInfo.nodesOS[workerNode]
-		if err := data.createAgnhostPodOnNode(podInfos[i].name, testNamespace, workerNode, false); err != nil {
+		if err := data.createAgnhostPodOnNode(podInfos[i].name, data.testNamespace, workerNode, false); err != nil {
 			t.Fatalf("Error when creating agnhost test Pod '%s': %v", podInfos[i], err)
 		}
-		defer deletePodWrapper(t, data, testNamespace, podInfos[i].name)
+		defer deletePodWrapper(t, data, data.testNamespace, podInfos[i].name)
 	}
 
 	data.runPingMesh(t, podInfos, agnhostContainerName)
@@ -181,7 +181,7 @@ func (data *TestData) testHostPortPodConnectivity(t *testing.T, clientNamespace,
 
 // testHostPortPodConnectivity checks that a Pod with hostPort set is reachable.
 func testHostPortPodConnectivity(t *testing.T, data *TestData) {
-	data.testHostPortPodConnectivity(t, testNamespace, testNamespace)
+	data.testHostPortPodConnectivity(t, data.testNamespace, data.testNamespace)
 }
 
 // createPodsOnDifferentNodes creates agnhost Pods through a DaemonSet. This function returns information of the created
@@ -238,7 +238,7 @@ func (data *TestData) testPodConnectivityDifferentNodes(t *testing.T) {
 		// subnet, all Nodes should have a Pod.
 		numPods = maxPods
 	}
-	podInfos, deletePods := createPodsOnDifferentNodes(t, data, testNamespace, "differentnodes")
+	podInfos, deletePods := createPodsOnDifferentNodes(t, data, data.testNamespace, "differentnodes")
 	defer deletePods()
 
 	if len(podInfos) > maxPods {
@@ -489,13 +489,13 @@ func testOVSFlowReplay(t *testing.T, data *TestData, namespace string) {
 func testPingLargeMTU(t *testing.T, data *TestData) {
 	skipIfNumNodesLessThan(t, 2)
 
-	podInfos, deletePods := createPodsOnDifferentNodes(t, data, testNamespace, "largemtu")
+	podInfos, deletePods := createPodsOnDifferentNodes(t, data, data.testNamespace, "largemtu")
 	defer deletePods()
 	podIPs := waitForPodIPs(t, data, podInfos)
 
 	pingSize := 2000
 	t.Logf("Running ping with size %d between Pods %s and %s", pingSize, podInfos[0].name, podInfos[1].name)
-	if err := data.runPingCommandFromTestPod(podInfos[0], testNamespace, podIPs[podInfos[1].name], agnhostContainerName, pingCount, pingSize); err != nil {
+	if err := data.runPingCommandFromTestPod(podInfos[0], data.testNamespace, podIPs[podInfos[1].name], agnhostContainerName, pingCount, pingSize); err != nil {
 		t.Error(err)
 	}
 }

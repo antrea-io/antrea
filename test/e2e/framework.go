@@ -82,7 +82,6 @@ const (
 	antreaDeployment           string = "antrea-controller"
 	flowAggregatorDeployment   string = "flow-aggregator"
 	antreaDefaultGW            string = "antrea-gw0"
-	testNamespace              string = "antrea-test"
 	testAntreaIPAMNamespace    string = "antrea-ipam-test"
 	testAntreaIPAMNamespace11  string = "antrea-ipam-test-11"
 	testAntreaIPAMNamespace12  string = "antrea-ipam-test-12"
@@ -210,6 +209,7 @@ type TestData struct {
 	aggregatorClient   aggregatorclientset.Interface
 	crdClient          crdclientset.Interface
 	logsDirForTestCase string
+	testNamespace      string
 }
 
 var testData *TestData
@@ -610,11 +610,6 @@ func (data *TestData) CreateNamespace(namespace string, mutateFunc func(*corev1.
 	return nil
 }
 
-// createTestNamespace creates the namespace used for tests.
-func (data *TestData) createTestNamespace() error {
-	return data.CreateNamespace(testNamespace, nil)
-}
-
 // createNamespaceWithAnnotations creates the namespace with Annotations.
 func (data *TestData) createNamespaceWithAnnotations(namespace string, annotations map[string]string) error {
 	var mutateFunc func(*corev1.Namespace)
@@ -653,26 +648,8 @@ func (data *TestData) DeleteNamespace(namespace string, timeout time.Duration) e
 		}
 		return fmt.Errorf("error when deleting '%s' Namespace: %v", namespace, err)
 	}
-	err := wait.Poll(defaultInterval, timeout, func() (bool, error) {
-		if ns, err := data.clientset.CoreV1().Namespaces().Get(context.TODO(), namespace, metav1.GetOptions{}); err != nil {
-			if errors.IsNotFound(err) {
-				// Success
-				return true, nil
-			}
-			return false, fmt.Errorf("error when getting Namespace '%s' after delete: %v", namespace, err)
-		} else if ns.Status.Phase != corev1.NamespaceTerminating {
-			return false, fmt.Errorf("deleted Namespace '%s' should be in 'Terminating' phase", namespace)
-		}
 
-		// Keep trying
-		return false, nil
-	})
-	return err
-}
-
-// deleteTestNamespace deletes test namespace and waits for deletion to actually complete.
-func (data *TestData) deleteTestNamespace(timeout time.Duration) error {
-	return data.DeleteNamespace(testNamespace, timeout)
+	return nil
 }
 
 // deployAntreaCommon deploys Antrea using kubectl on the control-plane Node.
@@ -1605,7 +1582,7 @@ func (data *TestData) CreateServiceWithAnnotations(serviceName, namespace string
 
 // createNginxClusterIPServiceWithAnnotations creates nginx service with Annotation
 func (data *TestData) createNginxClusterIPServiceWithAnnotations(affinity bool, ipFamily *corev1.IPFamily, annotation map[string]string) (*corev1.Service, error) {
-	return data.CreateServiceWithAnnotations("nginx", testNamespace, 80, 80, corev1.ProtocolTCP, map[string]string{"app": "nginx"}, affinity, false, corev1.ServiceTypeClusterIP, ipFamily, annotation)
+	return data.CreateServiceWithAnnotations("nginx", data.testNamespace, 80, 80, corev1.ProtocolTCP, map[string]string{"app": "nginx"}, affinity, false, corev1.ServiceTypeClusterIP, ipFamily, annotation)
 }
 
 // createNginxClusterIPService creates a nginx service with the given name.
@@ -1618,21 +1595,21 @@ func (data *TestData) createNginxClusterIPService(name, namespace string, affini
 
 // createAgnhostClusterIPService creates a ClusterIP agnhost service with the given name.
 func (data *TestData) createAgnhostClusterIPService(serviceName string, affinity bool, ipFamily *corev1.IPFamily) (*corev1.Service, error) {
-	return data.CreateService(serviceName, testNamespace, 8080, 8080, map[string]string{"app": "agnhost"}, affinity, false, corev1.ServiceTypeClusterIP, ipFamily)
+	return data.CreateService(serviceName, data.testNamespace, 8080, 8080, map[string]string{"app": "agnhost"}, affinity, false, corev1.ServiceTypeClusterIP, ipFamily)
 }
 
 // createAgnhostNodePortService creates a NodePort agnhost service with the given name.
 func (data *TestData) createAgnhostNodePortService(serviceName string, affinity, nodeLocalExternal bool, ipFamily *corev1.IPFamily) (*corev1.Service, error) {
-	return data.CreateService(serviceName, testNamespace, 8080, 8080, map[string]string{"app": "agnhost"}, affinity, nodeLocalExternal, corev1.ServiceTypeNodePort, ipFamily)
+	return data.CreateService(serviceName, data.testNamespace, 8080, 8080, map[string]string{"app": "agnhost"}, affinity, nodeLocalExternal, corev1.ServiceTypeNodePort, ipFamily)
 }
 
 // createNginxNodePortService creates a NodePort nginx service with the given name.
 func (data *TestData) createNginxNodePortService(serviceName string, affinity, nodeLocalExternal bool, ipFamily *corev1.IPFamily) (*corev1.Service, error) {
-	return data.CreateService(serviceName, testNamespace, 80, 80, map[string]string{"app": "nginx"}, affinity, nodeLocalExternal, corev1.ServiceTypeNodePort, ipFamily)
+	return data.CreateService(serviceName, data.testNamespace, 80, 80, map[string]string{"app": "nginx"}, affinity, nodeLocalExternal, corev1.ServiceTypeNodePort, ipFamily)
 }
 
 func (data *TestData) updateServiceExternalTrafficPolicy(serviceName string, nodeLocalExternal bool) (*corev1.Service, error) {
-	svc, err := data.clientset.CoreV1().Services(testNamespace).Get(context.TODO(), serviceName, metav1.GetOptions{})
+	svc, err := data.clientset.CoreV1().Services(data.testNamespace).Get(context.TODO(), serviceName, metav1.GetOptions{})
 	if err != nil {
 		return svc, err
 	}
@@ -1642,12 +1619,12 @@ func (data *TestData) updateServiceExternalTrafficPolicy(serviceName string, nod
 		svc.Spec.ExternalTrafficPolicy = corev1.ServiceExternalTrafficPolicyTypeCluster
 	}
 
-	return data.clientset.CoreV1().Services(testNamespace).Update(context.TODO(), svc, metav1.UpdateOptions{})
+	return data.clientset.CoreV1().Services(data.testNamespace).Update(context.TODO(), svc, metav1.UpdateOptions{})
 }
 
 // createAgnhostLoadBalancerService creates a LoadBalancer agnhost service with the given name.
 func (data *TestData) createAgnhostLoadBalancerService(serviceName string, affinity, nodeLocalExternal bool, ingressIPs []string, ipFamily *corev1.IPFamily) (*corev1.Service, error) {
-	svc, err := data.CreateService(serviceName, testNamespace, 8080, 8080, map[string]string{"app": "agnhost"}, affinity, nodeLocalExternal, corev1.ServiceTypeLoadBalancer, ipFamily)
+	svc, err := data.CreateService(serviceName, data.testNamespace, 8080, 8080, map[string]string{"app": "agnhost"}, affinity, nodeLocalExternal, corev1.ServiceTypeLoadBalancer, ipFamily)
 	if err != nil {
 		return svc, err
 	}
@@ -1666,7 +1643,7 @@ func (data *TestData) createAgnhostLoadBalancerService(serviceName string, affin
 }
 
 func (data *TestData) createNginxLoadBalancerService(affinity bool, ingressIPs []string, ipFamily *corev1.IPFamily) (*corev1.Service, error) {
-	svc, err := data.CreateService(nginxLBService, testNamespace, 80, 80, map[string]string{"app": "nginx"}, affinity, false, corev1.ServiceTypeLoadBalancer, ipFamily)
+	svc, err := data.CreateService(nginxLBService, data.testNamespace, 80, 80, map[string]string{"app": "nginx"}, affinity, false, corev1.ServiceTypeLoadBalancer, ipFamily)
 	if err != nil {
 		return svc, err
 	}
@@ -1724,7 +1701,7 @@ func (data *TestData) createNetworkPolicy(name string, spec *networkingv1.Networ
 		},
 		Spec: *spec,
 	}
-	return data.clientset.NetworkingV1().NetworkPolicies(testNamespace).Create(context.TODO(), policy, metav1.CreateOptions{})
+	return data.clientset.NetworkingV1().NetworkPolicies(data.testNamespace).Create(context.TODO(), policy, metav1.CreateOptions{})
 }
 
 // deleteNetworkpolicy deletes the network policy.
@@ -1748,6 +1725,7 @@ func randSeq(n int) string {
 	return string(b)
 }
 
+// randName generates a DNS-1123 subdomain name
 func randName(prefix string) string {
 	return prefix + randSeq(nameSuffixLength)
 }

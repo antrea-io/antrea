@@ -33,10 +33,11 @@ const (
 )
 
 var (
-	allPodsPerCluster                      []antreae2e.Pod
-	perNamespacePods, perClusterNamespaces []string
-	podsByNamespace                        map[string][]antreae2e.Pod
-	clusterK8sUtilsMap                     map[string]*antreae2e.KubernetesUtils
+	allPodsPerCluster    []antreae2e.Pod
+	perNamespacePods     []string
+	perClusterNamespaces map[string]string
+	podsByNamespace      map[string][]antreae2e.Pod
+	clusterK8sUtilsMap   map[string]*antreae2e.KubernetesUtils
 )
 
 func failOnError(err error, t *testing.T) {
@@ -52,7 +53,10 @@ func failOnError(err error, t *testing.T) {
 // initializeForPolicyTest creates three Pods in three test Namespaces for each test cluster.
 func initializeForPolicyTest(t *testing.T, data *MCTestData) {
 	perNamespacePods = []string{"a", "b", "c"}
-	perClusterNamespaces = []string{"x", "y", "z"}
+	perClusterNamespaces = make(map[string]string)
+	perClusterNamespaces["x"] = "x"
+	perClusterNamespaces["y"] = "y"
+	perClusterNamespaces["z"] = "z"
 
 	allPodsPerCluster = []antreae2e.Pod{}
 	podsByNamespace = make(map[string][]antreae2e.Pod)
