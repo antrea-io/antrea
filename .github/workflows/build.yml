@@ -18,10 +18,10 @@ jobs:
     - uses: actions/checkout@v3
       with:
         fetch-depth: 0
-    - uses: antrea-io/has-changes@v1
+    - uses: antrea-io/has-changes@v2
       id: check_diff
       with:
-        args: docs/* ci/jenkins/* *.md hack/.notableofcontents
+        paths-ignore: docs/* ci/jenkins/* *.md hack/.notableofcontents
     outputs:
       has_changes: ${{ steps.check_diff.outputs.has_changes }}
 
@@ -190,10 +190,10 @@ jobs:
     - uses: actions/checkout@v3
       with:
         fetch-depth: 0
-    - uses: antrea-io/has-changes@v1
+    - uses: antrea-io/has-changes@v2
       id: check_diff
       with:
-        args: build/yamls/* ci/* cmd/* docs/* hack/* multicluster/* pkg/* test/* third_party/* plugins/octant/* plugins/grafana-sankey-plugin/* *.md
+        paths-ignore: build/yamls/* ci/* cmd/* docs/* hack/* multicluster/* pkg/* test/* third_party/* plugins/octant/* plugins/grafana-sankey-plugin/* *.md
     outputs:
       has_changes: ${{ steps.check_diff.outputs.has_changes }}
 
