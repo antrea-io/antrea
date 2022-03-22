@@ -42,7 +42,7 @@ jobs:
         go-version: 1.17
     - name: Check-out code
       uses: actions/checkout@v3
-    - uses: actions/cache@v2
+    - uses: actions/cache@v3
       with:
         # In order:
         # * Module download cache
@@ -81,7 +81,7 @@ jobs:
         go-version: 1.17
     - name: Check-out code
       uses: actions/checkout@v3
-    - uses: actions/cache@v2
+    - uses: actions/cache@v3
       with:
         # In order:
         # * Module download cache
@@ -113,7 +113,7 @@ jobs:
         go-version: 1.17
     - name: Check-out code
       uses: actions/checkout@v3
-    - uses: actions/cache@v2
+    - uses: actions/cache@v3
       with:
         # In order:
         # * Module download cache
@@ -152,7 +152,7 @@ jobs:
         go-version: 1.17
     - name: Check-out code
       uses: actions/checkout@v3
-    - uses: actions/cache@v2
+    - uses: actions/cache@v3
       with:
         # In order:
         # * Module download cache
