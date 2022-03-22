@@ -36,13 +36,14 @@ import (
 
 	mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
 	"antrea.io/antrea/multicluster/controllers/multicluster/common"
+	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
 )
 
 var (
 	localClusterID   = "cluster-a"
 	leaderNamespace  = "default"
-	svcResImportName = "default-nginx-service"
-	epResImportName  = "default-nginx-endpoints"
+	svcResImportName = leaderNamespace + "-" + "nginx-service"
+	epResImportName  = leaderNamespace + "-" + "nginx-endpoints"
 
 	svcImportReq = ctrl.Request{NamespacedName: types.NamespacedName{
 		Namespace: leaderNamespace,
@@ -112,6 +113,7 @@ var (
 
 func init() {
 	utilruntime.Must(mcsv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(v1alpha1.AddToScheme(scheme))
 	utilruntime.Must(k8smcsapi.AddToScheme(scheme))
 	utilruntime.Must(k8sscheme.AddToScheme(scheme))
 }

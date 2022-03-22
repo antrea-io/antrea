@@ -412,6 +412,91 @@ ResourceExport into the corresponding ResourceImport until users correct it.
 due to forementioned mismatch issue, Antrea Multi-cluster Controller will also skip converging
 the corresponding Endpoints ResourceExport until users correct it.
 
+## Multi-cluster ClusterNetworkPolicy Replication
+
+Since Antrea v1.6.0, Multi-cluster admins can specify certain ClusterNetworkPolicies to be replicated
+across the entire ClusterSet. This is especially useful for ClusterSet admins who want all clusters in
+the ClusterSet to be applied with a consistent security posture (for example, all Namespaces in all
+clusters can only communicate with Pods in their own namespaces). For more information regarding
+Antrea ClusterNetworkPolicy (ACNP), refer to [this document](../antrea-network-policy.md).
+
+To achieve such ACNP replication across clusters, admins can, in the acting leader cluster of a
+Multi-cluster deployment, create a ResourceExport of kind `AntreaClusterNetworkPolicy` which contains
+the ClusterNetworkPolicy spec they wish to be replicated. The ResourceExport should be created in the
+Namespace which implements the  Common Area of the ClusterSet. In future releases, some additional tooling
+may become available to automate the creation of such ResourceExport and make ACNP replication easier.
+
+```yaml
+apiVersion: multicluster.crd.antrea.io/v1alpha1
+kind: ResourceExport
+metadata:
+  name: strict-namespace-isolation-for-test-clusterset
+  namespace: antrea-mcs-ns          # Namespace that implements Common Area of test-clusterset
+spec:
+  kind: AntreaClusterNetworkPolicy  
+  name: strict-namespace-isolation  # In each importing cluster, an ACNP of name antrea-mc-strict-namespace-isolation will be created with the spec below
+  clusternetworkpolicy:
+    priority: 1
+    tier: securityops
+    appliedTo:
+      - namespaceSelector: {}       # Selects all Namespaces in the member cluster
+    ingress:
+      - action: Pass
+        from:
+        - namespaces:
+            match: Self            # Skip drop rule for traffic from Pods in the same Namespace
+        - podSelector:
+            matchLabels:
+              k8s-app: kube-dns    # Skip drop rule for traffic from the core-dns components
+      - action: Drop
+        from:
+        - namespaceSelector: {}    # Drop from Pods from all other Namespaces
+```
+
+The above sample spec will create an ACNP in each member cluster which implements strict namespace
+isolation for that cluster.
+
+Note that because the Tier that an ACNP refers to must exist before the ACNP is applied, an importing
+cluster may fail to create the ACNP to be replicated, if the Tier in the ResourceExport spec cannot be
+found in that particular cluster. If there are such failures, the ACNP creation status of failed member
+clusters will be reported back to the Common Area as K8s Events, and can be checked by describing the
+ResourceImport of the original ResourceExport:
+
+```text
+kubectl describe resourceimport -A
+---
+Name:         strict-namespace-isolation-antreaclusternetworkpolicy
+Namespace:    antrea-mcs-ns
+API Version:  multicluster.crd.antrea.io/v1alpha1
+Kind:         ResourceImport
+Spec:
+  Clusternetworkpolicy:
+    Applied To:
+      Namespace Selector:
+    Ingress:
+      Action:          Pass
+      Enable Logging:  false
+      From:
+        Namespaces:
+          Match:  Self
+        Pod Selector:
+          Match Labels:
+            k8s-app:   kube-dns
+      Action:          Drop
+      Enable Logging:  false
+      From:
+        Namespace Selector:
+    Priority:  1
+    Tier:      random
+  Kind:        AntreaClusterNetworkPolicy
+  Name:        strict-namespace-isolation
+  ...
+Events:
+  Type    Reason               Age    From                       Message
+  ----    ------               ----   ----                       -------
+  Warning ACNPImportFailed     2m11s  resourceimport-controller  ACNP Tier random does not exist in the importing cluster test-cluster-west
+```
+
 ## Known Issue
 
 We recommend user to reinstall or update Antrea Multi-cluster controllers through `kubectl apply`.

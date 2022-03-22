@@ -26,7 +26,8 @@ The MemberClusterAnnounce CRD declares a member cluster configuration to the lea
 
 The Common Area is an abstraction in the Antrea Multi-cluster implementation provides a storage
 interface for resource export/import that can be read/written by all member and leader clusters
-in the ClusterSet. The Common Area is implemented with a Namespace in the leader cluster
+in the ClusterSet. The Common Area is implemented with a Namespace in the leader cluster for a
+given ClusterSet.
 
 ## Antrea Multi-cluster Controller
 
@@ -88,3 +89,17 @@ The Service Ports definition will be the same as exported Services, the Endpoint
 IPs from all member clusters. The new created Antrea Multi-cluster Service is just like a regular
 Kubernetes Service, so Pods in a member cluster can access the multi-cluster Service as usual without
 any extra setting.
+
+## Antrea Multi-cluster policy enforcement
+
+At this moment, Antrea does not support Pod-level policy enforcement for cross-cluster traffic. Access
+towards Multi-cluster Services can be regulated with Antrea ClusterNetworkPolicy `toService` rules. In
+each member cluster, users can create an Antrea ClusterNetworkPolicy selecting Pods in that cluster, with
+the imported Mutli-cluster Service name and Namespace in an egress `toService` rule, and the Action to
+take for traffic matching this rule. For more information regarding Antrea ClusterNetworkPolicy (ACNP),
+refer to [this document](../antrea-network-policy.md).
+
+Multi-cluster admins can also specify certain ClusterNetworkPolicies to be replicated across the entire
+ClusterSet. The ACNP to be replicated should be created as a ResourceExport in the leader cluster, and
+the resource export/import pipeline will ensure member clusters receive this ACNP spec to be replicated.
+Each member cluster's Multi-cluster Controller will then create an ACNP in their respective clusters.

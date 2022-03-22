@@ -77,6 +77,8 @@ func NewResourceImportReconciler(client client.Client, scheme *runtime.Scheme, l
 	}
 }
 
+//+kubebuilder:rbac:groups=crd.antrea.io,resources=clusternetworkpolicies,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=crd.antrea.io,resources=tiers,verbs=get;list;watch
 //+kubebuilder:rbac:groups=multicluster.crd.antrea.io,resources=resourceimports,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=multicluster.crd.antrea.io,resources=resourceimports/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=multicluster.crd.antrea.io,resources=resourceimports/finalizers,verbs=update
@@ -84,11 +86,12 @@ func NewResourceImportReconciler(client client.Client, scheme *runtime.Scheme, l
 //+kubebuilder:rbac:groups=multicluster.x-k8s.io,resources=serviceimports/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups="",resources=endpoints,verbs=get;list;watch;update;create;patch;delete
 //+kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch;update;create;patch;delete
+//+kubebuilder:rbac:groups="",resources=events,verbs=create
 
 // Reconcile will attempt to ensure that the imported Resource is installed in local cluster as per the
 // ResourceImport object.
 func (r *ResourceImportReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	klog.V(2).InfoS("reconciling ResourceImport", "resourceimport", req.NamespacedName)
+	klog.V(2).InfoS("Reconciling ResourceImport", "resourceimport", req.NamespacedName)
 	// TODO: Must check whether this ResourceImport must be reconciled by this member cluster. Check `spec.clusters` field.
 	if r.localClusterClient == nil {
 		return ctrl.Result{}, errors.New("localClusterClient has not been initialized properly, no local cluster client")
@@ -104,7 +107,7 @@ func (r *ResourceImportReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	if err != nil {
 		isDeleted = apierrors.IsNotFound(err)
 		if !isDeleted {
-			klog.InfoS("unable to fetch ResourceImport", "resourceimport", req.NamespacedName.String(), "err", err)
+			klog.InfoS("Unable to fetch ResourceImport", "resourceimport", req.NamespacedName.String(), "err", err)
 			return ctrl.Result{}, err
 		} else {
 			resImpObj, exist, err := r.installedResImports.GetByKey(req.NamespacedName.String())
@@ -129,6 +132,11 @@ func (r *ResourceImportReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 			return r.handleResImpDeleteForEndpoints(ctx, &resImp)
 		}
 		return r.handleResImpUpdateForEndpoints(ctx, &resImp)
+	case common.AntreaClusterNetworkPolicyKind:
+		if isDeleted {
+			return r.handleResImpDeleteForClusterNetworkPolicy(ctx, &resImp)
+		}
+		return r.handleResImpUpdateForClusterNetworkPolicy(ctx, &resImp)
 	}
 	// TODO: handle for other ResImport Kinds
 	return ctrl.Result{}, nil
@@ -242,15 +250,14 @@ func (r *ResourceImportReconciler) handleResImpDeleteForService(ctx context.Cont
 	err = r.localClusterClient.Get(ctx, svcName, svc)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
+			klog.V(2).InfoS("Service corresponding to ResourceImport has already been deleted",
+				"service", svcName.String(), "resourceimport", klog.KObj(resImp))
 			return cleanupServiceImport()
 		}
 		return ctrl.Result{}, err
 	}
 	err = r.localClusterClient.Delete(ctx, svc, &client.DeleteOptions{})
 	if err != nil {
-		if apierrors.IsNotFound(err) {
-			return cleanupServiceImport()
-		}
 		return ctrl.Result{}, err
 	}
 	return cleanupServiceImport()
@@ -343,7 +350,7 @@ func (r *ResourceImportReconciler) handleResImpDeleteForEndpoints(ctx context.Co
 }
 
 func getMCService(resImp *multiclusterv1alpha1.ResourceImport) *corev1.Service {
-	mcsPorts := []corev1.ServicePort{}
+	var mcsPorts []corev1.ServicePort
 	for _, p := range resImp.Spec.ServiceImport.Spec.Ports {
 		mcsPorts = append(mcsPorts, corev1.ServicePort{
 			Name:     p.Name,

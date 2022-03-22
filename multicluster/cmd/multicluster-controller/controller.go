@@ -39,6 +39,7 @@ import (
 
 	multiclusterv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
 	multiclustercontrollers "antrea.io/antrea/multicluster/controllers/multicluster"
+	antreacrd "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	"antrea.io/antrea/pkg/apiserver/certificate"
 	// +kubebuilder:scaffold:imports
 )
@@ -59,6 +60,7 @@ func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(k8smcsv1alpha1.AddToScheme(scheme))
 	utilruntime.Must(multiclusterv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(antreacrd.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 }
 

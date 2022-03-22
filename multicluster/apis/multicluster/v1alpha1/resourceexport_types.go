@@ -20,6 +20,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
 )
 
@@ -63,6 +64,8 @@ type ResourceExportSpec struct {
 	Endpoints *EndpointsExport `json:"endpoints,omitempty"`
 	// If exported resource is ExternalEntity.
 	ExternalEntity *ExternalEntityExport `json:"externalentity,omitempty"`
+	// If exported resource is AntreaClusterNetworkPolicy.
+	ClusterNetworkPolicy *v1alpha1.ClusterNetworkPolicySpec `json:"clusternetworkpolicy,omitempty"`
 	// If exported resource Kind is unknown.
 	Raw RawResourceExport `json:"raw,omitempty"`
 }
