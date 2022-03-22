@@ -410,6 +410,20 @@ func (mr *MockTableMockRecorder) GetNext() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNext", reflect.TypeOf((*MockTable)(nil).GetNext))
 }
 
+// GetStageID mocks base method
+func (m *MockTable) GetStageID() openflow.StageID {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetStageID")
+	ret0, _ := ret[0].(openflow.StageID)
+	return ret0
+}
+
+// GetStageID indicates an expected call of GetStageID
+func (mr *MockTableMockRecorder) GetStageID() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetStageID", reflect.TypeOf((*MockTable)(nil).GetStageID))
+}
+
 // SetMissAction mocks base method
 func (m *MockTable) SetMissAction(arg0 openflow.MissActionType) {
 	m.ctrl.T.Helper()
@@ -717,6 +731,20 @@ func (mr *MockActionMockRecorder) Drop() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Drop", reflect.TypeOf((*MockAction)(nil).Drop))
 }
 
+// GotoStage mocks base method
+func (m *MockAction) GotoStage(arg0 openflow.StageID) openflow.FlowBuilder {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GotoStage", arg0)
+	ret0, _ := ret[0].(openflow.FlowBuilder)
+	return ret0
+}
+
+// GotoStage indicates an expected call of GotoStage
+func (mr *MockActionMockRecorder) GotoStage(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GotoStage", reflect.TypeOf((*MockAction)(nil).GotoStage), arg0)
+}
+
 // GotoTable mocks base method
 func (m *MockAction) GotoTable(arg0 byte) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
@@ -885,6 +913,20 @@ func (mr *MockActionMockRecorder) MoveRange(arg0, arg1, arg2, arg3 interface{}) 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MoveRange", reflect.TypeOf((*MockAction)(nil).MoveRange), arg0, arg1, arg2, arg3)
 }
 
+// NextTable mocks base method
+func (m *MockAction) NextTable() openflow.FlowBuilder {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "NextTable")
+	ret0, _ := ret[0].(openflow.FlowBuilder)
+	return ret0
+}
+
+// NextTable indicates an expected call of NextTable
+func (mr *MockActionMockRecorder) NextTable() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NextTable", reflect.TypeOf((*MockAction)(nil).NextTable))
+}
+
 // Normal mocks base method
 func (m *MockAction) Normal() openflow.FlowBuilder {
 	m.ctrl.T.Helper()
@@ -983,18 +1025,22 @@ func (mr *MockActionMockRecorder) Resubmit(arg0, arg1 interface{}) *gomock.Call 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Resubmit", reflect.TypeOf((*MockAction)(nil).Resubmit), arg0, arg1)
 }
 
-// ResubmitToTable mocks base method
-func (m *MockAction) ResubmitToTable(arg0 byte) openflow.FlowBuilder {
+// ResubmitToTables mocks base method
+func (m *MockAction) ResubmitToTables(arg0 ...byte) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ResubmitToTable", arg0)
+	varargs := []interface{}{}
+	for _, a := range arg0 {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "ResubmitToTables", varargs...)
 	ret0, _ := ret[0].(openflow.FlowBuilder)
 	return ret0
 }
 
-// ResubmitToTable indicates an expected call of ResubmitToTable
-func (mr *MockActionMockRecorder) ResubmitToTable(arg0 interface{}) *gomock.Call {
+// ResubmitToTables indicates an expected call of ResubmitToTables
+func (mr *MockActionMockRecorder) ResubmitToTables(arg0 ...interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResubmitToTable", reflect.TypeOf((*MockAction)(nil).ResubmitToTable), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResubmitToTables", reflect.TypeOf((*MockAction)(nil).ResubmitToTables), arg0...)
 }
 
 // SendToController mocks base method

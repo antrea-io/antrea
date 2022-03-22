@@ -763,7 +763,7 @@ func testGratuitousARP(t *testing.T, data *TestData, namespace string) {
 	// be sent 100ms after processing CNI ADD request.
 	time.Sleep(100 * time.Millisecond)
 
-	cmd := []string{"ovs-ofctl", "dump-flows", defaultBridgeName, fmt.Sprintf("table=10,arp,arp_spa=%s", podIP.ipv4.String())}
+	cmd := []string{"ovs-ofctl", "dump-flows", defaultBridgeName, fmt.Sprintf("table=ARPSpoofGuard,arp,arp_spa=%s", podIP.ipv4.String())}
 	stdout, _, err := data.runCommandFromPod(antreaNamespace, antreaPodName, ovsContainerName, cmd)
 	if err != nil {
 		t.Fatalf("Error when querying openflow: %v", err)

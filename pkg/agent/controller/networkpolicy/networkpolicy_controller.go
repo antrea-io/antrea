@@ -143,7 +143,7 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 			c.ofClient.RegisterPacketInHandler(uint8(openflow.PacketInReasonNP), "dnsresponse", c.fqdnController)
 		}
 	}
-	c.reconciler = newReconciler(ofClient, ifaceStore, idAllocator, c.fqdnController, groupCounters, v4Enabled, v6Enabled)
+	c.reconciler = newReconciler(ofClient, ifaceStore, idAllocator, c.fqdnController, groupCounters, v4Enabled, v6Enabled, antreaPolicyEnabled)
 	c.ruleCache = newRuleCache(c.enqueueRule, podUpdateSubscriber, groupIDUpdates)
 	if statusManagerEnabled {
 		c.statusManager = newStatusController(antreaClientGetter, nodeName, c.ruleCache)

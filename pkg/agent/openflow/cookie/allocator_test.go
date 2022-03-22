@@ -46,7 +46,7 @@ func TestConcurrentAllocate(t *testing.T) {
 		var seq []Category
 
 		for i := 0; i < eachTotal; i++ {
-			seq = append(seq, Pod, Node, Default)
+			seq = append(seq, NetworkPolicy, Service, PodConnectivity, Default)
 		}
 		rand.Shuffle(len(seq), func(a, b int) { seq[a], seq[b] = seq[b], seq[a] })
 
