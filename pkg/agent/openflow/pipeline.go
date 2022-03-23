@@ -2094,34 +2094,48 @@ func (f *featureNetworkPolicy) dnsPacketInFlow(conjunctionID uint32) binding.Flo
 		Done()
 }
 
-// localProbeFlow generates the flow to forward locally generated packets to ConntrackCommitTable, bypassing ingress
-// rules of Network Policies. The packets are sent by kubelet to probe the liveness/readiness of local Pods.
-// On Linux and when OVS kernel datapath is used, it identifies locally generated packets by matching the
-// HostLocalSourceMark, otherwise it matches the source IP. The difference is because:
-// 1. On Windows, kube-proxy userspace mode is used, and currently there is no way to distinguish kubelet generated
-//    traffic from kube-proxy proxied traffic.
+// localProbeFlows generates the flows to forward locally generated request packets to stageConntrack directly, bypassing
+// ingress rules of Network Policies. The packets are sent by kubelet to probe the liveness/readiness of local Pods.
+// On Linux and when OVS kernel datapath is used, the probe packets are identified by matching the HostLocalSourceMark.
+// On Windows or when OVS userspace (netdev) datapath is used, we need a different approach because:
+// 1. On Windows, kube-proxy userspace mode is used, and currently there is no way to distinguish kubelet generated traffic
+//    from kube-proxy proxied traffic.
 // 2. pkt_mark field is not properly supported for OVS userspace (netdev) datapath.
-// Note that there is a defect in the latter way that NodePort Service access by external clients will be masqueraded as
-// a local gateway IP to bypass Network Policies. See https://github.com/antrea-io/antrea/issues/280.
-// TODO: Fix it after replacing kube-proxy with AntreaProxy.
-func (f *featurePodConnectivity) localProbeFlow() []binding.Flow {
+// When proxyAll is disabled, the probe packets are identified by matching the source IP is the Antrea gateway IP;
+// otherwise, the packets are identified by matching both the Antrea gateway IP and NotServiceCTMark. Note that, when
+// proxyAll is disabled, currently there is no way to distinguish kubelet generated traffic from kube-proxy proxied traffic
+// only by matching the Antrea gateway IP. There is a defect that NodePort Service access by external clients will be
+// masqueraded as the Antrea gateway IP to bypass NetworkPolicies. See https://github.com/antrea-io/antrea/issues/280.
+func (f *featurePodConnectivity) localProbeFlows() []binding.Flow {
 	cookieID := f.cookieAllocator.Request(f.category).Raw()
 	var flows []binding.Flow
 	if runtime.IsWindowsPlatform() || f.ovsDatapathType == ovsconfig.OVSDatapathNetdev {
+		var ctMarksToMatch []*binding.CtMark
+		if f.proxyAll {
+			ctMarksToMatch = append(ctMarksToMatch, NotServiceCTMark)
+		}
 		for ipProtocol, gatewayIP := range f.gatewayIPs {
 			flows = append(flows, IngressSecurityClassifierTable.ofTable.BuildFlow(priorityHigh).
 				Cookie(cookieID).
 				MatchProtocol(ipProtocol).
+				MatchCTStateRpl(false).
+				MatchCTStateTrk(true).
 				MatchSrcIP(gatewayIP).
+				MatchCTMark(ctMarksToMatch...).
 				Action().GotoStage(stageConntrack).
 				Done())
 		}
 	} else {
-		flows = append(flows, IngressSecurityClassifierTable.ofTable.BuildFlow(priorityHigh).
-			Cookie(cookieID).
-			MatchPktMark(types.HostLocalSourceMark, &types.HostLocalSourceMark).
-			Action().GotoStage(stageConntrack).
-			Done())
+		for _, ipProtocol := range f.ipProtocols {
+			flows = append(flows, IngressSecurityClassifierTable.ofTable.BuildFlow(priorityHigh).
+				Cookie(cookieID).
+				MatchProtocol(ipProtocol).
+				MatchCTStateRpl(false).
+				MatchCTStateTrk(true).
+				MatchPktMark(types.HostLocalSourceMark, &types.HostLocalSourceMark).
+				Action().GotoStage(stageConntrack).
+				Done())
+		}
 	}
 	return flows
 }

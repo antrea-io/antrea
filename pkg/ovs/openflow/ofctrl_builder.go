@@ -244,6 +244,9 @@ func (b *ofFlowBuilder) MatchCTStateSNAT(set bool) FlowBuilder {
 }
 
 func (b *ofFlowBuilder) MatchCTMark(marks ...*CtMark) FlowBuilder {
+	if len(marks) == 0 {
+		return b
+	}
 	var value, mask uint32
 	for _, mark := range marks {
 		value |= mark.GetValue()
