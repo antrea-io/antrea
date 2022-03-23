@@ -155,8 +155,10 @@ var (
 	FromGatewayCTMark     = binding.NewCTMark(ConnSourceCTMarkField, fromGatewayVal)
 	FromBridgeCTMark      = binding.NewCTMark(ConnSourceCTMarkField, fromBridgeVal)
 
-	// CTMark[4]: Mark to indicate DNAT is performed on the connection for Service.
-	ServiceCTMark = binding.NewOneBitCTMark(4)
+	// CTMark[4]: Marks to indicate whether DNAT is performed on the connection for Service.
+	// These CT marks are used in CtZone / CtZoneV6 and SNATCtZone / SNATCtZoneV6.
+	ServiceCTMark    = binding.NewOneBitCTMark(4)
+	NotServiceCTMark = binding.NewOneBitZeroCTMark(4)
 )
 
 // Fields using CT label.
