@@ -688,7 +688,7 @@ func (c *client) InstallGatewayFlows() error {
 	}
 
 	// Add flow to ensure the liveness check packet could be forwarded correctly.
-	flows = append(flows, c.featurePodConnectivity.localProbeFlow(c.ovsDatapathType)...)
+	flows = append(flows, c.featurePodConnectivity.localProbeFlows(c.ovsDatapathType)...)
 	flows = append(flows, c.featurePodConnectivity.l3FwdFlowToGateway()...)
 
 	if err := c.ofEntryOperations.AddAll(flows); err != nil {
@@ -786,7 +786,8 @@ func (c *client) generatePipelines() {
 		c.nodeConfig,
 		c.networkConfig,
 		c.connectUplinkToBridge,
-		c.enableMulticast)
+		c.enableMulticast,
+		c.proxyAll)
 	c.activatedFeatures = append(c.activatedFeatures, c.featurePodConnectivity)
 	c.traceableFeatures = append(c.traceableFeatures, c.featurePodConnectivity)
 

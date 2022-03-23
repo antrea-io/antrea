@@ -40,6 +40,7 @@ type featurePodConnectivity struct {
 	connectUplinkToBridge bool
 	ctZoneSrcField        *binding.RegField
 	enableMulticast       bool
+	proxyAll              bool
 
 	category cookie.Category
 }
@@ -54,7 +55,8 @@ func newFeaturePodConnectivity(
 	nodeConfig *config.NodeConfig,
 	networkConfig *config.NetworkConfig,
 	connectUplinkToBridge bool,
-	enableMulticast bool) *featurePodConnectivity {
+	enableMulticast bool,
+	proxyAll bool) *featurePodConnectivity {
 	ctZones := make(map[binding.Protocol]int)
 	gatewayIPs := make(map[binding.Protocol]net.IP)
 	localCIDRs := make(map[binding.Protocol]net.IPNet)
@@ -91,6 +93,7 @@ func newFeaturePodConnectivity(
 		connectUplinkToBridge: connectUplinkToBridge,
 		ctZoneSrcField:        getZoneSrcField(connectUplinkToBridge),
 		enableMulticast:       enableMulticast,
+		proxyAll:              proxyAll,
 		category:              cookie.PodConnectivity,
 	}
 }
