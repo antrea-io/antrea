@@ -42,7 +42,7 @@ example, to enable `AntreaProxy` on Linux, edit the Agent configuration in the
 | `FlowExporter`          | Agent              | `false` | Alpha | v0.9          | N/A          | N/A        | Yes                |       |
 | `NetworkPolicyStats`    | Agent + Controller | `true`  | Beta  | v0.10         | v1.2         | N/A        | No                 |       |
 | `NodePortLocal`         | Agent              | `true`  | Beta  | v0.13         | v1.4         | N/A        | Yes                | Important user-facing change in v1.2.0 |
-| `Egress`                | Agent + Controller | `false` | Alpha | v1.0          | N/A          | N/A        | Yes                |       |
+| `Egress`                | Agent + Controller | `true`  | Beta  | v1.0          | v1.6         | N/A        | Yes                |       |
 | `NodeIPAM`              | Controller         | `false` | Alpha | v1.4          | N/A          | N/A        | Yes                |       |
 | `AntreaIPAM`            | Agent + Controller | `false` | Alpha | v1.4          | N/A          | N/A        | Yes                |       |
 | `Multicast`             | Agent              | `false` | Alpha | v1.5          | N/A          | N/A        | Yes                |       |

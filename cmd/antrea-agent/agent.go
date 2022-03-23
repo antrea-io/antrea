@@ -64,6 +64,7 @@ import (
 	"antrea.io/antrea/pkg/util/channel"
 	"antrea.io/antrea/pkg/util/cipher"
 	"antrea.io/antrea/pkg/util/k8s"
+	"antrea.io/antrea/pkg/util/runtime"
 	"antrea.io/antrea/pkg/version"
 )
 
@@ -82,6 +83,10 @@ var excludeNodePortDevices = []string{"antrea-egress0", "antrea-ingress0", "kube
 // run starts Antrea agent with the given options and waits for termination signal.
 func run(o *Options) error {
 	klog.Infof("Starting Antrea agent (version %s)", version.GetFullVersion())
+
+	// Windows platform doesn't support Egress feature yet.
+	egressEnabled := features.DefaultFeatureGate.Enabled(features.Egress) && !runtime.IsWindowsPlatform()
+
 	// Create K8s Clientset, CRD Clientset and SharedInformerFactory for the given config.
 	k8sClient, _, crdClient, _, err := k8s.CreateClients(o.config.ClientConnection, o.config.KubeAPIServerOverride)
 	if err != nil {
@@ -124,7 +129,7 @@ func run(o *Options) error {
 	ofClient := openflow.NewClient(o.config.OVSBridge, ovsBridgeMgmtAddr, ovsDatapathType,
 		features.DefaultFeatureGate.Enabled(features.AntreaProxy),
 		features.DefaultFeatureGate.Enabled(features.AntreaPolicy),
-		features.DefaultFeatureGate.Enabled(features.Egress),
+		egressEnabled,
 		features.DefaultFeatureGate.Enabled(features.FlowExporter),
 		o.config.AntreaProxy.ProxyAll,
 		connectUplinkToBridge,
@@ -306,7 +311,7 @@ func run(o *Options) error {
 	var externalIPController *serviceexternalip.ServiceExternalIPController
 	var memberlistCluster *memberlist.Cluster
 
-	if features.DefaultFeatureGate.Enabled(features.Egress) || features.DefaultFeatureGate.Enabled(features.ServiceExternalIP) {
+	if egressEnabled || features.DefaultFeatureGate.Enabled(features.ServiceExternalIP) {
 		externalIPPoolController = externalippool.NewExternalIPPoolController(
 			crdClient, externalIPPoolInformer,
 		)
@@ -325,7 +330,7 @@ func run(o *Options) error {
 			return fmt.Errorf("error creating new memberlist cluster: %v", err)
 		}
 	}
-	if features.DefaultFeatureGate.Enabled(features.Egress) {
+	if egressEnabled {
 		egressController, err = egress.NewEgressController(
 			ofClient, antreaClientProvider, crdClient, ifaceStore, routeClient, nodeConfig.Name, nodeConfig.NodeTransportInterfaceName,
 			memberlistCluster, egressInformer, podUpdateChannel,
@@ -528,12 +533,12 @@ func run(o *Options) error {
 	informerFactory.Start(stopCh)
 	crdInformerFactory.Start(stopCh)
 
-	if features.DefaultFeatureGate.Enabled(features.Egress) || features.DefaultFeatureGate.Enabled(features.ServiceExternalIP) {
+	if egressEnabled || features.DefaultFeatureGate.Enabled(features.ServiceExternalIP) {
 		go externalIPPoolController.Run(stopCh)
 		go memberlistCluster.Run(stopCh)
 	}
 
-	if features.DefaultFeatureGate.Enabled(features.Egress) {
+	if egressEnabled {
 		go egressController.Run(stopCh)
 	}
 
