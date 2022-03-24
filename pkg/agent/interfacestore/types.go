@@ -80,6 +80,8 @@ type InterfaceConfig struct {
 	InterfaceName string
 	IPs           []net.IP
 	MAC           net.HardwareAddr
+	// VLAN ID of the interface
+	VLANID uint16
 	*OVSPortConfig
 	*ContainerInterfaceConfig
 	*TunnelInterfaceConfig
@@ -112,7 +114,8 @@ func NewContainerInterface(
 	podName string,
 	podNamespace string,
 	mac net.HardwareAddr,
-	ips []net.IP) *InterfaceConfig {
+	ips []net.IP,
+	vlanID uint16) *InterfaceConfig {
 	containerConfig := &ContainerInterfaceConfig{
 		ContainerID:  containerID,
 		PodName:      podName,
@@ -122,6 +125,7 @@ func NewContainerInterface(
 		Type:                     ContainerInterface,
 		IPs:                      ips,
 		MAC:                      mac,
+		VLANID:                   vlanID,
 		ContainerInterfaceConfig: containerConfig}
 }
 

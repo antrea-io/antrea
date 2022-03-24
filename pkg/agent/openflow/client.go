@@ -85,7 +85,7 @@ type Client interface {
 	// flows will be installed). Calls to InstallPodFlows are idempotent. Concurrent calls
 	// to InstallPodFlows and / or UninstallPodFlows are supported as long as they are all
 	// for different interfaceNames.
-	InstallPodFlows(interfaceName string, podInterfaceIPs []net.IP, podInterfaceMAC net.HardwareAddr, ofPort uint32) error
+	InstallPodFlows(interfaceName string, podInterfaceIPs []net.IP, podInterfaceMAC net.HardwareAddr, ofPort uint32, vlanID uint16) error
 
 	// UninstallPodFlows removes the connection to the local Pod specified with the
 	// interfaceName. UninstallPodFlows will do nothing if no connection to the Pod was established.
@@ -472,7 +472,7 @@ func (c *client) UninstallNodeFlows(hostname string) error {
 	return c.deleteFlows(c.featurePodConnectivity.nodeCachedFlows, hostname)
 }
 
-func (c *client) InstallPodFlows(interfaceName string, podInterfaceIPs []net.IP, podInterfaceMAC net.HardwareAddr, ofPort uint32) error {
+func (c *client) InstallPodFlows(interfaceName string, podInterfaceIPs []net.IP, podInterfaceMAC net.HardwareAddr, ofPort uint32, vlanID uint16) error {
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
 
@@ -491,9 +491,9 @@ func (c *client) InstallPodFlows(interfaceName string, podInterfaceIPs []net.IP,
 		flows = append(flows, c.featurePodConnectivity.arpSpoofGuardFlow(podInterfaceIPv4, podInterfaceMAC, ofPort))
 	}
 	// Add IP SpoofGuard flows for all validate IPs.
-	flows = append(flows, c.featurePodConnectivity.podIPSpoofGuardFlow(podInterfaceIPs, podInterfaceMAC, ofPort)...)
+	flows = append(flows, c.featurePodConnectivity.podIPSpoofGuardFlow(podInterfaceIPs, podInterfaceMAC, ofPort, vlanID)...)
 	// Add L3 Routing flows to rewrite Pod's dst MAC for all validate IPs.
-	flows = append(flows, c.featurePodConnectivity.l3FwdFlowToPod(localGatewayMAC, podInterfaceIPs, podInterfaceMAC, isAntreaFlexibleIPAM)...)
+	flows = append(flows, c.featurePodConnectivity.l3FwdFlowToPod(localGatewayMAC, podInterfaceIPs, podInterfaceMAC, isAntreaFlexibleIPAM, vlanID)...)
 
 	if c.networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {
 		// In policy-only mode, traffic to local Pod is routed based on destination IP.
@@ -504,7 +504,10 @@ func (c *client) InstallPodFlows(interfaceName string, podInterfaceIPs []net.IP,
 
 	if isAntreaFlexibleIPAM {
 		// Add Pod uplink classifier flows for AntreaFlexibleIPAM Pods.
-		flows = append(flows, c.featurePodConnectivity.podUplinkClassifierFlows(podInterfaceMAC)...)
+		flows = append(flows, c.featurePodConnectivity.podUplinkClassifierFlows(podInterfaceMAC, vlanID)...)
+		if vlanID > 0 {
+			flows = append(flows, c.featurePodConnectivity.podVLANFlow(ofPort, vlanID))
+		}
 	}
 
 	return c.addFlows(c.featurePodConnectivity.podCachedFlows, interfaceName, flows)
@@ -792,7 +795,8 @@ func (c *client) generatePipelines() {
 		c.bridge,
 		c.ovsMetersAreSupported,
 		c.enableDenyTracking,
-		c.enableAntreaPolicy)
+		c.enableAntreaPolicy,
+		c.connectUplinkToBridge)
 	c.activatedFeatures = append(c.activatedFeatures, c.featureNetworkPolicy)
 	c.traceableFeatures = append(c.traceableFeatures, c.featureNetworkPolicy)
 
@@ -1232,6 +1236,9 @@ func (c *client) InstallBridgeUplinkFlows() error {
 		}
 		//TODO: support IPv6
 		flows := c.featurePodConnectivity.hostBridgeUplinkFlows(podCIDRMap)
+		if c.connectUplinkToBridge {
+			flows = append(flows, c.featurePodConnectivity.hostBridgeUplinkVLANFlows()...)
+		}
 		if err := c.ofEntryOperations.AddAll(flows); err != nil {
 			return err
 		}

@@ -43,6 +43,7 @@ type featureService struct {
 	enableProxy           bool
 	proxyAll              bool
 	connectUplinkToBridge bool
+	ctZoneSrcField        *binding.RegField
 
 	category cookie.Category
 }
@@ -91,6 +92,7 @@ func newFeatureService(
 		enableProxy:           enableProxy,
 		proxyAll:              proxyAll,
 		connectUplinkToBridge: connectUplinkToBridge,
+		ctZoneSrcField:        getZoneSrcField(connectUplinkToBridge),
 		category:              cookie.Service,
 	}
 }

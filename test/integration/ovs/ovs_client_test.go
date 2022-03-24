@@ -109,30 +109,34 @@ func TestOVSBridge(t *testing.T) {
 		time.Sleep(time.Second)
 	}
 	assert.Equal(t, expectedDatapathID, datapathID)
+	vlanID := uint16(100)
 
 	deleteAllPorts(t, data.br)
 	checkPorts(0)
 
-	uuid1 := testCreatePort(t, data.br, "p1", "internal")
-	uuid2 := testCreatePort(t, data.br, "p2", "")
-	uuid3 := testCreatePort(t, data.br, "p3", "vxlan")
-	uuid4 := testCreatePort(t, data.br, "p4", "geneve")
+	uuid1 := testCreatePort(t, data.br, "p1", "internal", 0)
+	uuid2 := testCreatePort(t, data.br, "p2", "", 0)
+	uuid3 := testCreatePort(t, data.br, "p3", "vxlan", 0)
+	uuid4 := testCreatePort(t, data.br, "p4", "geneve", 0)
+	uuid5 := testCreatePort(t, data.br, "p5", "", vlanID)
 
-	checkPorts(4)
+	checkPorts(5)
 
 	testDeletePort(t, data.br, uuid1)
 	testDeletePort(t, data.br, uuid2)
 	testDeletePort(t, data.br, uuid3)
 	testDeletePort(t, data.br, uuid4)
+	testDeletePort(t, data.br, uuid5)
 
 	checkPorts(0)
 
-	testCreatePort(t, data.br, "p1", "internal")
-	testCreatePort(t, data.br, "p2", "")
-	testCreatePort(t, data.br, "p3", "vxlan")
-	testCreatePort(t, data.br, "p4", "geneve")
+	testCreatePort(t, data.br, "p1", "internal", 0)
+	testCreatePort(t, data.br, "p2", "", 0)
+	testCreatePort(t, data.br, "p3", "vxlan", 0)
+	testCreatePort(t, data.br, "p4", "geneve", 0)
+	testCreatePort(t, data.br, "p5", "", vlanID)
 
-	checkPorts(4)
+	checkPorts(5)
 
 	deleteAllPorts(t, data.br)
 
@@ -148,7 +152,7 @@ func TestOVSDeletePortIdempotent(t *testing.T) {
 
 	deleteAllPorts(t, data.br)
 
-	uuid := testCreatePort(t, data.br, "p1", "internal")
+	uuid := testCreatePort(t, data.br, "p1", "internal", 0)
 	testDeletePort(t, data.br, uuid)
 	testDeletePort(t, data.br, uuid)
 }
@@ -269,7 +273,7 @@ func deleteAllPorts(t *testing.T, br *ovsconfig.OVSBridge) {
 
 var ofPortRequest int32 = 1
 
-func testCreatePort(t *testing.T, br *ovsconfig.OVSBridge, name string, ifType string) string {
+func testCreatePort(t *testing.T, br *ovsconfig.OVSBridge, name string, ifType string, vlanID uint16) string {
 	var err error
 	var uuid string
 	var externalIDs map[string]interface{}
@@ -278,7 +282,11 @@ func testCreatePort(t *testing.T, br *ovsconfig.OVSBridge, name string, ifType s
 	switch ifType {
 	case "":
 		externalIDs = map[string]interface{}{"k1": "v1", "k2": "v2"}
-		uuid, err = br.CreatePort(name, name, externalIDs)
+		if vlanID == 0 {
+			uuid, err = br.CreatePort(name, name, externalIDs)
+		} else {
+			uuid, err = br.CreateAccessPort(name, name, externalIDs, vlanID)
+		}
 	case "internal":
 		externalIDs = map[string]interface{}{"k1": "v1", "k2": "v2"}
 		uuid, err = br.CreateInternalPort(name, ofPortRequest, externalIDs)
@@ -310,6 +318,7 @@ func testCreatePort(t *testing.T, br *ovsconfig.OVSBridge, name string, ifType s
 	if ifType != "" {
 		assert.Equal(t, ofPort, port.OFPort)
 	}
+	assert.Equal(t, vlanID, port.VLANID)
 
 	for k, v := range externalIDs {
 		rv, ok := port.ExternalIDs[k]

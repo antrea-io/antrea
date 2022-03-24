@@ -645,10 +645,10 @@ func testProxyServiceSessionAffinity(ipFamily *corev1.IPFamily, ingressIPs []str
 	require.NoError(t, err)
 	require.NoError(t, data.podWaitForRunning(defaultTimeout, nginx, testNamespace))
 	svc, err := data.createNginxClusterIPService(nginx, testNamespace, true, ipFamily)
-	defer data.deleteServiceAndWait(defaultTimeout, nginx)
+	defer data.deleteServiceAndWait(defaultTimeout, nginx, testNamespace)
 	require.NoError(t, err)
 	_, err = data.createNginxLoadBalancerService(true, ingressIPs, ipFamily)
-	defer data.deleteServiceAndWait(defaultTimeout, nginxLBService)
+	defer data.deleteServiceAndWait(defaultTimeout, nginxLBService, testNamespace)
 	require.NoError(t, err)
 
 	busyboxPod := randName("busybox-")
@@ -724,7 +724,7 @@ func testProxyHairpin(t *testing.T, isIPv6 bool) {
 	// Create a ClusterIP Service.
 	serviceClusterIP := fmt.Sprintf("clusterip-%v", isIPv6)
 	clusterIPSvc, err := data.createAgnhostClusterIPService(serviceClusterIP, true, &ipProtocol)
-	defer data.deleteServiceAndWait(defaultTimeout, serviceClusterIP)
+	defer data.deleteServiceAndWait(defaultTimeout, serviceClusterIP, testNamespace)
 	require.NoError(t, err)
 
 	// Create two NodePort Services. The externalTrafficPolicy of one Service is Cluster, and the externalTrafficPolicy
@@ -733,7 +733,7 @@ func testProxyHairpin(t *testing.T, isIPv6 bool) {
 	serviceNodePortCluster := fmt.Sprintf("nodeport-cluster-%v", isIPv6)
 	serviceNodePortLocal := fmt.Sprintf("nodeport-local-%v", isIPv6)
 	nodePortSvc, err := data.createAgnhostNodePortService(serviceNodePortCluster, true, false, &ipProtocol)
-	defer data.deleteServiceAndWait(defaultTimeout, serviceNodePortCluster)
+	defer data.deleteServiceAndWait(defaultTimeout, serviceNodePortCluster, testNamespace)
 	require.NoError(t, err)
 	for _, port := range nodePortSvc.Spec.Ports {
 		if port.NodePort != 0 {
@@ -744,7 +744,7 @@ func testProxyHairpin(t *testing.T, isIPv6 bool) {
 	require.NotEqual(t, "", nodePortCluster, "NodePort port number should not be empty")
 	nodePortSvc, err = data.createAgnhostNodePortService(serviceNodePortLocal, true, true, &ipProtocol)
 	require.NoError(t, err)
-	defer data.deleteServiceAndWait(defaultTimeout, serviceNodePortLocal)
+	defer data.deleteServiceAndWait(defaultTimeout, serviceNodePortLocal, testNamespace)
 	for _, port := range nodePortSvc.Spec.Ports {
 		if port.NodePort != 0 {
 			nodePortLocal = fmt.Sprint(port.NodePort)
@@ -930,7 +930,7 @@ func testProxyEndpointLifeCycle(ipFamily *corev1.IPFamily, data *TestData, t *te
 	nginxIPs, err := data.podWaitForIPs(defaultTimeout, nginx, testNamespace)
 	require.NoError(t, err)
 	_, err = data.createNginxClusterIPService(nginx, testNamespace, false, ipFamily)
-	defer data.deleteServiceAndWait(defaultTimeout, nginx)
+	defer data.deleteServiceAndWait(defaultTimeout, nginx, testNamespace)
 	require.NoError(t, err)
 
 	// Hold on to make sure that the Service is realized.
@@ -1030,10 +1030,10 @@ func testProxyServiceLifeCycle(ipFamily *corev1.IPFamily, ingressIPs []string, d
 		nginxIP = nginxIPs.ipv4.String()
 	}
 	svc, err := data.createNginxClusterIPService(nginx, testNamespace, false, ipFamily)
-	defer data.deleteServiceAndWait(defaultTimeout, nginx)
+	defer data.deleteServiceAndWait(defaultTimeout, nginx, testNamespace)
 	require.NoError(t, err)
 	_, err = data.createNginxLoadBalancerService(false, ingressIPs, ipFamily)
-	defer data.deleteServiceAndWait(defaultTimeout, nginxLBService)
+	defer data.deleteServiceAndWait(defaultTimeout, nginxLBService, testNamespace)
 	require.NoError(t, err)
 	agentName, err := data.getAntreaPodOnNode(nodeName)
 	require.NoError(t, err)
@@ -1086,8 +1086,8 @@ func testProxyServiceLifeCycle(ipFamily *corev1.IPFamily, ingressIPs []string, d
 		}
 	}
 
-	require.NoError(t, data.deleteService(nginx))
-	require.NoError(t, data.deleteService(nginxLBService))
+	require.NoError(t, data.deleteService(testNamespace, nginx))
+	require.NoError(t, data.deleteService(testNamespace, nginxLBService))
 
 	// Hold on to make sure that the Service is realized.
 	time.Sleep(3 * time.Second)

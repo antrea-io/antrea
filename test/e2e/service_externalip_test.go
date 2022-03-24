@@ -630,7 +630,7 @@ func testExternalIPAccess(t *testing.T, data *TestData) {
 					}
 					service, err := data.createServiceWithAnnotations(et.serviceName, testNamespace, port, port, corev1.ProtocolTCP, map[string]string{"app": "agnhost"}, false, et.externalTrafficPolicyLocal, corev1.ServiceTypeLoadBalancer, &ipFamily, annotations)
 					require.NoError(t, err)
-					defer data.deleteService(service.Name)
+					defer data.deleteService(service.Namespace, service.Name)
 
 					externalIP, host, err := waitExternalIPConfigured(service)
 					require.NoError(t, err)

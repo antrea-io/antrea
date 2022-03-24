@@ -37,10 +37,7 @@ func TestCopyToBuilder(t *testing.T) {
 		Cookie(uint64(1004)).
 		MatchRegFieldWithValue(testField, 0x101).
 		MatchCTStateNew(true).MatchCTStateTrk(true).
-		Action().CT(
-		true,
-		t1,
-		0x1234).
+		Action().CT(true, t1, 0x1234, nil).
 		LoadToCtMark(mark).
 		MoveToLabel(NxmFieldSrcMAC, &Range{0, 47}, &Range{0, 47}).CTDone().
 		Done()

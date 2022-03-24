@@ -905,7 +905,7 @@ func prepareFlows(table binding.Table) ([]binding.Flow, []*ExpectFlow) {
 			Done(),
 		table.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
 			Cookie(getCookieID()).
-			Action().CT(false, table.GetNext(), ctZone).CTDone().
+			Action().CT(false, table.GetNext(), ctZone, nil).CTDone().
 			Done(),
 		table.BuildFlow(priorityNormal+10).MatchProtocol(binding.ProtocolIP).
 			Cookie(getCookieID()).
@@ -918,10 +918,7 @@ func prepareFlows(table binding.Table) ([]binding.Flow, []*ExpectFlow) {
 			Cookie(getCookieID()).
 			MatchRegMark(fromGatewayMark).
 			MatchCTStateNew(true).MatchCTStateTrk(true).
-			Action().CT(
-			true,
-			table.GetNext(),
-			ctZone).
+			Action().CT(true, table.GetNext(), ctZone, nil).
 			LoadToCtMark(gatewayCTMark).CTDone().
 			Done(),
 		table.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
@@ -939,7 +936,7 @@ func prepareFlows(table binding.Table) ([]binding.Flow, []*ExpectFlow) {
 		table.BuildFlow(priorityNormal-10).MatchProtocol(binding.ProtocolIP).
 			Cookie(getCookieID()).
 			MatchCTStateNew(true).MatchCTStateTrk(true).
-			Action().CT(true, table.GetNext(), ctZone).CTDone().
+			Action().CT(true, table.GetNext(), ctZone, nil).CTDone().
 			Done(),
 		table.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
 			Cookie(getCookieID()).
@@ -1061,13 +1058,13 @@ func prepareNATflows(table binding.Table) ([]binding.Flow, []*ExpectFlow) {
 	dnatMark2 := binding.NewOneBitRegMark(marksReg, 20, "DNATMark2")
 	flows := []binding.Flow{
 		table.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
-			Action().CT(false, table.GetNext(), ctZone).NAT().CTDone().
+			Action().CT(false, table.GetNext(), ctZone, nil).NAT().CTDone().
 			Cookie(getCookieID()).
 			Done(),
 		table.BuildFlow(priorityNormal).
 			MatchProtocol(binding.ProtocolIP).
 			MatchRegMark(snatMark1).
-			Action().CT(true, table.GetNext(), ctZone).
+			Action().CT(true, table.GetNext(), ctZone, nil).
 			SNAT(natIPRange1, nil).
 			LoadToCtMark(snatCTMark).CTDone().
 			Cookie(getCookieID()).
@@ -1075,7 +1072,7 @@ func prepareNATflows(table binding.Table) ([]binding.Flow, []*ExpectFlow) {
 		table.BuildFlow(priorityNormal).
 			MatchProtocol(binding.ProtocolIP).
 			MatchRegMark(snatMark2).
-			Action().CT(true, table.GetNext(), ctZone).
+			Action().CT(true, table.GetNext(), ctZone, nil).
 			SNAT(natIPRange2, nil).
 			LoadToCtMark(snatCTMark).CTDone().
 			Cookie(getCookieID()).
@@ -1083,7 +1080,7 @@ func prepareNATflows(table binding.Table) ([]binding.Flow, []*ExpectFlow) {
 		table.BuildFlow(priorityNormal).
 			MatchProtocol(binding.ProtocolIP).
 			MatchRegMark(dnatMark1).
-			Action().CT(true, table.GetNext(), ctZone).
+			Action().CT(true, table.GetNext(), ctZone, nil).
 			DNAT(natIPRange1, nil).
 			LoadToCtMark(snatCTMark).CTDone().
 			Cookie(getCookieID()).
@@ -1091,7 +1088,7 @@ func prepareNATflows(table binding.Table) ([]binding.Flow, []*ExpectFlow) {
 		table.BuildFlow(priorityNormal).
 			MatchProtocol(binding.ProtocolIP).
 			MatchRegMark(dnatMark2).
-			Action().CT(true, table.GetNext(), ctZone).
+			Action().CT(true, table.GetNext(), ctZone, nil).
 			DNAT(natIPRange2, nil).
 			LoadToCtMark(snatCTMark).CTDone().
 			Cookie(getCookieID()).

@@ -44,20 +44,22 @@ func testClusterIP(t *testing.T, isIPv6 bool) {
 	}
 	defer teardownTest(t, data)
 
-	data.testClusterIP(t, isIPv6, testNamespace)
+	data.testClusterIP(t, isIPv6, testNamespace, testNamespace)
 }
 
-func (data *TestData) testClusterIP(t *testing.T, isIPv6 bool, namespace string) {
+func (data *TestData) testClusterIP(t *testing.T, isIPv6 bool, clientNamespace, serverNamespace string) {
 	nodes := []string{nodeName(0), nodeName(1)}
 	clients := make(map[string]string)
 	for idx, node := range nodes {
-		podName, _, _ := createAndWaitForPod(t, data, data.createAgnhostPodOnNode, fmt.Sprintf("client-%d-", idx), node, namespace, false)
+		podName, _, cleanupFunc := createAndWaitForPod(t, data, data.createAgnhostPodOnNode, fmt.Sprintf("client-%d-", idx), node, clientNamespace, false)
 		clients[node] = podName
+		defer cleanupFunc()
 	}
 	hostNetworkClients := make(map[string]string)
 	for idx, node := range nodes {
-		podName, _, _ := createAndWaitForPod(t, data, data.createAgnhostPodOnNode, fmt.Sprintf("hostnet-client-%d-", idx), node, namespace, true)
+		podName, _, cleanupFunc := createAndWaitForPod(t, data, data.createAgnhostPodOnNode, fmt.Sprintf("hostnet-client-%d-", idx), node, clientNamespace, true)
 		hostNetworkClients[node] = podName
+		defer cleanupFunc()
 	}
 
 	nginx := fmt.Sprintf("nginx-%v", isIPv6)
@@ -66,20 +68,24 @@ func (data *TestData) testClusterIP(t *testing.T, isIPv6 bool, namespace string)
 	if isIPv6 {
 		ipProtocol = corev1.IPv6Protocol
 	}
-	clusterIPSvc, err := data.createNginxClusterIPService(fmt.Sprintf("nginx-%v", isIPv6), namespace, true, &ipProtocol)
+	clusterIPSvc, err := data.createNginxClusterIPService(fmt.Sprintf("nginx-%v", isIPv6), serverNamespace, true, &ipProtocol)
 	require.NoError(t, err)
+	defer data.deleteService(clusterIPSvc.Namespace, clusterIPSvc.Name)
 	require.NotEqual(t, "", clusterIPSvc.Spec.ClusterIP, "ClusterIP should not be empty")
 	url := net.JoinHostPort(clusterIPSvc.Spec.ClusterIP, "80")
 
-	createAndWaitForPod(t, data, data.createNginxPodOnNode, nginx, nodeName(0), namespace, false)
+	_, _, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, nginx, nodeName(0), serverNamespace, false)
+	defer cleanupFunc()
 	t.Run("Non-HostNetwork Endpoints", func(t *testing.T) {
-		testClusterIPCases(t, data, url, clients, hostNetworkClients, namespace)
+		testClusterIPCases(t, data, url, clients, hostNetworkClients, clientNamespace)
 	})
 
-	require.NoError(t, data.deletePod(namespace, nginx))
-	createAndWaitForPod(t, data, data.createNginxPodOnNode, hostNginx, nodeName(0), namespace, true)
+	require.NoError(t, data.deletePod(serverNamespace, nginx))
+	_, _, cleanupFunc = createAndWaitForPod(t, data, data.createNginxPodOnNode, hostNginx, nodeName(0), serverNamespace, true)
+	defer cleanupFunc()
 	t.Run("HostNetwork Endpoints", func(t *testing.T) {
-		testClusterIPCases(t, data, url, clients, hostNetworkClients, namespace)
+		skipIfNamespaceIsNotEqual(t, serverNamespace, testNamespace)
+		testClusterIPCases(t, data, url, clients, hostNetworkClients, clientNamespace)
 	})
 }
 
@@ -87,6 +93,7 @@ func testClusterIPCases(t *testing.T, data *TestData, url string, clients, hostN
 	t.Run("All Nodes can access Service ClusterIP", func(t *testing.T) {
 		skipIfProxyAllDisabled(t, data)
 		skipIfKubeProxyEnabled(t, data)
+		skipIfNamespaceIsNotEqual(t, namespace, testNamespace)
 		for node, pod := range hostNetworkClients {
 			testClusterIPFromPod(t, data, url, node, pod, true, namespace)
 		}
@@ -129,10 +136,10 @@ func TestNodePortWindows(t *testing.T) {
 	}
 	defer teardownTest(t, data)
 
-	data.testNodePort(t, true, testNamespace)
+	data.testNodePort(t, true, testNamespace, testNamespace)
 }
 
-func (data *TestData) testNodePort(t *testing.T, isWindows bool, namespace string) {
+func (data *TestData) testNodePort(t *testing.T, isWindows bool, clientNamespace, serverNamespace string) {
 	svcName := "agnhost"
 	svcNode := ""
 	if isWindows {
@@ -140,7 +147,7 @@ func (data *TestData) testNodePort(t *testing.T, isWindows bool, namespace strin
 	} else {
 		svcNode = nodeName(1)
 	}
-	svc, cleanup := data.createAgnhostServiceAndBackendPods(t, svcName, namespace, svcNode, corev1.ServiceTypeNodePort)
+	svc, cleanup := data.createAgnhostServiceAndBackendPods(t, svcName, serverNamespace, svcNode, corev1.ServiceTypeNodePort)
 	defer cleanup()
 	t.Logf("%s Service is ready", svcName)
 
@@ -148,9 +155,9 @@ func (data *TestData) testNodePort(t *testing.T, isWindows bool, namespace strin
 	// It doesn't need to be the control-plane for e2e test and other Linux workers will work as well. However, in this
 	// e2e framework, nodeName(0)/Control-plane Node is guaranteed to be a Linux one.
 	clientName := "busybox-client"
-	require.NoError(t, data.createBusyboxPodOnNode(clientName, namespace, nodeName(0), false))
-	defer data.deletePodAndWait(defaultTimeout, clientName, namespace)
-	podIPs, err := data.podWaitForIPs(defaultTimeout, clientName, namespace)
+	require.NoError(t, data.createBusyboxPodOnNode(clientName, clientNamespace, nodeName(0), false))
+	defer data.deletePodAndWait(defaultTimeout, clientName, clientNamespace)
+	podIPs, err := data.podWaitForIPs(defaultTimeout, clientName, clientNamespace)
 	require.NoError(t, err)
 	t.Logf("Created client Pod IPs %v", podIPs.ipStrings)
 
@@ -158,7 +165,7 @@ func (data *TestData) testNodePort(t *testing.T, isWindows bool, namespace strin
 	nodePort := int(svc.Spec.Ports[0].NodePort)
 	url := fmt.Sprintf("http://%s:%d", nodeIP, nodePort)
 
-	stdout, stderr, err := data.runWgetCommandOnBusyboxWithRetry(clientName, namespace, url, 5)
+	stdout, stderr, err := data.runWgetCommandOnBusyboxWithRetry(clientName, clientNamespace, url, 5)
 	if err != nil {
 		t.Errorf("Error when running 'wget -O - %s' from Pod '%s', stdout: %s, stderr: %s, error: %v",
 			url, clientName, stdout, stderr, err)
@@ -186,7 +193,7 @@ func (data *TestData) createAgnhostServiceAndBackendPods(t *testing.T, name, nam
 
 	cleanup := func() {
 		data.deletePodAndWait(defaultTimeout, name, namespace)
-		data.deleteServiceAndWait(defaultTimeout, name)
+		data.deleteServiceAndWait(defaultTimeout, name, namespace)
 	}
 
 	return svc, cleanup

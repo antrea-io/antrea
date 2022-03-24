@@ -39,11 +39,12 @@ var serviceProtocolMap = map[uint8]corev1.Protocol{
 }
 
 type ConntrackConnectionStore struct {
-	connDumper           ConnTrackDumper
-	v4Enabled            bool
-	v6Enabled            bool
-	networkPolicyQuerier querier.AgentNetworkPolicyInfoQuerier
-	pollInterval         time.Duration
+	connDumper            ConnTrackDumper
+	v4Enabled             bool
+	v6Enabled             bool
+	networkPolicyQuerier  querier.AgentNetworkPolicyInfoQuerier
+	pollInterval          time.Duration
+	connectUplinkToBridge bool
 	connectionStore
 }
 
@@ -57,12 +58,13 @@ func NewConntrackConnectionStore(
 	o *flowexporter.FlowExporterOptions,
 ) *ConntrackConnectionStore {
 	return &ConntrackConnectionStore{
-		connDumper:           connTrackDumper,
-		v4Enabled:            v4Enabled,
-		v6Enabled:            v6Enabled,
-		networkPolicyQuerier: npQuerier,
-		pollInterval:         o.PollInterval,
-		connectionStore:      NewConnectionStore(ifaceStore, proxier, o),
+		connDumper:            connTrackDumper,
+		v4Enabled:             v4Enabled,
+		v6Enabled:             v6Enabled,
+		networkPolicyQuerier:  npQuerier,
+		pollInterval:          o.PollInterval,
+		connectionStore:       NewConnectionStore(ifaceStore, proxier, o),
+		connectUplinkToBridge: o.ConnectUplinkToBridge,
 	}
 }
 
@@ -121,10 +123,18 @@ func (cs *ConntrackConnectionStore) Poll() ([]int, error) {
 	var zones []uint16
 	var connsLens []int
 	if cs.v4Enabled {
-		zones = append(zones, openflow.CtZone)
+		if cs.connectUplinkToBridge {
+			zones = append(zones, uint16(openflow.IPCtZoneTypeRegMark.GetValue()<<12))
+		} else {
+			zones = append(zones, openflow.CtZone)
+		}
 	}
 	if cs.v6Enabled {
-		zones = append(zones, openflow.CtZoneV6)
+		if cs.connectUplinkToBridge {
+			zones = append(zones, uint16(openflow.IPv6CtZoneTypeRegMark.GetValue()<<12))
+		} else {
+			zones = append(zones, openflow.CtZoneV6)
+		}
 	}
 	var totalConns int
 	for _, zone := range zones {

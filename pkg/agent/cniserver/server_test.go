@@ -249,7 +249,7 @@ func TestIPAMServiceMultiDriver(t *testing.T) {
 	ips := []string{"10.1.2.100/24,10.1.2.1,4"}
 	routes := []string{"10.0.0.0/8,10.1.2.1", "0.0.0.0/0,10.1.2.1"}
 	dns := []string{"192.168.100.1"}
-	ipamResult := ipamtest.GenerateIPAMResult(cniVersion, ips, routes, dns)
+	ipamResult := &ipam.IPAMResult{Result: *ipamtest.GenerateIPAMResult(cniVersion, ips, routes, dns)}
 
 	t.Run("Error on ADD for first registered driver", func(t *testing.T) {
 		mockDriverA.EXPECT().Add(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil, fmt.Errorf("IPAM add error"))
@@ -515,7 +515,7 @@ func TestValidateOVSInterface(t *testing.T) {
 	hostIface := &current.Interface{Name: hostIfaceName}
 	result.Interfaces = []*current.Interface{hostIface, containerIface}
 	portUUID := uuid.New().String()
-	containerConfig := buildContainerConfig(hostIfaceName, containerID, testPodNameA, testPodNamespace, containerIface, result.IPs)
+	containerConfig := buildContainerConfig(hostIfaceName, containerID, testPodNameA, testPodNamespace, containerIface, result.IPs, 0)
 	containerConfig.OVSPortConfig = &interfacestore.OVSPortConfig{PortUUID: portUUID}
 
 	ifaceStore.AddInterface(containerConfig)
@@ -562,7 +562,8 @@ func TestRemoveInterface(t *testing.T) {
 			podName,
 			testPodNamespace,
 			containerMAC,
-			[]net.IP{containerIP})
+			[]net.IP{containerIP},
+			0)
 		containerConfig.OVSPortConfig = &interfacestore.OVSPortConfig{PortUUID: fakePortUUID, OFPort: 0}
 	}
 
@@ -612,7 +613,7 @@ func TestBuildOVSPortExternalIDs(t *testing.T) {
 	containerIP1 := net.ParseIP("10.1.2.100")
 	containerIP2 := net.ParseIP("2001:fd1a::2")
 	containerIPs := []net.IP{containerIP1, containerIP2}
-	containerConfig := interfacestore.NewContainerInterface("pod1-abcd", containerID, "test-1", "t1", containerMAC, containerIPs)
+	containerConfig := interfacestore.NewContainerInterface("pod1-abcd", containerID, "test-1", "t1", containerMAC, containerIPs, 0)
 	externalIds := BuildOVSPortExternalIDs(containerConfig)
 	parsedIP, existed := externalIds[ovsExternalIDIP]
 	parsedIPStr := parsedIP.(string)

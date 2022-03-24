@@ -38,6 +38,7 @@ type featurePodConnectivity struct {
 	networkConfig *config.NetworkConfig
 
 	connectUplinkToBridge bool
+	ctZoneSrcField        *binding.RegField
 	enableMulticast       bool
 
 	category cookie.Category
@@ -84,6 +85,7 @@ func newFeaturePodConnectivity(
 		nodeConfig:            nodeConfig,
 		networkConfig:         networkConfig,
 		connectUplinkToBridge: connectUplinkToBridge,
+		ctZoneSrcField:        getZoneSrcField(connectUplinkToBridge),
 		enableMulticast:       enableMulticast,
 		category:              cookie.PodConnectivity,
 	}
