@@ -61,8 +61,8 @@ data:
     under the License is distributed on an \"AS IS\" BASIS,\n# WITHOUT WARRANTIES
     OR CONDITIONS OF ANY KIND, either express or implied.\n# See the License for the
     specific language governing permissions and\n# limitations under the License.\n\nset
-    -e\nclickhouse client -n -h 127.0.0.1 <<-EOSQL\n\n    CREATE TABLE IF NOT EXISTS
-    flows (\n        timeInserted DateTime DEFAULT now(),\n        flowStartSeconds
+    -e\nclickhouse client -n -h 127.0.0.1 --port 9000 <<-EOSQL\n\n    CREATE TABLE
+    IF NOT EXISTS flows (\n        timeInserted DateTime DEFAULT now(),\n        flowStartSeconds
     DateTime,\n        flowEndSeconds DateTime,\n        flowEndSecondsFromSourceNode
     DateTime,\n        flowEndSecondsFromDestinationNode DateTime,\n        flowEndReason
     UInt8,\n        sourceIP String,\n        destinationIP String,\n        sourceTransportPort
@@ -145,7 +145,7 @@ data:
     \   ORDER BY (timeCreated);\n    \nEOSQL\n"
 kind: ConfigMap
 metadata:
-  name: clickhouse-mounted-configmap-dkbmg82ctg
+  name: clickhouse-mounted-configmap-2mfk7kmcgt
   namespace: flow-visibility
 ---
 apiVersion: v1
@@ -4903,8 +4903,16 @@ spec:
       clickhouse_operator/networks/ip: ::/0
   defaults:
     templates:
+      hostTemplate: host-template
       podTemplate: pod-template
+      serviceTemplate: service-template
   templates:
+    hostTemplates:
+    - name: host-template
+      spec:
+        httpPort: 8123
+        interserverHTTPPort: 9009
+        tcpPort: 9000
     podTemplates:
     - name: pod-template
       spec:
@@ -4938,9 +4946,18 @@ spec:
           name: clickhouse-monitor
         volumes:
         - configMap:
-            name: clickhouse-mounted-configmap-dkbmg82ctg
+            name: clickhouse-mounted-configmap-2mfk7kmcgt
           name: clickhouse-configmap-volume
         - emptyDir:
             medium: Memory
             sizeLimit: 8Gi
           name: clickhouse-storage-volume
+    serviceTemplates:
+    - name: service-template
+      spec:
+        ports:
+        - name: http
+          port: 8123
+        - name: tcp
+          port: 9000
+        type: LoadBalancer

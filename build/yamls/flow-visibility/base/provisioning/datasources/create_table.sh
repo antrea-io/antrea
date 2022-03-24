@@ -15,7 +15,7 @@
 # limitations under the License.
 
 set -e
-clickhouse client -n -h 127.0.0.1 <<-EOSQL
+clickhouse client -n -h 127.0.0.1 --port 9000 <<-EOSQL
 
     CREATE TABLE IF NOT EXISTS flows (
         timeInserted DateTime DEFAULT now(),

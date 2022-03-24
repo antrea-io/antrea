@@ -26,7 +26,24 @@ spec:
   defaults:
     templates:
       podTemplate: pod-template
+      hostTemplate: host-template
+      serviceTemplate: service-template
   templates:
+    hostTemplates:
+    - name: host-template
+      spec:
+        httpPort: 8123
+        tcpPort: 9000
+        interserverHTTPPort: 9009
+    serviceTemplates:
+      - name: service-template
+        spec:
+          ports:
+            - name: http
+              port: 8123
+            - name: tcp
+              port: 9000
+          type: LoadBalancer
     podTemplates:
       - name: pod-template
         spec:
