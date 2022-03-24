@@ -47,14 +47,14 @@ var (
 	nsDefault = newNamespace("default", map[string]string{"company": "default"})
 	nsOther   = newNamespace("other", map[string]string{"company": "other"})
 	// Fake groups
-	groupPodFooType1             = &group{groupType: groupType1, groupName: "groupPodFooType1", groupSelector: types.NewGroupSelector("default", &metav1.LabelSelector{MatchLabels: map[string]string{"app": "foo"}}, nil, nil)}
-	groupPodFooType2             = &group{groupType: groupType2, groupName: "groupPodFooType2", groupSelector: types.NewGroupSelector("default", &metav1.LabelSelector{MatchLabels: map[string]string{"app": "foo"}}, nil, nil)}
-	groupPodBarType1             = &group{groupType: groupType1, groupName: "groupPodBarType1", groupSelector: types.NewGroupSelector("default", &metav1.LabelSelector{MatchLabels: map[string]string{"app": "bar"}}, nil, nil)}
-	groupEEFooType1              = &group{groupType: groupType1, groupName: "groupEEFooType1", groupSelector: types.NewGroupSelector("default", nil, nil, &metav1.LabelSelector{MatchLabels: map[string]string{"app": "foo"}})}
-	groupEEFooType2              = &group{groupType: groupType2, groupName: "groupEEFooType2", groupSelector: types.NewGroupSelector("default", nil, nil, &metav1.LabelSelector{MatchLabels: map[string]string{"app": "foo"}})}
-	groupPodFooAllNamespaceType1 = &group{groupType: groupType1, groupName: "groupPodFooAllNamespaceType1", groupSelector: types.NewGroupSelector("", &metav1.LabelSelector{MatchLabels: map[string]string{"app": "foo"}}, nil, nil)}
-	groupPodAllNamespaceType1    = &group{groupType: groupType1, groupName: "groupPodAllNamespaceType1", groupSelector: types.NewGroupSelector("", nil, &metav1.LabelSelector{}, nil)}
-	groupEEFooAllNamespaceType1  = &group{groupType: groupType1, groupName: "groupEEFooAllNamespaceType1", groupSelector: types.NewGroupSelector("", nil, &metav1.LabelSelector{}, &metav1.LabelSelector{MatchLabels: map[string]string{"app": "foo"}})}
+	groupPodFooType1             = &group{groupType: groupType1, groupName: "groupPodFooType1", groupSelector: types.NewGroupSelector("default", &metav1.LabelSelector{MatchLabels: map[string]string{"app": "foo"}}, nil, nil, nil)}
+	groupPodFooType2             = &group{groupType: groupType2, groupName: "groupPodFooType2", groupSelector: types.NewGroupSelector("default", &metav1.LabelSelector{MatchLabels: map[string]string{"app": "foo"}}, nil, nil, nil)}
+	groupPodBarType1             = &group{groupType: groupType1, groupName: "groupPodBarType1", groupSelector: types.NewGroupSelector("default", &metav1.LabelSelector{MatchLabels: map[string]string{"app": "bar"}}, nil, nil, nil)}
+	groupEEFooType1              = &group{groupType: groupType1, groupName: "groupEEFooType1", groupSelector: types.NewGroupSelector("default", nil, nil, &metav1.LabelSelector{MatchLabels: map[string]string{"app": "foo"}}, nil)}
+	groupEEFooType2              = &group{groupType: groupType2, groupName: "groupEEFooType2", groupSelector: types.NewGroupSelector("default", nil, nil, &metav1.LabelSelector{MatchLabels: map[string]string{"app": "foo"}}, nil)}
+	groupPodFooAllNamespaceType1 = &group{groupType: groupType1, groupName: "groupPodFooAllNamespaceType1", groupSelector: types.NewGroupSelector("", &metav1.LabelSelector{MatchLabels: map[string]string{"app": "foo"}}, nil, nil, nil)}
+	groupPodAllNamespaceType1    = &group{groupType: groupType1, groupName: "groupPodAllNamespaceType1", groupSelector: types.NewGroupSelector("", nil, &metav1.LabelSelector{}, nil, nil)}
+	groupEEFooAllNamespaceType1  = &group{groupType: groupType1, groupName: "groupEEFooAllNamespaceType1", groupSelector: types.NewGroupSelector("", nil, &metav1.LabelSelector{}, &metav1.LabelSelector{MatchLabels: map[string]string{"app": "foo"}}, nil)}
 )
 
 type group struct {
@@ -124,28 +124,28 @@ func TestGroupEntityIndexGetEntities(t *testing.T) {
 			name:                     "namespace scoped pod selector",
 			existingPods:             []*v1.Pod{podFoo1, podFoo2, podBar1, podFoo1InOtherNamespace},
 			existingExternalEntities: []*v1alpha2.ExternalEntity{eeFoo1, eeFoo2, eeBar1, eeFoo1InOtherNamespace},
-			inputGroupSelector:       types.NewGroupSelector("default", &metav1.LabelSelector{MatchLabels: map[string]string{"app": "foo"}}, nil, nil),
+			inputGroupSelector:       types.NewGroupSelector("default", &metav1.LabelSelector{MatchLabels: map[string]string{"app": "foo"}}, nil, nil, nil),
 			expectedPods:             []*v1.Pod{podFoo1, podFoo2},
 		},
 		{
 			name:                     "namespace scoped externalEntity selector",
 			existingPods:             []*v1.Pod{podFoo1, podFoo2, podBar1, podFoo1InOtherNamespace},
 			existingExternalEntities: []*v1alpha2.ExternalEntity{eeFoo1, eeFoo2, eeBar1, eeFoo1InOtherNamespace},
-			inputGroupSelector:       types.NewGroupSelector("default", nil, nil, &metav1.LabelSelector{MatchLabels: map[string]string{"app": "foo"}}),
+			inputGroupSelector:       types.NewGroupSelector("default", nil, nil, &metav1.LabelSelector{MatchLabels: map[string]string{"app": "foo"}}, nil),
 			expectedExternalEntities: []*v1alpha2.ExternalEntity{eeFoo1, eeFoo2},
 		},
 		{
 			name:                     "cluster scoped pod selector",
 			existingPods:             []*v1.Pod{podFoo1, podFoo2, podBar1, podFoo1InOtherNamespace},
 			existingExternalEntities: []*v1alpha2.ExternalEntity{eeFoo1, eeFoo2, eeBar1, eeFoo1InOtherNamespace},
-			inputGroupSelector:       types.NewGroupSelector("", &metav1.LabelSelector{MatchLabels: map[string]string{"app": "foo"}}, nil, nil),
+			inputGroupSelector:       types.NewGroupSelector("", &metav1.LabelSelector{MatchLabels: map[string]string{"app": "foo"}}, nil, nil, nil),
 			expectedPods:             []*v1.Pod{podFoo1, podFoo2, podFoo1InOtherNamespace},
 		},
 		{
 			name:                     "cluster scoped externalEntity selector",
 			existingPods:             []*v1.Pod{podFoo1, podFoo2, podBar1, podFoo1InOtherNamespace},
 			existingExternalEntities: []*v1alpha2.ExternalEntity{eeFoo1, eeFoo2, eeBar1, eeFoo1InOtherNamespace},
-			inputGroupSelector:       types.NewGroupSelector("", nil, nil, &metav1.LabelSelector{MatchLabels: map[string]string{"app": "foo"}}),
+			inputGroupSelector:       types.NewGroupSelector("", nil, nil, &metav1.LabelSelector{MatchLabels: map[string]string{"app": "foo"}}, nil),
 			expectedExternalEntities: []*v1alpha2.ExternalEntity{eeFoo1, eeFoo2, eeFoo1InOtherNamespace},
 		},
 		{
@@ -153,14 +153,14 @@ func TestGroupEntityIndexGetEntities(t *testing.T) {
 			existingNamespaces:       []*v1.Namespace{nsDefault, nsOther},
 			existingPods:             []*v1.Pod{podFoo1, podFoo2, podBar1, podFoo1InOtherNamespace},
 			existingExternalEntities: []*v1alpha2.ExternalEntity{eeFoo1, eeFoo2, eeBar1, eeFoo1InOtherNamespace},
-			inputGroupSelector:       types.NewGroupSelector("", &metav1.LabelSelector{MatchLabels: map[string]string{"app": "foo"}}, &metav1.LabelSelector{MatchLabels: nsOther.Labels}, nil),
+			inputGroupSelector:       types.NewGroupSelector("", &metav1.LabelSelector{MatchLabels: map[string]string{"app": "foo"}}, &metav1.LabelSelector{MatchLabels: nsOther.Labels}, nil, nil),
 			expectedPods:             []*v1.Pod{podFoo1InOtherNamespace},
 		},
 		{
 			name:                     "cluster scoped pod selector with namespaceSelector but no namespaces",
 			existingPods:             []*v1.Pod{podFoo1, podFoo2, podBar1, podFoo1InOtherNamespace},
 			existingExternalEntities: []*v1alpha2.ExternalEntity{eeFoo1, eeFoo2, eeBar1, eeFoo1InOtherNamespace},
-			inputGroupSelector:       types.NewGroupSelector("", &metav1.LabelSelector{MatchLabels: map[string]string{"app": "foo"}}, &metav1.LabelSelector{MatchLabels: nsOther.Labels}, nil),
+			inputGroupSelector:       types.NewGroupSelector("", &metav1.LabelSelector{MatchLabels: map[string]string{"app": "foo"}}, &metav1.LabelSelector{MatchLabels: nsOther.Labels}, nil, nil),
 			expectedPods:             []*v1.Pod{},
 		},
 	}
@@ -289,7 +289,7 @@ func TestGroupEntityIndexUpdateGroup(t *testing.T) {
 	for _, ns := range namespaces {
 		index.AddNamespace(ns)
 	}
-	index.AddGroup(groupType1, "group1", types.NewGroupSelector("default", &metav1.LabelSelector{MatchLabels: map[string]string{"app": "foo"}}, nil, nil))
+	index.AddGroup(groupType1, "group1", types.NewGroupSelector("default", &metav1.LabelSelector{MatchLabels: map[string]string{"app": "foo"}}, nil, nil, nil))
 	actualGroups, _ := index.GetGroupsForPod(podFoo1.Namespace, podFoo1.Name)
 	assert.Equal(t, map[GroupType][]string{groupType1: {"group1"}}, actualGroups)
 	actualGroups, _ = index.GetGroupsForExternalEntity(eeFoo1.Namespace, eeFoo1.Name)
@@ -298,7 +298,7 @@ func TestGroupEntityIndexUpdateGroup(t *testing.T) {
 	assert.ElementsMatch(t, []*v1.Pod{podFoo1, podFoo2}, actualPods)
 	assert.ElementsMatch(t, []*v1alpha2.ExternalEntity{}, actualExternalEntities)
 
-	index.AddGroup(groupType1, "group1", types.NewGroupSelector("default", nil, nil, &metav1.LabelSelector{MatchLabels: map[string]string{"app": "foo"}}))
+	index.AddGroup(groupType1, "group1", types.NewGroupSelector("default", nil, nil, &metav1.LabelSelector{MatchLabels: map[string]string{"app": "foo"}}, nil))
 	actualGroups, _ = index.GetGroupsForPod(podFoo1.Namespace, podFoo1.Name)
 	assert.Equal(t, map[GroupType][]string{}, actualGroups)
 	actualGroups, _ = index.GetGroupsForExternalEntity(eeFoo1.Namespace, eeFoo1.Name)
@@ -502,12 +502,12 @@ func TestGroupEntityIndexEventHandlers(t *testing.T) {
 			existingGroups: []*group{groupPodFooType1, groupPodFooAllNamespaceType1, groupPodAllNamespaceType1, {
 				groupType:     groupType1,
 				groupName:     "groupCompanyDefault",
-				groupSelector: types.NewGroupSelector("", nil, &metav1.LabelSelector{MatchLabels: nsDefault.Labels}, nil),
+				groupSelector: types.NewGroupSelector("", nil, &metav1.LabelSelector{MatchLabels: nsDefault.Labels}, nil, nil),
 			},
 				{
 					groupType:     groupType1,
 					groupName:     "groupCompanyOther",
-					groupSelector: types.NewGroupSelector("", nil, &metav1.LabelSelector{MatchLabels: nsOther.Labels}, nil),
+					groupSelector: types.NewGroupSelector("", nil, &metav1.LabelSelector{MatchLabels: nsOther.Labels}, nil, nil),
 				}},
 			inputEvent: func(i *GroupEntityIndex) {
 				i.AddNamespace(copyAndMutateNamespace(nsDefault, func(namespace *v1.Namespace) {

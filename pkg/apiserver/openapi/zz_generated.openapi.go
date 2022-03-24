@@ -55,6 +55,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyRule":             schema_pkg_apis_controlplane_v1beta2_NetworkPolicyRule(ref),
 		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyStats":            schema_pkg_apis_controlplane_v1beta2_NetworkPolicyStats(ref),
 		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyStatus":           schema_pkg_apis_controlplane_v1beta2_NetworkPolicyStatus(ref),
+		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.NodeReference":                 schema_pkg_apis_controlplane_v1beta2_NodeReference(ref),
 		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.NodeStatsSummary":              schema_pkg_apis_controlplane_v1beta2_NodeStatsSummary(ref),
 		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.PaginationGetOptions":          schema_pkg_apis_controlplane_v1beta2_PaginationGetOptions(ref),
 		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.PodReference":                  schema_pkg_apis_controlplane_v1beta2_PodReference(ref),
@@ -1014,11 +1015,17 @@ func schema_pkg_apis_controlplane_v1beta2_GroupMember(ref common.ReferenceCallba
 							},
 						},
 					},
+					"node": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Node maintains the reference to the Node.",
+							Ref:         ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.NodeReference"),
+						},
+					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.ExternalEntityReference", "antrea.io/antrea/pkg/apis/controlplane/v1beta2.NamedPort", "antrea.io/antrea/pkg/apis/controlplane/v1beta2.PodReference"},
+			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.ExternalEntityReference", "antrea.io/antrea/pkg/apis/controlplane/v1beta2.NamedPort", "antrea.io/antrea/pkg/apis/controlplane/v1beta2.NodeReference", "antrea.io/antrea/pkg/apis/controlplane/v1beta2.PodReference"},
 	}
 }
 
@@ -1608,6 +1615,26 @@ func schema_pkg_apis_controlplane_v1beta2_NetworkPolicyStatus(ref common.Referen
 		},
 		Dependencies: []string{
 			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyNodeStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+	}
+}
+
+func schema_pkg_apis_controlplane_v1beta2_NodeReference(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "NodeReference represents a Node Reference.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"name": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The name of this Node.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+			},
+		},
 	}
 }
 

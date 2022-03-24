@@ -143,6 +143,9 @@ message GroupMember {
 
   // Ports is the list NamedPort of the GroupMember.
   repeated NamedPort ports = 4;
+
+  // Node maintains the reference to the Node.
+  optional NodeReference node = 5;
 }
 
 message GroupReference {
@@ -314,6 +317,12 @@ message NetworkPolicyStatus {
 
   // Nodes contains statuses produced on a list of Nodes.
   repeated NetworkPolicyNodeStatus nodes = 2;
+}
+
+// NodeReference represents a Node Reference.
+message NodeReference {
+  // The name of this Node.
+  optional string name = 1;
 }
 
 // NodeStatsSummary contains stats produced on a Node. It's used by the antrea-agents to report stats to the antrea-controller.

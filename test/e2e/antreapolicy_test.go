@@ -44,13 +44,13 @@ import (
 
 // common for all tests.
 var (
-	allPods                              []Pod
-	podsByNamespace                      map[string][]Pod
-	k8sUtils                             *KubernetesUtils
-	allTestList                          []*TestCase
-	pods, namespaces                     []string
-	podIPs                               map[string][]string
-	p80, p81, p8080, p8081, p8082, p8085 int32
+	allPods                                     []Pod
+	podsByNamespace                             map[string][]Pod
+	k8sUtils                                    *KubernetesUtils
+	allTestList                                 []*TestCase
+	pods, namespaces                            []string
+	podIPs                                      map[string][]string
+	p80, p81, p8080, p8081, p8082, p8085, p6443 int32
 )
 
 const (
@@ -2299,7 +2299,6 @@ func testACNPNamespaceIsolation(t *testing.T) {
 	builder2 = builder2.SetName("test-acnp-ns-isolation-applied-to-per-rule").
 		SetTier("baseline").
 		SetPriority(1.0)
-	//SetAppliedToGroup([]ACNPAppliedToSpec{{NSSelector: map[string]string{"ns": "x"}}})
 	builder2.AddEgress(v1.ProtocolTCP, nil, nil, nil, nil, nil, nil, nil, nil,
 		true, []ACNPAppliedToSpec{{NSSelector: map[string]string{"ns": "x"}}}, crdv1alpha1.RuleActionAllow, "", "", nil)
 	builder2.AddEgress(v1.ProtocolTCP, nil, nil, nil, nil, nil, map[string]string{}, nil, nil,
@@ -2695,6 +2694,148 @@ func testServiceAccountSelector(t *testing.T, data *TestData) {
 	time.Sleep(networkPolicyDelay)
 }
 
+func testACNPNodeSelectorEgress(t *testing.T) {
+	builder := &ClusterNetworkPolicySpecBuilder{}
+	builder = builder.SetName("test-acnp-drop-egress-control-plane").
+		SetPriority(1.0)
+	nodeSelector := metav1.LabelSelector{MatchLabels: map[string]string{"kubernetes.io/hostname": controlPlaneNodeName()}}
+	builder.AddNodeSelectorRule(&nodeSelector, v1.ProtocolTCP, &p6443, "egress-control-plane-drop",
+		[]ACNPAppliedToSpec{{NSSelector: map[string]string{"ns": "x"}, PodSelector: map[string]string{"pod": "a"}}},
+		crdv1alpha1.RuleActionDrop, true)
+
+	var testcases []podToAddrTestStep
+	if clusterInfo.podV4NetworkCIDR != "" {
+		ipv4Testcases := []podToAddrTestStep{
+			{
+				"x/a",
+				controlPlaneNodeIPv4(),
+				6443,
+				Dropped,
+			},
+			{
+				"x/b",
+				controlPlaneNodeIPv4(),
+				6443,
+				Connected,
+			},
+		}
+		testcases = append(testcases, ipv4Testcases...)
+	}
+
+	if clusterInfo.podV6NetworkCIDR != "" {
+		ipv6Testcases := []podToAddrTestStep{
+			{
+				"x/a",
+				controlPlaneNodeIPv6(),
+				6443,
+				Dropped,
+			},
+			{
+				"x/b",
+				controlPlaneNodeIPv6(),
+				6443,
+				Connected,
+			},
+		}
+		testcases = append(testcases, ipv6Testcases...)
+	}
+	_, err := k8sUtils.CreateOrUpdateACNP(builder.Get())
+	failOnError(err, t)
+	time.Sleep(networkPolicyDelay)
+	for _, tc := range testcases {
+		log.Tracef("Probing: %s -> %s", tc.clientPod.PodName(), tc.destAddr)
+		connectivity, err := k8sUtils.ProbeAddr(tc.clientPod.Namespace(), "pod", tc.clientPod.PodName(), tc.destAddr, tc.destPort, v1.ProtocolTCP)
+		if err != nil {
+			t.Errorf("failure -- could not complete probe: %v", err)
+		}
+		if connectivity != tc.expectedConnectivity {
+			t.Errorf("failure -- wrong results for probe: Source %s/%s --> Dest %s:%d connectivity: %v, expected: %v",
+				tc.clientPod.Namespace(), tc.clientPod.PodName(), tc.destAddr, tc.destPort, connectivity, tc.expectedConnectivity)
+		}
+	}
+	// cleanup test resources
+	failOnError(k8sUtils.DeleteACNP(builder.Name), t)
+	failOnError(waitForResourceDelete("", builder.Name, resourceACNP, timeout), t)
+	time.Sleep(networkPolicyDelay)
+}
+
+func testACNPNodeSelectorIngress(t *testing.T, data *TestData) {
+	_, serverIP0, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "server0", nodeName(1), "x", false)
+	defer cleanupFunc()
+
+	_, serverIP1, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "server1", nodeName(1), "y", false)
+	defer cleanupFunc()
+
+	clientName := "agnhost-client"
+	require.NoError(t, data.createAgnhostPodOnNode(clientName, "z", controlPlaneNodeName(), true))
+	defer data.deletePodAndWait(defaultTimeout, clientName, "z")
+	_, err := data.podWaitForIPs(defaultTimeout, clientName, "z")
+	require.NoError(t, err)
+
+	builder := &ClusterNetworkPolicySpecBuilder{}
+	builder = builder.SetName("test-acnp-drop-ingress-from-control-plane").
+		SetPriority(1.0)
+	nodeSelector := metav1.LabelSelector{MatchLabels: map[string]string{"kubernetes.io/hostname": controlPlaneNodeName()}}
+	builder.AddNodeSelectorRule(&nodeSelector, v1.ProtocolTCP, &p80, "ingress-control-plane-drop",
+		[]ACNPAppliedToSpec{{NSSelector: map[string]string{"ns": "x"}}},
+		crdv1alpha1.RuleActionDrop, false)
+
+	testcases := []podToAddrTestStep{}
+	if clusterInfo.podV4NetworkCIDR != "" {
+		ipv4TestCases := []podToAddrTestStep{
+			{
+				Pod("z/" + clientName),
+				serverIP0.ipv4.String(),
+				80,
+				Dropped,
+			},
+			{
+				Pod("z/" + clientName),
+				serverIP1.ipv4.String(),
+				80,
+				Connected,
+			},
+		}
+		testcases = append(testcases, ipv4TestCases...)
+	}
+	if clusterInfo.podV6NetworkCIDR != "" {
+		ipv6TestCases := []podToAddrTestStep{
+			{
+				Pod("z/" + clientName),
+				serverIP0.ipv6.String(),
+				80,
+				Dropped,
+			},
+			{
+				Pod("z/" + clientName),
+				serverIP1.ipv6.String(),
+				80,
+				Connected,
+			},
+		}
+		testcases = append(testcases, ipv6TestCases...)
+	}
+
+	_, err = k8sUtils.CreateOrUpdateACNP(builder.Get())
+	failOnError(err, t)
+	time.Sleep(networkPolicyDelay)
+	for _, tc := range testcases {
+		log.Tracef("Probing: %s -> %s", tc.clientPod.PodName(), tc.destAddr)
+		connectivity, err := k8sUtils.ProbeAddr(tc.clientPod.Namespace(), "antrea-e2e", tc.clientPod.PodName(), tc.destAddr, tc.destPort, v1.ProtocolTCP)
+		if err != nil {
+			t.Errorf("failure -- could not complete probe: %v", err)
+		}
+		if connectivity != tc.expectedConnectivity {
+			t.Errorf("failure -- wrong results for probe: Source %s/%s --> Dest %s:%d connectivity: %v, expected: %v",
+				tc.clientPod.Namespace(), tc.clientPod.PodName(), tc.destAddr, tc.destPort, connectivity, tc.expectedConnectivity)
+		}
+	}
+	// cleanup test resources
+	failOnError(k8sUtils.DeleteACNP(builder.Name), t)
+	failOnError(waitForResourceDelete("", builder.Name, resourceACNP, timeout), t)
+	time.Sleep(networkPolicyDelay)
+}
+
 // executeTests runs all the tests in testList and prints results
 func executeTests(t *testing.T, testList []*TestCase) {
 	executeTestsWithData(t, testList, nil)
@@ -3026,6 +3167,8 @@ func TestAntreaPolicy(t *testing.T) {
 		t.Run("Case=FQDNPolicyInCluster", func(t *testing.T) { testFQDNPolicyInClusterService(t) })
 		t.Run("Case=ACNPToServices", func(t *testing.T) { testToServices(t) })
 		t.Run("Case=ACNPServiceAccountSelector", func(t *testing.T) { testServiceAccountSelector(t, data) })
+		t.Run("Case=ACNPNodeSelectorEgress", func(t *testing.T) { testACNPNodeSelectorEgress(t) })
+		t.Run("Case=ACNPNodeSelectorIngress", func(t *testing.T) { testACNPNodeSelectorIngress(t, data) })
 	})
 	// print results for reachability tests
 	printResults()
