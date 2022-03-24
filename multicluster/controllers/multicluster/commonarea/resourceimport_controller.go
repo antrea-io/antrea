@@ -115,7 +115,7 @@ func (r *ResourceImportReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 				resImp = resImpObj.(multiclusterv1alpha1.ResourceImport)
 			} else {
 				// stale_controller will reconcile and clean up MC Service/ServiceImport, so it's ok to return nil here
-				klog.ErrorS(err, "no cached data for ResourceImport", "resourceimport", req.NamespacedName.String())
+				klog.ErrorS(err, "No cached data for ResourceImport", "resourceimport", req.NamespacedName.String())
 				return ctrl.Result{}, nil
 			}
 		}
@@ -158,8 +158,8 @@ func (r *ResourceImportReconciler) handleResImpUpdateForService(ctx context.Cont
 		// Here we will skip creating derived MC Service when a Service with the same name
 		// already exists but it not previously created by Importer.
 		if _, ok := svc.Annotations[common.AntreaMCServiceAnnotation]; !ok {
-			err := errors.New("unable to import Service which conflicts with existing one")
-			klog.ErrorS(err, "", "service", klog.KObj(svc))
+			err := errors.New("the Service conflicts with existing one")
+			klog.ErrorS(err, "Unable to import Service", "service", klog.KObj(svc))
 			return ctrl.Result{}, err
 		}
 	}
@@ -167,13 +167,13 @@ func (r *ResourceImportReconciler) handleResImpUpdateForService(ctx context.Cont
 	if svcNotFound {
 		err := r.localClusterClient.Create(ctx, svcObj, &client.CreateOptions{})
 		if err != nil {
-			klog.ErrorS(err, "failed to create Service", "service", klog.KObj(svcObj))
+			klog.ErrorS(err, "Failed to create Service", "service", klog.KObj(svcObj))
 			return ctrl.Result{}, err
 		}
 		if err = r.localClusterClient.Get(ctx, svcName, svc); err != nil {
 			// Ignore the error here, and requeue the event again when both Service
 			// and ServiceImport are created later
-			klog.ErrorS(err, "failed to get latest imported Service", "service", klog.KObj(svc))
+			klog.ErrorS(err, "Failed to get latest imported Service", "service", klog.KObj(svc))
 		}
 	}
 
@@ -191,7 +191,7 @@ func (r *ResourceImportReconciler) handleResImpUpdateForService(ctx context.Cont
 	if svcImpNotFound {
 		err := r.localClusterClient.Create(ctx, svcImpObj, &client.CreateOptions{})
 		if err != nil {
-			klog.ErrorS(err, "failed to create ServiceImport", "serviceimport", klog.KObj(svcImpObj))
+			klog.ErrorS(err, "Failed to create ServiceImport", "serviceimport", klog.KObj(svcImpObj))
 			return ctrl.Result{}, err
 		}
 		r.installedResImports.Add(*resImp)
@@ -207,7 +207,7 @@ func (r *ResourceImportReconciler) handleResImpUpdateForService(ctx context.Cont
 		svc.Spec.Ports = svcObj.Spec.Ports
 		err = r.localClusterClient.Update(ctx, svc, &client.UpdateOptions{})
 		if err != nil {
-			klog.ErrorS(err, "failed to update imported Service", "service", svcName.String())
+			klog.ErrorS(err, "Failed to update imported Service", "service", svcName.String())
 			return ctrl.Result{}, err
 		}
 		r.installedResImports.Update(*resImp)
@@ -218,7 +218,7 @@ func (r *ResourceImportReconciler) handleResImpUpdateForService(ctx context.Cont
 		addAnnotation(svcImp, r.localClusterID)
 		err = r.localClusterClient.Update(ctx, svcImp, &client.UpdateOptions{})
 		if err != nil {
-			klog.ErrorS(err, "failed to update ServiceImport", "serviceimport", svcImpName.String())
+			klog.ErrorS(err, "Failed to update ServiceImport", "serviceimport", svcImpName.String())
 			return ctrl.Result{}, err
 		}
 		r.installedResImports.Update(*resImp)
@@ -277,8 +277,8 @@ func (r *ResourceImportReconciler) handleResImpUpdateForEndpoints(ctx context.Co
 	}
 	if !epNotFound {
 		if _, ok := ep.Annotations[common.AntreaMCServiceAnnotation]; !ok {
-			err := errors.New("unable to import Endpoints which conflicts with existing one")
-			klog.ErrorS(err, "", "endpoints", klog.KObj(ep))
+			err := errors.New("the Endpoints conflicts with existing one")
+			klog.ErrorS(err, "Unable to import Endpoints", "endpoints", klog.KObj(ep))
 			return ctrl.Result{}, err
 		}
 	}
@@ -292,7 +292,7 @@ func (r *ResourceImportReconciler) handleResImpUpdateForEndpoints(ctx context.Co
 	} else if apierrors.IsNotFound(err) {
 		newSubsets = resImp.Spec.Endpoints.Subsets
 	} else {
-		klog.ErrorS(err, "failed to get local Endpoint", "endpoint", epNamespaced.String())
+		klog.ErrorS(err, "Failed to get local Endpoint", "endpoint", epNamespaced.String())
 		return ctrl.Result{}, err
 	}
 	mcsEpObj := &corev1.Endpoints{
@@ -306,14 +306,14 @@ func (r *ResourceImportReconciler) handleResImpUpdateForEndpoints(ctx context.Co
 	if epNotFound {
 		err := r.localClusterClient.Create(ctx, mcsEpObj, &client.CreateOptions{})
 		if err != nil {
-			klog.ErrorS(err, "failed to create MCS Endpoints", "endpoints", klog.KObj(mcsEpObj), err)
+			klog.ErrorS(err, "Failed to create MCS Endpoints", "endpoints", klog.KObj(mcsEpObj), err)
 			return ctrl.Result{}, err
 		}
 		r.installedResImports.Add(*resImp)
 		return ctrl.Result{}, nil
 	}
 	if _, ok := ep.Annotations[common.AntreaMCServiceAnnotation]; !ok {
-		klog.InfoS("Endpoints has no desired annotation "+common.AntreaMCServiceAnnotation+", skip update", "endpoints", epNamespaced.String())
+		klog.InfoS("Endpoints has no desired annotation, skip update", "annotation", common.AntreaMCServiceAnnotation, "endpoints", epNamespaced.String())
 		return ctrl.Result{}, nil
 	}
 	// TODO: check label difference ?
@@ -321,7 +321,7 @@ func (r *ResourceImportReconciler) handleResImpUpdateForEndpoints(ctx context.Co
 		ep.Subsets = newSubsets
 		err = r.localClusterClient.Update(ctx, ep, &client.UpdateOptions{})
 		if err != nil {
-			klog.ErrorS(err, "failed to update MCS Endpoints", "endpoints", epNamespaced.String())
+			klog.ErrorS(err, "Failed to update MCS Endpoints", "endpoints", epNamespaced.String())
 			return ctrl.Result{}, err
 		}
 		r.installedResImports.Update(*resImp)
@@ -338,12 +338,12 @@ func (r *ResourceImportReconciler) handleResImpDeleteForEndpoints(ctx context.Co
 	ep := &corev1.Endpoints{}
 	err := r.localClusterClient.Get(ctx, epNamespaced, ep)
 	if err != nil {
-		klog.InfoS("unable to fetch imported Endpoints", "endpoints", epNamespaced.String(), "err", err)
+		klog.InfoS("Unable to fetch imported Endpoints", "endpoints", epNamespaced.String(), "err", err)
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 	err = r.localClusterClient.Delete(ctx, ep, &client.DeleteOptions{})
 	if err != nil {
-		klog.InfoS("failed to delete imported Endpoints", "endpoints", epNamespaced.String(), "err", err)
+		klog.InfoS("Failed to delete imported Endpoints", "endpoints", epNamespaced.String(), "err", err)
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 	return ctrl.Result{}, nil
