@@ -135,7 +135,7 @@ func (r *MemberClusterSetReconciler) updateMultiClusterSetOnMemberCluster(cluste
 		r.RemoteCommonAreaManager = commonarea.NewRemoteCommonAreaManager(r.clusterSetID, r.clusterID)
 		err := r.RemoteCommonAreaManager.Start()
 		if err != nil {
-			klog.ErrorS(err, "error starting RemoteCommonAreaManager")
+			klog.ErrorS(err, "Error starting RemoteCommonAreaManager")
 			r.RemoteCommonAreaManager = nil
 			r.clusterSetID = common.InvalidClusterSetID
 			r.clusterID = common.InvalidClusterID
@@ -277,7 +277,7 @@ func (r *MemberClusterSetReconciler) updateStatus() {
 	clusterSet := &multiclusterv1alpha1.ClusterSet{}
 	err := r.Get(context.TODO(), namespacedName, clusterSet)
 	if err != nil {
-		klog.ErrorS(err, "failed to read ClusterSet", "Name", namespacedName)
+		klog.ErrorS(err, "Failed to read ClusterSet", "Name", namespacedName)
 	}
 	status.Conditions = clusterSet.Status.Conditions
 	if (len(clusterSet.Status.Conditions) == 1 && clusterSet.Status.Conditions[0].Status != overallCondition.Status) ||
@@ -287,6 +287,6 @@ func (r *MemberClusterSetReconciler) updateStatus() {
 	clusterSet.Status = status
 	err = r.Status().Update(context.TODO(), clusterSet)
 	if err != nil {
-		klog.ErrorS(err, "failed to update Status of ClusterSet", "Name", namespacedName)
+		klog.ErrorS(err, "Failed to update Status of ClusterSet", "Name", namespacedName)
 	}
 }

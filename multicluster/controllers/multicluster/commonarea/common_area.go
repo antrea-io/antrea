@@ -25,7 +25,7 @@ import (
 // CommonArea is an interface that provides access to the common area of a ClusterSet.
 // Common Area of a ClusterSet is a Namespace in the leader cluster.
 type CommonArea interface {
-	// Client grants read/write to the namespace of the cluster that is backing this CommonArea.
+	// Client grants read/write to the Namespace of the cluster that is backing this CommonArea.
 	client.Client
 
 	// GetClusterID returns the clusterID of the cluster accessed by this CommonArea.
