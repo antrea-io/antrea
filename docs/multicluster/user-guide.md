@@ -1,10 +1,16 @@
-# Antrea Multi-cluster Installation
+# Antrea Multi-cluster User Guide
 
-Antrea Multi-cluster allows users to export and import resources including Services and
-Endpoints across multiple clusters within a ClusterSet, and enables inter-cluster Service
-communication in the ClusterSet. This feature is introduced from Antrea v1.5.0.
+Antrea Multi-cluster implements [Multi-cluster Service API](https://github.com/kubernetes/enhancements/tree/master/keps/sig-multicluster/1645-multi-cluster-services-api),
+which allows users to create multi-cluster Services that can be accessed cross clusters in a
+ClusterSet. Antrea Multi-cluster also supports Antrea ClusterNetworkPolicy replication.
+Multi-cluster admins can define ClusterNetworkPolicies to be replicated across the entire
+ClusterSet, and enforced in all member clusters. Antrea Multi-cluster is introduced in
+Antrea v1.5.0, and the ClusterNetworkPolicy replication feature is supported since Antrea
+v1.6.0.
 
-## Prepare Antrea Multi-cluster Image
+## Antrea Multi-cluster Installation
+
+### Prepare Antrea Multi-cluster Image
 
 For Antrea Multi-cluster, there is only one image `antrea/antrea-mc-controller:latest`
 you can pull the image from Docker Hub by default, or if you'd like to build image locally,
@@ -16,7 +22,7 @@ you can follow the following steps to get the image ready on your local clusters
 3. Copy the image file `antrea-mcs.tar` to the Nodes of your local cluster.
 4. Run `docker load < antrea-mcs.tar` in each Node of your local cluster.
 
-## Deploy Mulit-cluster Controller
+### Deploy Mulit-cluster Controller
 
 In a ClusterSet, there is one leader cluster and two or more member clusters. You can run the
 leader controller in either a dedicated cluster or one of the member clusters. Please refer
@@ -26,7 +32,7 @@ to deploy leader and member controllers in separate clusters, or you can refer t
 [Installation in a Shared Cluster](#installation-in-a-shared-cluster) to learn how to
 run both member and leader controllers in one cluster.
 
-### Deployment in a Dedicated Leader Cluster
+#### Deployment in a Dedicated Leader Cluster
 
 1. Run the following commands to apply Multi-cluster CRDs in the leader cluster.
 
@@ -61,7 +67,7 @@ manifest with new Namespace.
   multicluster/hack/generate-manifest.sh -l antrea-mcs-ns | kubectl apply -f -
   ```
   
-### Deployment in the Member Cluster
+#### Deployment in a Member Cluster
 
 You can run the following commands to install Multi-cluster Controller to all
 member clusters. The command will run the controller in the "member" mode in the `kube-system`
@@ -79,7 +85,7 @@ kubectl apply -f https://github.com/antrea-io/antrea/releases/download/<TAG>/ant
 kubectl apply -f multicluster/build/yamls/antrea-multicluster-member.yml
 ```
 
-### Deploy Leader and Member in one Cluster
+#### Deploy Leader and Member in one Cluster
 
 There is no deployment dependency between member and leader clusters if you are using a cluster
 as a dedicated leader cluster. But if you'd like to run both leader and member controllers in
@@ -90,14 +96,14 @@ to install the member controller first.
 2. Follow the step 2 only in section [Installation in Dedicated Leader Cluster](#deployment-in-dedicated-leader-cluster)
 to install the leader controller. The global CRDs have been installed when you deploy the member controller.
 
-## ClusterSet
+### ClusterSet Creation
 
 An Antrea Multi-cluster ClusterSet should include at least one leader cluster
 and two member clusters. As an example, in the following sections we will create a ClusterSet with
 ID `test-clusterset` which has two member clusters with cluster ID `test-cluster-east`,
 `test-cluster-west` and one leader cluster with ID `test-cluster-north`.
 
-### Setting up Access to Leader Cluster
+#### Set up Access to Leader Cluster
 
 We first need to set up access to the leader cluster's API server for all member clusters.
 We recommend creating one ServiceAccount for each member for fine-grained access control.
@@ -145,7 +151,7 @@ We recommend creating one ServiceAccount for each member for fine-grained access
 3. Replace all `east` to `west` and repeat step 1/2 for the other member cluster `test-cluster-west`
 to create the token secret and copy the token.
 
-### Setting up ClusterSet
+#### Set up ClusterSet
 
 All clusters in the ClusterSet need to use `ClusterClaim` to claim itself as a member
 of a ClusterSet. A leader cluster will define `ClusterSet` which includes leader and
@@ -357,9 +363,9 @@ spec:
     namespace: antrea-mcs-ns
 ```
 
-## Export and Import Service
+## Multi-cluster Service
 
-After you set up a cluster set properly, you can simply create a `ServiceExport` resource
+After you set up a ClusterSet properly, you can simply create a `ServiceExport` resource
 as below to export a `Service` from one member cluster to other members in the ClusterSet,
 you can update the name and Namespace according to your local K8s Service.
 
