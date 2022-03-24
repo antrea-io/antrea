@@ -30,6 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
+	"k8s.io/klog/v2"
 
 	crdv1a2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
 	fakecrd "antrea.io/antrea/pkg/client/clientset/versioned/fake"
@@ -108,69 +109,84 @@ func verifyPoolAllocatedSize(t *testing.T, poolName string, poolLister listers.I
 	require.NoError(t, err)
 }
 
-func testStatefulSetLifecycle(t *testing.T, dedicatedPool bool, replicas int32) {
-	stopCh := make(chan struct{})
-	defer close(stopCh)
+func TestStatefulSetLifecycle(t *testing.T) {
 
-	namespace, pool, statefulSet := initTestObjects(!dedicatedPool, dedicatedPool, replicas)
-	crdClient := fakecrd.NewSimpleClientset(pool)
-	k8sClient := fake.NewSimpleClientset(namespace, statefulSet)
-
-	informerFactory := informers.NewSharedInformerFactory(k8sClient, 0)
-
-	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, 0)
-	poolInformer := crdInformerFactory.Crd().V1alpha2().IPPools()
-	poolLister := poolInformer.Lister()
-
-	controller := NewAntreaIPAMController(crdClient, informerFactory, crdInformerFactory)
-	require.NotNil(t, controller)
-	informerFactory.Start(stopCh)
-	crdInformerFactory.Start(stopCh)
-
-	go controller.Run(stopCh)
-
-	var allocator *poolallocator.IPPoolAllocator
-	var err error
-	// Wait until pool propagates to the informer
-	pollErr := wait.PollImmediate(100*time.Millisecond, 1*time.Second, func() (bool, error) {
-		allocator, err = poolallocator.NewIPPoolAllocator(pool.Name, crdClient, poolLister)
-		if err != nil {
-			return false, nil
-		}
-		return true, nil
-	})
-	require.NoError(t, pollErr)
-	defer allocator.ReleaseStatefulSet(statefulSet.Namespace, statefulSet.Name)
-
-	if int(replicas) < allocator.Total() {
-		// Verify create event was handled by the controller and preallocation was succesfull
-		verifyPoolAllocatedSize(t, pool.Name, poolLister, int(replicas))
-	} else {
-		// Not enough IPs in the pool - preallocation should fail
-		verifyPoolAllocatedSize(t, pool.Name, poolLister, 0)
+	tests := []struct {
+		name                string
+		dedicatedPool       bool
+		replicas            int32
+		expectAllocatedSize int
+	}{
+		{
+			name:                "Dedicated pool",
+			dedicatedPool:       true,
+			replicas:            5,
+			expectAllocatedSize: 5,
+		},
+		{
+			name:                "Full reservation of dedicated pool",
+			dedicatedPool:       true,
+			replicas:            11,
+			expectAllocatedSize: 11,
+		},
+		{
+			name:                "Namespace pool",
+			dedicatedPool:       false,
+			replicas:            7,
+			expectAllocatedSize: 7,
+		},
+		{
+			name:                "No enough IPs",
+			dedicatedPool:       false,
+			replicas:            20,
+			expectAllocatedSize: 0,
+		},
 	}
 
-	// Delete StatefulSet
-	k8sClient.AppsV1().StatefulSets(namespace.Name).Delete(context.TODO(), statefulSet.Name, metav1.DeleteOptions{})
+	for _, tt := range tests {
+		stopCh := make(chan struct{})
+		defer close(stopCh)
 
-	// Verify Delete event was processed
-	verifyPoolAllocatedSize(t, pool.Name, poolLister, 0)
-}
+		klog.InfoS("Running", "test", tt.name)
+		namespace, pool, statefulSet := initTestObjects(!tt.dedicatedPool, tt.dedicatedPool, tt.replicas)
+		crdClient := fakecrd.NewSimpleClientset(pool)
+		k8sClient := fake.NewSimpleClientset(namespace, statefulSet)
 
-// This test verifies preallocation of IPs for dedicated IP pool annotation.
-func TestStatefulSetLifecycle_DedicatedPool(t *testing.T) {
-	testStatefulSetLifecycle(t, true, 5)
-}
+		informerFactory := informers.NewSharedInformerFactory(k8sClient, 0)
 
-// This test verifies preallocation of IPs for IP pool annotation based on StatefulSet Namespace.
-func TestStatefulSetLifecycle_NamespacePool(t *testing.T) {
-	testStatefulSetLifecycle(t, false, 7)
-}
+		crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, 0)
+		poolInformer := crdInformerFactory.Crd().V1alpha2().IPPools()
+		poolLister := poolInformer.Lister()
 
-// This test verifies use case when continuous IP range can not be preallocated.
-// However we don't expect error since preallocation is best-effort feature.
-func TestStatefulSetLifecycle_NoPreallocation(t *testing.T) {
-	testStatefulSetLifecycle(t, false, 20)
+		controller := NewAntreaIPAMController(crdClient, informerFactory, crdInformerFactory)
+		require.NotNil(t, controller)
+		informerFactory.Start(stopCh)
+		crdInformerFactory.Start(stopCh)
+
+		go controller.Run(stopCh)
+
+		var allocator *poolallocator.IPPoolAllocator
+		var err error
+		// Wait until pool propagates to the informer
+		pollErr := wait.PollImmediate(100*time.Millisecond, 1*time.Second, func() (bool, error) {
+			allocator, err = poolallocator.NewIPPoolAllocator(pool.Name, crdClient, poolLister)
+			if err != nil {
+				return false, nil
+			}
+			return true, nil
+		})
+		require.NoError(t, pollErr)
+		defer allocator.ReleaseStatefulSet(statefulSet.Namespace, statefulSet.Name)
+
+		// Verify create event was handled by the controller
+		verifyPoolAllocatedSize(t, pool.Name, poolLister, tt.expectAllocatedSize)
+
+		// Delete StatefulSet
+		k8sClient.AppsV1().StatefulSets(namespace.Name).Delete(context.TODO(), statefulSet.Name, metav1.DeleteOptions{})
+
+		// Verify Delete event was processed
+		verifyPoolAllocatedSize(t, pool.Name, poolLister, 0)
+	}
 }
 
 // Test for cleanup on controller startup: stale addresses that belong no StatefulSet objects
