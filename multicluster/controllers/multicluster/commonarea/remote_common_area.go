@@ -139,7 +139,7 @@ func NewRemoteCommonArea(clusterID common.ClusterID, clusterSetID common.Cluster
 		Namespace:          clusterSetNamespace,
 	})
 	if err != nil {
-		klog.ErrorS(err, "error creating manager for RemoteCommonArea", "Cluster", clusterID)
+		klog.ErrorS(err, "Error creating manager for RemoteCommonArea", "Cluster", clusterID)
 		return nil, err
 	}
 
@@ -221,9 +221,8 @@ func (r *remoteCommonArea) SendMemberAnnounce() error {
 		// Add timestamp to force update on MemberClusterAnnounce. Leader cluster requires
 		// periodic updates to detect connectivity. Without this, no-op updates will be ignored.
 		localClusterMemberAnnounce.Annotations[TimestampAnnotationKey] = time.Now().String()
-		// do an update
 		if err := r.Update(context.TODO(), &localClusterMemberAnnounce, &client.UpdateOptions{}); err != nil {
-			klog.ErrorS(err, "error updating MemberClusterAnnounce", "Cluster", r.GetClusterID())
+			klog.ErrorS(err, "Error updating MemberClusterAnnounce", "Cluster", r.GetClusterID())
 			return err
 		}
 	} else {
@@ -341,7 +340,7 @@ func (r *remoteCommonArea) Start() (context.CancelFunc, error) {
 
 func (r *remoteCommonArea) doMemberAnnounce() {
 	if err := r.SendMemberAnnounce(); err != nil {
-		klog.ErrorS(err, "error writing member announce", "Cluster", r.GetClusterID())
+		klog.ErrorS(err, "Error writing member announce", "Cluster", r.GetClusterID())
 		r.updateRemoteCommonAreaStatus(false, err)
 	} else {
 		r.updateRemoteCommonAreaStatus(true, nil)
@@ -383,7 +382,7 @@ func (r *remoteCommonArea) StartWatching() error {
 	)
 
 	if err := resImportReconciler.SetupWithManager(r.ClusterManager); err != nil {
-		klog.V(2).ErrorS(err, "error creating ResourceImport controller for RemoteCommonArea", "Cluster", r.ClusterID)
+		klog.V(2).ErrorS(err, "Error creating ResourceImport controller for RemoteCommonArea", "Cluster", r.ClusterID)
 		return fmt.Errorf("error creating ResourceImport controller for RemoteCommonArea: %v", err)
 	}
 
@@ -396,7 +395,7 @@ func (r *remoteCommonArea) StartWatching() error {
 		// the leader again, it starts the Manager again.
 		err := r.ClusterManager.Start(stopCtx)
 		if err != nil {
-			klog.ErrorS(err, "error starting ClusterManager for RemoteCommonArea", "Cluster", r.ClusterID)
+			klog.ErrorS(err, "Error starting ClusterManager for RemoteCommonArea", "Cluster", r.ClusterID)
 		}
 		klog.InfoS("Stopping ClusterManager for RemoteCommonArea", "Cluster", r.ClusterID)
 	}()

@@ -149,22 +149,22 @@ func epIndexerByLabelFunc(obj interface{}) ([]string, error) {
 // and also Endpoints/Services resource. It will create/update/remove ResourceExport
 // in a leader cluster for corresponding ServiceExport from a member cluster.
 func (r *ServiceExportReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	klog.V(2).InfoS("reconciling ServiceExport", "serviceexport", req.NamespacedName)
+	klog.V(2).InfoS("Reconciling ServiceExport", "serviceexport", req.NamespacedName)
 	svcExportList := &k8smcsv1alpha1.ServiceExportList{}
 	err := r.Client.List(ctx, svcExportList, &client.ListOptions{})
 	if err != nil {
-		klog.ErrorS(err, "failed to list ServiceExport")
+		klog.ErrorS(err, "Failed to list ServiceExport")
 		return ctrl.Result{}, err
 	}
 
 	// return faster during initilization instead of handling all Service/Endpoint events
 	if len(svcExportList.Items) == 0 && len(r.installedSvcs.List()) == 0 {
-		klog.InfoS("skip reconciling, no corresponding ServiceExport")
+		klog.InfoS("Skip reconciling, no corresponding ServiceExport")
 		return ctrl.Result{}, nil
 	}
 
 	if *r.remoteCommonAreaManager == nil {
-		klog.InfoS("clusterset has not been initialized properly, no remote cluster manager")
+		klog.InfoS("ClusterSet has not been initialized properly, no remote cluster manager")
 		return ctrl.Result{Requeue: true}, nil
 	}
 	r.localClusterID = string((*r.remoteCommonAreaManager).GetLocalClusterID())
@@ -189,7 +189,7 @@ func (r *ServiceExportReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 
 	svc := &corev1.Service{}
 	if err := r.Client.Get(ctx, req.NamespacedName, &svcExport); err != nil {
-		klog.V(2).InfoS("unable to fetch ServiceExport", "serviceexport", req.String(), "err", err)
+		klog.V(2).ErrorS(err, "Unable to fetch ServiceExport", "serviceexport", req.String())
 		if !apierrors.IsNotFound(err) {
 			return ctrl.Result{}, err
 		}
@@ -229,7 +229,7 @@ func (r *ServiceExportReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			}
 			return ctrl.Result{}, nil
 		} else {
-			klog.ErrorS(err, "failed to get Service ", req.String())
+			klog.ErrorS(err, "Failed to get Service ", req.String())
 			return ctrl.Result{}, err
 		}
 	}
@@ -237,7 +237,7 @@ func (r *ServiceExportReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	// skip if ServiceExport is trying to export MC Service/Endpoints
 	if !svcInstalled || !epInstalled {
 		if _, ok := svc.Annotations[common.AntreaMCServiceAnnotation]; ok {
-			klog.InfoS("it's not allowed to export the multi-cluster controller auto-generated Service", "service", req.String())
+			klog.InfoS("It's not allowed to export the multi-cluster controller auto-generated Service", "service", req.String())
 			err = r.updateSvcExportStatus(ctx, req, importedService)
 			if err != nil {
 				return ctrl.Result{}, err
@@ -270,7 +270,7 @@ func (r *ServiceExportReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 
 	err = r.Client.Get(ctx, req.NamespacedName, ep)
 	if err != nil {
-		klog.ErrorS(err, "failed to get Endpoints", "endpoints", req.String())
+		klog.ErrorS(err, "Failed to get Endpoints", "endpoints", req.String())
 		if apierrors.IsNotFound(err) && epInstalled {
 			err = r.handleEndpointDeleteEvent(ctx, req, remoteCluster)
 			if err != nil {
@@ -316,7 +316,7 @@ func (r *ServiceExportReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			"resourceexport", svcExportNSName)
 		err := r.serviceHandler(ctx, req, svc, svcResExportName, re, remoteCluster)
 		if err != nil {
-			klog.ErrorS(err, "failed to handle Service change", "service", req.String())
+			klog.ErrorS(err, "Failed to handle Service change", "service", req.String())
 			return ctrl.Result{}, err
 		}
 	}
@@ -326,7 +326,7 @@ func (r *ServiceExportReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			req.String(), "resourceexport", epExportNSName)
 		err := r.endpointsHandler(ctx, req, ep, epResExportName, re, remoteCluster)
 		if err != nil {
-			klog.ErrorS(err, "failed to handle Endpoints change", "endpoints", req.String())
+			klog.ErrorS(err, "Failed to handle Endpoints change", "endpoints", req.String())
 			return ctrl.Result{}, err
 		}
 	}
@@ -352,11 +352,11 @@ func (r *ServiceExportReconciler) handleServiceDeleteEvent(ctx context.Context, 
 	svcResExportNamespaced := common.NamespacedName(r.leaderNamespace, svcResExportName)
 	err := remoteCluster.Delete(ctx, svcResExport, &client.DeleteOptions{})
 	if err != nil && !apierrors.IsNotFound(err) {
-		klog.ErrorS(err, "failed to delete ResourceExport in remote cluster", "resourceexport",
+		klog.ErrorS(err, "Failed to delete ResourceExport in remote cluster", "resourceexport",
 			svcResExportNamespaced, "clusterID", r.leaderClusterID)
 		return err
 	}
-	klog.V(2).InfoS("clean up ResourceExport in remote cluster", "resourceexport", svcResExportNamespaced)
+	klog.V(2).InfoS("Clean up ResourceExport in remote cluster", "resourceexport", svcResExportNamespaced)
 	return nil
 }
 
@@ -374,12 +374,12 @@ func (r *ServiceExportReconciler) handleEndpointDeleteEvent(ctx context.Context,
 	epResExportNamespaced := common.NamespacedName(r.leaderNamespace, epResExportName)
 	err := remoteCluster.Delete(ctx, epResExport, &client.DeleteOptions{})
 	if err != nil && !apierrors.IsNotFound(err) {
-		klog.ErrorS(err, "failed to delete ResourceExport in remote cluster", "resourceexport",
+		klog.ErrorS(err, "Failed to delete ResourceExport in remote cluster", "resourceexport",
 			epResExportNamespaced, "clusterID", r.leaderClusterID)
 		return err
 	}
 
-	klog.V(2).InfoS("clean up ResourceExport in remote cluster", "resourceexport", epResExportNamespaced)
+	klog.V(2).InfoS("Clean up ResourceExport in remote cluster", "resourceexport", epResExportNamespaced)
 	return nil
 }
 
@@ -438,7 +438,7 @@ func (r *ServiceExportReconciler) updateSvcExportStatus(ctx context.Context, req
 	}
 	err = r.Client.Status().Update(ctx, svcExport)
 	if err != nil {
-		klog.ErrorS(err, "failed to update ServiceExport", "serviceexport", req.String())
+		klog.ErrorS(err, "Failed to update ServiceExport", "serviceexport", req.String())
 		return client.IgnoreNotFound(err)
 	}
 	return nil
@@ -491,7 +491,7 @@ func (r *ServiceExportReconciler) serviceHandler(
 	err := rc.Get(ctx, resNamespaced, existResExport)
 	if err != nil {
 		if !apierrors.IsNotFound(err) {
-			klog.ErrorS(err, "failed to get ResourceExport", "resourceexport", resNamespaced.String())
+			klog.ErrorS(err, "Failed to get ResourceExport", "resourceexport", resNamespaced.String())
 			return err
 		}
 	}
@@ -525,7 +525,7 @@ func (r *ServiceExportReconciler) endpointsHandler(
 	err := rc.Get(ctx, resNamespaced, existResExport)
 	if err != nil {
 		if !apierrors.IsNotFound(err) {
-			klog.ErrorS(err, "failed to get ResourceExport", "resourceexport", resNamespaced.String())
+			klog.ErrorS(err, "Failed to get ResourceExport", "resourceexport", resNamespaced.String())
 			return err
 		}
 	}
@@ -575,10 +575,10 @@ func (r *ServiceExportReconciler) updateOrCreateResourceExport(resName string,
 	resNamespaced := types.NamespacedName{Namespace: rc.GetNamespace(), Name: resName}
 	if createResExport {
 		newResExport.Finalizers = []string{common.ResourceExportFinalizer}
-		klog.InfoS("creating ResourceExport", "resourceexport", resNamespaced.String())
+		klog.InfoS("Creating ResourceExport", "resourceexport", resNamespaced.String())
 		err := rc.Create(ctx, newResExport, &client.CreateOptions{})
 		if err != nil {
-			klog.ErrorS(err, "failed to create ResourceExport in leader cluster", "resourceexport", resNamespaced.String())
+			klog.ErrorS(err, "Failed to create ResourceExport in leader cluster", "resourceexport", resNamespaced.String())
 			return err
 		}
 	} else {
@@ -586,7 +586,7 @@ func (r *ServiceExportReconciler) updateOrCreateResourceExport(resName string,
 		newResExport.Finalizers = existResExport.Finalizers
 		err := rc.Update(ctx, newResExport, &client.UpdateOptions{})
 		if err != nil {
-			klog.ErrorS(err, "failed to update ResourceExport", "resourceexport", resNamespaced.String())
+			klog.ErrorS(err, "Failed to update ResourceExport", "resourceexport", resNamespaced.String())
 			return err
 		}
 	}

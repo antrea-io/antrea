@@ -69,7 +69,6 @@ func (r *LeaderClusterSetReconciler) Reconcile(ctx context.Context, req ctrl.Req
 		if !errors.IsNotFound(err) {
 			return ctrl.Result{}, err
 		}
-		// if errors.IsNotFound(err)
 		klog.InfoS("Received ClusterSet delete", "config", klog.KObj(clusterSet))
 		for _, removedMember := range r.clusterSetConfig.Spec.Members {
 			r.StatusManager.RemoveMember(common.ClusterID(removedMember.ClusterID))
@@ -143,7 +142,7 @@ func (r *LeaderClusterSetReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&multiclusterv1alpha1.ClusterSet{}).
 		WithOptions(controller.Options{
-			MaxConcurrentReconciles: 5, // TODO: Use a constant after merging with Lan's changes
+			MaxConcurrentReconciles: common.DefaultWorkerCount,
 		}).
 		Complete(r)
 }
@@ -226,7 +225,7 @@ func (r *LeaderClusterSetReconciler) updateStatus() {
 	clusterSet := &multiclusterv1alpha1.ClusterSet{}
 	err := r.Get(context.TODO(), namespacedName, clusterSet)
 	if err != nil {
-		klog.ErrorS(err, "failed to read ClusterSet", "Name", namespacedName)
+		klog.ErrorS(err, "Failed to read ClusterSet", "Name", namespacedName)
 	}
 	status.Conditions = clusterSet.Status.Conditions
 	if (len(clusterSet.Status.Conditions) == 1 && clusterSet.Status.Conditions[0].Status != overallCondition.Status) ||
@@ -236,6 +235,6 @@ func (r *LeaderClusterSetReconciler) updateStatus() {
 	clusterSet.Status = status
 	err = r.Status().Update(context.TODO(), clusterSet)
 	if err != nil {
-		klog.ErrorS(err, "failed to update Status of ClusterSet", "Name", namespacedName)
+		klog.ErrorS(err, "Failed to update Status of ClusterSet", "Name", namespacedName)
 	}
 }

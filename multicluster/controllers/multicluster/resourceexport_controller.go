@@ -136,9 +136,9 @@ func (r *ResourceExportReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 			return ctrl.Result{}, err
 		}
 		r.updateResourceExportStatus(&resExport, succeed)
-		klog.InfoS("Create ResourceImport successfully", "resourceimport", resImportName.String())
+		klog.V(2).InfoS("ResourceImport is created successfully", "resourceimport", resImportName.String())
 	} else if changed {
-		klog.InfoS("Update ResourceImport for ResoureExport", "resourceimport", resImportName.String(), "resourceexport", req.NamespacedName)
+		klog.V(2).InfoS("Updating ResourceImport for ResoureExport", "resourceimport", resImportName.String(), "resourceexport", req.NamespacedName)
 		if err = r.handleUpdateEvent(ctx, resImport, &resExport); err != nil {
 			return ctrl.Result{}, err
 		}
@@ -452,7 +452,7 @@ func (r *ResourceExportReconciler) updateResourceExportStatus(resExport *mcsv1al
 	}
 	err := r.Client.Status().Update(ctx, resExport)
 	if err != nil {
-		klog.ErrorS(err, "failed to update ResourceExport status", "resourceexport", klog.KObj(resExport))
+		klog.ErrorS(err, "Failed to update ResourceExport status", "resourceexport", klog.KObj(resExport))
 	}
 }
 
@@ -467,7 +467,7 @@ func (r *ResourceExportReconciler) deleteResourceExport(resExport *mcsv1alpha1.R
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *ResourceExportReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	// ignore status update event via GenerationChangedPredicate
+	// Ignore status update event via GenerationChangedPredicate
 	instance := predicate.GenerationChangedPredicate{}
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&mcsv1alpha1.ResourceExport{}).
