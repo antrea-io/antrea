@@ -1076,8 +1076,7 @@ func (n *NetworkPolicyController) syncAddressGroup(key string) error {
 		SpanMeta:     antreatypes.SpanMeta{NodeNames: addrGroupNodeNames},
 	}
 	klog.V(2).Infof("Updating existing AddressGroup %s with %d Pods/ExternalEntities and %d Nodes", key, len(memberSet), addrGroupNodeNames.Len())
-	n.addressGroupStore.Update(updatedAddressGroup)
-	return nil
+	return n.addressGroupStore.Update(updatedAddressGroup)
 }
 
 func (c *NetworkPolicyController) getNodeMemberSet(selector labels.Selector) controlplane.GroupMemberSet {

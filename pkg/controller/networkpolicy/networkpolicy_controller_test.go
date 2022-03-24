@@ -3292,12 +3292,10 @@ func TestAddressGroupWithNodeSelector(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Name: "fakeNode0"},
 		Status:     corev1.NodeStatus{Addresses: []corev1.NodeAddress{{Type: corev1.NodeInternalIP, Address: "1.1.1.1"}}},
 	}
-	fakeNode0.Spec.PodCIDR = "192.168.0.0/24"
 	fakeNode1 := &corev1.Node{
 		ObjectMeta: metav1.ObjectMeta{Name: "fakeNode1"},
 		Status:     corev1.NodeStatus{Addresses: []corev1.NodeAddress{{Type: corev1.NodeInternalIP, Address: "1.1.1.2"}}},
 	}
-	fakeNode1.Spec.PodCIDR = "192.168.1.0/24"
 
 	createNode := func(node *corev1.Node) error {
 		_, err := c.kubeClient.CoreV1().Nodes().Create(context.TODO(), node, metav1.CreateOptions{})
@@ -3321,8 +3319,8 @@ func TestAddressGroupWithNodeSelector(t *testing.T) {
 	assert.NoError(t, err)
 	addrGroup := addrGroupObj.(*antreatypes.AddressGroup)
 	groupMembers := addrGroup.GroupMembers
-	memberNode0 := &controlplane.GroupMember{IPs: []controlplane.IPAddress{ipStrToIPAddress("1.1.1.1"), ipStrToIPAddress("192.168.0.1")}}
-	memberNode1 := &controlplane.GroupMember{IPs: []controlplane.IPAddress{ipStrToIPAddress("1.1.1.2"), ipStrToIPAddress("192.168.1.1")}}
+	memberNode0 := &controlplane.GroupMember{IPs: []controlplane.IPAddress{ipStrToIPAddress("1.1.1.1")}}
+	memberNode1 := &controlplane.GroupMember{IPs: []controlplane.IPAddress{ipStrToIPAddress("1.1.1.2")}}
 	assert.True(t, groupMembers.Has(memberNode0))
 	assert.False(t, groupMembers.Has(memberNode1))
 }

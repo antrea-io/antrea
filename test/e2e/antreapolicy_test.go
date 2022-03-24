@@ -2772,12 +2772,6 @@ func testACNPNodeSelectorIngress(t *testing.T, data *TestData) {
 	_, err := data.podWaitForIPs(defaultTimeout, clientName, "z")
 	require.NoError(t, err)
 
-	clientName1 := "agnhost-client1"
-	require.NoError(t, data.createAgnhostPodOnNode(clientName1, "z", nodeName(1), true))
-	defer data.deletePodAndWait(defaultTimeout, clientName1, "z")
-	_, err = data.podWaitForIPs(defaultTimeout, clientName1, "z")
-	require.NoError(t, err)
-
 	builder := &ClusterNetworkPolicySpecBuilder{}
 	builder = builder.SetName("test-acnp-drop-ingress-from-control-plane").
 		SetPriority(1.0)
@@ -2801,12 +2795,6 @@ func testACNPNodeSelectorIngress(t *testing.T, data *TestData) {
 				80,
 				Connected,
 			},
-			{
-				Pod("z/" + clientName1),
-				serverIP0.ipv4.String(),
-				80,
-				Connected,
-			},
 		}
 		testcases = append(testcases, ipv4TestCases...)
 	}
@@ -2821,12 +2809,6 @@ func testACNPNodeSelectorIngress(t *testing.T, data *TestData) {
 			{
 				Pod("z/" + clientName),
 				serverIP1.ipv6.String(),
-				80,
-				Connected,
-			},
-			{
-				Pod("z/" + clientName1),
-				serverIP0.ipv6.String(),
 				80,
 				Connected,
 			},
