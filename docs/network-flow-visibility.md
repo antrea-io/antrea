@@ -553,7 +553,7 @@ pod/grafana-5c6c5b74f7-x4v5b          1/1     Running   0          1m
 
 NAME                                    TYPE           CLUSTER-IP       EXTERNAL-IP   PORT(S)                         AGE
 service/chi-clickhouse-clickhouse-0-0   ClusterIP      None             <none>        8123/TCP,9000/TCP,9009/TCP      1m
-service/clickhouse-clickhouse           LoadBalancer   10.105.198.192   <pending>     8123:30001/TCP,9000:31044/TCP   1m
+service/clickhouse-clickhouse           ClusterIP      10.102.124.56    <none>        8123/TCP,9000/TCP               1m
 service/grafana                         LoadBalancer   10.97.171.150    <pending>     3000:31171/TCP                  1m
 
 NAME                      READY   UP-TO-DATE   AVAILABLE   AGE
@@ -641,7 +641,6 @@ serviceTemplates:
           port: 8123
         - name: tcp
           port: 9000
-      type: LoadBalancer
 ```
 
 This service is also used by the Flow Aggregator and Grafana. If you update the
