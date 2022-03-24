@@ -515,7 +515,10 @@ func (v *antreaPolicyValidator) validatePeers(ingress, egress []crdv1alpha1.Rule
 			if peer.ServiceAccount != nil && peerFieldsNum > 1 {
 				return "serviceAccount cannot be set with other peers in rules", false
 			}
-			if reason, allowed := checkSelectorsLabels(peer.PodSelector, peer.NamespaceSelector, peer.ExternalEntitySelector); !allowed {
+			if peer.NodeSelector != nil && peerFieldsNum > 1 {
+				return "nodeSelector cannot be set with other peers in rules", false
+			}
+			if reason, allowed := checkSelectorsLabels(peer.PodSelector, peer.NamespaceSelector, peer.ExternalEntitySelector, peer.NodeSelector); !allowed {
 				return reason, allowed
 			}
 		}

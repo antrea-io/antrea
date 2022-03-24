@@ -35,6 +35,7 @@
   - [K8s clusters with version 1.21 and above](#k8s-clusters-with-version-121-and-above)
   - [K8s clusters with version 1.20 and below](#k8s-clusters-with-version-120-and-below)
 - [FQDN based filtering](#fqdn-based-filtering)
+- [Node Selector](#node-selector)
 - [toServices instruction](#toservices-instruction)
 - [ServiceAccount based selection](#serviceaccount-based-selection)
 - [RBAC](#rbac)
@@ -531,7 +532,7 @@ Usage of ClusterGroups along with stand-alone selectors is not allowed.
 
 ### Behavior of *to* and *from* selectors
 
-There are six kinds of selectors that can be specified in an ingress `from`
+There are seven kinds of selectors that can be specified in an ingress `from`
 section or egress `to` section:
 
 **podSelector**: This selects particular Pods from all Namespaces as "sources",
@@ -544,6 +545,10 @@ with `namespaces` field.
 **podSelector** and **namespaceSelector**:  A single to/from entry that
 specifies both namespaceSelector and podSelector selects particular Pods within
 particular Namespaces.
+
+**nodeSelector**: This selects particular Nodes in cluster. The selected Node's
+IPs will be set as "sources" if `nodeSelector` set in `ingress` section, or as
+"destinations" if is set in the `egress` section.
 
 **namespaces**: A `namespaces` field allows users to perform advanced matching on
 Namespace objects which cannot be done via label selectors. Currently, the
@@ -1100,6 +1105,50 @@ spec:
   - action: Drop
     to:
       - fqdn: "svcA.default.svc.cluster.local"
+```
+
+## Node Selector
+
+NodeSelector selects certain Nodes which match the label selector.
+When used in the `to` field of an egress rule, it adds the Node IPs to the rule's destination address group;
+when used in the `from` field of an ingress rule, it adds the Node IPs to the rule's source address group.
+
+Notice that when a rule with a nodeSelector applies to a Node, it only restricts the traffic to/from certain IPs of the Node.
+The IPs include:  
+
+1. The Node IP (the IP address in the Node API object)
+2. The Antrea gateway IP (the IP address of the interface antrea-agent will create and use for Node-to-Pod communication)
+3. The transport IP (the IP address of the interface used for tunneling or routing the traffic across Nodes) if it's different from Node IP
+
+Traffic to/from other IPs of the Node will be ignored.
+Meanwhile, `NodeSelector` doesn’t affect the traffic from Node to Pods running on that Node. Such traffic will always
+be allowed to make sure that [agents on a Node (e.g. system daemons, kubelet) can communicate with all Pods on
+that Node](https://kubernetes.io/docs/concepts/services-networking/#the-kubernetes-network-model) to perform liveness
+and readiness probes. For more information, see [https://github.com/antrea-io/antrea/pull/104](https://github.com/antrea-io/antrea/pull/104).
+
+For example, the following rule applies to Pods with label `app=antrea-test-app` and will `Drop` egress traffic to
+Nodes on TCP port 6443 which have the labels `node-role.kubernetes.io/control-plane`.
+
+```yaml
+apiVersion: crd.antrea.io/v1alpha1
+kind: ClusterNetworkPolicy
+metadata:
+  name: egress-control-plane
+spec:
+  priority: 1
+  appliedTo:
+    - podSelector:
+        matchLabels:
+          app: antrea-test-app
+  egress:
+    - action: Drop
+      to:
+        - nodeSelector:
+            matchLabels:
+              node-role.kubernetes.io/control-plane: ""
+      ports:
+        - protocol: TCP
+          port: 6443
 ```
 
 ## toServices instruction

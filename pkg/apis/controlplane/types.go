@@ -44,6 +44,12 @@ type PodReference struct {
 	Namespace string
 }
 
+// NodeReference represents a Node Reference.
+type NodeReference struct {
+	// The name of this Node.
+	Name string
+}
+
 // ServiceReference represents reference to a v1.Service.
 type ServiceReference struct {
 	// The name of this Service.
@@ -70,12 +76,14 @@ type ExternalEntityReference struct {
 	Namespace string
 }
 
-// GroupMember represents an resource member to be populated in Groups.
+// GroupMember represents a resource member to be populated in Groups.
 type GroupMember struct {
 	// Pod maintains the reference to the Pod.
 	Pod *PodReference
 	// ExternalEntity maintains the reference to the ExternalEntity.
 	ExternalEntity *ExternalEntityReference
+	// Node maintains the reference to the Node.
+	Node *NodeReference
 	// IP is the IP address of the Endpoints associated with the GroupMember.
 	IPs []IPAddress
 	// Ports is the list NamedPort of the GroupMember.

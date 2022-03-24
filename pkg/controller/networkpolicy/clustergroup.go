@@ -142,7 +142,7 @@ func (c *NetworkPolicyController) processClusterGroup(cg *crdv1alpha3.ClusterGro
 			Name:      svcSelector.Name,
 		}
 	} else {
-		groupSelector := antreatypes.NewGroupSelector("", cg.Spec.PodSelector, cg.Spec.NamespaceSelector, cg.Spec.ExternalEntitySelector)
+		groupSelector := antreatypes.NewGroupSelector("", cg.Spec.PodSelector, cg.Spec.NamespaceSelector, cg.Spec.ExternalEntitySelector, nil)
 		internalGroup.Selector = groupSelector
 	}
 	return &internalGroup
@@ -356,7 +356,7 @@ func (c *NetworkPolicyController) serviceToGroupSelector(service *v1.Service) *a
 	}
 	// Convert Service.spec.selector to GroupSelector by setting the Namespace to the Service's Namespace
 	// and podSelector to Service's selector.
-	groupSelector := antreatypes.NewGroupSelector(service.Namespace, &svcPodSelector, nil, nil)
+	groupSelector := antreatypes.NewGroupSelector(service.Namespace, &svcPodSelector, nil, nil, nil)
 	return groupSelector
 }
 

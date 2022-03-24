@@ -151,7 +151,7 @@ func TestToAntreaPeerForCRD(t *testing.T) {
 	selectorC := metav1.LabelSelector{MatchLabels: map[string]string{"foo3": "bar3"}}
 	selectorAll := metav1.LabelSelector{}
 	matchAllPodsPeer := matchAllPeer
-	matchAllPodsPeer.AddressGroups = []string{getNormalizedUID(antreatypes.NewGroupSelector("", nil, &selectorAll, nil).NormalizedName)}
+	matchAllPodsPeer.AddressGroups = []string{getNormalizedUID(antreatypes.NewGroupSelector("", nil, &selectorAll, nil, nil).NormalizedName)}
 	// cgA with selector present in cache
 	cgA := crdv1alpha3.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{Name: "cgA", UID: "uidA"},
@@ -180,8 +180,8 @@ func TestToAntreaPeerForCRD(t *testing.T) {
 			},
 			outPeer: controlplane.NetworkPolicyPeer{
 				AddressGroups: []string{
-					getNormalizedUID(antreatypes.NewGroupSelector("", &selectorA, &selectorB, nil).NormalizedName),
-					getNormalizedUID(antreatypes.NewGroupSelector("", &selectorC, nil, nil).NormalizedName),
+					getNormalizedUID(antreatypes.NewGroupSelector("", &selectorA, &selectorB, nil, nil).NormalizedName),
+					getNormalizedUID(antreatypes.NewGroupSelector("", &selectorC, nil, nil, nil).NormalizedName),
 				},
 			},
 			direction: controlplane.DirectionIn,
@@ -199,8 +199,8 @@ func TestToAntreaPeerForCRD(t *testing.T) {
 			},
 			outPeer: controlplane.NetworkPolicyPeer{
 				AddressGroups: []string{
-					getNormalizedUID(antreatypes.NewGroupSelector("", &selectorA, &selectorB, nil).NormalizedName),
-					getNormalizedUID(antreatypes.NewGroupSelector("", &selectorC, nil, nil).NormalizedName),
+					getNormalizedUID(antreatypes.NewGroupSelector("", &selectorA, &selectorB, nil, nil).NormalizedName),
+					getNormalizedUID(antreatypes.NewGroupSelector("", &selectorC, nil, nil, nil).NormalizedName),
 				},
 			},
 			direction: controlplane.DirectionOut,
@@ -277,6 +277,34 @@ func TestToAntreaPeerForCRD(t *testing.T) {
 			},
 			outPeer: controlplane.NetworkPolicyPeer{
 				AddressGroups: []string{cgA.Name},
+			},
+			direction: controlplane.DirectionOut,
+		},
+		{
+			name: "node-selector-peer-ingress",
+			inPeers: []crdv1alpha1.NetworkPolicyPeer{
+				{
+					NodeSelector: &selectorA,
+				},
+			},
+			outPeer: controlplane.NetworkPolicyPeer{
+				AddressGroups: []string{
+					getNormalizedUID(antreatypes.NewGroupSelector("", nil, nil, nil, &selectorA).NormalizedName),
+				},
+			},
+			direction: controlplane.DirectionIn,
+		},
+		{
+			name: "node-selector-peer-egress",
+			inPeers: []crdv1alpha1.NetworkPolicyPeer{
+				{
+					NodeSelector: &selectorA,
+				},
+			},
+			outPeer: controlplane.NetworkPolicyPeer{
+				AddressGroups: []string{
+					getNormalizedUID(antreatypes.NewGroupSelector("", nil, nil, nil, &selectorA).NormalizedName),
+				},
 			},
 			direction: controlplane.DirectionOut,
 		},

@@ -49,27 +49,36 @@ type GroupSelector struct {
 	// If Namespace and NamespaceSelector both are unset, it selects the ExternalEntities in all the Namespaces.
 	// TODO: Add validation in API to not allow externalEntitySelector and podSelector in the same group.
 	ExternalEntitySelector labels.Selector
+
+	// This is a label selector which selects certain Node IPs. Within a group NodeSelector cannot be set together with
+	// other selectors: Namespace/NamespaceSelector/PodSelector/ExternalEntitySelector.
+	NodeSelector labels.Selector
 }
 
-func NewGroupSelector(namespace string, podSelector, nsSelector, extEntitySelector *metav1.LabelSelector) *GroupSelector {
+// NewGroupSelector converts the podSelector, namespaceSelector, externalEntitySelector and nodeSelector
+// and NetworkPolicy Namespace to a networkpolicy.GroupSelector object.
+func NewGroupSelector(namespace string, podSelector, nsSelector, extEntitySelector, nodeSelector *metav1.LabelSelector) *GroupSelector {
 	groupSelector := GroupSelector{}
 	if podSelector != nil {
-		pSelector, _ := metav1.LabelSelectorAsSelector(podSelector)
-		groupSelector.PodSelector = pSelector
+		groupSelector.PodSelector, _ = metav1.LabelSelectorAsSelector(podSelector)
 	}
 	if extEntitySelector != nil {
-		eSelector, _ := metav1.LabelSelectorAsSelector(extEntitySelector)
-		groupSelector.ExternalEntitySelector = eSelector
+		groupSelector.ExternalEntitySelector, _ = metav1.LabelSelectorAsSelector(extEntitySelector)
 	}
 	if nsSelector == nil {
 		// No namespaceSelector indicates that the pods must be selected within
 		// the NetworkPolicy's Namespace.
 		groupSelector.Namespace = namespace
 	} else {
-		nSelector, _ := metav1.LabelSelectorAsSelector(nsSelector)
-		groupSelector.NamespaceSelector = nSelector
+		groupSelector.NamespaceSelector, _ = metav1.LabelSelectorAsSelector(nsSelector)
 	}
-	name := GenerateNormalizedName(groupSelector.Namespace, groupSelector.PodSelector, groupSelector.NamespaceSelector, groupSelector.ExternalEntitySelector)
+
+	if nodeSelector != nil {
+		groupSelector.NodeSelector, _ = metav1.LabelSelectorAsSelector(nodeSelector)
+	}
+
+	name := GenerateNormalizedName(groupSelector.Namespace, groupSelector.PodSelector,
+		groupSelector.NamespaceSelector, groupSelector.ExternalEntitySelector, groupSelector.NodeSelector)
 	groupSelector.NormalizedName = name
 	return &groupSelector
 }
@@ -78,7 +87,7 @@ func NewGroupSelector(namespace string, podSelector, nsSelector, extEntitySelect
 // the following format: "namespace=NamespaceName And podSelector=normalizedPodSelector".
 // Note: Namespace and nsSelector may or may not be set depending on the
 // selector. However, they cannot be set simultaneously.
-func GenerateNormalizedName(namespace string, podSelector, nsSelector, eeSelector labels.Selector) string {
+func GenerateNormalizedName(namespace string, podSelector, nsSelector, eeSelector labels.Selector, nodeSelector labels.Selector) string {
 	normalizedName := []string{}
 	if nsSelector != nil {
 		normalizedName = append(normalizedName, fmt.Sprintf("namespaceSelector=%s", nsSelector.String()))
@@ -90,6 +99,9 @@ func GenerateNormalizedName(namespace string, podSelector, nsSelector, eeSelecto
 	}
 	if eeSelector != nil {
 		normalizedName = append(normalizedName, fmt.Sprintf("eeSelector=%s", eeSelector.String()))
+	}
+	if nodeSelector != nil {
+		normalizedName = append(normalizedName, fmt.Sprintf("nodeSelector=%s", nodeSelector.String()))
 	}
 	sort.Strings(normalizedName)
 	return strings.Join(normalizedName, " And ")

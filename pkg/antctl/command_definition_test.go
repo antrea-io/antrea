@@ -220,9 +220,36 @@ foo2
 					Pods: []common.GroupMember{},
 				},
 			},
-			expected: `NAME       POD-IPS                                           
-GroupName1 10.0.0.3,127.0.0.1,127.0.0.2,127.0.0.3 + 2 more...
-GroupName2 <NONE>                                            
+			expected: `NAME       POD-IPS                                            NODE-IPS
+GroupName1 10.0.0.3,127.0.0.1,127.0.0.2,127.0.0.3 + 2 more... <NONE>  
+GroupName2 <NONE>                                             <NONE>  
+`,
+		},
+		{
+			name: "StructureData-AddressGroup-HasNode",
+			rawResponseData: []addressgroup.Response{
+				{
+					Name: "AddressGroupNameHasNode",
+					Nodes: []common.GroupMember{
+						{IP: "127.0.0.1"}, {IP: "192.168.0.1"}, {IP: "10.176.27.105"}, {IP: "127.0.0.3"},
+					},
+				},
+				{
+					Name: "AddressGroupNameHasPod",
+					Pods: []common.GroupMember{
+						{IP: "127.0.0.1"}, {IP: "192.168.0.1"}, {IP: "127.0.0.2"},
+						{IP: "127.0.0.3"}, {IP: "10.0.0.3"}, {IP: "127.0.0.5"}, {IP: "127.0.0.6"},
+					},
+				},
+				{
+					Name: "AddressGroupNameNone",
+					Pods: []common.GroupMember{},
+				},
+			},
+			expected: `NAME                    POD-IPS                                            NODE-IPS                                     
+AddressGroupNameHasNode <NONE>                                             10.176.27.105,127.0.0.1,127.0.0.3,192.168.0.1
+AddressGroupNameHasPod  10.0.0.3,127.0.0.1,127.0.0.2,127.0.0.3 + 2 more... <NONE>                                       
+AddressGroupNameNone    <NONE>                                             <NONE>                                       
 `,
 		},
 		{

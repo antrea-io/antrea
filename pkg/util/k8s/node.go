@@ -17,9 +17,13 @@ package k8s
 import (
 	"fmt"
 	"net"
+	"strings"
 
+	ip2 "github.com/containernetworking/plugins/pkg/ip"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/util/sets"
 
+	"antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/util/ip"
 )
 
@@ -56,4 +60,88 @@ func GetNodeAddrs(node *v1.Node) (*ip.DualStackIPs, error) {
 		}
 	}
 	return nodeAddrs, nil
+}
+
+// GetNodeAddrsFromAnnotations gets available IPs from the Node Annotation. The annotations are set by Antrea.
+func GetNodeAddrsFromAnnotations(node *v1.Node, annotationKey string) (*ip.DualStackIPs, error) {
+	annotationAddrsStr := node.Annotations[annotationKey]
+	if annotationAddrsStr == "" {
+		return nil, nil
+	}
+	var ipAddrs = new(ip.DualStackIPs)
+	for _, addr := range strings.Split(annotationAddrsStr, ",") {
+		peerNodeAddr := net.ParseIP(addr)
+		if peerNodeAddr == nil {
+			return nil, fmt.Errorf("invalid annotation for ip-address on Node %s: %s", node.Name, annotationAddrsStr)
+		}
+		if peerNodeAddr.To4() == nil {
+			ipAddrs.IPv6 = peerNodeAddr
+		} else {
+			ipAddrs.IPv4 = peerNodeAddr
+		}
+	}
+	return ipAddrs, nil
+}
+
+// GetNodeGatewayAddrs gets Node Antrea gateway IPs from the Node Spec.
+func GetNodeGatewayAddrs(node *v1.Node) (*ip.DualStackIPs, error) {
+	nodeAddrs := new(ip.DualStackIPs)
+	parseIP := func(podCIDR string) error {
+		cidrIP, _, err := net.ParseCIDR(podCIDR)
+		if err != nil {
+			return err
+		}
+		if cidrIP.To4() != nil {
+			nodeAddrs.IPv4 = ip2.NextIP(cidrIP)
+		} else {
+			nodeAddrs.IPv6 = ip2.NextIP(cidrIP)
+		}
+		return nil
+	}
+	if node.Spec.PodCIDRs != nil {
+		for _, podCIDR := range node.Spec.PodCIDRs {
+			if err := parseIP(podCIDR); err != nil {
+				return nil, err
+			}
+		}
+		return nodeAddrs, nil
+	}
+	if err := parseIP(node.Spec.PodCIDR); err != nil {
+		return nil, err
+	}
+	return nodeAddrs, nil
+}
+
+// GetNodeAllAddrs gets all Node IPs from the Node.
+func GetNodeAllAddrs(node *v1.Node) (ips sets.String, err error) {
+	var nodeIPs, gwIPs, transportAddrs *ip.DualStackIPs
+	ips = sets.String{}
+	appendIP := func(dsIPs *ip.DualStackIPs) {
+		if dsIPs == nil {
+			return
+		}
+		if dsIPs.IPv4 != nil {
+			ips.Insert(dsIPs.IPv4.String())
+		}
+		if dsIPs.IPv6 != nil {
+			ips.Insert(dsIPs.IPv6.String())
+		}
+	}
+
+	if nodeIPs, err = GetNodeAddrs(node); err != nil {
+		return
+	}
+	appendIP(nodeIPs)
+
+	if gwIPs, err = GetNodeGatewayAddrs(node); err != nil {
+		return
+	}
+	appendIP(gwIPs)
+
+	if transportAddrs, err = GetNodeAddrsFromAnnotations(node, types.NodeTransportAddressAnnotationKey); err != nil {
+		return
+	}
+	appendIP(transportAddrs)
+
+	return
 }

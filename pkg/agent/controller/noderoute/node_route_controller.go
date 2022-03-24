@@ -17,7 +17,6 @@ package noderoute
 import (
 	"fmt"
 	"net"
-	"strings"
 	"time"
 
 	"github.com/containernetworking/plugins/pkg/ip"
@@ -765,21 +764,12 @@ func getNodeMAC(node *corev1.Node) (net.HardwareAddr, error) {
 }
 
 func (c *Controller) getNodeTransportAddrs(node *corev1.Node) (*utilip.DualStackIPs, error) {
-	var transportAddrs = new(utilip.DualStackIPs)
 	if c.networkConfig.TransportIface != "" || len(c.networkConfig.TransportIfaceCIDRs) > 0 {
-		transportAddrsStr := node.Annotations[types.NodeTransportAddressAnnotationKey]
-		if transportAddrsStr != "" {
-			for _, addr := range strings.Split(transportAddrsStr, ",") {
-				peerNodeAddr := net.ParseIP(addr)
-				if peerNodeAddr == nil {
-					return nil, fmt.Errorf("invalid annotation for transport-address on Node %s: %s", node.Name, transportAddrsStr)
-				}
-				if peerNodeAddr.To4() == nil {
-					transportAddrs.IPv6 = peerNodeAddr
-				} else {
-					transportAddrs.IPv4 = peerNodeAddr
-				}
-			}
+		transportAddrs, err := k8s.GetNodeAddrsFromAnnotations(node, types.NodeTransportAddressAnnotationKey)
+		if err != nil {
+			return nil, err
+		}
+		if transportAddrs != nil {
 			return transportAddrs, nil
 		}
 		klog.InfoS("Transport address is not found, using NodeIP instead", "node", node.Name)
