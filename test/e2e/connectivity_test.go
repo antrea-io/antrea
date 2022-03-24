@@ -106,7 +106,7 @@ func (data *TestData) runPingMesh(t *testing.T, podInfos []podInfo, ctrname stri
 				podNamespace = pi1.namespace
 			}
 			pod2Namespace := testNamespace
-			if pi1.namespace != "" {
+			if pi2.namespace != "" {
 				pod2Namespace = pi2.namespace
 			}
 			if err := data.runPingCommandFromTestPod(pi1, podNamespace, podIPs[pi2.name], ctrname, pingCount, 0); err != nil {

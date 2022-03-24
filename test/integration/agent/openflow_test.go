@@ -1081,7 +1081,7 @@ func preparePodFlows(podIPs []net.IP, podMAC net.HardwareAddr, podOFPort uint32,
 			"Classifier",
 			[]*ofTestUtils.ExpectFlow{
 				{
-					MatchStr: fmt.Sprintf("priority=200,ip,in_port=%d%s,dl_dst=%s", 3, matchVlanVIDString, podMAC.String()),
+					MatchStr: fmt.Sprintf("priority=210,ip,in_port=%d%s,dl_dst=%s", 3, matchVlanVIDString, podMAC.String()),
 					ActStr:   fmt.Sprintf("load:0x1->NXM_NX_REG8[12..15],load:%s->NXM_NX_REG8[0..11],load:0x4->NXM_NX_REG0[0..3],goto_table:SNATConntrackZone", vlanVIDString),
 				},
 			},
@@ -1091,7 +1091,7 @@ func preparePodFlows(podIPs []net.IP, podMAC net.HardwareAddr, podOFPort uint32,
 				"Classifier",
 				[]*ofTestUtils.ExpectFlow{
 					{
-						MatchStr: fmt.Sprintf("priority=200,ip,in_port=LOCAL,vlan_tci=0x0000/0x1fff,dl_dst=%s", podMAC.String()),
+						MatchStr: fmt.Sprintf("priority=210,ip,in_port=LOCAL,vlan_tci=0x0000/0x1fff,dl_dst=%s", podMAC.String()),
 						ActStr:   fmt.Sprintf("load:0x1->NXM_NX_REG8[12..15],load:0x5->NXM_NX_REG0[0..3],goto_table:SNATConntrackZone"),
 					},
 				},

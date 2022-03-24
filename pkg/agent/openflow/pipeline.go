@@ -23,6 +23,7 @@ import (
 	"sync"
 	"time"
 
+	"antrea.io/libOpenflow/openflow13"
 	"antrea.io/libOpenflow/protocol"
 	"antrea.io/ofnet/ofctrl"
 	v1 "k8s.io/api/core/v1"
@@ -621,7 +622,7 @@ func (f *featurePodConnectivity) podUplinkClassifierFlows(dstMAC net.HardwareAdd
 		}
 		flows = append(flows,
 			// This generates the flow to mark the packets from uplink port.
-			ClassifierTable.ofTable.BuildFlow(priorityNormal).
+			ClassifierTable.ofTable.BuildFlow(priorityHigh).
 				Cookie(cookieID).
 				MatchInPort(config.UplinkOFPort).
 				MatchDstMAC(dstMAC).
@@ -636,7 +637,7 @@ func (f *featurePodConnectivity) podUplinkClassifierFlows(dstMAC net.HardwareAdd
 		if vlanID == 0 {
 			flows = append(flows,
 				// This generates the flow to mark the packets from bridge local port.
-				ClassifierTable.ofTable.BuildFlow(priorityNormal).
+				ClassifierTable.ofTable.BuildFlow(priorityHigh).
 					Cookie(cookieID).
 					MatchInPort(config.BridgeOFPort).
 					MatchDstMAC(dstMAC).
@@ -1256,6 +1257,7 @@ func (f *featurePodConnectivity) l3FwdFlowToPod(localGatewayMAC net.HardwareAddr
 			fb := L3ForwardingTable.ofTable.BuildFlow(priorityNormal).
 				Cookie(cookieID)
 			if f.connectUplinkToBridge {
+				// Only overwrite MAC for untagged traffic which destination is a local per-Node IPAM Pod.
 				fb = fb.MatchRegFieldWithValue(VLANIDField, 0)
 			}
 			flows = append(flows, fb.MatchProtocol(ipProtocol).
@@ -2793,13 +2795,13 @@ func (f *featurePodConnectivity) hostBridgeLocalFlows() []binding.Flow {
 	cookieID := f.cookieAllocator.Request(f.category).Raw()
 	return []binding.Flow{
 		// This generates the flow to forward the packets from uplink port to bridge local port.
-		ClassifierTable.ofTable.BuildFlow(priorityLow).
+		ClassifierTable.ofTable.BuildFlow(priorityNormal).
 			Cookie(cookieID).
 			MatchInPort(config.UplinkOFPort).
 			Action().Output(config.BridgeOFPort).
 			Done(),
 		// This generates the flow to forward the packets from bridge local port to uplink port.
-		ClassifierTable.ofTable.BuildFlow(priorityLow).
+		ClassifierTable.ofTable.BuildFlow(priorityNormal).
 			Cookie(cookieID).
 			MatchInPort(config.BridgeOFPort).
 			Action().Output(config.UplinkOFPort).
@@ -2809,7 +2811,7 @@ func (f *featurePodConnectivity) hostBridgeLocalFlows() []binding.Flow {
 
 // hostBridgeUplinkVLANFlows generates the flows to match VLAN packets from uplink port.
 func (f *featurePodConnectivity) hostBridgeUplinkVLANFlows() []binding.Flow {
-	vlanMask := uint16(0x1000)
+	vlanMask := uint16(openflow13.OFPVID_PRESENT)
 	return []binding.Flow{
 		VLANTable.ofTable.BuildFlow(priorityLow).
 			Cookie(f.cookieAllocator.Request(f.category).Raw()).
