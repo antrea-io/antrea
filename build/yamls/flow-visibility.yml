@@ -4903,16 +4903,9 @@ spec:
       clickhouse_operator/networks/ip: ::/0
   defaults:
     templates:
-      hostTemplate: host-template
       podTemplate: pod-template
       serviceTemplate: service-template
   templates:
-    hostTemplates:
-    - name: host-template
-      spec:
-        httpPort: 8123
-        interserverHTTPPort: 9009
-        tcpPort: 9000
     podTemplates:
     - name: pod-template
       spec:
