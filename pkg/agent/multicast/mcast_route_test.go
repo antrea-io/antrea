@@ -32,9 +32,11 @@ import (
 )
 
 var (
-	addrIf1    = &net.IPNet{IP: nodeIf1IP, Mask: net.IPv4Mask(255, 255, 255, 0)}
-	addrIf2    = &net.IPNet{IP: externalInterfaceIP, Mask: net.IPv4Mask(255, 255, 255, 0)}
-	nodeConfig = &config.NodeConfig{GatewayConfig: &config.GatewayConfig{Name: "antrea-gw0"}, NodeIPv4Addr: addrIf1}
+	addrIPv6If1 = &net.IPNet{IP: nodeIf1IP, Mask: net.IPv4Mask(255, 255, 255, 0)}
+	addrIPv6If2 = &net.IPNet{IP: externalInterfaceIP, Mask: net.IPv4Mask(255, 255, 255, 0)}
+	addrIf1     = &net.IPNet{IP: nodeIf1IP, Mask: net.IPv4Mask(255, 255, 255, 0)}
+	addrIf2     = &net.IPNet{IP: externalInterfaceIP, Mask: net.IPv4Mask(255, 255, 255, 0)}
+	nodeConfig  = &config.NodeConfig{GatewayConfig: &config.GatewayConfig{Name: "antrea-gw0"}, NodeIPv4Addr: addrIf1}
 )
 
 func TestParseIGMPMsg(t *testing.T) {
@@ -52,7 +54,7 @@ func TestParseIGMPMsg(t *testing.T) {
 		{msg: []byte{123, 234, 112, 33, 244, 2, 64, 2, 1, 0, 1, 0, 10, 244, 0, 4, 224, 2, 4, 8, 1, 0, 0},
 			expectedParsedIGMPMsg: &parsedIGMPMsg{Src: net.ParseIP("10.244.0.4"), Dst: net.ParseIP("224.2.4.8"), VIF: uint16(1)}, expectedErr: nil},
 		{msg: []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 11, 11, 12, 24, 12, 34, 21, 23, 45},
-			expectedErr: fmt.Errorf("failed to parse IGMPMSG: message length should be greater than 19")},
+			expectedErr: fmt.Errorf("failed to parse IGMPMSG: message length should be no less than 20")},
 		{msg: []byte{1, 2, 3, 4, 5, 6, 7, 8, 0, 0, 11, 11, 12, 24, 12, 34, 21, 23, 45, 22},
 			expectedErr: fmt.Errorf("not a IGMPMSG_NOCACHE message: [1 2 3 4 5 6 7 8 0 0 11 11 12 24 12 34 21 23 45 22]")},
 		{msg: []byte{69, 0, 0, 28, 242, 241, 64, 0, 1, 1, 0, 0, 10, 244, 0, 2, 224, 3, 3, 7, 1, 0, 0, 0, 0, 0, 0, 0},
@@ -61,6 +63,80 @@ func TestParseIGMPMsg(t *testing.T) {
 		msg, err := mRoute.parseIGMPMsg(m.msg)
 		assert.Equal(t, m.expectedErr, err)
 		assert.Equal(t, m.expectedParsedIGMPMsg, msg)
+	}
+}
+
+func TestParseMRT6msg(t *testing.T) {
+	mRoute := newMockMulticastRouteClient(t)
+	err := mRoute.initialize(t)
+	assert.Nil(t, err)
+	for _, m := range []struct {
+		msg             []byte
+		expectedMRT6msg *parsedMRT6msg
+		expectedErr     error
+	}{
+		{msg: []byte{0, 1, 1, 0, 0, 0, 0, 0, 0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0x2a, 0x59, 0xab, 0, 0x43, 0x60, 0x91, 0x64, 0xff, 0x2e, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x44},
+			expectedMRT6msg: &parsedMRT6msg{Src: net.ParseIP("fe80::2a59:ab00:4360:9164"), Dst: net.ParseIP("ff2e::44"), MIF: uint16(1)}, expectedErr: nil},
+		{msg: []byte{0, 1, 2, 0, 0, 0, 0, 0, 0xfe, 0x80, 0, 0x44, 0, 0, 0, 0, 0x2a, 0x59, 0xab, 0, 0x43, 0x60, 0x91, 0x64, 0xff, 0x2e, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x45},
+			expectedMRT6msg: &parsedMRT6msg{Src: net.ParseIP("fe80:44::2a59:ab00:4360:9164"), Dst: net.ParseIP("ff2e::45"), MIF: uint16(2)}, expectedErr: nil},
+		{msg: []byte{0, 1, 2, 0, 0, 0, 0, 0, 0xfe, 0x80, 0, 0x44, 0, 0, 0, 0, 0x2a, 0x59, 0xab, 0, 0x43, 0x60, 0x91, 0x64, 0xff, 0x2e, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x45},
+			expectedErr: fmt.Errorf("failed to parse MRT6MSG: message length should be no less than 40")},
+		{msg: []byte{0, 2, 1, 0, 0, 0, 0, 0, 0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0x2a, 0x59, 0xab, 0, 0x43, 0x60, 0x91, 0x64, 0xff, 0x2e, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x44},
+			expectedErr: fmt.Errorf("not a MRT6MSG_NOCACHE message: [0 2 1 0 0 0 0 0 254 128 0 0 0 0 0 0 42 89 171 0 67 96 145 100 255 46 0 0 0 0 0 0 0 0 0 0 0 0 0 68]")},
+		{msg: []byte{1, 1, 2, 0, 0, 0, 0, 0, 0xfe, 0x80, 0, 0x44, 0, 0, 0, 0, 0x2a, 0x59, 0xab, 0, 0x43, 0x60, 0x91, 0x64, 0xff, 0x2e, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x45},
+			expectedErr: fmt.Errorf("invalid mrt6msg message: im6_mbz must be zero")},
+	} {
+		msg, err := mRoute.parseMRT6msg(m.msg)
+		assert.Equal(t, m.expectedErr, err)
+		assert.Equal(t, m.expectedMRT6msg, msg)
+	}
+}
+
+func TestProcessMRT6NocachMsg(t *testing.T) {
+	mRoute := newMockMulticastRouteClient(t)
+	err := mRoute.initialize(t)
+	assert.Nil(t, err)
+	mRoute.multicastInterfaceConfigs = []multicastInterfaceConfig{
+		{Name: "if1", IPv6Addr: addrIPv6If1},
+		{Name: "if2", IPv6Addr: addrIPv6If2},
+	}
+	mRoute.externalInterfaceMIFs = []uint16{1, 2}
+	mRoute.internalInterfaceMIF = uint16(0)
+	status1 := &GroupMemberStatus{
+		group:        net.ParseIP("ff2e::44"),
+		localMembers: sets.NewString("aa"),
+	}
+	mRoute.groupCache.Add(status1)
+	status2 := &GroupMemberStatus{
+		group:        net.ParseIP("ff2e::45"),
+		localMembers: sets.NewString(),
+	}
+	mRoute.groupCache.Add(status2)
+	for _, m := range []struct {
+		mrt6msg            []byte
+		expectedSrc        net.IP
+		expectedGroup      net.IP
+		expectedIif        uint16
+		expectedOifVIFs    []uint16
+		expectedNumOfCalls int
+	}{
+		{mrt6msg: []byte{0, 1, 2, 0, 0, 0, 0, 0, 0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0x2a, 0x59, 0xab, 0, 0x43, 0x60, 0x91, 0x64, 0xff, 0x2e, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x44},
+			expectedSrc: net.ParseIP("fe80::2a59:ab00:4360:9164"), expectedGroup: net.ParseIP("ff2e::44"), expectedIif: uint16(2), expectedOifVIFs: []uint16{0}, expectedNumOfCalls: 1},
+		{mrt6msg: []byte{0, 2, 2, 0, 0, 0, 0, 0, 0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0x2a, 0x59, 0xab, 0, 0x43, 0x60, 0x91, 0x64, 0xff, 0x2e, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x44},
+			expectedSrc: net.ParseIP("fe80::2a59:ab00:4360:9164"), expectedGroup: net.ParseIP("ff2e::44"), expectedIif: uint16(2), expectedOifVIFs: []uint16{0}, expectedNumOfCalls: 0},
+		{mrt6msg: []byte{1, 1, 2, 0, 0, 0, 0, 0, 0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0x2a, 0x59, 0xab, 0, 0x43, 0x60, 0x91, 0x64, 0xff, 0x2e, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x44},
+			expectedSrc: net.ParseIP("fe80::2a59:ab00:4360:9164"), expectedGroup: net.ParseIP("ff2e::44"), expectedIif: uint16(2), expectedOifVIFs: []uint16{0}, expectedNumOfCalls: 0},
+		{mrt6msg: []byte{0, 1, 0, 0, 0, 0, 0, 0, 0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0x2a, 0x59, 0xab, 0, 0x43, 0x60, 0x91, 0x64, 0xff, 0x2e, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x44},
+			expectedSrc: net.ParseIP("fe80::2a59:ab00:4360:9164"), expectedGroup: net.ParseIP("ff2e::44"), expectedIif: uint16(0), expectedOifVIFs: []uint16{1, 2}, expectedNumOfCalls: 1},
+		{mrt6msg: []byte{0, 1, 3, 0, 0, 0, 0, 0, 0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0x2a, 0x59, 0xab, 0, 0x43, 0x60, 0x91, 0x64, 0xff, 0x2e, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x44},
+			expectedSrc: net.ParseIP("fe80::2a59:ab00:4360:9164"), expectedGroup: net.ParseIP("ff2e::44"), expectedIif: uint16(2), expectedOifVIFs: []uint16{0}, expectedNumOfCalls: 0},
+		{mrt6msg: []byte{0, 1, 2, 0, 0, 0, 0, 0, 0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0x2a, 0x59, 0xab, 0, 0x43, 0x60, 0x91, 0x64, 0xff, 0x2e, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x45},
+			expectedSrc: net.ParseIP("fe80::2a59:ab00:4360:9164"), expectedGroup: net.ParseIP("ff2e::45"), expectedIif: uint16(2), expectedOifVIFs: []uint16{0}, expectedNumOfCalls: 0},
+		{mrt6msg: []byte{0, 1, 2, 0, 0, 0, 0, 0, 0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0x2a, 0x59, 0xab, 0, 0x43, 0x60, 0x91, 0x64, 0xff, 0x2e, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x46},
+			expectedSrc: net.ParseIP("fe80::2a59:ab00:4360:9164"), expectedGroup: net.ParseIP("ff2e::45"), expectedIif: uint16(2), expectedOifVIFs: []uint16{0}, expectedNumOfCalls: 0},
+	} {
+		mockMulticastSocket.EXPECT().AddMrouteEntry(m.expectedSrc, m.expectedGroup, m.expectedIif, m.expectedOifVIFs).Times(m.expectedNumOfCalls)
+		mRoute.processMRT6NocacheMsg(m.mrt6msg)
 	}
 }
 
@@ -120,7 +196,7 @@ func newMockMulticastRouteClient(t *testing.T) *MRouteClient {
 }
 
 func (c *MRouteClient) initialize(t *testing.T) error {
-	mockMulticastSocket.EXPECT().AllocateVIFs(gomock.Any(), uint16(0)).Times(1).Return([]uint16{0}, nil)
-	mockMulticastSocket.EXPECT().AllocateVIFs(gomock.Any(), uint16(1)).Times(1).Return([]uint16{1, 2}, nil)
+	mockMulticastSocket.EXPECT().AllocateVIFs(gomock.Any(), uint16(0), uint16(0)).Times(1).Return([]uint16{0}, []uint16{0}, nil)
+	mockMulticastSocket.EXPECT().AllocateVIFs(gomock.Any(), uint16(1), uint16(1)).Times(1).Return([]uint16{1, 2}, []uint16{1, 2}, nil)
 	return c.Initialize()
 }

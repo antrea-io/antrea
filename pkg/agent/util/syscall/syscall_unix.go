@@ -40,6 +40,14 @@ func SetsockoptMfcctl(fd, level, opt int, mfcctl *Mfcctl) error {
 	return setsockopt(fd, level, opt, unsafe.Pointer(mfcctl), SizeofMfcctl)
 }
 
+func SetsockoptMf6cctl(fd, level, opt int, mf6cctl *Mf6cctl) error {
+	return setsockopt(fd, level, opt, unsafe.Pointer(mf6cctl), SizeofMf6cctl)
+}
+
 func SetsockoptVifctl(fd, level, opt int, vifctl *Vifctl) error {
 	return setsockopt(fd, level, opt, unsafe.Pointer(vifctl), SizeofVifctl)
+}
+
+func SetsockoptMif6ctl(fd, level, opt int, mif6ctl *Mif6ctl) error {
+	return setsockopt(fd, level, opt, unsafe.Pointer(mif6ctl), SizeofMif6ctl)
 }

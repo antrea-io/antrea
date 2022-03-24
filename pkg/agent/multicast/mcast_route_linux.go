@@ -32,7 +32,7 @@ import (
 // https://github.com/torvalds/linux/commit/c8715a8e9f38906e73d6d78764216742db13ba0e.
 func (c *MRouteClient) parseIGMPMsg(msg []byte) (*parsedIGMPMsg, error) {
 	if len(msg) < SizeofIgmpmsg {
-		return nil, fmt.Errorf("failed to parse IGMPMSG: message length should be greater than 19")
+		return nil, fmt.Errorf("failed to parse IGMPMSG: message length should be no less than %d", SizeofIgmpmsg)
 	}
 	if msg[8] != IGMPMsgNocache {
 		return nil, fmt.Errorf("not a IGMPMSG_NOCACHE message: %v", msg)
@@ -59,22 +59,54 @@ func (c *MRouteClient) parseIGMPMsg(msg []byte) (*parsedIGMPMsg, error) {
 	}, nil
 }
 
+func (c *MRouteClient) parseMRT6msg(msg []byte) (*parsedMRT6msg, error) {
+	if len(msg) < SizeofMrt6msg {
+		return nil, fmt.Errorf("failed to parse MRT6MSG: message length should be no less than %d", SizeofMrt6msg)
+	}
+	if msg[1] != IGMPMsgNocache {
+		return nil, fmt.Errorf("not a MRT6MSG_NOCACHE message: %v", msg)
+	}
+	// im6_mbz in mrt6msg must be zero, as document by
+	// https://github.com/torvalds/linux/blob/787af64d05cd528aac9ad16752d11bb1c6061bb9/include/uapi/linux/mroute6.h#L138.
+	if msg[0] != 0 {
+		return nil, fmt.Errorf("invalid mrt6msg message: im6_mbz must be zero")
+	}
+	mif := uint16(msg[2]) + (uint16(msg[3]) << uint16(8))
+	return &parsedMRT6msg{
+		MIF: mif,
+		Src: msg[8:24],
+		Dst: msg[24:40],
+	}, nil
+}
+
 func (c *MRouteClient) run(stopCh <-chan struct{}) {
 	klog.InfoS("Start running multicast routing daemon")
-	go func() {
-		for {
-			buf := make([]byte, MulticastRecvBufferSize)
-			n, _ := syscall.Read(c.socket.GetFD(), buf)
-			if n > 0 {
-				c.igmpMsgChan <- buf[:n]
+	if c.socket.GetIPv4FD() >= 0 {
+		go func() {
+			for {
+				buf := make([]byte, MulticastRecvBufferSize)
+				n, _ := syscall.Read(c.socket.GetIPv4FD(), buf)
+				if n > 0 {
+					c.igmpMsgChan <- buf[:n]
+				}
 			}
-		}
-	}()
-
+		}()
+	}
+	if c.socket.GetIPv6FD() >= 0 {
+		go func() {
+			for {
+				buf := make([]byte, MulticastRecvBufferSize)
+				n, _ := syscall.Read(c.socket.GetIPv6FD(), buf)
+				if n > 0 {
+					c.mrt6MsgChan <- buf[:n]
+				}
+			}
+		}()
+	}
 	for i := 0; i < int(workerCount); i++ {
 		go c.worker(stopCh)
 	}
 	<-stopCh
 	c.socket.FlushMRoute()
-	syscall.Close(c.socket.GetFD())
+	syscall.Close(c.socket.GetIPv4FD())
 }

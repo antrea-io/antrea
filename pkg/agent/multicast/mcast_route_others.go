@@ -20,5 +20,9 @@ func (c *MRouteClient) parseIGMPMsg(msg []byte) (*parsedIGMPMsg, error) {
 	return nil, nil
 }
 
+func (c *MRouteClient) parseMRT6msg(msg []byte) (*parsedMRT6msg, error) {
+	return nil, nil
+}
+
 func (c *MRouteClient) run(stopCh <-chan struct{}) {
 }

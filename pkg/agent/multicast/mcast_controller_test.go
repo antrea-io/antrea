@@ -83,7 +83,7 @@ func TestAddGroupMemberStatus(t *testing.T) {
 	assert.True(t, ok)
 	assert.Equal(t, mgroup.String(), key)
 	mockOFClient.EXPECT().InstallMulticastFlow(mgroup).Times(1)
-	mockMulticastSocket.EXPECT().MulticastInterfaceJoinMgroup(mgroup.To4(), nodeIf1IP.To4(), if1.InterfaceName).Times(1)
+	mockMulticastSocket.EXPECT().MulticastInterfaceJoinMgroup(mgroup, gomock.Any(), if1.InterfaceName).Times(1)
 	err = mctrl.syncGroup(key)
 	assert.Nil(t, err)
 	mctrl.queue.Forget(obj)
@@ -337,8 +337,8 @@ func (c *Controller) initialize(t *testing.T) error {
 	ovsClient.EXPECT().SetBridgeMcastSnooping(true).Times(1)
 	ovsClient.EXPECT().AddBridgeOtherConfig(map[string]interface{}{"mcast-snooping-disable-flood-unregistered": "true"}).Times(1)
 	mockOFClient.EXPECT().InstallMulticastInitialFlows(uint8(0)).Times(1)
-	mockMulticastSocket.EXPECT().AllocateVIFs(gomock.Any(), uint16(0)).Times(1).Return([]uint16{0}, nil)
-	mockMulticastSocket.EXPECT().AllocateVIFs(gomock.Any(), uint16(1)).Times(1).Return([]uint16{1, 2}, nil)
+	mockMulticastSocket.EXPECT().AllocateVIFs(gomock.Any(), uint16(0), uint16(0)).Times(1).Return([]uint16{0}, []uint16{0}, nil)
+	mockMulticastSocket.EXPECT().AllocateVIFs(gomock.Any(), uint16(1), uint16(1)).Times(1).Return([]uint16{1, 2}, []uint16{1, 2}, nil)
 	return c.Initialize()
 }
 

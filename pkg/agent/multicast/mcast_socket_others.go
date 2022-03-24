@@ -24,6 +24,7 @@ import (
 const (
 	IGMPMsgNocache = 0
 	MaxVIFs        = 0
+	MaxMIFs        = 0
 	SizeofIgmpmsg  = 0
 )
 
@@ -42,22 +43,27 @@ func CreateMulticastSocket() (*Socket, error) {
 	return nil, nil
 }
 
-func (s *Socket) AllocateVIFs(interfaceNames []string, startVIF uint16) ([]uint16, error) {
-	return nil, nil
+func (s *Socket) AllocateVIFs(interfaceNames []string, startVIF uint16, startMIF uint16) ([]uint16, []uint16, error) {
+	return nil, nil, nil
 }
 
-func (s *Socket) MulticastInterfaceJoinMgroup(mgroup net.IP, ifaceIP net.IP, ifaceName string) error {
+func (s *Socket) MulticastInterfaceJoinMgroup(mgroup net.IP, ifIndex uint32, ifaceName string) error {
 	return nil
 }
 
-func (s *Socket) MulticastInterfaceLeaveMgroup(mgroup net.IP, ifaceIP net.IP, ifaceName string) error {
+func (s *Socket) MulticastInterfaceLeaveMgroup(mgroup net.IP, ifIndex uint32, ifaceName string) error {
 	return nil
 }
 
-func (s *Socket) GetFD() int {
-	return s.sockFD
+func (s *Socket) GetIPv4FD() int {
+	return s.IPv4SockFD
+}
+
+func (s *Socket) GetIPv6FD() int {
+	return s.IPv6SockFD
 }
 
 type Socket struct {
-	sockFD int
+	IPv4SockFD int
+	IPv6SockFD int
 }

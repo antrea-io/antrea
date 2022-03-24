@@ -28,6 +28,17 @@ const (
 	MAXVIFS          = 0x20
 )
 
+const (
+	MRT6MSG_NOCACHE = 0x1
+	MRT6_ADD_VIF    = 0xca
+	MRT6_ADD_MFC    = 0xcc
+	MRT6_DEL_MFC    = 0xcd
+	MRT6_INIT       = 0xc8
+	MRT6_TABLE      = 0xd1
+	MRT6_FLUSH      = 0xd4
+	MAXMIFS         = 0x20
+)
+
 type Mfcctl struct {
 	Origin   [4]byte /* in_addr */
 	Mcastgrp [4]byte /* in_addr */
@@ -47,6 +58,35 @@ type Vifctl struct {
 	Lcl_ifindex int32
 	Rmt_addr    [4]byte /* in_addr */
 }
+
+type RawSockaddrInet6 struct {
+	Family   uint16
+	Port     uint16
+	Flowinfo uint32
+	Addr     [16]byte /* in6_addr */
+	Scope_id uint32
+}
+
+type IfSet struct {
+	Bits [8]uint32
+}
+type Mif6ctl struct {
+	Mif6c_mifi      uint16
+	Mif6c_flags     uint8
+	Vifc_threshold  uint8
+	Mif6c_pifi      uint16
+	Vifc_rate_limit uint32
+}
+type Mf6cctl struct {
+	Origin   RawSockaddrInet6
+	Mcastgrp RawSockaddrInet6
+	Parent   uint16
+	Ifset    IfSet
+}
+
+const SizeofMif6ctl = 0xc
+const SizeofMf6cctl = 0x5c
+const SizeofMrt6msg = 0x28
 
 const SizeofMfcctl = 0x3c
 const SizeofVifctl = 0x10

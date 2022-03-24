@@ -63,18 +63,19 @@ func (mr *MockRouteInterfaceMockRecorder) AddMrouteEntry(arg0, arg1, arg2, arg3 
 }
 
 // AllocateVIFs mocks base method
-func (m *MockRouteInterface) AllocateVIFs(arg0 []string, arg1 uint16) ([]uint16, error) {
+func (m *MockRouteInterface) AllocateVIFs(arg0 []string, arg1, arg2 uint16) ([]uint16, []uint16, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AllocateVIFs", arg0, arg1)
+	ret := m.ctrl.Call(m, "AllocateVIFs", arg0, arg1, arg2)
 	ret0, _ := ret[0].([]uint16)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	ret1, _ := ret[1].([]uint16)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
 }
 
 // AllocateVIFs indicates an expected call of AllocateVIFs
-func (mr *MockRouteInterfaceMockRecorder) AllocateVIFs(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockRouteInterfaceMockRecorder) AllocateVIFs(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AllocateVIFs", reflect.TypeOf((*MockRouteInterface)(nil).AllocateVIFs), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AllocateVIFs", reflect.TypeOf((*MockRouteInterface)(nil).AllocateVIFs), arg0, arg1, arg2)
 }
 
 // DelMrouteEntry mocks base method
@@ -103,22 +104,36 @@ func (mr *MockRouteInterfaceMockRecorder) FlushMRoute() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FlushMRoute", reflect.TypeOf((*MockRouteInterface)(nil).FlushMRoute))
 }
 
-// GetFD mocks base method
-func (m *MockRouteInterface) GetFD() int {
+// GetIPv4FD mocks base method
+func (m *MockRouteInterface) GetIPv4FD() int {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetFD")
+	ret := m.ctrl.Call(m, "GetIPv4FD")
 	ret0, _ := ret[0].(int)
 	return ret0
 }
 
-// GetFD indicates an expected call of GetFD
-func (mr *MockRouteInterfaceMockRecorder) GetFD() *gomock.Call {
+// GetIPv4FD indicates an expected call of GetIPv4FD
+func (mr *MockRouteInterfaceMockRecorder) GetIPv4FD() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetFD", reflect.TypeOf((*MockRouteInterface)(nil).GetFD))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetIPv4FD", reflect.TypeOf((*MockRouteInterface)(nil).GetIPv4FD))
+}
+
+// GetIPv6FD mocks base method
+func (m *MockRouteInterface) GetIPv6FD() int {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetIPv6FD")
+	ret0, _ := ret[0].(int)
+	return ret0
+}
+
+// GetIPv6FD indicates an expected call of GetIPv6FD
+func (mr *MockRouteInterfaceMockRecorder) GetIPv6FD() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetIPv6FD", reflect.TypeOf((*MockRouteInterface)(nil).GetIPv6FD))
 }
 
 // MulticastInterfaceJoinMgroup mocks base method
-func (m *MockRouteInterface) MulticastInterfaceJoinMgroup(arg0, arg1 net.IP, arg2 string) error {
+func (m *MockRouteInterface) MulticastInterfaceJoinMgroup(arg0 net.IP, arg1 uint32, arg2 string) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "MulticastInterfaceJoinMgroup", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
@@ -132,7 +147,7 @@ func (mr *MockRouteInterfaceMockRecorder) MulticastInterfaceJoinMgroup(arg0, arg
 }
 
 // MulticastInterfaceLeaveMgroup mocks base method
-func (m *MockRouteInterface) MulticastInterfaceLeaveMgroup(arg0, arg1 net.IP, arg2 string) error {
+func (m *MockRouteInterface) MulticastInterfaceLeaveMgroup(arg0 net.IP, arg1 uint32, arg2 string) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "MulticastInterfaceLeaveMgroup", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)

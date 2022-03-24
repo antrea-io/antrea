@@ -35,6 +35,7 @@ const (
 func newRouteClient(nodeconfig *config.NodeConfig, groupCache cache.Indexer, multicastSocket RouteInterface, multicastInterfaces sets.String) *MRouteClient {
 	var m = &MRouteClient{
 		igmpMsgChan:         make(chan []byte, workerCount),
+		mrt6MsgChan:         make(chan []byte, workerCount),
 		nodeConfig:          nodeconfig,
 		groupCache:          groupCache,
 		inboundRouteCache:   cache.NewIndexer(getMulticastInboundEntryKey, cache.Indexers{GroupNameIndexName: inboundGroupIndexFunc}),
@@ -48,27 +49,35 @@ func (c *MRouteClient) Initialize() error {
 	c.setMulticastInterfaces()
 	// Allocate VIF for each interface in multicastInterfaceNames and gatewayInterface.
 	// The VIFs will be later used for multicast route configuration.
-	gatewayInterfaceVIF, err := c.socket.AllocateVIFs([]string{c.nodeConfig.GatewayConfig.Name}, 0)
+	gatewayInterfaceVIF, gatewayInterfaceMIF, err := c.socket.AllocateVIFs([]string{c.nodeConfig.GatewayConfig.Name}, 0, 0)
 	if err != nil {
 		return err
 	}
-	c.internalInterfaceVIF = gatewayInterfaceVIF[0]
+	if len(gatewayInterfaceVIF) > 0 {
+		c.internalInterfaceVIF = gatewayInterfaceVIF[0]
+	}
+	if len(gatewayInterfaceMIF) > 0 {
+		c.internalInterfaceMIF = gatewayInterfaceMIF[0]
+	}
 	multicastInterfaceNames := make([]string, len(c.multicastInterfaceConfigs))
 	for i, config := range c.multicastInterfaceConfigs {
 		multicastInterfaceNames[i] = config.Name
 	}
-	externalInterfaceVIFs, err := c.socket.AllocateVIFs(multicastInterfaceNames, c.internalInterfaceVIF+1)
+	externalInterfaceVIFs, externalInterfaceMIF, err := c.socket.AllocateVIFs(multicastInterfaceNames, c.internalInterfaceVIF+1, c.internalInterfaceMIF+1)
 	if err != nil {
 		return err
 	}
 	c.externalInterfaceVIFs = externalInterfaceVIFs
+	c.externalInterfaceMIFs = externalInterfaceMIF
 	return nil
 }
 
 // MRouteClient configures static multicast route.
 type MRouteClient struct {
-	// igmpMsgChan is used for processing IGMPMsg reading from sockFD in parallel
-	igmpMsgChan               chan []byte
+	// igmpMsgChan is used for processing IGMPMsg reading from sockIPv4FD in parallel
+	igmpMsgChan chan []byte
+	// mrt6MsgChan is used for processing IGMPMsg reading from sockIPv6FD in parallel
+	mrt6MsgChan               chan []byte
 	nodeConfig                *config.NodeConfig
 	multicastInterfaces       []string
 	inboundRouteCache         cache.Indexer
@@ -76,7 +85,9 @@ type MRouteClient struct {
 	socket                    RouteInterface
 	multicastInterfaceConfigs []multicastInterfaceConfig
 	internalInterfaceVIF      uint16
+	internalInterfaceMIF      uint16
 	externalInterfaceVIFs     []uint16
+	externalInterfaceMIFs     []uint16
 }
 
 // multicastInterfacesJoinMgroup allows multicast interfaces to join multicast group,
@@ -84,9 +95,7 @@ type MRouteClient struct {
 // https://tldp.org/HOWTO/Multicast-HOWTO-6.html#ss6.4
 func (c *MRouteClient) multicastInterfacesJoinMgroup(mgroup net.IP) error {
 	for _, config := range c.multicastInterfaceConfigs {
-		addrIP := config.IPv4Addr.IP.To4()
-		groupIP := mgroup.To4()
-		err := c.socket.MulticastInterfaceJoinMgroup(groupIP, addrIP, config.Name)
+		err := c.socket.MulticastInterfaceJoinMgroup(mgroup, config.Index, config.Name)
 		if err != nil {
 			return err
 		}
@@ -96,14 +105,47 @@ func (c *MRouteClient) multicastInterfacesJoinMgroup(mgroup net.IP) error {
 
 func (c *MRouteClient) multicastInterfacesLeaveMgroup(mgroup net.IP) error {
 	for _, config := range c.multicastInterfaceConfigs {
-		addrIP := config.IPv4Addr.IP.To4()
-		groupIP := mgroup.To4()
-		err := c.socket.MulticastInterfaceLeaveMgroup(groupIP, addrIP, config.Name)
+		err := c.socket.MulticastInterfaceLeaveMgroup(mgroup, config.Index, config.Name)
 		if err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func (c *MRouteClient) processMRT6NocacheMsg(mrt6msg []byte) {
+	klog.V(2).InfoS("Received mrt6msg", "mrt6msg", mrt6msg)
+	msg, err := c.parseMRT6msg(mrt6msg)
+	if err != nil {
+		klog.V(4).ErrorS(err, "Error parsing MRT6 message")
+		return
+	}
+	if msg.MIF != c.internalInterfaceMIF {
+		// Skip inbound multicast traffic when there is no multicast receiver Pod
+		// listening the msg.Dst group.
+		status, ok, _ := c.groupCache.GetByKey(msg.Dst.String())
+		if !ok {
+			return
+		}
+		groupStatus := status.(*GroupMemberStatus)
+		if len(groupStatus.localMembers) == 0 {
+			return
+		}
+		// Prevent adding route entries for unrecognized MIF.
+		if len(c.externalInterfaceMIFs) < int(msg.MIF) {
+			klog.ErrorS(fmt.Errorf("error finding MIF"), "Adding inbound multicast route entry failed", "VIF", msg.MIF)
+			return
+		}
+		err := c.addInboundMrouteEntry(msg.Src, msg.Dst, msg.MIF)
+		if err != nil {
+			klog.ErrorS(err, "Adding inbound multicast route entry failed")
+		}
+	} else {
+		err = c.addOutboundMrouteEntry(msg.Src, msg.Dst)
+		if err != nil {
+			klog.ErrorS(err, "Adding outbound multicast route entry failed")
+		}
+	}
 }
 
 // processIGMPNocacheMsg reads igmpMsg from the multicast socket and configures
@@ -128,7 +170,7 @@ func (c *MRouteClient) processIGMPNocacheMsg(igmpMsg []byte) {
 		}
 		// Prevent adding route entries for unrecognized VIF.
 		if len(c.externalInterfaceVIFs) < int(msg.VIF) {
-			klog.ErrorS(fmt.Errorf("error finding VIF"), "Adding inbound multicast route entry failed", "VIF", msg.VIF)
+			klog.ErrorS(fmt.Errorf("error finding VIF"), "Adding inbound multicast route entry failed", "MIF", msg.VIF)
 			return
 		}
 		err := c.addInboundMrouteEntry(msg.Src, msg.Dst, msg.VIF)
@@ -228,6 +270,7 @@ func (c *MRouteClient) setMulticastInterfaces() {
 			continue
 		}
 		config := multicastInterfaceConfig{
+			Index:    uint32(iface.Index),
 			Name:     iface.Name,
 			IPv4Addr: ipv4Addr,
 			IPv6Addr: ipv6Addr,
@@ -242,6 +285,8 @@ func (c *MRouteClient) worker(stopCh <-chan struct{}) {
 		select {
 		case msg := <-c.igmpMsgChan:
 			c.processIGMPNocacheMsg(msg)
+		case msg := <-c.mrt6MsgChan:
+			c.processMRT6NocacheMsg(msg)
 		case <-stopCh:
 			return
 		}
@@ -256,7 +301,18 @@ type parsedIGMPMsg struct {
 	Dst net.IP
 }
 
+// This struct is result of parsing mrt6msg from the kernel
+// with fields we interest.
+type parsedMRT6msg struct {
+	// MIF stands for multicast vif. We align with terms from Linux kernel source:
+	// calling VIF for virtual interface for IPv4 multicast and MIF for IPv6 multicast.
+	MIF uint16
+	Src net.IP
+	Dst net.IP
+}
+
 type multicastInterfaceConfig struct {
+	Index    uint32
 	Name     string
 	IPv4Addr *net.IPNet
 	IPv6Addr *net.IPNet
@@ -265,10 +321,10 @@ type multicastInterfaceConfig struct {
 type RouteInterface interface {
 	// MulticastInterfaceJoinMgroup enables interface with name ifaceName and IP ifaceIP
 	// joins multicast group IP mgroup.
-	MulticastInterfaceJoinMgroup(mgroup net.IP, ifaceIP net.IP, ifaceName string) error
+	MulticastInterfaceJoinMgroup(mgroup net.IP, ifIndex uint32, ifaceName string) error
 	// MulticastInterfaceLeaveMgroup enables interface with name ifaceName and IP ifaceIP
 	// leaves multicast group IP mgroup.
-	MulticastInterfaceLeaveMgroup(mgroup net.IP, ifaceIP net.IP, ifaceName string) error
+	MulticastInterfaceLeaveMgroup(mgroup net.IP, ifIndex uint32, ifaceName string) error
 	// AddMrouteEntry adds multicast route with specified source(src), multicast group IP(group),
 	// inbound multicast interface(iif) and outbound multicast interfaces(oifs).
 	AddMrouteEntry(src net.IP, group net.IP, iif uint16, oifs []uint16) (err error)
@@ -277,8 +333,10 @@ type RouteInterface interface {
 	DelMrouteEntry(src net.IP, group net.IP, iif uint16) (err error)
 	// FlushMRoute flushes static multicast routing entries.
 	FlushMRoute()
-	// GetFD returns socket file descriptor.
-	GetFD() int
+	// GetIPv4FD returns socket file descriptor for IPv4 multicast.
+	GetIPv4FD() int
+	// GetIPv6FD returns socket file descriptor for IPv6 multicast.
+	GetIPv6FD() int
 	// AllocateVIFs allocate VIFs to interfaces, starting from startVIF.
-	AllocateVIFs(interfaceNames []string, startVIF uint16) ([]uint16, error)
+	AllocateVIFs(interfaceNames []string, startVIF uint16, startMIF uint16) ([]uint16, []uint16, error)
 }
