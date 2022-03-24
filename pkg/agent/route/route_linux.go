@@ -642,6 +642,32 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet, podIPSet, localAntreaFl
 		}...)
 	}
 
+	// This generates the rule to masquerade the packets destined for a hostPort whose backend is an AntreaIPAM VLAN Pod.
+	// For simplicity, in the following descriptions:
+	//   - per-Node IPAM Pod is referred to as regular Pod.
+	//   - AntreaIPAM Pod without VLAN is referred to as AntreaIPAM Pod.
+	//   - AntreaIPAM Pod with VLAN is referred to as AntreaIPAM VLAN Pod.
+	// The common conditions are:
+	//   - AntreaIPAM VLAN Pod exposes hostPort.
+	//   - hostPort traffic is sent to underlay gateway after Node DNATed the traffic.
+	//   - underlay gateway sends traffic back with a vlan tag.
+	//   - SNAT is required to guarantee the reply traffic can be sent to Node to de-DNAT.
+	// Corresponding traffic models are:
+	//   01. Regular Pod              -- hostPort [request]              --> AntreaIPAM VLAN Pod
+	//   02. AntreaIPAM Pod           -- hostPort [request]              --> AntreaIPAM VLAN Pod
+	//   03. AntreaIPAM VLAN Pod      -- hostPort [request]              --> AntreaIPAM VLAN Pod (different subnet/VLAN)
+	//   04. External                 -- hostPort [request]              --> AntreaIPAM VLAN Pod
+	// Below traffic models are already covered by portmap CNI:
+	//   01. AntreaIPAM VLAN Pod      -- hostPort [request]              --> AntreaIPAM VLAN Pod (same subnet)
+	if c.connectUplinkToBridge {
+		writeLine(iptablesData, []string{
+			"-A", antreaPostRoutingChain,
+			"-m", "comment", "--comment", `"Antrea: masquerade traffic to local AntreaIPAM hostPort Pod"`,
+			"-m", "set", "--match-set", localAntreaFlexibleIPAMPodIPSet, "dst",
+			"-j", iptables.MasqueradeTarget,
+		}...)
+	}
+
 	writeLine(iptablesData, "COMMIT")
 	return iptablesData
 }

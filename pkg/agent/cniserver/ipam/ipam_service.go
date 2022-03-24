@@ -45,8 +45,13 @@ type IPAMConfig struct {
 	Ranges []RangeSet `json:"ranges,omitempty"`
 }
 
+type IPAMResult struct {
+	current.Result
+	VLANID uint16
+}
+
 type IPAMDriver interface {
-	Add(args *invoke.Args, k8sArgs *argtypes.K8sArgs, networkConfig []byte) (bool, *current.Result, error)
+	Add(args *invoke.Args, k8sArgs *argtypes.K8sArgs, networkConfig []byte) (bool, *IPAMResult, error)
 	Del(args *invoke.Args, k8sArgs *argtypes.K8sArgs, networkConfig []byte) (bool, error)
 	Check(args *invoke.Args, k8sArgs *argtypes.K8sArgs, networkConfig []byte) (bool, error)
 }
@@ -70,7 +75,7 @@ func argsFromEnv(cniArgs *cnipb.CniCmdArgs) *invoke.Args {
 	}
 }
 
-func ExecIPAMAdd(cniArgs *cnipb.CniCmdArgs, k8sArgs *argtypes.K8sArgs, ipamType string, resultKey string) (*current.Result, error) {
+func ExecIPAMAdd(cniArgs *cnipb.CniCmdArgs, k8sArgs *argtypes.K8sArgs, ipamType string, resultKey string) (*IPAMResult, error) {
 	// Return the cached IPAM result for the same Pod. This cache helps to ensure CNIAdd is idempotent. There are two
 	// usages of CNIAdd message on Windows: 1) add container network configuration, and 2) query Pod network status.
 	// kubelet on Windows sends CNIAdd messages to query Pod status periodically before the sandbox container is ready.
@@ -135,10 +140,10 @@ func ExecIPAMCheck(cniArgs *cnipb.CniCmdArgs, k8sArgs *argtypes.K8sArgs, ipamTyp
 	return fmt.Errorf("No suitable IPAM driver found")
 }
 
-func GetIPFromCache(resultKey string) (*current.Result, bool) {
+func GetIPFromCache(resultKey string) (*IPAMResult, bool) {
 	obj, ok := ipamResults.Load(resultKey)
 	if ok {
-		result := obj.(*current.Result)
+		result := obj.(*IPAMResult)
 		return result, ok
 	}
 	return nil, ok

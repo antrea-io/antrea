@@ -43,7 +43,7 @@ func (pc *podConfigurator) connectInterfaceToOVSAsync(ifConfig *interfacestore.I
 		}
 		containerID := ifConfig.ContainerID
 		klog.V(2).Infof("Setting up Openflow entries for container %s", containerID)
-		if err := pc.ofClient.InstallPodFlows(ovsPortName, ifConfig.IPs, ifConfig.MAC, uint32(ofPort)); err != nil {
+		if err := pc.ofClient.InstallPodFlows(ovsPortName, ifConfig.IPs, ifConfig.MAC, uint32(ofPort), ifConfig.VLANID); err != nil {
 			return fmt.Errorf("failed to add Openflow entries for container %s: %v", containerID, err)
 		}
 		// Update interface config with the ofPort.
@@ -62,11 +62,12 @@ func (pc *podConfigurator) connectInterfaceToOVS(
 	hostIface *current.Interface,
 	containerIface *current.Interface,
 	ips []*current.IPConfig,
+	vlanID uint16,
 	containerAccess *containerAccessArbitrator,
 ) (*interfacestore.InterfaceConfig, error) {
 	// Use the outer veth interface name as the OVS port name.
 	ovsPortName := hostIface.Name
-	containerConfig := buildContainerConfig(ovsPortName, containerID, podName, podNameSpace, containerIface, ips)
+	containerConfig := buildContainerConfig(ovsPortName, containerID, podName, podNameSpace, containerIface, ips, vlanID)
 	hostIfAlias := util.VirtualAdapterName(ovsPortName)
 	// - For Containerd runtime, the container interface is created after CNI replying the network setup result.
 	//   So for such case we need to use asynchronous way to wait for interface to be created: we create the OVS port
@@ -83,7 +84,7 @@ func (pc *podConfigurator) connectInterfaceToOVS(
 	}
 	klog.V(2).Infof("Adding OVS port %s for container %s", ovsPortName, containerID)
 	ovsAttachInfo := BuildOVSPortExternalIDs(containerConfig)
-	portUUID, err := pc.createOVSPort(ovsPortName, ovsAttachInfo)
+	portUUID, err := pc.createOVSPort(ovsPortName, ovsAttachInfo, containerConfig.VLANID)
 	if err != nil {
 		return nil, err
 	}

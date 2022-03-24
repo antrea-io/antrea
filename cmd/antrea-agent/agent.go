@@ -418,7 +418,8 @@ func run(o *Options) error {
 			ActiveFlowTimeout:      o.activeFlowTimeout,
 			IdleFlowTimeout:        o.idleFlowTimeout,
 			StaleConnectionTimeout: o.staleConnectionTimeout,
-			PollInterval:           o.pollInterval}
+			PollInterval:           o.pollInterval,
+			ConnectUplinkToBridge:  connectUplinkToBridge}
 		flowExporter, err = exporter.NewFlowExporter(
 			ifaceStore,
 			proxier,

@@ -30,25 +30,112 @@ func TestAntreaIPAMService(t *testing.T) {
 	defer teardownTest(t, data)
 
 	// Create AntreaIPAM IPPool and test Namespace
-	ippool, err := createIPPool(t, data, "0")
-	if err != nil {
-		t.Fatalf("Creating IPPool failed, err=%+v", err)
+	var ipPools []string
+	for _, namespace := range []string{testAntreaIPAMNamespace, testAntreaIPAMNamespace11, testAntreaIPAMNamespace12} {
+		ipPool, err := createIPPool(t, data, namespace)
+		if err != nil {
+			t.Fatalf("Creating IPPool failed, err=%+v", err)
+		}
+		defer deleteIPPoolWrapper(t, data, ipPool.Name)
+		ipPools = append(ipPools, ipPool.Name)
+		annotations := map[string]string{}
+		annotations[ipam.AntreaIPAMAnnotationKey] = ipPool.Name
+		err = data.createNamespaceWithAnnotations(namespace, annotations)
+		if err != nil {
+			t.Fatalf("Creating AntreaIPAM Namespace failed, err=%+v", err)
+		}
+		defer deleteAntreaIPAMNamespace(t, data, namespace)
 	}
-	defer deleteIPPoolWrapper(t, data, ippool.Name)
-	annotations := map[string]string{}
-	annotations[ipam.AntreaIPAMAnnotationKey] = ippool.Name
-	err = data.createNamespaceWithAnnotations(testAntreaIPAMNamespace, annotations)
-	if err != nil {
-		t.Fatalf("Creating AntreaIPAM Namespace failed, err=%+v", err)
-	}
-	defer deleteAntreaIPAMNamespace(t, data)
 
+	t.Run("testAntreaIPAMPodToAntreaIPAMClusterIPv4", func(t *testing.T) {
+		skipIfNotIPv4Cluster(t)
+		data.testClusterIP(t, false, testAntreaIPAMNamespace, testAntreaIPAMNamespace)
+		checkIPPoolsEmpty(t, data, ipPools)
+	})
 	t.Run("testAntreaIPAMClusterIPv4", func(t *testing.T) {
 		skipIfNotIPv4Cluster(t)
-		data.testClusterIP(t, false, testAntreaIPAMNamespace)
+		data.testClusterIP(t, false, testNamespace, testAntreaIPAMNamespace)
+		checkIPPoolsEmpty(t, data, ipPools)
+	})
+	t.Run("testAntreaIPAMPodToClusterIPv4", func(t *testing.T) {
+		skipIfNotIPv4Cluster(t)
+		data.testClusterIP(t, false, testAntreaIPAMNamespace, testNamespace)
+		checkIPPoolsEmpty(t, data, ipPools)
+	})
+	t.Run("testAntreaIPAMVLAN11PodToAntreaIPAMVLAN11ClusterIPv4", func(t *testing.T) {
+		skipIfNotIPv4Cluster(t)
+		data.testClusterIP(t, false, testAntreaIPAMNamespace11, testAntreaIPAMNamespace11)
+		checkIPPoolsEmpty(t, data, ipPools)
+	})
+	t.Run("testAntreaIPAMVLAN11PodToAntreaIPAMVLAN12ClusterIPv4", func(t *testing.T) {
+		skipIfNotIPv4Cluster(t)
+		data.testClusterIP(t, false, testAntreaIPAMNamespace11, testAntreaIPAMNamespace12)
+		checkIPPoolsEmpty(t, data, ipPools)
+	})
+	t.Run("testAntreaIPAMPodToAntreaIPAMVLAN11ClusterIPv4", func(t *testing.T) {
+		skipIfNotIPv4Cluster(t)
+		data.testClusterIP(t, false, testAntreaIPAMNamespace, testAntreaIPAMNamespace11)
+		checkIPPoolsEmpty(t, data, ipPools)
+	})
+	t.Run("testAntreaIPAMVLAN11PodToAntreaIPAMClusterIPv4", func(t *testing.T) {
+		skipIfNotIPv4Cluster(t)
+		data.testClusterIP(t, false, testAntreaIPAMNamespace11, testAntreaIPAMNamespace)
+		checkIPPoolsEmpty(t, data, ipPools)
+	})
+	t.Run("testAntreaIPAMVLAN11ClusterIPv4", func(t *testing.T) {
+		skipIfNotIPv4Cluster(t)
+		data.testClusterIP(t, false, testNamespace, testAntreaIPAMNamespace11)
+		checkIPPoolsEmpty(t, data, ipPools)
+	})
+	t.Run("testAntreaIPAMVLAN11PodToClusterIPv4", func(t *testing.T) {
+		skipIfNotIPv4Cluster(t)
+		data.testClusterIP(t, false, testAntreaIPAMNamespace11, testNamespace)
+		checkIPPoolsEmpty(t, data, ipPools)
+	})
+
+	t.Run("testAntreaIPAMPodToAntreaIPAMNodePort", func(t *testing.T) {
+		skipIfHasWindowsNodes(t)
+		data.testNodePort(t, false, testAntreaIPAMNamespace, testAntreaIPAMNamespace)
+		checkIPPoolsEmpty(t, data, ipPools)
 	})
 	t.Run("testAntreaIPAMNodePort", func(t *testing.T) {
 		skipIfHasWindowsNodes(t)
-		data.testNodePort(t, false, testAntreaIPAMNamespace)
+		data.testNodePort(t, false, testNamespace, testAntreaIPAMNamespace)
+		checkIPPoolsEmpty(t, data, ipPools)
+	})
+	t.Run("testAntreaIPAMPodToNodePort", func(t *testing.T) {
+		skipIfHasWindowsNodes(t)
+		data.testNodePort(t, false, testAntreaIPAMNamespace, testNamespace)
+		checkIPPoolsEmpty(t, data, ipPools)
+	})
+	t.Run("testAntreaIPAMVLAN11PodToAntreaIPAMVLAN11NodePort", func(t *testing.T) {
+		skipIfHasWindowsNodes(t)
+		data.testNodePort(t, false, testAntreaIPAMNamespace11, testAntreaIPAMNamespace11)
+		checkIPPoolsEmpty(t, data, ipPools)
+	})
+	t.Run("testAntreaIPAMVLAN11PodToAntreaIPAMVLAN12NodePort", func(t *testing.T) {
+		skipIfHasWindowsNodes(t)
+		data.testNodePort(t, false, testAntreaIPAMNamespace11, testAntreaIPAMNamespace12)
+		checkIPPoolsEmpty(t, data, ipPools)
+	})
+	t.Run("testAntreaIPAMPodToAntreaIPAMVLAN11NodePort", func(t *testing.T) {
+		skipIfHasWindowsNodes(t)
+		data.testNodePort(t, false, testAntreaIPAMNamespace, testAntreaIPAMNamespace11)
+		checkIPPoolsEmpty(t, data, ipPools)
+	})
+	t.Run("testAntreaIPAMVLAN11PodToAntreaIPAMNodePort", func(t *testing.T) {
+		skipIfHasWindowsNodes(t)
+		data.testNodePort(t, false, testAntreaIPAMNamespace11, testAntreaIPAMNamespace)
+		checkIPPoolsEmpty(t, data, ipPools)
+	})
+	t.Run("testAntreaIPAMVLAN11NodePort", func(t *testing.T) {
+		skipIfHasWindowsNodes(t)
+		data.testNodePort(t, false, testNamespace, testAntreaIPAMNamespace11)
+		checkIPPoolsEmpty(t, data, ipPools)
+	})
+	t.Run("testAntreaIPAMVLAN11PodToNodePort", func(t *testing.T) {
+		skipIfHasWindowsNodes(t)
+		data.testNodePort(t, false, testAntreaIPAMNamespace11, testNamespace)
+		checkIPPoolsEmpty(t, data, ipPools)
 	})
 }

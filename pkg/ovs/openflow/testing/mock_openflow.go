@@ -676,17 +676,17 @@ func (m *MockAction) EXPECT() *MockActionMockRecorder {
 }
 
 // CT mocks base method
-func (m *MockAction) CT(arg0 bool, arg1 byte, arg2 int) openflow.CTAction {
+func (m *MockAction) CT(arg0 bool, arg1 byte, arg2 int, arg3 *openflow.RegField) openflow.CTAction {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CT", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "CT", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(openflow.CTAction)
 	return ret0
 }
 
 // CT indicates an expected call of CT
-func (mr *MockActionMockRecorder) CT(arg0, arg1, arg2 interface{}) *gomock.Call {
+func (mr *MockActionMockRecorder) CT(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CT", reflect.TypeOf((*MockAction)(nil).CT), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CT", reflect.TypeOf((*MockAction)(nil).CT), arg0, arg1, arg2, arg3)
 }
 
 // Conjunction mocks base method
@@ -1011,6 +1011,34 @@ func (mr *MockActionMockRecorder) OutputToRegField(arg0 interface{}) *gomock.Cal
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OutputToRegField", reflect.TypeOf((*MockAction)(nil).OutputToRegField), arg0)
 }
 
+// PopVLAN mocks base method
+func (m *MockAction) PopVLAN() openflow.FlowBuilder {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PopVLAN")
+	ret0, _ := ret[0].(openflow.FlowBuilder)
+	return ret0
+}
+
+// PopVLAN indicates an expected call of PopVLAN
+func (mr *MockActionMockRecorder) PopVLAN() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PopVLAN", reflect.TypeOf((*MockAction)(nil).PopVLAN))
+}
+
+// PushVLAN mocks base method
+func (m *MockAction) PushVLAN(arg0 uint16) openflow.FlowBuilder {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PushVLAN", arg0)
+	ret0, _ := ret[0].(openflow.FlowBuilder)
+	return ret0
+}
+
+// PushVLAN indicates an expected call of PushVLAN
+func (mr *MockActionMockRecorder) PushVLAN(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PushVLAN", reflect.TypeOf((*MockAction)(nil).PushVLAN), arg0)
+}
+
 // Resubmit mocks base method
 func (m *MockAction) Resubmit(arg0 uint16, arg1 byte) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
@@ -1181,6 +1209,20 @@ func (m *MockAction) SetTunnelDst(arg0 net.IP) openflow.FlowBuilder {
 func (mr *MockActionMockRecorder) SetTunnelDst(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetTunnelDst", reflect.TypeOf((*MockAction)(nil).SetTunnelDst), arg0)
+}
+
+// SetVLAN mocks base method
+func (m *MockAction) SetVLAN(arg0 uint16) openflow.FlowBuilder {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetVLAN", arg0)
+	ret0, _ := ret[0].(openflow.FlowBuilder)
+	return ret0
+}
+
+// SetVLAN indicates an expected call of SetVLAN
+func (mr *MockActionMockRecorder) SetVLAN(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetVLAN", reflect.TypeOf((*MockAction)(nil).SetVLAN), arg0)
 }
 
 // MockCTAction is a mock of CTAction interface
@@ -1997,6 +2039,20 @@ func (m *MockFlowBuilder) MatchTunnelDst(arg0 net.IP) openflow.FlowBuilder {
 func (mr *MockFlowBuilderMockRecorder) MatchTunnelDst(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchTunnelDst", reflect.TypeOf((*MockFlowBuilder)(nil).MatchTunnelDst), arg0)
+}
+
+// MatchVLAN mocks base method
+func (m *MockFlowBuilder) MatchVLAN(arg0 bool, arg1 uint16, arg2 *uint16) openflow.FlowBuilder {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MatchVLAN", arg0, arg1, arg2)
+	ret0, _ := ret[0].(openflow.FlowBuilder)
+	return ret0
+}
+
+// MatchVLAN indicates an expected call of MatchVLAN
+func (mr *MockFlowBuilderMockRecorder) MatchVLAN(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchVLAN", reflect.TypeOf((*MockFlowBuilder)(nil).MatchVLAN), arg0, arg1, arg2)
 }
 
 // MatchXXReg mocks base method

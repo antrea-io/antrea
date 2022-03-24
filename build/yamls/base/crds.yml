@@ -270,7 +270,9 @@ spec:
                       prefixLength:
                         type: integer
                       vlan:
-                        type: string
+                        type: integer
+                        minimum: 0
+                        maximum: 4094
                     type: object
                   type: array
             status:

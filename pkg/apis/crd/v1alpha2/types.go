@@ -317,8 +317,8 @@ type SubnetInfo struct {
 	Gateway string `json:"gateway"`
 	// Prefix length for the subnet, eg. 24
 	PrefixLength int32 `json:"prefixLength"`
-	// VLAN ID for this subnet. Default is 0. String-typed for sake of potential autoselect option.
-	VLAN string `json:"vlan,omitempty"`
+	// VLAN ID for this subnet. Default is 0. Valid value is 0~4094.
+	VLAN uint16 `json:"vlan,omitempty"`
 }
 
 // SubnetIPRange is a set of contiguous IP addresses, represented by a CIDR or a pair of start and end IPs,

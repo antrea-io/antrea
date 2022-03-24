@@ -64,12 +64,14 @@ func (a *ofFlowAction) OutputInPort() FlowBuilder {
 }
 
 // CT is an action to set conntrack marks and return CTAction to add actions that is executed with conntrack context.
-func (a *ofFlowAction) CT(commit bool, tableID uint8, zone int) CTAction {
+// zone will be ignored if zoneSrcField is not nil.
+func (a *ofFlowAction) CT(commit bool, tableID uint8, zone int, zoneSrcField *RegField) CTAction {
 	base := ctBase{
-		commit:  commit,
-		force:   false,
-		ctTable: tableID,
-		ctZone:  uint16(zone),
+		commit:         commit,
+		force:          false,
+		ctTable:        tableID,
+		ctZoneImm:      uint16(zone),
+		ctZoneSrcField: zoneSrcField,
 	}
 	ct := &ofCTAction{
 		ctBase:  base,
@@ -172,7 +174,12 @@ func (a *ofCTAction) NAT() CTAction {
 
 // CTDone sets the conntrack action in the Openflow rule and it returns FlowBuilder.
 func (a *ofCTAction) CTDone() FlowBuilder {
-	conntrackAct := ofctrl.NewNXConnTrackAction(a.commit, a.force, &a.ctTable, &a.ctZone, a.actions...)
+	var conntrackAct *ofctrl.NXConnTrackAction
+	if a.ctZoneSrcField == nil {
+		conntrackAct = ofctrl.NewNXConnTrackAction(a.commit, a.force, &a.ctTable, &a.ctZoneImm, a.actions...)
+	} else {
+		conntrackAct = ofctrl.NewNXConnTrackActionWithZoneField(a.commit, a.force, &a.ctTable, nil, a.ctZoneSrcField.GetNXFieldName(), a.ctZoneSrcField.GetRange().ToNXRange(), a.actions...)
+	}
 	a.builder.ApplyAction(conntrackAct)
 	return a.builder
 }
@@ -237,6 +244,27 @@ func (a *ofFlowAction) SetDstIP(addr net.IP) FlowBuilder {
 func (a *ofFlowAction) SetTunnelDst(addr net.IP) FlowBuilder {
 	setTunDstAct := &ofctrl.SetTunnelDstAction{IP: addr}
 	a.builder.ApplyAction(setTunDstAct)
+	return a.builder
+}
+
+// PopVLAN is an action to pop VLAN ID.
+func (a *ofFlowAction) PopVLAN() FlowBuilder {
+	popVLANAct := &ofctrl.PopVLANAction{}
+	a.builder.ApplyAction(popVLANAct)
+	return a.builder
+}
+
+// PushVLAN is an action to add VLAN ID.
+func (a *ofFlowAction) PushVLAN(etherType uint16) FlowBuilder {
+	pushVLANAct := &ofctrl.PushVLANAction{EtherType: etherType}
+	a.builder.ApplyAction(pushVLANAct)
+	return a.builder
+}
+
+// SetVLAN is an action to set existing VLAN ID.
+func (a *ofFlowAction) SetVLAN(vlanID uint16) FlowBuilder {
+	setVLANAct := &ofctrl.SetVLANAction{VlanID: vlanID}
+	a.builder.ApplyAction(setVLANAct)
 	return a.builder
 }
 

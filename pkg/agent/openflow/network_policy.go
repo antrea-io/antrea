@@ -1734,6 +1734,7 @@ type featureNetworkPolicy struct {
 	ovsMetersAreSupported bool
 	enableDenyTracking    bool
 	enableAntreaPolicy    bool
+	ctZoneSrcField        *binding.RegField
 	// deterministic represents whether to generate flows deterministically.
 	// For example, if a flow has multiple actions, setting it to true can get consistent flow.
 	// Enabling it may carry a performance impact. It's disabled by default and should only be used in testing.
@@ -1752,7 +1753,8 @@ func newFeatureNetworkPolicy(
 	bridge binding.Bridge,
 	ovsMetersAreSupported,
 	enableDenyTracking,
-	enableAntreaPolicy bool) *featureNetworkPolicy {
+	enableAntreaPolicy bool,
+	connectUplinkToBridge bool) *featureNetworkPolicy {
 	return &featureNetworkPolicy{
 		cookieAllocator:          cookieAllocator,
 		ipProtocols:              ipProtocols,
@@ -1763,6 +1765,7 @@ func newFeatureNetworkPolicy(
 		enableDenyTracking:       enableDenyTracking,
 		enableAntreaPolicy:       enableAntreaPolicy,
 		category:                 cookie.NetworkPolicy,
+		ctZoneSrcField:           getZoneSrcField(connectUplinkToBridge),
 	}
 }
 

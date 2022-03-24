@@ -101,6 +101,7 @@ func createIPPools(crdClient *fakepoolclient.IPPoolClientset) {
 	subnetInfoPear := crdv1a2.SubnetInfo{
 		Gateway:      "10.2.3.1",
 		PrefixLength: 24,
+		VLAN:         100,
 	}
 	subnetRangePear := crdv1a2.SubnetIPRange{IPRange: ipRangePear,
 		SubnetInfo: subnetInfoPear}
@@ -340,6 +341,7 @@ func TestAntreaIPAMDriver(t *testing.T) {
 
 	cniArgsMap := make(map[string]*invoke.Args)
 	k8sArgsMap := make(map[string]*argtypes.K8sArgs)
+	vlanArgsMap := map[string]uint16{"pear1": 100, "pear2": 100, "pear3": 100, "pear-sts-8": 100}
 	for _, test := range []string{"apple1", "apple2", "apple-sts-0", "orange1", "orange2", testNoAnnotation, testJunkAnnotation, "pear1", "pear2", "pear3", "pear4", "pear5", "pear6", "pear7", "pear-sts-8", "pear-sts-9", "pear10"} {
 		// extract Namespace by removing numerals
 		re := regexp.MustCompile("(-sts-)*[0-9]*$")
@@ -361,6 +363,11 @@ func TestAntreaIPAMDriver(t *testing.T) {
 		assert.Equal(t, expectedIP, result.IPs[0].Address.IP.String())
 		assert.Equal(t, expectedMask, result.IPs[0].Address.Mask.String())
 		assert.Equal(t, expectedGW, result.IPs[0].Gateway.String())
+		if vlanID, ok := vlanArgsMap[test]; ok {
+			assert.Equal(t, vlanID, result.VLANID)
+		} else {
+			assert.Equal(t, uint16(0), result.VLANID)
+		}
 
 		podNamespace := string(k8sArgsMap[test].K8S_POD_NAMESPACE)
 		podName := string(k8sArgsMap[test].K8S_POD_NAME)

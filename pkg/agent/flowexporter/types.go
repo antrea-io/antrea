@@ -95,4 +95,5 @@ type FlowExporterOptions struct {
 	IdleFlowTimeout        time.Duration
 	StaleConnectionTimeout time.Duration
 	PollInterval           time.Duration
+	ConnectUplinkToBridge  bool
 }

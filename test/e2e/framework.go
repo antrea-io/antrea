@@ -84,6 +84,8 @@ const (
 	antreaDefaultGW            string = "antrea-gw0"
 	testNamespace              string = "antrea-test"
 	testAntreaIPAMNamespace    string = "antrea-ipam-test"
+	testAntreaIPAMNamespace11  string = "antrea-ipam-test-11"
+	testAntreaIPAMNamespace12  string = "antrea-ipam-test-12"
 	busyboxContainerName       string = "busybox"
 	mcjoinContainerName        string = "mcjoin"
 	tcpdumpContainerName       string = "netshoot"
@@ -1588,8 +1590,8 @@ func (data *TestData) createNginxLoadBalancerService(affinity bool, ingressIPs [
 }
 
 // deleteService deletes the service.
-func (data *TestData) deleteService(name string) error {
-	if err := data.clientset.CoreV1().Services(testNamespace).Delete(context.TODO(), name, metav1.DeleteOptions{}); err != nil {
+func (data *TestData) deleteService(namespace, name string) error {
+	if err := data.clientset.CoreV1().Services(namespace).Delete(context.TODO(), name, metav1.DeleteOptions{}); err != nil {
 		return fmt.Errorf("unable to cleanup service %v: %v", name, err)
 	}
 	return nil
@@ -1597,13 +1599,13 @@ func (data *TestData) deleteService(name string) error {
 
 // Deletes a Service in the test namespace then waits us to timeout for the Service not to be visible to the
 // client any more.
-func (data *TestData) deleteServiceAndWait(timeout time.Duration, name string) error {
-	if err := data.deleteService(name); err != nil {
+func (data *TestData) deleteServiceAndWait(timeout time.Duration, name, namespace string) error {
+	if err := data.deleteService(namespace, name); err != nil {
 		return err
 	}
 
 	err := wait.Poll(defaultInterval, timeout, func() (bool, error) {
-		if _, err := data.clientset.CoreV1().Services(testNamespace).Get(context.TODO(), name, metav1.GetOptions{}); err != nil {
+		if _, err := data.clientset.CoreV1().Services(namespace).Get(context.TODO(), name, metav1.GetOptions{}); err != nil {
 			if errors.IsNotFound(err) {
 				return true, nil
 			}

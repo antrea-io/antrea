@@ -345,7 +345,7 @@ func testDefaultDenyIngressPolicy(t *testing.T, data *TestData) {
 	if err != nil {
 		t.Fatalf("Error when creating nginx NodePort service: %v", err)
 	}
-	defer data.deleteService(service.Name)
+	defer data.deleteService(service.Namespace, service.Name)
 
 	// client1 is a host network Pod and is on the same node as the server Pod, simulating kubelet probe traffic.
 	client1Name, _, cleanupFunc := createAndWaitForPod(t, data, data.createBusyboxPodOnNode, "test-hostnetwork-client-can-connect-", serverNode, testNamespace, true)
@@ -926,7 +926,7 @@ func createAndWaitForPod(t *testing.T, data *TestData, createFunc func(name stri
 		t.Fatalf("Error when creating busybox test Pod: %v", err)
 	}
 	cleanupFunc := func() {
-		deletePodWrapper(t, data, testNamespace, name)
+		deletePodWrapper(t, data, ns, name)
 	}
 	podIP, err := data.podWaitForIPs(defaultTimeout, name, ns)
 	if err != nil {
