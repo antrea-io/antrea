@@ -114,7 +114,7 @@ func (data *TestData) testDeletePod(t *testing.T, podName string, nodeName strin
 		antctlCmd := fmt.Sprintf("C:/k/antrea/bin/antctl.exe get podinterface %s -n %s -o json", podName, namespace)
 		envCmd := fmt.Sprintf("export POD_NAME=antrea-agent;export KUBERNETES_SERVICE_HOST=%s;export KUBERNETES_SERVICE_PORT=%d", clusterInfo.k8sServiceHost, clusterInfo.k8sServicePort)
 		cmd := fmt.Sprintf("%s && %s", envCmd, antctlCmd)
-		_, stdout, _, err = RunCommandOnNode(nodeName, cmd)
+		_, stdout, _, err = data.RunCommandOnNode(nodeName, cmd)
 	} else {
 		cmds := []string{"antctl", "get", "podinterface", podName, "-n", namespace, "-o", "json"}
 		stdout, _, err = runAntctl(antreaPodName, cmds, data)
@@ -139,7 +139,7 @@ func (data *TestData) testDeletePod(t *testing.T, podName string, nodeName strin
 	if isWindowsNode {
 		doesInterfaceExist = func() bool {
 			cmd := fmt.Sprintf("powershell 'Get-HnsEndpoint | Where-Object Name -EQ %s | Select-Object ID | Format-Table -HideTableHeaders'", ifName)
-			_, stdout, _, err := RunCommandOnNode(nodeName, cmd)
+			_, stdout, _, err := data.RunCommandOnNode(nodeName, cmd)
 			if err != nil {
 				t.Fatalf("Error when querying HNSEndpoint with name %s: %s", ifName, err.Error())
 			}
@@ -154,7 +154,7 @@ func (data *TestData) testDeletePod(t *testing.T, podName string, nodeName strin
 		}
 		doesIPAllocationExist = func(podIP string) bool {
 			cmd := fmt.Sprintf("powershell 'Test-Path /var/lib/cni/networks/antrea/%s'", podIP)
-			_, stdout, _, err := RunCommandOnNode(nodeName, cmd)
+			_, stdout, _, err := data.RunCommandOnNode(nodeName, cmd)
 			if err != nil {
 				t.Fatalf("Error when querying IPAM result: %s", err.Error())
 			}
@@ -163,7 +163,7 @@ func (data *TestData) testDeletePod(t *testing.T, podName string, nodeName strin
 	} else {
 		doesInterfaceExist = func() bool {
 			cmd := []string{"ip", "link", "show", ifName}
-			stdout, stderr, err := data.runCommandFromPod(antreaNamespace, antreaPodName, agentContainerName, cmd)
+			stdout, stderr, err := data.RunCommandFromPod(antreaNamespace, antreaPodName, agentContainerName, cmd)
 			if err != nil {
 				if strings.Contains(stderr, "does not exist") {
 					return false
@@ -181,7 +181,7 @@ func (data *TestData) testDeletePod(t *testing.T, podName string, nodeName strin
 		}
 		doesIPAllocationExist = func(podIP string) bool {
 			cmd := []string{"test", "-f", "/var/run/antrea/cni/networks/antrea/" + podIP}
-			_, _, err := data.runCommandFromPod(antreaNamespace, antreaPodName, agentContainerName, cmd)
+			_, _, err := data.RunCommandFromPod(antreaNamespace, antreaPodName, agentContainerName, cmd)
 			return err == nil
 		}
 	}
@@ -388,7 +388,7 @@ func testReconcileGatewayRoutesOnStartup(t *testing.T, data *TestData, isIPv6 bo
 			cmd = []string{"ip", "-6", "route", "list", "dev", antreaGWName}
 		}
 		podName := antreaPodName()
-		stdout, stderr, err := data.runCommandFromPod(antreaNamespace, podName, agentContainerName, cmd)
+		stdout, stderr, err := data.RunCommandFromPod(antreaNamespace, podName, agentContainerName, cmd)
 		if err != nil {
 			return nil, fmt.Errorf("error when running ip command in Pod '%s': %v - stdout: %s - stderr: %s", podName, err, stdout, stderr)
 		}
@@ -476,7 +476,7 @@ func testReconcileGatewayRoutesOnStartup(t *testing.T, data *TestData, isIPv6 bo
 		} else {
 			cmd = []string{"ip", "-6", "route", "del", route.peerPodCIDR.String()}
 		}
-		_, _, err := data.runCommandFromPod(antreaNamespace, antreaPodName(), agentContainerName, cmd)
+		_, _, err := data.RunCommandFromPod(antreaNamespace, antreaPodName(), agentContainerName, cmd)
 		if err != nil {
 			return fmt.Errorf("error when running ip command on Node '%s': %v", nodeName, err)
 		}
@@ -490,7 +490,7 @@ func testReconcileGatewayRoutesOnStartup(t *testing.T, data *TestData, isIPv6 bo
 		} else {
 			cmd = []string{"ip", "-6", "route", "add", route.peerPodCIDR.String(), "via", route.peerPodGW.String(), "dev", antreaGWName, "onlink"}
 		}
-		_, _, err := data.runCommandFromPod(antreaNamespace, antreaPodName(), agentContainerName, cmd)
+		_, _, err := data.RunCommandFromPod(antreaNamespace, antreaPodName(), agentContainerName, cmd)
 		if err != nil {
 			return fmt.Errorf("error when running ip command on Node '%s': %v", nodeName, err)
 		}
@@ -584,7 +584,7 @@ func getRoundNumber(data *TestData, podName string) (uint64, error) {
 		return 0, fmt.Errorf("error when marshalling OVSDB query: %v", err)
 	}
 	cmd := []string{"ovsdb-client", "query", string(b)}
-	stdout, stderr, err := data.runCommandFromPod(antreaNamespace, podName, ovsContainerName, cmd)
+	stdout, stderr, err := data.RunCommandFromPod(antreaNamespace, podName, ovsContainerName, cmd)
 	if err != nil {
 		return 0, fmt.Errorf("cannot retrieve round number: stderr: <%v>, err: <%v>", stderr, err)
 	}
@@ -678,7 +678,7 @@ func testDeletePreviousRoundFlowsOnStartup(t *testing.T, data *TestData) {
 			"ovs-ofctl", "add-flow", defaultBridgeName,
 			fmt.Sprintf("table=0,cookie=%#x,priority=0,actions=drop", cookieID),
 		}
-		_, stderr, err := data.runCommandFromPod(antreaNamespace, podName, ovsContainerName, cmd)
+		_, stderr, err := data.RunCommandFromPod(antreaNamespace, podName, ovsContainerName, cmd)
 		if err != nil {
 			t.Fatalf("error when adding flow: <%v>, err: <%v>", stderr, err)
 		}
@@ -692,7 +692,7 @@ func testDeletePreviousRoundFlowsOnStartup(t *testing.T, data *TestData) {
 		// ignore potential error as it is possible for the container to exit with code 137
 		// if the container does not restart properly, we will know when we try to get the
 		// new round number below.
-		data.runCommandFromPod(antreaNamespace, podName, agentContainerName, cmd)
+		data.RunCommandFromPod(antreaNamespace, podName, agentContainerName, cmd)
 	}
 	t.Logf("Restarting antrea-agent container on Node %s", nodeName)
 	stopAgent()
@@ -714,7 +714,7 @@ func testDeletePreviousRoundFlowsOnStartup(t *testing.T, data *TestData) {
 			"ovs-ofctl", "dump-flows", defaultBridgeName,
 			fmt.Sprintf("table=0,cookie=%#x/%#x", cookieID, cookieMask),
 		}
-		stdout, stderr, err := data.runCommandFromPod(antreaNamespace, podName, ovsContainerName, cmd)
+		stdout, stderr, err := data.RunCommandFromPod(antreaNamespace, podName, ovsContainerName, cmd)
 		if err != nil {
 			t.Fatalf("error when dumping flows: <%v>, err: <%v>", stderr, err)
 		}
@@ -764,7 +764,7 @@ func testGratuitousARP(t *testing.T, data *TestData, namespace string) {
 	time.Sleep(100 * time.Millisecond)
 
 	cmd := []string{"ovs-ofctl", "dump-flows", defaultBridgeName, fmt.Sprintf("table=ARPSpoofGuard,arp,arp_spa=%s", podIP.ipv4.String())}
-	stdout, _, err := data.runCommandFromPod(antreaNamespace, antreaPodName, ovsContainerName, cmd)
+	stdout, _, err := data.RunCommandFromPod(antreaNamespace, antreaPodName, ovsContainerName, cmd)
 	if err != nil {
 		t.Fatalf("Error when querying openflow: %v", err)
 	}

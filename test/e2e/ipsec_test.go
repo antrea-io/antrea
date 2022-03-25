@@ -50,7 +50,7 @@ func (data *TestData) readSecurityAssociationsStatus(nodeName string) (up int, c
 		return 0, 0, err
 	}
 	cmd := []string{"ipsec", "status"}
-	stdout, stderr, err := data.runCommandFromPod(antreaNamespace, antreaPodName, "antrea-ipsec", cmd)
+	stdout, stderr, err := data.RunCommandFromPod(antreaNamespace, antreaPodName, "antrea-ipsec", cmd)
 	if err != nil {
 		return 0, 0, fmt.Errorf("error when running 'ipsec status' on '%s': %v - stdout: %s - stderr: %s", nodeName, err, stdout, stderr)
 	}

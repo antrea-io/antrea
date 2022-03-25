@@ -38,7 +38,7 @@ import (
 
 // getAccessToken retrieves the local access token of an antrea component API server.
 func getAccessToken(podName string, containerName string, tokenPath string, data *TestData) (string, error) {
-	stdout, _, err := data.runCommandFromPod(metav1.NamespaceSystem, podName, containerName, []string{"cat", tokenPath})
+	stdout, _, err := data.RunCommandFromPod(metav1.NamespaceSystem, podName, containerName, []string{"cat", tokenPath})
 	if err != nil {
 		return "", err
 	}

@@ -64,10 +64,10 @@ func TestUpgrade(t *testing.T) {
 	namespace := randName("test-namespace-")
 
 	t.Logf("Creating namespace '%s'", namespace)
-	if err := data.createNamespace(namespace, nil); err != nil {
+	if err := data.CreateNamespace(namespace, nil); err != nil {
 		t.Fatalf("Error when creating namespace '%s'", namespace)
 	}
-	defer data.deleteNamespace(namespace, defaultTimeout)
+	defer data.DeleteNamespace(namespace, defaultTimeout)
 
 	data.testPodConnectivitySameNode(t)
 	data.testPodConnectivityDifferentNodes(t)
@@ -109,7 +109,7 @@ func TestUpgrade(t *testing.T) {
 	checkFn()
 
 	t.Logf("Deleting namespace '%s'", namespace)
-	if err := data.deleteNamespace(namespace, defaultTimeout); err != nil {
+	if err := data.DeleteNamespace(namespace, defaultTimeout); err != nil {
 		t.Errorf("Namespace deletion failed: %v", err)
 	}
 

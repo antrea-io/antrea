@@ -88,20 +88,20 @@ func skipIfKubeProxyEnabled(t *testing.T, data *TestData) {
 	}
 }
 
-func probeFromNode(node string, url string) error {
-	_, _, _, err := RunCommandOnNode(node, fmt.Sprintf("curl --connect-timeout 1 --retry 5 --retry-connrefused %s", url))
+func probeFromNode(node string, url string, data *TestData) error {
+	_, _, _, err := data.RunCommandOnNode(node, fmt.Sprintf("curl --connect-timeout 1 --retry 5 --retry-connrefused %s", url))
 	return err
 }
 
-func probeHostnameFromNode(node string, baseUrl string) (string, error) {
+func probeHostnameFromNode(node string, baseUrl string, data *TestData) (string, error) {
 	url := fmt.Sprintf("%s/%s", baseUrl, "hostname")
-	_, hostname, _, err := RunCommandOnNode(node, fmt.Sprintf("curl --connect-timeout 1 --retry 5 --retry-connrefused %s", url))
+	_, hostname, _, err := data.RunCommandOnNode(node, fmt.Sprintf("curl --connect-timeout 1 --retry 5 --retry-connrefused %s", url))
 	return hostname, err
 }
 
-func probeClientIPFromNode(node string, baseUrl string) (string, error) {
+func probeClientIPFromNode(node string, baseUrl string, data *TestData) (string, error) {
 	url := fmt.Sprintf("%s/%s", baseUrl, "clientip")
-	_, hostPort, _, err := RunCommandOnNode(node, fmt.Sprintf("curl --connect-timeout 1 --retry 5 --retry-connrefused %s", url))
+	_, hostPort, _, err := data.RunCommandOnNode(node, fmt.Sprintf("curl --connect-timeout 1 --retry 5 --retry-connrefused %s", url))
 	if err != nil {
 		return "", err
 	}
@@ -114,7 +114,7 @@ func probeFromPod(data *TestData, pod, container string, url string) error {
 	if container == busyboxContainerName {
 		_, _, err = data.runWgetCommandOnBusyboxWithRetry(pod, testNamespace, url, 5)
 	} else {
-		_, _, err = data.runCommandFromPod(testNamespace, pod, container, []string{"wget", "-O", "-", url, "-T", "5"})
+		_, _, err = data.RunCommandFromPod(testNamespace, pod, container, []string{"wget", "-O", "-", url, "-T", "5"})
 	}
 	return err
 }
@@ -126,7 +126,7 @@ func probeHostnameFromPod(data *TestData, pod, container string, baseUrl string)
 	if container == busyboxContainerName {
 		hostname, _, err = data.runWgetCommandOnBusyboxWithRetry(pod, testNamespace, url, 5)
 	} else {
-		hostname, _, err = data.runCommandFromPod(testNamespace, pod, container, []string{"wget", "-O", "-", url, "-T", "5"})
+		hostname, _, err = data.RunCommandFromPod(testNamespace, pod, container, []string{"wget", "-O", "-", url, "-T", "5"})
 	}
 	return hostname, err
 }
@@ -138,7 +138,7 @@ func probeClientIPFromPod(data *TestData, pod, container string, baseUrl string)
 	if container == busyboxContainerName {
 		hostPort, _, err = data.runWgetCommandOnBusyboxWithRetry(pod, testNamespace, url, 5)
 	} else {
-		hostPort, _, err = data.runCommandFromPod(testNamespace, pod, container, []string{"wget", "-O", "-", url, "-T", "5"})
+		hostPort, _, err = data.RunCommandFromPod(testNamespace, pod, container, []string{"wget", "-O", "-", url, "-T", "5"})
 	}
 	if err != nil {
 		return "", err
@@ -221,7 +221,7 @@ func testProxyLoadBalancerService(t *testing.T, isIPv6 bool) {
 	// Delete agnhost Pods which are not on host network and create new agnhost Pods which are on host network.
 	hostAgnhosts := []string{"agnhost-host-0", "agnhost-host-1"}
 	for idx, node := range nodes {
-		require.NoError(t, data.deletePod(testNamespace, agnhosts[idx]))
+		require.NoError(t, data.DeletePod(testNamespace, agnhosts[idx]))
 		createAgnhostPod(t, data, hostAgnhosts[idx], node, true)
 	}
 	t.Run("HostNetwork Endpoints", func(t *testing.T) {
@@ -247,7 +247,7 @@ func loadBalancerTestCases(t *testing.T, data *TestData, clusterUrl, localUrl st
 func testLoadBalancerClusterFromNode(t *testing.T, data *TestData, nodes []string, url string) {
 	skipIfKubeProxyEnabled(t, data)
 	for _, node := range nodes {
-		require.NoError(t, probeFromNode(node, url), "Service LoadBalancer whose externalTrafficPolicy is Cluster should be able to be connected from Node")
+		require.NoError(t, probeFromNode(node, url, data), "Service LoadBalancer whose externalTrafficPolicy is Cluster should be able to be connected from Node")
 	}
 }
 
@@ -260,7 +260,7 @@ func testLoadBalancerClusterFromPod(t *testing.T, data *TestData, pods []string,
 func testLoadBalancerLocalFromNode(t *testing.T, data *TestData, nodes []string, url string, expectedHostnames []string) {
 	skipIfKubeProxyEnabled(t, data)
 	for idx, node := range nodes {
-		hostname, err := probeHostnameFromNode(node, url)
+		hostname, err := probeHostnameFromNode(node, url, data)
 		require.NoError(t, err, "Service LoadBalancer whose externalTrafficPolicy is Local should be able to be connected from Node")
 		require.Equal(t, hostname, expectedHostnames[idx])
 	}
@@ -354,7 +354,7 @@ func testProxyNodePortService(t *testing.T, isIPv6 bool) {
 	// Delete agnhost Pods which are not on host network and create new agnhost Pods which are on host network.
 	hostAgnhosts := []string{"agnhost-host-0", "agnhost-host-1"}
 	for idx, node := range nodes {
-		require.NoError(t, data.deletePod(testNamespace, agnhosts[idx]))
+		require.NoError(t, data.DeletePod(testNamespace, agnhosts[idx]))
 		createAgnhostPod(t, data, hostAgnhosts[idx], node, true)
 	}
 	t.Run("HostNetwork Endpoints", func(t *testing.T) {
@@ -469,7 +469,7 @@ sleep 3600
 	}
 	// Connect to NodePort on control plane Node in the fake external network.
 	cmd = fmt.Sprintf("ip netns exec %s curl --connect-timeout 1 --retry 5 --retry-connrefused %s", testNetns, testNodePortURL)
-	_, _, err = data.runCommandFromPod(testNamespace, testPod, agnhostContainerName, []string{"sh", "-c", cmd})
+	_, _, err = data.RunCommandFromPod(testNamespace, testPod, agnhostContainerName, []string{"sh", "-c", cmd})
 	require.NoError(t, err, "Service NodePort should be able to be connected from external network when Egress is enabled")
 }
 
@@ -492,14 +492,14 @@ func createAgnhostPod(t *testing.T, data *TestData, podName string, node string,
 func testNodePortClusterFromRemote(t *testing.T, data *TestData, nodes, urls []string) {
 	skipIfKubeProxyEnabled(t, data)
 	for idx, node := range nodes {
-		require.NoError(t, probeFromNode(node, urls[idx]), "Service NodePort whose externalTrafficPolicy is Cluster should be able to be connected from remote Node")
+		require.NoError(t, probeFromNode(node, urls[idx], data), "Service NodePort whose externalTrafficPolicy is Cluster should be able to be connected from remote Node")
 	}
 }
 
 func testNodePortClusterFromNode(t *testing.T, data *TestData, nodes, urls []string) {
 	skipIfKubeProxyEnabled(t, data)
 	for idx, node := range nodes {
-		require.NoError(t, probeFromNode(node, urls[idx]), "Service NodePort whose externalTrafficPolicy is Cluster should be able to be connected from Node")
+		require.NoError(t, probeFromNode(node, urls[idx], data), "Service NodePort whose externalTrafficPolicy is Cluster should be able to be connected from Node")
 	}
 }
 
@@ -515,11 +515,11 @@ func testNodePortLocalFromRemote(t *testing.T, data *TestData, nodes, urls, expe
 	skipIfKubeProxyEnabled(t, data)
 	errMsg := "Service NodePort whose externalTrafficPolicy is Local should be able to be connected from remote Node"
 	for idx, node := range nodes {
-		hostname, err := probeHostnameFromNode(node, urls[idx])
+		hostname, err := probeHostnameFromNode(node, urls[idx], data)
 		require.NoError(t, err, errMsg)
 		require.Equal(t, expectedHostnames[idx], hostname)
 
-		clientIP, err := probeClientIPFromNode(node, urls[idx])
+		clientIP, err := probeClientIPFromNode(node, urls[idx], data)
 		require.NoError(t, err, errMsg)
 		require.Equal(t, expectedClientIPs[idx], clientIP)
 	}
@@ -528,7 +528,7 @@ func testNodePortLocalFromRemote(t *testing.T, data *TestData, nodes, urls, expe
 func testNodePortLocalFromNode(t *testing.T, data *TestData, nodes, urls, expectedHostnames []string) {
 	skipIfKubeProxyEnabled(t, data)
 	for idx, node := range nodes {
-		hostname, err := probeHostnameFromNode(node, urls[idx])
+		hostname, err := probeHostnameFromNode(node, urls[idx], data)
 		require.NoError(t, err, "Service NodePort whose externalTrafficPolicy is Local should be able to be connected rom Node")
 		require.Equal(t, expectedHostnames[idx], hostname)
 	}
@@ -668,7 +668,7 @@ func testProxyServiceSessionAffinity(ipFamily *corev1.IPFamily, ingressIPs []str
 	agentName, err := data.getAntreaPodOnNode(nodeName)
 	require.NoError(t, err)
 	tableSessionAffinityName := "SessionAffinity"
-	tableSessionAffinityOutput, _, err := data.runCommandFromPod(metav1.NamespaceSystem, agentName, "antrea-agent", []string{"ovs-ofctl", "dump-flows", defaultBridgeName, fmt.Sprintf("table=%s", tableSessionAffinityName)})
+	tableSessionAffinityOutput, _, err := data.RunCommandFromPod(metav1.NamespaceSystem, agentName, "antrea-agent", []string{"ovs-ofctl", "dump-flows", defaultBridgeName, fmt.Sprintf("table=%s", tableSessionAffinityName)})
 	require.NoError(t, err)
 	if *ipFamily == corev1.IPv4Protocol {
 		require.Contains(t, tableSessionAffinityOutput, fmt.Sprintf("nw_dst=%s,tp_dst=80", svc.Spec.ClusterIP))
@@ -786,7 +786,7 @@ func testProxyHairpin(t *testing.T, isIPv6 bool) {
 		testProxyIntraNodeHairpinCases(data, t, expectedGatewayIP, agnhost, clusterIPUrl, workerNodePortClusterUrl, workerNodePortLocalUrl, lbClusterUrl, lbLocalUrl)
 		testProxyInterNodeHairpinCases(data, t, false, expectedControllerIP, nodeName(0), clusterIPUrl, controllerNodePortClusterUrl, lbClusterUrl)
 	})
-	require.NoError(t, data.deletePod(testNamespace, agnhost))
+	require.NoError(t, data.DeletePod(testNamespace, agnhost))
 
 	agnhostHost := fmt.Sprintf("agnhost-host-%v", isIPv6)
 	createAgnhostPod(t, data, agnhostHost, node, true)
@@ -869,7 +869,7 @@ func testProxyInterNodeHairpinCases(data *TestData, t *testing.T, hostNetwork bo
 	}
 
 	t.Run("InterNode/ClusterIP", func(t *testing.T) {
-		clientIP, err := probeClientIPFromNode(node, clusterIPUrl)
+		clientIP, err := probeClientIPFromNode(node, clusterIPUrl, data)
 		require.NoError(t, err, "ClusterIP hairpin should be able to be connected")
 		require.Equal(t, expectedClientIP, clientIP)
 	})
@@ -878,7 +878,7 @@ func testProxyInterNodeHairpinCases(data *TestData, t *testing.T, hostNetwork bo
 		if !hostNetwork && currentEncapMode == config.TrafficEncapModeNoEncap {
 			skipIfHasWindowsNodes(t)
 		}
-		clientIP, err := probeClientIPFromNode(node, nodePortClusterUrl)
+		clientIP, err := probeClientIPFromNode(node, nodePortClusterUrl, data)
 		require.NoError(t, err, "NodePort whose externalTrafficPolicy is Cluster hairpin should be able to be connected")
 		require.Equal(t, expectedClientIP, clientIP)
 	})
@@ -887,7 +887,7 @@ func testProxyInterNodeHairpinCases(data *TestData, t *testing.T, hostNetwork bo
 		if !hostNetwork && currentEncapMode == config.TrafficEncapModeNoEncap {
 			skipIfHasWindowsNodes(t)
 		}
-		clientIP, err := probeClientIPFromNode(node, lbClusterUrl)
+		clientIP, err := probeClientIPFromNode(node, lbClusterUrl, data)
 		require.NoError(t, err, "LoadBalancer whose externalTrafficPolicy is Cluster hairpin should be able to be connected")
 		require.Equal(t, expectedClientIP, clientIP)
 	})
@@ -956,12 +956,12 @@ func testProxyEndpointLifeCycle(ipFamily *corev1.IPFamily, data *TestData, t *te
 	}
 
 	for tableName, keyword := range keywords {
-		tableOutput, _, err := data.runCommandFromPod(metav1.NamespaceSystem, agentName, "antrea-agent", []string{"ovs-ofctl", "dump-flows", defaultBridgeName, fmt.Sprintf("table=%s", tableName)})
+		tableOutput, _, err := data.RunCommandFromPod(metav1.NamespaceSystem, agentName, "antrea-agent", []string{"ovs-ofctl", "dump-flows", defaultBridgeName, fmt.Sprintf("table=%s", tableName)})
 		require.NoError(t, err)
 		require.Contains(t, tableOutput, keyword)
 	}
 
-	groupOutput, _, err := data.runCommandFromPod(metav1.NamespaceSystem, agentName, "antrea-agent", []string{"ovs-ofctl", "dump-groups", defaultBridgeName})
+	groupOutput, _, err := data.RunCommandFromPod(metav1.NamespaceSystem, agentName, "antrea-agent", []string{"ovs-ofctl", "dump-groups", defaultBridgeName})
 	require.NoError(t, err)
 	for _, k := range groupKeywords {
 		require.Contains(t, groupOutput, k)
@@ -973,12 +973,12 @@ func testProxyEndpointLifeCycle(ipFamily *corev1.IPFamily, data *TestData, t *te
 	time.Sleep(time.Second)
 
 	for tableName, keyword := range keywords {
-		tableOutput, _, err := data.runCommandFromPod(metav1.NamespaceSystem, agentName, "antrea-agent", []string{"ovs-ofctl", "dump-flows", defaultBridgeName, fmt.Sprintf("table=%s", tableName)})
+		tableOutput, _, err := data.RunCommandFromPod(metav1.NamespaceSystem, agentName, "antrea-agent", []string{"ovs-ofctl", "dump-flows", defaultBridgeName, fmt.Sprintf("table=%s", tableName)})
 		require.NoError(t, err)
 		require.NotContains(t, tableOutput, keyword)
 	}
 
-	groupOutput, _, err = data.runCommandFromPod(metav1.NamespaceSystem, agentName, "antrea-agent", []string{"ovs-ofctl", "dump-groups", defaultBridgeName})
+	groupOutput, _, err = data.RunCommandFromPod(metav1.NamespaceSystem, agentName, "antrea-agent", []string{"ovs-ofctl", "dump-groups", defaultBridgeName})
 	require.NoError(t, err)
 	for _, k := range groupKeywords {
 		require.NotContains(t, groupOutput, k)
@@ -1075,11 +1075,11 @@ func testProxyServiceLifeCycle(ipFamily *corev1.IPFamily, ingressIPs []string, d
 	} else {
 		groupKeyword = fmt.Sprintf("load:0x%s->NXM_NX_REG3[],load:0x%x->NXM_NX_REG4[0..15]", strings.TrimLeft(hex.EncodeToString(nginxIPs.ipv4.To4()), "0"), 80)
 	}
-	groupOutput, _, err := data.runCommandFromPod(metav1.NamespaceSystem, agentName, "antrea-agent", []string{"ovs-ofctl", "dump-groups", defaultBridgeName})
+	groupOutput, _, err := data.RunCommandFromPod(metav1.NamespaceSystem, agentName, "antrea-agent", []string{"ovs-ofctl", "dump-groups", defaultBridgeName})
 	require.NoError(t, err)
 	require.Contains(t, groupOutput, groupKeyword)
 	for _, expectedTable := range expectedFlows {
-		tableOutput, _, err := data.runCommandFromPod(metav1.NamespaceSystem, agentName, "antrea-agent", []string{"ovs-ofctl", "dump-flows", defaultBridgeName, fmt.Sprintf("table=%s", expectedTable.tableName)})
+		tableOutput, _, err := data.RunCommandFromPod(metav1.NamespaceSystem, agentName, "antrea-agent", []string{"ovs-ofctl", "dump-flows", defaultBridgeName, fmt.Sprintf("table=%s", expectedTable.tableName)})
 		require.NoError(t, err)
 		for _, expectedFlow := range expectedTable.flows {
 			require.Contains(t, tableOutput, expectedFlow)
@@ -1092,11 +1092,11 @@ func testProxyServiceLifeCycle(ipFamily *corev1.IPFamily, ingressIPs []string, d
 	// Hold on to make sure that the Service is realized.
 	time.Sleep(3 * time.Second)
 
-	groupOutput, _, err = data.runCommandFromPod(metav1.NamespaceSystem, agentName, "antrea-agent", []string{"ovs-ofctl", "dump-groups", defaultBridgeName})
+	groupOutput, _, err = data.RunCommandFromPod(metav1.NamespaceSystem, agentName, "antrea-agent", []string{"ovs-ofctl", "dump-groups", defaultBridgeName})
 	require.NoError(t, err)
 	require.NotContains(t, groupOutput, groupKeyword)
 	for _, expectedTable := range expectedFlows {
-		tableOutput, _, err := data.runCommandFromPod(metav1.NamespaceSystem, agentName, "antrea-agent", []string{"ovs-ofctl", "dump-flows", defaultBridgeName, fmt.Sprintf("table=%s", expectedTable.tableName)})
+		tableOutput, _, err := data.RunCommandFromPod(metav1.NamespaceSystem, agentName, "antrea-agent", []string{"ovs-ofctl", "dump-flows", defaultBridgeName, fmt.Sprintf("table=%s", expectedTable.tableName)})
 		require.NoError(t, err)
 		for _, expectedFlow := range expectedTable.flows {
 			require.NotContains(t, tableOutput, expectedFlow)

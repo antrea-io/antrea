@@ -103,7 +103,7 @@ func getNPLAnnotation(t *testing.T, data *TestData, r *require.Assertions, testP
 		podTimeout = 18 * time.Second
 	}
 	for i := 0; i <= maxRetries; i++ {
-		_, err = data.podWaitFor(podTimeout, testPodName, testNamespace, func(pod *corev1.Pod) (bool, error) {
+		_, err = data.PodWaitFor(podTimeout, testPodName, testNamespace, func(pod *corev1.Pod) (bool, error) {
 			var err error
 			if pod.Status.Phase != corev1.PodRunning {
 				return false, nil
@@ -177,7 +177,7 @@ func checkForNPLRuleInIPTables(t *testing.T, data *TestData, r *require.Assertio
 	t.Logf("Verifying iptables rules %v, present: %v", rules, present)
 	const timeout = 30 * time.Second
 	err := wait.Poll(time.Second, timeout, func() (bool, error) {
-		stdout, _, err := data.runCommandFromPod(antreaNamespace, antreaPod, agentContainerName, cmd)
+		stdout, _, err := data.RunCommandFromPod(antreaNamespace, antreaPod, agentContainerName, cmd)
 		if err != nil {
 			t.Logf("Error while checking rules in iptables: %v", err)
 			// Retry, as sometimes error can occur due to concurrent operations on iptables.
@@ -209,7 +209,7 @@ func checkForNPLListeningSockets(t *testing.T, data *TestData, r *require.Assert
 		for _, rule := range rules {
 			protocolOption := "--" + rule.protocol
 			cmd := []string{"ss", "--listening", protocolOption, "-H", "-n"}
-			stdout, _, err := data.runCommandFromPod(antreaNamespace, antreaPod, agentContainerName, cmd)
+			stdout, _, err := data.RunCommandFromPod(antreaNamespace, antreaPod, agentContainerName, cmd)
 			if err != nil {
 				return false, fmt.Errorf("error when running 'ss': %v", err)
 			}
@@ -241,7 +241,7 @@ func deleteNPLRuleFromIPTables(t *testing.T, data *TestData, r *require.Assertio
 	cmd := append([]string{"iptables", "-w", "10", "-t", "nat", "-D", "ANTREA-NODE-PORT-LOCAL"}, buildRuleForPod(rule)...)
 	t.Logf("Deleting iptables rule for %v", rule)
 	const timeout = 30 * time.Second
-	_, _, err := data.runCommandFromPod(antreaNamespace, antreaPod, agentContainerName, cmd)
+	_, _, err := data.RunCommandFromPod(antreaNamespace, antreaPod, agentContainerName, cmd)
 	r.NoError(err, "Error when deleting iptables rule")
 }
 
@@ -302,7 +302,7 @@ func NPLTestMultiplePods(t *testing.T) {
 		expectedAnnotations.Check(t, nplAnnotations)
 		checkTrafficForNPL(testData, r, nplAnnotations, clientName)
 
-		testData.deletePod(testNamespace, testPodName)
+		testData.DeletePod(testNamespace, testPodName)
 		checkNPLRulesForPod(t, testData, r, nplAnnotations, antreaPod, testPodIP, false)
 	}
 }
@@ -319,8 +319,8 @@ func NPLTestPodAddMultiPort(t *testing.T) {
 	selector := make(map[string]string)
 	selector["app"] = "agnhost"
 	ipFamily := corev1.IPv4Protocol
-	testData.createServiceWithAnnotations("agnhost1", testNamespace, 80, 80, corev1.ProtocolTCP, selector, false, false, corev1.ServiceTypeClusterIP, &ipFamily, annotation)
-	testData.createServiceWithAnnotations("agnhost2", testNamespace, 80, 8080, corev1.ProtocolTCP, selector, false, false, corev1.ServiceTypeClusterIP, &ipFamily, annotation)
+	testData.CreateServiceWithAnnotations("agnhost1", testNamespace, 80, 80, corev1.ProtocolTCP, selector, false, false, corev1.ServiceTypeClusterIP, &ipFamily, annotation)
+	testData.CreateServiceWithAnnotations("agnhost2", testNamespace, 80, 8080, corev1.ProtocolTCP, selector, false, false, corev1.ServiceTypeClusterIP, &ipFamily, annotation)
 	expectedAnnotations := newExpectedNPLAnnotations(defaultStartPort, defaultEndPort).
 		Add(nil, 80, "tcp").Add(nil, 8080, "tcp")
 
@@ -365,9 +365,9 @@ func NPLTestPodAddMultiPort(t *testing.T) {
 	expectedAnnotations.Check(t, nplAnnotations)
 	checkTrafficForNPL(testData, r, nplAnnotations, clientName)
 
-	testData.deletePod(testNamespace, testPodName)
-	testData.deleteService(testNamespace, "agnhost1")
-	testData.deleteService(testNamespace, "agnhost2")
+	testData.DeletePod(testNamespace, testPodName)
+	testData.DeleteService(testNamespace, "agnhost1")
+	testData.DeleteService(testNamespace, "agnhost2")
 	checkNPLRulesForPod(t, testData, r, nplAnnotations, antreaPod, testPodIP, false)
 }
 
@@ -383,8 +383,8 @@ func NPLTestPodAddMultiProtocol(t *testing.T) {
 	selector := make(map[string]string)
 	selector["app"] = "agnhost"
 	ipFamily := corev1.IPv4Protocol
-	testData.createServiceWithAnnotations("agnhost1", testNamespace, 80, 8080, corev1.ProtocolTCP, selector, false, false, corev1.ServiceTypeClusterIP, &ipFamily, annotation)
-	testData.createServiceWithAnnotations("agnhost2", testNamespace, 80, 8080, corev1.ProtocolUDP, selector, false, false, corev1.ServiceTypeClusterIP, &ipFamily, annotation)
+	testData.CreateServiceWithAnnotations("agnhost1", testNamespace, 80, 8080, corev1.ProtocolTCP, selector, false, false, corev1.ServiceTypeClusterIP, &ipFamily, annotation)
+	testData.CreateServiceWithAnnotations("agnhost2", testNamespace, 80, 8080, corev1.ProtocolUDP, selector, false, false, corev1.ServiceTypeClusterIP, &ipFamily, annotation)
 	expectedAnnotations := newExpectedNPLAnnotations(defaultStartPort, defaultEndPort).
 		Add(nil, 8080, "tcp").Add(nil, 8080, "udp")
 
@@ -400,7 +400,7 @@ func NPLTestPodAddMultiProtocol(t *testing.T) {
 			pod.Labels[k] = v
 		}
 	}
-	err := testData.createPodOnNodeInNamespace(testPodName, testNamespace, node, containerName, agnhostImage, cmd, args, []corev1.EnvVar{}, []corev1.ContainerPort{port}, false, mutateLabels)
+	err := testData.CreatePodOnNodeInNamespace(testPodName, testNamespace, node, containerName, agnhostImage, cmd, args, []corev1.EnvVar{}, []corev1.ContainerPort{port}, false, mutateLabels)
 
 	r.NoError(err, "Error creating test Pod: %v", err)
 
@@ -421,9 +421,9 @@ func NPLTestPodAddMultiProtocol(t *testing.T) {
 	expectedAnnotations.Check(t, nplAnnotations)
 	checkTrafficForNPL(testData, r, nplAnnotations, clientName)
 
-	testData.deletePod(testNamespace, testPodName)
-	testData.deleteService(testNamespace, "agnhost1")
-	testData.deleteService(testNamespace, "agnhost2")
+	testData.DeletePod(testNamespace, testPodName)
+	testData.DeleteService(testNamespace, "agnhost1")
+	testData.DeleteService(testNamespace, "agnhost2")
 	checkNPLRulesForPod(t, testData, r, nplAnnotations, antreaPod, testPodIP, false)
 }
 
@@ -460,7 +460,7 @@ func NPLTestLocalAccess(t *testing.T) {
 	expectedAnnotations.Check(t, nplAnnotations)
 	checkTrafficForNPL(testData, r, nplAnnotations, clientName)
 
-	testData.deletePod(testNamespace, testPodName)
+	testData.DeletePod(testNamespace, testPodName)
 	checkNPLRulesForPod(t, testData, r, nplAnnotations, antreaPod, testPodIP, false)
 }
 

@@ -548,7 +548,7 @@ func checkAntctlGetFlowRecordsJson(t *testing.T, data *TestData, podName string,
 		dstIP = podBIPs.ipv6.String()
 		cmdStr = fmt.Sprintf("iperf3 -6 -c %s -t %d", dstIP, iperfTimeSecShort)
 	}
-	stdout, _, err := data.runCommandFromPod(testNamespace, "perftest-a", "perftool", []string{"bash", "-c", cmdStr})
+	stdout, _, err := data.RunCommandFromPod(testNamespace, "perftest-a", "perftool", []string{"bash", "-c", cmdStr})
 	require.NoErrorf(t, err, "Error when running iperf3 client: %v", err)
 	_, srcPort, dstPort := getBandwidthAndPorts(stdout)
 
@@ -607,7 +607,7 @@ func checkRecordsForFlows(t *testing.T, data *TestData, srcIP string, dstIP stri
 	} else {
 		cmdStr = fmt.Sprintf("iperf3 -6 -c %s -t %d -b %s", dstIP, iperfTimeSec, iperfBandwidth)
 	}
-	stdout, _, err := data.runCommandFromPod(testNamespace, "perftest-a", "perftool", []string{"bash", "-c", cmdStr})
+	stdout, _, err := data.RunCommandFromPod(testNamespace, "perftest-a", "perftool", []string{"bash", "-c", cmdStr})
 	require.NoErrorf(t, err, "Error when running iperf3 client: %v", err)
 	bwSlice, srcPort, _ := getBandwidthAndPorts(stdout)
 	require.Equal(t, 2, len(bwSlice), "bandwidth value and / or bandwidth unit are not available")
@@ -621,7 +621,7 @@ func checkRecordsForFlows(t *testing.T, data *TestData, srcIP string, dstIP stri
 		t.Fatalf("Unit of the traffic bandwidth reported by iperf should be Mbits.")
 	}
 
-	collectorOutput, recordSlices := getCollectorOutput(t, srcIP, dstIP, srcPort, checkService, true, isIPv6)
+	collectorOutput, recordSlices := getCollectorOutput(t, srcIP, dstIP, srcPort, checkService, true, isIPv6, data)
 	// Iterate over recordSlices and build some results to test with expected results
 	dataRecordsCount := 0
 	src, dst := matchSrcAndDstAddress(srcIP, dstIP, checkService, isIPv6)
@@ -704,10 +704,10 @@ func checkRecordsForToExternalFlows(t *testing.T, data *TestData, srcNodeName st
 	} else {
 		cmd = fmt.Sprintf("wget -O- [%s]:%d", dstIP, dstPort)
 	}
-	stdout, stderr, err := data.runCommandFromPod(testNamespace, srcPodName, busyboxContainerName, strings.Fields(cmd))
+	stdout, stderr, err := data.RunCommandFromPod(testNamespace, srcPodName, busyboxContainerName, strings.Fields(cmd))
 	require.NoErrorf(t, err, "Error when running wget command, stdout: %s, stderr: %s", stdout, stderr)
 
-	_, recordSlices := getCollectorOutput(t, srcIP, dstIP, "", false, false, isIPv6)
+	_, recordSlices := getCollectorOutput(t, srcIP, dstIP, "", false, false, isIPv6, data)
 	for _, record := range recordSlices {
 		if strings.Contains(record, srcIP) && strings.Contains(record, dstIP) {
 			checkPodAndNodeData(t, record, srcPodName, srcNodeName, "", "")
@@ -726,13 +726,13 @@ func checkRecordsForDenyFlows(t *testing.T, data *TestData, testFlow1, testFlow2
 		cmdStr1 = fmt.Sprintf("iperf3 -6 -c %s -n 1", testFlow1.dstIP)
 		cmdStr2 = fmt.Sprintf("iperf3 -6 -c %s -n 1", testFlow2.dstIP)
 	}
-	_, _, err := data.runCommandFromPod(testNamespace, testFlow1.srcPodName, "", []string{"timeout", "2", "bash", "-c", cmdStr1})
+	_, _, err := data.RunCommandFromPod(testNamespace, testFlow1.srcPodName, "", []string{"timeout", "2", "bash", "-c", cmdStr1})
 	assert.Error(t, err)
-	_, _, err = data.runCommandFromPod(testNamespace, testFlow2.srcPodName, "", []string{"timeout", "2", "bash", "-c", cmdStr2})
+	_, _, err = data.RunCommandFromPod(testNamespace, testFlow2.srcPodName, "", []string{"timeout", "2", "bash", "-c", cmdStr2})
 	assert.Error(t, err)
 
-	_, recordSlices1 := getCollectorOutput(t, testFlow1.srcIP, testFlow1.dstIP, "", false, false, isIPv6)
-	_, recordSlices2 := getCollectorOutput(t, testFlow2.srcIP, testFlow2.dstIP, "", false, false, isIPv6)
+	_, recordSlices1 := getCollectorOutput(t, testFlow1.srcIP, testFlow1.dstIP, "", false, false, isIPv6, data)
+	_, recordSlices2 := getCollectorOutput(t, testFlow2.srcIP, testFlow2.dstIP, "", false, false, isIPv6, data)
 	recordSlices := append(recordSlices1, recordSlices2...)
 	src_flow1, dst_flow1 := matchSrcAndDstAddress(testFlow1.srcIP, testFlow1.dstIP, false, isIPv6)
 	src_flow2, dst_flow2 := matchSrcAndDstAddress(testFlow2.srcIP, testFlow2.dstIP, false, isIPv6)
@@ -837,7 +837,7 @@ func getUint64FieldFromRecord(t *testing.T, record string, field string) uint64 
 // received all the expected records for a given flow with source IP, destination IP
 // and source port. We send source port to ignore the control flows during the
 // iperf test.
-func getCollectorOutput(t *testing.T, srcIP, dstIP, srcPort string, isDstService bool, checkAllRecords bool, isIPv6 bool) (string, []string) {
+func getCollectorOutput(t *testing.T, srcIP, dstIP, srcPort string, isDstService bool, checkAllRecords bool, isIPv6 bool, data *TestData) (string, []string) {
 	var collectorOutput string
 	var recordSlices []string
 	// In the ToExternalFlows test, flow record will arrive 5.5s (exporterActiveFlowExportTimeout+aggregatorActiveFlowRecordTimeout) after executing wget command
@@ -846,7 +846,7 @@ func getCollectorOutput(t *testing.T, srcIP, dstIP, srcPort string, isDstService
 		var rc int
 		var err error
 		// `pod-running-timeout` option is added to cover scenarios where ipfix flow-collector has crashed after being deployed
-		rc, collectorOutput, _, err = provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl logs --pod-running-timeout=%v ipfix-collector -n antrea-test", aggregatorInactiveFlowRecordTimeout.String()))
+		rc, collectorOutput, _, err = data.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl logs --pod-running-timeout=%v ipfix-collector -n antrea-test", aggregatorInactiveFlowRecordTimeout.String()))
 		if err != nil || rc != 0 {
 			return false, err
 		}
@@ -1089,12 +1089,12 @@ func createPerftestServices(data *TestData, isIPv6 bool) (svcB *corev1.Service, 
 		svcIPFamily = corev1.IPv6Protocol
 	}
 
-	svcB, err = data.createService("perftest-b", testNamespace, iperfPort, iperfPort, map[string]string{"antrea-e2e": "perftest-b"}, false, false, corev1.ServiceTypeClusterIP, &svcIPFamily)
+	svcB, err = data.CreateService("perftest-b", testNamespace, iperfPort, iperfPort, map[string]string{"antrea-e2e": "perftest-b"}, false, false, corev1.ServiceTypeClusterIP, &svcIPFamily)
 	if err != nil {
 		return nil, nil, fmt.Errorf("Error when creating perftest-b Service: %v", err)
 	}
 
-	svcC, err = data.createService("perftest-c", testNamespace, iperfPort, iperfPort, map[string]string{"antrea-e2e": "perftest-c"}, false, false, corev1.ServiceTypeClusterIP, &svcIPFamily)
+	svcC, err = data.CreateService("perftest-c", testNamespace, iperfPort, iperfPort, map[string]string{"antrea-e2e": "perftest-c"}, false, false, corev1.ServiceTypeClusterIP, &svcIPFamily)
 	if err != nil {
 		return nil, nil, fmt.Errorf("Error when creating perftest-c Service: %v", err)
 	}

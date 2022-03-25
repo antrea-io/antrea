@@ -1,4 +1,4 @@
-// Copyright 2021 Antrea Authors
+// Copyright 2022 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,7 +26,7 @@ func createDirectory(path string) error {
 	return os.Mkdir(path, 0700)
 }
 
-func (data *TestData) setupLogDirectoryForTest(testName string) error {
+func (data *MCTestData) setupLogDirectoryForTest(testName string) error {
 	path := filepath.Join(testOptions.logsExportDir, testName)
 	// remove directory if it already exists. This ensures that we start with an empty
 	// directory
@@ -39,7 +39,7 @@ func (data *TestData) setupLogDirectoryForTest(testName string) error {
 	return nil
 }
 
-func setupTest(tb testing.TB) (*TestData, error) {
+func setupTest(tb testing.TB) (*MCTestData, error) {
 	if err := testData.setupLogDirectoryForTest(tb.Name()); err != nil {
 		tb.Errorf("Error creating logs directory '%s': %v", testData.logsDirForTestCase, err)
 		return nil, err
@@ -51,7 +51,7 @@ func setupTest(tb testing.TB) (*TestData, error) {
 		}
 	}()
 	tb.Logf("Creating '%s' K8s Namespace", multiClusterTestNamespace)
-	if err := testData.createTestNamespace(); err != nil {
+	if err := testData.createTestNamespaces(); err != nil {
 		return nil, err
 	}
 
@@ -59,13 +59,13 @@ func setupTest(tb testing.TB) (*TestData, error) {
 	return testData, nil
 }
 
-func teardownTest(tb testing.TB, data *TestData) {
+func teardownTest(tb testing.TB, data *MCTestData) {
 	if empty, _ := IsDirEmpty(data.logsDirForTestCase); empty {
 		_ = os.Remove(data.logsDirForTestCase)
 	}
 }
 
-func createPodWrapper(tb testing.TB, data *TestData, cluster string, namespace string, name string, image string, ctr string, command []string,
+func createPodWrapper(tb testing.TB, data *MCTestData, cluster string, namespace string, name string, image string, ctr string, command []string,
 	args []string, env []corev1.EnvVar, ports []corev1.ContainerPort, hostNetwork bool, mutateFunc func(pod *corev1.Pod)) error {
 	tb.Logf("Creating Pod '%s'", name)
 	if err := data.createPod(cluster, name, namespace, ctr, image, command, args, env, ports, hostNetwork, mutateFunc); err != nil {
@@ -79,14 +79,14 @@ func createPodWrapper(tb testing.TB, data *TestData, cluster string, namespace s
 	return err
 }
 
-func deletePodWrapper(tb testing.TB, data *TestData, clusterName string, namespace string, name string) {
+func deletePodWrapper(tb testing.TB, data *MCTestData, clusterName string, namespace string, name string) {
 	tb.Logf("Deleting Pod '%s'", name)
 	if err := data.deletePod(clusterName, namespace, name); err != nil {
 		tb.Logf("Error when deleting Pod: %v", err)
 	}
 }
 
-func deleteServiceWrapper(tb testing.TB, data *TestData, clusterName string, namespace string, name string) {
+func deleteServiceWrapper(tb testing.TB, data *MCTestData, clusterName string, namespace string, name string) {
 	tb.Logf("Deleting Service '%s'", name)
 	if err := data.deleteService(clusterName, namespace, name); err != nil {
 		tb.Logf("Error when deleting Service: %v", err)

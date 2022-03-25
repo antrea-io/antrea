@@ -106,7 +106,7 @@ func (k *KubernetesUtils) probe(
 		fmt.Sprintf("for i in $(seq 1 3); do /agnhost connect %s:%d --timeout=1s --protocol=%s; done;", dstAddr, port, protocolStr[protocol]),
 	}
 	log.Tracef("Running: kubectl exec %s -c %s -n %s -- %s", pod.Name, containerName, pod.Namespace, strings.Join(cmd, " "))
-	stdout, stderr, err := k.runCommandFromPod(pod.Namespace, pod.Name, containerName, cmd)
+	stdout, stderr, err := k.RunCommandFromPod(pod.Namespace, pod.Name, containerName, cmd)
 	// It needs to check both err and stderr because:
 	// 1. The probe tried 3 times. If it checks err only, failure+failure+success would be considered connected.
 	// 2. There might be an issue in Pod exec API that it sometimes doesn't return error when the probe fails. See #2394.
@@ -118,13 +118,13 @@ func (k *KubernetesUtils) probe(
 		if stderr == "" {
 			return Error
 		}
-		return decideProbeResult(stderr, 3)
+		return DecideProbeResult(stderr, 3)
 	}
 	return Connected
 }
 
-// decideProbeResult uses the probe stderr to decide the connectivity.
-func decideProbeResult(stderr string, probeNum int) PodConnectivityMark {
+// DecideProbeResult uses the probe stderr to decide the connectivity.
+func DecideProbeResult(stderr string, probeNum int) PodConnectivityMark {
 	countConnected := probeNum - strings.Count(stderr, "\n")
 	countDropped := strings.Count(stderr, "TIMEOUT")
 	// For our UDP rejection cases, agnhost will return:
@@ -211,21 +211,21 @@ func (k *KubernetesUtils) ProbeAddr(ns, podLabelKey, podLabelValue, dstAddr stri
 }
 
 // CreateOrUpdateNamespace is a convenience function for idempotent setup of Namespaces
-func (k *KubernetesUtils) CreateOrUpdateNamespace(n string, labels map[string]string) (*v1.Namespace, error) {
+func (data *TestData) CreateOrUpdateNamespace(n string, labels map[string]string) (*v1.Namespace, error) {
 	ns := &v1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:   n,
 			Labels: labels,
 		},
 	}
-	nsr, err := k.clientset.CoreV1().Namespaces().Create(context.TODO(), ns, metav1.CreateOptions{})
+	nsr, err := data.clientset.CoreV1().Namespaces().Create(context.TODO(), ns, metav1.CreateOptions{})
 	if err == nil {
 		log.Infof("Created Namespace %s", n)
 		return nsr, nil
 	}
 
 	log.Debugf("Unable to create Namespace %s, let's try updating it instead (error: %s)", ns.Name, err)
-	nsr, err = k.clientset.CoreV1().Namespaces().Update(context.TODO(), ns, metav1.UpdateOptions{})
+	nsr, err = data.clientset.CoreV1().Namespaces().Update(context.TODO(), ns, metav1.UpdateOptions{})
 	if err != nil {
 		log.Debugf("Unable to update Namespace %s: %s", ns, err)
 	}
@@ -234,7 +234,7 @@ func (k *KubernetesUtils) CreateOrUpdateNamespace(n string, labels map[string]st
 }
 
 // CreateOrUpdateDeployment is a convenience function for idempotent setup of deployments
-func (k *KubernetesUtils) CreateOrUpdateDeployment(ns, deploymentName string, replicas int32, labels map[string]string) (*appsv1.Deployment, error) {
+func (data *TestData) CreateOrUpdateDeployment(ns, deploymentName string, replicas int32, labels map[string]string) (*appsv1.Deployment, error) {
 	zero := int64(0)
 	log.Infof("Creating/updating Deployment '%s/%s'", ns, deploymentName)
 	makeContainerSpec := func(port int32, protocol v1.Protocol) v1.Container {
@@ -298,14 +298,14 @@ func (k *KubernetesUtils) CreateOrUpdateDeployment(ns, deploymentName string, re
 		},
 	}
 
-	d, err := k.clientset.AppsV1().Deployments(ns).Create(context.TODO(), deployment, metav1.CreateOptions{})
+	d, err := data.clientset.AppsV1().Deployments(ns).Create(context.TODO(), deployment, metav1.CreateOptions{})
 	if err == nil {
 		log.Infof("Created deployment '%s/%s'", ns, d.Name)
 		return d, nil
 	}
 
 	log.Debugf("Unable to create deployment %s in Namespace %s, let's try update instead", deployment.Name, ns)
-	d, err = k.clientset.AppsV1().Deployments(ns).Update(context.TODO(), deployment, metav1.UpdateOptions{})
+	d, err = data.clientset.AppsV1().Deployments(ns).Update(context.TODO(), deployment, metav1.UpdateOptions{})
 	if err != nil {
 		log.Debugf("Unable to update deployment '%s/%s': %s", ns, deployment.Name, err)
 	}
@@ -313,7 +313,7 @@ func (k *KubernetesUtils) CreateOrUpdateDeployment(ns, deploymentName string, re
 }
 
 // BuildService is a convenience function for building a corev1.Service spec.
-func (k *KubernetesUtils) BuildService(svcName, svcNS string, port, targetPort int, selector map[string]string, serviceType *v1.ServiceType) *v1.Service {
+func (data *TestData) BuildService(svcName, svcNS string, port, targetPort int, selector map[string]string, serviceType *v1.ServiceType) *v1.Service {
 	service := &v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      svcName,
@@ -334,12 +334,12 @@ func (k *KubernetesUtils) BuildService(svcName, svcNS string, port, targetPort i
 }
 
 // CreateOrUpdateService is a convenience function for updating/creating Services.
-func (k *KubernetesUtils) CreateOrUpdateService(svc *v1.Service) (*v1.Service, error) {
+func (data *TestData) CreateOrUpdateService(svc *v1.Service) (*v1.Service, error) {
 	log.Infof("Creating/updating Service %s in ns %s", svc.Name, svc.Namespace)
-	svcReturned, err := k.clientset.CoreV1().Services(svc.Namespace).Get(context.TODO(), svc.Name, metav1.GetOptions{})
+	svcReturned, err := data.clientset.CoreV1().Services(svc.Namespace).Get(context.TODO(), svc.Name, metav1.GetOptions{})
 
 	if err != nil {
-		service, err := k.clientset.CoreV1().Services(svc.Namespace).Create(context.TODO(), svc, metav1.CreateOptions{})
+		service, err := data.clientset.CoreV1().Services(svc.Namespace).Create(context.TODO(), svc, metav1.CreateOptions{})
 		if err != nil {
 			log.Infof("Unable to create Service %s/%s: %s", svc.Namespace, svc.Name, err)
 			return nil, err
@@ -350,25 +350,21 @@ func (k *KubernetesUtils) CreateOrUpdateService(svc *v1.Service) (*v1.Service, e
 		clusterIP := svcReturned.Spec.ClusterIP
 		svcReturned.Spec = svc.Spec
 		svcReturned.Spec.ClusterIP = clusterIP
-		service, err := k.clientset.CoreV1().Services(svc.Namespace).Update(context.TODO(), svcReturned, metav1.UpdateOptions{})
+		service, err := data.clientset.CoreV1().Services(svc.Namespace).Update(context.TODO(), svcReturned, metav1.UpdateOptions{})
 		return service, err
 	}
 	return nil, fmt.Errorf("error occurred in creating/updating Service %s", svc.Name)
 }
 
 // GetService is a convenience function for getting Service
-func (k *KubernetesUtils) GetService(namespace, name string) (*v1.Service, error) {
-	res, err := k.clientset.CoreV1().Services(namespace).Get(context.TODO(), name, metav1.GetOptions{})
-	if err != nil {
-		return nil, err
-	}
-	return res, nil
+func (data *TestData) GetService(namespace, name string) (*v1.Service, error) {
+	return data.clientset.CoreV1().Services(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 }
 
 // DeleteService is a convenience function for deleting a Service by Namespace and name.
-func (k *KubernetesUtils) DeleteService(ns, name string) error {
+func (data *TestData) DeleteService(ns, name string) error {
 	log.Infof("Deleting Service %s in ns %s", name, ns)
-	err := k.clientset.CoreV1().Services(ns).Delete(context.TODO(), name, metav1.DeleteOptions{})
+	err := data.clientset.CoreV1().Services(ns).Delete(context.TODO(), name, metav1.DeleteOptions{})
 	if err != nil {
 		return errors.Wrapf(err, "unable to delete Service %s", name)
 	}
@@ -376,14 +372,14 @@ func (k *KubernetesUtils) DeleteService(ns, name string) error {
 }
 
 // CleanServices is a convenience function for deleting Services in the cluster.
-func (k *KubernetesUtils) CleanServices(namespaces []string) error {
+func (data *TestData) CleanServices(namespaces []string) error {
 	for _, ns := range namespaces {
-		l, err := k.clientset.CoreV1().Services(ns).List(context.TODO(), metav1.ListOptions{})
+		l, err := data.clientset.CoreV1().Services(ns).List(context.TODO(), metav1.ListOptions{})
 		if err != nil {
 			return errors.Wrapf(err, "unable to list Services in ns %s", ns)
 		}
 		for _, svc := range l.Items {
-			if err := k.DeleteService(svc.Namespace, svc.Name); err != nil {
+			if err := data.DeleteService(svc.Namespace, svc.Name); err != nil {
 				return err
 			}
 		}
@@ -392,7 +388,7 @@ func (k *KubernetesUtils) CleanServices(namespaces []string) error {
 }
 
 // BuildServiceAccount is a convenience function for building a corev1.SerivceAccount spec.
-func (k *KubernetesUtils) BuildServiceAccount(name, ns string, labels map[string]string) *v1.ServiceAccount {
+func (data *TestData) BuildServiceAccount(name, ns string, labels map[string]string) *v1.ServiceAccount {
 	serviceAccount := &v1.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -404,13 +400,12 @@ func (k *KubernetesUtils) BuildServiceAccount(name, ns string, labels map[string
 }
 
 // CreateOrUpdateServiceAccount is a convenience function for updating/creating ServiceAccount.
-func (k *KubernetesUtils) CreateOrUpdateServiceAccount(sa *v1.ServiceAccount) (*v1.ServiceAccount, error) {
-
+func (data *TestData) CreateOrUpdateServiceAccount(sa *v1.ServiceAccount) (*v1.ServiceAccount, error) {
 	log.Infof("Creating/updating ServiceAccount %s in ns %s", sa.Name, sa.Namespace)
-	saReturned, err := k.clientset.CoreV1().ServiceAccounts(sa.Namespace).Get(context.TODO(), sa.Name, metav1.GetOptions{})
+	saReturned, err := data.clientset.CoreV1().ServiceAccounts(sa.Namespace).Get(context.TODO(), sa.Name, metav1.GetOptions{})
 
 	if err != nil {
-		serviceAccount, err := k.clientset.CoreV1().ServiceAccounts(sa.Namespace).Create(context.TODO(), sa, metav1.CreateOptions{})
+		serviceAccount, err := data.clientset.CoreV1().ServiceAccounts(sa.Namespace).Create(context.TODO(), sa, metav1.CreateOptions{})
 		if err != nil {
 			log.Infof("Unable to create ServiceAccount %s/%s: %s", sa.Namespace, sa.Name, err)
 			return nil, err
@@ -419,7 +414,7 @@ func (k *KubernetesUtils) CreateOrUpdateServiceAccount(sa *v1.ServiceAccount) (*
 	}
 	log.Debugf("ServiceAccount %s/%s already exists, updating", sa.Namespace, sa.Name)
 	saReturned.Labels = sa.Labels
-	serviceAccount, err := k.clientset.CoreV1().ServiceAccounts(sa.Namespace).Update(context.TODO(), saReturned, metav1.UpdateOptions{})
+	serviceAccount, err := data.clientset.CoreV1().ServiceAccounts(sa.Namespace).Update(context.TODO(), saReturned, metav1.UpdateOptions{})
 	if err != nil {
 		log.Infof("Unable to update ServiceAccount %s/%s: %s", sa.Namespace, sa.Name, err)
 		return nil, err
@@ -428,9 +423,9 @@ func (k *KubernetesUtils) CreateOrUpdateServiceAccount(sa *v1.ServiceAccount) (*
 }
 
 // DeleteServiceAccount is a convenience function for deleting a ServiceAccount by Namespace and name.
-func (k *KubernetesUtils) DeleteServiceAccount(ns, name string) error {
+func (data *TestData) DeleteServiceAccount(ns, name string) error {
 	log.Infof("Deleting ServiceAccount %s in ns %s", name, ns)
-	err := k.clientset.CoreV1().ServiceAccounts(ns).Delete(context.TODO(), name, metav1.DeleteOptions{})
+	err := data.clientset.CoreV1().ServiceAccounts(ns).Delete(context.TODO(), name, metav1.DeleteOptions{})
 	if err != nil {
 		return errors.Wrapf(err, "unable to delete ServiceAccount %s in ns %s", name, ns)
 	}
@@ -439,15 +434,15 @@ func (k *KubernetesUtils) DeleteServiceAccount(ns, name string) error {
 
 // CreateOrUpdateNetworkPolicy is a convenience function for updating/creating netpols. Updating is important since
 // some tests update a network policy to confirm that mutation works with a CNI.
-func (k *KubernetesUtils) CreateOrUpdateNetworkPolicy(netpol *v1net.NetworkPolicy) (*v1net.NetworkPolicy, error) {
+func (data *TestData) CreateOrUpdateNetworkPolicy(netpol *v1net.NetworkPolicy) (*v1net.NetworkPolicy, error) {
 	log.Infof("Creating/updating NetworkPolicy '%s/%s'", netpol.Namespace, netpol.Name)
-	np, err := k.clientset.NetworkingV1().NetworkPolicies(netpol.Namespace).Update(context.TODO(), netpol, metav1.UpdateOptions{})
+	np, err := data.clientset.NetworkingV1().NetworkPolicies(netpol.Namespace).Update(context.TODO(), netpol, metav1.UpdateOptions{})
 	if err == nil {
 		return np, err
 	}
 
 	log.Debugf("Unable to update NetworkPolicy '%s/%s', let's try creating it instead (error: %s)", netpol.Namespace, netpol.Name, err)
-	np, err = k.clientset.NetworkingV1().NetworkPolicies(netpol.Namespace).Create(context.TODO(), netpol, metav1.CreateOptions{})
+	np, err = data.clientset.NetworkingV1().NetworkPolicies(netpol.Namespace).Create(context.TODO(), netpol, metav1.CreateOptions{})
 	if err != nil {
 		log.Debugf("Unable to create network policy: %s", err)
 	}
@@ -455,18 +450,14 @@ func (k *KubernetesUtils) CreateOrUpdateNetworkPolicy(netpol *v1net.NetworkPolic
 }
 
 // GetNetworkPolicy is a convenience function for getting k8s NetworkPolicies.
-func (k *KubernetesUtils) GetNetworkPolicy(namespace, name string) (*v1net.NetworkPolicy, error) {
-	res, err := k.clientset.NetworkingV1().NetworkPolicies(namespace).Get(context.TODO(), name, metav1.GetOptions{})
-	if err != nil {
-		return nil, err
-	}
-	return res, nil
+func (data *TestData) GetNetworkPolicy(namespace, name string) (*v1net.NetworkPolicy, error) {
+	return data.clientset.NetworkingV1().NetworkPolicies(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 }
 
 // DeleteNetworkPolicy is a convenience function for deleting NetworkPolicy by name and Namespace.
-func (k *KubernetesUtils) DeleteNetworkPolicy(ns, name string) error {
+func (data *TestData) DeleteNetworkPolicy(ns, name string) error {
 	log.Infof("Deleting NetworkPolicy '%s/%s'", ns, name)
-	err := k.clientset.NetworkingV1().NetworkPolicies(ns).Delete(context.TODO(), name, metav1.DeleteOptions{})
+	err := data.clientset.NetworkingV1().NetworkPolicies(ns).Delete(context.TODO(), name, metav1.DeleteOptions{})
 	if err != nil {
 		return errors.Wrapf(err, "unable to delete NetworkPolicy '%s'", name)
 	}
@@ -474,14 +465,14 @@ func (k *KubernetesUtils) DeleteNetworkPolicy(ns, name string) error {
 }
 
 // CleanNetworkPolicies is a convenience function for deleting NetworkPolicies in the provided namespaces.
-func (k *KubernetesUtils) CleanNetworkPolicies(namespaces []string) error {
+func (data *TestData) CleanNetworkPolicies(namespaces []string) error {
 	for _, ns := range namespaces {
-		l, err := k.clientset.NetworkingV1().NetworkPolicies(ns).List(context.TODO(), metav1.ListOptions{})
+		l, err := data.clientset.NetworkingV1().NetworkPolicies(ns).List(context.TODO(), metav1.ListOptions{})
 		if err != nil {
 			return errors.Wrapf(err, "unable to list NetworkPolicy in Namespace '%s'", ns)
 		}
 		for _, np := range l.Items {
-			if err = k.DeleteNetworkPolicy(np.Namespace, np.Name); err != nil {
+			if err = data.DeleteNetworkPolicy(np.Namespace, np.Name); err != nil {
 				return err
 			}
 		}
@@ -490,15 +481,15 @@ func (k *KubernetesUtils) CleanNetworkPolicies(namespaces []string) error {
 }
 
 // CreateTier is a convenience function for creating an Antrea Policy Tier by name and priority.
-func (k *KubernetesUtils) CreateNewTier(name string, tierPriority int32) (*crdv1alpha1.Tier, error) {
+func (data *TestData) CreateNewTier(name string, tierPriority int32) (*crdv1alpha1.Tier, error) {
 	log.Infof("Creating tier %s", name)
-	_, err := k.crdClient.CrdV1alpha1().Tiers().Get(context.TODO(), name, metav1.GetOptions{})
+	_, err := data.crdClient.CrdV1alpha1().Tiers().Get(context.TODO(), name, metav1.GetOptions{})
 	if err != nil {
 		tr := &crdv1alpha1.Tier{
 			ObjectMeta: metav1.ObjectMeta{Name: name},
 			Spec:       crdv1alpha1.TierSpec{Priority: tierPriority},
 		}
-		tr, err = k.crdClient.CrdV1alpha1().Tiers().Create(context.TODO(), tr, metav1.CreateOptions{})
+		tr, err = data.crdClient.CrdV1alpha1().Tiers().Create(context.TODO(), tr, metav1.CreateOptions{})
 		if err != nil {
 			log.Debugf("Unable to create tier %s: %s", name, err)
 		}
@@ -508,40 +499,36 @@ func (k *KubernetesUtils) CreateNewTier(name string, tierPriority int32) (*crdv1
 }
 
 // GetTier is a convenience function for getting Tier.
-func (k *KubernetesUtils) GetTier(name string) (*crdv1alpha1.Tier, error) {
-	res, err := k.crdClient.CrdV1alpha1().Tiers().Get(context.TODO(), name, metav1.GetOptions{})
-	if err != nil {
-		return nil, err
-	}
-	return res, nil
+func (data *TestData) GetTier(name string) (*crdv1alpha1.Tier, error) {
+	return data.crdClient.CrdV1alpha1().Tiers().Get(context.TODO(), name, metav1.GetOptions{})
 }
 
 // UpdateTier is a convenience function for updating an Antrea Policy Tier.
-func (k *KubernetesUtils) UpdateTier(tier *crdv1alpha1.Tier) (*crdv1alpha1.Tier, error) {
+func (data *TestData) UpdateTier(tier *crdv1alpha1.Tier) (*crdv1alpha1.Tier, error) {
 	log.Infof("Updating tier %s", tier.Name)
-	updatedTier, err := k.crdClient.CrdV1alpha1().Tiers().Update(context.TODO(), tier, metav1.UpdateOptions{})
+	updatedTier, err := data.crdClient.CrdV1alpha1().Tiers().Update(context.TODO(), tier, metav1.UpdateOptions{})
 	return updatedTier, err
 }
 
 // DeleteTier is a convenience function for deleting an Antrea Policy Tier with specific name.
-func (k *KubernetesUtils) DeleteTier(name string) error {
-	_, err := k.crdClient.CrdV1alpha1().Tiers().Get(context.TODO(), name, metav1.GetOptions{})
+func (data *TestData) DeleteTier(name string) error {
+	_, err := data.crdClient.CrdV1alpha1().Tiers().Get(context.TODO(), name, metav1.GetOptions{})
 	if err != nil {
 		return errors.Wrapf(err, "unable to get tier %s", name)
 	}
 	log.Infof("Deleting tier %s", name)
-	if err = k.crdClient.CrdV1alpha1().Tiers().Delete(context.TODO(), name, metav1.DeleteOptions{}); err != nil {
+	if err = data.crdClient.CrdV1alpha1().Tiers().Delete(context.TODO(), name, metav1.DeleteOptions{}); err != nil {
 		return errors.Wrapf(err, "unable to delete tier %s", name)
 	}
 	return nil
 }
 
 // CreateOrUpdateV1Alpha2CG is a convenience function for idempotent setup of crd/v1alpha2 ClusterGroups
-func (k *KubernetesUtils) CreateOrUpdateV1Alpha2CG(cg *crdv1alpha2.ClusterGroup) (*crdv1alpha2.ClusterGroup, error) {
+func (data *TestData) CreateOrUpdateV1Alpha2CG(cg *crdv1alpha2.ClusterGroup) (*crdv1alpha2.ClusterGroup, error) {
 	log.Infof("Creating/updating ClusterGroup %s", cg.Name)
-	cgReturned, err := k.crdClient.CrdV1alpha2().ClusterGroups().Get(context.TODO(), cg.Name, metav1.GetOptions{})
+	cgReturned, err := data.crdClient.CrdV1alpha2().ClusterGroups().Get(context.TODO(), cg.Name, metav1.GetOptions{})
 	if err != nil {
-		cgr, err := k.crdClient.CrdV1alpha2().ClusterGroups().Create(context.TODO(), cg, metav1.CreateOptions{})
+		cgr, err := data.crdClient.CrdV1alpha2().ClusterGroups().Create(context.TODO(), cg, metav1.CreateOptions{})
 		if err != nil {
 			log.Infof("Unable to create cluster group %s: %v", cg.Name, err)
 			return nil, err
@@ -550,18 +537,18 @@ func (k *KubernetesUtils) CreateOrUpdateV1Alpha2CG(cg *crdv1alpha2.ClusterGroup)
 	} else if cgReturned.Name != "" {
 		log.Debugf("ClusterGroup with name %s already exists, updating", cg.Name)
 		cgReturned.Spec = cg.Spec
-		cgr, err := k.crdClient.CrdV1alpha2().ClusterGroups().Update(context.TODO(), cgReturned, metav1.UpdateOptions{})
+		cgr, err := data.crdClient.CrdV1alpha2().ClusterGroups().Update(context.TODO(), cgReturned, metav1.UpdateOptions{})
 		return cgr, err
 	}
 	return nil, fmt.Errorf("error occurred in creating/updating ClusterGroup %s", cg.Name)
 }
 
 // CreateOrUpdateV1Alpha3CG is a convenience function for idempotent setup of crd/v1alpha3 ClusterGroups
-func (k *KubernetesUtils) CreateOrUpdateV1Alpha3CG(cg *crdv1alpha3.ClusterGroup) (*crdv1alpha3.ClusterGroup, error) {
+func (data *TestData) CreateOrUpdateV1Alpha3CG(cg *crdv1alpha3.ClusterGroup) (*crdv1alpha3.ClusterGroup, error) {
 	log.Infof("Creating/updating ClusterGroup %s", cg.Name)
-	cgReturned, err := k.crdClient.CrdV1alpha3().ClusterGroups().Get(context.TODO(), cg.Name, metav1.GetOptions{})
+	cgReturned, err := data.crdClient.CrdV1alpha3().ClusterGroups().Get(context.TODO(), cg.Name, metav1.GetOptions{})
 	if err != nil {
-		cgr, err := k.crdClient.CrdV1alpha3().ClusterGroups().Create(context.TODO(), cg, metav1.CreateOptions{})
+		cgr, err := data.crdClient.CrdV1alpha3().ClusterGroups().Create(context.TODO(), cg, metav1.CreateOptions{})
 		if err != nil {
 			log.Infof("Unable to create cluster group %s: %v", cg.Name, err)
 			return nil, err
@@ -570,24 +557,24 @@ func (k *KubernetesUtils) CreateOrUpdateV1Alpha3CG(cg *crdv1alpha3.ClusterGroup)
 	} else if cgReturned.Name != "" {
 		log.Debugf("ClusterGroup with name %s already exists, updating", cg.Name)
 		cgReturned.Spec = cg.Spec
-		cgr, err := k.crdClient.CrdV1alpha3().ClusterGroups().Update(context.TODO(), cgReturned, metav1.UpdateOptions{})
+		cgr, err := data.crdClient.CrdV1alpha3().ClusterGroups().Update(context.TODO(), cgReturned, metav1.UpdateOptions{})
 		return cgr, err
 	}
 	return nil, fmt.Errorf("error occurred in creating/updating ClusterGroup %s", cg.Name)
 }
 
-func (k *KubernetesUtils) GetV1Alpha2CG(cgName string) (*crdv1alpha2.ClusterGroup, error) {
-	return k.crdClient.CrdV1alpha2().ClusterGroups().Get(context.TODO(), cgName, metav1.GetOptions{})
+func (data *TestData) GetV1Alpha2CG(cgName string) (*crdv1alpha2.ClusterGroup, error) {
+	return data.crdClient.CrdV1alpha2().ClusterGroups().Get(context.TODO(), cgName, metav1.GetOptions{})
 }
 
-func (k *KubernetesUtils) GetV1Alpha3CG(cgName string) (*crdv1alpha3.ClusterGroup, error) {
-	return k.crdClient.CrdV1alpha3().ClusterGroups().Get(context.TODO(), cgName, metav1.GetOptions{})
+func (data *TestData) GetV1Alpha3CG(cgName string) (*crdv1alpha3.ClusterGroup, error) {
+	return data.crdClient.CrdV1alpha3().ClusterGroups().Get(context.TODO(), cgName, metav1.GetOptions{})
 }
 
 // CreateCG is a convenience function for creating an Antrea ClusterGroup by name and selector.
-func (k *KubernetesUtils) CreateCG(name string, pSelector, nSelector *metav1.LabelSelector, ipBlocks []crdv1alpha1.IPBlock) (*crdv1alpha3.ClusterGroup, error) {
+func (data *TestData) CreateCG(name string, pSelector, nSelector *metav1.LabelSelector, ipBlocks []crdv1alpha1.IPBlock) (*crdv1alpha3.ClusterGroup, error) {
 	log.Infof("Creating clustergroup %s", name)
-	_, err := k.crdClient.CrdV1alpha3().ClusterGroups().Get(context.TODO(), name, metav1.GetOptions{})
+	_, err := data.crdClient.CrdV1alpha3().ClusterGroups().Get(context.TODO(), name, metav1.GetOptions{})
 	if err != nil {
 		cg := &crdv1alpha3.ClusterGroup{
 			ObjectMeta: metav1.ObjectMeta{
@@ -603,7 +590,7 @@ func (k *KubernetesUtils) CreateCG(name string, pSelector, nSelector *metav1.Lab
 		if len(ipBlocks) > 0 {
 			cg.Spec.IPBlocks = ipBlocks
 		}
-		cg, err = k.crdClient.CrdV1alpha3().ClusterGroups().Create(context.TODO(), cg, metav1.CreateOptions{})
+		cg, err = data.crdClient.CrdV1alpha3().ClusterGroups().Create(context.TODO(), cg, metav1.CreateOptions{})
 		if err != nil {
 			log.Debugf("Unable to create clustergroup %s: %s", name, err)
 		}
@@ -612,19 +599,10 @@ func (k *KubernetesUtils) CreateCG(name string, pSelector, nSelector *metav1.Lab
 	return nil, fmt.Errorf("clustergroup with name %s already exists", name)
 }
 
-// GetCG is a convenience function for getting ClusterGroups
-func (k *KubernetesUtils) GetCG(name string) (*crdv1alpha2.ClusterGroup, error) {
-	res, err := k.crdClient.CrdV1alpha2().ClusterGroups().Get(context.TODO(), name, metav1.GetOptions{})
-	if err != nil {
-		return nil, err
-	}
-	return res, nil
-}
-
 // DeleteV1Alpha2CG is a convenience function for deleting crd/v1alpha2 ClusterGroup by name.
-func (k *KubernetesUtils) DeleteV1Alpha2CG(name string) error {
+func (data *TestData) DeleteV1Alpha2CG(name string) error {
 	log.Infof("Deleting ClusterGroup %s", name)
-	err := k.crdClient.CrdV1alpha2().ClusterGroups().Delete(context.TODO(), name, metav1.DeleteOptions{})
+	err := data.crdClient.CrdV1alpha2().ClusterGroups().Delete(context.TODO(), name, metav1.DeleteOptions{})
 	if err != nil {
 		return errors.Wrapf(err, "unable to delete ClusterGroup %s", name)
 	}
@@ -632,9 +610,9 @@ func (k *KubernetesUtils) DeleteV1Alpha2CG(name string) error {
 }
 
 // DeleteV1Alpha3CG is a convenience function for deleting core/v1alpha3 ClusterGroup by name.
-func (k *KubernetesUtils) DeleteV1Alpha3CG(name string) error {
+func (data *TestData) DeleteV1Alpha3CG(name string) error {
 	log.Infof("deleting ClusterGroup %s", name)
-	err := k.crdClient.CrdV1alpha3().ClusterGroups().Delete(context.TODO(), name, metav1.DeleteOptions{})
+	err := data.crdClient.CrdV1alpha3().ClusterGroups().Delete(context.TODO(), name, metav1.DeleteOptions{})
 	if err != nil {
 		return errors.Wrapf(err, "unable to delete ClusterGroup %s", name)
 	}
@@ -642,22 +620,22 @@ func (k *KubernetesUtils) DeleteV1Alpha3CG(name string) error {
 }
 
 // CleanCGs is a convenience function for deleting all ClusterGroups in the cluster.
-func (k *KubernetesUtils) CleanCGs() error {
-	l, err := k.crdClient.CrdV1alpha2().ClusterGroups().List(context.TODO(), metav1.ListOptions{})
+func (data *TestData) CleanCGs() error {
+	l, err := data.crdClient.CrdV1alpha2().ClusterGroups().List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		return errors.Wrapf(err, "unable to list ClusterGroups in v1alpha2")
 	}
 	for _, cg := range l.Items {
-		if err := k.DeleteV1Alpha2CG(cg.Name); err != nil {
+		if err := data.DeleteV1Alpha2CG(cg.Name); err != nil {
 			return err
 		}
 	}
-	l2, err := k.crdClient.CrdV1alpha3().ClusterGroups().List(context.TODO(), metav1.ListOptions{})
+	l2, err := data.crdClient.CrdV1alpha3().ClusterGroups().List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		return errors.Wrapf(err, "unable to list ClusterGroups in v1alpha3")
 	}
 	for _, cg := range l2.Items {
-		if err := k.DeleteV1Alpha3CG(cg.Name); err != nil {
+		if err := data.DeleteV1Alpha3CG(cg.Name); err != nil {
 			return err
 		}
 	}
@@ -665,12 +643,12 @@ func (k *KubernetesUtils) CleanCGs() error {
 }
 
 // CreateOrUpdateACNP is a convenience function for updating/creating AntreaClusterNetworkPolicies.
-func (k *KubernetesUtils) CreateOrUpdateACNP(cnp *crdv1alpha1.ClusterNetworkPolicy) (*crdv1alpha1.ClusterNetworkPolicy, error) {
+func (data *TestData) CreateOrUpdateACNP(cnp *crdv1alpha1.ClusterNetworkPolicy) (*crdv1alpha1.ClusterNetworkPolicy, error) {
 	log.Infof("Creating/updating ClusterNetworkPolicy %s", cnp.Name)
-	cnpReturned, err := k.crdClient.CrdV1alpha1().ClusterNetworkPolicies().Get(context.TODO(), cnp.Name, metav1.GetOptions{})
+	cnpReturned, err := data.crdClient.CrdV1alpha1().ClusterNetworkPolicies().Get(context.TODO(), cnp.Name, metav1.GetOptions{})
 	if err != nil {
 		log.Debugf("Creating ClusterNetworkPolicy %s", cnp.Name)
-		cnp, err = k.crdClient.CrdV1alpha1().ClusterNetworkPolicies().Create(context.TODO(), cnp, metav1.CreateOptions{})
+		cnp, err = data.crdClient.CrdV1alpha1().ClusterNetworkPolicies().Create(context.TODO(), cnp, metav1.CreateOptions{})
 		if err != nil {
 			log.Debugf("Unable to create ClusterNetworkPolicy: %s", err)
 		}
@@ -678,15 +656,15 @@ func (k *KubernetesUtils) CreateOrUpdateACNP(cnp *crdv1alpha1.ClusterNetworkPoli
 	} else if cnpReturned.Name != "" {
 		log.Debugf("ClusterNetworkPolicy with name %s already exists, updating", cnp.Name)
 		cnpReturned.Spec = cnp.Spec
-		cnp, err = k.crdClient.CrdV1alpha1().ClusterNetworkPolicies().Update(context.TODO(), cnpReturned, metav1.UpdateOptions{})
+		cnp, err = data.crdClient.CrdV1alpha1().ClusterNetworkPolicies().Update(context.TODO(), cnpReturned, metav1.UpdateOptions{})
 		return cnp, err
 	}
 	return nil, fmt.Errorf("error occurred in creating/updating ClusterNetworkPolicy %s", cnp.Name)
 }
 
 // GetACNP is a convenience function for getting AntreaClusterNetworkPolicies.
-func (k *KubernetesUtils) GetACNP(name string) (*crdv1alpha1.ClusterNetworkPolicy, error) {
-	res, err := k.crdClient.CrdV1alpha1().ClusterNetworkPolicies().Get(context.TODO(), name, metav1.GetOptions{})
+func (data *TestData) GetACNP(name string) (*crdv1alpha1.ClusterNetworkPolicy, error) {
+	res, err := data.crdClient.CrdV1alpha1().ClusterNetworkPolicies().Get(context.TODO(), name, metav1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -694,9 +672,9 @@ func (k *KubernetesUtils) GetACNP(name string) (*crdv1alpha1.ClusterNetworkPolic
 }
 
 // DeleteACNP is a convenience function for deleting ACNP by name.
-func (k *KubernetesUtils) DeleteACNP(name string) error {
+func (data *TestData) DeleteACNP(name string) error {
 	log.Infof("Deleting AntreaClusterNetworkPolicies %s", name)
-	err := k.crdClient.CrdV1alpha1().ClusterNetworkPolicies().Delete(context.TODO(), name, metav1.DeleteOptions{})
+	err := data.crdClient.CrdV1alpha1().ClusterNetworkPolicies().Delete(context.TODO(), name, metav1.DeleteOptions{})
 	if err != nil {
 		return errors.Wrapf(err, "unable to delete ClusterNetworkPolicy %s", name)
 	}
@@ -704,13 +682,13 @@ func (k *KubernetesUtils) DeleteACNP(name string) error {
 }
 
 // CleanACNPs is a convenience function for deleting all Antrea ClusterNetworkPolicies in the cluster.
-func (k *KubernetesUtils) CleanACNPs() error {
-	l, err := k.crdClient.CrdV1alpha1().ClusterNetworkPolicies().List(context.TODO(), metav1.ListOptions{})
+func (data *TestData) CleanACNPs() error {
+	l, err := data.crdClient.CrdV1alpha1().ClusterNetworkPolicies().List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		return errors.Wrapf(err, "unable to list AntreaClusterNetworkPolicies")
 	}
 	for _, cnp := range l.Items {
-		if err = k.DeleteACNP(cnp.Name); err != nil {
+		if err = data.DeleteACNP(cnp.Name); err != nil {
 			return err
 		}
 	}
@@ -718,37 +696,33 @@ func (k *KubernetesUtils) CleanACNPs() error {
 }
 
 // CreateOrUpdateANP is a convenience function for updating/creating Antrea NetworkPolicies.
-func (k *KubernetesUtils) CreateOrUpdateANP(anp *crdv1alpha1.NetworkPolicy) (*crdv1alpha1.NetworkPolicy, error) {
+func (data *TestData) CreateOrUpdateANP(anp *crdv1alpha1.NetworkPolicy) (*crdv1alpha1.NetworkPolicy, error) {
 	log.Infof("Creating/updating Antrea NetworkPolicy %s/%s", anp.Namespace, anp.Name)
-	cnpReturned, err := k.crdClient.CrdV1alpha1().NetworkPolicies(anp.Namespace).Get(context.TODO(), anp.Name, metav1.GetOptions{})
+	cnpReturned, err := data.crdClient.CrdV1alpha1().NetworkPolicies(anp.Namespace).Get(context.TODO(), anp.Name, metav1.GetOptions{})
 	if err != nil {
 		log.Debugf("Creating Antrea NetworkPolicy %s", anp.Name)
-		anp, err = k.crdClient.CrdV1alpha1().NetworkPolicies(anp.Namespace).Create(context.TODO(), anp, metav1.CreateOptions{})
+		anp, err = data.crdClient.CrdV1alpha1().NetworkPolicies(anp.Namespace).Create(context.TODO(), anp, metav1.CreateOptions{})
 		if err != nil {
 			log.Debugf("Unable to create Antrea NetworkPolicy: %s", err)
 		}
 		return anp, err
 	} else if cnpReturned.Name != "" {
 		log.Debugf("Antrea NetworkPolicy with name %s already exists, updating", anp.Name)
-		anp, err = k.crdClient.CrdV1alpha1().NetworkPolicies(anp.Namespace).Update(context.TODO(), anp, metav1.UpdateOptions{})
+		anp, err = data.crdClient.CrdV1alpha1().NetworkPolicies(anp.Namespace).Update(context.TODO(), anp, metav1.UpdateOptions{})
 		return anp, err
 	}
 	return nil, fmt.Errorf("error occurred in creating/updating Antrea NetworkPolicy %s", anp.Name)
 }
 
 // GetANP is a convenience function for getting AntreaNetworkPolicies.
-func (k *KubernetesUtils) GetANP(namespace, name string) (*crdv1alpha1.NetworkPolicy, error) {
-	res, err := k.crdClient.CrdV1alpha1().NetworkPolicies(namespace).Get(context.TODO(), name, metav1.GetOptions{})
-	if err != nil {
-		return nil, err
-	}
-	return res, nil
+func (data *TestData) GetANP(namespace, name string) (*crdv1alpha1.NetworkPolicy, error) {
+	return data.crdClient.CrdV1alpha1().NetworkPolicies(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 }
 
 // DeleteANP is a convenience function for deleting ANP by name and Namespace.
-func (k *KubernetesUtils) DeleteANP(ns, name string) error {
+func (data *TestData) DeleteANP(ns, name string) error {
 	log.Infof("Deleting Antrea NetworkPolicy '%s/%s'", ns, name)
-	err := k.crdClient.CrdV1alpha1().NetworkPolicies(ns).Delete(context.TODO(), name, metav1.DeleteOptions{})
+	err := data.crdClient.CrdV1alpha1().NetworkPolicies(ns).Delete(context.TODO(), name, metav1.DeleteOptions{})
 	if err != nil {
 		return errors.Wrapf(err, "unable to delete Antrea NetworkPolicy %s", name)
 	}
@@ -756,14 +730,14 @@ func (k *KubernetesUtils) DeleteANP(ns, name string) error {
 }
 
 // CleanANPs is a convenience function for deleting all Antrea NetworkPolicies in provided namespaces.
-func (k *KubernetesUtils) CleanANPs(namespaces []string) error {
+func (data *TestData) CleanANPs(namespaces []string) error {
 	for _, ns := range namespaces {
-		l, err := k.crdClient.CrdV1alpha1().NetworkPolicies(ns).List(context.TODO(), metav1.ListOptions{})
+		l, err := data.crdClient.CrdV1alpha1().NetworkPolicies(ns).List(context.TODO(), metav1.ListOptions{})
 		if err != nil {
 			return errors.Wrapf(err, "unable to list Antrea NetworkPolicies in ns %s", ns)
 		}
 		for _, anp := range l.Items {
-			if err = k.DeleteANP(anp.Namespace, anp.Name); err != nil {
+			if err = data.DeleteANP(anp.Namespace, anp.Name); err != nil {
 				return err
 			}
 		}
@@ -933,15 +907,15 @@ func (k *KubernetesUtils) Bootstrap(namespaces, pods []string) (*map[string][]st
 func (k *KubernetesUtils) Cleanup(namespaces []string) {
 	// Cleanup any cluster-scoped resources.
 	if err := k.CleanACNPs(); err != nil {
-		log.Errorf("Error when cleaning-up ACNPs: %v", err)
+		log.Errorf("Error when cleaning up ACNPs: %v", err)
 	}
 	if err := k.CleanCGs(); err != nil {
-		log.Errorf("Error when cleaning-up CGs: %v", err)
+		log.Errorf("Error when cleaning up CGs: %v", err)
 	}
 
 	for _, ns := range namespaces {
 		log.Infof("Deleting test Namespace %s", ns)
-		if err := k.deleteNamespace(ns, defaultTimeout); err != nil {
+		if err := k.DeleteNamespace(ns, defaultTimeout); err != nil {
 			log.Errorf("Error when deleting Namespace '%s': %v", ns, err)
 		}
 	}

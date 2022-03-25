@@ -42,12 +42,12 @@ func TestBatchCreatePods(t *testing.T) {
 	getFDs := func() string {
 		// In case that antrea-agent is not running as Pid 1 in future.
 		cmds := []string{"pgrep", "-o", "antrea-agent"}
-		pid, _, err := data.runCommandFromPod(antreaNamespace, podName, "antrea-agent", cmds)
+		pid, _, err := data.RunCommandFromPod(antreaNamespace, podName, "antrea-agent", cmds)
 		assert.NoError(t, err)
 
 		// Ignore the difference of modification time by specifying "--time-style +".
 		cmds = []string{"ls", "-l", "--time-style", "+", fmt.Sprintf("/proc/%s/fd/", strings.TrimSpace(pid))}
-		stdout, _, err := data.runCommandFromPod(antreaNamespace, podName, "antrea-agent", cmds)
+		stdout, _, err := data.RunCommandFromPod(antreaNamespace, podName, "antrea-agent", cmds)
 		assert.NoError(t, err)
 		return stdout
 	}
