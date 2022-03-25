@@ -34,6 +34,7 @@ YAMLS=(
     "build/yamls/antrea-octant.yml"
     "build/yamls/antrea-windows.yml"
     "build/yamls/flow-aggregator.yml"
+    "build/yamls/flow-visibility.yml"
 )
 
 rm "${YAMLS[@]}"

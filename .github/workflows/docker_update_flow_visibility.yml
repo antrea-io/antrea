@@ -1,0 +1,52 @@
+# Anyone with write permissions to the antrea-io/antrea Github repository can
+# trigger this workflow manually, but please check with a maintainer first. The
+# workflow will tag and push flow visibility related external images into Antrea
+# Docker hub.
+name: Manually update flow visibility Docker images
+
+on:
+  workflow_dispatch:
+    inputs:
+      ch-operator-tag:
+        description: 'Tag for clickhouse-operator and metrics-exporter Docker image'
+        required: true
+      grafana-tag:
+        description: 'Tag for grafana Docker image'
+        required: true
+      ch-server-tag:
+        description: 'Tag for clickhouse-server Docker image'
+        required: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Login to DockerHub
+        uses: docker/login-action@v1
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+      - name: Push antrea/flow-visibility-clickhouse-operator
+        uses: akhilerm/tag-push-action@v2.0.0
+        with:
+          src: docker.io/altinity/clickhouse-operator:${{ github.event.inputs.ch-operator-tag }}
+          dst: |
+            docker.io/antrea/flow-visibility-clickhouse-operator:${{ github.event.inputs.ch-operator-tag }}
+      - name: Push antrea/flow-visibility-metrics-exporter
+        uses: akhilerm/tag-push-action@v2.0.0
+        with:
+          src: docker.io/altinity/metrics-exporter:${{ github.event.inputs.ch-operator-tag }}
+          dst: |
+            docker.io/antrea/flow-visibility-metrics-exporter:${{ github.event.inputs.ch-operator-tag }}
+      - name: Push antrea/flow-visibility-grafana
+        uses: akhilerm/tag-push-action@v2.0.0
+        with:
+          src: docker.io/grafana/grafana:${{ github.event.inputs.grafana-tag }}
+          dst: |
+            docker.io/antrea/flow-visibility-grafana:${{ github.event.inputs.grafana-tag }}
+      - name: Push antrea/flow-visibility-clickhouse-server
+        uses: akhilerm/tag-push-action@v2.0.0
+        with:
+          src: docker.io/yandex/clickhouse-server:${{ github.event.inputs.ch-server-tag }}
+          dst: |
+            docker.io/antrea/flow-visibility-clickhouse-server:${{ github.event.inputs.ch-server-tag }}

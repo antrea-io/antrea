@@ -580,11 +580,12 @@ ClickHouse as the data storage, and use Grafana as the data visualization and mo
 
 To deploy the Grafana Flow Collector, the first step is to install the ClickHouse
 Operator, which creates, configures and manages ClickHouse clusters. Check the [homepage](https://github.com/Altinity/clickhouse-operator)
-for more information about the ClickHouse Operator. Running the following command
+for more information about the ClickHouse Operator. Current checked-in yaml is based on their
+[v0.18.2](https://github.com/Altinity/clickhouse-operator/blob/refs/tags/0.18.2/deploy/operator/clickhouse-operator-install-bundle.yaml) released version. Running the following command
 will install ClickHouse Operator into `kube-system` Namespace.
 
 ```bash
-kubectl apply -f https://raw.githubusercontent.com/Altinity/clickhouse-operator/master/deploy/operator/clickhouse-operator-install-bundle.yaml
+kubectl apply -f https://raw.githubusercontent.com/antrea-io/antrea/main/build/yamls/clickhouse-operator-install-bundle.yaml
 ```
 
 To deploy a released version of the Grafana Flow Collector, find a deployment manifest
@@ -654,7 +655,7 @@ To stop the Grafana Flow Collector, run the following commands:
 
 ```shell
 kubectl delete -f flow-visibility.yml
-kubectl delete -f https://raw.githubusercontent.com/Altinity/clickhouse-operator/master/deploy/operator/clickhouse-operator-install-bundle.yaml -n kube-system
+kubectl delete -f https://raw.githubusercontent.com/antrea-io/antrea/main/build/yamls/clickhouse-operator-install-bundle.yaml -n kube-system
 ```
 
 ##### Credentials Configuration

@@ -73,6 +73,21 @@
           - email:
               recipients: projectantrea-dev@googlegroups.com
           wrappers: []
+      - '{name}-{test_name}-for-period':
+          test_name: daily-flow-visibility-validate
+          node: 'antrea-test-node'
+          description: 'This is for validating the flow visibility manifest daily.'
+          builders:
+            - builder-flow-visibility
+          branches:
+          - '*/main'
+          included_regions: []
+          cron: 'H H * * *'
+          ignore_post_commit_hooks: false
+          publishers:
+          - email:
+              recipients: projectantrea-dev@googlegroups.com
+          wrappers: []
       - '{name}-{test_name}-for-gc':
           test_name: workload-cluster
           node: 'antrea-test-node'

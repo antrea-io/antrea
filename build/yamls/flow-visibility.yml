@@ -4827,7 +4827,7 @@ spec:
             secretKeyRef:
               key: admin-password
               name: grafana-secret
-        image: grafana/grafana:8.3.3
+        image: projects.registry.vmware.com/antrea/flow-visibility-grafana:8.3.3
         imagePullPolicy: IfNotPresent
         livenessProbe:
           failureThreshold: 3
@@ -4910,7 +4910,7 @@ spec:
     - name: pod-template
       spec:
         containers:
-        - image: yandex/clickhouse-server:21.11
+        - image: projects.registry.vmware.com/antrea/flow-visibility-clickhouse-server:21.11
           name: clickhouse
           volumeMounts:
           - mountPath: /docker-entrypoint-initdb.d
