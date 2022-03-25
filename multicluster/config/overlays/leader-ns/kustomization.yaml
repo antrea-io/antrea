@@ -1,5 +1,8 @@
 namespace: changeme
 
+commonLabels:
+  app: antrea
+
 namePrefix: antrea-mc-
 
 bases:
@@ -45,6 +48,9 @@ resources:
   - member_cluster_role.yaml
   - member_cluster_rolebinding.yaml
   - member_cluster_serviceaccount.yaml
+  - service_account.yaml
+  - role.yaml
+  - role_binding.yaml
 
 patchesStrategicMerge:
   - manager_command_patch.yaml

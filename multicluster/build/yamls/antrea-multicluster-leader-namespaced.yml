@@ -9,6 +9,8 @@ metadata:
 apiVersion: v1
 kind: ServiceAccount
 metadata:
+  labels:
+    app: antrea
   name: antrea-mc-member-access-sa
   namespace: changeme
 ---
@@ -24,53 +26,15 @@ rules:
 - apiGroups:
   - ""
   resources:
-  - endpoints
+  - configmaps
   verbs:
-  - create
-  - delete
   - get
   - list
-  - patch
+  - watch
+  - create
   - update
-  - watch
-- apiGroups:
-  - ""
-  resources:
-  - events
-  verbs:
-  - create
-- apiGroups:
-  - ""
-  resources:
-  - services
-  verbs:
-  - create
-  - delete
-  - get
-  - list
   - patch
-  - update
-  - watch
-- apiGroups:
-  - crd.antrea.io
-  resources:
-  - clusternetworkpolicies
-  verbs:
-  - create
   - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - crd.antrea.io
-  resources:
-  - tiers
-  verbs:
-  - get
-  - list
-  - watch
 - apiGroups:
   - multicluster.crd.antrea.io
   resources:
@@ -253,86 +217,6 @@ rules:
   - get
   - patch
   - update
-- apiGroups:
-  - multicluster.x-k8s.io
-  resources:
-  - serviceexports
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - multicluster.x-k8s.io
-  resources:
-  - serviceexports/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - multicluster.x-k8s.io
-  resources:
-  - serviceimports
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - multicluster.x-k8s.io
-  resources:
-  - serviceimports/status
-  verbs:
-  - get
-  - patch
-  - update
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
-metadata:
-  labels:
-    app: antrea
-  name: antrea-mc-leader-election-role
-  namespace: changeme
-rules:
-- apiGroups:
-  - ""
-  resources:
-  - configmaps
-  verbs:
-  - get
-  - list
-  - watch
-  - create
-  - update
-  - patch
-  - delete
-- apiGroups:
-  - coordination.k8s.io
-  resources:
-  - leases
-  verbs:
-  - get
-  - list
-  - watch
-  - create
-  - update
-  - patch
-  - delete
-- apiGroups:
-  - ""
-  resources:
-  - events
-  verbs:
-  - create
-  - patch
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
@@ -424,38 +308,6 @@ rules:
   - update
 ---
 apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  labels:
-    app: antrea
-  name: changeme-antrea-mc-metrics-reader
-rules:
-- nonResourceURLs:
-  - /metrics
-  verbs:
-  - get
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  labels:
-    app: antrea
-  name: changeme-antrea-mc-proxy-role
-rules:
-- apiGroups:
-  - authentication.k8s.io
-  resources:
-  - tokenreviews
-  verbs:
-  - create
-- apiGroups:
-  - authorization.k8s.io
-  resources:
-  - subjectaccessreviews
-  verbs:
-  - create
----
-apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   labels:
@@ -476,20 +328,6 @@ kind: RoleBinding
 metadata:
   labels:
     app: antrea
-  name: antrea-mc-leader-election-rolebinding
-  namespace: changeme
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: Role
-  name: antrea-mc-leader-election-role
-subjects:
-- kind: ServiceAccount
-  name: antrea-mc-controller
-  namespace: changeme
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
   name: antrea-mc-member-cluster-rolebinding
   namespace: changeme
 roleRef:
@@ -511,21 +349,6 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
   name: changeme-antrea-mc-controller-webhook-role
-subjects:
-- kind: ServiceAccount
-  name: antrea-mc-controller
-  namespace: changeme
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  labels:
-    app: antrea
-  name: changeme-antrea-mc-proxy-rolebinding
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: changeme-antrea-mc-proxy-role
 subjects:
 - kind: ServiceAccount
   name: antrea-mc-controller
@@ -553,23 +376,6 @@ metadata:
     app: antrea
   name: antrea-mc-controller-config-49875k4ht8
   namespace: changeme
----
-apiVersion: v1
-kind: Service
-metadata:
-  labels:
-    app: antrea
-    component: antrea-mc-controller
-  name: antrea-mc-controller-metrics-service
-  namespace: changeme
-spec:
-  ports:
-  - name: https
-    port: 8443
-    targetPort: https
-  selector:
-    app: antrea
-    component: antrea-mc-controller
 ---
 apiVersion: v1
 kind: Service

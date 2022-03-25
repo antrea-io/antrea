@@ -1,0 +1,17 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: memberclusterannounces.multicluster.crd.antrea.io
+$patch: delete
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: resourceexports.multicluster.crd.antrea.io
+$patch: delete
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: resourceimports.multicluster.crd.antrea.io
+$patch: delete
