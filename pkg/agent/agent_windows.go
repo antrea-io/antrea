@@ -43,6 +43,10 @@ func (i *Initializer) prepareHostNetwork() error {
 		}
 		// Save the uplink adapter name to check if the OVS uplink port has been created in prepareOVSBridge stage.
 		i.nodeConfig.UplinkNetConfig.Name = hnsNetwork.NetworkAdapterName
+
+		// Save the uplink adapter MAC to modify Pod traffic source MAC if the packet is directly output to the uplink
+		// interface in OVS pipeline.
+		i.nodeConfig.UplinkNetConfig.MAC, _ = net.ParseMAC(hnsNetwork.SourceMac)
 		return nil
 	}
 	if _, ok := err.(hcsshim.NetworkNotFoundError); !ok {
