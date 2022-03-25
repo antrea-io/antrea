@@ -102,7 +102,7 @@ config_antrea() {
 
 setup_flow_aggregator() {
   echo "=== Config Antrea Flow Aggregator ==="
-  perl -i -p0e 's/      # Enable is the switch to enable exporting flow records to ClickHouse.\n      #enable: false/      # Enable is the switch to enable exporting flow records to ClickHouse.\n      enable: true/' ./build/yamls/flow-aggregator.yml
+  $GIT_CHECKOUT_DIR/hack/generate-manifest-flow-aggregator.sh -ch > ${GIT_CHECKOUT_DIR}/build/yamls/flow-aggregator.yml
   echo "=== Start Antrea Flow Aggregator ==="
   kubectl apply -f ${GIT_CHECKOUT_DIR}/build/yamls/flow-aggregator.yml
   echo "=== Waiting for Antrea Flow Aggregator to be ready ==="
