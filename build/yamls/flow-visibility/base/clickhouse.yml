@@ -26,7 +26,16 @@ spec:
   defaults:
     templates:
       podTemplate: pod-template
+      serviceTemplate: service-template
   templates:
+    serviceTemplates:
+      - name: service-template
+        spec:
+          ports:
+            - name: http
+              port: 8123
+            - name: tcp
+              port: 9000
     podTemplates:
       - name: pod-template
         spec:
@@ -38,6 +47,25 @@ spec:
                   mountPath: /docker-entrypoint-initdb.d
                 - name: clickhouse-storage-volume
                   mountPath: /var/lib/clickhouse
+            - name: clickhouse-monitor
+              image: flow-visibility-clickhouse-monitor
+              env:
+                - name: CLICKHOUSE_USERNAME
+                  valueFrom:
+                    secretKeyRef: 
+                      name: clickhouse-secret
+                      key: username
+                - name: CLICKHOUSE_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: clickhouse-secret
+                      key: password
+                - name: DB_URL
+                  value: "tcp://localhost:9000"
+                - name: TABLE_NAME
+                  value: "default.flows"
+                - name: MV_NAMES
+                  value: "default.flows_pod_view default.flows_node_view default.flows_policy_view"
           volumes:
             - name: clickhouse-configmap-volume
               configMap:
@@ -46,90 +74,3 @@ spec:
               emptyDir:
                 medium: Memory
                 sizeLimit: 8Gi
----
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  labels:
-    app: flow-visibility
-  name: clickhouse-monitor
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
-metadata:
-  labels:
-    app: flow-visibility
-  name: clickhouse-monitor-role
-rules:
-  - apiGroups:
-      - ""
-    resources:
-      - pods
-    verbs:
-      - list
-  - apiGroups:
-      - ""
-    resources:
-      - pods/log
-    verbs:
-      - get
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  labels:
-    app: flow-visibility
-  name: clickhouse-monitor-role-binding
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: Role
-  name: clickhouse-monitor-role
-subjects:
-  - kind: ServiceAccount
-    name: clickhouse-monitor
----
-apiVersion: batch/v1
-kind: CronJob
-metadata:
-  labels:
-    app: clickhouse-monitor
-  name: clickhouse-monitor
-spec:
-  schedule: "* * * * *"
-  successfulJobsHistoryLimit: 1
-  failedJobsHistoryLimit: 1
-  jobTemplate:
-    spec:
-      template:
-        metadata:
-          labels:
-            app: clickhouse-monitor
-        spec:
-          serviceAccountName: clickhouse-monitor
-          containers:
-          - name: clickhouse-monitor
-            image: flow-visibility-clickhouse-monitor
-            env:
-              - name: CLICKHOUSE_USERNAME
-                valueFrom:
-                  secretKeyRef: 
-                    name: clickhouse-secret
-                    key: username
-              - name: CLICKHOUSE_PASSWORD
-                valueFrom:
-                  secretKeyRef:
-                    name: clickhouse-secret
-                    key: password
-              - name: DB_URL
-                value: "tcp://clickhouse-clickhouse.flow-visibility.svc:9000"
-              - name: TABLE_NAME
-                value: "default.flows"
-              - name: MV_NAMES
-                value: "default.flows_pod_view default.flows_node_view default.flows_policy_view"
-              - name: NAMESPACE
-                valueFrom:
-                  fieldRef:
-                    fieldPath: metadata.namespace
-              - name: MONITOR_LABEL
-                value: "app=clickhouse-monitor"
-          restartPolicy: OnFailure

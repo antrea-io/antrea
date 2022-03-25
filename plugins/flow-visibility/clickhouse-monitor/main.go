@@ -15,22 +15,14 @@
 package main
 
 import (
-	"bytes"
-	"context"
 	"database/sql"
 	"fmt"
-	"io"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/ClickHouse/clickhouse-go"
-	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 )
 
@@ -43,14 +35,16 @@ const (
 	skipRoundsNum = 3
 	// Connection to ClickHouse times out if it fails for 1 minute.
 	connTimeout = time.Minute
-	// Retry connection to ClickHouse every 5 seconds if it fails.
-	connRetryInterval = 5 * time.Second
+	// Retry connection to ClickHouse every 10 seconds if it fails.
+	connRetryInterval = 10 * time.Second
 	// Query to ClickHouse time out if if it fails for 10 seconds.
 	queryTimeout = 10 * time.Second
 	// Retry query to ClickHouse every second if it fails.
 	queryRetryInterval = 1 * time.Second
 	// Time format for timeInserted
 	timeFormat = "2006-01-02 15:04:05"
+	// The monitor runs every minute.
+	monitorExecInterval = 1 * time.Minute
 )
 
 var (
@@ -58,113 +52,35 @@ var (
 	tableName = os.Getenv("TABLE_NAME")
 	// The names of the materialized views
 	mvNames = strings.Split(os.Getenv("MV_NAMES"), " ")
-	// The namespace of the ClickHouse server
-	namespace = os.Getenv("NAMESPACE")
-	// The ClickHouse monitor label
-	monitorLabel = os.Getenv("MONITOR_LABEL")
+	// The remaining number of rounds to be skipped
+	remainingRoundsNum = 0
 )
 
 func main() {
 	// Check environment variables
-	if len(tableName) == 0 || len(mvNames) == 0 || len(namespace) == 0 || len(monitorLabel) == 0 {
-		klog.ErrorS(nil, "Unable to load environment variables, TABLE_NAME, MV_NAMES, NAMESPACE and MONITOR_LABEL must be defined")
+	if len(tableName) == 0 || len(mvNames) == 0 {
+		klog.ErrorS(nil, "Unable to load environment variables, TABLE_NAME and MV_NAMES must be defined")
 		return
 	}
-	// The monitor stops working for several rounds after a deletion
-	// as the release of memory space by the ClickHouse MergeTree engine requires time
-	if !skipRound() {
-		connect, err := connectLoop()
-		if err != nil {
-			klog.ErrorS(err, "Error when connecting to ClickHouse")
-			return
-		}
-		deleted := monitorMemory(connect)
-		if deleted {
-			klog.InfoS("Skip rounds after a successful deletion", "skipRoundsNum", skipRoundsNum)
+
+	connect, err := connectLoop()
+	if err != nil {
+		klog.ErrorS(err, "Error when connecting to ClickHouse")
+		os.Exit(1)
+	}
+	wait.Forever(func() {
+		// The monitor stops working for several rounds after a deletion
+		// as the release of memory space by the ClickHouse MergeTree engine requires time
+		if remainingRoundsNum > 0 {
+			klog.InfoS("Skip rounds after a successful deletion", "remaining number of rounds", remainingRoundsNum)
+			remainingRoundsNum -= 1
+		} else if remainingRoundsNum == 0 {
+			monitorMemory(connect)
 		} else {
-			klog.InfoS("Next round will not be skipped", "skipRoundsNum", 0)
+			klog.ErrorS(nil, "Remaining rounds number to be skipped should be larger than or equal to 0", "number", remainingRoundsNum)
+			os.Exit(1)
 		}
-	}
-}
-
-// Checks the k8s log for the number of rounds to skip.
-// Returns true when the monitor needs to skip more rounds and log the rest number of rounds to skip.
-func skipRound() bool {
-	logString, err := getPodLogs()
-	if err != nil {
-		klog.ErrorS(err, "Not find last monitor job")
-		return false
-	}
-	// A sample log string looks like the following
-	// [clickhouse]host(s)=clickhouse-clickhouse.flow-visibility.svc.cluster.local:9000, database=default, username=clickhouse_operator
-	// ...
-	// [clickhouse][connect=1][prepare] SELECT free_space, total_space FROM system.disks
-	// [clickhouse][connect=1][send query] SELECT free_space, total_space FROM system.disks
-	// ...
-	// I0208 19:54:07.346630       1 main.go:213] "Memory usage" total=1979224064 used=11431936 percentage=0.005775968576744225
-	// I0207 22:29:06.283450       1 main.go:71] "Next round will not be skipped" skipRoundsNum=0
-	// ...
-
-	// reads the number of rounds requires to be skipped
-	logs := strings.Split(logString, "skipRoundsNum=")
-	if len(logs) != 2 {
-		klog.ErrorS(nil, "Error when finding number of rounds")
-		return false
-	}
-	lines := strings.Split(logs[1], "\n")
-	remainingRoundsNum, convErr := strconv.Atoi(lines[0])
-	if convErr != nil {
-		klog.ErrorS(convErr, "Error when finding last monitor job")
-		return false
-	}
-	if remainingRoundsNum > 0 {
-		klog.InfoS("Skip rounds after a successful deletion", "skipRoundsNum", remainingRoundsNum-1)
-		return true
-	}
-	return false
-}
-
-// Gets pod logs from the ClickHouse monitor job
-func getPodLogs() (string, error) {
-	var logString string
-	podLogOpts := corev1.PodLogOptions{}
-	config, err := rest.InClusterConfig()
-	listOptions := metav1.ListOptions{
-		LabelSelector: monitorLabel,
-	}
-	if err != nil {
-		return logString, fmt.Errorf("error when getting config: %v", err)
-	}
-	// creates the clientset
-	clientset, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		return logString, fmt.Errorf("error when getting access to K8S: %v", err)
-	}
-	// gets ClickHouse monitor pod
-	pods, err := clientset.CoreV1().Pods(namespace).List(context.TODO(), listOptions)
-	if err != nil {
-		return logString, fmt.Errorf("failed to list ClickHouse monitor Pods: %v", err)
-	}
-	for _, pod := range pods.Items {
-		// reads logs from the last successful pod
-		if pod.Status.Phase == corev1.PodSucceeded {
-			req := clientset.CoreV1().Pods(namespace).GetLogs(pod.Name, &podLogOpts)
-			podLogs, err := req.Stream(context.TODO())
-			if err != nil {
-				return logString, fmt.Errorf("error when opening stream: %v", err)
-			}
-			defer podLogs.Close()
-
-			buf := new(bytes.Buffer)
-			_, err = io.Copy(buf, podLogs)
-			if err != nil {
-				return logString, fmt.Errorf("error when copying information from podLogs to buf: %v", err)
-			}
-			logString := buf.String()
-			return logString, nil
-		}
-	}
-	return logString, fmt.Errorf("no successful monitor")
+	}, monitorExecInterval)
 }
 
 // Connects to ClickHouse in a loop
@@ -202,8 +118,8 @@ func connectLoop() (*sql.DB, error) {
 	return connect, nil
 }
 
-// Checks the memory usage in the ClickHouse, deletes records when it exceeds the threshold.
-func monitorMemory(connect *sql.DB) bool {
+// Checks the memory usage in the ClickHouse, and deletes records when it exceeds the threshold.
+func monitorMemory(connect *sql.DB) {
 	var (
 		freeSpace  uint64
 		totalSpace uint64
@@ -217,8 +133,8 @@ func monitorMemory(connect *sql.DB) bool {
 			return true, nil
 		}
 	}); err != nil {
-		klog.ErrorS(err, "Failed to get memory usage for ClickHouse")
-		return false
+		klog.ErrorS(err, "Failed to get memory usage for ClickHouse", "timeout", queryTimeout)
+		return
 	}
 
 	// Calculate the memory usage
@@ -229,7 +145,7 @@ func monitorMemory(connect *sql.DB) bool {
 		timeBoundary, err := getTimeBoundary(connect)
 		if err != nil {
 			klog.ErrorS(err, "Failed to get timeInserted boundary")
-			return false
+			return
 		}
 		// Delete old data in the table storing records and related materialized views
 		tables := append([]string{tableName}, mvNames...)
@@ -238,12 +154,12 @@ func monitorMemory(connect *sql.DB) bool {
 			command := fmt.Sprintf("ALTER TABLE %s DELETE WHERE timeInserted < toDateTime('%v')", table, timeBoundary.Format(timeFormat))
 			if _, err := connect.Exec(command); err != nil {
 				klog.ErrorS(err, "Failed to delete records from ClickHouse", "table", table)
-				return false
+				return
 			}
 		}
-		return true
+		klog.InfoS("Skip rounds after a successful deletion", "skipRoundsNum", skipRoundsNum)
+		remainingRoundsNum = skipRoundsNum
 	}
-	return false
 }
 
 // Gets the timeInserted value of the latest row to be deleted.
