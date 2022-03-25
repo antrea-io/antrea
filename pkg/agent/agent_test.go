@@ -27,6 +27,7 @@ import (
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/kubernetes/fake"
 
 	"antrea.io/antrea/pkg/agent/cniserver"
@@ -231,13 +232,14 @@ func TestInitNodeLocalConfig(t *testing.T) {
 			}
 			require.NoError(t, initializer.initNodeLocalConfig())
 			expectedNodeConfig := config.NodeConfig{
-				Name:            nodeName,
-				OVSBridge:       ovsBridge,
-				DefaultTunName:  defaultTunInterfaceName,
-				PodIPv4CIDR:     podCIDR,
-				NodeIPAddr:      nodeIPNet,
-				NodeMTU:         tt.expectedMTU,
-				UplinkNetConfig: new(config.AdapterNetConfig),
+				Name:                       nodeName,
+				OVSBridge:                  ovsBridge,
+				DefaultTunName:             defaultTunInterfaceName,
+				PodIPv4CIDR:                podCIDR,
+				NodeTransportInterfaceName: ipDevice.Name,
+				NodeIPAddr:                 nodeIPNet,
+				NodeMTU:                    tt.expectedMTU,
+				UplinkNetConfig:            new(config.AdapterNetConfig),
 			}
 			assert.Equal(t, expectedNodeConfig, *initializer.nodeConfig)
 			node, err := client.CoreV1().Nodes().Get(context.TODO(), nodeName, metav1.GetOptions{})
@@ -249,7 +251,7 @@ func TestInitNodeLocalConfig(t *testing.T) {
 
 func mockGetIPNetDeviceFromIP(ipNet *net.IPNet, ipDevice *net.Interface) func() {
 	prevGetIPNetDeviceFromIP := getIPNetDeviceFromIP
-	getIPNetDeviceFromIP = func(localIP net.IP) (*net.IPNet, *net.Interface, error) {
+	getIPNetDeviceFromIP = func(net.IP, sets.String) (*net.IPNet, *net.Interface, error) {
 		return ipNet, ipDevice, nil
 	}
 	return func() { getIPNetDeviceFromIP = prevGetIPNetDeviceFromIP }

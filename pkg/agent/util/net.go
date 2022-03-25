@@ -22,6 +22,8 @@ import (
 	"io"
 	"net"
 	"strings"
+
+	"k8s.io/apimachinery/pkg/util/sets"
 )
 
 const (
@@ -107,13 +109,16 @@ func dialUnix(address string) (net.Conn, error) {
 }
 
 // GetIPNetDeviceFromIP returns a local IP/mask and associated device from IP.
-func GetIPNetDeviceFromIP(localIP net.IP) (*net.IPNet, *net.Interface, error) {
+func GetIPNetDeviceFromIP(localIP net.IP, ignoredInterfaces sets.String) (*net.IPNet, *net.Interface, error) {
 	linkList, err := net.Interfaces()
 	if err != nil {
 		return nil, nil, err
 	}
 
 	for _, link := range linkList {
+		if ignoredInterfaces.Has(link.Name) {
+			continue
+		}
 		addrList, err := link.Addrs()
 		if err != nil {
 			continue
@@ -126,6 +131,26 @@ func GetIPNetDeviceFromIP(localIP net.IP) (*net.IPNet, *net.Interface, error) {
 			}
 		}
 	}
+	return nil, nil, fmt.Errorf("unable to find local IP and device")
+}
+
+func GetIPNetDeviceByName(ifaceName string) (*net.IPNet, *net.Interface, error) {
+	link, err := net.InterfaceByName(ifaceName)
+	if err != nil {
+		return nil, nil, err
+	}
+	addrList, err := link.Addrs()
+	if err != nil {
+		return nil, nil, err
+	}
+	for _, addr := range addrList {
+		if ipNet, ok := addr.(*net.IPNet); ok {
+			if ipNet.IP.IsGlobalUnicast() {
+				return ipNet, link, nil
+			}
+		}
+	}
+
 	return nil, nil, fmt.Errorf("unable to find local IP and device")
 }
 

@@ -15,15 +15,13 @@
 package ipassigner
 
 import (
-	"net"
-
 	"k8s.io/apimachinery/pkg/util/sets"
 )
 
 type ipAssigner struct {
 }
 
-func NewIPAssigner(nodeIPAddr net.IP, dummyDeviceName string) (*ipAssigner, error) {
+func NewIPAssigner(nodeTransportInterface string, dummyDeviceName string) (*ipAssigner, error) {
 	return nil, nil
 }
 

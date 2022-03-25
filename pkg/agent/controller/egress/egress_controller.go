@@ -150,7 +150,8 @@ func NewEgressController(
 	ifaceStore interfacestore.InterfaceStore,
 	routeClient route.Interface,
 	nodeName string,
-	nodeIP net.IP,
+	nodeTransportInterface string,
+	nodeTransportIP net.IP,
 	clusterPort int,
 	egressInformer crdinformers.EgressInformer,
 	nodeInformer coreinformers.NodeInformer,
@@ -175,13 +176,13 @@ func NewEgressController(
 		localIPDetector:      localIPDetector,
 		idAllocator:          newIDAllocator(minEgressMark, maxEgressMark),
 	}
-	ipAssigner, err := ipassigner.NewIPAssigner(nodeIP, egressDummyDevice)
+	ipAssigner, err := ipassigner.NewIPAssigner(nodeTransportInterface, egressDummyDevice)
 	if err != nil {
 		return nil, fmt.Errorf("initializing egressIP assigner failed: %v", err)
 	}
 	c.ipAssigner = ipAssigner
 
-	cluster, err := memberlist.NewCluster(clusterPort, nodeIP, nodeName, nodeInformer, externalIPPoolInformer)
+	cluster, err := memberlist.NewCluster(clusterPort, nodeTransportIP, nodeName, nodeInformer, externalIPPoolInformer)
 	if err != nil {
 		return nil, fmt.Errorf("initializing memberlist cluster failed: %v", err)
 	}

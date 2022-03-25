@@ -85,6 +85,9 @@ type NodeConfig struct {
 	PodIPv6CIDR *net.IPNet
 	// The Node's IP used in Kubernetes. It has the network mask information.
 	NodeIPAddr *net.IPNet
+	// The name of the Node's transport interface. The transport interface defaults to the
+	// interface that has the K8s Node IP.
+	NodeTransportInterfaceName string
 	// Set either via defaultMTU config in antrea.yaml or auto discovered.
 	// Auto discovery will use MTU value of the Node's primary interface.
 	// For Encap and Hybrid mode, Node MTU will be adjusted to account for encap header.
