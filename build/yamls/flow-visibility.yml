@@ -15,37 +15,8 @@ volumeBindingMode: WaitForFirstConsumer
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  labels:
-    app: flow-visibility
-  name: clickhouse-monitor
-  namespace: flow-visibility
----
-apiVersion: v1
-kind: ServiceAccount
-metadata:
   name: grafana
   namespace: flow-visibility
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
-metadata:
-  labels:
-    app: flow-visibility
-  name: clickhouse-monitor-role
-  namespace: flow-visibility
-rules:
-- apiGroups:
-  - ""
-  resources:
-  - pods
-  verbs:
-  - list
-- apiGroups:
-  - ""
-  resources:
-  - pods/log
-  verbs:
-  - get
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
@@ -63,22 +34,6 @@ rules:
   - get
   - list
   - watch
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  labels:
-    app: flow-visibility
-  name: clickhouse-monitor-role-binding
-  namespace: flow-visibility
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: Role
-  name: clickhouse-monitor-role
-subjects:
-- kind: ServiceAccount
-  name: clickhouse-monitor
-  namespace: flow-visibility
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -4929,54 +4884,6 @@ spec:
           name: grafana-dashboard-config-gkkgc9d727
         name: grafana-dashboard-config
 ---
-apiVersion: batch/v1
-kind: CronJob
-metadata:
-  labels:
-    app: clickhouse-monitor
-  name: clickhouse-monitor
-  namespace: flow-visibility
-spec:
-  failedJobsHistoryLimit: 1
-  jobTemplate:
-    spec:
-      template:
-        metadata:
-          labels:
-            app: clickhouse-monitor
-        spec:
-          containers:
-          - env:
-            - name: CLICKHOUSE_USERNAME
-              valueFrom:
-                secretKeyRef:
-                  key: username
-                  name: clickhouse-secret
-            - name: CLICKHOUSE_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  key: password
-                  name: clickhouse-secret
-            - name: DB_URL
-              value: tcp://clickhouse-clickhouse.flow-visibility.svc:9000
-            - name: TABLE_NAME
-              value: default.flows
-            - name: MV_NAMES
-              value: default.flows_pod_view default.flows_node_view default.flows_policy_view
-            - name: NAMESPACE
-              valueFrom:
-                fieldRef:
-                  fieldPath: metadata.namespace
-            - name: MONITOR_LABEL
-              value: app=clickhouse-monitor
-            image: projects.registry.vmware.com/antrea/flow-visibility-clickhouse-monitor:latest
-            imagePullPolicy: IfNotPresent
-            name: clickhouse-monitor
-          restartPolicy: OnFailure
-          serviceAccountName: clickhouse-monitor
-  schedule: '* * * * *'
-  successfulJobsHistoryLimit: 1
----
 apiVersion: clickhouse.altinity.com/v1
 kind: ClickHouseInstallation
 metadata:
@@ -4997,6 +4904,7 @@ spec:
   defaults:
     templates:
       podTemplate: pod-template
+      serviceTemplate: service-template
   templates:
     podTemplates:
     - name: pod-template
@@ -5009,6 +4917,26 @@ spec:
             name: clickhouse-configmap-volume
           - mountPath: /var/lib/clickhouse
             name: clickhouse-storage-volume
+        - env:
+          - name: CLICKHOUSE_USERNAME
+            valueFrom:
+              secretKeyRef:
+                key: username
+                name: clickhouse-secret
+          - name: CLICKHOUSE_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                key: password
+                name: clickhouse-secret
+          - name: DB_URL
+            value: tcp://localhost:9000
+          - name: TABLE_NAME
+            value: default.flows
+          - name: MV_NAMES
+            value: default.flows_pod_view default.flows_node_view default.flows_policy_view
+          image: projects.registry.vmware.com/antrea/flow-visibility-clickhouse-monitor:latest
+          imagePullPolicy: IfNotPresent
+          name: clickhouse-monitor
         volumes:
         - configMap:
             name: clickhouse-mounted-configmap-dkbmg82ctg
@@ -5017,3 +4945,11 @@ spec:
             medium: Memory
             sizeLimit: 8Gi
           name: clickhouse-storage-volume
+    serviceTemplates:
+    - name: service-template
+      spec:
+        ports:
+        - name: http
+          port: 8123
+        - name: tcp
+          port: 9000

@@ -112,7 +112,7 @@ find ../../patches/$MODE -name \*.yml -exec cp {} . \;
 
 if [ "$MODE" == "dev" ]; then
     $KUSTOMIZE edit set image flow-visibility-clickhouse-monitor=projects.registry.vmware.com/antrea/flow-visibility-clickhouse-monitor:latest
-    $KUSTOMIZE edit add patch --path imagePullPolicy.yml
+    $KUSTOMIZE edit add patch --path imagePullPolicy.yml --group clickhouse.altinity.com --version v1 --kind ClickHouseInstallation --name clickhouse
 fi
 
 if [ "$MODE" == "release" ]; then

@@ -33,7 +33,7 @@
     - [About Grafana and ClickHouse](#about-grafana-and-clickhouse)
     - [Deployment Steps](#deployment-steps-1)
       - [Credentials Configuration](#credentials-configuration)
-      - [ClickHouse Performance Configuration](#clickhouse-performance-configuration)
+      - [ClickHouse Configuration](#clickhouse-configuration)
     - [Pre-built Dashboards](#pre-built-dashboards)
       - [Flow Records Dashboard](#flow-records-dashboard)
       - [Pod-to-Pod Flows Dashboard](#pod-to-pod-flows-dashboard)
@@ -615,12 +615,12 @@ The expected results will be like:
 
 ```bash  
 NAME                                  READY   STATUS    RESTARTS   AGE
-pod/chi-clickhouse-clickhouse-0-0-0   1/1     Running   0          1m
+pod/chi-clickhouse-clickhouse-0-0-0   2/2     Running   0          1m
 pod/grafana-5c6c5b74f7-x4v5b          1/1     Running   0          1m
 
 NAME                                    TYPE           CLUSTER-IP       EXTERNAL-IP   PORT(S)                         AGE
 service/chi-clickhouse-clickhouse-0-0   ClusterIP      None             <none>        8123/TCP,9000/TCP,9009/TCP      1m
-service/clickhouse-clickhouse           LoadBalancer   10.105.198.192   <pending>     8123:30001/TCP,9000:31044/TCP   1m
+service/clickhouse-clickhouse           ClusterIP      10.102.124.56    <none>        8123/TCP,9000/TCP               1m
 service/grafana                         LoadBalancer   10.97.171.150    <pending>     3000:31171/TCP                  1m
 
 NAME                      READY   UP-TO-DATE   AVAILABLE   AGE
@@ -632,12 +632,6 @@ replicaset.apps/grafana-5c6c5b74f7   1         1         1       1m
 NAME                                             READY   AGE
 statefulset.apps/chi-clickhouse-clickhouse-0-0   1/1     1m
 
-
-NAME                               SCHEDULE    SUSPEND   ACTIVE   LAST SCHEDULE   AGE
-cronjob.batch/clickhouse-monitor   * * * * *   False     0        30s             1m
-
-NAME                                    COMPLETIONS   DURATION   AGE
-job.batch/clickhouse-monitor-27434986   1/1           6s         30s
 ```
 
 Run the following commands to print the IP of the workder Node and the NodePort
@@ -698,7 +692,28 @@ a new manifest:
 make manifest
 ```
 
-##### ClickHouse Performance Configuration
+##### ClickHouse Configuration
+
+The ClickHouse database can be accessed through the service `clickhouse-clickhouse`.
+The pod exposes HTTP port at 8123 and TCP port at 9000 by default. The ports are
+specified in [clickhouse.yml][clickhouse_manifest_yaml] as `serviceTemplates`.
+To use other ports, please update the following section accordingly.
+
+```yaml
+serviceTemplates:
+  - name: service-template
+    spec:
+      ports:
+        - name: http
+          port: 8123
+        - name: tcp
+          port: 9000
+```
+
+This service is also used by the Flow Aggregator and Grafana. If you update the
+HTTP port, please update `url` in [datasource_provider.yml][grafana_datasouce_provider_yaml].
+If you update the TCP port, please update `jsonData.port` in [datasource_provider.yml][grafana_datasouce_provider_yaml]
+and `databaseURL` in the [Flow Aggregator Configuration](#configuration-1).
 
 The ClickHouse throughput depends on two factors - the storage size of the ClickHouse
 and the time interval between the batch commits to the ClickHouse. Larger storage
@@ -1005,4 +1020,5 @@ Visualization Network Policy Dashboard">
 [clickhouse_manifest_yaml]: ../build/yamls/flow-visibility/base/clickhouse.yml
 [flow_aggregator_manifest_yaml]: ../build/yamls/flow-aggregator/base/flow-aggregator.yml
 [grafana_manifest_yaml]: ../build/yamls/flow-visibility/base/grafana.yml
+[grafana_datasouce_provider_yaml]: ../build/yamls/flow-visibility/base/provisioning/datasources/datasource_provider.yml
 [flow_visibility_kustomization_yaml]: ../build/yamls/flow-visibility/base/kustomization.yml
