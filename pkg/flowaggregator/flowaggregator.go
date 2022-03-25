@@ -32,6 +32,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 
+	"antrea.io/antrea/pkg/flowaggregator/clickhouseclient"
 	"antrea.io/antrea/pkg/flowaggregator/querier"
 	"antrea.io/antrea/pkg/ipfix"
 )
@@ -196,6 +197,7 @@ type flowAggregator struct {
 	aggregatorTransportProtocol AggregatorTransportProtocol
 	collectingProcess           ipfix.IPFIXCollectingProcess
 	aggregationProcess          ipfix.IPFIXAggregationProcess
+	dbExportProcess             *clickhouseclient.ClickHouseExportProcess
 	activeFlowRecordTimeout     time.Duration
 	inactiveFlowRecordTimeout   time.Duration
 	exportingProcess            ipfix.IPFIXExportingProcess
@@ -330,6 +332,12 @@ func (fa *flowAggregator) InitAggregationProcess() error {
 	return err
 }
 
+func (fa *flowAggregator) InitDBExportProcess(chInput clickhouseclient.ClickHouseInput) error {
+	var err error
+	fa.dbExportProcess, err = clickhouseclient.NewClickHouseClient(chInput)
+	return err
+}
+
 func (fa *flowAggregator) createAndSendTemplate(isRecordIPv6 bool) error {
 	templateID := fa.exportingProcess.NewTemplateID()
 	recordIPFamily := "IPv4"
@@ -399,6 +407,10 @@ func (fa *flowAggregator) Run(stopCh <-chan struct{}, wg *sync.WaitGroup) {
 	defer fa.collectingProcess.Stop()
 	go fa.aggregationProcess.Start()
 	defer fa.aggregationProcess.Stop()
+	if fa.dbExportProcess != nil {
+		go fa.dbExportProcess.Start()
+		defer fa.dbExportProcess.Stop()
+	}
 	go fa.flowRecordExpiryCheck(stopCh)
 
 	<-stopCh
@@ -416,7 +428,7 @@ func (fa *flowAggregator) flowRecordExpiryCheck(stopCh <-chan struct{}) {
 			expireTimer.Stop()
 			return
 		case <-expireTimer.C:
-			if fa.exportingProcess == nil {
+			if fa.externalFlowCollectorAddr != "" && fa.exportingProcess == nil {
 				err := fa.initExportingProcess()
 				if err != nil {
 					klog.Errorf("Error when initializing exporting process: %v, will retry in %s", err, fa.activeFlowRecordTimeout)
@@ -431,8 +443,10 @@ func (fa *flowAggregator) flowRecordExpiryCheck(stopCh <-chan struct{}) {
 				klog.Errorf("Error when sending expired flow records: %v", err)
 				// If there is an error when sending flow records because of intermittent connectivity, we reset the connection
 				// to IPFIX collector and retry in the next export cycle to reinitialize the connection and send flow records.
-				fa.exportingProcess.CloseConnToCollector()
-				fa.exportingProcess = nil
+				if fa.exportingProcess != nil {
+					fa.exportingProcess.CloseConnToCollector()
+					fa.exportingProcess = nil
+				}
 				expireTimer.Reset(fa.activeFlowRecordTimeout)
 				continue
 			}
@@ -470,15 +484,19 @@ func (fa *flowAggregator) sendFlowKeyRecord(key ipfixintermediate.FlowKey, recor
 	if err := fa.set.AddRecord(record.Record.GetOrderedElementList(), templateID); err != nil {
 		return err
 	}
-
-	sentBytes, err := fa.exportingProcess.SendSet(fa.set)
-	if err != nil {
+	if fa.exportingProcess != nil {
+		sentBytes, err := fa.exportingProcess.SendSet(fa.set)
+		if err != nil {
+			return err
+		}
+		klog.V(4).Infof("Data set sent successfully: %d Bytes sent", sentBytes)
+	}
+	if fa.dbExportProcess != nil {
+		fa.dbExportProcess.CacheSet(fa.set)
+	}
+	if err := fa.aggregationProcess.ResetStatAndThroughputElementsInRecord(record.Record); err != nil {
 		return err
 	}
-	if err = fa.aggregationProcess.ResetStatAndThroughputElementsInRecord(record.Record); err != nil {
-		return err
-	}
-	klog.V(4).Infof("Data set sent successfully: %d Bytes sent", sentBytes)
 	fa.numRecordsExported = fa.numRecordsExported + 1
 	return nil
 }
