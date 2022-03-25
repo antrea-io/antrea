@@ -251,8 +251,8 @@ ip netns exec %[1]s /agnhost netexec
 			}); err != nil {
 				t.Fatalf("Failed to create Pod initial-ip-checker: %v", err)
 			}
-			defer data.deletePod(testNamespace, initialIPChecker)
-			_, err = data.podWaitFor(timeout, initialIPChecker, testNamespace, func(pod *v1.Pod) (bool, error) {
+			defer data.DeletePod(testNamespace, initialIPChecker)
+			_, err = data.PodWaitFor(timeout, initialIPChecker, testNamespace, func(pod *v1.Pod) (bool, error) {
 				if pod.Status.Phase == v1.PodFailed {
 					return false, fmt.Errorf("Pod terminated with failure")
 				}
@@ -607,7 +607,7 @@ func testEgressNodeFailure(t *testing.T, data *TestData) {
 			}
 			signalAgent := func(nodeName, signal string) {
 				cmd := fmt.Sprintf("pkill -%s antrea-agent", signal)
-				rc, stdout, stderr, err := RunCommandOnNode(nodeName, cmd)
+				rc, stdout, stderr, err := data.RunCommandOnNode(nodeName, cmd)
 				if rc != 0 || err != nil {
 					t.Errorf("Error when running command '%s' on Node '%s', rc: %d, stdout: %s, stderr: %s, error: %v",
 						cmd, nodeName, rc, stdout, stderr, err)
@@ -711,7 +711,7 @@ func hasIP(data *TestData, nodeName string, ip string) (bool, error) {
 		return false, err
 	}
 	cmd := []string{"ip", "-br", "addr"}
-	stdout, _, err := data.runCommandFromPod(antreaNamespace, antreaPodName, agentContainerName, cmd)
+	stdout, _, err := data.RunCommandFromPod(antreaNamespace, antreaPodName, agentContainerName, cmd)
 	if err != nil {
 		return false, err
 	}

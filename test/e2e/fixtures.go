@@ -99,11 +99,11 @@ func skipIfNotIPv6Cluster(tb testing.TB) {
 	}
 }
 
-func skipIfMissingKernelModule(tb testing.TB, nodeName string, requiredModules []string) {
+func skipIfMissingKernelModule(tb testing.TB, data *TestData, nodeName string, requiredModules []string) {
 	for _, module := range requiredModules {
 		// modprobe with "--dry-run" does not require root privileges
 		cmd := fmt.Sprintf("modprobe --dry-run %s", module)
-		rc, stdout, stderr, err := RunCommandOnNode(nodeName, cmd)
+		rc, stdout, stderr, err := data.RunCommandOnNode(nodeName, cmd)
 		if err != nil {
 			tb.Skipf("Skipping test as modprobe could not be run to confirm the presence of module '%s': %v", module, err)
 		}
@@ -290,7 +290,7 @@ func exportLogs(tb testing.TB, data *TestData, logsSubDir string, writeNodeLogs 
 	// runKubectl runs the provided kubectl command on the control-plane Node and returns the
 	// output. It returns an empty string in case of error.
 	runKubectl := func(cmd string) string {
-		rc, stdout, _, err := RunCommandOnNode(controlPlaneNodeName(), cmd)
+		rc, stdout, _, err := data.RunCommandOnNode(controlPlaneNodeName(), cmd)
 		if err != nil || rc != 0 {
 			tb.Errorf("Error when running this kubectl command on control-plane Node: %s", cmd)
 			return ""
@@ -362,7 +362,7 @@ func exportLogs(tb testing.TB, data *TestData, logsSubDir string, writeNodeLogs 
 		if clusterInfo.nodesOS[nodeName] == "windows" {
 			cmd = "Get-EventLog -LogName \"System\" -Source \"Service Control Manager\" | grep kubelet ; Get-EventLog -LogName \"Application\" -Source \"nssm\" | grep kubelet"
 		}
-		rc, stdout, _, err := RunCommandOnNode(nodeName, cmd)
+		rc, stdout, _, err := data.RunCommandOnNode(nodeName, cmd)
 		if err != nil || rc != 0 {
 			// return an error and skip subsequent Nodes
 			return fmt.Errorf("error when running journalctl on Node '%s', is it available? Error: %v", nodeName, err)
@@ -387,7 +387,7 @@ func teardownFlowAggregator(tb testing.TB, data *TestData) {
 		}
 	}
 	tb.Logf("Deleting '%s' K8s Namespace", flowAggregatorNamespace)
-	if err := data.deleteNamespace(flowAggregatorNamespace, defaultTimeout); err != nil {
+	if err := data.DeleteNamespace(flowAggregatorNamespace, defaultTimeout); err != nil {
 		tb.Logf("Error when tearing down flow aggregator: %v", err)
 	}
 }
@@ -405,7 +405,7 @@ func teardownTest(tb testing.TB, data *TestData) {
 
 func deletePodWrapper(tb testing.TB, data *TestData, namespace, name string) {
 	tb.Logf("Deleting Pod '%s'", name)
-	if err := data.deletePod(namespace, name); err != nil {
+	if err := data.DeletePod(namespace, name); err != nil {
 		tb.Logf("Error when deleting Pod: %v", err)
 	}
 }

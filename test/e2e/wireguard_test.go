@@ -35,11 +35,12 @@ func TestWireGuard(t *testing.T) {
 	skipIfNumNodesLessThan(t, 2)
 	skipIfHasWindowsNodes(t)
 	skipIfAntreaIPAMTest(t)
-	for _, node := range clusterInfo.nodes {
-		skipIfMissingKernelModule(t, node.name, []string{"wireguard"})
-	}
+
 	data, err := setupTest(t)
 	skipIfEncapModeIsNot(t, data, config.TrafficEncapModeEncap)
+	for _, node := range clusterInfo.nodes {
+		skipIfMissingKernelModule(t, data, node.name, []string{"wireguard"})
+	}
 
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
@@ -72,7 +73,7 @@ func (data *TestData) getWireGuardPeerEndpointsWithHandshake(nodeName string) ([
 		return peerEndpoints, err
 	}
 	cmd := []string{"wg"}
-	stdout, stderr, err := data.runCommandFromPod(antreaNamespace, antreaPodName, "wireguard", cmd)
+	stdout, stderr, err := data.RunCommandFromPod(antreaNamespace, antreaPodName, "wireguard", cmd)
 	if err != nil {
 		return peerEndpoints, fmt.Errorf("error when running 'wg' on '%s': %v - stdout: %s - stderr: %s", nodeName, err, stdout, stderr)
 	}

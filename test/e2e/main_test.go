@@ -85,21 +85,23 @@ func testMain(m *testing.M) int {
 	flag.StringVar(&testOptions.skipCases, "skip", "", "Key words to skip cases")
 	flag.Parse()
 
-	if err := initProvider(); err != nil {
-		log.Fatalf("Error when initializing provider: %v", err)
-	}
-
 	cleanupLogging := testOptions.setupLogging()
 	defer cleanupLogging()
 
 	testData = &TestData{}
-	log.Println("Creating K8s clientset")
-	if err := testData.createClient(); err != nil {
-		log.Fatalf("Error when creating K8s clientset: %v", err)
-		return 1
+	if err := testData.InitProvider(testOptions.providerName, testOptions.providerConfigPath); err != nil {
+		log.Fatalf("Error when initializing provider: %v", err)
+	}
+	log.Println("Creating K8s ClientSet")
+	kubeconfigPath, err := testData.provider.GetKubeconfigPath()
+	if err != nil {
+		log.Fatalf("Error when getting Kubeconfig path: %v", err)
+	}
+	if err := testData.CreateClient(kubeconfigPath); err != nil {
+		log.Fatalf("Error when creating K8s ClientSet: %v", err)
 	}
 	log.Println("Collecting information about K8s cluster")
-	if err := collectClusterInfo(); err != nil {
+	if err := testData.collectClusterInfo(); err != nil {
 		log.Fatalf("Error when collecting information about K8s cluster: %v", err)
 	}
 	if clusterInfo.podV4NetworkCIDR != "" {
@@ -115,7 +117,7 @@ func testMain(m *testing.M) int {
 		log.Printf("Service IPv6 network: '%s'", clusterInfo.svcV6NetworkCIDR)
 	}
 	log.Printf("Num nodes: %d", clusterInfo.numNodes)
-	err := ensureAntreaRunning(testData)
+	err = ensureAntreaRunning(testData)
 	if err != nil {
 		log.Fatalf("Error when deploying Antrea: %v", err)
 	}

@@ -80,7 +80,7 @@ func (data *TestData) testClusterIP(t *testing.T, isIPv6 bool, clientNamespace, 
 		testClusterIPCases(t, data, url, clients, hostNetworkClients, clientNamespace)
 	})
 
-	require.NoError(t, data.deletePod(serverNamespace, nginx))
+	require.NoError(t, data.DeletePod(serverNamespace, nginx))
 	_, _, cleanupFunc = createAndWaitForPod(t, data, data.createNginxPodOnNode, hostNginx, nodeName(0), serverNamespace, true)
 	defer cleanupFunc()
 	t.Run("HostNetwork Endpoints", func(t *testing.T) {
@@ -109,7 +109,7 @@ func testClusterIPFromPod(t *testing.T, data *TestData, url, nodeName, podName s
 	cmd := []string{"/agnhost", "connect", url, "--timeout=1s", "--protocol=tcp"}
 	err := wait.PollImmediate(1*time.Second, 5*time.Second, func() (bool, error) {
 		t.Logf(strings.Join(cmd, " "))
-		stdout, stderr, err := data.runCommandFromPod(namespace, podName, agnhostContainerName, cmd)
+		stdout, stderr, err := data.RunCommandFromPod(namespace, podName, agnhostContainerName, cmd)
 		t.Logf("stdout: %s - stderr: %s - err: %v", stdout, stderr, err)
 		if err == nil {
 			return true, nil
@@ -188,7 +188,7 @@ func (data *TestData) createAgnhostServiceAndBackendPods(t *testing.T, name, nam
 	require.NoError(t, err)
 	t.Logf("Created service Pod IPs %v", podIPs.ipStrings)
 	require.NoError(t, data.podWaitForRunning(defaultTimeout, name, namespace))
-	svc, err := data.createService(name, namespace, 80, 80, map[string]string{"app": "agnhost"}, false, false, svcType, &ipv4Protocol)
+	svc, err := data.CreateService(name, namespace, 80, 80, map[string]string{"app": "agnhost"}, false, false, svcType, &ipv4Protocol)
 	require.NoError(t, err)
 
 	cleanup := func() {

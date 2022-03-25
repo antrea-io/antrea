@@ -95,11 +95,11 @@ func testNetworkPolicyStats(t *testing.T, data *TestData) {
 	// So we need to  "warm-up" the tunnel.
 	if clusterInfo.podV4NetworkCIDR != "" {
 		cmd := []string{"/bin/sh", "-c", fmt.Sprintf("nc -vz -w 4 %s 80", serverIPs.ipv4.String())}
-		data.runCommandFromPod(testNamespace, clientName, busyboxContainerName, cmd)
+		data.RunCommandFromPod(testNamespace, clientName, busyboxContainerName, cmd)
 	}
 	if clusterInfo.podV6NetworkCIDR != "" {
 		cmd := []string{"/bin/sh", "-c", fmt.Sprintf("nc -vz -w 4 %s 80", serverIPs.ipv6.String())}
-		data.runCommandFromPod(testNamespace, clientName, busyboxContainerName, cmd)
+		data.RunCommandFromPod(testNamespace, clientName, busyboxContainerName, cmd)
 	}
 
 	np1, err := data.createNetworkPolicy("test-networkpolicy-ingress", &networkingv1.NetworkPolicySpec{
@@ -155,11 +155,11 @@ func testNetworkPolicyStats(t *testing.T, data *TestData) {
 		go func() {
 			if clusterInfo.podV4NetworkCIDR != "" {
 				cmd := []string{"/bin/sh", "-c", fmt.Sprintf("nc -vz -w 4 %s 80", serverIPs.ipv4.String())}
-				data.runCommandFromPod(testNamespace, clientName, busyboxContainerName, cmd)
+				data.RunCommandFromPod(testNamespace, clientName, busyboxContainerName, cmd)
 			}
 			if clusterInfo.podV6NetworkCIDR != "" {
 				cmd := []string{"/bin/sh", "-c", fmt.Sprintf("nc -vz -w 4 %s 80", serverIPs.ipv6.String())}
-				data.runCommandFromPod(testNamespace, clientName, busyboxContainerName, cmd)
+				data.RunCommandFromPod(testNamespace, clientName, busyboxContainerName, cmd)
 			}
 			wg.Done()
 		}()
@@ -341,7 +341,7 @@ func testDefaultDenyIngressPolicy(t *testing.T, data *TestData) {
 	_, serverIPs, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "test-server-", serverNode, testNamespace, false)
 	defer cleanupFunc()
 
-	service, err := data.createService("nginx", testNamespace, serverPort, serverPort, map[string]string{"app": "nginx"}, false, false, corev1.ServiceTypeNodePort, nil)
+	service, err := data.CreateService("nginx", testNamespace, serverPort, serverPort, map[string]string{"app": "nginx"}, false, false, corev1.ServiceTypeNodePort, nil)
 	if err != nil {
 		t.Fatalf("Error when creating nginx NodePort service: %v", err)
 	}
@@ -957,7 +957,7 @@ func createAndWaitForPodWithLabels(t *testing.T, data *TestData, createFunc func
 		t.Fatalf("Error when creating busybox test Pod: %v", err)
 	}
 	cleanupFunc := func() error {
-		if err := data.deletePod(ns, name); err != nil {
+		if err := data.DeletePod(ns, name); err != nil {
 			return fmt.Errorf("error when deleting Pod: %v", err)
 		}
 		return nil

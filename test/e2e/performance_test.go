@@ -237,7 +237,7 @@ func httpRequest(requests, policyRules int, data *TestData, b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		b.Logf("Running http request bench %d/%d", i+1, b.N)
 		cmd := []string{"ab", "-n", fmt.Sprint(requests), "-c", fmt.Sprint(*httpConcurrency), serverURL.String()}
-		stdout, stderr, err := data.runCommandFromPod(testNamespace, perftoolPodName, perftoolContainerName, cmd)
+		stdout, stderr, err := data.RunCommandFromPod(testNamespace, perftoolPodName, perftoolContainerName, cmd)
 		if err != nil {
 			b.Errorf("Error when running http request %dx: %v, stdout: %s, stderr: %s\n", requests, err, stdout, stderr)
 		}
@@ -296,7 +296,7 @@ func checkRealize(policyRules int, data *TestData) (bool, error) {
 	}
 	// table IngressRule is the ingressRuleTable where the rules in workload network policy is being applied to.
 	cmd := []string{"ovs-ofctl", "dump-flows", defaultBridgeName, fmt.Sprintf("table=%s", openflow.IngressRuleTable.GetName())}
-	stdout, _, err := data.runCommandFromPod(antreaNamespace, antreaPodName, "antrea-agent", cmd)
+	stdout, _, err := data.RunCommandFromPod(antreaNamespace, antreaPodName, "antrea-agent", cmd)
 	if err != nil {
 		return false, err
 	}

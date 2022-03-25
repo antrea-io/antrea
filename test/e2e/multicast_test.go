@@ -166,7 +166,7 @@ func runTestMulticastForwardToMultipleInterfaces(t *testing.T, data *TestData, s
 	// It sends two multicast packets for every second(-f 500 means it takes 500 milliseconds for sending one packet).
 	sendMulticastCommand := []string{"/bin/sh", "-c", fmt.Sprintf("timeout 90s mcjoin -f 500 -o -p %d -s -t 3 -w 2 -W %d %s", senderPort, mcjoinWaitTimeout, senderGroup)}
 	go func() {
-		data.runCommandFromPod(testNamespace, senderName, mcjoinContainerName, sendMulticastCommand)
+		data.RunCommandFromPod(testNamespace, senderName, mcjoinContainerName, sendMulticastCommand)
 	}()
 
 	if err := wait.Poll(5*time.Second, defaultTimeout, func() (bool, error) {
@@ -175,7 +175,7 @@ func runTestMulticastForwardToMultipleInterfaces(t *testing.T, data *TestData, s
 		// If multicast traffic is sent from non-HostNetwork pods, all multicast interfaces in senders should receive multicast traffic.
 		for _, multicastInterface := range senderMulticastInterfaces {
 			tcpdumpReceiveMulticastCommand := []string{"/bin/sh", "-c", fmt.Sprintf("timeout 5s tcpdump -q -i %s -c 1 -W 90 host %s", multicastInterface, senderGroup)}
-			_, stderr, err := data.runCommandFromPod(testNamespace, tcpdumpName, tcpdumpContainerName, tcpdumpReceiveMulticastCommand)
+			_, stderr, err := data.RunCommandFromPod(testNamespace, tcpdumpName, tcpdumpContainerName, tcpdumpReceiveMulticastCommand)
 			if err != nil {
 				return false, err
 			}
@@ -210,7 +210,7 @@ func runTestMulticastBetweenPods(t *testing.T, data *TestData, mc multicastTestc
 			// The following command joins a multicast group and sets the timeout to 100 seconds(-W 100) before exit.
 			// The command will return after receiving 1 packet(-c 1).
 			receiveMulticastCommand := []string{"/bin/sh", "-c", fmt.Sprintf("mcjoin -c 1 -o -p %d -W %d %s", mc.port, mcjoinWaitTimeout, mc.group.String())}
-			res, _, err := data.runCommandFromPod(testNamespace, r, mcjoinContainerName, receiveMulticastCommand)
+			res, _, err := data.RunCommandFromPod(testNamespace, r, mcjoinContainerName, receiveMulticastCommand)
 			failOnError(err, t)
 			assert.Contains(t, res, "Total: 1 packets")
 		}()
@@ -219,12 +219,12 @@ func runTestMulticastBetweenPods(t *testing.T, data *TestData, mc multicastTestc
 	// It sends two multicast packets for every second(-f 500 means it takes 500 milliseconds for sending one packet).
 	sendMulticastCommand := []string{"/bin/sh", "-c", fmt.Sprintf("mcjoin -f 500 -o -p %d -s -t 3 -w 2 -W %d %s", mc.port, mcjoinWaitTimeout, mc.group.String())}
 	go func() {
-		data.runCommandFromPod(testNamespace, senderName, mcjoinContainerName, sendMulticastCommand)
+		data.RunCommandFromPod(testNamespace, senderName, mcjoinContainerName, sendMulticastCommand)
 	}()
 
 	if err := wait.Poll(5*time.Second, defaultTimeout, func() (bool, error) {
 		// Sender pods should add an outbound multicast route except running as HostNetwork.
-		_, mrouteResult, _, err := RunCommandOnNode(nodeName(mc.senderConfig.nodeIdx), fmt.Sprintf("ip mroute show to %s iif %s | grep '%s'", mc.group.String(), gatewayInterface, strings.Join(nodeMulticastInterfaces[mc.senderConfig.nodeIdx], " ")))
+		_, mrouteResult, _, err := data.RunCommandOnNode(nodeName(mc.senderConfig.nodeIdx), fmt.Sprintf("ip mroute show to %s iif %s | grep '%s'", mc.group.String(), gatewayInterface, strings.Join(nodeMulticastInterfaces[mc.senderConfig.nodeIdx], " ")))
 		if err != nil {
 			return false, err
 		}
@@ -240,7 +240,7 @@ func runTestMulticastBetweenPods(t *testing.T, data *TestData, mc multicastTestc
 		// Check inbound multicast route and whether multicast interfaces has joined the multicast group.
 		for _, receiver := range mc.receiverConfigs {
 			for _, receiverMulticastInterface := range nodeMulticastInterfaces[receiver.nodeIdx] {
-				_, mRouteResult, _, err := RunCommandOnNode(nodeName(receiver.nodeIdx), fmt.Sprintf("ip mroute show to %s iif %s ", mc.group.String(), receiverMulticastInterface))
+				_, mRouteResult, _, err := data.RunCommandOnNode(nodeName(receiver.nodeIdx), fmt.Sprintf("ip mroute show to %s iif %s ", mc.group.String(), receiverMulticastInterface))
 				if err != nil {
 					return false, err
 				}
@@ -255,7 +255,7 @@ func runTestMulticastBetweenPods(t *testing.T, data *TestData, mc multicastTestc
 						return false, nil
 					}
 				}
-				_, mAddrResult, _, err := RunCommandOnNode(nodeName(receiver.nodeIdx), fmt.Sprintf("ip maddr show %s | grep %s", receiverMulticastInterface, mc.group.String()))
+				_, mAddrResult, _, err := data.RunCommandOnNode(nodeName(receiver.nodeIdx), fmt.Sprintf("ip maddr show %s | grep %s", receiverMulticastInterface, mc.group.String()))
 				if err != nil {
 					return false, err
 				}
@@ -287,13 +287,13 @@ func computeMulticastInterfaces(t *testing.T, data *TestData) ([][]string, error
 	if err != nil {
 		return nil, err
 	}
-	transportInterface, err := GetTransportInterface()
+	transportInterface, err := GetTransportInterface(data)
 	if err != nil {
 		t.Fatalf("Error getting transport interfaces: %v", err)
 	}
 	nodeMulticastInterfaces := make([][]string, 0, len(clusterInfo.nodes))
 	for nodeIdx := range clusterInfo.nodes {
-		_, localInterfacesStr, _, err := RunCommandOnNode(nodeName(nodeIdx), "ls /sys/class/net")
+		_, localInterfacesStr, _, err := data.RunCommandOnNode(nodeName(nodeIdx), "ls /sys/class/net")
 		if err != nil {
 			return nil, err
 		}

@@ -157,7 +157,7 @@ func (data *TestData) testHostPortPodConnectivity(t *testing.T, clientNamespace,
 	}
 	defer deletePodWrapper(t, data, serverNamespace, hpPodName)
 	// Retrieve the IP Address of the Node on which the Pod is scheduled.
-	hpPod, err := data.podWaitFor(defaultTimeout, hpPodName, serverNamespace, func(pod *corev1.Pod) (bool, error) {
+	hpPod, err := data.PodWaitFor(defaultTimeout, hpPodName, serverNamespace, func(pod *corev1.Pod) (bool, error) {
 		return pod.Status.Phase == corev1.PodRunning, nil
 	})
 	if err != nil {
@@ -324,7 +324,7 @@ func testOVSRestartSameNode(t *testing.T, data *TestData, namespace string) {
 		// utility in busybox does not let us choose a smaller interval than 1 second.
 		count := 25
 		cmd := fmt.Sprintf("arping -c %d %s", count, podIPs[1].ipv4.String())
-		stdout, stderr, err := data.runCommandFromPod(namespace, podNames[0], busyboxContainerName, strings.Fields(cmd))
+		stdout, stderr, err := data.RunCommandFromPod(namespace, podNames[0], busyboxContainerName, strings.Fields(cmd))
 		if err != nil {
 			return fmt.Errorf("error when running arping command: %v - stdout: %s - stderr: %s", err, stdout, stderr)
 		}
@@ -396,7 +396,7 @@ func testOVSFlowReplay(t *testing.T, data *TestData, namespace string) {
 
 	countFlows := func() int {
 		cmd := []string{"ovs-ofctl", "dump-flows", defaultBridgeName}
-		stdout, stderr, err := data.runCommandFromPod(antreaNamespace, antreaPodName, ovsContainerName, cmd)
+		stdout, stderr, err := data.RunCommandFromPod(antreaNamespace, antreaPodName, ovsContainerName, cmd)
 		if err != nil {
 			t.Fatalf("error when dumping flows: <%v>, err: <%v>", stderr, err)
 		}
@@ -406,7 +406,7 @@ func testOVSFlowReplay(t *testing.T, data *TestData, namespace string) {
 	}
 	countGroups := func() int {
 		cmd := []string{"ovs-ofctl", "dump-groups", defaultBridgeName}
-		stdout, stderr, err := data.runCommandFromPod(antreaNamespace, antreaPodName, ovsContainerName, cmd)
+		stdout, stderr, err := data.RunCommandFromPod(antreaNamespace, antreaPodName, ovsContainerName, cmd)
 		if err != nil {
 			t.Fatalf("error when dumping groups: <%v>, err: <%v>", stderr, err)
 		}
@@ -424,12 +424,12 @@ func testOVSFlowReplay(t *testing.T, data *TestData, namespace string) {
 	if !testOptions.enableAntreaIPAM {
 		delFlowsAndGroups := func() {
 			cmd := []string{"ovs-ofctl", "del-flows", defaultBridgeName}
-			_, stderr, err := data.runCommandFromPod(antreaNamespace, antreaPodName, ovsContainerName, cmd)
+			_, stderr, err := data.RunCommandFromPod(antreaNamespace, antreaPodName, ovsContainerName, cmd)
 			if err != nil {
 				t.Fatalf("error when deleting flows: <%v>, err: <%v>", stderr, err)
 			}
 			cmd = []string{"ovs-ofctl", "del-groups", defaultBridgeName}
-			_, stderr, err = data.runCommandFromPod(antreaNamespace, antreaPodName, ovsContainerName, cmd)
+			_, stderr, err = data.RunCommandFromPod(antreaNamespace, antreaPodName, ovsContainerName, cmd)
 			if err != nil {
 				t.Fatalf("error when deleting groups: <%v>, err: <%v>", stderr, err)
 			}
@@ -440,7 +440,7 @@ func testOVSFlowReplay(t *testing.T, data *TestData, namespace string) {
 		// run one command to delete flows and groups and to restart OVS to avoid connectivity issue
 		restartCmd = []string{"bash", "-c", fmt.Sprintf("ovs-ofctl del-flows %s ; ovs-ofctl del-groups %s ; /usr/share/openvswitch/scripts/ovs-ctl --system-id=random restart --db-file=/var/run/openvswitch/conf.db", defaultBridgeName, defaultBridgeName)}
 	}
-	if stdout, stderr, err := data.runCommandFromPod(antreaNamespace, antreaPodName, ovsContainerName, restartCmd); err != nil {
+	if stdout, stderr, err := data.RunCommandFromPod(antreaNamespace, antreaPodName, ovsContainerName, restartCmd); err != nil {
 		t.Fatalf("Error when restarting OVS with ovs-ctl: %v - stdout: %s - stderr: %s", err, stdout, stderr)
 	} else {
 		t.Logf("Restarted OVS with ovs-ctl: stdout: %s - stderr: %s", stdout, stderr)

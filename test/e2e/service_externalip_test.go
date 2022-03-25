@@ -223,7 +223,7 @@ func testServiceExternalTrafficPolicyLocal(t *testing.T, data *TestData) {
 			annotation := map[string]string{
 				antreaagenttypes.ServiceExternalIPPoolAnnotationKey: ipPool.Name,
 			}
-			service, err = data.createServiceWithAnnotations(fmt.Sprintf("test-svc-local-%d", idx),
+			service, err = data.CreateServiceWithAnnotations(fmt.Sprintf("test-svc-local-%d", idx),
 				testNamespace, 80, 80, corev1.ProtocolTCP, nil, false, true, v1.ServiceTypeLoadBalancer, nil, annotation)
 			require.NoError(t, err)
 			defer data.clientset.CoreV1().Services(service.Namespace).Delete(context.TODO(), service.Name, metav1.DeleteOptions{})
@@ -342,7 +342,7 @@ func testServiceWithExternalIPCRUD(t *testing.T, data *TestData) {
 			annotation := map[string]string{
 				antreaagenttypes.ServiceExternalIPPoolAnnotationKey: ipPool.Name,
 			}
-			service, err = data.createServiceWithAnnotations(fmt.Sprintf("test-svc-eip-%d", idx),
+			service, err = data.CreateServiceWithAnnotations(fmt.Sprintf("test-svc-eip-%d", idx),
 				testNamespace, 80, 80, corev1.ProtocolTCP, nil, false, false, v1.ServiceTypeLoadBalancer, nil, annotation)
 			require.NoError(t, err)
 
@@ -436,7 +436,7 @@ func testServiceUpdateExternalIP(t *testing.T, data *TestData) {
 			annotation := map[string]string{
 				antreaagenttypes.ServiceExternalIPPoolAnnotationKey: originalPool.Name,
 			}
-			service, err := data.createServiceWithAnnotations(fmt.Sprintf("test-update-eip-%d", idx),
+			service, err := data.CreateServiceWithAnnotations(fmt.Sprintf("test-update-eip-%d", idx),
 				testNamespace, 80, 80, corev1.ProtocolTCP, nil, false, false, v1.ServiceTypeLoadBalancer, nil, annotation)
 			require.NoError(t, err)
 			defer data.clientset.CoreV1().Services(service.Namespace).Delete(context.TODO(), service.Name, metav1.DeleteOptions{})
@@ -490,7 +490,7 @@ func testServiceNodeFailure(t *testing.T, data *TestData) {
 			}
 			signalAgent := func(nodeName, signal string) {
 				cmd := fmt.Sprintf("pkill -%s antrea-agent", signal)
-				rc, stdout, stderr, err := RunCommandOnNode(nodeName, cmd)
+				rc, stdout, stderr, err := data.RunCommandOnNode(nodeName, cmd)
 				if rc != 0 || err != nil {
 					t.Errorf("Error when running command '%s' on Node '%s', rc: %d, stdout: %s, stderr: %s, error: %v",
 						cmd, nodeName, rc, stdout, stderr, err)
@@ -518,7 +518,7 @@ func testServiceNodeFailure(t *testing.T, data *TestData) {
 			annotation := map[string]string{
 				antreaagenttypes.ServiceExternalIPPoolAnnotationKey: externalIPPoolTwoNodes.Name,
 			}
-			service, err := data.createServiceWithAnnotations("test-service-node-failure", testNamespace, 80, 80,
+			service, err := data.CreateServiceWithAnnotations("test-service-node-failure", testNamespace, 80, 80,
 				corev1.ProtocolTCP, nil, false, false, v1.ServiceTypeLoadBalancer, nil, annotation)
 			require.NoError(t, err)
 			defer data.clientset.CoreV1().Services(service.Namespace).Delete(context.TODO(), service.Name, metav1.DeleteOptions{})
@@ -628,7 +628,7 @@ func testExternalIPAccess(t *testing.T, data *TestData) {
 					annotations := map[string]string{
 						antreaagenttypes.ServiceExternalIPPoolAnnotationKey: ipPool.Name,
 					}
-					service, err := data.createServiceWithAnnotations(et.serviceName, testNamespace, port, port, corev1.ProtocolTCP, map[string]string{"app": "agnhost"}, false, et.externalTrafficPolicyLocal, corev1.ServiceTypeLoadBalancer, &ipFamily, annotations)
+					service, err := data.CreateServiceWithAnnotations(et.serviceName, testNamespace, port, port, corev1.ProtocolTCP, map[string]string{"app": "agnhost"}, false, et.externalTrafficPolicyLocal, corev1.ServiceTypeLoadBalancer, &ipFamily, annotations)
 					require.NoError(t, err)
 					defer data.deleteService(service.Namespace, service.Name)
 
@@ -668,7 +668,7 @@ sleep 3600`, tt.clientName, tt.clientIP, tt.localIP, tt.clientIPMaskLen)
 						}
 					}))
 
-					_, err = data.podWaitFor(defaultTimeout, tt.clientName, testNamespace, func(p *v1.Pod) (bool, error) {
+					_, err = data.PodWaitFor(defaultTimeout, tt.clientName, testNamespace, func(p *v1.Pod) (bool, error) {
 						for _, condition := range p.Status.Conditions {
 							if condition.Type == corev1.PodReady {
 								return condition.Status == corev1.ConditionTrue, nil
@@ -681,7 +681,7 @@ sleep 3600`, tt.clientName, tt.clientIP, tt.localIP, tt.clientIPMaskLen)
 
 					hostNameUrl := fmt.Sprintf("%s/%s", baseUrl, "hostname")
 					probeCmd := fmt.Sprintf("ip netns exec %s curl --connect-timeout 1 --retry 5 --retry-connrefused %s", tt.clientName, hostNameUrl)
-					hostname, stderr, err := data.runCommandFromPod(testNamespace, tt.clientName, "", []string{"sh", "-c", probeCmd})
+					hostname, stderr, err := data.RunCommandFromPod(testNamespace, tt.clientName, "", []string{"sh", "-c", probeCmd})
 					assert.NoError(t, err, "External IP should be able to be connected from remote: %s", stderr)
 
 					if et.externalTrafficPolicyLocal {
@@ -692,7 +692,7 @@ sleep 3600`, tt.clientName, tt.clientIP, tt.localIP, tt.clientIPMaskLen)
 						}
 						clientIPUrl := fmt.Sprintf("%s/clientip", baseUrl)
 						probeClientIPCmd := fmt.Sprintf("ip netns exec %s curl --connect-timeout 1 --retry 5 --retry-connrefused %s", tt.clientName, clientIPUrl)
-						clientIPPort, stderr, err := data.runCommandFromPod(testNamespace, tt.clientName, "", []string{"sh", "-c", probeClientIPCmd})
+						clientIPPort, stderr, err := data.RunCommandFromPod(testNamespace, tt.clientName, "", []string{"sh", "-c", probeClientIPCmd})
 						assert.NoError(t, err, "External IP should be able to be connected from remote: %s", stderr)
 						clientIP, _, err := net.SplitHostPort(clientIPPort)
 						assert.NoError(t, err)
