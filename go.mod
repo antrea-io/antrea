@@ -5,6 +5,8 @@ go 1.17
 require (
 	antrea.io/libOpenflow v0.6.2
 	antrea.io/ofnet v0.5.5
+	github.com/ClickHouse/clickhouse-go v1.5.1
+	github.com/DATA-DOG/go-sqlmock v1.5.0
 	github.com/Mellanox/sriovnet v1.0.2
 	github.com/Microsoft/go-winio v0.4.16-0.20201130162521-d1ffc52c7331
 	github.com/Microsoft/hcsshim v0.8.9
@@ -16,6 +18,7 @@ require (
 	github.com/containernetworking/cni v0.8.1
 	github.com/containernetworking/plugins v0.8.7
 	github.com/coreos/go-iptables v0.6.0
+	github.com/gammazero/deque v0.1.0
 	github.com/go-logr/logr v0.4.0
 	github.com/go-openapi/spec v0.19.5
 	github.com/gogo/protobuf v1.3.2
@@ -94,6 +97,7 @@ require (
 	github.com/cenkalti/hub v1.0.1 // indirect
 	github.com/cenkalti/rpc2 v0.0.0-20180727162946-9642ea02d0aa // indirect
 	github.com/cespare/xxhash/v2 v2.1.1 // indirect
+	github.com/cloudflare/golz4 v0.0.0-20150217214814-ef862a3cdc58 // indirect
 	github.com/containerd/cgroups v0.0.0-20200531161412-0dbf7f05ba59 // indirect
 	github.com/contiv/libovsdb v0.0.0-20170227191248-d0061a53e358 // indirect
 	github.com/coreos/go-semver v0.3.0 // indirect
