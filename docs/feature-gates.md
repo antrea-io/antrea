@@ -303,11 +303,8 @@ Service (through kube-proxy). To enable external IP allocation for a
 `LoadBalancer` Service, you need to annotate the Service with
 `"service.antrea.io/external-ip-pool": "<externalIPPool name>"` and define the
 appropriate `ExternalIPPool` resource.
-
-More documentation will be coming in the future.
+Refer to this [document](service-loadbalancer.md) for more information.
 
 #### Requirements for this Feature
 
-This feature is currently only supported for Nodes running Linux. At the moment,
-it only works with kube-proxy and it requires Antrea ProxyAll to be disabled
-(which is the default Antrea configuration).
+This feature is currently only supported for Nodes running Linux.
