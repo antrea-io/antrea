@@ -238,6 +238,18 @@ metadata:
   namespace: flow-aggregator
 ---
 apiVersion: v1
+kind: Secret
+metadata:
+  labels:
+    app: flow-aggregator
+  name: clickhouse-secret
+  namespace: flow-aggregator
+stringData:
+  password: clickhouse_operator_password
+  username: clickhouse_operator
+type: Opaque
+---
+apiVersion: v1
 kind: Service
 metadata:
   labels:
@@ -289,6 +301,16 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: metadata.name
+        - name: CH_USERNAME
+          valueFrom:
+            secretKeyRef:
+              key: username
+              name: clickhouse-secret
+        - name: CH_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: password
+              name: clickhouse-secret
         image: projects.registry.vmware.com/antrea/flow-aggregator:latest
         imagePullPolicy: IfNotPresent
         name: flow-aggregator
