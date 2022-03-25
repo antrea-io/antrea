@@ -85,6 +85,7 @@ func (f *featurePodConnectivity) l3FwdFlowToRemoteViaRouting(localGatewayMAC net
 				MatchDstIP(peerIP).
 				MatchCTStateRpl(true).
 				MatchCTStateTrk(true).
+				Action().SetSrcMAC(f.nodeConfig.UplinkNetConfig.MAC).
 				Action().SetDstMAC(remoteGatewayMAC).
 				Action().NextTable().
 				Done(),
