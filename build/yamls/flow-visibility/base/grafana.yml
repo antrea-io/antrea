@@ -103,7 +103,7 @@ spec:
           - 0
       containers:
         - name: grafana
-          image: grafana/grafana:8.3.3
+          image: projects.registry.vmware.com/antrea/flow-visibility-grafana:8.3.3
           imagePullPolicy: IfNotPresent
           env:
             - name: GF_INSTALL_PLUGINS
