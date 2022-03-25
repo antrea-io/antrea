@@ -26,7 +26,7 @@ func init() {
 
 // addConversionFuncs adds non-generated conversion functions to the given scheme.
 func addConversionFuncs(scheme *runtime.Scheme) error {
-	for _, kind := range []string{"AppliedToGroup", "AddressGroup", "NetworkPolicy", "EgressGroup"} {
+	for _, kind := range []string{"AppliedToGroup", "AddressGroup", "NetworkPolicy", "EgressGroup", "ExternalEntity"} {
 		err := scheme.AddFieldLabelConversionFunc(SchemeGroupVersion.WithKind(kind),
 			func(label, value string) (string, string, error) {
 				switch label {

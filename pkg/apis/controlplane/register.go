@@ -61,6 +61,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&EgressGroup{},
 		&EgressGroupPatch{},
 		&EgressGroupList{},
+		&ExternalEntity{},
+		&ExternalEntityList{},
 	)
 	return nil
 }

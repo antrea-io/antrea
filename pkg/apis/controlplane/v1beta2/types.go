@@ -415,3 +415,39 @@ type EgressGroupList struct {
 	metav1.ListMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
 	Items           []EgressGroup `json:"items" protobuf:"bytes,2,rep,name=items"`
 }
+
+// +genclient
+// +genclient:noStatus
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+type ExternalEntity struct {
+	metav1.TypeMeta `json:",inline"`
+	// Standard metadata of the object.
+	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
+	// Desired state of the external entity.
+	Endpoints []Endpoint `json:"endpoints,omitempty" protobuf:"bytes,2,rep,name=endpoints"`
+	// Ports maintain the list of named ports.
+	Ports []NamedPort `json:"ports,omitempty" protobuf:"bytes,3,rep,name=ports"`
+	// ExternalNode is the opaque identifier of the agent/controller responsible
+	// for additional processing or handling of this external entity.
+	ExternalNode string `json:"externalNode,omitempty" protobuf:"bytes,4,opt,name=externalNode"`
+}
+
+// Endpoint refers to an endpoint associated with the ExternalEntity.
+type Endpoint struct {
+	// IP associated with this endpoint.
+	IP string `json:"ip,omitempty" protobuf:"bytes,1,opt,name=ip"`
+	// Name identifies this endpoint. Could be the network interface name in case of VMs.
+	// +optional
+	Name string `json:"name,omitempty" protobuf:"bytes,2,opt,name=name"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+type ExternalEntityList struct {
+	metav1.TypeMeta `json:",inline"`
+	// +optional
+	metav1.ListMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
+
+	Items []ExternalEntity `json:"items,omitempty" protobuf:"bytes,2,rep,name=items"`
+}

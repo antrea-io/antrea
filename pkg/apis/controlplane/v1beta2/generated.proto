@@ -112,6 +112,38 @@ message EgressGroupPatch {
   repeated GroupMember removedGroupMembers = 3;
 }
 
+// Endpoint refers to an endpoint associated with the ExternalEntity.
+message Endpoint {
+  // IP associated with this endpoint.
+  optional string ip = 1;
+
+  // Name identifies this endpoint. Could be the network interface name in case of VMs.
+  // +optional
+  optional string name = 2;
+}
+
+message ExternalEntity {
+  // Standard metadata of the object.
+  optional k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
+
+  // Desired state of the external entity.
+  repeated Endpoint endpoints = 2;
+
+  // Ports maintain the list of named ports.
+  repeated NamedPort ports = 3;
+
+  // ExternalNode is the opaque identifier of the agent/controller responsible
+  // for additional processing or handling of this external entity.
+  optional string externalNode = 4;
+}
+
+message ExternalEntityList {
+  // +optional
+  optional k8s.io.apimachinery.pkg.apis.meta.v1.ListMeta metadata = 1;
+
+  repeated ExternalEntity items = 2;
+}
+
 // ExternalEntityReference represents a ExternalEntity Reference.
 message ExternalEntityReference {
   // The name of this ExternalEntity.

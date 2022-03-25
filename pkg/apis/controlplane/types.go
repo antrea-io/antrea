@@ -409,3 +409,37 @@ type EgressGroupList struct {
 	metav1.ListMeta
 	Items []EgressGroup
 }
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+type ExternalEntity struct {
+	metav1.TypeMeta
+	// Standard metadata of the object.
+	metav1.ObjectMeta
+	// Desired state of the external entity.
+	Endpoints []Endpoint
+	// Ports maintain the list of named ports.
+	Ports []NamedPort
+	// ExternalNode is the opaque identifier of the agent/controller responsible
+	// for additional processing or handling of this external entity.
+	ExternalNode string
+}
+
+// Endpoint refers to an endpoint associated with the ExternalEntity.
+type Endpoint struct {
+	// IP associated with this endpoint.
+	IP string
+	// Name identifies this endpoint. Could be the network interface name in case of VMs.
+	// +optional
+	Name string
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+type ExternalEntityList struct {
+	metav1.TypeMeta
+	// +optional
+	metav1.ListMeta
+
+	Items []ExternalEntity
+}

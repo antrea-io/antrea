@@ -41,6 +41,8 @@ import (
 	"antrea.io/antrea/pkg/controller/egress"
 	egressstore "antrea.io/antrea/pkg/controller/egress/store"
 	"antrea.io/antrea/pkg/controller/externalippool"
+	"antrea.io/antrea/pkg/controller/externalnode"
+	eestore "antrea.io/antrea/pkg/controller/externalnode/store"
 	"antrea.io/antrea/pkg/controller/grouping"
 	antreaipam "antrea.io/antrea/pkg/controller/ipam"
 	"antrea.io/antrea/pkg/controller/metrics"
@@ -135,6 +137,7 @@ func run(o *Options) error {
 	appliedToGroupStore := store.NewAppliedToGroupStore()
 	networkPolicyStore := store.NewNetworkPolicyStore()
 	egressGroupStore := egressstore.NewEgressGroupStore()
+	externalEntityStore := eestore.NewExternalEntityStore()
 	groupStore := store.NewGroupStore()
 	groupEntityIndex := grouping.NewGroupEntityIndex()
 	groupEntityController := grouping.NewGroupEntityController(groupEntityIndex, podInformer, namespaceInformer, eeInformer)
@@ -154,6 +157,7 @@ func run(o *Options) error {
 		appliedToGroupStore,
 		networkPolicyStore,
 		groupStore)
+	externalEntityController := externalnode.NewExternalEntityController(crdClient, eeInformer, externalEntityStore)
 
 	var networkPolicyStatusController *networkpolicy.StatusController
 	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
@@ -218,6 +222,7 @@ func run(o *Options) error {
 		networkPolicyStore,
 		groupStore,
 		egressGroupStore,
+		externalEntityStore,
 		controllerQuerier,
 		endpointQuerier,
 		networkPolicyController,
@@ -253,6 +258,8 @@ func run(o *Options) error {
 	go clusterIdentityAllocator.Run(stopCh)
 
 	go controllerMonitor.Run(stopCh)
+
+	go externalEntityController.Run(stopCh)
 
 	// It starts dispatching group updates to consumers, should start individually.
 	// If it's not running, adding Pods/Entities to groupEntityIndex may be blocked because of full channel.
@@ -368,6 +375,7 @@ func createAPIServerConfig(kubeconfig string,
 	networkPolicyStore storage.Interface,
 	groupStore storage.Interface,
 	egressGroupStore storage.Interface,
+	externalEntityStore storage.Interface,
 	controllerQuerier querier.ControllerQuerier,
 	endpointQuerier networkpolicy.EndpointQuerier,
 	npController *networkpolicy.NetworkPolicyController,
@@ -428,6 +436,7 @@ func createAPIServerConfig(kubeconfig string,
 		networkPolicyStore,
 		groupStore,
 		egressGroupStore,
+		externalEntityStore,
 		caCertController,
 		statsAggregator,
 		controllerQuerier,

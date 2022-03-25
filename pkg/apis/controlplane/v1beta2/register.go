@@ -76,6 +76,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&EgressGroup{},
 		&EgressGroupPatch{},
 		&EgressGroupList{},
+		&ExternalEntity{},
+		&ExternalEntityList{},
 	)
 
 	metav1.AddToGroupVersion(scheme, SchemeGroupVersion)
