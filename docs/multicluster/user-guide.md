@@ -145,7 +145,7 @@ We recommend creating one ServiceAccount for each member for fine-grained access
 2. Copy the access token into the member cluster `test-cluster-east`. E.g.
 
    ```bash
-   kubectl get secret member-east-access-token -n antrea-mcs-ns -o yaml | grep -w -e '^apiVersion' -e '^data' -e '^metadata' -e '^ *name:'  -e   '^kind' -e '  ca.crt' -e '  token:' -e '^type' -e '  namespace' | sed -e 's/kubernetes.io\/service-account-token/Opaque/g' -e 's/ namespace:   antrea-mcs-ns/namespace: kube-system/g' >  member-east-access-token.yml
+   kubectl get secret member-east-access-token -n antrea-mcs-ns -o yaml | grep -w -e '^apiVersion' -e '^data' -e '^metadata' -e '^ *name:'  -e   '^kind' -e '  ca.crt' -e '  token:' -e '^type' -e '  namespace' | sed -e 's/kubernetes.io\/service-account-token/Opaque/g' -e 's/antrea-mcs-ns/kube-system/g' >  member-east-access-token.yml
    ```
 
 3. Replace all `east` to `west` and repeat step 1/2 for the other member cluster `test-cluster-west`
