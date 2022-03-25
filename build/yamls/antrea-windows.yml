@@ -103,7 +103,7 @@ data:
     #                    supporting Pod traffic across IP subnets.
     # hybrid:            noEncap if source and destination Nodes are on the same subnet, otherwise encap.
     #
-    #trafficEncapMode: encap
+    trafficEncapMode: noEncap
 
     # The name of the interface on Node which is used for tunneling or routing the traffic across Nodes.
     # If there are multiple IP addresses configured on the interface, the first one is used. The IP
