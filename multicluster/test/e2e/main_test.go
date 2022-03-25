@@ -88,3 +88,20 @@ func testMain(m *testing.M) int {
 func TestMain(m *testing.M) {
 	os.Exit(testMain(m))
 }
+
+func TestConnectivity(t *testing.T) {
+	data, err := setupTest(t)
+	if err != nil {
+		t.Fatalf("Error when setting up test: %v", err)
+	}
+	defer teardownTest(t, data)
+
+	t.Run("testServiceExport", func(t *testing.T) {
+		testServiceExport(t, data)
+	})
+	t.Run("testAntreaPolicy", func(t *testing.T) {
+		initializeForPolicyTest(t, data)
+		testMCAntreaPolicy(t, data)
+		tearDownForPolicyTest()
+	})
+}

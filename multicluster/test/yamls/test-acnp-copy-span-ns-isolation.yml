@@ -1,0 +1,23 @@
+apiVersion: multicluster.crd.antrea.io/v1alpha1
+kind: ResourceExport
+metadata:
+  name: strict-namespace-isolation-for-test-clusterset
+  namespace: antrea-mcs-ns
+spec:
+  kind: AntreaClusterNetworkPolicy
+  name: strict-namespace-isolation
+  clusternetworkpolicy:
+    priority: 1
+    tier: securityops
+    appliedTo:
+      - namespaceSelector:          # Selects all non-system Namespaces in the cluster
+          matchExpressions:
+            - {key:  kubernetes.io/metadata.name, operator: NotIn, values: [kube-system]}
+    ingress:
+      - action: Pass
+        from:
+          - namespaces:
+              match: Self
+      - action: Drop
+        from:
+          - namespaceSelector: {}

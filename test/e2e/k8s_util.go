@@ -47,6 +47,37 @@ func NewKubernetesUtils(data *TestData) (*KubernetesUtils, error) {
 	}, nil
 }
 
+// TestCase is a collection of TestSteps to be tested against.
+type TestCase struct {
+	Name  string
+	Steps []*TestStep
+}
+
+// TestStep is a single unit of testing spec. It includes the policy specs that need to be
+// applied for this test, the port to test traffic on and the expected Reachability matrix.
+type TestStep struct {
+	Name          string
+	Reachability  *Reachability
+	TestResources []metav1.Object
+	Ports         []int32
+	Protocol      v1.Protocol
+	Duration      time.Duration
+	CustomProbes  []*CustomProbe
+}
+
+// CustomProbe will spin up (or update) SourcePod and DestPod such that Add event of Pods
+// can be tested against expected connectivity among those Pods.
+type CustomProbe struct {
+	// Create or update a source Pod.
+	SourcePod CustomPod
+	// Create or update a destination Pod.
+	DestPod CustomPod
+	// Port on which the probe will be made.
+	Port int32
+	// Set the expected connectivity.
+	ExpectConnectivity PodConnectivityMark
+}
+
 // GetPodByLabel returns a Pod with the matching Namespace and "pod" label.
 func (k *KubernetesUtils) GetPodByLabel(ns string, name string) (*v1.Pod, error) {
 	pods, err := k.getPodsUncached(ns, "pod", name)
