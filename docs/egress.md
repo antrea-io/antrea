@@ -40,10 +40,10 @@ This guide demonstrates how to configure `Egress` to achieve the above result.
 
 ## Prerequisites
 
-Egress is introduced in v1.0 as an alpha feature. As with other alpha features,
-a feature gate `Egress` must be enabled on the antrea-controller and
-antrea-agent for the feature to work. The following options in the
-`antrea-config` ConfigMap need to be set:
+Egress was introduced in v1.0 as an alpha feature, and was graduated to beta in
+v1.6, at which time it was enabled by default. Prior to v1.6, a feature gate,
+`Egress` must be enabled on the antrea-controller and antrea-agent in the
+`antrea-config` ConfigMap like the following options for the feature to work:
 
 ```yaml
 kind: ConfigMap

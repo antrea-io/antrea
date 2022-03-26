@@ -2768,7 +2768,7 @@ data:
     #  NetworkPolicyStats: true
 
     # Enable controlling SNAT IPs of Pod egress traffic.
-    #  Egress: false
+    #  Egress: true
 
     # Enable AntreaIPAM, which can allocate IP addresses from IPPools. AntreaIPAM is required by the
     # bridging mode and allocates IPs to Pods in bridging mode.
@@ -3016,7 +3016,7 @@ data:
     #  NetworkPolicyStats: true
 
     # Enable controlling SNAT IPs of Pod egress traffic.
-    #  Egress: false
+    #  Egress: true
 
     # Run Kubernetes NodeIPAMController with Antrea.
     #  NodeIPAM: false
@@ -3079,7 +3079,7 @@ kind: ConfigMap
 metadata:
   labels:
     app: antrea
-  name: antrea-config-h6d7mmd9hg
+  name: antrea-config-hkhbh5gf99
   namespace: kube-system
 ---
 apiVersion: v1
@@ -3150,7 +3150,7 @@ spec:
             fieldRef:
               fieldPath: spec.serviceAccountName
         - name: ANTREA_CONFIG_MAP_NAME
-          value: antrea-config-h6d7mmd9hg
+          value: antrea-config-hkhbh5gf99
         image: projects.registry.vmware.com/antrea/antrea-ubuntu:latest
         imagePullPolicy: IfNotPresent
         livenessProbe:
@@ -3201,7 +3201,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-h6d7mmd9hg
+          name: antrea-config-hkhbh5gf99
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -3440,7 +3440,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-h6d7mmd9hg
+          name: antrea-config-hkhbh5gf99
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d

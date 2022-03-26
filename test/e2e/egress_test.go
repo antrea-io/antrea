@@ -34,8 +34,6 @@ import (
 
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
-	agentconfig "antrea.io/antrea/pkg/config/agent"
-	controllerconfig "antrea.io/antrea/pkg/config/controller"
 )
 
 const waitEgressRealizedTimeout = 3 * time.Second
@@ -52,17 +50,6 @@ func TestEgress(t *testing.T) {
 	defer teardownTest(t, data)
 	// Egress works for encap mode only.
 	skipIfEncapModeIsNot(t, data, config.TrafficEncapModeEncap)
-
-	cc := func(config *controllerconfig.ControllerConfig) {
-		config.FeatureGates["Egress"] = true
-	}
-	ac := func(config *agentconfig.AgentConfig) {
-		config.FeatureGates["Egress"] = true
-	}
-
-	if err := data.mutateAntreaConfigMap(cc, ac, true, true); err != nil {
-		t.Fatalf("Failed to enable Egress feature: %v", err)
-	}
 
 	t.Run("testEgressClientIP", func(t *testing.T) { testEgressClientIP(t, data) })
 	t.Run("testEgressCRUD", func(t *testing.T) { testEgressCRUD(t, data) })
