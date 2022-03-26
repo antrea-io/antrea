@@ -1371,7 +1371,7 @@ func (f *featurePodConnectivity) l3FwdFlowToRemoteViaGW(localGatewayMAC net.Hard
 	}
 	return fb.Action().SetDstMAC(localGatewayMAC).
 		Action().LoadRegMark(ToGatewayRegMark).
-		Action().NextTable().
+		Action().GotoTable(L3DecTTLTable.GetID()). // Traffic to in-cluster destination should skip EgressMark table.
 		Done()
 }
 

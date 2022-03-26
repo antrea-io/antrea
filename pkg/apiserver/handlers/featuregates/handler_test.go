@@ -47,7 +47,7 @@ func Test_getGatesResponse(t *testing.T) {
 			want: []Response{
 				{Component: "agent", Name: "AntreaPolicy", Status: "Disabled", Version: "BETA"},
 				{Component: "agent", Name: "AntreaProxy", Status: "Enabled", Version: "BETA"},
-				{Component: "agent", Name: "Egress", Status: "Disabled", Version: "ALPHA"},
+				{Component: "agent", Name: "Egress", Status: "Enabled", Version: "BETA"},
 				{Component: "agent", Name: "EndpointSlice", Status: "Disabled", Version: "ALPHA"},
 				{Component: "agent", Name: "AntreaIPAM", Status: "Disabled", Version: "ALPHA"},
 				{Component: "agent", Name: "Traceflow", Status: "Enabled", Version: "BETA"},
@@ -191,7 +191,7 @@ func Test_getControllerGatesResponse(t *testing.T) {
 			name: "good path",
 			want: []Response{
 				{Component: "controller", Name: "AntreaPolicy", Status: "Enabled", Version: "BETA"},
-				{Component: "controller", Name: "Egress", Status: "Disabled", Version: "ALPHA"},
+				{Component: "controller", Name: "Egress", Status: "Enabled", Version: "BETA"},
 				{Component: "controller", Name: "Traceflow", Status: "Enabled", Version: "BETA"},
 				{Component: "controller", Name: "NetworkPolicyStats", Status: "Enabled", Version: "BETA"},
 				{Component: "controller", Name: "NodeIPAM", Status: "Disabled", Version: "ALPHA"},
