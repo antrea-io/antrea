@@ -32,6 +32,7 @@ import (
 	"antrea.io/antrea/pkg/client/informers/externalversions"
 	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha2"
 	crdlisters "antrea.io/antrea/pkg/client/listers/crd/v1alpha2"
+	annotation "antrea.io/antrea/pkg/ipam"
 	"antrea.io/antrea/pkg/ipam/poolallocator"
 	"antrea.io/antrea/pkg/util/k8s"
 )
@@ -148,25 +149,25 @@ func (c *AntreaIPAMController) getIPPoolsByPod(namespace, name string) ([]string
 		return nil, nil, nil, err
 	}
 
-	annotations, exists := pod.Annotations[AntreaIPAMAnnotationKey]
+	annotations, exists := pod.Annotations[annotation.AntreaIPAMAnnotationKey]
 	if !exists {
 		// Find IPPool by Namespace
 		ns, err := c.namespaceLister.Get(namespace)
 		if err != nil {
 			return nil, nil, nil, nil
 		}
-		annotations, exists = ns.Annotations[AntreaIPAMAnnotationKey]
+		annotations, exists = ns.Annotations[annotation.AntreaIPAMAnnotationKey]
 		if !exists {
 			return nil, nil, nil, nil
 		}
 	}
 
 	// Collect specified IPs if exist
-	ipStrings, _ := pod.Annotations[AntreaIPAMPodIPAnnotationKey]
+	ipStrings, _ := pod.Annotations[annotation.AntreaIPAMPodIPAnnotationKey]
 	ipStrings = strings.ReplaceAll(ipStrings, " ", "")
 	var ipErr error
 	if ipStrings != "" {
-		splittedIPStrings := strings.Split(ipStrings, AntreaIPAMAnnotationDelimiter)
+		splittedIPStrings := strings.Split(ipStrings, annotation.AntreaIPAMAnnotationDelimiter)
 		for _, ipString := range splittedIPStrings {
 			ip := net.ParseIP(ipString)
 			if ipString != "" && ip == nil {
@@ -200,7 +201,7 @@ ownerReferenceLoop:
 		}
 	}
 
-	return strings.Split(annotations, AntreaIPAMAnnotationDelimiter), ips, reservedOwner, ipErr
+	return strings.Split(annotations, annotation.AntreaIPAMAnnotationDelimiter), ips, reservedOwner, ipErr
 }
 
 func (c *AntreaIPAMController) getPoolAllocatorByPod(namespace, podName string) (mineType, *poolallocator.IPPoolAllocator, []net.IP, *crdv1a2.IPAddressOwner, error) {

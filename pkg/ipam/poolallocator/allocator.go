@@ -194,7 +194,7 @@ func (a *IPPoolAllocator) appendPoolUsageForStatefulSet(ipPool *v1alpha2.IPPool,
 		}
 		usageEntry := v1alpha2.IPAddressState{
 			IPAddress: ip.String(),
-			Phase:     v1alpha2.IPAddressPhasePreallocated,
+			Phase:     v1alpha2.IPAddressPhaseReserved,
 			Owner:     owner,
 		}
 
@@ -409,6 +409,13 @@ func (a *IPPoolAllocator) AllocateStatefulSet(namespace, name string, size int) 
 			return err
 		}
 
+		// Make sure there is no double allocation for this StatefulSet
+		for _, ip := range ipPool.Status.IPAddresses {
+			if ip.Owner.StatefulSet != nil && ip.Owner.StatefulSet.Namespace == namespace && ip.Owner.StatefulSet.Name == name {
+				return fmt.Errorf("StatefulSet %s/%s is already present in IPPool %s", namespace, name, ipPool.Name)
+			}
+		}
+
 		ips, err := allocators.AllocateRange(size)
 		if err != nil {
 			return err
@@ -607,4 +614,12 @@ func (a *IPPoolAllocator) getReservedIP(reservedOwner v1alpha2.IPAddressOwner) (
 		}
 	}
 	return nil, nil
+}
+
+func (a IPPoolAllocator) Total() int {
+	_, allocators, err := a.getPoolAndInitIPAllocators()
+	if err != nil {
+		return 0
+	}
+	return allocators.Total()
 }
