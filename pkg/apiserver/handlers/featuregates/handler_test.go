@@ -29,6 +29,12 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 
 	"antrea.io/antrea/pkg/features"
+	"antrea.io/antrea/pkg/util/runtime"
+)
+
+var (
+	egressStatus string
+	nplStatus    string
 )
 
 func Test_getGatesResponse(t *testing.T) {
@@ -47,13 +53,13 @@ func Test_getGatesResponse(t *testing.T) {
 			want: []Response{
 				{Component: "agent", Name: "AntreaPolicy", Status: "Disabled", Version: "BETA"},
 				{Component: "agent", Name: "AntreaProxy", Status: "Enabled", Version: "BETA"},
-				{Component: "agent", Name: "Egress", Status: "Enabled", Version: "BETA"},
+				{Component: "agent", Name: "Egress", Status: egressStatus, Version: "BETA"},
 				{Component: "agent", Name: "EndpointSlice", Status: "Disabled", Version: "ALPHA"},
 				{Component: "agent", Name: "AntreaIPAM", Status: "Disabled", Version: "ALPHA"},
 				{Component: "agent", Name: "Traceflow", Status: "Enabled", Version: "BETA"},
 				{Component: "agent", Name: "FlowExporter", Status: "Disabled", Version: "ALPHA"},
 				{Component: "agent", Name: "NetworkPolicyStats", Status: "Enabled", Version: "BETA"},
-				{Component: "agent", Name: "NodePortLocal", Status: "Enabled", Version: "BETA"},
+				{Component: "agent", Name: "NodePortLocal", Status: nplStatus, Version: "BETA"},
 				{Component: "agent", Name: "Multicast", Status: "Disabled", Version: "ALPHA"},
 				{Component: "agent", Name: "ServiceExternalIP", Status: "Disabled", Version: "ALPHA"},
 			},
@@ -128,30 +134,12 @@ func TestHandleFunc(t *testing.T) {
 	)
 
 	tests := []struct {
-		name             string
-		expectedStatus   int
-		expectedResponse []Response
+		name           string
+		expectedStatus int
 	}{
 		{
 			name:           "good path",
 			expectedStatus: http.StatusOK,
-			expectedResponse: []Response{
-				{Component: "controller", Name: "AntreaPolicy", Status: "Enabled", Version: "BETA"},
-				{Component: "controller", Name: "Egress", Status: "Disabled", Version: "ALPHA"},
-				{Component: "controller", Name: "Traceflow", Status: "Enabled", Version: "BETA"},
-				{Component: "controller", Name: "NetworkPolicyStats", Status: "Enabled", Version: "BETA"},
-				{Component: "controller", Name: "NodeIPAM", Status: "Disabled", Version: "ALPHA"},
-				{Component: "controller", Name: "ServiceExternalIP", Status: "Disabled", Version: "ALPHA"},
-				{Component: "agent", Name: "AntreaPolicy", Status: "Enabled", Version: "BETA"},
-				{Component: "agent", Name: "AntreaProxy", Status: "Enabled", Version: "BETA"},
-				{Component: "agent", Name: "Egress", Status: "Disabled", Version: "ALPHA"},
-				{Component: "agent", Name: "EndpointSlice", Status: "Disabled", Version: "ALPHA"},
-				{Component: "agent", Name: "Traceflow", Status: "Enabled", Version: "BETA"},
-				{Component: "agent", Name: "FlowExporter", Status: "Disabled", Version: "ALPHA"},
-				{Component: "agent", Name: "NetworkPolicyStats", Status: "Enabled", Version: "BETA"},
-				{Component: "agent", Name: "NodePortLocal", Status: "Enabled", Version: "BETA"},
-				{Component: "agent", Name: "ServiceExternalIP", Status: "Disabled", Version: "ALPHA"},
-			},
 		},
 	}
 	os.Setenv("POD_NAME", "antrea-controller-wotqiwth")
@@ -191,7 +179,7 @@ func Test_getControllerGatesResponse(t *testing.T) {
 			name: "good path",
 			want: []Response{
 				{Component: "controller", Name: "AntreaPolicy", Status: "Enabled", Version: "BETA"},
-				{Component: "controller", Name: "Egress", Status: "Enabled", Version: "BETA"},
+				{Component: "controller", Name: "Egress", Status: egressStatus, Version: "BETA"},
 				{Component: "controller", Name: "Traceflow", Status: "Enabled", Version: "BETA"},
 				{Component: "controller", Name: "NetworkPolicyStats", Status: "Enabled", Version: "BETA"},
 				{Component: "controller", Name: "NodeIPAM", Status: "Disabled", Version: "ALPHA"},
@@ -212,5 +200,14 @@ func Test_getControllerGatesResponse(t *testing.T) {
 				t.Errorf("getControllerGatesResponse() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func init() {
+	egressStatus = "Enabled"
+	nplStatus = "Enabled"
+	if runtime.IsWindowsPlatform() {
+		egressStatus = "Disabled"
+		nplStatus = "Disabled"
 	}
 }
