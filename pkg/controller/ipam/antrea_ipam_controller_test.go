@@ -18,9 +18,11 @@
 package ipam
 
 import (
+	"context"
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -28,67 +30,72 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
+	"k8s.io/klog/v2"
 
 	crdv1a2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
 	fakecrd "antrea.io/antrea/pkg/client/clientset/versioned/fake"
 	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions"
 	listers "antrea.io/antrea/pkg/client/listers/crd/v1alpha2"
+	annotation "antrea.io/antrea/pkg/ipam"
 	"antrea.io/antrea/pkg/ipam/poolallocator"
 )
 
-var (
-	testPool     = "test-pool"
-	testWithPool = "test-pool"
-	testNoPool   = "test-no-pool"
-	testStale    = "test-stale"
-)
+func initTestObjects(annotateNamespace bool, annotateStatefulSet bool, replicas int32) (*corev1.Namespace, *crdv1a2.IPPool, *appsv1.StatefulSet) {
+	namespace := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: uuid.New().String(),
+		},
+	}
 
-// StatefulSet objects are not defined here, since IPAM annotations
-// are configured on Pods which belong to the StatefulSet via "app" label.
-func initTestClients(pool *crdv1a2.IPPool) (*fake.Clientset, *fakecrd.Clientset) {
-	crdClient := fakecrd.NewSimpleClientset(pool)
+	subnetRange := crdv1a2.SubnetIPRange{
+		IPRange: crdv1a2.IPRange{
+			Start: "10.2.2.100",
+			End:   "10.2.2.110",
+		},
+		SubnetInfo: crdv1a2.SubnetInfo{
+			Gateway:      "10.2.2.1",
+			PrefixLength: 24,
+		},
+	}
 
-	k8sClient := fake.NewSimpleClientset(
-		&corev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:        testWithPool,
-				Annotations: map[string]string{AntreaIPAMAnnotationKey: testPool},
-			},
+	pool := &crdv1a2.IPPool{
+		ObjectMeta: metav1.ObjectMeta{Name: uuid.New().String()},
+		Spec: crdv1a2.IPPoolSpec{
+			IPRanges: []crdv1a2.SubnetIPRange{subnetRange},
 		},
-		&corev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: testNoPool,
-			},
-		},
-		&corev1.Pod{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      testNoPool,
-				Namespace: testWithPool,
-				Labels:    map[string]string{"app": testNoPool},
-			},
-		},
-		&corev1.Pod{
-			ObjectMeta: metav1.ObjectMeta{
-				Annotations: map[string]string{AntreaIPAMAnnotationKey: testPool},
-				Labels:      map[string]string{"app": testWithPool},
-				Namespace:   testNoPool,
-			},
-		},
-		&appsv1.StatefulSet{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      testWithPool,
-				Namespace: testNoPool,
-			},
-		},
-	)
+	}
 
-	return k8sClient, crdClient
+	if annotateNamespace {
+		namespace.Annotations = map[string]string{annotation.AntreaIPAMAnnotationKey: pool.Name}
+	}
+
+	statefulSet := &appsv1.StatefulSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      uuid.New().String(),
+			Namespace: namespace.Name,
+		},
+		Spec: appsv1.StatefulSetSpec{
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        namespace.Name,
+					Annotations: map[string]string{annotation.AntreaIPAMAnnotationKey: pool.Name},
+				},
+			},
+			Replicas: &replicas,
+		},
+	}
+
+	if annotateStatefulSet {
+		statefulSet.Spec.Template.Annotations = map[string]string{annotation.AntreaIPAMAnnotationKey: pool.Name}
+	}
+
+	return namespace, pool, statefulSet
 }
 
-func verifyPoolAllocatedSize(t *testing.T, poolLister listers.IPPoolLister, size int) {
+func verifyPoolAllocatedSize(t *testing.T, poolName string, poolLister listers.IPPoolLister, size int) {
 
 	err := wait.PollImmediate(100*time.Millisecond, 1*time.Second, func() (bool, error) {
-		pool, err := poolLister.Get(testPool)
+		pool, err := poolLister.Get(poolName)
 		if err != nil {
 			return false, nil
 		}
@@ -102,90 +109,84 @@ func verifyPoolAllocatedSize(t *testing.T, poolLister listers.IPPoolLister, size
 	require.NoError(t, err)
 }
 
-// This test verifies release of reserved IPs for dedicated IP pool annotation,
-// as well as namespace-based IP Pool annotation.
-func TestReleaseStatefulSet(t *testing.T) {
-	stopCh := make(chan struct{})
-	defer close(stopCh)
+func TestStatefulSetLifecycle(t *testing.T) {
 
-	ipRange := crdv1a2.IPRange{
-		Start: "10.2.2.100",
-		End:   "10.2.2.200",
-	}
-
-	subnetInfo := crdv1a2.SubnetInfo{
-		Gateway:      "10.2.2.1",
-		PrefixLength: 24,
-	}
-
-	subnetRange := crdv1a2.SubnetIPRange{IPRange: ipRange,
-		SubnetInfo: subnetInfo}
-
-	pool := crdv1a2.IPPool{
-		ObjectMeta: metav1.ObjectMeta{Name: testPool},
-		Spec: crdv1a2.IPPoolSpec{
-			IPRanges: []crdv1a2.SubnetIPRange{subnetRange},
+	tests := []struct {
+		name                string
+		dedicatedPool       bool
+		replicas            int32
+		expectAllocatedSize int
+	}{
+		{
+			name:                "Dedicated pool",
+			dedicatedPool:       true,
+			replicas:            5,
+			expectAllocatedSize: 5,
+		},
+		{
+			name:                "Full reservation of dedicated pool",
+			dedicatedPool:       true,
+			replicas:            11,
+			expectAllocatedSize: 11,
+		},
+		{
+			name:                "Namespace pool",
+			dedicatedPool:       false,
+			replicas:            7,
+			expectAllocatedSize: 7,
+		},
+		{
+			name:                "No enough IPs",
+			dedicatedPool:       false,
+			replicas:            20,
+			expectAllocatedSize: 0,
 		},
 	}
 
-	k8sClient, crdClient := initTestClients(&pool)
+	for _, tt := range tests {
+		stopCh := make(chan struct{})
+		defer close(stopCh)
 
-	informerFactory := informers.NewSharedInformerFactory(k8sClient, 0)
+		klog.InfoS("Running", "test", tt.name)
+		namespace, pool, statefulSet := initTestObjects(!tt.dedicatedPool, tt.dedicatedPool, tt.replicas)
+		crdClient := fakecrd.NewSimpleClientset(pool)
+		k8sClient := fake.NewSimpleClientset(namespace, statefulSet)
 
-	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, 0)
-	poolInformer := crdInformerFactory.Crd().V1alpha2().IPPools()
-	poolLister := poolInformer.Lister()
+		informerFactory := informers.NewSharedInformerFactory(k8sClient, 0)
 
-	controller := NewAntreaIPAMController(crdClient, informerFactory, crdInformerFactory)
-	require.NotNil(t, controller)
-	informerFactory.Start(stopCh)
-	crdInformerFactory.Start(stopCh)
+		crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, 0)
+		poolInformer := crdInformerFactory.Crd().V1alpha2().IPPools()
+		poolLister := poolInformer.Lister()
 
-	go controller.Run(stopCh)
+		controller := NewAntreaIPAMController(crdClient, informerFactory, crdInformerFactory)
+		require.NotNil(t, controller)
+		informerFactory.Start(stopCh)
+		crdInformerFactory.Start(stopCh)
 
-	var allocator *poolallocator.IPPoolAllocator
-	var err error
-	// Wait until pool propagates to the informer
-	pollErr := wait.PollImmediate(100*time.Millisecond, 1*time.Second, func() (bool, error) {
-		allocator, err = poolallocator.NewIPPoolAllocator(testPool, crdClient, poolLister)
-		if err != nil {
-			return false, nil
-		}
-		return true, nil
-	})
-	require.NoError(t, pollErr)
+		go controller.Run(stopCh)
 
-	verifyPoolAllocatedSize(t, poolLister, 0)
+		var allocator *poolallocator.IPPoolAllocator
+		var err error
+		// Wait until pool propagates to the informer
+		pollErr := wait.PollImmediate(100*time.Millisecond, 1*time.Second, func() (bool, error) {
+			allocator, err = poolallocator.NewIPPoolAllocator(pool.Name, crdClient, poolLister)
+			if err != nil {
+				return false, nil
+			}
+			return true, nil
+		})
+		require.NoError(t, pollErr)
+		defer allocator.ReleaseStatefulSet(statefulSet.Namespace, statefulSet.Name)
 
-	// Allocate StatefulSet with dedicated IP Pool
-	err = allocator.AllocateStatefulSet(testNoPool, testWithPool, 5)
-	require.NoError(t, err, "Failed to reserve IPs for StatefulSet")
-	verifyPoolAllocatedSize(t, poolLister, 5)
+		// Verify create event was handled by the controller
+		verifyPoolAllocatedSize(t, pool.Name, poolLister, tt.expectAllocatedSize)
 
-	// Allocate StatefulSet with namespace-based IP Pool annotation
-	err = allocator.AllocateStatefulSet(testWithPool, testNoPool, 3)
-	require.NoError(t, err, "Failed to reserve IPs for StatefulSet")
-	verifyPoolAllocatedSize(t, poolLister, 8)
+		// Delete StatefulSet
+		k8sClient.AppsV1().StatefulSets(namespace.Name).Delete(context.TODO(), statefulSet.Name, metav1.DeleteOptions{})
 
-	// Delete StatefulSet with namespace-based IP Pool annotation
-	controller.enqueueStatefulSetDeleteEvent(&appsv1.StatefulSet{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      testNoPool,
-			Namespace: testWithPool,
-		}})
-
-	// Verify delete event was handled by the controller
-	verifyPoolAllocatedSize(t, poolLister, 5)
-
-	// Delete StatefulSet with dedicated IP Pool
-	controller.enqueueStatefulSetDeleteEvent(&appsv1.StatefulSet{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      testWithPool,
-			Namespace: testNoPool,
-		}})
-
-	// Verify delete event was handled by the controller
-	verifyPoolAllocatedSize(t, poolLister, 0)
+		// Verify Delete event was processed
+		verifyPoolAllocatedSize(t, pool.Name, poolLister, 0)
+	}
 }
 
 // Test for cleanup on controller startup: stale addresses that belong no StatefulSet objects
@@ -194,54 +195,36 @@ func TestReleaseStaleAddresses(t *testing.T) {
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 
-	ipRange := crdv1a2.IPRange{
-		CIDR: "10.2.2.0/24",
-	}
+	namespace, pool, statefulSet := initTestObjects(true, false, 7)
 
-	subnetInfo := crdv1a2.SubnetInfo{
-		Gateway:      "10.2.2.1",
-		PrefixLength: 24,
-	}
-
-	subnetRange := crdv1a2.SubnetIPRange{IPRange: ipRange,
-		SubnetInfo: subnetInfo}
-
-	// pool includes two entries for non-existent StatefulSet at startup
-	// as well as one legit entry
 	activeSetOwner := crdv1a2.StatefulSetOwner{
-		Name:      testWithPool,
-		Namespace: testNoPool,
-		Index:     0,
+		Name:      statefulSet.Name,
+		Namespace: namespace.Name,
 	}
 
 	staleSetOwner := crdv1a2.StatefulSetOwner{
-		Name:      testStale,
-		Namespace: testNoPool,
-		Index:     0,
+		Name:      uuid.New().String(),
+		Namespace: namespace.Name,
 	}
 
 	addresses := []crdv1a2.IPAddressState{
 		{IPAddress: "10.2.2.12",
-			Phase: crdv1a2.IPAddressPhasePreallocated,
+			Phase: crdv1a2.IPAddressPhaseReserved,
 			Owner: crdv1a2.IPAddressOwner{StatefulSet: &activeSetOwner}},
 		{IPAddress: "20.1.1.100",
-			Phase: crdv1a2.IPAddressPhasePreallocated,
+			Phase: crdv1a2.IPAddressPhaseReserved,
 			Owner: crdv1a2.IPAddressOwner{StatefulSet: &staleSetOwner}},
 		{IPAddress: "20.1.1.200",
-			Phase: crdv1a2.IPAddressPhasePreallocated,
+			Phase: crdv1a2.IPAddressPhaseReserved,
 			Owner: crdv1a2.IPAddressOwner{StatefulSet: &staleSetOwner}},
 	}
-	pool := crdv1a2.IPPool{
-		ObjectMeta: metav1.ObjectMeta{Name: testPool},
-		Spec: crdv1a2.IPPoolSpec{
-			IPRanges: []crdv1a2.SubnetIPRange{subnetRange},
-		},
-		Status: crdv1a2.IPPoolStatus{
-			IPAddresses: addresses,
-		},
+
+	pool.Status = crdv1a2.IPPoolStatus{
+		IPAddresses: addresses,
 	}
 
-	k8sClient, crdClient := initTestClients(&pool)
+	crdClient := fakecrd.NewSimpleClientset(pool)
+	k8sClient := fake.NewSimpleClientset(namespace, statefulSet)
 
 	informerFactory := informers.NewSharedInformerFactory(k8sClient, 0)
 
@@ -256,16 +239,6 @@ func TestReleaseStaleAddresses(t *testing.T) {
 
 	go controller.Run(stopCh)
 
-	// Wait until pool propagates to the informer
-	pollErr := wait.PollImmediate(100*time.Millisecond, 1*time.Second, func() (bool, error) {
-		_, err := poolallocator.NewIPPoolAllocator(testPool, crdClient, poolLister)
-		if err != nil {
-			return false, nil
-		}
-		return true, nil
-	})
-	require.NoError(t, pollErr)
-
 	// after cleanup pool should have single entry
-	verifyPoolAllocatedSize(t, poolLister, 1)
+	verifyPoolAllocatedSize(t, pool.Name, poolLister, 1)
 }
