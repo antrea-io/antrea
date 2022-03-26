@@ -220,6 +220,7 @@ func (c *ruleCache) getAppliedNetworkPolicies(pod, namespace string, npFilter *q
 			}
 			if c.networkPolicyMatchFilter(npFilter, np) {
 				policies = append(policies, *np)
+				policyKeys.Insert(string(rule.PolicyUID))
 			}
 		}
 	}

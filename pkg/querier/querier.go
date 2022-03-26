@@ -87,8 +87,6 @@ type NetworkPolicyQueryFilter struct {
 	SourceName string
 	// The namespace of the original Namespace that the internal NetworkPolicy is created for.
 	Namespace string
-	// Name of the pod that the network policy is applied on.
-	Pod string
 	// The type of the original NetworkPolicy that the internal NetworkPolicy is created for.(K8sNP, CNP, ANP)
 	SourceType cpv1beta.NetworkPolicyType
 }
