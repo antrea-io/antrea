@@ -56,8 +56,8 @@ network will be sent to the underlay network through the Node's transport
 network interface, and will be forwarded/routed by the underlay network. We also
 call this forwarding mode `bridging mode`.
 
-`IPPool` CRD defines a desired set of IP ranges. An `IPPool` can be annotated to
-Namespace, Pod and PodTemplate of StatefulSet/Deployment. Then Antrea will
+`IPPool` CRD defines a desired set of IP ranges and VLANs. An `IPPool` can be annotated
+to Namespace, Pod and PodTemplate of StatefulSet/Deployment. Then Antrea will
 manage IP address assignment for corresponding Pods according to `IPPool` spec.
 Note that the IP pool annotation cannot be updated or deleted without recreating
 the resource. An `IPPool` can be extended, but cannot be shrunk if already
@@ -107,6 +107,7 @@ spec:
     end: "10.2.0.20"
     gateway: "10.2.0.1"
     prefixLength: 24
+    vlan: 2              # Default is 0 (untagged). Valid value is 0~4095.
 ```
 
 #### IPPool Annotations on Namespace
@@ -193,18 +194,23 @@ restore its configurations at exit. Node may lose network connection when `antre
 or OVS daemons are stopped unexpectedly, which can be recovered by rebooting the Node.
 `AntreaIPAM` Pods' traffic will not be routed by local Node's network stack.
 
-All traffic to a local Pod will be sent to the Pod's OVS port directly, after the
-destination MAC is rewritten to the Pod's MAC address. This includes `AntreaIPAM` Pods
-and regular `Subnet per Node` IPAM Pods, even they are not in the same subnets.
-Inter-Node traffic will be sent to the Node network from the source Node, and forwarded
-to the destination Node by the Node network.
+Traffic from `AntreaIPAM` Pods without VLAN, regular `Subnet per Node` IPAM Pods, and K8s
+Nodes is recognized as VLAN 0 (untagged).
+
+Traffic to a local Pod in the Pod's VLAN will be sent to the Pod's OVS port directly,
+after the destination MAC is rewritten to the Pod's MAC address. This includes
+`AntreaIPAM` Pods and regular `Subnet per Node` IPAM Pods, even when they are not in the
+same subnet. Traffic to a Pod in different VLAN will be sent to the underlay network,
+where the underlay router will route the traffic to the destination VLAN.
 
 ### Requirements for this Feature
 
 As of now, this feature is supported on Linux Nodes, with IPv4, `system` OVS datapath
 type, and `noEncap`, `noSNAT` traffic mode.
 
-The IPs in the `IPPools` must be in the same "underlay" subnet as the Node IP, because
-inter-Node traffic of AntreaIPAM Pods is forwarded by the Node network. Only a single IP
-pool can be included in the Namespace annotation. In the future, annotation of up to two
-pools for IPv4 and IPv6 respectively will be supported.
+The IPs in the `IPPools` without VLAN must be in the same underlay subnet as the Node
+IP, because inter-Node traffic of AntreaIPAM Pods is forwarded by the Node network.
+`IPPools` with VLAN must not overlap with other network subnets, and the underlay network
+router should provide the network connectivity for these VLANs. Only a single IP pool can
+be included in the Namespace annotation. In the future, annotation of up to two pools for
+IPv4 and IPv6 respectively will be supported.
