@@ -128,7 +128,7 @@ Please note that the default value for `flowCollectorAddr` is `"flow-aggregator.
 which uses the DNS name of the Flow Aggregator Service, if the Service is deployed
 with the Name and Namespace set to `flow-aggregator`. For Antrea Agent running on
 a Windows node, the user is required to change the default value of `HOST` in `flowCollectorAddr`
-from DNS name to the Cluster IP of the Flow Aggregator service. The reason is because
+from DNS name to the Cluster IP of the Flow Aggregator Service. The reason is because
 on Windows the Antrea Agent runs as a process, it uses the host's default DNS setting and the DNS
 resolver will not be configured to talk to the CoreDNS Service for cluster local DNS queries like
 `flow-aggregator.flow-aggregator.svc`. In addition, if you deploy the Flow Aggregator Service
@@ -603,6 +603,28 @@ use the checked-in [deployment yaml](/build/yamls/flow-visibility.yml):
 kubectl apply -f https://raw.githubusercontent.com/antrea-io/antrea/main/build/yamls/flow-visibility.yml
 ```
 
+Grafana is exposed through a NodePort Service by default in `flow-visibility.yml`.
+If the given K8s cluster supports LoadBalancer Services, Grafana can be exposed
+through a LoadBalancer Service by changing the `grafana` Service type in the manifest
+like below.
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana
+  namespace: flow-visibility
+spec:
+  ports:
+  - port: 3000
+    protocol: TCP
+    targetPort: http-grafana
+  selector:
+    app: grafana
+  sessionAffinity: None
+  type: LoadBalancer
+```
+
 Please refer to the [Flow Aggregator Configuration](#configuration-1) to learn about
 the ClickHouse configuration options.
 
@@ -622,7 +644,7 @@ pod/grafana-5c6c5b74f7-x4v5b          1/1     Running   0          1m
 NAME                                    TYPE           CLUSTER-IP       EXTERNAL-IP   PORT(S)                         AGE
 service/chi-clickhouse-clickhouse-0-0   ClusterIP      None             <none>        8123/TCP,9000/TCP,9009/TCP      1m
 service/clickhouse-clickhouse           ClusterIP      10.102.124.56    <none>        8123/TCP,9000/TCP               1m
-service/grafana                         LoadBalancer   10.97.171.150    <pending>     3000:31171/TCP                  1m
+service/grafana                         NodePort       10.97.171.150    <none>        3000:31171/TCP                  1m
 
 NAME                      READY   UP-TO-DATE   AVAILABLE   AGE
 deployment.apps/grafana   1/1     1            1           1m
@@ -660,8 +682,22 @@ kubectl delete -f https://raw.githubusercontent.com/antrea-io/antrea/main/build/
 
 ##### Credentials Configuration
 
-ClickHouse credentials are specified in [clickhouse.yml][clickhouse_manifest_yaml] as
-a resource of kind: a Secret. If the username `clickhouse_operator` has changed, please
+ClickHouse credentials are specified in `flow-visibility.yml` as a Secret named
+`clickhouse-secret`.
+
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: clickhouse-secret
+  namespace: flow-visibility
+stringData:
+  password: clickhouse_operator_password
+  username: clickhouse_operator
+type: Opaque
+```
+
+If the username `clickhouse_operator` has been changed, please
 update the following section accordingly.
 
 ```yaml
@@ -679,26 +715,47 @@ spec:
       clickhouse_operator/networks/ip: "::/0"
 ```
 
-ClickHouse credentials are also specified in [flow-aggregator.yml][flow_aggregator_manifest_yaml]
-as a resource of kind: a Secret. Please also make the corresponding changes.
+ClickHouse credentials are also specified in `flow-aggregator.yml` as a Secret
+named `clickhouse-secret` as shown below. Please also make the corresponding changes.
 
-Grafana login credentials are specified in [grafana.yml][grafana_manifest_yaml] as
-resource of kind: a Secret.
-
-We recommend changing all the credentials above if you are going to run the Flow Collector
-in production. After making any credentials change, run the following command to generate
-a new manifest:
-
-```shell
-make manifest
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  labels:
+    app: flow-aggregator
+  name: clickhouse-secret
+  namespace: flow-aggregator
+stringData:
+  password: clickhouse_operator_password
+  username: clickhouse_operator
+type: Opaque
 ```
+
+Grafana login credentials are specified in `flow-visibility.yml` as a Secret named
+`grafana-secret`.
+
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: grafana-secret
+  namespace: flow-visibility
+stringData:
+  admin-password: admin
+  admin-username: admin
+type: Opaque
+```
+
+We recommend changing all the credentials above if you are going to run the Flow
+Collector in production.
 
 ##### ClickHouse Configuration
 
-The ClickHouse database can be accessed through the service `clickhouse-clickhouse`.
-The pod exposes HTTP port at 8123 and TCP port at 9000 by default. The ports are
-specified in [clickhouse.yml][clickhouse_manifest_yaml] as `serviceTemplates`.
-To use other ports, please update the following section accordingly.
+The ClickHouse database can be accessed through the Service `clickhouse-clickhouse`.
+The Pod exposes HTTP port at 8123 and TCP port at 9000 by default. The ports are
+specified in `flow-visibility.yml` as `serviceTemplates` of a `ClickHouseInstallation`
+resource. To use other ports, please update the following section.
 
 ```yaml
 serviceTemplates:
@@ -711,34 +768,55 @@ serviceTemplates:
           port: 9000
 ```
 
-This service is also used by the Flow Aggregator and Grafana. If you update the
-HTTP port, please update `url` in [datasource_provider.yml][grafana_datasouce_provider_yaml].
-If you update the TCP port, please update `jsonData.port` in [datasource_provider.yml][grafana_datasouce_provider_yaml]
-and `databaseURL` in the [Flow Aggregator Configuration](#configuration-1).
+This Service is used by the Flow Aggregator and Grafana.
+
+- If you have changed the HTTP port, please update the `url` of a ConfigMap named
+`grafana-datasource-provider` in `flow-visibility.yml`.
+
+- If you have changed the TCP port, please update the `databaseURL` following
+[Flow Aggregator Configuration](#configuration-1), and also update the `jsonData.port`
+of the `grafana-datasource-provider` ConfigMap.
+
+```yaml
+apiVersion: v1
+data:
+  datasource_provider.yml: |
+    apiVersion: 1
+    datasources:
+      - name: ClickHouse
+        type: grafana-clickhouse-datasource
+        access: proxy
+        url: http://clickhouse-clickhouse.flow-visibility.svc:8123
+        editable: true
+        jsonData:
+          server: clickhouse-clickhouse.flow-visibility.svc
+          port: 9000
+          username: $CLICKHOUSE_USERNAME
+        secureJsonData:
+          password: $CLICKHOUSE_PASSWORD
+kind: ConfigMap
+metadata:
+  name: grafana-datasource-provider-h868k56k95
+  namespace: flow-visibility
+```
 
 The ClickHouse throughput depends on two factors - the storage size of the ClickHouse
 and the time interval between the batch commits to the ClickHouse. Larger storage
 size and longer commit interval provide higher throughput.
 
 Grafana flow collector supports the ClickHouse in-memory deployment with limited
-storage size. This is specified in [clickhouse.yml][clickhouse_manifest_yaml].
-The default value of storage size for the ClickHouse server is 8 GiB. Users
-can expect a linear growth in the ClickHouse throughput when they enlarge the
-storage size. For development or testing environment, you can decrease the storage
-size to 2GB. To deploy the ClickHouse with a different storage size, please
-modify the `sizeLimit` in the following section.
+storage size. This is specified in `flow-visibility.yml` under the `clickhouse`
+resource of kind: `ClickHouseInstallation`. The default value of storage size for
+the ClickHouse server is 8 GiB. Users can expect a linear growth in the ClickHouse
+throughput when they enlarge the storage size. For development or testing environment,
+you can decrease the storage size to 2GiB. To deploy the ClickHouse with a different
+storage size, please modify the `sizeLimit` in the following section.
 
 ```yaml
-- name: clickhouse-storage-volume
-  emptyDir:
+- emptyDir:
     medium: Memory
     sizeLimit: 8Gi
-```
-
-After making the change, run the following command to generate a new manifest:
-
-```shell
-./hack/generate-manifest-flow-visibility.sh > build/yamls/flow-visibility.yml
+  name: clickhouse-storage-volume
 ```
 
 The time interval between the batch commits to the ClickHouse is specified in the
@@ -831,9 +909,20 @@ Currently we only support the visualization of NetworkPolicies with `Allow` acti
 #### Dashboards Customization
 
 If you would like to make any changes to any of the pre-built dashboards, or build
-a new dashboard, please follow this [doc](https://grafana.com/docs/grafana/latest/dashboards/export-import/)
-for dashboard export and import. To generate a deployment manifest with the changes,
-please follow the following steps:
+a new dashboard, please follow this [doc](https://grafana.com/docs/grafana/latest/dashboards/)
+on how to build a dashboard.
+
+By clicking on the "Save dashboard" button in the Grafana UI, the changes to the
+dashboards will be persisted in the Grafana database at runtime, but they will be
+lost after restarting the Grafana deployment. To restore those changes after a restart,
+as the first step, you will need to export the dashboard JSON file following the
+[doc](https://grafana.com/docs/grafana/latest/dashboards/export-import/), then there
+are two ways to import the dashboard depending on your needs:
+
+- In the running Grafana UI, manually import the dashboard JSON files.
+- If you want the changed dashboards to be automatically provisioned in Grafana
+like our pre-built dashboards, generate a deployment manifest with the changes by
+following the steps below:
 
 1. Clone the repository. Exported dashboard JSON files should be placed under `antrea/build/yamls/flow-visibility/base/provisioning/dashboards`.
 1. If a new dashboard is added, edit [kustomization.yml][flow_visibility_kustomization_yaml]
@@ -1018,8 +1107,4 @@ With filters applied:
 <img src="https://downloads.antrea.io/static/03022021/flow-visualization-np-2.png" width="900" alt="Flow
 Visualization Network Policy Dashboard">
 
-[clickhouse_manifest_yaml]: ../build/yamls/flow-visibility/base/clickhouse.yml
-[flow_aggregator_manifest_yaml]: ../build/yamls/flow-aggregator/base/flow-aggregator.yml
-[grafana_manifest_yaml]: ../build/yamls/flow-visibility/base/grafana.yml
-[grafana_datasouce_provider_yaml]: ../build/yamls/flow-visibility/base/provisioning/datasources/datasource_provider.yml
 [flow_visibility_kustomization_yaml]: ../build/yamls/flow-visibility/base/kustomization.yml
