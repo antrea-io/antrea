@@ -34,14 +34,20 @@ import (
 
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
+	"antrea.io/antrea/pkg/features"
 )
 
 const waitEgressRealizedTimeout = 3 * time.Second
+
+func skipIfEgressDisabled(tb testing.TB) {
+	skipIfFeatureDisabled(tb, features.Egress, true, true)
+}
 
 func TestEgress(t *testing.T) {
 	skipIfHasWindowsNodes(t)
 	skipIfNumNodesLessThan(t, 2)
 	skipIfAntreaIPAMTest(t)
+	skipIfEgressDisabled(t)
 
 	data, err := setupTest(t)
 	if err != nil {
