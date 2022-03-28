@@ -149,6 +149,14 @@ rules:
   - apiGroups:
       - crd.antrea.io
     resources:
+      - accountnodemappings
+    verbs:
+      - get
+      - watch
+      - list
+  - apiGroups:
+      - crd.antrea.io
+    resources:
       - clusternetworkpolicies
       - networkpolicies
     verbs:

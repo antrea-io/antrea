@@ -1,4 +1,4 @@
-// Copyright 2021 Antrea Authors
+// Copyright 2022 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@ import (
 
 type CrdV1alpha1Interface interface {
 	RESTClient() rest.Interface
+	AccountNodeMappingsGetter
 	ClusterNetworkPoliciesGetter
 	NetworkPoliciesGetter
 	TiersGetter
@@ -33,6 +34,10 @@ type CrdV1alpha1Interface interface {
 // CrdV1alpha1Client is used to interact with features provided by the crd.antrea.io group.
 type CrdV1alpha1Client struct {
 	restClient rest.Interface
+}
+
+func (c *CrdV1alpha1Client) AccountNodeMappings(namespace string) AccountNodeMappingInterface {
+	return newAccountNodeMappings(c, namespace)
 }
 
 func (c *CrdV1alpha1Client) ClusterNetworkPolicies() ClusterNetworkPolicyInterface {

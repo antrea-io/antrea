@@ -15,6 +15,7 @@
 package apiserver
 
 import (
+	"antrea.io/antrea/pkg/monitor"
 	"context"
 	"time"
 
@@ -100,6 +101,7 @@ type ExtraConfig struct {
 	caCertController              *certificate.CACertController
 	statsAggregator               *stats.Aggregator
 	networkPolicyStatusController *controllernetworkpolicy.StatusController
+	controllerMonitor             *monitor.ControllerMonitor
 }
 
 // Config defines the config for Antrea apiserver.
@@ -139,7 +141,8 @@ func NewConfig(
 	networkPolicyStatusController *controllernetworkpolicy.StatusController,
 	endpointQuerier controllernetworkpolicy.EndpointQuerier,
 	npController *controllernetworkpolicy.NetworkPolicyController,
-	egressController *egress.EgressController) *Config {
+	egressController *egress.EgressController,
+	controllerMonitor *monitor.ControllerMonitor) *Config {
 	return &Config{
 		genericConfig: genericConfig,
 		extraConfig: ExtraConfig{
@@ -155,6 +158,7 @@ func NewConfig(
 			networkPolicyController:       npController,
 			networkPolicyStatusController: networkPolicyStatusController,
 			egressController:              egressController,
+			controllerMonitor:             controllerMonitor,
 		},
 	}
 }
@@ -296,6 +300,7 @@ func installHandlers(c *ExtraConfig, s *genericapiserver.GenericAPIServer) {
 	if features.DefaultFeatureGate.Enabled(features.AntreaIPAM) {
 		s.Handler.NonGoRestfulMux.HandleFunc("/validate/ippool", webhook.HandlerForValidateFunc(ipam.ValidateIPPool))
 	}
+	s.Handler.NonGoRestfulMux.HandleFunc("/validate/antreaagentinfo", webhook.HandlerForValidateFunc(c.controllerMonitor.ValidateAntreaAgentInfo))
 }
 
 func DefaultCAConfig() *certificate.CAConfig {

@@ -183,6 +183,21 @@ webhooks:
     admissionReviewVersions: ["v1", "v1beta1"]
     sideEffects: None
     timeoutSeconds: 5
+  - name: "antreaagentinfovalidator.antrea.io"
+    clientConfig:
+      service:
+        name: "antrea"
+        namespace: "kube-system"
+        path: "/validate/antreaagentinfo"
+    rules:
+      - operations: ["CREATE", "UPDATE"]
+        apiGroups: ["crd.antrea.io"]
+        apiVersions: ["v1beta1"]
+        resources: ["antreaagentinfos"]
+        scope: "Cluster"
+    admissionReviewVersions: ["v1", "v1beta1"]
+    sideEffects: None
+    timeoutSeconds: 5
 ---
 apiVersion: apiregistration.k8s.io/v1
 kind: APIService

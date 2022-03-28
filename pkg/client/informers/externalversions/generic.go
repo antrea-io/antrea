@@ -1,4 +1,4 @@
-// Copyright 2021 Antrea Authors
+// Copyright 2022 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -54,6 +54,8 @@ func (f *genericInformer) Lister() cache.GenericLister {
 func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource) (GenericInformer, error) {
 	switch resource {
 	// Group=crd.antrea.io, Version=v1alpha1
+	case v1alpha1.SchemeGroupVersion.WithResource("accountnodemappings"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Crd().V1alpha1().AccountNodeMappings().Informer()}, nil
 	case v1alpha1.SchemeGroupVersion.WithResource("clusternetworkpolicies"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Crd().V1alpha1().ClusterNetworkPolicies().Informer()}, nil
 	case v1alpha1.SchemeGroupVersion.WithResource("networkpolicies"):

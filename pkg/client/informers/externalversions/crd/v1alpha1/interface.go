@@ -1,4 +1,4 @@
-// Copyright 2021 Antrea Authors
+// Copyright 2022 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,6 +22,8 @@ import (
 
 // Interface provides access to all the informers in this group version.
 type Interface interface {
+	// AccountNodeMappings returns a AccountNodeMappingInformer.
+	AccountNodeMappings() AccountNodeMappingInformer
 	// ClusterNetworkPolicies returns a ClusterNetworkPolicyInformer.
 	ClusterNetworkPolicies() ClusterNetworkPolicyInformer
 	// NetworkPolicies returns a NetworkPolicyInformer.
@@ -41,6 +43,11 @@ type version struct {
 // New returns a new Interface.
 func New(f internalinterfaces.SharedInformerFactory, namespace string, tweakListOptions internalinterfaces.TweakListOptionsFunc) Interface {
 	return &version{factory: f, namespace: namespace, tweakListOptions: tweakListOptions}
+}
+
+// AccountNodeMappings returns a AccountNodeMappingInformer.
+func (v *version) AccountNodeMappings() AccountNodeMappingInformer {
+	return &accountNodeMappingInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }
 
 // ClusterNetworkPolicies returns a ClusterNetworkPolicyInformer.

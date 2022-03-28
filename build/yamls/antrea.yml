@@ -3,6 +3,30 @@ kind: CustomResourceDefinition
 metadata:
   labels:
     app: antrea
+  name: accountnodemappings.crd.antrea.io
+spec:
+  group: crd.antrea.io
+  names:
+    kind: AccountNodeMapping
+    plural: accountnodemappings
+    shortNames:
+    - anm
+    singular: accountnodemappings
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        type: object
+        x-kubernetes-preserve-unknown-fields: true
+    served: true
+    storage: true
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  labels:
+    app: antrea
   name: antreaagentinfos.crd.antrea.io
 spec:
   group: crd.antrea.io
@@ -2592,6 +2616,14 @@ rules:
 - apiGroups:
   - crd.antrea.io
   resources:
+  - accountnodemappings
+  verbs:
+  - get
+  - watch
+  - list
+- apiGroups:
+  - crd.antrea.io
+  resources:
   - clusternetworkpolicies
   - networkpolicies
   verbs:
@@ -2736,7 +2768,7 @@ subjects:
 ---
 apiVersion: v1
 data:
-  antrea-agent.conf: |
+  antrea-agent.conf: |-
     # FeatureGates is a map of feature names to bools that enable or disable experimental features.
     featureGates:
     # Enable AntreaProxy which provides ServiceLB for in-cluster Services in antrea-agent.
@@ -2980,6 +3012,17 @@ data:
       # Note that setting ProxyLoadBalancerIPs to false usually only makes sense when ProxyAll is set to true and
       # kube-proxy is removed from the cluser, otherwise kube-proxy will still load-balance this traffic.
       #proxyLoadBalancerIPs: true
+
+    # The role in which Antrea Agent is working. Supported values:
+    # - Node (default)
+    # - VM
+    # - BM
+    #agentRole: Node
+
+    # The namespace to create the ExternalEntity for the VM/BM object.
+    # The default value is "default".
+    # It is used only when AgentRole is VM or BM.
+    #namespace: default
   antrea-cni.conflist: |
     {
         "cniVersion":"0.3.0",
@@ -3079,7 +3122,7 @@ kind: ConfigMap
 metadata:
   labels:
     app: antrea
-  name: antrea-config-hkhbh5gf99
+  name: antrea-config-547gd8bm9d
   namespace: kube-system
 ---
 apiVersion: v1
@@ -3150,7 +3193,7 @@ spec:
             fieldRef:
               fieldPath: spec.serviceAccountName
         - name: ANTREA_CONFIG_MAP_NAME
-          value: antrea-config-hkhbh5gf99
+          value: antrea-config-547gd8bm9d
         image: projects.registry.vmware.com/antrea/antrea-ubuntu:latest
         imagePullPolicy: IfNotPresent
         livenessProbe:
@@ -3201,7 +3244,7 @@ spec:
         key: node-role.kubernetes.io/master
       volumes:
       - configMap:
-          name: antrea-config-hkhbh5gf99
+          name: antrea-config-547gd8bm9d
         name: antrea-config
       - name: antrea-controller-tls
         secret:
@@ -3440,7 +3483,7 @@ spec:
         operator: Exists
       volumes:
       - configMap:
-          name: antrea-config-hkhbh5gf99
+          name: antrea-config-547gd8bm9d
         name: antrea-config
       - hostPath:
           path: /etc/cni/net.d
@@ -3684,6 +3727,28 @@ webhooks:
     - DELETE
     resources:
     - ippools
+    scope: Cluster
+  sideEffects: None
+  timeoutSeconds: 5
+- admissionReviewVersions:
+  - v1
+  - v1beta1
+  clientConfig:
+    service:
+      name: antrea
+      namespace: kube-system
+      path: /validate/antreaagentinfo
+  name: antreaagentinfovalidator.antrea.io
+  rules:
+  - apiGroups:
+    - crd.antrea.io
+    apiVersions:
+    - v1beta1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - antreaagentinfos
     scope: Cluster
   sideEffects: None
   timeoutSeconds: 5

@@ -95,6 +95,7 @@ var allowedPaths = []string{
 	"/validate/externalippool",
 	"/validate/egress",
 	"/validate/ippool",
+	"/validate/antreaagentinfo",
 	"/convert/clustergroup",
 }
 
@@ -123,6 +124,7 @@ func run(o *Options) error {
 	cgInformer := crdInformerFactory.Crd().V1alpha3().ClusterGroups()
 	egressInformer := crdInformerFactory.Crd().V1alpha2().Egresses()
 	externalIPPoolInformer := crdInformerFactory.Crd().V1alpha2().ExternalIPPools()
+	anmInformer := crdInformerFactory.Crd().V1alpha1().AccountNodeMappings()
 
 	clusterIdentityAllocator := clusteridentity.NewClusterIdentityAllocator(
 		env.GetAntreaNamespace(),
@@ -164,7 +166,7 @@ func run(o *Options) error {
 
 	controllerQuerier := querier.NewControllerQuerier(networkPolicyController, o.config.APIPort)
 
-	controllerMonitor := monitor.NewControllerMonitor(crdClient, nodeInformer, controllerQuerier)
+	controllerMonitor := monitor.NewControllerMonitor(crdClient, nodeInformer, controllerQuerier, anmInformer)
 
 	var egressController *egress.EgressController
 	var externalIPPoolController *externalippool.ExternalIPPoolController
@@ -224,6 +226,7 @@ func run(o *Options) error {
 		networkPolicyStatusController,
 		egressController,
 		statsAggregator,
+		controllerMonitor,
 		*o.config.EnablePrometheusMetrics,
 		cipherSuites,
 		cipher.TLSVersionMap[o.config.TLSMinVersion])
@@ -374,6 +377,7 @@ func createAPIServerConfig(kubeconfig string,
 	networkPolicyStatusController *networkpolicy.StatusController,
 	egressController *egress.EgressController,
 	statsAggregator *stats.Aggregator,
+	controllerMonitor *monitor.ControllerMonitor,
 	enableMetrics bool,
 	cipherSuites []uint16,
 	tlsMinVersion uint16) (*apiserver.Config, error) {
@@ -434,5 +438,6 @@ func createAPIServerConfig(kubeconfig string,
 		networkPolicyStatusController,
 		endpointQuerier,
 		npController,
-		egressController), nil
+		egressController,
+		controllerMonitor), nil
 }

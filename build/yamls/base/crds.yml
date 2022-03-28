@@ -423,6 +423,28 @@ spec:
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
+  name: accountnodemappings.crd.antrea.io
+spec:
+  group: crd.antrea.io
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          x-kubernetes-preserve-unknown-fields: true
+  scope: Namespaced
+  names:
+    plural: accountnodemappings
+    singular: accountnodemappings
+    kind: AccountNodeMapping
+    shortNames:
+      - anm
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
   name: traceflows.crd.antrea.io
 spec:
   group: crd.antrea.io
