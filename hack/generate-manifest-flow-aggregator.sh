@@ -20,16 +20,17 @@ function echoerr {
     >&2 echo "$@"
 }
 
-_usage="Usage: $0 [--mode (dev|release)] [-fc|--flow-collector] [--keep] [--help|-h]
+_usage="Usage: $0 [--mode (dev|release)] [-fc|--flow-collector <addr>] [-ch|--clickhouse] [--keep] [--help|-h]
 Generate a YAML manifest for the Flow Aggregator, using Kustomize, and print it to stdout.
-        --mode (dev|release)  Choose the configuration variant that you need (default is 'dev')
-        --flow-collector      Flow collector is the externalFlowCollectorAddr configMap parameter
-                              It should be given in format IP:port:proto. Example: 192.168.1.100:4739:udp
-        --keep                Debug flag which will preserve the generated kustomization.yml
-        --coverage            Generate a manifest which supports measuring code coverage of the Flow Aggregator binaries.
-        --verbose-log         Generate a manifest with increased log-level (level 4) for the Flow Aggregator. 
-                              This option will work only with 'dev' mode.
-        --help, -h            Print this message and exit
+        --mode (dev|release)            Choose the configuration variant that you need (default is 'dev').
+        --flow-collector, -fc <addr>    Specify the flowCollector address.
+                                        It should be given in format IP:port:proto. Example: 192.168.1.100:4739:udp.
+        --clickhouse, -ch               Enable exporting flow records to default ClickHouse service address.
+        --keep                          Debug flag which will preserve the generated kustomization.yml.
+        --coverage                      Generate a manifest which supports measuring code coverage of the Flow Aggregator binaries.
+        --verbose-log                   Generate a manifest with increased log-level (level 4) for the Flow Aggregator.
+                                        This option will work only with 'dev' mode.
+        --help, -h                      Print this message and exit.
 
 In 'release' mode, environment variables IMG_NAME and IMG_TAG must be set.
 
@@ -49,6 +50,7 @@ function print_help {
 MODE="dev"
 KEEP=false
 FLOW_COLLECTOR=""
+CLICKHOUSE=false
 COVERAGE=false
 VERBOSE_LOG=false
 
@@ -64,6 +66,10 @@ case $key in
     -fc|--flow-collector)
     FLOW_COLLECTOR="$2"
     shift 2
+    ;;
+    -ch|--clickhouse)
+    CLICKHOUSE=true
+    shift
     ;;
     --keep)
     KEEP=true
@@ -138,7 +144,12 @@ mkdir configMap && cd configMap
 # but instead to the generated YAML manifest, so our regexs need not be too robust.
 cp $KUSTOMIZATION_DIR/base/conf/flow-aggregator.conf flow-aggregator.conf
 if [[ $FLOW_COLLECTOR != "" ]]; then
-    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*externalFlowCollectorAddr[[:space:]]*:[[:space:]]\"\"+[[:space:]]*$/externalFlowCollectorAddr:  \"$FLOW_COLLECTOR\"/" flow-aggregator.conf
+    perl -i -p0e 's/  # Enable is the switch to enable exporting flow records to external flow collector.\n  #enable: false/  # Enable is the switch to enable exporting flow records to external flow collector.\n  enable: true/' flow-aggregator.conf
+    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*address[[:space:]]*:[[:space:]]\"\"+[[:space:]]*$/  address: \"$FLOW_COLLECTOR\"/" flow-aggregator.conf
+fi
+
+if $CLICKHOUSE; then
+    perl -i -p0e 's/  # Enable is the switch to enable exporting flow records to ClickHouse.\n  #enable: false/  # Enable is the switch to enable exporting flow records to ClickHouse.\n  enable: true/' flow-aggregator.conf
 fi
 
 # unfortunately 'kustomize edit add configmap' does not support specifying 'merge' as the behavior,

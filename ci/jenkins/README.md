@@ -182,6 +182,11 @@ DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
   daily validation of elk flow collector manifest. If build fails, Jenkins will send an email to
   projectantrea-dev@googlegroups.com for notification.
 
+* [daily-flow-visibility-validate](https://jenkins.antrea-ci.rocks/job/antrea-daily-flow-visibility-validate-for-period/):
+  [![Build Status](http://jenkins.antrea-ci.rocks/buildStatus/icon?job=antrea-daily-flow-visibility-validate-for-period)](http://jenkins.antrea-ci.rocks/view/cloud/job/antrea-daily-flow-visibility-validate-for-period/)
+  daily validation of Flow Visibility manifest. If build fails, Jenkins will send an email to
+  projectantrea-dev@googlegroups.com for notification.
+
 * [matrix-test [weekly]](https://jenkins.antrea-ci.rocks/job/antrea-weekly-matrix-compatibility-test/):
   runs Antrea e2e, K8s Conformance and NetworkPolicy tests, using different combinations of various operating systems and K8s releases.
   |  K8s Version   |  Node OS        |  Status  |
