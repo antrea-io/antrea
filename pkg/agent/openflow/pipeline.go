@@ -191,6 +191,14 @@ var (
 	priorityDNSIntercept    = uint16(64991)
 	priorityDNSBypass       = uint16(64992)
 
+	// priorityAdd should be used only when all predefined priorities (priorityHigh, priorityNormal, priorityLow and
+	// priorityMiss) cannot meet the design requirement and a new priority has to be introduced. Adding offset directly to
+	// a defined priority is not recommended when building a flow because it is not easy to track the priorities like
+	// `priorityHigh + 1`, `priorityNormal + 2` for developers.
+	priorityAdd = func(original, offset uint16) uint16 {
+		return original + offset
+	}
+
 	// Index for priority cache
 	priorityIndex = "priority"
 
@@ -906,14 +914,14 @@ func (f *featurePodConnectivity) flowsToTrace(dataplaneTag uint8,
 	if packet == nil {
 		for _, ipProtocol := range f.ipProtocols {
 			flows = append(flows,
-				ConntrackStateTable.ofTable.BuildFlow(priorityLow+1).
+				ConntrackStateTable.ofTable.BuildFlow(priorityAdd(priorityLow, 1)).
 					Cookie(cookieID).
 					MatchProtocol(ipProtocol).
 					MatchIPDSCP(dataplaneTag).
 					SetHardTimeout(timeout).
 					Action().GotoStage(stagePreRouting).
 					Done(),
-				ConntrackStateTable.ofTable.BuildFlow(priorityLow+2).
+				ConntrackStateTable.ofTable.BuildFlow(priorityAdd(priorityLow, 2)).
 					Cookie(cookieID).
 					MatchProtocol(ipProtocol).
 					MatchCTStateTrk(true).
@@ -1009,7 +1017,7 @@ func (f *featurePodConnectivity) flowsToTrace(dataplaneTag uint8,
 	for _, ipProtocol := range f.ipProtocols {
 		if f.networkConfig.TrafficEncapMode.SupportsEncap() {
 			// SendToController and Output if output port is tunnel port.
-			fb := L2ForwardingOutTable.ofTable.BuildFlow(priorityNormal+3).
+			fb := L2ForwardingOutTable.ofTable.BuildFlow(priorityAdd(priorityNormal, 3)).
 				Cookie(cookieID).
 				MatchRegFieldWithValue(TargetOFPortField, config.DefaultTunOFPort).
 				MatchProtocol(ipProtocol).
@@ -1022,7 +1030,7 @@ func (f *featurePodConnectivity) flowsToTrace(dataplaneTag uint8,
 			// For injected packets, only SendToController if output port is local gateway. In encapMode, a Traceflow
 			// packet going out of the gateway port (i.e. exiting the overlay) essentially means that the Traceflow
 			// request is complete.
-			fb = L2ForwardingOutTable.ofTable.BuildFlow(priorityNormal+2).
+			fb = L2ForwardingOutTable.ofTable.BuildFlow(priorityAdd(priorityNormal, 2)).
 				Cookie(cookieID).
 				MatchRegFieldWithValue(TargetOFPortField, config.HostGatewayOFPort).
 				MatchProtocol(ipProtocol).
@@ -1035,7 +1043,7 @@ func (f *featurePodConnectivity) flowsToTrace(dataplaneTag uint8,
 		} else {
 			// SendToController and Output if output port is local gateway. Unlike in encapMode, inter-Node Pod-to-Pod
 			// traffic is expected to go out of the gateway port on the way to its destination.
-			fb := L2ForwardingOutTable.ofTable.BuildFlow(priorityNormal+2).
+			fb := L2ForwardingOutTable.ofTable.BuildFlow(priorityAdd(priorityNormal, 2)).
 				Cookie(cookieID).
 				MatchRegFieldWithValue(TargetOFPortField, config.HostGatewayOFPort).
 				MatchProtocol(ipProtocol).
@@ -1049,7 +1057,7 @@ func (f *featurePodConnectivity) flowsToTrace(dataplaneTag uint8,
 		// Only SendToController if output port is local gateway and destination IP is gateway.
 		gatewayIP := f.gatewayIPs[ipProtocol]
 		if gatewayIP != nil {
-			fb := L2ForwardingOutTable.ofTable.BuildFlow(priorityNormal+3).
+			fb := L2ForwardingOutTable.ofTable.BuildFlow(priorityAdd(priorityNormal, 3)).
 				Cookie(cookieID).
 				MatchRegFieldWithValue(TargetOFPortField, config.HostGatewayOFPort).
 				MatchProtocol(ipProtocol).
@@ -1062,7 +1070,7 @@ func (f *featurePodConnectivity) flowsToTrace(dataplaneTag uint8,
 			flows = append(flows, fb.Done())
 		}
 		// Only SendToController if output port is Pod port.
-		fb := L2ForwardingOutTable.ofTable.BuildFlow(priorityNormal + 2).
+		fb := L2ForwardingOutTable.ofTable.BuildFlow(priorityAdd(priorityNormal, 2)).
 			Cookie(cookieID).
 			MatchProtocol(ipProtocol).
 			MatchRegMark(OFPortFoundRegMark).
@@ -1112,7 +1120,7 @@ func (f *featureService) flowsToTrace(dataplaneTag uint8,
 		if f.enableProxy {
 			// Only SendToController for hairpin traffic.
 			// This flow must have higher priority than the one installed by l2ForwardOutputHairpinServiceFlow.
-			fb := L2ForwardingOutTable.ofTable.BuildFlow(priorityHigh + 2).
+			fb := L2ForwardingOutTable.ofTable.BuildFlow(priorityAdd(priorityHigh, 2)).
 				Cookie(cookieID).
 				MatchProtocol(ipProtocol).
 				MatchCTMark(HairpinCTMark).
@@ -1141,9 +1149,9 @@ func (f *featureNetworkPolicy) flowsToTrace(dataplaneTag uint8,
 	defer f.conjMatchFlowLock.Unlock()
 	for _, ctx := range f.globalConjMatchFlowCache {
 		if ctx.dropFlow != nil {
-			copyFlowBuilder := ctx.dropFlow.CopyToBuilder(priorityNormal+2, false)
+			copyFlowBuilder := ctx.dropFlow.CopyToBuilder(priorityAdd(priorityNormal, 2), false)
 			if ctx.dropFlow.FlowProtocol() == "" {
-				copyFlowBuilderIPv6 := ctx.dropFlow.CopyToBuilder(priorityNormal+2, false)
+				copyFlowBuilderIPv6 := ctx.dropFlow.CopyToBuilder(priorityAdd(priorityNormal, 2), false)
 				copyFlowBuilderIPv6 = copyFlowBuilderIPv6.MatchProtocol(binding.ProtocolIPv6)
 				if f.ovsMetersAreSupported {
 					copyFlowBuilderIPv6 = copyFlowBuilderIPv6.Action().Meter(PacketInMeterIDTF)
@@ -1169,11 +1177,11 @@ func (f *featureNetworkPolicy) flowsToTrace(dataplaneTag uint8,
 	for _, conj := range f.policyCache.List() {
 		for _, flow := range conj.(*policyRuleConjunction).metricFlows {
 			if flow.IsDropFlow() {
-				copyFlowBuilder := flow.CopyToBuilder(priorityNormal+2, false)
+				copyFlowBuilder := flow.CopyToBuilder(priorityAdd(priorityNormal, 2), false)
 				// Generate both IPv4 and IPv6 flows if the original drop flow doesn't match IP/IPv6.
 				// DSCP field is in IP/IPv6 headers so IP/IPv6 match is required in a flow.
 				if flow.FlowProtocol() == "" {
-					copyFlowBuilderIPv6 := flow.CopyToBuilder(priorityNormal+2, false)
+					copyFlowBuilderIPv6 := flow.CopyToBuilder(priorityAdd(priorityNormal, 2), false)
 					copyFlowBuilderIPv6 = copyFlowBuilderIPv6.MatchProtocol(binding.ProtocolIPv6)
 					if f.ovsMetersAreSupported {
 						copyFlowBuilderIPv6 = copyFlowBuilderIPv6.Action().Meter(PacketInMeterIDTF)
