@@ -4754,7 +4754,7 @@ spec:
   selector:
     app: grafana
   sessionAffinity: None
-  type: LoadBalancer
+  type: NodePort
 ---
 apiVersion: v1
 kind: PersistentVolume
