@@ -275,6 +275,11 @@ codegen:
 	@echo "===> Updating generated code <==="
 	$(CURDIR)/hack/update-codegen.sh
 
+.PHONY: mockgen
+mockgen:
+	@echo "===> Updating generated mock code <==="
+	$(CURDIR)/hack/update-codegen.sh mockgen
+
 ### Docker images ###
 
 .PHONY: ubuntu
