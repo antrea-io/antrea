@@ -1272,8 +1272,7 @@ func (f *featurePodConnectivity) l3FwdFlowToPod(localGatewayMAC net.HardwareAddr
 }
 
 // l3FwdFlowRouteToPod generates the flows to match the packets destined for a Pod based on the destination IPs. It rewrites
-// destination MAC to the Pod interface's MAC. The flows are used in networkPolicyOnly mode to match the packets from the
-// Antrea gateway.
+// destination MAC to the Pod interface's MAC. The flows are only used in networkPolicyOnly mode.
 func (f *featurePodConnectivity) l3FwdFlowRouteToPod(podInterfaceIPs []net.IP, podInterfaceMAC net.HardwareAddr) []binding.Flow {
 	cookieID := f.cookieAllocator.Request(f.category).Raw()
 	var flows []binding.Flow
@@ -1284,7 +1283,7 @@ func (f *featurePodConnectivity) l3FwdFlowRouteToPod(podInterfaceIPs []net.IP, p
 			MatchProtocol(ipProtocol).
 			MatchDstIP(ip).
 			Action().SetDstMAC(podInterfaceMAC).
-			Action().NextTable().
+			Action().GotoTable(L3DecTTLTable.GetID()).
 			Done())
 	}
 	return flows
@@ -1302,7 +1301,7 @@ func (f *featurePodConnectivity) l3FwdFlowRouteToGW() []binding.Flow {
 			MatchProtocol(ipProtocol).
 			Action().SetDstMAC(f.nodeConfig.GatewayConfig.MAC).
 			Action().LoadRegMark(ToGatewayRegMark).
-			Action().NextTable().
+			Action().GotoTable(L3DecTTLTable.GetID()).
 			Done(),
 		)
 	}
