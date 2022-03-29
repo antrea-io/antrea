@@ -65,7 +65,7 @@ func TestStaleController_CleanupService(t *testing.T) {
 		Spec: mcsv1alpha1.ResourceImportSpec{
 			Name:      "non-nginx",
 			Namespace: "default",
-			Kind:      common.ServiceKind,
+			Kind:      common.ServiceImportKind,
 		},
 	}
 	tests := []struct {
