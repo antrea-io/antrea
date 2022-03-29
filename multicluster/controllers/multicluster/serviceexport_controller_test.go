@@ -307,7 +307,7 @@ func TestServiceExportReconciler_handleServiceUpdateEvent(t *testing.T) {
 							IP: "192.168.17.11",
 						},
 					},
-					Ports: epPorts8080,
+					Ports: common.RemovePortName(epPorts8080),
 				},
 			}
 			if !reflect.DeepEqual(subsets, expectedSubsets) {

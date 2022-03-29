@@ -73,9 +73,23 @@ func FilterEndpointSubsets(subsets []corev1.EndpointSubset) []corev1.EndpointSub
 		}
 		if len(newAddresses) > 0 {
 			subset.Addresses = newAddresses
-			subset.Ports = s.Ports
+			subset.Ports = RemovePortName(s.Ports)
 			newSubsets = append(newSubsets, subset)
 		}
 	}
 	return newSubsets
+}
+
+// RemovePortName will remove each port's name since Antrea agent will skip reconciling
+// the Service/Endpoint if Service has no name but Endpoint has a name, vice versa.
+func RemovePortName(originalPorts []corev1.EndpointPort) []corev1.EndpointPort {
+	var newPorts []corev1.EndpointPort
+	for _, port := range originalPorts {
+		newPorts = append(newPorts, corev1.EndpointPort{
+			Port:        port.Port,
+			Protocol:    port.Protocol,
+			AppProtocol: port.AppProtocol,
+		})
+	}
+	return newPorts
 }

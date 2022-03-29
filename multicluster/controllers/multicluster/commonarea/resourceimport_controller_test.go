@@ -70,7 +70,6 @@ var (
 				Spec: k8smcsapi.ServiceImportSpec{
 					Ports: []k8smcsapi.ServicePort{
 						{
-							Name:     "http",
 							Protocol: corev1.ProtocolTCP,
 							Port:     80,
 						},
@@ -88,7 +87,6 @@ var (
 			},
 			Ports: []corev1.EndpointPort{
 				{
-					Name:     "http",
 					Port:     80,
 					Protocol: corev1.ProtocolTCP,
 				},
@@ -286,7 +284,6 @@ func TestResourceImportReconciler_handleUpdateEvent(t *testing.T) {
 		Spec: k8smcsapi.ServiceImportSpec{
 			Ports: []k8smcsapi.ServicePort{
 				{
-					Name:     "http",
 					Protocol: corev1.ProtocolTCP,
 					Port:     8080,
 				},
@@ -317,7 +314,6 @@ func TestResourceImportReconciler_handleUpdateEvent(t *testing.T) {
 		},
 		Ports: []corev1.EndpointPort{
 			{
-				Name:     "http",
 				Port:     8080,
 				Protocol: corev1.ProtocolTCP,
 			},
@@ -331,7 +327,6 @@ func TestResourceImportReconciler_handleUpdateEvent(t *testing.T) {
 		},
 		Ports: []corev1.EndpointPort{
 			{
-				Name:     "http",
 				Port:     8080,
 				Protocol: corev1.ProtocolTCP,
 			},
@@ -366,7 +361,6 @@ func TestResourceImportReconciler_handleUpdateEvent(t *testing.T) {
 	}
 	newPorts := []k8smcsapi.ServicePort{
 		{
-			Name:     "http",
 			Protocol: corev1.ProtocolTCP,
 			Port:     8080,
 		},
@@ -410,7 +404,6 @@ func TestResourceImportReconciler_handleUpdateEvent(t *testing.T) {
 			resNamespaceName: types.NamespacedName{Namespace: "default", Name: "antrea-mc-nginx"},
 			expectedSvcPorts: []corev1.ServicePort{
 				{
-					Name:     "http",
 					Protocol: corev1.ProtocolTCP,
 					Port:     8080,
 				},
