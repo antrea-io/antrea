@@ -112,7 +112,7 @@ func (c *StaleController) cleanupStaleServiceResources(remoteCluster commonarea.
 
 	for _, resImp := range resImpList.Items {
 		for k, svc := range mcsSvcItems {
-			if resImp.Spec.Kind == common.ServiceKind && svc.Name == common.AntreaMCSPrefix+resImp.Spec.Name && svc.Namespace == resImp.Spec.Namespace {
+			if resImp.Spec.Kind == common.ServiceImportKind && svc.Name == common.AntreaMCSPrefix+resImp.Spec.Name && svc.Namespace == resImp.Spec.Namespace {
 				// Set the valid Service item as empty Service, then all left non-empty items should be removed.
 				mcsSvcItems[k] = corev1.Service{}
 			}
