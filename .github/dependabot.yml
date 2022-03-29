@@ -7,6 +7,8 @@ updates:
     open-pull-requests-limit: 5
     ignore:
     - dependency-name: "k8s.io/*"
+    - dependency-name: "sigs.k8s.io/*"
+    - dependency-name: "github.com/containernetworking/*"
     - dependency-name: "github.com/vmware/go-ipfix"
     - dependency-name: "github.com/TomCodeLV/OVSDB-golang-lib"
     - dependency-name: "github.com/vmware-tanzu/octant"
