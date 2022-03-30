@@ -2,7 +2,8 @@
 
 ## 1.6.0 - 2022-03-29
 
-The Egress feature is graduated from Alpha to Beta and is therefore enabled by default.
+- The Egress feature is graduated from Alpha to Beta and is therefore enabled by default.
+- The support for proxying all Service traffic by Antrea Proxy (enabled by `antreaProxy.proxyAll`) is now Beta.
 
 ### Added
 
@@ -78,7 +79,7 @@ The Egress feature is graduated from Alpha to Beta and is therefore enabled by d
 - Fix CT mark matching without range in flow exporter. ([#3348](https://github.com/antrea-io/antrea/pull/3348), [@hongliangl])
 - [Windows] Enable IP forwarding of the Windows bridge local interface to fix support for Service of type LoadBalancer. ([#3137](https://github.com/antrea-io/antrea/pull/3137), [@hongliangl])
 
-[Antrea Multi-cluster]: https://github.com/antrea-io/antrea/blob/v1.6.0/docs/multicluster/getting-started.md
+[Antrea Multi-cluster]: https://github.com/antrea-io/antrea/blob/v1.6.0/docs/multicluster/user-guide.md
 [Antrea IPAM]: https://github.com/antrea-io/antrea/blob/v1.6.0/docs/antrea-ipam.md
 [AntreaPolicy]: https://github.com/antrea-io/antrea/blob/v1.6.0/docs/antrea-network-policy.md
 
