@@ -492,14 +492,13 @@ func (c *client) InstallPodFlows(interfaceName string, podInterfaceIPs []net.IP,
 	}
 	// Add IP SpoofGuard flows for all validate IPs.
 	flows = append(flows, c.featurePodConnectivity.podIPSpoofGuardFlow(podInterfaceIPs, podInterfaceMAC, ofPort, vlanID)...)
-	// Add L3 Routing flows to rewrite Pod's dst MAC for all validate IPs.
-	flows = append(flows, c.featurePodConnectivity.l3FwdFlowToPod(localGatewayMAC, podInterfaceIPs, podInterfaceMAC, isAntreaFlexibleIPAM, vlanID)...)
 
 	if c.networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {
-		// In policy-only mode, traffic to local Pod is routed based on destination IP.
-		flows = append(flows,
-			c.featurePodConnectivity.l3FwdFlowRouteToPod(podInterfaceIPs, podInterfaceMAC)...,
-		)
+		// In NetworkPolicyOnly mode, add flows to forward packets to local Pods based on destination IPs.
+		flows = append(flows, c.featurePodConnectivity.l3FwdFlowRouteToPod(podInterfaceIPs, podInterfaceMAC)...)
+	} else {
+		// In non-NetworkPolicyOnly mode, add flows to forward packets with RewriteMACRegMark to local Pods based on destination IPs.
+		flows = append(flows, c.featurePodConnectivity.l3FwdFlowToPod(localGatewayMAC, podInterfaceIPs, podInterfaceMAC, isAntreaFlexibleIPAM, vlanID)...)
 	}
 
 	if isAntreaFlexibleIPAM {
