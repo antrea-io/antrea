@@ -15,7 +15,7 @@ require (
 	github.com/blang/semver v3.5.1+incompatible
 	github.com/cheggaaa/pb/v3 v3.0.8
 	github.com/confluentinc/bincover v0.1.0
-	github.com/containernetworking/cni v0.8.1
+	github.com/containernetworking/cni v1.0.1
 	github.com/containernetworking/plugins v0.8.7
 	github.com/coreos/go-iptables v0.6.0
 	github.com/gammazero/deque v0.1.0
@@ -27,7 +27,7 @@ require (
 	github.com/google/btree v1.0.1
 	github.com/google/uuid v1.1.2
 	github.com/hashicorp/memberlist v0.2.4
-	github.com/k8snetworkplumbingwg/network-attachment-definition-client v1.1.0
+	github.com/k8snetworkplumbingwg/network-attachment-definition-client v1.2.0
 	github.com/k8snetworkplumbingwg/sriov-cni v2.1.0+incompatible
 	github.com/kevinburke/ssh_config v0.0.0-20190725054713-01f96b0aa0cd
 	github.com/mdlayher/arp v0.0.0-20191213142603-f72070a231fc
