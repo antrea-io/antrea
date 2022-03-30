@@ -27,7 +27,7 @@ type featureMulticast struct {
 	cookieAllocator cookie.Allocator
 	ipProtocols     []binding.Protocol
 
-	mcastFlowCache *flowCategoryCache
+	cachedFlows *flowCategoryCache
 
 	category cookie.Category
 }
@@ -40,7 +40,7 @@ func newFeatureMulticast(cookieAllocator cookie.Allocator, ipProtocols []binding
 	return &featureMulticast{
 		cookieAllocator: cookieAllocator,
 		ipProtocols:     ipProtocols,
-		mcastFlowCache:  newFlowCategoryCache(),
+		cachedFlows:     newFlowCategoryCache(),
 		category:        cookie.Multicast,
 	}
 }
@@ -61,5 +61,5 @@ func (f *featureMulticast) initFlows() []binding.Flow {
 
 func (f *featureMulticast) replayFlows() []binding.Flow {
 	// Get cached flows.
-	return getCachedFlows(f.mcastFlowCache)
+	return getCachedFlows(f.cachedFlows)
 }

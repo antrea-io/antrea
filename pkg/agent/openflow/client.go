@@ -30,7 +30,6 @@ import (
 	"antrea.io/antrea/pkg/agent/util"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 	utilip "antrea.io/antrea/pkg/util/ip"
-	"antrea.io/antrea/pkg/util/runtime"
 	"antrea.io/antrea/third_party/proxy"
 )
 
@@ -43,22 +42,11 @@ type Client interface {
 	// be called to ensure that the set of OVS flows is correct. All flows programmed in the
 	// switch which match the current round number will be deleted before any new flow is
 	// installed.
-	Initialize(roundInfo types.RoundInfo, config *config.NodeConfig, networkconfig *config.NetworkConfig) (<-chan struct{}, error)
-
-	// InstallGatewayFlows sets up flows related to an OVS gateway port, the gateway must exist.
-	InstallGatewayFlows() error
-
-	// InstallClusterServiceCIDRFlows sets up the appropriate flows so that traffic can reach
-	// the different Services running in the Cluster. This method needs to be invoked once with
-	// the Cluster Service CIDR as a parameter.
-	InstallClusterServiceCIDRFlows(serviceNets []*net.IPNet) error
-
-	// InstallDefaultServiceFlows sets up the appropriate flows so that traffic can reach
-	// the different Services running in the Cluster. This method needs to be invoked once.
-	InstallDefaultServiceFlows(nodePortAddressesIPv4, nodePortAddressesIPv6 []net.IP) error
-
-	// InstallDefaultTunnelFlows sets up the classification flow for the default (flow based) tunnel.
-	InstallDefaultTunnelFlows() error
+	Initialize(roundInfo types.RoundInfo,
+		config *config.NodeConfig,
+		networkConfig *config.NetworkConfig,
+		egressConfig *config.EgressConfig,
+		serviceConfig *config.ServiceConfig) (<-chan struct{}, error)
 
 	// InstallNodeFlows should be invoked when a connection to a remote Node is going to be set
 	// up. The hostname is used to identify the added flows. When IPsec tunnel is enabled,
@@ -139,16 +127,6 @@ type Client interface {
 	// DeletePolicyRuleAddress removes addresses from the specified NetworkPolicy rule. If addrType is srcAddress, the addresses
 	// are removed from PolicyRule.From, else from PolicyRule.To.
 	DeletePolicyRuleAddress(ruleID uint32, addrType types.AddressType, addresses []types.Address, priority *uint16) error
-
-	// InstallBridgeUplinkFlows installs Openflow flows between bridge local port and uplink port to support host networking.
-	InstallBridgeUplinkFlows() error
-
-	// InstallExternalFlows sets up flows to enable Pods to communicate to
-	// the external IP addresses. The flows identify the packets from local
-	// Pods to the external IP address, and mark the packets to be SNAT'd
-	// with the configured SNAT IPs. On Windows Node, the flows also perform
-	// SNAT with the Openflow NAT action.
-	InstallExternalFlows(exceptCIDRs []net.IPNet) error
 
 	// InstallSNATMarkFlows installs flows for a local SNAT IP. On Linux, a
 	// single flow is added to mark the packets tunnelled from remote Nodes
@@ -636,80 +614,6 @@ func (c *client) GetServiceFlowKeys(svcIP net.IP, svcPort uint16, protocol bindi
 	return flowKeys
 }
 
-func (c *client) InstallDefaultServiceFlows(nodePortAddressesIPv4, nodePortAddressesIPv6 []net.IP) error {
-	flows := []binding.Flow{
-		c.featureService.serviceNeedLBFlow(),
-		c.featureService.sessionAffinityReselectFlow(),
-		c.featureService.l2ForwardOutputHairpinServiceFlow(),
-	}
-
-	if c.proxyAll {
-		for _, ipProtocol := range c.ipProtocols {
-			// These flows are used to match the first packet of NodePort. The flows will set a bit of a register to mark
-			// the Service type of the packet as NodePort. The mark will be consumed in table serviceLBTable to match NodePort
-			nodePortAddresses := nodePortAddressesIPv4
-			if ipProtocol == binding.ProtocolIPv6 {
-				nodePortAddresses = nodePortAddressesIPv6
-			}
-			flows = append(flows, c.featureService.nodePortMarkFlows(nodePortAddresses, ipProtocol)...)
-		}
-	}
-	if err := c.ofEntryOperations.AddAll(flows); err != nil {
-		return err
-	}
-	c.featureService.fixedFlows = flows
-	return nil
-}
-
-func (c *client) InstallClusterServiceCIDRFlows(serviceNets []*net.IPNet) error {
-	flows := c.featureService.serviceCIDRDNATFlows(serviceNets)
-	if err := c.ofEntryOperations.AddAll(flows); err != nil {
-		return err
-	}
-	c.featureService.fixedFlows = flows
-	return nil
-}
-
-func (c *client) InstallGatewayFlows() error {
-	gatewayConfig := c.nodeConfig.GatewayConfig
-
-	flows := []binding.Flow{
-		c.featurePodConnectivity.gatewayClassifierFlow(),
-		c.featurePodConnectivity.l2ForwardCalcFlow(gatewayConfig.MAC, config.HostGatewayOFPort),
-	}
-	flows = append(flows, c.featurePodConnectivity.gatewayIPSpoofGuardFlows()...)
-
-	// Add ARP SpoofGuard flow for local gateway interface.
-	if gatewayConfig.IPv4 != nil {
-		flows = append(flows, c.featurePodConnectivity.arpSpoofGuardFlow(gatewayConfig.IPv4, gatewayConfig.MAC, config.HostGatewayOFPort))
-		if c.connectUplinkToBridge {
-			flows = append(flows, c.featurePodConnectivity.arpSpoofGuardFlow(c.nodeConfig.NodeIPv4Addr.IP, gatewayConfig.MAC, config.HostGatewayOFPort))
-		}
-	}
-
-	// Add flow to ensure the liveness check packet could be forwarded correctly.
-	flows = append(flows, c.featurePodConnectivity.localProbeFlow(c.ovsDatapathType)...)
-	flows = append(flows, c.featurePodConnectivity.l3FwdFlowToGateway()...)
-
-	if err := c.ofEntryOperations.AddAll(flows); err != nil {
-		return err
-	}
-	c.featurePodConnectivity.fixedFlows = append(c.featurePodConnectivity.fixedFlows, flows...)
-	return nil
-}
-
-func (c *client) InstallDefaultTunnelFlows() error {
-	flows := []binding.Flow{
-		c.featurePodConnectivity.tunnelClassifierFlow(config.DefaultTunOFPort),
-		c.featurePodConnectivity.l2ForwardCalcFlow(GlobalVirtualMAC, config.DefaultTunOFPort),
-	}
-	if err := c.ofEntryOperations.AddAll(flows); err != nil {
-		return err
-	}
-	c.featurePodConnectivity.fixedFlows = append(c.featurePodConnectivity.fixedFlows, flows...)
-	return nil
-}
-
 func (c *client) initialize() error {
 	if err := c.ofEntryOperations.AddAll(c.defaultFlows()); err != nil {
 		return fmt.Errorf("failed to install default flows: %v", err)
@@ -732,9 +636,15 @@ func (c *client) initialize() error {
 	return nil
 }
 
-func (c *client) Initialize(roundInfo types.RoundInfo, nodeConfig *config.NodeConfig, networkConfig *config.NetworkConfig) (<-chan struct{}, error) {
+func (c *client) Initialize(roundInfo types.RoundInfo,
+	nodeConfig *config.NodeConfig,
+	networkConfig *config.NetworkConfig,
+	egressConfig *config.EgressConfig,
+	serviceConfig *config.ServiceConfig) (<-chan struct{}, error) {
 	c.nodeConfig = nodeConfig
 	c.networkConfig = networkConfig
+	c.egressConfig = egressConfig
+	c.serviceConfig = serviceConfig
 
 	if networkConfig.IPv4Enabled {
 		c.ipProtocols = append(c.ipProtocols, binding.ProtocolIP)
@@ -785,6 +695,7 @@ func (c *client) generatePipelines() {
 		c.ipProtocols,
 		c.nodeConfig,
 		c.networkConfig,
+		c.ovsDatapathType,
 		c.connectUplinkToBridge,
 		c.enableMulticast)
 	c.activatedFeatures = append(c.activatedFeatures, c.featurePodConnectivity)
@@ -803,6 +714,7 @@ func (c *client) generatePipelines() {
 	c.featureService = newFeatureService(c.cookieAllocator,
 		c.ipProtocols,
 		c.nodeConfig,
+		c.serviceConfig,
 		c.bridge,
 		c.enableProxy,
 		c.proxyAll,
@@ -811,7 +723,7 @@ func (c *client) generatePipelines() {
 	c.traceableFeatures = append(c.traceableFeatures, c.featureService)
 
 	if c.enableEgress {
-		c.featureEgress = newFeatureEgress(c.cookieAllocator, c.ipProtocols, c.nodeConfig)
+		c.featureEgress = newFeatureEgress(c.cookieAllocator, c.ipProtocols, c.nodeConfig, c.egressConfig)
 		c.activatedFeatures = append(c.activatedFeatures, c.featureEgress)
 	}
 
@@ -866,17 +778,6 @@ func (c *client) generatePipelines() {
 		// generate a pipeline from the required table list.
 		c.pipelines[pipelineID] = generatePipeline(pipelineID, requiredTables)
 	}
-}
-
-func (c *client) InstallExternalFlows(exceptCIDRs []net.IPNet) error {
-	if c.enableEgress {
-		flows := c.featureEgress.externalFlows(exceptCIDRs)
-		if err := c.ofEntryOperations.AddAll(flows); err != nil {
-			return fmt.Errorf("failed to install flows for external communication: %v", err)
-		}
-		c.featureEgress.fixedFlows = append(c.featureEgress.fixedFlows, flows...)
-	}
-	return nil
 }
 
 func (c *client) InstallSNATMarkFlows(snatIP net.IP, mark uint32) error {
@@ -1190,7 +1091,7 @@ func (c *client) InstallMulticastInitialFlows(pktInReason uint8) error {
 	cacheKey := fmt.Sprintf("multicast")
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
-	return c.addFlows(c.featureMulticast.mcastFlowCache, cacheKey, flows)
+	return c.addFlows(c.featureMulticast.cachedFlows, cacheKey, flows)
 }
 
 func (c *client) InstallMulticastFlow(multicastIP net.IP) error {
@@ -1198,14 +1099,14 @@ func (c *client) InstallMulticastFlow(multicastIP net.IP) error {
 	cacheKey := fmt.Sprintf("multicast_%s", multicastIP.String())
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
-	return c.addFlows(c.featureMulticast.mcastFlowCache, cacheKey, flows)
+	return c.addFlows(c.featureMulticast.cachedFlows, cacheKey, flows)
 }
 
 func (c *client) UninstallMulticastFlow(multicastIP net.IP) error {
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
 	cacheKey := fmt.Sprintf("multicast_%s", multicastIP.String())
-	return c.deleteFlows(c.featureMulticast.mcastFlowCache, cacheKey)
+	return c.deleteFlows(c.featureMulticast.cachedFlows, cacheKey)
 }
 
 func (c *client) SendIGMPQueryPacketOut(
@@ -1226,23 +1127,4 @@ func (c *client) SendIGMPQueryPacketOut(
 	packetOutBuilder = packetOutBuilder.SetIPProtocol(binding.ProtocolIGMP).SetL4Packet(igmp)
 	packetOutObj := packetOutBuilder.Done()
 	return c.bridge.SendPacketOut(packetOutObj)
-}
-
-func (c *client) InstallBridgeUplinkFlows() error {
-	if runtime.IsWindowsPlatform() || c.connectUplinkToBridge {
-		podCIDRMap := make(map[binding.Protocol]net.IPNet)
-		if c.nodeConfig.PodIPv4CIDR != nil {
-			podCIDRMap[binding.ProtocolIP] = *c.nodeConfig.PodIPv4CIDR
-		}
-		//TODO: support IPv6
-		flows := c.featurePodConnectivity.hostBridgeUplinkFlows(podCIDRMap)
-		if c.connectUplinkToBridge {
-			flows = append(flows, c.featurePodConnectivity.hostBridgeUplinkVLANFlows()...)
-		}
-		if err := c.ofEntryOperations.AddAll(flows); err != nil {
-			return err
-		}
-		c.featurePodConnectivity.fixedFlows = append(c.featurePodConnectivity.fixedFlows, flows...)
-	}
-	return nil
 }

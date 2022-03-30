@@ -182,3 +182,11 @@ func (nc *NetworkConfig) NeedsTunnelToPeer(peerIP net.IP, localIP *net.IPNet) bo
 func (nc *NetworkConfig) NeedsDirectRoutingToPeer(peerIP net.IP, localIP *net.IPNet) bool {
 	return (nc.TrafficEncapMode == TrafficEncapModeNoEncap || nc.TrafficEncapMode == TrafficEncapModeHybrid) && localIP.Contains(peerIP)
 }
+
+// ServiceConfig includes K8s Service CIDR and available IP addresses for NodePort.
+type ServiceConfig struct {
+	ServiceCIDR           *net.IPNet // K8s Service ClusterIP CIDR
+	ServiceCIDRv6         *net.IPNet // K8s Service ClusterIP CIDR in IPv6
+	NodePortAddressesIPv4 []net.IP
+	NodePortAddressesIPv6 []net.IP
+}

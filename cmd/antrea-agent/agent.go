@@ -191,6 +191,12 @@ func run(o *Options) error {
 			return fmt.Errorf("getting available NodePort IP addresses failed: %v", err)
 		}
 	}
+	serviceConfig := &config.ServiceConfig{
+		ServiceCIDR:           serviceCIDRNet,
+		ServiceCIDRv6:         serviceCIDRNetv6,
+		NodePortAddressesIPv4: nodePortAddressesIPv4,
+		NodePortAddressesIPv6: nodePortAddressesIPv6,
+	}
 
 	// Initialize agent and node network.
 	agentInitializer := agent.NewInitializer(
@@ -202,17 +208,14 @@ func run(o *Options) error {
 		o.config.OVSBridge,
 		o.config.HostGateway,
 		o.config.DefaultMTU,
-		serviceCIDRNet,
-		serviceCIDRNetv6,
 		networkConfig,
 		wireguardConfig,
 		egressConfig,
+		serviceConfig,
 		networkReadyCh,
 		stopCh,
 		features.DefaultFeatureGate.Enabled(features.AntreaProxy),
 		o.config.AntreaProxy.ProxyAll,
-		nodePortAddressesIPv4,
-		nodePortAddressesIPv6,
 		connectUplinkToBridge)
 	err = agentInitializer.Initialize()
 	if err != nil {

@@ -56,6 +56,8 @@ var (
 		NodeIPv4Addr:    nodeIP,
 	}
 	networkConfig = &config.NetworkConfig{IPv4Enabled: true}
+	egressConfig  = &config.EgressConfig{}
+	serviceConfig = &config.ServiceConfig{}
 )
 
 func installNodeFlows(ofClient Client, cacheKey string) (int, error) {
@@ -111,6 +113,8 @@ func TestIdempotentFlowInstallation(t *testing.T) {
 			client.ofEntryOperations = m
 			client.nodeConfig = nodeConfig
 			client.networkConfig = networkConfig
+			client.egressConfig = egressConfig
+			client.serviceConfig = serviceConfig
 			client.ipProtocols = []binding.Protocol{binding.ProtocolIP}
 			client.generatePipelines()
 
@@ -142,6 +146,8 @@ func TestIdempotentFlowInstallation(t *testing.T) {
 			client.ofEntryOperations = m
 			client.nodeConfig = nodeConfig
 			client.networkConfig = networkConfig
+			client.egressConfig = egressConfig
+			client.serviceConfig = serviceConfig
 			client.ipProtocols = []binding.Protocol{binding.ProtocolIP}
 			client.generatePipelines()
 
@@ -186,6 +192,8 @@ func TestFlowInstallationFailed(t *testing.T) {
 			client.ofEntryOperations = m
 			client.nodeConfig = nodeConfig
 			client.networkConfig = networkConfig
+			client.egressConfig = egressConfig
+			client.serviceConfig = serviceConfig
 			client.ipProtocols = []binding.Protocol{binding.ProtocolIP}
 			client.generatePipelines()
 
@@ -223,6 +231,8 @@ func TestConcurrentFlowInstallation(t *testing.T) {
 			client.ofEntryOperations = m
 			client.nodeConfig = nodeConfig
 			client.networkConfig = networkConfig
+			client.egressConfig = egressConfig
+			client.serviceConfig = serviceConfig
 			client.ipProtocols = []binding.Protocol{binding.ProtocolIP}
 			client.generatePipelines()
 
@@ -415,6 +425,8 @@ func prepareTraceflowFlow(ctrl *gomock.Controller) *client {
 	c.ofEntryOperations = m
 	c.nodeConfig = nodeConfig
 	c.networkConfig = networkConfig
+	c.egressConfig = egressConfig
+	c.serviceConfig = serviceConfig
 	c.ipProtocols = []binding.Protocol{binding.ProtocolIP}
 	c.generatePipelines()
 
