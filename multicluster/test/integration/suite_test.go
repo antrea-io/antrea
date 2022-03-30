@@ -37,10 +37,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	mcsscheme "sigs.k8s.io/mcs-api/pkg/client/clientset/versioned/scheme"
 
-	// mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
 	mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
 	multiclustercontrollers "antrea.io/antrea/multicluster/controllers/multicluster"
 	antreamcscheme "antrea.io/antrea/multicluster/pkg/client/clientset/versioned/scheme"
+	antreascheme "antrea.io/antrea/pkg/client/clientset/versioned/scheme"
 	"antrea.io/antrea/pkg/signals"
 	//+kubebuilder:scaffold:imports
 )
@@ -97,7 +97,9 @@ var _ = BeforeSuite(func() {
 	By("bootstrapping test environment")
 	useExistingCluster := true
 	testEnv = &envtest.Environment{
-		CRDDirectoryPaths:     []string{filepath.Join("..", "..", "config", "crd", "bases"), filepath.Join("..", "..", "config", "crd", "k8smcs")},
+		CRDDirectoryPaths: []string{filepath.Join("..", "..", "config", "crd", "bases"),
+			filepath.Join("..", "..", "config", "crd", "k8smcs"),
+			filepath.Join("..", "..", "..", "build", "yamls", "base", "crds.yml")},
 		ErrorIfCRDPathMissing: true,
 		UseExistingCluster:    &useExistingCluster,
 	}
@@ -113,6 +115,8 @@ var _ = BeforeSuite(func() {
 	err = antreamcscheme.AddToScheme(scheme)
 	Expect(err).NotTo(HaveOccurred())
 	err = k8sscheme.AddToScheme(scheme)
+	Expect(err).NotTo(HaveOccurred())
+	err = antreascheme.AddToScheme(scheme)
 	Expect(err).NotTo(HaveOccurred())
 	//+kubebuilder:scaffold:scheme
 
