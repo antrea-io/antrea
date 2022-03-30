@@ -31,11 +31,14 @@ _usage="Usage: $0 [--encap-mode <mode>] [--ip-family <v4|v6>] [--no-proxy] [--np
         --no-np                       Disables Antrea-native policies.
         --skip                        A comma-separated list of keywords, with which tests should be skipped.
         --coverage                    Enables measure Antrea code coverage when run e2e tests on kind.
+        --setup-only                  Only perform setting up the cluster and run test.
+        --cleanup-only                Only perform cleaning up the cluster.
+        --test-only                   Only run test on current cluster. Not set up/clean up the cluster.
         --help, -h                    Print this message and exit.
 "
 
 function print_usage {
-    echoerr "$_usage"
+    echoerr -n "$_usage"
 }
 
 
@@ -44,12 +47,13 @@ YML_CMD=$(dirname $0)"/../../hack/generate-manifest.sh"
 FLOWAGGREGATOR_YML_CMD=$(dirname $0)"/../../hack/generate-manifest-flow-aggregator.sh"
 
 function quit {
-  if [[ $? != 0 ]]; then
-    echoerr " Test failed cleaning testbed"
-    $TESTBED_CMD destroy kind
+  result=$?
+  if [[ $setup_only || $test_only ]]; then
+    exit $result
   fi
+  echoerr "Cleaning testbed"
+  $TESTBED_CMD destroy kind
 }
-trap "quit" INT EXIT
 
 mode=""
 ipfamily="v4"
@@ -59,6 +63,9 @@ endpointslice=false
 np=true
 coverage=false
 skiplist=""
+setup_only=false
+cleanup_only=false
+test_only=false
 while [[ $# -gt 0 ]]
 do
 key="$1"
@@ -96,6 +103,18 @@ case $key in
     coverage=true
     shift
     ;;
+    --setup-only)
+    setup_only=true
+    shift
+    ;;
+    --cleanup-only)
+    cleanup_only=true
+    shift
+    ;;
+    --test-only)
+    test_only=true
+    shift
+    ;;
     -h|--help)
     print_usage
     exit 0
@@ -106,6 +125,13 @@ case $key in
     ;;
 esac
 done
+
+if [[ $cleanup_only == "true" ]];then
+  $TESTBED_CMD destroy kind
+  exit 0
+fi
+
+trap "quit" INT EXIT
 
 manifest_args=""
 if ! $proxy; then
@@ -150,9 +176,8 @@ fi
 
 printf -v COMMON_IMAGES "%s " "${COMMON_IMAGES_LIST[@]}"
 
-function run_test {
-  current_mode=$1
-  args=$2
+function setup_cluster {
+  args=$1
 
   if [[ "$ipfamily" == "v6" ]]; then
     args="$args --ip-family ipv6 --pod-cidr fd00:10:244::/56"
@@ -166,6 +191,10 @@ function run_test {
 
   echo "creating test bed with args $args"
   eval "timeout 600 $TESTBED_CMD create kind $args"
+}
+
+function run_test {
+  current_mode=$1
 
   if $coverage; then
       $YML_CMD --encap-mode $current_mode $manifest_args | docker exec -i kind-control-plane dd of=/root/antrea-coverage.yml
@@ -191,20 +220,28 @@ function run_test {
   else
       go test -v -timeout=75m antrea.io/antrea/test/e2e -provider=kind --logs-export-dir=$ANTREA_LOG_DIR --skip=$skiplist
   fi
-  $TESTBED_CMD destroy kind
 }
 
 if [[ "$mode" == "" ]] || [[ "$mode" == "encap" ]]; then
   echo "======== Test encap mode =========="
-  run_test encap "--images \"$COMMON_IMAGES\""
+  if [[ $test_only == "false" ]];then
+    setup_cluster "--images \"$COMMON_IMAGES\""
+  fi
+  run_test encap
 fi
 if [[ "$mode" == "" ]] || [[ "$mode" == "noEncap" ]]; then
   echo "======== Test noencap mode =========="
-  run_test noEncap "--images \"$COMMON_IMAGES\""
+  if [[ $test_only == "false" ]];then
+    setup_cluster "--images \"$COMMON_IMAGES\""
+  fi
+  run_test noEncap
 fi
 if [[ "$mode" == "" ]] || [[ "$mode" == "hybrid" ]]; then
   echo "======== Test hybrid mode =========="
-  run_test hybrid "--subnets \"20.20.20.0/24\" --images \"$COMMON_IMAGES\""
+  if [[ $test_only == "false" ]];then
+    setup_cluster "--subnets \"20.20.20.0/24\" --images \"$COMMON_IMAGES\""
+  fi
+  run_test hybrid
 fi
 exit 0
 
