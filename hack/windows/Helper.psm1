@@ -262,7 +262,7 @@ function Start-AntreaAgent {
     $AntreaAgent = "$AntreaHome\bin\antrea-agent.exe"
     $AntreaAgentConfigPath = "$AntreaHome\etc\antrea-agent.conf"
     if ($LogDir -eq "") {
-        $LogDir = "$AntreaHome\logs"
+        $LogDir = "c:\var\log\antrea"
     }
     New-DirectoryIfNotExist $LogDir
     [Environment]::SetEnvironmentVariable("NODE_NAME", (hostname).ToLower())
