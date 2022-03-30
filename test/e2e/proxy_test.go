@@ -28,8 +28,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"antrea.io/antrea/pkg/agent/config"
-	agentconfig "antrea.io/antrea/pkg/config/agent"
-	controllerconfig "antrea.io/antrea/pkg/config/controller"
 )
 
 type expectTableFlows struct {
@@ -396,7 +394,9 @@ func TestNodePortAndEgressWithTheSameBackendPod(t *testing.T) {
 	skipIfHasWindowsNodes(t)
 	skipIfNotIPv4Cluster(t)
 	skipIfNumNodesLessThan(t, 2)
+	skipIfAntreaIPAMTest(t)
 	skipIfProxyDisabled(t)
+	skipIfEgressDisabled(t)
 
 	data, err := setupTest(t)
 	if err != nil {
@@ -405,17 +405,6 @@ func TestNodePortAndEgressWithTheSameBackendPod(t *testing.T) {
 	defer teardownTest(t, data)
 	skipIfProxyAllDisabled(t, data)
 	skipIfEncapModeIsNot(t, data, config.TrafficEncapModeEncap) // Egress works for encap mode only.
-
-	cc := func(config *controllerconfig.ControllerConfig) {
-		config.FeatureGates["Egress"] = true
-	}
-	ac := func(config *agentconfig.AgentConfig) {
-		config.FeatureGates["Egress"] = true
-	}
-
-	if err := data.mutateAntreaConfigMap(cc, ac, true, true); err != nil {
-		t.Fatalf("Failed to enable Egress feature: %v", err)
-	}
 
 	// Create a NodePort Service.
 	nodePortIP := controlPlaneNodeIPv4()
