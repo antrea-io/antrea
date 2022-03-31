@@ -4,10 +4,12 @@ on:
     branches:
     - main
     - release-*
+    - feature/*
   push:
     branches:
     - main
     - release-*
+    - feature/*
 
 env:
   go-cache-name: go

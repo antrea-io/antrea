@@ -4,10 +4,12 @@ on:
     branches:
     - main
     - release-*
+    - feature/*
   push:
     branches:
     - main
     - release-*
+    - feature/*
 
 env:
   KIND_VERSION: v0.11.1

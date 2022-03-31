@@ -5,10 +5,12 @@ on:
     branches:
       - main
       - release-*
+      - feature/*
   push:
     branches:
       - main
       - release-*
+      - feature/*
 
 jobs:
   check-changes:
