@@ -24,14 +24,16 @@
     - [Aggregation of Flow Records](#aggregation-of-flow-records)
   - [Antctl support](#antctl-support)
 - [Quick deployment](#quick-deployment)
+  - [Image-building steps](#image-building-steps)
+  - [Deployment Steps](#deployment-steps)
 - [Flow Collectors](#flow-collectors)
   - [Go-ipfix Collector](#go-ipfix-collector)
-    - [Deployment Steps](#deployment-steps)
+    - [Deployment Steps](#deployment-steps-1)
     - [Output Flow Records](#output-flow-records)
   - [Grafana Flow Collector](#grafana-flow-collector)
     - [Purpose](#purpose)
     - [About Grafana and ClickHouse](#about-grafana-and-clickhouse)
-    - [Deployment Steps](#deployment-steps-1)
+    - [Deployment Steps](#deployment-steps-2)
       - [Credentials Configuration](#credentials-configuration)
       - [ClickHouse Configuration](#clickhouse-configuration)
     - [Pre-built Dashboards](#pre-built-dashboards)
@@ -45,7 +47,7 @@
   - [ELK Flow Collector (deprecated)](#elk-flow-collector-deprecated)
     - [Purpose](#purpose-1)
     - [About Elastic Stack](#about-elastic-stack)
-    - [Deployment Steps](#deployment-steps-2)
+    - [Deployment Steps](#deployment-steps-3)
     - [Pre-built Dashboards](#pre-built-dashboards-1)
       - [Overview](#overview-1)
       - [Pod-to-Pod Flows](#pod-to-pod-flows)
@@ -486,8 +488,27 @@ about flow record processing. Refer to the
 ## Quick deployment
 
 If you would like to quickly try Network Flow Visibility feature, you can deploy
-Antrea, the Flow Aggregator Service and the ELK Flow Collector on the
-[Vagrant setup](../test/e2e/README.md). You can use the following command:
+Antrea, the Flow Aggregator Service, the ELK Flow Collector or the Grafana Flow Collector on the
+[Vagrant setup](../test/e2e/README.md).
+
+### Image-building steps
+
+Build required image under antrea by using make command:
+
+```shell
+make
+make flow-aggregator-image
+```
+
+If you would like to use Grafana flow collector, run:
+
+```shell
+make flow-visibility-clickhouse-monitor
+```
+
+### Deployment Steps
+
+If you would like to deploy the ELK Flow Collector, you can run the following command:
 
 ```shell
 ./infra/vagrant/provision.sh
@@ -513,6 +534,13 @@ commands:
 ```shell
 ./infra/vagrant/provision.sh
 ./infra/vagrant/push_antrea.sh --flow-collector <externalFlowCollectorAddress>
+```
+
+If you would like to deploy the Grafana Flow Collector, you can run the following command:
+
+```shell
+./infra/vagrant/provision.sh
+./infra/vagrant/push_antrea.sh --flow-collector Grafana
 ```
 
 ## Flow Collectors
@@ -585,7 +613,7 @@ for more information about the ClickHouse Operator. Current checked-in yaml is b
 will install ClickHouse Operator into `kube-system` Namespace.
 
 ```bash
-kubectl apply -f https://raw.githubusercontent.com/antrea-io/antrea/main/build/yamls/clickhouse-operator-install-bundle.yaml
+kubectl apply -f https://raw.githubusercontent.com/antrea-io/antrea/main/build/yamls/clickhouse-operator-install-bundle.yml
 ```
 
 To deploy a released version of the Grafana Flow Collector, find a deployment manifest
