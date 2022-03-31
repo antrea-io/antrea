@@ -93,6 +93,30 @@ func TestEgressControllerValidateExternalIPPool(t *testing.T) {
 			expectedResponse: &admv1.AdmissionResponse{Allowed: true},
 		},
 		{
+			name: "CREATE operation with invalid prefix length should not be allowed",
+			request: &admv1.AdmissionRequest{
+				Name:      "foo",
+				Operation: "CREATE",
+				Object: runtime.RawExtension{Raw: marshal(copyAndMutateIPPool(testIPPool, func(pool *crdv1alpha2.IPPool) {
+					pool.Spec.IPRanges = append(pool.Spec.IPRanges, crdv1alpha2.SubnetIPRange{
+						IPRange: crdv1alpha2.IPRange{
+							CIDR: "192.168.3.0/26",
+						},
+						SubnetInfo: crdv1alpha2.SubnetInfo{
+							Gateway:      "192.168.3.1",
+							PrefixLength: 32,
+						},
+					})
+				}))},
+			},
+			expectedResponse: &admv1.AdmissionResponse{
+				Allowed: false,
+				Result: &metav1.Status{
+					Message: "Invalid prefix length 32",
+				},
+			},
+		},
+		{
 			name: "CREATE operation with CIDR partially overlap with IP range should not be allowed",
 			request: &admv1.AdmissionRequest{
 				Name:      "foo",
@@ -152,7 +176,7 @@ func TestEgressControllerValidateExternalIPPool(t *testing.T) {
 						},
 						SubnetInfo: crdv1alpha2.SubnetInfo{
 							Gateway:      "10:2400::01",
-							PrefixLength: 64,
+							PrefixLength: 24,
 						},
 					})
 				}))},
