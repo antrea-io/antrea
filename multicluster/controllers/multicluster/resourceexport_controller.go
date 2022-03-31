@@ -453,6 +453,7 @@ func SvcPortsConverter(svcPort []corev1.ServicePort) []mcs.ServicePort {
 	var mcsSP []mcs.ServicePort
 	for _, v := range svcPort {
 		mcsSP = append(mcsSP, mcs.ServicePort{
+			Name:     v.Name,
 			Port:     v.Port,
 			Protocol: v.Protocol,
 		})

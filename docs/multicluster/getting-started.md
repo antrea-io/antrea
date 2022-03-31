@@ -406,8 +406,8 @@ converging the update until users correct it to match the Service definition in 
 ResourceImport.
 2. When a member cluster has already exported a Service, e.g.: `default/nginx` with TCP
 Port `80`, then other member clusters can only export the same Service with the same Ports
-definition. Otherwise, Antrea Multi-cluster Controller will skip converging the mismatched
-ResourceExport into the corresponding ResourceImport until users correct it.
+definition including port names. Otherwise, Antrea Multi-cluster Controller will skip converting
+the mismatched ResourceExport into the corresponding ResourceImport until users correct it.
 3. When a member cluster's Service ResourceExport has not been converged successfully
 due to forementioned mismatch issue, Antrea Multi-cluster Controller will also skip converging
 the corresponding Endpoints ResourceExport until users correct it.
