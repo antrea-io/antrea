@@ -195,7 +195,13 @@ function deliver_antrea_multicluster {
 
     git show --numstat
     make clean
-    ${CLEAN_STALE_IMAGES}
+    # Clean up dangling images generated in previous builds.
+    docker image prune -f --filter "until=24h" || true > /dev/null
+
+    # Ensure that files in the Docker context have the correct permissions, or Docker caching cannot
+    # be leveraged successfully
+    chmod -R g-w build/images/ovs
+    chmod -R g-w build/images/base
 
     cp -f build/yamls/*.yml $WORKDIR
     DOCKER_REGISTRY="${DOCKER_REGISTRY}" ./hack/build-antrea-linux-all.sh --pull
