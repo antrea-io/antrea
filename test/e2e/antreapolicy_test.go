@@ -2023,6 +2023,173 @@ func testRejectServiceTraffic(t *testing.T, data *TestData) {
 	time.Sleep(networkPolicyDelay)
 }
 
+// testRejectLoopTraffic tests that a double direction rejection won't cause an infinite rejection loop.
+func testRejectLoopTraffic(t *testing.T, data *TestData) {
+	clientName := "agnhost-client"
+	require.NoError(t, data.createAgnhostPodOnNode(clientName, testNamespace, nodeName(0), false))
+	defer data.deletePodAndWait(defaultTimeout, clientName, testNamespace)
+	_, err := data.podWaitForIPs(defaultTimeout, clientName, testNamespace)
+	require.NoError(t, err)
+
+	_, server0IP, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "server", nodeName(0), testNamespace, false)
+	defer cleanupFunc()
+
+	_, server1IP, cleanupFunc := createAndWaitForPod(t, data, data.createNginxPodOnNode, "server", nodeName(1), testNamespace, false)
+	defer cleanupFunc()
+
+	var testcases []podToAddrTestStep
+	if clusterInfo.podV4NetworkCIDR != "" {
+		testcases = append(testcases, []podToAddrTestStep{
+			{
+				"antrea-test/agnhost-client",
+				server0IP.ipv4.String(),
+				80,
+				Rejected,
+			},
+			{
+				"antrea-test/agnhost-client",
+				server1IP.ipv4.String(),
+				80,
+				Rejected,
+			},
+		}...)
+	}
+	if clusterInfo.podV6NetworkCIDR != "" {
+		testcases = append(testcases, []podToAddrTestStep{
+			{
+				"antrea-test/agnhost-client",
+				server0IP.ipv6.String(),
+				80,
+				Rejected,
+			},
+			{
+				"antrea-test/agnhost-client",
+				server1IP.ipv6.String(),
+				80,
+				Rejected,
+			},
+		}...)
+	}
+
+	// Test client and server reject traffic that ingress from each other.
+	builder1 := &ClusterNetworkPolicySpecBuilder{}
+	builder1 = builder1.SetName("acnp-reject-ingress-double-dir").
+		SetPriority(1.0)
+	builder1.AddIngress(v1.ProtocolTCP, nil, nil, nil, nil, map[string]string{"app": "nginx"}, nil,
+		nil, nil, false, []ACNPAppliedToSpec{{PodSelector: map[string]string{"antrea-e2e": clientName}}}, crdv1alpha1.RuleActionReject, "", "", nil)
+	builder1.AddIngress(v1.ProtocolTCP, nil, nil, nil, nil, map[string]string{"antrea-e2e": clientName}, nil,
+		nil, nil, false, []ACNPAppliedToSpec{{PodSelector: map[string]string{"app": "nginx"}}}, crdv1alpha1.RuleActionReject, "", "", nil)
+
+	acnpIngress := builder1.Get()
+	k8sUtils.CreateOrUpdateACNP(acnpIngress)
+	failOnError(waitForResourceReady(acnpIngress, timeout), t)
+	time.Sleep(networkPolicyDelay)
+
+	for _, tc := range testcases {
+		log.Tracef("Probing: %s -> %s:%d", tc.clientPod.PodName(), tc.destAddr, tc.destPort)
+		connectivity, err := k8sUtils.ProbeAddr(tc.clientPod.Namespace(), "antrea-e2e", tc.clientPod.PodName(), tc.destAddr, tc.destPort, v1.ProtocolTCP)
+		if err != nil {
+			t.Errorf("failure -- could not complete probe: %v", err)
+		}
+		if connectivity != tc.expectedConnectivity {
+			t.Errorf("failure -- wrong results for probe: Source %s/%s --> Dest %s:%d connectivity: %v, expected: %v",
+				tc.clientPod.Namespace(), tc.clientPod.PodName(), tc.destAddr, tc.destPort, connectivity, tc.expectedConnectivity)
+		}
+	}
+	failOnError(k8sUtils.DeleteACNP(builder1.Name), t)
+	failOnError(waitForResourceDelete("", builder1.Name, resourceACNP, timeout), t)
+	time.Sleep(networkPolicyDelay)
+
+	// Test client and server reject traffic that egress to each other.
+	builder2 := &ClusterNetworkPolicySpecBuilder{}
+	builder2 = builder2.SetName("acnp-reject-egress-double-dir").
+		SetPriority(1.0)
+	builder2.AddEgress(v1.ProtocolTCP, nil, nil, nil, nil, map[string]string{"app": "nginx"}, nil,
+		nil, nil, false, []ACNPAppliedToSpec{{PodSelector: map[string]string{"antrea-e2e": clientName}}}, crdv1alpha1.RuleActionReject, "", "", nil)
+	builder2.AddEgress(v1.ProtocolTCP, nil, nil, nil, nil, map[string]string{"antrea-e2e": clientName}, nil,
+		nil, nil, false, []ACNPAppliedToSpec{{PodSelector: map[string]string{"app": "nginx"}}}, crdv1alpha1.RuleActionReject, "", "", nil)
+
+	acnpEgress := builder2.Get()
+	k8sUtils.CreateOrUpdateACNP(acnpEgress)
+	failOnError(waitForResourceReady(acnpEgress, timeout), t)
+	time.Sleep(networkPolicyDelay)
+
+	for _, tc := range testcases {
+		log.Tracef("Probing: %s -> %s:%d", tc.clientPod.PodName(), tc.destAddr, tc.destPort)
+		connectivity, err := k8sUtils.ProbeAddr(tc.clientPod.Namespace(), "antrea-e2e", tc.clientPod.PodName(), tc.destAddr, tc.destPort, v1.ProtocolTCP)
+		if err != nil {
+			t.Errorf("failure -- could not complete probe: %v", err)
+		}
+		if connectivity != tc.expectedConnectivity {
+			t.Errorf("failure -- wrong results for probe: Source %s/%s --> Dest %s:%d connectivity: %v, expected: %v",
+				tc.clientPod.Namespace(), tc.clientPod.PodName(), tc.destAddr, tc.destPort, connectivity, tc.expectedConnectivity)
+		}
+	}
+	failOnError(k8sUtils.DeleteACNP(builder2.Name), t)
+	failOnError(waitForResourceDelete("", builder2.Name, resourceACNP, timeout), t)
+	time.Sleep(networkPolicyDelay)
+
+	// Test server reject traffic that egress to client and ingress from client.
+	builder3 := &ClusterNetworkPolicySpecBuilder{}
+	builder3 = builder3.SetName("acnp-reject-server-double-dir").
+		SetPriority(1.0).
+		SetAppliedToGroup([]ACNPAppliedToSpec{{PodSelector: map[string]string{"app": "nginx"}}})
+	builder3.AddIngress(v1.ProtocolTCP, nil, nil, nil, nil, map[string]string{"antrea-e2e": clientName}, nil,
+		nil, nil, false, nil, crdv1alpha1.RuleActionReject, "", "", nil)
+	builder3.AddEgress(v1.ProtocolTCP, nil, nil, nil, nil, map[string]string{"antrea-e2e": clientName}, nil,
+		nil, nil, false, nil, crdv1alpha1.RuleActionReject, "", "", nil)
+
+	acnpServer := builder3.Get()
+	k8sUtils.CreateOrUpdateACNP(acnpServer)
+	failOnError(waitForResourceReady(acnpServer, timeout), t)
+	time.Sleep(networkPolicyDelay)
+
+	for _, tc := range testcases {
+		log.Tracef("Probing: %s -> %s:%d", tc.clientPod.PodName(), tc.destAddr, tc.destPort)
+		connectivity, err := k8sUtils.ProbeAddr(tc.clientPod.Namespace(), "antrea-e2e", tc.clientPod.PodName(), tc.destAddr, tc.destPort, v1.ProtocolTCP)
+		if err != nil {
+			t.Errorf("failure -- could not complete probe: %v", err)
+		}
+		if connectivity != tc.expectedConnectivity {
+			t.Errorf("failure -- wrong results for probe: Source %s/%s --> Dest %s:%d connectivity: %v, expected: %v",
+				tc.clientPod.Namespace(), tc.clientPod.PodName(), tc.destAddr, tc.destPort, connectivity, tc.expectedConnectivity)
+		}
+	}
+	failOnError(k8sUtils.DeleteACNP(builder3.Name), t)
+	failOnError(waitForResourceDelete("", builder3.Name, resourceACNP, timeout), t)
+	time.Sleep(networkPolicyDelay)
+
+	// Test client reject traffic that egress to server and ingress from server.
+	builder4 := &ClusterNetworkPolicySpecBuilder{}
+	builder4 = builder4.SetName("acnp-reject-client-double-dir").
+		SetPriority(1.0).
+		SetAppliedToGroup([]ACNPAppliedToSpec{{PodSelector: map[string]string{"antrea-e2e": clientName}}})
+	builder4.AddIngress(v1.ProtocolTCP, nil, nil, nil, nil, map[string]string{"app": "nginx"}, nil,
+		nil, nil, false, nil, crdv1alpha1.RuleActionReject, "", "", nil)
+	builder4.AddEgress(v1.ProtocolTCP, nil, nil, nil, nil, map[string]string{"app": "nginx"}, nil,
+		nil, nil, false, nil, crdv1alpha1.RuleActionReject, "", "", nil)
+
+	acnpClient := builder4.Get()
+	k8sUtils.CreateOrUpdateACNP(acnpClient)
+	failOnError(waitForResourceReady(acnpClient, timeout), t)
+	time.Sleep(networkPolicyDelay)
+
+	for _, tc := range testcases {
+		log.Tracef("Probing: %s -> %s:%d", tc.clientPod.PodName(), tc.destAddr, tc.destPort)
+		connectivity, err := k8sUtils.ProbeAddr(tc.clientPod.Namespace(), "antrea-e2e", tc.clientPod.PodName(), tc.destAddr, tc.destPort, v1.ProtocolTCP)
+		if err != nil {
+			t.Errorf("failure -- could not complete probe: %v", err)
+		}
+		if connectivity != tc.expectedConnectivity {
+			t.Errorf("failure -- wrong results for probe: Source %s/%s --> Dest %s:%d connectivity: %v, expected: %v",
+				tc.clientPod.Namespace(), tc.clientPod.PodName(), tc.destAddr, tc.destPort, connectivity, tc.expectedConnectivity)
+		}
+	}
+	failOnError(k8sUtils.DeleteACNP(builder4.Name), t)
+	failOnError(waitForResourceDelete("", builder4.Name, resourceACNP, timeout), t)
+	time.Sleep(networkPolicyDelay)
+}
+
 // testANPPortRange tests the port range in a ANP can work.
 func testANPPortRange(t *testing.T) {
 	builder := &AntreaNetworkPolicySpecBuilder{}
@@ -3223,6 +3390,7 @@ func TestAntreaPolicy(t *testing.T) {
 		t.Run("Case=ACNPRejectIngress", func(t *testing.T) { testACNPRejectIngress(t, v1.ProtocolTCP) })
 		t.Run("Case=ACNPRejectIngressUDP", func(t *testing.T) { testACNPRejectIngress(t, v1.ProtocolUDP) })
 		t.Run("Case=RejectServiceTraffic", func(t *testing.T) { testRejectServiceTraffic(t, data) })
+		t.Run("Case=RejectLoopTraffic", func(t *testing.T) { testRejectLoopTraffic(t, data) })
 		t.Run("Case=ACNPNoEffectOnOtherProtocols", func(t *testing.T) { testACNPNoEffectOnOtherProtocols(t) })
 		t.Run("Case=ACNPBaselinePolicy", func(t *testing.T) { testBaselineNamespaceIsolation(t) })
 		t.Run("Case=ACNPPriorityOverride", func(t *testing.T) { testACNPPriorityOverride(t) })
