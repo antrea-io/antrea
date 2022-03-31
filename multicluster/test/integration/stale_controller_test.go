@@ -41,14 +41,33 @@ var _ = Describe("Stale controller", func() {
 	ctx := context.Background()
 	It("Should clean up MC Service and ServiceImport if no corresponding ResourceImport in leader cluster", func() {
 		By("By claim a Service and ServiceImport without ResourceImport in leader cluster")
+		svcImpNoDelete := &k8smcsv1alpha1.ServiceImport{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: testNSForStale,
+				Name:      "nginxnodelete",
+			},
+			Spec: k8smcsv1alpha1.ServiceImportSpec{
+				Type: k8smcsv1alpha1.ClusterSetIP,
+				Ports: []k8smcsv1alpha1.ServicePort{
+					{
+						Name:     "http",
+						Protocol: corev1.ProtocolTCP,
+						Port:     80,
+					},
+				},
+			},
+		}
+
 		resImport := &mcsv1alpha1.ResourceImport{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "resourceimportexist",
 				Namespace: LeaderNamespace,
 			},
 			Spec: mcsv1alpha1.ResourceImportSpec{
-				Name:      "nginxnodelete",
-				Namespace: testNSForStale,
+				Name:          "nginxnodelete",
+				Namespace:     testNSForStale,
+				Kind:          common.ServiceImportKind,
+				ServiceImport: svcImpNoDelete,
 			},
 		}
 		err := k8sClient.Create(ctx, resImport, &client.CreateOptions{})
@@ -106,28 +125,16 @@ var _ = Describe("Stale controller", func() {
 			Spec: svcSpec,
 		}
 
-		svcImpNoDelete := &k8smcsv1alpha1.ServiceImport{
-			ObjectMeta: metav1.ObjectMeta{
-				Namespace: testNSForStale,
-				Name:      "nginxnodelete",
-			},
-			Spec: k8smcsv1alpha1.ServiceImportSpec{
-				Type: k8smcsv1alpha1.ClusterSetIP,
-				Ports: []k8smcsv1alpha1.ServicePort{
-					{
-						Name:     "http",
-						Protocol: corev1.ProtocolTCP,
-						Port:     80,
-					},
-				},
-			},
-		}
-
 		Expect(k8sClient.Create(ctx, svcToDelete)).Should(Succeed())
 		Expect(k8sClient.Create(ctx, svcImpToDelete)).Should(Succeed())
 		Expect(k8sClient.Create(ctx, svcNoDelete)).Should(Succeed())
-		Expect(k8sClient.Create(ctx, mcSvcNoDelete)).Should(Succeed())
-		Expect(k8sClient.Create(ctx, svcImpNoDelete)).Should(Succeed())
+		// ResourceImport controller will watch ResourceImport creation event,
+		// it may create correspoding Service and ServiceImport already, so we
+		// skip it if it's 409 AlreadyExists error.
+		err = k8sClient.Create(ctx, mcSvcNoDelete)
+		Expect(err == nil || apierrors.IsAlreadyExists(err)).Should(BeTrue())
+		err = k8sClient.Create(ctx, svcImpNoDelete)
+		Expect(err == nil || apierrors.IsAlreadyExists(err)).Should(BeTrue())
 
 		Eventually(func() bool {
 			latestSvc := &corev1.Service{}
