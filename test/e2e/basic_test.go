@@ -26,6 +26,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/podinterface"
@@ -360,65 +362,11 @@ func testReconcileGatewayRoutesOnStartup(t *testing.T, data *TestData, isIPv6 bo
 		t.Fatalf(" failed to get encap mode, err %v", err)
 	}
 
-	type Route struct {
-		peerPodCIDR *net.IPNet
-		peerPodGW   net.IP
-	}
-
 	nodeName := nodeName(0)
-	antreaPodName := func() string {
-		antreaPodName, err := data.getAntreaPodOnNode(nodeName)
-		if err != nil {
-			t.Fatalf("Error when retrieving the name of the Antrea Pod running on Node '%s': %v", nodeName, err)
-		}
-		t.Logf("The Antrea Pod for Node '%s' is '%s'", nodeName, antreaPodName)
-		return antreaPodName
-	}
-
+	podName := getAntreaPodName(t, data, nodeName)
 	antreaGWName, err := data.GetGatewayInterfaceName(antreaNamespace)
 	if err != nil {
 		t.Fatalf("Failed to detect gateway interface name from ConfigMap: %v", err)
-	}
-
-	getGatewayRoutes := func() (routes []Route, err error) {
-		var cmd []string
-		if !isIPv6 {
-			cmd = []string{"ip", "route", "list", "dev", antreaGWName}
-		} else {
-			cmd = []string{"ip", "-6", "route", "list", "dev", antreaGWName}
-		}
-		podName := antreaPodName()
-		stdout, stderr, err := data.RunCommandFromPod(antreaNamespace, podName, agentContainerName, cmd)
-		if err != nil {
-			return nil, fmt.Errorf("error when running ip command in Pod '%s': %v - stdout: %s - stderr: %s", podName, err, stdout, stderr)
-		}
-		re := regexp.MustCompile(`([^\s]+) via ([^\s]+)`)
-		for _, line := range strings.Split(stdout, "\n") {
-			var err error
-			matches := re.FindStringSubmatch(line)
-			if len(matches) == 0 {
-				continue
-			}
-			route := Route{}
-			if _, route.peerPodCIDR, err = net.ParseCIDR(matches[1]); err != nil {
-				return nil, fmt.Errorf("%s is not a valid net CIDR", matches[1])
-			}
-			if route.peerPodGW = net.ParseIP(matches[2]); route.peerPodGW == nil {
-				return nil, fmt.Errorf("%s is not a valid IP", matches[2])
-			}
-			// For gateway routes, the Antrea Node controller will not clean the route whose gateway is virtual Service IP.
-			// When running all e2e tests together, AntreaProxy could be installed and uninstalled several times.
-			// After uninstalling AntreaProxy, the route which is used to route ClusterIP to gateway still exists.
-			// When installing AntreaProxy again, a new route which used to route ClusterIP to gateway will be installed.
-			// The old route will be an orphan route, but Antrea Node controller cannot clean it because the func `Reconcile`
-			// of Antrea Node controller will not clean the route whose gateway is virtual Service IP. In short, the number
-			// of gateway routes is uncertain because there may be orphan routes, so it should not be counted.
-			if route.peerPodGW.Equal(config.VirtualServiceIPv4) || route.peerPodGW.Equal(config.VirtualServiceIPv6) {
-				continue
-			}
-			routes = append(routes, route)
-		}
-		return routes, nil
 	}
 
 	expectedRtNumMin, expectedRtNumMax := clusterInfo.numNodes-1, clusterInfo.numNodes-1
@@ -432,7 +380,7 @@ func testReconcileGatewayRoutesOnStartup(t *testing.T, data *TestData, isIPv6 bo
 	t.Logf("Retrieving gateway routes on Node '%s'", nodeName)
 	var routes []Route
 	if err := wait.PollImmediate(defaultInterval, defaultTimeout, func() (found bool, err error) {
-		routes, err = getGatewayRoutes()
+		routes, _, err = getGatewayRoutes(t, data, antreaGWName, nodeName, isIPv6)
 		if err != nil {
 			return false, err
 		}
@@ -459,11 +407,11 @@ func testReconcileGatewayRoutesOnStartup(t *testing.T, data *TestData, isIPv6 bo
 	// A dummy route
 	routeToAdd := &Route{}
 	if !isIPv6 {
-		_, routeToAdd.peerPodCIDR, _ = net.ParseCIDR("99.99.99.0/24")
-		routeToAdd.peerPodGW = net.ParseIP("99.99.99.1")
+		_, routeToAdd.routeCIDR, _ = net.ParseCIDR("99.99.99.0/24")
+		routeToAdd.routeGW = net.ParseIP("99.99.99.1")
 	} else {
-		_, routeToAdd.peerPodCIDR, _ = net.ParseCIDR("fe80::0/112")
-		routeToAdd.peerPodGW = net.ParseIP("fe80::1")
+		_, routeToAdd.routeCIDR, _ = net.ParseCIDR("fe80::0/112")
+		routeToAdd.routeGW = net.ParseIP("fe80::1")
 	}
 
 	// We run the ip command from the antrea-agent container for delete / add since they need to
@@ -472,11 +420,11 @@ func testReconcileGatewayRoutesOnStartup(t *testing.T, data *TestData, isIPv6 bo
 	deleteGatewayRoute := func(route *Route) error {
 		var cmd []string
 		if !isIPv6 {
-			cmd = []string{"ip", "route", "del", route.peerPodCIDR.String()}
+			cmd = []string{"ip", "route", "del", route.routeCIDR.String()}
 		} else {
-			cmd = []string{"ip", "-6", "route", "del", route.peerPodCIDR.String()}
+			cmd = []string{"ip", "-6", "route", "del", route.routeCIDR.String()}
 		}
-		_, _, err := data.RunCommandFromPod(antreaNamespace, antreaPodName(), agentContainerName, cmd)
+		_, _, err := data.RunCommandFromPod(antreaNamespace, podName, agentContainerName, cmd)
 		if err != nil {
 			return fmt.Errorf("error when running ip command on Node '%s': %v", nodeName, err)
 		}
@@ -486,11 +434,11 @@ func testReconcileGatewayRoutesOnStartup(t *testing.T, data *TestData, isIPv6 bo
 	addGatewayRoute := func(route *Route) error {
 		var cmd []string
 		if !isIPv6 {
-			cmd = []string{"ip", "route", "add", route.peerPodCIDR.String(), "via", route.peerPodGW.String(), "dev", antreaGWName, "onlink"}
+			cmd = []string{"ip", "route", "add", route.routeCIDR.String(), "via", route.routeGW.String(), "dev", antreaGWName, "onlink"}
 		} else {
-			cmd = []string{"ip", "-6", "route", "add", route.peerPodCIDR.String(), "via", route.peerPodGW.String(), "dev", antreaGWName, "onlink"}
+			cmd = []string{"ip", "-6", "route", "add", route.routeCIDR.String(), "via", route.routeGW.String(), "dev", antreaGWName, "onlink"}
 		}
-		_, _, err := data.RunCommandFromPod(antreaNamespace, antreaPodName(), agentContainerName, cmd)
+		_, _, err := data.RunCommandFromPod(antreaNamespace, podName, agentContainerName, cmd)
 		if err != nil {
 			return fmt.Errorf("error when running ip command on Node '%s': %v", nodeName, err)
 		}
@@ -526,7 +474,7 @@ func testReconcileGatewayRoutesOnStartup(t *testing.T, data *TestData, isIPv6 bo
 	// We expect the agent to delete the extra route we added and add back the route we deleted
 	t.Logf("Waiting for gateway routes to converge")
 	if err := wait.Poll(defaultInterval, defaultTimeout, func() (bool, error) {
-		newRoutes, err := getGatewayRoutes()
+		newRoutes, _, err := getGatewayRoutes(t, data, antreaGWName, nodeName, isIPv6)
 		if err != nil {
 			return false, err
 		}
@@ -534,7 +482,7 @@ func testReconcileGatewayRoutesOnStartup(t *testing.T, data *TestData, isIPv6 bo
 			return false, nil
 		}
 		for _, route := range newRoutes {
-			if route.peerPodGW.Equal(routeToAdd.peerPodGW) {
+			if route.routeGW.Equal(routeToAdd.routeGW) {
 				// The dummy route hasn't been deleted yet, keep trying
 				return false, nil
 			}
@@ -542,7 +490,7 @@ func testReconcileGatewayRoutesOnStartup(t *testing.T, data *TestData, isIPv6 bo
 		if routeToDelete != nil {
 			// At this stage we have confirmed that the dummy route has been deleted
 			for _, route := range newRoutes {
-				if route.peerPodGW.Equal(routeToDelete.peerPodGW) {
+				if route.routeGW.Equal(routeToDelete.routeGW) {
 					// The deleted route was added back, success!
 					return true, nil
 				}
@@ -559,6 +507,80 @@ func testReconcileGatewayRoutesOnStartup(t *testing.T, data *TestData, isIPv6 bo
 	} else {
 		t.Logf("Gateway routes successfully converged")
 	}
+}
+
+func TestCleanStaleClusterIPRoutes(t *testing.T) {
+	skipIfNumNodesLessThan(t, 2)
+	skipIfHasWindowsNodes(t)
+	skipIfProxyDisabled(t)
+
+	data, err := setupTest(t)
+	if err != nil {
+		t.Fatalf("Error when setting up test: %v", err)
+	}
+	defer teardownTest(t, data)
+	skipIfProxyAllDisabled(t, data)
+
+	// Create a backend Pod for test Service: if a Service has no backend Pod, no ClusterIP route will be installed.
+	createAndWaitForPod(t, data, data.createNginxPodOnNode, "test-clean-stale-route-pod", nodeName(0), testNamespace, false)
+
+	if len(clusterInfo.podV4NetworkCIDR) != 0 {
+		t.Logf("Running IPv4 test")
+		testCleanStaleClusterIPRoutes(t, data, false)
+	}
+	if len(clusterInfo.podV6NetworkCIDR) != 0 {
+		t.Logf("Running IPv6 test")
+		testCleanStaleClusterIPRoutes(t, data, true)
+	}
+}
+
+func testCleanStaleClusterIPRoutes(t *testing.T, data *TestData, isIPv6 bool) {
+	ipProtocol := corev1.IPv4Protocol
+	if isIPv6 {
+		ipProtocol = corev1.IPv6Protocol
+	}
+	// Create two test ClusterIPs.
+	svc, err := data.createNginxClusterIPService(fmt.Sprintf("test-clean-stale-route-svc1-%v", isIPv6), testNamespace, false, &ipProtocol)
+	require.NoError(t, err)
+	require.NotEqual(t, "", svc.Spec.ClusterIP, "ClusterIP should not be empty")
+	svc, err = data.createNginxClusterIPService(fmt.Sprintf("test-clean-stale-route-svc2-%v", isIPv6), testNamespace, false, &ipProtocol)
+	require.NoError(t, err)
+	require.NotEqual(t, "", svc.Spec.ClusterIP, "ClusterIP should not be empty")
+	time.Sleep(time.Second)
+
+	nodeName := nodeName(0)
+	if _, err := data.deleteAntreaAgentOnNode(nodeName, 30 /* grace period in seconds */, defaultTimeout); err != nil {
+		t.Logf("Error when restarting antrea-agent on Node '%s': %v", nodeName, err)
+	}
+
+	antreaGWName, err := data.GetGatewayInterfaceName(antreaNamespace)
+	if err != nil {
+		t.Fatalf("Failed to detect gateway interface name from ConfigMap: %v", err)
+	}
+	var routes []Route
+	if err := wait.PollImmediate(defaultInterval, defaultTimeout, func() (bool, error) {
+		_, routes, err = getGatewayRoutes(t, data, antreaGWName, nodeName, isIPv6)
+		if err != nil {
+			t.Logf("Failed to get Service gateway routes: %v", err)
+			return false, nil
+		}
+		if len(routes) < 1 {
+			t.Logf("Failed to get enough Service gateway routes")
+			return false, nil
+		}
+		return true, nil
+	}); err != nil {
+		t.Errorf("Failed to get enough Service gateway routes after timeout")
+	}
+
+	clusterIP := net.ParseIP(svc.Spec.ClusterIP)
+	routeCounter := 0
+	for _, rt := range routes {
+		if rt.routeCIDR.Contains(clusterIP) {
+			routeCounter++
+		}
+	}
+	require.Equal(t, 1, routeCounter, "There should be only one route whose destination CIDR can container the ClusterIP %v", clusterIP.String())
 }
 
 func getRoundNumber(data *TestData, podName string) (uint64, error) {
@@ -614,22 +636,73 @@ func getRoundNumber(data *TestData, podName string) (uint64, error) {
 	return 0, fmt.Errorf("did not find roundNum in OVSDB result")
 }
 
+func getAntreaPodName(t *testing.T, data *TestData, nodeName string) string {
+	antreaPodName, err := data.getAntreaPodOnNode(nodeName)
+	if err != nil {
+		t.Fatalf("Error when retrieving the name of the Antrea Pod running on Node '%s': %v", nodeName, err)
+	}
+	t.Logf("The Antrea Pod for Node '%s' is '%s'", nodeName, antreaPodName)
+	return antreaPodName
+}
+
+type Route struct {
+	routeCIDR *net.IPNet
+	routeGW   net.IP
+}
+
+func getGatewayRoutes(t *testing.T, data *TestData, antreaGWName, nodeName string, isIPv6 bool) ([]Route, []Route, error) {
+	var cmd []string
+	virtualIP := config.VirtualServiceIPv4
+	mask := 32
+	if !isIPv6 {
+		cmd = []string{"ip", "route", "list", "dev", antreaGWName}
+	} else {
+		cmd = []string{"ip", "-6", "route", "list", "dev", antreaGWName}
+		virtualIP = config.VirtualServiceIPv6
+		mask = 128
+	}
+	podName := getAntreaPodName(t, data, nodeName)
+	stdout, stderr, err := data.RunCommandFromPod(antreaNamespace, podName, agentContainerName, cmd)
+	if err != nil {
+		return nil, nil, fmt.Errorf("error when running ip command in Pod '%s': %v - stdout: %s - stderr: %s", podName, err, stdout, stderr)
+	}
+
+	var nodeRoutes, serviceRoutes []Route
+	re := regexp.MustCompile(`([^\s]+) via ([^\s]+)`)
+	for _, line := range strings.Split(stdout, "\n") {
+		var err error
+		matches := re.FindStringSubmatch(line)
+		if len(matches) == 0 {
+			continue
+		}
+		if net.ParseIP(matches[1]) != nil {
+			matches[1] = fmt.Sprintf("%s/%d", matches[1], mask)
+		}
+		route := Route{}
+		if _, route.routeCIDR, err = net.ParseCIDR(matches[1]); err != nil {
+			return nil, nil, fmt.Errorf("%s is not a valid net CIDR", matches[1])
+		}
+		if route.routeGW = net.ParseIP(matches[2]); route.routeGW == nil {
+			return nil, nil, fmt.Errorf("%s is not a valid IP", matches[2])
+		}
+		if route.routeGW.Equal(virtualIP) {
+			// If the route is added by AntreaProxy, append it to slice serviceRoutes.
+			serviceRoutes = append(serviceRoutes, route)
+		} else {
+			// If the route is added by Node controller, append it to slice nodeRoutes.
+			nodeRoutes = append(nodeRoutes, route)
+		}
+	}
+	return nodeRoutes, serviceRoutes, nil
+}
+
 // testDeletePreviousRoundFlowsOnStartup checks that when the Antrea agent is restarted, flows from
 // the previous "round" which are no longer needed (e.g. in case of changes to the cluster / to
 // Network Policies) are removed correctly.
 func testDeletePreviousRoundFlowsOnStartup(t *testing.T, data *TestData) {
 	skipIfRunCoverage(t, "Stopping Agent does not work with Coverage")
 	nodeName := nodeName(0)
-	antreaPodName := func() string {
-		antreaPodName, err := data.getAntreaPodOnNode(nodeName)
-		if err != nil {
-			t.Fatalf("Error when retrieving the name of the Antrea Pod running on Node '%s': %v", nodeName, err)
-		}
-		t.Logf("The Antrea Pod for Node '%s' is '%s'", nodeName, antreaPodName)
-		return antreaPodName
-	}
-
-	podName := antreaPodName()
+	podName := getAntreaPodName(t, data, nodeName)
 
 	roundNumber := func(podName string) uint64 {
 		roundNum, err := getRoundNumber(data, podName)
@@ -648,7 +721,7 @@ func testDeletePreviousRoundFlowsOnStartup(t *testing.T, data *TestData) {
 		t.Fatalf("Error when restarting antrea-agent on Node '%s': %v", nodeName, err)
 	}
 
-	podName = antreaPodName() // pod name has changed
+	podName = getAntreaPodName(t, data, nodeName) // pod name has changed
 
 	waitForNextRoundNum := func(roundNum uint64) uint64 {
 		var nextRoundNum uint64
