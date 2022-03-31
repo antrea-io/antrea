@@ -1,0 +1,22 @@
+name: Label
+on:
+  pull_request:
+    branches:
+      - main
+      - release-*
+    types: [opened, labeled, unlabeled, synchronize]
+
+jobs:
+  check-required-labels:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: mheap/github-action-required-labels@v1
+        with:
+          mode: exactly
+          count: 1
+          labels: "action/release-note, action/release-note-none"
+      - uses: mheap/github-action-required-labels@v1
+        with:
+          mode: minimum
+          count: 1
+          labels: "kind/documentation, kind/feature kind/api-change kind/bug kind/deprecation kind/cleanup kind/failing-test"
