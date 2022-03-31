@@ -16,6 +16,7 @@ package networkpolicy
 
 import (
 	"encoding/binary"
+	"fmt"
 
 	"antrea.io/libOpenflow/protocol"
 	"antrea.io/ofnet/ofctrl"
@@ -73,6 +74,9 @@ const (
 	// Service traffic, when AntreaProxy is disabled. The EndpointPod is on a remote
 	// Node and the dstPod of the reject response is on the local Node.
 	RejectNoAPServiceRemoteToLocal
+	// Unsupported represents that Antrea couldn't generate packetOut for current
+	// packetIn.
+	Unsupported
 )
 
 // rejectRequest sends reject response to the requesting client, based on the
@@ -133,6 +137,18 @@ func (c *Controller) rejectRequest(pktIn *ofctrl.PacketIn) error {
 		return dstFound && dstMAC == gwIfaces[0].MAC.String()
 	}
 	packetOutType := getRejectType(isServiceTraffic(), c.antreaProxyEnabled, srcFound, dstFound)
+	if packetOutType == Unsupported {
+		return fmt.Errorf("error when generating reject response for the packet from: %s to %s: neither source nor destination are on this Node", dstIP, srcIP)
+	}
+	// When in AntreaIPAM mode, even srcPod and dstPod are on the same Node, MAC will
+	// still be re-written in L3ForwardingTable. During rejection, the reject response
+	// will be directly sent to the dst OF port without go thru L3ForwardingTable. So
+	// we need to re-write MAC here. There is no need to check whether AntreaIPAM mode
+	// is on. Because if AntreaIPAM mode is off, this re-write doesn't change anything.
+	if packetOutType == RejectPodLocal {
+		srcMAC = sIface.MAC.String()
+		dstMAC = dIface.MAC.String()
+	}
 	inPort, outPort := getRejectOFPorts(packetOutType, sIface, dIface)
 	mutateFunc := getRejectPacketOutMutateFunc(packetOutType)
 
@@ -195,13 +211,19 @@ func getRejectType(isServiceTraffic, antreaProxyEnabled, srcIsLocal, dstIsLocal 
 			}
 			return RejectLocalToRemote
 		}
-		return RejectPodRemoteToLocal
+		if dstIsLocal {
+			return RejectPodRemoteToLocal
+		}
+		return Unsupported
 	}
 	if !antreaProxyEnabled {
 		if srcIsLocal {
 			return RejectNoAPServiceLocal
 		}
-		return RejectNoAPServiceRemoteToLocal
+		if dstIsLocal {
+			return RejectNoAPServiceRemoteToLocal
+		}
+		return Unsupported
 	}
 	if srcIsLocal {
 		if dstIsLocal {
@@ -209,7 +231,10 @@ func getRejectType(isServiceTraffic, antreaProxyEnabled, srcIsLocal, dstIsLocal 
 		}
 		return RejectLocalToRemote
 	}
-	return RejectServiceRemoteToLocal
+	if dstIsLocal {
+		return RejectServiceRemoteToLocal
+	}
+	return Unsupported
 }
 
 // getRejectOFPorts returns the inPort and outPort of a packetOut based on the RejectType.
@@ -219,6 +244,7 @@ func getRejectOFPorts(rejectType RejectType, sIface, dIface *interfacestore.Inte
 	switch rejectType {
 	case RejectPodLocal:
 		inPort = uint32(sIface.OFPort)
+		outPort = uint32(dIface.OFPort)
 	case RejectServiceLocal:
 		inPort = uint32(sIface.OFPort)
 	case RejectPodRemoteToLocal:
@@ -247,11 +273,6 @@ func getRejectPacketOutMutateFunc(rejectType RejectType) func(binding.PacketOutB
 		mutatePacketOut = func(packetOutBuilder binding.PacketOutBuilder) binding.PacketOutBuilder {
 			return packetOutBuilder.AddResubmitAction(nil, &tableID)
 		}
-	case RejectPodLocal:
-		// When in AntreaIPAM mode, even srcPod and dstPod are on the same Node, MAC will
-		// still be re-written in L3ForwardingTable. So during rejection, we also need to
-		// let the reject response go thru L3ForwardingTable to re-write MAC.
-		fallthrough
 	case RejectLocalToRemote:
 		tableID := openflow.L3ForwardingTable.GetID()
 		mutatePacketOut = func(packetOutBuilder binding.PacketOutBuilder) binding.PacketOutBuilder {
