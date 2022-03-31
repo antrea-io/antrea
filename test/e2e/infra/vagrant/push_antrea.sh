@@ -158,6 +158,7 @@ function copyManifestToNodes() {
 }
 
 FLOW_AGG_YML="/tmp/flow-aggregator.yml"
+FLOW_VIS_YML="/tmp/flow-visibility.yml"
 SAVED_FLOW_AGG_IMG=/tmp/flow-aggregator.tar
 FLOW_AGG_IMG_NAME=projects.registry.vmware.com/antrea/flow-aggregator:latest
 if [ "$FLOW_AGGREGATOR" == "true" ]; then
@@ -183,8 +184,12 @@ if [ "$FLOW_AGGREGATOR" == "true" ]; then
             ELK_ADDR="${LOGSTASH_CLUSTER_IP}:4739:udp"
 
             $THIS_DIR/../../../../hack/generate-manifest-flow-aggregator.sh --mode dev -fc $ELK_ADDR > "${FLOW_AGG_YML}"
-        else
-            $THIS_DIR/../../../../hack/generate-manifest-flow-aggregator.sh --mode dev -fc $FLOW_COLLECTOR > "${FLOW_AGG_YML}"
+
+        elif [[ $FLOW_COLLECTOR == "GRAFANA" ]]; then
+            echo "Deploy Grafana flow collector"
+            # ssh -F ssh-config k8s-node-control-plane kubectl apply -f $THIS_DIR/../../../../build/yamls/clickhouse-operator-install-bundle.yml
+
+            $THIS_DIR/../../../../hack/generate-manifest-flow-aggregator.sh --mode dev -ch > "${FLOW_AGG_YML}"
         fi
     else
         $THIS_DIR/../../../../hack/generate-manifest-flow-aggregator.sh --mode dev > "${FLOW_AGG_YML}"
