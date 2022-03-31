@@ -29,7 +29,7 @@ jobs:
 
   test-unit:
     needs: check-changes
-    if: ${{ needs.check-changes.outputs.has_changes == 'yes' }}
+    if: ${{ needs.check-changes.outputs.has_changes == 'yes' && matrix.os != '' }}
     name: Unit test
     strategy:
       matrix:
