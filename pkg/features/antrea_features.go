@@ -15,8 +15,10 @@
 package features
 
 import (
-	"k8s.io/apimachinery/pkg/util/runtime"
+	k8sruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/component-base/featuregate"
+
+	"antrea.io/antrea/pkg/util/runtime"
 )
 
 // When editing this file, make sure you edit the documentation as well to keep
@@ -139,7 +141,18 @@ var (
 )
 
 func init() {
-	runtime.Must(DefaultMutableFeatureGate.Add(DefaultAntreaFeatureGates))
+	if runtime.IsWindowsPlatform() {
+		for f := range unsupportedFeaturesOnWindows {
+			// A feature which is enabled by default on Linux might not be supported on
+			// Windows. So, override the default value here.
+			fg := DefaultAntreaFeatureGates[f]
+			if fg.Default {
+				fg.Default = false
+				DefaultAntreaFeatureGates[f] = fg
+			}
+		}
+	}
+	k8sruntime.Must(DefaultMutableFeatureGate.Add(DefaultAntreaFeatureGates))
 }
 
 // SupportedOnWindows checks whether a feature is supported on a Windows Node.

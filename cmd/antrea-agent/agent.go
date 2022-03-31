@@ -64,7 +64,6 @@ import (
 	"antrea.io/antrea/pkg/util/channel"
 	"antrea.io/antrea/pkg/util/cipher"
 	"antrea.io/antrea/pkg/util/k8s"
-	"antrea.io/antrea/pkg/util/runtime"
 	"antrea.io/antrea/pkg/version"
 )
 
@@ -83,9 +82,6 @@ var excludeNodePortDevices = []string{"antrea-egress0", "antrea-ingress0", "kube
 // run starts Antrea agent with the given options and waits for termination signal.
 func run(o *Options) error {
 	klog.Infof("Starting Antrea agent (version %s)", version.GetFullVersion())
-
-	// Windows platform doesn't support Egress feature yet.
-	egressEnabled := features.DefaultFeatureGate.Enabled(features.Egress) && !runtime.IsWindowsPlatform()
 
 	// Create K8s Clientset, CRD Clientset and SharedInformerFactory for the given config.
 	k8sClient, _, crdClient, _, err := k8s.CreateClients(o.config.ClientConnection, o.config.KubeAPIServerOverride)
@@ -119,6 +115,7 @@ func run(o *Options) error {
 	}
 	defer ovsdbConnection.Close()
 
+	egressEnabled := features.DefaultFeatureGate.Enabled(features.Egress)
 	enableBridgingMode := features.DefaultFeatureGate.Enabled(features.AntreaIPAM) && o.config.EnableBridgingMode
 	// Bridging mode will connect the uplink interface to the OVS bridge.
 	connectUplinkToBridge := enableBridgingMode
