@@ -202,7 +202,7 @@ function deliver_antrea_multicluster {
     # be leveraged successfully
     chmod -R g-w build/images/ovs
     chmod -R g-w build/images/base
-    
+
     cp -f build/yamls/*.yml $WORKDIR
     DOCKER_REGISTRY="${DOCKER_REGISTRY}" ./hack/build-antrea-linux-all.sh --pull
     echo "====== Delivering Antrea to all the Nodes ======"
