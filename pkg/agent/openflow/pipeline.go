@@ -414,6 +414,8 @@ type client struct {
 	replayMutex   sync.RWMutex
 	nodeConfig    *config.NodeConfig
 	networkConfig *config.NetworkConfig
+	egressConfig  *config.EgressConfig
+	serviceConfig *config.ServiceConfig
 	// ovsDatapathType is the type of the datapath used by the bridge.
 	ovsDatapathType ovsconfig.OVSDatapathType
 	// ovsMetersAreSupported indicates whether the OVS datapath supports OpenFlow meters.
@@ -1560,21 +1562,18 @@ func (f *featurePodConnectivity) gatewayIPSpoofGuardFlows() []binding.Flow {
 }
 
 // serviceCIDRDNATFlows generates the flows to match destination IP in Service CIDR and output to the Antrea gateway directly.
-func (f *featureService) serviceCIDRDNATFlows(serviceCIDRs []*net.IPNet) []binding.Flow {
+func (f *featureService) serviceCIDRDNATFlows() []binding.Flow {
 	cookieID := f.cookieAllocator.Request(f.category).Raw()
 	var flows []binding.Flow
-	for _, serviceCIDR := range serviceCIDRs {
-		if serviceCIDR != nil {
-			ipProtocol := getIPProtocol(serviceCIDR.IP)
-			flows = append(flows, DNATTable.ofTable.BuildFlow(priorityNormal).
-				Cookie(cookieID).
-				MatchProtocol(ipProtocol).
-				MatchDstIPNet(*serviceCIDR).
-				Action().LoadToRegField(TargetOFPortField, config.HostGatewayOFPort).
-				Action().LoadRegMark(OFPortFoundRegMark).
-				Action().GotoStage(stageConntrack).
-				Done())
-		}
+	for ipProtocol, serviceCIDR := range f.serviceCIDRs {
+		flows = append(flows, DNATTable.ofTable.BuildFlow(priorityNormal).
+			Cookie(cookieID).
+			MatchProtocol(ipProtocol).
+			MatchDstIPNet(serviceCIDR).
+			Action().LoadToRegField(TargetOFPortField, config.HostGatewayOFPort).
+			Action().LoadRegMark(OFPortFoundRegMark).
+			Action().GotoStage(stageConntrack).
+			Done())
 	}
 	return flows
 }
@@ -2122,10 +2121,10 @@ func (f *featureNetworkPolicy) dnsPacketInFlow(conjunctionID uint32) binding.Flo
 // Note that there is a defect in the latter way that NodePort Service access by external clients will be masqueraded as
 // a local gateway IP to bypass Network Policies. See https://github.com/antrea-io/antrea/issues/280.
 // TODO: Fix it after replacing kube-proxy with AntreaProxy.
-func (f *featurePodConnectivity) localProbeFlow(ovsDatapathType ovsconfig.OVSDatapathType) []binding.Flow {
+func (f *featurePodConnectivity) localProbeFlow() []binding.Flow {
 	cookieID := f.cookieAllocator.Request(f.category).Raw()
 	var flows []binding.Flow
-	if runtime.IsWindowsPlatform() || ovsDatapathType == ovsconfig.OVSDatapathNetdev {
+	if runtime.IsWindowsPlatform() || f.ovsDatapathType == ovsconfig.OVSDatapathNetdev {
 		for ipProtocol, gatewayIP := range f.gatewayIPs {
 			flows = append(flows, IngressSecurityClassifierTable.ofTable.BuildFlow(priorityHigh).
 				Cookie(cookieID).
@@ -2226,29 +2225,31 @@ func (f *featureEgress) snatRuleFlow(ofPort uint32, snatIP net.IP, snatMark uint
 
 // nodePortMarkFlows generates the flows to mark the first packet of Service NodePort connection with ToNodePortAddressRegMark,
 // which indicates the Service type is NodePort.
-func (f *featureService) nodePortMarkFlows(nodePortAddresses []net.IP, ipProtocol binding.Protocol) []binding.Flow {
+func (f *featureService) nodePortMarkFlows() []binding.Flow {
 	cookieID := f.cookieAllocator.Request(f.category).Raw()
 	var flows []binding.Flow
-	// This generates a flow for every NodePort IP. The flows are used to mark the first packet of NodePort connections
-	// from a local Pod.
-	for i := range nodePortAddresses {
+	for ipProtocol, nodePortAddresses := range f.nodePortAddresses {
+		// This generates a flow for every NodePort IP. The flows are used to mark the first packet of NodePort connection
+		// from a local Pod.
+		for i := range nodePortAddresses {
+			flows = append(flows,
+				NodePortMarkTable.ofTable.BuildFlow(priorityNormal).
+					Cookie(cookieID).
+					MatchProtocol(ipProtocol).
+					MatchDstIP(nodePortAddresses[i]).
+					Action().LoadRegMark(ToNodePortAddressRegMark).
+					Done())
+		}
+		// This generates the flow for the virtual IP. The flow is used to mark the first packet of NodePort connection from
+		// the Antrea gateway (the connection is performed DNAT with the virtual IP in host netns).
 		flows = append(flows,
 			NodePortMarkTable.ofTable.BuildFlow(priorityNormal).
 				Cookie(cookieID).
 				MatchProtocol(ipProtocol).
-				MatchDstIP(nodePortAddresses[i]).
+				MatchDstIP(f.virtualIPs[ipProtocol]).
 				Action().LoadRegMark(ToNodePortAddressRegMark).
 				Done())
 	}
-	// This generates the flow for the virtual IP. The flow is used to mark the first packet of NodePort connection from
-	// the Antrea gateway (the connection is performed DNAT with the virtual IP in host netns).
-	flows = append(flows,
-		NodePortMarkTable.ofTable.BuildFlow(priorityNormal).
-			Cookie(cookieID).
-			MatchProtocol(ipProtocol).
-			MatchDstIP(f.virtualIPs[ipProtocol]).
-			Action().LoadRegMark(ToNodePortAddressRegMark).
-			Done())
 
 	return flows
 }
@@ -2481,17 +2482,8 @@ func (f *featurePodConnectivity) decTTLFlows() []binding.Flow {
 
 // externalFlows generates the flows to perform SNAT for the packets of connection to the external network. The flows identify
 // the packets to external network, and send them to EgressMarkTable, where SNAT IPs are looked up for the packets.
-func (f *featureEgress) externalFlows(exceptCIDRs []net.IPNet) []binding.Flow {
+func (f *featureEgress) externalFlows() []binding.Flow {
 	cookieID := f.cookieAllocator.Request(f.category).Raw()
-	exceptCIDRsMap := make(map[binding.Protocol][]net.IPNet)
-	for _, cidr := range exceptCIDRs {
-		if cidr.IP.To4() == nil {
-			exceptCIDRsMap[binding.ProtocolIPv6] = append(exceptCIDRsMap[binding.ProtocolIPv6], cidr)
-		} else {
-			exceptCIDRsMap[binding.ProtocolIP] = append(exceptCIDRsMap[binding.ProtocolIP], cidr)
-		}
-	}
-
 	var flows []binding.Flow
 	for _, ipProtocol := range f.ipProtocols {
 		flows = append(flows,
@@ -2529,7 +2521,7 @@ func (f *featureEgress) externalFlows(exceptCIDRs []net.IPNet) []binding.Flow {
 			f.snatSkipNodeFlow(f.nodeIPs[ipProtocol]),
 		)
 		// This generates the flows to bypass the packets sourced from local Pods and destined for the except CIDRs for Egress.
-		for _, cidr := range exceptCIDRsMap[ipProtocol] {
+		for _, cidr := range f.exceptCIDRs[ipProtocol] {
 			flows = append(flows, EgressMarkTable.ofTable.BuildFlow(priorityHigh).
 				Cookie(cookieID).
 				MatchProtocol(ipProtocol).

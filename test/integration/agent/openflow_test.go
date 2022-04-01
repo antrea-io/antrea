@@ -270,7 +270,7 @@ func TestReplayFlowsNetworkPolicyFlows(t *testing.T) {
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge: %v", err))
 
 	config := prepareConfiguration(true, false)
-	_, err = c.Initialize(roundInfo, config.nodeConfig, &config1.NetworkConfig{TrafficEncapMode: config1.TrafficEncapModeEncap})
+	_, err = c.Initialize(roundInfo, config.nodeConfig, &config1.NetworkConfig{TrafficEncapMode: config1.TrafficEncapModeEncap, IPv4Enabled: true}, &config1.EgressConfig{}, &config1.ServiceConfig{})
 	require.Nil(t, err, "Failed to initialize OFClient")
 
 	defer func() {
@@ -320,11 +320,6 @@ func TestReplayFlowsNetworkPolicyFlows(t *testing.T) {
 }
 
 func testExternalFlows(t *testing.T, config *testConfig) {
-	exceptCIDRs := []net.IPNet{}
-	if err := c.InstallExternalFlows(exceptCIDRs); err != nil {
-		t.Errorf("Failed to install OpenFlow entries to allow Pod to communicate to the external addresses: %v", err)
-	}
-
 	gwMACStr := config.nodeConfig.GatewayConfig.MAC.String()
 	if config.enableIPv4 {
 		for _, tableFlow := range expectedExternalFlows("ip", gwMACStr) {
@@ -360,7 +355,7 @@ func testReplayFlows(t *testing.T) {
 }
 
 func testInitialize(t *testing.T, config *testConfig) {
-	if _, err := c.Initialize(roundInfo, config.nodeConfig, &config1.NetworkConfig{TrafficEncapMode: config1.TrafficEncapModeEncap, IPv4Enabled: config.enableIPv4, IPv6Enabled: config.enableIPv6}); err != nil {
+	if _, err := c.Initialize(roundInfo, config.nodeConfig, &config1.NetworkConfig{TrafficEncapMode: config1.TrafficEncapModeEncap, IPv4Enabled: config.enableIPv4, IPv6Enabled: config.enableIPv6}, &config1.EgressConfig{}, &config1.ServiceConfig{}); err != nil {
 		t.Errorf("Failed to initialize openflow client: %v", err)
 	}
 	for _, tableFlow := range prepareDefaultFlows(config) {
@@ -370,20 +365,12 @@ func testInitialize(t *testing.T, config *testConfig) {
 }
 
 func testInstallTunnelFlows(t *testing.T, config *testConfig) {
-	err := c.InstallDefaultTunnelFlows()
-	if err != nil {
-		t.Fatalf("Failed to install Openflow entries for tunnel port: %v", err)
-	}
 	for _, tableFlow := range prepareTunnelFlows(config1.DefaultTunOFPort, config.globalMAC) {
 		ofTestUtils.CheckFlowExists(t, ovsCtlClient, tableFlow.tableName, 0, true, tableFlow.flows)
 	}
 }
 
 func testInstallServiceFlows(t *testing.T, config *testConfig) {
-	err := c.InstallDefaultServiceFlows(nil, nil)
-	if err != nil {
-		t.Fatalf("Failed to install Openflow entries to skip service CIDR from egress table: %v", err)
-	}
 	for _, tableFlow := range prepareServiceHelperFlows() {
 		ofTestUtils.CheckFlowExists(t, ovsCtlClient, tableFlow.tableName, 0, true, tableFlow.flows)
 	}
@@ -460,7 +447,7 @@ func TestNetworkPolicyFlows(t *testing.T) {
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge %s", br))
 
 	config := prepareConfiguration(true, true)
-	_, err = c.Initialize(roundInfo, config.nodeConfig, &config1.NetworkConfig{TrafficEncapMode: config1.TrafficEncapModeEncap, IPv4Enabled: true, IPv6Enabled: true})
+	_, err = c.Initialize(roundInfo, config.nodeConfig, &config1.NetworkConfig{TrafficEncapMode: config1.TrafficEncapModeEncap, IPv4Enabled: true, IPv6Enabled: true}, &config1.EgressConfig{}, &config1.ServiceConfig{})
 	require.Nil(t, err, "Failed to initialize OFClient")
 
 	defer func() {
@@ -622,7 +609,7 @@ func TestProxyServiceFlows(t *testing.T) {
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge %s", br))
 
 	config := prepareConfiguration(true, false)
-	_, err = c.Initialize(roundInfo, config.nodeConfig, &config1.NetworkConfig{TrafficEncapMode: config1.TrafficEncapModeEncap, IPv4Enabled: true})
+	_, err = c.Initialize(roundInfo, config.nodeConfig, &config1.NetworkConfig{TrafficEncapMode: config1.TrafficEncapModeEncap, IPv4Enabled: true}, &config1.EgressConfig{}, &config1.ServiceConfig{})
 	require.Nil(t, err, "Failed to initialize OFClient")
 
 	defer func() {
@@ -961,10 +948,6 @@ func checkOVSFlowMetrics(t *testing.T, client ofClient.Client) {
 
 func testInstallGatewayFlows(t *testing.T, config *testConfig) {
 	gatewayConfig := config.nodeConfig.GatewayConfig
-	err := c.InstallGatewayFlows()
-	if err != nil {
-		t.Fatalf("Failed to install Openflow entries for gateway: %v", err)
-	}
 	var ips []net.IP
 	if config.enableIPv4 {
 		ips = append(ips, gatewayConfig.IPv4)
@@ -980,6 +963,7 @@ func testInstallGatewayFlows(t *testing.T, config *testConfig) {
 func prepareConfiguration(enableIPv4, enableIPv6 bool) *testConfig {
 	podMAC, _ := net.ParseMAC("aa:aa:aa:aa:aa:13")
 	gwMAC, _ := net.ParseMAC("aa:aa:aa:aa:aa:11")
+	uplinkMAC, _ := net.ParseMAC("aa:aa:aa:aa:aa:12")
 	peerNodeMAC, _ := net.ParseMAC("aa:aa:aa:aa:ab:00")
 
 	nodeIPv4, nodeIPv4Subnet, _ := net.ParseCIDR("10.10.10.1/24")
@@ -990,7 +974,8 @@ func prepareConfiguration(enableIPv4, enableIPv6 bool) *testConfig {
 	_, peerIPv6Subnet, _ := net.ParseCIDR("fd74:ca9b:172:20::/64")
 
 	gatewayConfig := &config1.GatewayConfig{MAC: gwMAC}
-	nodeConfig := &config1.NodeConfig{GatewayConfig: gatewayConfig}
+	uplinkConfig := &config1.AdapterNetConfig{MAC: uplinkMAC}
+	nodeConfig := &config1.NodeConfig{GatewayConfig: gatewayConfig, UplinkNetConfig: uplinkConfig}
 	podCfg := &testLocalPodConfig{
 		name: "container-1",
 		testPortConfig: &testPortConfig{
@@ -1652,7 +1637,7 @@ func TestEgressMarkFlows(t *testing.T) {
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge %s", br))
 
 	config := prepareConfiguration(true, true)
-	_, err = c.Initialize(roundInfo, config.nodeConfig, &config1.NetworkConfig{TrafficEncapMode: config1.TrafficEncapModeEncap})
+	_, err = c.Initialize(roundInfo, config.nodeConfig, &config1.NetworkConfig{TrafficEncapMode: config1.TrafficEncapModeEncap}, &config1.EgressConfig{}, &config1.ServiceConfig{})
 	require.Nil(t, err, "Failed to initialize OFClient")
 
 	defer func() {
