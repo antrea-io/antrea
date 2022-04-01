@@ -76,6 +76,7 @@ const (
 	kubeNamespace              string = "kube-system"
 	flowAggregatorNamespace    string = "flow-aggregator"
 	antreaConfigVolume         string = "antrea-config"
+	antreaWindowsConfigVolume  string = "antrea-windows-config"
 	flowAggregatorConfigVolume string = "flow-aggregator-config"
 	antreaDaemonSet            string = "antrea-agent"
 	antreaWindowsDaemonSet     string = "antrea-agent-windows"
@@ -1969,6 +1970,28 @@ func GetControllerFeatures() (featuregate.FeatureGate, error) {
 	return getFeatures(antreaControllerConfName)
 }
 
+func (data *TestData) GetAntreaWindowsConfigMap(antreaNamespace string) (*corev1.ConfigMap, error) {
+	daemonset, err := data.clientset.AppsV1().DaemonSets(antreaNamespace).Get(context.TODO(), antreaWindowsDaemonSet, metav1.GetOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve Antrea Windows DaemonSet: %v", err)
+	}
+	var configMapName string
+	for _, volume := range daemonset.Spec.Template.Spec.Volumes {
+		if volume.ConfigMap != nil && volume.Name == antreaWindowsConfigVolume {
+			configMapName = volume.ConfigMap.Name
+			break
+		}
+	}
+	if len(configMapName) == 0 {
+		return nil, fmt.Errorf("failed to locate Windows %s ConfigMap volume", antreaWindowsConfigVolume)
+	}
+	configMap, err := data.clientset.CoreV1().ConfigMaps(antreaNamespace).Get(context.TODO(), configMapName, metav1.GetOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get Windows ConfigMap %s: %v", configMapName, err)
+	}
+	return configMap, nil
+}
+
 func (data *TestData) GetAntreaConfigMap(antreaNamespace string) (*corev1.ConfigMap, error) {
 	deployment, err := data.clientset.AppsV1().Deployments(antreaNamespace).Get(context.TODO(), antreaDeployment, metav1.GetOptions{})
 	if err != nil {
@@ -2041,6 +2064,16 @@ func (data *TestData) mutateAntreaConfigMap(
 	restartController bool,
 	restartAgent bool,
 ) error {
+	includeWindowsAgent := false
+	var antreaWindowsConfigMap *corev1.ConfigMap
+	if len(clusterInfo.windowsNodes) != 0 {
+		var err error
+		includeWindowsAgent = true
+		antreaWindowsConfigMap, err = data.GetAntreaWindowsConfigMap(antreaNamespace)
+		if err != nil {
+			return err
+		}
+	}
 	configMap, err := data.GetAntreaConfigMap(antreaNamespace)
 	if err != nil {
 		return err
@@ -2082,10 +2115,10 @@ func (data *TestData) mutateAntreaConfigMap(
 		}
 		configMap.Data["antrea-controller.conf"] = string(b)
 	}
-
-	getAgentConf := func() (*agentconfig.AgentConfig, error) {
+	//getAgentConf should be able to process both windows and linux configmap.
+	getAgentConf := func(cm *corev1.ConfigMap) (*agentconfig.AgentConfig, error) {
 		var agentConf agentconfig.AgentConfig
-		if err := yaml.Unmarshal([]byte(configMap.Data["antrea-agent.conf"]), &agentConf); err != nil {
+		if err := yaml.Unmarshal([]byte(cm.Data["antrea-agent.conf"]), &agentConf); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal Agent config from ConfigMap: %v", err)
 		}
 		// as a convenience, we initialize the FeatureGates map if it is nil
@@ -2096,24 +2129,30 @@ func (data *TestData) mutateAntreaConfigMap(
 	}
 
 	agentConfChanged := false
+	agentConfigMaps := []*corev1.ConfigMap{configMap}
 	if agentChanges != nil {
-		agentConfIn, err := getAgentConf()
-		if err != nil {
-			return err
+		if includeWindowsAgent {
+			agentConfigMaps = append(agentConfigMaps, antreaWindowsConfigMap)
 		}
-		agentConfOut, err := getAgentConf()
-		if err != nil {
-			return err
-		}
+		for _, cm := range agentConfigMaps {
+			agentConfIn, err := getAgentConf(cm)
+			if err != nil {
+				return err
+			}
+			agentConfOut, err := getAgentConf(cm)
+			if err != nil {
+				return err
+			}
 
-		agentChanges(agentConfOut)
-		agentConfChanged = !reflect.DeepEqual(agentConfIn, agentConfOut)
+			agentChanges(agentConfOut)
+			agentConfChanged = !reflect.DeepEqual(agentConfIn, agentConfOut)
 
-		b, err := yaml.Marshal(agentConfOut)
-		if err != nil {
-			return fmt.Errorf("failed to marshal Agent config: %v", err)
+			b, err := yaml.Marshal(agentConfOut)
+			if err != nil {
+				return fmt.Errorf("failed to marshal Agent config: %v", err)
+			}
+			cm.Data["antrea-agent.conf"] = string(b)
 		}
-		configMap.Data["antrea-agent.conf"] = string(b)
 	}
 
 	if !agentConfChanged && !controllerConfChanged {
@@ -2121,9 +2160,12 @@ func (data *TestData) mutateAntreaConfigMap(
 		return nil
 	}
 
-	if _, err := data.clientset.CoreV1().ConfigMaps(antreaNamespace).Update(context.TODO(), configMap, metav1.UpdateOptions{}); err != nil {
-		return fmt.Errorf("failed to update ConfigMap %s: %v", configMap.Name, err)
+	for _, cm := range agentConfigMaps {
+		if _, err := data.clientset.CoreV1().ConfigMaps(antreaNamespace).Update(context.TODO(), cm, metav1.UpdateOptions{}); err != nil {
+			return fmt.Errorf("failed to update ConfigMap %s: %v", cm.Name, err)
+		}
 	}
+
 	if restartAgent && agentConfChanged {
 		err = data.restartAntreaAgentPods(defaultTimeout)
 		if err != nil {
