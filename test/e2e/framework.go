@@ -124,6 +124,7 @@ const (
 	mcjoinImage         = "projects.registry.vmware.com/antrea/mcjoin:v2.9"
 	netshootImage       = "projects.registry.vmware.com/antrea/netshoot:v0.1"
 	nginxImage          = "projects.registry.vmware.com/antrea/nginx:1.21.6-alpine"
+	iisImage            = "mcr.microsoft.com/windows/servercore/iis"
 	perftoolImage       = "projects.registry.vmware.com/antrea/perftool"
 	ipfixCollectorImage = "projects.registry.vmware.com/antrea/ipfix-collector:v0.5.12"
 	ipfixCollectorPort  = "4739"
@@ -1149,13 +1150,20 @@ func (data *TestData) createNetshootPodOnNode(name string, ns string, nodeName s
 // createNginxPodOnNode creates a Pod in the test namespace with a single nginx container. The
 // Pod will be scheduled on the specified Node (if nodeName is not empty).
 func (data *TestData) createNginxPodOnNode(name string, ns string, nodeName string, hostNetwork bool) error {
+	var mutateImage func(*corev1.Pod)
+	mutateImage = nil
+	if clusterInfo.nodesOS[nodeName] == "windows" {
+		mutateImage = func(pod *corev1.Pod) {
+			pod.Spec.Containers[0].Image = iisImage
+		}
+	}
 	return data.createPodOnNode(name, ns, nodeName, nginxImage, []string{}, nil, nil, []corev1.ContainerPort{
 		{
 			Name:          "http",
 			ContainerPort: 80,
 			Protocol:      corev1.ProtocolTCP,
 		},
-	}, hostNetwork, nil)
+	}, hostNetwork, mutateImage)
 }
 
 // createServerPod creates a Pod that can listen to specified port and have named port set.
