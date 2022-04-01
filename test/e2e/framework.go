@@ -1854,10 +1854,10 @@ func (data *TestData) runPingCommandFromTestPod(podInfo podInfo, ns string, targ
 }
 
 func (data *TestData) runNetcatCommandFromTestPod(podName string, ns string, server string, port int32) error {
-	return data.runNetcatCommandFromTestPodWithProtocol(podName, ns, server, port, "tcp")
+	return data.runNetcatCommandFromTestPodWithProtocol(podName, ns, busyboxContainerName, server, port, "tcp")
 }
 
-func (data *TestData) runNetcatCommandFromTestPodWithProtocol(podName string, ns string, server string, port int32, protocol string) error {
+func (data *TestData) runNetcatCommandFromTestPodWithProtocol(podName string, ns string, ctrName string, server string, port int32, protocol string) error {
 	// No parameter required for TCP connections.
 	protocolOption := ""
 	if protocol == "udp" {
@@ -1871,7 +1871,7 @@ func (data *TestData) runNetcatCommandFromTestPodWithProtocol(podName string, ns
 			protocolOption, server, port),
 	}
 
-	stdout, stderr, err := data.RunCommandFromPod(ns, podName, busyboxContainerName, cmd)
+	stdout, stderr, err := data.RunCommandFromPod(ns, podName, ctrName, cmd)
 	if err == nil {
 		return nil
 	}
