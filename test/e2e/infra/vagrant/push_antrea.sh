@@ -158,51 +158,34 @@ function copyManifestToNodes() {
 }
 
 FLOW_AGG_YML="/tmp/flow-aggregator.yml"
-FLOW_VIS_YML="/tmp/flow-visibility.yml"
 SAVED_FLOW_AGG_IMG=/tmp/flow-aggregator.tar
 FLOW_AGG_IMG_NAME=projects.registry.vmware.com/antrea/flow-aggregator:latest
+
+CH_OPERATOR_INSTALL_BUNDLE_BASE_YML=$THIS_DIR/../../../../build/yamls/clickhouse-operator-install-bundle.yml
+CH_OPERATOR_INSTALL_BUNDLE_YML="/tmp/clickhouse-operator-install-bundle.yml"
+FLOW_VIS_YML="/tmp/flow-visibility.yml"
+
+# images inside flow-visibility and clickhouse
+SAVED_GRAFANA_IMG=/tmp/flow-visibility-grafana.tar
+GRAFANA_IMG_NAME=projects.registry.vmware.com/antrea/flow-visibility-grafana:8.3.3
+SAVED_CH_SERVER_IMG=/tmp/flow-visibility-clickhouse-server.tar
+CH_SERVER_IMG_NAME=projects.registry.vmware.com/antrea/flow-visibility-clickhouse-server:21.11
+SAVED_CH_MONITOR_IMG=/tmp/flow-visibility-clickhouse-monitor.tar
+CH_MONITOR_IMG_NAME=projects.registry.vmware.com/antrea/flow-visibility-clickhouse-monitor:latest
+SAVED_CH_OPERATOR_IMG=/tmp/flow-visibility-clickhouse-operator.tar
+CH_OPERATOR_IMG_NAME=projects.registry.vmware.com/antrea/flow-visibility-clickhouse-operator:0.18.2
+SAVED_METRICS_EXPORTER_IMG=/tmp/flow-visibility-metrics-exporter.tar
+METRICS_EXPORTER_IMG_NAME=projects.registry.vmware.com/antrea/flow-visibility-metrics-exporter:0.18.2
+
+
 if [ "$FLOW_AGGREGATOR" == "true" ]; then
     pushImgToNodes "$FLOW_AGG_IMG_NAME" "$SAVED_FLOW_AGG_IMG"
-
     # If a flow collector address is also provided, we update the Antrea
-    # manifest (to enable all features) and Aggregator manifests (to set the
-    # collector address) accordingly.
+    # manifest (to enable all features)
     if [[ $FLOW_COLLECTOR != "" ]]; then
         echo "Generating manifest with all features enabled along with FlowExporter feature"
         $THIS_DIR/../../../../hack/generate-manifest.sh --mode dev --all-features > "${ANTREA_YML}"
-        if [[ $FLOW_COLLECTOR == "ELK" ]]; then
-            echo "Deploy ELK flow collector"
-            echo "Copying ELK flow collector folder"
-            scp -F ssh-config -r $THIS_DIR/../../../../build/yamls/elk-flow-collector k8s-node-control-plane:~/
-            echo "Done copying"
-            # ELK flow collector needs a few minutes (2-4 mins.) to finish its deployment,
-            # so the Flow Aggregator service will not send any records till then.
-            ssh -F ssh-config k8s-node-control-plane kubectl create namespace elk-flow-collector
-            ssh -F ssh-config k8s-node-control-plane kubectl create configmap logstash-configmap -n elk-flow-collector --from-file=./elk-flow-collector/logstash/
-            ssh -F ssh-config k8s-node-control-plane kubectl apply -f elk-flow-collector/elk-flow-collector.yml -n elk-flow-collector
-            LOGSTASH_CLUSTER_IP=$(ssh -F ssh-config k8s-node-control-plane kubectl get -n elk-flow-collector svc logstash -o jsonpath='{.spec.clusterIP}')
-            ELK_ADDR="${LOGSTASH_CLUSTER_IP}:4739:udp"
-
-            $THIS_DIR/../../../../hack/generate-manifest-flow-aggregator.sh --mode dev -fc $ELK_ADDR > "${FLOW_AGG_YML}"
-
-        elif [[ $FLOW_COLLECTOR == "GRAFANA" ]]; then
-            echo "Deploy Grafana flow collector"
-            # ssh -F ssh-config k8s-node-control-plane kubectl apply -f $THIS_DIR/../../../../build/yamls/clickhouse-operator-install-bundle.yml
-
-            $THIS_DIR/../../../../hack/generate-manifest-flow-aggregator.sh --mode dev -ch > "${FLOW_AGG_YML}"
-        fi
-    else
-        $THIS_DIR/../../../../hack/generate-manifest-flow-aggregator.sh --mode dev > "${FLOW_AGG_YML}"
     fi
-
-    copyManifestToNodes "$FLOW_AGG_YML"
-    if [[ $FLOW_COLLECTOR != "" ]]; then
-        echo "Restarting Flow Aggregator deployment"
-        ssh -F ssh-config k8s-node-control-plane kubectl -n flow-aggregator delete pod --all
-        ssh -F ssh-config k8s-node-control-plane kubectl apply -f flow-aggregator.yml
-    fi
-
-    rm "${FLOW_AGG_YML}"
 fi
 
 # Push Antrea image and related manifest.
@@ -217,5 +200,60 @@ ssh -F ssh-config k8s-node-control-plane kubectl -n kube-system delete all -l ap
 ssh -F ssh-config k8s-node-control-plane kubectl apply -f antrea.yml
 
 rm "${ANTREA_YML}"
+
+# Update aggregator manifests (to set the collector address) accordingly.
+if [ "$FLOW_AGGREGATOR" == "true" ]; then
+    if [[ $FLOW_COLLECTOR != "" ]]; then
+        if [[ $FLOW_COLLECTOR == "ELK" ]]; then
+            echo "Deploy ELK flow collector"
+            echo "Copying ELK flow collector folder"
+            scp -F ssh-config -r $THIS_DIR/../../../../build/yamls/elk-flow-collector k8s-node-control-plane:~/
+            echo "Done copying"
+            # ELK flow collector needs a few minutes (2-4 mins.) to finish its deployment,
+            # so the Flow Aggregator service will not send any records till then.
+            ssh -F ssh-config k8s-node-control-plane kubectl create namespace elk-flow-collector
+            ssh -F ssh-config k8s-node-control-plane kubectl create configmap logstash-configmap -n elk-flow-collector --from-file=./elk-flow-collector/logstash/
+            ssh -F ssh-config k8s-node-control-plane kubectl apply -f elk-flow-collector/elk-flow-collector.yml -n elk-flow-collector
+            LOGSTASH_CLUSTER_IP=$(ssh -F ssh-config k8s-node-control-plane kubectl get -n elk-flow-collector svc logstash -o jsonpath='{.spec.clusterIP}')
+            ELK_ADDR="${LOGSTASH_CLUSTER_IP}:4739:udp"
+            $THIS_DIR/../../../../hack/generate-manifest-flow-aggregator.sh --mode dev -fc $ELK_ADDR > "${FLOW_AGG_YML}"
+
+        elif [[ $FLOW_COLLECTOR == "GRAFANA" ]]; then
+            echo "Deploy Grafana flow collector"
+            pushImgToNodes "$GRAFANA_IMG_NAME" "$SAVED_GRAFANA_IMG"
+            pushImgToNodes "$CH_SERVER_IMG_NAME" "$SAVED_CH_SERVER_IMG"
+            pushImgToNodes "$CH_MONITOR_IMG_NAME" "$SAVED_CH_MONITOR_IMG"
+            pushImgToNodes "$CH_OPERATOR_IMG_NAME" "$SAVED_CH_OPERATOR_IMG"
+            pushImgToNodes "$METRICS_EXPORTER_IMG_NAME" "$SAVED_METRICS_EXPORTER_IMG"
+
+            # generate manifest and push to nodes
+            $THIS_DIR/../../../../hack/generate-manifest-flow-visibility.sh --mode dev > "${FLOW_VIS_YML}"
+            $THIS_DIR/../../../../hack/generate-manifest-flow-aggregator.sh --mode dev -ch > "${FLOW_AGG_YML}"
+            cp "${CH_OPERATOR_INSTALL_BUNDLE_BASE_YML}" "${CH_OPERATOR_INSTALL_BUNDLE_YML}"
+            copyManifestToNodes "$FLOW_VIS_YML"
+            copyManifestToNodes "$CH_OPERATOR_INSTALL_BUNDLE_YML"
+
+            # apply needed yaml file
+            ssh -F ssh-config k8s-node-control-plane kubectl apply -f clickhouse-operator-install-bundle.yml
+            ssh -F ssh-config k8s-node-control-plane kubectl wait --for=condition=ready pod -l app=clickhouse-operator -n kube-system --timeout=100s
+            ssh -F ssh-config k8s-node-control-plane kubectl apply -f flow-visibility.yml
+            ssh -F ssh-config k8s-node-control-plane kubectl wait --for=condition=ready pod -l app=grafana -n flow-visibility --timeout=100s
+            ssh -F ssh-config k8s-node-control-plane kubectl wait --for=condition=ready pod -l app=clickhouse -n flow-visibility --timeout=100s
+            rm "${FLOW_VIS_YML}"
+            rm "${CH_OPERATOR_INSTALL_BUNDLE_YML}"
+        fi
+    else
+        $THIS_DIR/../../../../hack/generate-manifest-flow-aggregator.sh --mode dev > "${FLOW_AGG_YML}"
+    fi
+
+    copyManifestToNodes "$FLOW_AGG_YML"
+    if [[ $FLOW_COLLECTOR != "" ]]; then
+        echo "Restarting Flow Aggregator deployment"
+        ssh -F ssh-config k8s-node-control-plane kubectl -n flow-aggregator delete pod --all
+        ssh -F ssh-config k8s-node-control-plane kubectl apply -f flow-aggregator.yml
+    fi
+
+    rm "${FLOW_AGG_YML}"
+fi
 
 echo "Done!"
