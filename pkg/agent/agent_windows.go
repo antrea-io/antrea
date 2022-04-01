@@ -191,15 +191,6 @@ func (i *Initializer) prepareOVSBridge() error {
 	return nil
 }
 
-// initHostNetworkFlows installs Openflow flows between bridge local port and uplink port to support
-// host networking.
-func (i *Initializer) initHostNetworkFlows() error {
-	if err := i.ofClient.InstallBridgeUplinkFlows(); err != nil {
-		return err
-	}
-	return nil
-}
-
 // getTunnelLocalIP returns local_ip of tunnel port
 func (i *Initializer) getTunnelPortLocalIP() net.IP {
 	return i.nodeConfig.NodeTransportIPv4Addr.IP

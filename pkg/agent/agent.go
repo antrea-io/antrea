@@ -85,21 +85,18 @@ type Initializer struct {
 	ovsBridge             string
 	hostGateway           string // name of gateway port on the OVS bridge
 	mtu                   int
-	serviceCIDR           *net.IPNet // K8s Service ClusterIP CIDR
-	serviceCIDRv6         *net.IPNet // K8s Service ClusterIP CIDR in IPv6
 	networkConfig         *config.NetworkConfig
 	nodeConfig            *config.NodeConfig
 	wireGuardConfig       *config.WireGuardConfig
 	egressConfig          *config.EgressConfig
+	serviceConfig         *config.ServiceConfig
 	enableProxy           bool
 	connectUplinkToBridge bool
 	// networkReadyCh should be closed once the Node's network is ready.
 	// The CNI server will wait for it before handling any CNI Add requests.
-	proxyAll              bool
-	nodePortAddressesIPv4 []net.IP
-	nodePortAddressesIPv6 []net.IP
-	networkReadyCh        chan<- struct{}
-	stopCh                <-chan struct{}
+	proxyAll       bool
+	networkReadyCh chan<- struct{}
+	stopCh         <-chan struct{}
 }
 
 func NewInitializer(
@@ -111,17 +108,14 @@ func NewInitializer(
 	ovsBridge string,
 	hostGateway string,
 	mtu int,
-	serviceCIDR *net.IPNet,
-	serviceCIDRv6 *net.IPNet,
 	networkConfig *config.NetworkConfig,
 	wireGuardConfig *config.WireGuardConfig,
 	egressConfig *config.EgressConfig,
+	serviceConfig *config.ServiceConfig,
 	networkReadyCh chan<- struct{},
 	stopCh <-chan struct{},
 	enableProxy bool,
 	proxyAll bool,
-	nodePortAddressesIPv4 []net.IP,
-	nodePortAddressesIPv6 []net.IP,
 	connectUplinkToBridge bool,
 ) *Initializer {
 	return &Initializer{
@@ -133,17 +127,14 @@ func NewInitializer(
 		ovsBridge:             ovsBridge,
 		hostGateway:           hostGateway,
 		mtu:                   mtu,
-		serviceCIDR:           serviceCIDR,
-		serviceCIDRv6:         serviceCIDRv6,
 		networkConfig:         networkConfig,
 		wireGuardConfig:       wireGuardConfig,
 		egressConfig:          egressConfig,
+		serviceConfig:         serviceConfig,
 		networkReadyCh:        networkReadyCh,
 		stopCh:                stopCh,
 		enableProxy:           enableProxy,
 		proxyAll:              proxyAll,
-		nodePortAddressesIPv4: nodePortAddressesIPv4,
-		nodePortAddressesIPv6: nodePortAddressesIPv6,
 		connectUplinkToBridge: connectUplinkToBridge,
 	}
 }
@@ -434,58 +425,10 @@ func (i *Initializer) initOpenFlowPipeline() error {
 	roundInfo := getRoundInfo(i.ovsBridgeClient)
 
 	// Set up all basic flows.
-	ofConnCh, err := i.ofClient.Initialize(roundInfo, i.nodeConfig, i.networkConfig)
+	ofConnCh, err := i.ofClient.Initialize(roundInfo, i.nodeConfig, i.networkConfig, i.egressConfig, i.serviceConfig)
 	if err != nil {
 		klog.Errorf("Failed to initialize openflow client: %v", err)
 		return err
-	}
-
-	// On Windows platform, host network flows are needed for host traffic.
-	if err := i.initHostNetworkFlows(); err != nil {
-		klog.Errorf("Failed to install openflow entries for host network: %v", err)
-		return err
-	}
-
-	// Install OpenFlow entries to enable Pod traffic to external IP
-	// addresses.
-	if err := i.ofClient.InstallExternalFlows(i.egressConfig.ExceptCIDRs); err != nil {
-		klog.Errorf("Failed to install openflow entries for external connectivity: %v", err)
-		return err
-	}
-
-	// Set up flow entries for gateway interface, including classifier, skip spoof guard check,
-	// L3 forwarding and L2 forwarding
-	if err := i.ofClient.InstallGatewayFlows(); err != nil {
-		klog.Errorf("Failed to setup openflow entries for gateway: %v", err)
-		return err
-	}
-
-	if i.networkConfig.TrafficEncapMode.SupportsEncap() {
-		// Set up flow entries for the default tunnel port interface.
-		if err := i.ofClient.InstallDefaultTunnelFlows(); err != nil {
-			klog.Errorf("Failed to setup openflow entries for tunnel interface: %v", err)
-			return err
-		}
-	}
-
-	if !i.enableProxy {
-		// Set up flow entries to enable Service connectivity. Upstream kube-proxy is leveraged to
-		// provide load-balancing, and the flows installed by this method ensure that traffic sent
-		// from local Pods to any Service address can be forwarded to the host gateway interface
-		// correctly. Otherwise packets might be dropped by egress rules before they are DNATed to
-		// backend Pods.
-		if err := i.ofClient.InstallClusterServiceCIDRFlows([]*net.IPNet{i.serviceCIDR, i.serviceCIDRv6}); err != nil {
-			klog.Errorf("Failed to setup OpenFlow entries for Service CIDRs: %v", err)
-			return err
-		}
-	} else {
-		// Set up flow entries to enable Service connectivity. The agent proxy handles
-		// ClusterIP Services while the upstream kube-proxy is leveraged to handle
-		// any other kinds of Services.
-		if err := i.ofClient.InstallDefaultServiceFlows(i.nodePortAddressesIPv4, i.nodePortAddressesIPv6); err != nil {
-			klog.Errorf("Failed to setup default OpenFlow entries for ClusterIP Services: %v", err)
-			return err
-		}
 	}
 
 	go func() {

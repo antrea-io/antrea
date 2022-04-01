@@ -20,6 +20,8 @@ import (
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/openflow/cookie"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
+	"antrea.io/antrea/pkg/ovs/ovsconfig"
+	"antrea.io/antrea/pkg/util/runtime"
 )
 
 type featurePodConnectivity struct {
@@ -28,7 +30,6 @@ type featurePodConnectivity struct {
 
 	nodeCachedFlows *flowCategoryCache
 	podCachedFlows  *flowCategoryCache
-	fixedFlows      []binding.Flow
 
 	gatewayIPs    map[binding.Protocol]net.IP
 	ctZones       map[binding.Protocol]int
@@ -36,6 +37,8 @@ type featurePodConnectivity struct {
 	nodeIPs       map[binding.Protocol]net.IP
 	nodeConfig    *config.NodeConfig
 	networkConfig *config.NetworkConfig
+	// ovsDatapathType is the type of the datapath used by the bridge.
+	ovsDatapathType ovsconfig.OVSDatapathType
 
 	connectUplinkToBridge bool
 	ctZoneSrcField        *binding.RegField
@@ -53,6 +56,7 @@ func newFeaturePodConnectivity(
 	ipProtocols []binding.Protocol,
 	nodeConfig *config.NodeConfig,
 	networkConfig *config.NetworkConfig,
+	ovsDatapathType ovsconfig.OVSDatapathType,
 	connectUplinkToBridge bool,
 	enableMulticast bool) *featurePodConnectivity {
 	ctZones := make(map[binding.Protocol]int)
@@ -88,6 +92,7 @@ func newFeaturePodConnectivity(
 		nodeIPs:               nodeIPs,
 		nodeConfig:            nodeConfig,
 		networkConfig:         networkConfig,
+		ovsDatapathType:       ovsDatapathType,
 		connectUplinkToBridge: connectUplinkToBridge,
 		ctZoneSrcField:        getZoneSrcField(connectUplinkToBridge),
 		enableMulticast:       enableMulticast,
@@ -97,14 +102,24 @@ func newFeaturePodConnectivity(
 
 func (f *featurePodConnectivity) initFlows() []binding.Flow {
 	var flows []binding.Flow
+	gatewayMAC := f.nodeConfig.GatewayConfig.MAC
 
 	for _, ipProtocol := range f.ipProtocols {
 		if ipProtocol == binding.ProtocolIPv6 {
 			flows = append(flows, f.ipv6Flows()...)
 		} else if ipProtocol == binding.ProtocolIP {
 			flows = append(flows, f.arpNormalFlow())
+			flows = append(flows, f.arpSpoofGuardFlow(f.gatewayIPs[ipProtocol], gatewayMAC, config.HostGatewayOFPort))
 			if f.connectUplinkToBridge {
-				flows = append(flows, f.arpResponderFlow(f.nodeConfig.GatewayConfig.IPv4, f.nodeConfig.GatewayConfig.MAC))
+				flows = append(flows, f.arpResponderFlow(f.gatewayIPs[ipProtocol], gatewayMAC))
+				flows = append(flows, f.arpSpoofGuardFlow(f.nodeConfig.NodeIPv4Addr.IP, gatewayMAC, config.HostGatewayOFPort))
+				flows = append(flows, f.hostBridgeUplinkVLANFlows()...)
+			}
+			if runtime.IsWindowsPlatform() || f.connectUplinkToBridge {
+				// This installs the flows between bridge local port and uplink port to support host networking.
+				// TODO: support IPv6
+				podCIDRMap := map[binding.Protocol]net.IPNet{binding.ProtocolIP: *f.nodeConfig.PodIPv4CIDR}
+				flows = append(flows, f.hostBridgeUplinkFlows(podCIDRMap)...)
 			}
 		}
 	}
@@ -115,10 +130,21 @@ func (f *featurePodConnectivity) initFlows() []binding.Flow {
 	flows = append(flows, f.decTTLFlows()...)
 	flows = append(flows, f.conntrackFlows()...)
 	flows = append(flows, f.l2ForwardOutputFlow())
+	flows = append(flows, f.gatewayClassifierFlow())
+	flows = append(flows, f.l2ForwardCalcFlow(gatewayMAC, config.HostGatewayOFPort))
+	flows = append(flows, f.gatewayIPSpoofGuardFlows()...)
+	flows = append(flows, f.l3FwdFlowToGateway()...)
+	// Add flow to ensure the liveliness check packet could be forwarded correctly.
+	flows = append(flows, f.localProbeFlow()...)
+
+	if f.networkConfig.TrafficEncapMode.SupportsEncap() {
+		flows = append(flows, f.tunnelClassifierFlow(config.DefaultTunOFPort))
+		flows = append(flows, f.l2ForwardCalcFlow(GlobalVirtualMAC, config.DefaultTunOFPort))
+	}
+
 	if f.networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {
 		flows = append(flows, f.l3FwdFlowRouteToGW()...)
-		// If IPv6 is enabled, this flow will never get hit.
-		// Replies any ARP request with the same global virtual MAC.
+		// If IPv6 is enabled, this flow will never get hit. Replies any ARP request with the same global virtual MAC.
 		flows = append(flows, f.arpResponderStaticFlow())
 	} else {
 		// If NetworkPolicyOnly mode is enabled, IPAM is implemented by the primary CNI, which may not use the Pod CIDR
@@ -132,11 +158,6 @@ func (f *featurePodConnectivity) initFlows() []binding.Flow {
 func (f *featurePodConnectivity) replayFlows() []binding.Flow {
 	var flows []binding.Flow
 
-	// Get fixed flows.
-	for _, flow := range f.fixedFlows {
-		flow.Reset()
-		flows = append(flows, flow)
-	}
 	// Get cached flows.
 	for _, cachedFlows := range []*flowCategoryCache{f.nodeCachedFlows, f.podCachedFlows} {
 		flows = append(flows, getCachedFlows(cachedFlows)...)

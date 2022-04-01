@@ -31,14 +31,15 @@ type featureService struct {
 	bridge          binding.Bridge
 
 	cachedFlows *flowCategoryCache
-	fixedFlows  []binding.Flow
 	groupCache  sync.Map
 
-	gatewayIPs  map[binding.Protocol]net.IP
-	virtualIPs  map[binding.Protocol]net.IP
-	dnatCtZones map[binding.Protocol]int
-	snatCtZones map[binding.Protocol]int
-	gatewayMAC  net.HardwareAddr
+	gatewayIPs        map[binding.Protocol]net.IP
+	virtualIPs        map[binding.Protocol]net.IP
+	dnatCtZones       map[binding.Protocol]int
+	snatCtZones       map[binding.Protocol]int
+	gatewayMAC        net.HardwareAddr
+	nodePortAddresses map[binding.Protocol][]net.IP
+	serviceCIDRs      map[binding.Protocol]net.IPNet
 
 	enableProxy           bool
 	proxyAll              bool
@@ -56,6 +57,7 @@ func newFeatureService(
 	cookieAllocator cookie.Allocator,
 	ipProtocols []binding.Protocol,
 	nodeConfig *config.NodeConfig,
+	serviceConfig *config.ServiceConfig,
 	bridge binding.Bridge,
 	enableProxy,
 	proxyAll,
@@ -64,17 +66,27 @@ func newFeatureService(
 	virtualIPs := make(map[binding.Protocol]net.IP)
 	dnatCtZones := make(map[binding.Protocol]int)
 	snatCtZones := make(map[binding.Protocol]int)
+	nodePortAddresses := make(map[binding.Protocol][]net.IP)
+	serviceCIDRs := make(map[binding.Protocol]net.IPNet)
 	for _, ipProtocol := range ipProtocols {
 		if ipProtocol == binding.ProtocolIP {
 			gatewayIPs[ipProtocol] = nodeConfig.GatewayConfig.IPv4
 			virtualIPs[ipProtocol] = config.VirtualServiceIPv4
 			dnatCtZones[ipProtocol] = CtZone
 			snatCtZones[ipProtocol] = SNATCtZone
+			nodePortAddresses[ipProtocol] = serviceConfig.NodePortAddressesIPv4
+			if serviceConfig.ServiceCIDR != nil {
+				serviceCIDRs[ipProtocol] = *serviceConfig.ServiceCIDR
+			}
 		} else if ipProtocol == binding.ProtocolIPv6 {
 			gatewayIPs[ipProtocol] = nodeConfig.GatewayConfig.IPv6
 			virtualIPs[ipProtocol] = config.VirtualServiceIPv6
 			dnatCtZones[ipProtocol] = CtZoneV6
 			snatCtZones[ipProtocol] = SNATCtZoneV6
+			nodePortAddresses[ipProtocol] = serviceConfig.NodePortAddressesIPv6
+			if serviceConfig.ServiceCIDRv6 != nil {
+				serviceCIDRs[ipProtocol] = *serviceConfig.ServiceCIDRv6
+			}
 		}
 	}
 
@@ -88,6 +100,8 @@ func newFeatureService(
 		virtualIPs:            virtualIPs,
 		dnatCtZones:           dnatCtZones,
 		snatCtZones:           snatCtZones,
+		nodePortAddresses:     nodePortAddresses,
+		serviceCIDRs:          serviceCIDRs,
 		gatewayMAC:            nodeConfig.GatewayConfig.MAC,
 		enableProxy:           enableProxy,
 		proxyAll:              proxyAll,
@@ -105,6 +119,20 @@ func (f *featureService) initFlows() []binding.Flow {
 		flows = append(flows, f.l3FwdFlowsToExternalEndpoint()...)
 		flows = append(flows, f.gatewaySNATFlows()...)
 		flows = append(flows, f.snatConntrackFlows()...)
+		flows = append(flows, f.serviceNeedLBFlow())
+		flows = append(flows, f.sessionAffinityReselectFlow())
+		flows = append(flows, f.l2ForwardOutputHairpinServiceFlow())
+		if f.proxyAll {
+			// This installs the flows to match the first packet of NodePort connection. The flows set a bit of a register
+			// to mark the Service type of the packet as NodePort, and the mark is consumed in table serviceLBTable.
+			flows = append(flows, f.nodePortMarkFlows()...)
+		}
+	} else {
+		// This installs the flows to enable Service connectivity. Upstream kube-proxy is leveraged to provide load-balancing,
+		// and the flows installed by this method ensure that traffic sent from local Pods to any Service address can be
+		// forwarded to the host gateway interface correctly, otherwise packets might be dropped by egress rules before
+		// they are DNATed to backend Pods.
+		flows = append(flows, f.serviceCIDRDNATFlows()...)
 	}
 	return flows
 }
@@ -112,11 +140,6 @@ func (f *featureService) initFlows() []binding.Flow {
 func (f *featureService) replayFlows() []binding.Flow {
 	var flows []binding.Flow
 
-	// Get fixed flows.
-	for _, flow := range f.fixedFlows {
-		flow.Reset()
-		flows = append(flows, flow)
-	}
 	// Get cached flows.
 	flows = append(flows, getCachedFlows(f.cachedFlows)...)
 
