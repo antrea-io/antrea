@@ -41,6 +41,7 @@ import (
 	"antrea.io/antrea/pkg/agent/util"
 	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
 	ofconfig "antrea.io/antrea/pkg/ovs/openflow"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 	"antrea.io/antrea/pkg/ovs/ovsctl"
@@ -116,7 +117,7 @@ func TestConnectivityFlows(t *testing.T) {
 		antrearuntime.WindowsOS = runtime.GOOS
 	}
 
-	c = ofClient.NewClient(br, bridgeMgmtAddr, true, false, true, false, false, false, false)
+	c = ofClient.NewClient(br, bridgeMgmtAddr, true, false, true, false, false, false, false, false)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge: %v", err))
 	defer func() {
@@ -164,7 +165,7 @@ func TestAntreaFlexibleIPAMConnectivityFlows(t *testing.T) {
 	legacyregistry.Reset()
 	metrics.InitializeOVSMetrics()
 
-	c = ofClient.NewClient(br, bridgeMgmtAddr, true, false, true, false, false, true, false)
+	c = ofClient.NewClient(br, bridgeMgmtAddr, true, false, true, false, false, true, false, false)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge: %v", err))
 	defer func() {
@@ -223,7 +224,7 @@ func TestReplayFlowsConnectivityFlows(t *testing.T) {
 	legacyregistry.Reset()
 	metrics.InitializeOVSMetrics()
 
-	c = ofClient.NewClient(br, bridgeMgmtAddr, true, false, true, false, false, false, false)
+	c = ofClient.NewClient(br, bridgeMgmtAddr, true, false, true, false, false, false, false, false)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge: %v", err))
 
@@ -265,7 +266,7 @@ func TestReplayFlowsNetworkPolicyFlows(t *testing.T) {
 	legacyregistry.Reset()
 	metrics.InitializeOVSMetrics()
 
-	c = ofClient.NewClient(br, bridgeMgmtAddr, true, false, false, false, false, false, false)
+	c = ofClient.NewClient(br, bridgeMgmtAddr, true, false, false, false, false, false, false, false)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge: %v", err))
 
@@ -442,7 +443,7 @@ func TestNetworkPolicyFlows(t *testing.T) {
 	legacyregistry.Reset()
 	metrics.InitializeOVSMetrics()
 
-	c = ofClient.NewClient(br, bridgeMgmtAddr, true, false, false, false, false, false, false)
+	c = ofClient.NewClient(br, bridgeMgmtAddr, true, false, false, false, false, false, false, false)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge %s", br))
 
@@ -556,7 +557,7 @@ func TestIPv6ConnectivityFlows(t *testing.T) {
 	legacyregistry.Reset()
 	metrics.InitializeOVSMetrics()
 
-	c = ofClient.NewClient(br, bridgeMgmtAddr, true, false, true, false, false, false, false)
+	c = ofClient.NewClient(br, bridgeMgmtAddr, true, false, true, false, false, false, false, false)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge: %v", err))
 
@@ -604,7 +605,7 @@ func TestProxyServiceFlows(t *testing.T) {
 	legacyregistry.Reset()
 	metrics.InitializeOVSMetrics()
 
-	c = ofClient.NewClient(br, bridgeMgmtAddr, true, false, false, false, false, false, false)
+	c = ofClient.NewClient(br, bridgeMgmtAddr, true, false, false, false, false, false, false, false)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge %s", br))
 
@@ -1627,12 +1628,62 @@ func prepareEgressMarkFlows(snatIP net.IP, mark, podOFPort, podOFPortRemote uint
 	}
 }
 
+func prepareTrafficControlFlows(sourceOFPorts []uint32, targetOFPort, returnOFPort uint32) []expectTableFlows {
+	expectedFlows := []expectTableFlows{
+		{
+			"Classifier",
+			[]*ofTestUtils.ExpectFlow{
+				{
+					MatchStr: fmt.Sprintf("priority=200,in_port=%d", returnOFPort),
+					ActStr:   "load:0x6->NXM_NX_REG0[0..3],goto_table:L3Forwarding",
+				},
+			},
+		},
+		{
+			"Output",
+			[]*ofTestUtils.ExpectFlow{
+				{
+					MatchStr: "priority=211,reg0=0x100/0x100,reg4=0x400000/0xc00000",
+					ActStr:   "output:NXM_NX_REG1[],output:NXM_NX_REG9[]",
+				},
+				{
+					MatchStr: "priority=211,reg0=0x100/0x100,reg4=0x800000/0xc00000",
+					ActStr:   "output:NXM_NX_REG9[]",
+				},
+			},
+		},
+	}
+	trafficControlTableFlows := expectTableFlows{
+		"TrafficControl",
+		[]*ofTestUtils.ExpectFlow{
+			{
+				MatchStr: "priority=210,reg0=0x106/0x10f",
+				ActStr:   "goto_table:Output",
+			},
+		},
+	}
+	for _, port := range sourceOFPorts {
+		trafficControlTableFlows.flows = append(trafficControlTableFlows.flows,
+			&ofTestUtils.ExpectFlow{
+				MatchStr: fmt.Sprintf("priority=200,reg1=0x%x", port),
+				ActStr:   fmt.Sprintf("load:0x%x->NXM_NX_REG9[],load:0x2->NXM_NX_REG4[22..23],goto_table:IngressSecurityClassifier", targetOFPort),
+			},
+			&ofTestUtils.ExpectFlow{
+				MatchStr: fmt.Sprintf("priority=200,in_port=%d", port),
+				ActStr:   fmt.Sprintf("load:0x%x->NXM_NX_REG9[],load:0x2->NXM_NX_REG4[22..23],goto_table:IngressSecurityClassifier", targetOFPort),
+			},
+		)
+	}
+	expectedFlows = append(expectedFlows, trafficControlTableFlows)
+	return expectedFlows
+}
+
 func TestEgressMarkFlows(t *testing.T) {
 	// Reset OVS metrics (Prometheus) and reinitialize them to test.
 	legacyregistry.Reset()
 	metrics.InitializeOVSMetrics()
 
-	c = ofClient.NewClient(br, bridgeMgmtAddr, false, false, true, false, false, false, false)
+	c = ofClient.NewClient(br, bridgeMgmtAddr, false, false, true, false, false, false, false, false)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge %s", br))
 
@@ -1681,5 +1732,38 @@ func TestEgressMarkFlows(t *testing.T) {
 	c.UninstallSNATMarkFlows(snatMarkV6)
 	for _, tableFlow := range expectedFlows {
 		ofTestUtils.CheckFlowExists(t, ovsCtlClient, tableFlow.tableName, 0, false, tableFlow.flows)
+	}
+}
+
+func TestTrafficControlFlows(t *testing.T) {
+	// Reset OVS metrics (Prometheus) and reinitialize them to test.
+	legacyregistry.Reset()
+	metrics.InitializeOVSMetrics()
+
+	c = ofClient.NewClient(br, bridgeMgmtAddr, false, false, false, false, false, false, false, true)
+	err := ofTestUtils.PrepareOVSBridge(br)
+	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge %s", br))
+
+	config := prepareConfiguration(true, false)
+	_, err = c.Initialize(roundInfo, config.nodeConfig, &config1.NetworkConfig{TrafficEncapMode: config1.TrafficEncapModeEncap, IPv4Enabled: config.enableIPv4}, &config1.EgressConfig{}, &config1.ServiceConfig{})
+	require.Nil(t, err, "Failed to initialize OFClient")
+
+	defer func() {
+		err = c.Disconnect()
+		assert.Nil(t, err, fmt.Sprintf("Error while disconnecting from OVS bridge: %v", err))
+		err = ofTestUtils.DeleteOVSBridge(br)
+		assert.Nil(t, err, fmt.Sprintf("Error while deleting OVS bridge: %v", err))
+		ofClient.CleanOFTableCache()
+		ofClient.ResetOFTable()
+	}()
+
+	sourceOFPorts := []uint32{100, 101, 102}
+	targetOFPort := uint32(200)
+	returnOFPort := uint32(201)
+	expectedFlows := prepareTrafficControlFlows(sourceOFPorts, targetOFPort, returnOFPort)
+	c.InstallTrafficControlReturnPortFlow(returnOFPort)
+	c.InstallTrafficControlMarkFlows("tc", sourceOFPorts, targetOFPort, v1alpha2.DirectionBoth, v1alpha2.ActionRedirect)
+	for _, tableFlow := range expectedFlows {
+		ofTestUtils.CheckFlowExists(t, ovsCtlClient, tableFlow.tableName, 0, true, tableFlow.flows)
 	}
 }

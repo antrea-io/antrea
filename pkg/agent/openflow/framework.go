@@ -187,6 +187,9 @@ func (f *featurePodConnectivity) getRequiredTables() []*Table {
 			}
 		}
 	}
+	if f.enableTrafficControl {
+		tables = append(tables, TrafficControlTable)
+	}
 
 	return tables
 }

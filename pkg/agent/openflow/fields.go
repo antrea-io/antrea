@@ -21,11 +21,12 @@ import (
 
 // Fields using reg.
 var (
-	tunnelVal  = uint32(1)
-	gatewayVal = uint32(2)
-	localVal   = uint32(3)
-	uplinkVal  = uint32(4)
-	bridgeVal  = uint32(5)
+	tunnelVal   = uint32(1)
+	gatewayVal  = uint32(2)
+	localVal    = uint32(3)
+	uplinkVal   = uint32(4)
+	bridgeVal   = uint32(5)
+	tcReturnVal = uint32(6)
 
 	// reg0 (NXM_NX_REG0)
 	// reg0[0..3]: Field to store the packet source. Marks in this field include:
@@ -34,12 +35,14 @@ var (
 	//   - 3: from local Pods.
 	//   - 4: from uplink port.
 	//   - 5: from bridge local port.
-	PktSourceField     = binding.NewRegField(0, 0, 3, "PacketSource")
-	FromTunnelRegMark  = binding.NewRegMark(PktSourceField, tunnelVal)
-	FromGatewayRegMark = binding.NewRegMark(PktSourceField, gatewayVal)
-	FromLocalRegMark   = binding.NewRegMark(PktSourceField, localVal)
-	FromUplinkRegMark  = binding.NewRegMark(PktSourceField, uplinkVal)
-	FromBridgeRegMark  = binding.NewRegMark(PktSourceField, bridgeVal)
+	//   - 6: from traffic control return port.
+	PktSourceField      = binding.NewRegField(0, 0, 3, "PacketSource")
+	FromTunnelRegMark   = binding.NewRegMark(PktSourceField, tunnelVal)
+	FromGatewayRegMark  = binding.NewRegMark(PktSourceField, gatewayVal)
+	FromLocalRegMark    = binding.NewRegMark(PktSourceField, localVal)
+	FromUplinkRegMark   = binding.NewRegMark(PktSourceField, uplinkVal)
+	FromBridgeRegMark   = binding.NewRegMark(PktSourceField, bridgeVal)
+	FromTCReturnRegMark = binding.NewRegMark(PktSourceField, tcReturnVal)
 	// reg0[4..7]: Field to store the packet destination. Marks in this field include:
 	//   - 1: to tunnel port.
 	//   - 2: to Antrea gateway port.
@@ -123,6 +126,10 @@ var (
 	NotAntreaFlexibleIPAMRegMark = binding.NewOneBitZeroRegMark(4, 20, "NotAntreaFlexibleIPAM")
 	// reg4[21]: Mark to indicate externalTrafficPolicy of the Service is Cluster.
 	ToClusterServiceRegMark = binding.NewOneBitRegMark(4, 21, "ToClusterService")
+	// reg4[22..23]: Field to store the action of a traffic control rule. Marks in this field include:
+	TrafficControlActionField     = binding.NewRegField(4, 22, 23, "TrafficControlAction")
+	TrafficControlMirrorRegMark   = binding.NewRegMark(TrafficControlActionField, 0b01)
+	TrafficControlRedirectRegMark = binding.NewRegMark(TrafficControlActionField, 0b10)
 
 	// reg5(NXM_NX_REG5)
 	// Field to cache the Egress conjunction ID hit by TraceFlow packet.
@@ -147,6 +154,10 @@ var (
 	IPv6CtZoneTypeRegMark = binding.NewRegMark(CtZoneTypeField, 0b0011)
 	// Field to store the CtZone ID, which is a combination of VLANIDField and CtZoneTypeField to indicate CtZone for DstNAT.
 	CtZoneField = binding.NewRegField(8, 0, 15, "CtZoneID")
+
+	// reg9(NXM_NX_REG9)
+	// Field to cache the ofPort of the OVS interface to output traffic control packets.
+	TrafficControlTargetOFPortField = binding.NewRegField(9, 0, 31, "TrafficControlTargetOFPort")
 )
 
 // Fields using xxreg.

@@ -22,6 +22,7 @@ package testing
 import (
 	config "antrea.io/antrea/pkg/agent/config"
 	types "antrea.io/antrea/pkg/agent/types"
+	v1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
 	openflow "antrea.io/antrea/pkg/ovs/openflow"
 	ip "antrea.io/antrea/pkg/util/ip"
 	proxy "antrea.io/antrea/third_party/proxy"
@@ -421,6 +422,34 @@ func (mr *MockClientMockRecorder) InstallTraceflowFlows(arg0, arg1, arg2, arg3, 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallTraceflowFlows", reflect.TypeOf((*MockClient)(nil).InstallTraceflowFlows), arg0, arg1, arg2, arg3, arg4, arg5, arg6)
 }
 
+// InstallTrafficControlMarkFlows mocks base method
+func (m *MockClient) InstallTrafficControlMarkFlows(arg0 string, arg1 []uint32, arg2 uint32, arg3 v1alpha2.Direction, arg4 v1alpha2.TrafficControlAction) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "InstallTrafficControlMarkFlows", arg0, arg1, arg2, arg3, arg4)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// InstallTrafficControlMarkFlows indicates an expected call of InstallTrafficControlMarkFlows
+func (mr *MockClientMockRecorder) InstallTrafficControlMarkFlows(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallTrafficControlMarkFlows", reflect.TypeOf((*MockClient)(nil).InstallTrafficControlMarkFlows), arg0, arg1, arg2, arg3, arg4)
+}
+
+// InstallTrafficControlReturnPortFlow mocks base method
+func (m *MockClient) InstallTrafficControlReturnPortFlow(arg0 uint32) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "InstallTrafficControlReturnPortFlow", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// InstallTrafficControlReturnPortFlow indicates an expected call of InstallTrafficControlReturnPortFlow
+func (mr *MockClientMockRecorder) InstallTrafficControlReturnPortFlow(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallTrafficControlReturnPortFlow", reflect.TypeOf((*MockClient)(nil).InstallTrafficControlReturnPortFlow), arg0)
+}
+
 // IsConnected mocks base method
 func (m *MockClient) IsConnected() bool {
 	m.ctrl.T.Helper()
@@ -736,6 +765,34 @@ func (m *MockClient) UninstallTraceflowFlows(arg0 byte) error {
 func (mr *MockClientMockRecorder) UninstallTraceflowFlows(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UninstallTraceflowFlows", reflect.TypeOf((*MockClient)(nil).UninstallTraceflowFlows), arg0)
+}
+
+// UninstallTrafficControlMarkFlows mocks base method
+func (m *MockClient) UninstallTrafficControlMarkFlows(arg0 string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UninstallTrafficControlMarkFlows", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UninstallTrafficControlMarkFlows indicates an expected call of UninstallTrafficControlMarkFlows
+func (mr *MockClientMockRecorder) UninstallTrafficControlMarkFlows(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UninstallTrafficControlMarkFlows", reflect.TypeOf((*MockClient)(nil).UninstallTrafficControlMarkFlows), arg0)
+}
+
+// UninstallTrafficControlReturnPortFlow mocks base method
+func (m *MockClient) UninstallTrafficControlReturnPortFlow(arg0 uint32) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UninstallTrafficControlReturnPortFlow", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UninstallTrafficControlReturnPortFlow indicates an expected call of UninstallTrafficControlReturnPortFlow
+func (mr *MockClientMockRecorder) UninstallTrafficControlReturnPortFlow(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UninstallTrafficControlReturnPortFlow", reflect.TypeOf((*MockClient)(nil).UninstallTrafficControlReturnPortFlow), arg0)
 }
 
 // MockOFEntryOperations is a mock of OFEntryOperations interface

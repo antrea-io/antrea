@@ -131,7 +131,9 @@ func run(o *Options) error {
 		features.DefaultFeatureGate.Enabled(features.FlowExporter),
 		o.config.AntreaProxy.ProxyAll,
 		connectUplinkToBridge,
-		features.DefaultFeatureGate.Enabled(features.Multicast))
+		features.DefaultFeatureGate.Enabled(features.Multicast),
+		features.DefaultFeatureGate.Enabled(features.TrafficControl),
+	)
 
 	_, serviceCIDRNet, _ := net.ParseCIDR(o.config.ServiceCIDR)
 	var serviceCIDRNetv6 *net.IPNet
