@@ -25,13 +25,11 @@ corresponding container images will be downloaded from public registries.
 
 For the sake of this guide, we will use macvlan in "bridge" mode, which supports
 the creation of multiple subinterfaces on one parent interface, and connects
-them all using a bridge. For more information on the different macvlan modes,
-you can refer to this [blog post](https://hicu.be/bridge-vs-macvlan). Macvlan in
-"bridge" mode requires the network to be able to handle "promiscuous mode", as
-the same physical interface / virtual adapter ends up being assigned multiple
-MAC addresses. When using a virtual network for the Nodes, some configuration
-changes are usually required, which depend on the virtualization technology. For
-example:
+them all using a bridge. Macvlan in "bridge" mode requires the network to be
+able to handle "promiscuous mode", as the same physical interface / virtual
+adapter ends up being assigned multiple MAC addresses. When using a virtual
+network for the Nodes, some configuration changes are usually required, which
+depend on the virtualization technology. For example:
 
 * when using VirtualBox and [Internal
   Networking](https://www.virtualbox.org/manual/ch06.html#network_internal), set
