@@ -21,8 +21,8 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 1,
-  "iteration": 1644612951629,
+  "id": 6,
+  "iteration": 1650253069764,
   "links": [],
   "liveNow": false,
   "panels": [
@@ -63,7 +63,7 @@
           "query": "SELECT SUM(octetDeltaCount), (sourcePodName, destinationServicePortName) AS pair\nFROM $table\nWHERE $timeFilter\nAND destinationServicePortName != ''\nAND flowType IN (1, 2)\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nGROUP BY pair\n",
           "queryType": "randomWalk",
           "rawQuery": "SELECT SUM(octetDeltaCount), (sourcePodName, destinationServicePortName) AS pair\nFROM default.flows_pod_view\nWHERE flowEndSeconds >= toDateTime(1642193285) AND flowEndSeconds <= toDateTime(1642195085)\nAND destinationServicePortName != ''\nAND flowType IN (1, 2)\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nGROUP BY pair",
-          "rawSql": "select SUM(octetDeltaCount) as bytes, sourcePodName as source, destinationServicePortName as destination\nFrom flows_pod_view\nWHERE flowType IN (1, 2)\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nAND destinationPodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nAND destinationServicePortName != ''\nAND $__timeFilter(flowEndSeconds)\nGROUP BY source, destination",
+          "rawSql": "select SUM(octetDeltaCount) as bytes, \nCONCAT(sourcePodNamespace, '/', sourcePodName, ':', CAST(sourceTransportPort as VARCHAR)) as source, \nCONCAT(destinationServicePortName, ':', CAST(destinationServicePort as VARCHAR)) as destination\nFrom flows_pod_view\nWHERE flowType IN (1, 2)\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nAND destinationPodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nAND destinationServicePortName != ''\nAND $__timeFilter(flowEndSeconds)\nGROUP BY source, destination",
           "refId": "A",
           "round": "0s",
           "skip_comments": true,
@@ -112,7 +112,7 @@
           "query": "SELECT SUM(reverseOctetDeltaCount), (sourcePodName, destinationServicePortName) AS pair\nFROM $table\nWHERE $timeFilter\nAND destinationServicePortName != ''\nAND flowType IN (1, 2)\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nGROUP BY pair\n",
           "queryType": "randomWalk",
           "rawQuery": "SELECT SUM(reverseOctetDeltaCount), (sourcePodName, destinationServicePortName) AS pair\nFROM default.flows_pod_view\nWHERE flowEndSeconds >= toDateTime(1642193431) AND flowEndSeconds <= toDateTime(1642195231)\nAND destinationServicePortName != ''\nAND flowType IN (1, 2)\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nGROUP BY pair",
-          "rawSql": "select SUM(reverseOctetDeltaCount) as bytes, sourcePodName as source, destinationServicePortName as destination\nFrom flows_pod_view\nWHERE flowType IN (1, 2)\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nAND destinationPodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nAND destinationServicePortName != ''\nAND $__timeFilter(flowEndSeconds)\nGROUP BY source, destination",
+          "rawSql": "select SUM(reverseOctetDeltaCount) as bytes,\nCONCAT(sourcePodNamespace, '/', sourcePodName, ':', CAST(sourceTransportPort as VARCHAR)) as source, \nCONCAT(destinationServicePortName, ':', CAST(destinationServicePort as VARCHAR)) as destination\nFrom flows_pod_view\nWHERE flowType IN (1, 2)\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nAND destinationPodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nAND destinationServicePortName != ''\nAND $__timeFilter(flowEndSeconds)\nGROUP BY source, destination",
           "refId": "A",
           "round": "0s",
           "skip_comments": true,
@@ -187,7 +187,7 @@
         "y": 18
       },
       "id": 18,
-      "interval": "60s",
+      "interval": "1s",
       "options": {
         "legend": {
           "calcs": [
@@ -221,7 +221,7 @@
           "query": "SELECT $timeSeries as t, SUM(throughputFromSourceNode), sourcePodName\nFROM $table\nWHERE $timeFilter \nAND flowType IN (1, 2)\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nGROUP BY sourcePodName, t\nORDER BY t\n",
           "queryType": "sql",
           "rawQuery": "SELECT (intDiv(toUInt32(flowEndSeconds), 60) * 60) * 1000 as t, SUM(throughputFromSourceNode), sourcePodName\nFROM default.flows_pod_view\nWHERE flowEndSeconds >= toDateTime(1642532448) AND flowEndSeconds <= toDateTime(1642534248) \nAND flowType IN (1, 2)\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nGROUP BY sourcePodName, t\nORDER BY t",
-          "rawSql": "SELECT $__timeInterval(flowEndSeconds) as time, CONCAT(sourcePodName, '->', destinationServicePortName) as pair, SUM(throughput) as Pod\nFROM flows_pod_view\nWHERE flowType IN (1, 2)\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nAND destinationPodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nAND destinationServicePortName != ''\nAND $__timeFilter(flowEndSeconds)\nGROUP BY time, pair\nORDER BY time",
+          "rawSql": "SELECT $__timeInterval(flowEndSeconds) as time, \nCONCAT(sourcePodNamespace, '/', sourcePodName, ':', CAST(sourceTransportPort as VARCHAR), ' -> ', destinationServicePortName, ':', CAST(destinationServicePort as VARCHAR)) as pair, \nAVG(throughput)\nFROM flows_pod_view\nWHERE flowType IN (1, 2)\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nAND destinationPodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nAND destinationServicePortName != ''\nAND $__timeFilter(flowEndSeconds)\nGROUP BY time, pair\nHAVING AVG(throughput) > 0\nORDER BY time",
           "refId": "A",
           "round": "0s",
           "skip_comments": true,
@@ -315,7 +315,7 @@
         "y": 18
       },
       "id": 19,
-      "interval": "60s",
+      "interval": "1s",
       "options": {
         "legend": {
           "calcs": [
@@ -349,7 +349,7 @@
           "query": "SELECT $timeSeries as t, SUM(throughputFromSourceNode), sourcePodName\nFROM $table\nWHERE $timeFilter \nAND flowType IN (1, 2)\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nGROUP BY sourcePodName, t\nORDER BY t\n",
           "queryType": "sql",
           "rawQuery": "SELECT (intDiv(toUInt32(flowEndSeconds), 60) * 60) * 1000 as t, SUM(throughputFromSourceNode), sourcePodName\nFROM default.flows_pod_view\nWHERE flowEndSeconds >= toDateTime(1642532448) AND flowEndSeconds <= toDateTime(1642534248) \nAND flowType IN (1, 2)\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nGROUP BY sourcePodName, t\nORDER BY t",
-          "rawSql": "SELECT $__timeInterval(flowEndSeconds) as time, CONCAT(sourcePodName, '->', destinationServicePortName) as pair, SUM(reverseThroughput) as Pod\nFROM flows_pod_view\nWHERE flowType IN (1, 2)\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nAND destinationPodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nAND destinationServicePortName != ''\nAND $__timeFilter(time)\nGROUP BY time, pair\nORDER BY time",
+          "rawSql": "SELECT $__timeInterval(flowEndSeconds) as time, \nCONCAT(sourcePodNamespace, '/', sourcePodName, ':', CAST(sourceTransportPort as VARCHAR), ' -> ', destinationServicePortName, ':', CAST(destinationServicePort as VARCHAR)) as pair, \nSUM(reverseThroughput)\nFROM flows_pod_view\nWHERE flowType IN (1, 2)\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nAND destinationPodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nAND destinationServicePortName != ''\nAND $__timeFilter(time)\nGROUP BY time, pair\nHAVING AVG(throughput) > 0\nORDER BY time",
           "refId": "A",
           "round": "0s",
           "skip_comments": true,
@@ -477,7 +477,7 @@
           "query": "SELECT $timeSeries as t, SUM(throughputFromSourceNode), sourcePodName\nFROM $table\nWHERE $timeFilter \nAND flowType IN (1, 2)\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nGROUP BY sourcePodName, t\nORDER BY t\n",
           "queryType": "sql",
           "rawQuery": "SELECT (intDiv(toUInt32(flowEndSeconds), 60) * 60) * 1000 as t, SUM(throughputFromSourceNode), sourcePodName\nFROM default.flows_pod_view\nWHERE flowEndSeconds >= toDateTime(1642532448) AND flowEndSeconds <= toDateTime(1642534248) \nAND flowType IN (1, 2)\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nGROUP BY sourcePodName, t\nORDER BY t",
-          "rawSql": "SELECT $__timeInterval(flowEndSecondsFromSourceNode) as time, sourcePodName, SUM(throughputFromSourceNode) as Pod\nFROM flows_pod_view\nWHERE flowType IN (1, 2)\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nAND destinationPodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nAND destinationServicePortName != ''\nAND $__timeFilter(time)\nGROUP BY time, sourcePodName\nORDER BY time",
+          "rawSql": "SELECT\n    $__timeInterval(flowEndSecondsFromSourceNode) as time,\n    CONCAT(sourcePodNamespace, '/', sourcePodName, ':', CAST(sourceTransportPort as VARCHAR)) as src,\n    SUM(throughputFromSourceNode)\nFROM (\n    SELECT\n        $__timeInterval(flowEndSecondsFromSourceNode) AS flowEndSecondsFromSourceNode,\n        sourcePodName,\n        sourcePodNamespace,\n        sourceTransportPort,\n        AVG(throughputFromSourceNode) AS throughputFromSourceNode\n    FROM flows_pod_view\n    WHERE flowType IN (1, 2)\n    AND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\n    AND destinationPodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\n    AND $__timeFilter(flowEndSecondsFromSourceNode)\n    AND destinationServicePortName != ''\n    GROUP BY\n        flowEndSecondsFromSourceNode,\n        sourcePodName,\n        sourcePodNamespace,\n        sourceTransportPort,\n        destinationServicePort,\n        destinationServicePortName,\n        protocolIdentifier\n    HAVING throughputFromSourceNode > 0\n    ORDER BY flowEndSecondsFromSourceNode\n)\nGROUP BY\n    time,\n    src\nORDER BY time ASC",
           "refId": "A",
           "round": "0s",
           "skip_comments": true,
@@ -501,7 +501,7 @@
         {
           "id": "labelsToFields",
           "options": {
-            "valueLabel": "sourcePodName"
+            "valueLabel": "src"
           }
         }
       ],
@@ -605,7 +605,7 @@
           "query": "SELECT $timeSeries as t, SUM(throughputFromSourceNode), sourcePodName\nFROM $table\nWHERE $timeFilter \nAND flowType IN (1, 2)\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nGROUP BY sourcePodName, t\nORDER BY t\n",
           "queryType": "sql",
           "rawQuery": "SELECT (intDiv(toUInt32(flowEndSeconds), 60) * 60) * 1000 as t, SUM(throughputFromSourceNode), sourcePodName\nFROM default.flows_pod_view\nWHERE flowEndSeconds >= toDateTime(1642532448) AND flowEndSeconds <= toDateTime(1642534248) \nAND flowType IN (1, 2)\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nGROUP BY sourcePodName, t\nORDER BY t",
-          "rawSql": "SELECT $__timeInterval(flowEndSecondsFromDestinationNode) as time, destinationServicePortName, SUM(throughputFromDestinationNode) as Service\nFROM flows_pod_view\nWHERE flowType IN (1, 2)\nAND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nAND destinationPodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\nAND destinationServicePortName != ''\nAND $__timeFilter(time)\nGROUP BY time, destinationServicePortName\nORDER BY time",
+          "rawSql": "SELECT\n    $__timeInterval(flowEndSecondsFromDestinationNode) as time,\n    CONCAT(destinationServicePortName, ':', CAST(destinationServicePort as VARCHAR)) as dst,\n    SUM(throughputFromDestinationNode)\nFROM (\n    SELECT\n        $__timeInterval(flowEndSecondsFromDestinationNode) AS flowEndSecondsFromDestinationNode,\n        destinationServicePortName,\n        destinationServicePort,\n        AVG(throughputFromDestinationNode) AS throughputFromDestinationNode\n    FROM flows_pod_view\n    WHERE flowType IN (1, 2)\n    AND sourcePodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\n    AND destinationPodNamespace NOT IN ('kube-system', 'flow-visibility', 'flow-aggregator')\n    AND $__timeFilter(flowEndSecondsFromDestinationNode)\n    AND destinationServicePortName != ''\n    GROUP BY\n        flowEndSecondsFromDestinationNode,\n        sourcePodName,\n        sourcePodNamespace,\n        sourceTransportPort,\n        destinationServicePort,\n        destinationServicePortName,\n        protocolIdentifier\n    HAVING throughputFromDestinationNode > 0\n    ORDER BY flowEndSecondsFromDestinationNode\n)\nGROUP BY\n    time,\n    dst\nORDER BY time ASC",
           "refId": "A",
           "round": "0s",
           "skip_comments": true,
@@ -629,7 +629,7 @@
         {
           "id": "labelsToFields",
           "options": {
-            "valueLabel": "destinationServicePortName"
+            "valueLabel": "dst"
           }
         }
       ],
@@ -671,6 +671,6 @@
   "timezone": "",
   "title": "pod_to_service_dashboard",
   "uid": "LGdxbW17z",
-  "version": 8,
+  "version": 18,
   "weekStart": ""
 }

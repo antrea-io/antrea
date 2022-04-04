@@ -82,10 +82,14 @@ clickhouse client -n -h 127.0.0.1 <<-EOSQL
         sourcePodName,
         destinationPodName,
         destinationIP,
+        destinationServicePort,
         destinationServicePortName,
         flowType,
         sourcePodNamespace,
-        destinationPodNamespace)
+        destinationPodNamespace,
+        sourceTransportPort,
+        destinationTransportPort,
+        protocolIdentifier)
     TTL timeInserted + INTERVAL 1 HOUR
     SETTINGS merge_with_ttl_timeout = 3600
     POPULATE
@@ -97,10 +101,14 @@ clickhouse client -n -h 127.0.0.1 <<-EOSQL
         sourcePodName,
         destinationPodName,
         destinationIP,
+        destinationServicePort,
         destinationServicePortName,
         flowType,
         sourcePodNamespace,
         destinationPodNamespace,
+        sourceTransportPort,
+        destinationTransportPort,
+        protocolIdentifier,
         sum(octetDeltaCount) AS octetDeltaCount,
         sum(reverseOctetDeltaCount) AS reverseOctetDeltaCount,
         sum(throughput) AS throughput,
@@ -116,10 +124,14 @@ clickhouse client -n -h 127.0.0.1 <<-EOSQL
         sourcePodName,
         destinationPodName,
         destinationIP,
+        destinationServicePort,
         destinationServicePortName,
         flowType,
         sourcePodNamespace,
-        destinationPodNamespace;
+        destinationPodNamespace,
+        sourceTransportPort,
+        destinationTransportPort,
+        protocolIdentifier;
 
     CREATE MATERIALIZED VIEW flows_node_view
     ENGINE = SummingMergeTree
@@ -128,10 +140,15 @@ clickhouse client -n -h 127.0.0.1 <<-EOSQL
         flowEndSeconds,
         flowEndSecondsFromSourceNode,
         flowEndSecondsFromDestinationNode,
+        sourceIP,
+        destinationIP,
         sourceNodeName,
         destinationNodeName,
         sourcePodNamespace,
-        destinationPodNamespace)
+        destinationPodNamespace,
+        sourceTransportPort,
+        destinationTransportPort,
+        protocolIdentifier)
     TTL timeInserted + INTERVAL 1 HOUR
     SETTINGS merge_with_ttl_timeout = 3600
     POPULATE
@@ -140,10 +157,15 @@ clickhouse client -n -h 127.0.0.1 <<-EOSQL
         flowEndSeconds,
         flowEndSecondsFromSourceNode,
         flowEndSecondsFromDestinationNode,
+        sourceIP,
+        destinationIP,
         sourceNodeName,
         destinationNodeName,
         sourcePodNamespace,
         destinationPodNamespace,
+        sourceTransportPort,
+        destinationTransportPort,
+        protocolIdentifier,
         sum(octetDeltaCount) AS octetDeltaCount,
         sum(reverseOctetDeltaCount) AS reverseOctetDeltaCount,
         sum(throughput) AS throughput,
@@ -158,10 +180,15 @@ clickhouse client -n -h 127.0.0.1 <<-EOSQL
         flowEndSeconds,
         flowEndSecondsFromSourceNode,
         flowEndSecondsFromDestinationNode,
+        sourceIP,
+        destinationIP,
         sourceNodeName,
         destinationNodeName,
         sourcePodNamespace,
-        destinationPodNamespace;
+        destinationPodNamespace,
+        sourceTransportPort,
+        destinationTransportPort,
+        protocolIdentifier;
 
     CREATE MATERIALIZED VIEW flows_policy_view
     ENGINE = SummingMergeTree
@@ -172,10 +199,17 @@ clickhouse client -n -h 127.0.0.1 <<-EOSQL
         flowEndSecondsFromDestinationNode,
         egressNetworkPolicyName,
         egressNetworkPolicyRuleAction,
+        egressNetworkPolicyNamespace,
         ingressNetworkPolicyName,
         ingressNetworkPolicyRuleAction,
+        ingressNetworkPolicyNamespace,
+        sourceIP,
+        destinationIP,
         sourcePodNamespace,
-        destinationPodNamespace)
+        destinationPodNamespace,
+        sourceTransportPort,
+        destinationTransportPort,
+        protocolIdentifier)
     TTL timeInserted + INTERVAL 1 HOUR
     SETTINGS merge_with_ttl_timeout = 3600
     POPULATE
@@ -186,10 +220,17 @@ clickhouse client -n -h 127.0.0.1 <<-EOSQL
         flowEndSecondsFromDestinationNode,
         egressNetworkPolicyName,
         egressNetworkPolicyRuleAction,
+        egressNetworkPolicyNamespace,
         ingressNetworkPolicyName,
         ingressNetworkPolicyRuleAction,
+        ingressNetworkPolicyNamespace,
+        sourceIP,
+        destinationIP,
         sourcePodNamespace,
         destinationPodNamespace,
+        sourceTransportPort,
+        destinationTransportPort,
+        protocolIdentifier,
         sum(octetDeltaCount) AS octetDeltaCount,
         sum(reverseOctetDeltaCount) AS reverseOctetDeltaCount,
         sum(throughput) AS throughput,
@@ -206,10 +247,17 @@ clickhouse client -n -h 127.0.0.1 <<-EOSQL
         flowEndSecondsFromDestinationNode,
         egressNetworkPolicyName,
         egressNetworkPolicyRuleAction,
+        egressNetworkPolicyNamespace,
         ingressNetworkPolicyName,
         ingressNetworkPolicyRuleAction,
+        ingressNetworkPolicyNamespace,
+        sourceIP,
+        destinationIP,
         sourcePodNamespace,
-        destinationPodNamespace;
+        destinationPodNamespace,
+        sourceTransportPort,
+        destinationTransportPort,
+        protocolIdentifier;
 
     CREATE TABLE IF NOT EXISTS recommendations (
         id String,
