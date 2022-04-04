@@ -74,7 +74,7 @@ const (
 	// Service traffic, when AntreaProxy is disabled. The EndpointPod is on a remote
 	// Node and the dstPod of the reject response is on the local Node.
 	RejectNoAPServiceRemoteToLocal
-	// Unsupported represents that Antrea couldn't generate packetOut for current
+	// Unsupported indicates that Antrea couldn't generate packetOut for current
 	// packetIn.
 	Unsupported
 )
@@ -140,11 +140,12 @@ func (c *Controller) rejectRequest(pktIn *ofctrl.PacketIn) error {
 	if packetOutType == Unsupported {
 		return fmt.Errorf("error when generating reject response for the packet from: %s to %s: neither source nor destination are on this Node", dstIP, srcIP)
 	}
-	// When in AntreaIPAM mode, even srcPod and dstPod are on the same Node, MAC will
-	// still be re-written in L3ForwardingTable. During rejection, the reject response
-	// will be directly sent to the dst OF port without go thru L3ForwardingTable. So
-	// we need to re-write MAC here. There is no need to check whether AntreaIPAM mode
-	// is on. Because if AntreaIPAM mode is off, this re-write doesn't change anything.
+	// When in AntreaIPAM mode, even though srcPod and dstPod are on the same Node, MAC
+	// will still be re-written in L3ForwardingTable. During rejection, the reject
+	// response will be directly sent to the dst OF port without go through
+	// L3ForwardingTable. So we need to re-write MAC here. There is no need to check
+	// whether AntreaIPAM mode is enabled. Because if AntreaIPAM mode is disabled,
+	// this re-write doesn't change anything.
 	if packetOutType == RejectPodLocal {
 		srcMAC = sIface.MAC.String()
 		dstMAC = dIface.MAC.String()
