@@ -430,12 +430,12 @@ toc:
 .PHONE: markdownlint
 markdownlint:
 	@echo "===> Running markdownlint <==="
-	markdownlint -c .markdownlint-config.yml -i CHANGELOG/ -i CHANGELOG.md -i hack/netpol -i CODE_OF_CONDUCT.md .
+	markdownlint -c hack/.markdownlint-config.yml -p hack/.markdownlint-ignore .
 
 .PHONE: markdownlint-fix
 markdownlint-fix:
 	@echo "===> Running markdownlint <==="
-	markdownlint --fix -c .markdownlint-config.yml -i CHANGELOG/ -i CHANGELOG.md -i hack/netpol -i CODE_OF_CONDUCT.md .
+	markdownlint --fix -c hack/.markdownlint-config.yml -p hack/.markdownlint-ignore .
 
 .PHONY: spelling-fix
 spelling-fix:
