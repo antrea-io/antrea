@@ -1833,34 +1833,37 @@ func (data *TestData) doesOVSPortExistOnWindows(nodeName, portName string) (bool
 	return false, fmt.Errorf("error when running ovs-vsctl command on Windows Node '%s': %v", nodeName, err)
 }
 
-func (data *TestData) GetEncapMode() (config.TrafficEncapModeType, error) {
+func (data *TestData) GetAntreaAgentConf() (*agentconfig.AgentConfig, error) {
 	configMap, err := data.GetAntreaConfigMap(antreaNamespace)
 	if err != nil {
-		return config.TrafficEncapModeInvalid, fmt.Errorf("failed to get Antrea ConfigMap: %v", err)
+		return nil, err
 	}
-	for _, antreaConfig := range configMap.Data {
-		for _, mode := range config.GetTrafficEncapModes() {
-			searchStr := fmt.Sprintf("trafficEncapMode: %s", mode)
-			if strings.Index(strings.ToLower(antreaConfig), strings.ToLower(searchStr)) != -1 {
-				return mode, nil
-			}
-		}
+	var agentConf agentconfig.AgentConfig
+	if err := yaml.Unmarshal([]byte(configMap.Data["antrea-agent.conf"]), &agentConf); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal Agent config from ConfigMap: %v", err)
 	}
-	return config.TrafficEncapModeEncap, nil
+	return &agentConf, nil
+}
+
+func (data *TestData) GetEncapMode() (config.TrafficEncapModeType, error) {
+	agentConf, err := data.GetAntreaAgentConf()
+	if err != nil {
+		return config.TrafficEncapModeInvalid, fmt.Errorf("failed to get Antrea Agent config: %w", err)
+	}
+	if agentConf.TrafficEncapMode == "" {
+		// default encap mode
+		return config.TrafficEncapModeEncap, nil
+	}
+	_, encapMode := config.GetTrafficEncapModeFromStr(agentConf.TrafficEncapMode)
+	return encapMode, nil
 }
 
 func (data *TestData) isProxyAll() (bool, error) {
-	configMap, err := data.GetAntreaConfigMap(antreaNamespace)
+	agentConf, err := data.GetAntreaAgentConf()
 	if err != nil {
-		return false, fmt.Errorf("failed to get Antrea ConfigMap: %v", err)
+		return false, fmt.Errorf("failed to get Antrea Agent config: %w", err)
 	}
-	for _, antreaConfig := range configMap.Data {
-		searchStr := "proxyAll: true"
-		if strings.Index(strings.ToLower(antreaConfig), strings.ToLower(searchStr)) != -1 {
-			return true, nil
-		}
-	}
-	return false, nil
+	return agentConf.AntreaProxy.ProxyAll, nil
 }
 
 func getFeatures(confName string) (featuregate.FeatureGate, error) {
