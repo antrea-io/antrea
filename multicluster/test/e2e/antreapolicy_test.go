@@ -20,9 +20,9 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
-	v1 "k8s.io/api/core/v1"
 
 	antreae2e "antrea.io/antrea/test/e2e"
+	"antrea.io/antrea/test/e2e/utils"
 )
 
 const (
@@ -102,7 +102,7 @@ func (data *MCTestData) testAntreaPolicyCopySpanNSIsolation(t *testing.T) {
 		Name:         "Port 80",
 		Reachability: reachability,
 		Ports:        []int32{80},
-		Protocol:     v1.ProtocolTCP,
+		Protocol:     utils.ProtocolTCP,
 	}
 	testCaseList := []*antreae2e.TestCase{
 		{

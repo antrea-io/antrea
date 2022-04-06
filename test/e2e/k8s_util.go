@@ -32,6 +32,7 @@ import (
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	crdv1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
 	crdv1alpha3 "antrea.io/antrea/pkg/apis/crd/v1alpha3"
+	"antrea.io/antrea/test/e2e/utils"
 )
 
 type KubernetesUtils struct {
@@ -60,7 +61,7 @@ type TestStep struct {
 	Reachability  *Reachability
 	TestResources []metav1.Object
 	Ports         []int32
-	Protocol      v1.Protocol
+	Protocol      utils.AntreaPolicyProtocol
 	Duration      time.Duration
 	CustomProbes  []*CustomProbe
 }
@@ -120,12 +121,12 @@ func (k *KubernetesUtils) probe(
 	dstAddr string,
 	dstName string,
 	port int32,
-	protocol v1.Protocol,
+	protocol utils.AntreaPolicyProtocol,
 ) PodConnectivityMark {
-	protocolStr := map[v1.Protocol]string{
-		v1.ProtocolTCP:  "tcp",
-		v1.ProtocolUDP:  "udp",
-		v1.ProtocolSCTP: "sctp",
+	protocolStr := map[utils.AntreaPolicyProtocol]string{
+		utils.ProtocolTCP:  "tcp",
+		utils.ProtocolUDP:  "udp",
+		utils.ProtocolSCTP: "sctp",
 	}
 	// We try to connect 3 times. This dates back to when we were using the OVS netdev datapath
 	// for Kind clusters, as the first packet sent on a tunnel was always dropped
@@ -178,11 +179,77 @@ func DecideProbeResult(stderr string, probeNum int) PodConnectivityMark {
 	return Error
 }
 
+func (k *KubernetesUtils) pingProbe(
+	pod *v1.Pod,
+	podName string,
+	containerName string,
+	dstAddr string,
+	dstName string,
+) PodConnectivityMark {
+	pingCmd := fmt.Sprintf("ping -4 -c 3 -W 1 %s", dstAddr)
+	if strings.Contains(dstAddr, ":") {
+		pingCmd = fmt.Sprintf("ping -6 -c 3 -W 1 %s", dstAddr)
+	}
+	cmd := []string{
+		"/bin/sh",
+		"-c",
+		pingCmd,
+	}
+	log.Tracef("Running: kubectl exec %s -c %s -n %s -- %s", pod.Name, containerName, pod.Namespace, strings.Join(cmd, " "))
+	stdout, stderr, err := k.RunCommandFromPod(pod.Namespace, pod.Name, containerName, cmd)
+	log.Tracef("%s -> %s: error when running command: err - %v /// stdout - %s /// stderr - %s", podName, dstName, err, stdout, stderr)
+	return DecidePingProbeResult(stdout, 3)
+}
+
+// DecidePingProbeResult uses the pingProbe stdout to decide the connectivity.
+func DecidePingProbeResult(stdout string, probeNum int) PodConnectivityMark {
+	// Provide stdout example for different connectivity:
+	// ================== Connected stdout ==================
+	// PING 10.10.1.2 (10.10.1.2) 56(84) bytes of data.
+	// 64 bytes from 10.10.1.2: icmp_seq=1 ttl=64 time=0.695 ms
+	// 64 bytes from 10.10.1.2: icmp_seq=2 ttl=64 time=0.250 ms
+	// 64 bytes from 10.10.1.2: icmp_seq=3 ttl=64 time=0.058 ms
+	//
+	// --- 10.10.1.2 ping statistics ---
+	// 3 packets transmitted, 3 received, 0% packet loss, time 2043ms
+	// rtt min/avg/max/mdev = 0.058/0.334/0.695/0.266 ms
+	// ======================================================
+	// =================== Dropped stdout ===================
+	// PING 10.10.1.2 (10.10.1.2) 56(84) bytes of data.
+	//
+	// --- 10.10.1.2 ping statistics ---
+	// 3 packets transmitted, 0 received, 100% packet loss, time 2037ms
+	// =======================================================
+	// =================== Rejected stdout ===================
+	// PING 10.10.1.2 (10.10.1.2) 56(84) bytes of data.
+	// From 10.10.1.2 icmp_seq=1 Destination Host Prohibited
+	// From 10.10.1.2 icmp_seq=2 Destination Host Prohibited
+	// From 10.10.1.2 icmp_seq=3 Destination Host Prohibited
+	//
+	// --- 10.10.1.2 ping statistics ---
+	// 3 packets transmitted, 0 received, +3 errors, 100% packet loss, time 2042ms
+	// =======================================================
+	countConnected := strings.Count(stdout, "bytes from")
+	countRejected := strings.Count(stdout, "Prohibited")
+	countDropped := probeNum - strings.Count(stdout, "icmp_seq")
+
+	if countRejected == 0 && countConnected > 0 {
+		return Connected
+	}
+	if countConnected == 0 && countRejected > 0 {
+		return Rejected
+	}
+	if countDropped == probeNum {
+		return Dropped
+	}
+	return Error
+}
+
 // Probe execs into a Pod and checks its connectivity to another Pod. Of course it
 // assumes that the target Pod is serving on the input port, and also that agnhost
 // is installed. The connectivity from source Pod to all IPs of the target Pod
 // should be consistent. Otherwise, Error PodConnectivityMark will be returned.
-func (k *KubernetesUtils) Probe(ns1, pod1, ns2, pod2 string, port int32, protocol v1.Protocol) (PodConnectivityMark, error) {
+func (k *KubernetesUtils) Probe(ns1, pod1, ns2, pod2 string, port int32, protocol utils.AntreaPolicyProtocol) (PodConnectivityMark, error) {
 	fromPods, err := k.GetPodsByLabel(ns1, "pod", pod1)
 	if err != nil {
 		return Error, fmt.Errorf("unable to get Pods from Namespace %s: %v", ns1, err)
@@ -223,7 +290,7 @@ func (k *KubernetesUtils) Probe(ns1, pod1, ns2, pod2 string, port int32, protoco
 
 // ProbeAddr execs into a Pod and checks its connectivity to an arbitrary destination
 // address.
-func (k *KubernetesUtils) ProbeAddr(ns, podLabelKey, podLabelValue, dstAddr string, port int32, protocol v1.Protocol) (PodConnectivityMark, error) {
+func (k *KubernetesUtils) ProbeAddr(ns, podLabelKey, podLabelValue, dstAddr string, port int32, protocol utils.AntreaPolicyProtocol) (PodConnectivityMark, error) {
 	fromPods, err := k.GetPodsByLabel(ns, podLabelKey, podLabelValue)
 	if err != nil {
 		return Error, fmt.Errorf("unable to get Pods from Namespace %s: %v", ns, err)
@@ -233,11 +300,16 @@ func (k *KubernetesUtils) ProbeAddr(ns, podLabelKey, podLabelValue, dstAddr stri
 	}
 	fromPod := fromPods[0]
 	containerName := fromPod.Spec.Containers[0].Name
-	// If it's an IPv6 address, add "[]" around it.
-	if strings.Contains(dstAddr, ":") {
-		dstAddr = fmt.Sprintf("[%s]", dstAddr)
+	var connectivity PodConnectivityMark
+	if protocol == utils.ProtocolICMP {
+		connectivity = k.pingProbe(&fromPod, fmt.Sprintf("%s/%s", ns, podLabelValue), containerName, dstAddr, dstAddr)
+	} else {
+		// If it's an IPv6 address, add "[]" around it.
+		if strings.Contains(dstAddr, ":") {
+			dstAddr = fmt.Sprintf("[%s]", dstAddr)
+		}
+		connectivity = k.probe(&fromPod, fmt.Sprintf("%s/%s", ns, podLabelValue), containerName, dstAddr, dstAddr, port, protocol)
 	}
-	connectivity := k.probe(&fromPod, fmt.Sprintf("%s/%s", ns, podLabelValue), containerName, dstAddr, dstAddr, port, protocol)
 	return connectivity, nil
 }
 
@@ -807,17 +879,17 @@ func (k *KubernetesUtils) waitForHTTPServers(allPods []Pod) error {
 
 	serversAreReady := func() bool {
 		reachability := NewReachability(allPods, Connected)
-		k.Validate(allPods, reachability, []int32{80, 81, 8080, 8081, 8082, 8083, 8084, 8085}, v1.ProtocolTCP)
+		k.Validate(allPods, reachability, []int32{80, 81, 8080, 8081, 8082, 8083, 8084, 8085}, utils.ProtocolTCP)
 		if _, wrong, _ := reachability.Summary(); wrong != 0 {
 			return false
 		}
 
-		k.Validate(allPods, reachability, []int32{80, 81}, v1.ProtocolUDP)
+		k.Validate(allPods, reachability, []int32{80, 81}, utils.ProtocolUDP)
 		if _, wrong, _ := reachability.Summary(); wrong != 0 {
 			return false
 		}
 
-		k.Validate(allPods, reachability, []int32{80, 81}, v1.ProtocolSCTP)
+		k.Validate(allPods, reachability, []int32{80, 81}, utils.ProtocolSCTP)
 		if _, wrong, _ := reachability.Summary(); wrong != 0 {
 			return false
 		}
@@ -834,7 +906,7 @@ func (k *KubernetesUtils) waitForHTTPServers(allPods []Pod) error {
 	return errors.Errorf("after %d tries, HTTP servers are not ready", maxTries)
 }
 
-func (k *KubernetesUtils) validateOnePort(allPods []Pod, reachability *Reachability, port int32, protocol v1.Protocol) {
+func (k *KubernetesUtils) validateOnePort(allPods []Pod, reachability *Reachability, port int32, protocol utils.AntreaPolicyProtocol) {
 	type probeResult struct {
 		podFrom      Pod
 		podTo        Pod
@@ -884,7 +956,7 @@ func (k *KubernetesUtils) validateOnePort(allPods []Pod, reachability *Reachabil
 // list of ports and a protocol. The connectivity from a Pod to another Pod should
 // be consistent across all provided ports. Otherwise, this connectivity will be
 // treated as Error.
-func (k *KubernetesUtils) Validate(allPods []Pod, reachability *Reachability, ports []int32, protocol v1.Protocol) {
+func (k *KubernetesUtils) Validate(allPods []Pod, reachability *Reachability, ports []int32, protocol utils.AntreaPolicyProtocol) {
 	for _, port := range ports {
 		// we do not run all the probes in parallel as we have experienced that on some
 		// machines, this can cause a fraction of the probes to always fail, despite the

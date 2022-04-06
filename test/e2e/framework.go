@@ -1085,9 +1085,9 @@ func (data *TestData) createMcJoinPodOnNode(name string, ns string, nodeName str
 
 // createNetshootPodOnNode creates a Pod in the test namespace with a single netshoot container. The
 // Pod will be scheduled on the specified Node (if nodeName is not empty).
-func (data *TestData) createNetshootPodOnNode(name string, ns string, nodeName string, _ bool) error {
+func (data *TestData) createNetshootPodOnNode(name string, ns string, nodeName string, hostNetwork bool) error {
 	sleepDuration := 3600 // seconds
-	return data.createPodOnNode(name, ns, nodeName, netshootImage, []string{"sleep", strconv.Itoa(sleepDuration)}, nil, nil, nil, true, nil)
+	return data.createPodOnNode(name, ns, nodeName, netshootImage, []string{"sleep", strconv.Itoa(sleepDuration)}, nil, nil, nil, hostNetwork, nil)
 }
 
 // createNginxPodOnNode creates a Pod in the test namespace with a single nginx container. The
