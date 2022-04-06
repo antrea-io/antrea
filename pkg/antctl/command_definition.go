@@ -41,6 +41,7 @@ const (
 	jsonFormatter  formatterType = "json"
 	yamlFormatter  formatterType = "yaml"
 	tableFormatter formatterType = "table"
+	rawFormatter   formatterType = "raw"
 )
 
 const (
@@ -540,6 +541,8 @@ func (cd *commandDefinition) output(resp io.Reader, writer io.Writer, ft formatt
 		} else {
 			return output.TableOutput(obj, writer)
 		}
+	case rawFormatter:
+		return output.RawOutput(obj, writer)
 	default:
 		return fmt.Errorf("unsupported format type: %v", ft)
 	}
