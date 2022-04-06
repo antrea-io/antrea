@@ -61,7 +61,7 @@ jobs:
     - name: Run unit tests
       run: make test-unit
     - name: Codecov
-      uses: codecov/codecov-action@v1
+      uses: codecov/codecov-action@v3
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
         file: .coverage/coverage-unit.txt
