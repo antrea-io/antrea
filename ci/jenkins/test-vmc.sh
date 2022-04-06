@@ -37,8 +37,7 @@ SECRET_EXIST=false
 TEST_FAILURE=false
 CLUSTER_READY=false
 DOCKER_REGISTRY=""
-# TODO: change to "control-plane" when testbeds are updated to K8s v1.20
-CONTROL_PLANE_NODE_ROLE="master"
+CONTROL_PLANE_NODE_ROLE="control-plane"
 
 _usage="Usage: $0 [--cluster-name <VMCClusterNameToUse>] [--kubeconfig <KubeconfigSavePath>] [--workdir <HomePath>]
                   [--log-mode <SonobuoyResultLogLevel>] [--testcase <e2e|conformance|all-features-conformance|whole-conformance|networkpolicy>]
@@ -189,7 +188,7 @@ function release_static_ip() {
 function setup_cluster() {
     export KUBECONFIG=$KUBECONFIG_PATH
     if [ -z $K8S_VERSION ]; then
-      export K8S_VERSION=v1.19.1
+      export K8S_VERSION=v1.20.1
     fi
     if [ -z $TEST_OS ]; then
       export TEST_OS=ubuntu-1804
@@ -567,8 +566,10 @@ function run_conformance {
     export PATH=$GOROOT/bin:$PATH
     export KUBECONFIG=$GIT_CHECKOUT_DIR/jenkins/out/kubeconfig
 
+    $GIT_CHECKOUT_DIR/hack/generate-manifest.sh --mode dev --endpointslice > $GIT_CHECKOUT_DIR/build/yamls/antrea.yml
     antrea_yml="antrea.yml"
     if [[ "$COVERAGE" == true ]]; then
+        $GIT_CHECKOUT_DIR/hack/generate-manifest.sh --mode dev --endpointslice --coverage > $GIT_CHECKOUT_DIR/build/yamls/antrea-coverage.yml
         antrea_yml="antrea-coverage.yml"
     fi
 
