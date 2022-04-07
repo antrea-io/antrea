@@ -285,7 +285,7 @@ func TestServiceExportReconciler_handleServiceUpdateEvent(t *testing.T) {
 			ports := svcResExport.Spec.Service.ServiceSpec.Ports
 			expectedPorts := []corev1.ServicePort{
 				{
-					Name:     "tcp8080",
+					Name:     "http",
 					Protocol: corev1.ProtocolTCP,
 					Port:     8080,
 				},
