@@ -269,6 +269,10 @@ fi
 
 THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
+# Avoid potential Helm warnings about invalid permissions for Kubeconfig file.
+# The Kubeconfig does not matter for "helm template".
+unset KUBECONFIG
+
 source $THIS_DIR/verify-helm.sh
 
 if [ -z "$HELM" ]; then
