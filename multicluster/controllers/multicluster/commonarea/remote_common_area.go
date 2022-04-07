@@ -147,7 +147,6 @@ func NewRemoteCommonArea(clusterID common.ClusterID, clusterSetID common.Cluster
 	if e != nil {
 		return nil, e
 	}
-
 	remote := &remoteCommonArea{
 		Client:                  remoteClient,
 		ClusterManager:          mgr,
@@ -409,6 +408,17 @@ func (r *remoteCommonArea) StopWatching() {
 	}
 	r.managerStopFunc()
 	r.managerStopFunc = nil
+
+	// Reset ClusterManager so this common area can be started again when it's reconnected.
+	mgr, err := ctrl.NewManager(r.config, ctrl.Options{
+		Scheme:             r.scheme,
+		MetricsBindAddress: "0",
+		Namespace:          r.Namespace,
+	})
+	if err != nil {
+		klog.ErrorS(err, "Error to reset manager for RemoteCommonArea", "Cluster", r.ClusterID)
+	}
+	r.ClusterManager = mgr
 }
 
 func (r *remoteCommonArea) GetStatus() []multiclusterv1alpha1.ClusterCondition {
