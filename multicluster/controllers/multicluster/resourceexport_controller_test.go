@@ -372,7 +372,7 @@ func TestResourceExportReconciler_handleSingleServiceUpdateEvent(t *testing.T) {
 		ServiceImport: &mcs.ServiceImport{
 			Spec: mcs.ServiceImportSpec{
 				Ports: SvcPortsConverter([]corev1.ServicePort{{
-					Name:     "8080tcp",
+					Name:     "http",
 					Port:     8080,
 					Protocol: corev1.ProtocolTCP,
 				}}),
