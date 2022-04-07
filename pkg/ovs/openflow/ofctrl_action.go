@@ -94,9 +94,11 @@ func (a *ofCTAction) LoadToMark(value uint32) CTAction {
 	return a
 }
 
-func (a *ofCTAction) LoadToCtMark(mark *CtMark) CTAction {
+func (a *ofCTAction) LoadToCtMark(marks ...*CtMark) CTAction {
 	field, _, _ := getFieldRange(NxmFieldCtMark)
-	a.load(field, uint64(mark.value), mark.field.rng)
+	for _, mark := range marks {
+		a.load(field, uint64(mark.value), mark.field.rng)
+	}
 	return a
 }
 
@@ -292,8 +294,13 @@ func (a *ofFlowAction) LoadToRegField(field *RegField, value uint32) FlowBuilder
 	return a.builder
 }
 
-func (a *ofFlowAction) LoadRegMark(mark *RegMark) FlowBuilder {
-	return a.LoadToRegField(mark.field, mark.value)
+func (a *ofFlowAction) LoadRegMark(marks ...*RegMark) FlowBuilder {
+	var fb FlowBuilder
+	fb = a.builder
+	for _, mark := range marks {
+		fb = a.LoadToRegField(mark.field, mark.value)
+	}
+	return fb
 }
 
 // LoadToPktMarkRange is an action to load data into pkt_mark at specified range.
