@@ -32,8 +32,15 @@ import (
 	"antrea.io/antrea/pkg/util/ip"
 )
 
-// prepareHostNetwork creates HNS Network for containers.
 func (i *Initializer) prepareHostNetwork() error {
+	if i.nodeConfig.Type == config.K8sNode {
+		return i.prepareHNSNetworkAndOVSExtension()
+	}
+	return nil
+}
+
+// prepareHNSNetworkAndOVSExtension creates HNS Network for containers, and enables OVS Extension on it.
+func (i *Initializer) prepareHNSNetworkAndOVSExtension() error {
 	// If the HNS Network already exists, return immediately.
 	hnsNetwork, err := hcsshim.GetHNSNetworkByName(util.LocalHNSNetwork)
 	if err == nil {
@@ -104,12 +111,19 @@ func (i *Initializer) prepareHostNetwork() error {
 	return util.PrepareHNSNetwork(subnetCIDR, i.nodeConfig.NodeTransportIPv4Addr, adapter, i.nodeConfig.UplinkNetConfig.Gateway, dnsServers, i.nodeConfig.UplinkNetConfig.Routes, i.ovsBridge)
 }
 
-// prepareOVSBridge adds local port and uplink to ovs bridge.
-// This function will delete OVS bridge and HNS network created by antrea on failure.
 func (i *Initializer) prepareOVSBridge() error {
+	if i.nodeType == config.K8sNode {
+		return i.prepareOVSBridgeOnHNSNetwork()
+	}
+	return nil
+}
+
+// prepareOVSBridgeOnHNSNetwork adds local port and uplink to OVS bridge after the OVS Extension is enabled on HNSNetwork.
+// This function will delete OVS bridge and HNS network created by Antrea at failures.
+func (i *Initializer) prepareOVSBridgeOnHNSNetwork() error {
 	hnsNetwork, err := hcsshim.GetHNSNetworkByName(util.LocalHNSNetwork)
 	defer func() {
-		// prepareOVSBridge only works on windows platform. The operation has a chance to fail on the first time agent
+		// prepareOVSBridge only works on Windows platform. The operation has a chance to fail on the first time agent
 		// starts up when OVS bridge uplink and local interface have not been configured. If the operation fails, the
 		// host can not communicate with external network. To make sure the agent can connect to API server in
 		// next retry, this step deletes OVS bridge and HNS network created previously which will restore the
@@ -136,7 +150,7 @@ func (i *Initializer) prepareOVSBridge() error {
 	datapathID := strings.Replace(hnsNetwork.SourceMac, ":", "", -1)
 	datapathID = "0000" + datapathID
 	if err = i.ovsBridgeClient.SetDatapathID(datapathID); err != nil {
-		klog.Errorf("Failed to set datapath_id %s: %v", datapathID, err)
+		klog.ErrorS(err, "Failed to set OVS bridge datapath_id", "datapathID", datapathID)
 		return err
 	}
 

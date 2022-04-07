@@ -59,6 +59,23 @@ var (
 	VirtualServiceIPv6 = net.ParseIP("fc01::aabb:ccdd:eeff")
 )
 
+type NodeType uint8
+
+const (
+	K8sNode NodeType = iota
+	ExternalNode
+)
+
+func (t NodeType) String() string {
+	switch t {
+	case K8sNode:
+		return "k8sNode"
+	case ExternalNode:
+		return "externalNode"
+	}
+	return "unknown"
+}
+
 type GatewayConfig struct {
 	// Name is the name of host gateway, e.g. antrea-gw0.
 	Name string
@@ -103,6 +120,8 @@ type EgressConfig struct {
 type NodeConfig struct {
 	// The Node's name used in Kubernetes.
 	Name string
+	// The type to identify it is a Kubernetes Node or an external Node.
+	Type NodeType
 	// The name of the OpenVSwitch bridge antrea-agent uses.
 	OVSBridge string
 	// The name of the default tunnel interface. Defaults to "antrea-tun0", but can

@@ -645,6 +645,7 @@ func (c *client) Initialize(roundInfo types.RoundInfo,
 	c.networkConfig = networkConfig
 	c.egressConfig = egressConfig
 	c.serviceConfig = serviceConfig
+	c.nodeType = nodeConfig.Type
 
 	if networkConfig.IPv4Enabled {
 		c.ipProtocols = append(c.ipProtocols, binding.ProtocolIP)
@@ -691,16 +692,29 @@ func (c *client) Initialize(roundInfo types.RoundInfo,
 // generatePipelines generates table list for every pipeline from all activated features. Note that, tables are not realized
 // in OVS bridge in this function.
 func (c *client) generatePipelines() {
-	c.featurePodConnectivity = newFeaturePodConnectivity(c.cookieAllocator,
-		c.ipProtocols,
-		c.nodeConfig,
-		c.networkConfig,
-		c.ovsDatapathType,
-		c.connectUplinkToBridge,
-		c.enableMulticast,
-		c.proxyAll)
-	c.activatedFeatures = append(c.activatedFeatures, c.featurePodConnectivity)
-	c.traceableFeatures = append(c.traceableFeatures, c.featurePodConnectivity)
+	if c.nodeType == config.K8sNode {
+		c.featurePodConnectivity = newFeaturePodConnectivity(c.cookieAllocator,
+			c.ipProtocols,
+			c.nodeConfig,
+			c.networkConfig,
+			c.ovsDatapathType,
+			c.connectUplinkToBridge,
+			c.enableMulticast,
+			c.proxyAll)
+		c.activatedFeatures = append(c.activatedFeatures, c.featurePodConnectivity)
+		c.traceableFeatures = append(c.traceableFeatures, c.featurePodConnectivity)
+
+		c.featureService = newFeatureService(c.cookieAllocator,
+			c.ipProtocols,
+			c.nodeConfig,
+			c.serviceConfig,
+			c.bridge,
+			c.enableProxy,
+			c.proxyAll,
+			c.connectUplinkToBridge)
+		c.activatedFeatures = append(c.activatedFeatures, c.featureService)
+		c.traceableFeatures = append(c.traceableFeatures, c.featureService)
+	}
 
 	c.featureNetworkPolicy = newFeatureNetworkPolicy(c.cookieAllocator,
 		c.ipProtocols,
@@ -711,17 +725,6 @@ func (c *client) generatePipelines() {
 		c.connectUplinkToBridge)
 	c.activatedFeatures = append(c.activatedFeatures, c.featureNetworkPolicy)
 	c.traceableFeatures = append(c.traceableFeatures, c.featureNetworkPolicy)
-
-	c.featureService = newFeatureService(c.cookieAllocator,
-		c.ipProtocols,
-		c.nodeConfig,
-		c.serviceConfig,
-		c.bridge,
-		c.enableProxy,
-		c.proxyAll,
-		c.connectUplinkToBridge)
-	c.activatedFeatures = append(c.activatedFeatures, c.featureService)
-	c.traceableFeatures = append(c.traceableFeatures, c.featureService)
 
 	if c.enableEgress {
 		c.featureEgress = newFeatureEgress(c.cookieAllocator, c.ipProtocols, c.nodeConfig, c.egressConfig)
@@ -819,7 +822,9 @@ func (c *client) ReplayFlows() {
 		klog.Errorf("Error during flow replay: %v", err)
 	}
 
-	c.featureService.replayGroups()
+	if c.featureService != nil {
+		c.featureService.replayGroups()
+	}
 
 	for _, activeFeature := range c.activatedFeatures {
 		if err := c.ofEntryOperations.AddAll(activeFeature.replayFlows()); err != nil {
