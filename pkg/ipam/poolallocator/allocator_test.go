@@ -373,23 +373,24 @@ func TestHas(t *testing.T) {
 	_, _, err := allocator.AllocateNext(crdv1a2.IPAddressPhaseAllocated, owner)
 	require.NoError(t, err)
 	err = wait.PollImmediate(100*time.Millisecond, 1*time.Second, func() (bool, error) {
-		has, _ := allocator.HasPod(testNamespace, "fakePod")
+		has, _ := allocator.hasPod(testNamespace, "fakePod")
 		return has, nil
 	})
 	require.NoError(t, err)
 
-	has, err := allocator.HasPod(testNamespace, "realPod")
+	has, err := allocator.hasPod(testNamespace, "realPod")
 	require.NoError(t, err)
 	assert.False(t, has)
-	has, err = allocator.HasContainer("fakeContainer", "eth1")
+	var ip net.IP
+	ip, err = allocator.GetContainerIP("fakeContainer", "eth1")
 	require.NoError(t, err)
-	assert.True(t, has)
-	has, err = allocator.HasContainer("fakeContainer", "")
+	assert.NotNil(t, ip)
+	ip, err = allocator.GetContainerIP("fakeContainer", "")
 	require.NoError(t, err)
-	assert.False(t, has)
-	has, err = allocator.HasContainer("realContainer", "eth1")
+	assert.Nil(t, ip)
+	ip, err = allocator.GetContainerIP("realContainer", "eth1")
 	require.NoError(t, err)
-	assert.False(t, has)
+	assert.Nil(t, ip)
 }
 
 func TestAllocateReleaseStatefulSet(t *testing.T) {

@@ -23,7 +23,6 @@ import (
 	"github.com/containernetworking/cni/pkg/invoke"
 	cnitypes "github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types/current"
-	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
 
@@ -59,7 +58,6 @@ const (
 
 // Resource needs to be unique since it is used as identifier in Del.
 // Therefore Container ID is used, while Pod/Namespace are shown for visibility.
-// TODO: Consider multi-interface case
 func getAllocationOwner(args *invoke.Args, k8sArgs *types.K8sArgs, reservedOwner *crdv1a2.IPAddressOwner, secondary bool) crdv1a2.IPAddressOwner {
 	podOwner := &crdv1a2.PodOwner{
 		Name:        string(k8sArgs.K8S_POD_NAME),
@@ -182,21 +180,21 @@ func (d *AntreaIPAM) Check(args *invoke.Args, k8sArgs *types.K8sArgs, networkCon
 		return false, nil
 	}
 
-	found, err := allocator.HasContainer(args.ContainerID, "")
+	ip, err := allocator.GetContainerIP(args.ContainerID, "")
 	if err != nil {
 		return true, err
 	}
 
-	if !found {
+	if ip == nil {
 		return true, fmt.Errorf("no IP Address association found for container %s", string(k8sArgs.K8S_POD_NAME))
 	}
-
 	return true, nil
 }
 
 func (d *AntreaIPAM) secondaryNetworkAdd(args *invoke.Args, k8sArgs *types.K8sArgs, networkConfig *types.NetworkConfig) (*current.Result, error) {
 	ipamConf := networkConfig.IPAM
-	if len(ipamConf.IPPools) == 0 {
+	numPools := len(ipamConf.IPPools)
+	if numPools == 0 {
 		return nil, fmt.Errorf("Antrea IPPool must be specified")
 	}
 
@@ -205,37 +203,42 @@ func (d *AntreaIPAM) secondaryNetworkAdd(args *invoke.Args, k8sArgs *types.K8sAr
 		return nil, err
 	}
 
-	var err error
-	var allocator *poolallocator.IPPoolAllocator
-	for _, p := range ipamConf.IPPools {
-		allocator, err = d.controller.getPoolAllocatorByName(p)
-		if err == nil {
-			// Use the first IPPool that exists.
-			break
-		}
-		if !errors.IsNotFound(err) {
-			return nil, fmt.Errorf("failed to get IPPool %s: %v", p, err)
-		}
-		klog.InfoS("IPPool not found", "pool", p)
-
-	}
-	if allocator == nil {
-		return nil, fmt.Errorf("no valid IPPool found")
-	}
-
 	owner := getAllocationOwner(args, k8sArgs, nil, true)
-	var ip net.IP
-	var subnetInfo *crdv1a2.SubnetInfo
-	ip, subnetInfo, err = allocator.AllocateNext(crdv1a2.IPAddressPhaseAllocated, owner)
-	if err != nil {
-		return nil, err
-	}
+	var allocatorsToRelease []*poolallocator.IPPoolAllocator
+	defer func() {
+		for _, allocator := range allocatorsToRelease {
+			// Try to release the allocated IPs after an error.
+			allocator.ReleaseContainer(owner.Pod.ContainerID, owner.Pod.IFName)
+		}
+	}()
 
+	result := &current.Result{}
+	for _, p := range ipamConf.IPPools {
+		allocator, err := d.controller.getPoolAllocatorByName(p)
+		if err != nil {
+			return nil, err
+		}
+
+		var ip net.IP
+		var subnetInfo *crdv1a2.SubnetInfo
+		ip, subnetInfo, err = allocator.AllocateNext(crdv1a2.IPAddressPhaseAllocated, owner)
+		if err != nil {
+			return nil, err
+		}
+		if numPools > 1 {
+			allocatorsToRelease = append(allocatorsToRelease, allocator)
+		}
+
+		gwIP := net.ParseIP(subnetInfo.Gateway)
+		ipConfig, _ := generateIPConfig(ip, int(subnetInfo.PrefixLength), gwIP)
+		result.IPs = append(result.IPs, ipConfig)
+	}
 	// Copy routes and DNS from the input IPAM configuration.
-	result := &current.Result{Routes: ipamConf.Routes, DNS: ipamConf.DNS}
-	gwIP := net.ParseIP(subnetInfo.Gateway)
-	ipConfig, _ := generateIPConfig(ip, int(subnetInfo.PrefixLength), gwIP)
-	result.IPs = append(result.IPs, ipConfig)
+	result.Routes = ipamConf.Routes
+	result.DNS = ipamConf.DNS
+
+	// No failed allocation, so do not release allocated IPs.
+	allocatorsToRelease = nil
 	return result, nil
 }
 
@@ -270,7 +273,6 @@ func (d *AntreaIPAM) del(podOwner *crdv1a2.PodOwner) (foundAllocation bool, err 
 	for _, a := range allocators {
 		err = a.ReleaseContainer(podOwner.ContainerID, podOwner.IFName)
 		if err != nil {
-			klog.Errorf("xxx err: %v", err)
 			return true, err
 		}
 	}
