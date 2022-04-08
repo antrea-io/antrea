@@ -1385,6 +1385,7 @@ func (f *featurePodConnectivity) l3FwdFlowToRemoteViaUplink(remoteGatewayMAC net
 			MatchDstIPNet(peerSubnet).
 			Action().SetSrcMAC(f.nodeConfig.UplinkNetConfig.MAC).
 			Action().SetDstMAC(remoteGatewayMAC).
+			Action().LoadRegMark(ToUplinkRegMark).
 			Action().GotoTable(L3DecTTLTable.GetID()).
 			Done()
 	}
@@ -1398,6 +1399,7 @@ func (f *featurePodConnectivity) l3FwdFlowToRemoteViaUplink(remoteGatewayMAC net
 		MatchRegMark(AntreaFlexibleIPAMRegMark).
 		MatchDstIPNet(peerSubnet).
 		Action().SetDstMAC(remoteGatewayMAC).
+		Action().LoadRegMark(ToUplinkRegMark).
 		Action().GotoTable(L3DecTTLTable.GetID()).
 		Done()
 }
@@ -2141,6 +2143,12 @@ func (f *featureNetworkPolicy) ingressClassifierFlows() []binding.Flow {
 		IngressSecurityClassifierTable.ofTable.BuildFlow(priorityNormal).
 			Cookie(cookieID).
 			MatchRegMark(ToTunnelRegMark).
+			Action().GotoTable(IngressMetricTable.GetID()).
+			Done(),
+		// This generates the flow to match the packets to uplink and forward them to IngressMetricTable.
+		IngressSecurityClassifierTable.ofTable.BuildFlow(priorityNormal).
+			Cookie(cookieID).
+			MatchRegMark(ToUplinkRegMark).
 			Action().GotoTable(IngressMetricTable.GetID()).
 			Done(),
 	}
@@ -2896,33 +2904,41 @@ func (f *featureService) gatewaySNATFlows() []binding.Flow {
 	cookieID := f.cookieAllocator.Request(f.category).Raw()
 	var flows []binding.Flow
 	for _, ipProtocol := range f.ipProtocols {
-		flows = append(flows,
-			// This generates the flow to match the first packet of hairpin connection initiated through the Antrea gateway.
-			// ConnSNATCTMark and HairpinCTMark will be loaded in DNAT CT zone.
-			ServiceMarkTable.ofTable.BuildFlow(priorityNormal).
-				Cookie(cookieID).
-				MatchProtocol(ipProtocol).
-				MatchCTStateNew(true).
-				MatchCTStateTrk(true).
-				MatchRegMark(GatewayHairpinRegMark).
-				Action().CT(true, ServiceMarkTable.GetNext(), f.dnatCtZones[ipProtocol], f.ctZoneSrcField).
-				LoadToCtMark(ConnSNATCTMark, HairpinCTMark).
-				CTDone().
-				Done(),
+		// This generates the flow to match the first packet of hairpin connection initiated through the Antrea gateway.
+		// ConnSNATCTMark and HairpinCTMark will be loaded in DNAT CT zone.
+		flows = append(flows, ServiceMarkTable.ofTable.BuildFlow(priorityNormal).
+			Cookie(cookieID).
+			MatchProtocol(ipProtocol).
+			MatchCTStateNew(true).
+			MatchCTStateTrk(true).
+			MatchRegMark(FromGatewayRegMark, ToGatewayRegMark).
+			Action().CT(true, ServiceMarkTable.GetNext(), f.dnatCtZones[ipProtocol], f.ctZoneSrcField).
+			LoadToCtMark(ConnSNATCTMark, HairpinCTMark).
+			CTDone().
+			Done())
+
+		var pktDstRegMarks []*binding.RegMark
+		if f.networkConfig.TrafficEncapMode.SupportsEncap() {
+			pktDstRegMarks = append(pktDstRegMarks, ToTunnelRegMark)
+		}
+		if f.networkConfig.TrafficEncapMode.SupportsNoEncap() && runtime.IsWindowsPlatform() {
+			pktDstRegMarks = append(pktDstRegMarks, ToUplinkRegMark)
+		}
+		for _, pktDstRegMark := range pktDstRegMarks {
 			// This generates the flow to match the first packet of NodePort / LoadBalancer connection initiated through the
-			// Antrea gateway and externalTrafficPolicy of the Service is Cluster. ConnSNATCTMark will be loaded in DNAT
-			// CT zone.
-			ServiceMarkTable.ofTable.BuildFlow(priorityLow).
+			// Antrea gateway and externalTrafficPolicy of the Service is Cluster, and the selected Endpoint is on a remote
+			// Node, then ConnSNATCTMark will be loaded in DNAT CT zone, indicating that SNAT is required for the connection.
+			flows = append(flows, ServiceMarkTable.ofTable.BuildFlow(priorityNormal).
 				Cookie(cookieID).
 				MatchProtocol(ipProtocol).
 				MatchCTStateNew(true).
 				MatchCTStateTrk(true).
-				MatchRegMark(FromGatewayRegMark, ToClusterServiceRegMark).
+				MatchRegMark(FromGatewayRegMark, pktDstRegMark, ToClusterServiceRegMark).
 				Action().CT(true, ServiceMarkTable.GetNext(), f.dnatCtZones[ipProtocol], f.ctZoneSrcField).
 				LoadToCtMark(ConnSNATCTMark).
 				CTDone().
-				Done(),
-		)
+				Done())
+		}
 	}
 
 	return flows

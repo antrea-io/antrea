@@ -49,11 +49,7 @@ var (
 	PktDestinationField = binding.NewRegField(0, 4, 7, "PacketDestination")
 	ToTunnelRegMark     = binding.NewRegMark(PktDestinationField, tunnelVal)
 	ToGatewayRegMark    = binding.NewRegMark(PktDestinationField, gatewayVal)
-	// reg0[0..7]: Union field of the packet source and destination. It is used to mark hairpin packets. Marks in this
-	// field include:
-	//  - 0x11: the packet sourced from Antrea gateway interface, and destined for local Node via Antrea gateway interface.
-	PktUnionField         = binding.NewRegField(0, 0, 7, "PacketUnion")
-	GatewayHairpinRegMark = binding.NewRegMark(PktUnionField, (ToGatewayRegMark.GetValue()<<ToGatewayRegMark.GetField().GetRange().Offset())|FromGatewayRegMark.GetValue())
+	ToUplinkRegMark     = binding.NewRegMark(PktDestinationField, uplinkVal)
 	// reg0[8]: Mark to indicate the ofPort number of an interface is found.
 	OFPortFoundRegMark = binding.NewOneBitRegMark(0, 8, "OFPortFound")
 	// reg0[9]: Field to indicate whether the packet's source / destination MAC address needs to be rewritten.
