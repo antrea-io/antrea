@@ -1,0 +1,28 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: clickhouse-storage
+provisioner: kubernetes.io/no-provisioner
+volumeBindingMode: WaitForFirstConsumer
+reclaimPolicy: Retain
+allowVolumeExpansion: True
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: clickhouse-pv
+spec:
+  storageClassName: clickhouse-storage
+  capacity:
+    storage: STORAGE_SIZE
+  accessModes:
+    - ReadWriteOnce
+  volumeMode: Filesystem
+  local:
+    path: LOCAL_PATH
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: antrea.io/clickhouse-data-node
+          operator: Exists

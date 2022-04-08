@@ -1,0 +1,14 @@
+- op: add
+  path: /spec/defaults/templates/dataVolumeClaimTemplate
+  value: clickhouse-storage-template
+- op: add
+  path: /spec/templates/volumeClaimTemplates
+  value: 
+    - name: clickhouse-storage-template
+      spec:
+        storageClassName: STORAGECLASS_NAME
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: STORAGE_SIZE

@@ -86,26 +86,27 @@ data:
     UInt64,\n        reverseThroughputFromDestinationNode UInt64,\n        trusted
     UInt8 DEFAULT 0\n    ) engine=MergeTree\n    ORDER BY (timeInserted, flowEndSeconds)\n
     \   TTL timeInserted + INTERVAL 1 HOUR\n    SETTINGS merge_with_ttl_timeout =
-    3600;\n\n    CREATE MATERIALIZED VIEW flows_pod_view\n    ENGINE = SummingMergeTree\n
-    \   ORDER BY (\n        timeInserted,\n        flowEndSeconds,\n        flowEndSecondsFromSourceNode,\n
-    \       flowEndSecondsFromDestinationNode,\n        sourcePodName,\n        destinationPodName,\n
-    \       destinationIP,\n        destinationServicePortName,\n        flowType,\n
-    \       sourcePodNamespace,\n        destinationPodNamespace)\n    TTL timeInserted
-    + INTERVAL 1 HOUR\n    SETTINGS merge_with_ttl_timeout = 3600\n    POPULATE\n
-    \   AS SELECT\n        timeInserted,\n        flowEndSeconds,\n        flowEndSecondsFromSourceNode,\n
-    \       flowEndSecondsFromDestinationNode,\n        sourcePodName,\n        destinationPodName,\n
-    \       destinationIP,\n        destinationServicePortName,\n        flowType,\n
-    \       sourcePodNamespace,\n        destinationPodNamespace,\n        sum(octetDeltaCount)
-    AS octetDeltaCount,\n        sum(reverseOctetDeltaCount) AS reverseOctetDeltaCount,\n
-    \       sum(throughput) AS throughput,\n        sum(reverseThroughput) AS reverseThroughput,\n
-    \       sum(throughputFromSourceNode) AS throughputFromSourceNode,\n        sum(throughputFromDestinationNode)
-    AS throughputFromDestinationNode\n    FROM flows\n    GROUP BY\n        timeInserted,\n
+    3600;\n\n    CREATE MATERIALIZED VIEW IF NOT EXISTS flows_pod_view\n    ENGINE
+    = SummingMergeTree\n    ORDER BY (\n        timeInserted,\n        flowEndSeconds,\n
+    \       flowEndSecondsFromSourceNode,\n        flowEndSecondsFromDestinationNode,\n
+    \       sourcePodName,\n        destinationPodName,\n        destinationIP,\n
+    \       destinationServicePortName,\n        flowType,\n        sourcePodNamespace,\n
+    \       destinationPodNamespace)\n    TTL timeInserted + INTERVAL 1 HOUR\n    SETTINGS
+    merge_with_ttl_timeout = 3600\n    POPULATE\n    AS SELECT\n        timeInserted,\n
     \       flowEndSeconds,\n        flowEndSecondsFromSourceNode,\n        flowEndSecondsFromDestinationNode,\n
     \       sourcePodName,\n        destinationPodName,\n        destinationIP,\n
     \       destinationServicePortName,\n        flowType,\n        sourcePodNamespace,\n
-    \       destinationPodNamespace;\n\n    CREATE MATERIALIZED VIEW flows_node_view\n
-    \   ENGINE = SummingMergeTree\n    ORDER BY (\n        timeInserted,\n        flowEndSeconds,\n
+    \       destinationPodNamespace,\n        sum(octetDeltaCount) AS octetDeltaCount,\n
+    \       sum(reverseOctetDeltaCount) AS reverseOctetDeltaCount,\n        sum(throughput)
+    AS throughput,\n        sum(reverseThroughput) AS reverseThroughput,\n        sum(throughputFromSourceNode)
+    AS throughputFromSourceNode,\n        sum(throughputFromDestinationNode) AS throughputFromDestinationNode\n
+    \   FROM flows\n    GROUP BY\n        timeInserted,\n        flowEndSeconds,\n
     \       flowEndSecondsFromSourceNode,\n        flowEndSecondsFromDestinationNode,\n
+    \       sourcePodName,\n        destinationPodName,\n        destinationIP,\n
+    \       destinationServicePortName,\n        flowType,\n        sourcePodNamespace,\n
+    \       destinationPodNamespace;\n\n    CREATE MATERIALIZED VIEW IF NOT EXISTS
+    flows_node_view\n    ENGINE = SummingMergeTree\n    ORDER BY (\n        timeInserted,\n
+    \       flowEndSeconds,\n        flowEndSecondsFromSourceNode,\n        flowEndSecondsFromDestinationNode,\n
     \       sourceNodeName,\n        destinationNodeName,\n        sourcePodNamespace,\n
     \       destinationPodNamespace)\n    TTL timeInserted + INTERVAL 1 HOUR\n    SETTINGS
     merge_with_ttl_timeout = 3600\n    POPULATE\n    AS SELECT\n        timeInserted,\n
@@ -120,9 +121,9 @@ data:
     AS reverseThroughputFromDestinationNode\n    FROM flows\n    GROUP BY\n        timeInserted,\n
     \       flowEndSeconds,\n        flowEndSecondsFromSourceNode,\n        flowEndSecondsFromDestinationNode,\n
     \       sourceNodeName,\n        destinationNodeName,\n        sourcePodNamespace,\n
-    \       destinationPodNamespace;\n\n    CREATE MATERIALIZED VIEW flows_policy_view\n
-    \   ENGINE = SummingMergeTree\n    ORDER BY (\n        timeInserted,\n        flowEndSeconds,\n
-    \       flowEndSecondsFromSourceNode,\n        flowEndSecondsFromDestinationNode,\n
+    \       destinationPodNamespace;\n\n    CREATE MATERIALIZED VIEW IF NOT EXISTS
+    flows_policy_view\n    ENGINE = SummingMergeTree\n    ORDER BY (\n        timeInserted,\n
+    \       flowEndSeconds,\n        flowEndSecondsFromSourceNode,\n        flowEndSecondsFromDestinationNode,\n
     \       egressNetworkPolicyName,\n        egressNetworkPolicyRuleAction,\n        ingressNetworkPolicyName,\n
     \       ingressNetworkPolicyRuleAction,\n        sourcePodNamespace,\n        destinationPodNamespace)\n
     \   TTL timeInserted + INTERVAL 1 HOUR\n    SETTINGS merge_with_ttl_timeout =
@@ -145,7 +146,7 @@ data:
     \   ORDER BY (timeCreated);\n    \nEOSQL\n"
 kind: ConfigMap
 metadata:
-  name: clickhouse-mounted-configmap-dkbmg82ctg
+  name: clickhouse-mounted-configmap-58fkkt9b56
   namespace: flow-visibility
 ---
 apiVersion: v1
@@ -4934,12 +4935,14 @@ spec:
             value: default.flows
           - name: MV_NAMES
             value: default.flows_pod_view default.flows_node_view default.flows_policy_view
+          - name: STORAGE_SIZE
+            value: 8Gi
           image: projects.registry.vmware.com/antrea/flow-visibility-clickhouse-monitor:latest
           imagePullPolicy: IfNotPresent
           name: clickhouse-monitor
         volumes:
         - configMap:
-            name: clickhouse-mounted-configmap-dkbmg82ctg
+            name: clickhouse-mounted-configmap-58fkkt9b56
           name: clickhouse-configmap-volume
         - emptyDir:
             medium: Memory

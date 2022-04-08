@@ -35,7 +35,10 @@
     - [About Grafana and ClickHouse](#about-grafana-and-clickhouse)
     - [Deployment Steps](#deployment-steps-2)
       - [Credentials Configuration](#credentials-configuration)
-      - [ClickHouse Configuration](#clickhouse-configuration)
+    - [ClickHouse Configuration](#clickhouse-configuration)
+      - [Service Customization](#service-customization)
+      - [Performance Configuration](#performance-configuration)
+      - [Persistent Volumes](#persistent-volumes)
     - [Pre-built Dashboards](#pre-built-dashboards)
       - [Flow Records Dashboard](#flow-records-dashboard)
       - [Pod-to-Pod Flows Dashboard](#pod-to-pod-flows-dashboard)
@@ -778,7 +781,9 @@ type: Opaque
 We recommend changing all the credentials above if you are going to run the Flow
 Collector in production.
 
-##### ClickHouse Configuration
+#### ClickHouse Configuration
+
+##### Service Customization
 
 The ClickHouse database can be accessed through the Service `clickhouse-clickhouse`.
 The Pod exposes HTTP port at 8123 and TCP port at 9000 by default. The ports are
@@ -828,6 +833,8 @@ metadata:
   namespace: flow-visibility
 ```
 
+##### Performance Configuration
+
 The ClickHouse throughput depends on two factors - the storage size of the ClickHouse
 and the time interval between the batch commits to the ClickHouse. Larger storage
 size and longer commit interval provide higher throughput.
@@ -847,10 +854,120 @@ storage size, please modify the `sizeLimit` in the following section.
   name: clickhouse-storage-volume
 ```
 
+To deploy ClickHouse with Persistent Volumes and limited storage size, please refer
+to [Persistent Volumes](#persistent-volumes).
+
 The time interval between the batch commits to the ClickHouse is specified in the
 [Flow Aggregator Configuration](#configuration-1) as `commitInterval`. The
 ClickHouse throughput grows sightly when the commit interval grows from 1s to 8s.
 A commit interval larger than 8s provides little improvement on the throughput.
+
+##### Persistent Volumes
+
+By default, ClickHouse is deployed in memory. From Antrea v1.7, we support deploying
+ClickHouse with Persistent Volumes.
+
+[PersistentVolume](https://kubernetes.io/docs/concepts/storage/persistent-volumes/)
+(PV) is a piece of storage in the K8s cluster, which requires to be manually
+provisioned by an administrator or dynamically provisioned using Storage Classes.
+A PersistentVolumeClaim (PVC) is a request for storage which consumes PV. As
+ClickHouse is deployed as a StatefulSet, the volume can be claimed using
+`volumeClaimTemplate`.
+
+To generate the manifest automatically with default settings, you can clone the
+repository and run one of the following commands:
+
+```yaml
+# To generate a manifest with Local PV for the ClickHouse
+./hack/generate-manifest-flow-visibility.sh --volume pv --local <local_path> > flow-visibility.yml
+ 
+# To generate a manifest with NFS PV for the ClickHouse
+./hack/generate-manifest-flow-visibility.sh --volume pv --nfs <nfs_server_address>:/<nfs_server_path> > flow-visibility.yml
+ 
+# To generate a manifest with a customized StorageClass for the ClickHouse
+./hack/generate-manifest-flow-visibility.sh --volume pv --storageclass <storageclass_name> > flow-visibility.yml
+```
+
+If you prefer not to clone the repository and prefer to create a customized
+manifest manually, please follow the steps below to deploy the ClickHouse with
+Persistent Volumes:
+
+1. Provision the PersistentVolume. K8s supports a great number of
+[PersistentVolume types](https://kubernetes.io/docs/concepts/storage/persistent-volumes/#types-of-persistent-volumes).
+You can provision your own PersistentVolume per your requirements. Here are
+two simple examples for your reference.
+
+    - Local PV allows you to store the ClickHouse data at a pre-defined path on
+    a specific Node. Refer to [createLocalPv.yml][local_pv_yaml] to create the
+    PV. Please replace `LOCAL_PATH` with the path to store the ClickHouse data
+    and label the Node used to store the ClickHouse data with
+    `antrea.io/clickhouse-data-node=`.
+
+    - NFS PV allows you to store the ClickHouse data on an existing NFS server.
+    Refer to [createNfsPv.yml][nfs_pv_yaml] to create the PV. Please replace
+    `NFS_SERVER_ADDRESS` with the host name of the NFS server and `NFS_SERVER_PATH`
+    with the exported path on the NFS server.
+
+    In both examples, you can set `.spec.capacity.storage` in PersistentVolume
+    to your storage size. This value is for informative purpose as K8s does not
+    enforce the capacity of PVs. If you want to limit the storage usage, you need
+    to ask for your storage system to enforce that. For example, you can create
+    a Local PV on a partition with the limited size. We recommend using a dedicated
+    saving space for the ClickHouse if you are going to run the Flow Collector in
+    production.
+
+    As these examples do not use any dynamic provisioner, the reclaim policy
+    for the PVs is `Retain` by default. After stopping the Grafana Flow Collector,
+    if you no long need the data for future use, you may need to manually clean
+    up the data on the local disk or NFS server.
+
+1. Request the PV for ClickHouse. Please add a `volumeClaimTemplate` section
+under `.spec.templates` for the resource `ClickHouseInstallation` in
+`flow-visibility.yml` as shown in the example below. `storageClassName` should
+be set to your own `StorageClass` name, and `.resources.requests.storage`
+should be set to your storage size.
+
+    ```yaml
+    volumeClaimTemplates:
+    - name: clickhouse-storage-template
+      spec:
+        accessModes:
+        - ReadWriteOnce
+        resources:
+          requests:
+            storage: 8Gi
+        storageClassName: clickhouse-storage
+    ```
+
+    Then add this template as `dataVolumeClaimTemplate` to the section below.
+
+    ```yaml
+    defaults:
+      templates:
+        dataVolumeClaimTemplate: clickhouse-storage-template
+        podTemplate: pod-template
+        serviceTemplate: service-template
+    ```
+
+1. Remove the in-memory related deployment options, by removing the appropriate
+`volume` and `volumeMount` for the `ClickHouseInstallation` resource in
+`flow-visibility.yml`.
+
+    The `volumeMounts` entry to be removed is the following one:
+
+    ```yaml
+    - mountPath: /var/lib/clickhouse
+      name: clickhouse-storage-volume
+    ```
+
+    The `volumes` entry to be removed is the following one:
+
+    ```yaml
+    - emptyDir:
+        medium: Memory
+        sizeLimit: 8Gi
+      name: clickhouse-storage-volume
+    ```
 
 #### Pre-built Dashboards
 
@@ -1145,3 +1262,5 @@ With filters applied:
 Visualization Network Policy Dashboard">
 
 [flow_visibility_kustomization_yaml]: ../build/yamls/flow-visibility/base/kustomization.yml
+[local_pv_yaml]: ../build/yamls/flow-visibility/patches/pv/createLocalPv.yml
+[nfs_pv_yaml]: ../build/yamls/flow-visibility/patches/pv/createNfsPv.yml
