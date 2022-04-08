@@ -20,7 +20,7 @@ _BINDIR="$THIS_DIR/.bin"
 # versions
 _HELM_VERSION="v3.8.1"
 
-# Ensure the helm tool exists and is the correct version, or installs it
+# Ensure the helm tool exists and is the correct version, or install it
 verify_helm() {
     # Check if there is already a helm binary in $_BINDIR and if yes, check if
     # the version matches the expected one.

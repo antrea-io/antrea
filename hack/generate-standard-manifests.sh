@@ -30,10 +30,10 @@ In 'release' mode, environment variables IMG_NAME and IMG_TAG must be set.
 
 In 'dev' mode, environment variable IMG_NAME can be set to use a custom image.
 
-This tool uses uses Helm 3 (https://helm.sh/) to generate the \"standard\" manifests for
-Antrea. These are the manifests that are checked-in into the Antrea source tree, and that are
-uploaded as release assets for each new Antrea release. This script looks for all the Helm values
-YAML files under /build/yamls/chart-values/, and generates the corresponding manifest for each one.
+This tool uses Helm 3 (https://helm.sh/) to generate the \"standard\" manifests for Antrea. These
+are the manifests that are checked-in into the Antrea source tree, and that are uploaded as release
+assets for each new Antrea release. This script looks for all the Helm values YAML files under
+/build/yamls/chart-values/, and generates the corresponding manifest for each one.
 
 You can set the HELM environment variable to the path of the helm binary you wan t us to
 use. Otherwise we will download the appropriate version of the helm binary and use it (this is the
@@ -99,6 +99,10 @@ if [ "$OUTPUT_DIR" == "" ]; then
 fi
 
 THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+
+# Avoid potential Helm warnings about invalid permissions for Kubeconfig file.
+# The Kubeconfig does not matter for "helm template".
+unset KUBECONFIG
 
 source $THIS_DIR/verify-helm.sh
 

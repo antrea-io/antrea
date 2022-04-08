@@ -194,7 +194,7 @@ controller:
   # -- Indicates whether to use auto-generated self-signed TLS certificates. If
   # false, a Secret named "antrea-controller-tls" must be provided with the
   # following keys: ca.crt, tls.crt, tls.key.
-  selfSigned: true
+  selfSignedCert: true
   # -- Tolerations for the antrea-controller Pod.
   tolerations:
     # Mark it as a critical add-on.

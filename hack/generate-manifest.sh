@@ -51,7 +51,7 @@ In 'release' mode, environment variables IMG_NAME and IMG_TAG must be set.
 
 In 'dev' mode, environment variable IMG_NAME can be set to use a custom image.
 
-This tool uses uses Helm 3 (https://helm.sh/) to generate manifests for Antrea. You can set the HELM
+This tool uses Helm 3 (https://helm.sh/) to generate manifests for Antrea. You can set the HELM
 environment variable to the path of the helm binary you want us to use. Otherwise we will download
 the appropriate version of the helm binary and use it (this is the recommended approach since
 different versions of helm may create different output YAMLs)."

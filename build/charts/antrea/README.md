@@ -60,7 +60,7 @@ Kubernetes: `>= 1.16.0-0`
 | controller.podAnnotations | object | `{}` | Annotations to be added to antrea-controller Pod. |
 | controller.podLabels | object | `{}` | Labels to be added to antrea-controller Pod. |
 | controller.priorityClassName | string | `"system-cluster-critical"` | Prority class to use for the antrea-controller Pod. |
-| controller.selfSigned | bool | `true` | Indicates whether to use auto-generated self-signed TLS certificates. If false, a Secret named "antrea-controller-tls" must be provided with the following keys: ca.crt, tls.crt, tls.key. |
+| controller.selfSignedCert | bool | `true` | Indicates whether to use auto-generated self-signed TLS certificates. If false, a Secret named "antrea-controller-tls" must be provided with the following keys: ca.crt, tls.crt, tls.key. |
 | controller.tolerations | list | `[{"key":"CriticalAddonsOnly","operator":"Exists"},{"effect":"NoSchedule","key":"node-role.kubernetes.io/master"}]` | Tolerations for the antrea-controller Pod. |
 | defaultMTU | int | `0` | Default MTU to use for the host gateway interface and the network interface of each Pod. By default, antrea-agent will discover the MTU of the Node's primary interface and adjust it to accommodate for tunnel encapsulation overhead if applicable. |
 | egress.exceptCIDRs | list | `[]` | CIDR ranges to which outbound Pod traffic will not be SNAT'd by Egresses. |
