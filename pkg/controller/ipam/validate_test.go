@@ -31,7 +31,7 @@ var testIPPool = &crdv1alpha2.IPPool{
 		Name: "test-ip-pool",
 	},
 	Spec: crdv1alpha2.IPPoolSpec{
-		IPVersion: 4,
+		IPVersion: crdv1alpha2.IPv4,
 		IPRanges: []crdv1alpha2.SubnetIPRange{
 			{
 				IPRange: crdv1alpha2.IPRange{

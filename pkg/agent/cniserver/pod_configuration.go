@@ -27,6 +27,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent/cniserver/ipam"
+	"antrea.io/antrea/pkg/agent/cniserver/types"
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/openflow"
 	"antrea.io/antrea/pkg/agent/route"
@@ -394,7 +395,7 @@ func (pc *podConfigurator) validateOVSInterfaceConfig(containerID string, contai
 	return fmt.Errorf("container %s interface not found from local cache", containerID)
 }
 
-func parsePrevResult(conf *NetworkConfig) error {
+func parsePrevResult(conf *types.NetworkConfig) error {
 	if conf.RawPrevResult == nil {
 		return nil
 	}

@@ -110,7 +110,7 @@ func createIPPools(crdClient *fakepoolclient.IPPoolClientset) {
 		ObjectMeta: metav1.ObjectMeta{Name: testPear},
 		Spec: crdv1a2.IPPoolSpec{
 			IPRanges:  []crdv1a2.SubnetIPRange{subnetRangePear},
-			IPVersion: 4,
+			IPVersion: crdv1a2.IPv4,
 		},
 		Status: crdv1a2.IPPoolStatus{IPAddresses: []crdv1a2.IPAddressState{{
 			IPAddress: "10.2.3.198",
@@ -322,7 +322,7 @@ func TestAntreaIPAMDriver(t *testing.T) {
 		listOptions,
 	)
 
-	antreaIPAMController, err := InitializeAntreaIPAMController(k8sClient, crdClient, informerFactory, localPodInformer, crdInformerFactory)
+	antreaIPAMController, err := InitializeAntreaIPAMController(crdClient, informerFactory, crdInformerFactory, localPodInformer, true)
 	require.NoError(t, err, "Expected no error in initialization for Antrea IPAM Controller")
 	informerFactory.Start(stopCh)
 	go localPodInformer.Run(stopCh)
@@ -338,7 +338,7 @@ func TestAntreaIPAMDriver(t *testing.T) {
 	// Test the driver singleton that was assigned to global variable
 	testDriver := antreaIPAMDriver
 
-	networkConfig := []byte("'name': 'testCfg', 'cniVersion': '0.4.0', 'type': 'antrea', 'ipam': {'type': 'antrea-ipam'}}")
+	networkConfig := []byte("'name': 'testCfg', 'cniVersion': '0.4.0', 'type': 'antrea', 'ipam': {'type': 'antrea'}}")
 
 	cniArgsMap := make(map[string]*invoke.Args)
 	k8sArgsMap := make(map[string]*argtypes.K8sArgs)
@@ -516,7 +516,7 @@ func TestAntreaIPAMDriver(t *testing.T) {
 	}
 
 	owns, err = testDriver.Del(cniArgsBadContainer, k8sArgsMap["orange1"], networkConfig)
-	assert.True(t, owns)
+	assert.False(t, owns)
 	require.NoError(t, err, "expected no error in Del call")
 
 	// Make sure repeated Add works for Pod that was previously released

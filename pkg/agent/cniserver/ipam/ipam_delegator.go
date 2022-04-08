@@ -125,7 +125,5 @@ func delegateNoResult(delegatePlugin string, networkConfig []byte, args *invoke.
 }
 
 func init() {
-	if err := RegisterIPAMDriver(ipamHostLocal, &IPAMDelegator{pluginType: ipamHostLocal}); err != nil {
-		klog.Errorf("Failed to register IPAM plugin on type %s", ipamHostLocal)
-	}
+	RegisterIPAMDriver(ipamHostLocal, &IPAMDelegator{pluginType: ipamHostLocal})
 }

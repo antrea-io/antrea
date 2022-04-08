@@ -31,6 +31,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2"
 )
 
@@ -83,7 +84,7 @@ func validateAllocationSequence(t *testing.T, allocator *IPPoolAllocator, subnet
 		ip, returnInfo, err := allocator.AllocateNext(crdv1a2.IPAddressPhaseAllocated, owner)
 		require.NoError(t, err)
 		assert.Equal(t, net.ParseIP(expectedIP), ip)
-		assert.Equal(t, subnetInfo, returnInfo)
+		assert.Equal(t, subnetInfo, *returnInfo)
 		i += 1
 	}
 }
@@ -115,11 +116,11 @@ func TestAllocateIP(t *testing.T) {
 
 	// Allocate specific IP from the range
 	returnInfo, err := allocator.AllocateIP(net.ParseIP("10.2.2.101"), crdv1a2.IPAddressPhaseAllocated, fakePodOwner)
-	assert.Equal(t, subnetInfo, returnInfo)
+	assert.Equal(t, subnetInfo, *returnInfo)
 	require.NoError(t, err)
 
 	// Validate IP outside the range is not allocated
-	returnInfo, err = allocator.AllocateIP(net.ParseIP("10.2.2.121"), crdv1a2.IPAddressPhaseAllocated, fakePodOwner)
+	_, err = allocator.AllocateIP(net.ParseIP("10.2.2.121"), crdv1a2.IPAddressPhaseAllocated, fakePodOwner)
 	require.Error(t, err)
 
 	// Make sure IP allocated above is not allocated again
@@ -128,7 +129,6 @@ func TestAllocateIP(t *testing.T) {
 	// Validate error is returned if IP is already allocated
 	_, err = allocator.AllocateIP(net.ParseIP("10.2.2.102"), crdv1a2.IPAddressPhaseAllocated, fakePodOwner)
 	require.Error(t, err)
-
 }
 
 func TestAllocateNext(t *testing.T) {
@@ -269,6 +269,34 @@ func TestAllocateReleaseSequence(t *testing.T) {
 	validateAllocationSequence(t, allocator, subnetInfo, []string{"2001::1000", "2001::2", "2001::5"})
 }
 
+// releasePod releases the IP associated with the specified Pod, and updates the IPPool CR status.
+// The func returns an error, if no IP is allocated to the Pod according to the IPPool CR status.
+func (a *IPPoolAllocator) releasePod(namespace, podName string) error {
+	// Retry on CRD update conflict which is caused by multiple agents updating a pool at same time.
+	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		ipPool, err := a.getPool()
+		if err != nil {
+			return err
+		}
+
+		// Mark allocated IPs from pool status as unavailable
+		for _, ip := range ipPool.Status.IPAddresses {
+			if ip.Owner.Pod != nil && ip.Owner.Pod.Namespace == namespace && ip.Owner.Pod.Name == podName {
+				return a.removeIPAddressState(ipPool, net.ParseIP(ip.IPAddress))
+
+			}
+		}
+
+		klog.V(4).InfoS("IP Pool state:", "name", a.ipPoolName, "allocation", ipPool.Status.IPAddresses)
+		return fmt.Errorf("failed to find record of IP allocated to Pod:%s/%s in pool %s", namespace, podName, a.ipPoolName)
+	})
+
+	if err != nil {
+		klog.ErrorS(err, "Failed to release IP address", "Namespace", namespace, "Pod", podName, "IPPool", a.ipPoolName)
+	}
+	return err
+}
+
 func TestReleaseResource(t *testing.T) {
 	stopCh := make(chan struct{})
 	defer close(stopCh)
@@ -302,7 +330,7 @@ func TestReleaseResource(t *testing.T) {
 
 	// Release first IP from first range and middle IP from second range
 	for _, podName := range []string{"fakePod2", "fakePod4"} {
-		err := allocator.ReleasePod(testNamespace, podName)
+		err := allocator.releasePod(testNamespace, podName)
 		require.NoError(t, err)
 	}
 
@@ -318,6 +346,7 @@ func TestHas(t *testing.T) {
 			Name:        "fakePod",
 			Namespace:   testNamespace,
 			ContainerID: "fakeContainer",
+			IFName:      "eth1",
 		},
 	}
 	poolName := uuid.New().String()
@@ -352,10 +381,13 @@ func TestHas(t *testing.T) {
 	has, err := allocator.HasPod(testNamespace, "realPod")
 	require.NoError(t, err)
 	assert.False(t, has)
-	has, err = allocator.HasContainer("fakeContainer")
+	has, err = allocator.HasContainer("fakeContainer", "eth1")
 	require.NoError(t, err)
 	assert.True(t, has)
-	has, err = allocator.HasContainer("realContainer")
+	has, err = allocator.HasContainer("fakeContainer", "")
+	require.NoError(t, err)
+	assert.False(t, has)
+	has, err = allocator.HasContainer("realContainer", "eth1")
 	require.NoError(t, err)
 	assert.False(t, has)
 }

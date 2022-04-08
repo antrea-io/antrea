@@ -116,7 +116,8 @@ func run(o *Options) error {
 	defer ovsdbConnection.Close()
 
 	egressEnabled := features.DefaultFeatureGate.Enabled(features.Egress)
-	enableBridgingMode := features.DefaultFeatureGate.Enabled(features.AntreaIPAM) && o.config.EnableBridgingMode
+	enableAntreaIPAM := features.DefaultFeatureGate.Enabled(features.AntreaIPAM)
+	enableBridgingMode := enableAntreaIPAM && o.config.EnableBridgingMode
 	// Bridging mode will connect the uplink interface to the OVS bridge.
 	connectUplinkToBridge := enableBridgingMode
 
@@ -362,9 +363,10 @@ func run(o *Options) error {
 		o.config.HostProcPathPrefix,
 		nodeConfig,
 		k8sClient,
-		isChaining,
-		enableBridgingMode, // activate AntreaIPAM in CNIServer when bridging mode is enabled
 		routeClient,
+		isChaining,
+		enableBridgingMode,
+		enableAntreaIPAM,
 		networkReadyCh)
 
 	var cniPodInfoStore cnipodcache.CNIPodInfoStore
@@ -493,15 +495,11 @@ func run(o *Options) error {
 		go nplController.Run(stopCh)
 	}
 
-	// Now Antrea IPAM is used only by bridging mode, so we initialize AntreaIPAMController only
-	// when the bridging mode is enabled.
-	if enableBridgingMode {
+	// Antrea IPAM is needed by bridging mode and secondary network IPAM.
+	if enableAntreaIPAM {
 		ipamController, err := ipam.InitializeAntreaIPAMController(
-			k8sClient,
-			crdClient,
-			informerFactory,
-			localPodInformer,
-			crdInformerFactory)
+			crdClient, informerFactory, crdInformerFactory,
+			localPodInformer, enableBridgingMode)
 		if err != nil {
 			return fmt.Errorf("failed to start Antrea IPAM agent: %v", err)
 		}
