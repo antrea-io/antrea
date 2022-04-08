@@ -34,7 +34,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent/cniserver/ipam"
-	argtypes "antrea.io/antrea/pkg/agent/cniserver/types"
+	"antrea.io/antrea/pkg/agent/cniserver/types"
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/openflow"
@@ -48,6 +48,8 @@ import (
 )
 
 const (
+	antreaCNIType = "antrea"
+
 	// networkReadyTimeout is the maximum time the CNI server will wait for network ready when processing CNI Add
 	// requests. If timeout occurs, tryAgainLaterResponse will be returned.
 	// The default runtime request timeout of kubelet is 2 minutes.
@@ -100,52 +102,35 @@ func (arbitrator *containerAccessArbitrator) unlockContainer(containerKey string
 }
 
 type CNIServer struct {
-	cniSocket               string
-	supportedCNIVersions    map[string]bool
-	serverVersion           string
-	nodeConfig              *config.NodeConfig
-	hostProcPathPrefix      string
-	kubeClient              clientset.Interface
-	containerAccess         *containerAccessArbitrator
-	podConfigurator         *podConfigurator
-	isChaining              bool
-	antreaIPAM              bool
-	routeClient             route.Interface
-	secondaryNetworkEnabled bool
+	cniSocket            string
+	supportedCNIVersions map[string]bool
+	serverVersion        string
+	nodeConfig           *config.NodeConfig
+	hostProcPathPrefix   string
+	kubeClient           clientset.Interface
+	containerAccess      *containerAccessArbitrator
+	podConfigurator      *podConfigurator
+	routeClient          route.Interface
+	isChaining           bool
+	enableBridgingMode   bool
+	// Enable AntreaIPAM for secondary networks implementd by other CNIs.
+	enableSecondaryNetworkIPAM bool
+	secondaryNetworkEnabled    bool
 	// networkReadyCh notifies that the network is ready so new Pods can be created. Therefore, CmdAdd waits for it.
 	networkReadyCh <-chan struct{}
 }
 
 var supportedCNIVersionSet map[string]bool
 
-type RuntimeDNS struct {
-	Nameservers []string `json:"servers,omitempty"`
-	Search      []string `json:"searches,omitempty"`
-}
-
-type RuntimeConfig struct {
-	DNS RuntimeDNS `json:"dns"`
-}
-
-type NetworkConfig struct {
-	CNIVersion string          `json:"cniVersion,omitempty"`
-	Name       string          `json:"name,omitempty"`
-	Type       string          `json:"type,omitempty"`
-	DeviceID   string          `json:"deviceID"` // PCI address of a VF
-	MTU        int             `json:"mtu,omitempty"`
-	DNS        cnitypes.DNS    `json:"dns"`
-	IPAM       ipam.IPAMConfig `json:"ipam,omitempty"`
-	// Options to be passed in by the runtime.
-	RuntimeConfig RuntimeConfig `json:"runtimeConfig"`
-
-	RawPrevResult map[string]interface{} `json:"prevResult,omitempty"`
-	PrevResult    cnitypes.Result        `json:"-"`
-}
-
 type CNIConfig struct {
-	*NetworkConfig
+	*types.NetworkConfig
+	// AntreaIPAM for an interface not managed by Antrea CNI.
+	secondaryNetworkIPAM bool
+	// CniCmdArgs received from the CNI plugin. IPAM data in CniCmdArgs can be updated with the
+	// Node's Pod CIDRs for NodeIPAM.
 	*cnipb.CniCmdArgs
-	*argtypes.K8sArgs
+	// K8s CNI_ARGS passed to the CNI plugin.
+	*types.K8sArgs
 }
 
 // updateResultIfaceConfig processes the result from the IPAM plugin and does the following:
@@ -197,23 +182,20 @@ func resultToResponse(result *current.Result) *cnipb.CniCmdResponse {
 }
 
 func (s *CNIServer) loadNetworkConfig(request *cnipb.CniCmdRequest) (*CNIConfig, error) {
-	cniConfig := &CNIConfig{}
-	cniConfig.CniCmdArgs = request.CniArgs
-	if err := json.Unmarshal(request.CniArgs.NetworkConfiguration, cniConfig); err != nil {
-		return cniConfig, err
+	cniConfig := CNIConfig{}
+	if err := json.Unmarshal(request.CniArgs.NetworkConfiguration, &cniConfig); err != nil {
+		return nil, err
 	}
-	cniConfig.K8sArgs = &argtypes.K8sArgs{}
+	cniConfig.K8sArgs = &types.K8sArgs{}
 	if err := cnitypes.LoadArgs(request.CniArgs.Args, cniConfig.K8sArgs); err != nil {
-		return cniConfig, err
-	}
-	if !s.isChaining {
-		s.updateLocalIPAMSubnet(cniConfig)
+		return nil, err
 	}
 	if cniConfig.MTU == 0 {
 		cniConfig.MTU = s.nodeConfig.NodeMTU
 	}
+	cniConfig.CniCmdArgs = request.CniArgs
 	klog.V(3).Infof("Load network configurations: %v", cniConfig)
-	return cniConfig, nil
+	return &cniConfig, nil
 }
 
 func (s *CNIServer) isCNIVersionSupported(reqVersion string) bool {
@@ -221,44 +203,69 @@ func (s *CNIServer) isCNIVersionSupported(reqVersion string) bool {
 	return exist
 }
 
-func (s *CNIServer) checkRequestMessage(request *cnipb.CniCmdRequest) (*CNIConfig, *cnipb.CniCmdResponse) {
+func (s *CNIServer) valiateCNIAndIPAMType(cniConfig *CNIConfig) *cnipb.CniCmdResponse {
+	ipamType := cniConfig.IPAM.Type
+	if cniConfig.Type == antreaCNIType {
+		if s.isChaining {
+			return nil
+		}
+		if !ipam.IsIPAMTypeValid(ipamType) {
+			klog.Errorf("Unsupported IPAM type %s", ipamType)
+			return s.unsupportedFieldResponse("ipam/type", ipamType)
+		}
+		if s.enableBridgingMode {
+			// When the bridging mode is enabled, Antrea ignores IPAM type from request.
+			cniConfig.IPAM.Type = ipam.AntreaIPAMType
+
+		}
+		return nil
+	}
+
+	if !s.enableSecondaryNetworkIPAM {
+		return s.unsupportedFieldResponse("type", cniConfig.Type)
+	}
+	if ipamType != ipam.AntreaIPAMType {
+		klog.Errorf("Unsupported IPAM type %s", ipamType)
+		return s.unsupportedFieldResponse("ipam/type", ipamType)
+	}
+	// IPAM for an interface not managed by Antrea CNI.
+	cniConfig.secondaryNetworkIPAM = true
+	return nil
+}
+
+func (s *CNIServer) validateRequestMessage(request *cnipb.CniCmdRequest) (*CNIConfig, *cnipb.CniCmdResponse) {
 	cniConfig, err := s.loadNetworkConfig(request)
 	if err != nil {
 		klog.Errorf("Failed to parse network configuration: %v", err)
 		return nil, s.decodingFailureResponse("network config")
 	}
+
 	cniVersion := cniConfig.CNIVersion
 	// Check if CNI version in the request is supported
 	if !s.isCNIVersionSupported(cniVersion) {
 		klog.Errorf(fmt.Sprintf("Unsupported CNI version [%s], supported CNI versions %s", cniVersion, version.All.SupportedVersions()))
-		return cniConfig, s.incompatibleCniVersionResponse(cniVersion)
+		return nil, s.incompatibleCniVersionResponse(cniVersion)
 	}
-	if s.isChaining {
-		return cniConfig, nil
-	}
-	// Find IPAM Service according configuration
-	ipamType := cniConfig.IPAM.Type
-	isValid := ipam.IsIPAMTypeValid(ipamType)
-	if !isValid {
-		klog.Errorf("Unsupported IPAM type %s", ipamType)
-		return cniConfig, s.unsupportedFieldResponse("ipam/type", ipamType)
-	}
-	if s.antreaIPAM {
-		// With AnteaIPAM feature enabled, Antrea ignores IPAM type from request
-		cniConfig.IPAM.Type = ipam.AntreaIPAMType
 
+	if resp := s.valiateCNIAndIPAMType(cniConfig); resp != nil {
+		return nil, resp
+	}
+	if !s.isChaining && !cniConfig.secondaryNetworkIPAM {
+		s.updateLocalIPAMSubnet(cniConfig)
 	}
 	return cniConfig, nil
 }
 
+// updateLocalIPAMSubnet updates CNIConfig.CniCmdArgs with this Node's Pod CIDRs, which will be
+// passed to the IPAM driver.
 func (s *CNIServer) updateLocalIPAMSubnet(cniConfig *CNIConfig) {
 	if (s.nodeConfig.GatewayConfig.IPv4 != nil) && (s.nodeConfig.PodIPv4CIDR != nil) {
 		cniConfig.NetworkConfig.IPAM.Ranges = append(cniConfig.NetworkConfig.IPAM.Ranges,
-			ipam.RangeSet{ipam.Range{Subnet: s.nodeConfig.PodIPv4CIDR.String(), Gateway: s.nodeConfig.GatewayConfig.IPv4.String()}})
+			types.RangeSet{types.Range{Subnet: s.nodeConfig.PodIPv4CIDR.String(), Gateway: s.nodeConfig.GatewayConfig.IPv4.String()}})
 	}
 	if (s.nodeConfig.GatewayConfig.IPv6 != nil) && (s.nodeConfig.PodIPv6CIDR != nil) {
 		cniConfig.NetworkConfig.IPAM.Ranges = append(cniConfig.NetworkConfig.IPAM.Ranges,
-			ipam.RangeSet{ipam.Range{Subnet: s.nodeConfig.PodIPv6CIDR.String(), Gateway: s.nodeConfig.GatewayConfig.IPv6.String()}})
+			types.RangeSet{types.Range{Subnet: s.nodeConfig.PodIPv6CIDR.String(), Gateway: s.nodeConfig.GatewayConfig.IPv6.String()}})
 	}
 	cniConfig.NetworkConfiguration, _ = json.Marshal(cniConfig.NetworkConfig)
 }
@@ -336,7 +343,7 @@ func buildVersionSet() map[string]bool {
 	return versionSet
 }
 
-func (s *CNIServer) parsePrevResultFromRequest(networkConfig *NetworkConfig) (*current.Result, *cnipb.CniCmdResponse) {
+func (s *CNIServer) parsePrevResultFromRequest(networkConfig *types.NetworkConfig) (*current.Result, *cnipb.CniCmdResponse) {
 	if networkConfig.PrevResult == nil && networkConfig.RawPrevResult == nil {
 		klog.Errorf("Previous network configuration not specified")
 		return nil, s.unsupportedFieldResponse("prevResult", "")
@@ -358,7 +365,7 @@ func (s *CNIServer) parsePrevResultFromRequest(networkConfig *NetworkConfig) (*c
 
 // validatePrevResult validates container and host interfaces configuration
 // the return value is nil if prevResult is valid
-func (s *CNIServer) validatePrevResult(cfgArgs *cnipb.CniCmdArgs, k8sCNIArgs *argtypes.K8sArgs, prevResult *current.Result, sriovVFDeviceID string) *cnipb.CniCmdResponse {
+func (s *CNIServer) validatePrevResult(cfgArgs *cnipb.CniCmdArgs, prevResult *current.Result, sriovVFDeviceID string) *cnipb.CniCmdResponse {
 	containerID := cfgArgs.ContainerId
 	netNS := s.hostNetNsPath(cfgArgs.Netns)
 
@@ -384,11 +391,46 @@ func (s *CNIServer) GetPodConfigurator() *podConfigurator {
 	return s.podConfigurator
 }
 
+// Antrea IPAM for secondary network.
+func (s *CNIServer) ipamAdd(cniConfig *CNIConfig) (*cnipb.CniCmdResponse, error) {
+	ipamResult, err := ipam.SecondaryNetworkAdd(cniConfig.CniCmdArgs, cniConfig.K8sArgs, cniConfig.NetworkConfig)
+	if err != nil {
+		return s.ipamFailureResponse(err), nil
+	}
+	klog.InfoS("Allocated IP addresses", "container", cniConfig.ContainerId, "result", ipamResult)
+	return resultToResponse(ipamResult), nil
+}
+
+func (s *CNIServer) ipamDel(cniConfig *CNIConfig) (*cnipb.CniCmdResponse, error) {
+	if err := ipam.SecondaryNetworkDel(cniConfig.CniCmdArgs, cniConfig.K8sArgs, cniConfig.NetworkConfig); err != nil {
+		return s.ipamFailureResponse(err), nil
+	}
+	return &cnipb.CniCmdResponse{CniResult: []byte("")}, nil
+}
+
+func (s *CNIServer) ipamCheck(cniConfig *CNIConfig) (*cnipb.CniCmdResponse, error) {
+	if err := ipam.SecondaryNetworkCheck(cniConfig.CniCmdArgs, cniConfig.K8sArgs, cniConfig.NetworkConfig); err != nil {
+		return s.ipamFailureResponse(err), nil
+	}
+	// CNI CHECK is not implemented for secondary network IPAM, and so the func will always
+	// return an error, but never reach here.
+	return &cnipb.CniCmdResponse{CniResult: []byte("")}, nil
+}
+
 func (s *CNIServer) CmdAdd(ctx context.Context, request *cnipb.CniCmdRequest) (*cnipb.CniCmdResponse, error) {
 	klog.Infof("Received CmdAdd request %v", request)
-	cniConfig, response := s.checkRequestMessage(request)
+	cniConfig, response := s.validateRequestMessage(request)
 	if response != nil {
 		return response, nil
+	}
+
+	infraContainer := cniConfig.getInfraContainer()
+	if cniConfig.secondaryNetworkIPAM {
+		klog.InfoS("Antrea IPAM add", "CNI", cniConfig.Type, "network", cniConfig.Name)
+		s.containerAccess.lockContainer(infraContainer)
+		resp, err := s.ipamAdd(cniConfig)
+		s.containerAccess.unlockContainer(infraContainer)
+		return resp, err
 	}
 
 	select {
@@ -418,7 +460,7 @@ func (s *CNIServer) CmdAdd(ctx context.Context, request *cnipb.CniCmdRequest) (*
 		}
 	}()
 
-	infraContainer := cniConfig.getInfraContainer()
+	// Serialize CNI calls for one Pod.
 	s.containerAccess.lockContainer(infraContainer)
 	defer s.containerAccess.unlockContainer(infraContainer)
 
@@ -446,16 +488,17 @@ func (s *CNIServer) CmdAdd(ctx context.Context, request *cnipb.CniCmdRequest) (*
 			return s.ipamFailureResponse(err), nil
 		}
 	}
-	klog.Infof("Requested ip addresses for container %v: %v", cniConfig.ContainerId, ipamResult)
+	klog.InfoS("Allocated IP addresses", "container", cniConfig.ContainerId, "result", ipamResult)
 	result.IPs = ipamResult.IPs
 	result.Routes = ipamResult.Routes
 	result.VLANID = ipamResult.VLANID
 	// Ensure interface gateway setting and mapping relations between result.Interfaces and result.IPs
 	updateResultIfaceConfig(&result.Result, s.nodeConfig.GatewayConfig.IPv4, s.nodeConfig.GatewayConfig.IPv6)
+	updateResultDNSConfig(&result.Result, cniConfig)
+
 	// Setup pod interfaces and connect to ovs bridge
 	podName := string(cniConfig.K8S_POD_NAME)
 	podNamespace := string(cniConfig.K8S_POD_NAMESPACE)
-	updateResultDNSConfig(&result.Result, cniConfig)
 	if err = s.podConfigurator.configureInterfaces(
 		podName,
 		podNamespace,
@@ -491,7 +534,7 @@ func (s *CNIServer) CmdDel(_ context.Context, request *cnipb.CniCmdRequest) (
 	*cnipb.CniCmdResponse, error) {
 	klog.Infof("Received CmdDel request %v", request)
 
-	cniConfig, response := s.checkRequestMessage(request)
+	cniConfig, response := s.validateRequestMessage(request)
 	if response != nil {
 		return response, nil
 	}
@@ -499,6 +542,11 @@ func (s *CNIServer) CmdDel(_ context.Context, request *cnipb.CniCmdRequest) (
 	infraContainer := cniConfig.getInfraContainer()
 	s.containerAccess.lockContainer(infraContainer)
 	defer s.containerAccess.unlockContainer(infraContainer)
+
+	if cniConfig.secondaryNetworkIPAM {
+		klog.InfoS("Antrea IPAM del", "CNI", cniConfig.Type, "network", cniConfig.Name)
+		return s.ipamDel(cniConfig)
+	}
 
 	if s.isChaining {
 		return s.interceptDel(cniConfig)
@@ -532,7 +580,7 @@ func (s *CNIServer) CmdCheck(_ context.Context, request *cnipb.CniCmdRequest) (
 	*cnipb.CniCmdResponse, error) {
 	klog.Infof("Received CmdCheck request %v", request)
 
-	cniConfig, response := s.checkRequestMessage(request)
+	cniConfig, response := s.validateRequestMessage(request)
 	if response != nil {
 		return response, nil
 	}
@@ -540,6 +588,11 @@ func (s *CNIServer) CmdCheck(_ context.Context, request *cnipb.CniCmdRequest) (
 	infraContainer := cniConfig.getInfraContainer()
 	s.containerAccess.lockContainer(infraContainer)
 	defer s.containerAccess.unlockContainer(infraContainer)
+
+	if cniConfig.secondaryNetworkIPAM {
+		klog.InfoS("Antrea IPAM check", "CNI", cniConfig.Type, "network", cniConfig.Name)
+		return s.ipamCheck(cniConfig)
+	}
 
 	if s.isChaining {
 		return s.interceptCheck(cniConfig)
@@ -554,7 +607,7 @@ func (s *CNIServer) CmdCheck(_ context.Context, request *cnipb.CniCmdRequest) (
 	if valid, _ := version.GreaterThanOrEqualTo(cniVersion, "0.4.0"); valid {
 		if prevResult, response := s.parsePrevResultFromRequest(cniConfig.NetworkConfig); response != nil {
 			return response, nil
-		} else if response := s.validatePrevResult(cniConfig.CniCmdArgs, cniConfig.K8sArgs, prevResult, cniConfig.DeviceID); response != nil {
+		} else if response := s.validatePrevResult(cniConfig.CniCmdArgs, prevResult, cniConfig.DeviceID); response != nil {
 			return response, nil
 		}
 	}
@@ -566,23 +619,23 @@ func New(
 	cniSocket, hostProcPathPrefix string,
 	nodeConfig *config.NodeConfig,
 	kubeClient clientset.Interface,
-	isChaining bool,
-	antreaIPAM bool,
 	routeClient route.Interface,
+	isChaining, enableBridgingMode, enableSecondaryNetworkIPAM bool,
 	networkReadyCh <-chan struct{},
 ) *CNIServer {
 	return &CNIServer{
-		cniSocket:            cniSocket,
-		supportedCNIVersions: supportedCNIVersionSet,
-		serverVersion:        cni.AntreaCNIVersion,
-		nodeConfig:           nodeConfig,
-		hostProcPathPrefix:   hostProcPathPrefix,
-		kubeClient:           kubeClient,
-		containerAccess:      newContainerAccessArbitrator(),
-		isChaining:           isChaining,
-		antreaIPAM:           antreaIPAM,
-		routeClient:          routeClient,
-		networkReadyCh:       networkReadyCh,
+		cniSocket:                  cniSocket,
+		supportedCNIVersions:       supportedCNIVersionSet,
+		serverVersion:              cni.AntreaCNIVersion,
+		nodeConfig:                 nodeConfig,
+		hostProcPathPrefix:         hostProcPathPrefix,
+		kubeClient:                 kubeClient,
+		containerAccess:            newContainerAccessArbitrator(),
+		routeClient:                routeClient,
+		isChaining:                 isChaining,
+		enableBridgingMode:         enableBridgingMode,
+		enableSecondaryNetworkIPAM: enableSecondaryNetworkIPAM,
+		networkReadyCh:             networkReadyCh,
 	}
 }
 

@@ -30,13 +30,20 @@ type KindProvider struct {
 func (provider *KindProvider) RunCommandOnControlPlaneNode(cmd string) (
 	code int, stdout string, stderr string, err error,
 ) {
-	return exec.RunDockerExecCommand(provider.controlPlaneNodeName, cmd, "/root")
+	return exec.RunDockerExecCommand(provider.controlPlaneNodeName, cmd, "/root", nil, "")
 }
 
 func (provider *KindProvider) RunCommandOnNode(nodeName string, cmd string) (
 	code int, stdout string, stderr string, err error,
 ) {
-	return exec.RunDockerExecCommand(nodeName, cmd, "/root")
+	return exec.RunDockerExecCommand(nodeName, cmd, "/root", nil, "")
+}
+
+func (provider *KindProvider) RunCommandOnNodeExt(nodeName, cmd string, envs map[string]string, stdin string, sudo bool) (
+	code int, stdout string, stderr string, err error,
+) {
+	// sudo is not needed for Docker exec, so ignore the argument.
+	return exec.RunDockerExecCommand(nodeName, cmd, "/root", envs, stdin)
 }
 
 func (provider *KindProvider) GetKubeconfigPath() (string, error) {

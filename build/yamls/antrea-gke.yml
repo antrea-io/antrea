@@ -1278,6 +1278,8 @@ spec:
                           properties:
                             containerID:
                               type: string
+                            ifName:
+                              type: string
                             name:
                               type: string
                             namespace:

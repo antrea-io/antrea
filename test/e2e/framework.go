@@ -403,6 +403,11 @@ func (data *TestData) RunCommandOnNode(nodeName string, cmd string) (code int, s
 	return data.provider.RunCommandOnNode(nodeName, cmd)
 }
 
+func (data *TestData) RunCommandOnNodeExt(nodeName, cmd string, envs map[string]string, stdin string, sudo bool) (
+	code int, stdout, stderr string, err error) {
+	return data.provider.RunCommandOnNodeExt(nodeName, cmd, envs, stdin, sudo)
+}
+
 func (data *TestData) collectClusterInfo() error {
 	// retrieve Node information
 	nodes, err := testData.clientset.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{})

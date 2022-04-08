@@ -21,7 +21,7 @@ import (
 	"github.com/containernetworking/cni/pkg/invoke"
 	"github.com/containernetworking/cni/pkg/types/current"
 
-	argtypes "antrea.io/antrea/pkg/agent/cniserver/types"
+	"antrea.io/antrea/pkg/agent/cniserver/types"
 	cnipb "antrea.io/antrea/pkg/apis/cni/v1beta1"
 )
 
@@ -33,17 +33,8 @@ import (
 // Otherwise IPAM should be handled by host-local plugin.
 var ipamDrivers map[string][]IPAMDriver
 
-type Range struct {
-	Subnet  string `json:"subnet"`
-	Gateway string `json:"gateway,omitempty"`
-}
-
-type RangeSet []Range
-
-type IPAMConfig struct {
-	Type   string     `json:"type,omitempty"`
-	Ranges []RangeSet `json:"ranges,omitempty"`
-}
+// A cache of IPAM results.
+var ipamResults = sync.Map{}
 
 type IPAMResult struct {
 	current.Result
@@ -51,19 +42,16 @@ type IPAMResult struct {
 }
 
 type IPAMDriver interface {
-	Add(args *invoke.Args, k8sArgs *argtypes.K8sArgs, networkConfig []byte) (bool, *IPAMResult, error)
-	Del(args *invoke.Args, k8sArgs *argtypes.K8sArgs, networkConfig []byte) (bool, error)
-	Check(args *invoke.Args, k8sArgs *argtypes.K8sArgs, networkConfig []byte) (bool, error)
+	Add(args *invoke.Args, k8sArgs *types.K8sArgs, networkConfig []byte) (bool, *IPAMResult, error)
+	Del(args *invoke.Args, k8sArgs *types.K8sArgs, networkConfig []byte) (bool, error)
+	Check(args *invoke.Args, k8sArgs *types.K8sArgs, networkConfig []byte) (bool, error)
 }
 
-var ipamResults = sync.Map{}
-
-func RegisterIPAMDriver(ipamType string, ipamDriver IPAMDriver) error {
+func RegisterIPAMDriver(ipamType string, ipamDriver IPAMDriver) {
 	if ipamDrivers == nil {
 		ipamDrivers = make(map[string][]IPAMDriver)
 	}
 	ipamDrivers[ipamType] = append(ipamDrivers[ipamType], ipamDriver)
-	return nil
 }
 
 func argsFromEnv(cniArgs *cnipb.CniCmdArgs) *invoke.Args {
@@ -75,20 +63,20 @@ func argsFromEnv(cniArgs *cnipb.CniCmdArgs) *invoke.Args {
 	}
 }
 
-func ExecIPAMAdd(cniArgs *cnipb.CniCmdArgs, k8sArgs *argtypes.K8sArgs, ipamType string, resultKey string) (*IPAMResult, error) {
-	// Return the cached IPAM result for the same Pod. This cache helps to ensure CNIAdd is idempotent. There are two
-	// usages of CNIAdd message on Windows: 1) add container network configuration, and 2) query Pod network status.
-	// kubelet on Windows sends CNIAdd messages to query Pod status periodically before the sandbox container is ready.
-	// The cache here is to ensure only one IP address is allocated to one Pod.
-	// TODO: A risk of IP re-allocation exists if agent restarts before kubelet queries Pod status and after the
-	//       container networking configurations is added.
+func ExecIPAMAdd(cniArgs *cnipb.CniCmdArgs, k8sArgs *types.K8sArgs, ipamType string, resultKey string) (*IPAMResult, error) {
+	// Return the cached IPAM result for the same Pod. This cache helps to ensure CNI ADD is
+	// idempotent. There are two usages of CNI ADD on Windows: 1) add container network
+	// configuration, and 2) query Pod network status. kubelet on Windows excutess CNI ADD
+	// to query Pod status periodically before the sandbox container is ready. The cache here
+	// is to ensure only one IP address is allocated to one Pod.
+	// TODO: A risk of IP re-allocation exists if agent restarts before kubelet queries Pod
+	// status and after the container network configuration is added.
 	obj, ok := GetIPFromCache(resultKey)
 	if ok {
 		return obj, nil
 	}
 
 	args := argsFromEnv(cniArgs)
-
 	drivers := ipamDrivers[ipamType]
 	for _, driver := range drivers {
 		owns, result, err := driver.Add(args, k8sArgs, cniArgs.NetworkConfiguration)
@@ -106,7 +94,7 @@ func ExecIPAMAdd(cniArgs *cnipb.CniCmdArgs, k8sArgs *argtypes.K8sArgs, ipamType 
 	return nil, fmt.Errorf("No suitable IPAM driver found")
 }
 
-func ExecIPAMDelete(cniArgs *cnipb.CniCmdArgs, k8sArgs *argtypes.K8sArgs, ipamType string, resultKey string) error {
+func ExecIPAMDelete(cniArgs *cnipb.CniCmdArgs, k8sArgs *types.K8sArgs, ipamType string, resultKey string) error {
 	args := argsFromEnv(cniArgs)
 	drivers := ipamDrivers[ipamType]
 	for _, driver := range drivers {
@@ -124,7 +112,7 @@ func ExecIPAMDelete(cniArgs *cnipb.CniCmdArgs, k8sArgs *argtypes.K8sArgs, ipamTy
 	return fmt.Errorf("No suitable IPAM driver found")
 }
 
-func ExecIPAMCheck(cniArgs *cnipb.CniCmdArgs, k8sArgs *argtypes.K8sArgs, ipamType string) error {
+func ExecIPAMCheck(cniArgs *cnipb.CniCmdArgs, k8sArgs *types.K8sArgs, ipamType string) error {
 	args := argsFromEnv(cniArgs)
 	drivers := ipamDrivers[ipamType]
 	for _, driver := range drivers {
@@ -152,4 +140,31 @@ func GetIPFromCache(resultKey string) (*IPAMResult, bool) {
 func IsIPAMTypeValid(ipamType string) bool {
 	_, valid := ipamDrivers[ipamType]
 	return valid
+}
+
+// Antrea IPAM for secondary network.
+func SecondaryNetworkAdd(cniArgs *cnipb.CniCmdArgs, k8sArgs *types.K8sArgs, networkConfig *types.NetworkConfig) (*current.Result, error) {
+	args := argsFromEnv(cniArgs)
+	return getAntreaIPAMDriver().secondaryNetworkAdd(args, k8sArgs, networkConfig)
+
+}
+
+func SecondaryNetworkDel(cniArgs *cnipb.CniCmdArgs, k8sArgs *types.K8sArgs, networkConfig *types.NetworkConfig) error {
+	args := argsFromEnv(cniArgs)
+	return getAntreaIPAMDriver().secondaryNetworkDel(args, k8sArgs, networkConfig)
+
+}
+
+func SecondaryNetworkCheck(cniArgs *cnipb.CniCmdArgs, k8sArgs *types.K8sArgs, networkConfig *types.NetworkConfig) error {
+	args := argsFromEnv(cniArgs)
+	return getAntreaIPAMDriver().secondaryNetworkCheck(args, k8sArgs, networkConfig)
+
+}
+
+func getAntreaIPAMDriver() *AntreaIPAM {
+	drivers, ok := ipamDrivers[AntreaIPAMType]
+	if !ok {
+		return nil
+	}
+	return drivers[0].(*AntreaIPAM)
 }

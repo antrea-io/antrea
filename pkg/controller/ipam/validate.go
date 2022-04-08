@@ -187,31 +187,31 @@ func ipInRange(rangeStart, rangeEnd, ip net.IP) bool {
 	return bytes.Compare(ip16, rangeStart.To16()) >= 0 && bytes.Compare(ip16, rangeEnd.To16()) <= 0
 }
 
-func ipVersion(ip net.IP) int {
+func ipVersion(ip net.IP) crdv1alpha2.IPVersion {
 	if ip.To4() != nil {
-		return 4
+		return crdv1alpha2.IPv4
 	}
-	return 6
+	return crdv1alpha2.IPv6
 }
 
-func validateIPRange(r crdv1alpha2.SubnetIPRange, poolIPVersion int) (bool, string) {
-	if poolIPVersion == 4 {
+func validateIPRange(r crdv1alpha2.SubnetIPRange, poolIPVersion crdv1alpha2.IPVersion) (bool, string) {
+	if poolIPVersion == crdv1alpha2.IPv4 {
 		if r.PrefixLength <= 0 || r.PrefixLength >= 32 {
 			return false, fmt.Sprintf("Invalid prefix length %d", r.PrefixLength)
 		}
-	} else if poolIPVersion == 6 {
+	} else if poolIPVersion == crdv1alpha2.IPv6 {
 		if r.PrefixLength <= 0 || r.PrefixLength >= 128 {
 			return false, fmt.Sprintf("Invalid prefix length %d", r.PrefixLength)
 		}
 	} else {
-		return false, fmt.Sprintf("Invalid IP version %d", poolIPVersion)
+		return false, fmt.Sprintf("Invalid IP version %d", int(poolIPVersion))
 	}
 	// Validate the integrity the IP range:
 	//  Verify that all the IP ranges have the same IP family as the IP pool
 	//  Verify that the gateway IP is reachable from the IP range
 	gateway := net.ParseIP(r.Gateway)
 	var mask net.IPMask
-	if ipVersion(gateway) == 4 {
+	if ipVersion(gateway) == crdv1alpha2.IPv4 {
 		mask = net.CIDRMask(int(r.PrefixLength), 32)
 	} else {
 		mask = net.CIDRMask(int(r.PrefixLength), 128)
