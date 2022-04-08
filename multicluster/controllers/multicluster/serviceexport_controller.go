@@ -20,8 +20,6 @@ import (
 	"context"
 	"reflect"
 	"sort"
-	"strconv"
-	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
@@ -530,15 +528,8 @@ func (r *ServiceExportReconciler) refreshResourceExport(resName, kind string,
 	switch kind {
 	case common.ServiceKind:
 		re.ObjectMeta.Name = resName
-		newSvcSpec := svc.Spec.DeepCopy()
-		var renamedPorts []corev1.ServicePort
-		for _, p := range svc.Spec.Ports {
-			p.Name = strings.ToLower(string(p.Protocol)) + strconv.Itoa(int(p.Port))
-			renamedPorts = append(renamedPorts, p)
-		}
-		newSvcSpec.Ports = renamedPorts
 		re.Spec.Service = &mcsv1alpha1.ServiceExport{
-			ServiceSpec: *newSvcSpec,
+			ServiceSpec: svc.Spec,
 		}
 		re.Labels[common.SourceKind] = common.ServiceKind
 	case common.EndpointsKind:
