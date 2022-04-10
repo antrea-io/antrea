@@ -489,7 +489,7 @@ function run_integration {
     else
       echo "===== Run Integration tests ====="
       # umask ensures that files are cloned with the correct permissions so that Docker caching can be leveraged
-      ${SSH_WITH_UTILS_KEY} -n jenkins@${VM_IP} "umask 0022 && git clone ${ghprbAuthorRepoGitUrl} antrea && cd antrea && git checkout ${GIT_BRANCH} && DOCKER_REGISTRY=${DOCKER_REGISTRY} ./build/images/ovs/build.sh --pull && NO_PULL=${NO_PULL} make docker-test-integration"
+      ${SSH_WITH_UTILS_KEY} -n jenkins@${VM_IP} "umask 0022 && git clone ${ghprbAuthorRepoGitUrl} antrea && cd antrea && git checkout ${GIT_BRANCH} && ./build/images/ovs/build.sh --pull; if [ $? -ne 0 ]; then DOCKER_REGISTRY=${DOCKER_REGISTRY} ./build/images/ovs/build.sh --pull; fi && NO_PULL=${NO_PULL} make docker-test-integration"
       if [[ "$COVERAGE" == true ]]; then
         run_codecov "integration-tests" "antrea/.coverage/coverage-integration.txt" "" true ${VM_IP}
       fi
