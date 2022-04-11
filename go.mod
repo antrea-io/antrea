@@ -43,7 +43,7 @@ require (
 	github.com/prometheus/common v0.26.0
 	github.com/satori/go.uuid v1.2.0
 	github.com/sirupsen/logrus v1.8.1
-	github.com/spf13/afero v1.6.0
+	github.com/spf13/afero v1.8.2
 	github.com/spf13/cobra v1.4.0
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.7.0
@@ -51,15 +51,15 @@ require (
 	github.com/vishvananda/netlink v1.1.1-0.20210510164352-d17758a128bf
 	github.com/vmware/go-ipfix v0.5.12
 	go.uber.org/multierr v1.6.0
-	golang.org/x/crypto v0.0.0-20210503195802-e9a32991a82e
+	golang.org/x/crypto v0.0.0-20211108221036-ceb1ce70b4fa
 	golang.org/x/exp v0.0.0-20200224162631-6cc2880d07d6
 	golang.org/x/mod v0.4.2
 	golang.org/x/net v0.0.0-20210504132125-bbd867fde50d
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
-	golang.org/x/sys v0.0.0-20210603081109-ebe580a85c40
+	golang.org/x/sys v0.0.0-20210615035016-665e8c7367d1
 	golang.org/x/time v0.0.0-20210611083556-38a9dc6acbc6
 	golang.zx2c4.com/wireguard/wgctrl v0.0.0-20210506160403-92e472f520a5
-	google.golang.org/grpc v1.27.1
+	google.golang.org/grpc v1.35.0
 	google.golang.org/protobuf v1.27.1
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
 	gopkg.in/yaml.v2 v2.4.0
@@ -80,7 +80,7 @@ require (
 )
 
 require (
-	cloud.google.com/go v0.54.0 // indirect
+	cloud.google.com/go v0.75.0 // indirect
 	github.com/Azure/go-autorest v14.2.0+incompatible // indirect
 	github.com/Azure/go-autorest/autorest v0.11.12 // indirect
 	github.com/Azure/go-autorest/autorest/adal v0.9.5 // indirect
@@ -156,17 +156,17 @@ require (
 	github.com/vishvananda/netns v0.0.0-20200728191858-db3c7e526aae // indirect
 	gitlab.com/golang-commonmark/puny v0.0.0-20191124015043-9f83538fa04f // indirect
 	go.etcd.io/etcd v0.5.0-alpha.5.0.20200910180754-dd1b699fc489 // indirect
-	go.opencensus.io v0.22.3 // indirect
+	go.opencensus.io v0.22.5 // indirect
 	go.uber.org/atomic v1.7.0 // indirect
 	go.uber.org/zap v1.17.0 // indirect
-	golang.org/x/oauth2 v0.0.0-20200107190931-bf48bf16ab8d // indirect
+	golang.org/x/oauth2 v0.0.0-20210218202405-ba52d332ba99 // indirect
 	golang.org/x/term v0.0.0-20210220032956-6a3ed077a48d // indirect
 	golang.org/x/text v0.3.6 // indirect
 	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 // indirect
 	golang.zx2c4.com/wireguard v0.0.0-20210427022245-097af6e1351b // indirect
 	gomodules.xyz/jsonpatch/v2 v2.2.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
-	google.golang.org/genproto v0.0.0-20201110150050-8816d57aaa9a // indirect
+	google.golang.org/genproto v0.0.0-20210226172003-ab064af71705 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
 	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
