@@ -42,7 +42,7 @@ jobs:
     - name: Save Antrea image to tarball
       run:  docker save -o antrea-ubuntu.tar antrea/antrea-ubuntu-coverage:latest
     - name: Upload Antrea image for subsequent jobs
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v3
       with:
         name: antrea-ubuntu-cov
         path: antrea-ubuntu.tar
@@ -59,7 +59,7 @@ jobs:
     - name: Save Flow Aggregator image to tarball
       run: docker save -o flow-aggregator.tar antrea/flow-aggregator-coverage:latest
     - name: Upload Flow Aggregator image for subsequent jobs
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v3
       with:
         name: flow-aggregator-cov
         path: flow-aggregator.tar
@@ -98,7 +98,7 @@ jobs:
     - name: Tar coverage files
       run: tar -czf test-e2e-encap-coverage.tar.gz test-e2e-encap-coverage
     - name: Upload coverage for test-e2e-encap-coverage
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v3
       with:
         name: test-e2e-encap-coverage
         path: test-e2e-encap-coverage.tar.gz
@@ -115,7 +115,7 @@ jobs:
       if: ${{ failure() }}
       run: tar -czf log.tar.gz log
     - name: Upload test log
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v3
       if: ${{ failure() }}
       with:
         name: e2e-kind-encap.tar.gz
@@ -155,7 +155,7 @@ jobs:
     - name: Tar coverage files
       run: tar -czf test-e2e-encap-no-proxy-coverage.tar.gz test-e2e-encap-no-proxy-coverage
     - name: Upload coverage for test-e2e-encap-no-proxy-coverage
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v3
       with:
         name: test-e2e-encap-no-proxy-coverage
         path: test-e2e-encap-no-proxy-coverage.tar.gz
@@ -172,7 +172,7 @@ jobs:
       if: ${{ failure() }}
       run: tar -czf log.tar.gz log
     - name: Upload test log
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v3
       if: ${{ failure() }}
       with:
         name: e2e-kind-encap-no-proxy.tar.gz
@@ -218,7 +218,7 @@ jobs:
       - name: Tar coverage files
         run: tar -czf test-e2e-encap-proxy-all-coverage.tar.gz test-e2e-encap-proxy-all-coverage
       - name: Upload coverage for test-e2e-encap-proxy-all-coverage
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: test-e2e-encap-proxy-all-coverage
           path: test-e2e-encap-proxy-all-coverage.tar.gz
@@ -235,7 +235,7 @@ jobs:
         if: ${{ failure() }}
         run: tar -czf log.tar.gz log
       - name: Upload test log
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         if: ${{ failure() }}
         with:
           name: e2e-kind-encap-proxy-all.tar.gz
@@ -275,7 +275,7 @@ jobs:
     - name: Tar coverage files
       run: tar -czf test-e2e-noencap-coverage.tar.gz test-e2e-noencap-coverage
     - name: Upload coverage for test-e2e-noencap-coverage
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v3
       with:
         name: test-e2e-noencap-coverage
         path: test-e2e-noencap-coverage.tar.gz
@@ -292,7 +292,7 @@ jobs:
       if: ${{ failure() }}
       run: tar -czf log.tar.gz log
     - name: Upload test log
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v3
       if: ${{ failure() }}
       with:
         name: e2e-kind-noencap.tar.gz
@@ -332,7 +332,7 @@ jobs:
     - name: Tar coverage files
       run: tar -czf test-e2e-hybrid-coverage.tar.gz test-e2e-hybrid-coverage
     - name: Upload coverage for test-e2e-hybrid-coverage
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v3
       with:
         name: test-e2e-hybrid-coverage
         path: test-e2e-hybrid-coverage.tar.gz
@@ -349,7 +349,7 @@ jobs:
       if: ${{ failure() }}
       run: tar -czf log.tar.gz log
     - name: Upload test log
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v3
       if: ${{ failure() }}
       with:
         name: e2e-kind-hybrid.tar.gz
@@ -392,7 +392,7 @@ jobs:
     - name: Tar coverage files
       run: tar -czf test-e2e-encap-no-np-coverage.tar.gz test-e2e-encap-no-np-coverage
     - name: Upload coverage for test-e2e-encap-no-np-coverage
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v3
       with:
         name: test-e2e-encap-no-np-coverage
         path: test-e2e-encap-no-np-coverage.tar.gz
@@ -409,7 +409,7 @@ jobs:
       if: ${{ failure() }}
       run: tar -czf log.tar.gz log
     - name: Upload test log
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v3
       if: ${{ failure() }}
       with:
         name: e2e-kind-encap-no-np.tar.gz
