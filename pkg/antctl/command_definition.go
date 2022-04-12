@@ -295,7 +295,11 @@ func (cd *commandDefinition) applySubCommandToRoot(root *cobra.Command, client A
 	if groupCommand, ok := groupCommands[cd.commandGroup]; ok {
 		groupCommand.AddCommand(cmd)
 	} else {
-		root.AddCommand(cmd)
+		// when antctl runs outside the Controller/Agent/FlowAggregator Pod. This check ensures that
+		// the log-level command is not added to the list of available commands.
+		if cmd.Use != "log-level [level]" || (cmd.Use == "log-level [level]" && runtime.InPod) {
+			root.AddCommand(cmd)
+		}
 	}
 	cd.applyExampleToCommand(cmd)
 
