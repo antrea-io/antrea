@@ -94,7 +94,7 @@ type Bridge interface {
 	CreateTable(table Table, next uint8, missAction MissActionType) Table
 	// AddTable adds table on the Bridge. Return true if the operation succeeds, otherwise return false.
 	DeleteTable(id uint8) bool
-	CreateGroup(id GroupIDType) Group
+	CreateGroupTypeSelect(id GroupIDType) Group
 	DeleteGroup(id GroupIDType) bool
 	CreateMeter(id MeterIDType, flags ofctrl.MeterFlag) Meter
 	DeleteMeter(id MeterIDType) bool

@@ -120,18 +120,18 @@ func (mr *MockBridgeMockRecorder) Connect(arg0, arg1 interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Connect", reflect.TypeOf((*MockBridge)(nil).Connect), arg0, arg1)
 }
 
-// CreateGroup mocks base method
-func (m *MockBridge) CreateGroup(arg0 openflow.GroupIDType) openflow.Group {
+// CreateGroupTypeSelect mocks base method
+func (m *MockBridge) CreateGroupTypeSelect(arg0 openflow.GroupIDType) openflow.Group {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateGroup", arg0)
+	ret := m.ctrl.Call(m, "CreateGroupTypeSelect", arg0)
 	ret0, _ := ret[0].(openflow.Group)
 	return ret0
 }
 
-// CreateGroup indicates an expected call of CreateGroup
-func (mr *MockBridgeMockRecorder) CreateGroup(arg0 interface{}) *gomock.Call {
+// CreateGroupTypeSelect indicates an expected call of CreateGroupTypeSelect
+func (mr *MockBridgeMockRecorder) CreateGroupTypeSelect(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateGroup", reflect.TypeOf((*MockBridge)(nil).CreateGroup), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateGroupTypeSelect", reflect.TypeOf((*MockBridge)(nil).CreateGroupTypeSelect), arg0)
 }
 
 // CreateMeter mocks base method

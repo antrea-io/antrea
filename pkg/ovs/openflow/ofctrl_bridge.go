@@ -189,7 +189,7 @@ type OFBridge struct {
 	multipartReplyChs map[uint32]chan *openflow13.MultipartReply
 }
 
-func (b *OFBridge) CreateGroup(id GroupIDType) Group {
+func (b *OFBridge) CreateGroupTypeSelect(id GroupIDType) Group {
 	ofctrlGroup, err := b.ofSwitch.NewGroup(uint32(id), ofctrl.GroupSelect)
 	if err != nil { // group already exists
 		ofctrlGroup = b.ofSwitch.GetGroup(uint32(id))

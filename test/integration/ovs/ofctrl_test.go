@@ -280,7 +280,7 @@ func TestOFctrlGroup(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			group := br.CreateGroup(1)
+			group := br.CreateGroupTypeSelect(1)
 			for _, bucket := range buckets {
 				require.NotZero(t, bucket.weight, "Weight value of a bucket must be specified")
 				bucketBuilder := group.Bucket().Weight(bucket.weight)
@@ -529,7 +529,7 @@ func TestBundleWithGroupAndFlow(t *testing.T) {
 	field1 := binding.NewRegField(1, 0, 31, "field1")
 	field2 := binding.NewRegField(2, 0, 31, "field2")
 	field3 := binding.NewRegField(3, 0, 31, "field3")
-	group := bridge.CreateGroup(groupID).
+	group := bridge.CreateGroupTypeSelect(groupID).
 		Bucket().Weight(100).
 		LoadToRegField(field1, uint32(0xa0a0002)).
 		LoadToRegField(field2, uint32(0x35)).

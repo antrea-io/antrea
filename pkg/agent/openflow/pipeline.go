@@ -2422,7 +2422,7 @@ func (f *featureService) endpointDNATFlow(endpointIP net.IP, endpointPort uint16
 // will resubmit packets back to ServiceLBTable to trigger the learn flow, the learn flow will then send packets to
 // EndpointDNATTable. Otherwise, buckets will resubmit packets to EndpointDNATTable directly.
 func (f *featureService) serviceEndpointGroup(groupID binding.GroupIDType, withSessionAffinity bool, endpoints ...proxy.Endpoint) binding.Group {
-	group := f.bridge.CreateGroup(groupID).ResetBuckets()
+	group := f.bridge.CreateGroupTypeSelect(groupID).ResetBuckets()
 	var resubmitTableID uint8
 	if withSessionAffinity {
 		resubmitTableID = ServiceLBTable.GetID()
