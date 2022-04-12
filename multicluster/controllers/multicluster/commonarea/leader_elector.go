@@ -122,6 +122,8 @@ func (r *remoteCommonAreaManager) setElectedLeader(cluster RemoteCommonArea) {
 	}
 	r.electedLeaderCluster = cluster
 	if cluster != nil {
-		cluster.StartWatching()
+		if err := cluster.StartWatching(); err != nil {
+			klog.ErrorS(err, "Failed to start watching events")
+		}
 	}
 }

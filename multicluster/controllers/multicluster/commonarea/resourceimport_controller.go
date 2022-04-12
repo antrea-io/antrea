@@ -210,7 +210,6 @@ func (r *ResourceImportReconciler) handleResImpUpdateForService(ctx context.Cont
 			klog.ErrorS(err, "Failed to update imported Service", "service", svcName.String())
 			return ctrl.Result{}, err
 		}
-		r.installedResImports.Update(*resImp)
 	}
 
 	if !apiequality.Semantic.DeepEqual(svcImp.Spec, svcImpObj.Spec) {
@@ -221,8 +220,8 @@ func (r *ResourceImportReconciler) handleResImpUpdateForService(ctx context.Cont
 			klog.ErrorS(err, "Failed to update ServiceImport", "serviceimport", svcImpName.String())
 			return ctrl.Result{}, err
 		}
-		r.installedResImports.Update(*resImp)
 	}
+	r.installedResImports.Update(*resImp)
 	return ctrl.Result{}, nil
 }
 
@@ -324,8 +323,8 @@ func (r *ResourceImportReconciler) handleResImpUpdateForEndpoints(ctx context.Co
 			klog.ErrorS(err, "Failed to update MCS Endpoints", "endpoints", epNamespaced.String())
 			return ctrl.Result{}, err
 		}
-		r.installedResImports.Update(*resImp)
 	}
+	r.installedResImports.Update(*resImp)
 	return ctrl.Result{}, nil
 }
 
