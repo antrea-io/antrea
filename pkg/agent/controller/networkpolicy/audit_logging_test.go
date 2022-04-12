@@ -130,17 +130,6 @@ func newLogInfo(disposition string) (*logInfo, string) {
 	return testLogInfo, expected
 }
 
-func sendMultiplePackets(antreaLogger *AntreaPolicyLogger, ob *logInfo, numPackets int, sendInterval time.Duration) {
-	count := 0
-	for range time.Tick(sendInterval) {
-		count += 1
-		antreaLogger.LogDedupPacket(ob)
-		if count == numPackets {
-			break
-		}
-	}
-}
-
 func expectedLogWithCount(msg string, count int) string {
 	return fmt.Sprintf("%s [%d", msg, count)
 }
@@ -164,12 +153,17 @@ func TestDropPacketLog(t *testing.T) {
 }
 
 func TestDropPacketDedupLog(t *testing.T) {
-	antreaLogger, mockAnpLogger := newTestAntreaPolicyLogger(testBufferLength, &realClock{})
+	clock := NewVirtualClock(time.Now())
+	defer clock.Stop()
+	antreaLogger, mockAnpLogger := newTestAntreaPolicyLogger(testBufferLength, clock)
 	ob, expected := newLogInfo("Drop")
 	// Add the additional log info for duplicate packets.
 	expected = expectedLogWithCount(expected, 2)
 
-	go sendMultiplePackets(antreaLogger, ob, 2, time.Millisecond)
+	antreaLogger.LogDedupPacket(ob)
+	clock.Advance(time.Millisecond)
+	antreaLogger.LogDedupPacket(ob)
+	clock.Advance(testBufferLength)
 	actual := <-mockAnpLogger.logged
 	assert.Contains(t, actual, expected)
 }
