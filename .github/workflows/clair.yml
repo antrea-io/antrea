@@ -23,7 +23,7 @@ jobs:
         ./ci/clair-scan/run.sh ./clair-reports
     - name: Upload Clair scan reports
       if: ${{ always() }}
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v3
       with:
         name: clair-scan-reports
         path: clair-reports/*.json
