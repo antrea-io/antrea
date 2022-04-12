@@ -18,21 +18,31 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"hash/fnv"
+	"io/ioutil"
+	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
+	"github.com/fsnotify/fsnotify"
+	"github.com/google/uuid"
 	"github.com/vmware/go-ipfix/pkg/collector"
 	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
 	"github.com/vmware/go-ipfix/pkg/exporter"
 	ipfixintermediate "github.com/vmware/go-ipfix/pkg/intermediate"
 	ipfixregistry "github.com/vmware/go-ipfix/pkg/registry"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 
+	"antrea.io/antrea/pkg/clusteridentity"
+	flowaggregatorconfig "antrea.io/antrea/pkg/config/flowaggregator"
 	"antrea.io/antrea/pkg/flowaggregator/clickhouseclient"
+	"antrea.io/antrea/pkg/flowaggregator/options"
 	"antrea.io/antrea/pkg/flowaggregator/querier"
 	"antrea.io/antrea/pkg/ipfix"
 )
@@ -183,18 +193,25 @@ const (
 	podInfoIndex = "podInfo"
 )
 
-type AggregatorTransportProtocol string
+type updateParam int
 
 const (
-	AggregatorTransportProtocolTCP AggregatorTransportProtocol = "TCP"
-	AggregatorTransportProtocolTLS AggregatorTransportProtocol = "TLS"
-	AggregatorTransportProtocolUDP AggregatorTransportProtocol = "UDP"
+	updateExternalFlowCollectorAddr updateParam = iota
+	updateClickHouseParam
+	enableClickHouse
+	disableClickHouse
+	disableFlowCollector
 )
+
+type updateMsg struct {
+	param updateParam
+	value interface{}
+}
 
 type flowAggregator struct {
 	externalFlowCollectorAddr   string
 	externalFlowCollectorProto  string
-	aggregatorTransportProtocol AggregatorTransportProtocol
+	aggregatorTransportProtocol flowaggregatorconfig.AggregatorTransportProtocol
 	collectingProcess           ipfix.IPFIXCollectingProcess
 	aggregationProcess          ipfix.IPFIXAggregationProcess
 	dbExportProcess             *clickhouseclient.ClickHouseExportProcess
@@ -213,40 +230,141 @@ type flowAggregator struct {
 	sendJSONRecord              bool
 	numRecordsExported          int64
 	numRecordsReceived          int64
+	updateCh                    chan updateMsg
+	configFile                  string
+	configWatcher               *fsnotify.Watcher
+	configData                  []byte
+	APIServer                   flowaggregatorconfig.APIServerConfig
 }
 
 func NewFlowAggregator(
-	externalFlowCollectorAddr string,
-	externalFlowCollectorProto string,
-	activeFlowRecTimeout time.Duration,
-	inactiveFlowRecTimeout time.Duration,
-	aggregatorTransportProtocol AggregatorTransportProtocol,
-	flowAggregatorAddress string,
-	includePodLabels bool,
 	k8sClient kubernetes.Interface,
-	observationDomainID uint32,
 	podInformer coreinformers.PodInformer,
-	sendJSONRecord bool,
-) *flowAggregator {
+	configFile string,
+) (*flowAggregator, error) {
+	if len(configFile) == 0 {
+		return nil, fmt.Errorf("configFile is empty string")
+	}
 	registry := ipfix.NewIPFIXRegistry()
 	registry.LoadRegistry()
+
+	var err error
+	configWatcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		return nil, fmt.Errorf("error when creating file watcher for configuration file: %v", err)
+	}
+	// When watching the configuration file directly, we have to add the file back to our watcher whenever the configuration
+	// file is modified (The watcher cannot track the config file  when the config file is replaced).
+	// Watching the directory can prevent us from above situation.
+	if err = configWatcher.Add(filepath.Dir(configFile)); err != nil {
+		return nil, fmt.Errorf("error when starting file watch on configuration dir: %v", err)
+	}
+
+	data, err := ioutil.ReadFile(configFile)
+	if err != nil {
+		return nil, fmt.Errorf("cannot read FlowAggregator configuration file: %v", err)
+	}
+	opt, err := options.LoadConfig(data)
+	if err != nil {
+		return nil, err
+	}
+
+	var observationDomainID uint32
+	if opt.Config.FlowCollector.ObservationDomainID != nil {
+		observationDomainID = *opt.Config.FlowCollector.ObservationDomainID
+	} else {
+		observationDomainID = genObservationDomainID(k8sClient)
+	}
+	klog.InfoS("Flow aggregator Observation Domain ID", "Domain ID", observationDomainID)
+
+	var sendJSONRecord bool
+	if opt.Config.FlowCollector.RecordFormat == "JSON" {
+		sendJSONRecord = true
+	} else {
+		sendJSONRecord = false
+	}
+
 	fa := &flowAggregator{
-		externalFlowCollectorAddr:   externalFlowCollectorAddr,
-		externalFlowCollectorProto:  externalFlowCollectorProto,
-		aggregatorTransportProtocol: aggregatorTransportProtocol,
-		activeFlowRecordTimeout:     activeFlowRecTimeout,
-		inactiveFlowRecordTimeout:   inactiveFlowRecTimeout,
+		externalFlowCollectorAddr:   opt.ExternalFlowCollectorAddr,
+		externalFlowCollectorProto:  opt.ExternalFlowCollectorProto,
+		aggregatorTransportProtocol: opt.AggregatorTransportProtocol,
+		activeFlowRecordTimeout:     opt.ActiveFlowRecordTimeout,
+		inactiveFlowRecordTimeout:   opt.InactiveFlowRecordTimeout,
 		registry:                    registry,
 		set:                         ipfixentities.NewSet(false),
-		flowAggregatorAddress:       flowAggregatorAddress,
-		includePodLabels:            includePodLabels,
+		flowAggregatorAddress:       opt.Config.FlowAggregatorAddress,
+		includePodLabels:            opt.Config.RecordContents.PodLabels,
 		k8sClient:                   k8sClient,
 		observationDomainID:         observationDomainID,
 		podInformer:                 podInformer,
 		sendJSONRecord:              sendJSONRecord,
+		updateCh:                    make(chan updateMsg),
+		configFile:                  configFile,
+		configWatcher:               configWatcher,
+		configData:                  data,
+		APIServer:                   opt.Config.APIServer,
+	}
+	err = fa.InitCollectingProcess()
+	if err != nil {
+		return nil, fmt.Errorf("error when creating collecting process: %v", err)
+	}
+	err = fa.InitAggregationProcess()
+	if err != nil {
+		return nil, fmt.Errorf("error when creating aggregation process: %v", err)
+	}
+	if opt.Config.ClickHouse.Enable {
+		chInput := clickhouseclient.ClickHouseInput{
+			Username:       os.Getenv("CH_USERNAME"),
+			Password:       os.Getenv("CH_PASSWORD"),
+			Database:       opt.Config.ClickHouse.Database,
+			DatabaseURL:    opt.Config.ClickHouse.DatabaseURL,
+			Debug:          opt.Config.ClickHouse.Debug,
+			Compress:       opt.Config.ClickHouse.Compress,
+			CommitInterval: opt.ClickHouseCommitInterval,
+		}
+		err = fa.InitDBExportProcess(chInput)
+		if err != nil {
+			return nil, fmt.Errorf("error when creating db export process: %v", err)
+		}
 	}
 	podInformer.Informer().AddIndexers(cache.Indexers{podInfoIndex: podInfoIndexFunc})
-	return fa
+	return fa, nil
+}
+
+// genObservationDomainID generates an IPFIX Observation Domain ID when one is not provided by the
+// user through the flow aggregator configuration. It will first try to generate one
+// deterministically based on the cluster UUID (if available, with a timeout of 10s). Otherwise, it
+// will generate a random one. The cluster UUID should be available if Antrea is deployed to the
+// cluster ahead of the flow aggregator, which is the expectation since when deploying flow
+// aggregator as a Pod, networking needs to be configured by the CNI plugin.
+func genObservationDomainID(k8sClient kubernetes.Interface) uint32 {
+	const retryInterval = time.Second
+	const timeout = 10 * time.Second
+	const defaultAntreaNamespace = "kube-system"
+
+	clusterIdentityProvider := clusteridentity.NewClusterIdentityProvider(
+		defaultAntreaNamespace,
+		clusteridentity.DefaultClusterIdentityConfigMapName,
+		k8sClient,
+	)
+	var clusterUUID uuid.UUID
+	if err := wait.PollImmediate(retryInterval, timeout, func() (bool, error) {
+		clusterIdentity, _, err := clusterIdentityProvider.Get()
+		if err != nil {
+			return false, nil
+		}
+		clusterUUID = clusterIdentity.UUID
+		return true, nil
+	}); err != nil {
+		klog.InfoS(
+			"Unable to retrieve cluster UUID; will generate a random observation domain ID", "timeout", timeout, "ConfigMapNameSpace", defaultAntreaNamespace, "ConfigMapName", clusteridentity.DefaultClusterIdentityConfigMapName,
+		)
+		clusterUUID = uuid.New()
+	}
+	h := fnv.New32()
+	h.Write(clusterUUID[:])
+	observationDomainID := h.Sum32()
+	return observationDomainID
 }
 
 func podInfoIndexFunc(obj interface{}) ([]string, error) {
@@ -266,7 +384,7 @@ func podInfoIndexFunc(obj interface{}) ([]string, error) {
 
 func (fa *flowAggregator) InitCollectingProcess() error {
 	var cpInput collector.CollectorInput
-	if fa.aggregatorTransportProtocol == AggregatorTransportProtocolTLS {
+	if fa.aggregatorTransportProtocol == flowaggregatorconfig.AggregatorTransportProtocolTLS {
 		parentCert, privateKey, caCert, err := generateCACertKey()
 		if err != nil {
 			return fmt.Errorf("error when generating CA certificate: %v", err)
@@ -294,7 +412,7 @@ func (fa *flowAggregator) InitCollectingProcess() error {
 			ServerKey:     serverKey,
 			ServerCert:    serverCert,
 		}
-	} else if fa.aggregatorTransportProtocol == AggregatorTransportProtocolTCP {
+	} else if fa.aggregatorTransportProtocol == flowaggregatorconfig.AggregatorTransportProtocolTCP {
 		cpInput = collector.CollectorInput{
 			Address:       collectorAddress,
 			Protocol:      tcpTransport,
@@ -411,12 +529,12 @@ func (fa *flowAggregator) Run(stopCh <-chan struct{}, wg *sync.WaitGroup) {
 		go fa.dbExportProcess.Start()
 		defer fa.dbExportProcess.Stop()
 	}
-	go fa.flowRecordExpiryCheck(stopCh)
-
+	go fa.flowExportLoop(stopCh)
+	go fa.watchConfiguration(stopCh)
 	<-stopCh
 }
 
-func (fa *flowAggregator) flowRecordExpiryCheck(stopCh <-chan struct{}) {
+func (fa *flowAggregator) flowExportLoop(stopCh <-chan struct{}) {
 	expireTimer := time.NewTimer(fa.activeFlowRecordTimeout)
 	logTicker := time.NewTicker(time.Minute)
 	for {
@@ -431,7 +549,7 @@ func (fa *flowAggregator) flowRecordExpiryCheck(stopCh <-chan struct{}) {
 			if fa.externalFlowCollectorAddr != "" && fa.exportingProcess == nil {
 				err := fa.initExportingProcess()
 				if err != nil {
-					klog.Errorf("Error when initializing exporting process: %v, will retry in %s", err, fa.activeFlowRecordTimeout)
+					klog.ErrorS(err, "Error when initializing exporting process", "wait time for retry", fa.activeFlowRecordTimeout)
 					// Initializing exporting process fails, will retry in next cycle.
 					expireTimer.Reset(fa.activeFlowRecordTimeout)
 					continue
@@ -440,7 +558,7 @@ func (fa *flowAggregator) flowRecordExpiryCheck(stopCh <-chan struct{}) {
 			// Pop the flow record item from expire priority queue in the Aggregation
 			// Process and send the flow records.
 			if err := fa.aggregationProcess.ForAllExpiredFlowRecordsDo(fa.sendFlowKeyRecord); err != nil {
-				klog.Errorf("Error when sending expired flow records: %v", err)
+				klog.ErrorS(err, "Error when sending expired flow records")
 				// If there is an error when sending flow records because of intermittent connectivity, we reset the connection
 				// to IPFIX collector and retry in the next export cycle to reinitialize the connection and send flow records.
 				if fa.exportingProcess != nil {
@@ -458,6 +576,70 @@ func (fa *flowAggregator) flowRecordExpiryCheck(stopCh <-chan struct{}) {
 			klog.V(4).InfoS("Total number of records exported", "count", fa.numRecordsExported)
 			klog.V(4).InfoS("Total number of flows stored in Flow Aggregator", "count", fa.aggregationProcess.GetNumFlows())
 			klog.V(4).InfoS("Number of exporters connected with Flow Aggregator", "count", fa.collectingProcess.GetNumConnToCollector())
+		case msg := <-fa.updateCh:
+			switch msg.param {
+			case updateExternalFlowCollectorAddr:
+				//modify addr and proto if changes.
+				newAddr := msg.value.(querier.ExternalFlowCollectorAddr)
+				if newAddr.Address == fa.externalFlowCollectorAddr && newAddr.Protocol == fa.externalFlowCollectorProto {
+					continue
+				}
+				klog.InfoS("Updating flow-collector address")
+				fa.externalFlowCollectorAddr = newAddr.Address
+				fa.externalFlowCollectorProto = newAddr.Protocol
+				klog.InfoS("Config ExternalFlowCollectorAddr is changed", "address", fa.externalFlowCollectorAddr, "protocol", fa.externalFlowCollectorProto)
+				if fa.exportingProcess != nil {
+					fa.exportingProcess.CloseConnToCollector()
+					fa.exportingProcess = nil
+				}
+			case enableClickHouse:
+				klog.InfoS("Enabling ClickHouse")
+				chInput := msg.value.(clickhouseclient.ClickHouseInput)
+				err := fa.InitDBExportProcess(chInput)
+				if err != nil {
+					klog.ErrorS(err, "Error when creating db export process")
+					continue
+				}
+				klog.InfoS("Clickhouse param is", "database", chInput.Database, "databaseURL", chInput.DatabaseURL, "debug", chInput.Debug, "compress", *chInput.Compress, "commitInterval", fa.dbExportProcess.GetCommitInterval().String())
+				go fa.dbExportProcess.Start()
+				defer fa.dbExportProcess.Stop()
+			case updateClickHouseParam:
+				chInput := msg.value.(clickhouseclient.ClickHouseInput)
+				dsn, connect, err := clickhouseclient.PrepareConnection(chInput)
+				if err != nil {
+					klog.ErrorS(err, "Error when checking new connection")
+					continue
+				}
+				if dsn == fa.dbExportProcess.GetDsn() && chInput.CommitInterval.String() == fa.dbExportProcess.GetCommitInterval().String() {
+					continue
+				}
+				klog.InfoS("Updating ClickHouse")
+				if dsn != fa.dbExportProcess.GetDsn() {
+					fa.dbExportProcess.UpdateCH(fa.dbExportProcess, dsn, connect)
+				}
+				if chInput.CommitInterval.String() != fa.dbExportProcess.GetCommitInterval().String() {
+					fa.dbExportProcess.SetCommitInterval(chInput.CommitInterval)
+				}
+				klog.InfoS("New clickhouse param is", "database", chInput.Database, "databaseURL", chInput.DatabaseURL, "debug", chInput.Debug, "compress", *chInput.Compress, "commitInterval", fa.dbExportProcess.GetCommitInterval().String())
+			case disableFlowCollector:
+				if fa.exportingProcess != nil || fa.externalFlowCollectorAddr != "" {
+					klog.InfoS("Disabling Flow-Collector")
+					fa.externalFlowCollectorAddr = ""
+					fa.externalFlowCollectorProto = ""
+					if fa.exportingProcess != nil {
+						fa.exportingProcess.CloseConnToCollector()
+						fa.exportingProcess = nil
+					}
+					klog.Info("Flow-collector disabled ")
+				}
+			case disableClickHouse:
+				if fa.dbExportProcess != nil {
+					klog.InfoS("Disabling Clickhouse")
+					fa.dbExportProcess.Stop()
+					fa.dbExportProcess = nil
+					klog.InfoS("Clickhouse disabled")
+				}
+			}
 		}
 	}
 }
@@ -489,7 +671,7 @@ func (fa *flowAggregator) sendFlowKeyRecord(key ipfixintermediate.FlowKey, recor
 		if err != nil {
 			return err
 		}
-		klog.V(4).Infof("Data set sent successfully: %d Bytes sent", sentBytes)
+		klog.V(4).InfoS("Data set sent successfully", "bytes sent", sentBytes)
 	}
 	if fa.dbExportProcess != nil {
 		fa.dbExportProcess.CacheSet(fa.set)
@@ -723,4 +905,100 @@ func (fa *flowAggregator) createInfoElementForTemplateSet(ieName string, enterpr
 		return nil, err
 	}
 	return ie, nil
+}
+
+func (fa *flowAggregator) watchConfiguration(stopCh <-chan struct{}) {
+	klog.InfoS("Watching for FlowAggregator configuration file")
+	for {
+		select {
+		case <-stopCh:
+			close(fa.updateCh)
+			return
+		case event, ok := <-fa.configWatcher.Events:
+			klog.InfoS("Event happened", "event", event.String())
+			if !ok {
+				// If configWatcher event channel is closed, we kill the flow-aggregator Pod to restore
+				// the channel.
+				klog.Fatal("ConfigWatcher event channel closed")
+			}
+			if err := fa.handleWatcherEvent(); err != nil {
+				// If the watcher cannot add mounted configuration file or the configuration file is not readable,
+				// we kill the flow-aggregator Pod (serious error)
+				klog.Fatalf("Cannot watch or read configMap: %v", err)
+			}
+		case err := <-fa.configWatcher.Errors:
+			if err != nil {
+				// If the error happens to watcher, we kill the flow-aggregator Pod.
+				// watcher might be shut-down or broken in this situation.
+				klog.Fatalf("configWatcher err: %v", err)
+			}
+		}
+	}
+}
+
+func (fa *flowAggregator) handleWatcherEvent() error {
+	data, err := ioutil.ReadFile(fa.configFile)
+	if err != nil {
+		return fmt.Errorf("cannot read FlowAggregator configuration file: %v", err)
+	}
+	opt, err := options.LoadConfig(data)
+	if err != nil {
+		klog.ErrorS(err, "Error when loading configuration from config file")
+		return nil
+	}
+	if bytes.Equal(data, fa.configData) {
+		klog.InfoS("Flow-aggregator configuration didn't changed")
+		return nil
+	}
+	fa.configData = data
+	fa.updateFlowAggregator(opt)
+	return nil
+}
+
+func (fa *flowAggregator) updateFlowAggregator(opt *options.Options) {
+	klog.InfoS("Updating Flow Aggregator")
+	if opt.Config.FlowCollector.Enable {
+		query := querier.ExternalFlowCollectorAddr{
+			Address:  opt.ExternalFlowCollectorAddr,
+			Protocol: opt.ExternalFlowCollectorProto,
+		}
+		fa.updateCh <- updateMsg{
+			param: updateExternalFlowCollectorAddr,
+			value: query,
+		}
+	} else {
+		if fa.exportingProcess != nil || fa.externalFlowCollectorAddr != "" {
+			fa.updateCh <- updateMsg{
+				param: disableFlowCollector,
+			}
+		}
+	}
+	if opt.Config.ClickHouse.Enable {
+		chInput := clickhouseclient.ClickHouseInput{
+			Username:       os.Getenv("CH_USERNAME"),
+			Password:       os.Getenv("CH_PASSWORD"),
+			Database:       opt.Config.ClickHouse.Database,
+			DatabaseURL:    opt.Config.ClickHouse.DatabaseURL,
+			Debug:          opt.Config.ClickHouse.Debug,
+			Compress:       opt.Config.ClickHouse.Compress,
+			CommitInterval: opt.ClickHouseCommitInterval,
+		}
+		if fa.dbExportProcess == nil {
+			fa.updateCh <- updateMsg{
+				param: enableClickHouse,
+				value: chInput,
+			}
+		} else {
+			fa.updateCh <- updateMsg{
+				param: updateClickHouseParam,
+				value: chInput,
+			}
+		}
+	} else {
+		if fa.dbExportProcess != nil {
+			fa.updateCh <- updateMsg{
+				param: disableClickHouse,
+			}
+		}
+	}
 }

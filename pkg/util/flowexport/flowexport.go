@@ -20,7 +20,7 @@ import (
 	"strings"
 	"time"
 
-	"antrea.io/antrea/pkg/flowaggregator"
+	flowaggregatorconfig "antrea.io/antrea/pkg/config/flowaggregator"
 )
 
 // ParseFlowCollectorAddr parses the flow collector address input for flow exporter and aggregator
@@ -76,10 +76,10 @@ func ParseFlowIntervalString(intervalString string) (time.Duration, error) {
 }
 
 // ParseTransportProtocol parses the transport protocol input for the flow aggregator
-func ParseTransportProtocol(trasnportProtocolInput flowaggregator.AggregatorTransportProtocol) (flowaggregator.AggregatorTransportProtocol, error) {
-	upperProtocolInput := flowaggregator.AggregatorTransportProtocol(strings.ToUpper(string(trasnportProtocolInput)))
-	if (upperProtocolInput != flowaggregator.AggregatorTransportProtocolTLS) && (upperProtocolInput != flowaggregator.AggregatorTransportProtocolUDP) && (upperProtocolInput != flowaggregator.AggregatorTransportProtocolTCP) {
-		return "", fmt.Errorf("collecting process over %s proto is not supported", trasnportProtocolInput)
+func ParseTransportProtocol(transportProtocolInput flowaggregatorconfig.AggregatorTransportProtocol) (flowaggregatorconfig.AggregatorTransportProtocol, error) {
+	upperProtocolInput := flowaggregatorconfig.AggregatorTransportProtocol(strings.ToUpper(string(transportProtocolInput)))
+	if (upperProtocolInput != flowaggregatorconfig.AggregatorTransportProtocolTLS) && (upperProtocolInput != flowaggregatorconfig.AggregatorTransportProtocolUDP) && (upperProtocolInput != flowaggregatorconfig.AggregatorTransportProtocolTCP) {
+		return "", fmt.Errorf("collecting process over %s proto is not supported", transportProtocolInput)
 	}
 	return upperProtocolInput, nil
 }

@@ -188,10 +188,11 @@ type flagInfo struct {
 // write complex client-side tasks. Only the global flags of the antctl framework will
 // be passed to the cobra.Command.
 type rawCommand struct {
-	cobraCommand      *cobra.Command
-	supportAgent      bool
-	supportController bool
-	commandGroup      commandGroup
+	cobraCommand          *cobra.Command
+	supportAgent          bool
+	supportController     bool
+	supportFlowAggregator bool
+	commandGroup          commandGroup
 }
 
 // commandDefinition defines options to create a cobra.Command for an antctl client.

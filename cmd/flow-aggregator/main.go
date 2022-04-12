@@ -35,7 +35,6 @@ func main() {
 }
 
 func newFlowAggregatorCommand() *cobra.Command {
-	opts := newOptions()
 
 	cmd := &cobra.Command{
 		Use:  "flow-aggregator",
@@ -43,21 +42,18 @@ func newFlowAggregatorCommand() *cobra.Command {
 		Run: func(cmd *cobra.Command, args []string) {
 			log.InitLogs(cmd.Flags())
 			defer log.FlushLogs()
-			if err := opts.complete(args); err != nil {
-				klog.Fatalf("Failed to complete args: %v", err)
+			configFile, err := cmd.Flags().GetString("config")
+			if err != nil {
+				klog.Fatalf("Error when finding the path of config: %v", err)
 			}
-			if err := opts.validate(args); err != nil {
-				klog.Fatalf("Failed to validate args: %v", err)
-			}
-			if err := run(opts); err != nil {
+			if err := run(configFile); err != nil {
 				klog.Fatalf("Error running flow aggregator: %v", err)
 			}
 		},
 		Version: version.GetFullVersionWithRuntimeInfo(),
 	}
-
 	flags := cmd.Flags()
-	opts.addFlags(flags)
+	flags.String("config", "", "The path to the configuration file")
 	log.AddFlags(flags)
 	return cmd
 }

@@ -24,6 +24,7 @@ import (
 	"github.com/ClickHouse/clickhouse-go"
 	"github.com/gammazero/deque"
 	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
 )
 
@@ -94,8 +95,10 @@ type ClickHouseExportProcess struct {
 	queueSize int
 	// commitInterval is the interval between batch commits
 	commitInterval time.Duration
-	// stopChan is the channel to receive stop message
-	stopChan chan bool
+	// stopCh is the channel to receive stop message
+	stopCh chan bool
+	// commitTicker is a ticker, containing a channel used to trigger batchCommitAll() for every commitInterval period
+	commitTicker *time.Ticker
 }
 
 type ClickHouseInput struct {
@@ -121,9 +124,13 @@ func (ci *ClickHouseInput) getDataSourceName() (string, error) {
 	}
 	if ci.Debug {
 		sb.WriteString("&debug=true")
+	} else {
+		sb.WriteString("&debug=false")
 	}
 	if *ci.Compress {
 		sb.WriteString("&compress=true")
+	} else {
+		sb.WriteString("&compress=false")
 	}
 
 	return sb.String(), nil
@@ -180,37 +187,11 @@ type ClickHouseFlowRow struct {
 }
 
 func NewClickHouseClient(input ClickHouseInput) (*ClickHouseExportProcess, error) {
-	dsn, err := input.getDataSourceName()
-	if err != nil {
-		klog.ErrorS(err, "Error parsing ClickHouse DSN")
-		return nil, err
-	}
-	connect, err := sql.Open("clickhouse", dsn)
-	if err != nil {
-		klog.ErrorS(err, "Error when opening DB connection", "dbURL", input.DatabaseURL)
-		return nil, err
-	}
 
-	// Test ping DB
-	if err = connect.Ping(); err != nil {
-		if exception, ok := err.(*clickhouse.Exception); ok {
-			klog.ErrorS(err, "Error pinging DB", "errCode", exception.Code)
-		} else {
-			klog.ErrorS(err, "Error pinging DB")
-		}
-		return nil, err
-	}
-
-	// Test open Transaction
-	tx, err := connect.Begin()
-	if err == nil {
-		_, err = tx.Prepare(insertQuery)
-	}
+	dsn, connect, err := PrepareConnection(input)
 	if err != nil {
-		klog.ErrorS(err, "Error when preparing insert statement")
 		return nil, err
 	}
-	_ = tx.Commit()
 
 	chClient := &ClickHouseExportProcess{
 		db:             connect,
@@ -219,9 +200,9 @@ func NewClickHouseClient(input ClickHouseInput) (*ClickHouseExportProcess, error
 		mutex:          sync.RWMutex{},
 		queueSize:      maxQueueSize,
 		commitInterval: input.CommitInterval,
-		stopChan:       make(chan bool),
+		stopCh:         make(chan bool),
+		commitTicker:   time.NewTicker(input.CommitInterval),
 	}
-
 	return chClient, nil
 }
 
@@ -239,11 +220,11 @@ func (ch *ClickHouseExportProcess) CacheSet(set ipfixentities.Set) {
 
 func (ch *ClickHouseExportProcess) Start() {
 	go ch.flowRecordPeriodicCommit()
-	<-ch.stopChan
+	<-ch.stopCh
 }
 
 func (ch *ClickHouseExportProcess) Stop() {
-	close(ch.stopChan)
+	close(ch.stopCh)
 }
 
 func (ch *ClickHouseExportProcess) getClickHouseFlowRow(record ipfixentities.Record) *ClickHouseFlowRow {
@@ -399,16 +380,23 @@ func (ch *ClickHouseExportProcess) getClickHouseFlowRow(record ipfixentities.Rec
 }
 
 func (ch *ClickHouseExportProcess) flowRecordPeriodicCommit() {
-	commitTicker := time.NewTicker(ch.commitInterval)
 	logTicker := time.NewTicker(time.Minute)
 	committedRec := 0
 	for {
 		select {
-		case <-ch.stopChan:
-			commitTicker.Stop()
+		case <-ch.stopCh:
+			klog.InfoS("Stopping ClickHouse exporting process")
+			committed, err := ch.batchCommitAll()
+			if err != nil {
+				klog.ErrorS(err, "Error when doing last batchCommitAll")
+			} else {
+				committedRec += committed
+				klog.V(4).InfoS("Total number of records committed to DB", "count", committedRec)
+			}
+			ch.commitTicker.Stop()
 			logTicker.Stop()
 			return
-		case <-commitTicker.C:
+		case <-ch.commitTicker.C:
 			committed, err := ch.batchCommitAll()
 			if err == nil {
 				committedRec += committed
@@ -517,4 +505,87 @@ func (ch *ClickHouseExportProcess) batchCommitAll() (int, error) {
 	}
 
 	return currSize, nil
+}
+
+func PrepareConnection(input ClickHouseInput) (string, *sql.DB, error) {
+	dsn, err := input.getDataSourceName()
+	if err != nil {
+		return "", nil, fmt.Errorf("error when parsing ClickHouse DSN: %v", err)
+	}
+	connect, err := ConnectClickHouse(dsn)
+	if err != nil {
+		return "", nil, err
+	}
+	// Test open Transaction
+	tx, err := connect.Begin()
+	if err == nil {
+		_, err = tx.Prepare(insertQuery)
+	}
+	if err != nil {
+		return "", nil, fmt.Errorf("error when preparing insert statement, %v", err)
+	}
+	_ = tx.Commit()
+	return dsn, connect, err
+}
+
+func (ch *ClickHouseExportProcess) GetDsnMap() map[string]string {
+	parseURL := strings.Split(ch.dsn, "?")
+	m := make(map[string]string)
+	m["databaseURL"] = parseURL[0]
+	for _, v := range strings.Split(parseURL[1], "&") {
+		pair := strings.Split(v, "=")
+		m[pair[0]] = pair[1]
+	}
+	return m
+}
+
+func (ch *ClickHouseExportProcess) UpdateCH(input *ClickHouseExportProcess, dsn string, connect *sql.DB) {
+	input.mutex.Lock()
+	defer input.mutex.Unlock()
+	input.dsn = dsn
+	input.db = connect
+}
+
+func (ch *ClickHouseExportProcess) GetCommitInterval() time.Duration {
+	return ch.commitInterval
+}
+
+func (ch *ClickHouseExportProcess) SetCommitInterval(commitInterval time.Duration) {
+	ch.commitInterval = commitInterval
+	ch.commitTicker.Reset(ch.commitInterval)
+}
+
+func (ch *ClickHouseExportProcess) GetDsn() string {
+	return ch.dsn
+}
+
+func ConnectClickHouse(url string) (*sql.DB, error) {
+	var connect *sql.DB
+	var connErr error
+	connRetryInterval := 1 * time.Second
+	connTimeout := 10 * time.Second
+
+	// Connect to ClickHouse in a loop
+	if err := wait.PollImmediate(connRetryInterval, connTimeout, func() (bool, error) {
+		// Open the database and ping it
+		var err error
+		connect, err = sql.Open("clickhouse", url)
+		if err != nil {
+			connErr = fmt.Errorf("error when opening DB connection: %v", err)
+			return false, nil
+		}
+		if err := connect.Ping(); err != nil {
+			if exception, ok := err.(*clickhouse.Exception); ok {
+				connErr = fmt.Errorf("failed to ping ClickHouse: %v", exception.Message)
+			} else {
+				connErr = fmt.Errorf("failed to ping ClickHouse: %v", err)
+			}
+			return false, nil
+		} else {
+			return true, nil
+		}
+	}); err != nil {
+		return nil, fmt.Errorf("failed to connect to ClickHouse after %s: %v", connTimeout, connErr)
+	}
+	return connect, nil
 }

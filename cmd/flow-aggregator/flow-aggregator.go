@@ -16,22 +16,16 @@ package main
 
 import (
 	"fmt"
-	"hash/fnv"
-	"os"
 	"sync"
 	"time"
 
-	"github.com/google/uuid"
-	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
 
-	"antrea.io/antrea/pkg/clusteridentity"
 	aggregator "antrea.io/antrea/pkg/flowaggregator"
 	"antrea.io/antrea/pkg/flowaggregator/apiserver"
-	"antrea.io/antrea/pkg/flowaggregator/clickhouseclient"
 	"antrea.io/antrea/pkg/log"
 	"antrea.io/antrea/pkg/signals"
 	"antrea.io/antrea/pkg/util/cipher"
@@ -39,44 +33,7 @@ import (
 
 const informerDefaultResync = 12 * time.Hour
 
-// genObservationDomainID generates an IPFIX Observation Domain ID when one is not provided by the
-// user through the flow aggregator configuration. It will first try to generate one
-// deterministically based on the cluster UUID (if available, with a timeout of 10s). Otherwise, it
-// will generate a random one. The cluster UUID should be available if Antrea is deployed to the
-// cluster ahead of the flow aggregator, which is the expectation since when deploying flow
-// aggregator as a Pod, networking needs to be configured by the CNI plugin.
-func genObservationDomainID(k8sClient kubernetes.Interface) uint32 {
-	const retryInterval = time.Second
-	const timeout = 10 * time.Second
-	const defaultAntreaNamespace = "kube-system"
-
-	clusterIdentityProvider := clusteridentity.NewClusterIdentityProvider(
-		defaultAntreaNamespace,
-		clusteridentity.DefaultClusterIdentityConfigMapName,
-		k8sClient,
-	)
-	var clusterUUID uuid.UUID
-	if err := wait.PollImmediate(retryInterval, timeout, func() (bool, error) {
-		clusterIdentity, _, err := clusterIdentityProvider.Get()
-		if err != nil {
-			return false, nil
-		}
-		clusterUUID = clusterIdentity.UUID
-		return true, nil
-	}); err != nil {
-		klog.Warningf(
-			"Unable to retrieve cluster UUID after %v (does ConfigMap '%s/%s' exist?); will generate a random observation domain ID",
-			timeout, defaultAntreaNamespace, clusteridentity.DefaultClusterIdentityConfigMapName,
-		)
-		clusterUUID = uuid.New()
-	}
-	h := fnv.New32()
-	h.Write(clusterUUID[:])
-	observationDomainID := h.Sum32()
-	return observationDomainID
-}
-
-func run(o *Options) error {
+func run(configFile string) error {
 	klog.Infof("Flow aggregator starting...")
 	// Set up signal capture: the first SIGTERM / SIGINT signal is handled gracefully and will
 	// cause the stopCh channel to be closed; if another signal is received before the program
@@ -93,72 +50,28 @@ func run(o *Options) error {
 	informerFactory := informers.NewSharedInformerFactory(k8sClient, informerDefaultResync)
 	podInformer := informerFactory.Core().V1().Pods()
 
-	var observationDomainID uint32
-	if o.config.FlowCollector.ObservationDomainID != nil {
-		observationDomainID = *o.config.FlowCollector.ObservationDomainID
-	} else {
-		observationDomainID = genObservationDomainID(k8sClient)
-	}
-	klog.Infof("Flow aggregator Observation Domain ID: %d", observationDomainID)
-
-	var sendJSONRecord bool
-	if o.format == "JSON" {
-		sendJSONRecord = true
-	} else {
-		sendJSONRecord = false
-	}
-
-	flowAggregator := aggregator.NewFlowAggregator(
-		o.externalFlowCollectorAddr,
-		o.externalFlowCollectorProto,
-		o.activeFlowRecordTimeout,
-		o.inactiveFlowRecordTimeout,
-		o.aggregatorTransportProtocol,
-		o.flowAggregatorAddress,
-		o.includePodLabels,
+	flowAggregator, err := aggregator.NewFlowAggregator(
 		k8sClient,
-		observationDomainID,
 		podInformer,
-		sendJSONRecord,
+		configFile,
 	)
-	err = flowAggregator.InitCollectingProcess()
-	if err != nil {
-		return fmt.Errorf("error when creating collecting process: %v", err)
-	}
-	err = flowAggregator.InitAggregationProcess()
-	if err != nil {
-		return fmt.Errorf("error when creating aggregation process: %v", err)
-	}
 
-	if o.config.ClickHouse.Enable {
-		chInput := clickhouseclient.ClickHouseInput{
-			Username:       os.Getenv("CH_USERNAME"),
-			Password:       os.Getenv("CH_PASSWORD"),
-			Database:       o.config.ClickHouse.Database,
-			DatabaseURL:    o.config.ClickHouse.DatabaseURL,
-			Debug:          o.config.ClickHouse.Debug,
-			Compress:       o.config.ClickHouse.Compress,
-			CommitInterval: o.clickHouseCommitInterval,
-		}
-		err = flowAggregator.InitDBExportProcess(chInput)
-		if err != nil {
-			return fmt.Errorf("error when creating db export process: %v", err)
-		}
+	if err != nil {
+		return err
 	}
-
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go flowAggregator.Run(stopCh, &wg)
 
-	cipherSuites, err := cipher.GenerateCipherSuitesList(o.config.APIServer.TLSCipherSuites)
+	cipherSuites, err := cipher.GenerateCipherSuitesList(flowAggregator.APIServer.TLSCipherSuites)
 	if err != nil {
 		return fmt.Errorf("error generating Cipher Suite list: %v", err)
 	}
 	apiServer, err := apiserver.New(
 		flowAggregator,
-		o.config.APIServer.APIPort,
+		flowAggregator.APIServer.APIPort,
 		cipherSuites,
-		cipher.TLSVersionMap[o.config.APIServer.TLSMinVersion])
+		cipher.TLSVersionMap[flowAggregator.APIServer.TLSMinVersion])
 	if err != nil {
 		return fmt.Errorf("error when creating flow aggregator API server: %v", err)
 	}
@@ -167,7 +80,7 @@ func run(o *Options) error {
 	informerFactory.Start(stopCh)
 
 	<-stopCh
-	klog.Infof("Stopping flow aggregator")
+	klog.InfoS("Stopping flow aggregator")
 	wg.Wait()
 	return nil
 }
