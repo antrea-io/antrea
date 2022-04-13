@@ -29,18 +29,33 @@ import (
 var (
 	testIPPoolv4 = &crdv1alpha2.IPPool{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "test-ippool-ipv4-1",
+			Name: "test-ippool-ipv4",
 		},
 		Spec: crdv1alpha2.IPPoolSpec{
 			IPVersion: crdv1alpha2.IPv4,
 			IPRanges: []crdv1alpha2.SubnetIPRange{{IPRange: crdv1alpha2.IPRange{
-				CIDR:  "",
-				Start: "10.123.1.101",
-				End:   "10.123.1.200",
+				CIDR: "10.123.1.0/24",
 			},
 				SubnetInfo: crdv1alpha2.SubnetInfo{
 					Gateway:      "10.123.1.254",
 					PrefixLength: 24,
+				}}},
+		},
+	}
+
+	testIPPoolv6 = &crdv1alpha2.IPPool{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "test-ippool-ipv6",
+		},
+		Spec: crdv1alpha2.IPPoolSpec{
+			IPVersion: crdv1alpha2.IPv6,
+			IPRanges: []crdv1alpha2.SubnetIPRange{{IPRange: crdv1alpha2.IPRange{
+				Start: "3ffe:ffff:1:01ff::0101",
+				End:   "3ffe:ffff:1:01ff::0200",
+			},
+				SubnetInfo: crdv1alpha2.SubnetInfo{
+					Gateway:      "3ffe:ffff:1:01ff::1",
+					PrefixLength: 64,
 				}}},
 		},
 	}
@@ -61,7 +76,7 @@ var (
     "keyA": ["some more", "plugin specific", "configuration"],
     "ipam": {
         "type": "antrea",
-        "ippools": [ "test-ippool-ipv4-1" ],
+        "ippools": [ "test-ippool-ipv4", "test-ippool-ipv6" ],
         "routes": [
             { "dst": "0.0.0.0/0" },
             { "dst": "192.168.0.0/16", "gw": "10.10.5.1" },
@@ -79,8 +94,13 @@ var (
     "ips": [
         {
             "version": "4",
-            "address": "10.123.1.101/24",
+            "address": "10.123.1.1/24",
             "gateway": "10.123.1.254"
+        },
+        {
+            "version": "6",
+            "address": "3ffe:ffff:1:1ff::101/64",
+            "gateway": "3ffe:ffff:1:1ff::1"
         }
     ],
     "routes": [
@@ -110,8 +130,13 @@ var (
     "ips": [
         {
             "version": "4",
-            "address": "10.123.1.102/24",
+            "address": "10.123.1.2/24",
             "gateway": "10.123.1.254"
+        },
+        {
+            "version": "6",
+            "address": "3ffe:ffff:1:1ff::102/64",
+            "gateway": "3ffe:ffff:1:1ff::1"
         }
     ],
     "routes": [
@@ -205,15 +230,20 @@ func TestSecondaryNetworkIPAM(t *testing.T) {
 	_, err = data.crdClient.CrdV1alpha2().IPPools().Create(context.TODO(), testIPPoolv4, metav1.CreateOptions{})
 	defer deleteIPPoolWrapper(t, data, testIPPoolv4.Name)
 	if err != nil {
-		t.Fatalf("Failed to create IPPool CR: %v", err)
+		t.Fatalf("Failed to create v4 IPPool CR: %v", err)
+	}
+	_, err = data.crdClient.CrdV1alpha2().IPPools().Create(context.TODO(), testIPPoolv6, metav1.CreateOptions{})
+	defer deleteIPPoolWrapper(t, data, testIPPoolv6.Name)
+	if err != nil {
+		t.Fatalf("Failed to create v6 IPPool CR: %v", err)
 	}
 
 	// DEL non-existing network. Should return no error.
 	executeCNI(t, data, false, true, "net1", 0, "")
 	// Allocate the first IP.
 	executeCNI(t, data, true, false, "net1", 0, testOutput1)
-	// Duplicated ADD request. Should return exit code 1.
-	executeCNI(t, data, true, false, "net1", 1, "")
+	// CNI ADD retry should return the same result.
+	executeCNI(t, data, true, false, "net1", 0, testOutput1)
 	// Allocate the second IP, and then DEL.
 	executeCNI(t, data, true, true, "net2", 0, testOutput2)
 	// The second IP should be re-allocated, as it was releaed with the previous CNI DEL.
