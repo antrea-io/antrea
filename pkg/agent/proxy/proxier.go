@@ -16,6 +16,7 @@ package proxy
 
 import (
 	"fmt"
+	"math"
 	"net"
 	"sort"
 	"strings"
@@ -50,6 +51,9 @@ const (
 	// of Endpoints that Antrea can support at the moment is 800. If the number of Endpoints for a given Service exceeds
 	// 800, extra Endpoints will be dropped.
 	maxEndpoints = 800
+	// SessionAffinity timeout is implemented using a hard_timeout in OVS. hard_timeout is
+	// represented by a uint16 in the OpenFlow protocol,
+	maxSupportedAffinityTimeout = math.MaxUint16
 )
 
 // Proxier wraps proxy.Provider and adds extra methods. It is introduced for
@@ -372,6 +376,28 @@ func (p *proxier) installServices() {
 			needUpdateService = true
 		}
 
+		affinityTimeout := svcInfo.StickyMaxAgeSeconds()
+		if svcInfo.StickyMaxAgeSeconds() > maxSupportedAffinityTimeout {
+			// SessionAffinity timeout is implemented using a hard_timeout in
+			// OVS. hard_timeout is represented by a uint16 in the OpenFlow protocol,
+			// hence we cannot support timeouts greater than 65535 seconds. However, the
+			// K8s Service spec allows timeout values up to 86400 seconds
+			// (https://godoc.org/k8s.io/api/core/v1#ClientIPConfig). For values greater
+			// than 65535 seconds, we need to set the hard_timeout to 65535 rather than
+			// let the timeout value wrap around.
+			affinityTimeout = maxSupportedAffinityTimeout
+			if !ok || (svcInfo.StickyMaxAgeSeconds() != pSvcInfo.StickyMaxAgeSeconds()) {
+				// We only log a warning when the Service hasn't been installed
+				// yet, or when the timeout has changed.
+				klog.InfoS(
+					"The timeout configured for ClientIP-based session affinity exceeds the max supported value",
+					"service", svcPortName.String(),
+					"timeout", svcInfo.StickyMaxAgeSeconds(),
+					"maxTimeout", maxSupportedAffinityTimeout,
+				)
+			}
+		}
+
 		var internalNodeLocal, externalNodeLocal bool
 		if svcInfo.NodeLocalInternal() {
 			internalNodeLocal = true
@@ -498,19 +524,19 @@ func (p *proxier) installServices() {
 					// of the Service are different, install two groups. One group has all Endpoints, the other has only
 					// local Endpoints.
 					groupID := p.groupCounter.AllocateIfNotExist(svcPortName, true)
-					if err = p.ofClient.InstallServiceGroup(groupID, svcInfo.StickyMaxAgeSeconds() != 0, localEndpointUpdateList); err != nil {
+					if err = p.ofClient.InstallServiceGroup(groupID, affinityTimeout != 0, localEndpointUpdateList); err != nil {
 						klog.ErrorS(err, "Error when installing Group of local Endpoints for Service", "Service", svcPortName)
 						continue
 					}
 					groupID = p.groupCounter.AllocateIfNotExist(svcPortName, false)
-					if err = p.ofClient.InstallServiceGroup(groupID, svcInfo.StickyMaxAgeSeconds() != 0, allEndpointUpdateList); err != nil {
+					if err = p.ofClient.InstallServiceGroup(groupID, affinityTimeout != 0, allEndpointUpdateList); err != nil {
 						klog.ErrorS(err, "Error when installing Group of all Endpoints for Service", "Service", svcPortName)
 						continue
 					}
 				} else {
 					// If the type of the Service is ClusterIP, install a group according to internalTrafficPolicy.
 					groupID := p.groupCounter.AllocateIfNotExist(svcPortName, internalNodeLocal)
-					if err = p.ofClient.InstallServiceGroup(groupID, svcInfo.StickyMaxAgeSeconds() != 0, endpointUpdateList); err != nil {
+					if err = p.ofClient.InstallServiceGroup(groupID, affinityTimeout != 0, endpointUpdateList); err != nil {
 						klog.ErrorS(err, "Error when installing Group of Endpoints for Service", "Service", svcPortName)
 						continue
 					}
@@ -524,7 +550,7 @@ func (p *proxier) installServices() {
 				// only local Endpoints. Note that, if a group doesn't exist on OVS, then the return value will be nil.
 				nodeLocalVal := internalNodeLocal && externalNodeLocal
 				groupID := p.groupCounter.AllocateIfNotExist(svcPortName, nodeLocalVal)
-				if err = p.ofClient.InstallServiceGroup(groupID, svcInfo.StickyMaxAgeSeconds() != 0, endpointUpdateList); err != nil {
+				if err = p.ofClient.InstallServiceGroup(groupID, affinityTimeout != 0, endpointUpdateList); err != nil {
 					klog.ErrorS(err, "Error when installing Group of local Endpoints for Service", "Service", svcPortName)
 					continue
 				}
@@ -576,7 +602,7 @@ func (p *proxier) installServices() {
 
 			// Install ClusterIP flows for the Service.
 			groupID := p.groupCounter.AllocateIfNotExist(svcPortName, internalNodeLocal)
-			if err := p.ofClient.InstallServiceFlows(groupID, svcInfo.ClusterIP(), uint16(svcInfo.Port()), svcInfo.OFProtocol, uint16(svcInfo.StickyMaxAgeSeconds()), svcInfo.NodeLocalInternal(), corev1.ServiceTypeClusterIP); err != nil {
+			if err := p.ofClient.InstallServiceFlows(groupID, svcInfo.ClusterIP(), uint16(svcInfo.Port()), svcInfo.OFProtocol, uint16(affinityTimeout), svcInfo.NodeLocalInternal(), corev1.ServiceTypeClusterIP); err != nil {
 				klog.Errorf("Error when installing Service flows: %v", err)
 				continue
 			}
@@ -595,7 +621,7 @@ func (p *proxier) installServices() {
 				// If previous Service is nil or NodePort flows and configurations of previous Service have been removed,
 				// install NodePort flows and configurations for current Service.
 				if svcInfo.NodePort() > 0 && (pSvcInfo == nil || needRemoval) {
-					if err := p.installNodePortService(nGroupID, uint16(svcInfo.NodePort()), svcInfo.OFProtocol, uint16(svcInfo.StickyMaxAgeSeconds()), svcInfo.NodeLocalExternal()); err != nil {
+					if err := p.installNodePortService(nGroupID, uint16(svcInfo.NodePort()), svcInfo.OFProtocol, uint16(affinityTimeout), svcInfo.NodeLocalExternal()); err != nil {
 						klog.ErrorS(err, "Failed to install NodePort flows and configurations of Service", "Service", svcPortName)
 						continue
 					}
@@ -622,7 +648,7 @@ func (p *proxier) installServices() {
 				}
 				// Install LoadBalancer flows and configurations.
 				if len(toAdd) > 0 {
-					if err := p.installLoadBalancerService(nGroupID, toAdd, uint16(svcInfo.Port()), svcInfo.OFProtocol, uint16(svcInfo.StickyMaxAgeSeconds()), svcInfo.NodeLocalExternal()); err != nil {
+					if err := p.installLoadBalancerService(nGroupID, toAdd, uint16(svcInfo.Port()), svcInfo.OFProtocol, uint16(affinityTimeout), svcInfo.NodeLocalExternal()); err != nil {
 						klog.ErrorS(err, "Failed to install LoadBalancer flows and configurations of Service", "Service", svcPortName)
 						continue
 					}
