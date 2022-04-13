@@ -16,6 +16,7 @@ package proxy
 
 import (
 	"fmt"
+	"math"
 	"net"
 	"testing"
 	"time"
@@ -956,7 +957,7 @@ func TestClusterIPRemoveEndpointsIPv6(t *testing.T) {
 	testClusterIPRemoveEndpoints(t, net.ParseIP("10:20::41"), net.ParseIP("10:180::1"), true)
 }
 
-func testSessionAffinityNoEndpoint(t *testing.T, svcExternalIPs net.IP, svcIP net.IP, epIP net.IP, isIPv6 bool) {
+func testSessionAffinity(t *testing.T, svcExternalIPs net.IP, svcIP net.IP, epIP net.IP, affinitySeconds int32, isIPv6 bool) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockOFClient := ofmock.NewMockClient(ctrl)
@@ -971,7 +972,6 @@ func testSessionAffinityNoEndpoint(t *testing.T, svcExternalIPs net.IP, svcIP ne
 		Port:           "80",
 		Protocol:       corev1.ProtocolTCP,
 	}
-	timeoutSeconds := corev1.DefaultClientIPServiceAffinitySeconds
 
 	makeServiceMap(fp,
 		makeTestService(svcPortName.Namespace, svcPortName.Name, func(svc *corev1.Service) {
@@ -981,7 +981,7 @@ func testSessionAffinityNoEndpoint(t *testing.T, svcExternalIPs net.IP, svcIP ne
 			svc.Spec.SessionAffinity = corev1.ServiceAffinityClientIP
 			svc.Spec.SessionAffinityConfig = &corev1.SessionAffinityConfig{
 				ClientIP: &corev1.ClientIPConfig{
-					TimeoutSeconds: &timeoutSeconds,
+					TimeoutSeconds: &affinitySeconds,
 				},
 			}
 			svc.Spec.Ports = []corev1.ServicePort{{
@@ -1013,20 +1013,35 @@ func testSessionAffinityNoEndpoint(t *testing.T, svcExternalIPs net.IP, svcIP ne
 	groupID := fp.groupCounter.AllocateIfNotExist(svcPortName, false)
 	mockOFClient.EXPECT().InstallServiceGroup(groupID, true, gomock.Any()).Times(1)
 	mockOFClient.EXPECT().InstallEndpointFlows(bindingProtocol, gomock.Any()).Times(1)
-	mockOFClient.EXPECT().InstallServiceFlows(groupID, svcIP, uint16(svcPort), bindingProtocol, uint16(corev1.DefaultClientIPServiceAffinitySeconds), false, corev1.ServiceTypeClusterIP).Times(1)
+	var expectedAffinity uint16
+	if affinitySeconds > math.MaxUint16 {
+		expectedAffinity = math.MaxUint16
+	} else {
+		expectedAffinity = uint16(affinitySeconds)
+	}
+	mockOFClient.EXPECT().InstallServiceFlows(groupID, svcIP, uint16(svcPort), bindingProtocol, expectedAffinity, false, corev1.ServiceTypeClusterIP).Times(1)
 
 	fp.syncProxyRules()
 }
 
-func TestSessionAffinityNoEndpointIPv4(t *testing.T) {
-	testSessionAffinityNoEndpoint(t, net.ParseIP("50.60.70.81"), net.ParseIP("10.20.30.41"), net.ParseIP("10.180.0.1"), false)
+func TestSessionAffinityIPv4(t *testing.T) {
+	affinitySeconds := corev1.DefaultClientIPServiceAffinitySeconds
+	testSessionAffinity(t, net.ParseIP("50.60.70.81"), net.ParseIP("10.20.30.41"), net.ParseIP("10.180.0.1"), affinitySeconds, false)
 }
 
-func TestSessionAffinityNoEndpointIPv6(t *testing.T) {
-	testSessionAffinityNoEndpoint(t, net.ParseIP("5060:70::81"), net.ParseIP("10:20::41"), net.ParseIP("10:180::1"), true)
+func TestSessionAffinityIPv6(t *testing.T) {
+	affinitySeconds := corev1.DefaultClientIPServiceAffinitySeconds
+	testSessionAffinity(t, net.ParseIP("5060:70::81"), net.ParseIP("10:20::41"), net.ParseIP("10:180::1"), affinitySeconds, true)
 }
 
-func testSessionAffinity(t *testing.T, svcExternalIPs net.IP, svcIP net.IP, isIPv6 bool) {
+func TestSessionAffinityOverflow(t *testing.T) {
+	// Ensure that the SessionAffinity timeout is truncated to the max supported value, instead
+	// of wrapping around.
+	affinitySeconds := int32(math.MaxUint16 + 10)
+	testSessionAffinity(t, net.ParseIP("50.60.70.81"), net.ParseIP("10.20.30.41"), net.ParseIP("10.180.0.1"), affinitySeconds, false)
+}
+
+func testSessionAffinityNoEndpoint(t *testing.T, svcExternalIPs net.IP, svcIP net.IP, isIPv6 bool) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockOFClient := ofmock.NewMockClient(ctrl)
@@ -1066,12 +1081,12 @@ func testSessionAffinity(t *testing.T, svcExternalIPs net.IP, svcIP net.IP, isIP
 	fp.syncProxyRules()
 }
 
-func TestSessionAffinityIPv4(t *testing.T) {
-	testSessionAffinity(t, net.ParseIP("50.60.70.81"), net.ParseIP("10.20.30.41"), false)
+func TestSessionAffinityNoEndpointIPv4(t *testing.T) {
+	testSessionAffinityNoEndpoint(t, net.ParseIP("50.60.70.81"), net.ParseIP("10.20.30.41"), false)
 }
 
-func TestSessionAffinityIPv6(t *testing.T) {
-	testSessionAffinity(t, net.ParseIP("5060:70::81"), net.ParseIP("10:20::41"), true)
+func TestSessionAffinityIPv6NoEndpoint(t *testing.T) {
+	testSessionAffinityNoEndpoint(t, net.ParseIP("5060:70::81"), net.ParseIP("10:20::41"), true)
 }
 
 func testPortChange(t *testing.T, svcIP net.IP, epIP net.IP, isIPv6 bool) {
