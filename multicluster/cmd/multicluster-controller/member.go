@@ -78,6 +78,13 @@ func runMember(o *Options) error {
 	if err = svcExportReconciler.SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("error creating ServiceExport controller: %v", err)
 	}
+	labelIdentityReconciler := multiclustercontrollers.NewLabelIdentityReconciler(
+		mgr.GetClient(),
+		mgr.GetScheme(),
+		commonAreaGetter)
+	if err = labelIdentityReconciler.SetupWithManager(mgr); err != nil {
+		return fmt.Errorf("error creating LabelIdentity controller: %v", err)
+	}
 
 	gwReconciler := multiclustercontrollers.NewGatewayReconciler(
 		mgr.GetClient(),

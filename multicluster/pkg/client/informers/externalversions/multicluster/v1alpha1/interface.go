@@ -27,6 +27,8 @@ type Interface interface {
 	ClusterSets() ClusterSetInformer
 	// Gateways returns a GatewayInformer.
 	Gateways() GatewayInformer
+	// LabelIdentities returns a LabelIdentityInformer.
+	LabelIdentities() LabelIdentityInformer
 	// MemberClusterAnnounces returns a MemberClusterAnnounceInformer.
 	MemberClusterAnnounces() MemberClusterAnnounceInformer
 	// ResourceExports returns a ResourceExportInformer.
@@ -59,6 +61,11 @@ func (v *version) ClusterSets() ClusterSetInformer {
 // Gateways returns a GatewayInformer.
 func (v *version) Gateways() GatewayInformer {
 	return &gatewayInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+}
+
+// LabelIdentities returns a LabelIdentityInformer.
+func (v *version) LabelIdentities() LabelIdentityInformer {
+	return &labelIdentityInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
 }
 
 // MemberClusterAnnounces returns a MemberClusterAnnounceInformer.

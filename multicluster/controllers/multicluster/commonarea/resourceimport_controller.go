@@ -80,16 +80,16 @@ func NewResourceImportReconciler(client client.Client, scheme *runtime.Scheme, l
 	}
 }
 
-//+kubebuilder:rbac:groups=crd.antrea.io,resources=clusternetworkpolicies,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=crd.antrea.io,resources=tiers,verbs=get;list;watch
-//+kubebuilder:rbac:groups=multicluster.crd.antrea.io,resources=resourceimports,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=multicluster.crd.antrea.io,resources=resourceimports/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=multicluster.crd.antrea.io,resources=resourceimports/finalizers,verbs=update
-//+kubebuilder:rbac:groups=multicluster.x-k8s.io,resources=serviceimports,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=multicluster.x-k8s.io,resources=serviceimports/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups="",resources=endpoints,verbs=get;list;watch;update;create;patch;delete
-//+kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch;update;create;patch;delete
-//+kubebuilder:rbac:groups="",resources=events,verbs=create
+// +kubebuilder:rbac:groups=crd.antrea.io,resources=clusternetworkpolicies,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=crd.antrea.io,resources=tiers,verbs=get;list;watch
+// +kubebuilder:rbac:groups=multicluster.crd.antrea.io,resources=resourceimports,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=multicluster.crd.antrea.io,resources=resourceimports/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=multicluster.crd.antrea.io,resources=resourceimports/finalizers,verbs=update
+// +kubebuilder:rbac:groups=multicluster.x-k8s.io,resources=serviceimports,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=multicluster.x-k8s.io,resources=serviceimports/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups="",resources=endpoints,verbs=get;list;watch;update;create;patch;delete
+// +kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch;update;create;patch;delete
+// +kubebuilder:rbac:groups="",resources=events,verbs=create
 
 // Reconcile will attempt to ensure that the imported Resource is installed in local cluster as per the
 // ResourceImport object.
@@ -374,7 +374,16 @@ func getMCServiceImport(resImp *multiclusterv1alpha1.ResourceImport) *k8smcsv1al
 // in the remoteCommonArea.
 func (r *ResourceImportReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	// Ignore status update event via GenerationChangedPredicate
-	instance := predicate.GenerationChangedPredicate{}
+	generationPredicate := predicate.GenerationChangedPredicate{}
+	// Register this controller to ignore LabelIdentity kind of ResourceImport
+	labelIdentityResImportFilter := func(object client.Object) bool {
+		if resImport, ok := object.(*multiclusterv1alpha1.ResourceImport); ok {
+			return resImport.Spec.Kind != common.LabelIdentityKind
+		}
+		return false
+	}
+	labelIdentityResImportPredicate := predicate.NewPredicateFuncs(labelIdentityResImportFilter)
+	instance := predicate.And(generationPredicate, labelIdentityResImportPredicate)
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&multiclusterv1alpha1.ResourceImport{}).
 		WithEventFilter(instance).

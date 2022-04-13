@@ -13,7 +13,12 @@ limitations under the License.
 
 package common
 
-import corev1 "k8s.io/api/core/v1"
+import (
+	"crypto/sha1" // #nosec G505: not used for security purposes
+	"encoding/hex"
+
+	corev1 "k8s.io/api/core/v1"
+)
 
 const (
 	AntreaMCServiceAnnotation = "multicluster.antrea.io/imported-service"
@@ -25,6 +30,7 @@ const (
 	ServiceKind                    = "Service"
 	EndpointsKind                  = "Endpoints"
 	AntreaClusterNetworkPolicyKind = "AntreaClusterNetworkPolicy"
+	LabelIdentityKind              = "LabelIdentity"
 	ServiceImportKind              = "ServiceImport"
 	ClusterInfoKind                = "ClusterInfo"
 
@@ -33,7 +39,8 @@ const (
 	SourceClusterID = "sourceClusterID"
 	SourceKind      = "sourceKind"
 
-	DefaultWorkerCount = 5
+	DefaultWorkerCount      = 5
+	labelIdentityHashLength = 16
 
 	ResourceExportFinalizer = "resourceexport.finalizers.antrea.io"
 )
@@ -91,10 +98,10 @@ func GetServiceEndpointPorts(ports []corev1.ServicePort) []corev1.EndpointPort {
 // FilterEndpointSubsets keeps IPs only and removes other fields from EndpointSubset
 // which are unnecessary information for other member clusters.
 func FilterEndpointSubsets(subsets []corev1.EndpointSubset) []corev1.EndpointSubset {
-	newSubsets := []corev1.EndpointSubset{}
+	var newSubsets []corev1.EndpointSubset
 	for _, s := range subsets {
 		subset := corev1.EndpointSubset{}
-		newAddresses := []corev1.EndpointAddress{}
+		var newAddresses []corev1.EndpointAddress
 		for _, addr := range s.Addresses {
 			newAddresses = append(newAddresses, corev1.EndpointAddress{
 				IP: addr.IP,
@@ -107,4 +114,12 @@ func FilterEndpointSubsets(subsets []corev1.EndpointSubset) []corev1.EndpointSub
 		}
 	}
 	return newSubsets
+}
+
+// HashLabelIdentity generates a hash value for label identity string.
+func HashLabelIdentity(l string) string {
+	hash := sha1.New() // #nosec G401: not used for security purposes
+	hash.Write([]byte(l))
+	hashValue := hex.EncodeToString(hash.Sum(nil))
+	return hashValue[:labelIdentityHashLength]
 }
