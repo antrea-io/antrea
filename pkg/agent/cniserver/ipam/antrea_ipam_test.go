@@ -523,8 +523,8 @@ func TestAntreaIPAMDriver(t *testing.T) {
 	testAdd("apple1", "10.2.2.100", "10.2.2.1", "ffffff00", false)
 	testAdd("apple-sts-0", "10.2.2.102", "10.2.2.1", "ffffff00", true)
 
-	// Make sure repeated call for previous container results in error
-	testAddError("apple2")
+	// Make sure repeated call for previous container gets identical result
+	testAdd("apple2", "10.2.2.101", "10.2.2.1", "ffffff00", false)
 
 	// Make sure repeated Add works for pod that was previously released
 	testAdd("pear3", "10.2.3.199", "10.2.3.1", "ffffff00", false)

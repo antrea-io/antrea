@@ -63,9 +63,9 @@ func podIndexFunc(obj interface{}) ([]string, error) {
 		return nil, fmt.Errorf("obj is not IPPool: %+v", obj)
 	}
 	podNames := sets.NewString()
-	for _, IPAddress := range ipPool.Status.IPAddresses {
-		if IPAddress.Owner.Pod != nil {
-			podNames.Insert(k8s.NamespacedName(IPAddress.Owner.Pod.Namespace, IPAddress.Owner.Pod.Name))
+	for _, ipAddress := range ipPool.Status.IPAddresses {
+		if ipAddress.Owner.Pod != nil {
+			podNames.Insert(k8s.NamespacedName(ipAddress.Owner.Pod.Namespace, ipAddress.Owner.Pod.Name))
 		}
 	}
 	return podNames.UnsortedList(), nil
@@ -217,7 +217,7 @@ func (c *AntreaIPAMController) getPoolAllocatorByPod(namespace, podName string) 
 			break
 		}
 	}
-	if allocator == nil {
+	if err == nil && allocator == nil {
 		err = fmt.Errorf("no valid IPPool found")
 	}
 
@@ -231,8 +231,8 @@ func (c *AntreaIPAMController) getPoolAllocatorsByOwner(podOwner *crdv1a2.PodOwn
 		k8s.NamespacedName(podOwner.Namespace, podOwner.Name))
 	for _, item := range ipPools {
 		ipPool := item.(*crdv1a2.IPPool)
-		for _, IPAddress := range ipPool.Status.IPAddresses {
-			savedPod := IPAddress.Owner.Pod
+		for _, ipAddress := range ipPool.Status.IPAddresses {
+			savedPod := ipAddress.Owner.Pod
 			if savedPod != nil && savedPod.ContainerID == podOwner.ContainerID && savedPod.IFName == podOwner.IFName {
 				allocator, err := poolallocator.NewIPPoolAllocator(ipPool.Name, c.crdClient, c.ipPoolLister)
 				if err != nil {
