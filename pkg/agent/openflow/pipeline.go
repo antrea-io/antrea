@@ -686,6 +686,7 @@ func (f *featurePodConnectivity) conntrackFlows() []binding.Flow {
 				MatchProtocol(ipProtocol).
 				MatchCTStateNew(true).
 				MatchCTStateTrk(true).
+				MatchCTMark(NotServiceCTMark).
 				Action().CT(true, ConntrackCommitTable.GetNext(), f.ctZones[ipProtocol], f.ctZoneSrcField).
 				MoveToCtMarkField(PktSourceField, ConnSourceCTMarkField).
 				CTDone().
@@ -717,14 +718,6 @@ func (f *featureService) conntrackFlows() []binding.Flow {
 				MatchCTStateTrk(true).
 				Action().LoadRegMark(RewriteMACRegMark).
 				Action().GotoStage(stageEgressSecurity).
-				Done(),
-			// This generates the flow to avoid committing Service connections (with ServiceCTMark) another time. They
-			// have been committed in EndpointDNATTable, using the same CT zone.
-			ConntrackCommitTable.ofTable.BuildFlow(priorityHigh).
-				Cookie(cookieID).
-				MatchProtocol(ipProtocol).
-				MatchCTMark(ServiceCTMark).
-				Action().GotoStage(stageOutput).
 				Done(),
 		)
 	}
