@@ -67,7 +67,7 @@ First install Antrea (v0.13.0+ is required for Containerd).
 
 ```bash
 # Example:
-kubectl apply -f https://github.com/antrea-io/antrea/releases/download/v0.13.0/antrea.yml
+kubectl apply -f https://github.com/antrea-io/antrea/releases/download/v1.6.0/antrea.yml
 ```
 
 Then, you can run the following commands. [nssm](https://nssm.cc/) will install Antrea as a Windows service. Please ensure
@@ -75,14 +75,14 @@ Then, you can run the following commands. [nssm](https://nssm.cc/) will install 
 `<KubeProxyKubeconfigPath>` and `<KubeletKubeconfigPath>` should be set by you. E.g.
 
 ```powershell
-$KubernetesVersion="v1.20.4"
+$KubernetesVersion="v1.23.5"
 $KubeConfig="C:/Users/Administrator/.kube/config" # admin kubeconfig
 $KubeletKubeconfigPath="C:/etc/kubernetes/kubelet.conf"
 $KubeProxyKubeconfigPath="C:/Users/Administrator/kubeproxy.conf"
 ```
 
 ```powershell
-$TAG="v0.13.0"
+$TAG="v1.6.0"
 $KubernetesVersion="<KubernetesVersion>"
 $KubeConfig="<KubeconfigPath>"
 $KubeletKubeconfigPath="<KubeletKubeconfigPath>"
@@ -134,7 +134,7 @@ kube-proxy version.
 
 ```bash
 # Example:
-curl -L "https://github.com/kubernetes-sigs/sig-windows-tools/releases/download/v0.1.5/kube-proxy.yml" | sed 's/VERSION/v1.18.0/g' > kube-proxy.yml
+curl -L "https://github.com/kubernetes-sigs/sig-windows-tools/releases/download/v0.1.5/kube-proxy.yml" | sed 's/VERSION/v1.23.5/g' > kube-proxy.yml
 ```
 
 Replace the content of `run-script.ps1` in configmap named `kube-proxy-windows`
@@ -182,13 +182,6 @@ spec:
         k8s-app: kube-proxy-windows
     spec:
       hostNetwork: true
-```
-
-If the powershell version on your Window Node is earlier than v6.0,
-change the command from `pwsh` to `powershell` in kube-proxy.yml.
-
-```bash
-sed -i 's/pwsh/powershell/g' kube-proxy.yml
 ```
 
 Then apply the `kube-proxy.yml`.
@@ -262,7 +255,7 @@ container.
 ```powershell
 # Example:
 curl.exe -LO "https://github.com/kubernetes-sigs/sig-windows-tools/releases/download/v0.1.5/PrepareNode.ps1"
-.\PrepareNode.ps1 -KubernetesVersion v1.18.0
+.\PrepareNode.ps1 -KubernetesVersion v1.23.5
 ```
 
 #### 4. Prepare Node environment needed by antrea-agent
@@ -360,9 +353,9 @@ Nodes and Pods in your cluster by running:
 # Show Nodes
 kubectl get nodes -o wide -n kube-system
 NAME                           STATUS   ROLES                  AGE   VERSION   INTERNAL-IP     EXTERNAL-IP   OS-IMAGE                                  KERNEL-VERSION     CONTAINER-RUNTIME
-control-plane                  Ready    control-plane,master   1h    v1.18.3   10.176.27.168   <none>        Ubuntu 18.04.3 LTS                        4.15.0-66-generic   docker://19.3.9
-win-5akrf2tpq91                Ready    <none>                 1h    v1.18.0   10.176.27.150   <none>        Windows Server 2019 Standard Evaluation   10.0.17763.1158    docker://19.3.5
-win-5akrf2tpq92                Ready    <none>                 1h    v1.18.0   10.176.27.197   <none>        Windows Server 2019 Standard Evaluation   10.0.17763.1158     docker://19.3.5
+control-plane                  Ready    control-plane,master   1h    v1.23.5   10.176.27.168   <none>        Ubuntu 20.04.3 LTS                        5.11.0-1022-generic   docker://20.10.14
+win-5akrf2tpq91                Ready    <none>                 1h    v1.23.5   10.176.27.150   <none>        Windows Server 2019 Standard Evaluation   10.0.17763.2686       docker://20.10.9
+win-5akrf2tpq92                Ready    <none>                 1h    v1.23.5   10.176.27.197   <none>        Windows Server 2019 Standard Evaluation   10.0.17763.2686       docker://20.10.9
 
 # Show antrea-agent and kube-proxy Pods
 kubectl get pods -o wide -n kube-system | grep windows
