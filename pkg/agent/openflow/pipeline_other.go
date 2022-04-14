@@ -65,8 +65,7 @@ func (f *featurePodConnectivity) hostBridgeUplinkFlows(localSubnetMap map[bindin
 		L2ForwardingOutTable.ofTable.BuildFlow(priorityHigh).
 			Cookie(cookieID).
 			MatchProtocol(binding.ProtocolIP).
-			MatchRegMark(OutputToBridgeRegMark).
-			MatchRegMark(OFPortFoundRegMark).
+			MatchRegMark(OutputToBridgeRegMark, OFPortFoundRegMark).
 			Action().Output(config.BridgeOFPort).
 			Done(),
 		// Handle outgoing packet from AntreaFlexibleIPAM Pods. Broadcast is not supported.

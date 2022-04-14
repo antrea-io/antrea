@@ -54,8 +54,7 @@ func (f *featurePodConnectivity) hostBridgeUplinkFlows(localSubnetMap map[bindin
 				MatchProtocol(ipProtocol).
 				MatchInPort(config.UplinkOFPort).
 				MatchDstIPNet(localSubnet).
-				Action().LoadRegMark(FromUplinkRegMark).
-				Action().LoadRegMark(RewriteMACRegMark).
+				Action().LoadRegMark(FromUplinkRegMark, RewriteMACRegMark).
 				Action().GotoStage(stageConntrackState).
 				Done())
 		}

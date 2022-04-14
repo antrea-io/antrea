@@ -107,8 +107,13 @@ func (b *ofFlowBuilder) matchRegRange(regID int, data uint32, rng *Range) FlowBu
 	return b
 }
 
-func (b *ofFlowBuilder) MatchRegMark(mark *RegMark) FlowBuilder {
-	return b.MatchRegFieldWithValue(mark.field, mark.value)
+func (b *ofFlowBuilder) MatchRegMark(marks ...*RegMark) FlowBuilder {
+	var fb FlowBuilder
+	fb = b
+	for _, mark := range marks {
+		fb = b.MatchRegFieldWithValue(mark.field, mark.value)
+	}
+	return fb
 }
 
 func (b *ofFlowBuilder) MatchRegFieldWithValue(field *RegField, data uint32) FlowBuilder {
@@ -238,17 +243,15 @@ func (b *ofFlowBuilder) MatchCTStateSNAT(set bool) FlowBuilder {
 	return b
 }
 
-func (b *ofFlowBuilder) MatchCTMark(mark *CtMark) FlowBuilder {
-	var ctmarkKey string
-	b.ofFlow.Match.CtMark = mark.GetValue()
-	if mark.isFullRange() {
-		b.ofFlow.Match.CtMarkMask = nil
-		ctmarkKey = fmt.Sprintf("ct_mark=0x%x", mark.value)
-	} else {
-		mask := mark.field.rng.ToNXRange().ToUint32Mask()
-		ctmarkKey = fmt.Sprintf("ct_mark=0x%x/0x%x", mark.GetValue(), mask)
-		b.ofFlow.Match.CtMarkMask = &mask
+func (b *ofFlowBuilder) MatchCTMark(marks ...*CtMark) FlowBuilder {
+	var value, mask uint32
+	for _, mark := range marks {
+		value |= mark.GetValue()
+		mask |= mark.field.rng.ToNXRange().ToUint32Mask()
 	}
+	b.ofFlow.Match.CtMark = value
+	b.ofFlow.Match.CtMarkMask = &mask
+	ctmarkKey := fmt.Sprintf("ct_mark=0x%x/0x%x", value, mask)
 	b.matchers = append(b.matchers, ctmarkKey)
 	return b
 }
