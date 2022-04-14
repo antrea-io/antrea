@@ -12,13 +12,18 @@ e.g. [ipvlan](https://github.com/containernetworking/plugins/tree/master/plugins
 
 ## Prerequisites
 
-The only prerequisites are:
+The general prerequisites are:
 
 * a K8s cluster (Linux Nodes) running a K8s version supported by Antrea. At the
   time of writing, we recommend version 1.16 or later. Typically the cluster
   needs to be running on a network infrastructure that you control. For example,
   using macvlan networking will not work on public clouds like AWS.
 * [`kubectl`](https://kubernetes.io/docs/tasks/tools/install-kubectl/)
+
+The Antrea IPAM capability for secondary network was added in Antrea version
+1.7. To leverage Antrea IPAM for IP assignment of secondary networks, an Antrea
+version >= 1.7.0 should be used. There is no Antrea version requirement for
+other IPAM options.
 
 All the required software will be deployed using YAML manifests, and the
 corresponding container images will be downloaded from public registries.
@@ -77,26 +82,57 @@ use as an example in this guide.
 ### Step 1: Deploying Antrea
 
 For detailed information on the Antrea requirements and instructions on how to
-deploy Antrea, please refer to
-[getting-started.md](../../getting-started.md). To deploy the latest version of
-Antrea, use:
+deploy Antrea, please refer to [getting-started.md](../../getting-started.md).
+You can deploy the latest version of Antrea with
+[the manifest](https://raw.githubusercontent.com/antrea-io/antrea/main/build/yamls/antrea.yml).
+You may also choose a [released Antrea version](https://github.com/antrea-io/antrea/releases).
+
+To leverage Antrea IPAM to assign IP addresses for the secondary network, you
+need to edit the Antrea deployment manifest and enable the `AntreaIPAM` feature
+gate for both `antrea-controller` and `antrea-agent`, and then deploy Antrea
+with:
 
 ```bash
 kubectl apply -f https://raw.githubusercontent.com/antrea-io/antrea/main/build/yamls/antrea.yml
 ```
 
-You may also choose a [released Antrea
-version](https://github.com/antrea-io/antrea/releases).
+If you choose other IPAM options like DHCP or Whereabouts, you can just deploy
+Antrea with the Antrea deployment manifest without modification:
+
+```bash
+kubectl apply -f https://raw.githubusercontent.com/antrea-io/antrea/main/build/yamls/antrea.yml
+```
 
 ### Step 2: Deploy Multus as a DaemonSet
 
 ```bash
 git clone https://github.com/k8snetworkplumbingwg/multus-cni && cd multus-cni
-cat ./images/multus-daemonset.yml | kubectl apply -f -
+cat ./deployments/multus-daemonset-thick-plugin.yml | kubectl apply -f -
 ```
 
-### Step 3: Create a NetworkAttachmentDefinition
+### Step 3: Create an `IPPool` and a `NetworkAttachmentDefinition`
 
+With Antrea IPAM, the subnet and IP ranges for the secondary network are defined
+with an Antrea `IPPool` CR. To learn more information about Antrea IPAM for
+secondary network, please refer to the [Antrea IPAM documentation](../../antrea-ipam.md#ipam-for-secondary-network).
+
+```bash
+cat <<EOF | kubectl create -f -
+apiVersion: "crd.antrea.io/v1alpha2"
+kind: IPPool
+metadata:
+  name: macvlan-ippool
+spec:
+  ipVersion: 4
+  ipRanges:
+  - start: "192.168.78.200"
+    end: "192.168.78.250"
+    gateway: "192.168.78.1"
+    prefixLength: 24
+EOF
+```
+
+Next, you should create a `NetworkAttachmentDefinition` for the macvlan network.
 Make sure that you are using the correct interface name for `"master"`: it
 should be the name of the Node's network interface (e.g. `eth0`) that you want
 to use as the parent interface for the macvlan secondary Pod interfaces. If you
@@ -115,16 +151,18 @@ spec:
       "master": "enp0s9",
       "mode": "bridge",
       "ipam": {
-        "type": "dhcp"
+        "type": "antrea",
+        "ippools": [ "macvlan-ippool" ]
       }
     }'
 EOF
 ```
 
-The above definition assumes that DHCP will be used to assign IP addresses to
-the macvlan secondary interfaces. For an alternative solution using the
-[whereabouts] project, please refer to this
-[section](#using-whereabouts-for-ipam).
+Again, the above definition assumes that Antrea IPAM will be used to assign IP
+addresses to the macvlan secondary interfaces. Section [Using DHCP for IPAM](#using-dhcp-for-ipam)
+and section [Using Whereabouts for IPAM](#using-whereabouts-for-ipam) talk
+about alternative IPAM solutions with DHCP and the [Whereabouts] project
+respectively.
 
 ### Step 4 (optional): Create a macvlan subinterface on each Node
 
@@ -150,6 +188,16 @@ Node. It will:
   the [Prerequisites](#prerequisites).
 * Create a macvlan subinterface for the Node
 * Move the IP address from the parent interface to the new subinterface
+
+No edit to the manifest should be required, regardless of which K8s cluster you
+are using.
+
+## Using DHCP for IPAM
+
+To use DHCP for IPAM, you need not create the Antrea `IPPool` CR in [step-3],
+and `dhcp` should be specified as the IPAM type in the
+`NetworkAttachmentDefinition` CR created.  And, two more extra steps are
+required, after step 1 - 4.
 
 ### Step 5: Run a DHCP server
 
@@ -191,10 +239,7 @@ following command:
 kubectl apply -f https://raw.githubusercontent.com/antrea-io/antrea/main/docs/cookbooks/multus/resources/dhcp-daemon.yml
 ```
 
-No edits to the manifest should be required, regardless of which K8s cluster you
-are using.
-
-### Testing
+## Testing
 
 To test that the secondary interfaces are functional, you can create Pods with
 the `k8s.v1.cni.cncf.io/networks: macvlan-conf` annotation. We suggest creating
@@ -263,25 +308,26 @@ PING 192.168.78.205 (192.168.78.205) 56(84) bytes of data.
 rtt min/avg/max/mdev = 0.410/0.587/0.846/0.186 ms
 ```
 
-### Overview of a test cluster Node
+## Overview of a test cluster Node
 
 The diagram below shows an overview of a K8s Node when using the [test cluster]
-and following all the steps above. For the sake of completeness, we show the
-DHCP server running on that Node, but as we use a Deployment with a single
-replica, the server may be running on any worker Node in the cluster.
+using [DHCP] for IPAM, and following all the steps above. For the sake of
+completeness, we show the DHCP server running on that Node, but as we use a
+Deployment with a single replica, the server may be running on any worker Node
+in the cluster.
 
 <img src="assets/testbed-multus-macvlan.svg" width="900" alt="Test cluster Node">
 
-## Using [whereabouts] for IPAM
+## Using [Whereabouts] for IPAM
 
 If you do not already have a DHCP server for the underlying parent network and
 you find that deploying one in-cluster is impractical, you may want to consider
-using [whereabouts] to assign IP addresses to the secondary interfaces. When
-using [whereabouts], follow steps 1 and 2 above, along with step 4 if you want
+using [Whereabouts] to assign IP addresses to the secondary interfaces. When
+using [Whereabouts], follow steps 1 and 2 above, along with step 4 if you want
 the Nodes to be able to communicate with the Pods using the secondary
 network.
 
-The next step is to install the [whereabouts] plugin as follows:
+The next step is to install the [Whereabouts] plugin as follows:
 
 ```bash
 git clone https://github.com/dougbtv/whereabouts && cd whereabouts
@@ -329,11 +375,12 @@ EOF
 You can then validate that the configuration works by running the same
 [test](#testing) as above.
 
-[whereabouts]: https://github.com/dougbtv/whereabouts
+[Whereabouts]: https://github.com/dougbtv/whereabouts
 [test cluster]: #suggested-test-cluster
+[DHCP]: #using-dhcp-for-ipam
 [step-1]: #step-1-deploying-antrea
 [step-2]: #step-2-deploy-multus-as-a-daemonset
-[step-3]: #step-3-create-a-networkattachmentdefinition
+[step-3]: #step-3-create-an-ippool-and-a-networkattachmentdefinition
 [step-4]: #step-4-optional-create-a-macvlan-subinterface-on-each-node
 [step-5]: #step-5-run-a-dhcp-server
 [step-6]: #step-6-run-the-dhcp-daemons

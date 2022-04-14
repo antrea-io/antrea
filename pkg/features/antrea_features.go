@@ -77,7 +77,7 @@ const (
 	NodeIPAM featuregate.Feature = "NodeIPAM"
 
 	// alpha: v1.4
-	// Enable flexible IPAM for Pods.
+	// Enable AntreaIPAM, which is required by bridging mode Pods and secondary network IPAM.
 	AntreaIPAM featuregate.Feature = "AntreaIPAM"
 
 	// alpha: v1.5
