@@ -2070,35 +2070,47 @@ func (data *TestData) mutateAntreaConfigMap(
 	return nil
 }
 
+func (data *TestData) killProcessAndCollectCovFiles(namespace, podName, containerName, processName, covFile, covDir string) error {
+	if err := data.collectAntctlCovFiles(podName, containerName, namespace, covDir); err != nil {
+		return fmt.Errorf("error when copying antctl coverage files out: %v", err)
+	}
+
+	cmds := []string{"pgrep", "-f", processName, "-P", "1"}
+	stdout, stderr, err := data.RunCommandFromPod(namespace, podName, containerName, cmds)
+	if err != nil {
+		return fmt.Errorf("error when getting pid of '%s', stderr: <%v>, err: <%v>", processName, stderr, err)
+	}
+	cmds = []string{"kill", "-SIGINT", strings.TrimSpace(stdout)}
+	log.Infof("Sending SIGINT to '%s'", processName)
+	_, stderr, err = data.RunCommandFromPod(namespace, podName, containerName, cmds)
+	if err != nil {
+		return fmt.Errorf("error when sending SIGINT signal to '%s', stderr: <%v>, err: <%v>", processName, stderr, err)
+	}
+
+	log.Infof("Copying coverage files from Pod '%s'", podName)
+	if err := wait.PollImmediate(1*time.Second, 5*time.Second, func() (bool, error) {
+		if err = data.copyPodFiles(podName, containerName, namespace, covFile, covDir); err != nil {
+			log.Infof("Coverage file not available yet for copy: %v", err)
+			return false, nil
+		}
+		return true, nil
+	}); err != nil {
+		return fmt.Errorf("timeout when waiting for coverage file")
+	}
+
+	return nil
+}
+
 // gracefulExitAntreaController copies the Antrea controller binary coverage data file out before terminating the Pod
 func (data *TestData) gracefulExitAntreaController(covDir string) error {
 	antreaController, err := data.getAntreaController()
 	if err != nil {
-		return fmt.Errorf("error when getting antrea-controller Pod: %v", err)
+		return fmt.Errorf("error when getting antrea-controller Pod: %w", err)
 	}
 	podName := antreaController.Name
 
-	err = data.collectAntctlCovFiles(podName, "antrea-controller", antreaNamespace, covDir)
-
-	if err != nil {
-		return fmt.Errorf("error when graceful exit Antrea controller - copy antctl coverage files out: %v", err)
-	}
-
-	cmds := []string{"pgrep", "-f", antreaControllerCovBinary, "-P", "1"}
-	stdout, stderr, err := data.RunCommandFromPod(antreaNamespace, podName, "antrea-controller", cmds)
-	if err != nil {
-		return fmt.Errorf("error when getting pid of '%s', stderr: <%v>, err: <%v>", antreaControllerCovBinary, stderr, err)
-	}
-	cmds = []string{"kill", "-SIGINT", strings.TrimSpace(stdout)}
-
-	_, stderr, err = data.RunCommandFromPod(antreaNamespace, podName, "antrea-controller", cmds)
-	if err != nil {
-		return fmt.Errorf("error when sending SIGINT signal to '%s', stderr: <%v>, err: <%v>", antreaControllerCovBinary, stderr, err)
-	}
-	err = data.copyPodFiles(podName, "antrea-controller", antreaNamespace, antreaControllerCovFile, covDir)
-
-	if err != nil {
-		return fmt.Errorf("error when graceful exit Antrea controller - copy antrea-controller coverage files out: %v", err)
+	if err := data.killProcessAndCollectCovFiles(antreaNamespace, podName, "antrea-controller", antreaControllerCovBinary, antreaControllerCovFile, covDir); err != nil {
+		return fmt.Errorf("error when gracefully exiting Antrea Controller: %w", err)
 	}
 
 	return nil
@@ -2119,26 +2131,8 @@ func (data *TestData) gracefulExitAntreaAgent(covDir string, nodeName string) er
 	}
 	for _, pod := range pods.Items {
 		podName := pod.Name
-		err := data.collectAntctlCovFiles(podName, "antrea-agent", antreaNamespace, covDir)
-
-		if err != nil {
-			return fmt.Errorf("error when graceful exit Antrea agent - copy antctl coverage files out: %v", err)
-		}
-
-		cmds := []string{"pgrep", "-f", antreaAgentCovBinary, "-P", "1"}
-		stdout, stderr, err := data.RunCommandFromPod(antreaNamespace, podName, "antrea-agent", cmds)
-		if err != nil {
-			return fmt.Errorf("error when getting pid of '%s', stderr: <%v>, err: <%v>", antreaAgentCovBinary, stderr, err)
-		}
-		cmds = []string{"kill", "-SIGINT", strings.TrimSpace(stdout)}
-		_, stderr, err = data.RunCommandFromPod(antreaNamespace, podName, "antrea-agent", cmds)
-		if err != nil {
-			return fmt.Errorf("error when sending SIGINT signal to '%s', stderr: <%v>, err: <%v>", antreaAgentCovBinary, stderr, err)
-		}
-		err = data.copyPodFiles(podName, "antrea-agent", antreaNamespace, antreaAgentCovFile, covDir)
-
-		if err != nil {
-			return fmt.Errorf("error when graceful exit Antrea agent - copy antrea-agent coverage files out: %v", err)
+		if err := data.killProcessAndCollectCovFiles(antreaNamespace, podName, "antrea-agent", antreaAgentCovBinary, antreaAgentCovFile, covDir); err != nil {
+			return fmt.Errorf("error when gracefully exiting Antrea Agent: %w", err)
 		}
 	}
 	return nil
@@ -2152,18 +2146,8 @@ func (data *TestData) gracefulExitFlowAggregator(covDir string) error {
 	}
 	podName := flowAggPod.Name
 
-	cmds := []string{"pgrep", "-f", flowAggregatorCovBinary, "-P", "1"}
-	stdout, stderr, err := data.RunCommandFromPod(flowAggregatorNamespace, podName, "flow-aggregator", cmds)
-	if err != nil {
-		_, describeStdout, _, _ := data.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl -n %s describe pod", flowAggregatorNamespace))
-		return fmt.Errorf("error when getting pid of '%s', stdout: <%v>, stderr: <%v>, err: <%v>, describe stdout: <%v>", flowAggregatorCovBinary, stdout, stderr, err, describeStdout)
-	}
-	cmds = []string{"kill", "-SIGINT", strings.TrimSpace(stdout)}
-	if _, stderr, err = data.RunCommandFromPod(flowAggregatorNamespace, podName, "flow-aggregator", cmds); err != nil {
-		return fmt.Errorf("error when sending SIGINT signal to '%s', stderr: <%v>, err: <%v>", flowAggregatorCovBinary, stderr, err)
-	}
-	if err = data.copyPodFiles(podName, "flow-aggregator", flowAggregatorNamespace, flowAggregatorCovFile, covDir); err != nil {
-		return fmt.Errorf("error when gracefully exiting Flow Aggregator - copy flow-aggregator coverage files out: %v", err)
+	if err := data.killProcessAndCollectCovFiles(flowAggregatorNamespace, podName, "flow-aggregator", flowAggregatorCovBinary, flowAggregatorCovFile, covDir); err != nil {
+		return fmt.Errorf("error when gracefully exiting Flow Aggregator: %w", err)
 	}
 
 	return nil
@@ -2221,14 +2205,14 @@ func (data *TestData) collectAntctlCovFilesFromControlPlaneNode(covDir string) e
 }
 
 // copyPodFiles copies file from a Pod and save it to specified directory
-func (data *TestData) copyPodFiles(podName string, containerName string, nsName string, fileName string, covDir string) error {
+func (data *TestData) copyPodFiles(podName string, containerName string, nsName string, fileName string, destDir string) error {
 	// getPodWriter creates the file with name podName-fileName-suffix. It returns nil if the
 	// file cannot be created. File must be closed by the caller.
 	getPodWriter := func(podName, fileName, suffix string) *os.File {
-		covFile := filepath.Join(covDir, fmt.Sprintf("%s-%s-%s", podName, fileName, suffix))
-		f, err := os.Create(covFile)
+		destFile := filepath.Join(destDir, fmt.Sprintf("%s-%s-%s", podName, fileName, suffix))
+		f, err := os.Create(destFile)
 		if err != nil {
-			_ = fmt.Errorf("error when creating coverage file '%s': %v", covFile, err)
+			_ = fmt.Errorf("error when creating destination file '%s': %v", destFile, err)
 			return nil
 		}
 		return f
