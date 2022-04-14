@@ -104,9 +104,9 @@ type AgentConfig struct {
 	// WireGuard related configurations.
 	WireGuard WireGuardConfig `yaml:"wireGuard"`
 	// Enable bridging mode of Pod network on Nodes, in which the Node's transport interface is connected
-	// to the OVS bridge, and cross-Node/VLAN traffic from AntreaIPAM Pods (Pods whose IP addresses are
-	// allocated by AntreaIPAM from IPPools) is sent to the underlay network via the uplink, and
-	// forwarded/routed by the underlay network.
+	// to the OVS bridge, and cross-Node/VLAN traffic of AntreaIPAM Pods (Pods whose IP addresses are
+	// allocated by AntreaIPAM from IPPools) is sent to the underlay network, and forwarded/routed by the
+	// underlay network.
 	// This option requires the `AntreaIPAM` feature gate to be enabled. At this moment, it supports only
 	// IPv4 and Linux Nodes, and can be enabled only when `ovsDatapathType` is `system`,
 	// `trafficEncapMode` is `noEncap`, and `noSNAT` is true.
