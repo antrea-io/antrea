@@ -203,7 +203,7 @@ type Flow interface {
 type Action interface {
 	LoadARPOperation(value uint16) FlowBuilder
 	LoadToRegField(field *RegField, value uint32) FlowBuilder
-	LoadRegMark(mark *RegMark) FlowBuilder
+	LoadRegMark(marks ...*RegMark) FlowBuilder
 	LoadPktMarkRange(value uint32, to *Range) FlowBuilder
 	LoadIPDSCP(value uint8) FlowBuilder
 	LoadRange(name string, addr uint64, to *Range) FlowBuilder
@@ -247,7 +247,7 @@ type FlowBuilder interface {
 	MatchProtocol(name Protocol) FlowBuilder
 	MatchIPProtocolValue(isIPv6 bool, protoValue uint8) FlowBuilder
 	MatchXXReg(regID int, data []byte) FlowBuilder
-	MatchRegMark(mark *RegMark) FlowBuilder
+	MatchRegMark(marks ...*RegMark) FlowBuilder
 	MatchRegFieldWithValue(field *RegField, data uint32) FlowBuilder
 	MatchInPort(inPort uint32) FlowBuilder
 	MatchDstIP(ip net.IP) FlowBuilder
@@ -270,7 +270,7 @@ type FlowBuilder interface {
 	MatchCTStateInv(isSet bool) FlowBuilder
 	MatchCTStateDNAT(isSet bool) FlowBuilder
 	MatchCTStateSNAT(isSet bool) FlowBuilder
-	MatchCTMark(mark *CtMark) FlowBuilder
+	MatchCTMark(marks ...*CtMark) FlowBuilder
 	MatchCTLabelField(high, low uint64, field *CtLabel) FlowBuilder
 	MatchPktMark(value uint32, mask *uint32) FlowBuilder
 	MatchConjID(value uint32) FlowBuilder
@@ -359,7 +359,7 @@ type MeterBandBuilder interface {
 
 type CTAction interface {
 	LoadToMark(value uint32) CTAction
-	LoadToCtMark(mark *CtMark) CTAction
+	LoadToCtMark(marks ...*CtMark) CTAction
 	LoadToLabelField(value uint64, labelField *CtLabel) CTAction
 	MoveToLabel(fromName string, fromRng, labelRng *Range) CTAction
 	MoveToCtMarkField(fromRegField *RegField, ctMark *CtMarkField) CTAction

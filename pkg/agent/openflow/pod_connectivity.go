@@ -42,6 +42,7 @@ type featurePodConnectivity struct {
 
 	connectUplinkToBridge bool
 	ctZoneSrcField        *binding.RegField
+	ipCtZoneTypeRegMarks  map[binding.Protocol]*binding.RegMark
 	enableMulticast       bool
 
 	category cookie.Category
@@ -63,6 +64,7 @@ func newFeaturePodConnectivity(
 	gatewayIPs := make(map[binding.Protocol]net.IP)
 	localCIDRs := make(map[binding.Protocol]net.IPNet)
 	nodeIPs := make(map[binding.Protocol]net.IP)
+	ipCtZoneTypeRegMarks := make(map[binding.Protocol]*binding.RegMark)
 	for _, ipProtocol := range ipProtocols {
 		if ipProtocol == binding.ProtocolIP {
 			ctZones[ipProtocol] = CtZone
@@ -71,6 +73,7 @@ func newFeaturePodConnectivity(
 			if nodeConfig.PodIPv4CIDR != nil {
 				localCIDRs[ipProtocol] = *nodeConfig.PodIPv4CIDR
 			}
+			ipCtZoneTypeRegMarks[ipProtocol] = IPCtZoneTypeRegMark
 		} else if ipProtocol == binding.ProtocolIPv6 {
 			ctZones[ipProtocol] = CtZoneV6
 			gatewayIPs[ipProtocol] = nodeConfig.GatewayConfig.IPv6
@@ -78,6 +81,7 @@ func newFeaturePodConnectivity(
 			if nodeConfig.PodIPv6CIDR != nil {
 				localCIDRs[ipProtocol] = *nodeConfig.PodIPv6CIDR
 			}
+			ipCtZoneTypeRegMarks[ipProtocol] = IPv6CtZoneTypeRegMark
 		}
 	}
 
@@ -94,6 +98,7 @@ func newFeaturePodConnectivity(
 		networkConfig:         networkConfig,
 		ovsDatapathType:       ovsDatapathType,
 		connectUplinkToBridge: connectUplinkToBridge,
+		ipCtZoneTypeRegMarks:  ipCtZoneTypeRegMarks,
 		ctZoneSrcField:        getZoneSrcField(connectUplinkToBridge),
 		enableMulticast:       enableMulticast,
 		category:              cookie.PodConnectivity,

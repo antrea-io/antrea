@@ -576,8 +576,7 @@ func (f *featurePodConnectivity) tunnelClassifierFlow(tunnelOFPort uint32) bindi
 	return ClassifierTable.ofTable.BuildFlow(priorityNormal).
 		Cookie(f.cookieAllocator.Request(f.category).Raw()).
 		MatchInPort(tunnelOFPort).
-		Action().LoadRegMark(FromTunnelRegMark).
-		Action().LoadRegMark(RewriteMACRegMark).
+		Action().LoadRegMark(FromTunnelRegMark, RewriteMACRegMark).
 		Action().GotoStage(stageConntrackState).
 		Done()
 }
@@ -594,17 +593,16 @@ func (f *featurePodConnectivity) gatewayClassifierFlow() binding.Flow {
 
 // podClassifierFlow generates the flow to mark the packets from a local Pod port.
 func (f *featurePodConnectivity) podClassifierFlow(podOFPort uint32, isAntreaFlexibleIPAM bool) binding.Flow {
-	flowBuilder := ClassifierTable.ofTable.BuildFlow(priorityLow).
+	regMarksToLoad := []*binding.RegMark{FromLocalRegMark}
+	if isAntreaFlexibleIPAM {
+		regMarksToLoad = append(regMarksToLoad, AntreaFlexibleIPAMRegMark, RewriteMACRegMark)
+	}
+	return ClassifierTable.ofTable.BuildFlow(priorityLow).
 		Cookie(f.cookieAllocator.Request(f.category).Raw()).
 		MatchInPort(podOFPort).
-		Action().LoadRegMark(FromLocalRegMark).
-		Action().GotoStage(stageValidation)
-	if isAntreaFlexibleIPAM {
-		// This is used to mark the packets from a local Antrea IPAM Pod port.
-		flowBuilder = flowBuilder.Action().LoadRegMark(AntreaFlexibleIPAMRegMark).
-			Action().LoadRegMark(RewriteMACRegMark)
-	}
-	return flowBuilder.Done()
+		Action().LoadRegMark(regMarksToLoad...).
+		Action().GotoStage(stageValidation).
+		Done()
 }
 
 // podUplinkClassifierFlows generates the flows to mark the packets with target destination MAC address from uplink/bridge
@@ -617,10 +615,6 @@ func (f *featurePodConnectivity) podUplinkClassifierFlows(dstMAC net.HardwareAdd
 		nonVLAN = false
 	}
 	for _, ipProtocol := range f.ipProtocols {
-		ctZoneTypeRegMark := IPCtZoneTypeRegMark
-		if ipProtocol == binding.ProtocolIPv6 {
-			ctZoneTypeRegMark = IPv6CtZoneTypeRegMark
-		}
 		flows = append(flows,
 			// This generates the flow to mark the packets from uplink port.
 			ClassifierTable.ofTable.BuildFlow(priorityHigh).
@@ -629,9 +623,8 @@ func (f *featurePodConnectivity) podUplinkClassifierFlows(dstMAC net.HardwareAdd
 				MatchDstMAC(dstMAC).
 				MatchVLAN(nonVLAN, vlanID, nil).
 				MatchProtocol(ipProtocol).
-				Action().LoadRegMark(ctZoneTypeRegMark).
+				Action().LoadRegMark(f.ipCtZoneTypeRegMarks[ipProtocol], FromUplinkRegMark).
 				Action().LoadToRegField(VLANIDField, uint32(vlanID)).
-				Action().LoadRegMark(FromUplinkRegMark).
 				Action().GotoStage(stageConntrackState).
 				Done(),
 		)
@@ -644,8 +637,7 @@ func (f *featurePodConnectivity) podUplinkClassifierFlows(dstMAC net.HardwareAdd
 					MatchDstMAC(dstMAC).
 					MatchVLAN(true, 0, nil).
 					MatchProtocol(ipProtocol).
-					Action().LoadRegMark(ctZoneTypeRegMark).
-					Action().LoadRegMark(FromBridgeRegMark).
+					Action().LoadRegMark(f.ipCtZoneTypeRegMarks[ipProtocol], FromBridgeRegMark).
 					Action().GotoStage(stageConntrackState).
 					Done(),
 			)
@@ -777,12 +769,10 @@ func (f *featureService) snatConntrackFlows() []binding.Flow {
 				MatchCTStateNew(true).
 				MatchCTStateTrk(true).
 				MatchRegMark(FromGatewayRegMark).
-				MatchCTMark(ConnSNATCTMark).
 				MatchCTMark(HairpinCTMark).
 				Action().CT(true, SNATConntrackCommitTable.GetNext(), f.snatCtZones[ipProtocol], nil).
 				SNAT(&binding.IPRange{StartIP: f.virtualIPs[ipProtocol], EndIP: f.virtualIPs[ipProtocol]}, nil).
-				LoadToCtMark(ServiceCTMark).
-				LoadToCtMark(HairpinCTMark).
+				LoadToCtMark(ServiceCTMark, HairpinCTMark).
 				CTDone().
 				Done(),
 			// This generates the flow to match the first packet of hairpin Service connection initiated through a Pod with
@@ -793,12 +783,10 @@ func (f *featureService) snatConntrackFlows() []binding.Flow {
 				MatchCTStateNew(true).
 				MatchCTStateTrk(true).
 				MatchRegMark(FromLocalRegMark).
-				MatchCTMark(ConnSNATCTMark).
 				MatchCTMark(HairpinCTMark).
 				Action().CT(true, SNATConntrackCommitTable.GetNext(), f.snatCtZones[ipProtocol], nil).
 				SNAT(&binding.IPRange{StartIP: f.gatewayIPs[ipProtocol], EndIP: f.gatewayIPs[ipProtocol]}, nil).
-				LoadToCtMark(ServiceCTMark).
-				LoadToCtMark(HairpinCTMark).
+				LoadToCtMark(ServiceCTMark, HairpinCTMark).
 				CTDone().
 				Done(),
 			// This generates the flow to match the first packet of NodePort / LoadBalancer connection (non-hairpin) initiated
@@ -1255,14 +1243,15 @@ func (f *featurePodConnectivity) l3FwdFlowToPod(localGatewayMAC net.HardwareAddr
 				Done())
 		} else {
 			// This generates the flow to match the packets with RewriteMACRegMark and destined for a local per-Node IPAM Pod.
-			fb := L3ForwardingTable.ofTable.BuildFlow(priorityNormal).
-				Cookie(cookieID)
+			regMarksToMatch := []*binding.RegMark{RewriteMACRegMark}
 			if f.connectUplinkToBridge {
 				// Only overwrite MAC for untagged traffic which destination is a local per-Node IPAM Pod.
-				fb = fb.MatchRegFieldWithValue(VLANIDField, 0)
+				regMarksToMatch = append(regMarksToMatch, binding.NewRegMark(VLANIDField, 0))
 			}
-			flows = append(flows, fb.MatchProtocol(ipProtocol).
-				MatchRegMark(RewriteMACRegMark).
+			flows = append(flows, L3ForwardingTable.ofTable.BuildFlow(priorityNormal).
+				Cookie(cookieID).
+				MatchProtocol(ipProtocol).
+				MatchRegMark(regMarksToMatch...).
 				MatchDstIP(ip).
 				Action().SetSrcMAC(localGatewayMAC).
 				Action().SetDstMAC(podInterfaceMAC).
@@ -1361,16 +1350,18 @@ func (f *featurePodConnectivity) l3FwdFlowToRemoteViaTun(localGatewayMAC net.Har
 func (f *featurePodConnectivity) l3FwdFlowToRemoteViaGW(localGatewayMAC net.HardwareAddr, peerSubnet net.IPNet) binding.Flow {
 	cookieID := f.cookieAllocator.Request(f.category).Raw()
 	ipProtocol := getIPProtocol(peerSubnet.IP)
+	var regMarksToMatch []*binding.RegMark
+	if f.connectUplinkToBridge {
+		regMarksToMatch = append(regMarksToMatch, NotAntreaFlexibleIPAMRegMark) // Exclude the packets from Antrea IPAM Pods.
+	}
 	// This generates the flow to match the packets destined for remote Pods. Note that, this flow is installed in Linux Nodes
 	// or Windows Nodes whose remote Node's transport interface MAC is unknown.
-	fb := L3ForwardingTable.ofTable.BuildFlow(priorityNormal).
+	return L3ForwardingTable.ofTable.BuildFlow(priorityNormal).
 		Cookie(cookieID).
 		MatchProtocol(ipProtocol).
-		MatchDstIPNet(peerSubnet)
-	if f.connectUplinkToBridge {
-		fb = fb.MatchRegMark(NotAntreaFlexibleIPAMRegMark) // Exclude the packets from Antrea IPAM Pods.
-	}
-	return fb.Action().SetDstMAC(localGatewayMAC).
+		MatchDstIPNet(peerSubnet).
+		MatchRegMark(regMarksToMatch...).
+		Action().SetDstMAC(localGatewayMAC).
 		Action().LoadRegMark(ToGatewayRegMark).
 		Action().GotoTable(L3DecTTLTable.GetID()). // Traffic to in-cluster destination should skip EgressMark table.
 		Done()
@@ -1468,22 +1459,19 @@ func (f *featurePodConnectivity) podIPSpoofGuardFlow(ifIPs []net.IP, ifMAC net.H
 	}
 
 	for _, ifIP := range ifIPs {
+		var regMarksToLoad []*binding.RegMark
 		ipProtocol := getIPProtocol(ifIP)
-		fb := SpoofGuardTable.ofTable.BuildFlow(priorityNormal).
+		if f.connectUplinkToBridge {
+			regMarksToLoad = append(regMarksToLoad, f.ipCtZoneTypeRegMarks[ipProtocol], binding.NewRegMark(VLANIDField, uint32(vlanID)))
+		}
+		flows = append(flows, SpoofGuardTable.ofTable.BuildFlow(priorityNormal).
 			Cookie(cookieID).
 			MatchProtocol(ipProtocol).
 			MatchInPort(ifOFPort).
 			MatchSrcMAC(ifMAC).
-			MatchSrcIP(ifIP)
-		if f.connectUplinkToBridge {
-			ctZoneTypeRegMark := IPCtZoneTypeRegMark
-			if ipProtocol == binding.ProtocolIPv6 {
-				ctZoneTypeRegMark = IPv6CtZoneTypeRegMark
-			}
-			fb = fb.Action().LoadRegMark(ctZoneTypeRegMark).
-				Action().LoadToRegField(VLANIDField, uint32(vlanID))
-		}
-		flows = append(flows, fb.Action().GotoTable(targetTables[ipProtocol]).
+			MatchSrcIP(ifIP).
+			Action().LoadRegMark(regMarksToLoad...).
+			Action().GotoTable(targetTables[ipProtocol]).
 			Done())
 	}
 	return flows
@@ -1542,19 +1530,17 @@ func (f *featurePodConnectivity) gatewayIPSpoofGuardFlows() []binding.Flow {
 	}
 
 	for _, ipProtocol := range f.ipProtocols {
-		fb := SpoofGuardTable.ofTable.BuildFlow(priorityNormal).
-			Cookie(cookieID).
-			MatchProtocol(ipProtocol).
-			MatchInPort(config.HostGatewayOFPort)
+		var regMarksToLoad []*binding.RegMark
 		// Set CtZoneTypeField based on ipProtocol and keep VLANIDField=0
 		if f.connectUplinkToBridge {
-			ctZoneTypeRegMark := IPCtZoneTypeRegMark
-			if ipProtocol == binding.ProtocolIPv6 {
-				ctZoneTypeRegMark = IPv6CtZoneTypeRegMark
-			}
-			fb = fb.Action().LoadRegMark(ctZoneTypeRegMark)
+			regMarksToLoad = append(regMarksToLoad, f.ipCtZoneTypeRegMarks[ipProtocol])
 		}
-		flows = append(flows, fb.Action().GotoTable(targetTables[ipProtocol]).
+		flows = append(flows, SpoofGuardTable.ofTable.BuildFlow(priorityNormal).
+			Cookie(cookieID).
+			MatchProtocol(ipProtocol).
+			MatchInPort(config.HostGatewayOFPort).
+			Action().LoadRegMark(regMarksToLoad...).
+			Action().GotoTable(targetTables[ipProtocol]).
 			Done(),
 		)
 	}
@@ -1713,9 +1699,8 @@ func (f *featureNetworkPolicy) conjunctionActionFlow(conjunctionID uint32, table
 				fb = fb.Action().Meter(PacketInMeterIDNP)
 			}
 			return fb.
-				Action().LoadToRegField(conjReg, conjunctionID).  // Traceflow.
-				Action().LoadRegMark(DispositionAllowRegMark).    // AntreaPolicy.
-				Action().LoadRegMark(CustomReasonLoggingRegMark). // Enable logging.
+				Action().LoadToRegField(conjReg, conjunctionID).                           // Traceflow.
+				Action().LoadRegMark(DispositionAllowRegMark, CustomReasonLoggingRegMark). // AntreaPolicy, Enable logging.
 				Action().SendToController(uint8(PacketInReasonNP)).
 				Action().CT(true, nextTable, ctZone, f.ctZoneSrcField). // CT action requires commit flag if actions other than NAT without arguments are specified.
 				LoadToLabelField(uint64(conjunctionID), labelField).
@@ -1797,8 +1782,7 @@ func (f *featureNetworkPolicy) conjunctionActionPassFlow(conjunctionID uint32, t
 		Action().LoadToRegField(conjReg, conjunctionID)
 	if enableLogging {
 		flowBuilder = flowBuilder.
-			Action().LoadRegMark(DispositionPassRegMark).
-			Action().LoadRegMark(CustomReasonLoggingRegMark).
+			Action().LoadRegMark(DispositionPassRegMark, CustomReasonLoggingRegMark).
 			Action().SendToController(uint8(PacketInReasonNP))
 	}
 	return flowBuilder.Action().GotoTable(nextTable.GetID()).
@@ -2088,8 +2072,7 @@ func (f *featureNetworkPolicy) defaultDropFlow(table binding.Table, matchKey *ty
 	if f.enableDenyTracking {
 		return f.addFlowMatch(fb, matchKey, matchValue).
 			Action().Drop().
-			Action().LoadRegMark(DispositionDropRegMark).
-			Action().LoadRegMark(CustomReasonDenyRegMark).
+			Action().LoadRegMark(DispositionDropRegMark, CustomReasonDenyRegMark).
 			Action().SendToController(uint8(PacketInReasonNP)).
 			Cookie(cookieID).
 			Done()
@@ -2353,23 +2336,26 @@ func (f *featureService) serviceLBFlow(groupID binding.GroupIDType,
 	} else {
 		lbResultMark = EpSelectedRegMark
 	}
+	regMarksToMatch := []*binding.RegMark{lbResultMark, RewriteMACRegMark}
 	var flowBuilder binding.FlowBuilder
 	if serviceType == v1.ServiceTypeNodePort {
 		// If externalTrafficPolicy of NodePort is Cluster, the first packet of NodePort requires SNAT, so nodeLocalExternal
 		// will be false, and ServiceNeedSNATRegMark will be set. If externalTrafficPolicy of NodePort is Local, the first
 		// packet of NodePort doesn't require SNAT, ServiceNeedSNATRegMark won't be set.
 		unionVal := (ToNodePortAddressRegMark.GetValue() << ServiceEPStateField.GetRange().Length()) + EpToSelectRegMark.GetValue()
+		if !nodeLocalExternal {
+			regMarksToMatch = append(regMarksToMatch, ToClusterServiceRegMark)
+		}
 		flowBuilder = ServiceLBTable.ofTable.BuildFlow(priorityNormal).
 			Cookie(cookieID).
 			MatchProtocol(protocol).
 			MatchRegFieldWithValue(NodePortUnionField, unionVal).
 			MatchDstPort(svcPort, nil).
-			Action().LoadRegMark(lbResultMark).
-			Action().LoadRegMark(RewriteMACRegMark)
-		if !nodeLocalExternal {
-			flowBuilder = flowBuilder.Action().LoadRegMark(ToClusterServiceRegMark)
-		}
+			Action().LoadRegMark(regMarksToMatch...)
 	} else {
+		if serviceType == v1.ServiceTypeLoadBalancer && !nodeLocalExternal {
+			regMarksToMatch = append(regMarksToMatch, ToClusterServiceRegMark)
+		}
 		// If Service type is LoadBalancer, as above NodePort.
 		flowBuilder = ServiceLBTable.ofTable.BuildFlow(priorityNormal).
 			Cookie(cookieID).
@@ -2377,11 +2363,7 @@ func (f *featureService) serviceLBFlow(groupID binding.GroupIDType,
 			MatchDstPort(svcPort, nil).
 			MatchDstIP(svcIP).
 			MatchRegMark(EpToSelectRegMark).
-			Action().LoadRegMark(lbResultMark).
-			Action().LoadRegMark(RewriteMACRegMark)
-		if serviceType == v1.ServiceTypeLoadBalancer && !nodeLocalExternal {
-			flowBuilder = flowBuilder.Action().LoadRegMark(ToClusterServiceRegMark)
-		}
+			Action().LoadRegMark(regMarksToMatch...)
 	}
 	return flowBuilder.
 		Action().LoadToRegField(ServiceGroupIDField, uint32(groupID)).
@@ -2718,17 +2700,17 @@ func (sl conjunctiveActionsInOrder) Less(i, j int) bool {
 func (f *featurePodConnectivity) l3FwdFlowToLocalPodCIDR() []binding.Flow {
 	cookieID := f.cookieAllocator.Request(f.category).Raw()
 	var flows []binding.Flow
+	regMarksToMatch := []*binding.RegMark{NotRewriteMACRegMark}
+	if f.connectUplinkToBridge {
+		regMarksToMatch = append(regMarksToMatch, binding.NewRegMark(VLANIDField, 0))
+	}
 	for ipProtocol, cidr := range f.localCIDRs {
 		// This generates the flow to match the packets destined for local Pods without RewriteMACRegMark.
-		fb := L3ForwardingTable.ofTable.BuildFlow(priorityLow).
-			Cookie(cookieID)
-		if f.connectUplinkToBridge {
-			fb = fb.MatchRegFieldWithValue(VLANIDField, 0)
-		}
-		flows = append(flows, fb.
+		flows = append(flows, L3ForwardingTable.ofTable.BuildFlow(priorityLow).
+			Cookie(cookieID).
 			MatchProtocol(ipProtocol).
 			MatchDstIPNet(cidr).
-			MatchRegMark(NotRewriteMACRegMark).
+			MatchRegMark(regMarksToMatch...).
 			Action().GotoStage(stageSwitching).
 			Done())
 	}
@@ -2738,29 +2720,31 @@ func (f *featurePodConnectivity) l3FwdFlowToLocalPodCIDR() []binding.Flow {
 // l3FwdFlowToNode generates the flows to match the packets destined for local Node.
 func (f *featurePodConnectivity) l3FwdFlowToNode() []binding.Flow {
 	cookieID := f.cookieAllocator.Request(f.category).Raw()
+	var regMarksToMatch []*binding.RegMark
+	if f.connectUplinkToBridge {
+		regMarksToMatch = append(regMarksToMatch, binding.NewRegMark(VLANIDField, 0))
+	}
 	var flows []binding.Flow
 	for ipProtocol, nodeIP := range f.nodeIPs {
-		fb1 := L3ForwardingTable.ofTable.BuildFlow(priorityHigh).
-			Cookie(cookieID)
-		fb2 := L3ForwardingTable.ofTable.BuildFlow(priorityHigh).
-			Cookie(cookieID)
-		if f.connectUplinkToBridge {
-			fb1 = fb1.MatchRegFieldWithValue(VLANIDField, 0)
-			fb2 = fb2.MatchRegFieldWithValue(VLANIDField, 0)
-		}
 		flows = append(flows,
 			// This generates the flow to match the packets sourced from local Antrea Pods and destined for local Node
 			// via bridge local port.
-			fb1.MatchProtocol(ipProtocol).
+			L3ForwardingTable.ofTable.BuildFlow(priorityHigh).
+				Cookie(cookieID).
+				MatchProtocol(ipProtocol).
 				MatchDstIP(nodeIP).
 				MatchRegMark(AntreaFlexibleIPAMRegMark).
+				MatchRegMark(regMarksToMatch...).
 				Action().SetDstMAC(f.nodeConfig.UplinkNetConfig.MAC).
 				Action().GotoStage(stageSwitching).
 				Done(),
 			// When Node bridge local port and uplink port connect to OVS, this generates the flow to match the reply
 			// packets of connection initiated through the bridge local port with FromBridgeCTMark.
-			fb2.MatchProtocol(ipProtocol).
+			L3ForwardingTable.ofTable.BuildFlow(priorityHigh).
+				Cookie(cookieID).
+				MatchProtocol(ipProtocol).
 				MatchCTMark(FromBridgeCTMark).
+				MatchRegMark(regMarksToMatch...).
 				MatchCTStateRpl(true).
 				MatchCTStateTrk(true).
 				Action().SetDstMAC(f.nodeConfig.UplinkNetConfig.MAC).
@@ -2778,7 +2762,6 @@ func (f *featurePodConnectivity) l3FwdFlowToExternal() binding.Flow {
 		Action().LoadRegMark(ToGatewayRegMark).
 		Action().GotoStage(stageSwitching).
 		Done()
-
 }
 
 // hostBridgeLocalFlows generates the flows to match the packets forwarded between bridge local port and uplink port.
@@ -2859,8 +2842,7 @@ func (f *featureService) l3FwdFlowsToExternalEndpoint() []binding.Flow {
 			// destined for external network.
 			L3ForwardingTable.ofTable.BuildFlow(priorityLow).
 				Cookie(cookieID).
-				MatchRegMark(RewriteMACRegMark).
-				MatchRegMark(NotAntreaFlexibleIPAMRegMark).
+				MatchRegMark(RewriteMACRegMark, NotAntreaFlexibleIPAMRegMark).
 				MatchCTMark(ServiceCTMark).
 				Action().SetDstMAC(f.gatewayMAC).
 				Action().LoadRegMark(ToGatewayRegMark).
@@ -2903,8 +2885,7 @@ func (f *featureService) podHairpinSNATFlow(endpoint net.IP) binding.Flow {
 		MatchSrcIP(endpoint).
 		MatchDstIP(endpoint).
 		Action().CT(true, ServiceMarkTable.GetNext(), f.dnatCtZones[ipProtocol], f.ctZoneSrcField).
-		LoadToCtMark(ConnSNATCTMark).
-		LoadToCtMark(HairpinCTMark).
+		LoadToCtMark(ConnSNATCTMark, HairpinCTMark).
 		CTDone().
 		Done()
 }
@@ -2925,8 +2906,7 @@ func (f *featureService) gatewaySNATFlows() []binding.Flow {
 				MatchCTStateTrk(true).
 				MatchRegMark(GatewayHairpinRegMark).
 				Action().CT(true, ServiceMarkTable.GetNext(), f.dnatCtZones[ipProtocol], f.ctZoneSrcField).
-				LoadToCtMark(ConnSNATCTMark).
-				LoadToCtMark(HairpinCTMark).
+				LoadToCtMark(ConnSNATCTMark, HairpinCTMark).
 				CTDone().
 				Done(),
 			// This generates the flow to match the first packet of NodePort / LoadBalancer connection initiated through the
@@ -2937,8 +2917,7 @@ func (f *featureService) gatewaySNATFlows() []binding.Flow {
 				MatchProtocol(ipProtocol).
 				MatchCTStateNew(true).
 				MatchCTStateTrk(true).
-				MatchRegMark(FromGatewayRegMark).
-				MatchRegMark(ToClusterServiceRegMark).
+				MatchRegMark(FromGatewayRegMark, ToClusterServiceRegMark).
 				Action().CT(true, ServiceMarkTable.GetNext(), f.dnatCtZones[ipProtocol], f.ctZoneSrcField).
 				LoadToCtMark(ConnSNATCTMark).
 				CTDone().
