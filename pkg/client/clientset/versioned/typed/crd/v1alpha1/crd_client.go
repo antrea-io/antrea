@@ -1,4 +1,4 @@
-// Copyright 2021 Antrea Authors
+// Copyright 2022 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@ import (
 type CrdV1alpha1Interface interface {
 	RESTClient() rest.Interface
 	ClusterNetworkPoliciesGetter
+	ExternalNodesGetter
 	NetworkPoliciesGetter
 	TiersGetter
 	TraceflowsGetter
@@ -37,6 +38,10 @@ type CrdV1alpha1Client struct {
 
 func (c *CrdV1alpha1Client) ClusterNetworkPolicies() ClusterNetworkPolicyInterface {
 	return newClusterNetworkPolicies(c)
+}
+
+func (c *CrdV1alpha1Client) ExternalNodes(namespace string) ExternalNodeInterface {
+	return newExternalNodes(c, namespace)
 }
 
 func (c *CrdV1alpha1Client) NetworkPolicies(namespace string) NetworkPolicyInterface {

@@ -600,3 +600,38 @@ type NamespacedName struct {
 	Name      string `json:"name,omitempty"`
 	Namespace string `json:"namespace,omitempty"`
 }
+
+// +genclient
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// ExternalNode refers to a virtual machine or a bare-metal server
+// which is not a K8s node, but has Antrea agent running on it.
+type ExternalNode struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	Spec ExternalNodeSpec `json:"spec,omitempty"`
+}
+
+// ExternalNodeSpec defines the desired state for ExternalNode.
+type ExternalNodeSpec struct {
+	// Only one network interface is supported now.
+	// Other interfaces except interfaces[0] will be ignored if there are more than one interfaces.
+	Interfaces []NetworkInterface `json:"interfaces,omitempty"`
+}
+
+type NetworkInterface struct {
+	Name string `json:"name,omitempty"`
+
+	IPs []string `json:"ips,omitempty"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+type ExternalNodeList struct {
+	metav1.TypeMeta `json:",inline"`
+	// +optional
+	metav1.ListMeta `json:"metadata,omitempty"`
+
+	Items []ExternalNode `json:"items,omitempty"`
+}
