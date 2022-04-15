@@ -1386,7 +1386,7 @@ func prepareDefaultFlows(config *testConfig) []expectTableFlows {
 			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ip", ActStr: fmt.Sprintf("ct(table=ConntrackState,zone=%s,nat)", ctZone)},
 		)
 		tableConntrackStateFlows.flows = append(tableConntrackStateFlows.flows,
-			&ofTestUtils.ExpectFlow{MatchStr: "priority=190,ct_state=+inv+trk,ip", ActStr: "drop"},
+			&ofTestUtils.ExpectFlow{MatchStr: "priority=210,ct_state=+inv+trk,ip", ActStr: "drop"},
 		)
 		tableConntrackCommitFlows.flows = append(tableConntrackCommitFlows.flows,
 			&ofTestUtils.ExpectFlow{MatchStr: "priority=210,ct_mark=0x10/0x10,ip", ActStr: fmt.Sprintf("goto_table:%s", outputStageTable)},
@@ -1431,7 +1431,7 @@ func prepareDefaultFlows(config *testConfig) []expectTableFlows {
 			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ipv6", ActStr: fmt.Sprintf("ct(table=ConntrackState,zone=%s,nat)", ctZoneV6)},
 		)
 		tableConntrackStateFlows.flows = append(tableConntrackStateFlows.flows,
-			&ofTestUtils.ExpectFlow{MatchStr: "priority=190,ct_state=+inv+trk,ipv6", ActStr: "drop"},
+			&ofTestUtils.ExpectFlow{MatchStr: "priority=210,ct_state=+inv+trk,ipv6", ActStr: "drop"},
 		)
 		tableConntrackCommitFlows.flows = append(tableConntrackCommitFlows.flows,
 			&ofTestUtils.ExpectFlow{MatchStr: "priority=210,ct_mark=0x10/0x10,ipv6", ActStr: "goto_table:Output"},
