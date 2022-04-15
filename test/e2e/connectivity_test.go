@@ -394,28 +394,46 @@ func testOVSFlowReplay(t *testing.T, data *TestData, namespace string) {
 	}
 	t.Logf("The Antrea Pod for Node '%s' is '%s'", workerNode, antreaPodName)
 
-	countFlows := func() int {
-		cmd := []string{"ovs-ofctl", "dump-flows", defaultBridgeName}
+	dumpFlows := func() []string {
+		cmd := []string{"ovs-ofctl", "dump-flows", defaultBridgeName, "--names"}
 		stdout, stderr, err := data.RunCommandFromPod(antreaNamespace, antreaPodName, ovsContainerName, cmd)
 		if err != nil {
 			t.Fatalf("error when dumping flows: <%v>, err: <%v>", stderr, err)
 		}
-		count := strings.Count(stdout, "\n")
+		flows := make([]string, 0)
+		for _, flow := range strings.Split(stdout, "\n") {
+			flow = strings.TrimSpace(flow)
+			if flow == "" {
+				continue
+			}
+			flows = append(flows, flow)
+		}
+		count := len(flows)
 		t.Logf("Counted %d flow in OVS bridge '%s' for Node '%s'", count, defaultBridgeName, workerNode)
-		return count
+		return flows
 	}
-	countGroups := func() int {
+	dumpGroups := func() []string {
 		cmd := []string{"ovs-ofctl", "dump-groups", defaultBridgeName}
 		stdout, stderr, err := data.RunCommandFromPod(antreaNamespace, antreaPodName, ovsContainerName, cmd)
 		if err != nil {
 			t.Fatalf("error when dumping groups: <%v>, err: <%v>", stderr, err)
 		}
-		count := strings.Count(stdout, "\n")
+		groups := make([]string, 0)
+		// remove first line ("NXST_GROUP_DESC reply (xid=0x2):")
+		for _, group := range strings.Split(stdout, "\n")[1:] {
+			group = strings.TrimSpace(group)
+			if group == "" {
+				continue
+			}
+			groups = append(groups, group)
+		}
+		count := len(groups)
 		t.Logf("Counted %d group in OVS bridge '%s' for Node '%s'", count, defaultBridgeName, workerNode)
-		return count
+		return groups
 	}
 
-	numFlows1, numGroups1 := countFlows(), countGroups()
+	flows1, groups1 := dumpFlows(), dumpGroups()
+	numFlows1, numGroups1 := len(flows1), len(groups1)
 
 	// This is necessary because "ovs-ctl restart" saves and restores OpenFlow flows for the
 	// bridge. An alternative may be to kill the antrea-ovs container running on that Node.
@@ -451,9 +469,20 @@ func testOVSFlowReplay(t *testing.T, data *TestData, namespace string) {
 	t.Logf("Running second ping mesh to check that flows have been restored")
 	data.runPingMesh(t, podInfos, busyboxContainerName)
 
-	numFlows2, numGroups2 := countFlows(), countGroups()
-	assert.Equal(t, numFlows1, numFlows2, "Mismatch in OVS flow count after flow replay")
-	assert.Equal(t, numGroups1, numGroups2, "Mismatch in OVS group count after flow replay")
+	flows2, groups2 := dumpFlows(), dumpGroups()
+	numFlows2, numGroups2 := len(flows2), len(groups2)
+	if !assert.Equal(t, numFlows1, numFlows2, "Mismatch in OVS flow count after flow replay") {
+		fmt.Println("Flows before replay:")
+		fmt.Println(strings.Join(flows1, "\n"))
+		fmt.Println("Flows after replay:")
+		fmt.Println(strings.Join(flows2, "\n"))
+	}
+	if !assert.Equal(t, numGroups1, numGroups2, "Mismatch in OVS group count after flow replay") {
+		fmt.Println("Groups before replay:")
+		fmt.Println(strings.Join(groups1, "\n"))
+		fmt.Println("Groups after replay:")
+		fmt.Println(strings.Join(groups2, "\n"))
+	}
 }
 
 // testPingLargeMTU verifies that fragmented ICMP packets are handled correctly.
