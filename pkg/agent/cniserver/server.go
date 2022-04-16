@@ -419,8 +419,10 @@ func (s *CNIServer) ipamCheck(cniConfig *CNIConfig) (*cnipb.CniCmdResponse, erro
 
 func (s *CNIServer) CmdAdd(ctx context.Context, request *cnipb.CniCmdRequest) (*cnipb.CniCmdResponse, error) {
 	klog.Infof("Received CmdAdd request %v", request)
+	klog.Errorf("XXX: Received CmdAdd request %v", request)
 	cniConfig, response := s.validateRequestMessage(request)
 	if response != nil {
+		klog.Errorf("Error at CNI request validation: %v", response)
 		return response, nil
 	}
 
