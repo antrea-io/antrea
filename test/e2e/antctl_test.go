@@ -36,7 +36,6 @@ type cmdAndReturnCode struct {
 // TestAntctl is the top-level test which contains all subtests for
 // Antctl related test cases as they can share setup, teardown.
 func TestAntctl(t *testing.T) {
-	skipIfHasWindowsNodes(t)
 	skipIfNotRequired(t, "mode-irrelevant")
 
 	data, err := setupTest(t)

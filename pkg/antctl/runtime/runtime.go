@@ -20,6 +20,9 @@ import (
 
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+
+	agentapiserver "antrea.io/antrea/pkg/agent/apiserver"
+	"antrea.io/antrea/pkg/util/runtime"
 )
 
 const (
@@ -53,6 +56,15 @@ func init() {
 	podName, found := os.LookupEnv("POD_NAME")
 	InPod = found && (strings.HasPrefix(podName, "antrea-agent") || strings.HasPrefix(podName, "antrea-controller") ||
 		strings.HasPrefix(podName, "flow-aggregator"))
+
+	if runtime.IsWindowsPlatform() && !InPod {
+		if _, err := os.Stat(agentapiserver.TokenPath); err == nil {
+			InPod = true
+			Mode = ModeAgent
+			return
+		}
+	}
+
 	if strings.HasPrefix(podName, "antrea-agent") {
 		Mode = ModeAgent
 	} else if strings.HasPrefix(podName, "flow-aggregator") {
