@@ -36,6 +36,75 @@ ANTREA_PKG="antrea.io/antrea"
 # https://github.com/kubernetes-sigs/gateway-api/issues/11
 ANTREA_PROTO_PKG="antrea_io.antrea"
 
+if [[ "$#" -eq 1 && $1 == "mockgen" ]]; then
+  mockgen
+  reset_year_change
+  exit 0
+fi
+
+function mockgen {
+  # Generate mocks for testing with mockgen.
+  MOCKGEN_TARGETS=(
+    "pkg/agent/cniserver/ipam IPAMDriver testing"
+    "pkg/agent/flowexporter/connections ConnTrackDumper,NetFilterConnTrack testing"
+    "pkg/agent/interfacestore InterfaceStore testing"
+    "pkg/agent/multicast RouteInterface testing"
+    "pkg/agent/nodeportlocal/portcache LocalPortOpener testing"
+    "pkg/agent/nodeportlocal/rules PodPortRules testing"
+    "pkg/agent/openflow Client,OFEntryOperations testing"
+    "pkg/agent/proxy Proxier testing"
+    "pkg/agent/querier AgentQuerier testing"
+    "pkg/agent/route Interface testing"
+    "pkg/agent/ipassigner IPAssigner testing"
+    "pkg/antctl AntctlClient ."
+    "pkg/controller/networkpolicy EndpointQuerier testing"
+    "pkg/controller/querier ControllerQuerier testing"
+    "pkg/ipfix IPFIXExportingProcess,IPFIXRegistry,IPFIXCollectingProcess,IPFIXAggregationProcess testing"
+    "pkg/ovs/openflow Bridge,Table,Flow,Action,CTAction,FlowBuilder testing"
+    "pkg/ovs/ovsconfig OVSBridgeClient testing"
+    "pkg/ovs/ovsctl OVSCtlClient testing"
+    "pkg/querier AgentNetworkPolicyInfoQuerier testing"
+    "third_party/proxy Provider testing"
+  )
+
+  # Command mockgen does not automatically replace variable YEAR with current year
+  # like others do, e.g. client-gen.
+  current_year=$(date +"%Y")
+  sed -i "s/YEAR/${current_year}/g" hack/boilerplate/license_header.raw.txt
+  for target in "${MOCKGEN_TARGETS[@]}"; do
+    read -r package interfaces mock_package <<<"${target}"
+    package_name=$(basename "${package}")
+    if [[ "${mock_package}" == "." ]]; then # generate mocks in same package as src
+        $GOPATH/bin/mockgen \
+            -copyright_file hack/boilerplate/license_header.raw.txt \
+            -destination "${package}/mock_${package_name}_test.go" \
+            -package="${package_name}" \
+            "${ANTREA_PKG}/${package}" "${interfaces}"
+    else # generate mocks in subpackage
+        $GOPATH/bin/mockgen \
+            -copyright_file hack/boilerplate/license_header.raw.txt \
+            -destination "${package}/${mock_package}/mock_${package_name}.go" \
+            -package="${mock_package}" \
+            "${ANTREA_PKG}/${package}" "${interfaces}"
+    fi
+  done
+  git checkout HEAD -- hack/boilerplate/license_header.raw.txt
+}
+
+function reset_year_change {
+  set +x
+  echo "=== Start resetting changes introduced by YEAR ==="
+  # The call to 'tac' ensures that we cannot have concurrent git processes, by
+  # waiting for the call to 'git diff  --numstat' to complete before iterating
+  # over the files and calling 'git diff ${file}'.
+  git diff  --numstat | awk '$1 == "1" && $2 == "1" {print $3}' | tac | while read file; do
+    if [[ "$(git diff ${file})" == *"-// Copyright "*" Antrea Authors"* ]]; then
+      git checkout HEAD -- "${file}"
+      echo "=== ${file} is reset ==="
+    fi
+  done
+}
+
 # Generate protobuf code for CNI gRPC service with protoc.
 protoc --go_out=plugins=grpc:. pkg/apis/cni/v1beta1/cni.proto
 
@@ -107,52 +176,7 @@ $GOPATH/bin/openapi-gen  \
   -O zz_generated.openapi \
   --go-header-file hack/boilerplate/license_header.go.txt
 
-# Generate mocks for testing with mockgen.
-MOCKGEN_TARGETS=(
-  "pkg/agent/cniserver/ipam IPAMDriver testing"
-  "pkg/agent/flowexporter/connections ConnTrackDumper,NetFilterConnTrack testing"
-  "pkg/agent/interfacestore InterfaceStore testing"
-  "pkg/agent/multicast RouteInterface testing"
-  "pkg/agent/nodeportlocal/portcache LocalPortOpener testing"
-  "pkg/agent/nodeportlocal/rules PodPortRules testing"
-  "pkg/agent/openflow Client,OFEntryOperations testing"
-  "pkg/agent/proxy Proxier testing"
-  "pkg/agent/querier AgentQuerier testing"
-  "pkg/agent/route Interface testing"
-  "pkg/agent/ipassigner IPAssigner testing"
-  "pkg/antctl AntctlClient ."
-  "pkg/controller/networkpolicy EndpointQuerier testing"
-  "pkg/controller/querier ControllerQuerier testing"
-  "pkg/ipfix IPFIXExportingProcess,IPFIXRegistry,IPFIXCollectingProcess,IPFIXAggregationProcess testing"
-  "pkg/ovs/openflow Bridge,Table,Flow,Action,CTAction,FlowBuilder testing"
-  "pkg/ovs/ovsconfig OVSBridgeClient testing"
-  "pkg/ovs/ovsctl OVSCtlClient testing"
-  "pkg/querier AgentNetworkPolicyInfoQuerier testing"
-  "third_party/proxy Provider testing"
-)
-
-# Command mockgen does not automatically replace variable YEAR with current year
-# like others do, e.g. client-gen.
-current_year=$(date +"%Y")
-sed -i "s/YEAR/${current_year}/g" hack/boilerplate/license_header.raw.txt
-for target in "${MOCKGEN_TARGETS[@]}"; do
-  read -r package interfaces mock_package <<<"${target}"
-  package_name=$(basename "${package}")
-  if [[ "${mock_package}" == "." ]]; then # generate mocks in same package as src
-      $GOPATH/bin/mockgen \
-          -copyright_file hack/boilerplate/license_header.raw.txt \
-          -destination "${package}/mock_${package_name}_test.go" \
-          -package="${package_name}" \
-          "${ANTREA_PKG}/${package}" "${interfaces}"
-  else # generate mocks in subpackage
-      $GOPATH/bin/mockgen \
-          -copyright_file hack/boilerplate/license_header.raw.txt \
-          -destination "${package}/${mock_package}/mock_${package_name}.go" \
-          -package="${mock_package}" \
-          "${ANTREA_PKG}/${package}" "${interfaces}"
-  fi
-done
-git checkout HEAD -- hack/boilerplate/license_header.raw.txt
+mockgen
 
 # Download vendored modules to the vendor directory so it's easier to
 # specify the search path of required protobuf files.
@@ -173,15 +197,4 @@ $GOPATH/bin/go-to-protobuf \
   --go-header-file hack/boilerplate/license_header.go.txt
 rm -rf /tmp/includes
 
-set +x
-
-echo "=== Start resetting changes introduced by YEAR ==="
-# The call to 'tac' ensures that we cannot have concurrent git processes, by
-# waiting for the call to 'git diff  --numstat' to complete before iterating
-# over the files and calling 'git diff ${file}'.
-git diff  --numstat | awk '$1 == "1" && $2 == "1" {print $3}' | tac | while read file; do
-  if [[ "$(git diff ${file})" == *"-// Copyright "*" Antrea Authors"* ]]; then
-    git checkout HEAD -- "${file}"
-    echo "=== ${file} is reset ==="
-  fi
-done
+reset_year_change
