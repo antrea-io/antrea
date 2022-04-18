@@ -356,8 +356,7 @@ func (o *Options) validateAntreaIPAMConfig() error {
 		return nil
 	}
 	if !features.DefaultFeatureGate.Enabled(features.AntreaIPAM) {
-		klog.InfoS("The enableBridgingMode option is set to true, but it will be ignored because the AntreaIPAM feature gate is disabled")
-		return nil
+		return fmt.Errorf("AntreaIPAM feature gate must be enabled to configure bridging mode")
 	}
 	// Bridging mode will connect uplink to OVS bridge, which is not compatible with OVSDatapathSystem 'netdev'.
 	if o.config.OVSDatapathType != string(ovsconfig.OVSDatapathSystem) {
