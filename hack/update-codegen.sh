@@ -29,4 +29,4 @@ function docker_run() {
 		"${IMAGE_NAME}" "$@"
 }
 
-docker_run hack/update-codegen-dockerized.sh
+docker_run hack/update-codegen-dockerized.sh "$@"
