@@ -230,4 +230,69 @@ var _ = Describe("ServiceExport controller", func() {
 			return apierrors.IsNotFound(err)
 		}, timeout, interval).Should(BeTrue())
 	})
+
+	It("Should update existing ServiceExport status when corresponding Service is removed", func() {
+		By("By deleting a Service")
+		svc := &corev1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "nginx-svc-deleted",
+				Namespace: testNamespace,
+			},
+			Spec: svcSpec,
+		}
+		ep := &corev1.Endpoints{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "nginx-svc-deleted",
+				Namespace: testNamespace,
+			},
+			Subsets: []corev1.EndpointSubset{
+				{
+					Addresses: []corev1.EndpointAddress{
+						{
+							IP:       "192.168.170.11",
+							Hostname: "pod1",
+						},
+					},
+					Ports: epPorts,
+				},
+			},
+		}
+		svcResExportName := LocalClusterID + "-" + svc.Namespace + "-" + svc.Name + "-service"
+		epResExportName := LocalClusterID + "-" + ep.Namespace + "-" + ep.Name + "-endpoints"
+
+		svcExportDeletedService := &k8smcsv1alpha1.ServiceExport{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "nginx-svc-deleted",
+				Namespace: testNamespace,
+			},
+		}
+		Expect(k8sClient.Create(ctx, svc)).Should(Succeed())
+		Expect(k8sClient.Create(ctx, ep)).Should(Succeed())
+		Expect(k8sClient.Create(ctx, svcExportDeletedService)).Should(Succeed())
+		time.Sleep(2 * time.Second)
+
+		err := k8sClient.Delete(ctx, svc)
+		Expect(err).ToNot(HaveOccurred())
+		time.Sleep(2 * time.Second)
+
+		latestsvcExportDeletedService := &k8smcsv1alpha1.ServiceExport{}
+		err = k8sClient.Get(ctx, types.NamespacedName{
+			Namespace: svcExportDeletedService.Namespace,
+			Name:      svcExportDeletedService.Name,
+		}, latestsvcExportDeletedService)
+		Expect(err).ToNot(HaveOccurred())
+		conditions := latestsvcExportDeletedService.Status.Conditions
+		Expect(len(conditions)).Should(Equal(1))
+		Expect(*conditions[0].Message).Should(Equal("the Service does not exist"))
+
+		resExp := &mcsv1alpha1.ResourceExport{}
+		Eventually(func() bool {
+			err = k8sClient.Get(ctx, types.NamespacedName{Namespace: LeaderNamespace, Name: svcResExportName}, resExp)
+			return apierrors.IsNotFound(err)
+		}, timeout, interval).Should(BeTrue())
+		Eventually(func() bool {
+			err = k8sClient.Get(ctx, types.NamespacedName{Namespace: LeaderNamespace, Name: epResExportName}, resExp)
+			return apierrors.IsNotFound(err)
+		}, timeout, interval).Should(BeTrue())
+	})
 })

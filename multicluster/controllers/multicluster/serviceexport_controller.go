@@ -185,41 +185,43 @@ func (r *ServiceExportReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	r.leaderNamespace = remoteCluster.GetNamespace()
 	r.leaderClusterID = string(remoteCluster.GetClusterID())
 
-	svc := &corev1.Service{}
-	if err := r.Client.Get(ctx, req.NamespacedName, &svcExport); err != nil {
-		klog.V(2).ErrorS(err, "Unable to fetch ServiceExport", "serviceexport", req.String())
-		if !apierrors.IsNotFound(err) {
-			return ctrl.Result{}, err
-		}
+	cleanup := func() error {
 		if svcInstalled {
 			err = r.handleServiceDeleteEvent(ctx, req, remoteCluster)
 			if err != nil {
-				return ctrl.Result{}, err
+				return err
 			}
 			r.installedSvcs.Delete(svcObj)
 		}
-
 		if epInstalled {
 			err = r.handleEndpointDeleteEvent(ctx, req, remoteCluster)
 			if err != nil {
-				return ctrl.Result{}, err
+				return err
 			}
 			r.installedEps.Delete(epObj)
+		}
+		return nil
+	}
+
+	if err := r.Client.Get(ctx, req.NamespacedName, &svcExport); err != nil {
+		if !apierrors.IsNotFound(err) {
+			klog.ErrorS(err, "Unable to fetch ServiceExport", "serviceexport", req.String())
+			return ctrl.Result{}, err
+		}
+		if err := cleanup(); err != nil {
+			return ctrl.Result{}, err
 		}
 		return ctrl.Result{}, nil
 	}
 
 	// if corresponding Service doesn't exist, update ServiceExport's status reason to not_found_service,
 	// and clean up remote ResourceExport if it's an installed Service.
+	svc := &corev1.Service{}
 	err = r.Client.Get(ctx, req.NamespacedName, svc)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			if svcInstalled {
-				err = r.handleServiceDeleteEvent(ctx, req, remoteCluster)
-				if err != nil {
-					return ctrl.Result{}, err
-				}
-				r.installedSvcs.Delete(svcObj)
+			if err := cleanup(); err != nil {
+				return ctrl.Result{}, err
 			}
 			err = r.updateSvcExportStatus(ctx, req, notFound)
 			if err != nil {
