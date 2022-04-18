@@ -126,6 +126,7 @@ const (
 
 	nginxLBService = "nginx-loadbalancer"
 
+	exporterFlowPollInterval            = 1 * time.Second
 	exporterActiveFlowExportTimeout     = 2 * time.Second
 	exporterIdleFlowExportTimeout       = 1 * time.Second
 	aggregatorActiveFlowRecordTimeout   = 3500 * time.Millisecond
@@ -694,7 +695,7 @@ func (data *TestData) enableAntreaFlowExporter(ipfixCollector string) error {
 	// Enable flow exporter feature and add related config params to antrea agent configmap.
 	ac := func(config *agentconfig.AgentConfig) {
 		config.FeatureGates["FlowExporter"] = true
-		config.FlowPollInterval = "1s"
+		config.FlowPollInterval = exporterFlowPollInterval.String()
 		config.ActiveFlowExportTimeout = exporterActiveFlowExportTimeout.String()
 		config.IdleFlowExportTimeout = exporterIdleFlowExportTimeout.String()
 		if ipfixCollector != "" {

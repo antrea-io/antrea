@@ -70,7 +70,20 @@ func (cs *connectionStore) ForAllConnectionsDo(callback flowexporter.ConnectionM
 	for k, v := range cs.connections {
 		err := callback(k, v)
 		if err != nil {
-			klog.Errorf("Callback execution failed for flow with key: %v, conn: %v, k, v: %v", k, v, err)
+			klog.ErrorS(err, "Callback execution failed for flow", "key", k, "conn", v)
+			return err
+		}
+	}
+	return nil
+}
+
+// ForAllConnectionsDoWithoutLock execute the callback for each connection in connection
+// map, without grabbing the lock. Caller is expected to grab lock.
+func (cs *connectionStore) ForAllConnectionsDoWithoutLock(callback flowexporter.ConnectionMapCallBack) error {
+	for k, v := range cs.connections {
+		err := callback(k, v)
+		if err != nil {
+			klog.ErrorS(err, "Callback execution failed for flow", "key", k, "conn", v)
 			return err
 		}
 	}
