@@ -3487,7 +3487,7 @@ data:
                 "containers" : [
                   {
                     "name": "clickhouse",
-                    "image": "projects.registry.vmware.com/antrea/flow-visibility-clickhouse-server:21.3",
+                    "image": "projects.registry.vmware.com/antrea/flow-visibility-clickhouse-server:21.11",
                     "ports": [
                       {
                         "name": "http",
