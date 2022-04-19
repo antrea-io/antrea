@@ -86,6 +86,7 @@ time vagrant up --provision
 echo "Writing Vagrant ssh config to file"
 vagrant ssh-config > ssh-config
 
+chmod 0600 "$THIS_DIR/playbook/kube/config"
 # TODO: use Kubeconfig contexts to add new cluster to existing Kubeconfig file
 echo "******************************"
 echo "Kubeconfig file written to $THIS_DIR/playbook/kube/config"
