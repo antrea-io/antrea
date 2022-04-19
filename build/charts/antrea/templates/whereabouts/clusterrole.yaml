@@ -1,0 +1,22 @@
+{{- if .Values.whereabouts.enable }}
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: antrea-agent-whereabouts
+  labels:
+    app: antrea
+rules:
+  - apiGroups:
+      - whereabouts.cni.cncf.io
+    resources:
+      - ippools
+    verbs:
+      - get
+      - put
+      - watch
+      - list
+      - update
+      - patch
+      - create
+      - delete
+{{- end }}

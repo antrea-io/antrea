@@ -1,0 +1,14 @@
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: antrea-agent
+  labels:
+    app: antrea
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: antrea-agent
+subjects:
+  - kind: ServiceAccount
+    name: antrea-agent
+    namespace: {{ .Release.Namespace }}
