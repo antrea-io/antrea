@@ -1,0 +1,3 @@
+trafficEncryptionMode: "ipsec"
+# change the tunnel type to GRE which works better with IPsec encryption than other types.
+tunnelType: "gre"

@@ -1,0 +1,26 @@
+{
+    "cniVersion":"0.3.0",
+    "name": "antrea",
+    "plugins": [
+        {
+            "type": "antrea",
+            "ipam": {
+                "type": "host-local"
+            }
+        }
+        {{- if .Values.cni.plugins.portmap }}
+        ,
+        {
+            "type": "portmap",
+            "capabilities": {"portMappings": true}
+        }
+        {{- end }}
+        {{- if .Values.cni.plugins.bandwidth }}
+        ,
+        {
+            "type": "bandwidth",
+            "capabilities": {"bandwidth": true}
+        }
+        {{- end }}
+    ]
+}

@@ -1,0 +1,263 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: clustergroups.crd.antrea.io
+  labels:
+    app: antrea
+spec:
+  group: crd.antrea.io
+  versions:
+    - name: v1alpha2
+      served: true
+      storage: false
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                childGroups:
+                  type: array
+                  items:
+                    type: string
+                podSelector:
+                  type: object
+                  properties:
+                    matchExpressions:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          key:
+                            type: string
+                          operator:
+                            enum:
+                              - In
+                              - NotIn
+                              - Exists
+                              - DoesNotExist
+                            type: string
+                          values:
+                            type: array
+                            items:
+                              type: string
+                              pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
+                    matchLabels:
+                      x-kubernetes-preserve-unknown-fields: true
+                namespaceSelector:
+                  type: object
+                  properties:
+                    matchExpressions:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          key:
+                            type: string
+                          operator:
+                            enum:
+                              - In
+                              - NotIn
+                              - Exists
+                              - DoesNotExist
+                            type: string
+                          values:
+                            type: array
+                            items:
+                              type: string
+                              pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
+                    matchLabels:
+                      x-kubernetes-preserve-unknown-fields: true
+                externalEntitySelector:
+                  type: object
+                  properties:
+                    matchExpressions:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          key:
+                            type: string
+                          operator:
+                            enum:
+                              - In
+                              - NotIn
+                              - Exists
+                              - DoesNotExist
+                            type: string
+                          values:
+                            type: array
+                            items:
+                              type: string
+                              pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
+                    matchLabels:
+                      x-kubernetes-preserve-unknown-fields: true
+                ipBlock:
+                  type: object
+                  properties:
+                    cidr:
+                      type: string
+                      format: cidr
+                ipBlocks:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      cidr:
+                        type: string
+                        format: cidr
+                serviceReference:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                    namespace:
+                      type: string
+            status:
+              type: object
+              properties:
+                conditions:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      type:
+                        type: string
+                      status:
+                        type: string
+                      lastTransitionTime:
+                        type: string
+    - name: v1alpha3
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                childGroups:
+                  type: array
+                  items:
+                    type: string
+                podSelector:
+                  type: object
+                  properties:
+                    matchExpressions:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          key:
+                            type: string
+                          operator:
+                            enum:
+                              - In
+                              - NotIn
+                              - Exists
+                              - DoesNotExist
+                            type: string
+                          values:
+                            type: array
+                            items:
+                              type: string
+                              pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
+                    matchLabels:
+                      x-kubernetes-preserve-unknown-fields: true
+                namespaceSelector:
+                  type: object
+                  properties:
+                    matchExpressions:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          key:
+                            type: string
+                          operator:
+                            enum:
+                              - In
+                              - NotIn
+                              - Exists
+                              - DoesNotExist
+                            type: string
+                          values:
+                            type: array
+                            items:
+                              type: string
+                              pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
+                    matchLabels:
+                      x-kubernetes-preserve-unknown-fields: true
+                externalEntitySelector:
+                  type: object
+                  properties:
+                    matchExpressions:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          key:
+                            type: string
+                          operator:
+                            enum:
+                              - In
+                              - NotIn
+                              - Exists
+                              - DoesNotExist
+                            type: string
+                          values:
+                            type: array
+                            items:
+                              type: string
+                              pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
+                    matchLabels:
+                      x-kubernetes-preserve-unknown-fields: true
+                ipBlocks:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      cidr:
+                        type: string
+                        format: cidr
+                serviceReference:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                    namespace:
+                      type: string
+            status:
+              type: object
+              properties:
+                conditions:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      type:
+                        type: string
+                      status:
+                        type: string
+                      lastTransitionTime:
+                        type: string
+      subresources:
+        status: {}
+  conversion:
+    strategy: Webhook
+    webhook:
+      conversionReviewVersions: ["v1", "v1beta1"]
+      clientConfig:
+        service:
+          name: "antrea"
+          namespace: "kube-system"
+          path: "/convert/clustergroup"
+  scope: Cluster
+  names:
+    plural: clustergroups
+    singular: clustergroup
+    kind: ClusterGroup
+    shortNames:
+      - cg

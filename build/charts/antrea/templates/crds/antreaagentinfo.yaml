@@ -1,0 +1,52 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: antreaagentinfos.crd.antrea.io
+  labels:
+    app: antrea
+spec:
+  group: crd.antrea.io
+  versions:
+    - name: v1beta1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          x-kubernetes-preserve-unknown-fields: true
+      additionalPrinterColumns:
+        - description: Health status of this Agent
+          jsonPath: ".agentConditions[?(@.type=='AgentHealthy')].status"
+          name: Healthy
+          type: string
+        - description: Last time the Healthy Condition was updated
+          jsonPath: ".agentConditions[?(@.type=='AgentHealthy')].lastHeartbeatTime"
+          name: Last Heartbeat
+          type: date
+        - description: Version of this Agent
+          jsonPath: ".version"
+          name: Version
+          type: string
+          priority: 1
+        - description: Node on which this Agent is running
+          jsonPath: ".nodeRef.name"
+          name: Node
+          type: string
+          priority: 1
+        - description: Number of local Pods managed by this Agent
+          jsonPath: ".localPodNum"
+          name: Num Pods
+          type: integer
+          priority: 2
+        - description: Subnets used by this Agent for Pod IPAM
+          jsonPath: ".nodeSubnets"
+          name: Subnets
+          type: string
+          priority: 2
+  scope: Cluster
+  names:
+    plural: antreaagentinfos
+    singular: antreaagentinfo
+    kind: AntreaAgentInfo
+    shortNames:
+      - aai

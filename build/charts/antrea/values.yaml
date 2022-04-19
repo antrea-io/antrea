@@ -1,0 +1,266 @@
+# -- Container image to use for Antrea components.
+image:
+  repository: "projects.registry.vmware.com/antrea/antrea-ubuntu"
+  pullPolicy: "IfNotPresent"
+  tag: "latest"
+
+# -- Determines how traffic is encapsulated. It must be one of "encap",
+# "noEncap", "hybrid", or "networkPolicyOnly".
+trafficEncapMode: "encap"
+# -- Tunnel protocol used for encapsulating traffic across Nodes. It must be one
+# of "geneve", "vxlan", "gre", "stt".
+tunnelType: "geneve"
+# -- Determines how tunnel traffic is encrypted. Currently encryption only works
+# with encap mode.It must be one of "none", "ipsec", "wireGuard".
+trafficEncryptionMode: "none"
+# -- Enable bridging mode of Pod network on Nodes, in which the Node's transport
+# interface is connected to the OVS bridge.
+enableBridgingMode: false
+# -- Whether or not to SNAT (using the Node IP) the egress traffic from a Pod to
+# the external network.
+noSNAT: false
+# -- Name of the interface antrea-agent will create and use for host <-> Pod
+# communication.
+hostGateway: "antrea-gw0"
+# -- Name of the interface on Node which is used for tunneling or routing the
+# traffic across Nodes.
+transportInterface: ""
+# -- Network CIDRs of the interface on Node which is used for tunneling or
+# routing the traffic across Nodes.
+transportInterfaceCIDRs: []
+# -- Names of the interfaces on Nodes that are used to forward multicast traffic.
+multicastInterfaces: []
+# -- Default MTU to use for the host gateway interface and the network interface
+# of each Pod. By default, antrea-agent will discover the MTU of the Node's
+# primary interface and adjust it to accommodate for tunnel encapsulation
+# overhead if applicable.
+defaultMTU: 0
+
+ovs:
+  # -- Name of the OVS bridge antrea-agent will create and use.
+  bridgeName: "br-int"
+  # -- Enable hardware offload for the OVS bridge (required additional
+  # configuration).
+  hwOffload: false
+
+wireGuard:
+  # -- Port for WireGuard to send and receive traffic.
+  port: 51820
+
+ipsec:
+  # -- Preshared Key (PSK) for IKE authentication. It will be stored in a secret
+  # and passed to antrea-agent as an environment variable.
+  psk: "changeme"
+
+egress:
+  # -- CIDR ranges to which outbound Pod traffic will not be SNAT'd by Egresses.
+  exceptCIDRs: []
+
+nodePortLocal:
+  # -- Enable the NodePortLocal feature.
+  enable: false
+  # -- Port range used by NodePortLocal when creating Pod port mappings.
+  portRange: "61000-62000"
+
+antreaProxy:
+  # -- Proxy all Service traffic, for all Service types, regardless of where it
+  # comes from.
+  proxyAll: false
+  # -- String array of values which specifies the host IPv4/IPv6 addresses for
+  # NodePort. By default, all host addresses are used.
+  nodePortAddresses: []
+  ## -- List of Services which should be ignored by AntreaProxy.
+  skipServices: []
+  # -- When set to false, AntreaProxy no longer load-balances traffic destined
+  # to the External IPs of LoadBalancer Services.
+  proxyLoadBalancerIPs: true
+
+nodeIPAM:
+  # -- Enable Node IPAM in Antrea
+  enable: false
+  # -- CIDR ranges to use when allocating Pod IP addresses.
+  clusterCIDRs: []
+  # -- IPv4 CIDR ranges reserved for Services.
+  serviceCIDR: ""
+  # -- IPv6 CIDR ranges reserved for Services.
+  serviceCIDRv6: ""
+  # -- Mask size for IPv4 Node CIDR in IPv4 or dual-stack cluster.
+  nodeCIDRMaskSizeIPv4: 24
+  # -- Mask size for IPv6 Node CIDR in IPv6 or dual-stack cluster.
+  nodeCIDRMaskSizeIPv6: 64
+
+# -- Address of Kubernetes apiserver, to override any value provided in
+# kubeconfig or InClusterConfig.
+kubeAPIServerOverride: ""
+# -- IPv4 CIDR range used for Services. Required when AntreaProxy is disabled.
+serviceCIDR: ""
+# -- IPv6 CIDR range used for Services. Required when AntreaProxy is disabled.
+serviceCIDRv6: ""
+
+# -- Comma-separated list of cipher suites that will be used by the Antrea
+# APIservers. If empty, the default Go Cipher Suites will be used. See
+# https://golang.org/pkg/crypto/tls/#pkg-constants.
+tlsCipherSuites: ""
+# -- TLS min version from: VersionTLS10, VersionTLS11, VersionTLS12,
+# VersionTLS13.
+tlsMinVersion: ""
+
+# -- To explicitly enable or disable a FeatureGate and bypass the Antrea
+# defaults, add an entry to the dictionary with the FeatureGate's name as the
+# key and a boolean as the value.
+featureGates: {}
+
+agent:
+  # -- Port for the antrea-agent APIServer to serve on.
+  apiPort: 10350
+  # -- Enable metrics exposure via Prometheus.
+  enablePrometheusMetrics: true
+  # -- Annotations to be added to antrea-agent Pods.
+  podAnnotations: {}
+  # -- Labels to be added to antrea-agent Pods.
+  podLabels: {}
+  # -- Tolerations for the antrea-agent Pods.
+  tolerations:
+    # Mark it as a critical add-on.
+    - key: CriticalAddonsOnly
+      operator: Exists
+    # Make sure it gets scheduled on all Nodes.
+    - effect: NoSchedule
+      operator: Exists
+    # Make sure it doesn't get evicted.
+    - effect: NoExecute
+      operator: Exists
+  # -- Node selector for the antrea-agent Pods.
+  nodeSelector:
+    kubernetes.io/os: linux
+  # -- Prority class to use for the antrea-agent Pods.
+  priorityClassName: "system-node-critical"
+  # -- Affinity for the antrea-agent Pods.
+  affinity: {}
+  # -- DNS Policy for the antrea-agent Pods.
+  dnsPolicy: "ClusterFirstWithHostNet"
+  # -- Update strategy for the antrea-agent DaemonSet.
+  updateStrategy:
+    type: RollingUpdate
+  # -- Additional volumes for antrea-agent Pods.
+  extraVolumes: []
+  installCNI:
+    # -- Resource requests and limits for the install-cni initContainer.
+    resources:
+      requests:
+        cpu: "100m"
+  antreaAgent:
+    # -- Extra environment variables to be injected into antrea-agent.
+    extraEnv: {}
+    # -- Max size in MBs of any single log file.
+    logFileMaxSize: 100
+    # -- Max number of log files.
+    logFileMaxNum: 4
+    # -- Extra command-line arguments for antrea-agent.
+    extraArgs: []
+    # -- Additional volumeMounts for the antrea-agent container.
+    extraVolumeMounts: []
+    # -- Resource requests and limits for the antrea-agent container.
+    resources:
+      requests:
+        cpu: "200m"
+  antreaOVS:
+    # -- Max size in MBs of any single log file.
+    logFileMaxSize: 100
+    # -- Max number of log files.
+    logFileMaxNum: 4
+    # -- Extra command-line arguments for antrea-ovs.
+    extraArgs: []
+    # -- Resource requests and limits for the antrea-ovs container.
+    resources:
+      requests:
+        cpu: "200m"
+  antreaIPsec:
+    # -- Resource requests and limits for the antrea-ipsec container (when IPsec
+    # is enabled).
+    resources:
+      requests:
+        cpu: "50m"
+
+controller:
+  # -- Port for the antrea-controller APIServer to serve on.
+  apiPort: 10349
+  # -- Enable metrics exposure via Prometheus.
+  enablePrometheusMetrics: true
+  # -- Annotations to be added to antrea-controller Pod.
+  podAnnotations: {}
+  # -- Labels to be added to antrea-controller Pod.
+  podLabels: {}
+  # -- Indicates whether to use auto-generated self-signed TLS certificates. If
+  # false, a Secret named "antrea-controller-tls" must be provided with the
+  # following keys: ca.crt, tls.crt, tls.key.
+  selfSignedCert: true
+  # -- Tolerations for the antrea-controller Pod.
+  tolerations:
+    # Mark it as a critical add-on.
+    - key: CriticalAddonsOnly
+      operator: Exists
+    # Allow it to schedule onto master nodes.
+    - key: node-role.kubernetes.io/master
+      effect: NoSchedule
+  # -- Node selector for the antrea-controller Pod.
+  nodeSelector:
+    kubernetes.io/os: linux
+  # -- Prority class to use for the antrea-controller Pod.
+  priorityClassName: "system-cluster-critical"
+  # -- Affinity for the antrea-controller Pod.
+  affinity: {}
+  antreaController:
+    # -- Extra environment variables to be injected into antrea-controller.
+    extraEnv: {}
+    # -- Max size in MBs of any single log file.
+    logFileMaxSize: 100
+    # -- Max number of log files.
+    logFileMaxNum: 4
+    # -- Extra command-line arguments for antrea-controller.
+    extraArgs: []
+    # -- Resource requests and limits for the antrea-controller container.
+    resources:
+      requests:
+        cpu: "200m"
+
+flowCollector:
+  # -- IPFIX collector address as a string with format <HOST>:[<PORT>][:<PROTO>].
+  collectorAddr: "flow-aggregator.flow-aggregator.svc:4739:tls"
+  # -- Determines how often the flow exporter polls for new connections.
+  flowPollInterval: "5s"
+  # -- timeout after which a flow record is sent to the collector for active
+  # flows.
+  activeFlowExportTimeout: "5s"
+  # -- timeout after which a flow record is sent to the collector for idle
+  # flows.
+  idleFlowExportTimeout: "15s"
+
+cni:
+  # -- Chained plugins to use alongside antrea-cni.
+  plugins:
+    portmap: true
+    bandwidth: true
+  # -- Installation path of CNI binaries on the host.
+  hostBinPath: "/opt/cni/bin"
+  # -- CNI binaries shipped with Antrea for which installation should be
+  # skipped.
+  skipBinaries: []
+
+webhooks:
+  labelsMutator:
+    ## -- Mutate all namespaces to add the "antrea.io/metadata.name" label.
+    enable: false
+
+## -- Global log verbosity switch for all Antrea components.
+logVerbosity: 0
+
+## -- Install and configure Whereabouts, for use by the antrea-agent.
+whereabouts:
+  enable: false
+
+testing:
+  ## -- enable code coverage measurement (used when testing Antrea only).
+  coverage: false
+  simulator:
+    enable: false

@@ -1,0 +1,57 @@
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: antctl
+  labels:
+    app: antrea
+rules:
+  - apiGroups:
+      - controlplane.antrea.io
+    resources:
+      - networkpolicies
+      - appliedtogroups
+      - addressgroups
+    verbs:
+      - get
+      - list
+  - apiGroups:
+      - stats.antrea.io
+    resources:
+      - networkpolicystats
+      - antreaclusternetworkpolicystats
+      - antreanetworkpolicystats
+    verbs:
+      - get
+      - list
+  - apiGroups:
+      - system.antrea.io
+    resources:
+      - controllerinfos
+      - agentinfos
+    verbs:
+      - get
+  - apiGroups:
+      - system.antrea.io
+    resources:
+      - supportbundles
+    verbs:
+      - get
+      - post
+  - apiGroups:
+      - system.antrea.io
+    resources:
+      - supportbundles/download
+    verbs:
+      - get
+  - nonResourceURLs:
+      - /agentinfo
+      - /addressgroups
+      - /appliedtogroups
+      - /loglevel
+      - /networkpolicies
+      - /ovsflows
+      - /ovstracing
+      - /podinterfaces
+      - /featuregates
+    verbs:
+      - get
