@@ -1,4 +1,4 @@
-// Copyright 2021 Antrea Authors
+// Copyright 2022 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,6 +28,10 @@ type FakeCrdV1alpha1 struct {
 
 func (c *FakeCrdV1alpha1) ClusterNetworkPolicies() v1alpha1.ClusterNetworkPolicyInterface {
 	return &FakeClusterNetworkPolicies{c}
+}
+
+func (c *FakeCrdV1alpha1) ExternalNodes(namespace string) v1alpha1.ExternalNodeInterface {
+	return &FakeExternalNodes{c, namespace}
 }
 
 func (c *FakeCrdV1alpha1) NetworkPolicies(namespace string) v1alpha1.NetworkPolicyInterface {
