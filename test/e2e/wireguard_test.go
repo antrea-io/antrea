@@ -21,6 +21,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 
@@ -103,6 +104,63 @@ func testPodConnectivity(t *testing.T, data *TestData) {
 	defer deletePods()
 	numPods := 2
 	data.runPingMesh(t, podInfos[:numPods], agnhostContainerName)
+
+	// Make sure that route to Pod on peer Node and route to peer gateway is targeting the WireGuard device.
+	srcPod, err := data.getAntreaPodOnNode(nodeName(0))
+	require.NoError(t, err)
+	var srcIP, peerGatewayIP, peerPodIP string
+	ipv4, ipv6 := nodeGatewayIPs(0)
+	if ipv4 != "" {
+		srcIP = ipv4
+	} else {
+		srcIP = ipv6
+	}
+	ipv4, ipv6 = nodeGatewayIPs(1)
+	if ipv4 != "" {
+		peerGatewayIP = ipv4
+	} else {
+		peerGatewayIP = ipv6
+	}
+	podIPs := waitForPodIPs(t, data, podInfos)
+	for _, pi := range podInfos {
+		if pi.os == "linux" && pi.nodeName != nodeName(0) {
+			if podIPs[pi.name].ipv4 != nil {
+				peerPodIP = podIPs[pi.name].ipv4.String()
+			} else {
+				peerPodIP = podIPs[pi.name].ipv6.String()
+			}
+			break
+		}
+	}
+
+	tests := []struct {
+		name               string
+		dstIP              string
+		expectedDeviceName string
+		expectedSrcIP      string
+	}{
+		{
+			name:               "routeToPodOnPeerNode",
+			dstIP:              peerPodIP,
+			expectedDeviceName: "antrea-wg0",
+			expectedSrcIP:      srcIP,
+		},
+		{
+			name:               "routeToPeerGateway",
+			dstIP:              peerGatewayIP,
+			expectedDeviceName: "antrea-wg0",
+			expectedSrcIP:      srcIP,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cmd := []string{"ip", "route", "get", tt.dstIP}
+			stdout, _, err := data.RunCommandFromPod(antreaNamespace, srcPod, agentContainerName, cmd)
+			require.NoError(t, err)
+			assert.Contains(t, stdout, tt.expectedDeviceName)
+			assert.Contains(t, stdout, tt.expectedSrcIP)
+		})
+	}
 }
 
 // testServiceConnectivity verifies host-to-service can be transferred through the encrypted tunnel correctly.
