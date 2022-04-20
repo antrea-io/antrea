@@ -205,19 +205,10 @@ jobs:
       uses: actions/checkout@v3
     - name: Run verify scripts
       run: make verify
-    - name: Checking for broken Markdown links for main branch
-      if: ${{ github.base_ref == 'main' }}
+    - name: Checking for broken Markdown links
       uses: gaurav-nelson/github-action-markdown-link-check@v1
       with:
-        check-modified-files-only: yes
-        folder-path: './docs'
-        file-path: './README.md, ./CHANGELOG.md, ./CONTRIBUTING.md, ./GOVERNANCE.md, ./MAINTAINERS.md, ./ROADMAP.md, ./SECURITY.md'
-        config-file: 'hack/.md_links_config.json'
-    - name: Checking for broken Markdown links for release branch
-      if: ${{ startsWith(github.base_ref, 'release-') }}
-      uses: gaurav-nelson/github-action-markdown-link-check@v1
-      with:
-        # Check modified files only as there may be stale links in previous CHANGELOGs and markdown files.
+        # Check modified files only for pull requests. Cronjob "Verify docs" takes care of checking all markdown files.
         check-modified-files-only: yes
         base-branch: ${{ github.base_ref }}
         config-file: 'hack/.md_links_config.json'
