@@ -310,7 +310,7 @@ func (c *client) l3FwdFlowToRemoteViaRouting(localGatewayMAC net.HardwareAddr, r
 			Action().GotoTable(conntrackCommitTable).
 			Cookie(c.cookieAllocator.Request(category).Raw()).
 			Done()}
-		flows = append(flows, c.l3FwdFlowToRemoteViaGW(remoteGatewayMAC, *peerPodCIDR, category))
+		flows = append(flows, c.l3FwdFlowToRemoteViaUplink(remoteGatewayMAC, *peerPodCIDR, category))
 		return flows
 	}
 	return []binding.Flow{c.l3FwdFlowToRemoteViaGW(localGatewayMAC, *peerPodCIDR, category)}
