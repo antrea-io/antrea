@@ -35,9 +35,10 @@ var (
 	}
 )
 
-// toAntreaServicesForCRD converts a slice of v1alpha1.NetworkPolicyPort
-// objects to a slice of Antrea Service objects. A bool is returned along with
-// the Service objects to indicate whether any named port exists.
+// toAntreaServicesForCRD converts a slice of v1alpha1.NetworkPolicyPort objects
+// and a slice of v1alpha1.NetworkPolicyProtocol objects to a slice of Antrea
+// Service objects. A bool is returned along with the Service objects to indicate
+// whether any named port exists.
 func toAntreaServicesForCRD(npPorts []v1alpha1.NetworkPolicyPort, npProtocols []v1alpha1.NetworkPolicyProtocol) ([]controlplane.Service, bool) {
 	var antreaServices []controlplane.Service
 	var namedPortExists bool

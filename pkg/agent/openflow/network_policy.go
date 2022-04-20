@@ -841,12 +841,12 @@ func (c *clause) addAddrFlows(featureNetworkPolicy *featureNetworkPolicy, addrTy
 	return conjMatchFlowContextChanges
 }
 
-// addServiceFlows translates the specified NetworkPolicyPorts to conjunctiveMatchFlow, and returns corresponding
-// conjMatchFlowContextChange.
-func (c *clause) addServiceFlows(featureNetworkPolicy *featureNetworkPolicy, ports []v1beta2.Service, priority *uint16, matchSrc bool) []*conjMatchFlowContextChange {
+// addServiceFlows translates the specified Antrea Service to conjunctiveMatchFlow,
+// and returns corresponding conjMatchFlowContextChange.
+func (c *clause) addServiceFlows(featureNetworkPolicy *featureNetworkPolicy, services []v1beta2.Service, priority *uint16, matchSrc bool) []*conjMatchFlowContextChange {
 	var conjMatchFlowContextChanges []*conjMatchFlowContextChange
-	for _, port := range ports {
-		matches := generateServiceConjMatches(c.ruleTable.GetID(), port, priority, featureNetworkPolicy.ipProtocols, matchSrc)
+	for _, service := range services {
+		matches := generateServiceConjMatches(c.ruleTable.GetID(), service, priority, featureNetworkPolicy.ipProtocols, matchSrc)
 		for _, match := range matches {
 			ctxChange := c.addConjunctiveMatchFlow(featureNetworkPolicy, match)
 			conjMatchFlowContextChanges = append(conjMatchFlowContextChanges, ctxChange)
