@@ -27,6 +27,7 @@ import (
 type CrdV1alpha1Interface interface {
 	RESTClient() rest.Interface
 	ClusterNetworkPoliciesGetter
+	ExternalNodesGetter
 	NetworkPoliciesGetter
 	TiersGetter
 	TraceflowsGetter
@@ -39,6 +40,10 @@ type CrdV1alpha1Client struct {
 
 func (c *CrdV1alpha1Client) ClusterNetworkPolicies() ClusterNetworkPolicyInterface {
 	return newClusterNetworkPolicies(c)
+}
+
+func (c *CrdV1alpha1Client) ExternalNodes(namespace string) ExternalNodeInterface {
+	return newExternalNodes(c, namespace)
 }
 
 func (c *CrdV1alpha1Client) NetworkPolicies(namespace string) NetworkPolicyInterface {
