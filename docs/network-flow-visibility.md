@@ -585,7 +585,7 @@ for more information about the ClickHouse Operator. Current checked-in yaml is b
 will install ClickHouse Operator into `kube-system` Namespace.
 
 ```bash
-kubectl apply -f https://raw.githubusercontent.com/antrea-io/antrea/main/build/yamls/clickhouse-operator-install-bundle.yaml
+kubectl apply -f https://raw.githubusercontent.com/antrea-io/antrea/main/build/yamls/clickhouse-operator-install-bundle.yml
 ```
 
 To deploy a released version of the Grafana Flow Collector, find a deployment manifest
@@ -677,7 +677,7 @@ To stop the Grafana Flow Collector, run the following commands:
 
 ```shell
 kubectl delete -f flow-visibility.yml
-kubectl delete -f https://raw.githubusercontent.com/antrea-io/antrea/main/build/yamls/clickhouse-operator-install-bundle.yaml -n kube-system
+kubectl delete -f https://raw.githubusercontent.com/antrea-io/antrea/main/build/yamls/clickhouse-operator-install-bundle.yml -n kube-system
 ```
 
 ##### Credentials Configuration
@@ -830,6 +830,15 @@ The following dashboards are pre-built and are recommended for Antrea flow
 visualization. They can be found in the Home page of Grafana, by clicking
 the Magnifier button on the left menu bar.
 <img src="https://downloads.antrea.io/static/02152022/flow-visibility-grafana-intro-1.png" width="900" alt="Grafana Search Dashboards Guide">
+
+Note that all pre-built dashboards (except for the "Flow Records Dashboard")
+filter out Pod traffic for which the source or destination Namespace is one of
+`kube-system`, `flow-visibility`, or `flow-aggregator`. The primary motivation
+for this is to avoid showing the connections between the Antrea Agents and the
+Flow Aggregator, between the Flow Aggregator and ClickHouse, and between
+ClickHouse and Grafana. If you want to stop filtering traffic like this, you
+will need to [customize dashboards](#dashboards-customization) and edit the
+ClickHouse SQL query for each individual panel.
 
 ##### Flow Records Dashboard
 
