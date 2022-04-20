@@ -206,6 +206,7 @@ jobs:
     - name: Run verify scripts
       run: make verify
     - name: Checking for broken Markdown links
+      if: ${{ github.event_name == 'pull_request' }}
       uses: gaurav-nelson/github-action-markdown-link-check@v1
       with:
         # Check modified files only for pull requests. Cronjob "Verify docs" takes care of checking all markdown files.
