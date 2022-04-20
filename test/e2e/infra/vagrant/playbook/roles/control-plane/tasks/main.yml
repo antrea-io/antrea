@@ -46,6 +46,7 @@
         dest: /home/{{ test_user }}/.kube/config
         owner: "{{ test_user }}"
         group: "{{ test_user }}"
+        mode: '0600'
 
 # We currently copy the kube config and join command to the host so that it can
 # be copied to all the worker nodes when provisioning them. An alternative is to
