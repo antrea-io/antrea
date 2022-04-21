@@ -37,7 +37,6 @@ import (
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 	mocks "antrea.io/antrea/pkg/ovs/openflow/testing"
-	"antrea.io/antrea/pkg/ovs/ovsconfig"
 	ovsctltest "antrea.io/antrea/pkg/ovs/ovsctl/testing"
 	"antrea.io/antrea/pkg/util/ip"
 )
@@ -525,7 +524,7 @@ func TestBatchInstallPolicyRuleFlows(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 			mockOperations := oftest.NewMockOFEntryOperations(ctrl)
-			ofClient := NewClient(bridgeName, bridgeMgmtAddr, ovsconfig.OVSDatapathSystem, false, true, false, false, false, false, false)
+			ofClient := NewClient(bridgeName, bridgeMgmtAddr, false, true, false, false, false, false, false)
 			c = ofClient.(*client)
 			c.cookieAllocator = cookie.NewAllocator(0)
 			c.ofEntryOperations = mockOperations
@@ -1006,9 +1005,8 @@ func prepareClient(ctrl *gomock.Controller, dualStack bool) *client {
 		ipProtocols = append(ipProtocols, binding.ProtocolIPv6)
 	}
 	c = &client{
-		bridge:          bridge,
-		ovsDatapathType: ovsconfig.OVSDatapathNetdev,
-		ipProtocols:     ipProtocols,
+		bridge:      bridge,
+		ipProtocols: ipProtocols,
 	}
 	c.cookieAllocator = cookie.NewAllocator(0)
 	m := oftest.NewMockOFEntryOperations(ctrl)

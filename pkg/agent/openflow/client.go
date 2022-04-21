@@ -695,7 +695,6 @@ func (c *client) generatePipelines() {
 		c.ipProtocols,
 		c.nodeConfig,
 		c.networkConfig,
-		c.ovsDatapathType,
 		c.connectUplinkToBridge,
 		c.enableMulticast,
 		c.proxyAll)

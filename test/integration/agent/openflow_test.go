@@ -116,7 +116,7 @@ func TestConnectivityFlows(t *testing.T) {
 		antrearuntime.WindowsOS = runtime.GOOS
 	}
 
-	c = ofClient.NewClient(br, bridgeMgmtAddr, ovsconfig.OVSDatapathNetdev, true, false, true, false, false, false, false)
+	c = ofClient.NewClient(br, bridgeMgmtAddr, true, false, true, false, false, false, false)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge: %v", err))
 	defer func() {
@@ -164,7 +164,7 @@ func TestAntreaFlexibleIPAMConnectivityFlows(t *testing.T) {
 	legacyregistry.Reset()
 	metrics.InitializeOVSMetrics()
 
-	c = ofClient.NewClient(br, bridgeMgmtAddr, ovsconfig.OVSDatapathNetdev, true, false, true, false, false, true, false)
+	c = ofClient.NewClient(br, bridgeMgmtAddr, true, false, true, false, false, true, false)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge: %v", err))
 	defer func() {
@@ -223,7 +223,7 @@ func TestReplayFlowsConnectivityFlows(t *testing.T) {
 	legacyregistry.Reset()
 	metrics.InitializeOVSMetrics()
 
-	c = ofClient.NewClient(br, bridgeMgmtAddr, ovsconfig.OVSDatapathNetdev, true, false, true, false, false, false, false)
+	c = ofClient.NewClient(br, bridgeMgmtAddr, true, false, true, false, false, false, false)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge: %v", err))
 
@@ -265,7 +265,7 @@ func TestReplayFlowsNetworkPolicyFlows(t *testing.T) {
 	legacyregistry.Reset()
 	metrics.InitializeOVSMetrics()
 
-	c = ofClient.NewClient(br, bridgeMgmtAddr, ovsconfig.OVSDatapathNetdev, true, false, false, false, false, false, false)
+	c = ofClient.NewClient(br, bridgeMgmtAddr, true, false, false, false, false, false, false)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge: %v", err))
 
@@ -442,7 +442,7 @@ func TestNetworkPolicyFlows(t *testing.T) {
 	legacyregistry.Reset()
 	metrics.InitializeOVSMetrics()
 
-	c = ofClient.NewClient(br, bridgeMgmtAddr, ovsconfig.OVSDatapathNetdev, true, false, false, false, false, false, false)
+	c = ofClient.NewClient(br, bridgeMgmtAddr, true, false, false, false, false, false, false)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge %s", br))
 
@@ -556,7 +556,7 @@ func TestIPv6ConnectivityFlows(t *testing.T) {
 	legacyregistry.Reset()
 	metrics.InitializeOVSMetrics()
 
-	c = ofClient.NewClient(br, bridgeMgmtAddr, ovsconfig.OVSDatapathNetdev, true, false, true, false, false, false, false)
+	c = ofClient.NewClient(br, bridgeMgmtAddr, true, false, true, false, false, false, false)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge: %v", err))
 
@@ -604,7 +604,7 @@ func TestProxyServiceFlows(t *testing.T) {
 	legacyregistry.Reset()
 	metrics.InitializeOVSMetrics()
 
-	c = ofClient.NewClient(br, bridgeMgmtAddr, ovsconfig.OVSDatapathNetdev, true, false, false, false, false, false, false)
+	c = ofClient.NewClient(br, bridgeMgmtAddr, true, false, false, false, false, false, false)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge %s", br))
 
@@ -1632,7 +1632,7 @@ func TestEgressMarkFlows(t *testing.T) {
 	legacyregistry.Reset()
 	metrics.InitializeOVSMetrics()
 
-	c = ofClient.NewClient(br, bridgeMgmtAddr, ovsconfig.OVSDatapathNetdev, false, false, true, false, false, false, false)
+	c = ofClient.NewClient(br, bridgeMgmtAddr, false, false, true, false, false, false, false)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge %s", br))
 
