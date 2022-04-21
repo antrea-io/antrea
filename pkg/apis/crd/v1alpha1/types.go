@@ -311,7 +311,7 @@ type NetworkPolicySpec struct {
 	// Select workloads on which the rules will be applied to. Cannot be set in
 	// conjunction with AppliedTo in each rule.
 	// +optional
-	AppliedTo []NetworkPolicyPeer `json:"appliedTo,omitempty"`
+	AppliedTo []AppliedTo `json:"appliedTo,omitempty"`
 	// Set of ingress rules evaluated based on the order in which they are set.
 	// Currently Ingress rule supports setting the `From` field but not the `To`
 	// field within a Rule.
@@ -419,7 +419,7 @@ type Rule struct {
 	// Select workloads on which this rule will be applied to. Cannot be set in
 	// conjunction with NetworkPolicySpec/ClusterNetworkPolicySpec.AppliedTo.
 	// +optional
-	AppliedTo []NetworkPolicyPeer `json:"appliedTo,omitempty"`
+	AppliedTo []AppliedTo `json:"appliedTo,omitempty"`
 }
 
 // NetworkPolicyPeer describes the grouping selector of workloads.
@@ -430,7 +430,7 @@ type NetworkPolicyPeer struct {
 	// +optional
 	IPBlock *IPBlock `json:"ipBlock,omitempty"`
 	// Select Pods from NetworkPolicy's Namespace as workloads in
-	// AppliedTo/To/From fields. If set with NamespaceSelector, Pods are
+	// To/From fields. If set with NamespaceSelector, Pods are
 	// matched from Namespaces matched by the NamespaceSelector.
 	// Cannot be set with any other selector except NamespaceSelector.
 	// +optional
@@ -442,7 +442,7 @@ type NetworkPolicyPeer struct {
 	// ExternalEntitySelector. Cannot be set with Namespaces.
 	// +optional
 	NamespaceSelector *metav1.LabelSelector `json:"namespaceSelector,omitempty"`
-	// Select Pod/ExternalEntity from Namespaces matched by specifc criteria.
+	// Select Pod/ExternalEntity from Namespaces matched by specific criteria.
 	// Current supported criteria is match: Self, which selects from the same
 	// Namespace of the appliedTo workloads.
 	// Cannot be set with any other selector except PodSelector or
@@ -452,16 +452,15 @@ type NetworkPolicyPeer struct {
 	// +optional
 	Namespaces *PeerNamespaces `json:"namespaces,omitempty"`
 	// Select ExternalEntities from NetworkPolicy's Namespace as workloads
-	// in AppliedTo/To/From fields. If set with NamespaceSelector,
+	// in To/From fields. If set with NamespaceSelector,
 	// ExternalEntities are matched from Namespaces matched by the
 	// NamespaceSelector.
 	// Cannot be set with any other selector except NamespaceSelector.
 	// +optional
 	ExternalEntitySelector *metav1.LabelSelector `json:"externalEntitySelector,omitempty"`
-	// Group is the name of the ClusterGroup which can be set as an
-	// AppliedTo or within an Ingress or Egress rule in place of
-	// a stand-alone selector. A Group cannot be set with any other
-	// selector.
+	// Group is the name of the ClusterGroup which can be set within
+	// an Ingress or Egress rule in place of a stand-alone selector.
+	// A Group cannot be set with any other selector.
 	Group string `json:"group,omitempty"`
 	// Restrict egress access to the Fully Qualified Domain Names prescribed
 	// by name or by wildcard match patterns. This field can only be set for
@@ -471,7 +470,7 @@ type NetworkPolicyPeer struct {
 	//  Wildcard expressions, i.e. "*wayfair.com".
 	FQDN string `json:"fqdn,omitempty"`
 	// Select all Pods with the ServiceAccount matched by this field, as
-	// workloads in AppliedTo/To/From fields.
+	// workloads in To/From fields.
 	// Cannot be set with any other selector.
 	// +optional
 	ServiceAccount *NamespacedName `json:"serviceAccount,omitempty"`
@@ -479,6 +478,40 @@ type NetworkPolicyPeer struct {
 	// A NodeSelector cannot be set in AppliedTo field or set with any other selector.
 	// +optional
 	NodeSelector *metav1.LabelSelector `json:"nodeSelector,omitempty"`
+}
+
+// AppliedTo describes the grouping selector of workloads in AppliedTo field.
+type AppliedTo struct {
+	// Select Pods from NetworkPolicy's Namespace as workloads in
+	// AppliedTo fields. If set with NamespaceSelector, Pods are
+	// matched from Namespaces matched by the NamespaceSelector.
+	// Cannot be set with any other selector except NamespaceSelector.
+	// +optional
+	PodSelector *metav1.LabelSelector `json:"podSelector,omitempty"`
+	// Select all Pods from Namespaces matched by this selector, as
+	// workloads in AppliedTo fields. If set with PodSelector,
+	// Pods are matched from Namespaces matched by the NamespaceSelector.
+	// Cannot be set with any other selector except PodSelector or
+	// ExternalEntitySelector. Cannot be set with Namespaces.
+	// +optional
+	NamespaceSelector *metav1.LabelSelector `json:"namespaceSelector,omitempty"`
+	// Select ExternalEntities from NetworkPolicy's Namespace as workloads
+	// in AppliedTo fields. If set with NamespaceSelector,
+	// ExternalEntities are matched from Namespaces matched by the
+	// NamespaceSelector.
+	// Cannot be set with any other selector except NamespaceSelector.
+	// +optional
+	ExternalEntitySelector *metav1.LabelSelector `json:"externalEntitySelector,omitempty"`
+	// Group is the name of the ClusterGroup which can be set as an
+	// AppliedTo in place of a stand-alone selector. A Group cannot
+	// be set with any other selector.
+	// +optional
+	Group string `json:"group,omitempty"`
+	// Select all Pods with the ServiceAccount matched by this field, as
+	// workloads in AppliedTo fields.
+	// Cannot be set with any other selector.
+	// +optional
+	ServiceAccount *NamespacedName `json:"serviceAccount,omitempty"`
 	// Select a certain Service which matches the NamespacedName.
 	// A Service can only be set in either policy level AppliedTo field in a policy
 	// that only has ingress rules or rule level AppliedTo field in an ingress rule.
@@ -585,7 +618,7 @@ type ClusterNetworkPolicySpec struct {
 	// Select workloads on which the rules will be applied to. Cannot be set in
 	// conjunction with AppliedTo in each rule.
 	// +optional
-	AppliedTo []NetworkPolicyPeer `json:"appliedTo,omitempty"`
+	AppliedTo []AppliedTo `json:"appliedTo,omitempty"`
 	// Set of ingress rules evaluated based on the order in which they are set.
 	// Currently Ingress rule supports setting the `From` field but not the `To`
 	// field within a Rule.

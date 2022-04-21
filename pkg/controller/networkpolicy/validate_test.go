@@ -44,7 +44,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					Name: "non-existent-tier",
 				},
 				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
-					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+					AppliedTo: []crdv1alpha1.AppliedTo{
 						{
 							PodSelector: &metav1.LabelSelector{
 								MatchLabels: map[string]string{"foo": "bar"},
@@ -63,7 +63,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					Name: "acnp-static-tier",
 				},
 				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
-					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+					AppliedTo: []crdv1alpha1.AppliedTo{
 						{
 							PodSelector: &metav1.LabelSelector{
 								MatchLabels: map[string]string{"foo": "bar"},
@@ -82,7 +82,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					Name: "acnp-ingress-baseline-pass-action",
 				},
 				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
-					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+					AppliedTo: []crdv1alpha1.AppliedTo{
 						{
 							PodSelector: &metav1.LabelSelector{
 								MatchLabels: map[string]string{"foo1": "bar1"},
@@ -113,7 +113,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					Name: "acnp-egress-baseline-pass-action",
 				},
 				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
-					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+					AppliedTo: []crdv1alpha1.AppliedTo{
 						{
 							PodSelector: &metav1.LabelSelector{
 								MatchLabels: map[string]string{"foo1": "bar1"},
@@ -144,7 +144,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					Name: "acnp-egress-pass-action",
 				},
 				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
-					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+					AppliedTo: []crdv1alpha1.AppliedTo{
 						{
 							PodSelector: &metav1.LabelSelector{
 								MatchLabels: map[string]string{"foo1": "bar1"},
@@ -175,7 +175,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					Name: "acnp-non-unique-rule-name",
 				},
 				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
-					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+					AppliedTo: []crdv1alpha1.AppliedTo{
 						{
 							PodSelector: &metav1.LabelSelector{
 								MatchLabels: map[string]string{"foo1": "bar1"},
@@ -217,7 +217,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					Name: "acnp-appliedto-both-spec-rule",
 				},
 				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
-					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+					AppliedTo: []crdv1alpha1.AppliedTo{
 						{
 							PodSelector: &metav1.LabelSelector{
 								MatchLabels: map[string]string{"foo1": "bar1"},
@@ -234,7 +234,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 									},
 								},
 							},
-							AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+							AppliedTo: []crdv1alpha1.AppliedTo{
 								{
 									PodSelector: &metav1.LabelSelector{
 										MatchLabels: map[string]string{"foo3": "bar3"},
@@ -287,7 +287,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 									},
 								},
 							},
-							AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+							AppliedTo: []crdv1alpha1.AppliedTo{
 								{
 									PodSelector: &metav1.LabelSelector{
 										MatchLabels: map[string]string{"foo2": "bar2"},
@@ -329,7 +329,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 									},
 								},
 							},
-							AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+							AppliedTo: []crdv1alpha1.AppliedTo{
 								{
 									PodSelector: &metav1.LabelSelector{
 										MatchLabels: map[string]string{"foo2": "bar2"},
@@ -347,7 +347,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 									},
 								},
 							},
-							AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+							AppliedTo: []crdv1alpha1.AppliedTo{
 								{
 									PodSelector: &metav1.LabelSelector{
 										MatchLabels: map[string]string{"foo4": "bar4"},
@@ -368,7 +368,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					Name: "acnp-appliedto-group-set-with-psel",
 				},
 				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
-					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+					AppliedTo: []crdv1alpha1.AppliedTo{
 						{
 							PodSelector: &metav1.LabelSelector{
 								MatchLabels: map[string]string{"foo1": "bar1"},
@@ -387,7 +387,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					Name: "acnp-appliedto-group-set-with-nssel",
 				},
 				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
-					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+					AppliedTo: []crdv1alpha1.AppliedTo{
 						{
 							NamespaceSelector: &metav1.LabelSelector{
 								MatchLabels: map[string]string{"foo1": "bar1"},
@@ -406,7 +406,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					Name: "acnp-appliedto-group-alone",
 				},
 				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
-					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+					AppliedTo: []crdv1alpha1.AppliedTo{
 						{
 							Group: "group1",
 						},
@@ -434,7 +434,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					Name: "acnp-rule-group-set-with-psel",
 				},
 				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
-					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+					AppliedTo: []crdv1alpha1.AppliedTo{
 						{
 							NamespaceSelector: &metav1.LabelSelector{
 								MatchLabels: map[string]string{"foo1": "bar1"},
@@ -465,7 +465,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					Name: "acnp-rule-group-set-with-nssel",
 				},
 				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
-					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+					AppliedTo: []crdv1alpha1.AppliedTo{
 						{
 							NamespaceSelector: &metav1.LabelSelector{
 								MatchLabels: map[string]string{"foo1": "bar1"},
@@ -496,7 +496,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					Name: "acnp-rule-group-set-with-ipblock",
 				},
 				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
-					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+					AppliedTo: []crdv1alpha1.AppliedTo{
 						{
 							NamespaceSelector: &metav1.LabelSelector{
 								MatchLabels: map[string]string{"foo1": "bar1"},
@@ -527,7 +527,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					Name: "acnp-rule-group-set-with-ns",
 				},
 				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
-					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+					AppliedTo: []crdv1alpha1.AppliedTo{
 						{
 							NamespaceSelector: &metav1.LabelSelector{
 								MatchLabels: map[string]string{"foo1": "bar1"},
@@ -558,7 +558,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					Name: "acnp-rule-group-set-with-fqdn",
 				},
 				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
-					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+					AppliedTo: []crdv1alpha1.AppliedTo{
 						{
 							NamespaceSelector: &metav1.LabelSelector{
 								MatchLabels: map[string]string{"foo1": "bar1"},
@@ -587,7 +587,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					Name: "acnp-rule-group-set-with-eesel",
 				},
 				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
-					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+					AppliedTo: []crdv1alpha1.AppliedTo{
 						{
 							NamespaceSelector: &metav1.LabelSelector{
 								MatchLabels: map[string]string{"foo1": "bar1"},
@@ -618,7 +618,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					Name: "acnp-rule-group-alone",
 				},
 				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
-					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+					AppliedTo: []crdv1alpha1.AppliedTo{
 						{
 							NamespaceSelector: &metav1.LabelSelector{
 								MatchLabels: map[string]string{"foo1": "bar1"},
@@ -646,7 +646,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					Name: "acnp-rule-ns-set-with-nssel",
 				},
 				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
-					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+					AppliedTo: []crdv1alpha1.AppliedTo{
 						{
 							NamespaceSelector: &metav1.LabelSelector{
 								MatchLabels: map[string]string{"foo1": "bar1"},
@@ -679,7 +679,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					Name: "acnp-toservice-set-with-to",
 				},
 				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
-					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+					AppliedTo: []crdv1alpha1.AppliedTo{
 						{
 							NamespaceSelector: &metav1.LabelSelector{
 								MatchLabels: map[string]string{"foo1": "bar1"},
@@ -715,7 +715,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					Name: "acnp-toservice-set-with-ports",
 				},
 				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
-					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+					AppliedTo: []crdv1alpha1.AppliedTo{
 						{
 							NamespaceSelector: &metav1.LabelSelector{
 								MatchLabels: map[string]string{"foo1": "bar1"},
@@ -749,7 +749,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					Name: "acnp-toservice-set-with-protocols",
 				},
 				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
-					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+					AppliedTo: []crdv1alpha1.AppliedTo{
 						{
 							NamespaceSelector: &metav1.LabelSelector{
 								MatchLabels: map[string]string{"foo1": "bar1"},
@@ -783,7 +783,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					Name: "acnp-toservice-alone",
 				},
 				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
-					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+					AppliedTo: []crdv1alpha1.AppliedTo{
 						{
 							NamespaceSelector: &metav1.LabelSelector{
 								MatchLabels: map[string]string{"foo1": "bar1"},
@@ -812,7 +812,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					Name: "acnp-invalid-fqdn",
 				},
 				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
-					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+					AppliedTo: []crdv1alpha1.AppliedTo{
 						{
 							NamespaceSelector: &metav1.LabelSelector{
 								MatchLabels: map[string]string{"foo1": "bar1"},
@@ -840,7 +840,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					Name: "acnp-valid-fqdn",
 				},
 				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
-					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+					AppliedTo: []crdv1alpha1.AppliedTo{
 						{
 							NamespaceSelector: &metav1.LabelSelector{
 								MatchLabels: map[string]string{"foo1": "bar1"},
@@ -868,7 +868,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					Name: "acnp-endport-without-port-in-ports",
 				},
 				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
-					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+					AppliedTo: []crdv1alpha1.AppliedTo{
 						{
 							NamespaceSelector: &metav1.LabelSelector{
 								MatchLabels: map[string]string{"foo1": "bar1"},
@@ -896,7 +896,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					Name: "acnp-endport-smaller-port-in-ports",
 				},
 				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
-					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+					AppliedTo: []crdv1alpha1.AppliedTo{
 						{
 							NamespaceSelector: &metav1.LabelSelector{
 								MatchLabels: map[string]string{"foo1": "bar1"},
@@ -925,7 +925,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					Name: "acnp-named-port-with-endport-in-ports",
 				},
 				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
-					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+					AppliedTo: []crdv1alpha1.AppliedTo{
 						{
 							NamespaceSelector: &metav1.LabelSelector{
 								MatchLabels: map[string]string{"foo1": "bar1"},
@@ -954,7 +954,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					Name: "acnp-port-range-in-ports",
 				},
 				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
-					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+					AppliedTo: []crdv1alpha1.AppliedTo{
 						{
 							NamespaceSelector: &metav1.LabelSelector{
 								MatchLabels: map[string]string{"foo1": "bar1"},
@@ -983,7 +983,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					Name: "acnp-invalid-label-key-applied-to",
 				},
 				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
-					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+					AppliedTo: []crdv1alpha1.AppliedTo{
 						{
 							NamespaceSelector: &metav1.LabelSelector{
 								MatchLabels: map[string]string{"foo=": "bar"},
@@ -1011,7 +1011,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 									},
 								},
 							},
-							AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+							AppliedTo: []crdv1alpha1.AppliedTo{
 								{
 									NamespaceSelector: &metav1.LabelSelector{
 										MatchLabels: map[string]string{"foo1": "bar="},
@@ -1031,7 +1031,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					Name: "acnp-invalid-label-key-rule",
 				},
 				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
-					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+					AppliedTo: []crdv1alpha1.AppliedTo{
 						{
 							NamespaceSelector: &metav1.LabelSelector{
 								MatchLabels: map[string]string{"foo": "bar"},
@@ -1061,7 +1061,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					Name: "acnp-appliedto-service-set-with-psel",
 				},
 				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
-					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+					AppliedTo: []crdv1alpha1.AppliedTo{
 						{
 							PodSelector: &metav1.LabelSelector{
 								MatchLabels: map[string]string{"foo1": "bar1"},
@@ -1083,7 +1083,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					Name: "acnp-appliedto-service-and-psel",
 				},
 				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
-					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+					AppliedTo: []crdv1alpha1.AppliedTo{
 						{
 							PodSelector: &metav1.LabelSelector{
 								MatchLabels: map[string]string{"foo1": "bar1"},
@@ -1107,7 +1107,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					Name: "acnp-appliedto-service-with-egress-rule",
 				},
 				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
-					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+					AppliedTo: []crdv1alpha1.AppliedTo{
 						{
 							Service: &crdv1alpha1.NamespacedName{
 								Namespace: "foo1",
@@ -1148,7 +1148,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 									},
 								},
 							},
-							AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+							AppliedTo: []crdv1alpha1.AppliedTo{
 								{
 									Service: &crdv1alpha1.NamespacedName{
 										Namespace: "foo1",
@@ -1169,7 +1169,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					Name: "egress-rule-appliedto-service",
 				},
 				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
-					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+					AppliedTo: []crdv1alpha1.AppliedTo{
 						{
 							Service: &crdv1alpha1.NamespacedName{
 								Namespace: "foo1",
@@ -1200,7 +1200,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					Name: "egress-rule-appliedto-service",
 				},
 				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
-					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+					AppliedTo: []crdv1alpha1.AppliedTo{
 						{
 							Service: &crdv1alpha1.NamespacedName{
 								Namespace: "foo1",

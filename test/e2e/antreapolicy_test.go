@@ -517,7 +517,7 @@ func testInvalidACNPPodSelectorNsSelectorMatchExpressions(t *testing.T, data *Te
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: data.testNamespace, Name: "cnptest", Labels: map[string]string{"antrea-e2e": "cnp1"}},
 		Spec: crdv1alpha1.ClusterNetworkPolicySpec{
-			AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+			AppliedTo: []crdv1alpha1.AppliedTo{
 				{PodSelector: &selectorA},
 				{NamespaceSelector: &nsSelectA},
 			},
@@ -4566,7 +4566,7 @@ func testANPNetworkPolicyStatsWithDropAction(t *testing.T, data *TestData) {
 	var anp = &crdv1alpha1.NetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{Namespace: data.testNamespace, Name: "np1", Labels: map[string]string{"antrea-e2e": "np1"}},
 		Spec: crdv1alpha1.NetworkPolicySpec{
-			AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+			AppliedTo: []crdv1alpha1.AppliedTo{
 				{PodSelector: &selectorC},
 			},
 			Priority: p10,
@@ -4701,7 +4701,7 @@ func testAntreaClusterNetworkPolicyStats(t *testing.T, data *TestData) {
 	var acnp = &crdv1alpha1.ClusterNetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{Namespace: data.testNamespace, Name: "cnp1", Labels: map[string]string{"antrea-e2e": "cnp1"}},
 		Spec: crdv1alpha1.ClusterNetworkPolicySpec{
-			AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+			AppliedTo: []crdv1alpha1.AppliedTo{
 				{PodSelector: &selectorC},
 			},
 			Priority: p10,

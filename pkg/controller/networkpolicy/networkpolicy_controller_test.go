@@ -2911,7 +2911,7 @@ func TestSyncInternalNetworkPolicy(t *testing.T) {
 	inputPolicy := &crdv1alpha1.ClusterNetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{Name: "cnpA", UID: "uidA"},
 		Spec: crdv1alpha1.ClusterNetworkPolicySpec{
-			AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+			AppliedTo: []crdv1alpha1.AppliedTo{
 				{PodSelector: &selectorA},
 				{PodSelector: &selectorB},
 			},
@@ -3169,7 +3169,7 @@ func TestSyncInternalNetworkPolicyWithGroups(t *testing.T) {
 			inputPolicy: &crdv1alpha1.NetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "anpA", UID: "uidA"},
 				Spec: crdv1alpha1.NetworkPolicySpec{
-					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+					AppliedTo: []crdv1alpha1.AppliedTo{
 						{Group: "groupA"},
 					},
 					Priority: p10,
@@ -3218,7 +3218,7 @@ func TestSyncInternalNetworkPolicyWithGroups(t *testing.T) {
 			inputPolicy: &crdv1alpha1.NetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "anpA", UID: "uidA"},
 				Spec: crdv1alpha1.NetworkPolicySpec{
-					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+					AppliedTo: []crdv1alpha1.AppliedTo{
 						{Group: "parentGroup"},
 					},
 					Priority: p10,
@@ -3263,7 +3263,7 @@ func TestSyncInternalNetworkPolicyWithGroups(t *testing.T) {
 			inputPolicy: &crdv1alpha1.NetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "anpA", UID: "uidA"},
 				Spec: crdv1alpha1.NetworkPolicySpec{
-					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+					AppliedTo: []crdv1alpha1.AppliedTo{
 						{Group: "groupA"},
 					},
 					Priority: p10,
@@ -3312,7 +3312,7 @@ func TestSyncInternalNetworkPolicyWithGroups(t *testing.T) {
 			inputPolicy: &crdv1alpha1.NetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "anpA", UID: "uidA"},
 				Spec: crdv1alpha1.NetworkPolicySpec{
-					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+					AppliedTo: []crdv1alpha1.AppliedTo{
 						{Group: "parentGroup"},
 					},
 					Priority: p10,

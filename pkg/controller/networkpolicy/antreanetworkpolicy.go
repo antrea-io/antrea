@@ -155,7 +155,7 @@ func (n *NetworkPolicyController) processAntreaNetworkPolicy(np *crdv1alpha1.Net
 	return internalNetworkPolicy, appliedToGroups, addressGroups
 }
 
-func (n *NetworkPolicyController) processAppliedTo(namespace string, appliedTo []crdv1alpha1.NetworkPolicyPeer) []*antreatypes.AppliedToGroup {
+func (n *NetworkPolicyController) processAppliedTo(namespace string, appliedTo []crdv1alpha1.AppliedTo) []*antreatypes.AppliedToGroup {
 	var appliedToGroups []*antreatypes.AppliedToGroup
 	for _, at := range appliedTo {
 		var atg *antreatypes.AppliedToGroup

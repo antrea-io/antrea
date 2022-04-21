@@ -398,7 +398,7 @@ func GetAdmissionResponseForErr(err error) *admv1.AdmissionResponse {
 func (v *antreaPolicyValidator) createValidate(curObj interface{}, userInfo authenticationv1.UserInfo) (string, bool) {
 	var tier string
 	var ingress, egress []crdv1alpha1.Rule
-	var specAppliedTo []crdv1alpha1.NetworkPolicyPeer
+	var specAppliedTo []crdv1alpha1.AppliedTo
 	switch curObj.(type) {
 	case *crdv1alpha1.ClusterNetworkPolicy:
 		curCNP := curObj.(*crdv1alpha1.ClusterNetworkPolicy)
@@ -469,7 +469,7 @@ func (v *antreaPolicyValidator) validateRuleName(ingress, egress []crdv1alpha1.R
 	return isUnique(ingress) && isUnique(egress)
 }
 
-func (v *antreaPolicyValidator) validateAppliedTo(ingress, egress []crdv1alpha1.Rule, specAppliedTo []crdv1alpha1.NetworkPolicyPeer) (string, bool) {
+func (v *antreaPolicyValidator) validateAppliedTo(ingress, egress []crdv1alpha1.Rule, specAppliedTo []crdv1alpha1.AppliedTo) (string, bool) {
 	appliedToInSpec := len(specAppliedTo) != 0
 	countAppliedToInRules := func(rules []crdv1alpha1.Rule) int {
 		num := 0
@@ -499,10 +499,10 @@ func (v *antreaPolicyValidator) validateAppliedTo(ingress, egress []crdv1alpha1.
 		appliedToEgressRule  = 2
 	)
 
-	checkAppliedTo := func(appliedTo []crdv1alpha1.NetworkPolicyPeer, appliedToScope int) (string, bool) {
+	checkAppliedTo := func(appliedTo []crdv1alpha1.AppliedTo, appliedToScope int) (string, bool) {
 		appliedToSvcNum := 0
 		for _, eachAppliedTo := range appliedTo {
-			appliedToFieldsNum := numFieldsSetInPeer(eachAppliedTo)
+			appliedToFieldsNum := numFieldsSetInStruct(eachAppliedTo)
 			if eachAppliedTo.Group != "" && appliedToFieldsNum > 1 {
 				return "group cannot be set with other peers in appliedTo", false
 			}
@@ -556,7 +556,7 @@ func (v *antreaPolicyValidator) validatePeers(ingress, egress []crdv1alpha1.Rule
 			if peer.NamespaceSelector != nil && peer.Namespaces != nil {
 				return "namespaces and namespaceSelector cannot be set at the same time for a single NetworkPolicyPeer", false
 			}
-			peerFieldsNum := numFieldsSetInPeer(peer)
+			peerFieldsNum := numFieldsSetInStruct(peer)
 			if peer.Group != "" && peerFieldsNum > 1 {
 				return "group cannot be set with other peers in rules", false
 			}
@@ -597,8 +597,8 @@ func (v *antreaPolicyValidator) validatePeers(ingress, egress []crdv1alpha1.Rule
 
 // validateAppliedToServiceIngressPeer ensures that if a policy or an ingress rule
 // is applied to Services, the ingress rule can only use ipBlock to select workloads.
-func (v *antreaPolicyValidator) validateAppliedToServiceIngressPeer(specAppliedTo []crdv1alpha1.NetworkPolicyPeer, ingress []crdv1alpha1.Rule) (string, bool) {
-	isAppliedToService := func(peers []crdv1alpha1.NetworkPolicyPeer) bool {
+func (v *antreaPolicyValidator) validateAppliedToServiceIngressPeer(specAppliedTo []crdv1alpha1.AppliedTo, ingress []crdv1alpha1.Rule) (string, bool) {
+	isAppliedToService := func(peers []crdv1alpha1.AppliedTo) bool {
 		if len(peers) > 0 {
 			return peers[0].Service != nil
 		}
@@ -608,7 +608,7 @@ func (v *antreaPolicyValidator) validateAppliedToServiceIngressPeer(specAppliedT
 	for _, rule := range ingress {
 		if policyAppliedToService || isAppliedToService(rule.AppliedTo) {
 			for _, peer := range rule.From {
-				if peer.IPBlock == nil || numFieldsSetInPeer(peer) > 1 {
+				if peer.IPBlock == nil || numFieldsSetInStruct(peer) > 1 {
 					return "a rule/policy that is applied to Services can only use ipBlock to select workloads", false
 				}
 			}
@@ -617,10 +617,10 @@ func (v *antreaPolicyValidator) validateAppliedToServiceIngressPeer(specAppliedT
 	return "", true
 }
 
-// numFieldsSetInPeer returns the number of fields in use of a peer.
-func numFieldsSetInPeer(peer crdv1alpha1.NetworkPolicyPeer) int {
+// numFieldsSetInStruct returns the number of fields in use of the object.
+func numFieldsSetInStruct(obj interface{}) int {
 	num := 0
-	v := reflect.ValueOf(peer)
+	v := reflect.ValueOf(obj)
 	for i := 0; i < v.NumField(); i++ {
 		if !v.Field(i).IsZero() {
 			num++
@@ -776,7 +776,7 @@ func (v *antreaPolicyValidator) validateFQDNSelectors(egressRules []crdv1alpha1.
 func (v *antreaPolicyValidator) updateValidate(curObj, oldObj interface{}, userInfo authenticationv1.UserInfo) (string, bool) {
 	var tier string
 	var ingress, egress []crdv1alpha1.Rule
-	var specAppliedTo []crdv1alpha1.NetworkPolicyPeer
+	var specAppliedTo []crdv1alpha1.AppliedTo
 	switch curObj.(type) {
 	case *crdv1alpha1.ClusterNetworkPolicy:
 		curCNP := curObj.(*crdv1alpha1.ClusterNetworkPolicy)
