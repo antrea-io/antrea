@@ -188,6 +188,7 @@ type TestOptions struct {
 	withBench           bool
 	enableCoverage      bool
 	enableAntreaIPAM    bool
+	flowVisibility      bool
 	coverageDir         string
 	skipCases           string
 }
@@ -712,13 +713,6 @@ func (data *TestData) enableAntreaFlowExporter(ipfixCollector string) error {
 	return data.mutateAntreaConfigMap(nil, ac, false, true)
 }
 
-func (data *TestData) disableAntreaFlowExporter() error {
-	ac := func(config *agentconfig.AgentConfig) {
-		config.FeatureGates["FlowExporter"] = false
-	}
-	return data.mutateAntreaConfigMap(nil, ac, false, true)
-}
-
 // deployFlowVisibilityClickHouse deploys ClickHouse operator and DB.
 func (data *TestData) deployFlowVisibilityClickHouse() (*PodIPs, error) {
 	err := data.CreateNamespace(flowVisibilityNamespace, nil)
@@ -757,8 +751,7 @@ func (data *TestData) deployFlowVisibilityClickHouse() (*PodIPs, error) {
 		return false, nil
 	})
 	if err != nil {
-		_, stdout, stderr, podErr := data.provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl get po %s -n %s -o yaml", podName, kubeNamespace))
-		return nil, fmt.Errorf("error when waiting for ClickHouse Operator Ready: %v; stdout: %s, stderr: %s, %v", err, stdout, stderr, podErr)
+		return nil, err
 	}
 	// check for clickhouse pod running
 	_, err = data.PodWaitFor(defaultTimeout, flowVisibilityCHPodName, flowVisibilityNamespace, func(p *corev1.Pod) (bool, error) {
@@ -770,9 +763,7 @@ func (data *TestData) deployFlowVisibilityClickHouse() (*PodIPs, error) {
 		return false, nil
 	})
 	if err != nil {
-		_, stdout, stderr, podErr := data.provider.RunCommandOnNode(controlPlaneNodeName(),
-			fmt.Sprintf("kubectl get po %s -n %s -o yaml", flowVisibilityCHPodName, flowVisibilityNamespace))
-		return nil, fmt.Errorf("error when waiting for ClickHouse Ready: %v; stdout: %s; stderr: %s; %v", err, stdout, stderr, podErr)
+		return nil, err
 	}
 	podIPs, err := data.podWaitForIPs(defaultTimeout, flowVisibilityCHPodName, flowVisibilityNamespace)
 	if err != nil {
@@ -807,7 +798,7 @@ func (data *TestData) deployFlowAggregator(ipfixCollector, clickHouse string) er
 		_, logStdout, _, _ := data.provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl -n %s logs -l app=flow-aggregator", flowAggregatorNamespace))
 		return fmt.Errorf("error when waiting for the Flow Aggregator rollout to complete. kubectl describe output: %s, logs: %s", stdout, logStdout)
 	}
-	// Check for flow-aggregator pod running again for db connection establishment
+	// Check for flow-aggregator Pod running again for db connection establishment
 	flowAggPod, err := data.getFlowAggregator()
 	if err != nil {
 		return fmt.Errorf("error when getting flow-aggregator Pod: %v", err)
@@ -822,13 +813,12 @@ func (data *TestData) deployFlowAggregator(ipfixCollector, clickHouse string) er
 		return false, nil
 	})
 	if err != nil {
-		_, stdout, stderr, podErr := data.provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl get po %s -n %s -o yaml", podName, flowAggregatorNamespace))
-		return fmt.Errorf("error when waiting for flow-aggregator Ready: %v; stdout %s, stderr: %s, %v", err, stdout, stderr, podErr)
+		return err
 	}
 	return nil
 }
 
-func (data *TestData) mutateFlowAggregatorConfigMap(ipfixCollector, clickHouse string) error {
+func (data *TestData) mutateFlowAggregatorConfigMap(ipfixCollectorAddr, clickHouseURL string) error {
 	configMap, err := data.GetFlowAggregatorConfigMap()
 	if err != nil {
 		return err
@@ -841,11 +831,11 @@ func (data *TestData) mutateFlowAggregatorConfigMap(ipfixCollector, clickHouse s
 
 	flowAggregatorConf.FlowCollector = flowaggregatorconfig.FlowCollectorConfig{
 		Enable:  true,
-		Address: ipfixCollector,
+		Address: ipfixCollectorAddr,
 	}
 	flowAggregatorConf.ClickHouse = flowaggregatorconfig.ClickHouseConfig{
 		Enable:         true,
-		DatabaseURL:    clickHouse,
+		DatabaseURL:    clickHouseURL,
 		CommitInterval: "1s",
 	}
 	flowAggregatorConf.ActiveFlowRecordTimeout = aggregatorActiveFlowRecordTimeout.String()

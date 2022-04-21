@@ -229,6 +229,7 @@ if [ "$FLOW_AGGREGATOR" == "true" ]; then
             $THIS_DIR/../../../../hack/generate-manifest-flow-aggregator.sh --mode dev -fc $FLOW_COLLECTOR > "${FLOW_AGG_YML}"
         fi
     else
+        $THIS_DIR/../../../../hack/generate-manifest.sh --mode dev --flow-exporter > "${ANTREA_YML}"
         $THIS_DIR/../../../../hack/generate-manifest-flow-aggregator.sh --mode dev > "${FLOW_AGG_YML}"
     fi
 

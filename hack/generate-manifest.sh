@@ -319,6 +319,9 @@ fi
 
 if $FLOW_EXPORTER; then
     HELM_VALUES+=("featureGates.FlowExporter=true")
+    if [ "$MODE" == "dev" ]; then
+       HELM_VALUES+=("flowCollector.flowPollInterval=1s" "flowCollector.activeFlowExportTimeout=2s" "flowCollector.idleFlowExportTimeout=1s")
+    fi
 fi
 
 if ! $NP; then

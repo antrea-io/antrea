@@ -49,6 +49,12 @@ func skipIfAntreaIPAMTest(tb testing.TB) {
 	}
 }
 
+func skipIfNotFlowVisibilityTest(tb testing.TB) {
+	if !testOptions.flowVisibility {
+		tb.Skipf("Skipping test when not running flow visibility test: %s", tb.Name())
+	}
+}
+
 func skipIfNamespaceIsNotEqual(tb testing.TB, actualNamespace, expectNamespace string) {
 	if actualNamespace != expectNamespace {
 		tb.Skipf("Skipping test when namespace is not: %s", expectNamespace)
@@ -213,7 +219,7 @@ func setupTest(tb testing.TB) (*TestData, error) {
 	return testData, nil
 }
 
-func setupTestWithIPFIXCollector(tb testing.TB) (*TestData, bool, bool, error) {
+func setupTestForFlowAggregator(tb testing.TB) (*TestData, bool, bool, error) {
 	v4Enabled := clusterInfo.podV4NetworkCIDR != ""
 	v6Enabled := clusterInfo.podV6NetworkCIDR != ""
 	testData, err := setupTest(tb)
@@ -254,15 +260,6 @@ func setupTestWithIPFIXCollector(tb testing.TB) (*TestData, bool, bool, error) {
 	tb.Logf("Applying flow aggregator YAML with ipfix collector: %s and clickHouse: %s",
 		ipfixCollectorAddr, clickHouseAddr)
 	if err := testData.deployFlowAggregator(ipfixCollectorAddr, clickHouseAddr); err != nil {
-		return testData, v4Enabled, v6Enabled, err
-	}
-	tb.Logf("Enabling flow exporter in Antrea Agent")
-	if err = testData.enableAntreaFlowExporter(""); err != nil {
-		return testData, v4Enabled, v6Enabled, err
-	}
-
-	tb.Logf("Checking CoreDNS deployment")
-	if err = testData.checkCoreDNSPods(defaultTimeout); err != nil {
 		return testData, v4Enabled, v6Enabled, err
 	}
 	return testData, v4Enabled, v6Enabled, nil
