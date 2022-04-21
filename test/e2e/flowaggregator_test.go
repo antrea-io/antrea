@@ -153,17 +153,15 @@ type testFlow struct {
 }
 
 func TestFlowAggregator(t *testing.T) {
+	skipIfNotFlowVisibilityTest(t)
 	skipIfHasWindowsNodes(t)
 
-	data, v4Enabled, v6Enabled, err := setupTestWithIPFIXCollector(t)
+	data, v4Enabled, v6Enabled, err := setupTestForFlowAggregator(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
 	defer func() {
 		teardownTest(t, data)
-		if err := data.disableAntreaFlowExporter(); err != nil {
-			t.Errorf("Failed to disable flow exporter in Antrea Agent: %v", err)
-		}
 		// Execute teardownFlowAggregator later than teardownTest to ensure that the log
 		// of Flow Aggregator has been exported.
 		teardownFlowAggregator(t, data)

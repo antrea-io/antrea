@@ -29,6 +29,7 @@ _usage="Usage: $0 [--encap-mode <mode>] [--ip-family <v4|v6>] [--no-proxy] [--np
         --proxy-all                   Enables Antrea proxy with all Service support.
         --endpointslice               Enables Antrea proxy and EndpointSlice support.
         --no-np                       Disables Antrea-native policies.
+        --flow-visibility             Only run flow visibility related e2e tests.
         --skip                        A comma-separated list of keywords, with which tests should be skipped.
         --coverage                    Enables measure Antrea code coverage when run e2e tests on kind.
         --setup-only                  Only perform setting up the cluster and run test.
@@ -62,6 +63,7 @@ proxy=true
 proxy_all=false
 endpointslice=false
 np=true
+flow_visibility=false
 coverage=false
 skiplist=""
 setup_only=false
@@ -90,6 +92,10 @@ case $key in
     ;;
     --no-np)
     np=false
+    shift
+    ;;
+    --flow-visibility)
+    flow_visibility=true
     shift
     ;;
     --skip)
@@ -151,22 +157,19 @@ fi
 if ! $np; then
     manifest_args="$manifest_args --no-np"
 fi
+if $flow_visibility; then
+    manifest_args="$manifest_args --flow-exporter"
+fi
 
 COMMON_IMAGES_LIST=("k8s.gcr.io/e2e-test-images/agnhost:2.29" \
                     "projects.registry.vmware.com/library/busybox"  \
                     "projects.registry.vmware.com/antrea/nginx:1.21.6-alpine" \
-                    "projects.registry.vmware.com/antrea/perftool" \
-                    "projects.registry.vmware.com/antrea/ipfix-collector:v0.5.12" \
-                    "projects.registry.vmware.com/antrea/wireguard-go:0.0.20210424" \
-                    "projects.registry.vmware.com/antrea/clickhouse-operator:0.18.2" \
-                    "projects.registry.vmware.com/antrea/metrics-exporter:0.18.2" \
-                    "projects.registry.vmware.com/antrea/clickhouse-server:21.11")
-for image in "${COMMON_IMAGES_LIST[@]}"; do
-    for i in `seq 3`; do
-        docker pull $image && break
-        sleep 1
-    done
-done
+                    "projects.registry.vmware.com/antrea/perftool")
+
+FLOW_VISIBILITY_IMAGE_LIST=("projects.registry.vmware.com/antrea/ipfix-collector:v0.5.12" \
+                            "projects.registry.vmware.com/antrea/clickhouse-operator:0.18.2" \
+                            "projects.registry.vmware.com/antrea/metrics-exporter:0.18.2" \
+                            "projects.registry.vmware.com/antrea/clickhouse-server:21.11")
 if $coverage; then
     manifest_args="$manifest_args --coverage"
     COMMON_IMAGES_LIST+=("antrea/antrea-ubuntu-coverage:latest")
@@ -178,6 +181,20 @@ fi
 if $proxy_all; then
     COMMON_IMAGES_LIST+=("k8s.gcr.io/echoserver:1.10")
 fi
+if $flow_visibility; then
+    COMMON_IMAGES_LIST+=("${FLOW_VISIBILITY_IMAGE_LIST[@]}")
+    if $coverage; then
+        COMMON_IMAGES_LIST+=("antrea/flow-aggregator-coverage:latest")
+    else
+        COMMON_IMAGES_LIST+=("projects.registry.vmware.com/antrea/flow-aggregator:latest")
+    fi
+fi
+for image in "${COMMON_IMAGES_LIST[@]}"; do
+    for i in `seq 3`; do
+        docker pull $image && break
+        sleep 1
+    done
+done
 
 printf -v COMMON_IMAGES "%s " "${COMMON_IMAGES_LIST[@]}"
 
@@ -200,17 +217,31 @@ function setup_cluster {
 
 function run_test {
   current_mode=$1
+  coverage_args=""
+  flow_visibility_args=""
 
   if $coverage; then
       $YML_CMD --encap-mode $current_mode $manifest_args | docker exec -i kind-control-plane dd of=/root/antrea-coverage.yml
       $YML_CMD --ipsec $manifest_args | docker exec -i kind-control-plane dd of=/root/antrea-ipsec-coverage.yml
-      $FLOWAGGREGATOR_YML_CMD --coverage | docker exec -i kind-control-plane dd of=/root/flow-aggregator-coverage.yml
+      timeout="80m"
+      coverage_args="--coverage --coverage-dir $ANTREA_COV_DIR"
   else
       $YML_CMD --encap-mode $current_mode $manifest_args | docker exec -i kind-control-plane dd of=/root/antrea.yml
       $YML_CMD --ipsec $manifest_args | docker exec -i kind-control-plane dd of=/root/antrea-ipsec.yml
-      $FLOWAGGREGATOR_YML_CMD | docker exec -i kind-control-plane dd of=/root/flow-aggregator.yml
+      timeout="75m"
   fi
-  $FLOW_VISIBILITY_CMD | docker exec -i kind-control-plane dd of=/root/flow-visibility.yml
+
+  if $flow_visibility; then
+      timeout="10m"
+      flow_visibility_args="-run=TestFlowAggregator --flow-visibility"
+      if $coverage; then
+          $FLOWAGGREGATOR_YML_CMD --coverage | docker exec -i kind-control-plane dd of=/root/flow-aggregator-coverage.yml
+      else
+          $FLOWAGGREGATOR_YML_CMD | docker exec -i kind-control-plane dd of=/root/flow-aggregator.yml
+      fi
+      $FLOW_VISIBILITY_CMD | docker exec -i kind-control-plane dd of=/root/flow-visibility.yml
+  fi
+
   if $proxy_all; then
       apiserver=$(docker exec -i kind-control-plane kubectl get endpoints kubernetes --no-headers | awk '{print $2}')
       if $coverage; then
@@ -221,11 +252,7 @@ function run_test {
   fi
   sleep 1
 
-  if $coverage; then
-      go test -v -timeout=80m antrea.io/antrea/test/e2e -provider=kind --logs-export-dir=$ANTREA_LOG_DIR --coverage --coverage-dir $ANTREA_COV_DIR --skip=$skiplist
-  else
-      go test -v -timeout=75m antrea.io/antrea/test/e2e -provider=kind --logs-export-dir=$ANTREA_LOG_DIR --skip=$skiplist
-  fi
+  go test -v -timeout=$timeout antrea.io/antrea/test/e2e $flow_visibility_args -provider=kind --logs-export-dir=$ANTREA_LOG_DIR --skip=$skiplist $coverage_args
 }
 
 if [[ "$mode" == "" ]] || [[ "$mode" == "encap" ]]; then
