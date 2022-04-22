@@ -697,7 +697,8 @@ func (c *client) generatePipelines() {
 		c.networkConfig,
 		c.ovsDatapathType,
 		c.connectUplinkToBridge,
-		c.enableMulticast)
+		c.enableMulticast,
+		c.proxyAll)
 	c.activatedFeatures = append(c.activatedFeatures, c.featurePodConnectivity)
 	c.traceableFeatures = append(c.traceableFeatures, c.featurePodConnectivity)
 
