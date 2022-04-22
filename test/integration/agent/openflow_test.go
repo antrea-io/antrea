@@ -1222,7 +1222,7 @@ func prepareGatewayFlows(gwIPs []net.IP, gwMAC net.HardwareAddr, vMAC net.Hardwa
 				tableName: "IngressSecurityClassifier",
 				flows: []*ofTestUtils.ExpectFlow{
 					{
-						MatchStr: fmt.Sprintf("priority=210,%s,%s=%s", ipProtoStr, nwSrcStr, gwIP.String()),
+						MatchStr: fmt.Sprintf("priority=210,ct_state=-rpl+trk,%s,%s=%s", ipProtoStr, nwSrcStr, gwIP.String()),
 						ActStr:   "goto_table:ConntrackCommit",
 					},
 				},
