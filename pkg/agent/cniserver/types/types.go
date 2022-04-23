@@ -15,6 +15,8 @@
 package types
 
 import (
+	"net"
+
 	cnitypes "github.com/containernetworking/cni/pkg/types"
 )
 
@@ -41,12 +43,23 @@ type Range struct {
 
 type RangeSet []Range
 
+type Address struct {
+	Address string `json:"address"`
+	Gateway net.IP `json:"gateway,omitempty"`
+	IPNet   net.IPNet
+	// IP version. Either "4" or "6".
+	Version string
+}
+
 type IPAMConfig struct {
 	Type string `json:"type"`
 	// IP ranges for NodeIPAM. Can include both v4 and v6 ranges.
-	Ranges []RangeSet        `json:"ranges,omitempty"`
-	Routes []*cnitypes.Route `json:"routes,omitempty"`
-	DNS    cnitypes.DNS      `json:"dns,omitempty"`
+	Ranges []RangeSet `json:"ranges,omitempty"`
+	// Routes, Addresses, and DNS are copied from static IPAM
+	// (https://www.cni.dev/plugins/current/ipam/static).
+	Routes    []*cnitypes.Route `json:"routes,omitempty"`
+	Addresses []Address         `json:"addresses,omitempty"`
+	DNS       cnitypes.DNS      `json:"dns,omitempty"`
 	// Antrea IPPool names for Antrea IPAM.
 	IPPools []string `json:"ippools,omitempty"`
 	// Other NodeIPAM config parameters (ResolvConf, IPArgs) are not supported.

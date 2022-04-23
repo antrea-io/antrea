@@ -77,6 +77,16 @@ var (
     "ipam": {
         "type": "antrea",
         "ippools": [ "test-ippool-ipv4", "test-ippool-ipv6" ],
+        "addresses": [
+            {
+                "address": "10.123.10.111/24",
+                "gateway": "10.123.10.1"
+            },
+            {
+                "address": "3ffe:ffff:10:01ff::111/64",
+                "gateway": "3ffe:ffff:10::1"
+            }
+        ],
         "routes": [
             { "dst": "0.0.0.0/0" },
             { "dst": "192.168.0.0/16", "gw": "10.10.5.1" },
@@ -101,6 +111,16 @@ var (
             "version": "6",
             "address": "3ffe:ffff:1:1ff::101/64",
             "gateway": "3ffe:ffff:1:1ff::1"
+        },
+        {
+            "version": "4",
+            "address": "10.123.10.111/24",
+            "gateway": "10.123.10.1"
+        },
+        {
+            "version": "6",
+            "address": "3ffe:ffff:10:1ff::111/64",
+            "gateway": "3ffe:ffff:10::1"
         }
     ],
     "routes": [
@@ -137,6 +157,16 @@ var (
             "version": "6",
             "address": "3ffe:ffff:1:1ff::102/64",
             "gateway": "3ffe:ffff:1:1ff::1"
+        },
+        {
+            "version": "4",
+            "address": "10.123.10.111/24",
+            "gateway": "10.123.10.1"
+        },
+        {
+            "version": "6",
+            "address": "3ffe:ffff:10:1ff::111/64",
+            "gateway": "3ffe:ffff:10::1"
         }
     ],
     "routes": [
@@ -165,21 +195,24 @@ var (
 
 func executeCNI(t *testing.T, data *TestData, add, del bool, ifName string, expectedExitCode int, expectedOutput string) {
 	var code int
-	var stdout string
+	var stdout, stderr string
 	var err error
+
+	t.Logf("Execute CNI for interface %s, ADD %v, DEL %v", ifName, add, del)
 	cniEnvs["CNI_IFNAME"] = ifName
 	defer delete(cniEnvs, "CNI_IFNAME")
+
 	if add {
 		cniEnvs["CNI_COMMAND"] = "ADD"
 		defer delete(cniEnvs, "ADD")
 		// antrea CNI needs to be executed as root to connect to the antrea-agent CNI
 		// socket, so set sudo.
-		code, stdout, _, err = data.RunCommandOnNodeExt(nodeName(0), cniCmd, cniEnvs, cniNetworkConfig, true)
+		code, stdout, stderr, err = data.RunCommandOnNodeExt(nodeName(0), cniCmd, cniEnvs, cniNetworkConfig, true)
 		if err != nil {
 			t.Fatalf("Failed to execute CNI ADD: %v", err)
 		}
 		if code != expectedExitCode {
-			t.Fatalf("CNI ADD exits with code: %d, expected: %d, stdout:\n%s", code, expectedExitCode, stdout)
+			t.Fatalf("CNI ADD exits with code %d, expected %d, stdout:\n%s\nstderr: %s", code, expectedExitCode, stdout, stderr)
 		}
 		if expectedExitCode == 0 && stdout != expectedOutput {
 			t.Fatalf("CNI ADD output:\n%s\nexpected:\n%s", stdout, expectedOutput)
@@ -188,12 +221,12 @@ func executeCNI(t *testing.T, data *TestData, add, del bool, ifName string, expe
 	if del {
 		cniEnvs["CNI_COMMAND"] = "DEL"
 		defer delete(cniEnvs, "DEL")
-		code, stdout, _, err = data.RunCommandOnNodeExt(nodeName(0), cniCmd, cniEnvs, cniNetworkConfig, true)
+		code, stdout, stderr, err = data.RunCommandOnNodeExt(nodeName(0), cniCmd, cniEnvs, cniNetworkConfig, true)
 		if err != nil {
 			t.Fatalf("Failed to execute CNI DEL: %v", err)
 		}
 		if code != 0 {
-			t.Fatalf("CNI ADD exits with code: %d, stdout:\n%s", code, stdout)
+			t.Fatalf("CNI DEL exits with code %d, stdout:\n%s\nstderr: %s", code, stdout, stderr)
 		}
 	}
 }

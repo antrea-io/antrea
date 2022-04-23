@@ -111,6 +111,23 @@ func generateIPConfig(ip net.IP, prefixLength int, gwIP net.IP) (*current.IPConf
 	return &ipConfig, &defaultRoute
 }
 
+func parseStaticAddresses(ipamConfig *types.IPAMConfig) error {
+	for i := range ipamConfig.Addresses {
+		ip, addr, err := net.ParseCIDR(ipamConfig.Addresses[i].Address)
+		if err != nil {
+			return fmt.Errorf("invalid address %s", ipamConfig.Addresses[i].Address)
+		}
+		ipamConfig.Addresses[i].IPNet = *addr
+		ipamConfig.Addresses[i].IPNet.IP = ip
+		if ip.To4() != nil {
+			ipamConfig.Addresses[i].Version = "4"
+		} else {
+			ipamConfig.Addresses[i].Version = "6"
+		}
+	}
+	return nil
+}
+
 func (d *AntreaIPAM) setController(controller *AntreaIPAMController) {
 	d.controllerMutex.Lock()
 	defer d.controllerMutex.Unlock()
@@ -194,51 +211,68 @@ func (d *AntreaIPAM) Check(args *invoke.Args, k8sArgs *types.K8sArgs, networkCon
 func (d *AntreaIPAM) secondaryNetworkAdd(args *invoke.Args, k8sArgs *types.K8sArgs, networkConfig *types.NetworkConfig) (*current.Result, error) {
 	ipamConf := networkConfig.IPAM
 	numPools := len(ipamConf.IPPools)
-	if numPools == 0 {
-		return nil, fmt.Errorf("Antrea IPPool must be specified")
-	}
 
-	if err := d.waitForControllerReady(); err != nil {
-		// Return error to let the invoker retry.
-		return nil, err
+	if err := parseStaticAddresses(ipamConf); err != nil {
+		return nil, fmt.Errorf("failed to parse static addresses in the IPAM config: %v", err)
 	}
-
-	owner := getAllocationOwner(args, k8sArgs, nil, true)
-	var allocatorsToRelease []*poolallocator.IPPoolAllocator
-	defer func() {
-		for _, allocator := range allocatorsToRelease {
-			// Try to release the allocated IPs after an error.
-			allocator.ReleaseContainer(owner.Pod.ContainerID, owner.Pod.IFName)
-		}
-	}()
+	if numPools == 0 && len(ipamConf.Addresses) == 0 {
+		return nil, fmt.Errorf("at least one Antrea IPPool or static address must be specified")
+	}
 
 	result := &current.Result{}
-	for _, p := range ipamConf.IPPools {
-		allocator, err := d.controller.getPoolAllocatorByName(p)
-		if err != nil {
+	if numPools > 0 {
+		if err := d.waitForControllerReady(); err != nil {
+			// Return error to let the invoker retry.
 			return nil, err
 		}
 
-		var ip net.IP
-		var subnetInfo *crdv1a2.SubnetInfo
-		ip, subnetInfo, err = allocator.AllocateNext(crdv1a2.IPAddressPhaseAllocated, owner)
-		if err != nil {
-			return nil, err
-		}
-		if numPools > 1 {
-			allocatorsToRelease = append(allocatorsToRelease, allocator)
-		}
+		owner := getAllocationOwner(args, k8sArgs, nil, true)
+		var allocatorsToRelease []*poolallocator.IPPoolAllocator
+		defer func() {
+			for _, allocator := range allocatorsToRelease {
+				// Try to release the allocated IPs after an error.
+				allocator.ReleaseContainer(owner.Pod.ContainerID, owner.Pod.IFName)
+			}
+		}()
 
-		gwIP := net.ParseIP(subnetInfo.Gateway)
-		ipConfig, _ := generateIPConfig(ip, int(subnetInfo.PrefixLength), gwIP)
-		result.IPs = append(result.IPs, ipConfig)
+		for _, p := range ipamConf.IPPools {
+			allocator, err := d.controller.getPoolAllocatorByName(p)
+			if err != nil {
+				return nil, err
+			}
+
+			var ip net.IP
+			var subnetInfo *crdv1a2.SubnetInfo
+			ip, subnetInfo, err = allocator.AllocateNext(crdv1a2.IPAddressPhaseAllocated, owner)
+			if err != nil {
+				return nil, err
+			}
+			if numPools > 1 {
+				allocatorsToRelease = append(allocatorsToRelease, allocator)
+			}
+
+			gwIP := net.ParseIP(subnetInfo.Gateway)
+			ipConfig, _ := generateIPConfig(ip, int(subnetInfo.PrefixLength), gwIP)
+			// CNI spec 0.2.0 and below support only one v4 and one v6 address. But we
+			// assume the CNI version >= 0.3.0, and so do not check the number of
+			// addresses.
+			result.IPs = append(result.IPs, ipConfig)
+		}
+		// No failed allocation, so do not release allocated IPs.
+		allocatorsToRelease = nil
 	}
+
+	// Add static addresses.
+	for _, a := range ipamConf.Addresses {
+		result.IPs = append(result.IPs, &current.IPConfig{
+			Address: a.IPNet,
+			Gateway: a.Gateway,
+			Version: a.Version})
+	}
+
 	// Copy routes and DNS from the input IPAM configuration.
 	result.Routes = ipamConf.Routes
 	result.DNS = ipamConf.DNS
-
-	// No failed allocation, so do not release allocated IPs.
-	allocatorsToRelease = nil
 	return result, nil
 }
 
