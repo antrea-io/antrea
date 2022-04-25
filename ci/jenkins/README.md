@@ -248,3 +248,25 @@ updated with new code.
 ## Tips for Developer
 
 * [macro.yaml](/ci/jenkins/jobs/macros.yaml): Use "{{}}" instead of "{}" in "builder-list-tests" and "builder-conformance".
+
+## Deploy Antrea CI on AWS
+
+If you want to use AWS as the provider of Antrea CI, you should create some resources on AWS in advance. These resources include:
+
+Prerequisites:
+- Create an SSH key in EC2.
+- Create a VM in AWS for deploying kind cluster and Cluster API.
+- Follow [Kubernetes Cluster API Provider AWS](https://cluster-api-aws.sigs.k8s.io/getting-started.html) to deploy Cluster API on kind cluster.
+- A VPC: [Work with VPCs](https://docs.aws.amazon.com/vpc/latest/userguide/working-with-vpcs.html)
+- A subnet in the VPC: [Work with subnets](https://docs.aws.amazon.com/vpc/latest/userguide/working-with-subnets.html)
+
+The above VPC can be created in arbitrary AWS region, and then create a subnet in the VPC. Note down the VPC ID and subnet ID. Put the SSH private key file to 'ci/cluster-api/aws/default-aws'.
+
+Use the command below to run a test on AWS manually.
+```
+bash test-vmc.sh --cluster-name <NAME> --testcase <TESTCASE> \
+--provider aws --aws-region <REGION> \
+--aws-access-key-id <AWS ACCRESS KEY> \
+--aws-secret-access-key <AWS SECRET ACCESS KEY> \
+--aws-vpc-id <VPC ID> --aws-subnet-id <SUBNET ID>
+```

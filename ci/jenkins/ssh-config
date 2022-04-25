@@ -5,4 +5,4 @@ Host SSHCONFIGNODENAME
     GSSAPIDelegateCredentials no
     HostName SSHCONFIGNODEIP
     Port 22
-    User capv
+    User USERNAME
