@@ -198,7 +198,7 @@ data:
 
 There are two important prerequisites for this feature:
 
-* You must enabled `proxyAll` and [remove kube-proxy](#removing-kube-proxy) from
+* You must enable `proxyAll` and [remove kube-proxy](#removing-kube-proxy) from
   the cluster, otherwise kube-proxy will still load-balance the traffic and you
   will not achieve the desired behavior.
 * Your external LoadBalancer must SNAT the traffic, in order for the reply
@@ -209,7 +209,8 @@ There are two important prerequisites for this feature:
 * Due to some restrictions on the implementation of Services in Antrea, the
   maximum number of Endpoints that Antrea can support at the moment is 800. If
   the number of Endpoints for a given Service exceeds 800, extra Endpoints will
-  be dropped. This will be fixed eventually.
+  be dropped (with non-local Endpoints being dropped in priority by each Antrea
+  Agent). This will be fixed eventually.
 * Due to some restrictions on the implementation of Services in Antrea, the
   maximum timeout value supported for ClientIP-based Service SessionAffinity is
   65535 seconds (the K8s Service specs allow values up to 86400 seconds). Values
