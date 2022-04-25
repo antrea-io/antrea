@@ -32,6 +32,9 @@ var (
 	selectorB = metav1.LabelSelector{MatchLabels: map[string]string{"foo2": "bar2"}}
 	selectorC = metav1.LabelSelector{MatchLabels: map[string]string{"foo3": "bar3"}}
 	selectorD = metav1.LabelSelector{MatchLabels: map[string]string{"foo4": "bar4"}}
+
+	icmpType8 = int32(8)
+	icmpCode0 = int32(0)
 )
 
 func TestProcessAntreaNetworkPolicy(t *testing.T) {
@@ -501,6 +504,68 @@ func TestProcessAntreaNetworkPolicy(t *testing.T) {
 					},
 				},
 				AppliedToGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("ns6", &selectorA, nil, nil, nil).NormalizedName)},
+			},
+			expectedAppliedToGroups: 1,
+			expectedAddressGroups:   1,
+		},
+		{
+			name: "rules-with-icmp-protocol",
+			inputPolicy: &crdv1alpha1.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Namespace: "ns7", Name: "npG", UID: "uidG"},
+				Spec: crdv1alpha1.NetworkPolicySpec{
+					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+						{PodSelector: &selectorA},
+					},
+					Priority: p10,
+					Egress: []crdv1alpha1.Rule{
+						{
+							Protocols: []crdv1alpha1.NetworkPolicyProtocol{
+								{
+									ICMP: &crdv1alpha1.ICMPProtocol{
+										ICMPType: &icmpType8,
+										ICMPCode: &icmpCode0,
+									},
+								},
+							},
+							To: []crdv1alpha1.NetworkPolicyPeer{
+								{
+									NodeSelector: &selectorB,
+								},
+							},
+							Action: &allowAction,
+						},
+					},
+				},
+			},
+			expectedPolicy: &antreatypes.NetworkPolicy{
+				UID:  "uidG",
+				Name: "uidG",
+				SourceRef: &controlplane.NetworkPolicyReference{
+					Type:      controlplane.AntreaNetworkPolicy,
+					Namespace: "ns7",
+					Name:      "npG",
+					UID:       "uidG",
+				},
+				Priority:     &p10,
+				TierPriority: &DefaultTierPriority,
+				Rules: []controlplane.NetworkPolicyRule{
+					{
+						Direction: controlplane.DirectionOut,
+						To: controlplane.NetworkPolicyPeer{
+							AddressGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", nil, nil, nil, &selectorB).NormalizedName)},
+						},
+						Services: []controlplane.Service{
+							{
+								Protocol: &protocolICMP,
+								ICMPType: &icmpType8,
+								ICMPCode: &icmpCode0,
+							},
+						},
+						Priority: 0,
+						Action:   &allowAction,
+					},
+				},
+				AppliedToGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("ns7", &selectorA, nil, nil, nil).NormalizedName)},
 			},
 			expectedAppliedToGroups: 1,
 			expectedAddressGroups:   1,

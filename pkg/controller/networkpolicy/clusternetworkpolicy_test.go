@@ -1865,6 +1865,95 @@ func TestAddCNP(t *testing.T) {
 			expAppliedToGroups: 1,
 			expAddressGroups:   2,
 		},
+		{
+			name: "rules-with-icmp-protocol",
+			inputPolicy: &crdv1alpha1.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "cnpJ", UID: "uidJ"},
+				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
+					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+						{PodSelector: &selectorA},
+					},
+					Priority: p10,
+					Ingress: []crdv1alpha1.Rule{
+						{
+							Protocols: []crdv1alpha1.NetworkPolicyProtocol{
+								{
+									ICMP: &crdv1alpha1.ICMPProtocol{
+										ICMPType: &icmpType8,
+										ICMPCode: &icmpCode0,
+									},
+								},
+							},
+							From: []crdv1alpha1.NetworkPolicyPeer{
+								{
+									NodeSelector: &selectorB,
+								},
+							},
+							Action: &allowAction,
+						},
+					},
+					Egress: []crdv1alpha1.Rule{
+						{
+							Protocols: []crdv1alpha1.NetworkPolicyProtocol{
+								{
+									ICMP: &crdv1alpha1.ICMPProtocol{},
+								},
+							},
+							To: []crdv1alpha1.NetworkPolicyPeer{
+								{
+									NodeSelector: &selectorA,
+								},
+							},
+							Action: &allowAction,
+						},
+					},
+				},
+			},
+			expPolicy: &antreatypes.NetworkPolicy{
+				UID:  "uidJ",
+				Name: "uidJ",
+				SourceRef: &controlplane.NetworkPolicyReference{
+					Type: controlplane.AntreaClusterNetworkPolicy,
+					Name: "cnpJ",
+					UID:  "uidJ",
+				},
+				Priority:     &p10,
+				TierPriority: &DefaultTierPriority,
+				Rules: []controlplane.NetworkPolicyRule{
+					{
+						Direction: controlplane.DirectionIn,
+						From: controlplane.NetworkPolicyPeer{
+							AddressGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", nil, nil, nil, &selectorB).NormalizedName)},
+						},
+						Services: []controlplane.Service{
+							{
+								Protocol: &protocolICMP,
+								ICMPType: &icmpType8,
+								ICMPCode: &icmpCode0,
+							},
+						},
+						Priority: 0,
+						Action:   &allowAction,
+					},
+					{
+						Direction: controlplane.DirectionOut,
+						To: controlplane.NetworkPolicyPeer{
+							AddressGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", nil, nil, nil, &selectorA).NormalizedName)},
+						},
+						Services: []controlplane.Service{
+							{
+								Protocol: &protocolICMP,
+							},
+						},
+						Priority: 0,
+						Action:   &allowAction,
+					},
+				},
+				AppliedToGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", &selectorA, nil, nil, nil).NormalizedName)},
+			},
+			expAppliedToGroups: 1,
+			expAddressGroups:   2,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1884,7 +1973,7 @@ func TestAddCNP(t *testing.T) {
 	for _, tt := range tests {
 		npc.addCNP(tt.inputPolicy)
 	}
-	assert.Equal(t, 8, npc.GetNetworkPolicyNum(), "number of NetworkPolicies do not match")
+	assert.Equal(t, 9, npc.GetNetworkPolicyNum(), "number of NetworkPolicies do not match")
 	assert.Equal(t, 5, npc.GetAddressGroupNum(), "number of AddressGroups do not match")
 	assert.Equal(t, 1, npc.GetAppliedToGroupNum(), "number of AppliedToGroups do not match")
 }

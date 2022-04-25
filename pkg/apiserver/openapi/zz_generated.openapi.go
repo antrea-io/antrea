@@ -1792,14 +1792,14 @@ func schema_pkg_apis_controlplane_v1beta2_Service(ref common.ReferenceCallback) 
 				Properties: map[string]spec.Schema{
 					"protocol": {
 						SchemaProps: spec.SchemaProps{
-							Description: "The protocol (TCP, UDP, or SCTP) which traffic must match. If not specified, this field defaults to TCP.",
+							Description: "The protocol (TCP, UDP, SCTP, or ICMP) which traffic must match. If not specified, this field defaults to TCP.",
 							Type:        []string{"string"},
 							Format:      "",
 						},
 					},
 					"port": {
 						SchemaProps: spec.SchemaProps{
-							Description: "The port name or number on the given protocol. If not specified, this matches all port numbers.",
+							Description: "Port and EndPort can only be specified, when the Protocol is TCP, UDP, or SCTP. Port defines the port name or number on the given protocol. If not specified and the Protocol is TCP, UDP, or SCTP, this matches all port numbers.",
 							Ref:         ref("k8s.io/apimachinery/pkg/util/intstr.IntOrString"),
 						},
 					},
@@ -1808,6 +1808,19 @@ func schema_pkg_apis_controlplane_v1beta2_Service(ref common.ReferenceCallback) 
 							Description: "EndPort defines the end of the port range, being the end included within the range. It can only be specified when a numerical `port` is specified.",
 							Type:        []string{"integer"},
 							Format:      "int32",
+						},
+					},
+					"icmpType": {
+						SchemaProps: spec.SchemaProps{
+							Description: "ICMPType and ICMPCode can only be specified, when the Protocol is ICMP. If they both are not specified and the Protocol is ICMP, this matches all ICMP traffic.",
+							Type:        []string{"integer"},
+							Format:      "int32",
+						},
+					},
+					"icmpCode": {
+						SchemaProps: spec.SchemaProps{
+							Type:   []string{"integer"},
+							Format: "int32",
 						},
 					},
 				},

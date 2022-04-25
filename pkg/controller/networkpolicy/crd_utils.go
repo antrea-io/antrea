@@ -35,10 +35,11 @@ var (
 	}
 )
 
-// toAntreaServicesForCRD converts a slice of v1alpha1.NetworkPolicyPort
-// objects to a slice of Antrea Service objects. A bool is returned along with
-// the Service objects to indicate whether any named port exists.
-func toAntreaServicesForCRD(npPorts []v1alpha1.NetworkPolicyPort) ([]controlplane.Service, bool) {
+// toAntreaServicesForCRD converts a slice of v1alpha1.NetworkPolicyPort objects
+// and a slice of v1alpha1.NetworkPolicyProtocol objects to a slice of Antrea
+// Service objects. A bool is returned along with the Service objects to indicate
+// whether any named port exists.
+func toAntreaServicesForCRD(npPorts []v1alpha1.NetworkPolicyPort, npProtocols []v1alpha1.NetworkPolicyProtocol) ([]controlplane.Service, bool) {
 	var antreaServices []controlplane.Service
 	var namedPortExists bool
 	for _, npPort := range npPorts {
@@ -50,6 +51,16 @@ func toAntreaServicesForCRD(npPorts []v1alpha1.NetworkPolicyPort) ([]controlplan
 			Port:     npPort.Port,
 			EndPort:  npPort.EndPort,
 		})
+	}
+	for _, npProtocol := range npProtocols {
+		if npProtocol.ICMP != nil {
+			curProtocol := controlplane.ProtocolICMP
+			antreaServices = append(antreaServices, controlplane.Service{
+				Protocol: &curProtocol,
+				ICMPType: npProtocol.ICMP.ICMPType,
+				ICMPCode: npProtocol.ICMP.ICMPCode,
+			})
+		}
 	}
 	return antreaServices, namedPortExists
 }

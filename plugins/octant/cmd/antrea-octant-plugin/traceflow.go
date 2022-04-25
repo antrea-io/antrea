@@ -529,7 +529,7 @@ func checkTimeout(request *service.ActionRequest) (bool, uint16) {
 
 func updateIPHeader(tf *crdv1alpha1.Traceflow, hasSrcPort bool, hasDstPort bool, srcPort uint16, dstPort uint16) {
 	switch tf.Spec.Packet.IPHeader.Protocol {
-	case crdv1alpha1.TCPProtocol:
+	case crdv1alpha1.TCPProtocolNumber:
 		tf.Spec.Packet.TransportHeader.TCP = &crdv1alpha1.TCPHeader{
 			Flags: 2,
 		}
@@ -539,7 +539,7 @@ func updateIPHeader(tf *crdv1alpha1.Traceflow, hasSrcPort bool, hasDstPort bool,
 		if hasDstPort {
 			tf.Spec.Packet.TransportHeader.TCP.DstPort = int32(dstPort)
 		}
-	case crdv1alpha1.UDPProtocol:
+	case crdv1alpha1.UDPProtocolNumber:
 		tf.Spec.Packet.TransportHeader.UDP = &crdv1alpha1.UDPHeader{}
 		if hasSrcPort {
 			tf.Spec.Packet.TransportHeader.UDP.SrcPort = int32(srcPort)
@@ -547,7 +547,7 @@ func updateIPHeader(tf *crdv1alpha1.Traceflow, hasSrcPort bool, hasDstPort bool,
 		if hasDstPort {
 			tf.Spec.Packet.TransportHeader.UDP.DstPort = int32(dstPort)
 		}
-	case crdv1alpha1.ICMPProtocol:
+	case crdv1alpha1.ICMPProtocolNumber:
 		tf.Spec.Packet.TransportHeader.ICMP = &crdv1alpha1.ICMPEchoRequestHeader{
 			ID:       0,
 			Sequence: 0,

@@ -705,7 +705,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
-			expectedReason: "`toServices` can't be used with `to` or `ports`",
+			expectedReason: "`toServices` can't be used with `to`, `ports` or `protocols`",
 		},
 		{
 			name: "acnp-toservice-set-with-ports",
@@ -739,7 +739,41 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
-			expectedReason: "`toServices` can't be used with `to` or `ports`",
+			expectedReason: "`toServices` can't be used with `to`, `ports` or `protocols`",
+		},
+		{
+			name: "acnp-toservice-set-with-protocols",
+			policy: &crdv1alpha1.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "acnp-toservice-set-with-protocols",
+				},
+				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
+					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+						{
+							NamespaceSelector: &metav1.LabelSelector{
+								MatchLabels: map[string]string{"foo1": "bar1"},
+							},
+						},
+					},
+					Egress: []crdv1alpha1.Rule{
+						{
+							Action: &allowAction,
+							Protocols: []crdv1alpha1.NetworkPolicyProtocol{
+								{
+									ICMP: &crdv1alpha1.ICMPProtocol{},
+								},
+							},
+							ToServices: []crdv1alpha1.NamespacedName{
+								{
+									Name:      "foo",
+									Namespace: "bar",
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedReason: "`toServices` can't be used with `to`, `ports` or `protocols`",
 		},
 		{
 			name: "acnp-toservice-alone",
@@ -827,10 +861,10 @@ func TestValidateAntreaPolicy(t *testing.T) {
 			expectedReason: "",
 		},
 		{
-			name: "acnp-endport-without-port",
+			name: "acnp-endport-without-port-in-ports",
 			policy: &crdv1alpha1.ClusterNetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "acnp-endport-without-port",
+					Name: "acnp-endport-without-port-in-ports",
 				},
 				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
 					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
@@ -855,10 +889,10 @@ func TestValidateAntreaPolicy(t *testing.T) {
 			expectedReason: "if `endPort` is specified `port` must be specified",
 		},
 		{
-			name: "acnp-endport-smaller-port",
+			name: "acnp-endport-smaller-port-in-ports",
 			policy: &crdv1alpha1.ClusterNetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "acnp-endport-smaller-port",
+					Name: "acnp-endport-smaller-port-in-ports",
 				},
 				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
 					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
@@ -884,10 +918,10 @@ func TestValidateAntreaPolicy(t *testing.T) {
 			expectedReason: "`endPort` should be greater than or equal to `port`",
 		},
 		{
-			name: "acnp-named-port-with-endport",
+			name: "acnp-named-port-with-endport-in-ports",
 			policy: &crdv1alpha1.ClusterNetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "acnp-named-port-with-endport",
+					Name: "acnp-named-port-with-endport-in-ports",
 				},
 				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
 					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
@@ -913,10 +947,10 @@ func TestValidateAntreaPolicy(t *testing.T) {
 			expectedReason: "if `port` is a string `endPort` cannot be specified",
 		},
 		{
-			name: "acnp-port-range",
+			name: "acnp-port-range-in-ports",
 			policy: &crdv1alpha1.ClusterNetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "acnp-port-range",
+					Name: "acnp-port-range-in-ports",
 				},
 				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
 					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
