@@ -356,12 +356,14 @@ message PodReference {
 
 // Service describes a port to allow traffic on.
 message Service {
-  // The protocol (TCP, UDP, or SCTP) which traffic must match. If not specified, this
+  // The protocol (TCP, UDP, SCTP, or ICMP) which traffic must match. If not specified, this
   // field defaults to TCP.
   // +optional
   optional string protocol = 1;
 
-  // The port name or number on the given protocol. If not specified, this matches all port numbers.
+  // Port and EndPort can only be specified, when the Protocol is TCP, UDP, or SCTP.
+  // Port defines the port name or number on the given protocol. If not specified
+  // and the Protocol is TCP, UDP, or SCTP, this matches all port numbers.
   // +optional
   optional k8s.io.apimachinery.pkg.util.intstr.IntOrString port = 2;
 
@@ -369,6 +371,13 @@ message Service {
   // It can only be specified when a numerical `port` is specified.
   // +optional
   optional int32 endPort = 3;
+
+  // ICMPType and ICMPCode can only be specified, when the Protocol is ICMP. If they
+  // both are not specified and the Protocol is ICMP, this matches all ICMP traffic.
+  // +optional
+  optional int32 icmpType = 4;
+
+  optional int32 icmpCode = 5;
 }
 
 // ServiceReference represents reference to a v1.Service.

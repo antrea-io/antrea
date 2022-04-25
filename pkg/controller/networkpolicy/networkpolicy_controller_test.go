@@ -59,7 +59,8 @@ var (
 	k8sProtocolTCP  = corev1.ProtocolTCP
 	k8sProtocolSCTP = corev1.ProtocolSCTP
 
-	protocolTCP = controlplane.ProtocolTCP
+	protocolTCP  = controlplane.ProtocolTCP
+	protocolICMP = controlplane.ProtocolICMP
 
 	int80   = intstr.FromInt(80)
 	int81   = intstr.FromInt(81)

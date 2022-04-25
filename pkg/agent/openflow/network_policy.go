@@ -54,6 +54,10 @@ var (
 	MatchTCPv6SrcPort   = types.NewMatchKey(binding.ProtocolTCPv6, types.L4PortAddr, "tp_src")
 	MatchUDPSrcPort     = types.NewMatchKey(binding.ProtocolUDP, types.L4PortAddr, "tp_src")
 	MatchUDPv6SrcPort   = types.NewMatchKey(binding.ProtocolUDPv6, types.L4PortAddr, "tp_src")
+	MatchICMPType       = types.NewMatchKey(binding.ProtocolICMP, types.ICMPAddr, "icmp_type")
+	MatchICMPCode       = types.NewMatchKey(binding.ProtocolICMP, types.ICMPAddr, "icmp_code")
+	MatchICMPv6Type     = types.NewMatchKey(binding.ProtocolICMPv6, types.ICMPAddr, "icmpv6_type")
+	MatchICMPv6Code     = types.NewMatchKey(binding.ProtocolICMPv6, types.ICMPAddr, "icmpv6_code")
 	MatchServiceGroupID = types.NewMatchKey(binding.ProtocolIP, types.ServiceGroupIDAddr, "reg7[0..31]")
 	Unsupported         = types.NewMatchKey(binding.ProtocolIP, types.UnSupported, "unknown")
 
@@ -206,13 +210,17 @@ func newConjunctionNotFound(conjunctionID uint32) *ConjunctionNotFound {
 type conjunctiveMatch struct {
 	tableID    uint8
 	priority   *uint16
+	matchPairs []matchPair
+}
+
+type matchPair struct {
 	matchKey   *types.MatchKey
 	matchValue interface{}
 }
 
-func (m *conjunctiveMatch) generateGlobalMapKey() string {
-	var valueStr, priorityStr string
+func (m *matchPair) KeyString() string {
 	matchType := m.matchKey
+	var valueStr string
 	switch v := m.matchValue.(type) {
 	case net.IP:
 		// Use the unique format "x.x.x.x/xx" for IP address and IP net, to avoid generating two different global map
@@ -248,16 +256,32 @@ func (m *conjunctiveMatch) generateGlobalMapKey() string {
 			// To normalize the key, set full mask while a single port is provided.
 			valueStr = fmt.Sprintf("%d/65535", bitRange.Value)
 		}
+	case *int32:
+		// This case includes the matchValue is ICMPType or ICMPCode.
+		if v != nil {
+			valueStr = fmt.Sprintf("%d", *v)
+		} else {
+			valueStr = fmt.Sprintf("%v", m.matchValue)
+		}
 	default:
 		// The default cases include the matchValue is an ofport Number.
 		valueStr = fmt.Sprintf("%s", m.matchValue)
+	}
+	return fmt.Sprintf("%v=%s", matchType, valueStr)
+}
+
+func (m *conjunctiveMatch) generateGlobalMapKey() string {
+	var priorityStr string
+	var matchPairStrList []string
+	for _, eachMatchPair := range m.matchPairs {
+		matchPairStrList = append(matchPairStrList, eachMatchPair.KeyString())
 	}
 	if m.priority == nil {
 		priorityStr = strconv.Itoa(int(priorityNormal))
 	} else {
 		priorityStr = strconv.Itoa(int(*m.priority))
 	}
-	return fmt.Sprintf("table:%d,priority:%s,type:%v,value:%s", m.tableID, priorityStr, matchType, valueStr)
+	return fmt.Sprintf("table:%d,priority:%s,matchPair:%s", m.tableID, priorityStr, strings.Join(matchPairStrList, ","))
 }
 
 // changeType is generally used to describe the change type of a conjMatchFlowContext. It is also used in "flowChange"
@@ -332,7 +356,7 @@ func (ctx *conjMatchFlowContext) createOrUpdateConjunctiveMatchFlow(actions []*c
 
 		// Create the conjunctive match flow entry. The actions here should not be empty for either add or update case.
 		// The expected operation for a new Openflow entry should be "insertion".
-		flow := ctx.featureNetworkPolicy.conjunctiveMatchFlow(ctx.tableID, ctx.matchKey, ctx.matchValue, ctx.priority, actions)
+		flow := ctx.featureNetworkPolicy.conjunctiveMatchFlow(ctx.tableID, ctx.matchPairs, ctx.priority, actions)
 		return &flowChange{
 			flow:       flow,
 			changeType: insertion,
@@ -622,7 +646,7 @@ func (c *clause) addConjunctiveMatchFlow(featureNetworkPolicy *featureNetworkPol
 		// Generate the default drop flow if dropTable is not nil and the default drop flow is not set yet.
 		if c.dropTable != nil && context.dropFlow == nil {
 			dropFlow = &flowChange{
-				flow:       context.featureNetworkPolicy.defaultDropFlow(c.dropTable, match.matchKey, match.matchValue),
+				flow:       context.featureNetworkPolicy.defaultDropFlow(c.dropTable, match.matchPairs),
 				changeType: insertion,
 			}
 		}
@@ -661,31 +685,50 @@ func generateAddressConjMatch(ruleTableID uint8, addr types.Address, addrType ty
 	matchValue := addr.GetValue()
 	match := &conjunctiveMatch{
 		tableID:    ruleTableID,
-		matchKey:   matchKey,
-		matchValue: matchValue,
+		matchPairs: []matchPair{{matchKey: matchKey, matchValue: matchValue}},
 		priority:   priority,
 	}
 	return match
 }
 
-func getServiceMatchType(protocol *v1beta2.Protocol, ipProtocols []binding.Protocol, matchSrc bool) []*types.MatchKey {
-	var matchKeys []*types.MatchKey
-	switch *protocol {
+func generateServiceConjMatches(ruleTableID uint8, service v1beta2.Service, priority *uint16, ipProtocols []binding.Protocol, matchSrc bool) []*conjunctiveMatch {
+	var matches []*conjunctiveMatch
+	conjMatchesMatchPairs := getServiceMatchPairs(service, ipProtocols, matchSrc)
+	for _, conjMatchMatchPairs := range conjMatchesMatchPairs {
+		matches = append(matches,
+			&conjunctiveMatch{
+				tableID:    ruleTableID,
+				matchPairs: conjMatchMatchPairs,
+				priority:   priority,
+			})
+	}
+	return matches
+}
+
+func getServiceMatchPairs(service v1beta2.Service, ipProtocols []binding.Protocol, matchSrc bool) [][]matchPair {
+	var conjMatchesMatchPairs [][]matchPair
+	ovsBitRanges := serviceToBitRanges(service)
+	addL4MatchPairs := func(matchKey *types.MatchKey) {
+		for _, ovsBitRange := range ovsBitRanges {
+			conjMatchesMatchPairs = append(conjMatchesMatchPairs, []matchPair{{matchKey: matchKey, matchValue: ovsBitRange}})
+		}
+	}
+	switch *service.Protocol {
 	case v1beta2.ProtocolTCP:
 		if !matchSrc {
 			for _, ipProtocol := range ipProtocols {
 				if ipProtocol == binding.ProtocolIP {
-					matchKeys = append(matchKeys, MatchTCPDstPort)
+					addL4MatchPairs(MatchTCPDstPort)
 				} else {
-					matchKeys = append(matchKeys, MatchTCPv6DstPort)
+					addL4MatchPairs(MatchTCPv6DstPort)
 				}
 			}
 		} else {
 			for _, ipProtocol := range ipProtocols {
 				if ipProtocol == binding.ProtocolIP {
-					matchKeys = append(matchKeys, MatchTCPSrcPort)
+					addL4MatchPairs(MatchTCPSrcPort)
 				} else {
-					matchKeys = append(matchKeys, MatchTCPv6SrcPort)
+					addL4MatchPairs(MatchTCPv6SrcPort)
 				}
 			}
 		}
@@ -693,50 +736,60 @@ func getServiceMatchType(protocol *v1beta2.Protocol, ipProtocols []binding.Proto
 		if !matchSrc {
 			for _, ipProtocol := range ipProtocols {
 				if ipProtocol == binding.ProtocolIP {
-					matchKeys = append(matchKeys, MatchUDPDstPort)
+					addL4MatchPairs(MatchUDPDstPort)
 				} else {
-					matchKeys = append(matchKeys, MatchUDPv6DstPort)
+					addL4MatchPairs(MatchUDPv6DstPort)
 				}
 			}
 		} else {
 			for _, ipProtocol := range ipProtocols {
 				if ipProtocol == binding.ProtocolIP {
-					matchKeys = append(matchKeys, MatchUDPSrcPort)
+					addL4MatchPairs(MatchUDPSrcPort)
 				} else {
-					matchKeys = append(matchKeys, MatchUDPv6SrcPort)
+					addL4MatchPairs(MatchUDPv6SrcPort)
 				}
 			}
 		}
 	case v1beta2.ProtocolSCTP:
 		for _, ipProtocol := range ipProtocols {
 			if ipProtocol == binding.ProtocolIP {
-				matchKeys = append(matchKeys, MatchSCTPDstPort)
+				addL4MatchPairs(MatchSCTPDstPort)
 			} else {
-				matchKeys = append(matchKeys, MatchSCTPv6DstPort)
+				addL4MatchPairs(MatchSCTPv6DstPort)
+			}
+		}
+	case v1beta2.ProtocolICMP:
+		for _, ipProtocol := range ipProtocols {
+			if ipProtocol == binding.ProtocolIP {
+				var matchPairs []matchPair
+				if service.ICMPType != nil {
+					matchPairs = append(matchPairs, matchPair{matchKey: MatchICMPType, matchValue: service.ICMPType})
+				}
+				if service.ICMPCode != nil {
+					matchPairs = append(matchPairs, matchPair{matchKey: MatchICMPCode, matchValue: service.ICMPCode})
+				}
+				if len(matchPairs) == 0 {
+					matchPairs = append(matchPairs, matchPair{matchKey: MatchICMPType, matchValue: nil})
+				}
+				conjMatchesMatchPairs = append(conjMatchesMatchPairs, matchPairs)
+			} else {
+				var matchPairs []matchPair
+				if service.ICMPType != nil {
+					matchPairs = append(matchPairs, matchPair{matchKey: MatchICMPv6Type, matchValue: service.ICMPType})
+				}
+				if service.ICMPCode != nil {
+					matchPairs = append(matchPairs, matchPair{matchKey: MatchICMPv6Code, matchValue: service.ICMPCode})
+				}
+				if len(matchPairs) == 0 {
+					matchPairs = append(matchPairs, matchPair{matchKey: MatchICMPv6Type, matchValue: nil})
+				}
+				conjMatchesMatchPairs = append(conjMatchesMatchPairs, matchPairs)
 			}
 		}
 	default:
-		matchKeys = []*types.MatchKey{MatchTCPDstPort}
+		addL4MatchPairs(MatchTCPDstPort)
 	}
-	return matchKeys
-}
-
-func generateServicePortConjMatches(ruleTableID uint8, service v1beta2.Service, priority *uint16, ipProtocols []binding.Protocol, matchSrc bool) []*conjunctiveMatch {
-	matchKeys := getServiceMatchType(service.Protocol, ipProtocols, matchSrc)
-	ovsBitRanges := serviceToBitRanges(service)
-	var matches []*conjunctiveMatch
-	for _, matchKey := range matchKeys {
-		for _, ovsBitRange := range ovsBitRanges {
-			matches = append(matches,
-				&conjunctiveMatch{
-					tableID:    ruleTableID,
-					matchKey:   matchKey,
-					matchValue: ovsBitRange,
-					priority:   priority,
-				})
-		}
-	}
-	return matches
+	return conjMatchesMatchPairs
 }
 
 // serviceToBitRanges converts a Service to a list of BitRange.
@@ -788,12 +841,12 @@ func (c *clause) addAddrFlows(featureNetworkPolicy *featureNetworkPolicy, addrTy
 	return conjMatchFlowContextChanges
 }
 
-// addServiceFlows translates the specified NetworkPolicyPorts to conjunctiveMatchFlow, and returns corresponding
-// conjMatchFlowContextChange.
-func (c *clause) addServiceFlows(featureNetworkPolicy *featureNetworkPolicy, ports []v1beta2.Service, priority *uint16, matchSrc bool) []*conjMatchFlowContextChange {
+// addServiceFlows translates the specified Antrea Service to conjunctiveMatchFlow,
+// and returns corresponding conjMatchFlowContextChange.
+func (c *clause) addServiceFlows(featureNetworkPolicy *featureNetworkPolicy, services []v1beta2.Service, priority *uint16, matchSrc bool) []*conjMatchFlowContextChange {
 	var conjMatchFlowContextChanges []*conjMatchFlowContextChange
-	for _, port := range ports {
-		matches := generateServicePortConjMatches(c.ruleTable.GetID(), port, priority, featureNetworkPolicy.ipProtocols, matchSrc)
+	for _, service := range services {
+		matches := generateServiceConjMatches(c.ruleTable.GetID(), service, priority, featureNetworkPolicy.ipProtocols, matchSrc)
 		for _, match := range matches {
 			ctxChange := c.addConjunctiveMatchFlow(featureNetworkPolicy, match)
 			conjMatchFlowContextChanges = append(conjMatchFlowContextChanges, ctxChange)
@@ -1005,8 +1058,8 @@ func (f *featureNetworkPolicy) addRuleToConjunctiveMatch(conj *policyRuleConjunc
 		}
 	}
 	if conj.serviceClause != nil {
-		for _, port := range rule.Service {
-			matches := generateServicePortConjMatches(conj.serviceClause.ruleTable.GetID(), port, rule.Priority, f.ipProtocols, false)
+		for _, eachService := range rule.Service {
+			matches := generateServiceConjMatches(conj.serviceClause.ruleTable.GetID(), eachService, rule.Priority, f.ipProtocols, false)
 			for _, match := range matches {
 				f.addActionToConjunctiveMatch(conj.serviceClause, match)
 			}
@@ -1036,7 +1089,7 @@ func (f *featureNetworkPolicy) addActionToConjunctiveMatch(clause *clause, match
 		}
 		// Generate the default drop flow if dropTable is not nil.
 		if clause.dropTable != nil {
-			context.dropFlow = context.featureNetworkPolicy.defaultDropFlow(clause.dropTable, match.matchKey, match.matchValue)
+			context.dropFlow = context.featureNetworkPolicy.defaultDropFlow(clause.dropTable, match.matchPairs)
 		}
 		f.globalConjMatchFlowCache[matcherKey] = context
 	}
@@ -1079,7 +1132,7 @@ func (c *client) BatchInstallPolicyRuleFlows(ofPolicyRules []*types.PolicyRule) 
 			for _, action := range ctx.actions {
 				actions = append(actions, action)
 			}
-			ctx.flow = c.featureNetworkPolicy.conjunctiveMatchFlow(ctx.tableID, ctx.matchKey, ctx.matchValue, ctx.priority, actions)
+			ctx.flow = c.featureNetworkPolicy.conjunctiveMatchFlow(ctx.tableID, ctx.matchPairs, ctx.priority, actions)
 			allFlows = append(allFlows, ctx.flow)
 		}
 		if ctx.dropFlow != nil {

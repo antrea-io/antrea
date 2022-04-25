@@ -56,23 +56,23 @@ const (
 // List the supported protocols and their codes in traceflow.
 // According to code in Antrea agent and controller, default protocol is ICMP if protocol is not inputted by users.
 const (
-	ICMPProtocol int32 = 1
-	TCPProtocol  int32 = 6
-	UDPProtocol  int32 = 17
-	SCTPProtocol int32 = 132
+	ICMPProtocolNumber int32 = 1
+	TCPProtocolNumber  int32 = 6
+	UDPProtocolNumber  int32 = 17
+	SCTPProtocolNumber int32 = 132
 )
 
 var SupportedProtocols = map[string]int32{
-	"TCP":  TCPProtocol,
-	"UDP":  UDPProtocol,
-	"ICMP": ICMPProtocol,
+	"TCP":  TCPProtocolNumber,
+	"UDP":  UDPProtocolNumber,
+	"ICMP": ICMPProtocolNumber,
 }
 
 var ProtocolsToString = map[int32]string{
-	TCPProtocol:  "TCP",
-	UDPProtocol:  "UDP",
-	ICMPProtocol: "ICMP",
-	SCTPProtocol: "SCTP",
+	TCPProtocolNumber:  "TCP",
+	UDPProtocolNumber:  "UDP",
+	ICMPProtocolNumber: "ICMP",
+	SCTPProtocolNumber: "SCTP",
 }
 
 // List the supported destination types in traceflow.
@@ -353,10 +353,14 @@ type NetworkPolicyStatus struct {
 type Rule struct {
 	// Action specifies the action to be applied on the rule.
 	Action *RuleAction `json:"action"`
-	// Set of port and protocol allowed/denied by the rule. If this field is unset
-	// or empty, this rule matches all ports.
+	// Set of ports and protocols matched by the rule. If this field and Protocols
+	// are unset or empty, this rule matches all ports.
 	// +optional
 	Ports []NetworkPolicyPort `json:"ports,omitempty"`
+	// Set of protocols matched by the rule. If this field and Ports are unset or
+	// empty, this rule matches all protocols supported.
+	// +optional
+	Protocols []NetworkPolicyProtocol `json:"protocols,omitempty"`
 	// Rule is matched if traffic originates from workloads selected by
 	// this field. If this field is empty, this rule matches all sources.
 	// +optional
@@ -599,4 +603,18 @@ type TierList struct {
 type NamespacedName struct {
 	Name      string `json:"name,omitempty"`
 	Namespace string `json:"namespace,omitempty"`
+}
+
+// NetworkPolicyProtocol defines additional protocols that are not supported by
+// `ports`. All fields should be used as a standalone field.
+type NetworkPolicyProtocol struct {
+	ICMP *ICMPProtocol `json:"icmp,omitempty"`
+}
+
+// ICMPProtocol matches ICMP traffic with specific ICMPType and/or ICMPCode. All
+// fields could be used alone or together. If all fields are not provided, this
+// matches all ICMP traffic.
+type ICMPProtocol struct {
+	ICMPType *int32 `json:"icmpType,omitempty"`
+	ICMPCode *int32 `json:"icmpCode,omitempty"`
 }

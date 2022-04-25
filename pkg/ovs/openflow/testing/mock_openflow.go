@@ -1829,6 +1829,34 @@ func (mr *MockFlowBuilderMockRecorder) MatchDstPort(arg0, arg1 interface{}) *gom
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchDstPort", reflect.TypeOf((*MockFlowBuilder)(nil).MatchDstPort), arg0, arg1)
 }
 
+// MatchICMPCode mocks base method
+func (m *MockFlowBuilder) MatchICMPCode(arg0 byte) openflow.FlowBuilder {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MatchICMPCode", arg0)
+	ret0, _ := ret[0].(openflow.FlowBuilder)
+	return ret0
+}
+
+// MatchICMPCode indicates an expected call of MatchICMPCode
+func (mr *MockFlowBuilderMockRecorder) MatchICMPCode(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchICMPCode", reflect.TypeOf((*MockFlowBuilder)(nil).MatchICMPCode), arg0)
+}
+
+// MatchICMPType mocks base method
+func (m *MockFlowBuilder) MatchICMPType(arg0 byte) openflow.FlowBuilder {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MatchICMPType", arg0)
+	ret0, _ := ret[0].(openflow.FlowBuilder)
+	return ret0
+}
+
+// MatchICMPType indicates an expected call of MatchICMPType
+func (mr *MockFlowBuilderMockRecorder) MatchICMPType(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchICMPType", reflect.TypeOf((*MockFlowBuilder)(nil).MatchICMPType), arg0)
+}
+
 // MatchICMPv6Code mocks base method
 func (m *MockFlowBuilder) MatchICMPv6Code(arg0 byte) openflow.FlowBuilder {
 	m.ctrl.T.Helper()

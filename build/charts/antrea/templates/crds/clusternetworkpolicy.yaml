@@ -190,7 +190,7 @@ spec:
                               required:
                               - name
                               - namespace
-                      # Ensure that Action field allows only ALLOW, DROP and REJECT values
+                      # Ensure that Action field allows only ALLOW, DROP, REJECT and PASS values
                       action:
                         type: string
                         enum: ['Allow', 'Drop', 'Reject', 'Pass']
@@ -206,6 +206,24 @@ spec:
                               x-kubernetes-int-or-string: true
                             endPort:
                               type: integer
+                      protocols:
+                        type: array
+                        items:
+                          type: object
+                          oneOf:
+                            - required: [icmp]
+                          properties:
+                            icmp:
+                              type: object
+                              properties:
+                                icmpType:
+                                  type: integer
+                                  minimum: 0
+                                  maximum: 255
+                                icmpCode:
+                                  type: integer
+                                  minimum: 0
+                                  maximum: 255
                       from:
                         type: array
                         items:
@@ -385,7 +403,7 @@ spec:
                               required:
                               - name
                               - namespace
-                      # Ensure that Action field allows only ALLOW, DROP and REJECT values
+                      # Ensure that Action field allows only ALLOW, DROP, REJECT and PASS values
                       action:
                         type: string
                         enum: ['Allow', 'Drop', 'Reject', 'Pass']
@@ -401,6 +419,24 @@ spec:
                               x-kubernetes-int-or-string: true
                             endPort:
                               type: integer
+                      protocols:
+                        type: array
+                        items:
+                          type: object
+                          oneOf:
+                            - required: [icmp]
+                          properties:
+                            icmp:
+                              type: object
+                              properties:
+                                icmpType:
+                                  type: integer
+                                  minimum: 0
+                                  maximum: 255
+                                icmpCode:
+                                  type: integer
+                                  minimum: 0
+                                  maximum: 255
                       to:
                         type: array
                         items:

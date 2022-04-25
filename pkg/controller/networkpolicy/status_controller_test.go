@@ -69,7 +69,7 @@ func (c *fakeNetworkPolicyControl) getAntreaClusterNetworkPolicyStatus() *crdv1a
 }
 
 func newTestStatusController(initialObjects ...runtime.Object) (*StatusController, antreaclientset.Interface, antreainformers.SharedInformerFactory, storage.Interface, *fakeNetworkPolicyControl) {
-	//clientset := fake.NewSimpleClientset(initialObjects...)
+	// clientset := fake.NewSimpleClientset(initialObjects...)
 	networkPolicyStore := store.NewNetworkPolicyStore()
 	antreaClientset := antreafakeclientset.NewSimpleClientset(initialObjects...)
 	antreaInformerFactory := antreainformers.NewSharedInformerFactory(antreaClientset, 0)
