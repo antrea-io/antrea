@@ -104,7 +104,7 @@ const (
 	nameSuffixLength int = 8
 
 	agnhostImage        = "projects.registry.vmware.com/antrea/agnhost:2.26"
-	busyboxImage        = "projects.registry.vmware.com/library/busybox"
+	busyboxImage        = "projects.registry.vmware.com/antrea/busybox"
 	nginxImage          = "projects.registry.vmware.com/antrea/nginx"
 	perftoolImage       = "projects.registry.vmware.com/antrea/perftool"
 	ipfixCollectorImage = "projects.registry.vmware.com/antrea/ipfix-collector:v0.5.4"
