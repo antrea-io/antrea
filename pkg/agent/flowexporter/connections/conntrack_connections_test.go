@@ -118,6 +118,7 @@ func TestConntrackConnectionStore_AddOrUpdateConn(t *testing.T) {
 				FlowKey:                        tuple1,
 				Labels:                         []byte{0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0},
 				Mark:                           openflow.ServiceCTMark.GetValue(),
+				IsPresent:                      true,
 				IsActive:                       true,
 				DestinationPodName:             "pod1",
 				DestinationPodNamespace:        "ns1",
