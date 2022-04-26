@@ -250,6 +250,21 @@ func (mr *MockOVSBridgeClientMockRecorder) GetBridgeName() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBridgeName", reflect.TypeOf((*MockOVSBridgeClient)(nil).GetBridgeName))
 }
 
+// GetDatapathID mocks base method
+func (m *MockOVSBridgeClient) GetDatapathID() (string, ovsconfig.Error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetDatapathID")
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(ovsconfig.Error)
+	return ret0, ret1
+}
+
+// GetDatapathID indicates an expected call of GetDatapathID
+func (mr *MockOVSBridgeClientMockRecorder) GetDatapathID() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDatapathID", reflect.TypeOf((*MockOVSBridgeClient)(nil).GetDatapathID))
+}
+
 // GetExternalIDs mocks base method
 func (m *MockOVSBridgeClient) GetExternalIDs() (map[string]string, ovsconfig.Error) {
 	m.ctrl.T.Helper()

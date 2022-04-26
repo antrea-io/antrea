@@ -975,7 +975,7 @@ func prepareConfiguration(enableIPv4, enableIPv6 bool) *testConfig {
 
 	gatewayConfig := &config1.GatewayConfig{MAC: gwMAC}
 	uplinkConfig := &config1.AdapterNetConfig{MAC: uplinkMAC}
-	nodeConfig := &config1.NodeConfig{GatewayConfig: gatewayConfig, UplinkNetConfig: uplinkConfig}
+	nodeConfig := &config1.NodeConfig{GatewayConfig: gatewayConfig, UplinkNetConfig: uplinkConfig, Type: config1.K8sNode}
 	podCfg := &testLocalPodConfig{
 		name: "container-1",
 		testPortConfig: &testPortConfig{
