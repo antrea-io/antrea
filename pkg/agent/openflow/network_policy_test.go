@@ -528,7 +528,7 @@ func TestBatchInstallPolicyRuleFlows(t *testing.T) {
 			c = ofClient.(*client)
 			c.cookieAllocator = cookie.NewAllocator(0)
 			c.ofEntryOperations = mockOperations
-			c.nodeConfig = &config.NodeConfig{PodIPv4CIDR: podIPv4CIDR, PodIPv6CIDR: nil}
+			c.nodeConfig = &config.NodeConfig{PodIPv4CIDR: podIPv4CIDR, PodIPv6CIDR: nil, Type: config.K8sNode}
 			c.networkConfig = &config.NetworkConfig{IPv4Enabled: true}
 			c.ipProtocols = []binding.Protocol{binding.ProtocolIP}
 			mockFeaturePodConnectivity.cookieAllocator = c.cookieAllocator
