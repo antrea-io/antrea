@@ -19,10 +19,11 @@ function usage() {
     Push the latest Antrea image to all vagrant nodes and restart the Antrea daemons
           --prometheus                 Deploy Prometheus service to scrape metrics
                                        from Antrea Agents and Controllers.
-          --flow-collector <Addr|ELK>  Provide either the external IPFIX collector
+          --flow-collector <Addr|ELK|Grafana>
+                                       Provide either the external IPFIX collector
                                        address or specify 'ELK' to deploy the ELK
-                                       flow collector. The address should be given
-                                       in the format IP:port:proto. Example: 192.168.1.100:4739:udp.
+                                       flow collector or specify 'Grafana' to deploy the Grafana flow collector.
+                                       The address should be given in the format IP:port:proto. Example: 192.168.1.100:4739:udp.
                                        Please note that with this option we deploy
                                        the Flow Aggregator Service.
           --flow-aggregator            Upload Flow Aggregator image and manifests
@@ -160,15 +161,33 @@ function copyManifestToNodes() {
 FLOW_AGG_YML="/tmp/flow-aggregator.yml"
 SAVED_FLOW_AGG_IMG=/tmp/flow-aggregator.tar
 FLOW_AGG_IMG_NAME=projects.registry.vmware.com/antrea/flow-aggregator:latest
+
+CH_OPERATOR_INSTALL_BUNDLE_YML=$THIS_DIR/../../../../build/yamls/clickhouse-operator-install-bundle.yml
+FLOW_VIS_YML="/tmp/flow-visibility.yml"
+
+# If a flow collector address is also provided, we update the Antrea
+# manifest (to enable all features)
+if [[ $FLOW_COLLECTOR != "" ]]; then
+    echo "Generating manifest with all features enabled along with FlowExporter feature"
+    $THIS_DIR/../../../../hack/generate-manifest.sh --mode dev --all-features > "${ANTREA_YML}"
+fi
+
+# Push Antrea image and related manifest.
+pushImgToNodes "$ANTREA_IMG_NAME" "$SAVED_ANTREA_IMG"
+copyManifestToNodes "$ANTREA_YML"
+copyManifestToNodes "$ANTREA_IPSEC_YML"
+
+# To ensure that the most recent version of Antrea (that we just pushed) will be used.
+echo "Restarting Antrea DaemonSet"
+ssh -F ssh-config k8s-node-control-plane kubectl -n kube-system delete all -l app=antrea
+ssh -F ssh-config k8s-node-control-plane kubectl apply -f antrea.yml
+
+rm "${ANTREA_YML}"
+
+# Update aggregator manifests (to set the collector address) accordingly.
 if [ "$FLOW_AGGREGATOR" == "true" ]; then
     pushImgToNodes "$FLOW_AGG_IMG_NAME" "$SAVED_FLOW_AGG_IMG"
-
-    # If a flow collector address is also provided, we update the Antrea
-    # manifest (to enable all features) and Aggregator manifests (to set the
-    # collector address) accordingly.
     if [[ $FLOW_COLLECTOR != "" ]]; then
-        echo "Generating manifest with all features enabled along with FlowExporter feature"
-        $THIS_DIR/../../../../hack/generate-manifest.sh --mode dev --all-features > "${ANTREA_YML}"
         if [[ $FLOW_COLLECTOR == "ELK" ]]; then
             echo "Deploy ELK flow collector"
             echo "Copying ELK flow collector folder"
@@ -181,8 +200,31 @@ if [ "$FLOW_AGGREGATOR" == "true" ]; then
             ssh -F ssh-config k8s-node-control-plane kubectl apply -f elk-flow-collector/elk-flow-collector.yml -n elk-flow-collector
             LOGSTASH_CLUSTER_IP=$(ssh -F ssh-config k8s-node-control-plane kubectl get -n elk-flow-collector svc logstash -o jsonpath='{.spec.clusterIP}')
             ELK_ADDR="${LOGSTASH_CLUSTER_IP}:4739:udp"
-
             $THIS_DIR/../../../../hack/generate-manifest-flow-aggregator.sh --mode dev -fc $ELK_ADDR > "${FLOW_AGG_YML}"
+
+        elif [[ $FLOW_COLLECTOR == "Grafana" ]]; then
+            echo "Deploy ClickHouse flow collector"
+            # Generate manifest
+            $THIS_DIR/../../../../hack/generate-manifest-flow-visibility.sh --mode dev > "${FLOW_VIS_YML}"
+            $THIS_DIR/../../../../hack/generate-manifest-flow-aggregator.sh --mode dev -ch > "${FLOW_AGG_YML}"
+
+            # Push ClickHouse Monitor image
+            SAVED_CH_MONITOR_IMG=/tmp/flow-visibility-clickhouse-monitor.tar
+            CH_MONITOR_IMG_NAME=projects.registry.vmware.com/antrea/flow-visibility-clickhouse-monitor:latest
+            pushImgToNodes "$CH_MONITOR_IMG_NAME" "$SAVED_CH_MONITOR_IMG"
+
+            # Copy manifests to nodes
+            copyManifestToNodes "$FLOW_VIS_YML"
+            copyManifestToNodes "$CH_OPERATOR_INSTALL_BUNDLE_YML"
+
+            # Apply needed yaml files
+            # Grafana flow collector needs a few minutes (2-5 mins.) to finish its deployment. It depends on the wait conditions below.
+            ssh -F ssh-config k8s-node-control-plane kubectl apply -f clickhouse-operator-install-bundle.yml
+            ssh -F ssh-config k8s-node-control-plane kubectl wait --for=condition=ready pod -l app=clickhouse-operator -n kube-system --timeout=180s
+            ssh -F ssh-config k8s-node-control-plane kubectl apply -f flow-visibility.yml
+            ssh -F ssh-config k8s-node-control-plane kubectl wait --for=condition=ready pod -l app=grafana -n flow-visibility --timeout=180s
+            ssh -F ssh-config k8s-node-control-plane kubectl wait --for=condition=ready pod -l app=clickhouse -n flow-visibility --timeout=180s
+            rm "${FLOW_VIS_YML}"
         else
             $THIS_DIR/../../../../hack/generate-manifest-flow-aggregator.sh --mode dev -fc $FLOW_COLLECTOR > "${FLOW_AGG_YML}"
         fi
@@ -199,18 +241,5 @@ if [ "$FLOW_AGGREGATOR" == "true" ]; then
 
     rm "${FLOW_AGG_YML}"
 fi
-
-# Push Antrea image and related manifest.
-pushImgToNodes "$ANTREA_IMG_NAME" "$SAVED_ANTREA_IMG"
-copyManifestToNodes "$ANTREA_YML"
-copyManifestToNodes "$ANTREA_IPSEC_YML"
-
-# To ensure that the most recent version of Antrea (that we just pushed) will be
-# used.
-echo "Restarting Antrea DaemonSet"
-ssh -F ssh-config k8s-node-control-plane kubectl -n kube-system delete all -l app=antrea
-ssh -F ssh-config k8s-node-control-plane kubectl apply -f antrea.yml
-
-rm "${ANTREA_YML}"
 
 echo "Done!"
