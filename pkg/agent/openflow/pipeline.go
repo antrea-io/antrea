@@ -386,6 +386,7 @@ type client struct {
 	enableMulticast       bool
 	enableTrafficControl  bool
 	connectUplinkToBridge bool
+	nodeType              config.NodeType
 	roundInfo             types.RoundInfo
 	cookieAllocator       cookie.Allocator
 	bridge                binding.Bridge

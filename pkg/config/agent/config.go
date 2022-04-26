@@ -194,6 +194,9 @@ type AgentConfig struct {
 	Egress EgressConfig `yaml:"egress"`
 	// IPsec related configurations.
 	IPsec IPsecConfig `yaml:"ipsec"`
+	// NodeType is type of the Node where Antrea Agent is running.
+	// Defaults to "k8sNode". Valid values include "k8sNode", and "externalNode".
+	NodeType string `yaml:"nodeType,omitempty"`
 }
 
 type AntreaProxyConfig struct {

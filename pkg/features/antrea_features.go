@@ -99,6 +99,10 @@ const (
 	// alpha: v1.7
 	// Enable certificated-based authentication for IPsec.
 	IPsecCertAuth featuregate.Feature = "IPsecCertAuth"
+
+	// alpha: v1.8
+	// Enable running agent on an unmanaged VM/BM.
+	ExternalNode featuregate.Feature = "ExternalNode"
 )
 
 var (
@@ -128,6 +132,7 @@ var (
 		ServiceExternalIP:  {Default: false, PreRelease: featuregate.Alpha},
 		TrafficControl:     {Default: false, PreRelease: featuregate.Alpha},
 		IPsecCertAuth:      {Default: false, PreRelease: featuregate.Alpha},
+		ExternalNode:       {Default: false, PreRelease: featuregate.Alpha},
 	}
 
 	// UnsupportedFeaturesOnWindows records the features not supported on
@@ -147,6 +152,14 @@ var (
 		SecondaryNetwork:  {},
 		ServiceExternalIP: {},
 		IPsecCertAuth:     {},
+	}
+	// supportedFeaturesOnExternalNode records the features supported on an external
+	// Node. Antrea Agent checks the enabled features if it is running on an
+	// unmanaged VM/BM, and fails the startup if an unsupported feature is enabled.
+	supportedFeaturesOnExternalNode = map[featuregate.Feature]struct{}{
+		ExternalNode:       {},
+		AntreaPolicy:       {},
+		NetworkPolicyStats: {},
 	}
 )
 
@@ -173,4 +186,14 @@ func SupportedOnWindows(feature featuregate.Feature) bool {
 	}
 	_, exists = unsupportedFeaturesOnWindows[feature]
 	return !exists
+}
+
+// SupportedOnExternalNode checks whether a feature is supported on a external Node.
+func SupportedOnExternalNode(feature featuregate.Feature) bool {
+	_, exists := DefaultAntreaFeatureGates[feature]
+	if !exists {
+		return false
+	}
+	_, exists = supportedFeaturesOnExternalNode[feature]
+	return exists
 }
