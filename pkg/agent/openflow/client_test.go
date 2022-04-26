@@ -54,6 +54,7 @@ var (
 		WireGuardConfig: &config.WireGuardConfig{},
 		PodIPv4CIDR:     ipNet,
 		NodeIPv4Addr:    nodeIP,
+		Type:            config.K8sNode,
 	}
 	networkConfig = &config.NetworkConfig{IPv4Enabled: true}
 	egressConfig  = &config.EgressConfig{}

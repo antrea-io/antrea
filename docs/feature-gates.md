@@ -48,6 +48,7 @@ example, to enable `AntreaProxy` on Linux, edit the Agent configuration in the
 | `Multicast`             | Agent              | `false` | Alpha | v1.5          | N/A          | N/A        | Yes                |       |
 | `SecondaryNetwork`      | Agent              | `false` | Alpha | v1.5          | N/A          | N/A        | Yes                |       |
 | `ServiceExternalIP`     | Agent + Controller | `false` | Alpha | v1.5          | N/A          | N/A        | Yes                |       |
+| `ExternalNode`          | Agent              | `false` | Alpha | v1.7          | N/A          | N/A        | Yes                |       |
 
 ## Description and Requirements of Features
 
@@ -323,3 +324,19 @@ Refer to this [document](service-loadbalancer.md) for more information.
 #### Requirements for this Feature
 
 This feature is currently only supported for Nodes running Linux.
+
+### ExternalNode
+
+The `ExternalNode` feature enables Antrea Agent runs on a virtual machine or a bare-metal server which is not a
+Kubernetes Node, and enforces Antrea NetworkPolicy for the VM/BM. Antrea Agent supports the `ExternalNode` feature on
+both Linux and Windows.
+
+More documentation will be coming in the future.
+
+#### Requirements for this Feature
+
+Since Antrea Agent is running on an unmanaged VM/BM when this feature is enabled, features designed for K8s Pods are
+disabled. As of now, this feature requires that `AntreaProxy` and `NetworkPolicyStats` are also enabled.
+
+OVS is required to be installed on the virtual machine or the bare-metal server before running Antrea Agent, and the OVS
+version must be >= 2.13.0 and <= 2.15.1.
