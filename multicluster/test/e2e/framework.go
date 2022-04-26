@@ -220,6 +220,26 @@ func randName(prefix string) string {
 	return prefix + randSeq(nameSuffixLength)
 }
 
+func (data *MCTestData) probeServiceFromPodInCluster(
+	cluster string,
+	podName string,
+	containerName string,
+	podNamespace string,
+	serviceIP string,
+) error {
+	cmd := []string{
+		"/bin/sh",
+		"-c",
+		fmt.Sprintf("curl --connect-timeout 5 -s %s", serviceIP),
+	}
+	log.Tracef("Running: kubectl exec %s -c %s -n %s -- %s", podName, containerName, podNamespace, strings.Join(cmd, " "))
+	stdout, stderr, err := data.runCommandFromPod(cluster, podNamespace, podName, containerName, cmd)
+	if err != nil || stderr != "" {
+		return fmt.Errorf("%s -> %s: error when running command: err - %v /// stdout - %s /// stderr - %s", podName, serviceIP, err, stdout, stderr)
+	}
+	return nil
+}
+
 func (data *MCTestData) probeFromPodInCluster(
 	cluster string,
 	podNamespace string,

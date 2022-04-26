@@ -246,8 +246,11 @@ function deliver_multicluster_controller {
 
     for kubeconfig in "${membercluter_kubeconfigs[@]}"
     do
-       ip=$(kubectl get nodes -o wide --no-headers=true ${EAST_CLUSTER_CONFIG} | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 == role {print $6}')
-       rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no" ./multicluster/test/yamls/test-east-serviceexport.yml jenkins@["${ip}"]:"${WORKDIR}"/serviceexport.yml
+       # Remove the longest matched substring '*/' from a string like '--kubeconfig=/var/lib/jenkins/.kube/east'
+       # to get the last element which is the cluster name.
+       cluster=${kubeconfig##*/}
+       ip=$(kubectl get nodes -o wide --no-headers=true ${kubeconfig} | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 == role {print $6}')
+       rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no" ./multicluster/test/yamls/test-${cluster}-serviceexport.yml jenkins@["${ip}"]:"${WORKDIR}"/serviceexport.yml
     done
 }
 
