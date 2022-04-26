@@ -84,7 +84,7 @@ func (c *ovsCtlClient) DumpGroup(groupID uint32) (string, error) {
 	// versions of OpenFlow always dump all groups. But when OpenFlow
 	// version is not specified, ovs-ofctl defaults to use OpenFlow10 but
 	// with the Nicira extensions enabled, which can support dumping a
-	// single group too. So here, we do not specify Openflow13 to run the
+	// single group too. So here, we do not specify Openflow15 to run the
 	// command.
 	groupDump, err := c.runOfctlCmd(false, "dump-groups", strconv.FormatUint(uint64(groupID), 10))
 	if err != nil {
@@ -163,11 +163,11 @@ func (c *ovsCtlClient) SetPortNoFlood(ofport int) error {
 	return nil
 }
 
-func (c *ovsCtlClient) runOfctlCmd(openflow13 bool, cmd string, args ...string) ([]byte, error) {
+func (c *ovsCtlClient) runOfctlCmd(openflow15 bool, cmd string, args ...string) ([]byte, error) {
 	cmdStr := fmt.Sprintf("ovs-ofctl %s %s", cmd, c.bridge)
 	cmdStr = cmdStr + " " + strings.Join(args, " ")
-	if openflow13 {
-		cmdStr += " -O Openflow13"
+	if openflow15 {
+		cmdStr += " -O Openflow15"
 	}
 	out, err := getOVSCommand(cmdStr).Output()
 	if err != nil {
@@ -177,7 +177,7 @@ func (c *ovsCtlClient) runOfctlCmd(openflow13 bool, cmd string, args ...string) 
 }
 
 func (c *ovsCtlClient) RunOfctlCmd(cmd string, args ...string) ([]byte, error) {
-	// Default to use Openflow13.
+	// Default to use Openflow15.
 	return c.runOfctlCmd(true, cmd, args...)
 }
 

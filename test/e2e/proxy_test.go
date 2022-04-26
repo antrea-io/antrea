@@ -941,9 +941,10 @@ func testProxyEndpointLifeCycle(ipFamily *corev1.IPFamily, data *TestData, t *te
 
 	var groupKeywords []string
 	if *ipFamily == corev1.IPv6Protocol {
-		groupKeywords = append(groupKeywords, fmt.Sprintf("set_field:0x%s->xxreg3", strings.TrimPrefix(hex.EncodeToString(*nginxIPs.ipv6), "0")))
+		groupKeywords = append(groupKeywords,
+			fmt.Sprintf("load:0x%s->NXM_NX_XXREG3[0..63],load:0x%s->NXM_NX_XXREG3[64..127]", strings.TrimLeft(hex.EncodeToString((*nginxIPs.ipv6)[8:16]), "0"), strings.TrimLeft(hex.EncodeToString((*nginxIPs.ipv6)[:8]), "0")))
 	} else {
-		groupKeywords = append(groupKeywords, fmt.Sprintf("0x%s->NXM_NX_REG3[]", strings.TrimPrefix(hex.EncodeToString(nginxIPs.ipv4.To4()), "0")))
+		groupKeywords = append(groupKeywords, fmt.Sprintf("0x%s->NXM_NX_REG3[]", strings.TrimLeft(hex.EncodeToString(nginxIPs.ipv4.To4()), "0")))
 	}
 
 	for tableName, keyword := range keywords {
@@ -1063,7 +1064,10 @@ func testProxyServiceLifeCycle(ipFamily *corev1.IPFamily, ingressIPs []string, d
 
 	var groupKeyword string
 	if *ipFamily == corev1.IPv6Protocol {
-		groupKeyword = fmt.Sprintf("set_field:0x%s->xxreg3,load:0x%x->NXM_NX_REG4[0..15]", strings.TrimLeft(hex.EncodeToString(nginxIPs.ipv6.To16()), "0"), 80)
+		groupKeyword = fmt.Sprintf("load:0x%s->NXM_NX_XXREG3[0..63],load:0x%s->NXM_NX_XXREG3[64..127],load:0x%x->NXM_NX_REG4[0..15]",
+			strings.TrimLeft(hex.EncodeToString(nginxIPs.ipv6.To16()[8:16]), "0"),
+			strings.TrimLeft(hex.EncodeToString(nginxIPs.ipv6.To16()[:8]), "0"),
+			80)
 	} else {
 		groupKeyword = fmt.Sprintf("load:0x%s->NXM_NX_REG3[],load:0x%x->NXM_NX_REG4[0..15]", strings.TrimLeft(hex.EncodeToString(nginxIPs.ipv4.To4()), "0"), 80)
 	}

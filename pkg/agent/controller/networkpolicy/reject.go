@@ -18,7 +18,7 @@ import (
 	"encoding/binary"
 	"fmt"
 
-	"antrea.io/libOpenflow/openflow13"
+	"antrea.io/libOpenflow/openflow15"
 	"antrea.io/libOpenflow/protocol"
 	"antrea.io/ofnet/ofctrl"
 
@@ -83,8 +83,12 @@ const (
 // packet-in message.
 func (c *Controller) rejectRequest(pktIn *ofctrl.PacketIn) error {
 	// Get ethernet data.
-	srcMAC := pktIn.Data.HWDst.String()
-	dstMAC := pktIn.Data.HWSrc.String()
+	ethernetPkt, err := getEthernetPacket(pktIn)
+	if err != nil {
+		return err
+	}
+	srcMAC := ethernetPkt.HWDst.String()
+	dstMAC := ethernetPkt.HWSrc.String()
 
 	var (
 		srcIP  string
@@ -92,7 +96,7 @@ func (c *Controller) rejectRequest(pktIn *ofctrl.PacketIn) error {
 		proto  uint8
 		isIPv6 bool
 	)
-	switch ipPkt := pktIn.Data.Data.(type) {
+	switch ipPkt := ethernetPkt.Data.(type) {
 	case *protocol.IPv4:
 		// Get IP data.
 		srcIP = ipPkt.NWDst.String()
@@ -152,17 +156,17 @@ func (c *Controller) rejectRequest(pktIn *ofctrl.PacketIn) error {
 	}
 	tunPort := c.tunPort
 	if tunPort == 0 {
-		// openflow13.P_CONTROLLER is used with noEncap mode when tunnel interface is not found.
-		// It won't cause a loop with openflow13.P_CONTROLLER because it is used as the input port but not output port
+		// openflow15.P_CONTROLLER is used with noEncap mode when tunnel interface is not found.
+		// It won't cause a loop with openflow15.P_CONTROLLER because it is used as the input port but not output port
 		// in the packet out message.
-		tunPort = uint32(openflow13.P_CONTROLLER)
+		tunPort = uint32(openflow15.P_CONTROLLER)
 	}
 	inPort, outPort := getRejectOFPorts(packetOutType, sIface, dIface, c.gwPort, tunPort)
 	mutateFunc := getRejectPacketOutMutateFunc(packetOutType)
 
 	if proto == protocol.Type_TCP {
 		// Get TCP data.
-		oriTCPSrcPort, oriTCPDstPort, oriTCPSeqNum, _, _, err := binding.GetTCPHeaderData(pktIn.Data.Data)
+		oriTCPSrcPort, oriTCPDstPort, oriTCPSeqNum, _, _, err := binding.GetTCPHeaderData(ethernetPkt.Data)
 		if err != nil {
 			return err
 		}
@@ -191,7 +195,7 @@ func (c *Controller) rejectRequest(pktIn *ofctrl.PacketIn) error {
 		icmpCode = ICMPv6DstAdminProhibitedCode
 		ipHdrLen = IPv6HdrLen
 	}
-	ipHdr, _ := pktIn.Data.Data.MarshalBinary()
+	ipHdr, _ := ethernetPkt.Data.MarshalBinary()
 	icmpData := make([]byte, int(ICMPUnusedHdrLen+ipHdrLen+8))
 	// Put ICMP unused header in Data prop and set it to zero.
 	binary.BigEndian.PutUint32(icmpData[:ICMPUnusedHdrLen], 0)

@@ -917,6 +917,20 @@ func (mr *MockActionMockRecorder) Move(arg0, arg1 interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Move", reflect.TypeOf((*MockAction)(nil).Move), arg0, arg1)
 }
 
+// MoveFromTunMetadata mocks base method
+func (m *MockAction) MoveFromTunMetadata(arg0 int, arg1 string, arg2, arg3 openflow.Range, arg4 byte) openflow.FlowBuilder {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MoveFromTunMetadata", arg0, arg1, arg2, arg3, arg4)
+	ret0, _ := ret[0].(openflow.FlowBuilder)
+	return ret0
+}
+
+// MoveFromTunMetadata indicates an expected call of MoveFromTunMetadata
+func (mr *MockActionMockRecorder) MoveFromTunMetadata(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MoveFromTunMetadata", reflect.TypeOf((*MockAction)(nil).MoveFromTunMetadata), arg0, arg1, arg2, arg3, arg4)
+}
+
 // MoveRange mocks base method
 func (m *MockAction) MoveRange(arg0, arg1 string, arg2, arg3 openflow.Range) openflow.FlowBuilder {
 	m.ctrl.T.Helper()

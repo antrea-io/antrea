@@ -210,6 +210,7 @@ type Action interface {
 	LoadRange(name string, addr uint64, to *Range) FlowBuilder
 	Move(from, to string) FlowBuilder
 	MoveRange(fromName, toName string, from, to Range) FlowBuilder
+	MoveFromTunMetadata(fromTunMetadataID int, toField string, fromRange, toRange Range, tlvLength uint8) FlowBuilder
 	Resubmit(port uint16, table uint8) FlowBuilder
 	ResubmitToTables(tables ...uint8) FlowBuilder
 	CT(commit bool, tableID uint8, zone int, zoneSrcField *RegField) CTAction
@@ -364,6 +365,9 @@ type MeterBandBuilder interface {
 type CTAction interface {
 	LoadToMark(value uint32) CTAction
 	LoadToCtMark(marks ...*CtMark) CTAction
+	// LoadToLabelField loads a data into ct_label field. If the expected label is larger than the max value of uint64
+	// (0xffffffffffffffff), call this function twice: one is to set the low 64 bits, and the other is to set the high
+	// 64 bits.
 	LoadToLabelField(value uint64, labelField *CtLabel) CTAction
 	MoveToLabel(fromName string, fromRng, labelRng *Range) CTAction
 	MoveToCtMarkField(fromRegField *RegField, ctMark *CtMarkField) CTAction
@@ -406,7 +410,9 @@ type PacketOutBuilder interface {
 	SetICMPData(data []byte) PacketOutBuilder
 	SetInport(inPort uint32) PacketOutBuilder
 	SetOutport(outport uint32) PacketOutBuilder
-	AddLoadAction(name string, data uint64, rng *Range) PacketOutBuilder
+	// AddSetIPTOSAction sets the IP_TOS field in the packet-out message. The action clears the two ECN bits as 0,
+	// and only 2-7 bits of the DSCP field in IP header is set.
+	AddSetIPTOSAction(data uint8) PacketOutBuilder
 	AddLoadRegMark(mark *RegMark) PacketOutBuilder
 	AddResubmitAction(inPort *uint16, table *uint8) PacketOutBuilder
 	SetL4Packet(packet util.Message) PacketOutBuilder

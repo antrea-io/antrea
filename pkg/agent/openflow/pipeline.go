@@ -22,7 +22,7 @@ import (
 	"sync"
 	"time"
 
-	"antrea.io/libOpenflow/openflow13"
+	"antrea.io/libOpenflow/openflow15"
 	"antrea.io/libOpenflow/protocol"
 	"antrea.io/ofnet/ofctrl"
 	v1 "k8s.io/api/core/v1"
@@ -370,10 +370,6 @@ var DispositionToString = map[uint32]string{
 }
 
 var (
-	// traceflowTagToSRange stores Traceflow dataplane tag to DSCP bits of
-	// IP header ToS field.
-	traceflowTagToSRange = binding.IPDSCPToSRange
-
 	// snatPktMarkRange takes an 8-bit range of pkt_mark to store the ID of
 	// a SNAT IP. The bit range must match SNATIPMarkMask.
 	snatPktMarkRange = &binding.Range{0, 7}
@@ -2869,7 +2865,7 @@ func (f *featurePodConnectivity) hostBridgeLocalFlows() []binding.Flow {
 
 // hostBridgeUplinkVLANFlows generates the flows to match VLAN packets from uplink port.
 func (f *featurePodConnectivity) hostBridgeUplinkVLANFlows() []binding.Flow {
-	vlanMask := uint16(openflow13.OFPVID_PRESENT)
+	vlanMask := uint16(openflow15.OFPVID_PRESENT)
 	return []binding.Flow{
 		VLANTable.ofTable.BuildFlow(priorityLow).
 			Cookie(f.cookieAllocator.Request(f.category).Raw()).

@@ -15,8 +15,10 @@
 package openflow
 
 import (
+	"encoding/binary"
 	"fmt"
 
+	"antrea.io/libOpenflow/openflow15"
 	"antrea.io/ofnet/ofctrl"
 	"golang.org/x/time/rate"
 	"k8s.io/klog/v2"
@@ -126,4 +128,24 @@ func (c *client) parsePacketIn(featurePacketIn *featureStartPacketIn) {
 			}
 		}
 	}
+}
+
+func GetMatchFieldByRegID(matchers *ofctrl.Matchers, regID int) *ofctrl.MatchField {
+	xregID := uint8(regID / 2)
+	startBit := 4 * (regID % 2)
+	f := matchers.GetMatch(openflow15.OXM_CLASS_PACKET_REGS, xregID)
+	if f == nil {
+		return nil
+	}
+	dataBytes := f.Value.(*openflow15.ByteArrayField).Data
+	data := binary.BigEndian.Uint32(dataBytes[startBit : startBit+4])
+	var mask uint32
+	if f.HasMask {
+		maskBytes, _ := f.Mask.MarshalBinary()
+		mask = binary.BigEndian.Uint32(maskBytes[startBit : startBit+4])
+	}
+	if data == 0 && mask == 0 {
+		return nil
+	}
+	return &ofctrl.MatchField{MatchField: openflow15.NewRegMatchFieldWithMask(regID, data, mask)}
 }

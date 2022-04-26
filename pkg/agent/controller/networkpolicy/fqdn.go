@@ -756,7 +756,11 @@ func (f *fqdnController) handlePacketIn(pktIn *ofctrl.PacketIn) error {
 		f.onDNSResponseMsg(&dnsMsg, time.Now(), waitCh)
 	}
 	go func() {
-		switch ipPkt := pktIn.Data.Data.(type) {
+		ethernetPkt, err := getEthernetPacket(pktIn)
+		if err != nil {
+			return
+		}
+		switch ipPkt := ethernetPkt.Data.(type) {
 		case *protocol.IPv4:
 			switch dnsPkt := ipPkt.Data.(type) {
 			case *protocol.UDP:
@@ -789,7 +793,11 @@ func (f *fqdnController) sendDNSPacketout(pktIn *ofctrl.PacketIn) error {
 		prot         uint8
 		isIPv6       bool
 	)
-	switch ipPkt := pktIn.Data.Data.(type) {
+	ethernetPkt, err := getEthernetPacket(pktIn)
+	if err != nil {
+		return err
+	}
+	switch ipPkt := ethernetPkt.Data.(type) {
 	case *protocol.IPv4:
 		srcIP = ipPkt.NWSrc.String()
 		dstIP = ipPkt.NWDst.String()
@@ -820,7 +828,7 @@ func (f *fqdnController) sendDNSPacketout(pktIn *ofctrl.PacketIn) error {
 				inPort = inPortField.GetValue().(uint32)
 			}
 		}
-		udpSrcPort, udpDstPort, err := binding.GetUDPHeaderData(pktIn.Data.Data)
+		udpSrcPort, udpDstPort, err := binding.GetUDPHeaderData(ethernetPkt.Data)
 		if err != nil {
 			klog.ErrorS(err, "Failed to get UDP header data")
 			return err
@@ -829,8 +837,8 @@ func (f *fqdnController) sendDNSPacketout(pktIn *ofctrl.PacketIn) error {
 			return packetOutBuilder.AddLoadRegMark(openflow.CustomReasonDNSRegMark)
 		}
 		return f.ofClient.SendUDPPacketOut(
-			pktIn.Data.HWSrc.String(),
-			pktIn.Data.HWDst.String(),
+			ethernetPkt.HWSrc.String(),
+			ethernetPkt.HWDst.String(),
 			srcIP,
 			dstIP,
 			inPort,
