@@ -375,6 +375,7 @@ func TestInitNodeLocalConfig(t *testing.T) {
 			ifaceStore := interfacestore.NewInterfaceStore()
 			expectedNodeConfig := config.NodeConfig{
 				Name:                       nodeName,
+				Type:                       config.K8sNode,
 				OVSBridge:                  ovsBridge,
 				DefaultTunName:             defaultTunInterfaceName,
 				PodIPv4CIDR:                podCIDR,
@@ -412,7 +413,7 @@ func TestInitNodeLocalConfig(t *testing.T) {
 			defer mockGetIPNetDeviceFromIP(nodeIPNet, ipDevice)()
 			defer mockNodeNameEnv(nodeName)()
 
-			require.NoError(t, initializer.initNodeLocalConfig())
+			require.NoError(t, initializer.initK8sNodeLocalConfig(nodeName))
 			assert.Equal(t, expectedNodeConfig, *initializer.nodeConfig)
 			node, err := client.CoreV1().Nodes().Get(context.TODO(), nodeName, metav1.GetOptions{})
 			require.NoError(t, err)

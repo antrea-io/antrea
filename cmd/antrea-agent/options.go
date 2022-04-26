@@ -23,6 +23,7 @@ import (
 
 	"github.com/spf13/pflag"
 	"gopkg.in/yaml.v2"
+	"k8s.io/component-base/featuregate"
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent/config"
@@ -49,6 +50,7 @@ const (
 	defaultIdleFlowExportTimeout   = 15 * time.Second
 	defaultStaleConnectionTimeout  = 5 * time.Minute
 	defaultNPLPortRange            = "61000-62000"
+	defaultNodeType                = config.K8sNode
 )
 
 type Options struct {
@@ -70,6 +72,7 @@ type Options struct {
 	staleConnectionTimeout time.Duration
 	nplStartPort           int
 	nplEndPort             int
+	nodeType               config.NodeType
 }
 
 func newOptions() *Options {
@@ -95,6 +98,11 @@ func (o *Options) complete(args []string) error {
 		return err
 	}
 	o.setDefaults()
+	if o.config.NodeType == config.ExternalNode.String() {
+		if err := o.resetVMDefaultFeatures(); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -104,85 +112,24 @@ func (o *Options) validate(args []string) error {
 		return fmt.Errorf("no positional arguments are supported")
 	}
 
-	if o.config.TunnelType != ovsconfig.VXLANTunnel && o.config.TunnelType != ovsconfig.GeneveTunnel &&
-		o.config.TunnelType != ovsconfig.GRETunnel && o.config.TunnelType != ovsconfig.STTTunnel {
-		return fmt.Errorf("tunnel type %s is invalid", o.config.TunnelType)
-	}
-	ok, encryptionMode := config.GetTrafficEncryptionModeFromStr(o.config.TrafficEncryptionMode)
-	if !ok {
-		return fmt.Errorf("TrafficEncryptionMode %s is unknown", o.config.TrafficEncryptionMode)
-	}
 	if o.config.OVSDatapathType != string(ovsconfig.OVSDatapathSystem) && o.config.OVSDatapathType != string(ovsconfig.OVSDatapathNetdev) {
 		return fmt.Errorf("OVS datapath type %s is not supported", o.config.OVSDatapathType)
 	}
 	if o.config.OVSDatapathType == string(ovsconfig.OVSDatapathNetdev) {
 		klog.Info("OVS 'netdev' datapath is not fully supported at the moment")
 	}
-	ok, encapMode := config.GetTrafficEncapModeFromStr(o.config.TrafficEncapMode)
-	if !ok {
-		return fmt.Errorf("TrafficEncapMode %s is unknown", o.config.TrafficEncapMode)
+	if config.ExternalNode.String() == o.config.NodeType && !features.DefaultFeatureGate.Enabled(features.ExternalNode) {
+		return fmt.Errorf("nodeType %s requires feature gate ExternalNode to be enabled", o.config.NodeType)
 	}
-
-	// Check if the enabled features are supported on the OS.
-	if err := o.checkUnsupportedFeatures(); err != nil {
-		return err
+	if o.config.NodeType == config.ExternalNode.String() {
+		o.nodeType = config.ExternalNode
+		return o.validateExternalNodeOptions()
+	} else if o.config.NodeType == config.K8sNode.String() {
+		o.nodeType = config.K8sNode
+		return o.validateK8sNodeOptions()
+	} else {
+		return fmt.Errorf("unsupported nodeType %s", o.config.NodeType)
 	}
-
-	if encapMode.SupportsNoEncap() {
-		// When using NoEncap traffic mode without AntreaProxy, Pod-to-Service traffic is handled by kube-proxy
-		// (iptables/ipvs) in the root netns. If the Endpoint is not local the DNATed traffic will be output to
-		// the physical network directly without going back to OVS for Egress NetworkPolicy enforcement, which
-		// breaks basic security functionality. Therefore, we usually do not allow the NoEncap traffic mode without
-		// AntreaProxy. But one can bypass this check and force this feature combination to be allowed, by defining
-		// the ALLOW_NO_ENCAP_WITHOUT_ANTREA_PROXY environment variable and setting it to true. This may lead to
-		// better performance when using NoEncap if Egress NetworkPolicy enforcement is not required.
-		if !features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
-			if env.GetAllowNoEncapWithoutAntreaProxy() {
-				klog.InfoS("Disabling AntreaProxy in NoEncap mode will prevent Egress NetworkPolicy rules from being enforced correctly")
-			} else {
-				return fmt.Errorf("TrafficEncapMode %s requires AntreaProxy to be enabled", o.config.TrafficEncapMode)
-			}
-		}
-		if encryptionMode != config.TrafficEncryptionModeNone {
-			return fmt.Errorf("TrafficEncryptionMode %s may only be enabled in %s mode", encryptionMode, config.TrafficEncapModeEncap)
-		}
-	}
-	if o.config.NoSNAT && !(encapMode == config.TrafficEncapModeNoEncap || encapMode == config.TrafficEncapModeNetworkPolicyOnly) {
-		return fmt.Errorf("noSNAT is only applicable to the %s mode", config.TrafficEncapModeNoEncap)
-	}
-	if encapMode == config.TrafficEncapModeNetworkPolicyOnly {
-		// In the NetworkPolicyOnly mode, Antrea will not perform SNAT
-		// (but SNAT can be done by the primary CNI).
-		o.config.NoSNAT = true
-	}
-	if err := o.validateAntreaProxyConfig(); err != nil {
-		return fmt.Errorf("proxy config is invalid: %w", err)
-	}
-	if err := o.validateFlowExporterConfig(); err != nil {
-		return fmt.Errorf("failed to validate flow exporter config: %v", err)
-	}
-	if features.DefaultFeatureGate.Enabled(features.Egress) {
-		for _, cidr := range o.config.Egress.ExceptCIDRs {
-			_, _, err := net.ParseCIDR(cidr)
-			if err != nil {
-				return fmt.Errorf("Egress Except CIDR %s is invalid", cidr)
-			}
-		}
-	}
-	if features.DefaultFeatureGate.Enabled(features.NodePortLocal) {
-		startPort, endPort, err := parsePortRange(o.config.NodePortLocal.PortRange)
-		if err != nil {
-			return fmt.Errorf("NodePortLocal portRange is not valid: %v", err)
-		}
-		o.nplStartPort = startPort
-		o.nplEndPort = endPort
-	} else if o.config.NodePortLocal.Enable {
-		klog.InfoS("The nodePortLocal.enable config option is set to true, but it will be ignored because the NodePortLocal feature gate is disabled")
-	}
-	if err := o.validateAntreaIPAMConfig(); err != nil {
-		return fmt.Errorf("failed to validate AntreaIPAM config: %v", err)
-	}
-	return nil
 }
 
 func (o *Options) loadConfigFromFile() error {
@@ -195,9 +142,6 @@ func (o *Options) loadConfigFromFile() error {
 }
 
 func (o *Options) setDefaults() {
-	if o.config.CNISocket == "" {
-		o.config.CNISocket = cni.AntreaCNISocketAddr
-	}
 	if o.config.OVSBridge == "" {
 		o.config.OVSBridge = defaultOVSBridge
 	}
@@ -207,69 +151,16 @@ func (o *Options) setDefaults() {
 	if o.config.OVSRunDir == "" {
 		o.config.OVSRunDir = ovsconfig.DefaultOVSRunDir
 	}
-	if o.config.HostGateway == "" {
-		o.config.HostGateway = defaultHostGateway
-	}
-	if o.config.TrafficEncapMode == "" {
-		o.config.TrafficEncapMode = config.TrafficEncapModeEncap.String()
-	}
-	if o.config.TrafficEncryptionMode == "" {
-		o.config.TrafficEncryptionMode = config.TrafficEncryptionModeNone.String()
-	}
-	if o.config.TunnelType == "" {
-		o.config.TunnelType = defaultTunnelType
-	}
-	if o.config.HostProcPathPrefix == "" {
-		o.config.HostProcPathPrefix = defaultHostProcPathPrefix
-	}
-	if features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
-		if o.config.AntreaProxy.ProxyLoadBalancerIPs == nil {
-			o.config.AntreaProxy.ProxyLoadBalancerIPs = new(bool)
-			*o.config.AntreaProxy.ProxyLoadBalancerIPs = true
-		}
-	} else {
-		if o.config.ServiceCIDR == "" {
-			o.config.ServiceCIDR = defaultServiceCIDR
-		}
-	}
 	if o.config.APIPort == 0 {
 		o.config.APIPort = apis.AntreaAgentAPIPort
 	}
-	if o.config.ClusterMembershipPort == 0 {
-		o.config.ClusterMembershipPort = apis.AntreaAgentClusterMembershipPort
+	if o.config.NodeType == "" {
+		o.config.NodeType = defaultNodeType.String()
 	}
-	if o.config.EnablePrometheusMetrics == nil {
-		o.config.EnablePrometheusMetrics = new(bool)
-		*o.config.EnablePrometheusMetrics = true
-	}
-	if o.config.WireGuard.Port == 0 {
-		o.config.WireGuard.Port = apis.WireGuardListenPort
-	}
-
-	if features.DefaultFeatureGate.Enabled(features.FlowExporter) {
-		if o.config.FlowCollectorAddr == "" {
-			o.config.FlowCollectorAddr = defaultFlowCollectorAddress
-		}
-		if o.config.FlowPollInterval == "" {
-			o.pollInterval = defaultFlowPollInterval
-		}
-		if o.config.ActiveFlowExportTimeout == "" {
-			o.activeFlowTimeout = defaultActiveFlowExportTimeout
-		}
-		if o.config.IdleFlowExportTimeout == "" {
-			o.idleFlowTimeout = defaultIdleFlowExportTimeout
-		}
-	}
-
-	if features.DefaultFeatureGate.Enabled(features.NodePortLocal) {
-		switch {
-		case o.config.NodePortLocal.PortRange != "":
-		case o.config.NPLPortRange != "":
-			klog.InfoS("The nplPortRange option is deprecated, please use nodePortLocal.portRange instead")
-			o.config.NodePortLocal.PortRange = o.config.NPLPortRange
-		default:
-			o.config.NodePortLocal.PortRange = defaultNPLPortRange
-		}
+	if o.config.NodeType == config.K8sNode.String() {
+		o.setK8sNodeDefaultOptions()
+	} else {
+		o.setExternalNodeDefaultOptions()
 	}
 }
 
@@ -373,4 +264,192 @@ func (o *Options) validateAntreaIPAMConfig() error {
 		return fmt.Errorf("Bridging mode requires noSNAT")
 	}
 	return nil
+}
+
+func (o *Options) setK8sNodeDefaultOptions() {
+	if o.config.CNISocket == "" {
+		o.config.CNISocket = cni.AntreaCNISocketAddr
+	}
+	if o.config.HostGateway == "" {
+		o.config.HostGateway = defaultHostGateway
+	}
+	if o.config.TrafficEncapMode == "" {
+		o.config.TrafficEncapMode = config.TrafficEncapModeEncap.String()
+	}
+	if o.config.TrafficEncryptionMode == "" {
+		o.config.TrafficEncryptionMode = config.TrafficEncryptionModeNone.String()
+	}
+	if o.config.TunnelType == "" {
+		o.config.TunnelType = defaultTunnelType
+	}
+	if o.config.HostProcPathPrefix == "" {
+		o.config.HostProcPathPrefix = defaultHostProcPathPrefix
+	}
+	if features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
+		if o.config.AntreaProxy.ProxyLoadBalancerIPs == nil {
+			o.config.AntreaProxy.ProxyLoadBalancerIPs = new(bool)
+			*o.config.AntreaProxy.ProxyLoadBalancerIPs = true
+		}
+	} else {
+		if o.config.ServiceCIDR == "" {
+			o.config.ServiceCIDR = defaultServiceCIDR
+		}
+	}
+	if o.config.ClusterMembershipPort == 0 {
+		o.config.ClusterMembershipPort = apis.AntreaAgentClusterMembershipPort
+	}
+	if o.config.EnablePrometheusMetrics == nil {
+		o.config.EnablePrometheusMetrics = new(bool)
+		*o.config.EnablePrometheusMetrics = true
+	}
+	if o.config.WireGuard.Port == 0 {
+		o.config.WireGuard.Port = apis.WireGuardListenPort
+	}
+
+	if features.DefaultFeatureGate.Enabled(features.FlowExporter) {
+		if o.config.FlowCollectorAddr == "" {
+			o.config.FlowCollectorAddr = defaultFlowCollectorAddress
+		}
+		if o.config.FlowPollInterval == "" {
+			o.pollInterval = defaultFlowPollInterval
+		}
+		if o.config.ActiveFlowExportTimeout == "" {
+			o.activeFlowTimeout = defaultActiveFlowExportTimeout
+		}
+		if o.config.IdleFlowExportTimeout == "" {
+			o.idleFlowTimeout = defaultIdleFlowExportTimeout
+		}
+	}
+
+	if features.DefaultFeatureGate.Enabled(features.NodePortLocal) {
+		switch {
+		case o.config.NodePortLocal.PortRange != "":
+		case o.config.NPLPortRange != "":
+			klog.InfoS("The nplPortRange option is deprecated, please use nodePortLocal.portRange instead")
+			o.config.NodePortLocal.PortRange = o.config.NPLPortRange
+		default:
+			o.config.NodePortLocal.PortRange = defaultNPLPortRange
+		}
+	}
+}
+
+func (o *Options) validateK8sNodeOptions() error {
+	if o.config.TunnelType != ovsconfig.VXLANTunnel && o.config.TunnelType != ovsconfig.GeneveTunnel &&
+		o.config.TunnelType != ovsconfig.GRETunnel && o.config.TunnelType != ovsconfig.STTTunnel {
+		return fmt.Errorf("tunnel type %s is invalid", o.config.TunnelType)
+	}
+	ok, encryptionMode := config.GetTrafficEncryptionModeFromStr(o.config.TrafficEncryptionMode)
+	if !ok {
+		return fmt.Errorf("TrafficEncryptionMode %s is unknown", o.config.TrafficEncryptionMode)
+	}
+	ok, encapMode := config.GetTrafficEncapModeFromStr(o.config.TrafficEncapMode)
+	if !ok {
+		return fmt.Errorf("TrafficEncapMode %s is unknown", o.config.TrafficEncapMode)
+	}
+
+	// Check if the enabled features are supported on the OS.
+	if err := o.checkUnsupportedFeatures(); err != nil {
+		return err
+	}
+
+	if encapMode.SupportsNoEncap() {
+		// When using NoEncap traffic mode without AntreaProxy, Pod-to-Service traffic is handled by kube-proxy
+		// (iptables/ipvs) in the root netns. If the Endpoint is not local the DNATed traffic will be output to
+		// the physical network directly without going back to OVS for Egress NetworkPolicy enforcement, which
+		// breaks basic security functionality. Therefore, we usually do not allow the NoEncap traffic mode without
+		// AntreaProxy. But one can bypass this check and force this feature combination to be allowed, by defining
+		// the ALLOW_NO_ENCAP_WITHOUT_ANTREA_PROXY environment variable and setting it to true. This may lead to
+		// better performance when using NoEncap if Egress NetworkPolicy enforcement is not required.
+		if !features.DefaultFeatureGate.Enabled(features.AntreaProxy) {
+			if env.GetAllowNoEncapWithoutAntreaProxy() {
+				klog.InfoS("Disabling AntreaProxy in NoEncap mode will prevent Egress NetworkPolicy rules from being enforced correctly")
+			} else {
+				return fmt.Errorf("TrafficEncapMode %s requires AntreaProxy to be enabled", o.config.TrafficEncapMode)
+			}
+		}
+		if encryptionMode != config.TrafficEncryptionModeNone {
+			return fmt.Errorf("TrafficEncryptionMode %s may only be enabled in %s mode", encryptionMode, config.TrafficEncapModeEncap)
+		}
+	}
+	if o.config.NoSNAT && !(encapMode == config.TrafficEncapModeNoEncap || encapMode == config.TrafficEncapModeNetworkPolicyOnly) {
+		return fmt.Errorf("noSNAT is only applicable to the %s mode", config.TrafficEncapModeNoEncap)
+	}
+	if encapMode == config.TrafficEncapModeNetworkPolicyOnly {
+		// In the NetworkPolicyOnly mode, Antrea will not perform SNAT
+		// (but SNAT can be done by the primary CNI).
+		o.config.NoSNAT = true
+	}
+	if err := o.validateAntreaProxyConfig(); err != nil {
+		return fmt.Errorf("proxy config is invalid: %w", err)
+	}
+	if err := o.validateFlowExporterConfig(); err != nil {
+		return fmt.Errorf("failed to validate flow exporter config: %v", err)
+	}
+	if features.DefaultFeatureGate.Enabled(features.Egress) {
+		for _, cidr := range o.config.Egress.ExceptCIDRs {
+			_, _, err := net.ParseCIDR(cidr)
+			if err != nil {
+				return fmt.Errorf("Egress Except CIDR %s is invalid", cidr)
+			}
+		}
+	}
+	if features.DefaultFeatureGate.Enabled(features.NodePortLocal) {
+		startPort, endPort, err := parsePortRange(o.config.NodePortLocal.PortRange)
+		if err != nil {
+			return fmt.Errorf("NodePortLocal portRange is not valid: %v", err)
+		}
+		o.nplStartPort = startPort
+		o.nplEndPort = endPort
+	} else if o.config.NodePortLocal.Enable {
+		klog.InfoS("The nodePortLocal.enable config option is set to true, but it will be ignored because the NodePortLocal feature gate is disabled")
+	}
+	if err := o.validateAntreaIPAMConfig(); err != nil {
+		return fmt.Errorf("failed to validate AntreaIPAM config: %v", err)
+	}
+	return nil
+}
+
+// resetVMDefaultFeatures sets the feature's default enablement status as false if it is not supported on a VM or a BM.
+func (o *Options) resetVMDefaultFeatures() error {
+	disabledFeatureMap := make(map[string]bool)
+	for f, s := range features.DefaultAntreaFeatureGates {
+		if s.Default && !features.SupportedOnExternalNode(f) {
+			disabledFeatureMap[string(f)] = false
+		}
+	}
+	return features.DefaultMutableFeatureGate.SetFromMap(disabledFeatureMap)
+}
+
+func (o *Options) validateExternalNodeOptions() error {
+	var unsupported []string
+	for f, enabled := range o.config.FeatureGates {
+		if enabled && !features.SupportedOnExternalNode(featuregate.Feature(f)) {
+			unsupported = append(unsupported, f)
+		}
+	}
+	if o.config.TrafficEncapMode != config.TrafficEncapModeNoEncap.String() {
+		unsupported = append(unsupported, o.config.TrafficEncapMode)
+	}
+	if o.config.NodePortLocal.Enable {
+		unsupported = append(unsupported, "NodePortLocal")
+	}
+	if o.config.EnableIPSecTunnel {
+		unsupported = append(unsupported, "EnableIPSecTunnel")
+	}
+	if unsupported != nil {
+		return fmt.Errorf("unsupported features on Virtual Machine: {%s}", strings.Join(unsupported, ", "))
+	}
+	return nil
+}
+
+func (o *Options) setExternalNodeDefaultOptions() {
+	// Following options are default values for agent running on a Virtual Machine.
+	// They are set to avoid unexpected agent crash.
+	if o.config.TrafficEncapMode == "" {
+		o.config.TrafficEncapMode = config.TrafficEncapModeNoEncap.String()
+	}
+	if o.config.EnablePrometheusMetrics == nil {
+		o.config.EnablePrometheusMetrics = new(bool)
+		*o.config.EnablePrometheusMetrics = false
+	}
 }
