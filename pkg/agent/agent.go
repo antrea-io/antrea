@@ -103,6 +103,7 @@ type Initializer struct {
 	proxyAll       bool
 	networkReadyCh chan<- struct{}
 	stopCh         <-chan struct{}
+	nodeType       config.NodeType
 }
 
 func NewInitializer(
@@ -120,6 +121,7 @@ func NewInitializer(
 	serviceConfig *config.ServiceConfig,
 	networkReadyCh chan<- struct{},
 	stopCh <-chan struct{},
+	nodeType config.NodeType,
 	enableProxy bool,
 	proxyAll bool,
 	connectUplinkToBridge bool,
@@ -139,6 +141,7 @@ func NewInitializer(
 		serviceConfig:         serviceConfig,
 		networkReadyCh:        networkReadyCh,
 		stopCh:                stopCh,
+		nodeType:              nodeType,
 		enableProxy:           enableProxy,
 		proxyAll:              proxyAll,
 		connectUplinkToBridge: connectUplinkToBridge,
@@ -175,13 +178,15 @@ func (i *Initializer) setupOVSBridge() error {
 		return err
 	}
 
-	if err := i.setupDefaultTunnelInterface(); err != nil {
-		return err
-	}
-	// Set up host gateway interface
-	err := i.setupGatewayInterface()
-	if err != nil {
-		return err
+	if i.nodeType == config.K8sNode {
+		if err := i.setupDefaultTunnelInterface(); err != nil {
+			return err
+		}
+		// Set up host gateway interface
+		err := i.setupGatewayInterface()
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -344,9 +349,6 @@ func (i *Initializer) Initialize() error {
 		return err
 	}
 
-	i.networkConfig.IPv4Enabled = config.IsIPv4Enabled(i.nodeConfig, i.networkConfig.TrafficEncapMode)
-	i.networkConfig.IPv6Enabled = config.IsIPv6Enabled(i.nodeConfig, i.networkConfig.TrafficEncapMode)
-
 	if err := i.prepareHostNetwork(); err != nil {
 		return err
 	}
@@ -406,23 +408,30 @@ func (i *Initializer) Initialize() error {
 		}
 	}
 
-	wg.Add(1)
-	// routeClient.Initialize() should be after i.setupOVSBridge() which
-	// creates the host gateway interface.
-	if err := i.routeClient.Initialize(i.nodeConfig, wg.Done); err != nil {
-		return err
-	}
+	if i.nodeType == config.K8sNode {
+		wg.Add(1)
+		// routeClient.Initialize() should be after i.setupOVSBridge() which
+		// creates the host gateway interface.
+		if err := i.routeClient.Initialize(i.nodeConfig, wg.Done); err != nil {
+			return err
+		}
 
-	// Install OpenFlow entries on OVS bridge.
-	if err := i.initOpenFlowPipeline(); err != nil {
-		return err
-	}
+		// Install OpenFlow entries on OVS bridge.
+		if err := i.initOpenFlowPipeline(); err != nil {
+			return err
+		}
 
-	// The Node's network is ready only when both synchronous and asynchronous initialization are done.
-	go func() {
-		wg.Wait()
-		close(i.networkReadyCh)
-	}()
+		// The Node's network is ready only when both synchronous and asynchronous initialization are done.
+		go func() {
+			wg.Wait()
+			close(i.networkReadyCh)
+		}()
+	} else {
+		// Install OpenFlow entries on OVS bridge.
+		if err := i.initOpenFlowPipeline(); err != nil {
+			return err
+		}
+	}
 	klog.Infof("Agent initialized NodeConfig=%v, NetworkConfig=%v", i.nodeConfig, i.networkConfig)
 	return nil
 }
@@ -800,16 +809,12 @@ func (i *Initializer) enableTunnelCsum(tunnelPortName string) error {
 	return i.ovsBridgeClient.SetInterfaceOptions(tunnelPortName, updatedOptions)
 }
 
-// initNodeLocalConfig retrieves node's subnet CIDR from node.spec.PodCIDR, which is used for IPAM and setup
+// initK8sNodeLocalConfig retrieves node's subnet CIDR from node.spec.PodCIDR, which is used for IPAM and setup
 // host gateway interface.
-func (i *Initializer) initNodeLocalConfig() error {
-	nodeName, err := env.GetNodeName()
-	if err != nil {
-		return err
-	}
-
+func (i *Initializer) initK8sNodeLocalConfig(nodeName string) error {
 	var node *v1.Node
 	if err := wait.PollImmediate(5*time.Second, 30*time.Second, func() (bool, error) {
+		var err error
 		node, err = i.client.CoreV1().Nodes().Get(context.TODO(), nodeName, metav1.GetOptions{})
 		if err != nil {
 			return false, fmt.Errorf("failed to get Node with name %s from K8s: %w", nodeName, err)
@@ -905,6 +910,7 @@ func (i *Initializer) initNodeLocalConfig() error {
 
 	i.nodeConfig = &config.NodeConfig{
 		Name:                       nodeName,
+		Type:                       config.K8sNode,
 		OVSBridge:                  i.ovsBridge,
 		DefaultTunName:             defaultTunInterfaceName,
 		NodeIPv4Addr:               nodeIPv4Addr,
@@ -1162,4 +1168,35 @@ func (i *Initializer) patchNodeAnnotations(nodeName, key string, value interface
 // with NetworkPolicyOnly mode on public cloud setup, e.g., AKS.
 func (i *Initializer) getNodeInterfaceFromIP(nodeIPs *utilip.DualStackIPs) (v4IPNet *net.IPNet, v6IPNet *net.IPNet, iface *net.Interface, err error) {
 	return getIPNetDeviceFromIP(nodeIPs, sets.NewString(i.hostGateway))
+}
+
+func (i *Initializer) initNodeLocalConfig() error {
+	nodeName, err := env.GetNodeName()
+	if err != nil {
+		return err
+	}
+	if i.nodeType == config.K8sNode {
+		if err := i.initK8sNodeLocalConfig(nodeName); err != nil {
+			return err
+		}
+
+		i.networkConfig.IPv4Enabled = config.IsIPv4Enabled(i.nodeConfig, i.networkConfig.TrafficEncapMode)
+		i.networkConfig.IPv6Enabled = config.IsIPv6Enabled(i.nodeConfig, i.networkConfig.TrafficEncapMode)
+		return nil
+	}
+	if err := i.initVMLocalConfig(nodeName); err != nil {
+		return err
+	}
+	// Only IPv4 is supported on a VM Node.
+	i.networkConfig.IPv4Enabled = true
+	return nil
+}
+
+func (i *Initializer) initVMLocalConfig(nodeName string) error {
+	i.nodeConfig = &config.NodeConfig{
+		Name:      nodeName,
+		Type:      config.ExternalNode,
+		OVSBridge: i.ovsBridge,
+	}
+	return nil
 }
