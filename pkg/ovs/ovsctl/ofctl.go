@@ -18,9 +18,18 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 )
+
+func (c *ovsCtlClient) DumpTables() ([]string, error) {
+	tableDump, err := c.RunOfctlCmd("dump-table-features")
+	if err != nil {
+		return nil, err
+	}
+	return c.parseTableEntries(tableDump)
+}
 
 func (c *ovsCtlClient) DumpFlows(args ...string) ([]string, error) {
 	// Print table and port names.
@@ -52,6 +61,27 @@ func (c *ovsCtlClient) parseFlowEntries(flowDump []byte) ([]string, error) {
 		flowList = append(flowList, flow)
 	}
 	return flowList, nil
+}
+
+func (c *ovsCtlClient) parseTableEntries(tableDump []byte) ([]string, error) {
+	scanner := bufio.NewScanner(strings.NewReader(string(tableDump)))
+	scanner.Split(bufio.ScanLines)
+	var tableList []string
+	re := regexp.MustCompile(`(\d+) \("(\S+)"\)`)
+	for scanner.Scan() {
+		line := trimFlowStr(scanner.Text())
+		if line == "" {
+			continue
+		}
+		match := re.FindString(line)
+		if match == "" {
+			continue
+		}
+		match = strings.Replace(match, "(\"", "", -1)
+		match = strings.Replace(match, "\")", "", -1)
+		tableList = append(tableList, match)
+	}
+	return tableList, nil
 }
 
 func (c *ovsCtlClient) DumpMatchedFlow(matchStr string) (string, error) {

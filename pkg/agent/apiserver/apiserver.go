@@ -38,6 +38,7 @@ import (
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/featuregates"
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/networkpolicy"
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/ovsflows"
+	"antrea.io/antrea/pkg/agent/apiserver/handlers/ovstables"
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/ovstracing"
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/podinterface"
 	agentquerier "antrea.io/antrea/pkg/agent/querier"
@@ -81,6 +82,7 @@ func installHandlers(aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolic
 	s.Handler.NonGoRestfulMux.HandleFunc("/appliedtogroups", appliedtogroup.HandleFunc(npq))
 	s.Handler.NonGoRestfulMux.HandleFunc("/addressgroups", addressgroup.HandleFunc(npq))
 	s.Handler.NonGoRestfulMux.HandleFunc("/ovsflows", ovsflows.HandleFunc(aq))
+	s.Handler.NonGoRestfulMux.HandleFunc("/ovstables", ovstables.HandleFunc(aq))
 	s.Handler.NonGoRestfulMux.HandleFunc("/ovstracing", ovstracing.HandleFunc(aq))
 }
 

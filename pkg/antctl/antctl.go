@@ -20,6 +20,7 @@ import (
 
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/agentinfo"
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/ovsflows"
+	"antrea.io/antrea/pkg/agent/apiserver/handlers/ovstables"
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/podinterface"
 	"antrea.io/antrea/pkg/agent/openflow"
 	fallbackversion "antrea.io/antrea/pkg/antctl/fallback/version"
@@ -370,6 +371,22 @@ var CommandList = &commandList{
 			},
 			commandGroup:        get,
 			transformedResponse: reflect.TypeOf(ovsflows.Response{}),
+		},
+		{
+			use:     "ovstables",
+			aliases: []string{"ot"},
+			short:   "Dump OVS tables",
+			long:    "Dump all the OVS tables for the specified entity.",
+			example: `  Dump all OVS tables
+  $ antctl get ovstables`,
+			agentEndpoint: &endpoint{
+				nonResourceEndpoint: &nonResourceEndpoint{
+					path:       "/ovstables",
+					outputType: multiple,
+				},
+			},
+			commandGroup:        get,
+			transformedResponse: reflect.TypeOf(ovstables.Response{}),
 		},
 		{
 			use:   "trace-packet",

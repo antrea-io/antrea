@@ -34,12 +34,14 @@ type TracingRequest struct {
 // OVSCtlClient is an interface for executing OVS "ovs-ofctl" and "ovs-appctl"
 // commands.
 type OVSCtlClient interface {
+	// DumpTables returns tables of the bridge.
+	DumpTables() ([]string, error)
 	// DumpFlows returns flows of the bridge.
 	DumpFlows(args ...string) ([]string, error)
 	// DumpFlowsWithoutTableNames returns flows of the bridge, and the table is shown as uint8 value in the result.
 	// This function is only used in test.
 	DumpFlowsWithoutTableNames(args ...string) ([]string, error)
-	// DumpMatchedFlows returns the flow which exactly matches the matchStr.
+	// DumpMatchedFlow returns the flow which exactly matches the matchStr.
 	DumpMatchedFlow(matchStr string) (string, error)
 	// DumpTableFlows returns all flows in the table.
 	DumpTableFlows(table uint8) ([]string, error)

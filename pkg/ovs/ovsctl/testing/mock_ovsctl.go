@@ -161,6 +161,21 @@ func (mr *MockOVSCtlClientMockRecorder) DumpTableFlows(arg0 interface{}) *gomock
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DumpTableFlows", reflect.TypeOf((*MockOVSCtlClient)(nil).DumpTableFlows), arg0)
 }
 
+// DumpTables mocks base method
+func (m *MockOVSCtlClient) DumpTables() ([]string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DumpTables")
+	ret0, _ := ret[0].([]string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// DumpTables indicates an expected call of DumpTables
+func (mr *MockOVSCtlClientMockRecorder) DumpTables() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DumpTables", reflect.TypeOf((*MockOVSCtlClient)(nil).DumpTables))
+}
+
 // GetDPFeatures mocks base method
 func (m *MockOVSCtlClient) GetDPFeatures() (map[ovsctl.DPFeature]bool, error) {
 	m.ctrl.T.Helper()
