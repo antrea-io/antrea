@@ -87,6 +87,8 @@ const resyncPeriodDisabled = 0 * time.Minute
 // The devices that should be excluded from NodePort.
 var excludeNodePortDevices = []string{"antrea-egress0", "antrea-ingress0", "kube-ipvs0"}
 
+var ipv4Localhost = net.ParseIP("127.0.0.1")
+
 // run starts Antrea agent with the given options and waits for termination signal.
 func run(o *Options) error {
 	klog.Infof("Starting Antrea agent (version %s)", version.GetFullVersion())
@@ -147,7 +149,10 @@ func run(o *Options) error {
 		features.DefaultFeatureGate.Enabled(features.Multicluster),
 	)
 
-	_, serviceCIDRNet, _ := net.ParseCIDR(o.config.ServiceCIDR)
+	var serviceCIDRNet *net.IPNet
+	if o.nodeType == config.K8sNode {
+		_, serviceCIDRNet, _ = net.ParseCIDR(o.config.ServiceCIDR)
+	}
 	var serviceCIDRNetv6 *net.IPNet
 	if o.config.ServiceCIDRv6 != "" {
 		_, serviceCIDRNetv6, _ = net.ParseCIDR(o.config.ServiceCIDRv6)
@@ -234,6 +239,7 @@ func run(o *Options) error {
 		serviceConfig,
 		networkReadyCh,
 		stopCh,
+		o.nodeType,
 		features.DefaultFeatureGate.Enabled(features.AntreaProxy),
 		o.config.AntreaProxy.ProxyAll,
 		connectUplinkToBridge)
@@ -250,19 +256,22 @@ func run(o *Options) error {
 		ipsecCertController = ipseccertificate.NewIPSecCertificateController(k8sClient, ovsBridgeClient, nodeConfig.Name)
 	}
 
-	nodeRouteController := noderoute.NewNodeRouteController(
-		k8sClient,
-		informerFactory,
-		ofClient,
-		ovsBridgeClient,
-		routeClient,
-		ifaceStore,
-		networkConfig,
-		nodeConfig,
-		agentInitializer.GetWireGuardClient(),
-		o.config.AntreaProxy.ProxyAll,
-		ipsecCertController,
-	)
+	var nodeRouteController *noderoute.Controller
+	if o.nodeType == config.K8sNode {
+		nodeRouteController = noderoute.NewNodeRouteController(
+			k8sClient,
+			informerFactory,
+			ofClient,
+			ovsBridgeClient,
+			routeClient,
+			ifaceStore,
+			networkConfig,
+			nodeConfig,
+			agentInitializer.GetWireGuardClient(),
+			o.config.AntreaProxy.ProxyAll,
+			ipsecCertController,
+		)
+	}
 
 	var mcRouteController *mcroute.MCRouteController
 	var mcInformerFactory mcinformers.SharedInformerFactory
@@ -403,33 +412,36 @@ func run(o *Options) error {
 		}
 	}
 
-	isChaining := false
-	if networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {
-		isChaining = true
-	}
-	cniServer := cniserver.New(
-		o.config.CNISocket,
-		o.config.HostProcPathPrefix,
-		nodeConfig,
-		k8sClient,
-		routeClient,
-		isChaining,
-		enableBridgingMode,
-		enableAntreaIPAM,
-		o.config.DisableTXChecksumOffload,
-		networkReadyCh)
-
+	var cniServer *cniserver.CNIServer
 	var cniPodInfoStore cnipodcache.CNIPodInfoStore
-	if features.DefaultFeatureGate.Enabled(features.SecondaryNetwork) {
-		cniPodInfoStore = cnipodcache.NewCNIPodInfoStore()
-		err = cniServer.Initialize(ovsBridgeClient, ofClient, ifaceStore, podUpdateChannel, cniPodInfoStore)
-		if err != nil {
-			return fmt.Errorf("error initializing CNI server with cniPodInfoStore cache: %v", err)
+	if o.nodeType == config.K8sNode {
+		isChaining := false
+		if networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {
+			isChaining = true
 		}
-	} else {
-		err = cniServer.Initialize(ovsBridgeClient, ofClient, ifaceStore, podUpdateChannel, nil)
-		if err != nil {
-			return fmt.Errorf("error initializing CNI server: %v", err)
+		cniServer = cniserver.New(
+			o.config.CNISocket,
+			o.config.HostProcPathPrefix,
+			nodeConfig,
+			k8sClient,
+			routeClient,
+			isChaining,
+			enableBridgingMode,
+			enableAntreaIPAM,
+			o.config.DisableTXChecksumOffload,
+			networkReadyCh)
+
+		if features.DefaultFeatureGate.Enabled(features.SecondaryNetwork) {
+			cniPodInfoStore = cnipodcache.NewCNIPodInfoStore()
+			err = cniServer.Initialize(ovsBridgeClient, ofClient, ifaceStore, podUpdateChannel, cniPodInfoStore)
+			if err != nil {
+				return fmt.Errorf("error initializing CNI server with cniPodInfoStore cache: %v", err)
+			}
+		} else {
+			err = cniServer.Initialize(ovsBridgeClient, ofClient, ifaceStore, podUpdateChannel, nil)
+			if err != nil {
+				return fmt.Errorf("error initializing CNI server: %v", err)
+			}
 		}
 	}
 
@@ -519,11 +531,17 @@ func run(o *Options) error {
 
 	log.StartLogFileNumberMonitor(stopCh)
 
-	go podUpdateChannel.Run(stopCh)
+	if o.nodeType == config.K8sNode {
+		go routeClient.Run(stopCh)
+		go podUpdateChannel.Run(stopCh)
+		go cniServer.Run(stopCh)
+		go nodeRouteController.Run(stopCh)
+	}
 
-	go routeClient.Run(stopCh)
-
-	go cniServer.Run(stopCh)
+	if networkConfig.TrafficEncryptionMode == config.TrafficEncryptionModeIPSec &&
+		networkConfig.IPsecConfig.AuthenticationMode == config.IPsecAuthenticationModeCert {
+		go ipsecCertController.Run(stopCh)
+	}
 
 	go antreaClientProvider.Run(ctx)
 
@@ -531,8 +549,6 @@ func run(o *Options) error {
 		networkConfig.IPsecConfig.AuthenticationMode == config.IPsecAuthenticationModeCert {
 		go ipsecCertController.Run(stopCh)
 	}
-
-	go nodeRouteController.Run(stopCh)
 
 	go networkPolicyController.Run(stopCh)
 	// Initialize the NPL agent.
@@ -691,11 +707,16 @@ func run(o *Options) error {
 	if err != nil {
 		return fmt.Errorf("error generating Cipher Suite list: %v", err)
 	}
+	bindAddress := net.IPv4zero
+	if o.nodeType == config.ExternalNode {
+		bindAddress = ipv4Localhost
+	}
 	apiServer, err := apiserver.New(
 		agentQuerier,
 		networkPolicyController,
 		mcastController,
 		externalIPController,
+		bindAddress,
 		o.config.APIPort,
 		*o.config.EnablePrometheusMetrics,
 		o.config.ClientConnection.Kubeconfig,
