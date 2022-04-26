@@ -715,6 +715,7 @@ func (c *client) generatePipelines() {
 	c.featureService = newFeatureService(c.cookieAllocator,
 		c.ipProtocols,
 		c.nodeConfig,
+		c.networkConfig,
 		c.serviceConfig,
 		c.bridge,
 		c.enableProxy,

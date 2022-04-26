@@ -40,6 +40,7 @@ type featureService struct {
 	gatewayMAC        net.HardwareAddr
 	nodePortAddresses map[binding.Protocol][]net.IP
 	serviceCIDRs      map[binding.Protocol]net.IPNet
+	networkConfig     *config.NetworkConfig
 
 	enableProxy           bool
 	proxyAll              bool
@@ -57,6 +58,7 @@ func newFeatureService(
 	cookieAllocator cookie.Allocator,
 	ipProtocols []binding.Protocol,
 	nodeConfig *config.NodeConfig,
+	networkConfig *config.NetworkConfig,
 	serviceConfig *config.ServiceConfig,
 	bridge binding.Bridge,
 	enableProxy,
@@ -103,6 +105,7 @@ func newFeatureService(
 		nodePortAddresses:     nodePortAddresses,
 		serviceCIDRs:          serviceCIDRs,
 		gatewayMAC:            nodeConfig.GatewayConfig.MAC,
+		networkConfig:         networkConfig,
 		enableProxy:           enableProxy,
 		proxyAll:              proxyAll,
 		connectUplinkToBridge: connectUplinkToBridge,
