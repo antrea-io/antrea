@@ -67,6 +67,9 @@ manifest provided as part of releases enables this feature by default. If you
 edit the manifest, make sure you do not disable it, as it is needed for correct
 NetworkPolicy implementation for Pod-to-Service traffic.
 
+Please refer to this [document](antrea-proxy.md) for extra information on
+AntreaProxy and how it can be configured.
+
 ### EndpointSlice
 
 `EndpointSlice` enables Service EndpointSlice support in AntreaProxy. The
