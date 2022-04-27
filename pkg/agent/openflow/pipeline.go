@@ -35,7 +35,6 @@ import (
 	"antrea.io/antrea/pkg/agent/openflow/cookie"
 	"antrea.io/antrea/pkg/agent/types"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
-	"antrea.io/antrea/pkg/ovs/ovsconfig"
 	"antrea.io/antrea/pkg/ovs/ovsctl"
 	"antrea.io/antrea/pkg/util/runtime"
 	"antrea.io/antrea/third_party/proxy"
@@ -416,8 +415,6 @@ type client struct {
 	networkConfig *config.NetworkConfig
 	egressConfig  *config.EgressConfig
 	serviceConfig *config.ServiceConfig
-	// ovsDatapathType is the type of the datapath used by the bridge.
-	ovsDatapathType ovsconfig.OVSDatapathType
 	// ovsMetersAreSupported indicates whether the OVS datapath supports OpenFlow meters.
 	ovsMetersAreSupported bool
 	// packetInHandlers stores handler to process PacketIn event. Each packetin reason can have multiple handlers registered.
@@ -2134,7 +2131,7 @@ func (f *featureNetworkPolicy) dnsPacketInFlow(conjunctionID uint32) binding.Flo
 func (f *featurePodConnectivity) localProbeFlows() []binding.Flow {
 	cookieID := f.cookieAllocator.Request(f.category).Raw()
 	var flows []binding.Flow
-	if runtime.IsWindowsPlatform() || f.ovsDatapathType == ovsconfig.OVSDatapathNetdev {
+	if runtime.IsWindowsPlatform() {
 		var ctMarksToMatch []*binding.CtMark
 		if f.proxyAll {
 			ctMarksToMatch = append(ctMarksToMatch, NotServiceCTMark)
@@ -2699,7 +2696,6 @@ func (f *featureMulticast) externalMulticastReceiverFlow() binding.Flow {
 // NewClient is the constructor of the Client interface.
 func NewClient(bridgeName string,
 	mgmtAddr string,
-	ovsDatapathType ovsconfig.OVSDatapathType,
 	enableProxy bool,
 	enableAntreaPolicy bool,
 	enableEgress bool,
@@ -2720,8 +2716,7 @@ func NewClient(bridgeName string,
 		pipelines:             make(map[binding.PipelineID]binding.Pipeline),
 		packetInHandlers:      map[uint8]map[string]PacketInHandler{},
 		ovsctlClient:          ovsctl.NewClient(bridgeName),
-		ovsDatapathType:       ovsDatapathType,
-		ovsMetersAreSupported: ovsMetersAreSupported(ovsDatapathType),
+		ovsMetersAreSupported: ovsMetersAreSupported(),
 	}
 	c.ofEntryOperations = c
 	return c
