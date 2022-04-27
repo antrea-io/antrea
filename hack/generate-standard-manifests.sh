@@ -100,10 +100,6 @@ fi
 
 THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
-# Avoid potential Helm warnings about invalid permissions for Kubeconfig file.
-# The Kubeconfig does not matter for "helm template".
-unset KUBECONFIG
-
 source $THIS_DIR/verify-helm.sh
 
 if [ -z "$HELM" ]; then
@@ -122,11 +118,14 @@ fi
 ANTREA_CHART="$THIS_DIR/../build/charts/antrea"
 VALUES_DIR="$THIS_DIR/../build/yamls/chart-values"
 VALUES_FILES=$(cd $VALUES_DIR && find * -type f -name "*.yml" )
+# Suppress potential Helm warnings about invalid permissions for Kubeconfig file
+# by throwing away related warnings.
 for values in $VALUES_FILES; do
     $HELM template \
           --namespace kube-system \
           -f "$VALUES_DIR/$values" \
           $EXTRA_VALUES \
           "$ANTREA_CHART" \
-          > "$OUTPUT_DIR/$values"
+          > "$OUTPUT_DIR/$values" \
+          2> >(grep -v 'This is insecure' >&2)
 done
