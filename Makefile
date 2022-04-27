@@ -25,6 +25,16 @@ UNAME_S := $(shell uname -s)
 USERID  := $(shell id -u)
 GRPID   := $(shell id -g)
 
+.PHONY: install-hooks
+install-hooks:
+	@echo "===> Copying Antrea git hooks to local <==="
+	cp hack/git_client_side_hooks/pre-commit .git/hooks/
+
+.PHONY: uninstall-hooks
+uninstall-hooks:
+	@echo "===> Removing Antrea git hooks from local <==="
+	rm .git/hooks/pre-commit
+
 .PHONY: bin
 bin:
 	@mkdir -p $(BINDIR)
