@@ -1,0 +1,7 @@
+apiVersion: multicluster.crd.antrea.io/v1alpha1
+kind: Gateway
+metadata:
+  name: gateway-sample
+  namespace: kube-system
+gatewayIP: 10.10.10.10
+internalIP: 172.16.27.224

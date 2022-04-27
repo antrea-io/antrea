@@ -31,8 +31,16 @@ func (c *FakeMulticlusterV1alpha1) ClusterClaims(namespace string) v1alpha1.Clus
 	return &FakeClusterClaims{c, namespace}
 }
 
+func (c *FakeMulticlusterV1alpha1) ClusterInfoImports(namespace string) v1alpha1.ClusterInfoImportInterface {
+	return &FakeClusterInfoImports{c, namespace}
+}
+
 func (c *FakeMulticlusterV1alpha1) ClusterSets(namespace string) v1alpha1.ClusterSetInterface {
 	return &FakeClusterSets{c, namespace}
+}
+
+func (c *FakeMulticlusterV1alpha1) Gateways(namespace string) v1alpha1.GatewayInterface {
+	return &FakeGateways{c, namespace}
 }
 
 func (c *FakeMulticlusterV1alpha1) MemberClusterAnnounces(namespace string) v1alpha1.MemberClusterAnnounceInterface {

@@ -11,3 +11,5 @@ leaderElection:
   resourceName: 6536456a.crd.antrea.io
   leaseDuration: "30s"
   renewDeadline: "20s"
+serviceCIDR: ""
+gatewayIPPrecedence: "private"

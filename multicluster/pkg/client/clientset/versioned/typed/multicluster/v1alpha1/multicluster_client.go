@@ -26,7 +26,9 @@ import (
 type MulticlusterV1alpha1Interface interface {
 	RESTClient() rest.Interface
 	ClusterClaimsGetter
+	ClusterInfoImportsGetter
 	ClusterSetsGetter
+	GatewaysGetter
 	MemberClusterAnnouncesGetter
 	ResourceExportsGetter
 	ResourceExportFiltersGetter
@@ -43,8 +45,16 @@ func (c *MulticlusterV1alpha1Client) ClusterClaims(namespace string) ClusterClai
 	return newClusterClaims(c, namespace)
 }
 
+func (c *MulticlusterV1alpha1Client) ClusterInfoImports(namespace string) ClusterInfoImportInterface {
+	return newClusterInfoImports(c, namespace)
+}
+
 func (c *MulticlusterV1alpha1Client) ClusterSets(namespace string) ClusterSetInterface {
 	return newClusterSets(c, namespace)
+}
+
+func (c *MulticlusterV1alpha1Client) Gateways(namespace string) GatewayInterface {
+	return newGateways(c, namespace)
 }
 
 func (c *MulticlusterV1alpha1Client) MemberClusterAnnounces(namespace string) MemberClusterAnnounceInterface {

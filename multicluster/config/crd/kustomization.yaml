@@ -11,6 +11,8 @@ resources:
 - bases/multicluster.crd.antrea.io_resourceimports.yaml
 - k8smcs/multicluster.x-k8s.io_serviceexports.yaml
 - k8smcs/multicluster.x-k8s.io_serviceimports.yaml
+- bases/multicluster.crd.antrea.io_clusterinfoimports.yaml
+- bases/multicluster.crd.antrea.io_gateways.yaml
 #+kubebuilder:scaffold:crdkustomizeresource
 
 patchesStrategicMerge:
@@ -24,6 +26,8 @@ patchesStrategicMerge:
 #- patches/webhook_in_resourceimportfilters.yaml
 #- patches/webhook_in_resourceexports.yaml
 #- patches/webhook_in_resourceimports.yaml
+#- patches/webhook_in_clusterinfoimports.yaml
+#- patches/webhook_in_gateways.yaml
 #+kubebuilder:scaffold:crdkustomizewebhookpatch
 
 # the following config is for teaching kustomize how to do kustomization for CRDs.

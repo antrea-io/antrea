@@ -40,6 +40,25 @@ spec:
                 description: ClusterID specifies the member cluster this resource
                   exported from.
                 type: string
+              clusterinfo:
+                description: If exported resource is ClusterInfo.
+                properties:
+                  clusterID:
+                    description: ClusterID of the member cluster.
+                    type: string
+                  gatewayInfos:
+                    description: GatewayInfos has information of Gateways
+                    items:
+                      description: GatewayInfo includes information of a Gateway.
+                      properties:
+                        gatewayIP:
+                          type: string
+                      type: object
+                    type: array
+                  serviceCIDR:
+                    description: ServiceCIDR is the IP ranges used by Service ClusterIP.
+                    type: string
+                type: object
               clusternetworkpolicy:
                 description: If exported resource is AntreaClusterNetworkPolicy.
                 properties:
@@ -189,6 +208,53 @@ spec:
                               description: NamespaceMatchType describes Namespace
                                 matching strategy.
                               type: string
+                          type: object
+                        nodeSelector:
+                          description: Select certain Nodes which match the label
+                            selector. A NodeSelector cannot be set in AppliedTo field
+                            or set with any other selector.
+                          properties:
+                            matchExpressions:
+                              description: matchExpressions is a list of label selector
+                                requirements. The requirements are ANDed.
+                              items:
+                                description: A label selector requirement is a selector
+                                  that contains values, a key, and an operator that
+                                  relates the key and values.
+                                properties:
+                                  key:
+                                    description: key is the label key that the selector
+                                      applies to.
+                                    type: string
+                                  operator:
+                                    description: operator represents a key's relationship
+                                      to a set of values. Valid operators are In,
+                                      NotIn, Exists and DoesNotExist.
+                                    type: string
+                                  values:
+                                    description: values is an array of string values.
+                                      If the operator is In or NotIn, the values array
+                                      must be non-empty. If the operator is Exists
+                                      or DoesNotExist, the values array must be empty.
+                                      This array is replaced during a strategic merge
+                                      patch.
+                                    items:
+                                      type: string
+                                    type: array
+                                required:
+                                - key
+                                - operator
+                                type: object
+                              type: array
+                            matchLabels:
+                              additionalProperties:
+                                type: string
+                              description: matchLabels is a map of {key,value} pairs.
+                                A single {key,value} in the matchLabels map is equivalent
+                                to an element of matchExpressions, whose key field
+                                is "key", the operator is "In", and the values array
+                                contains only "value". The requirements are ANDed.
+                              type: object
                           type: object
                         podSelector:
                           description: Select Pods from NetworkPolicy's Namespace
@@ -417,6 +483,55 @@ spec:
                                       matching strategy.
                                     type: string
                                 type: object
+                              nodeSelector:
+                                description: Select certain Nodes which match the
+                                  label selector. A NodeSelector cannot be set in
+                                  AppliedTo field or set with any other selector.
+                                properties:
+                                  matchExpressions:
+                                    description: matchExpressions is a list of label
+                                      selector requirements. The requirements are
+                                      ANDed.
+                                    items:
+                                      description: A label selector requirement is
+                                        a selector that contains values, a key, and
+                                        an operator that relates the key and values.
+                                      properties:
+                                        key:
+                                          description: key is the label key that the
+                                            selector applies to.
+                                          type: string
+                                        operator:
+                                          description: operator represents a key's
+                                            relationship to a set of values. Valid
+                                            operators are In, NotIn, Exists and DoesNotExist.
+                                          type: string
+                                        values:
+                                          description: values is an array of string
+                                            values. If the operator is In or NotIn,
+                                            the values array must be non-empty. If
+                                            the operator is Exists or DoesNotExist,
+                                            the values array must be empty. This array
+                                            is replaced during a strategic merge patch.
+                                          items:
+                                            type: string
+                                          type: array
+                                      required:
+                                      - key
+                                      - operator
+                                      type: object
+                                    type: array
+                                  matchLabels:
+                                    additionalProperties:
+                                      type: string
+                                    description: matchLabels is a map of {key,value}
+                                      pairs. A single {key,value} in the matchLabels
+                                      map is equivalent to an element of matchExpressions,
+                                      whose key field is "key", the operator is "In",
+                                      and the values array contains only "value".
+                                      The requirements are ANDed.
+                                    type: object
+                                type: object
                               podSelector:
                                 description: Select Pods from NetworkPolicy's Namespace
                                   as workloads in AppliedTo/To/From fields. If set
@@ -638,6 +753,55 @@ spec:
                                       matching strategy.
                                     type: string
                                 type: object
+                              nodeSelector:
+                                description: Select certain Nodes which match the
+                                  label selector. A NodeSelector cannot be set in
+                                  AppliedTo field or set with any other selector.
+                                properties:
+                                  matchExpressions:
+                                    description: matchExpressions is a list of label
+                                      selector requirements. The requirements are
+                                      ANDed.
+                                    items:
+                                      description: A label selector requirement is
+                                        a selector that contains values, a key, and
+                                        an operator that relates the key and values.
+                                      properties:
+                                        key:
+                                          description: key is the label key that the
+                                            selector applies to.
+                                          type: string
+                                        operator:
+                                          description: operator represents a key's
+                                            relationship to a set of values. Valid
+                                            operators are In, NotIn, Exists and DoesNotExist.
+                                          type: string
+                                        values:
+                                          description: values is an array of string
+                                            values. If the operator is In or NotIn,
+                                            the values array must be non-empty. If
+                                            the operator is Exists or DoesNotExist,
+                                            the values array must be empty. This array
+                                            is replaced during a strategic merge patch.
+                                          items:
+                                            type: string
+                                          type: array
+                                      required:
+                                      - key
+                                      - operator
+                                      type: object
+                                    type: array
+                                  matchLabels:
+                                    additionalProperties:
+                                      type: string
+                                    description: matchLabels is a map of {key,value}
+                                      pairs. A single {key,value} in the matchLabels
+                                      map is equivalent to an element of matchExpressions,
+                                      whose key field is "key", the operator is "In",
+                                      and the values array contains only "value".
+                                      The requirements are ANDed.
+                                    type: object
+                                type: object
                               podSelector:
                                 description: Select Pods from NetworkPolicy's Namespace
                                   as workloads in AppliedTo/To/From fields. If set
@@ -706,9 +870,9 @@ spec:
                             Name should be unique within the policy.
                           type: string
                         ports:
-                          description: Set of port and protocol allowed/denied by
-                            the rule. If this field is unset or empty, this rule matches
-                            all ports.
+                          description: Set of ports and protocols matched by the rule.
+                            If this field and Protocols are unset or empty, this rule
+                            matches all ports.
                           items:
                             description: NetworkPolicyPort describes the port and
                               protocol to match in a rule.
@@ -734,6 +898,30 @@ spec:
                                   traffic must match. If not specified, this field
                                   defaults to TCP.
                                 type: string
+                            type: object
+                          type: array
+                        protocols:
+                          description: Set of protocols matched by the rule. If this
+                            field and Ports are unset or empty, this rule matches
+                            all protocols supported.
+                          items:
+                            description: NetworkPolicyProtocol defines additional
+                              protocols that are not supported by `ports`. All fields
+                              should be used as a standalone field.
+                            properties:
+                              icmp:
+                                description: ICMPProtocol matches ICMP traffic with
+                                  specific ICMPType and/or ICMPCode. All fields could
+                                  be used alone or together. If all fields are not
+                                  provided, this matches all ICMP traffic.
+                                properties:
+                                  icmpCode:
+                                    format: int32
+                                    type: integer
+                                  icmpType:
+                                    format: int32
+                                    type: integer
+                                type: object
                             type: object
                           type: array
                         to:
@@ -889,6 +1077,55 @@ spec:
                                     description: NamespaceMatchType describes Namespace
                                       matching strategy.
                                     type: string
+                                type: object
+                              nodeSelector:
+                                description: Select certain Nodes which match the
+                                  label selector. A NodeSelector cannot be set in
+                                  AppliedTo field or set with any other selector.
+                                properties:
+                                  matchExpressions:
+                                    description: matchExpressions is a list of label
+                                      selector requirements. The requirements are
+                                      ANDed.
+                                    items:
+                                      description: A label selector requirement is
+                                        a selector that contains values, a key, and
+                                        an operator that relates the key and values.
+                                      properties:
+                                        key:
+                                          description: key is the label key that the
+                                            selector applies to.
+                                          type: string
+                                        operator:
+                                          description: operator represents a key's
+                                            relationship to a set of values. Valid
+                                            operators are In, NotIn, Exists and DoesNotExist.
+                                          type: string
+                                        values:
+                                          description: values is an array of string
+                                            values. If the operator is In or NotIn,
+                                            the values array must be non-empty. If
+                                            the operator is Exists or DoesNotExist,
+                                            the values array must be empty. This array
+                                            is replaced during a strategic merge patch.
+                                          items:
+                                            type: string
+                                          type: array
+                                      required:
+                                      - key
+                                      - operator
+                                      type: object
+                                    type: array
+                                  matchLabels:
+                                    additionalProperties:
+                                      type: string
+                                    description: matchLabels is a map of {key,value}
+                                      pairs. A single {key,value} in the matchLabels
+                                      map is equivalent to an element of matchExpressions,
+                                      whose key field is "key", the operator is "In",
+                                      and the values array contains only "value".
+                                      The requirements are ANDed.
+                                    type: object
                                 type: object
                               podSelector:
                                 description: Select Pods from NetworkPolicy's Namespace
@@ -1140,6 +1377,55 @@ spec:
                                       matching strategy.
                                     type: string
                                 type: object
+                              nodeSelector:
+                                description: Select certain Nodes which match the
+                                  label selector. A NodeSelector cannot be set in
+                                  AppliedTo field or set with any other selector.
+                                properties:
+                                  matchExpressions:
+                                    description: matchExpressions is a list of label
+                                      selector requirements. The requirements are
+                                      ANDed.
+                                    items:
+                                      description: A label selector requirement is
+                                        a selector that contains values, a key, and
+                                        an operator that relates the key and values.
+                                      properties:
+                                        key:
+                                          description: key is the label key that the
+                                            selector applies to.
+                                          type: string
+                                        operator:
+                                          description: operator represents a key's
+                                            relationship to a set of values. Valid
+                                            operators are In, NotIn, Exists and DoesNotExist.
+                                          type: string
+                                        values:
+                                          description: values is an array of string
+                                            values. If the operator is In or NotIn,
+                                            the values array must be non-empty. If
+                                            the operator is Exists or DoesNotExist,
+                                            the values array must be empty. This array
+                                            is replaced during a strategic merge patch.
+                                          items:
+                                            type: string
+                                          type: array
+                                      required:
+                                      - key
+                                      - operator
+                                      type: object
+                                    type: array
+                                  matchLabels:
+                                    additionalProperties:
+                                      type: string
+                                    description: matchLabels is a map of {key,value}
+                                      pairs. A single {key,value} in the matchLabels
+                                      map is equivalent to an element of matchExpressions,
+                                      whose key field is "key", the operator is "In",
+                                      and the values array contains only "value".
+                                      The requirements are ANDed.
+                                    type: object
+                                type: object
                               podSelector:
                                 description: Select Pods from NetworkPolicy's Namespace
                                   as workloads in AppliedTo/To/From fields. If set
@@ -1361,6 +1647,55 @@ spec:
                                       matching strategy.
                                     type: string
                                 type: object
+                              nodeSelector:
+                                description: Select certain Nodes which match the
+                                  label selector. A NodeSelector cannot be set in
+                                  AppliedTo field or set with any other selector.
+                                properties:
+                                  matchExpressions:
+                                    description: matchExpressions is a list of label
+                                      selector requirements. The requirements are
+                                      ANDed.
+                                    items:
+                                      description: A label selector requirement is
+                                        a selector that contains values, a key, and
+                                        an operator that relates the key and values.
+                                      properties:
+                                        key:
+                                          description: key is the label key that the
+                                            selector applies to.
+                                          type: string
+                                        operator:
+                                          description: operator represents a key's
+                                            relationship to a set of values. Valid
+                                            operators are In, NotIn, Exists and DoesNotExist.
+                                          type: string
+                                        values:
+                                          description: values is an array of string
+                                            values. If the operator is In or NotIn,
+                                            the values array must be non-empty. If
+                                            the operator is Exists or DoesNotExist,
+                                            the values array must be empty. This array
+                                            is replaced during a strategic merge patch.
+                                          items:
+                                            type: string
+                                          type: array
+                                      required:
+                                      - key
+                                      - operator
+                                      type: object
+                                    type: array
+                                  matchLabels:
+                                    additionalProperties:
+                                      type: string
+                                    description: matchLabels is a map of {key,value}
+                                      pairs. A single {key,value} in the matchLabels
+                                      map is equivalent to an element of matchExpressions,
+                                      whose key field is "key", the operator is "In",
+                                      and the values array contains only "value".
+                                      The requirements are ANDed.
+                                    type: object
+                                type: object
                               podSelector:
                                 description: Select Pods from NetworkPolicy's Namespace
                                   as workloads in AppliedTo/To/From fields. If set
@@ -1429,9 +1764,9 @@ spec:
                             Name should be unique within the policy.
                           type: string
                         ports:
-                          description: Set of port and protocol allowed/denied by
-                            the rule. If this field is unset or empty, this rule matches
-                            all ports.
+                          description: Set of ports and protocols matched by the rule.
+                            If this field and Protocols are unset or empty, this rule
+                            matches all ports.
                           items:
                             description: NetworkPolicyPort describes the port and
                               protocol to match in a rule.
@@ -1457,6 +1792,30 @@ spec:
                                   traffic must match. If not specified, this field
                                   defaults to TCP.
                                 type: string
+                            type: object
+                          type: array
+                        protocols:
+                          description: Set of protocols matched by the rule. If this
+                            field and Ports are unset or empty, this rule matches
+                            all protocols supported.
+                          items:
+                            description: NetworkPolicyProtocol defines additional
+                              protocols that are not supported by `ports`. All fields
+                              should be used as a standalone field.
+                            properties:
+                              icmp:
+                                description: ICMPProtocol matches ICMP traffic with
+                                  specific ICMPType and/or ICMPCode. All fields could
+                                  be used alone or together. If all fields are not
+                                  provided, this matches all ICMP traffic.
+                                properties:
+                                  icmpCode:
+                                    format: int32
+                                    type: integer
+                                  icmpType:
+                                    format: int32
+                                    type: integer
+                                type: object
                             type: object
                           type: array
                         to:
@@ -1613,6 +1972,55 @@ spec:
                                       matching strategy.
                                     type: string
                                 type: object
+                              nodeSelector:
+                                description: Select certain Nodes which match the
+                                  label selector. A NodeSelector cannot be set in
+                                  AppliedTo field or set with any other selector.
+                                properties:
+                                  matchExpressions:
+                                    description: matchExpressions is a list of label
+                                      selector requirements. The requirements are
+                                      ANDed.
+                                    items:
+                                      description: A label selector requirement is
+                                        a selector that contains values, a key, and
+                                        an operator that relates the key and values.
+                                      properties:
+                                        key:
+                                          description: key is the label key that the
+                                            selector applies to.
+                                          type: string
+                                        operator:
+                                          description: operator represents a key's
+                                            relationship to a set of values. Valid
+                                            operators are In, NotIn, Exists and DoesNotExist.
+                                          type: string
+                                        values:
+                                          description: values is an array of string
+                                            values. If the operator is In or NotIn,
+                                            the values array must be non-empty. If
+                                            the operator is Exists or DoesNotExist,
+                                            the values array must be empty. This array
+                                            is replaced during a strategic merge patch.
+                                          items:
+                                            type: string
+                                          type: array
+                                      required:
+                                      - key
+                                      - operator
+                                      type: object
+                                    type: array
+                                  matchLabels:
+                                    additionalProperties:
+                                      type: string
+                                    description: matchLabels is a map of {key,value}
+                                      pairs. A single {key,value} in the matchLabels
+                                      map is equivalent to an element of matchExpressions,
+                                      whose key field is "key", the operator is "In",
+                                      and the values array contains only "value".
+                                      The requirements are ANDed.
+                                    type: object
+                                type: object
                               podSelector:
                                 description: Select Pods from NetworkPolicy's Namespace
                                   as workloads in AppliedTo/To/From fields. If set
@@ -1713,7 +2121,7 @@ spec:
                 - priority
                 type: object
               endpoints:
-                description: If exported resource is EndPoints.
+                description: If exported resource is Endpoints.
                 properties:
                   subsets:
                     items:
@@ -1971,7 +2379,7 @@ spec:
                 description: Namespace of exported resource.
                 type: string
               raw:
-                description: If exported resource Kind is unknown.
+                description: If exported resource kind is unknown.
                 properties:
                   data:
                     format: byte
