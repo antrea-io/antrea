@@ -98,6 +98,9 @@ data:
     # Enable managing external IPs of Services of LoadBalancer type.
     #  ServiceExternalIP: false
 
+    # Enable mirroring or redirecting the traffic Pods send or receive.
+    #  TrafficControl: false
+
     # Name of the OpenVSwitch bridge antrea-agent will create and use.
     # Make sure it doesn't conflict with your existing OpenVSwitch bridges.
     ovsBridge: "br-int"
@@ -2506,6 +2509,291 @@ spec:
     shortNames:
       - tf
 ---
+# Source: antrea/templates/crds/trafficcontrol.yaml
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: trafficcontrols.crd.antrea.io
+spec:
+  group: crd.antrea.io
+  versions:
+    - name: v1alpha2
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          required:
+            - spec
+          properties:
+            spec:
+              type: object
+              required:
+                - appliedTo
+                - direction
+                - action
+                - targetPort
+              properties:
+                appliedTo:
+                  type: object
+                  properties:
+                    podSelector:
+                      type: object
+                      properties:
+                        matchExpressions:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              key:
+                                type: string
+                              operator:
+                                enum:
+                                  - In
+                                  - NotIn
+                                  - Exists
+                                  - DoesNotExist
+                                type: string
+                              values:
+                                type: array
+                                items:
+                                  type: string
+                                  pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
+                        matchLabels:
+                          x-kubernetes-preserve-unknown-fields: true
+                    namespaceSelector:
+                      type: object
+                      properties:
+                        matchExpressions:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              key:
+                                type: string
+                              operator:
+                                enum:
+                                  - In
+                                  - NotIn
+                                  - Exists
+                                  - DoesNotExist
+                                type: string
+                              values:
+                                type: array
+                                items:
+                                  type: string
+                                  pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
+                        matchLabels:
+                          x-kubernetes-preserve-unknown-fields: true
+                direction:
+                  type: string
+                  enum:
+                    - Ingress
+                    - Egress
+                    - Both
+                action:
+                  type: string
+                  enum:
+                    - Mirror
+                    - Redirect
+                targetPort:
+                  type: object
+                  oneOf:
+                    - required: [ovsInternal]
+                    - required: [device]
+                    - required: [geneve]
+                    - required: [vxlan]
+                    - required: [gre]
+                    - required: [erspan]
+                  properties:
+                    ovsInternal:
+                      type: object
+                      required:
+                        - name
+                      properties:
+                        name:
+                          type: string
+                    device:
+                      type: object
+                      required:
+                        - name
+                      properties:
+                        name:
+                          type: string
+                    geneve:
+                      type: object
+                      required:
+                        - remoteIP
+                      properties:
+                        remoteIP:
+                          type: string
+                          oneOf:
+                            - format: ipv4
+                            - format: ipv6
+                        vni:
+                          type: integer
+                          minimum: 0
+                          maximum: 16777215
+                        destinationPort:
+                          type: integer
+                          minimum: 1
+                          maximum: 65535
+                    vxlan:
+                      type: object
+                      required:
+                        - remoteIP
+                      properties:
+                        remoteIP:
+                          type: string
+                          oneOf:
+                            - format: ipv4
+                            - format: ipv6
+                        vni:
+                          type: integer
+                          minimum: 0
+                          maximum: 16777215
+                        destinationPort:
+                          type: integer
+                          minimum: 1
+                          maximum: 65535
+                    gre:
+                      type: object
+                      required:
+                        - remoteIP
+                      properties:
+                        remoteIP:
+                          type: string
+                          oneOf:
+                            - format: ipv4
+                            - format: ipv6
+                        key:
+                          type: integer
+                          minimum: 0
+                          maximum: 4294967295
+                    erspan:
+                      type: object
+                      required:
+                        - remoteIP
+                        - version
+                      properties:
+                        remoteIP:
+                          type: string
+                          oneOf:
+                            - format: ipv4
+                            - format: ipv6
+                        sessionID:
+                          type: integer
+                          minimum: 0
+                          maximum: 1023
+                        version:
+                          type: integer
+                          enum:
+                            - 1
+                            - 2
+                        index:
+                          type: integer
+                        dir:
+                          type: integer
+                          enum:
+                            - 0
+                            - 1
+                        hardwareID:
+                          type: integer
+                returnPort:
+                  type: object
+                  oneOf:
+                    - required: [ovsInternal]
+                    - required: [device]
+                    - required: [geneve]
+                    - required: [vxlan]
+                    - required: [gre]
+                  properties:
+                    ovsInternal:
+                      type: object
+                      required:
+                        - name
+                      properties:
+                        name:
+                          type: string
+                    device:
+                      type: object
+                      required:
+                        - name
+                      properties:
+                        name:
+                          type: string
+                    geneve:
+                      type: object
+                      required:
+                        - remoteIP
+                      properties:
+                        remoteIP:
+                          type: string
+                          oneOf:
+                            - format: ipv4
+                            - format: ipv6
+                        vni:
+                          type: integer
+                          minimum: 0
+                          maximum: 16777215
+                        destinationPort:
+                          type: integer
+                          minimum: 1
+                          maximum: 65535
+                    vxlan:
+                      type: object
+                      required:
+                        - remoteIP
+                      properties:
+                        remoteIP:
+                          type: string
+                          oneOf:
+                            - format: ipv4
+                            - format: ipv6
+                        vni:
+                          type: integer
+                          minimum: 0
+                          maximum: 16777215
+                        destinationPort:
+                          type: integer
+                          minimum: 1
+                          maximum: 65535
+                    gre:
+                      type: object
+                      required:
+                        - remoteIP
+                      properties:
+                        remoteIP:
+                          type: string
+                          oneOf:
+                            - format: ipv4
+                            - format: ipv6
+                        key:
+                          type: integer
+                          minimum: 0
+                          maximum: 4294967295
+      additionalPrinterColumns:
+        - description: Specifies the direction of traffic that should be matched.
+          jsonPath: .spec.direction
+          name: Direction
+          type: string
+        - description: Specifies the action that should be taken for the traffic.
+          jsonPath: .spec.action
+          name: Action
+          type: string
+        - jsonPath: .metadata.creationTimestamp
+          name: Age
+          type: date
+      subresources:
+        status: {}
+  scope: Cluster
+  names:
+    plural: trafficcontrols
+    singular: trafficcontrol
+    kind: TrafficControl
+    shortNames:
+      - tc
+---
 # Source: antrea/templates/agent/clusterrole.yaml
 kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1
@@ -2676,6 +2964,7 @@ rules:
     resources:
       - externalippools
       - ippools
+      - trafficcontrols
     verbs:
       - get
       - watch
@@ -3193,7 +3482,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: cd2d943645be405d6af5e8fa14fa9949ec82ac09efde547e6536fcd5b3013b5d
+        checksum/config: 50cc962db93c0354f5eaa088e51d690e779692979cbafac0c3e27a88fc2c0c7c
         checksum/ipsec-secret: d0eb9c52d0cd4311b6d252a951126bf9bea27ec05590bed8a394f0f792dcb2a4
       labels:
         app: antrea
@@ -3469,7 +3758,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: cd2d943645be405d6af5e8fa14fa9949ec82ac09efde547e6536fcd5b3013b5d
+        checksum/config: 50cc962db93c0354f5eaa088e51d690e779692979cbafac0c3e27a88fc2c0c7c
       labels:
         app: antrea
         component: antrea-controller

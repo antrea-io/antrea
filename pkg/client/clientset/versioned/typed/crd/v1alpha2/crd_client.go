@@ -29,6 +29,7 @@ type CrdV1alpha2Interface interface {
 	ExternalEntitiesGetter
 	ExternalIPPoolsGetter
 	IPPoolsGetter
+	TrafficControlsGetter
 }
 
 // CrdV1alpha2Client is used to interact with features provided by the crd.antrea.io group.
@@ -54,6 +55,10 @@ func (c *CrdV1alpha2Client) ExternalIPPools() ExternalIPPoolInterface {
 
 func (c *CrdV1alpha2Client) IPPools() IPPoolInterface {
 	return newIPPools(c)
+}
+
+func (c *CrdV1alpha2Client) TrafficControls() TrafficControlInterface {
+	return newTrafficControls(c)
 }
 
 // NewForConfig creates a new CrdV1alpha2Client for the given config.

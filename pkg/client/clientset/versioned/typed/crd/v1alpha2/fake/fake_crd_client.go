@@ -46,6 +46,10 @@ func (c *FakeCrdV1alpha2) IPPools() v1alpha2.IPPoolInterface {
 	return &FakeIPPools{c}
 }
 
+func (c *FakeCrdV1alpha2) TrafficControls() v1alpha2.TrafficControlInterface {
+	return &FakeTrafficControls{c}
+}
+
 // RESTClient returns a RESTClient that is used to communicate
 // with API server by this client implementation.
 func (c *FakeCrdV1alpha2) RESTClient() rest.Interface {
