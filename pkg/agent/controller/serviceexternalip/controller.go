@@ -15,14 +15,12 @@
 package serviceexternalip
 
 import (
-	"context"
 	"fmt"
 	"sync"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	apimachinerytypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -37,6 +35,7 @@ import (
 	"antrea.io/antrea/pkg/agent/ipassigner"
 	"antrea.io/antrea/pkg/agent/memberlist"
 	"antrea.io/antrea/pkg/agent/types"
+	"antrea.io/antrea/pkg/querier"
 )
 
 const (
@@ -58,6 +57,7 @@ const (
 
 type externalIPState struct {
 	ip           string
+	ipPool       string
 	assignedNode string
 }
 
@@ -82,6 +82,8 @@ type ServiceExternalIPController struct {
 	ipAssigner      ipassigner.IPAssigner
 	localIPDetector ipassigner.LocalIPDetector
 }
+
+var _ querier.ServiceExternalIPStatusQuerier = (*ServiceExternalIPController)(nil)
 
 func NewServiceExternalIPController(
 	nodeName string,
@@ -321,8 +323,10 @@ func (c *ServiceExternalIPController) deleteService(service apimachinerytypes.Na
 	if state, exist = c.externalIPStates[service]; !exist {
 		return nil
 	}
-	if err := c.ipAssigner.UnassignIP(state.ip); err != nil {
-		return err
+	if state.ip != "" {
+		if err := c.ipAssigner.UnassignIP(state.ip); err != nil {
+			return err
+		}
 	}
 	delete(c.externalIPStates, service)
 	return nil
@@ -339,21 +343,21 @@ func (c *ServiceExternalIPController) getServiceState(service *corev1.Service) (
 	return state, exist
 }
 
-func (c *ServiceExternalIPController) saveServiceState(service *corev1.Service, state externalIPState) {
+func (c *ServiceExternalIPController) saveServiceState(service *corev1.Service, state *externalIPState) {
 	c.externalIPStatesMutex.Lock()
 	defer c.externalIPStatesMutex.Unlock()
 	name := apimachinerytypes.NamespacedName{
 		Namespace: service.Namespace,
 		Name:      service.Name,
 	}
-	c.externalIPStates[name] = state
+	c.externalIPStates[name] = *state
 }
 
-func (c *ServiceExternalIPController) getServiceExternalIPAndHostname(service *corev1.Service) (string, string) {
+func (c *ServiceExternalIPController) getServiceExternalIP(service *corev1.Service) string {
 	if len(service.Status.LoadBalancer.Ingress) == 0 {
-		return "", ""
+		return ""
 	}
-	return service.Status.LoadBalancer.Ingress[0].IP, service.Status.LoadBalancer.Ingress[0].Hostname
+	return service.Status.LoadBalancer.Ingress[0].IP
 }
 
 func (c *ServiceExternalIPController) syncService(key apimachinerytypes.NamespacedName) error {
@@ -374,9 +378,9 @@ func (c *ServiceExternalIPController) syncService(key apimachinerytypes.Namespac
 		return c.deleteService(key)
 	}
 
-	state, exist := c.getServiceState(service)
-	currentExternalIP, currentHostname := c.getServiceExternalIPAndHostname(service)
-	if exist && state.ip != currentExternalIP {
+	prevState, exist := c.getServiceState(service)
+	currentExternalIP := c.getServiceExternalIP(service)
+	if exist && prevState.ip != currentExternalIP {
 		// External IP of the Service has changed. Delete the previous assigned IP if exists.
 		if err := c.deleteService(key); err != nil {
 			return err
@@ -384,58 +388,41 @@ func (c *ServiceExternalIPController) syncService(key apimachinerytypes.Namespac
 	}
 
 	ipPool := service.ObjectMeta.Annotations[types.ServiceExternalIPPoolAnnotationKey]
+	state := &externalIPState{
+		ip:     currentExternalIP,
+		ipPool: ipPool,
+	}
+	defer c.saveServiceState(service, state)
+
 	if currentExternalIP == "" || ipPool == "" {
 		return nil
 	}
 
-	selectNode := true
 	var filters []func(string) bool
 	if service.Spec.ExternalTrafficPolicy == corev1.ServiceExternalTrafficPolicyTypeLocal {
 		nodes, err := c.nodesHasHealthyServiceEndpoint(service)
 		if err != nil {
 			return err
 		}
-		// Avoid unnecessary migration caused by Endpoints changes.
-		if currentHostname != "" && c.cluster.AliveNodes().Has(currentHostname) && nodes.Has(currentHostname) {
-			selectNode = false
-			state = externalIPState{
-				ip:           currentExternalIP,
-				assignedNode: currentHostname,
-			}
-			c.saveServiceState(service, state)
-		} else {
-			filters = append(filters, func(s string) bool {
-				return nodes.Has(s)
-			})
-		}
+		filters = append(filters, func(s string) bool {
+			return nodes.Has(s)
+		})
 	}
 
-	if selectNode {
-		nodeName, err := c.cluster.SelectNodeForIP(currentExternalIP, ipPool, filters...)
-		if err != nil {
-			if err == memberlist.ErrNoNodeAvailable {
-				// No Node is available for the moment. The Service will be requeued by Endpoints, Node, or Memberlist update events.
-				klog.InfoS("No Node available", "ip", currentExternalIP, "ipPool", ipPool)
-				return nil
-			}
-			return err
+	nodeName, err := c.cluster.SelectNodeForIP(currentExternalIP, ipPool, filters...)
+	if err != nil {
+		if err == memberlist.ErrNoNodeAvailable {
+			// No Node is available at the moment. The Service will be requeued by Endpoints, Node, or Memberlist update events.
+			klog.InfoS("No Node available", "ip", currentExternalIP, "ipPool", ipPool)
+			return nil
 		}
-		klog.InfoS("Select Node for IP", "service", key, "nodeName", nodeName, "currentExternalIP", currentExternalIP, "ipPool", ipPool)
-		state = externalIPState{
-			ip:           currentExternalIP,
-			assignedNode: nodeName,
-		}
-		c.saveServiceState(service, state)
+		return err
 	}
-	// Update the hostname field of Service status and assign the external IP if this Node is selected.
+	klog.InfoS("Select Node for IP", "service", key, "nodeName", nodeName, "currentExternalIP", currentExternalIP, "ipPool", ipPool)
+
+	state.assignedNode = nodeName
+
 	if state.assignedNode == c.nodeName {
-		if service.Status.LoadBalancer.Ingress[0].Hostname != state.assignedNode {
-			serviceToUpdate := service.DeepCopy()
-			serviceToUpdate.Status.LoadBalancer.Ingress[0].Hostname = state.assignedNode
-			if _, err = c.client.CoreV1().Services(serviceToUpdate.Namespace).UpdateStatus(context.TODO(), serviceToUpdate, v1.UpdateOptions{}); err != nil {
-				return err
-			}
-		}
 		return c.ipAssigner.AssignIP(currentExternalIP)
 	}
 	return c.ipAssigner.UnassignIP(currentExternalIP)
@@ -457,4 +444,20 @@ func (c *ServiceExternalIPController) nodesHasHealthyServiceEndpoint(service *co
 		}
 	}
 	return nodes, nil
+}
+
+func (c *ServiceExternalIPController) GetServiceExternalIPStatus() []querier.ServiceExternalIPInfo {
+	c.externalIPStatesMutex.RLock()
+	defer c.externalIPStatesMutex.RUnlock()
+	info := make([]querier.ServiceExternalIPInfo, 0, len(c.externalIPStates))
+	for k, v := range c.externalIPStates {
+		info = append(info, querier.ServiceExternalIPInfo{
+			ServiceName:    k.Name,
+			Namespace:      k.Namespace,
+			ExternalIP:     v.ip,
+			ExternalIPPool: v.ipPool,
+			AssignedNode:   v.assignedNode,
+		})
+	}
+	return info
 }
