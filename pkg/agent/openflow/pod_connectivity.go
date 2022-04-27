@@ -20,7 +20,6 @@ import (
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/openflow/cookie"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
-	"antrea.io/antrea/pkg/ovs/ovsconfig"
 	"antrea.io/antrea/pkg/util/runtime"
 )
 
@@ -37,8 +36,6 @@ type featurePodConnectivity struct {
 	nodeIPs       map[binding.Protocol]net.IP
 	nodeConfig    *config.NodeConfig
 	networkConfig *config.NetworkConfig
-	// ovsDatapathType is the type of the datapath used by the bridge.
-	ovsDatapathType ovsconfig.OVSDatapathType
 
 	connectUplinkToBridge bool
 	ctZoneSrcField        *binding.RegField
@@ -58,7 +55,6 @@ func newFeaturePodConnectivity(
 	ipProtocols []binding.Protocol,
 	nodeConfig *config.NodeConfig,
 	networkConfig *config.NetworkConfig,
-	ovsDatapathType ovsconfig.OVSDatapathType,
 	connectUplinkToBridge bool,
 	enableMulticast bool,
 	proxyAll bool) *featurePodConnectivity {
@@ -98,7 +94,6 @@ func newFeaturePodConnectivity(
 		nodeIPs:               nodeIPs,
 		nodeConfig:            nodeConfig,
 		networkConfig:         networkConfig,
-		ovsDatapathType:       ovsDatapathType,
 		connectUplinkToBridge: connectUplinkToBridge,
 		ipCtZoneTypeRegMarks:  ipCtZoneTypeRegMarks,
 		ctZoneSrcField:        getZoneSrcField(connectUplinkToBridge),
