@@ -183,7 +183,7 @@ func run(o *Options) error {
 
 	// Get all available NodePort addresses.
 	var nodePortAddressesIPv4, nodePortAddressesIPv6 []net.IP
-	if o.config.AntreaProxy.ProxyAll {
+	if features.DefaultFeatureGate.Enabled(features.AntreaProxy) && o.config.AntreaProxy.ProxyAll {
 		nodePortAddressesIPv4, nodePortAddressesIPv6, err = getAvailableNodePortAddresses(o.config.AntreaProxy.NodePortAddresses, append(excludeNodePortDevices, o.config.HostGateway))
 		if err != nil {
 			return fmt.Errorf("getting available NodePort IP addresses failed: %v", err)

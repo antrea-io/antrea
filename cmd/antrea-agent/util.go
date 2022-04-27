@@ -20,6 +20,8 @@ import (
 	"strconv"
 	"strings"
 
+	"k8s.io/klog/v2"
+
 	"antrea.io/antrea/pkg/agent/util"
 )
 
@@ -37,6 +39,10 @@ func getAvailableNodePortAddresses(nodePortAddressesFromConfig []string, exclude
 	var nodePortIPNets []*net.IPNet
 	for _, nodePortIP := range nodePortAddressesFromConfig {
 		_, ipNet, _ := net.ParseCIDR(nodePortIP)
+		// Skip invalid ipNet.
+		if ipNet == nil {
+			continue
+		}
 		nodePortIPNets = append(nodePortIPNets, ipNet)
 	}
 
@@ -52,6 +58,12 @@ func getAvailableNodePortAddresses(nodePortAddressesFromConfig []string, exclude
 				nodePortAddressesIPv6 = append(nodePortAddressesIPv6, nodeAddressesIPv6[i])
 			}
 		}
+	}
+	if len(nodePortAddressesIPv4) == 0 {
+		klog.Warning("No valid IPv4 address found for NodePort, thus IPv4 NodePort Service is unavailable on this Node")
+	}
+	if len(nodePortAddressesIPv6) == 0 {
+		klog.Warning("No valid IPv6 address found for NodePort, thus IPv6 NodePort Service is unavailable on this Node")
 	}
 
 	return nodePortAddressesIPv4, nodePortAddressesIPv6, nil
