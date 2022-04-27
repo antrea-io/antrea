@@ -173,6 +173,7 @@ function setup_aks() {
 
 function deliver_antrea_to_aks() {
     echo "====== Building Antrea for the Following Commit ======"
+    git config --global --add safe.directory ${GIT_CHECKOUT_DIR}
     git show --numstat
 
     export GO111MODULE=on
