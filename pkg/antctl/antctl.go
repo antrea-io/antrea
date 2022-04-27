@@ -21,6 +21,7 @@ import (
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/agentinfo"
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/ovsflows"
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/podinterface"
+	"antrea.io/antrea/pkg/agent/apiserver/handlers/serviceexternalip"
 	"antrea.io/antrea/pkg/agent/openflow"
 	fallbackversion "antrea.io/antrea/pkg/antctl/fallback/version"
 	"antrea.io/antrea/pkg/antctl/raw/featuregates"
@@ -508,6 +509,32 @@ var CommandList = &commandList{
 				},
 			},
 			transformedResponse: reflect.TypeOf(recordmetrics.Response{}),
+		},
+		{
+			use:          "serviceexternalip",
+			short:        "Print Service external IP status",
+			long:         "Print Service external IP status. It includes the external IP, external IP pool and the assigned Node for Services with type LoadBalancer managed by Antrea",
+			commandGroup: get,
+			aliases:      []string{"seip", "serviceexternalips"},
+			agentEndpoint: &endpoint{
+				nonResourceEndpoint: &nonResourceEndpoint{
+					path: "/serviceexternalip",
+					params: []flagInfo{
+						{
+							name:  "name",
+							usage: "Name of the Service; if present, Namespace must be provided as well.",
+							arg:   true,
+						},
+						{
+							name:      "namespace",
+							usage:     "Only get the external IP status for Services in the provided Namespace.",
+							shorthand: "n",
+						},
+					},
+					outputType: multiple,
+				},
+			},
+			transformedResponse: reflect.TypeOf(serviceexternalip.Response{}),
 		},
 	},
 	rawCommands: []rawCommand{
