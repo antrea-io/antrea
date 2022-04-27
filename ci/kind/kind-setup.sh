@@ -41,12 +41,10 @@ function echoerr {
 _usage="
 Usage: $0 create CLUSTER_NAME [--pod-cidr POD_CIDR] [--antrea-cni] [--num-workers NUM_WORKERS] [--images IMAGES] [--subnets SUBNETS] [--ip-family ipv4|ipv6]
                   destroy CLUSTER_NAME
-                  modify-node NODE_NAME
                   help
 where:
   create: create a kind cluster with name CLUSTER_NAME
   destroy: delete a kind cluster with name CLUSTER_NAME
-  modify-node: modify kind node with name NODE_NAME
   --pod-cidr: specifies pod cidr used in kind cluster, default is $POD_CIDR
   --encap-mode: inter-node pod traffic encap mode, default is encap
   --no-proxy: disable Antrea proxy
@@ -74,17 +72,6 @@ function get_encap_mode {
     return
   fi
   echo "--encap-mode $ENCAP_MODE"
-}
-
-function modify {
-  node="$1"
-  # In Kind cluster, DNAT operation is configured by Docker as all DNS requests from Pod CoreDNS are NAT'd to the Docker
-  # DNS embedded resolver, which is running on localhost. When kube-proxy is enabled, parameter net.ipv4.conf.all.route_localnet
-  # is set to 1 by kube-proxy. This setting ensures that the DNS response can be forwarded back to Pod CoreDNS, otherwise
-  # DNS response from Docker DNS embedded resolver will be discarded. When kube-proxy is disabled, to ensure that DNS
-  # response can be forwarded back to Pod CoreDNS, we also set parameter net.ipv4.conf.all.route_localnet to 1 through
-  # the following command:
-  docker exec "$node" sysctl -w net.ipv4.conf.all.route_localnet=1
 }
 
 function configure_networks {
@@ -165,7 +152,8 @@ function configure_networks {
     # this is needed to ensure that the worker node can still connect to the apiserver
     docker exec -t $node bash -c "echo '$control_plane_ip $CLUSTER_NAME-control-plane' >> /etc/hosts"
     docker exec -t $node pkill kubelet
-    docker exec -t $node pkill kube-proxy
+    # it's possible that kube-proxy is not running yet on some Nodes
+    docker exec -t $node pkill kube-proxy || true
     i=$((i+1))
     if [[ $i -ge $num_networks ]]; then
       i=0
@@ -191,7 +179,6 @@ function configure_networks {
     # otherwise we observe that inter-Node tunnelled traffic crossing Docker networks is dropped
     # because of an invalid outer checksum.
     docker exec "$node" ethtool -K eth0 tx off
-    modify $node
   done
 }
 
@@ -295,12 +282,6 @@ EOF
   configure_networks
   load_images
 
-  nodes="$(kind get nodes --name $CLUSTER_NAME)"
-  nodes="$(echo $nodes)"
-  for node in $nodes; do
-    modify $node
-  done
-
   if [[ $ANTREA_CNI == true ]]; then
     cmd=$(dirname $0)
     cmd+="/../../hack/generate-manifest.sh"
@@ -331,6 +312,12 @@ function destroy {
   delete_networks
 }
 
+if ! command -v kind &> /dev/null
+then
+    echoerr "kind could not be found"
+    exit 1
+fi
+
 while [[ $# -gt 0 ]]
  do
  key="$1"
@@ -343,10 +330,6 @@ while [[ $# -gt 0 ]]
     destroy)
       CLUSTER_NAME="$2"
       destroy
-      exit 0
-      ;;
-    modify-node)
-      modify "$2"
       exit 0
       ;;
     --pod-cidr)
@@ -399,5 +382,16 @@ while [[ $# -gt 0 ]]
       ;;
  esac
  done
+
+kind_version=$(kind version | awk  '{print $2}')
+kind_version=${kind_version:1} # strip leading 'v'
+function version_lt() { test "$(printf '%s\n' "$@" | sort -rV | head -n 1)" != "$1"; }
+if version_lt "$kind_version" "0.12.0" && [[ "$KUBE_PROXY_MODE" == "none" ]]; then
+    # This patch is required when using Antrea without kube-proxy:
+    # https://github.com/kubernetes-sigs/kind/pull/2375
+    echoerr "You have kind version v$kind_version installed"
+    echoerr "You need to upgrade to kind >= v0.12.0 when disabling kube-proxy"
+    exit 1
+fi
 
 create
