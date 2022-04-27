@@ -370,11 +370,13 @@ data:
       resourceName: 6536456a.crd.antrea.io
       leaseDuration: "30s"
       renewDeadline: "20s"
+    serviceCIDR: ""
+    gatewayIPPrecedence: "private"
 kind: ConfigMap
 metadata:
   labels:
     app: antrea
-  name: antrea-mc-controller-config-49875k4ht8
+  name: antrea-mc-controller-config-t2b9525b7f
   namespace: changeme
 ---
 apiVersion: v1
@@ -459,7 +461,7 @@ spec:
       terminationGracePeriodSeconds: 10
       volumes:
       - configMap:
-          name: antrea-mc-controller-config-49875k4ht8
+          name: antrea-mc-controller-config-t2b9525b7f
         name: antrea-mc-controller-config
 ---
 apiVersion: admissionregistration.k8s.io/v1

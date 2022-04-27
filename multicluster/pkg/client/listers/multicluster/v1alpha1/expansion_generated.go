@@ -25,6 +25,14 @@ type ClusterClaimListerExpansion interface{}
 // ClusterClaimNamespaceLister.
 type ClusterClaimNamespaceListerExpansion interface{}
 
+// ClusterInfoImportListerExpansion allows custom methods to be added to
+// ClusterInfoImportLister.
+type ClusterInfoImportListerExpansion interface{}
+
+// ClusterInfoImportNamespaceListerExpansion allows custom methods to be added to
+// ClusterInfoImportNamespaceLister.
+type ClusterInfoImportNamespaceListerExpansion interface{}
+
 // ClusterSetListerExpansion allows custom methods to be added to
 // ClusterSetLister.
 type ClusterSetListerExpansion interface{}
@@ -32,6 +40,14 @@ type ClusterSetListerExpansion interface{}
 // ClusterSetNamespaceListerExpansion allows custom methods to be added to
 // ClusterSetNamespaceLister.
 type ClusterSetNamespaceListerExpansion interface{}
+
+// GatewayListerExpansion allows custom methods to be added to
+// GatewayLister.
+type GatewayListerExpansion interface{}
+
+// GatewayNamespaceListerExpansion allows custom methods to be added to
+// GatewayNamespaceLister.
+type GatewayNamespaceListerExpansion interface{}
 
 // MemberClusterAnnounceListerExpansion allows custom methods to be added to
 // MemberClusterAnnounceLister.

@@ -25,8 +25,12 @@ import (
 type Interface interface {
 	// ClusterClaims returns a ClusterClaimInformer.
 	ClusterClaims() ClusterClaimInformer
+	// ClusterInfoImports returns a ClusterInfoImportInformer.
+	ClusterInfoImports() ClusterInfoImportInformer
 	// ClusterSets returns a ClusterSetInformer.
 	ClusterSets() ClusterSetInformer
+	// Gateways returns a GatewayInformer.
+	Gateways() GatewayInformer
 	// MemberClusterAnnounces returns a MemberClusterAnnounceInformer.
 	MemberClusterAnnounces() MemberClusterAnnounceInformer
 	// ResourceExports returns a ResourceExportInformer.
@@ -55,9 +59,19 @@ func (v *version) ClusterClaims() ClusterClaimInformer {
 	return &clusterClaimInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }
 
+// ClusterInfoImports returns a ClusterInfoImportInformer.
+func (v *version) ClusterInfoImports() ClusterInfoImportInformer {
+	return &clusterInfoImportInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+}
+
 // ClusterSets returns a ClusterSetInformer.
 func (v *version) ClusterSets() ClusterSetInformer {
 	return &clusterSetInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+}
+
+// Gateways returns a GatewayInformer.
+func (v *version) Gateways() GatewayInformer {
+	return &gatewayInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }
 
 // MemberClusterAnnounces returns a MemberClusterAnnounceInformer.

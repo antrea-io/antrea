@@ -19,7 +19,11 @@ package v1alpha1
 
 type ClusterClaimExpansion interface{}
 
+type ClusterInfoImportExpansion interface{}
+
 type ClusterSetExpansion interface{}
+
+type GatewayExpansion interface{}
 
 type MemberClusterAnnounceExpansion interface{}
 
