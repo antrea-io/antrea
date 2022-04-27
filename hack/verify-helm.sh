@@ -27,7 +27,7 @@ verify_helm() {
     local helm="$(PATH=$_BINDIR command -v helm)"
     if [ -x "$helm" ]; then
         # Verify version if helm was already installed.
-        local helm_version="$($helm version --short)"
+        local helm_version="$($helm version --short 2> >(grep -v 'This is insecure' >&2))"
         # Should work with:
         #  - v3.8.1
         #  - v3.8.1+g5cb9af4
