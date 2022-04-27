@@ -18,19 +18,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net"
-	"net/http"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
-	restclient "k8s.io/client-go/rest"
 	certutil "k8s.io/client-go/util/cert"
 
-	"antrea.io/antrea/pkg/apis"
 	"antrea.io/antrea/pkg/apis/crd/v1beta1"
 	"antrea.io/antrea/pkg/apiserver/certificate"
 	controllerconfig "antrea.io/antrea/pkg/config/controller"
@@ -153,8 +150,10 @@ func testCert(t *testing.T, data *TestData, expectedCABundle string, restartPod 
 	}
 
 	var caBundle string
+	var configMap *v1.ConfigMap
 	if err := wait.Poll(2*time.Second, timeout, func() (bool, error) {
-		configMap, err := data.clientset.CoreV1().ConfigMaps(caConfigMapNamespace).Get(context.TODO(), certificate.AntreaCAConfigMapName, metav1.GetOptions{})
+		var err error
+		configMap, err = data.clientset.CoreV1().ConfigMaps(caConfigMapNamespace).Get(context.TODO(), certificate.AntreaCAConfigMapName, metav1.GetOptions{})
 		if err != nil {
 			return false, fmt.Errorf("cannot get ConfigMap antrea-ca")
 		}
@@ -169,29 +168,42 @@ func testCert(t *testing.T, data *TestData, expectedCABundle string, restartPod 
 			t.Log("CA bundle doesn't match the expected one, retrying")
 			return false, nil
 		}
-		clientConfig := restclient.Config{
-			TLSClientConfig: restclient.TLSClientConfig{
-				Insecure:   false,
-				ServerName: certificate.GetAntreaServerNames(certificate.AntreaServiceName)[0],
-				CAData:     []byte(caBundle),
-			},
-		}
-		trans, _ := restclient.TransportFor(&clientConfig)
-		hc := &http.Client{Transport: trans, Timeout: 5 * time.Second}
-		reqURL := fmt.Sprintf("https://%s/readyz", net.JoinHostPort(antreaController.Status.PodIP, fmt.Sprint(apis.AntreaControllerAPIPort)))
-		req, err := http.NewRequest("GET", reqURL, nil)
-		if err != nil {
-			return false, err
-		}
+		return true, nil
+	}); err != nil {
+		t.Fatalf("Failed to get CA bundle availability: %v", err)
+	}
 
-		resp, err := hc.Do(req)
-		if err != nil {
-			t.Logf("Failed to connect antrea-controller or verify its serving cert: %v, retrying", err)
-			return false, nil
+	// We create a test Pod which needs access to the CA bundle.
+	// Because this Pod will be created inside the test Namespace, it will not have direct access to the antrea-ca ConfigMap,
+	// which is in the kube-system Namespace. Therefore, we make a "copy" of the antrea-ca ConfigMap in the test Namespace.
+	configMapCopy := v1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "antrea-ca-e2e",
+			Namespace: data.testNamespace,
+		},
+		Data: configMap.Data,
+	}
+	if _, err := data.clientset.CoreV1().ConfigMaps(data.testNamespace).Create(context.TODO(), &configMapCopy, metav1.CreateOptions{}); err != nil {
+		t.Errorf("Error when creating ConfigMap %s: %v", configMapCopy.Name, err)
+	}
+	defer func() {
+		if err := data.clientset.CoreV1().ConfigMaps(data.testNamespace).Delete(context.TODO(), configMapCopy.Name, metav1.DeleteOptions{}); err != nil {
+			t.Errorf("Error when deleting ConfigMap %s: %v", configMapCopy.Name, err)
 		}
-		if resp.StatusCode != http.StatusOK {
-			t.Logf("Expected status code %v, got %v, retrying", http.StatusOK, resp.StatusCode)
-			return false, nil
+	}()
+
+	caFile := "/etc/config/ca.crt"
+	clientName := "agnhost"
+	reqURL := fmt.Sprintf("https://%s/readyz", certificate.GetAntreaServerNames(certificate.AntreaServiceName)[0])
+	cmd := []string{"curl", "--cacert", caFile, "-s", reqURL}
+	require.NoError(t, NewPodBuilder(clientName, data.testNamespace, agnhostImage).WithContainerName(getImageName(agnhostImage)).MountConfigMap(configMapCopy.Name, "/etc/config/", "config-volume").WithHostNetwork(false).Create(data))
+	defer data.deletePodAndWait(defaultTimeout, clientName, data.testNamespace)
+	require.NoError(t, data.podWaitForRunning(defaultTimeout, clientName, data.testNamespace))
+	if err := wait.Poll(2*time.Second, timeout, func() (bool, error) {
+		stdout, stderr, err := data.RunCommandFromPod(data.testNamespace, clientName, agnhostContainerName, cmd)
+		if err != nil {
+			t.Logf("error when running cmd: %v , stdout: <%v>, stderr: <%v>", err, stdout, stderr)
+			return false, err
 		}
 		t.Logf("The CABundle in ConfigMap antrea-ca is valid")
 		return true, nil
