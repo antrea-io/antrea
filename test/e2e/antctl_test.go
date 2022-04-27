@@ -113,7 +113,7 @@ func testAntctlAgentLocalAccess(t *testing.T, data *TestData) {
 		cmd := strings.Join(args, " ")
 		t.Run(cmd, func(t *testing.T) {
 			stdout, stderr, err := runAntctl(podName, args, data)
-			if err != nil {
+			if err != nil && !strings.HasSuffix(stderr, "not enabled\n") {
 				t.Fatalf("Error when running `antctl %s` from %s: %v\n%s", c, podName, err, antctlOutput(stdout, stderr))
 			}
 		})

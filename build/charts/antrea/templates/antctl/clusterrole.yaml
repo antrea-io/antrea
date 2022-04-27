@@ -53,5 +53,6 @@ rules:
       - /ovstracing
       - /podinterfaces
       - /featuregates
+      - /serviceexternalip
     verbs:
       - get
