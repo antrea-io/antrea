@@ -91,6 +91,10 @@ const (
 	// alpha: v1.5
 	// Enable controlling Services with ExternalIP.
 	ServiceExternalIP featuregate.Feature = "ServiceExternalIP"
+
+	// alpha: v1.7
+	// Enable mirroring or redirecting the traffic Pods send or receive.
+	TrafficControl featuregate.Feature = "TrafficControl"
 )
 
 var (
@@ -118,6 +122,7 @@ var (
 		Multicast:          {Default: false, PreRelease: featuregate.Alpha},
 		SecondaryNetwork:   {Default: false, PreRelease: featuregate.Alpha},
 		ServiceExternalIP:  {Default: false, PreRelease: featuregate.Alpha},
+		TrafficControl:     {Default: false, PreRelease: featuregate.Alpha},
 	}
 
 	// UnsupportedFeaturesOnWindows records the features not supported on

@@ -39,3 +39,7 @@ type ExternalIPPoolListerExpansion interface{}
 // IPPoolListerExpansion allows custom methods to be added to
 // IPPoolLister.
 type IPPoolListerExpansion interface{}
+
+// TrafficControlListerExpansion allows custom methods to be added to
+// TrafficControlLister.
+type TrafficControlListerExpansion interface{}
