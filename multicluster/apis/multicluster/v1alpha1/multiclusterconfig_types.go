@@ -21,13 +21,25 @@ import (
 	config "sigs.k8s.io/controller-runtime/pkg/config/v1alpha1"
 )
 
+// Precedence defines the precedence of Node IP type.
+type Precedence string
+
+const (
+	PrecedencePrivate = "private"
+	PrecedencePublic  = "public"
+)
+
 //+kubebuilder:object:root=true
 
-// MultiClusterConfig is the Schema for the multiclusterconfigs API
 type MultiClusterConfig struct {
 	metav1.TypeMeta `json:",inline"`
-	// ControllerManagerConfigurationSpec returns the contfigurations for controllers
+	// ControllerManagerConfigurationSpec returns the contfigurations for controllers.
 	config.ControllerManagerConfigurationSpec `json:",inline"`
+	// ServiceCIDR allows user to set the ClusterIP range of the cluster manually.
+	ServiceCIDR string `json:"serviceCIDR,omitempty"`
+	// The precedence about which IP (private or public one) of Node is preferred to
+	// be used as tunnel endpoint. if not specified, private IP will be chosen.
+	GatewayIPPrecedence Precedence `json:"gatewayIPPrecedence,omitempty"`
 }
 
 func init() {

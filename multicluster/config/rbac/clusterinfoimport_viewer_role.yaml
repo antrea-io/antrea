@@ -1,0 +1,20 @@
+# permissions for end users to view clusterinfoimports.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: clusterinfoimport-viewer-role
+rules:
+- apiGroups:
+  - multicluster.crd.antrea.io
+  resources:
+  - clusterinfoimports
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - multicluster.crd.antrea.io
+  resources:
+  - clusterinfoimports/status
+  verbs:
+  - get

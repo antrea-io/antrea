@@ -27,6 +27,14 @@ rules:
 - apiGroups:
   - ""
   resources:
+  - nodes
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
   - services
   verbs:
   - create
@@ -85,6 +93,32 @@ rules:
 - apiGroups:
   - multicluster.crd.antrea.io
   resources:
+  - clusterinfoimports
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - multicluster.crd.antrea.io
+  resources:
+  - clusterinfoimports/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - multicluster.crd.antrea.io
+  resources:
+  - clusterinfoimports/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - multicluster.crd.antrea.io
+  resources:
   - clustersets
   verbs:
   - create
@@ -104,6 +138,32 @@ rules:
   - multicluster.crd.antrea.io
   resources:
   - clustersets/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - multicluster.crd.antrea.io
+  resources:
+  - gateways
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - multicluster.crd.antrea.io
+  resources:
+  - gateways/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - multicluster.crd.antrea.io
+  resources:
+  - gateways/status
   verbs:
   - get
   - patch
