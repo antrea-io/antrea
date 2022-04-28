@@ -451,6 +451,7 @@ func (pc *podConfigurator) reconcile(pods []corev1.Pod, containerAccess *contain
 				containerConfig.MAC,
 				uint32(containerConfig.OFPort),
 				containerConfig.VLANID,
+				nil,
 			); err != nil {
 				klog.Errorf("Error when re-installing flows for Pod %s", namespacedName)
 			}
@@ -491,7 +492,7 @@ func (pc *podConfigurator) connectInterfaceToOVSCommon(ovsPortName string, conta
 		return fmt.Errorf("failed to get of_port of OVS port %s: %v", ovsPortName, err)
 	}
 	klog.V(2).Infof("Setting up Openflow entries for container %s", containerID)
-	if err := pc.ofClient.InstallPodFlows(ovsPortName, containerConfig.IPs, containerConfig.MAC, uint32(ofPort), containerConfig.VLANID); err != nil {
+	if err := pc.ofClient.InstallPodFlows(ovsPortName, containerConfig.IPs, containerConfig.MAC, uint32(ofPort), containerConfig.VLANID, nil); err != nil {
 		return fmt.Errorf("failed to add Openflow entries for container %s: %v", containerID, err)
 	}
 	containerConfig.OVSPortConfig = &interfacestore.OVSPortConfig{PortUUID: portUUID, OFPort: ofPort}

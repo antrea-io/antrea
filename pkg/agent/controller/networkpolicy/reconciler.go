@@ -550,6 +550,8 @@ func (r *reconciler) computeOFRulesForAdd(rule *CompletedRule, ofPriority *uint1
 		from1 := groupMembersToOFAddresses(rule.FromAddresses)
 		// Get addresses that in From IPBlock but not in Except IPBlocks.
 		from2 := ipBlocksToOFAddresses(rule.From.IPBlocks, r.ipv4Enabled, r.ipv6Enabled, isRuleAppliedToService)
+		from3 := labelIDToOFAddresses(rule.From.LabelIdentities)
+		from := append(from1, append(from2, from3...)...)
 		membersByServicesMap, servicesMap := groupMembersByServices(rule.Services, rule.TargetMembers)
 		for svcKey, members := range membersByServicesMap {
 			var toAddresses []types.Address
@@ -567,7 +569,7 @@ func (r *reconciler) computeOFRulesForAdd(rule *CompletedRule, ofPriority *uint1
 			}
 			ofRuleByServicesMap[svcKey] = &types.PolicyRule{
 				Direction:     v1beta2.DirectionIn,
-				From:          append(from1, from2...),
+				From:          from,
 				To:            toAddresses,
 				Service:       filterUnresolvablePort(servicesMap[svcKey]),
 				Action:        rule.Action,
@@ -1205,6 +1207,15 @@ func ipBlocksToOFAddresses(ipBlocks []v1beta2.IPBlock, ipv4Enabled, ipv6Enabled,
 		}
 	}
 
+	return addresses
+}
+
+func labelIDToOFAddresses(labelIDs []uint32) []types.Address {
+	// Must not return nil as it means not restricted by addresses in Openflow implementation.
+	addresses := make([]types.Address, 0, len(labelIDs))
+	for _, labelID := range labelIDs {
+		addresses = append(addresses, openflow.NewLabelIDAddress(labelID))
+	}
 	return addresses
 }
 

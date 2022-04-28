@@ -627,6 +627,14 @@ func TestRuleCacheAddNetworkPolicy(t *testing.T) {
 		Services:        nil,
 		Priority:        0,
 	}
+	networkPolicyRule4 := &v1beta2.NetworkPolicyRule{
+		Direction:       v1beta2.DirectionIn,
+		AppliedToGroups: []string{"appliedToGroup1"},
+		From:            v1beta2.NetworkPolicyPeer{LabelIdentities: []uint32{1}},
+		To:              v1beta2.NetworkPolicyPeer{},
+		Services:        nil,
+		Priority:        0,
+	}
 	networkPolicy1 := &v1beta2.NetworkPolicy{
 		ObjectMeta:      metav1.ObjectMeta{UID: "policy1", Namespace: "ns1", Name: "name1"},
 		Rules:           nil,
@@ -659,9 +667,21 @@ func TestRuleCacheAddNetworkPolicy(t *testing.T) {
 			UID:       "policy3",
 		},
 	}
+	networkPolicy4 := &v1beta2.NetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{UID: "policy4", Namespace: "ns4", Name: "name4"},
+		Rules:      []v1beta2.NetworkPolicyRule{*networkPolicyRule4},
+		SourceRef: &v1beta2.NetworkPolicyReference{
+			Type:      v1beta2.AntreaNetworkPolicy,
+			Namespace: "ns4",
+			Name:      "name4",
+			UID:       "policy4",
+		},
+	}
 	rule1 := toRule(networkPolicyRule1, networkPolicy2, k8sNPMaxPriority)
 	rule2 := toRule(networkPolicyRule2, networkPolicy2, k8sNPMaxPriority)
 	rule3 := toRule(networkPolicyRule3, networkPolicy3, 0)
+	rule4 := toRule(networkPolicyRule4, networkPolicy4, 0)
+	rule4Sec := toStretchedNetworkPolicySecurityRule(networkPolicyRule4, networkPolicy4, 0)
 	tests := []struct {
 		name               string
 		args               *v1beta2.NetworkPolicy
@@ -685,6 +705,12 @@ func TestRuleCacheAddNetworkPolicy(t *testing.T) {
 			networkPolicy3,
 			[]*rule{rule3},
 			sets.NewString(rule3.ID),
+		},
+		{
+			"rule-with-label-identity",
+			networkPolicy4,
+			[]*rule{rule4, rule4Sec},
+			sets.NewString(rule4.ID, rule4Sec.ID),
 		},
 	}
 	for _, tt := range tests {

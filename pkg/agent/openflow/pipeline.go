@@ -619,10 +619,20 @@ func (f *featurePodConnectivity) gatewayClassifierFlow() binding.Flow {
 }
 
 // podClassifierFlow generates the flow to mark the packets from a local Pod port.
-func (f *featurePodConnectivity) podClassifierFlow(podOFPort uint32, isAntreaFlexibleIPAM bool) binding.Flow {
+// If multi-cluster is enabled, also load podLabelID into LabelIDField.
+func (f *featurePodConnectivity) podClassifierFlow(podOFPort uint32, isAntreaFlexibleIPAM bool, podLabelID *uint32) binding.Flow {
 	regMarksToLoad := []*binding.RegMark{FromLocalRegMark}
 	if isAntreaFlexibleIPAM {
 		regMarksToLoad = append(regMarksToLoad, AntreaFlexibleIPAMRegMark, RewriteMACRegMark)
+	}
+	if podLabelID != nil {
+		return ClassifierTable.ofTable.BuildFlow(priorityLow).
+			Cookie(f.cookieAllocator.Request(f.category).Raw()).
+			MatchInPort(podOFPort).
+			Action().LoadRegMark(regMarksToLoad...).
+			Action().SetTunnelID(uint64(*podLabelID)).
+			Action().GotoStage(stageValidation).
+			Done()
 	}
 	return ClassifierTable.ofTable.BuildFlow(priorityLow).
 		Cookie(f.cookieAllocator.Request(f.category).Raw()).
@@ -1971,6 +1981,8 @@ func (f *featureNetworkPolicy) addFlowMatch(fb binding.FlowBuilder, matchKey *ty
 		fb = fb.MatchRegFieldWithValue(ServiceGroupIDField, matchValue.(uint32))
 	case MatchIGMPProtocol:
 		fb = fb.MatchProtocol(matchKey.GetOFProtocol())
+	case MatchLabelID:
+		fb = fb.MatchTunnelID(uint64(matchValue.(uint32)))
 	}
 	return fb
 }

@@ -283,6 +283,8 @@ type MulticlusterConfig struct {
 	// The Namespace where the Antrea Multi-cluster controller is running.
 	// The default is antrea-agent's Namespace.
 	Namespace string `yaml:"namespace,omitempty"`
+	// Enable StretchedNetworkPolicy which could be enforced on cross-cluster traffic.
+	EnableStretchedNetworkPolicy bool `yaml:"enableStretchedNetworkPolicy,omitempty"`
 }
 
 type ExternalNodeConfig struct {

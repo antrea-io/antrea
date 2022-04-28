@@ -75,7 +75,7 @@ type Client interface {
 	// flows will be installed). Calls to InstallPodFlows are idempotent. Concurrent calls
 	// to InstallPodFlows and / or UninstallPodFlows are supported as long as they are all
 	// for different interfaceNames.
-	InstallPodFlows(interfaceName string, podInterfaceIPs []net.IP, podInterfaceMAC net.HardwareAddr, ofPort uint32, vlanID uint16) error
+	InstallPodFlows(interfaceName string, podInterfaceIPs []net.IP, podInterfaceMAC net.HardwareAddr, ofPort uint32, vlanID uint16, labelID *uint32) error
 
 	// UninstallPodFlows removes the connection to the local Pod specified with the
 	// interfaceName. UninstallPodFlows will do nothing if no connection to the Pod was established.
@@ -326,14 +326,16 @@ type Client interface {
 	InstallMulticlusterNodeFlows(
 		clusterID string,
 		peerConfigs map[*net.IPNet]net.IP,
-		tunnelPeerIP net.IP) error
+		tunnelPeerIP net.IP,
+		enableStretchedNetworkPolicy bool) error
 
 	// InstallMulticlusterGatewayFlows installs flows to handle cross-cluster packets between Gateways.
 	InstallMulticlusterGatewayFlows(
 		clusterID string,
 		peerConfigs map[*net.IPNet]net.IP,
 		tunnelPeerIP net.IP,
-		localGatewayIP net.IP) error
+		localGatewayIP net.IP,
+		enableStretchedNetworkPolicy bool) error
 
 	// InstallMulticlusterClassifierFlows installs flows to classify cross-cluster packets.
 	InstallMulticlusterClassifierFlows(tunnelOFPort uint32, isGateway bool) error
@@ -524,7 +526,7 @@ func (c *client) UninstallNodeFlows(hostname string) error {
 	return c.deleteFlows(c.featurePodConnectivity.nodeCachedFlows, hostname)
 }
 
-func (c *client) InstallPodFlows(interfaceName string, podInterfaceIPs []net.IP, podInterfaceMAC net.HardwareAddr, ofPort uint32, vlanID uint16) error {
+func (c *client) InstallPodFlows(interfaceName string, podInterfaceIPs []net.IP, podInterfaceMAC net.HardwareAddr, ofPort uint32, vlanID uint16, labelID *uint32) error {
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
 
@@ -534,7 +536,7 @@ func (c *client) InstallPodFlows(interfaceName string, podInterfaceIPs []net.IP,
 
 	localGatewayMAC := c.nodeConfig.GatewayConfig.MAC
 	flows := []binding.Flow{
-		c.featurePodConnectivity.podClassifierFlow(ofPort, isAntreaFlexibleIPAM),
+		c.featurePodConnectivity.podClassifierFlow(ofPort, isAntreaFlexibleIPAM, labelID),
 		c.featurePodConnectivity.l2ForwardCalcFlow(podInterfaceMAC, ofPort),
 	}
 
@@ -561,7 +563,7 @@ func (c *client) InstallPodFlows(interfaceName string, podInterfaceIPs []net.IP,
 			flows = append(flows, c.featurePodConnectivity.podVLANFlow(ofPort, vlanID))
 		}
 	}
-	err := c.addFlows(c.featurePodConnectivity.podCachedFlows, interfaceName, flows)
+	err := c.modifyFlows(c.featurePodConnectivity.podCachedFlows, interfaceName, flows)
 	if err != nil {
 		return err
 	}
@@ -1349,14 +1351,15 @@ func (c *client) UninstallMulticastGroup(groupID binding.GroupIDType) error {
 // Node and a local Gateway.
 func (c *client) InstallMulticlusterNodeFlows(clusterID string,
 	peerConfigs map[*net.IPNet]net.IP,
-	tunnelPeerIP net.IP) error {
+	tunnelPeerIP net.IP,
+	enableStretchedNetworkPolicy bool) error {
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
 	cacheKey := fmt.Sprintf("cluster_%s", clusterID)
 	var flows []binding.Flow
 	localGatewayMAC := c.nodeConfig.GatewayConfig.MAC
 	for peerCIDR, remoteGatewayIP := range peerConfigs {
-		flows = append(flows, c.featureMulticluster.l3FwdFlowToRemoteViaTun(localGatewayMAC, *peerCIDR, tunnelPeerIP, remoteGatewayIP)...)
+		flows = append(flows, c.featureMulticluster.l3FwdFlowToRemoteViaTun(localGatewayMAC, *peerCIDR, tunnelPeerIP, remoteGatewayIP, enableStretchedNetworkPolicy)...)
 	}
 	return c.modifyFlows(c.featureMulticluster.cachedFlows, cacheKey, flows)
 }
@@ -1366,6 +1369,7 @@ func (c *client) InstallMulticlusterGatewayFlows(clusterID string,
 	peerConfigs map[*net.IPNet]net.IP,
 	tunnelPeerIP net.IP,
 	localGatewayIP net.IP,
+	enableStretchedNetworkPolicy bool,
 ) error {
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
@@ -1373,7 +1377,7 @@ func (c *client) InstallMulticlusterGatewayFlows(clusterID string,
 	var flows []binding.Flow
 	localGatewayMAC := c.nodeConfig.GatewayConfig.MAC
 	for peerCIDR, remoteGatewayIP := range peerConfigs {
-		flows = append(flows, c.featureMulticluster.l3FwdFlowToRemoteViaTun(localGatewayMAC, *peerCIDR, tunnelPeerIP, remoteGatewayIP)...)
+		flows = append(flows, c.featureMulticluster.l3FwdFlowToRemoteViaTun(localGatewayMAC, *peerCIDR, tunnelPeerIP, remoteGatewayIP, enableStretchedNetworkPolicy)...)
 		// Add SNAT flows to change cross-cluster packets' source IP to local Gateway IP.
 		flows = append(flows, c.featureMulticluster.snatConntrackFlows(*peerCIDR, localGatewayIP)...)
 	}

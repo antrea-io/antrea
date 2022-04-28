@@ -142,7 +142,21 @@ func installPodFlows(ofClient Client, cacheKey string) (int, error) {
 	podMAC, _ := net.ParseMAC("AA:BB:CC:DD:EE:EE")
 	podIP := net.ParseIP("10.0.0.2")
 	ofPort := uint32(10)
-	err := ofClient.InstallPodFlows(containerID, []net.IP{podIP}, podMAC, ofPort, 0)
+	err := ofClient.InstallPodFlows(containerID, []net.IP{podIP}, podMAC, ofPort, 0, nil)
+	client := ofClient.(*client)
+	fCacheI, ok := client.featurePodConnectivity.podCachedFlows.Load(containerID)
+	if ok {
+		return len(fCacheI.(flowCache)), err
+	}
+	return 0, err
+}
+
+func installPodFlowsWithLabelID(ofClient Client, cacheKey string, labelID *uint32) (int, error) {
+	containerID := cacheKey
+	podMAC, _ := net.ParseMAC("AA:BB:CC:DD:EE:EE")
+	podIP := net.ParseIP("10.0.0.2")
+	ofPort := uint32(10)
+	err := ofClient.InstallPodFlows(containerID, []net.IP{podIP}, podMAC, ofPort, 0, labelID)
 	client := ofClient.(*client)
 	fCacheI, ok := client.featurePodConnectivity.podCachedFlows.Load(containerID)
 	if ok {
@@ -153,13 +167,16 @@ func installPodFlows(ofClient Client, cacheKey string) (int, error) {
 
 // TestIdempotentFlowInstallation checks that InstallNodeFlows and InstallPodFlows are idempotent.
 func TestIdempotentFlowInstallation(t *testing.T) {
+	labelID := uint32(1)
 	testCases := []struct {
 		name      string
 		cacheKey  string
+		labelID   *uint32
 		numFlows  int
-		installFn func(ofClient Client, cacheKey string) (int, error)
+		installFn func(ofClient Client, cacheKey string, labelID *uint32) (int, error)
 	}{
-		{"PodFlows", "aaaa-bbbb-cccc-dddd", 5, installPodFlows},
+		{"PodFlows", "aaaa-bbbb-cccc-dddd", nil, 5, installPodFlowsWithLabelID},
+		{"SNPPodFlows", "eeee-ffff-gggg-hhhh", &labelID, 5, installPodFlowsWithLabelID},
 	}
 
 	// Check the flows are installed only once even though InstallNodeFlows/InstallPodFlows is called multiple times.
@@ -173,13 +190,14 @@ func TestIdempotentFlowInstallation(t *testing.T) {
 
 			m.EXPECT().AddAll(gomock.Any()).Return(nil).Times(1)
 			// Installing the flows should succeed, and all the flows should be added into the cache.
-			numCached1, err := tc.installFn(fc, tc.cacheKey)
+			numCached1, err := tc.installFn(fc, tc.cacheKey, tc.labelID)
 			require.Nil(t, err, "Error when installing Node flows")
 			assert.Equal(t, tc.numFlows, numCached1)
 
 			// Installing the same flows again must not return an error and should not
 			// add additional flows to the cache.
-			numCached2, err := tc.installFn(fc, tc.cacheKey)
+			m.EXPECT().BundleOps(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
+			numCached2, err := tc.installFn(fc, tc.cacheKey, tc.labelID)
 			require.Nil(t, err, "Error when installing Node flows again")
 
 			assert.Equal(t, numCached1, numCached2)
@@ -195,16 +213,16 @@ func TestIdempotentFlowInstallation(t *testing.T) {
 			fc := newFakeClient(m, true, false, config.K8sNode, config.TrafficEncapModeEncap)
 			defer resetPipelines()
 
-			errorCall := m.EXPECT().AddAll(gomock.Any()).Return(errors.New("Bundle error")).Times(1)
+			errorCall := m.EXPECT().AddAll(gomock.Any()).Return(errors.New("Bundle error"))
 			m.EXPECT().AddAll(gomock.Any()).Return(nil).After(errorCall)
 
 			// Installing the flows failed at the first time, and no flow cache is created.
-			numCached1, err := tc.installFn(fc, tc.cacheKey)
+			numCached1, err := tc.installFn(fc, tc.cacheKey, tc.labelID)
 			require.NotNil(t, err, "Installing flows in bundle is expected to fail")
 			assert.Equal(t, 0, numCached1)
 
 			// Installing the same flows successfully at the second time, and add flows to the cache.
-			numCached2, err := tc.installFn(fc, tc.cacheKey)
+			numCached2, err := tc.installFn(fc, tc.cacheKey, tc.labelID)
 			require.Nil(t, err, "Error when installing Node flows again")
 
 			assert.Equal(t, tc.numFlows, numCached2)
@@ -220,8 +238,8 @@ func TestFlowInstallationFailed(t *testing.T) {
 		numAddCalls int
 		installFn   func(ofClient Client, cacheKey string) (int, error)
 	}{
-		{"NodeFlows", "host", 2, installNodeFlows},
-		{"PodFlows", "aaaa-bbbb-cccc-dddd", 5, installPodFlows},
+		{"NodeFlows", "host", 1, installNodeFlows},
+		{"PodFlows", "aaaa-bbbb-cccc-dddd", 1, installPodFlows},
 	}
 
 	for _, tc := range testCases {
@@ -233,7 +251,7 @@ func TestFlowInstallationFailed(t *testing.T) {
 			defer resetPipelines()
 
 			// We generate an error for AddAll call.
-			m.EXPECT().AddAll(gomock.Any()).Return(errors.New("Bundle error"))
+			m.EXPECT().AddAll(gomock.Any()).Return(errors.New("Bundle error")).Times(tc.numAddCalls)
 
 			var err error
 			var numCached int
@@ -753,7 +771,7 @@ func Test_client_InstallPodFlows(t *testing.T) {
 			interfaceName := "pod1"
 			cacheKey := fmt.Sprintf("multicast_pod_metric_%s", interfaceName)
 
-			assert.NoError(t, fc.InstallPodFlows(interfaceName, tc.podInterfaceIPs, podMAC, podOfPort, tc.vlanID))
+			assert.NoError(t, fc.InstallPodFlows(interfaceName, tc.podInterfaceIPs, podMAC, podOfPort, tc.vlanID, nil))
 			fCacheI, ok := fc.featurePodConnectivity.podCachedFlows.Load(interfaceName)
 			require.True(t, ok)
 			flows := getFlowStrings(fCacheI)
@@ -789,7 +807,7 @@ func Test_client_GetPodFlowKeys(t *testing.T) {
 	podInterfaceIPs := []net.IP{net.ParseIP("10.10.0.11")}
 	podMAC, _ := net.ParseMAC("00:00:10:10:00:11")
 
-	assert.NoError(t, fc.InstallPodFlows(interfaceName, podInterfaceIPs, podMAC, uint32(11), 0))
+	assert.NoError(t, fc.InstallPodFlows(interfaceName, podInterfaceIPs, podMAC, uint32(11), 0, nil))
 	flowKeys := fc.GetPodFlowKeys(interfaceName)
 	expectedFlowKeys := []string{
 		"table=1,arp,in_port=11,arp_sha=00:00:10:10:00:11,arp_spa=10.10.0.11",
@@ -2009,6 +2027,7 @@ func Test_client_InstallMulticlusterNodeFlows(t *testing.T) {
 			expectedFlows: []string{
 				"cookie=0x1060000000000, table=L3Forwarding, priority=200,ip,nw_dst=10.97.0.0/16 actions=set_field:0a:00:00:00:00:01->eth_src,set_field:aa:bb:cc:dd:ee:f0->eth_dst,set_field:192.168.78.101->tun_dst,set_field:0x10/0xf0->reg0,goto_table:L3DecTTL",
 				"cookie=0x1060000000000, table=L3Forwarding, priority=200,ct_state=+rpl+trk,ip,nw_dst=192.168.78.101 actions=set_field:0a:00:00:00:00:01->eth_src,set_field:aa:bb:cc:dd:ee:f0->eth_dst,set_field:192.168.78.101->tun_dst,set_field:0x10/0xf0->reg0,goto_table:L3DecTTL",
+				"cookie=0x1060000000000, table=L3Forwarding, priority=199,ip,reg0=0x4000/0x3e000,nw_dst=192.168.78.101 actions=set_field:0a:00:00:00:00:01->eth_src,set_field:aa:bb:cc:dd:ee:f0->eth_dst,set_field:192.168.78.101->tun_dst,set_field:0x10/0xf0->reg0,goto_table:L3DecTTL",
 			},
 		},
 		//TODO: IPv6
@@ -2025,7 +2044,7 @@ func Test_client_InstallMulticlusterNodeFlows(t *testing.T) {
 			m.EXPECT().AddAll(gomock.Any()).Return(nil).Times(1)
 			m.EXPECT().DeleteAll(gomock.Any()).Return(nil).Times(1)
 
-			assert.NoError(t, fc.InstallMulticlusterNodeFlows(clusterID, tc.peerConfigs, tc.tunnelPeerIP))
+			assert.NoError(t, fc.InstallMulticlusterNodeFlows(clusterID, tc.peerConfigs, tc.tunnelPeerIP, true))
 			cacheKey := fmt.Sprintf("cluster_%s", clusterID)
 			fCacheI, ok := fc.featureMulticluster.cachedFlows.Load(cacheKey)
 			require.True(t, ok)
@@ -2060,6 +2079,7 @@ func Test_client_InstallMulticlusterGatewayFlows(t *testing.T) {
 				"cookie=0x1060000000000, table=UnSNAT, priority=200,ip,nw_dst=192.168.77.100 actions=ct(table=ConntrackZone,zone=65521,exec(nat))",
 				"cookie=0x1060000000000, table=L3Forwarding, priority=200,ip,nw_dst=10.97.0.0/16 actions=set_field:0a:00:00:00:00:01->eth_src,set_field:aa:bb:cc:dd:ee:f0->eth_dst,set_field:192.168.78.101->tun_dst,set_field:0x10/0xf0->reg0,goto_table:L3DecTTL",
 				"cookie=0x1060000000000, table=L3Forwarding, priority=200,ct_state=+rpl+trk,ip,nw_dst=192.168.78.101 actions=set_field:0a:00:00:00:00:01->eth_src,set_field:aa:bb:cc:dd:ee:f0->eth_dst,set_field:192.168.78.101->tun_dst,set_field:0x10/0xf0->reg0,goto_table:L3DecTTL",
+				"cookie=0x1060000000000, table=L3Forwarding, priority=199,ip,reg0=0x4000/0x3e000,nw_dst=192.168.78.101 actions=set_field:0a:00:00:00:00:01->eth_src,set_field:aa:bb:cc:dd:ee:f0->eth_dst,set_field:192.168.78.101->tun_dst,set_field:0x10/0xf0->reg0,goto_table:L3DecTTL",
 				"cookie=0x1060000000000, table=SNATMark, priority=210,ct_state=+new+trk,ip,nw_dst=10.97.0.0/16 actions=ct(commit,table=SNAT,zone=65520,exec(set_field:0x20/0x20->ct_mark))",
 				"cookie=0x1060000000000, table=SNAT, priority=200,ct_state=+new+trk,ip,nw_dst=10.97.0.0/16 actions=ct(commit,table=L2ForwardingCalc,zone=65521,exec(nat(src=192.168.77.100)))",
 			},
@@ -2080,7 +2100,7 @@ func Test_client_InstallMulticlusterGatewayFlows(t *testing.T) {
 
 			cacheKey := fmt.Sprintf("cluster_%s", clusterID)
 
-			assert.NoError(t, fc.InstallMulticlusterGatewayFlows(clusterID, tc.peerConfigs, tc.tunnelPeerIP, tc.localGatewayIP))
+			assert.NoError(t, fc.InstallMulticlusterGatewayFlows(clusterID, tc.peerConfigs, tc.tunnelPeerIP, tc.localGatewayIP, true))
 			fCacheI, ok := fc.featureMulticluster.cachedFlows.Load(cacheKey)
 			require.True(t, ok)
 			assert.ElementsMatch(t, tc.expectedFlows, getFlowStrings(fCacheI))

@@ -306,6 +306,23 @@ func (o *Options) validateAntreaIPAMConfig() error {
 	return nil
 }
 
+func (o *Options) validateMulticlusterConfig(encapMode config.TrafficEncapModeType) error {
+	if !o.config.Multicluster.Enable {
+		o.config.Multicluster.EnableStretchedNetworkPolicy = false
+		return nil
+	}
+
+	if !features.DefaultFeatureGate.Enabled(features.Multicluster) {
+		return fmt.Errorf("Multicluster can only be enabled when Multicluster feature gate is enabled")
+	}
+
+	if encapMode != config.TrafficEncapModeEncap {
+		// Only Encap mode is supported for Multi-cluster Gateway.
+		return fmt.Errorf("Multicluster is only applicable to the %s mode", config.TrafficEncapModeEncap)
+	}
+	return nil
+}
+
 func (o *Options) setK8sNodeDefaultOptions() {
 	if o.config.CNISocket == "" {
 		o.config.CNISocket = cni.AntreaCNISocketAddr
@@ -453,11 +470,10 @@ func (o *Options) validateK8sNodeOptions() error {
 			}
 		}
 	}
-	if (features.DefaultFeatureGate.Enabled(features.Multicluster) || o.config.Multicluster.Enable) &&
-		encapMode != config.TrafficEncapModeEncap {
-		// Only Encap mode is supported for Multi-cluster feature.
-		return fmt.Errorf("Multicluster is only applicable to the %s mode", config.TrafficEncapModeEncap)
+	if err := o.validateMulticlusterConfig(encapMode); err != nil {
+		return err
 	}
+
 	if features.DefaultFeatureGate.Enabled(features.NodePortLocal) {
 		startPort, endPort, err := parsePortRange(o.config.NodePortLocal.PortRange)
 		if err != nil {

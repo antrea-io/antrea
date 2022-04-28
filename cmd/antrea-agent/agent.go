@@ -134,6 +134,8 @@ func run(o *Options) error {
 	egressEnabled := features.DefaultFeatureGate.Enabled(features.Egress)
 	enableAntreaIPAM := features.DefaultFeatureGate.Enabled(features.AntreaIPAM)
 	enableBridgingMode := enableAntreaIPAM && o.config.EnableBridgingMode
+	enableNodePortLocal := features.DefaultFeatureGate.Enabled(features.NodePortLocal) && o.config.NodePortLocal.Enable
+	enableMulticluster := features.DefaultFeatureGate.Enabled(features.Multicluster) && o.config.Multicluster.Enable
 	// Bridging mode will connect the uplink interface to the OVS bridge.
 	connectUplinkToBridge := enableBridgingMode
 
@@ -281,10 +283,42 @@ func run(o *Options) error {
 		)
 	}
 
+	// podUpdateChannel is a channel for receiving Pod updates from CNIServer and
+	// notifying NetworkPolicyController, StretchedNetworkPolicyController and
+	// EgressController to reconcile rules related to the updated Pods.
+	var podUpdateChannel *channel.SubscribableChannel
+	// externalEntityUpdateChannel is a channel for receiving ExternalEntity updates from ExternalNodeController and
+	// notifying NetworkPolicyController to reconcile rules related to the updated ExternalEntities.
+	var externalEntityUpdateChannel *channel.SubscribableChannel
+	if o.nodeType == config.K8sNode {
+		podUpdateChannel = channel.NewSubscribableChannel("PodUpdate", 100)
+	} else {
+		externalEntityUpdateChannel = channel.NewSubscribableChannel("ExternalEntityUpdate", 100)
+	}
+
+	// Initialize localPodInformer for NPLAgent, AntreaIPAMController,
+	// StretchedNetworkPolicyController, and secondary network controller.
+	var localPodInformer cache.SharedIndexInformer
+	if enableNodePortLocal || enableBridgingMode || enableMulticluster ||
+		features.DefaultFeatureGate.Enabled(features.SecondaryNetwork) ||
+		features.DefaultFeatureGate.Enabled(features.TrafficControl) {
+		listOptions := func(options *metav1.ListOptions) {
+			options.FieldSelector = fields.OneTermEqualSelector("spec.nodeName", nodeConfig.Name).String()
+		}
+		localPodInformer = coreinformers.NewFilteredPodInformer(
+			k8sClient,
+			metav1.NamespaceAll,
+			resyncPeriodDisabled,
+			cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, // NamespaceIndex is used in NPLController.
+			listOptions,
+		)
+	}
+
 	var mcRouteController *mcroute.MCRouteController
+	var mcStrechedNetworkPolicyController *mcroute.StretchedNetworkPolicyController
 	var mcInformerFactory mcinformers.SharedInformerFactory
 
-	if features.DefaultFeatureGate.Enabled(features.Multicluster) && o.config.Multicluster.Enable {
+	if enableMulticluster {
 		mcNamespace := env.GetPodNamespace()
 		if o.config.Multicluster.Namespace != "" {
 			mcNamespace = o.config.Multicluster.Namespace
@@ -292,6 +326,7 @@ func run(o *Options) error {
 		mcInformerFactory = mcinformers.NewSharedInformerFactory(mcClient, informerDefaultResync)
 		gwInformer := mcInformerFactory.Multicluster().V1alpha1().Gateways()
 		ciImportInformer := mcInformerFactory.Multicluster().V1alpha1().ClusterInfoImports()
+		labelIDInformer := mcInformerFactory.Multicluster().V1alpha1().LabelIdentities()
 		mcRouteController = mcroute.NewMCRouteController(
 			mcClient,
 			gwInformer,
@@ -301,7 +336,18 @@ func run(o *Options) error {
 			ifaceStore,
 			nodeConfig,
 			mcNamespace,
+			o.config.Multicluster.EnableStretchedNetworkPolicy,
 		)
+		if o.config.Multicluster.EnableStretchedNetworkPolicy {
+			mcStrechedNetworkPolicyController = mcroute.NewMCAgentStretchedNetworkPolicyController(
+				ofClient,
+				ifaceStore,
+				localPodInformer,
+				informerFactory.Core().V1().Namespaces(),
+				labelIDInformer,
+				podUpdateChannel,
+			)
+		}
 	}
 	var groupCounters []proxytypes.GroupCounter
 	groupIDUpdates := make(chan string, 100)
@@ -331,19 +377,6 @@ func run(o *Options) error {
 		default:
 			return fmt.Errorf("at least one of IPv4 or IPv6 should be enabled")
 		}
-	}
-
-	// podUpdateChannel is a channel for receiving Pod updates from CNIServer and
-	// notifying NetworkPolicyController and EgressController to reconcile rules
-	// related to the updated Pods.
-	var podUpdateChannel *channel.SubscribableChannel
-	// externalEntityUpdateChannel is a channel for receiving ExternalEntity updates from ExternalNodeController and
-	// notifying NetworkPolicyController to reconcile rules related to the updated ExternalEntities.
-	var externalEntityUpdateChannel *channel.SubscribableChannel
-	if o.nodeType == config.K8sNode {
-		podUpdateChannel = channel.NewSubscribableChannel("PodUpdate", 100)
-	} else {
-		externalEntityUpdateChannel = channel.NewSubscribableChannel("ExternalEntityUpdate", 100)
 	}
 
 	// We set flow poll interval as the time interval for rule deletion in the async
@@ -558,25 +591,6 @@ func run(o *Options) error {
 		networkPolicyController.SetDenyConnStore(flowExporter.GetDenyConnStore())
 	}
 
-	enableNodePortLocal := features.DefaultFeatureGate.Enabled(features.NodePortLocal) && o.config.NodePortLocal.Enable
-
-	// Initialize localPodInformer for NPLAgent, AntreaIPAMController, and secondary network controller.
-	var localPodInformer cache.SharedIndexInformer
-	if enableNodePortLocal || enableBridgingMode ||
-		features.DefaultFeatureGate.Enabled(features.SecondaryNetwork) ||
-		features.DefaultFeatureGate.Enabled(features.TrafficControl) {
-		listOptions := func(options *metav1.ListOptions) {
-			options.FieldSelector = fields.OneTermEqualSelector("spec.nodeName", nodeConfig.Name).String()
-		}
-		localPodInformer = coreinformers.NewFilteredPodInformer(
-			k8sClient,
-			metav1.NamespaceAll,
-			resyncPeriodDisabled,
-			cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, // NamespaceIndex is used in NPLController.
-			listOptions,
-		)
-	}
-
 	log.StartLogFileNumberMonitor(stopCh)
 
 	if o.nodeType == config.K8sNode {
@@ -730,9 +744,12 @@ func run(o *Options) error {
 		go mcastController.Run(stopCh)
 	}
 
-	if features.DefaultFeatureGate.Enabled(features.Multicluster) && o.config.Multicluster.Enable {
+	if enableMulticluster {
 		mcInformerFactory.Start(stopCh)
 		go mcRouteController.Run(stopCh)
+		if o.config.Multicluster.EnableStretchedNetworkPolicy {
+			go mcStrechedNetworkPolicyController.Run(stopCh)
+		}
 	}
 
 	// statsCollector collects stats and reports to the antrea-controller periodically. For now it's only used for
