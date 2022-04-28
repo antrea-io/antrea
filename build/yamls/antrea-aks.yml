@@ -3475,7 +3475,7 @@ spec:
         component: antrea-agent
     spec:
       hostNetwork: true
-      dnsPolicy: ClusterFirstWithHostNet
+      dnsPolicy: ClusterFirst
       priorityClassName: system-node-critical
       nodeSelector:
         kubernetes.io/os: linux
