@@ -31,7 +31,7 @@ RUN_CLEANUP_ONLY=false
 KUBECONFIG_PATH="$HOME/jenkins/out/eks"
 MODE="report"
 TEST_SCRIPT_RC=0
-KUBE_CONFORMANCE_IMAGE_VERSION=v1.18.5
+KUBE_CONFORMANCE_IMAGE_VERSION=auto
 
 _usage="Usage: $0 [--cluster-name <EKSClusterNameToUse>] [--kubeconfig <KubeconfigSavePath>] [--k8s-version <ClusterVersion>]\
                   [--aws-access-key <AccessKey>] [--aws-secret-key <SecretKey>] [--aws-region <Region>] [--ssh-key <SSHKey] \

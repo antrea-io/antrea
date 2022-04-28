@@ -31,7 +31,7 @@ RUN_ALL=true
 RUN_SETUP_ONLY=false
 RUN_CLEANUP_ONLY=false
 TEST_SCRIPT_RC=0
-KUBE_CONFORMANCE_IMAGE_VERSION=v1.18.5
+KUBE_CONFORMANCE_IMAGE_VERSION=auto
 
 _usage="Usage: $0 [--cluster-name <GKEClusterNameToUse>]  [--kubeconfig <KubeconfigSavePath>] [--k8s-version <ClusterVersion>] \
                   [--svc-account <Name>] [--user <Name>] [--gke-project <Project>] [--gke-zone <Zone>] [--log-mode <SonobuoyResultLogLevel>] \
