@@ -1,0 +1,8 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: antrea-agent
+spec:
+  template:
+    spec:
+      dnsPolicy: ClusterFirst
