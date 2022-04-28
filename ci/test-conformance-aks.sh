@@ -30,7 +30,7 @@ RUN_CLEANUP_ONLY=false
 KUBECONFIG_PATH="$HOME/jenkins/out/aks"
 TEST_SCRIPT_RC=0
 MODE="report"
-KUBE_CONFORMANCE_IMAGE_VERSION=v1.19.4
+KUBE_CONFORMANCE_IMAGE_VERSION=auto
 
 _usage="Usage: $0 [--cluster-name <AKSClusterNameToUse>] [--kubeconfig <KubeconfigSavePath>] [--k8s-version <ClusterVersion>]\
                   [--azure-app-id <AppID>] [--azure-tenant-id <TenantID>] [--azure-password <Password>] \
