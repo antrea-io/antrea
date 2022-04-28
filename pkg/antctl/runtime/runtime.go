@@ -65,6 +65,12 @@ func init() {
 		}
 	}
 
+	if _, found := os.LookupEnv("EXTERNAL_NODE"); found {
+		InPod = true
+		Mode = ModeAgent
+		return
+	}
+
 	if strings.HasPrefix(podName, "antrea-agent") {
 		Mode = ModeAgent
 	} else if strings.HasPrefix(podName, "flow-aggregator") {
