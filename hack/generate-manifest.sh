@@ -355,6 +355,16 @@ if [[ $ENCAP_MODE == "networkPolicyOnly" ]] ; then
     cd ..
 fi
 
+if [[ $CLOUD == "AKS" ]]; then
+    mkdir aks && cd aks
+    cp ../../patches/aks/*.yml .
+    touch kustomization.yml
+    $KUSTOMIZE edit add base $BASE
+    $KUSTOMIZE edit add patch --path dnsPolicy.yml
+    BASE=../aks
+    cd ..
+fi
+
 if [[ $CLOUD == "GKE" ]]; then
     mkdir gke && cd gke
     cp ../../patches/gke/*.yml .

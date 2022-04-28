@@ -4272,7 +4272,7 @@ spec:
         - mountPath: /var/log/openvswitch
           name: host-var-log-antrea
           subPath: openvswitch
-      dnsPolicy: ClusterFirstWithHostNet
+      dnsPolicy: ClusterFirst
       hostNetwork: true
       initContainers:
       - command:
