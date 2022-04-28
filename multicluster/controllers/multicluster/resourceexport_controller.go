@@ -56,11 +56,11 @@ const (
 )
 
 func NewResourceExportReconciler(
-	Client client.Client,
-	Scheme *runtime.Scheme) *ResourceExportReconciler {
+	client client.Client,
+	scheme *runtime.Scheme) *ResourceExportReconciler {
 	reconciler := &ResourceExportReconciler{
-		Client: Client,
-		Scheme: Scheme,
+		Client: client,
+		Scheme: scheme,
 	}
 	return reconciler
 }
@@ -87,16 +87,18 @@ func (r *ResourceExportReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		klog.V(2).InfoS("Reconciling Endpoint type of ResourceExport", "resourceexport", req.NamespacedName)
 	case common.AntreaClusterNetworkPolicyKind:
 		klog.V(2).InfoS("Reconciling AntreaClusterNetworkPolicy type of ResourceExport", "resourceexport", req.NamespacedName)
+	case common.ClusterInfoKind:
+		return r.handleClusterInfo(ctx, req, resExport)
 	default:
 		klog.InfoS("It's not expected kind, skip reconciling ResourceExport", "resourceexport", req.NamespacedName)
 		return ctrl.Result{}, nil
 	}
 
 	// We are using Finalizers to implement asynchronous pre-delete hooks.
-	// When ResourceExport is deleted, it will have non-zero DeletionTimestamp
-	// but controller can still get the deleted ResourceExport object, so we can
-	// clean up any external resources like ResourceImport.
-	// More details about using Finalizers, please refer to https://book.kubebuilder.io/reference/using-finalizers.html.
+	// When a ResourceExport is deleted, it will have non-zero DeletionTimestamp
+	// but controller can still get the deleted ResourceExport object, so it can
+	// clean up any replicated resources like ResourceImport.
+	// For more details about using Finalizers, please refer to https://book.kubebuilder.io/reference/using-finalizers.html.
 	if !resExport.DeletionTimestamp.IsZero() {
 		if common.StringExistsInSlice(resExport.Finalizers, common.ResourceExportFinalizer) {
 			err := r.handleDeleteEvent(ctx, &resExport)

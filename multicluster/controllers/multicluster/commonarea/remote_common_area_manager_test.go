@@ -38,7 +38,7 @@ var (
 
 func TestAddMember(t *testing.T) {
 
-	remoteCommonAreaManagerUnderTest := NewRemoteCommonAreaManager(common.ClusterSetID("clusterSetA"), common.ClusterID("memberA"))
+	remoteCommonAreaManagerUnderTest := NewRemoteCommonAreaManager(common.ClusterSetID("clusterSetA"), common.ClusterID("memberA"), "kube-system")
 
 	remoteCommonAreaManagerUnderTest.Start()
 	mockCtrl := gomock.NewController(t)
@@ -86,7 +86,7 @@ func TestAddMember(t *testing.T) {
 
 func TestLeaderElection(t *testing.T) {
 
-	remoteCommonAreaManagerUnderTest := NewRemoteCommonAreaManager("clusterSetA", "memberA")
+	remoteCommonAreaManagerUnderTest := NewRemoteCommonAreaManager("clusterSetA", "memberA", "kube-system")
 	remoteCommonAreaManagerUnderTest.Start()
 
 	mockCtrl := gomock.NewController(t)

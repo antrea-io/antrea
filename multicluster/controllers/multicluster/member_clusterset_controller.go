@@ -18,13 +18,14 @@ package multicluster
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
 
 	"go.uber.org/multierr"
 	v1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -38,18 +39,33 @@ import (
 	"antrea.io/antrea/multicluster/controllers/multicluster/commonarea"
 )
 
+type RemoteCommonAreaGetter interface {
+	GetRemoteCommonAreaAndLocalID() (commonarea.RemoteCommonArea, string, error)
+}
+
 // MemberClusterSetReconciler reconciles a ClusterSet object in the member cluster deployment.
 type MemberClusterSetReconciler struct {
 	client.Client
 	Scheme    *runtime.Scheme
 	Namespace string
-	mutex     sync.Mutex
+	mutex     sync.RWMutex
 
 	clusterSetConfig *multiclusterv1alpha1.ClusterSet
 	clusterSetID     common.ClusterSetID
 	clusterID        common.ClusterID
 
-	RemoteCommonAreaManager commonarea.RemoteCommonAreaManager
+	remoteCommonAreaManager commonarea.RemoteCommonAreaManager
+}
+
+func NewMemberClusterSetReconciler(client client.Client,
+	scheme *runtime.Scheme,
+	namespace string,
+) *MemberClusterSetReconciler {
+	return &MemberClusterSetReconciler{
+		Client:    client,
+		Scheme:    scheme,
+		Namespace: namespace,
+	}
 }
 
 //+kubebuilder:rbac:groups=multicluster.crd.antrea.io,resources=clustersets,verbs=get;list;watch;create;update;patch;delete
@@ -64,15 +80,15 @@ func (r *MemberClusterSetReconciler) Reconcile(ctx context.Context, req ctrl.Req
 	}
 	clusterSet := &multiclusterv1alpha1.ClusterSet{}
 	err := r.Get(ctx, req.NamespacedName, clusterSet)
-	defer r.mutex.Unlock()
 	r.mutex.Lock()
+	defer r.mutex.Unlock()
 	if err != nil {
-		if !errors.IsNotFound(err) {
+		if !apierrors.IsNotFound(err) {
 			return ctrl.Result{}, err
 		}
 		klog.InfoS("Received ClusterSet delete", "config", klog.KObj(clusterSet))
-		stopErr := r.RemoteCommonAreaManager.Stop()
-		r.RemoteCommonAreaManager = nil
+		stopErr := r.remoteCommonAreaManager.Stop()
+		r.remoteCommonAreaManager = nil
 		r.clusterSetConfig = nil
 		r.clusterID = common.InvalidClusterID
 		r.clusterSetID = common.InvalidClusterSetID
@@ -85,16 +101,16 @@ func (r *MemberClusterSetReconciler) Reconcile(ctx context.Context, req ctrl.Req
 	// Handle create or update
 	if r.clusterSetConfig == nil {
 		// If create, make sure the local ClusterClaim is part of the member config
-		clusterId, clusterSetId, err := validateLocalClusterClaim(r.Client, clusterSet)
+		clusterID, clusterSetID, err := validateLocalClusterClaim(r.Client, clusterSet)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
-		if err = validateConfigExists(clusterId, clusterSet.Spec.Members); err != nil {
-			err = fmt.Errorf("local cluster %s is not defined as member in ClusterSet", clusterId)
+		if err = validateConfigExists(clusterID, clusterSet.Spec.Members); err != nil {
+			err = fmt.Errorf("local cluster %s is not defined as member in ClusterSet", clusterID)
 			return ctrl.Result{}, err
 		}
-		r.clusterID = clusterId
-		r.clusterSetID = clusterSetId
+		r.clusterID = clusterID
+		r.clusterSetID = clusterSetID
 	} else {
 		if string(r.clusterSetID) != clusterSet.Name {
 			return ctrl.Result{}, fmt.Errorf("ClusterSet Name %s cannot be changed to %s",
@@ -131,12 +147,12 @@ func (r *MemberClusterSetReconciler) SetupWithManager(mgr ctrl.Manager) error {
 }
 
 func (r *MemberClusterSetReconciler) updateMultiClusterSetOnMemberCluster(clusterSet *multiclusterv1alpha1.ClusterSet) error {
-	if r.RemoteCommonAreaManager == nil {
-		r.RemoteCommonAreaManager = commonarea.NewRemoteCommonAreaManager(r.clusterSetID, r.clusterID)
-		err := r.RemoteCommonAreaManager.Start()
+	if r.remoteCommonAreaManager == nil {
+		r.remoteCommonAreaManager = commonarea.NewRemoteCommonAreaManager(r.clusterSetID, r.clusterID, r.Namespace)
+		err := r.remoteCommonAreaManager.Start()
 		if err != nil {
 			klog.ErrorS(err, "Error starting RemoteCommonAreaManager")
-			r.RemoteCommonAreaManager = nil
+			r.remoteCommonAreaManager = nil
 			r.clusterSetID = common.InvalidClusterSetID
 			r.clusterID = common.InvalidClusterID
 			r.clusterSetConfig = nil
@@ -144,7 +160,7 @@ func (r *MemberClusterSetReconciler) updateMultiClusterSetOnMemberCluster(cluste
 		}
 	}
 
-	currentLeaders := r.RemoteCommonAreaManager.GetRemoteCommonAreas()
+	currentLeaders := r.remoteCommonAreaManager.GetRemoteCommonAreas()
 	newLeaders := clusterSet.Spec.Leaders
 
 	var addedLeaders []*multiclusterv1alpha1.MemberCluster
@@ -176,7 +192,7 @@ func (r *MemberClusterSetReconciler) updateMultiClusterSetOnMemberCluster(cluste
 		secret, err := r.getSecretForLeader(secretName, clusterSet.GetNamespace())
 		if err == nil {
 			_, err = commonarea.NewRemoteCommonArea(clusterID, r.clusterSetID, url, secret, r.Scheme,
-				r.Client, r.RemoteCommonAreaManager, clusterSet.Spec.Namespace)
+				r.Client, r.remoteCommonAreaManager, clusterSet.Spec.Namespace)
 		}
 		if err != nil {
 			klog.ErrorS(err, "Unable to create RemoteCommonArea", "Cluster", clusterID)
@@ -188,7 +204,7 @@ func (r *MemberClusterSetReconciler) updateMultiClusterSetOnMemberCluster(cluste
 
 	removedLeaders = currentLeaders
 	for _, remoteCommonArea := range removedLeaders {
-		r.RemoteCommonAreaManager.RemoveRemoteCommonArea(remoteCommonArea)
+		r.remoteCommonAreaManager.RemoveRemoteCommonArea(remoteCommonArea)
 		klog.InfoS("Deleted RemoteCommonArea", "Cluster", remoteCommonArea.GetClusterID())
 	}
 
@@ -227,7 +243,7 @@ func (r *MemberClusterSetReconciler) updateStatus() {
 	status := multiclusterv1alpha1.ClusterSetStatus{}
 	status.TotalClusters = int32(len(r.clusterSetConfig.Spec.Members) + len(r.clusterSetConfig.Spec.Leaders))
 	status.ObservedGeneration = r.clusterSetConfig.Generation
-	status.ClusterStatuses = r.RemoteCommonAreaManager.GetMemberClusterStatues()
+	status.ClusterStatuses = r.remoteCommonAreaManager.GetMemberClusterStatues()
 
 	overallCondition := multiclusterv1alpha1.ClusterSetCondition{
 		Type:               multiclusterv1alpha1.ClusterSetReady,
@@ -289,4 +305,36 @@ func (r *MemberClusterSetReconciler) updateStatus() {
 	if err != nil {
 		klog.ErrorS(err, "Failed to update Status of ClusterSet", "Name", namespacedName)
 	}
+}
+
+// SetRemoteCommonAreaManager is for testing only
+func (r *MemberClusterSetReconciler) SetRemoteCommonAreaManager(mgr commonarea.RemoteCommonAreaManager) commonarea.RemoteCommonAreaManager {
+	r.remoteCommonAreaManager = mgr
+	return r.remoteCommonAreaManager
+}
+
+func (r *MemberClusterSetReconciler) GetRemoteCommonAreaAndLocalID() (commonarea.RemoteCommonArea, string, error) {
+	r.mutex.RLock()
+	defer r.mutex.RUnlock()
+	var remoteCommonArea commonarea.RemoteCommonArea
+	if r.remoteCommonAreaManager == nil {
+		return nil, "", errors.New("ClusterSet has not been initialized, no available Common Area")
+	}
+
+	remoteCommonAreas := r.remoteCommonAreaManager.GetRemoteCommonAreas()
+	if len(remoteCommonAreas) <= 0 {
+		return nil, "", errors.New("ClusterSet has not been set up properly, no available Common Area")
+	}
+
+	for _, c := range remoteCommonAreas {
+		if c.IsConnected() {
+			remoteCommonArea = c
+			break
+		}
+	}
+	if remoteCommonArea != nil {
+		localClusterID := string(r.remoteCommonAreaManager.GetLocalClusterID())
+		return remoteCommonArea, localClusterID, nil
+	}
+	return nil, "", errors.New("no connected remote common area")
 }

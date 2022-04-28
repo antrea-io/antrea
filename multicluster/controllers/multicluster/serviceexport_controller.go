@@ -62,13 +62,13 @@ type (
 	// ServiceExportReconciler reconciles a ServiceExport object in the member cluster.
 	ServiceExportReconciler struct {
 		client.Client
-		Scheme                  *runtime.Scheme
-		remoteCommonAreaManager *commonarea.RemoteCommonAreaManager
-		installedSvcs           cache.Indexer
-		installedEps            cache.Indexer
-		leaderNamespace         string
-		leaderClusterID         string
-		localClusterID          string
+		Scheme           *runtime.Scheme
+		commonAreaGetter RemoteCommonAreaGetter
+		installedSvcs    cache.Indexer
+		installedEps     cache.Indexer
+		leaderNamespace  string
+		leaderClusterID  string
+		localClusterID   string
 	}
 )
 
@@ -86,13 +86,13 @@ const (
 )
 
 func NewServiceExportReconciler(
-	Client client.Client,
-	Scheme *runtime.Scheme,
-	remoteCommonAreaManager *commonarea.RemoteCommonAreaManager) *ServiceExportReconciler {
+	client client.Client,
+	scheme *runtime.Scheme,
+	commonAreaGetter RemoteCommonAreaGetter) *ServiceExportReconciler {
 	reconciler := &ServiceExportReconciler{
-		Client:                  Client,
-		Scheme:                  Scheme,
-		remoteCommonAreaManager: remoteCommonAreaManager,
+		Client:           client,
+		Scheme:           scheme,
+		commonAreaGetter: commonAreaGetter,
 		installedSvcs: cache.NewIndexer(svcInfoKeyFunc, cache.Indexers{
 			svcIndexerByType: svcIndexerByTypeFunc,
 		}),
@@ -160,16 +160,14 @@ func (r *ServiceExportReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		klog.InfoS("Skip reconciling, no corresponding ServiceExport")
 		return ctrl.Result{}, nil
 	}
+	var commonArea commonarea.RemoteCommonArea
+	commonArea, r.localClusterID, err = r.commonAreaGetter.GetRemoteCommonAreaAndLocalID()
+	if commonArea == nil {
+		return ctrl.Result{Requeue: true}, err
+	}
 
-	if *r.remoteCommonAreaManager == nil {
-		klog.InfoS("ClusterSet has not been initialized properly, no remote cluster manager")
-		return ctrl.Result{Requeue: true}, nil
-	}
-	r.localClusterID = string((*r.remoteCommonAreaManager).GetLocalClusterID())
-	if len(r.localClusterID) == 0 {
-		klog.InfoS("localClusterID is not initialized, skip reconcile")
-		return ctrl.Result{Requeue: true}, nil
-	}
+	r.leaderNamespace = commonArea.GetNamespace()
+	r.leaderClusterID = string(commonArea.GetClusterID())
 
 	var svcExport k8smcsv1alpha1.ServiceExport
 	svcObj, svcInstalled, _ := r.installedSvcs.GetByKey(req.String())
@@ -177,24 +175,16 @@ func (r *ServiceExportReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	svcResExportName := getResourceExportName(r.localClusterID, req, "service")
 	epResExportName := getResourceExportName(r.localClusterID, req, "endpoints")
 
-	remoteCluster, err := getRemoteCommonArea(r.remoteCommonAreaManager)
-	if err != nil {
-		return ctrl.Result{}, err
-	}
-
-	r.leaderNamespace = remoteCluster.GetNamespace()
-	r.leaderClusterID = string(remoteCluster.GetClusterID())
-
 	cleanup := func() error {
 		if svcInstalled {
-			err = r.handleServiceDeleteEvent(ctx, req, remoteCluster)
+			err = r.handleServiceDeleteEvent(ctx, req, commonArea)
 			if err != nil {
 				return err
 			}
 			r.installedSvcs.Delete(svcObj)
 		}
 		if epInstalled {
-			err = r.handleEndpointDeleteEvent(ctx, req, remoteCluster)
+			err = r.handleEndpointDeleteEvent(ctx, req, commonArea)
 			if err != nil {
 				return err
 			}
@@ -272,7 +262,7 @@ func (r *ServiceExportReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	if err != nil {
 		klog.ErrorS(err, "Failed to get Endpoints", "endpoints", req.String())
 		if apierrors.IsNotFound(err) && epInstalled {
-			err = r.handleEndpointDeleteEvent(ctx, req, remoteCluster)
+			err = r.handleEndpointDeleteEvent(ctx, req, commonArea)
 			if err != nil {
 				return ctrl.Result{}, err
 			}
@@ -314,7 +304,7 @@ func (r *ServiceExportReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	if !svcNoChange {
 		klog.InfoS("Service has new changes, update ResourceExport", "service", req.String(),
 			"resourceexport", svcExportNSName)
-		err := r.serviceHandler(ctx, req, svc, svcResExportName, re, remoteCluster)
+		err := r.serviceHandler(ctx, req, svc, svcResExportName, re, commonArea)
 		if err != nil {
 			klog.ErrorS(err, "Failed to handle Service change", "service", req.String())
 			return ctrl.Result{}, err
@@ -324,7 +314,7 @@ func (r *ServiceExportReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	if !epNoChange {
 		klog.InfoS("Endpoints have new change, update ResourceExport", "endpoints",
 			req.String(), "resourceexport", epExportNSName)
-		err := r.endpointsHandler(ctx, req, ep, epResExportName, re, remoteCluster)
+		err := r.endpointsHandler(ctx, req, ep, epResExportName, re, commonArea)
 		if err != nil {
 			klog.ErrorS(err, "Failed to handle Endpoints change", "endpoints", req.String())
 			return ctrl.Result{}, err
@@ -339,7 +329,7 @@ func (r *ServiceExportReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 }
 
 func (r *ServiceExportReconciler) handleServiceDeleteEvent(ctx context.Context, req ctrl.Request,
-	remoteCluster commonarea.RemoteCommonArea) error {
+	commonArea commonarea.RemoteCommonArea) error {
 	svcResExportName := getResourceExportName(r.localClusterID, req, "service")
 	svcResExport := &mcsv1alpha1.ResourceExport{
 		ObjectMeta: metav1.ObjectMeta{
@@ -349,19 +339,19 @@ func (r *ServiceExportReconciler) handleServiceDeleteEvent(ctx context.Context, 
 	}
 
 	// clean up Service kind of ResourceExport in remote leader cluster
-	svcResExportNamespaced := common.NamespacedName(r.leaderNamespace, svcResExportName)
-	err := remoteCluster.Delete(ctx, svcResExport, &client.DeleteOptions{})
+	svcResExportNamespacedName := common.NamespacedName(r.leaderNamespace, svcResExportName)
+	err := commonArea.Delete(ctx, svcResExport, &client.DeleteOptions{})
 	if err != nil && !apierrors.IsNotFound(err) {
 		klog.ErrorS(err, "Failed to delete ResourceExport in remote cluster", "resourceexport",
-			svcResExportNamespaced, "clusterID", r.leaderClusterID)
+			svcResExportNamespacedName, "clusterID", r.leaderClusterID)
 		return err
 	}
-	klog.V(2).InfoS("Clean up ResourceExport in remote cluster", "resourceexport", svcResExportNamespaced)
+	klog.V(2).InfoS("Clean up ResourceExport in remote cluster", "resourceexport", svcResExportNamespacedName)
 	return nil
 }
 
 func (r *ServiceExportReconciler) handleEndpointDeleteEvent(ctx context.Context, req ctrl.Request,
-	remoteCluster commonarea.RemoteCommonArea) error {
+	commonArea commonarea.RemoteCommonArea) error {
 	epResExportName := getResourceExportName(r.localClusterID, req, "endpoints")
 	epResExport := &mcsv1alpha1.ResourceExport{
 		ObjectMeta: metav1.ObjectMeta{
@@ -371,15 +361,15 @@ func (r *ServiceExportReconciler) handleEndpointDeleteEvent(ctx context.Context,
 	}
 
 	// clean up Endpoints kind of ResourceExport in remote leader cluster
-	epResExportNamespaced := common.NamespacedName(r.leaderNamespace, epResExportName)
-	err := remoteCluster.Delete(ctx, epResExport, &client.DeleteOptions{})
+	epResExportNamespacedName := common.NamespacedName(r.leaderNamespace, epResExportName)
+	err := commonArea.Delete(ctx, epResExport, &client.DeleteOptions{})
 	if err != nil && !apierrors.IsNotFound(err) {
 		klog.ErrorS(err, "Failed to delete ResourceExport in remote cluster", "resourceexport",
-			epResExportNamespaced, "clusterID", r.leaderClusterID)
+			epResExportNamespacedName, "clusterID", r.leaderClusterID)
 		return err
 	}
 
-	klog.V(2).InfoS("Clean up ResourceExport in remote cluster", "resourceexport", epResExportNamespaced)
+	klog.V(2).InfoS("Clean up ResourceExport in remote cluster", "resourceexport", epResExportNamespacedName)
 	return nil
 }
 
@@ -448,16 +438,19 @@ func (r *ServiceExportReconciler) updateSvcExportStatus(ctx context.Context, req
 func (r *ServiceExportReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&k8smcsv1alpha1.ServiceExport{}).
-		Watches(&source.Kind{Type: &corev1.Service{}}, handler.EnqueueRequestsFromMapFunc(objMapFunc)).
-		Watches(&source.Kind{Type: &corev1.Endpoints{}}, handler.EnqueueRequestsFromMapFunc(objMapFunc)).
+		Watches(&source.Kind{Type: &corev1.Service{}}, handler.EnqueueRequestsFromMapFunc(serviceAndEndpointMapFunc)).
+		Watches(&source.Kind{Type: &corev1.Endpoints{}}, handler.EnqueueRequestsFromMapFunc(serviceAndEndpointMapFunc)).
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: common.DefaultWorkerCount,
 		}).
 		Complete(r)
 }
 
-// objMapFunc simply maps all object events to ServiceExport
-func objMapFunc(a client.Object) []reconcile.Request {
+// serviceAndEndpointMapFunc simply maps all Service and Endpoints events to ServiceExports.
+// When there are any Service/Endpoints changes, it might be reflected in ResourceExport
+// in Leader cluster as well, so ServiceExportReconciler also needs to watch Service
+// and Endpoints events.
+func serviceAndEndpointMapFunc(a client.Object) []reconcile.Request {
 	return []reconcile.Request{
 		{
 			NamespacedName: types.NamespacedName{
@@ -486,16 +479,16 @@ func (r *ServiceExportReconciler) serviceHandler(
 		svcType:    string(svc.Spec.Type),
 	}
 	r.refreshResourceExport(resName, kind, svc, nil, &re)
-	existResExport := &mcsv1alpha1.ResourceExport{}
+	existingResExport := &mcsv1alpha1.ResourceExport{}
 	resNamespaced := types.NamespacedName{Namespace: rc.GetNamespace(), Name: resName}
-	err := rc.Get(ctx, resNamespaced, existResExport)
+	err := rc.Get(ctx, resNamespaced, existingResExport)
 	if err != nil {
 		if !apierrors.IsNotFound(err) {
 			klog.ErrorS(err, "Failed to get ResourceExport", "resourceexport", resNamespaced.String())
 			return err
 		}
 	}
-	if err = r.updateOrCreateResourceExport(resName, ctx, req, &re, existResExport, rc); err != nil {
+	if err = r.updateOrCreateResourceExport(resName, ctx, req, &re, existingResExport, rc); err != nil {
 		return err
 	}
 	r.installedSvcs.Add(sinfo)
@@ -520,16 +513,16 @@ func (r *ServiceExportReconciler) endpointsHandler(
 		labels:     ep.Labels,
 	}
 	r.refreshResourceExport(resName, kind, nil, ep, &re)
-	existResExport := &mcsv1alpha1.ResourceExport{}
+	existingResExport := &mcsv1alpha1.ResourceExport{}
 	resNamespaced := types.NamespacedName{Namespace: rc.GetNamespace(), Name: resName}
-	err := rc.Get(ctx, resNamespaced, existResExport)
+	err := rc.Get(ctx, resNamespaced, existingResExport)
 	if err != nil {
 		if !apierrors.IsNotFound(err) {
 			klog.ErrorS(err, "Failed to get ResourceExport", "resourceexport", resNamespaced.String())
 			return err
 		}
 	}
-	if err = r.updateOrCreateResourceExport(resName, ctx, req, &re, existResExport, rc); err != nil {
+	if err = r.updateOrCreateResourceExport(resName, ctx, req, &re, existingResExport, rc); err != nil {
 		return err
 	}
 	r.installedEps.Add(epInfo)
@@ -562,11 +555,16 @@ func (r *ServiceExportReconciler) updateOrCreateResourceExport(resName string,
 	ctx context.Context,
 	req ctrl.Request,
 	newResExport *mcsv1alpha1.ResourceExport,
-	existResExport *mcsv1alpha1.ResourceExport,
+	existingResExport *mcsv1alpha1.ResourceExport,
 	rc commonarea.RemoteCommonArea) error {
-	createResExport := reflect.DeepEqual(*existResExport, mcsv1alpha1.ResourceExport{})
+	createResExport := reflect.DeepEqual(*existingResExport, mcsv1alpha1.ResourceExport{})
 	resNamespaced := types.NamespacedName{Namespace: rc.GetNamespace(), Name: resName}
 	if createResExport {
+		// We are using Finalizers to implement asynchronous pre-delete hooks.
+		// When a ServiceExport is deleted, the corresponding ResourceExport will have non-zero
+		// DeletionTimestamp, so Leader controller can still get the deleted ResourceExport object,
+		// then it can clean up any external resources like ResourceImport.
+		// For more details about using Finalizers, please refer to https://book.kubebuilder.io/reference/using-finalizers.html.
 		newResExport.Finalizers = []string{common.ResourceExportFinalizer}
 		klog.InfoS("Creating ResourceExport", "resourceexport", resNamespaced.String())
 		err := rc.Create(ctx, newResExport, &client.CreateOptions{})
@@ -575,8 +573,8 @@ func (r *ServiceExportReconciler) updateOrCreateResourceExport(resName string,
 			return err
 		}
 	} else {
-		newResExport.ObjectMeta.ResourceVersion = existResExport.ObjectMeta.ResourceVersion
-		newResExport.Finalizers = existResExport.Finalizers
+		newResExport.ObjectMeta.ResourceVersion = existingResExport.ObjectMeta.ResourceVersion
+		newResExport.Finalizers = existingResExport.Finalizers
 		err := rc.Update(ctx, newResExport, &client.UpdateOptions{})
 		if err != nil {
 			klog.ErrorS(err, "Failed to update ResourceExport", "resourceexport", resNamespaced.String())

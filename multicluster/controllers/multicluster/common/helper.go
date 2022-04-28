@@ -19,12 +19,15 @@ const (
 	AntreaMCServiceAnnotation   = "multicluster.antrea.io/imported-service"
 	AntreaMCACNPAnnotation      = "multicluster.antrea.io/imported-acnp"
 	AntreaMCClusterIDAnnotation = "multicluster.antrea.io/local-cluster-id"
+	GatewayAnnotation           = "multicluster.antrea.io/gateway"
+	GatewayIPAnnotation         = "multicluster.antrea.io/gateway-ip"
 
 	AntreaMCSPrefix                = "antrea-mc-"
 	ServiceKind                    = "Service"
 	EndpointsKind                  = "Endpoints"
 	AntreaClusterNetworkPolicyKind = "AntreaClusterNetworkPolicy"
 	ServiceImportKind              = "ServiceImport"
+	ClusterInfoKind                = "ClusterInfo"
 
 	SourceName      = "sourceName"
 	SourceNamespace = "sourceNamespace"
