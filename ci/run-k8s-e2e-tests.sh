@@ -37,12 +37,12 @@ DEFAULT_E2E_NETWORKPOLICY_FOCUS="\[Feature:NetworkPolicy\]"
 DEFAULT_E2E_NETWORKPOLICY_SKIP=""
 MODE="report"
 THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
-KUBE_CONFORMANCE_IMAGE=""
-KUBE_CONFORMANCE_IMAGE_VERSION="$(head -n1 $THIS_DIR/k8s-conformance-image-version)"
+KUBE_CONFORMANCE_IMAGE_OPTION=""
+KUBE_CONFORMANCE_IMAGE_VERSION_OPTION=""
 IMAGE_PULL_POLICY="Always"
 CONFORMANCE_IMAGE_CONFIG_PATH="${THIS_DIR}/conformance-image-config.yaml"
-SONOBUOY_IMAGE="projects.registry.vmware.com/sonobuoy/sonobuoy:v0.19.0"
-SYSTEMD_LOGS_IMAGE="projects.registry.vmware.com/sonobuoy/systemd-logs:v0.3"
+SONOBUOY_IMAGE="projects.registry.vmware.com/sonobuoy/sonobuoy:v0.56.4"
+SYSTEMD_LOGS_IMAGE="projects.registry.vmware.com/sonobuoy/systemd-logs:v0.4"
 
 _usage="Usage: $0 [--e2e-conformance] [--e2e-network-policy] [--e2e-focus <TestRegex>] [--e2e-skip <SkipRegex>]
                   [--kubeconfig <Kubeconfig>] [--kube-conformance-image-version <ConformanceImageVersion>]
@@ -91,7 +91,7 @@ case $key in
     shift 2
     ;;
     --kube-conformance-image-version)
-    KUBE_CONFORMANCE_IMAGE_VERSION="$2"
+    KUBE_CONFORMANCE_IMAGE_VERSION_OPTION="--kube-conformance-image-version $2"
     shift 2
     ;;
     --e2e-conformance)
@@ -172,14 +172,14 @@ function run_sonobuoy() {
         $SONOBUOY run --wait \
                 $KUBECONFIG_OPTION \
                 $KUBE_CONFORMANCE_IMAGE_OPTION \
-                --kube-conformance-image-version $KUBE_CONFORMANCE_IMAGE_VERSION \
+                $KUBE_CONFORMANCE_IMAGE_VERSION_OPTION \
                 --mode "certified-conformance" --image-pull-policy ${IMAGE_PULL_POLICY} \
                 --sonobuoy-image ${SONOBUOY_IMAGE} --systemd-logs-image ${SYSTEMD_LOGS_IMAGE} --e2e-repo-config ${CONFORMANCE_IMAGE_CONFIG_PATH}
     else
         $SONOBUOY run --wait \
                 $KUBECONFIG_OPTION \
                 $KUBE_CONFORMANCE_IMAGE_OPTION \
-                --kube-conformance-image-version $KUBE_CONFORMANCE_IMAGE_VERSION \
+                $KUBE_CONFORMANCE_IMAGE_VERSION_OPTION \
                 --e2e-focus "$focus_regex" --e2e-skip "$skip_regex" --image-pull-policy ${IMAGE_PULL_POLICY} \
                 --sonobuoy-image ${SONOBUOY_IMAGE} --systemd-logs-image ${SYSTEMD_LOGS_IMAGE} --e2e-repo-config ${CONFORMANCE_IMAGE_CONFIG_PATH}
     fi
