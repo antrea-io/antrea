@@ -204,7 +204,10 @@ func (s *CNIServer) isCNIVersionSupported(reqVersion string) bool {
 }
 
 func (s *CNIServer) valiateCNIAndIPAMType(cniConfig *CNIConfig) *cnipb.CniCmdResponse {
-	ipamType := cniConfig.IPAM.Type
+	var ipamType string
+	if cniConfig.IPAM != nil {
+		ipamType = cniConfig.IPAM.Type
+	}
 	if cniConfig.Type == antreaCNIType {
 		if s.isChaining {
 			return nil
