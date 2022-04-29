@@ -244,7 +244,7 @@ spec:
           args:
             - "--log_file_max_size={{ .Values.agent.antreaOVS.logFileMaxSize }}"
             - "--log_file_max_num={{ .Values.agent.antreaOVS.logFileMaxNum }}"
-            {{- if .Values.hwOffload }}
+            {{- if .Values.ovs.hwOffload }}
             - "--hw-offload"
             {{- end }}
             {{- with .Values.agent.antreaOVS.extraArgs }}
