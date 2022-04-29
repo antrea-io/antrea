@@ -122,9 +122,6 @@ if [ "$MODE" == "e2e" ]; then
     cp $KUSTOMIZATION_DIR/../clickhouse-operator-install-bundle.yml clickhouse-operator-install-bundle.yml
 
     $KUSTOMIZE edit add base base
-    $KUSTOMIZE edit add base clickhouse-operator-install-bundle.yml
-    $KUSTOMIZE edit add patch --path imagePullPolicyOperator.yml
-
     $KUSTOMIZE edit set image flow-visibility-clickhouse-monitor=projects.registry.vmware.com/antrea/flow-visibility-clickhouse-monitor:latest
     $KUSTOMIZE edit add patch --path imagePullPolicyClickhouse.yml --group clickhouse.altinity.com --version v1 --kind ClickHouseInstallation --name clickhouse
 else
