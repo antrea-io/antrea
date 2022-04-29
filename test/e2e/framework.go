@@ -100,6 +100,7 @@ const (
 	flowAggregatorYML          string = "flow-aggregator.yml"
 	flowAggregatorCovYML       string = "flow-aggregator-coverage.yml"
 	flowVisibilityYML          string = "flow-visibility.yml"
+	chOperatorYML              string = "clickhouse-operator-install-bundle.yml"
 	flowVisibilityCHPodName    string = "chi-clickhouse-clickhouse-0-0-0"
 	flowVisibilityNamespace    string = "flow-visibility"
 	defaultBridgeName          string = "br-int"
@@ -126,6 +127,7 @@ const (
 	perftoolImage       = "projects.registry.vmware.com/antrea/perftool"
 	ipfixCollectorImage = "projects.registry.vmware.com/antrea/ipfix-collector:v0.5.12"
 	ipfixCollectorPort  = "4739"
+	clickHousePort      = "9000"
 
 	nginxLBService = "nginx-loadbalancer"
 
@@ -137,9 +139,6 @@ const (
 	aggregatorClickHouseCommitInterval  = 1 * time.Second
 
 	statefulSetRestartAnnotationKey = "antrea-e2e/restartedAt"
-
-	clickHousePort           = "9000"
-	clickHouseOperatorYMLUrl = "https://raw.githubusercontent.com/Altinity/clickhouse-operator/0.18.2/deploy/operator/clickhouse-operator-install-bundle.yaml"
 )
 
 type ClusterNode struct {
@@ -720,6 +719,10 @@ func (data *TestData) deployFlowVisibilityClickHouse() (*PodIPs, error) {
 		return nil, err
 	}
 
+	rc, _, _, err := data.provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl apply -f %s", chOperatorYML))
+	if err != nil || rc != 0 {
+		return nil, fmt.Errorf("error when deploying the ClickHouse Operator YML; %s not available on the control-plane Node", chOperatorYML)
+	}
 	if err := wait.Poll(2*time.Second, 10*time.Second, func() (bool, error) {
 		rc, stdout, stderr, err := data.provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl apply -f %s", flowVisibilityYML))
 		if err != nil || rc != 0 {
@@ -736,33 +739,8 @@ func (data *TestData) deployFlowVisibilityClickHouse() (*PodIPs, error) {
 		return nil, err
 	}
 
-	// check for clickhouse operator running
-	chOperator, err := data.getClickHouseOperator()
-	if err != nil {
-		return nil, fmt.Errorf("error when getting clickhouse-operator Pod: %v", err)
-	}
-	podName := chOperator.Name
-	_, err = data.PodWaitFor(defaultTimeout, podName, kubeNamespace, func(p *corev1.Pod) (bool, error) {
-		for _, condition := range p.Status.Conditions {
-			if condition.Type == corev1.PodReady {
-				return condition.Status == corev1.ConditionTrue, nil
-			}
-		}
-		return false, nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	// check for clickhouse pod running
-	_, err = data.PodWaitFor(defaultTimeout, flowVisibilityCHPodName, flowVisibilityNamespace, func(p *corev1.Pod) (bool, error) {
-		for _, condition := range p.Status.Conditions {
-			if condition.Type == corev1.PodReady {
-				return condition.Status == corev1.ConditionTrue, nil
-			}
-		}
-		return false, nil
-	})
-	if err != nil {
+	// check for clickhouse pod Ready. Wait for 2x timeout as ch operator needs to be running first to handle chi
+	if err = data.podWaitForReady(2*defaultTimeout, flowVisibilityCHPodName, flowVisibilityNamespace); err != nil {
 		return nil, err
 	}
 	podIPs, err := data.podWaitForIPs(defaultTimeout, flowVisibilityCHPodName, flowVisibilityNamespace)
@@ -773,7 +751,7 @@ func (data *TestData) deployFlowVisibilityClickHouse() (*PodIPs, error) {
 }
 
 func (data *TestData) deleteClickHouseOperator() error {
-	rc, _, _, err := data.provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl delete -f %s -n kube-system", clickHouseOperatorYMLUrl))
+	rc, _, _, err := data.provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl delete -f %s -n kube-system", chOperatorYML))
 	if err != nil || rc != 0 {
 		return fmt.Errorf("error when deleting ClickHouse operator: %v", err)
 	}
@@ -781,7 +759,7 @@ func (data *TestData) deleteClickHouseOperator() error {
 }
 
 // deployFlowAggregator deploys the Flow Aggregator with ipfix collector and clickHouse address.
-func (data *TestData) deployFlowAggregator(ipfixCollector, clickHouse string) error {
+func (data *TestData) deployFlowAggregator(ipfixCollector, clickHouseAddr string) error {
 	flowAggYaml := flowAggregatorYML
 	if testOptions.enableCoverage {
 		flowAggYaml = flowAggregatorCovYML
@@ -790,7 +768,7 @@ func (data *TestData) deployFlowAggregator(ipfixCollector, clickHouse string) er
 	if err != nil || rc != 0 {
 		return fmt.Errorf("error when deploying the Flow Aggregator; %s not available on the control-plane Node", flowAggYaml)
 	}
-	if err = data.mutateFlowAggregatorConfigMap(ipfixCollector, clickHouse); err != nil {
+	if err = data.mutateFlowAggregatorConfigMap(ipfixCollector, clickHouseAddr); err != nil {
 		return err
 	}
 	if rc, _, _, err = data.provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl -n %s rollout status deployment/%s --timeout=%v", flowAggregatorNamespace, flowAggregatorDeployment, 2*defaultTimeout)); err != nil || rc != 0 {
@@ -803,22 +781,13 @@ func (data *TestData) deployFlowAggregator(ipfixCollector, clickHouse string) er
 	if err != nil {
 		return fmt.Errorf("error when getting flow-aggregator Pod: %v", err)
 	}
-	podName := flowAggPod.Name
-	_, err = data.PodWaitFor(defaultTimeout*2, podName, flowAggregatorNamespace, func(p *corev1.Pod) (bool, error) {
-		for _, condition := range p.Status.Conditions {
-			if condition.Type == corev1.PodReady {
-				return condition.Status == corev1.ConditionTrue, nil
-			}
-		}
-		return false, nil
-	})
-	if err != nil {
+	if err = data.podWaitForReady(2*defaultTimeout, flowAggPod.Name, flowAggregatorNamespace); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (data *TestData) mutateFlowAggregatorConfigMap(ipfixCollectorAddr, clickHouseURL string) error {
+func (data *TestData) mutateFlowAggregatorConfigMap(ipfixCollectorAddr, clickHouseAddr string) error {
 	configMap, err := data.GetFlowAggregatorConfigMap()
 	if err != nil {
 		return err
@@ -835,8 +804,8 @@ func (data *TestData) mutateFlowAggregatorConfigMap(ipfixCollectorAddr, clickHou
 	}
 	flowAggregatorConf.ClickHouse = flowaggregatorconfig.ClickHouseConfig{
 		Enable:         true,
-		DatabaseURL:    clickHouseURL,
-		CommitInterval: "1s",
+		DatabaseURL:    clickHouseAddr,
+		CommitInterval: aggregatorClickHouseCommitInterval.String(),
 	}
 	flowAggregatorConf.ActiveFlowRecordTimeout = aggregatorActiveFlowRecordTimeout.String()
 	flowAggregatorConf.InactiveFlowRecordTimeout = aggregatorInactiveFlowRecordTimeout.String()
@@ -1287,6 +1256,20 @@ func (data *TestData) podWaitForRunning(timeout time.Duration, name, namespace s
 	return err
 }
 
+// podWaitForReady polls the k8s apiserver until the specified Pod is in the "Ready" status (or
+// until the provided timeout expires).
+func (data *TestData) podWaitForReady(timeout time.Duration, name, namespace string) error {
+	_, err := data.PodWaitFor(timeout, name, namespace, func(p *corev1.Pod) (bool, error) {
+		for _, condition := range p.Status.Conditions {
+			if condition.Type == corev1.PodReady {
+				return condition.Status == corev1.ConditionTrue, nil
+			}
+		}
+		return false, nil
+	})
+	return err
+}
+
 // podWaitForIPs polls the K8s apiserver until the specified Pod is in the "running" state (or until
 // the provided timeout expires). The function then returns the IP addresses assigned to the Pod. If the
 // Pod is not using "hostNetwork", the function also checks that an IP address exists in each required
@@ -1471,29 +1454,6 @@ func (data *TestData) getAntreaController() (*corev1.Pod, error) {
 		return nil, fmt.Errorf("expected *exactly* one Pod")
 	}
 	return &pods.Items[0], nil
-}
-
-// getClickHouseOperator retrieves the name of the clickhouse operator Pod (clickhouse-operator-*).
-func (data *TestData) getClickHouseOperator() (*corev1.Pod, error) {
-	listOptions := metav1.ListOptions{
-		LabelSelector: "app=clickhouse-operator",
-	}
-	var pod *corev1.Pod
-	if err := wait.Poll(defaultInterval, defaultTimeout, func() (bool, error) {
-		pods, err := data.clientset.CoreV1().Pods(kubeNamespace).List(context.TODO(), listOptions)
-		if err != nil {
-			return false, fmt.Errorf("failed to list ClickHouse Operator Pod: %v", err)
-		}
-		if len(pods.Items) == 0 {
-			return false, nil
-		}
-		pod = &pods.Items[0]
-		return true, nil
-	}); err != nil {
-		return nil, err
-	}
-
-	return pod, nil
 }
 
 // restartAntreaControllerPod deletes the antrea-controller Pod to force it to be re-scheduled. It then waits

@@ -47,6 +47,8 @@ TESTBED_CMD=$(dirname $0)"/kind-setup.sh"
 YML_CMD=$(dirname $0)"/../../hack/generate-manifest.sh"
 FLOWAGGREGATOR_YML_CMD=$(dirname $0)"/../../hack/generate-manifest-flow-aggregator.sh"
 FLOW_VISIBILITY_CMD=$(dirname $0)"/../../hack/generate-manifest-flow-visibility.sh --mode e2e"
+FLOW_VISIBILITY_HELM_VALUES=$(dirname $0)"/values-flow-exporter.yml"
+CH_OPERATOR_YML=$(dirname $0)"/../../build/yamls/clickhouse-operator-install-bundle.yml"
 
 function quit {
   result=$?
@@ -158,7 +160,7 @@ if ! $np; then
     manifest_args="$manifest_args --no-np"
 fi
 if $flow_visibility; then
-    manifest_args="$manifest_args --flow-exporter"
+    manifest_args="$manifest_args --flow-exporter --extra-helm-values-file $FLOW_VISIBILITY_HELM_VALUES"
 fi
 
 COMMON_IMAGES_LIST=("k8s.gcr.io/e2e-test-images/agnhost:2.29" \
@@ -167,9 +169,10 @@ COMMON_IMAGES_LIST=("k8s.gcr.io/e2e-test-images/agnhost:2.29" \
                     "projects.registry.vmware.com/antrea/perftool")
 
 FLOW_VISIBILITY_IMAGE_LIST=("projects.registry.vmware.com/antrea/ipfix-collector:v0.5.12" \
-                            "projects.registry.vmware.com/antrea/clickhouse-operator:0.18.2" \
-                            "projects.registry.vmware.com/antrea/metrics-exporter:0.18.2" \
-                            "projects.registry.vmware.com/antrea/clickhouse-server:21.11")
+                            "projects.registry.vmware.com/antrea/flow-visibility-clickhouse-operator:0.18.2" \
+                            "projects.registry.vmware.com/antrea/flow-visibility-metrics-exporter:0.18.2" \
+                            "projects.registry.vmware.com/antrea/flow-visibility-clickhouse-server:21.11" \
+                            "projects.registry.vmware.com/antrea/flow-visibility-clickhouse-monitor:latest")
 if $coverage; then
     manifest_args="$manifest_args --coverage"
     COMMON_IMAGES_LIST+=("antrea/antrea-ubuntu-coverage:latest")
@@ -240,6 +243,7 @@ function run_test {
           $FLOWAGGREGATOR_YML_CMD | docker exec -i kind-control-plane dd of=/root/flow-aggregator.yml
       fi
       $FLOW_VISIBILITY_CMD | docker exec -i kind-control-plane dd of=/root/flow-visibility.yml
+      cat $CH_OPERATOR_YML | docker exec -i kind-control-plane dd of=/root/clickhouse-operator-install-bundle.yml
   fi
 
   if $proxy_all; then

@@ -168,8 +168,8 @@ FLOW_VIS_YML="/tmp/flow-visibility.yml"
 # If a flow collector address is also provided, we update the Antrea
 # manifest (to enable all features)
 if [[ $FLOW_COLLECTOR != "" ]]; then
-    echo "Generating manifest with all features enabled along with FlowExporter feature"
-    $THIS_DIR/../../../../hack/generate-manifest.sh --mode dev --all-features > "${ANTREA_YML}"
+    echo "Generating manifest with flow exporter enabled"
+    $THIS_DIR/../../../../hack/generate-manifest.sh --mode dev --flow-exporter > "${ANTREA_YML}"
 fi
 
 # Push Antrea image and related manifest.
@@ -229,16 +229,10 @@ if [ "$FLOW_AGGREGATOR" == "true" ]; then
             $THIS_DIR/../../../../hack/generate-manifest-flow-aggregator.sh --mode dev -fc $FLOW_COLLECTOR > "${FLOW_AGG_YML}"
         fi
     else
-        $THIS_DIR/../../../../hack/generate-manifest.sh --mode dev --flow-exporter > "${ANTREA_YML}"
         $THIS_DIR/../../../../hack/generate-manifest-flow-aggregator.sh --mode dev > "${FLOW_AGG_YML}"
     fi
 
     copyManifestToNodes "$FLOW_AGG_YML"
-
-    FLOW_VISIBILITY_CH_YML="/tmp/flow-visibility.yml"
-    echo "Generating manifest for flow visibility with only clickhouse operator and db"
-    $THIS_DIR/../../../../hack/generate-manifest-flow-visibility.sh --mode e2e > "${FLOW_VISIBILITY_CH_YML}"
-    copyManifestToNodes "$FLOW_VISIBILITY_CH_YML"
     if [[ $FLOW_COLLECTOR != "" ]]; then
         echo "Restarting Flow Aggregator deployment"
         ssh -F ssh-config k8s-node-control-plane kubectl -n flow-aggregator delete pod --all

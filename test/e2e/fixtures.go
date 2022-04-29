@@ -248,7 +248,8 @@ func setupTestForFlowAggregator(tb testing.TB) (*TestData, bool, bool, error) {
 	if err != nil {
 		return testData, v4Enabled, v6Enabled, err
 	}
-	tb.Logf("ClickHouse Pod running on address: %s", chPodIPs.String())
+	tb.Logf("ClickHouse Pod running on address: %v", chPodIPs.ipStrings[0])
+
 	var clickHouseIP string
 	if v6Enabled && chPodIPs.ipv6 != nil {
 		clickHouseIP = chPodIPs.ipv6.String()
@@ -338,6 +339,9 @@ func exportLogs(tb testing.TB, data *TestData, logsSubDir string, writeNodeLogs 
 	// dump the logs for flow-visibility Pods to disk.
 	data.forAllMatchingPodsInNamespace("", flowVisibilityNamespace, writePodLogs)
 
+	// dump the logs for clickhouse operator Pods to disk.
+	data.forAllMatchingPodsInNamespace("app=clickhouse-operator", kubeNamespace, writePodLogs)
+
 	// dump the output of "kubectl describe" for Antrea pods to disk.
 	data.forAllMatchingPodsInNamespace("app=antrea", antreaNamespace, func(nodeName, podName, nsName string) error {
 		w := getPodWriter(nodeName, podName, "describe")
@@ -408,7 +412,7 @@ func teardownFlowAggregator(tb testing.TB, data *TestData) {
 
 	tb.Logf("Deleting '%s' K8s Namespace and ClickHouse Operator", flowVisibilityNamespace)
 	if err := data.DeleteNamespace(flowVisibilityNamespace, defaultTimeout); err != nil {
-		tb.Logf("Error when tearing down flow aggregator: %v", err)
+		tb.Logf("Error when tearing down flow visibility: %v", err)
 	}
 	if err := data.deleteClickHouseOperator(); err != nil {
 		tb.Logf("Error when removing ClickHouse Operator: %v", err)
