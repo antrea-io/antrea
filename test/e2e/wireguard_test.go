@@ -21,6 +21,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 
@@ -64,6 +65,7 @@ func TestWireGuard(t *testing.T) {
 
 	t.Run("testPodConnectivity", func(t *testing.T) { testPodConnectivity(t, data) })
 	t.Run("testServiceConnectivity", func(t *testing.T) { testServiceConnectivity(t, data) })
+	t.Run("testRoute", func(t *testing.T) { testRoute(t, data) })
 }
 
 func (data *TestData) getWireGuardPeerEndpointsWithHandshake(nodeName string) ([]string, error) {
@@ -126,4 +128,64 @@ func testServiceConnectivity(t *testing.T, data *TestData) {
 
 	err = data.runNetcatCommandFromTestPod(clientPodName, testNamespace, clientPodNodeIP, svc.Spec.Ports[0].NodePort)
 	require.NoError(t, err, "Pod %s should be able to connect the service's NodePort %s:%d, but was not able to connect", clientPodName, clientPodNodeIP, svc.Spec.Ports[0].NodePort)
+}
+
+// testRoute make sure that the route to Pod on peer Node or route to peer gateway is targeting the WireGuard device.
+func testRoute(t *testing.T, data *TestData) {
+	srcPod, err := data.getAntreaPodOnNode(nodeName(0))
+	require.NoError(t, err)
+	var srcPodIP, peerGatewayIP, peerPodIP string
+	srcPodIPs, err := data.podWaitForIPs(defaultTimeout, srcPod, antreaNamespace)
+	require.NoError(t, err)
+	if srcPodIPs.ipv4 != nil {
+		srcPodIP = srcPodIPs.ipv4.String()
+	} else {
+		srcPodIP = srcPodIPs.ipv6.String()
+	}
+
+	IPv4, IPv6 := nodeGatewayIPs(1)
+	if IPv4 != "" {
+		peerGatewayIP = IPv4
+	} else {
+		peerGatewayIP = IPv6
+	}
+
+	peerPod, err := data.getAntreaPodOnNode(nodeName(1))
+	require.NoError(t, err)
+	peerPodIPs, err := data.podWaitForIPs(defaultTimeout, peerPod, antreaNamespace)
+	require.NoError(t, err)
+	if peerPodIPs.ipv4 != nil {
+		peerPodIP = peerPodIPs.ipv4.String()
+	} else {
+		peerPodIP = peerPodIPs.ipv6.String()
+	}
+
+	tests := []struct {
+		name               string
+		dstIP              string
+		expectedDeviceName string
+		expectedSrcIP      string
+	}{
+		{
+			name:               "toPodOnPeerNode",
+			dstIP:              peerPodIP,
+			expectedDeviceName: "antrea-wg0",
+			expectedSrcIP:      srcPodIP,
+		},
+		{
+			name:               "toPeerGateway",
+			dstIP:              peerGatewayIP,
+			expectedDeviceName: "antrea-wg0",
+			expectedSrcIP:      srcPodIP,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cmd := []string{fmt.Sprintf("ip route get %v", tt.dstIP)}
+			stdout, _, err := data.RunCommandFromPod(antreaNamespace, srcPod, agentContainerName, cmd)
+			require.NoError(t, err)
+			assert.Contains(t, stdout, tt.expectedDeviceName)
+			assert.Contains(t, stdout, tt.expectedSrcIP)
+		})
+	}
 }
