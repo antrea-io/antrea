@@ -187,10 +187,11 @@ CRDs, which provide advanced features including: policy priority, tiering, deny
 action, external entity, and policy statistics. For more information on usage of
 Antrea Network Policies, refer to the [Antrea Network Policy document](antrea-network-policy.md).
 
-### Traffic Encryption
+### Egress
 
-Antrea supports encrypting traffic between Linux Nodes using IPsec or WireGuard.
-To deploy Antrea with traffic encryption enabled, please refer to [this guide](traffic-encryption.md).
+Antrea supports specifying which egress (SNAT) IP the traffic from the selected
+Pods to the external network should use and which Node the traffic should leave
+the cluster from. For more information, refer to the [Egress document](egress.md).
 
 ### Network Flow Visibility
 
@@ -198,12 +199,6 @@ Antrea supports exporting network flow information using IPFIX, and provides a
 reference cookbook on how to visualize the exported network flows using Elastic
 Stack and Kibana dashboards. For more information, refer to the [network flow
 visibility document](network-flow-visibility.md).
-
-### Egress
-
-Antrea supports specifying which egress (SNAT) IP the traffic from the selected
-Pods to the external network should use and which Node the traffic should leave
-the cluster from. For more information, refer to the [Egress document](egress.md).
 
 ### NoEncap and Hybrid Traffic Modes
 
@@ -234,8 +229,30 @@ the [OVS hardware offload guide](ovs-offload.md).
 Antrea supports exporting metrics to Prometheus. For more information, refer to
 the [Prometheus integration document](prometheus-integration.md).
 
+### Support for Services of type LoadBalancer
+
+By leveraging Antrea's Service external IP management feature or configuring
+MetalLB to work with Antrea, Services of type LoadBalancer can be supported
+without requiring an external LoadBalancer. To learn more information, please
+refer to the [Service LoadBalancer document](service-loadbalancer.md).
+
 ### Traceflow
 
 Traceflow is a very useful network diagnosis feature in Antrea. It can trace
 and report the forwarding path of a specified packet in the Antrea network.
 For usage of this feature, refer to the [Traceflow user guide](traceflow-guide.md).
+
+### Traffic Encryption
+
+Antrea supports encrypting traffic between Linux Nodes using IPsec or WireGuard.
+To deploy Antrea with traffic encryption enabled, please refer to [this guide](traffic-encryption.md).
+
+### Antrea Multi-cluster
+
+Antrea Multi-cluster implements Multi-cluster Service API, which allows users to
+create multi-cluster Services that can be accessed cross clusters in a
+ClusterSet. Antrea Multi-cluster also supports Antrea ClusterNetworkPolicy
+replication. Multi-cluster admins can define ClusterNetworkPolicies to be
+replicated across the entire ClusterSet, and enforced in all member clusters.
+To learn more information about Antrea Multi-cluster, please refer to the
+[Antrea Multi-cluster user guide](multicluster/user-guide.md).
