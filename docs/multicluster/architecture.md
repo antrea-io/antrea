@@ -1,11 +1,14 @@
 # Antrea Multi-cluster Architecture
 
-Antrea Multi-cluster implements [Multi-cluster Service API](https://github.com/kubernetes/enhancements/tree/master/keps/sig-multicluster/1645-multi-cluster-services-api) for Service communication
-across multiple Kubernetes clusters.
+Antrea Multi-cluster implements [Multi-cluster Service API](https://github.com/kubernetes/enhancements/tree/master/keps/sig-multicluster/1645-multi-cluster-services-api),
+which allows users to create multi-cluster Services that can be accessed cross clusters in a
+ClusterSet. Antrea Multi-cluster also supports Antrea ClusterNetworkPolicy replication.
+Multi-cluster admins can define ClusterNetworkPolicies to be replicated across the entire
+ClusterSet, and enforced in all member clusters.
 
-The below diagram depicts a basic multi-cluster topology in Antrea.
+The diagram below depicts a basic multi-cluster topology in Antrea.
 
-<img src="assets/basic-topology.png" width="400" alt="Antrea Multi-cluster Topology">
+<img src="assets/basic-topology.png" width="500" alt="Antrea Multi-cluster Topology">
 
 Given a set of Kubernetes clusters, there will be a leader cluster and several member clusters.
 By default, a leader cluster itself is also a member cluster of a ClusterSet. A cluster
@@ -90,7 +93,7 @@ IPs from all member clusters. The new created Antrea Multi-cluster Service is ju
 Kubernetes Service, so Pods in a member cluster can access the multi-cluster Service as usual without
 any extra setting.
 
-## Antrea Multi-cluster policy enforcement
+## Antrea Multi-cluster NetworkPolicy
 
 At this moment, Antrea does not support Pod-level policy enforcement for cross-cluster traffic. Access
 towards Multi-cluster Services can be regulated with Antrea ClusterNetworkPolicy `toService` rules. In
