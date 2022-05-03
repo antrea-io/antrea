@@ -66,9 +66,8 @@ fit users’ different use cases.
 To specify custom input plugins and parsers, modify `./resources/kubernetes.conf`
 and create a ConfigMap with the following command. Later, direct Fluentd
 DaemonSet to refer to that ConfigMap. To see more variations of custom
-configuration, refer to
-[Fluentd inputs](https://docs.fluentbit.io/manual/pipeline/inputs).
-This cookbook uses the [tail](https://docs.fluentbit.io/manual/pipeline/inputs/tail)
+configuration, refer to [Fluentd inputs](https://docs.fluentd.org/input).
+This cookbook uses the [tail](https://docs.fluentd.org/input/tail)
 input plugin to monitor the audit logging files for Antrea-native policies
 on every K8s Node.
 
