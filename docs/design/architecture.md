@@ -365,3 +365,13 @@ daemons are run and managed, how the OVS bridge is configured and Pod network
 interfaces are connected to the bridge, and how host network routing and SNAT
 are implemented. For more information about the Antrea Windows implementation,
 refer to the [Windows design document](windows-design.md).
+
+### Antrea Multi-cluster
+
+Antrea Multi-cluster implements Multi-cluster Service API, which allows users to
+create multi-cluster Services that can be accessed cross clusters in a
+ClusterSet. Antrea Multi-cluster also supports Antrea ClusterNetworkPolicy
+replication. Multi-cluster admins can define ClusterNetworkPolicies to be
+replicated across the entire ClusterSet, and enforced in all member clusters.
+To learn more information about the Antrea Multi-cluster architecture, please
+refer to the [Antrea Multi-cluster architecture document](../multicluster/architecture.md).
