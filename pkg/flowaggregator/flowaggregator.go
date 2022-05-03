@@ -174,6 +174,49 @@ var (
 )
 
 const (
+	AllowedConnection = uint8(1)
+	DeniedConnection  = uint8(2)
+)
+
+var flowtypeArray = []uint8{ipfixregistry.FlowTypeIntraNode, ipfixregistry.FlowTypeInterNode, ipfixregistry.FlowTypeToExternal}
+var connectTypeArray = []uint8{AllowedConnection, DeniedConnection}
+
+var fieldFilterMap = map[uint8][]string{
+	ipfixregistry.FlowTypeIntraNode: {
+		"octetDeltaCountFromDestinationNode",
+		"octetTotalCountFromDestinationNode",
+		"packetDeltaCountFromDestinationNode",
+		"packetTotalCountFromDestinationNode",
+		"reverseOctetDeltaCountFromDestinationNode",
+		"reverseOctetTotalCountFromDestinationNode",
+		"reversePacketDeltaCountFromDestinationNode",
+		"reversePacketTotalCountFromDestinationNode",
+	},
+	ipfixregistry.FlowTypeInterNode: {},
+	ipfixregistry.FlowTypeToExternal: {
+		"destinationPodName",
+		"destinationPodNamespace",
+		"destinationNodeName",
+		"destinationServicePort",
+		"destinationServicePortName",
+		"ingressNetworkPolicyName",
+		"ingressNetworkPolicyNamespace",
+		"ingressNetworkPolicyType",
+		"ingressNetworkPolicyRuleName",
+		"ingressNetworkPolicyRuleAction",
+		"destinationClusterIPv4",
+		"destinationClusterIPv6",
+		"destinationPodLabels",
+	},
+}
+
+var fieldFilterDeniedConnection = []string{
+	"reversePacketTotalCount", "reverseOctetTotalCount", "reversePacketDeltaCount", "reverseOctetDeltaCount",
+	"reverseOctetDeltaCountFromSourceNode", "reverseOctetTotalCountFromSourceNode", "reversePacketDeltaCountFromSourceNode", "reversePacketTotalCountFromSourceNode",
+	"reverseOctetDeltaCountFromDestinationNode", "reverseOctetTotalCountFromDestinationNode", "reversePacketDeltaCountFromDestinationNode", "reversePacketTotalCountFromDestinationNode",
+}
+
+const (
 	aggregationWorkerNum = 2
 	udpTransport         = "udp"
 	tcpTransport         = "tcp"
@@ -201,8 +244,8 @@ type flowAggregator struct {
 	activeFlowRecordTimeout     time.Duration
 	inactiveFlowRecordTimeout   time.Duration
 	exportingProcess            ipfix.IPFIXExportingProcess
-	templateIDv4                uint16
-	templateIDv6                uint16
+	templateIDv4                map[uint8]map[uint8]uint16
+	templateIDv6                map[uint8]map[uint8]uint16
 	registry                    ipfix.IPFIXRegistry
 	set                         ipfixentities.Set
 	flowAggregatorAddress       string
@@ -244,6 +287,8 @@ func NewFlowAggregator(
 		observationDomainID:         observationDomainID,
 		podInformer:                 podInformer,
 		sendJSONRecord:              sendJSONRecord,
+		templateIDv4:                make(map[uint8]map[uint8]uint16),
+		templateIDv6:                make(map[uint8]map[uint8]uint16),
 	}
 	podInformer.Informer().AddIndexers(cache.Indexers{podInfoIndex: podInfoIndexFunc})
 	return fa
@@ -339,24 +384,30 @@ func (fa *flowAggregator) InitDBExportProcess(chInput clickhouseclient.ClickHous
 }
 
 func (fa *flowAggregator) createAndSendTemplate(isRecordIPv6 bool) error {
-	templateID := fa.exportingProcess.NewTemplateID()
 	recordIPFamily := "IPv4"
+	templateIDMap := fa.templateIDv4
 	if isRecordIPv6 {
 		recordIPFamily = "IPv6"
+		templateIDMap = fa.templateIDv6
 	}
-	if isRecordIPv6 {
-		fa.templateIDv6 = templateID
-	} else {
-		fa.templateIDv4 = templateID
+	for _, flowtype := range flowtypeArray {
+		for _, connectType := range connectTypeArray {
+			templateID := fa.exportingProcess.NewTemplateID()
+			_, ok := templateIDMap[flowtype]
+			if !ok {
+				templateIDMap[flowtype] = make(map[uint8]uint16)
+			}
+			templateIDMap[flowtype][connectType] = templateID
+			bytesSent, err := fa.sendTemplateSet(isRecordIPv6, flowtype, connectType)
+			if err != nil {
+				fa.exportingProcess.CloseConnToCollector()
+				fa.exportingProcess = nil
+				fa.set.ResetSet()
+				return fmt.Errorf("sending %s template set failed, err: %v", recordIPFamily, err)
+			}
+			klog.V(2).InfoS("Exporting process initialized", "bytesSent", bytesSent, "templateSetIPFamily", recordIPFamily)
+		}
 	}
-	bytesSent, err := fa.sendTemplateSet(isRecordIPv6)
-	if err != nil {
-		fa.exportingProcess.CloseConnToCollector()
-		fa.exportingProcess = nil
-		fa.set.ResetSet()
-		return fmt.Errorf("sending %s template set failed, err: %v", recordIPFamily, err)
-	}
-	klog.V(2).InfoS("Exporting process initialized", "bytesSent", bytesSent, "templateSetIPFamily", recordIPFamily)
 	return nil
 }
 
@@ -464,9 +515,14 @@ func (fa *flowAggregator) flowRecordExpiryCheck(stopCh <-chan struct{}) {
 
 func (fa *flowAggregator) sendFlowKeyRecord(key ipfixintermediate.FlowKey, record *ipfixintermediate.AggregationFlowRecord) error {
 	isRecordIPv4 := fa.aggregationProcess.IsAggregatedRecordIPv4(*record)
-	templateID := fa.templateIDv4
+	flowType := fa.findFlowType(record.Record)
+	if flowType != ipfixregistry.FlowTypeIntraNode && flowType != ipfixregistry.FlowTypeInterNode && flowType != ipfixregistry.FlowTypeToExternal {
+		return fmt.Errorf("unknown flow type, flowType=%v", flowType)
+	}
+	connectType := fa.isDeniedConnection(record.Record)
+	templateID := fa.templateIDv4[flowType][connectType]
 	if !isRecordIPv4 {
-		templateID = fa.templateIDv6
+		templateID = fa.templateIDv6[flowType][connectType]
 	}
 	// TODO: more records per data set will be supported when go-ipfix supports size check when adding records
 	fa.set.ResetSet()
@@ -481,7 +537,13 @@ func (fa *flowAggregator) sendFlowKeyRecord(key ipfixintermediate.FlowKey, recor
 		fa.fillPodLabels(key, record.Record)
 		fa.aggregationProcess.SetExternalFieldsFilled(record)
 	}
-	if err := fa.set.AddRecord(record.Record.GetOrderedElementList(), templateID); err != nil {
+	klog.InfoS("flow:", "flowtype", flowType, "field_length", len(record.Record.GetOrderedElementList()))
+	filteredEL := fa.filterField(fieldFilterMap[flowType], record.Record.GetOrderedElementList())
+	if connectType == DeniedConnection {
+		filteredEL = fa.filterField(fieldFilterDeniedConnection, filteredEL)
+	}
+	klog.InfoS("new_flow:", "flowtype", flowType, "connectType", connectType, "field_length", len(filteredEL))
+	if err := fa.set.AddRecord(filteredEL, templateID); err != nil {
 		return err
 	}
 	if fa.exportingProcess != nil {
@@ -501,15 +563,15 @@ func (fa *flowAggregator) sendFlowKeyRecord(key ipfixintermediate.FlowKey, recor
 	return nil
 }
 
-func (fa *flowAggregator) sendTemplateSet(isIPv6 bool) (int, error) {
+func (fa *flowAggregator) sendTemplateSet(isIPv6 bool, flowtype uint8, connectType uint8) (int, error) {
 	elements := make([]ipfixentities.InfoElementWithValue, 0)
 	ianaInfoElements := ianaInfoElementsIPv4
 	antreaInfoElements := antreaInfoElementsIPv4
-	templateID := fa.templateIDv4
+	templateID := fa.templateIDv4[flowtype][connectType]
 	if isIPv6 {
 		ianaInfoElements = ianaInfoElementsIPv6
 		antreaInfoElements = antreaInfoElementsIPv6
-		templateID = fa.templateIDv6
+		templateID = fa.templateIDv6[flowtype][connectType]
 	}
 	for _, ie := range ianaInfoElements {
 		ie, err := fa.createInfoElementForTemplateSet(ie, ipfixregistry.IANAEnterpriseID)
@@ -590,10 +652,16 @@ func (fa *flowAggregator) sendTemplateSet(isIPv6 bool) (int, error) {
 		}
 	}
 	fa.set.ResetSet()
+	//klog.InfoS("flow:", "flowtype", flowtype, "field_length", len(elements))
+	filteredElements := fa.filterField(fieldFilterMap[flowtype], elements)
+	if connectType == DeniedConnection {
+		filteredElements = fa.filterField(fieldFilterDeniedConnection, filteredElements)
+	}
+	//klog.InfoS("new_flow:", "flowtype", flowtype, "connectType", connectType, "field_length", len(filteredElements))
 	if err := fa.set.PrepareSet(ipfixentities.Template, templateID); err != nil {
 		return 0, err
 	}
-	err := fa.set.AddRecord(elements, templateID)
+	err := fa.set.AddRecord(filteredElements, templateID)
 	if err != nil {
 		return 0, fmt.Errorf("error when adding record to set, error: %v", err)
 	}
@@ -723,4 +791,45 @@ func (fa *flowAggregator) createInfoElementForTemplateSet(ieName string, enterpr
 		return nil, err
 	}
 	return ie, nil
+}
+
+func (fa *flowAggregator) filterField(filter []string, eL []ipfixentities.InfoElementWithValue) []ipfixentities.InfoElementWithValue {
+	elements := make([]ipfixentities.InfoElementWithValue, 0)
+	for i := range eL {
+		ie := eL[i]
+		ieName := ie.GetInfoElement().Name
+		if stringInSlice(ieName, filter) {
+			continue
+		}
+		elements = append(elements, ie)
+	}
+	return elements
+}
+
+func stringInSlice(name string, elements []string) bool {
+	for _, element := range elements {
+		if name == element {
+			return true
+		}
+	}
+	return false
+}
+
+func (fa *flowAggregator) findFlowType(record ipfixentities.Record) uint8 {
+	if flowType, _, exist := record.GetInfoElementWithValue("flowType"); exist {
+		return flowType.GetUnsigned8Value()
+	}
+	return 0
+}
+
+func (fa *flowAggregator) isDeniedConnection(record ipfixentities.Record) uint8 {
+	ruleAction := []string{"ingressNetworkPolicyRuleAction", "EgressNetworkPolicyRuleAction"}
+	for _, name := range ruleAction {
+		if element, _, exist := record.GetInfoElementWithValue(name); exist {
+			if element.GetUnsigned8Value() == ipfixregistry.NetworkPolicyRuleActionDrop || element.GetUnsigned8Value() == ipfixregistry.NetworkPolicyRuleActionReject {
+				return DeniedConnection
+			}
+		}
+	}
+	return AllowedConnection
 }

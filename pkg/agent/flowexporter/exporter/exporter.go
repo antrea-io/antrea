@@ -109,20 +109,49 @@ type FlowExporter struct {
 	elementsListv6         []ipfixentities.InfoElementWithValue
 	ipfixSet               ipfixentities.Set
 	numDataSetsSent        uint64 // used for unit tests.
-	templateIDv4           uint16
-	templateIDv6           uint16
+	templateIDv4           map[uint8]map[uint8]uint16
+	templateIDv6           map[uint8]map[uint8]uint16
 	registry               ipfix.IPFIXRegistry
 	v4Enabled              bool
 	v6Enabled              bool
 	exporterInput          exporter.ExporterInput
 	k8sClient              kubernetes.Interface
-	nodeRouteController    *noderoute.Controller
+	nodeRouteController    noderoute.ControllerInterface
 	isNetworkPolicyOnly    bool
 	nodeName               string
 	conntrackPriorityQueue *priorityqueue.ExpirePriorityQueue
 	denyPriorityQueue      *priorityqueue.ExpirePriorityQueue
 	expiredConns           []flowexporter.Connection
 }
+
+const (
+	AllowedConnection = uint8(1)
+	DeniedConnection  = uint8(2)
+)
+
+var flowTypeArray = []uint8{ipfixregistry.FlowTypeIntraNode, ipfixregistry.FlowTypeInterNode, ipfixregistry.FlowTypeToExternal}
+var connectTypeArray = []uint8{AllowedConnection, DeniedConnection}
+
+var fieldFilterMap = map[uint8][]string{
+	ipfixregistry.FlowTypeIntraNode: {},
+	ipfixregistry.FlowTypeInterNode: {},
+	ipfixregistry.FlowTypeToExternal: {
+		"destinationPodName",
+		"destinationPodNamespace",
+		"destinationNodeName",
+		"destinationServicePort",
+		"destinationServicePortName",
+		"ingressNetworkPolicyName",
+		"ingressNetworkPolicyNamespace",
+		"ingressNetworkPolicyType",
+		"ingressNetworkPolicyRuleName",
+		"ingressNetworkPolicyRuleAction",
+		"destinationClusterIPv4",
+		"destinationClusterIPv6",
+	},
+}
+
+var fieldFilterDeniedConnection = []string{"reversePacketTotalCount", "reverseOctetTotalCount", "reversePacketDeltaCount", "reverseOctetDeltaCount"}
 
 func genObservationID(nodeName string) uint32 {
 	h := fnv.New32()
@@ -153,7 +182,6 @@ func NewFlowExporter(ifaceStore interfacestore.InterfaceStore, proxier proxy.Pro
 	// Initialize IPFIX registry
 	registry := ipfix.NewIPFIXRegistry()
 	registry.LoadRegistry()
-
 	// Prepare input args for IPFIX exporting process.
 	nodeName, err := env.GetNodeName()
 	if err != nil {
@@ -180,6 +208,8 @@ func NewFlowExporter(ifaceStore interfacestore.InterfaceStore, proxier proxy.Pro
 		conntrackPriorityQueue: conntrackConnStore.GetPriorityQueue(),
 		denyPriorityQueue:      denyConnStore.GetPriorityQueue(),
 		expiredConns:           make([]flowexporter.Connection, 0, maxConnsToExport*2),
+		templateIDv4:           make(map[uint8]map[uint8]uint16),
+		templateIDv6:           make(map[uint8]map[uint8]uint16),
 	}, nil
 }
 
@@ -287,37 +317,52 @@ func (exp *FlowExporter) initFlowExporter() error {
 	}
 	exp.process = expProcess
 	if exp.v4Enabled {
-		templateID := exp.process.NewTemplateID()
-		exp.templateIDv4 = templateID
-		sentBytes, err := exp.sendTemplateSet(false)
-		if err != nil {
+		if err := exp.createAndSendTemplate(false); err != nil {
 			return err
 		}
-		klog.V(2).Infof("Initialized flow exporter for IPv4 flow records and sent %d bytes size of template record", sentBytes)
 	}
 	if exp.v6Enabled {
-		templateID := exp.process.NewTemplateID()
-		exp.templateIDv6 = templateID
-		sentBytes, err := exp.sendTemplateSet(true)
-		if err != nil {
+		if err := exp.createAndSendTemplate(true); err != nil {
 			return err
 		}
-		klog.V(2).Infof("Initialized flow exporter for IPv6 flow records and sent %d bytes size of template record", sentBytes)
 	}
 	metrics.ReconnectionsToFlowCollector.Inc()
 	return nil
 }
 
-func (exp *FlowExporter) sendTemplateSet(isIPv6 bool) (int, error) {
+func (exp *FlowExporter) createAndSendTemplate(isIPv6 bool) error {
+	templateIDMap := exp.templateIDv4
+	if isIPv6 {
+		templateIDMap = exp.templateIDv6
+	}
+	for _, flowType := range flowTypeArray {
+		for _, connectType := range connectTypeArray {
+			templateID := exp.process.NewTemplateID()
+			_, ok := templateIDMap[flowType]
+			if !ok {
+				templateIDMap[flowType] = make(map[uint8]uint16)
+			}
+			templateIDMap[flowType][connectType] = templateID
+			sentBytes, err := exp.sendTemplateSet(isIPv6, flowType, connectType)
+			if err != nil {
+				return err
+			}
+			klog.V(2).Infof("Initialized flow exporter for IPv4 flow records and sent %d bytes size of template record", sentBytes)
+		}
+	}
+	return nil
+}
+
+func (exp *FlowExporter) sendTemplateSet(isIPv6 bool, flowType uint8, connectType uint8) (int, error) {
 	elements := make([]ipfixentities.InfoElementWithValue, 0)
 
 	IANAInfoElements := IANAInfoElementsIPv4
 	AntreaInfoElements := AntreaInfoElementsIPv4
-	templateID := exp.templateIDv4
+	templateID := exp.templateIDv4[flowType][connectType]
 	if isIPv6 {
 		IANAInfoElements = IANAInfoElementsIPv6
 		AntreaInfoElements = AntreaInfoElementsIPv6
-		templateID = exp.templateIDv6
+		templateID = exp.templateIDv6[flowType][connectType]
 	}
 	for _, ie := range IANAInfoElements {
 		element, err := exp.registry.GetInfoElement(ie, ipfixregistry.IANAEnterpriseID)
@@ -353,10 +398,14 @@ func (exp *FlowExporter) sendTemplateSet(isIPv6 bool) (int, error) {
 		elements = append(elements, ieWithValue)
 	}
 	exp.ipfixSet.ResetSet()
+	filteredElements := exp.filterField(fieldFilterMap[flowType], elements)
+	if connectType == DeniedConnection {
+		filteredElements = exp.filterField(fieldFilterDeniedConnection, filteredElements)
+	}
 	if err := exp.ipfixSet.PrepareSet(ipfixentities.Template, templateID); err != nil {
 		return 0, err
 	}
-	err := exp.ipfixSet.AddRecord(elements, templateID)
+	err := exp.ipfixSet.AddRecord(filteredElements, templateID)
 	if err != nil {
 		return 0, fmt.Errorf("error in adding record to template set: %v", err)
 	}
@@ -377,11 +426,12 @@ func (exp *FlowExporter) sendTemplateSet(isIPv6 bool) (int, error) {
 
 func (exp *FlowExporter) addConnToSet(conn *flowexporter.Connection) error {
 	exp.ipfixSet.ResetSet()
-
+	flowType := exp.findFlowType(*conn)
+	connectType := exp.isDeniedConnection(*conn)
 	eL := exp.elementsListv4
-	templateID := exp.templateIDv4
+	templateID := exp.templateIDv4[flowType][connectType]
 	if conn.FlowKey.SourceAddress.To4() == nil {
-		templateID = exp.templateIDv6
+		templateID = exp.templateIDv6[flowType][connectType]
 		eL = exp.elementsListv6
 	}
 	if err := exp.ipfixSet.PrepareSet(ipfixentities.Data, templateID); err != nil {
@@ -518,10 +568,16 @@ func (exp *FlowExporter) addConnToSet(conn *flowexporter.Connection) error {
 		case "tcpState":
 			ie.SetStringValue(conn.TCPState)
 		case "flowType":
-			ie.SetUnsigned8Value(exp.findFlowType(*conn))
+			ie.SetUnsigned8Value(flowType)
 		}
 	}
-	err := exp.ipfixSet.AddRecord(eL, templateID)
+	//klog.InfoS("flow:", "flowtype", flowType, "field_length", len(eL))
+	filteredEL := exp.filterField(fieldFilterMap[flowType], eL)
+	if connectType == DeniedConnection {
+		filteredEL = exp.filterField(fieldFilterDeniedConnection, filteredEL)
+	}
+	//klog.InfoS("new_flow:", "flowtype", flowType, "connectType", connectType, "field_length", len(filteredEL))
+	err := exp.ipfixSet.AddRecord(filteredEL, templateID)
 	if err != nil {
 		return fmt.Errorf("error in adding record to data set: %v", err)
 	}
@@ -559,9 +615,18 @@ func (exp *FlowExporter) findFlowType(conn flowexporter.Connection) uint8 {
 		}
 		return ipfixregistry.FlowTypeToExternal
 	}
+
 	// We do not support External-To-Pod flows for now.
 	klog.Warningf("Source IP: %s doesn't exist in PodCIDRs", conn.FlowKey.SourceAddress.String())
 	return 0
+}
+
+func (exp *FlowExporter) isDeniedConnection(conn flowexporter.Connection) uint8 {
+	if conn.IngressNetworkPolicyRuleAction == ipfixregistry.NetworkPolicyRuleActionDrop || conn.IngressNetworkPolicyRuleAction == ipfixregistry.NetworkPolicyRuleActionReject ||
+		conn.EgressNetworkPolicyRuleAction == ipfixregistry.NetworkPolicyRuleActionDrop || conn.EgressNetworkPolicyRuleAction == ipfixregistry.NetworkPolicyRuleActionReject {
+		return DeniedConnection
+	}
+	return AllowedConnection
 }
 
 func (exp *FlowExporter) exportConn(conn *flowexporter.Connection) error {
@@ -582,4 +647,26 @@ func getMinTime(t1, t2 time.Duration) time.Duration {
 		return t1
 	}
 	return t2
+}
+
+func (exp *FlowExporter) filterField(filter []string, eL []ipfixentities.InfoElementWithValue) []ipfixentities.InfoElementWithValue {
+	elements := make([]ipfixentities.InfoElementWithValue, 0)
+	for i := range eL {
+		ie := eL[i]
+		ieName := ie.GetInfoElement().Name
+		if stringInSlice(ieName, filter) {
+			continue
+		}
+		elements = append(elements, ie)
+	}
+	return elements
+}
+
+func stringInSlice(name string, elements []string) bool {
+	for _, element := range elements {
+		if name == element {
+			return true
+		}
+	}
+	return false
 }

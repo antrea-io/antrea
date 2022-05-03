@@ -176,6 +176,8 @@ func NewFlowExporterForTest(o *flowexporter.FlowExporterOptions) *FlowExporter {
 		conntrackPriorityQueue: conntrackConnStore.GetPriorityQueue(),
 		denyPriorityQueue:      denyConnStore.GetPriorityQueue(),
 		expiredConns:           make([]flowexporter.Connection, 0, maxConnsToExport*2),
+		templateIDv4:           make(map[uint8]map[uint8]uint16),
+		templateIDv6:           make(map[uint8]map[uint8]uint16),
 	}
 }
 

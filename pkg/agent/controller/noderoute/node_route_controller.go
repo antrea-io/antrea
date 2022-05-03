@@ -59,6 +59,12 @@ const (
 	nodeRouteInfoPodCIDRIndexName = "podCIDR"
 )
 
+// ControllerInterface interface is added to facilitate unit testing without involving the code from node_route_controller library.
+type ControllerInterface interface {
+	IPInPodSubnets(ip net.IP) bool
+	Run(stopCh <-chan struct{})
+}
+
 // Controller is responsible for setting up necessary IP routes and Openflow entries for inter-node traffic.
 type Controller struct {
 	kubeClient       clientset.Interface
