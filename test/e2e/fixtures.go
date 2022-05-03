@@ -16,6 +16,7 @@ package e2e
 
 import (
 	"fmt"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"log"
 	"net"
 	"os"
@@ -249,6 +250,20 @@ func setupTestForFlowAggregator(tb testing.TB) (*TestData, bool, bool, error) {
 		return testData, v4Enabled, v6Enabled, err
 	}
 	tb.Logf("ClickHouse Pod running on address: %v", chPodIPs.ipStrings[0])
+
+	if err := wait.Poll(defaultInterval, defaultTimeout, func() (bool, error) {
+		rc, stdout, stderr, err := testData.RunCommandOnNode(controlPlaneNodeName(),
+			fmt.Sprintf("curl %s:8123", chPodIPs.ipv4.String()))
+		if rc != 0 || err != nil {
+			tb.Logf("err curl db: %s, %s", stdout, stderr)
+			return false, nil
+		} else {
+			tb.Logf("curl db: %s", stdout)
+			return true, nil
+		}
+	}); err != nil {
+		tb.Logf("curl db timeout")
+	}
 
 	var clickHouseIP string
 	if v6Enabled && chPodIPs.ipv6 != nil {

@@ -743,11 +743,19 @@ func (data *TestData) deployFlowVisibilityClickHouse() (*PodIPs, error) {
 	if err = data.podWaitForReady(2*defaultTimeout, flowVisibilityCHPodName, flowVisibilityNamespace); err != nil {
 		return nil, err
 	}
-	podIPs, err := data.podWaitForIPs(defaultTimeout, flowVisibilityCHPodName, flowVisibilityNamespace)
-	if err != nil {
-		return nil, fmt.Errorf("unable to get clickhouse server IP %s: %v", flowVisibilityCHPodName, err)
+	/*
+		podIPs, err := data.podWaitForIPs(defaultTimeout, flowVisibilityCHPodName, flowVisibilityNamespace)
+		if err != nil {
+			return nil, fmt.Errorf("unable to get clickhouse server IP %s: %v", flowVisibilityCHPodName, err)
+		}
+
+	*/
+	if svc, err := data.GetService("flow-visibility", "clickhouse-clickhouse"); err != nil {
+		return nil, err
+	} else {
+		ipAddr := net.ParseIP(svc.Spec.ClusterIP)
+		return &PodIPs{ipv4: &ipAddr, ipStrings: []string{svc.Spec.ClusterIP}}, nil
 	}
-	return podIPs, nil
 }
 
 func (data *TestData) deleteClickHouseOperator() error {
