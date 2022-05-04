@@ -19,6 +19,7 @@ import (
 	"net"
 	"strings"
 	"testing"
+	//"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -170,17 +171,19 @@ func testServiceConnectivity(t *testing.T, data *TestData) {
 	// nodeIP() returns IPv6 address if this is a IPv6 cluster.
 	clientPodNodeIP := nodeIP(0)
 	serverPodNode := nodeName(1)
-	svc, cleanup := data.createAgnhostServiceAndBackendPods(t, svcName, data.testNamespace, serverPodNode, corev1.ServiceTypeNodePort)
+	svc, cleanup := data.createAgnhostServiceAndBackendPods(t, svcName, data.testNamespace, serverPodNode, corev1.ServiceTypeNodePort) //ServiceTypeClusterIP
 	defer cleanup()
 
 	// Create the a hostNetwork Pod on a Node different from the service's backend Pod, so the service traffic will be transferred across the tunnel.
-	require.NoError(t, NewPodBuilder(clientPodName, data.testNamespace, busyboxImage).OnNode(clientPodNode).WithCommand([]string{"sleep", "3600"}).InHostNetwork().Create(data))
+	require.NoError(t, NewPodBuilder(clientPodName, data.testNamespace, busyboxImage).OnNode(clientPodNode).WithCommand([]string{"sleep", "3600"}).Create(data))
 	defer data.deletePodAndWait(defaultTimeout, clientPodName, data.testNamespace)
 	require.NoError(t, data.podWaitForRunning(defaultTimeout, clientPodName, data.testNamespace))
 
 	err := data.runNetcatCommandFromTestPod(clientPodName, data.testNamespace, svc.Spec.ClusterIP, 80)
+	//time.Sleep(36 * time.Second)
 	require.NoError(t, err, "Pod %s should be able to connect the service's ClusterIP %s, but was not able to connect", clientPodName, net.JoinHostPort(svc.Spec.ClusterIP, fmt.Sprint(80)))
-
+	//time.Sleep(3600 * time.Second)	
+	
 	err = data.runNetcatCommandFromTestPod(clientPodName, data.testNamespace, clientPodNodeIP, svc.Spec.Ports[0].NodePort)
-	require.NoError(t, err, "Pod %s should be able to connect the service's NodePort %s:%d, but was not able to connect", clientPodName, clientPodNodeIP, svc.Spec.Ports[0].NodePort)
+        require.NoError(t, err, "Pod %s should be able to connect the service's NodePort %s:%d, but was not able to connect", clientPodName, clientPodNodeIP, svc.Spec.Ports[0].NodePort)
 }

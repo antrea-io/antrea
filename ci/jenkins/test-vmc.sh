@@ -260,7 +260,7 @@ function setup_cluster() {
         do
             sleep 1m
             echo "=== Get node (try for 1m) ==="
-            mdNum="$(kubectl get node | grep -c ${CLUSTER}-md)"
+            mdNum="$(kubectl get node | grep -c ${CLUSTER}-m)"
             if [ "${mdNum}" == "2" ]; then
                 echo "=== Setup workload cluster succeeded ==="
                 CLUSTER_READY=true
@@ -503,7 +503,7 @@ function run_e2e {
         mkdir -p ${GIT_CHECKOUT_DIR}/e2e-coverage
         # HACK: see https://github.com/antrea-io/antrea/issues/2292
         go mod edit -replace github.com/moby/spdystream=github.com/antoninbas/spdystream@v0.2.1 && go mod tidy
-        go test -v -timeout=100m antrea.io/antrea/test/e2e --logs-export-dir ${GIT_CHECKOUT_DIR}/antrea-test-logs --prometheus --coverage --coverage-dir ${GIT_CHECKOUT_DIR}/e2e-coverage --provider remote --remote.sshconfig "${CLUSTER_SSHCONFIG}" --remote.kubeconfig "${CLUSTER_KUBECONFIG}"
+        go test -v -timeout=100m -run TestWireGuard antrea.io/antrea/test/e2e --logs-export-dir ${GIT_CHECKOUT_DIR}/antrea-test-logs --prometheus --coverage --coverage-dir ${GIT_CHECKOUT_DIR}/e2e-coverage --provider remote --remote.sshconfig "${CLUSTER_SSHCONFIG}" --remote.kubeconfig "${CLUSTER_KUBECONFIG}"
     else
         # HACK: see https://github.com/antrea-io/antrea/issues/2292
         go mod edit -replace github.com/moby/spdystream=github.com/antoninbas/spdystream@v0.2.1 && go mod tidy
