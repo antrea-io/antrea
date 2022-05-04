@@ -34,7 +34,6 @@ contributing to project Antrea:
 2. Check out the [Architecture document](docs/design/architecture.md) for the Antrea
    architecture and design.
 3. Set up necessary [accounts](#accounts-setup).
-4. Set up your [development environment](docs/contributors/manual-installation.md)
 
 Now that you're setup, skip ahead to learn how to [contribute](#contribute).
 

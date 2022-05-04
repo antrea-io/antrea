@@ -109,20 +109,14 @@ func skipIfPrometheusDisabled(t *testing.T) {
 // getMonitoringAuthToken retrieves monitoring authorization token, required for access to Antrea apiserver/metrics
 // resource
 func getMonitoringAuthToken(t *testing.T, data *TestData) string {
-	secrets, err := data.clientset.CoreV1().Secrets(monitoringNamespace).List(context.TODO(), metav1.ListOptions{})
+	const secretName = "prometheus-service-account-token"
+	secret, err := data.clientset.CoreV1().Secrets(monitoringNamespace).Get(context.TODO(), secretName, metav1.GetOptions{})
 	if err != nil {
-		t.Fatalf("Error fetching monitoring secrets: %v", err)
+		t.Fatalf("Error fetching monitoring secret '%s': %v", secretName, err)
 	}
-
-	var token string
-	for _, secret := range secrets.Items {
-		if secret.Annotations["kubernetes.io/service-account.name"] == "prometheus" {
-			token = string(secret.Data[v1.ServiceAccountTokenKey])
-		}
-	}
-
+	token := string(secret.Data[v1.ServiceAccountTokenKey])
 	if len(token) == 0 {
-		t.Fatal("Prometheus ServiceAccount secret not found")
+		t.Fatalf("Monitoring secret '%s' does not include token", secretName)
 	}
 
 	return token
