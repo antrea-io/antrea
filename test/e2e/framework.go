@@ -417,6 +417,15 @@ func (data *TestData) RunCommandOnNodeExt(nodeName, cmd string, envs map[string]
 }
 
 func (data *TestData) collectClusterInfo() error {
+	// retrieve K8s server version
+	// this needs to be done first, as there may be dependencies on the
+	// version later in this function (e.g., for labelNodeRoleControlPlane()).
+	serverVersion, err := testData.clientset.Discovery().ServerVersion()
+	if err != nil {
+		return err
+	}
+	clusterInfo.k8sServerVersion = serverVersion.String()
+
 	// retrieve Node information
 	nodes, err := testData.clientset.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
@@ -559,14 +568,6 @@ func (data *TestData) collectClusterInfo() error {
 	}
 	clusterInfo.svcV4NetworkCIDR = svcCIDRs[0]
 	clusterInfo.svcV6NetworkCIDR = svcCIDRs[1]
-
-	// retrieve K8s server version
-
-	serverVersion, err := testData.clientset.Discovery().ServerVersion()
-	if err != nil {
-		return err
-	}
-	clusterInfo.k8sServerVersion = serverVersion.String()
 
 	// Retrieve kubernetes Service host and Port
 	svc, err := testData.clientset.CoreV1().Services("default").Get(context.TODO(), "kubernetes", metav1.GetOptions{})
