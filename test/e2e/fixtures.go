@@ -49,6 +49,12 @@ func skipIfAntreaIPAMTest(tb testing.TB) {
 	}
 }
 
+func skipIfNotFlowVisibilityTest(tb testing.TB) {
+	if !testOptions.flowVisibility {
+		tb.Skipf("Skipping when not running flow visibility test")
+	}
+}
+
 func skipIfNamespaceIsNotEqual(tb testing.TB, actualNamespace, expectNamespace string) {
 	if actualNamespace != expectNamespace {
 		tb.Skipf("Skipping test when namespace is not: %s", expectNamespace)
@@ -213,7 +219,7 @@ func setupTest(tb testing.TB) (*TestData, error) {
 	return testData, nil
 }
 
-func setupTestWithIPFIXCollector(tb testing.TB) (*TestData, bool, bool, error) {
+func setupTestForFlowAggregator(tb testing.TB) (*TestData, bool, bool, error) {
 	v4Enabled := clusterInfo.podV4NetworkCIDR != ""
 	v6Enabled := clusterInfo.podV6NetworkCIDR != ""
 	testData, err := setupTest(tb)
@@ -237,17 +243,15 @@ func setupTestWithIPFIXCollector(tb testing.TB) (*TestData, bool, bool, error) {
 	}
 	ipfixCollectorAddr := fmt.Sprintf("%s:tcp", net.JoinHostPort(ipStr, ipfixCollectorPort))
 
-	tb.Logf("Applying flow aggregator YAML with ipfix collector address: %s", ipfixCollectorAddr)
+	tb.Logf("Deploying ClickHouse")
+	chSvcIP, err := testData.deployFlowVisibilityClickHouse()
+	if err != nil {
+		return testData, v4Enabled, v6Enabled, err
+	}
+	tb.Logf("ClickHouse Service created with ClusterIP: %v", chSvcIP)
+	tb.Logf("Applying flow aggregator YAML with ipfix collector: %s and clickHouse enabled",
+		ipfixCollectorAddr)
 	if err := testData.deployFlowAggregator(ipfixCollectorAddr); err != nil {
-		return testData, v4Enabled, v6Enabled, err
-	}
-	tb.Logf("Enabling flow exporter in Antrea Agent")
-	if err = testData.enableAntreaFlowExporter(""); err != nil {
-		return testData, v4Enabled, v6Enabled, err
-	}
-
-	tb.Logf("Checking CoreDNS deployment")
-	if err = testData.checkCoreDNSPods(defaultTimeout); err != nil {
 		return testData, v4Enabled, v6Enabled, err
 	}
 	return testData, v4Enabled, v6Enabled, nil
@@ -323,6 +327,12 @@ func exportLogs(tb testing.TB, data *TestData, logsSubDir string, writeNodeLogs 
 	// dump the logs for flow-aggregator Pods to disk.
 	data.forAllMatchingPodsInNamespace("", flowAggregatorNamespace, writePodLogs)
 
+	// dump the logs for flow-visibility Pods to disk.
+	data.forAllMatchingPodsInNamespace("", flowVisibilityNamespace, writePodLogs)
+
+	// dump the logs for clickhouse operator Pods to disk.
+	data.forAllMatchingPodsInNamespace("app=clickhouse-operator", kubeNamespace, writePodLogs)
+
 	// dump the output of "kubectl describe" for Antrea pods to disk.
 	data.forAllMatchingPodsInNamespace("app=antrea", antreaNamespace, func(nodeName, podName, nsName string) error {
 		w := getPodWriter(nodeName, podName, "describe")
@@ -389,6 +399,14 @@ func teardownFlowAggregator(tb testing.TB, data *TestData) {
 	tb.Logf("Deleting '%s' K8s Namespace", flowAggregatorNamespace)
 	if err := data.DeleteNamespace(flowAggregatorNamespace, defaultTimeout); err != nil {
 		tb.Logf("Error when tearing down flow aggregator: %v", err)
+	}
+
+	tb.Logf("Deleting '%s' K8s Namespace and ClickHouse Operator", flowVisibilityNamespace)
+	if err := data.DeleteNamespace(flowVisibilityNamespace, defaultTimeout); err != nil {
+		tb.Logf("Error when tearing down flow visibility: %v", err)
+	}
+	if err := data.deleteClickHouseOperator(); err != nil {
+		tb.Logf("Error when removing ClickHouse Operator: %v", err)
 	}
 }
 

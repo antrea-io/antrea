@@ -99,6 +99,10 @@ const (
 	antreaIPSecCovYML          string = "antrea-ipsec-coverage.yml"
 	flowAggregatorYML          string = "flow-aggregator.yml"
 	flowAggregatorCovYML       string = "flow-aggregator-coverage.yml"
+	flowVisibilityYML          string = "flow-visibility.yml"
+	chOperatorYML              string = "clickhouse-operator-install-bundle.yml"
+	flowVisibilityCHPodName    string = "chi-clickhouse-clickhouse-0-0-0"
+	flowVisibilityNamespace    string = "flow-visibility"
 	defaultBridgeName          string = "br-int"
 	monitoringNamespace        string = "monitoring"
 
@@ -123,6 +127,7 @@ const (
 	perftoolImage       = "projects.registry.vmware.com/antrea/perftool"
 	ipfixCollectorImage = "projects.registry.vmware.com/antrea/ipfix-collector:v0.5.12"
 	ipfixCollectorPort  = "4739"
+	clickHouseHTTPPort  = "8123"
 
 	nginxLBService = "nginx-loadbalancer"
 
@@ -131,6 +136,7 @@ const (
 	exporterIdleFlowExportTimeout       = 1 * time.Second
 	aggregatorActiveFlowRecordTimeout   = 3500 * time.Millisecond
 	aggregatorInactiveFlowRecordTimeout = 6 * time.Second
+	aggregatorClickHouseCommitInterval  = 1 * time.Second
 
 	statefulSetRestartAnnotationKey = "antrea-e2e/restartedAt"
 )
@@ -181,6 +187,7 @@ type TestOptions struct {
 	withBench           bool
 	enableCoverage      bool
 	enableAntreaIPAM    bool
+	flowVisibility      bool
 	coverageDir         string
 	skipCases           string
 }
@@ -705,14 +712,69 @@ func (data *TestData) enableAntreaFlowExporter(ipfixCollector string) error {
 	return data.mutateAntreaConfigMap(nil, ac, false, true)
 }
 
-func (data *TestData) disableAntreaFlowExporter() error {
-	ac := func(config *agentconfig.AgentConfig) {
-		config.FeatureGates["FlowExporter"] = false
+// deployFlowVisibilityClickHouse deploys ClickHouse operator and DB.
+func (data *TestData) deployFlowVisibilityClickHouse() (string, error) {
+	err := data.CreateNamespace(flowVisibilityNamespace, nil)
+	if err != nil {
+		return "", err
 	}
-	return data.mutateAntreaConfigMap(nil, ac, false, true)
+
+	rc, _, _, err := data.provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl apply -f %s", chOperatorYML))
+	if err != nil || rc != 0 {
+		return "", fmt.Errorf("error when deploying the ClickHouse Operator YML; %s not available on the control-plane Node", chOperatorYML)
+	}
+	if err := wait.Poll(2*time.Second, 10*time.Second, func() (bool, error) {
+		rc, stdout, stderr, err := data.provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl apply -f %s", flowVisibilityYML))
+		if err != nil || rc != 0 {
+			// ClickHouseInstallation CRD from ClickHouse Operator install bundle applied soon before
+			// applying CR. Sometimes apiserver validation fails to recognize resource of
+			// kind: ClickHouseInstallation. Retry in such scenario.
+			if strings.Contains(stderr, "ClickHouseInstallation") || strings.Contains(stdout, "ClickHouseInstallation") {
+				return false, nil
+			}
+			return false, fmt.Errorf("error when deploying the flow visibility YML %s: %s, %s, %v", flowVisibilityYML, stdout, stderr, err)
+		}
+		return true, nil
+	}); err != nil {
+		return "", err
+	}
+
+	// check for clickhouse pod Ready. Wait for 2x timeout as ch operator needs to be running first to handle chi
+	if err = data.podWaitForReady(2*defaultTimeout, flowVisibilityCHPodName, flowVisibilityNamespace); err != nil {
+		return "", err
+	}
+
+	// check clickhouse service http port for service connectivity
+	chSvc, err := data.GetService("flow-visibility", "clickhouse-clickhouse")
+	if err != nil {
+		return "", err
+	}
+	if err := wait.PollImmediate(defaultInterval, defaultTimeout, func() (bool, error) {
+		rc, stdout, stderr, err := testData.RunCommandOnNode(controlPlaneNodeName(),
+			fmt.Sprintf("curl -Ss %s:%s", chSvc.Spec.ClusterIP, clickHouseHTTPPort))
+		if rc != 0 || err != nil {
+			log.Infof("Failed to curl clickhouse Service: %s", strings.Trim(stderr, "\n"))
+			return false, nil
+		} else {
+			log.Infof("Successfully curl'ed clickhouse Service: %s", strings.Trim(stdout, "\n"))
+			return true, nil
+		}
+	}); err != nil {
+		return "", fmt.Errorf("timeout checking http port connectivity of clickhouse service: %v", err)
+	}
+
+	return chSvc.Spec.ClusterIP, nil
 }
 
-// deployFlowAggregator deploys the Flow Aggregator with ipfix collector address.
+func (data *TestData) deleteClickHouseOperator() error {
+	rc, _, _, err := data.provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl delete -f %s -n kube-system", chOperatorYML))
+	if err != nil || rc != 0 {
+		return fmt.Errorf("error when deleting ClickHouse operator: %v", err)
+	}
+	return nil
+}
+
+// deployFlowAggregator deploys the Flow Aggregator with ipfix collector and clickHouse address.
 func (data *TestData) deployFlowAggregator(ipfixCollector string) error {
 	flowAggYaml := flowAggregatorYML
 	if testOptions.enableCoverage {
@@ -722,11 +784,7 @@ func (data *TestData) deployFlowAggregator(ipfixCollector string) error {
 	if err != nil || rc != 0 {
 		return fmt.Errorf("error when deploying the Flow Aggregator; %s not available on the control-plane Node", flowAggYaml)
 	}
-	svc, err := data.clientset.CoreV1().Services(flowAggregatorNamespace).Get(context.TODO(), flowAggregatorDeployment, metav1.GetOptions{})
-	if err != nil {
-		return fmt.Errorf("unable to get service %v: %v", flowAggregatorDeployment, err)
-	}
-	if err = data.mutateFlowAggregatorConfigMap(ipfixCollector, svc.Spec.ClusterIP); err != nil {
+	if err = data.mutateFlowAggregatorConfigMap(ipfixCollector); err != nil {
 		return err
 	}
 	if rc, _, _, err = data.provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl -n %s rollout status deployment/%s --timeout=%v", flowAggregatorNamespace, flowAggregatorDeployment, 2*defaultTimeout)); err != nil || rc != 0 {
@@ -734,10 +792,18 @@ func (data *TestData) deployFlowAggregator(ipfixCollector string) error {
 		_, logStdout, _, _ := data.provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl -n %s logs -l app=flow-aggregator", flowAggregatorNamespace))
 		return fmt.Errorf("error when waiting for the Flow Aggregator rollout to complete. kubectl describe output: %s, logs: %s", stdout, logStdout)
 	}
+	// Check for flow-aggregator Pod running again for db connection establishment
+	flowAggPod, err := data.getFlowAggregator()
+	if err != nil {
+		return fmt.Errorf("error when getting flow-aggregator Pod: %v", err)
+	}
+	if err = data.podWaitForReady(2*defaultTimeout, flowAggPod.Name, flowAggregatorNamespace); err != nil {
+		return err
+	}
 	return nil
 }
 
-func (data *TestData) mutateFlowAggregatorConfigMap(ipfixCollector string, faClusterIP string) error {
+func (data *TestData) mutateFlowAggregatorConfigMap(ipfixCollectorAddr string) error {
 	configMap, err := data.GetFlowAggregatorConfigMap()
 	if err != nil {
 		return err
@@ -750,7 +816,11 @@ func (data *TestData) mutateFlowAggregatorConfigMap(ipfixCollector string, faClu
 
 	flowAggregatorConf.FlowCollector = flowaggregatorconfig.FlowCollectorConfig{
 		Enable:  true,
-		Address: ipfixCollector,
+		Address: ipfixCollectorAddr,
+	}
+	flowAggregatorConf.ClickHouse = flowaggregatorconfig.ClickHouseConfig{
+		Enable:         true,
+		CommitInterval: aggregatorClickHouseCommitInterval.String(),
 	}
 	flowAggregatorConf.ActiveFlowRecordTimeout = aggregatorActiveFlowRecordTimeout.String()
 	flowAggregatorConf.InactiveFlowRecordTimeout = aggregatorInactiveFlowRecordTimeout.String()
@@ -1197,6 +1267,20 @@ func (data *TestData) PodWaitFor(timeout time.Duration, name, namespace string, 
 func (data *TestData) podWaitForRunning(timeout time.Duration, name, namespace string) error {
 	_, err := data.PodWaitFor(timeout, name, namespace, func(pod *corev1.Pod) (bool, error) {
 		return pod.Status.Phase == corev1.PodRunning, nil
+	})
+	return err
+}
+
+// podWaitForReady polls the k8s apiserver until the specified Pod is in the "Ready" status (or
+// until the provided timeout expires).
+func (data *TestData) podWaitForReady(timeout time.Duration, name, namespace string) error {
+	_, err := data.PodWaitFor(timeout, name, namespace, func(p *corev1.Pod) (bool, error) {
+		for _, condition := range p.Status.Conditions {
+			if condition.Type == corev1.PodReady {
+				return condition.Status == corev1.ConditionTrue, nil
+			}
+		}
+		return false, nil
 	})
 	return err
 }

@@ -166,10 +166,10 @@ CH_OPERATOR_INSTALL_BUNDLE_YML=$THIS_DIR/../../../../build/yamls/clickhouse-oper
 FLOW_VIS_YML="/tmp/flow-visibility.yml"
 
 # If a flow collector address is also provided, we update the Antrea
-# manifest (to enable all features)
+# manifest to enable FlowExporter.
 if [[ $FLOW_COLLECTOR != "" ]]; then
-    echo "Generating manifest with all features enabled along with FlowExporter feature"
-    $THIS_DIR/../../../../hack/generate-manifest.sh --mode dev --all-features > "${ANTREA_YML}"
+    echo "Generating manifest with FlowExporter enabled"
+    $THIS_DIR/../../../../hack/generate-manifest.sh --mode dev --flow-exporter > "${ANTREA_YML}"
 fi
 
 # Push Antrea image and related manifest.
