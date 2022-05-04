@@ -30,6 +30,7 @@ Generate a YAML manifest for Antrea using Helm and print it to stdout.
         --no-proxy                    Generate a manifest with Antrea proxy disabled
         --proxy-all                   Generate a manifest with Antrea proxy with all Service support enabled
         --endpointslice               Generate a manifest with EndpointSlice support enabled
+        --flow-exporter               Generate a manifest with FlowExporter support enabled
         --no-np                       Generate a manifest with Antrea-native policies disabled
         --tun (geneve|vxlan|gre|stt)  Choose encap tunnel type from geneve, gre, stt and vxlan (default is geneve)
         --verbose-log                 Generate a manifest with increased log-level (level 4) for Antrea agent and controller.
@@ -46,6 +47,7 @@ Generate a YAML manifest for Antrea using Helm and print it to stdout.
         --help, -h                    Print this message and exit
         --multicast                   Generates a manifest for multicast.
         --multicast-interfaces        Multicast interface names (default is empty)
+        --extra-helm-values-file      Optional extra helm values file to override the default config values
 
 In 'release' mode, environment variables IMG_NAME and IMG_TAG must be set.
 
@@ -70,6 +72,7 @@ ALLFEATURES=false
 PROXY=true
 PROXY_ALL=false
 ENDPOINTSLICE=false
+FLOW_EXPORTER=false
 NP=true
 KEEP=false
 ENCAP_MODE=""
@@ -87,6 +90,7 @@ WHEREABOUTS=false
 FLEXIBLE_IPAM=false
 MULTICAST=false
 MULTICAST_INTERFACES=""
+HELM_VALUES_FILES=()
 
 while [[ $# -gt 0 ]]
 do
@@ -129,6 +133,10 @@ case $key in
     --endpointslice)
     PROXY=true
     ENDPOINTSLICE=true
+    shift
+    ;;
+    --flow-exporter)
+    FLOW_EXPORTER=true
     shift
     ;;
     --no-np)
@@ -191,6 +199,14 @@ case $key in
     ;;
     --multicast-interfaces)
     MULTICAST_INTERFACES="$2"
+    shift 2
+    ;;
+    --extra-helm-values-file)
+    if [[ ! -f "$2" ]]; then
+        echoerr "Helm values file $2 does not exist."
+        exit 1
+    fi
+    HELM_VALUES_FILES=("$2")
     shift 2
     ;;
     -h|--help)
@@ -281,7 +297,6 @@ fi
 
 TMP_DIR=$(mktemp -d $THIS_DIR/../build/yamls/chart-values.XXXXXXXX)
 HELM_VALUES=()
-HELM_VALUES_FILES=()
 
 if $IPSEC; then
     HELM_VALUES+=("trafficEncryptionMode=ipsec" "tunnelType=gre")
@@ -309,6 +324,10 @@ fi
 
 if $ENDPOINTSLICE; then
     HELM_VALUES+=("featureGates.EndpointSlice=true")
+fi
+
+if $FLOW_EXPORTER; then
+    HELM_VALUES+=("featureGates.FlowExporter=true")
 fi
 
 if ! $NP; then

@@ -81,6 +81,7 @@ func testMain(m *testing.M) int {
 	flag.BoolVar(&testOptions.withBench, "benchtest", false, "Run tests include benchmark tests")
 	flag.BoolVar(&testOptions.enableCoverage, "coverage", false, "Run tests and measure coverage")
 	flag.BoolVar(&testOptions.enableAntreaIPAM, "antrea-ipam", false, "Run tests with AntreaIPAM")
+	flag.BoolVar(&testOptions.flowVisibility, "flow-visibility", false, "Run flow visibility tests")
 	flag.StringVar(&testOptions.coverageDir, "coverage-dir", "", "Directory for coverage data files")
 	flag.StringVar(&testOptions.skipCases, "skip", "", "Key words to skip cases")
 	flag.Parse()
