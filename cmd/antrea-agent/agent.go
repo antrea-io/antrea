@@ -353,13 +353,6 @@ func run(o *Options) error {
 		return fmt.Errorf("error creating new NetworkPolicy controller: %v", err)
 	}
 
-	// statsCollector collects stats and reports to the antrea-controller periodically. For now it's only used for
-	// NetworkPolicy stats.
-	var statsCollector *stats.Collector
-	if features.DefaultFeatureGate.Enabled(features.NetworkPolicyStats) {
-		statsCollector = stats.NewCollector(antreaClientProvider, ofClient, networkPolicyController)
-	}
-
 	var egressController *egress.EgressController
 
 	var externalIPPoolController *externalippool.ExternalIPPoolController
@@ -616,10 +609,6 @@ func run(o *Options) error {
 		go externalIPController.Run(stopCh)
 	}
 
-	if features.DefaultFeatureGate.Enabled(features.NetworkPolicyStats) {
-		go statsCollector.Run(stopCh)
-	}
-
 	if features.DefaultFeatureGate.Enabled(features.Traceflow) {
 		go traceflowController.Run(stopCh)
 	}
@@ -641,7 +630,7 @@ func run(o *Options) error {
 			klog.InfoS("AntreaProxy is ready")
 		}
 	}
-
+	var mcastController *multicast.Controller
 	if multicastEnabled {
 		multicastSocket, err := multicast.CreateMulticastSocket()
 		if err != nil {
@@ -651,7 +640,7 @@ func run(o *Options) error {
 		if antreaPolicyEnabled {
 			validator = networkPolicyController
 		}
-		mcastController := multicast.NewMulticastController(
+		mcastController = multicast.NewMulticastController(
 			ofClient,
 			v4GroupIDAllocator,
 			nodeConfig,
@@ -673,6 +662,12 @@ func run(o *Options) error {
 		go mcRouteController.Run(stopCh)
 	}
 
+	// statsCollector collects stats and reports to the antrea-controller periodically. For now it's only used for
+	// NetworkPolicy stats and Multicast stats.
+	if features.DefaultFeatureGate.Enabled(features.NetworkPolicyStats) {
+		statsCollector := stats.NewCollector(antreaClientProvider, ofClient, networkPolicyController, mcastController)
+		go statsCollector.Run(stopCh)
+	}
 	agentQuerier := querier.NewAgentQuerier(
 		nodeConfig,
 		networkConfig,
@@ -695,6 +690,7 @@ func run(o *Options) error {
 	apiServer, err := apiserver.New(
 		agentQuerier,
 		networkPolicyController,
+		mcastController,
 		externalIPController,
 		o.config.APIPort,
 		*o.config.EnablePrometheusMetrics,

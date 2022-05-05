@@ -58,7 +58,7 @@ func getPodIPs(ips []net.IP) []string {
 	return ipStrs
 }
 
-// HandleFunc returns the function which can handle queries issued by the pod-interface command,
+// HandleFunc returns the function which can handle queries issued by the pod-interface command.
 func HandleFunc(aq querier.AgentQuerier) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		name := r.URL.Query().Get("name")

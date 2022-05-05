@@ -16,6 +16,7 @@ package openflow
 
 import (
 	"fmt"
+	"net"
 	"sync"
 
 	"k8s.io/klog/v2"
@@ -97,6 +98,41 @@ func (f *featureMulticast) multicastOutputFlow(cookieID uint64) binding.Flow {
 		MatchRegMark(OFPortFoundRegMark).
 		Action().OutputToRegField(TargetOFPortField).
 		Done()
+}
+
+func (f *featureMulticast) multicastSkipIGMPMetricFlows() []binding.Flow {
+	cookieID := f.cookieAllocator.Request(f.category).Raw()
+	flows := make([]binding.Flow, 0, 2)
+	for _, t := range []*Table{MulticastIngressPodMetricTable, MulticastEgressPodMetricTable} {
+		flows = append(flows, t.ofTable.BuildFlow(priorityHigh).
+			Cookie(cookieID).
+			MatchProtocol(binding.ProtocolIGMP).
+			Action().NextTable().
+			Done())
+	}
+	return flows
+}
+
+func (f *featureMulticast) multicastPodMetricFlows(podIP net.IP, podOFPort uint32) []binding.Flow {
+	ipProtocol := getIPProtocol(podIP)
+	return []binding.Flow{
+		// Generates the flows to forward multicast egress packets before outputting to MulticastOutputTable.
+		// It matches source IP with IP of the local sender Pod.
+		MulticastEgressPodMetricTable.ofTable.BuildFlow(priorityNormal).
+			Cookie(f.cookieAllocator.Request(f.category).Raw()).
+			MatchProtocol(ipProtocol).
+			MatchSrcIP(podIP).
+			Action().NextTable().
+			Done(),
+		// Generates the flows to collect multicast ingress packets metrics before outputting to MulticastOutputTable.
+		// It matches TargetOFPortField with the OFPort of a multicast receiver Pod.
+		MulticastIngressPodMetricTable.ofTable.BuildFlow(priorityNormal).
+			Cookie(f.cookieAllocator.Request(f.category).Raw()).
+			MatchProtocol(binding.ProtocolIP).
+			MatchRegFieldWithValue(TargetOFPortField, podOFPort).
+			Action().NextTable().
+			Done(),
+	}
 }
 
 func (f *featureMulticast) replayGroups() {

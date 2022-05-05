@@ -19,6 +19,7 @@ import (
 	"reflect"
 
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/agentinfo"
+	"antrea.io/antrea/pkg/agent/apiserver/handlers/multicast"
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/ovsflows"
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/podinterface"
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/serviceexternalip"
@@ -80,6 +81,36 @@ var CommandList = &commandList{
 				requestErrorFallback: fallbackversion.RequestErrorFallback,
 			},
 			transformedResponse: reflect.TypeOf(version.Response{}),
+		},
+		{
+			use:   "podmulticaststats",
+			short: "Show multicast statistics",
+			long:  "Show multicast traffic statistics of Pods",
+			example: `  Show multicast traffic statistics of all local Pods on the Node
+$ antctl get podmulticaststats
+Show multicast traffic statistics of a given Pod
+$ antctl get podmulticaststats pod -n namespace`,
+			commandGroup: get,
+			agentEndpoint: &endpoint{
+				nonResourceEndpoint: &nonResourceEndpoint{
+					path:       "/podmulticaststats",
+					outputType: multiple,
+					params: []flagInfo{
+						{
+							name:  "name",
+							usage: "Retrieve Pod Multicast Statistics by name. If present, Namespace must be provided.",
+							arg:   true,
+						},
+						{
+							name:      "namespace",
+							usage:     "Get Pod Multicast Statistics from specific Namespace.",
+							shorthand: "n",
+						},
+					},
+				},
+			},
+
+			transformedResponse: reflect.TypeOf(multicast.Response{}),
 		},
 		{
 			use:   "log-level",

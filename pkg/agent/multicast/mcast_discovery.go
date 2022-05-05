@@ -18,17 +18,20 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"sync"
 	"time"
 
 	"antrea.io/libOpenflow/openflow13"
 	"antrea.io/libOpenflow/protocol"
 	"antrea.io/libOpenflow/util"
 	"antrea.io/ofnet/ofctrl"
+	apitypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/openflow"
 	"antrea.io/antrea/pkg/agent/types"
+	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
 )
 
@@ -49,8 +52,16 @@ type IGMPSnooper struct {
 	ofClient      openflow.Client
 	ifaceStore    interfacestore.InterfaceStore
 	eventCh       chan *mcastGroupEvent
-	queryInterval time.Duration
 	validator     types.MulticastValidator
+	queryInterval time.Duration
+	// igmpReportANPStats is a map that saves AntreaNetworkPolicyStats of IGMP report packets.
+	// The map can be interpreted as
+	// map[UID of the AntreaNetworkPolicy]map[name of AntreaNetworkPolicy rule]statistics of rule.
+	igmpReportANPStats      map[apitypes.UID]map[string]*types.RuleMetric
+	igmpReportANPStatsMutex sync.Mutex
+	// Similar to igmpReportANPStats, it stores ACNP stats for IGMP reports.
+	igmpReportACNPStats      map[apitypes.UID]map[string]*types.RuleMetric
+	igmpReportACNPStatsMutex sync.Mutex
 }
 
 func (s *IGMPSnooper) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
@@ -111,7 +122,7 @@ func (s *IGMPSnooper) queryIGMP(group net.IP, versions []uint8) error {
 	return nil
 }
 
-func (s *IGMPSnooper) validate(event *mcastGroupEvent, igmpType uint8) (bool, error) {
+func (s *IGMPSnooper) validate(event *mcastGroupEvent, igmpType uint8, packetInData protocol.Ethernet) (bool, error) {
 	if s.validator == nil {
 		// Return true directly if there is no validator.
 		return true, nil
@@ -126,15 +137,18 @@ func (s *IGMPSnooper) validate(event *mcastGroupEvent, igmpType uint8) (bool, er
 		klog.ErrorS(err, "Failed to validate multicast group event")
 		return false, err
 	}
-	klog.V(2).InfoS("Got NetworkPolicy action for IGMP query", "RuleAction", item.RuleAction, "uuid", item.UUID, "Name", item.Name)
+	klog.V(2).InfoS("Got NetworkPolicy action for IGMP report", "RuleAction", item.RuleAction, "uuid", item.UUID, "Name", item.Name)
+	if item.NPType != nil {
+		s.addToIGMPReportNPStatsMap(item, uint64(packetInData.Len()))
+	}
 	if item.RuleAction == v1alpha1.RuleActionDrop {
 		return false, nil
 	}
 	return true, nil
 }
 
-func (s *IGMPSnooper) validatePacketAndNotify(event *mcastGroupEvent, igmpType uint8) {
-	allow, err := s.validate(event, igmpType)
+func (s *IGMPSnooper) validatePacketAndNotify(event *mcastGroupEvent, igmpType uint8, packetInData protocol.Ethernet) {
+	allow, err := s.validate(event, igmpType, packetInData)
 	if err != nil {
 		// Antrea Agent does not remove the Pod from the OpenFlow group bucket immediately when an error is returned,
 		// but it will be removed when after timeout (Controller.mcastGroupTimeout)
@@ -146,6 +160,43 @@ func (s *IGMPSnooper) validatePacketAndNotify(event *mcastGroupEvent, igmpType u
 		event.eType = groupLeave
 	}
 	s.eventCh <- event
+}
+
+func (s *IGMPSnooper) addToIGMPReportNPStatsMap(item types.McastNPValidationItem, packetLen uint64) {
+	updateRuleStats := func(igmpReportStatsMap map[apitypes.UID]map[string]*types.RuleMetric, uuid apitypes.UID, name string) {
+		if igmpReportStatsMap[uuid] == nil {
+			igmpReportStatsMap[uuid] = make(map[string]*types.RuleMetric)
+		}
+		if igmpReportStatsMap[uuid][name] == nil {
+			igmpReportStatsMap[uuid][name] = &types.RuleMetric{}
+		}
+		t := igmpReportStatsMap[uuid][name]
+		t.Packets += 1
+		t.Bytes += packetLen
+	}
+	ruleType := *item.NPType
+	if ruleType == v1beta2.AntreaNetworkPolicy {
+		s.igmpReportANPStatsMutex.Lock()
+		updateRuleStats(s.igmpReportANPStats, item.UUID, item.Name)
+		s.igmpReportANPStatsMutex.Unlock()
+	} else if ruleType == v1beta2.AntreaClusterNetworkPolicy {
+		s.igmpReportACNPStatsMutex.Lock()
+		updateRuleStats(s.igmpReportACNPStats, item.UUID, item.Name)
+		s.igmpReportACNPStatsMutex.Unlock()
+	}
+}
+
+// WARNING: This func will reset the saved stats.
+func (s *IGMPSnooper) collectStats() (igmpANPStats, igmpACNPStats map[apitypes.UID]map[string]*types.RuleMetric) {
+	s.igmpReportANPStatsMutex.Lock()
+	igmpANPStats = s.igmpReportANPStats
+	s.igmpReportANPStats = make(map[apitypes.UID]map[string]*types.RuleMetric)
+	s.igmpReportANPStatsMutex.Unlock()
+	s.igmpReportACNPStatsMutex.Lock()
+	igmpACNPStats = s.igmpReportACNPStats
+	s.igmpReportACNPStats = make(map[apitypes.UID]map[string]*types.RuleMetric)
+	s.igmpReportACNPStatsMutex.Unlock()
+	return igmpANPStats, igmpACNPStats
 }
 
 func (s *IGMPSnooper) processPacketIn(pktIn *ofctrl.PacketIn) error {
@@ -176,7 +227,7 @@ func (s *IGMPSnooper) processPacketIn(pktIn *ofctrl.PacketIn) error {
 			time:  now,
 			iface: iface,
 		}
-		s.validatePacketAndNotify(event, igmpType)
+		s.validatePacketAndNotify(event, igmpType, pktIn.Data)
 	case protocol.IGMPv3Report:
 		msg := igmp.(*protocol.IGMPv3MembershipReport)
 		for _, gr := range msg.GroupRecords {
@@ -192,9 +243,8 @@ func (s *IGMPSnooper) processPacketIn(pktIn *ofctrl.PacketIn) error {
 				time:  now,
 				iface: iface,
 			}
-			s.validatePacketAndNotify(event, igmpType)
+			s.validatePacketAndNotify(event, igmpType, pktIn.Data)
 		}
-
 	case protocol.IGMPv2LeaveGroup:
 		mgroup := igmp.(*protocol.IGMPv1or2).GroupAddress
 		klog.V(2).InfoS("Received IGMPv2 Leave message", "group", mgroup.String(), "interface", iface.InterfaceName, "pod", podName)
@@ -280,8 +330,10 @@ func parseIGMPPacket(pkt protocol.Ethernet) (protocol.IGMPMessage, error) {
 	}
 }
 
-func newSnooper(ofClient openflow.Client, ifaceStore interfacestore.InterfaceStore, eventCh chan *mcastGroupEvent, queryInterval time.Duration, validator types.MulticastValidator) *IGMPSnooper {
-	d := &IGMPSnooper{ofClient: ofClient, ifaceStore: ifaceStore, eventCh: eventCh, queryInterval: queryInterval, validator: validator}
-	ofClient.RegisterPacketInHandler(uint8(openflow.PacketInReasonMC), "MulticastGroupDiscovery", d)
-	return d
+func newSnooper(ofClient openflow.Client, ifaceStore interfacestore.InterfaceStore, eventCh chan *mcastGroupEvent, queryInterval time.Duration, multicastValidator types.MulticastValidator) *IGMPSnooper {
+	snooper := &IGMPSnooper{ofClient: ofClient, ifaceStore: ifaceStore, eventCh: eventCh, validator: multicastValidator, queryInterval: queryInterval}
+	snooper.igmpReportACNPStats = make(map[apitypes.UID]map[string]*types.RuleMetric)
+	snooper.igmpReportANPStats = make(map[apitypes.UID]map[string]*types.RuleMetric)
+	ofClient.RegisterPacketInHandler(uint8(openflow.PacketInReasonMC), "MulticastGroupDiscovery", snooper)
+	return snooper
 }

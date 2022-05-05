@@ -1697,27 +1697,54 @@ func (c *client) ReassignFlowPriorities(updates map[uint16]uint16, table uint8) 
 	return nil
 }
 
-func parseDropFlow(flowMap map[string]string) (uint32, types.RuleMetric) {
+func parseMulticastIngressPodFlow(flowMap map[string]string) (uint32, types.RuleMetric) {
+	m := parseFlowMetric(flowMap)
+	reg1 := flowMap["reg1"]
+	id, _ := strconv.ParseUint(reg1, 0, 32)
+	return uint32(id), m
+}
+
+func parseMulticastEgressPodFlow(flowMap map[string]string) (string, types.RuleMetric) {
+	m := parseFlowMetric(flowMap)
+	nwSrc := flowMap["nw_src"]
+	return nwSrc, m
+}
+
+func parseMulticastMetricFlow(flowMap map[string]string) (uint32, types.RuleMetric) {
+	// example MulticastEgressMetric allow flow format:
+	// table=MulticastEgressMetric, n_packets=11, n_bytes=1562, priority=200,reg0=0x400/0x400,reg3=0x4 actions=goto_table:MulticastEgressPodMetric
+	// example MulticastEgressMetric drop flow format:
+	// table=MulticastEgressMetric, n_packets=230, n_bytes=32660, priority=200,reg0=0x400/0x400,reg3=0x3 actions=drop
+	// example MulticastIngressMetric allow flow format:
+	// table=MulticastIngressMetric, n_packets=18, n_bytes=780, priority=200,reg0=0x400/0x400,reg3=0x3 actions=resubmit(,MulticastOutput)
+	m := parseFlowMetric(flowMap)
+	conjID := flowMap["reg3"]
+	id, _ := strconv.ParseUint(conjID, 0, 32)
+	return uint32(id), m
+}
+
+func parseFlowMetric(flowMap map[string]string) types.RuleMetric {
 	m := types.RuleMetric{}
 	pkts, _ := strconv.ParseUint(flowMap["n_packets"], 10, 64)
 	m.Packets = pkts
-	m.Sessions = pkts
 	bytes, _ := strconv.ParseUint(flowMap["n_bytes"], 10, 64)
 	m.Bytes = bytes
+	return m
+}
+
+func parseDropFlow(flowMap map[string]string) (uint32, types.RuleMetric) {
+	m := parseFlowMetric(flowMap)
+	m.Sessions = m.Packets
 	reg3 := flowMap["reg3"]
-	id, _ := strconv.ParseUint(reg3[:strings.Index(reg3, " ")], 0, 32)
+	id, _ := strconv.ParseUint(reg3, 0, 32)
 	return uint32(id), m
 }
 
 func parseAllowFlow(flowMap map[string]string) (uint32, types.RuleMetric) {
-	m := types.RuleMetric{}
-	pkts, _ := strconv.ParseUint(flowMap["n_packets"], 10, 64)
-	m.Packets = pkts
+	m := parseFlowMetric(flowMap)
 	if strings.Contains(flowMap["ct_state"], "+") { // ct_state=+new
-		m.Sessions = pkts
+		m.Sessions = m.Packets
 	}
-	bytes, _ := strconv.ParseUint(flowMap["n_bytes"], 10, 64)
-	m.Bytes = bytes
 	ct_label := flowMap["ct_label"]
 	idRaw := ct_label[strings.Index(ct_label, "0x")+2 : strings.Index(ct_label, "/")]
 	if len(idRaw) > 8 { // only 32 bits are valid.
@@ -1736,14 +1763,21 @@ func parseFlowToMap(flow string) map[string]string {
 		if equalIndex == -1 {
 			continue
 		}
-		flowMap[strings.TrimSpace(seg[:equalIndex])] = strings.TrimSpace(seg[equalIndex+1:])
+		key := strings.TrimSpace(seg[:equalIndex])
+		value := strings.TrimSpace(seg[equalIndex+1:])
+		// There is space not comma before actions, which causes troubles when parsing value, example:
+		// table=MulticastEgressRule, ...,conj_id=2 actions=load:0x2->NXM_NX_REG5[],load...
+		actionIndex := strings.Index(value, "actions")
+		if actionIndex != -1 {
+			value = value[:actionIndex-1]
+		}
+		flowMap[key] = value
 	}
 	return flowMap
 }
 
-func parseMetricFlow(flow string) (uint32, types.RuleMetric) {
+func parseMetricFlow(flowMap map[string]string) (uint32, types.RuleMetric) {
 	dropIdentifier := "reg0"
-	flowMap := parseFlowToMap(flow)
 	// example allow flow format:
 	// table=101, n_packets=0, n_bytes=0, priority=200,ct_state=-new,ct_label=0x1/0xffffffff,ip actions=goto_table:105
 	// example drop flow format:
@@ -1754,18 +1788,68 @@ func parseMetricFlow(flow string) (uint32, types.RuleMetric) {
 	return parseAllowFlow(flowMap)
 }
 
+func (c *client) MulticastIngressPodMetrics() map[uint32]*types.RuleMetric {
+	result := map[uint32]*types.RuleMetric{}
+	ingressFlows, _ := c.ovsctlClient.DumpTableFlows(MulticastIngressPodMetricTable.ofTable.GetID())
+	for _, flow := range ingressFlows {
+		if !strings.Contains(flow, metricFlowIdentifier) {
+			continue
+		}
+		flowMap := parseFlowToMap(flow)
+		ofPort, metric := parseMulticastIngressPodFlow(flowMap)
+		result[ofPort] = &metric
+	}
+	return result
+}
+
+func (c *client) MulticastIngressPodMetricsByOFPort(ofPort int32) *types.RuleMetric {
+	table := MulticastIngressPodMetricTable.ofTable.GetID()
+	reg1 := ofPort
+	flow, _ := c.ovsctlClient.DumpMatchedFlow(fmt.Sprintf("table=%d,ip,reg1=%d", table, reg1))
+	if len(flow) == 0 {
+		return &types.RuleMetric{}
+	}
+	flowMap := parseFlowToMap(flow)
+	metric := parseFlowMetric(flowMap)
+	return &metric
+}
+
+func (c *client) MulticastEgressPodMetrics() map[string]*types.RuleMetric {
+	result := map[string]*types.RuleMetric{}
+	ingressFlows, _ := c.ovsctlClient.DumpTableFlows(MulticastEgressPodMetricTable.ofTable.GetID())
+	for _, flow := range ingressFlows {
+		if !strings.Contains(flow, metricFlowIdentifier) {
+			continue
+		}
+		flowMap := parseFlowToMap(flow)
+		srcIP, metric := parseMulticastEgressPodFlow(flowMap)
+		result[srcIP] = &metric
+	}
+	return result
+}
+
+func (c *client) MulticastEgressPodMetricsByIP(ip net.IP) *types.RuleMetric {
+	table := MulticastEgressPodMetricTable.ofTable.GetID()
+	nwSrc := ip.String()
+	flow, _ := c.ovsctlClient.DumpMatchedFlow(fmt.Sprintf("table=%d,ip,nw_src=%s,nw_dst=224.0.0.0/4", table, nwSrc))
+	if len(flow) == 0 {
+		return &types.RuleMetric{}
+	}
+	flowMap := parseFlowToMap(flow)
+	metric := parseFlowMetric(flowMap)
+	return &metric
+}
+
 func (c *client) NetworkPolicyMetrics() map[uint32]*types.RuleMetric {
 	result := map[uint32]*types.RuleMetric{}
-	egressFlows, _ := c.ovsctlClient.DumpTableFlows(EgressMetricTable.ofTable.GetID())
-	ingressFlows, _ := c.ovsctlClient.DumpTableFlows(IngressMetricTable.ofTable.GetID())
-
-	collectMetricsFromFlows := func(flows []string) {
-		for _, flow := range flows {
+	collectMetricsFromFlows := func(table *Table, getMetricAndID func(flowMap map[string]string) (uint32, types.RuleMetric)) {
+		dumpedFlows, _ := c.ovsctlClient.DumpTableFlows(table.ofTable.GetID())
+		for _, flow := range dumpedFlows {
 			if !strings.Contains(flow, metricFlowIdentifier) {
 				continue
 			}
-			ruleID, metric := parseMetricFlow(flow)
-
+			flowMap := parseFlowToMap(flow)
+			ruleID, metric := getMetricAndID(flowMap)
 			if accMetric, ok := result[ruleID]; ok {
 				accMetric.Merge(&metric)
 			} else {
@@ -1773,14 +1857,19 @@ func (c *client) NetworkPolicyMetrics() map[uint32]*types.RuleMetric {
 			}
 		}
 	}
+	if c.enableMulticast {
+		// We need to collect NP statistics matching IGMP query messages and egress multicast traffic.
+		collectMetricsFromFlows(MulticastIngressMetricTable, parseMulticastMetricFlow)
+		collectMetricsFromFlows(MulticastEgressMetricTable, parseMulticastMetricFlow)
+	}
 	// We have two flows for each allow rule. One matches 'ct_state=+new'
 	// and counts the number of first packets, which is also the number
 	// of sessions (this is the reason why we have 2 flows). The other
 	// matches 'ct_state=-new' and is used to count all subsequent
 	// packets in the session. We need to merge metrics from these 2
 	// flows to get the correct number of total packets.
-	collectMetricsFromFlows(egressFlows)
-	collectMetricsFromFlows(ingressFlows)
+	collectMetricsFromFlows(EgressMetricTable, parseMetricFlow)
+	collectMetricsFromFlows(IngressMetricTable, parseMetricFlow)
 	return result
 }
 

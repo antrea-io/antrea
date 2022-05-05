@@ -70,7 +70,7 @@ func newFilterFromURLQuery(query url.Values) (*querier.NetworkPolicyQueryFilter,
 	namespace, pod := query.Get("namespace"), query.Get("pod")
 	if pod != "" {
 		if !strings.Contains(pod, "/") {
-			return nil, "", fmt.Errorf("invalid pod option foramt. Expected format is podNamespace/podName")
+			return nil, "", fmt.Errorf("invalid pod option format. Expected format is podNamespace/podName")
 		} else if namespace != "" {
 			return nil, "", fmt.Errorf("namespace option should not be used with pod option")
 		}
