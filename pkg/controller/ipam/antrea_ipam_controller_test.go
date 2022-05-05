@@ -19,6 +19,7 @@ package ipam
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -195,7 +196,7 @@ func TestReleaseStaleAddresses(t *testing.T) {
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 
-	namespace, pool, statefulSet := initTestObjects(true, false, 7)
+	namespace, pool, statefulSet := initTestObjects(true, false, 0)
 
 	activeSetOwner := crdv1a2.StatefulSetOwner{
 		Name:      statefulSet.Name,
@@ -207,16 +208,26 @@ func TestReleaseStaleAddresses(t *testing.T) {
 		Namespace: namespace.Name,
 	}
 
+	stalePodOwner := crdv1a2.PodOwner{
+		Name:      uuid.New().String(),
+		Namespace: namespace.Name,
+	}
+
 	addresses := []crdv1a2.IPAddressState{
 		{IPAddress: "10.2.2.12",
 			Phase: crdv1a2.IPAddressPhaseReserved,
 			Owner: crdv1a2.IPAddressOwner{StatefulSet: &activeSetOwner}},
-		{IPAddress: "20.1.1.100",
+		{IPAddress: "20.2.2.13",
 			Phase: crdv1a2.IPAddressPhaseReserved,
 			Owner: crdv1a2.IPAddressOwner{StatefulSet: &staleSetOwner}},
-		{IPAddress: "20.1.1.200",
+		{IPAddress: "20.2.2.14",
 			Phase: crdv1a2.IPAddressPhaseReserved,
 			Owner: crdv1a2.IPAddressOwner{StatefulSet: &staleSetOwner}},
+		{IPAddress: "20.2.2.15",
+			Phase: crdv1a2.IPAddressPhaseAllocated,
+			Owner: crdv1a2.IPAddressOwner{StatefulSet: &activeSetOwner,
+				Pod: &stalePodOwner},
+		},
 	}
 
 	pool.Status = crdv1a2.IPPoolStatus{
@@ -239,6 +250,26 @@ func TestReleaseStaleAddresses(t *testing.T) {
 
 	go controller.Run(stopCh)
 
-	// after cleanup pool should have single entry
-	verifyPoolAllocatedSize(t, pool.Name, poolLister, 1)
+	// verify two stale entries were deleted, one updated to Reserved status
+	err := wait.PollImmediate(100*time.Millisecond, 2*time.Second, func() (bool, error) {
+		pool, err := poolLister.Get(pool.Name)
+		if err != nil {
+			return false, nil
+		}
+
+		if len(pool.Status.IPAddresses) != 2 {
+			t.Logf("IP Pool status: %v", pool.Status.IPAddresses)
+			return false, nil
+		}
+
+		for _, addr := range pool.Status.IPAddresses {
+			if addr.Phase != crdv1a2.IPAddressPhaseReserved {
+				return true, fmt.Errorf("Incorrect phase %s after cleanup", addr.Phase)
+			}
+		}
+
+		return true, nil
+	})
+
+	require.NoError(t, err)
 }
