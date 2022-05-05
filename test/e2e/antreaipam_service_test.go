@@ -21,6 +21,9 @@ import (
 )
 
 func TestAntreaIPAMService(t *testing.T) {
+	// TODO(gran): remove this
+	skipIfIPv6Cluster(t)
+
 	skipIfNotAntreaIPAMTest(t)
 
 	data, err := setupTest(t)

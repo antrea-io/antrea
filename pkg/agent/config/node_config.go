@@ -87,6 +87,7 @@ type AdapterNetConfig struct {
 	Index      int
 	MAC        net.HardwareAddr
 	IP         *net.IPNet
+	IPv6       *net.IPNet
 	Gateway    string
 	DNSServers string
 	Routes     []interface{}

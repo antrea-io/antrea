@@ -17,6 +17,7 @@ package ipam
 import (
 	"fmt"
 	"regexp"
+	"strings"
 	"testing"
 	"time"
 
@@ -46,6 +47,7 @@ import (
 var (
 	testApple          = "apple"
 	testOrange         = "orange"
+	testAppleOrange    = "apple-orange"
 	testPear           = "pear"
 	testNoAnnotation   = "empty"
 	testJunkAnnotation = "junk"
@@ -166,6 +168,12 @@ func initTestClients() (*fake.Clientset, *fakepoolclient.IPPoolClientset) {
 		},
 		&corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
+				Name:        testAppleOrange,
+				Annotations: map[string]string{"junk": "garbage", annotations.AntreaIPAMAnnotationKey: fmt.Sprintf("%s,%s", testApple, testOrange)},
+			},
+		},
+		&corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
 				Name:        testPear,
 				Annotations: map[string]string{"junk": "garbage"},
 			},
@@ -214,6 +222,45 @@ func initTestClients() (*fake.Clientset, *fakepoolclient.IPPoolClientset) {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "orange2",
 				Namespace: testOrange,
+			},
+			Spec: corev1.PodSpec{NodeName: "fakeNode"},
+		},
+		&corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "apple-orange1",
+				Namespace: testAppleOrange,
+			},
+			Spec: corev1.PodSpec{NodeName: "fakeNode"},
+		},
+		&corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:        "apple-orange2",
+				Namespace:   testAppleOrange,
+				Annotations: map[string]string{"junk": "garbage", annotations.AntreaIPAMPodIPAnnotationKey: "10.2.2.199,20::1f"},
+			},
+			Spec: corev1.PodSpec{NodeName: "fakeNode"},
+		},
+		&corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:        "apple-orange3",
+				Namespace:   testAppleOrange,
+				Annotations: map[string]string{"junk": "garbage", annotations.AntreaIPAMPodIPAnnotationKey: "10.2.2.198"},
+			},
+			Spec: corev1.PodSpec{NodeName: "fakeNode"},
+		},
+		&corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:        "apple-orange4",
+				Namespace:   testAppleOrange,
+				Annotations: map[string]string{"junk": "garbage", annotations.AntreaIPAMAnnotationKey: fmt.Sprintf("%s,%s", testPear, testOrange)},
+			},
+			Spec: corev1.PodSpec{NodeName: "fakeNode"},
+		},
+		&corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:        "apple-orange5",
+				Namespace:   testAppleOrange,
+				Annotations: map[string]string{"junk": "garbage", annotations.AntreaIPAMPodIPAnnotationKey: "10.2.2.197,30::1f"},
 			},
 			Spec: corev1.PodSpec{NodeName: "fakeNode"},
 		},
@@ -343,7 +390,7 @@ func TestAntreaIPAMDriver(t *testing.T) {
 	cniArgsMap := make(map[string]*invoke.Args)
 	k8sArgsMap := make(map[string]*argtypes.K8sArgs)
 	vlanArgsMap := map[string]uint16{"pear1": 100, "pear2": 100, "pear3": 100, "pear-sts-8": 100}
-	for _, test := range []string{"apple1", "apple2", "apple-sts-0", "orange1", "orange2", testNoAnnotation, testJunkAnnotation, "pear1", "pear2", "pear3", "pear4", "pear5", "pear6", "pear7", "pear-sts-8", "pear-sts-9", "pear10"} {
+	for _, test := range []string{"apple1", "apple2", "apple-sts-0", "orange1", "orange2", "apple-orange1", "apple-orange2", "apple-orange3", "apple-orange4", "apple-orange5", testNoAnnotation, testJunkAnnotation, "pear1", "pear2", "pear3", "pear4", "pear5", "pear6", "pear7", "pear-sts-8", "pear-sts-9", "pear10"} {
 		// extract Namespace by removing numerals
 		re := regexp.MustCompile("(-sts-)*[0-9]*$")
 		namespace := re.ReplaceAllString(test, "")
@@ -355,15 +402,17 @@ func TestAntreaIPAMDriver(t *testing.T) {
 		}
 	}
 
-	testAdd := func(test string, expectedIP string, expectedGW string, expectedMask string, isReserved bool) {
+	testAdd := func(test string, expectedIPs []string, expectedGWs []string, expectedMasks []string, isReserved bool) {
 		owns, result, err := testDriver.Add(cniArgsMap[test], k8sArgsMap[test], networkConfig)
 		require.NoError(t, err, "expected no error in Add call")
 		assert.True(t, owns)
-		assert.Len(t, result.IPs, 1)
-		assert.Len(t, result.Routes, 1)
-		assert.Equal(t, expectedIP, result.IPs[0].Address.IP.String())
-		assert.Equal(t, expectedMask, result.IPs[0].Address.Mask.String())
-		assert.Equal(t, expectedGW, result.IPs[0].Gateway.String())
+		assert.Len(t, result.IPs, len(expectedIPs))
+		assert.Len(t, result.Routes, len(expectedIPs))
+		for i := range expectedIPs {
+			assert.Equal(t, expectedIPs[i], result.IPs[i].Address.IP.String())
+			assert.Equal(t, expectedMasks[i], result.IPs[i].Address.Mask.String())
+			assert.Equal(t, expectedGWs[i], result.IPs[i].Gateway.String())
+		}
 		if vlanID, ok := vlanArgsMap[test]; ok {
 			assert.Equal(t, vlanID, result.VLANID)
 		} else {
@@ -373,22 +422,26 @@ func TestAntreaIPAMDriver(t *testing.T) {
 		podNamespace := string(k8sArgsMap[test].K8S_POD_NAMESPACE)
 		podName := string(k8sArgsMap[test].K8S_POD_NAME)
 		err = wait.Poll(time.Millisecond*200, time.Second, func() (bool, error) {
-			ipPool, _ := antreaIPAMController.ipPoolLister.Get(podNamespace)
-			found := false
-			for _, ipAddress := range ipPool.Status.IPAddresses {
-				if expectedIP == ipAddress.IPAddress {
-					assert.Equal(t, ipAddress.Owner.StatefulSet != nil, isReserved)
-					if ipAddress.Owner.StatefulSet != nil {
-						assert.Equal(t, podName, fmt.Sprintf("%s-%d", ipAddress.Owner.StatefulSet.Name, ipAddress.Owner.StatefulSet.Index))
-						assert.Equal(t, podNamespace, ipAddress.Owner.StatefulSet.Namespace)
+			found := 0
+			poolNames := strings.Split(podNamespace, "-")
+			for _, poolName := range poolNames {
+				ipPool, _ := antreaIPAMController.ipPoolLister.Get(poolName)
+				for _, ipAddress := range ipPool.Status.IPAddresses {
+					for _, expectedIP := range expectedIPs {
+						if expectedIP == ipAddress.IPAddress {
+							assert.Equal(t, ipAddress.Owner.StatefulSet != nil, isReserved)
+							if ipAddress.Owner.StatefulSet != nil {
+								assert.Equal(t, podName, fmt.Sprintf("%s-%d", ipAddress.Owner.StatefulSet.Name, ipAddress.Owner.StatefulSet.Index))
+								assert.Equal(t, podNamespace, ipAddress.Owner.StatefulSet.Namespace)
+							}
+							assert.Equal(t, podName, ipAddress.Owner.Pod.Name)
+							assert.Equal(t, podNamespace, ipAddress.Owner.Pod.Namespace)
+							found++
+						}
 					}
-					assert.Equal(t, podName, ipAddress.Owner.Pod.Name)
-					assert.Equal(t, podNamespace, ipAddress.Owner.Pod.Namespace)
-					found = true
-					break
 				}
 			}
-			return found == true, nil
+			return found == len(expectedIPs), nil
 		})
 		assert.Nil(t, err)
 	}
@@ -407,19 +460,27 @@ func TestAntreaIPAMDriver(t *testing.T) {
 		podNamespace := string(k8sArgsMap[test].K8S_POD_NAMESPACE)
 		podName := string(k8sArgsMap[test].K8S_POD_NAME)
 		err = wait.Poll(time.Millisecond*200, time.Second, func() (bool, error) {
-			ipPool, _ := antreaIPAMController.ipPoolLister.Get(podNamespace)
-			found := false
-			for _, ipAddress := range ipPool.Status.IPAddresses {
-				if ipAddress.Owner.Pod != nil && ipAddress.Owner.Pod.Name == podName && ipAddress.Owner.Pod.Namespace == podNamespace {
-					t.Logf("IP allocation is not removed")
-					return false, nil
-				}
-				if ipAddress.Owner.StatefulSet != nil && podName == fmt.Sprintf("%s-%d", ipAddress.Owner.StatefulSet.Name, ipAddress.Owner.StatefulSet.Index) && podNamespace == ipAddress.Owner.StatefulSet.Namespace {
-					found = true
-					break
+			foundReserved := 0
+			poolNames := strings.Split(podNamespace, "-")
+			for _, poolName := range poolNames {
+				ipPool, _ := antreaIPAMController.ipPoolLister.Get(poolName)
+				for _, ipAddress := range ipPool.Status.IPAddresses {
+					if ipAddress.Owner.Pod != nil && ipAddress.Owner.Pod.Name == podName && ipAddress.Owner.Pod.Namespace == podNamespace {
+						t.Logf("IP allocation is not removed")
+						return false, nil
+					}
+					if ipAddress.Owner.StatefulSet != nil && podName == fmt.Sprintf("%s-%d", ipAddress.Owner.StatefulSet.Name, ipAddress.Owner.StatefulSet.Index) && podNamespace == ipAddress.Owner.StatefulSet.Namespace {
+						foundReserved++
+					}
 				}
 			}
-			return found == isReserved, nil
+			done := false
+			if isReserved && foundReserved == len(poolNames) {
+				done = true
+			} else if !isReserved && foundReserved == 0 {
+				done = true
+			}
+			return done, nil
 		})
 		assert.Nil(t, err)
 	}
@@ -436,20 +497,37 @@ func TestAntreaIPAMDriver(t *testing.T) {
 
 	// Run several adds from two Namespaces that have pool annotations
 	ipv6Mask := "ffffffffffffffff0000000000000000"
-	testAdd("apple1", "10.2.2.100", "10.2.2.1", "ffffff00", false)
+	testAdd("apple1", []string{"10.2.2.100"}, []string{"10.2.2.1"}, []string{"ffffff00"}, false)
 
 	// introduce new IP Pool in mid-action
-	testAdd("orange1", "20::2", "20::1", ipv6Mask, false)
-	testAdd("orange2", "20::3", "20::1", ipv6Mask, false)
-	testAdd("apple2", "10.2.2.101", "10.2.2.1", "ffffff00", false)
-	testAdd("apple-sts-0", "10.2.2.102", "10.2.2.1", "ffffff00", true)
-	testAdd("pear1", "10.2.3.100", "10.2.3.1", "ffffff00", false)
-	testAdd("pear2", "10.2.3.101", "10.2.3.1", "ffffff00", false)
-	testAdd("pear3", "10.2.3.199", "10.2.3.1", "ffffff00", false)
-	testAdd("pear-sts-8", "10.2.3.198", "10.2.3.1", "ffffff00", true)
+	testAdd("orange1", []string{"20::2"}, []string{"20::1"}, []string{ipv6Mask}, false)
+	testAdd("orange2", []string{"20::3"}, []string{"20::1"}, []string{ipv6Mask}, false)
+	testAdd("apple2", []string{"10.2.2.101"}, []string{"10.2.2.1"}, []string{"ffffff00"}, false)
+	testAdd("apple-sts-0", []string{"10.2.2.102"}, []string{"10.2.2.1"}, []string{"ffffff00"}, true)
+	testAdd("apple-orange1", []string{"10.2.2.103", "20::4"}, []string{"10.2.2.1", "20::1"}, []string{"ffffff00", ipv6Mask}, false)
+	testAdd("apple-orange2", []string{"10.2.2.199", "20::1f"}, []string{"10.2.2.1", "20::1"}, []string{"ffffff00", ipv6Mask}, false)
+	testAdd("pear1", []string{"10.2.3.100"}, []string{"10.2.3.1"}, []string{"ffffff00"}, false)
+	testAdd("pear2", []string{"10.2.3.101"}, []string{"10.2.3.1"}, []string{"ffffff00"}, false)
+	testAdd("pear3", []string{"10.2.3.199"}, []string{"10.2.3.1"}, []string{"ffffff00"}, false)
+	testAdd("pear-sts-8", []string{"10.2.3.198"}, []string{"10.2.3.1"}, []string{"ffffff00"}, true)
+
+	// Verify that IP pool and IP annotation mismatch error
+	owns, _, err := testDriver.Add(cniArgsMap["apple-orange3"], k8sArgsMap["apple-orange3"], networkConfig)
+	require.NotNil(t, err, "expected error in Add call due to IP pool and IP annotation mismatch")
+	assert.True(t, owns)
+
+	// Verify that IP pool and IP annotation mismatch error
+	owns, _, err = testDriver.Add(cniArgsMap["apple-orange4"], k8sArgsMap["apple-orange4"], networkConfig)
+	require.NotNil(t, err, "expected error in Add call due to VLAN mismatch")
+	assert.True(t, owns)
+
+	// Verify that IP pool and IP annotation mismatch error
+	owns, _, err = testDriver.Add(cniArgsMap["apple-orange5"], k8sArgsMap["apple-orange5"], networkConfig)
+	require.NotNil(t, err, "expected error in Add call due to IP is not belong to IPPool")
+	assert.True(t, owns)
 
 	// Make sure the driver does not own request without pool annotation
-	owns, _, err := testDriver.Add(cniArgsMap[testNoAnnotation], k8sArgsMap[testNoAnnotation], networkConfig)
+	owns, _, err = testDriver.Add(cniArgsMap[testNoAnnotation], k8sArgsMap[testNoAnnotation], networkConfig)
 	require.NoError(t, err, "expected no error in Add call without pool annotation")
 	assert.False(t, owns)
 
@@ -481,6 +559,7 @@ func TestAntreaIPAMDriver(t *testing.T) {
 	// Del two of the Pods
 	testDel("apple1", false)
 	testDel("orange2", false)
+	testDel("apple-orange1", false)
 	testDel("pear3", false)
 	testDel("apple-sts-0", true)
 	testDel("pear-sts-8", true)
@@ -504,6 +583,11 @@ func TestAntreaIPAMDriver(t *testing.T) {
 	testCheck("apple2", true)
 	testCheck("orange1", true)
 	testCheck("orange2", false)
+	testCheck("apple-orange1", false)
+	testCheck("apple-orange2", true)
+	testCheck("apple-orange3", false)
+	testCheck("apple-orange4", false)
+	testCheck("apple-orange5", false)
 	testCheck("pear1", true)
 	testCheck("pear2", true)
 	testCheck("pear3", false)
@@ -520,14 +604,14 @@ func TestAntreaIPAMDriver(t *testing.T) {
 	require.NoError(t, err, "expected no error in Del call")
 
 	// Make sure repeated Add works for Pod that was previously released
-	testAdd("apple1", "10.2.2.100", "10.2.2.1", "ffffff00", false)
-	testAdd("apple-sts-0", "10.2.2.102", "10.2.2.1", "ffffff00", true)
+	testAdd("apple1", []string{"10.2.2.100"}, []string{"10.2.2.1"}, []string{"ffffff00"}, false)
+	testAdd("apple-sts-0", []string{"10.2.2.102"}, []string{"10.2.2.1"}, []string{"ffffff00"}, true)
 
 	// Make sure repeated call for previous container gets identical result
-	testAdd("apple2", "10.2.2.101", "10.2.2.1", "ffffff00", false)
+	testAdd("apple2", []string{"10.2.2.101"}, []string{"10.2.2.1"}, []string{"ffffff00"}, false)
 
 	// Make sure repeated Add works for pod that was previously released
-	testAdd("pear3", "10.2.3.199", "10.2.3.1", "ffffff00", false)
+	testAdd("pear3", []string{"10.2.3.199"}, []string{"10.2.3.1"}, []string{"ffffff00"}, false)
 
 	// Make sure repeated call without previous container results in error
 	testAddError("pear3")

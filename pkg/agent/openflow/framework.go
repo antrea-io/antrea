@@ -171,20 +171,27 @@ func (f *featurePodConnectivity) getRequiredTables() []*Table {
 		L2ForwardingOutTable,
 	}
 
+	hasIP := false
 	for _, ipProtocol := range f.ipProtocols {
 		switch ipProtocol {
 		case binding.ProtocolIPv6:
 			tables = append(tables, IPv6Table)
 		case binding.ProtocolIP:
+			hasIP = true
 			tables = append(tables,
 				ARPSpoofGuardTable,
 				ARPResponderTable)
 			if f.enableMulticast {
 				tables = append(tables, PipelineIPClassifierTable)
 			}
-			if f.connectUplinkToBridge {
-				tables = append(tables, VLANTable)
-			}
+		}
+	}
+	if f.connectUplinkToBridge {
+		tables = append(tables, VLANTable)
+		// Add ARPSpoofGuardTable to allow Node's IPv4 traffic in an IPv6 only cluster.
+		if !hasIP {
+			tables = append(tables,
+				ARPSpoofGuardTable)
 		}
 	}
 	if f.enableTrafficControl {

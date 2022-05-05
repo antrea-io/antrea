@@ -18,8 +18,10 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
+	"k8s.io/apimachinery/pkg/util/wait"
 )
 
 // TestBatchCreatePods verifies there is no FD leak after batched Pod creation.
@@ -57,6 +59,14 @@ func TestBatchCreatePods(t *testing.T) {
 	_, _, cleanupFn := createTestBusyboxPods(t, data, batchNum, data.testNamespace, node1)
 	defer cleanupFn()
 
+	wait.PollImmediate(defaultInterval, 30*time.Second, func() (bool, error) {
+		newFDs := getFDs()
+		if oldFDs == newFDs {
+			return true, nil
+		}
+		t.Logf("FDs were changed after batched Pod creation, retry...")
+		return false, nil
+	})
 	newFDs := getFDs()
 	assert.Equal(t, oldFDs, newFDs, "FDs were changed after batched Pod creation")
 }

@@ -65,7 +65,6 @@ func (f *featurePodConnectivity) hostBridgeUplinkFlows() []binding.Flow {
 			Done(),
 		L2ForwardingOutTable.ofTable.BuildFlow(priorityHigh).
 			Cookie(cookieID).
-			MatchProtocol(binding.ProtocolIP).
 			MatchRegMark(outputToBridgeRegMark, OFPortFoundRegMark).
 			Action().Output(f.hostIfacePort).
 			Done(),

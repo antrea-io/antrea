@@ -19,13 +19,16 @@ import (
 	"fmt"
 	"net"
 	"reflect"
+	"strings"
 
 	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
 	crdclientset "antrea.io/antrea/pkg/client/clientset/versioned"
 	informers "antrea.io/antrea/pkg/client/listers/crd/v1alpha2"
 	"antrea.io/antrea/pkg/ipam/ipallocator"
 	iputil "antrea.io/antrea/pkg/util/ip"
+	utilretry "antrea.io/antrea/pkg/util/retry"
 
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/klog/v2"
@@ -539,9 +542,13 @@ func (a *IPPoolAllocator) ReleaseStatefulSet(namespace, name string) error {
 // and updates the IPPool CR status.
 // If no IP is allocated to the Pod according to the IPPool CR status, the func just returns with no
 // change.
-func (a *IPPoolAllocator) ReleaseContainer(containerID, ifName string) error {
+func (a *IPPoolAllocator) ReleaseContainer(containerID, ifName string, retryIfNotFound bool) error {
+	ipAllocationNotFoundError := fmt.Errorf("cannot find the allocation record in IPPool")
+	retryIfIPAllocationNotFoundFunc := func(err error) bool {
+		return retryIfNotFound && strings.Contains(err.Error(), ipAllocationNotFoundError.Error())
+	}
 	// Retry on CRD update conflict which is caused by multiple agents updating a pool at same time.
-	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+	err := utilretry.RetryOnErrors(retry.DefaultRetry, func() error {
 		ipPool, err := a.getPool()
 		if err != nil {
 			return err
@@ -558,8 +565,11 @@ func (a *IPPoolAllocator) ReleaseContainer(containerID, ifName string) error {
 
 		klog.V(4).InfoS("Did not find the allocation record in IPPool",
 			"container", containerID, "interface", ifName, "pool", a.ipPoolName, "allocation", ipPool.Status.IPAddresses)
+		if retryIfNotFound {
+			return ipAllocationNotFoundError
+		}
 		return nil
-	})
+	}, errors.IsConflict, retryIfIPAllocationNotFoundFunc)
 
 	if err != nil {
 		klog.ErrorS(err, "Failed to release IP address", "Container", containerID, "interface", ifName, "IPPool", a.ipPoolName)

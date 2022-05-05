@@ -58,6 +58,7 @@ import (
 	controllerconfig "antrea.io/antrea/pkg/config/controller"
 	flowaggregatorconfig "antrea.io/antrea/pkg/config/flowaggregator"
 	"antrea.io/antrea/pkg/features"
+	utilretry "antrea.io/antrea/pkg/util/retry"
 	"antrea.io/antrea/test/e2e/providers"
 )
 
@@ -65,6 +66,7 @@ var AntreaConfigMap *corev1.ConfigMap
 
 var (
 	connectionLostError = fmt.Errorf("http2: client connection lost")
+	noRouteToHostError  = fmt.Errorf("connect: no route to host")
 )
 
 const (
@@ -998,7 +1000,7 @@ func (data *TestData) restartCoreDNSPods(timeout time.Duration) error {
 	if err := data.clientset.CoreV1().Pods(antreaNamespace).DeleteCollection(context.TODO(), deleteOptions, listOptions); err != nil {
 		return fmt.Errorf("error when deleting all CoreDNS Pods: %v", err)
 	}
-	return retryOnConnectionLostError(retry.DefaultRetry, func() error { return data.waitForCoreDNSPods(timeout) })
+	return utilretry.RetryOnErrors(retry.DefaultRetry, func() error { return data.waitForCoreDNSPods(timeout) }, IsConnectionLostError)
 }
 
 // checkCoreDNSPods checks that all the Pods for the CoreDNS deployment are ready. If not, it
@@ -2693,12 +2695,14 @@ func (data *TestData) waitForStatefulSetPods(timeout time.Duration, stsName stri
 	return nil
 }
 
-func isConnectionLostError(err error) bool {
+// IsConnectionLostError returns true if error is connectionLostError.
+// e2e script might get ConnectionLost error when accessing K8s apiserver if AntreaIPAM is enabled and antrea-agent is restarted.
+func IsConnectionLostError(err error) bool {
 	return strings.Contains(err.Error(), connectionLostError.Error())
 }
 
-// retryOnConnectionLostError allows the caller to retry fn in case the error is ConnectionLost.
-// e2e script might get ConnectionLost error when accessing k8s apiserver if AntreaIPAM is enabled and antrea-agent is restarted.
-func retryOnConnectionLostError(backoff wait.Backoff, fn func() error) error {
-	return retry.OnError(backoff, isConnectionLostError, fn)
+// IsNoRouteToHostError returns true if error is noRouteToHostError.
+// e2e script might get NoRouteToHost error when accessing K8s apiserver IPv6 address if AntreaIPAM is enabled and antrea-agent is restarted.
+func IsNoRouteToHostError(err error) bool {
+	return strings.Contains(err.Error(), noRouteToHostError.Error())
 }

@@ -29,12 +29,14 @@ import (
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/util/retry"
 
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/podinterface"
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/openflow/cookie"
 	crdv1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
 	"antrea.io/antrea/pkg/clusteridentity"
+	utilretry "antrea.io/antrea/pkg/util/retry"
 )
 
 // TestBasic is the top-level test which contains some subtests for
@@ -606,8 +608,12 @@ func getRoundNumber(data *TestData, podName string) (uint64, error) {
 		return 0, fmt.Errorf("error when marshalling OVSDB query: %v", err)
 	}
 	cmd := []string{"ovsdb-client", "query", string(b)}
-	stdout, stderr, err := data.RunCommandFromPod(antreaNamespace, podName, ovsContainerName, cmd)
-	if err != nil {
+	var stdout, stderr string
+	retryErr := utilretry.RetryOnErrors(retry.DefaultRetry, func() error {
+		stdout, stderr, err = data.RunCommandFromPod(antreaNamespace, podName, ovsContainerName, cmd)
+		return err
+	}, IsNoRouteToHostError)
+	if retryErr != nil {
 		return 0, fmt.Errorf("cannot retrieve round number: stderr: <%v>, err: <%v>", stderr, err)
 	}
 

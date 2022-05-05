@@ -189,12 +189,15 @@ ownerReferenceLoop:
 			}
 		}
 	}
-
-	return strings.Split(annotations, annotation.AntreaIPAMAnnotationDelimiter), ips, reservedOwner, ipErr
+	poolNames := strings.Split(annotations, annotation.AntreaIPAMAnnotationDelimiter)
+	if ipErr == nil && len(ips) > 0 && len(poolNames) != len(ips) {
+		ipErr = fmt.Errorf("IP pool and IP counts mismatch")
+	}
+	return poolNames, ips, reservedOwner, ipErr
 }
 
 // Look up IPPools from the Pod annotation.
-func (c *AntreaIPAMController) getPoolAllocatorByPod(namespace, podName string) (mineType, *poolallocator.IPPoolAllocator, []net.IP, *crdv1a2.IPAddressOwner, error) {
+func (c *AntreaIPAMController) getPoolAllocatorsByPod(namespace, podName string) (mineType, []*poolallocator.IPPoolAllocator, []net.IP, *crdv1a2.IPAddressOwner, error) {
 	poolNames, ips, reservedOwner, err := c.getIPPoolsByPod(namespace, podName)
 	if err != nil {
 		return mineUnknown, nil, nil, nil, err
@@ -202,8 +205,9 @@ func (c *AntreaIPAMController) getPoolAllocatorByPod(namespace, podName string) 
 		return mineFalse, nil, nil, nil, nil
 	}
 
-	var allocator *poolallocator.IPPoolAllocator
+	var allocators []*poolallocator.IPPoolAllocator
 	for _, p := range poolNames {
+		var allocator *poolallocator.IPPoolAllocator
 		allocator, err = poolallocator.NewIPPoolAllocator(p, c.crdClient, c.ipPoolLister)
 		if err != nil {
 			if !errors.IsNotFound(err) {
@@ -212,16 +216,18 @@ func (c *AntreaIPAMController) getPoolAllocatorByPod(namespace, podName string) 
 			}
 			klog.InfoS("IPPool not found", "pool", p)
 			err = nil
-		} else if allocator.IPVersion == crdv1a2.IPv4 {
-			// Support IPv6 / dual stack in future.
-			break
+		}
+		allocators = append(allocators, allocator)
+	}
+	if err == nil {
+		if allocators == nil {
+			err = fmt.Errorf("no valid IPPool found")
+		} else if len(ips) > 0 && len(allocators) != len(ips) {
+			err = fmt.Errorf("IP pool and IP counts mismatch")
 		}
 	}
-	if err == nil && allocator == nil {
-		err = fmt.Errorf("no valid IPPool found")
-	}
 
-	return mineTrue, allocator, ips, reservedOwner, err
+	return mineTrue, allocators, ips, reservedOwner, err
 }
 
 // Look up IPPools by matching PodOwnder.

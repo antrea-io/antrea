@@ -130,24 +130,27 @@ func (f *featurePodConnectivity) initFlows() []binding.Flow {
 	var flows []binding.Flow
 	gatewayMAC := f.nodeConfig.GatewayConfig.MAC
 
+	podCIDRMap := map[binding.Protocol]net.IPNet{}
 	for _, ipProtocol := range f.ipProtocols {
 		if ipProtocol == binding.ProtocolIPv6 {
 			flows = append(flows, f.ipv6Flows()...)
+			podCIDRMap[binding.ProtocolIPv6] = *f.nodeConfig.PodIPv6CIDR
 		} else if ipProtocol == binding.ProtocolIP {
 			flows = append(flows, f.arpNormalFlow())
 			flows = append(flows, f.arpSpoofGuardFlow(f.gatewayIPs[ipProtocol], gatewayMAC, f.gatewayPort))
 			if f.connectUplinkToBridge {
 				flows = append(flows, f.arpResponderFlow(f.gatewayIPs[ipProtocol], gatewayMAC))
 				flows = append(flows, f.arpSpoofGuardFlow(f.nodeConfig.NodeIPv4Addr.IP, gatewayMAC, f.gatewayPort))
-				flows = append(flows, f.hostBridgeUplinkVLANFlows()...)
 			}
-			if runtime.IsWindowsPlatform() || f.connectUplinkToBridge {
-				// This installs the flows between bridge local port and uplink port to support host networking.
-				flows = append(flows, f.hostBridgeUplinkFlows()...)
-			}
+			podCIDRMap[binding.ProtocolIP] = *f.nodeConfig.PodIPv4CIDR
 		}
 	}
+	if runtime.IsWindowsPlatform() || f.connectUplinkToBridge {
+		// This installs the flows between bridge local port and uplink port to support host networking.
+		flows = append(flows, f.hostBridgeUplinkFlows()...)
+	}
 	if f.connectUplinkToBridge {
+		flows = append(flows, f.hostBridgeUplinkVLANFlows()...)
 		flows = append(flows, f.l3FwdFlowToNode()...)
 	}
 	flows = append(flows, f.l3FwdFlowToExternal())

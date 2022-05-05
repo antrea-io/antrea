@@ -501,9 +501,9 @@ func (c *client) InstallPodFlows(interfaceName string, podInterfaceIPs []net.IP,
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
 
-	podInterfaceIPv4 := util.GetIPv4Addr(podInterfaceIPs)
-	// TODO(gran): support IPv6
-	isAntreaFlexibleIPAM := c.connectUplinkToBridge && c.nodeConfig.PodIPv4CIDR != nil && !c.nodeConfig.PodIPv4CIDR.Contains(podInterfaceIPv4)
+	podInterfaceIPv4, _ := util.GetIPWithFamily(podInterfaceIPs, util.FamilyIPv4)
+	podInterfaceIPv6, _ := util.GetIPWithFamily(podInterfaceIPs, util.FamilyIPv6)
+	isAntreaFlexibleIPAM := c.connectUplinkToBridge && ((c.nodeConfig.PodIPv4CIDR != nil && !c.nodeConfig.PodIPv4CIDR.Contains(podInterfaceIPv4)) || (c.nodeConfig.PodIPv6CIDR != nil && !c.nodeConfig.PodIPv6CIDR.Contains(podInterfaceIPv6)))
 
 	localGatewayMAC := c.nodeConfig.GatewayConfig.MAC
 	flows := []binding.Flow{
@@ -814,7 +814,7 @@ func (c *client) generatePipelines() {
 
 	// Pipelines to generate.
 	pipelineIDs := []binding.PipelineID{pipelineRoot, pipelineIP}
-	if c.networkConfig.IPv4Enabled {
+	if c.networkConfig.IPv4Enabled || c.connectUplinkToBridge {
 		pipelineIDs = append(pipelineIDs, pipelineARP)
 		if c.enableMulticast {
 			pipelineIDs = append(pipelineIDs, pipelineMulticast)

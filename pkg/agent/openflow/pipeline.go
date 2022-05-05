@@ -570,8 +570,15 @@ func (c *client) defaultFlows() []binding.Flow {
 		case pipelineIP:
 			// This generates the flow to match IPv4 / IPv6 packets and forward them to the first table of pipelineIP in
 			// PipelineRootClassifierTable.
-			for _, ipProtocol := range c.ipProtocols {
-				flows = append(flows, pipelineClassifyFlow(cookieID, ipProtocol, pipeline))
+			if c.connectUplinkToBridge {
+				// Both IP and IPv6 pipeline classify flow is required when connectUplinkToBridge=true to allow traffic
+				// for Node
+				flows = append(flows, pipelineClassifyFlow(cookieID, binding.ProtocolIP, pipeline))
+				flows = append(flows, pipelineClassifyFlow(cookieID, binding.ProtocolIPv6, pipeline))
+			} else {
+				for _, ipProtocol := range c.ipProtocols {
+					flows = append(flows, pipelineClassifyFlow(cookieID, ipProtocol, pipeline))
+				}
 			}
 		case pipelineARP:
 			// This generates the flow to match ARP packets and forward them to the first table of pipelineARP in
@@ -632,9 +639,16 @@ func (f *featurePodConnectivity) podUplinkClassifierFlows(dstMAC net.HardwareAdd
 		nonVLAN = false
 	}
 	for _, ipProtocol := range f.ipProtocols {
+		table := ClassifierTable
+		priority := priorityHigh
+		// Antrea uses a separate table to save IPv6 uplink flows
+		if ipProtocol == binding.ProtocolIPv6 {
+			table = IPv6Table
+			priority = priorityNormal
+		}
 		flows = append(flows,
 			// This generates the flow to mark the packets from uplink port.
-			ClassifierTable.ofTable.BuildFlow(priorityHigh).
+			table.ofTable.BuildFlow(priority).
 				Cookie(cookieID).
 				MatchInPort(f.uplinkPort).
 				MatchDstMAC(dstMAC).
@@ -648,7 +662,7 @@ func (f *featurePodConnectivity) podUplinkClassifierFlows(dstMAC net.HardwareAdd
 		if vlanID == 0 {
 			flows = append(flows,
 				// This generates the flow to mark the packets from bridge local port.
-				ClassifierTable.ofTable.BuildFlow(priorityHigh).
+				table.ofTable.BuildFlow(priority).
 					Cookie(cookieID).
 					MatchInPort(f.hostIfacePort).
 					MatchDstMAC(dstMAC).
@@ -1693,14 +1707,14 @@ func (f *featurePodConnectivity) ipv6Flows() []binding.Flow {
 			Action().GotoTable(IPv6Table.GetID()).
 			Done(),
 		// Handle IPv6 Neighbor Solicitation and Neighbor Advertisement as a regular L2 learning Switch by using normal.
-		IPv6Table.ofTable.BuildFlow(priorityNormal).
+		IPv6Table.ofTable.BuildFlow(priorityHigh).
 			Cookie(cookieID).
 			MatchProtocol(binding.ProtocolICMPv6).
 			MatchICMPv6Type(135).
 			MatchICMPv6Code(0).
 			Action().Normal().
 			Done(),
-		IPv6Table.ofTable.BuildFlow(priorityNormal).
+		IPv6Table.ofTable.BuildFlow(priorityHigh).
 			Cookie(cookieID).
 			MatchProtocol(binding.ProtocolICMPv6).
 			MatchICMPv6Type(136).
@@ -1710,7 +1724,7 @@ func (f *featurePodConnectivity) ipv6Flows() []binding.Flow {
 		// Handle IPv6 multicast packets as a regular L2 learning Switch by using normal.
 		// It is used to ensure that all kinds of IPv6 multicast packets are properly handled (e.g. Multicast Listener
 		// Report Message V2).
-		IPv6Table.ofTable.BuildFlow(priorityNormal).
+		IPv6Table.ofTable.BuildFlow(priorityHigh).
 			Cookie(cookieID).
 			MatchProtocol(binding.ProtocolIPv6).
 			MatchDstIPNet(*ipv6MulticastIpnet).
@@ -2847,20 +2861,52 @@ func (f *featurePodConnectivity) l3FwdFlowToExternal() binding.Flow {
 // hostBridgeLocalFlows generates the flows to match the packets forwarded between bridge local port and uplink port.
 func (f *featurePodConnectivity) hostBridgeLocalFlows() []binding.Flow {
 	cookieID := f.cookieAllocator.Request(f.category).Raw()
-	return []binding.Flow{
-		// This generates the flow to forward the packets from uplink port to bridge local port.
+	flows := []binding.Flow{
+		// This generates the flow to forward the non-IPv6 packets from uplink port to bridge local port.
 		ClassifierTable.ofTable.BuildFlow(priorityNormal).
 			Cookie(cookieID).
 			MatchInPort(f.uplinkPort).
 			Action().Output(f.hostIfacePort).
 			Done(),
-		// This generates the flow to forward the packets from bridge local port to uplink port.
+		// This generates the flow to forward the non-IPv6 packets from bridge local port to uplink port.
 		ClassifierTable.ofTable.BuildFlow(priorityNormal).
 			Cookie(cookieID).
 			MatchInPort(f.hostIfacePort).
 			Action().Output(f.uplinkPort).
 			Done(),
 	}
+	for _, ipProtocol := range f.ipProtocols {
+		if ipProtocol == binding.ProtocolIPv6 {
+			flows = append(flows,
+				// This generates the flow to send the IPv6 packets from uplink port to IPv6Table.
+				ClassifierTable.ofTable.BuildFlow(priorityHigh).
+					Cookie(cookieID).
+					MatchInPort(f.uplinkPort).
+					MatchProtocol(ipProtocol).
+					Action().GotoTable(IPv6Table.GetID()).
+					Done(),
+				// This generates the flow to send the IPv6 packets from bridge local port to IPv6Table.
+				ClassifierTable.ofTable.BuildFlow(priorityHigh).
+					Cookie(cookieID).
+					MatchInPort(f.hostIfacePort).
+					MatchProtocol(ipProtocol).
+					Action().GotoTable(IPv6Table.GetID()).
+					Done(),
+				// This generates the flow to forward the IPv6 packets from uplink port to bridge local port.
+				IPv6Table.ofTable.BuildFlow(priorityLow).
+					Cookie(cookieID).
+					MatchInPort(f.uplinkPort).
+					Action().Output(f.hostIfacePort).
+					Done(),
+				// This generates the flow to forward the IPv6 packets from bridge local port to uplink port.
+				IPv6Table.ofTable.BuildFlow(priorityLow).
+					Cookie(cookieID).
+					MatchInPort(f.hostIfacePort).
+					Action().Output(f.uplinkPort).
+					Done())
+		}
+	}
+	return flows
 }
 
 // hostBridgeUplinkVLANFlows generates the flows to match VLAN packets from uplink port.

@@ -45,8 +45,13 @@ func (i *Initializer) prepareOVSBridge() error {
 	}
 	klog.Infof("Preparing OVS bridge for AntreaFlexibleIPAM")
 	// Get uplink network configuration.
-	// TODO(gran): support IPv6
-	_, _, adapter, err := i.getNodeInterfaceFromIP(&utilip.DualStackIPs{IPv4: i.nodeConfig.NodeIPv4Addr.IP})
+	var adapter *net.Interface
+	var err error
+	if i.nodeConfig.NodeIPv4Addr != nil {
+		_, _, adapter, err = i.getNodeInterfaceFromIP(&utilip.DualStackIPs{IPv4: i.nodeConfig.NodeIPv4Addr.IP})
+	} else {
+		_, _, adapter, err = i.getNodeInterfaceFromIP(&utilip.DualStackIPs{IPv6: i.nodeConfig.NodeIPv6Addr.IP})
+	}
 	if err != nil {
 		return err
 	}
@@ -54,6 +59,7 @@ func (i *Initializer) prepareOVSBridge() error {
 	uplinkNetConfig.Name = adapter.Name
 	uplinkNetConfig.MAC = adapter.HardwareAddr
 	uplinkNetConfig.IP = i.nodeConfig.NodeIPv4Addr
+	uplinkNetConfig.IPv6 = i.nodeConfig.NodeIPv6Addr
 	uplinkNetConfig.Index = adapter.Index
 	// Gateway and DNSServers are not configured at adapter in Linux
 	// Limitation: dynamic DNS servers will be lost after DHCP lease expired
@@ -126,19 +132,13 @@ func GetTransportIPNetDeviceByName(ifaceName string, ovsBridgeName string) (*net
 // The routes will be restored on OVS bridge interface after the IP configuration
 // is moved to the OVS bridge.
 func (i *Initializer) saveHostRoutes() error {
-	routes, err := netlink.RouteList(nil, netlink.FAMILY_V4)
+	routes, err := netlink.RouteList(nil, netlink.FAMILY_ALL)
 	if err != nil {
 		return err
 	}
 	for _, route := range routes {
 		if route.LinkIndex != i.nodeConfig.UplinkNetConfig.Index {
 			klog.V(2).Infof("Skipped host route not on uplink: %+v", route)
-			continue
-		}
-		// Skip IPv6 routes before we support IPv6 stack.
-		// TODO(gran): support IPv6
-		if route.Gw.To4() == nil {
-			klog.V(2).Infof("Skipped IPv6 host route: %+v", route)
 			continue
 		}
 		klog.Infof("Got host route=%+v", route)
