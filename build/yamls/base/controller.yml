@@ -226,6 +226,9 @@ spec:
         # Allow it to schedule onto master nodes.
         - key: node-role.kubernetes.io/master
           effect: NoSchedule
+        # Control-plane taint for Kubernetes >= 1.24.
+        - key: node-role.kubernetes.io/control-plane
+          effect: NoSchedule
       serviceAccountName: antrea-controller
       containers:
         - name: antrea-controller
