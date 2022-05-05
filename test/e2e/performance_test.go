@@ -48,8 +48,6 @@ var (
 	customizePolicyRules = flag.Int("perf.http.policy_rules", 0, "Number of CIDRs in the network policy")
 	httpConcurrency      = flag.Int("perf.http.concurrency", 1, "Number of multiple requests to make at a time")
 	realizeTimeout       = flag.Duration("perf.realize.timeout", 5*time.Minute, "Timeout of the realization of network policies")
-	// tolerate NoSchedule taint to let the Pod run on control-plane Node
-	noScheduleToleration = controlPlaneNoScheduleToleration()
 	labelSelector        = &metav1.LabelSelector{
 		MatchLabels: map[string]string{"app": perfTestAppLabel},
 	}
@@ -116,7 +114,7 @@ func createPerfTestPodDefinition(name, containerName, image string) *corev1.Pod 
 		"kubernetes.io/hostname": controlPlaneNodeName(),
 	}
 
-	podSpec.Tolerations = []corev1.Toleration{noScheduleToleration}
+	podSpec.Tolerations = controlPlaneNoScheduleTolerations()
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:   name,
