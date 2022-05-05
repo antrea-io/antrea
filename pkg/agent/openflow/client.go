@@ -28,6 +28,7 @@ import (
 	"antrea.io/antrea/pkg/agent/openflow/cookie"
 	"antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/agent/util"
+	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 	utilip "antrea.io/antrea/pkg/util/ip"
 	"antrea.io/antrea/third_party/proxy"
@@ -279,6 +280,18 @@ type Client interface {
 		dstIP net.IP,
 		outPort uint32,
 		igmp ofutil.Message) error
+
+	// InstallTrafficControlMarkFlows installs the flows to mark the packets for a traffic control rule.
+	InstallTrafficControlMarkFlows(name string, sourceOFPorts []uint32, targetOFPort uint32, direction v1alpha2.Direction, action v1alpha2.TrafficControlAction) error
+
+	// UninstallTrafficControlMarkFlows removes the flows for a traffic control rule.
+	UninstallTrafficControlMarkFlows(name string) error
+
+	// InstallTrafficControlReturnPortFlow installs the flow to classify the packets from a return port.
+	InstallTrafficControlReturnPortFlow(returnOFPort uint32) error
+
+	// UninstallTrafficControlReturnPortFlow removes the flow to classify the packets from a return port.
+	UninstallTrafficControlReturnPortFlow(returnOFPort uint32) error
 }
 
 // GetFlowTableStatus returns an array of flow table status.
@@ -697,7 +710,8 @@ func (c *client) generatePipelines() {
 		c.networkConfig,
 		c.connectUplinkToBridge,
 		c.enableMulticast,
-		c.proxyAll)
+		c.proxyAll,
+		c.enableTrafficControl)
 	c.activatedFeatures = append(c.activatedFeatures, c.featurePodConnectivity)
 	c.traceableFeatures = append(c.traceableFeatures, c.featurePodConnectivity)
 
@@ -1128,4 +1142,34 @@ func (c *client) SendIGMPQueryPacketOut(
 	packetOutBuilder = packetOutBuilder.SetIPProtocol(binding.ProtocolIGMP).SetL4Packet(igmp)
 	packetOutObj := packetOutBuilder.Done()
 	return c.bridge.SendPacketOut(packetOutObj)
+}
+
+func (c *client) InstallTrafficControlMarkFlows(name string, sourceOFPorts []uint32, targetOFPort uint32, direction v1alpha2.Direction, action v1alpha2.TrafficControlAction) error {
+	flows := c.featurePodConnectivity.trafficControlMarkFlows(sourceOFPorts, targetOFPort, direction, action)
+	cacheKey := fmt.Sprintf("tc_%s", name)
+	c.replayMutex.RLock()
+	defer c.replayMutex.RUnlock()
+	return c.modifyFlows(c.featurePodConnectivity.tcCachedFlows, cacheKey, flows)
+}
+
+func (c *client) UninstallTrafficControlMarkFlows(name string) error {
+	cacheKey := fmt.Sprintf("tc_%s", name)
+	c.replayMutex.RLock()
+	defer c.replayMutex.RUnlock()
+	return c.deleteFlows(c.featurePodConnectivity.tcCachedFlows, cacheKey)
+}
+
+func (c *client) InstallTrafficControlReturnPortFlow(returnOFPort uint32) error {
+	cacheKey := fmt.Sprintf("tc_%d", returnOFPort)
+	flows := []binding.Flow{c.featurePodConnectivity.trafficControlReturnClassifierFlow(returnOFPort)}
+	c.replayMutex.RLock()
+	defer c.replayMutex.RUnlock()
+	return c.addFlows(c.featurePodConnectivity.tcCachedFlows, cacheKey, flows)
+}
+
+func (c *client) UninstallTrafficControlReturnPortFlow(returnOFPort uint32) error {
+	cacheKey := fmt.Sprintf("tc_%d", returnOFPort)
+	c.replayMutex.RLock()
+	defer c.replayMutex.RUnlock()
+	return c.deleteFlows(c.featurePodConnectivity.tcCachedFlows, cacheKey)
 }

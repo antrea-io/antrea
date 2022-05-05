@@ -19,6 +19,7 @@ import (
 
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/openflow/cookie"
+	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 	"antrea.io/antrea/pkg/util/runtime"
 )
@@ -29,6 +30,7 @@ type featurePodConnectivity struct {
 
 	nodeCachedFlows *flowCategoryCache
 	podCachedFlows  *flowCategoryCache
+	tcCachedFlows   *flowCategoryCache
 
 	gatewayIPs    map[binding.Protocol]net.IP
 	ctZones       map[binding.Protocol]int
@@ -42,6 +44,7 @@ type featurePodConnectivity struct {
 	ipCtZoneTypeRegMarks  map[binding.Protocol]*binding.RegMark
 	enableMulticast       bool
 	proxyAll              bool
+	enableTrafficControl  bool
 
 	category cookie.Category
 }
@@ -57,7 +60,8 @@ func newFeaturePodConnectivity(
 	networkConfig *config.NetworkConfig,
 	connectUplinkToBridge bool,
 	enableMulticast bool,
-	proxyAll bool) *featurePodConnectivity {
+	proxyAll bool,
+	enableTrafficControl bool) *featurePodConnectivity {
 	ctZones := make(map[binding.Protocol]int)
 	gatewayIPs := make(map[binding.Protocol]net.IP)
 	localCIDRs := make(map[binding.Protocol]net.IPNet)
@@ -88,6 +92,7 @@ func newFeaturePodConnectivity(
 		ipProtocols:           ipProtocols,
 		nodeCachedFlows:       newFlowCategoryCache(),
 		podCachedFlows:        newFlowCategoryCache(),
+		tcCachedFlows:         newFlowCategoryCache(),
 		gatewayIPs:            gatewayIPs,
 		ctZones:               ctZones,
 		localCIDRs:            localCIDRs,
@@ -95,6 +100,7 @@ func newFeaturePodConnectivity(
 		nodeConfig:            nodeConfig,
 		networkConfig:         networkConfig,
 		connectUplinkToBridge: connectUplinkToBridge,
+		enableTrafficControl:  enableTrafficControl,
 		ipCtZoneTypeRegMarks:  ipCtZoneTypeRegMarks,
 		ctZoneSrcField:        getZoneSrcField(connectUplinkToBridge),
 		enableMulticast:       enableMulticast,
@@ -155,6 +161,9 @@ func (f *featurePodConnectivity) initFlows() []binding.Flow {
 		// Pod IP will take care of routing the traffic to destination Pod.
 		flows = append(flows, f.l3FwdFlowToLocalPodCIDR()...)
 	}
+	if f.enableTrafficControl {
+		flows = append(flows, f.trafficControlCommonFlows()...)
+	}
 	return flows
 }
 
@@ -162,9 +171,84 @@ func (f *featurePodConnectivity) replayFlows() []binding.Flow {
 	var flows []binding.Flow
 
 	// Get cached flows.
-	for _, cachedFlows := range []*flowCategoryCache{f.nodeCachedFlows, f.podCachedFlows} {
+	for _, cachedFlows := range []*flowCategoryCache{f.nodeCachedFlows, f.podCachedFlows, f.tcCachedFlows} {
 		flows = append(flows, getCachedFlows(cachedFlows)...)
 	}
 
 	return flows
+}
+
+// trafficControlMarkFlows generates the flows to mark the packets that need to be redirected or mirrored.
+func (f *featurePodConnectivity) trafficControlMarkFlows(sourceOFPorts []uint32, targetOFPort uint32, direction v1alpha2.Direction, action v1alpha2.TrafficControlAction) []binding.Flow {
+	cookieID := f.cookieAllocator.Request(f.category).Raw()
+	var actionRegMark *binding.RegMark
+	if action == v1alpha2.ActionRedirect {
+		actionRegMark = TrafficControlRedirectRegMark
+	} else if action == v1alpha2.ActionMirror {
+		actionRegMark = TrafficControlMirrorRegMark
+	}
+	var flows []binding.Flow
+	for _, port := range sourceOFPorts {
+		if direction == v1alpha2.DirectionIngress || direction == v1alpha2.DirectionBoth {
+			// This generates the flow to mark the packets destined for a provided port.
+			flows = append(flows, TrafficControlTable.ofTable.BuildFlow(priorityNormal).
+				Cookie(cookieID).
+				MatchRegFieldWithValue(TargetOFPortField, port).
+				Action().LoadToRegField(TrafficControlTargetOFPortField, targetOFPort).
+				Action().LoadRegMark(actionRegMark).
+				Action().NextTable().
+				Done())
+		}
+		// This generates the flow to mark the packets sourced from a provided port.
+		if direction == v1alpha2.DirectionEgress || direction == v1alpha2.DirectionBoth {
+			flows = append(flows, TrafficControlTable.ofTable.BuildFlow(priorityNormal).
+				Cookie(cookieID).
+				MatchInPort(port).
+				Action().LoadToRegField(TrafficControlTargetOFPortField, targetOFPort).
+				Action().LoadRegMark(actionRegMark).
+				Action().NextTable().
+				Done())
+		}
+	}
+	return flows
+}
+
+// trafficControlReturnClassifierFlow generates the flow to mark the packets from traffic control return port and forward
+// the packets to stageRouting directly. Note that, for the packets which are originally to be output to a tunnel port,
+// value of NXM_NX_TUN_IPV4_DST for the returned packets needs to be loaded in stageRouting.
+func (f *featurePodConnectivity) trafficControlReturnClassifierFlow(returnOFPort uint32) binding.Flow {
+	return ClassifierTable.ofTable.BuildFlow(priorityNormal).
+		Cookie(f.cookieAllocator.Request(f.category).Raw()).
+		MatchInPort(returnOFPort).
+		Action().LoadRegMark(FromTCReturnRegMark).
+		Action().GotoStage(stageRouting).
+		Done()
+}
+
+// trafficControlCommonFlows generates the common flows for traffic control.
+func (f *featurePodConnectivity) trafficControlCommonFlows() []binding.Flow {
+	cookieID := f.cookieAllocator.Request(f.category).Raw()
+	return []binding.Flow{
+		// This generates the flow to output packets to the original target port as well as mirror the packets to the target
+		// traffic control port.
+		L2ForwardingOutTable.ofTable.BuildFlow(priorityHigh+1).
+			Cookie(cookieID).
+			MatchRegMark(OFPortFoundRegMark, TrafficControlMirrorRegMark).
+			Action().OutputToRegField(TargetOFPortField).
+			Action().OutputToRegField(TrafficControlTargetOFPortField).
+			Done(),
+		// This generates the flow to output the packets to be redirected to the target traffic control port.
+		L2ForwardingOutTable.ofTable.BuildFlow(priorityHigh+1).
+			Cookie(cookieID).
+			MatchRegMark(OFPortFoundRegMark, TrafficControlRedirectRegMark).
+			Action().OutputToRegField(TrafficControlTargetOFPortField).
+			Done(),
+		// This generates the flow to forward the returned packets (with FromTCReturnRegMark) to stageOutput directly
+		// after loading output port number to reg1 in L2ForwardingCalcTable.
+		TrafficControlTable.ofTable.BuildFlow(priorityHigh).
+			Cookie(cookieID).
+			MatchRegMark(OFPortFoundRegMark, FromTCReturnRegMark).
+			Action().GotoStage(stageOutput).
+			Done(),
+	}
 }
