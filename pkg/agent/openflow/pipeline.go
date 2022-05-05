@@ -161,6 +161,7 @@ var (
 
 	// Tables in stageSwitching:
 	L2ForwardingCalcTable = newTable("L2ForwardingCalc", stageSwitching, pipelineIP)
+	TrafficControlTable   = newTable("TrafficControl", stageSwitching, pipelineIP)
 
 	// Tables in stageIngressSecurity:
 	IngressSecurityClassifierTable = newTable("IngressSecurityClassifier", stageIngressSecurity, pipelineIP)
@@ -389,6 +390,7 @@ type client struct {
 	enableDenyTracking    bool
 	enableEgress          bool
 	enableMulticast       bool
+	enableTrafficControl  bool
 	connectUplinkToBridge bool
 	roundInfo             types.RoundInfo
 	cookieAllocator       cookie.Allocator
@@ -2695,7 +2697,8 @@ func NewClient(bridgeName string,
 	enableDenyTracking bool,
 	proxyAll bool,
 	connectUplinkToBridge bool,
-	enableMulticast bool) Client {
+	enableMulticast bool,
+	enableTrafficControl bool) Client {
 	bridge := binding.NewOFBridge(bridgeName, mgmtAddr)
 	c := &client{
 		bridge:                bridge,
@@ -2705,6 +2708,7 @@ func NewClient(bridgeName string,
 		enableDenyTracking:    enableDenyTracking,
 		enableEgress:          enableEgress,
 		enableMulticast:       enableMulticast,
+		enableTrafficControl:  enableTrafficControl,
 		connectUplinkToBridge: connectUplinkToBridge,
 		pipelines:             make(map[binding.PipelineID]binding.Pipeline),
 		packetInHandlers:      map[uint8]map[string]PacketInHandler{},
