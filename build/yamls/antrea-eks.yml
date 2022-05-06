@@ -3725,6 +3725,8 @@ spec:
           operator: Exists
         - effect: NoSchedule
           key: node-role.kubernetes.io/master
+        - effect: NoSchedule
+          key: node-role.kubernetes.io/control-plane
       serviceAccountName: antrea-controller
       containers:
         - name: antrea-controller

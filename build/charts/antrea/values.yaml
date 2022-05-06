@@ -203,6 +203,9 @@ controller:
     # Allow it to schedule onto master nodes.
     - key: node-role.kubernetes.io/master
       effect: NoSchedule
+    # Control-plane taint for Kubernetes >= 1.24.
+    - key: node-role.kubernetes.io/control-plane
+      effect: NoSchedule
   # -- Node selector for the antrea-controller Pod.
   nodeSelector:
     kubernetes.io/os: linux
