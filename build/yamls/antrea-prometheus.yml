@@ -12,6 +12,16 @@ metadata:
   name: prometheus
   namespace: monitoring
 ---
+# This is useful for testing and manual access to the /metrics endpoints
+apiVersion: v1
+kind: Secret
+metadata:
+  name: prometheus-service-account-token
+  namespace: monitoring
+  annotations:
+    kubernetes.io/service-account.name: prometheus
+type: kubernetes.io/service-account-token
+---
 # Authorize Prometheus to view Kubernetes cluster components for service discovery purposes
 # Authorize Prometheus to retrieve metrics
 apiVersion: rbac.authorization.k8s.io/v1

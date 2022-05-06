@@ -15,9 +15,9 @@ Use `antrea-agent -h` to see complete options.
 
 The `antrea-agent` configuration file specifies the agent configuration
 parameters. For all the agent configuration parameters of a Linux Node, refer to
-this [base configuration file](/build/yamls/base/conf/antrea-agent.conf).
+this [base configuration file](../build/charts/antrea/conf/antrea-agent.conf).
 For all the configuration parameters of a Windows Node, refer to this [base
-configuration file](/build/yamls/windows/base/conf/antrea-agent.conf)
+configuration file](../build/yamls/windows/base/conf/antrea-agent.conf)
 
 ## antrea-controller
 
@@ -34,7 +34,7 @@ Use `antrea-controller -h` to see complete options.
 
 The `antrea-controller` configuration file specifies the controller
 configuration parameters. For all the controller configuration parameters,
-refer to this [base configuration file](/build/yamls/base/conf/antrea-controller.conf).
+refer to this [base configuration file](../build/charts/antrea/conf/antrea-controller.conf).
 
 ## CNI configuration
 

@@ -26,6 +26,26 @@ metadata:
   labels:
     app: antrea
 ---
+# Source: antrea/templates/agent/secret.yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: antrea-agent-service-account-token
+  namespace: kube-system
+  annotations:
+    kubernetes.io/service-account.name: antrea-agent
+type: kubernetes.io/service-account-token
+---
+# Source: antrea/templates/antctl/secret.yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: antctl-service-account-token
+  namespace: kube-system
+  annotations:
+    kubernetes.io/service-account.name: antctl
+type: kubernetes.io/service-account-token
+---
 # Source: antrea/templates/configmap.yaml
 apiVersion: v1
 kind: ConfigMap
