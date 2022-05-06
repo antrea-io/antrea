@@ -1,0 +1,12 @@
+- op: add
+  path: /spec/templates/podTemplates/0/spec/volumes/-
+  value: 
+    name: clickhouse-storage-volume
+    emptyDir:
+      medium: Memory
+      sizeLimit: STORAGE_SIZE
+- op: add
+  path: /spec/templates/podTemplates/0/spec/containers/0/volumeMounts/-
+  value: 
+    name: clickhouse-storage-volume
+    mountPath: /var/lib/clickhouse
