@@ -21,11 +21,11 @@ import (
 	"sync"
 	"time"
 
-	"k8s.io/apimachinery/pkg/util/clock"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
+	"k8s.io/utils/clock"
 
 	"antrea.io/antrea/pkg/agent/types"
 )
@@ -106,7 +106,7 @@ func newIDAllocator(asyncRuleDeleteInterval time.Duration, allocatedIDs ...uint3
 
 // newIDAllocatorWithCustomClock creates an ID allocator with a custom clock,
 // which is useful when writing robust unit tests.
-func newIDAllocatorWithCustomClock(clock clock.Clock, asyncRuleDeleteInterval time.Duration, allocatedIDs ...uint32) *idAllocator {
+func newIDAllocatorWithCustomClock(clock clock.WithTicker, asyncRuleDeleteInterval time.Duration, allocatedIDs ...uint32) *idAllocator {
 	allocator := newIDAllocator(asyncRuleDeleteInterval, allocatedIDs...)
 	// override regular delaying workqueue with one using a custom clock
 	allocator.deleteQueue = workqueue.NewDelayingQueueWithCustomClock(clock, deleteQueueName)

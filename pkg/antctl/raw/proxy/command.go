@@ -187,7 +187,15 @@ func runE(cmd *cobra.Command, _ []string) error {
 		}
 	}
 
-	server, err := proxy.NewServer(options.staticDir, options.apiPrefix, options.staticPrefix, options.filter, clientCfg, options.keepalive)
+	// The last argument is for "appendLocationPath", which for "kubectl proxy" is used as
+	// follows: if the Kubeconfig context provides a server URL which includes a Path comppnent
+	// (e.g., https://example.com/PATH), then this path is automatically added to all incoming
+	// requests to the proxy.
+	// See https://github.com/kubernetes/kubernetes/pull/97350
+	// In our case, we craft the config manually and clientCfg.Host never includes a Path
+	// component, so we always set "appendLocationPath" to "false", and there is no need to
+	// expose a flag like --append-server-path for "antctl proxy".
+	server, err := proxy.NewServer(options.staticDir, options.apiPrefix, options.staticPrefix, options.filter, clientCfg, options.keepalive, false)
 
 	if err != nil {
 		return err

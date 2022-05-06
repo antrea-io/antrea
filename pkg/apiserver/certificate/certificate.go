@@ -15,6 +15,7 @@
 package certificate
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"os"
@@ -169,7 +170,7 @@ func rotateSelfSignedCertificates(c *CACertController, secureServing *options.Se
 			klog.Errorf("error generating new cert: %v", err)
 			return
 		}
-		c.UpdateCertificate()
+		c.UpdateCertificate(context.TODO())
 	}
 }
 

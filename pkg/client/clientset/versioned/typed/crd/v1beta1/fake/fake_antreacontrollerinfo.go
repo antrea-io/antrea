@@ -1,4 +1,4 @@
-// Copyright 2021 Antrea Authors
+// Copyright 2022 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -97,7 +97,7 @@ func (c *FakeAntreaControllerInfos) Update(ctx context.Context, antreaController
 // Delete takes name of the antreaControllerInfo and deletes it. Returns an error if one occurs.
 func (c *FakeAntreaControllerInfos) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewRootDeleteAction(antreacontrollerinfosResource, name), &v1beta1.AntreaControllerInfo{})
+		Invokes(testing.NewRootDeleteActionWithOptions(antreacontrollerinfosResource, name, opts), &v1beta1.AntreaControllerInfo{})
 	return err
 }
 

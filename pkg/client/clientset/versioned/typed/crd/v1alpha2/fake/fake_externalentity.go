@@ -1,4 +1,4 @@
-// Copyright 2021 Antrea Authors
+// Copyright 2022 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -103,7 +103,7 @@ func (c *FakeExternalEntities) Update(ctx context.Context, externalEntity *v1alp
 // Delete takes name of the externalEntity and deletes it. Returns an error if one occurs.
 func (c *FakeExternalEntities) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewDeleteAction(externalentitiesResource, c.ns, name), &v1alpha2.ExternalEntity{})
+		Invokes(testing.NewDeleteActionWithOptions(externalentitiesResource, c.ns, name, opts), &v1alpha2.ExternalEntity{})
 
 	return err
 }

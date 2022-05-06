@@ -1,4 +1,4 @@
-// Copyright 2021 Antrea Authors
+// Copyright 2022 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -97,7 +97,7 @@ func (c *FakeTiers) Update(ctx context.Context, tier *v1alpha1.Tier, opts v1.Upd
 // Delete takes name of the tier and deletes it. Returns an error if one occurs.
 func (c *FakeTiers) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewRootDeleteAction(tiersResource, name), &v1alpha1.Tier{})
+		Invokes(testing.NewRootDeleteActionWithOptions(tiersResource, name, opts), &v1alpha1.Tier{})
 	return err
 }
 
