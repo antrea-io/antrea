@@ -145,8 +145,9 @@ DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
   [ci/jenkins/jobs](/ci/jenkins/jobs). It validates the syntax of the jenkins jobs'
   configuration.
 
-* Jenkins Windows OVS validator: this job only executes for PRs that include changes to [hack/windows/Install-OVS.ps1](hack/windows/Install-OVS.ps1). It validates
-  if Windows OVS can be installed correctly.
+* Jenkins Windows OVS validator: this job only executes for PRs that include
+  changes to [hack/windows/Install-OVS.ps1](/hack/windows/Install-OVS.ps1).
+  It validates if Windows OVS can be installed correctly.
 
 ```shell
 #!/bin/bash
