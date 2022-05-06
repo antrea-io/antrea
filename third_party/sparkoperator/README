@@ -1,0 +1,1 @@
+These API files are copied from [spark-on-k8s-operator](https://github.com/GoogleCloudPlatform/spark-on-k8s-operator) to avoid the version discrepancy of k8s.io/kubernetes if importing this module directly.

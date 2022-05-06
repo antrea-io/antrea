@@ -397,7 +397,7 @@ func TestBatchCommitAll(t *testing.T) {
 	defer db.Close()
 
 	chExportProc := ClickHouseExportProcess{
-		db:    db,
+		DB:    db,
 		deque: deque.New(),
 		mutex: sync.RWMutex{},
 	}
@@ -526,7 +526,7 @@ func TestBatchCommitAllMultiRecord(t *testing.T) {
 	defer db.Close()
 
 	chExportProc := ClickHouseExportProcess{
-		db:    db,
+		DB:    db,
 		deque: deque.New(),
 		mutex: sync.RWMutex{},
 	}
@@ -564,7 +564,7 @@ func TestBatchCommitAllError(t *testing.T) {
 	defer db.Close()
 
 	chExportProc := ClickHouseExportProcess{
-		db:    db,
+		DB:    db,
 		deque: deque.New(),
 		mutex: sync.RWMutex{},
 	}

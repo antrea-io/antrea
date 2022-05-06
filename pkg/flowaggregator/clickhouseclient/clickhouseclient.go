@@ -82,8 +82,8 @@ const (
 )
 
 type ClickHouseExportProcess struct {
-	// db holds sql connection struct to clickhouse db.
-	db *sql.DB
+	// DB holds sql connection struct to clickhouse DB.
+	DB *sql.DB
 	// dsn is data source name used for connection to clickhouse db.
 	dsn string
 	// deque buffers flows records between batch commits.
@@ -213,7 +213,7 @@ func NewClickHouseClient(input ClickHouseInput) (*ClickHouseExportProcess, error
 	_ = tx.Commit()
 
 	chClient := &ClickHouseExportProcess{
-		db:             connect,
+		DB:             connect,
 		dsn:            dsn,
 		deque:          deque.New(),
 		mutex:          sync.RWMutex{},
@@ -432,7 +432,7 @@ func (ch *ClickHouseExportProcess) batchCommitAll() (int, error) {
 	var stmt *sql.Stmt
 
 	// start new connection
-	tx, err := ch.db.Begin()
+	tx, err := ch.DB.Begin()
 	if err == nil {
 		stmt, err = tx.Prepare(insertQuery)
 	}

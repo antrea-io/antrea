@@ -513,6 +513,10 @@ func testHelper(t *testing.T, data *TestData, podAIPs, podBIPs, podCIPs, podDIPs
 		}
 		podName := flowAggPod.Name
 		for _, args := range antctl.CommandList.GetDebugCommands(runtime.ModeFlowAggregator) {
+			if args[0] == "policyReco" {
+				// Ignore the policyReco Antctl sub-commands
+				continue
+			}
 			command := []string{}
 			if testOptions.enableCoverage {
 				antctlCovArgs := antctlCoverageArgs("antctl-coverage")

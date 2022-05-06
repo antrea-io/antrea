@@ -75,6 +75,7 @@ const (
 	get
 	query
 	mc
+	policyReco
 )
 
 var groupCommands = map[commandGroup]*cobra.Command{
@@ -92,6 +93,11 @@ var groupCommands = map[commandGroup]*cobra.Command{
 		Use:   "mc",
 		Short: "Sub-commands of multi-cluster feature",
 		Long:  "Sub-commands of multi-cluster feature",
+	},
+	policyReco: {
+		Use:   "policyReco",
+		Short: "Sub-commands of policy recommendation feature",
+		Long:  "Sub-commands of policy recommendation feature",
 	},
 }
 
@@ -650,11 +656,13 @@ func (cd *commandDefinition) applyFlagsToCommand(cmd *cobra.Command) {
 		cmd.Args = cobra.NoArgs
 	}
 	if cd.commandGroup == get {
-		cmd.Flags().StringP("output", "o", "table", "output format: json|table|yaml")
+		cmd.Flags().StringP("output", "o", "table", "output format: json|table|yaml|raw")
 	} else if cd.commandGroup == query {
-		cmd.Flags().StringP("output", "o", "table", "output format: json|table|yaml")
+		cmd.Flags().StringP("output", "o", "table", "output format: json|table|yaml|raw")
+	} else if cd.commandGroup == policyReco {
+		cmd.Flags().StringP("output", "o", "raw", "output format: json|table|yaml|raw")
 	} else {
-		cmd.Flags().StringP("output", "o", "yaml", "output format: json|table|yaml")
+		cmd.Flags().StringP("output", "o", "yaml", "output format: json|table|yaml|raw")
 	}
 }
 

@@ -32,6 +32,9 @@ import (
 	systeminstall "antrea.io/antrea/pkg/apis/system/install"
 	"antrea.io/antrea/pkg/apiserver/handlers/loglevel"
 	"antrea.io/antrea/pkg/flowaggregator/apiserver/handlers/flowrecords"
+	"antrea.io/antrea/pkg/flowaggregator/apiserver/handlers/policyrecocheck"
+	"antrea.io/antrea/pkg/flowaggregator/apiserver/handlers/policyrecoresult"
+	"antrea.io/antrea/pkg/flowaggregator/apiserver/handlers/policyrecostart"
 	"antrea.io/antrea/pkg/flowaggregator/apiserver/handlers/recordmetrics"
 	"antrea.io/antrea/pkg/flowaggregator/querier"
 	antreaversion "antrea.io/antrea/pkg/version"
@@ -73,6 +76,9 @@ func installHandlers(s *genericapiserver.GenericAPIServer, faq querier.FlowAggre
 	s.Handler.NonGoRestfulMux.HandleFunc("/flowrecords", flowrecords.HandleFunc(faq))
 	s.Handler.NonGoRestfulMux.HandleFunc("/recordmetrics", recordmetrics.HandleFunc(faq))
 	s.Handler.NonGoRestfulMux.HandleFunc("/loglevel", loglevel.HandleFunc())
+	s.Handler.NonGoRestfulMux.HandleFunc("/policyrecostart", policyrecostart.HandleFunc(faq))
+	s.Handler.NonGoRestfulMux.HandleFunc("/policyrecocheck", policyrecocheck.HandleFunc(faq))
+	s.Handler.NonGoRestfulMux.HandleFunc("/policyrecoresult", policyrecoresult.HandleFunc(faq))
 }
 
 // New creates an APIServer for running in flow aggregator.

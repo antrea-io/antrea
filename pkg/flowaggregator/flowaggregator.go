@@ -16,17 +16,23 @@ package flowaggregator
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"net/http"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/vmware/go-ipfix/pkg/collector"
 	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
 	"github.com/vmware/go-ipfix/pkg/exporter"
 	ipfixintermediate "github.com/vmware/go-ipfix/pkg/intermediate"
 	ipfixregistry "github.com/vmware/go-ipfix/pkg/registry"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
@@ -35,6 +41,7 @@ import (
 	"antrea.io/antrea/pkg/flowaggregator/clickhouseclient"
 	"antrea.io/antrea/pkg/flowaggregator/querier"
 	"antrea.io/antrea/pkg/ipfix"
+	sparkv1 "antrea.io/antrea/third_party/sparkoperator/v1beta2"
 )
 
 var (
@@ -180,7 +187,8 @@ const (
 	collectorAddress     = "0.0.0.0:4739"
 
 	// PodInfo index name for Pod cache.
-	podInfoIndex = "podInfo"
+	podInfoIndex     = "podInfo"
+	flowAggregatorNS = "flow-aggregator"
 )
 
 type AggregatorTransportProtocol string
@@ -723,4 +731,201 @@ func (fa *flowAggregator) createInfoElementForTemplateSet(ieName string, enterpr
 		return nil, err
 	}
 	return ie, nil
+}
+
+func (fa *flowAggregator) policyRecommendationPreCheck() error {
+	if fa.dbExportProcess == nil {
+		return fmt.Errorf("clickhouse client of Flow Aggregator hasn't started yet, please check if Theia has been deployed")
+	}
+	err := fa.dbExportProcess.DB.Ping()
+	if err != nil {
+		return fmt.Errorf("error %v when pinging ClickHouse DB, please check the deployment of Theia", err)
+	}
+	pods, err := fa.k8sClient.CoreV1().Pods(flowAggregatorNS).List(context.TODO(), metav1.ListOptions{
+		LabelSelector: "app.kubernetes.io/instance=policy-reco,app.kubernetes.io/name=spark-operator",
+	})
+	if err != nil {
+		return fmt.Errorf("error %v when finding the policy-reco-spark-operator Pod, please check the deployment of the Spark Operator", err)
+	}
+	if len(pods.Items) < 1 {
+		return fmt.Errorf("can't find the policy-reco-spark-operator Pod, please check the deployment of the Spark Operator")
+	}
+	return nil
+}
+
+func (fa *flowAggregator) StartPolicyRecommendation(arguments []string, driverCoreRequest string, driverMemory string, executorCoreRequest string, executorMemory string, executorInstances int32) (string, error) {
+	err := fa.policyRecommendationPreCheck()
+	if err != nil {
+		return "", err
+	}
+	sparkImage := "antrea/theia-policy-recommendation:latest"
+	sparkImagePullPolicy := "IfNotPresent"
+	sparkAppFile := "local:///opt/spark/work-dir/policy_recommendation_job.py"
+	sparkServiceAccount := "policy-reco-spark"
+	sparkVersion := "3.1.1"
+	recommendationID := uuid.New().String()
+	arguments = append(arguments, "--id", recommendationID)
+	recommendationApplication := &sparkv1.SparkApplication{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "sparkoperator.k8s.io/v1beta2",
+			Kind:       "SparkApplication",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "policy-reco-" + recommendationID,
+			Namespace: flowAggregatorNS,
+		},
+		Spec: sparkv1.SparkApplicationSpec{
+			Type:                "Python",
+			SparkVersion:        sparkVersion,
+			Mode:                "cluster",
+			Image:               &sparkImage,
+			ImagePullPolicy:     &sparkImagePullPolicy,
+			MainApplicationFile: &sparkAppFile,
+			Arguments:           arguments,
+			Driver: sparkv1.DriverSpec{
+				CoreRequest: &driverCoreRequest,
+				SparkPodSpec: sparkv1.SparkPodSpec{
+					Memory: &driverMemory,
+					Labels: map[string]string{
+						"version": sparkVersion,
+					},
+					EnvSecretKeyRefs: map[string]sparkv1.NameKey{
+						"CH_USERNAME": {
+							Name: "clickhouse-secret",
+							Key:  "username",
+						},
+						"CH_PASSWORD": {
+							Name: "clickhouse-secret",
+							Key:  "password",
+						},
+					},
+					ServiceAccount: &sparkServiceAccount,
+				},
+			},
+			Executor: sparkv1.ExecutorSpec{
+				CoreRequest: &executorCoreRequest,
+				SparkPodSpec: sparkv1.SparkPodSpec{
+					Memory: &executorMemory,
+					Labels: map[string]string{
+						"version": sparkVersion,
+					},
+					EnvSecretKeyRefs: map[string]sparkv1.NameKey{
+						"CH_USERNAME": {
+							Name: "clickhouse-secret",
+							Key:  "username",
+						},
+						"CH_PASSWORD": {
+							Name: "clickhouse-secret",
+							Key:  "password",
+						},
+					},
+				},
+				Instances: &executorInstances,
+			},
+		},
+	}
+	response := &sparkv1.SparkApplication{}
+	err = fa.k8sClient.CoreV1().RESTClient().
+		Post().
+		AbsPath("/apis/sparkoperator.k8s.io/v1beta2").
+		Namespace(flowAggregatorNS).
+		Resource("sparkapplications").
+		Body(recommendationApplication).
+		Do(context.TODO()).
+		Into(response)
+	return recommendationID, err
+}
+
+func (fa *flowAggregator) CheckPolicyRecommendation(id string) (string, error) {
+	err := fa.policyRecommendationPreCheck()
+	if err != nil {
+		return "", err
+	}
+	sparkApplication := &sparkv1.SparkApplication{}
+	err = fa.k8sClient.CoreV1().RESTClient().
+		Get().
+		AbsPath("/apis/sparkoperator.k8s.io/v1beta2").
+		Namespace(flowAggregatorNS).
+		Resource("sparkapplications").
+		Name("policy-reco-" + id).
+		Do(context.TODO()).
+		Into(sparkApplication)
+	if err != nil {
+		return fmt.Sprintf("Check failed of recommendation job with id %s", id), err
+	}
+	state := strings.TrimSpace(string(sparkApplication.Status.AppState.State))
+	if state == "RUNNING" {
+		// Check the working progress of running recommendation job
+		state += getPolicyRecommendationProgress(id)
+	}
+	return fmt.Sprintf("Status of this policy recommendation job is %s\n", state), nil
+}
+
+func (fa *flowAggregator) GetPolicyRecommendationResult(id string) (string, error) {
+	err := fa.policyRecommendationPreCheck()
+	if err != nil {
+		return "", err
+	}
+	var recoResult string
+	query := fmt.Sprintf("SELECT yamls FROM recommendations WHERE id = '%s';", id)
+	err = fa.dbExportProcess.DB.QueryRow(query).Scan(&recoResult)
+	if err != nil {
+		return fmt.Sprintf("Get recommendaation result failed of recommendation job with id %s", id), err
+	}
+	return recoResult, nil
+}
+
+func getResponseFromSparkMonitoringSvc(url string) ([]byte, error) {
+	sparkMonitoringClient := http.Client{}
+	request, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	res, getErr := sparkMonitoringClient.Do(request)
+	if getErr != nil {
+		return nil, err
+	}
+	if res.Body != nil {
+		defer res.Body.Close()
+	}
+	body, readErr := ioutil.ReadAll(res.Body)
+	if readErr != nil {
+		return nil, err
+	}
+	return body, nil
+}
+
+func getPolicyRecommendationProgress(id string) string {
+	// Get the id of current spark application
+	url := fmt.Sprintf("http://policy-reco-%s-ui-svc:4040/api/v1/applications", id)
+	response, err := getResponseFromSparkMonitoringSvc(url)
+	if err != nil {
+		klog.ErrorS(err, "Failed to get response from Spark Monitoring service", "id", id)
+		return ""
+	}
+	var getAppsResult []map[string]interface{}
+	json.Unmarshal([]byte(response), &getAppsResult)
+	if len(getAppsResult) != 1 {
+		return ""
+	}
+	sparkAppID := getAppsResult[0]["id"]
+	// Check the percentage of completed stages
+	url = fmt.Sprintf("http://policy-reco-%s-ui-svc:4040/api/v1/applications/%s/stages", id, sparkAppID)
+	response, err = getResponseFromSparkMonitoringSvc(url)
+	if err != nil {
+		klog.ErrorS(err, "Failed to get response from Spark Monitoring service", "url", url)
+		return ""
+	}
+	var getStagesResult []map[string]interface{}
+	json.Unmarshal([]byte(response), &getStagesResult)
+	if len(getStagesResult) < 1 {
+		return ""
+	}
+	completedStages := 0
+	for _, stage := range getStagesResult {
+		if stage["status"] == "COMPLETE" || stage["status"] == "SKIPPED" {
+			completedStages++
+		}
+	}
+	return fmt.Sprintf(": %d/%d (%d%%) stages completed", completedStages, len(getStagesResult), completedStages*100/len(getStagesResult))
 }

@@ -28,4 +28,7 @@ type Metrics struct {
 type FlowAggregatorQuerier interface {
 	GetFlowRecords(flowKey *ipfixintermediate.FlowKey) []map[string]interface{}
 	GetRecordMetrics() Metrics
+	StartPolicyRecommendation(arguments []string, driverCoreRequest string, driverMemory string, executorCoreRequest string, executorMemory string, executorInstances int32) (string, error)
+	CheckPolicyRecommendation(id string) (string, error)
+	GetPolicyRecommendationResult(id string) (string, error)
 }

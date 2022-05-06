@@ -34,6 +34,9 @@ import (
 	"antrea.io/antrea/pkg/antctl/transform/controllerinfo"
 	"antrea.io/antrea/pkg/antctl/transform/networkpolicy"
 	"antrea.io/antrea/pkg/antctl/transform/ovstracing"
+	"antrea.io/antrea/pkg/antctl/transform/policyrecocheck"
+	"antrea.io/antrea/pkg/antctl/transform/policyrecoresult"
+	"antrea.io/antrea/pkg/antctl/transform/policyrecostart"
 	"antrea.io/antrea/pkg/antctl/transform/version"
 	cpv1beta "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	systemv1beta1 "antrea.io/antrea/pkg/apis/system/v1beta1"
@@ -535,6 +538,143 @@ var CommandList = &commandList{
 				},
 			},
 			transformedResponse: reflect.TypeOf(serviceexternalip.Response{}),
+		},
+		{
+			use:   "start",
+			short: "Start policy recommendation Spark job",
+			long:  "Start a new policy recommendation Spark job. Network policies will be recommended based on the flow records sent by Flow Aggregator.",
+			example: `  Start a policy recommendation spark job with default configuration
+  $ antctl policyReco start
+  Start an initial policy recommendation spark job with network isolation option 1 and limit on last 10k flow records
+  $ antctl policyReco start --type initial --option 1 --limit 10000
+  Start an initial policy recommendation spark job with network isolation option 1 and limit on flow records from 2022-01-01 00:00:00 to 2022-01-31 23:59:59.
+  $ antctl policyReco start --type initial --option 1 --start_time '2022-01-01 00:00:00' --end_time '2022-01-31 23:59:59'`,
+			commandGroup: policyReco,
+			flowAggregatorEndpoint: &endpoint{
+				nonResourceEndpoint: &nonResourceEndpoint{
+					path: "/policyrecostart",
+					params: []flagInfo{
+						{
+							name: "type",
+							usage: `{initial|subsequent} Indicates this recommendation is an initial recommendion or a subsequent recommendation job.
+Default value is initial.`,
+						},
+						{
+							name: "limit",
+							usage: `The limit on the number of flow records read from the database. 0 means no limit.
+Default value is 0 (no limit).`,
+						},
+						{
+							name: "option",
+							usage: `Option of network isolation preference in policy recommendation.
+Currently we have 3 options:
+1: Recommending allow ANP/ACNP policies, with default deny rules only on applied to Pod labels which have allow rules recommended.
+2: Recommending allow ANP/ACNP policies, with default deny rules for whole cluster.
+3: Recommending allow K8s network policies, with no deny rules at all
+Default value is 1.`,
+						},
+						{
+							name: "start_time",
+							usage: `The start time of the flow records considered for the policy recommendation. 
+Format is YYYY-MM-DD hh:mm:ss in UTC timezone. 
+Default value is None, which means no limit of the start time of flow records.`,
+						},
+						{
+							name: "end_time",
+							usage: `The end time of the flow records considered for the policy recommendation.
+Format is YYYY-MM-DD hh:mm:ss in UTC timezone.
+Default value is None, which means no limit of the end time of flow records.`,
+						},
+						{
+							name: "ns_allow_list",
+							usage: `List of default traffic allow namespaces.
+Default value is a list of Antrea CNI related namespaces: ['kube-system', 'flow-aggregator', 'flow-visibility'].`,
+						},
+						{
+							name: "rm_labels",
+							usage: `{true|false} Enable this option will remove automatically generated Pod labels including 'pod-template-hash', 'controller-revision-hash', 'pod-template-generation'.
+Default value is true`,
+						},
+						{
+							name: "to_services",
+							usage: `{true|false} Use the toServices feature in ANP, only works when option is 1 or 2.
+Default value is true.`,
+						},
+						{
+							name: "driver_core_request",
+							usage: `Specify the cpu request for the driver pod. Values conform to the Kubernetes convention. Example values include 0.1, 500m, 1.5, 5, etc.
+Default value is 200m.`,
+						},
+						{
+							name: "driver_memory",
+							usage: `Specify the memory request for the driver pod. Values conform to the Kubernetes convention. Example values include 512M, 1G, 8G, etc.
+Default value is 512M.`,
+						},
+						{
+							name: "executor_core_request",
+							usage: `Specify the cpu request for each executor pod. Values conform to the Kubernetes convention. Example values include 0.1, 500m, 1.5, 5, etc.
+Default value is 200m.`,
+						},
+						{
+							name: "executor_memory",
+							usage: `Specify the memory request for each executor pod. Values conform to the Kubernetes convention. Example values include 512M, 1G, 8G, etc.
+Default value is 512M.`,
+						},
+						{
+							name: "executor_instances",
+							usage: `Specify the number of executors for the spark application. Example values include 1, 2, 8, etc.
+Default value is 1.`,
+						},
+					},
+					outputType: single,
+				},
+				addonTransform: policyrecostart.Transform,
+			},
+			transformedResponse: reflect.TypeOf(""),
+		},
+		{
+			use:   "check",
+			short: "Check the status of policy recommendation Spark job by ID",
+			example: `  Check the status of policy recommendation Spark job by ID
+  $ antctl policyReco check --id c46091dd-5d82-46aa-a216-f66e42a1d19e4h6fd
+  Check the status with job ID c46091dd-5d82-46aa-a216-f66e42a1d19e4h6fd`,
+			commandGroup: policyReco,
+			flowAggregatorEndpoint: &endpoint{
+				nonResourceEndpoint: &nonResourceEndpoint{
+					path: "/policyrecocheck",
+					params: []flagInfo{
+						{
+							name:  "id",
+							usage: "recommendation Spark job ID",
+						},
+					},
+					outputType: single,
+				},
+				addonTransform: policyrecocheck.Transform,
+			},
+			transformedResponse: reflect.TypeOf(""),
+		},
+		{
+			use:   "result",
+			short: "Get the recommendation result of policy recommendation Spark job by ID",
+			example: `  Get the recommendation result of policy recommendation Spark job by ID.
+  $ antctl policyReco result --id c46091dd-5d82-46aa-a216-f66e42a1d19e4h6fd
+  Get the recommendation result with job ID c46091dd-5d82-46aa-a216-f66e42a1d19e4h6fd`,
+			commandGroup: policyReco,
+			flowAggregatorEndpoint: &endpoint{
+				nonResourceEndpoint: &nonResourceEndpoint{
+					path: "/policyrecoresult",
+					params: []flagInfo{
+						{
+							name:  "id",
+							usage: "recommendation Spark job ID",
+						},
+					},
+					outputType: single,
+				},
+				addonTransform: policyrecoresult.Transform,
+			},
+			transformedResponse: reflect.TypeOf(""),
 		},
 	},
 	rawCommands: []rawCommand{
