@@ -48,6 +48,7 @@ example, to enable `AntreaProxy` on Linux, edit the Agent configuration in the
 | `Multicast`             | Agent              | `false` | Alpha | v1.5          | N/A          | N/A        | Yes                |       |
 | `SecondaryNetwork`      | Agent              | `false` | Alpha | v1.5          | N/A          | N/A        | Yes                |       |
 | `ServiceExternalIP`     | Agent + Controller | `false` | Alpha | v1.5          | N/A          | N/A        | Yes                |       |
+| `TrafficControl`        | Agent              | `false` | Alpha | v1.7          | N/A          | N/A        | No                 |       |
 
 ## Description and Requirements of Features
 
@@ -323,3 +324,13 @@ Refer to this [document](service-loadbalancer.md) for more information.
 #### Requirements for this Feature
 
 This feature is currently only supported for Nodes running Linux.
+
+### TrafficControl
+
+`TrafficControl` enables a CRD API for Antrea that controls and manipulates the
+transmission of Pod traffic. It allows users to mirror or redirect traffic
+originating from specific Pods or destined for specific Pods to a local network
+device or a remote destination via a tunnel of various types. It enables a
+monitoring solution to get full visibility into network traffic, including both
+north-south and east-west traffic. Refer to this [document](traffic-control.md)
+for more information.
