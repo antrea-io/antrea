@@ -177,11 +177,6 @@ DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
   | :------------: | :-----------------: | :-------------: | :------: |
   |    1.21.7      |  Standard_DS2_v2    |  Ubuntu 18.04   |[![Build Status](http://jenkins.antrea-ci.rocks/buildStatus/icon?job=cloud-antrea-aks-conformance-net-policy)](http://jenkins.antrea-ci.rocks/view/cloud/job/cloud-antrea-aks-conformance-net-policy/)|
 
-* [daily-elk-flow-collector-validate](https://jenkins.antrea-ci.rocks/job/antrea-daily-elk-flow-collector-validate-for-period/):
-  [![Build Status](http://jenkins.antrea-ci.rocks/buildStatus/icon?job=antrea-daily-elk-flow-collector-validate-for-period)](http://jenkins.antrea-ci.rocks/view/cloud/job/antrea-daily-elk-flow-collector-validate-for-period/)
-  daily validation of elk flow collector manifest. If build fails, Jenkins will send an email to
-  projectantrea-dev@googlegroups.com for notification.
-
 * [daily-flow-visibility-validate](https://jenkins.antrea-ci.rocks/job/antrea-daily-flow-visibility-validate-for-period/):
   [![Build Status](http://jenkins.antrea-ci.rocks/buildStatus/icon?job=antrea-daily-flow-visibility-validate-for-period)](http://jenkins.antrea-ci.rocks/view/cloud/job/antrea-daily-flow-visibility-validate-for-period/)
   daily validation of Flow Visibility manifest. If build fails, Jenkins will send an email to

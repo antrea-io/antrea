@@ -44,18 +44,7 @@
       - [Node-to-Node Flows Dashboard](#node-to-node-flows-dashboard)
       - [Network-Policy Flows Dashboard](#network-policy-flows-dashboard)
     - [Dashboards Customization](#dashboards-customization)
-  - [ELK Flow Collector (deprecated)](#elk-flow-collector-deprecated)
-    - [Purpose](#purpose-1)
-    - [About Elastic Stack](#about-elastic-stack)
-    - [Deployment Steps](#deployment-steps-3)
-    - [Pre-built Dashboards](#pre-built-dashboards-1)
-      - [Overview](#overview-1)
-      - [Pod-to-Pod Flows](#pod-to-pod-flows)
-      - [Pod-to-External Flows](#pod-to-external-flows)
-      - [Pod-to-Service Flows](#pod-to-service-flows)
-      - [Flow Records](#flow-records)
-      - [Node Throughput](#node-throughput)
-      - [Network Policy](#network-policy)
+  - [ELK Flow Collector (removed)](#elk-flow-collector-removed)
 <!-- /toc -->
 
 ## Overview
@@ -277,20 +266,13 @@ kubectl apply -f https://raw.githubusercontent.com/antrea-io/antrea/main/build/y
 The following configuration parameters have to be provided through the Flow
 Aggregator ConfigMap. Flow aggregator needs to be configured with at least one
 of the supported [Flow Collectors](#flow-collectors).
-`flowCollector` is mandatory for [go-ipfix collector](#deployment-steps) or
-[ELK flow collector](#deployment-steps-2), and `clickHouse` is mandatory for
-[Grafana Flow Collector](#grafana-flow-collector). We provide an example value
-for this parameter in the following snippet.  
+`flowCollector` is mandatory for [go-ipfix collector](#deployment-steps), and
+`clickHouse` is mandatory for [Grafana Flow Collector](#grafana-flow-collector).
+We provide an example value for this parameter in the following snippet.  
 
 * If you have deployed the [go-ipfix collector](#deployment-steps),
 then please set `flowCollector.enable` to `true` and use the address for
 `flowCollector.address`: `<Ipfix-Collector Cluster IP>:<port>:<tcp|udp>`
-* If you have deployed the [ELK flow collector](#deployment-steps-2), then
-please set `flowCollector.enable` to `true` and use the address for
-`flowCollector.address`:`<Logstash Cluster IP>:4739:<tcp|udp>` for sending
-IPFIX messages, or `<Logstash Cluster IP>:4736:<tcp|udp>` for sending JSON
-format records. Record format is specified with `flowCollector.recordFormat`
-(defaults to IPFIX) and must match the format expected by the collector.
 * If you have deployed the [Grafana Flow Collector](#grafana-flow-collector),
 then please enable the collector by setting `clickHouse.enable` to `true`. If
 it is deployed following the [deployment steps](#deployment-steps-1), the
@@ -488,7 +470,7 @@ about flow record processing. Refer to the
 ## Quick deployment
 
 If you would like to quickly try Network Flow Visibility feature, you can deploy
-Antrea, the Flow Aggregator Service, the ELK Flow Collector or the Grafana Flow Collector on the
+Antrea, the Flow Aggregator Service, the Grafana Flow Collector on the
 [Vagrant setup](../test/e2e/README.md).
 
 ### Image-building steps
@@ -508,28 +490,8 @@ make flow-visibility-clickhouse-monitor
 
 ### Deployment Steps
 
-If you would like to deploy the ELK Flow Collector, you can run the following command:
-
-```shell
-./infra/vagrant/provision.sh
-./infra/vagrant/push_antrea.sh --flow-collector ELK
-```
-
-If you would like to deploy elastic search with high resources, you can change
-the `ES_JAVA_OPTS` in the [ELK Flow Collector configuration](../build/yamls/elk-flow-collector/elk-flow-collector.yml)
-according to the [guide](https://www.elastic.co/guide/en/elasticsearch/reference/7.8/heap-size.html).
-A larger heap size, like `-Xms1g -Xmx2g`, requires the Vagrant Nodes to have
-higher memory than default. In this case, we need to provision the Nodes with
-the `--large` option as with the following command:
-
-```shell
-./infra/vagrant/provision.sh --large
-./infra/vagrant/push_antrea.sh --flow-collector ELK
-```
-
-Alternatively, given any external IPFIX flow collector, you can deploy Antrea and
-the Flow Aggregator Service on a default Vagrant setup by running the following
-commands:
+Given any external IPFIX flow collector, you can deploy Antrea and the Flow
+Aggregator Service on a default Vagrant setup by running the following commands:
 
 ```shell
 ./infra/vagrant/provision.sh
@@ -545,9 +507,9 @@ If you would like to deploy the Grafana Flow Collector, you can run the followin
 
 ## Flow Collectors
 
-Here we list three choices the external configured flow collector: go-ipfix collector,
-Grafana flow collector and ELK flow collector. For each collector, we introduce how to
-deploy it and how to output or visualize the collected flow records information.
+Here we list two choices the external configured flow collector: go-ipfix collector
+and Grafana flow collector. For each collector, we introduce how to deploy it and
+how to output or visualize the collected flow records information.
 
 ### Go-ipfix Collector
 
@@ -983,165 +945,10 @@ by adding the file in the following section:
 ./hack/generate-manifest-flow-visibility.sh > build/yamls/flow-visibility.yml
 ```
 
-### ELK Flow Collector (deprecated)
+### ELK Flow Collector (removed)
 
-#### Purpose
-
-Antrea supports sending IPFIX flow records through the Flow Exporter feature
-described above. The Elastic Stack (ELK Stack) works as the data collector, data
-storage and visualization tool for flow records and flow-related information. This
-document provides the guidelines for deploying Elastic Stack with support for
-Antrea-specific IPFIX fields in a Kubernetes cluster.
-
-#### About Elastic Stack
-
-[Elastic Stack](https://www.elastic.co) is a group of open source products to
-help collect, store, search, analyze and visualize data in real time. We will
-use Logstash, Elasticsearch and Kibana in Antrea flow visualization.
-[Logstash](https://www.elastic.co/logstash) works as data collector to
-centralize flow records. [Logstash Netflow codec plugin](https://www.elastic.co/guide/en/logstash/current/plugins-codecs-netflow.html)
-supports Netflow v5/v9/v10(IPFIX) protocols for flow data collection.
-The flow exporter feature in Antrea Agent uses the IPFIX (Netflow v10) protocol
-to export flow records.
-
-[Elasticsearch](https://www.elastic.co/elasticsearch/), as a RESTful search
-engine, supports storing, searching and indexing records received.
-[Kibana](https://www.elastic.co/kibana/) is mainly for data visualization and
-exploration.
-
-#### Deployment Steps
-
-If you are looking for steps to deploy the ELK flow collector along with a new Antrea
-cluster and the Flow Aggregator Service, then please refer to the
-[quick deployment](#quick-deployment) section.
-
-The following steps will deploy the ELK flow collector on an existing Kubernetes
-cluster, which uses Antrea as the CNI. First step is to fetch the necessary resources
-from the Antrea repository. You can either clone the entire repo or download the
-particular folder using the subversion(svn) utility. If the deployed version of
-Antrea has a release `<TAG>` (e.g. `v0.10.0`), then you can use the following command:
-
-```shell
-git clone --depth 1 --branch <TAG> https://github.com/antrea-io/antrea.git && cd antrea/build/yamls/
-or
-svn export https://github.com/antrea-io/antrea/tags/<TAG>/build/yamls/elk-flow-collector/
-```
-
-If the deployed version of Antrea is the latest version, i.e., built from the main
-branch, then you can use the following command:
-
-```shell
-git clone --depth 1 --branch main https://github.com/antrea-io/antrea.git && cd antrea/build/yamls/
-or
-svn export https://github.com/antrea-io/antrea/trunk/build/yamls/elk-flow-collector/
-```
-
-To create the required K8s resources in the `elk-flow-collector` folder and get
-everything up-and-running, run following commands:
-
-```shell
-kubectl create namespace elk-flow-collector
-kubectl create configmap logstash-configmap -n elk-flow-collector --from-file=./elk-flow-collector/logstash/
-kubectl apply -f ./elk-flow-collector/elk-flow-collector.yml -n elk-flow-collector
-```
-
-Please refer to the [Flow Aggregator Configuration](#configuration-1) to configure
-external flow collector as Logstash Service Cluster IP.
-
-Kibana dashboard is exposed as a Nodeport Service, which can be accessed via
-`http://[NodeIP]: 30007`. `elk-flow-collector/kibana.ndjson` is an auto-generated
-reusable file containing pre-built objects for visualizing Pod-to-Pod, Pod-to-Service
-and Node-to-Node flow records. To import the dashboards into Kibana, go to
-**Management -> Saved Objects** and import `elk-flow-collector/kibana.ndjson`.
-
-#### Pre-built Dashboards
-
-The following dashboards are pre-built and are recommended for Antrea flow
-visualization.
-
-##### Overview
-
-An overview of Pod-based flow records information is provided.
-
-<img src="https://downloads.antrea.io/static/02052021/flow-visualization-overview.png" width="900" alt="Flow
-Visualization Overview Dashboard">
-
-##### Pod-to-Pod Flows
-
-Pod-to-Pod cumulative Tx and Rx traffic is shown in sankey diagrams. Corresponding
-source or destination Pod throughput is visualized using line graph.
-
-<img src="https://downloads.antrea.io/static/04292021/flow-visualization-pod-to-pod-1.png" width="900" alt="Flow
-Visualization Pod-to-Pod Dashboard">
-
-<img src="https://downloads.antrea.io/static/02052021/flow-visualization-pod-to-pod-2.png" width="900" alt="Flow
-Visualization Pod-to-Pod Dashboard">
-
-<img src="https://downloads.antrea.io/static/02052021/flow-visualization-pod-to-pod-3.png" width="900" alt="Flow
-Visualization Pod-to-Pod Dashboard">
-
-##### Pod-to-External Flows
-
-Pod-to-External cumulative Tx and Rx traffic is shown in sankey diagrams. Corresponding
-source or destination throughput is visualized using line graph.
-
-<img src="https://downloads.antrea.io/static/04292021/flow-visualization-pod-to-external-1.png" width="900" alt="Flow
-Visualization Pod-to-External Dashboard">
-
-<img src="https://downloads.antrea.io/static/04292021/flow-visualization-pod-to-external-2.png" width="900" alt="Flow
-Visualization Pod-to-External Dashboard">
-
-##### Pod-to-Service Flows
-
-Pod-to-Service traffic is presented similar to Pod-to-Pod/External traffic.
-Corresponding source or destination IP addresses is shown in tooltips.
-
-<img src="https://downloads.antrea.io/static/03022021/flow-visualization-pod-to-service-1.png" width="900" alt="Flow
-Visualization Pod-to-Service Dashboard">
-
-Aggregated Tx and Rx traffic based on destination Service is shown in line graph.
-<img src="https://downloads.antrea.io/static/02052021/flow-visualization-pod-to-service-2.png" width="900" alt="Flow
-Visualization Pod-to-Service Dashboard">
-
-<img src="https://downloads.antrea.io/static/02052021/flow-visualization-pod-to-service-3.png" width="900" alt="Flow
-Visualization Pod-to-Service Dashboard">
-
-##### Flow Records
-
-Flow Records dashboard shows the raw flow records over time with support
-for filters.
-
-<img src="https://downloads.antrea.io/static/04292021/flow-visualization-flow-record.png" width="900" alt="Flow
-Visualization Flow Record Dashboard">
-
-##### Node Throughput
-
-Node Throughput dashboard shows the visualization of inter-Node and
-intra-Node traffic by aggregating all the Pod traffic per Node.
-
-<img src="https://downloads.antrea.io/static/03022021/flow-visualization-node-1.png" width="900" alt="Flow
-Visualization Node Throughput Dashboard">
-
-We also present aggregated Tx and Rx Mbps by Node in heatmap to give
-a better overview of Node bandwidth consumption.
-
-<img src="https://downloads.antrea.io/static/03022021/flow-visualization-node-2.png" width="900" alt="Flow
-Visualization Node Throughput Dashboard">
-
-##### Network Policy
-
-Network Policy dashboard provides filters over ingress network policy name and namespace, egress
-network policy name and namespace to view corresponding flow throughput under network policy. Flows
-are grouped by egress network policies (source) and ingress network policies (destination) in the
-sankey diagram. When hovering over the flow, it will show corresponding Pod-to-Pod traffic details
-and network policies.
-
-<img src="https://downloads.antrea.io/static/03022021/flow-visualization-np-1.png" width="900" alt="Flow
-Visualization Network Policy Dashboard">
-
-With filters applied:
-
-<img src="https://downloads.antrea.io/static/03022021/flow-visualization-np-2.png" width="900" alt="Flow
-Visualization Network Policy Dashboard">
+**Starting with Antrea v1.7, support for the ELK Flow Collector has been removed.**
+Please consider using the [Grafana Flow Collector](#grafana-flow-collector)
+instead, which is actively maintained.
 
 [flow_visibility_kustomization_yaml]: ../build/yamls/flow-visibility/base/kustomization.yml
