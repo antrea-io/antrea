@@ -160,7 +160,7 @@ member clusters.
 * Create below `ClusterClaim` and `ClusterSet` in the member cluster `test-cluster-east`.
 
 Note: Update `server: "https://172.18.0.2:6443"` in `ClusterSet` resource to
-the correct the leader cluster API address.
+the correct the leader cluster API address. You can refer to [multicluster_membercluster_template.yaml](../../multicluster/config/samples/clusterset_init/multicluster_membercluster_template.yaml).
 
 ```yaml
 apiVersion: multicluster.crd.antrea.io/v1alpha1
@@ -231,7 +231,7 @@ spec:
     namespace: antrea-mcs-ns
 ```
 
-* Create `ClusterClaim` and `ClusterSet` in the leader cluster `test-cluster-north`.
+* Create `ClusterClaim` and `ClusterSet` in the leader cluster `test-cluster-north`. A sample is like below, you can also refer to [multicluster_clusterset_template.yaml](../../multicluster/config/samples/clusterset_init/multicluster_clusterset_template.yaml).
 
 ```yaml
 apiVersion: multicluster.crd.antrea.io/v1alpha1
