@@ -16,6 +16,7 @@ package e2e
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net"
 	"strconv"
@@ -38,6 +39,7 @@ import (
 	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
 	agentconfig "antrea.io/antrea/pkg/config/agent"
 	controllerconfig "antrea.io/antrea/pkg/config/controller"
+	"antrea.io/antrea/pkg/querier"
 )
 
 func TestServiceExternalIP(t *testing.T) {
@@ -243,18 +245,16 @@ func testServiceExternalTrafficPolicyLocal(t *testing.T, data *TestData) {
 			require.NoError(t, err)
 			defer data.clientset.CoreV1().Endpoints(eps.Namespace).Delete(context.TODO(), eps.Name, metav1.DeleteOptions{})
 
-			service, err = data.waitForServiceConfigured(service, tt.expectedExternalIP, tt.expectedNodeOrigin != "", tt.expectedNodeOrigin)
+			service, node, err := data.waitForServiceConfigured(service, tt.expectedExternalIP, tt.expectedNodeOrigin)
 			require.NoError(t, err)
-			_, node := getServiceExternalIPAndHost(service)
 			assert.Equal(t, tt.expectedNodeOrigin, node)
 
 			epsToUpdate := eps.DeepCopy()
 			epsToUpdate.Subsets = tt.updatedEndpointSubsets
 			_, err = data.clientset.CoreV1().Endpoints(eps.Namespace).Update(context.TODO(), epsToUpdate, metav1.UpdateOptions{})
 			require.NoError(t, err)
-			service, err = data.waitForServiceConfigured(service, tt.expectedExternalIP, tt.expectedNodeUpdated != "", tt.expectedNodeUpdated)
+			_, node, err = data.waitForServiceConfigured(service, tt.expectedExternalIP, tt.expectedNodeUpdated)
 			require.NoError(t, err)
-			_, node = getServiceExternalIPAndHost(service)
 			assert.Equal(t, tt.expectedNodeUpdated, node)
 			assert.NoError(t, err)
 		})
@@ -347,12 +347,10 @@ func testServiceWithExternalIPCRUD(t *testing.T, data *TestData) {
 			require.NoError(t, err)
 
 			defer data.clientset.CoreV1().Services(service.Namespace).Delete(context.TODO(), service.Name, metav1.DeleteOptions{})
-			waitForNodeConfigured := len(tt.expectedNodes) != 0
-			service, err = data.waitForServiceConfigured(service, tt.expectedExternalIP, waitForNodeConfigured, "")
+			service, assignedNode, err := data.waitForServiceConfigured(service, tt.expectedExternalIP, "")
 			require.NoError(t, err)
 
 			if len(tt.expectedNodes) > 0 {
-				_, assignedNode := getServiceExternalIPAndHost(service)
 				assert.True(t, tt.expectedNodes.Has(assignedNode), "expected assigned Node in %s, got %s", tt.expectedNodes, assignedNode)
 			}
 
@@ -441,7 +439,7 @@ func testServiceUpdateExternalIP(t *testing.T, data *TestData) {
 			require.NoError(t, err)
 			defer data.clientset.CoreV1().Services(service.Namespace).Delete(context.TODO(), service.Name, metav1.DeleteOptions{})
 
-			service, err = data.waitForServiceConfigured(service, tt.originalExternalIP, true, tt.originalNode)
+			service, _, err = data.waitForServiceConfigured(service, tt.originalExternalIP, tt.originalNode)
 			require.NoError(t, err)
 
 			toUpdate := service.DeepCopy()
@@ -455,7 +453,7 @@ func testServiceUpdateExternalIP(t *testing.T, data *TestData) {
 			})
 			require.NoError(t, err, "Failed to update Service")
 
-			_, err = data.waitForServiceConfigured(service, tt.newExternalIP, true, tt.newNode)
+			_, _, err = data.waitForServiceConfigured(service, tt.newExternalIP, tt.newNode)
 			assert.NoError(t, err)
 		})
 	}
@@ -523,9 +521,8 @@ func testServiceNodeFailure(t *testing.T, data *TestData) {
 			require.NoError(t, err)
 			defer data.clientset.CoreV1().Services(service.Namespace).Delete(context.TODO(), service.Name, metav1.DeleteOptions{})
 
-			service, err = data.waitForServiceConfigured(service, tt.expectedIP, true, "")
+			service, originalNode, err := data.waitForServiceConfigured(service, tt.expectedIP, "")
 			assert.NoError(t, err)
-			_, originalNode := getServiceExternalIPAndHost(service)
 			pauseAgent(originalNode)
 			defer restoreAgent(originalNode)
 
@@ -535,10 +532,17 @@ func testServiceNodeFailure(t *testing.T, data *TestData) {
 			} else {
 				expectedMigratedNode = nodeName(0)
 			}
-			service, err = data.waitForServiceConfigured(service, tt.expectedIP, true, expectedMigratedNode)
+			// The Agent on the original Node is paused. Run antctl from the expected migrated Node instead.
+			err = wait.PollImmediate(200*time.Millisecond, 15*time.Second, func() (done bool, err error) {
+				assigndNode, err := data.getServiceAssignedNode(expectedMigratedNode, service)
+				if err != nil {
+					return false, nil
+				}
+				return assigndNode == expectedMigratedNode, nil
+			})
 			assert.NoError(t, err)
 			restoreAgent(originalNode)
-			_, err = data.waitForServiceConfigured(service, tt.expectedIP, true, originalNode)
+			_, _, err = data.waitForServiceConfigured(service, tt.expectedIP, originalNode)
 			assert.NoError(t, err)
 		})
 	}
@@ -608,20 +612,23 @@ func testExternalIPAccess(t *testing.T, data *TestData) {
 			}
 			waitExternalIPConfigured := func(service *v1.Service) (string, string, error) {
 				var ip string
-				var host string
+				var assigndNode string
 				err := wait.PollImmediate(200*time.Millisecond, 5*time.Second, func() (done bool, err error) {
 					service, err = data.clientset.CoreV1().Services(service.Namespace).Get(context.TODO(), service.Name, metav1.GetOptions{})
 					if err != nil {
 						return false, err
 					}
-					if len(service.Status.LoadBalancer.Ingress) == 0 || service.Status.LoadBalancer.Ingress[0].IP == "" || service.Status.LoadBalancer.Ingress[0].Hostname == "" {
+					if len(service.Status.LoadBalancer.Ingress) == 0 || service.Status.LoadBalancer.Ingress[0].IP == "" {
+						return false, nil
+					}
+					assigndNode, err = data.getServiceAssignedNode("", service)
+					if err != nil {
 						return false, nil
 					}
 					ip = service.Status.LoadBalancer.Ingress[0].IP
-					host = service.Status.LoadBalancer.Ingress[0].Hostname
 					return true, nil
 				})
-				return ip, host, err
+				return ip, assigndNode, err
 			}
 			for _, et := range externalIPTestCases {
 				t.Run(et.name, func(t *testing.T) {
@@ -704,14 +711,32 @@ sleep 3600`, tt.clientName, tt.clientIP, tt.localIP, tt.clientIPMaskLen)
 	}
 }
 
-func getServiceExternalIPAndHost(service *v1.Service) (string, string) {
-	if service == nil || len(service.Status.LoadBalancer.Ingress) == 0 {
-		return "", ""
+func (data *TestData) getServiceAssignedNode(node string, service *v1.Service) (string, error) {
+	if node == "" {
+		node = nodeName(0)
 	}
-	return service.Status.LoadBalancer.Ingress[0].IP, service.Status.LoadBalancer.Ingress[0].Hostname
+	agentPodName, err := data.getAntreaPodOnNode(node)
+	if err != nil {
+		return "", err
+	}
+	cmd := []string{"antctl", "get", "serviceexternalip", service.Name, "-n", service.Namespace, "-o", "json"}
+
+	stdout, _, err := runAntctl(agentPodName, cmd, data)
+	if err != nil {
+		return "", err
+	}
+	var serviceExternalIPInfo []querier.ServiceExternalIPInfo
+	if err := json.Unmarshal([]byte(stdout), &serviceExternalIPInfo); err != nil {
+		return "", err
+	}
+	if len(serviceExternalIPInfo) != 1 {
+		return "", fmt.Errorf("expected exactly one entry, got %#v", serviceExternalIPInfo)
+	}
+	return serviceExternalIPInfo[0].AssignedNode, nil
 }
 
-func (data *TestData) waitForServiceConfigured(service *v1.Service, expectedExternalIP string, waitForNodeConfigured bool, expectedNodeName string) (*corev1.Service, error) {
+func (data *TestData) waitForServiceConfigured(service *v1.Service, expectedExternalIP string, expectedNodeName string) (*corev1.Service, string, error) {
+	var assignedNode string
 	err := wait.PollImmediate(200*time.Millisecond, 15*time.Second, func() (done bool, err error) {
 		service, err = data.clientset.CoreV1().Services(service.Namespace).Get(context.TODO(), service.Name, metav1.GetOptions{})
 		if err != nil {
@@ -720,19 +745,18 @@ func (data *TestData) waitForServiceConfigured(service *v1.Service, expectedExte
 		if len(service.Status.LoadBalancer.Ingress) == 0 || service.Status.LoadBalancer.Ingress[0].IP != expectedExternalIP {
 			return false, nil
 		}
-		if waitForNodeConfigured || expectedNodeName != "" {
-			if service.Status.LoadBalancer.Ingress[0].Hostname == "" {
-				return false, nil
-			}
+		assignedNode, err = data.getServiceAssignedNode("", service)
+		if err != nil {
+			return false, nil
 		}
-		if expectedNodeName != "" && service.Status.LoadBalancer.Ingress[0].Hostname != expectedNodeName {
+		if expectedNodeName != "" && assignedNode != expectedNodeName {
 			return false, nil
 		}
 		return true, nil
 	})
 	if err != nil {
-		return service, fmt.Errorf("wait for Service %q configured failed: %v. Expected external IP %s on Node %s, actual status %#v",
-			service.Name, err, expectedExternalIP, expectedNodeName, service.Status)
+		return service, assignedNode, fmt.Errorf("wait for Service %q configured failed: %v. Expected external IP %s on Node %s, actual status %#v, assigned Node: %s"+
+			service.Name, err, expectedExternalIP, expectedNodeName, service.Status, assignedNode)
 	}
-	return service, nil
+	return service, assignedNode, nil
 }
