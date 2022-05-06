@@ -494,6 +494,8 @@ spec:
                               type: object
                               properties:
                                 match:
+                                  enum:
+                                    - Self
                                   type: string
                             ipBlock:
                               type: object
