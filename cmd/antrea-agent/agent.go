@@ -614,6 +614,7 @@ func run(o *Options) error {
 	apiServer, err := apiserver.New(
 		agentQuerier,
 		networkPolicyController,
+		externalIPController,
 		o.config.APIPort,
 		*o.config.EnablePrometheusMetrics,
 		o.config.ClientConnection.Kubeconfig,
