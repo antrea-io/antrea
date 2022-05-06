@@ -24,6 +24,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent/interfacestore"
+	"antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/agent/util"
 	"antrea.io/antrea/pkg/util/k8s"
 )
@@ -49,7 +50,13 @@ func (pc *podConfigurator) connectInterfaceToOVSAsync(ifConfig *interfacestore.I
 		// Update interface config with the ofPort.
 		ifConfig.OVSPortConfig.OFPort = ofPort
 		// Notify the Pod update event to required components.
-		pc.podUpdateNotifier.Notify(k8s.NamespacedName(ifConfig.PodNamespace, ifConfig.PodName))
+		event := types.PodUpdate{
+			PodName:      ifConfig.PodName,
+			PodNamespace: ifConfig.PodNamespace,
+			IsAdd:        true,
+			ContainerID:  ifConfig.ContainerID,
+		}
+		pc.podUpdateNotifier.Notify(event)
 		return nil
 	})
 }

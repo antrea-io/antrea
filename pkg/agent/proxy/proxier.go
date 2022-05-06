@@ -173,7 +173,7 @@ func (p *proxier) removeStaleServices() {
 		// Remove Service group whose Endpoints are local.
 		if svcInfo.NodeLocalExternal() {
 			if groupIDLocal, exist := p.groupCounter.Get(svcPortName, true); exist {
-				if err := p.ofClient.UninstallServiceGroup(groupIDLocal); err != nil {
+				if err := p.ofClient.UninstallGroup(groupIDLocal); err != nil {
 					klog.ErrorS(err, "Failed to remove Group of local Endpoints for Service", "Service", svcPortName)
 					continue
 				}
@@ -182,7 +182,7 @@ func (p *proxier) removeStaleServices() {
 		}
 		// Remove Service group which has all Endpoints.
 		if groupID, exist := p.groupCounter.Get(svcPortName, false); exist {
-			if err := p.ofClient.UninstallServiceGroup(groupID); err != nil {
+			if err := p.ofClient.UninstallGroup(groupID); err != nil {
 				klog.ErrorS(err, "Failed to remove Group of all Endpoints for Service", "Service", svcPortName)
 				continue
 			}
@@ -555,7 +555,7 @@ func (p *proxier) installServices() {
 					continue
 				}
 				if groupID, exist := p.groupCounter.Get(svcPortName, !nodeLocalVal); exist {
-					if err := p.ofClient.UninstallServiceGroup(groupID); err != nil {
+					if err := p.ofClient.UninstallGroup(groupID); err != nil {
 						klog.ErrorS(err, "Failed to uninstall Group of all Endpoints for Service", "Service", svcPortName)
 						continue
 					}

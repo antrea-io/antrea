@@ -25,8 +25,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 
+	"antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	"antrea.io/antrea/pkg/util/channel"
+	"antrea.io/antrea/pkg/util/k8s"
 )
 
 var (
@@ -1184,7 +1186,12 @@ func TestRuleCacheProcessPodUpdates(t *testing.T) {
 			stopCh := make(chan struct{})
 			defer close(stopCh)
 			go podUpdateNotifier.Run(stopCh)
-			podUpdateNotifier.Notify(tt.podUpdate)
+			ns, name := k8s.SplitNamespacedName(tt.podUpdate)
+			e := types.PodUpdate{
+				PodNamespace: ns,
+				PodName:      name,
+			}
+			podUpdateNotifier.Notify(e)
 			func() {
 				// Drain the channel with 10 ms timeout so we can know it's done.
 				for {

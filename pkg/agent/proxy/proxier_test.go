@@ -347,7 +347,7 @@ func testLoadBalancer(t *testing.T, nodePortAddresses []net.IP, svcIP, ep1IP, ep
 			mockOFClient.EXPECT().InstallServiceFlows(groupID, loadBalancerIP, uint16(svcPort), bindingProtocol, uint16(0), nodeLocalVal, corev1.ServiceTypeLoadBalancer).Times(1)
 		}
 		groupID = fp.groupCounter.AllocateIfNotExist(svcPortName, !nodeLocalVal)
-		mockOFClient.EXPECT().UninstallServiceGroup(groupID).Times(1)
+		mockOFClient.EXPECT().UninstallGroup(groupID).Times(1)
 	}
 	mockRouteClient.EXPECT().AddClusterIPRoute(svcIP).Times(1)
 	if proxyLoadBalancerIPs {
@@ -466,7 +466,7 @@ func testNodePort(t *testing.T, nodePortAddresses []net.IP, svcIP, ep1IP, ep2IP 
 		mockOFClient.EXPECT().InstallServiceFlows(groupID, gomock.Any(), uint16(svcNodePort), bindingProtocol, uint16(0), nodeLocalVal, corev1.ServiceTypeNodePort).Times(1)
 
 		groupID = fp.groupCounter.AllocateIfNotExist(svcPortName, !nodeLocalVal)
-		mockOFClient.EXPECT().UninstallServiceGroup(groupID).Times(1)
+		mockOFClient.EXPECT().UninstallGroup(groupID).Times(1)
 	}
 	mockRouteClient.EXPECT().AddClusterIPRoute(svcIP).Times(1)
 	mockRouteClient.EXPECT().AddNodePort(gomock.Any(), uint16(svcNodePort), bindingProtocol).Times(1)
@@ -748,7 +748,7 @@ func testClusterIPRemoval(t *testing.T, svcIP net.IP, epIP net.IP, isIPv6 bool) 
 	mockRouteClient.EXPECT().AddClusterIPRoute(svcIP).Times(1)
 	mockOFClient.EXPECT().UninstallServiceFlows(svcIP, uint16(svcPort), bindingProtocol).Times(1)
 	mockOFClient.EXPECT().UninstallEndpointFlows(bindingProtocol, gomock.Any()).Times(1)
-	mockOFClient.EXPECT().UninstallServiceGroup(gomock.Any()).Times(1)
+	mockOFClient.EXPECT().UninstallGroup(gomock.Any()).Times(1)
 	fp.syncProxyRules()
 
 	fp.serviceChanges.OnServiceUpdate(service, nil)
@@ -1231,8 +1231,8 @@ func TestServicesWithSameEndpoints(t *testing.T) {
 	mockOFClient.EXPECT().InstallServiceFlows(groupID2, svcIP2, uint16(svcPort), bindingProtocol, uint16(0), false, corev1.ServiceTypeClusterIP).Times(1)
 	mockOFClient.EXPECT().UninstallServiceFlows(svcIP1, uint16(svcPort), bindingProtocol).Times(1)
 	mockOFClient.EXPECT().UninstallServiceFlows(svcIP2, uint16(svcPort), bindingProtocol).Times(1)
-	mockOFClient.EXPECT().UninstallServiceGroup(groupID1).Times(1)
-	mockOFClient.EXPECT().UninstallServiceGroup(groupID2).Times(1)
+	mockOFClient.EXPECT().UninstallGroup(groupID1).Times(1)
+	mockOFClient.EXPECT().UninstallGroup(groupID2).Times(1)
 	// Since these two Services reference to the same Endpoint, there should only be one operation.
 	mockOFClient.EXPECT().UninstallEndpointFlows(bindingProtocol, gomock.Any()).Times(1)
 

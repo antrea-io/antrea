@@ -36,10 +36,10 @@ func newEventReceiver() *eventReceiver {
 	}
 }
 
-func (r *eventReceiver) receive(e string) {
+func (r *eventReceiver) receive(e interface{}) {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
-	r.receivedEvents.Insert(e)
+	r.receivedEvents.Insert(e.(string))
 }
 
 func (r *eventReceiver) received() sets.String {
