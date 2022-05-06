@@ -25,7 +25,7 @@ const (
 	notifyTimeout = time.Second
 )
 
-type eventHandler func(string)
+type eventHandler func(interface{})
 
 type Subscriber interface {
 	// Subscribe registers an eventHandler which will be called when an event is sent to the channel.
@@ -37,7 +37,7 @@ type Subscriber interface {
 
 type Notifier interface {
 	// Notify sends an event to the channel.
-	Notify(string) bool
+	Notify(interface{}) bool
 }
 
 // SubscribableChannel is different from the Go channel which dispatches every event to only single consumer regardless
@@ -47,7 +47,7 @@ type SubscribableChannel struct {
 	// The name of the channel, used for logging purpose to differentiate multiple channels.
 	name string
 	// eventCh is the channel used for buffering the pending events.
-	eventCh chan string
+	eventCh chan interface{}
 	// handlers is a slice of callbacks registered by consumers.
 	handlers []eventHandler
 }
@@ -55,7 +55,7 @@ type SubscribableChannel struct {
 func NewSubscribableChannel(name string, bufferSize int) *SubscribableChannel {
 	n := &SubscribableChannel{
 		name:    name,
-		eventCh: make(chan string, bufferSize),
+		eventCh: make(chan interface{}, bufferSize),
 	}
 	return n
 }
@@ -64,7 +64,7 @@ func (n *SubscribableChannel) Subscribe(h eventHandler) {
 	n.handlers = append(n.handlers, h)
 }
 
-func (n *SubscribableChannel) Notify(e string) bool {
+func (n *SubscribableChannel) Notify(e interface{}) bool {
 	timer := time.NewTimer(notifyTimeout)
 	defer timer.Stop()
 	select {

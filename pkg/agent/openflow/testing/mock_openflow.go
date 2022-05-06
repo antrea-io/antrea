@@ -282,18 +282,32 @@ func (mr *MockClientMockRecorder) InstallEndpointFlows(arg0, arg1 interface{}) *
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallEndpointFlows", reflect.TypeOf((*MockClient)(nil).InstallEndpointFlows), arg0, arg1)
 }
 
-// InstallMulticastFlow mocks base method
-func (m *MockClient) InstallMulticastFlow(arg0 net.IP) error {
+// InstallMulticastFlows mocks base method
+func (m *MockClient) InstallMulticastFlows(arg0 net.IP, arg1 openflow.GroupIDType) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "InstallMulticastFlow", arg0)
+	ret := m.ctrl.Call(m, "InstallMulticastFlows", arg0, arg1)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// InstallMulticastFlow indicates an expected call of InstallMulticastFlow
-func (mr *MockClientMockRecorder) InstallMulticastFlow(arg0 interface{}) *gomock.Call {
+// InstallMulticastFlows indicates an expected call of InstallMulticastFlows
+func (mr *MockClientMockRecorder) InstallMulticastFlows(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallMulticastFlow", reflect.TypeOf((*MockClient)(nil).InstallMulticastFlow), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallMulticastFlows", reflect.TypeOf((*MockClient)(nil).InstallMulticastFlows), arg0, arg1)
+}
+
+// InstallMulticastGroup mocks base method
+func (m *MockClient) InstallMulticastGroup(arg0 openflow.GroupIDType, arg1 []uint32) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "InstallMulticastGroup", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// InstallMulticastGroup indicates an expected call of InstallMulticastGroup
+func (mr *MockClientMockRecorder) InstallMulticastGroup(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallMulticastGroup", reflect.TypeOf((*MockClient)(nil).InstallMulticastGroup), arg0, arg1)
 }
 
 // InstallMulticastInitialFlows mocks base method
@@ -640,18 +654,32 @@ func (mr *MockClientMockRecorder) UninstallEndpointFlows(arg0, arg1 interface{})
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UninstallEndpointFlows", reflect.TypeOf((*MockClient)(nil).UninstallEndpointFlows), arg0, arg1)
 }
 
-// UninstallMulticastFlow mocks base method
-func (m *MockClient) UninstallMulticastFlow(arg0 net.IP) error {
+// UninstallGroup mocks base method
+func (m *MockClient) UninstallGroup(arg0 openflow.GroupIDType) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UninstallMulticastFlow", arg0)
+	ret := m.ctrl.Call(m, "UninstallGroup", arg0)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// UninstallMulticastFlow indicates an expected call of UninstallMulticastFlow
-func (mr *MockClientMockRecorder) UninstallMulticastFlow(arg0 interface{}) *gomock.Call {
+// UninstallGroup indicates an expected call of UninstallGroup
+func (mr *MockClientMockRecorder) UninstallGroup(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UninstallMulticastFlow", reflect.TypeOf((*MockClient)(nil).UninstallMulticastFlow), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UninstallGroup", reflect.TypeOf((*MockClient)(nil).UninstallGroup), arg0)
+}
+
+// UninstallMulticastFlows mocks base method
+func (m *MockClient) UninstallMulticastFlows(arg0 net.IP) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UninstallMulticastFlows", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UninstallMulticastFlows indicates an expected call of UninstallMulticastFlows
+func (mr *MockClientMockRecorder) UninstallMulticastFlows(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UninstallMulticastFlows", reflect.TypeOf((*MockClient)(nil).UninstallMulticastFlows), arg0)
 }
 
 // UninstallNodeFlows mocks base method
@@ -737,20 +765,6 @@ func (m *MockClient) UninstallServiceFlows(arg0 net.IP, arg1 uint16, arg2 openfl
 func (mr *MockClientMockRecorder) UninstallServiceFlows(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UninstallServiceFlows", reflect.TypeOf((*MockClient)(nil).UninstallServiceFlows), arg0, arg1, arg2)
-}
-
-// UninstallServiceGroup mocks base method
-func (m *MockClient) UninstallServiceGroup(arg0 openflow.GroupIDType) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UninstallServiceGroup", arg0)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// UninstallServiceGroup indicates an expected call of UninstallServiceGroup
-func (mr *MockClientMockRecorder) UninstallServiceGroup(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UninstallServiceGroup", reflect.TypeOf((*MockClient)(nil).UninstallServiceGroup), arg0)
 }
 
 // UninstallTraceflowFlows mocks base method

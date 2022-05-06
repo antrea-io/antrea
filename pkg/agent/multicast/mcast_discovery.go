@@ -131,7 +131,7 @@ func (s *IGMPSnooper) processPacketIn(pktIn *ofctrl.PacketIn) error {
 		fallthrough
 	case protocol.IGMPv2Report:
 		mgroup := igmp.(*protocol.IGMPv1or2).GroupAddress
-		klog.InfoS("Received IGMPv1or2 Report message", "group", mgroup.String(), "interface", iface.InterfaceName, "pod", podName)
+		klog.V(2).InfoS("Received IGMPv1or2 Report message", "group", mgroup.String(), "interface", iface.InterfaceName, "pod", podName)
 		event := &mcastGroupEvent{
 			group: mgroup,
 			eType: groupJoin,
@@ -143,7 +143,7 @@ func (s *IGMPSnooper) processPacketIn(pktIn *ofctrl.PacketIn) error {
 		msg := igmp.(*protocol.IGMPv3MembershipReport)
 		for _, gr := range msg.GroupRecords {
 			mgroup := gr.MulticastAddress
-			klog.InfoS("Received IGMPv3 Report message", "group", mgroup.String(), "interface", iface.InterfaceName, "pod", podName, "recordType", gr.Type, "sourceCount", gr.NumberOfSources)
+			klog.V(2).InfoS("Received IGMPv3 Report message", "group", mgroup.String(), "interface", iface.InterfaceName, "pod", podName, "recordType", gr.Type, "sourceCount", gr.NumberOfSources)
 			evtType := groupJoin
 			if (gr.Type == protocol.IGMPIsIn || gr.Type == protocol.IGMPToIn) && gr.NumberOfSources == 0 {
 				evtType = groupLeave
@@ -159,7 +159,7 @@ func (s *IGMPSnooper) processPacketIn(pktIn *ofctrl.PacketIn) error {
 
 	case protocol.IGMPv2LeaveGroup:
 		mgroup := igmp.(*protocol.IGMPv1or2).GroupAddress
-		klog.InfoS("Received IGMPv2 Leave message", "group", mgroup.String(), "interface", iface.InterfaceName, "pod", podName)
+		klog.V(2).InfoS("Received IGMPv2 Leave message", "group", mgroup.String(), "interface", iface.InterfaceName, "pod", podName)
 		event := &mcastGroupEvent{
 			group: mgroup,
 			eType: groupLeave,

@@ -189,8 +189,16 @@ type OFBridge struct {
 	multipartReplyChs map[uint32]chan *openflow13.MultipartReply
 }
 
+func (b *OFBridge) CreateGroupTypeAll(id GroupIDType) Group {
+	return b.createGroupWithType(id, ofctrl.GroupAll)
+}
+
 func (b *OFBridge) CreateGroup(id GroupIDType) Group {
-	ofctrlGroup, err := b.ofSwitch.NewGroup(uint32(id), ofctrl.GroupSelect)
+	return b.createGroupWithType(id, ofctrl.GroupSelect)
+}
+
+func (b *OFBridge) createGroupWithType(id GroupIDType, groupType ofctrl.GroupType) Group {
+	ofctrlGroup, err := b.ofSwitch.NewGroup(uint32(id), groupType)
 	if err != nil { // group already exists
 		ofctrlGroup = b.ofSwitch.GetGroup(uint32(id))
 	}

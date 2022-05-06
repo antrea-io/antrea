@@ -180,7 +180,10 @@ var (
 	// Tables of pipelineMulticast are declared below. Do don't declare any tables of other pipelines here!
 
 	// Tables in stageRouting:
-	MulticastTable = newTable("Multicast", stageRouting, pipelineMulticast)
+	MulticastRoutingTable = newTable("MulticastRouting", stageRouting, pipelineMulticast)
+
+	// Tables in stageOutput
+	MulticastOutputTable = newTable("MulticastOutput", stageOutput, pipelineMulticast)
 
 	// Flow priority level
 	priorityHigh            = uint16(210)
@@ -2637,8 +2640,8 @@ func pipelineClassifyFlow(cookieID uint64, protocol binding.Protocol, pipeline b
 		Done()
 }
 
-// igmpPktInFlows generates the flow to load CustomReasonIGMPRegMark to mark the IGMP packet in MulticastTable and sends
-// it to antrea-agent on MulticastTable.
+// igmpPktInFlows generates the flow to load CustomReasonIGMPRegMark to mark the IGMP packet in MulticastRoutingTable and sends
+// it to antrea-agent.
 func (f *featureMulticast) igmpPktInFlows(reason uint8) []binding.Flow {
 	flows := []binding.Flow{
 		// Set a custom reason for the IGMP packets, and then send it to antrea-agent and forward it normally in the
@@ -2646,7 +2649,7 @@ func (f *featureMulticast) igmpPktInFlows(reason uint8) []binding.Flow {
 		// group and its members in the meanwhile.
 		// Do not set dst IP address because IGMPv1 report message uses target multicast group as IP destination in
 		// the packet.
-		MulticastTable.ofTable.BuildFlow(priorityHigh).
+		MulticastRoutingTable.ofTable.BuildFlow(priorityHigh).
 			Cookie(f.cookieAllocator.Request(f.category).Raw()).
 			MatchProtocol(binding.ProtocolIGMP).
 			MatchRegMark(FromLocalRegMark).
@@ -2658,33 +2661,34 @@ func (f *featureMulticast) igmpPktInFlows(reason uint8) []binding.Flow {
 	return flows
 }
 
-// localMulticastForwardFlow generates the flow to forward multicast packets with OVS action "normal", and outputs
+// localMulticastForwardFlows generates the flow to forward multicast packets with OVS action "normal", and outputs
 // it to Antrea gateway in the meanwhile, so that the packet can be forwarded to local Pods which have joined the Multicast
 // group and to the external receivers. For external multicast packets accessing to the given multicast IP also hits the
 // flow, and the packet is not sent back to Antrea gateway because OVS datapath will drop it when it finds the output
 // port is the same as the input port.
-func (f *featureMulticast) localMulticastForwardFlow(multicastIP net.IP) []binding.Flow {
+func (f *featureMulticast) localMulticastForwardFlows(multicastIP net.IP, groupID binding.GroupIDType) []binding.Flow {
 	return []binding.Flow{
-		MulticastTable.ofTable.BuildFlow(priorityNormal).
+		MulticastRoutingTable.ofTable.BuildFlow(priorityNormal).
 			Cookie(f.cookieAllocator.Request(f.category).Raw()).
 			MatchProtocol(binding.ProtocolIP).
 			MatchDstIP(multicastIP).
-			Action().Output(config.HostGatewayOFPort).
-			Action().Normal().
+			Action().Group(groupID).
 			Done(),
 	}
 }
 
 // externalMulticastReceiverFlow generates the flow to output multicast packets to Antrea gateway, so that local Pods can
 // send multicast packets to access the external receivers. For the case that one or more local Pods have joined the target
-// multicast group, it is handled by the flows created by function "localMulticastForwardFlow" after local Pods report the
+// multicast group, it is handled by the flows created by function "localMulticastForwardFlows" after local Pods report the
 // IGMP membership.
 func (f *featureMulticast) externalMulticastReceiverFlow() binding.Flow {
-	return MulticastTable.ofTable.BuildFlow(priorityLow).
+	return MulticastRoutingTable.ofTable.BuildFlow(priorityLow).
 		Cookie(f.cookieAllocator.Request(f.category).Raw()).
 		MatchProtocol(binding.ProtocolIP).
 		MatchDstIPNet(*mcastCIDR).
-		Action().Output(config.HostGatewayOFPort).
+		Action().LoadRegMark(OFPortFoundRegMark).
+		Action().LoadToRegField(TargetOFPortField, config.HostGatewayOFPort).
+		Action().NextTable().
 		Done()
 }
 

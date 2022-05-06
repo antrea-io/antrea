@@ -704,7 +704,7 @@ func uninstallServiceFlowsFunc(t *testing.T, gid uint32, svc svcConfig, endpoint
 	groupID := ofconfig.GroupIDType(gid)
 	err := c.UninstallServiceFlows(svc.ip, svc.port, svc.protocol)
 	assert.Nil(t, err)
-	err = c.UninstallServiceGroup(groupID)
+	err = c.UninstallGroup(groupID)
 	assert.Nil(t, err)
 	for _, ep := range endpointList {
 		err := c.UninstallEndpointFlows(svc.protocol, ep)

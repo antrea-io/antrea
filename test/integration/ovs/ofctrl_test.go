@@ -269,6 +269,8 @@ func TestOFctrlGroup(t *testing.T) {
 
 	ovsCtlClient := ovsctl.NewClient(brName)
 
+	id := 1
+
 	for name, buckets := range map[string][]struct {
 		weight        uint16      // Must have non-zero value.
 		reg2reg       [][4]uint32 // regNum, data, startIndex, endIndex
@@ -278,12 +280,25 @@ func TestOFctrlGroup(t *testing.T) {
 			{weight: 100, reg2reg: [][4]uint32{{0, 1, 0, 31}, {1, 2, 15, 31}}, resubmitTable: 31},
 			{weight: 110, resubmitTable: 42},
 		},
+		"TypeAll": {
+			{weight: 100, reg2reg: [][4]uint32{{0, 1, 0, 31}, {1, 2, 15, 31}}, resubmitTable: 31},
+			{weight: 110, resubmitTable: 42},
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			group := br.CreateGroup(1)
+			var group binding.Group
+			gid := binding.GroupIDType(id)
+			if name == "TypeAll" {
+				group = br.CreateGroupTypeAll(gid)
+			} else {
+				group = br.CreateGroup(gid)
+			}
 			for _, bucket := range buckets {
 				require.NotZero(t, bucket.weight, "Weight value of a bucket must be specified")
-				bucketBuilder := group.Bucket().Weight(bucket.weight)
+				bucketBuilder := group.Bucket()
+				if name == "Normal" {
+					bucketBuilder = bucketBuilder.Weight(bucket.weight)
+				}
 				if bucket.resubmitTable != 0 {
 					bucketBuilder = bucketBuilder.ResubmitToTable(bucket.resubmitTable)
 				}
@@ -303,8 +318,10 @@ func TestOFctrlGroup(t *testing.T) {
 			}), "Failed to install group")
 			dumpedGroup := groups[0]
 			for i, bucket := range buckets {
-				// Must have weight
-				assert.True(t, strings.Contains(dumpedGroup[i+1], fmt.Sprintf("weight:%d", bucket.weight)))
+				if name == "Normal" {
+					// Must have weight
+					assert.True(t, strings.Contains(dumpedGroup[i+1], fmt.Sprintf("weight:%d", bucket.weight)))
+				}
 				for _, loading := range bucket.reg2reg {
 					rngStr := "[]"
 					if !(loading[2] == 0 && loading[3] == 31) {
@@ -326,6 +343,7 @@ func TestOFctrlGroup(t *testing.T) {
 				return len(groups) == 0, nil
 			}), "Failed to delete group")
 		})
+		id++
 	}
 }
 
