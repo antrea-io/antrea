@@ -126,7 +126,7 @@ address and pass an authentication token when accessing it, like this:
 # Get the antrea Service address
 ANTREA_SVC=$(kubectl get service antrea -n kube-system -o jsonpath='{.spec.clusterIP}')
 # Get the token value of antctl account, you can use any ServiceAccount that has permissions to antrea API.
-TOKEN=$(kubectl get secrets -n kube-system -o jsonpath="{.items[?(@.metadata.annotations['kubernetes\.io/service-account\.name']=='antctl')].data.token}"|base64 --decode)
+TOKEN=$(kubectl get secret/antctl-service-account-token -n kube-system -o jsonpath="{.data.token}"|base64 --decode)
 # Access antrea API with TOKEN
 curl --insecure --header "Authorization: Bearer $TOKEN" https://$ANTREA_SVC/apis
 ```
@@ -176,13 +176,14 @@ using the authentication token of the `antctl` ServiceAccount:
 
 ```bash
 # Get the token value of antctl account.
-TOKEN=$(kubectl get secrets -n kube-system -o jsonpath="{.items[?(@.metadata.annotations['kubernetes\.io/service-account\.name']=='antctl')].data.token}"|base64 --decode)
+TOKEN=$(kubectl get secret/antctl-service-account-token -n kube-system -o jsonpath="{.data.token}"|base64 --decode)
 # Access antrea API with TOKEN
 curl --insecure --header "Authorization: Bearer $TOKEN" https://<Node IP address>:10350/podinterfaces
 ```
 
 However, in this case you will be limited to the endpoints that `antctl` is
-allowed to access, as defined [here](/build/yamls/base/antctl.yml).
+allowed to access, as defined
+[here](../build/charts/antrea/templates/antctl/clusterrole.yaml).
 
 ## Accessing the flow-aggregator API
 

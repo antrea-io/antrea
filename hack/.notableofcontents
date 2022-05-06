@@ -9,7 +9,6 @@ docs/contributors/code-generation.md
 docs/contributors/docker-desktop-alternatives.md
 docs/contributors/eks-terraform.md
 docs/contributors/github-labels.md
-docs/contributors/manual-installation.md
 docs/configuration.md
 docs/cookbooks/multus/README.md
 docs/cookbooks/multus/build/cni-dhcp-daemon/README.md

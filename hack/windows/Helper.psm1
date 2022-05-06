@@ -127,7 +127,7 @@ function Install-AntreaAgent {
     $APIServer=$(kubectl --kubeconfig=$KubeConfig get service kubernetes -o jsonpath='{.spec.clusterIP}')
     $APIServerPort=$(kubectl --kubeconfig=$KubeConfig get service kubernetes -o jsonpath='{.spec.ports[0].port}')
     $APIServer="https://$APIServer" + ":" + $APIServerPort
-    $TOKEN=$(kubectl --kubeconfig=$KubeConfig get secrets -n kube-system -o jsonpath="{.items[?(@.metadata.annotations['kubernetes\.io/service-account\.name']=='antrea-agent')].data.token}")
+    $TOKEN=$(kubectl --kubeconfig=$KubeConfig get secret/antrea-agent-service-account-token -n kube-system -o jsonpath="{.data.token}")
     $TOKEN=$([System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($TOKEN)))
     kubectl config --kubeconfig=$AntreaEtc\antrea-agent.kubeconfig set-cluster kubernetes --server=$APIServer --insecure-skip-tls-verify
     kubectl config --kubeconfig=$AntreaEtc\antrea-agent.kubeconfig set-credentials antrea-agent --token=$TOKEN
