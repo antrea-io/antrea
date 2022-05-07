@@ -116,7 +116,7 @@ const (
 	nameSuffixLength int = 8
 
 	agnhostImage        = "k8s.gcr.io/e2e-test-images/agnhost:2.29"
-	busyboxImage        = "projects.registry.vmware.com/library/busybox"
+	busyboxImage        = "projects.registry.vmware.com/antrea/busybox"
 	mcjoinImage         = "projects.registry.vmware.com/antrea/mcjoin:v2.9"
 	netshootImage       = "projects.registry.vmware.com/antrea/netshoot:v0.1"
 	nginxImage          = "projects.registry.vmware.com/antrea/nginx:1.21.6-alpine"
