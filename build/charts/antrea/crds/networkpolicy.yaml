@@ -57,6 +57,30 @@ spec:
                     type: object
                     # Ensure that Spec.AppliedTo does not allow NamespaceSelector/IPBlock field
                     properties:
+                      externalEntitySelector:
+                        type: object
+                        properties:
+                          matchExpressions:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                key:
+                                  type: string
+                                operator:
+                                  enum:
+                                    - In
+                                    - NotIn
+                                    - Exists
+                                    - DoesNotExist
+                                  type: string
+                                values:
+                                  type: array
+                                  items:
+                                    type: string
+                                    pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
+                          matchLabels:
+                            x-kubernetes-preserve-unknown-fields: true
                       podSelector:
                         type: object
                         properties:
