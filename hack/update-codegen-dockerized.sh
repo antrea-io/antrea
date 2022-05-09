@@ -36,13 +36,7 @@ ANTREA_PKG="antrea.io/antrea"
 # https://github.com/kubernetes-sigs/gateway-api/issues/11
 ANTREA_PROTO_PKG="antrea_io.antrea"
 
-if [[ "$#" -eq 1 && $1 == "mockgen" ]]; then
-  mockgen
-  reset_year_change
-  exit 0
-fi
-
-function mockgen {
+function generate_mocks {
   # Generate mocks for testing with mockgen.
   MOCKGEN_TARGETS=(
     "pkg/agent/cniserver/ipam IPAMDriver testing"
@@ -104,6 +98,12 @@ function reset_year_change {
     fi
   done
 }
+
+if [[ "$#" -eq 1 && $1 == "mockgen" ]]; then
+  generate_mocks
+  reset_year_change
+  exit 0
+fi
 
 # Generate protobuf code for CNI gRPC service with protoc.
 protoc --go_out=plugins=grpc:. pkg/apis/cni/v1beta1/cni.proto
@@ -176,7 +176,7 @@ $GOPATH/bin/openapi-gen  \
   -O zz_generated.openapi \
   --go-header-file hack/boilerplate/license_header.go.txt
 
-mockgen
+generate_mocks
 
 # Download vendored modules to the vendor directory so it's easier to
 # specify the search path of required protobuf files.
