@@ -28,10 +28,10 @@ TESTCASE=""
 TEST_FAILURE=false
 MODE="report"
 DOCKER_REGISTRY=$(head -n1 "${WORKSPACE}/ci/docker-registry")
+TESTBED_TYPE="legacy"
 GO_VERSION=$(head -n1 "${WORKSPACE}/build/images/deps/go-version")
 IMAGE_PULL_POLICY="Always"
 PROXY_ALL=false
-FLEXIBLE_IPAM=false
 
 WINDOWS_CONFORMANCE_FOCUS="\[sig-network\].+\[Conformance\]|\[sig-windows\]"
 WINDOWS_CONFORMANCE_SKIP="\[LinuxOnly\]|\[Slow\]|\[Serial\]|\[Disruptive\]|\[Flaky\]|\[Feature:.+\]|\[sig-cli\]|\[sig-storage\]|\[sig-auth\]|\[sig-api-machinery\]|\[sig-apps\]|\[sig-node\]|\[Privileged\]|should be able to change the type from|\[sig-network\] Services should be able to create a functioning NodePort service \[Conformance\]|Service endpoints latency should not be very high|should be able to create a functioning NodePort service for Windows"
@@ -41,9 +41,10 @@ CONFORMANCE_SKIP="\[Slow\]|\[Serial\]|\[Disruptive\]|\[Flaky\]|\[Feature:.+\]|\[
 NETWORKPOLICY_SKIP="should allow egress access to server in CIDR block|should enforce except clause while egress access to server in CIDR block"
 
 # TODO: change to "control-plane" when testbeds are updated to K8s v1.20
-CONTROL_PLANE_NODE_ROLE="master"
+CONTROL_PLANE_NODE_ROLE="master|control-plane"
 
 CLEAN_STALE_IMAGES="docker system prune --force --all --filter until=48h"
+CLEAN_STALE_IMAGES_CONTAINERD="crictl rmi --prune"
 
 _usage="Usage: $0 [--kubeconfig <KubeconfigSavePath>] [--workdir <HomePath>]
                   [--testcase <windows-install-ovs|windows-conformance|windows-networkpolicy|windows-e2e|e2e|conformance|networkpolicy|multicast-e2e>]
@@ -55,7 +56,7 @@ Run K8s e2e community tests (Conformance & Network Policy) or Antrea e2e tests o
         --testcase               Windows install OVS, Conformance and Network Policy or Antrea e2e testcases on a Windows or Linux cluster. It can also be flexible ipam or multicast e2e test.
         --registry               The docker registry to use instead of dockerhub.
         --proxyall               Enable proxyAll to test AntreaProxy.
-        --flexible-ipam          Run tests in flexible ipam mode"
+        --testbed-type           The testbed type to run tests. It can be flexible-ipam, jumper or legacy."
 
 function print_usage {
     echoerr "$_usage"
@@ -86,12 +87,12 @@ case $key in
     DOCKER_REGISTRY="$2"
     shift 2
     ;;
+    --testbed-type)
+    TESTBED_TYPE="$2"
+    shift 2
+    ;;
     --proxyall)
     PROXY_ALL=true
-    shift
-    ;;
-    --flexible-ipam)
-    FLEXIBLE_IPAM=true
     shift
     ;;
     -h|--help)
@@ -131,6 +132,7 @@ function export_govc_env_var {
 
 function clean_antrea {
     echo "====== Cleanup Antrea Installation ======"
+    clean_up_one_ns "monitoring"
     clean_up_one_ns "antrea-ipam-test-11"
     clean_up_one_ns "antrea-ipam-test-12"
     clean_up_one_ns "antrea-ipam-test"
@@ -409,6 +411,7 @@ function deliver_antrea_windows {
 
 function deliver_antrea {
     echo "====== Cleanup Antrea Installation ======"
+    clean_up_one_ns "monitoring"
     clean_up_one_ns "antrea-ipam-test-11"
     clean_up_one_ns "antrea-ipam-test-12"
     clean_up_one_ns "antrea-ipam-test"
@@ -457,9 +460,12 @@ function deliver_antrea {
     echo "---" >> build/yamls/antrea.yml
     cat build/yamls/antrea-prometheus.yml >> build/yamls/antrea.yml
 
-    if [[ $FLEXIBLE_IPAM == true ]]; then
+    if [[ $TESTBED_TYPE == "flexible-ipam" ]]; then
         control_plane_ip="$(kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 ~ role {print $6}')"
         scp -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i "${WORKDIR}/jenkins_id_rsa" build/yamls/*.yml jenkins@${control_plane_ip}:~
+    elif [[ $TESTBED_TYPE == "jumper" ]]; then
+        control_plane_ip="$(kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 ~ role {print $6}')"
+        scp -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i "${WORKDIR}/.ssh/id_rsa" build/yamls/*.yml jenkins@${control_plane_ip}:${WORKDIR}/
     else
         cp -f build/yamls/*.yml $WORKDIR
     fi
@@ -468,11 +474,17 @@ function deliver_antrea {
     docker save -o antrea-ubuntu.tar projects.registry.vmware.com/antrea/antrea-ubuntu:latest
     docker save -o flow-aggregator.tar projects.registry.vmware.com/antrea/flow-aggregator:latest
 
-    if [[ $FLEXIBLE_IPAM == true ]]; then
+    if [[ $TESTBED_TYPE == "flexible-ipam" ]]; then
         kubectl get nodes -o wide --no-headers=true | awk '{print $6}' | while read IP; do
             scp -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i "${WORKDIR}/jenkins_id_rsa" antrea-ubuntu.tar jenkins@${IP}:${DEFAULT_WORKDIR}/antrea-ubuntu.tar
             scp -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i "${WORKDIR}/jenkins_id_rsa" flow-aggregator.tar jenkins@${IP}:${DEFAULT_WORKDIR}/flow-aggregator.tar
             ssh -o StrictHostKeyChecking=no -i "${WORKDIR}/jenkins_id_rsa" -n jenkins@${IP} "${CLEAN_STALE_IMAGES}; docker load -i ${DEFAULT_WORKDIR}/antrea-ubuntu.tar; docker load -i ${DEFAULT_WORKDIR}/flow-aggregator.tar" || true
+        done
+    elif [[ $TESTBED_TYPE == "jumper" ]]; then
+        kubectl get nodes -o wide --no-headers=true | awk '{print $6}' | while read IP; do
+            scp -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i "${WORKDIR}/.ssh/id_rsa" antrea-ubuntu.tar jenkins@${IP}:${DEFAULT_WORKDIR}/antrea-ubuntu.tar
+            scp -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i "${WORKDIR}/.ssh/id_rsa" flow-aggregator.tar jenkins@${IP}:${DEFAULT_WORKDIR}/flow-aggregator.tar
+            ssh -o StrictHostKeyChecking=no -i "${WORKDIR}/.ssh/id_rsa" -n jenkins@${IP} "${CLEAN_STALE_IMAGES_CONTAINERD};ctr -n=k8s.io images import ${DEFAULT_WORKDIR}/antrea-ubuntu.tar; ctr -n=k8s.io images import ${DEFAULT_WORKDIR}/flow-aggregator.tar" || true
         done
     else
         kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 !~ role {print $6}' | while read IP; do
@@ -527,7 +539,7 @@ function run_e2e {
     mkdir -p `pwd`/antrea-test-logs
     # HACK: see https://github.com/antrea-io/antrea/issues/2292
     go mod edit -replace github.com/moby/spdystream=github.com/antoninbas/spdystream@v0.2.1 && go mod tidy
-    if [[ $FLEXIBLE_IPAM == true ]]; then
+    if [[ $TESTBED_TYPE == "flexible-ipam" ]]; then
         go test -v antrea.io/antrea/test/e2e --logs-export-dir `pwd`/antrea-test-logs --provider remote -timeout=100m --prometheus --antrea-ipam
     else
         go test -v antrea.io/antrea/test/e2e --logs-export-dir `pwd`/antrea-test-logs --provider remote -timeout=100m --prometheus
@@ -670,7 +682,7 @@ function clean_tmp() {
 }
 
 export KUBECONFIG=${KUBECONFIG_PATH}
-if [[ $FLEXIBLE_IPAM == true ]]; then
+if [[ $TESTBED_TYPE == "flexible-ipam" ]]; then
     ./hack/generate-manifest.sh --flexible-ipam --verbose-log > build/yamls/antrea.yml
 fi
 
