@@ -143,6 +143,7 @@ rules:
       - antreaagentinfos
     verbs:
       - list
+      - create
       - delete
   - apiGroups:
       - crd.antrea.io
