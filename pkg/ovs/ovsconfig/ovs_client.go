@@ -261,7 +261,7 @@ func (br *OVSBridge) SetExternalIDs(externalIDs map[string]interface{}) Error {
 // http://openvswitch.org/support/dist-docs-2.5/FAQ.md.html
 func (br *OVSBridge) SetDatapathID(datapathID string) Error {
 	tx := br.ovsdb.Transaction(openvSwitchSchema)
-	otherConfig := map[string]interface{}{"datapath-id": datapathID}
+	otherConfig := map[string]interface{}{OVSOtherConfigDatapathIDKey: datapathID}
 	tx.Update(dbtransaction.Update{
 		Table: "Bridge",
 		Where: [][]interface{}{{"name", "==", br.name}},

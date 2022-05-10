@@ -366,6 +366,20 @@ func (mr *MockClientMockRecorder) InstallPodSNATFlows(arg0, arg1, arg2 interface
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallPodSNATFlows", reflect.TypeOf((*MockClient)(nil).InstallPodSNATFlows), arg0, arg1, arg2)
 }
 
+// InstallPolicyBypassFlows mocks base method
+func (m *MockClient) InstallPolicyBypassFlows(arg0 openflow.Protocol, arg1 *net.IPNet, arg2 net.IP, arg3 uint16, arg4 bool) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "InstallPolicyBypassFlows", arg0, arg1, arg2, arg3, arg4)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// InstallPolicyBypassFlows indicates an expected call of InstallPolicyBypassFlows
+func (mr *MockClientMockRecorder) InstallPolicyBypassFlows(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallPolicyBypassFlows", reflect.TypeOf((*MockClient)(nil).InstallPolicyBypassFlows), arg0, arg1, arg2, arg3, arg4)
+}
+
 // InstallPolicyRuleFlows mocks base method
 func (m *MockClient) InstallPolicyRuleFlows(arg0 *types.PolicyRule) error {
 	m.ctrl.T.Helper()
@@ -462,6 +476,20 @@ func (m *MockClient) InstallTrafficControlReturnPortFlow(arg0 uint32) error {
 func (mr *MockClientMockRecorder) InstallTrafficControlReturnPortFlow(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallTrafficControlReturnPortFlow", reflect.TypeOf((*MockClient)(nil).InstallTrafficControlReturnPortFlow), arg0)
+}
+
+// InstallVMUplinkFlows mocks base method
+func (m *MockClient) InstallVMUplinkFlows(arg0 string, arg1, arg2 int32) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "InstallVMUplinkFlows", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// InstallVMUplinkFlows indicates an expected call of InstallVMUplinkFlows
+func (mr *MockClientMockRecorder) InstallVMUplinkFlows(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallVMUplinkFlows", reflect.TypeOf((*MockClient)(nil).InstallVMUplinkFlows), arg0, arg1, arg2)
 }
 
 // IsConnected mocks base method
@@ -807,6 +835,20 @@ func (m *MockClient) UninstallTrafficControlReturnPortFlow(arg0 uint32) error {
 func (mr *MockClientMockRecorder) UninstallTrafficControlReturnPortFlow(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UninstallTrafficControlReturnPortFlow", reflect.TypeOf((*MockClient)(nil).UninstallTrafficControlReturnPortFlow), arg0)
+}
+
+// UninstallVMUplinkFlows mocks base method
+func (m *MockClient) UninstallVMUplinkFlows(arg0 string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UninstallVMUplinkFlows", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UninstallVMUplinkFlows indicates an expected call of UninstallVMUplinkFlows
+func (mr *MockClientMockRecorder) UninstallVMUplinkFlows(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UninstallVMUplinkFlows", reflect.TypeOf((*MockClient)(nil).UninstallVMUplinkFlows), arg0)
 }
 
 // MockOFEntryOperations is a mock of OFEntryOperations interface

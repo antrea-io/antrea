@@ -15,6 +15,7 @@
 package openflow
 
 import (
+	agentconfig "antrea.io/antrea/pkg/agent/config"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 )
 
@@ -71,9 +72,12 @@ const (
 	pipelineIP
 	// pipelineMulticast is used to process multicast packets.
 	pipelineMulticast
+	// pipelineNonIP is used to process the traffic of non-IP packets. This pipeline is used when ExternalNode feature
+	// is enabled.
+	pipelineNonIP
 
 	firstPipeline = pipelineRoot
-	lastPipeline  = pipelineMulticast
+	lastPipeline  = pipelineNonIP
 )
 
 const (
@@ -210,7 +214,11 @@ func (f *featureNetworkPolicy) getRequiredTables() []*Table {
 			AntreaPolicyIngressRuleTable,
 		)
 	}
-
+	if f.nodeType == agentconfig.ExternalNode {
+		tables = append(tables,
+			EgressSecurityClassifierTable,
+		)
+	}
 	return tables
 }
 
@@ -252,6 +260,17 @@ func (f *featureMulticast) getRequiredTables() []*Table {
 
 func (f *featureTraceflow) getRequiredTables() []*Table {
 	return nil
+}
+
+func (f *featureExternalNodeConnectivity) getRequiredTables() []*Table {
+	return []*Table{
+		ClassifierTable,
+		ConntrackTable,
+		ConntrackStateTable,
+		ConntrackCommitTable,
+		L2ForwardingOutTable,
+		NonIPTable,
+	}
 }
 
 // traceableFeature is the interface to support Traceflow in Antrea data path. Any other feature expected to trace the
