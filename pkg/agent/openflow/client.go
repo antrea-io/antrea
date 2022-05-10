@@ -337,7 +337,7 @@ type Client interface {
 	// InstallPolicyBypassFlows installs flows to bypass the NetworkPolicy rules on the traffic with the given ipnet
 	// or ip, port, protocol and direction. It is used to bypass NetworkPolicy enforcement on a VM for the particular
 	// traffic.
-	InstallPolicyBypassFlows(protocol binding.Protocol, ipnet *net.IPNet, ip net.IP, port uint16, isIngress bool) error
+	InstallPolicyBypassFlows(protocol binding.Protocol, ipNet *net.IPNet, port uint16, isIngress bool) error
 }
 
 // GetFlowTableStatus returns an array of flow table status.

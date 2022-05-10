@@ -89,8 +89,6 @@ type EntityInterfaceConfig struct {
 	EntityNamespace string
 	// UplinkPort is the OVS port configuration for the uplink, which is a pair port of this interface on OVS.
 	UplinkPort *OVSPortConfig
-	// HostIfaceIndex is the index of the host interface created by this OVS internal port.
-	HostIfaceIndex int
 }
 
 type InterfaceConfig struct {

@@ -42,6 +42,7 @@ import (
 	"antrea.io/antrea/pkg/agent/controller/serviceexternalip"
 	"antrea.io/antrea/pkg/agent/controller/traceflow"
 	"antrea.io/antrea/pkg/agent/controller/trafficcontrol"
+	"antrea.io/antrea/pkg/agent/externalnode"
 	"antrea.io/antrea/pkg/agent/flowexporter"
 	"antrea.io/antrea/pkg/agent/flowexporter/exporter"
 	"antrea.io/antrea/pkg/agent/interfacestore"
@@ -60,6 +61,7 @@ import (
 	"antrea.io/antrea/pkg/agent/stats"
 	agenttypes "antrea.io/antrea/pkg/agent/types"
 	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions"
+	crdv1alpha1informers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha1"
 	"antrea.io/antrea/pkg/controller/externalippool"
 	"antrea.io/antrea/pkg/features"
 	"antrea.io/antrea/pkg/log"
@@ -226,6 +228,7 @@ func run(o *Options) error {
 	// Initialize agent and node network.
 	agentInitializer := agent.NewInitializer(
 		k8sClient,
+		crdClient,
 		ovsBridgeClient,
 		ofClient,
 		routeClient,
@@ -240,6 +243,7 @@ func run(o *Options) error {
 		networkReadyCh,
 		stopCh,
 		o.nodeType,
+		o.config.ExternalNode.ExternalNodeNamespace,
 		features.DefaultFeatureGate.Enabled(features.AntreaProxy),
 		o.config.AntreaProxy.ProxyAll,
 		connectUplinkToBridge)
@@ -328,7 +332,16 @@ func run(o *Options) error {
 	// podUpdateChannel is a channel for receiving Pod updates from CNIServer and
 	// notifying NetworkPolicyController and EgressController to reconcile rules
 	// related to the updated Pods.
-	podUpdateChannel := channel.NewSubscribableChannel("PodUpdate", 100)
+	var podUpdateChannel *channel.SubscribableChannel
+	// externalEntityUpdateChannel is a channel for receiving ExternalEntity updates from ExternalNodeController and
+	// notifying NetworkPolicyController to reconcile rules related to the updated ExternalEntities.
+	var externalEntityUpdateChannel *channel.SubscribableChannel
+	if o.nodeType == config.K8sNode {
+		podUpdateChannel = channel.NewSubscribableChannel("PodUpdate", 100)
+	} else {
+		externalEntityUpdateChannel = channel.NewSubscribableChannel("ExternalEntityUpdate", 100)
+	}
+
 	// We set flow poll interval as the time interval for rule deletion in the async
 	// rule cache, which is implemented as part of the idAllocator. This is to preserve
 	// the rule info for populating NetworkPolicy fields in the Flow Exporter even
@@ -341,12 +354,19 @@ func run(o *Options) error {
 	statusManagerEnabled := antreaPolicyEnabled
 	loggingEnabled := antreaPolicyEnabled
 
+	var gwPort, tunPort uint32
+	if o.nodeType == config.K8sNode {
+		gwPort = nodeConfig.GatewayConfig.OFPort
+		tunPort = nodeConfig.TunnelOFPort
+	}
+
 	networkPolicyController, err := networkpolicy.NewNetworkPolicyController(
 		antreaClientProvider,
 		ofClient,
 		ifaceStore,
 		nodeConfig.Name,
 		podUpdateChannel,
+		externalEntityUpdateChannel,
 		groupCounters,
 		groupIDUpdates,
 		antreaPolicyEnabled,
@@ -356,10 +376,12 @@ func run(o *Options) error {
 		loggingEnabled,
 		asyncRuleDeleteInterval,
 		o.dnsServerOverride,
+		o.nodeType,
 		v4Enabled,
 		v6Enabled,
-		nodeConfig.GatewayConfig.OFPort,
-		nodeConfig.TunnelOFPort)
+		gwPort,
+		tunPort,
+	)
 	if err != nil {
 		return fmt.Errorf("error creating new NetworkPolicy controller: %v", err)
 	}
@@ -414,6 +436,8 @@ func run(o *Options) error {
 
 	var cniServer *cniserver.CNIServer
 	var cniPodInfoStore cnipodcache.CNIPodInfoStore
+	var externalNodeController *externalnode.ExternalNodeController
+	var localExternalNodeInformer cache.SharedIndexInformer
 	if o.nodeType == config.K8sNode {
 		isChaining := false
 		if networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {
@@ -442,6 +466,22 @@ func run(o *Options) error {
 			if err != nil {
 				return fmt.Errorf("error initializing CNI server: %v", err)
 			}
+		}
+	} else {
+		listOptions := func(options *metav1.ListOptions) {
+			options.FieldSelector = fields.OneTermEqualSelector("metadata.name", nodeConfig.Name).String()
+		}
+		localExternalNodeInformer = crdv1alpha1informers.NewFilteredExternalNodeInformer(
+			crdClient,
+			o.config.ExternalNode.ExternalNodeNamespace,
+			resyncPeriodDisabled,
+			cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
+			listOptions,
+		)
+		externalNodeController, err = externalnode.NewExternalNodeController(ovsBridgeClient, ofClient, localExternalNodeInformer,
+			ifaceStore, externalEntityUpdateChannel, o.config.ExternalNode.ExternalNodeNamespace, o.config.ExternalNode.PolicyBypassRules)
+		if err != nil {
+			return fmt.Errorf("error creating ExternalNode controller: %v", err)
 		}
 	}
 
@@ -536,6 +576,10 @@ func run(o *Options) error {
 		go podUpdateChannel.Run(stopCh)
 		go cniServer.Run(stopCh)
 		go nodeRouteController.Run(stopCh)
+	} else {
+		go externalEntityUpdateChannel.Run(stopCh)
+		go localExternalNodeInformer.Run(stopCh)
+		go externalNodeController.Run(stopCh)
 	}
 
 	if networkConfig.TrafficEncryptionMode == config.TrafficEncryptionModeIPSec &&

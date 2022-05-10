@@ -22,6 +22,7 @@ import (
 	"antrea.io/libOpenflow/protocol"
 	"antrea.io/ofnet/ofctrl"
 
+	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/openflow"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
@@ -122,6 +123,9 @@ func (c *Controller) rejectRequest(pktIn *ofctrl.PacketIn) error {
 	//    response is being generated for locally-originated traffic that went through
 	//    kube-proxy and was re-injected into the bridge through antrea-gw.
 	isServiceTraffic := func() bool {
+		if c.nodeType == config.ExternalNode {
+			return false
+		}
 		if c.antreaProxyEnabled {
 			matches := pktIn.GetMatches()
 			if match := getMatchRegField(matches, openflow.ServiceEPStateField); match != nil {
@@ -158,7 +162,7 @@ func (c *Controller) rejectRequest(pktIn *ofctrl.PacketIn) error {
 		tunPort = uint32(openflow13.P_CONTROLLER)
 	}
 	inPort, outPort := getRejectOFPorts(packetOutType, sIface, dIface, c.gwPort, tunPort)
-	mutateFunc := getRejectPacketOutMutateFunc(packetOutType)
+	mutateFunc := getRejectPacketOutMutateFunc(packetOutType, c.nodeType)
 
 	if proto == protocol.Type_TCP {
 		// Get TCP data.
@@ -256,12 +260,19 @@ func getRejectOFPorts(rejectType RejectType, sIface, dIface *interfacestore.Inte
 	case RejectServiceLocal:
 		inPort = uint32(sIface.OFPort)
 	case RejectPodRemoteToLocal:
-		inPort = gwOFPort
+		if dIface.Type == interfacestore.ExternalEntityInterface {
+			inPort = uint32(dIface.EntityInterfaceConfig.UplinkPort.OFPort)
+		} else {
+			inPort = gwOFPort
+		}
 		outPort = uint32(dIface.OFPort)
 	case RejectServiceRemoteToLocal:
 		inPort = gwOFPort
 	case RejectLocalToRemote:
 		inPort = uint32(sIface.OFPort)
+		if sIface.Type == interfacestore.ExternalEntityInterface {
+			outPort = uint32(sIface.EntityInterfaceConfig.UplinkPort.OFPort)
+		}
 	case RejectNoAPServiceLocal:
 		inPort = uint32(sIface.OFPort)
 		outPort = gwOFPort
@@ -273,7 +284,7 @@ func getRejectOFPorts(rejectType RejectType, sIface, dIface *interfacestore.Inte
 }
 
 // getRejectPacketOutMutateFunc returns the mutate func of a packetOut based on the RejectType.
-func getRejectPacketOutMutateFunc(rejectType RejectType) func(binding.PacketOutBuilder) binding.PacketOutBuilder {
+func getRejectPacketOutMutateFunc(rejectType RejectType, nodeType config.NodeType) func(binding.PacketOutBuilder) binding.PacketOutBuilder {
 	var mutatePacketOut func(binding.PacketOutBuilder) binding.PacketOutBuilder
 	switch rejectType {
 	case RejectServiceLocal:
@@ -283,6 +294,10 @@ func getRejectPacketOutMutateFunc(rejectType RejectType) func(binding.PacketOutB
 		}
 	case RejectLocalToRemote:
 		tableID := openflow.L3ForwardingTable.GetID()
+		// L3ForwardingTable is not initialized for ExternalNode case since layer 3 is not needed.
+		if nodeType == config.ExternalNode {
+			tableID = openflow.L2ForwardingCalcTable.GetID()
+		}
 		mutatePacketOut = func(packetOutBuilder binding.PacketOutBuilder) binding.PacketOutBuilder {
 			return packetOutBuilder.AddResubmitAction(nil, &tableID)
 		}

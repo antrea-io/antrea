@@ -19,6 +19,7 @@ import (
 	"bytes"
 	"fmt"
 	"net"
+	"strconv"
 	"strings"
 
 	"k8s.io/klog/v2"
@@ -226,4 +227,39 @@ func (c *ovsCtlClient) GetDPFeatures() (map[DPFeature]bool, error) {
 		features[feature] = supported
 	}
 	return features, nil
+}
+
+// DeleteDPInterface deletes OVS datapath interface, and it returns with no error if the interface does not exist.
+func (c *ovsCtlClient) DeleteDPInterface(name string) error {
+	cmd := fmt.Sprintf("dpctl/show ovs-system")
+	out, execErr := c.runAppCtl(cmd, false)
+	if execErr != nil {
+		return execErr
+	}
+	scanner := bufio.NewScanner(strings.NewReader(string(out)))
+	scanner.Split(bufio.ScanLines)
+	for scanner.Scan() {
+		line := scanner.Text()
+		fields := strings.Split(line, ": ")
+		if len(fields) < 2 {
+			continue
+		}
+		nameStr := fields[1]
+		ifName := strings.Split(nameStr, " (internal)")[0]
+		if ifName == name {
+			portStr := strings.Split(fields[0], " ")[1]
+			port, err := strconv.Atoi(portStr)
+			if err != nil {
+				return fmt.Errorf("failed to parse portNum from portStr %s, line %s", portStr, line)
+			}
+			cmd = fmt.Sprintf("dpctl/del-if ovs-system %d", port)
+			_, execErr = c.runAppCtl(cmd, false)
+			if execErr == nil || strings.Contains(execErr.Error(), "No such device") {
+				return nil
+			} else {
+				return execErr
+			}
+		}
+	}
+	return nil
 }

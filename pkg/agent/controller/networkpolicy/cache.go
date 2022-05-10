@@ -27,6 +27,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 
+	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/metrics"
 	agenttypes "antrea.io/antrea/pkg/agent/types"
 	v1beta "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
@@ -394,7 +395,8 @@ func toIGMPReportGroupAddressIndexFunc(obj interface{}) ([]string, error) {
 }
 
 // newRuleCache returns a new *ruleCache.
-func newRuleCache(dirtyRuleHandler func(string), podUpdateSubscriber channel.Subscriber, serviceGroupIDUpdate <-chan string) *ruleCache {
+func newRuleCache(dirtyRuleHandler func(string), podUpdateSubscriber channel.Subscriber, externalEntityUpdateSubscriber channel.Subscriber,
+	serviceGroupIDUpdate <-chan string, nodeType config.NodeType) *ruleCache {
 	rules := cache.NewIndexer(
 		ruleKeyFunc,
 		cache.Indexers{
@@ -413,14 +415,20 @@ func newRuleCache(dirtyRuleHandler func(string), podUpdateSubscriber channel.Sub
 		dirtyRuleHandler:    dirtyRuleHandler,
 		groupIDUpdates:      serviceGroupIDUpdate,
 	}
-	// Subscribe Pod update events from CNIServer.
-	podUpdateSubscriber.Subscribe(cache.processPodUpdate)
+	if nodeType == config.K8sNode {
+		// Subscribe Pod update events from CNIServer.
+		podUpdateSubscriber.Subscribe(cache.processPodUpdate)
+	} else {
+		// Subscribe ExternalEntity update events from ExternalNodeController
+		externalEntityUpdateSubscriber.Subscribe(cache.processExternalEntityUpdate)
+	}
+
 	go cache.processGroupIDUpdates()
 	return cache
 }
 
 // processPodUpdate will be called when CNIServer publishes a Pod update event.
-// It finds out AppliedToGroups that contains this Pod and trigger reconciling
+// It finds out AppliedToGroups that contain this Pod and triggers reconciliation
 // of related rules.
 // It can enforce NetworkPolicies to newly added Pods right after CNI ADD is
 // done if antrea-controller has computed the Pods' policies and propagated
@@ -433,6 +441,24 @@ func (c *ruleCache) processPodUpdate(e interface{}) {
 			Name:      podEvent.PodName,
 			Namespace: podEvent.PodNamespace,
 		},
+	}
+	c.appliedToSetLock.RLock()
+	defer c.appliedToSetLock.RUnlock()
+	for group, memberSet := range c.appliedToSetByGroup {
+		if memberSet.Has(member) {
+			c.onAppliedToGroupUpdate(group)
+		}
+	}
+}
+
+// processExternalEntityUpdate will be called when ExternalNodeController publishes an ExternalEntity update event.
+// It finds out AppliedToGroups that contain this ExternalNode converted ExternalEntity and triggers reconciliation
+// of related rules.
+// It can enforce NetworkPolicies to ExternalEntities after ExternalEntityInterface is realised in the interface store.
+func (c *ruleCache) processExternalEntityUpdate(e interface{}) {
+	externalEntityRef := e.(v1beta.ExternalEntityReference)
+	member := &v1beta.GroupMember{
+		ExternalEntity: &externalEntityRef,
 	}
 	c.appliedToSetLock.RLock()
 	defer c.appliedToSetLock.RUnlock()
