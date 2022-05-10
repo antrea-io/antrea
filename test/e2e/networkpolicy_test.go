@@ -828,8 +828,7 @@ func testIngressPolicyWithEndPort(t *testing.T, data *TestData) {
 		}
 		if nodeName == controlPlaneNodeName() {
 			// tolerate NoSchedule taint if we want Pod to run on control-plane Node
-			noScheduleToleration := controlPlaneNoScheduleToleration()
-			podSpec.Tolerations = []corev1.Toleration{noScheduleToleration}
+			podSpec.Tolerations = controlPlaneNoScheduleTolerations()
 		}
 		pod := &corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{

@@ -377,12 +377,19 @@ func labelNodeRoleControlPlane() string {
 	return labelNodeRoleControlPlane
 }
 
-func controlPlaneNoScheduleToleration() corev1.Toleration {
+func controlPlaneNoScheduleTolerations() []corev1.Toleration {
 	// the Node taint still uses "master" in K8s v1.20
-	return corev1.Toleration{
-		Key:      "node-role.kubernetes.io/master",
-		Operator: corev1.TolerationOpExists,
-		Effect:   corev1.TaintEffectNoSchedule,
+	return []corev1.Toleration{
+		{
+			Key:      "node-role.kubernetes.io/master",
+			Operator: corev1.TolerationOpExists,
+			Effect:   corev1.TaintEffectNoSchedule,
+		},
+		{
+			Key:      "node-role.kubernetes.io/control-plane",
+			Operator: corev1.TolerationOpExists,
+			Effect:   corev1.TaintEffectNoSchedule,
+		},
 	}
 }
 
@@ -1046,8 +1053,7 @@ func (data *TestData) createPodOnNodeInNamespace(name, ns string, nodeName, ctrN
 	}
 	if nodeName == controlPlaneNodeName() {
 		// tolerate NoSchedule taint if we want Pod to run on control-plane Node
-		noScheduleToleration := controlPlaneNoScheduleToleration()
-		podSpec.Tolerations = []corev1.Toleration{noScheduleToleration}
+		podSpec.Tolerations = controlPlaneNoScheduleTolerations()
 	}
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -2279,9 +2285,7 @@ func (data *TestData) createAgnhostPodOnNodeWithAnnotations(name string, ns stri
 
 func (data *TestData) createDaemonSet(name string, ns string, ctrName string, image string, cmd []string, args []string) (*appsv1.DaemonSet, func() error, error) {
 	podSpec := corev1.PodSpec{
-		Tolerations: []corev1.Toleration{
-			controlPlaneNoScheduleToleration(),
-		},
+		Tolerations: controlPlaneNoScheduleTolerations(),
 		Containers: []corev1.Container{
 			{
 				Name:            ctrName,
@@ -2353,9 +2357,7 @@ func (data *TestData) waitForDaemonSetPods(timeout time.Duration, dsName string,
 
 func (data *TestData) createStatefulSet(name string, ns string, size int32, ctrName string, image string, cmd []string, args []string, mutateFunc func(*appsv1.StatefulSet)) (*appsv1.StatefulSet, func() error, error) {
 	podSpec := corev1.PodSpec{
-		Tolerations: []corev1.Toleration{
-			controlPlaneNoScheduleToleration(),
-		},
+		Tolerations: controlPlaneNoScheduleTolerations(),
 		Containers: []corev1.Container{
 			{
 				Name:            ctrName,
