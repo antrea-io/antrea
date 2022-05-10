@@ -31,7 +31,6 @@ The labels in this list originated within Kubernetes at
 | area/endpoint/type                 | Issues or PRs related to endpoint type | Any |
 | area/flow-visibility               | Issues or PRs related to flow visibility support in Antrea | Any |
 | area/flow-visibility/aggregation   | Issues or PRs related to flow aggregation | Any |
-| area/flow-visibility/elk           | Issues or PRs related to the reference ELK configuration for flow visualization | Any |
 | area/flow-visibility/export        | Issues or PRs related to the Flow Exporter functions in the Agent | Any |
 | area/github-membership             | Categorizes an issue as a membership request to join the antrea-io Github organization | Any |
 | area/grouping                      | Issues or PRs related to ClusterGroup, Group API | Any |
