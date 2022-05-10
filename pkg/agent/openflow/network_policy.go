@@ -1830,7 +1830,6 @@ func (f *featureNetworkPolicy) initFlows() []binding.Flow {
 	var flows []binding.Flow
 	flows = append(flows, f.establishedConnectionFlows()...)
 	flows = append(flows, f.relatedConnectionFlows()...)
-	flows = append(flows, f.rejectBypassNetworkpolicyFlows()...)
 	flows = append(flows, f.ingressClassifierFlows()...)
 	return flows
 }
