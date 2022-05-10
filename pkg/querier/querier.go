@@ -92,3 +92,19 @@ type NetworkPolicyQueryFilter struct {
 	// The type of the original NetworkPolicy that the internal NetworkPolicy is created for.(K8sNP, CNP, ANP)
 	SourceType cpv1beta.NetworkPolicyType
 }
+
+// ServiceExternalIPStatusQuerier queries the Service external IP status for debugging purposes.
+// Ideally, every Node should have consistent results eventually. This should only be used when
+// ServiceExternalIP feature is enabled.
+type ServiceExternalIPStatusQuerier interface {
+	GetServiceExternalIPStatus() []ServiceExternalIPInfo
+}
+
+// ServiceExternalIPInfo contains the essential information for Services with type of Loadbalancer managed by Antrea.
+type ServiceExternalIPInfo struct {
+	ServiceName    string `json:"serviceName,omitempty" antctl:"name,Name of the Service"`
+	Namespace      string `json:"namespace,omitempty"`
+	ExternalIP     string `json:"externalIP,omitempty"`
+	ExternalIPPool string `json:"externalIPPool,omitempty"`
+	AssignedNode   string `json:"assignedNode,omitempty"`
+}

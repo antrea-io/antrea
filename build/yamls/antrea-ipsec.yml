@@ -3429,6 +3429,7 @@ rules:
   - /ovstracing
   - /podinterfaces
   - /featuregates
+  - /serviceexternalip
   verbs:
   - get
 ---
@@ -3477,12 +3478,6 @@ rules:
   - get
   - watch
   - list
-- apiGroups:
-  - ""
-  resources:
-  - services/status
-  verbs:
-  - update
 - apiGroups:
   - discovery.k8s.io
   resources:
