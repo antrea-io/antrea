@@ -367,6 +367,7 @@ func Test_client_SendTraceflowPacket(t *testing.T) {
 			name: "IPv6 ICMPv6",
 			args: args{
 				Packet: binding.Packet{
+					IsIPv6:         true,
 					SourceMAC:      srcMAC,
 					DestinationMAC: dstMAC,
 					SourceIP:       net.ParseIP("1111::4444"),
@@ -381,6 +382,7 @@ func Test_client_SendTraceflowPacket(t *testing.T) {
 			name: "IPv6 TCP",
 			args: args{
 				Packet: binding.Packet{
+					IsIPv6:         true,
 					SourceMAC:      srcMAC,
 					DestinationMAC: dstMAC,
 					SourceIP:       net.ParseIP("1111::4444"),
@@ -394,6 +396,7 @@ func Test_client_SendTraceflowPacket(t *testing.T) {
 			name: "IPv6 UDP",
 			args: args{
 				Packet: binding.Packet{
+					IsIPv6:         true,
 					SourceMAC:      srcMAC,
 					DestinationMAC: dstMAC,
 					SourceIP:       net.ParseIP("1111::4444"),
