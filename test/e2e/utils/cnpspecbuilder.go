@@ -15,7 +15,6 @@
 package utils
 
 import (
-	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
@@ -104,8 +103,8 @@ func (b *ClusterNetworkPolicySpecBuilder) GetAppliedToPeer(podSelector map[strin
 	return peer
 }
 
-func (b *ClusterNetworkPolicySpecBuilder) AddIngress(protoc v1.Protocol,
-	port *int32, portName *string, endPort *int32, cidr *string,
+func (b *ClusterNetworkPolicySpecBuilder) AddIngress(protoc AntreaPolicyProtocol,
+	port *int32, portName *string, endPort, icmpType, icmpCode *int32, cidr *string,
 	podSelector map[string]string, nsSelector map[string]string,
 	podSelectorMatchExp []metav1.LabelSelectorRequirement, nsSelectorMatchExp []metav1.LabelSelectorRequirement, selfNS bool,
 	ruleAppliedToSpecs []ACNPAppliedToSpec, action crdv1alpha1.RuleAction, ruleClusterGroup, name string, serviceAccount *crdv1alpha1.NamespacedName) *ClusterNetworkPolicySpecBuilder {
@@ -158,35 +157,11 @@ func (b *ClusterNetworkPolicySpecBuilder) AddIngress(protoc v1.Protocol,
 			ServiceAccount:    serviceAccount,
 		}}
 	}
-
-	var ports []crdv1alpha1.NetworkPolicyPort
-	if port != nil && portName != nil {
-		panic("specify portname or port, not both")
-	}
-	if portName != nil {
-		ports = []crdv1alpha1.NetworkPolicyPort{
-			{
-				Port:     &intstr.IntOrString{Type: intstr.String, StrVal: *portName},
-				Protocol: &protoc,
-			},
-		}
-	}
-	if port != nil || endPort != nil {
-		var pVal *intstr.IntOrString
-		if port != nil {
-			pVal = &intstr.IntOrString{IntVal: *port}
-		}
-		ports = []crdv1alpha1.NetworkPolicyPort{
-			{
-				Port:     pVal,
-				EndPort:  endPort,
-				Protocol: &protoc,
-			},
-		}
-	}
+	ports, protocols := GenPortsOrProtocols(protoc, port, portName, endPort, icmpType, icmpCode)
 	newRule := crdv1alpha1.Rule{
 		From:      policyPeer,
 		Ports:     ports,
+		Protocols: protocols,
 		Action:    &action,
 		Name:      name,
 		AppliedTo: appliedTos,
@@ -195,8 +170,8 @@ func (b *ClusterNetworkPolicySpecBuilder) AddIngress(protoc v1.Protocol,
 	return b
 }
 
-func (b *ClusterNetworkPolicySpecBuilder) AddEgress(protoc v1.Protocol,
-	port *int32, portName *string, endPort *int32, cidr *string,
+func (b *ClusterNetworkPolicySpecBuilder) AddEgress(protoc AntreaPolicyProtocol,
+	port *int32, portName *string, endPort, icmpType, icmpCode *int32, cidr *string,
 	podSelector map[string]string, nsSelector map[string]string,
 	podSelectorMatchExp []metav1.LabelSelectorRequirement, nsSelectorMatchExp []metav1.LabelSelectorRequirement, selfNS bool,
 	ruleAppliedToSpecs []ACNPAppliedToSpec, action crdv1alpha1.RuleAction, ruleClusterGroup, name string, serviceAccount *crdv1alpha1.NamespacedName) *ClusterNetworkPolicySpecBuilder {
@@ -204,7 +179,7 @@ func (b *ClusterNetworkPolicySpecBuilder) AddEgress(protoc v1.Protocol,
 	// For simplicity, we just reuse the Ingress code here.  The underlying data model for ingress/egress is identical
 	// With the exception of calling the rule `To` vs. `From`.
 	c := &ClusterNetworkPolicySpecBuilder{}
-	c.AddIngress(protoc, port, portName, endPort, cidr, podSelector, nsSelector,
+	c.AddIngress(protoc, port, portName, endPort, icmpType, icmpCode, cidr, podSelector, nsSelector,
 		podSelectorMatchExp, nsSelectorMatchExp, selfNS, ruleAppliedToSpecs, action, ruleClusterGroup, name, serviceAccount)
 	theRule := c.Get().Spec.Ingress[0]
 
@@ -218,17 +193,17 @@ func (b *ClusterNetworkPolicySpecBuilder) AddEgress(protoc v1.Protocol,
 	return b
 }
 
-func (b *ClusterNetworkPolicySpecBuilder) AddNodeSelectorRule(nodeSelector *metav1.LabelSelector, protoc v1.Protocol, port *int32, name string,
+func (b *ClusterNetworkPolicySpecBuilder) AddNodeSelectorRule(nodeSelector *metav1.LabelSelector, protoc AntreaPolicyProtocol, port *int32, name string,
 	ruleAppliedToSpecs []ACNPAppliedToSpec, action crdv1alpha1.RuleAction, isEgress bool) *ClusterNetworkPolicySpecBuilder {
 	var appliedTos []crdv1alpha1.NetworkPolicyPeer
 	for _, at := range ruleAppliedToSpecs {
 		appliedTos = append(appliedTos, b.GetAppliedToPeer(at.PodSelector, at.NSSelector, at.PodSelectorMatchExp, at.NSSelectorMatchExp, at.Group))
 	}
 	policyPeer := []crdv1alpha1.NetworkPolicyPeer{{NodeSelector: nodeSelector}}
-
+	k8sProtocol, _ := AntreaPolicyProtocolToK8sProtocol(protoc)
 	newRule := crdv1alpha1.Rule{
 		Ports: []crdv1alpha1.NetworkPolicyPort{
-			{Protocol: &protoc, Port: &intstr.IntOrString{IntVal: *port}},
+			{Protocol: &k8sProtocol, Port: &intstr.IntOrString{IntVal: *port}},
 		},
 		Action:    &action,
 		Name:      name,
@@ -245,35 +220,14 @@ func (b *ClusterNetworkPolicySpecBuilder) AddNodeSelectorRule(nodeSelector *meta
 }
 
 func (b *ClusterNetworkPolicySpecBuilder) AddFQDNRule(fqdn string,
-	protoc v1.Protocol, port *int32, portName *string, endPort *int32, name string,
+	protoc AntreaPolicyProtocol, port *int32, portName *string, endPort *int32, name string,
 	ruleAppliedToSpecs []ACNPAppliedToSpec, action crdv1alpha1.RuleAction) *ClusterNetworkPolicySpecBuilder {
 	var appliedTos []crdv1alpha1.NetworkPolicyPeer
 	for _, at := range ruleAppliedToSpecs {
 		appliedTos = append(appliedTos, b.GetAppliedToPeer(at.PodSelector, at.NSSelector, at.PodSelectorMatchExp, at.NSSelectorMatchExp, at.Group))
 	}
 	policyPeer := []crdv1alpha1.NetworkPolicyPeer{{FQDN: fqdn}}
-	var ports []crdv1alpha1.NetworkPolicyPort
-	if portName != nil {
-		ports = []crdv1alpha1.NetworkPolicyPort{
-			{
-				Port:     &intstr.IntOrString{Type: intstr.String, StrVal: *portName},
-				Protocol: &protoc,
-			},
-		}
-	}
-	if port != nil || endPort != nil {
-		var pVal *intstr.IntOrString
-		if port != nil {
-			pVal = &intstr.IntOrString{IntVal: *port}
-		}
-		ports = []crdv1alpha1.NetworkPolicyPort{
-			{
-				Port:     pVal,
-				EndPort:  endPort,
-				Protocol: &protoc,
-			},
-		}
-	}
+	ports, _ := GenPortsOrProtocols(protoc, port, portName, endPort, nil, nil)
 	newRule := crdv1alpha1.Rule{
 		To:        policyPeer,
 		Ports:     ports,
@@ -304,7 +258,7 @@ func (b *ClusterNetworkPolicySpecBuilder) AddToServicesRule(svcRefs []crdv1alpha
 
 // AddEgressDNS mutates the nth policy rule to allow DNS, convenience method
 func (b *ClusterNetworkPolicySpecBuilder) WithEgressDNS() *ClusterNetworkPolicySpecBuilder {
-	protocolUDP := v1.ProtocolUDP
+	protocolUDP, _ := AntreaPolicyProtocolToK8sProtocol(ProtocolUDP)
 	route53 := crdv1alpha1.NetworkPolicyPort{
 		Protocol: &protocolUDP,
 		Port:     &intstr.IntOrString{Type: intstr.Int, IntVal: 53},
