@@ -536,7 +536,7 @@ jobs:
   # yet.
   artifact-cleanup:
     name: Delete uploaded images
-    needs: [build-antrea-coverage-image, build-flow-aggregator-coverage-image, test-e2e-encap, test-e2e-encap-no-proxy, test-e2e-encap-proxy-all, test-e2e-noencap, test-e2e-hybrid, test-e2e-encap-no-np, test-netpol-tmp, validate-prometheus-metrics-doc]
+    needs: [build-antrea-coverage-image, build-flow-aggregator-coverage-image, test-e2e-encap, test-e2e-encap-no-proxy, test-e2e-encap-proxy-all, test-e2e-noencap, test-e2e-hybrid, test-e2e-encap-no-np, test-netpol-tmp, validate-prometheus-metrics-doc, test-e2e-flow-visibility]
     if: ${{ always() &&  (needs.build-antrea-coverage-image.result == 'success' || needs.build-flow-aggregator-coverage-image.result == 'success') }}
     runs-on: [ubuntu-latest]
     steps:

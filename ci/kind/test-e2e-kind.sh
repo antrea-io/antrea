@@ -164,7 +164,7 @@ if $flow_visibility; then
 fi
 
 COMMON_IMAGES_LIST=("k8s.gcr.io/e2e-test-images/agnhost:2.29" \
-                    "projects.registry.vmware.com/library/busybox"  \
+                    "projects.registry.vmware.com/antrea/busybox"  \
                     "projects.registry.vmware.com/antrea/nginx:1.21.6-alpine" \
                     "projects.registry.vmware.com/antrea/perftool")
 
@@ -176,10 +176,8 @@ FLOW_VISIBILITY_IMAGE_LIST=("projects.registry.vmware.com/antrea/ipfix-collector
 if $coverage; then
     manifest_args="$manifest_args --coverage"
     COMMON_IMAGES_LIST+=("antrea/antrea-ubuntu-coverage:latest")
-    COMMON_IMAGES_LIST+=("antrea/flow-aggregator-coverage:latest")
 else
     COMMON_IMAGES_LIST+=("projects.registry.vmware.com/antrea/antrea-ubuntu:latest")
-    COMMON_IMAGES_LIST+=("projects.registry.vmware.com/antrea/flow-aggregator:latest")
 fi
 if $proxy_all; then
     COMMON_IMAGES_LIST+=("k8s.gcr.io/echoserver:1.10")
