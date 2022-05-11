@@ -21,7 +21,7 @@ function echoerr {
 }
 
 GKE_ZONE="us-west1-a"
-GKE_HOST="UBUNTU"
+GKE_HOST="UBUNTU_CONTAINERD"
 MACHINE_TYPE="e2-standard-4"
 GKE_SERVICE_CIDR="10.94.0.0/16"
 GKE_PROJECT="antrea"
@@ -31,7 +31,8 @@ RUN_ALL=true
 RUN_SETUP_ONLY=false
 RUN_CLEANUP_ONLY=false
 TEST_SCRIPT_RC=0
-KUBE_CONFORMANCE_IMAGE_VERSION=auto
+# There is a problem with the netpol suite added in v1.21.0 when running on GKE. See #3762 for details.
+KUBE_CONFORMANCE_IMAGE_VERSION=v1.20.15
 
 _usage="Usage: $0 [--cluster-name <GKEClusterNameToUse>]  [--kubeconfig <KubeconfigSavePath>] [--k8s-version <ClusterVersion>] \
                   [--svc-account <Name>] [--user <Name>] [--gke-project <Project>] [--gke-zone <Zone>] [--log-mode <SonobuoyResultLogLevel>] \
