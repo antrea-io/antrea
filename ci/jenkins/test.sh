@@ -295,8 +295,8 @@ function deliver_antrea_windows {
         KUBERNETES_SVC_EP_IP=$(kubectl get endpoints kubernetes -o jsonpath='{.subsets[0].addresses[0].ip}')
         KUBERNETES_SVC_EP_PORT=$(kubectl get endpoints kubernetes -o jsonpath='{.subsets[0].ports[0].port}')
         KUBERNETES_SVC_EP_ADDR="${KUBERNETES_SVC_EP_IP}:${KUBERNETES_SVC_EP_PORT}"
-        sed -i "s|#kubeAPIServerOverride: \"\"|kubeAPIServerOverride: \"${KUBERNETES_SVC_EP_ADDR}\"|g" build/yamls/antrea.yml build/yamls/antrea-windows.yml
-        sed -i "s|#proxyAll: false|proxyAll: true|g" build/yamls/antrea.yml build/yamls/antrea-windows.yml
+        sed -i "s|.*kubeAPIServerOverride: \"\"|    kubeAPIServerOverride: \"${KUBERNETES_SVC_EP_ADDR}\"|g" build/yamls/antrea.yml build/yamls/antrea-windows.yml
+        sed -i "s|.*proxyAll: false|      proxyAll: true|g" build/yamls/antrea.yml build/yamls/antrea-windows.yml
     fi
 
     cp -f build/yamls/*.yml $WORKDIR
@@ -334,8 +334,8 @@ function deliver_antrea_windows {
         govc snapshot.revert -vm ${WORKER_NAME} win-initial
         # If Windows VM fails to power on correctly in time, retry several times.
         winVMIPs=""
-        for i in `seq 3`; do
-            winVMIPs=$(govc vm.ip -wait=1m -a ${WORKER_NAME})
+        for i in `seq 10`; do
+            winVMIPs=$(govc vm.ip -wait=2m -a ${WORKER_NAME})
             if [[ $winVMIPs != "" ]]; then
                 echo "Windows VM ${WORKER_NAME} powered on"
                 break
@@ -353,16 +353,15 @@ function deliver_antrea_windows {
             sleep 5
             ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "W32tm /resync /force" | grep successfully && break
         done
+        # Avoid potential resync delay error
+        sleep 5
         # Some tests need us.gcr.io/k8s-artifacts-prod/e2e-test-images/agnhost:2.13 image but it is not for windows/amd64 10.0.17763
         # Use e2eteam/agnhost:2.13 instead
-        harbor_images=("sigwindowstools-kube-proxy:v1.18.0" "agnhost:2.13" "agnhost:2.13" "e2eteam-jessie-dnsutils:1.0" "e2eteam-pause:3.2")
-        antrea_images=("sigwindowstools/kube-proxy:v1.18.0" "e2eteam/agnhost:2.13" "us.gcr.io/k8s-artifacts-prod/e2e-test-images/agnhost:2.13" "e2eteam/jessie-dnsutils:1.0" "e2eteam/pause:3.2")
+        harbor_images=("sigwindowstools-kube-proxy:v1.18.0" "agnhost:2.13" "agnhost:2.13" "agnhost:2.29" "e2eteam-jessie-dnsutils:1.0" "e2eteam-pause:3.2")
+        antrea_images=("sigwindowstools/kube-proxy:v1.18.0" "e2eteam/agnhost:2.13" "us.gcr.io/k8s-artifacts-prod/e2e-test-images/agnhost:2.13" "k8s.gcr.io/e2e-test-images/agnhost:2.29" "e2eteam/jessie-dnsutils:1.0" "e2eteam/pause:3.2")
+        # Pull necessary images in advance to avoid transient error
         for i in "${!harbor_images[@]}"; do
             ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "docker pull -q ${DOCKER_REGISTRY}/antrea/${harbor_images[i]} && docker tag ${DOCKER_REGISTRY}/antrea/${harbor_images[i]} ${antrea_images[i]}" || true
-        done
-        # Pull necessary images in advance to avoid transient error
-        for image in "${common_images[@]}"; do
-            ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "docker pull -q ${image}" || true
         done
 
         # Use a script to run antrea agent in windows Network Policy cases
