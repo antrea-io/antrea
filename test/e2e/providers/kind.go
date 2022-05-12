@@ -46,6 +46,11 @@ func (provider *KindProvider) RunCommandOnNodeExt(nodeName, cmd string, envs map
 	return exec.RunDockerExecCommand(nodeName, cmd, "/root", envs, stdin)
 }
 
+func (provider *KindProvider) RunCommandOnVM(nodeName, cmd string) (
+	code int, stdout, stderr string, err error) {
+	return 0, "", "", nil
+}
+
 func (provider *KindProvider) GetKubeconfigPath() (string, error) {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {

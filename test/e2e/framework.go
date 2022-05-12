@@ -191,6 +191,8 @@ type TestOptions struct {
 	flowVisibility      bool
 	coverageDir         string
 	skipCases           string
+	linVMs              string
+	winVMs              string
 }
 
 var testOptions TestOptions

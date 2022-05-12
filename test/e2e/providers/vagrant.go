@@ -133,6 +133,11 @@ func (provider *VagrantProvider) RunCommandOnNodeExt(nodeName, cmd string, envs 
 	return exec.RunSSHCommand(host, config, cmd, envs, stdin, sudo)
 }
 
+func (provider *VagrantProvider) RunCommandOnVM(nodeName, cmd string) (
+	code int, stdout, stderr string, err error) {
+	return 0, "", "", nil
+}
+
 func (provider *VagrantProvider) GetKubeconfigPath() (string, error) {
 	vagrantPath, err := vagrantPath()
 	if err != nil {

@@ -389,6 +389,58 @@ func exportLogs(tb testing.TB, data *TestData, logsSubDir string, writeNodeLogs 
 	}); err != nil {
 		tb.Logf("Error when exporting kubelet logs: %v", err)
 	}
+
+	getVmWriter := func(nodeName, suffix string) *os.File {
+		logFile := filepath.Join(logsDir, fmt.Sprintf("%s-%s", nodeName, suffix))
+		f, err := os.Create(logFile)
+		if err != nil {
+			tb.Errorf("Error when creating log file '%s': '%v'", logFile, err)
+			return nil
+		}
+		return f
+	}
+
+	if testOptions.linVMs != "" {
+		//Export logs for linux VMs.
+		var cmd string
+		vms := strings.Split(testOptions.linVMs, ",")
+		for _, vm := range vms {
+			tb.Logf("Exporting logs from %s", vm)
+			cmd = "sudo cat /var/log/antrea/antrea-agent.log"
+			_, stdout, _, err := data.provider.RunCommandOnVM(vm, cmd)
+			if err != nil {
+				tb.Logf("Error when exporting antrea-agent logs from %s: Erro %+v", vm, err)
+			}
+			w := getVmWriter(vm, "antrea-agent")
+			if w == nil {
+				// move on to the next VM
+				continue
+			}
+			defer w.Close()
+			w.WriteString(stdout)
+		}
+	}
+
+	if testOptions.winVMs != "" {
+		//Export logs for windows VMs
+		var cmd string
+		vms := strings.Split(testOptions.winVMs, ",")
+		for _, vm := range vms {
+			tb.Logf("Exporting logs from %s", vm)
+			cmd = "cat c:/antrea-agent/antrea-agent.log"
+			_, stdout, _, err := data.provider.RunCommandOnVM(vm, cmd)
+			if err != nil {
+				tb.Logf("Error when exporting antrea-agent logs from %s: Error %+v", vm, err)
+			}
+			w := getVmWriter(vm, "antrea-agent")
+			if w == nil {
+				// move on to the next VM
+				continue
+			}
+			defer w.Close()
+			w.WriteString(stdout)
+		}
+	}
 }
 
 func teardownFlowAggregator(tb testing.TB, data *TestData) {
