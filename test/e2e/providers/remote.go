@@ -68,6 +68,15 @@ func (p *RemoteProvider) RunCommandOnNodeExt(nodeName, cmd string, envs map[stri
 	return exec.RunSSHCommand(host, clientCfg, cmd, envs, stdin, sudo)
 }
 
+func (p *RemoteProvider) RunCommandOnVM(nodeName, cmd string) (
+	code int, stdout, stderr string, err error) {
+	host, clientCfg, err := convertConfig(p.sshConfig, nodeName)
+	if err != nil {
+		return 0, "", "", err
+	}
+	return exec.RunSSHCommand(host, clientCfg, cmd, nil, "", false)
+}
+
 func (p *RemoteProvider) GetKubeconfigPath() (string, error) {
 	return *remoteKubeconfig, nil
 }

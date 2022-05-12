@@ -267,3 +267,7 @@ testing:
   coverage: false
   simulator:
     enable: false
+
+nodeport:
+  enable: false
+  port: 32767

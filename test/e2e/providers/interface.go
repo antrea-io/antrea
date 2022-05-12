@@ -20,5 +20,6 @@ type ProviderInterface interface {
 	RunCommandOnNode(nodeName string, cmd string) (code int, stdout string, stderr string, err error)
 	// RunCommandOnNodeExt supports passing environment variables and writing the input to stdin.
 	RunCommandOnNodeExt(nodeName, cmd string, envs map[string]string, stdin string, sudo bool) (code int, stdout string, stderr string, err error)
+	RunCommandOnVM(nodeName, cmd string) (code int, stdout string, stderr string, err error)
 	GetKubeconfigPath() (string, error)
 }

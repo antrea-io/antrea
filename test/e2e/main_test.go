@@ -84,6 +84,8 @@ func testMain(m *testing.M) int {
 	flag.BoolVar(&testOptions.flowVisibility, "flow-visibility", false, "Run flow visibility tests")
 	flag.StringVar(&testOptions.coverageDir, "coverage-dir", "", "Directory for coverage data files")
 	flag.StringVar(&testOptions.skipCases, "skip", "", "Key words to skip cases")
+	flag.StringVar(&testOptions.linVMs, "linVMs", "", "hostname of linux VMs")
+	flag.StringVar(&testOptions.winVMs, "winVMs", "", "hostname of windows VMs")
 	flag.Parse()
 
 	cleanupLogging := testOptions.setupLogging()
