@@ -45,6 +45,8 @@ Generate a YAML manifest for Antrea using Helm and print it to stdout.
         --multicast-interfaces        Multicast interface names (default is empty)
         --extra-helm-values-file      Optional extra helm values file to override the default config values
         --extra-helm-values           Optional extra helm values to override the default config values
+        --export-controller-nodeport  Configure antrea-controller Service as type NodePort
+        --enable-externalnode         Enable ExternalNode feature in antrea-controller
 
 In 'release' mode, environment variables IMG_NAME and IMG_TAG must be set.
 
@@ -84,6 +86,8 @@ MULTICAST=false
 MULTICAST_INTERFACES=""
 HELM_VALUES_FILES=()
 HELM_VALUES=()
+ANTREA_SERVICE_NODEPORT=0
+ENABLE_EXTERNALNODE=false
 
 while [[ $# -gt 0 ]]
 do
@@ -183,6 +187,14 @@ case $key in
     --extra-helm-values)
     HELM_VALUES+=("$2")
     shift 2
+    ;;
+    --export-controller-nodeport)
+    ANTREA_SERVICE_NODEPORT=$2
+    shift 2
+    ;;
+    --enable-externalnode)
+    ENABLE_EXTERNALNODE=true
+    shift
     ;;
     -h|--help)
     print_usage
@@ -326,6 +338,14 @@ fi
 
 if $WHEREABOUTS; then
     HELM_VALUES+=("whereabouts.enable=true")
+fi
+
+if [ $ANTREA_SERVICE_NODEPORT -ne 0 ]; then
+    HELM_VALUES+=("controller.nodeport=$ANTREA_SERVICE_NODEPORT")
+fi
+
+if $ENABLE_EXTERNALNODE; then
+    HELM_VALUES+=("featureGates.ExternalNode=true")
 fi
 
 if [ "$MODE" == "dev" ]; then

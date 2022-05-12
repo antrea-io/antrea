@@ -207,6 +207,8 @@ agent:
 controller:
   # -- Port for the antrea-controller APIServer to serve on.
   apiPort: 10349
+  # -- Exporting antrea-controller APIServer via nodeport.
+  nodeport: 0
   # -- Enable metrics exposure via Prometheus.
   enablePrometheusMetrics: true
   # -- Annotations to be added to antrea-controller Pod.

@@ -6,10 +6,16 @@ metadata:
   labels:
     app: antrea
 spec:
+  {{- if .Values.controller.nodeport }}
+  type: NodePort
+  {{- end }}
   ports:
     - port: 443
       protocol: TCP
       targetPort: api
+      {{- if .Values.controller.nodeport }}
+      nodePort: {{ .Values.controller.nodeport }}
+      {{- end }}
   selector:
     app: antrea
     component: antrea-controller
