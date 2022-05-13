@@ -219,7 +219,7 @@ function deliver_antrea_to_gke() {
     node_names=$(kubectl get nodes -o wide --no-headers=true | awk '{print $1}')
     for node_name in ${node_names}; do
         ${GCLOUD_PATH} compute scp ${antrea_image}.tar ubuntu@${node_name}:~ --zone ${GKE_ZONE}
-        ${GCLOUD_PATH} compute ssh ubuntu@${node_name} --command="sudo docker load -i ~/${antrea_image}.tar ; sudo docker tag ${DOCKER_IMG_NAME}:${DOCKER_IMG_VERSION} ${DOCKER_IMG_NAME}:latest" --zone ${GKE_ZONE}
+        ${GCLOUD_PATH} compute ssh ubuntu@${node_name} --command="sudo ctr -n=k8s.io images import ~/${antrea_image}.tar ; sudo ctr -n=k8s.io images tag ${DOCKER_IMG_NAME}:${DOCKER_IMG_VERSION} ${DOCKER_IMG_NAME}:latest" --zone ${GKE_ZONE}
     done
     rm ${antrea_image}.tar
 
