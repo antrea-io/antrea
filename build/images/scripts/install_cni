@@ -3,7 +3,7 @@
 set -euo pipefail
 
 # Fetching the list of the binaries that user wants to skip installing.
-IFS=',' read -r -a binaries <<< "$SKIP_CNI_BINARIES"
+IFS=',' read -r -a binaries <<< "${SKIP_CNI_BINARIES:-}"
 # Todo: check version and continue installation only for a newer version
 
 # Install Antrea binary file
