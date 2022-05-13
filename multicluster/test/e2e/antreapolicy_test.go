@@ -91,6 +91,8 @@ func (data *MCTestData) testAntreaPolicyCopySpanNSIsolation(t *testing.T) {
 	setup := func() {
 		err := data.deployACNPResourceExport(acnpIsolationResourceExport)
 		failOnError(err, t)
+		// Sleep 5s to wait resource export/import process to finish resource exchange.
+		time.Sleep(5 * time.Second)
 	}
 	teardown := func() {
 		err := data.deleteACNPResourceExport(acnpIsolationResourceExport)

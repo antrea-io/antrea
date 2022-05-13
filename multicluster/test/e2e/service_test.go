@@ -117,10 +117,10 @@ func (data *MCTestData) testServiceExport(t *testing.T) {
 	}
 
 	// Verfiy that ACNP works fine with new Multicluster Service.
-	data.verifyMCServiceACNP(t, clientPodName, westIP)
+	data.verifyMCServiceACNP(t, clientPodName, eastIP)
 }
 
-func (data *MCTestData) verifyMCServiceACNP(t *testing.T, clientPodName, westIP string) {
+func (data *MCTestData) verifyMCServiceACNP(t *testing.T, clientPodName, eastIP string) {
 	var err error
 	anpBuilder := &e2euttils.AntreaNetworkPolicySpecBuilder{}
 	anpBuilder = anpBuilder.SetName(multiClusterTestNamespace, "block-west-exported-service").
@@ -135,7 +135,7 @@ func (data *MCTestData) verifyMCServiceACNP(t *testing.T, clientPodName, westIP 
 	}
 	defer data.deleteANP(eastCluster, multiClusterTestNamespace, anpBuilder.Name)
 
-	connectivity := data.probeFromPodInCluster(eastCluster, multiClusterTestNamespace, clientPodName, "client", westIP, "westClusterServiceIP", 80, corev1.ProtocolTCP)
+	connectivity := data.probeFromPodInCluster(eastCluster, multiClusterTestNamespace, clientPodName, "client", eastIP, fmt.Sprintf("antrea-mc-%s", westClusterTestService), 80, corev1.ProtocolTCP)
 	if connectivity == antreae2e.Error {
 		t.Errorf("Failure -- could not complete probeFromPodInCluster: %v", err)
 	} else if connectivity != antreae2e.Dropped {
