@@ -169,7 +169,7 @@ func (data *TestData) testNodePort(t *testing.T, isWindows bool, namespace strin
 }
 
 func (data *TestData) createAgnhostServiceAndBackendPods(t *testing.T, name, namespace string, node string, svcType corev1.ServiceType) (*corev1.Service, func()) {
-	ipv4Protocol := corev1.IPv4Protocol
+	ipProtocol := corev1.IPv4Protocol
 	args := []string{"netexec", "--http-port=80", "--udp-port=80"}
 	require.NoError(t, data.createPodOnNode(name, namespace, node, agnhostImage, []string{}, args, nil, []corev1.ContainerPort{
 		{
@@ -181,8 +181,13 @@ func (data *TestData) createAgnhostServiceAndBackendPods(t *testing.T, name, nam
 	podIPs, err := data.podWaitForIPs(defaultTimeout, name, namespace)
 	require.NoError(t, err)
 	t.Logf("Created service Pod IPs %v", podIPs.ipStrings)
+	if podIPs.ipv4 == nil {
+		// "IPv4" is invalid in IPv6 only cluster with K8s>=1.21
+		// error: Service "s1" is invalid: spec.ipFamilies[0]: Invalid value: "IPv4": not configured on this cluster
+		ipProtocol = corev1.IPv6Protocol
+	}
 	require.NoError(t, data.podWaitForRunning(defaultTimeout, name, namespace))
-	svc, err := data.createService(name, namespace, 80, 80, map[string]string{"app": "agnhost"}, false, false, svcType, &ipv4Protocol)
+	svc, err := data.createService(name, namespace, 80, 80, map[string]string{"app": "agnhost"}, false, false, svcType, &ipProtocol)
 	require.NoError(t, err)
 
 	cleanup := func() {
