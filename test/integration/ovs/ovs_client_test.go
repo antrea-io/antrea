@@ -204,13 +204,36 @@ func TestOVSOtherConfig(t *testing.T) {
 	require.Nil(t, err, "Error when getting OVS other_config")
 	require.Equal(t, map[string]string{"flow-restore-wait": "true", "foo1": "bar1", "foo2": "bar2"}, gotOtherConfigs, "other_config mismatched")
 
+	// Expect to modify existing values and insert new values
+	err = data.br.UpdateOVSOtherConfig(map[string]interface{}{"foo2": "bar3", "foo3": "bar2"})
+	require.Nil(t, err, "Error when updating OVS other_config")
+	gotOtherConfigs, err = data.br.GetOVSOtherConfig()
+	require.Nil(t, err, "Error when getting OVS other_config")
+	require.Equal(t, map[string]string{"flow-restore-wait": "true", "foo1": "bar1", "foo2": "bar3", "foo3": "bar2"}, gotOtherConfigs, "other_config mismatched")
+
 	// Expect only the matched config "flow-restore-wait: true" will be deleted.
-	err = data.br.DeleteOVSOtherConfig(map[string]interface{}{"flow-restore-wait": "true", "foo1": "bar2"})
+	err = data.br.DeleteOVSOtherConfig(map[string]interface{}{"flow-restore-wait": "true", "foo1": "bar2", "foo2": "bar1"})
 	require.Nil(t, err, "Error when deleting OVS other_config")
 
 	gotOtherConfigs, err = data.br.GetOVSOtherConfig()
 	require.Nil(t, err, "Error when getting OVS other_config")
-	require.Equal(t, map[string]string{"foo1": "bar1", "foo2": "bar2"}, gotOtherConfigs, "other_config mismatched")
+	require.Equal(t, map[string]string{"foo1": "bar1", "foo2": "bar3", "foo3": "bar2"}, gotOtherConfigs, "other_config mismatched")
+
+	// Expect "foo1" will be deleted
+	err = data.br.DeleteOVSOtherConfig(map[string]interface{}{"foo1": "", "foo2": "bar4"})
+	require.Nil(t, err, "Error when deleting OVS other_config")
+
+	gotOtherConfigs, err = data.br.GetOVSOtherConfig()
+	require.Nil(t, err, "Error when getting OVS other_config")
+	require.Equal(t, map[string]string{"foo2": "bar3", "foo3": "bar2"}, gotOtherConfigs, "other_config mismatched")
+
+	// Expect "foo2" will be deleted
+	err = data.br.DeleteOVSOtherConfig(map[string]interface{}{"foo2": "", "foo4": ""})
+	require.Nil(t, err, "Error when deleting OVS other_config")
+
+	gotOtherConfigs, err = data.br.GetOVSOtherConfig()
+	require.Nil(t, err, "Error when getting OVS other_config")
+	require.Equal(t, map[string]string{"foo3": "bar2"}, gotOtherConfigs, "other_config mismatched")
 }
 
 func TestTunnelOptionCsum(t *testing.T) {
@@ -242,7 +265,7 @@ func TestTunnelOptionCsum(t *testing.T) {
 			defer data.teardown(t)
 
 			name := "vxlan0"
-			_, err := data.br.CreateTunnelPortExt(name, ovsconfig.VXLANTunnel, ofPortRequest, testCase.initialCsum, "", "", "", nil)
+			_, err := data.br.CreateTunnelPortExt(name, ovsconfig.VXLANTunnel, ofPortRequest, testCase.initialCsum, "", "", "", "", nil)
 			require.Nil(t, err, "Error when creating tunnel port")
 			options, err := data.br.GetInterfaceOptions(name)
 			require.Nil(t, err, "Error when getting interface options")

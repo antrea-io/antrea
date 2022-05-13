@@ -192,6 +192,8 @@ type AgentConfig struct {
 	AntreaProxy AntreaProxyConfig `yaml:"antreaProxy,omitempty"`
 	// Egress related configurations.
 	Egress EgressConfig `yaml:"egress"`
+	// IPsec related configurations.
+	IPsec IPsecConfig `yaml:"ipsec"`
 }
 
 type AntreaProxyConfig struct {
@@ -245,4 +247,11 @@ type MulticastConfig struct {
 
 type EgressConfig struct {
 	ExceptCIDRs []string `yaml:"exceptCIDRs,omitempty"`
+}
+
+type IPsecConfig struct {
+	// The authentication mode of IPsec tunnel. It has the following options:
+	// - psk (default): Use pre-shared key (PSK) for IKE authentication.
+	// - cert:          Use CA-signed certificates for IKE authentication.
+	AuthenticationMode string `yaml:"authenticationMode,omitempty"`
 }

@@ -205,6 +205,11 @@ spec:
           - name: host-var-run-antrea
             mountPath: /var/run/openvswitch
             subPath: openvswitch
+          {{- if eq .Values.trafficEncryptionMode "ipsec" }}
+          - name: antrea-ipsec-ca
+            mountPath: /var/run/openvswitch/ca
+            readOnly: true
+          {{- end }}
           # host-local IPAM stores allocated IP addresses as files in /var/lib/cni/networks/$NETWORK_NAME.
           # Mount a sub-directory of host-var-run-antrea to it for persistence of IP allocation.
           - name: host-var-run-antrea
@@ -305,6 +310,9 @@ spec:
           - name: host-var-log-antrea
             mountPath: /var/log/strongswan
             subPath: strongswan
+          - mountPath: /etc/ipsec.d/cacerts
+            name: antrea-ipsec-ca
+            readOnly: true
         {{- end }}
       volumes:
         - name: antrea-config
@@ -322,6 +330,12 @@ spec:
         - name: host-var-run-netns
           hostPath:
             path: /var/run/netns
+        {{- if eq .Values.trafficEncryptionMode "ipsec" }}
+        - name: antrea-ipsec-ca
+          configMap:
+            name: antrea-ipsec-ca
+            optional: true
+        {{- end }}
         - name: host-var-run-antrea
           hostPath:
             path: /var/run/antrea

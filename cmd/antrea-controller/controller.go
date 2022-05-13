@@ -24,21 +24,28 @@ import (
 	"time"
 
 	apiextensionclientset "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/fields"
 	genericopenapi "k8s.io/apiserver/pkg/endpoints/openapi"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
 	"k8s.io/client-go/informers"
+	csrinformers "k8s.io/client-go/informers/certificates/v1"
 	clientset "k8s.io/client-go/kubernetes"
+	csrlisters "k8s.io/client-go/listers/certificates/v1"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 	aggregatorclientset "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 	netutils "k8s.io/utils/net"
 
+	antreaapis "antrea.io/antrea/pkg/apis"
 	"antrea.io/antrea/pkg/apiserver"
 	"antrea.io/antrea/pkg/apiserver/certificate"
 	"antrea.io/antrea/pkg/apiserver/openapi"
 	"antrea.io/antrea/pkg/apiserver/storage"
 	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions"
 	"antrea.io/antrea/pkg/clusteridentity"
+	"antrea.io/antrea/pkg/controller/certificatesigningrequest"
 	"antrea.io/antrea/pkg/controller/egress"
 	egressstore "antrea.io/antrea/pkg/controller/egress/store"
 	"antrea.io/antrea/pkg/controller/externalippool"
@@ -174,6 +181,22 @@ func run(o *Options) error {
 		externalIPPoolController = externalippool.NewExternalIPPoolController(
 			crdClient, externalIPPoolInformer,
 		)
+	}
+
+	var csrApprovingController *certificatesigningrequest.CSRApprovingController
+	var csrSigningController *certificatesigningrequest.IPsecCSRSigningController
+	var csrInformer cache.SharedIndexInformer
+	var csrLister csrlisters.CertificateSigningRequestLister
+	if features.DefaultFeatureGate.Enabled(features.IPsecCertAuth) {
+		csrInformer = csrinformers.NewFilteredCertificateSigningRequestInformer(client, 0, nil, func(listOptions *metav1.ListOptions) {
+			listOptions.FieldSelector = fields.OneTermEqualSelector("spec.signerName", antreaapis.AntreaIPsecCSRSignerName).String()
+		})
+		csrLister = csrlisters.NewCertificateSigningRequestLister(csrInformer.GetIndexer())
+
+		if *o.config.IPsecCSRSignerConfig.AutoApprove {
+			csrApprovingController = certificatesigningrequest.NewCSRApprovingController(client, csrInformer, csrLister)
+		}
+		csrSigningController = certificatesigningrequest.NewIPsecCSRSigningController(client, csrInformer, csrLister, *o.config.IPsecCSRSignerConfig.SelfSignedCA)
 	}
 
 	if features.DefaultFeatureGate.Enabled(features.Egress) {
@@ -317,6 +340,14 @@ func run(o *Options) error {
 
 	if antreaIPAMController != nil {
 		go antreaIPAMController.Run(stopCh)
+	}
+
+	if features.DefaultFeatureGate.Enabled(features.IPsecCertAuth) {
+		go csrInformer.Run(stopCh)
+		if *o.config.IPsecCSRSignerConfig.AutoApprove {
+			go csrApprovingController.Run(stopCh)
+		}
+		go csrSigningController.Run(stopCh)
 	}
 
 	<-stopCh

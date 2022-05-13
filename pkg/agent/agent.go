@@ -74,6 +74,10 @@ var (
 	getTransportIPNetDeviceByName = GetTransportIPNetDeviceByName
 )
 
+// otherConfigKeysForIPsecCertificates are configurations added to OVS bridge when AuthenticationMode is "cert" and
+// need to be deleted when changing to "psk".
+var otherConfigKeysForIPsecCertificates = []string{"certificate", "private_key", "ca_cert", "remote_cert", "remote_name"}
+
 // Initializer knows how to setup host networking, OpenVSwitch, and Openflow.
 type Initializer struct {
 	client                clientset.Interface
@@ -348,14 +352,53 @@ func (i *Initializer) Initialize() error {
 	}
 
 	// initializeWireGuard must be executed after setupOVSBridge as it requires gateway addresses on the OVS bridge.
-	switch i.networkConfig.TrafficEncryptionMode {
-	case config.TrafficEncryptionModeIPSec:
-		if err := i.initializeIPSec(); err != nil {
-			return err
-		}
-	case config.TrafficEncryptionModeWireGuard:
+	if i.networkConfig.TrafficEncryptionMode == config.TrafficEncryptionModeWireGuard {
 		if err := i.initializeWireGuard(); err != nil {
 			return err
+		}
+	}
+	// TODO: clean up WireGuard related configurations.
+
+	// Initialize for IPsec PSK mode.
+	if i.networkConfig.TrafficEncryptionMode == config.TrafficEncryptionModeIPSec &&
+		i.networkConfig.IPsecConfig.AuthenticationMode == config.IPsecAuthenticationModePSK {
+		if err := i.waitForIPsecMonitorDaemon(); err != nil {
+			return err
+		}
+		if err := i.readIPSecPSK(); err != nil {
+			return err
+		}
+	}
+
+	// Initialize for IPsec Certificate mode.
+	if i.networkConfig.TrafficEncryptionMode == config.TrafficEncryptionModeIPSec &&
+		i.networkConfig.IPsecConfig.AuthenticationMode == config.IPsecAuthenticationModeCert {
+		if err := i.waitForIPsecMonitorDaemon(); err != nil {
+			return err
+		}
+	} else {
+		configs, err := i.ovsBridgeClient.GetOVSOtherConfig()
+		if err != nil {
+			return fmt.Errorf("failed to get OVS other configs: %w", err)
+		}
+		// Clean up certificate and private key files.
+		if configs["certificate"] != "" {
+			if err := os.Remove(configs["certificate"]); err != nil && !os.IsNotExist(err) {
+				klog.ErrorS(err, "Failed to delete unused IPsec certificate", "file", configs["certificate"])
+			}
+		}
+		if configs["private_key"] != "" {
+			if err := os.Remove(configs["private_key"]); err != nil && !os.IsNotExist(err) {
+				klog.ErrorS(err, "Failed to delete unused IPsec private key", "file", configs["private_key"])
+			}
+		}
+		toDelete := make(map[string]interface{})
+		for _, key := range otherConfigKeysForIPsecCertificates {
+			toDelete[key] = ""
+		}
+		// Clean up stale configs in OVS database.
+		if err := i.ovsBridgeClient.DeleteOVSOtherConfig(toDelete); err != nil {
+			return fmt.Errorf("failed to clean up OVS other configs: %w", err)
 		}
 	}
 
@@ -707,7 +750,7 @@ func (i *Initializer) setupDefaultTunnelInterface() error {
 		externalIDs := map[string]interface{}{
 			interfacestore.AntreaInterfaceTypeKey: interfacestore.AntreaTunnel,
 		}
-		tunnelPortUUID, err := i.ovsBridgeClient.CreateTunnelPortExt(tunnelPortName, i.networkConfig.TunnelType, config.DefaultTunOFPort, shouldEnableCsum, localIPStr, "", "", externalIDs)
+		tunnelPortUUID, err := i.ovsBridgeClient.CreateTunnelPortExt(tunnelPortName, i.networkConfig.TunnelType, config.DefaultTunOFPort, shouldEnableCsum, localIPStr, "", "", "", externalIDs)
 		if err != nil {
 			klog.Errorf("Failed to create tunnel port %s type %s on OVS bridge: %v", tunnelPortName, i.networkConfig.TunnelType, err)
 			return err
@@ -884,8 +927,8 @@ func (i *Initializer) initNodeLocalConfig() error {
 	return nil
 }
 
-// initializeIPSec checks if preconditions are met for using IPsec and reads the IPsec PSK value.
-func (i *Initializer) initializeIPSec() error {
+// waitForIPsecMonitorDaemon checks if preconditions are met for using IPsec.
+func (i *Initializer) waitForIPsecMonitorDaemon() error {
 	// At the time the agent is initialized and this code is executed, the
 	// OVS daemons are already running given that we have successfully
 	// connected to OVSDB. Given that the start_ovs script deletes existing
@@ -908,10 +951,6 @@ func (i *Initializer) initializeIPSec() error {
 			return fmt.Errorf("IPsec was requested, but the OVS IPsec monitor does not seem to be running")
 		}
 	}
-
-	if err := i.readIPSecPSK(); err != nil {
-		return err
-	}
 	return nil
 }
 
@@ -929,13 +968,13 @@ func (i *Initializer) initializeWireGuard() error {
 
 // readIPSecPSK reads the IPsec PSK value from environment variable ANTREA_IPSEC_PSK
 func (i *Initializer) readIPSecPSK() error {
-	i.networkConfig.IPSecPSK = os.Getenv(ipsecPSKEnvKey)
-	if i.networkConfig.IPSecPSK == "" {
+	i.networkConfig.IPsecConfig.PSK = os.Getenv(ipsecPSKEnvKey)
+	if i.networkConfig.IPsecConfig.PSK == "" {
 		return fmt.Errorf("IPsec PSK environment variable '%s' is not set or is empty", ipsecPSKEnvKey)
 	}
 
 	// Usually one does not want to log the secret data.
-	klog.V(4).Infof("IPsec PSK value: %s", i.networkConfig.IPSecPSK)
+	klog.V(4).Infof("IPsec PSK value: %s", i.networkConfig.IPsecConfig.PSK)
 	return nil
 }
 

@@ -68,7 +68,10 @@ type TunnelInterfaceConfig struct {
 	LocalIP net.IP
 	// IP address of the remote Node.
 	RemoteIP net.IP
-	PSK      string
+	// CommonName of the remote Name for certificate based authentication.
+	RemoteName string
+	// Pre-shard key for authentication.
+	PSK string
 	// Whether options:csum is set for this tunnel interface.
 	// If true, encapsulation header UDP checksums will be computed on outgoing packets.
 	Csum bool
@@ -144,8 +147,8 @@ func NewTunnelInterface(tunnelName string, tunnelType ovsconfig.TunnelType, loca
 
 // NewIPSecTunnelInterface creates InterfaceConfig for the IPsec tunnel to the
 // Node.
-func NewIPSecTunnelInterface(interfaceName string, tunnelType ovsconfig.TunnelType, nodeName string, nodeIP net.IP, psk string) *InterfaceConfig {
-	tunnelConfig := &TunnelInterfaceConfig{Type: tunnelType, NodeName: nodeName, RemoteIP: nodeIP, PSK: psk}
+func NewIPSecTunnelInterface(interfaceName string, tunnelType ovsconfig.TunnelType, nodeName string, nodeIP net.IP, psk, remoteName string) *InterfaceConfig {
+	tunnelConfig := &TunnelInterfaceConfig{Type: tunnelType, NodeName: nodeName, RemoteIP: nodeIP, PSK: psk, RemoteName: remoteName}
 	return &InterfaceConfig{InterfaceName: interfaceName, Type: TunnelInterface, TunnelInterfaceConfig: tunnelConfig}
 }
 

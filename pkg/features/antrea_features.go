@@ -95,6 +95,10 @@ const (
 	// alpha: v1.7
 	// Enable mirroring or redirecting the traffic Pods send or receive.
 	TrafficControl featuregate.Feature = "TrafficControl"
+
+	// alpha: v1.7
+	// Enable certificated-based authentication for IPsec.
+	IPsecCertAuth featuregate.Feature = "IPsecCertAuth"
 )
 
 var (
@@ -123,6 +127,7 @@ var (
 		SecondaryNetwork:   {Default: false, PreRelease: featuregate.Alpha},
 		ServiceExternalIP:  {Default: false, PreRelease: featuregate.Alpha},
 		TrafficControl:     {Default: false, PreRelease: featuregate.Alpha},
+		IPsecCertAuth:      {Default: false, PreRelease: featuregate.Alpha},
 	}
 
 	// UnsupportedFeaturesOnWindows records the features not supported on
