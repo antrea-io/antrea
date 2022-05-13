@@ -29,8 +29,11 @@ func HandleFunc() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		level := r.URL.Query().Get("level")
 		if level != "" {
-			err := log.SetLogLevel(level)
-			if err != nil {
+			if levelNum, err := strconv.Atoi(level); err != nil || levelNum < 0 {
+				http.Error(w, "log level must be a positive integer", http.StatusBadRequest)
+				return
+			}
+			if err := log.SetLogLevel(level); err != nil {
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
@@ -39,7 +42,7 @@ func HandleFunc() http.HandlerFunc {
 			err := json.NewEncoder(w).Encode(levelNum)
 			if err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
-				klog.Errorf("Error when encoding log level to json: %v", err)
+				klog.ErrorS(err, "Error when encoding log level to json")
 			}
 		}
 	}

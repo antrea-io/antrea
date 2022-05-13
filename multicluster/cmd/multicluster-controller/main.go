@@ -32,12 +32,15 @@ var (
 )
 
 func main() {
-	logs.InitLogs()
-	defer logs.FlushLogs()
-
 	command := newControllerCommand()
+	flags := command.PersistentFlags()
+	opts.addFlags(flags)
+	logs.AddFlags(flags)
 	command.AddCommand(newLeaderCommand())
 	command.AddCommand(newMemberCommand())
+
+	logs.InitLogs()
+	defer logs.FlushLogs()
 
 	if err := command.Execute(); err != nil {
 		logs.FlushLogs()
@@ -46,14 +49,11 @@ func main() {
 }
 
 func newControllerCommand() *cobra.Command {
-	cmd := &cobra.Command{
+	return &cobra.Command{
 		Use:  "antrea-mc-controller",
 		Long: "The Antrea MultiCluster Controller.",
 		Run: func(cmd *cobra.Command, args []string) {
 			fmt.Println("Error: must be run in leader or member mode")
 		},
 	}
-	flags := cmd.PersistentFlags()
-	opts.addFlags(flags)
-	return cmd
 }
