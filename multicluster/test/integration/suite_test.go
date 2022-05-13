@@ -99,7 +99,7 @@ var _ = BeforeSuite(func() {
 	testEnv = &envtest.Environment{
 		CRDDirectoryPaths: []string{filepath.Join("..", "..", "config", "crd", "bases"),
 			filepath.Join("..", "..", "config", "crd", "k8smcs"),
-			filepath.Join("..", "..", "..", "build", "yamls", "base", "crds.yml")},
+			filepath.Join("..", "..", "..", "build", "charts", "antrea", "templates", "crds", "clusternetworkpolicy.yaml")},
 		ErrorIfCRDPathMissing: true,
 		UseExistingCluster:    &useExistingCluster,
 	}
