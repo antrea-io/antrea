@@ -28,7 +28,7 @@ GRPID   := $(shell id -g)
 .PHONY: install-hooks
 install-hooks:
 	@echo "===> Copying Antrea git hooks to local <==="
-	cp hack/git_client_side_hooks/pre-commit .git/hooks/
+	install hack/git_client_side_hooks/pre-commit .git/hooks/
 
 .PHONY: uninstall-hooks
 uninstall-hooks:
