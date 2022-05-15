@@ -81,14 +81,8 @@ func (nn *netnatRules) AddRule(nodePort int, podIP string, podPort int, protocol
 // AddAllRules constructs a list of NPL rules and performs NetNatStaticMapping replacement.
 func (nn *netnatRules) AddAllRules(nplList []PodNodePort) error {
 	for _, nplData := range nplList {
-		for _, protocol := range nplData.Protocols {
-			nodePort16 := util.PortToUint16(nplData.NodePort)
-			podPort16 := util.PortToUint16(nplData.PodPort)
-			podAddr := fmt.Sprintf("%s:%d", nplData.PodIP, podPort16)
-			if err := util.ReplaceNetNatStaticMapping(antreaNatNPL, "0.0.0.0", nodePort16, nplData.PodIP, podPort16, protocol); err != nil {
-				return err
-			}
-			klog.InfoS("Successfully added NetNatStaticMapping rule", "podAddr", podAddr, "nodePort", nodePort16, "protocol", protocol)
+		if err := nn.AddRule(nplData.NodePort, nplData.PodIP, nplData.PodPort, nplData.Protocol); err != nil {
+			return err
 		}
 	}
 	return nil

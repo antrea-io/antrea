@@ -19,6 +19,7 @@ package portcache
 
 import (
 	"fmt"
+	"strconv"
 	"time"
 
 	"k8s.io/klog/v2"
@@ -26,9 +27,38 @@ import (
 	"antrea.io/antrea/pkg/agent/nodeportlocal/rules"
 )
 
+const (
+	// stateOpen means that a listening socket has been opened for the
+	// protocol (as a means to reserve the port for this protocol), but no
+	// NPL rule has been installed for it.
+	stateOpen protocolSocketState = iota
+	// stateInUse means that a listening socket has been opened AND a NPL
+	// rule has been installed.
+	stateInUse
+	// stateClosed means that the socket has been closed.
+	stateClosed
+)
+
+var (
+	supportedProtocols = []string{"tcp", "udp"}
+)
+
+func (pt *PortTable) GetEntry(ip string, port int, protocol string) *NodePortData {
+	var _ = protocol
+	pt.tableLock.RLock()
+	defer pt.tableLock.RUnlock()
+	// Return pointer to copy of data from the PodEndpointTable.
+	if data := pt.getEntryByPodIPPort(ip, port); data != nil {
+		dataCopy := *data
+		return &dataCopy
+	}
+	return nil
+}
+
 func openSocketsForPort(localPortOpener LocalPortOpener, port int) ([]ProtocolSocketData, error) {
-	// port needs to be available for all supported protocols: we want to use the same port
+	// Port needs to be available for all supported protocols: we want to use the same port
 	// number for all protocols and we don't know at this point which protocols are needed.
+	// This is to preserve the legacy behavior of allocating the same nodePort for all protocols.
 	protocols := make([]ProtocolSocketData, 0, len(supportedProtocols))
 	for _, protocol := range supportedProtocols {
 		socket, err := localPortOpener.OpenLocalPort(port, protocol)
@@ -54,7 +84,7 @@ func (pt *PortTable) getFreePort(podIP string, podPort int) (int, []ProtocolSock
 			// handle wrap around
 			port = port - numPorts
 		}
-		if _, ok := pt.NodePortTable[port]; ok {
+		if _, ok := pt.NodePortTable[strconv.Itoa(port)]; ok {
 			// port is already taken
 			continue
 		}
@@ -172,7 +202,7 @@ func (pt *PortTable) AddRule(podIP string, podPort int, protocol string) (int, e
 
 	protocolSocketData.State = stateInUse
 	if !exists {
-		pt.NodePortTable[nodePort] = npData
+		pt.NodePortTable[strconv.Itoa(nodePort)] = npData
 		pt.PodEndpointTable[podIPPortFormat(podIP, podPort)] = npData
 	}
 	return npData.NodePort, nil
@@ -210,7 +240,7 @@ func (pt *PortTable) DeleteRule(podIP string, podPort int, protocol string) erro
 		if err := data.CloseSockets(); err != nil {
 			return err
 		}
-		delete(pt.NodePortTable, data.NodePort)
+		delete(pt.NodePortTable, strconv.Itoa(data.NodePort))
 		delete(pt.PodEndpointTable, podIPPortFormat(podIP, podPort))
 	}
 	return nil
@@ -231,7 +261,7 @@ func (pt *PortTable) DeleteRulesForPod(podIP string) error {
 			}
 			podEntry.Protocols = podEntry.Protocols[1:]
 		}
-		delete(pt.NodePortTable, podEntry.NodePort)
+		delete(pt.NodePortTable, strconv.Itoa(podEntry.NodePort))
 		delete(pt.PodEndpointTable, podIPPortFormat(podIP, podEntry.PodPort))
 	}
 	return nil
@@ -293,8 +323,8 @@ func (pt *PortTable) RestoreRules(allNPLPorts []rules.PodNodePort, synced chan<-
 			}
 			protocolSocketData.State = stateInUse
 		}
-		pt.NodePortTable[nplPort.NodePort] = npData
-		pt.PodEndpointTable[podIPPortFormat(nplPort.PodIP, nplPort.PodPort)] = pt.NodePortTable[nplPort.NodePort]
+		pt.NodePortTable[strconv.Itoa(nplPort.NodePort)] = npData
+		pt.PodEndpointTable[podIPPortFormat(nplPort.PodIP, nplPort.PodPort)] = pt.NodePortTable[strconv.Itoa(nplPort.NodePort)]
 	}
 	// retry mechanism as iptables-restore can fail if other components (in Antrea or other
 	// software) are accessing iptables.

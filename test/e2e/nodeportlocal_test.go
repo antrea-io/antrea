@@ -188,7 +188,6 @@ func checkNPLRulesForWindowsPod(t *testing.T, data *TestData, r *require.Asserti
 		}
 	}
 	checkForNPLRuleInNetNat(t, data, r, antreaPod, nodeName, rules, present)
-	//don't need to check listening socket on windows
 }
 
 func buildRuleForPod(rule nplRuleData) []string {
@@ -335,14 +334,7 @@ func deleteNPLRuleFromIPTables(t *testing.T, data *TestData, r *require.Assertio
 
 func deleteNPLRuleFromNetNat(t *testing.T, data *TestData, r *require.Assertions, antreaPod string, rule nplRuleData) {
 	t.Logf("Deleting Netnat rule for %v", rule)
-	const timeout = 30 * time.Second
-	err := wait.Poll(time.Second, timeout, func() (bool, error) {
-		_, _, _, err := data.RunCommandOnNode(rule.nodeIP, "Remove-NetNatStaticMapping -NatName antrea-nat -StaticMappingID 1 -Confirm:$false")
-		if err != nil {
-			return false, fmt.Errorf("Error when deleting Netnat rule: %v", err)
-		}
-		return true, nil
-	})
+	_, _, _, err := data.RunCommandOnNode(rule.nodeIP, "Remove-NetNatStaticMapping -NatName antrea-nat -StaticMappingID 1 -Confirm:$false")
 	r.NoError(err, "Error when deleting Netnat rule")
 }
 

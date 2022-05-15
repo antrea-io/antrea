@@ -25,34 +25,46 @@ import (
 	"antrea.io/antrea/pkg/agent/nodeportlocal/rules"
 )
 
+const (
+	// stateInUse means that the NPL rule has been installed.
+	stateInUse protocolSocketState = 1
+)
+
+// podIPPortFormat formats the ip, port to string ip:port.
+func podIPPortProtoFormat(ip string, port int, protocol string) string {
+	return fmt.Sprintf("%s:%d:%s", ip, port, protocol)
+}
+
+func (pt *PortTable) getEntryByPodIPPortProto(ip string, port int, protocol string) *NodePortData {
+	return pt.PodEndpointTable[podIPPortProtoFormat(ip, port, protocol)]
+}
+
+func (pt *PortTable) GetEntry(ip string, port int, protocol string) *NodePortData {
+	pt.tableLock.RLock()
+	defer pt.tableLock.RUnlock()
+	// Return pointer to copy of data from the PodEndpointTable.
+	if data := pt.getEntryByPodIPPortProto(ip, port, protocol); data != nil {
+		dataCopy := *data
+		return &dataCopy
+	}
+	return nil
+}
+
 func addRuleForPort(podPortRules rules.PodPortRules, port int, podIP string, podPort int, protocol string) ([]ProtocolSocketData, error) {
-	// port needs to be available for all supported protocols: all available protocols
-	// should be returned if any NetNatStaticMapping rule can be inserted to an unused port.
-	protocols := make([]ProtocolSocketData, 0, len(supportedProtocols))
+	// Only the protocol used here should be returned if NetNatStaticMapping rule
+	// can be inserted to an unused protocol port.
+	protocols := make([]ProtocolSocketData, 0, 1)
 	err := podPortRules.AddRule(port, podIP, podPort, protocol)
 	if err != nil {
 		klog.ErrorS(err, "Local port cannot be opened", "port", port, "protocol", protocol)
 		return nil, err
 	}
-	for _, proto := range supportedProtocols {
-		protocols = append(protocols, ProtocolSocketData{
-			Protocol: proto,
-			State:    stateOpen,
-			socket:   nil,
-		})
-	}
+	protocols = append(protocols, ProtocolSocketData{
+		Protocol: protocol,
+		State:    stateInUse,
+		socket:   nil,
+	})
 	return protocols, nil
-}
-
-func updateCloseState(protocols []ProtocolSocketData) error {
-	for idx := range protocols {
-		protocolSocketData := &protocols[idx]
-		if protocolSocketData.State != stateOpen {
-			continue
-		}
-		protocolSocketData.State = stateClosed
-	}
-	return nil
 }
 
 func (pt *PortTable) addRuleforFreePort(podIP string, podPort int, protocol string) (int, []ProtocolSocketData, error) {
@@ -64,8 +76,8 @@ func (pt *PortTable) addRuleforFreePort(podIP string, podPort int, protocol stri
 			// handle wrap around
 			port = port - numPorts
 		}
-		if _, ok := pt.NodePortTable[port]; ok {
-			// port is already taken
+		if _, ok := pt.NodePortTable[NodePortProtoFormat(port, protocol)]; ok {
+			// protocol port is already taken
 			continue
 		}
 
@@ -87,11 +99,11 @@ func (pt *PortTable) addRuleforFreePort(podIP string, podPort int, protocol stri
 func (pt *PortTable) AddRule(podIP string, podPort int, protocol string) (int, error) {
 	pt.tableLock.Lock()
 	defer pt.tableLock.Unlock()
-	npData := pt.getEntryByPodIPPort(podIP, podPort)
+	npData := pt.getEntryByPodIPPortProto(podIP, podPort, protocol)
 	exists := (npData != nil)
 	if !exists {
 		nodePort, protocols, err := pt.addRuleforFreePort(podIP, podPort, protocol)
-		//success means port, protocol available, state is open.
+		//success means port, protocol available.
 		if err != nil {
 			return 0, err
 		}
@@ -101,73 +113,27 @@ func (pt *PortTable) AddRule(podIP string, podPort int, protocol string) (int, e
 			PodPort:   podPort,
 			Protocols: protocols,
 		}
-		protocolSocketData := npData.FindProtocol(protocol)
-		protocolSocketData.State = stateInUse
 
-		pt.NodePortTable[nodePort] = npData
-		pt.PodEndpointTable[podIPPortFormat(podIP, podPort)] = npData
+		pt.NodePortTable[NodePortProtoFormat(nodePort, protocol)] = npData
+		pt.PodEndpointTable[podIPPortProtoFormat(podIP, podPort, protocol)] = npData
 	} else {
-		protocolSocketData := npData.FindProtocol(protocol)
-		if protocolSocketData == nil {
-			return 0, fmt.Errorf("unknown protocol %s", protocol)
-		}
-		if protocolSocketData.State == stateInUse {
-			return 0, fmt.Errorf("rule for %s:%d:%s already exists", podIP, podPort, protocol)
-		}
-		if protocolSocketData.State == stateClosed {
-			return 0, fmt.Errorf("invalid socket state for %s:%d:%s", podIP, podPort, protocol)
-		}
-
-		nodePort := npData.NodePort
-		if err := pt.PodPortRules.AddRule(nodePort, podIP, podPort, protocol); err != nil {
-			return 0, err
-		}
-
-		protocolSocketData.State = stateInUse
+		// Only add rules for if the entry does not exist.
+		return 0, fmt.Errorf("existed windows nodeport entry for %s:%d:%s", podIP, podPort, protocol)
 	}
 	return npData.NodePort, nil
 }
 
-// syncRules ensures that contents of the port table matches the netnat rules present on the Node.
-func (pt *PortTable) syncRules() error {
-	pt.tableLock.Lock()
-	defer pt.tableLock.Unlock()
-	nplPorts := make([]rules.PodNodePort, 0, len(pt.NodePortTable))
-	for _, npData := range pt.NodePortTable {
-		protocols := make([]string, 0, len(supportedProtocols))
-		for _, protocol := range npData.Protocols {
-			if protocol.State == stateInUse {
-				protocols = append(protocols, protocol.Protocol)
-			}
-		}
-		nplPorts = append(nplPorts, rules.PodNodePort{
-			NodePort:  npData.NodePort,
-			PodPort:   npData.PodPort,
-			PodIP:     npData.PodIP,
-			Protocols: protocols,
-		})
-	}
-	if err := pt.PodPortRules.AddAllRules(nplPorts); err != nil {
-		return err
-	}
-	return nil
-}
-
-// RestoreRules should be called at Antrea Agent startup to restore a set of NPL rules. It is non-blocking but
-// takes a channel parameter - synced, which will be closed when the necessary rules have been
-// restored successfully. No other operations should be performed on the PortTable until the channel
-// is closed.
+// RestoreRules should be called at Antrea Agent startup to restore a set of NPL rules.
 func (pt *PortTable) RestoreRules(allNPLPorts []rules.PodNodePort, synced chan<- struct{}) error {
 	pt.tableLock.Lock()
 	defer pt.tableLock.Unlock()
 	for _, nplPort := range allNPLPorts {
-		protocols, err := addRuleForPort(pt.PodPortRules, nplPort.NodePort, nplPort.PodIP, nplPort.PodPort, nplPort.Protocols[0])
+		protocols, err := addRuleForPort(pt.PodPortRules, nplPort.NodePort, nplPort.PodIP, nplPort.PodPort, nplPort.Protocol)
 		if err != nil {
 			// This will be handled gracefully by the NPL controller: if there is an
 			// annotation using this port, it will be removed and replaced with a new
 			// one with a valid port mapping.
 			klog.ErrorS(err, "Cannot bind to local port, skipping it", "port", nplPort.NodePort)
-			updateCloseState(protocols)
 			continue
 		}
 
@@ -177,79 +143,31 @@ func (pt *PortTable) RestoreRules(allNPLPorts []rules.PodNodePort, synced chan<-
 			PodIP:     nplPort.PodIP,
 			Protocols: protocols,
 		}
-		for _, protocol := range nplPort.Protocols {
-			protocolSocketData := npData.FindProtocol(protocol)
-			if protocolSocketData == nil {
-				return fmt.Errorf("unknown protocol %s", protocol)
-			}
-			protocolSocketData.State = stateInUse
-		}
-		pt.NodePortTable[nplPort.NodePort] = npData
-		pt.PodEndpointTable[podIPPortFormat(nplPort.PodIP, nplPort.PodPort)] = pt.NodePortTable[nplPort.NodePort]
+		pt.PodEndpointTable[podIPPortProtoFormat(nplPort.PodIP, nplPort.PodPort, nplPort.Protocol)] = pt.NodePortTable[NodePortProtoFormat(nplPort.NodePort, nplPort.Protocol)]
+		pt.NodePortTable[NodePortProtoFormat(nplPort.NodePort, nplPort.Protocol)] = npData
 	}
-
-	go func() {
-		defer close(synced)
-		if err := pt.syncRules(); err != nil {
-			klog.ErrorS(err, "Failed to restore netnat rules")
-		}
-	}()
-	return nil
-}
-
-func (d *NodePortData) UpdateCloseStates() error {
-	for idx := range d.Protocols {
-		protocolSocketData := &d.Protocols[idx]
-		switch protocolSocketData.State {
-		case stateClosed:
-			// already closed
-			continue
-		case stateInUse:
-			// should not happen
-			return fmt.Errorf("protocol %s is still in use, cannot update status to closed", protocolSocketData.Protocol)
-		case stateOpen:
-			protocolSocketData.State = stateClosed
-		default:
-			return fmt.Errorf("invalid protocol state")
-		}
-	}
+	// No need to sync up again because addRuleForPort has updated all rules on Windows
+	close(synced)
 	return nil
 }
 
 func (pt *PortTable) DeleteRule(podIP string, podPort int, protocol string) error {
 	pt.tableLock.Lock()
 	defer pt.tableLock.Unlock()
-	data := pt.getEntryByPodIPPort(podIP, podPort)
+	data := pt.getEntryByPodIPPortProto(podIP, podPort, protocol)
 	if data == nil {
 		// Delete not required when the PortTable entry does not exist
 		return nil
 	}
-	numProtocolsInUse := 0
 	var protocolSocketData *ProtocolSocketData
-	for idx, pData := range data.Protocols {
-		if pData.State != stateInUse {
-			continue
-		}
-		numProtocolsInUse++
-		if pData.Protocol == protocol {
-			protocolSocketData = &data.Protocols[idx]
-		}
-	}
+	protocolSocketData = &data.Protocols[0]
 	if protocolSocketData != nil {
 		if err := pt.PodPortRules.DeleteRule(data.NodePort, podIP, podPort, protocol); err != nil {
 			return err
 		}
-		protocolSocketData.State = stateOpen
-		numProtocolsInUse--
 	}
-	if numProtocolsInUse == 0 {
-		// Node port is not needed anymore: status update
-		if err := data.UpdateCloseStates(); err != nil {
-			return err
-		}
-		delete(pt.NodePortTable, data.NodePort)
-		delete(pt.PodEndpointTable, podIPPortFormat(podIP, podPort))
-	}
+	delete(pt.NodePortTable, NodePortProtoFormat(data.NodePort, protocol))
+	delete(pt.PodEndpointTable, podIPPortProtoFormat(podIP, podPort, protocol))
 	return nil
 }
 
@@ -258,15 +176,14 @@ func (pt *PortTable) DeleteRulesForPod(podIP string) error {
 	defer pt.tableLock.Unlock()
 	podEntries := pt.getDataForPodIP(podIP)
 	for _, podEntry := range podEntries {
-		for len(podEntry.Protocols) > 0 {
+		if len(podEntry.Protocols) > 0 {
 			protocolSocketData := podEntry.Protocols[0]
 			if err := pt.PodPortRules.DeleteRule(podEntry.NodePort, podIP, podEntry.PodPort, protocolSocketData.Protocol); err != nil {
 				return err
 			}
-			podEntry.Protocols = podEntry.Protocols[1:]
+			delete(pt.PodEndpointTable, podIPPortProtoFormat(podIP, podEntry.PodPort, protocolSocketData.Protocol))
+			delete(pt.NodePortTable, NodePortProtoFormat(podEntry.NodePort, protocolSocketData.Protocol))
 		}
-		delete(pt.NodePortTable, podEntry.NodePort)
-		delete(pt.PodEndpointTable, podIPPortFormat(podIP, podEntry.PodPort))
 	}
 	return nil
 }

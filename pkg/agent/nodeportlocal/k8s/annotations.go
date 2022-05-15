@@ -39,7 +39,8 @@ type NPLAnnotation struct {
 	PodPort   int      `json:"podPort"`
 	NodeIP    string   `json:"nodeIP"`
 	NodePort  int      `json:"nodePort"`
-	Protocols []string `json:"protocols"`
+	Protocol  string   `json:"protocol"`
+	Protocols []string `json:"protocols"` // deprecated, array with a single member which is equal to the Protocol field
 }
 
 func toJSON(serialize interface{}) string {

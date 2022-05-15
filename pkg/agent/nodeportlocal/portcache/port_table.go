@@ -25,25 +25,9 @@ import (
 	"antrea.io/antrea/pkg/agent/nodeportlocal/rules"
 )
 
-var (
-	supportedProtocols = []string{"tcp", "udp"}
-)
-
 // protocolSocketState represents the state of the socket corresponding to a
 // given (Node port, protocol) tuple.
 type protocolSocketState int
-
-const (
-	// stateOpen means that a listening socket has been opened for the
-	// protocol (as a means to reserve the port for this protocol), but no
-	// NPL rule has been installed for it.
-	stateOpen protocolSocketState = iota
-	// stateInUse means that a listening socket has been opened AND a NPL
-	// rule has been installed.
-	stateInUse
-	// stateClosed means that the socket has been closed.
-	stateClosed
-)
 
 type ProtocolSocketData struct {
 	Protocol string
@@ -83,7 +67,7 @@ type LocalPortOpener interface {
 type localPortOpener struct{}
 
 type PortTable struct {
-	NodePortTable    map[int]*NodePortData
+	NodePortTable    map[string]*NodePortData
 	PodEndpointTable map[string]*NodePortData
 	StartPort        int
 	EndPort          int
@@ -95,7 +79,7 @@ type PortTable struct {
 
 func NewPortTable(start, end int) (*PortTable, error) {
 	ptable := PortTable{
-		NodePortTable:    make(map[int]*NodePortData),
+		NodePortTable:    make(map[string]*NodePortData),
 		PodEndpointTable: make(map[string]*NodePortData),
 		StartPort:        start,
 		EndPort:          end,
@@ -112,19 +96,8 @@ func NewPortTable(start, end int) (*PortTable, error) {
 func (pt *PortTable) CleanupAllEntries() {
 	pt.tableLock.Lock()
 	defer pt.tableLock.Unlock()
-	pt.NodePortTable = make(map[int]*NodePortData)
+	pt.NodePortTable = make(map[string]*NodePortData)
 	pt.PodEndpointTable = make(map[string]*NodePortData)
-}
-
-func (pt *PortTable) GetEntry(ip string, port int) *NodePortData {
-	pt.tableLock.RLock()
-	defer pt.tableLock.RUnlock()
-	// Return pointer to copy of data from the PodEndpointTable.
-	if data := pt.getEntryByPodIPPort(ip, port); data != nil {
-		dataCopy := *data
-		return &dataCopy
-	}
-	return nil
 }
 
 func (pt *PortTable) GetDataForPodIP(ip string) []NodePortData {
@@ -154,6 +127,11 @@ func (pt *PortTable) RuleExists(podIP string, podPort int, protocol string) bool
 		return data.ProtocolInUse(protocol)
 	}
 	return false
+}
+
+// nodePortProtoFormat formats the nodeport, protocol to string port:protocol.
+func NodePortProtoFormat(nodeport int, protocol string) string {
+	return fmt.Sprintf("%d:%s", nodeport, protocol)
 }
 
 // podIPPortFormat formats the ip, port to string ip:port.
