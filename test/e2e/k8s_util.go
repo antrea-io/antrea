@@ -229,8 +229,17 @@ func DecidePingProbeResult(stdout string, probeNum int) PodConnectivityMark {
 	// --- 10.10.1.2 ping statistics ---
 	// 3 packets transmitted, 0 received, +3 errors, 100% packet loss, time 2042ms
 	// =======================================================
+	// =================== Rejected ICMPv6 stdout ===================
+	// PING fd02:0:0:f8::11(fd02:0:0:f8::11) 56 data bytes
+	// From fd02:0:0:f8::11 icmp_seq=1 Destination unreachable: Administratively prohibited
+	// From fd02:0:0:f8::11 icmp_seq=2 Destination unreachable: Administratively prohibited
+	// From fd02:0:0:f8::11 icmp_seq=3 Destination unreachable: Administratively prohibited
+	//
+	// --- fd02:0:0:f8::11 ping statistics ---
+	// 3 packets transmitted, 0 received, +3 errors, 100% packet loss, time 2047ms
+	// =======================================================
 	countConnected := strings.Count(stdout, "bytes from")
-	countRejected := strings.Count(stdout, "Prohibited")
+	countRejected := strings.Count(stdout, "Prohibited") + strings.Count(stdout, "prohibited")
 	countDropped := probeNum - strings.Count(stdout, "icmp_seq")
 
 	if countRejected == 0 && countConnected > 0 {
