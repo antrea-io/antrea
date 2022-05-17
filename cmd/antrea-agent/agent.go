@@ -15,6 +15,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"time"
@@ -182,6 +183,11 @@ func run(o *Options) error {
 	// cause the stopCh channel to be closed; if another signal is received before the program
 	// exits, we will force exit.
 	stopCh := signals.RegisterSignalHandlers()
+	// Generate a context for functions which require one (instead of stopCh).
+	// We cancel the context when the function returns, which in the normal case will be when
+	// stopCh is closed.
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	// Get all available NodePort addresses.
 	var nodePortAddressesIPv4, nodePortAddressesIPv6 []net.IP
@@ -476,7 +482,7 @@ func run(o *Options) error {
 
 	go cniServer.Run(stopCh)
 
-	go antreaClientProvider.Run(stopCh)
+	go antreaClientProvider.Run(ctx)
 
 	go nodeRouteController.Run(stopCh)
 

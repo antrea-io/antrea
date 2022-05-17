@@ -97,7 +97,7 @@ func (c *FakeTrafficControls) Update(ctx context.Context, trafficControl *v1alph
 // Delete takes name of the trafficControl and deletes it. Returns an error if one occurs.
 func (c *FakeTrafficControls) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewRootDeleteAction(trafficcontrolsResource, name), &v1alpha2.TrafficControl{})
+		Invokes(testing.NewRootDeleteActionWithOptions(trafficcontrolsResource, name, opts), &v1alpha2.TrafficControl{})
 	return err
 }
 

@@ -15,22 +15,33 @@
 package log
 
 import (
-	"flag"
+	"fmt"
 
+	"github.com/spf13/pflag"
 	"k8s.io/klog/v2"
 )
 
 const logVerbosityFlag = "v"
 
-// GetCurrentLogLevel returns the current log verbosity level.
-func GetCurrentLogLevel() string {
-	return flag.Lookup(logVerbosityFlag).Value.String()
+type logLevelManager struct {
+	// we use this to access the verbosity value at runtime
+	flag *pflag.Flag
 }
 
-// SetLogLevel sets the log verbosity level. level must be a string
-// representation of a decimal integer.
-func SetLogLevel(level string) error {
-	oldLevel := GetCurrentLogLevel()
+var logLevelMgr = &logLevelManager{}
+
+func (m *logLevelManager) getCurrentLogLevel() string {
+	if m.flag == nil {
+		return "UNKNOWN"
+	}
+	return m.flag.Value.String()
+}
+
+func (m *logLevelManager) setLogLevel(level string) error {
+	if m.flag == nil {
+		return fmt.Errorf("verbosity flag is unknown")
+	}
+	oldLevel := m.getCurrentLogLevel()
 	if oldLevel == level {
 		return nil
 	}
@@ -40,7 +51,26 @@ func SetLogLevel(level string) error {
 	if err != nil {
 		return err
 	}
-	klog.Infof("Changed log level from %s to %s", oldLevel, level)
+	klog.InfoS("Changed log level", "from", oldLevel, "to", level)
 	return nil
 
+}
+
+func initLogLevelManager(fs *pflag.FlagSet) {
+	flag := fs.Lookup(logVerbosityFlag)
+	if flag == nil {
+		klog.ErrorS(nil, "Failed to lookup verbosity flag", "flag", logVerbosityFlag)
+	}
+	logLevelMgr.flag = flag
+}
+
+// GetCurrentLogLevel returns the current log verbosity level.
+func GetCurrentLogLevel() string {
+	return logLevelMgr.getCurrentLogLevel()
+}
+
+// SetLogLevel sets the log verbosity level. level must be a string
+// representation of a decimal integer.
+func SetLogLevel(level string) error {
+	return logLevelMgr.setLogLevel(level)
 }

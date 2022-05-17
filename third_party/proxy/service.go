@@ -70,7 +70,6 @@ type BaseServiceInfo struct {
 	nodeLocalExternal        bool
 	nodeLocalInternal        bool
 	internalTrafficPolicy    *v1.ServiceInternalTrafficPolicyType
-	topologyKeys             []string
 	hintsAnnotation          string
 }
 
@@ -150,11 +149,6 @@ func (info *BaseServiceInfo) InternalTrafficPolicy() *v1.ServiceInternalTrafficP
 	return info.internalTrafficPolicy
 }
 
-// TopologyKeys is part of ServicePort interface.
-func (info *BaseServiceInfo) TopologyKeys() []string {
-	return info.topologyKeys
-}
-
 // HintsAnnotation is part of ServicePort interface.
 func (info *BaseServiceInfo) HintsAnnotation() string {
 	return info.hintsAnnotation
@@ -183,7 +177,6 @@ func (sct *ServiceChangeTracker) newBaseServiceInfo(port *v1.ServicePort, servic
 		nodeLocalExternal:     nodeLocalExternal,
 		nodeLocalInternal:     nodeLocalInternal,
 		internalTrafficPolicy: service.Spec.InternalTrafficPolicy,
-		topologyKeys:          service.Spec.TopologyKeys,
 		hintsAnnotation:       service.Annotations[v1.AnnotationTopologyAwareHints],
 	}
 

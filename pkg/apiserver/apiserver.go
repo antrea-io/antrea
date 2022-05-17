@@ -114,14 +114,14 @@ type APIServer struct {
 	caCertController *certificate.CACertController
 }
 
-func (s *APIServer) Run(stopCh <-chan struct{}) error {
+func (s *APIServer) Run(ctx context.Context) error {
 	// Make sure CACertController runs once to publish the CA cert before starting APIServer.
-	if err := s.caCertController.RunOnce(); err != nil {
+	if err := s.caCertController.RunOnce(ctx); err != nil {
 		klog.Warningf("caCertController RunOnce failed: %v", err)
 	}
-	go s.caCertController.Run(1, stopCh)
+	go s.caCertController.Run(ctx, 1)
 
-	return s.GenericAPIServer.PrepareRun().Run(stopCh)
+	return s.GenericAPIServer.PrepareRun().Run(ctx.Done())
 }
 
 type completedConfig struct {

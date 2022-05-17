@@ -1,4 +1,4 @@
-// Copyright 2021 Antrea Authors
+// Copyright 2022 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -108,7 +108,7 @@ func (c *FakeEgresses) UpdateStatus(ctx context.Context, egress *v1alpha2.Egress
 // Delete takes name of the egress and deletes it. Returns an error if one occurs.
 func (c *FakeEgresses) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewRootDeleteAction(egressesResource, name), &v1alpha2.Egress{})
+		Invokes(testing.NewRootDeleteActionWithOptions(egressesResource, name, opts), &v1alpha2.Egress{})
 	return err
 }
 

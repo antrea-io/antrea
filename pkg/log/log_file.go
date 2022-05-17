@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package log processes the klog flags, and enforces the maximum log file
-// size and maximum log file number limits.
 package log
 
 import (
@@ -54,9 +52,9 @@ func AddFlags(fs *pflag.FlagSet) {
 	fs.Uint16Var(&maxNumArg, maxNumFlag, maxNumArg, "Maximum number of log files per severity level to be kept. Value 0 means unlimited.")
 }
 
-// InitLogFileLimits initializes log file maximum size and maximum number limits based on the
+// initLogFileLimits initializes log file maximum size and maximum number limits based on the
 // command line flags.
-func InitLogFileLimits(fs *pflag.FlagSet) {
+func initLogFileLimits(fs *pflag.FlagSet) {
 	var err error
 	var logToStdErr bool
 	var logFile string
