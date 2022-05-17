@@ -18,7 +18,6 @@
 package main
 
 import (
-	"flag"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -30,13 +29,8 @@ import (
 )
 
 func main() {
-	logs.InitLogs()
-	defer logs.FlushLogs()
-
 	command := newFlowAggregatorCommand()
-
 	if err := command.Execute(); err != nil {
-		logs.FlushLogs()
 		os.Exit(1)
 	}
 }
@@ -48,7 +42,9 @@ func newFlowAggregatorCommand() *cobra.Command {
 		Use:  "flow-aggregator",
 		Long: "The Flow Aggregator.",
 		Run: func(cmd *cobra.Command, args []string) {
-			log.InitLogFileLimits(cmd.Flags())
+			logs.InitLogs()
+			defer logs.FlushLogs()
+			log.Init(cmd.Flags())
 			if err := opts.complete(args); err != nil {
 				klog.Fatalf("Failed to complete args: %v", err)
 			}
@@ -64,8 +60,7 @@ func newFlowAggregatorCommand() *cobra.Command {
 
 	flags := cmd.Flags()
 	opts.addFlags(flags)
+	logs.AddFlags(flags)
 	log.AddFlags(flags)
-	// Install log flags
-	flags.AddGoFlagSet(flag.CommandLine)
 	return cmd
 }

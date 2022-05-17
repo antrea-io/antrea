@@ -15,6 +15,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -244,6 +245,11 @@ func run(o *Options) error {
 	// cause the stopCh channel to be closed; if another signal is received before the program
 	// exits, we will force exit.
 	stopCh := signals.RegisterSignalHandlers()
+	// Generate a context for functions which require one (instead of stopCh).
+	// We cancel the context when the function returns, which in the normal case will be when
+	// stopCh is closed.
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	log.StartLogFileNumberMonitor(stopCh)
 
@@ -262,7 +268,7 @@ func run(o *Options) error {
 
 	go networkPolicyController.Run(stopCh)
 
-	go apiServer.Run(stopCh)
+	go apiServer.Run(ctx)
 
 	if features.DefaultFeatureGate.Enabled(features.NetworkPolicyStats) {
 		go statsAggregator.Run(stopCh)

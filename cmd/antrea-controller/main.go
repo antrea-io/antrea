@@ -18,7 +18,6 @@
 package main
 
 import (
-	"flag"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -30,13 +29,8 @@ import (
 )
 
 func main() {
-	logs.InitLogs()
-	defer logs.FlushLogs()
-
 	command := newControllerCommand()
-
 	if err := command.Execute(); err != nil {
-		logs.FlushLogs()
 		os.Exit(1)
 	}
 }
@@ -48,7 +42,9 @@ func newControllerCommand() *cobra.Command {
 		Use:  "antrea-controller",
 		Long: "The Antrea Controller.",
 		Run: func(cmd *cobra.Command, args []string) {
-			log.InitLogFileLimits(cmd.Flags())
+			logs.InitLogs()
+			defer logs.FlushLogs()
+			log.Init(cmd.Flags())
 			if err := opts.complete(args); err != nil {
 				klog.Fatalf("Failed to complete: %v", err)
 			}
@@ -64,8 +60,7 @@ func newControllerCommand() *cobra.Command {
 
 	flags := cmd.Flags()
 	opts.addFlags(flags)
+	logs.AddFlags(flags)
 	log.AddFlags(flags)
-	// Install log flags
-	flags.AddGoFlagSet(flag.CommandLine)
 	return cmd
 }

@@ -57,8 +57,13 @@ func run() error {
 
 	// Create the stop chan with signals
 	stopCh := signals.RegisterSignalHandlers()
+	// Generate a context for functions which require one (instead of stopCh).
+	// We cancel the context when the function returns, which in the normal case will be when
+	// stopCh is closed.
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
-	go antreaClientProvider.Run(stopCh)
+	go antreaClientProvider.Run(ctx)
 
 	// Add loop to check whether client is ready
 	attempts := 0

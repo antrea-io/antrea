@@ -39,6 +39,7 @@ var (
 
 func initFlags() *pflag.FlagSet {
 	flags := pflag.NewFlagSet("test", pflag.ContinueOnError)
+	logs.AddFlags(flags)
 	AddFlags(flags)
 	flags.AddGoFlagSet(flag.CommandLine)
 	return flags
@@ -83,7 +84,7 @@ func TestKlogFileLimits(t *testing.T) {
 	args := []string{"--logtostderr=false", "--log_dir=" + testLogDir, "--log_file_max_size=1",
 		fmt.Sprintf("--log_file_max_num=%d", testMaxNum)}
 	testFlags.Parse(args)
-	InitLogFileLimits(testFlags)
+	initLogFileLimits(testFlags)
 	logs.InitLogs()
 	defer restoreFlagDefaultValues()
 
@@ -188,7 +189,7 @@ func TestFlags(t *testing.T) {
 
 	for _, test := range testcases {
 		testFlags.Parse(test.args)
-		InitLogFileLimits(testFlags)
+		initLogFileLimits(testFlags)
 		assert.Equal(t, test.maxSize, klog.MaxSize, test.name)
 		assert.Equal(t, test.maxNum, logFileMaxNum, test.name)
 		assert.Equal(t, test.logDir, logDir, test.name)

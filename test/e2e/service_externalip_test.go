@@ -665,7 +665,7 @@ sleep 3600`, tt.clientName, tt.clientIP, tt.localIP, tt.clientIPMaskLen)
 						// Refer to https://github.com/curl/curl/issues/1603.
 						probeCmd := strings.Split(fmt.Sprintf("ip netns exec %s curl -s %s", tt.clientName, baseUrl), " ")
 						pod.Spec.Containers[0].ReadinessProbe = &v1.Probe{
-							Handler: v1.Handler{
+							ProbeHandler: v1.ProbeHandler{
 								Exec: &v1.ExecAction{
 									Command: probeCmd,
 								},

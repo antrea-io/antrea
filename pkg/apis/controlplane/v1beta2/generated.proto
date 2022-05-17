@@ -25,7 +25,7 @@ import "k8s.io/apimachinery/pkg/runtime/schema/generated.proto";
 import "k8s.io/apimachinery/pkg/util/intstr/generated.proto";
 
 // Package-wide variables from generator "generated".
-option go_package = "v1beta2";
+option go_package = "antrea.io/antrea/pkg/apis/controlplane/v1beta2";
 
 // AddressGroup is the message format of antrea/pkg/controller/types.AddressGroup in an API response.
 message AddressGroup {

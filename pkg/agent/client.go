@@ -15,6 +15,7 @@
 package agent
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -76,8 +77,8 @@ func (p *antreaClientProvider) RunOnce() error {
 
 // Run starts the caContentProvider, which watches the ConfigMap and notifies changes
 // by calling Enqueue.
-func (p *antreaClientProvider) Run(stopCh <-chan struct{}) {
-	p.caContentProvider.Run(1, stopCh)
+func (p *antreaClientProvider) Run(ctx context.Context) {
+	p.caContentProvider.Run(ctx, 1)
 }
 
 // Enqueue implements dynamiccertificates.Listener. It will be called by caContentProvider

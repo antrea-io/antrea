@@ -37,6 +37,8 @@ var rootCmd = &cobra.Command{
 }
 
 func init() {
+	// Add klog flags to command-line flags, must be called before InitLogs()
+	logs.AddGoFlags(flag.CommandLine)
 	// prevent any unexpected output at beginning
 	flag.Set("logtostderr", "false")
 	flag.Set("v", "0")

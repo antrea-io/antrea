@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -133,7 +134,7 @@ func setupManagerAndCertController(o *Options) (manager.Manager, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error applying server cert: %v", err)
 	}
-	if err := caCertController.RunOnce(); err != nil {
+	if err := caCertController.RunOnce(context.TODO()); err != nil {
 		return nil, err
 	}
 
