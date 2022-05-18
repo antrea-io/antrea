@@ -46,6 +46,7 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.GroupReference":                schema_pkg_apis_controlplane_v1beta2_GroupReference(ref),
 		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.IPBlock":                       schema_pkg_apis_controlplane_v1beta2_IPBlock(ref),
 		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.IPNet":                         schema_pkg_apis_controlplane_v1beta2_IPNet(ref),
+		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.MulticastGroupInfo":            schema_pkg_apis_controlplane_v1beta2_MulticastGroupInfo(ref),
 		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.NamedPort":                     schema_pkg_apis_controlplane_v1beta2_NamedPort(ref),
 		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicy":                 schema_pkg_apis_controlplane_v1beta2_NetworkPolicy(ref),
 		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyList":             schema_pkg_apis_controlplane_v1beta2_NetworkPolicyList(ref),
@@ -73,8 +74,11 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"antrea.io/antrea/pkg/apis/stats/v1alpha1.AntreaClusterNetworkPolicyStatsList": schema_pkg_apis_stats_v1alpha1_AntreaClusterNetworkPolicyStatsList(ref),
 		"antrea.io/antrea/pkg/apis/stats/v1alpha1.AntreaNetworkPolicyStats":            schema_pkg_apis_stats_v1alpha1_AntreaNetworkPolicyStats(ref),
 		"antrea.io/antrea/pkg/apis/stats/v1alpha1.AntreaNetworkPolicyStatsList":        schema_pkg_apis_stats_v1alpha1_AntreaNetworkPolicyStatsList(ref),
+		"antrea.io/antrea/pkg/apis/stats/v1alpha1.MulticastGroup":                      schema_pkg_apis_stats_v1alpha1_MulticastGroup(ref),
+		"antrea.io/antrea/pkg/apis/stats/v1alpha1.MulticastGroupList":                  schema_pkg_apis_stats_v1alpha1_MulticastGroupList(ref),
 		"antrea.io/antrea/pkg/apis/stats/v1alpha1.NetworkPolicyStats":                  schema_pkg_apis_stats_v1alpha1_NetworkPolicyStats(ref),
 		"antrea.io/antrea/pkg/apis/stats/v1alpha1.NetworkPolicyStatsList":              schema_pkg_apis_stats_v1alpha1_NetworkPolicyStatsList(ref),
+		"antrea.io/antrea/pkg/apis/stats/v1alpha1.PodReference":                        schema_pkg_apis_stats_v1alpha1_PodReference(ref),
 		"antrea.io/antrea/pkg/apis/stats/v1alpha1.RuleTrafficStats":                    schema_pkg_apis_stats_v1alpha1_RuleTrafficStats(ref),
 		"antrea.io/antrea/pkg/apis/stats/v1alpha1.TrafficStats":                        schema_pkg_apis_stats_v1alpha1_TrafficStats(ref),
 		"antrea.io/antrea/pkg/apis/system/v1beta1.SupportBundle":                       schema_pkg_apis_system_v1beta1_SupportBundle(ref),
@@ -1126,6 +1130,42 @@ func schema_pkg_apis_controlplane_v1beta2_IPNet(ref common.ReferenceCallback) co
 	}
 }
 
+func schema_pkg_apis_controlplane_v1beta2_MulticastGroupInfo(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "MulticastGroupInfo contains the list of Pods that have joined a multicast group, for a given Node.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"group": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Group is the IP of the multicast group.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"pods": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Pods is the list of Pods that have joined the multicast group.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.PodReference"),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.PodReference"},
+	}
+}
+
 func schema_pkg_apis_controlplane_v1beta2_NamedPort(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -1709,11 +1749,25 @@ func schema_pkg_apis_controlplane_v1beta2_NodeStatsSummary(ref common.ReferenceC
 							},
 						},
 					},
+					"multicast": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Multicast group information collected from the Node.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.MulticastGroupInfo"),
+									},
+								},
+							},
+						},
+					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyStats", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.MulticastGroupInfo", "antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyStats", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
 	}
 }
 
@@ -2546,6 +2600,113 @@ func schema_pkg_apis_stats_v1alpha1_AntreaNetworkPolicyStatsList(ref common.Refe
 	}
 }
 
+func schema_pkg_apis_stats_v1alpha1_MulticastGroup(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "MulticastGroup contains the mapping between multicast group and Pods.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+						},
+					},
+					"group": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Group is the IP of the multicast group.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"pods": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Pods is the list of Pods that have joined the multicast group.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("antrea.io/antrea/pkg/apis/stats/v1alpha1.PodReference"),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"pods"},
+			},
+		},
+		Dependencies: []string{
+			"antrea.io/antrea/pkg/apis/stats/v1alpha1.PodReference", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+	}
+}
+
+func schema_pkg_apis_stats_v1alpha1_MulticastGroupList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "MulticastGroupList is a list of MulticastGroup.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+						},
+					},
+					"items": {
+						SchemaProps: spec.SchemaProps{
+							Description: "List of MulticastGroup.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("antrea.io/antrea/pkg/apis/stats/v1alpha1.MulticastGroup"),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"items"},
+			},
+		},
+		Dependencies: []string{
+			"antrea.io/antrea/pkg/apis/stats/v1alpha1.MulticastGroup", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+	}
+}
+
 func schema_pkg_apis_stats_v1alpha1_NetworkPolicyStats(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -2635,6 +2796,33 @@ func schema_pkg_apis_stats_v1alpha1_NetworkPolicyStatsList(ref common.ReferenceC
 		},
 		Dependencies: []string{
 			"antrea.io/antrea/pkg/apis/stats/v1alpha1.NetworkPolicyStats", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+	}
+}
+
+func schema_pkg_apis_stats_v1alpha1_PodReference(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "PodReference represents a Pod Reference.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"name": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The name of this Pod.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"namespace": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The namespace of this Pod.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+			},
+		},
 	}
 }
 

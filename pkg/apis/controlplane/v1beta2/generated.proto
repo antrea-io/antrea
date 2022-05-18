@@ -178,6 +178,15 @@ message IPNet {
   optional int32 prefixLength = 2;
 }
 
+// MulticastGroupInfo contains the list of Pods that have joined a multicast group, for a given Node.
+message MulticastGroupInfo {
+  // Group is the IP of the multicast group.
+  optional string group = 1;
+
+  // Pods is the list of Pods that have joined the multicast group.
+  repeated PodReference pods = 2;
+}
+
 // NamedPort represents a Port with a name on Pod.
 message NamedPort {
   // Port represents the Port number.
@@ -337,6 +346,9 @@ message NodeStatsSummary {
 
   // The TrafficStats of Antrea NetworkPolicies collected from the Node.
   repeated NetworkPolicyStats antreaNetworkPolicies = 4;
+
+  // Multicast group information collected from the Node.
+  repeated MulticastGroupInfo multicast = 5;
 }
 
 message PaginationGetOptions {
