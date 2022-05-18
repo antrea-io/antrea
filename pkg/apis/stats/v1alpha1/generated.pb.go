@@ -152,10 +152,66 @@ func (m *AntreaNetworkPolicyStatsList) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_AntreaNetworkPolicyStatsList proto.InternalMessageInfo
 
+func (m *MulticastGroup) Reset()      { *m = MulticastGroup{} }
+func (*MulticastGroup) ProtoMessage() {}
+func (*MulticastGroup) Descriptor() ([]byte, []int) {
+	return fileDescriptor_91b517c6fa558473, []int{4}
+}
+func (m *MulticastGroup) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *MulticastGroup) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	b = b[:cap(b)]
+	n, err := m.MarshalToSizedBuffer(b)
+	if err != nil {
+		return nil, err
+	}
+	return b[:n], nil
+}
+func (m *MulticastGroup) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_MulticastGroup.Merge(m, src)
+}
+func (m *MulticastGroup) XXX_Size() int {
+	return m.Size()
+}
+func (m *MulticastGroup) XXX_DiscardUnknown() {
+	xxx_messageInfo_MulticastGroup.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_MulticastGroup proto.InternalMessageInfo
+
+func (m *MulticastGroupList) Reset()      { *m = MulticastGroupList{} }
+func (*MulticastGroupList) ProtoMessage() {}
+func (*MulticastGroupList) Descriptor() ([]byte, []int) {
+	return fileDescriptor_91b517c6fa558473, []int{5}
+}
+func (m *MulticastGroupList) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *MulticastGroupList) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	b = b[:cap(b)]
+	n, err := m.MarshalToSizedBuffer(b)
+	if err != nil {
+		return nil, err
+	}
+	return b[:n], nil
+}
+func (m *MulticastGroupList) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_MulticastGroupList.Merge(m, src)
+}
+func (m *MulticastGroupList) XXX_Size() int {
+	return m.Size()
+}
+func (m *MulticastGroupList) XXX_DiscardUnknown() {
+	xxx_messageInfo_MulticastGroupList.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_MulticastGroupList proto.InternalMessageInfo
+
 func (m *NetworkPolicyStats) Reset()      { *m = NetworkPolicyStats{} }
 func (*NetworkPolicyStats) ProtoMessage() {}
 func (*NetworkPolicyStats) Descriptor() ([]byte, []int) {
-	return fileDescriptor_91b517c6fa558473, []int{4}
+	return fileDescriptor_91b517c6fa558473, []int{6}
 }
 func (m *NetworkPolicyStats) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -183,7 +239,7 @@ var xxx_messageInfo_NetworkPolicyStats proto.InternalMessageInfo
 func (m *NetworkPolicyStatsList) Reset()      { *m = NetworkPolicyStatsList{} }
 func (*NetworkPolicyStatsList) ProtoMessage() {}
 func (*NetworkPolicyStatsList) Descriptor() ([]byte, []int) {
-	return fileDescriptor_91b517c6fa558473, []int{5}
+	return fileDescriptor_91b517c6fa558473, []int{7}
 }
 func (m *NetworkPolicyStatsList) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -208,10 +264,38 @@ func (m *NetworkPolicyStatsList) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_NetworkPolicyStatsList proto.InternalMessageInfo
 
+func (m *PodReference) Reset()      { *m = PodReference{} }
+func (*PodReference) ProtoMessage() {}
+func (*PodReference) Descriptor() ([]byte, []int) {
+	return fileDescriptor_91b517c6fa558473, []int{8}
+}
+func (m *PodReference) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *PodReference) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	b = b[:cap(b)]
+	n, err := m.MarshalToSizedBuffer(b)
+	if err != nil {
+		return nil, err
+	}
+	return b[:n], nil
+}
+func (m *PodReference) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_PodReference.Merge(m, src)
+}
+func (m *PodReference) XXX_Size() int {
+	return m.Size()
+}
+func (m *PodReference) XXX_DiscardUnknown() {
+	xxx_messageInfo_PodReference.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_PodReference proto.InternalMessageInfo
+
 func (m *RuleTrafficStats) Reset()      { *m = RuleTrafficStats{} }
 func (*RuleTrafficStats) ProtoMessage() {}
 func (*RuleTrafficStats) Descriptor() ([]byte, []int) {
-	return fileDescriptor_91b517c6fa558473, []int{6}
+	return fileDescriptor_91b517c6fa558473, []int{9}
 }
 func (m *RuleTrafficStats) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -239,7 +323,7 @@ var xxx_messageInfo_RuleTrafficStats proto.InternalMessageInfo
 func (m *TrafficStats) Reset()      { *m = TrafficStats{} }
 func (*TrafficStats) ProtoMessage() {}
 func (*TrafficStats) Descriptor() ([]byte, []int) {
-	return fileDescriptor_91b517c6fa558473, []int{7}
+	return fileDescriptor_91b517c6fa558473, []int{10}
 }
 func (m *TrafficStats) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -269,8 +353,11 @@ func init() {
 	proto.RegisterType((*AntreaClusterNetworkPolicyStatsList)(nil), "antrea_io.antrea.pkg.apis.stats.v1alpha1.AntreaClusterNetworkPolicyStatsList")
 	proto.RegisterType((*AntreaNetworkPolicyStats)(nil), "antrea_io.antrea.pkg.apis.stats.v1alpha1.AntreaNetworkPolicyStats")
 	proto.RegisterType((*AntreaNetworkPolicyStatsList)(nil), "antrea_io.antrea.pkg.apis.stats.v1alpha1.AntreaNetworkPolicyStatsList")
+	proto.RegisterType((*MulticastGroup)(nil), "antrea_io.antrea.pkg.apis.stats.v1alpha1.MulticastGroup")
+	proto.RegisterType((*MulticastGroupList)(nil), "antrea_io.antrea.pkg.apis.stats.v1alpha1.MulticastGroupList")
 	proto.RegisterType((*NetworkPolicyStats)(nil), "antrea_io.antrea.pkg.apis.stats.v1alpha1.NetworkPolicyStats")
 	proto.RegisterType((*NetworkPolicyStatsList)(nil), "antrea_io.antrea.pkg.apis.stats.v1alpha1.NetworkPolicyStatsList")
+	proto.RegisterType((*PodReference)(nil), "antrea_io.antrea.pkg.apis.stats.v1alpha1.PodReference")
 	proto.RegisterType((*RuleTrafficStats)(nil), "antrea_io.antrea.pkg.apis.stats.v1alpha1.RuleTrafficStats")
 	proto.RegisterType((*TrafficStats)(nil), "antrea_io.antrea.pkg.apis.stats.v1alpha1.TrafficStats")
 }
@@ -280,44 +367,51 @@ func init() {
 }
 
 var fileDescriptor_91b517c6fa558473 = []byte{
-	// 592 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xec, 0x56, 0xcf, 0x6b, 0x13, 0x41,
-	0x14, 0xce, 0x24, 0x0d, 0x8d, 0xd3, 0x88, 0x61, 0x10, 0x09, 0x41, 0x36, 0x21, 0xbd, 0x44, 0xd0,
-	0x59, 0x53, 0xa4, 0x14, 0xf1, 0xe2, 0x7a, 0x2a, 0x68, 0x2c, 0x5b, 0x4f, 0x22, 0xe8, 0x64, 0x3b,
-	0xd9, 0x8c, 0xc9, 0xee, 0x2c, 0x3b, 0x93, 0x48, 0x6e, 0xfd, 0x03, 0x3c, 0xf8, 0x57, 0xf8, 0xb7,
-	0xe4, 0xd8, 0x63, 0xbd, 0x14, 0xb3, 0x22, 0x78, 0x15, 0x2f, 0x1e, 0x65, 0x66, 0x37, 0xbf, 0x29,
-	0x59, 0x2f, 0xed, 0x41, 0x6f, 0x3b, 0xef, 0xbd, 0xef, 0x7d, 0xef, 0x7d, 0xef, 0x23, 0x04, 0x1e,
-	0x10, 0x5f, 0x86, 0x94, 0x60, 0xc6, 0xcd, 0xf8, 0xcb, 0x0c, 0x7a, 0xae, 0x49, 0x02, 0x26, 0x4c,
-	0x21, 0x89, 0x14, 0xe6, 0xb0, 0x49, 0xfa, 0x41, 0x97, 0x34, 0x4d, 0x97, 0xfa, 0x34, 0x24, 0x92,
-	0x9e, 0xe0, 0x20, 0xe4, 0x92, 0xa3, 0x46, 0x5c, 0xff, 0x96, 0x71, 0x9c, 0xf4, 0x08, 0x7a, 0x2e,
-	0x56, 0x48, 0xac, 0x91, 0x78, 0x8a, 0xac, 0x3c, 0x70, 0x99, 0xec, 0x0e, 0xda, 0xd8, 0xe1, 0x9e,
-	0xe9, 0x72, 0x97, 0x9b, 0xba, 0x41, 0x7b, 0xd0, 0xd1, 0x2f, 0xfd, 0xd0, 0x5f, 0x71, 0xe3, 0xca,
-	0xa3, 0xde, 0x81, 0xd0, 0xf3, 0x04, 0xcc, 0x23, 0x4e, 0x97, 0xf9, 0x34, 0x1c, 0xcd, 0xa7, 0xf2,
-	0xa8, 0x24, 0xe6, 0x70, 0x6d, 0x9c, 0x8a, 0x79, 0x19, 0x2a, 0x1c, 0xf8, 0x92, 0x79, 0x74, 0x0d,
-	0xb0, 0xbf, 0x09, 0x20, 0x9c, 0x2e, 0xf5, 0xc8, 0x2a, 0xae, 0xfe, 0x3b, 0x0b, 0xab, 0x4f, 0xf5,
-	0xc2, 0xcf, 0xfa, 0x03, 0x21, 0x69, 0xd8, 0xa2, 0xf2, 0x03, 0x0f, 0x7b, 0x47, 0xbc, 0xcf, 0x9c,
-	0xd1, 0xb1, 0x5a, 0x1d, 0xbd, 0x83, 0x05, 0x35, 0xe7, 0x09, 0x91, 0xa4, 0x0c, 0x6a, 0xa0, 0xb1,
-	0xb3, 0xf7, 0x10, 0xc7, 0x74, 0x78, 0x91, 0x6e, 0xae, 0x98, 0xaa, 0xc6, 0xc3, 0x26, 0x7e, 0xd9,
-	0x7e, 0x4f, 0x1d, 0xf9, 0x82, 0x4a, 0x62, 0xa1, 0xf1, 0x45, 0x35, 0x13, 0x5d, 0x54, 0xe1, 0x3c,
-	0x66, 0xcf, 0xba, 0xa2, 0x00, 0x16, 0x65, 0x48, 0x3a, 0x1d, 0xe6, 0x68, 0xc6, 0x72, 0x56, 0xb3,
-	0xec, 0xe3, 0xb4, 0x47, 0xc1, 0xaf, 0x16, 0xd0, 0xd6, 0xed, 0x84, 0xab, 0xb8, 0x18, 0xb5, 0x97,
-	0x18, 0xd0, 0x29, 0x80, 0xa5, 0x70, 0xd0, 0xa7, 0x8b, 0x25, 0xe5, 0x5c, 0x2d, 0xd7, 0xd8, 0xd9,
-	0x7b, 0x9c, 0x9e, 0xd6, 0x5e, 0xe9, 0x60, 0x95, 0x13, 0xea, 0xd2, 0x6a, 0xc6, 0x5e, 0x63, 0xab,
-	0xff, 0x02, 0x70, 0x77, 0x83, 0xf4, 0xcf, 0x99, 0x90, 0xe8, 0xcd, 0x9a, 0xfc, 0x38, 0x9d, 0xfc,
-	0x0a, 0xad, 0xc5, 0x2f, 0x25, 0x53, 0x15, 0xa6, 0x91, 0x05, 0xe9, 0x7d, 0x98, 0x67, 0x92, 0x7a,
-	0x4a, 0x73, 0xb5, 0xfc, 0x61, 0xfa, 0xe5, 0x37, 0xcc, 0x6e, 0xdd, 0x4c, 0x58, 0xf3, 0x87, 0xaa,
-	0xbf, 0x1d, 0xd3, 0xd4, 0x7f, 0x66, 0x61, 0x39, 0x46, 0xfe, 0x77, 0xda, 0x55, 0x39, 0xed, 0x3b,
-	0x80, 0x77, 0x2f, 0xd3, 0xfc, 0x0a, 0x2c, 0xe6, 0x2e, 0x5b, 0xcc, 0xfa, 0x5b, 0x8b, 0xa5, 0xf6,
-	0xd6, 0x0f, 0x00, 0xd1, 0xbf, 0xe1, 0xaa, 0xfa, 0x17, 0x00, 0xef, 0x5c, 0xcb, 0x31, 0xc9, 0xf2,
-	0x31, 0x9f, 0xa4, 0xdf, 0x31, 0xf5, 0x19, 0x3f, 0x03, 0xb8, 0xe6, 0x6a, 0x54, 0x83, 0x5b, 0x3e,
-	0xf1, 0xa8, 0xde, 0xe8, 0x86, 0x55, 0x4c, 0x80, 0x5b, 0x2d, 0xe2, 0x51, 0x5b, 0x67, 0xae, 0xe1,
-	0x08, 0x1f, 0x01, 0x5c, 0x4a, 0xa3, 0x7b, 0x70, 0x3b, 0x20, 0x4e, 0x8f, 0x4a, 0xa1, 0xe7, 0xcc,
-	0x59, 0xb7, 0x92, 0x2e, 0xdb, 0x47, 0x71, 0xd8, 0x9e, 0xe6, 0xd1, 0x2e, 0xcc, 0xb7, 0x47, 0x92,
-	0xc6, 0x63, 0xe6, 0xe6, 0x4a, 0x58, 0x2a, 0x68, 0xc7, 0x39, 0x74, 0x1f, 0x16, 0x04, 0x15, 0x82,
-	0x71, 0x5f, 0xfd, 0x64, 0xa8, 0xba, 0xd9, 0x69, 0x8e, 0x93, 0xb8, 0x3d, 0xab, 0xb0, 0x5a, 0xe3,
-	0x89, 0x91, 0x39, 0x9b, 0x18, 0x99, 0xf3, 0x89, 0x91, 0x39, 0x8d, 0x0c, 0x30, 0x8e, 0x0c, 0x70,
-	0x16, 0x19, 0xe0, 0x3c, 0x32, 0xc0, 0xd7, 0xc8, 0x00, 0x9f, 0xbe, 0x19, 0x99, 0xd7, 0x8d, 0xb4,
-	0xff, 0x91, 0xfe, 0x04, 0x00, 0x00, 0xff, 0xff, 0x82, 0xba, 0xaa, 0x57, 0x4e, 0x09, 0x00, 0x00,
+	// 704 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xec, 0x56, 0x4f, 0x6b, 0x13, 0x4d,
+	0x18, 0xcf, 0x34, 0x2d, 0x6d, 0xa6, 0x79, 0xdf, 0xb7, 0xef, 0x20, 0x12, 0x8a, 0x6c, 0x4b, 0x7a,
+	0x89, 0xa0, 0xb3, 0xb6, 0x48, 0x29, 0xe2, 0xc5, 0xf5, 0x20, 0x05, 0x1b, 0xc3, 0xd4, 0x83, 0x88,
+	0xa2, 0x93, 0xcd, 0x64, 0x33, 0x26, 0xbb, 0xb3, 0xec, 0xcc, 0x56, 0x7a, 0xeb, 0x07, 0xf0, 0xe0,
+	0xa7, 0xf0, 0xb3, 0xf4, 0x58, 0x6f, 0xf5, 0x52, 0x6c, 0x44, 0xf0, 0x2a, 0x5e, 0x3c, 0xca, 0xcc,
+	0x6e, 0xba, 0xd9, 0x86, 0xd2, 0xed, 0x25, 0x1e, 0xf4, 0x94, 0x9d, 0xe7, 0xdf, 0xef, 0xf7, 0x3c,
+	0xcf, 0x6f, 0x86, 0xc0, 0x2d, 0x1a, 0xa8, 0x88, 0x51, 0xcc, 0x85, 0x9d, 0x7c, 0xd9, 0x61, 0xdf,
+	0xb3, 0x69, 0xc8, 0xa5, 0x2d, 0x15, 0x55, 0xd2, 0xde, 0x5b, 0xa7, 0x83, 0xb0, 0x47, 0xd7, 0x6d,
+	0x8f, 0x05, 0x2c, 0xa2, 0x8a, 0x75, 0x70, 0x18, 0x09, 0x25, 0x50, 0x23, 0x89, 0x7f, 0xc5, 0x05,
+	0x4e, 0x6b, 0x84, 0x7d, 0x0f, 0xeb, 0x4c, 0x6c, 0x32, 0xf1, 0x28, 0x73, 0xf9, 0xb6, 0xc7, 0x55,
+	0x2f, 0x6e, 0x63, 0x57, 0xf8, 0xb6, 0x27, 0x3c, 0x61, 0x9b, 0x02, 0xed, 0xb8, 0x6b, 0x4e, 0xe6,
+	0x60, 0xbe, 0x92, 0xc2, 0xcb, 0x77, 0xfb, 0x5b, 0xd2, 0xf0, 0x09, 0xb9, 0x4f, 0xdd, 0x1e, 0x0f,
+	0x58, 0xb4, 0x9f, 0xb1, 0xf2, 0x99, 0xa2, 0xf6, 0xde, 0x04, 0x9d, 0x65, 0xfb, 0xa2, 0xac, 0x28,
+	0x0e, 0x14, 0xf7, 0xd9, 0x44, 0xc2, 0xe6, 0x65, 0x09, 0xd2, 0xed, 0x31, 0x9f, 0x9e, 0xcf, 0xab,
+	0xff, 0x9c, 0x81, 0x2b, 0x0f, 0x4c, 0xc3, 0x0f, 0x07, 0xb1, 0x54, 0x2c, 0x6a, 0x32, 0xf5, 0x56,
+	0x44, 0xfd, 0x96, 0x18, 0x70, 0x77, 0x7f, 0x57, 0xb7, 0x8e, 0x5e, 0xc3, 0x05, 0xcd, 0xb3, 0x43,
+	0x15, 0xad, 0x81, 0x55, 0xd0, 0x58, 0xdc, 0xb8, 0x83, 0x13, 0x38, 0x3c, 0x0e, 0x97, 0x4d, 0x4c,
+	0x47, 0xe3, 0xbd, 0x75, 0xfc, 0xa4, 0xfd, 0x86, 0xb9, 0x6a, 0x87, 0x29, 0xea, 0xa0, 0xc3, 0x93,
+	0x95, 0xd2, 0xf0, 0x64, 0x05, 0x66, 0x36, 0x72, 0x56, 0x15, 0x85, 0xb0, 0xaa, 0x22, 0xda, 0xed,
+	0x72, 0xd7, 0x20, 0xd6, 0x66, 0x0c, 0xca, 0x26, 0x2e, 0xba, 0x14, 0xfc, 0x74, 0x2c, 0xdb, 0xb9,
+	0x96, 0x62, 0x55, 0xc7, 0xad, 0x24, 0x87, 0x80, 0x0e, 0x00, 0x5c, 0x8a, 0xe2, 0x01, 0x1b, 0x0f,
+	0xa9, 0x95, 0x57, 0xcb, 0x8d, 0xc5, 0x8d, 0x7b, 0xc5, 0x61, 0xc9, 0xb9, 0x0a, 0x4e, 0x2d, 0x85,
+	0x5e, 0x3a, 0xef, 0x21, 0x13, 0x68, 0xf5, 0x1f, 0x00, 0xae, 0x5d, 0x32, 0xfa, 0xc7, 0x5c, 0x2a,
+	0xf4, 0x62, 0x62, 0xfc, 0xb8, 0xd8, 0xf8, 0x75, 0xb6, 0x19, 0xfe, 0x52, 0xca, 0x6a, 0x61, 0x64,
+	0x19, 0x1b, 0x7d, 0x00, 0xe7, 0xb8, 0x62, 0xbe, 0x9e, 0xb9, 0x6e, 0x7e, 0xbb, 0x78, 0xf3, 0x97,
+	0x70, 0x77, 0xfe, 0x49, 0x51, 0xe7, 0xb6, 0x75, 0x7d, 0x92, 0xc0, 0xd4, 0xbf, 0xcf, 0xc0, 0x5a,
+	0x92, 0xf9, 0x57, 0x69, 0xd3, 0x52, 0xda, 0x57, 0x00, 0x6f, 0x5c, 0x34, 0xf3, 0x29, 0x48, 0xcc,
+	0xcb, 0x4b, 0xcc, 0xb9, 0xaa, 0xc4, 0x8a, 0x6b, 0x0b, 0xc0, 0x7f, 0x77, 0xe2, 0x81, 0xe2, 0x2e,
+	0x95, 0xea, 0x51, 0x24, 0xe2, 0x70, 0x0a, 0x8a, 0x5a, 0x83, 0x73, 0x9e, 0x86, 0x32, 0x52, 0xaa,
+	0x64, 0xcc, 0x0c, 0x3e, 0x49, 0x7c, 0xe8, 0x19, 0x9c, 0x0d, 0x45, 0x67, 0xb4, 0xf7, 0x2b, 0xc8,
+	0xad, 0x25, 0x3a, 0x84, 0x75, 0x59, 0xc4, 0x02, 0x97, 0x39, 0xd5, 0xb4, 0xf6, 0x6c, 0x4b, 0x74,
+	0x24, 0x31, 0x15, 0xeb, 0x1f, 0x01, 0x44, 0xf9, 0x9e, 0xa7, 0xb0, 0xd1, 0x97, 0xf9, 0x8d, 0x6e,
+	0x15, 0xef, 0x27, 0x4f, 0xf5, 0x82, 0x3d, 0x7e, 0x03, 0x10, 0xfd, 0x19, 0xaf, 0x43, 0xfd, 0x13,
+	0x80, 0xd7, 0x7f, 0xcb, 0xa5, 0xa4, 0xf9, 0x15, 0xde, 0x2f, 0xde, 0x63, 0xe1, 0xeb, 0x48, 0x61,
+	0x75, 0x5c, 0xbe, 0x68, 0x15, 0xce, 0x06, 0xd4, 0x67, 0xa6, 0x99, 0x4a, 0x26, 0xe6, 0x26, 0xf5,
+	0x19, 0x31, 0x1e, 0x64, 0xc3, 0x8a, 0xfe, 0x95, 0x21, 0x75, 0x59, 0x7a, 0x9f, 0xfe, 0x4f, 0xc3,
+	0x2a, 0xcd, 0x91, 0x83, 0x64, 0x31, 0xf5, 0x0f, 0x00, 0x4e, 0x3c, 0x80, 0x05, 0x70, 0xa6, 0xbf,
+	0xe7, 0x77, 0x00, 0xe6, 0xdc, 0xe8, 0x26, 0x9c, 0x0f, 0xa9, 0xdb, 0x67, 0x4a, 0x1a, 0x9e, 0x65,
+	0xe7, 0xbf, 0xb4, 0xca, 0x7c, 0x2b, 0x31, 0x93, 0x91, 0x5f, 0xbf, 0x30, 0xed, 0x7d, 0xc5, 0x12,
+	0x9a, 0xe5, 0x6c, 0xd8, 0x8e, 0x36, 0x92, 0xc4, 0x87, 0x6e, 0xc1, 0x05, 0xc9, 0xa4, 0xe4, 0x22,
+	0xd0, 0xaf, 0x8c, 0x8e, 0x3b, 0xdb, 0xfe, 0x6e, 0x6a, 0x27, 0x67, 0x11, 0x4e, 0xf3, 0xf0, 0xd4,
+	0x2a, 0x1d, 0x9d, 0x5a, 0xa5, 0xe3, 0x53, 0xab, 0x74, 0x30, 0xb4, 0xc0, 0xe1, 0xd0, 0x02, 0x47,
+	0x43, 0x0b, 0x1c, 0x0f, 0x2d, 0xf0, 0x79, 0x68, 0x81, 0xf7, 0x5f, 0xac, 0xd2, 0xf3, 0x46, 0xd1,
+	0xbf, 0xd3, 0xbf, 0x02, 0x00, 0x00, 0xff, 0xff, 0x73, 0x1f, 0x1a, 0xcb, 0x79, 0x0b, 0x00, 0x00,
 }
 
 func (m *AntreaClusterNetworkPolicyStats) Marshal() (dAtA []byte, err error) {
@@ -528,6 +622,105 @@ func (m *AntreaNetworkPolicyStatsList) MarshalToSizedBuffer(dAtA []byte) (int, e
 	return len(dAtA) - i, nil
 }
 
+func (m *MulticastGroup) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *MulticastGroup) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *MulticastGroup) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if len(m.Pods) > 0 {
+		for iNdEx := len(m.Pods) - 1; iNdEx >= 0; iNdEx-- {
+			{
+				size, err := m.Pods[iNdEx].MarshalToSizedBuffer(dAtA[:i])
+				if err != nil {
+					return 0, err
+				}
+				i -= size
+				i = encodeVarintGenerated(dAtA, i, uint64(size))
+			}
+			i--
+			dAtA[i] = 0x1a
+		}
+	}
+	i -= len(m.Group)
+	copy(dAtA[i:], m.Group)
+	i = encodeVarintGenerated(dAtA, i, uint64(len(m.Group)))
+	i--
+	dAtA[i] = 0x12
+	{
+		size, err := m.ObjectMeta.MarshalToSizedBuffer(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+		i = encodeVarintGenerated(dAtA, i, uint64(size))
+	}
+	i--
+	dAtA[i] = 0xa
+	return len(dAtA) - i, nil
+}
+
+func (m *MulticastGroupList) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *MulticastGroupList) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *MulticastGroupList) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	if len(m.Items) > 0 {
+		for iNdEx := len(m.Items) - 1; iNdEx >= 0; iNdEx-- {
+			{
+				size, err := m.Items[iNdEx].MarshalToSizedBuffer(dAtA[:i])
+				if err != nil {
+					return 0, err
+				}
+				i -= size
+				i = encodeVarintGenerated(dAtA, i, uint64(size))
+			}
+			i--
+			dAtA[i] = 0x12
+		}
+	}
+	{
+		size, err := m.ListMeta.MarshalToSizedBuffer(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+		i = encodeVarintGenerated(dAtA, i, uint64(size))
+	}
+	i--
+	dAtA[i] = 0xa
+	return len(dAtA) - i, nil
+}
+
 func (m *NetworkPolicyStats) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
@@ -613,6 +806,39 @@ func (m *NetworkPolicyStatsList) MarshalToSizedBuffer(dAtA []byte) (int, error) 
 		i -= size
 		i = encodeVarintGenerated(dAtA, i, uint64(size))
 	}
+	i--
+	dAtA[i] = 0xa
+	return len(dAtA) - i, nil
+}
+
+func (m *PodReference) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalToSizedBuffer(dAtA[:size])
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *PodReference) MarshalTo(dAtA []byte) (int, error) {
+	size := m.Size()
+	return m.MarshalToSizedBuffer(dAtA[:size])
+}
+
+func (m *PodReference) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	i -= len(m.Namespace)
+	copy(dAtA[i:], m.Namespace)
+	i = encodeVarintGenerated(dAtA, i, uint64(len(m.Namespace)))
+	i--
+	dAtA[i] = 0x12
+	i -= len(m.Name)
+	copy(dAtA[i:], m.Name)
+	i = encodeVarintGenerated(dAtA, i, uint64(len(m.Name)))
 	i--
 	dAtA[i] = 0xa
 	return len(dAtA) - i, nil
@@ -771,6 +997,42 @@ func (m *AntreaNetworkPolicyStatsList) Size() (n int) {
 	return n
 }
 
+func (m *MulticastGroup) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = m.ObjectMeta.Size()
+	n += 1 + l + sovGenerated(uint64(l))
+	l = len(m.Group)
+	n += 1 + l + sovGenerated(uint64(l))
+	if len(m.Pods) > 0 {
+		for _, e := range m.Pods {
+			l = e.Size()
+			n += 1 + l + sovGenerated(uint64(l))
+		}
+	}
+	return n
+}
+
+func (m *MulticastGroupList) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = m.ListMeta.Size()
+	n += 1 + l + sovGenerated(uint64(l))
+	if len(m.Items) > 0 {
+		for _, e := range m.Items {
+			l = e.Size()
+			n += 1 + l + sovGenerated(uint64(l))
+		}
+	}
+	return n
+}
+
 func (m *NetworkPolicyStats) Size() (n int) {
 	if m == nil {
 		return 0
@@ -798,6 +1060,19 @@ func (m *NetworkPolicyStatsList) Size() (n int) {
 			n += 1 + l + sovGenerated(uint64(l))
 		}
 	}
+	return n
+}
+
+func (m *PodReference) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.Name)
+	n += 1 + l + sovGenerated(uint64(l))
+	l = len(m.Namespace)
+	n += 1 + l + sovGenerated(uint64(l))
 	return n
 }
 
@@ -898,6 +1173,39 @@ func (this *AntreaNetworkPolicyStatsList) String() string {
 	}, "")
 	return s
 }
+func (this *MulticastGroup) String() string {
+	if this == nil {
+		return "nil"
+	}
+	repeatedStringForPods := "[]PodReference{"
+	for _, f := range this.Pods {
+		repeatedStringForPods += strings.Replace(strings.Replace(f.String(), "PodReference", "PodReference", 1), `&`, ``, 1) + ","
+	}
+	repeatedStringForPods += "}"
+	s := strings.Join([]string{`&MulticastGroup{`,
+		`ObjectMeta:` + strings.Replace(strings.Replace(fmt.Sprintf("%v", this.ObjectMeta), "ObjectMeta", "v1.ObjectMeta", 1), `&`, ``, 1) + `,`,
+		`Group:` + fmt.Sprintf("%v", this.Group) + `,`,
+		`Pods:` + repeatedStringForPods + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *MulticastGroupList) String() string {
+	if this == nil {
+		return "nil"
+	}
+	repeatedStringForItems := "[]MulticastGroup{"
+	for _, f := range this.Items {
+		repeatedStringForItems += strings.Replace(strings.Replace(f.String(), "MulticastGroup", "MulticastGroup", 1), `&`, ``, 1) + ","
+	}
+	repeatedStringForItems += "}"
+	s := strings.Join([]string{`&MulticastGroupList{`,
+		`ListMeta:` + strings.Replace(strings.Replace(fmt.Sprintf("%v", this.ListMeta), "ListMeta", "v1.ListMeta", 1), `&`, ``, 1) + `,`,
+		`Items:` + repeatedStringForItems + `,`,
+		`}`,
+	}, "")
+	return s
+}
 func (this *NetworkPolicyStats) String() string {
 	if this == nil {
 		return "nil"
@@ -921,6 +1229,17 @@ func (this *NetworkPolicyStatsList) String() string {
 	s := strings.Join([]string{`&NetworkPolicyStatsList{`,
 		`ListMeta:` + strings.Replace(strings.Replace(fmt.Sprintf("%v", this.ListMeta), "ListMeta", "v1.ListMeta", 1), `&`, ``, 1) + `,`,
 		`Items:` + repeatedStringForItems + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *PodReference) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&PodReference{`,
+		`Name:` + fmt.Sprintf("%v", this.Name) + `,`,
+		`Namespace:` + fmt.Sprintf("%v", this.Namespace) + `,`,
 		`}`,
 	}, "")
 	return s
@@ -1490,6 +1809,272 @@ func (m *AntreaNetworkPolicyStatsList) Unmarshal(dAtA []byte) error {
 	}
 	return nil
 }
+func (m *MulticastGroup) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowGenerated
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: MulticastGroup: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: MulticastGroup: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ObjectMeta", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowGenerated
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthGenerated
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthGenerated
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if err := m.ObjectMeta.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Group", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowGenerated
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthGenerated
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthGenerated
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Group = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Pods", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowGenerated
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthGenerated
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthGenerated
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Pods = append(m.Pods, PodReference{})
+			if err := m.Pods[len(m.Pods)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipGenerated(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthGenerated
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *MulticastGroupList) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowGenerated
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: MulticastGroupList: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: MulticastGroupList: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ListMeta", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowGenerated
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthGenerated
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthGenerated
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if err := m.ListMeta.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Items", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowGenerated
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthGenerated
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthGenerated
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Items = append(m.Items, MulticastGroup{})
+			if err := m.Items[len(m.Items)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipGenerated(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthGenerated
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
 func (m *NetworkPolicyStats) Unmarshal(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
@@ -1701,6 +2286,120 @@ func (m *NetworkPolicyStatsList) Unmarshal(dAtA []byte) error {
 			if err := m.Items[len(m.Items)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipGenerated(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if (skippy < 0) || (iNdEx+skippy) < 0 {
+				return ErrInvalidLengthGenerated
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *PodReference) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowGenerated
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: PodReference: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: PodReference: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Name", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowGenerated
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthGenerated
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthGenerated
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Name = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Namespace", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowGenerated
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthGenerated
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthGenerated
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Namespace = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex

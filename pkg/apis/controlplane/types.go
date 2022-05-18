@@ -340,6 +340,16 @@ type NodeStatsSummary struct {
 	AntreaClusterNetworkPolicies []NetworkPolicyStats
 	// The TrafficStats of Antrea NetworkPolicies collected from the Node.
 	AntreaNetworkPolicies []NetworkPolicyStats
+	// Multicast group information from the Node.
+	Multicast []MulticastGroupInfo
+}
+
+// MulticastGroupInfo contains the list of Pods that have joined a multicast group, for a given Node.
+type MulticastGroupInfo struct {
+	// Group is the IP of the multicast group.
+	Group string
+	// Pods is the list of Pods that have joined the multicast group.
+	Pods []PodReference
 }
 
 // NetworkPolicyStats contains the information and traffic stats of a NetworkPolicy.
