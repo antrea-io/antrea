@@ -615,15 +615,15 @@ func (mr *MockClientMockRecorder) SendUDPPacketOut(arg0, arg1, arg2, arg3, arg4,
 }
 
 // StartPacketInHandler mocks base method
-func (m *MockClient) StartPacketInHandler(arg0 []byte, arg1 <-chan struct{}) {
+func (m *MockClient) StartPacketInHandler(arg0 <-chan struct{}) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "StartPacketInHandler", arg0, arg1)
+	m.ctrl.Call(m, "StartPacketInHandler", arg0)
 }
 
 // StartPacketInHandler indicates an expected call of StartPacketInHandler
-func (mr *MockClientMockRecorder) StartPacketInHandler(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockClientMockRecorder) StartPacketInHandler(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartPacketInHandler", reflect.TypeOf((*MockClient)(nil).StartPacketInHandler), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartPacketInHandler", reflect.TypeOf((*MockClient)(nil).StartPacketInHandler), arg0)
 }
 
 // SubscribePacketIn mocks base method
