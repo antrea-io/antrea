@@ -215,7 +215,7 @@ type Client interface {
 	// packets through registered handlers.
 	RegisterPacketInHandler(packetHandlerReason uint8, packetHandlerName string, packetInHandler interface{})
 
-	StartPacketInHandler(packetInStartedReason []uint8, stopCh <-chan struct{})
+	StartPacketInHandler(stopCh <-chan struct{})
 	// Get traffic metrics of each NetworkPolicy rule.
 	NetworkPolicyMetrics() map[uint32]*types.RuleMetric
 	// SendTCPPacketOut sends TCP packet as a packet-out to OVS.
