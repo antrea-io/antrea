@@ -23,7 +23,8 @@ import (
 
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/component-base/logs"
+
+	"antrea.io/antrea/pkg/log"
 )
 
 var (
@@ -35,15 +36,11 @@ func main() {
 	command := newControllerCommand()
 	flags := command.PersistentFlags()
 	opts.addFlags(flags)
-	logs.AddFlags(flags)
+	log.AddFlags(flags)
 	command.AddCommand(newLeaderCommand())
 	command.AddCommand(newMemberCommand())
 
-	logs.InitLogs()
-	defer logs.FlushLogs()
-
 	if err := command.Execute(); err != nil {
-		logs.FlushLogs()
 		os.Exit(1)
 	}
 }

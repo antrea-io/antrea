@@ -21,7 +21,6 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
-	"k8s.io/component-base/logs"
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/log"
@@ -40,9 +39,8 @@ func newSimulatorCommand() *cobra.Command {
 		Use:  "antrea-agent-simulator",
 		Long: "The Antrea agent simulator.",
 		Run: func(cmd *cobra.Command, args []string) {
-			logs.InitLogs()
-			defer logs.FlushLogs()
-			log.Init(cmd.Flags())
+			log.InitLogs(cmd.Flags())
+			defer log.FlushLogs()
 
 			if err := run(); err != nil {
 				klog.Fatalf("Error running agent: %v", err)
@@ -52,7 +50,6 @@ func newSimulatorCommand() *cobra.Command {
 	}
 
 	flags := cmd.Flags()
-	logs.AddFlags(flags)
 	log.AddFlags(flags)
 
 	return cmd

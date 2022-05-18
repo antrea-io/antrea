@@ -15,17 +15,15 @@
 package main
 
 import (
-	"flag"
 	"math/rand"
 	"os"
 	"path"
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
-	"k8s.io/component-base/logs"
 
 	"antrea.io/antrea/pkg/antctl"
+	"antrea.io/antrea/pkg/log"
 )
 
 var commandName = path.Base(os.Args[0])
@@ -36,24 +34,14 @@ var rootCmd = &cobra.Command{
 	Long:  commandName + " is the command line tool for Antrea that supports showing status of ${component}",
 }
 
-func init() {
-	// Add klog flags to command-line flags, must be called before InitLogs()
-	logs.AddGoFlags(flag.CommandLine)
-	// prevent any unexpected output at beginning
-	flag.Set("logtostderr", "false")
-	flag.Set("v", "0")
-	pflag.CommandLine.MarkHidden("log-flush-frequency")
-}
-
 func main() {
-	logs.InitLogs()
-	defer logs.FlushLogs()
+	defer log.FlushLogs()
 
 	rand.Seed(time.Now().UTC().UnixNano())
 	antctl.CommandList.ApplyToRootCommand(rootCmd)
 	err := rootCmd.Execute()
 	if err != nil {
-		logs.FlushLogs()
+		log.FlushLogs()
 		os.Exit(1)
 	}
 }
