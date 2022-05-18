@@ -294,6 +294,26 @@ type Client interface {
 	UninstallTrafficControlReturnPortFlow(returnOFPort uint32) error
 
 	InstallMulticastGroup(ofGroupID binding.GroupIDType, localReceivers []uint32) error
+
+	// InstallMulticlusterNodeFlows installs flows to handle cross-cluster packets between a regular
+	// Node and a local Gateway.
+	InstallMulticlusterNodeFlows(
+		gatewayID string,
+		peerConfigs map[*net.IPNet]net.IP,
+		tunnelPeerIP net.IP) error
+
+	// InstallMulticlusterGatewayFlows installs flows to handle cross-cluster packets between Gateways.
+	InstallMulticlusterGatewayFlows(
+		gatewayID string,
+		peerConfigs map[*net.IPNet]net.IP,
+		tunnelPeerIP net.IP,
+		localGatewayIP net.IP) error
+
+	// InstallMulticlusterClassifierFlows installs flows to classify cross-cluster packets.
+	InstallMulticlusterClassifierFlows(gatewayID string, tunnelOFPort uint32, isGateway bool) error
+
+	// UninstallMulticlusterFlows removes flows to classify cross-cluster packets.
+	UninstallMulticlusterFlows(gatewayID string) error
 }
 
 // GetFlowTableStatus returns an array of flow table status.
@@ -749,6 +769,12 @@ func (c *client) generatePipelines() {
 		c.featureMulticast = newFeatureMulticast(c.cookieAllocator, []binding.Protocol{binding.ProtocolIP}, c.bridge)
 		c.activatedFeatures = append(c.activatedFeatures, c.featureMulticast)
 	}
+
+	if c.enableMulticluster {
+		c.featureMulticluster = newFeatureMulticluster(c.cookieAllocator, []binding.Protocol{binding.ProtocolIP})
+		c.activatedFeatures = append(c.activatedFeatures, c.featureMulticluster)
+	}
+
 	c.featureTraceflow = newFeatureTraceflow()
 	c.activatedFeatures = append(c.activatedFeatures, c.featureTraceflow)
 
@@ -1108,7 +1134,7 @@ func (c *client) SendUDPPacketOut(
 func (c *client) InstallMulticastInitialFlows(pktInReason uint8) error {
 	flows := c.featureMulticast.igmpPktInFlows(pktInReason)
 	flows = append(flows, c.featureMulticast.externalMulticastReceiverFlow())
-	cacheKey := fmt.Sprintf("multicast")
+	cacheKey := "multicast"
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
 	return c.addFlows(c.featureMulticast.cachedFlows, cacheKey, flows)
@@ -1188,4 +1214,70 @@ func (c *client) InstallMulticastGroup(groupID binding.GroupIDType, localReceive
 		return err
 	}
 	return nil
+}
+
+// InstallMulticlusterNodeFlows installs flows to handle cross-cluster packets between a regular
+// Node and a local Gateway.
+func (c *client) InstallMulticlusterNodeFlows(gatewayID string,
+	peerConfigs map[*net.IPNet]net.IP,
+	tunnelPeerIP net.IP) error {
+	c.replayMutex.RLock()
+	defer c.replayMutex.RUnlock()
+
+	var flows []binding.Flow
+	localGatewayMAC := c.nodeConfig.GatewayConfig.MAC
+	for peerCIDR, remoteGatewayIP := range peerConfigs {
+		flows = append(flows, c.featureMulticluster.l3FwdFlowToGatewayNodeViaTun(localGatewayMAC, *peerCIDR, tunnelPeerIP, remoteGatewayIP)...)
+	}
+	return c.modifyFlows(c.featureMulticluster.cachedFlows, gatewayID, flows)
+}
+
+// InstallMulticlusterGatewayFlows installs flows to handle cross-cluster packets between Gateways.
+func (c *client) InstallMulticlusterGatewayFlows(gatewayID string,
+	peerConfigs map[*net.IPNet]net.IP,
+	tunnelPeerIP net.IP,
+	localGatewayIP net.IP,
+) error {
+	c.replayMutex.RLock()
+	defer c.replayMutex.RUnlock()
+
+	var flows []binding.Flow
+	localGatewayMAC := c.nodeConfig.GatewayConfig.MAC
+	for peerCIDR, remoteGatewayIP := range peerConfigs {
+		flows = append(flows, c.featureMulticluster.l3FwdFlowToRemoteGatewayViaTun(localGatewayMAC, *peerCIDR, tunnelPeerIP, remoteGatewayIP)...)
+		// Add SNAT flows to change cross-cluster packets's source IP to local Gateway IP.
+		flows = append(flows, c.featureMulticluster.snatConntrackFlows(*peerCIDR, localGatewayIP)...)
+	}
+	return c.modifyFlows(c.featureMulticluster.cachedFlows, gatewayID, flows)
+}
+
+// InstallMulticlusterClassifierFlows adds below flows:
+// * One flow for the global virtual multicluster MAC 'aa:bb:cc:dd:ee:f0' to set its target output port as 'antrea-tun0'
+// * One flow to match MC virtual MAC 'aa:bb:cc:dd:ee:f0' in ClassifierTable table to set in_port as 0. This allows both
+// cross-clusters request and reply packets from regular Node go through Gateway's 'antrea-tun0' as in port and output port.
+func (c *client) InstallMulticlusterClassifierFlows(gatewayID string, tunnelOFPort uint32, isGateway bool) error {
+	c.replayMutex.RLock()
+	defer c.replayMutex.RUnlock()
+	// The flow for global virtual multicluster MAC should always be kept, so assign it an unique key.
+	err := c.modifyFlows(c.featureMulticluster.cachedFlows, "unique-global-mc-vmac", []binding.Flow{
+		c.featurePodConnectivity.l2ForwardCalcFlow(GlobalVirtualMACForMulticluster, tunnelOFPort),
+	})
+	if err != nil {
+		return err
+	}
+	if isGateway {
+		if err := c.modifyFlows(c.featureMulticluster.cachedFlows, gatewayID, []binding.Flow{
+			c.featureMulticluster.tunnelClassifierFlow(c.featureMulticluster.category, tunnelOFPort),
+			c.featureMulticluster.outputFlow(c.featureMulticluster.category, tunnelOFPort),
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (c *client) UninstallMulticlusterFlows(gatewayID string) error {
+	c.replayMutex.RLock()
+	defer c.replayMutex.RUnlock()
+	return c.deleteFlows(c.featureMulticluster.cachedFlows, gatewayID)
 }

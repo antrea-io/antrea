@@ -180,3 +180,19 @@ rules:
       - get
       - list
       - watch
+  - apiGroups:
+    - multicluster.crd.antrea.io
+    resources:
+    - gateways
+    verbs:
+    - get
+    - list
+    - watch
+  - apiGroups:
+    - multicluster.crd.antrea.io
+    resources:
+    - clusterinfoimports
+    verbs:
+    - get
+    - list
+    - watch

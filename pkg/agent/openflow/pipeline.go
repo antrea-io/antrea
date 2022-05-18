@@ -314,6 +314,7 @@ const (
 	CtZoneV6     = 0xffe6
 	SNATCtZone   = 0xfff1
 	SNATCtZoneV6 = 0xffe7
+	MCSNATCtZone = 0xfffa
 
 	// disposition values used in AP
 	DispositionAllow = 0b00
@@ -394,6 +395,7 @@ type client struct {
 	enableEgress          bool
 	enableMulticast       bool
 	enableTrafficControl  bool
+	enableMulticluster    bool
 	connectUplinkToBridge bool
 	roundInfo             types.RoundInfo
 	cookieAllocator       cookie.Allocator
@@ -404,6 +406,7 @@ type client struct {
 	featureEgress          *featureEgress
 	featureNetworkPolicy   *featureNetworkPolicy
 	featureMulticast       *featureMulticast
+	featureMulticluster    *featureMulticluster
 	activatedFeatures      []feature
 
 	featureTraceflow  *featureTraceflow
@@ -2646,7 +2649,8 @@ func NewClient(bridgeName string,
 	proxyAll bool,
 	connectUplinkToBridge bool,
 	enableMulticast bool,
-	enableTrafficControl bool) Client {
+	enableTrafficControl bool,
+	enableMulticluster bool) Client {
 	bridge := binding.NewOFBridge(bridgeName, mgmtAddr)
 	c := &client{
 		bridge:                bridge,
@@ -2657,6 +2661,7 @@ func NewClient(bridgeName string,
 		enableEgress:          enableEgress,
 		enableMulticast:       enableMulticast,
 		enableTrafficControl:  enableTrafficControl,
+		enableMulticluster:    enableMulticluster,
 		connectUplinkToBridge: connectUplinkToBridge,
 		pipelines:             make(map[binding.PipelineID]binding.Pipeline),
 		packetInHandlers:      map[uint8]map[string]PacketInHandler{},

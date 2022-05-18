@@ -29,6 +29,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 
+	mcinformers "antrea.io/antrea/multicluster/pkg/client/informers/externalversions"
 	"antrea.io/antrea/pkg/agent"
 	"antrea.io/antrea/pkg/agent/apiserver"
 	"antrea.io/antrea/pkg/agent/cniserver"
@@ -45,6 +46,7 @@ import (
 	"antrea.io/antrea/pkg/agent/memberlist"
 	"antrea.io/antrea/pkg/agent/metrics"
 	"antrea.io/antrea/pkg/agent/multicast"
+	mcroute "antrea.io/antrea/pkg/agent/multicluster"
 	npl "antrea.io/antrea/pkg/agent/nodeportlocal"
 	"antrea.io/antrea/pkg/agent/openflow"
 	"antrea.io/antrea/pkg/agent/proxy"
@@ -64,6 +66,7 @@ import (
 	"antrea.io/antrea/pkg/signals"
 	"antrea.io/antrea/pkg/util/channel"
 	"antrea.io/antrea/pkg/util/cipher"
+	"antrea.io/antrea/pkg/util/env"
 	"antrea.io/antrea/pkg/util/k8s"
 	"antrea.io/antrea/pkg/version"
 )
@@ -84,8 +87,8 @@ var excludeNodePortDevices = []string{"antrea-egress0", "antrea-ingress0", "kube
 func run(o *Options) error {
 	klog.Infof("Starting Antrea agent (version %s)", version.GetFullVersion())
 
-	// Create K8s Clientset, CRD Clientset and SharedInformerFactory for the given config.
-	k8sClient, _, crdClient, _, err := k8s.CreateClients(o.config.ClientConnection, o.config.KubeAPIServerOverride)
+	// Create K8s Clientset, CRD Clientset, Multicluster CRD Clientset and SharedInformerFactory for the given config.
+	k8sClient, _, crdClient, _, mcClient, err := k8s.CreateClients(o.config.ClientConnection, o.config.KubeAPIServerOverride)
 	if err != nil {
 		return fmt.Errorf("error creating K8s clients: %v", err)
 	}
@@ -134,6 +137,7 @@ func run(o *Options) error {
 		connectUplinkToBridge,
 		features.DefaultFeatureGate.Enabled(features.Multicast),
 		features.DefaultFeatureGate.Enabled(features.TrafficControl),
+		features.DefaultFeatureGate.Enabled(features.Multicluster),
 	)
 
 	_, serviceCIDRNet, _ := net.ParseCIDR(o.config.ServiceCIDR)
@@ -240,6 +244,28 @@ func run(o *Options) error {
 		agentInitializer.GetWireGuardClient(),
 		o.config.AntreaProxy.ProxyAll)
 
+	var mcRouteController *mcroute.MCRouteController
+	var mcInformerFactory mcinformers.SharedInformerFactory
+
+	if features.DefaultFeatureGate.Enabled(features.Multicluster) && o.config.Multicluster.Enable {
+		mcNamespace := env.GetPodNamespace()
+		if o.config.Multicluster.Namespace != "" {
+			mcNamespace = o.config.Multicluster.Namespace
+		}
+		mcInformerFactory = mcinformers.NewSharedInformerFactory(mcClient, informerDefaultResync)
+		gwInformer := mcInformerFactory.Multicluster().V1alpha1().Gateways()
+		ciImportInformer := mcInformerFactory.Multicluster().V1alpha1().ClusterInfoImports()
+		mcRouteController = mcroute.NewMCRouteController(
+			mcClient,
+			gwInformer,
+			ciImportInformer,
+			ofClient,
+			ovsBridgeClient,
+			ifaceStore,
+			nodeConfig,
+			mcNamespace,
+		)
+	}
 	var groupCounters []proxytypes.GroupCounter
 	groupIDUpdates := make(chan string, 100)
 	v4GroupIDAllocator := openflow.NewGroupAllocator(false)
@@ -597,6 +623,11 @@ func run(o *Options) error {
 			return err
 		}
 		go mcastController.Run(stopCh)
+	}
+
+	if features.DefaultFeatureGate.Enabled(features.Multicluster) && o.config.Multicluster.Enable {
+		mcInformerFactory.Start(stopCh)
+		go mcRouteController.Run(stopCh)
 	}
 
 	agentQuerier := querier.NewAgentQuerier(

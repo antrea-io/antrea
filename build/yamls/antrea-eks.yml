@@ -55,7 +55,7 @@ metadata:
   labels:
     app: antrea
 data:
-  antrea-agent.conf: |
+  antrea-agent.conf: |-
     # FeatureGates is a map of feature names to bools that enable or disable experimental features.
     featureGates:
     # Enable AntreaProxy which provides ServiceLB for in-cluster Services in antrea-agent.
@@ -96,6 +96,10 @@ data:
 
     # Enable multicast traffic. This feature is supported only with noEncap mode.
     #  Multicast: false
+
+    # Enable Antrea Multi-cluster Gateway to support cross-cluster traffic.
+    # This feature is supported only with encap mode.
+    #  Multicluster: false
 
     # Enable support for provisioning secondary network interfaces for Pods (using
     # Pod annotations). At the moment, Antrea can only create secondary network
@@ -312,6 +316,14 @@ data:
       # Note that setting ProxyLoadBalancerIPs to false usually only makes sense when ProxyAll is set to true and
       # kube-proxy is removed from the cluser, otherwise kube-proxy will still load-balance this traffic.
       proxyLoadBalancerIPs: true
+
+    multicluster:
+    # Enable Antrea Multi-cluster Gateway to support cross-cluster traffic.
+    # This feature is supported only with encap mode.
+      enable: false
+    # The Namespace where Antrea Multi-cluster Controller is running.
+    # 'kube-system' will be used by default if it's empty.
+      namespace: ""
   antrea-cni.conflist: |
     {
         "cniVersion":"0.3.0",
@@ -2996,6 +3008,22 @@ rules:
       - get
       - list
       - watch
+  - apiGroups:
+    - multicluster.crd.antrea.io
+    resources:
+    - gateways
+    verbs:
+    - get
+    - list
+    - watch
+  - apiGroups:
+    - multicluster.crd.antrea.io
+    resources:
+    - clusterinfoimports
+    verbs:
+    - get
+    - list
+    - watch
 ---
 # Source: antrea/templates/antctl/clusterrole.yaml
 kind: ClusterRole
@@ -3496,7 +3524,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: fd449f30e949fff2d22ed79bca0a040535429c5b605b7b93dfdbfd3b359115ae
+        checksum/config: ba66e59fdd6eaf473d294b55615319b0bf31c0774eef88b8fbbe2afaa6fb6d0e
       labels:
         app: antrea
         component: antrea-agent
@@ -3738,7 +3766,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: fd449f30e949fff2d22ed79bca0a040535429c5b605b7b93dfdbfd3b359115ae
+        checksum/config: ba66e59fdd6eaf473d294b55615319b0bf31c0774eef88b8fbbe2afaa6fb6d0e
       labels:
         app: antrea
         component: antrea-controller

@@ -89,6 +89,8 @@ var (
 	OutputToBridgeRegMark = binding.NewRegMark(TargetOFPortField, config.BridgeOFPort)
 	// OutputToUplinkRegMark marks that the output interface is uplink.
 	OutputToUplinkRegMark = binding.NewRegMark(TargetOFPortField, config.UplinkOFPort)
+	// OutputToTunnelRegMark marks that the output interface is tunnel interface.
+	OutputToTunnelRegMark = binding.NewRegMark(TargetOFPortField, config.DefaultTunOFPort)
 
 	// reg2(NXM_NX_REG2)
 	// Field to help swap values in two different flow fields in the OpenFlow actions. This field is only used in func
@@ -179,6 +181,7 @@ var (
 	ConnSourceCTMarkField = binding.NewCTMarkField(0, 3)
 	FromGatewayCTMark     = binding.NewCTMark(ConnSourceCTMarkField, gatewayVal)
 	FromBridgeCTMark      = binding.NewCTMark(ConnSourceCTMarkField, bridgeVal)
+	FromTunnelCTMark      = binding.NewCTMark(ConnSourceCTMarkField, tunnelVal)
 
 	// CTMark[4]: Marks to indicate whether DNAT is performed on the connection for Service.
 	// These CT marks are used in CtZone / CtZoneV6 and SNATCtZone / SNATCtZoneV6.

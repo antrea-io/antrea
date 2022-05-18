@@ -103,7 +103,7 @@ func (b *bucketBuilder) LoadXXReg(regID int, data []byte) BucketBuilder {
 	return b
 }
 
-// LoadRegRange is an action to Load data to the target register at specified range.
+// LoadRegRange is an action to load data to the target register at specified range.
 func (b *bucketBuilder) LoadRegRange(regID int, data uint32, rng *Range) BucketBuilder {
 	reg := fmt.Sprintf("%s%d", NxmFieldReg, regID)
 	regField, _ := openflow13.FindFieldHeaderByName(reg, true)

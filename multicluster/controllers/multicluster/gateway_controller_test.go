@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"reflect"
 	"testing"
+	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -37,18 +38,23 @@ var (
 	serviceCIDR = "10.96.0.0/12"
 	clusterID   = "cluster-a"
 
+	gw1CreationTime = metav1.NewTime(time.Now())
+	gw2CreationTime = metav1.NewTime(time.Now().Add(10 * time.Minute))
+
 	gwNode1 = mcsv1alpha1.Gateway{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "node-1",
-			Namespace: "default",
+			Name:              "node-1",
+			Namespace:         "default",
+			CreationTimestamp: gw1CreationTime,
 		},
 		GatewayIP:  "10.10.10.10",
 		InternalIP: "172.11.10.1",
 	}
 	gwNode2 = mcsv1alpha1.Gateway{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "node-2",
-			Namespace: "default",
+			Name:              "node-2",
+			Namespace:         "default",
+			CreationTimestamp: gw2CreationTime,
 		},
 		GatewayIP:  "10.8.8.8",
 		InternalIP: "172.11.10.1",

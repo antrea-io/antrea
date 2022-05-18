@@ -250,6 +250,16 @@ func (f *featureMulticast) getRequiredTables() []*Table {
 	}
 }
 
+func (f *featureMulticluster) getRequiredTables() []*Table {
+	return []*Table{
+		ClassifierTable,
+		SNATConntrackTable,
+		L3ForwardingTable,
+		SNATConntrackCommitTable,
+		L2ForwardingOutTable,
+	}
+}
+
 func (f *featureTraceflow) getRequiredTables() []*Table {
 	return nil
 }

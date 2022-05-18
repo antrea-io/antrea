@@ -62,6 +62,7 @@ func Test_getGatesResponse(t *testing.T) {
 				{Component: "agent", Name: "NodePortLocal", Status: nplStatus, Version: "BETA"},
 				{Component: "agent", Name: "Multicast", Status: "Disabled", Version: "ALPHA"},
 				{Component: "agent", Name: "ServiceExternalIP", Status: "Disabled", Version: "ALPHA"},
+				{Component: "agent", Name: "Multicluster", Status: "Disabled", Version: "ALPHA"},
 			},
 		},
 	}

@@ -76,6 +76,7 @@ const (
 	NxmFieldDstIPv4     = "NXM_OF_IP_DST"
 	NxmFieldSrcIPv6     = "NXM_NX_IPV6_SRC"
 	NxmFieldDstIPv6     = "NXM_NX_IPV6_DST"
+	NxmFieldInPort      = "NXM_OF_IN_PORT"
 
 	OxmFieldVLANVID = "OXM_OF_VLAN_VID"
 )

@@ -273,6 +273,15 @@ logVerbosity: 0
 whereabouts:
   enable: false
 
+## -- Configure Multicluster, for use by the antrea-agent.
+multicluster:
+  # -- Enable Antrea Multi-cluster Gateway to support cross-cluster traffic.
+  # This feature is supported only with encap mode.
+  enable: false
+  # -- The Namespace where Antrea Multi-cluster Controller is running.
+  # 'kube-system' will be used by default if it's empty.
+  namespace: ""
+
 testing:
   ## -- enable code coverage measurement (used when testing Antrea only).
   coverage: false

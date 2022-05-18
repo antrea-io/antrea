@@ -192,6 +192,8 @@ type AgentConfig struct {
 	AntreaProxy AntreaProxyConfig `yaml:"antreaProxy,omitempty"`
 	// Egress related configurations.
 	Egress EgressConfig `yaml:"egress"`
+	// Multicluster configuration options.
+	Multicluster MulticlusterConfig `yaml:"multicluster,omitempty"`
 }
 
 type AntreaProxyConfig struct {
@@ -245,4 +247,13 @@ type MulticastConfig struct {
 
 type EgressConfig struct {
 	ExceptCIDRs []string `yaml:"exceptCIDRs,omitempty"`
+}
+
+type MulticlusterConfig struct {
+	// Enable Multicluster which allow cross-cluster traffic between member clusters
+	// in a ClusterSet.
+	Enable bool `yaml:"enable,omitempty"`
+	// The Namespace where the Antrea Multi-cluster controller is running.
+	// 'kube-system' will be used by default if it's emtpy.
+	Namespace string `yaml:"namespace,omitempty"`
 }
