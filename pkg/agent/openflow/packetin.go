@@ -84,13 +84,13 @@ func newfeatureStartPacketIn(reason uint8, stopCh <-chan struct{}) *featureStart
 }
 
 // StartPacketInHandler is the starting point for processing feature packetin requests.
-func (c *client) StartPacketInHandler(packetInStartedReason []uint8, stopCh <-chan struct{}) {
-	if len(c.packetInHandlers) == 0 || len(packetInStartedReason) == 0 {
+func (c *client) StartPacketInHandler(stopCh <-chan struct{}) {
+	if len(c.packetInHandlers) == 0 {
 		return
 	}
 
 	// Iterate through each feature that starts packetin. Subscribe with their specified reason.
-	for _, reason := range packetInStartedReason {
+	for reason := range c.packetInHandlers {
 		featurePacketIn := newfeatureStartPacketIn(reason, stopCh)
 		err := c.subscribeFeaturePacketIn(featurePacketIn)
 		if err != nil {

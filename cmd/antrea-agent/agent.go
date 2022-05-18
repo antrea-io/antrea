@@ -633,17 +633,8 @@ func run(o *Options) error {
 	}
 	go apiServer.Run(stopCh)
 
-	// Start PacketIn for features and specify their own reason.
-	var packetInReasons []uint8
-	if features.DefaultFeatureGate.Enabled(features.Traceflow) {
-		packetInReasons = append(packetInReasons, uint8(openflow.PacketInReasonTF))
-	}
-	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
-		packetInReasons = append(packetInReasons, uint8(openflow.PacketInReasonNP))
-	}
-	if len(packetInReasons) > 0 {
-		go ofClient.StartPacketInHandler(packetInReasons, stopCh)
-	}
+	// Start PacketIn
+	go ofClient.StartPacketInHandler(stopCh)
 
 	// Start the goroutine to periodically export IPFIX flow records.
 	if features.DefaultFeatureGate.Enabled(features.FlowExporter) {
