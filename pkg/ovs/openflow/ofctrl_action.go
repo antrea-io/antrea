@@ -270,14 +270,14 @@ func (a *ofFlowAction) SetVLAN(vlanID uint16) FlowBuilder {
 	return a.builder
 }
 
-// LoadARPOperation is an action to Load data to NXM_OF_ARP_OP field.
+// LoadARPOperation is an action to load data to NXM_OF_ARP_OP field.
 func (a *ofFlowAction) LoadARPOperation(value uint16) FlowBuilder {
 	loadAct, _ := ofctrl.NewNXLoadAction(NxmFieldARPOp, uint64(value), openflow13.NewNXRange(0, 15))
 	a.builder.ApplyAction(loadAct)
 	return a.builder
 }
 
-// LoadRange is an action to Load data to the target field at specified range.
+// LoadRange is an action to load data to the target field at specified range.
 func (a *ofFlowAction) LoadRange(name string, value uint64, rng *Range) FlowBuilder {
 	loadAct, _ := ofctrl.NewNXLoadAction(name, value, rng.ToNXRange())
 	if a.builder.ofFlow.Table != nil && a.builder.ofFlow.Table.Switch != nil {

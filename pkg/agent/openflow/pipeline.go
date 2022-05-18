@@ -155,8 +155,8 @@ var (
 	L3DecTTLTable     = newTable("L3DecTTL", stageRouting, pipelineIP)
 
 	// Tables in stagePostRouting:
-	ServiceMarkTable = newTable("ServiceMark", stagePostRouting, pipelineIP)
-	SNATTable        = newTable("SNAT", stagePostRouting, pipelineIP)
+	SNATMarkTable = newTable("SNATMark", stagePostRouting, pipelineIP)
+	SNATTable     = newTable("SNAT", stagePostRouting, pipelineIP)
 
 	// Tables in stageSwitching:
 	L2ForwardingCalcTable = newTable("L2ForwardingCalc", stageSwitching, pipelineIP)
@@ -385,6 +385,7 @@ type client struct {
 	enableEgress          bool
 	enableMulticast       bool
 	enableTrafficControl  bool
+	enableMulticluster    bool
 	connectUplinkToBridge bool
 	roundInfo             types.RoundInfo
 	cookieAllocator       cookie.Allocator
@@ -395,6 +396,7 @@ type client struct {
 	featureEgress          *featureEgress
 	featureNetworkPolicy   *featureNetworkPolicy
 	featureMulticast       *featureMulticast
+	featureMulticluster    *featureMulticluster
 	activatedFeatures      []feature
 
 	featureTraceflow  *featureTraceflow
@@ -679,6 +681,7 @@ func (f *featurePodConnectivity) conntrackFlows() []binding.Flow {
 				MatchProtocol(ipProtocol).
 				MatchCTStateNew(true).
 				MatchCTStateTrk(true).
+				MatchCTStateSNAT(false).
 				MatchCTMark(NotServiceCTMark).
 				Action().CT(true, ConntrackCommitTable.GetNext(), f.ctZones[ipProtocol], f.ctZoneSrcField).
 				MoveToCtMarkField(PktSourceField, ConnSourceCTMarkField).
@@ -722,10 +725,10 @@ func (f *featureService) snatConntrackFlows() []binding.Flow {
 	cookieID := f.cookieAllocator.Request(f.category).Raw()
 	var flows []binding.Flow
 	for _, ipProtocol := range f.ipProtocols {
-		gatewayIP, _ := f.gatewayIPs[ipProtocol]
+		gatewayIP := f.gatewayIPs[ipProtocol]
 		// virtualIP is used as SNAT IP when a request's source IP is gateway IP and we need to forward it back to
 		// gateway interface to avoid asymmetry path.
-		virtualIP, _ := f.virtualIPs[ipProtocol]
+		virtualIP := f.virtualIPs[ipProtocol]
 		flows = append(flows,
 			// SNAT should be performed for the following connections:
 			// - Hairpin Service connection initiated through a local Pod, and SNAT should be performed with the Antrea
@@ -2650,7 +2653,8 @@ func NewClient(bridgeName string,
 	proxyAll bool,
 	connectUplinkToBridge bool,
 	enableMulticast bool,
-	enableTrafficControl bool) Client {
+	enableTrafficControl bool,
+	enableMulticluster bool) Client {
 	bridge := binding.NewOFBridge(bridgeName, mgmtAddr)
 	c := &client{
 		bridge:                bridge,
@@ -2661,6 +2665,7 @@ func NewClient(bridgeName string,
 		enableEgress:          enableEgress,
 		enableMulticast:       enableMulticast,
 		enableTrafficControl:  enableTrafficControl,
+		enableMulticluster:    enableMulticluster,
 		connectUplinkToBridge: connectUplinkToBridge,
 		pipelines:             make(map[binding.PipelineID]binding.Pipeline),
 		packetInHandlers:      map[uint8]map[string]PacketInHandler{},
@@ -2866,14 +2871,14 @@ func (f *featureService) l3FwdFlowsToExternalEndpoint() []binding.Flow {
 // ConnSNATCTMark and HairpinCTMark will be loaded in DNAT CT zone.
 func (f *featureService) podHairpinSNATFlow(endpoint net.IP) binding.Flow {
 	ipProtocol := getIPProtocol(endpoint)
-	return ServiceMarkTable.ofTable.BuildFlow(priorityLow).
+	return SNATMarkTable.ofTable.BuildFlow(priorityLow).
 		Cookie(f.cookieAllocator.Request(f.category).Raw()).
 		MatchProtocol(ipProtocol).
 		MatchCTStateNew(true).
 		MatchCTStateTrk(true).
 		MatchSrcIP(endpoint).
 		MatchDstIP(endpoint).
-		Action().CT(true, ServiceMarkTable.GetNext(), f.dnatCtZones[ipProtocol], f.ctZoneSrcField).
+		Action().CT(true, SNATMarkTable.GetNext(), f.dnatCtZones[ipProtocol], f.ctZoneSrcField).
 		LoadToCtMark(ConnSNATCTMark, HairpinCTMark).
 		CTDone().
 		Done()
@@ -2887,13 +2892,13 @@ func (f *featureService) gatewaySNATFlows() []binding.Flow {
 	for _, ipProtocol := range f.ipProtocols {
 		// This generates the flow to match the first packet of hairpin connection initiated through the Antrea gateway.
 		// ConnSNATCTMark and HairpinCTMark will be loaded in DNAT CT zone.
-		flows = append(flows, ServiceMarkTable.ofTable.BuildFlow(priorityNormal).
+		flows = append(flows, SNATMarkTable.ofTable.BuildFlow(priorityNormal).
 			Cookie(cookieID).
 			MatchProtocol(ipProtocol).
 			MatchCTStateNew(true).
 			MatchCTStateTrk(true).
 			MatchRegMark(FromGatewayRegMark, ToGatewayRegMark).
-			Action().CT(true, ServiceMarkTable.GetNext(), f.dnatCtZones[ipProtocol], f.ctZoneSrcField).
+			Action().CT(true, SNATMarkTable.GetNext(), f.dnatCtZones[ipProtocol], f.ctZoneSrcField).
 			LoadToCtMark(ConnSNATCTMark, HairpinCTMark).
 			CTDone().
 			Done())
@@ -2909,13 +2914,13 @@ func (f *featureService) gatewaySNATFlows() []binding.Flow {
 			// This generates the flow to match the first packet of NodePort / LoadBalancer connection initiated through the
 			// Antrea gateway and externalTrafficPolicy of the Service is Cluster, and the selected Endpoint is on a remote
 			// Node, then ConnSNATCTMark will be loaded in DNAT CT zone, indicating that SNAT is required for the connection.
-			flows = append(flows, ServiceMarkTable.ofTable.BuildFlow(priorityNormal).
+			flows = append(flows, SNATMarkTable.ofTable.BuildFlow(priorityNormal).
 				Cookie(cookieID).
 				MatchProtocol(ipProtocol).
 				MatchCTStateNew(true).
 				MatchCTStateTrk(true).
 				MatchRegMark(FromGatewayRegMark, pktDstRegMark, ToClusterServiceRegMark).
-				Action().CT(true, ServiceMarkTable.GetNext(), f.dnatCtZones[ipProtocol], f.ctZoneSrcField).
+				Action().CT(true, SNATMarkTable.GetNext(), f.dnatCtZones[ipProtocol], f.ctZoneSrcField).
 				LoadToCtMark(ConnSNATCTMark).
 				CTDone().
 				Done())

@@ -32,8 +32,7 @@ MULTICLUSTER_KUBECONFIG_PATH=$WORKDIR/.kube
 LEADER_CLUSTER_CONFIG="--kubeconfig=$MULTICLUSTER_KUBECONFIG_PATH/leader"
 EAST_CLUSTER_CONFIG="--kubeconfig=$MULTICLUSTER_KUBECONFIG_PATH/east"
 WEST_CLUSTER_CONFIG="--kubeconfig=$MULTICLUSTER_KUBECONFIG_PATH/west"
-
-NGINX_IMAGE=projects.registry.vmware.com/antrea/nginx:1.21.6-alpine
+ENABLE_MC_GATEWAY=false
 
 CONTROL_PLANE_NODE_ROLE="control-plane,master"
 
@@ -44,14 +43,15 @@ membercluster_kubeconfigs=($EAST_CLUSTER_CONFIG $WEST_CLUSTER_CONFIG)
 CLEAN_STALE_IMAGES="docker system prune --force --all --filter until=48h"
 
 _usage="Usage: $0 [--kubeconfigs-path <KubeconfigSavePath>] [--workdir <HomePath>]
-                  [--testcase <e2e>]
+                  [--testcase <e2e>] [--mc-gateway]
 
 Run Antrea multi-cluster e2e tests on a remote (Jenkins) Linux Cluster Set.
 
         --kubeconfigs-path            Path of cluster set kubeconfigs.
         --workdir                     Home path for Go, vSphere information and antrea_logs during cluster setup. Default is $WORKDIR.
         --testcase                    Antrea multi-cluster e2e test cases on a Linux cluster set.
-        --registry                    The docker registry to use instead of dockerhub."
+        --registry                    The docker registry to use instead of dockerhub.
+        --mc-gateway                  Enable Multicluster Gateway."
 
 function print_usage {
     echoerr "$_usage"
@@ -78,6 +78,10 @@ case $key in
     --registry)
     DOCKER_REGISTRY="$2"
     shift 2
+    ;;
+    --mc-gateway)
+    ENABLE_MC_GATEWAY=true
+    shift
     ;;
     -h|--help)
     print_usage
@@ -223,7 +227,7 @@ function deliver_multicluster_controller {
 
     export NO_PULL=1;make antrea-mc-controller
 
-    docker save projects.registry.vmware.com/antrea/antrea-mc-controller:latest -o "${WORKDIR}"/antrea-mcs.tar
+    docker save "${DOCKER_REGISTRY}"/antrea/antrea-mc-controller:latest -o "${WORKDIR}"/antrea-mcs.tar
     ./multicluster/hack/generate-manifest.sh -l antrea-mcs-ns > ./multicluster/test/yamls/manifest.yml
 
     for kubeconfig in "${multicluster_kubeconfigs[@]}"
@@ -257,14 +261,17 @@ function run_multicluster_e2e {
     export GOCACHE=${WORKDIR}/.cache/go-build
     export PATH=$GOROOT/bin:$PATH
 
+    if [[ ${ENABLE_MC_GATEWAY} ]]; then
+      sed -i.bak -E "s/#[[:space:]]*Multicluster[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  Multicluster: true/" build/yamls/antrea.yml
+    fi
     wait_for_antrea_multicluster_pods_ready "${LEADER_CLUSTER_CONFIG}"
     wait_for_antrea_multicluster_pods_ready "${EAST_CLUSTER_CONFIG}"
     wait_for_antrea_multicluster_pods_ready "${WEST_CLUSTER_CONFIG}"
 
     wait_for_multicluster_controller_ready
 
-    docker pull $NGINX_IMAGE
-    docker save $NGINX_IMAGE -o "${WORKDIR}"/nginx.tar
+    docker pull "${DOCKER_REGISTRY}"/antrea/nginx:1.21.6-alpine
+    docker save "${DOCKER_REGISTRY}"/antrea/nginx:1.21.6-alpine -o "${WORKDIR}"/nginx.tar
 
     docker pull "${DOCKER_REGISTRY}/antrea/agnhost:2.26"
     docker tag "${DOCKER_REGISTRY}/antrea/agnhost:2.26" "agnhost:2.26"
@@ -284,7 +291,12 @@ function run_multicluster_e2e {
 
     set +e
     mkdir -p `pwd`/antrea-multicluster-test-logs
-    go test -v antrea.io/antrea/multicluster/test/e2e --logs-export-dir  `pwd`/antrea-multicluster-test-logs
+    if [[ ${ENABLE_MC_GATEWAY} ]];then
+      go test -v antrea.io/antrea/multicluster/test/e2e --logs-export-dir  `pwd`/antrea-multicluster-test-logs --mc-gateway
+    else
+      go test -v antrea.io/antrea/multicluster/test/e2e --logs-export-dir  `pwd`/antrea-multicluster-test-logs
+    fi
+
     if [[ "$?" != "0" ]]; then
         TEST_FAILURE=true
     fi

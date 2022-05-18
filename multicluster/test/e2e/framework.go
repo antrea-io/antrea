@@ -35,7 +35,7 @@ var (
 
 const (
 	defaultTimeout     = 90 * time.Second
-	importServiceDelay = 10 * time.Second
+	importServiceDelay = 2 * time.Second
 
 	multiClusterTestNamespace string = "antrea-multicluster-test"
 	eastClusterTestService    string = "east-nginx"
@@ -57,15 +57,18 @@ type TestOptions struct {
 	leaderClusterKubeConfigPath string
 	westClusterKubeConfigPath   string
 	eastClusterKubeConfigPath   string
+	enableGateway               bool
 	logsExportDir               string
 }
 
 var testOptions TestOptions
 
 type MCTestData struct {
-	clusters           []string
-	clusterTestDataMap map[string]antreae2e.TestData
-	logsDirForTestCase string
+	clusters            []string
+	clusterTestDataMap  map[string]antreae2e.TestData
+	logsDirForTestCase  string
+	clusterGateways     map[string]string
+	clusterRegularNodes map[string]string
 }
 
 var testData *MCTestData
@@ -149,19 +152,10 @@ func (data *MCTestData) deleteTestNamespaces(timeout time.Duration) error {
 	return nil
 }
 
-func (data *MCTestData) deleteNamespace(clusterName, namespace string, timeout time.Duration) error {
-	if d, ok := data.clusterTestDataMap[clusterName]; ok {
-		if err := d.DeleteNamespace(namespace, timeout); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (data *MCTestData) createPod(clusterName, name, namespace, ctrName, image string, command []string,
+func (data *MCTestData) createPod(clusterName, name, nodeName, namespace, ctrName, image string, command []string,
 	args []string, env []corev1.EnvVar, ports []corev1.ContainerPort, hostNetwork bool, mutateFunc func(pod *corev1.Pod)) error {
 	if d, ok := data.clusterTestDataMap[clusterName]; ok {
-		return d.CreatePodOnNodeInNamespace(name, namespace, "", ctrName, image, command, args, env, ports, hostNetwork, mutateFunc)
+		return d.CreatePodOnNodeInNamespace(name, namespace, nodeName, ctrName, image, command, args, env, ports, hostNetwork, mutateFunc)
 	}
 	return fmt.Errorf("clusterName %s not found", clusterName)
 }

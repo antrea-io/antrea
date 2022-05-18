@@ -97,6 +97,10 @@ data:
     # Enable multicast traffic. This feature is supported only with noEncap mode.
     #  Multicast: false
 
+    # Enable Antrea Multi-cluster Gateway to support cross-cluster traffic.
+    # This feature is supported only with encap mode.
+    #  Multicluster: false
+
     # Enable support for provisioning secondary network interfaces for Pods (using
     # Pod annotations). At the moment, Antrea can only create secondary network
     # interfaces using SR-IOV VFs on baremetal Nodes.
@@ -323,6 +327,14 @@ data:
       # - cert:          Use CA-signed certificates for IKE authentication. This option requires the `IPsecCertAuth`
       #                  feature gate to be enabled.
       authenticationMode: "psk"
+
+    multicluster:
+    # Enable Antrea Multi-cluster Gateway to support cross-cluster traffic.
+    # This feature is supported only with encap mode.
+      enable: false
+    # The Namespace where Antrea Multi-cluster Controller is running.
+    # The default is antrea-agent's Namespace.
+      namespace: ""
   antrea-cni.conflist: |
     {
         "cniVersion":"0.3.0",
@@ -3033,6 +3045,22 @@ rules:
       - watch
       - list
       - create
+  - apiGroups:
+    - multicluster.crd.antrea.io
+    resources:
+    - gateways
+    verbs:
+    - get
+    - list
+    - watch
+  - apiGroups:
+    - multicluster.crd.antrea.io
+    resources:
+    - clusterinfoimports
+    verbs:
+    - get
+    - list
+    - watch
 ---
 # Source: antrea/templates/antctl/clusterrole.yaml
 kind: ClusterRole
@@ -3569,7 +3597,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 0cf7fc67ba29593ea1cdb73b19f72f8d53a24ac432b1737a1849591a0aa43e75
+        checksum/config: 9f60e42d8b53705c8d6fa0f789b0b362e78e81a93f4ae71dc590b95fb4a4933d
       labels:
         app: antrea
         component: antrea-agent
@@ -3809,7 +3837,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 0cf7fc67ba29593ea1cdb73b19f72f8d53a24ac432b1737a1849591a0aa43e75
+        checksum/config: 9f60e42d8b53705c8d6fa0f789b0b362e78e81a93f4ae71dc590b95fb4a4933d
       labels:
         app: antrea
         component: antrea-controller
