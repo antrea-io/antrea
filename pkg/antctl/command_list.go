@@ -15,7 +15,6 @@
 package antctl
 
 import (
-	"flag"
 	"fmt"
 	"io"
 	"math"
@@ -57,7 +56,6 @@ func (cl *commandList) applyToRootCommand(root *cobra.Command, client AntctlClie
 			continue
 		}
 		def.applySubCommandToRoot(root, client, out)
-		klog.Infof("Added command %s", def.use)
 	}
 	cl.applyPersistentFlagsToRoot(root)
 
@@ -79,13 +77,10 @@ func (cl *commandList) applyToRootCommand(root *cobra.Command, client AntctlClie
 		if err != nil {
 			return err
 		}
-		err = flag.Set("logtostderr", fmt.Sprint(enableVerbose))
-		if err != nil {
-			return err
-		}
+		klog.LogToStderr(enableVerbose)
 		if enableVerbose {
-			err := flag.Set("v", fmt.Sprint(math.MaxInt32))
-			if err != nil {
+			var logLevel klog.Level
+			if err := logLevel.Set(fmt.Sprint(math.MaxInt32)); err != nil {
 				return err
 			}
 		}

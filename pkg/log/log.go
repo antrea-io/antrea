@@ -17,10 +17,67 @@
 package log
 
 import (
+	"flag"
+	"time"
+
 	"github.com/spf13/pflag"
+	"k8s.io/klog/v2"
 )
 
-func Init(fs *pflag.FlagSet) {
+const (
+	logFlushFreqFlag = "log-flush-frequency"
+)
+
+var (
+	klogFlags = flag.NewFlagSet("logging", flag.ContinueOnError)
+
+	logFlushFreq time.Duration
+)
+
+func init() {
+	klog.InitFlags(klogFlags)
+}
+
+func addKlogFlags(fs *pflag.FlagSet) {
+	klogFlags.VisitAll(func(f *flag.Flag) {
+		pf := pflag.PFlagFromGoFlag(f)
+		fs.AddFlag(pf)
+	})
+}
+
+func AddFlags(fs *pflag.FlagSet) {
+	addKlogFlags(fs)
+	fs.Uint16Var(&maxNumArg, maxNumFlag, maxNumArg, "Maximum number of log files per severity level to be kept. Value 0 means unlimited.")
+	fs.DurationVar(&logFlushFreq, logFlushFreqFlag, 5*time.Second, "Maximum number of seconds between log flushes")
+}
+
+type Options struct {
+	withFlushDaemon bool
+}
+
+func WithoutFlushDaemon(options *Options) {
+	options.withFlushDaemon = false
+}
+
+func initKlog(options *Options) {
+	if options.withFlushDaemon {
+		klog.StartFlushDaemon(logFlushFreq)
+	}
+	klog.EnableContextualLogging(false)
+}
+
+func InitLogs(fs *pflag.FlagSet, opts ...func(options *Options)) {
+	options := Options{
+		withFlushDaemon: true,
+	}
+	for _, opt := range opts {
+		opt(&options)
+	}
+	initKlog(&options)
 	initLogFileLimits(fs)
 	initLogLevelManager(fs)
+}
+
+func FlushLogs() {
+	klog.Flush()
 }

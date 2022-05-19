@@ -48,10 +48,6 @@ var (
 	executableName = filepath.Base(os.Args[0])
 )
 
-func AddFlags(fs *pflag.FlagSet) {
-	fs.Uint16Var(&maxNumArg, maxNumFlag, maxNumArg, "Maximum number of log files per severity level to be kept. Value 0 means unlimited.")
-}
-
 // initLogFileLimits initializes log file maximum size and maximum number limits based on the
 // command line flags.
 func initLogFileLimits(fs *pflag.FlagSet) {

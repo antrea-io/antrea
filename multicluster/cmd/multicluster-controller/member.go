@@ -23,6 +23,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	multiclustercontrollers "antrea.io/antrea/multicluster/controllers/multicluster"
+	"antrea.io/antrea/pkg/log"
 	"antrea.io/antrea/pkg/signals"
 	"antrea.io/antrea/pkg/util/env"
 )
@@ -33,6 +34,8 @@ func newMemberCommand() *cobra.Command {
 		Short: "Run the MC controller in member cluster",
 		Long:  "Run the Antrea Multi-Cluster controller for member cluster",
 		Run: func(cmd *cobra.Command, args []string) {
+			log.InitLogs(cmd.Flags())
+			defer log.FlushLogs()
 			if err := opts.complete(args); err != nil {
 				klog.Fatalf("Failed to complete: %v", err)
 			}

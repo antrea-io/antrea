@@ -21,7 +21,6 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
-	"k8s.io/component-base/logs"
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/log"
@@ -42,9 +41,8 @@ func newAgentCommand() *cobra.Command {
 		Use:  "antrea-agent",
 		Long: "The Antrea agent runs on each node.",
 		Run: func(cmd *cobra.Command, args []string) {
-			logs.InitLogs()
-			defer logs.FlushLogs()
-			log.Init(cmd.Flags())
+			log.InitLogs(cmd.Flags())
+			defer log.FlushLogs()
 			if err := opts.complete(args); err != nil {
 				klog.Fatalf("Failed to complete: %v", err)
 			}
@@ -60,7 +58,6 @@ func newAgentCommand() *cobra.Command {
 
 	flags := cmd.Flags()
 	opts.addFlags(flags)
-	logs.AddFlags(flags)
 	log.AddFlags(flags)
 	return cmd
 }

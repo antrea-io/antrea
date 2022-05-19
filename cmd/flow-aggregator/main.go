@@ -21,7 +21,6 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
-	"k8s.io/component-base/logs"
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/log"
@@ -42,9 +41,8 @@ func newFlowAggregatorCommand() *cobra.Command {
 		Use:  "flow-aggregator",
 		Long: "The Flow Aggregator.",
 		Run: func(cmd *cobra.Command, args []string) {
-			logs.InitLogs()
-			defer logs.FlushLogs()
-			log.Init(cmd.Flags())
+			log.InitLogs(cmd.Flags())
+			defer log.FlushLogs()
 			if err := opts.complete(args); err != nil {
 				klog.Fatalf("Failed to complete args: %v", err)
 			}
@@ -60,7 +58,6 @@ func newFlowAggregatorCommand() *cobra.Command {
 
 	flags := cmd.Flags()
 	opts.addFlags(flags)
-	logs.AddFlags(flags)
 	log.AddFlags(flags)
 	return cmd
 }
