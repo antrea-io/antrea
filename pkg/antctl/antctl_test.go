@@ -16,7 +16,6 @@ package antctl
 
 import (
 	"bytes"
-	"flag"
 	"fmt"
 	"os"
 	"testing"
@@ -24,7 +23,6 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
-	"k8s.io/component-base/logs"
 
 	antreaversion "antrea.io/antrea/pkg/version"
 )
@@ -32,11 +30,6 @@ import (
 var (
 	serverError = fmt.Errorf("cannot reach server")
 )
-
-func init() {
-	// the antctl code assumes that the logtostderr flag exists
-	logs.AddGoFlags(flag.CommandLine)
-}
 
 // TestCommandListValidation ensures the command list is valid.
 func TestCommandListValidation(t *testing.T) {
