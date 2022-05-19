@@ -135,9 +135,6 @@ function clean_antrea {
     clean_up_one_ns "antrea-ipam-test-12"
     clean_up_one_ns "antrea-ipam-test"
     clean_up_one_ns "antrea-test"
-    kubectl get pod -n kube-system -l component=antrea-agent --no-headers=true | awk '{print $1}' | while read AGENTNAME; do
-        kubectl exec $AGENTNAME -c antrea-agent -n kube-system -- ovs-vsctl del-port br-int gw0 || true
-    done
     for antrea_yml in ${WORKDIR}/*.yml; do
         kubectl delete -f $antrea_yml --ignore-not-found=true || true
     done
