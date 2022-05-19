@@ -144,22 +144,18 @@ func (data *MCTestData) verifyMCServiceACNP(t *testing.T, clientPodName, eastIP 
 }
 
 func (data *MCTestData) deployServiceExport(clusterName string) error {
-	var rc int
-	var err error
-	rc, _, _, err = provider.RunCommandOnNode(clusterName, fmt.Sprintf("kubectl apply -f %s", serviceExportYML))
-	if err != nil || rc != 0 {
-		return fmt.Errorf("error when deploying the ServiceExport: %v", err)
+	rc, _, stderr, err := provider.RunCommandOnNode(clusterName, fmt.Sprintf("kubectl apply -f %s", serviceExportYML))
+	if err != nil || rc != 0 || stderr != "" {
+		return fmt.Errorf("error when deploying the ServiceExport: %v, stderr: %v", err, stderr)
 	}
 
 	return nil
 }
 
 func (data *MCTestData) deleteServiceExport(clusterName string) error {
-	var rc int
-	var err error
-	rc, _, _, err = provider.RunCommandOnNode(clusterName, fmt.Sprintf("kubectl delete -f %s", serviceExportYML))
-	if err != nil || rc != 0 {
-		return fmt.Errorf("error when deleting the ServiceExport: %v", err)
+	rc, _, stderr, err := provider.RunCommandOnNode(clusterName, fmt.Sprintf("kubectl delete -f %s", serviceExportYML))
+	if err != nil || rc != 0 || stderr != "" {
+		return fmt.Errorf("error when deleting the ServiceExport: %v, stderr: %v", err, stderr)
 	}
 
 	return nil

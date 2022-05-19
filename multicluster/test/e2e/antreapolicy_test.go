@@ -134,7 +134,7 @@ func executeTestsOnAllMemberClusters(t *testing.T, testList []*antreae2e.TestCas
 					}
 					start := time.Now()
 					k8sUtils.Validate(allPodsPerCluster, reachability, step.Ports, step.Protocol)
-					step.Duration = time.Now().Sub(start)
+					step.Duration = time.Since(start)
 					_, wrong, _ := step.Reachability.Summary()
 					if wrong != 0 {
 						t.Errorf("Failure in cluster %s -- %d wrong results", clusterName, wrong)
@@ -148,22 +148,18 @@ func executeTestsOnAllMemberClusters(t *testing.T, testList []*antreae2e.TestCas
 }
 
 func (data *MCTestData) deployACNPResourceExport(reFileName string) error {
-	var rc int
-	var err error
 	log.Infof("Creating ResourceExport %s in the leader cluster", reFileName)
-	rc, _, _, err = provider.RunCommandOnNode(leaderCluster, fmt.Sprintf("kubectl apply -f %s", reFileName))
-	if err != nil || rc != 0 {
-		return fmt.Errorf("error when deploying the ACNP ResourceExport in leader cluster: %v", err)
+	rc, _, stderr, err := provider.RunCommandOnNode(leaderCluster, fmt.Sprintf("kubectl apply -f %s", reFileName))
+	if err != nil || rc != 0 || stderr != "" {
+		return fmt.Errorf("error when deploying the ACNP ResourceExport in leader cluster: %v, stderr: %v", err, stderr)
 	}
 	return nil
 }
 
 func (data *MCTestData) deleteACNPResourceExport(reFileName string) error {
-	var rc int
-	var err error
-	rc, _, _, err = provider.RunCommandOnNode(leaderCluster, fmt.Sprintf("kubectl delete -f %s", reFileName))
-	if err != nil || rc != 0 {
-		return fmt.Errorf("error when deleting the ACNP ResourceExport in leader cluster: %v", err)
+	rc, _, stderr, err := provider.RunCommandOnNode(leaderCluster, fmt.Sprintf("kubectl delete -f %s", reFileName))
+	if err != nil || rc != 0 || stderr != "" {
+		return fmt.Errorf("error when deleting the ACNP ResourceExport in leader cluster: %v, stderr: %v", err, stderr)
 	}
 	return nil
 }

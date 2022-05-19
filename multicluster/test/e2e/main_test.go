@@ -104,4 +104,7 @@ func TestConnectivity(t *testing.T) {
 		testMCAntreaPolicy(t, data)
 		tearDownForPolicyTest()
 	})
+	// Wait 5 seconds to let both member and leader controllers clean up all resources,
+	// otherwise, Namespace deletion may stuck into termininating status.
+	time.Sleep(5 * time.Second)
 }

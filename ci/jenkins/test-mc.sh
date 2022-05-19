@@ -38,7 +38,7 @@ NGINX_IMAGE=projects.registry.vmware.com/antrea/nginx:1.21.6-alpine
 CONTROL_PLANE_NODE_ROLE="control-plane,master"
 
 multicluster_kubeconfigs=($EAST_CLUSTER_CONFIG $LEADER_CLUSTER_CONFIG $WEST_CLUSTER_CONFIG)
-membercluter_kubeconfigs=($EAST_CLUSTER_CONFIG $WEST_CLUSTER_CONFIG)
+membercluster_kubeconfigs=($EAST_CLUSTER_CONFIG $WEST_CLUSTER_CONFIG)
 
 
 CLEAN_STALE_IMAGES="docker system prune --force --all --filter until=48h"
@@ -104,6 +104,11 @@ function clean_tmp() {
     find ${WORKDIR} -name "support-bundles*" -mtime +7 -exec rm -rf {} \; 2>&1 | grep -v "Permission denied" || true
 }
 
+function clean_images() {
+    docker images | grep -E 'mc-controller|antrea-ubuntu' | awk '{print $3}' | xargs -r docker rmi -f || true
+    # Clean up dangling images generated in previous builds.
+    docker image prune -f --filter "until=24h" || true > /dev/null
+}
 
 function cleanup_multicluster_ns {
     ns=$1
@@ -127,13 +132,7 @@ function cleanup_multicluster_controller {
 function cleanup_multicluster_antrea {
     echo "====== Cleanup Antrea controller and agent ======"
     kubeconfig=$1
-    kubectl get pod -n kube-system -l component=antrea-agent --no-headers=true $kubeconfig | awk '{print $1}' | while read AGENTNAME; do
-       kubectl exec $AGENTNAME -c antrea-agent -n kube-system ${kubeconfig} -- ovs-vsctl del-port br-int gw0 || true
-    done
-
-   for antrea_yml in ${WORKDIR}/*.yml; do
-        kubectl delete -f $antrea_yml --ignore-not-found=true ${kubeconfig} --timeout=30s || true
-    done
+    kubectl delete -f build/yamls/antrea.yml --ignore-not-found=true ${kubeconfig} --timeout=30s || true
 }
 
 function clean_multicluster {
@@ -174,7 +173,7 @@ function wait_for_multicluster_controller_ready {
     sed -i 's/antrea-mcs-ns/kube-system/g' ./multicluster/test/yamls/leader-access-token.yml
     echo "type: Opaque" >>./multicluster/test/yamls/leader-access-token.yml
 
-    for config in "${membercluter_kubeconfigs[@]}";
+    for config in "${membercluster_kubeconfigs[@]}";
     do
         kubectl apply -f ./multicluster/build/yamls/antrea-multicluster-member.yml ${config}
         kubectl rollout status deployment/antrea-mc-controller -n kube-system ${config}
@@ -195,15 +194,12 @@ function deliver_antrea_multicluster {
 
     git show --numstat
     make clean
-    # Clean up dangling images generated in previous builds.
-    docker image prune -f --filter "until=24h" || true > /dev/null
 
     # Ensure that files in the Docker context have the correct permissions, or Docker caching cannot
     # be leveraged successfully
     chmod -R g-w build/images/ovs
     chmod -R g-w build/images/base
 
-    cp -f build/yamls/*.yml $WORKDIR
     DOCKER_REGISTRY="${DOCKER_REGISTRY}" ./hack/build-antrea-linux-all.sh --pull
     echo "====== Delivering Antrea to all the Nodes ======"
     docker save -o ${WORKDIR}/antrea-ubuntu.tar $DOCKER_REGISTRY/antrea/antrea-ubuntu:latest
@@ -225,11 +221,10 @@ function deliver_multicluster_controller {
     export GOROOT=/usr/local/go
     export PATH=${GOROOT}/bin:$PATH
 
-    docker images | grep 'mc-controller' | awk '{print $3}' | xargs -r docker rmi || true
     export NO_PULL=1;make antrea-mc-controller
 
     docker save projects.registry.vmware.com/antrea/antrea-mc-controller:latest -o "${WORKDIR}"/antrea-mcs.tar
-    ./multicluster/hack/generate-manifest.sh -l antrea-mcs-ns >./multicluster/test/yamls/manifest.yml
+    ./multicluster/hack/generate-manifest.sh -l antrea-mcs-ns > ./multicluster/test/yamls/manifest.yml
 
     for kubeconfig in "${multicluster_kubeconfigs[@]}"
     do
@@ -244,7 +239,7 @@ function deliver_multicluster_controller {
     sed -i "s|<LEADER_CLUSTER_IP>|${leader_ip}|" ./multicluster/test/yamls/west-member-cluster.yml
     rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no" ./multicluster/test/yamls/test-acnp-copy-span-ns-isolation.yml jenkins@["${leader_ip}"]:"${WORKDIR}"/test-acnp-copy-span-ns-isolation.yml
 
-    for kubeconfig in "${membercluter_kubeconfigs[@]}"
+    for kubeconfig in "${membercluster_kubeconfigs[@]}"
     do
        # Remove the longest matched substring '*/' from a string like '--kubeconfig=/var/lib/jenkins/.kube/east'
        # to get the last element which is the cluster name.
@@ -275,7 +270,7 @@ function run_multicluster_e2e {
     docker tag "${DOCKER_REGISTRY}/antrea/agnhost:2.26" "agnhost:2.26"
     docker save agnhost:2.26 -o "${WORKDIR}"/agnhost.tar
 
-    for kubeconfig in "${membercluter_kubeconfigs[@]}"
+    for kubeconfig in "${membercluster_kubeconfigs[@]}"
     do
         kubectl get nodes -o wide --no-headers=true "${kubeconfig}"| awk '{print $6}' | while read IP; do
             rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no" "${WORKDIR}"/nginx.tar jenkins@["${IP}"]:"${WORKDIR}"/nginx.tar
@@ -298,6 +293,7 @@ function run_multicluster_e2e {
 
 trap clean_multicluster EXIT
 clean_tmp
+clean_images
 
 if [[ ${TESTCASE} =~ "e2e" ]]; then
     deliver_antrea_multicluster
