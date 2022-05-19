@@ -27,6 +27,9 @@ import (
 type ofpPacketInReason uint8
 
 type PacketInHandler interface {
+	// HandlePacketIn should not modify the input pktIn and should not
+	// assume that the pktIn contents(e.g. NWSrc/NWDst) will not be
+	// modified at a later time.
 	HandlePacketIn(pktIn *ofctrl.PacketIn) error
 }
 
