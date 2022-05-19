@@ -48,6 +48,7 @@ Generate a YAML manifest for Antrea using Helm and print it to stdout.
         --multicast                   Generates a manifest for multicast.
         --multicast-interfaces        Multicast interface names (default is empty)
         --extra-helm-values-file      Optional extra helm values file to override the default config values
+        --extra-helm-values           Optional extra helm values to override the default config values
 
 In 'release' mode, environment variables IMG_NAME and IMG_TAG must be set.
 
@@ -91,11 +92,11 @@ FLEXIBLE_IPAM=false
 MULTICAST=false
 MULTICAST_INTERFACES=""
 HELM_VALUES_FILES=()
+HELM_VALUES=()
 
 while [[ $# -gt 0 ]]
 do
 key="$1"
-
 case $key in
     --mode)
     MODE="$2"
@@ -209,6 +210,10 @@ case $key in
     HELM_VALUES_FILES=("$2")
     shift 2
     ;;
+    --extra-helm-values)
+    HELM_VALUES+=("$2")
+    shift 2
+    ;;
     -h|--help)
     print_usage
     exit 0
@@ -296,7 +301,6 @@ elif ! $HELM version > /dev/null 2>&1; then
 fi
 
 TMP_DIR=$(mktemp -d $THIS_DIR/../build/yamls/chart-values.XXXXXXXX)
-HELM_VALUES=()
 
 if $IPSEC; then
     HELM_VALUES+=("trafficEncryptionMode=ipsec" "tunnelType=gre")
