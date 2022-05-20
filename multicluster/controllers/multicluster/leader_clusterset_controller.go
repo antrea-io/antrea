@@ -63,8 +63,8 @@ type LeaderClusterSetReconciler struct {
 func (r *LeaderClusterSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	clusterSet := &multiclusterv1alpha1.ClusterSet{}
 	err := r.Get(ctx, req.NamespacedName, clusterSet)
-	defer r.mutex.Unlock()
 	r.mutex.Lock()
+	defer r.mutex.Unlock()
 	if err != nil {
 		if !errors.IsNotFound(err) {
 			return ctrl.Result{}, err
@@ -85,21 +85,21 @@ func (r *LeaderClusterSetReconciler) Reconcile(ctx context.Context, req ctrl.Req
 	// Handle create or update
 	// If create, make sure the local ClusterClaim is part of the leader config
 	if r.clusterSetConfig == nil {
-		clusterId, clusterSetId, err := validateLocalClusterClaim(r.Client, clusterSet)
+		clusterID, clusterSetID, err := validateLocalClusterClaim(r.Client, clusterSet)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
-		if err = validateConfigExists(clusterId, clusterSet.Spec.Leaders); err != nil {
-			err = fmt.Errorf("local cluster %s is not defined as leader in ClusterSet", clusterId)
+		if err = validateConfigExists(clusterID, clusterSet.Spec.Leaders); err != nil {
+			err = fmt.Errorf("local cluster %s is not defined as leader in ClusterSet", clusterID)
 			return ctrl.Result{}, err
 		}
 		if err = validateClusterSetNamespace(clusterSet); err != nil {
 			return ctrl.Result{}, err
 		}
-		r.clusterID = clusterId
-		r.clusterSetID = clusterSetId
+		r.clusterID = clusterID
+		r.clusterSetID = clusterSetID
 	} else {
-		// Make sure clusterSetId has not changed
+		// Make sure clusterSetID has not changed
 		if string(r.clusterSetID) != req.Name {
 			return ctrl.Result{}, fmt.Errorf("ClusterSet Name %s cannot be changed to %s",
 				r.clusterSetID, req.Name)

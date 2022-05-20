@@ -32,7 +32,7 @@ import (
 
 // This file contains test cases for below basic scenarios:
 //  * Clean up MC Service and ServiceImport if no corresponding ResourceImport.
-//  * Clean up ResourceExport if no correspoding exported Service.
+//  * Clean up ResourceExport if no corresponding exported Service.
 
 var _ = Describe("Stale controller", func() {
 	svcSpec := corev1.ServiceSpec{
@@ -129,7 +129,7 @@ var _ = Describe("Stale controller", func() {
 		Expect(k8sClient.Create(ctx, svcImpToDelete)).Should(Succeed())
 		Expect(k8sClient.Create(ctx, svcNoDelete)).Should(Succeed())
 		// ResourceImport controller will watch ResourceImport creation event,
-		// it may create correspoding Service and ServiceImport already, so we
+		// it may create corresponding Service and ServiceImport already, so we
 		// skip it if it's 409 AlreadyExists error.
 		err = k8sClient.Create(ctx, mcSvcNoDelete)
 		Expect(err == nil || apierrors.IsAlreadyExists(err)).Should(BeTrue())

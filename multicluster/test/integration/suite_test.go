@@ -135,11 +135,11 @@ var _ = BeforeSuite(func() {
 	k8sClient.Create(ctx, leaderNS)
 	k8sClient.Create(ctx, testNS)
 	k8sClient.Create(ctx, testNSStale)
-	clusterSetReconciler := &multiclustercontrollers.MemberClusterSetReconciler{
-		Client:    k8sManager.GetClient(),
-		Scheme:    k8sManager.GetScheme(),
-		Namespace: LeaderNamespace,
-	}
+	clusterSetReconciler := multiclustercontrollers.NewMemberClusterSetReconciler(
+		k8sManager.GetClient(),
+		k8sManager.GetScheme(),
+		LeaderNamespace,
+	)
 	err = clusterSetReconciler.SetupWithManager(k8sManager)
 	Expect(err).ToNot(HaveOccurred())
 
@@ -147,7 +147,7 @@ var _ = BeforeSuite(func() {
 	svcExportReconciler := multiclustercontrollers.NewServiceExportReconciler(
 		k8sManager.GetClient(),
 		k8sManager.GetScheme(),
-		&clusterSetReconciler.RemoteCommonAreaManager)
+		clusterSetReconciler)
 	err = svcExportReconciler.SetupWithManager(k8sManager)
 	Expect(err).ToNot(HaveOccurred())
 
@@ -156,14 +156,15 @@ var _ = BeforeSuite(func() {
 
 	By("Creating StaleController")
 	stopCh := signals.RegisterSignalHandlers()
-	staleController := multiclustercontrollers.NewStaleController(
+	staleController := multiclustercontrollers.NewStaleResCleanupController(
 		k8sManager.GetClient(),
 		k8sManager.GetScheme(),
-		&clusterSetReconciler.RemoteCommonAreaManager)
+		"default",
+		clusterSetReconciler)
 
 	go staleController.Run(stopCh)
 	// Make sure to trigger clean up process every 5 seconds
-	// otherwise staleController will only run once before test case is ready to run.
+	// otherwise staleResCleanupController will only run once before test case is ready to run.
 	go func() {
 		for {
 			staleController.Enqueue()

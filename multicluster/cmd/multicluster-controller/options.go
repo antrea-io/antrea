@@ -16,6 +16,7 @@ package main
 
 import (
 	"fmt"
+	"net"
 	"time"
 
 	"github.com/spf13/pflag"
@@ -30,6 +31,11 @@ type Options struct {
 	configFile     string
 	SelfSignedCert bool
 	options        ctrl.Options
+	// The Service ClusterIP range used in the member cluster.
+	ServiceCIDR string
+	// The precedence about which IP (private or public one) of Node is preferred to
+	// be used as tunnel endpoint. If not specified, private IP will be chosen.
+	GatewayIPPrecedence mcsv1alpha1.Precedence
 }
 
 func newOptions() *Options {
@@ -51,6 +57,13 @@ func (o *Options) complete(args []string) error {
 			return fmt.Errorf("failed to load options from configuration file %s", o.configFile)
 		}
 		o.options = options
+		if ctrlConfig.ServiceCIDR != "" {
+			if _, _, err := net.ParseCIDR(ctrlConfig.ServiceCIDR); err != nil {
+				return fmt.Errorf("failed to parse serviceCIDR, invalid CIDR string %s", ctrlConfig.ServiceCIDR)
+			}
+		}
+		o.ServiceCIDR = ctrlConfig.ServiceCIDR
+		o.GatewayIPPrecedence = ctrlConfig.GatewayIPPrecedence
 		klog.InfoS("Using config from file", "config", o.options)
 	} else {
 		klog.InfoS("Using default config", "config", o.options)

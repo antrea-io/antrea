@@ -107,13 +107,13 @@ var (
 )
 
 func TestResourceImportReconciler_handleCopySpanACNPCreateEvent(t *testing.T) {
-	remoteMgr := NewRemoteCommonAreaManager("test-clusterset", common.ClusterID(localClusterID))
-	go remoteMgr.Start()
+	remoteMgr := NewRemoteCommonAreaManager("test-clusterset", common.ClusterID(localClusterID), "kube-system")
+	remoteMgr.Start()
 	defer remoteMgr.Stop()
 
 	fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(securityOpsTier).Build()
 	fakeRemoteClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(acnpResImport, acnpResImportNoMatchingTier).Build()
-	remoteCluster := NewFakeRemoteCommonArea(scheme, &remoteMgr, fakeRemoteClient, "leader-cluster", "default")
+	remoteCluster := NewFakeRemoteCommonArea(scheme, remoteMgr, fakeRemoteClient, "leader-cluster", "default")
 
 	tests := []struct {
 		name            string
@@ -134,7 +134,7 @@ func TestResourceImportReconciler_handleCopySpanACNPCreateEvent(t *testing.T) {
 			expectedSuccess: false,
 		},
 	}
-	r := NewResourceImportReconciler(fakeClient, scheme, fakeClient, localClusterID, remoteCluster)
+	r := NewResourceImportReconciler(fakeClient, scheme, fakeClient, localClusterID, "default", remoteCluster)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if _, err := r.Reconcile(ctx, tt.req); err != nil {
@@ -164,8 +164,8 @@ func TestResourceImportReconciler_handleCopySpanACNPCreateEvent(t *testing.T) {
 }
 
 func TestResourceImportReconciler_handleCopySpanACNPDeleteEvent(t *testing.T) {
-	remoteMgr := NewRemoteCommonAreaManager("test-clusterset", common.ClusterID(localClusterID))
-	go remoteMgr.Start()
+	remoteMgr := NewRemoteCommonAreaManager("test-clusterset", common.ClusterID(localClusterID), "kube-system")
+	remoteMgr.Start()
 	defer remoteMgr.Stop()
 
 	existingACNP := &v1alpha1.ClusterNetworkPolicy{
@@ -176,9 +176,9 @@ func TestResourceImportReconciler_handleCopySpanACNPDeleteEvent(t *testing.T) {
 
 	fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(existingACNP).Build()
 	fakeRemoteClient := fake.NewClientBuilder().WithScheme(scheme).Build()
-	remoteCluster := NewFakeRemoteCommonArea(scheme, &remoteMgr, fakeRemoteClient, "leader-cluster", "default")
+	remoteCluster := NewFakeRemoteCommonArea(scheme, remoteMgr, fakeRemoteClient, "leader-cluster", "default")
 
-	r := NewResourceImportReconciler(fakeClient, scheme, fakeClient, localClusterID, remoteCluster)
+	r := NewResourceImportReconciler(fakeClient, scheme, fakeClient, localClusterID, "default", remoteCluster)
 	r.installedResImports.Add(*acnpResImport)
 
 	if _, err := r.Reconcile(ctx, acnpImpReq); err != nil {
@@ -191,8 +191,8 @@ func TestResourceImportReconciler_handleCopySpanACNPDeleteEvent(t *testing.T) {
 }
 
 func TestResourceImportReconciler_handleCopySpanACNPUpdateEvent(t *testing.T) {
-	remoteMgr := NewRemoteCommonAreaManager("test-clusterset", common.ClusterID(localClusterID))
-	go remoteMgr.Start()
+	remoteMgr := NewRemoteCommonAreaManager("test-clusterset", common.ClusterID(localClusterID), "kube-system")
+	remoteMgr.Start()
 	defer remoteMgr.Stop()
 
 	existingACNP1 := &v1alpha1.ClusterNetworkPolicy{
@@ -290,9 +290,9 @@ func TestResourceImportReconciler_handleCopySpanACNPUpdateEvent(t *testing.T) {
 
 	fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(existingACNP1, existingACNP3, existingACNP4, securityOpsTier).Build()
 	fakeRemoteClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(acnpResImport, updatedResImport2, updatedResImport3).Build()
-	remoteCluster := NewFakeRemoteCommonArea(scheme, &remoteMgr, fakeRemoteClient, "leader-cluster", "default")
+	remoteCluster := NewFakeRemoteCommonArea(scheme, remoteMgr, fakeRemoteClient, "leader-cluster", "default")
 
-	r := NewResourceImportReconciler(fakeClient, scheme, fakeClient, localClusterID, remoteCluster)
+	r := NewResourceImportReconciler(fakeClient, scheme, fakeClient, localClusterID, "default", remoteCluster)
 	r.installedResImports.Add(*acnpResImport)
 	r.installedResImports.Add(*acnpResImportNoMatchingTier)
 	r.installedResImports.Add(*updatedResImport3)

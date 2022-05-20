@@ -1,20 +1,16 @@
-# permissions for end users to edit gateways.
+# permissions for end users to view gateways.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: gatewaynode-editor-role
+  name: gateway-viewer-role
 rules:
 - apiGroups:
   - multicluster.crd.antrea.io
   resources:
   - gateways
   verbs:
-  - create
-  - delete
   - get
   - list
-  - patch
-  - update
   - watch
 - apiGroups:
   - multicluster.crd.antrea.io
