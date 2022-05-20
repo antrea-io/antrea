@@ -235,6 +235,14 @@ rules:
     verbs:
       - update
   - apiGroups:
+      - crd.antrea.io
+    resources:
+      - externalnodes
+    verbs:
+      - get
+      - watch
+      - list
+  - apiGroups:
       - apps
     resources:
       - statefulsets

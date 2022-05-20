@@ -108,6 +108,9 @@ data:
     # Enable mirroring or redirecting the traffic Pods send or receive.
     #  TrafficControl: false
 
+    # Enable running agent on an unmanaged VM/BM.
+    #  ExternalNode: false
+
     # Name of the OpenVSwitch bridge antrea-agent will create and use.
     # Make sure it doesn't conflict with your existing OpenVSwitch bridges.
     ovsBridge: "br-int"
@@ -357,6 +360,9 @@ data:
 
     # Enable managing external IPs of Services of LoadBalancer type.
     #  ServiceExternalIP: false
+
+    # Enable managing ExternalNode for unmanaged VM/BM.
+    #  ExternalNode: false
 
     # The port for the antrea-controller APIServer to serve on.
     # Note that if it's set to another value, the `containerPort` of the `api` port of the
@@ -3373,6 +3379,14 @@ rules:
     verbs:
       - update
   - apiGroups:
+      - crd.antrea.io
+    resources:
+      - externalnodes
+    verbs:
+      - get
+      - watch
+      - list
+  - apiGroups:
       - apps
     resources:
       - statefulsets
@@ -3557,7 +3571,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 0cc20edc3fc882f0ea9bd3450fbab504858feeff47e1d3f09d8f6ebacd741dbe
+        checksum/config: fd3db69eb5db9d8492480b297952e3577e1063d608dd3e9d904a84c9c7466af7
       labels:
         app: antrea
         component: antrea-agent
@@ -3799,7 +3813,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 0cc20edc3fc882f0ea9bd3450fbab504858feeff47e1d3f09d8f6ebacd741dbe
+        checksum/config: fd3db69eb5db9d8492480b297952e3577e1063d608dd3e9d904a84c9c7466af7
       labels:
         app: antrea
         component: antrea-controller
