@@ -116,7 +116,7 @@ func (data *MCTestData) testServiceExport(t *testing.T) {
 		t.Fatalf("Error when probing service from %s", westCluster)
 	}
 
-	// Verfiy that ACNP works fine with new Multicluster Service.
+	// Verify that ACNP works fine with new Multicluster Service.
 	data.verifyMCServiceACNP(t, clientPodName, eastIP)
 }
 

@@ -54,28 +54,48 @@ func runMember(o *Options) error {
 		return err
 	}
 
-	clusterSetReconciler := &multiclustercontrollers.MemberClusterSetReconciler{
-		Client:    mgr.GetClient(),
-		Scheme:    mgr.GetScheme(),
-		Namespace: env.GetPodNamespace(),
-	}
+	clusterSetReconciler := multiclustercontrollers.NewMemberClusterSetReconciler(mgr.GetClient(),
+		mgr.GetScheme(),
+		env.GetPodNamespace(),
+	)
 	if err = clusterSetReconciler.SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("error creating ClusterSet controller: %v", err)
 	}
 
+	commonAreaGetter := clusterSetReconciler
 	svcExportReconciler := multiclustercontrollers.NewServiceExportReconciler(
 		mgr.GetClient(),
 		mgr.GetScheme(),
-		&clusterSetReconciler.RemoteCommonAreaManager)
+		commonAreaGetter)
 	if err = svcExportReconciler.SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("error creating ServiceExport controller: %v", err)
 	}
 
-	stopCh := signals.RegisterSignalHandlers()
-	staleController := multiclustercontrollers.NewStaleController(
+	gwReconciler := multiclustercontrollers.NewGatewayReconciler(
 		mgr.GetClient(),
 		mgr.GetScheme(),
-		&clusterSetReconciler.RemoteCommonAreaManager)
+		env.GetPodNamespace(),
+		opts.ServiceCIDR,
+		commonAreaGetter)
+	if err = gwReconciler.SetupWithManager(mgr); err != nil {
+		return fmt.Errorf("error creating Gateway controller: %v", err)
+	}
+
+	nodeReconciler := multiclustercontrollers.NewNodeReconciler(
+		mgr.GetClient(),
+		mgr.GetScheme(),
+		env.GetPodNamespace(),
+		opts.GatewayIPPrecedence)
+	if err = nodeReconciler.SetupWithManager(mgr); err != nil {
+		return fmt.Errorf("error creating Node controller: %v", err)
+	}
+
+	stopCh := signals.RegisterSignalHandlers()
+	staleController := multiclustercontrollers.NewStaleResCleanupController(
+		mgr.GetClient(),
+		mgr.GetScheme(),
+		env.GetPodNamespace(),
+		commonAreaGetter)
 
 	go staleController.Run(stopCh)
 	// Member runs ResourceImportReconciler from RemoteCommonArea only

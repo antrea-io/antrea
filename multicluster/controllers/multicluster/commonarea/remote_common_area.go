@@ -377,6 +377,7 @@ func (r *remoteCommonArea) StartWatching() error {
 		r.ClusterManager.GetScheme(),
 		r.localClusterClient,
 		string(r.remoteCommonAreaManager.GetLocalClusterID()),
+		r.remoteCommonAreaManager.GetNamespace(),
 		r,
 	)
 

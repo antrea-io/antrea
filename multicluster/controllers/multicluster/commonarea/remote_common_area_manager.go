@@ -47,6 +47,8 @@ type RemoteCommonAreaManager interface {
 	GetElectedLeaderClusterID() common.ClusterID
 	// GetLocalClusterID returns local cluster ID
 	GetLocalClusterID() common.ClusterID
+	// GetNamespace returns local Namespace where the RemoteCommonAreaManager is running.
+	GetNamespace() string
 	GetMemberClusterStatues() []multiclusterv1alpha1.ClusterStatus
 }
 
@@ -89,14 +91,18 @@ type remoteCommonAreaManager struct {
 
 	// stopFunc is to stop all background processing when RemoteCommonAreaManager is stopped.
 	stopFunc context.CancelFunc
+
+	// namespace is the Namespace where this remoteCommonAreaManager running from.
+	namespace string
 }
 
-func NewRemoteCommonAreaManager(clusterSetID common.ClusterSetID, clusterID common.ClusterID) RemoteCommonAreaManager {
+func NewRemoteCommonAreaManager(clusterSetID common.ClusterSetID, clusterID common.ClusterID, namespace string) RemoteCommonAreaManager {
 	klog.InfoS("Creating NewRemoteCommonAreaManager", "ClusterSet", clusterSetID)
 	return &remoteCommonAreaManager{
 		clusterSetID:      clusterSetID,
 		clusterID:         clusterID,
 		eventChan:         make(chan clusterEvent),
+		namespace:         namespace,
 		remoteCommonAreas: make(map[common.ClusterID]RemoteCommonArea),
 	}
 }
@@ -202,6 +208,10 @@ func (r *remoteCommonAreaManager) GetElectedLeaderClusterID() common.ClusterID {
 
 func (r *remoteCommonAreaManager) GetLocalClusterID() common.ClusterID {
 	return r.clusterID
+}
+
+func (r *remoteCommonAreaManager) GetNamespace() string {
+	return r.namespace
 }
 
 func (r *remoteCommonAreaManager) GetMemberClusterStatues() []multiclusterv1alpha1.ClusterStatus {

@@ -119,12 +119,13 @@ func init() {
 }
 
 func TestResourceImportReconciler_handleCreateEvent(t *testing.T) {
-	remoteMgr := NewRemoteCommonAreaManager("test-clusterset", common.ClusterID(localClusterID))
-	go remoteMgr.Start()
+	remoteMgr := NewRemoteCommonAreaManager("test-clusterset", common.ClusterID(localClusterID), "kube-system")
+	remoteMgr.Start()
+	defer remoteMgr.Stop()
 
 	fakeClient := fake.NewClientBuilder().WithScheme(scheme).Build()
 	fakeRemoteClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(svcResImport, epResImport).Build()
-	remoteCluster := NewFakeRemoteCommonArea(scheme, &remoteMgr, fakeRemoteClient, "leader-cluster", "default")
+	remoteCluster := NewFakeRemoteCommonArea(scheme, remoteMgr, fakeRemoteClient, "leader-cluster", "default")
 
 	tests := []struct {
 		name    string
@@ -143,7 +144,7 @@ func TestResourceImportReconciler_handleCreateEvent(t *testing.T) {
 		},
 	}
 
-	r := NewResourceImportReconciler(fakeClient, scheme, fakeClient, localClusterID, remoteCluster)
+	r := NewResourceImportReconciler(fakeClient, scheme, fakeClient, localClusterID, "default", remoteCluster)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if _, err := r.Reconcile(ctx, tt.req); err != nil {
@@ -174,8 +175,9 @@ func TestResourceImportReconciler_handleCreateEvent(t *testing.T) {
 }
 
 func TestResourceImportReconciler_handleDeleteEvent(t *testing.T) {
-	remoteMgr := NewRemoteCommonAreaManager("test-clusterset", common.ClusterID(localClusterID))
-	go remoteMgr.Start()
+	remoteMgr := NewRemoteCommonAreaManager("test-clusterset", common.ClusterID(localClusterID), "kube-system")
+	remoteMgr.Start()
+	defer remoteMgr.Stop()
 
 	existSvc := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
@@ -198,7 +200,7 @@ func TestResourceImportReconciler_handleDeleteEvent(t *testing.T) {
 
 	fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(existSvc, existEp, existSvcImp).Build()
 	fakeRemoteClient := fake.NewClientBuilder().WithScheme(scheme).Build()
-	remoteCluster := NewFakeRemoteCommonArea(scheme, &remoteMgr, fakeRemoteClient, "leader-cluster", "default")
+	remoteCluster := NewFakeRemoteCommonArea(scheme, remoteMgr, fakeRemoteClient, "leader-cluster", "default")
 
 	tests := []struct {
 		name    string
@@ -217,7 +219,7 @@ func TestResourceImportReconciler_handleDeleteEvent(t *testing.T) {
 		},
 	}
 
-	r := NewResourceImportReconciler(fakeClient, scheme, fakeClient, localClusterID, remoteCluster)
+	r := NewResourceImportReconciler(fakeClient, scheme, fakeClient, localClusterID, "default", remoteCluster)
 	r.installedResImports.Add(*svcResImport)
 	r.installedResImports.Add(*epResImport)
 
@@ -248,8 +250,9 @@ func TestResourceImportReconciler_handleDeleteEvent(t *testing.T) {
 }
 
 func TestResourceImportReconciler_handleUpdateEvent(t *testing.T) {
-	remoteMgr := NewRemoteCommonAreaManager("test-clusterset", common.ClusterID(localClusterID))
-	go remoteMgr.Start()
+	remoteMgr := NewRemoteCommonAreaManager("test-clusterset", common.ClusterID(localClusterID), "kube-system")
+	remoteMgr.Start()
+	defer remoteMgr.Stop()
 
 	nginxPorts := []corev1.ServicePort{
 		{
@@ -392,7 +395,7 @@ func TestResourceImportReconciler_handleUpdateEvent(t *testing.T) {
 		existEp, existMCSvcConflicts, existMCEpConflicts, svcWithoutAutoAnnotation, epWithoutAutoAnnotation).Build()
 	fakeRemoteClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(updatedEpResImport, updatedSvcResImport,
 		svcResImportWithConflicts, epResImportWithConflicts).Build()
-	remoteCluster := NewFakeRemoteCommonArea(scheme, &remoteMgr, fakeRemoteClient, "leader-cluster", "default")
+	remoteCluster := NewFakeRemoteCommonArea(scheme, remoteMgr, fakeRemoteClient, "leader-cluster", "default")
 
 	tests := []struct {
 		name             string
@@ -445,7 +448,7 @@ func TestResourceImportReconciler_handleUpdateEvent(t *testing.T) {
 		},
 	}
 
-	r := NewResourceImportReconciler(fakeClient, scheme, fakeClient, localClusterID, remoteCluster)
+	r := NewResourceImportReconciler(fakeClient, scheme, fakeClient, localClusterID, "default", remoteCluster)
 	r.installedResImports.Add(*svcResImport)
 	r.installedResImports.Add(*epResImport)
 
