@@ -49,6 +49,7 @@ import (
 	"antrea.io/antrea/pkg/controller/egress"
 	egressstore "antrea.io/antrea/pkg/controller/egress/store"
 	"antrea.io/antrea/pkg/controller/externalippool"
+	"antrea.io/antrea/pkg/controller/externalnode"
 	"antrea.io/antrea/pkg/controller/grouping"
 	antreaipam "antrea.io/antrea/pkg/controller/ipam"
 	"antrea.io/antrea/pkg/controller/metrics"
@@ -131,6 +132,7 @@ func run(o *Options) error {
 	cgInformer := crdInformerFactory.Crd().V1alpha3().ClusterGroups()
 	egressInformer := crdInformerFactory.Crd().V1alpha2().Egresses()
 	externalIPPoolInformer := crdInformerFactory.Crd().V1alpha2().ExternalIPPools()
+	externalNodeInformer := crdInformerFactory.Crd().V1alpha1().ExternalNodes()
 
 	clusterIdentityAllocator := clusteridentity.NewClusterIdentityAllocator(
 		env.GetAntreaNamespace(),
@@ -162,6 +164,11 @@ func run(o *Options) error {
 		appliedToGroupStore,
 		networkPolicyStore,
 		groupStore)
+
+	var externalNodeController *externalnode.ExternalNodeController
+	if features.DefaultFeatureGate.Enabled(features.ExternalNode) {
+		externalNodeController = externalnode.NewExternalNodeController(crdClient, externalNodeInformer, eeInformer)
+	}
 
 	var networkPolicyStatusController *networkpolicy.StatusController
 	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
@@ -336,6 +343,10 @@ func run(o *Options) error {
 
 	if features.DefaultFeatureGate.Enabled(features.ServiceExternalIP) {
 		go externalIPController.Run(stopCh)
+	}
+
+	if features.DefaultFeatureGate.Enabled(features.ExternalNode) {
+		go externalNodeController.Run(stopCh)
 	}
 
 	if antreaIPAMController != nil {
