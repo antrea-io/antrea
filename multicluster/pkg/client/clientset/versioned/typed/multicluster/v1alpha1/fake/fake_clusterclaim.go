@@ -104,7 +104,7 @@ func (c *FakeClusterClaims) Update(ctx context.Context, clusterClaim *v1alpha1.C
 // Delete takes name of the clusterClaim and deletes it. Returns an error if one occurs.
 func (c *FakeClusterClaims) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewDeleteAction(clusterclaimsResource, c.ns, name), &v1alpha1.ClusterClaim{})
+		Invokes(testing.NewDeleteActionWithOptions(clusterclaimsResource, c.ns, name, opts), &v1alpha1.ClusterClaim{})
 
 	return err
 }

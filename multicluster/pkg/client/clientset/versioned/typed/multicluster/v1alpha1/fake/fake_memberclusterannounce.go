@@ -104,7 +104,7 @@ func (c *FakeMemberClusterAnnounces) Update(ctx context.Context, memberClusterAn
 // Delete takes name of the memberClusterAnnounce and deletes it. Returns an error if one occurs.
 func (c *FakeMemberClusterAnnounces) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewDeleteAction(memberclusterannouncesResource, c.ns, name), &v1alpha1.MemberClusterAnnounce{})
+		Invokes(testing.NewDeleteActionWithOptions(memberclusterannouncesResource, c.ns, name, opts), &v1alpha1.MemberClusterAnnounce{})
 
 	return err
 }
