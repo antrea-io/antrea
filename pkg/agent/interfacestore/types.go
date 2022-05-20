@@ -35,6 +35,8 @@ const (
 	HostInterface
 	// TrafficControlInterface is used to mark current interface is for traffic control port
 	TrafficControlInterface
+	// ExternalEntityInterface is used to mark current interface is for ExternalEntity Endpoint
+	ExternalEntityInterface
 
 	AntreaInterfaceTypeKey = "antrea-type"
 	AntreaGateway          = "gateway"
@@ -82,6 +84,15 @@ type TunnelInterfaceConfig struct {
 	Csum bool
 }
 
+type EntityInterfaceConfig struct {
+	EntityName      string
+	EntityNamespace string
+	// UplinkPort is the OVS port configuration for the uplink, which is a pair port of this interface on OVS.
+	UplinkPort *OVSPortConfig
+	// HostIfaceIndex is the index of the host interface created by this OVS internal port.
+	HostIfaceIndex int
+}
+
 type InterfaceConfig struct {
 	Type InterfaceType
 	// Unique name of the interface, also used for the OVS port name.
@@ -93,6 +104,7 @@ type InterfaceConfig struct {
 	*OVSPortConfig
 	*ContainerInterfaceConfig
 	*TunnelInterfaceConfig
+	*EntityInterfaceConfig
 }
 
 // InterfaceStore is a service interface to create local interfaces for container, host gateway, and tunnel port.
