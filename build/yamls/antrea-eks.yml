@@ -2749,6 +2749,9 @@ data:
     # Enable certificated-based authentication for IPsec.
     #  IPsecCertAuth: false
 
+    # Enable running agent on an unmanaged VM/BM.
+    #  ExternalNode: false
+
     # Name of the OpenVSwitch bridge antrea-agent will create and use.
     # Make sure it doesn't conflict with your existing OpenVSwitch bridges.
     ovsBridge: "br-int"
@@ -3041,6 +3044,9 @@ data:
 
     # Enable certificated-based authentication for IPsec.
     #  IPsecCertAuth: false
+
+    # Enable managing ExternalNode for unmanaged VM/BM.
+    #  ExternalNode: false
 
     # The port for the antrea-controller APIServer to serve on.
     # Note that if it's set to another value, the `containerPort` of the `api` port of the
@@ -3790,6 +3796,14 @@ rules:
     verbs:
       - update
       - patch
+  - apiGroups:
+      - crd.antrea.io
+    resources:
+      - externalnodes
+    verbs:
+      - get
+      - watch
+      - list
   - apiGroups:
       - apps
     resources:
