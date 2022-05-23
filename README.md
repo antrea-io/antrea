@@ -98,12 +98,14 @@ Also check out [@ProjectAntrea](https://twitter.com/ProjectAntrea) on Twitter!
   analysis, flow inspection). It exposes Prometheus metrics and supports
   exporting network flow information which can be visualized in Kibana
   dashboards.
-* **Encryption**: Encryption of inter-Node Pod traffic with IPsec tunnels when
-  using an overlay Pod network.
+* **Encryption**: Encryption of inter-Node Pod traffic with IPsec or WireGuard
+  tunnels.
 * **Easy deployment**: Antrea is deployed by applying a single YAML manifest
   file.
 
-Refer to the [Changelogs](CHANGELOG/README.md) for a detailed list of features
+To explore more Antrea features and their usage, check the [Getting started](docs/getting-started.md#features)
+document and user guides in the [Antrea documentation folder](docs/). Refer to
+the [Changelogs](CHANGELOG/README.md) for a detailed list of features
 introduced for each version release.
 
 ## Adopters
