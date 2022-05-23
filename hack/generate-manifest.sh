@@ -307,7 +307,7 @@ if $FLEXIBLE_IPAM; then
 fi
 
 if $MULTICAST; then
-    HELM_VALUES+=("trafficEncapMode=noEncap" "featureGates.Multicast=true" "multicastInterfaces={$MULTICAST_INTERFACES}")
+    HELM_VALUES+=("trafficEncapMode=noEncap" "featureGates.Multicast=true" "multicast.multicastInterfaces={$MULTICAST_INTERFACES}")
 fi
 
 if $ALLFEATURES; then

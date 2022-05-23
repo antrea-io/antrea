@@ -217,7 +217,7 @@ func TestClearStaleGroups(t *testing.T) {
 		wg.Done()
 	}()
 	now := time.Now()
-	validUpdateTime := now.Add(-queryInterval)
+	validUpdateTime := now.Add(-mctrl.queryInterval)
 	validGroups := []*GroupMemberStatus{
 		{
 			group:          net.ParseIP("224.96.1.2"),
@@ -230,7 +230,7 @@ func TestClearStaleGroups(t *testing.T) {
 			lastIGMPReport: validUpdateTime,
 		},
 	}
-	staleUpdateTime := now.Add(-mcastGroupTimeout - time.Second)
+	staleUpdateTime := now.Add(-mctrl.mcastGroupTimeout - time.Second)
 	staleGroups := []*GroupMemberStatus{
 		{
 			group:          net.ParseIP("224.96.1.4"),
@@ -364,7 +364,8 @@ func newMockMulticastController(t *testing.T) *Controller {
 	mockOFClient.EXPECT().RegisterPacketInHandler(gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
 	groupAllocator := openflow.NewGroupAllocator(false)
 	podUpdateSubscriber := channel.NewSubscribableChannel("PodUpdate", 100)
-	mctrl := NewMulticastController(mockOFClient, groupAllocator, nodeConfig, mockIfaceStore, mockMulticastSocket, sets.NewString(), ovsClient, podUpdateSubscriber)
+	queryInterval := 5 * time.Second
+	mctrl := NewMulticastController(mockOFClient, groupAllocator, nodeConfig, mockIfaceStore, mockMulticastSocket, sets.NewString(), ovsClient, podUpdateSubscriber, queryInterval)
 	return mctrl
 }
 

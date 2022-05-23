@@ -153,20 +153,20 @@ func (c *Controller) checkLastMember(group net.IP) {
 	c.queue.AddAfter(group.String(), igmpMaxResponseTime)
 }
 
-// clearStaleGroups checks the stale group members which have not been updated for mcastGroupTimeout, and then notifies worker
+// clearStaleGroups checks the stale group members which have not been updated for c.mcastGroupTimeout, and then notifies worker
 // to remove them from groupCache.
 func (c *Controller) clearStaleGroups() {
 	now := time.Now()
 	for _, obj := range c.groupCache.List() {
 		status := obj.(*GroupMemberStatus)
 		diff := now.Sub(status.lastIGMPReport)
-		if diff > mcastGroupTimeout {
+		if diff > c.mcastGroupTimeout {
 			// Notify worker to remove the group from groupCache if all its members are not updated before mcastGroupTimeout.
 			c.queue.Add(status.group.String())
 		} else {
 			// Create a "leave" event for a local member if it is not updated before mcastGroupTimeout.
 			for member, lastUpdate := range status.localMembers {
-				if now.Sub(lastUpdate) > mcastGroupTimeout {
+				if now.Sub(lastUpdate) > c.mcastGroupTimeout {
 					ifConfig := &interfacestore.InterfaceConfig{
 						InterfaceName: member,
 					}
@@ -222,6 +222,11 @@ type Controller struct {
 	installedGroupsMutex sync.RWMutex
 	mRouteClient         *MRouteClient
 	ovsBridgeClient      ovsconfig.OVSBridgeClient
+
+	// queryInterval is the interval to send IGMP query messages.
+	queryInterval time.Duration
+	// mcastGroupTimeout is the timeout to detect a group as stale if no IGMP report is received within the time.
+	mcastGroupTimeout time.Duration
 }
 
 func NewMulticastController(ofClient openflow.Client,
@@ -231,25 +236,28 @@ func NewMulticastController(ofClient openflow.Client,
 	multicastSocket RouteInterface,
 	multicastInterfaces sets.String,
 	ovsBridgeClient ovsconfig.OVSBridgeClient,
-	podUpdateSubscriber channel.Subscriber) *Controller {
+	podUpdateSubscriber channel.Subscriber,
+	igmpQueryInterval time.Duration) *Controller {
 	eventCh := make(chan *mcastGroupEvent, workerCount)
-	groupSnooper := newSnooper(ofClient, ifaceStore, eventCh)
+	groupSnooper := newSnooper(ofClient, ifaceStore, eventCh, igmpQueryInterval)
 	groupCache := cache.NewIndexer(getGroupEventKey, cache.Indexers{
 		podInterfaceIndex: podInterfaceIndexFunc,
 	})
 	multicastRouteClient := newRouteClient(nodeConfig, groupCache, multicastSocket, multicastInterfaces)
 	c := &Controller{
-		ofClient:         ofClient,
-		ifaceStore:       ifaceStore,
-		v4GroupAllocator: v4GroupAllocator,
-		nodeConfig:       nodeConfig,
-		igmpSnooper:      groupSnooper,
-		groupEventCh:     eventCh,
-		groupCache:       groupCache,
-		installedGroups:  sets.NewString(),
-		queue:            workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "multicastgroup"),
-		mRouteClient:     multicastRouteClient,
-		ovsBridgeClient:  ovsBridgeClient,
+		ofClient:          ofClient,
+		ifaceStore:        ifaceStore,
+		v4GroupAllocator:  v4GroupAllocator,
+		nodeConfig:        nodeConfig,
+		igmpSnooper:       groupSnooper,
+		groupEventCh:      eventCh,
+		groupCache:        groupCache,
+		installedGroups:   sets.NewString(),
+		queue:             workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "multicastgroup"),
+		mRouteClient:      multicastRouteClient,
+		ovsBridgeClient:   ovsBridgeClient,
+		queryInterval:     igmpQueryInterval,
+		mcastGroupTimeout: igmpQueryInterval * 3,
 	}
 	podUpdateSubscriber.Subscribe(c.removeLocalInterface)
 	return c
@@ -279,10 +287,10 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 		if err := c.igmpSnooper.queryIGMP(net.IPv4zero, queryVersions); err != nil {
 			klog.ErrorS(err, "Failed to send IGMP query")
 		}
-	}, queryInterval, stopCh)
+	}, c.queryInterval, stopCh)
 
 	// Periodically check the group member status, and remove the groups in which no members exist
-	go wait.NonSlidingUntil(c.clearStaleGroups, queryInterval, stopCh)
+	go wait.NonSlidingUntil(c.clearStaleGroups, c.queryInterval, stopCh)
 	go c.eventHandler(stopCh)
 
 	for i := 0; i < int(workerCount); i++ {
@@ -421,11 +429,11 @@ func (c *Controller) syncGroup(groupKey string) error {
 	return nil
 }
 
-// groupIsStale returns true if no local members in the group, or there is no IGMP report received after mcastGroupTimeout.
+// groupIsStale returns true if no local members in the group, or there is no IGMP report received after c.mcastGroupTimeout.
 func (c *Controller) groupIsStale(status *GroupMemberStatus) bool {
 	membersCount := len(status.localMembers)
 	diff := time.Now().Sub(status.lastIGMPReport)
-	if membersCount == 0 || diff > mcastGroupTimeout {
+	if membersCount == 0 || diff > c.mcastGroupTimeout {
 		return true
 	}
 	return false

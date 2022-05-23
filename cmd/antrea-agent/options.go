@@ -47,6 +47,7 @@ const (
 	defaultFlowPollInterval        = 5 * time.Second
 	defaultActiveFlowExportTimeout = 30 * time.Second
 	defaultIdleFlowExportTimeout   = 15 * time.Second
+	defaultIGMPQueryInterval       = 125 * time.Second
 	defaultStaleConnectionTimeout  = 5 * time.Minute
 	defaultNPLPortRange            = "61000-62000"
 )
@@ -68,6 +69,7 @@ type Options struct {
 	idleFlowTimeout time.Duration
 	// Stale connection timeout to delete connections if they are not exported.
 	staleConnectionTimeout time.Duration
+	igmpQueryInterval      time.Duration
 	nplStartPort           int
 	nplEndPort             int
 }
@@ -160,6 +162,9 @@ func (o *Options) validate(args []string) error {
 	}
 	if err := o.validateFlowExporterConfig(); err != nil {
 		return fmt.Errorf("failed to validate flow exporter config: %v", err)
+	}
+	if err := o.validateMulticastConfig(); err != nil {
+		return fmt.Errorf("failed to validate multicast config: %v", err)
 	}
 	if features.DefaultFeatureGate.Enabled(features.Egress) {
 		for _, cidr := range o.config.Egress.ExceptCIDRs {
@@ -271,6 +276,12 @@ func (o *Options) setDefaults() {
 			o.config.NodePortLocal.PortRange = defaultNPLPortRange
 		}
 	}
+
+	if features.DefaultFeatureGate.Enabled(features.Multicast) {
+		if o.config.Multicast.IGMPQueryInterval == "" {
+			o.igmpQueryInterval = defaultIGMPQueryInterval
+		}
+	}
 }
 
 func (o *Options) validateAntreaProxyConfig() error {
@@ -346,6 +357,19 @@ func (o *Options) validateFlowExporterConfig() error {
 			}
 		} else {
 			o.staleConnectionTimeout = defaultStaleConnectionTimeout
+		}
+	}
+	return nil
+}
+
+func (o *Options) validateMulticastConfig() error {
+	if features.DefaultFeatureGate.Enabled(features.Multicast) {
+		var err error
+		if o.config.Multicast.IGMPQueryInterval != "" {
+			o.igmpQueryInterval, err = time.ParseDuration(o.config.Multicast.IGMPQueryInterval)
+			if err != nil {
+				return err
+			}
 		}
 	}
 	return nil

@@ -266,9 +266,14 @@ data:
     # 3. The Node IP
     transportInterface: ""
 
+    multicast:
     # The names of the interfaces on Nodes that are used to forward multicast traffic.
     # Defaults to transport interface if not set.
-    multicastInterfaces:
+      multicastInterfaces:
+
+    # The interval at which the antrea-agent sends IGMP queries to Pods.
+    # Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
+      igmpQueryInterval: "125s"
 
     # The network CIDRs of the interface on Node which is used for tunneling or routing the traffic across
     # Nodes. If there are multiple interfaces configured the same network CIDR, the first one is used. The
@@ -3486,7 +3491,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: edef4c00e4f28a10dc1e077086ef68641a9a3b53d0fe7d47ff3dafc2ce5d5c9b
+        checksum/config: 6b6be76fd37d8fdac7783fcd026b6f34e993630c12c339b1dafa99ba5b36cf00
       labels:
         app: antrea
         component: antrea-agent
@@ -3726,7 +3731,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: edef4c00e4f28a10dc1e077086ef68641a9a3b53d0fe7d47ff3dafc2ce5d5c9b
+        checksum/config: 6b6be76fd37d8fdac7783fcd026b6f34e993630c12c339b1dafa99ba5b36cf00
       labels:
         app: antrea
         component: antrea-controller
