@@ -116,7 +116,7 @@ func (c *FakeResourceExportFilters) UpdateStatus(ctx context.Context, resourceEx
 // Delete takes name of the resourceExportFilter and deletes it. Returns an error if one occurs.
 func (c *FakeResourceExportFilters) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewDeleteAction(resourceexportfiltersResource, c.ns, name), &v1alpha1.ResourceExportFilter{})
+		Invokes(testing.NewDeleteActionWithOptions(resourceexportfiltersResource, c.ns, name, opts), &v1alpha1.ResourceExportFilter{})
 
 	return err
 }
