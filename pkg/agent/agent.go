@@ -37,6 +37,7 @@ import (
 	"antrea.io/antrea/pkg/agent/cniserver"
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/controller/noderoute"
+	"antrea.io/antrea/pkg/agent/controller/trafficcontrol"
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/openflow"
 	"antrea.io/antrea/pkg/agent/openflow/cookie"
@@ -280,6 +281,8 @@ func (i *Initializer) initInterfaceStore() error {
 			case interfacestore.AntreaContainer:
 				// The port should be for a container interface.
 				intf = cniserver.ParseOVSPortInterfaceConfig(port, ovsPort, true)
+			case interfacestore.AntreaTrafficControl:
+				intf = trafficcontrol.ParseTrafficControlInterfaceConfig(port, ovsPort)
 			default:
 				klog.InfoS("Unknown Antrea interface type", "type", interfaceType)
 			}
@@ -750,7 +753,7 @@ func (i *Initializer) setupDefaultTunnelInterface() error {
 		externalIDs := map[string]interface{}{
 			interfacestore.AntreaInterfaceTypeKey: interfacestore.AntreaTunnel,
 		}
-		tunnelPortUUID, err := i.ovsBridgeClient.CreateTunnelPortExt(tunnelPortName, i.networkConfig.TunnelType, config.DefaultTunOFPort, shouldEnableCsum, localIPStr, "", "", "", externalIDs)
+		tunnelPortUUID, err := i.ovsBridgeClient.CreateTunnelPortExt(tunnelPortName, i.networkConfig.TunnelType, config.DefaultTunOFPort, shouldEnableCsum, localIPStr, "", "", "", nil, externalIDs)
 		if err != nil {
 			klog.Errorf("Failed to create tunnel port %s type %s on OVS bridge: %v", tunnelPortName, i.networkConfig.TunnelType, err)
 			return err

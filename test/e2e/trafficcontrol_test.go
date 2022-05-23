@@ -1,0 +1,334 @@
+// Copyright 2022 Antrea Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package e2e
+
+import (
+	"context"
+	"fmt"
+	"net"
+	"regexp"
+	"strconv"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/require"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
+
+	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
+	agentconfig "antrea.io/antrea/pkg/config/agent"
+)
+
+type trafficControlTestConfig struct {
+	nodeName         string
+	podName          string
+	podIPs           map[corev1.IPFamily]string
+	collectorPodName string
+	collectorPodIPs  map[corev1.IPFamily]string
+}
+
+var (
+	vni          = int32(1)
+	dstVXLANPort = int32(1111)
+	labels       = map[string]string{"tc-e2e": "agnhost"}
+
+	tcTestConfig = trafficControlTestConfig{
+		podName:          "test-tc-pod",
+		podIPs:           map[corev1.IPFamily]string{},
+		collectorPodName: "test-packets-collector-pod",
+		collectorPodIPs:  map[corev1.IPFamily]string{},
+	}
+)
+
+func TestTrafficControl(t *testing.T) {
+	skipIfHasWindowsNodes(t)
+
+	data, err := setupTest(t)
+	if err != nil {
+		t.Fatalf("Error when setting up test: %v", err)
+	}
+	defer teardownTest(t, data)
+
+	ac := func(config *agentconfig.AgentConfig) {
+		config.FeatureGates["TrafficControl"] = true
+	}
+
+	if err = data.mutateAntreaConfigMap(nil, ac, true, true); err != nil {
+		t.Fatalf("Failed to enable TrafficControl feature: %v", err)
+	}
+
+	tcTestConfig.nodeName = controlPlaneNodeName()
+
+	createTrafficControlTestPod(t, data, tcTestConfig.podName)
+	createTrafficControlPacketsCollectorPod(t, data, tcTestConfig.collectorPodName)
+
+	t.Run("TestMirrorToRemoteBasedIPv4Tunnel", func(t *testing.T) { testMirrorToRemote(t, data, corev1.IPv4Protocol) })
+	t.Run("TestMirrorToLocal", func(t *testing.T) { testMirrorToLocal(t, data) })
+	t.Run("TestRedirectToLocal", func(t *testing.T) { testRedirectToLocal(t, data) })
+}
+
+func createTrafficControlTestPod(t *testing.T, data *TestData, podName string) {
+	args := []string{"netexec", "--http-port=8080"}
+	ports := []corev1.ContainerPort{
+		{
+			Name:          "http",
+			ContainerPort: 8080,
+			Protocol:      corev1.ProtocolTCP,
+		},
+	}
+	mutateLabels := func(pod *corev1.Pod) {
+		for k, v := range labels {
+			pod.Labels[k] = v
+		}
+	}
+
+	require.NoError(t, data.createPodOnNode(podName, data.testNamespace, tcTestConfig.nodeName, agnhostImage, []string{}, args, nil, ports, false, mutateLabels))
+	ips, err := data.podWaitForIPs(defaultTimeout, podName, data.testNamespace)
+	if err != nil {
+		t.Fatalf("Error when waiting for IP for Pod '%s': %v", podName, err)
+	}
+	require.NoError(t, data.podWaitForRunning(defaultTimeout, podName, data.testNamespace))
+
+	if ips.ipv4 != nil {
+		tcTestConfig.podIPs[corev1.IPv4Protocol] = ips.ipv4.String()
+	}
+	if ips.ipv6 != nil {
+		tcTestConfig.podIPs[corev1.IPv6Protocol] = ips.ipv6.String()
+	}
+}
+
+func createTrafficControlPacketsCollectorPod(t *testing.T, data *TestData, podName string) {
+	require.NoError(t, data.createPodOnNode(podName, data.testNamespace, tcTestConfig.nodeName, agnhostImage, []string{"sleep"}, []string{"3600"}, nil, nil, false, func(pod *corev1.Pod) {
+		privileged := true
+		pod.Spec.Containers[0].SecurityContext = &corev1.SecurityContext{Privileged: &privileged}
+	}))
+	ips, err := data.podWaitForIPs(defaultTimeout, podName, data.testNamespace)
+	if err != nil {
+		t.Fatalf("Error when waiting for IP for Pod '%s': %v", podName, err)
+	}
+	require.NoError(t, data.podWaitForRunning(defaultTimeout, podName, data.testNamespace))
+
+	if ips.ipv4 != nil {
+		tcTestConfig.collectorPodIPs[corev1.IPv4Protocol] = ips.ipv4.String()
+	}
+	if ips.ipv6 != nil {
+		tcTestConfig.collectorPodIPs[corev1.IPv6Protocol] = ips.ipv6.String()
+	}
+}
+
+func (data *TestData) createTrafficControl(t *testing.T,
+	generateName string,
+	matchExpressions []metav1.LabelSelectorRequirement,
+	matchLabels map[string]string,
+	direction v1alpha2.Direction,
+	action v1alpha2.TrafficControlAction,
+	targetPort interface{},
+	isTargetPortVXLAN bool,
+	returnPort interface{}) *v1alpha2.TrafficControl {
+	tc := &v1alpha2.TrafficControl{
+		ObjectMeta: metav1.ObjectMeta{GenerateName: generateName},
+		Spec: v1alpha2.TrafficControlSpec{
+			AppliedTo: v1alpha2.AppliedTo{
+				PodSelector: &metav1.LabelSelector{
+					MatchExpressions: matchExpressions,
+					MatchLabels:      matchLabels,
+				},
+			},
+			Direction:  direction,
+			Action:     action,
+			ReturnPort: &v1alpha2.TrafficControlPort{},
+		},
+	}
+	switch targetPort.(type) {
+	case *v1alpha2.OVSInternalPort:
+		tc.Spec.TargetPort.OVSInternal = targetPort.(*v1alpha2.OVSInternalPort)
+	case *v1alpha2.NetworkDevice:
+		tc.Spec.TargetPort.Device = targetPort.(*v1alpha2.NetworkDevice)
+	case *v1alpha2.UDPTunnel:
+		if isTargetPortVXLAN {
+			tc.Spec.TargetPort.VXLAN = targetPort.(*v1alpha2.UDPTunnel)
+		} else {
+			tc.Spec.TargetPort.GENEVE = targetPort.(*v1alpha2.UDPTunnel)
+		}
+	case *v1alpha2.GRETunnel:
+		tc.Spec.TargetPort.GRE = targetPort.(*v1alpha2.GRETunnel)
+	case *v1alpha2.ERSPANTunnel:
+		tc.Spec.TargetPort.ERSPAN = targetPort.(*v1alpha2.ERSPANTunnel)
+	}
+
+	switch returnPort.(type) {
+	case *v1alpha2.OVSInternalPort:
+		tc.Spec.ReturnPort.OVSInternal = returnPort.(*v1alpha2.OVSInternalPort)
+	case *v1alpha2.NetworkDevice:
+		tc.Spec.ReturnPort.Device = returnPort.(*v1alpha2.NetworkDevice)
+	default:
+		tc.Spec.ReturnPort = nil
+	}
+
+	tc, err := data.crdClient.CrdV1alpha2().TrafficControls().Create(context.TODO(), tc, metav1.CreateOptions{})
+	require.NoError(t, err, "Failed to create TrafficControl")
+	return tc
+}
+
+func countPackets(t *testing.T, data *TestData, portName string, isPortOnNode bool, podName string, direction string) int {
+	var stdout string
+	var err error
+	cmd := fmt.Sprintf("ip -s link show %s", portName)
+	if !isPortOnNode {
+		stdout, _, err = data.RunCommandFromPod(data.testNamespace, podName, agnhostContainerName, []string{"sh", "-c", cmd})
+	} else {
+		_, stdout, _, err = data.RunCommandOnNode(tcTestConfig.nodeName, cmd)
+	}
+	require.NoError(t, err)
+
+	re := regexp.MustCompile(fmt.Sprintf(`(?s)%s.*?\d+.*?(\d+)`, direction))
+	matches := re.FindStringSubmatch(stdout)
+	require.Equal(t, 2, len(matches))
+	packets, _ := strconv.Atoi(matches[1])
+
+	return packets
+}
+
+func abs(a, b int) int {
+	if a > b {
+		return a - b
+	}
+	return b - a
+}
+
+func verifyMirroredPackets(t *testing.T, data *TestData, portName string, isPortOnNode bool) {
+	// Get the number of received packets on the interface for receiving mirrored packets before testing mirroring.
+	mirroredPacketsBefore := countPackets(t, data, portName, isPortOnNode, tcTestConfig.collectorPodName, "RX")
+
+	icmpRequests := 50
+	for _, ip := range tcTestConfig.podIPs {
+		cmd := fmt.Sprintf("ping %s -i 0.01 -c %d", ip, icmpRequests)
+		t.Logf("Generate packets for mirroring with command '%s'", cmd)
+		data.RunCommandFromPod(data.testNamespace, tcTestConfig.collectorPodName, agnhostContainerName, []string{"sh", "-c", cmd})
+	}
+
+	mirroredPackets := icmpRequests * 2 * len(tcTestConfig.podIPs)
+	t.Logf("The total number of mirrored packets is %d", mirroredPackets)
+
+	// Get the number of received packets on the interface for receiving mirrored packet.
+	receivedPackets := countPackets(t, data, portName, isPortOnNode, tcTestConfig.collectorPodName, "RX") - mirroredPacketsBefore
+	t.Logf("The actual number of received packets is %d", receivedPackets)
+
+	// The difference in the number of packets mirrored and received should be within 5.
+	require.GreaterOrEqual(t, 5, abs(receivedPackets, mirroredPackets))
+}
+
+func testMirrorToRemote(t *testing.T, data *TestData, ipFamily corev1.IPFamily) {
+	// Create a VXLAN tunnel on the collector Pod to receive mirrored packets.
+	tunnelPeer := "vxlan0"
+	cmd := fmt.Sprintf(`ip link add %[3]s type vxlan id %[1]d dstport %[2]d dev eth0 && \
+ip link set %[3]s up`, vni, dstVXLANPort, tunnelPeer)
+	_, _, err := data.RunCommandFromPod(data.testNamespace, tcTestConfig.collectorPodName, agnhostContainerName, []string{"sh", "-c", cmd})
+	require.NoError(t, err, "Failed to create VXLAN tunnel")
+
+	// Create a TrafficControl whose target port is VXLAN.
+	targetPort := &v1alpha2.UDPTunnel{RemoteIP: tcTestConfig.collectorPodIPs[ipFamily], VNI: &vni, DestinationPort: &dstVXLANPort}
+
+	tc := data.createTrafficControl(t, "tc-", nil, labels, v1alpha2.DirectionBoth, v1alpha2.ActionMirror, targetPort, true, nil)
+	defer data.crdClient.CrdV1alpha2().TrafficControls().Delete(context.TODO(), tc.Name, metav1.DeleteOptions{})
+	// Wait flows of the TrafficControl to be realized.
+	time.Sleep(time.Second)
+
+	// Verify the number of mirrored packets.
+	verifyMirroredPackets(t, data, tunnelPeer, false)
+}
+
+func testMirrorToLocal(t *testing.T, data *TestData) {
+	// Create a TrafficControl whose target port is OVS internal port.
+	portName := "test-port"
+	targetPort := &v1alpha2.OVSInternalPort{Name: portName}
+	tc := data.createTrafficControl(t, "tc-", nil, labels, v1alpha2.DirectionBoth, v1alpha2.ActionMirror, targetPort, false, nil)
+	defer data.crdClient.CrdV1alpha2().TrafficControls().Delete(context.TODO(), tc.Name, metav1.DeleteOptions{})
+	// Wait flows of the TrafficControl to be realized.
+	time.Sleep(time.Second)
+
+	// Verify the number of mirrored packets.
+	verifyMirroredPackets(t, data, portName, true)
+}
+
+func verifyRedirectedPackets(t *testing.T, data *TestData, targetPort, returnPort string) {
+	// Get the number of received and sent packets on test Pod before testing redirect.
+	packetsBefore := countPackets(t, data, "eth0", false, tcTestConfig.podName, "RX") +
+		countPackets(t, data, "eth0", false, tcTestConfig.podName, "TX")
+	// Get the number of received packets on target port before testing redirect.
+	packetsOnTargetPortBefore := countPackets(t, data, targetPort, true, "", "RX")
+	// Get the number of sent packets on return port before testing redirect.
+	packetsOnReturnPortBefore := countPackets(t, data, returnPort, true, "", "TX")
+
+	addTCRuleCmd := fmt.Sprintf(`tc qdisc add dev %[1]s handle ffff: ingress && \
+tc filter add dev %[1]s ingress u32 match u32 0 0 action mirred egress redirect dev %[2]s`, targetPort, returnPort)
+	verifyTCRuleCmd := fmt.Sprintf("tc filter show dev %s ingress", targetPort)
+	if pollErr := wait.PollImmediate(time.Second, 20*time.Second, func() (bool, error) {
+		_, _, _, err := data.RunCommandOnNode(tcTestConfig.nodeName, addTCRuleCmd)
+		require.NoError(t, err, "Failed to add Linux traffic control rule")
+		time.Sleep(time.Second)
+		_, stdout, _, err := data.RunCommandOnNode(tcTestConfig.nodeName, verifyTCRuleCmd)
+		if err == nil && stdout != "" {
+			return true, nil
+		}
+		return false, err
+	}); pollErr != nil {
+		t.Fatalf("Failed to add Linux traffic control rule on %s", targetPort)
+	}
+
+	for _, ip := range tcTestConfig.podIPs {
+		cmd := fmt.Sprintf("curl --connect-timeout 1 --retry 5 --retry-connrefused http://%s/hostname", net.JoinHostPort(ip, "8080"))
+		t.Logf("Generate packets for redirecting with command '%s'", cmd)
+		for i := 0; i < 5; i++ {
+			hostname, _, err := data.RunCommandFromPod(data.testNamespace, tcTestConfig.collectorPodName, agnhostContainerName, []string{"sh", "-c", cmd})
+			require.NoError(t, err)
+			require.Equal(t, tcTestConfig.podName, hostname)
+		}
+	}
+
+	// Get the number of redirected packets on test Pod.
+	packetsOnPod := countPackets(t, data, "eth0", false, tcTestConfig.podName, "RX") +
+		countPackets(t, data, "eth0", false, tcTestConfig.podName, "TX") - packetsBefore
+	t.Logf("The total number of redirected packets on test Pod is %d", packetsOnPod)
+
+	// Get the number of received packets on target port after testing redirect.
+	packetsOnTargetPort := countPackets(t, data, targetPort, true, "", "RX") - packetsOnTargetPortBefore
+	t.Logf("The actual number of received packets on target port is %d", packetsOnTargetPort)
+
+	// Get the number of sent packets on return port after testing redirect.
+	packetsOnReturnPort := countPackets(t, data, returnPort, true, "", "TX") - packetsOnReturnPortBefore
+	t.Logf("The actual number of sent packets on return port is %d", packetsOnReturnPort)
+
+	// The difference in the number of packets redirected and received should be within 5.
+	require.GreaterOrEqual(t, 5, abs(packetsOnTargetPort, packetsOnPod))
+	require.GreaterOrEqual(t, 5, abs(packetsOnReturnPort, packetsOnPod))
+	require.GreaterOrEqual(t, 5, abs(packetsOnTargetPort, packetsOnReturnPort))
+}
+
+func testRedirectToLocal(t *testing.T, data *TestData) {
+	targetPortName := "target1"
+	returnPortName := "return1"
+
+	targetPort := &v1alpha2.OVSInternalPort{Name: targetPortName}
+	returnPort := &v1alpha2.OVSInternalPort{Name: returnPortName}
+	tc := data.createTrafficControl(t, "tc-", nil, labels, v1alpha2.DirectionBoth, v1alpha2.ActionRedirect, targetPort, false, returnPort)
+	defer data.crdClient.CrdV1alpha2().TrafficControls().Delete(context.TODO(), tc.Name, metav1.DeleteOptions{})
+	// Wait flows of TrafficControl to be realized.
+	time.Sleep(time.Second)
+
+	// Verify the number of redirected packets.
+	verifyRedirectedPackets(t, data, targetPortName, returnPortName)
+}
