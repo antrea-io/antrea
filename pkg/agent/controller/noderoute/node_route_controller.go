@@ -686,6 +686,7 @@ func (c *Controller) createIPSecTunnelPort(nodeName string, nodeIP net.IP) (int3
 			nodeIP.String(),
 			remoteName,
 			psk,
+			nil,
 			ovsExternalIDs)
 		if err != nil {
 			return 0, fmt.Errorf("failed to create IPsec tunnel port for Node %s", nodeName)
