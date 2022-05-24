@@ -15,15 +15,13 @@
 package e2e
 
 import (
+	"fmt"
 	"testing"
 
 	annotation "antrea.io/antrea/pkg/ipam"
 )
 
 func TestAntreaIPAMService(t *testing.T) {
-	// TODO(gran): remove this
-	skipIfIPv6Cluster(t)
-
 	skipIfNotAntreaIPAMTest(t)
 
 	data, err := setupTest(t)
@@ -32,17 +30,26 @@ func TestAntreaIPAMService(t *testing.T) {
 	}
 	defer teardownTest(t, data)
 
+	ipVersions := getIPVersions()
 	// Create AntreaIPAM IPPool and test Namespace
 	var ipPools []string
 	for _, namespace := range []string{testAntreaIPAMNamespace, testAntreaIPAMNamespace11, testAntreaIPAMNamespace12} {
-		ipPool, err := createIPPool(t, data, namespace)
-		if err != nil {
-			t.Fatalf("Creating IPPool failed, err=%+v", err)
+		antreaIPAMAnnotationValue := ""
+		for _, ipVersion := range ipVersions {
+			ipPool, err := createIPPool(t, data, namespace, ipVersion)
+			if err != nil {
+				t.Fatalf("Creating IPPool failed, err=%+v", err)
+			}
+			defer deleteIPPoolWrapper(t, data, ipPool.Name)
+			ipPools = append(ipPools, ipPool.Name)
+			if antreaIPAMAnnotationValue == "" {
+				antreaIPAMAnnotationValue = ipPool.Name
+			} else {
+				antreaIPAMAnnotationValue = fmt.Sprintf("%s,%s", antreaIPAMAnnotationValue, ipPool.Name)
+			}
 		}
-		defer deleteIPPoolWrapper(t, data, ipPool.Name)
-		ipPools = append(ipPools, ipPool.Name)
 		annotations := map[string]string{}
-		annotations[annotation.AntreaIPAMAnnotationKey] = ipPool.Name
+		annotations[annotation.AntreaIPAMAnnotationKey] = antreaIPAMAnnotationValue
 		err = data.createNamespaceWithAnnotations(namespace, annotations)
 		if err != nil {
 			t.Fatalf("Creating AntreaIPAM Namespace failed, err=%+v", err)
@@ -93,6 +100,52 @@ func TestAntreaIPAMService(t *testing.T) {
 	t.Run("testAntreaIPAMVLAN11PodToClusterIPv4", func(t *testing.T) {
 		skipIfNotIPv4Cluster(t)
 		data.testClusterIP(t, false, testAntreaIPAMNamespace11, data.testNamespace)
+		checkIPPoolsEmpty(t, data, ipPools)
+	})
+
+	t.Run("testAntreaIPAMPodToAntreaIPAMClusterIPv6", func(t *testing.T) {
+		skipIfNotIPv6Cluster(t)
+		data.testClusterIP(t, true, testAntreaIPAMNamespace, testAntreaIPAMNamespace)
+		checkIPPoolsEmpty(t, data, ipPools)
+	})
+	t.Run("testAntreaIPAMClusterIPv6", func(t *testing.T) {
+		skipIfNotIPv6Cluster(t)
+		data.testClusterIP(t, true, data.testNamespace, testAntreaIPAMNamespace)
+		checkIPPoolsEmpty(t, data, ipPools)
+	})
+	t.Run("testAntreaIPAMPodToClusterIPv6", func(t *testing.T) {
+		skipIfNotIPv6Cluster(t)
+		data.testClusterIP(t, true, testAntreaIPAMNamespace, data.testNamespace)
+		checkIPPoolsEmpty(t, data, ipPools)
+	})
+	t.Run("testAntreaIPAMVLAN11PodToAntreaIPAMVLAN11ClusterIPv6", func(t *testing.T) {
+		skipIfNotIPv6Cluster(t)
+		data.testClusterIP(t, true, testAntreaIPAMNamespace11, testAntreaIPAMNamespace11)
+		checkIPPoolsEmpty(t, data, ipPools)
+	})
+	t.Run("testAntreaIPAMVLAN11PodToAntreaIPAMVLAN12ClusterIPv6", func(t *testing.T) {
+		skipIfNotIPv6Cluster(t)
+		data.testClusterIP(t, true, testAntreaIPAMNamespace11, testAntreaIPAMNamespace12)
+		checkIPPoolsEmpty(t, data, ipPools)
+	})
+	t.Run("testAntreaIPAMPodToAntreaIPAMVLAN11ClusterIPv6", func(t *testing.T) {
+		skipIfNotIPv6Cluster(t)
+		data.testClusterIP(t, true, testAntreaIPAMNamespace, testAntreaIPAMNamespace11)
+		checkIPPoolsEmpty(t, data, ipPools)
+	})
+	t.Run("testAntreaIPAMVLAN11PodToAntreaIPAMClusterIPv6", func(t *testing.T) {
+		skipIfNotIPv6Cluster(t)
+		data.testClusterIP(t, true, testAntreaIPAMNamespace11, testAntreaIPAMNamespace)
+		checkIPPoolsEmpty(t, data, ipPools)
+	})
+	t.Run("testAntreaIPAMVLAN11ClusterIPv6", func(t *testing.T) {
+		skipIfNotIPv6Cluster(t)
+		data.testClusterIP(t, true, data.testNamespace, testAntreaIPAMNamespace11)
+		checkIPPoolsEmpty(t, data, ipPools)
+	})
+	t.Run("testAntreaIPAMVLAN11PodToClusterIPv6", func(t *testing.T) {
+		skipIfNotIPv6Cluster(t)
+		data.testClusterIP(t, true, testAntreaIPAMNamespace11, data.testNamespace)
 		checkIPPoolsEmpty(t, data, ipPools)
 	})
 

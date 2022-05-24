@@ -191,7 +191,11 @@ func (data *TestData) testDeletePod(t *testing.T, podName string, nodeName strin
 	}
 	if namespace == testAntreaIPAMNamespace {
 		doesIPAllocationExist = func(podIP string) bool {
-			_, ipAddressState, err := checkIPPoolAllocation(t, data, "test-ippool-ipv4-0", podIP)
+			ipPoolName := "test-ippool-ipv4-0"
+			if strings.Contains(podIP, ":") {
+				ipPoolName = "test-ippool-ipv6-0"
+			}
+			_, ipAddressState, err := checkIPPoolAllocation(t, data, ipPoolName, podIP)
 			if err != nil {
 				t.Fatalf("Cannot check IPPool allocation: %v", err)
 			}

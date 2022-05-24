@@ -163,6 +163,9 @@ func (data *TestData) testNodePort(t *testing.T, isWindows bool, clientNamespace
 	t.Logf("Created client Pod IPs %v", podIPs.ipStrings)
 
 	nodeIP := clusterInfo.nodes[0].ip()
+	if strings.Contains(nodeIP, ":") {
+		nodeIP = fmt.Sprintf("[%s]", nodeIP)
+	}
 	nodePort := int(svc.Spec.Ports[0].NodePort)
 	url := fmt.Sprintf("http://%s:%d", nodeIP, nodePort)
 
