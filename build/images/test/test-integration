@@ -16,5 +16,5 @@
 
 trap "chown -R $1:$2 /tmp/gopath /tmp/gocache" EXIT
 
-start_ovs_netdev --start-ovs-only
+/usr/share/openvswitch/scripts/ovs-ctl --system-id=random start --db-file=/var/run/openvswitch/conf.db
 make test-integration

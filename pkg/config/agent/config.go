@@ -33,12 +33,8 @@ type AgentConfig struct {
 	// Make sure it doesn't conflict with your existing OpenVSwitch bridges.
 	// Defaults to br-int.
 	OVSBridge string `yaml:"ovsBridge,omitempty"`
-	// Datapath type to use for the OpenVSwitch bridge created by Antrea. Supported values are:
-	// - system
-	// - netdev
-	// 'system' is the default value and corresponds to the kernel datapath. Use 'netdev' to run
-	// OVS in userspace mode (not fully supported yet). Userspace mode requires the tun device
-	// driver to be available.
+	// Datapath type to use for the OpenVSwitch bridge created by Antrea. At the moment, the only supported
+	// value is 'system', which corresponds to the kernel datapath.
 	OVSDatapathType string `yaml:"ovsDatapathType,omitempty"`
 	// Runtime data directory used by Open vSwitch.
 	// Default value:
