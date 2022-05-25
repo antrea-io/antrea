@@ -40,9 +40,6 @@ WINDOWS_NETWORKPOLICY_SKIP="SCTP"
 CONFORMANCE_SKIP="\[Slow\]|\[Serial\]|\[Disruptive\]|\[Flaky\]|\[Feature:.+\]|\[sig-cli\]|\[sig-storage\]|\[sig-auth\]|\[sig-api-machinery\]|\[sig-apps\]|\[sig-node\]"
 NETWORKPOLICY_SKIP="should allow egress access to server in CIDR block|should enforce except clause while egress access to server in CIDR block"
 
-# TODO: change to "control-plane" when testbeds are updated to K8s v1.20
-CONTROL_PLANE_NODE_ROLE="master"
-
 CLEAN_STALE_IMAGES="docker system prune --force --all --filter until=48h"
 
 _usage="Usage: $0 [--kubeconfig <KubeconfigSavePath>] [--workdir <HomePath>]
@@ -144,7 +141,7 @@ function clean_antrea {
 
 function clean_for_windows_install_cni {
     # https://github.com/antrea-io/antrea/issues/1577
-    kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 !~ role && $1 ~ /win/ {print $6}' | while read IP; do
+    kubectl get nodes -o wide --no-headers=true | awk -v role1="master" -v role2="control-plane" '(!($3 ~ role1 || $3 ~ role2) && $1 ~ /win/) {print $6}' | while read IP; do
         CLEAN_LIST=("/cygdrive/c/opt/cni/bin/antrea.exe" "/cygdrive/c/opt/cni/bin/host-local.exe" "/cygdrive/c/k/antrea/etc/antrea-agent.conf" "/cygdrive/c/etc/cni/net.d/10-antrea.conflist" "/cygdrive/c/k/antrea/bin/antrea-agent.exe")
         for file in "${CLEAN_LIST[@]}"; do
             ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "rm -f ${file}"
@@ -184,7 +181,7 @@ function collect_windows_network_info_and_logs {
         fi
     done
 
-    kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 !~ role && $1 ~ /win/ {print $1}' | while read NODENAME; do
+    kubectl get nodes -o wide --no-headers=true | awk -v role1="master" -v role2="control-plane" '(!($3 ~ role1 || $3 ~ role2) && $1 ~ /win/) {print $6}' | while read NODENAME; do
         IP=$(kubectl get node ${NODENAME} -o json | jq -r '.status.addresses[] | select(.type | test("InternalIP")).address')
         mkdir "${DEBUG_LOG_PATH}/${NODENAME}"
 
@@ -222,7 +219,7 @@ function wait_for_antrea_windows_pods_ready {
     if [[ "${PROXY_ALL}" == false ]]; then
         kubectl rollout status daemonset/kube-proxy-windows -n kube-system
     fi
-    kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 !~ role && $1 ~ /win/ {print $6}' | while read IP; do
+    kubectl get nodes -o wide --no-headers=true | awk -v role1="master" -v role2="control-plane" '(!($3 ~ role1 || $3 ~ role2) && $1 ~ /win/) {print $6}' | while read IP; do
         for i in `seq 5`; do
             sleep 5
             timeout 5s ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "powershell Get-NetAdapter -Name br-int -ErrorAction SilentlyContinue" && break
@@ -237,7 +234,7 @@ function wait_for_antrea_windows_processes_ready {
     kubectl rollout status deployment/coredns -n kube-system
     kubectl rollout status deployment.apps/antrea-controller -n kube-system
     kubectl rollout status daemonset/antrea-agent -n kube-system
-    kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 !~ role && $1 ~ /win/ {print $6}' | while read IP; do
+    kubectl get nodes -o wide --no-headers=true | awk -v role1="master" -v role2="control-plane" '(!($3 ~ role1 || $3 ~ role2) && $1 ~ /win/) {print $6}' | while read IP; do
         echo "===== Run script to startup Antrea agent ====="
         ANTREA_VERSION=$(ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "/cygdrive/c/k/antrea/bin/antrea-agent.exe --version" | awk '{print $3}')
         ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "chmod +x /cygdrive/c/k/antrea/Start.ps1 && powershell 'c:\k\antrea\Start.ps1 -AntreaVersion ${ANTREA_VERSION}'"
@@ -310,7 +307,7 @@ function deliver_antrea_windows {
         docker tag "${DOCKER_REGISTRY}/antrea/${harbor_images[i]}" "${antrea_images[i]}"
     done
     echo "===== Deliver Antrea to Linux worker nodes and pull necessary images on worker nodes ====="
-    kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 !~ role && $1 !~ /win/ {print $6}' | while read IP; do
+    kubectl get nodes -o wide --no-headers=true | awk -v role1="master" -v role2="control-plane" '(!($3 ~ role1 || $3 ~ role2) && $1 !~ /win/) {print $6}' | while read IP; do
         rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no" antrea-ubuntu.tar jenkins@${IP}:${WORKDIR}/antrea-ubuntu.tar
         ssh -o StrictHostKeyChecking=no -n jenkins@${IP} "${CLEAN_STALE_IMAGES}; docker load -i ${WORKDIR}/antrea-ubuntu.tar" || true
 
@@ -328,7 +325,7 @@ function deliver_antrea_windows {
     echo "===== Deliver Antrea Windows to Windows worker nodes and pull necessary images on Windows worker nodes ====="
     rm -f antrea-windows.tar.gz
     sed -i 's/if (!(Test-Path $AntreaAgentConfigPath))/if ($true)/' hack/windows/Helper.psm1
-    kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 !~ role && $1 ~ /win/ {print $1}' | while read WORKER_NAME; do
+    kubectl get nodes -o wide --no-headers=true | awk -v role1="master" -v role2="control-plane" '(!($3 ~ role1 || $3 ~ role2) && $1 ~ /win/) {print $1}' | while read WORKER_NAME; do
         echo "==== Reverting Windows VM ${WORKER_NAME} ====="
         govc snapshot.revert -vm ${WORKER_NAME} win-initial
         # If Windows VM fails to power on correctly in time, retry several times.
@@ -459,7 +456,7 @@ function deliver_antrea {
     cat build/yamls/antrea-prometheus.yml >> build/yamls/antrea.yml
 
     if [[ $FLEXIBLE_IPAM == true ]]; then
-        control_plane_ip="$(kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 ~ role {print $6}')"
+        control_plane_ip="$(kubectl get nodes -o wide --no-headers=true | awk -v role1="master" -v role2="control-plane" '($3 ~ role1 || $3 ~ role2) {print $6}')"
         scp -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i "${WORKDIR}/jenkins_id_rsa" build/yamls/*.yml jenkins@${control_plane_ip}:~
     else
         cp -f build/yamls/*.yml $WORKDIR
@@ -476,7 +473,7 @@ function deliver_antrea {
             ssh -o StrictHostKeyChecking=no -i "${WORKDIR}/jenkins_id_rsa" -n jenkins@${IP} "${CLEAN_STALE_IMAGES}; docker load -i ${DEFAULT_WORKDIR}/antrea-ubuntu.tar; docker load -i ${DEFAULT_WORKDIR}/flow-aggregator.tar" || true
         done
     else
-        kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 !~ role {print $6}' | while read IP; do
+        kubectl get nodes -o wide --no-headers=true | awk -v role1="master" -v role2="control-plane" '!($3 ~ role1 || $3 ~ role2) {print $6}' | while read IP; do
             rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no" antrea-ubuntu.tar jenkins@[${IP}]:${WORKDIR}/antrea-ubuntu.tar
             rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no" flow-aggregator.tar jenkins@[${IP}]:${WORKDIR}/flow-aggregator.tar
             ssh -o StrictHostKeyChecking=no -n jenkins@${IP} "${CLEAN_STALE_IMAGES}; docker load -i ${WORKDIR}/antrea-ubuntu.tar; docker load -i ${WORKDIR}/flow-aggregator.tar" || true
