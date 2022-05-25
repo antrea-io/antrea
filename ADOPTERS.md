@@ -8,6 +8,10 @@ height="50"></a>&nbsp; &nbsp; &nbsp;
 <img alt="https://www.transwarp.io" src="docs/assets/adopters/transwarp-logo.png"
 height="50"></a>&nbsp; &nbsp; &nbsp;
 
+<a href="https://www.terasky.com" border="0" target="_blank">
+<img alt="https://www.terasky.com" src="docs/assets/adopters/terasky-logo.png"
+height="50"></a>&nbsp; &nbsp; &nbsp;
+
 ## Success Stories
 
 Below is a list of adopters of Antrea that have publicly shared the details
@@ -37,6 +41,9 @@ antrea nodes in one cluster for upgrading.
 Internal Pods can get the real source IP of the request.
 
 You can contact us with mkt@transwarp.io
+
+**[TeraSky](https://terasky.com)**
+TeraSky is an Global Advanced Technology Solutions Provider. We utilize Antrea in many of our internal Kubernetes clusters as well as by many of our customers in order to apply very strong and flexible security models in Kubernetes using Antrea Cluster Network Policies, Antrea Network Policies and Egress functionality. We are @TeraSkycom1 on Twitter.  
 
 ## Adding yourself as an Adopter
 
