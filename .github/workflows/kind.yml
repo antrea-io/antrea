@@ -462,7 +462,7 @@ jobs:
           retention-days: 30
 
   test-netpol-tmp:
-    name: Run experimental network policy tests (netpol) on Kind cluster
+    name: Run network policy tests on Kind cluster
     needs: build-antrea-coverage-image
     runs-on: [ubuntu-latest]
     steps:
@@ -490,12 +490,9 @@ jobs:
         curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-$(uname)-amd64
         chmod +x ./kind
         sudo mv kind /usr/local/bin
-    - name: Build netpol Docker image
-      working-directory: hack/netpol
-      run: make
     - name: Run netpol tests
-      working-directory: hack/netpol
-      run: ./test-kind.sh
+      working-directory: ci/kind
+      run: ./test-np.sh
 
   validate-prometheus-metrics-doc:
     name: Validate metrics in Prometheus document match running deployment's
