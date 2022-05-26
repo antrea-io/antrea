@@ -2042,7 +2042,7 @@ func (data *TestData) GetMulticastInterfaces(antreaNamespace string) ([]string, 
 	if err != nil {
 		return []string{}, err
 	}
-	return agentConf.MulticastInterfaces, nil
+	return agentConf.Multicast.MulticastInterfaces, nil
 }
 
 func GetTransportInterface(data *TestData) (string, error) {
