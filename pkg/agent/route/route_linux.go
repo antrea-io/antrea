@@ -1298,7 +1298,11 @@ func (c *Client) deleteLoadBalancerIngressIPRoute(svcIPStr string) error {
 
 	route := generateRoute(svcIP, mask, gw, linkIndex, netlink.SCOPE_UNIVERSE)
 	if err := netlink.RouteDel(route); err != nil {
-		return fmt.Errorf("failed to delete routing entry for LoadBalancer ingress IP %s: %w", svcIP.String(), err)
+		if err.Error() == "no such process" {
+			klog.InfoS("Failed to delete LoadBalancer ingress IP route since the route has been deleted", "route", route)
+		} else {
+			return fmt.Errorf("failed to delete routing entry for LoadBalancer ingress IP %s: %w", svcIP.String(), err)
+		}
 	}
 	klog.V(4).InfoS("Deleted LoadBalancer ingress IP route", "route", route)
 	c.serviceRoutes.Delete(svcIP.String())
