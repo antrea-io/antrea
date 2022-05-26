@@ -182,9 +182,8 @@ type AgentConfig struct {
 	// 2. TransportInterfaceCIDRs
 	// 3. The Node IP
 	TransportInterfaceCIDRs []string `yaml:"transportInterfaceCIDRs,omitempty"`
-	// The names of the interfaces on Nodes that are used to forward multicast traffic.
-	// Defaults to transport interface if not set.
-	MulticastInterfaces []string `yaml:"multicastInterfaces,omitempty"`
+	// Multicast configuration options.
+	Multicast MulticastConfig `yaml:"multicast,omitempty"`
 	// AntreaProxy contains AntreaProxy related configuration options.
 	AntreaProxy AntreaProxyConfig `yaml:"antreaProxy,omitempty"`
 	// Egress related configurations.
@@ -229,6 +228,15 @@ type NodePortLocalConfig struct {
 	// pod.spec.containers[].ports), and all Node traffic directed to that port will be
 	// forwarded to the Pod.
 	PortRange string `yaml:"portRange,omitempty"`
+}
+
+type MulticastConfig struct {
+	// The names of the interfaces on Nodes that are used to forward multicast traffic.
+	// Defaults to transport interface if not set.
+	MulticastInterfaces []string `yaml:"multicastInterfaces,omitempty"`
+	// The interval for antrea-agent to send IGMP queries to Pods.
+	// Defaults to 125 seconds.
+	IGMPQueryInterval string `yaml:"igmpQueryInterval"`
 }
 
 type EgressConfig struct {
