@@ -99,7 +99,7 @@ func (data *TestData) getWireGuardPeerEndpointsWithHandshake(nodeName string) ([
 }
 
 func testPodConnectivity(t *testing.T, data *TestData) {
-	podInfos, deletePods := createPodsOnDifferentNodes(t, data, testNamespace, "differentnodes")
+	podInfos, deletePods := createPodsOnDifferentNodes(t, data, data.testNamespace, "differentnodes")
 	defer deletePods()
 	numPods := 2
 	data.runPingMesh(t, podInfos[:numPods], agnhostContainerName)
@@ -113,17 +113,17 @@ func testServiceConnectivity(t *testing.T, data *TestData) {
 	// nodeIP() returns IPv6 address if this is a IPv6 cluster.
 	clientPodNodeIP := nodeIP(0)
 	serverPodNode := nodeName(1)
-	svc, cleanup := data.createAgnhostServiceAndBackendPods(t, svcName, testNamespace, serverPodNode, corev1.ServiceTypeNodePort)
+	svc, cleanup := data.createAgnhostServiceAndBackendPods(t, svcName, data.testNamespace, serverPodNode, corev1.ServiceTypeNodePort)
 	defer cleanup()
 
 	// Create the a hostNetwork Pod on a Node different from the service's backend Pod, so the service traffic will be transferred across the tunnel.
-	require.NoError(t, data.createPodOnNode(clientPodName, testNamespace, clientPodNode, busyboxImage, []string{"sleep", strconv.Itoa(3600)}, nil, nil, nil, true, nil))
-	defer data.deletePodAndWait(defaultTimeout, clientPodName, testNamespace)
-	require.NoError(t, data.podWaitForRunning(defaultTimeout, clientPodName, testNamespace))
+	require.NoError(t, data.createPodOnNode(clientPodName, data.testNamespace, clientPodNode, busyboxImage, []string{"sleep", strconv.Itoa(3600)}, nil, nil, nil, true, nil))
+	defer data.deletePodAndWait(defaultTimeout, clientPodName, data.testNamespace)
+	require.NoError(t, data.podWaitForRunning(defaultTimeout, clientPodName, data.testNamespace))
 
-	err := data.runNetcatCommandFromTestPod(clientPodName, testNamespace, svc.Spec.ClusterIP, 80)
+	err := data.runNetcatCommandFromTestPod(clientPodName, data.testNamespace, svc.Spec.ClusterIP, 80)
 	require.NoError(t, err, "Pod %s should be able to connect the service's ClusterIP %s, but was not able to connect", clientPodName, net.JoinHostPort(svc.Spec.ClusterIP, fmt.Sprint(80)))
 
-	err = data.runNetcatCommandFromTestPod(clientPodName, testNamespace, clientPodNodeIP, svc.Spec.Ports[0].NodePort)
+	err = data.runNetcatCommandFromTestPod(clientPodName, data.testNamespace, clientPodNodeIP, svc.Spec.Ports[0].NodePort)
 	require.NoError(t, err, "Pod %s should be able to connect the service's NodePort %s:%d, but was not able to connect", clientPodName, clientPodNodeIP, svc.Spec.Ports[0].NodePort)
 }

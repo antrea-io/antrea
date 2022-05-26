@@ -142,7 +142,7 @@ func setupTestPodsConnection(data *TestData) error {
 		ObjectMeta: metav1.ObjectMeta{Name: podsConnectionNetworkPolicyName},
 		Spec:       npSpec,
 	}
-	_, err := data.clientset.NetworkingV1().NetworkPolicies(testNamespace).Create(context.TODO(), np, metav1.CreateOptions{})
+	_, err := data.clientset.NetworkingV1().NetworkPolicies(data.testNamespace).Create(context.TODO(), np, metav1.CreateOptions{})
 	return err
 }
 
@@ -170,31 +170,31 @@ func generateWorkloadNetworkPolicy(policyRules int) *networkv1.NetworkPolicy {
 }
 
 func populateWorkloadNetworkPolicy(np *networkv1.NetworkPolicy, data *TestData) error {
-	_, err := data.clientset.NetworkingV1().NetworkPolicies(testNamespace).Create(context.TODO(), np, metav1.CreateOptions{})
+	_, err := data.clientset.NetworkingV1().NetworkPolicies(data.testNamespace).Create(context.TODO(), np, metav1.CreateOptions{})
 	return err
 }
 
 func setupTestPods(data *TestData, b *testing.B) (nginxPodIP, perfPodIP *PodIPs) {
 	b.Logf("Creating a nginx test Pod")
 	nginxPod := createPerfTestPodDefinition(benchNginxPodName, nginxContainerName, nginxImage)
-	_, err := data.clientset.CoreV1().Pods(testNamespace).Create(context.TODO(), nginxPod, metav1.CreateOptions{})
+	_, err := data.clientset.CoreV1().Pods(data.testNamespace).Create(context.TODO(), nginxPod, metav1.CreateOptions{})
 	if err != nil {
 		b.Fatalf("Error when creating nginx test pod: %v", err)
 	}
 	b.Logf("Waiting IP assignment of the nginx test Pod")
-	nginxPodIP, err = data.podWaitForIPs(defaultTimeout, benchNginxPodName, testNamespace)
+	nginxPodIP, err = data.podWaitForIPs(defaultTimeout, benchNginxPodName, data.testNamespace)
 	if err != nil {
 		b.Fatalf("Error when waiting for IP assignment of nginx test Pod: %v", err)
 	}
 
 	b.Logf("Creating a perftool test Pod")
 	perfPod := createPerfTestPodDefinition(perftoolPodName, perftoolContainerName, perftoolImage)
-	_, err = data.clientset.CoreV1().Pods(testNamespace).Create(context.TODO(), perfPod, metav1.CreateOptions{})
+	_, err = data.clientset.CoreV1().Pods(data.testNamespace).Create(context.TODO(), perfPod, metav1.CreateOptions{})
 	if err != nil {
 		b.Fatalf("Error when creating perftool test Pod: %v", err)
 	}
 	b.Logf("Waiting for IP assignment of the perftool test Pod")
-	perfPodIP, err = data.podWaitForIPs(defaultTimeout, perftoolPodName, testNamespace)
+	perfPodIP, err = data.podWaitForIPs(defaultTimeout, perftoolPodName, data.testNamespace)
 	if err != nil {
 		b.Fatalf("Error when waiting for IP assignment of perftool test Pod: %v", err)
 	}
@@ -235,7 +235,7 @@ func httpRequest(requests, policyRules int, data *TestData, b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		b.Logf("Running http request bench %d/%d", i+1, b.N)
 		cmd := []string{"ab", "-n", fmt.Sprint(requests), "-c", fmt.Sprint(*httpConcurrency), serverURL.String()}
-		stdout, stderr, err := data.RunCommandFromPod(testNamespace, perftoolPodName, perftoolContainerName, cmd)
+		stdout, stderr, err := data.RunCommandFromPod(data.testNamespace, perftoolPodName, perftoolContainerName, cmd)
 		if err != nil {
 			b.Errorf("Error when running http request %dx: %v, stdout: %s, stderr: %s\n", requests, err, stdout, stderr)
 		}
@@ -268,7 +268,7 @@ func networkPolicyRealize(policyRules int, data *TestData, b *testing.B) {
 		b.StopTimer()
 		b.Log("Network policy realized")
 
-		err = data.clientset.NetworkingV1().NetworkPolicies(testNamespace).Delete(context.TODO(), workloadNetworkPolicyName, metav1.DeleteOptions{})
+		err = data.clientset.NetworkingV1().NetworkPolicies(data.testNamespace).Delete(context.TODO(), workloadNetworkPolicyName, metav1.DeleteOptions{})
 		if err != nil {
 			b.Fatalf("Error when cleaning up network policies after running one bench iteration: %v", err)
 		}

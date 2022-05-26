@@ -54,10 +54,10 @@ func TestUpgrade(t *testing.T) {
 	podName := randName("test-pod-")
 
 	t.Logf("Creating a busybox test Pod on '%s'", nodeName)
-	if err := data.createBusyboxPodOnNode(podName, testNamespace, nodeName, false); err != nil {
+	if err := data.createBusyboxPodOnNode(podName, data.testNamespace, nodeName, false); err != nil {
 		t.Fatalf("Error when creating busybox test Pod: %v", err)
 	}
-	if err := data.podWaitForRunning(defaultTimeout, podName, testNamespace); err != nil {
+	if err := data.podWaitForRunning(defaultTimeout, podName, data.testNamespace); err != nil {
 		t.Fatalf("Error when waiting for Pod '%s' to be in the Running state", podName)
 	}
 
@@ -113,5 +113,5 @@ func TestUpgrade(t *testing.T) {
 		t.Errorf("Namespace deletion failed: %v", err)
 	}
 
-	data.testDeletePod(t, podName, nodeName, testNamespace, false)
+	data.testDeletePod(t, podName, nodeName, data.testNamespace, false)
 }

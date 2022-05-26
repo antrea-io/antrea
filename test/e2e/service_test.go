@@ -38,13 +38,14 @@ func TestClusterIPv6(t *testing.T) {
 
 func testClusterIP(t *testing.T, isIPv6 bool) {
 	skipIfNumNodesLessThan(t, 2)
+
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
 	defer teardownTest(t, data)
 
-	data.testClusterIP(t, isIPv6, testNamespace, testNamespace)
+	data.testClusterIP(t, isIPv6, data.testNamespace, data.testNamespace)
 }
 
 func (data *TestData) testClusterIP(t *testing.T, isIPv6 bool, clientNamespace, serverNamespace string) {
@@ -84,7 +85,7 @@ func (data *TestData) testClusterIP(t *testing.T, isIPv6 bool, clientNamespace, 
 	_, _, cleanupFunc = createAndWaitForPod(t, data, data.createNginxPodOnNode, hostNginx, nodeName(0), serverNamespace, true)
 	defer cleanupFunc()
 	t.Run("HostNetwork Endpoints", func(t *testing.T) {
-		skipIfNamespaceIsNotEqual(t, serverNamespace, testNamespace)
+		skipIfNamespaceIsNotEqual(t, serverNamespace, data.testNamespace)
 		testClusterIPCases(t, data, url, clients, hostNetworkClients, clientNamespace)
 	})
 }
@@ -93,7 +94,7 @@ func testClusterIPCases(t *testing.T, data *TestData, url string, clients, hostN
 	t.Run("All Nodes can access Service ClusterIP", func(t *testing.T) {
 		skipIfProxyAllDisabled(t, data)
 		skipIfKubeProxyEnabled(t, data)
-		skipIfNamespaceIsNotEqual(t, namespace, testNamespace)
+		skipIfNamespaceIsNotEqual(t, namespace, data.testNamespace)
 		for node, pod := range hostNetworkClients {
 			testClusterIPFromPod(t, data, url, node, pod, true, namespace)
 		}
@@ -136,7 +137,7 @@ func TestNodePortWindows(t *testing.T) {
 	}
 	defer teardownTest(t, data)
 
-	data.testNodePort(t, true, testNamespace, testNamespace)
+	data.testNodePort(t, true, data.testNamespace, data.testNamespace)
 }
 
 func (data *TestData) testNodePort(t *testing.T, isWindows bool, clientNamespace, serverNamespace string) {

@@ -49,12 +49,12 @@ func TestBasic(t *testing.T) {
 	}
 	defer teardownTest(t, data)
 
-	t.Run("testPodAssignIP", func(t *testing.T) { testPodAssignIP(t, data, testNamespace, "", "") })
-	t.Run("testDeletePod", func(t *testing.T) { testDeletePod(t, data, testNamespace) })
+	t.Run("testPodAssignIP", func(t *testing.T) { testPodAssignIP(t, data, data.testNamespace, "", "") })
+	t.Run("testDeletePod", func(t *testing.T) { testDeletePod(t, data, data.testNamespace) })
 	t.Run("testAntreaGracefulExit", func(t *testing.T) { testAntreaGracefulExit(t, data) })
-	t.Run("testIPAMRestart", func(t *testing.T) { testIPAMRestart(t, data, testNamespace) })
+	t.Run("testIPAMRestart", func(t *testing.T) { testIPAMRestart(t, data, data.testNamespace) })
 	t.Run("testDeletePreviousRoundFlowsOnStartup", func(t *testing.T) { testDeletePreviousRoundFlowsOnStartup(t, data) })
-	t.Run("testGratuitousARP", func(t *testing.T) { testGratuitousARP(t, data, testNamespace) })
+	t.Run("testGratuitousARP", func(t *testing.T) { testGratuitousARP(t, data, data.testNamespace) })
 	t.Run("testClusterIdentity", func(t *testing.T) { testClusterIdentity(t, data) })
 }
 
@@ -522,7 +522,7 @@ func TestCleanStaleClusterIPRoutes(t *testing.T) {
 	skipIfProxyAllDisabled(t, data)
 
 	// Create a backend Pod for test Service: if a Service has no backend Pod, no ClusterIP route will be installed.
-	createAndWaitForPod(t, data, data.createNginxPodOnNode, "test-clean-stale-route-pod", nodeName(0), testNamespace, false)
+	createAndWaitForPod(t, data, data.createNginxPodOnNode, "test-clean-stale-route-pod", nodeName(0), data.testNamespace, false)
 
 	if len(clusterInfo.podV4NetworkCIDR) != 0 {
 		t.Logf("Running IPv4 test")
@@ -540,10 +540,10 @@ func testCleanStaleClusterIPRoutes(t *testing.T, data *TestData, isIPv6 bool) {
 		ipProtocol = corev1.IPv6Protocol
 	}
 	// Create two test ClusterIPs.
-	svc, err := data.createNginxClusterIPService(fmt.Sprintf("test-clean-stale-route-svc1-%v", isIPv6), testNamespace, false, &ipProtocol)
+	svc, err := data.createNginxClusterIPService(fmt.Sprintf("test-clean-stale-route-svc1-%v", isIPv6), data.testNamespace, false, &ipProtocol)
 	require.NoError(t, err)
 	require.NotEqual(t, "", svc.Spec.ClusterIP, "ClusterIP should not be empty")
-	svc, err = data.createNginxClusterIPService(fmt.Sprintf("test-clean-stale-route-svc2-%v", isIPv6), testNamespace, false, &ipProtocol)
+	svc, err = data.createNginxClusterIPService(fmt.Sprintf("test-clean-stale-route-svc2-%v", isIPv6), data.testNamespace, false, &ipProtocol)
 	require.NoError(t, err)
 	require.NotEqual(t, "", svc.Spec.ClusterIP, "ClusterIP should not be empty")
 	time.Sleep(time.Second)
