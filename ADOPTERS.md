@@ -43,11 +43,13 @@ Internal Pods can get the real source IP of the request.
 You can contact us with mkt@transwarp.io
 
 **[TeraSky](https://terasky.com)**
-TeraSky is a Global Advanced Technology Solutions Provider.  
-Antrea is used in our internal Kubernetes clusters as well as by many of our customers.  
+
+TeraSky is a Global Advanced Technology Solutions Provider.
+Antrea is used in our internal Kubernetes clusters as well as by many of our customers.
 Antrea helps us to apply a very strong and flexible security models in Kubernetes.
 We are very heavily utilizing Antrea Cluster Network Policies, Antrea Network Policies,
-and the Egress functionality.  
+and the Egress functionality.
+
 We are @TeraSkycom1 on Twitter.  
 
 ## Adding yourself as an Adopter
