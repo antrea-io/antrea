@@ -589,9 +589,10 @@ func run(o *Options) error {
 			nodeConfig,
 			ifaceStore,
 			multicastSocket,
-			sets.NewString(append(o.config.MulticastInterfaces, nodeConfig.NodeTransportInterfaceName)...),
+			sets.NewString(append(o.config.Multicast.MulticastInterfaces, nodeConfig.NodeTransportInterfaceName)...),
 			ovsBridgeClient,
-			podUpdateChannel)
+			podUpdateChannel,
+			o.igmpQueryInterval)
 		if err := mcastController.Initialize(); err != nil {
 			return err
 		}

@@ -34,13 +34,6 @@ const (
 	IGMPProtocolNumber = 2
 )
 
-const (
-	// queryInterval is the interval to send IGMP query messages.
-	queryInterval = time.Second * 125
-	// mcastGroupTimeout is the timeout to detect a group as stale if no IGMP report is received within the time.
-	mcastGroupTimeout = queryInterval * 3
-)
-
 var (
 	// igmpMaxResponseTime is the maximum time allowed before sending a responding report which is used for the
 	// "Max Resp Code" field in the IGMP query message. It is also the maximum time to wait for the IGMP report message
@@ -52,9 +45,10 @@ var (
 )
 
 type IGMPSnooper struct {
-	ofClient   openflow.Client
-	ifaceStore interfacestore.InterfaceStore
-	eventCh    chan *mcastGroupEvent
+	ofClient      openflow.Client
+	ifaceStore    interfacestore.InterfaceStore
+	eventCh       chan *mcastGroupEvent
+	queryInterval time.Duration
 }
 
 func (s *IGMPSnooper) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
@@ -99,7 +93,7 @@ func (s *IGMPSnooper) parseSrcInterface(pktIn *ofctrl.PacketIn) (*interfacestore
 
 func (s *IGMPSnooper) queryIGMP(group net.IP, versions []uint8) error {
 	for _, version := range versions {
-		igmp, err := generateIGMPQueryPacket(group, version)
+		igmp, err := generateIGMPQueryPacket(group, version, s.queryInterval)
 		if err != nil {
 			return err
 		}
@@ -171,7 +165,7 @@ func (s *IGMPSnooper) processPacketIn(pktIn *ofctrl.PacketIn) error {
 	return nil
 }
 
-func generateIGMPQueryPacket(group net.IP, version uint8) (util.Message, error) {
+func generateIGMPQueryPacket(group net.IP, version uint8, queryInterval time.Duration) (util.Message, error) {
 	// The max response time field in IGMP protocol uses a value in units of 1/10 second.
 	// See https://datatracker.ietf.org/doc/html/rfc2236 and https://datatracker.ietf.org/doc/html/rfc3376
 	respTime := uint8(igmpMaxResponseTime.Seconds() * 10)
@@ -242,8 +236,8 @@ func parseIGMPPacket(pkt protocol.Ethernet) (protocol.IGMPMessage, error) {
 	}
 }
 
-func newSnooper(ofClient openflow.Client, ifaceStore interfacestore.InterfaceStore, eventCh chan *mcastGroupEvent) *IGMPSnooper {
-	d := &IGMPSnooper{ofClient: ofClient, ifaceStore: ifaceStore, eventCh: eventCh}
+func newSnooper(ofClient openflow.Client, ifaceStore interfacestore.InterfaceStore, eventCh chan *mcastGroupEvent, queryInterval time.Duration) *IGMPSnooper {
+	d := &IGMPSnooper{ofClient: ofClient, ifaceStore: ifaceStore, eventCh: eventCh, queryInterval: queryInterval}
 	ofClient.RegisterPacketInHandler(uint8(openflow.PacketInReasonMC), "MulticastGroupDiscovery", d)
 	return d
 }

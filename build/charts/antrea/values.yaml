@@ -28,8 +28,14 @@ transportInterface: ""
 # -- Network CIDRs of the interface on Node which is used for tunneling or
 # routing the traffic across Nodes.
 transportInterfaceCIDRs: []
-# -- Names of the interfaces on Nodes that are used to forward multicast traffic.
-multicastInterfaces: []
+
+multicast:
+  # -- Names of the interfaces on Nodes that are used to forward multicast traffic.
+  multicastInterfaces: []
+  # -- The interval at which the antrea-agent sends IGMP queries to Pods.
+  # Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
+  igmpQueryInterval: "125s"
+
 # -- Default MTU to use for the host gateway interface and the network interface
 # of each Pod. By default, antrea-agent will discover the MTU of the Node's
 # primary interface and adjust it to accommodate for tunnel encapsulation
