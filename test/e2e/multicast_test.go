@@ -160,15 +160,15 @@ type multicastTestcase struct {
 
 func runTestMulticastForwardToMultipleInterfaces(t *testing.T, data *TestData, senderIdx int, senderPort int, senderGroup string, senderMulticastInterfaces []string) {
 	mcjoinWaitTimeout := defaultTimeout / time.Second
-	senderName, _, cleanupFunc := createAndWaitForPod(t, data, data.createMcJoinPodOnNode, "test-sender-", nodeName(senderIdx), testNamespace, false)
+	senderName, _, cleanupFunc := createAndWaitForPod(t, data, data.createMcJoinPodOnNode, "test-sender-", nodeName(senderIdx), data.testNamespace, false)
 	defer cleanupFunc()
-	tcpdumpName, _, cleanupFunc := createAndWaitForPod(t, data, data.createNetshootPodOnNode, "test-tcpdump-", nodeName(senderIdx), testNamespace, true)
+	tcpdumpName, _, cleanupFunc := createAndWaitForPod(t, data, data.createNetshootPodOnNode, "test-tcpdump-", nodeName(senderIdx), data.testNamespace, true)
 	defer cleanupFunc()
 	// Wait 2 seconds(-w 2) before sending multicast traffic.
 	// It sends two multicast packets for every second(-f 500 means it takes 500 milliseconds for sending one packet).
 	sendMulticastCommand := []string{"/bin/sh", "-c", fmt.Sprintf("timeout 90s mcjoin -f 500 -o -p %d -s -t 3 -w 2 -W %d %s", senderPort, mcjoinWaitTimeout, senderGroup)}
 	go func() {
-		data.RunCommandFromPod(testNamespace, senderName, mcjoinContainerName, sendMulticastCommand)
+		data.RunCommandFromPod(data.testNamespace, senderName, mcjoinContainerName, sendMulticastCommand)
 	}()
 
 	if err := wait.Poll(5*time.Second, defaultTimeout, func() (bool, error) {
@@ -177,7 +177,7 @@ func runTestMulticastForwardToMultipleInterfaces(t *testing.T, data *TestData, s
 		// If multicast traffic is sent from non-HostNetwork pods, all multicast interfaces in senders should receive multicast traffic.
 		for _, multicastInterface := range senderMulticastInterfaces {
 			tcpdumpReceiveMulticastCommand := []string{"/bin/sh", "-c", fmt.Sprintf("timeout 5s tcpdump -q -i %s -c 1 -W 90 host %s", multicastInterface, senderGroup)}
-			_, stderr, err := data.RunCommandFromPod(testNamespace, tcpdumpName, tcpdumpContainerName, tcpdumpReceiveMulticastCommand)
+			_, stderr, err := data.RunCommandFromPod(data.testNamespace, tcpdumpName, tcpdumpContainerName, tcpdumpReceiveMulticastCommand)
 			if err != nil {
 				return false, err
 			}
@@ -195,11 +195,11 @@ func runTestMulticastBetweenPods(t *testing.T, data *TestData, mc multicastTestc
 	mcjoinWaitTimeout := defaultTimeout / time.Second
 	gatewayInterface, err := data.GetGatewayInterfaceName(antreaNamespace)
 	failOnError(err, t)
-	senderName, _, cleanupFunc := createAndWaitForPod(t, data, data.createMcJoinPodOnNode, "test-sender-", nodeName(mc.senderConfig.nodeIdx), testNamespace, mc.senderConfig.isHostNetwork)
+	senderName, _, cleanupFunc := createAndWaitForPod(t, data, data.createMcJoinPodOnNode, "test-sender-", nodeName(mc.senderConfig.nodeIdx), data.testNamespace, mc.senderConfig.isHostNetwork)
 	defer cleanupFunc()
 	receiverNames := make([]string, 0)
 	for _, receiver := range mc.receiverConfigs {
-		receiverName, _, cleanupFunc := createAndWaitForPod(t, data, data.createMcJoinPodOnNode, "test-receiver-", nodeName(receiver.nodeIdx), testNamespace, receiver.isHostNetwork)
+		receiverName, _, cleanupFunc := createAndWaitForPod(t, data, data.createMcJoinPodOnNode, "test-receiver-", nodeName(receiver.nodeIdx), data.testNamespace, receiver.isHostNetwork)
 		receiverNames = append(receiverNames, receiverName)
 		defer cleanupFunc()
 	}
@@ -212,7 +212,7 @@ func runTestMulticastBetweenPods(t *testing.T, data *TestData, mc multicastTestc
 			// The following command joins a multicast group and sets the timeout to 100 seconds(-W 100) before exit.
 			// The command will return after receiving 1 packet(-c 1).
 			receiveMulticastCommand := []string{"/bin/sh", "-c", fmt.Sprintf("mcjoin -c 10 -o -p %d -W %d %s", mc.port, mcjoinWaitTimeout, mc.group.String())}
-			res, _, err := data.RunCommandFromPod(testNamespace, r, mcjoinContainerName, receiveMulticastCommand)
+			res, _, err := data.RunCommandFromPod(data.testNamespace, r, mcjoinContainerName, receiveMulticastCommand)
 			failOnError(err, t)
 			assert.Contains(t, res, "Total: 10 packets")
 		}()
@@ -221,7 +221,7 @@ func runTestMulticastBetweenPods(t *testing.T, data *TestData, mc multicastTestc
 	// It sends two multicast packets for every second(-f 500 means it takes 500 milliseconds for sending one packet).
 	sendMulticastCommand := []string{"/bin/sh", "-c", fmt.Sprintf("mcjoin -f 500 -o -p %d -s -t 3 -w 2 -W %d %s", mc.port, mcjoinWaitTimeout, mc.group.String())}
 	go func() {
-		data.RunCommandFromPod(testNamespace, senderName, mcjoinContainerName, sendMulticastCommand)
+		data.RunCommandFromPod(data.testNamespace, senderName, mcjoinContainerName, sendMulticastCommand)
 	}()
 
 	readyReceivers := sets.NewInt()

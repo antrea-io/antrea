@@ -208,11 +208,12 @@ func setupTest(tb testing.TB) (*TestData, error) {
 			exportLogs(tb, testData, "afterSetupTest", true)
 		}
 	}()
-	tb.Logf("Creating '%s' K8s Namespace", testNamespace)
+	testData.testNamespace = randName(strings.ToLower(tb.Name()) + "-")
+	tb.Logf("Creating '%s' K8s Namespace", testData.testNamespace)
 	if err := ensureAntreaRunning(testData); err != nil {
 		return nil, err
 	}
-	if err := testData.createTestNamespace(); err != nil {
+	if err := testData.CreateNamespace(testData.testNamespace, nil); err != nil {
 		return nil, err
 	}
 	success = true
@@ -227,10 +228,10 @@ func setupTestForFlowAggregator(tb testing.TB) (*TestData, bool, bool, error) {
 		return testData, v4Enabled, v6Enabled, err
 	}
 	// Create pod using ipfix collector image
-	if err = testData.createPodOnNode("ipfix-collector", testNamespace, "", ipfixCollectorImage, nil, nil, nil, nil, true, nil); err != nil {
+	if err = testData.createPodOnNode("ipfix-collector", testData.testNamespace, "", ipfixCollectorImage, nil, nil, nil, nil, true, nil); err != nil {
 		tb.Errorf("Error when creating the ipfix collector Pod: %v", err)
 	}
-	ipfixCollectorIP, err := testData.podWaitForIPs(defaultTimeout, "ipfix-collector", testNamespace)
+	ipfixCollectorIP, err := testData.podWaitForIPs(defaultTimeout, "ipfix-collector", testData.testNamespace)
 	if err != nil || len(ipfixCollectorIP.ipStrings) == 0 {
 		tb.Errorf("Error when waiting to get ipfix collector Pod IP: %v", err)
 		return nil, v4Enabled, v6Enabled, err
@@ -415,8 +416,8 @@ func teardownTest(tb testing.TB, data *TestData) {
 	if empty, _ := IsDirEmpty(data.logsDirForTestCase); empty {
 		_ = os.Remove(data.logsDirForTestCase)
 	}
-	tb.Logf("Deleting '%s' K8s Namespace", testNamespace)
-	if err := data.deleteTestNamespace(defaultTimeout); err != nil {
+	tb.Logf("Deleting '%s' K8s Namespace", testData.testNamespace)
+	if err := data.DeleteNamespace(testData.testNamespace, defaultTimeout); err != nil {
 		tb.Logf("Error when tearing down test: %v", err)
 	}
 }

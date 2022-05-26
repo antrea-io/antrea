@@ -52,7 +52,7 @@ func testInvalidCGIPBlockWithPodSelector(t *testing.T) {
 func testInvalidCGIPBlockWithNSSelector(t *testing.T) {
 	invalidErr := fmt.Errorf("clustergroup created with ipblock and namespaceSelector")
 	cgName := "ipb-ns"
-	nSel := &metav1.LabelSelector{MatchLabels: map[string]string{"ns": "y"}}
+	nSel := &metav1.LabelSelector{MatchLabels: map[string]string{"ns": namespaces["y"]}}
 	cidr := "10.0.0.10/32"
 	ipb := []crdv1alpha1.IPBlock{{CIDR: cidr}}
 	cg := &crdv1alpha3.ClusterGroup{
@@ -97,7 +97,7 @@ func testInvalidCGServiceRefWithPodSelector(t *testing.T) {
 	cgName := "svcref-pod-selector"
 	pSel := &metav1.LabelSelector{MatchLabels: map[string]string{"pod": "x"}}
 	svcRef := &crdv1alpha1.NamespacedName{
-		Namespace: "y",
+		Namespace: namespaces["y"],
 		Name:      "test-svc",
 	}
 	cg := &crdv1alpha3.ClusterGroup{
@@ -118,9 +118,9 @@ func testInvalidCGServiceRefWithPodSelector(t *testing.T) {
 func testInvalidCGServiceRefWithNSSelector(t *testing.T) {
 	invalidErr := fmt.Errorf("clustergroup created with serviceReference and namespaceSelector")
 	cgName := "svcref-ns-selector"
-	nSel := &metav1.LabelSelector{MatchLabels: map[string]string{"ns": "y"}}
+	nSel := &metav1.LabelSelector{MatchLabels: map[string]string{"ns": namespaces["y"]}}
 	svcRef := &crdv1alpha1.NamespacedName{
-		Namespace: "y",
+		Namespace: namespaces["y"],
 		Name:      "test-svc",
 	}
 	cg := &crdv1alpha3.ClusterGroup{
@@ -144,7 +144,7 @@ func testInvalidCGServiceRefWithIPBlock(t *testing.T) {
 	cidr := "10.0.0.10/32"
 	ipb := []crdv1alpha1.IPBlock{{CIDR: cidr}}
 	svcRef := &crdv1alpha1.NamespacedName{
-		Namespace: "y",
+		Namespace: namespaces["y"],
 		Name:      "test-svc",
 	}
 	cg := &crdv1alpha3.ClusterGroup{
@@ -207,7 +207,7 @@ func testInvalidCGChildGroupWithServiceReference(t *testing.T) {
 	invalidErr := fmt.Errorf("clustergroup created with childGroups and ServiceReference")
 	cgName := "child-group-svcref"
 	svcRef := &crdv1alpha1.NamespacedName{
-		Namespace: "y",
+		Namespace: namespaces["y"],
 		Name:      "test-svc",
 	}
 	cg := &crdv1alpha3.ClusterGroup{
@@ -389,6 +389,7 @@ func TestClusterGroup(t *testing.T) {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
 	defer teardownTest(t, data)
+
 	initialize(t, data)
 
 	t.Run("TestGroupClusterGroupValidate", func(t *testing.T) {
