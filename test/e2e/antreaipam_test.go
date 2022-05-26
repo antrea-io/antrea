@@ -186,12 +186,12 @@ func TestAntreaIPAM(t *testing.T) {
 	})
 	t.Run("testAntreaIPAMHostPortPodConnectivity", func(t *testing.T) {
 		skipIfHasWindowsNodes(t)
-		data.testHostPortPodConnectivity(t, testNamespace, testAntreaIPAMNamespace)
+		data.testHostPortPodConnectivity(t, data.testNamespace, testAntreaIPAMNamespace)
 		checkIPPoolsEmpty(t, data, ipPools)
 	})
 	t.Run("testAntreaIPAMPodToHostPortPodConnectivity", func(t *testing.T) {
 		skipIfHasWindowsNodes(t)
-		data.testHostPortPodConnectivity(t, testAntreaIPAMNamespace, testNamespace)
+		data.testHostPortPodConnectivity(t, testAntreaIPAMNamespace, data.testNamespace)
 		checkIPPoolsEmpty(t, data, ipPools)
 	})
 	t.Run("testAntreaIPAMVLAN11PodToAntreaIPAMVLAN11HostPortPodConnectivity", func(t *testing.T) {
@@ -216,12 +216,12 @@ func TestAntreaIPAM(t *testing.T) {
 	})
 	t.Run("testAntreaIPAMVLAN11HostPortPodConnectivity", func(t *testing.T) {
 		skipIfHasWindowsNodes(t)
-		data.testHostPortPodConnectivity(t, testNamespace, testAntreaIPAMNamespace11)
+		data.testHostPortPodConnectivity(t, data.testNamespace, testAntreaIPAMNamespace11)
 		checkIPPoolsEmpty(t, data, ipPools)
 	})
 	t.Run("testAntreaIPAMVLAN11PodToHostPortPodConnectivity", func(t *testing.T) {
 		skipIfHasWindowsNodes(t)
-		data.testHostPortPodConnectivity(t, testAntreaIPAMNamespace11, testNamespace)
+		data.testHostPortPodConnectivity(t, testAntreaIPAMNamespace11, data.testNamespace)
 		checkIPPoolsEmpty(t, data, ipPools)
 	})
 	t.Run("testAntreaIPAMOVSRestartSameNode", func(t *testing.T) {
@@ -260,7 +260,7 @@ func testAntreaIPAMPodConnectivitySameNode(t *testing.T, data *TestData) {
 	// One Per-Node IPAM Pod
 	podInfos = append(podInfos, podInfo{
 		name:      randName("test-pod-0-"),
-		namespace: testNamespace,
+		namespace: data.testNamespace,
 	})
 	workerNode := workerNodeName(1)
 
@@ -279,7 +279,7 @@ func testAntreaIPAMPodConnectivitySameNode(t *testing.T, data *TestData) {
 func testAntreaIPAMPodConnectivityDifferentNodes(t *testing.T, data *TestData) {
 	maxNodes := 3
 	var podInfos []podInfo
-	for _, namespace := range []string{testNamespace, testAntreaIPAMNamespace, testAntreaIPAMNamespace11, testAntreaIPAMNamespace12} {
+	for _, namespace := range []string{data.testNamespace, testAntreaIPAMNamespace, testAntreaIPAMNamespace11, testAntreaIPAMNamespace12} {
 		createdPodInfos, deletePods := createPodsOnDifferentNodes(t, data, namespace, "differentnodes")
 		defer deletePods()
 		if len(createdPodInfos) > maxNodes {

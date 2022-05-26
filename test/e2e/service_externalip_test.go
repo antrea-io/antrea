@@ -226,7 +226,7 @@ func testServiceExternalTrafficPolicyLocal(t *testing.T, data *TestData) {
 				antreaagenttypes.ServiceExternalIPPoolAnnotationKey: ipPool.Name,
 			}
 			service, err = data.CreateServiceWithAnnotations(fmt.Sprintf("test-svc-local-%d", idx),
-				testNamespace, 80, 80, corev1.ProtocolTCP, nil, false, true, v1.ServiceTypeLoadBalancer, nil, annotation)
+				data.testNamespace, 80, 80, corev1.ProtocolTCP, nil, false, true, v1.ServiceTypeLoadBalancer, nil, annotation)
 			require.NoError(t, err)
 			defer data.clientset.CoreV1().Services(service.Namespace).Delete(context.TODO(), service.Name, metav1.DeleteOptions{})
 
@@ -343,7 +343,7 @@ func testServiceWithExternalIPCRUD(t *testing.T, data *TestData) {
 				antreaagenttypes.ServiceExternalIPPoolAnnotationKey: ipPool.Name,
 			}
 			service, err = data.CreateServiceWithAnnotations(fmt.Sprintf("test-svc-eip-%d", idx),
-				testNamespace, 80, 80, corev1.ProtocolTCP, nil, false, false, v1.ServiceTypeLoadBalancer, nil, annotation)
+				data.testNamespace, 80, 80, corev1.ProtocolTCP, nil, false, false, v1.ServiceTypeLoadBalancer, nil, annotation)
 			require.NoError(t, err)
 
 			defer data.clientset.CoreV1().Services(service.Namespace).Delete(context.TODO(), service.Name, metav1.DeleteOptions{})
@@ -435,7 +435,7 @@ func testServiceUpdateExternalIP(t *testing.T, data *TestData) {
 				antreaagenttypes.ServiceExternalIPPoolAnnotationKey: originalPool.Name,
 			}
 			service, err := data.CreateServiceWithAnnotations(fmt.Sprintf("test-update-eip-%d", idx),
-				testNamespace, 80, 80, corev1.ProtocolTCP, nil, false, false, v1.ServiceTypeLoadBalancer, nil, annotation)
+				data.testNamespace, 80, 80, corev1.ProtocolTCP, nil, false, false, v1.ServiceTypeLoadBalancer, nil, annotation)
 			require.NoError(t, err)
 			defer data.clientset.CoreV1().Services(service.Namespace).Delete(context.TODO(), service.Name, metav1.DeleteOptions{})
 
@@ -516,7 +516,7 @@ func testServiceNodeFailure(t *testing.T, data *TestData) {
 			annotation := map[string]string{
 				antreaagenttypes.ServiceExternalIPPoolAnnotationKey: externalIPPoolTwoNodes.Name,
 			}
-			service, err := data.CreateServiceWithAnnotations("test-service-node-failure", testNamespace, 80, 80,
+			service, err := data.CreateServiceWithAnnotations("test-service-node-failure", data.testNamespace, 80, 80,
 				corev1.ProtocolTCP, nil, false, false, v1.ServiceTypeLoadBalancer, nil, annotation)
 			require.NoError(t, err)
 			defer data.clientset.CoreV1().Services(service.Namespace).Delete(context.TODO(), service.Name, metav1.DeleteOptions{})
@@ -591,7 +591,7 @@ func testExternalIPAccess(t *testing.T, data *TestData) {
 			// Create agnhost Pods on each Node.
 			for idx, node := range nodes {
 				createAgnhostPod(t, data, agnhosts[idx], node, false)
-				defer data.deletePodAndWait(defaultTimeout, agnhosts[idx], testNamespace)
+				defer data.deletePodAndWait(defaultTimeout, agnhosts[idx], data.testNamespace)
 			}
 			var port int32 = 8080
 			externalIPTestCases := []struct {
@@ -635,7 +635,7 @@ func testExternalIPAccess(t *testing.T, data *TestData) {
 					annotations := map[string]string{
 						antreaagenttypes.ServiceExternalIPPoolAnnotationKey: ipPool.Name,
 					}
-					service, err := data.CreateServiceWithAnnotations(et.serviceName, testNamespace, port, port, corev1.ProtocolTCP, map[string]string{"app": "agnhost"}, false, et.externalTrafficPolicyLocal, corev1.ServiceTypeLoadBalancer, &ipFamily, annotations)
+					service, err := data.CreateServiceWithAnnotations(et.serviceName, data.testNamespace, port, port, corev1.ProtocolTCP, map[string]string{"app": "agnhost"}, false, et.externalTrafficPolicyLocal, corev1.ServiceTypeLoadBalancer, &ipFamily, annotations)
 					require.NoError(t, err)
 					defer data.deleteService(service.Namespace, service.Name)
 
@@ -656,7 +656,7 @@ sleep 3600`, tt.clientName, tt.clientIP, tt.localIP, tt.clientIPMaskLen)
 
 					baseUrl := net.JoinHostPort(externalIP, strconv.FormatInt(int64(port), 10))
 
-					require.NoError(t, data.createPodOnNode(tt.clientName, testNamespace, host, agnhostImage, []string{"sh", "-c", cmd}, nil, nil, nil, true, func(pod *v1.Pod) {
+					require.NoError(t, data.createPodOnNode(tt.clientName, data.testNamespace, host, agnhostImage, []string{"sh", "-c", cmd}, nil, nil, nil, true, func(pod *v1.Pod) {
 						privileged := true
 						pod.Spec.Containers[0].SecurityContext = &v1.SecurityContext{Privileged: &privileged}
 						delete(pod.Labels, "app")
@@ -675,7 +675,7 @@ sleep 3600`, tt.clientName, tt.clientIP, tt.localIP, tt.clientIPMaskLen)
 						}
 					}))
 
-					_, err = data.PodWaitFor(defaultTimeout, tt.clientName, testNamespace, func(p *v1.Pod) (bool, error) {
+					_, err = data.PodWaitFor(defaultTimeout, tt.clientName, data.testNamespace, func(p *v1.Pod) (bool, error) {
 						for _, condition := range p.Status.Conditions {
 							if condition.Type == corev1.PodReady {
 								return condition.Status == corev1.ConditionTrue, nil
@@ -684,11 +684,11 @@ sleep 3600`, tt.clientName, tt.clientIP, tt.localIP, tt.clientIPMaskLen)
 						return false, nil
 					})
 					require.NoError(t, err)
-					defer data.deletePodAndWait(defaultTimeout, tt.clientName, testNamespace)
+					defer data.deletePodAndWait(defaultTimeout, tt.clientName, data.testNamespace)
 
 					hostNameUrl := fmt.Sprintf("%s/%s", baseUrl, "hostname")
 					probeCmd := fmt.Sprintf("ip netns exec %s curl --connect-timeout 1 --retry 5 --retry-connrefused %s", tt.clientName, hostNameUrl)
-					hostname, stderr, err := data.RunCommandFromPod(testNamespace, tt.clientName, "", []string{"sh", "-c", probeCmd})
+					hostname, stderr, err := data.RunCommandFromPod(data.testNamespace, tt.clientName, "", []string{"sh", "-c", probeCmd})
 					assert.NoError(t, err, "External IP should be able to be connected from remote: %s", stderr)
 
 					if et.externalTrafficPolicyLocal {
@@ -699,7 +699,7 @@ sleep 3600`, tt.clientName, tt.clientIP, tt.localIP, tt.clientIPMaskLen)
 						}
 						clientIPUrl := fmt.Sprintf("%s/clientip", baseUrl)
 						probeClientIPCmd := fmt.Sprintf("ip netns exec %s curl --connect-timeout 1 --retry 5 --retry-connrefused %s", tt.clientName, clientIPUrl)
-						clientIPPort, stderr, err := data.RunCommandFromPod(testNamespace, tt.clientName, "", []string{"sh", "-c", probeClientIPCmd})
+						clientIPPort, stderr, err := data.RunCommandFromPod(data.testNamespace, tt.clientName, "", []string{"sh", "-c", probeClientIPCmd})
 						assert.NoError(t, err, "External IP should be able to be connected from remote: %s", stderr)
 						clientIP, _, err := net.SplitHostPort(clientIPPort)
 						assert.NoError(t, err)

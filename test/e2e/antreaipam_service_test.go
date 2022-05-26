@@ -54,12 +54,12 @@ func TestAntreaIPAMService(t *testing.T) {
 	})
 	t.Run("testAntreaIPAMClusterIPv4", func(t *testing.T) {
 		skipIfNotIPv4Cluster(t)
-		data.testClusterIP(t, false, testNamespace, testAntreaIPAMNamespace)
+		data.testClusterIP(t, false, data.testNamespace, testAntreaIPAMNamespace)
 		checkIPPoolsEmpty(t, data, ipPools)
 	})
 	t.Run("testAntreaIPAMPodToClusterIPv4", func(t *testing.T) {
 		skipIfNotIPv4Cluster(t)
-		data.testClusterIP(t, false, testAntreaIPAMNamespace, testNamespace)
+		data.testClusterIP(t, false, testAntreaIPAMNamespace, data.testNamespace)
 		checkIPPoolsEmpty(t, data, ipPools)
 	})
 	t.Run("testAntreaIPAMVLAN11PodToAntreaIPAMVLAN11ClusterIPv4", func(t *testing.T) {
@@ -84,12 +84,12 @@ func TestAntreaIPAMService(t *testing.T) {
 	})
 	t.Run("testAntreaIPAMVLAN11ClusterIPv4", func(t *testing.T) {
 		skipIfNotIPv4Cluster(t)
-		data.testClusterIP(t, false, testNamespace, testAntreaIPAMNamespace11)
+		data.testClusterIP(t, false, data.testNamespace, testAntreaIPAMNamespace11)
 		checkIPPoolsEmpty(t, data, ipPools)
 	})
 	t.Run("testAntreaIPAMVLAN11PodToClusterIPv4", func(t *testing.T) {
 		skipIfNotIPv4Cluster(t)
-		data.testClusterIP(t, false, testAntreaIPAMNamespace11, testNamespace)
+		data.testClusterIP(t, false, testAntreaIPAMNamespace11, data.testNamespace)
 		checkIPPoolsEmpty(t, data, ipPools)
 	})
 
@@ -100,12 +100,12 @@ func TestAntreaIPAMService(t *testing.T) {
 	})
 	t.Run("testAntreaIPAMNodePort", func(t *testing.T) {
 		skipIfHasWindowsNodes(t)
-		data.testNodePort(t, false, testNamespace, testAntreaIPAMNamespace)
+		data.testNodePort(t, false, data.testNamespace, testAntreaIPAMNamespace)
 		checkIPPoolsEmpty(t, data, ipPools)
 	})
 	t.Run("testAntreaIPAMPodToNodePort", func(t *testing.T) {
 		skipIfHasWindowsNodes(t)
-		data.testNodePort(t, false, testAntreaIPAMNamespace, testNamespace)
+		data.testNodePort(t, false, testAntreaIPAMNamespace, data.testNamespace)
 		checkIPPoolsEmpty(t, data, ipPools)
 	})
 	t.Run("testAntreaIPAMVLAN11PodToAntreaIPAMVLAN11NodePort", func(t *testing.T) {
@@ -130,12 +130,12 @@ func TestAntreaIPAMService(t *testing.T) {
 	})
 	t.Run("testAntreaIPAMVLAN11NodePort", func(t *testing.T) {
 		skipIfHasWindowsNodes(t)
-		data.testNodePort(t, false, testNamespace, testAntreaIPAMNamespace11)
+		data.testNodePort(t, false, data.testNamespace, testAntreaIPAMNamespace11)
 		checkIPPoolsEmpty(t, data, ipPools)
 	})
 	t.Run("testAntreaIPAMVLAN11PodToNodePort", func(t *testing.T) {
 		skipIfHasWindowsNodes(t)
-		data.testNodePort(t, false, testAntreaIPAMNamespace11, testNamespace)
+		data.testNodePort(t, false, testAntreaIPAMNamespace11, data.testNamespace)
 		checkIPPoolsEmpty(t, data, ipPools)
 	})
 }
