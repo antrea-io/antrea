@@ -115,6 +115,7 @@ type CNIServer struct {
 	enableBridgingMode   bool
 	// Enable AntreaIPAM for secondary networks implementd by other CNIs.
 	enableSecondaryNetworkIPAM bool
+	disableTXChecksumOffload   bool
 	secondaryNetworkEnabled    bool
 	// networkReadyCh notifies that the network is ready so new Pods can be created. Therefore, CmdAdd waits for it.
 	networkReadyCh <-chan struct{}
@@ -623,7 +624,7 @@ func New(
 	nodeConfig *config.NodeConfig,
 	kubeClient clientset.Interface,
 	routeClient route.Interface,
-	isChaining, enableBridgingMode, enableSecondaryNetworkIPAM bool,
+	isChaining, enableBridgingMode, enableSecondaryNetworkIPAM, disableTXChecksumOffload bool,
 	networkReadyCh <-chan struct{},
 ) *CNIServer {
 	return &CNIServer{
@@ -637,6 +638,7 @@ func New(
 		routeClient:                routeClient,
 		isChaining:                 isChaining,
 		enableBridgingMode:         enableBridgingMode,
+		disableTXChecksumOffload:   disableTXChecksumOffload,
 		enableSecondaryNetworkIPAM: enableSecondaryNetworkIPAM,
 		networkReadyCh:             networkReadyCh,
 	}
@@ -660,7 +662,7 @@ func (s *CNIServer) Initialize(
 	s.podConfigurator, err = newPodConfigurator(
 		ovsBridgeClient, ofClient, s.routeClient, ifaceStore, s.nodeConfig.GatewayConfig.MAC,
 		ovsBridgeClient.GetOVSDatapathType(), ovsBridgeClient.IsHardwareOffloadEnabled(), podUpdateNotifier,
-		podInfoStore,
+		podInfoStore, s.disableTXChecksumOffload,
 	)
 	if err != nil {
 		return fmt.Errorf("error during initialize podConfigurator: %v", err)
