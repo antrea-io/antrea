@@ -62,20 +62,20 @@ DATA SET:
     reversePacketDeltaCount: 136211
     reverseOctetDeltaCount: 7083284
     sourcePodName: perftest-a
-    sourcePodNamespace: antrea-test
+    sourcePodNamespace: testflowaggregator-b6mjmbpl
     sourceNodeName: k8s-node-control-plane
     destinationPodName: perftest-b
-    destinationPodNamespace: antrea-test
+    destinationPodNamespace: testflowaggregator-b6mjmbpl
     destinationNodeName: k8s-node-control-plane
     destinationServicePort: 0
     destinationServicePortName:
     ingressNetworkPolicyName: test-flow-aggregator-networkpolicy-ingress-allow
-    ingressNetworkPolicyNamespace: antrea-test
+    ingressNetworkPolicyNamespace: testflowaggregator-b6mjmbpl
     ingressNetworkPolicyType: 1
     ingressNetworkPolicyRuleName:
     ingressNetworkPolicyRuleAction: 1
     egressNetworkPolicyName: test-flow-aggregator-networkpolicy-egress-allow
-    egressNetworkPolicyNamespace: antrea-test
+    egressNetworkPolicyNamespace: testflowaggregator-b6mjmbpl
     egressNetworkPolicyType: 1
     egressNetworkPolicyRuleName:
     egressNetworkPolicyRuleAction: 1
@@ -719,9 +719,9 @@ func checkRecordsForFlowsClickHouse(t *testing.T, data *TestData, srcIP, dstIP, 
 		assert := assert.New(t)
 		if checkService {
 			if isIntraNode {
-				assert.Contains(record.DestinationServicePortName, "antrea-test/perftest-b", "Record with ServiceIP does not have Service name")
+				assert.Contains(record.DestinationServicePortName, data.testNamespace+"/perftest-b", "Record with ServiceIP does not have Service name")
 			} else {
-				assert.Contains(record.DestinationServicePortName, "antrea-test/perftest-c", "Record with ServiceIP does not have Service name")
+				assert.Contains(record.DestinationServicePortName, data.testNamespace+"/perftest-c", "Record with ServiceIP does not have Service name")
 			}
 		}
 		if checkK8sNetworkPolicy {
