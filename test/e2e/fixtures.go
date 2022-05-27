@@ -401,11 +401,15 @@ func teardownFlowAggregator(tb testing.TB, data *TestData) {
 	if err := data.DeleteNamespace(flowAggregatorNamespace, defaultTimeout); err != nil {
 		tb.Logf("Error when tearing down flow aggregator: %v", err)
 	}
-
-	tb.Logf("Deleting '%s' K8s Namespace and ClickHouse Operator", flowVisibilityNamespace)
-	if err := data.DeleteNamespace(flowVisibilityNamespace, defaultTimeout); err != nil {
-		tb.Logf("Error when tearing down flow visibility: %v", err)
+	tb.Logf("Deleting K8s resources created by flow visibility YAML")
+	if err := data.deleteFlowVisibility(); err != nil {
+		tb.Logf("Error when deleting K8s resources created by flow visibility YAML: %v", err)
 	}
+	tb.Logf("Deleting '%s' K8s Namespace", flowVisibilityNamespace)
+	if err := data.DeleteNamespace(flowVisibilityNamespace, defaultTimeout); err != nil {
+		tb.Logf("Error when deleting flow-visibility namespace: %v", err)
+	}
+	tb.Logf("Deleting ClickHouse Operator")
 	if err := data.deleteClickHouseOperator(); err != nil {
 		tb.Logf("Error when removing ClickHouse Operator: %v", err)
 	}

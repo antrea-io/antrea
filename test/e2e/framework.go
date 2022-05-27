@@ -751,10 +751,26 @@ func (data *TestData) deployFlowVisibilityClickHouse() (string, error) {
 	return chSvc.Spec.ClusterIP, nil
 }
 
+func (data *TestData) deleteFlowVisibility() error {
+	startTime := time.Now()
+	defer func() {
+		log.Infof("Deleting K8s resources created by flow visibility YAML took %v", time.Since(startTime))
+	}()
+	rc, _, _, err := data.provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl delete -f %s", flowVisibilityYML))
+	if err != nil || rc != 0 {
+		return fmt.Errorf("error when deleting K8s resources created by flow visibility YAML: %v", err)
+	}
+	return nil
+}
+
 func (data *TestData) deleteClickHouseOperator() error {
+	startTime := time.Now()
+	defer func() {
+		log.Infof("Deleting ClickHouse Operator took %v", time.Since(startTime))
+	}()
 	rc, _, _, err := data.provider.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl delete -f %s -n kube-system", chOperatorYML))
 	if err != nil || rc != 0 {
-		return fmt.Errorf("error when deleting ClickHouse operator: %v", err)
+		return fmt.Errorf("error when deleting ClickHouse Operator: %v", err)
 	}
 	return nil
 }
