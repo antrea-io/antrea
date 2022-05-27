@@ -100,14 +100,6 @@ func runMember(o *Options) error {
 	go staleController.Run(stopCh)
 	// Member runs ResourceImportReconciler from RemoteCommonArea only
 
-	// ResourceImportFilterReconciler is only run on the member cluster
-	if err = (&multiclustercontrollers.ResourceImportFilterReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
-		return fmt.Errorf("error creating ResourceImportFilter controller: %v", err)
-	}
-
 	klog.InfoS("Member MC Controller Starting Manager")
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		return fmt.Errorf("error running Manager: %v", err)

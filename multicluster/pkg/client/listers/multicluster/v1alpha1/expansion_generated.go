@@ -65,14 +65,6 @@ type ResourceExportListerExpansion interface{}
 // ResourceExportNamespaceLister.
 type ResourceExportNamespaceListerExpansion interface{}
 
-// ResourceExportFilterListerExpansion allows custom methods to be added to
-// ResourceExportFilterLister.
-type ResourceExportFilterListerExpansion interface{}
-
-// ResourceExportFilterNamespaceListerExpansion allows custom methods to be added to
-// ResourceExportFilterNamespaceLister.
-type ResourceExportFilterNamespaceListerExpansion interface{}
-
 // ResourceImportListerExpansion allows custom methods to be added to
 // ResourceImportLister.
 type ResourceImportListerExpansion interface{}
@@ -80,11 +72,3 @@ type ResourceImportListerExpansion interface{}
 // ResourceImportNamespaceListerExpansion allows custom methods to be added to
 // ResourceImportNamespaceLister.
 type ResourceImportNamespaceListerExpansion interface{}
-
-// ResourceImportFilterListerExpansion allows custom methods to be added to
-// ResourceImportFilterLister.
-type ResourceImportFilterListerExpansion interface{}
-
-// ResourceImportFilterNamespaceListerExpansion allows custom methods to be added to
-// ResourceImportFilterNamespaceLister.
-type ResourceImportFilterNamespaceListerExpansion interface{}
