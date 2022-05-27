@@ -146,7 +146,7 @@ func TestParseFlow(t *testing.T) {
 		pkt, err := parseFlow()
 		if err != nil {
 			if tc.success {
-				t.Errorf("error when running parseFlow(): %w", err)
+				t.Errorf("error when running parseFlow(): %v", err)
 			}
 		} else {
 			assert.Equal(t, tc.expected.Spec.Packet, *pkt)
