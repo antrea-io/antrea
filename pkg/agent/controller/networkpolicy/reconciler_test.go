@@ -526,7 +526,7 @@ func TestReconcilerReconcile(t *testing.T) {
 			mockOFClient := openflowtest.NewMockClient(controller)
 			// TODO: mock idAllocator and priorityAssigner
 			for i := 0; i < len(tt.expectedOFRules); i++ {
-				mockOFClient.EXPECT().InstallPolicyRuleFlows(gomock.Any())
+				mockOFClient.EXPECT().InstallPolicyRuleFlows(newPolicyRulesMatcher(tt.expectedOFRules[i]))
 			}
 			r := newTestReconciler(t, controller, ifaceStore, mockOFClient, true, false)
 			if err := r.Reconcile(tt.args); (err != nil) != tt.wantErr {
@@ -1966,6 +1966,7 @@ func newPolicyRulesMatcher(ofRule *types.PolicyRule) gomock.Matcher {
 	return policyRuleMatcher{ofPolicyRule: ofRule}
 }
 
+// Matches checks if predictable fields of *types.PolicyRule match.
 func (m policyRuleMatcher) Matches(x interface{}) bool {
 	b, ok := x.(*types.PolicyRule)
 	if !ok {
@@ -1975,7 +1976,6 @@ func (m policyRuleMatcher) Matches(x interface{}) bool {
 	if !sliceEqual(a.Service, b.Service) ||
 		!sliceEqual(a.From, b.From) ||
 		!sliceEqual(a.To, b.To) ||
-		a.TableID != b.TableID ||
 		a.PolicyRef != b.PolicyRef ||
 		a.Direction != b.Direction ||
 		a.EnableLogging != b.EnableLogging {
