@@ -314,7 +314,9 @@ func (c *EgressController) Run(stopCh <-chan struct{}) {
 		return
 	}
 
-	c.removeStaleEgressIPs()
+	if err := c.replaceEgressIPs(); err != nil {
+		klog.ErrorS(err, "failed to replace Egress IPs")
+	}
 
 	go wait.NonSlidingUntil(c.watchEgressGroup, 5*time.Second, stopCh)
 
@@ -324,10 +326,10 @@ func (c *EgressController) Run(stopCh <-chan struct{}) {
 	<-stopCh
 }
 
-// removeStaleEgressIPs unassigns stale Egress IPs that shouldn't be present on this Node.
-// These Egresses were either deleted from the Kubernetes API or migrated to other Nodes when the agent on this Node
-// was not running.
-func (c *EgressController) removeStaleEgressIPs() {
+// replaceEgressIPs unassigns stale Egress IPs that shouldn't be present on this Node and assigns the missing IPs
+// on this node. The unassigned IPs are from Egresses that were either deleted from the Kubernetes API or migrated
+// to other Nodes when the agent on this Node was not running.
+func (c *EgressController) replaceEgressIPs() error {
 	desiredLocalEgressIPs := sets.NewString()
 	egresses, _ := c.egressLister.List(labels.Everything())
 	for _, egress := range egresses {
@@ -335,12 +337,10 @@ func (c *EgressController) removeStaleEgressIPs() {
 			desiredLocalEgressIPs.Insert(egress.Spec.EgressIP)
 		}
 	}
-	actualLocalEgressIPs := c.ipAssigner.AssignedIPs()
-	for ip := range actualLocalEgressIPs.Difference(desiredLocalEgressIPs) {
-		if err := c.ipAssigner.UnassignIP(ip); err != nil {
-			klog.ErrorS(err, "Failed to clean up stale Egress IP", "ip", ip)
-		}
+	if err := c.ipAssigner.InitIPs(desiredLocalEgressIPs); err != nil {
+		return err
 	}
+	return nil
 }
 
 // worker is a long-running function that will continually call the processNextWorkItem function in
