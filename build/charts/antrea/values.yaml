@@ -16,6 +16,11 @@ trafficEncryptionMode: "none"
 # -- Enable bridging mode of Pod network on Nodes, in which the Node's transport
 # interface is connected to the OVS bridge.
 enableBridgingMode: false
+# -- Disable TX checksum offloading for container network interfaces. It's
+# supposed to be set to true when the datapath doesn't support TX checksum
+# offloading, which causes packets to be dropped due to bad checksum. It affects
+# Pods running on Linux Nodes only.
+disableTXChecksumOffload: false
 # -- Whether or not to SNAT (using the Node IP) the egress traffic from a Pod to
 # the external network.
 noSNAT: false

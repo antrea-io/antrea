@@ -82,8 +82,9 @@ func newPodConfigurator(
 	isOvsHardwareOffloadEnabled bool,
 	podUpdateNotifier channel.Notifier,
 	podInfoStore cnipodcache.CNIPodInfoStore,
+	disableTXChecksumOffload bool,
 ) (*podConfigurator, error) {
-	ifConfigurator, err := newInterfaceConfigurator(ovsDatapathType, isOvsHardwareOffloadEnabled)
+	ifConfigurator, err := newInterfaceConfigurator(ovsDatapathType, isOvsHardwareOffloadEnabled, disableTXChecksumOffload)
 	if err != nil {
 		return nil, err
 	}

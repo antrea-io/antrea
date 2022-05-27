@@ -374,6 +374,7 @@ func run(o *Options) error {
 		isChaining,
 		enableBridgingMode,
 		enableAntreaIPAM,
+		o.config.DisableTXChecksumOffload,
 		networkReadyCh)
 
 	var cniPodInfoStore cnipodcache.CNIPodInfoStore
