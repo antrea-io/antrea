@@ -938,14 +938,26 @@ visualization. They can be found in the Home page of Grafana, by clicking
 the Magnifier button on the left menu bar.
 <img src="https://downloads.antrea.io/static/02152022/flow-visibility-grafana-intro-1.png" width="900" alt="Grafana Search Dashboards Guide">
 
-Note that all pre-built dashboards (except for the "Flow Records Dashboard")
+- Note that all pre-built dashboards (except for the "Flow Records Dashboard")
 filter out Pod traffic for which the source or destination Namespace is one of
 `kube-system`, `flow-visibility`, or `flow-aggregator`. The primary motivation
 for this is to avoid showing the connections between the Antrea Agents and the
 Flow Aggregator, between the Flow Aggregator and ClickHouse, and between
-ClickHouse and Grafana. If you want to stop filtering traffic like this, you
-will need to [customize dashboards](#dashboards-customization) and edit the
-ClickHouse SQL query for each individual panel.
+ClickHouse and Grafana.
+
+- Also note that we limit the number of values displayed on panels. For table
+panel on the Flow Records Dashboard, the limit is set to 10000. For Sankey
+diagrams, the limit is 50. For time-series line graphs, the limit is 50. For
+pie charts, the limit is 25. The motivation is, when the input data is very
+large, we want to keep the charts readable and avoid consuming too much time
+and resources to render them.
+
+If you want to stop filtering traffic by Namespace, or edit the panel limit,
+you will need to edit the ClickHouse SQL query for each individual panel. Please
+follow the [dashboards customization](#dashboards-customization) section for
+more information. As a special case, to edit the panel limit for pie charts,
+instead of editing the query, please follow the [doc](https://grafana.com/docs/grafana/latest/visualizations/pie-chart-panel/#limit)
+to edit `Value options - Limit`.
 
 ##### Flow Records Dashboard
 
