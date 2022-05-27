@@ -626,7 +626,7 @@ func (data *TestData) createNamespaceWithAnnotations(namespace string, annotatio
 	return data.CreateNamespace(namespace, mutateFunc)
 }
 
-// DeleteNamespace deletes the provided namespace and waits for deletion to actually complete.
+// DeleteNamespace deletes the provided Namespace, and waits for deletion to actually complete if timeout>=0
 func (data *TestData) DeleteNamespace(namespace string, timeout time.Duration) error {
 	var gracePeriodSeconds int64
 	var propagationPolicy = metav1.DeletePropagationForeground
@@ -648,7 +648,22 @@ func (data *TestData) DeleteNamespace(namespace string, timeout time.Duration) e
 		}
 		return fmt.Errorf("error when deleting '%s' Namespace: %v", namespace, err)
 	}
+	if timeout >= 0 {
+		return wait.Poll(defaultInterval, timeout, func() (bool, error) {
+			if ns, err := data.clientset.CoreV1().Namespaces().Get(context.TODO(), namespace, metav1.GetOptions{}); err != nil {
+				if errors.IsNotFound(err) {
+					// Success
+					return true, nil
+				}
+				return false, fmt.Errorf("error when getting Namespace '%s' after delete: %v", namespace, err)
+			} else if ns.Status.Phase != corev1.NamespaceTerminating {
+				return false, fmt.Errorf("deleted Namespace '%s' should be in 'Terminating' phase", namespace)
+			}
 
+			// Keep trying
+			return false, nil
+		})
+	}
 	return nil
 }
 
