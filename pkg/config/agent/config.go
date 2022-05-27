@@ -111,6 +111,10 @@ type AgentConfig struct {
 	// IPv4 and Linux Nodes, and can be enabled only when `ovsDatapathType` is `system`,
 	// `trafficEncapMode` is `noEncap`, and `noSNAT` is true.
 	EnableBridgingMode bool `yaml:"enableBridgingMode,omitempty"`
+	// Disable TX checksum offloading for container network interfaces. It's supposed to be set to true when the
+	// datapath doesn't support TX checksum offloading, which causes packets to be dropped due to bad checksum.
+	// It affects Pods running on Linux Nodes only.
+	DisableTXChecksumOffload bool `yaml:"disableTXChecksumOffload,omitempty"`
 	// APIPort is the port for the antrea-agent APIServer to serve on.
 	// Defaults to 10350.
 	APIPort int `yaml:"apiPort,omitempty"`

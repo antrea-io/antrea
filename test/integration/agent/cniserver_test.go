@@ -574,7 +574,7 @@ func newTester() *cmdAddDelTester {
 		testNodeConfig,
 		k8sFake.NewSimpleClientset(),
 		routeMock,
-		false, false, false,
+		false, false, false, false,
 		tester.networkReadyCh)
 	tester.server.Initialize(ovsServiceMock, ofServiceMock, ifaceStore, channel.NewSubscribableChannel("PodUpdate", 100), nil)
 	ctx := context.Background()
@@ -738,7 +738,7 @@ func setupChainTest(
 			testNodeConfig,
 			k8sFake.NewSimpleClientset(),
 			routeMock,
-			true, false, false,
+			true, false, false, false,
 			networkReadyCh)
 	} else {
 		server = inServer

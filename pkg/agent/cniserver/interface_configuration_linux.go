@@ -47,10 +47,11 @@ const (
 type ifConfigurator struct {
 	ovsDatapathType             ovsconfig.OVSDatapathType
 	isOvsHardwareOffloadEnabled bool
+	disableTXChecksumOffload    bool
 }
 
-func newInterfaceConfigurator(ovsDatapathType ovsconfig.OVSDatapathType, isOvsHardwareOffloadEnabled bool) (*ifConfigurator, error) {
-	return &ifConfigurator{ovsDatapathType: ovsDatapathType, isOvsHardwareOffloadEnabled: isOvsHardwareOffloadEnabled}, nil
+func newInterfaceConfigurator(ovsDatapathType ovsconfig.OVSDatapathType, isOvsHardwareOffloadEnabled bool, disableTXChecksumOffload bool) (*ifConfigurator, error) {
+	return &ifConfigurator{ovsDatapathType: ovsDatapathType, isOvsHardwareOffloadEnabled: isOvsHardwareOffloadEnabled, disableTXChecksumOffload: disableTXChecksumOffload}, nil
 }
 
 func renameLink(curName, newName string) error {
@@ -260,9 +261,10 @@ func (ic *ifConfigurator) configureContainerLinkVeth(
 		}
 		containerIface.Mac = containerVeth.HardwareAddr.String()
 		hostIface.Mac = hostVeth.HardwareAddr.String()
+		// Disable TX checksum offloading when it's configured explicitly or the datapath is netdev.
 		// OVS netdev datapath doesn't support TX checksum offloading, i.e. if packet
 		// arrives with bad/no checksum it will be sent to the output port with same bad/no checksum.
-		if ic.ovsDatapathType == ovsconfig.OVSDatapathNetdev {
+		if ic.disableTXChecksumOffload || ic.ovsDatapathType == ovsconfig.OVSDatapathNetdev {
 			if err := ethtool.EthtoolTXHWCsumOff(containerVeth.Name); err != nil {
 				return fmt.Errorf("error when disabling TX checksum offload on container veth: %v", err)
 			}
