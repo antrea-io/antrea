@@ -29,10 +29,6 @@ var (
 		IP:       "192.168.17.13",
 		Hostname: "pod3",
 	}
-	addr4 = corev1.EndpointAddress{
-		IP:       "192.168.17.14",
-		Hostname: "pod4",
-	}
 	epPorts = []corev1.EndpointPort{
 		{
 			Name:     "http",

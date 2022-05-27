@@ -163,7 +163,7 @@ func (r *ResourceImportReconciler) handleResImpUpdateForService(ctx context.Cont
 	}
 	if !svcNotFound {
 		// Here we will skip creating derived MC Service when a Service with the same name
-		// already exists but it not previously created by Importer.
+		// already exists but it's not previously created by Importer.
 		if _, ok := svc.Annotations[common.AntreaMCServiceAnnotation]; !ok {
 			err := errors.New("the Service conflicts with existing one")
 			klog.ErrorS(err, "Unable to import Service", "service", klog.KObj(svc))
@@ -180,7 +180,7 @@ func (r *ResourceImportReconciler) handleResImpUpdateForService(ctx context.Cont
 		if err = r.localClusterClient.Get(ctx, svcName, svc); err != nil {
 			// Ignore the error here, and requeue the event again when both Service
 			// and ServiceImport are created later
-			klog.ErrorS(err, "Failed to get latest imported Service", "service", klog.KObj(svc))
+			klog.ErrorS(err, "Failed to get latest imported Service", "service", klog.KObj(svcObj))
 		}
 	}
 
@@ -286,12 +286,13 @@ func (r *ResourceImportReconciler) handleResImpUpdateForEndpoints(ctx context.Co
 		}
 	}
 	// ResourceImport includes all Endpoints from exported Service.
-	// Need to remove any Endpoints from the local cluster.
+	// Need to remove any Service's ClusterIP from the local cluster.
 	var newSubsets []corev1.EndpointSubset
-	localEp := &corev1.Endpoints{}
-	err = r.localClusterClient.Get(ctx, types.NamespacedName{Namespace: resImp.Spec.Namespace, Name: resImp.Spec.Name}, localEp)
+	localSvc := &corev1.Service{}
+	err = r.localClusterClient.Get(ctx, types.NamespacedName{Namespace: resImp.Spec.Namespace, Name: resImp.Spec.Name}, localSvc)
 	if err == nil {
-		newSubsets = removeLocalSubsets(localEp.Subsets, resImp.Spec.Endpoints.Subsets)
+		subsets := common.GetServiceEndpointSubset(localSvc)
+		newSubsets = removeLocalSubsets([]corev1.EndpointSubset{subsets}, resImp.Spec.Endpoints.Subsets)
 	} else if apierrors.IsNotFound(err) {
 		newSubsets = resImp.Spec.Endpoints.Subsets
 	} else {
@@ -390,7 +391,6 @@ func getMCServiceImport(resImp *multiclusterv1alpha1.ResourceImport, clusterID s
 }
 
 func removeLocalSubsets(local []corev1.EndpointSubset, allSubsets []corev1.EndpointSubset) []corev1.EndpointSubset {
-	filteredLocal := common.FilterEndpointSubsets(local)
 	size := len(allSubsets)
 	if size < 1 {
 		return allSubsets
@@ -399,7 +399,7 @@ func removeLocalSubsets(local []corev1.EndpointSubset, allSubsets []corev1.Endpo
 	copy(newSubsets, allSubsets)
 	lastIdx := size - 1
 	for n, r := range newSubsets {
-		for _, l := range filteredLocal {
+		for _, l := range local {
 			if apiequality.Semantic.DeepEqual(r, l) {
 				newSubsets[n] = newSubsets[lastIdx]
 				newSubsets[lastIdx] = corev1.EndpointSubset{}

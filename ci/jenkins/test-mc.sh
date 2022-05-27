@@ -33,8 +33,7 @@ LEADER_CLUSTER_CONFIG="--kubeconfig=$MULTICLUSTER_KUBECONFIG_PATH/leader"
 EAST_CLUSTER_CONFIG="--kubeconfig=$MULTICLUSTER_KUBECONFIG_PATH/east"
 WEST_CLUSTER_CONFIG="--kubeconfig=$MULTICLUSTER_KUBECONFIG_PATH/west"
 ENABLE_MC_GATEWAY=false
-
-CONTROL_PLANE_NODE_ROLE="control-plane,master"
+IS_CONTAINERD=false
 
 multicluster_kubeconfigs=($EAST_CLUSTER_CONFIG $LEADER_CLUSTER_CONFIG $WEST_CLUSTER_CONFIG)
 membercluster_kubeconfigs=($EAST_CLUSTER_CONFIG $WEST_CLUSTER_CONFIG)
@@ -160,6 +159,7 @@ function wait_for_antrea_multicluster_pods_ready {
 }
 
 function wait_for_multicluster_controller_ready {
+    echo "====== Deploying Antrea Multicluster Leader Cluster with ${LEADER_CLUSTER_CONFIG} ======"
     kubectl create ns antrea-mcs-ns  "${LEADER_CLUSTER_CONFIG}" || true
     kubectl apply -f ./multicluster/test/yamls/manifest.yml "${LEADER_CLUSTER_CONFIG}"
     kubectl apply -f ./multicluster/build/yamls/antrea-multicluster-leader-global.yml "${LEADER_CLUSTER_CONFIG}"
@@ -175,15 +175,17 @@ function wait_for_multicluster_controller_ready {
     sed -i '/creationTimestamp/d' ./multicluster/test/yamls/leader-access-token.yml
     sed -i 's/antrea-multicluster-member-access-sa/antrea-multicluster-controller/g' ./multicluster/test/yamls/leader-access-token.yml
     sed -i 's/antrea-mcs-ns/kube-system/g' ./multicluster/test/yamls/leader-access-token.yml
-    echo "type: Opaque" >>./multicluster/test/yamls/leader-access-token.yml
+    echo "type: Opaque" >> ./multicluster/test/yamls/leader-access-token.yml
 
     for config in "${membercluster_kubeconfigs[@]}";
     do
+        echo "====== Deploying Antrea Multicluster Member Cluster with ${config} ======"
         kubectl apply -f ./multicluster/build/yamls/antrea-multicluster-member.yml ${config}
         kubectl rollout status deployment/antrea-mc-controller -n kube-system ${config}
         kubectl apply -f ./multicluster/test/yamls/leader-access-token.yml ${config}
     done
 
+    echo "====== ClusterSet Initialization in Leader and Member Clusters ======"
     kubectl apply -f ./multicluster/test/yamls/east-member-cluster.yml "${EAST_CLUSTER_CONFIG}"
     kubectl apply -f ./multicluster/test/yamls/west-member-cluster.yml "${WEST_CLUSTER_CONFIG}"
     kubectl apply -f ./multicluster/test/yamls/clusterset.yml "${LEADER_CLUSTER_CONFIG}"
@@ -213,7 +215,11 @@ function deliver_antrea_multicluster {
     do
        kubectl get nodes -o wide --no-headers=true ${kubeconfig}| awk '{print $6}' | while read IP; do
             rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no" "${WORKDIR}"/antrea-ubuntu.tar jenkins@[${IP}]:${WORKDIR}/antrea-ubuntu.tar
-            ssh -o StrictHostKeyChecking=no -n jenkins@${IP} "${CLEAN_STALE_IMAGES}; docker load -i ${WORKDIR}/antrea-ubuntu.tar" || true
+            if [[ ${IS_CONTAINERD} ]];then
+              ssh -o StrictHostKeyChecking=no -n jenkins@${IP} "${CLEAN_STALE_IMAGES}; sudo ctr -n=k8s.io images import ${WORKDIR}/antrea-ubuntu.tar" || true
+            else
+              ssh -o StrictHostKeyChecking=no -n jenkins@${IP} "${CLEAN_STALE_IMAGES}; docker load -i ${WORKDIR}/antrea-ubuntu.tar" || true
+            fi
        done
     done
 }
@@ -232,13 +238,17 @@ function deliver_multicluster_controller {
 
     for kubeconfig in "${multicluster_kubeconfigs[@]}"
     do
-        kubectl get nodes -o wide --no-headers=true "${kubeconfig}"| awk '{print $6}' | while read IP; do
+        kubectl get nodes -o wide --no-headers=true "${kubeconfig}" | awk '{print $6}' | while read IP; do
             rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no" "${WORKDIR}"/antrea-mcs.tar jenkins@[${IP}]:${WORKDIR}/antrea-mcs.tar
-            ssh -o StrictHostKeyChecking=no -n jenkins@"${IP}" "${CLEAN_STALE_IMAGES}; docker load -i ${WORKDIR}/antrea-mcs.tar" || true
+            if [[ ${IS_CONTAINERD} ]];then
+              ssh -o StrictHostKeyChecking=no -n jenkins@"${IP}" "${CLEAN_STALE_IMAGES}; sudo ctr -n=k8s.io images import ${WORKDIR}/antrea-mcs.tar" || true
+            else
+              ssh -o StrictHostKeyChecking=no -n jenkins@"${IP}" "${CLEAN_STALE_IMAGES}; docker load -i ${WORKDIR}/antrea-mcs.tar" || true
+            fi
         done
     done
 
-    leader_ip=$(kubectl get nodes -o wide --no-headers=true ${LEADER_CLUSTER_CONFIG} | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 == role {print $6}')
+    leader_ip=$(kubectl get nodes -o wide --no-headers=true ${LEADER_CLUSTER_CONFIG} | awk -v role1="master" -v role2="control-plane" '($3 ~ role1 || $3 ~ role2) {print $6}')
     sed -i "s|<LEADER_CLUSTER_IP>|${leader_ip}|" ./multicluster/test/yamls/east-member-cluster.yml
     sed -i "s|<LEADER_CLUSTER_IP>|${leader_ip}|" ./multicluster/test/yamls/west-member-cluster.yml
     rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no" ./multicluster/test/yamls/test-acnp-copy-span-ns-isolation.yml jenkins@["${leader_ip}"]:"${WORKDIR}"/test-acnp-copy-span-ns-isolation.yml
@@ -248,7 +258,7 @@ function deliver_multicluster_controller {
        # Remove the longest matched substring '*/' from a string like '--kubeconfig=/var/lib/jenkins/.kube/east'
        # to get the last element which is the cluster name.
        cluster=${kubeconfig##*/}
-       ip=$(kubectl get nodes -o wide --no-headers=true ${kubeconfig} | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 == role {print $6}')
+       ip=$(kubectl get nodes -o wide --no-headers=true ${kubeconfig} |  awk -v role1="master" -v role2="control-plane" '($3 ~ role1 || $3 ~ role2) {print $6}')
        rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no" ./multicluster/test/yamls/test-${cluster}-serviceexport.yml jenkins@["${ip}"]:"${WORKDIR}"/serviceexport.yml
     done
 }
@@ -262,7 +272,14 @@ function run_multicluster_e2e {
     export PATH=$GOROOT/bin:$PATH
 
     if [[ ${ENABLE_MC_GATEWAY} ]]; then
-      sed -i.bak -E "s/#[[:space:]]*Multicluster[[:space:]]*:[[:space:]]*[a-z]+[[:space:]]*$/  Multicluster: true/" build/yamls/antrea.yml
+cat > build/yamls/chart-values/antrea.yml <<EOF
+multicluster:
+  enable: true
+featureGates: {
+  Multicluster: true
+}
+EOF
+make manifest
     fi
     wait_for_antrea_multicluster_pods_ready "${LEADER_CLUSTER_CONFIG}"
     wait_for_antrea_multicluster_pods_ready "${EAST_CLUSTER_CONFIG}"
@@ -281,10 +298,14 @@ function run_multicluster_e2e {
     do
         kubectl get nodes -o wide --no-headers=true "${kubeconfig}"| awk '{print $6}' | while read IP; do
             rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no" "${WORKDIR}"/nginx.tar jenkins@["${IP}"]:"${WORKDIR}"/nginx.tar
-            ssh -o StrictHostKeyChecking=no -n jenkins@"${IP}" "${CLEAN_STALE_IMAGES}; docker load -i ${WORKDIR}/nginx.tar" || true
-
             rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no" "${WORKDIR}"/agnhost.tar jenkins@["${IP}"]:"${WORKDIR}"/agnhost.tar
+        if [[ ${IS_CONTAINERD} ]];then
+            ssh -o StrictHostKeyChecking=no -n jenkins@"${IP}" "${CLEAN_STALE_IMAGES}; sudo ctr -n=k8s.io images import ${WORKDIR}/nginx.tar" || true
+            ssh -o StrictHostKeyChecking=no -n jenkins@"${IP}" "sudo ctr -n=k8s.io images import ${WORKDIR}/agnhost.tar" || true
+        else
+            ssh -o StrictHostKeyChecking=no -n jenkins@"${IP}" "${CLEAN_STALE_IMAGES}; docker load -i ${WORKDIR}/nginx.tar" || true
             ssh -o StrictHostKeyChecking=no -n jenkins@"${IP}" "docker load -i ${WORKDIR}/agnhost.tar" || true
+        fi
         done
 
     done
@@ -306,6 +327,15 @@ function run_multicluster_e2e {
 trap clean_multicluster EXIT
 clean_tmp
 clean_images
+
+# We assume all clusters in one testing ClusterSet are using the same runtime,
+# so check leader cluster only to set IS_CONTAINERD.
+set +e
+kubectl get nodes -o wide --no-headers=true ${LEADER_CLUSTER_CONFIG} | grep containerd
+if [[ $? -ne 0 ]];then
+    IS_CONTAINERD=true
+fi
+set -e
 
 if [[ ${TESTCASE} =~ "e2e" ]]; then
     deliver_antrea_multicluster
