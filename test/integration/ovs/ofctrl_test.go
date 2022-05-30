@@ -240,10 +240,11 @@ func TestOFctrlFlow(t *testing.T) {
 		if err != nil {
 			t.Errorf("Failed to DeleteFlowsByCookie: %v", err)
 		}
-		flowList, _ = OfctlDumpTableFlowsWithoutName(ovsCtlClient, myTable.GetID())
-		if len(flowList) > 0 {
-			t.Errorf("Failed to delete flows by CookieID")
-		}
+		require.NoError(t, wait.PollImmediate(time.Millisecond*100, time.Second, func() (done bool, err error) {
+			flowList, err = OfctlDumpTableFlowsWithoutName(ovsCtlClient, myTable.GetID())
+			require.Nil(t, err)
+			return len(flowList) == 0, nil
+		}), "Failed to delete flows by CookieID")
 	}
 }
 
