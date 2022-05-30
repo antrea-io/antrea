@@ -421,7 +421,7 @@ func teardownTest(tb testing.TB, data *TestData) {
 		_ = os.Remove(data.logsDirForTestCase)
 	}
 	tb.Logf("Deleting '%s' K8s Namespace", testData.testNamespace)
-	if err := data.DeleteNamespace(testData.testNamespace, defaultTimeout); err != nil {
+	if err := data.DeleteNamespace(testData.testNamespace, -1); err != nil {
 		tb.Logf("Error when tearing down test: %v", err)
 	}
 }
