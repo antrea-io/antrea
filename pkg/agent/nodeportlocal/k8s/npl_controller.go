@@ -1,6 +1,3 @@
-//go:build !windows
-// +build !windows
-
 // Copyright 2020 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -450,7 +447,7 @@ func (c *NPLController) handleAddUpdatePod(key string, obj interface{}) error {
 		}
 	}
 
-	nplAnnotationsRequiredMap := map[int]NPLAnnotation{}
+	nplAnnotationsRequiredMap := map[string]NPLAnnotation{}
 	nplAnnotationsRequired := []NPLAnnotation{}
 
 	hostPorts := make(map[string]int)
@@ -494,7 +491,7 @@ func (c *NPLController) handleAddUpdatePod(key string, obj interface{}) error {
 			return fmt.Errorf("failed to parse port number and protocol from %s for Pod %s: %v", targetPortProto, key, err)
 		}
 		podPorts[targetPortProto] = struct{}{}
-		portData := c.portTable.GetEntry(podIP, port)
+		portData := c.portTable.GetEntry(podIP, port, protocol)
 		if portData != nil && !portData.ProtocolInUse(protocol) {
 			// If the PortTable has an entry for the Pod but does not have an
 			// entry with protocol, we enforce AddRule for the missing Protocol.
@@ -513,14 +510,12 @@ func (c *NPLController) handleAddUpdatePod(key string, obj interface{}) error {
 			nodePort = portData.NodePort
 		}
 
-		if val, ok := nplAnnotationsRequiredMap[nodePort]; ok {
-			val.Protocols = append(val.Protocols, protocol)
-			nplAnnotationsRequiredMap[nodePort] = val
-		} else {
-			nplAnnotationsRequiredMap[nodePort] = NPLAnnotation{
+		if _, ok := nplAnnotationsRequiredMap[portcache.NodePortProtoFormat(nodePort, protocol)]; !ok {
+			nplAnnotationsRequiredMap[portcache.NodePortProtoFormat(nodePort, protocol)] = NPLAnnotation{
 				PodPort:   port,
 				NodeIP:    pod.Status.HostIP,
 				NodePort:  nodePort,
+				Protocol:  protocol,
 				Protocols: []string{protocol},
 			}
 		}
@@ -607,6 +602,7 @@ func (c *NPLController) waitForRulesInitialization() {
 				NodePort:  npl.NodePort,
 				PodPort:   npl.PodPort,
 				PodIP:     pod.Status.PodIP,
+				Protocol:  npl.Protocol,
 				Protocols: npl.Protocols,
 			})
 		}

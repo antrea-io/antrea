@@ -66,7 +66,7 @@ const (
 
 func newPortTable(mockIPTables rules.PodPortRules, mockPortOpener portcache.LocalPortOpener) *portcache.PortTable {
 	return &portcache.PortTable{
-		NodePortTable:    make(map[int]*portcache.NodePortData),
+		NodePortTable:    make(map[string]*portcache.NodePortData),
 		PodEndpointTable: make(map[string]*portcache.NodePortData),
 		StartPort:        defaultStartPort,
 		EndPort:          defaultEndPort,

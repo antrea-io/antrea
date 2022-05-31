@@ -6,6 +6,7 @@
 - [What is NodePortLocal?](#what-is-nodeportlocal)
 - [Prerequisites](#prerequisites)
 - [Usage](#usage)
+  - [Usage pre Antrea v1.7](#usage-pre-antrea-v17)
   - [Usage pre Antrea v1.4](#usage-pre-antrea-v14)
   - [Usage pre Antrea v1.2](#usage-pre-antrea-v12)
 - [Limitations](#limitations)
@@ -29,7 +30,7 @@ directly to backend Pods.
 NodePortLocal was introduced in v0.13 as an alpha feature, and was graduated to
 beta in v1.4, at which time it was enabled by default. Prior to v1.4, a feature
 gate, `NodePortLocal`, must be enabled on the antrea-agent for the feature to
-work.
+work. Starting from Antrea v1.7, NPL is supported on the Windows antrea-agent.
 
 ## Usage
 
@@ -114,12 +115,12 @@ metadata:
   labels:
     app: nginx
   annotations:
-    nodeportlocal.antrea.io: '[{"podPort":8080,"nodeIP":"10.10.10.10","nodePort":61002}]'
+    nodeportlocal.antrea.io: '[{"podPort":8080,"nodeIP":"10.10.10.10","nodePort":61002,"protocol":"tcp","protocols":["tcp"]}]'
 ...
 ```
 
 This annotation indicates that port 8080 of the Pod can be reached through port
-61002 of the Node with IP Address 10.10.10.10.
+61002 of the Node with IP Address 10.10.10.10 for TCP traffic.
 
 The `nodeportlocal.antrea.io` annotation is generated and managed by Antrea. It
 is not meant to be created or modified by users directly. A user-provided
@@ -130,6 +131,38 @@ NodePortLocal can only be used with Services of type `ClusterIP` or
 `LoadBalancer`. The `nodeportlocal.antrea.io` annotation has no effect for
 Services of type `NodePort` or `ExternalName`. The annotation also has no effect
 for Services with an empty or missing Selector.
+
+Starting from the Antrea v1.7 minor release, the `protocols` field in the
+annotation is deprecated. The array contains a single member, equal to the
+`protocol` field.
+The `protocols` field will be removed from Antrea for minor releases post March 2023,
+as per our deprecation policy.
+
+### Usage pre Antrea v1.7
+
+Prior to the Antrea v1.7 minor release, the `nodeportlocal.antrea.io` annotation
+could contain multiple members in `protocols`.
+An example may look like this:
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx-6799fc88d8-9rx8z
+  labels:
+    app: nginx
+  annotations:
+    nodeportlocal.antrea.io: '[{"podPort":8080,"nodeIP":"10.10.10.10","nodePort":61002}, "protocols":["tcp","udp"]]'
+...
+```
+
+This annotation indicates that port 8080 of the Pod can be reached through port
+61002 of the Node with IP Address 10.10.10.10 for both TCP and UDP traffic.
+
+Prior to v1.7, the implementation would always allocate the same nodePort value
+for all the protocols exposed for a given podPort.
+Starting with v1.7, there will be multiple annotations for the different protocols
+for a given podPort, and the allocated nodePort may be different for each one.
 
 ### Usage pre Antrea v1.4
 
@@ -179,8 +212,8 @@ mapped.
 
 ## Limitations
 
-This feature is currently only supported for Nodes running Linux with IPv4
-addresses. Only TCP & UDP Service ports are supported (not SCTP).
+This feature is currently only supported for Nodes running Linux or Windows
+with IPv4 addresses. Only TCP & UDP Service ports are supported (not SCTP).
 
 ## Integrations with External Load Balancers
 

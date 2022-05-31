@@ -208,6 +208,5 @@ func init() {
 	nplStatus = "Enabled"
 	if runtime.IsWindowsPlatform() {
 		egressStatus = "Disabled"
-		nplStatus = "Disabled"
 	}
 }
