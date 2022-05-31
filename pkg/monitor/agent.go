@@ -18,7 +18,6 @@ import (
 	"context"
 	"time"
 
-	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
@@ -59,30 +58,20 @@ func (monitor *agentMonitor) syncAgentCRD() {
 		if monitor.agentCRD, err = monitor.updateAgentCRD(true); err == nil {
 			return
 		}
-		klog.Errorf("Failed to partially update agent monitoring CRD: %v", err)
+		klog.ErrorS(err, "Failed to partially update agent monitoring CRD")
 		monitor.agentCRD = nil
 	}
 
 	monitor.agentCRD, err = monitor.getAgentCRD()
-
-	if errors.IsNotFound(err) {
-		monitor.agentCRD, err = monitor.createAgentCRD()
-		if err != nil {
-			klog.Errorf("Failed to create agent monitoring CRD: %v", err)
-			monitor.agentCRD = nil
-		}
-		return
-	}
-
 	if err != nil {
-		klog.Errorf("Failed to get agent monitoring CRD: %v", err)
+		klog.ErrorS(err, "Failed to get agent monitoring CRD")
 		monitor.agentCRD = nil
 		return
 	}
 
 	monitor.agentCRD, err = monitor.updateAgentCRD(false)
 	if err != nil {
-		klog.Errorf("Failed to entirely update agent monitoring CRD: %v", err)
+		klog.ErrorS(err, "Failed to entirely update agent monitoring CRD")
 		monitor.agentCRD = nil
 	}
 }
@@ -91,16 +80,8 @@ func (monitor *agentMonitor) syncAgentCRD() {
 // So when the pod restarts, it will update this monitoring CRD instead of creating a new one.
 func (monitor *agentMonitor) getAgentCRD() (*v1beta1.AntreaAgentInfo, error) {
 	crdName := monitor.querier.GetNodeConfig().Name
-	klog.V(2).Infof("Getting agent monitoring CRD %+v", crdName)
+	klog.V(2).InfoS("Getting agent monitoring CRD", "name", crdName)
 	return monitor.client.CrdV1beta1().AntreaAgentInfos().Get(context.TODO(), crdName, metav1.GetOptions{})
-}
-
-// createAgentCRD creates a new agent CRD.
-func (monitor *agentMonitor) createAgentCRD() (*v1beta1.AntreaAgentInfo, error) {
-	agentCRD := new(v1beta1.AntreaAgentInfo)
-	monitor.querier.GetAgentInfo(agentCRD, false)
-	klog.V(2).Infof("Creating agent monitoring CRD %+v", agentCRD)
-	return monitor.client.CrdV1beta1().AntreaAgentInfos().Create(context.TODO(), agentCRD, metav1.CreateOptions{})
 }
 
 // updateAgentCRD updates the monitoring CRD.

@@ -3077,9 +3077,7 @@ rules:
       - antreaagentinfos
     verbs:
       - get
-      - create
       - update
-      - delete
   - apiGroups:
       - controlplane.antrea.io
     resources:
@@ -3485,6 +3483,7 @@ rules:
       - antreaagentinfos
     verbs:
       - list
+      - create
       - delete
   - apiGroups:
       - crd.antrea.io
