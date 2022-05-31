@@ -66,6 +66,19 @@ rules:
       - get
       - watch
       - list
+  - apiGroups:
+      - controlplane.antrea.io
+    resources:
+      - networkpolicies/status
+    verbs:
+      - create
+      - get
+ - apiGroups:
+      - controlplane.antrea.io
+    resources:
+      - nodestatssummaries
+    verbs:
+      - create
 ---
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
