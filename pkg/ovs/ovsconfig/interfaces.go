@@ -39,7 +39,7 @@ type OVSBridgeClient interface {
 	SetInterfaceOptions(name string, options map[string]interface{}) Error
 	CreatePort(name, ifDev string, externalIDs map[string]interface{}) (string, Error)
 	CreateAccessPort(name, ifDev string, externalIDs map[string]interface{}, vlanID uint16) (string, Error)
-	CreateInternalPort(name string, ofPortRequest int32, externalIDs map[string]interface{}) (string, Error)
+	CreateInternalPort(name string, ofPortRequest int32, mac string, externalIDs map[string]interface{}) (string, Error)
 	CreateTunnelPort(name string, tunnelType TunnelType, ofPortRequest int32) (string, Error)
 	CreateTunnelPortExt(name string, tunnelType TunnelType, ofPortRequest int32, csum bool, localIP string, remoteIP string, remoteName string, psk string, extraOptions, externalIDs map[string]interface{}) (string, Error)
 	CreateUplinkPort(name string, ofPortRequest int32, externalIDs map[string]interface{}) (string, Error)
@@ -48,6 +48,7 @@ type OVSBridgeClient interface {
 	GetOFPort(ifName string, waitUntilValid bool) (int32, Error)
 	GetPortData(portUUID, ifName string) (*OVSPortData, Error)
 	GetPortList() ([]OVSPortData, Error)
+	AllocateOFPort(startPort int) (int32, error)
 	SetInterfaceMTU(name string, MTU int) error
 	GetOVSVersion() (string, Error)
 	AddOVSOtherConfig(configs map[string]interface{}) Error
