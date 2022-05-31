@@ -64,17 +64,25 @@ func TestIPAssigner(t *testing.T) {
 	require.NoError(t, err, "Failed to list IP addresses")
 	assert.Equal(t, desiredIPs, actualIPs, "Actual IPs don't match")
 
-	// NewIPAssigner should load existing IPs correctly.
 	newIPAssigner, err := ipassigner.NewIPAssigner(nodeLinkName, dummyDeviceName)
 	require.NoError(t, err, "Initializing new IP assigner failed")
-	assert.Equal(t, desiredIPs, newIPAssigner.AssignedIPs(), "Assigned IPs don't match")
+	assert.Equal(t, sets.NewString(), newIPAssigner.AssignedIPs(), "Assigned IPs don't match")
 
-	for ip := range desiredIPs {
-		err = ipAssigner.UnassignIP(ip)
+	ip4 := "2021:124:6020:1006:250:56ff:fea7:36c4"
+	newDesiredIPs := sets.NewString(ip1, ip2, ip4)
+	err = newIPAssigner.InitIPs(newDesiredIPs)
+	require.NoError(t, err, "InitIPs failed")
+	assert.Equal(t, newDesiredIPs, newIPAssigner.AssignedIPs(), "Assigned IPs don't match")
+
+	actualIPs, err = listIPAddresses(dummyDevice)
+	require.NoError(t, err, "Failed to list IP addresses")
+	assert.Equal(t, newDesiredIPs, actualIPs, "Actual IPs don't match")
+
+	for ip := range newDesiredIPs {
+		err = newIPAssigner.UnassignIP(ip)
 		assert.NoError(t, err, "Failed to unassign a valid IP")
 	}
-
-	assert.Equal(t, sets.NewString(), ipAssigner.AssignedIPs(), "Assigned IPs don't match")
+	assert.Equal(t, sets.NewString(), newIPAssigner.AssignedIPs(), "Assigned IPs don't match")
 
 	actualIPs, err = listIPAddresses(dummyDevice)
 	require.NoError(t, err, "Failed to list IP addresses")

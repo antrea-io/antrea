@@ -37,5 +37,9 @@ func (a *ipAssigner) AssignedIPs() sets.String {
 	return nil
 }
 
+func (a *ipAssigner) InitIPs(ips sets.String) error {
+	return nil
+}
+
 func (a *ipAssigner) Run(ch <-chan struct{}) {
 }
