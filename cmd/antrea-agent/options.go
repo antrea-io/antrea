@@ -124,6 +124,13 @@ func (o *Options) validate(args []string) error {
 	if !ok {
 		return fmt.Errorf("TrafficEncapMode %s is unknown", o.config.TrafficEncapMode)
 	}
+	ok, ipsecAuthMode := config.GetIPsecAuthenticationModeFromStr(o.config.IPsec.AuthenticationMode)
+	if !ok {
+		return fmt.Errorf("IPsec AuthenticationMode %s is unknown", o.config.TrafficEncapMode)
+	}
+	if ipsecAuthMode == config.IPsecAuthenticationModeCert && !features.DefaultFeatureGate.Enabled(features.IPsecCertAuth) {
+		return fmt.Errorf("IPsec AuthenticationMode %s requires feature gate %s to be enabled", o.config.TrafficEncapMode, features.IPsecCertAuth)
+	}
 
 	// Check if the enabled features are supported on the OS.
 	if err := o.checkUnsupportedFeatures(); err != nil {

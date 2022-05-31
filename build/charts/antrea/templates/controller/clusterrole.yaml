@@ -80,6 +80,7 @@ rules:
       - configmaps
     resourceNames:
       - antrea-ca
+      - antrea-ipsec-ca
       - antrea-cluster-identity
     verbs:
       - get
@@ -87,7 +88,18 @@ rules:
   - apiGroups:
       - ""
     resources:
+      - secrets
+    resourceNames:
+      - antrea-ipsec-ca
+    verbs:
+      - get
+      - update
+      - watch
+  - apiGroups:
+      - ""
+    resources:
       - configmaps
+      - secrets
     verbs:
       - create
   - apiGroups:
@@ -128,6 +140,30 @@ rules:
     verbs:
       - get
       - update
+  - apiGroups:
+    - certificates.k8s.io
+    resources:
+    - certificatesigningrequests
+    verbs:
+    - get
+    - list
+    - watch
+  - apiGroups:
+    - certificates.k8s.io
+    resources:
+    - certificatesigningrequests/approval
+    - certificatesigningrequests/status
+    verbs:
+    - update
+  - apiGroups:
+    - certificates.k8s.io
+    resources:
+    - signers
+    resourceNames:
+    - antrea.io/antrea-agent-ipsec-tunnel
+    verbs:
+    - approve
+    - sign
   - apiGroups:
       - crd.antrea.io
     resources:

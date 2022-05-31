@@ -35,6 +35,7 @@ import (
 	"antrea.io/antrea/pkg/agent/cniserver/ipam"
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/controller/egress"
+	"antrea.io/antrea/pkg/agent/controller/ipseccertificate"
 	"antrea.io/antrea/pkg/agent/controller/networkpolicy"
 	"antrea.io/antrea/pkg/agent/controller/noderoute"
 	"antrea.io/antrea/pkg/agent/controller/serviceexternalip"
@@ -148,12 +149,16 @@ func run(o *Options) error {
 		klog.InfoS("enableIPSecTunnel is deprecated, use trafficEncryptionMode instead.")
 		encryptionMode = config.TrafficEncryptionModeIPSec
 	}
+	_, ipsecAuthenticationMode := config.GetIPsecAuthenticationModeFromStr(o.config.IPsec.AuthenticationMode)
 	networkConfig := &config.NetworkConfig{
 		TunnelType:            ovsconfig.TunnelType(o.config.TunnelType),
 		TrafficEncapMode:      encapMode,
 		TrafficEncryptionMode: encryptionMode,
 		TransportIface:        o.config.TransportInterface,
 		TransportIfaceCIDRs:   o.config.TransportInterfaceCIDRs,
+		IPsecConfig: config.IPsecConfig{
+			AuthenticationMode: ipsecAuthenticationMode,
+		},
 	}
 
 	wireguardConfig := &config.WireGuardConfig{
@@ -228,6 +233,13 @@ func run(o *Options) error {
 	}
 	nodeConfig := agentInitializer.GetNodeConfig()
 
+	var ipsecCertController *ipseccertificate.Controller
+
+	if networkConfig.TrafficEncryptionMode == config.TrafficEncryptionModeIPSec &&
+		networkConfig.IPsecConfig.AuthenticationMode == config.IPsecAuthenticationModeCert {
+		ipsecCertController = ipseccertificate.NewIPSecCertificateController(k8sClient, ovsBridgeClient, nodeConfig.Name)
+	}
+
 	nodeRouteController := noderoute.NewNodeRouteController(
 		k8sClient,
 		informerFactory,
@@ -238,7 +250,9 @@ func run(o *Options) error {
 		networkConfig,
 		nodeConfig,
 		agentInitializer.GetWireGuardClient(),
-		o.config.AntreaProxy.ProxyAll)
+		o.config.AntreaProxy.ProxyAll,
+		ipsecCertController,
+	)
 
 	var groupCounters []proxytypes.GroupCounter
 	groupIDUpdates := make(chan string, 100)
@@ -483,6 +497,11 @@ func run(o *Options) error {
 	go cniServer.Run(stopCh)
 
 	go antreaClientProvider.Run(ctx)
+
+	if networkConfig.TrafficEncryptionMode == config.TrafficEncryptionModeIPSec &&
+		networkConfig.IPsecConfig.AuthenticationMode == config.IPsecAuthenticationModeCert {
+		go ipsecCertController.Run(stopCh)
+	}
 
 	go nodeRouteController.Run(stopCh)
 

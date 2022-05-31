@@ -59,9 +59,17 @@ wireGuard:
   port: 51820
 
 ipsec:
+  # -- The authentication mode to use for IPsec. Must be one of "psk" or "cert".
+  authenticationMode: "psk"
   # -- Preshared Key (PSK) for IKE authentication. It will be stored in a secret
   # and passed to antrea-agent as an environment variable.
   psk: "changeme"
+  # -- CSR signer configuration when the authenticationMode is "cert".
+  csrSigner:
+    # --- Enable auto approval of Antrea signer for IPsec certificates.
+    autoApprove: true
+    # --- Whether or not to use auto-generated self-signed CA.
+    selfSignedCA: true
 
 egress:
   # -- CIDR ranges to which outbound Pod traffic will not be SNAT'd by Egresses.

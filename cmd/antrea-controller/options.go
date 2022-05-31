@@ -161,12 +161,10 @@ func (o *Options) setDefaults() {
 		o.config.APIPort = apis.AntreaControllerAPIPort
 	}
 	if o.config.EnablePrometheusMetrics == nil {
-		o.config.EnablePrometheusMetrics = new(bool)
-		*o.config.EnablePrometheusMetrics = true
+		o.config.EnablePrometheusMetrics = ptrBool(true)
 	}
 	if o.config.SelfSignedCert == nil {
-		o.config.SelfSignedCert = new(bool)
-		*o.config.SelfSignedCert = true
+		o.config.SelfSignedCert = ptrBool(true)
 	}
 	if o.config.NodeIPAM.NodeCIDRMaskSizeIPv4 == 0 {
 		o.config.NodeIPAM.NodeCIDRMaskSizeIPv4 = ipamIPv4MaskDefault
@@ -175,4 +173,14 @@ func (o *Options) setDefaults() {
 	if o.config.NodeIPAM.NodeCIDRMaskSizeIPv6 == 0 {
 		o.config.NodeIPAM.NodeCIDRMaskSizeIPv6 = ipamIPv6MaskDefault
 	}
+	if o.config.IPsecCSRSignerConfig.SelfSignedCA == nil {
+		o.config.IPsecCSRSignerConfig.SelfSignedCA = ptrBool(true)
+	}
+	if o.config.IPsecCSRSignerConfig.AutoApprove == nil {
+		o.config.IPsecCSRSignerConfig.AutoApprove = ptrBool(true)
+	}
+}
+
+func ptrBool(value bool) *bool {
+	return &value
 }

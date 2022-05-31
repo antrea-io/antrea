@@ -65,4 +65,18 @@ type ControllerConfig struct {
 	LegacyCRDMirroring *bool `yaml:"legacyCRDMirroring,omitempty"`
 	// NodeIPAM Configuration
 	NodeIPAM NodeIPAMConfig `yaml:"nodeIPAM"`
+	// IPsec CSR signer configuration
+	IPsecCSRSignerConfig IPsecCSRSignerConfig `yaml:"ipsecCSRSigner"`
+}
+
+type IPsecCSRSignerConfig struct {
+	// Indicates whether to use auto-generated self-signed CA certificate.
+	// If false, a Secret named "antrea-ipsec-ca" must be provided with the following keys:
+	//   tls.crt: <CA certificate>
+	//   tls.key: <CA private key>
+	// Defaults to true.
+	SelfSignedCA *bool `yaml:"selfSignedCA,omitempty"`
+	// Antrea signer auto approve policy.
+	// Defaults to true.
+	AutoApprove *bool `yaml:"autoApprove,omitempty"`
 }

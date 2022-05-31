@@ -23,6 +23,8 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 
 	"antrea.io/antrea/pkg/agent/util"
+	agentconfig "antrea.io/antrea/pkg/config/agent"
+	controllerconfig "antrea.io/antrea/pkg/config/controller"
 )
 
 // TestIPSec is the top-level test which contains all subtests for
@@ -40,68 +42,119 @@ func TestIPSec(t *testing.T) {
 	}
 	defer teardownTest(t, data)
 
-	t.Run("testIPSecTunnelConnectivity", func(t *testing.T) { testIPSecTunnelConnectivity(t, data) })
+	t.Logf("Redeploy Antrea with IPsec tunnel enabled")
+	data.redeployAntrea(t, deployAntreaIPsec)
+	// Restore normal Antrea deployment with IPsec disabled.
+	defer data.redeployAntrea(t, deployAntreaDefault)
+
+	t.Run("testIPSecPSKAuth", func(t *testing.T) {
+		cc := func(config *controllerconfig.ControllerConfig) {
+		}
+		ac := func(config *agentconfig.AgentConfig) {
+			config.IPsec.AuthenticationMode = "psk"
+		}
+		if err := data.mutateAntreaConfigMap(cc, ac, true, true); err != nil {
+			t.Fatalf("Failed to enable IPsecCertAuth feature: %v", err)
+		}
+		t.Run("testIPSecTunnelConnectivity", func(t *testing.T) { testIPSecTunnelConnectivity(t, data, false) })
+	})
+
+	t.Run("testIPSecCertificateAuth", func(t *testing.T) {
+		// restart the Controller first as Agent needs to get the CSR signed.
+		cc := func(config *controllerconfig.ControllerConfig) {
+			config.FeatureGates["IPsecCertAuth"] = true
+		}
+		if err := data.mutateAntreaConfigMap(cc, nil, true, false); err != nil {
+			t.Fatalf("Failed to enable IPsecCertAuth feature: %v", err)
+		}
+		ac := func(config *agentconfig.AgentConfig) {
+			config.FeatureGates["IPsecCertAuth"] = true
+			config.IPsec.AuthenticationMode = "cert"
+		}
+		if err := data.mutateAntreaConfigMap(nil, ac, false, true); err != nil {
+			t.Fatalf("Failed to enable IPsecCertAuth feature: %v", err)
+		}
+		t.Run("testIPSecTunnelConnectivity", func(t *testing.T) { testIPSecTunnelConnectivity(t, data, true) })
+	})
+
 	t.Run("testIPSecDeleteStaleTunnelPorts", func(t *testing.T) { testIPSecDeleteStaleTunnelPorts(t, data) })
 }
 
-func (data *TestData) readSecurityAssociationsStatus(nodeName string) (up int, connecting int, err error) {
+func (data *TestData) readSecurityAssociationsStatus(nodeName string) (up int, connecting int, isCertAuth bool, err error) {
 	antreaPodName, err := data.getAntreaPodOnNode(nodeName)
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, false, err
 	}
-	cmd := []string{"ipsec", "status"}
+	cmd := []string{"ipsec", "statusall"}
 	stdout, stderr, err := data.RunCommandFromPod(antreaNamespace, antreaPodName, "antrea-ipsec", cmd)
 	if err != nil {
-		return 0, 0, fmt.Errorf("error when running 'ipsec status' on '%s': %v - stdout: %s - stderr: %s", nodeName, err, stdout, stderr)
+		return 0, 0, false, fmt.Errorf("error when running 'ipsec status' on '%s': %v - stdout: %s - stderr: %s", nodeName, err, stdout, stderr)
 	}
 	re := regexp.MustCompile(`Security Associations \((\d+) up, (\d+) connecting\)`)
 	matches := re.FindStringSubmatch(stdout)
 	if len(matches) == 0 {
-		return 0, 0, fmt.Errorf("unexpected 'ipsec status' output: %s", stdout)
+		return 0, 0, false, fmt.Errorf("unexpected 'ipsec statusall' output: %s", stdout)
 	}
 	v, err := strconv.ParseUint(matches[1], 10, 32)
 	if err != nil {
-		return 0, 0, fmt.Errorf("error when retrieving 'up' SAs from 'ipsec status' output: %v", err)
+		return 0, 0, false, fmt.Errorf("error when retrieving 'up' SAs from 'ipsec statusall' output: %v", err)
 	}
 	up = int(v)
 	v, err = strconv.ParseUint(matches[2], 10, 32)
 	if err != nil {
-		return 0, 0, fmt.Errorf("error when retrieving 'connecting' SAs from 'ipsec status' output: %v", err)
+		return 0, 0, false, fmt.Errorf("error when retrieving 'connecting' SAs from 'ipsec statusall' output: %v", err)
 	}
 	connecting = int(v)
-	return up, connecting, nil
+
+	re = regexp.MustCompile(`uses ([a-z-]+) key authentication`)
+	match := re.FindStringSubmatch(stdout)
+	if len(match) == 0 {
+		return 0, 0, false, fmt.Errorf("failed to determine authentication method from 'ipsec statusall' output: %s", stdout)
+	}
+
+	if match[1] == "pre-shared" {
+		isCertAuth = false
+	} else if match[1] == "public" {
+		isCertAuth = true
+	} else {
+		return 0, 0, false, fmt.Errorf("unknown key authentication mode %q", match[1])
+	}
+
+	return up, connecting, isCertAuth, nil
 }
 
 // testIPSecTunnelConnectivity checks that Pod traffic across two Nodes over
 // the IPsec tunnel, by creating multiple Pods across distinct Nodes and having
 // them ping each other.
-func testIPSecTunnelConnectivity(t *testing.T, data *TestData) {
-	t.Logf("Redeploy Antrea with IPsec tunnel enabled")
-	data.redeployAntrea(t, deployAntreaIPsec)
-
-	data.testPodConnectivityDifferentNodes(t)
+func testIPSecTunnelConnectivity(t *testing.T, data *TestData, certAuth bool) {
+	var tag string
+	if certAuth {
+		tag = "ipsec-cert"
+	} else {
+		tag = "ipsec-psk"
+	}
+	podInfos, deletePods := createPodsOnDifferentNodes(t, data, data.testNamespace, tag)
+	defer deletePods()
+	data.runPingMesh(t, podInfos[:2], agnhostContainerName)
 
 	// We know that testPodConnectivityDifferentNodes always creates a Pod on Node 0 for the
 	// inter-Node ping test.
 	nodeName := nodeName(0)
-	if up, _, err := data.readSecurityAssociationsStatus(nodeName); err != nil {
+	if up, _, isCertAuth, err := data.readSecurityAssociationsStatus(nodeName); err != nil {
 		t.Errorf("Error when reading Security Associations: %v", err)
 	} else if up == 0 {
 		t.Errorf("Expected at least one 'up' Security Association, but got %d", up)
+	} else if isCertAuth != certAuth {
+		t.Errorf("Expected certificate authentication to be %t, got %t", certAuth, isCertAuth)
 	} else {
-		t.Logf("Found %d 'up' SecurityAssociation(s) for Node '%s'", up, nodeName)
+		t.Logf("Found %d 'up' SecurityAssociation(s) for Node '%s', certificate auth: %t", up, nodeName, isCertAuth)
 	}
-
-	// Restore normal Antrea deployment with IPsec disabled.
-	data.redeployAntrea(t, deployAntreaDefault)
 }
 
 // testIPSecDeleteStaleTunnelPorts checks that when switching from IPsec mode to
 // non-encrypted mode, the previously created tunnel ports are deleted
 // correctly.
 func testIPSecDeleteStaleTunnelPorts(t *testing.T, data *TestData) {
-	t.Logf("Redeploy Antrea with IPsec tunnel enabled")
-	data.redeployAntrea(t, deployAntreaIPsec)
 
 	nodeName0 := nodeName(0)
 	nodeName1 := nodeName(1)

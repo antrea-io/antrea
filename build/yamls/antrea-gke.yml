@@ -108,6 +108,9 @@ data:
     # Enable mirroring or redirecting the traffic Pods send or receive.
     #  TrafficControl: false
 
+    # Enable certificated-based authentication for IPsec.
+    #  IPsecCertAuth: false
+
     # Name of the OpenVSwitch bridge antrea-agent will create and use.
     # Make sure it doesn't conflict with your existing OpenVSwitch bridges.
     ovsBridge: "br-int"
@@ -312,6 +315,14 @@ data:
       # Note that setting ProxyLoadBalancerIPs to false usually only makes sense when ProxyAll is set to true and
       # kube-proxy is removed from the cluser, otherwise kube-proxy will still load-balance this traffic.
       proxyLoadBalancerIPs: true
+
+    # IPsec tunnel related configurations.
+    ipsec:
+      # The authentication mode of IPsec tunnel. It has the following options:
+      # - psk (default): Use pre-shared key (PSK) for IKE authentication.
+      # - cert:          Use CA-signed certificates for IKE authentication. This option requires the `IPsecCertAuth`
+      #                  feature gate to be enabled.
+      authenticationMode: "psk"
   antrea-cni.conflist: |
     {
         "cniVersion":"0.3.0",
@@ -363,6 +374,9 @@ data:
     # Enable managing external IPs of Services of LoadBalancer type.
     #  ServiceExternalIP: false
 
+    # Enable certificated-based authentication for IPsec.
+    #  IPsecCertAuth: false
+
     # The port for the antrea-controller APIServer to serve on.
     # Note that if it's set to another value, the `containerPort` of the `api` port of the
     # `antrea-controller` container must be set to the same value.
@@ -404,6 +418,20 @@ data:
       # Mask size for IPv6 Node CIDR in IPv6 or dual-stack cluster. Value ignored when enableNodeIPAM is false
       # or when IPv6 Pod CIDR is not configured. Valid range is 64 to 126.
       nodeCIDRMaskSizeIPv6: 64
+
+    ipsecCSRSigner:
+      # Determines the auto-approve policy of Antrea CSR signer for IPsec certificates management.
+      # If enabled, Antrea will auto-approve the CertificateSingingRequest (CSR) if its subject and x509 extensions
+      # are permitted, and the requestor can be validated. If K8s `BoundServiceAccountTokenVolume` feature is enabled,
+      # the Pod identity will also be validated to provide maximum security.
+      # If set to false, Antrea will not auto-approve CertificateSingingRequests and they need to be approved
+      # manually by `kubectl certificate approve`.
+      autoApprove: true
+      # Indicates whether to use auto-generated self-signed CA certificate.
+      # If false, a Secret named "antrea-ipsec-ca" must be provided with the following keys:
+      #   tls.crt: <CA certificate>
+      #   tls.key: <CA private key>
+      selfSignedCA: true
 ---
 # Source: antrea/templates/crds/antreaagentinfo.yaml
 apiVersion: apiextensions.k8s.io/v1
@@ -2996,6 +3024,15 @@ rules:
       - get
       - list
       - watch
+  - apiGroups:
+    - certificates.k8s.io
+    resources:
+      - certificatesigningrequests
+    verbs:
+      - get
+      - watch
+      - list
+      - create
 ---
 # Source: antrea/templates/antctl/clusterrole.yaml
 kind: ClusterRole
@@ -3157,6 +3194,7 @@ rules:
       - configmaps
     resourceNames:
       - antrea-ca
+      - antrea-ipsec-ca
       - antrea-cluster-identity
     verbs:
       - get
@@ -3164,7 +3202,18 @@ rules:
   - apiGroups:
       - ""
     resources:
+      - secrets
+    resourceNames:
+      - antrea-ipsec-ca
+    verbs:
+      - get
+      - update
+      - watch
+  - apiGroups:
+      - ""
+    resources:
       - configmaps
+      - secrets
     verbs:
       - create
   - apiGroups:
@@ -3205,6 +3254,30 @@ rules:
     verbs:
       - get
       - update
+  - apiGroups:
+    - certificates.k8s.io
+    resources:
+    - certificatesigningrequests
+    verbs:
+    - get
+    - list
+    - watch
+  - apiGroups:
+    - certificates.k8s.io
+    resources:
+    - certificatesigningrequests/approval
+    - certificatesigningrequests/status
+    verbs:
+    - update
+  - apiGroups:
+    - certificates.k8s.io
+    resources:
+    - signers
+    resourceNames:
+    - antrea.io/antrea-agent-ipsec-tunnel
+    verbs:
+    - approve
+    - sign
   - apiGroups:
       - crd.antrea.io
     resources:
@@ -3496,7 +3569,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 7e0d8c70d728f9f981756d8238d9b19a9c2321206b09a814a1cdb4ac604b190c
+        checksum/config: 9b30c1a8c106bef23da9374bbf18b11a72b5cf96532c2941ca0a11e5af48d2e6
       labels:
         app: antrea
         component: antrea-agent
@@ -3736,7 +3809,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 7e0d8c70d728f9f981756d8238d9b19a9c2321206b09a814a1cdb4ac604b190c
+        checksum/config: 9b30c1a8c106bef23da9374bbf18b11a72b5cf96532c2941ca0a11e5af48d2e6
       labels:
         app: antrea
         component: antrea-controller
