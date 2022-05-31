@@ -146,12 +146,18 @@ func (n *NodeConfig) String() string {
 		n.Name, n.OVSBridge, n.PodIPv4CIDR, n.PodIPv6CIDR, n.NodeIPv4Addr, n.NodeIPv6Addr, n.NodeTransportIPv4Addr, n.NodeTransportIPv6Addr, n.GatewayConfig)
 }
 
+// IPsecConfig includes IPsec related configurations.
+type IPsecConfig struct {
+	AuthenticationMode IPsecAuthenticationMode
+	PSK                string
+}
+
 // NetworkConfig includes user provided network configuration parameters.
 type NetworkConfig struct {
 	TrafficEncapMode      TrafficEncapModeType
 	TunnelType            ovsconfig.TunnelType
 	TrafficEncryptionMode TrafficEncryptionModeType
-	IPSecPSK              string
+	IPsecConfig           IPsecConfig
 	TransportIface        string
 	TransportIfaceCIDRs   []string
 	IPv4Enabled           bool

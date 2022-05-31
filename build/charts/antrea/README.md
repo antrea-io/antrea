@@ -73,6 +73,10 @@ Kubernetes: `>= 1.16.0-0`
 | flowCollector.idleFlowExportTimeout | string | `"15s"` | timeout after which a flow record is sent to the collector for idle flows. |
 | hostGateway | string | `"antrea-gw0"` | Name of the interface antrea-agent will create and use for host <-> Pod communication. |
 | image | object | `{"pullPolicy":"IfNotPresent","repository":"projects.registry.vmware.com/antrea/antrea-ubuntu","tag":"latest"}` | Container image to use for Antrea components. |
+| ipsec.authenticationMode | string | `"psk"` | The authentication mode to use for IPsec. Must be one of "psk" or "cert". |
+| ipsec.csrSigner | object | `{"autoApprove":true,"selfSignedCA":true}` | CSR signer configuration when the authenticationMode is "cert". |
+| ipsec.csrSigner.autoApprove | bool | `true` | - Enable auto approval of Antrea signer for IPsec certificates. |
+| ipsec.csrSigner.selfSignedCA | bool | `true` | - Whether or not to use auto-generated self-signed CA. |
 | ipsec.psk | string | `"changeme"` | Preshared Key (PSK) for IKE authentication. It will be stored in a secret and passed to antrea-agent as an environment variable. |
 | kubeAPIServerOverride | string | `""` | Address of Kubernetes apiserver, to override any value provided in kubeconfig or InClusterConfig. |
 | logVerbosity | int | `0` |  |

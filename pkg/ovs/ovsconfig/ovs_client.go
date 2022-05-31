@@ -373,7 +373,7 @@ func (br *OVSBridge) CreateInternalPort(name string, ofPortRequest int32, extern
 // the bridge.
 // If ofPortRequest is not zero, it will be passed to the OVS port creation.
 func (br *OVSBridge) CreateTunnelPort(name string, tunnelType TunnelType, ofPortRequest int32) (string, Error) {
-	return br.createTunnelPort(name, tunnelType, ofPortRequest, false, "", "", "", nil)
+	return br.createTunnelPort(name, tunnelType, ofPortRequest, false, "", "", "", "", nil)
 }
 
 // CreateTunnelPortExt creates a tunnel port with the specified name and type
@@ -393,12 +393,16 @@ func (br *OVSBridge) CreateTunnelPortExt(
 	csum bool,
 	localIP string,
 	remoteIP string,
+	remoteName string,
 	psk string,
 	externalIDs map[string]interface{}) (string, Error) {
 	if psk != "" && remoteIP == "" {
 		return "", newInvalidArgumentsError("IPsec tunnel can not be flow based. remoteIP must be set")
 	}
-	return br.createTunnelPort(name, tunnelType, ofPortRequest, csum, localIP, remoteIP, psk, externalIDs)
+	if psk != "" && remoteName != "" {
+		return "", newInvalidArgumentsError("Cannot set psk and remoteName together")
+	}
+	return br.createTunnelPort(name, tunnelType, ofPortRequest, csum, localIP, remoteIP, remoteName, psk, externalIDs)
 }
 
 func (br *OVSBridge) createTunnelPort(
@@ -408,6 +412,7 @@ func (br *OVSBridge) createTunnelPort(
 	csum bool,
 	localIP string,
 	remoteIP string,
+	remoteName string,
 	psk string,
 	externalIDs map[string]interface{}) (string, Error) {
 
@@ -429,7 +434,9 @@ func (br *OVSBridge) createTunnelPort(
 	if localIP != "" {
 		options["local_ip"] = localIP
 	}
-
+	if remoteName != "" {
+		options["remote_name"] = remoteName
+	}
 	if psk != "" {
 		options["psk"] = psk
 	}
@@ -481,13 +488,13 @@ func (br *OVSBridge) SetInterfaceOptions(name string, options map[string]interfa
 
 // ParseTunnelInterfaceOptions reads remote IP, local IP, IPsec PSK, and csum
 // from the tunnel interface options and returns them.
-func ParseTunnelInterfaceOptions(portData *OVSPortData) (net.IP, net.IP, string, bool) {
+func ParseTunnelInterfaceOptions(portData *OVSPortData) (net.IP, net.IP, string, string, bool) {
 	if portData.Options == nil {
-		return nil, nil, "", false
+		return nil, nil, "", "", false
 	}
 
 	var ok bool
-	var remoteIPStr, localIPStr, psk string
+	var remoteIPStr, localIPStr, psk, remoteName string
 	var remoteIP, localIP net.IP
 	var csum bool
 
@@ -504,7 +511,8 @@ func ParseTunnelInterfaceOptions(portData *OVSPortData) (net.IP, net.IP, string,
 	if csumStr, ok := portData.Options["csum"]; ok {
 		csum, _ = strconv.ParseBool(csumStr)
 	}
-	return remoteIP, localIP, psk, csum
+	remoteName = portData.Options["remote_name"]
+	return remoteIP, localIP, psk, remoteName, csum
 }
 
 // CreateUplinkPort creates uplink port.
@@ -860,17 +868,57 @@ func (br *OVSBridge) GetOVSOtherConfig() (map[string]string, Error) {
 	return buildMapFromOVSDBMap(otherConfigs), nil
 }
 
+// UpdateOVSOtherConfig updates the given configs to the "other_config" column of
+// the single record in the "Open_vSwitch" table.
+// For each config, it will be updated if the existing value does not match the given one,
+// and it will be added if its key does not exist.
+// It the configs are already up to date, this function will be a no-op.
+func (br *OVSBridge) UpdateOVSOtherConfig(configs map[string]interface{}) Error {
+	tx := br.ovsdb.Transaction(openvSwitchSchema)
+	list := make([]string, 0, len(configs))
+	for k := range configs {
+		list = append(list, k)
+	}
+	deleteSet := makeOVSDBSetFromList(list)
+	insertSet := helpers.MakeOVSDBMap(configs)
+	tx.Mutate(dbtransaction.Mutate{
+		Table: "Open_vSwitch",
+		Mutations: [][]interface{}{
+			{"other_config", "delete", deleteSet},
+			{"other_config", "insert", insertSet},
+		}})
+	_, err, temporary := tx.Commit()
+	if err != nil {
+		klog.Error("Transaction failed: ", err)
+		return NewTransactionError(err, temporary)
+	}
+	return nil
+}
+
 // DeleteOVSOtherConfig deletes the given configs from the "other_config" column of
 // the single record in the "Open_vSwitch" table.
-// For each config, it will only be deleted if its key exists and its value matches the stored one.
-// No error is returned if configs don't exist or don't match.
+// For each config, it will be deleted if its key exists and the given value is empty string or
+// its value matches the given one. No error is returned if configs don't exist or don't match.
 func (br *OVSBridge) DeleteOVSOtherConfig(configs map[string]interface{}) Error {
 	tx := br.ovsdb.Transaction(openvSwitchSchema)
 
-	mutateSet := helpers.MakeOVSDBMap(configs)
+	mapToDelete := make(map[string]interface{})
+	listToDelete := []string{}
+	for k, v := range configs {
+		if v.(string) != "" {
+			mapToDelete[k] = v
+		} else {
+			listToDelete = append(listToDelete, k)
+		}
+	}
+	mutateMap := helpers.MakeOVSDBMap(mapToDelete)
+	mutateSet := makeOVSDBSetFromList(listToDelete)
 	tx.Mutate(dbtransaction.Mutate{
-		Table:     "Open_vSwitch",
-		Mutations: [][]interface{}{{"other_config", "delete", mutateSet}},
+		Table: "Open_vSwitch",
+		Mutations: [][]interface{}{
+			{"other_config", "delete", mutateSet},
+			{"other_config", "delete", mutateMap},
+		},
 	})
 
 	_, err, temporary := tx.Commit()

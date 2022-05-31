@@ -32,6 +32,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/agent/controller/ipseccertificate"
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/openflow"
 	"antrea.io/antrea/pkg/agent/route"
@@ -79,6 +80,10 @@ type Controller struct {
 	installedNodes  cache.Indexer
 	wireGuardClient wireguard.Interface
 	proxyAll        bool
+	// ipsecCertificateManager is useful for determining whether the ipsec certificate has been configured
+	// or not when IPsec is enabled with "cert" mode. The NodeRouteController must wait for the certificate
+	// to be configured before installing routes/flows to peer Nodes to prevent unencrypted traffic across Nodes.
+	ipsecCertificateManager ipseccertificate.Manager
 }
 
 // NewNodeRouteController instantiates a new Controller object which will process Node events
@@ -94,25 +99,27 @@ func NewNodeRouteController(
 	nodeConfig *config.NodeConfig,
 	wireguardClient wireguard.Interface,
 	proxyAll bool,
+	ipsecCertificateManager ipseccertificate.Manager,
 ) *Controller {
 	nodeInformer := informerFactory.Core().V1().Nodes()
 	svcLister := informerFactory.Core().V1().Services()
 	controller := &Controller{
-		kubeClient:       kubeClient,
-		ovsBridgeClient:  ovsBridgeClient,
-		ofClient:         client,
-		routeClient:      routeClient,
-		interfaceStore:   interfaceStore,
-		networkConfig:    networkConfig,
-		nodeConfig:       nodeConfig,
-		nodeInformer:     nodeInformer,
-		nodeLister:       nodeInformer.Lister(),
-		nodeListerSynced: nodeInformer.Informer().HasSynced,
-		svcLister:        svcLister.Lister(),
-		queue:            workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "noderoute"),
-		installedNodes:   cache.NewIndexer(nodeRouteInfoKeyFunc, cache.Indexers{nodeRouteInfoPodCIDRIndexName: nodeRouteInfoPodCIDRIndexFunc}),
-		wireGuardClient:  wireguardClient,
-		proxyAll:         proxyAll,
+		kubeClient:              kubeClient,
+		ovsBridgeClient:         ovsBridgeClient,
+		ofClient:                client,
+		routeClient:             routeClient,
+		interfaceStore:          interfaceStore,
+		networkConfig:           networkConfig,
+		nodeConfig:              nodeConfig,
+		nodeInformer:            nodeInformer,
+		nodeLister:              nodeInformer.Lister(),
+		nodeListerSynced:        nodeInformer.Informer().HasSynced,
+		svcLister:               svcLister.Lister(),
+		queue:                   workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "noderoute"),
+		installedNodes:          cache.NewIndexer(nodeRouteInfoKeyFunc, cache.Indexers{nodeRouteInfoPodCIDRIndexName: nodeRouteInfoPodCIDRIndexFunc}),
+		wireGuardClient:         wireguardClient,
+		proxyAll:                proxyAll,
+		ipsecCertificateManager: ipsecCertificateManager,
 	}
 	nodeInformer.Informer().AddEventHandlerWithResyncPeriod(
 		cache.ResourceEventHandlerFuncs{
@@ -252,10 +259,17 @@ func (c *Controller) removeStaleTunnelPorts() error {
 				klog.Errorf("Failed to retrieve IP address of Node %s: %v", node.Name, err)
 				continue
 			}
-
+			var remoteName, psk string
+			// remote_name and psk are mutually exclusive.
+			switch c.networkConfig.IPsecConfig.AuthenticationMode {
+			case config.IPsecAuthenticationModeCert:
+				remoteName = node.Name
+			case config.IPsecAuthenticationModePSK:
+				psk = c.networkConfig.IPsecConfig.PSK
+			}
 			ifaceID := util.GenerateNodeTunnelInterfaceKey(node.Name)
 			ifaceName := util.GenerateNodeTunnelInterfaceName(node.Name)
-			if c.compareInterfaceConfig(interfaceConfig, peerNodeIPs.IPv4, ifaceName) || c.compareInterfaceConfig(interfaceConfig, peerNodeIPs.IPv6, ifaceName) {
+			if c.compareInterfaceConfig(interfaceConfig, peerNodeIPs.IPv4, psk, remoteName, ifaceName) || c.compareInterfaceConfig(interfaceConfig, peerNodeIPs.IPv6, psk, remoteName, ifaceName) {
 				desiredInterfaces[ifaceID] = true
 			}
 		}
@@ -289,9 +303,10 @@ func (c *Controller) removeStaleTunnelPorts() error {
 }
 
 func (c *Controller) compareInterfaceConfig(interfaceConfig *interfacestore.InterfaceConfig,
-	peerNodeIP net.IP, interfaceName string) bool {
+	peerNodeIP net.IP, psk, remoteName, interfaceName string) bool {
 	return interfaceConfig.InterfaceName == interfaceName &&
-		interfaceConfig.PSK == c.networkConfig.IPSecPSK &&
+		interfaceConfig.PSK == psk &&
+		interfaceConfig.RemoteName == remoteName &&
 		interfaceConfig.RemoteIP.Equal(peerNodeIP) &&
 		interfaceConfig.TunnelInterfaceConfig.Type == c.networkConfig.TunnelType
 }
@@ -347,7 +362,14 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 	klog.Infof("Starting %s", controllerName)
 	defer klog.Infof("Shutting down %s", controllerName)
 
-	if !cache.WaitForNamedCacheSync(controllerName, stopCh, c.nodeListerSynced) {
+	cacheSynced := []cache.InformerSynced{
+		c.nodeListerSynced,
+	}
+	if c.networkConfig.TrafficEncryptionMode == config.TrafficEncryptionModeIPSec &&
+		c.networkConfig.IPsecConfig.AuthenticationMode == config.IPsecAuthenticationModeCert {
+		cacheSynced = append(cacheSynced, c.ipsecCertificateManager.HasSynced)
+	}
+	if !cache.WaitForNamedCacheSync(controllerName, stopCh, cacheSynced...) {
 		return
 	}
 
@@ -626,11 +648,20 @@ func getPodCIDRsOnNode(node *corev1.Node) []string {
 func (c *Controller) createIPSecTunnelPort(nodeName string, nodeIP net.IP) (int32, error) {
 	portName := util.GenerateNodeTunnelInterfaceName(nodeName)
 	interfaceConfig, exists := c.interfaceStore.GetNodeTunnelInterface(nodeName)
-	// check if Node IP, PSK, or tunnel type changes. This can
+
+	var remoteName, psk string
+	// remote_name and psk are mutually exclusive.
+	switch c.networkConfig.IPsecConfig.AuthenticationMode {
+	case config.IPsecAuthenticationModeCert:
+		remoteName = nodeName
+	case config.IPsecAuthenticationModePSK:
+		psk = c.networkConfig.IPsecConfig.PSK
+	}
+	// check if Node IP, PSK, remote name, or tunnel type changes. This can
 	// happen if removeStaleTunnelPorts fails to remove a "stale"
 	// tunnel port for which the configuration has changed, return error to requeue the Node.
 	if exists {
-		if !c.compareInterfaceConfig(interfaceConfig, nodeIP, portName) {
+		if !c.compareInterfaceConfig(interfaceConfig, nodeIP, psk, remoteName, portName) {
 			klog.InfoS("IPsec tunnel interface config doesn't match the cached one, deleting the stale IPsec tunnel port", "node", nodeName, "interface", interfaceConfig.InterfaceName)
 			if err := c.ovsBridgeClient.DeletePort(interfaceConfig.PortUUID); err != nil {
 				return 0, fmt.Errorf("fail to delete the stale IPsec tunnel port %s: %v", interfaceConfig.InterfaceName, err)
@@ -653,7 +684,8 @@ func (c *Controller) createIPSecTunnelPort(nodeName string, nodeIP net.IP) (int3
 			false,
 			"",
 			nodeIP.String(),
-			c.networkConfig.IPSecPSK,
+			remoteName,
+			psk,
 			ovsExternalIDs)
 		if err != nil {
 			return 0, fmt.Errorf("failed to create IPsec tunnel port for Node %s", nodeName)
@@ -666,7 +698,9 @@ func (c *Controller) createIPSecTunnelPort(nodeName string, nodeIP net.IP) (int3
 			c.networkConfig.TunnelType,
 			nodeName,
 			nodeIP,
-			c.networkConfig.IPSecPSK)
+			psk,
+			remoteName,
+		)
 		interfaceConfig.OVSPortConfig = ovsPortConfig
 		c.interfaceStore.AddInterface(interfaceConfig)
 	}
@@ -693,20 +727,22 @@ func ParseTunnelInterfaceConfig(
 		klog.V(2).Infof("OVS port %s has no options", portData.Name)
 		return nil
 	}
-	remoteIP, localIP, psk, csum := ovsconfig.ParseTunnelInterfaceOptions(portData)
+	remoteIP, localIP, psk, remoteName, csum := ovsconfig.ParseTunnelInterfaceOptions(portData)
 
 	var interfaceConfig *interfacestore.InterfaceConfig
 	var nodeName string
 	if portData.ExternalIDs != nil {
 		nodeName = portData.ExternalIDs[ovsExternalIDNodeName]
 	}
-	if psk != "" {
+	if psk != "" || remoteName != "" {
 		interfaceConfig = interfacestore.NewIPSecTunnelInterface(
 			portData.Name,
 			ovsconfig.TunnelType(portData.IFType),
 			nodeName,
 			remoteIP,
-			psk)
+			psk,
+			remoteName,
+		)
 	} else {
 		interfaceConfig = interfacestore.NewTunnelInterface(portData.Name, ovsconfig.TunnelType(portData.IFType), localIP, csum)
 	}
