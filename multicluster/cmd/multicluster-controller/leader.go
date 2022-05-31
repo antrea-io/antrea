@@ -92,14 +92,6 @@ func runLeader(o *Options) error {
 		return fmt.Errorf("error creating ResourceImport webhook: %v", err)
 	}
 
-	// Only leader runs the ResourceExportFilterReconciler
-	if err = (&multiclustercontrollers.ResourceExportFilterReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
-		return fmt.Errorf("error creating ResourceExportFilter controller: %v", err)
-	}
-
 	klog.InfoS("Leader MC Controller Starting Manager")
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		return fmt.Errorf("error running Manager: %v", err)

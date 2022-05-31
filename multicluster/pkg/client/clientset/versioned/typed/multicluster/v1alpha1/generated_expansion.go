@@ -29,8 +29,4 @@ type MemberClusterAnnounceExpansion interface{}
 
 type ResourceExportExpansion interface{}
 
-type ResourceExportFilterExpansion interface{}
-
 type ResourceImportExpansion interface{}
-
-type ResourceImportFilterExpansion interface{}

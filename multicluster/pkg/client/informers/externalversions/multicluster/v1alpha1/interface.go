@@ -35,12 +35,8 @@ type Interface interface {
 	MemberClusterAnnounces() MemberClusterAnnounceInformer
 	// ResourceExports returns a ResourceExportInformer.
 	ResourceExports() ResourceExportInformer
-	// ResourceExportFilters returns a ResourceExportFilterInformer.
-	ResourceExportFilters() ResourceExportFilterInformer
 	// ResourceImports returns a ResourceImportInformer.
 	ResourceImports() ResourceImportInformer
-	// ResourceImportFilters returns a ResourceImportFilterInformer.
-	ResourceImportFilters() ResourceImportFilterInformer
 }
 
 type version struct {
@@ -84,17 +80,7 @@ func (v *version) ResourceExports() ResourceExportInformer {
 	return &resourceExportInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }
 
-// ResourceExportFilters returns a ResourceExportFilterInformer.
-func (v *version) ResourceExportFilters() ResourceExportFilterInformer {
-	return &resourceExportFilterInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
-}
-
 // ResourceImports returns a ResourceImportInformer.
 func (v *version) ResourceImports() ResourceImportInformer {
 	return &resourceImportInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
-}
-
-// ResourceImportFilters returns a ResourceImportFilterInformer.
-func (v *version) ResourceImportFilters() ResourceImportFilterInformer {
-	return &resourceImportFilterInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }

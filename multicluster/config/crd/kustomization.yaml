@@ -5,8 +5,6 @@ resources:
 - bases/multicluster.crd.antrea.io_clusterclaims.yaml
 - bases/multicluster.crd.antrea.io_memberclusterannounces.yaml
 - bases/multicluster.crd.antrea.io_clustersets.yaml
-- bases/multicluster.crd.antrea.io_resourceexportfilters.yaml
-- bases/multicluster.crd.antrea.io_resourceimportfilters.yaml
 - bases/multicluster.crd.antrea.io_resourceexports.yaml
 - bases/multicluster.crd.antrea.io_resourceimports.yaml
 - k8smcs/multicluster.x-k8s.io_serviceexports.yaml
@@ -22,8 +20,6 @@ patchesStrategicMerge:
 #- patches/webhook_in_clusterclaims.yaml
 #- patches/webhook_in_memberclusterannounces.yaml
 #- patches/webhook_in_clustersets.yaml
-#- patches/webhook_in_resourceexportfilters.yaml
-#- patches/webhook_in_resourceimportfilters.yaml
 #- patches/webhook_in_resourceexports.yaml
 #- patches/webhook_in_resourceimports.yaml
 #- patches/webhook_in_clusterinfoimports.yaml
