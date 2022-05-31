@@ -312,7 +312,7 @@ func testCreatePort(t *testing.T, br *ovsconfig.OVSBridge, name string, ifType s
 		}
 	case "internal":
 		externalIDs = map[string]interface{}{"k1": "v1", "k2": "v2"}
-		uuid, err = br.CreateInternalPort(name, ofPortRequest, externalIDs)
+		uuid, err = br.CreateInternalPort(name, ofPortRequest, "", externalIDs)
 	case "vxlan":
 		externalIDs = map[string]interface{}{}
 		uuid, err = br.CreateTunnelPort(name, ovsconfig.VXLANTunnel, ofPortRequest)

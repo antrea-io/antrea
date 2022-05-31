@@ -271,7 +271,7 @@ func (pc *podConfigurator) createOVSPort(ovsPortName string, ovsAttachInfo map[s
 	var err error
 	switch pc.ifConfigurator.getOVSInterfaceType(ovsPortName) {
 	case internalOVSInterfaceType:
-		portUUID, err = pc.ovsBridgeClient.CreateInternalPort(ovsPortName, 0, ovsAttachInfo)
+		portUUID, err = pc.ovsBridgeClient.CreateInternalPort(ovsPortName, 0, "", ovsAttachInfo)
 	default:
 		if vlanID == 0 {
 			portUUID, err = pc.ovsBridgeClient.CreatePort(ovsPortName, ovsPortName, ovsAttachInfo)

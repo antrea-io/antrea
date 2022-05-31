@@ -23,6 +23,7 @@ import (
 	"github.com/TomCodeLV/OVSDB-golang-lib/pkg/dbtransaction"
 	"github.com/TomCodeLV/OVSDB-golang-lib/pkg/helpers"
 	"github.com/TomCodeLV/OVSDB-golang-lib/pkg/ovsdb"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2"
 )
 
@@ -34,6 +35,7 @@ type OVSBridge struct {
 	datapathType             OVSDatapathType
 	uuid                     string
 	isHardwareOffloadEnabled bool
+	allocatedOFPorts         []int32
 }
 
 type OVSPortData struct {
@@ -96,7 +98,7 @@ func NewOVSDBConnectionUDS(address string) (*ovsdb.OVSDB, Error) {
 
 // NewOVSBridge creates and returns a new OVSBridge struct.
 func NewOVSBridge(bridgeName string, ovsDatapathType OVSDatapathType, ovsdb *ovsdb.OVSDB) *OVSBridge {
-	return &OVSBridge{ovsdb, bridgeName, ovsDatapathType, "", false}
+	return &OVSBridge{ovsdb, bridgeName, ovsDatapathType, "", false, []int32{}}
 }
 
 // Create looks up or creates the bridge. If the bridge with name bridgeName
@@ -362,11 +364,11 @@ func (br *OVSBridge) DeletePort(portUUID string) Error {
 // If externalIDs is not empty, the map key/value pairs will be set to the
 // port's external_ids.
 // If ofPortRequest is not zero, it will be passed to the OVS port creation.
-func (br *OVSBridge) CreateInternalPort(name string, ofPortRequest int32, externalIDs map[string]interface{}) (string, Error) {
+func (br *OVSBridge) CreateInternalPort(name string, ofPortRequest int32, mac string, externalIDs map[string]interface{}) (string, Error) {
 	if ofPortRequest < 0 || ofPortRequest > ofPortRequestMax {
 		return "", newInvalidArgumentsError(fmt.Sprint("invalid ofPortRequest value: ", ofPortRequest))
 	}
-	return br.createPort(name, name, "internal", ofPortRequest, 0, externalIDs, nil)
+	return br.createPort(name, name, "internal", ofPortRequest, 0, mac, externalIDs, nil)
 }
 
 // CreateTunnelPort creates a tunnel port with the specified name and type on
@@ -454,7 +456,7 @@ func (br *OVSBridge) createTunnelPort(
 		options["csum"] = "true"
 	}
 
-	return br.createPort(name, name, string(tunnelType), ofPortRequest, 0, externalIDs, options)
+	return br.createPort(name, name, string(tunnelType), ofPortRequest, 0, "", externalIDs, options)
 }
 
 // GetInterfaceOptions returns the options of the provided interface.
@@ -526,7 +528,7 @@ func ParseTunnelInterfaceOptions(portData *OVSPortData) (net.IP, net.IP, string,
 
 // CreateUplinkPort creates uplink port.
 func (br *OVSBridge) CreateUplinkPort(name string, ofPortRequest int32, externalIDs map[string]interface{}) (string, Error) {
-	return br.createPort(name, name, "", ofPortRequest, 0, externalIDs, nil)
+	return br.createPort(name, name, "", ofPortRequest, 0, "", externalIDs, nil)
 }
 
 // CreatePort creates a port with the specified name on the bridge, and connects
@@ -534,7 +536,7 @@ func (br *OVSBridge) CreateUplinkPort(name string, ofPortRequest int32, external
 // If externalIDs is not empty, the map key/value pairs will be set to the
 // port's external_ids.
 func (br *OVSBridge) CreatePort(name, ifDev string, externalIDs map[string]interface{}) (string, Error) {
-	return br.createPort(name, ifDev, "", 0, 0, externalIDs, nil)
+	return br.createPort(name, ifDev, "", 0, 0, "", externalIDs, nil)
 }
 
 // CreateAccessPort creates a port with the specified name and VLAN ID on the bridge, and connects
@@ -543,10 +545,10 @@ func (br *OVSBridge) CreatePort(name, ifDev string, externalIDs map[string]inter
 // port's external_ids.
 // vlanID=0 will perform same behavior as CreatePort.
 func (br *OVSBridge) CreateAccessPort(name, ifDev string, externalIDs map[string]interface{}, vlanID uint16) (string, Error) {
-	return br.createPort(name, ifDev, "", 0, vlanID, externalIDs, nil)
+	return br.createPort(name, ifDev, "", 0, vlanID, "", externalIDs, nil)
 }
 
-func (br *OVSBridge) createPort(name, ifName, ifType string, ofPortRequest int32, vlanID uint16, externalIDs, options map[string]interface{}) (string, Error) {
+func (br *OVSBridge) createPort(name, ifName, ifType string, ofPortRequest int32, vlanID uint16, mac string, externalIDs, options map[string]interface{}) (string, Error) {
 	var externalIDMap []interface{}
 	var optionMap []interface{}
 
@@ -564,6 +566,7 @@ func (br *OVSBridge) createPort(name, ifName, ifType string, ofPortRequest int32
 		Type:          ifType,
 		OFPortRequest: ofPortRequest,
 		Options:       optionMap,
+		MAC:           mac,
 	}
 	ifNamedUUID := tx.Insert(dbtransaction.Insert{
 		Table: "Interface",
@@ -794,6 +797,31 @@ func (br *OVSBridge) GetPortList() ([]OVSPortData, Error) {
 	}
 
 	return portList, nil
+}
+
+// AllocateOFPort returns an OpenFlow port number which is not allocated or used by any existing OVS port. Note that,
+// the returned port number is cached locally but not saved in OVSDB yet before the real port is created, so it might
+// introduce an issue of conflict if the OFPort is occupied by another port creation.
+func (br *OVSBridge) AllocateOFPort(startPort int) (int32, error) {
+	existingOFPorts := sets.NewInt32()
+	for _, allocatedOFPort := range br.allocatedOFPorts {
+		existingOFPorts.Insert(allocatedOFPort)
+	}
+	ports, err := br.GetPortList()
+	if err != nil {
+		return 0, err
+	}
+	for _, p := range ports {
+		existingOFPorts.Insert(p.OFPort)
+	}
+	port := int32(startPort)
+	for ; ; port++ {
+		if !existingOFPorts.Has(port) {
+			break
+		}
+	}
+	br.allocatedOFPorts = append(br.allocatedOFPorts, port)
+	return port, nil
 }
 
 // GetOVSVersion either returns the version of OVS, or an error.

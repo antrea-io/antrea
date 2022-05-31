@@ -76,6 +76,21 @@ func (mr *MockOVSBridgeClientMockRecorder) AddOVSOtherConfig(arg0 interface{}) *
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddOVSOtherConfig", reflect.TypeOf((*MockOVSBridgeClient)(nil).AddOVSOtherConfig), arg0)
 }
 
+// AllocateOFPort mocks base method
+func (m *MockOVSBridgeClient) AllocateOFPort(arg0 int) (int32, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AllocateOFPort", arg0)
+	ret0, _ := ret[0].(int32)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// AllocateOFPort indicates an expected call of AllocateOFPort
+func (mr *MockOVSBridgeClientMockRecorder) AllocateOFPort(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AllocateOFPort", reflect.TypeOf((*MockOVSBridgeClient)(nil).AllocateOFPort), arg0)
+}
+
 // Create mocks base method
 func (m *MockOVSBridgeClient) Create() ovsconfig.Error {
 	m.ctrl.T.Helper()
@@ -106,18 +121,18 @@ func (mr *MockOVSBridgeClientMockRecorder) CreateAccessPort(arg0, arg1, arg2, ar
 }
 
 // CreateInternalPort mocks base method
-func (m *MockOVSBridgeClient) CreateInternalPort(arg0 string, arg1 int32, arg2 map[string]interface{}) (string, ovsconfig.Error) {
+func (m *MockOVSBridgeClient) CreateInternalPort(arg0 string, arg1 int32, arg2 string, arg3 map[string]interface{}) (string, ovsconfig.Error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateInternalPort", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "CreateInternalPort", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(string)
 	ret1, _ := ret[1].(ovsconfig.Error)
 	return ret0, ret1
 }
 
 // CreateInternalPort indicates an expected call of CreateInternalPort
-func (mr *MockOVSBridgeClientMockRecorder) CreateInternalPort(arg0, arg1, arg2 interface{}) *gomock.Call {
+func (mr *MockOVSBridgeClientMockRecorder) CreateInternalPort(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateInternalPort", reflect.TypeOf((*MockOVSBridgeClient)(nil).CreateInternalPort), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateInternalPort", reflect.TypeOf((*MockOVSBridgeClient)(nil).CreateInternalPort), arg0, arg1, arg2, arg3)
 }
 
 // CreatePort mocks base method
