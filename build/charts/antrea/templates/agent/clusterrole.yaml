@@ -57,9 +57,7 @@ rules:
       - antreaagentinfos
     verbs:
       - get
-      - create
       - update
-      - delete
   - apiGroups:
       - controlplane.antrea.io
     resources:
