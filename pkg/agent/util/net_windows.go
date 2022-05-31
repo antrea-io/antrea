@@ -47,6 +47,8 @@ const (
 
 	MetricDefault = 256
 	MetricHigh    = 50
+
+	AntreaNatName = "antrea-nat"
 )
 
 type Route struct {
@@ -700,6 +702,7 @@ func NewNetNat(netNatName string, subnetCIDR *net.IPNet) error {
 		}
 	} else {
 		if strings.Contains(internalNet, subnetCIDR.String()) {
+			klog.InfoS("existing netnat in CIDR", "name", internalNet, "subnetCIDR", subnetCIDR.String())
 			return nil
 		}
 		klog.InfoS("Removing the existing netnat", "name", netNatName, "internalIPInterfaceAddressPrefix", internalNet)
@@ -781,8 +784,37 @@ func RemoveNetNatStaticMapping(netNatName string, externalIPAddr string, externa
 	return RemoveNetNatStaticMappingByID(netNatName, id)
 }
 
+func RemoveNetNatStaticMappingByNPLTuples(netNatName string, externalIPAddr string, externalPort uint16, internalIPAddr string, internalPort uint16, proto string) error {
+	staticMappingStr, err := GetNetNatStaticMapping(netNatName, externalIPAddr, externalPort, proto)
+	if err != nil {
+		return err
+	}
+	parsed := parseGetNetCmdResult(staticMappingStr, 6)
+	if len(parsed) > 0 {
+		items := parsed[0]
+		if items[4] == internalIPAddr && items[5] == strconv.Itoa(int(internalPort)) {
+			firstCol := strings.Split(items[0], ";")
+			id, err := strconv.Atoi(firstCol[1])
+			if err != nil {
+				return err
+			}
+			if err := RemoveNetNatStaticMappingByID(netNatName, id); err != nil {
+				return err
+			}
+			return nil
+		}
+	}
+	return nil
+}
+
 func RemoveNetNatStaticMappingByID(netNatName string, id int) error {
 	cmd := fmt.Sprintf("Remove-NetNatStaticMapping -NatName %s -StaticMappingID %d -Confirm:$false", netNatName, id)
+	_, err := ps.RunCommand(cmd)
+	return err
+}
+
+func RemoveNetNatStaticMappingByNAME(netNatName string) error {
+	cmd := fmt.Sprintf("Remove-NetNatStaticMapping -NatName %s -Confirm:$false", netNatName)
 	_, err := ps.RunCommand(cmd)
 	return err
 }

@@ -1,6 +1,3 @@
-//go:build !windows
-// +build !windows
-
 // Copyright 2020 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -24,10 +21,4 @@ type PodPortRules interface {
 	DeleteRule(nodePort int, podIP string, podPort int, protocol string) error
 	DeleteAllRules() error
 	AddAllRules(nplList []PodNodePort) error
-}
-
-// InitRules initializes rules based on the underlying implementation
-func InitRules() PodPortRules {
-	// Currently we only support IPTABLES. Later this can be extended based on the system capability.
-	return NewIPTableRules()
 }

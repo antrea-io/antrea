@@ -38,12 +38,13 @@ const (
 	inboundFirewallRuleName  = "Antrea: accept packets from local Pods"
 	outboundFirewallRuleName = "Antrea: accept packets to local Pods"
 
-	antreaNat         = "antrea-nat"
 	antreaNatNodePort = "antrea-nat-nodeport"
 )
 
 var (
+	antreaNat             = util.AntreaNatName
 	virtualServiceIPv4Net = util.NewIPNet(config.VirtualServiceIPv4)
+	PodCIDRIPv4           *net.IPNet
 )
 
 type Client struct {
@@ -71,6 +72,7 @@ func NewClient(networkConfig *config.NetworkConfig, noSNAT, proxyAll, connectUpl
 // Service LoadBalancing is provided by OpenFlow.
 func (c *Client) Initialize(nodeConfig *config.NodeConfig, done func()) error {
 	c.nodeConfig = nodeConfig
+	PodCIDRIPv4 = nodeConfig.PodIPv4CIDR
 	bridgeInf, err := net.InterfaceByName(nodeConfig.OVSBridge)
 	if err != nil {
 		return fmt.Errorf("failed to find the interface %s: %v", nodeConfig.OVSBridge, err)

@@ -40,24 +40,18 @@ func NewExpectedNPLAnnotations(nodeIP *string, nplStartPort, nplEndPort int) *Ex
 	}
 }
 
-func (a *ExpectedNPLAnnotations) find(podPort int) *nplk8s.NPLAnnotation {
+func (a *ExpectedNPLAnnotations) find(podPort int, protocol string) *nplk8s.NPLAnnotation {
 	for _, annotation := range a.annotations {
-		if annotation.PodPort == podPort {
+		if annotation.PodPort == podPort && annotation.Protocol == protocol {
 			return &annotation
 		}
 	}
 	return nil
 }
 
-func (a *ExpectedNPLAnnotations) Add(nodePort *int, podPort int, protocols ...string) *ExpectedNPLAnnotations {
-	for i, annotation := range a.annotations {
-		if annotation.PodPort == podPort {
-			annotation.Protocols = append(annotation.Protocols, protocols...)
-			a.annotations[i] = annotation
-			return a
-		}
-	}
-	annotation := nplk8s.NPLAnnotation{PodPort: podPort, Protocols: protocols}
+func (a *ExpectedNPLAnnotations) Add(nodePort *int, podPort int, protocol string) *ExpectedNPLAnnotations {
+	protocols := []string{protocol}
+	annotation := nplk8s.NPLAnnotation{PodPort: podPort, Protocol: protocol, Protocols: protocols}
 	if nodePort != nil {
 		annotation.NodePort = *nodePort
 	}
@@ -70,11 +64,8 @@ func (a *ExpectedNPLAnnotations) Add(nodePort *int, podPort int, protocols ...st
 
 func (a *ExpectedNPLAnnotations) Check(t *testing.T, nplValue []nplk8s.NPLAnnotation) {
 	assert.Equal(t, len(a.annotations), len(nplValue), "Invalid number of NPL annotations")
-	nodePorts := make(map[int]bool)
 	for _, nplAnnotation := range nplValue {
-		assert.NotContains(t, nodePorts, nplAnnotation.NodePort, "Duplicate Node ports in NPL annotations")
-		nodePorts[nplAnnotation.NodePort] = true
-		expectedAnnotation := a.find(nplAnnotation.PodPort)
+		expectedAnnotation := a.find(nplAnnotation.PodPort, nplAnnotation.Protocol)
 		if !assert.NotNilf(t, expectedAnnotation, "Unexpected annotation with PodPort %d", nplAnnotation.PodPort) {
 			continue
 		}
