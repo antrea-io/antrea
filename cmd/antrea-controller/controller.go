@@ -182,7 +182,8 @@ func run(o *Options) error {
 
 	controllerQuerier := querier.NewControllerQuerier(networkPolicyController, o.config.APIPort)
 
-	controllerMonitor := monitor.NewControllerMonitor(crdClient, nodeInformer, controllerQuerier)
+	externalNodeEnabled := features.DefaultFeatureGate.Enabled(features.ExternalNode)
+	controllerMonitor := monitor.NewControllerMonitor(crdClient, nodeInformer, externalNodeInformer, controllerQuerier, externalNodeEnabled)
 
 	var egressController *egress.EgressController
 	var externalIPPoolController *externalippool.ExternalIPPoolController
