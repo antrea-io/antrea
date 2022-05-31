@@ -26,7 +26,7 @@ spec:
         name: host-aws-node-run-dir
       containers:
         - name: node-init
-          image: gcr.io/google-containers/startup-script:v1
+          image: gcr.io/google-containers/startup-script:v2
           imagePullPolicy: IfNotPresent
           securityContext:
             privileged: true
@@ -42,7 +42,11 @@ spec:
               set -o pipefail
               set -o nounset
 
-              if [ -f /opt/cni/antrea-node-init-status ]; then
+              # The STARTUP_SCRIPT environment variable (which is set to the contents of this
+              # script) will be available when the script is executed :)
+              checkpoint_path="/opt/cni/antrea-node-init-status-$(md5sum <<<"${STARTUP_SCRIPT}" | cut -c-32)"
+
+              if [ -f "$checkpoint_path" ]; then
                   echo "Antrea node init already done. Exiting"
                   exit
               fi
@@ -63,6 +67,11 @@ spec:
                   sleep 2s
               done
 
+              echo "Detecting container runtime (docker / containerd) based on whether /var/run/docker.sock exists"
+              container_runtime="docker"
+              test -e /var/run/docker.sock || container_runtime="containerd"
+              echo "Container runtime: $container_runtime"
+
               # Wait for kubelet to register the file update. Default sync time is 5sec
               # https://github.com/kubernetes/kubernetes/blob/master/pkg/kubelet/dockershim/network/cni/cni.go#L50
               sleep 5s
@@ -78,10 +87,19 @@ spec:
               echo "\n"
               for container_id in $(cat /var/run/aws-node/ipam.json | jq -r '.allocations | .[] | .containerID'); do
                   echo "Restarting container with ID: ${container_id}"
-                  docker kill "${container_id}" || true
+                  if [[ "$container_runtime" == "docker" ]]; then
+                      docker kill "${container_id}" || true
+                  else
+                      ctr -n=k8s.io tasks kill "${container_id}" || true
+                  fi
               done
 
-              # Save the node init status, to avoid container restart in case of node-init pod restart or worker node reboot
-              touch /opt/cni/antrea-node-init-status
+              # Save the Node init status, to avoid container restart in case of node-init Pod
+              # restart or worker Node reboot.
+              # Note that gcr.io/google-containers/startup-script:v2 also includes a similar
+              # mechanism but it doesn't prevent the script from being run again when the Node
+              # restarts, since the checkpoint path is located in the /tmp folder.
+              # See https://github.com/kubernetes-retired/contrib/blob/master/startup-script/manage-startup-script.sh.
+              touch "$checkpoint_path"
 
               echo "Node initialization completed"
