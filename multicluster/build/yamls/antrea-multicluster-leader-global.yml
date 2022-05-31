@@ -287,61 +287,6 @@ metadata:
   creationTimestamp: null
   labels:
     app: antrea
-  name: resourceexportfilters.multicluster.crd.antrea.io
-spec:
-  group: multicluster.crd.antrea.io
-  names:
-    kind: ResourceExportFilter
-    listKind: ResourceExportFilterList
-    plural: resourceexportfilters
-    singular: resourceexportfilter
-  scope: Namespaced
-  versions:
-  - name: v1alpha1
-    schema:
-      openAPIV3Schema:
-        description: ResourceExportFilter is the Schema for the ResourceExportFilters
-          API
-        properties:
-          apiVersion:
-            description: 'APIVersion defines the versioned schema of this representation
-              of an object. Servers should convert recognized schemas to the latest
-              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
-            type: string
-          kind:
-            description: 'Kind is a string value representing the REST resource this
-              object represents. Servers may infer this from the endpoint the client
-              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
-            type: string
-          metadata:
-            type: object
-          spec:
-            description: ResourceExportFilterSpec defines the desired state of ResourceExportFilter
-            type: object
-          status:
-            description: ResourceExportFilterStatus defines the observed state of
-              ResourceExportFilter
-            type: object
-        type: object
-    served: true
-    storage: true
-    subresources:
-      status: {}
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: []
-  storedVersions: []
----
-apiVersion: apiextensions.k8s.io/v1
-kind: CustomResourceDefinition
-metadata:
-  annotations:
-    controller-gen.kubebuilder.io/version: v0.4.1
-  creationTimestamp: null
-  labels:
-    app: antrea
   name: resourceexports.multicluster.crd.antrea.io
 spec:
   group: multicluster.crd.antrea.io
@@ -3073,61 +3018,6 @@ spec:
                       type: string
                   type: object
                 type: array
-            type: object
-        type: object
-    served: true
-    storage: true
-    subresources:
-      status: {}
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: []
-  storedVersions: []
----
-apiVersion: apiextensions.k8s.io/v1
-kind: CustomResourceDefinition
-metadata:
-  annotations:
-    controller-gen.kubebuilder.io/version: v0.4.1
-  creationTimestamp: null
-  labels:
-    app: antrea
-  name: resourceimportfilters.multicluster.crd.antrea.io
-spec:
-  group: multicluster.crd.antrea.io
-  names:
-    kind: ResourceImportFilter
-    listKind: ResourceImportFilterList
-    plural: resourceimportfilters
-    singular: resourceimportfilter
-  scope: Namespaced
-  versions:
-  - name: v1alpha1
-    schema:
-      openAPIV3Schema:
-        description: ResourceImportFilter is the Schema for the ResourceImportFilters
-          API
-        properties:
-          apiVersion:
-            description: 'APIVersion defines the versioned schema of this representation
-              of an object. Servers should convert recognized schemas to the latest
-              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
-            type: string
-          kind:
-            description: 'Kind is a string value representing the REST resource this
-              object represents. Servers may infer this from the endpoint the client
-              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
-            type: string
-          metadata:
-            type: object
-          spec:
-            description: ResourceImportFilterSpec defines the desired state of ResourceImportFilter
-            type: object
-          status:
-            description: ResourceImportFilterStatus defines the observed state of
-              ResourceImportFilter
             type: object
         type: object
     served: true

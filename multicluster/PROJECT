@@ -50,24 +50,6 @@ resources:
   controller: true
   domain: crd.antrea.io
   group: multicluster
-  kind: ResourceExportFilter
-  path: antrea.io/antrea/multicluster/apis/multicluster/v1alpha1
-  version: v1alpha1
-- api:
-    crdVersion: v1
-    namespaced: true
-  controller: true
-  domain: crd.antrea.io
-  group: multicluster
-  kind: ResourceImportFilter
-  path: antrea.io/antrea/multicluster/apis/multicluster/v1alpha1
-  version: v1alpha1
-- api:
-    crdVersion: v1
-    namespaced: true
-  controller: true
-  domain: crd.antrea.io
-  group: multicluster
   kind: ResourceExport
   path: antrea.io/antrea/multicluster/apis/multicluster/v1alpha1
   version: v1alpha1

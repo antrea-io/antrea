@@ -51,16 +51,8 @@ func (c *FakeMulticlusterV1alpha1) ResourceExports(namespace string) v1alpha1.Re
 	return &FakeResourceExports{c, namespace}
 }
 
-func (c *FakeMulticlusterV1alpha1) ResourceExportFilters(namespace string) v1alpha1.ResourceExportFilterInterface {
-	return &FakeResourceExportFilters{c, namespace}
-}
-
 func (c *FakeMulticlusterV1alpha1) ResourceImports(namespace string) v1alpha1.ResourceImportInterface {
 	return &FakeResourceImports{c, namespace}
-}
-
-func (c *FakeMulticlusterV1alpha1) ResourceImportFilters(namespace string) v1alpha1.ResourceImportFilterInterface {
-	return &FakeResourceImportFilters{c, namespace}
 }
 
 // RESTClient returns a RESTClient that is used to communicate
