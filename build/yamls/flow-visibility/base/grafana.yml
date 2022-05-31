@@ -107,7 +107,7 @@ spec:
           imagePullPolicy: IfNotPresent
           env:
             - name: GF_INSTALL_PLUGINS
-              value: "https://downloads.antrea.io/artifacts/grafana-custom-plugins/grafana-sankey-plugin-1.0.0.zip;antreaflowvisibility-grafana-sankey-plugin,grafana-clickhouse-datasource 1.0.1"
+              value: "https://downloads.antrea.io/artifacts/grafana-custom-plugins/grafana-sankey-plugin-1.0.1.zip;antreaflowvisibility-grafana-sankey-plugin,grafana-clickhouse-datasource 1.0.1"
             - name: CLICKHOUSE_USERNAME
               valueFrom:
                 secretKeyRef: 
