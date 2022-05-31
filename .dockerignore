@@ -1,5 +1,10 @@
+# DO NOT ADD ANY CHECKED-IN FILES TO THIS LIST!
+# During the build, we look for tracked files with changes and if we find any,
+# we add a "dirty" tag to the version string. Therefore if any checked-in file
+# is added to this list, it will be omitted from the docker build context, git
+# will think the file has been deleted and the "dirty" tag will always be
+# present, even for Antrea builds created directly from the main branch by CI.
 .cache
 bin/antctl-darwin
 bin/antctl-linux
 bin/antctl-windows.exe
-test/e2e/infra
