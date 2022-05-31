@@ -49,7 +49,7 @@ For local instances, plugins are installed and updated via a simple CLI command.
 Use the grafana-cli tool to install sankey-panel-plugin from the commandline:
 
 ```shell
-grafana-cli --pluginUrl https://downloads.antrea.io/artifacts/grafana-custom-plugins/grafana-sankey-plugin-1.0.0.zip plugins install antreaflowvisibility-grafana-sankey-plugin
+grafana-cli --pluginUrl https://downloads.antrea.io/artifacts/grafana-custom-plugins/grafana-sankey-plugin-1.0.1.zip plugins install antreaflowvisibility-grafana-sankey-plugin
 ```
 
 The plugin will be installed into your grafana plugins directory; the default is
@@ -58,7 +58,7 @@ The plugin will be installed into your grafana plugins directory; the default is
 Alternatively, you can manually download the .zip file and unpack it into your grafana
 plugins directory.
 
-[Download](https://downloads.antrea.io/artifacts/grafana-custom-plugins/grafana-sankey-plugin-1.0.0.zip)
+[Download](https://downloads.antrea.io/artifacts/grafana-custom-plugins/grafana-sankey-plugin-1.0.1.zip)
 
 Installing to a Grafana deployed on Kubernetes:
 
@@ -68,7 +68,7 @@ as below:
 ```yaml
 env:
 - name: GF_INSTALL_PLUGINS
-   value: "https://downloads.antrea.io/artifacts/grafana-custom-plugins/grafana-sankey-plugin-1.0.0.zip;antreaflowvisibility-grafana-sankey-plugin"
+   value: "https://downloads.antrea.io/artifacts/grafana-custom-plugins/grafana-sankey-plugin-1.0.1.zip;antreaflowvisibility-grafana-sankey-plugin"
 ```
 
 ### 2. Add the Panel to a Dashboard

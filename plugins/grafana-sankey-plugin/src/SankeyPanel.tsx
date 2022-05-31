@@ -53,11 +53,11 @@ export const SankeyPanel: React.FC<Props> = ({ options, data, width, height }) =
           destination = destinationIPs[i];
         }
       } else {
-        // Google Chart will not be rendered if source is equal to destination.
-        // Add an extra space to differentiate to-self traffic (e.g. intra-Node).
-        if (source === destination) {
-          destination = destination + ' ';
-        }
+        // Google Chart will not render if cycle exists. Direct cycle: a->a
+        // (e.g. intra-Node traffic in node_to_node_flows dashboard); Indirect
+        // cycle: a->b, b->c, c->a. Add an extra space to all the destination
+        // names to avoid introducing cycles.
+        destination = destination + ' ';
       }
       record.push(source);
       record.push(destination);
