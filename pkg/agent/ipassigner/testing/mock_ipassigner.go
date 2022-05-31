@@ -1,4 +1,4 @@
-// Copyright 2021 Antrea Authors
+// Copyright 2022 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -74,6 +74,20 @@ func (m *MockIPAssigner) AssignedIPs() sets.String {
 func (mr *MockIPAssignerMockRecorder) AssignedIPs() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AssignedIPs", reflect.TypeOf((*MockIPAssigner)(nil).AssignedIPs))
+}
+
+// InitIPs mocks base method
+func (m *MockIPAssigner) InitIPs(arg0 sets.String) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "InitIPs", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// InitIPs indicates an expected call of InitIPs
+func (mr *MockIPAssignerMockRecorder) InitIPs(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InitIPs", reflect.TypeOf((*MockIPAssigner)(nil).InitIPs), arg0)
 }
 
 // Run mocks base method

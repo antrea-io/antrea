@@ -24,6 +24,8 @@ type IPAssigner interface {
 	UnassignIP(ip string) error
 	// AssignedIPs return the IPs that are assigned to the system by this IPAssigner.
 	AssignedIPs() sets.String
+	// InitIPs ensures the IPs that are assigned to the system match the given IPs.
+	InitIPs(sets.String) error
 	// Run starts the IP assigner.
 	Run(<-chan struct{})
 }
