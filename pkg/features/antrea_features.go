@@ -146,6 +146,7 @@ var (
 		Multicast:         {},
 		SecondaryNetwork:  {},
 		ServiceExternalIP: {},
+		IPsecCertAuth:     {},
 	}
 )
 
