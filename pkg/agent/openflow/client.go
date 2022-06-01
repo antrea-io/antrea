@@ -287,10 +287,10 @@ type Client interface {
 	// UninstallTrafficControlMarkFlows removes the flows for a traffic control rule.
 	UninstallTrafficControlMarkFlows(name string) error
 
-	// InstallTrafficControlReturnPortFlow installs the flow to classify the packets from a return port.
-	InstallTrafficControlReturnPortFlow(returnOFPort uint32) error
+	// InstallTrafficControlReturnPortFlows installs the flows for a return port.
+	InstallTrafficControlReturnPortFlows(returnOFPort uint32) error
 
-	// UninstallTrafficControlReturnPortFlow removes the flow to classify the packets from a return port.
+	// UninstallTrafficControlReturnPortFlow removes the flows for a return port.
 	UninstallTrafficControlReturnPortFlow(returnOFPort uint32) error
 
 	InstallMulticastGroup(ofGroupID binding.GroupIDType, localReceivers []uint32) error
@@ -1164,9 +1164,9 @@ func (c *client) UninstallTrafficControlMarkFlows(name string) error {
 	return c.deleteFlows(c.featurePodConnectivity.tcCachedFlows, cacheKey)
 }
 
-func (c *client) InstallTrafficControlReturnPortFlow(returnOFPort uint32) error {
+func (c *client) InstallTrafficControlReturnPortFlows(returnOFPort uint32) error {
 	cacheKey := fmt.Sprintf("tc_%d", returnOFPort)
-	flows := []binding.Flow{c.featurePodConnectivity.trafficControlReturnClassifierFlow(returnOFPort)}
+	flows := c.featurePodConnectivity.trafficControlReturnClassifierFlows(returnOFPort)
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
 	return c.addFlows(c.featurePodConnectivity.tcCachedFlows, cacheKey, flows)

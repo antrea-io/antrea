@@ -1759,7 +1759,7 @@ func TestTrafficControlFlows(t *testing.T) {
 	targetOFPort := uint32(200)
 	returnOFPort := uint32(201)
 	expectedFlows := prepareTrafficControlFlows(sourceOFPorts, targetOFPort, returnOFPort)
-	c.InstallTrafficControlReturnPortFlow(returnOFPort)
+	c.InstallTrafficControlReturnPortFlows(returnOFPort)
 	c.InstallTrafficControlMarkFlows("tc", sourceOFPorts, targetOFPort, v1alpha2.DirectionBoth, v1alpha2.ActionRedirect)
 	for _, tableFlow := range expectedFlows {
 		ofTestUtils.CheckFlowExists(t, ovsCtlClient, tableFlow.tableName, 0, true, tableFlow.flows)

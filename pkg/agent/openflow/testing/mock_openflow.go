@@ -451,9 +451,9 @@ func (mr *MockClientMockRecorder) InstallTrafficControlMarkFlows(arg0, arg1, arg
 }
 
 // InstallTrafficControlReturnPortFlow mocks base method
-func (m *MockClient) InstallTrafficControlReturnPortFlow(arg0 uint32) error {
+func (m *MockClient) InstallTrafficControlReturnPortFlows(arg0 uint32) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "InstallTrafficControlReturnPortFlow", arg0)
+	ret := m.ctrl.Call(m, "InstallTrafficControlReturnPortFlows", arg0)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
@@ -461,7 +461,7 @@ func (m *MockClient) InstallTrafficControlReturnPortFlow(arg0 uint32) error {
 // InstallTrafficControlReturnPortFlow indicates an expected call of InstallTrafficControlReturnPortFlow
 func (mr *MockClientMockRecorder) InstallTrafficControlReturnPortFlow(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallTrafficControlReturnPortFlow", reflect.TypeOf((*MockClient)(nil).InstallTrafficControlReturnPortFlow), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallTrafficControlReturnPortFlows", reflect.TypeOf((*MockClient)(nil).InstallTrafficControlReturnPortFlows), arg0)
 }
 
 // IsConnected mocks base method

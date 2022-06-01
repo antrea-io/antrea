@@ -213,16 +213,30 @@ func (f *featurePodConnectivity) trafficControlMarkFlows(sourceOFPorts []uint32,
 	return flows
 }
 
-// trafficControlReturnClassifierFlow generates the flow to mark the packets from traffic control return port and forward
-// the packets to stageRouting directly. Note that, for the packets which are originally to be output to a tunnel port,
-// value of NXM_NX_TUN_IPV4_DST for the returned packets needs to be loaded in stageRouting.
-func (f *featurePodConnectivity) trafficControlReturnClassifierFlow(returnOFPort uint32) binding.Flow {
-	return ClassifierTable.ofTable.BuildFlow(priorityNormal).
-		Cookie(f.cookieAllocator.Request(f.category).Raw()).
-		MatchInPort(returnOFPort).
-		Action().LoadRegMark(FromTCReturnRegMark).
-		Action().GotoStage(stageRouting).
-		Done()
+// trafficControlReturnClassifierFlows generates the flows for a return port.
+func (f *featurePodConnectivity) trafficControlReturnClassifierFlows(returnOFPort uint32) []binding.Flow {
+	cookieID := f.cookieAllocator.Request(f.category).Raw()
+	return []binding.Flow{
+		// This generates the flow to mark the packets from traffic control return port and forward the packets to
+		// stageRouting directly. Note that, for the packets which are originally to be output to a tunnel port, value
+		// of NXM_NX_TUN_IPV4_DST for the returned packets needs to be loaded in stageRouting.
+		ClassifierTable.ofTable.BuildFlow(priorityNormal).
+			Cookie(cookieID).
+			MatchInPort(returnOFPort).
+			Action().LoadRegMark(FromTCReturnRegMark).
+			Action().GotoStage(stageRouting).
+			Done(),
+		// This generates the flow to block ARP flood requests from the return port. Without this flow, when a target
+		// port receives an ARP request, if the ARP request is sent back to OVS via the return port, then the ARP request
+		// will be flooded again and the target port will receive the ARP request again. As a result, the ARP request
+		// will be flooded again and again. This flow is used to prevent the flooding of ARP request by dropping ARP packets
+		// from return port.
+		ARPSpoofGuardTable.ofTable.BuildFlow(priorityHigh).
+			Cookie(cookieID).
+			MatchInPort(returnOFPort).
+			Action().Drop().
+			Done(),
+	}
 }
 
 // trafficControlCommonFlows generates the common flows for traffic control.
