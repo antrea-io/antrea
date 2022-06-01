@@ -126,7 +126,7 @@ func (o *Options) validate(args []string) error {
 	}
 	ok, ipsecAuthMode := config.GetIPsecAuthenticationModeFromStr(o.config.IPsec.AuthenticationMode)
 	if !ok {
-		return fmt.Errorf("IPsec AuthenticationMode %s is unknown", o.config.TrafficEncapMode)
+		return fmt.Errorf("IPsec AuthenticationMode %s is unknown", o.config.IPsec.AuthenticationMode)
 	}
 	if ipsecAuthMode == config.IPsecAuthenticationModeCert && !features.DefaultFeatureGate.Enabled(features.IPsecCertAuth) {
 		return fmt.Errorf("IPsec AuthenticationMode %s requires feature gate %s to be enabled", o.config.TrafficEncapMode, features.IPsecCertAuth)
@@ -256,6 +256,9 @@ func (o *Options) setDefaults() {
 	}
 	if o.config.WireGuard.Port == 0 {
 		o.config.WireGuard.Port = apis.WireGuardListenPort
+	}
+	if o.config.IPsec.AuthenticationMode == "" {
+		o.config.IPsec.AuthenticationMode = config.IPsecAuthenticationModePSK.String()
 	}
 
 	if features.DefaultFeatureGate.Enabled(features.FlowExporter) {
