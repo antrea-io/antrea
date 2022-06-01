@@ -24,7 +24,7 @@ const (
 	// Identify this cluster.
 	WellKnownClusterClaimID = "id.k8s.io"
 	// Identify a clusterSet that this cluster is member of.
-	WellKnownClusterClaimClusterSet = "clusterSet.k8s.io"
+	WellKnownClusterClaimClusterSet = "clusterset.k8s.io"
 )
 
 // +genclient

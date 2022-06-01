@@ -16,6 +16,8 @@ which is defined by Kubernetes upstream [KEP-1645](https://github.com/kubernetes
 | `MemberClusterAnnounces` | v1alpha1    | v1.5.0        | N/A                                 | N/A             |
 | `ResourceExports`        | v1alpha1    | v1.5.0        | N/A                                 | N/A             |
 | `ResourceImports`        | v1alpha1    | v1.5.0        | N/A                                 | N/A             |
+| `Gateway`                | v1alpha1    | v1.7.0        | N/A                                 | N/A             |
+| `ClusterInfoImport`      | v1alpha1    | v1.7.0        | N/A                                 | N/A             |
 
 ## CRDs in `multicluster.x-k8s.io`
 

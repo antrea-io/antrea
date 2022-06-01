@@ -201,7 +201,7 @@ func configureClusterSet() {
 			Namespace: LeaderNamespace,
 			Name:      "clusterset-id",
 		},
-		Name:  "clusterSet.k8s.io",
+		Name:  "clusterset.k8s.io",
 		Value: clusterSetID,
 	}
 	clusterSet := &mcsv1alpha1.ClusterSet{
