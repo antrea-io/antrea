@@ -921,8 +921,12 @@ func testIngressPolicyWithEndPort(t *testing.T, data *TestData) {
 
 func createAndWaitForPod(t *testing.T, data *TestData, createFunc func(name string, ns string, nodeName string, hostNetwork bool) error, namePrefix string, nodeName string, ns string, hostNetwork bool) (string, *PodIPs, func()) {
 	name := randName(namePrefix)
+	return createAndWaitForPodWithExactName(t, data, createFunc, name, nodeName, ns, hostNetwork)
+}
+
+func createAndWaitForPodWithExactName(t *testing.T, data *TestData, createFunc func(name string, ns string, nodeName string, hostNetwork bool) error, name string, nodeName string, ns string, hostNetwork bool) (string, *PodIPs, func()) {
 	if err := createFunc(name, ns, nodeName, hostNetwork); err != nil {
-		t.Fatalf("Error when creating busybox test Pod: %v", err)
+		t.Fatalf("Error when creating test Pod: %v", err)
 	}
 	cleanupFunc := func() {
 		deletePodWrapper(t, data, ns, name)
