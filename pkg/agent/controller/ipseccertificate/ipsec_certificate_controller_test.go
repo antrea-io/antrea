@@ -209,10 +209,11 @@ func TestController_syncConfigurations(t *testing.T) {
 		assert.Equal(t, 0, fakeController.queue.Len())
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
+		watcher, err := fakeController.kubeClient.CertificatesV1().CertificateSigningRequests().Watch(ctx, metav1.ListOptions{})
+		require.NoError(t, err)
+		defer watcher.Stop()
 		// start a fake signer in background to sign CSRs.
 		go func() {
-			watcher, err := fakeController.kubeClient.CertificatesV1().CertificateSigningRequests().Watch(ctx, metav1.ListOptions{})
-			require.NoError(t, err)
 			for ev := range watcher.ResultChan() {
 				switch ev.Type {
 				case watch.Added:
@@ -242,7 +243,7 @@ func TestController_syncConfigurations(t *testing.T) {
 		}
 		fakeController.mockBridgeClient.EXPECT().UpdateOVSOtherConfig(expectedOVSConfig)
 		// syncConfigurations should not block and get signed certificates from CSR successfully.
-		err := fakeController.syncConfigurations()
+		err = fakeController.syncConfigurations()
 		assert.NoError(t, err)
 		list, err := fakeController.kubeClient.CertificatesV1().CertificateSigningRequests().List(context.TODO(), metav1.ListOptions{})
 		require.NoError(t, err)
@@ -272,13 +273,14 @@ func TestController_RotateCertificates(t *testing.T) {
 	assert.Equal(t, 0, fakeController.queue.Len())
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	watcher, err := fakeController.kubeClient.CertificatesV1().CertificateSigningRequests().Watch(ctx, metav1.ListOptions{})
+	defer watcher.Stop()
+	require.NoError(t, err)
 	// start a fake signer in background to sign CSRs.
 	signCh := make(chan struct{})
 	go func() {
 		defer close(signCh)
 		counter := 0
-		watcher, err := fakeController.kubeClient.CertificatesV1().CertificateSigningRequests().Watch(ctx, metav1.ListOptions{})
-		require.NoError(t, err)
 		for ev := range watcher.ResultChan() {
 			switch ev.Type {
 			case watch.Added:
