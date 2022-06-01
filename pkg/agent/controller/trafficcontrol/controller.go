@@ -45,6 +45,7 @@ import (
 	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha2"
 	crdlisters "antrea.io/antrea/pkg/client/listers/crd/v1alpha2"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
+	"antrea.io/antrea/pkg/ovs/ovsctl"
 	"antrea.io/antrea/pkg/util/channel"
 	"antrea.io/antrea/pkg/util/k8s"
 	utilsets "antrea.io/antrea/pkg/util/sets"
@@ -115,6 +116,7 @@ type Controller struct {
 
 	portToTCBindings   map[string]*portToTCBinding
 	ovsBridgeClient    ovsconfig.OVSBridgeClient
+	ovsCtlClient       ovsctl.OVSCtlClient
 	ovsPortUpdateMutex sync.Mutex
 
 	interfaceStore interfacestore.InterfaceStore
@@ -142,6 +144,7 @@ type Controller struct {
 func NewTrafficControlController(ofClient openflow.Client,
 	interfaceStore interfacestore.InterfaceStore,
 	ovsBridgeClient ovsconfig.OVSBridgeClient,
+	ovsCtlClient ovsctl.OVSCtlClient,
 	tcInformer crdinformers.TrafficControlInformer,
 	podInformer cache.SharedIndexInformer,
 	namespaceInformer coreinformers.NamespaceInformer,
@@ -149,6 +152,7 @@ func NewTrafficControlController(ofClient openflow.Client,
 	c := &Controller{
 		ofClient:                   ofClient,
 		ovsBridgeClient:            ovsBridgeClient,
+		ovsCtlClient:               ovsCtlClient,
 		interfaceStore:             interfaceStore,
 		trafficControlInformer:     tcInformer.Informer(),
 		trafficControlLister:       tcInformer.Lister(),
@@ -747,6 +751,11 @@ func (c *Controller) getOrCreateTrafficControlPort(port *v1alpha2.TrafficControl
 	if err != nil {
 		return 0, err
 	}
+	// Set the port with no-flood to reject ARP flood packets.
+	if err = c.ovsCtlClient.SetPortNoFlood(int(ofPort)); err != nil {
+		return 0, fmt.Errorf("failed to set port %s with no-flood config: %w", portName, err)
+	}
+
 	// If the port is a return port and is newly created, install a return flow for the port.
 	if isReturnPort {
 		if err = c.ofClient.InstallTrafficControlReturnPortFlow(uint32(ofPort)); err != nil {

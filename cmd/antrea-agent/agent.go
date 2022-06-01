@@ -63,6 +63,7 @@ import (
 	"antrea.io/antrea/pkg/monitor"
 	ofconfig "antrea.io/antrea/pkg/ovs/openflow"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
+	"antrea.io/antrea/pkg/ovs/ovsctl"
 	"antrea.io/antrea/pkg/signals"
 	"antrea.io/antrea/pkg/util/channel"
 	"antrea.io/antrea/pkg/util/cipher"
@@ -558,6 +559,7 @@ func run(o *Options) error {
 		tcController := trafficcontrol.NewTrafficControlController(ofClient,
 			ifaceStore,
 			ovsBridgeClient,
+			ovsctl.NewClient(o.config.OVSBridge),
 			trafficControlInformer,
 			localPodInformer,
 			namespaceInformer,
