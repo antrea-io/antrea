@@ -73,7 +73,7 @@ var (
 	//       * If you want to add a table called `FooTable` just after `ConntrackStateTable` in pipelineARP, then the
 	//         table should be declared after `ConntrackStateTable`:
 	//       ```go
-	//          SNATConntrackTable  = newTable("SNATConntrackZone", stageConntrackState, pipelineIP)
+	//          UnSNATTable         = newTable("UnSNAT", stageConntrackState, pipelineIP)
 	//          ConntrackTable      = newTable("ConntrackZone", stageConntrackState, pipelineIP)
 	//          ConntrackStateTable = newTable("ConntrackState", stageConntrackState, pipelineIP)
 	//          FooTable            = newTable("Foo", stageConntrackState, pipelineIP)
@@ -129,7 +129,7 @@ var (
 	PipelineIPClassifierTable = newTable("PipelineIPClassifier", stageValidation, pipelineIP)
 
 	// Tables in stageConntrackState:
-	SNATConntrackTable  = newTable("SNATConntrackZone", stageConntrackState, pipelineIP)
+	UnSNATTable         = newTable("UnSNAT", stageConntrackState, pipelineIP)
 	ConntrackTable      = newTable("ConntrackZone", stageConntrackState, pipelineIP)
 	ConntrackStateTable = newTable("ConntrackState", stageConntrackState, pipelineIP)
 
@@ -155,8 +155,8 @@ var (
 	L3DecTTLTable     = newTable("L3DecTTL", stageRouting, pipelineIP)
 
 	// Tables in stagePostRouting:
-	ServiceMarkTable         = newTable("ServiceMark", stagePostRouting, pipelineIP)
-	SNATConntrackCommitTable = newTable("SNATConntrackCommit", stagePostRouting, pipelineIP)
+	ServiceMarkTable = newTable("ServiceMark", stagePostRouting, pipelineIP)
+	SNATTable        = newTable("SNAT", stagePostRouting, pipelineIP)
 
 	// Tables in stageSwitching:
 	L2ForwardingCalcTable = newTable("L2ForwardingCalc", stageSwitching, pipelineIP)
@@ -722,17 +722,11 @@ func (f *featureService) snatConntrackFlows() []binding.Flow {
 	cookieID := f.cookieAllocator.Request(f.category).Raw()
 	var flows []binding.Flow
 	for _, ipProtocol := range f.ipProtocols {
+		gatewayIP, _ := f.gatewayIPs[ipProtocol]
+		// virtualIP is used as SNAT IP when a request's source IP is gateway IP and we need to forward it back to
+		// gateway interface to avoid asymmetry path.
+		virtualIP, _ := f.virtualIPs[ipProtocol]
 		flows = append(flows,
-			// This generates the flow to transform destination IP of reply packets from tracked SNATed Service connection
-			// committed in SNAT CT zone.
-			SNATConntrackTable.ofTable.BuildFlow(priorityNormal).
-				Cookie(cookieID).
-				MatchProtocol(ipProtocol).
-				Action().CT(false, SNATConntrackTable.GetNext(), f.snatCtZones[ipProtocol], nil).
-				NAT().
-				CTDone().
-				Done(),
-
 			// SNAT should be performed for the following connections:
 			// - Hairpin Service connection initiated through a local Pod, and SNAT should be performed with the Antrea
 			//   gateway IP.
@@ -749,44 +743,63 @@ func (f *featureService) snatConntrackFlows() []binding.Flow {
 
 			// This generates the flow to match the first packet of hairpin Service connection initiated through the Antrea
 			// gateway with ConnSNATCTMark and HairpinCTMark, then perform SNAT in SNAT CT zone with a virtual IP.
-			SNATConntrackCommitTable.ofTable.BuildFlow(priorityNormal).
+			SNATTable.ofTable.BuildFlow(priorityNormal).
 				Cookie(cookieID).
 				MatchProtocol(ipProtocol).
 				MatchCTStateNew(true).
 				MatchCTStateTrk(true).
 				MatchRegMark(FromGatewayRegMark).
 				MatchCTMark(HairpinCTMark).
-				Action().CT(true, SNATConntrackCommitTable.GetNext(), f.snatCtZones[ipProtocol], nil).
-				SNAT(&binding.IPRange{StartIP: f.virtualIPs[ipProtocol], EndIP: f.virtualIPs[ipProtocol]}, nil).
+				Action().CT(true, SNATTable.GetNext(), f.snatCtZones[ipProtocol], nil).
+				SNAT(&binding.IPRange{StartIP: virtualIP, EndIP: virtualIP}, nil).
 				LoadToCtMark(ServiceCTMark, HairpinCTMark).
 				CTDone().
 				Done(),
+			// This generates the flow to unSNAT reply packets of connections committed in SNAT CT zone by the above flow.
+			UnSNATTable.ofTable.BuildFlow(priorityNormal).
+				Cookie(cookieID).
+				MatchProtocol(ipProtocol).
+				MatchDstIP(virtualIP).
+				Action().CT(false, UnSNATTable.GetNext(), f.snatCtZones[ipProtocol], nil).
+				NAT().
+				CTDone().
+				Done(),
+
 			// This generates the flow to match the first packet of hairpin Service connection initiated through a Pod with
 			// ConnSNATCTMark and HairpinCTMark, then perform SNAT in SNAT CT zone with the Antrea gateway IP.
-			SNATConntrackCommitTable.ofTable.BuildFlow(priorityNormal).
+			SNATTable.ofTable.BuildFlow(priorityNormal).
 				Cookie(cookieID).
 				MatchProtocol(ipProtocol).
 				MatchCTStateNew(true).
 				MatchCTStateTrk(true).
 				MatchRegMark(FromLocalRegMark).
 				MatchCTMark(HairpinCTMark).
-				Action().CT(true, SNATConntrackCommitTable.GetNext(), f.snatCtZones[ipProtocol], nil).
-				SNAT(&binding.IPRange{StartIP: f.gatewayIPs[ipProtocol], EndIP: f.gatewayIPs[ipProtocol]}, nil).
+				Action().CT(true, SNATTable.GetNext(), f.snatCtZones[ipProtocol], nil).
+				SNAT(&binding.IPRange{StartIP: gatewayIP, EndIP: gatewayIP}, nil).
 				LoadToCtMark(ServiceCTMark, HairpinCTMark).
 				CTDone().
 				Done(),
 			// This generates the flow to match the first packet of NodePort / LoadBalancer connection (non-hairpin) initiated
 			// through the Antrea gateway with ConnSNATCTMark, then perform SNAT in SNAT CT zone with the Antrea gateway IP.
-			SNATConntrackCommitTable.ofTable.BuildFlow(priorityLow).
+			SNATTable.ofTable.BuildFlow(priorityLow).
 				Cookie(cookieID).
 				MatchProtocol(ipProtocol).
 				MatchCTStateNew(true).
 				MatchCTStateTrk(true).
 				MatchRegMark(FromGatewayRegMark).
 				MatchCTMark(ConnSNATCTMark).
-				Action().CT(true, SNATConntrackCommitTable.GetNext(), f.snatCtZones[ipProtocol], nil).
-				SNAT(&binding.IPRange{StartIP: f.gatewayIPs[ipProtocol], EndIP: f.gatewayIPs[ipProtocol]}, nil).
+				Action().CT(true, SNATTable.GetNext(), f.snatCtZones[ipProtocol], nil).
+				SNAT(&binding.IPRange{StartIP: gatewayIP, EndIP: gatewayIP}, nil).
 				LoadToCtMark(ServiceCTMark).
+				CTDone().
+				Done(),
+			// This generates the flow to unSNAT reply packets of connections committed in SNAT CT zone by the above flows.
+			UnSNATTable.ofTable.BuildFlow(priorityNormal).
+				Cookie(cookieID).
+				MatchProtocol(ipProtocol).
+				MatchDstIP(gatewayIP).
+				Action().CT(false, UnSNATTable.GetNext(), f.snatCtZones[ipProtocol], nil).
+				NAT().
 				CTDone().
 				Done(),
 			// This generates the flow to match the subsequent request packets of connection whose first request packet has
@@ -821,14 +834,14 @@ func (f *featureService) snatConntrackFlows() []binding.Flow {
 			*/
 			// As a result, subsequent request packets like packet 3 will only perform SNAT when they pass through SNAT
 			// CT zone the second time, after they are DNATed in DNAT CT zone.
-			SNATConntrackCommitTable.ofTable.BuildFlow(priorityNormal).
+			SNATTable.ofTable.BuildFlow(priorityNormal).
 				Cookie(cookieID).
 				MatchProtocol(ipProtocol).
 				MatchCTMark(ConnSNATCTMark).
 				MatchCTStateNew(false).
 				MatchCTStateTrk(true).
 				MatchCTStateRpl(false).
-				Action().CT(false, SNATConntrackCommitTable.GetNext(), f.snatCtZones[ipProtocol], nil).
+				Action().CT(false, SNATTable.GetNext(), f.snatCtZones[ipProtocol], nil).
 				NAT().
 				CTDone().
 				Done(),
