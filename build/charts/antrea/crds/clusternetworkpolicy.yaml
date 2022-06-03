@@ -616,6 +616,21 @@ spec:
                   type: integer
                 desiredNodesRealized:
                   type: integer
+                conditions:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      type:
+                        type: string
+                      status:
+                        type: string
+                      lastTransitionTime:
+                        type: string
+                      reason:
+                        type: string
+                      message:
+                        type: string
       subresources:
         status: {}
   scope: Cluster

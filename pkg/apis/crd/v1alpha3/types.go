@@ -103,6 +103,9 @@ type ClusterGroupList struct {
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
+// Group can be used in AntreaNetworkPolicies. When used with AppliedTo, it cannot include NamespaceSelector,
+// otherwise, Antrea will not realize the NetworkPolicy or rule, but will just update the NetworkPolicy
+// Status as "Unrealizable".
 type Group struct {
 	metav1.TypeMeta `json:",inline"`
 	// Standard metadata of the object.

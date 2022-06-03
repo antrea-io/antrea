@@ -18,8 +18,6 @@ import (
 	"fmt"
 	"testing"
 
-	crdv1alpha3 "antrea.io/antrea/pkg/apis/crd/v1alpha3"
-
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -27,6 +25,7 @@ import (
 
 	"antrea.io/antrea/pkg/apis/controlplane"
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	crdv1alpha3 "antrea.io/antrea/pkg/apis/crd/v1alpha3"
 	antreatypes "antrea.io/antrea/pkg/controller/types"
 )
 
@@ -821,7 +820,7 @@ func TestProcessAppliedToGroupsForGroup(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			actualAG := npc.processAppliedToGroupForNamespacedGroup(tt.namespace, tt.inputG)
+			actualAG, _ := npc.processAppliedToGroupForNamespacedGroup(tt.namespace, tt.inputG)
 			assert.Equal(t, tt.expectedAG, actualAG, "appliedToGroup list does not match")
 		})
 	}

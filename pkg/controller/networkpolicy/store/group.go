@@ -62,6 +62,13 @@ func NewGroupStore() storage.Interface {
 			if !ok {
 				return []string{}, nil
 			}
+			if g.SourceReference.Namespace != "" {
+				namespacedCG := make([]string, len(g.ChildGroups))
+				for _, childGroup := range g.ChildGroups {
+					namespacedCG = append(namespacedCG, g.SourceReference.Namespace+"/"+childGroup)
+				}
+				return namespacedCG, nil
+			}
 			return g.ChildGroups, nil
 		},
 	}

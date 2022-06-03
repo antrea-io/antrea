@@ -31,7 +31,7 @@ func (r *GroupReference) ToGroupName() string {
 }
 
 // ToTypedString returns the Group or ClusterGroup namespaced name as a string along with its type.
-// Typical usage of typed string will be to use in log messages.
+// Typed strings are typically used in log messages.
 func (r *GroupReference) ToTypedString() string {
 	if r.Namespace == "" {
 		return fmt.Sprintf("ClusterGroup:%s", r.Name)

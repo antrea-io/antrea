@@ -987,6 +987,21 @@ spec:
                   type: integer
                 desiredNodesRealized:
                   type: integer
+                conditions:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      type:
+                        type: string
+                      status:
+                        type: string
+                      lastTransitionTime:
+                        type: string
+                      reason:
+                        type: string
+                      message:
+                        type: string
       subresources:
         status: {}
   scope: Cluster
@@ -1488,6 +1503,8 @@ spec:
                                     pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
                           matchLabels:
                             x-kubernetes-preserve-unknown-fields: true
+                      group:
+                        type: string
                 ingress:
                   type: array
                   items:
@@ -1525,6 +1542,8 @@ spec:
                                           pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
                                 matchLabels:
                                   x-kubernetes-preserve-unknown-fields: true
+                            group:
+                              type: string
                       # Ensure that Action field allows only ALLOW, DROP, REJECT and PASS values
                       action:
                         type: string
@@ -1679,6 +1698,8 @@ spec:
                                   type: array
                                 matchLabels:
                                   x-kubernetes-preserve-unknown-fields: true
+                            group:
+                              type: string
                       name:
                         type: string
                       enableLogging:
@@ -1720,6 +1741,8 @@ spec:
                                           pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
                                 matchLabels:
                                   x-kubernetes-preserve-unknown-fields: true
+                            group:
+                              type: string
                       # Ensure that Action field allows only ALLOW, DROP, REJECT and PASS values
                       action:
                         type: string
@@ -1878,6 +1901,8 @@ spec:
                                   type: array
                                 matchLabels:
                                   x-kubernetes-preserve-unknown-fields: true
+                            group:
+                              type: string
                       toServices:
                         type: array
                         items:
@@ -1904,6 +1929,21 @@ spec:
                   type: integer
                 desiredNodesRealized:
                   type: integer
+                conditions:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      type:
+                        type: string
+                      status:
+                        type: string
+                      lastTransitionTime:
+                        type: string
+                      reason:
+                        type: string
+                      message:
+                        type: string
       subresources:
         status: {}
   scope: Namespaced

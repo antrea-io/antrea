@@ -18,9 +18,8 @@ import (
 	"fmt"
 	"testing"
 
-	corev1 "k8s.io/api/core/v1"
-
 	"github.com/stretchr/testify/assert"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"antrea.io/antrea/pkg/apis/controlplane"
@@ -500,7 +499,7 @@ func TestGroupMembersComputedConditionEqual(t *testing.T) {
 				Type:   crdv1alpha3.GroupMembersComputed,
 				Status: tt.checkStatus,
 			}
-			actualValue := groupMembersComputedConditionEqual(tt.existingConds, inCond)
+			actualValue := compareGroupMembersComputedConditionEqual(tt.existingConds, inCond)
 			assert.Equal(t, tt.expValue, actualValue)
 		})
 	}

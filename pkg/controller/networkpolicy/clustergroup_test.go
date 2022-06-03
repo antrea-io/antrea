@@ -487,7 +487,7 @@ func TestClusterClusterGroupMembersComputedConditionEqual(t *testing.T) {
 				Type:   crdv1alpha3.GroupMembersComputed,
 				Status: tt.checkStatus,
 			}
-			actualValue := clusterGroupMembersComputedConditionEqual(tt.existingConds, inCond)
+			actualValue := compareGroupMembersComputedConditionEqual(tt.existingConds, inCond)
 			assert.Equal(t, tt.expValue, actualValue)
 		})
 	}
@@ -864,7 +864,7 @@ func TestGetAssociatedGroups(t *testing.T) {
 			for i, g := range tt.existingGroups {
 				npc.internalGroupStore.Create(&tt.existingGroups[i])
 				if g.Selector != nil {
-					npc.groupingInterface.AddGroup(clusterGroupType, g.SourceReference.Name, g.Selector)
+					npc.groupingInterface.AddGroup(internalGroupType, g.SourceReference.Name, g.Selector)
 				}
 			}
 			groups, err := npc.GetAssociatedGroups(tt.queryName, tt.queryNamespace)
@@ -911,7 +911,7 @@ func TestGetGroupMembers(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			npc.internalGroupStore.Create(&tt.group)
-			npc.groupingInterface.AddGroup(clusterGroupType, tt.group.SourceReference.Name, tt.group.Selector)
+			npc.groupingInterface.AddGroup(internalGroupType, tt.group.SourceReference.Name, tt.group.Selector)
 			members, _, err := npc.GetGroupMembers(tt.group.SourceReference.Name)
 			assert.Equal(t, nil, err)
 			assert.Equal(t, tt.expectedMembers, members)

@@ -310,30 +310,30 @@ func (v *antreaPolicyValidator) validatePort(ingress, egress []crdv1alpha1.Rule)
 }
 
 // validateAntreaGroup validates the admission of a Group, ClusterGroup resource
-func (v *NetworkPolicyValidator) validateAntreaGroup(curCG, oldCG interface{}, op admv1.Operation, userInfo authenticationv1.UserInfo) (string, bool) {
+func (v *NetworkPolicyValidator) validateAntreaGroup(curAG, oldAG interface{}, op admv1.Operation, userInfo authenticationv1.UserInfo) (string, bool) {
 	allowed := true
 	reason := ""
 	switch op {
 	case admv1.Create:
-		klog.V(2).Info("Validating CREATE request for ClusterGroup")
+		klog.V(2).Info("Validating CREATE request for ClusterGroup/Group")
 		for _, val := range v.groupValidators {
-			reason, allowed = val.createValidate(curCG, userInfo)
+			reason, allowed = val.createValidate(curAG, userInfo)
 			if !allowed {
 				return reason, allowed
 			}
 		}
 	case admv1.Update:
-		klog.V(2).Info("Validating UPDATE request for ClusterGroup")
+		klog.V(2).Info("Validating UPDATE request for ClusterGroup/Group")
 		for _, val := range v.groupValidators {
-			reason, allowed = val.updateValidate(curCG, oldCG, userInfo)
+			reason, allowed = val.updateValidate(curAG, oldAG, userInfo)
 			if !allowed {
 				return reason, allowed
 			}
 		}
 	case admv1.Delete:
-		klog.V(2).Info("Validating DELETE request for ClusterGroup")
+		klog.V(2).Info("Validating DELETE request for ClusterGroup/Group")
 		for _, val := range v.groupValidators {
-			reason, allowed = val.deleteValidate(oldCG, userInfo)
+			reason, allowed = val.deleteValidate(oldAG, userInfo)
 			if !allowed {
 				return reason, allowed
 			}
@@ -1011,7 +1011,6 @@ func (g *groupValidator) validateCG(cg *crdv1alpha2.ClusterGroup) (string, bool)
 	if !allowed {
 		return reason, allowed
 	}
-	// TODO: validate child groups for Group
 	return g.validateChildClusterGroup(cg)
 }
 
@@ -1020,7 +1019,6 @@ func (g *groupValidator) validateG(grp *crdv1alpha3.Group) (string, bool) {
 	if !allowed {
 		return reason, allowed
 	}
-	// TODO: validate child groups for Group
 	return g.validateChildGroup(grp)
 }
 

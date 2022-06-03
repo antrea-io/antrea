@@ -16,14 +16,17 @@ package networkpolicy
 
 import (
 	"strings"
+	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/conversion"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/apis/controlplane"
 	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	crdv1alpha3 "antrea.io/antrea/pkg/apis/crd/v1alpha3"
 	"antrea.io/antrea/pkg/controller/networkpolicy/store"
 	antreatypes "antrea.io/antrea/pkg/controller/types"
 	"antrea.io/antrea/pkg/util/k8s"
@@ -36,6 +39,37 @@ var (
 		NamespaceSelector: &metav1.LabelSelector{},
 	}
 )
+
+// semanticIgnoreLastTransitionTime does semantic deep equality checks for
+// NetworkPolicyCondition but excludes LastTransitionTime. They are used when
+// comparing NetworkPolicyCondition in NetworkPolicyStatus objects to avoid
+// unnecessary updates caused different status generation time.
+var semanticIgnoreLastTransitionTime = conversion.EqualitiesOrDie(
+	func(a, b v1alpha1.NetworkPolicyCondition) bool {
+		a.LastTransitionTime = metav1.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC)
+		b.LastTransitionTime = metav1.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC)
+		return a == b
+	},
+)
+
+// CompareNetworkPolicyStatus compares two NetworkPolicyStatus objects, ignoring
+// LastTransitionTime equality in the status Conditions.
+func CompareNetworkPolicyStatus(oldStatus, newStatus v1alpha1.NetworkPolicyStatus) bool {
+	return semanticIgnoreLastTransitionTime.DeepEqual(oldStatus, newStatus)
+}
+
+// compareGroupMembersComputedConditionEqual checks whether the condition status for GroupMembersComputed condition
+// is same. Returns true if equal, otherwise returns false. It disregards the lastTransitionTime field.
+func compareGroupMembersComputedConditionEqual(conds []crdv1alpha3.GroupCondition, condition crdv1alpha3.GroupCondition) bool {
+	for _, c := range conds {
+		if c.Type == crdv1alpha3.GroupMembersComputed {
+			if c.Status == condition.Status {
+				return true
+			}
+		}
+	}
+	return false
+}
 
 // toAntreaServicesForCRD converts a slice of v1alpha1.NetworkPolicyPort objects
 // and a slice of v1alpha1.NetworkPolicyProtocol objects to a slice of Antrea
@@ -198,7 +232,7 @@ func (n *NetworkPolicyController) createAppliedToGroupForInternalGroup(intGrp *a
 		UID:  intGrp.UID,
 		Name: key,
 	}
-	klog.V(2).Infof("Creating new AppliedToGroup %v corresponding to %s", appliedToGroup.UID, intGrp.SourceReference.ToTypedString())
+	klog.V(2).InfoS("Creating new AppliedToGroup corresponding to internal Group", "AppliedToGroup", appliedToGroup.UID, "internalGroup", intGrp.SourceReference.ToTypedString())
 	n.appliedToGroupStore.Create(appliedToGroup)
 	n.enqueueAppliedToGroup(key)
 	return key
@@ -247,7 +281,7 @@ func (n *NetworkPolicyController) createAddressGroupForInternalGroup(intGrp *ant
 		Name: key,
 	}
 	n.addressGroupStore.Create(addressGroup)
-	klog.V(2).Infof("Created new AddressGroup %v corresponding to %s", addressGroup.UID, intGrp.SourceReference.ToTypedString())
+	klog.V(2).InfoS("Created new AddressGroup corresponding to internal Group", "AddressGroup", addressGroup.UID, "internalGroup", intGrp.SourceReference.ToTypedString())
 	return key
 }
 
@@ -292,8 +326,8 @@ func (n *NetworkPolicyController) syncInternalGroup(key string) error {
 	// Retrieve the internal Group corresponding to this key.
 	grpObj, found, _ := n.internalGroupStore.Get(key)
 	if !found {
-		klog.V(2).Infof("Internal group %s not found.", key)
-		n.groupingInterface.DeleteGroup(clusterGroupType, key)
+		klog.V(2).InfoS("Internal group not found.", "internalGroup", key)
+		n.groupingInterface.DeleteGroup(internalGroupType, key)
 		return nil
 	}
 	grp := grpObj.(*antreatypes.Group)

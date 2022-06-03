@@ -1159,13 +1159,8 @@ func deployAntreaNetworkPolicies(t *testing.T, data *TestData, srcPod, dstPod st
 	builder1 = builder1.SetName(data.testNamespace, ingressAntreaNetworkPolicyName).
 		SetPriority(2.0).
 		SetAppliedToGroup([]utils.ANPAppliedToSpec{{PodSelector: map[string]string{"antrea-e2e": dstPod}}})
-<<<<<<< HEAD
 	builder1 = builder1.AddIngress(utils.ProtocolTCP, nil, nil, nil, nil, nil, nil, nil, nil, map[string]string{"antrea-e2e": srcPod}, map[string]string{},
-		nil, nil, nil, secv1alpha1.RuleActionAllow, testIngressRuleName)
-=======
-	builder1 = builder1.AddIngress(corev1.ProtocolTCP, nil, nil, nil, nil, map[string]string{"antrea-e2e": srcPod}, map[string]string{},
 		nil, nil, nil, secv1alpha1.RuleActionAllow, "", testIngressRuleName)
->>>>>>> ad478561 (Remove group validation)
 	anp1 = builder1.Get()
 	anp1, err1 := k8sUtils.CreateOrUpdateANP(anp1)
 	if err1 != nil {
@@ -1177,13 +1172,8 @@ func deployAntreaNetworkPolicies(t *testing.T, data *TestData, srcPod, dstPod st
 	builder2 = builder2.SetName(data.testNamespace, egressAntreaNetworkPolicyName).
 		SetPriority(2.0).
 		SetAppliedToGroup([]utils.ANPAppliedToSpec{{PodSelector: map[string]string{"antrea-e2e": srcPod}}})
-<<<<<<< HEAD
 	builder2 = builder2.AddEgress(utils.ProtocolTCP, nil, nil, nil, nil, nil, nil, nil, nil, map[string]string{"antrea-e2e": dstPod}, map[string]string{},
-		nil, nil, nil, secv1alpha1.RuleActionAllow, testEgressRuleName)
-=======
-	builder2 = builder2.AddEgress(corev1.ProtocolTCP, nil, nil, nil, nil, map[string]string{"antrea-e2e": dstPod}, map[string]string{},
 		nil, nil, nil, secv1alpha1.RuleActionAllow, "", testEgressRuleName)
->>>>>>> ad478561 (Remove group validation)
 	anp2 = builder2.Get()
 	anp2, err2 := k8sUtils.CreateOrUpdateANP(anp2)
 	if err2 != nil {
@@ -1207,45 +1197,25 @@ func deployDenyAntreaNetworkPolicies(t *testing.T, data *TestData, srcPod, podRe
 		builder1 = builder1.SetName(data.testNamespace, ingressRejectANPName).
 			SetPriority(2.0).
 			SetAppliedToGroup([]utils.ANPAppliedToSpec{{PodSelector: map[string]string{"antrea-e2e": podReject}}})
-<<<<<<< HEAD
 		builder1 = builder1.AddIngress(utils.ProtocolTCP, nil, nil, nil, nil, nil, nil, nil, nil, map[string]string{"antrea-e2e": srcPod}, map[string]string{},
-			nil, nil, nil, secv1alpha1.RuleActionReject, testIngressRuleName)
+			nil, nil, nil, secv1alpha1.RuleActionReject, "", testIngressRuleName)
 		builder2 = builder2.SetName(data.testNamespace, ingressDropANPName).
 			SetPriority(2.0).
 			SetAppliedToGroup([]utils.ANPAppliedToSpec{{PodSelector: map[string]string{"antrea-e2e": podDrop}}})
 		builder2 = builder2.AddIngress(utils.ProtocolTCP, nil, nil, nil, nil, nil, nil, nil, nil, map[string]string{"antrea-e2e": srcPod}, map[string]string{},
-			nil, nil, nil, secv1alpha1.RuleActionDrop, testIngressRuleName)
-=======
-		builder1 = builder1.AddIngress(corev1.ProtocolTCP, nil, nil, nil, nil, map[string]string{"antrea-e2e": srcPod}, map[string]string{},
-			nil, nil, nil, secv1alpha1.RuleActionReject, "", testIngressRuleName)
-		builder2 = builder2.SetName(testNamespace, ingressDropANPName).
-			SetPriority(2.0).
-			SetAppliedToGroup([]utils.ANPAppliedToSpec{{PodSelector: map[string]string{"antrea-e2e": podDrop}}})
-		builder2 = builder2.AddIngress(corev1.ProtocolTCP, nil, nil, nil, nil, map[string]string{"antrea-e2e": srcPod}, map[string]string{},
 			nil, nil, nil, secv1alpha1.RuleActionDrop, "", testIngressRuleName)
->>>>>>> ad478561 (Remove group validation)
 	} else {
 		// apply reject and drop egress rule to source pod
 		builder1 = builder1.SetName(data.testNamespace, egressRejectANPName).
 			SetPriority(2.0).
 			SetAppliedToGroup([]utils.ANPAppliedToSpec{{PodSelector: map[string]string{"antrea-e2e": srcPod}}})
-<<<<<<< HEAD
 		builder1 = builder1.AddEgress(utils.ProtocolTCP, nil, nil, nil, nil, nil, nil, nil, nil, map[string]string{"antrea-e2e": podReject}, map[string]string{},
-			nil, nil, nil, secv1alpha1.RuleActionReject, testEgressRuleName)
+			nil, nil, nil, secv1alpha1.RuleActionReject, "", testEgressRuleName)
 		builder2 = builder2.SetName(data.testNamespace, egressDropANPName).
 			SetPriority(2.0).
 			SetAppliedToGroup([]utils.ANPAppliedToSpec{{PodSelector: map[string]string{"antrea-e2e": srcPod}}})
 		builder2 = builder2.AddEgress(utils.ProtocolTCP, nil, nil, nil, nil, nil, nil, nil, nil, map[string]string{"antrea-e2e": podDrop}, map[string]string{},
-			nil, nil, nil, secv1alpha1.RuleActionDrop, testEgressRuleName)
-=======
-		builder1 = builder1.AddEgress(corev1.ProtocolTCP, nil, nil, nil, nil, map[string]string{"antrea-e2e": podReject}, map[string]string{},
-			nil, nil, nil, secv1alpha1.RuleActionReject, "", testEgressRuleName)
-		builder2 = builder2.SetName(testNamespace, egressDropANPName).
-			SetPriority(2.0).
-			SetAppliedToGroup([]utils.ANPAppliedToSpec{{PodSelector: map[string]string{"antrea-e2e": srcPod}}})
-		builder2 = builder2.AddEgress(corev1.ProtocolTCP, nil, nil, nil, nil, map[string]string{"antrea-e2e": podDrop}, map[string]string{},
 			nil, nil, nil, secv1alpha1.RuleActionDrop, "", testEgressRuleName)
->>>>>>> ad478561 (Remove group validation)
 	}
 	anp1 = builder1.Get()
 	anp1, err = k8sUtils.CreateOrUpdateANP(anp1)

@@ -66,14 +66,14 @@ func (b *AntreaNetworkPolicySpecBuilder) SetTier(tier string) *AntreaNetworkPoli
 
 func (b *AntreaNetworkPolicySpecBuilder) SetAppliedToGroup(specs []ANPAppliedToSpec) *AntreaNetworkPolicySpecBuilder {
 	for _, spec := range specs {
-		appliedToPeer := b.GetAppliedToPeer(spec.PodSelector, spec.PodSelectorMatchExp)
+		appliedToPeer := b.GetAppliedToPeer(spec.PodSelector, spec.PodSelectorMatchExp, spec.Group)
 		b.Spec.AppliedTo = append(b.Spec.AppliedTo, appliedToPeer)
 	}
 	return b
 }
 
 func (b *AntreaNetworkPolicySpecBuilder) GetAppliedToPeer(podSelector map[string]string,
-	podSelectorMatchExp []metav1.LabelSelectorRequirement) crdv1alpha1.NetworkPolicyPeer {
+	podSelectorMatchExp []metav1.LabelSelectorRequirement, appliedToGrp string) crdv1alpha1.NetworkPolicyPeer {
 	var ps *metav1.LabelSelector
 	if len(podSelector) > 0 || len(podSelectorMatchExp) > 0 {
 		ps = &metav1.LabelSelector{
@@ -81,9 +81,13 @@ func (b *AntreaNetworkPolicySpecBuilder) GetAppliedToPeer(podSelector map[string
 			MatchExpressions: podSelectorMatchExp,
 		}
 	}
-	return crdv1alpha1.NetworkPolicyPeer{
+	peer := crdv1alpha1.NetworkPolicyPeer{
 		PodSelector: ps,
 	}
+	if appliedToGrp != "" {
+		peer.Group = appliedToGrp
+	}
+	return peer
 }
 
 func (b *AntreaNetworkPolicySpecBuilder) AddIngress(protoc AntreaPolicyProtocol,
@@ -117,7 +121,7 @@ func (b *AntreaNetworkPolicySpecBuilder) AddIngress(protoc AntreaPolicyProtocol,
 		}
 	}
 	for _, at := range ruleAppliedToSpecs {
-		appliedTos = append(appliedTos, b.GetAppliedToPeer(at.PodSelector, at.PodSelectorMatchExp))
+		appliedTos = append(appliedTos, b.GetAppliedToPeer(at.PodSelector, at.PodSelectorMatchExp, at.Group))
 	}
 	// An empty From/To in ANP rules evaluates to match all addresses.
 	policyPeer := make([]crdv1alpha1.NetworkPolicyPeer, 0)
@@ -151,13 +155,8 @@ func (b *AntreaNetworkPolicySpecBuilder) AddEgress(protoc AntreaPolicyProtocol,
 	// For simplicity, we just reuse the Ingress code here.  The underlying data model for ingress/egress is identical
 	// With the exception of calling the rule `To` vs. `From`.
 	c := &AntreaNetworkPolicySpecBuilder{}
-<<<<<<< HEAD
 	c.AddIngress(protoc, port, portName, endPort, icmpType, icmpCode, igmpType, groupAddress, cidr, podSelector, nsSelector,
-		podSelectorMatchExp, nsSelectorMatchExp, ruleAppliedToSpecs, action, name)
-=======
-	c.AddIngress(protoc, port, portName, endPort, cidr, podSelector, nsSelector,
 		podSelectorMatchExp, nsSelectorMatchExp, ruleAppliedToSpecs, action, ruleGroup, name)
->>>>>>> ad478561 (Remove group validation)
 	theRule := c.Get().Spec.Ingress[0]
 
 	b.Spec.Egress = append(b.Spec.Egress, crdv1alpha1.Rule{
@@ -174,7 +173,7 @@ func (b *AntreaNetworkPolicySpecBuilder) AddToServicesRule(svcRefs []crdv1alpha1
 	name string, ruleAppliedToSpecs []ANPAppliedToSpec, action crdv1alpha1.RuleAction) *AntreaNetworkPolicySpecBuilder {
 	var appliedTos []crdv1alpha1.NetworkPolicyPeer
 	for _, at := range ruleAppliedToSpecs {
-		appliedTos = append(appliedTos, b.GetAppliedToPeer(at.PodSelector, at.PodSelectorMatchExp))
+		appliedTos = append(appliedTos, b.GetAppliedToPeer(at.PodSelector, at.PodSelectorMatchExp, at.Group))
 	}
 	newRule := crdv1alpha1.Rule{
 		To:         make([]crdv1alpha1.NetworkPolicyPeer, 0),

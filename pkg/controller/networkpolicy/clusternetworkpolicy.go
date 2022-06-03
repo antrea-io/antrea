@@ -635,9 +635,7 @@ func (n *NetworkPolicyController) processInternalGroupForRule(group *antreatypes
 	var ipBlocks []controlplane.IPBlock
 	createAddrGroup := false
 	for _, childName := range group.ChildGroups {
-		if group.SourceReference.Namespace != "" {
-			childName = group.SourceReference.Namespace + "/" + childName
-		}
+		childName = k8s.NamespacedName(group.SourceReference.Namespace, childName)
 		childGroup, found, _ := n.internalGroupStore.Get(childName)
 		if found {
 			child := childGroup.(*antreatypes.Group)

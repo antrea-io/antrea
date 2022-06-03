@@ -672,7 +672,7 @@ func (i *GroupEntityIndex) Run(stopCh <-chan struct{}) {
 			klog.Info("Stopping GroupEntityIndex")
 			return
 		case group := <-i.eventChan:
-			parts := strings.Split(group, "/")
+			parts := strings.SplitN(group, "/", 2)
 			groupType, name := GroupType(parts[0]), parts[1]
 			for _, handler := range i.eventHandlers[groupType] {
 				handler(name)

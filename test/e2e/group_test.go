@@ -33,7 +33,7 @@ func testInvalidGroupIPBlockWithPodSelector(t *testing.T) {
 	g := &crdv1alpha3.Group{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      gName,
-			Namespace: "x",
+			Namespace: namespaces["x"],
 		},
 		Spec: crdv1alpha3.GroupSpec{
 			PodSelector: pSel,
@@ -49,13 +49,13 @@ func testInvalidGroupIPBlockWithPodSelector(t *testing.T) {
 func testInvalidGroupIPBlockWithNSSelector(t *testing.T) {
 	invalidErr := fmt.Errorf("group created with ipblock and namespaceSelector")
 	gName := "ipb-ns"
-	nSel := &metav1.LabelSelector{MatchLabels: map[string]string{"ns": "y"}}
+	nSel := &metav1.LabelSelector{MatchLabels: map[string]string{"ns": namespaces["y"]}}
 	cidr := "10.0.0.10/32"
 	ipb := []crdv1alpha1.IPBlock{{CIDR: cidr}}
 	g := &crdv1alpha3.Group{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      gName,
-			Namespace: "x",
+			Namespace: namespaces["x"],
 		},
 		Spec: crdv1alpha3.GroupSpec{
 			NamespaceSelector: nSel,
@@ -73,13 +73,13 @@ func testInvalidGroupServiceRefWithPodSelector(t *testing.T) {
 	gName := "svcref-pod-selector"
 	pSel := &metav1.LabelSelector{MatchLabels: map[string]string{"pod": "x"}}
 	svcRef := &crdv1alpha1.NamespacedName{
-		Namespace: "y",
+		Namespace: namespaces["y"],
 		Name:      "test-svc",
 	}
 	g := &crdv1alpha3.Group{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      gName,
-			Namespace: "y",
+			Namespace: namespaces["y"],
 		},
 		Spec: crdv1alpha3.GroupSpec{
 			PodSelector:      pSel,
@@ -95,15 +95,15 @@ func testInvalidGroupServiceRefWithPodSelector(t *testing.T) {
 func testInvalidGroupServiceRefWithNSSelector(t *testing.T) {
 	invalidErr := fmt.Errorf("group created with serviceReference and namespaceSelector")
 	gName := "svcref-ns-selector"
-	nSel := &metav1.LabelSelector{MatchLabels: map[string]string{"ns": "y"}}
+	nSel := &metav1.LabelSelector{MatchLabels: map[string]string{"ns": namespaces["y"]}}
 	svcRef := &crdv1alpha1.NamespacedName{
-		Namespace: "y",
+		Namespace: namespaces["y"],
 		Name:      "test-svc",
 	}
 	g := &crdv1alpha3.Group{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      gName,
-			Namespace: "y",
+			Namespace: namespaces["y"],
 		},
 		Spec: crdv1alpha3.GroupSpec{
 			NamespaceSelector: nSel,
@@ -122,13 +122,13 @@ func testInvalidGroupServiceRefWithIPBlock(t *testing.T) {
 	cidr := "10.0.0.10/32"
 	ipb := []crdv1alpha1.IPBlock{{CIDR: cidr}}
 	svcRef := &crdv1alpha1.NamespacedName{
-		Namespace: "y",
+		Namespace: namespaces["y"],
 		Name:      "test-svc",
 	}
 	g := &crdv1alpha3.Group{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      gName,
-			Namespace: "y",
+			Namespace: namespaces["y"],
 		},
 		Spec: crdv1alpha3.GroupSpec{
 			ServiceReference: svcRef,
@@ -150,7 +150,7 @@ func createChildGroupForTest(t *testing.T) {
 	g := &crdv1alpha3.Group{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      testChildGroupName,
-			Namespace: testChildGroupNamespace,
+			Namespace: namespaces[testChildGroupNamespace],
 		},
 		Spec: crdv1alpha3.GroupSpec{
 			PodSelector: &metav1.LabelSelector{},
@@ -162,7 +162,7 @@ func createChildGroupForTest(t *testing.T) {
 }
 
 func cleanupChildGroupForTest(t *testing.T) {
-	if err := k8sUtils.DeleteV1Alpha3Group(testChildGroupNamespace, testChildGroupName); err != nil {
+	if err := k8sUtils.DeleteV1Alpha3Group(namespaces[testChildGroupNamespace], testChildGroupName); err != nil {
 		failOnError(err, t)
 	}
 }
@@ -174,7 +174,7 @@ func testInvalidGroupChildGroupWithPodSelector(t *testing.T) {
 	g := &crdv1alpha3.Group{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      gName,
-			Namespace: testChildGroupNamespace,
+			Namespace: namespaces[testChildGroupNamespace],
 		},
 		Spec: crdv1alpha3.GroupSpec{
 			PodSelector: pSel,
@@ -191,13 +191,13 @@ func testInvalidGroupChildGroupWithServiceReference(t *testing.T) {
 	invalidErr := fmt.Errorf("group created with childGroups and ServiceReference")
 	gName := "child-group-svcref"
 	svcRef := &crdv1alpha1.NamespacedName{
-		Namespace: testChildGroupNamespace,
 		Name:      "test-svc",
+		Namespace: namespaces[testChildGroupNamespace],
 	}
 	g := &crdv1alpha3.Group{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      gName,
-			Namespace: testChildGroupNamespace,
+			Namespace: namespaces[testChildGroupNamespace],
 		},
 		Spec: crdv1alpha3.GroupSpec{
 			ServiceReference: svcRef,
@@ -214,13 +214,13 @@ func testInvalidGroupMaxNestedLevel(t *testing.T) {
 	invalidErr := fmt.Errorf("group created with childGroup which has childGroups itself")
 	gName1, gName2 := "g-nested-1", "g-nested-2"
 	g1 := &crdv1alpha3.Group{
-		ObjectMeta: metav1.ObjectMeta{Namespace: testChildGroupNamespace, Name: gName1},
+		ObjectMeta: metav1.ObjectMeta{Namespace: namespaces[testChildGroupNamespace], Name: gName1},
 		Spec: crdv1alpha3.GroupSpec{
 			ChildGroups: []crdv1alpha3.ClusterGroupReference{crdv1alpha3.ClusterGroupReference(testChildGroupName)},
 		},
 	}
 	g2 := &crdv1alpha3.Group{
-		ObjectMeta: metav1.ObjectMeta{Namespace: testChildGroupNamespace, Name: gName2},
+		ObjectMeta: metav1.ObjectMeta{Namespace: namespaces[testChildGroupNamespace], Name: gName2},
 		Spec: crdv1alpha3.GroupSpec{
 			ChildGroups: []crdv1alpha3.ClusterGroupReference{crdv1alpha3.ClusterGroupReference(gName1)},
 		},
@@ -236,7 +236,7 @@ func testInvalidGroupMaxNestedLevel(t *testing.T) {
 		failOnError(invalidErr, t)
 	}
 	// cleanup g-nested-1
-	if err := k8sUtils.DeleteV1Alpha3Group(testChildGroupNamespace, gName1); err != nil {
+	if err := k8sUtils.DeleteV1Alpha3Group(namespaces[testChildGroupNamespace], gName1); err != nil {
 		failOnError(err, t)
 	}
 	// Try to create g-nested-2 first and then g-nested-1.
@@ -249,8 +249,8 @@ func testInvalidGroupMaxNestedLevel(t *testing.T) {
 		// Above creation of Group must fail as g-nested-2 cannot have g-nested-1 as childGroup.
 		failOnError(invalidErr, t)
 	}
-	// cleanup cg-nested-2
-	if err := k8sUtils.DeleteV1Alpha3Group(testChildGroupNamespace, gName2); err != nil {
+	// cleanup g-nested-2
+	if err := k8sUtils.DeleteV1Alpha3Group(namespaces[testChildGroupNamespace], gName2); err != nil {
 		failOnError(err, t)
 	}
 }

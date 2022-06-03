@@ -33,9 +33,9 @@ import (
 func (n *NetworkPolicyController) addGroup(curObj interface{}) {
 	g := curObj.(*crdv1alpha3.Group)
 	key := internalGroupKeyFunc(g)
-	klog.V(2).Infof("Processing ADD event for Group %s/%s", g.GetNamespace(), g.GetName())
+	klog.V(2).InfoS("Processing ADD event for Group", "Group", key)
 	newGroup := n.processGroup(g)
-	klog.V(2).Infof("Creating new internal Group %s", newGroup.UID)
+	klog.V(2).InfoS("Creating new internal Group", "internalGroup", newGroup.UID)
 	n.internalGroupStore.Create(newGroup)
 	n.enqueueInternalGroup(key)
 }
@@ -45,7 +45,7 @@ func (n *NetworkPolicyController) updateGroup(oldObj, curObj interface{}) {
 	cg := curObj.(*crdv1alpha3.Group)
 	og := oldObj.(*crdv1alpha3.Group)
 	key := internalGroupKeyFunc(cg)
-	klog.V(2).Infof("Processing UPDATE event for Group %s/%s", cg.Namespace, cg.Name)
+	klog.V(2).InfoS("Processing UPDATE event for Group", "Group", key)
 	newGroup := n.processGroup(cg)
 	oldGroup := n.processGroup(og)
 
@@ -92,7 +92,7 @@ func (n *NetworkPolicyController) updateGroup(oldObj, curObj interface{}) {
 // deleteGroup is responsible for processing the DELETE event of a Group resource.
 func (n *NetworkPolicyController) deleteGroup(oldObj interface{}) {
 	og, ok := oldObj.(*crdv1alpha3.Group)
-	klog.V(2).Infof("Processing DELETE event for Group %s/%s", og.GetNamespace(), og.GetName())
+	klog.V(2).InfoS("Processing DELETE event for Group", "Group", internalGroupKeyFunc(og))
 	if !ok {
 		tombstone, ok := oldObj.(cache.DeletedFinalStateUnknown)
 		if !ok {
@@ -106,7 +106,7 @@ func (n *NetworkPolicyController) deleteGroup(oldObj interface{}) {
 		}
 	}
 	key := internalGroupKeyFunc(og)
-	klog.V(2).Infof("Deleting internal Group %s", key)
+	klog.V(2).InfoS("Deleting internal Group", "Group", key)
 	err := n.internalGroupStore.Delete(key)
 	if err != nil {
 		klog.Errorf("Unable to delete internal Group %s from store: %v", key, err)
@@ -159,15 +159,15 @@ func (n *NetworkPolicyController) syncInternalNamespacedGroup(grp *antreatypes.G
 	// Retrieve the Group corresponding to this key.
 	g, err := n.grpLister.Groups(grp.SourceReference.Namespace).Get(grp.SourceReference.Name)
 	if err != nil {
-		klog.Infof("Didn't find %s, skip processing of internal group", grp.SourceReference.ToTypedString())
+		klog.InfoS("Didn't find Group, skip processing of internal group", "Group", grp.SourceReference.ToTypedString())
 		return nil
 	}
 	key := internalGroupKeyFunc(g)
 	selectorUpdated := n.processServiceReference(grp)
 	if grp.Selector != nil {
-		n.groupingInterface.AddGroup(clusterGroupType, key, grp.Selector)
+		n.groupingInterface.AddGroup(internalGroupType, key, grp.Selector)
 	} else {
-		n.groupingInterface.DeleteGroup(clusterGroupType, key)
+		n.groupingInterface.DeleteGroup(internalGroupType, key)
 	}
 
 	membersComputed, membersComputedStatus := true, v1.ConditionFalse
@@ -186,7 +186,7 @@ func (n *NetworkPolicyController) syncInternalNamespacedGroup(grp *antreatypes.G
 		}
 	}
 	if membersComputed {
-		klog.V(4).Infof("Updating GroupMembersComputed Status for Group %s/%s", g.Namespace, g.Name)
+		klog.V(4).InfoS("Updating GroupMembersComputed Status for Group %s/%s", "Group", key)
 		err = n.updateGroupStatus(g, v1.ConditionTrue)
 		if err != nil {
 			klog.Errorf("Failed to update Group %s/%s GroupMembersComputed condition to %s: %v", g.Namespace, g.Name, v1.ConditionTrue, err)
@@ -205,7 +205,7 @@ func (n *NetworkPolicyController) syncInternalNamespacedGroup(grp *antreatypes.G
 			ServiceReference: grp.ServiceReference,
 			ChildGroups:      grp.ChildGroups,
 		}
-		klog.V(2).Infof("Updating existing internal Group %s", grp.SourceReference.ToGroupName())
+		klog.V(2).InfoS("Updating existing internal Group", "internalGroup", grp.SourceReference.ToGroupName())
 		n.internalGroupStore.Update(updatedGrp)
 	}
 	return err
@@ -223,7 +223,7 @@ func (n *NetworkPolicyController) triggerANPUpdates(g string) {
 		anp := obj.(*crdv1alpha1.NetworkPolicy)
 		// Re-process Antrea NetworkPolicies which may be affected due to updates to Group.
 		curInternalNP := n.processAntreaNetworkPolicy(anp)
-		klog.V(2).Infof("Updating existing internal NetworkPolicy %s for %s", curInternalNP.Name, curInternalNP.SourceRef.ToString())
+		klog.V(2).InfoS("Updating existing internal NetworkPolicy for Antrea NetworkPolicy", "internalNP", curInternalNP.Name, "ANP", curInternalNP.SourceRef.ToString())
 		key := internalNetworkPolicyKeyFunc(anp)
 		// Lock access to internal NetworkPolicy store such that concurrent access
 		// to an internal NetworkPolicy is not allowed. This will avoid the
@@ -252,10 +252,10 @@ func (n *NetworkPolicyController) triggerANPUpdates(g string) {
 			}
 		}
 		n.enqueueInternalNetworkPolicy(key)
-		n.deleteDereferencedAddressGroups(oldInternalNP)
 		for _, atg := range oldInternalNP.AppliedToGroups {
 			n.deleteDereferencedAppliedToGroup(atg)
 		}
+		n.deleteDereferencedAddressGroups(oldInternalNP)
 	}
 	return
 }
@@ -266,7 +266,7 @@ func (n *NetworkPolicyController) updateGroupStatus(g *crdv1alpha3.Group, cStatu
 		Status: cStatus,
 		Type:   crdv1alpha3.GroupMembersComputed,
 	}
-	if groupMembersComputedConditionEqual(g.Status.Conditions, condStatus) {
+	if compareGroupMembersComputedConditionEqual(g.Status.Conditions, condStatus) {
 		// There is no change in conditions.
 		return nil
 	}
@@ -274,22 +274,9 @@ func (n *NetworkPolicyController) updateGroupStatus(g *crdv1alpha3.Group, cStatu
 	status := crdv1alpha3.GroupStatus{
 		Conditions: []crdv1alpha3.GroupCondition{condStatus},
 	}
-	klog.V(4).Infof("Updating Group %s/%s status to %#v", g.Namespace, g.Name, condStatus)
+	klog.V(4).InfoS("Updating Group status", "Group", internalGroupKeyFunc(g), "status", condStatus)
 	toUpdate := g.DeepCopy()
 	toUpdate.Status = status
 	_, err := n.crdClient.CrdV1alpha3().Groups(g.GetNamespace()).UpdateStatus(context.TODO(), toUpdate, metav1.UpdateOptions{})
 	return err
-}
-
-// groupMembersComputedConditionEqual checks whether the condition status for GroupMembersComputed condition
-// is same. Returns true if equal, otherwise returns false. It disregards the lastTransitionTime field.
-func groupMembersComputedConditionEqual(conds []crdv1alpha3.GroupCondition, condition crdv1alpha3.GroupCondition) bool {
-	for _, c := range conds {
-		if c.Type == crdv1alpha3.GroupMembersComputed {
-			if c.Status == condition.Status {
-				return true
-			}
-		}
-	}
-	return false
 }
