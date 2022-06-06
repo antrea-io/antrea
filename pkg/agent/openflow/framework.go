@@ -86,8 +86,8 @@ const (
 	stageClassifier
 	// Validate packets.
 	stageValidation
-	// Transform committed packets in CT zones.
-	stageConntrackState
+	// Transform committed packets in CT zones or commit connection in CT zone.
+	stageConntrack
 	// Similar to PREROUTING chain of nat table in iptables. DNAT for Service connections is performed in this stage.
 	stagePreRouting
 	// Install egress rules for K8s NetworkPolicy and Antrea NetworkPolicy.
@@ -100,8 +100,6 @@ const (
 	stageSwitching
 	// Install ingress rules for K8s NetworkPolicy and Antrea NetworkPolicy.
 	stageIngressSecurity
-	// Commit non-Service connections.
-	stageConntrack
 	// Output packets to target port.
 	stageOutput
 )
@@ -163,11 +161,11 @@ func (f *featurePodConnectivity) getRequiredTables() []*Table {
 		ClassifierTable,
 		SpoofGuardTable,
 		ConntrackTable,
+		ConntrackCommitTable,
 		ConntrackStateTable,
 		L3ForwardingTable,
 		L3DecTTLTable,
 		L2ForwardingCalcTable,
-		ConntrackCommitTable,
 		L2ForwardingOutTable,
 	}
 
@@ -227,7 +225,6 @@ func (f *featureService) getRequiredTables() []*Table {
 		L3ForwardingTable,
 		ServiceMarkTable,
 		SNATTable,
-		ConntrackCommitTable,
 		L2ForwardingOutTable,
 	}
 	if f.proxyAll {

@@ -750,7 +750,7 @@ func expectedProxyServiceGroupAndFlows(gid uint32, svc svcConfig, endpointList [
 		unionVal := (0b010 << 16) + uint32(epPort)
 		epDNATFlows.flows = append(epDNATFlows.flows, &ofTestUtils.ExpectFlow{
 			MatchStr: fmt.Sprintf("priority=200,%s,reg3=%s,reg4=0x%x/0x7ffff", string(svc.protocol), epIP, unionVal),
-			ActStr:   fmt.Sprintf("ct(commit,table=EgressRule,zone=65520,nat(dst=%s:%d),exec(load:0x1->NXM_NX_CT_MARK[4],move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3])", ep.IP(), epPort),
+			ActStr:   fmt.Sprintf("ct(commit,table=EgressRule,zone=65520,nat(dst=%s:%d),exec(load:0x1->NXM_NX_CT_MARK[4])", ep.IP(), epPort),
 		})
 
 		if ep.GetIsLocal() {
@@ -1155,6 +1155,10 @@ func preparePodFlows(podIPs []net.IP, podMAC net.HardwareAddr, podOFPort uint32,
 }
 
 func prepareGatewayFlows(gwIPs []net.IP, gwMAC net.HardwareAddr, vMAC net.HardwareAddr, nodeConfig *config1.NodeConfig, connectUplinkToBridge bool) []expectTableFlows {
+	outputStageTable := "Output"
+	if connectUplinkToBridge {
+		outputStageTable = "VLAN"
+	}
 	flows := []expectTableFlows{
 		{
 			"Classifier",
@@ -1224,7 +1228,7 @@ func prepareGatewayFlows(gwIPs []net.IP, gwMAC net.HardwareAddr, vMAC net.Hardwa
 				flows: []*ofTestUtils.ExpectFlow{
 					{
 						MatchStr: fmt.Sprintf("priority=210,ct_state=-rpl+trk,%s,%s=%s", ipProtoStr, nwSrcStr, gwIP.String()),
-						ActStr:   "goto_table:ConntrackCommit",
+						ActStr:   fmt.Sprintf("goto_table:%s", outputStageTable),
 					},
 				},
 			},
@@ -1350,7 +1354,7 @@ func prepareDefaultFlows(config *testConfig) []expectTableFlows {
 	}
 	tableConntrackCommitFlows := expectTableFlows{
 		tableName: "ConntrackCommit",
-		flows:     []*ofTestUtils.ExpectFlow{{MatchStr: "priority=0", ActStr: fmt.Sprintf("goto_table:%s", outputStageTable)}},
+		flows:     []*ofTestUtils.ExpectFlow{{MatchStr: "priority=0", ActStr: "goto_table:ConntrackState"}},
 	}
 	tableSNATFlows := expectTableFlows{
 		tableName: "SNAT",
@@ -1369,7 +1373,7 @@ func prepareDefaultFlows(config *testConfig) []expectTableFlows {
 	}
 	tableConntrackZoneFlows := expectTableFlows{
 		tableName: "ConntrackZone",
-		flows:     []*ofTestUtils.ExpectFlow{{MatchStr: "priority=0", ActStr: "goto_table:ConntrackState"}},
+		flows:     []*ofTestUtils.ExpectFlow{{MatchStr: "priority=0", ActStr: "goto_table:ConntrackCommit"}},
 	}
 	tableServiceMarkFlows := expectTableFlows{
 		tableName: "ServiceMark",
@@ -1385,26 +1389,26 @@ func prepareDefaultFlows(config *testConfig) []expectTableFlows {
 			&ofTestUtils.ExpectFlow{MatchStr: fmt.Sprintf("priority=200,ip,nw_dst=%s", config1.VirtualServiceIPv4), ActStr: "ct(table=ConntrackZone,zone=65521,nat)"},
 		)
 		tableConntrackZoneFlows.flows = append(tableConntrackZoneFlows.flows,
-			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ip", ActStr: fmt.Sprintf("ct(table=ConntrackState,zone=%s,nat)", ctZone)},
+			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ip", ActStr: fmt.Sprintf("ct(table=ConntrackCommit,zone=%s,nat)", ctZone)},
 		)
 		tableConntrackStateFlows.flows = append(tableConntrackStateFlows.flows,
 			&ofTestUtils.ExpectFlow{MatchStr: "priority=210,ct_state=+inv+trk,ip", ActStr: "drop"},
 		)
 		tableConntrackCommitFlows.flows = append(tableConntrackCommitFlows.flows,
-			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ct_state=+new+trk,ct_mark=0/0x10,ip", ActStr: fmt.Sprintf("ct(commit,table=%s,zone=%s,exec(move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))", outputStageTable, ctZone)},
+			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ct_state=+new+trk,ip", ActStr: fmt.Sprintf("ct(commit,table=ConntrackState,zone=%s,exec(move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))", ctZone)},
 		)
 		tableSNATFlows.flows = append(tableSNATFlows.flows,
 			&ofTestUtils.ExpectFlow{
 				MatchStr: "priority=200,ct_state=+new+trk,ct_mark=0x40/0x40,ip,reg0=0x2/0xf",
-				ActStr:   fmt.Sprintf("ct(commit,table=L2ForwardingCalc,zone=65521,nat(src=%s),exec(load:0x1->NXM_NX_CT_MARK[4],load:0x1->NXM_NX_CT_MARK[6]))", config1.VirtualServiceIPv4),
+				ActStr:   fmt.Sprintf("ct(commit,table=L2ForwardingCalc,zone=65521,nat(src=%s),exec(load:0x1->NXM_NX_CT_MARK[6]))", config1.VirtualServiceIPv4),
 			},
 			&ofTestUtils.ExpectFlow{
 				MatchStr: "priority=200,ct_state=+new+trk,ct_mark=0x40/0x40,ip,reg0=0x3/0xf",
-				ActStr:   fmt.Sprintf("ct(commit,table=L2ForwardingCalc,zone=65521,nat(src=%s),exec(load:0x1->NXM_NX_CT_MARK[4],load:0x1->NXM_NX_CT_MARK[6]))", config.nodeConfig.GatewayConfig.IPv4),
+				ActStr:   fmt.Sprintf("ct(commit,table=L2ForwardingCalc,zone=65521,nat(src=%s),exec(load:0x1->NXM_NX_CT_MARK[6]))", config.nodeConfig.GatewayConfig.IPv4),
 			},
 			&ofTestUtils.ExpectFlow{
 				MatchStr: "priority=190,ct_state=+new+trk,ct_mark=0x20/0x20,ip,reg0=0x2/0xf",
-				ActStr:   fmt.Sprintf("ct(commit,table=L2ForwardingCalc,zone=65521,nat(src=%s),exec(load:0x1->NXM_NX_CT_MARK[4]))", config.nodeConfig.GatewayConfig.IPv4),
+				ActStr:   fmt.Sprintf("ct(commit,table=L2ForwardingCalc,zone=65521,nat(src=%s))", config.nodeConfig.GatewayConfig.IPv4),
 			},
 			&ofTestUtils.ExpectFlow{
 				MatchStr: "priority=200,ct_state=-new-rpl+trk,ct_mark=0x20/0x20,ip",
@@ -1430,26 +1434,26 @@ func prepareDefaultFlows(config *testConfig) []expectTableFlows {
 			&ofTestUtils.ExpectFlow{MatchStr: fmt.Sprintf("priority=200,ipv6,ipv6_dst=%s", config1.VirtualServiceIPv6), ActStr: "ct(table=ConntrackZone,zone=65511,nat)"},
 		)
 		tableConntrackZoneFlows.flows = append(tableConntrackZoneFlows.flows,
-			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ipv6", ActStr: fmt.Sprintf("ct(table=ConntrackState,zone=%s,nat)", ctZoneV6)},
+			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ipv6", ActStr: fmt.Sprintf("ct(table=ConntrackCommit,zone=%s,nat)", ctZoneV6)},
 		)
 		tableConntrackStateFlows.flows = append(tableConntrackStateFlows.flows,
 			&ofTestUtils.ExpectFlow{MatchStr: "priority=210,ct_state=+inv+trk,ipv6", ActStr: "drop"},
 		)
 		tableConntrackCommitFlows.flows = append(tableConntrackCommitFlows.flows,
-			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ct_state=+new+trk,ct_mark=0/0x10,ipv6", ActStr: fmt.Sprintf("ct(commit,table=Output,zone=%s,exec(move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))", ctZoneV6)},
+			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ct_state=+new+trk,ipv6", ActStr: fmt.Sprintf("ct(commit,table=ConntrackState,zone=%s,exec(move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))", ctZoneV6)},
 		)
 		tableSNATFlows.flows = append(tableSNATFlows.flows,
 			&ofTestUtils.ExpectFlow{
 				MatchStr: "priority=200,ct_state=+new+trk,ct_mark=0x40/0x40,ipv6,reg0=0x2/0xf",
-				ActStr:   fmt.Sprintf("ct(commit,table=L2ForwardingCalc,zone=65511,nat(src=%s),exec(load:0x1->NXM_NX_CT_MARK[4],load:0x1->NXM_NX_CT_MARK[6]))", config1.VirtualServiceIPv6),
+				ActStr:   fmt.Sprintf("ct(commit,table=L2ForwardingCalc,zone=65511,nat(src=%s),exec(load:0x1->NXM_NX_CT_MARK[6]))", config1.VirtualServiceIPv6),
 			},
 			&ofTestUtils.ExpectFlow{
 				MatchStr: "priority=200,ct_state=+new+trk,ct_mark=0x40/0x40,ipv6,reg0=0x3/0xf",
-				ActStr:   fmt.Sprintf("ct(commit,table=L2ForwardingCalc,zone=65511,nat(src=%s),exec(load:0x1->NXM_NX_CT_MARK[4],load:0x1->NXM_NX_CT_MARK[6]))", config.nodeConfig.GatewayConfig.IPv6),
+				ActStr:   fmt.Sprintf("ct(commit,table=L2ForwardingCalc,zone=65511,nat(src=%s),exec(load:0x1->NXM_NX_CT_MARK[6]))", config.nodeConfig.GatewayConfig.IPv6),
 			},
 			&ofTestUtils.ExpectFlow{
 				MatchStr: "priority=190,ct_state=+new+trk,ct_mark=0x20/0x20,ipv6,reg0=0x2/0xf",
-				ActStr:   fmt.Sprintf("ct(commit,table=L2ForwardingCalc,zone=65511,nat(src=%s),exec(load:0x1->NXM_NX_CT_MARK[4]))", config.nodeConfig.GatewayConfig.IPv6),
+				ActStr:   fmt.Sprintf("ct(commit,table=L2ForwardingCalc,zone=65511,nat(src=%s))", config.nodeConfig.GatewayConfig.IPv6),
 			},
 			&ofTestUtils.ExpectFlow{
 				MatchStr: "priority=200,ct_state=-new-rpl+trk,ct_mark=0x20/0x20,ipv6",
@@ -1534,7 +1538,7 @@ func prepareDefaultFlows(config *testConfig) []expectTableFlows {
 		},
 		{
 			"IngressMetric",
-			[]*ofTestUtils.ExpectFlow{{MatchStr: "priority=0", ActStr: "goto_table:ConntrackCommit"}},
+			[]*ofTestUtils.ExpectFlow{{MatchStr: "priority=0", ActStr: fmt.Sprintf("goto_table:%s", outputStageTable)}},
 		},
 		{
 			"Output",

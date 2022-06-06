@@ -55,7 +55,7 @@ func (f *featurePodConnectivity) hostBridgeUplinkFlows(localSubnetMap map[bindin
 				MatchInPort(config.UplinkOFPort).
 				MatchDstIPNet(localSubnet).
 				Action().LoadRegMark(FromUplinkRegMark, RewriteMACRegMark).
-				Action().GotoStage(stageConntrackState).
+				Action().GotoStage(stageConntrack).
 				Done())
 		}
 	}
@@ -95,7 +95,7 @@ func (f *featurePodConnectivity) l3FwdFlowToRemoteViaRouting(localGatewayMAC net
 				MatchDstMAC(remoteGatewayMAC).
 				Action().LoadToRegField(TargetOFPortField, config.UplinkOFPort).
 				Action().LoadRegMark(OFPortFoundRegMark).
-				Action().GotoStage(stageConntrack).
+				Action().GotoStage(stageOutput).
 				Done(),
 		)
 		flows = append(flows, f.l3FwdFlowToRemoteViaUplink(remoteGatewayMAC, *peerPodCIDR, false))

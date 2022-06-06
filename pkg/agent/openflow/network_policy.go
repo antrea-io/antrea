@@ -588,7 +588,7 @@ func (c *client) NewDNSpacketInConjunction(id uint32) error {
 		actionFlows: []binding.Flow{
 			c.featureNetworkPolicy.dnsPacketInFlow(id),
 			c.featureNetworkPolicy.dnsResponseBypassPacketInFlow(),
-			c.featureNetworkPolicy.dnsResponseBypassConntrackFlow(c.pipelines[pipelineIP].GetFirstTableInStage(stageConntrackState))},
+			c.featureNetworkPolicy.dnsResponseBypassConntrackFlow(c.pipelines[pipelineIP].GetFirstTableInStage(stageConntrack))},
 	}
 	if err := c.ofEntryOperations.AddAll(conj.actionFlows); err != nil {
 		return fmt.Errorf("error when adding action flows for the DNS conjunction: %w", err)

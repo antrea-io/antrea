@@ -70,13 +70,14 @@ var (
 	//          FooTable          = newTable("Foo", stageOutput, binding.PipelineARP)
 	//          ARPResponderTable = newTable("ARPResponder", stageOutput, binding.PipelineARP)
 	//       ```
-	//       * If you want to add a table called `FooTable` just after `ConntrackStateTable` in pipelineARP, then the
+	//       * If you want to add a table called `FooTable` just after `ConntrackStateTable` in pipelineIP, then the
 	//         table should be declared after `ConntrackStateTable`:
 	//       ```go
-	//          UnSNATTable         = newTable("UnSNAT", stageConntrackState, pipelineIP)
-	//          ConntrackTable      = newTable("ConntrackZone", stageConntrackState, pipelineIP)
-	//          ConntrackStateTable = newTable("ConntrackState", stageConntrackState, pipelineIP)
-	//          FooTable            = newTable("Foo", stageConntrackState, pipelineIP)
+	//          UnSNATTable          = newTable("UnSNAT", stageConntrack, pipelineIP)
+	//          ConntrackTable       = newTable("ConntrackZone", stageConntrack, pipelineIP)
+	//          ConntrackStateTable  = newTable("ConntrackState", stageConntrack, pipelineIP)
+	//          ConntrackCommitTable = newTable("ConntrackCommit", stageConntrack, pipelineIP)
+	//          FooTable             = newTable("Foo", stageConntrack, pipelineIP)
 	//       ```
 	//  - Reference the new table in a feature in file pkg/agent/openflow/framework.go. The table can be referenced by multiple
 	//    features if multiple features need to install flows in the table. Note that, if the newly added table is not
@@ -128,10 +129,11 @@ var (
 	IPv6Table                 = newTable("IPv6", stageValidation, pipelineIP)
 	PipelineIPClassifierTable = newTable("PipelineIPClassifier", stageValidation, pipelineIP)
 
-	// Tables in stageConntrackState:
-	UnSNATTable         = newTable("UnSNAT", stageConntrackState, pipelineIP)
-	ConntrackTable      = newTable("ConntrackZone", stageConntrackState, pipelineIP)
-	ConntrackStateTable = newTable("ConntrackState", stageConntrackState, pipelineIP)
+	// Tables in stageConntrack:
+	UnSNATTable          = newTable("UnSNAT", stageConntrack, pipelineIP)
+	ConntrackTable       = newTable("ConntrackZone", stageConntrack, pipelineIP)
+	ConntrackCommitTable = newTable("ConntrackCommit", stageConntrack, pipelineIP)
+	ConntrackStateTable  = newTable("ConntrackState", stageConntrack, pipelineIP)
 
 	// Tables in stagePreRouting:
 	// When proxy is enabled.
@@ -168,9 +170,6 @@ var (
 	IngressRuleTable               = newTable("IngressRule", stageIngressSecurity, pipelineIP)
 	IngressDefaultTable            = newTable("IngressDefaultRule", stageIngressSecurity, pipelineIP)
 	IngressMetricTable             = newTable("IngressMetric", stageIngressSecurity, pipelineIP)
-
-	// Tables in stageConntrack:
-	ConntrackCommitTable = newTable("ConntrackCommit", stageConntrack, pipelineIP)
 
 	// Tables in stageOutput:
 	VLANTable            = newTable("VLAN", stageOutput, pipelineIP)
@@ -570,7 +569,7 @@ func (f *featurePodConnectivity) tunnelClassifierFlow(tunnelOFPort uint32) bindi
 		Cookie(f.cookieAllocator.Request(f.category).Raw()).
 		MatchInPort(tunnelOFPort).
 		Action().LoadRegMark(FromTunnelRegMark, RewriteMACRegMark).
-		Action().GotoStage(stageConntrackState).
+		Action().GotoStage(stageConntrack).
 		Done()
 }
 
@@ -618,7 +617,7 @@ func (f *featurePodConnectivity) podUplinkClassifierFlows(dstMAC net.HardwareAdd
 				MatchProtocol(ipProtocol).
 				Action().LoadRegMark(f.ipCtZoneTypeRegMarks[ipProtocol], FromUplinkRegMark).
 				Action().LoadToRegField(VLANIDField, uint32(vlanID)).
-				Action().GotoStage(stageConntrackState).
+				Action().GotoStage(stageConntrack).
 				Done(),
 		)
 		if vlanID == 0 {
@@ -631,7 +630,7 @@ func (f *featurePodConnectivity) podUplinkClassifierFlows(dstMAC net.HardwareAdd
 					MatchVLAN(true, 0, nil).
 					MatchProtocol(ipProtocol).
 					Action().LoadRegMark(f.ipCtZoneTypeRegMarks[ipProtocol], FromBridgeRegMark).
-					Action().GotoStage(stageConntrackState).
+					Action().GotoStage(stageConntrack).
 					Done(),
 			)
 		}
@@ -672,14 +671,13 @@ func (f *featurePodConnectivity) conntrackFlows() []binding.Flow {
 				MatchCTStateTrk(true).
 				Action().Drop().
 				Done(),
-			// This generates the flow to match the first packet of non-Service connection and mark the source of the connection
-			// by copying PktSourceField to ConnSourceCTMarkField.
+			// This generates the flow to match the first packet of connection and commit the connection to conntrack,
+			// and mark the source of the connection by copying PktSourceField to ConnSourceCTMarkField.
 			ConntrackCommitTable.ofTable.BuildFlow(priorityNormal).
 				Cookie(cookieID).
 				MatchProtocol(ipProtocol).
 				MatchCTStateNew(true).
 				MatchCTStateTrk(true).
-				MatchCTMark(NotServiceCTMark).
 				Action().CT(true, ConntrackCommitTable.GetNext(), f.ctZones[ipProtocol], f.ctZoneSrcField).
 				MoveToCtMarkField(PktSourceField, ConnSourceCTMarkField).
 				CTDone().
@@ -752,7 +750,7 @@ func (f *featureService) snatConntrackFlows() []binding.Flow {
 				MatchCTMark(HairpinCTMark).
 				Action().CT(true, SNATTable.GetNext(), f.snatCtZones[ipProtocol], nil).
 				SNAT(&binding.IPRange{StartIP: virtualIP, EndIP: virtualIP}, nil).
-				LoadToCtMark(ServiceCTMark, HairpinCTMark).
+				LoadToCtMark(HairpinCTMark).
 				CTDone().
 				Done(),
 			// This generates the flow to unSNAT reply packets of connections committed in SNAT CT zone by the above flow.
@@ -776,7 +774,7 @@ func (f *featureService) snatConntrackFlows() []binding.Flow {
 				MatchCTMark(HairpinCTMark).
 				Action().CT(true, SNATTable.GetNext(), f.snatCtZones[ipProtocol], nil).
 				SNAT(&binding.IPRange{StartIP: gatewayIP, EndIP: gatewayIP}, nil).
-				LoadToCtMark(ServiceCTMark, HairpinCTMark).
+				LoadToCtMark(HairpinCTMark).
 				CTDone().
 				Done(),
 			// This generates the flow to match the first packet of NodePort / LoadBalancer connection (non-hairpin) initiated
@@ -790,7 +788,6 @@ func (f *featureService) snatConntrackFlows() []binding.Flow {
 				MatchCTMark(ConnSNATCTMark).
 				Action().CT(true, SNATTable.GetNext(), f.snatCtZones[ipProtocol], nil).
 				SNAT(&binding.IPRange{StartIP: gatewayIP, EndIP: gatewayIP}, nil).
-				LoadToCtMark(ServiceCTMark).
 				CTDone().
 				Done(),
 			// This generates the flow to unSNAT reply packets of connections committed in SNAT CT zone by the above flows.
@@ -851,7 +848,7 @@ func (f *featureService) snatConntrackFlows() []binding.Flow {
 }
 
 // dnsResponseBypassConntrackFlow generates the flow to bypass the dns response packetout from conntrack, to avoid unexpected
-// packet drop. This flow should be installed on the first table of stageConntrackState.
+// packet drop. This flow should be installed on the first table of stageConntrack.
 func (f *featureNetworkPolicy) dnsResponseBypassConntrackFlow(table binding.Table) binding.Flow {
 	return table.BuildFlow(priorityHigh).
 		MatchRegFieldWithValue(CustomReasonField, CustomReasonDNS).
@@ -1559,7 +1556,7 @@ func (f *featureService) serviceCIDRDNATFlows() []binding.Flow {
 			MatchDstIPNet(serviceCIDR).
 			Action().LoadToRegField(TargetOFPortField, config.HostGatewayOFPort).
 			Action().LoadRegMark(OFPortFoundRegMark).
-			Action().GotoStage(stageConntrack).
+			Action().GotoStage(stageOutput).
 			Done())
 	}
 	return flows
@@ -2090,7 +2087,7 @@ func (f *featurePodConnectivity) localProbeFlows() []binding.Flow {
 				MatchCTStateTrk(true).
 				MatchSrcIP(gatewayIP).
 				MatchCTMark(ctMarksToMatch...).
-				Action().GotoStage(stageConntrack).
+				Action().GotoStage(stageOutput).
 				Done())
 		}
 	} else {
@@ -2101,7 +2098,7 @@ func (f *featurePodConnectivity) localProbeFlows() []binding.Flow {
 				MatchCTStateRpl(false).
 				MatchCTStateTrk(true).
 				MatchPktMark(types.HostLocalSourceMark, &types.HostLocalSourceMark).
-				Action().GotoStage(stageConntrack).
+				Action().GotoStage(stageOutput).
 				Done())
 		}
 	}
@@ -2383,7 +2380,6 @@ func (f *featureService) endpointDNATFlow(endpointIP net.IP, endpointPort uint16
 			&binding.PortRange{StartPort: endpointPort, EndPort: endpointPort},
 		).
 		LoadToCtMark(ServiceCTMark).
-		MoveToCtMarkField(PktSourceField, ConnSourceCTMarkField).
 		CTDone().
 		Done()
 }

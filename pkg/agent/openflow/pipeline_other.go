@@ -60,7 +60,7 @@ func (f *featurePodConnectivity) hostBridgeUplinkFlows(localSubnetMap map[bindin
 			MatchDstMAC(f.nodeConfig.UplinkNetConfig.MAC).
 			Action().LoadToRegField(TargetOFPortField, config.BridgeOFPort).
 			Action().LoadRegMark(OFPortFoundRegMark).
-			Action().GotoStage(stageConntrack).
+			Action().GotoStage(stageOutput).
 			Done(),
 		L2ForwardingOutTable.ofTable.BuildFlow(priorityHigh).
 			Cookie(cookieID).
@@ -74,7 +74,7 @@ func (f *featurePodConnectivity) hostBridgeUplinkFlows(localSubnetMap map[bindin
 			MatchRegMark(AntreaFlexibleIPAMRegMark).
 			Action().LoadToRegField(TargetOFPortField, config.UplinkOFPort).
 			Action().LoadRegMark(OFPortFoundRegMark).
-			Action().GotoStage(stageConntrack).
+			Action().GotoStage(stageOutput).
 			Done())
 	return flows
 }
