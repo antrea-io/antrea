@@ -3,4 +3,4 @@ kind: Namespace
 metadata:
   name: CLUSTERNAMESPACE
   labels:
-    antrea-ci: true
+    antrea-ci: "true"

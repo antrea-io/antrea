@@ -225,7 +225,9 @@ function setup_aws_sg() {
     # New control plane security group
     set +e
     clusterawsadm bootstrap iam create-cloudformation-stack
+    set +x
     export AWS_B64ENCODED_CREDENTIALS=$(clusterawsadm bootstrap credentials encode-as-profile)
+    set -x
     clusterctl init --infrastructure aws
 
     aws ec2 create-security-group --description capi-controlplane --group-name capi-controlplane --vpc-id $AWS_VPC_ID
@@ -789,6 +791,8 @@ function collect_coverage() {
 function cleanup_cluster() {
     echo "=== Cleaning up cluster ${CLUSTER} ==="
     export KUBECONFIG=$KUBECONFIG_PATH
+
+    kubectl delete ${CLUSTER} -n ${CLUSTER}
 
     kubectl delete ns ${CLUSTER}
     rm -rf "${GIT_CHECKOUT_DIR}/jenkins"
