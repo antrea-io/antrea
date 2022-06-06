@@ -219,14 +219,14 @@ func (f *featureService) getRequiredTables() []*Table {
 		return []*Table{DNATTable}
 	}
 	tables := []*Table{
-		SNATConntrackTable,
+		UnSNATTable,
 		PreRoutingClassifierTable,
 		SessionAffinityTable,
 		ServiceLBTable,
 		EndpointDNATTable,
 		L3ForwardingTable,
 		ServiceMarkTable,
-		SNATConntrackCommitTable,
+		SNATTable,
 		ConntrackCommitTable,
 		L2ForwardingOutTable,
 	}
