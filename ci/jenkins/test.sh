@@ -280,7 +280,6 @@ function deliver_antrea_windows {
     DOCKER_REGISTRY="${DOCKER_REGISTRY}" ./hack/build-antrea-linux-all.sh --pull
     if [[ "$TESTCASE" == "windows-networkpolicy-process" ]]; then
         make windows-bin
-        make antctl-windows
     fi
 
     echo "====== Delivering Antrea to all the Nodes ======"
@@ -376,7 +375,7 @@ function deliver_antrea_windows {
             ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "rm -rf /cygdrive/c/k/antrea && mkdir -p /cygdrive/c/k/antrea/bin && mkdir -p /cygdrive/c/k/antrea/etc && rm -rf /cygdrive/c/opt/cni/bin && mkdir -p /cygdrive/c/opt/cni/bin && mkdir -p /cygdrive/c/etc/cni/net.d"
             scp -o StrictHostKeyChecking=no -T $KUBECONFIG Administrator@${IP}:/cygdrive/c/k/config
             scp -o StrictHostKeyChecking=no -T bin/antrea-agent.exe Administrator@${IP}:/cygdrive/c/k/antrea/bin/
-            scp -o StrictHostKeyChecking=no -T bin/antctl-windows.exe Administrator@${IP}:/cygdrive/c/k/antrea/bin/antctl.exe
+            scp -o StrictHostKeyChecking=no -T bin/antctl.exe Administrator@${IP}:/cygdrive/c/k/antrea/bin/antctl.exe
             scp -o StrictHostKeyChecking=no -T bin/antrea-cni.exe Administrator@${IP}:/cygdrive/c/opt/cni/bin/antrea.exe
             scp -o StrictHostKeyChecking=no -T hack/windows/Start.ps1 Administrator@${IP}:/cygdrive/c/k/antrea/
             scp -o StrictHostKeyChecking=no -T hack/windows/Stop.ps1 Administrator@${IP}:/cygdrive/c/k/antrea/
