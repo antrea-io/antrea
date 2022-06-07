@@ -1181,6 +1181,10 @@ func (i *Initializer) setOVSDatapath() error {
 		klog.ErrorS(err, "Failed to read OVS bridge other_config")
 		return err
 	}
+	// Check if "datapath-id" exists in "other_config" on OVS bridge or not, and return directly if yes.
+	// Note: function `ovsBridgeClient.GetDatapathID` is not used here, because OVS always has data in "datapath_id"
+	// field. If "datapath-id" is not explicitly set in "other_config", the datapath ID in use may change when uplink
+	// is attached on OVS.
 	if _, exists := otherConfig[ovsconfig.OVSOtherConfigDatapathIDKey]; exists {
 		return nil
 	}
