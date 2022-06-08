@@ -115,7 +115,7 @@ func testTraceflowIntraNodeANP(t *testing.T, data *TestData) {
 			t.Errorf("Error when deleting Antrea NetworkPolicy: %v", err)
 		}
 	}()
-	if err = data.waitForANPRealized(t, data.testNamespace, denyIngressName); err != nil {
+	if err = data.waitForANPRealized(t, data.testNamespace, denyIngressName, policyRealizedTimeout); err != nil {
 		t.Fatal(err)
 	}
 	var rejectIngress *v1alpha1.NetworkPolicy
@@ -128,7 +128,7 @@ func testTraceflowIntraNodeANP(t *testing.T, data *TestData) {
 			t.Errorf("Error when deleting Antrea NetworkPolicy: %v", err)
 		}
 	}()
-	if err = data.waitForANPRealized(t, data.testNamespace, rejectIngressName); err != nil {
+	if err = data.waitForANPRealized(t, data.testNamespace, rejectIngressName, policyRealizedTimeout); err != nil {
 		t.Fatal(err)
 	}
 
