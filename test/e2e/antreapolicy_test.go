@@ -2580,19 +2580,22 @@ func testFQDNPolicyInClusterService(t *testing.T) {
 		eachServiceCases := []podToAddrTestStep{
 			{
 				Pod(namespaces["y"] + "/b"),
-				svcDNSName(service),
+				// To indicate the server name is a FQDN, end it with a dot. Then DNS resolver won't attempt to append
+				// domain names (e.g. svc.cluster.local, cluster.local) when resolving it, making it get resolution
+				// result more quickly.
+				svcDNSName(service) + ".",
 				80,
 				Rejected,
 			},
 			{
 				Pod(namespaces["z"] + "/c"),
-				svcDNSName(service),
+				svcDNSName(service) + ".",
 				80,
 				Dropped,
 			},
 			{
 				Pod(namespaces["x"] + "/c"),
-				svcDNSName(service),
+				svcDNSName(service) + ".",
 				80,
 				Connected,
 			},

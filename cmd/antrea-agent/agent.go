@@ -346,7 +346,7 @@ func run(o *Options) error {
 		multicastEnabled,
 		loggingEnabled,
 		asyncRuleDeleteInterval,
-		o.config.DNSServerOverride,
+		o.dnsServerOverride,
 		v4Enabled,
 		v6Enabled)
 	if err != nil {

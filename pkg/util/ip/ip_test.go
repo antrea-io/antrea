@@ -186,3 +186,56 @@ func TestMustIPv6(t *testing.T) {
 		})
 	}
 }
+
+func TestAppendPortIfMissing(t *testing.T) {
+	tests := []struct {
+		name string
+		addr string
+		port string
+		want string
+	}{
+		{
+			name: "IPv4 address without port",
+			addr: "10.96.0.10",
+			port: "80",
+			want: "10.96.0.10:80",
+		},
+		{
+			name: "IPv4 address with port",
+			addr: "10.96.0.10:53",
+			port: "80",
+			want: "10.96.0.10:53",
+		},
+		{
+			name: "IPv6 address without port",
+			addr: "fd00:10:96::a",
+			port: "80",
+			want: "[fd00:10:96::a]:80",
+		},
+		{
+			name: "IPv6 address with port",
+			addr: "[fd00:10:96::a]:53",
+			port: "80",
+			want: "[fd00:10:96::a]:53",
+		},
+		{
+			name: "Empty address",
+			addr: "",
+			port: "80",
+			want: "",
+		},
+		{
+			name: "Invalid address",
+			addr: "10.96.0.10.6",
+			port: "80",
+			want: "10.96.0.10.6",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := AppendPortIfMissing(tt.addr, tt.port); got != tt.want {
+				t.Errorf("AppendPortIfMissing() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

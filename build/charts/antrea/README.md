@@ -64,6 +64,7 @@ Kubernetes: `>= 1.16.0-0`
 | controller.tolerations | list | `[{"key":"CriticalAddonsOnly","operator":"Exists"},{"effect":"NoSchedule","key":"node-role.kubernetes.io/master"},{"effect":"NoSchedule","key":"node-role.kubernetes.io/control-plane"}]` | Tolerations for the antrea-controller Pod. |
 | defaultMTU | int | `0` | Default MTU to use for the host gateway interface and the network interface of each Pod. By default, antrea-agent will discover the MTU of the Node's primary interface and adjust it to accommodate for tunnel encapsulation overhead if applicable. |
 | disableTXChecksumOffload | bool | `false` | Disable TX checksum offloading for container network interfaces. It's supposed to be set to true when the datapath doesn't support TX checksum offloading, which causes packets to be dropped due to bad checksum. It affects Pods running on Linux Nodes only. |
+| dnsServerOverride | string | `""` | Address of DNS server, to override the kube-dns service. It's used to resolve hostname in FQDN policy. |
 | egress.exceptCIDRs | list | `[]` | CIDR ranges to which outbound Pod traffic will not be SNAT'd by Egresses. |
 | enableBridgingMode | bool | `false` | Enable bridging mode of Pod network on Nodes, in which the Node's transport interface is connected to the OVS bridge. |
 | featureGates | object | `{}` | To explicitly enable or disable a FeatureGate and bypass the Antrea defaults, add an entry to the dictionary with the FeatureGate's name as the key and a boolean as the value. |
