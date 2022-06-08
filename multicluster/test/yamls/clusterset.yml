@@ -11,7 +11,7 @@ kind: ClusterClaim
 metadata:
   name: clusterset-id
   namespace: antrea-mcs-ns
-name: clusterSet.k8s.io
+name: clusterset.k8s.io
 value: test-clusterset
 ---
 apiVersion: multicluster.crd.antrea.io/v1alpha1

@@ -1,17 +1,17 @@
 apiVersion: multicluster.crd.antrea.io/v1alpha1
 kind: ClusterClaim
 metadata:
-  name: east-membercluster-id
+  name: id.k8s.io
   namespace: kube-system
 name: id.k8s.io
-value: test-cluster-east
+value: test-cluster-member
 ---
 apiVersion: multicluster.crd.antrea.io/v1alpha1
 kind: ClusterClaim
 metadata:
-  name: clusterset-id
+  name: clusterset.k8s.io
   namespace: kube-system
-name: clusterSet.k8s.io
+name: clusterset.k8s.io
 value: test-clusterset
 ---
 apiVersion: multicluster.crd.antrea.io/v1alpha1
@@ -25,5 +25,6 @@ spec:
       secret: leader-access-token
       server: https://<LEADER_CLUSTER_IP>:6443
   members:
-    - clusterID: test-cluster-east
-  namespace: antrea-mcs-ns
+    - clusterID: test-cluster-leader
+    - clusterID: test-cluster-member
+  namespace: antrea-multicluster

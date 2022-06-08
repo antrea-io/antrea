@@ -29,6 +29,7 @@ docs/maintainers/updating-ovs-windows.md
 docs/multicluster/api.md
 docs/multicluster/antctl.md
 docs/multicluster/architecture.md
+docs/multicluster/quick-start.md
 docs/multicluster/upgrade.md
 docs/multicluster/user-guide.md
 docs/network-requirements.md
