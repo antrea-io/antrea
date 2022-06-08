@@ -440,7 +440,13 @@ func (c *Client) syncIPTables() error {
 	})
 	// Use iptables-restore to configure IPv4 settings.
 	if c.networkConfig.IPv4Enabled {
-		iptablesData := c.restoreIptablesData(c.nodeConfig.PodIPv4CIDR, antreaPodIPSet, localAntreaFlexibleIPAMPodIPSet, antreaNodePortIPSet, config.VirtualServiceIPv4, snatMarkToIPv4)
+		iptablesData := c.restoreIptablesData(c.nodeConfig.PodIPv4CIDR,
+			antreaPodIPSet,
+			localAntreaFlexibleIPAMPodIPSet,
+			antreaNodePortIPSet,
+			config.VirtualNodePortDNATIPv4,
+			config.VirtualServiceIPv4,
+			snatMarkToIPv4)
 		// Setting --noflush to keep the previous contents (i.e. non antrea managed chains) of the tables.
 		if err := c.ipt.Restore(iptablesData.Bytes(), false, false); err != nil {
 			return err
@@ -449,7 +455,13 @@ func (c *Client) syncIPTables() error {
 
 	// Use ip6tables-restore to configure IPv6 settings.
 	if c.networkConfig.IPv6Enabled {
-		iptablesData := c.restoreIptablesData(c.nodeConfig.PodIPv6CIDR, antreaPodIP6Set, localAntreaFlexibleIPAMPodIP6Set, antreaNodePortIP6Set, config.VirtualServiceIPv6, snatMarkToIPv6)
+		iptablesData := c.restoreIptablesData(c.nodeConfig.PodIPv6CIDR,
+			antreaPodIP6Set,
+			localAntreaFlexibleIPAMPodIP6Set,
+			antreaNodePortIP6Set,
+			config.VirtualNodePortDNATIPv4,
+			config.VirtualServiceIPv6,
+			snatMarkToIPv6)
 		// Setting --noflush to keep the previous contents (i.e. non antrea managed chains) of the tables.
 		if err := c.ipt.Restore(iptablesData.Bytes(), false, true); err != nil {
 			return err
@@ -458,7 +470,13 @@ func (c *Client) syncIPTables() error {
 	return nil
 }
 
-func (c *Client) restoreIptablesData(podCIDR *net.IPNet, podIPSet, localAntreaFlexibleIPAMPodIPSet, nodePortIPSet string, serviceVirtualIP net.IP, snatMarkToIP map[uint32]net.IP) *bytes.Buffer {
+func (c *Client) restoreIptablesData(podCIDR *net.IPNet,
+	podIPSet,
+	localAntreaFlexibleIPAMPodIPSet,
+	nodePortIPSet string,
+	nodePortDNATVirtualIP,
+	serviceVirtualIP net.IP,
+	snatMarkToIP map[uint32]net.IP) *bytes.Buffer {
 	// Create required rules in the antrea chains.
 	// Use iptables-restore as it flushes the involved chains and creates the desired rules
 	// with a single call, instead of string matching to clean up stale rules.
@@ -571,7 +589,7 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet, podIPSet, localAntreaFl
 			"-m", "comment", "--comment", `"Antrea: DNAT external to NodePort packets"`,
 			"-m", "set", "--match-set", nodePortIPSet, "dst,dst",
 			"-j", iptables.DNATTarget,
-			"--to-destination", serviceVirtualIP.String(),
+			"--to-destination", nodePortDNATVirtualIP.String(),
 		}...)
 		writeLine(iptablesData, iptables.MakeChainLine(antreaOutputChain))
 		writeLine(iptablesData, []string{
@@ -579,7 +597,7 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet, podIPSet, localAntreaFl
 			"-m", "comment", "--comment", `"Antrea: DNAT local to NodePort packets"`,
 			"-m", "set", "--match-set", nodePortIPSet, "dst,dst",
 			"-j", iptables.DNATTarget,
-			"--to-destination", serviceVirtualIP.String(),
+			"--to-destination", nodePortDNATVirtualIP.String(),
 		}...)
 	}
 	writeLine(iptablesData, iptables.MakeChainLine(antreaPostRoutingChain))
@@ -694,9 +712,15 @@ func (c *Client) initServiceIPRoutes() error {
 		if err := c.addVirtualServiceIPRoute(false); err != nil {
 			return err
 		}
+		if err := c.addVirtualNodePortDNATIPRoute(false); err != nil {
+			return err
+		}
 	}
 	if c.networkConfig.IPv6Enabled {
 		if err := c.addVirtualServiceIPRoute(true); err != nil {
+			return err
+		}
+		if err := c.addVirtualNodePortDNATIPRoute(true); err != nil {
 			return err
 		}
 	}
@@ -1248,6 +1272,26 @@ func (c *Client) AddClusterIPRoute(svcIP net.IP) error {
 		}
 		klog.V(4).InfoS("Uninstalled stale ClusterIP route successfully", "stale route", rt)
 	}
+
+	return nil
+}
+
+func (c *Client) addVirtualNodePortDNATIPRoute(isIPv6 bool) error {
+	linkIndex := c.nodeConfig.GatewayConfig.LinkIndex
+	vIP := config.VirtualNodePortDNATIPv4
+	gw := config.VirtualServiceIPv4
+	mask := ipv4AddrLength
+	if isIPv6 {
+		vIP = config.VirtualNodePortDNATIPv6
+		gw = config.VirtualServiceIPv6
+		mask = ipv6AddrLength
+	}
+	route := generateRoute(vIP, mask, gw, linkIndex, netlink.SCOPE_UNIVERSE)
+	if err := netlink.RouteReplace(route); err != nil {
+		return fmt.Errorf("failed to install routing entry for virtual NodePort DNAT IP %s: %w", vIP.String(), err)
+	}
+	klog.V(4).InfoS("Added virtual NodePort DNAT IP route", "route", route)
+	c.serviceRoutes.Store(vIP.String(), route)
 
 	return nil
 }

@@ -287,9 +287,9 @@ func smallSliceDifference(s1, s2 []string) []string {
 }
 
 func (p *proxier) installNodePortService(groupID binding.GroupIDType, svcPort uint16, protocol binding.Protocol, affinityTimeout uint16, nodeLocalExternal bool) error {
-	svcIP := agentconfig.VirtualServiceIPv4
+	svcIP := agentconfig.VirtualNodePortDNATIPv4
 	if p.isIPv6 {
-		svcIP = agentconfig.VirtualServiceIPv6
+		svcIP = agentconfig.VirtualNodePortDNATIPv6
 	}
 	if err := p.ofClient.InstallServiceFlows(groupID, svcIP, svcPort, protocol, affinityTimeout, nodeLocalExternal, corev1.ServiceTypeNodePort); err != nil {
 		return fmt.Errorf("failed to install Service NodePort load balancing flows: %w", err)
@@ -301,9 +301,9 @@ func (p *proxier) installNodePortService(groupID binding.GroupIDType, svcPort ui
 }
 
 func (p *proxier) uninstallNodePortService(svcPort uint16, protocol binding.Protocol) error {
-	svcIP := agentconfig.VirtualServiceIPv4
+	svcIP := agentconfig.VirtualNodePortDNATIPv4
 	if p.isIPv6 {
-		svcIP = agentconfig.VirtualServiceIPv6
+		svcIP = agentconfig.VirtualNodePortDNATIPv6
 	}
 	if err := p.ofClient.UninstallServiceFlows(svcIP, svcPort, protocol); err != nil {
 		return fmt.Errorf("failed to remove Service NodePort NodePort load balancing flows: %w", err)

@@ -245,7 +245,7 @@ func TestBuildPipeline(t *testing.T) {
 					EgressMetricTable,
 					L3ForwardingTable,
 					L3DecTTLTable,
-					ServiceMarkTable,
+					SNATMarkTable,
 					SNATTable,
 					L2ForwardingCalcTable,
 					AntreaPolicyIngressRuleTable,
