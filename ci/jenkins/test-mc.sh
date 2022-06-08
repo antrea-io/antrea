@@ -284,7 +284,7 @@ function run_multicluster_e2e {
 
     set +e
     mkdir -p `pwd`/antrea-multicluster-test-logs
-    go test -v antrea.io/antrea/multicluster/test/e2e --logs-export-dir  `pwd`/antrea-multicluster-test-logs
+    go test -v antrea.io/antrea/multicluster/test/e2e --logs-export-dir  `pwd`/antrea-multicluster-test-logs -run=TestAntreaPolicy
     if [[ "$?" != "0" ]]; then
         TEST_FAILURE=true
     fi

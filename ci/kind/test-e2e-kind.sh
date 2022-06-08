@@ -254,7 +254,7 @@ function run_test {
   fi
   sleep 1
 
-  go test -v -timeout=$timeout antrea.io/antrea/test/e2e $flow_visibility_args -provider=kind --logs-export-dir=$ANTREA_LOG_DIR --skip=$skiplist $coverage_args
+  go test -v -timeout=$timeout antrea.io/antrea/test/e2e $flow_visibility_args -provider=kind --logs-export-dir=$ANTREA_LOG_DIR --skip=$skiplist $coverage_args -run=TestAntreaPolicy
 }
 
 if [[ "$mode" == "" ]] || [[ "$mode" == "encap" ]]; then
