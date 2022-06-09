@@ -19,8 +19,6 @@ import (
 	"testing"
 	"time"
 
-	log "github.com/sirupsen/logrus"
-
 	antreae2e "antrea.io/antrea/test/e2e"
 	"antrea.io/antrea/test/e2e/utils"
 )
@@ -42,7 +40,7 @@ var (
 
 func failOnError(err error, t *testing.T) {
 	if err != nil {
-		log.Errorf("%+v", err)
+		t.Errorf("%+v", err)
 		for _, k8sUtils := range clusterK8sUtilsMap {
 			k8sUtils.Cleanup(perClusterNamespaces)
 		}
@@ -93,7 +91,7 @@ func testMCAntreaPolicy(t *testing.T, data *MCTestData) {
 // for Namespace isolation, strict Namespace isolation is enforced in each of the member clusters.
 func (data *MCTestData) testAntreaPolicyCopySpanNSIsolation(t *testing.T) {
 	setup := func() {
-		err := data.deployACNPResourceExport(acnpIsolationResourceExport)
+		err := data.deployACNPResourceExport(t, acnpIsolationResourceExport)
 		failOnError(err, t)
 		// Sleep 5s to wait resource export/import process to finish resource exchange.
 		time.Sleep(5 * time.Second)
@@ -123,9 +121,9 @@ func executeTestsOnAllMemberClusters(t *testing.T, testList []*antreae2e.TestCas
 	setup()
 	time.Sleep(networkPolicyDelay)
 	for _, testCase := range testList {
-		log.Infof("Running test case %s", testCase.Name)
+		t.Logf("Running test case %s", testCase.Name)
 		for _, step := range testCase.Steps {
-			log.Infof("Running step %s of test case %s", step.Name, testCase.Name)
+			t.Logf("Running step %s of test case %s", step.Name, testCase.Name)
 			reachability := step.Reachability
 			if reachability != nil {
 				for clusterName, k8sUtils := range clusterK8sUtilsMap {
@@ -151,11 +149,11 @@ func executeTestsOnAllMemberClusters(t *testing.T, testList []*antreae2e.TestCas
 	teardown()
 }
 
-func (data *MCTestData) deployACNPResourceExport(reFileName string) error {
-	log.Infof("Creating ResourceExport %s in the leader cluster", reFileName)
+func (data *MCTestData) deployACNPResourceExport(t *testing.T, reFileName string) error {
+	t.Logf("Creating ResourceExport %s in the leader cluster", reFileName)
 	rc, _, stderr, err := provider.RunCommandOnNode(leaderCluster, fmt.Sprintf("kubectl apply -f %s", reFileName))
 	if err != nil || rc != 0 || stderr != "" {
-		return fmt.Errorf("error when deploying the ACNP ResourceExport in leader cluster: %v, stderr: %v", err, stderr)
+		return fmt.Errorf("error when deploying the ACNP ResourceExport in leader cluster: %v, stderr: %s", err, stderr)
 	}
 	return nil
 }
@@ -163,7 +161,7 @@ func (data *MCTestData) deployACNPResourceExport(reFileName string) error {
 func (data *MCTestData) deleteACNPResourceExport(reFileName string) error {
 	rc, _, stderr, err := provider.RunCommandOnNode(leaderCluster, fmt.Sprintf("kubectl delete -f %s", reFileName))
 	if err != nil || rc != 0 || stderr != "" {
-		return fmt.Errorf("error when deleting the ACNP ResourceExport in leader cluster: %v, stderr: %v", err, stderr)
+		return fmt.Errorf("error when deleting the ACNP ResourceExport in leader cluster: %v, stderr: %s", err, stderr)
 	}
 	return nil
 }

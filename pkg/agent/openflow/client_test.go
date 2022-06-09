@@ -107,7 +107,7 @@ func TestIdempotentFlowInstallation(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 			m := oftest.NewMockOFEntryOperations(ctrl)
-			ofClient := NewClient(bridgeName, bridgeMgmtAddr, true, false, false, false, false, false, false, false)
+			ofClient := NewClient(bridgeName, bridgeMgmtAddr, true, false, false, false, false, false, false, false, false)
 			client := ofClient.(*client)
 			client.cookieAllocator = cookie.NewAllocator(0)
 			client.ofEntryOperations = m
@@ -140,7 +140,7 @@ func TestIdempotentFlowInstallation(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 			m := oftest.NewMockOFEntryOperations(ctrl)
-			ofClient := NewClient(bridgeName, bridgeMgmtAddr, true, false, false, false, false, false, false, false)
+			ofClient := NewClient(bridgeName, bridgeMgmtAddr, true, false, false, false, false, false, false, false, false)
 			client := ofClient.(*client)
 			client.cookieAllocator = cookie.NewAllocator(0)
 			client.ofEntryOperations = m
@@ -186,7 +186,7 @@ func TestFlowInstallationFailed(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 			m := oftest.NewMockOFEntryOperations(ctrl)
-			ofClient := NewClient(bridgeName, bridgeMgmtAddr, true, false, false, false, false, false, false, false)
+			ofClient := NewClient(bridgeName, bridgeMgmtAddr, true, false, false, false, false, false, false, false, false)
 			client := ofClient.(*client)
 			client.cookieAllocator = cookie.NewAllocator(0)
 			client.ofEntryOperations = m
@@ -225,7 +225,7 @@ func TestConcurrentFlowInstallation(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 			m := oftest.NewMockOFEntryOperations(ctrl)
-			ofClient := NewClient(bridgeName, bridgeMgmtAddr, true, false, false, false, false, false, false, false)
+			ofClient := NewClient(bridgeName, bridgeMgmtAddr, true, false, false, false, false, false, false, false, false)
 			client := ofClient.(*client)
 			client.cookieAllocator = cookie.NewAllocator(0)
 			client.ofEntryOperations = m
@@ -420,7 +420,7 @@ func Test_client_SendTraceflowPacket(t *testing.T) {
 }
 
 func prepareTraceflowFlow(ctrl *gomock.Controller) *client {
-	ofClient := NewClient(bridgeName, bridgeMgmtAddr, true, true, false, false, false, false, false, false)
+	ofClient := NewClient(bridgeName, bridgeMgmtAddr, true, true, false, false, false, false, false, false, false)
 	c := ofClient.(*client)
 	c.cookieAllocator = cookie.NewAllocator(0)
 	c.nodeConfig = nodeConfig
@@ -446,7 +446,7 @@ func prepareTraceflowFlow(ctrl *gomock.Controller) *client {
 }
 
 func prepareSendTraceflowPacket(ctrl *gomock.Controller, success bool) *client {
-	ofClient := NewClient(bridgeName, bridgeMgmtAddr, true, true, false, false, false, false, false, false)
+	ofClient := NewClient(bridgeName, bridgeMgmtAddr, true, true, false, false, false, false, false, false, false)
 	c := ofClient.(*client)
 	c.nodeConfig = nodeConfig
 	m := ovsoftest.NewMockBridge(ctrl)
@@ -534,7 +534,7 @@ func Test_client_setBasePacketOutBuilder(t *testing.T) {
 }
 
 func prepareSetBasePacketOutBuilder(ctrl *gomock.Controller, success bool) *client {
-	ofClient := NewClient(bridgeName, bridgeMgmtAddr, true, true, false, false, false, false, false, false)
+	ofClient := NewClient(bridgeName, bridgeMgmtAddr, true, true, false, false, false, false, false, false, false)
 	c := ofClient.(*client)
 	m := ovsoftest.NewMockBridge(ctrl)
 	c.bridge = m
@@ -544,4 +544,41 @@ func prepareSetBasePacketOutBuilder(ctrl *gomock.Controller, success bool) *clie
 		m.EXPECT().SendPacketOut(gomock.Any()).Times(1)
 	}
 	return c
+}
+
+// TestMulticlusterFlowsInstallation checks that InstallMulticlusterNodeFlows
+// and UninstallMulticlusterFlows works as expected.
+func TestMulticlusterFlowsInstallation(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	m := oftest.NewMockOFEntryOperations(ctrl)
+	ofClient := NewClient(bridgeName, bridgeMgmtAddr, true, false, false, false, false, false, false, false, true)
+	client := ofClient.(*client)
+	client.cookieAllocator = cookie.NewAllocator(0)
+	client.ofEntryOperations = m
+	client.nodeConfig = nodeConfig
+	client.networkConfig = networkConfig
+	client.egressConfig = egressConfig
+	client.serviceConfig = serviceConfig
+	client.ipProtocols = []binding.Protocol{binding.ProtocolIP}
+	client.generatePipelines()
+
+	m.EXPECT().AddAll(gomock.Any()).Return(nil).Times(1)
+	clusterID := "cluster-a"
+	tunnelPeerIP := net.ParseIP("172.17.0.11")
+	peerConfigs := make(map[*net.IPNet]net.IP, 1)
+	_, peerCIDR, _ := net.ParseCIDR("10.16.0.1/18")
+	peerConfigs[peerCIDR] = net.ParseIP("10.17.0.11")
+	err := ofClient.InstallMulticlusterNodeFlows(clusterID, peerConfigs, tunnelPeerIP)
+	require.NoError(t, err)
+	cacheKey := fmt.Sprintf("cluster_%s", clusterID)
+	fCacheI, ok := client.featureMulticluster.cachedFlows.Load(cacheKey)
+	require.True(t, ok)
+	require.Len(t, fCacheI.(flowCache), 2)
+
+	m.EXPECT().DeleteAll(gomock.Any()).Return(nil).Times(1)
+	err = ofClient.UninstallMulticlusterFlows(clusterID)
+	require.NoError(t, err)
+	_, ok = client.featureMulticluster.cachedFlows.Load(cacheKey)
+	require.False(t, ok)
 }

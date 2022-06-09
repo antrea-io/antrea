@@ -15,6 +15,7 @@
 package k8s
 
 import (
+	netdefclient "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/client/clientset/versioned/typed/k8s.cni.cncf.io/v1"
 	apiextensionclientset "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -23,39 +24,44 @@ import (
 	"k8s.io/klog/v2"
 	aggregatorclientset "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 
+	mcclientset "antrea.io/antrea/multicluster/pkg/client/clientset/versioned"
 	crdclientset "antrea.io/antrea/pkg/client/clientset/versioned"
-
-	netdefclient "github.com/k8snetworkplumbingwg/network-attachment-definition-client/pkg/client/clientset/versioned/typed/k8s.cni.cncf.io/v1"
 )
 
 // CreateClients creates kube clients from the given config.
 func CreateClients(config componentbaseconfig.ClientConnectionConfiguration, kubeAPIServerOverride string) (
-	clientset.Interface, aggregatorclientset.Interface, crdclientset.Interface, apiextensionclientset.Interface, error) {
+	clientset.Interface, aggregatorclientset.Interface, crdclientset.Interface, apiextensionclientset.Interface, mcclientset.Interface, error) {
 	kubeConfig, err := createRestConfig(config, kubeAPIServerOverride)
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, err
 	}
 
 	client, err := clientset.NewForConfig(kubeConfig)
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, err
 	}
 
 	aggregatorClient, err := aggregatorclientset.NewForConfig(kubeConfig)
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, err
 	}
-	// Create client for crd operations
+	// Create client for CRD operations.
 	crdClient, err := crdclientset.NewForConfig(kubeConfig)
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, err
 	}
-	// Create client for crd manipulations
+	// Create client for CRD manipulations.
 	apiExtensionClient, err := apiextensionclientset.NewForConfig(kubeConfig)
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, err
 	}
-	return client, aggregatorClient, crdClient, apiExtensionClient, nil
+
+	// Create client for multicluster CRD operations.
+	mcClient, err := mcclientset.NewForConfig(kubeConfig)
+	if err != nil {
+		return nil, nil, nil, nil, nil, err
+	}
+	return client, aggregatorClient, crdClient, apiExtensionClient, mcClient, nil
 }
 
 // CreateNetworkAttachDefClient creates net-attach-def client handle from the given config.

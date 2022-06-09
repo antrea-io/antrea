@@ -117,7 +117,7 @@ func TestConnectivityFlows(t *testing.T) {
 		antrearuntime.WindowsOS = runtime.GOOS
 	}
 
-	c = ofClient.NewClient(br, bridgeMgmtAddr, true, false, true, false, false, false, false, false)
+	c = ofClient.NewClient(br, bridgeMgmtAddr, true, false, true, false, false, false, false, false, false)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge: %v", err))
 	defer func() {
@@ -165,7 +165,7 @@ func TestAntreaFlexibleIPAMConnectivityFlows(t *testing.T) {
 	legacyregistry.Reset()
 	metrics.InitializeOVSMetrics()
 
-	c = ofClient.NewClient(br, bridgeMgmtAddr, true, false, true, false, false, true, false, false)
+	c = ofClient.NewClient(br, bridgeMgmtAddr, true, false, true, false, false, true, false, false, false)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge: %v", err))
 	defer func() {
@@ -224,7 +224,7 @@ func TestReplayFlowsConnectivityFlows(t *testing.T) {
 	legacyregistry.Reset()
 	metrics.InitializeOVSMetrics()
 
-	c = ofClient.NewClient(br, bridgeMgmtAddr, true, false, true, false, false, false, false, false)
+	c = ofClient.NewClient(br, bridgeMgmtAddr, true, false, true, false, false, false, false, false, false)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge: %v", err))
 
@@ -266,7 +266,7 @@ func TestReplayFlowsNetworkPolicyFlows(t *testing.T) {
 	legacyregistry.Reset()
 	metrics.InitializeOVSMetrics()
 
-	c = ofClient.NewClient(br, bridgeMgmtAddr, true, false, false, false, false, false, false, false)
+	c = ofClient.NewClient(br, bridgeMgmtAddr, true, false, false, false, false, false, false, false, false)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge: %v", err))
 
@@ -443,7 +443,7 @@ func TestNetworkPolicyFlows(t *testing.T) {
 	legacyregistry.Reset()
 	metrics.InitializeOVSMetrics()
 
-	c = ofClient.NewClient(br, bridgeMgmtAddr, true, false, false, false, false, false, false, false)
+	c = ofClient.NewClient(br, bridgeMgmtAddr, true, false, false, false, false, false, false, false, false)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge %s", br))
 
@@ -557,7 +557,7 @@ func TestIPv6ConnectivityFlows(t *testing.T) {
 	legacyregistry.Reset()
 	metrics.InitializeOVSMetrics()
 
-	c = ofClient.NewClient(br, bridgeMgmtAddr, true, false, true, false, false, false, false, false)
+	c = ofClient.NewClient(br, bridgeMgmtAddr, true, false, true, false, false, false, false, false, false)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge: %v", err))
 
@@ -605,7 +605,7 @@ func TestProxyServiceFlows(t *testing.T) {
 	legacyregistry.Reset()
 	metrics.InitializeOVSMetrics()
 
-	c = ofClient.NewClient(br, bridgeMgmtAddr, true, false, false, false, false, false, false, false)
+	c = ofClient.NewClient(br, bridgeMgmtAddr, true, false, false, false, false, false, false, false, false)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge %s", br))
 
@@ -739,7 +739,7 @@ func expectedProxyServiceGroupAndFlows(gid uint32, svc svcConfig, endpointList [
 		},
 	}}
 	epDNATFlows := expectTableFlows{tableName: "EndpointDNAT", flows: []*ofTestUtils.ExpectFlow{}}
-	hairpinFlows := expectTableFlows{tableName: "ServiceMark", flows: []*ofTestUtils.ExpectFlow{}}
+	hairpinFlows := expectTableFlows{tableName: "SNATMark", flows: []*ofTestUtils.ExpectFlow{}}
 	groupBuckets = make([]string, 0)
 	for _, ep := range endpointList {
 		epIP := ipToHexString(net.ParseIP(ep.IP()))
@@ -1361,7 +1361,7 @@ func prepareDefaultFlows(config *testConfig) []expectTableFlows {
 	}
 	tableL3DecTTLFlows := expectTableFlows{
 		tableName: "L3DecTTL",
-		flows:     []*ofTestUtils.ExpectFlow{{MatchStr: "priority=0", ActStr: "goto_table:ServiceMark"}},
+		flows:     []*ofTestUtils.ExpectFlow{{MatchStr: "priority=0", ActStr: "goto_table:SNATMark"}},
 	}
 	tableUnSNATFlows := expectTableFlows{
 		tableName: "UnSNAT",
@@ -1371,8 +1371,8 @@ func prepareDefaultFlows(config *testConfig) []expectTableFlows {
 		tableName: "ConntrackZone",
 		flows:     []*ofTestUtils.ExpectFlow{{MatchStr: "priority=0", ActStr: "goto_table:ConntrackState"}},
 	}
-	tableServiceMarkFlows := expectTableFlows{
-		tableName: "ServiceMark",
+	tableSNATMarkFlows := expectTableFlows{
+		tableName: "SNATMark",
 		flows:     []*ofTestUtils.ExpectFlow{{MatchStr: "priority=0", ActStr: "goto_table:SNAT"}},
 	}
 	if config.enableIPv4 {
@@ -1391,7 +1391,7 @@ func prepareDefaultFlows(config *testConfig) []expectTableFlows {
 			&ofTestUtils.ExpectFlow{MatchStr: "priority=210,ct_state=+inv+trk,ip", ActStr: "drop"},
 		)
 		tableConntrackCommitFlows.flows = append(tableConntrackCommitFlows.flows,
-			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ct_state=+new+trk,ct_mark=0/0x10,ip", ActStr: fmt.Sprintf("ct(commit,table=%s,zone=%s,exec(move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))", outputStageTable, ctZone)},
+			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ct_state=+new+trk-snat,ct_mark=0/0x10,ip", ActStr: fmt.Sprintf("ct(commit,table=%s,zone=%s,exec(move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))", outputStageTable, ctZone)},
 		)
 		tableSNATFlows.flows = append(tableSNATFlows.flows,
 			&ofTestUtils.ExpectFlow{
@@ -1415,13 +1415,13 @@ func prepareDefaultFlows(config *testConfig) []expectTableFlows {
 		tableL3ForwardingFlows.flows = append(tableL3ForwardingFlows.flows,
 			&ofTestUtils.ExpectFlow{MatchStr: fmt.Sprintf("priority=200,ip,reg0=0/0x200%s,nw_dst=%s", matchVLANString, podCIDR), ActStr: "goto_table:L2ForwardingCalc"},
 		)
-		tableServiceMarkFlows.flows = append(tableServiceMarkFlows.flows,
+		tableSNATMarkFlows.flows = append(tableSNATMarkFlows.flows,
 			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ct_state=+new+trk,ip,reg0=0x22/0xff", ActStr: fmt.Sprintf("ct(commit,table=SNAT,zone=%s,exec(load:0x1->NXM_NX_CT_MARK[5],load:0x1->NXM_NX_CT_MARK[6]))", ctZone)},
 			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ct_state=+new+trk,ip,reg0=0x12/0xff,reg4=0x200000/0x200000", ActStr: fmt.Sprintf("ct(commit,table=SNAT,zone=%s,exec(load:0x1->NXM_NX_CT_MARK[5]))", ctZone)},
 		)
 		tableL3DecTTLFlows.flows = append(tableL3DecTTLFlows.flows,
-			&ofTestUtils.ExpectFlow{MatchStr: "priority=210,ip,reg0=0x2/0xf", ActStr: "goto_table:ServiceMark"},
-			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ip", ActStr: "dec_ttl,goto_table:ServiceMark"},
+			&ofTestUtils.ExpectFlow{MatchStr: "priority=210,ip,reg0=0x2/0xf", ActStr: "goto_table:SNATMark"},
+			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ip", ActStr: "dec_ttl,goto_table:SNATMark"},
 		)
 	}
 	if config.enableIPv6 {
@@ -1436,7 +1436,7 @@ func prepareDefaultFlows(config *testConfig) []expectTableFlows {
 			&ofTestUtils.ExpectFlow{MatchStr: "priority=210,ct_state=+inv+trk,ipv6", ActStr: "drop"},
 		)
 		tableConntrackCommitFlows.flows = append(tableConntrackCommitFlows.flows,
-			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ct_state=+new+trk,ct_mark=0/0x10,ipv6", ActStr: fmt.Sprintf("ct(commit,table=Output,zone=%s,exec(move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))", ctZoneV6)},
+			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ct_state=+new+trk-snat,ct_mark=0/0x10,ipv6", ActStr: fmt.Sprintf("ct(commit,table=Output,zone=%s,exec(move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3]))", ctZoneV6)},
 		)
 		tableSNATFlows.flows = append(tableSNATFlows.flows,
 			&ofTestUtils.ExpectFlow{
@@ -1460,13 +1460,13 @@ func prepareDefaultFlows(config *testConfig) []expectTableFlows {
 		tableL3ForwardingFlows.flows = append(tableL3ForwardingFlows.flows,
 			&ofTestUtils.ExpectFlow{MatchStr: fmt.Sprintf("priority=200,ipv6,reg0=0/0x200,ipv6_dst=%s", podCIDR), ActStr: "goto_table:L2ForwardingCalc"},
 		)
-		tableServiceMarkFlows.flows = append(tableServiceMarkFlows.flows,
+		tableSNATMarkFlows.flows = append(tableSNATMarkFlows.flows,
 			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ct_state=+new+trk,ipv6,reg0=0x22/0xff", ActStr: "ct(commit,table=SNAT,zone=65510,exec(load:0x1->NXM_NX_CT_MARK[5],load:0x1->NXM_NX_CT_MARK[6]))"},
 			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ct_state=+new+trk,ipv6,reg0=0x12/0xff,reg4=0x200000/0x200000", ActStr: "ct(commit,table=SNAT,zone=65510,exec(load:0x1->NXM_NX_CT_MARK[5]))"},
 		)
 		tableL3DecTTLFlows.flows = append(tableL3DecTTLFlows.flows,
-			&ofTestUtils.ExpectFlow{MatchStr: "priority=210,ipv6,reg0=0x2/0xf", ActStr: "goto_table:ServiceMark"},
-			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ipv6", ActStr: "dec_ttl,goto_table:ServiceMark"},
+			&ofTestUtils.ExpectFlow{MatchStr: "priority=210,ipv6,reg0=0x2/0xf", ActStr: "goto_table:SNATMark"},
+			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ipv6", ActStr: "dec_ttl,goto_table:SNATMark"},
 		)
 	}
 	if config.enableIPv4 && config.connectUplinkToBridge {
@@ -1486,7 +1486,7 @@ func prepareDefaultFlows(config *testConfig) []expectTableFlows {
 		tableL3ForwardingFlows,
 		tableL3DecTTLFlows,
 		tableUnSNATFlows,
-		tableServiceMarkFlows,
+		tableSNATMarkFlows,
 		tableVLANFlows,
 		{
 			"Classifier",
@@ -1683,7 +1683,7 @@ func TestEgressMarkFlows(t *testing.T) {
 	legacyregistry.Reset()
 	metrics.InitializeOVSMetrics()
 
-	c = ofClient.NewClient(br, bridgeMgmtAddr, false, false, true, false, false, false, false, false)
+	c = ofClient.NewClient(br, bridgeMgmtAddr, false, false, true, false, false, false, false, false, false)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge %s", br))
 
@@ -1740,7 +1740,7 @@ func TestTrafficControlFlows(t *testing.T) {
 	legacyregistry.Reset()
 	metrics.InitializeOVSMetrics()
 
-	c = ofClient.NewClient(br, bridgeMgmtAddr, false, false, false, false, false, false, false, true)
+	c = ofClient.NewClient(br, bridgeMgmtAddr, false, false, false, false, false, false, false, true, false)
 	err := ofTestUtils.PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge %s", br))
 

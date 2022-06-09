@@ -233,7 +233,7 @@ func (f *featureService) getRequiredTables() []*Table {
 		ServiceLBTable,
 		EndpointDNATTable,
 		L3ForwardingTable,
-		ServiceMarkTable,
+		SNATMarkTable,
 		SNATTable,
 		ConntrackCommitTable,
 		L2ForwardingOutTable,
@@ -257,6 +257,18 @@ func (f *featureMulticast) getRequiredTables() []*Table {
 		MulticastOutputTable,
 	}
 	return tables
+}
+
+func (f *featureMulticluster) getRequiredTables() []*Table {
+	return []*Table{
+		ClassifierTable,
+		ConntrackTable,
+		L3ForwardingTable,
+		SNATTable,
+		UnSNATTable,
+		SNATMarkTable,
+		L2ForwardingOutTable,
+	}
 }
 
 func (f *featureTraceflow) getRequiredTables() []*Table {

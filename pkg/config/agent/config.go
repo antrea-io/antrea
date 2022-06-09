@@ -194,6 +194,8 @@ type AgentConfig struct {
 	Egress EgressConfig `yaml:"egress"`
 	// IPsec related configurations.
 	IPsec IPsecConfig `yaml:"ipsec"`
+	// Multicluster configuration options.
+	Multicluster MulticlusterConfig `yaml:"multicluster,omitempty"`
 }
 
 type AntreaProxyConfig struct {
@@ -254,4 +256,13 @@ type IPsecConfig struct {
 	// - psk (default): Use pre-shared key (PSK) for IKE authentication.
 	// - cert:          Use CA-signed certificates for IKE authentication.
 	AuthenticationMode string `yaml:"authenticationMode,omitempty"`
+}
+
+type MulticlusterConfig struct {
+	// Enable Multicluster which allow cross-cluster traffic between member clusters
+	// in a ClusterSet.
+	Enable bool `yaml:"enable,omitempty"`
+	// The Namespace where the Antrea Multi-cluster controller is running.
+	// The default is antrea-agent's Namespace.
+	Namespace string `yaml:"namespace,omitempty"`
 }
