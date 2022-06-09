@@ -441,7 +441,7 @@ func prepareTraceflowFlow(ctrl *gomock.Controller) *client {
 	mFlow.EXPECT().FlowProtocol().Return(binding.Protocol("ip"))
 	mFlow.EXPECT().CopyToBuilder(priorityNormal+2, false).Return(EgressDefaultTable.ofTable.BuildFlow(priorityNormal + 2)).Times(1)
 	c.featureNetworkPolicy.globalConjMatchFlowCache["mockContext"] = ctx
-	c.featureNetworkPolicy.policyCache.Add(&policyRuleConjunction{metricFlows: []binding.Flow{c.featureNetworkPolicy.denyRuleMetricFlow(123, false)}})
+	c.featureNetworkPolicy.policyCache.Add(&policyRuleConjunction{metricFlows: []binding.Flow{c.featureNetworkPolicy.denyRuleMetricFlow(123, false, 1)}})
 	return c
 }
 

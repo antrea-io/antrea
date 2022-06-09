@@ -75,7 +75,11 @@ func (c *Controller) eventHandler(stopCh <-chan struct{}) {
 	for {
 		select {
 		case e := <-c.groupEventCh:
-			c.addOrUpdateGroupEvent(e)
+			if e.group.Equal(types.McastAllHosts) {
+				c.updateQueryGroup()
+			} else {
+				c.addOrUpdateGroupEvent(e)
+			}
 		case <-stopCh:
 			return
 		}
@@ -186,8 +190,7 @@ func (c *Controller) clearStaleGroups() {
 // removeLocalInterface searches the GroupMemberStatus which the deleted interface has joined, and then triggers a member
 // leave event so that Antrea can remove the corresponding interface from local multicast receivers on OVS. This function
 // should be called if the removed Pod receiver fails to send IGMP leave message before deletion.
-func (c *Controller) removeLocalInterface(e interface{}) {
-	podEvent := e.(types.PodUpdate)
+func (c *Controller) removeLocalInterface(podEvent types.PodUpdate) {
 	// Ignore Pod creation event.
 	if podEvent.IsAdd {
 		return
@@ -222,11 +225,12 @@ type Controller struct {
 	installedGroupsMutex sync.RWMutex
 	mRouteClient         *MRouteClient
 	ovsBridgeClient      ovsconfig.OVSBridgeClient
-
 	// queryInterval is the interval to send IGMP query messages.
 	queryInterval time.Duration
 	// mcastGroupTimeout is the timeout to detect a group as stale if no IGMP report is received within the time.
 	mcastGroupTimeout time.Duration
+	// the group ID in OVS for group which IGMP queries are sent to
+	queryGroupId binding.GroupIDType
 }
 
 func NewMulticastController(ofClient openflow.Client,
@@ -237,9 +241,10 @@ func NewMulticastController(ofClient openflow.Client,
 	multicastInterfaces sets.String,
 	ovsBridgeClient ovsconfig.OVSBridgeClient,
 	podUpdateSubscriber channel.Subscriber,
-	igmpQueryInterval time.Duration) *Controller {
+	igmpQueryInterval time.Duration,
+	validator types.MulticastValidator) *Controller {
 	eventCh := make(chan *mcastGroupEvent, workerCount)
-	groupSnooper := newSnooper(ofClient, ifaceStore, eventCh, igmpQueryInterval)
+	groupSnooper := newSnooper(ofClient, ifaceStore, eventCh, igmpQueryInterval, validator)
 	groupCache := cache.NewIndexer(getGroupEventKey, cache.Indexers{
 		podInterfaceIndex: podInterfaceIndexFunc,
 	})
@@ -258,8 +263,9 @@ func NewMulticastController(ofClient openflow.Client,
 		ovsBridgeClient:   ovsBridgeClient,
 		queryInterval:     igmpQueryInterval,
 		mcastGroupTimeout: igmpQueryInterval * 3,
+		queryGroupId:      v4GroupAllocator.Allocate(),
 	}
-	podUpdateSubscriber.Subscribe(c.removeLocalInterface)
+	podUpdateSubscriber.Subscribe(c.memberChanged)
 	return c
 }
 
@@ -276,6 +282,10 @@ func (c *Controller) Initialize() error {
 	err = c.ofClient.InstallMulticastInitialFlows(uint8(openflow.PacketInReasonMC))
 	if err != nil {
 		klog.ErrorS(err, "Failed to install multicast initial flows")
+		return err
+	}
+	err = c.initQueryGroup()
+	if err != nil {
 		return err
 	}
 	return nil
@@ -367,7 +377,8 @@ func (c *Controller) syncGroup(groupKey string) error {
 		return nil
 	}
 	status := obj.(*GroupMemberStatus)
-	memberPorts := make([]uint32, 0, len(status.localMembers))
+	memberPorts := make([]uint32, 0, len(status.localMembers)+1)
+	memberPorts = append(memberPorts, config.HostGatewayOFPort)
 	for memberInterfaceName := range status.localMembers {
 		obj, found := c.ifaceStore.GetInterfaceByName(memberInterfaceName)
 		if !found {
@@ -471,6 +482,46 @@ func (c *Controller) addOrUpdateGroupEvent(e *mcastGroupEvent) {
 			c.updateGroupMemberStatus(obj, e)
 		}
 	}
+}
+
+func (c *Controller) memberChanged(e interface{}) {
+	podEvent := e.(types.PodUpdate)
+	namespace, name := podEvent.PodNamespace, podEvent.PodName
+
+	klog.V(2).InfoS("Pod is updated", "IsAdd", podEvent.IsAdd, "namespace", namespace, "name", name)
+	event := &mcastGroupEvent{
+		group: types.McastAllHosts,
+	}
+	c.groupEventCh <- event
+	c.removeLocalInterface(podEvent)
+}
+
+func (c *Controller) initQueryGroup() error {
+	err := c.updateQueryGroup()
+	if err != nil {
+		return err
+	}
+	if err = c.ofClient.InstallMulticastFlows(types.McastAllHosts, c.queryGroupId); err != nil {
+		klog.ErrorS(err, "Failed to install multicast flows", "group", types.McastAllHosts)
+		return err
+	}
+	return nil
+}
+
+// updateQueryGroup gets all containers' interfaces, and add all ofports into IGMP query group.
+func (c *Controller) updateQueryGroup() error {
+	ifaces := c.ifaceStore.GetInterfacesByType(interfacestore.ContainerInterface)
+	memberPorts := make([]uint32, 0, len(ifaces))
+	for _, iface := range ifaces {
+		memberPorts = append(memberPorts, uint32(iface.OFPort))
+	}
+	// Install OpenFlow group for a new multicast group which has local Pod receivers joined.
+	if err := c.ofClient.InstallMulticastGroup(c.queryGroupId, memberPorts); err != nil {
+		return err
+	}
+	klog.V(2).InfoS("Installed OpenFlow group for local receivers", "group", types.McastAllHosts.String(),
+		"ofGroup", c.queryGroupId, "localReceivers", memberPorts)
+	return nil
 }
 
 func podInterfaceIndexFunc(obj interface{}) ([]string, error) {

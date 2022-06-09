@@ -103,7 +103,7 @@ func newTestReconciler(t *testing.T, controller *gomock.Controller, ifaceStore i
 	ch := make(chan string, 100)
 	groupIDAllocator := openflow.NewGroupAllocator(v6Enabled)
 	groupCounters := []proxytypes.GroupCounter{proxytypes.NewGroupCounter(groupIDAllocator, ch)}
-	r := newReconciler(ofClient, ifaceStore, newIDAllocator(testAsyncDeleteInterval), f, groupCounters, v4Enabled, v6Enabled, true)
+	r := newReconciler(ofClient, ifaceStore, newIDAllocator(testAsyncDeleteInterval), f, groupCounters, v4Enabled, v6Enabled, true, false)
 	return r
 }
 
@@ -215,6 +215,7 @@ func TestReconcilerReconcile(t *testing.T) {
 	ipNet2 := newCIDR("10.20.0.0/16")
 	ipNet3 := newCIDR("10.20.1.0/24")
 	ipNet4 := newCIDR("10.20.2.0/28")
+	ipNet5 := newCIDR("234.10.10.100/32")
 	diffNet1 := newCIDR("10.20.128.0/17")
 	diffNet2 := newCIDR("10.20.64.0/18")
 	diffNet3 := newCIDR("10.20.32.0/19")
@@ -237,6 +238,9 @@ func TestReconcilerReconcile(t *testing.T) {
 			{IP: v1beta2.IPAddress(ipNet3.IP), PrefixLength: 24},
 			{IP: v1beta2.IPAddress(ipNet4.IP), PrefixLength: 28},
 		},
+	}
+	ipBlock3 := v1beta2.IPBlock{
+		CIDR: v1beta2.IPNet{IP: v1beta2.IPAddress(ipNet5.IP), PrefixLength: 32},
 	}
 
 	tests := []struct {
@@ -512,6 +516,32 @@ func TestReconcilerReconcile(t *testing.T) {
 					Direction: v1beta2.DirectionOut,
 					From:      ipsToOFAddresses(sets.NewString("2.2.2.2")),
 					To:        []types.Address{},
+					Service:   nil,
+					PolicyRef: &np1,
+				},
+			},
+			false,
+		},
+		{
+			"egress-rule-for-mcast-ipblocks",
+			&CompletedRule{
+				rule: &rule{
+					ID:        "egress-rule",
+					Direction: v1beta2.DirectionOut,
+					To:        v1beta2.NetworkPolicyPeer{IPBlocks: []v1beta2.IPBlock{ipBlock3}},
+					SourceRef: &np1,
+				},
+				FromAddresses: nil,
+				ToAddresses:   nil,
+				TargetMembers: appliedToGroup1,
+			},
+			[]*types.PolicyRule{
+				{
+					Direction: v1beta2.DirectionOut,
+					From:      ipsToOFAddresses(sets.NewString("2.2.2.2")),
+					To: []types.Address{
+						openflow.NewIPNetAddress(*ipNet5),
+					},
 					Service:   nil,
 					PolicyRef: &np1,
 				},

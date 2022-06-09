@@ -42,6 +42,7 @@ func TestBuildPipeline(t *testing.T) {
 		features       []feature
 		expectedTables map[binding.PipelineID][]*Table
 	}{
+
 		{
 			ipStack: dualStack,
 			features: []feature{
@@ -215,13 +216,65 @@ func TestBuildPipeline(t *testing.T) {
 				},
 			},
 		},
+		{
+			ipStack: ipv4Only,
+			features: []feature{
+				&featurePodConnectivity{ipProtocols: ipStackMap[ipv4Only], enableMulticast: true},
+				&featureNetworkPolicy{enableAntreaPolicy: true, enableMulticast: true},
+				&featureService{enableProxy: true, proxyAll: false},
+				&featureMulticast{enableAntreaPolicy: true},
+			},
+			expectedTables: map[binding.PipelineID][]*Table{
+				pipelineRoot: {
+					PipelineRootClassifierTable,
+				},
+				pipelineIP: {
+					ClassifierTable,
+					SpoofGuardTable,
+					PipelineIPClassifierTable,
+					UnSNATTable,
+					ConntrackTable,
+					ConntrackStateTable,
+					PreRoutingClassifierTable,
+					SessionAffinityTable,
+					ServiceLBTable,
+					EndpointDNATTable,
+					AntreaPolicyEgressRuleTable,
+					EgressRuleTable,
+					EgressDefaultTable,
+					EgressMetricTable,
+					L3ForwardingTable,
+					L3DecTTLTable,
+					ServiceMarkTable,
+					SNATTable,
+					L2ForwardingCalcTable,
+					AntreaPolicyIngressRuleTable,
+					IngressRuleTable,
+					IngressDefaultTable,
+					IngressMetricTable,
+					ConntrackCommitTable,
+					L2ForwardingOutTable,
+				},
+				pipelineARP: {
+					ARPSpoofGuardTable,
+					ARPResponderTable,
+				},
+				pipelineMulticast: {
+					MulticastEgressRuleTable,
+					MulticastEgressMetricTable,
+
+					MulticastRoutingTable,
+
+					MulticastIngressRuleTable,
+					MulticastIngressMetricTable,
+
+					MulticastOutputTable,
+				},
+			},
+		},
 	} {
-		pipelineIDs := []binding.PipelineID{pipelineRoot, pipelineIP}
-		if tc.ipStack != ipv6Only {
-			pipelineIDs = append(pipelineIDs, pipelineARP)
-		}
 		pipelineRequiredTablesMap := make(map[binding.PipelineID]map[*Table]struct{})
-		for _, pipelineID := range pipelineIDs {
+		for pipelineID := range tc.expectedTables {
 			pipelineRequiredTablesMap[pipelineID] = make(map[*Table]struct{})
 		}
 		pipelineRequiredTablesMap[pipelineRoot][PipelineRootClassifierTable] = struct{}{}

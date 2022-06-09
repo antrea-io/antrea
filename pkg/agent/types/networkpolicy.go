@@ -55,6 +55,7 @@ const (
 	L4PortAddr
 	ICMPAddr
 	ServiceGroupIDAddr
+	IGMPAddr
 	UnSupported
 )
 

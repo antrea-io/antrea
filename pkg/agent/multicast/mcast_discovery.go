@@ -28,6 +28,8 @@ import (
 
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/openflow"
+	"antrea.io/antrea/pkg/agent/types"
+	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
 )
 
 const (
@@ -41,7 +43,6 @@ var (
 	igmpMaxResponseTime = time.Second * 10
 	// igmpQueryDstMac is the MAC address used in the dst MAC field in the IGMP query message
 	igmpQueryDstMac, _ = net.ParseMAC("01:00:5e:00:00:01")
-	mcastAllHosts      = net.ParseIP("224.0.0.1").To4()
 )
 
 type IGMPSnooper struct {
@@ -49,6 +50,7 @@ type IGMPSnooper struct {
 	ifaceStore    interfacestore.InterfaceStore
 	eventCh       chan *mcastGroupEvent
 	queryInterval time.Duration
+	validator     types.MulticastValidator
 }
 
 func (s *IGMPSnooper) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
@@ -97,12 +99,53 @@ func (s *IGMPSnooper) queryIGMP(group net.IP, versions []uint8) error {
 		if err != nil {
 			return err
 		}
-		if err := s.ofClient.SendIGMPQueryPacketOut(igmpQueryDstMac, mcastAllHosts, openflow13.P_NORMAL, igmp); err != nil {
+		// outPort sets the output port of the packetOut message. We expect the message to go through OVS pipeline
+		// from table0. The final OpenFlow message will use a standard OpenFlow port number OFPP_TABLE = 0xfffffff9 corrected
+		// by ofnet.
+		outPort := uint32(0)
+		if err := s.ofClient.SendIGMPQueryPacketOut(igmpQueryDstMac, types.McastAllHosts, outPort, igmp); err != nil {
 			return err
 		}
-		klog.V(2).InfoS("Sent packetOut for IGMP query", "group", group.String(), "version", version)
+		klog.V(2).InfoS("Sent packetOut for IGMP query", "group", group.String(), "version", version, "outPort", outPort)
 	}
 	return nil
+}
+
+func (s *IGMPSnooper) validate(event *mcastGroupEvent, igmpType uint8) (bool, error) {
+	if s.validator == nil {
+		// Return true directly if there is no validator.
+		return true, nil
+	}
+	if event.iface.Type != interfacestore.ContainerInterface {
+		return true, fmt.Errorf("interface is not container")
+	}
+	// Validate checks if packet should be dropped or not, and returns multicast NP information
+	item, err := s.validator.Validate(event.iface.PodName, event.iface.PodNamespace, event.group, igmpType)
+	if err != nil {
+		// It shall drop the packet if function Validate returns error
+		klog.ErrorS(err, "Failed to validate multicast group event")
+		return false, err
+	}
+	klog.V(2).InfoS("Got NetworkPolicy action for IGMP query", "RuleAction", item.RuleAction, "uuid", item.UUID, "Name", item.Name)
+	if item.RuleAction == v1alpha1.RuleActionDrop {
+		return false, nil
+	}
+	return true, nil
+}
+
+func (s *IGMPSnooper) validatePacketAndNotify(event *mcastGroupEvent, igmpType uint8) {
+	allow, err := s.validate(event, igmpType)
+	if err != nil {
+		// Antrea Agent does not remove the Pod from the OpenFlow group bucket immediately when an error is returned,
+		// but it will be removed when after timeout (Controller.mcastGroupTimeout)
+		return
+	}
+	if !allow {
+		// If any rule is desired to drop the traffic, Antrea Agent removes the Pod from
+		// the OpenFlow group bucket directly
+		event.eType = groupLeave
+	}
+	s.eventCh <- event
 }
 
 func (s *IGMPSnooper) processPacketIn(pktIn *ofctrl.PacketIn) error {
@@ -120,7 +163,8 @@ func (s *IGMPSnooper) processPacketIn(pktIn *ofctrl.PacketIn) error {
 	if err != nil {
 		return err
 	}
-	switch igmp.GetMessageType() {
+	igmpType := igmp.GetMessageType()
+	switch igmpType {
 	case protocol.IGMPv1Report:
 		fallthrough
 	case protocol.IGMPv2Report:
@@ -132,7 +176,7 @@ func (s *IGMPSnooper) processPacketIn(pktIn *ofctrl.PacketIn) error {
 			time:  now,
 			iface: iface,
 		}
-		s.eventCh <- event
+		s.validatePacketAndNotify(event, igmpType)
 	case protocol.IGMPv3Report:
 		msg := igmp.(*protocol.IGMPv3MembershipReport)
 		for _, gr := range msg.GroupRecords {
@@ -148,7 +192,7 @@ func (s *IGMPSnooper) processPacketIn(pktIn *ofctrl.PacketIn) error {
 				time:  now,
 				iface: iface,
 			}
-			s.eventCh <- event
+			s.validatePacketAndNotify(event, igmpType)
 		}
 
 	case protocol.IGMPv2LeaveGroup:
@@ -236,8 +280,8 @@ func parseIGMPPacket(pkt protocol.Ethernet) (protocol.IGMPMessage, error) {
 	}
 }
 
-func newSnooper(ofClient openflow.Client, ifaceStore interfacestore.InterfaceStore, eventCh chan *mcastGroupEvent, queryInterval time.Duration) *IGMPSnooper {
-	d := &IGMPSnooper{ofClient: ofClient, ifaceStore: ifaceStore, eventCh: eventCh, queryInterval: queryInterval}
+func newSnooper(ofClient openflow.Client, ifaceStore interfacestore.InterfaceStore, eventCh chan *mcastGroupEvent, queryInterval time.Duration, validator types.MulticastValidator) *IGMPSnooper {
+	d := &IGMPSnooper{ofClient: ofClient, ifaceStore: ifaceStore, eventCh: eventCh, queryInterval: queryInterval, validator: validator}
 	ofClient.RegisterPacketInHandler(uint8(openflow.PacketInReasonMC), "MulticastGroupDiscovery", d)
 	return d
 }

@@ -390,6 +390,12 @@ message Service {
   optional int32 icmpType = 4;
 
   optional int32 icmpCode = 5;
+
+  // IGMPType and GroupAddress can only be specified when the Protocol is IGMP.
+  // +optional
+  optional int32 igmpType = 6;
+
+  optional string groupAddress = 7;
 }
 
 // ServiceReference represents reference to a v1.Service.

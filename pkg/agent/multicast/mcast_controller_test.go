@@ -38,6 +38,7 @@ import (
 	multicasttest "antrea.io/antrea/pkg/agent/multicast/testing"
 	"antrea.io/antrea/pkg/agent/openflow"
 	openflowtest "antrea.io/antrea/pkg/agent/openflow/testing"
+	"antrea.io/antrea/pkg/agent/types"
 	ovsconfigtest "antrea.io/antrea/pkg/ovs/ovsconfig/testing"
 	"antrea.io/antrea/pkg/util/channel"
 )
@@ -112,7 +113,7 @@ func TestUpdateGroupMemberStatus(t *testing.T) {
 		iface: if1,
 	}
 	mctrl.addGroupMemberStatus(event)
-	mockOFClient.EXPECT().SendIGMPQueryPacketOut(igmpQueryDstMac, mcastAllHosts, uint32(openflow13.P_NORMAL), gomock.Any()).Times(len(queryVersions))
+	mockOFClient.EXPECT().SendIGMPQueryPacketOut(igmpQueryDstMac, types.McastAllHosts, uint32(0), gomock.Any()).Times(len(queryVersions))
 	for _, e := range []*mcastGroupEvent{
 		{group: mgroup, eType: groupJoin, time: event.time.Add(time.Second * 20), iface: if1},
 		{group: mgroup, eType: groupJoin, time: event.time.Add(time.Second * 40), iface: if1},
@@ -160,7 +161,7 @@ func TestCheckLastMember(t *testing.T) {
 		}
 		_ = mctrl.groupCache.Add(status)
 		mctrl.addInstalledGroup(status.group.String())
-		mockOFClient.EXPECT().SendIGMPQueryPacketOut(igmpQueryDstMac, mcastAllHosts, uint32(openflow13.P_NORMAL), gomock.Any()).AnyTimes()
+		mockOFClient.EXPECT().SendIGMPQueryPacketOut(igmpQueryDstMac, types.McastAllHosts, uint32(0), gomock.Any()).AnyTimes()
 		var wg sync.WaitGroup
 		wg.Add(1)
 		go func() {
@@ -365,12 +366,15 @@ func newMockMulticastController(t *testing.T) *Controller {
 	groupAllocator := openflow.NewGroupAllocator(false)
 	podUpdateSubscriber := channel.NewSubscribableChannel("PodUpdate", 100)
 	queryInterval := 5 * time.Second
-	mctrl := NewMulticastController(mockOFClient, groupAllocator, nodeConfig, mockIfaceStore, mockMulticastSocket, sets.NewString(), ovsClient, podUpdateSubscriber, queryInterval)
+	mctrl := NewMulticastController(mockOFClient, groupAllocator, nodeConfig, mockIfaceStore, mockMulticastSocket, sets.NewString(), ovsClient, podUpdateSubscriber, queryInterval, nil)
 	return mctrl
 }
 
 func (c *Controller) initialize(t *testing.T) error {
 	mockOFClient.EXPECT().InstallMulticastInitialFlows(uint8(0)).Times(1)
+	mockOFClient.EXPECT().InstallMulticastGroup(gomock.Any(), gomock.Any())
+	mockOFClient.EXPECT().InstallMulticastFlows(gomock.Any(), gomock.Any())
+	mockIfaceStore.EXPECT().GetInterfacesByType(interfacestore.InterfaceType(0)).Times(1).Return([]*interfacestore.InterfaceConfig{})
 	mockMulticastSocket.EXPECT().AllocateVIFs(gomock.Any(), uint16(0)).Times(1).Return([]uint16{0}, nil)
 	mockMulticastSocket.EXPECT().AllocateVIFs(gomock.Any(), uint16(1)).Times(1).Return([]uint16{1, 2}, nil)
 	return c.Initialize()
