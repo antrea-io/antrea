@@ -2733,3 +2733,21 @@ func isConnectionLostError(err error) bool {
 func retryOnConnectionLostError(backoff wait.Backoff, fn func() error) error {
 	return retry.OnError(backoff, isConnectionLostError, fn)
 }
+
+func (data *TestData) checkAntreaAgentInfo(interval time.Duration, timeout time.Duration, name string) error {
+	err := wait.Poll(interval, timeout, func() (bool, error) {
+		aai, err := data.crdClient.CrdV1beta1().AntreaAgentInfos().Get(context.TODO(), name, metav1.GetOptions{})
+		if err != nil {
+			if errors.IsNotFound(err) {
+				return false, nil
+			}
+			return false, fmt.Errorf("failed to get AntreaAgentInfo %s: %v", name, err)
+		}
+		if aai.NodeRef.Name == "" {
+			// keep trying
+			return false, nil
+		}
+		return true, nil
+	})
+	return err
+}
