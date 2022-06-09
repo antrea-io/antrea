@@ -2397,34 +2397,36 @@ func (f *featureService) serviceLBFlow(groupID binding.GroupIDType,
 	} else {
 		lbResultMark = EpSelectedRegMark
 	}
-	regMarksToMatch := []*binding.RegMark{lbResultMark, RewriteMACRegMark}
+	regMarksToLoad := []*binding.RegMark{lbResultMark, RewriteMACRegMark}
 	var flowBuilder binding.FlowBuilder
 	if serviceType == v1.ServiceTypeNodePort {
-		// If externalTrafficPolicy of NodePort is Cluster, the first packet of NodePort requires SNAT, so nodeLocalExternal
-		// will be false, and ServiceNeedSNATRegMark will be set. If externalTrafficPolicy of NodePort is Local, the first
-		// packet of NodePort doesn't require SNAT, ServiceNeedSNATRegMark won't be set.
 		unionVal := (ToNodePortAddressRegMark.GetValue() << ServiceEPStateField.GetRange().Length()) + EpToSelectRegMark.GetValue()
+		// If externalTrafficPolicy of a NodePort Service is Cluster (nodeLocalExternal=false), it loads
+		// ToClusterServiceRegMark to indicate it. The mark will be checked later when determining if SNAT is required
+		// or not.
 		if !nodeLocalExternal {
-			regMarksToMatch = append(regMarksToMatch, ToClusterServiceRegMark)
+			regMarksToLoad = append(regMarksToLoad, ToClusterServiceRegMark)
 		}
 		flowBuilder = ServiceLBTable.ofTable.BuildFlow(priorityNormal).
 			Cookie(cookieID).
 			MatchProtocol(protocol).
 			MatchRegFieldWithValue(NodePortUnionField, unionVal).
 			MatchDstPort(svcPort, nil).
-			Action().LoadRegMark(regMarksToMatch...)
+			Action().LoadRegMark(regMarksToLoad...)
 	} else {
+		// If externalTrafficPolicy of a LoadBalancer Service is Cluster (nodeLocalExternal=false), it loads
+		// ToClusterServiceRegMark to indicate it. The mark will be checked later when determining if SNAT is required
+		// or not.
 		if serviceType == v1.ServiceTypeLoadBalancer && !nodeLocalExternal {
-			regMarksToMatch = append(regMarksToMatch, ToClusterServiceRegMark)
+			regMarksToLoad = append(regMarksToLoad, ToClusterServiceRegMark)
 		}
-		// If Service type is LoadBalancer, as above NodePort.
 		flowBuilder = ServiceLBTable.ofTable.BuildFlow(priorityNormal).
 			Cookie(cookieID).
 			MatchProtocol(protocol).
 			MatchDstPort(svcPort, nil).
 			MatchDstIP(svcIP).
 			MatchRegMark(EpToSelectRegMark).
-			Action().LoadRegMark(regMarksToMatch...)
+			Action().LoadRegMark(regMarksToLoad...)
 	}
 	return flowBuilder.
 		Action().LoadToRegField(ServiceGroupIDField, uint32(groupID)).

@@ -124,7 +124,8 @@ var (
 	// be used with RewriteMACRegMark, thus the reg id must not be same due to the limitation of ofnet library.
 	AntreaFlexibleIPAMRegMark    = binding.NewOneBitRegMark(4, 20, "AntreaFlexibleIPAM")
 	NotAntreaFlexibleIPAMRegMark = binding.NewOneBitZeroRegMark(4, 20, "NotAntreaFlexibleIPAM")
-	// reg4[21]: Mark to indicate externalTrafficPolicy of the Service is Cluster.
+	// reg4[21]: Mark to indicate whether the packet is accessing a NodePort or a LoadBalancer IP of a Service whose
+	// externalTrafficPolicy is Cluster.
 	ToClusterServiceRegMark = binding.NewOneBitRegMark(4, 21, "ToClusterService")
 	// reg4[22..23]: Field to store the action of a traffic control rule. Marks in this field include:
 	TrafficControlActionField     = binding.NewRegField(4, 22, 23, "TrafficControlAction")
