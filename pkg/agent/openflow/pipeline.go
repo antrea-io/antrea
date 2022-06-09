@@ -733,7 +733,8 @@ func (f *featureService) snatConntrackFlows() []binding.Flow {
 			// - Hairpin Service connection initiated through the Antrea gateway, and SNAT should be performed with a
 			//   virtual IP.
 			// - Nodeport / LoadBalancer connection initiated through the Antrea gateway and externalTrafficPolicy is
-			//   Cluster, and SNAT should be performed with the Antrea gateway IP.
+			//   Cluster, if the selected Endpoint is not on local Node, then SNAT should be performed with the Antrea
+			//   gateway IP.
 			// Note that, for Service connections that require SNAT, ServiceCTMark is loaded in SNAT CT zone when performing
 			// SNAT since ServiceCTMark loaded in DNAT CT zone cannot be read in SNAT CT zone. For Service connections,
 			// ServiceCTMark (loaded in DNAT / SNAT CT zone) is used to bypass ConntrackCommitTable which is used to commit
@@ -2464,7 +2465,7 @@ func (f *featureEgress) externalFlows() []binding.Flow {
 				MatchProtocol(ipProtocol).
 				MatchCTStateRpl(false).
 				MatchCTStateTrk(true).
-				MatchRegMark(FromLocalRegMark).
+				MatchRegMark(FromLocalRegMark, NotAntreaFlexibleIPAMRegMark).
 				Action().GotoTable(EgressMarkTable.GetID()).
 				Done(),
 			// This generates the flow to match the packets sourced from tunnel and destined for external network, then
@@ -2695,7 +2696,7 @@ func (f *featurePodConnectivity) l3FwdFlowToLocalPodCIDR() []binding.Flow {
 	}
 	for ipProtocol, cidr := range f.localCIDRs {
 		// This generates the flow to match the packets destined for local Pods without RewriteMACRegMark.
-		flows = append(flows, L3ForwardingTable.ofTable.BuildFlow(priorityLow).
+		flows = append(flows, L3ForwardingTable.ofTable.BuildFlow(priorityNormal).
 			Cookie(cookieID).
 			MatchProtocol(ipProtocol).
 			MatchDstIPNet(cidr).
@@ -2743,9 +2744,22 @@ func (f *featurePodConnectivity) l3FwdFlowToNode() []binding.Flow {
 	return flows
 }
 
-// l3FwdFlowToExternal generates the flow to match the packets destined for external network.
+// l3FwdFlowToExternal generates the flow to forward packets destined for external network. Corresponding cases are listed
+// in the follows:
+//  - when Egress is disabled, request packets of connections sourced from local Pods and destined for external network.
+//  - when AntreaIPAM is enabled, request packets of connections sourced from local AntreaIPAM Pods and destined for external network.
+// TODO: load ToUplinkRegMark to packets sourced from AntreaIPAM Pods and destined for external network.
+//  Due to the lack of defined variables of flow priority, there are not enough flow priority to install the flows to
+//  differentiate the packets sourced from AntreaIPAM Pods and non-AntreaIPAM Pods. For the packets sourced from AntreaIPAM
+//  Pods and destined for external network, they are forwarded via uplink port, not Antrea gateway. Apparently, loading
+//  ToGatewayRegMark to such packets is not right. However, packets sourced from AntreaIPAM Pods with ToGatewayRegMark
+//  don't cause unexpected effects to the consumers of ToGatewayRegMark and ToUplinkRegMark. Consumers of these two
+//  marks are listed in the follows:
+//  - In IngressSecurityClassifierTable, flows are installed to forward the packets with ToGatewayRegMark, ToGatewayRegMark
+//    or ToUplinkRegMark to IngressMetricTable directly.
+//  - In ServiceMarkTable, ToGatewayRegMark is used with FromGatewayRegMark together.
+//  - In ServiceMarkTable, ToUplinkRegMark is only used in noEncap mode + Windows.
 func (f *featurePodConnectivity) l3FwdFlowToExternal() binding.Flow {
-	// TODO: load ToUplinkRegMark for packets from Antrea IPAM Pod.
 	return L3ForwardingTable.ofTable.BuildFlow(priorityMiss).
 		Cookie(f.cookieAllocator.Request(f.category).Raw()).
 		Action().LoadRegMark(ToGatewayRegMark).
@@ -2821,45 +2835,18 @@ func (f *featureService) preRoutingClassifierFlows() []binding.Flow {
 	return flows
 }
 
-// l3FwdFlowsToExternalEndpoint generates the flows to forward the packets of Service connection to external network.
-func (f *featureService) l3FwdFlowsToExternalEndpoint() []binding.Flow {
-	cookieID := f.cookieAllocator.Request(f.category).Raw()
-	var flows []binding.Flow
-	if f.connectUplinkToBridge {
-		flows = append(flows,
-			// When AntreaIPAM is enabled, this generates the flow to match the packets sourced from per-Node IPAM Pod and
-			// destined for external network.
-			L3ForwardingTable.ofTable.BuildFlow(priorityLow).
-				Cookie(cookieID).
-				MatchRegMark(RewriteMACRegMark, NotAntreaFlexibleIPAMRegMark).
-				MatchCTMark(ServiceCTMark).
-				Action().SetDstMAC(f.gatewayMAC).
-				Action().LoadRegMark(ToGatewayRegMark).
-				Action().GotoTable(L3DecTTLTable.GetID()).
-				Done(),
-			// When AntreaIPAM is enabled, this generates the flow to match the packets sourced from Antrea IPAM Pod and
-			// destined for external network.
-			L3ForwardingTable.ofTable.BuildFlow(priorityLow).
-				Cookie(cookieID).
-				MatchRegMark(AntreaFlexibleIPAMRegMark).
-				MatchCTMark(ServiceCTMark).
-				Action().GotoTable(L3DecTTLTable.GetID()).
-				Done(),
-		)
-	} else {
-		// This generates the flow to match the packets sourced from per-Node IPAM Pod and destined for external network.
-		flows = append(flows,
-			L3ForwardingTable.ofTable.BuildFlow(priorityLow).
-				Cookie(cookieID).
-				MatchRegMark(RewriteMACRegMark).
-				MatchCTMark(ServiceCTMark).
-				Action().SetDstMAC(f.gatewayMAC).
-				Action().LoadRegMark(ToGatewayRegMark).
-				Action().GotoTable(L3DecTTLTable.GetID()).
-				Done(),
-		)
-	}
-	return flows
+// l3FwdFlowToExternalEndpoint generates the flow to forward the packets of Service connections sourced from local Antrea
+// gateway and destined for external network. Note that, the destination MAC address of the packets should be rewritten to
+// local Antrea gateway's so that the packets can be forwarded to external network via local Antrea gateway.
+func (f *featureService) l3FwdFlowToExternalEndpoint() binding.Flow {
+	return L3ForwardingTable.ofTable.BuildFlow(priorityLow).
+		Cookie(f.cookieAllocator.Request(f.category).Raw()).
+		MatchRegMark(RewriteMACRegMark, FromGatewayRegMark).
+		MatchCTMark(ServiceCTMark).
+		Action().SetDstMAC(f.gatewayMAC).
+		Action().LoadRegMark(ToGatewayRegMark).
+		Action().GotoTable(L3DecTTLTable.GetID()).
+		Done()
 }
 
 // podHairpinSNATFlow generates the flow to match the first packet of hairpin connection initiated through a local Pod.

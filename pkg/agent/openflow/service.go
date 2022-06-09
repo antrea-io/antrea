@@ -119,7 +119,7 @@ func (f *featureService) initFlows() []binding.Flow {
 	if f.enableProxy {
 		flows = append(flows, f.conntrackFlows()...)
 		flows = append(flows, f.preRoutingClassifierFlows()...)
-		flows = append(flows, f.l3FwdFlowsToExternalEndpoint()...)
+		flows = append(flows, f.l3FwdFlowToExternalEndpoint())
 		flows = append(flows, f.gatewaySNATFlows()...)
 		flows = append(flows, f.snatConntrackFlows()...)
 		flows = append(flows, f.serviceNeedLBFlow())
