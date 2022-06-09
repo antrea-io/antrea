@@ -1,18 +1,21 @@
 # Antrea Multi-cluster Architecture
 
 Antrea Multi-cluster implements [Multi-cluster Service API](https://github.com/kubernetes/enhancements/tree/master/keps/sig-multicluster/1645-multi-cluster-services-api),
-which allows users to create multi-cluster Services that can be accessed cross clusters in a
-ClusterSet. Antrea Multi-cluster also supports Antrea ClusterNetworkPolicy replication.
-Multi-cluster admins can define ClusterNetworkPolicies to be replicated across the entire
-ClusterSet, and enforced in all member clusters.
+which allows users to create multi-cluster Services that can be accessed cross
+clusters in a ClusterSet. Antrea Multi-cluster also supports Antrea
+ClusterNetworkPolicy replication. Multi-cluster admins can define
+ClusterNetworkPolicies to be replicated across the entire ClusterSet, and
+enforced in all member clusters.
 
-The diagram below depicts a basic multi-cluster topology in Antrea.
+An Antrea Multi-cluster ClusterSet includes a leader cluster and multiple member
+clusters. Antrea Multi-cluster Controller needs to be deployed in the leader and
+all member clusters. A cluster can serve as the leader, and meanwhile also be a
+member cluster of the ClusterSet.
 
-<img src="assets/basic-topology.png" width="500" alt="Antrea Multi-cluster Topology">
+The diagram below depicts a basic Antrea Multi-cluster topology with one leader
+cluster and two member clusters.
 
-Given a set of Kubernetes clusters, there will be a leader cluster and several member clusters.
-By default, a leader cluster itself is also a member cluster of a ClusterSet. A cluster
-can also be configured as a dedicated leader cluster of multiple ClusterSets.
+<img src="assets/basic-topology.svg" width="650" alt="Antrea Multi-cluster Topology">
 
 ## Terminology
 
@@ -22,8 +25,8 @@ Namespace sameness applies, which means all Namespaces with a given name are con
 be the same Namespace. The ClusterSet Custom Resource Definition(CRD) defines a ClusterSet
 including the leader and member clusters information.
 
-The ClusterClaim CRD is used to claim a cluster itself as a member of a ClusterSet with
-unique cluster ID, to claim a ClusterSet with unique ClusterSet ID.
+The ClusterClaim CRD is used to claim a ClusterSet with a unique ClusterSet ID, and to
+claim the cluster itself as a member of a ClusterSet with a unique cluster ID.
 
 The MemberClusterAnnounce CRD declares a member cluster configuration to the leader cluster.
 
@@ -34,75 +37,167 @@ given ClusterSet.
 
 ## Antrea Multi-cluster Controller
 
-In a member cluster, Antrea Multi-cluster creates a Deployment that runs Antrea Multi-cluster
-Controller which is responsible for exporting resource to and importing resource from a leader
-cluster in a ClusterSet.
+Antrea Multi-cluster Controller implements ClusterSet management and resource
+export/import in the ClusterSet. In either a leader or a member cluster, Antrea
+Multi-cluster Controller is deployed with a Deployment of a single replica, but
+it takes different responsibilities in leader and member clusters.
 
-In a leader cluster, Antrea Multi-cluster creates a Deployment that runs Antrea Multi-cluster
-Controller which is responsible for converting resources from different member clusters into one
-encapsulated resource as long as these resources have the same kind and match Namespace sameness.
+### ClusterSet Establishment
 
-In ClusterSet initialization, Antrea Multi-cluster Controller in a member cluster watches
-ClusterSet, ClusterClaim, and creates a MemberClusterAnnounce in the leader cluster.
+In a member cluster, Multi-cluster Controller watches and validates the ClusterSet
+and ClusterClaim CRs, and creates a MemberClusterAnnounce in the Common Area of the
+leader cluster to join the ClusterSet.
 
-For exporting resources from the member cluster, it watches ServiceExport, Service and Endpoints
-resources, encapsulates Services and Endpoints into ResourceExports according to ServiceExports,
-and writes the ResourceExports to leader cluster. For resource importing, it watches ResourceImports
-from leader cluster, and creates multi-cluster Services and Endpoints with a prefix `antrea-mc-`
-plus exported Service name, and also ServiceImports which have the same name as the Service name.
+In the leader cluster, Multi-cluster controller watches and validates the
+ClusterSet and Clusterclaim CRs, and initializes the ClusterSet. It also validates
+the MemberClusterAnnounce CR created by a member cluster and updates the member
+cluster status to the ClusterSet.
 
-In a leader cluster, for ClusterSet initialization, Antrea Multi-cluster controller watches and
-validates the ClusterSet and Clusterclaim. For resource export/import, it watches ResourceExports
-and encapsulates them into ResourceImports.
+### Resource Export and Import
 
-## Service Export and Import
+In a member cluster, Multi-cluster controller watches exported resources (e.g.
+ServiceExports, Services, Multi-cluster Gateways), encapsulates an exported
+resource into a ResourceExport and creates the ResourceExport CR in the Common
+Area of the leader cluster.
 
-<img src="assets/resource-export-import-pipeline.png" width="800" alt="Antrea Multi-cluster Resource Export/Import Pipeline">
+In the leader cluster, Multi-cluster Controller watches ResourceExports created
+by member clusters (in the case of Service and ClusterInfo export), or by the
+ClusterSet admin (in the case of Multi-cluster NetworkPolicy), converts
+ResourceExports to ResourceImports, and creates the ResourceImports CRs in the
+Common Area for member clusters to import them. Multi-cluster Controller also
+merges ResourceExports from different member clusters to a single
+ResourceImport, when these exported resources share the same kind, name, and
+original Namespace (matching Namespace sameness).
 
-The current multi-cluster implementation supports Service discovery and Service export/import among
-member clusters. The above diagram depicts Antrea Multi-cluster resource export/import pipeline.
+Multi-cluster Controller in a member cluster also watches ResourceImports in the
+Common Area of the leader cluster, decapsulates the resources from them, and
+creates the resources (e.g. Services, Endpoints, Antrea ClusterNetworkPolicies,
+ClusterInfoImports) in the member cluster.
 
-Given two Services in the member clusters - `foo.ns.cluster1.local` and `foo.ns.cluster2.local`,
-multi-cluster Services may be generated by the following the resource export/import pipeline.
+For more information about Multi-cluster Service export/import, also check the
+[Service Export and Import](#service-export-and-import) section.
 
-* Administrators create resource ServiceExports `foo` in Namespace `ns` in each
-of the clusters.
-* The Exporters in member clusters `cluster1` and `cluster2` see ServiceExport `foo`, collect
-the associated Services and Endpoints, and create ResourceExports for them in the Common Area of the
-leader cluster.
-* The controller in the leader cluster sees ResourcesExports in the Common Area, computes multi-cluster
-Service `cluster1-ns-foo-service`, `cluster2-ns-foo-service` and associated Endpoints
-`cluster1-ns-foo-endpoints`, `cluster2-ns-foo-endpoints`.
-* The controller creates ResourcesImport enclosing multi-cluster Service `ns-foo-service` and Endpoints
-`ns-foo-endpoints` in the Common Area.
-* The Importer in each member cluster watches ResourceImports; decapsulates them and gets Service
-`ns/antrea-mc-foo`, Endpoints `ns/antrea-mc-foo`, and creates the resources and as well as a
-ServiceImport `ns/foo` locally if they don't exist or updates them if the resources have already
-been created by the Importer earlier.
+## Multi-cluster Service
 
-## Antrea Multi-cluster Service
+### Service Export and Import
 
-Antrea Multi-cluster Controller only supports Service of type ClusterIP at this moment. In
-order to support multi-cluster Service access between member clusters, Antrea requires member
-clusters' Pod IPs are reachable and no overlapping between all member clusters.
+<img src="assets/resource-export-import-pipeline.svg" width="1500" alt="Antrea Multi-cluster Service Export/Import Pipeline">
 
-When Antrea Multi-cluster Controller in member cluster watches ResourceImport's creation event
-in leader cluster, it will create multi-cluster Service, Endpoints and ServiceImport locally.
-The Service Ports definition will be the same as exported Services, the Endpoints will be Pod
-IPs from all member clusters. The new created Antrea Multi-cluster Service is just like a regular
-Kubernetes Service, so Pods in a member cluster can access the multi-cluster Service as usual without
-any extra setting.
+Antrea Multi-cluster Controller implements Service export/import among member
+clusters. The above diagram depicts Antrea Multi-cluster resource export/import
+pipeline, using Service export/import as an example.
+
+Given two Services with the same name and Namespace in two member clusters -
+`foo.ns.cluster-a.local` and `foo.ns.cluster-b.local`, a multi-cluster Service can
+be created by the following resource export/import pipeline.
+
+* User creates a ServiceExport `foo` in Namespace `ns` in each of the two
+clusters.
+* Multi-cluster Controllers in `cluster-a` and `cluster-b` see ServiceExport
+`foo`, and both create two ResourceExports for the Service and Endpoints
+respectively in the Common Area of the leader cluster.
+* Multi-cluster Controller in the leader cluster sees the ResourcesExports in
+the Common Area, including the two for Service `foo`: `cluster-a-ns-foo-service`,
+`cluster-b-ns-foo-service`; and the two for the Endpoints:
+`cluster-a-ns-foo-endpoints`, `cluster-b-ns-foo-endpoints`. It then creates a
+ResourceImport `ns-foo-service` for the multi-cluster Service; and a
+ResourceImport `ns-foo-endpoints` for the Endpoints, which includes the
+exported endpoints of both `cluster-a-ns-foo-endpoints` and
+`cluster-b-ns-foo-endpoints`.
+* Multi-cluster Controller in each member cluster watches the ResourceImports
+from the Common Area, decapsulates them and gets Service `ns/antrea-mc-foo` and
+Endpoints `ns/antrea-mc-foo`, and creates the Service and Endpoints, as well as
+a ServiceImport `foo` in local Namespace `ns`.
+
+### Service Access Across Clusters
+
+Since Antrea v1.7.0, the Service's ClusterIP is exported as the multi-cluster
+Service's Endpoints. Multi-cluster Gateways must be configured to support
+multi-cluster Service access across member clusters, and Service CIDRs cannot
+overlap between clusters. Please refer to [Antrea Multi-cluster Gateway](#multi-cluster-gateway)
+for more information. Before Antrea v1.7.0, Pod IPs are exported as the
+multi-cluster Service's Endpoints. Pod IPs must be directly reachable across
+clusters for multi-cluster Service access, and Pod CIDRs cannot overlap between
+clusters. Antrea Multi-cluster only supports creating multi-cluster Services
+for Services of type ClusterIP.
+
+## Multi-cluster Gateway
+
+Antrea started to support Multi-cluster Gateway since v1.7.0. User can choose
+one K8s Node as the Gateway in a member cluster. The Gateway Node will be
+responsible for routing all cross-clusters traffic from the local cluster to
+other member clusters through tunnels. The diagram below depicts Antrea
+Mulit-cluster connectivity with Multi-cluster Gateways.
+
+<img src="assets/mc-gateway.svg" width="800" alt="Antrea Multi-cluster Gateway">
+
+Antrea Agent is responsible for setting up tunnels between Gateways of meamber
+clusters. At the moment, Multi-cluster Gateway only works with Antrea `encap`
+mode. The tunnels between Gateways use Antrea Agent's configured tunnel type.
+All member clusters in a ClusterSet need to deploy Antrea with the same tunnel
+type.
+
+The Multi-cluster Gateway implementation introduces two new CRDs `Gateway` and
+`ClusterInfoImport`. `Gateway` includes the local Multi-cluster Gateway
+information including: `internalIP` for tunnels to local Nodes, and `gatewayIP`
+for tunnels to remote cluster Gateways. `ClusterInfoImport` includes Gateway
+and network information of member clusters, including Gateway IPs and Service
+CIDRs. The existing esource export/import pipeline is leveraged to exchange
+the cluster network information among member clusters, generating
+ClusterInfoImports in each member cluster.
+
+### Multi-cluster Service Traffic Walk
+
+Let's use the ClusterSet in the above diagram as an example. As shown in the
+diagram:
+
+1. Cluster A has a client Pod named `pod-a` running on a regular Node, and a
+   multi-cluster Service named `antrea-mc-nginx` with ClusterIP `10.112.10.11`
+   in the `default` Namespace.
+2. Cluster B exported a Service named `nginx` with ClusterIP `10.96.2.22` in
+   the `default` Namespace. The Service has one Endpoint `172.170.11.22` which is
+   `pod-b`'s IP.
+3. Cluster C exported a Service named `nginx` with ClusterIP `10.11.12.33` also
+   in the `default` Namespace. The Service has one Endpoint `172.10.11.33` which
+   is `pod-c`'s IP.
+
+The multi-cluster Service `antrea-mc-nginx` in cluster A will have two
+Endpoints:
+
+* `nginx` Service's ClusterIP `10.96.2.22` from cluster B.
+* `nginx` Service's ClusterIP `10.11.12.33` from cluster C.
+
+When the client Pod `pod-a` on cluster A tries to access the multi-cluster
+Service `antrea-mc-nginx`, the request packet will first goes through the
+Service load balancing pipeline on the source Node `node-a2`, with one endpoint
+of the Multi-cluster Service being chosen as the destination. Let's say endpoint
+`10.11.12.33` from cluster C is chosen, then the request packet will be DNAT'd
+with IP `10.11.12.33` and tunnelled to the local Gateway Node `node-a1`.
+`node-a1` knows the packet is multi-cluster Service traffic destined for Cluster
+C from the destination IP `10.11.12.33`, and it will tunnel the packet to 
+Cluster C's Gateway Node `node-c1`, after performing SNAT and setting the
+packet's source IP to its own Gateway IP. On `node-c1`, the packet will go
+through the Service load balancing pipeline again with a local endpoint of
+Service `nginx` being chosen as the destination. As the Service has only one
+local endpoint - `172.10.11.33` of `pod-c`, the request packet will be DNAT'd to
+`172.10.11.33` and tunnelled to `node-c2` where `pod-c` is running. Finally,
+on `node-c2` the packet will go through the normal Antrea pipeline and be
+forwarded to `pod-c`.
 
 ## Antrea Multi-cluster NetworkPolicy
 
-At this moment, Antrea does not support Pod-level policy enforcement for cross-cluster traffic. Access
-towards Multi-cluster Services can be regulated with Antrea ClusterNetworkPolicy `toService` rules. In
-each member cluster, users can create an Antrea ClusterNetworkPolicy selecting Pods in that cluster, with
-the imported Mutli-cluster Service name and Namespace in an egress `toService` rule, and the Action to
-take for traffic matching this rule. For more information regarding Antrea ClusterNetworkPolicy (ACNP),
-refer to [this document](../antrea-network-policy.md).
+At this moment, Antrea does not support Pod-level policy enforcement for
+cross-cluster traffic. Access towards Multi-cluster Services can be regulated
+with Antrea ClusterNetworkPolicy `toService` rules. In each member cluster,
+users can create an Antrea ClusterNetworkPolicy selecting Pods in that cluster,
+with the imported Mutli-cluster Service name and Namespace in an egress
+`toService` rule, and the Action to take for traffic matching this rule.
+For more information regarding Antrea ClusterNetworkPolicy (ACNP), refer
+to [this document](../antrea-network-policy.md).
 
-Multi-cluster admins can also specify certain ClusterNetworkPolicies to be replicated across the entire
-ClusterSet. The ACNP to be replicated should be created as a ResourceExport in the leader cluster, and
-the resource export/import pipeline will ensure member clusters receive this ACNP spec to be replicated.
-Each member cluster's Multi-cluster Controller will then create an ACNP in their respective clusters.
+Multi-cluster admins can also specify certain ClusterNetworkPolicies to be
+replicated across the entire ClusterSet. The ACNP to be replicated should
+be created as a ResourceExport in the leader cluster, and the resource
+export/import pipeline will ensure member clusters receive this ACNP spec
+to be replicated. Each member cluster's Multi-cluster Controller will then
+create an ACNP in their respective clusters.
