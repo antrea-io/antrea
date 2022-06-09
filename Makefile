@@ -153,13 +153,27 @@ docker-test-unit: $(DOCKER_CACHE)
 	@$(DOCKER_ENV) make test-unit
 	@chmod -R 0755 $<
 
-.PHONY: docker-test-integration
-docker-test-integration: .coverage
+.PHONY: build-test-image
+build-test-image:
 	@echo "===> Building Antrea Integration Test Docker image <==="
 ifneq ($(NO_PULL),)
 	docker build -t antrea/test -f build/images/test/Dockerfile $(DOCKER_BUILD_ARGS) .
 else
 	docker build --pull -t antrea/test -f build/images/test/Dockerfile $(DOCKER_BUILD_ARGS) .
+endif
+
+HAS_TEST_IMAGE = $(shell docker images antrea/test | grep antrea/test > /dev/null && echo "yes")
+.PHONY: docker-test-integration
+docker-test-integration: .coverage
+ifneq ($(CHECK_IMAGE),true)
+	@echo "===> You can set 'CHECK_IMAGE=true' to check and use existing image if it does exist <==="
+	make build-test-image
+else
+ifeq ($(HAS_TEST_IMAGE),yes)
+	@echo "===> Using existing 'antrea/test' image to run Antrea Integration Test <==="
+else
+	make build-test-image
+endif
 endif
 	@docker run --privileged --rm \
 		-e "GOCACHE=/tmp/gocache" \
