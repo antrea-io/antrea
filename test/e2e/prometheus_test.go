@@ -30,6 +30,7 @@ import (
 	"github.com/prometheus/common/expfmt"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 )
 
 // Agent metrics to validate
@@ -140,16 +141,31 @@ func getMetricsFromAPIServer(t *testing.T, url string, token string) string {
 		req.Header.Add("Authorization", "Bearer "+token)
 	}
 
-	// Query metrics via HTTPS from Pod
-	resp, err := client.Do(req)
-	if err != nil {
-		t.Fatalf("Error fetching metrics from %s: %v", url, err)
-	}
-	defer resp.Body.Close()
+	var body []byte
+	err = wait.PollImmediate(defaultInterval, defaultTimeout, func() (bool, error) {
+		// Query metrics via HTTPS from Pod
+		resp, err := client.Do(req)
+		if err != nil {
+			t.Fatalf("Error fetching metrics from %s: %v", url, err)
+		}
+		defer resp.Body.Close()
 
-	body, err := ioutil.ReadAll(resp.Body)
+		body = []byte{}
+		body, err = ioutil.ReadAll(resp.Body)
+		if err != nil {
+			t.Fatalf("Error retrieving metrics from %s. response: %v", url, err)
+		}
+
+		if resp.StatusCode >= 300 {
+			// Handle unexpected StatusCode returned when prometheus is not ready
+			// TODO: RCA the reason of resp.StatusCode=401
+			t.Logf("Response StatusCode: %d, Body: %s", resp.StatusCode, string(body))
+			return false, nil
+		}
+		return true, nil
+	})
 	if err != nil {
-		t.Fatalf("Error retrieving metrics from %s. response: %v", url, err)
+		t.Fatalf("Wrong StatusCode from Prometheus: %v", err)
 	}
 
 	return string(body)
@@ -268,22 +284,37 @@ func testMetricsFromPrometheusServer(t *testing.T, data *TestData, prometheusJob
 	queryURL := fmt.Sprintf("http://%s/api/v1/targets/metadata?%s", address, path)
 
 	client := &http.Client{}
-	resp, err := client.Get(queryURL)
-	if err != nil {
-		t.Fatalf("Error fetching metrics from %s: %v", queryURL, err)
-	}
-	defer resp.Body.Close()
-
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatalf("Failed to retrieve JSON data from Prometheus: %v", err)
-	}
-
-	// Parse JSON results
 	var output prometheusServerOutput
-	err = json.Unmarshal(body, &output)
+	err := wait.PollImmediate(defaultInterval, defaultTimeout, func() (bool, error) {
+		resp, err := client.Get(queryURL)
+		if err != nil {
+			// Retry when accessing prometheus failed for flexible-ipam
+			t.Logf("Error fetching metrics from %s: %v", queryURL, err)
+			return false, nil
+		}
+		defer resp.Body.Close()
+
+		body, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			t.Fatalf("Failed to retrieve JSON data from Prometheus: %v", err)
+		}
+
+		// Parse JSON results
+		output = prometheusServerOutput{}
+		err = json.Unmarshal(body, &output)
+		if err != nil {
+			t.Fatalf("Failed to parse JSON data from Prometheus: %v", err)
+		}
+		if len(output.Data) == 0 {
+			// Handle empty output data returned when prometheus is not ready
+			// TODO: RCA the reason of empty result
+			t.Logf("No output data from Prometheus: %v", err)
+			return false, nil
+		}
+		return true, nil
+	})
 	if err != nil {
-		t.Fatalf("Failed to parse JSON data from Prometheus: %v", err)
+		t.Fatalf("No output data from Prometheus: %v", err)
 	}
 
 	// Create a map of all the metrics which were found on the server
