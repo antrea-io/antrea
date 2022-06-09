@@ -158,6 +158,7 @@ func IPNetToNetIPNet(ipNet *v1beta2.IPNet) *net.IPNet {
 
 const (
 	ICMPProtocol   = 1
+	IGMPProtocol   = 2
 	TCPProtocol    = 6
 	UDPProtocol    = 17
 	ICMPv6Protocol = 58
@@ -170,6 +171,8 @@ func IPProtocolNumberToString(protocolNum uint8, defaultValue string) string {
 	switch protocolNum {
 	case ICMPProtocol:
 		return "ICMP"
+	case IGMPProtocol:
+		return "IGMP"
 	case TCPProtocol:
 		return "TCP"
 	case UDPProtocol:

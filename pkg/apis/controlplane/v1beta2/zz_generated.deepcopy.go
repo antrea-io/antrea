@@ -980,6 +980,11 @@ func (in *Service) DeepCopyInto(out *Service) {
 		*out = new(int32)
 		**out = **in
 	}
+	if in.IGMPType != nil {
+		in, out := &in.IGMPType, &out.IGMPType
+		*out = new(int32)
+		**out = **in
+	}
 	return
 }
 

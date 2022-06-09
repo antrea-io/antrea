@@ -59,6 +59,7 @@ var (
 	MatchICMPv6Type     = types.NewMatchKey(binding.ProtocolICMPv6, types.ICMPAddr, "icmpv6_type")
 	MatchICMPv6Code     = types.NewMatchKey(binding.ProtocolICMPv6, types.ICMPAddr, "icmpv6_code")
 	MatchServiceGroupID = types.NewMatchKey(binding.ProtocolIP, types.ServiceGroupIDAddr, "reg7[0..31]")
+	MatchIGMPProtocol   = types.NewMatchKey(binding.ProtocolIGMP, types.IGMPAddr, "igmp")
 	Unsupported         = types.NewMatchKey(binding.ProtocolIP, types.UnSupported, "unknown")
 
 	// metricFlowIdentifier is used to identify metric flows in metric table.
@@ -786,6 +787,20 @@ func getServiceMatchPairs(service v1beta2.Service, ipProtocols []binding.Protoco
 				conjMatchesMatchPairs = append(conjMatchesMatchPairs, matchPairs)
 			}
 		}
+	case v1beta2.ProtocolIGMP:
+		var matchPairs []matchPair
+		if service.IGMPType != nil && *service.IGMPType == crdv1alpha1.IGMPQuery {
+			// Since OVS only matches layer 3 IP address on the IGMP query packet, and doesn't
+			// identify the multicast group address set in the IGMP protocol, the flow entry
+			// processes all IGMP query packets by matching the destintaion IP address ( 224.0.0.1 )
+			if service.GroupAddress != "" {
+				matchPairs = append(matchPairs, matchPair{matchKey: MatchDstIP, matchValue: net.ParseIP(service.GroupAddress)})
+			} else {
+				matchPairs = append(matchPairs, matchPair{matchKey: MatchDstIP, matchValue: types.McastAllHosts})
+			}
+			matchPairs = append(matchPairs, matchPair{matchKey: MatchIGMPProtocol, matchValue: nil})
+			conjMatchesMatchPairs = append(conjMatchesMatchPairs, matchPairs)
+		}
 	default:
 		addL4MatchPairs(MatchTCPDstPort)
 	}
@@ -1017,15 +1032,15 @@ func (f *featureNetworkPolicy) calculateActionFlowChangesForRule(rule *types.Pol
 		var actionFlows []binding.Flow
 		var metricFlows []binding.Flow
 		if rule.IsAntreaNetworkPolicyRule() && *rule.Action == crdv1alpha1.RuleActionDrop {
-			metricFlows = append(metricFlows, f.denyRuleMetricFlow(ruleOfID, isIngress))
+			metricFlows = append(metricFlows, f.denyRuleMetricFlow(ruleOfID, isIngress, rule.TableID))
 			actionFlows = append(actionFlows, f.conjunctionActionDenyFlow(ruleOfID, ruleTable, rule.Priority, DispositionDrop, rule.EnableLogging))
 		} else if rule.IsAntreaNetworkPolicyRule() && *rule.Action == crdv1alpha1.RuleActionReject {
-			metricFlows = append(metricFlows, f.denyRuleMetricFlow(ruleOfID, isIngress))
+			metricFlows = append(metricFlows, f.denyRuleMetricFlow(ruleOfID, isIngress, rule.TableID))
 			actionFlows = append(actionFlows, f.conjunctionActionDenyFlow(ruleOfID, ruleTable, rule.Priority, DispositionRej, rule.EnableLogging))
 		} else if rule.IsAntreaNetworkPolicyRule() && *rule.Action == crdv1alpha1.RuleActionPass {
 			actionFlows = append(actionFlows, f.conjunctionActionPassFlow(ruleOfID, ruleTable, rule.Priority, rule.EnableLogging))
 		} else {
-			metricFlows = append(metricFlows, f.allowRulesMetricFlows(ruleOfID, isIngress)...)
+			metricFlows = append(metricFlows, f.allowRulesMetricFlows(ruleOfID, isIngress, rule.TableID)...)
 			actionFlows = append(actionFlows, f.conjunctionActionFlow(ruleOfID, ruleTable, dropTable.GetNext(), rule.Priority, rule.EnableLogging)...)
 		}
 		conj.actionFlows = actionFlows
@@ -1787,6 +1802,7 @@ type featureNetworkPolicy struct {
 	ovsMetersAreSupported bool
 	enableDenyTracking    bool
 	enableAntreaPolicy    bool
+	enableMulticast       bool
 	ctZoneSrcField        *binding.RegField
 	// deterministic represents whether to generate flows deterministically.
 	// For example, if a flow has multiple actions, setting it to true can get consistent flow.
@@ -1807,6 +1823,7 @@ func newFeatureNetworkPolicy(
 	ovsMetersAreSupported,
 	enableDenyTracking,
 	enableAntreaPolicy bool,
+	enableMulticast bool,
 	connectUplinkToBridge bool) *featureNetworkPolicy {
 	return &featureNetworkPolicy{
 		cookieAllocator:          cookieAllocator,
@@ -1814,6 +1831,7 @@ func newFeatureNetworkPolicy(
 		bridge:                   bridge,
 		globalConjMatchFlowCache: make(map[string]*conjMatchFlowContext),
 		policyCache:              cache.NewIndexer(policyConjKeyFunc, cache.Indexers{priorityIndex: priorityIndexFunc}),
+		enableMulticast:          enableMulticast,
 		ovsMetersAreSupported:    ovsMetersAreSupported,
 		enableDenyTracking:       enableDenyTracking,
 		enableAntreaPolicy:       enableAntreaPolicy,
@@ -1826,6 +1844,9 @@ func (f *featureNetworkPolicy) initFlows() []binding.Flow {
 	f.egressTables = map[uint8]struct{}{EgressRuleTable.GetID(): {}, EgressDefaultTable.GetID(): {}}
 	if f.enableAntreaPolicy {
 		f.egressTables[AntreaPolicyEgressRuleTable.GetID()] = struct{}{}
+		if f.enableMulticast {
+			f.egressTables[MulticastEgressRuleTable.GetID()] = struct{}{}
+		}
 	}
 	var flows []binding.Flow
 	flows = append(flows, f.establishedConnectionFlows()...)

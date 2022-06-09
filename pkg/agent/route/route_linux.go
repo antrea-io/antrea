@@ -83,8 +83,6 @@ var (
 	// IPTablesSyncInterval is exported so that sync interval can be configured for running integration test with
 	// smaller values. It is meant to be used internally by Run.
 	IPTablesSyncInterval = 60 * time.Second
-	// Multicast CIDR is used to skip masquerade Pod to external packets for multicast traffic.
-	_, mcastCIDR, _ = net.ParseCIDR("224.0.0.0/4")
 )
 
 // Client takes care of routing container packets in host network, coordinating ip route, ip rule, iptables and ipset.
@@ -592,7 +590,7 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet, podIPSet, localAntreaFl
 			"-A", antreaPostRoutingChain,
 			"-m", "comment", "--comment", `"Antrea: skip masquerade for multicast traffic"`,
 			"-s", podCIDR.String(),
-			"-d", mcastCIDR.String(),
+			"-d", types.McastCIDR.String(),
 			"-j", iptables.ReturnTarget,
 		}...)
 	}

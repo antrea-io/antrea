@@ -61,6 +61,7 @@ var (
 
 	protocolTCP  = controlplane.ProtocolTCP
 	protocolICMP = controlplane.ProtocolICMP
+	protocolIGMP = controlplane.ProtocolIGMP
 
 	int80   = intstr.FromInt(80)
 	int81   = intstr.FromInt(81)

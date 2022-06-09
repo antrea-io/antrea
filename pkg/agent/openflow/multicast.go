@@ -16,24 +16,23 @@ package openflow
 
 import (
 	"fmt"
-	"net"
 	"sync"
 
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent/openflow/cookie"
+	"antrea.io/antrea/pkg/agent/types"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 )
-
-var _, mcastCIDR, _ = net.ParseCIDR("224.0.0.0/4")
 
 type featureMulticast struct {
 	cookieAllocator cookie.Allocator
 	ipProtocols     []binding.Protocol
 	bridge          binding.Bridge
 
-	cachedFlows *flowCategoryCache
-	groupCache  sync.Map
+	cachedFlows        *flowCategoryCache
+	groupCache         sync.Map
+	enableAntreaPolicy bool
 
 	category cookie.Category
 }
@@ -42,14 +41,15 @@ func (f *featureMulticast) getFeatureName() string {
 	return "Multicast"
 }
 
-func newFeatureMulticast(cookieAllocator cookie.Allocator, ipProtocols []binding.Protocol, bridge binding.Bridge) *featureMulticast {
+func newFeatureMulticast(cookieAllocator cookie.Allocator, ipProtocols []binding.Protocol, bridge binding.Bridge, anpEnabled bool) *featureMulticast {
 	return &featureMulticast{
-		cookieAllocator: cookieAllocator,
-		ipProtocols:     ipProtocols,
-		cachedFlows:     newFlowCategoryCache(),
-		bridge:          bridge,
-		category:        cookie.Multicast,
-		groupCache:      sync.Map{},
+		cookieAllocator:    cookieAllocator,
+		ipProtocols:        ipProtocols,
+		cachedFlows:        newFlowCategoryCache(),
+		bridge:             bridge,
+		category:           cookie.Multicast,
+		groupCache:         sync.Map{},
+		enableAntreaPolicy: anpEnabled,
 	}
 }
 
@@ -58,7 +58,7 @@ func multicastPipelineClassifyFlow(cookieID uint64, pipeline binding.Pipeline) b
 	return PipelineIPClassifierTable.ofTable.BuildFlow(priorityHigh).
 		Cookie(cookieID).
 		MatchProtocol(binding.ProtocolIP).
-		MatchDstIPNet(*mcastCIDR).
+		MatchDstIPNet(*types.McastCIDR).
 		Action().ResubmitToTables(targetTable.GetID()).
 		Done()
 }
@@ -75,13 +75,13 @@ func (f *featureMulticast) replayFlows() []binding.Flow {
 	return getCachedFlows(f.cachedFlows)
 }
 
-func (f *featureMulticast) multicastReceiversGroup(groupID binding.GroupIDType, ports ...uint32) error {
+func (f *featureMulticast) multicastReceiversGroup(groupID binding.GroupIDType, tableID uint8, ports ...uint32) error {
 	group := f.bridge.CreateGroupTypeAll(groupID).ResetBuckets()
 	for i := range ports {
 		group = group.Bucket().
 			LoadToRegField(OFPortFoundRegMark.GetField(), OFPortFoundRegMark.GetValue()).
 			LoadToRegField(TargetOFPortField, ports[i]).
-			ResubmitToTable(MulticastRoutingTable.GetNext()).
+			ResubmitToTable(tableID).
 			Done()
 	}
 	if err := group.Add(); err != nil {

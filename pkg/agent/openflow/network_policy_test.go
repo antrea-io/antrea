@@ -460,12 +460,12 @@ func TestBatchInstallPolicyRuleFlows(t *testing.T) {
 						Action().CT(true, IngressMetricTable.GetID(), CtZone, nil).LoadToLabelField(10, IngressRuleCTLabel).CTDone().Done(),
 					AntreaPolicyIngressRuleTable.ofTable.BuildFlow(priority100).Cookie(cookiePolicy).
 						MatchConjID(11).
-						Action().LoadToRegField(CNPDenyConjIDField, 11).
+						Action().LoadToRegField(CNPConjIDField, 11).
 						Action().LoadRegMark(CnpDenyRegMark).
 						Action().GotoTable(IngressMetricTable.GetID()).Done(),
 					AntreaPolicyIngressRuleTable.ofTable.BuildFlow(priority200).Cookie(cookiePolicy).
 						MatchConjID(12).
-						Action().LoadToRegField(CNPDenyConjIDField, 12).
+						Action().LoadToRegField(CNPConjIDField, 12).
 						Action().LoadRegMark(CnpDenyRegMark).
 						Action().GotoTable(IngressMetricTable.GetID()).Done(),
 					AntreaPolicyIngressRuleTable.ofTable.BuildFlow(priority100).Cookie(cookiePolicy).
@@ -510,10 +510,10 @@ func TestBatchInstallPolicyRuleFlows(t *testing.T) {
 						MatchProtocol(binding.ProtocolIP).MatchCTStateNew(false).MatchCTLabelField(0, 10, IngressRuleCTLabel).
 						Action().NextTable().Done(),
 					IngressMetricTable.ofTable.BuildFlow(priorityNormal).Cookie(cookiePolicy).
-						MatchRegMark(CnpDenyRegMark).MatchRegFieldWithValue(CNPDenyConjIDField, 11).
+						MatchRegMark(CnpDenyRegMark).MatchRegFieldWithValue(CNPConjIDField, 11).
 						Action().Drop().Done(),
 					IngressMetricTable.ofTable.BuildFlow(priorityNormal).Cookie(cookiePolicy).
-						MatchRegMark(CnpDenyRegMark).MatchRegFieldWithValue(CNPDenyConjIDField, 12).
+						MatchRegMark(CnpDenyRegMark).MatchRegFieldWithValue(CNPConjIDField, 12).
 						Action().Drop().Done(),
 				}
 			},

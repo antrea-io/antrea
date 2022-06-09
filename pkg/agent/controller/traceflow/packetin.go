@@ -208,7 +208,7 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1alpha1.Tracefl
 	// Get drop table.
 	if tableID == openflow.EgressMetricTable.GetID() || tableID == openflow.IngressMetricTable.GetID() {
 		ob := getNetworkPolicyObservation(tableID, tableID == openflow.IngressMetricTable.GetID())
-		if match := getMatchRegField(matchers, openflow.CNPDenyConjIDField); match != nil {
+		if match := getMatchRegField(matchers, openflow.CNPConjIDField); match != nil {
 			notAllowConjInfo, err := getRegValue(match, nil)
 			if err != nil {
 				return nil, nil, nil, err
