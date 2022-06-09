@@ -163,7 +163,7 @@ func (r *ResourceImportReconciler) handleResImpUpdateForService(ctx context.Cont
 	}
 	if !svcNotFound {
 		// Here we will skip creating derived MC Service when a Service with the same name
-		// already exists but it not previously created by Importer.
+		// already exists but it's not previously created by Importer.
 		if _, ok := svc.Annotations[common.AntreaMCServiceAnnotation]; !ok {
 			err := errors.New("the Service conflicts with existing one")
 			klog.ErrorS(err, "Unable to import Service", "service", klog.KObj(svc))
@@ -180,7 +180,7 @@ func (r *ResourceImportReconciler) handleResImpUpdateForService(ctx context.Cont
 		if err = r.localClusterClient.Get(ctx, svcName, svc); err != nil {
 			// Ignore the error here, and requeue the event again when both Service
 			// and ServiceImport are created later
-			klog.ErrorS(err, "Failed to get latest imported Service", "service", klog.KObj(svc))
+			klog.ErrorS(err, "Failed to get latest imported Service", "service", klog.KObj(svcObj))
 		}
 	}
 
@@ -285,19 +285,8 @@ func (r *ResourceImportReconciler) handleResImpUpdateForEndpoints(ctx context.Co
 			return ctrl.Result{}, err
 		}
 	}
-	// ResourceImport includes all Endpoints from exported Service.
-	// Need to remove any Endpoints from the local cluster.
-	var newSubsets []corev1.EndpointSubset
-	localEp := &corev1.Endpoints{}
-	err = r.localClusterClient.Get(ctx, types.NamespacedName{Namespace: resImp.Spec.Namespace, Name: resImp.Spec.Name}, localEp)
-	if err == nil {
-		newSubsets = removeLocalSubsets(localEp.Subsets, resImp.Spec.Endpoints.Subsets)
-	} else if apierrors.IsNotFound(err) {
-		newSubsets = resImp.Spec.Endpoints.Subsets
-	} else {
-		klog.ErrorS(err, "Failed to get local Endpoint", "endpoint", epNamespaced.String())
-		return ctrl.Result{}, err
-	}
+
+	newSubsets := resImp.Spec.Endpoints.Subsets
 	mcsEpObj := &corev1.Endpoints{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        epName,
@@ -387,28 +376,6 @@ func getMCServiceImport(resImp *multiclusterv1alpha1.ResourceImport, clusterID s
 		Spec: resImp.Spec.ServiceImport.Spec,
 	}
 	return svcImp
-}
-
-func removeLocalSubsets(local []corev1.EndpointSubset, allSubsets []corev1.EndpointSubset) []corev1.EndpointSubset {
-	filteredLocal := common.FilterEndpointSubsets(local)
-	size := len(allSubsets)
-	if size < 1 {
-		return allSubsets
-	}
-	newSubsets := make([]corev1.EndpointSubset, size)
-	copy(newSubsets, allSubsets)
-	lastIdx := size - 1
-	for n, r := range newSubsets {
-		for _, l := range filteredLocal {
-			if apiequality.Semantic.DeepEqual(r, l) {
-				newSubsets[n] = newSubsets[lastIdx]
-				newSubsets[lastIdx] = corev1.EndpointSubset{}
-				newSubsets = newSubsets[:lastIdx]
-				break
-			}
-		}
-	}
-	return newSubsets
 }
 
 func addAnnotation(svcImport *k8smcsv1alpha1.ServiceImport, localClusterID string) {

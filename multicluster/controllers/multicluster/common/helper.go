@@ -82,3 +82,29 @@ func FilterEndpointSubsets(subsets []corev1.EndpointSubset) []corev1.EndpointSub
 	}
 	return newSubsets
 }
+
+func GetServiceEndpointSubset(svc *corev1.Service) corev1.EndpointSubset {
+	var epSubset corev1.EndpointSubset
+	for _, ip := range svc.Spec.ClusterIPs {
+		epSubset.Addresses = append(epSubset.Addresses, corev1.EndpointAddress{IP: ip})
+	}
+
+	epSubset.Ports = GetServiceEndpointPorts(svc.Spec.Ports)
+	return epSubset
+}
+
+// GetServiceEndpointPorts converts Service's port to EndpointPort
+func GetServiceEndpointPorts(ports []corev1.ServicePort) []corev1.EndpointPort {
+	if len(ports) == 0 {
+		return nil
+	}
+	var epPorts []corev1.EndpointPort
+	for _, p := range ports {
+		epPorts = append(epPorts, corev1.EndpointPort{
+			Name:     p.Name,
+			Port:     p.Port,
+			Protocol: p.Protocol,
+		})
+	}
+	return epPorts
+}

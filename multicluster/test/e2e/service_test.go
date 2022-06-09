@@ -186,12 +186,12 @@ func (data *MCTestData) deleteServiceExport(clusterName string) error {
 
 // getNodeNamesFromCluster will pick up a Node randomly as the Gateway
 // and also a regular Node from the specified cluster.
-func getNodeNamesFromCluster(nodeName string) (string, string, error) {
-	rc, output, stderr, err := provider.RunCommandOnNode(nodeName, "kubectl get node -o custom-columns=:metadata.name --no-headers")
+func getNodeNamesFromCluster(clusterName string) (string, string, error) {
+	rc, output, stderr, err := provider.RunCommandOnNode(clusterName, "kubectl get node -o jsonpath='{range .items[*]}{.metadata.name}{\" \"}{end}'")
 	if err != nil || rc != 0 || stderr != "" {
 		return "", "", fmt.Errorf("error when getting Node list: %v, stderr: %s", err, stderr)
 	}
-	nodes := strings.Split(output, "\n")
+	nodes := strings.Split(strings.TrimRight(output, " "), " ")
 	gwIdx := rand.Intn(len(nodes)) // #nosec G404: for test only
 	var regularNode string
 	for i, node := range nodes {

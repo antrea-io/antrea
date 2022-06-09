@@ -12,7 +12,7 @@ like Service, Endpoints controllers etc.
 
 The tests must be run on an real Kubernetes cluster. At the moment, you can
 simply run `make test-integration` in `antrea/multicluster` folder. It will
-create a Kind cluster named `antrea-integration-kind` and execute the integration
+create a Kind cluster named `antrea-integration` and execute the integration
 codes.
 
 if you'd like to run the integration test in an existing Kubernetes cluster, you
