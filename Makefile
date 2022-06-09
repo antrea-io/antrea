@@ -87,7 +87,7 @@ antctl-instr-binary:
 .PHONY: windows-bin
 windows-bin:
 	@mkdir -p $(BINDIR)
-	GOOS=windows CGO_ENABLED=0 $(GO) build -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' antrea.io/antrea/cmd/antrea-cni antrea.io/antrea/cmd/antrea-agent
+	GOOS=windows CGO_ENABLED=0 $(GO) build -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' antrea.io/antrea/cmd/antrea-cni antrea.io/antrea/cmd/antrea-agent antrea.io/antrea/cmd/antctl
 
 .PHONY: flow-aggregator
 flow-aggregator:
