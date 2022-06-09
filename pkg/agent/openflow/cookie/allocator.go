@@ -36,6 +36,7 @@ const (
 	Service
 	Egress
 	Multicast
+	Multicluster
 	Traceflow
 )
 
@@ -53,6 +54,8 @@ func (c Category) String() string {
 		return "Egress"
 	case Multicast:
 		return "Multicast"
+	case Multicluster:
+		return "Multicluster"
 	case Traceflow:
 		return "Traceflow"
 	default:

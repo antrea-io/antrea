@@ -342,12 +342,22 @@ func TestResourceImportReconciler_handleUpdateEvent(t *testing.T) {
 	}
 	newSubsets := []corev1.EndpointSubset{subSetA, subSetB}
 
-	existEp := &corev1.Endpoints{
+	existSvc := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
 			Name:      "nginx",
 		},
-		Subsets: []corev1.EndpointSubset{subSetB},
+		Spec: corev1.ServiceSpec{
+			Ports: []corev1.ServicePort{
+				{
+					Name:     "http",
+					Protocol: corev1.ProtocolTCP,
+					Port:     8080,
+				},
+			},
+			ClusterIP:  "10.10.11.13",
+			ClusterIPs: []string{"10.10.11.13"},
+		},
 	}
 
 	svcWithoutAutoAnnotation := &corev1.Service{
@@ -392,7 +402,7 @@ func TestResourceImportReconciler_handleUpdateEvent(t *testing.T) {
 	epResImportWithConflicts.Spec.Namespace = "kube-system"
 
 	fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(existMCSvc, existMCEp, existSvcImp,
-		existEp, existMCSvcConflicts, existMCEpConflicts, svcWithoutAutoAnnotation, epWithoutAutoAnnotation).Build()
+		existSvc, existMCSvcConflicts, existMCEpConflicts, svcWithoutAutoAnnotation, epWithoutAutoAnnotation).Build()
 	fakeRemoteClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(updatedEpResImport, updatedSvcResImport,
 		svcResImportWithConflicts, epResImportWithConflicts).Build()
 	remoteCluster := NewFakeRemoteCommonArea(scheme, remoteMgr, fakeRemoteClient, "leader-cluster", "default")
@@ -407,7 +417,7 @@ func TestResourceImportReconciler_handleUpdateEvent(t *testing.T) {
 		expectedErr      bool
 	}{
 		{
-			name:             "update service",
+			name:             "update Service",
 			objType:          "Service",
 			req:              svcImportReq,
 			resNamespaceName: types.NamespacedName{Namespace: "default", Name: "antrea-mc-nginx"},
@@ -420,14 +430,14 @@ func TestResourceImportReconciler_handleUpdateEvent(t *testing.T) {
 			},
 		},
 		{
-			name:             "update endpoints",
+			name:             "update Endpoints",
 			objType:          "Endpoints",
 			req:              epImportReq,
 			resNamespaceName: types.NamespacedName{Namespace: "default", Name: "antrea-mc-nginx"},
-			expectedSubset:   []corev1.EndpointSubset{subSetA},
+			expectedSubset:   newSubsets,
 		},
 		{
-			name:    "skip update a service without mcs annotation",
+			name:    "skip update a Service without mcs annotation",
 			objType: "Service",
 			req: ctrl.Request{NamespacedName: types.NamespacedName{
 				Namespace: leaderNamespace,
@@ -437,7 +447,7 @@ func TestResourceImportReconciler_handleUpdateEvent(t *testing.T) {
 			expectedErr:      true,
 		},
 		{
-			name:    "skip update an endpoint without mcs annotation",
+			name:    "skip update an Endpoint without mcs annotation",
 			objType: "Endpoints",
 			req: ctrl.Request{NamespacedName: types.NamespacedName{
 				Namespace: leaderNamespace,

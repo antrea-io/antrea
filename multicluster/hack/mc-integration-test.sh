@@ -17,7 +17,7 @@
 set -e
 
 clean_up() {
-  kind delete cluster --name antrea-integration-kind
+  kind delete cluster --name antrea-integration
 }
 
 trap clean_up EXIT
@@ -29,7 +29,7 @@ if [[ "$WORKDIR" != "" ]];then
 fi
 
 echo "" > /tmp/mc-integration-kubeconfig
-kind create cluster --name=antrea-integration-kind --kubeconfig=/tmp/mc-integration-kubeconfig
+kind create cluster --name=antrea-integration --kubeconfig=/tmp/mc-integration-kubeconfig
 sleep 5
 export KUBECONFIG=/tmp/mc-integration-kubeconfig
 kubectl create namespace leader-ns
@@ -38,7 +38,7 @@ kubectl apply -f test/integration/cluster-admin.yml
 
 if [[ $NO_LOCAL == "true" ]];then
   # Run go test in a Docker container
-  container_ip=$(docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' antrea-integration-kind-control-plane)
+  container_ip=$(docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' antrea-integration-control-plane)
   sed -i "s|server: https://.*|server: https://${container_ip}:6443|" /tmp/mc-integration-kubeconfig
   docker run --network kind --privileged --rm \
 	  -w /usr/src/antrea.io/antrea \

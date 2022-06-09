@@ -181,6 +181,11 @@ func (o *Options) validate(args []string) error {
 			}
 		}
 	}
+	if (features.DefaultFeatureGate.Enabled(features.Multicluster) || o.config.Multicluster.Enable) &&
+		encapMode != config.TrafficEncapModeEncap {
+		// Only Encap mode is supported for Multi-cluster feature.
+		return fmt.Errorf("Multicluster is only applicable to the %s mode", config.TrafficEncapModeEncap)
+	}
 	if features.DefaultFeatureGate.Enabled(features.NodePortLocal) {
 		startPort, endPort, err := parsePortRange(o.config.NodePortLocal.PortRange)
 		if err != nil {

@@ -65,6 +65,7 @@ func testMain(m *testing.M) int {
 	flag.StringVar(&testOptions.leaderClusterKubeConfigPath, "leader-cluster-kubeconfig-path", path.Join(homedir, ".kube", "leader"), "Kubeconfig Path of the leader cluster")
 	flag.StringVar(&testOptions.eastClusterKubeConfigPath, "east-cluster-kubeconfig-path", path.Join(homedir, ".kube", "east"), "Kubeconfig Path of the east cluster")
 	flag.StringVar(&testOptions.westClusterKubeConfigPath, "west-cluster-kubeconfig-path", path.Join(homedir, ".kube", "west"), "Kubeconfig Path of the west cluster")
+	flag.BoolVar(&testOptions.enableGateway, "mc-gateway", false, "Run tests with Multicluster Gateway")
 	flag.Parse()
 
 	cleanupLogging := testOptions.setupLogging()
@@ -96,13 +97,23 @@ func TestConnectivity(t *testing.T) {
 	}
 	defer teardownTest(t, data)
 
+	if testOptions.enableGateway {
+		initializeGateway(t, data)
+		defer teardownGateway(t, data)
+
+		// Sleep 5s to wait resource export/import process to finish resource
+		// exchange, and data path realization.
+		time.Sleep(5 * time.Second)
+	}
+
 	t.Run("testServiceExport", func(t *testing.T) {
 		testServiceExport(t, data)
 	})
+
 	t.Run("testAntreaPolicy", func(t *testing.T) {
+		defer tearDownForPolicyTest()
 		initializeForPolicyTest(t, data)
 		testMCAntreaPolicy(t, data)
-		tearDownForPolicyTest()
 	})
 	// Wait 5 seconds to let both member and leader controllers clean up all resources,
 	// otherwise, Namespace deletion may stuck into termininating status.
