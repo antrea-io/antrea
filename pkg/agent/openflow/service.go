@@ -33,14 +33,15 @@ type featureService struct {
 	cachedFlows *flowCategoryCache
 	groupCache  sync.Map
 
-	gatewayIPs        map[binding.Protocol]net.IP
-	virtualIPs        map[binding.Protocol]net.IP
-	dnatCtZones       map[binding.Protocol]int
-	snatCtZones       map[binding.Protocol]int
-	gatewayMAC        net.HardwareAddr
-	nodePortAddresses map[binding.Protocol][]net.IP
-	serviceCIDRs      map[binding.Protocol]net.IPNet
-	networkConfig     *config.NetworkConfig
+	gatewayIPs             map[binding.Protocol]net.IP
+	virtualIPs             map[binding.Protocol]net.IP
+	virtualNodePortDNATIPs map[binding.Protocol]net.IP
+	dnatCtZones            map[binding.Protocol]int
+	snatCtZones            map[binding.Protocol]int
+	gatewayMAC             net.HardwareAddr
+	nodePortAddresses      map[binding.Protocol][]net.IP
+	serviceCIDRs           map[binding.Protocol]net.IPNet
+	networkConfig          *config.NetworkConfig
 
 	enableProxy           bool
 	proxyAll              bool
@@ -66,6 +67,7 @@ func newFeatureService(
 	connectUplinkToBridge bool) *featureService {
 	gatewayIPs := make(map[binding.Protocol]net.IP)
 	virtualIPs := make(map[binding.Protocol]net.IP)
+	virtualNodePortDNATIPs := make(map[binding.Protocol]net.IP)
 	dnatCtZones := make(map[binding.Protocol]int)
 	snatCtZones := make(map[binding.Protocol]int)
 	nodePortAddresses := make(map[binding.Protocol][]net.IP)
@@ -74,6 +76,7 @@ func newFeatureService(
 		if ipProtocol == binding.ProtocolIP {
 			gatewayIPs[ipProtocol] = nodeConfig.GatewayConfig.IPv4
 			virtualIPs[ipProtocol] = config.VirtualServiceIPv4
+			virtualNodePortDNATIPs[ipProtocol] = config.VirtualNodePortDNATIPv4
 			dnatCtZones[ipProtocol] = CtZone
 			snatCtZones[ipProtocol] = SNATCtZone
 			nodePortAddresses[ipProtocol] = serviceConfig.NodePortAddressesIPv4
@@ -83,6 +86,7 @@ func newFeatureService(
 		} else if ipProtocol == binding.ProtocolIPv6 {
 			gatewayIPs[ipProtocol] = nodeConfig.GatewayConfig.IPv6
 			virtualIPs[ipProtocol] = config.VirtualServiceIPv6
+			virtualNodePortDNATIPs[ipProtocol] = config.VirtualNodePortDNATIPv6
 			dnatCtZones[ipProtocol] = CtZoneV6
 			snatCtZones[ipProtocol] = SNATCtZoneV6
 			nodePortAddresses[ipProtocol] = serviceConfig.NodePortAddressesIPv6
@@ -93,24 +97,25 @@ func newFeatureService(
 	}
 
 	return &featureService{
-		cookieAllocator:       cookieAllocator,
-		ipProtocols:           ipProtocols,
-		bridge:                bridge,
-		cachedFlows:           newFlowCategoryCache(),
-		groupCache:            sync.Map{},
-		gatewayIPs:            gatewayIPs,
-		virtualIPs:            virtualIPs,
-		dnatCtZones:           dnatCtZones,
-		snatCtZones:           snatCtZones,
-		nodePortAddresses:     nodePortAddresses,
-		serviceCIDRs:          serviceCIDRs,
-		gatewayMAC:            nodeConfig.GatewayConfig.MAC,
-		networkConfig:         networkConfig,
-		enableProxy:           enableProxy,
-		proxyAll:              proxyAll,
-		connectUplinkToBridge: connectUplinkToBridge,
-		ctZoneSrcField:        getZoneSrcField(connectUplinkToBridge),
-		category:              cookie.Service,
+		cookieAllocator:        cookieAllocator,
+		ipProtocols:            ipProtocols,
+		bridge:                 bridge,
+		cachedFlows:            newFlowCategoryCache(),
+		groupCache:             sync.Map{},
+		gatewayIPs:             gatewayIPs,
+		virtualIPs:             virtualIPs,
+		virtualNodePortDNATIPs: virtualNodePortDNATIPs,
+		dnatCtZones:            dnatCtZones,
+		snatCtZones:            snatCtZones,
+		nodePortAddresses:      nodePortAddresses,
+		serviceCIDRs:           serviceCIDRs,
+		gatewayMAC:             nodeConfig.GatewayConfig.MAC,
+		networkConfig:          networkConfig,
+		enableProxy:            enableProxy,
+		proxyAll:               proxyAll,
+		connectUplinkToBridge:  connectUplinkToBridge,
+		ctZoneSrcField:         getZoneSrcField(connectUplinkToBridge),
+		category:               cookie.Service,
 	}
 }
 

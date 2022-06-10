@@ -42,9 +42,10 @@ const (
 )
 
 var (
-	antreaNat             = util.AntreaNatName
-	virtualServiceIPv4Net = util.NewIPNet(config.VirtualServiceIPv4)
-	PodCIDRIPv4           *net.IPNet
+	antreaNat                  = util.AntreaNatName
+	virtualServiceIPv4Net      = util.NewIPNet(config.VirtualServiceIPv4)
+	virtualNodePortDNATIPv4Net = util.NewIPNet(config.VirtualNodePortDNATIPv4)
+	PodCIDRIPv4                *net.IPNet
 )
 
 type Client struct {
@@ -245,8 +246,11 @@ func (c *Client) addVirtualServiceIPRoute(isIPv6 bool) error {
 	}
 	klog.InfoS("Added virtual Service IP neighbor", "neighbor", vNeighbor)
 
+	if err := c.addServiceRoute(config.VirtualNodePortDNATIPv4); err != nil {
+		return err
+	}
 	// For NodePort Service, a new NetNat for NetNatStaticMapping is needed.
-	err := util.NewNetNat(antreaNatNodePort, virtualServiceIPv4Net)
+	err := util.NewNetNat(antreaNatNodePort, virtualNodePortDNATIPv4Net)
 	if err != nil {
 		return err
 	}

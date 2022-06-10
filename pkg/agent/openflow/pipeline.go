@@ -2280,13 +2280,13 @@ func (f *featureService) nodePortMarkFlows() []binding.Flow {
 					Action().LoadRegMark(ToNodePortAddressRegMark).
 					Done())
 		}
-		// This generates the flow for the virtual IP. The flow is used to mark the first packet of NodePort connection from
-		// the Antrea gateway (the connection is performed DNAT with the virtual IP in host netns).
+		// This generates the flow for the virtual NodePort DNAT IP. The flow is used to mark the first packet of NodePort
+		// connection sourced from the Antrea gateway (the connection is performed DNAT with the virtual IP in host netns).
 		flows = append(flows,
 			NodePortMarkTable.ofTable.BuildFlow(priorityNormal).
 				Cookie(cookieID).
 				MatchProtocol(ipProtocol).
-				MatchDstIP(f.virtualIPs[ipProtocol]).
+				MatchDstIP(f.virtualNodePortDNATIPs[ipProtocol]).
 				Action().LoadRegMark(ToNodePortAddressRegMark).
 				Done())
 	}
