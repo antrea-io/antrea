@@ -32,8 +32,8 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 
-	"antrea.io/antrea/pkg/agent/nodeportlocal/k8s"
 	npltesting "antrea.io/antrea/pkg/agent/nodeportlocal/testing"
+	"antrea.io/antrea/pkg/agent/nodeportlocal/types"
 	agentconfig "antrea.io/antrea/pkg/config/agent"
 	"antrea.io/antrea/pkg/features"
 )
@@ -127,7 +127,7 @@ func getNPLAnnotation(t *testing.T, data *TestData, r *require.Assertions, testP
 
 			ann := pod.GetAnnotations()
 			t.Logf("Got annotations %v for Pod with IP %v", ann, testPodIP.ipv4.String())
-			nplAnn, found = ann[k8s.NPLAnnotationKey]
+			nplAnn, found = ann[types.NPLAnnotationKey]
 			return found, nil
 		})
 		if err == nil {
@@ -140,14 +140,14 @@ func getNPLAnnotation(t *testing.T, data *TestData, r *require.Assertions, testP
 	return nplAnn, testPodIP.ipv4.String()
 }
 
-func getNPLAnnotations(t *testing.T, data *TestData, r *require.Assertions, testPodName string) ([]k8s.NPLAnnotation, string) {
+func getNPLAnnotations(t *testing.T, data *TestData, r *require.Assertions, testPodName string) ([]types.NPLAnnotation, string) {
 	nplAnnotationString, testPodIP := getNPLAnnotation(t, data, r, testPodName)
-	var nplAnnotations []k8s.NPLAnnotation
+	var nplAnnotations []types.NPLAnnotation
 	json.Unmarshal([]byte(nplAnnotationString), &nplAnnotations)
 	return nplAnnotations, testPodIP
 }
 
-func checkNPLRules(t *testing.T, data *TestData, r *require.Assertions, nplAnnotations []k8s.NPLAnnotation, antreaPod, podIP string, nodeName string, present bool) {
+func checkNPLRules(t *testing.T, data *TestData, r *require.Assertions, nplAnnotations []types.NPLAnnotation, antreaPod, podIP string, nodeName string, present bool) {
 	if clusterInfo.nodesOS[nodeName] == "windows" {
 		checkNPLRulesForWindowsPod(t, data, r, nplAnnotations, antreaPod, podIP, nodeName, present)
 	} else {
@@ -155,7 +155,7 @@ func checkNPLRules(t *testing.T, data *TestData, r *require.Assertions, nplAnnot
 	}
 }
 
-func checkNPLRulesForPod(t *testing.T, data *TestData, r *require.Assertions, nplAnnotations []k8s.NPLAnnotation, antreaPod, podIP string, present bool) {
+func checkNPLRulesForPod(t *testing.T, data *TestData, r *require.Assertions, nplAnnotations []types.NPLAnnotation, antreaPod, podIP string, present bool) {
 	var rules []nplRuleData
 	for _, ann := range nplAnnotations {
 		for _, protocol := range ann.Protocols {
@@ -173,7 +173,7 @@ func checkNPLRulesForPod(t *testing.T, data *TestData, r *require.Assertions, np
 	checkForNPLListeningSockets(t, data, r, antreaPod, rules, present)
 }
 
-func checkNPLRulesForWindowsPod(t *testing.T, data *TestData, r *require.Assertions, nplAnnotations []k8s.NPLAnnotation, antreaPod, podIP string, nodeName string, present bool) {
+func checkNPLRulesForWindowsPod(t *testing.T, data *TestData, r *require.Assertions, nplAnnotations []types.NPLAnnotation, antreaPod, podIP string, nodeName string, present bool) {
 	var rules []nplRuleData
 	for _, ann := range nplAnnotations {
 		for _, protocol := range ann.Protocols {
@@ -338,7 +338,7 @@ func deleteNPLRuleFromNetNat(t *testing.T, data *TestData, r *require.Assertions
 	r.NoError(err, "Error when deleting Netnat rule")
 }
 
-func checkTrafficForNPL(data *TestData, r *require.Assertions, nplAnnotations []k8s.NPLAnnotation, clientName string) {
+func checkTrafficForNPL(data *TestData, r *require.Assertions, nplAnnotations []types.NPLAnnotation, clientName string) {
 	for i := range nplAnnotations {
 		for j := range nplAnnotations[i].Protocols {
 			err := data.runNetcatCommandFromTestPodWithProtocol(clientName, data.testNamespace, "agnhost", nplAnnotations[i].NodeIP, int32(nplAnnotations[i].NodePort), nplAnnotations[i].Protocols[j])
@@ -364,7 +364,7 @@ func NPLTestMultiplePods(t *testing.T, data *TestData) {
 	r := require.New(t)
 
 	annotation := make(map[string]string)
-	annotation[k8s.NPLEnabledAnnotationKey] = "true"
+	annotation[types.NPLEnabledAnnotationKey] = "true"
 	ipFamily := corev1.IPv4Protocol
 	testData.createNginxClusterIPServiceWithAnnotations(false, &ipFamily, annotation)
 	node := nodeName(0)
@@ -416,7 +416,7 @@ func NPLTestPodAddMultiPort(t *testing.T, data *TestData) {
 	testPodName := randName("test-pod-")
 
 	annotation := make(map[string]string)
-	annotation[k8s.NPLEnabledAnnotationKey] = "true"
+	annotation[types.NPLEnabledAnnotationKey] = "true"
 	selector := make(map[string]string)
 	selector["app"] = "agnhost"
 	ipFamily := corev1.IPv4Protocol
@@ -484,7 +484,7 @@ func NPLTestPodAddMultiProtocol(t *testing.T, data *TestData) {
 	testPodName := randName("test-pod-")
 
 	annotation := make(map[string]string)
-	annotation[k8s.NPLEnabledAnnotationKey] = "true"
+	annotation[types.NPLEnabledAnnotationKey] = "true"
 	selector := make(map[string]string)
 	selector["app"] = "agnhost"
 	ipFamily := corev1.IPv4Protocol
@@ -539,7 +539,7 @@ func NPLTestLocalAccess(t *testing.T, data *TestData) {
 	r := require.New(t)
 
 	annotation := make(map[string]string)
-	annotation[k8s.NPLEnabledAnnotationKey] = "true"
+	annotation[types.NPLEnabledAnnotationKey] = "true"
 	ipFamily := corev1.IPv4Protocol
 	testData.createNginxClusterIPServiceWithAnnotations(false, &ipFamily, annotation)
 	expectedAnnotations := newExpectedNPLAnnotations(defaultStartPort, defaultEndPort).Add(nil, defaultTargetPort, "tcp")
@@ -583,7 +583,7 @@ func testNPLMultiplePodsAgentRestart(t *testing.T, data *TestData) {
 	r := require.New(t)
 
 	annotation := make(map[string]string)
-	annotation[k8s.NPLEnabledAnnotationKey] = "true"
+	annotation[types.NPLEnabledAnnotationKey] = "true"
 	ipFamily := corev1.IPv4Protocol
 	data.createNginxClusterIPServiceWithAnnotations(false, &ipFamily, annotation)
 
@@ -659,7 +659,7 @@ func testNPLChangePortRangeAgentRestart(t *testing.T, data *TestData) {
 	r := require.New(t)
 
 	annotation := make(map[string]string)
-	annotation[k8s.NPLEnabledAnnotationKey] = "true"
+	annotation[types.NPLEnabledAnnotationKey] = "true"
 	ipFamily := corev1.IPv4Protocol
 	data.createNginxClusterIPServiceWithAnnotations(false, &ipFamily, annotation)
 

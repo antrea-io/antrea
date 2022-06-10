@@ -22,14 +22,14 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	nplk8s "antrea.io/antrea/pkg/agent/nodeportlocal/k8s"
+	"antrea.io/antrea/pkg/agent/nodeportlocal/types"
 )
 
 type ExpectedNPLAnnotations struct {
 	nodeIP       *string
 	nplStartPort int
 	nplEndPort   int
-	annotations  []nplk8s.NPLAnnotation
+	annotations  []types.NPLAnnotation
 }
 
 func NewExpectedNPLAnnotations(nodeIP *string, nplStartPort, nplEndPort int) *ExpectedNPLAnnotations {
@@ -40,7 +40,7 @@ func NewExpectedNPLAnnotations(nodeIP *string, nplStartPort, nplEndPort int) *Ex
 	}
 }
 
-func (a *ExpectedNPLAnnotations) find(podPort int, protocol string) *nplk8s.NPLAnnotation {
+func (a *ExpectedNPLAnnotations) find(podPort int, protocol string) *types.NPLAnnotation {
 	for _, annotation := range a.annotations {
 		if annotation.PodPort == podPort && annotation.Protocol == protocol {
 			return &annotation
@@ -51,7 +51,7 @@ func (a *ExpectedNPLAnnotations) find(podPort int, protocol string) *nplk8s.NPLA
 
 func (a *ExpectedNPLAnnotations) Add(nodePort *int, podPort int, protocol string) *ExpectedNPLAnnotations {
 	protocols := []string{protocol}
-	annotation := nplk8s.NPLAnnotation{PodPort: podPort, Protocol: protocol, Protocols: protocols}
+	annotation := types.NPLAnnotation{PodPort: podPort, Protocol: protocol, Protocols: protocols}
 	if nodePort != nil {
 		annotation.NodePort = *nodePort
 	}
@@ -62,7 +62,7 @@ func (a *ExpectedNPLAnnotations) Add(nodePort *int, podPort int, protocol string
 	return a
 }
 
-func (a *ExpectedNPLAnnotations) Check(t *testing.T, nplValue []nplk8s.NPLAnnotation) {
+func (a *ExpectedNPLAnnotations) Check(t *testing.T, nplValue []types.NPLAnnotation) {
 	assert.Equal(t, len(a.annotations), len(nplValue), "Invalid number of NPL annotations")
 	for _, nplAnnotation := range nplValue {
 		expectedAnnotation := a.find(nplAnnotation.PodPort, nplAnnotation.Protocol)
