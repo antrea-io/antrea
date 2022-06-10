@@ -373,7 +373,7 @@ func (br *OVSBridge) CreateInternalPort(name string, ofPortRequest int32, extern
 // the bridge.
 // If ofPortRequest is not zero, it will be passed to the OVS port creation.
 func (br *OVSBridge) CreateTunnelPort(name string, tunnelType TunnelType, ofPortRequest int32) (string, Error) {
-	return br.createTunnelPort(name, tunnelType, ofPortRequest, false, "", "", "", "", nil)
+	return br.createTunnelPort(name, tunnelType, ofPortRequest, false, "", "", "", "", nil, nil)
 }
 
 // CreateTunnelPortExt creates a tunnel port with the specified name and type
@@ -384,7 +384,7 @@ func (br *OVSBridge) CreateTunnelPort(name string, tunnelType TunnelType, ofPort
 // psk is for the pre-shared key of IPsec ESP tunnel. If it is not empty, it
 // will be set to the tunnel port interface options. Flow based IPsec tunnel is
 // not supported, so remoteIP must be provided too when psk is not empty.
-// If externalIDs is not nill, the IDs in it will be added to the port's
+// If externalIDs is not nil, the IDs in it will be added to the port's
 // external_ids.
 func (br *OVSBridge) CreateTunnelPortExt(
 	name string,
@@ -395,6 +395,7 @@ func (br *OVSBridge) CreateTunnelPortExt(
 	remoteIP string,
 	remoteName string,
 	psk string,
+	extraOptions map[string]interface{},
 	externalIDs map[string]interface{}) (string, Error) {
 	if psk != "" && remoteIP == "" {
 		return "", newInvalidArgumentsError("IPsec tunnel can not be flow based. remoteIP must be set")
@@ -402,7 +403,7 @@ func (br *OVSBridge) CreateTunnelPortExt(
 	if psk != "" && remoteName != "" {
 		return "", newInvalidArgumentsError("Cannot set psk and remoteName together")
 	}
-	return br.createTunnelPort(name, tunnelType, ofPortRequest, csum, localIP, remoteIP, remoteName, psk, externalIDs)
+	return br.createTunnelPort(name, tunnelType, ofPortRequest, csum, localIP, remoteIP, remoteName, psk, extraOptions, externalIDs)
 }
 
 func (br *OVSBridge) createTunnelPort(
@@ -414,16 +415,25 @@ func (br *OVSBridge) createTunnelPort(
 	remoteIP string,
 	remoteName string,
 	psk string,
+	extraOptions map[string]interface{},
 	externalIDs map[string]interface{}) (string, Error) {
 
-	if tunnelType != VXLANTunnel && tunnelType != GeneveTunnel && tunnelType != GRETunnel && tunnelType != STTTunnel {
+	if tunnelType != VXLANTunnel &&
+		tunnelType != GeneveTunnel &&
+		tunnelType != GRETunnel &&
+		tunnelType != STTTunnel &&
+		tunnelType != ERSPANTunnel {
 		return "", newInvalidArgumentsError("unsupported tunnel type: " + string(tunnelType))
 	}
 	if ofPortRequest < 0 || ofPortRequest > ofPortRequestMax {
 		return "", newInvalidArgumentsError(fmt.Sprint("invalid ofPortRequest value: ", ofPortRequest))
 	}
 
-	options := make(map[string]interface{}, 3)
+	options := make(map[string]interface{})
+	for k, v := range extraOptions {
+		options[k] = v
+	}
+
 	if remoteIP != "" {
 		options["remote_ip"] = remoteIP
 	} else {
@@ -506,7 +516,6 @@ func ParseTunnelInterfaceOptions(portData *OVSPortData) (net.IP, net.IP, string,
 	if localIPStr, ok = portData.Options["local_ip"]; ok {
 		localIP = net.ParseIP(localIPStr)
 	}
-
 	psk = portData.Options["psk"]
 	if csumStr, ok := portData.Options["csum"]; ok {
 		csum, _ = strconv.ParseBool(csumStr)
