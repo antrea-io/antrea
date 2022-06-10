@@ -265,7 +265,7 @@ func TestTunnelOptionCsum(t *testing.T) {
 			defer data.teardown(t)
 
 			name := "vxlan0"
-			_, err := data.br.CreateTunnelPortExt(name, ovsconfig.VXLANTunnel, ofPortRequest, testCase.initialCsum, "", "", "", "", nil)
+			_, err := data.br.CreateTunnelPortExt(name, ovsconfig.VXLANTunnel, ofPortRequest, testCase.initialCsum, "", "", "", "", nil, nil)
 			require.Nil(t, err, "Error when creating tunnel port")
 			options, err := data.br.GetInterfaceOptions(name)
 			require.Nil(t, err, "Error when getting interface options")

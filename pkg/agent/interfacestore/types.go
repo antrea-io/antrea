@@ -33,6 +33,8 @@ const (
 	UplinkInterface
 	// HostInterface is used to mark current interface is for host
 	HostInterface
+	// TrafficControlInterface is used to mark current interface is for traffic control port
+	TrafficControlInterface
 
 	AntreaInterfaceTypeKey = "antrea-type"
 	AntreaGateway          = "gateway"
@@ -40,6 +42,7 @@ const (
 	AntreaTunnel           = "tunnel"
 	AntreaUplink           = "uplink"
 	AntreaHost             = "host"
+	AntreaTrafficControl   = "traffic-control"
 	AntreaUnset            = ""
 )
 
@@ -68,6 +71,8 @@ type TunnelInterfaceConfig struct {
 	LocalIP net.IP
 	// IP address of the remote Node.
 	RemoteIP net.IP
+	// Destination port of the remote Node.
+	DestinationPort int32
 	// CommonName of the remote Name for certificate based authentication.
 	RemoteName string
 	// Pre-shard key for authentication.
@@ -160,6 +165,11 @@ func NewUplinkInterface(uplinkName string) *InterfaceConfig {
 
 func NewHostInterface(hostInterfaceName string) *InterfaceConfig {
 	return &InterfaceConfig{InterfaceName: hostInterfaceName, Type: HostInterface}
+}
+
+func NewTrafficControlInterface(interfaceName string) *InterfaceConfig {
+	trafficControlConfig := &InterfaceConfig{InterfaceName: interfaceName, Type: TrafficControlInterface}
+	return trafficControlConfig
 }
 
 // TODO: remove this method after IPv4/IPv6 dual-stack is supported completely.
