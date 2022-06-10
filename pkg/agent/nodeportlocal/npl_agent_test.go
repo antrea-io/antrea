@@ -700,20 +700,17 @@ func TestMultipleProtocols(t *testing.T) {
 	assert.NotEqual(t, pod1Value[0].NodePort, pod2Value[0].NodePort)
 	assert.True(t, testData.portTable.RuleExists(testPod2.Status.PodIP, defaultPort, protocolUDP))
 
-	// Update testSvc2 to serve TCP/80 and UDP/81 both, so pod1 is
+	// Update testSvc2 to serve TCP/80 and UDP/81 both, so pod2 is
 	// exposed on both TCP and UDP, with the same NodePort.
-	testPod2.Labels = tcpUdpSvcLabel
-	testData.updatePodOrFail(testPod2)
 
 	testSvc2.Spec.Ports = append(testSvc2.Spec.Ports, corev1.ServicePort{
-		Port:     81,
-		Protocol: corev1.ProtocolUDP,
+		Port:     80,
+		Protocol: corev1.ProtocolTCP,
 		TargetPort: intstr.IntOrString{
 			Type:   intstr.Int,
 			IntVal: 80,
 		},
 	})
-	testSvc2.Spec.Selector = tcpUdpSvcLabel
 	testData.updateServiceOrFail(testSvc2)
 
 	pod2ValueUpdate, err := testData.pollForPodAnnotation(testPod2.Name, true)
