@@ -143,7 +143,7 @@ function clean_multicluster {
     for kubeconfig in "${multicluster_kubeconfigs[@]}"
     do
         cleanup_multicluster_ns "antrea-multicluster-test" $kubeconfig
-        cleanup_multicluster_ns "antrea-mcs-ns" $kubeconfig
+        cleanup_multicluster_ns "antrea-multicluster" $kubeconfig
         cleanup_multicluster_controller $kubeconfig
         cleanup_multicluster_antrea $kubeconfig
     done
@@ -160,13 +160,13 @@ function wait_for_antrea_multicluster_pods_ready {
 
 function wait_for_multicluster_controller_ready {
     echo "====== Deploying Antrea Multicluster Leader Cluster with ${LEADER_CLUSTER_CONFIG} ======"
-    kubectl create ns antrea-mcs-ns  "${LEADER_CLUSTER_CONFIG}" || true
+    kubectl create ns antrea-multicluster  "${LEADER_CLUSTER_CONFIG}" || true
     kubectl apply -f ./multicluster/test/yamls/manifest.yml "${LEADER_CLUSTER_CONFIG}"
     kubectl apply -f ./multicluster/build/yamls/antrea-multicluster-leader-global.yml "${LEADER_CLUSTER_CONFIG}"
-    kubectl rollout status deployment/antrea-mc-controller -n antrea-mcs-ns "${LEADER_CLUSTER_CONFIG}" || true
+    kubectl rollout status deployment/antrea-mc-controller -n antrea-multicluster "${LEADER_CLUSTER_CONFIG}" || true
     kubectl apply -f ./multicluster/test/yamls/manifest.yml "${LEADER_CLUSTER_CONFIG}"
     kubectl create -f ./multicluster/test/yamls/leader-access-token-secret.yml "${LEADER_CLUSTER_CONFIG}" || true
-    kubectl get secret -n antrea-mcs-ns leader-access-token "${LEADER_CLUSTER_CONFIG}" -o yaml > ./multicluster/test/yamls/leader-access-token.yml
+    kubectl get secret -n antrea-multicluster leader-access-token "${LEADER_CLUSTER_CONFIG}" -o yaml > ./multicluster/test/yamls/leader-access-token.yml
 
     sed -i '/uid:/d' ./multicluster/test/yamls/leader-access-token.yml
     sed -i '/resourceVersion/d' ./multicluster/test/yamls/leader-access-token.yml
@@ -174,7 +174,7 @@ function wait_for_multicluster_controller_ready {
     sed -i '/type/d' ./multicluster/test/yamls/leader-access-token.yml
     sed -i '/creationTimestamp/d' ./multicluster/test/yamls/leader-access-token.yml
     sed -i 's/antrea-multicluster-member-access-sa/antrea-multicluster-controller/g' ./multicluster/test/yamls/leader-access-token.yml
-    sed -i 's/antrea-mcs-ns/kube-system/g' ./multicluster/test/yamls/leader-access-token.yml
+    sed -i 's/antrea-multicluster/kube-system/g' ./multicluster/test/yamls/leader-access-token.yml
     echo "type: Opaque" >> ./multicluster/test/yamls/leader-access-token.yml
 
     for config in "${membercluster_kubeconfigs[@]}";
@@ -234,7 +234,7 @@ function deliver_multicluster_controller {
     export NO_PULL=1;make antrea-mc-controller
 
     docker save "${DOCKER_REGISTRY}"/antrea/antrea-mc-controller:latest -o "${WORKDIR}"/antrea-mcs.tar
-    ./multicluster/hack/generate-manifest.sh -l antrea-mcs-ns > ./multicluster/test/yamls/manifest.yml
+    ./multicluster/hack/generate-manifest.sh -l antrea-multicluster > ./multicluster/test/yamls/manifest.yml
 
     for kubeconfig in "${multicluster_kubeconfigs[@]}"
     do

@@ -88,7 +88,7 @@ export IMG_NAME=projects.registry.vmware.com/antrea/flow-visibility-clickhouse-m
 export IMG_NAME=projects.registry.vmware.com/antrea/antrea-mc-controller
 cd multicluster
 ./hack/generate-manifest.sh -g > "$OUTPUT_DIR"/antrea-multicluster-leader-global.yml
-./hack/generate-manifest.sh -r -l changeme > "$OUTPUT_DIR"/antrea-multicluster-leader-namespaced.yml
+./hack/generate-manifest.sh -r -l antrea-multicluster > "$OUTPUT_DIR"/antrea-multicluster-leader-namespaced.yml
 ./hack/generate-manifest.sh -r -m > "$OUTPUT_DIR"/antrea-multicluster-member.yml
 
 ls "$OUTPUT_DIR" | cat

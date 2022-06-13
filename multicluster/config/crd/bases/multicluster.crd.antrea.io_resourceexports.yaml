@@ -922,6 +922,20 @@ spec:
                                     format: int32
                                     type: integer
                                 type: object
+                              igmp:
+                                description: 'IGMPProtocol matches IGMP traffic with
+                                  IGMPType and GroupAddress. IGMPType must be filled
+                                  with: IGMPQuery    int32 = 0x11 IGMPReportV1 int32
+                                  = 0x12 IGMPReportV2 int32 = 0x16 IGMPReportV3 int32
+                                  = 0x22 If groupAddress is empty, all groupAddresses
+                                  will be matched.'
+                                properties:
+                                  groupAddress:
+                                    type: string
+                                  igmpType:
+                                    format: int32
+                                    type: integer
+                                type: object
                             type: object
                           type: array
                         to:
@@ -1813,6 +1827,20 @@ spec:
                                     format: int32
                                     type: integer
                                   icmpType:
+                                    format: int32
+                                    type: integer
+                                type: object
+                              igmp:
+                                description: 'IGMPProtocol matches IGMP traffic with
+                                  IGMPType and GroupAddress. IGMPType must be filled
+                                  with: IGMPQuery    int32 = 0x11 IGMPReportV1 int32
+                                  = 0x12 IGMPReportV2 int32 = 0x16 IGMPReportV3 int32
+                                  = 0x22 If groupAddress is empty, all groupAddresses
+                                  will be matched.'
+                                properties:
+                                  groupAddress:
+                                    type: string
+                                  igmpType:
                                     format: int32
                                     type: integer
                                 type: object
