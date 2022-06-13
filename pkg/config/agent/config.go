@@ -164,7 +164,8 @@ type AgentConfig struct {
 	// Defaults to "". It must be a host string, a host:port pair, or a URL to the base of the apiserver.
 	KubeAPIServerOverride string `yaml:"kubeAPIServerOverride,omitempty"`
 	// Provide the address of DNS server, to override the kube-dns service. It's used to resolve hostname in FQDN policy.
-	// Defaults to "". It must be a host string or a host:port pair of the dns server.
+	// Defaults to "". It must be a host string or a host:port pair of the DNS server (e.g. 10.96.0.10, 10.96.0.10:53,
+	// [fd00:10:96::a]:53).
 	DNSServerOverride string `yaml:"dnsServerOverride,omitempty"`
 	// Cipher suites to use.
 	TLSCipherSuites string `yaml:"tlsCipherSuites,omitempty"`

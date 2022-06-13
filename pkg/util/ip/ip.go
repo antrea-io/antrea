@@ -211,3 +211,18 @@ func GetLocalBroadcastIP(ipNet *net.IPNet) net.IP {
 	binary.BigEndian.PutUint32(lastAddr, binary.BigEndian.Uint32(ipNet.IP.To4())|^binary.BigEndian.Uint32(net.IP(ipNet.Mask).To4()))
 	return lastAddr
 }
+
+// AppendPortIfMissing appends the given port to the address if the address doesn't contain any port.
+func AppendPortIfMissing(addr, port string) string {
+	if _, _, err := net.SplitHostPort(addr); err == nil {
+		return addr
+	}
+
+	ip := net.ParseIP(addr)
+	// Return the address directly if it's not a valid address.
+	if ip == nil {
+		return addr
+	}
+
+	return net.JoinHostPort(addr, port)
+}
