@@ -70,8 +70,8 @@ the `ServiceExternalIP` feature gate in the `antrea-config` ConfigMap in
 the Antrea deployment YAML:
 
 ```yaml
-kind: ConfigMap
 apiVersion: v1
+kind: ConfigMap
 metadata:
   name: antrea-config-dcfb6k2hkm
   namespace: kube-system
@@ -110,18 +110,17 @@ selects the Nodes with label "network-role: ingress-node" to host the external
 IPs:
 
 ```yaml
-- apiVersion: crd.antrea.io/v1alpha2
-  kind: ExternalIPPool
-  metadata:
-    name: service-external-ip-pool
-  spec:
-    ipRanges:
-    - start: 10.10.0.2
-      end: 10.10.0.10
-    - cidr: 10.10.1.0/28
-    nodeSelector:
-      matchLabels:
-        network-role: ingress-node
+apiVersion: crd.antrea.io/v1alpha2
+kind: ExternalIPPool
+metadata:
+  name: service-external-ip-pool
+spec:
+  ipRanges:
+  - start: 10.10.0.2
+    end: 10.10.0.10
+  nodeSelector:
+    matchLabels:
+      network-role: ingress-node
 ```
 
 #### Create a Service of type LoadBalancer
