@@ -26,5 +26,5 @@ spec:
       server: https://<LEADER_CLUSTER_IP>:6443
   members:
     - clusterID: test-cluster-west
-  namespace: antrea-mcs-ns
+  namespace: antrea-multicluster
 

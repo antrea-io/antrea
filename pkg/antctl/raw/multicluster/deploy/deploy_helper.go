@@ -170,7 +170,7 @@ func deploy(cmd *cobra.Command, role string, version string, namespace string, f
 
 			content := string(b)
 			if role == leaderRole && strings.Contains(manifest, "namespaced") {
-				content = strings.ReplaceAll(content, "changeme", namespace)
+				content = strings.ReplaceAll(content, "antrea-multicluster", namespace)
 			}
 			if role == memberRole && strings.Contains(manifest, "member") {
 				content = strings.ReplaceAll(content, "kube-system", namespace)

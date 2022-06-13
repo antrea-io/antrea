@@ -4,7 +4,7 @@ metadata:
   labels:
     app: antrea
   name: member-cluster-role
-  namespace: changeme
+  namespace: antrea-multicluster
 rules:
   - apiGroups:
       - ""

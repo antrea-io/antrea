@@ -2,7 +2,7 @@ apiVersion: multicluster.crd.antrea.io/v1alpha1
 kind: ClusterClaim
 metadata:
   name: leadercluster-id
-  namespace: antrea-mcs-ns
+  namespace: antrea-multicluster
 name: id.k8s.io
 value: test-cluster-leader
 ---
@@ -10,7 +10,7 @@ apiVersion: multicluster.crd.antrea.io/v1alpha1
 kind: ClusterClaim
 metadata:
   name: clusterset-id
-  namespace: antrea-mcs-ns
+  namespace: antrea-multicluster
 name: clusterset.k8s.io
 value: test-clusterset
 ---
@@ -18,7 +18,7 @@ apiVersion: multicluster.crd.antrea.io/v1alpha1
 kind: ClusterSet
 metadata:
   name: test-clusterset
-  namespace: antrea-mcs-ns
+  namespace: antrea-multicluster
 spec:
   leaders:
     - clusterID: test-cluster-leader
@@ -27,5 +27,5 @@ spec:
       serviceAccount: antrea-mc-member-access-sa
     - clusterID: test-cluster-west
       serviceAccount: antrea-mc-member-access-sa
-  namespace: antrea-mcs-ns
+  namespace: antrea-multicluster
 

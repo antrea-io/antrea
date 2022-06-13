@@ -4,7 +4,7 @@ metadata:
   labels:
     app: antrea
   name: antrea-mc-controller
-  namespace: changeme
+  namespace: antrea-multicluster
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -12,7 +12,7 @@ metadata:
   labels:
     app: antrea
   name: antrea-mc-member-access-sa
-  namespace: changeme
+  namespace: antrea-multicluster
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
@@ -21,7 +21,7 @@ metadata:
   labels:
     app: antrea
   name: antrea-mc-controller-role
-  namespace: changeme
+  namespace: antrea-multicluster
 rules:
 - apiGroups:
   - ""
@@ -172,7 +172,7 @@ metadata:
   labels:
     app: antrea
   name: antrea-mc-member-cluster-role
-  namespace: changeme
+  namespace: antrea-multicluster
 rules:
 - apiGroups:
   - ""
@@ -241,13 +241,13 @@ metadata:
   creationTimestamp: null
   labels:
     app: antrea
-  name: changeme-antrea-mc-controller-webhook-role
+  name: antrea-multicluster-antrea-mc-controller-webhook-role
 rules:
 - apiGroups:
   - admissionregistration.k8s.io
   resourceNames:
-  - changeme-antrea-mc-mutating-webhook-configuration
-  - changeme-antrea-mc-validating-webhook-configuration
+  - antrea-multicluster-antrea-mc-mutating-webhook-configuration
+  - antrea-multicluster-antrea-mc-validating-webhook-configuration
   resources:
   - mutatingwebhookconfigurations
   - validatingwebhookconfigurations
@@ -261,7 +261,7 @@ metadata:
   labels:
     app: antrea
   name: antrea-mc-controller-rolebinding
-  namespace: changeme
+  namespace: antrea-multicluster
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
@@ -269,7 +269,7 @@ roleRef:
 subjects:
 - kind: ServiceAccount
   name: antrea-mc-controller
-  namespace: changeme
+  namespace: antrea-multicluster
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -277,7 +277,7 @@ metadata:
   labels:
     app: antrea
   name: antrea-mc-member-cluster-rolebinding
-  namespace: changeme
+  namespace: antrea-multicluster
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
@@ -285,22 +285,22 @@ roleRef:
 subjects:
 - kind: ServiceAccount
   name: antrea-mc-member-access-sa
-  namespace: changeme
+  namespace: antrea-multicluster
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
   labels:
     app: antrea
-  name: changeme-antrea-mc-controller-webhook-rolebinding
+  name: antrea-multicluster-antrea-mc-controller-webhook-rolebinding
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: changeme-antrea-mc-controller-webhook-role
+  name: antrea-multicluster-antrea-mc-controller-webhook-role
 subjects:
 - kind: ServiceAccount
   name: antrea-mc-controller
-  namespace: changeme
+  namespace: antrea-multicluster
 ---
 apiVersion: v1
 data:
@@ -325,7 +325,7 @@ metadata:
   labels:
     app: antrea
   name: antrea-mc-controller-config-t2b9525b7f
-  namespace: changeme
+  namespace: antrea-multicluster
 ---
 apiVersion: v1
 kind: Service
@@ -333,7 +333,7 @@ metadata:
   labels:
     app: antrea
   name: antrea-mc-webhook-service
-  namespace: changeme
+  namespace: antrea-multicluster
 spec:
   ports:
   - port: 443
@@ -349,7 +349,7 @@ metadata:
     app: antrea
     component: antrea-mc-controller
   name: antrea-mc-controller
-  namespace: changeme
+  namespace: antrea-multicluster
 spec:
   replicas: 1
   selector:
@@ -414,7 +414,7 @@ metadata:
   creationTimestamp: null
   labels:
     app: antrea
-  name: changeme-antrea-mc-mutating-webhook-configuration
+  name: antrea-multicluster-antrea-mc-mutating-webhook-configuration
 webhooks:
 - admissionReviewVersions:
   - v1
@@ -422,13 +422,13 @@ webhooks:
   clientConfig:
     service:
       name: antrea-mc-webhook-service
-      namespace: changeme
+      namespace: antrea-multicluster
       path: /mutate-multicluster-crd-antrea-io-v1alpha1-clusterclaim
   failurePolicy: Fail
   name: mclusterclaim.kb.io
   namespaceSelector:
     matchLabels:
-      kubernetes.io/metadata.name: changeme
+      kubernetes.io/metadata.name: antrea-multicluster
   rules:
   - apiGroups:
     - multicluster.crd.antrea.io
@@ -446,13 +446,13 @@ webhooks:
   clientConfig:
     service:
       name: antrea-mc-webhook-service
-      namespace: changeme
+      namespace: antrea-multicluster
       path: /mutate-multicluster-crd-antrea-io-v1alpha1-clusterset
   failurePolicy: Fail
   name: mclusterset.kb.io
   namespaceSelector:
     matchLabels:
-      kubernetes.io/metadata.name: changeme
+      kubernetes.io/metadata.name: antrea-multicluster
   rules:
   - apiGroups:
     - multicluster.crd.antrea.io
@@ -470,13 +470,13 @@ webhooks:
   clientConfig:
     service:
       name: antrea-mc-webhook-service
-      namespace: changeme
+      namespace: antrea-multicluster
       path: /mutate-multicluster-crd-antrea-io-v1alpha1-resourceexport
   failurePolicy: Fail
   name: mresourceexport.kb.io
   namespaceSelector:
     matchLabels:
-      kubernetes.io/metadata.name: changeme
+      kubernetes.io/metadata.name: antrea-multicluster
   rules:
   - apiGroups:
     - multicluster.crd.antrea.io
@@ -494,13 +494,13 @@ webhooks:
   clientConfig:
     service:
       name: antrea-mc-webhook-service
-      namespace: changeme
+      namespace: antrea-multicluster
       path: /mutate-multicluster-crd-antrea-io-v1alpha1-resourceimport
   failurePolicy: Fail
   name: mresourceimport.kb.io
   namespaceSelector:
     matchLabels:
-      kubernetes.io/metadata.name: changeme
+      kubernetes.io/metadata.name: antrea-multicluster
   rules:
   - apiGroups:
     - multicluster.crd.antrea.io
@@ -519,7 +519,7 @@ metadata:
   creationTimestamp: null
   labels:
     app: antrea
-  name: changeme-antrea-mc-validating-webhook-configuration
+  name: antrea-multicluster-antrea-mc-validating-webhook-configuration
 webhooks:
 - admissionReviewVersions:
   - v1
@@ -527,13 +527,13 @@ webhooks:
   clientConfig:
     service:
       name: antrea-mc-webhook-service
-      namespace: changeme
+      namespace: antrea-multicluster
       path: /validate-multicluster-crd-antrea-io-v1alpha1-clusterclaim
   failurePolicy: Fail
   name: vclusterclaim.kb.io
   namespaceSelector:
     matchLabels:
-      kubernetes.io/metadata.name: changeme
+      kubernetes.io/metadata.name: antrea-multicluster
   rules:
   - apiGroups:
     - multicluster.crd.antrea.io
@@ -551,13 +551,13 @@ webhooks:
   clientConfig:
     service:
       name: antrea-mc-webhook-service
-      namespace: changeme
+      namespace: antrea-multicluster
       path: /validate-multicluster-crd-antrea-io-v1alpha1-clusterset
   failurePolicy: Fail
   name: vclusterset.kb.io
   namespaceSelector:
     matchLabels:
-      kubernetes.io/metadata.name: changeme
+      kubernetes.io/metadata.name: antrea-multicluster
   rules:
   - apiGroups:
     - multicluster.crd.antrea.io
@@ -575,13 +575,13 @@ webhooks:
   clientConfig:
     service:
       name: antrea-mc-webhook-service
-      namespace: changeme
+      namespace: antrea-multicluster
       path: /validate-multicluster-crd-antrea-io-v1alpha1-resourceexport
   failurePolicy: Fail
   name: vresourceexport.kb.io
   namespaceSelector:
     matchLabels:
-      kubernetes.io/metadata.name: changeme
+      kubernetes.io/metadata.name: antrea-multicluster
   rules:
   - apiGroups:
     - multicluster.crd.antrea.io
@@ -599,13 +599,13 @@ webhooks:
   clientConfig:
     service:
       name: antrea-mc-webhook-service
-      namespace: changeme
+      namespace: antrea-multicluster
       path: /validate-multicluster-crd-antrea-io-v1alpha1-resourceimport
   failurePolicy: Fail
   name: vresourceimport.kb.io
   namespaceSelector:
     matchLabels:
-      kubernetes.io/metadata.name: changeme
+      kubernetes.io/metadata.name: antrea-multicluster
   rules:
   - apiGroups:
     - multicluster.crd.antrea.io
@@ -623,13 +623,13 @@ webhooks:
   clientConfig:
     service:
       name: antrea-mc-webhook-service
-      namespace: changeme
+      namespace: antrea-multicluster
       path: /validate-multicluster-crd-antrea-io-v1alpha1-memberclusterannounce
   failurePolicy: Fail
   name: vmemberclusterannounce.kb.io
   namespaceSelector:
     matchLabels:
-      kubernetes.io/metadata.name: changeme
+      kubernetes.io/metadata.name: antrea-multicluster
   rules:
   - apiGroups:
     - multicluster.crd.antrea.io
