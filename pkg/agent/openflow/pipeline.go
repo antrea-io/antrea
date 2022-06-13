@@ -2666,20 +2666,24 @@ func pipelineClassifyFlow(cookieID uint64, protocol binding.Protocol, pipeline b
 // igmpPktInFlows generates the flow to load CustomReasonIGMPRegMark to mark the IGMP packet in MulticastRoutingTable
 // and sends it to antrea-agent.
 func (f *featureMulticast) igmpPktInFlows(reason uint8) []binding.Flow {
-	flows := []binding.Flow{
-		// Set a custom reason for the IGMP packets, and then send it to antrea-agent and forward it normally in the
-		// OVS bridge, so that the OVS multicast db cache can be updated, and antrea-agent can identify the local multicast
-		// group and its members in the meanwhile.
-		// Do not set dst IP address because IGMPv1 report message uses target multicast group as IP destination in
-		// the packet.
-		MulticastRoutingTable.ofTable.BuildFlow(priorityHigh).
-			Cookie(f.cookieAllocator.Request(f.category).Raw()).
-			MatchProtocol(binding.ProtocolIGMP).
-			MatchRegMark(FromLocalRegMark).
-			Action().LoadRegMark(CustomReasonIGMPRegMark).
-			Action().SendToController(reason).
-			Action().Normal().
-			Done(),
+	var flows []binding.Flow
+	sourceMarks := []*binding.RegMark{FromLocalRegMark}
+	if f.encapEnabled {
+		sourceMarks = append(sourceMarks, FromTunnelRegMark)
+	}
+	for _, m := range sourceMarks {
+		flows = append(flows,
+			// Set a custom reason for the IGMP packets, and then send it to antrea-agent. Then antrea-agent can identify
+			// the local multicast group and its members in the meanwhile.
+			// Do not set dst IP address because IGMPv1 report message uses target multicast group as IP destination in
+			// the packet.
+			MulticastRoutingTable.ofTable.BuildFlow(priorityHigh).
+				Cookie(f.cookieAllocator.Request(f.category).Raw()).
+				MatchProtocol(binding.ProtocolIGMP).
+				MatchRegMark(m).
+				Action().LoadRegMark(CustomReasonIGMPRegMark).
+				Action().SendToController(reason).
+				Done())
 	}
 	return flows
 }

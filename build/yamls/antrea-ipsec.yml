@@ -2596,7 +2596,7 @@ data:
     # IPAM when configuring secondary network interfaces with Multus.
     #  AntreaIPAM: false
 
-    # Enable multicast traffic. This feature is supported only with noEncap mode.
+    # Enable multicast traffic.
     #  Multicast: false
 
     # Enable Antrea Multi-cluster Gateway to support cross-cluster traffic.
@@ -2885,7 +2885,7 @@ data:
     # Enable collecting and exposing NetworkPolicy statistics.
     #  NetworkPolicyStats: true
 
-    # Enable multicast traffic. This feature is supported only with noEncap mode.
+    # Enable multicast traffic.
     #  Multicast: false
 
     # Enable controlling SNAT IPs of Pod egress traffic.
@@ -3705,7 +3705,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 1609abc57e2865390df7a7d99e4c3b342c7e097fa879fefe8e4315130eaa9019
+        checksum/config: c74f29ceba3905db50cef22ee46f73e1c101c108a70e70918b17413c174081e8
         checksum/ipsec-secret: d0eb9c52d0cd4311b6d252a951126bf9bea27ec05590bed8a394f0f792dcb2a4
       labels:
         app: antrea
@@ -3991,7 +3991,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 1609abc57e2865390df7a7d99e4c3b342c7e097fa879fefe8e4315130eaa9019
+        checksum/config: c74f29ceba3905db50cef22ee46f73e1c101c108a70e70918b17413c174081e8
       labels:
         app: antrea
         component: antrea-controller

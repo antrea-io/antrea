@@ -16,6 +16,7 @@ package openflow
 
 import (
 	"fmt"
+	"net"
 
 	"antrea.io/libOpenflow/openflow13"
 	"antrea.io/ofnet/ofctrl"
@@ -125,6 +126,13 @@ func (b *bucketBuilder) LoadRegMark(mark *RegMark) BucketBuilder {
 // ResubmitToTable is an action to resubmit packet to the specified table when the bucket is selected.
 func (b *bucketBuilder) ResubmitToTable(tableID uint8) BucketBuilder {
 	b.bucket.AddAction(openflow13.NewNXActionResubmitTableAction(openflow13.OFPP_IN_PORT, tableID))
+	return b
+}
+
+// SetTunnelDst is an action to set tunnel destination address when the bucket is selected.
+func (b *bucketBuilder) SetTunnelDst(addr net.IP) BucketBuilder {
+	setTunDstAct := &ofctrl.SetTunnelDstAction{IP: addr}
+	b.bucket.AddAction(setTunDstAct.GetActionMessage())
 	return b
 }
 

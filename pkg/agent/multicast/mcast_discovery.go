@@ -39,6 +39,11 @@ const (
 	IGMPProtocolNumber = 2
 )
 
+const (
+	openflowKeyTunnelSrc = "NXM_NX_TUN_IPV4_SRC"
+	openflowKeyInPort    = "OXM_OF_IN_PORT"
+)
+
 var (
 	// igmpMaxResponseTime is the maximum time allowed before sending a responding report which is used for the
 	// "Max Resp Code" field in the IGMP query message. It is also the maximum time to wait for the IGMP report message
@@ -46,6 +51,8 @@ var (
 	igmpMaxResponseTime = time.Second * 10
 	// igmpQueryDstMac is the MAC address used in the dst MAC field in the IGMP query message
 	igmpQueryDstMac, _ = net.ParseMAC("01:00:5e:00:00:01")
+	// igmpReportDstMac is the MAC address used in the dst MAC field in the IGMP report message
+	igmpReportDstMac, _ = net.ParseMAC("01:00:5e:00:00:16")
 )
 
 type IGMPSnooper struct {
@@ -62,6 +69,7 @@ type IGMPSnooper struct {
 	// Similar to igmpReportANPStats, it stores ACNP stats for IGMP reports.
 	igmpReportACNPStats      map[apitypes.UID]map[string]*types.RuleMetric
 	igmpReportACNPStatsMutex sync.Mutex
+	encapEnabled             bool
 }
 
 func (s *IGMPSnooper) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
@@ -92,7 +100,7 @@ func getInfoInReg(regMatch *ofctrl.MatchField, rng *openflow13.NXRange) (uint32,
 
 func (s *IGMPSnooper) parseSrcInterface(pktIn *ofctrl.PacketIn) (*interfacestore.InterfaceConfig, error) {
 	matches := pktIn.GetMatches()
-	ofPortField := matches.GetMatchByName("OXM_OF_IN_PORT")
+	ofPortField := matches.GetMatchByName(openflowKeyInPort)
 	if ofPortField == nil {
 		return nil, errors.New("in_port field not found")
 	}
@@ -125,6 +133,11 @@ func (s *IGMPSnooper) queryIGMP(group net.IP, versions []uint8) error {
 func (s *IGMPSnooper) validate(event *mcastGroupEvent, igmpType uint8, packetInData protocol.Ethernet) (bool, error) {
 	if s.validator == nil {
 		// Return true directly if there is no validator.
+		return true, nil
+	}
+	// MulticastValidator only validates the IGMP report message sent from Pods. The report message received from tunnel
+	// port is sent from Antrea Agent on a different Node, and returns true directly.
+	if event.iface.Type == interfacestore.TunnelInterface {
 		return true, nil
 	}
 	if event.iface.Type != interfacestore.ContainerInterface {
@@ -201,6 +214,42 @@ func (s *IGMPSnooper) collectStats() (igmpANPStats, igmpACNPStats map[apitypes.U
 	return igmpANPStats, igmpACNPStats
 }
 
+func (s *IGMPSnooper) sendIGMPReport(groupRecordType uint8, groups []net.IP) error {
+	igmp, err := s.generateIGMPReportPacket(groupRecordType, groups)
+	if err != nil {
+		return err
+	}
+	if err := s.ofClient.SendIGMPRemoteReportPacketOut(igmpReportDstMac, types.IGMPv3Router, igmp); err != nil {
+		return err
+	}
+	klog.V(2).InfoS("Sent packetOut for IGMP v3 report", "groups", groups)
+	return nil
+}
+
+func (s *IGMPSnooper) generateIGMPReportPacket(groupRecordType uint8, groups []net.IP) (util.Message, error) {
+	records := make([]protocol.IGMPv3GroupRecord, len(groups))
+	for i, group := range groups {
+		records[i] = protocol.IGMPv3GroupRecord{
+			Type:             groupRecordType,
+			MulticastAddress: group,
+		}
+	}
+	return &protocol.IGMPv3MembershipReport{
+		Type:           protocol.IGMPv3Report,
+		Checksum:       0,
+		NumberOfGroups: uint16(len(records)),
+		GroupRecords:   records,
+	}, nil
+}
+
+func (s *IGMPSnooper) sendIGMPJoinReport(groups []net.IP) error {
+	return s.sendIGMPReport(protocol.IGMPIsEx, groups)
+}
+
+func (s *IGMPSnooper) sendIGMPLeaveReport(groups []net.IP) error {
+	return s.sendIGMPReport(protocol.IGMPToIn, groups)
+}
+
 func (s *IGMPSnooper) processPacketIn(pktIn *ofctrl.PacketIn) error {
 	now := time.Now()
 	iface, err := s.parseSrcInterface(pktIn)
@@ -209,8 +258,15 @@ func (s *IGMPSnooper) processPacketIn(pktIn *ofctrl.PacketIn) error {
 	}
 	klog.V(2).InfoS("Received PacketIn for IGMP packet", "in_port", iface.OFPort)
 	podName := "unknown"
+	var srcNode net.IP
 	if iface.Type == interfacestore.ContainerInterface {
 		podName = iface.PodName
+	} else if iface.Type == interfacestore.TunnelInterface {
+		var err error
+		srcNode, err = s.parseSrcNode(pktIn)
+		if err != nil {
+			return err
+		}
 	}
 	igmp, err := parseIGMPPacket(pktIn.Data)
 	if err != nil {
@@ -240,10 +296,11 @@ func (s *IGMPSnooper) processPacketIn(pktIn *ofctrl.PacketIn) error {
 				evtType = groupLeave
 			}
 			event := &mcastGroupEvent{
-				group: mgroup,
-				eType: evtType,
-				time:  now,
-				iface: iface,
+				group:   mgroup,
+				eType:   evtType,
+				time:    now,
+				iface:   iface,
+				srcNode: srcNode,
 			}
 			s.validatePacketAndNotify(event, igmpType, pktIn.Data)
 		}
@@ -259,6 +316,16 @@ func (s *IGMPSnooper) processPacketIn(pktIn *ofctrl.PacketIn) error {
 		s.eventCh <- event
 	}
 	return nil
+}
+
+func (s *IGMPSnooper) parseSrcNode(pktIn *ofctrl.PacketIn) (net.IP, error) {
+	matches := pktIn.GetMatches()
+	tunSrcField := matches.GetMatchByName(openflowKeyTunnelSrc)
+	if tunSrcField == nil {
+		return nil, errors.New("in_port field not found")
+	}
+	tunSrc := tunSrcField.GetValue().(net.IP)
+	return tunSrc, nil
 }
 
 func generateIGMPQueryPacket(group net.IP, version uint8, queryInterval time.Duration) (util.Message, error) {
@@ -332,8 +399,8 @@ func parseIGMPPacket(pkt protocol.Ethernet) (protocol.IGMPMessage, error) {
 	}
 }
 
-func newSnooper(ofClient openflow.Client, ifaceStore interfacestore.InterfaceStore, eventCh chan *mcastGroupEvent, queryInterval time.Duration, multicastValidator types.McastNetworkPolicyController) *IGMPSnooper {
-	snooper := &IGMPSnooper{ofClient: ofClient, ifaceStore: ifaceStore, eventCh: eventCh, validator: multicastValidator, queryInterval: queryInterval}
+func newSnooper(ofClient openflow.Client, ifaceStore interfacestore.InterfaceStore, eventCh chan *mcastGroupEvent, queryInterval time.Duration, multicastValidator types.McastNetworkPolicyController, encapEnabled bool) *IGMPSnooper {
+	snooper := &IGMPSnooper{ofClient: ofClient, ifaceStore: ifaceStore, eventCh: eventCh, validator: multicastValidator, queryInterval: queryInterval, encapEnabled: encapEnabled}
 	snooper.igmpReportACNPStats = make(map[apitypes.UID]map[string]*types.RuleMetric)
 	snooper.igmpReportANPStats = make(map[apitypes.UID]map[string]*types.RuleMetric)
 	ofClient.RegisterPacketInHandler(uint8(openflow.PacketInReasonMC), "MulticastGroupDiscovery", snooper)

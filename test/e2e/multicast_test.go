@@ -30,8 +30,10 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 
+	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/multicast"
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	agentconfig "antrea.io/antrea/pkg/config/agent"
 	"antrea.io/antrea/pkg/features"
 )
 
@@ -56,6 +58,22 @@ func TestMulticast(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error computing multicast interfaces: %v", err)
 	}
+	t.Run("testMulticastWithNoEncap", func(t *testing.T) {
+		skipIfEncapModeIsNot(t, data, config.TrafficEncapModeNoEncap)
+		runMulticastTestCases(t, data, nodeMulticastInterfaces, true)
+	})
+	t.Run("testMulticastWithEncap", func(t *testing.T) {
+		ac := func(config *agentconfig.AgentConfig) {
+			config.TrafficEncapMode = "encap"
+		}
+		if err := data.mutateAntreaConfigMap(nil, ac, true, true); err != nil {
+			t.Fatalf("Failed to deploy cluster with encap mode: %v", err)
+		}
+		runMulticastTestCases(t, data, nodeMulticastInterfaces, false)
+	})
+}
+
+func runMulticastTestCases(t *testing.T, data *TestData, nodeMulticastInterfaces map[int][]string, checkReceiverRoute bool) {
 	t.Run("testMulticastBetweenPodsInTwoNodes", func(t *testing.T) {
 		skipIfNumNodesLessThan(t, 2)
 		testcases := []multicastTestcase{
@@ -92,7 +110,7 @@ func TestMulticast(t *testing.T) {
 			mc := mc
 			t.Run(mc.name, func(t *testing.T) {
 				t.Parallel()
-				runTestMulticastBetweenPods(t, data, mc, nodeMulticastInterfaces)
+				runTestMulticastBetweenPods(t, data, mc, nodeMulticastInterfaces, checkReceiverRoute)
 			})
 		}
 	})
@@ -132,11 +150,14 @@ func TestMulticast(t *testing.T) {
 			mc := mc
 			t.Run(mc.name, func(t *testing.T) {
 				t.Parallel()
-				runTestMulticastBetweenPods(t, data, mc, nodeMulticastInterfaces)
+				runTestMulticastBetweenPods(t, data, mc, nodeMulticastInterfaces, checkReceiverRoute)
 			})
 		}
 	})
 	t.Run("testMulticastForwardToMultipleInterfaces", func(t *testing.T) {
+		// Skip this case with encap mode because iptables masquerade is configured, and it leads the multicast packet
+		// sent from Pod are not able to forwarded to more than one network interface on the host.
+		skipIfEncapModeIsNot(t, data, config.TrafficEncapModeNoEncap)
 		multipleInterfacesFound := false
 		var nodeIdx int
 		for i, ifaces := range nodeMulticastInterfaces {
@@ -365,6 +386,7 @@ func testMulticastStatsWithSendersReceivers(t *testing.T, data *TestData, mc mul
 		if err != nil {
 			t.Fatalf("Error when waiting for ANP %s to be realized: %v", np.Name, err)
 		}
+		defer data.DeleteANP(data.testNamespace, anp.name)
 	}
 
 	for _, anp := range mc.igmpANPConfigs {
@@ -403,6 +425,7 @@ func testMulticastStatsWithSendersReceivers(t *testing.T, data *TestData, mc mul
 		if err != nil {
 			t.Fatalf("Error when waiting for ANP %s released: %v", np.Name, err)
 		}
+		defer data.DeleteANP(data.testNamespace, anp.name)
 	}
 
 	for _, receiverConfig := range mc.receiverConfigs {
@@ -556,7 +579,11 @@ func testMulticastForwardToMultipleInterfaces(t *testing.T, data *TestData, send
 	}
 }
 
-func runTestMulticastBetweenPods(t *testing.T, data *TestData, mc multicastTestcase, nodeMulticastInterfaces map[int][]string) {
+func runTestMulticastBetweenPods(t *testing.T, data *TestData, mc multicastTestcase, nodeMulticastInterfaces map[int][]string, checkReceiverRoute bool) {
+	currentEncapMode, _ := data.GetEncapMode()
+	if requiresExternalHostSupport(mc) && currentEncapMode == config.TrafficEncapModeEncap {
+		t.Skipf("Multicast does not support using hostNetwork Pod to simulate the external host with encap mode, skip the case")
+	}
 	mcjoinWaitTimeout := defaultTimeout / time.Second
 	gatewayInterface, err := data.GetGatewayInterfaceName(antreaNamespace)
 	failOnError(err, t)
@@ -602,19 +629,21 @@ func runTestMulticastBetweenPods(t *testing.T, data *TestData, mc multicastTestc
 				continue
 			}
 			for _, receiverMulticastInterface := range nodeMulticastInterfaces[receiver.nodeIdx] {
-				_, mRouteResult, _, err := data.RunCommandOnNode(nodeName(receiver.nodeIdx), fmt.Sprintf("ip mroute show to %s iif %s ", mc.group.String(), receiverMulticastInterface))
-				if err != nil {
-					return false, err
-				}
-				// If multicast traffic is sent from non-HostNetwork pods and senders-receivers are located in different nodes,
-				// the receivers should configure corresponding inbound multicast routes.
-				if mc.senderConfig.nodeIdx != receiver.nodeIdx && !receiver.isHostNetwork {
-					if len(mRouteResult) == 0 {
-						return false, nil
+				if checkReceiverRoute {
+					_, mRouteResult, _, err := data.RunCommandOnNode(nodeName(receiver.nodeIdx), fmt.Sprintf("ip mroute show to %s iif %s ", mc.group.String(), receiverMulticastInterface))
+					if err != nil {
+						return false, err
 					}
-				} else {
-					if len(mRouteResult) != 0 {
-						return false, nil
+					// If multicast traffic is sent from non-HostNetwork pods and senders-receivers are located in different nodes,
+					// the receivers should configure corresponding inbound multicast routes.
+					if mc.senderConfig.nodeIdx != receiver.nodeIdx && !receiver.isHostNetwork {
+						if len(mRouteResult) == 0 {
+							return false, nil
+						}
+					} else {
+						if len(mRouteResult) != 0 {
+							return false, nil
+						}
 					}
 				}
 				_, mAddrResult, _, err := data.RunCommandOnNode(nodeName(receiver.nodeIdx), fmt.Sprintf("ip maddr show %s | grep %s", receiverMulticastInterface, mc.group.String()))
@@ -706,4 +735,16 @@ func checkAntctlResult(t *testing.T, data *TestData, antreaPodName, containerPod
 	t.Logf("The result of running antctl get podmulticaststats in %s is stdout: %s, stderr: %s, err: %v", antreaPodName, stdout, stderr, err)
 	match, _ := regexp.MatchString(fmt.Sprintf("%s[[:space:]]+%s[[:space:]]+%d[[:space:]]+%d", data.testNamespace, containerPodName, inbound, outbound), strings.TrimSpace(stdout))
 	return match, nil
+}
+
+func requiresExternalHostSupport(mc multicastTestcase) bool {
+	if mc.senderConfig.isHostNetwork {
+		return true
+	}
+	for _, receiver := range mc.receiverConfigs {
+		if receiver.isHostNetwork {
+			return true
+		}
+	}
+	return false
 }

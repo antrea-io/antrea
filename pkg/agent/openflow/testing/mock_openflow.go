@@ -297,17 +297,17 @@ func (mr *MockClientMockRecorder) InstallMulticastFlows(arg0, arg1 interface{}) 
 }
 
 // InstallMulticastGroup mocks base method
-func (m *MockClient) InstallMulticastGroup(arg0 openflow.GroupIDType, arg1 []uint32) error {
+func (m *MockClient) InstallMulticastGroup(arg0 openflow.GroupIDType, arg1 []uint32, arg2 []net.IP) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "InstallMulticastGroup", arg0, arg1)
+	ret := m.ctrl.Call(m, "InstallMulticastGroup", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // InstallMulticastGroup indicates an expected call of InstallMulticastGroup
-func (mr *MockClientMockRecorder) InstallMulticastGroup(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockClientMockRecorder) InstallMulticastGroup(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallMulticastGroup", reflect.TypeOf((*MockClient)(nil).InstallMulticastGroup), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallMulticastGroup", reflect.TypeOf((*MockClient)(nil).InstallMulticastGroup), arg0, arg1, arg2)
 }
 
 // InstallMulticastInitialFlows mocks base method
@@ -322,6 +322,20 @@ func (m *MockClient) InstallMulticastInitialFlows(arg0 byte) error {
 func (mr *MockClientMockRecorder) InstallMulticastInitialFlows(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallMulticastInitialFlows", reflect.TypeOf((*MockClient)(nil).InstallMulticastInitialFlows), arg0)
+}
+
+// InstallMulticastRemoteReportFlows mocks base method
+func (m *MockClient) InstallMulticastRemoteReportFlows(arg0 openflow.GroupIDType) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "InstallMulticastRemoteReportFlows", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// InstallMulticastRemoteReportFlows indicates an expected call of InstallMulticastRemoteReportFlows
+func (mr *MockClientMockRecorder) InstallMulticastRemoteReportFlows(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallMulticastRemoteReportFlows", reflect.TypeOf((*MockClient)(nil).InstallMulticastRemoteReportFlows), arg0)
 }
 
 // InstallMulticlusterClassifierFlows mocks base method
@@ -668,6 +682,20 @@ func (m *MockClient) SendIGMPQueryPacketOut(arg0 net.HardwareAddr, arg1 net.IP, 
 func (mr *MockClientMockRecorder) SendIGMPQueryPacketOut(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendIGMPQueryPacketOut", reflect.TypeOf((*MockClient)(nil).SendIGMPQueryPacketOut), arg0, arg1, arg2, arg3)
+}
+
+// SendIGMPRemoteReportPacketOut mocks base method
+func (m *MockClient) SendIGMPRemoteReportPacketOut(arg0 net.HardwareAddr, arg1 net.IP, arg2 util.Message) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SendIGMPRemoteReportPacketOut", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SendIGMPRemoteReportPacketOut indicates an expected call of SendIGMPRemoteReportPacketOut
+func (mr *MockClientMockRecorder) SendIGMPRemoteReportPacketOut(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendIGMPRemoteReportPacketOut", reflect.TypeOf((*MockClient)(nil).SendIGMPRemoteReportPacketOut), arg0, arg1, arg2)
 }
 
 // SendTCPPacketOut mocks base method

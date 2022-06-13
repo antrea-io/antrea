@@ -19,8 +19,10 @@ import (
 	"net"
 	"sync"
 
+	"antrea.io/libOpenflow/openflow13"
 	"k8s.io/klog/v2"
 
+	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/openflow/cookie"
 	"antrea.io/antrea/pkg/agent/types"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
@@ -31,6 +33,8 @@ type featureMulticast struct {
 	ipProtocols     []binding.Protocol
 	bridge          binding.Bridge
 	gatewayPort     uint32
+	encapEnabled    bool
+	tunnelPort      uint32
 
 	cachedFlows        *flowCategoryCache
 	groupCache         sync.Map
@@ -43,7 +47,7 @@ func (f *featureMulticast) getFeatureName() string {
 	return "Multicast"
 }
 
-func newFeatureMulticast(cookieAllocator cookie.Allocator, ipProtocols []binding.Protocol, bridge binding.Bridge, anpEnabled bool, gwPort uint32) *featureMulticast {
+func newFeatureMulticast(cookieAllocator cookie.Allocator, ipProtocols []binding.Protocol, bridge binding.Bridge, anpEnabled bool, gwPort uint32, encapEnabled bool, tunnelPort uint32) *featureMulticast {
 	return &featureMulticast{
 		cookieAllocator:    cookieAllocator,
 		ipProtocols:        ipProtocols,
@@ -53,6 +57,8 @@ func newFeatureMulticast(cookieAllocator cookie.Allocator, ipProtocols []binding
 		groupCache:         sync.Map{},
 		enableAntreaPolicy: anpEnabled,
 		gatewayPort:        gwPort,
+		encapEnabled:       encapEnabled,
+		tunnelPort:         tunnelPort,
 	}
 }
 
@@ -68,9 +74,7 @@ func multicastPipelineClassifyFlow(cookieID uint64, pipeline binding.Pipeline) b
 
 func (f *featureMulticast) initFlows() []binding.Flow {
 	cookieID := f.cookieAllocator.Request(f.category).Raw()
-	return []binding.Flow{
-		f.multicastOutputFlow(cookieID),
-	}
+	return f.multicastOutputFlows(cookieID)
 }
 
 func (f *featureMulticast) replayFlows() []binding.Flow {
@@ -78,13 +82,21 @@ func (f *featureMulticast) replayFlows() []binding.Flow {
 	return getCachedFlows(f.cachedFlows)
 }
 
-func (f *featureMulticast) multicastReceiversGroup(groupID binding.GroupIDType, tableID uint8, ports ...uint32) error {
+func (f *featureMulticast) multicastReceiversGroup(groupID binding.GroupIDType, tableID uint8, ports []uint32, remoteIPs []net.IP) error {
 	group := f.bridge.CreateGroupTypeAll(groupID).ResetBuckets()
 	for i := range ports {
 		group = group.Bucket().
 			LoadToRegField(OFPortFoundRegMark.GetField(), OFPortFoundRegMark.GetValue()).
 			LoadToRegField(TargetOFPortField, ports[i]).
 			ResubmitToTable(tableID).
+			Done()
+	}
+	for _, ip := range remoteIPs {
+		group = group.Bucket().
+			LoadToRegField(OFPortFoundRegMark.GetField(), OFPortFoundRegMark.GetValue()).
+			LoadToRegField(TargetOFPortField, f.tunnelPort).
+			SetTunnelDst(ip).
+			ResubmitToTable(MulticastOutputTable.GetID()).
 			Done()
 	}
 	if err := group.Add(); err != nil {
@@ -94,12 +106,38 @@ func (f *featureMulticast) multicastReceiversGroup(groupID binding.GroupIDType, 
 	return nil
 }
 
-func (f *featureMulticast) multicastOutputFlow(cookieID uint64) binding.Flow {
-	return MulticastOutputTable.ofTable.BuildFlow(priorityNormal).
-		Cookie(cookieID).
-		MatchRegMark(OFPortFoundRegMark).
-		Action().OutputToRegField(TargetOFPortField).
-		Done()
+func (f *featureMulticast) multicastOutputFlows(cookieID uint64) []binding.Flow {
+	flows := []binding.Flow{
+		MulticastOutputTable.ofTable.BuildFlow(priorityNormal).
+			Cookie(cookieID).
+			MatchRegMark(OFPortFoundRegMark).
+			Action().OutputToRegField(TargetOFPortField).
+			Done(),
+	}
+	if f.encapEnabled {
+		// When running with encap mode, drop the multicast packets if it is received from tunnel port and expected to
+		// output to antrea-gw0, or received from antrea-gw0 and expected to output to tunnel. These flows are used to
+		// avoid duplication on packet forwarding. For example, if the packet is received on tunnel port, it means
+		// the sender is a Pod on other Node, then the packet is already sent to external via antrea-gw0 on the source
+		// Node. On the reverse, if the packet is received on antrea-gw0, it means the sender is from external, then
+		// the Pod receivers on other Nodes should also receive the packets from the underlay network.
+		flows = append(flows, MulticastOutputTable.ofTable.BuildFlow(priorityHigh).
+			Cookie(cookieID).
+			MatchRegMark(FromTunnelRegMark).
+			MatchRegMark(OFPortFoundRegMark).
+			MatchRegFieldWithValue(TargetOFPortField, config.HostGatewayOFPort).
+			Action().Drop().
+			Done(),
+			MulticastOutputTable.ofTable.BuildFlow(priorityHigh).
+				Cookie(cookieID).
+				MatchRegMark(FromGatewayRegMark).
+				MatchRegMark(OFPortFoundRegMark).
+				MatchRegFieldWithValue(TargetOFPortField, config.DefaultTunOFPort).
+				Action().Drop().
+				Done(),
+		)
+	}
+	return flows
 }
 
 func (f *featureMulticast) multicastSkipIGMPMetricFlows() []binding.Flow {
@@ -146,4 +184,35 @@ func (f *featureMulticast) replayGroups() {
 		}
 		return true
 	})
+}
+
+func (f *featureMulticast) multicastRemoteReportFlows(groupID binding.GroupIDType, firstMulticastTable binding.Table) []binding.Flow {
+	return []binding.Flow{
+		// This flow outputs the IGMP report message sent from Antrea Agent to an OpenFlow group which is expected to
+		// broadcast to all the other Nodes in the cluster. The multicast groups in side the IGMP report message
+		// include the ones local Pods have joined in.
+		MulticastRoutingTable.ofTable.BuildFlow(priorityHigh).
+			Cookie(f.cookieAllocator.Request(f.category).Raw()).
+			MatchProtocol(binding.ProtocolIGMP).
+			MatchInPort(openflow13.P_CONTROLLER).
+			Action().LoadRegMark(CustomReasonIGMPRegMark).
+			Action().Group(groupID).
+			Done(),
+		// This flow ensures the IGMP report message sent from Antrea Agent to bypass the check in SpoofGuardTable.
+		ClassifierTable.ofTable.BuildFlow(priorityNormal).
+			Cookie(f.cookieAllocator.Request(f.category).Raw()).
+			MatchInPort(openflow13.P_CONTROLLER).
+			Action().GotoTable(SpoofGuardTable.GetNext()).
+			Done(),
+		// This flow ensures the multicast packet sent from a different Node via the tunnel port to enter Multicast
+		// pipeline.
+		ClassifierTable.ofTable.BuildFlow(priorityHigh).
+			Cookie(f.cookieAllocator.Request(f.category).Raw()).
+			MatchInPort(f.tunnelPort).
+			MatchProtocol(binding.ProtocolIP).
+			MatchDstIPNet(*types.McastCIDR).
+			Action().LoadRegMark(FromTunnelRegMark).
+			Action().GotoTable(firstMulticastTable.GetID()).
+			Done(),
+	}
 }

@@ -32,6 +32,7 @@ type IGMPNPRuleInfo struct {
 
 var (
 	McastAllHosts   = net.ParseIP("224.0.0.1").To4()
+	IGMPv3Router    = net.ParseIP("224.0.0.22").To4()
 	_, McastCIDR, _ = net.ParseCIDR("224.0.0.0/4")
 )
 
