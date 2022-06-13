@@ -41,7 +41,7 @@ function print_help {
 }
 
 OVERLAY=member
-NAMESPACE=changeme
+NAMESPACE=antrea-multicluster
 MODE=""
 
 while [[ $# -gt 0 ]]
@@ -111,7 +111,7 @@ if [ "$OVERLAY" == "leader-ns" ] ;
 then
     mkdir config && cd config
     cp $KUSTOMIZATION_DIR/overlays/leader-ns/prefix_transformer.yaml .
-    sed -ie "s/changeme/$NAMESPACE/g" prefix_transformer.yaml
+    sed -ie "s/antrea-multicluster/$NAMESPACE/g" prefix_transformer.yaml
 
 cat << EOF > kustomization.yaml
 namespace: $NAMESPACE

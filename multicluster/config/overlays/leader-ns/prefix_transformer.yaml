@@ -7,7 +7,7 @@ apiVersion: builtin
 kind: PrefixSuffixTransformer
 metadata:
   name: customPrefixer
-prefix: changeme-
+prefix: antrea-multicluster-
 fieldSpecs:
   - kind: ClusterRole
     path: metadata/name

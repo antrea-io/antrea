@@ -31,5 +31,5 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: controller
-    namespace: changeme
+    namespace: antrea-multicluster
 

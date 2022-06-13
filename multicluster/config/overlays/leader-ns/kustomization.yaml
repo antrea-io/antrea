@@ -1,4 +1,4 @@
-namespace: changeme
+namespace: antrea-multicluster
 
 commonLabels:
   app: antrea
@@ -21,7 +21,7 @@ patchesJson6902:
         value: RoleBinding
       - op: add
         path: /metadata/namespace
-        value: changeme
+        value: antrea-multicluster
       - op: replace
         path: /roleRef/kind
         value: Role
@@ -36,7 +36,7 @@ patchesJson6902:
         value: Role
       - op: add
         path: /metadata/namespace
-        value: changeme
+        value: antrea-multicluster
     target:
       group: rbac.authorization.k8s.io
       kind: ClusterRole
