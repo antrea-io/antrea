@@ -10,7 +10,7 @@
     - [IEs from IANA-assigned IE Registry](#ies-from-iana-assigned-ie-registry)
     - [IEs from Reverse IANA-assigned IE Registry](#ies-from-reverse-iana-assigned-ie-registry)
     - [IEs from Antrea IE Registry](#ies-from-antrea-ie-registry)
-  - [Supported capabilities](#supported-capabilities)
+  - [Supported Capabilities](#supported-capabilities)
     - [Types of Flows and Associated Information](#types-of-flows-and-associated-information)
     - [Connection Metrics](#connection-metrics)
 - [Flow Aggregator](#flow-aggregator)
@@ -18,13 +18,13 @@
   - [Configuration](#configuration-1)
   - [IPFIX Information Elements (IEs) in an Aggregated Flow Record](#ipfix-information-elements-ies-in-an-aggregated-flow-record)
     - [IEs from Antrea IE Registry](#ies-from-antrea-ie-registry-1)
-  - [Supported capabilities](#supported-capabilities-1)
+  - [Supported Capabilities](#supported-capabilities-1)
     - [Storage of Flow Records](#storage-of-flow-records)
     - [Correlation of Flow Records](#correlation-of-flow-records)
     - [Aggregation of Flow Records](#aggregation-of-flow-records)
-  - [Antctl support](#antctl-support)
-- [Quick deployment](#quick-deployment)
-  - [Image-building steps](#image-building-steps)
+  - [Antctl Support](#antctl-support)
+- [Quick Deployment](#quick-deployment)
+  - [Image-building Steps](#image-building-steps)
   - [Deployment Steps](#deployment-steps)
 - [Flow Collectors](#flow-collectors)
   - [Go-ipfix Collector](#go-ipfix-collector)
@@ -198,7 +198,7 @@ Flow Exporter are listed below:
 | tcpState                         | 136      | string      | The state of the TCP connection. The states are: LISTEN, SYN-SENT, SYN-RECEIVED, ESTABLISHED, FIN-WAIT-1, FIN-WAIT-2, CLOSE-WAIT, CLOSING, LAST-ACK, TIME-WAIT, and CLOSED. |
 | flowType                         | 137      | unsigned8   | 1 stands for Intra-Node. 2 stands for Inter-Node. 3 stands for To External. 4 stands for From External. |
 
-### Supported capabilities
+### Supported Capabilities
 
 #### Types of Flows and Associated Information
 
@@ -435,7 +435,7 @@ the Flow Aggregator adds the following fields to the flow records.
 | flowEndSecondsFromSourceNode              | 151      | unsigned32  | The absolute timestamp of the last packet of this flow, based on the records sent from the source Node. The unit is seconds. |
 | flowEndSecondsFromDestinationNode         | 152      | unsigned32  | The absolute timestamp of the last packet of this flow, based on the records sent from the destination Node. The unit is seconds. |
 
-### Supported capabilities
+### Supported Capabilities
 
 #### Storage of Flow Records
 
@@ -464,19 +464,19 @@ the [new fields](#ies-from-antrea-ie-registry) in Antrea Enterprise IPFIX regist
 corresponding to the Source Node and Destination Node, so that flow statistics from
 different Nodes can be preserved.
 
-### Antctl support
+### Antctl Support
 
 antctl can access the Flow Aggregator API to dump flow records and print metrics
 about flow record processing. Refer to the
 [antctl documentation](antctl.md#flow-aggregator-commands) for more information.
 
-## Quick deployment
+## Quick Deployment
 
 If you would like to quickly try Network Flow Visibility feature, you can deploy
 Antrea, the Flow Aggregator Service, the Grafana Flow Collector on the
 [Vagrant setup](../test/e2e/README.md).
 
-### Image-building steps
+### Image-building Steps
 
 Build required image under antrea by using make command:
 
@@ -550,7 +550,15 @@ kubectl logs <ipfix-collector-pod-name> -n ipfix
 
 ### Grafana Flow Collector
 
-Grafana Flow Collector feature is only available for releases starting from Antrea v1.6.
+The Grafana Flow Collector was added in Antrea v1.6.0. In Antrea v1.7.0, we
+start to move the network observability and analytics functionalities of Antrea
+to [Project Theia](https://github.com/antrea-io/theia), including the Grafana
+Flow Collector. Going forward, further development of the Grafana Flow Collector
+will be in the Theia repo, but we will keep the existing implementation in the
+Antrea repo for a while before deprecating it. This section talks about the
+"legacy" Grafana Flow Collector kept in the Antrea repo. For the up-to-date
+version of Grafana Flow Collector and other Theia features, please refer to the
+[Theia document](https://github.com/antrea-io/theia/blob/main/docs/network-flow-visibility.md).
 
 #### Purpose
 
