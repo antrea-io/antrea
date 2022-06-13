@@ -111,6 +111,9 @@ nodeIPAM:
 # -- Address of Kubernetes apiserver, to override any value provided in
 # kubeconfig or InClusterConfig.
 kubeAPIServerOverride: ""
+# -- Address of DNS server, to override the kube-dns service. It's used to
+# resolve hostname in FQDN policy.
+dnsServerOverride: ""
 # -- IPv4 CIDR range used for Services. Required when AntreaProxy is disabled.
 serviceCIDR: ""
 # -- IPv6 CIDR range used for Services. Required when AntreaProxy is disabled.

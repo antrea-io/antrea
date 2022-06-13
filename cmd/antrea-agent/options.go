@@ -33,6 +33,7 @@ import (
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 	"antrea.io/antrea/pkg/util/env"
 	"antrea.io/antrea/pkg/util/flowexport"
+	"antrea.io/antrea/pkg/util/ip"
 )
 
 const (
@@ -72,6 +73,8 @@ type Options struct {
 	igmpQueryInterval      time.Duration
 	nplStartPort           int
 	nplEndPort             int
+
+	dnsServerOverride string
 }
 
 func newOptions() *Options {
@@ -198,6 +201,15 @@ func (o *Options) validate(args []string) error {
 	}
 	if err := o.validateAntreaIPAMConfig(); err != nil {
 		return fmt.Errorf("failed to validate AntreaIPAM config: %v", err)
+	}
+
+	if o.config.DNSServerOverride != "" {
+		hostPort := ip.AppendPortIfMissing(o.config.DNSServerOverride, "53")
+		_, _, err := net.SplitHostPort(hostPort)
+		if err != nil {
+			return fmt.Errorf("dnsServerOverride %s is invalid: %v", o.config.DNSServerOverride, err)
+		}
+		o.dnsServerOverride = hostPort
 	}
 	return nil
 }
