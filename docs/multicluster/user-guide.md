@@ -78,7 +78,7 @@ To deploy Multi-cluster Controller in a dual-role cluster, please refer to
   kubectl apply -f https://github.com/antrea-io/antrea/releases/download/$TAG/antrea-multicluster-leader-namespaced.yml >   antrea-multicluster-leader-namespaced.yml
   ```
 
-The Multi-cluster Controller in the leader cluster will be deployed in the Namespace `antrea-multicluster`
+The Multi-cluster Controller in the leader cluster will be deployed in Namespace `antrea-multicluster`
 by default. If you'd like to use another Namespace, you can change `antrea-multicluster` to the desired
 Namespace in `antrea-multicluster-leader-namespaced.yml`, for example:
 
