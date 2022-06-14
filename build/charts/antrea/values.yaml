@@ -299,7 +299,7 @@ logVerbosity: 0
 whereabouts:
   enable: false
 
-## -- Configure Multicluster, for use by the antrea-agent.
+## -- Configure Multicluster defaults for both Antrea controller and agent.
 multicluster:
   # -- Enable Antrea Multi-cluster Gateway to support cross-cluster traffic.
   # This feature is supported only with encap mode.

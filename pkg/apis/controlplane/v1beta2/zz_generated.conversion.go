@@ -1312,6 +1312,7 @@ func autoConvert_v1beta2_NetworkPolicyPeer_To_controlplane_NetworkPolicyPeer(in 
 	out.IPBlocks = *(*[]controlplane.IPBlock)(unsafe.Pointer(&in.IPBlocks))
 	out.FQDNs = *(*[]string)(unsafe.Pointer(&in.FQDNs))
 	out.ToServices = *(*[]controlplane.ServiceReference)(unsafe.Pointer(&in.ToServices))
+	out.LabelIdentities = *(*[]uint32)(unsafe.Pointer(&in.LabelIdentities))
 	return nil
 }
 
@@ -1325,6 +1326,7 @@ func autoConvert_controlplane_NetworkPolicyPeer_To_v1beta2_NetworkPolicyPeer(in 
 	out.IPBlocks = *(*[]IPBlock)(unsafe.Pointer(&in.IPBlocks))
 	out.FQDNs = *(*[]string)(unsafe.Pointer(&in.FQDNs))
 	out.ToServices = *(*[]ServiceReference)(unsafe.Pointer(&in.ToServices))
+	out.LabelIdentities = *(*[]uint32)(unsafe.Pointer(&in.LabelIdentities))
 	return nil
 }
 
