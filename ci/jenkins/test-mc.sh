@@ -215,7 +215,7 @@ function deliver_antrea_multicluster {
     do
        kubectl get nodes -o wide --no-headers=true ${kubeconfig}| awk '{print $6}' | while read IP; do
             rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no" "${WORKDIR}"/antrea-ubuntu.tar jenkins@[${IP}]:${WORKDIR}/antrea-ubuntu.tar
-            if [[ ${IS_CONTAINERD} ]];then
+            if ${IS_CONTAINERD};then
               ssh -o StrictHostKeyChecking=no -n jenkins@${IP} "${CLEAN_STALE_IMAGES}; sudo ctr -n=k8s.io images import ${WORKDIR}/antrea-ubuntu.tar" || true
             else
               ssh -o StrictHostKeyChecking=no -n jenkins@${IP} "${CLEAN_STALE_IMAGES}; docker load -i ${WORKDIR}/antrea-ubuntu.tar" || true
@@ -240,7 +240,7 @@ function deliver_multicluster_controller {
     do
         kubectl get nodes -o wide --no-headers=true "${kubeconfig}" | awk '{print $6}' | while read IP; do
             rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no" "${WORKDIR}"/antrea-mcs.tar jenkins@[${IP}]:${WORKDIR}/antrea-mcs.tar
-            if [[ ${IS_CONTAINERD} ]];then
+            if ${IS_CONTAINERD};then
               ssh -o StrictHostKeyChecking=no -n jenkins@"${IP}" "${CLEAN_STALE_IMAGES}; sudo ctr -n=k8s.io images import ${WORKDIR}/antrea-mcs.tar" || true
             else
               ssh -o StrictHostKeyChecking=no -n jenkins@"${IP}" "${CLEAN_STALE_IMAGES}; docker load -i ${WORKDIR}/antrea-mcs.tar" || true
@@ -271,7 +271,7 @@ function run_multicluster_e2e {
     export GOCACHE=${WORKDIR}/.cache/go-build
     export PATH=$GOROOT/bin:$PATH
 
-    if [[ ${ENABLE_MC_GATEWAY} ]]; then
+    if ${ENABLE_MC_GATEWAY}; then
     cat > build/yamls/chart-values/antrea.yml <<EOF
 multicluster:
   enable: true
@@ -299,7 +299,7 @@ EOF
         kubectl get nodes -o wide --no-headers=true "${kubeconfig}"| awk '{print $6}' | while read IP; do
             rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no" "${WORKDIR}"/nginx.tar jenkins@["${IP}"]:"${WORKDIR}"/nginx.tar
             rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no" "${WORKDIR}"/agnhost.tar jenkins@["${IP}"]:"${WORKDIR}"/agnhost.tar
-        if [[ ${IS_CONTAINERD} ]];then
+        if ${IS_CONTAINERD};then
             ssh -o StrictHostKeyChecking=no -n jenkins@"${IP}" "${CLEAN_STALE_IMAGES}; sudo ctr -n=k8s.io images import ${WORKDIR}/nginx.tar" || true
             ssh -o StrictHostKeyChecking=no -n jenkins@"${IP}" "sudo ctr -n=k8s.io images import ${WORKDIR}/agnhost.tar" || true
         else
@@ -312,7 +312,7 @@ EOF
 
     set +e
     mkdir -p `pwd`/antrea-multicluster-test-logs
-    if [[ ${ENABLE_MC_GATEWAY} ]];then
+    if ${ENABLE_MC_GATEWAY};then
       go test -v antrea.io/antrea/multicluster/test/e2e --logs-export-dir  `pwd`/antrea-multicluster-test-logs --mc-gateway
     else
       go test -v antrea.io/antrea/multicluster/test/e2e --logs-export-dir  `pwd`/antrea-multicluster-test-logs
