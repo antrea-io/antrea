@@ -45,13 +45,13 @@ it takes different responsibilities in leader and member clusters.
 ### ClusterSet Establishment
 
 In a member cluster, Multi-cluster Controller watches and validates the ClusterSet
-and ClusterClaim CRs, and creates a MemberClusterAnnounce in the Common Area of the
-leader cluster to join the ClusterSet.
+and ClusterClaim CRs, and creates a MemberClusterAnnounce CR in the Common Area of
+the leader cluster to join the ClusterSet.
 
 In the leader cluster, Multi-cluster controller watches and validates the
 ClusterSet and Clusterclaim CRs, and initializes the ClusterSet. It also validates
-the MemberClusterAnnounce CR created by a member cluster and updates the member
-cluster status to the ClusterSet.
+the MemberClusterAnnounce CR created by a member cluster and adds the cluster to
+the ClusterSet CR's member cluster list.
 
 ### Resource Export and Import
 
@@ -63,7 +63,7 @@ Area of the leader cluster.
 In the leader cluster, Multi-cluster Controller watches ResourceExports created
 by member clusters (in the case of Service and ClusterInfo export), or by the
 ClusterSet admin (in the case of Multi-cluster NetworkPolicy), converts
-ResourceExports to ResourceImports, and creates the ResourceImports CRs in the
+ResourceExports to ResourceImports, and creates the ResourceImport CRs in the
 Common Area for member clusters to import them. Multi-cluster Controller also
 merges ResourceExports from different member clusters to a single
 ResourceImport, when these exported resources share the same kind, name, and
@@ -74,8 +74,8 @@ Common Area of the leader cluster, decapsulates the resources from them, and
 creates the resources (e.g. Services, Endpoints, Antrea ClusterNetworkPolicies,
 ClusterInfoImports) in the member cluster.
 
-For more information about Multi-cluster Service export/import, also check the
-[Service Export and Import](#service-export-and-import) section.
+For more information about Multi-cluster Service export/import, please also check
+the [Service Export and Import](#service-export-and-import) section.
 
 ## Multi-cluster Service
 
@@ -89,7 +89,7 @@ pipeline, using Service export/import as an example.
 
 Given two Services with the same name and Namespace in two member clusters -
 `foo.ns.cluster-a.local` and `foo.ns.cluster-b.local`, a multi-cluster Service can
-be created by the following resource export/import pipeline.
+be created by the following resource export/import workflow.
 
 * User creates a ServiceExport `foo` in Namespace `ns` in each of the two
 clusters.
@@ -107,14 +107,14 @@ exported endpoints of both `cluster-a-ns-foo-endpoints` and
 * Multi-cluster Controller in each member cluster watches the ResourceImports
 from the Common Area, decapsulates them and gets Service `ns/antrea-mc-foo` and
 Endpoints `ns/antrea-mc-foo`, and creates the Service and Endpoints, as well as
-a ServiceImport `foo` in local Namespace `ns`.
+a ServiceImport `foo` in the local Namespace `ns`.
 
 ### Service Access Across Clusters
 
 Since Antrea v1.7.0, the Service's ClusterIP is exported as the multi-cluster
 Service's Endpoints. Multi-cluster Gateways must be configured to support
 multi-cluster Service access across member clusters, and Service CIDRs cannot
-overlap between clusters. Please refer to [Antrea Multi-cluster Gateway](#multi-cluster-gateway)
+overlap between clusters. Please refer to [Multi-cluster Gateway](#multi-cluster-gateway)
 for more information. Before Antrea v1.7.0, Pod IPs are exported as the
 multi-cluster Service's Endpoints. Pod IPs must be directly reachable across
 clusters for multi-cluster Service access, and Pod CIDRs cannot overlap between
@@ -124,8 +124,8 @@ for Services of type ClusterIP.
 ## Multi-cluster Gateway
 
 Antrea started to support Multi-cluster Gateway since v1.7.0. User can choose
-one K8s Node as the Gateway in a member cluster. The Gateway Node will be
-responsible for routing all cross-clusters traffic from the local cluster to
+one K8s Node as the Multi-cluster Gateway in a member cluster. The Gateway Node
+is responsible for routing all cross-clusters traffic from the local cluster to
 other member clusters through tunnels. The diagram below depicts Antrea
 Mulit-cluster connectivity with Multi-cluster Gateways.
 
@@ -168,21 +168,21 @@ Endpoints:
 * `nginx` Service's ClusterIP `10.11.12.33` from cluster C.
 
 When the client Pod `pod-a` on cluster A tries to access the multi-cluster
-Service `antrea-mc-nginx`, the request packet will first goes through the
-Service load balancing pipeline on the source Node `node-a2`, with one endpoint
-of the Multi-cluster Service being chosen as the destination. Let's say endpoint
+Service `antrea-mc-nginx`, the request packet will first go through the Service
+load balancing pipeline on the source Node `node-a2`, with one endpoint of the
+Multi-cluster Service being chosen as the destination. Let's say endpoint
 `10.11.12.33` from cluster C is chosen, then the request packet will be DNAT'd
 with IP `10.11.12.33` and tunnelled to the local Gateway Node `node-a1`.
-`node-a1` knows the packet is multi-cluster Service traffic destined for Cluster
-C from the destination IP `10.11.12.33`, and it will tunnel the packet to 
-Cluster C's Gateway Node `node-c1`, after performing SNAT and setting the
-packet's source IP to its own Gateway IP. On `node-c1`, the packet will go
-through the Service load balancing pipeline again with a local endpoint of
-Service `nginx` being chosen as the destination. As the Service has only one
-local endpoint - `172.10.11.33` of `pod-c`, the request packet will be DNAT'd to
-`172.10.11.33` and tunnelled to `node-c2` where `pod-c` is running. Finally,
-on `node-c2` the packet will go through the normal Antrea pipeline and be
-forwarded to `pod-c`.
+`node-a1` knows from the destination IP (`10.11.12.33`) the packet is
+multi-cluster Service traffic destined for cluster C, and it will tunnel the
+packet to cluster C's Gateway Node `node-c1`, after performing SNAT and setting
+the packet's source IP to its own Gateway IP. On `node-c1`, the packet will go
+through the Service load balancing pipeline again with an endpoint of Service
+`nginx` being chosen as the destination. As the Service has only one endpoint -
+`172.10.11.33` of `pod-c`, the request packet will be DNAT'd to `172.10.11.33`
+and tunnelled to `node-c2` where `pod-c` is running. Finally, on `node-c2` the
+packet will go through the normal Antrea forwarding pipeline and be forwarded
+to `pod-c`.
 
 ## Antrea Multi-cluster NetworkPolicy
 
