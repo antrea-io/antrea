@@ -19,6 +19,7 @@ import (
 	"sync"
 	"time"
 
+	apitypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/tools/cache"
@@ -30,6 +31,7 @@ import (
 	"antrea.io/antrea/pkg/agent/openflow"
 	"antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/agent/util"
+	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 	"antrea.io/antrea/pkg/util/channel"
@@ -276,7 +278,7 @@ func (c *Controller) Initialize() error {
 	}
 	// Install flows on OVS for IGMP packets and multicast traffic forwarding:
 	// 1) send the IGMP report messages to Antrea Agent,
-	// 2) forward the IMGP query messages to all local Pods,
+	// 2) forward the IGMP query messages to all local Pods,
 	// 3) forward the multicast traffic to antrea-gw0 if no local Pods have joined in the group, and this is to ensure
 	//    local Pods can access the external multicast receivers.
 	err = c.ofClient.InstallMulticastInitialFlows(uint8(openflow.PacketInReasonMC))
@@ -313,15 +315,6 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 func (c *Controller) worker() {
 	for c.processNextWorkItem() {
 	}
-}
-
-// getGroupMemberStatusByGroup returns the GroupMemberStatus according to the given group.
-func (c *Controller) getGroupMemberStatusByGroup(group net.IP) *GroupMemberStatus {
-	status, ok, _ := c.groupCache.GetByKey(group.String())
-	if ok {
-		return status.(*GroupMemberStatus)
-	}
-	return nil
 }
 
 // getGroupMemberStatusesByPod returns all GroupMemberStatus that the given podInterface is included in its localMembers.
@@ -536,4 +529,70 @@ func podInterfaceIndexFunc(obj interface{}) ([]string, error) {
 func getGroupEventKey(obj interface{}) (string, error) {
 	groupState := obj.(*GroupMemberStatus)
 	return groupState.group.String(), nil
+}
+
+func (c *Controller) CollectIGMPReportNPStats() (igmpANPStats, igmpACNPStats map[apitypes.UID]map[string]*types.RuleMetric) {
+	return c.igmpSnooper.collectStats()
+}
+
+func (c *Controller) GetGroupPods() map[string][]v1beta2.PodReference {
+	groupPodsMap := make(map[string][]v1beta2.PodReference)
+	for _, obj := range c.groupCache.List() {
+		status := obj.(*GroupMemberStatus)
+		members := make([]v1beta2.PodReference, 0, len(status.localMembers))
+		for s := range status.localMembers {
+			iface, found := c.ifaceStore.GetInterfaceByName(s)
+			if found {
+				members = append(members, v1beta2.PodReference{Name: iface.PodName, Namespace: iface.PodNamespace})
+			}
+		}
+		if len(members) > 0 {
+			groupPodsMap[status.group.String()] = members
+		}
+	}
+	return groupPodsMap
+}
+
+// PodTrafficStats encodes the inbound and outbound multicast statistics of each Pod.
+type PodTrafficStats struct {
+	Inbound, Outbound uint64
+}
+
+func (c *Controller) GetPodStats(podName string, podNamespace string) *PodTrafficStats {
+	ifaces := c.ifaceStore.GetContainerInterfacesByPod(podName, podNamespace)
+	for _, iface := range ifaces {
+		egressPodStats := c.ofClient.MulticastEgressPodMetricsByIP(iface.GetIPv4Addr())
+		ingressPodStats := c.ofClient.MulticastIngressPodMetricsByOFPort(iface.OFPort)
+		return &PodTrafficStats{Inbound: ingressPodStats.Packets, Outbound: egressPodStats.Packets}
+	}
+	return nil
+}
+
+func (c *Controller) GetAllPodsStats() map[*interfacestore.InterfaceConfig]*PodTrafficStats {
+	statsMap := make(map[*interfacestore.InterfaceConfig]*PodTrafficStats)
+	egressPodStats := c.ofClient.MulticastEgressPodMetrics()
+	for ipStr, stats := range egressPodStats {
+		iface, exist := c.ifaceStore.GetInterfaceByIP(ipStr)
+		if exist {
+			statEntry, ok := statsMap[iface]
+			if !ok {
+				statsMap[iface] = &PodTrafficStats{Outbound: stats.Packets}
+			} else {
+				statEntry.Outbound += stats.Packets
+			}
+		}
+	}
+	ingressPodStats := c.ofClient.MulticastIngressPodMetrics()
+	for ofPort, stats := range ingressPodStats {
+		iface, exist := c.ifaceStore.GetInterfaceByOFPort(ofPort)
+		if exist {
+			statEntry, ok := statsMap[iface]
+			if !ok {
+				statsMap[iface] = &PodTrafficStats{Inbound: stats.Packets}
+			} else {
+				statEntry.Inbound += stats.Packets
+			}
+		}
+	}
+	return statsMap
 }

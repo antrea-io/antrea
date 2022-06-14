@@ -218,6 +218,16 @@ type Client interface {
 	StartPacketInHandler(stopCh <-chan struct{})
 	// Get traffic metrics of each NetworkPolicy rule.
 	NetworkPolicyMetrics() map[uint32]*types.RuleMetric
+
+	// Get multicast ingress metrics of each Pod in MulticastIngressPodMetricTable.
+	MulticastIngressPodMetrics() map[uint32]*types.RuleMetric
+	// Get multicast Pod ingress statistics from MulticastIngressPodMetricTable with specified ofPort.
+	MulticastIngressPodMetricsByOFPort(ofPort int32) *types.RuleMetric
+	// Get multicast egress metrics of each Pod in MulticastEgressPodMetricTable.
+	MulticastEgressPodMetrics() map[string]*types.RuleMetric
+	// Get multicast Pod ingress statistics from MulticastEgressPodMetricTable with specified src IP.
+	MulticastEgressPodMetricsByIP(ip net.IP) *types.RuleMetric
+
 	// SendTCPPacketOut sends TCP packet as a packet-out to OVS.
 	SendTCPPacketOut(
 		srcMAC string,
@@ -523,14 +533,35 @@ func (c *client) InstallPodFlows(interfaceName string, podInterfaceIPs []net.IP,
 			flows = append(flows, c.featurePodConnectivity.podVLANFlow(ofPort, vlanID))
 		}
 	}
+	err := c.addFlows(c.featurePodConnectivity.podCachedFlows, interfaceName, flows)
+	if err != nil {
+		return err
+	}
+	// Multicast pod statistics is currently only supported for pods running IPv4 address.
+	if c.enableMulticast && podInterfaceIPv4 != nil {
+		return c.installMulticastPodMetricFlows(interfaceName, podInterfaceIPv4, ofPort)
+	}
+	return nil
+}
 
-	return c.addFlows(c.featurePodConnectivity.podCachedFlows, interfaceName, flows)
+func (c *client) installMulticastPodMetricFlows(interfaceName string, podIP net.IP, ofPort uint32) error {
+	flows := c.featureMulticast.multicastPodMetricFlows(podIP, ofPort)
+	cacheKey := fmt.Sprintf("multicast_pod_metric_%s", interfaceName)
+	return c.addFlows(c.featureMulticast.cachedFlows, cacheKey, flows)
 }
 
 func (c *client) UninstallPodFlows(interfaceName string) error {
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
-	return c.deleteFlows(c.featurePodConnectivity.podCachedFlows, interfaceName)
+	err := c.deleteFlows(c.featurePodConnectivity.podCachedFlows, interfaceName)
+	if err != nil {
+		return err
+	}
+	if c.enableMulticast {
+		cacheKey := fmt.Sprintf("multicast_pod_metric_%s", interfaceName)
+		return c.deleteFlows(c.featureMulticast.cachedFlows, cacheKey)
+	}
+	return nil
 }
 
 func (c *client) getFlowKeysFromCache(cache *flowCategoryCache, cacheKey string) []string {
@@ -1136,6 +1167,7 @@ func (c *client) SendUDPPacketOut(
 func (c *client) InstallMulticastInitialFlows(pktInReason uint8) error {
 	flows := c.featureMulticast.igmpPktInFlows(pktInReason)
 	flows = append(flows, c.featureMulticast.externalMulticastReceiverFlow())
+	flows = append(flows, c.featureMulticast.multicastSkipIGMPMetricFlows()...)
 	cacheKey := "multicast"
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()

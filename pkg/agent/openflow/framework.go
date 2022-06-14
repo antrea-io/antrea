@@ -214,6 +214,10 @@ func (f *featureNetworkPolicy) getRequiredTables() []*Table {
 				MulticastEgressRuleTable,
 				MulticastEgressMetricTable,
 				MulticastIngressRuleTable,
+				MulticastIngressPodMetricTable,
+				MulticastEgressRuleTable,
+				MulticastEgressMetricTable,
+				MulticastEgressPodMetricTable,
 				MulticastIngressMetricTable,
 			)
 		}
@@ -255,6 +259,8 @@ func (f *featureMulticast) getRequiredTables() []*Table {
 	tables := []*Table{
 		MulticastRoutingTable,
 		MulticastOutputTable,
+		MulticastEgressPodMetricTable,
+		MulticastIngressPodMetricTable,
 	}
 	return tables
 }

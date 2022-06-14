@@ -194,12 +194,13 @@ func TestCollect(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ofClient := oftest.NewMockClient(ctrl)
 			npQuerier := queriertest.NewMockAgentNetworkPolicyInfoQuerier(ctrl)
+			mcQuerier := queriertest.NewMockAgentMulticastInfoQuerier(ctrl)
 			ofClient.EXPECT().NetworkPolicyMetrics().Return(tt.ruleStats).Times(1)
 			for ofID, policy := range tt.ofIDToPolicyMap {
 				npQuerier.EXPECT().GetRuleByFlowID(ofID).Return(policy)
 			}
 
-			m := &Collector{ofClient: ofClient, networkPolicyQuerier: npQuerier}
+			m := &Collector{ofClient: ofClient, networkPolicyQuerier: npQuerier, multicastQuerier: mcQuerier}
 			actualPolicyStats := m.collect()
 			assert.Equal(t, tt.expectedStatsCollection, actualPolicyStats)
 		})

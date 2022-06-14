@@ -182,11 +182,15 @@ var (
 	// MulticastIGMPEgressMetricTable here.
 	MulticastEgressRuleTable   = newTable("MulticastEgressRule", stageEgressSecurity, pipelineMulticast)
 	MulticastEgressMetricTable = newTable("MulticastEgressMetric", stageEgressSecurity, pipelineMulticast)
+
+	MulticastEgressPodMetricTable = newTable("MulticastEgressPodMetric", stageEgressSecurity, pipelineMulticast)
+
 	// Tables in stageRouting:
 	MulticastRoutingTable = newTable("MulticastRouting", stageRouting, pipelineMulticast)
 	// Tables in stageIngressSecurity
-	MulticastIngressRuleTable   = newTable("MulticastIngressRule", stageIngressSecurity, pipelineMulticast)
-	MulticastIngressMetricTable = newTable("MulticastIngressMetric", stageIngressSecurity, pipelineMulticast)
+	MulticastIngressRuleTable      = newTable("MulticastIngressRule", stageIngressSecurity, pipelineMulticast)
+	MulticastIngressMetricTable    = newTable("MulticastIngressMetric", stageIngressSecurity, pipelineMulticast)
+	MulticastIngressPodMetricTable = newTable("MulticastIngressPodMetric", stageIngressSecurity, pipelineMulticast)
 	// Tables in stageOutput
 	MulticastOutputTable = newTable("MulticastOutput", stageOutput, pipelineMulticast)
 
@@ -2704,7 +2708,6 @@ func (f *featureMulticast) externalMulticastReceiverFlow() binding.Flow {
 	return MulticastRoutingTable.ofTable.BuildFlow(priorityLow).
 		Cookie(f.cookieAllocator.Request(f.category).Raw()).
 		MatchProtocol(binding.ProtocolIP).
-		MatchDstIPNet(*types.McastCIDR).
 		Action().LoadRegMark(OFPortFoundRegMark).
 		Action().LoadToRegField(TargetOFPortField, config.HostGatewayOFPort).
 		Action().GotoStage(stageOutput).

@@ -390,6 +390,9 @@ data:
     # Enable collecting and exposing NetworkPolicy statistics.
     #  NetworkPolicyStats: true
 
+    # Enable multicast traffic. This feature is supported only with noEncap mode.
+    #  Multicast: false
+
     # Enable controlling SNAT IPs of Pod egress traffic.
     #  Egress: true
 
@@ -3671,7 +3674,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 8163f2a3f77f88fe96aa80678572ff05cf3c2c4ef328398b0757dcc97ddcd07f
+        checksum/config: 626cd437985469e9b0e55e2faacbab203aee641d8a99ff9831c2bb3319f02e95
         checksum/ipsec-secret: d0eb9c52d0cd4311b6d252a951126bf9bea27ec05590bed8a394f0f792dcb2a4
       labels:
         app: antrea
@@ -3957,7 +3960,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 8163f2a3f77f88fe96aa80678572ff05cf3c2c4ef328398b0757dcc97ddcd07f
+        checksum/config: 626cd437985469e9b0e55e2faacbab203aee641d8a99ff9831c2bb3319f02e95
       labels:
         app: antrea
         component: antrea-controller

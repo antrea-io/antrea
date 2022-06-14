@@ -520,6 +520,62 @@ func (mr *MockClientMockRecorder) IsConnected() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsConnected", reflect.TypeOf((*MockClient)(nil).IsConnected))
 }
 
+// MulticastEgressPodMetrics mocks base method
+func (m *MockClient) MulticastEgressPodMetrics() map[string]*types.RuleMetric {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MulticastEgressPodMetrics")
+	ret0, _ := ret[0].(map[string]*types.RuleMetric)
+	return ret0
+}
+
+// MulticastEgressPodMetrics indicates an expected call of MulticastEgressPodMetrics
+func (mr *MockClientMockRecorder) MulticastEgressPodMetrics() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MulticastEgressPodMetrics", reflect.TypeOf((*MockClient)(nil).MulticastEgressPodMetrics))
+}
+
+// MulticastEgressPodMetricsByIP mocks base method
+func (m *MockClient) MulticastEgressPodMetricsByIP(arg0 net.IP) *types.RuleMetric {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MulticastEgressPodMetricsByIP", arg0)
+	ret0, _ := ret[0].(*types.RuleMetric)
+	return ret0
+}
+
+// MulticastEgressPodMetricsByIP indicates an expected call of MulticastEgressPodMetricsByIP
+func (mr *MockClientMockRecorder) MulticastEgressPodMetricsByIP(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MulticastEgressPodMetricsByIP", reflect.TypeOf((*MockClient)(nil).MulticastEgressPodMetricsByIP), arg0)
+}
+
+// MulticastIngressPodMetrics mocks base method
+func (m *MockClient) MulticastIngressPodMetrics() map[uint32]*types.RuleMetric {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MulticastIngressPodMetrics")
+	ret0, _ := ret[0].(map[uint32]*types.RuleMetric)
+	return ret0
+}
+
+// MulticastIngressPodMetrics indicates an expected call of MulticastIngressPodMetrics
+func (mr *MockClientMockRecorder) MulticastIngressPodMetrics() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MulticastIngressPodMetrics", reflect.TypeOf((*MockClient)(nil).MulticastIngressPodMetrics))
+}
+
+// MulticastIngressPodMetricsByOFPort mocks base method
+func (m *MockClient) MulticastIngressPodMetricsByOFPort(arg0 int32) *types.RuleMetric {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MulticastIngressPodMetricsByOFPort", arg0)
+	ret0, _ := ret[0].(*types.RuleMetric)
+	return ret0
+}
+
+// MulticastIngressPodMetricsByOFPort indicates an expected call of MulticastIngressPodMetricsByOFPort
+func (mr *MockClientMockRecorder) MulticastIngressPodMetricsByOFPort(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MulticastIngressPodMetricsByOFPort", reflect.TypeOf((*MockClient)(nil).MulticastIngressPodMetricsByOFPort), arg0)
+}
+
 // NetworkPolicyMetrics mocks base method
 func (m *MockClient) NetworkPolicyMetrics() map[uint32]*types.RuleMetric {
 	m.ctrl.T.Helper()
