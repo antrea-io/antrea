@@ -459,7 +459,7 @@ func (c *Client) syncIPTables() error {
 			antreaPodIP6Set,
 			localAntreaFlexibleIPAMPodIP6Set,
 			antreaNodePortIP6Set,
-			config.VirtualNodePortDNATIPv4,
+			config.VirtualNodePortDNATIPv6,
 			config.VirtualServiceIPv6,
 			snatMarkToIPv6)
 		// Setting --noflush to keep the previous contents (i.e. non antrea managed chains) of the tables.
