@@ -350,7 +350,8 @@ $ kubectl describe configmap -n kube-system kube-proxy | grep strictARP
 
 ### Issue with Antrea Egress
 
-The current implementation of Antrea Egress does not work with the `strictARP`
+If you are using Antrea v1.7.0 or later, please ignore the issue. The previous
+implementation of Antrea Egress before v1.7.0 does not work with the `strictARP`
 configuration of `kube-proxy`. It means Antrea Egress cannot work together with
 Service external IP management or MetalLB layer 2 mode, when `kube-proxy` IPVS
-is used. We assume this issue will be fixed in a near future Antrea version.
+is used. This issue was fixed in Antrea v1.7.0.
