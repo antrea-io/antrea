@@ -3334,12 +3334,12 @@ func testToServices(t *testing.T) {
 		services = append(services, ipv6Svc)
 	}
 
-	var svcRefs []crdv1alpha1.NamespacedName
+	var svcRefs []crdv1alpha1.PeerService
 	var builtSvcs []*v1.Service
 	for _, service := range services {
 		builtSvc, _ := k8sUtils.CreateOrUpdateService(service)
 		failOnError(waitForResourceReady(t, timeout, service), t)
-		svcRefs = append(svcRefs, crdv1alpha1.NamespacedName{
+		svcRefs = append(svcRefs, crdv1alpha1.PeerService{
 			Name:      service.Name,
 			Namespace: service.Namespace,
 		})

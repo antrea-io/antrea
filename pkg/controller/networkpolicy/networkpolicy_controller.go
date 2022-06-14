@@ -240,9 +240,9 @@ type NetworkPolicyController struct {
 	groupingInterfaceSynced func() bool
 
 	labelIdentityInterface labelidentity.Interface
-	// Enable Multicluster which allow Antrea-native policies to select peer
+	// Enable Stretched Networkpolicy feature which allow Antrea-native policies to select peer
 	// from other clusters in a ClusterSet.
-	multiclusterEnabled bool
+	stretchNPEnabled bool
 	// heartbeatCh is an internal channel for testing. It's used to know whether all tasks have been
 	// processed, and to count executions of each function.
 	heartbeatCh chan heartbeat
@@ -391,7 +391,7 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 	appliedToGroupStore storage.Interface,
 	internalNetworkPolicyStore storage.Interface,
 	internalGroupStore storage.Interface,
-	multiclusterEnabled bool) *NetworkPolicyController {
+	stretchedNPEnabled bool) *NetworkPolicyController {
 	n := &NetworkPolicyController{
 		kubeClient:                 kubeClient,
 		crdClient:                  crdClient,
@@ -409,7 +409,7 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 		groupingInterface:          groupingInterface,
 		groupingInterfaceSynced:    groupingInterface.HasSynced,
 		labelIdentityInterface:     labelIdentityInterface,
-		multiclusterEnabled:        multiclusterEnabled,
+		stretchNPEnabled:           stretchedNPEnabled,
 	}
 	n.groupingInterface.AddEventHandler(appliedToGroupType, n.enqueueAppliedToGroup)
 	n.groupingInterface.AddEventHandler(addressGroupType, n.enqueueAddressGroup)
@@ -1570,7 +1570,7 @@ func (n *NetworkPolicyController) deleteInternalNetworkPolicy(name string) {
 	internalNetworkPolicy := obj.(*antreatypes.NetworkPolicy)
 	n.internalNetworkPolicyStore.Delete(internalNetworkPolicy.Name)
 	n.cleanupOrphanGroups(internalNetworkPolicy)
-	if n.multiclusterEnabled && internalNetworkPolicy.SourceRef.Type != controlplane.K8sNetworkPolicy {
+	if n.stretchNPEnabled && internalNetworkPolicy.SourceRef.Type != controlplane.K8sNetworkPolicy {
 		n.labelIdentityInterface.DeletePolicySelectors(internalNetworkPolicy.Name)
 	}
 	// Enqueue AddressGroups previously used by this NetworkPolicy as their span may change due to the removal.

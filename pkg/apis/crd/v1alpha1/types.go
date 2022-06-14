@@ -415,12 +415,15 @@ type Rule struct {
 	// +optional
 	To []NetworkPolicyPeer `json:"to,omitempty"`
 	// Rule is matched if traffic is intended for a Service listed in this field.
-	// Currently only ClusterIP types Services are supported in this field. This field
-	// can only be used when AntreaProxy is enabled. This field can't be used with To
-	// or Ports. If this field and To are both empty or missing, this rule matches all
-	// destinations.
+	// Currently, only ClusterIP types Services are supported in this field.
+	// When scope is set to ClusterSet, it matches traffic intended for a multi-cluster
+	// Service listed in this field. Service name and Namespace provided should match
+	// the original exported Service.
+	// This field can only be used when AntreaProxy is enabled. This field can't be used
+	// with To or Ports. If this field and To are both empty or missing, this rule matches
+	// all destinations.
 	// +optional
-	ToServices []NamespacedName `json:"toServices,omitempty"`
+	ToServices []PeerService `json:"toServices,omitempty"`
 	// Name describes the intention of this rule.
 	// Name should be unique within the policy.
 	// +optional
@@ -704,6 +707,14 @@ type TierList struct {
 type NamespacedName struct {
 	Name      string `json:"name,omitempty"`
 	Namespace string `json:"namespace,omitempty"`
+}
+
+// PeerService refers to a Service, which can be a in-cluster Service or
+// imported multi-cluster service.
+type PeerService struct {
+	Name      string    `json:"name,omitempty"`
+	Namespace string    `json:"namespace,omitempty"`
+	Scope     PeerScope `json:"scope,omitempty"`
 }
 
 // NetworkPolicyProtocol defines additional protocols that are not supported by

@@ -1016,6 +1016,8 @@ spec:
                               type: string
                             namespace:
                               type: string
+                            scope:
+                              type: string
                       name:
                         type: string
                       enableLogging:
@@ -2080,6 +2082,8 @@ spec:
                             name:
                               type: string
                             namespace:
+                              type: string
+                            scope:
                               type: string
                       name:
                         type: string

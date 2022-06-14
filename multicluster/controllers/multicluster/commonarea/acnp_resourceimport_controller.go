@@ -49,7 +49,7 @@ func (r *ResourceImportReconciler) handleResImpUpdateForClusterNetworkPolicy(ctx
 	}
 	acnpName := types.NamespacedName{
 		Namespace: "",
-		Name:      common.AntreaMCSPrefix + resImp.Spec.Name,
+		Name:      common.ToMCResourceName(resImp.Spec.Name),
 	}
 	klog.InfoS("Updating ACNP corresponding to ResourceImport",
 		"acnp", acnpName.String(), "resourceimport", klog.KObj(resImp))
@@ -111,7 +111,7 @@ func (r *ResourceImportReconciler) handleResImpUpdateForClusterNetworkPolicy(ctx
 }
 
 func (r *ResourceImportReconciler) handleResImpDeleteForClusterNetworkPolicy(ctx context.Context, resImp *multiclusterv1alpha1.ResourceImport) (ctrl.Result, error) {
-	acnpName := common.AntreaMCSPrefix + resImp.Spec.Name
+	acnpName := common.ToMCResourceName(resImp.Spec.Name)
 	klog.InfoS("Deleting ACNP corresponding to ResourceImport",
 		"acnp", acnpName, "resourceimport", klog.KObj(resImp))
 
@@ -132,7 +132,7 @@ func (r *ResourceImportReconciler) handleResImpDeleteForClusterNetworkPolicy(ctx
 func getMCAntreaClusterPolicy(resImp *multiclusterv1alpha1.ResourceImport) *v1alpha1.ClusterNetworkPolicy {
 	return &v1alpha1.ClusterNetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: common.AntreaMCSPrefix + resImp.Spec.Name,
+			Name: common.ToMCResourceName(resImp.Spec.Name),
 			Annotations: map[string]string{
 				common.AntreaMCACNPAnnotation: "true",
 			},

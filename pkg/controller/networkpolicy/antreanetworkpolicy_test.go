@@ -22,6 +22,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"antrea.io/antrea/multicluster/controllers/multicluster/common"
 	"antrea.io/antrea/pkg/apis/controlplane"
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	antreatypes "antrea.io/antrea/pkg/controller/types"
@@ -407,7 +408,7 @@ func TestProcessAntreaNetworkPolicy(t *testing.T) {
 					Priority: p10,
 					Egress: []crdv1alpha1.Rule{
 						{
-							ToServices: []crdv1alpha1.NamespacedName{
+							ToServices: []crdv1alpha1.PeerService{
 								{
 									Namespace: "ns5",
 									Name:      "svc1",
@@ -437,6 +438,59 @@ func TestProcessAntreaNetworkPolicy(t *testing.T) {
 								{
 									Namespace: "ns5",
 									Name:      "svc1",
+								},
+							},
+						},
+						Priority: 0,
+						Action:   &allowAction,
+					},
+				},
+				AppliedToGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("ns5", &selectorA, nil, nil, nil).NormalizedName)},
+			},
+			expectedAppliedToGroups: 1,
+			expectedAddressGroups:   0,
+		},
+		{
+			name: "rules-with-to-mc-services",
+			inputPolicy: &crdv1alpha1.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Namespace: "ns5", Name: "npE2", UID: "uidE2"},
+				Spec: crdv1alpha1.NetworkPolicySpec{
+					AppliedTo: []crdv1alpha1.AppliedTo{
+						{PodSelector: &selectorA},
+					},
+					Priority: p10,
+					Egress: []crdv1alpha1.Rule{
+						{
+							ToServices: []crdv1alpha1.PeerService{
+								{
+									Name:  "svc1",
+									Scope: crdv1alpha1.ScopeClusterSet,
+								},
+							},
+							Action: &allowAction,
+						},
+					},
+				},
+			},
+			expectedPolicy: &antreatypes.NetworkPolicy{
+				UID:  "uidE2",
+				Name: "uidE2",
+				SourceRef: &controlplane.NetworkPolicyReference{
+					Type:      controlplane.AntreaNetworkPolicy,
+					Namespace: "ns5",
+					Name:      "npE2",
+					UID:       "uidE2",
+				},
+				Priority:     &p10,
+				TierPriority: &DefaultTierPriority,
+				Rules: []controlplane.NetworkPolicyRule{
+					{
+						Direction: controlplane.DirectionOut,
+						To: controlplane.NetworkPolicyPeer{
+							ToServices: []controlplane.ServiceReference{
+								{
+									Namespace: "ns5",
+									Name:      common.ToMCResourceName("svc1"),
 								},
 							},
 						},
