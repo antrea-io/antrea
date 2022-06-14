@@ -1072,7 +1072,7 @@ func TestParseMetricFlow(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			rule, metric := parseMetricFlow(tc.flow)
+			rule, metric := parseMetricFlow(parseFlowToMap(tc.flow))
 			require.Equal(t, tc.rule, rule)
 			require.Equal(t, tc.metric.Bytes, metric.Bytes)
 			require.Equal(t, tc.metric.Sessions, metric.Sessions)

@@ -36,6 +36,7 @@ import (
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/agentinfo"
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/appliedtogroup"
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/featuregates"
+	"antrea.io/antrea/pkg/agent/apiserver/handlers/multicast"
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/networkpolicy"
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/ovsflows"
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/ovstracing"
@@ -73,8 +74,9 @@ func (s *agentAPIServer) Run(stopCh <-chan struct{}) error {
 	return s.GenericAPIServer.PrepareRun().Run(stopCh)
 }
 
-func installHandlers(aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolicyInfoQuerier, seipq querier.ServiceExternalIPStatusQuerier, s *genericapiserver.GenericAPIServer) {
+func installHandlers(aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolicyInfoQuerier, mq querier.AgentMulticastInfoQuerier, seipq querier.ServiceExternalIPStatusQuerier, s *genericapiserver.GenericAPIServer) {
 	s.Handler.NonGoRestfulMux.HandleFunc("/loglevel", loglevel.HandleFunc())
+	s.Handler.NonGoRestfulMux.HandleFunc("/podmulticaststats", multicast.HandleFunc(mq))
 	s.Handler.NonGoRestfulMux.HandleFunc("/featuregates", featuregates.HandleFunc())
 	s.Handler.NonGoRestfulMux.HandleFunc("/agentinfo", agentinfo.HandleFunc(aq))
 	s.Handler.NonGoRestfulMux.HandleFunc("/podinterfaces", podinterface.HandleFunc(aq))
@@ -97,7 +99,7 @@ func installAPIGroup(s *genericapiserver.GenericAPIServer, aq agentquerier.Agent
 }
 
 // New creates an APIServer for running in antrea agent.
-func New(aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolicyInfoQuerier, seipq querier.ServiceExternalIPStatusQuerier,
+func New(aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolicyInfoQuerier, mq querier.AgentMulticastInfoQuerier, seipq querier.ServiceExternalIPStatusQuerier,
 	bindPort int, enableMetrics bool, kubeconfig string, cipherSuites []uint16, tlsMinVersion uint16, v4Enabled, v6Enabled bool) (*agentAPIServer, error) {
 	cfg, err := newConfig(npq, bindPort, enableMetrics, kubeconfig)
 	if err != nil {
@@ -112,7 +114,7 @@ func New(aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolicyInfoQuerier
 	if err := installAPIGroup(s, aq, npq, v4Enabled, v6Enabled); err != nil {
 		return nil, err
 	}
-	installHandlers(aq, npq, seipq, s)
+	installHandlers(aq, npq, mq, seipq, s)
 	return &agentAPIServer{GenericAPIServer: s}, nil
 }
 

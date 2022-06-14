@@ -29,6 +29,7 @@ import (
 	"antrea.io/ofnet/ofctrl"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
+	apitypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/tools/cache"
 
@@ -39,16 +40,20 @@ import (
 	"antrea.io/antrea/pkg/agent/openflow"
 	openflowtest "antrea.io/antrea/pkg/agent/openflow/testing"
 	"antrea.io/antrea/pkg/agent/types"
+	typestest "antrea.io/antrea/pkg/agent/types/testing"
+	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	ovsconfigtest "antrea.io/antrea/pkg/ovs/ovsconfig/testing"
 	"antrea.io/antrea/pkg/util/channel"
 )
 
 var (
-	mockOFClient        *openflowtest.MockClient
-	mockMulticastSocket *multicasttest.MockRouteInterface
-	mockIfaceStore      *ifaceStoretest.MockInterfaceStore
-	ovsClient           *ovsconfigtest.MockOVSBridgeClient
-	if1                 = &interfacestore.InterfaceConfig{
+	mockOFClient           *openflowtest.MockClient
+	mockMulticastSocket    *multicasttest.MockRouteInterface
+	mockIfaceStore         *ifaceStoretest.MockInterfaceStore
+	mockMulticastValidator *typestest.MockMulticastValidator
+	ovsClient              *ovsconfigtest.MockOVSBridgeClient
+	if1                    = &interfacestore.InterfaceConfig{
 		Type:          interfacestore.ContainerInterface,
 		InterfaceName: "if1",
 		IPs:           []net.IP{net.ParseIP("192.168.1.1")},
@@ -293,45 +298,203 @@ func TestProcessPacketIn(t *testing.T) {
 		}
 		return ips
 	}
+	allow := v1alpha1.RuleActionAllow
+	anp := v1beta2.AntreaNetworkPolicy
+	acnp := v1beta2.AntreaClusterNetworkPolicy
+	drop := v1alpha1.RuleActionDrop
 	for _, tc := range []struct {
-		iface        *interfacestore.InterfaceConfig
-		version      uint8
-		joinedGroups sets.String
-		leftGroups   sets.String
+		iface            *interfacestore.InterfaceConfig
+		version          uint8
+		joinedGroups     sets.String
+		joinedGroupItems map[string]types.McastNPValidationItem
+		leftGroups       sets.String
+		igmpANPStats     map[apitypes.UID]map[string]*types.RuleMetric
+		igmpACNPStats    map[apitypes.UID]map[string]*types.RuleMetric
+		expGroups        sets.String
 	}{
 		{
 			iface:        createInterface("p1", 1),
 			joinedGroups: sets.NewString("224.1.101.2", "224.1.101.3", "224.1.101.4"),
-			leftGroups:   sets.NewString(),
-			version:      1,
+			joinedGroupItems: map[string]types.McastNPValidationItem{
+				"224.1.101.2": {
+					RuleAction: allow,
+					UUID:       "",
+					NPType:     nil,
+					Name:       "",
+				},
+				"224.1.101.3": {
+					RuleAction: allow,
+					UUID:       "",
+					NPType:     nil,
+					Name:       "",
+				},
+				"224.1.101.4": {
+					RuleAction: allow,
+					UUID:       "anp",
+					NPType:     &anp,
+					Name:       "allow_1014",
+				},
+			},
+			leftGroups:    sets.NewString(),
+			expGroups:     sets.NewString("224.1.101.2", "224.1.101.3", "224.1.101.4"),
+			igmpANPStats:  map[apitypes.UID]map[string]*types.RuleMetric{"anp": {"allow_1014": {Bytes: 42, Packets: 1}}},
+			igmpACNPStats: map[apitypes.UID]map[string]*types.RuleMetric{},
+			version:       1,
+		},
+		{
+			iface:        createInterface("p11", 1),
+			joinedGroups: sets.NewString("224.1.101.20", "224.1.101.21", "224.1.101.22", "224.1.101.23"),
+			joinedGroupItems: map[string]types.McastNPValidationItem{
+				"224.1.101.20": {
+					RuleAction: drop,
+					UUID:       "anp",
+					NPType:     &anp,
+					Name:       "block10120",
+				},
+				"224.1.101.2": {
+					RuleAction: allow,
+					UUID:       "",
+					NPType:     nil,
+					Name:       "",
+				},
+				"224.1.101.22": {
+					RuleAction: allow,
+					UUID:       "anp",
+					NPType:     &anp,
+					Name:       "allow_10122",
+				},
+				"224.1.101.23": {
+					RuleAction: allow,
+					UUID:       "acnp",
+					NPType:     &acnp,
+					Name:       "allow_10123",
+				},
+			},
+			igmpANPStats:  map[apitypes.UID]map[string]*types.RuleMetric{"anp": {"allow_10122": {Bytes: 42, Packets: 1}, "block10120": {Bytes: 42, Packets: 1}, "allow_1014": {Bytes: 42, Packets: 1}}},
+			igmpACNPStats: map[apitypes.UID]map[string]*types.RuleMetric{"acnp": {"allow_10123": {Packets: 1, Bytes: 42}}},
+			expGroups:     sets.NewString("224.1.101.21", "224.1.101.22", "224.1.101.23"),
+			version:       1,
 		},
 		{
 			iface:        createInterface("p2", 2),
 			joinedGroups: sets.NewString("224.1.102.2", "224.1.102.3", "224.1.102.4"),
-			leftGroups:   sets.NewString("224.1.102.3"),
-			version:      2,
+			joinedGroupItems: map[string]types.McastNPValidationItem{
+				"224.1.102.2": {
+					RuleAction: allow,
+					UUID:       "",
+					NPType:     nil,
+					Name:       "",
+				},
+				"224.1.102.3": {
+					RuleAction: allow,
+					UUID:       "",
+					NPType:     nil,
+					Name:       "",
+				},
+				"224.1.102.4": {
+					RuleAction: allow,
+					UUID:       "",
+					NPType:     nil,
+					Name:       "",
+				},
+			},
+			leftGroups:    sets.NewString("224.1.102.3"),
+			igmpANPStats:  map[apitypes.UID]map[string]*types.RuleMetric{"anp": {"allow_10122": {Bytes: 42, Packets: 1}, "block10120": {Bytes: 42, Packets: 1}, "allow_1014": {Bytes: 42, Packets: 1}}},
+			igmpACNPStats: map[apitypes.UID]map[string]*types.RuleMetric{"acnp": {"allow_10123": {Packets: 1, Bytes: 42}}},
+			expGroups:     sets.NewString("224.1.102.2", "224.1.102.4"),
+			version:       2,
 		},
 		{
-			iface:        createInterface("p3", 3),
+			iface:        createInterface("p22", 2),
+			joinedGroups: sets.NewString("224.1.102.21", "224.1.102.22", "224.1.102.23", "224.1.102.24"),
+			joinedGroupItems: map[string]types.McastNPValidationItem{
+				"224.1.102.21": {
+					RuleAction: allow,
+					UUID:       "",
+					NPType:     nil,
+					Name:       "",
+				},
+				"224.1.102.22": {
+					RuleAction: allow,
+					UUID:       "",
+					NPType:     nil,
+					Name:       "",
+				},
+				"224.1.102.23": {
+					RuleAction: allow,
+					UUID:       "",
+					NPType:     nil,
+					Name:       "",
+				},
+				"224.1.102.24": {
+					RuleAction: drop,
+					UUID:       "anp",
+					NPType:     &anp,
+					Name:       "block10120",
+				},
+			},
+			leftGroups:    sets.NewString("224.1.102.23"),
+			version:       2,
+			igmpANPStats:  map[apitypes.UID]map[string]*types.RuleMetric{"anp": {"allow_10122": {Bytes: 42, Packets: 1}, "block10120": {Bytes: 84, Packets: 2}, "allow_1014": {Bytes: 42, Packets: 1}}},
+			igmpACNPStats: map[apitypes.UID]map[string]*types.RuleMetric{"acnp": {"allow_10123": {Packets: 1, Bytes: 42}}},
+			expGroups:     sets.NewString("224.1.102.21", "224.1.102.22"),
+		},
+		{
+			iface:        createInterface("p33", 3),
 			joinedGroups: sets.NewString("224.1.103.2", "224.1.103.3", "224.1.103.4"),
-			leftGroups:   sets.NewString("224.1.103.2"),
-			version:      3,
+			joinedGroupItems: map[string]types.McastNPValidationItem{
+				"224.1.103.2": {
+					RuleAction: allow,
+					UUID:       "",
+					NPType:     nil,
+					Name:       "",
+				},
+				"224.1.103.3": {
+					RuleAction: drop,
+					UUID:       "acnp2",
+					NPType:     &acnp,
+					Name:       "test",
+				},
+				"224.1.103.4": {
+					RuleAction: allow,
+					UUID:       "acnp2",
+					NPType:     &acnp,
+					Name:       "test2",
+				},
+			},
+			leftGroups:    sets.NewString("224.1.103.2", "224.1.103.3"),
+			igmpANPStats:  map[apitypes.UID]map[string]*types.RuleMetric{"anp": {"allow_10122": {Bytes: 42, Packets: 1}, "block10120": {Bytes: 84, Packets: 2}, "allow_1014": {Bytes: 42, Packets: 1}}},
+			igmpACNPStats: map[apitypes.UID]map[string]*types.RuleMetric{"acnp2": {"test": {Packets: 1, Bytes: 58}, "test2": {Packets: 1, Bytes: 66}}, "acnp": {"allow_10123": {Packets: 1, Bytes: 42}}},
+			expGroups:     sets.NewString("224.1.103.4"),
+			version:       3,
 		},
 	} {
 		mockIfaceStore.EXPECT().GetInterfaceByName(tc.iface.InterfaceName).Return(tc.iface, true).AnyTimes()
 		packets := createIGMPReportPacketIn(getIPs(tc.joinedGroups.List()), getIPs(tc.leftGroups.List()), tc.version, uint32(tc.iface.OFPort))
 		mockOFClient.EXPECT().SendIGMPQueryPacketOut(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+
+		if tc.version == 3 {
+			for _, leftGroup := range tc.leftGroups.List() {
+				mockMulticastValidator.EXPECT().Validate(tc.iface.InterfaceName, tc.iface.PodNamespace, net.ParseIP(leftGroup).To4(), gomock.Any()).Times(1)
+			}
+		}
+		for _, joinedGroup := range tc.joinedGroups.List() {
+			mockMulticastValidator.EXPECT().Validate(tc.iface.InterfaceName, tc.iface.PodNamespace, net.ParseIP(joinedGroup).To4(), gomock.Any()).Return(tc.joinedGroupItems[joinedGroup], nil).Times(1)
+		}
 		for _, pkt := range packets {
 			mockIfaceStore.EXPECT().GetInterfaceByOFPort(uint32(tc.iface.OFPort)).Return(tc.iface, true)
 			err := snooper.processPacketIn(pkt)
 			assert.Nil(t, err)
 		}
+
+		assert.Equal(t, tc.igmpACNPStats, snooper.igmpReportACNPStats)
+		assert.Equal(t, tc.igmpANPStats, snooper.igmpReportANPStats)
+
 		time.Sleep(time.Second)
-		expGroups := tc.joinedGroups.Difference(tc.leftGroups)
 		statuses := mockController.getGroupMemberStatusesByPod(tc.iface.InterfaceName)
-		assert.Equal(t, expGroups.Len(), len(statuses))
+		assert.Equal(t, tc.expGroups.Len(), len(statuses))
 		for _, s := range statuses {
-			assert.True(t, expGroups.Has(s.group.String()))
+			assert.True(t, tc.expGroups.Has(s.group.String()))
 		}
 	}
 }
@@ -359,14 +522,14 @@ func newMockMulticastController(t *testing.T) *Controller {
 	mockOFClient = openflowtest.NewMockClient(controller)
 	mockIfaceStore = ifaceStoretest.NewMockInterfaceStore(controller)
 	mockMulticastSocket = multicasttest.NewMockRouteInterface(controller)
+	mockMulticastValidator = typestest.NewMockMulticastValidator(controller)
 	ovsClient = ovsconfigtest.NewMockOVSBridgeClient(controller)
 	addr := &net.IPNet{IP: nodeIf1IP, Mask: net.IPv4Mask(255, 255, 255, 0)}
 	nodeConfig := &config.NodeConfig{GatewayConfig: &config.GatewayConfig{Name: "antrea-gw0"}, NodeIPv4Addr: addr}
 	mockOFClient.EXPECT().RegisterPacketInHandler(gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
 	groupAllocator := openflow.NewGroupAllocator(false)
 	podUpdateSubscriber := channel.NewSubscribableChannel("PodUpdate", 100)
-	queryInterval := 5 * time.Second
-	mctrl := NewMulticastController(mockOFClient, groupAllocator, nodeConfig, mockIfaceStore, mockMulticastSocket, sets.NewString(), ovsClient, podUpdateSubscriber, queryInterval, nil)
+	mctrl := NewMulticastController(mockOFClient, groupAllocator, nodeConfig, mockIfaceStore, mockMulticastSocket, sets.NewString(), ovsClient, podUpdateSubscriber, time.Second*5, mockMulticastValidator)
 	return mctrl
 }
 

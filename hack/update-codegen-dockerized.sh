@@ -43,6 +43,7 @@ function generate_mocks {
     "pkg/agent/flowexporter/connections ConnTrackDumper,NetFilterConnTrack testing"
     "pkg/agent/interfacestore InterfaceStore testing"
     "pkg/agent/multicast RouteInterface testing"
+    "pkg/agent/types MulticastValidator testing"
     "pkg/agent/nodeportlocal/portcache LocalPortOpener testing"
     "pkg/agent/nodeportlocal/rules PodPortRules testing"
     "pkg/agent/openflow Client,OFEntryOperations testing"
@@ -57,7 +58,7 @@ function generate_mocks {
     "pkg/ovs/openflow Bridge,Table,Flow,Action,CTAction,FlowBuilder testing"
     "pkg/ovs/ovsconfig OVSBridgeClient testing"
     "pkg/ovs/ovsctl OVSCtlClient testing"
-    "pkg/querier AgentNetworkPolicyInfoQuerier testing"
+    "pkg/querier AgentNetworkPolicyInfoQuerier,AgentMulticastInfoQuerier testing"
     "third_party/proxy Provider testing"
   )
 
