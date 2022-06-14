@@ -30,6 +30,7 @@ const (
 	ProtocolUDP  AntreaPolicyProtocol = "UDP"
 	ProtocolSCTP AntreaPolicyProtocol = "SCTP"
 	ProtocolICMP AntreaPolicyProtocol = "ICMP"
+	ProtocolIGMP AntreaPolicyProtocol = "IGMP"
 )
 
 func AntreaPolicyProtocolToK8sProtocol(antreaProtocol AntreaPolicyProtocol) (v1.Protocol, error) {
@@ -45,13 +46,23 @@ func AntreaPolicyProtocolToK8sProtocol(antreaProtocol AntreaPolicyProtocol) (v1.
 	}
 }
 
-func GenPortsOrProtocols(protoc AntreaPolicyProtocol, port *int32, portName *string, endPort, icmpType, icmpCode *int32) ([]crdv1alpha1.NetworkPolicyPort, []crdv1alpha1.NetworkPolicyProtocol) {
+func GenPortsOrProtocols(protoc AntreaPolicyProtocol, port *int32, portName *string, endPort, icmpType, icmpCode, igmpType *int32, groupAddress *string) ([]crdv1alpha1.NetworkPolicyPort, []crdv1alpha1.NetworkPolicyProtocol) {
 	if protoc == ProtocolICMP {
 		return nil, []crdv1alpha1.NetworkPolicyProtocol{
 			{
 				ICMP: &crdv1alpha1.ICMPProtocol{
 					ICMPType: icmpType,
 					ICMPCode: icmpCode,
+				},
+			},
+		}
+	}
+	if protoc == ProtocolIGMP {
+		return nil, []crdv1alpha1.NetworkPolicyProtocol{
+			{
+				IGMP: &crdv1alpha1.IGMPProtocol{
+					IGMPType:     igmpType,
+					GroupAddress: *groupAddress,
 				},
 			},
 		}

@@ -86,8 +86,8 @@ func (b *AntreaNetworkPolicySpecBuilder) GetAppliedToPeer(podSelector map[string
 }
 
 func (b *AntreaNetworkPolicySpecBuilder) AddIngress(protoc AntreaPolicyProtocol,
-	port *int32, portName *string, endPort, icmpType, icmpCode *int32, cidr *string,
-	podSelector map[string]string, nsSelector map[string]string,
+	port *int32, portName *string, endPort, icmpType, icmpCode, igmpType *int32,
+	groupAddress, cidr *string, podSelector map[string]string, nsSelector map[string]string,
 	podSelectorMatchExp []metav1.LabelSelectorRequirement, nsSelectorMatchExp []metav1.LabelSelectorRequirement,
 	ruleAppliedToSpecs []ANPAppliedToSpec, action crdv1alpha1.RuleAction, name string) *AntreaNetworkPolicySpecBuilder {
 
@@ -127,7 +127,7 @@ func (b *AntreaNetworkPolicySpecBuilder) AddIngress(protoc AntreaPolicyProtocol,
 			IPBlock:           ipBlock,
 		}}
 	}
-	ports, protocols := GenPortsOrProtocols(protoc, port, portName, endPort, icmpType, icmpCode)
+	ports, protocols := GenPortsOrProtocols(protoc, port, portName, endPort, icmpType, icmpCode, igmpType, groupAddress)
 	newRule := crdv1alpha1.Rule{
 		From:      policyPeer,
 		Ports:     ports,
@@ -141,15 +141,15 @@ func (b *AntreaNetworkPolicySpecBuilder) AddIngress(protoc AntreaPolicyProtocol,
 }
 
 func (b *AntreaNetworkPolicySpecBuilder) AddEgress(protoc AntreaPolicyProtocol,
-	port *int32, portName *string, endPort, icmpType, icmpCode *int32, cidr *string,
-	podSelector map[string]string, nsSelector map[string]string,
+	port *int32, portName *string, endPort, icmpType, icmpCode, igmpType *int32,
+	groupAddress, cidr *string, podSelector map[string]string, nsSelector map[string]string,
 	podSelectorMatchExp []metav1.LabelSelectorRequirement, nsSelectorMatchExp []metav1.LabelSelectorRequirement,
 	ruleAppliedToSpecs []ANPAppliedToSpec, action crdv1alpha1.RuleAction, name string) *AntreaNetworkPolicySpecBuilder {
 
 	// For simplicity, we just reuse the Ingress code here.  The underlying data model for ingress/egress is identical
 	// With the exception of calling the rule `To` vs. `From`.
 	c := &AntreaNetworkPolicySpecBuilder{}
-	c.AddIngress(protoc, port, portName, endPort, icmpType, icmpCode, cidr, podSelector, nsSelector,
+	c.AddIngress(protoc, port, portName, endPort, icmpType, icmpCode, igmpType, groupAddress, cidr, podSelector, nsSelector,
 		podSelectorMatchExp, nsSelectorMatchExp, ruleAppliedToSpecs, action, name)
 	theRule := c.Get().Spec.Ingress[0]
 
