@@ -298,10 +298,9 @@ This feature is currently only supported for Nodes running Linux and "encap"
 mode. The support for Windows and other traffic modes will be added in the
 future.
 
-The current implementation of Antrea Egress does not work with the `strictARP`
-configuration of `kube-proxy` IPVS mode. The `strictARP` configuration is
-required by some Service load balancing solutions including: [Antrea Service
-external IP management, MetalLB](service-loadbalancer.md#interoperability-with-kube-proxy-ipvs-mode),
+The previous implementation of Antrea Egress before Antrea v1.7.0 does not work
+with the `strictARP` configuration of `kube-proxy` IPVS mode. The `strictARP`
+configuration is required by some Service load balancing solutions including:
+[Antrea Service external IP management, MetalLB](service-loadbalancer.md#interoperability-with-kube-proxy-ipvs-mode),
 and kube-vip. It means Antrea Egress cannot work together with these solutions
-in a cluster using `kube-proxy` IPVS. We assume this issue will be fixed in a
-near future Antrea version.
+in a cluster using `kube-proxy` IPVS. The issue was fixed in Antrea v1.7.0.
