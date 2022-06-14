@@ -197,26 +197,12 @@ func runTestMulticastBetweenPods(t *testing.T, data *TestData, mc multicastTestc
 	failOnError(err, t)
 	senderName, _, cleanupFunc := createAndWaitForPod(t, data, data.createMcJoinPodOnNode, "test-sender-", nodeName(mc.senderConfig.nodeIdx), data.testNamespace, mc.senderConfig.isHostNetwork)
 	defer cleanupFunc()
-	receiverNames := make([]string, 0)
-	for _, receiver := range mc.receiverConfigs {
-		receiverName, _, cleanupFunc := createAndWaitForPod(t, data, data.createMcJoinPodOnNode, "test-receiver-", nodeName(receiver.nodeIdx), data.testNamespace, receiver.isHostNetwork)
-		receiverNames = append(receiverNames, receiverName)
+	var wg sync.WaitGroup
+	_, cleanupFuncs := setupReceivers(t, data, mc, mcjoinWaitTimeout, &wg)
+	for _, cleanupFunc := range cleanupFuncs {
 		defer cleanupFunc()
 	}
-	var wg sync.WaitGroup
-	for _, receiverName := range receiverNames {
-		r := receiverName
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			// The following command joins a multicast group and sets the timeout to 100 seconds(-W 100) before exit.
-			// The command will return after receiving 1 packet(-c 1).
-			receiveMulticastCommand := []string{"/bin/sh", "-c", fmt.Sprintf("mcjoin -c 10 -o -p %d -W %d %s", mc.port, mcjoinWaitTimeout, mc.group.String())}
-			res, _, err := data.RunCommandFromPod(data.testNamespace, r, mcjoinContainerName, receiveMulticastCommand)
-			failOnError(err, t)
-			assert.Contains(t, res, "Total: 10 packets")
-		}()
-	}
+
 	// Wait 2 seconds(-w 2) before sending multicast traffic.
 	// It sends two multicast packets for every second(-f 500 means it takes 500 milliseconds for sending one packet).
 	sendMulticastCommand := []string{"/bin/sh", "-c", fmt.Sprintf("mcjoin -f 500 -o -p %d -s -t 3 -w 2 -W %d %s", mc.port, mcjoinWaitTimeout, mc.group.String())}
@@ -290,6 +276,31 @@ func runTestMulticastBetweenPods(t *testing.T, data *TestData, mc multicastTestc
 		t.Fatalf("Error waiting for multicast routes and stats: %v", err)
 	}
 	wg.Wait()
+}
+
+func setupReceivers(t *testing.T, data *TestData, mc multicastTestcase, mcjoinWaitTimeout time.Duration, wg *sync.WaitGroup) ([]string, []func()) {
+	receiverNames := make([]string, 0)
+	cleanupFuncs := []func(){}
+	for _, receiver := range mc.receiverConfigs {
+		receiverName, _, cleanupFunc := createAndWaitForPod(t, data, data.createMcJoinPodOnNode, "test-receiver-", nodeName(receiver.nodeIdx), data.testNamespace, receiver.isHostNetwork)
+		receiverNames = append(receiverNames, receiverName)
+		cleanupFuncs = append(cleanupFuncs, cleanupFunc)
+	}
+
+	for _, receiverName := range receiverNames {
+		r := receiverName
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			// The following command joins a multicast group and sets the timeout to 100 seconds(-W 100) before exit.
+			// The command will return after receiving 10 packet(-c 10).
+			receiveMulticastCommand := []string{"/bin/sh", "-c", fmt.Sprintf("mcjoin -c 10 -o -p %d -W %d %s", mc.port, mcjoinWaitTimeout, mc.group.String())}
+			res, _, err := data.RunCommandFromPod(data.testNamespace, r, mcjoinContainerName, receiveMulticastCommand)
+			failOnError(err, t)
+			assert.Contains(t, res, "Total: 10 packets")
+		}()
+	}
+	return receiverNames, cleanupFuncs
 }
 
 // computeMulticastInterfaces computes multicastInterfaces for each node.

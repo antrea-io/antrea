@@ -114,6 +114,15 @@ func (k *KubernetesUtils) GetPodsByLabel(ns string, key string, val string) ([]v
 	return v1PodList, nil
 }
 
+func (k *KubernetesUtils) LabelPod(ns, name, key, value string) (*v1.Pod, error) {
+	pod, err := k.clientset.CoreV1().Pods(ns).Get(context.TODO(), name, metav1.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+	pod.Labels[key] = value
+	return k.clientset.CoreV1().Pods(ns).Update(context.TODO(), pod, metav1.UpdateOptions{})
+}
+
 func (k *KubernetesUtils) probe(
 	pod *v1.Pod,
 	podName string,
