@@ -3,11 +3,11 @@
 Antrea Multi-cluster implements [Multi-cluster Service API](https://github.com/kubernetes/enhancements/tree/master/keps/sig-multicluster/1645-multi-cluster-services-api),
 which allows users to create multi-cluster Services that can be accessed cross clusters in a
 ClusterSet. Antrea Multi-cluster also supports Antrea ClusterNetworkPolicy replication. A
-multi-cluster ClusterSet admin can define ClusterNetworkPolicies to be replicated across the
+Multi-cluster ClusterSet admin can define ClusterNetworkPolicies to be replicated across the
 entire ClusterSet and enforced in all member clusters. Antrea Multi-cluster is introduced in
 Antrea v1.5.0, and the ClusterNetworkPolicy replication feature is supported since Antrea
 v1.6.0. In Antrea v1.7.0, the Multi-cluster Gateway feature is added that supports routing
-Multi-cluster Service traffic through tunnels among clusters.
+multi-cluster Service traffic through tunnels among clusters.
 
 ## Quick Start
 
@@ -31,7 +31,7 @@ you can change the YAML manifest path to: `https://github.com/antrea-io/antrea/t
 when applying or downloading an Antrea YAML manifest.
 
 Multi-cluster Services require an Antrea Multi-cluster Gateway to be set up in
-each member cluster, so the Multi-cluster Service traffic can be routed across
+each member cluster, so the multi-cluster Service traffic can be routed across
 clusters by the Gateways. To support Multi-cluster Gateways, `antrea-agent` must
 be deployed with the `Multicluster` feature enabled in a member cluster. You can
 set the following configuration parameters in `antrea-agent.conf` of the Antrea
@@ -49,7 +49,10 @@ antrea-agent.conf: |
     namespace: ""
 ```
 
-### Deploy Antrea Mulit-cluster Controller
+At the moment, Multi-cluster Gateway only works with the Antrea `encap` traffic
+mode, and all member clusters in a ClusterSet must use the same tunnel type.
+
+### Deploy Antrea Multi-cluster Controller
 
 A Multi-cluster ClusterSet is comprised of a single leader cluster and at least
 two member clusters. Antrea Multi-cluster Controller needs to be deployed in the
@@ -359,12 +362,16 @@ spec:
 
 ## Multi-cluster Gateway Configuration
 
+Multi-cluster Gateways are required to support multi-cluster Service access
+across member clusters. Each member cluster should have one Node be specified as
+its Multi-cluster Gateway. Multi-cluster Service traffic is routed among clusters
+through the tunnels between Gateways.
+
 After a member cluster joins a ClusterSet, and the `Multicluster` feature is
-enabled for `antrea-agent`, one K8s Node in the member cluster can be specified
-to serve as the Multi-cluster Gateway of the cluster. An annotation -
-`multicluster.antrea.io/gateway=true` - should be added to the Node to tell
-Antrea it is the Gateway Node. For example, you can run the following command to
-annotate Node `node-1` as the Multi-cluster Gateway:
+enabled on `antrea-agent`, you can select one Node of the cluster to serve as
+the Multi-cluster Gateway by adding an annotation:
+`multicluster.antrea.io/gateway=true` to the K8s Node. For example, you can run
+the following command to annotate Node `node-1` as the Multi-cluster Gateway:
 
 ```bash
 $kubectl annotate node node-1 multicluster.antrea.io/gateway=true
@@ -387,29 +394,36 @@ internalIP: 10.17.27.55
 
 `internalIP` of the Gateway is used for the tunnels between the Gateway Node and
 other Nodes in the local cluster, while `gatewayIP` is used for the tunnels to
-remote Gateways of other member clusters.  By default, Multi-cluster Controller
-will use the K8s Node `InternalIP` of the Gateway Node as the `gatewayIP`. If
-you want to use `ExternalIP` of the Gateway Node instead, you can change the
-configuration option `gatewayIPPrecedence` in ConfigMap
-`antrea-mc-controller-config-***` to value `public`, when you deploy the member
-Multi-cluster Controller. When selecting the Multi-cluster Gateway Node, you
-need to make sure the resulted `gatewayIP` can be reached from the remote
-Gateways.
+remote Gateways of other member clusters. Multi-cluster Controller discovers the
+IP addresses from the K8s Node resource of the Gateway Node. It will always use
+`InternalIP` of the K8s Node as the Gateway's `internalIP`. For `gatewayIP`,
+there are several possibilities:
 
-After the `Gateway` CR is created, Multi-cluster Controller will be responsible
-for exporting the cluster's network information to the leader cluster including
-the Gateway IPs and `serviceCIDR` (the cluster's Service ClusterIP range).
-Multi-cluster Controller will try to discover `serviceCIDR` automatically, but
-you can also define the `serviceCIDR` manually in the Antrea Multi-cluster
-ConfigMap `antrea-mc-controller-config-***`.
+* By default, the K8s Node's `InternalIP` is used as `gatewayIP` too.
+* You can choose to use the K8s Node's `ExternalIP` as `gatewayIP`, by changing
+the configuration option `gatewayIPPrecedence` to value: `public`, when
+deploying the member Multi-cluster Controller. The configration option is
+defined in ConfigMap `antrea-mc-controller-config-***` in `antrea-multicluster-member.yml`.
+* When the Gateway Node has a separate IP for external communication or is
+associated with a public IP (e.g. an Elastic IP on AWS), but the IP is not added
+to the K8s Node, you can still choose to use the IP as `gatewayIP`, by adding an
+annotation: `multicluster.antrea.io/gateway-ip=<ip-address>` to the K8s Node.
 
-The Multi-cluster resource export/import pipeline will replicate the exported
-cluster network information to all member clusters in the ClusterSet. For
-example, in other member clusters, you can see a `ClusterInfoImport` CR with
-name `test-cluster-east-clusterinfo` is created for `test-cluster-east` with
-its network information. You can check the `ClusterInfoImport` with command:
-`kubectl get clusterinfoimport test-cluster-east-clusterinfo -o yaml`, which
-should show information like:
+When selecting the Multi-cluster Gateway Node, you need to make sure the
+resulted `gatewayIP` can be reached from the remote Gateways.
+
+After the Gateway is detected, Multi-cluster Controller will be responsible
+for exporting the cluster's network information to other member clusters
+through the leader cluster, including the cluster's Gateway IP and Service
+CIDR. Multi-cluster Controller will try to discover the cluster's Service CIDR
+automatically, but you can also manually specify the `serviceCIDR` option in
+ConfigMap `antrea-mc-controller-config-***`. In other member clusters, a
+`ClusterInfoImport` CR will be created for the cluster which includes the
+exported network information. For example, in cluster `test-cluster-west`, you
+you can see a `ClusterInfoImport` CR with name `test-cluster-east-clusterinfo`
+is created for cluster `test-cluster-east`. You can check the
+`ClusterInfoImport` with command: `kubectl get clusterinfoimport -o yaml`,
+which should show information like:
 
 ```yaml
 apiVersion: multicluster.crd.antrea.io/v1alpha1
@@ -424,72 +438,58 @@ spec:
   serviceCIDR: 110.96.0.0/20
 ```
 
-Make sure you repeat the same steps to assign a Gateway Node in all member
-clusters, then `antrea-agent` will set up Geneve tunnels among the Gateway Nodes
-of member clusters based on the local `Gateway` and the `ClusterInfoImport`
-resources, and route Multi-cluster Service traffic across clusters through the
-tunnels. `antrea-agent` on regular Nodes will route cross-cluster traffic from
-local Pods to the Gateway Node of the member cluster.
-
-Once you confirm that all `Gateway` and `ClusterInfoImport` resources are
+Make sure you repeat the same step to assign a Gateway Node in all member
+clusters. Once you confirm that all `Gateway` and `ClusterInfoImport` are
 created correctly, you can follow the [Multi-cluster Service](#multi-cluster-service)
-section to create Multi-cluster Services and verify cross-cluster Service
+section to create multi-cluster Services and verify cross-cluster Service
 access.
 
 ## Multi-cluster Service
 
-After you set up a ClusterSet properly, you can simply create a `ServiceExport` resource
-as below to export a `Service` from one member cluster to other members in the ClusterSet,
-you can update the name and Namespace according to your local K8s Service.
+After you set up a ClusterSet properly, you can create a `ServiceExport` CR to
+export a Service from one cluster to other clusters in the Clusterset, like the
+example below:
 
 ```yaml
 apiVersion: multicluster.x-k8s.io/v1alpha1
 kind: ServiceExport
 metadata:
   name: nginx
-  namespace: kube-system
+  namespace: default
 ```
 
-For example, once you export the `kube-system/nginx` Service in the member cluster
-`test-cluster-west`, Antrea Multi-cluster Controller in the member cluster will create
-two corresponding `ResourceExport` resources in the leader cluster, and the controller
-in leader cluster will create two `ResourceImport` contains all exported Service and
-Endpoints'. you can check the created resources in the leader cluster which should be
-like below:
+For example, once you export the `default/nginx` Service in member cluster
+`test-cluster-west`, it will be automatically imported in member cluster
+`test-cluster-east`. A Service and an Endpoints with name
+`default/antrea-mc-nginx` will be created in `test-cluster-east`, as well as
+a ServcieImport CR with name `default/nginx`. Now, Pods in `test-cluster-east`
+can access the imported Service using its ClusterIP, and the requests will be
+routed to the backend `nginx` Pods in `test-cluster-west`.
+
+As part of the Service export/import process, in the leader cluster, two
+ResourceExport CRs will be created in the Multi-cluster Controller Namespace,
+for the exported Service and Endpoints respectively, as well as two
+ResourceImport CRs. You can check them in the leader cluster with commands:
 
 ```sh
-$kubectl get resourceexport
+$kubectl get resourceexport -n antrea-multicluster
 NAME                                        AGE
 test-cluster-west-default-nginx-endpoints   7s
 test-cluster-west-default-nginx-service     7s
 
-$kubectl get resourceimport
+$kubectl get resourceimport -n antrea-multicluster
 NAME                      AGE
 default-nginx-endpoints   99s
 default-nginx-service     99s
 ```
 
-Then you can go to the member cluster `test-cluster-east` to check the new created
-Service and Endpoints with name `kube-system/antrea-mc-nginx` and a ServiceImport named
-`kube-system/nginx`. If there is already an existing Service created by users in the
-member cluster `test-cluster-east` also named `nginx` in Namespace `kube-system`, which
-should have no Antrea Multi-cluster annotation, then Multi-cluster Controller will
-simply skip the Service and Endpoints creation.
-
-If there is any new change from the exported Service or Endpoints, the derived multi-cluster
-resources will be updated accordingly. A few cases below are worth to note:
-
-1. When there is only one Service ResourceExport, Antrea Multi-cluster Controller will converge
-   the change and reflect the update in correspoding ResourceImport. Otherwise, controller will skip
-   converging the update until users correct it to match the Service definition in correspoding
-   ResourceImport.
-2. When a member cluster has already exported a Service, e.g.: `default/nginx` with TCP
-   Port `80`, then other member clusters can only export the same Service with the same Ports
-   definition including port names. Otherwise, Antrea Multi-cluster Controller will skip converting
-   the mismatched ResourceExport into the corresponding ResourceImport until users correct it.
-3. When a member cluster's Service ResourceExport has not been converged successfully
-   due to forementioned mismatch issue, Antrea Multi-cluster Controller will also skip converging
-   the corresponding Endpoints ResourceExport until users correct it.
+When there is any new change on the exported Service, the imported multi-cluster
+Service resources will be updated accordingly. But when multiple member clusters
+exported the same Service with conflicted definitions, only the first export
+will be replicated to other clusters, and new updates on the Service will be
+ingored, until user fixes the conflicts. For example, after a member cluster
+exported a Service: `default/nginx` with TCP Port `80`, other clusters can only
+export the same Service with the same Ports definition including Port names.
 
 ## Multi-cluster ClusterNetworkPolicy Replication
 
@@ -499,18 +499,18 @@ the ClusterSet to be applied with a consistent security posture (for example, al
 clusters can only communicate with Pods in their own namespaces). For more information regarding
 Antrea ClusterNetworkPolicy (ACNP), refer to [this document](../antrea-network-policy.md).
 
-To achieve such ACNP replication across clusters, admins can, in the acting leader cluster of a
-Multi-cluster deployment, create a ResourceExport of kind `AntreaClusterNetworkPolicy` which contains
-the ClusterNetworkPolicy spec they wish to be replicated. The ResourceExport should be created in the
-Namespace which implements the Common Area of the ClusterSet. In future releases, some additional tooling
-may become available to automate the creation of such ResourceExport and make ACNP replication easier.
+To achieve such ACNP replication across clusters, admins can, in the leader
+cluster of a ClusterSet, create a `ResourceExport` CR of kind
+`AntreaClusterNetworkPolicy` which contains the ClusterNetworkPolicy spec
+they wish to be replicated. The `ResourceExport` should be created in the
+Namespace where the ClusterSet's leader Multi-cluster Controller runs.
 
 ```yaml
 apiVersion: multicluster.crd.antrea.io/v1alpha1
 kind: ResourceExport
 metadata:
   name: strict-namespace-isolation-for-test-clusterset
-  namespace: antrea-multicluster # Namespace that implements Common Area of test-clusterset
+  namespace: antrea-multicluster # Namespace that Multi-cluster Controller is deployed
 spec:
   kind: AntreaClusterNetworkPolicy
   name: strict-namespace-isolation # In each importing cluster, an ACNP of name antrea-mc-strict-namespace-isolation will be created with the spec below
@@ -532,14 +532,14 @@ spec:
           - namespaceSelector: {} # Drop from Pods from all other Namespaces
 ```
 
-The above sample spec will create an ACNP in each member cluster which implements strict namespace
-isolation for that cluster.
+The above sample spec will create an ACNP in each member cluster which
+implements strict Namespace isolation for that cluster.
 
 Note that because the Tier that an ACNP refers to must exist before the ACNP is applied, an importing
 cluster may fail to create the ACNP to be replicated, if the Tier in the ResourceExport spec cannot be
 found in that particular cluster. If there are such failures, the ACNP creation status of failed member
-clusters will be reported back to the Common Area as K8s Events, and can be checked by describing the
-ResourceImport of the original ResourceExport:
+clusters will be reported back to the leader cluster as K8s Events, and can be checked by describing
+the `ResourceImport` of the original `ResourceExport`:
 
 ```text
 kubectl describe resourceimport -A
@@ -576,6 +576,10 @@ Events:
   Warning ACNPImportFailed     2m11s  resourceimport-controller  ACNP Tier random does not exist in the importing cluster test-cluster-west
 ```
 
+In future releases, some additional tooling may become available to automate the
+creation of ResourceExports for ACNPs, and provide a user-friendly way to define
+Multi-cluster NetworkPolicies to be enforced in the ClusterSet.
+
 ## Build Antrea Multi-cluster Image
 
 If you'd like to build Antrea Multi-cluster Docker image locally, you can follow
@@ -589,14 +593,15 @@ the following steps:
 
 ## Known Issue
 
-We recommend user to reinstall or update Antrea Multi-cluster controllers through `kubectl apply`.
-If you are using `kubectl delete -f *` and `kubectl create -f *` to reinstall CRDs and controller
-in the leader cluster, you might encounter [a known issue](https://github.com/kubernetes/kubernetes/issues/60538)
-during `ResourceExport` CRD cleanup. To avoid this issue, please clean up any `ResourceExport`
-resources in the leader cluster first, and make sure `kubectl get resourceexport -A` returns
-empty result before you can reinstall the CRDs and leader controller.
+We recommend user to redeploy or update Antrea Multi-cluster Controller through
+`kubectl apply`. If you are using `kubectl delete -f *` and `kubectl create -f *`
+to redeploy Controller in the leader cluster, you might encounter [a known issue](https://github.com/kubernetes/kubernetes/issues/60538)
+in `ResourceExport` CRD cleanup. To avoid this issue, please delete any
+`ResourceExport` CRs in the leader cluster first, and make sure
+`kubectl get resourceexport -A` returns empty result before you can redeploy
+Multi-cluster Controller.
 
-All `ResourceExport` can be deleted with the following command:
+All `ResourceExports` can be deleted with the following command:
 
 ```sh
 kubectl get resourceexport -A -o json | jq -r '.items[]|[.metadata.namespace,.metadata.name]|join(" ")' | xargs -n2 bash -c 'kubectl delete -n $0 resourceexport/$1'
