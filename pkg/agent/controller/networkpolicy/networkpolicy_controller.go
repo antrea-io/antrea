@@ -25,7 +25,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
-	apitypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/util/workqueue"
@@ -38,7 +37,6 @@ import (
 	proxytypes "antrea.io/antrea/pkg/agent/proxy/types"
 	"antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
-	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	"antrea.io/antrea/pkg/querier"
 	"antrea.io/antrea/pkg/util/channel"
 )
@@ -493,11 +491,9 @@ func (c *Controller) matchIGMPType(r *rule, igmpType uint8, groupAddress string)
 	return false
 }
 
-// Validate checks if there is rule to drop or allow IGMP report from a Pod to a group Address, and returns multicast
-// NetworkPolicy Information
-func (c *Controller) Validate(podName, podNamespace string, groupAddress net.IP, igmpType uint8) (types.McastNPValidationItem, error) {
-	var ruleTypePtr *v1beta2.NetworkPolicyType
-	action, uuid, ruleName := v1alpha1.RuleActionAllow, apitypes.UID(""), ""
+// GetIGMPNPRuleInfo looks up the IGMP NetworkPolicy rule that matches the given Pod and groupAddress,
+// and returns the rule information if found.
+func (c *Controller) GetIGMPNPRuleInfo(podName, podNamespace string, groupAddress net.IP, igmpType uint8) (*types.IGMPNPRuleInfo, error) {
 	member := &v1beta2.GroupMember{
 		Pod: &v1beta2.PodReference{
 			Name:      podName,
@@ -505,6 +501,7 @@ func (c *Controller) Validate(podName, podNamespace string, groupAddress net.IP,
 		},
 	}
 
+	var ruleInfo *types.IGMPNPRuleInfo
 	objects, _ := c.ruleCache.rules.ByIndex(toIGMPReportGroupAddressIndex, groupAddress.String())
 	objects2, _ := c.ruleCache.rules.ByIndex(toIGMPReportGroupAddressIndex, "")
 	objects = append(objects, objects2...)
@@ -522,15 +519,14 @@ func (c *Controller) Validate(podName, podNamespace string, groupAddress net.IP,
 	}
 
 	if matchedRule != nil {
-		ruleTypePtr = new(v1beta2.NetworkPolicyType)
-		action, uuid, *ruleTypePtr, ruleName = *matchedRule.Action, matchedRule.PolicyUID, matchedRule.SourceRef.Type, matchedRule.Name
+		ruleInfo = &types.IGMPNPRuleInfo{
+			RuleAction: *matchedRule.Action,
+			UUID:       matchedRule.PolicyUID,
+			NPType:     &matchedRule.SourceRef.Type,
+			Name:       matchedRule.Name,
+		}
 	}
-	return types.McastNPValidationItem{
-		RuleAction: action,
-		UUID:       uuid,
-		NPType:     ruleTypePtr,
-		Name:       ruleName,
-	}, nil
+	return ruleInfo, nil
 }
 
 func (c *Controller) enqueueRule(ruleID string) {

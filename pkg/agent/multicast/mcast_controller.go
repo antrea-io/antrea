@@ -244,7 +244,7 @@ func NewMulticastController(ofClient openflow.Client,
 	ovsBridgeClient ovsconfig.OVSBridgeClient,
 	podUpdateSubscriber channel.Subscriber,
 	igmpQueryInterval time.Duration,
-	validator types.MulticastValidator) *Controller {
+	validator types.McastNetworkPolicyController) *Controller {
 	eventCh := make(chan *mcastGroupEvent, workerCount)
 	groupSnooper := newSnooper(ofClient, ifaceStore, eventCh, igmpQueryInterval, validator)
 	groupCache := cache.NewIndexer(getGroupEventKey, cache.Indexers{

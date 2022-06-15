@@ -51,7 +51,7 @@ var (
 	mockOFClient           *openflowtest.MockClient
 	mockMulticastSocket    *multicasttest.MockRouteInterface
 	mockIfaceStore         *ifaceStoretest.MockInterfaceStore
-	mockMulticastValidator *typestest.MockMulticastValidator
+	mockMulticastValidator *typestest.MockMcastNetworkPolicyController
 	ovsClient              *ovsconfigtest.MockOVSBridgeClient
 	if1                    = &interfacestore.InterfaceConfig{
 		Type:          interfacestore.ContainerInterface,
@@ -306,7 +306,7 @@ func TestProcessPacketIn(t *testing.T) {
 		iface            *interfacestore.InterfaceConfig
 		version          uint8
 		joinedGroups     sets.String
-		joinedGroupItems map[string]types.McastNPValidationItem
+		joinedGroupItems map[string]*types.IGMPNPRuleInfo
 		leftGroups       sets.String
 		igmpANPStats     map[apitypes.UID]map[string]*types.RuleMetric
 		igmpACNPStats    map[apitypes.UID]map[string]*types.RuleMetric
@@ -315,19 +315,9 @@ func TestProcessPacketIn(t *testing.T) {
 		{
 			iface:        createInterface("p1", 1),
 			joinedGroups: sets.NewString("224.1.101.2", "224.1.101.3", "224.1.101.4"),
-			joinedGroupItems: map[string]types.McastNPValidationItem{
-				"224.1.101.2": {
-					RuleAction: allow,
-					UUID:       "",
-					NPType:     nil,
-					Name:       "",
-				},
-				"224.1.101.3": {
-					RuleAction: allow,
-					UUID:       "",
-					NPType:     nil,
-					Name:       "",
-				},
+			joinedGroupItems: map[string]*types.IGMPNPRuleInfo{
+				"224.1.101.2": nil,
+				"224.1.101.3": nil,
 				"224.1.101.4": {
 					RuleAction: allow,
 					UUID:       "anp",
@@ -344,19 +334,14 @@ func TestProcessPacketIn(t *testing.T) {
 		{
 			iface:        createInterface("p11", 1),
 			joinedGroups: sets.NewString("224.1.101.20", "224.1.101.21", "224.1.101.22", "224.1.101.23"),
-			joinedGroupItems: map[string]types.McastNPValidationItem{
+			joinedGroupItems: map[string]*types.IGMPNPRuleInfo{
 				"224.1.101.20": {
 					RuleAction: drop,
 					UUID:       "anp",
 					NPType:     &anp,
 					Name:       "block10120",
 				},
-				"224.1.101.2": {
-					RuleAction: allow,
-					UUID:       "",
-					NPType:     nil,
-					Name:       "",
-				},
+				"224.1.101.2": nil,
 				"224.1.101.22": {
 					RuleAction: allow,
 					UUID:       "anp",
@@ -378,25 +363,10 @@ func TestProcessPacketIn(t *testing.T) {
 		{
 			iface:        createInterface("p2", 2),
 			joinedGroups: sets.NewString("224.1.102.2", "224.1.102.3", "224.1.102.4"),
-			joinedGroupItems: map[string]types.McastNPValidationItem{
-				"224.1.102.2": {
-					RuleAction: allow,
-					UUID:       "",
-					NPType:     nil,
-					Name:       "",
-				},
-				"224.1.102.3": {
-					RuleAction: allow,
-					UUID:       "",
-					NPType:     nil,
-					Name:       "",
-				},
-				"224.1.102.4": {
-					RuleAction: allow,
-					UUID:       "",
-					NPType:     nil,
-					Name:       "",
-				},
+			joinedGroupItems: map[string]*types.IGMPNPRuleInfo{
+				"224.1.102.2": nil,
+				"224.1.102.3": nil,
+				"224.1.102.4": nil,
 			},
 			leftGroups:    sets.NewString("224.1.102.3"),
 			igmpANPStats:  map[apitypes.UID]map[string]*types.RuleMetric{"anp": {"allow_10122": {Bytes: 42, Packets: 1}, "block10120": {Bytes: 42, Packets: 1}, "allow_1014": {Bytes: 42, Packets: 1}}},
@@ -407,25 +377,10 @@ func TestProcessPacketIn(t *testing.T) {
 		{
 			iface:        createInterface("p22", 2),
 			joinedGroups: sets.NewString("224.1.102.21", "224.1.102.22", "224.1.102.23", "224.1.102.24"),
-			joinedGroupItems: map[string]types.McastNPValidationItem{
-				"224.1.102.21": {
-					RuleAction: allow,
-					UUID:       "",
-					NPType:     nil,
-					Name:       "",
-				},
-				"224.1.102.22": {
-					RuleAction: allow,
-					UUID:       "",
-					NPType:     nil,
-					Name:       "",
-				},
-				"224.1.102.23": {
-					RuleAction: allow,
-					UUID:       "",
-					NPType:     nil,
-					Name:       "",
-				},
+			joinedGroupItems: map[string]*types.IGMPNPRuleInfo{
+				"224.1.102.21": nil,
+				"224.1.102.22": nil,
+				"224.1.102.23": nil,
 				"224.1.102.24": {
 					RuleAction: drop,
 					UUID:       "anp",
@@ -442,13 +397,8 @@ func TestProcessPacketIn(t *testing.T) {
 		{
 			iface:        createInterface("p33", 3),
 			joinedGroups: sets.NewString("224.1.103.2", "224.1.103.3", "224.1.103.4"),
-			joinedGroupItems: map[string]types.McastNPValidationItem{
-				"224.1.103.2": {
-					RuleAction: allow,
-					UUID:       "",
-					NPType:     nil,
-					Name:       "",
-				},
+			joinedGroupItems: map[string]*types.IGMPNPRuleInfo{
+				"224.1.103.2": nil,
 				"224.1.103.3": {
 					RuleAction: drop,
 					UUID:       "acnp2",
@@ -475,11 +425,11 @@ func TestProcessPacketIn(t *testing.T) {
 
 		if tc.version == 3 {
 			for _, leftGroup := range tc.leftGroups.List() {
-				mockMulticastValidator.EXPECT().Validate(tc.iface.InterfaceName, tc.iface.PodNamespace, net.ParseIP(leftGroup).To4(), gomock.Any()).Times(1)
+				mockMulticastValidator.EXPECT().GetIGMPNPRuleInfo(tc.iface.InterfaceName, tc.iface.PodNamespace, net.ParseIP(leftGroup).To4(), gomock.Any()).Times(1)
 			}
 		}
 		for _, joinedGroup := range tc.joinedGroups.List() {
-			mockMulticastValidator.EXPECT().Validate(tc.iface.InterfaceName, tc.iface.PodNamespace, net.ParseIP(joinedGroup).To4(), gomock.Any()).Return(tc.joinedGroupItems[joinedGroup], nil).Times(1)
+			mockMulticastValidator.EXPECT().GetIGMPNPRuleInfo(tc.iface.InterfaceName, tc.iface.PodNamespace, net.ParseIP(joinedGroup).To4(), gomock.Any()).Return(tc.joinedGroupItems[joinedGroup], nil).Times(1)
 		}
 		for _, pkt := range packets {
 			mockIfaceStore.EXPECT().GetInterfaceByOFPort(uint32(tc.iface.OFPort)).Return(tc.iface, true)
@@ -522,7 +472,7 @@ func newMockMulticastController(t *testing.T) *Controller {
 	mockOFClient = openflowtest.NewMockClient(controller)
 	mockIfaceStore = ifaceStoretest.NewMockInterfaceStore(controller)
 	mockMulticastSocket = multicasttest.NewMockRouteInterface(controller)
-	mockMulticastValidator = typestest.NewMockMulticastValidator(controller)
+	mockMulticastValidator = typestest.NewMockMcastNetworkPolicyController(controller)
 	ovsClient = ovsconfigtest.NewMockOVSBridgeClient(controller)
 	addr := &net.IPNet{IP: nodeIf1IP, Mask: net.IPv4Mask(255, 255, 255, 0)}
 	nodeConfig := &config.NodeConfig{GatewayConfig: &config.GatewayConfig{Name: "antrea-gw0"}, NodeIPv4Addr: addr}
