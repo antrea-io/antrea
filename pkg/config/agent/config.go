@@ -187,6 +187,10 @@ type AgentConfig struct {
 	// 2. TransportInterfaceCIDRs
 	// 3. The Node IP
 	TransportInterfaceCIDRs []string `yaml:"transportInterfaceCIDRs,omitempty"`
+	// The names of the interfaces on Nodes that are used to forward multicast traffic.
+	// Defaults to transport interface if not set.
+	// Deprecated: use Multicast.MulticastInterfaces instead.
+	MulticastInterfaces []string `yaml:"multicastInterfaces,omitempty"`
 	// Multicast configuration options.
 	Multicast MulticastConfig `yaml:"multicast,omitempty"`
 	// AntreaProxy contains AntreaProxy related configuration options.
