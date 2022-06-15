@@ -15,23 +15,31 @@
 package e2e
 
 import (
+	"context"
 	"fmt"
 	"net"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 
+	"antrea.io/antrea/pkg/agent/multicast"
+	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	"antrea.io/antrea/pkg/features"
 )
 
 func skipIfMulticastDisabled(tb testing.TB) {
 	skipIfFeatureDisabled(tb, features.Multicast, true, false)
 }
+
+var igmpQueryType = int32(0x11)
 
 func TestMulticast(t *testing.T) {
 	skipIfHasWindowsNodes(t)
@@ -128,7 +136,7 @@ func TestMulticast(t *testing.T) {
 			})
 		}
 	})
-	t.Run("runTestMulticastForwardToMultipleInterfaces", func(t *testing.T) {
+	t.Run("testMulticastForwardToMultipleInterfaces", func(t *testing.T) {
 		multipleInterfacesFound := false
 		var nodeIdx int
 		for i, ifaces := range nodeMulticastInterfaces {
@@ -141,7 +149,118 @@ func TestMulticast(t *testing.T) {
 		if !multipleInterfacesFound {
 			t.Skip("Skipping test because none of the Nodes has more than one multicast enabled interface")
 		}
-		runTestMulticastForwardToMultipleInterfaces(t, data, nodeIdx, 3464, "224.3.4.13", nodeMulticastInterfaces[nodeIdx])
+		testMulticastForwardToMultipleInterfaces(t, data, nodeIdx, 3464, "224.3.4.13", nodeMulticastInterfaces[nodeIdx])
+	})
+	t.Run("testMulticaststats", func(t *testing.T) {
+		skipIfNumNodesLessThan(t, 2)
+		testcases := []multicastStatsTestcase{
+			{
+				name: "testMulticastNetworkPolicyStats",
+				senderConfigs: []senderConfigs{
+					{nodeName: nodeName(0), name: "test1-sender-1", IPs: []string{"225.20.2.2", "225.20.2.3"}, sendSessions: 10},
+				},
+				multicastANPConfigs: []ANPConfigs{
+					{
+						name:         "anp1-multicast",
+						appliedToPod: "test1-sender-1",
+						ruleConfigs: []ruleConfig{
+							{name: "allow-multicast-traffic", address: "225.20.2.3", action: crdv1alpha1.RuleActionAllow},
+							{name: "drop-multicast-traffic", address: "225.20.2.2", action: crdv1alpha1.RuleActionDrop},
+						},
+					},
+				},
+				antctlResults: map[string]multicast.PodTrafficStats{
+					"test1-sender-1": {Inbound: 0, Outbound: 10},
+				},
+				multicastANPStatsResult: map[string]map[string]int64{
+					"anp1-multicast": {"allow-multicast-traffic": 10, "drop-multicast-traffic": 10},
+				},
+			},
+			{
+				name: "testIGMPNetworkPolicyStats",
+				receiverConfigs: []receiverConfigs{
+					{nodeName: nodeName(1), name: "test2-receiver-1", IPs: []string{"225.20.3.2", "225.20.3.3"}},
+				},
+				igmpANPConfigs: []ANPConfigs{
+					{
+						name:         "anp1-igmp",
+						appliedToPod: "test2-receiver-1",
+						ruleConfigs: []ruleConfig{
+							{name: "allow-igmp-report", address: "225.20.3.3", action: crdv1alpha1.RuleActionAllow},
+							{name: "drop-igmp-report", address: "225.20.3.2", action: crdv1alpha1.RuleActionDrop},
+						},
+					},
+				},
+				antctlResults: map[string]multicast.PodTrafficStats{
+					"test2-receiver-1": {Inbound: 0, Outbound: 0},
+				},
+				igmpStatsResult: map[string]sets.String{
+					"anp1-igmp": sets.NewString("allow-igmp-report", "drop-igmp-report"),
+				},
+				multicastGroupsResult: map[string]sets.String{
+					"225.20.3.3": sets.NewString("test2-receiver-1"),
+				},
+			},
+			{
+				name: "testMulticastStatsWithMixedANPs",
+				senderConfigs: []senderConfigs{
+					{nodeName: nodeName(0), name: "test3-sender-1", IPs: []string{"225.20.1.2", "225.20.1.3"}, sendSessions: 10},
+					{nodeName: nodeName(1), name: "test3-sender-2", IPs: []string{"225.20.1.2", "225.20.1.3"}, sendSessions: 10},
+				},
+				receiverConfigs: []receiverConfigs{
+					{nodeName: nodeName(1), name: "test3-receiver-1", IPs: []string{"225.20.1.2", "225.20.1.3"}},
+					{nodeName: nodeName(0), name: "test3-receiver-2", IPs: []string{"225.20.1.2", "225.20.1.3"}},
+				},
+				multicastANPConfigs: []ANPConfigs{
+					{
+						name:         "anp1-mixed",
+						appliedToPod: "test3-sender-1",
+						ruleConfigs: []ruleConfig{
+							{name: "allow-multicast-traffic", address: "225.20.1.3", action: crdv1alpha1.RuleActionAllow},
+							{name: "drop-multicast-traffic", address: "225.20.1.2", action: crdv1alpha1.RuleActionDrop},
+						},
+					},
+				},
+				igmpANPConfigs: []ANPConfigs{
+					{
+						name:         "anp2-mixed",
+						appliedToPod: "test3-receiver-1",
+						ruleConfigs: []ruleConfig{
+							{name: "allow-igmp-report", address: "225.20.1.2", action: crdv1alpha1.RuleActionAllow},
+							{name: "drop-igmp-report", address: "225.20.1.3", action: crdv1alpha1.RuleActionDrop},
+						},
+					},
+					{
+						name:         "anp3-mixed",
+						appliedToPod: "test3-receiver-1",
+						ruleConfigs:  []ruleConfig{{name: "allow-igmp-query", igmpType: &igmpQueryType, address: "224.0.0.1", action: crdv1alpha1.RuleActionAllow}},
+					},
+				},
+				antctlResults: map[string]multicast.PodTrafficStats{
+					"test3-sender-1":   {Inbound: 0, Outbound: 10},
+					"test3-sender-2":   {Inbound: 0, Outbound: 20},
+					"test3-receiver-1": {Inbound: 10, Outbound: 0},
+					"test3-receiver-2": {Inbound: 30, Outbound: 0},
+				},
+				multicastANPStatsResult: map[string]map[string]int64{
+					"anp1-mixed": {"allow-multicast-traffic": 10, "drop-multicast-traffic": 10},
+				},
+				igmpStatsResult: map[string]sets.String{
+					"anp2-mixed": sets.NewString("allow-igmp-report", "drop-igmp-report"),
+					"anp3-mixed": sets.NewString("allow-igmp-query"),
+				},
+				multicastGroupsResult: map[string]sets.String{
+					"225.20.1.2": sets.NewString("test3-receiver-2", "test3-receiver-1"),
+					"225.20.1.3": sets.NewString("test3-receiver-2"),
+				},
+			},
+		}
+		for _, mc := range testcases {
+			mc := mc
+			t.Run(mc.name, func(t *testing.T) {
+				testMulticastStatsWithSendersReceivers(t, data, mc)
+			})
+		}
 	})
 }
 
@@ -158,7 +277,253 @@ type multicastTestcase struct {
 	group           net.IP
 }
 
-func runTestMulticastForwardToMultipleInterfaces(t *testing.T, data *TestData, senderIdx int, senderPort int, senderGroup string, senderMulticastInterfaces []string) {
+type multicastStatsTestcase struct {
+	name                    string
+	senderConfigs           []senderConfigs
+	receiverConfigs         []receiverConfigs
+	multicastANPConfigs     []ANPConfigs
+	igmpANPConfigs          []ANPConfigs
+	antctlResults           map[string]multicast.PodTrafficStats
+	multicastANPStatsResult map[string]map[string]int64
+	igmpStatsResult         map[string]sets.String
+	multicastGroupsResult   map[string]sets.String
+}
+
+type senderConfigs struct {
+	name         string
+	nodeName     string
+	IPs          []string
+	sendSessions int
+}
+
+type receiverConfigs struct {
+	name     string
+	nodeName string
+	IPs      []string
+}
+
+type ANPConfigs struct {
+	name         string
+	appliedToPod string
+	ruleConfigs  []ruleConfig
+}
+
+type ruleConfig struct {
+	name     string
+	address  string
+	igmpType *int32
+	action   crdv1alpha1.RuleAction
+}
+
+// testMulticastStatsWithSendersReceivers tests multiple multicast senders and receivers cases with specified AntreaNetworkPolicies which may drop/allow IGMP or Multicast traffic.
+// It checks the results of all the multicaststats-related commands, including kubectl get multicastgroups, antctl get podmulticaststats and kubectl get antreanetworkpolicystats.
+func testMulticastStatsWithSendersReceivers(t *testing.T, data *TestData, mc multicastStatsTestcase) {
+	mcjoinWaitTimeout := defaultTimeout / time.Second
+
+	for _, senderConfig := range mc.senderConfigs {
+		_, _, cleanupFunc := createAndWaitForPodWithExactName(t, data, data.createMcJoinPodOnNode, senderConfig.name, senderConfig.nodeName, data.testNamespace, false)
+		defer cleanupFunc()
+	}
+
+	for _, receiverConfig := range mc.receiverConfigs {
+		_, _, cleanupFunc := createAndWaitForPodWithExactName(t, data, data.createMcJoinPodOnNode, receiverConfig.name, receiverConfig.nodeName, data.testNamespace, false)
+		defer cleanupFunc()
+	}
+
+	var err error
+	k8sUtils, _ = NewKubernetesUtils(data)
+	p10 := float64(10)
+
+	for _, anp := range mc.multicastANPConfigs {
+		np := &crdv1alpha1.NetworkPolicy{
+			ObjectMeta: metav1.ObjectMeta{Namespace: data.testNamespace, Name: anp.name, Labels: map[string]string{"antrea-e2e": anp.name}},
+			Spec: crdv1alpha1.NetworkPolicySpec{
+				Priority: p10,
+				AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+					{PodSelector: &metav1.LabelSelector{MatchLabels: map[string]string{"antrea-e2e": anp.appliedToPod}}},
+				},
+				Egress: []crdv1alpha1.Rule{},
+			},
+		}
+		for i := range anp.ruleConfigs {
+			np.Spec.Egress = append(np.Spec.Egress, crdv1alpha1.Rule{
+				To: []crdv1alpha1.NetworkPolicyPeer{
+					{
+						IPBlock: &crdv1alpha1.IPBlock{
+							CIDR: fmt.Sprintf("%s/32", anp.ruleConfigs[i].address),
+						},
+					},
+				},
+				Action: &anp.ruleConfigs[i].action,
+				Name:   anp.ruleConfigs[i].name,
+			})
+		}
+		if _, err = k8sUtils.CreateOrUpdateANP(np); err != nil {
+			t.Fatalf("Creating ANP %s failed: %v", np.Name, err)
+		}
+		err = data.waitForANPRealized(t, data.testNamespace, np.Name)
+		if err != nil {
+			t.Fatalf("Error when waiting for ANP %s to be realized: %v", np.Name, err)
+		}
+	}
+
+	for _, anp := range mc.igmpANPConfigs {
+		np := &crdv1alpha1.NetworkPolicy{
+			ObjectMeta: metav1.ObjectMeta{Namespace: data.testNamespace, Name: anp.name, Labels: map[string]string{"antrea-e2e": anp.name}},
+			Spec: crdv1alpha1.NetworkPolicySpec{
+				Priority: p10,
+				AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+					{PodSelector: &metav1.LabelSelector{MatchLabels: map[string]string{"antrea-e2e": anp.appliedToPod}}},
+				},
+				Egress:  []crdv1alpha1.Rule{},
+				Ingress: []crdv1alpha1.Rule{},
+			},
+		}
+		for i := range anp.ruleConfigs {
+			rule := crdv1alpha1.Rule{
+				From: []crdv1alpha1.NetworkPolicyPeer{},
+				Protocols: []crdv1alpha1.NetworkPolicyProtocol{
+					{
+						IGMP: &crdv1alpha1.IGMPProtocol{IGMPType: anp.ruleConfigs[i].igmpType, GroupAddress: anp.ruleConfigs[i].address},
+					},
+				},
+				Action: &anp.ruleConfigs[i].action,
+				Name:   anp.ruleConfigs[i].name,
+			}
+			if anp.ruleConfigs[i].igmpType != nil && *anp.ruleConfigs[i].igmpType == igmpQueryType {
+				np.Spec.Ingress = append(np.Spec.Ingress, rule)
+			} else {
+				np.Spec.Egress = append(np.Spec.Egress, rule)
+			}
+		}
+		if _, err = k8sUtils.CreateOrUpdateANP(np); err != nil {
+			t.Fatalf("Creating ANP %s failed: %v", np.Name, err)
+		}
+		err = data.waitForANPRealized(t, data.testNamespace, np.Name)
+		if err != nil {
+			t.Fatalf("Error when waiting for ANP %s released: %v", np.Name, err)
+		}
+	}
+
+	for _, receiverConfig := range mc.receiverConfigs {
+		for _, addr := range receiverConfig.IPs {
+			go func(receiver, addr string) {
+				cmd := []string{"/bin/sh", "-c", fmt.Sprintf("mcjoin -o -p %d -W %d %s", 2234, mcjoinWaitTimeout, addr)}
+				data.RunCommandFromPod(data.testNamespace, receiver, mcjoinContainerName, cmd)
+			}(receiverConfig.name, addr)
+		}
+	}
+
+	time.Sleep(5 * time.Second)
+
+	var wg sync.WaitGroup
+
+	for _, senderConfig := range mc.senderConfigs {
+		for _, addr := range senderConfig.IPs {
+			wg.Add(1)
+			go func(sender, addr string, sessions int) {
+				defer wg.Done()
+				cmd := []string{"/bin/sh", "-c", fmt.Sprintf("mcjoin -f 500 -o -p %d -s -t 30 -c %d -W %d %s", 2234, sessions, mcjoinWaitTimeout, addr)}
+				data.RunCommandFromPod(data.testNamespace, sender, mcjoinContainerName, cmd)
+			}(senderConfig.name, addr, senderConfig.sendSessions)
+		}
+	}
+	wg.Wait()
+
+	if err := wait.Poll(5*time.Second, defaultTimeout, func() (bool, error) {
+		for _, senderConfig := range mc.senderConfigs {
+			stats := mc.antctlResults[senderConfig.name]
+			t.Logf("Checking antctl get podmulticaststats result for %s", senderConfig.name)
+			antreaPod, err := data.getAntreaPodOnNode(senderConfig.nodeName)
+			if err != nil {
+				t.Fatalf("Error getting getAntreaPodOnNode for %s", senderConfig.name)
+			}
+			matches, err := checkAntctlResult(t, data, antreaPod, senderConfig.name, stats.Inbound, stats.Outbound)
+			if err != nil || !matches {
+				return false, err
+			}
+		}
+		groupAddresses := sets.NewString()
+		for _, receiverConfig := range mc.receiverConfigs {
+			groupAddresses.Insert(receiverConfig.IPs...)
+			stats := mc.antctlResults[receiverConfig.name]
+			t.Logf("Checking antctl get podmulticaststats result for %s", receiverConfig.name)
+			antreaPod, err := data.getAntreaPodOnNode(receiverConfig.nodeName)
+			if err != nil {
+				t.Fatalf("Error getting getAntreaPodOnNode for %s", receiverConfig.name)
+			}
+			matches, err := checkAntctlResult(t, data, antreaPod, receiverConfig.name, stats.Inbound, stats.Outbound)
+			if err != nil || !matches {
+				return false, err
+			}
+		}
+		for _, anp := range mc.igmpANPConfigs {
+			stats, err := data.crdClient.StatsV1alpha1().AntreaNetworkPolicyStats(data.testNamespace).Get(context.TODO(), anp.name, metav1.GetOptions{})
+			if err != nil {
+				return false, err
+			}
+			t.Logf("Got AntreaNetworkPolicy stats: %v", stats)
+			expectedRuleNames, exist := mc.igmpStatsResult[anp.name]
+			if !exist || len(expectedRuleNames) == 0 {
+				if len(stats.RuleTrafficStats) > 0 {
+					return false, nil
+				}
+			} else {
+				ruleNames := sets.NewString()
+				for _, ruleName := range stats.RuleTrafficStats {
+					ruleNames.Insert(ruleName.Name)
+				}
+				if !ruleNames.Equal(expectedRuleNames) {
+					return false, nil
+				}
+			}
+		}
+		for _, anp := range mc.multicastANPConfigs {
+			stats, err := data.crdClient.StatsV1alpha1().AntreaNetworkPolicyStats(data.testNamespace).Get(context.TODO(), anp.name, metav1.GetOptions{})
+			if err != nil {
+				return false, err
+			}
+			t.Logf("Got AntreaNetworkPolicy stats: %v", stats)
+			if len(stats.RuleTrafficStats) != len(mc.multicastANPStatsResult[anp.name]) {
+				return false, nil
+			}
+			for _, rule := range stats.RuleTrafficStats {
+				pktCount := mc.multicastANPStatsResult[anp.name][rule.Name]
+				if pktCount != rule.TrafficStats.Packets {
+					return false, nil
+				}
+			}
+		}
+		for _, group := range groupAddresses.List() {
+			multicastGroup, err := data.crdClient.StatsV1alpha1().MulticastGroups().Get(context.TODO(), group, metav1.GetOptions{})
+			if err != nil && !errors.IsNotFound(err) {
+				t.Logf("Got multicastGroup error %v", err)
+				return false, err
+			}
+			expectedPodNames, exist := mc.multicastGroupsResult[group]
+			if err != nil {
+				t.Logf("Got multicastGroup error %v", err)
+				if exist && len(expectedPodNames) > 0 {
+					return false, nil
+				}
+			} else {
+				t.Logf("Got multicast group information for group %s: %v", group, multicastGroup)
+				podsNames := sets.NewString()
+				for _, pod := range multicastGroup.Pods {
+					podsNames.Insert(pod.Name)
+				}
+				if !podsNames.Equal(expectedPodNames) {
+					return false, nil
+				}
+			}
+		}
+		return true, nil
+	}); err != nil {
+		t.Fatalf("Test failed: %v", err)
+	}
+}
+
+func testMulticastForwardToMultipleInterfaces(t *testing.T, data *TestData, senderIdx int, senderPort int, senderGroup string, senderMulticastInterfaces []string) {
 	mcjoinWaitTimeout := defaultTimeout / time.Second
 	senderName, _, cleanupFunc := createAndWaitForPod(t, data, data.createMcJoinPodOnNode, "test-sender-", nodeName(senderIdx), data.testNamespace, false)
 	defer cleanupFunc()
@@ -187,7 +552,7 @@ func runTestMulticastForwardToMultipleInterfaces(t *testing.T, data *TestData, s
 		}
 		return true, nil
 	}); err != nil {
-		t.Fatalf("Error waiting for capturing multicast traffic on all multicast interfaces: %v", err)
+		t.Fatalf("Error when waiting for capturing multicast traffic on all multicast interfaces: %v", err)
 	}
 }
 
@@ -273,7 +638,7 @@ func runTestMulticastBetweenPods(t *testing.T, data *TestData, mc multicastTestc
 		}
 		return true, nil
 	}); err != nil {
-		t.Fatalf("Error waiting for multicast routes and stats: %v", err)
+		t.Fatalf("Error when waiting for multicast routes and statistics: %v", err)
 	}
 	wg.Wait()
 }
@@ -329,4 +694,16 @@ func computeMulticastInterfaces(t *testing.T, data *TestData) (map[int][]string,
 		nodeMulticastInterfaces[nodeIdx] = currNodeMulticastInterfaces
 	}
 	return nodeMulticastInterfaces, nil
+}
+
+func checkAntctlResult(t *testing.T, data *TestData, antreaPodName, containerPodName string, inbound, outbound uint64) (bool, error) {
+	antctlCmds := []string{"antctl", "get", "podmulticaststats"}
+	stdout, stderr, err := runAntctl(antreaPodName, antctlCmds, data)
+	if err != nil {
+		t.Errorf("Error when executing antctl get podmulticaststats, stdout: %s, stderr: %s, err: %v", stdout, stderr, err)
+		return false, err
+	}
+	t.Logf("The result of running antctl get podmulticaststats in %s is stdout: %s, stderr: %s, err: %v", antreaPodName, stdout, stderr, err)
+	match, _ := regexp.MatchString(fmt.Sprintf("%s[[:space:]]+%s[[:space:]]+%d[[:space:]]+%d", data.testNamespace, containerPodName, inbound, outbound), strings.TrimSpace(stdout))
+	return match, nil
 }
