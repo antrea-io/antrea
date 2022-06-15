@@ -398,6 +398,10 @@ func (o *Options) validateMulticastConfig() error {
 				return err
 			}
 		}
+		if len(o.config.Multicast.MulticastInterfaces) == 0 && len(o.config.MulticastInterfaces) > 0 {
+			klog.InfoS("The multicastInterfaces option is deprecated, please use multicast.multicastInterfaces instead")
+			o.config.Multicast.MulticastInterfaces = o.config.MulticastInterfaces
+		}
 	}
 	return nil
 }
