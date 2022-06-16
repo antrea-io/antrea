@@ -23,6 +23,7 @@ ANTREA_IMAGE="projects.registry.vmware.com/antrea/antrea-ubuntu:latest"
 IMAGES=$ANTREA_IMAGE
 ANTREA_CNI=false
 POD_CIDR=""
+SERVICE_CIDR=""
 IP_FAMILY="ipv4"
 NUM_WORKERS=2
 SUBNETS=""
@@ -40,13 +41,14 @@ function echoerr {
 }
 
 _usage="
-Usage: $0 create CLUSTER_NAME [--pod-cidr POD_CIDR] [--antrea-cni] [--num-workers NUM_WORKERS] [--images IMAGES] [--subnets SUBNETS] [--ip-family ipv4|ipv6|dual] [--k8s-version VERSION]
-                  destroy CLUSTER_NAME
-                  help
+Usage: $0 create CLUSTER_NAME [--pod-cidr POD_CIDR] [--service-cidr SERVICE_CIDR]  [--antrea-cni] [--num-workers NUM_WORKERS] [--images IMAGES] [--subnets SUBNETS] [--ip-family ipv4|ipv6|dual] [--k8s-version VERSION]
+       $0 destroy CLUSTER_NAME
+       $0 help
 where:
   create: create a kind cluster with name CLUSTER_NAME
   destroy: delete a kind cluster with name CLUSTER_NAME
   --pod-cidr: specifies pod cidr used in kind cluster, kind's default value will be used if empty.
+  --service-cidr: specifies service clusterip cidr used in kind cluster, kind's default value will be used if empty.
   --encap-mode: inter-node pod traffic encap mode, default is encap
   --no-proxy: disable Antrea proxy
   --no-kube-proxy: disable Kube proxy
@@ -256,6 +258,7 @@ featureGates:
 networking:
   disableDefaultCNI: true
   podSubnet: $POD_CIDR
+  serviceSubnet: $SERVICE_CIDR
   ipFamily: $IP_FAMILY
   kubeProxyMode: $KUBE_PROXY_MODE
 nodes:
@@ -344,6 +347,10 @@ while [[ $# -gt 0 ]]
       ;;
     --pod-cidr)
       POD_CIDR="$2"
+      shift 2
+      ;;
+    --service-cidr)
+      SERVICE_CIDR="$2"
       shift 2
       ;;
     --ip-family)
