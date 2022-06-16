@@ -242,7 +242,7 @@ function wait_for_antrea_windows_processes_ready {
     kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 !~ role && $1 ~ /win/ {print $6}' | while read IP; do
         echo "===== Run script to startup Antrea agent ====="
         ANTREA_VERSION=$(ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "/cygdrive/c/k/antrea/bin/antrea-agent.exe --version" | awk '{print $3}')
-        ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "chmod +x /cygdrive/c/k/antrea/Start.ps1 && powershell 'c:\k\antrea\Start.ps1 -AntreaVersion ${ANTREA_VERSION}'"
+        ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "chmod +x /cygdrive/c/k/antrea/Start-AntreaAgent.ps1 && powershell 'c:\k\antrea\Start-AntreaAgent.ps1 -AntreaVersion ${ANTREA_VERSION}'"
         for i in `seq 5`; do
             sleep 5
             timeout 5s ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "powershell Get-NetAdapter -Name br-int -ErrorAction SilentlyContinue" && break
@@ -379,8 +379,8 @@ function deliver_antrea_windows {
             scp -o StrictHostKeyChecking=no -T bin/antrea-agent.exe Administrator@${IP}:/cygdrive/c/k/antrea/bin/
             scp -o StrictHostKeyChecking=no -T bin/antctl.exe Administrator@${IP}:/cygdrive/c/k/antrea/bin/antctl.exe
             scp -o StrictHostKeyChecking=no -T bin/antrea-cni.exe Administrator@${IP}:/cygdrive/c/opt/cni/bin/antrea.exe
-            scp -o StrictHostKeyChecking=no -T hack/windows/Start.ps1 Administrator@${IP}:/cygdrive/c/k/antrea/
-            scp -o StrictHostKeyChecking=no -T hack/windows/Stop.ps1 Administrator@${IP}:/cygdrive/c/k/antrea/
+            scp -o StrictHostKeyChecking=no -T hack/windows/Start-AntreaAgent.ps1 Administrator@${IP}:/cygdrive/c/k/antrea/
+            scp -o StrictHostKeyChecking=no -T hack/windows/Stop-AntreaAgent.ps1 Administrator@${IP}:/cygdrive/c/k/antrea/
             scp -o StrictHostKeyChecking=no -T hack/windows/Helper.psm1 Administrator@${IP}:/cygdrive/c/k/antrea/
             scp -o StrictHostKeyChecking=no -T build/yamls/windows/base/conf/antrea-cni.conflist Administrator@${IP}:/cygdrive/c/etc/cni/net.d/10-antrea.conflist
             scp -o StrictHostKeyChecking=no -T build/yamls/windows/base/conf/antrea-agent.conf Administrator@${IP}:/cygdrive/c/k/antrea/etc
