@@ -49,7 +49,9 @@ The `kind-setup.sh` script may execute `kubectl` commands to set up the cluster,
 and requires that `kubectl` be present in your `PATH`.
 
 To specify a different number of worker Nodes, use `--num-workers <NUM>`. To
-create an IPv6 Kind cluster, use `--ip-family ipv6`.
+specify the IP family of the kind cluster, use `--ip-family <ipv4|ipv6|dual>`.
+To specify the Kubernetes version of the kind cluster, use
+`--k8s-version <VERSION>`.
 
 If you want to pre-load the Antrea image in each Node (to avoid having each Node
 pull from the registry), you can use:
