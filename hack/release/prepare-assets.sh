@@ -65,7 +65,7 @@ done
 # the windows-bin Makefile target builds antrea-cni and antrea-agent with cgo
 # explicitly disabled.
 BINDIR="$OUTPUT_DIR" make windows-bin
-sed "s/AntreaVersion=\"latest\"/AntreaVersion=\"$VERSION\"/" ./hack/windows/Start.ps1 > "$OUTPUT_DIR"/Start.ps1
+sed "s/AntreaVersion=\"latest\"/AntreaVersion=\"$VERSION\"/" ./hack/windows/Start-AntreaAgent.ps1 > "$OUTPUT_DIR"/Start-AntreaAgent.ps1
 
 export IMG_TAG=$VERSION
 

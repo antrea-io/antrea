@@ -375,9 +375,9 @@ steps. And then run the following commands in powershell.
 ```powershell
 mkdir c:\k\antrea
 cd c:\k\antrea
-curl.exe -LO https://github.com/antrea-io/antrea/releases/download/<TAG>/Start.ps1
+curl.exe -LO https://github.com/antrea-io/antrea/releases/download/<TAG>/Start-AntreaAgent.ps1
 # $KubeConfigPath is the path of kubeconfig file
-./Start.ps1 -kubeconfig $KubeConfigPath
+./Start-AntreaAgent.ps1 -kubeconfig $KubeConfigPath
 ```
 
 > Note: Some features such as supportbundle collection are not supported in this
