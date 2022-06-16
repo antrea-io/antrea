@@ -24,6 +24,20 @@ ANTREA_PKG="antrea.io/antrea"
 cd multicluster
 rm -rf pkg/client/{clientset,informers,listers}
 
+function reset_year_change {
+  set +x
+  echo "=== Start resetting changes introduced by YEAR ==="
+  # The call to 'tac' ensures that we cannot have concurrent git processes, by
+  # waiting for the call to 'git diff  --numstat' to complete before iterating
+  # over the files and calling 'git diff ${file}'.
+  git diff  --numstat | awk '$1 == "1" && $2 == "1" {print $3}' | tac | while read file; do
+    if [[ "$(git diff ${file})" == *"-// Copyright "*" Antrea Authors"* ]]; then
+      git checkout HEAD -- "${file}"
+      echo "=== ${file} is reset ==="
+    fi
+  done
+}
+
 $GOPATH/bin/client-gen \
   --clientset-name versioned \
   --input-base "${ANTREA_PKG}/multicluster/apis" \
@@ -45,3 +59,6 @@ $GOPATH/bin/informer-gen \
   --listers-package "${ANTREA_PKG}/multicluster/pkg/client/listers" \
   --output-package "${ANTREA_PKG}/multicluster/pkg/client/informers" \
   --go-header-file hack/boilerplate.go.txt
+
+cd ..
+reset_year_change
