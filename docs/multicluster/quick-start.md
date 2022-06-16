@@ -23,7 +23,7 @@ To use the latest version of Antrea Multi-cluster from the Antrea main branch,
 you can change the YAML manifest path to: `https://github.com/antrea-io/antrea/tree/main/multicluster/build/yamls/`
 when applying or downloading an Antrea YAML manifest.
 
-Antrea must be deployed in both cluster A and cluster B. To configure Antrea
+Antrea must be deployed in both cluster A and cluster B. To set up Antrea
 Multi-cluster Gateways, the `Multicluster` feature of `antrea-agent` must be
 feature enabled in both cluster A and B. Multi-cluster Gateways are required for
 routing multi-cluster Service traffic across the member clusters. Set the
@@ -41,6 +41,9 @@ antrea-agent.conf: |
     enable: true
     namespace: ""
 ```
+
+At the moment, Multi-cluster Gateway only works with the Antrea `encap` traffic
+mode, and all member clusters in a ClusterSet must use the same tunnel type.
 
 ## Set up Leader and Member in Cluster A
 
@@ -114,7 +117,7 @@ information about Multi-cluster Gatweay, please refer to the [Multi-cluster
 User Guide](user-guide.md#multi-cluster-gateway-configuration).
 
 Assuming K8s Node `node-a1` is selected for the Multi-cluster Gateway, run
-the following command to annotate the Node with
+the following command to annotate the Node with:
 `multicluster.antrea.io/gateway=true` (so Antrea can know it is the Gateway
 Node from the annotation):
 
