@@ -1427,7 +1427,7 @@ func prepareDefaultFlows(config *testConfig) []expectTableFlows {
 		)
 		podCIDR := config.nodeConfig.PodIPv4CIDR.String()
 		tableL3ForwardingFlows.flows = append(tableL3ForwardingFlows.flows,
-			&ofTestUtils.ExpectFlow{MatchStr: fmt.Sprintf("priority=190,ip,reg0=0/0x200%s,nw_dst=%s", matchVLANString, podCIDR), ActStr: "goto_table:L2ForwardingCalc"},
+			&ofTestUtils.ExpectFlow{MatchStr: fmt.Sprintf("priority=200,ip,reg0=0/0x200%s,nw_dst=%s", matchVLANString, podCIDR), ActStr: "goto_table:L2ForwardingCalc"},
 		)
 		tableServiceMarkFlows.flows = append(tableServiceMarkFlows.flows,
 			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ct_state=+new+trk,ip,reg0=0x22/0xff", ActStr: fmt.Sprintf("ct(commit,table=SNATConntrackCommit,zone=%s,exec(load:0x1->NXM_NX_CT_MARK[5],load:0x1->NXM_NX_CT_MARK[6]))", ctZone)},
@@ -1472,7 +1472,7 @@ func prepareDefaultFlows(config *testConfig) []expectTableFlows {
 		)
 		podCIDR := config.nodeConfig.PodIPv6CIDR.String()
 		tableL3ForwardingFlows.flows = append(tableL3ForwardingFlows.flows,
-			&ofTestUtils.ExpectFlow{MatchStr: fmt.Sprintf("priority=190,ipv6,reg0=0/0x200,ipv6_dst=%s", podCIDR), ActStr: "goto_table:L2ForwardingCalc"},
+			&ofTestUtils.ExpectFlow{MatchStr: fmt.Sprintf("priority=200,ipv6,reg0=0/0x200,ipv6_dst=%s", podCIDR), ActStr: "goto_table:L2ForwardingCalc"},
 		)
 		tableServiceMarkFlows.flows = append(tableServiceMarkFlows.flows,
 			&ofTestUtils.ExpectFlow{MatchStr: "priority=200,ct_state=+new+trk,ipv6,reg0=0x22/0xff", ActStr: "ct(commit,table=SNATConntrackCommit,zone=65510,exec(load:0x1->NXM_NX_CT_MARK[5],load:0x1->NXM_NX_CT_MARK[6]))"},
@@ -1587,7 +1587,7 @@ func expectedExternalFlows(ipProtoStr, gwMACStr string) []expectTableFlows {
 			"L3Forwarding",
 			[]*ofTestUtils.ExpectFlow{
 				{
-					MatchStr: fmt.Sprintf("priority=190,ct_state=-rpl+trk,%s,reg0=0x3/0xf", ipProtoStr),
+					MatchStr: fmt.Sprintf("priority=190,ct_state=-rpl+trk,%s,reg0=0x3/0xf,reg4=0/0x100000", ipProtoStr),
 					ActStr:   "goto_table:EgressMark",
 				},
 				{
