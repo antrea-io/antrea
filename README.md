@@ -96,8 +96,11 @@ Also check out [@ProjectAntrea](https://twitter.com/ProjectAntrea) on Twitter!
 * **Troubleshooting and monitoring tools**: Antrea comes with CLI and UI tools
   which provide visibility and diagnostics capabilities (packet tracing, policy
   analysis, flow inspection). It exposes Prometheus metrics and supports
-  exporting network flow information which can be visualized in Kibana
-  dashboards.
+  exporting network flow information to collectors and analyzers.
+* **Network observability and analytics**: Antrea + [Theia](https://github.com/antrea-io/theia)
+  enable fine-grained visibility into the communication among Kubernetes
+  workloads. Theia provides visualization for Antrea network flows in Grafana
+  dashboards, and recommends Network Policies to secure the workloads.
 * **Encryption**: Encryption of inter-Node Pod traffic with IPsec or WireGuard
   tunnels.
 * **Easy deployment**: Antrea is deployed by applying a single YAML manifest
