@@ -1741,6 +1741,7 @@ spec:
               properties:
                 ipVersion:
                   type: integer
+                  enum: [ 4, 6 ]
                 ipRanges:
                   items:
                     oneOf:
@@ -1774,6 +1775,8 @@ spec:
                         type: string
                       prefixLength:
                         type: integer
+                        minimum: 1
+                        maximum: 128
                       vlan:
                         type: integer
                         minimum: 0
