@@ -74,7 +74,7 @@ Common Area of the leader cluster, decapsulates the resources from them, and
 creates the resources (e.g. Services, Endpoints, Antrea ClusterNetworkPolicies,
 ClusterInfoImports) in the member cluster.
 
-For more information about Multi-cluster Service export/import, please also check
+For more information about multi-cluster Service export/import, please also check
 the [Service Export and Import](#service-export-and-import) section.
 
 ## Multi-cluster Service
@@ -127,7 +127,7 @@ Antrea started to support Multi-cluster Gateway since v1.7.0. User can choose
 one K8s Node as the Multi-cluster Gateway in a member cluster. The Gateway Node
 is responsible for routing all cross-clusters traffic from the local cluster to
 other member clusters through tunnels. The diagram below depicts Antrea
-Mulit-cluster connectivity with Multi-cluster Gateways.
+Multi-cluster connectivity with Multi-cluster Gateways.
 
 <img src="assets/mc-gateway.svg" width="800" alt="Antrea Multi-cluster Gateway">
 
@@ -170,7 +170,7 @@ Endpoints:
 When the client Pod `pod-a` on cluster A tries to access the multi-cluster
 Service `antrea-mc-nginx`, the request packet will first go through the Service
 load balancing pipeline on the source Node `node-a2`, with one endpoint of the
-Multi-cluster Service being chosen as the destination. Let's say endpoint
+multi-cluster Service being chosen as the destination. Let's say endpoint
 `10.11.12.33` from cluster C is chosen, then the request packet will be DNAT'd
 with IP `10.11.12.33` and tunnelled to the local Gateway Node `node-a1`.
 `node-a1` knows from the destination IP (`10.11.12.33`) the packet is
@@ -187,7 +187,7 @@ to `pod-c`.
 ## Antrea Multi-cluster NetworkPolicy
 
 At this moment, Antrea does not support Pod-level policy enforcement for
-cross-cluster traffic. Access towards Multi-cluster Services can be regulated
+cross-cluster traffic. Access towards multi-cluster Services can be regulated
 with Antrea ClusterNetworkPolicy `toService` rules. In each member cluster,
 users can create an Antrea ClusterNetworkPolicy selecting Pods in that cluster,
 with the imported Mutli-cluster Service name and Namespace in an egress
