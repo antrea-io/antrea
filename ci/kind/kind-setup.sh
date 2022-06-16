@@ -22,7 +22,7 @@ CLUSTER_NAME=""
 ANTREA_IMAGE="projects.registry.vmware.com/antrea/antrea-ubuntu:latest"
 IMAGES=$ANTREA_IMAGE
 ANTREA_CNI=false
-POD_CIDR="10.10.0.0/16"
+POD_CIDR=""
 IP_FAMILY="ipv4"
 NUM_WORKERS=2
 SUBNETS=""
@@ -30,6 +30,7 @@ ENCAP_MODE=""
 PROXY=true
 KUBE_PROXY_MODE="iptables"
 PROMETHEUS=false
+K8S_VERSION=""
 
 THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
@@ -39,13 +40,13 @@ function echoerr {
 }
 
 _usage="
-Usage: $0 create CLUSTER_NAME [--pod-cidr POD_CIDR] [--antrea-cni] [--num-workers NUM_WORKERS] [--images IMAGES] [--subnets SUBNETS] [--ip-family ipv4|ipv6]
+Usage: $0 create CLUSTER_NAME [--pod-cidr POD_CIDR] [--antrea-cni] [--num-workers NUM_WORKERS] [--images IMAGES] [--subnets SUBNETS] [--ip-family ipv4|ipv6|dual] [--k8s-version VERSION]
                   destroy CLUSTER_NAME
                   help
 where:
   create: create a kind cluster with name CLUSTER_NAME
   destroy: delete a kind cluster with name CLUSTER_NAME
-  --pod-cidr: specifies pod cidr used in kind cluster, default is $POD_CIDR
+  --pod-cidr: specifies pod cidr used in kind cluster, kind's default value will be used if empty.
   --encap-mode: inter-node pod traffic encap mode, default is encap
   --no-proxy: disable Antrea proxy
   --no-kube-proxy: disable Kube proxy
@@ -55,7 +56,8 @@ where:
   --images: specifies images loaded to kind cluster, default is $IMAGES
   --subnets: a subnet creates a separate docker bridge network (named 'antrea-<idx>') with assigned subnet that worker nodes may connect to. Default is empty: all worker
     Node connected to default docker bridge network created by Kind.
-  --ip-family: specifies the ip-family for the kind cluster, default is $IP_FAMILY. A valid pod-cidr must be configured in the same family
+  --ip-family: specifies the ip-family for the kind cluster, default is $IP_FAMILY.
+  --k8s-version: specifies the Kubernetes version of the kind cluster, kind's default K8s version will be used if empty.
 "
 
 function print_usage {
@@ -223,8 +225,8 @@ function create {
      exit 1
   fi
 
-  if [[ "$IP_FAMILY" != "ipv4" ]] && [[ "$IP_FAMILY" != "ipv6" ]]; then
-    echoerr "Invalid value for --ip-family \"$IP_FAMILY\", expected \"ipv4\" or \"ipv6\""
+  if [[ "$IP_FAMILY" != "ipv4" ]] && [[ "$IP_FAMILY" != "ipv6" ]] && [[ "$IP_FAMILY" != "dual" ]]; then
+    echoerr "Invalid value for --ip-family \"$IP_FAMILY\", expected \"ipv4\", \"ipv6\", or \"dual\""
     exit 1
   fi
 
@@ -262,7 +264,15 @@ EOF
   for (( i=0; i<$NUM_WORKERS; i++ )); do
     echo -e "- role: worker" >> $config_file
   done
-  kind create cluster --name $CLUSTER_NAME --config $config_file
+
+  IMAGE_OPT=""
+  if [[ "$K8S_VERSION" != "" ]]; then
+    if [[ "$K8S_VERSION" != v* ]]; then
+      K8S_VERSION="v${K8S_VERSION}"
+    fi
+    IMAGE_OPT="--image kindest/node:${K8S_VERSION}"
+  fi
+  kind create cluster --name $CLUSTER_NAME --config $config_file $IMAGE_OPT
 
   # force coredns to run on control-plane node because it
   # is attached to kind bridge and uses host dns.
@@ -370,6 +380,10 @@ while [[ $# -gt 0 ]]
       ;;
     --num-workers)
       NUM_WORKERS="$2"
+      shift 2
+      ;;
+    --k8s-version)
+      K8S_VERSION="$2"
       shift 2
       ;;
     help)
