@@ -531,7 +531,7 @@ The actions of flow 1:
   NXM_NX_REG4.
 * `load:0x2->NXM_NX_REG4[16..18]` is used to set the value of bits [16..18] in NXM_NX_REG4 to
   0b010, which indicates that the Service has done Endpoint selection.
-* `load:0x1->NXM_NX_REG0[18]` is used to set the value of bit 18 in NXM_NX_REG4 to 0x1, which
+* `load:0x1->NXM_NX_REG0[19]` is used to set the value of bit 19 in NXM_NX_REG0 to 0x1, which
   indicates that the source and destination MACs need to be rewritten.
 
 Note that, if the value of bits [16..18] in NXM_NX_REG4 is 0b010 (set by action `load:0x2->NXM_NX_REG4[16..18]`
