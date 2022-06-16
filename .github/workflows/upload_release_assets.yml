@@ -236,12 +236,12 @@ jobs:
         asset_path: ./assets/antrea-cni.exe
         asset_name: antrea-cni-windows-x86_64.exe
         asset_content_type: application/octet-stream
-    - name: Upload Start.ps1
+    - name: Upload Start-AntreaAgent.ps1
       uses: actions/upload-release-asset@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ github.event.release.upload_url }}
-        asset_path: ./assets/Start.ps1
-        asset_name: Start.ps1
+        asset_path: ./assets/Start-AntreaAgent.ps1
+        asset_name: Start-AntreaAgent.ps1
         asset_content_type: application/octet-stream

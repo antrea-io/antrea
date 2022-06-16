@@ -73,7 +73,7 @@ function Install-AntreaAgent {
     $AntreaAgentConfigPath = "$AntreaEtc\antrea-agent.conf"
     $AntreaAgent = "$AntreaHome\bin\antrea-agent.exe"
     $AntreaCNI = "$CNIPath\antrea.exe"
-    $StopScript = "$AntreaHome\Stop.ps1"
+    $StopScript = "$AntreaHome\Stop-AntreaAgent.ps1"
     $Owner = "antrea-io"
     $Repo = "antrea"
 
@@ -108,7 +108,7 @@ function Install-AntreaAgent {
     Get-WebFileIfNotExist $AntreaAgent  "$AntreaReleaseUrlBase/$AntreaVersion/antrea-agent-windows-x86_64.exe"
     Get-WebFileIfNotExist $AntreaCNI  "$AntreaReleaseUrlBase/$AntreaVersion/antrea-cni-windows-x86_64.exe"
     # Prepare antrea scripts
-    Get-WebFileIfNotExist $StopScript  "$AntreaRawUrlBase/hack/windows/Stop.ps1"
+    Get-WebFileIfNotExist $StopScript  "$AntreaRawUrlBase/hack/windows/Stop-AntreaAgent.ps1"
 
     # Download host-local IPAM plugin
     if (!(Test-Path $HostLocalIpam)) {
