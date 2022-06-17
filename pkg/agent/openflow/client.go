@@ -98,8 +98,9 @@ type Client interface {
 	// InstallServiceFlows installs flows for accessing Service NodePort, LoadBalancer and ClusterIP. It installs the
 	// flow that uses the group/bucket to do service LB. If the affinityTimeout is not zero, it also installs the flow
 	// which has a learn action to maintain the LB decision. The group with the groupID must be installed before,
-	// otherwise the installation will fail. If the externalTrafficPolicy of NodePort/LoadBalancer is Local,
-	// nodeLocalExternal will be true, otherwise it will be false.
+	// otherwise the installation will fail.
+	// nodeLocalExternal represents if the externalTrafficPolicy is Local or not. This field is meaningful only when
+	// the svcType is NodePort or LoadBalancer.
 	InstallServiceFlows(groupID binding.GroupIDType, svcIP net.IP, svcPort uint16, protocol binding.Protocol, affinityTimeout uint16, nodeLocalExternal bool, svcType v1.ServiceType) error
 	// UninstallServiceFlows removes flows installed by InstallServiceFlows.
 	UninstallServiceFlows(svcIP net.IP, svcPort uint16, protocol binding.Protocol) error
