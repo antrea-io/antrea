@@ -602,7 +602,7 @@ func (p *proxier) installServices() {
 
 			// Install ClusterIP flows for the Service.
 			groupID := p.groupCounter.AllocateIfNotExist(svcPortName, internalNodeLocal)
-			if err := p.ofClient.InstallServiceFlows(groupID, svcInfo.ClusterIP(), uint16(svcInfo.Port()), svcInfo.OFProtocol, uint16(affinityTimeout), svcInfo.NodeLocalInternal(), corev1.ServiceTypeClusterIP); err != nil {
+			if err := p.ofClient.InstallServiceFlows(groupID, svcInfo.ClusterIP(), uint16(svcInfo.Port()), svcInfo.OFProtocol, uint16(affinityTimeout), externalNodeLocal, corev1.ServiceTypeClusterIP); err != nil {
 				klog.Errorf("Error when installing Service flows: %v", err)
 				continue
 			}

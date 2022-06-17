@@ -229,7 +229,7 @@ func testClusterIP(t *testing.T, svcIP net.IP, ep1IP, ep2IP net.IP, isIPv6, node
 	groupID := fp.groupCounter.AllocateIfNotExist(svcPortName, nodeLocalInternal)
 	mockOFClient.EXPECT().InstallEndpointFlows(bindingProtocol, gomock.InAnyOrder(expectedAllEps)).Times(1)
 	mockOFClient.EXPECT().InstallServiceGroup(groupID, false, gomock.InAnyOrder(expectedAllEps)).Times(1)
-	mockOFClient.EXPECT().InstallServiceFlows(groupID, svcIP, uint16(svcPort), bindingProtocol, uint16(0), nodeLocalInternal, corev1.ServiceTypeClusterIP).Times(1)
+	mockOFClient.EXPECT().InstallServiceFlows(groupID, svcIP, uint16(svcPort), bindingProtocol, uint16(0), false, corev1.ServiceTypeClusterIP).Times(1)
 	mockRouteClient.EXPECT().AddClusterIPRoute(svcIP).Times(1)
 
 	fp.syncProxyRules()
@@ -330,7 +330,7 @@ func testLoadBalancer(t *testing.T, nodePortAddresses []net.IP, svcIP, ep1IP, ep
 		}
 		groupID := fp.groupCounter.AllocateIfNotExist(svcPortName, nodeLocalInternal)
 		mockOFClient.EXPECT().InstallServiceGroup(groupID, false, gomock.InAnyOrder(clusterIPEps)).Times(1)
-		mockOFClient.EXPECT().InstallServiceFlows(groupID, svcIP, uint16(svcPort), bindingProtocol, uint16(0), nodeLocalInternal, corev1.ServiceTypeClusterIP).Times(1)
+		mockOFClient.EXPECT().InstallServiceFlows(groupID, svcIP, uint16(svcPort), bindingProtocol, uint16(0), nodeLocalExternal, corev1.ServiceTypeClusterIP).Times(1)
 		groupID = fp.groupCounter.AllocateIfNotExist(svcPortName, nodeLocalExternal)
 		mockOFClient.EXPECT().InstallServiceGroup(groupID, false, gomock.InAnyOrder(nodePortEps)).Times(1)
 		mockOFClient.EXPECT().InstallServiceFlows(groupID, gomock.Any(), uint16(svcNodePort), bindingProtocol, uint16(0), nodeLocalExternal, corev1.ServiceTypeNodePort).Times(1)
@@ -341,10 +341,10 @@ func testLoadBalancer(t *testing.T, nodePortAddresses []net.IP, svcIP, ep1IP, ep
 		nodeLocalVal := nodeLocalInternal && nodeLocalExternal
 		groupID := fp.groupCounter.AllocateIfNotExist(svcPortName, nodeLocalVal)
 		mockOFClient.EXPECT().InstallServiceGroup(groupID, false, gomock.InAnyOrder(expectedAllEps)).Times(1)
-		mockOFClient.EXPECT().InstallServiceFlows(groupID, svcIP, uint16(svcPort), bindingProtocol, uint16(0), nodeLocalVal, corev1.ServiceTypeClusterIP).Times(1)
-		mockOFClient.EXPECT().InstallServiceFlows(groupID, gomock.Any(), uint16(svcNodePort), bindingProtocol, uint16(0), nodeLocalVal, corev1.ServiceTypeNodePort).Times(1)
+		mockOFClient.EXPECT().InstallServiceFlows(groupID, svcIP, uint16(svcPort), bindingProtocol, uint16(0), nodeLocalExternal, corev1.ServiceTypeClusterIP).Times(1)
+		mockOFClient.EXPECT().InstallServiceFlows(groupID, gomock.Any(), uint16(svcNodePort), bindingProtocol, uint16(0), nodeLocalExternal, corev1.ServiceTypeNodePort).Times(1)
 		if proxyLoadBalancerIPs {
-			mockOFClient.EXPECT().InstallServiceFlows(groupID, loadBalancerIP, uint16(svcPort), bindingProtocol, uint16(0), nodeLocalVal, corev1.ServiceTypeLoadBalancer).Times(1)
+			mockOFClient.EXPECT().InstallServiceFlows(groupID, loadBalancerIP, uint16(svcPort), bindingProtocol, uint16(0), nodeLocalExternal, corev1.ServiceTypeLoadBalancer).Times(1)
 		}
 		groupID = fp.groupCounter.AllocateIfNotExist(svcPortName, !nodeLocalVal)
 		mockOFClient.EXPECT().UninstallGroup(groupID).Times(1)
@@ -453,7 +453,7 @@ func testNodePort(t *testing.T, nodePortAddresses []net.IP, svcIP, ep1IP, ep2IP 
 		}
 		groupID := fp.groupCounter.AllocateIfNotExist(svcPortName, nodeLocalInternal)
 		mockOFClient.EXPECT().InstallServiceGroup(groupID, false, gomock.InAnyOrder(clusterIPEps)).Times(1)
-		mockOFClient.EXPECT().InstallServiceFlows(groupID, svcIP, uint16(svcPort), bindingProtocol, uint16(0), nodeLocalInternal, corev1.ServiceTypeClusterIP).Times(1)
+		mockOFClient.EXPECT().InstallServiceFlows(groupID, svcIP, uint16(svcPort), bindingProtocol, uint16(0), nodeLocalExternal, corev1.ServiceTypeClusterIP).Times(1)
 
 		groupID = fp.groupCounter.AllocateIfNotExist(svcPortName, nodeLocalExternal)
 		mockOFClient.EXPECT().InstallServiceGroup(groupID, false, gomock.InAnyOrder(nodePortEps)).Times(1)
@@ -462,8 +462,8 @@ func testNodePort(t *testing.T, nodePortAddresses []net.IP, svcIP, ep1IP, ep2IP 
 		nodeLocalVal := nodeLocalInternal && nodeLocalExternal
 		groupID := fp.groupCounter.AllocateIfNotExist(svcPortName, nodeLocalVal)
 		mockOFClient.EXPECT().InstallServiceGroup(groupID, false, gomock.InAnyOrder(expectedAllEps)).Times(1)
-		mockOFClient.EXPECT().InstallServiceFlows(groupID, svcIP, uint16(svcPort), bindingProtocol, uint16(0), nodeLocalVal, corev1.ServiceTypeClusterIP).Times(1)
-		mockOFClient.EXPECT().InstallServiceFlows(groupID, gomock.Any(), uint16(svcNodePort), bindingProtocol, uint16(0), nodeLocalVal, corev1.ServiceTypeNodePort).Times(1)
+		mockOFClient.EXPECT().InstallServiceFlows(groupID, svcIP, uint16(svcPort), bindingProtocol, uint16(0), nodeLocalExternal, corev1.ServiceTypeClusterIP).Times(1)
+		mockOFClient.EXPECT().InstallServiceFlows(groupID, gomock.Any(), uint16(svcNodePort), bindingProtocol, uint16(0), nodeLocalExternal, corev1.ServiceTypeNodePort).Times(1)
 
 		groupID = fp.groupCounter.AllocateIfNotExist(svcPortName, !nodeLocalVal)
 		mockOFClient.EXPECT().UninstallGroup(groupID).Times(1)
