@@ -1,20 +1,37 @@
 # Antrea Multi-cluster User Guide
 
+## Table of Contents
+
+<!-- toc -->
+- [Quick Start](#quick-start)
+- [Installation](#installation)
+  - [Preparation](#preparation)
+  - [Deploy Antrea Multi-cluster Controller](#deploy-antrea-multi-cluster-controller)
+  - [Create ClusterSet](#create-clusterset)
+- [Multi-cluster Gateway Configuration](#multi-cluster-gateway-configuration)
+- [Multi-cluster Service](#multi-cluster-service)
+- [Multi-cluster ClusterNetworkPolicy Replication](#multi-cluster-clusternetworkpolicy-replication)
+- [Build Antrea Multi-cluster Image](#build-antrea-multi-cluster-image)
+- [Known Issue](#known-issue)
+<!-- /toc -->
+
 Antrea Multi-cluster implements [Multi-cluster Service API](https://github.com/kubernetes/enhancements/tree/master/keps/sig-multicluster/1645-multi-cluster-services-api),
-which allows users to create multi-cluster Services that can be accessed cross clusters in a
-ClusterSet. Antrea Multi-cluster also supports Antrea ClusterNetworkPolicy replication. A
-Multi-cluster ClusterSet admin can define ClusterNetworkPolicies to be replicated across the
-entire ClusterSet and enforced in all member clusters. Antrea Multi-cluster is introduced in
-Antrea v1.5.0, and the ClusterNetworkPolicy replication feature is supported since Antrea
-v1.6.0. In Antrea v1.7.0, the Multi-cluster Gateway feature is added that supports routing
-multi-cluster Service traffic through tunnels among clusters.
+which allows users to create multi-cluster Services that can be accessed cross
+clusters in a ClusterSet. Antrea Multi-cluster also supports Antrea
+ClusterNetworkPolicy replication. A Multi-cluster ClusterSet admin can define
+ClusterNetworkPolicies to be replicated across the entire ClusterSet and
+enforced in all member clusters. Antrea Multi-cluster was first introduced in
+Antrea v1.5.0, and the ClusterNetworkPolicy replication feature is supported
+since Antrea v1.6.0. In Antrea v1.7.0, the Multi-cluster Gateway feature was
+added that supports routing multi-cluster Service traffic through tunnels among
+clusters.
 
 ## Quick Start
 
 Please refer to the [Quick Start Guide](./quick-start.md) to learn how to build a ClusterSet
 with two clusters quickly.
 
-## Antrea Multi-cluster Installation
+## Installation
 
 ### Preparation
 
@@ -30,12 +47,13 @@ To use the latest version of Antrea Multi-cluster from the Antrea main branch,
 you can change the YAML manifest path to: `https://github.com/antrea-io/antrea/tree/main/multicluster/build/yamls/`
 when applying or downloading an Antrea YAML manifest.
 
-Multi-cluster Services require an Antrea Multi-cluster Gateway to be set up in
-each member cluster, so the multi-cluster Service traffic can be routed across
-clusters by the Gateways. To support Multi-cluster Gateways, `antrea-agent` must
-be deployed with the `Multicluster` feature enabled in a member cluster. You can
-set the following configuration parameters in `antrea-agent.conf` of the Antrea
-deployment manifest to enable the `Multicluster` feature:
+Since Antrea 1.7.0, multi-cluster Services require an Antrea Multi-cluster
+Gateway to be set up in each member cluster to route Service traffic across
+clusters, and Service CIDRs (ClusterIP ranges) must not overlap among clusters.
+To support Multi-cluster Gateways, `antrea-agent` must be deployed with the
+`Multicluster` feature enabled in a member cluster. You can set the following
+configuration parameters in `antrea-agent.conf` of the Antrea deployment
+manifest to enable the `Multicluster` feature:
 
 ```yaml
 antrea-agent.conf: |
@@ -410,7 +428,10 @@ to the K8s Node, you can still choose to use the IP as `gatewayIP`, by adding an
 annotation: `multicluster.antrea.io/gateway-ip=<ip-address>` to the K8s Node.
 
 When selecting the Multi-cluster Gateway Node, you need to make sure the
-resulted `gatewayIP` can be reached from the remote Gateways.
+resulted `gatewayIP` can be reached from the remote Gateways. You may need to
+[configure firewall or security groups](../network-requirements.md) properly to
+allow the tunnels between Gateway Nodes. As of now, only IPv4 Gateway IPs are
+supported.
 
 After the Gateway is detected, Multi-cluster Controller will be responsible
 for exporting the cluster's network information to other member clusters
@@ -418,9 +439,9 @@ through the leader cluster, including the cluster's Gateway IP and Service
 CIDR. Multi-cluster Controller will try to discover the cluster's Service CIDR
 automatically, but you can also manually specify the `serviceCIDR` option in
 ConfigMap `antrea-mc-controller-config-***`. In other member clusters, a
-`ClusterInfoImport` CR will be created for the cluster which includes the
+ClusterInfoImport CR will be created for the cluster which includes the
 exported network information. For example, in cluster `test-cluster-west`, you
-you can see a `ClusterInfoImport` CR with name `test-cluster-east-clusterinfo`
+you can see a ClusterInfoImport CR with name `test-cluster-east-clusterinfo`
 is created for cluster `test-cluster-east`. You can check the
 `ClusterInfoImport` with command: `kubectl get clusterinfoimport -o yaml`,
 which should show information like:
@@ -464,18 +485,29 @@ For example, once you export the `default/nginx` Service in member cluster
 `default/antrea-mc-nginx` will be created in `test-cluster-east`, as well as
 a ServcieImport CR with name `default/nginx`. Now, Pods in `test-cluster-east`
 can access the imported Service using its ClusterIP, and the requests will be
-routed to the backend `nginx` Pods in `test-cluster-west`.
+routed to the backend `nginx` Pods in `test-cluster-west`. You can check the
+imported Service and ServiceImport with commands:
+
+```bash
+$kubectl get serviceimport antrea-mc-nginx -n default
+NAME            TYPE        CLUSTER-IP   EXTERNAL-IP   PORT(S)   AGE
+antrea-mc-nginx ClusterIP   10.107.57.62 <none>        443/TCP   10s
+
+$kubectl get serviceimport nginx -n default
+NAME      TYPE           IP                AGE
+nginx     ClusterSetIP   ["10.19.57.62"]   10s
+```
 
 As part of the Service export/import process, in the leader cluster, two
 ResourceExport CRs will be created in the Multi-cluster Controller Namespace,
 for the exported Service and Endpoints respectively, as well as two
 ResourceImport CRs. You can check them in the leader cluster with commands:
 
-```sh
+```bash
 $kubectl get resourceexport -n antrea-multicluster
 NAME                                        AGE
-test-cluster-west-default-nginx-endpoints   7s
-test-cluster-west-default-nginx-service     7s
+test-cluster-west-default-nginx-endpoints   30s
+test-cluster-west-default-nginx-service     30s
 
 $kubectl get resourceimport -n antrea-multicluster
 NAME                      AGE
@@ -484,20 +516,29 @@ default-nginx-service     99s
 ```
 
 When there is any new change on the exported Service, the imported multi-cluster
-Service resources will be updated accordingly. But when multiple member clusters
-exported the same Service with conflicted definitions, only the first export
-will be replicated to other clusters, and new updates on the Service will be
+Service resources will be updated accordingly. Multiple member clusters can
+export the same Service (with the same name and Namespace). In this case, the
+imported Service in a member cluster will include endpoints from all the export
+clusters, and the Service requests will be load-balanced to all these clusters.
+Even when the client Pod's cluster also exported the Service, the Service
+requests may be routed to other clusters, and the endpoints from the local
+cluster do not take precedence. A Service cannot have conflicted definitions in
+different export clusters, otherwise only the first export will be replicated to
+other clusters; other exports as well as new updates to the Service will be
 ingored, until user fixes the conflicts. For example, after a member cluster
 exported a Service: `default/nginx` with TCP Port `80`, other clusters can only
-export the same Service with the same Ports definition including Port names.
+export the same Service with the same Ports definition including Port names. At
+the moment, Antrea Multi-cluster supports only IPv4 multi-cluster Services.
 
 ## Multi-cluster ClusterNetworkPolicy Replication
 
-Since Antrea v1.6.0, Multi-cluster admins can specify certain ClusterNetworkPolicies to be replicated
-across the entire ClusterSet. This is especially useful for ClusterSet admins who want all clusters in
-the ClusterSet to be applied with a consistent security posture (for example, all Namespaces in all
-clusters can only communicate with Pods in their own namespaces). For more information regarding
-Antrea ClusterNetworkPolicy (ACNP), refer to [this document](../antrea-network-policy.md).
+Since Antrea v1.6.0, Multi-cluster admins can specify certain
+ClusterNetworkPolicies to be replicated and enforced across the entire
+ClusterSet. This is especially useful for ClusterSet admins who want all
+clusters in the ClusterSet to be applied with a consistent security posture (for
+example, all Namespaces in all clusters can only communicate with Pods in their
+own Namespaces). For more information regarding Antrea ClusterNetworkPolicy
+(ACNP), please refer to [this document](../antrea-network-policy.md).
 
 To achieve such ACNP replication across clusters, admins can, in the leader
 cluster of a ClusterSet, create a `ResourceExport` CR of kind
@@ -541,9 +582,8 @@ found in that particular cluster. If there are such failures, the ACNP creation 
 clusters will be reported back to the leader cluster as K8s Events, and can be checked by describing
 the `ResourceImport` of the original `ResourceExport`:
 
-```text
-kubectl describe resourceimport -A
----
+```bash
+$kubectl describe resourceimport -A
 Name:         strict-namespace-isolation-antreaclusternetworkpolicy
 Namespace:    antrea-multicluster
 API Version:  multicluster.crd.antrea.io/v1alpha1
@@ -603,6 +643,6 @@ Multi-cluster Controller.
 
 All `ResourceExports` can be deleted with the following command:
 
-```sh
+```bash
 kubectl get resourceexport -A -o json | jq -r '.items[]|[.metadata.namespace,.metadata.name]|join(" ")' | xargs -n2 bash -c 'kubectl delete -n $0 resourceexport/$1'
 ```
