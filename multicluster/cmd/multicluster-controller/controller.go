@@ -31,15 +31,14 @@ import (
 	clientset "k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
+	"k8s.io/klog/v2"
 	aggregatorclientset "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
-	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	k8smcsv1alpha1 "sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
 
 	multiclusterv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
-	multiclustercontrollers "antrea.io/antrea/multicluster/controllers/multicluster"
 	antreacrd "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	"antrea.io/antrea/pkg/apiserver/certificate"
 	// +kubebuilder:scaffold:imports
@@ -115,11 +114,7 @@ func getMutationWebhooks(controllerNs string) []string {
 }
 
 func setupManagerAndCertController(o *Options) (manager.Manager, error) {
-	opts := zap.Options{
-		Development: false,
-	}
-
-	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
+	ctrl.SetLogger(klog.NewKlogr())
 
 	// build up cert controller to manage certificate for MC Controller
 	k8sConfig := ctrl.GetConfigOrDie()
@@ -149,12 +144,6 @@ func setupManagerAndCertController(o *Options) (manager.Manager, error) {
 		return nil, fmt.Errorf("error starting manager: %v", err)
 	}
 
-	if err = (&multiclustercontrollers.ClusterClaimReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
-		return nil, fmt.Errorf("error creating ClusterClaim controller: %v", err)
-	}
 	if err = (&multiclusterv1alpha1.ClusterClaim{}).SetupWebhookWithManager(mgr); err != nil {
 		return nil, fmt.Errorf("error create ClusterClaim webhook: %v", err)
 	}

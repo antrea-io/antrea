@@ -23,7 +23,7 @@ import (
 const (
 	// Identify this cluster.
 	WellKnownClusterClaimID = "id.k8s.io"
-	// Identify a clusterSet that this cluster is member of.
+	// Identify a ClusterSet that this cluster is a member of.
 	WellKnownClusterClaimClusterSet = "clusterset.k8s.io"
 )
 

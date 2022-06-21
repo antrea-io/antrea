@@ -18,13 +18,10 @@ package v1alpha1
 
 import (
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 )
-
-// log is for logging in this package.
-var clustersetlog = logf.Log.WithName("clusterset-resource")
 
 func (r *ClusterSet) SetupWebhookWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewWebhookManagedBy(mgr).
@@ -38,7 +35,7 @@ var _ webhook.Defaulter = &ClusterSet{}
 
 // Default implements webhook.Defaulter so a webhook will be registered for the type
 func (r *ClusterSet) Default() {
-	clustersetlog.Info("default", "name", r.Name)
+	klog.InfoS("default", "name", r.Name)
 }
 
 //+kubebuilder:webhook:path=/validate-multicluster-crd-antrea-io-v1alpha1-clusterset,mutating=false,failurePolicy=fail,sideEffects=None,groups=multicluster.crd.antrea.io,resources=clustersets,verbs=create;update,versions=v1alpha1,name=vclusterset.kb.io,admissionReviewVersions={v1,v1beta1}
@@ -47,18 +44,18 @@ var _ webhook.Validator = &ClusterSet{}
 
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type
 func (r *ClusterSet) ValidateCreate() error {
-	clustersetlog.Info("validate create", "name", r.Name)
+	klog.InfoS("validate create", "name", r.Name)
 	return nil
 }
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
 func (r *ClusterSet) ValidateUpdate(old runtime.Object) error {
-	clustersetlog.Info("validate update", "name", r.Name)
+	klog.InfoS("validate update", "name", r.Name)
 	return nil
 }
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type
 func (r *ClusterSet) ValidateDelete() error {
-	clustersetlog.Info("validate delete", "name", r.Name)
+	klog.InfoS("validate delete", "name", r.Name)
 	return nil
 }

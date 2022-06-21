@@ -69,7 +69,7 @@ func (r *LeaderClusterSetReconciler) Reconcile(ctx context.Context, req ctrl.Req
 		if !errors.IsNotFound(err) {
 			return ctrl.Result{}, err
 		}
-		klog.InfoS("Received ClusterSet delete", "clusterset", klog.KObj(clusterSet))
+		klog.InfoS("Received ClusterSet delete", "clusterset", req.NamespacedName)
 		for _, removedMember := range r.clusterSetConfig.Spec.Members {
 			r.StatusManager.RemoveMember(common.ClusterID(removedMember.ClusterID))
 		}
@@ -83,7 +83,8 @@ func (r *LeaderClusterSetReconciler) Reconcile(ctx context.Context, req ctrl.Req
 	klog.InfoS("Received ClusterSet add/update", "clusterset", klog.KObj(clusterSet))
 
 	// Handle create or update
-	// If create, make sure the local ClusterClaim is part of the leader config
+	// If create, make sure the required local ClusterClaims are defined, and the cluster and ClusterSet
+	// IDs are included in the leader cluster's ClusterSet CR.
 	if r.clusterSetConfig == nil {
 		clusterID, clusterSetID, err := validateLocalClusterClaim(r.Client, clusterSet)
 		if err != nil {
@@ -100,9 +101,9 @@ func (r *LeaderClusterSetReconciler) Reconcile(ctx context.Context, req ctrl.Req
 		r.clusterSetID = clusterSetID
 	} else {
 		// Make sure clusterSetID has not changed
-		if string(r.clusterSetID) != req.Name {
+		if string(r.clusterSetID) != clusterSet.Name {
 			return ctrl.Result{}, fmt.Errorf("ClusterSet Name %s cannot be changed to %s",
-				r.clusterSetID, req.Name)
+				r.clusterSetID, clusterSet.Name)
 		}
 	}
 
@@ -120,7 +121,7 @@ func (r *LeaderClusterSetReconciler) Reconcile(ctx context.Context, req ctrl.Req
 		if !found {
 			addedMembers = append(addedMembers, memberID)
 		} else {
-			// In the end currentMembers will only have removed leaders
+			// In the end currentMembers will only have removed members.
 			delete(currentMembers, memberID)
 		}
 	}

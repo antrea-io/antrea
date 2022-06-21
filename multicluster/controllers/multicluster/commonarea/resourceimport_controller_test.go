@@ -162,7 +162,6 @@ func TestResourceImportReconciler_handleCreateEvent(t *testing.T) {
 				if err := fakeClient.Get(ctx, types.NamespacedName{Namespace: "default", Name: "nginx"}, svcImp); err != nil {
 					t.Errorf("ResourceImport Reconciler should create a ServiceImport successfully but got error = %v", err)
 				}
-				checkAnnotation(t, svcImp)
 			case "Endpoints":
 				ep := &corev1.Endpoints{}
 				if err := fakeClient.Get(ctx, types.NamespacedName{Namespace: "default", Name: "antrea-mc-nginx"}, ep); err != nil {
@@ -487,12 +486,10 @@ func TestResourceImportReconciler_handleUpdateEvent(t *testing.T) {
 							Namespace: tt.resNamespaceName.Namespace,
 							Name:      strings.TrimPrefix(tt.resNamespaceName.Name, common.AntreaMCSPrefix)}, svcImp); err != nil {
 							t.Errorf("ResourceImport Reconciler should update a ServiceImport successfully but got error = %v", err)
-							checkAnnotation(t, svcImp)
 						} else {
 							if !reflect.DeepEqual(svcImp.Spec.Ports, newPorts) {
 								t.Errorf("expected ServiceImport ports are %v but got %v", newPorts, svc.Spec.Ports)
 							}
-							checkAnnotation(t, svcImp)
 						}
 					}
 				case "Endpoints":
@@ -507,12 +504,5 @@ func TestResourceImportReconciler_handleUpdateEvent(t *testing.T) {
 				}
 			}
 		})
-	}
-}
-
-func checkAnnotation(t *testing.T, svcImport *k8smcsapi.ServiceImport) {
-	id, ok := svcImport.Annotations[common.AntreaMCClusterIDAnnotation]
-	if id != localClusterID || !ok {
-		t.Errorf("latest ServiceImport annotation should be %v but got %v", localClusterID, id)
 	}
 }

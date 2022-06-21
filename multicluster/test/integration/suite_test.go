@@ -33,8 +33,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	mcsscheme "sigs.k8s.io/mcs-api/pkg/client/clientset/versioned/scheme"
 
 	mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
@@ -92,14 +90,13 @@ func TestAPIs(t *testing.T) {
 }
 
 var _ = BeforeSuite(func() {
-	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 	os.Setenv("KUBECONFIG", "/tmp/mc-integration-kubeconfig")
 	By("bootstrapping test environment")
 	useExistingCluster := true
 	testEnv = &envtest.Environment{
 		CRDDirectoryPaths: []string{filepath.Join("..", "..", "config", "crd", "bases"),
 			filepath.Join("..", "..", "config", "crd", "k8smcs"),
-			filepath.Join("..", "..", "..", "build", "charts", "antrea", "templates", "crds", "clusternetworkpolicy.yaml")},
+			filepath.Join("..", "..", "..", "build", "charts", "antrea", "crds", "clusternetworkpolicy.yaml")},
 		ErrorIfCRDPathMissing: true,
 		UseExistingCluster:    &useExistingCluster,
 	}
