@@ -1,10 +1,9 @@
-# Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
 # For controller-gen, float value is not allowed by default as it is considered dangerous
 # See https://github.com/kubernetes-sigs/controller-tools/issues/245
 # However the ResourceExport/Import refers to ACNP type definition and the priority field in ACNP spec is type float64.
 # Hence, before any ACNP spec bumps that changes the priorty field to a different type,
 # the allowDangerousTypes flag is needed for CRD manifests to generate correctly.
-CRD_OPTIONS ?= "crd:trivialVersions=true,allowDangerousTypes=true,preserveUnknownFields=false"
+CRD_OPTIONS ?= "crd:allowDangerousTypes=true"
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
@@ -25,6 +24,7 @@ SHELL = /usr/bin/env bash -o pipefail
 GO_VERSION         := $(shell head -n 1 ../build/images/deps/go-version)
 DOCKER_BUILD_ARGS = --build-arg GO_VERSION=$(GO_VERSION)
 
+YEAR :=$(shell date "+%Y")
 .PHONY: all
 all: build
 
@@ -53,7 +53,7 @@ manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and Cust
 	$(CURDIR)/hack/generate-manifest.sh -m > build/yamls/antrea-multicluster-member.yml
 
 generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
-	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
+	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt",year=$(YEAR) paths="./..."
 
 fmt: ## Run go fmt against code.
 	go fmt ./...
@@ -82,7 +82,7 @@ else
 endif
 ##@ Build
 
-build: generate fmt vet ## Build manager binary.
+build: fmt vet ## Build manager binary.
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o bin/antrea-mc-controller antrea.io/antrea/multicluster/cmd/...
 
 run: manifests generate fmt vet ## Run a controller from your host.
@@ -92,7 +92,7 @@ run: manifests generate fmt vet ## Run a controller from your host.
 
 CONTROLLER_GEN = $(shell pwd)/bin/controller-gen
 controller-gen: ## Download controller-gen locally if necessary.
-	$(call go-get-tool,$(CONTROLLER_GEN),sigs.k8s.io/controller-tools/cmd/controller-gen@v0.4.1)
+	$(call go-get-tool,$(CONTROLLER_GEN),sigs.k8s.io/controller-tools/cmd/controller-gen@v0.9.0)
 
 codegen:
 	./hack/update-codegen.sh
@@ -106,7 +106,7 @@ TMP_DIR=$$(mktemp -d) ;\
 cd $$TMP_DIR ;\
 go mod init tmp ;\
 echo "Downloading $(2)" ;\
-GOBIN=$(PROJECT_DIR)/bin go get $(2) ;\
+GOBIN=$(PROJECT_DIR)/bin go install $(2) ;\
 rm -rf $$TMP_DIR ;\
 }
 endef
