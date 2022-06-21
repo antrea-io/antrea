@@ -361,7 +361,7 @@ func testMulticastStatsWithSendersReceivers(t *testing.T, data *TestData, mc mul
 		if _, err = k8sUtils.CreateOrUpdateANP(np); err != nil {
 			t.Fatalf("Creating ANP %s failed: %v", np.Name, err)
 		}
-		err = data.waitForANPRealized(t, data.testNamespace, np.Name)
+		err = data.waitForANPRealized(t, data.testNamespace, np.Name, policyRealizedTimeout)
 		if err != nil {
 			t.Fatalf("Error when waiting for ANP %s to be realized: %v", np.Name, err)
 		}
@@ -399,7 +399,7 @@ func testMulticastStatsWithSendersReceivers(t *testing.T, data *TestData, mc mul
 		if _, err = k8sUtils.CreateOrUpdateANP(np); err != nil {
 			t.Fatalf("Creating ANP %s failed: %v", np.Name, err)
 		}
-		err = data.waitForANPRealized(t, data.testNamespace, np.Name)
+		err = data.waitForANPRealized(t, data.testNamespace, np.Name, policyRealizedTimeout)
 		if err != nil {
 			t.Fatalf("Error when waiting for ANP %s released: %v", np.Name, err)
 		}
