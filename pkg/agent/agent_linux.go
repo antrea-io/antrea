@@ -38,8 +38,8 @@ func (i *Initializer) prepareHostNetwork() error {
 	return nil
 }
 
-func (i *Initializer) prepareOVSBridge() error {
-	// Return immediately on Linux if connectUplinkToBridge is false.
+// prepareOVSBridgeForK8sNode returns immediately on Linux if connectUplinkToBridge is false.
+func (i *Initializer) prepareOVSBridgeForK8sNode() error {
 	if !i.connectUplinkToBridge {
 		return nil
 	}

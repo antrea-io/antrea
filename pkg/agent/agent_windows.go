@@ -111,11 +111,10 @@ func (i *Initializer) prepareHNSNetworkAndOVSExtension() error {
 	return util.PrepareHNSNetwork(subnetCIDR, i.nodeConfig.NodeTransportIPv4Addr, adapter, i.nodeConfig.UplinkNetConfig.Gateway, dnsServers, i.nodeConfig.UplinkNetConfig.Routes, i.ovsBridge)
 }
 
-func (i *Initializer) prepareOVSBridge() error {
-	if i.nodeType == config.K8sNode {
-		return i.prepareOVSBridgeOnHNSNetwork()
-	}
-	return nil
+// prepareOVSBridgeForK8sNode adds local port and uplink port to OVS bridge after OVS extension is enabled on HNSNetwork.
+// This function deletes OVS bridge and HNS network created by Antrea on failure.
+func (i *Initializer) prepareOVSBridgeForK8sNode() error {
+	return i.prepareOVSBridgeOnHNSNetwork()
 }
 
 // prepareOVSBridgeOnHNSNetwork adds local port and uplink to OVS bridge after the OVS Extension is enabled on HNSNetwork.
