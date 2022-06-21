@@ -2537,6 +2537,12 @@ data:
   antrea-agent.conf: |
     # FeatureGates is a map of feature names to bools that enable or disable experimental features.
     featureGates:
+    # AllAlpha is a global toggle for alpha features. Per-feature key values override the default set by AllAlpha.
+    #  AllAlpha: false
+
+    # AllBeta is a global toggle for beta features. Per-feature key values override the default set by AllBeta.
+    #  AllBeta: false
+
     # Enable AntreaProxy which provides ServiceLB for in-cluster Services in antrea-agent.
     # It should be enabled on Windows, otherwise NetworkPolicy will not take effect on
     # Service traffic.
@@ -2845,6 +2851,12 @@ data:
   antrea-controller.conf: |
     # FeatureGates is a map of feature names to bools that enable or disable experimental features.
     featureGates:
+    # AllAlpha is a global toggle for alpha features. Per-feature key values override the default set by AllAlpha.
+    #  AllAlpha: false
+
+    # AllBeta is a global toggle for beta features. Per-feature key values override the default set by AllBeta.
+    #  AllBeta: false
+
     # Enable traceflow which provides packet tracing feature to diagnose network issue.
     #  Traceflow: true
 
@@ -3676,7 +3688,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: afbe6d81852e79d710d0350ab5173f7d0e05b79c75744cffb94ce2294afc328c
+        checksum/config: cc8af4219d403a137ab87500ae0ab15b681fc635e41057b5623df6154443fddf
       labels:
         app: antrea
         component: antrea-agent
@@ -3916,7 +3928,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: afbe6d81852e79d710d0350ab5173f7d0e05b79c75744cffb94ce2294afc328c
+        checksum/config: cc8af4219d403a137ab87500ae0ab15b681fc635e41057b5623df6154443fddf
       labels:
         app: antrea
         component: antrea-controller

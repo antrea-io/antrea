@@ -25,6 +25,7 @@ import (
 	"antrea.io/antrea/pkg/agent/util"
 	agentconfig "antrea.io/antrea/pkg/config/agent"
 	controllerconfig "antrea.io/antrea/pkg/config/controller"
+	"antrea.io/antrea/pkg/features"
 )
 
 // TestIPSec is the top-level test which contains all subtests for
@@ -60,15 +61,8 @@ func TestIPSec(t *testing.T) {
 	})
 
 	t.Run("testIPSecCertificateAuth", func(t *testing.T) {
-		// restart the Controller first as Agent needs to get the CSR signed.
-		cc := func(config *controllerconfig.ControllerConfig) {
-			config.FeatureGates["IPsecCertAuth"] = true
-		}
-		if err := data.mutateAntreaConfigMap(cc, nil, true, false); err != nil {
-			t.Fatalf("Failed to enable IPsecCertAuth feature: %v", err)
-		}
+		skipIfFeatureDisabled(t, features.IPsecCertAuth, true, true)
 		ac := func(config *agentconfig.AgentConfig) {
-			config.FeatureGates["IPsecCertAuth"] = true
 			config.IPsec.AuthenticationMode = "cert"
 		}
 		if err := data.mutateAntreaConfigMap(nil, ac, false, true); err != nil {

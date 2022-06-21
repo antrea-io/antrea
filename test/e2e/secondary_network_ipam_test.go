@@ -22,8 +22,7 @@ import (
 
 	"antrea.io/antrea/pkg/agent/config"
 	crdv1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
-	agentconfig "antrea.io/antrea/pkg/config/agent"
-	controllerconfig "antrea.io/antrea/pkg/config/controller"
+	"antrea.io/antrea/pkg/features"
 )
 
 var (
@@ -242,6 +241,7 @@ func TestSecondaryNetworkIPAM(t *testing.T) {
 	skipIfProxyDisabled(t)
 	skipIfNotIPv4Cluster(t)
 	skipIfAntreaIPAMTest(t)
+	skipIfFeatureDisabled(t, features.AntreaIPAM, true, true)
 
 	data, err := setupTest(t)
 	if err != nil {
@@ -249,16 +249,6 @@ func TestSecondaryNetworkIPAM(t *testing.T) {
 	}
 	defer teardownTest(t, data)
 	skipIfEncapModeIsNot(t, data, config.TrafficEncapModeEncap)
-
-	cc := func(config *controllerconfig.ControllerConfig) {
-		config.FeatureGates["AntreaIPAM"] = true
-	}
-	ac := func(config *agentconfig.AgentConfig) {
-		config.FeatureGates["AntreaIPAM"] = true
-	}
-	if err = data.mutateAntreaConfigMap(cc, ac, true, true); err != nil {
-		t.Fatalf("Failed to enable AntreaIPAM feature: %v", err)
-	}
 
 	_, err = data.crdClient.CrdV1alpha2().IPPools().Create(context.TODO(), testIPPoolv4, metav1.CreateOptions{})
 	defer deleteIPPoolWrapper(t, data, testIPPoolv4.Name)
