@@ -7,7 +7,7 @@ meanwhile also join as a member cluster; another cluster will be a member only.
 The diagram below shows the two clusters and the ClusterSet to be created (for
 simplicity, the diagram just shows two Nodes for each cluster).
 
-<img src="assets/sample-clusterset.svg" width="1000" alt="Antrea Multi-cluster Example ClusterSet">
+<img src="assets/sample-clusterset.svg" width="800" alt="Antrea Multi-cluster Example ClusterSet">
 
 ## Preparation
 
@@ -23,12 +23,11 @@ To use the latest version of Antrea Multi-cluster from the Antrea main branch,
 you can change the YAML manifest path to: `https://github.com/antrea-io/antrea/tree/main/multicluster/build/yamls/`
 when applying or downloading an Antrea YAML manifest.
 
-Antrea must be deployed in both cluster A and cluster B. To set up Antrea
-Multi-cluster Gateways, the `Multicluster` feature of `antrea-agent` must be
-feature enabled in both cluster A and B. Multi-cluster Gateways are required for
-routing multi-cluster Service traffic across the member clusters. Set the
-following configuration parameters in `antrea-agent.conf` of the Antrea
-deployment manifest to enable the `Multicluster` feature:
+Antrea must be deployed in both cluster A and cluster B, and the `Multicluster`
+feature of `antrea-agent` must be enabled to support multi-cluster Services. The
+two clusters **must have non-overlapping Service CIDRs**. Set the following
+configuration parameters in `antrea-agent.conf` of the Antrea deployment
+manifest to enable the `Multicluster` feature:
 
 ```yaml
 antrea-agent.conf: |
@@ -179,12 +178,12 @@ So far, we set up an Antrea Multi-cluster ClusterSet with two clusters following
 the above sections of this guide. Next, you can start to consume the Antrea
 Multi-cluster features with the ClusterSet, including [Multi-cluster Services](user-guide.md#multi-cluster-service)
 and [ClusterNetworkPolicy Replication](user-guide.md#multi-cluster-clusternetworkpolicy-replication).
-Check the relevant Antrea Multi-cluster User Guide sections to learn more.
+Please check the relevant Antrea Multi-cluster User Guide sections to learn more.
 
 If you want to add a new member cluster to your ClusterSet, you can follow the
 steps for cluster B to do so. But note, you will need the following two changes:
 
-1. You need to add the new mumber cluster to the ClusterSet in the leader
+1. You need to add the new mumber cluster to the `ClusterSet` in the leader
 cluster (cluster A). You can do that by adding the cluster ID of the new member
 to `multicluster_clusterset_template.yaml` and re-applying the manifest in
 cluster A.
@@ -192,8 +191,8 @@ cluster A.
 2. You need to update the member cluster ID in
 `multicluster_membercluster_template.yaml` to the cluster ID of the new member
 cluster in the step 2 of initializing ClusterSet. For example, you can run the
-following commands to the following to initialize the ClusterSet for a member
-cluster with ID `test-cluster-member2`:
+following commands to initialize the ClusterSet for a member cluster with ID
+`test-cluster-member2`:
 
 ```bash
 $kubectl apply -f leader-access-token.yml
