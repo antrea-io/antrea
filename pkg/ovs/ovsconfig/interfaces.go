@@ -27,6 +27,8 @@ const (
 
 	OVSDatapathSystem OVSDatapathType = "system"
 	OVSDatapathNetdev OVSDatapathType = "netdev"
+
+	OVSOtherConfigDatapathIDKey string = "datapath-id"
 )
 
 type OVSBridgeClient interface {

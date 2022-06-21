@@ -15,6 +15,7 @@
 package util
 
 import (
+	"crypto/rand"
 	"crypto/sha1" // #nosec G505: not used for security purposes
 	"encoding/hex"
 	"errors"
@@ -377,4 +378,14 @@ func PortToUint16(port int) uint16 {
 	}
 	klog.Errorf("Port value %d out-of-bounds", port)
 	return 0
+}
+
+func GenerateRandomMAC() net.HardwareAddr {
+	buf := make([]byte, 6)
+	if _, err := rand.Read(buf); err != nil {
+		klog.ErrorS(err, "Failed to generate a random MAC")
+	}
+	// Set the local bit
+	buf[0] |= 2
+	return buf
 }
