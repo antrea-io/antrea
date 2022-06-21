@@ -144,10 +144,11 @@ var (
 	DNATTable = newTable("DNAT", stagePreRouting, pipelineIP)
 
 	// Tables in stageEgressSecurity:
-	AntreaPolicyEgressRuleTable = newTable("AntreaPolicyEgressRule", stageEgressSecurity, pipelineIP)
-	EgressRuleTable             = newTable("EgressRule", stageEgressSecurity, pipelineIP)
-	EgressDefaultTable          = newTable("EgressDefaultRule", stageEgressSecurity, pipelineIP)
-	EgressMetricTable           = newTable("EgressMetric", stageEgressSecurity, pipelineIP)
+	EgressSecurityClassifierTable = newTable("EgressSecurityClassifier", stageEgressSecurity, pipelineIP)
+	AntreaPolicyEgressRuleTable   = newTable("AntreaPolicyEgressRule", stageEgressSecurity, pipelineIP)
+	EgressRuleTable               = newTable("EgressRule", stageEgressSecurity, pipelineIP)
+	EgressDefaultTable            = newTable("EgressDefaultRule", stageEgressSecurity, pipelineIP)
+	EgressMetricTable             = newTable("EgressMetric", stageEgressSecurity, pipelineIP)
 
 	// Tables in stageRouting:
 	L3ForwardingTable = newTable("L3Forwarding", stageRouting, pipelineIP)
@@ -193,6 +194,10 @@ var (
 	MulticastIngressPodMetricTable = newTable("MulticastIngressPodMetric", stageIngressSecurity, pipelineMulticast)
 	// Tables in stageOutput
 	MulticastOutputTable = newTable("MulticastOutput", stageOutput, pipelineMulticast)
+
+	// NonIPTable is used when Antrea Agent is running on an external Node. It forwards the non-IP packet
+	// between the uplink and its pair port directly.
+	NonIPTable = newTable("NonIP", stageClassifier, pipelineNonIP, defaultDrop)
 
 	// Flow priority level
 	priorityHigh            = uint16(210)
@@ -414,13 +419,14 @@ type client struct {
 	cookieAllocator       cookie.Allocator
 	bridge                binding.Bridge
 
-	featurePodConnectivity *featurePodConnectivity
-	featureService         *featureService
-	featureEgress          *featureEgress
-	featureNetworkPolicy   *featureNetworkPolicy
-	featureMulticast       *featureMulticast
-	featureMulticluster    *featureMulticluster
-	activatedFeatures      []feature
+	featurePodConnectivity          *featurePodConnectivity
+	featureService                  *featureService
+	featureEgress                   *featureEgress
+	featureNetworkPolicy            *featureNetworkPolicy
+	featureMulticast                *featureMulticast
+	featureMulticluster             *featureMulticluster
+	featureExternalNodeConnectivity *featureExternalNodeConnectivity
+	activatedFeatures               []feature
 
 	featureTraceflow  *featureTraceflow
 	traceableFeatures []traceableFeature
@@ -583,6 +589,8 @@ func (c *client) defaultFlows() []binding.Flow {
 			// in PipelineIPClassifierTable. Note that, PipelineIPClassifierTable is in stageValidation of pipeline for IP. In another word,
 			// pipelineMulticast is forked from PipelineIPClassifierTable in pipelineIP.
 			flows = append(flows, multicastPipelineClassifyFlow(cookieID, pipeline))
+		case pipelineNonIP:
+			flows = append(flows, nonIPPipelineClassifyFlow(cookieID, pipeline))
 		}
 	}
 
@@ -1869,126 +1877,6 @@ func (c *client) Disconnect() error {
 
 func newFlowCategoryCache() *flowCategoryCache {
 	return &flowCategoryCache{}
-}
-
-// establishedConnectionFlows generates flows to ensure established connections skip the NetworkPolicy rules.
-func (f *featureNetworkPolicy) establishedConnectionFlows() []binding.Flow {
-	// egressDropTable checks the source address of packets, and drops packets sent from the AppliedToGroup but not
-	// matching the NetworkPolicy rules. Packets in the established connections need not to be checked with the
-	// egressRuleTable or the egressDropTable.
-	egressDropTable := EgressDefaultTable
-	// ingressDropTable checks the destination address of packets, and drops packets sent to the AppliedToGroup but not
-	// matching the NetworkPolicy rules. Packets in the established connections need not to be checked with the
-	// ingressRuleTable or ingressDropTable.
-	ingressDropTable := IngressDefaultTable
-	cookieID := f.cookieAllocator.Request(f.category).Raw()
-	var allEstFlows []binding.Flow
-	for _, ipProtocol := range f.ipProtocols {
-		egressEstFlow := EgressRuleTable.ofTable.BuildFlow(priorityHigh).
-			Cookie(cookieID).
-			MatchProtocol(ipProtocol).
-			MatchCTStateNew(false).
-			MatchCTStateEst(true).
-			Action().GotoTable(egressDropTable.GetNext()).
-			Done()
-		ingressEstFlow := IngressRuleTable.ofTable.BuildFlow(priorityHigh).
-			Cookie(cookieID).
-			MatchProtocol(ipProtocol).
-			MatchCTStateNew(false).
-			MatchCTStateEst(true).
-			Action().GotoTable(ingressDropTable.GetNext()).
-			Done()
-		allEstFlows = append(allEstFlows, egressEstFlow, ingressEstFlow)
-	}
-	if !f.enableAntreaPolicy {
-		return allEstFlows
-	}
-	var apFlows []binding.Flow
-	for _, table := range GetAntreaPolicyEgressTables() {
-		for _, ipProtocol := range f.ipProtocols {
-			apEgressEstFlow := table.ofTable.BuildFlow(priorityTopAntreaPolicy).
-				Cookie(cookieID).
-				MatchProtocol(ipProtocol).
-				MatchCTStateNew(false).
-				MatchCTStateEst(true).
-				Action().GotoTable(egressDropTable.GetNext()).
-				Done()
-			apFlows = append(apFlows, apEgressEstFlow)
-		}
-	}
-	for _, table := range GetAntreaPolicyIngressTables() {
-		for _, ipProtocol := range f.ipProtocols {
-			apIngressEstFlow := table.ofTable.BuildFlow(priorityTopAntreaPolicy).
-				Cookie(cookieID).
-				MatchProtocol(ipProtocol).
-				MatchCTStateNew(false).
-				MatchCTStateEst(true).
-				Action().GotoTable(ingressDropTable.GetNext()).
-				Done()
-			apFlows = append(apFlows, apIngressEstFlow)
-		}
-	}
-	allEstFlows = append(allEstFlows, apFlows...)
-	return allEstFlows
-}
-
-// relatedConnectionFlows generates flows to ensure related connections skip the NetworkPolicy rules.
-func (f *featureNetworkPolicy) relatedConnectionFlows() []binding.Flow {
-	// egressDropTable checks the source address of packets, and drops packets sent from the AppliedToGroup but not
-	// matching the NetworkPolicy rules. Packets in the related connections need not to be checked with the
-	// egressRuleTable or the egressDropTable.
-	egressDropTable := EgressDefaultTable
-	// ingressDropTable checks the destination address of packets, and drops packets sent to the AppliedToGroup but not
-	// matching the NetworkPolicy rules. Packets in the related connections need not to be checked with the
-	// ingressRuleTable or ingressDropTable.
-	ingressDropTable := IngressDefaultTable
-	cookieID := f.cookieAllocator.Request(f.category).Raw()
-	var flows []binding.Flow
-	for _, ipProtocol := range f.ipProtocols {
-		egressRelFlow := EgressRuleTable.ofTable.BuildFlow(priorityHigh).
-			Cookie(cookieID).
-			MatchProtocol(ipProtocol).
-			MatchCTStateNew(false).
-			MatchCTStateRel(true).
-			Action().GotoTable(egressDropTable.GetNext()).
-			Done()
-		ingressRelFlow := IngressRuleTable.ofTable.BuildFlow(priorityHigh).
-			Cookie(cookieID).
-			MatchProtocol(ipProtocol).
-			MatchCTStateNew(false).
-			MatchCTStateRel(true).
-			Action().GotoTable(ingressDropTable.GetNext()).
-			Done()
-		flows = append(flows, egressRelFlow, ingressRelFlow)
-	}
-	if !f.enableAntreaPolicy {
-		return flows
-	}
-	for _, table := range GetAntreaPolicyEgressTables() {
-		for _, ipProto := range f.ipProtocols {
-			apEgressRelFlow := table.ofTable.BuildFlow(priorityTopAntreaPolicy).
-				Cookie(cookieID).
-				MatchProtocol(ipProto).
-				MatchCTStateNew(false).
-				MatchCTStateRel(true).
-				Action().GotoTable(egressDropTable.GetNext()).
-				Done()
-			flows = append(flows, apEgressRelFlow)
-		}
-	}
-	for _, table := range GetAntreaPolicyIngressTables() {
-		for _, ipProto := range f.ipProtocols {
-			apIngressRelFlow := table.ofTable.BuildFlow(priorityTopAntreaPolicy).
-				Cookie(cookieID).
-				MatchProtocol(ipProto).
-				MatchCTStateNew(false).
-				MatchCTStateRel(true).
-				Action().GotoTable(ingressDropTable.GetNext()).
-				Done()
-			flows = append(flows, apIngressRelFlow)
-		}
-	}
-	return flows
 }
 
 func (f *featureNetworkPolicy) addFlowMatch(fb binding.FlowBuilder, matchKey *types.MatchKey, matchValue interface{}) binding.FlowBuilder {

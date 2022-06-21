@@ -224,7 +224,7 @@ func httpRequest(requests, policyRules int, data *TestData, b *testing.B) {
 	}
 
 	b.Log("Waiting for the workload network policy to be realized")
-	err = WaitNetworkPolicyRealize(policyRules, data)
+	err = WaitNetworkPolicyRealize(controlPlaneNodeName(), openflow.IngressRuleTable, policyRules, data)
 	if err != nil {
 		b.Fatalf("Checking network policies realization failed: %v", err)
 	}
@@ -261,7 +261,7 @@ func networkPolicyRealize(policyRules int, data *TestData, b *testing.B) {
 
 		b.Log("Waiting for the network policy to be realized")
 		b.StartTimer()
-		err := WaitNetworkPolicyRealize(policyRules, data)
+		err := WaitNetworkPolicyRealize(controlPlaneNodeName(), openflow.IngressRuleTable, policyRules, data)
 		if err != nil {
 			b.Fatalf("Checking network policies realization failed: %v", err)
 		}
@@ -275,9 +275,9 @@ func networkPolicyRealize(policyRules int, data *TestData, b *testing.B) {
 	}
 }
 
-func WaitNetworkPolicyRealize(policyRules int, data *TestData) error {
+func WaitNetworkPolicyRealize(nodeName string, table *openflow.Table, policyRules int, data *TestData) error {
 	return wait.PollImmediate(50*time.Millisecond, *realizeTimeout, func() (bool, error) {
-		return checkRealize(policyRules, data)
+		return checkRealize(nodeName, table, policyRules, data)
 	})
 }
 
@@ -287,13 +287,13 @@ func WaitNetworkPolicyRealize(policyRules int, data *TestData) error {
 // IngressRule. checkRealize returns true when the number of flows exceeds the number of CIDR, because each table has a
 // default flow entry which is used for default matching.
 // Since the check is done over SSH, the time measurement is not completely accurate.
-func checkRealize(policyRules int, data *TestData) (bool, error) {
-	antreaPodName, err := data.getAntreaPodOnNode(controlPlaneNodeName())
+func checkRealize(nodeName string, table *openflow.Table, policyRules int, data *TestData) (bool, error) {
+	antreaPodName, err := data.getAntreaPodOnNode(nodeName)
 	if err != nil {
 		return false, err
 	}
 	// table IngressRule is the ingressRuleTable where the rules in workload network policy is being applied to.
-	cmd := []string{"ovs-ofctl", "dump-flows", defaultBridgeName, fmt.Sprintf("table=%s", openflow.IngressRuleTable.GetName())}
+	cmd := []string{"ovs-ofctl", "dump-flows", defaultBridgeName, fmt.Sprintf("table=%s", table.GetName())}
 	stdout, _, err := data.RunCommandFromPod(antreaNamespace, antreaPodName, "antrea-agent", cmd)
 	if err != nil {
 		return false, err
