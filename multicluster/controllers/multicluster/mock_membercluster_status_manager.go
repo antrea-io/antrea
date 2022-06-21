@@ -51,15 +51,15 @@ func (m *MockMemberClusterStatusManager) EXPECT() *MockMemberClusterStatusManage
 }
 
 // AddMember mocks base method.
-func (m *MockMemberClusterStatusManager) AddMember(MemberId common.ClusterID) {
+func (m *MockMemberClusterStatusManager) AddMember(memberID common.ClusterID) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "AddMember", MemberId)
+	m.ctrl.Call(m, "AddMember", memberID)
 }
 
 // AddMember indicates an expected call of AddMember.
-func (mr *MockMemberClusterStatusManagerMockRecorder) AddMember(MemberId interface{}) *gomock.Call {
+func (mr *MockMemberClusterStatusManagerMockRecorder) AddMember(memberID interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddMember", reflect.TypeOf((*MockMemberClusterStatusManager)(nil).AddMember), MemberId)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddMember", reflect.TypeOf((*MockMemberClusterStatusManager)(nil).AddMember), memberID)
 }
 
 // GetMemberClusterStatuses mocks base method.
@@ -77,13 +77,13 @@ func (mr *MockMemberClusterStatusManagerMockRecorder) GetMemberClusterStatuses()
 }
 
 // RemoveMember mocks base method.
-func (m *MockMemberClusterStatusManager) RemoveMember(MemberId common.ClusterID) {
+func (m *MockMemberClusterStatusManager) RemoveMember(memberID common.ClusterID) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "RemoveMember", MemberId)
+	m.ctrl.Call(m, "RemoveMember", memberID)
 }
 
 // RemoveMember indicates an expected call of RemoveMember.
-func (mr *MockMemberClusterStatusManagerMockRecorder) RemoveMember(MemberId interface{}) *gomock.Call {
+func (mr *MockMemberClusterStatusManagerMockRecorder) RemoveMember(memberID interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveMember", reflect.TypeOf((*MockMemberClusterStatusManager)(nil).RemoveMember), MemberId)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveMember", reflect.TypeOf((*MockMemberClusterStatusManager)(nil).RemoveMember), memberID)
 }

@@ -86,7 +86,7 @@ func (r *MemberClusterSetReconciler) Reconcile(ctx context.Context, req ctrl.Req
 		if !apierrors.IsNotFound(err) {
 			return ctrl.Result{}, err
 		}
-		klog.InfoS("Received ClusterSet delete", "config", klog.KObj(clusterSet))
+		klog.InfoS("Received ClusterSet delete", "clusterset", klog.KObj(clusterSet))
 		stopErr := r.remoteCommonAreaManager.Stop()
 		r.remoteCommonAreaManager = nil
 		r.clusterSetConfig = nil
@@ -96,7 +96,7 @@ func (r *MemberClusterSetReconciler) Reconcile(ctx context.Context, req ctrl.Req
 		return ctrl.Result{}, stopErr
 	}
 
-	klog.InfoS("Received ClusterSet add/update", "config", klog.KObj(clusterSet))
+	klog.InfoS("Received ClusterSet add/update", "clusterset", klog.KObj(clusterSet))
 
 	// Handle create or update
 	if r.clusterSetConfig == nil {

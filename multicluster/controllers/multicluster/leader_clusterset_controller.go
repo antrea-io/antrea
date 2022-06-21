@@ -69,7 +69,7 @@ func (r *LeaderClusterSetReconciler) Reconcile(ctx context.Context, req ctrl.Req
 		if !errors.IsNotFound(err) {
 			return ctrl.Result{}, err
 		}
-		klog.InfoS("Received ClusterSet delete", "config", klog.KObj(clusterSet))
+		klog.InfoS("Received ClusterSet delete", "clusterset", klog.KObj(clusterSet))
 		for _, removedMember := range r.clusterSetConfig.Spec.Members {
 			r.StatusManager.RemoveMember(common.ClusterID(removedMember.ClusterID))
 		}
@@ -80,7 +80,7 @@ func (r *LeaderClusterSetReconciler) Reconcile(ctx context.Context, req ctrl.Req
 		return ctrl.Result{}, nil
 	}
 
-	klog.InfoS("Received ClusterSet add/update", "config", klog.KObj(clusterSet))
+	klog.InfoS("Received ClusterSet add/update", "clusterset", klog.KObj(clusterSet))
 
 	// Handle create or update
 	// If create, make sure the local ClusterClaim is part of the leader config
@@ -175,8 +175,8 @@ func (r *LeaderClusterSetReconciler) runBackgroundTasks() {
 //       statues across all clusters. Message will be empty and Reason
 //       will be "NoReadyCluster"
 func (r *LeaderClusterSetReconciler) updateStatus() {
-	defer r.mutex.Unlock()
 	r.mutex.Lock()
+	defer r.mutex.Unlock()
 
 	if r.clusterSetConfig == nil {
 		// Nothing to do.
