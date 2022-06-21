@@ -1,0 +1,18 @@
+apiVersion: "k8s.cni.cncf.io/v1"
+kind: NetworkAttachmentDefinition
+metadata:
+  name: virtual-net2
+  namespace: kube-system
+spec:
+  config: '{
+      "cniVersion": "0.3.0",
+      "type": "antrea",
+      "ipam": {
+        "type": "whereabouts",
+        "datastore": "kubernetes",
+        "kubernetes": {
+          "kubeconfig": "/host/etc/cni/net.d/whereabouts.d/whereabouts.kubeconfig"
+        },
+        "range": "148.14.25.0/24"
+      }
+    }'

@@ -163,6 +163,10 @@ func skipIfProxyDisabled(t *testing.T) {
 	skipIfFeatureDisabled(t, features.AntreaProxy, true /* checkAgent */, false /* checkController */)
 }
 
+func skipIfSecondaryNetworkDisabled(t *testing.T) {
+	skipIfFeatureDisabled(t, features.SecondaryNetwork, true /* checkAgent */, false /* checkController */)
+}
+
 func ensureAntreaRunning(data *TestData) error {
 	log.Println("Applying Antrea YAML")
 	if err := data.deployAntrea(deployAntreaDefault); err != nil {
@@ -227,7 +231,7 @@ func setupTestForFlowAggregator(tb testing.TB) (*TestData, bool, bool, error) {
 	if err != nil {
 		return testData, v4Enabled, v6Enabled, err
 	}
-	// Create pod using ipfix collector image
+	// Create Pod using ipfix collector image
 	if err = testData.createPodOnNode("ipfix-collector", testData.testNamespace, "", ipfixCollectorImage, nil, nil, nil, nil, true, nil); err != nil {
 		tb.Errorf("Error when creating the ipfix collector Pod: %v", err)
 	}
@@ -334,14 +338,14 @@ func exportLogs(tb testing.TB, data *TestData, logsSubDir string, writeNodeLogs 
 	// dump the logs for clickhouse operator Pods to disk.
 	data.forAllMatchingPodsInNamespace("app=clickhouse-operator", kubeNamespace, writePodLogs)
 
-	// dump the output of "kubectl describe" for Antrea pods to disk.
+	// dump the output of "kubectl describe" for Antrea Pods to disk.
 	data.forAllMatchingPodsInNamespace("app=antrea", antreaNamespace, func(nodeName, podName, nsName string) error {
 		w := getPodWriter(nodeName, podName, "describe")
 		if w == nil {
 			return nil
 		}
 		defer w.Close()
-		cmd := fmt.Sprintf("kubectl -n %s describe pod %s", nsName, podName)
+		cmd := fmt.Sprintf("kubectl -n %s describe Pod %s", nsName, podName)
 		stdout := runKubectl(cmd)
 		if stdout == "" {
 			return nil
@@ -514,4 +518,110 @@ func createTestPods(tb testing.TB, data *TestData, num int, ns string, nodeName 
 	}
 
 	return podNames, podIPs, cleanupFn
+}
+
+func setupTestWithSecondaryNetworkConfig(tb testing.TB) (*TestData, error) {
+	if err := testData.downloadSecondaryNetworkPrerequisiteYamlFiles(); err != nil {
+		tb.Errorf("Error downloading prerequest config files for secondary network : %v", err)
+		return nil, err
+	}
+	if err := testData.generateAntreaConfig(); err != nil {
+		tb.Errorf("Error downloading antrea config files for secondary network : %v", err)
+		return nil, err
+	}
+	if err := testData.copyFilesToControlPlaneNodeName(); err != nil {
+		tb.Errorf("Error in copying file from local to remote cluster : %v", err)
+		return nil, err
+	}
+	// Check all the require configuration files are available
+	/*
+		for _, fileName := range configFiles {
+			_, err := os.Stat("." + secondary_network_config_path + fileName)
+			if err != nil {
+				tb.Errorf("%s Config file not found : %v", fileName, err)
+				return nil, err
+			}
+		}*/
+
+	if _, err := os.Stat("." + secondary_network_config_path + configMap); err != nil {
+		tb.Errorf("%s Config file not found : %v", configMap, err)
+		return nil, err
+	}
+	if _, err := os.Stat("." + secondary_network_config_path + sriovDaemonset); err != nil {
+		tb.Errorf("%s Config file not found : %v", sriovDaemonset, err)
+		return nil, err
+	}
+	if _, err := os.Stat("." + secondary_network_config_path + antrea); err != nil {
+		tb.Errorf("%s Config file not found : %v", antrea, err)
+		return nil, err
+	}
+	if _, err := os.Stat("." + secondary_network_config_path + whereabouts); err != nil {
+		tb.Errorf("%s Config file not found : %v", whereabouts, err)
+		return nil, err
+	}
+	if _, err := os.Stat("." + secondary_network_config_path + netAttachDef); err != nil {
+		tb.Errorf("%s Config file not found : %v", netAttachDef, err)
+		return nil, err
+	}
+	if _, err := os.Stat("." + secondary_network_config_path + configfile); err != nil {
+		tb.Errorf("%s Config file not found : %v", configfile, err)
+		return nil, err
+	}
+
+	// Deploy all the prerequisite config for secondary network
+	if err := testData.deploySecondaryNetworkPrerequisiteConfig(); err != nil {
+		tb.Errorf("Error deploying prerequisite config files for secondary network : %v", err)
+		return nil, err
+	}
+
+	if err := testData.setupLogDirectoryForTest(tb.Name()); err != nil {
+		tb.Errorf("Error creating logs directory '%s': %v", testData.logsDirForTestCase, err)
+		return nil, err
+	}
+	success := false
+	defer func() {
+		if !success {
+			tb.Fail()
+			exportLogs(tb, testData, "afterSetupTest", true)
+		}
+	}()
+	tb.Logf("Creating '%s' K8s Namespace", testData.testNamespace)
+	if err := ensureAntreaRunning(testData); err != nil {
+		return nil, err
+	}
+	if err := testData.CreateNamespace(testData.testNamespace, nil); err != nil {
+		return nil, err
+	}
+	success = true
+	return testData, nil
+
+}
+
+func teardownSecondaryNetworkTest(tb testing.TB, data *TestData) {
+	if err := testData.deleteSecondaryNetworkPods(); err != nil {
+		tb.Errorf("Error downloading prerequest config files for secondary network : %v", err)
+	}
+	if err := testData.deleteAntreaCNI(); err != nil {
+		tb.Errorf("Error downloading prerequest config files for secondary network : %v", err)
+	}
+	if err := testData.deleteWhereaboutsCNI(); err != nil {
+		tb.Errorf("Error downloading prerequest config files for secondary network : %v", err)
+	}
+	if err := testData.deleteVirtualNetworks(nameOfVirtualNetwork); err != nil {
+		tb.Errorf("Error downloading prerequest config files for secondary network : %v", err)
+	}
+	if err := testData.deleteNetworkAttachmentDefinition(); err != nil {
+		tb.Errorf("Error downloading prerequest config files for secondary network : %v", err)
+	}
+	if err := testData.deleteSriovDevicePluginAtNode(); err != nil {
+		tb.Errorf("Error downloading prerequest config files for secondary network : %v", err)
+	}
+
+	if err := testData.toggleIPLinkAtNode(networkInterfaceName, 1); err != nil {
+		tb.Errorf("Error downloading prerequest config files for secondary network : %v", err)
+	}
+	if err := testData.configureSriovVFsAtNode(networkInterfaceName, "0"); err != nil {
+		tb.Errorf("Error configuring Sriov VFs at node! : %v", err)
+
+	}
 }

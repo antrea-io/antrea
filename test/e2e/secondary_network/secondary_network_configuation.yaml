@@ -1,0 +1,17 @@
+interface_type:
+        interfacetype: sriov
+sriov_conf:
+    networkinterface: ens160
+    numberofvfs: 16 
+controlnode_info:
+        username: intelsdp16051
+        nodeip: 146.152.205.43
+vir_net:
+    totalnumberofvirtualnetworks: 3
+    virtualnetworknames: ["virtual-network-instance1.yaml","virtual-network-instance2.yaml", "virtual-network-instance3.yaml"]
+create_pod:
+    numberofpods: 4
+    describe: [["testpodsec1",2,"virtual-net1","virtual-net2","eth1","eth2","sanity1.yaml"],
+               ["testpodsec2",3,"virtual-net1","virtual-net2","virtual-net3","eth1","eth2","eth3","sanity2.yaml"],
+               ["testpodsec3",1,"virtual-net2","eth2","sanity3.yaml"],
+               ["testpodsec4",2,"virtual-net2","virtual-net3","eth2","eth3","sanity4.yaml"]]
