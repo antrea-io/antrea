@@ -51,10 +51,10 @@ const (
 )
 
 const (
-	TableMissActionDrop MissActionType = iota
+	TableMissActionNone MissActionType = iota
+	TableMissActionDrop
 	TableMissActionNormal
 	TableMissActionNext
-	TableMissActionNone
 )
 
 const (
@@ -76,6 +76,8 @@ const (
 	NxmFieldDstIPv4     = "NXM_OF_IP_DST"
 	NxmFieldSrcIPv6     = "NXM_NX_IPV6_SRC"
 	NxmFieldDstIPv6     = "NXM_NX_IPV6_DST"
+
+	OxmFieldVLANVID = "OXM_OF_VLAN_VID"
 )
 
 const (
@@ -92,6 +94,7 @@ type Bridge interface {
 	CreateTable(table Table, next uint8, missAction MissActionType) Table
 	// AddTable adds table on the Bridge. Return true if the operation succeeds, otherwise return false.
 	DeleteTable(id uint8) bool
+	CreateGroupTypeAll(id GroupIDType) Group
 	CreateGroup(id GroupIDType) Group
 	DeleteGroup(id GroupIDType) bool
 	CreateMeter(id MeterIDType, flags ofctrl.MeterFlag) Meter
@@ -148,6 +151,18 @@ type Table interface {
 	GetNext() uint8
 	SetNext(next uint8)
 	SetMissAction(action MissActionType)
+	GetStageID() StageID
+}
+
+type PipelineID uint8
+
+type StageID uint8
+
+type Pipeline interface {
+	GetFirstTableInStage(id StageID) Table
+	GetFirstTable() Table
+	ListAllTables() []Table
+	IsLastTable(t Table) bool
 }
 
 type EntryType string
@@ -189,15 +204,15 @@ type Flow interface {
 type Action interface {
 	LoadARPOperation(value uint16) FlowBuilder
 	LoadToRegField(field *RegField, value uint32) FlowBuilder
-	LoadRegMark(mark *RegMark) FlowBuilder
+	LoadRegMark(marks ...*RegMark) FlowBuilder
 	LoadPktMarkRange(value uint32, to *Range) FlowBuilder
 	LoadIPDSCP(value uint8) FlowBuilder
 	LoadRange(name string, addr uint64, to *Range) FlowBuilder
 	Move(from, to string) FlowBuilder
 	MoveRange(fromName, toName string, from, to Range) FlowBuilder
 	Resubmit(port uint16, table uint8) FlowBuilder
-	ResubmitToTable(table uint8) FlowBuilder
-	CT(commit bool, tableID uint8, zone int) CTAction
+	ResubmitToTables(tables ...uint8) FlowBuilder
+	CT(commit bool, tableID uint8, zone int, zoneSrcField *RegField) CTAction
 	Drop() FlowBuilder
 	Output(port uint32) FlowBuilder
 	OutputFieldRange(from string, rng *Range) FlowBuilder
@@ -212,12 +227,17 @@ type Action interface {
 	SetSrcIP(addr net.IP) FlowBuilder
 	SetDstIP(addr net.IP) FlowBuilder
 	SetTunnelDst(addr net.IP) FlowBuilder
+	PopVLAN() FlowBuilder
+	PushVLAN(etherType uint16) FlowBuilder
+	SetVLAN(vlanID uint16) FlowBuilder
 	DecTTL() FlowBuilder
 	Normal() FlowBuilder
 	Conjunction(conjID uint32, clauseID uint8, nClause uint8) FlowBuilder
 	Group(id GroupIDType) FlowBuilder
 	Learn(id uint8, priority uint16, idleTimeout, hardTimeout uint16, cookieID uint64) LearnAction
 	GotoTable(table uint8) FlowBuilder
+	NextTable() FlowBuilder
+	GotoStage(stage StageID) FlowBuilder
 	SendToController(reason uint8) FlowBuilder
 	Note(notes string) FlowBuilder
 	Meter(meterID uint32) FlowBuilder
@@ -228,7 +248,7 @@ type FlowBuilder interface {
 	MatchProtocol(name Protocol) FlowBuilder
 	MatchIPProtocolValue(isIPv6 bool, protoValue uint8) FlowBuilder
 	MatchXXReg(regID int, data []byte) FlowBuilder
-	MatchRegMark(mark *RegMark) FlowBuilder
+	MatchRegMark(marks ...*RegMark) FlowBuilder
 	MatchRegFieldWithValue(field *RegField, data uint32) FlowBuilder
 	MatchInPort(inPort uint32) FlowBuilder
 	MatchDstIP(ip net.IP) FlowBuilder
@@ -251,16 +271,19 @@ type FlowBuilder interface {
 	MatchCTStateInv(isSet bool) FlowBuilder
 	MatchCTStateDNAT(isSet bool) FlowBuilder
 	MatchCTStateSNAT(isSet bool) FlowBuilder
-	MatchCTMark(mark *CtMark) FlowBuilder
+	MatchCTMark(marks ...*CtMark) FlowBuilder
 	MatchCTLabelField(high, low uint64, field *CtLabel) FlowBuilder
 	MatchPktMark(value uint32, mask *uint32) FlowBuilder
 	MatchConjID(value uint32) FlowBuilder
 	MatchDstPort(port uint16, portMask *uint16) FlowBuilder
 	MatchSrcPort(port uint16, portMask *uint16) FlowBuilder
+	MatchICMPType(icmpType byte) FlowBuilder
+	MatchICMPCode(icmpCode byte) FlowBuilder
 	MatchICMPv6Type(icmp6Type byte) FlowBuilder
 	MatchICMPv6Code(icmp6Code byte) FlowBuilder
 	MatchTunnelDst(dstIP net.IP) FlowBuilder
 	MatchTunMetadata(index int, data uint32) FlowBuilder
+	MatchVLAN(nonVLAN bool, vlanId uint16, vlanMask *uint16) FlowBuilder
 	// MatchCTSrcIP matches the source IPv4 address of the connection tracker original direction tuple.
 	MatchCTSrcIP(ip net.IP) FlowBuilder
 	// MatchCTSrcIPNet matches the source IPv4 address of the connection tracker original direction tuple with IP masking.
@@ -339,7 +362,7 @@ type MeterBandBuilder interface {
 
 type CTAction interface {
 	LoadToMark(value uint32) CTAction
-	LoadToCtMark(mark *CtMark) CTAction
+	LoadToCtMark(marks ...*CtMark) CTAction
 	LoadToLabelField(value uint64, labelField *CtLabel) CTAction
 	MoveToLabel(fromName string, fromRng, labelRng *Range) CTAction
 	MoveToCtMarkField(fromRegField *RegField, ctMark *CtMarkField) CTAction
@@ -390,10 +413,11 @@ type PacketOutBuilder interface {
 }
 
 type ctBase struct {
-	commit  bool
-	force   bool
-	ctTable uint8
-	ctZone  uint16
+	commit         bool
+	force          bool
+	ctTable        uint8
+	ctZoneImm      uint16
+	ctZoneSrcField *RegField
 }
 
 type IPRange struct {

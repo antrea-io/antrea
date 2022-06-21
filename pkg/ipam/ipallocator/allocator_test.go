@@ -308,7 +308,8 @@ func TestAllocateRange(t *testing.T) {
 	}
 }
 
-func TestName(t *testing.T) {
+func TestNameAndTotal(t *testing.T) {
 	ma := MultiIPAllocator{newIPRangeAllocator("1.1.1.10", "1.1.1.20"), newCIDRAllocator("10.10.10.128/30", nil)}
 	assert.Equal(t, []string{"1.1.1.10-1.1.1.20", "10.10.10.128/30"}, ma.Names())
+	assert.Equal(t, 14, ma.Total())
 }

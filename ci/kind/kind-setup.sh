@@ -22,7 +22,8 @@ CLUSTER_NAME=""
 ANTREA_IMAGE="projects.registry.vmware.com/antrea/antrea-ubuntu:latest"
 IMAGES=$ANTREA_IMAGE
 ANTREA_CNI=false
-POD_CIDR="10.10.0.0/16"
+POD_CIDR=""
+SERVICE_CIDR=""
 IP_FAMILY="ipv4"
 NUM_WORKERS=2
 SUBNETS=""
@@ -30,6 +31,7 @@ ENCAP_MODE=""
 PROXY=true
 KUBE_PROXY_MODE="iptables"
 PROMETHEUS=false
+K8S_VERSION=""
 
 THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
@@ -39,15 +41,14 @@ function echoerr {
 }
 
 _usage="
-Usage: $0 create CLUSTER_NAME [--pod-cidr POD_CIDR] [--antrea-cni] [--num-workers NUM_WORKERS] [--images IMAGES] [--subnets SUBNETS] [--ip-family ipv4|ipv6]
-                  destroy CLUSTER_NAME
-                  modify-node NODE_NAME
-                  help
+Usage: $0 create CLUSTER_NAME [--pod-cidr POD_CIDR] [--service-cidr SERVICE_CIDR]  [--antrea-cni] [--num-workers NUM_WORKERS] [--images IMAGES] [--subnets SUBNETS] [--ip-family ipv4|ipv6|dual] [--k8s-version VERSION]
+       $0 destroy CLUSTER_NAME
+       $0 help
 where:
   create: create a kind cluster with name CLUSTER_NAME
   destroy: delete a kind cluster with name CLUSTER_NAME
-  modify-node: modify kind node with name NODE_NAME
-  --pod-cidr: specifies pod cidr used in kind cluster, default is $POD_CIDR
+  --pod-cidr: specifies pod cidr used in kind cluster, kind's default value will be used if empty.
+  --service-cidr: specifies service clusterip cidr used in kind cluster, kind's default value will be used if empty.
   --encap-mode: inter-node pod traffic encap mode, default is encap
   --no-proxy: disable Antrea proxy
   --no-kube-proxy: disable Kube proxy
@@ -57,7 +58,8 @@ where:
   --images: specifies images loaded to kind cluster, default is $IMAGES
   --subnets: a subnet creates a separate docker bridge network (named 'antrea-<idx>') with assigned subnet that worker nodes may connect to. Default is empty: all worker
     Node connected to default docker bridge network created by Kind.
-  --ip-family: specifies the ip-family for the kind cluster, default is $IP_FAMILY. A valid pod-cidr must be configured in the same family
+  --ip-family: specifies the ip-family for the kind cluster, default is $IP_FAMILY.
+  --k8s-version: specifies the Kubernetes version of the kind cluster, kind's default K8s version will be used if empty.
 "
 
 function print_usage {
@@ -74,21 +76,6 @@ function get_encap_mode {
     return
   fi
   echo "--encap-mode $ENCAP_MODE"
-}
-
-function modify {
-  node="$1"
-  peerIdx=$(docker exec "$node" ip link | grep eth0 | awk -F[@:] '{ print $3 }' | cut -c 3-)
-  peerName=$(docker run --net=host antrea/ethtool:latest ip link | grep ^"$peerIdx": | awk -F[:@] '{ print $2 }' | cut -c 2-)
-  echo "Disabling TX checksum offload for node $node ($peerName)"
-  docker run --net=host --privileged antrea/ethtool:latest ethtool -K "$peerName" tx off
-  # In Kind cluster, DNAT operation is configured by Docker as all DNS requests from Pod CoreDNS are NAT'd to the Docker
-  # DNS embedded resolver, which is running on localhost. When kube-proxy is enabled, parameter net.ipv4.conf.all.route_localnet
-  # is set to 1 by kube-proxy. This setting ensures that the DNS response can be forwarded back to Pod CoreDNS, otherwise
-  # DNS response from Docker DNS embedded resolver will be discarded. When kube-proxy is disabled, to ensure that DNS
-  # response can be forwarded back to Pod CoreDNS, we also set parameter net.ipv4.conf.all.route_localnet to 1 through
-  # the following command:
-  docker exec "$node" sysctl -w net.ipv4.conf.all.route_localnet=1
 }
 
 function configure_networks {
@@ -169,7 +156,8 @@ function configure_networks {
     # this is needed to ensure that the worker node can still connect to the apiserver
     docker exec -t $node bash -c "echo '$control_plane_ip $CLUSTER_NAME-control-plane' >> /etc/hosts"
     docker exec -t $node pkill kubelet
-    docker exec -t $node pkill kube-proxy
+    # it's possible that kube-proxy is not running yet on some Nodes
+    docker exec -t $node pkill kube-proxy || true
     i=$((i+1))
     if [[ $i -ge $num_networks ]]; then
       i=0
@@ -186,6 +174,15 @@ function configure_networks {
       echo "current ip $tmp_ip, wait for new node ip $node_ip"
       sleep 2
     done
+  done
+
+  nodes="$(kind get nodes --name $CLUSTER_NAME)"
+  nodes="$(echo $nodes)"
+  for node in $nodes; do
+    # disable tx checksum offload
+    # otherwise we observe that inter-Node tunnelled traffic crossing Docker networks is dropped
+    # because of an invalid outer checksum.
+    docker exec "$node" ethtool -K eth0 tx off
   done
 }
 
@@ -230,8 +227,8 @@ function create {
      exit 1
   fi
 
-  if [[ "$IP_FAMILY" != "ipv4" ]] && [[ "$IP_FAMILY" != "ipv6" ]]; then
-    echoerr "Invalid value for --ip-family \"$IP_FAMILY\", expected \"ipv4\" or \"ipv6\""
+  if [[ "$IP_FAMILY" != "ipv4" ]] && [[ "$IP_FAMILY" != "ipv6" ]] && [[ "$IP_FAMILY" != "dual" ]]; then
+    echoerr "Invalid value for --ip-family \"$IP_FAMILY\", expected \"ipv4\", \"ipv6\", or \"dual\""
     exit 1
   fi
 
@@ -261,6 +258,7 @@ featureGates:
 networking:
   disableDefaultCNI: true
   podSubnet: $POD_CIDR
+  serviceSubnet: $SERVICE_CIDR
   ipFamily: $IP_FAMILY
   kubeProxyMode: $KUBE_PROXY_MODE
 nodes:
@@ -269,7 +267,15 @@ EOF
   for (( i=0; i<$NUM_WORKERS; i++ )); do
     echo -e "- role: worker" >> $config_file
   done
-  kind create cluster --name $CLUSTER_NAME --config $config_file
+
+  IMAGE_OPT=""
+  if [[ "$K8S_VERSION" != "" ]]; then
+    if [[ "$K8S_VERSION" != v* ]]; then
+      K8S_VERSION="v${K8S_VERSION}"
+    fi
+    IMAGE_OPT="--image kindest/node:${K8S_VERSION}"
+  fi
+  kind create cluster --name $CLUSTER_NAME --config $config_file $IMAGE_OPT
 
   # force coredns to run on control-plane node because it
   # is attached to kind bridge and uses host dns.
@@ -289,20 +295,14 @@ EOF
   configure_networks
   load_images
 
-  nodes="$(kind get nodes --name $CLUSTER_NAME)"
-  nodes="$(echo $nodes)"
-  for node in $nodes; do
-    modify $node
-  done
-
   if [[ $ANTREA_CNI == true ]]; then
     cmd=$(dirname $0)
     cmd+="/../../hack/generate-manifest.sh"
     if [[ $PROXY == false ]]; then
       cmd+=" --no-proxy"
     fi
-    echo "$cmd --kind $(get_encap_mode) | kubectl apply --context kind-$CLUSTER_NAME -f -"
-    eval "$cmd --kind $(get_encap_mode) | kubectl apply --context kind-$CLUSTER_NAME -f -"
+    echo "$cmd $(get_encap_mode) | kubectl apply --context kind-$CLUSTER_NAME -f -"
+    eval "$cmd $(get_encap_mode) | kubectl apply --context kind-$CLUSTER_NAME -f -"
 
     if [[ $PROMETHEUS == true ]]; then
       kubectl apply --context kind-$CLUSTER_NAME -f $THIS_DIR/../../build/yamls/antrea-prometheus-rbac.yml
@@ -325,6 +325,12 @@ function destroy {
   delete_networks
 }
 
+if ! command -v kind &> /dev/null
+then
+    echoerr "kind could not be found"
+    exit 1
+fi
+
 while [[ $# -gt 0 ]]
  do
  key="$1"
@@ -339,12 +345,12 @@ while [[ $# -gt 0 ]]
       destroy
       exit 0
       ;;
-    modify-node)
-      modify "$2"
-      exit 0
-      ;;
     --pod-cidr)
       POD_CIDR="$2"
+      shift 2
+      ;;
+    --service-cidr)
+      SERVICE_CIDR="$2"
       shift 2
       ;;
     --ip-family)
@@ -383,6 +389,10 @@ while [[ $# -gt 0 ]]
       NUM_WORKERS="$2"
       shift 2
       ;;
+    --k8s-version)
+      K8S_VERSION="$2"
+      shift 2
+      ;;
     help)
       print_usage
       exit 0
@@ -393,5 +403,16 @@ while [[ $# -gt 0 ]]
       ;;
  esac
  done
+
+kind_version=$(kind version | awk  '{print $2}')
+kind_version=${kind_version:1} # strip leading 'v'
+function version_lt() { test "$(printf '%s\n' "$@" | sort -rV | head -n 1)" != "$1"; }
+if version_lt "$kind_version" "0.12.0" && [[ "$KUBE_PROXY_MODE" == "none" ]]; then
+    # This patch is required when using Antrea without kube-proxy:
+    # https://github.com/kubernetes-sigs/kind/pull/2375
+    echoerr "You have kind version v$kind_version installed"
+    echoerr "You need to upgrade to kind >= v0.12.0 when disabling kube-proxy"
+    exit 1
+fi
 
 create

@@ -33,6 +33,7 @@ running in three different modes:
   - [Flow Aggregator commands](#flow-aggregator-commands)
     - [Dumping flow records](#dumping-flow-records)
     - [Record metrics](#record-metrics)
+  - [Multi-cluster commands](#multi-cluster-commands)
 <!-- /toc -->
 
 ## Installation
@@ -43,7 +44,7 @@ to connect to the Antrea Agent. Simply exec into the antrea-agent container for
 the appropriate antrea-agent Pod and run `antctl`:
 
 ```bash
-kubectl exec -it ANTREA-AGENT_POD_NAME -n kube-system -c antrea-agent bash
+kubectl exec -it ANTREA-AGENT_POD_NAME -n kube-system -c antrea-agent -- bash
 > antctl help
 ```
 
@@ -626,3 +627,8 @@ Example outputs of record metrics:
 RECORDS-EXPORTED RECORDS-RECEIVED FLOWS EXPORTERS-CONNECTED
 46               118              7     2      
 ```
+
+### Multi-cluster commands
+
+For information about Antrea Multi-cluster commands, please refer to the
+[antctl Multi-cluster commands](./multicluster/antctl.md).

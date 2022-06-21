@@ -17,7 +17,11 @@ package multicluster
 import (
 	"context"
 	"fmt"
+	"regexp"
 
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -25,7 +29,7 @@ import (
 	"antrea.io/antrea/multicluster/controllers/multicluster/common"
 )
 
-func validateLocalClusterClaim(c client.Client, clusterSet *multiclusterv1alpha1.ClusterSet) (clusterId common.ClusterID, clusterSetId common.ClusterSetID, err error) {
+func validateLocalClusterClaim(c client.Client, clusterSet *multiclusterv1alpha1.ClusterSet) (clusterID common.ClusterID, clusterSetID common.ClusterSetID, err error) {
 	configNamespace := clusterSet.GetNamespace()
 
 	clusterClaimList := &multiclusterv1alpha1.ClusterClaimList{}
@@ -44,10 +48,10 @@ func validateLocalClusterClaim(c client.Client, clusterSet *multiclusterv1alpha1
 		klog.InfoS("Processing ClusterClaim", "Name", clusterClaim.Name, "Value", clusterClaim.Value)
 		if clusterClaim.Name == multiclusterv1alpha1.WellKnownClusterClaimClusterSet {
 			wellKnownClusterSetClaimIDExist = true
-			clusterSetId = common.ClusterSetID(clusterClaim.Value)
+			clusterSetID = common.ClusterSetID(clusterClaim.Value)
 		} else if clusterClaim.Name == multiclusterv1alpha1.WellKnownClusterClaimID {
 			wellKnownClusterClaimIDExist = true
-			clusterId = common.ClusterID(clusterClaim.Value)
+			clusterID = common.ClusterID(clusterClaim.Value)
 		}
 	}
 
@@ -63,25 +67,25 @@ func validateLocalClusterClaim(c client.Client, clusterSet *multiclusterv1alpha1
 		return
 	}
 
-	if clusterSet.Name != string(clusterSetId) {
+	if clusterSet.Name != string(clusterSetID) {
 		err = fmt.Errorf("ClusterSet Name=%s is not same as ClusterClaim Value=%s for Name=%s",
-			clusterSet.Name, clusterSetId, multiclusterv1alpha1.WellKnownClusterClaimClusterSet)
+			clusterSet.Name, clusterSetID, multiclusterv1alpha1.WellKnownClusterClaimClusterSet)
 		return
 	}
 
 	return
 }
 
-func validateConfigExists(clusterId common.ClusterID, clusters []multiclusterv1alpha1.MemberCluster) (err error) {
+func validateConfigExists(clusterID common.ClusterID, clusters []multiclusterv1alpha1.MemberCluster) (err error) {
 	configExists := false
 	for _, cluster := range clusters {
-		if string(clusterId) == cluster.ClusterID {
+		if string(clusterID) == cluster.ClusterID {
 			configExists = true
 			break
 		}
 	}
 	if !configExists {
-		err = fmt.Errorf("validating cluster %s exists in %v failed", clusterId, clusters)
+		err = fmt.Errorf("validating cluster %s exists in %v failed", clusterID, clusters)
 		return
 	}
 	return
@@ -95,4 +99,54 @@ func validateClusterSetNamespace(clusterSet *multiclusterv1alpha1.ClusterSet) (e
 		return
 	}
 	return
+}
+
+// findServiceCIDRByInvalidServiceCreation creates an invalid Service to get returned error, and analyzes
+// the error message to get Service CIDR.
+// TODO: add dual-stack support.
+func findServiceCIDRByInvalidServiceCreation(ctx context.Context, k8sClient client.Client, namespace string) (string, error) {
+	invalidSvcSpec := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "invalid-svc",
+			Namespace: namespace,
+		},
+		Spec: corev1.ServiceSpec{
+			ClusterIP: "0.0.0.0",
+			Ports: []corev1.ServicePort{
+				{
+					Port: 443,
+					TargetPort: intstr.IntOrString{
+						IntVal: 443,
+					},
+				},
+			},
+		},
+	}
+
+	err := k8sClient.Create(ctx, invalidSvcSpec, &client.CreateOptions{})
+	// Creating invalid Service didn't fail as expected
+	if err == nil {
+		return "", fmt.Errorf("could not determine the Service ClusterIP range via Service creation - " +
+			"expected a specific error but none was returned")
+	}
+
+	return parseServiceCIDRFromError(err.Error())
+}
+
+// TODO: add dual-stack support.
+func parseServiceCIDRFromError(msg string) (string, error) {
+	// Expected error message is like below:
+	// `The Service "invalid-svc" is invalid: spec.clusterIPs: Invalid value: []string{"0.0.0.0"}:
+	// failed to allocate IP 0.0.0.0: provided IP is not in the valid range. The range of valid IPs is 10.19.0.0/18`
+	// The CIDR string should be parsed from the error message is:
+	//   10.19.0.0/18
+	re := regexp.MustCompile(".*valid IPs is (.*)$")
+
+	match := re.FindStringSubmatch(msg)
+	if match == nil {
+		return "", fmt.Errorf("could not determine the ClusterIP range via Service creation - the expected error "+
+			"was not returned. The actual error was %q", msg)
+	}
+
+	return match[1], nil
 }

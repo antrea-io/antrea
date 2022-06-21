@@ -1,0 +1,4 @@
+flowCollector:
+  flowPollInterval: "1s"
+  activeFlowExportTimeout: "2s"
+  idleFlowExportTimeout: "1s"

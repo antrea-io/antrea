@@ -43,6 +43,10 @@ func (i *Initializer) prepareHostNetwork() error {
 		}
 		// Save the uplink adapter name to check if the OVS uplink port has been created in prepareOVSBridge stage.
 		i.nodeConfig.UplinkNetConfig.Name = hnsNetwork.NetworkAdapterName
+
+		// Save the uplink adapter MAC to modify Pod traffic source MAC if the packet is directly output to the uplink
+		// interface in OVS pipeline.
+		i.nodeConfig.UplinkNetConfig.MAC, _ = net.ParseMAC(hnsNetwork.SourceMac)
 		return nil
 	}
 	if _, ok := err.(hcsshim.NetworkNotFoundError); !ok {
@@ -187,15 +191,6 @@ func (i *Initializer) prepareOVSBridge() error {
 	return nil
 }
 
-// initHostNetworkFlows installs Openflow flows between bridge local port and uplink port to support
-// host networking.
-func (i *Initializer) initHostNetworkFlows() error {
-	if err := i.ofClient.InstallBridgeUplinkFlows(); err != nil {
-		return err
-	}
-	return nil
-}
-
 // getTunnelLocalIP returns local_ip of tunnel port
 func (i *Initializer) getTunnelPortLocalIP() net.IP {
 	return i.nodeConfig.NodeTransportIPv4Addr.IP
@@ -257,9 +252,9 @@ func (i *Initializer) restoreHostRoutes() error {
 }
 
 func GetTransportIPNetDeviceByName(ifaceName string, ovsBridgeName string) (*net.IPNet, *net.IPNet, *net.Interface, error) {
-	// Find transport Interface in the order: ifaceName -> "vEthernet (ifaceName)" -> br-int. Return immediately if
-	// an interface using the specified name exists. Using "vEthernet (ifaceName)" or br-int is for restart agent case.
-	for _, name := range []string{ifaceName, util.VirtualAdapterName(ifaceName), ovsBridgeName} {
+	// Find transport Interface in the order: ifaceName -> br-int. Return immediately if
+	// an interface using the specified name exists. Using br-int is for restart agent case.
+	for _, name := range []string{ifaceName, ovsBridgeName} {
 		ipNet, _, link, err := util.GetIPNetDeviceByName(name)
 		if err == nil {
 			return ipNet, nil, link, nil

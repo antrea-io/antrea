@@ -15,18 +15,19 @@
 # limitations under the License.
 
 set -o errexit
-set -o nounset
 set -o pipefail
 
 ANTREA_ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )/../" && pwd )"
-IMAGE_NAME="antrea/codegen:kubernetes-1.21.0-build.1"
+IMAGE_NAME="antrea/codegen:kubernetes-1.24.0"
 
 function docker_run() {
   docker pull ${IMAGE_NAME}
+  set -x
   docker run --rm \
+		-e GOPROXY=${GOPROXY} \
 		-w /go/src/antrea.io/antrea \
 		-v ${ANTREA_ROOT}:/go/src/antrea.io/antrea \
 		"${IMAGE_NAME}" "$@"
 }
 
-docker_run hack/update-codegen-dockerized.sh
+docker_run hack/update-codegen-dockerized.sh "$@"

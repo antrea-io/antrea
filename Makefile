@@ -25,6 +25,16 @@ UNAME_S := $(shell uname -s)
 USERID  := $(shell id -u)
 GRPID   := $(shell id -g)
 
+.PHONY: install-hooks
+install-hooks:
+	@echo "===> Copying Antrea git hooks to local <==="
+	install hack/git_client_side_hooks/pre-commit .git/hooks/
+
+.PHONY: uninstall-hooks
+uninstall-hooks:
+	@echo "===> Removing Antrea git hooks from local <==="
+	rm .git/hooks/pre-commit
+
 .PHONY: bin
 bin:
 	@mkdir -p $(BINDIR)
@@ -77,7 +87,7 @@ antctl-instr-binary:
 .PHONY: windows-bin
 windows-bin:
 	@mkdir -p $(BINDIR)
-	GOOS=windows CGO_ENABLED=0 $(GO) build -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' antrea.io/antrea/cmd/antrea-cni antrea.io/antrea/cmd/antrea-agent
+	GOOS=windows CGO_ENABLED=0 $(GO) build -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' antrea.io/antrea/cmd/antrea-cni antrea.io/antrea/cmd/antrea-agent antrea.io/antrea/cmd/antctl
 
 .PHONY: flow-aggregator
 flow-aggregator:
@@ -275,6 +285,11 @@ codegen:
 	@echo "===> Updating generated code <==="
 	$(CURDIR)/hack/update-codegen.sh
 
+.PHONY: mockgen
+mockgen:
+	@echo "===> Updating generated mock code <==="
+	$(CURDIR)/hack/update-codegen.sh mockgen
+
 ### Docker images ###
 
 .PHONY: ubuntu
@@ -346,16 +361,11 @@ build-scale-simulator:
 .PHONY: manifest
 manifest:
 	@echo "===> Generating dev manifest for Antrea <==="
-	$(CURDIR)/hack/generate-manifest.sh --mode dev > build/yamls/antrea.yml
-	$(CURDIR)/hack/generate-manifest.sh --mode dev --ipsec > build/yamls/antrea-ipsec.yml
-	$(CURDIR)/hack/generate-manifest.sh --mode dev --cloud EKS --encap-mode networkPolicyOnly > build/yamls/antrea-eks.yml
-	$(CURDIR)/hack/generate-manifest.sh --mode dev --cloud GKE --encap-mode noEncap > build/yamls/antrea-gke.yml
-	$(CURDIR)/hack/generate-manifest.sh --mode dev --cloud AKS --encap-mode networkPolicyOnly > build/yamls/antrea-aks.yml
-	$(CURDIR)/hack/generate-manifest.sh --mode dev --kind > build/yamls/antrea-kind.yml
+	$(CURDIR)/hack/generate-standard-manifests.sh --mode dev --out build/yamls
 	$(CURDIR)/hack/generate-manifest-octant.sh --mode dev > build/yamls/antrea-octant.yml
 	$(CURDIR)/hack/generate-manifest-windows.sh --mode dev > build/yamls/antrea-windows.yml
 	$(CURDIR)/hack/generate-manifest-flow-aggregator.sh --mode dev > build/yamls/flow-aggregator.yml
-	$(CURDIR)/hack/generate-manifest-flow-visibility.sh > build/yamls/flow-visibility.yml
+	$(CURDIR)/hack/generate-manifest-flow-visibility.sh --mode dev > build/yamls/flow-visibility.yml
 
 .PHONY: manifest-scale
 manifest-scale:
@@ -380,13 +390,21 @@ octant-antrea-ubuntu:
 antrea-mc-controller:
 	@echo "===> Building antrea/antrea-mc-controller Docker image <==="
 ifneq ($(NO_PULL),)
-	docker build -t antrea/antrea-mc-controller:$(DOCKER_IMG_VERSION) -f multicluster/build/Dockerfile.build $(DOCKER_BUILD_ARGS) .
+	docker build -t antrea/antrea-mc-controller:$(DOCKER_IMG_VERSION) -f multicluster/build/images/Dockerfile.build $(DOCKER_BUILD_ARGS) .
 else
-	docker build --pull -t antrea/antrea-mc-controller:$(DOCKER_IMG_VERSION) -f multicluster/build/Dockerfile.build $(DOCKER_BUILD_ARGS) .
+	docker build --pull -t antrea/antrea-mc-controller:$(DOCKER_IMG_VERSION) -f multicluster/build/images/Dockerfile.build $(DOCKER_BUILD_ARGS) .
 endif
 	docker tag antrea/antrea-mc-controller:$(DOCKER_IMG_VERSION) antrea/antrea-mc-controller
 	docker tag antrea/antrea-mc-controller:$(DOCKER_IMG_VERSION) projects.registry.vmware.com/antrea/antrea-mc-controller
 	docker tag antrea/antrea-mc-controller:$(DOCKER_IMG_VERSION) projects.registry.vmware.com/antrea/antrea-mc-controller:$(DOCKER_IMG_VERSION)
+
+.PHONY: flow-visibility-clickhouse-monitor
+flow-visibility-clickhouse-monitor:
+	@echo "===> Building antrea/flow-visibility-clickhouse-monitor Docker image <==="
+	docker build --pull -t antrea/flow-visibility-clickhouse-monitor:$(DOCKER_IMG_VERSION) -f build/images/flow-visibility/Dockerfile.clickhouse-monitor.ubuntu $(DOCKER_BUILD_ARGS) .
+	docker tag antrea/flow-visibility-clickhouse-monitor:$(DOCKER_IMG_VERSION) antrea/flow-visibility-clickhouse-monitor
+	docker tag antrea/flow-visibility-clickhouse-monitor:$(DOCKER_IMG_VERSION) projects.registry.vmware.com/antrea/flow-visibility-clickhouse-monitor
+	docker tag antrea/flow-visibility-clickhouse-monitor:$(DOCKER_IMG_VERSION) projects.registry.vmware.com/antrea/flow-visibility-clickhouse-monitor:$(DOCKER_IMG_VERSION)
 
 .PHONY: flow-aggregator-image
 flow-aggregator-image:
@@ -427,12 +445,12 @@ toc:
 .PHONE: markdownlint
 markdownlint:
 	@echo "===> Running markdownlint <==="
-	markdownlint -c .markdownlint-config.yml -i CHANGELOG/ -i CHANGELOG.md -i hack/netpol -i CODE_OF_CONDUCT.md .
+	markdownlint -c hack/.markdownlint-config.yml -p hack/.markdownlint-ignore .
 
 .PHONE: markdownlint-fix
 markdownlint-fix:
 	@echo "===> Running markdownlint <==="
-	markdownlint --fix -c .markdownlint-config.yml -i CHANGELOG/ -i CHANGELOG.md -i hack/netpol -i CODE_OF_CONDUCT.md .
+	markdownlint --fix -c hack/.markdownlint-config.yml -p hack/.markdownlint-ignore .
 
 .PHONY: spelling-fix
 spelling-fix:

@@ -65,17 +65,12 @@ done
 # the windows-bin Makefile target builds antrea-cni and antrea-agent with cgo
 # explicitly disabled.
 BINDIR="$OUTPUT_DIR" make windows-bin
-sed "s/AntreaVersion=\"latest\"/AntreaVersion=\"$VERSION\"/" ./hack/windows/Start.ps1 > "$OUTPUT_DIR"/Start.ps1
+sed "s/AntreaVersion=\"latest\"/AntreaVersion=\"$VERSION\"/" ./hack/windows/Start-AntreaAgent.ps1 > "$OUTPUT_DIR"/Start-AntreaAgent.ps1
 
 export IMG_TAG=$VERSION
 
 export IMG_NAME=projects.registry.vmware.com/antrea/antrea-ubuntu
-./hack/generate-manifest.sh --mode release > "$OUTPUT_DIR"/antrea.yml
-./hack/generate-manifest.sh --mode release --ipsec > "$OUTPUT_DIR"/antrea-ipsec.yml
-./hack/generate-manifest.sh --mode release --cloud EKS --encap-mode networkPolicyOnly > "$OUTPUT_DIR"/antrea-eks.yml
-./hack/generate-manifest.sh --mode release --cloud GKE --encap-mode noEncap > "$OUTPUT_DIR"/antrea-gke.yml
-./hack/generate-manifest.sh --mode release --cloud AKS --encap-mode networkPolicyOnly > "$OUTPUT_DIR"/antrea-aks.yml
-./hack/generate-manifest.sh --mode release --kind > "$OUTPUT_DIR"/antrea-kind.yml
+./hack/generate-standard-manifests.sh --mode release --out "$OUTPUT_DIR"
 
 export IMG_NAME=projects.registry.vmware.com/antrea/octant-antrea-ubuntu
 ./hack/generate-manifest-octant.sh --mode release > "$OUTPUT_DIR"/antrea-octant.yml
@@ -86,13 +81,14 @@ export IMG_NAME=projects.registry.vmware.com/antrea/antrea-windows
 export IMG_NAME=projects.registry.vmware.com/antrea/flow-aggregator
 ./hack/generate-manifest-flow-aggregator.sh --mode release > "$OUTPUT_DIR"/flow-aggregator.yml
 
-./hack/generate-manifest-flow-visibility.sh > "$OUTPUT_DIR"/flow-visibility.yaml
+export IMG_NAME=projects.registry.vmware.com/antrea/flow-visibility-clickhouse-monitor
+./hack/generate-manifest-flow-visibility.sh --mode release > "$OUTPUT_DIR"/flow-visibility.yml
 
 # Generate multicluster manifests
 export IMG_NAME=projects.registry.vmware.com/antrea/antrea-mc-controller
 cd multicluster
 ./hack/generate-manifest.sh -g > "$OUTPUT_DIR"/antrea-multicluster-leader-global.yml
-./hack/generate-manifest.sh -r -l changeme > "$OUTPUT_DIR"/antrea-multicluster-leader-namespaced.yml
+./hack/generate-manifest.sh -r -l antrea-multicluster > "$OUTPUT_DIR"/antrea-multicluster-leader-namespaced.yml
 ./hack/generate-manifest.sh -r -m > "$OUTPUT_DIR"/antrea-multicluster-member.yml
 
 ls "$OUTPUT_DIR" | cat

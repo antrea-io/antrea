@@ -1,0 +1,251 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: traceflows.crd.antrea.io
+  labels:
+    app: antrea
+spec:
+  group: crd.antrea.io
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      additionalPrinterColumns:
+        - jsonPath: .status.phase
+          description: The phase of the Traceflow.
+          name: Phase
+          type: string
+        - jsonPath: .spec.source.pod
+          description: The name of the source Pod.
+          name: Source-Pod
+          type: string
+          priority: 10
+        - jsonPath: .spec.destination.pod
+          description: The name of the destination Pod.
+          name: Destination-Pod
+          type: string
+          priority: 10
+        - jsonPath: .spec.destination.ip
+          description: The IP address of the destination.
+          name: Destination-IP
+          type: string
+          priority: 10
+        - jsonPath: .spec.liveTraffic
+          description: Trace live traffic.
+          name: Live-Traffic
+          type: boolean
+          priority: 10
+        - jsonPath: .spec.droppedOnly
+          description: Capture only the dropped packet.
+          name: Dropped-Only
+          type: boolean
+          priority: 10
+        - jsonPath: .spec.timeout
+          description: Timeout in seconds.
+          name: Timeout
+          type: integer
+          priority: 10
+        - jsonPath: .metadata.creationTimestamp
+          name: Age
+          type: date
+      schema:
+        openAPIV3Schema:
+          type: object
+          required:
+            - spec
+          properties:
+            spec:
+              type: object
+              properties:
+                source:
+                  type: object
+                  properties:
+                    pod:
+                      type: string
+                    namespace:
+                      type: string
+                    ip:
+                      type: string
+                      oneOf:
+                        - format: ipv4
+                        - format: ipv6
+                destination:
+                  type: object
+                  properties:
+                    pod:
+                      type: string
+                    service:
+                      type: string
+                    namespace:
+                      type: string
+                    ip:
+                      type: string
+                      oneOf:
+                        - format: ipv4
+                        - format: ipv6
+                packet:
+                  type: object
+                  properties:
+                    ipHeader:
+                      type: object
+                      properties:
+                        srcIP:
+                          type: string
+                          oneOf:
+                            - format: ipv4
+                            - format: ipv6
+                        protocol:
+                          type: integer
+                        ttl:
+                          type: integer
+                        flags:
+                          type: integer
+                    ipv6Header:
+                      type: object
+                      properties:
+                        srcIP:
+                          type: string
+                          format: ipv6
+                        nextHeader:
+                          type: integer
+                        hopLimit:
+                          type: integer
+                    transportHeader:
+                      type: object
+                      properties:
+                        icmp:
+                          type: object
+                          properties:
+                            id:
+                              type: integer
+                            sequence:
+                              type: integer
+                        udp:
+                          type: object
+                          properties:
+                            srcPort:
+                              type: integer
+                            dstPort:
+                              type: integer
+                        tcp:
+                          type: object
+                          properties:
+                            srcPort:
+                              type: integer
+                            dstPort:
+                              type: integer
+                            flags:
+                              type: integer
+                liveTraffic:
+                  type: boolean
+                droppedOnly:
+                  type: boolean
+                timeout:
+                  type: integer
+            status:
+              type: object
+              properties:
+                reason:
+                  type: string
+                dataplaneTag:
+                  type: integer
+                phase:
+                  type: string
+                startTime:
+                  type: string
+                results:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      node:
+                        type: string
+                      role:
+                        type: string
+                      timestamp:
+                        type: integer
+                      observations:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            component:
+                              type: string
+                            componentInfo:
+                              type: string
+                            action:
+                              type: string
+                            pod:
+                              type: string
+                            dstMAC:
+                              type: string
+                            networkPolicy:
+                              type: string
+                            ttl:
+                              type: integer
+                            translatedSrcIP:
+                              type: string
+                            translatedDstIP:
+                              type: string
+                            tunnelDstIP:
+                              type: string
+                capturedPacket:
+                  properties:
+                    srcIP:
+                      type: string
+                    dstIP:
+                      type: string
+                    length:
+                      type: integer
+                    ipHeader:
+                      properties:
+                        flags:
+                          type: integer
+                        protocol:
+                          type: integer
+                        ttl:
+                          type: integer
+                      type: object
+                    ipv6Header:
+                      properties:
+                        hopLimit:
+                          type: integer
+                        nextHeader:
+                          type: integer
+                      type: object
+                    transportHeader:
+                      properties:
+                        tcp:
+                          properties:
+                            dstPort:
+                              type: integer
+                            srcPort:
+                              type: integer
+                            flags:
+                              type: integer
+                          type: object
+                        udp:
+                          properties:
+                            dstPort:
+                              type: integer
+                            srcPort:
+                              type: integer
+                          type: object
+                        icmp:
+                          properties:
+                            id:
+                              type: integer
+                            sequence:
+                              type: integer
+                          type: object
+                      type: object
+                  type: object
+      subresources:
+        status: {}
+  scope: Cluster
+  names:
+    plural: traceflows
+    singular: traceflow
+    kind: Traceflow
+    shortNames:
+      - tf

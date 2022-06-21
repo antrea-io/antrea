@@ -41,7 +41,7 @@ function print_help {
 }
 
 OVERLAY=member
-NAMESPACE=changeme
+NAMESPACE=antrea-multicluster
 MODE=""
 
 while [[ $# -gt 0 ]]
@@ -111,7 +111,7 @@ if [ "$OVERLAY" == "leader-ns" ] ;
 then
     mkdir config && cd config
     cp $KUSTOMIZATION_DIR/overlays/leader-ns/prefix_transformer.yaml .
-    sed -ie "s/changeme/$NAMESPACE/g" prefix_transformer.yaml
+    sed -ie "s/antrea-multicluster/$NAMESPACE/g" prefix_transformer.yaml
 
 cat << EOF > kustomization.yaml
 namespace: $NAMESPACE
@@ -131,6 +131,8 @@ fi
 
 if [ "$MODE" == "release" ]; then
     $KUSTOMIZE edit set image antrea/antrea-mc-controller=$IMG_NAME:$IMG_TAG
+else
+    $KUSTOMIZE edit set image antrea/antrea-mc-controller=projects.registry.vmware.com/antrea/antrea-mc-controller:latest
 fi
 $KUSTOMIZE build
 rm -rf $TMP_DIR

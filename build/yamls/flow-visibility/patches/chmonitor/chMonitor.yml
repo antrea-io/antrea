@@ -1,0 +1,24 @@
+- op: add
+  path: /spec/templates/podTemplates/0/spec/containers/-
+  value: 
+    name: clickhouse-monitor
+    image: flow-visibility-clickhouse-monitor
+    env:
+      - name: CLICKHOUSE_USERNAME
+        valueFrom:
+          secretKeyRef: 
+            name: clickhouse-secret
+            key: username
+      - name: CLICKHOUSE_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: clickhouse-secret
+            key: password
+      - name: DB_URL
+        value: "tcp://localhost:9000"
+      - name: TABLE_NAME
+        value: "default.flows"
+      - name: MV_NAMES
+        value: "default.flows_pod_view default.flows_node_view default.flows_policy_view"
+      - name: STORAGE_SIZE
+        value: STORAGE_SIZE_VALUE

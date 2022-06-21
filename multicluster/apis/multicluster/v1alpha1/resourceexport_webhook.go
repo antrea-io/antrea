@@ -21,6 +21,8 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
+
+	"antrea.io/antrea/multicluster/controllers/multicluster/common"
 )
 
 // log is for logging in this package.
@@ -39,6 +41,25 @@ var _ webhook.Defaulter = &ResourceExport{}
 // Default implements webhook.Defaulter so a webhook will be registered for the type
 func (r *ResourceExport) Default() {
 	resourceexportlog.Info("default", "name", r.Name)
+	if r.Spec.ClusterNetworkPolicy == nil {
+		// Only mutate ResourceExport created for ClusterNetworkPolicy resources
+		return
+	}
+	if len(r.Labels) == 0 {
+		r.Labels = map[string]string{}
+	}
+	if nameLabelVal, exists := r.Labels[common.SourceName]; !exists || nameLabelVal != r.Spec.Name {
+		r.Labels[common.SourceName] = r.Spec.Name
+	}
+	if namespaceLabelVal, exists := r.Labels[common.SourceNamespace]; !exists || namespaceLabelVal != "" {
+		r.Labels[common.SourceNamespace] = ""
+	}
+	if kindLabelVal, exists := r.Labels[common.SourceKind]; !exists || kindLabelVal != common.AntreaClusterNetworkPolicyKind {
+		r.Labels[common.SourceKind] = common.AntreaClusterNetworkPolicyKind
+	}
+	if r.DeletionTimestamp.IsZero() && !common.StringExistsInSlice(r.Finalizers, common.ResourceExportFinalizer) {
+		r.Finalizers = append(r.Finalizers, common.ResourceExportFinalizer)
+	}
 }
 
 //+kubebuilder:webhook:path=/validate-multicluster-crd-antrea-io-v1alpha1-resourceexport,mutating=false,failurePolicy=fail,sideEffects=None,groups=multicluster.crd.antrea.io,resources=resourceexports,verbs=create;update,versions=v1alpha1,name=vresourceexport.kb.io,admissionReviewVersions={v1,v1beta1}

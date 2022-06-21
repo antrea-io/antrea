@@ -145,6 +145,16 @@ spec:
             valueFrom:
               fieldRef:
                 fieldPath: metadata.name
+          - name: CH_USERNAME
+            valueFrom:
+              secretKeyRef:
+                name: clickhouse-secret
+                key: username
+          - name: CH_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: clickhouse-secret
+                key: password
         ports:
           - containerPort: 4739
         volumeMounts:
@@ -166,3 +176,13 @@ spec:
         hostPath:
           path: /var/log/antrea/flow-aggregator
           type: DirectoryOrCreate
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: clickhouse-secret
+  namespace: flow-aggregator
+type: Opaque
+stringData:
+  username: clickhouse_operator
+  password: clickhouse_operator_password

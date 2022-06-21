@@ -15,9 +15,7 @@
 package utils
 
 import (
-	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/intstr"
 
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 )
@@ -87,9 +85,9 @@ func (b *AntreaNetworkPolicySpecBuilder) GetAppliedToPeer(podSelector map[string
 	}
 }
 
-func (b *AntreaNetworkPolicySpecBuilder) AddIngress(protoc v1.Protocol,
-	port *int32, portName *string, endPort *int32, cidr *string,
-	podSelector map[string]string, nsSelector map[string]string,
+func (b *AntreaNetworkPolicySpecBuilder) AddIngress(protoc AntreaPolicyProtocol,
+	port *int32, portName *string, endPort, icmpType, icmpCode, igmpType *int32,
+	groupAddress, cidr *string, podSelector map[string]string, nsSelector map[string]string,
 	podSelectorMatchExp []metav1.LabelSelectorRequirement, nsSelectorMatchExp []metav1.LabelSelectorRequirement,
 	ruleAppliedToSpecs []ANPAppliedToSpec, action crdv1alpha1.RuleAction, name string) *AntreaNetworkPolicySpecBuilder {
 
@@ -129,36 +127,11 @@ func (b *AntreaNetworkPolicySpecBuilder) AddIngress(protoc v1.Protocol,
 			IPBlock:           ipBlock,
 		}}
 	}
-
-	var ports []crdv1alpha1.NetworkPolicyPort
-	if port != nil && portName != nil {
-		panic("specify portname or port, not both")
-	}
-	if portName != nil {
-		ports = []crdv1alpha1.NetworkPolicyPort{
-			{
-				Port:     &intstr.IntOrString{Type: intstr.String, StrVal: *portName},
-				Protocol: &protoc,
-			},
-		}
-	}
-	if port != nil || endPort != nil {
-		var pVal *intstr.IntOrString
-		if port != nil {
-			pVal = &intstr.IntOrString{IntVal: *port}
-		}
-		ports = []crdv1alpha1.NetworkPolicyPort{
-			{
-				Port:     pVal,
-				EndPort:  endPort,
-				Protocol: &protoc,
-			},
-		}
-	}
-
+	ports, protocols := GenPortsOrProtocols(protoc, port, portName, endPort, icmpType, icmpCode, igmpType, groupAddress)
 	newRule := crdv1alpha1.Rule{
 		From:      policyPeer,
 		Ports:     ports,
+		Protocols: protocols,
 		Action:    &action,
 		Name:      name,
 		AppliedTo: appliedTos,
@@ -167,16 +140,16 @@ func (b *AntreaNetworkPolicySpecBuilder) AddIngress(protoc v1.Protocol,
 	return b
 }
 
-func (b *AntreaNetworkPolicySpecBuilder) AddEgress(protoc v1.Protocol,
-	port *int32, portName *string, endPort *int32, cidr *string,
-	podSelector map[string]string, nsSelector map[string]string,
+func (b *AntreaNetworkPolicySpecBuilder) AddEgress(protoc AntreaPolicyProtocol,
+	port *int32, portName *string, endPort, icmpType, icmpCode, igmpType *int32,
+	groupAddress, cidr *string, podSelector map[string]string, nsSelector map[string]string,
 	podSelectorMatchExp []metav1.LabelSelectorRequirement, nsSelectorMatchExp []metav1.LabelSelectorRequirement,
 	ruleAppliedToSpecs []ANPAppliedToSpec, action crdv1alpha1.RuleAction, name string) *AntreaNetworkPolicySpecBuilder {
 
 	// For simplicity, we just reuse the Ingress code here.  The underlying data model for ingress/egress is identical
 	// With the exception of calling the rule `To` vs. `From`.
 	c := &AntreaNetworkPolicySpecBuilder{}
-	c.AddIngress(protoc, port, portName, endPort, cidr, podSelector, nsSelector,
+	c.AddIngress(protoc, port, portName, endPort, icmpType, icmpCode, igmpType, groupAddress, cidr, podSelector, nsSelector,
 		podSelectorMatchExp, nsSelectorMatchExp, ruleAppliedToSpecs, action, name)
 	theRule := c.Get().Spec.Ingress[0]
 

@@ -27,7 +27,6 @@ JOB_NAME=job.batch/cyclonus
 
 
 kind create cluster --config "$KIND_CONFIG"
-kind get nodes | xargs "$ROOT_DIR"/hack/kind-fix-networking.sh
 kind load docker-image projects.registry.vmware.com/antrea/antrea-ubuntu:latest
 
 # pre-load cyclonus image
@@ -37,7 +36,7 @@ kind load docker-image mfenwick100/cyclonus:v0.4.7
 docker pull k8s.gcr.io/e2e-test-images/agnhost:2.29
 kind load docker-image k8s.gcr.io/e2e-test-images/agnhost:2.29
 
-"$ROOT_DIR"/hack/generate-manifest.sh --kind --tun "vxlan" | kubectl apply -f -
+"$ROOT_DIR"/hack/generate-manifest.sh | kubectl apply -f -
 
 
 kubectl create clusterrolebinding cyclonus --clusterrole=cluster-admin --serviceaccount=kube-system:cyclonus

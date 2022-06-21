@@ -1,0 +1,30 @@
+name: Verify docs
+
+on:
+  schedule:
+    # every day at 9am
+    - cron: '0 9 * * *'
+
+jobs:
+  verify:
+    name: Verify docs and spelling
+    runs-on: [ubuntu-latest]
+    steps:
+    - name: Set up Go 1.17
+      uses: actions/setup-go@v3
+      with:
+        go-version: 1.17
+    - name: Check-out code
+      uses: actions/checkout@v3
+    - name: Run verify scripts
+      run: make verify
+    - name: Checking for broken Markdown links for main branch
+      uses: gaurav-nelson/github-action-markdown-link-check@v1
+      with:
+        folder-path: './docs'
+        file-path: './README.md, ./CHANGELOG.md, ./CONTRIBUTING.md, ./GOVERNANCE.md, ./MAINTAINERS.md, ./ROADMAP.md, ./SECURITY.md'
+        config-file: 'hack/.md_links_config.json'
+    - name: Markdownlint
+      run: |
+        sudo npm install -g markdownlint-cli@0.31.1
+        make markdownlint 

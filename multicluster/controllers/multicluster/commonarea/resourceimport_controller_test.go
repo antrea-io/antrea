@@ -36,13 +36,14 @@ import (
 
 	mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
 	"antrea.io/antrea/multicluster/controllers/multicluster/common"
+	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
 )
 
 var (
 	localClusterID   = "cluster-a"
 	leaderNamespace  = "default"
-	svcResImportName = "default-nginx-service"
-	epResImportName  = "default-nginx-endpoints"
+	svcResImportName = leaderNamespace + "-" + "nginx-service"
+	epResImportName  = leaderNamespace + "-" + "nginx-endpoints"
 
 	svcImportReq = ctrl.Request{NamespacedName: types.NamespacedName{
 		Namespace: leaderNamespace,
@@ -112,17 +113,19 @@ var (
 
 func init() {
 	utilruntime.Must(mcsv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(v1alpha1.AddToScheme(scheme))
 	utilruntime.Must(k8smcsapi.AddToScheme(scheme))
 	utilruntime.Must(k8sscheme.AddToScheme(scheme))
 }
 
 func TestResourceImportReconciler_handleCreateEvent(t *testing.T) {
-	remoteMgr := NewRemoteCommonAreaManager("test-clusterset", common.ClusterID(localClusterID))
-	go remoteMgr.Start()
+	remoteMgr := NewRemoteCommonAreaManager("test-clusterset", common.ClusterID(localClusterID), "kube-system")
+	remoteMgr.Start()
+	defer remoteMgr.Stop()
 
 	fakeClient := fake.NewClientBuilder().WithScheme(scheme).Build()
 	fakeRemoteClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(svcResImport, epResImport).Build()
-	remoteCluster := NewFakeRemoteCommonArea(scheme, &remoteMgr, fakeRemoteClient, "leader-cluster", "default")
+	remoteCluster := NewFakeRemoteCommonArea(scheme, remoteMgr, fakeRemoteClient, "leader-cluster", "default")
 
 	tests := []struct {
 		name    string
@@ -141,7 +144,7 @@ func TestResourceImportReconciler_handleCreateEvent(t *testing.T) {
 		},
 	}
 
-	r := NewResourceImportReconciler(fakeClient, scheme, fakeClient, localClusterID, remoteCluster)
+	r := NewResourceImportReconciler(fakeClient, scheme, fakeClient, localClusterID, "default", remoteCluster)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if _, err := r.Reconcile(ctx, tt.req); err != nil {
@@ -172,8 +175,9 @@ func TestResourceImportReconciler_handleCreateEvent(t *testing.T) {
 }
 
 func TestResourceImportReconciler_handleDeleteEvent(t *testing.T) {
-	remoteMgr := NewRemoteCommonAreaManager("test-clusterset", common.ClusterID(localClusterID))
-	go remoteMgr.Start()
+	remoteMgr := NewRemoteCommonAreaManager("test-clusterset", common.ClusterID(localClusterID), "kube-system")
+	remoteMgr.Start()
+	defer remoteMgr.Stop()
 
 	existSvc := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
@@ -196,7 +200,7 @@ func TestResourceImportReconciler_handleDeleteEvent(t *testing.T) {
 
 	fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(existSvc, existEp, existSvcImp).Build()
 	fakeRemoteClient := fake.NewClientBuilder().WithScheme(scheme).Build()
-	remoteCluster := NewFakeRemoteCommonArea(scheme, &remoteMgr, fakeRemoteClient, "leader-cluster", "default")
+	remoteCluster := NewFakeRemoteCommonArea(scheme, remoteMgr, fakeRemoteClient, "leader-cluster", "default")
 
 	tests := []struct {
 		name    string
@@ -215,7 +219,7 @@ func TestResourceImportReconciler_handleDeleteEvent(t *testing.T) {
 		},
 	}
 
-	r := NewResourceImportReconciler(fakeClient, scheme, fakeClient, localClusterID, remoteCluster)
+	r := NewResourceImportReconciler(fakeClient, scheme, fakeClient, localClusterID, "default", remoteCluster)
 	r.installedResImports.Add(*svcResImport)
 	r.installedResImports.Add(*epResImport)
 
@@ -246,8 +250,9 @@ func TestResourceImportReconciler_handleDeleteEvent(t *testing.T) {
 }
 
 func TestResourceImportReconciler_handleUpdateEvent(t *testing.T) {
-	remoteMgr := NewRemoteCommonAreaManager("test-clusterset", common.ClusterID(localClusterID))
-	go remoteMgr.Start()
+	remoteMgr := NewRemoteCommonAreaManager("test-clusterset", common.ClusterID(localClusterID), "kube-system")
+	remoteMgr.Start()
+	defer remoteMgr.Stop()
 
 	nginxPorts := []corev1.ServicePort{
 		{
@@ -337,12 +342,22 @@ func TestResourceImportReconciler_handleUpdateEvent(t *testing.T) {
 	}
 	newSubsets := []corev1.EndpointSubset{subSetA, subSetB}
 
-	existEp := &corev1.Endpoints{
+	existSvc := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
 			Name:      "nginx",
 		},
-		Subsets: []corev1.EndpointSubset{subSetB},
+		Spec: corev1.ServiceSpec{
+			Ports: []corev1.ServicePort{
+				{
+					Name:     "http",
+					Protocol: corev1.ProtocolTCP,
+					Port:     8080,
+				},
+			},
+			ClusterIP:  "10.10.11.13",
+			ClusterIPs: []string{"10.10.11.13"},
+		},
 	}
 
 	svcWithoutAutoAnnotation := &corev1.Service{
@@ -387,10 +402,10 @@ func TestResourceImportReconciler_handleUpdateEvent(t *testing.T) {
 	epResImportWithConflicts.Spec.Namespace = "kube-system"
 
 	fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(existMCSvc, existMCEp, existSvcImp,
-		existEp, existMCSvcConflicts, existMCEpConflicts, svcWithoutAutoAnnotation, epWithoutAutoAnnotation).Build()
+		existSvc, existMCSvcConflicts, existMCEpConflicts, svcWithoutAutoAnnotation, epWithoutAutoAnnotation).Build()
 	fakeRemoteClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(updatedEpResImport, updatedSvcResImport,
 		svcResImportWithConflicts, epResImportWithConflicts).Build()
-	remoteCluster := NewFakeRemoteCommonArea(scheme, &remoteMgr, fakeRemoteClient, "leader-cluster", "default")
+	remoteCluster := NewFakeRemoteCommonArea(scheme, remoteMgr, fakeRemoteClient, "leader-cluster", "default")
 
 	tests := []struct {
 		name             string
@@ -402,7 +417,7 @@ func TestResourceImportReconciler_handleUpdateEvent(t *testing.T) {
 		expectedErr      bool
 	}{
 		{
-			name:             "update service",
+			name:             "update Service",
 			objType:          "Service",
 			req:              svcImportReq,
 			resNamespaceName: types.NamespacedName{Namespace: "default", Name: "antrea-mc-nginx"},
@@ -415,14 +430,14 @@ func TestResourceImportReconciler_handleUpdateEvent(t *testing.T) {
 			},
 		},
 		{
-			name:             "update endpoints",
+			name:             "update Endpoints",
 			objType:          "Endpoints",
 			req:              epImportReq,
 			resNamespaceName: types.NamespacedName{Namespace: "default", Name: "antrea-mc-nginx"},
-			expectedSubset:   []corev1.EndpointSubset{subSetA},
+			expectedSubset:   newSubsets,
 		},
 		{
-			name:    "skip update a service without mcs annotation",
+			name:    "skip update a Service without mcs annotation",
 			objType: "Service",
 			req: ctrl.Request{NamespacedName: types.NamespacedName{
 				Namespace: leaderNamespace,
@@ -432,7 +447,7 @@ func TestResourceImportReconciler_handleUpdateEvent(t *testing.T) {
 			expectedErr:      true,
 		},
 		{
-			name:    "skip update an endpoint without mcs annotation",
+			name:    "skip update an Endpoint without mcs annotation",
 			objType: "Endpoints",
 			req: ctrl.Request{NamespacedName: types.NamespacedName{
 				Namespace: leaderNamespace,
@@ -443,7 +458,7 @@ func TestResourceImportReconciler_handleUpdateEvent(t *testing.T) {
 		},
 	}
 
-	r := NewResourceImportReconciler(fakeClient, scheme, fakeClient, localClusterID, remoteCluster)
+	r := NewResourceImportReconciler(fakeClient, scheme, fakeClient, localClusterID, "default", remoteCluster)
 	r.installedResImports.Add(*svcResImport)
 	r.installedResImports.Add(*epResImport)
 

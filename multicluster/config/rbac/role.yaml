@@ -21,6 +21,20 @@ rules:
 - apiGroups:
   - ""
   resources:
+  - events
+  verbs:
+  - create
+- apiGroups:
+  - ""
+  resources:
+  - nodes
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
   - services
   verbs:
   - create
@@ -29,6 +43,26 @@ rules:
   - list
   - patch
   - update
+  - watch
+- apiGroups:
+  - crd.antrea.io
+  resources:
+  - clusternetworkpolicies
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - crd.antrea.io
+  resources:
+  - tiers
+  verbs:
+  - get
+  - list
   - watch
 - apiGroups:
   - multicluster.crd.antrea.io
@@ -52,6 +86,32 @@ rules:
   - multicluster.crd.antrea.io
   resources:
   - clusterclaims/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - multicluster.crd.antrea.io
+  resources:
+  - clusterinfoimports
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - multicluster.crd.antrea.io
+  resources:
+  - clusterinfoimports/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - multicluster.crd.antrea.io
+  resources:
+  - clusterinfoimports/status
   verbs:
   - get
   - patch
@@ -85,6 +145,32 @@ rules:
 - apiGroups:
   - multicluster.crd.antrea.io
   resources:
+  - gateways
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - multicluster.crd.antrea.io
+  resources:
+  - gateways/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - multicluster.crd.antrea.io
+  resources:
+  - gateways/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - multicluster.crd.antrea.io
+  resources:
   - memberclusterannounces
   verbs:
   - create
@@ -111,32 +197,6 @@ rules:
 - apiGroups:
   - multicluster.crd.antrea.io
   resources:
-  - resourceexportfilters
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - multicluster.crd.antrea.io
-  resources:
-  - resourceexportfilters/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - multicluster.crd.antrea.io
-  resources:
-  - resourceexportfilters/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - multicluster.crd.antrea.io
-  resources:
   - resourceexports
   verbs:
   - create
@@ -156,32 +216,6 @@ rules:
   - multicluster.crd.antrea.io
   resources:
   - resourceexports/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - multicluster.crd.antrea.io
-  resources:
-  - resourceimportfilters
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - multicluster.crd.antrea.io
-  resources:
-  - resourceimportfilters/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - multicluster.crd.antrea.io
-  resources:
-  - resourceimportfilters/status
   verbs:
   - get
   - patch

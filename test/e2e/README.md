@@ -103,6 +103,36 @@ export KUBECONFIG=`pwd`/infra/vagrant/playbook/kube/config
 kubectl cluster-info
 ```
 
+#### Known issues
+
+##### The IP address configured for the host-only network is not within the allowed ranges
+
+With recent versions of VirtualBox (> 6.1.26), you may see the following error
+when running `./infra/vagrant/provision.sh`:
+
+```text
+The IP address configured for the host-only network is not within the
+allowed ranges. Please update the address used to be within the allowed
+ranges and run the command again.
+
+  Address: 192.168.77.100
+  Ranges: 192.168.56.0/21
+
+Valid ranges can be modified in the /etc/vbox/networks.conf file. For
+more information including valid format see:
+
+  https://www.virtualbox.org/manual/ch06.html#network_hostonly
+```
+
+To workaround this issue, you can either:
+
+* downgrade your VirtualBox version to 6.1.26
+* create a `/etc/vbox/networks.conf` file with the following contents:
+
+```text
+* 192.168.77.0/24
+```
+
 ## Running the tests
 
 Make sure that your cluster was provisioned and that the Antrea build artifacts
@@ -183,9 +213,13 @@ Node. Before running the Go e2e tests, you will also need to copy the Antrea
 manifest to the control-plane Docker container:
 
 ```bash
-./hack/generate-manifest.sh --kind | docker exec -i kind-control-plane dd of=/root/antrea.yml
-go test -v antrea.io/antrea/test/e2e -provider=kind
+./hack/generate-manifest.sh | docker exec -i kind-control-plane dd of=/root/antrea.yml
+go test -timeout=75 -v antrea.io/antrea/test/e2e -provider=kind
 ```
+
+The default timeout of `go test` is [10 minutes](https://pkg.go.dev/cmd/go#hdr-Testing_flags).
+If you encounter any timeout issue during e2e, you can try to increase timeout first. Some cases
+take more than 10 minutes. eg: `go test -v -timeout=20m antrea.io/antrea/test/e2e -run=TestAntreaPolicy -provider=kind`.
 
 `generate-manifest.sh` supports generating the Antrea manifest with different
 Antrea configurations. Run `./hack/generate-manifest.sh --help` to see the

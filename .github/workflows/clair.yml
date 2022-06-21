@@ -11,7 +11,7 @@ jobs:
     runs-on: [ubuntu-latest]
     steps:
     - uses: actions/checkout@v3
-    - uses: actions/setup-go@v2
+    - uses: actions/setup-go@v3
       with:
         go-version: 1.17
     - name: Scan Antrea Docker image for vulnerabilities
@@ -23,7 +23,7 @@ jobs:
         ./ci/clair-scan/run.sh ./clair-reports
     - name: Upload Clair scan reports
       if: ${{ always() }}
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v3
       with:
         name: clair-scan-reports
         path: clair-reports/*.json

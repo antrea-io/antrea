@@ -17,6 +17,7 @@ package exec
 import (
 	"bytes"
 	"fmt"
+	"strings"
 
 	"golang.org/x/crypto/ssh"
 )
@@ -24,7 +25,8 @@ import (
 // RunSSHCommand runs the provided SSH command on the specified host. Returns the exit code of the
 // command, along with the contents of stdout and stderr as strings. Note that if the command
 // returns a non-zero error code, this function does not report it as an error.
-func RunSSHCommand(host string, config *ssh.ClientConfig, cmd string) (code int, stdout string, stderr string, err error) {
+func RunSSHCommand(host string, config *ssh.ClientConfig, cmd string, envs map[string]string, stdin string, sudo bool) (
+	code int, stdout, stderr string, err error) {
 	client, err := ssh.Dial("tcp", host, config)
 	if err != nil {
 		return 0, "", "", fmt.Errorf("cannot establish SSH connection to host: %v", err)
@@ -35,9 +37,24 @@ func RunSSHCommand(host string, config *ssh.ClientConfig, cmd string) (code int,
 	}
 	defer session.Close()
 
+	// Set environment variables.
+	for e, v := range envs {
+		// Session.Setenv() requires that the remote host's sshd configuration accepts
+		// environment variables set by clients. So, just pre-appending environment
+		// variables to the command.
+		cmd = e + "='" + v + "' " + cmd
+	}
+	if sudo {
+		cmd = "sudo " + cmd
+	}
+
 	var stdoutB, stderrB bytes.Buffer
 	session.Stdout = &stdoutB
 	session.Stderr = &stderrB
+	if stdin != "" {
+		session.Stdin = strings.NewReader(stdin)
+	}
+
 	if err := session.Run(cmd); err != nil {
 		switch e := err.(type) {
 		case *ssh.ExitMissingError:

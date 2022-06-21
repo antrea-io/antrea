@@ -10,7 +10,7 @@ jobs:
     runs-on: [ubuntu-latest]
     steps:
     - name: Set up Go 1.17
-      uses: actions/setup-go@v2
+      uses: actions/setup-go@v3
       with:
         go-version: 1.17
     - uses: actions/checkout@v3
@@ -155,15 +155,6 @@ jobs:
         asset_path: ./assets/antrea-aks.yml
         asset_name: antrea-aks.yml
         asset_content_type: application/octet-stream
-    - name: Upload antrea-kind.yml
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ github.event.release.upload_url }}
-        asset_path: ./assets/antrea-kind.yml
-        asset_name: antrea-kind.yml
-        asset_content_type: application/octet-stream
     - name: Upload antrea-octant.yml
       uses: actions/upload-release-asset@v1
       env:
@@ -245,12 +236,12 @@ jobs:
         asset_path: ./assets/antrea-cni.exe
         asset_name: antrea-cni-windows-x86_64.exe
         asset_content_type: application/octet-stream
-    - name: Upload Start.ps1
+    - name: Upload Start-AntreaAgent.ps1
       uses: actions/upload-release-asset@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ github.event.release.upload_url }}
-        asset_path: ./assets/Start.ps1
-        asset_name: Start.ps1
+        asset_path: ./assets/Start-AntreaAgent.ps1
+        asset_name: Start-AntreaAgent.ps1
         asset_content_type: application/octet-stream

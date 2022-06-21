@@ -1,4 +1,4 @@
-// Copyright 2021 Antrea Authors
+// Copyright 2022 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -108,7 +108,7 @@ func (c *FakeClusterNetworkPolicies) UpdateStatus(ctx context.Context, clusterNe
 // Delete takes name of the clusterNetworkPolicy and deletes it. Returns an error if one occurs.
 func (c *FakeClusterNetworkPolicies) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewRootDeleteAction(clusternetworkpoliciesResource, name), &v1alpha1.ClusterNetworkPolicy{})
+		Invokes(testing.NewRootDeleteActionWithOptions(clusternetworkpoliciesResource, name, opts), &v1alpha1.ClusterNetworkPolicy{})
 	return err
 }
 

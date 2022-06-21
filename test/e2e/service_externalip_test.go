@@ -16,6 +16,7 @@ package e2e
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net"
 	"strconv"
@@ -38,6 +39,7 @@ import (
 	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
 	agentconfig "antrea.io/antrea/pkg/config/agent"
 	controllerconfig "antrea.io/antrea/pkg/config/controller"
+	"antrea.io/antrea/pkg/querier"
 )
 
 func TestServiceExternalIP(t *testing.T) {
@@ -223,8 +225,8 @@ func testServiceExternalTrafficPolicyLocal(t *testing.T, data *TestData) {
 			annotation := map[string]string{
 				antreaagenttypes.ServiceExternalIPPoolAnnotationKey: ipPool.Name,
 			}
-			service, err = data.createServiceWithAnnotations(fmt.Sprintf("test-svc-local-%d", idx),
-				testNamespace, 80, 80, corev1.ProtocolTCP, nil, false, true, v1.ServiceTypeLoadBalancer, nil, annotation)
+			service, err = data.CreateServiceWithAnnotations(fmt.Sprintf("test-svc-local-%d", idx),
+				data.testNamespace, 80, 80, corev1.ProtocolTCP, nil, false, true, v1.ServiceTypeLoadBalancer, nil, annotation)
 			require.NoError(t, err)
 			defer data.clientset.CoreV1().Services(service.Namespace).Delete(context.TODO(), service.Name, metav1.DeleteOptions{})
 
@@ -243,18 +245,16 @@ func testServiceExternalTrafficPolicyLocal(t *testing.T, data *TestData) {
 			require.NoError(t, err)
 			defer data.clientset.CoreV1().Endpoints(eps.Namespace).Delete(context.TODO(), eps.Name, metav1.DeleteOptions{})
 
-			service, err = data.waitForServiceConfigured(service, tt.expectedExternalIP, tt.expectedNodeOrigin != "", tt.expectedNodeOrigin)
+			service, node, err := data.waitForServiceConfigured(service, tt.expectedExternalIP, tt.expectedNodeOrigin)
 			require.NoError(t, err)
-			_, node := getServiceExternalIPAndHost(service)
 			assert.Equal(t, tt.expectedNodeOrigin, node)
 
 			epsToUpdate := eps.DeepCopy()
 			epsToUpdate.Subsets = tt.updatedEndpointSubsets
 			_, err = data.clientset.CoreV1().Endpoints(eps.Namespace).Update(context.TODO(), epsToUpdate, metav1.UpdateOptions{})
 			require.NoError(t, err)
-			service, err = data.waitForServiceConfigured(service, tt.expectedExternalIP, tt.expectedNodeUpdated != "", tt.expectedNodeUpdated)
+			_, node, err = data.waitForServiceConfigured(service, tt.expectedExternalIP, tt.expectedNodeUpdated)
 			require.NoError(t, err)
-			_, node = getServiceExternalIPAndHost(service)
 			assert.Equal(t, tt.expectedNodeUpdated, node)
 			assert.NoError(t, err)
 		})
@@ -342,17 +342,15 @@ func testServiceWithExternalIPCRUD(t *testing.T, data *TestData) {
 			annotation := map[string]string{
 				antreaagenttypes.ServiceExternalIPPoolAnnotationKey: ipPool.Name,
 			}
-			service, err = data.createServiceWithAnnotations(fmt.Sprintf("test-svc-eip-%d", idx),
-				testNamespace, 80, 80, corev1.ProtocolTCP, nil, false, false, v1.ServiceTypeLoadBalancer, nil, annotation)
+			service, err = data.CreateServiceWithAnnotations(fmt.Sprintf("test-svc-eip-%d", idx),
+				data.testNamespace, 80, 80, corev1.ProtocolTCP, nil, false, false, v1.ServiceTypeLoadBalancer, nil, annotation)
 			require.NoError(t, err)
 
 			defer data.clientset.CoreV1().Services(service.Namespace).Delete(context.TODO(), service.Name, metav1.DeleteOptions{})
-			waitForNodeConfigured := len(tt.expectedNodes) != 0
-			service, err = data.waitForServiceConfigured(service, tt.expectedExternalIP, waitForNodeConfigured, "")
+			service, assignedNode, err := data.waitForServiceConfigured(service, tt.expectedExternalIP, "")
 			require.NoError(t, err)
 
 			if len(tt.expectedNodes) > 0 {
-				_, assignedNode := getServiceExternalIPAndHost(service)
 				assert.True(t, tt.expectedNodes.Has(assignedNode), "expected assigned Node in %s, got %s", tt.expectedNodes, assignedNode)
 			}
 
@@ -436,12 +434,12 @@ func testServiceUpdateExternalIP(t *testing.T, data *TestData) {
 			annotation := map[string]string{
 				antreaagenttypes.ServiceExternalIPPoolAnnotationKey: originalPool.Name,
 			}
-			service, err := data.createServiceWithAnnotations(fmt.Sprintf("test-update-eip-%d", idx),
-				testNamespace, 80, 80, corev1.ProtocolTCP, nil, false, false, v1.ServiceTypeLoadBalancer, nil, annotation)
+			service, err := data.CreateServiceWithAnnotations(fmt.Sprintf("test-update-eip-%d", idx),
+				data.testNamespace, 80, 80, corev1.ProtocolTCP, nil, false, false, v1.ServiceTypeLoadBalancer, nil, annotation)
 			require.NoError(t, err)
 			defer data.clientset.CoreV1().Services(service.Namespace).Delete(context.TODO(), service.Name, metav1.DeleteOptions{})
 
-			service, err = data.waitForServiceConfigured(service, tt.originalExternalIP, true, tt.originalNode)
+			service, _, err = data.waitForServiceConfigured(service, tt.originalExternalIP, tt.originalNode)
 			require.NoError(t, err)
 
 			toUpdate := service.DeepCopy()
@@ -455,7 +453,7 @@ func testServiceUpdateExternalIP(t *testing.T, data *TestData) {
 			})
 			require.NoError(t, err, "Failed to update Service")
 
-			_, err = data.waitForServiceConfigured(service, tt.newExternalIP, true, tt.newNode)
+			_, _, err = data.waitForServiceConfigured(service, tt.newExternalIP, tt.newNode)
 			assert.NoError(t, err)
 		})
 	}
@@ -490,7 +488,7 @@ func testServiceNodeFailure(t *testing.T, data *TestData) {
 			}
 			signalAgent := func(nodeName, signal string) {
 				cmd := fmt.Sprintf("pkill -%s antrea-agent", signal)
-				rc, stdout, stderr, err := RunCommandOnNode(nodeName, cmd)
+				rc, stdout, stderr, err := data.RunCommandOnNode(nodeName, cmd)
 				if rc != 0 || err != nil {
 					t.Errorf("Error when running command '%s' on Node '%s', rc: %d, stdout: %s, stderr: %s, error: %v",
 						cmd, nodeName, rc, stdout, stderr, err)
@@ -518,14 +516,13 @@ func testServiceNodeFailure(t *testing.T, data *TestData) {
 			annotation := map[string]string{
 				antreaagenttypes.ServiceExternalIPPoolAnnotationKey: externalIPPoolTwoNodes.Name,
 			}
-			service, err := data.createServiceWithAnnotations("test-service-node-failure", testNamespace, 80, 80,
+			service, err := data.CreateServiceWithAnnotations("test-service-node-failure", data.testNamespace, 80, 80,
 				corev1.ProtocolTCP, nil, false, false, v1.ServiceTypeLoadBalancer, nil, annotation)
 			require.NoError(t, err)
 			defer data.clientset.CoreV1().Services(service.Namespace).Delete(context.TODO(), service.Name, metav1.DeleteOptions{})
 
-			service, err = data.waitForServiceConfigured(service, tt.expectedIP, true, "")
+			service, originalNode, err := data.waitForServiceConfigured(service, tt.expectedIP, "")
 			assert.NoError(t, err)
-			_, originalNode := getServiceExternalIPAndHost(service)
 			pauseAgent(originalNode)
 			defer restoreAgent(originalNode)
 
@@ -535,10 +532,17 @@ func testServiceNodeFailure(t *testing.T, data *TestData) {
 			} else {
 				expectedMigratedNode = nodeName(0)
 			}
-			service, err = data.waitForServiceConfigured(service, tt.expectedIP, true, expectedMigratedNode)
+			// The Agent on the original Node is paused. Run antctl from the expected migrated Node instead.
+			err = wait.PollImmediate(200*time.Millisecond, 15*time.Second, func() (done bool, err error) {
+				assigndNode, err := data.getServiceAssignedNode(expectedMigratedNode, service)
+				if err != nil {
+					return false, nil
+				}
+				return assigndNode == expectedMigratedNode, nil
+			})
 			assert.NoError(t, err)
 			restoreAgent(originalNode)
-			_, err = data.waitForServiceConfigured(service, tt.expectedIP, true, originalNode)
+			_, _, err = data.waitForServiceConfigured(service, tt.expectedIP, originalNode)
 			assert.NoError(t, err)
 		})
 	}
@@ -587,7 +591,7 @@ func testExternalIPAccess(t *testing.T, data *TestData) {
 			// Create agnhost Pods on each Node.
 			for idx, node := range nodes {
 				createAgnhostPod(t, data, agnhosts[idx], node, false)
-				defer data.deletePodAndWait(defaultTimeout, agnhosts[idx], testNamespace)
+				defer data.deletePodAndWait(defaultTimeout, agnhosts[idx], data.testNamespace)
 			}
 			var port int32 = 8080
 			externalIPTestCases := []struct {
@@ -608,29 +612,32 @@ func testExternalIPAccess(t *testing.T, data *TestData) {
 			}
 			waitExternalIPConfigured := func(service *v1.Service) (string, string, error) {
 				var ip string
-				var host string
+				var assigndNode string
 				err := wait.PollImmediate(200*time.Millisecond, 5*time.Second, func() (done bool, err error) {
 					service, err = data.clientset.CoreV1().Services(service.Namespace).Get(context.TODO(), service.Name, metav1.GetOptions{})
 					if err != nil {
 						return false, err
 					}
-					if len(service.Status.LoadBalancer.Ingress) == 0 || service.Status.LoadBalancer.Ingress[0].IP == "" || service.Status.LoadBalancer.Ingress[0].Hostname == "" {
+					if len(service.Status.LoadBalancer.Ingress) == 0 || service.Status.LoadBalancer.Ingress[0].IP == "" {
+						return false, nil
+					}
+					assigndNode, err = data.getServiceAssignedNode("", service)
+					if err != nil {
 						return false, nil
 					}
 					ip = service.Status.LoadBalancer.Ingress[0].IP
-					host = service.Status.LoadBalancer.Ingress[0].Hostname
 					return true, nil
 				})
-				return ip, host, err
+				return ip, assigndNode, err
 			}
 			for _, et := range externalIPTestCases {
 				t.Run(et.name, func(t *testing.T) {
 					annotations := map[string]string{
 						antreaagenttypes.ServiceExternalIPPoolAnnotationKey: ipPool.Name,
 					}
-					service, err := data.createServiceWithAnnotations(et.serviceName, testNamespace, port, port, corev1.ProtocolTCP, map[string]string{"app": "agnhost"}, false, et.externalTrafficPolicyLocal, corev1.ServiceTypeLoadBalancer, &ipFamily, annotations)
+					service, err := data.CreateServiceWithAnnotations(et.serviceName, data.testNamespace, port, port, corev1.ProtocolTCP, map[string]string{"app": "agnhost"}, false, et.externalTrafficPolicyLocal, corev1.ServiceTypeLoadBalancer, &ipFamily, annotations)
 					require.NoError(t, err)
-					defer data.deleteService(service.Name)
+					defer data.deleteService(service.Namespace, service.Name)
 
 					externalIP, host, err := waitExternalIPConfigured(service)
 					require.NoError(t, err)
@@ -649,7 +656,7 @@ sleep 3600`, tt.clientName, tt.clientIP, tt.localIP, tt.clientIPMaskLen)
 
 					baseUrl := net.JoinHostPort(externalIP, strconv.FormatInt(int64(port), 10))
 
-					require.NoError(t, data.createPodOnNode(tt.clientName, testNamespace, host, agnhostImage, []string{"sh", "-c", cmd}, nil, nil, nil, true, func(pod *v1.Pod) {
+					require.NoError(t, data.createPodOnNode(tt.clientName, data.testNamespace, host, agnhostImage, []string{"sh", "-c", cmd}, nil, nil, nil, true, func(pod *v1.Pod) {
 						privileged := true
 						pod.Spec.Containers[0].SecurityContext = &v1.SecurityContext{Privileged: &privileged}
 						delete(pod.Labels, "app")
@@ -658,7 +665,7 @@ sleep 3600`, tt.clientName, tt.clientIP, tt.localIP, tt.clientIPMaskLen)
 						// Refer to https://github.com/curl/curl/issues/1603.
 						probeCmd := strings.Split(fmt.Sprintf("ip netns exec %s curl -s %s", tt.clientName, baseUrl), " ")
 						pod.Spec.Containers[0].ReadinessProbe = &v1.Probe{
-							Handler: v1.Handler{
+							ProbeHandler: v1.ProbeHandler{
 								Exec: &v1.ExecAction{
 									Command: probeCmd,
 								},
@@ -668,7 +675,7 @@ sleep 3600`, tt.clientName, tt.clientIP, tt.localIP, tt.clientIPMaskLen)
 						}
 					}))
 
-					_, err = data.podWaitFor(defaultTimeout, tt.clientName, testNamespace, func(p *v1.Pod) (bool, error) {
+					_, err = data.PodWaitFor(defaultTimeout, tt.clientName, data.testNamespace, func(p *v1.Pod) (bool, error) {
 						for _, condition := range p.Status.Conditions {
 							if condition.Type == corev1.PodReady {
 								return condition.Status == corev1.ConditionTrue, nil
@@ -677,11 +684,11 @@ sleep 3600`, tt.clientName, tt.clientIP, tt.localIP, tt.clientIPMaskLen)
 						return false, nil
 					})
 					require.NoError(t, err)
-					defer data.deletePodAndWait(defaultTimeout, tt.clientName, testNamespace)
+					defer data.deletePodAndWait(defaultTimeout, tt.clientName, data.testNamespace)
 
 					hostNameUrl := fmt.Sprintf("%s/%s", baseUrl, "hostname")
 					probeCmd := fmt.Sprintf("ip netns exec %s curl --connect-timeout 1 --retry 5 --retry-connrefused %s", tt.clientName, hostNameUrl)
-					hostname, stderr, err := data.runCommandFromPod(testNamespace, tt.clientName, "", []string{"sh", "-c", probeCmd})
+					hostname, stderr, err := data.RunCommandFromPod(data.testNamespace, tt.clientName, "", []string{"sh", "-c", probeCmd})
 					assert.NoError(t, err, "External IP should be able to be connected from remote: %s", stderr)
 
 					if et.externalTrafficPolicyLocal {
@@ -692,7 +699,7 @@ sleep 3600`, tt.clientName, tt.clientIP, tt.localIP, tt.clientIPMaskLen)
 						}
 						clientIPUrl := fmt.Sprintf("%s/clientip", baseUrl)
 						probeClientIPCmd := fmt.Sprintf("ip netns exec %s curl --connect-timeout 1 --retry 5 --retry-connrefused %s", tt.clientName, clientIPUrl)
-						clientIPPort, stderr, err := data.runCommandFromPod(testNamespace, tt.clientName, "", []string{"sh", "-c", probeClientIPCmd})
+						clientIPPort, stderr, err := data.RunCommandFromPod(data.testNamespace, tt.clientName, "", []string{"sh", "-c", probeClientIPCmd})
 						assert.NoError(t, err, "External IP should be able to be connected from remote: %s", stderr)
 						clientIP, _, err := net.SplitHostPort(clientIPPort)
 						assert.NoError(t, err)
@@ -704,14 +711,32 @@ sleep 3600`, tt.clientName, tt.clientIP, tt.localIP, tt.clientIPMaskLen)
 	}
 }
 
-func getServiceExternalIPAndHost(service *v1.Service) (string, string) {
-	if service == nil || len(service.Status.LoadBalancer.Ingress) == 0 {
-		return "", ""
+func (data *TestData) getServiceAssignedNode(node string, service *v1.Service) (string, error) {
+	if node == "" {
+		node = nodeName(0)
 	}
-	return service.Status.LoadBalancer.Ingress[0].IP, service.Status.LoadBalancer.Ingress[0].Hostname
+	agentPodName, err := data.getAntreaPodOnNode(node)
+	if err != nil {
+		return "", err
+	}
+	cmd := []string{"antctl", "get", "serviceexternalip", service.Name, "-n", service.Namespace, "-o", "json"}
+
+	stdout, _, err := runAntctl(agentPodName, cmd, data)
+	if err != nil {
+		return "", err
+	}
+	var serviceExternalIPInfo []querier.ServiceExternalIPInfo
+	if err := json.Unmarshal([]byte(stdout), &serviceExternalIPInfo); err != nil {
+		return "", err
+	}
+	if len(serviceExternalIPInfo) != 1 {
+		return "", fmt.Errorf("expected exactly one entry, got %#v", serviceExternalIPInfo)
+	}
+	return serviceExternalIPInfo[0].AssignedNode, nil
 }
 
-func (data *TestData) waitForServiceConfigured(service *v1.Service, expectedExternalIP string, waitForNodeConfigured bool, expectedNodeName string) (*corev1.Service, error) {
+func (data *TestData) waitForServiceConfigured(service *v1.Service, expectedExternalIP string, expectedNodeName string) (*corev1.Service, string, error) {
+	var assignedNode string
 	err := wait.PollImmediate(200*time.Millisecond, 15*time.Second, func() (done bool, err error) {
 		service, err = data.clientset.CoreV1().Services(service.Namespace).Get(context.TODO(), service.Name, metav1.GetOptions{})
 		if err != nil {
@@ -720,19 +745,18 @@ func (data *TestData) waitForServiceConfigured(service *v1.Service, expectedExte
 		if len(service.Status.LoadBalancer.Ingress) == 0 || service.Status.LoadBalancer.Ingress[0].IP != expectedExternalIP {
 			return false, nil
 		}
-		if waitForNodeConfigured || expectedNodeName != "" {
-			if service.Status.LoadBalancer.Ingress[0].Hostname == "" {
-				return false, nil
-			}
+		assignedNode, err = data.getServiceAssignedNode("", service)
+		if err != nil {
+			return false, nil
 		}
-		if expectedNodeName != "" && service.Status.LoadBalancer.Ingress[0].Hostname != expectedNodeName {
+		if expectedNodeName != "" && assignedNode != expectedNodeName {
 			return false, nil
 		}
 		return true, nil
 	})
 	if err != nil {
-		return service, fmt.Errorf("wait for Service %q configured failed: %v. Expected external IP %s on Node %s, actual status %#v",
-			service.Name, err, expectedExternalIP, expectedNodeName, service.Status)
+		return service, assignedNode, fmt.Errorf("wait for Service %q configured failed: %v. Expected external IP %s on Node %s, actual status %#v, assigned Node: %s"+
+			service.Name, err, expectedExternalIP, expectedNodeName, service.Status, assignedNode)
 	}
-	return service, nil
+	return service, assignedNode, nil
 }

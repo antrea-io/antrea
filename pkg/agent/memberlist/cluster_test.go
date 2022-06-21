@@ -18,7 +18,6 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"reflect"
 	"testing"
 	"time"
 
@@ -152,20 +151,15 @@ func TestCluster_Run(t *testing.T) {
 
 			go fakeCluster.cluster.Run(stopCh)
 
-			assert.NoError(t, wait.Poll(time.Millisecond*100, time.Second, func() (done bool, err error) {
-				newEIP, _ := fakeCluster.cluster.externalIPPoolLister.Get(eip.Name)
-				return reflect.DeepEqual(newEIP, eip), nil
-			}))
-
 			tCase.egress.Spec.ExternalIPPool = eip.Name
-			res, err := fakeCluster.cluster.ShouldSelectIP(tCase.egress.Spec.EgressIP, eip.Name)
-			// Cluster should hold the same consistent hash ring for each ExternalIPPool.
-			assert.NoError(t, err)
+			assert.NoError(t, wait.Poll(100*time.Millisecond, time.Second, func() (done bool, err error) {
+				res, err := fakeCluster.cluster.ShouldSelectIP(tCase.egress.Spec.EgressIP, eip.Name)
+				return err == nil && res == tCase.expectEgressSelectResult, nil
+			}), "select Node result for Egress does not match")
 			allMembers, err := fakeCluster.cluster.allClusterMembers()
 			assert.NoError(t, err)
-			assert.Equal(t, 1, len(allMembers), "expected Node member num is 1")
+			assert.Len(t, allMembers, 1, "expected Node member num is 1")
 			assert.Equal(t, 1, fakeCluster.cluster.mList.NumMembers(), "expected alive Node num is 1")
-			assert.Equal(t, tCase.expectEgressSelectResult, res, "select Node for Egress result not match")
 		})
 	}
 }
@@ -207,11 +201,6 @@ func TestCluster_RunClusterEvents(t *testing.T) {
 
 	go fakeCluster.cluster.Run(stopCh)
 
-	assert.NoError(t, wait.Poll(time.Millisecond*100, time.Second, func() (done bool, err error) {
-		newEIP, _ := fakeCluster.cluster.externalIPPoolLister.Get(fakeEIP1.Name)
-		return reflect.DeepEqual(newEIP, fakeEIP1), nil
-	}))
-
 	// Test updating Node labels.
 	testCasesUpdateNode := []struct {
 		name                     string
@@ -249,18 +238,15 @@ func TestCluster_RunClusterEvents(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Update Node error: %v", err)
 		}
-		assert.NoError(t, wait.Poll(time.Millisecond*100, time.Second, func() (done bool, err error) {
-			newNode, _ := fakeCluster.cluster.nodeLister.Get(node.Name)
-			return reflect.DeepEqual(node, newNode), nil
-		}))
 	}
 	for _, tCase := range testCasesUpdateNode {
 		t.Run(tCase.name, func(t *testing.T) {
 			localNode.Labels = tCase.newNodeLabels
 			updateNode(localNode)
-			res, err := fakeCluster.cluster.ShouldSelectIP(tCase.egress.Spec.EgressIP, tCase.egress.Spec.ExternalIPPool)
-			assert.NoError(t, err)
-			assert.Equal(t, tCase.expectEgressSelectResult, res, "select Node for Egress result not match")
+			assert.NoError(t, wait.Poll(100*time.Millisecond, time.Second, func() (done bool, err error) {
+				res, err := fakeCluster.cluster.ShouldSelectIP(tCase.egress.Spec.EgressIP, tCase.egress.Spec.ExternalIPPool)
+				return err == nil && res == tCase.expectEgressSelectResult, nil
+			}), "select Node result for Egress does not match")
 		})
 	}
 
@@ -300,13 +286,10 @@ func TestCluster_RunClusterEvents(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Update ExternalIPPool error: %v", err)
 			}
-			assert.NoError(t, wait.Poll(time.Millisecond*100, time.Second, func() (done bool, err error) {
-				newEIP, _ := fakeCluster.cluster.externalIPPoolLister.Get(fakeEIP1.Name)
-				return reflect.DeepEqual(fakeEIP1, newEIP), nil
-			}))
-			res, err := fakeCluster.cluster.ShouldSelectIP(fakeEgress1.Spec.EgressIP, fakeEgress1.Spec.ExternalIPPool)
-			assert.NoError(t, err)
-			assert.Equal(t, tCase.expectEgressSelectResult, res, "select Node for Egress result not match")
+			assert.NoError(t, wait.Poll(100*time.Millisecond, time.Second, func() (done bool, err error) {
+				res, err := fakeCluster.cluster.ShouldSelectIP(fakeEgress1.Spec.EgressIP, fakeEgress1.Spec.ExternalIPPool)
+				return err == nil && res == tCase.expectEgressSelectResult, nil
+			}), "select Node result for Egress does not match")
 		})
 	}
 
@@ -326,16 +309,15 @@ func TestCluster_RunClusterEvents(t *testing.T) {
 		Spec:       crdv1a2.EgressSpec{ExternalIPPool: fakeEIP2.Name, EgressIP: fakeEgressIP2},
 	}
 	assert.NoError(t, createExternalIPPool(fakeCluster.crdClient, fakeEIP2))
-	assert.NoError(t, wait.Poll(time.Millisecond*100, time.Second, func() (done bool, err error) {
-		newEIP, _ := fakeCluster.cluster.externalIPPoolLister.Get(fakeEIP2.Name)
-		return reflect.DeepEqual(newEIP, fakeEIP2), nil
-	}))
+
 	assertEgressSelectResult := func(egress *crdv1a2.Egress, expectedRes bool, hasSyncedErr bool) {
-		res, err := fakeCluster.cluster.ShouldSelectIP(egress.Spec.EgressIP, egress.Spec.ExternalIPPool)
-		if !hasSyncedErr {
-			assert.NoError(t, err)
-		}
-		assert.Equal(t, expectedRes, res, "select Node for Egress result not match")
+		assert.NoErrorf(t, wait.Poll(100*time.Millisecond, time.Second, func() (done bool, err error) {
+			res, err := fakeCluster.cluster.ShouldSelectIP(egress.Spec.EgressIP, egress.Spec.ExternalIPPool)
+			if hasSyncedErr {
+				return err != nil, nil
+			}
+			return err == nil && res == expectedRes, nil
+		}), "select Node result for Egress '%s' does not match", egress.Name)
 	}
 	assertEgressSelectResult(fakeEgress2, true, false)
 	assertEgressSelectResult(fakeEgress1, false, false)
@@ -346,10 +328,6 @@ func TestCluster_RunClusterEvents(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Delete ExternalIPPool error: %v", err)
 		}
-		assert.NoError(t, wait.Poll(time.Millisecond*100, time.Second, func() (done bool, err error) {
-			newEIP, _ := fakeCluster.cluster.externalIPPoolLister.Get(eipName)
-			return nil == newEIP, nil
-		}))
 	}
 	deleteExternalIPPool(fakeEIP2.Name)
 	assertEgressSelectResult(fakeEgress2, false, true)
@@ -390,10 +368,6 @@ func TestCluster_RunClusterEvents(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Delete Node error: %v", err)
 		}
-		assert.NoError(t, wait.Poll(time.Millisecond*100, time.Second, func() (done bool, err error) {
-			newNode, _ := fakeCluster.cluster.nodeLister.Get(node.Name)
-			return nil == newNode, nil
-		}))
 	}
 	deleteNode(localNode)
 	assertEgressSelectResult(fakeEgress2, false, true)

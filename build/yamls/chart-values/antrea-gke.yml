@@ -1,0 +1,3 @@
+trafficEncapMode: "noEncap"
+cni:
+  hostBinPath: "/home/kubernetes/bin"

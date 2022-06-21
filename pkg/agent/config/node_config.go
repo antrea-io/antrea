@@ -45,18 +45,23 @@ const (
 )
 
 var (
-	// VirtualServiceIPv4 / VirtualServiceIPv6 are used in the following situations:
-	// - Use the virtual IP to perform SNAT for packets of Service from Antrea gateway and the Endpoint is not on
-	//   local Pod CIDR or any remote Pod CIDRs. It is used in OVS flow of table serviceConntrackCommitTable.
-	// - Use the virtual IP to perform DNAT for packets of NodePort on host. It is used in iptables rules on host.
-	// - Use the virtual IP as onlink routing entry gateway in host routing entry.
-	// - Use the virtual IP as destination IP in host routing entry. It is used to forward DNATed NodePort packets
-	//   or replied SNATed Service packets back to Antrea gateway.
-	// - Use the virtual IP for InternalIPAddress parameter of Add-NetNatStaticMapping.
+	// VirtualServiceIPv4 or VirtualServiceIPv6 is used in the following scenarios:
+	// - The IP is used to perform SNAT for packets of Service sourced from Antrea gateway and destined for external
+	//   network via Antrea gateway.
+	// - The IP is used as destination IP in host routing entry to forward replied SNATed Service packets back to Antrea
+	//   gateway.
+	// - The IP is used as the next hop of host routing entry for ClusterIP and virtual NodePort DNAT IP.
+	// - The IP is used for InternalIPAddress parameter of Add-NetNatStaticMapping on Windows.
 	//   The IP cannot be one used in the network, and cannot be within the 169.254.1.0 - 169.254.254.255 range
 	//   according to https://datatracker.ietf.org/doc/html/rfc3927#section-2.1
 	VirtualServiceIPv4 = net.ParseIP("169.254.0.253")
 	VirtualServiceIPv6 = net.ParseIP("fc01::aabb:ccdd:eeff")
+
+	// VirtualNodePortDNATIPv4 or VirtualNodePortDNATIPv6 is used in the following scenarios:
+	// - The IP is used to perform DNAT on host for packets of NodePort sourced from local Node or external network.
+	// - The IP is used as destination IP in host routing entry to forward DNATed NodePort packets to Antrea gateway
+	VirtualNodePortDNATIPv4 = net.ParseIP("169.254.0.252")
+	VirtualNodePortDNATIPv6 = net.ParseIP("fc01::aabb:ccdd:eefe")
 )
 
 type GatewayConfig struct {
@@ -146,12 +151,18 @@ func (n *NodeConfig) String() string {
 		n.Name, n.OVSBridge, n.PodIPv4CIDR, n.PodIPv6CIDR, n.NodeIPv4Addr, n.NodeIPv6Addr, n.NodeTransportIPv4Addr, n.NodeTransportIPv6Addr, n.GatewayConfig)
 }
 
+// IPsecConfig includes IPsec related configurations.
+type IPsecConfig struct {
+	AuthenticationMode IPsecAuthenticationMode
+	PSK                string
+}
+
 // NetworkConfig includes user provided network configuration parameters.
 type NetworkConfig struct {
 	TrafficEncapMode      TrafficEncapModeType
 	TunnelType            ovsconfig.TunnelType
 	TrafficEncryptionMode TrafficEncryptionModeType
-	IPSecPSK              string
+	IPsecConfig           IPsecConfig
 	TransportIface        string
 	TransportIfaceCIDRs   []string
 	IPv4Enabled           bool
@@ -181,4 +192,12 @@ func (nc *NetworkConfig) NeedsTunnelToPeer(peerIP net.IP, localIP *net.IPNet) bo
 // NeedsDirectRoutingToPeer returns true if Pod traffic to peer Node needs a direct route installed to the routing table.
 func (nc *NetworkConfig) NeedsDirectRoutingToPeer(peerIP net.IP, localIP *net.IPNet) bool {
 	return (nc.TrafficEncapMode == TrafficEncapModeNoEncap || nc.TrafficEncapMode == TrafficEncapModeHybrid) && localIP.Contains(peerIP)
+}
+
+// ServiceConfig includes K8s Service CIDR and available IP addresses for NodePort.
+type ServiceConfig struct {
+	ServiceCIDR           *net.IPNet // K8s Service ClusterIP CIDR
+	ServiceCIDRv6         *net.IPNet // K8s Service ClusterIP CIDR in IPv6
+	NodePortAddressesIPv4 []net.IP
+	NodePortAddressesIPv6 []net.IP
 }

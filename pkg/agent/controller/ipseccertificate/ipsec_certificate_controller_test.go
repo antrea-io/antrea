@@ -1,0 +1,463 @@
+// Copyright 2022 Antrea Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package ipseccertificate
+
+import (
+	"context"
+	"crypto"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/pem"
+	"fmt"
+	"io/ioutil"
+	"math/big"
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+
+	"github.com/golang/mock/gomock"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	certificatesv1 "k8s.io/api/certificates/v1"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/runtime"
+	utilrand "k8s.io/apimachinery/pkg/util/rand"
+	"k8s.io/apimachinery/pkg/util/uuid"
+	"k8s.io/apimachinery/pkg/watch"
+	"k8s.io/client-go/kubernetes/fake"
+	k8stesting "k8s.io/client-go/testing"
+	certutil "k8s.io/client-go/util/cert"
+
+	ovsconfigtest "antrea.io/antrea/pkg/ovs/ovsconfig/testing"
+)
+
+const fakeNodeName = "fake-node-1"
+
+type fakeController struct {
+	*Controller
+	mockController   *gomock.Controller
+	mockBridgeClient *ovsconfigtest.MockOVSBridgeClient
+	rawCAcert        []byte
+	caCert           *x509.Certificate
+	caKey            crypto.Signer
+}
+
+func newFakeController(t *testing.T) *fakeController {
+	mockController := gomock.NewController(t)
+	mockOVSBridgeClient := ovsconfigtest.NewMockOVSBridgeClient(mockController)
+	fakeClient := fake.NewSimpleClientset()
+	listCSRAction := k8stesting.NewRootListAction(certificatesv1.SchemeGroupVersion.WithResource("certificatesigningrequests"), certificatesv1.SchemeGroupVersion.WithKind("CertificateSigningRequest"), metav1.ListOptions{})
+
+	// add an reactor to fill the Name and UID in the Create request.
+	fakeClient.PrependReactor("create", "certificatesigningrequests", k8stesting.ReactionFunc(
+		func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+			csr := action.(k8stesting.CreateAction).GetObject().(*certificatesv1.CertificateSigningRequest)
+			if csr.ObjectMeta.GenerateName != "" {
+				csr.ObjectMeta.Name = fmt.Sprintf("%s%s", csr.ObjectMeta.GenerateName, utilrand.String(8))
+				csr.ObjectMeta.GenerateName = ""
+				csr.UID = uuid.NewUUID()
+				csr.CreationTimestamp = metav1.Now()
+			}
+			return false, csr, nil
+		}),
+	)
+	// add an reactor to honor the fieldsSelector in the List request.
+	fakeClient.PrependReactor("list", "certificatesigningrequests", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		var csrList *certificatesv1.CertificateSigningRequestList
+		// list CSRs using the original reactors.
+		for _, reactor := range fakeClient.Fake.ReactionChain[1:] {
+			if !reactor.Handles(listCSRAction) {
+				continue
+			}
+			handled, ret, err := reactor.React(listCSRAction)
+			if !handled {
+				continue
+			}
+			if err != nil {
+				return false, nil, err
+			}
+			csrList = ret.(*certificatesv1.CertificateSigningRequestList)
+		}
+		actionList, ok := action.(k8stesting.ListActionImpl)
+		if !ok {
+			return true, nil, fmt.Errorf("unexpected action type, expected %T, got %T", k8stesting.ListActionImpl{}, action)
+		}
+		listFieldsSelector := actionList.GetListRestrictions().Fields
+		var filtered []certificatesv1.CertificateSigningRequest
+		for _, c := range csrList.Items {
+			csrSpecificFieldsSet := make(fields.Set)
+			csrSpecificFieldsSet["metadata.name"] = c.Name
+			if listFieldsSelector.Matches(csrSpecificFieldsSet) {
+				filtered = append(filtered, c)
+			}
+		}
+		return true, &certificatesv1.CertificateSigningRequestList{
+			Items: filtered,
+		}, nil
+	})
+
+	originDefaultPath := defaultCertificatesPath
+	cfg := certutil.Config{
+		CommonName:   "antrea-ipsec-ca",
+		Organization: []string{"antrea.io"},
+	}
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+	rootCA, err := certutil.NewSelfSignedCACert(cfg, key)
+	require.NoError(t, err)
+	tempDir, err := ioutil.TempDir("", "antrea-ipsec-test")
+	require.NoError(t, err)
+	defaultCertificatesPath = tempDir
+	defer func() {
+		defaultCertificatesPath = originDefaultPath
+	}()
+	caData, err := certutil.EncodeCertificates(rootCA)
+	require.NoError(t, err)
+	err = certutil.WriteCert(filepath.Join(defaultCertificatesPath, "ca", "ca.crt"), caData)
+	require.NoError(t, err)
+
+	c := NewIPSecCertificateController(fakeClient, mockOVSBridgeClient, fakeNodeName)
+	return &fakeController{
+		Controller:       c,
+		mockController:   mockController,
+		mockBridgeClient: mockOVSBridgeClient,
+		rawCAcert:        caData,
+		caCert:           rootCA,
+		caKey:            key,
+	}
+}
+
+func TestController_syncConfigurations(t *testing.T) {
+	t.Run("rotate certificate if current certificates are empty", func(t *testing.T) {
+		fakeController := newFakeController(t)
+		defer fakeController.mockController.Finish()
+
+		ch := make(chan struct{})
+		fakeController.rotateCertificate = func() (*certificateKeyPair, error) {
+			close(ch)
+			return nil, fmt.Errorf("unable to rotate certificate")
+		}
+		err := fakeController.syncConfigurations()
+		assert.Error(t, err)
+		assert.Nil(t, fakeController.certificateKeyPair)
+		<-ch
+	})
+	t.Run("should not touch existing certificate if rotate certificate failed", func(t *testing.T) {
+		fakeController := newFakeController(t)
+		defer fakeController.mockController.Finish()
+		fakeController.certificateKeyPair = &certificateKeyPair{
+			certificatePath: "cert.crt",
+			privateKeyPath:  "key.key",
+		}
+		ch := make(chan struct{})
+		fakeController.rotateCertificate = func() (*certificateKeyPair, error) {
+			close(ch)
+			return nil, fmt.Errorf("unable to rotate certificate")
+		}
+		err := fakeController.syncConfigurations()
+		assert.Error(t, err)
+		assert.NotNil(t, fakeController.certificateKeyPair)
+		assert.Equal(t, "cert.crt", fakeController.certificateKeyPair.certificatePath)
+		assert.Equal(t, "key.key", fakeController.certificateKeyPair.privateKeyPath)
+		<-ch
+	})
+	t.Run("should clean up new certificate if it is not valid", func(t *testing.T) {
+		fakeController := newFakeController(t)
+		defer fakeController.mockController.Finish()
+		certPath := filepath.Join(fakeController.certificateFolderPath, "cert-1.crt")
+		keyPath := filepath.Join(fakeController.certificateFolderPath, "key-1.key")
+		ch := make(chan struct{})
+		fakeController.rotateCertificate = func() (*certificateKeyPair, error) {
+			close(ch)
+			require.NoError(t, ioutil.WriteFile(certPath, nil, 0600))
+			require.NoError(t, ioutil.WriteFile(keyPath, nil, 0400))
+			return &certificateKeyPair{
+				certificatePath: certPath,
+				privateKeyPath:  keyPath,
+			}, nil
+		}
+		err := fakeController.syncConfigurations()
+		assert.Error(t, err)
+		_, err = os.Stat(certPath)
+		assert.True(t, os.IsNotExist(err))
+		_, err = os.Stat(keyPath)
+		assert.True(t, os.IsNotExist(err))
+		<-ch
+	})
+	t.Run("request and configure new certificates", func(t *testing.T) {
+		ch := make(chan struct{})
+		defer close(ch)
+		fakeController := newFakeController(t)
+		defer fakeController.mockController.Finish()
+		assert.Equal(t, 0, fakeController.queue.Len())
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		watcher, err := fakeController.kubeClient.CertificatesV1().CertificateSigningRequests().Watch(ctx, metav1.ListOptions{})
+		require.NoError(t, err)
+		defer watcher.Stop()
+		// start a fake signer in background to sign CSRs.
+		go func() {
+			for ev := range watcher.ResultChan() {
+				switch ev.Type {
+				case watch.Added:
+					csr, ok := ev.Object.(*certificatesv1.CertificateSigningRequest)
+					assert.True(t, ok)
+					signCSR(t, fakeController, csr, time.Hour*24)
+				}
+			}
+		}()
+		originalRotateCertificate := fakeController.rotateCertificate
+		newCertDst := filepath.Join(fakeController.certificateFolderPath, "newcert.crt")
+		newKeyDst := filepath.Join(fakeController.certificateFolderPath, "newkey.key")
+		fakeController.rotateCertificate = func() (*certificateKeyPair, error) {
+			pair, err := originalRotateCertificate()
+			assert.NoError(t, err)
+			os.Link(pair.certificatePath, newCertDst)
+			os.Link(pair.privateKeyPath, newKeyDst)
+			pair.certificatePath = newCertDst
+			pair.privateKeyPath = newKeyDst
+			return pair, nil
+		}
+		// should configure OVS properly in syncConfigurations()
+		expectedOVSConfig := map[string]interface{}{
+			"certificate": newCertDst,
+			"private_key": newKeyDst,
+			"ca_cert":     caCertificatePath,
+		}
+		fakeController.mockBridgeClient.EXPECT().UpdateOVSOtherConfig(expectedOVSConfig)
+		// syncConfigurations should not block and get signed certificates from CSR successfully.
+		err = fakeController.syncConfigurations()
+		assert.NoError(t, err)
+		list, err := fakeController.kubeClient.CertificatesV1().CertificateSigningRequests().List(context.TODO(), metav1.ListOptions{})
+		require.NoError(t, err)
+		assert.Len(t, list.Items, 1)
+		assert.NotEmpty(t, fakeController.caPath)
+
+		rotationDeadline := fakeController.certificateKeyPair.nextRotationDeadline()
+		assert.False(t, rotationDeadline.IsZero())
+		fakeController.rotateCertificate = func() (*certificateKeyPair, error) {
+			t.Error("unexpected call rotateCertificate")
+			return nil, nil
+		}
+		fakeController.mockBridgeClient.EXPECT().UpdateOVSOtherConfig(expectedOVSConfig)
+		// syncConfigurations again should not request new certificates.
+		err = fakeController.syncConfigurations()
+		assert.NoError(t, err)
+		// rotation deadline should not be changed.
+		assert.Equal(t, fakeController.certificateKeyPair.nextRotationDeadline(), rotationDeadline)
+	})
+}
+
+func TestController_RotateCertificates(t *testing.T) {
+	ch := make(chan struct{})
+	defer close(ch)
+	fakeController := newFakeController(t)
+	defer fakeController.mockController.Finish()
+	assert.Equal(t, 0, fakeController.queue.Len())
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	watcher, err := fakeController.kubeClient.CertificatesV1().CertificateSigningRequests().Watch(ctx, metav1.ListOptions{})
+	defer watcher.Stop()
+	require.NoError(t, err)
+	// start a fake signer in background to sign CSRs.
+	signCh := make(chan struct{})
+	go func() {
+		defer close(signCh)
+		counter := 0
+		for ev := range watcher.ResultChan() {
+			switch ev.Type {
+			case watch.Added:
+				csr, ok := ev.Object.(*certificatesv1.CertificateSigningRequest)
+				assert.True(t, ok)
+				// issue a certificate with lifetime of 10 seconds.
+				signCSR(t, fakeController, csr, time.Second*10)
+				counter++
+				if counter == 2 {
+					return
+				}
+			}
+		}
+	}()
+	fakeController.mockBridgeClient.EXPECT().GetOVSOtherConfig().Times(1)
+	fakeController.mockBridgeClient.EXPECT().UpdateOVSOtherConfig(gomock.Any()).MinTimes(1)
+	go fakeController.Run(ch)
+	// wait for the signer to finish signing two CSRs.
+	<-signCh
+	list, err := fakeController.kubeClient.CertificatesV1().CertificateSigningRequests().List(context.TODO(), metav1.ListOptions{})
+	assert.NoError(t, err)
+	assert.Len(t, list.Items, 2)
+	delta := list.Items[0].CreationTimestamp.Sub(list.Items[1].CreationTimestamp.Time)
+	if delta < 0 {
+		delta = -delta
+	}
+	// the rotation interval should be in [7s, 9s], but it takes time to process the CSR request,
+	// so add one second to the upper bound.
+	assert.Less(t, delta, time.Second*10)
+	assert.LessOrEqual(t, time.Second*7, delta)
+}
+
+func newIPsecCertTemplate(t *testing.T, nodeName string, notBefore, notAfter time.Time) *x509.Certificate {
+	return &x509.Certificate{
+		Subject: pkix.Name{
+			CommonName:   nodeName,
+			Organization: []string{"antrea.io"},
+		},
+		SignatureAlgorithm:    x509.SHA512WithRSA,
+		NotBefore:             notBefore,
+		NotAfter:              notAfter,
+		SerialNumber:          big.NewInt(12345),
+		DNSNames:              []string{nodeName},
+		BasicConstraintsValid: true,
+		ExtKeyUsage: []x509.ExtKeyUsage{
+			x509.ExtKeyUsageIPSECTunnel,
+		},
+	}
+}
+
+func createCertificate(t *testing.T, nodeName string, caCert *x509.Certificate, caKey crypto.Signer,
+	publicKey crypto.PublicKey, notBefore time.Time, expirationDuration time.Duration) []byte {
+	template := newIPsecCertTemplate(t, nodeName, notBefore, notBefore.Add(expirationDuration))
+	derBytes, err := x509.CreateCertificate(rand.Reader, template, caCert, publicKey, caKey)
+	require.NoError(t, err)
+	certs, err := x509.ParseCertificates(derBytes)
+	require.NoError(t, err)
+	assert.Len(t, certs, 1)
+	encoded, err := certutil.EncodeCertificates(certs...)
+	require.NoError(t, err)
+	return encoded
+}
+
+func signCSR(t *testing.T, controller *fakeController,
+	csr *certificatesv1.CertificateSigningRequest, expirationDuration time.Duration) {
+	assert.Empty(t, csr.Status.Certificate)
+	// use the CreationTimestamp as the NotBefore field of issued certificates for testing.
+	assert.False(t, csr.CreationTimestamp.IsZero())
+	block, remain := pem.Decode(csr.Spec.Request)
+	assert.Empty(t, remain)
+	req, err := x509.ParseCertificateRequest(block.Bytes)
+	assert.NoError(t, err)
+	newCert := createCertificate(t, req.Subject.CommonName, controller.caCert,
+		controller.caKey, req.PublicKey, csr.CreationTimestamp.Time, expirationDuration)
+	toUpdate := csr.DeepCopy()
+	toUpdate.Status.Conditions = append(toUpdate.Status.Conditions, certificatesv1.CertificateSigningRequestCondition{
+		Type:   certificatesv1.CertificateApproved,
+		Status: corev1.ConditionTrue,
+	})
+	toUpdate, err = controller.kubeClient.CertificatesV1().CertificateSigningRequests().
+		UpdateApproval(context.TODO(), csr.Name, toUpdate, metav1.UpdateOptions{})
+	assert.NoError(t, err)
+
+	toUpdate = toUpdate.DeepCopy()
+	toUpdate.Status.Certificate = newCert
+	_, err = controller.kubeClient.CertificatesV1().CertificateSigningRequests().
+		UpdateStatus(context.TODO(), toUpdate, metav1.UpdateOptions{})
+	assert.NoError(t, err)
+}
+
+func Test_jitteryDuration(t *testing.T) {
+	tests := []struct {
+		name                                   string
+		duration                               time.Duration
+		expectedLowerBound, expectedUpperBound time.Duration
+	}{
+		{
+			name:               "10 seconds",
+			duration:           10 * time.Second,
+			expectedLowerBound: 7 * time.Second,
+			expectedUpperBound: 9 * time.Second,
+		}, {
+			name:               "10 minutes",
+			duration:           10 * time.Minute,
+			expectedLowerBound: 7 * time.Minute,
+			expectedUpperBound: 9 * time.Minute,
+		},
+		{
+			name:               "10 hours",
+			duration:           10 * time.Hour,
+			expectedLowerBound: 7 * time.Hour,
+			expectedUpperBound: 9 * time.Hour,
+		},
+		{
+			name:               "10 days",
+			duration:           10 * time.Hour * 24,
+			expectedLowerBound: 7 * time.Hour * 24,
+			expectedUpperBound: 9 * time.Hour * 24,
+		},
+		{
+			name:               "100 days",
+			duration:           100 * time.Hour * 24,
+			expectedLowerBound: 70 * time.Hour * 24,
+			expectedUpperBound: 90 * time.Hour * 24,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			d := jitteryDuration(tt.duration)
+			assert.LessOrEqual(t, tt.expectedLowerBound, d)
+			assert.LessOrEqual(t, d, tt.expectedUpperBound)
+		})
+	}
+}
+
+func Test_certificateKeyPair_nextRotationDeadline(t *testing.T) {
+	tests := []struct {
+		name                       string
+		notBefore, notAfter        string
+		deadlineStart, deadlineEnd string
+	}{
+		{
+			name:          "10 hours certificate should be rotated at [notBefore + 7h, notBefore + 9h]",
+			notBefore:     "2022-05-20T00:00:00Z",
+			notAfter:      "2022-05-20T10:00:00Z",
+			deadlineStart: "2022-05-20T07:00:00Z",
+			deadlineEnd:   "2022-05-20T09:00:00Z",
+		},
+		{
+			name:          "10 days certificate should be rotated at [notBefore + 7d, notBefore + 9d]",
+			notBefore:     "2022-05-20T00:00:00Z",
+			notAfter:      "2022-05-30T00:00:00Z",
+			deadlineStart: "2022-05-27T00:00:00Z",
+			deadlineEnd:   "2022-05-29T00:00:00Z",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			before, err := time.Parse(time.RFC3339, tt.notBefore)
+			require.NoError(t, err)
+			after, err := time.Parse(time.RFC3339, tt.notAfter)
+			require.NoError(t, err)
+			pair := &certificateKeyPair{
+				certificate: []*x509.Certificate{{
+					NotBefore: before,
+					NotAfter:  after,
+				}},
+			}
+			deadline := pair.nextRotationDeadline()
+			expectedDeadlineStart, err := time.Parse(time.RFC3339, tt.deadlineStart)
+			require.NoError(t, err)
+			expectedDeadlineEnd, err := time.Parse(time.RFC3339, tt.deadlineEnd)
+			require.NoError(t, err)
+			assert.False(t, deadline.Before(expectedDeadlineStart))
+			assert.False(t, expectedDeadlineEnd.Before(deadline))
+			newDeadline := pair.nextRotationDeadline()
+			assert.Equal(t, deadline, newDeadline, "rotation deadline should not change")
+		})
+	}
+}

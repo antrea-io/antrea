@@ -33,6 +33,7 @@ import (
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 	"antrea.io/antrea/pkg/util/env"
 	"antrea.io/antrea/pkg/util/flowexport"
+	"antrea.io/antrea/pkg/util/ip"
 )
 
 const (
@@ -47,6 +48,7 @@ const (
 	defaultFlowPollInterval        = 5 * time.Second
 	defaultActiveFlowExportTimeout = 30 * time.Second
 	defaultIdleFlowExportTimeout   = 15 * time.Second
+	defaultIGMPQueryInterval       = 125 * time.Second
 	defaultStaleConnectionTimeout  = 5 * time.Minute
 	defaultNPLPortRange            = "61000-62000"
 )
@@ -68,8 +70,11 @@ type Options struct {
 	idleFlowTimeout time.Duration
 	// Stale connection timeout to delete connections if they are not exported.
 	staleConnectionTimeout time.Duration
+	igmpQueryInterval      time.Duration
 	nplStartPort           int
 	nplEndPort             int
+
+	dnsServerOverride string
 }
 
 func newOptions() *Options {
@@ -115,9 +120,19 @@ func (o *Options) validate(args []string) error {
 	if o.config.OVSDatapathType != string(ovsconfig.OVSDatapathSystem) && o.config.OVSDatapathType != string(ovsconfig.OVSDatapathNetdev) {
 		return fmt.Errorf("OVS datapath type %s is not supported", o.config.OVSDatapathType)
 	}
+	if o.config.OVSDatapathType == string(ovsconfig.OVSDatapathNetdev) {
+		klog.Info("OVS 'netdev' datapath is not fully supported at the moment")
+	}
 	ok, encapMode := config.GetTrafficEncapModeFromStr(o.config.TrafficEncapMode)
 	if !ok {
 		return fmt.Errorf("TrafficEncapMode %s is unknown", o.config.TrafficEncapMode)
+	}
+	ok, ipsecAuthMode := config.GetIPsecAuthenticationModeFromStr(o.config.IPsec.AuthenticationMode)
+	if !ok {
+		return fmt.Errorf("IPsec AuthenticationMode %s is unknown", o.config.IPsec.AuthenticationMode)
+	}
+	if ipsecAuthMode == config.IPsecAuthenticationModeCert && !features.DefaultFeatureGate.Enabled(features.IPsecCertAuth) {
+		return fmt.Errorf("IPsec AuthenticationMode %s requires feature gate %s to be enabled", o.config.TrafficEncapMode, features.IPsecCertAuth)
 	}
 
 	// Check if the enabled features are supported on the OS.
@@ -158,6 +173,9 @@ func (o *Options) validate(args []string) error {
 	if err := o.validateFlowExporterConfig(); err != nil {
 		return fmt.Errorf("failed to validate flow exporter config: %v", err)
 	}
+	if err := o.validateMulticastConfig(); err != nil {
+		return fmt.Errorf("failed to validate multicast config: %v", err)
+	}
 	if features.DefaultFeatureGate.Enabled(features.Egress) {
 		for _, cidr := range o.config.Egress.ExceptCIDRs {
 			_, _, err := net.ParseCIDR(cidr)
@@ -165,6 +183,11 @@ func (o *Options) validate(args []string) error {
 				return fmt.Errorf("Egress Except CIDR %s is invalid", cidr)
 			}
 		}
+	}
+	if (features.DefaultFeatureGate.Enabled(features.Multicluster) || o.config.Multicluster.Enable) &&
+		encapMode != config.TrafficEncapModeEncap {
+		// Only Encap mode is supported for Multi-cluster feature.
+		return fmt.Errorf("Multicluster is only applicable to the %s mode", config.TrafficEncapModeEncap)
 	}
 	if features.DefaultFeatureGate.Enabled(features.NodePortLocal) {
 		startPort, endPort, err := parsePortRange(o.config.NodePortLocal.PortRange)
@@ -178,6 +201,15 @@ func (o *Options) validate(args []string) error {
 	}
 	if err := o.validateAntreaIPAMConfig(); err != nil {
 		return fmt.Errorf("failed to validate AntreaIPAM config: %v", err)
+	}
+
+	if o.config.DNSServerOverride != "" {
+		hostPort := ip.AppendPortIfMissing(o.config.DNSServerOverride, "53")
+		_, _, err := net.SplitHostPort(hostPort)
+		if err != nil {
+			return fmt.Errorf("dnsServerOverride %s is invalid: %v", o.config.DNSServerOverride, err)
+		}
+		o.dnsServerOverride = hostPort
 	}
 	return nil
 }
@@ -242,6 +274,9 @@ func (o *Options) setDefaults() {
 	if o.config.WireGuard.Port == 0 {
 		o.config.WireGuard.Port = apis.WireGuardListenPort
 	}
+	if o.config.IPsec.AuthenticationMode == "" {
+		o.config.IPsec.AuthenticationMode = config.IPsecAuthenticationModePSK.String()
+	}
 
 	if features.DefaultFeatureGate.Enabled(features.FlowExporter) {
 		if o.config.FlowCollectorAddr == "" {
@@ -266,6 +301,12 @@ func (o *Options) setDefaults() {
 			o.config.NodePortLocal.PortRange = o.config.NPLPortRange
 		default:
 			o.config.NodePortLocal.PortRange = defaultNPLPortRange
+		}
+	}
+
+	if features.DefaultFeatureGate.Enabled(features.Multicast) {
+		if o.config.Multicast.IGMPQueryInterval == "" {
+			o.igmpQueryInterval = defaultIGMPQueryInterval
 		}
 	}
 }
@@ -348,13 +389,29 @@ func (o *Options) validateFlowExporterConfig() error {
 	return nil
 }
 
+func (o *Options) validateMulticastConfig() error {
+	if features.DefaultFeatureGate.Enabled(features.Multicast) {
+		var err error
+		if o.config.Multicast.IGMPQueryInterval != "" {
+			o.igmpQueryInterval, err = time.ParseDuration(o.config.Multicast.IGMPQueryInterval)
+			if err != nil {
+				return err
+			}
+		}
+		if len(o.config.Multicast.MulticastInterfaces) == 0 && len(o.config.MulticastInterfaces) > 0 {
+			klog.InfoS("The multicastInterfaces option is deprecated, please use multicast.multicastInterfaces instead")
+			o.config.Multicast.MulticastInterfaces = o.config.MulticastInterfaces
+		}
+	}
+	return nil
+}
+
 func (o *Options) validateAntreaIPAMConfig() error {
 	if !o.config.EnableBridgingMode {
 		return nil
 	}
 	if !features.DefaultFeatureGate.Enabled(features.AntreaIPAM) {
-		klog.InfoS("The enableBridgingMode option is set to true, but it will be ignored because the AntreaIPAM feature gate is disabled")
-		return nil
+		return fmt.Errorf("AntreaIPAM feature gate must be enabled to configure bridging mode")
 	}
 	// Bridging mode will connect uplink to OVS bridge, which is not compatible with OVSDatapathSystem 'netdev'.
 	if o.config.OVSDatapathType != string(ovsconfig.OVSDatapathSystem) {

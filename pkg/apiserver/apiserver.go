@@ -50,6 +50,7 @@ import (
 	"antrea.io/antrea/pkg/apiserver/registry/networkpolicy/networkpolicy"
 	"antrea.io/antrea/pkg/apiserver/registry/stats/antreaclusternetworkpolicystats"
 	"antrea.io/antrea/pkg/apiserver/registry/stats/antreanetworkpolicystats"
+	"antrea.io/antrea/pkg/apiserver/registry/stats/multicastgroup"
 	"antrea.io/antrea/pkg/apiserver/registry/stats/networkpolicystats"
 	"antrea.io/antrea/pkg/apiserver/registry/system/controllerinfo"
 	"antrea.io/antrea/pkg/apiserver/registry/system/supportbundle"
@@ -69,6 +70,9 @@ var (
 	// Codecs provides methods for retrieving codecs and serializers for specific
 	// versions and content types.
 	Codecs = serializer.NewCodecFactory(Scheme)
+	// ParameterCodec defines methods for serializing and deserializing url values
+	// to versioned API objects and back.
+	parameterCodec = runtime.NewParameterCodec(Scheme)
 	// #nosec G101: false positive triggered by variable name which includes "token"
 	TokenPath = "/var/run/antrea/apiserver/loopback-client-token"
 )
@@ -111,14 +115,14 @@ type APIServer struct {
 	caCertController *certificate.CACertController
 }
 
-func (s *APIServer) Run(stopCh <-chan struct{}) error {
+func (s *APIServer) Run(ctx context.Context) error {
 	// Make sure CACertController runs once to publish the CA cert before starting APIServer.
-	if err := s.caCertController.RunOnce(); err != nil {
+	if err := s.caCertController.RunOnce(ctx); err != nil {
 		klog.Warningf("caCertController RunOnce failed: %v", err)
 	}
-	go s.caCertController.Run(1, stopCh)
+	go s.caCertController.Run(ctx, 1)
 
-	return s.GenericAPIServer.PrepareRun().Run(stopCh)
+	return s.GenericAPIServer.PrepareRun().Run(ctx.Done())
 }
 
 type completedConfig struct {
@@ -169,7 +173,7 @@ func installAPIGroup(s *APIServer, c completedConfig) error {
 	groupAssociationStorage := groupassociation.NewREST(c.extraConfig.networkPolicyController)
 	nodeStatsSummaryStorage := nodestatssummary.NewREST(c.extraConfig.statsAggregator)
 	egressGroupStorage := egressgroup.NewREST(c.extraConfig.egressGroupStore)
-	cpGroup := genericapiserver.NewDefaultAPIGroupInfo(controlplane.GroupName, Scheme, metav1.ParameterCodec, Codecs)
+	cpGroup := genericapiserver.NewDefaultAPIGroupInfo(controlplane.GroupName, Scheme, parameterCodec, Codecs)
 	cpv1beta2Storage := map[string]rest.Storage{}
 	cpv1beta2Storage["addressgroups"] = addressGroupStorage
 	cpv1beta2Storage["appliedtogroups"] = appliedToGroupStorage
@@ -194,9 +198,11 @@ func installAPIGroup(s *APIServer, c completedConfig) error {
 	statsStorage["networkpolicystats"] = networkpolicystats.NewREST(c.extraConfig.statsAggregator)
 	statsStorage["antreaclusternetworkpolicystats"] = antreaclusternetworkpolicystats.NewREST(c.extraConfig.statsAggregator)
 	statsStorage["antreanetworkpolicystats"] = antreanetworkpolicystats.NewREST(c.extraConfig.statsAggregator)
+	statsStorage["multicastgroups"] = multicastgroup.NewREST(c.extraConfig.statsAggregator)
 	statsGroup.VersionedResourcesStorageMap["v1alpha1"] = statsStorage
 
 	groups := []*genericapiserver.APIGroupInfo{&cpGroup, &systemGroup, &statsGroup}
+
 	for _, apiGroupInfo := range groups {
 		if err := s.GenericAPIServer.InstallAPIGroup(apiGroupInfo); err != nil {
 			return err

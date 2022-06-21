@@ -23,7 +23,8 @@ import (
 
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/component-base/logs"
+
+	"antrea.io/antrea/pkg/log"
 )
 
 var (
@@ -32,28 +33,24 @@ var (
 )
 
 func main() {
-	logs.InitLogs()
-	defer logs.FlushLogs()
-
 	command := newControllerCommand()
+	flags := command.PersistentFlags()
+	opts.addFlags(flags)
+	log.AddFlags(flags)
 	command.AddCommand(newLeaderCommand())
 	command.AddCommand(newMemberCommand())
 
 	if err := command.Execute(); err != nil {
-		logs.FlushLogs()
 		os.Exit(1)
 	}
 }
 
 func newControllerCommand() *cobra.Command {
-	cmd := &cobra.Command{
+	return &cobra.Command{
 		Use:  "antrea-mc-controller",
 		Long: "The Antrea MultiCluster Controller.",
 		Run: func(cmd *cobra.Command, args []string) {
 			fmt.Println("Error: must be run in leader or member mode")
 		},
 	}
-	flags := cmd.PersistentFlags()
-	opts.addFlags(flags)
-	return cmd
 }

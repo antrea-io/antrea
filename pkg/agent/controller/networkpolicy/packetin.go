@@ -17,6 +17,7 @@ package networkpolicy
 import (
 	"errors"
 	"fmt"
+	"net"
 	"time"
 
 	"antrea.io/libOpenflow/openflow13"
@@ -77,7 +78,7 @@ func getMatchRegField(matchers *ofctrl.Matchers, field *binding.RegField) *ofctr
 func getMatch(matchers *ofctrl.Matchers, tableID uint8, disposition uint32) *ofctrl.MatchField {
 	// Get match from CNPDenyConjIDReg if disposition is Drop or Reject.
 	if disposition == openflow.DispositionDrop || disposition == openflow.DispositionRej {
-		return getMatchRegField(matchers, openflow.CNPDenyConjIDField)
+		return getMatchRegField(matchers, openflow.CNPConjIDField)
 	}
 	// Get match from ingress/egress reg if disposition is Allow or Pass.
 	for _, table := range append(openflow.GetAntreaPolicyEgressTables(), openflow.EgressRuleTable) {
@@ -117,13 +118,11 @@ func (c *Controller) storeDenyConnection(pktIn *ofctrl.PacketIn) error {
 		DestinationPort: packet.DestinationPort,
 		Protocol:        packet.IPProto,
 	}
-	if packet.IsIPv6 {
-		tuple.SourceAddress = packet.SourceIP.To16()
-		tuple.DestinationAddress = packet.DestinationIP.To16()
-	} else {
-		tuple.SourceAddress = packet.SourceIP.To4()
-		tuple.DestinationAddress = packet.DestinationIP.To4()
-	}
+	// Make deep copy of IP addresses
+	tuple.SourceAddress = make(net.IP, len(packet.SourceIP))
+	tuple.DestinationAddress = make(net.IP, len(packet.DestinationIP))
+	copy(tuple.SourceAddress, packet.SourceIP)
+	copy(tuple.DestinationAddress, packet.DestinationIP)
 
 	// Generate deny connection and add to deny connection store
 	denyConn := flowexporter.Connection{}
@@ -160,6 +159,9 @@ func (c *Controller) storeDenyConnection(pktIn *ofctrl.PacketIn) error {
 		rule := c.GetRuleByFlowID(ruleID)
 		if policy == nil || rule == nil {
 			klog.V(4).Infof("Cannot find NetworkPolicy or rule that has ruleID %v", ruleID)
+			// Ignore the connection if there is no matching NetworkPolicy or rule: the
+			// NetworkPolicy must have been deleted or updated.
+			return nil
 		}
 		// Get name and namespace for Antrea Network Policy or Antrea Cluster Network Policy
 		if isAntreaPolicyIngressTable(tableID) {

@@ -19,6 +19,7 @@ package util
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -46,6 +47,8 @@ const (
 
 	MetricDefault = 256
 	MetricHigh    = 50
+
+	AntreaNatName = "antrea-nat"
 )
 
 type Route struct {
@@ -172,7 +175,17 @@ func EnableIPForwarding(ifaceName string) error {
 }
 
 func RenameVMNetworkAdapter(networkName string, macStr, newName string, renameNetAdapter bool) error {
-	cmd := fmt.Sprintf(`$name=$(Get-VMNetworkAdapter -ManagementOS -ComputerName "$(hostname)" -SwitchName "%s" | ? MacAddress -EQ "%s").Name; Rename-VMNetworkAdapter -ManagementOS -ComputerName "$(hostname)" -Name "$name" -NewName "%s"`, networkName, macStr, newName)
+	cmd := fmt.Sprintf(`Get-VMNetworkAdapter -ManagementOS -ComputerName "$(hostname)" -SwitchName "%s" | ? MacAddress -EQ "%s" | Select-Object -Property Name | Format-Table -HideTableHeaders`, networkName, macStr)
+	stdout, err := ps.RunCommand(cmd)
+	if err != nil {
+		return err
+	}
+	stdout = strings.TrimSpace(stdout)
+	if len(stdout) == 0 {
+		return fmt.Errorf("unable to find vmnetwork adapter configured with uplink MAC address %s", macStr)
+	}
+	vmNetworkAdapterName := stdout
+	cmd = fmt.Sprintf(`Get-VMNetworkAdapter -ManagementOS -ComputerName "$(hostname)" -Name "%s" | Rename-VMNetworkAdapter -NewName "%s"`, vmNetworkAdapterName, newName)
 	if _, err := ps.RunCommand(cmd); err != nil {
 		return err
 	}
@@ -385,15 +398,15 @@ func PrepareHNSNetwork(subnetCIDR *net.IPNet, nodeIPNet *net.IPNet, uplinkAdapte
 		}
 	}()
 
-	vNicName := VirtualAdapterName(uplinkAdapter.Name)
-	index, found, err := adapterIPExists(nodeIPNet.IP, vNicName)
+	adapter, ipFound, err := adapterIPExists(nodeIPNet.IP, uplinkAdapter.HardwareAddr, ContainerVNICPrefix)
 	if err != nil {
 		return err
 	}
-	// By default, "found" should be true after Windows creates the HNSNetwork. The following check is for some corner
+	vNicName, index := adapter.Name, adapter.Index
+	// By default, "ipFound" should be true after Windows creates the HNSNetwork. The following check is for some corner
 	// cases that Windows fails to move the physical adapter's IP address to the virtual network adapter, e.g., DHCP
 	// Server fails to allocate IP to new virtual network.
-	if !found {
+	if !ipFound {
 		klog.InfoS("Moving uplink configuration to the management virtual network adapter", "adapter", vNicName)
 		if err := ConfigureInterfaceAddressWithDefaultGateway(vNicName, nodeIPNet, nodeGateway); err != nil {
 			klog.ErrorS(err, "Failed to configure IP and gateway on the management virtual network adapter", "adapter", vNicName, "ip", nodeIPNet.String())
@@ -443,19 +456,35 @@ func PrepareHNSNetwork(subnetCIDR *net.IPNet, nodeIPNet *net.IPNet, uplinkAdapte
 	return nil
 }
 
-func adapterIPExists(ip net.IP, adapter string) (int, bool, error) {
-	iface, err := net.InterfaceByName(adapter)
+// adapterIPExists finds the network adapter configured with the provided IP, MAC and its name has the given prefix.
+// If "namePrefix" is empty, it returns the first network adapter with the provided IP and MAC.
+// It returns true if the IP is found on the adapter, otherwise it returns false.
+func adapterIPExists(ip net.IP, mac net.HardwareAddr, namePrefix string) (*net.Interface, bool, error) {
+	adapters, err := net.Interfaces()
 	if err != nil {
-		return 0, false, err
+		return nil, false, err
 	}
-	cmd := fmt.Sprintf(`Get-NetIPAddress -IPAddress %s -InterfaceIndex %d`, ip.String(), iface.Index)
-	if _, err = ps.RunCommand(cmd); err != nil {
-		if strings.Contains(err.Error(), "No matching MSFT_NetIPAddress objects found") {
-			return iface.Index, false, nil
+	ipExists := false
+	for _, adapter := range adapters {
+		if bytes.Equal(adapter.HardwareAddr, mac) {
+			if namePrefix == "" || strings.Contains(adapter.Name, namePrefix) {
+				addrList, err := adapter.Addrs()
+				if err != nil {
+					return nil, false, err
+				}
+				for _, addr := range addrList {
+					if ipNet, ok := addr.(*net.IPNet); ok {
+						if ipNet.IP.Equal(ip) {
+							ipExists = true
+							break
+						}
+					}
+				}
+				return &adapter, ipExists, nil
+			}
 		}
-		return 0, false, err
 	}
-	return iface.Index, true, nil
+	return nil, false, fmt.Errorf("unable to find a network adapter with MAC %s, IP %s, and name prefix %s", mac.String(), ip.String(), namePrefix)
 }
 
 // EnableRSCOnVSwitch enables RSC in the vSwitch to reduce host CPU utilization and increase throughput for virtual
@@ -673,6 +702,7 @@ func NewNetNat(netNatName string, subnetCIDR *net.IPNet) error {
 		}
 	} else {
 		if strings.Contains(internalNet, subnetCIDR.String()) {
+			klog.InfoS("existing netnat in CIDR", "name", internalNet, "subnetCIDR", subnetCIDR.String())
 			return nil
 		}
 		klog.InfoS("Removing the existing netnat", "name", netNatName, "internalIPInterfaceAddressPrefix", internalNet)
@@ -754,8 +784,37 @@ func RemoveNetNatStaticMapping(netNatName string, externalIPAddr string, externa
 	return RemoveNetNatStaticMappingByID(netNatName, id)
 }
 
+func RemoveNetNatStaticMappingByNPLTuples(netNatName string, externalIPAddr string, externalPort uint16, internalIPAddr string, internalPort uint16, proto string) error {
+	staticMappingStr, err := GetNetNatStaticMapping(netNatName, externalIPAddr, externalPort, proto)
+	if err != nil {
+		return err
+	}
+	parsed := parseGetNetCmdResult(staticMappingStr, 6)
+	if len(parsed) > 0 {
+		items := parsed[0]
+		if items[4] == internalIPAddr && items[5] == strconv.Itoa(int(internalPort)) {
+			firstCol := strings.Split(items[0], ";")
+			id, err := strconv.Atoi(firstCol[1])
+			if err != nil {
+				return err
+			}
+			if err := RemoveNetNatStaticMappingByID(netNatName, id); err != nil {
+				return err
+			}
+			return nil
+		}
+	}
+	return nil
+}
+
 func RemoveNetNatStaticMappingByID(netNatName string, id int) error {
 	cmd := fmt.Sprintf("Remove-NetNatStaticMapping -NatName %s -StaticMappingID %d -Confirm:$false", netNatName, id)
+	_, err := ps.RunCommand(cmd)
+	return err
+}
+
+func RemoveNetNatStaticMappingByNAME(netNatName string) error {
+	cmd := fmt.Sprintf("Remove-NetNatStaticMapping -NatName %s -Confirm:$false", netNatName)
 	_, err := ps.RunCommand(cmd)
 	return err
 }

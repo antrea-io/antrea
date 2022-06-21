@@ -28,21 +28,19 @@ const (
 )
 
 type CNIPodInfoCache struct {
+	// Mutex to protect CNIConfigInfo.PodCNIDeleted which is written by CNIServer, and read by
+	// the secondary network Pod controller.
 	sync.RWMutex
 	cache cache.Indexer
 }
 
 // Add CNIPodInfo to local cache store.
 func (c *CNIPodInfoCache) AddCNIConfigInfo(CNIConfig *CNIConfigInfo) {
-	c.Lock()
-	defer c.Unlock()
 	c.cache.Add(CNIConfig)
 }
 
 // Delete CNIPodInfo from local cache store.
 func (c *CNIPodInfoCache) DeleteCNIConfigInfo(CNIConfig *CNIConfigInfo) {
-	c.Lock()
-	defer c.Unlock()
 	c.cache.Delete(CNIConfig)
 }
 
@@ -54,9 +52,9 @@ func (c *CNIPodInfoCache) SetPodCNIDeleted(CNIConfig *CNIConfigInfo) {
 
 // Retrieve a valid CNI cache (PodCNIDeleted is not true) entry for the given Pod name and namespace.
 func (c *CNIPodInfoCache) GetValidCNIConfigInfoPerPod(podName, podNamespace string) *CNIConfigInfo {
+	podObjs, _ := c.cache.ByIndex(podIndex, k8s.NamespacedName(podNamespace, podName))
 	c.RLock()
 	defer c.RUnlock()
-	podObjs, _ := c.cache.ByIndex(podIndex, k8s.NamespacedName(podNamespace, podName))
 	for i := range podObjs {
 		var cniPodConfig *CNIConfigInfo
 		cniPodConfig = podObjs[i].(*CNIConfigInfo)
@@ -70,8 +68,6 @@ func (c *CNIPodInfoCache) GetValidCNIConfigInfoPerPod(podName, podNamespace stri
 // Retrieve all CNIConfigInfo from cacheStore for the given podName and its Namespace
 // NOTE: In an ideal scenario, there should be one cache entry per Pod name and namespace.
 func (c *CNIPodInfoCache) GetAllCNIConfigInfoPerPod(podName, podNamespace string) []*CNIConfigInfo {
-	c.RLock()
-	defer c.RUnlock()
 	podObjs, _ := c.cache.ByIndex(podIndex, k8s.NamespacedName(podNamespace, podName))
 	CNIPodConfigs := make([]*CNIConfigInfo, len(podObjs))
 	for i := range podObjs {
@@ -81,8 +77,6 @@ func (c *CNIPodInfoCache) GetAllCNIConfigInfoPerPod(podName, podNamespace string
 }
 
 func (c *CNIPodInfoCache) GetCNIConfigInfoByContainerID(podName, podNamespace, containerID string) *CNIConfigInfo {
-	c.RLock()
-	defer c.RUnlock()
 	podObjs, _ := c.cache.ByIndex(podIndex, k8s.NamespacedName(podNamespace, podName))
 	for i := range podObjs {
 		var cniPodConfig *CNIConfigInfo

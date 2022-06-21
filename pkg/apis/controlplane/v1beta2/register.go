@@ -71,6 +71,7 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&NetworkPolicyStatus{},
 		&NodeStatsSummary{},
 		&ClusterGroupMembers{},
+		&PaginationGetOptions{},
 		&GroupAssociation{},
 		&EgressGroup{},
 		&EgressGroupPatch{},

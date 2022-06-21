@@ -1,4 +1,4 @@
-// Copyright 2021 Antrea Authors
+// Copyright 2022 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -39,3 +39,7 @@ type ExternalIPPoolListerExpansion interface{}
 // IPPoolListerExpansion allows custom methods to be added to
 // IPPoolLister.
 type IPPoolListerExpansion interface{}
+
+// TrafficControlListerExpansion allows custom methods to be added to
+// TrafficControlLister.
+type TrafficControlListerExpansion interface{}

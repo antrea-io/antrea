@@ -1,0 +1,7 @@
+trafficEncapMode: "networkPolicyOnly"
+agent:
+  antreaAgent:
+    extraEnv:
+      # Antrea Agent needs to be aware that it is being used in EKS, as
+      # additional iptables rules may have to be installed.
+      ANTREA_CLOUD_EKS: "true"

@@ -21,12 +21,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 
 	"antrea.io/antrea/pkg/agent/config"
-	"antrea.io/antrea/pkg/apis"
 	agentconfig "antrea.io/antrea/pkg/config/agent"
 )
 
@@ -37,39 +35,32 @@ func TestWireGuard(t *testing.T) {
 	skipIfNumNodesLessThan(t, 2)
 	skipIfHasWindowsNodes(t)
 	skipIfAntreaIPAMTest(t)
-	providerIsKind := testOptions.providerName == "kind"
-	if !providerIsKind {
-		for _, node := range clusterInfo.nodes {
-			skipIfMissingKernelModule(t, node.name, []string{"wireguard"})
-		}
-	}
+
 	data, err := setupTest(t)
 	skipIfEncapModeIsNot(t, data, config.TrafficEncapModeEncap)
+	for _, node := range clusterInfo.nodes {
+		skipIfMissingKernelModule(t, data, node.name, []string{"wireguard"})
+	}
 
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
 	defer teardownTest(t, data)
 
-	if !providerIsKind {
+	ac := func(config *agentconfig.AgentConfig) {
+		config.TrafficEncryptionMode = "wireguard"
+	}
+	if err := data.mutateAntreaConfigMap(nil, ac, false, true); err != nil {
+		t.Fatalf("Failed to enable WireGuard tunnel: %v", err)
+	}
+	defer func() {
 		ac := func(config *agentconfig.AgentConfig) {
-			config.TrafficEncryptionMode = "wireguard"
+			config.TrafficEncryptionMode = "none"
 		}
 		if err := data.mutateAntreaConfigMap(nil, ac, false, true); err != nil {
-			t.Fatalf("Failed to enable WireGuard tunnel: %v", err)
+			t.Errorf("Failed to disable WireGuard tunnel: %v", err)
 		}
-		defer func() {
-			ac := func(config *agentconfig.AgentConfig) {
-				config.TrafficEncryptionMode = "none"
-			}
-			if err := data.mutateAntreaConfigMap(nil, ac, false, true); err != nil {
-				t.Fatalf("Failed to disable WireGuard tunnel: %v", err)
-			}
-		}()
-	} else {
-		data.redeployAntrea(t, deployAntreaWireGuardGo)
-		defer data.redeployAntrea(t, deployAntreaDefault)
-	}
+	}()
 
 	t.Run("testPodConnectivity", func(t *testing.T) { testPodConnectivity(t, data) })
 	t.Run("testServiceConnectivity", func(t *testing.T) { testServiceConnectivity(t, data) })
@@ -82,7 +73,7 @@ func (data *TestData) getWireGuardPeerEndpointsWithHandshake(nodeName string) ([
 		return peerEndpoints, err
 	}
 	cmd := []string{"wg"}
-	stdout, stderr, err := data.runCommandFromPod(antreaNamespace, antreaPodName, "wireguard", cmd)
+	stdout, stderr, err := data.RunCommandFromPod(antreaNamespace, antreaPodName, "wireguard", cmd)
 	if err != nil {
 		return peerEndpoints, fmt.Errorf("error when running 'wg' on '%s': %v - stdout: %s - stderr: %s", nodeName, err, stdout, stderr)
 	}
@@ -108,26 +99,10 @@ func (data *TestData) getWireGuardPeerEndpointsWithHandshake(nodeName string) ([
 }
 
 func testPodConnectivity(t *testing.T, data *TestData) {
-	podInfos, deletePods := createPodsOnDifferentNodes(t, data, testNamespace, "differentnodes")
+	podInfos, deletePods := createPodsOnDifferentNodes(t, data, data.testNamespace, "differentnodes")
 	defer deletePods()
 	numPods := 2
 	data.runPingMesh(t, podInfos[:numPods], agnhostContainerName)
-	// wg command is only available in WireGuard sidecar container.
-	if testOptions.providerName == "kind" {
-		nodeName0 := podInfos[0].nodeName
-		nodeName1 := podInfos[1].nodeName
-		endpoints, err := data.getWireGuardPeerEndpointsWithHandshake(nodeName0)
-		require.NoError(t, err)
-		t.Logf("Found peer endpoints %v with handshake established for Node '%s'", endpoints, nodeName0)
-		var nodeIP string
-		for _, n := range clusterInfo.nodes {
-			if n.name == nodeName1 {
-				nodeIP = n.ip()
-				break
-			}
-		}
-		assert.Contains(t, endpoints, fmt.Sprintf("%s:%d", nodeIP, apis.WireGuardListenPort))
-	}
 }
 
 // testServiceConnectivity verifies host-to-service can be transferred through the encrypted tunnel correctly.
@@ -138,17 +113,17 @@ func testServiceConnectivity(t *testing.T, data *TestData) {
 	// nodeIP() returns IPv6 address if this is a IPv6 cluster.
 	clientPodNodeIP := nodeIP(0)
 	serverPodNode := nodeName(1)
-	svc, cleanup := data.createAgnhostServiceAndBackendPods(t, svcName, testNamespace, serverPodNode, corev1.ServiceTypeNodePort)
+	svc, cleanup := data.createAgnhostServiceAndBackendPods(t, svcName, data.testNamespace, serverPodNode, corev1.ServiceTypeNodePort)
 	defer cleanup()
 
 	// Create the a hostNetwork Pod on a Node different from the service's backend Pod, so the service traffic will be transferred across the tunnel.
-	require.NoError(t, data.createPodOnNode(clientPodName, testNamespace, clientPodNode, busyboxImage, []string{"sleep", strconv.Itoa(3600)}, nil, nil, nil, true, nil))
-	defer data.deletePodAndWait(defaultTimeout, clientPodName, testNamespace)
-	require.NoError(t, data.podWaitForRunning(defaultTimeout, clientPodName, testNamespace))
+	require.NoError(t, data.createPodOnNode(clientPodName, data.testNamespace, clientPodNode, busyboxImage, []string{"sleep", strconv.Itoa(3600)}, nil, nil, nil, true, nil))
+	defer data.deletePodAndWait(defaultTimeout, clientPodName, data.testNamespace)
+	require.NoError(t, data.podWaitForRunning(defaultTimeout, clientPodName, data.testNamespace))
 
-	err := data.runNetcatCommandFromTestPod(clientPodName, testNamespace, svc.Spec.ClusterIP, 80)
+	err := data.runNetcatCommandFromTestPod(clientPodName, data.testNamespace, svc.Spec.ClusterIP, 80)
 	require.NoError(t, err, "Pod %s should be able to connect the service's ClusterIP %s, but was not able to connect", clientPodName, net.JoinHostPort(svc.Spec.ClusterIP, fmt.Sprint(80)))
 
-	err = data.runNetcatCommandFromTestPod(clientPodName, testNamespace, clientPodNodeIP, svc.Spec.Ports[0].NodePort)
+	err = data.runNetcatCommandFromTestPod(clientPodName, data.testNamespace, clientPodNodeIP, svc.Spec.Ports[0].NodePort)
 	require.NoError(t, err, "Pod %s should be able to connect the service's NodePort %s:%d, but was not able to connect", clientPodName, clientPodNodeIP, svc.Spec.Ports[0].NodePort)
 }

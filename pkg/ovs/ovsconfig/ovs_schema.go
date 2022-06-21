@@ -26,6 +26,11 @@ type Port struct {
 	ExternalIDs []interface{} `json:"external_ids,omitempty"`
 }
 
+type AccessPort struct {
+	Port
+	Tag uint32 `json:"tag"`
+}
+
 type Interface struct {
 	Name          string        `json:"name"`
 	Type          string        `json:"type,omitempty"`

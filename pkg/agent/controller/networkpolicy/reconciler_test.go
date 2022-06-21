@@ -103,11 +103,12 @@ func newTestReconciler(t *testing.T, controller *gomock.Controller, ifaceStore i
 	ch := make(chan string, 100)
 	groupIDAllocator := openflow.NewGroupAllocator(v6Enabled)
 	groupCounters := []proxytypes.GroupCounter{proxytypes.NewGroupCounter(groupIDAllocator, ch)}
-	r := newReconciler(ofClient, ifaceStore, newIDAllocator(testAsyncDeleteInterval), f, groupCounters, v4Enabled, v6Enabled)
+	r := newReconciler(ofClient, ifaceStore, newIDAllocator(testAsyncDeleteInterval), f, groupCounters, v4Enabled, v6Enabled, true, false)
 	return r
 }
 
 func TestReconcilerForget(t *testing.T) {
+	prepareMockTables()
 	tests := []struct {
 		name              string
 		lastRealizeds     map[string]*lastRealized
@@ -214,6 +215,7 @@ func TestReconcilerReconcile(t *testing.T) {
 	ipNet2 := newCIDR("10.20.0.0/16")
 	ipNet3 := newCIDR("10.20.1.0/24")
 	ipNet4 := newCIDR("10.20.2.0/28")
+	ipNet5 := newCIDR("234.10.10.100/32")
 	diffNet1 := newCIDR("10.20.128.0/17")
 	diffNet2 := newCIDR("10.20.64.0/18")
 	diffNet3 := newCIDR("10.20.32.0/19")
@@ -236,6 +238,9 @@ func TestReconcilerReconcile(t *testing.T) {
 			{IP: v1beta2.IPAddress(ipNet3.IP), PrefixLength: 24},
 			{IP: v1beta2.IPAddress(ipNet4.IP), PrefixLength: 28},
 		},
+	}
+	ipBlock3 := v1beta2.IPBlock{
+		CIDR: v1beta2.IPNet{IP: v1beta2.IPAddress(ipNet5.IP), PrefixLength: 32},
 	}
 
 	tests := []struct {
@@ -517,6 +522,32 @@ func TestReconcilerReconcile(t *testing.T) {
 			},
 			false,
 		},
+		{
+			"egress-rule-for-mcast-ipblocks",
+			&CompletedRule{
+				rule: &rule{
+					ID:        "egress-rule",
+					Direction: v1beta2.DirectionOut,
+					To:        v1beta2.NetworkPolicyPeer{IPBlocks: []v1beta2.IPBlock{ipBlock3}},
+					SourceRef: &np1,
+				},
+				FromAddresses: nil,
+				ToAddresses:   nil,
+				TargetMembers: appliedToGroup1,
+			},
+			[]*types.PolicyRule{
+				{
+					Direction: v1beta2.DirectionOut,
+					From:      ipsToOFAddresses(sets.NewString("2.2.2.2")),
+					To: []types.Address{
+						openflow.NewIPNetAddress(*ipNet5),
+					},
+					Service:   nil,
+					PolicyRef: &np1,
+				},
+			},
+			false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -525,7 +556,7 @@ func TestReconcilerReconcile(t *testing.T) {
 			mockOFClient := openflowtest.NewMockClient(controller)
 			// TODO: mock idAllocator and priorityAssigner
 			for i := 0; i < len(tt.expectedOFRules); i++ {
-				mockOFClient.EXPECT().InstallPolicyRuleFlows(gomock.Any())
+				mockOFClient.EXPECT().InstallPolicyRuleFlows(newPolicyRulesMatcher(tt.expectedOFRules[i]))
 			}
 			r := newTestReconciler(t, controller, ifaceStore, mockOFClient, true, false)
 			if err := r.Reconcile(tt.args); (err != nil) != tt.wantErr {
@@ -877,6 +908,37 @@ func TestReconcilerUpdate(t *testing.T) {
 			false,
 		},
 		{
+			"updating-egress-rule-with-duplicate-ip",
+			&CompletedRule{
+				rule: &rule{ID: "egress-rule", Direction: v1beta2.DirectionOut, SourceRef: &np1},
+				ToAddresses: v1beta2.NewGroupMemberSet(
+					newAddressGroupPodMember("pod1", "ns1", "1.1.1.1"),
+					newAddressGroupPodMember("pod2", "ns1", "1.1.1.1"),
+					newAddressGroupPodMember("pod3", "ns1", "1.1.1.2"),
+					newAddressGroupPodMember("pod4", "ns1", "1.1.1.2"),
+					newAddressGroupPodMember("pod5", "ns1", "1.1.1.3"),
+					newAddressGroupPodMember("pod6", "ns1", "1.1.1.3"),
+					newAddressGroupPodMember("pod7", "ns1", "1.1.1.4"),
+				),
+				TargetMembers: appliedToGroup1,
+			},
+			&CompletedRule{
+				rule: &rule{ID: "egress-rule", Direction: v1beta2.DirectionOut, SourceRef: &np1},
+				ToAddresses: v1beta2.NewGroupMemberSet(
+					newAddressGroupPodMember("pod1", "ns1", "1.1.1.1"),
+					newAddressGroupPodMember("pod5", "ns1", "1.1.1.5"),
+					newAddressGroupPodMember("pod8", "ns1", "1.1.1.4"),
+				),
+				TargetMembers: appliedToGroup2,
+			},
+			ipsToOFAddresses(sets.NewString("3.3.3.3")),
+			ipsToOFAddresses(sets.NewString("1.1.1.5")),
+			ipsToOFAddresses(sets.NewString("2.2.2.2")),
+			ipsToOFAddresses(sets.NewString("1.1.1.2", "1.1.1.3")),
+			false,
+			false,
+		},
+		{
 			"updating-egress-rule-deny-all",
 			&CompletedRule{
 				rule:          &rule{ID: "egress-rule", Direction: v1beta2.DirectionOut, SourceRef: &np1},
@@ -948,16 +1010,16 @@ func TestReconcilerUpdate(t *testing.T) {
 				mockOFClient.EXPECT().UninstallPolicyRuleFlows(gomock.Any())
 			}
 			if len(tt.expectedAddedFrom) > 0 {
-				mockOFClient.EXPECT().AddPolicyRuleAddress(gomock.Any(), types.SrcAddress, gomock.Eq(tt.expectedAddedFrom), priority)
+				mockOFClient.EXPECT().AddPolicyRuleAddress(gomock.Any(), types.SrcAddress, gomock.InAnyOrder(tt.expectedAddedFrom), priority)
 			}
 			if len(tt.expectedAddedTo) > 0 {
-				mockOFClient.EXPECT().AddPolicyRuleAddress(gomock.Any(), types.DstAddress, gomock.Eq(tt.expectedAddedTo), priority)
+				mockOFClient.EXPECT().AddPolicyRuleAddress(gomock.Any(), types.DstAddress, gomock.InAnyOrder(tt.expectedAddedTo), priority)
 			}
 			if len(tt.expectedDeletedFrom) > 0 {
-				mockOFClient.EXPECT().DeletePolicyRuleAddress(gomock.Any(), types.SrcAddress, gomock.Eq(tt.expectedDeletedFrom), priority)
+				mockOFClient.EXPECT().DeletePolicyRuleAddress(gomock.Any(), types.SrcAddress, gomock.InAnyOrder(tt.expectedDeletedFrom), priority)
 			}
 			if len(tt.expectedDeletedTo) > 0 {
-				mockOFClient.EXPECT().DeletePolicyRuleAddress(gomock.Any(), types.DstAddress, gomock.Eq(tt.expectedDeletedTo), priority)
+				mockOFClient.EXPECT().DeletePolicyRuleAddress(gomock.Any(), types.DstAddress, gomock.InAnyOrder(tt.expectedDeletedTo), priority)
 			}
 			r := newTestReconciler(t, controller, ifaceStore, mockOFClient, true, true)
 			if err := r.Reconcile(tt.originalRule); (err != nil) != tt.wantErr {
@@ -1934,6 +1996,7 @@ func newPolicyRulesMatcher(ofRule *types.PolicyRule) gomock.Matcher {
 	return policyRuleMatcher{ofPolicyRule: ofRule}
 }
 
+// Matches checks if predictable fields of *types.PolicyRule match.
 func (m policyRuleMatcher) Matches(x interface{}) bool {
 	b, ok := x.(*types.PolicyRule)
 	if !ok {
@@ -1943,7 +2006,6 @@ func (m policyRuleMatcher) Matches(x interface{}) bool {
 	if !sliceEqual(a.Service, b.Service) ||
 		!sliceEqual(a.From, b.From) ||
 		!sliceEqual(a.To, b.To) ||
-		a.TableID != b.TableID ||
 		a.PolicyRef != b.PolicyRef ||
 		a.Direction != b.Direction ||
 		a.EnableLogging != b.EnableLogging {

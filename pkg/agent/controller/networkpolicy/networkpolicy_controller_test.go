@@ -16,6 +16,7 @@ package networkpolicy
 
 import (
 	"fmt"
+	"net"
 	"strings"
 	"sync"
 	"testing"
@@ -36,6 +37,7 @@ import (
 	proxytypes "antrea.io/antrea/pkg/agent/proxy/types"
 	agenttypes "antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	"antrea.io/antrea/pkg/client/clientset/versioned"
 	"antrea.io/antrea/pkg/client/clientset/versioned/fake"
 	"antrea.io/antrea/pkg/querier"
@@ -58,8 +60,7 @@ func newTestController() (*Controller, *fake.Clientset, *mockReconciler) {
 	ch2 := make(chan string, 100)
 	groupIDAllocator := openflow.NewGroupAllocator(false)
 	groupCounters := []proxytypes.GroupCounter{proxytypes.NewGroupCounter(groupIDAllocator, ch2)}
-	controller, _ := NewNetworkPolicyController(&antreaClientGetter{clientset}, nil, nil, "node1", podUpdateChannel, groupCounters, ch2,
-		true, true, true, true, testAsyncDeleteInterval, "8.8.8.8:53", true, false)
+	controller, _ := NewNetworkPolicyController(&antreaClientGetter{clientset}, nil, nil, "node1", podUpdateChannel, groupCounters, ch2, true, true, true, false, true, testAsyncDeleteInterval, "8.8.8.8:53", true, false)
 	reconciler := newMockReconciler()
 	controller.reconciler = reconciler
 	controller.antreaPolicyLogger = nil
@@ -200,7 +201,20 @@ func newNetworkPolicyWithMultipleRules(name string, uid types.UID, from, to, app
 	}
 }
 
+func prepareMockTables() {
+	openflow.InitMockTables(
+		map[*openflow.Table]uint8{
+			openflow.AntreaPolicyEgressRuleTable:  uint8(5),
+			openflow.EgressRuleTable:              uint8(6),
+			openflow.EgressDefaultTable:           uint8(7),
+			openflow.AntreaPolicyIngressRuleTable: uint8(12),
+			openflow.IngressRuleTable:             uint8(13),
+			openflow.IngressDefaultTable:          uint8(14),
+		})
+}
+
 func TestAddSingleGroupRule(t *testing.T) {
+	prepareMockTables()
 	controller, clientset, reconciler := newTestController()
 	addressGroupWatcher := watch.NewFake()
 	appliedToGroupWatcher := watch.NewFake()
@@ -280,6 +294,7 @@ func TestAddSingleGroupRule(t *testing.T) {
 }
 
 func TestAddMultipleGroupsRule(t *testing.T) {
+	prepareMockTables()
 	controller, clientset, reconciler := newTestController()
 	addressGroupWatcher := watch.NewFake()
 	appliedToGroupWatcher := watch.NewFake()
@@ -359,6 +374,7 @@ func TestAddMultipleGroupsRule(t *testing.T) {
 }
 
 func TestDeleteRule(t *testing.T) {
+	prepareMockTables()
 	controller, clientset, reconciler := newTestController()
 	addressGroupWatcher := watch.NewFake()
 	appliedToGroupWatcher := watch.NewFake()
@@ -406,6 +422,7 @@ func TestDeleteRule(t *testing.T) {
 }
 
 func TestAddNetworkPolicyWithMultipleRules(t *testing.T) {
+	prepareMockTables()
 	controller, clientset, reconciler := newTestController()
 	addressGroupWatcher := watch.NewFake()
 	appliedToGroupWatcher := watch.NewFake()
@@ -488,6 +505,7 @@ func TestAddNetworkPolicyWithMultipleRules(t *testing.T) {
 }
 
 func TestNetworkPolicyMetrics(t *testing.T) {
+	prepareMockTables()
 	// Initialize NetworkPolicy metrics (prometheus)
 	metrics.InitializeNetworkPolicyMetrics()
 	controller, clientset, reconciler := newTestController()
@@ -601,4 +619,76 @@ func TestNetworkPolicyMetrics(t *testing.T) {
 	networkPolicyWatcher.Delete(newNetworkPolicy("policy2", "uid2", []string{}, []string{}, []string{}, nil))
 	waitForReconcilerDeleted()
 	checkNetworkPolicyMetrics()
+}
+
+func TestValidate(t *testing.T) {
+	controller, _, _ := newTestController()
+	igmpType := int32(0x12)
+	actionAllow, actionDrop := v1alpha1.RuleActionAllow, v1alpha1.RuleActionDrop
+	appliedToGroup := v1beta2.NewGroupMemberSet()
+	appliedToGroup.Insert()
+	tierPriority01 := int32(100)
+	policyPriority01 := float64(10)
+	proto := v1beta2.ProtocolIGMP
+	rule1 := &rule{
+		ID:   "rule1",
+		Name: "rule01",
+		SourceRef: &v1beta2.NetworkPolicyReference{
+			Type: v1beta2.AntreaClusterNetworkPolicy,
+		},
+		Services: []v1beta2.Service{
+			{
+				Protocol:     &proto,
+				IGMPType:     &igmpType,
+				GroupAddress: "225.1.2.3",
+			},
+		},
+		Action:          &actionAllow,
+		AppliedToGroups: []string{"appliedToGroup01"},
+		Priority:        0,
+		TierPriority:    &tierPriority01,
+		PolicyPriority:  &policyPriority01,
+		Direction:       v1beta2.DirectionOut,
+	}
+	rule2 := &rule{
+		ID:   "rule2",
+		Name: "rule02",
+		SourceRef: &v1beta2.NetworkPolicyReference{
+			Type: v1beta2.AntreaClusterNetworkPolicy,
+		},
+		Services: []v1beta2.Service{
+			{
+				Protocol:     &proto,
+				IGMPType:     &igmpType,
+				GroupAddress: "",
+			},
+		},
+		Action:          &actionDrop,
+		AppliedToGroups: []string{"appliedToGroup01"},
+		Priority:        1,
+		TierPriority:    &tierPriority01,
+		PolicyPriority:  &policyPriority01,
+		Direction:       v1beta2.DirectionOut,
+	}
+	groups := v1beta2.GroupMemberSet{}
+	groupAddress1, groupAddress2 := "225.1.2.3", "225.1.2.4"
+
+	groups["ns1/pod1"] = newAppliedToGroupMember("pod1", "ns1")
+	controller.ruleCache.appliedToSetByGroup["appliedToGroup01"] = groups
+	controller.ruleCache.rules.Add(rule1)
+	controller.ruleCache.rules.Add(rule2)
+	item, err := controller.Validate("pod1", "ns1", net.ParseIP(groupAddress1), 0x12)
+	if err != nil {
+		t.Fatalf("failed to validate group %s %v", groupAddress1, err)
+	}
+	if item.RuleAction != v1alpha1.RuleActionAllow {
+		t.Fatalf("groupAddress %s expect %v, but got %v", groupAddress1, v1alpha1.RuleActionAllow, item.RuleAction)
+	}
+	item, err = controller.Validate("pod1", "ns1", net.ParseIP(groupAddress2), 0x12)
+	if err != nil {
+		t.Fatalf("failed to validate group %s %+v", groupAddress2, err)
+	}
+	if item.RuleAction != v1alpha1.RuleActionDrop {
+		t.Fatalf("groupAddress %s expect %v, but got %v", groupAddress2, v1alpha1.RuleActionDrop, item.RuleAction)
+	}
 }

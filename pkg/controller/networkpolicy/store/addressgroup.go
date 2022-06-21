@@ -28,6 +28,8 @@ import (
 	"antrea.io/antrea/pkg/controller/types"
 )
 
+const IsNodeAddressGroupIndex = "isNodeAddressGroup"
+
 // addressGroupEvent implements storage.InternalEvent.
 type addressGroupEvent struct {
 	// The current version of the stored AddressGroup.
@@ -160,6 +162,13 @@ func NewAddressGroupStore() storage.Interface {
 			}
 			// ag.Selector.Namespace == "" means it's a cluster scoped group, we index it as it is.
 			return []string{ag.Selector.Namespace}, nil
+		},
+		IsNodeAddressGroupIndex: func(obj interface{}) ([]string, error) {
+			ag, ok := obj.(*types.AddressGroup)
+			if !ok || ag.Selector.NodeSelector == nil {
+				return []string{}, nil
+			}
+			return []string{"true"}, nil
 		},
 	}
 	return ram.NewStore(AddressGroupKeyFunc, indexers, genAddressGroupEvent, keyAndSpanSelectFunc, func() runtime.Object { return new(controlplane.AddressGroup) })

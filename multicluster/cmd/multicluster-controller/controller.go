@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -39,6 +40,7 @@ import (
 
 	multiclusterv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
 	multiclustercontrollers "antrea.io/antrea/multicluster/controllers/multicluster"
+	antreacrd "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	"antrea.io/antrea/pkg/apiserver/certificate"
 	// +kubebuilder:scaffold:imports
 )
@@ -59,6 +61,7 @@ func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(k8smcsv1alpha1.AddToScheme(scheme))
 	utilruntime.Must(multiclusterv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(antreacrd.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 }
 
@@ -131,7 +134,7 @@ func setupManagerAndCertController(o *Options) (manager.Manager, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error applying server cert: %v", err)
 	}
-	if err := caCertController.RunOnce(); err != nil {
+	if err := caCertController.RunOnce(context.TODO()); err != nil {
 		return nil, err
 	}
 

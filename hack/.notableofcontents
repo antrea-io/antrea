@@ -9,7 +9,6 @@ docs/contributors/code-generation.md
 docs/contributors/docker-desktop-alternatives.md
 docs/contributors/eks-terraform.md
 docs/contributors/github-labels.md
-docs/contributors/manual-installation.md
 docs/configuration.md
 docs/cookbooks/multus/README.md
 docs/cookbooks/multus/build/cni-dhcp-daemon/README.md
@@ -27,8 +26,12 @@ docs/maintainers/build-kubemark.md
 docs/maintainers/getting-started-gif.md
 docs/maintainers/release.md
 docs/maintainers/updating-ovs-windows.md
+docs/multicluster/api.md
+docs/multicluster/antctl.md
 docs/multicluster/architecture.md
-docs/multicluster/getting-started.md
+docs/multicluster/quick-start.md
+docs/multicluster/upgrade.md
+docs/multicluster/user-guide.md
 docs/network-requirements.md
 docs/noencap-hybrid-modes.md
 docs/octant-plugin-installation.md

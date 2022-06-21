@@ -304,9 +304,16 @@ type IPPool struct {
 	Status IPPoolStatus `json:"status"`
 }
 
+type IPVersion int
+
+const (
+	IPv4 = IPVersion(4)
+	IPv6 = IPVersion(6)
+)
+
 type IPPoolSpec struct {
 	// IP Version for this IP pool - either 4 or 6
-	IPVersion int `json:"ipVersion"`
+	IPVersion IPVersion `json:"ipVersion"`
 	// List IP ranges, along with subnet definition.
 	IPRanges []SubnetIPRange `json:"ipRanges"`
 }
@@ -317,8 +324,8 @@ type SubnetInfo struct {
 	Gateway string `json:"gateway"`
 	// Prefix length for the subnet, eg. 24
 	PrefixLength int32 `json:"prefixLength"`
-	// VLAN ID for this subnet. Default is 0. String-typed for sake of potential autoselect option.
-	VLAN string `json:"vlan,omitempty"`
+	// VLAN ID for this subnet. Default is 0. Valid value is 0~4094.
+	VLAN uint16 `json:"vlan,omitempty"`
 }
 
 // SubnetIPRange is a set of contiguous IP addresses, represented by a CIDR or a pair of start and end IPs,
@@ -361,6 +368,9 @@ type PodOwner struct {
 	Name        string `json:"name"`
 	Namespace   string `json:"namespace"`
 	ContainerID string `json:"containerID"`
+	// Network interface name. Used when the IP is allocated for a secondary network interface
+	// of the Pod.
+	IFName string `json:"ifName,omitempty"`
 }
 
 // StatefulSet owner
@@ -378,4 +388,128 @@ type IPPoolList struct {
 	metav1.ListMeta `json:"metadata,omitempty"`
 
 	Items []IPPool `json:"items"`
+}
+
+// +genclient
+// +genclient:nonNamespaced
+// +genclient:noStatus
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// TrafficControl allows mirroring or redirecting the traffic Pods send or receive. It enables users to monitor and
+// analyze Pod traffic, and to enforce custom network protections for Pods with fine-grained control over network
+// traffic.
+type TrafficControl struct {
+	metav1.TypeMeta `json:",inline"`
+	// Standard metadata of the object.
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	// Specification of the desired behavior of TrafficControl.
+	Spec TrafficControlSpec `json:"spec"`
+}
+
+type TrafficControlSpec struct {
+	// AppliedTo selects Pods to which the traffic control configuration will be applied.
+	AppliedTo AppliedTo `json:"appliedTo"`
+
+	// The direction of traffic that should be matched. It can be Ingress, Egress, or Both.
+	Direction Direction `json:"direction"`
+
+	// The action that should be taken for the traffic. It can be Redirect or Mirror.
+	Action TrafficControlAction `json:"action"`
+
+	// The port to which the traffic should be redirected or mirrored.
+	TargetPort TrafficControlPort `json:"targetPort"`
+
+	// The port from which the traffic will be sent back to OVS. It should only be set for Redirect action.
+	ReturnPort *TrafficControlPort `json:"returnPort,omitempty"`
+}
+
+type Direction string
+
+const (
+	DirectionIngress Direction = "Ingress"
+	DirectionEgress  Direction = "Egress"
+	DirectionBoth    Direction = "Both"
+)
+
+type TrafficControlAction string
+
+const (
+	ActionRedirect TrafficControlAction = "Redirect"
+	ActionMirror   TrafficControlAction = "Mirror"
+)
+
+// TrafficControlPort represents a port that can be used as the target of traffic mirroring or redirecting, and the
+// return port of traffic redirecting.
+type TrafficControlPort struct {
+	// OVSInternal represents an OVS internal port.
+	OVSInternal *OVSInternalPort `json:"ovsInternal,omitempty"`
+	// Device represents a network device.
+	Device *NetworkDevice `json:"device,omitempty"`
+	// GENEVE represents a GENEVE tunnel.
+	GENEVE *UDPTunnel `json:"geneve,omitempty"`
+	// VXLAN represents a VXLAN tunnel.
+	VXLAN *UDPTunnel `json:"vxlan,omitempty"`
+	// GRE represents a GRE tunnel.
+	GRE *GRETunnel `json:"gre,omitempty"`
+	// ERSPAN represents a ERSPAN tunnel.
+	ERSPAN *ERSPANTunnel `json:"erspan,omitempty"`
+}
+
+// OVSInternalPort represents an OVS internal port. Antrea will create the port if it doesn't exist.
+type OVSInternalPort struct {
+	// The name of the OVS internal port.
+	Name string `json:"name"`
+}
+
+// NetworkDevice represents a network device. It must exist on all Nodes. Antrea will attach it to the OVS bridge if it
+// is not attached.
+type NetworkDevice struct {
+	// The name of the network device.
+	Name string `json:"name"`
+}
+
+// UDPTunnel represents a UDP based tunnel. Antrea will create a port on the OVS bridge for the tunnel.
+type UDPTunnel struct {
+	// The remote IP of the tunnel.
+	RemoteIP string `json:"remoteIP"`
+	// The ID of the tunnel.
+	VNI *int32 `json:"vni,omitempty"`
+	// The transport layer destination port of the tunnel. If not specified, the assigned IANA port will be used, i.e.,
+	// 4789 for VXLAN, 6081 for GENEVE.
+	DestinationPort *int32 `json:"destinationPort,omitempty"`
+}
+
+// GRETunnel represents a GRE tunnel. Antrea will create a port on the OVS bridge for the tunnel.
+type GRETunnel struct {
+	// The remote IP of the tunnel.
+	RemoteIP string `json:"remoteIP"`
+	// GRE key.
+	Key *int32 `json:"key,omitempty"`
+}
+
+// ERSPANTunnel represents an ERSPAN tunnel. Antrea will create a port on the OVS bridge for the tunnel.
+type ERSPANTunnel struct {
+	// The remote IP of the tunnel.
+	RemoteIP string `json:"remoteIP"`
+	// ERSPAN session ID.
+	SessionID *int32 `json:"sessionID,omitempty"`
+	// ERSPAN version.
+	Version int32 `json:"version"`
+	// ERSPAN Index.
+	Index *int32 `json:"index,omitempty"`
+	// ERSPAN v2 mirrored traffic’s direction.
+	Dir *int32 `json:"dir,omitempty"`
+	// ERSPAN hardware ID.
+	HardwareID *int32 `json:"hardwareID,omitempty"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+type TrafficControlList struct {
+	metav1.TypeMeta `json:",inline"`
+	// +optional
+	metav1.ListMeta `json:"metadata,omitempty"`
+
+	Items []TrafficControl `json:"items"`
 }

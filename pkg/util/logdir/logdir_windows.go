@@ -17,4 +17,4 @@
 
 package logdir
 
-const antreaWellKnownLogDir = `C:\k\antrea\logs`
+const antreaWellKnownLogDir = `C:\var\log\antrea`

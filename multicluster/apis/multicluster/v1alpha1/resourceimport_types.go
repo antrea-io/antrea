@@ -21,6 +21,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	mcs "sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
 
+	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
 )
 
@@ -55,13 +56,17 @@ type ResourceImportSpec struct {
 	ServiceImport *mcs.ServiceImport `json:"serviceImport,omitempty"`
 	// If imported resource is EndPoints.
 	Endpoints *EndpointsImport `json:"endpoints,omitempty"`
+	// If imported resource is ClusterInfo.
+	ClusterInfo *ClusterInfo `json:"clusterinfo,omitempty"`
 	// If imported resource is ExternalEntity.
 	ExternalEntity *ExternalEntityImport `json:"externalentity,omitempty"`
+	// If imported resource is AntreaClusterNetworkPolicy.
+	ClusterNetworkPolicy *v1alpha1.ClusterNetworkPolicySpec `json:"clusternetworkpolicy,omitempty"`
 	// If imported resource is ANP.
 	// TODO:
 	// ANP uses float64 as priority.  Type float64 is discouraged by k8s, and is not supported by controller-gen tools.
 	// NetworkPolicy *v1alpha1.NetworkPolicySpec `json:"networkpolicy,omitempty"`
-	// If imported resource Kind is unknown.
+	// If imported resource kind is unknown.
 	Raw *RawResourceImport `json:"raw,omitempty"`
 }
 

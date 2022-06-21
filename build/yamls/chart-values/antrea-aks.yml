@@ -1,0 +1,3 @@
+trafficEncapMode: "networkPolicyOnly"
+agent:
+  dnsPolicy: "ClusterFirst"

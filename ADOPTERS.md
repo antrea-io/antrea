@@ -4,6 +4,14 @@
 <img alt="glasnostic.com" src="docs/assets/adopters/glasnostic-logo.png"
 height="50"></a>&nbsp; &nbsp; &nbsp;
 
+<a href="https://www.transwarp.io" border="0" target="_blank">
+<img alt="https://www.transwarp.io" src="docs/assets/adopters/transwarp-logo.png"
+height="50"></a>&nbsp; &nbsp; &nbsp;
+
+<a href="https://www.terasky.com" border="0" target="_blank">
+<img alt="https://www.terasky.com" src="docs/assets/adopters/terasky-logo.png"
+height="50"></a>&nbsp; &nbsp; &nbsp;
+
 ## Success Stories
 
 Below is a list of adopters of Antrea that have publicly shared the details
@@ -16,6 +24,33 @@ systems interact, automatically and in real-time. As a result, DevOps and SRE
 teams can deploy reliably, prevent failure and assure the customer experience.
 We use Antrea's Open vSwitch support to tune how services interact in Kubernetes
 clusters. We are @glasnostic on Twitter.
+
+**[Transwarp](https://www.transwarp.io)**
+
+Transwarp is committed to building enterprise-level big data infrastructure
+software, providing enterprises with infrastructure software and supporting
+around the whole data lifecycle to build a data world of the future.
+
+1. We use Antrea's AntreaClusterNetworkPolicy and AntreaNetworkPolicy to protect
+big data software for every tenant of our kubernetes platform.
+2. We use Antrea's Open vSwitch to support Pod-To-Pod network between flannel and
+antrea clusters, and also between antrea clusters
+3. We use Antrea's Open vSwitch to support Pod-To-Pod network between flannel and
+antrea nodes in one cluster for upgrading.
+4. We use Antrea's Egress feature to keep the original source ip to ensure
+Internal Pods can get the real source IP of the request.
+
+You can contact us with mkt@transwarp.io
+
+**[TeraSky](https://terasky.com)**
+
+TeraSky is a Global Advanced Technology Solutions Provider.
+Antrea is used in our internal Kubernetes clusters as well as by many of our customers.
+Antrea helps us to apply a very strong and flexible security models in Kubernetes.
+We are very heavily utilizing Antrea Cluster Network Policies, Antrea Network Policies,
+and the Egress functionality.
+
+We are @TeraSkycom1 on Twitter.  
 
 ## Adding yourself as an Adopter
 

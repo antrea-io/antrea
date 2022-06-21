@@ -4,6 +4,7 @@
 
 <!-- toc -->
 - [Service external IP management by Antrea](#service-external-ip-management-by-antrea)
+  - [Preparation](#preparation)
   - [Configuration](#configuration)
     - [Enable Service external IP management feature](#enable-service-external-ip-management-feature)
     - [Create an ExternalIPPool custom resource](#create-an-externalippool-custom-resource)
@@ -14,6 +15,8 @@
   - [Install MetalLB](#install-metallb)
   - [Configure MetalLB with layer 2 mode](#configure-metallb-with-layer-2-mode)
   - [Configure MetalLB with BGP mode](#configure-metallb-with-bgp-mode)
+- [Interoperability with kube-proxy IPVS mode](#interoperability-with-kube-proxy-ipvs-mode)
+  - [Issue with Antrea Egress](#issue-with-antrea-egress)
 <!-- /toc -->
 
 In Kubernetes, implementing Services of type LoadBalancer usually requires
@@ -46,6 +49,16 @@ Endpoints. Antrea also implements a Node failover mechanism for Service
 external IPs. When Antrea detects a Node hosting an external IP is down, it
 will move the external IP to another available Node of the ExternalIPPool.
 
+### Preparation
+
+If you are using `kube-proxy` in IPVS mode, you need to make sure `strictARP` is
+enabled in the `kube-proxy` configuration. For more information about how to
+configure `kube-proxy`, please refer to the [Interoperability with kube-proxy
+IPVS mode](#interoperability-with-kube-proxy-ipvs-mode) section.
+
+If you are using `kube-proxy` iptables mode or [`AntreaProxy` with `proxyAll`](antrea-proxy.md#antreaproxy-with-proxyall),
+no extra configuration change is needed.
+
 ### Configuration
 
 #### Enable Service external IP management feature
@@ -57,8 +70,8 @@ the `ServiceExternalIP` feature gate in the `antrea-config` ConfigMap in
 the Antrea deployment YAML:
 
 ```yaml
-kind: ConfigMap
 apiVersion: v1
+kind: ConfigMap
 metadata:
   name: antrea-config-dcfb6k2hkm
   namespace: kube-system
@@ -97,18 +110,17 @@ selects the Nodes with label "network-role: ingress-node" to host the external
 IPs:
 
 ```yaml
-- apiVersion: crd.antrea.io/v1alpha2
-  kind: ExternalIPPool
-  metadata:
-    name: service-external-ip-pool
-  spec:
-    ipRanges:
-    - start: 10.10.0.2
-      end: 10.10.0.10
-    - cidr: 10.10.1.0/28
-    nodeSelector:
-      matchLabels:
-        network-role: ingress-node
+apiVersion: crd.antrea.io/v1alpha2
+kind: ExternalIPPool
+metadata:
+  name: service-external-ip-pool
+spec:
+  ipRanges:
+  - start: 10.10.0.2
+    end: 10.10.0.10
+  nodeSelector:
+    matchLabels:
+      network-role: ingress-node
 ```
 
 #### Create a Service of type LoadBalancer
@@ -246,6 +258,12 @@ default configuration (in which the `ServiceExternalIP` feature gate of
 
 ### Configure MetalLB with layer 2 mode
 
+Similar to the case of Antrea Service external IP management, MetalLB layer 2
+mode also requires `kube-proxy`'s `strictARP` configuration to be enabled, when
+you are using `kube-proxy` IPVS. Please refer to the [Interoperability with
+kube-proxy IPVS mode](#interoperability-with-kube-proxy-ipvs-mode) section for
+more information.
+
 MetalLB is configured through a ConfigMap. To configure MetalLB to work in the
 layer 2 mode, you just need to provide the IP ranges to allocate external IPs.
 The IP ranges should be from the Node network subnet.
@@ -296,3 +314,44 @@ In addition to the basic layer 2 and BGP mode configurations described in this
 document, MetalLB supports a few more advanced BGP configurations and supports
 configuring multiple IP pools which can use different modes. For more
 information, please refer to the [MetalLB configuration guide](https://metallb.universe.tf/configuration).
+
+## Interoperability with kube-proxy IPVS mode
+
+Both Antrea Service external IP management and MetalLB layer 2 mode require
+`kube-proxy`'s `strictARP` configuration to be enabled, to work with
+`kube-proxy` in IPVS mode. You can check the `strictARP` configuration in the
+`kube-proxy` ConfigMap:
+
+```bash
+$ kubectl describe configmap -n kube-system kube-proxy | grep strictARP
+  strictARP: false
+```
+
+You can set `strictARP` to `true` by editing the `kube-proxy` ConfigMap:
+
+```bash
+kubectl edit configmap -n kube-system kube-proxy
+```
+
+Or, simply run the following command to set it:
+
+```bash
+$ kubectl get configmap kube-proxy -n kube-system -o yaml | \
+ sed -e "s/strictARP: false/strictARP: true/" | \
+ kubectl apply -f - -n kube-system
+```
+
+Last, to check the change is made:
+
+```bash
+$ kubectl describe configmap -n kube-system kube-proxy | grep strictARP
+  strictARP: true
+```
+
+### Issue with Antrea Egress
+
+If you are using Antrea v1.7.0 or later, please ignore the issue. The previous
+implementation of Antrea Egress before v1.7.0 does not work with the `strictARP`
+configuration of `kube-proxy`. It means Antrea Egress cannot work together with
+Service external IP management or MetalLB layer 2 mode, when `kube-proxy` IPVS
+is used. This issue was fixed in Antrea v1.7.0.

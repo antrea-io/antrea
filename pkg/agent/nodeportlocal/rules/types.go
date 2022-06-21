@@ -19,5 +19,6 @@ type PodNodePort struct {
 	NodePort  int
 	PodPort   int
 	PodIP     string
+	Protocol  string
 	Protocols []string
 }

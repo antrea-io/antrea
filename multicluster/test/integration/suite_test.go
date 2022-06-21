@@ -37,10 +37,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	mcsscheme "sigs.k8s.io/mcs-api/pkg/client/clientset/versioned/scheme"
 
-	// mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
 	mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
 	multiclustercontrollers "antrea.io/antrea/multicluster/controllers/multicluster"
 	antreamcscheme "antrea.io/antrea/multicluster/pkg/client/clientset/versioned/scheme"
+	antreascheme "antrea.io/antrea/pkg/client/clientset/versioned/scheme"
 	"antrea.io/antrea/pkg/signals"
 	//+kubebuilder:scaffold:imports
 )
@@ -97,7 +97,9 @@ var _ = BeforeSuite(func() {
 	By("bootstrapping test environment")
 	useExistingCluster := true
 	testEnv = &envtest.Environment{
-		CRDDirectoryPaths:     []string{filepath.Join("..", "..", "config", "crd", "bases"), filepath.Join("..", "..", "config", "crd", "k8smcs")},
+		CRDDirectoryPaths: []string{filepath.Join("..", "..", "config", "crd", "bases"),
+			filepath.Join("..", "..", "config", "crd", "k8smcs"),
+			filepath.Join("..", "..", "..", "build", "charts", "antrea", "templates", "crds", "clusternetworkpolicy.yaml")},
 		ErrorIfCRDPathMissing: true,
 		UseExistingCluster:    &useExistingCluster,
 	}
@@ -113,6 +115,8 @@ var _ = BeforeSuite(func() {
 	err = antreamcscheme.AddToScheme(scheme)
 	Expect(err).NotTo(HaveOccurred())
 	err = k8sscheme.AddToScheme(scheme)
+	Expect(err).NotTo(HaveOccurred())
+	err = antreascheme.AddToScheme(scheme)
 	Expect(err).NotTo(HaveOccurred())
 	//+kubebuilder:scaffold:scheme
 
@@ -131,11 +135,11 @@ var _ = BeforeSuite(func() {
 	k8sClient.Create(ctx, leaderNS)
 	k8sClient.Create(ctx, testNS)
 	k8sClient.Create(ctx, testNSStale)
-	clusterSetReconciler := &multiclustercontrollers.MemberClusterSetReconciler{
-		Client:    k8sManager.GetClient(),
-		Scheme:    k8sManager.GetScheme(),
-		Namespace: LeaderNamespace,
-	}
+	clusterSetReconciler := multiclustercontrollers.NewMemberClusterSetReconciler(
+		k8sManager.GetClient(),
+		k8sManager.GetScheme(),
+		LeaderNamespace,
+	)
 	err = clusterSetReconciler.SetupWithManager(k8sManager)
 	Expect(err).ToNot(HaveOccurred())
 
@@ -143,7 +147,7 @@ var _ = BeforeSuite(func() {
 	svcExportReconciler := multiclustercontrollers.NewServiceExportReconciler(
 		k8sManager.GetClient(),
 		k8sManager.GetScheme(),
-		&clusterSetReconciler.RemoteCommonAreaManager)
+		clusterSetReconciler)
 	err = svcExportReconciler.SetupWithManager(k8sManager)
 	Expect(err).ToNot(HaveOccurred())
 
@@ -152,14 +156,15 @@ var _ = BeforeSuite(func() {
 
 	By("Creating StaleController")
 	stopCh := signals.RegisterSignalHandlers()
-	staleController := multiclustercontrollers.NewStaleController(
+	staleController := multiclustercontrollers.NewStaleResCleanupController(
 		k8sManager.GetClient(),
 		k8sManager.GetScheme(),
-		&clusterSetReconciler.RemoteCommonAreaManager)
+		"default",
+		clusterSetReconciler)
 
 	go staleController.Run(stopCh)
 	// Make sure to trigger clean up process every 5 seconds
-	// otherwise staleController will only run once before test case is ready to run.
+	// otherwise staleResCleanupController will only run once before test case is ready to run.
 	go func() {
 		for {
 			staleController.Enqueue()
@@ -196,7 +201,7 @@ func configureClusterSet() {
 			Namespace: LeaderNamespace,
 			Name:      "clusterset-id",
 		},
-		Name:  "clusterSet.k8s.io",
+		Name:  "clusterset.k8s.io",
 		Value: clusterSetID,
 	}
 	clusterSet := &mcsv1alpha1.ClusterSet{

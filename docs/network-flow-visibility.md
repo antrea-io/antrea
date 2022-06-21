@@ -10,7 +10,7 @@
     - [IEs from IANA-assigned IE Registry](#ies-from-iana-assigned-ie-registry)
     - [IEs from Reverse IANA-assigned IE Registry](#ies-from-reverse-iana-assigned-ie-registry)
     - [IEs from Antrea IE Registry](#ies-from-antrea-ie-registry)
-  - [Supported capabilities](#supported-capabilities)
+  - [Supported Capabilities](#supported-capabilities)
     - [Types of Flows and Associated Information](#types-of-flows-and-associated-information)
     - [Connection Metrics](#connection-metrics)
 - [Flow Aggregator](#flow-aggregator)
@@ -18,21 +18,27 @@
   - [Configuration](#configuration-1)
   - [IPFIX Information Elements (IEs) in an Aggregated Flow Record](#ipfix-information-elements-ies-in-an-aggregated-flow-record)
     - [IEs from Antrea IE Registry](#ies-from-antrea-ie-registry-1)
-  - [Supported capabilities](#supported-capabilities-1)
+  - [Supported Capabilities](#supported-capabilities-1)
     - [Storage of Flow Records](#storage-of-flow-records)
     - [Correlation of Flow Records](#correlation-of-flow-records)
     - [Aggregation of Flow Records](#aggregation-of-flow-records)
-  - [Antctl support](#antctl-support)
-- [Quick deployment](#quick-deployment)
+  - [Antctl Support](#antctl-support)
+- [Quick Deployment](#quick-deployment)
+  - [Image-building Steps](#image-building-steps)
+  - [Deployment Steps](#deployment-steps)
 - [Flow Collectors](#flow-collectors)
   - [Go-ipfix Collector](#go-ipfix-collector)
-    - [Deployment Steps](#deployment-steps)
+    - [Deployment Steps](#deployment-steps-1)
     - [Output Flow Records](#output-flow-records)
   - [Grafana Flow Collector](#grafana-flow-collector)
     - [Purpose](#purpose)
     - [About Grafana and ClickHouse](#about-grafana-and-clickhouse)
-    - [Deployment Steps](#deployment-steps-1)
+    - [Deployment Steps](#deployment-steps-2)
       - [Credentials Configuration](#credentials-configuration)
+    - [ClickHouse Configuration](#clickhouse-configuration)
+      - [Service Customization](#service-customization)
+      - [Performance Configuration](#performance-configuration)
+      - [Persistent Volumes](#persistent-volumes)
     - [Pre-built Dashboards](#pre-built-dashboards)
       - [Flow Records Dashboard](#flow-records-dashboard)
       - [Pod-to-Pod Flows Dashboard](#pod-to-pod-flows-dashboard)
@@ -41,18 +47,7 @@
       - [Node-to-Node Flows Dashboard](#node-to-node-flows-dashboard)
       - [Network-Policy Flows Dashboard](#network-policy-flows-dashboard)
     - [Dashboards Customization](#dashboards-customization)
-  - [ELK Flow Collector (deprecated)](#elk-flow-collector-deprecated)
-    - [Purpose](#purpose-1)
-    - [About Elastic Stack](#about-elastic-stack)
-    - [Deployment Steps](#deployment-steps-2)
-    - [Pre-built Dashboards](#pre-built-dashboards-1)
-      - [Overview](#overview-1)
-      - [Pod-to-Pod Flows](#pod-to-pod-flows)
-      - [Pod-to-External Flows](#pod-to-external-flows)
-      - [Pod-to-Service Flows](#pod-to-service-flows)
-      - [Flow Records](#flow-records)
-      - [Node Throughput](#node-throughput)
-      - [Network Policy](#network-policy)
+  - [ELK Flow Collector (removed)](#elk-flow-collector-removed)
 <!-- /toc -->
 
 ## Overview
@@ -127,7 +122,7 @@ Please note that the default value for `flowCollectorAddr` is `"flow-aggregator.
 which uses the DNS name of the Flow Aggregator Service, if the Service is deployed
 with the Name and Namespace set to `flow-aggregator`. For Antrea Agent running on
 a Windows node, the user is required to change the default value of `HOST` in `flowCollectorAddr`
-from DNS name to the Cluster IP of the Flow Aggregator service. The reason is because
+from DNS name to the Cluster IP of the Flow Aggregator Service. The reason is because
 on Windows the Antrea Agent runs as a process, it uses the host's default DNS setting and the DNS
 resolver will not be configured to talk to the CoreDNS Service for cluster local DNS queries like
 `flow-aggregator.flow-aggregator.svc`. In addition, if you deploy the Flow Aggregator Service
@@ -203,7 +198,7 @@ Flow Exporter are listed below:
 | tcpState                         | 136      | string      | The state of the TCP connection. The states are: LISTEN, SYN-SENT, SYN-RECEIVED, ESTABLISHED, FIN-WAIT-1, FIN-WAIT-2, CLOSE-WAIT, CLOSING, LAST-ACK, TIME-WAIT, and CLOSED. |
 | flowType                         | 137      | unsigned8   | 1 stands for Intra-Node. 2 stands for Inter-Node. 3 stands for To External. 4 stands for From External. |
 
-### Supported capabilities
+### Supported Capabilities
 
 #### Types of Flows and Associated Information
 
@@ -271,41 +266,47 @@ kubectl apply -f https://raw.githubusercontent.com/antrea-io/antrea/main/build/y
 
 ### Configuration
 
-The following configuration parameters have to be provided through the Flow Aggregator
-ConfigMap. `externalFlowCollectorAddr` is a mandatory parameter. We provide an example
-value for this parameter in the following snippet.  
+The following configuration parameters have to be provided through the Flow
+Aggregator ConfigMap. Flow aggregator needs to be configured with at least one
+of the supported [Flow Collectors](#flow-collectors).
+`flowCollector` is mandatory for [go-ipfix collector](#deployment-steps), and
+`clickHouse` is mandatory for [Grafana Flow Collector](#grafana-flow-collector).
+We provide an example value for this parameter in the following snippet.  
 
 * If you have deployed the [go-ipfix collector](#deployment-steps),
-then please use the address:  
-`<Ipfix-Collector Cluster IP>:<port>:<tcp|udp>`
-* If you have deployed the [ELK
-flow collector](#deployment-steps-1), then please use the address:  
-`<Logstash Cluster IP>:4739:<tcp|udp>` for sending IPFIX messages, or `<Logstash Cluster IP>:4736:<tcp|udp>`
-for sending JSON format records. Record format is specified with `recordFormat` (defaults
-to IPFIX) and must match the format expected by the collector.
+then please set `flowCollector.enable` to `true` and use the address for
+`flowCollector.address`: `<Ipfix-Collector Cluster IP>:<port>:<tcp|udp>`
+* If you have deployed the [Grafana Flow Collector](#grafana-flow-collector),
+then please enable the collector by setting `clickHouse.enable` to `true`. If
+it is deployed following the [deployment steps](#deployment-steps-1), the
+ClickHouse server is already exposed via a K8s Service, and no further
+configuration is required. If a different FQDN or IP is desired, please use
+the URL for `clickHouse.databaseURL` in the following format:
+`tcp://<ClickHouse server FQDN or IP>:<ClickHouse TCP port>`.
 
 ```yaml
-flow-aggregator.conf: |
-  # Provide the flow collector address as a string with format <IP>:<port>[:<proto>], where proto is tcp or udp.
-  # If no L4 transport proto is given, we consider tcp as default.
-  externalFlowCollectorAddr: "192.168.86.86:4739:tcp"
-  
-  # Provide flow export interval as a duration string. This determines how often the flow aggregator exports flow
-  # records to the flow collector.
-  # Flow export interval should be greater than or equal to 1s (one second).
+flow-aggregator.conf: |  
+  # Provide the active flow record timeout as a duration string. This determines
+  # how often the flow aggregator exports the active flow records to the flow
+  # collector. Thus, for flows with a continuous stream of packets, a flow record
+  # will be exported to the collector once the elapsed time since the last export
+  # event in the flow aggregator is equal to the value of this timeout.
   # Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
-  #flowExportInterval: 60s
+  #activeFlowRecordTimeout: 60s
+
+  # Provide the inactive flow record timeout as a duration string. This determines
+  # how often the flow aggregator exports the inactive flow records to the flow
+  # collector. A flow record is considered to be inactive if no matching record
+  # has been received by the flow aggregator in the specified interval.
+  # Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
+  #inactiveFlowRecordTimeout: 90s
   
   # Provide the transport protocol for the flow aggregator collecting process, which is tls, tcp or udp.
   #aggregatorTransportProtocol: "tls"
   
   # Provide DNS name or IP address of flow aggregator for generating TLS certificate. It must match
-  # the flowCollectorAddr parameter in the antrea-agent config.    
+  # the flowCollectorAddr parameter in the antrea-agent config.
   #flowAggregatorAddress: "flow-aggregator.flow-aggregator.svc"
-
-  # Provide format for records sent to the configured flow collector.
-  # Supported formats are IPFIX and JSON.
-  #recordFormat: "IPFIX"
 
   # recordContents enables configuring some fields in the flow records. Fields can
   # be excluded to reduce record size, but some features or external tooling may
@@ -327,22 +328,76 @@ flow-aggregator.conf: |
 
     # TLS min version from: VersionTLS10, VersionTLS11, VersionTLS12, VersionTLS13.
     #tlsMinVersion:
+  
+  # flowCollector contains external IPFIX or JSON collector related configuration options.
+  flowCollector:
+    # Enable is the switch to enable exporting flow records to external flow collector.
+    #enable: false
+  
+    # Provide the flow collector address as string with format <IP>:<port>[:<proto>], where proto is tcp or udp.
+    # If no L4 transport proto is given, we consider tcp as default.
+    address: "192.168.86.86:4739:tcp"
+  
+    # Provide the 32-bit Observation Domain ID which will uniquely identify this instance of the flow
+    # aggregator to an external flow collector. If omitted, an Observation Domain ID will be generated
+    # from the persistent cluster UUID generated by Antrea. Failing that (e.g. because the cluster UUID
+    # is not available), a value will be randomly generated, which may vary across restarts of the flow
+    # aggregator.
+    #observationDomainID:
+  
+    # Provide format for records sent to the configured flow collector.
+    # Supported formats are IPFIX and JSON.
+    #recordFormat: "IPFIX"
+  
+  # clickHouse contains ClickHouse related configuration options.
+  clickHouse:
+    # Enable is the switch to enable exporting flow records to ClickHouse.
+    #enable: false
+  
+    # Database is the name of database where Antrea "flows" table is created.
+    #database: "default"
+  
+    # DatabaseURL is the url to the database. TCP protocol is required.
+    #databaseURL: "tcp://clickhouse-clickhouse.flow-visibility.svc:9000"
+  
+    # Debug enables debug logs from ClickHouse sql driver.
+    #debug: false
+  
+    # Compress enables lz4 compression when committing flow records.
+    #compress: true
+  
+    # CommitInterval is the periodical interval between batch commit of flow records to DB.
+    # Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
+    # The minimum interval is 1s based on ClickHouse documentation for best performance.
+    #commitInterval: "8s"
 ```
 
-Please note that the default values for `flowExportInterval`, `aggregatorTransportProtocol`,
-and `flowAggregatorAddress` parameters are set to `60s`, `tls` and `flow-aggregator.flow-aggregator.svc`,
-respectively. Please make sure that `aggregatorTransportProtocol` and protocol of `flowCollectorAddr` in
-`agent-agent.conf` are set to `tls` to guarantee secure communication works properly. Protocol of
-`flowCollectorAddr` and `aggregatorTransportProtocol` must always match, so TLS must either be enabled for
-both sides or disabled for both sides. Please modify the parameters as per your requirements.
+Please note that the default values for `activeFlowRecordTimeout`,
+`inactiveFlowRecordTimeout`, `aggregatorTransportProtocol`, and
+`flowAggregatorAddress` parameters are set to `60s`, `90s`, `tls` and
+`flow-aggregator.flow-aggregator.svc`, respectively. Please make sure that
+`aggregatorTransportProtocol` and protocol of `flowCollectorAddr` in
+`agent-agent.conf` are set to `tls` to guarantee secure communication works
+properly. Protocol of `flowCollectorAddr` and `aggregatorTransportProtocol`
+must always match, so TLS must either be enabled for both sides or disabled
+for both sides. Please modify the parameters as per your requirements.
 
-Please note that the default value for `podLabels` is `false`, which
-indicates source and destination Pod labels will not be included in the flow
-records. If you would like to include them, you can modify the value to true.
+Please note that the default value for `recordContents.podLabels` is `false`,
+which indicates source and destination Pod labels will not be included in the
+flow records exported to `flowCollector` and `clickHouse`. If you would like
+to include them, you can modify the value to `true`.
 
-Please note that the default value for  `apiPort` is `10348`, which is the port
-used to expose the Flow Aggregator's APIServer. Please modify the parameters as
-per your requirements.
+Please note that the default value for `apiServer.apiPort` is `10348`, which
+is the port used to expose the Flow Aggregator's APIServer. Please modify the
+parameters as per your requirements.
+
+Please note that the default value for `clickHouse.commitInterval` is `8s`,
+which is based on experiment results to achieve best ClickHouse write
+performance and data retention. Based on ClickHouse recommendation for best
+performance, this interval is required be no shorter than `1s`. Also note
+that flow aggregator has a cache limit of ~500k records for ClickHouse-Grafana
+collector. If `clickHouse.commitInterval` is set to a value too large, there's
+a risk of losing records.
 
 ### IPFIX Information Elements (IEs) in an Aggregated Flow Record
 
@@ -380,7 +435,7 @@ the Flow Aggregator adds the following fields to the flow records.
 | flowEndSecondsFromSourceNode              | 151      | unsigned32  | The absolute timestamp of the last packet of this flow, based on the records sent from the source Node. The unit is seconds. |
 | flowEndSecondsFromDestinationNode         | 152      | unsigned32  | The absolute timestamp of the last packet of this flow, based on the records sent from the destination Node. The unit is seconds. |
 
-### Supported capabilities
+### Supported Capabilities
 
 #### Storage of Flow Records
 
@@ -409,49 +464,55 @@ the [new fields](#ies-from-antrea-ie-registry) in Antrea Enterprise IPFIX regist
 corresponding to the Source Node and Destination Node, so that flow statistics from
 different Nodes can be preserved.
 
-### Antctl support
+### Antctl Support
 
 antctl can access the Flow Aggregator API to dump flow records and print metrics
 about flow record processing. Refer to the
 [antctl documentation](antctl.md#flow-aggregator-commands) for more information.
 
-## Quick deployment
+## Quick Deployment
 
 If you would like to quickly try Network Flow Visibility feature, you can deploy
-Antrea, the Flow Aggregator Service and the ELK Flow Collector on the
-[Vagrant setup](../test/e2e/README.md). You can use the following command:
+Antrea, the Flow Aggregator Service, the Grafana Flow Collector on the
+[Vagrant setup](../test/e2e/README.md).
+
+### Image-building Steps
+
+Build required image under antrea by using make command:
 
 ```shell
-./infra/vagrant/provision.sh
-./infra/vagrant/push_antrea.sh --flow-collector ELK
+make
+make flow-aggregator-image
 ```
 
-If you would like to deploy elastic search with high resources, you can change
-the `ES_JAVA_OPTS` in the [ELK Flow Collector configuration](../build/yamls/elk-flow-collector/elk-flow-collector.yml)
-according to the [guide](https://www.elastic.co/guide/en/elasticsearch/reference/7.8/heap-size.html).
-A larger heap size, like `-Xms1g -Xmx2g`, requires the Vagrant Nodes to have
-higher memory than default. In this case, we need to provision the Nodes with
-the `--large` option as with the following command:
+If you would like to use Grafana flow collector, run:
 
 ```shell
-./infra/vagrant/provision.sh --large
-./infra/vagrant/push_antrea.sh --flow-collector ELK
+make flow-visibility-clickhouse-monitor
 ```
 
-Alternatively, given any external IPFIX flow collector, you can deploy Antrea and
-the Flow Aggregator Service on a default Vagrant setup by running the following
-commands:
+### Deployment Steps
+
+Given any external IPFIX flow collector, you can deploy Antrea and the Flow
+Aggregator Service on a default Vagrant setup by running the following commands:
 
 ```shell
 ./infra/vagrant/provision.sh
 ./infra/vagrant/push_antrea.sh --flow-collector <externalFlowCollectorAddress>
 ```
 
+If you would like to deploy the Grafana Flow Collector, you can run the following command:
+
+```shell
+./infra/vagrant/provision.sh
+./infra/vagrant/push_antrea.sh --flow-collector Grafana
+```
+
 ## Flow Collectors
 
-Here we list three choices the external configured flow collector: go-ipfix collector,
-Grafana flow collector and ELK flow collector. For each collector, we introduce how to
-deploy it and how to output or visualize the collected flow records information.
+Here we list two choices the external configured flow collector: go-ipfix collector
+and Grafana flow collector. For each collector, we introduce how to deploy it and
+how to output or visualize the collected flow records information.
 
 ### Go-ipfix Collector
 
@@ -489,7 +550,15 @@ kubectl logs <ipfix-collector-pod-name> -n ipfix
 
 ### Grafana Flow Collector
 
-Grafana Flow Collector feature is only available for releases starting from Antrea v1.6.
+The Grafana Flow Collector was added in Antrea v1.6.0. In Antrea v1.7.0, we
+start to move the network observability and analytics functionalities of Antrea
+to [Project Theia](https://github.com/antrea-io/theia), including the Grafana
+Flow Collector. Going forward, further development of the Grafana Flow Collector
+will be in the Theia repo, but we will keep the existing implementation in the
+Antrea repo for a while before deprecating it. This section talks about the
+"legacy" Grafana Flow Collector kept in the Antrea repo. For the up-to-date
+version of Grafana Flow Collector and other Theia features, please refer to the
+[Theia document](https://github.com/antrea-io/theia/blob/main/docs/network-flow-visibility.md).
 
 #### Purpose
 
@@ -512,11 +581,12 @@ ClickHouse as the data storage, and use Grafana as the data visualization and mo
 
 To deploy the Grafana Flow Collector, the first step is to install the ClickHouse
 Operator, which creates, configures and manages ClickHouse clusters. Check the [homepage](https://github.com/Altinity/clickhouse-operator)
-for more information about the ClickHouse Operator. Running the following command
+for more information about the ClickHouse Operator. Current checked-in yaml is based on their
+[v0.18.2](https://github.com/Altinity/clickhouse-operator/blob/refs/tags/0.18.2/deploy/operator/clickhouse-operator-install-bundle.yaml) released version. Running the following command
 will install ClickHouse Operator into `kube-system` Namespace.
 
 ```bash
-kubectl apply -f https://raw.githubusercontent.com/Altinity/clickhouse-operator/master/deploy/operator/clickhouse-operator-install-bundle.yaml
+kubectl apply -f https://raw.githubusercontent.com/antrea-io/antrea/main/build/yamls/clickhouse-operator-install-bundle.yml
 ```
 
 To deploy a released version of the Grafana Flow Collector, find a deployment manifest
@@ -534,6 +604,28 @@ use the checked-in [deployment yaml](/build/yamls/flow-visibility.yml):
 kubectl apply -f https://raw.githubusercontent.com/antrea-io/antrea/main/build/yamls/flow-visibility.yml
 ```
 
+Grafana is exposed through a NodePort Service by default in `flow-visibility.yml`.
+If the given K8s cluster supports LoadBalancer Services, Grafana can be exposed
+through a LoadBalancer Service by changing the `grafana` Service type in the manifest
+like below.
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana
+  namespace: flow-visibility
+spec:
+  ports:
+  - port: 3000
+    protocol: TCP
+    targetPort: http-grafana
+  selector:
+    app: grafana
+  sessionAffinity: None
+  type: LoadBalancer
+```
+
 Please refer to the [Flow Aggregator Configuration](#configuration-1) to learn about
 the ClickHouse configuration options.
 
@@ -547,13 +639,13 @@ The expected results will be like:
 
 ```bash  
 NAME                                  READY   STATUS    RESTARTS   AGE
-pod/chi-clickhouse-clickhouse-0-0-0   1/1     Running   0          1m
+pod/chi-clickhouse-clickhouse-0-0-0   2/2     Running   0          1m
 pod/grafana-5c6c5b74f7-x4v5b          1/1     Running   0          1m
 
 NAME                                    TYPE           CLUSTER-IP       EXTERNAL-IP   PORT(S)                         AGE
 service/chi-clickhouse-clickhouse-0-0   ClusterIP      None             <none>        8123/TCP,9000/TCP,9009/TCP      1m
-service/clickhouse-clickhouse           LoadBalancer   10.105.198.192   <pending>     8123:30001/TCP,9000:31044/TCP   1m
-service/grafana                         LoadBalancer   10.97.171.150    <pending>     3000:31171/TCP                  1m
+service/clickhouse-clickhouse           ClusterIP      10.102.124.56    <none>        8123/TCP,9000/TCP               1m
+service/grafana                         NodePort       10.97.171.150    <none>        3000:31171/TCP                  1m
 
 NAME                      READY   UP-TO-DATE   AVAILABLE   AGE
 deployment.apps/grafana   1/1     1            1           1m
@@ -563,6 +655,7 @@ replicaset.apps/grafana-5c6c5b74f7   1         1         1       1m
 
 NAME                                             READY   AGE
 statefulset.apps/chi-clickhouse-clickhouse-0-0   1/1     1m
+
 ```
 
 Run the following commands to print the IP of the workder Node and the NodePort
@@ -585,13 +678,27 @@ To stop the Grafana Flow Collector, run the following commands:
 
 ```shell
 kubectl delete -f flow-visibility.yml
-kubectl delete -f https://raw.githubusercontent.com/Altinity/clickhouse-operator/master/deploy/operator/clickhouse-operator-install-bundle.yaml -n kube-system
+kubectl delete -f https://raw.githubusercontent.com/antrea-io/antrea/main/build/yamls/clickhouse-operator-install-bundle.yml -n kube-system
 ```
 
 ##### Credentials Configuration
 
-ClickHouse credentials are specified in [clickhouse.yml][clickhouse_manifest_yaml] as
-a resource of kind: a Secret. If the username `clickhouse_operator` has changed, please
+ClickHouse credentials are specified in `flow-visibility.yml` as a Secret named
+`clickhouse-secret`.
+
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: clickhouse-secret
+  namespace: flow-visibility
+stringData:
+  password: clickhouse_operator_password
+  username: clickhouse_operator
+type: Opaque
+```
+
+If the username `clickhouse_operator` has been changed, please
 update the following section accordingly.
 
 ```yaml
@@ -609,19 +716,228 @@ spec:
       clickhouse_operator/networks/ip: "::/0"
 ```
 
-ClickHouse credentials are also specified in [flow-aggregator.yml][flow_aggregator_manifest_yaml]
-as a resource of kind: a Secret. Please also make the corresponding changes.
+ClickHouse credentials are also specified in `flow-aggregator.yml` as a Secret
+named `clickhouse-secret` as shown below. Please also make the corresponding changes.
 
-Grafana login credentials are specified in [grafana.yml][grafana_manifest_yaml] as
-resource of kind: a Secret.
-
-We recommend changing all the credentials above if you are going to run the Flow Collector
-in production. After making any credentials change, run the following command to generate
-a new manifest:
-
-```shell
-make manifest
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  labels:
+    app: flow-aggregator
+  name: clickhouse-secret
+  namespace: flow-aggregator
+stringData:
+  password: clickhouse_operator_password
+  username: clickhouse_operator
+type: Opaque
 ```
+
+Grafana login credentials are specified in `flow-visibility.yml` as a Secret named
+`grafana-secret`.
+
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: grafana-secret
+  namespace: flow-visibility
+stringData:
+  admin-password: admin
+  admin-username: admin
+type: Opaque
+```
+
+We recommend changing all the credentials above if you are going to run the Flow
+Collector in production.
+
+#### ClickHouse Configuration
+
+##### Service Customization
+
+The ClickHouse database can be accessed through the Service `clickhouse-clickhouse`.
+The Pod exposes HTTP port at 8123 and TCP port at 9000 by default. The ports are
+specified in `flow-visibility.yml` as `serviceTemplates` of a `ClickHouseInstallation`
+resource. To use other ports, please update the following section.
+
+```yaml
+serviceTemplates:
+  - name: service-template
+    spec:
+      ports:
+        - name: http
+          port: 8123
+        - name: tcp
+          port: 9000
+```
+
+This Service is used by the Flow Aggregator and Grafana.
+
+- If you have changed the HTTP port, please update the `url` of a ConfigMap named
+`grafana-datasource-provider` in `flow-visibility.yml`.
+
+- If you have changed the TCP port, please update the `databaseURL` following
+[Flow Aggregator Configuration](#configuration-1), and also update the `jsonData.port`
+of the `grafana-datasource-provider` ConfigMap.
+
+```yaml
+apiVersion: v1
+data:
+  datasource_provider.yml: |
+    apiVersion: 1
+    datasources:
+      - name: ClickHouse
+        type: grafana-clickhouse-datasource
+        access: proxy
+        url: http://clickhouse-clickhouse.flow-visibility.svc:8123
+        editable: true
+        jsonData:
+          server: clickhouse-clickhouse.flow-visibility.svc
+          port: 9000
+          username: $CLICKHOUSE_USERNAME
+        secureJsonData:
+          password: $CLICKHOUSE_PASSWORD
+kind: ConfigMap
+metadata:
+  name: grafana-datasource-provider-h868k56k95
+  namespace: flow-visibility
+```
+
+##### Performance Configuration
+
+The ClickHouse throughput depends on two factors - the storage size of the ClickHouse
+and the time interval between the batch commits to the ClickHouse. Larger storage
+size and longer commit interval provide higher throughput.
+
+Grafana flow collector supports the ClickHouse in-memory deployment with limited
+storage size. This is specified in `flow-visibility.yml` under the `clickhouse`
+resource of kind: `ClickHouseInstallation`. The default value of storage size for
+the ClickHouse server is 8 GiB. Users can expect a linear growth in the ClickHouse
+throughput when they enlarge the storage size. For development or testing environment,
+you can decrease the storage size to 2GiB. To deploy the ClickHouse with a different
+storage size, please modify the `sizeLimit` in the following section.
+
+```yaml
+- emptyDir:
+    medium: Memory
+    sizeLimit: 8Gi
+  name: clickhouse-storage-volume
+```
+
+To deploy ClickHouse with Persistent Volumes and limited storage size, please refer
+to [Persistent Volumes](#persistent-volumes).
+
+The time interval between the batch commits to the ClickHouse is specified in the
+[Flow Aggregator Configuration](#configuration-1) as `commitInterval`. The
+ClickHouse throughput grows sightly when the commit interval grows from 1s to 8s.
+A commit interval larger than 8s provides little improvement on the throughput.
+
+##### Persistent Volumes
+
+By default, ClickHouse is deployed in memory. From Antrea v1.7, we support deploying
+ClickHouse with Persistent Volumes.
+
+[PersistentVolume](https://kubernetes.io/docs/concepts/storage/persistent-volumes/)
+(PV) is a piece of storage in the K8s cluster, which requires to be manually
+provisioned by an administrator or dynamically provisioned using Storage Classes.
+A PersistentVolumeClaim (PVC) is a request for storage which consumes PV. As
+ClickHouse is deployed as a StatefulSet, the volume can be claimed using
+`volumeClaimTemplate`.
+
+To generate the manifest automatically with default settings, you can clone the
+repository and run one of the following commands:
+
+```yaml
+# To generate a manifest with Local PV for the ClickHouse
+./hack/generate-manifest-flow-visibility.sh --volume pv --local <local_path> > flow-visibility.yml
+ 
+# To generate a manifest with NFS PV for the ClickHouse
+./hack/generate-manifest-flow-visibility.sh --volume pv --nfs <nfs_server_address>:/<nfs_server_path> > flow-visibility.yml
+ 
+# To generate a manifest with a customized StorageClass for the ClickHouse
+./hack/generate-manifest-flow-visibility.sh --volume pv --storageclass <storageclass_name> > flow-visibility.yml
+```
+
+If you prefer not to clone the repository and prefer to create a customized
+manifest manually, please follow the steps below to deploy the ClickHouse with
+Persistent Volumes:
+
+1. Provision the PersistentVolume. K8s supports a great number of
+[PersistentVolume types](https://kubernetes.io/docs/concepts/storage/persistent-volumes/#types-of-persistent-volumes).
+You can provision your own PersistentVolume per your requirements. Here are
+two simple examples for your reference.
+
+    - Local PV allows you to store the ClickHouse data at a pre-defined path on
+    a specific Node. Refer to [createLocalPv.yml][local_pv_yaml] to create the
+    PV. Please replace `LOCAL_PATH` with the path to store the ClickHouse data
+    and label the Node used to store the ClickHouse data with
+    `antrea.io/clickhouse-data-node=`.
+
+    - NFS PV allows you to store the ClickHouse data on an existing NFS server.
+    Refer to [createNfsPv.yml][nfs_pv_yaml] to create the PV. Please replace
+    `NFS_SERVER_ADDRESS` with the host name of the NFS server and `NFS_SERVER_PATH`
+    with the exported path on the NFS server.
+
+    In both examples, you can set `.spec.capacity.storage` in PersistentVolume
+    to your storage size. This value is for informative purpose as K8s does not
+    enforce the capacity of PVs. If you want to limit the storage usage, you need
+    to ask for your storage system to enforce that. For example, you can create
+    a Local PV on a partition with the limited size. We recommend using a dedicated
+    saving space for the ClickHouse if you are going to run the Flow Collector in
+    production.
+
+    As these examples do not use any dynamic provisioner, the reclaim policy
+    for the PVs is `Retain` by default. After stopping the Grafana Flow Collector,
+    if you no long need the data for future use, you may need to manually clean
+    up the data on the local disk or NFS server.
+
+1. Request the PV for ClickHouse. Please add a `volumeClaimTemplate` section
+under `.spec.templates` for the resource `ClickHouseInstallation` in
+`flow-visibility.yml` as shown in the example below. `storageClassName` should
+be set to your own `StorageClass` name, and `.resources.requests.storage`
+should be set to your storage size.
+
+    ```yaml
+    volumeClaimTemplates:
+    - name: clickhouse-storage-template
+      spec:
+        accessModes:
+        - ReadWriteOnce
+        resources:
+          requests:
+            storage: 8Gi
+        storageClassName: clickhouse-storage
+    ```
+
+    Then add this template as `dataVolumeClaimTemplate` to the section below.
+
+    ```yaml
+    defaults:
+      templates:
+        dataVolumeClaimTemplate: clickhouse-storage-template
+        podTemplate: pod-template
+        serviceTemplate: service-template
+    ```
+
+1. Remove the in-memory related deployment options, by removing the appropriate
+`volume` and `volumeMount` for the `ClickHouseInstallation` resource in
+`flow-visibility.yml`.
+
+    The `volumeMounts` entry to be removed is the following one:
+
+    ```yaml
+    - mountPath: /var/lib/clickhouse
+      name: clickhouse-storage-volume
+    ```
+
+    The `volumes` entry to be removed is the following one:
+
+    ```yaml
+    - emptyDir:
+        medium: Memory
+        sizeLimit: 8Gi
+      name: clickhouse-storage-volume
+    ```
 
 #### Pre-built Dashboards
 
@@ -629,6 +945,27 @@ The following dashboards are pre-built and are recommended for Antrea flow
 visualization. They can be found in the Home page of Grafana, by clicking
 the Magnifier button on the left menu bar.
 <img src="https://downloads.antrea.io/static/02152022/flow-visibility-grafana-intro-1.png" width="900" alt="Grafana Search Dashboards Guide">
+
+- Note that all pre-built dashboards (except for the "Flow Records Dashboard")
+filter out Pod traffic for which the source or destination Namespace is one of
+`kube-system`, `flow-visibility`, or `flow-aggregator`. The primary motivation
+for this is to avoid showing the connections between the Antrea Agents and the
+Flow Aggregator, between the Flow Aggregator and ClickHouse, and between
+ClickHouse and Grafana.
+
+- Also note that we limit the number of values displayed on panels. For table
+panel on the Flow Records Dashboard, the limit is set to 10000. For Sankey
+diagrams, the limit is 50. For time-series line graphs, the limit is 50. For
+pie charts, the limit is 25. The motivation is, when the input data is very
+large, we want to keep the charts readable and avoid consuming too much time
+and resources to render them.
+
+If you want to stop filtering traffic by Namespace, or edit the panel limit,
+you will need to edit the ClickHouse SQL query for each individual panel. Please
+follow the [dashboards customization](#dashboards-customization) section for
+more information. As a special case, to edit the panel limit for pie charts,
+instead of editing the query, please follow the [doc](https://grafana.com/docs/grafana/latest/visualizations/pie-chart-panel/#limit)
+to edit `Value options - Limit`.
 
 ##### Flow Records Dashboard
 
@@ -708,9 +1045,20 @@ Currently we only support the visualization of NetworkPolicies with `Allow` acti
 #### Dashboards Customization
 
 If you would like to make any changes to any of the pre-built dashboards, or build
-a new dashboard, please follow this [doc](https://grafana.com/docs/grafana/latest/dashboards/export-import/)
-for dashboard export and import. To generate a deployment manifest with the changes,
-please follow the following steps:
+a new dashboard, please follow this [doc](https://grafana.com/docs/grafana/latest/dashboards/)
+on how to build a dashboard.
+
+By clicking on the "Save dashboard" button in the Grafana UI, the changes to the
+dashboards will be persisted in the Grafana database at runtime, but they will be
+lost after restarting the Grafana deployment. To restore those changes after a restart,
+as the first step, you will need to export the dashboard JSON file following the
+[doc](https://grafana.com/docs/grafana/latest/dashboards/export-import/), then there
+are two ways to import the dashboard depending on your needs:
+
+- In the running Grafana UI, manually import the dashboard JSON files.
+- If you want the changed dashboards to be automatically provisioned in Grafana
+like our pre-built dashboards, generate a deployment manifest with the changes by
+following the steps below:
 
 1. Clone the repository. Exported dashboard JSON files should be placed under `antrea/build/yamls/flow-visibility/base/provisioning/dashboards`.
 1. If a new dashboard is added, edit [kustomization.yml][flow_visibility_kustomization_yaml]
@@ -734,168 +1082,12 @@ by adding the file in the following section:
 ./hack/generate-manifest-flow-visibility.sh > build/yamls/flow-visibility.yml
 ```
 
-### ELK Flow Collector (deprecated)
+### ELK Flow Collector (removed)
 
-#### Purpose
+**Starting with Antrea v1.7, support for the ELK Flow Collector has been removed.**
+Please consider using the [Grafana Flow Collector](#grafana-flow-collector)
+instead, which is actively maintained.
 
-Antrea supports sending IPFIX flow records through the Flow Exporter feature
-described above. The Elastic Stack (ELK Stack) works as the data collector, data
-storage and visualization tool for flow records and flow-related information. This
-document provides the guidelines for deploying Elastic Stack with support for
-Antrea-specific IPFIX fields in a Kubernetes cluster.
-
-#### About Elastic Stack
-
-[Elastic Stack](https://www.elastic.co) is a group of open source products to
-help collect, store, search, analyze and visualize data in real time. We will
-use Logstash, Elasticsearch and Kibana in Antrea flow visualization.
-[Logstash](https://www.elastic.co/logstash) works as data collector to
-centralize flow records. [Logstash Netflow codec plugin](https://www.elastic.co/guide/en/logstash/current/plugins-codecs-netflow.html)
-supports Netflow v5/v9/v10(IPFIX) protocols for flow data collection.
-The flow exporter feature in Antrea Agent uses the IPFIX (Netflow v10) protocol
-to export flow records.
-
-[Elasticsearch](https://www.elastic.co/elasticsearch/), as a RESTful search
-engine, supports storing, searching and indexing records received.
-[Kibana](https://www.elastic.co/kibana/) is mainly for data visualization and
-exploration.
-
-#### Deployment Steps
-
-If you are looking for steps to deploy the ELK flow collector along with a new Antrea
-cluster and the Flow Aggregator Service, then please refer to the
-[quick deployment](#quick-deployment) section.
-
-The following steps will deploy the ELK flow collector on an existing Kubernetes
-cluster, which uses Antrea as the CNI. First step is to fetch the necessary resources
-from the Antrea repository. You can either clone the entire repo or download the
-particular folder using the subversion(svn) utility. If the deployed version of
-Antrea has a release `<TAG>` (e.g. `v0.10.0`), then you can use the following command:
-
-```shell
-git clone --depth 1 --branch <TAG> https://github.com/antrea-io/antrea.git && cd antrea/build/yamls/
-or
-svn export https://github.com/antrea-io/antrea/tags/<TAG>/build/yamls/elk-flow-collector/
-```
-
-If the deployed version of Antrea is the latest version, i.e., built from the main
-branch, then you can use the following command:
-
-```shell
-git clone --depth 1 --branch main https://github.com/antrea-io/antrea.git && cd antrea/build/yamls/
-or
-svn export https://github.com/antrea-io/antrea/trunk/build/yamls/elk-flow-collector/
-```
-
-To create the required K8s resources in the `elk-flow-collector` folder and get
-everything up-and-running, run following commands:
-
-```shell
-kubectl create namespace elk-flow-collector
-kubectl create configmap logstash-configmap -n elk-flow-collector --from-file=./elk-flow-collector/logstash/
-kubectl apply -f ./elk-flow-collector/elk-flow-collector.yml -n elk-flow-collector
-```
-
-Please refer to the [Flow Aggregator Configuration](#configuration-1) to configure
-external flow collector as Logstash Service Cluster IP.
-
-Kibana dashboard is exposed as a Nodeport Service, which can be accessed via
-`http://[NodeIP]: 30007`. `elk-flow-collector/kibana.ndjson` is an auto-generated
-reusable file containing pre-built objects for visualizing Pod-to-Pod, Pod-to-Service
-and Node-to-Node flow records. To import the dashboards into Kibana, go to
-**Management -> Saved Objects** and import `elk-flow-collector/kibana.ndjson`.
-
-#### Pre-built Dashboards
-
-The following dashboards are pre-built and are recommended for Antrea flow
-visualization.
-
-##### Overview
-
-An overview of Pod-based flow records information is provided.
-
-<img src="https://downloads.antrea.io/static/02052021/flow-visualization-overview.png" width="900" alt="Flow
-Visualization Overview Dashboard">
-
-##### Pod-to-Pod Flows
-
-Pod-to-Pod cumulative Tx and Rx traffic is shown in sankey diagrams. Corresponding
-source or destination Pod throughput is visualized using line graph.
-
-<img src="https://downloads.antrea.io/static/04292021/flow-visualization-pod-to-pod-1.png" width="900" alt="Flow
-Visualization Pod-to-Pod Dashboard">
-
-<img src="https://downloads.antrea.io/static/02052021/flow-visualization-pod-to-pod-2.png" width="900" alt="Flow
-Visualization Pod-to-Pod Dashboard">
-
-<img src="https://downloads.antrea.io/static/02052021/flow-visualization-pod-to-pod-3.png" width="900" alt="Flow
-Visualization Pod-to-Pod Dashboard">
-
-##### Pod-to-External Flows
-
-Pod-to-External cumulative Tx and Rx traffic is shown in sankey diagrams. Corresponding
-source or destination throughput is visualized using line graph.
-
-<img src="https://downloads.antrea.io/static/04292021/flow-visualization-pod-to-external-1.png" width="900" alt="Flow
-Visualization Pod-to-External Dashboard">
-
-<img src="https://downloads.antrea.io/static/04292021/flow-visualization-pod-to-external-2.png" width="900" alt="Flow
-Visualization Pod-to-External Dashboard">
-
-##### Pod-to-Service Flows
-
-Pod-to-Service traffic is presented similar to Pod-to-Pod/External traffic.
-Corresponding source or destination IP addresses is shown in tooltips.
-
-<img src="https://downloads.antrea.io/static/03022021/flow-visualization-pod-to-service-1.png" width="900" alt="Flow
-Visualization Pod-to-Service Dashboard">
-
-Aggregated Tx and Rx traffic based on destination Service is shown in line graph.
-<img src="https://downloads.antrea.io/static/02052021/flow-visualization-pod-to-service-2.png" width="900" alt="Flow
-Visualization Pod-to-Service Dashboard">
-
-<img src="https://downloads.antrea.io/static/02052021/flow-visualization-pod-to-service-3.png" width="900" alt="Flow
-Visualization Pod-to-Service Dashboard">
-
-##### Flow Records
-
-Flow Records dashboard shows the raw flow records over time with support
-for filters.
-
-<img src="https://downloads.antrea.io/static/04292021/flow-visualization-flow-record.png" width="900" alt="Flow
-Visualization Flow Record Dashboard">
-
-##### Node Throughput
-
-Node Throughput dashboard shows the visualization of inter-Node and
-intra-Node traffic by aggregating all the Pod traffic per Node.
-
-<img src="https://downloads.antrea.io/static/03022021/flow-visualization-node-1.png" width="900" alt="Flow
-Visualization Node Throughput Dashboard">
-
-We also present aggregated Tx and Rx Mbps by Node in heatmap to give
-a better overview of Node bandwidth consumption.
-
-<img src="https://downloads.antrea.io/static/03022021/flow-visualization-node-2.png" width="900" alt="Flow
-Visualization Node Throughput Dashboard">
-
-##### Network Policy
-
-Network Policy dashboard provides filters over ingress network policy name and namespace, egress
-network policy name and namespace to view corresponding flow throughput under network policy. Flows
-are grouped by egress network policies (source) and ingress network policies (destination) in the
-sankey diagram. When hovering over the flow, it will show corresponding Pod-to-Pod traffic details
-and network policies.
-
-<img src="https://downloads.antrea.io/static/03022021/flow-visualization-np-1.png" width="900" alt="Flow
-Visualization Network Policy Dashboard">
-
-With filters applied:
-
-<img src="https://downloads.antrea.io/static/03022021/flow-visualization-np-2.png" width="900" alt="Flow
-Visualization Network Policy Dashboard">
-
-[clickhouse_manifest_yaml]: ../build/yamls/flow-visibility/base/clickhouse.yml
-[flow_aggregator_manifest_yaml]: ../build/yamls/flow-aggregator/base/flow-aggregator.yml
-[grafana_manifest_yaml]: ../build/yamls/flow-visibility/base/grafana.yml
 [flow_visibility_kustomization_yaml]: ../build/yamls/flow-visibility/base/kustomization.yml
+[local_pv_yaml]: ../build/yamls/flow-visibility/patches/pv/createLocalPv.yml
+[nfs_pv_yaml]: ../build/yamls/flow-visibility/patches/pv/createNfsPv.yml

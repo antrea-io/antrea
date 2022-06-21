@@ -15,8 +15,10 @@
 package features
 
 import (
-	"k8s.io/apimachinery/pkg/util/runtime"
+	k8sruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/component-base/featuregate"
+
+	"antrea.io/antrea/pkg/util/runtime"
 )
 
 // When editing this file, make sure you edit the documentation as well to keep
@@ -66,6 +68,7 @@ const (
 	NodePortLocal featuregate.Feature = "NodePortLocal"
 
 	// alpha: v1.0
+	// beta: v1.6
 	// Enable controlling SNAT IPs of Pod egress traffic.
 	Egress featuregate.Feature = "Egress"
 
@@ -74,12 +77,16 @@ const (
 	NodeIPAM featuregate.Feature = "NodeIPAM"
 
 	// alpha: v1.4
-	// Enable flexible IPAM for Pods.
+	// Enable AntreaIPAM, which is required by bridging mode Pods and secondary network IPAM.
 	AntreaIPAM featuregate.Feature = "AntreaIPAM"
 
 	// alpha: v1.5
 	// Enable Multicast.
 	Multicast featuregate.Feature = "Multicast"
+
+	// alpha: v1.7
+	// Enable Multicluster.
+	Multicluster featuregate.Feature = "Multicluster"
 
 	// alpha: v1.5
 	// Enable Secondary interface feature for Antrea.
@@ -88,6 +95,14 @@ const (
 	// alpha: v1.5
 	// Enable controlling Services with ExternalIP.
 	ServiceExternalIP featuregate.Feature = "ServiceExternalIP"
+
+	// alpha: v1.7
+	// Enable mirroring or redirecting the traffic Pods send or receive.
+	TrafficControl featuregate.Feature = "TrafficControl"
+
+	// alpha: v1.7
+	// Enable certificated-based authentication for IPsec.
+	IPsecCertAuth featuregate.Feature = "IPsecCertAuth"
 )
 
 var (
@@ -104,7 +119,7 @@ var (
 	DefaultAntreaFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
 		AntreaPolicy:       {Default: true, PreRelease: featuregate.Beta},
 		AntreaProxy:        {Default: true, PreRelease: featuregate.Beta},
-		Egress:             {Default: false, PreRelease: featuregate.Alpha},
+		Egress:             {Default: true, PreRelease: featuregate.Beta},
 		EndpointSlice:      {Default: false, PreRelease: featuregate.Alpha},
 		Traceflow:          {Default: true, PreRelease: featuregate.Beta},
 		AntreaIPAM:         {Default: false, PreRelease: featuregate.Alpha},
@@ -113,8 +128,11 @@ var (
 		NodePortLocal:      {Default: true, PreRelease: featuregate.Beta},
 		NodeIPAM:           {Default: false, PreRelease: featuregate.Alpha},
 		Multicast:          {Default: false, PreRelease: featuregate.Alpha},
+		Multicluster:       {Default: false, PreRelease: featuregate.Alpha},
 		SecondaryNetwork:   {Default: false, PreRelease: featuregate.Alpha},
 		ServiceExternalIP:  {Default: false, PreRelease: featuregate.Alpha},
+		TrafficControl:     {Default: false, PreRelease: featuregate.Alpha},
+		IPsecCertAuth:      {Default: false, PreRelease: featuregate.Alpha},
 	}
 
 	// UnsupportedFeaturesOnWindows records the features not supported on
@@ -128,17 +146,31 @@ var (
 	// can have different FeatureSpecs between Linux and Windows, we should
 	// still define a separate defaultAntreaFeatureGates map for Windows.
 	unsupportedFeaturesOnWindows = map[featuregate.Feature]struct{}{
-		NodePortLocal:     {},
 		Egress:            {},
 		AntreaIPAM:        {},
 		Multicast:         {},
 		SecondaryNetwork:  {},
 		ServiceExternalIP: {},
+		IPsecCertAuth:     {},
+		// Multicluster feature is not validated on Windows yet. This can removed
+		// in the future if it's fully tested on Windows.
+		Multicluster: {},
 	}
 )
 
 func init() {
-	runtime.Must(DefaultMutableFeatureGate.Add(DefaultAntreaFeatureGates))
+	if runtime.IsWindowsPlatform() {
+		for f := range unsupportedFeaturesOnWindows {
+			// A feature which is enabled by default on Linux might not be supported on
+			// Windows. So, override the default value here.
+			fg := DefaultAntreaFeatureGates[f]
+			if fg.Default {
+				fg.Default = false
+				DefaultAntreaFeatureGates[f] = fg
+			}
+		}
+	}
+	k8sruntime.Must(DefaultMutableFeatureGate.Add(DefaultAntreaFeatureGates))
 }
 
 // SupportedOnWindows checks whether a feature is supported on a Windows Node.

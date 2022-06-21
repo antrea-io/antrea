@@ -56,23 +56,25 @@ const (
 // List the supported protocols and their codes in traceflow.
 // According to code in Antrea agent and controller, default protocol is ICMP if protocol is not inputted by users.
 const (
-	ICMPProtocol int32 = 1
-	TCPProtocol  int32 = 6
-	UDPProtocol  int32 = 17
-	SCTPProtocol int32 = 132
+	ICMPProtocolNumber int32 = 1
+	IGMPProtocolNumber int32 = 2
+	TCPProtocolNumber  int32 = 6
+	UDPProtocolNumber  int32 = 17
+	SCTPProtocolNumber int32 = 132
 )
 
 var SupportedProtocols = map[string]int32{
-	"TCP":  TCPProtocol,
-	"UDP":  UDPProtocol,
-	"ICMP": ICMPProtocol,
+	"TCP":  TCPProtocolNumber,
+	"UDP":  UDPProtocolNumber,
+	"ICMP": ICMPProtocolNumber,
 }
 
 var ProtocolsToString = map[int32]string{
-	TCPProtocol:  "TCP",
-	UDPProtocol:  "UDP",
-	ICMPProtocol: "ICMP",
-	SCTPProtocol: "SCTP",
+	TCPProtocolNumber:  "TCP",
+	UDPProtocolNumber:  "UDP",
+	ICMPProtocolNumber: "ICMP",
+	IGMPProtocolNumber: "IGMP",
+	SCTPProtocolNumber: "SCTP",
 }
 
 // List the supported destination types in traceflow.
@@ -314,12 +316,12 @@ type NetworkPolicySpec struct {
 	// Currently Ingress rule supports setting the `From` field but not the `To`
 	// field within a Rule.
 	// +optional
-	Ingress []Rule `json:"ingress"`
+	Ingress []Rule `json:"ingress,omitempty"`
 	// Set of egress rules evaluated based on the order in which they are set.
 	// Currently Egress rule supports setting the `To` field but not the `From`
 	// field within a Rule.
 	// +optional
-	Egress []Rule `json:"egress"`
+	Egress []Rule `json:"egress,omitempty"`
 }
 
 // NetworkPolicyPhase defines the phase in which a NetworkPolicy is.
@@ -353,19 +355,23 @@ type NetworkPolicyStatus struct {
 type Rule struct {
 	// Action specifies the action to be applied on the rule.
 	Action *RuleAction `json:"action"`
-	// Set of port and protocol allowed/denied by the rule. If this field is unset
-	// or empty, this rule matches all ports.
+	// Set of ports and protocols matched by the rule. If this field and Protocols
+	// are unset or empty, this rule matches all ports.
 	// +optional
 	Ports []NetworkPolicyPort `json:"ports,omitempty"`
+	// Set of protocols matched by the rule. If this field and Ports are unset or
+	// empty, this rule matches all protocols supported.
+	// +optional
+	Protocols []NetworkPolicyProtocol `json:"protocols,omitempty"`
 	// Rule is matched if traffic originates from workloads selected by
 	// this field. If this field is empty, this rule matches all sources.
 	// +optional
-	From []NetworkPolicyPeer `json:"from"`
+	From []NetworkPolicyPeer `json:"from,omitempty"`
 	// Rule is matched if traffic is intended for workloads selected by
 	// this field. This field can't be used with ToServices. If this field
 	// and ToServices are both empty or missing this rule matches all destinations.
 	// +optional
-	To []NetworkPolicyPeer `json:"to"`
+	To []NetworkPolicyPeer `json:"to,omitempty"`
 	// Rule is matched if traffic is intended for a Service listed in this field.
 	// Currently only ClusterIP types Services are supported in this field. This field
 	// can only be used when AntreaProxy is enabled. This field can't be used with To
@@ -376,9 +382,10 @@ type Rule struct {
 	// Name describes the intention of this rule.
 	// Name should be unique within the policy.
 	// +optional
-	Name string `json:"name"`
+	Name string `json:"name,omitempty"`
 	// EnableLogging is used to indicate if agent should generate logs
 	// when rules are matched. Should be default to false.
+	// +optional
 	EnableLogging bool `json:"enableLogging"`
 	// Select workloads on which this rule will be applied to. Cannot be set in
 	// conjunction with NetworkPolicySpec/ClusterNetworkPolicySpec.AppliedTo.
@@ -439,6 +446,10 @@ type NetworkPolicyPeer struct {
 	// Cannot be set with any other selector.
 	// +optional
 	ServiceAccount *NamespacedName `json:"serviceAccount,omitempty"`
+	// Select certain Nodes which match the label selector.
+	// A NodeSelector cannot be set in AppliedTo field or set with any other selector.
+	// +optional
+	NodeSelector *metav1.LabelSelector `json:"nodeSelector,omitempty"`
 }
 
 type PeerNamespaces struct {
@@ -492,6 +503,11 @@ const (
 	// RuleActionReject indicates that the traffic matching the rule must be rejected and the
 	// client will receive a response.
 	RuleActionReject RuleAction = "Reject"
+
+	IGMPQuery    int32 = 0x11
+	IGMPReportV1 int32 = 0x12
+	IGMPReportV2 int32 = 0x16
+	IGMPReportV3 int32 = 0x22
 )
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -538,12 +554,12 @@ type ClusterNetworkPolicySpec struct {
 	// Currently Ingress rule supports setting the `From` field but not the `To`
 	// field within a Rule.
 	// +optional
-	Ingress []Rule `json:"ingress"`
+	Ingress []Rule `json:"ingress,omitempty"`
 	// Set of egress rules evaluated based on the order in which they are set.
 	// Currently Egress rule supports setting the `To` field but not the `From`
 	// field within a Rule.
 	// +optional
-	Egress []Rule `json:"egress"`
+	Egress []Rule `json:"egress,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -594,4 +610,31 @@ type TierList struct {
 type NamespacedName struct {
 	Name      string `json:"name,omitempty"`
 	Namespace string `json:"namespace,omitempty"`
+}
+
+// NetworkPolicyProtocol defines additional protocols that are not supported by
+// `ports`. All fields should be used as a standalone field.
+type NetworkPolicyProtocol struct {
+	ICMP *ICMPProtocol `json:"icmp,omitempty"`
+	IGMP *IGMPProtocol `json:"igmp,omitempty"`
+}
+
+// ICMPProtocol matches ICMP traffic with specific ICMPType and/or ICMPCode. All
+// fields could be used alone or together. If all fields are not provided, this
+// matches all ICMP traffic.
+type ICMPProtocol struct {
+	ICMPType *int32 `json:"icmpType,omitempty"`
+	ICMPCode *int32 `json:"icmpCode,omitempty"`
+}
+
+// IGMPProtocol matches IGMP traffic with IGMPType and GroupAddress. IGMPType must
+// be filled with:
+// IGMPQuery    int32 = 0x11
+// IGMPReportV1 int32 = 0x12
+// IGMPReportV2 int32 = 0x16
+// IGMPReportV3 int32 = 0x22
+// If groupAddress is empty, all groupAddresses will be matched.
+type IGMPProtocol struct {
+	IGMPType     *int32 `json:"igmpType,omitempty"`
+	GroupAddress string `json:"groupAddress,omitempty"`
 }

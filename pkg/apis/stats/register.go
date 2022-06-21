@@ -50,6 +50,8 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&AntreaNetworkPolicyStatsList{},
 		&NetworkPolicyStats{},
 		&NetworkPolicyStatsList{},
+		&MulticastGroup{},
+		&MulticastGroupList{},
 	)
 	return nil
 }

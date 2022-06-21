@@ -28,7 +28,24 @@ import (
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 )
 
+func prepareMockTables() {
+	openflow.InitMockTables(
+		map[*openflow.Table]uint8{
+			openflow.AntreaPolicyEgressRuleTable:  uint8(5),
+			openflow.EgressRuleTable:              uint8(6),
+			openflow.EgressDefaultTable:           uint8(7),
+			openflow.EgressMetricTable:            uint8(8),
+			openflow.AntreaPolicyIngressRuleTable: uint8(12),
+			openflow.IngressRuleTable:             uint8(13),
+			openflow.IngressDefaultTable:          uint8(14),
+			openflow.IngressMetricTable:           uint8(15),
+			openflow.L2ForwardingOutTable:         uint8(17),
+		})
+}
+
 func Test_getNetworkPolicyObservation(t *testing.T) {
+	prepareMockTables()
+
 	type args struct {
 		tableID uint8
 		ingress bool

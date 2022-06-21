@@ -23,6 +23,7 @@ work with that Antrea version.
 | - | AKS, K8s v1.18.14 | Azure | Ubuntu 18.04, moby | Standard_DS2_v2 |  | Antrea CI |
 | - | AKS, K8s v1.19.9 | Azure | Ubuntu 18.04, containerd | Standard_DS2_v2 |  | Antrea CI |
 | - | Kind v0.9.0, K8s v1.19.1 | N/A | Ubuntu 20.10, containerd://1.4.0 | N/A |  | [Requirements for using Antrea on Kind](kind.md) |
+| - | Minikube v1.25.0 | N/A | Ubuntu 20.04.2 LTS (5.10.76-linuxkit) arm64, docker://20.10.12 | 8GB RAM | | |
 
 ## Installer-specific instructions
 
@@ -56,6 +57,10 @@ cluster without deploying a specific network plugin.
 ### Kind
 
 To deploy Antrea on Kind, please follow these [steps](kind.md).
+
+### Minikube
+
+To deploy Antrea on minikube, please follow these [steps](minikube.md).
 
 ## Updating the list
 

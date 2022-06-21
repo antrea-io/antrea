@@ -38,12 +38,14 @@ const (
 	inboundFirewallRuleName  = "Antrea: accept packets from local Pods"
 	outboundFirewallRuleName = "Antrea: accept packets to local Pods"
 
-	antreaNat         = "antrea-nat"
 	antreaNatNodePort = "antrea-nat-nodeport"
 )
 
 var (
-	virtualServiceIPv4Net = util.NewIPNet(config.VirtualServiceIPv4)
+	antreaNat                  = util.AntreaNatName
+	virtualServiceIPv4Net      = util.NewIPNet(config.VirtualServiceIPv4)
+	virtualNodePortDNATIPv4Net = util.NewIPNet(config.VirtualNodePortDNATIPv4)
+	PodCIDRIPv4                *net.IPNet
 )
 
 type Client struct {
@@ -71,6 +73,7 @@ func NewClient(networkConfig *config.NetworkConfig, noSNAT, proxyAll, connectUpl
 // Service LoadBalancing is provided by OpenFlow.
 func (c *Client) Initialize(nodeConfig *config.NodeConfig, done func()) error {
 	c.nodeConfig = nodeConfig
+	PodCIDRIPv4 = nodeConfig.PodIPv4CIDR
 	bridgeInf, err := net.InterfaceByName(nodeConfig.OVSBridge)
 	if err != nil {
 		return fmt.Errorf("failed to find the interface %s: %v", nodeConfig.OVSBridge, err)
@@ -243,8 +246,11 @@ func (c *Client) addVirtualServiceIPRoute(isIPv6 bool) error {
 	}
 	klog.InfoS("Added virtual Service IP neighbor", "neighbor", vNeighbor)
 
+	if err := c.addServiceRoute(config.VirtualNodePortDNATIPv4); err != nil {
+		return err
+	}
 	// For NodePort Service, a new NetNat for NetNatStaticMapping is needed.
-	err := util.NewNetNat(antreaNatNodePort, virtualServiceIPv4Net)
+	err := util.NewNetNat(antreaNatNodePort, virtualNodePortDNATIPv4Net)
 	if err != nil {
 		return err
 	}

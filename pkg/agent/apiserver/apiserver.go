@@ -36,10 +36,12 @@ import (
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/agentinfo"
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/appliedtogroup"
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/featuregates"
+	"antrea.io/antrea/pkg/agent/apiserver/handlers/multicast"
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/networkpolicy"
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/ovsflows"
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/ovstracing"
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/podinterface"
+	"antrea.io/antrea/pkg/agent/apiserver/handlers/serviceexternalip"
 	agentquerier "antrea.io/antrea/pkg/agent/querier"
 	systeminstall "antrea.io/antrea/pkg/apis/system/install"
 	systemv1beta1 "antrea.io/antrea/pkg/apis/system/v1beta1"
@@ -72,8 +74,9 @@ func (s *agentAPIServer) Run(stopCh <-chan struct{}) error {
 	return s.GenericAPIServer.PrepareRun().Run(stopCh)
 }
 
-func installHandlers(aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolicyInfoQuerier, s *genericapiserver.GenericAPIServer) {
+func installHandlers(aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolicyInfoQuerier, mq querier.AgentMulticastInfoQuerier, seipq querier.ServiceExternalIPStatusQuerier, s *genericapiserver.GenericAPIServer) {
 	s.Handler.NonGoRestfulMux.HandleFunc("/loglevel", loglevel.HandleFunc())
+	s.Handler.NonGoRestfulMux.HandleFunc("/podmulticaststats", multicast.HandleFunc(mq))
 	s.Handler.NonGoRestfulMux.HandleFunc("/featuregates", featuregates.HandleFunc())
 	s.Handler.NonGoRestfulMux.HandleFunc("/agentinfo", agentinfo.HandleFunc(aq))
 	s.Handler.NonGoRestfulMux.HandleFunc("/podinterfaces", podinterface.HandleFunc(aq))
@@ -82,6 +85,7 @@ func installHandlers(aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolic
 	s.Handler.NonGoRestfulMux.HandleFunc("/addressgroups", addressgroup.HandleFunc(npq))
 	s.Handler.NonGoRestfulMux.HandleFunc("/ovsflows", ovsflows.HandleFunc(aq))
 	s.Handler.NonGoRestfulMux.HandleFunc("/ovstracing", ovstracing.HandleFunc(aq))
+	s.Handler.NonGoRestfulMux.HandleFunc("/serviceexternalip", serviceexternalip.HandleFunc(seipq))
 }
 
 func installAPIGroup(s *genericapiserver.GenericAPIServer, aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolicyInfoQuerier, v4Enabled, v6Enabled bool) error {
@@ -95,8 +99,8 @@ func installAPIGroup(s *genericapiserver.GenericAPIServer, aq agentquerier.Agent
 }
 
 // New creates an APIServer for running in antrea agent.
-func New(aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolicyInfoQuerier, bindPort int,
-	enableMetrics bool, kubeconfig string, cipherSuites []uint16, tlsMinVersion uint16, v4Enabled, v6Enabled bool) (*agentAPIServer, error) {
+func New(aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolicyInfoQuerier, mq querier.AgentMulticastInfoQuerier, seipq querier.ServiceExternalIPStatusQuerier,
+	bindPort int, enableMetrics bool, kubeconfig string, cipherSuites []uint16, tlsMinVersion uint16, v4Enabled, v6Enabled bool) (*agentAPIServer, error) {
 	cfg, err := newConfig(npq, bindPort, enableMetrics, kubeconfig)
 	if err != nil {
 		return nil, err
@@ -110,7 +114,7 @@ func New(aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolicyInfoQuerier
 	if err := installAPIGroup(s, aq, npq, v4Enabled, v6Enabled); err != nil {
 		return nil, err
 	}
-	installHandlers(aq, npq, s)
+	installHandlers(aq, npq, mq, seipq, s)
 	return &agentAPIServer{GenericAPIServer: s}, nil
 }
 

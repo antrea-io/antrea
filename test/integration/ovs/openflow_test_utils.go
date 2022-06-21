@@ -67,18 +67,21 @@ func (f ExpectFlow) flowStr(name string) string {
 func CheckFlowExists(t *testing.T, ovsCtlClient ovsctl.OVSCtlClient, tableName string, tableID uint8, expectFound bool, flows []*ExpectFlow) []string {
 	var flowList []string
 	var unexpectedFlows []*ExpectFlow
+	table := tableName
+	if table == "" {
+		table = fmt.Sprintf("%d", tableID)
+	}
 	if err := wait.PollImmediate(openFlowCheckInterval, openFlowCheckTimeout, func() (done bool, err error) {
 		unexpectedFlows = unexpectedFlows[:0]
 		if tableName != "" {
 			flowList, err = OfctlDumpTableFlows(ovsCtlClient, tableName)
 		} else {
 			flowList, err = OfctlDumpTableFlowsWithoutName(ovsCtlClient, tableID)
-			tableName = fmt.Sprintf("%d", tableID)
 		}
 		require.NoError(t, err, "Error dumping flows")
 
 		for _, flow := range flows {
-			found := OfctlFlowMatch(flowList, tableName, flow)
+			found := OfctlFlowMatch(flowList, table, flow)
 			if found != expectFound {
 				unexpectedFlows = append(unexpectedFlows, flow)
 			}
@@ -87,9 +90,9 @@ func CheckFlowExists(t *testing.T, ovsCtlClient ovsctl.OVSCtlClient, tableName s
 	}); err != nil {
 		for _, flow := range unexpectedFlows {
 			if expectFound {
-				t.Errorf("Failed to install flow: %s", flow.flowStr(tableName))
+				t.Errorf("Failed to install flow: %s", flow.flowStr(table))
 			} else {
-				t.Errorf("Failed to uninstall flow: %s", flow.flowStr(tableName))
+				t.Errorf("Failed to uninstall flow: %s", flow.flowStr(table))
 			}
 		}
 		t.Logf("Existing flows:\n%s", strings.Join(flowList, "\n"))

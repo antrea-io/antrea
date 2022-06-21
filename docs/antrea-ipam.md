@@ -56,8 +56,8 @@ network will be sent to the underlay network through the Node's transport
 network interface, and will be forwarded/routed by the underlay network. We also
 call this forwarding mode `bridging mode`.
 
-`IPPool` CRD defines a desired set of IP ranges. An `IPPool` can be annotated to
-Namespace, Pod and PodTemplate of StatefulSet/Deployment. Then Antrea will
+`IPPool` CRD defines a desired set of IP ranges and VLANs. An `IPPool` can be annotated
+to Namespace, Pod and PodTemplate of StatefulSet/Deployment. Then Antrea will
 manage IP address assignment for corresponding Pods according to `IPPool` spec.
 Note that the IP pool annotation cannot be updated or deleted without recreating
 the resource. An `IPPool` can be extended, but cannot be shrunk if already
@@ -93,7 +93,7 @@ Antrea deployment YAML are:
 
 #### Create IPPool CR
 
-The following example YAML manifests create an IPPool CR.
+The following example YAML manifest creates an IPPool CR.
 
 ```yaml
 apiVersion: "crd.antrea.io/v1alpha2"
@@ -107,11 +107,12 @@ spec:
     end: "10.2.0.20"
     gateway: "10.2.0.1"
     prefixLength: 24
+    vlan: 2              # Default is 0 (untagged). Valid value is 0~4095.
 ```
 
 #### IPPool Annotations on Namespace
 
-The following example YAML manifests create a Namespace to allocate Pod IPs from the IP pool.
+The following example YAML manifest creates a Namespace to allocate Pod IPs from the IP pool.
 
 ```yaml
 kind: Namespace
@@ -193,18 +194,185 @@ restore its configurations at exit. Node may lose network connection when `antre
 or OVS daemons are stopped unexpectedly, which can be recovered by rebooting the Node.
 `AntreaIPAM` Pods' traffic will not be routed by local Node's network stack.
 
-All traffic to a local Pod will be sent to the Pod's OVS port directly, after the
-destination MAC is rewritten to the Pod's MAC address. This includes `AntreaIPAM` Pods
-and regular `Subnet per Node` IPAM Pods, even they are not in the same subnets.
-Inter-Node traffic will be sent to the Node network from the source Node, and forwarded
-to the destination Node by the Node network.
+Traffic from `AntreaIPAM` Pods without VLAN, regular `Subnet per Node` IPAM Pods, and K8s
+Nodes is recognized as VLAN 0 (untagged).
+
+Traffic to a local Pod in the Pod's VLAN will be sent to the Pod's OVS port directly,
+after the destination MAC is rewritten to the Pod's MAC address. This includes
+`AntreaIPAM` Pods and regular `Subnet per Node` IPAM Pods, even when they are not in the
+same subnet. Traffic to a Pod in different VLAN will be sent to the underlay network,
+where the underlay router will route the traffic to the destination VLAN.
 
 ### Requirements for this Feature
 
 As of now, this feature is supported on Linux Nodes, with IPv4, `system` OVS datapath
 type, and `noEncap`, `noSNAT` traffic mode.
 
-The IPs in the `IPPools` must be in the same "underlay" subnet as the Node IP, because
-inter-Node traffic of AntreaIPAM Pods is forwarded by the Node network. Only a single IP
-pool can be included in the Namespace annotation. In the future, annotation of up to two
-pools for IPv4 and IPv6 respectively will be supported.
+The IPs in the `IPPools` without VLAN must be in the same underlay subnet as the Node
+IP, because inter-Node traffic of AntreaIPAM Pods is forwarded by the Node network.
+`IPPools` with VLAN must not overlap with other network subnets, and the underlay network
+router should provide the network connectivity for these VLANs. Only a single IP pool can
+be included in the Namespace annotation. In the future, annotation of up to two pools for
+IPv4 and IPv6 respectively will be supported.
+
+## IPAM for Secondary Network
+
+With the AntreaIPAM feature, Antrea can allocate IPs for Pod secondary networks. At the
+moment, AntreaIPAM supports secondary networks managed by [Multus](https://github.com/k8snetworkplumbingwg/multus-cni),
+we will add support for [secondary networks managed by Antrea](feature-gates.md#secondarynetwork)
+in the future.
+
+### Prerequisites
+
+The IPAM capability for secondary network was added in Antrea version 1.7. It
+requires the `AntreaIPAM` feature gate to be enabled on both `antrea-controller`
+and `antrea-agent`, as `AntreaIPAM` is still an alpha feature at this moment and
+is not enabled by default.
+
+### CNI IPAM configuration
+
+To configure Antrea IPAM, `antrea` should be specified as the IPAM plugin in the
+the CNI IPAM configuration, and at least one Antrea IPPool should be specified
+in the `ippools` field. IPs will be allocated from the specified IPPool(s) for
+the secondary network.
+
+```json
+{
+    "cniVersion": "0.3.0",
+    "name": "ipv4-net-1",
+    "type": "macvlan",
+    "master": "eth0",
+    "mode": "bridge",
+    "ipam": {
+        "type": "antrea",
+        "ippools": [ "ipv4-pool-1" ]
+    }
+}
+```
+
+Multiple IPPools can be specified to allocate multiple IPs from each IPPool for
+the secondary network. For example, you can specify one IPPool to allocate an
+IPv4 address and another IPPool to allocate an IPv6 address in the dual-stack
+case.
+
+```json
+{
+    "cniVersion": "0.3.0",
+    "name": "dual-stack-net-1",
+    "type": "macvlan",
+    "master": "eth0",
+    "mode": "bridge",
+    "ipam": {
+        "type": "antrea",
+        "ippools": [ "ipv4-pool-1", "ipv6-pool-1" ]
+    }
+}
+```
+
+Additionally, Antrea IPAM also supports the same configuration of static IP
+addresses, static routes, and DNS settings, as what is supported by the
+[static IPAM plugin](https://www.cni.dev/plugins/current/ipam/static). The
+following example requests an IP from an IPPool and also specifies two
+additional static IP addresses. It also includes static routes and DNS settings.
+
+```json
+{
+    "cniVersion": "0.3.0",
+    "name": "pool-and-static-net-1",
+    "type": "bridge",
+    "bridge": "br0"
+    "ipam": {
+        "type": "antrea",
+        "ippools": [ "ipv4-pool-1" ],
+        "addresses": [
+            {
+                "address": "10.10.0.1/24",
+                "gateway": "10.10.0.254"
+            },
+            {
+                "address": "3ffe:ffff:0:01ff::1/64",
+                "gateway": "3ffe:ffff:0::1"
+            }
+        ],
+        "routes": [
+            { "dst": "0.0.0.0/0" },
+            { "dst": "192.168.0.0/16", "gw": "10.10.5.1" },
+            { "dst": "3ffe:ffff:0:01ff::1/64" }
+        ],
+        "dns": {
+            "nameservers" : ["8.8.8.8"],
+            "domain": "example.com",
+            "search": [ "example.com" ]
+        }
+    }
+}
+```
+
+The CNI IPAM configuration can include only static addresses without IPPools, if
+only static IP addresses are needed.
+
+### Configuration with `NetworkAttachmentDefinition` CRD
+
+CNI and IPAM configuration of a secondary network is typically defined with the
+`NetworkAttachmentDefinition` CRD. For example:
+
+```yaml
+apiVersion: "k8s.cni.cncf.io/v1"
+kind: NetworkAttachmentDefinition
+metadata:
+  name: ipv4-net-1
+spec:
+  {
+      "cniVersion": "0.3.0",
+      "type": "macvlan",
+      "master": "eth0",
+      "mode": "bridge",
+      "ipam": {
+          "type": "antrea",
+          "ippools": [ "ipv4-pool-1" ]
+      }
+  }
+```
+
+## `IPPool` CRD
+
+Antrea IP pools are defined with the `IPPool` CRD. The following two examples
+define an IPv4 and an IPv6 IP pool respectively.
+
+```yaml
+apiVersion: "crd.antrea.io/v1alpha2"
+kind: IPPool
+metadata:
+  name: ipv4-pool-1
+spec:
+  ipVersion: 4
+  ipRanges:
+  - cidr: "10.10.1.0/26"
+    gateway: "10.10.1.1"
+    prefixLength: 24
+```
+
+```yaml
+apiVersion: "crd.antrea.io/v1alpha2"
+kind: IPPool
+metadata:
+  name: ipv6-pool-1
+spec:
+  ipVersion: 6
+  ipRanges:
+  - start: "3ffe:ffff:1:01ff::0100"
+    end: "3ffe:ffff:1:01ff::0200"
+    gateway: "3ffe:ffff:1:01ff::1"
+    prefixLength: 64
+```
+
+VLAN ID in the IP range subnet definition of `IPPool` CRD is not supported for
+secondary network IPAM.
+
+### Secondary Network creation with Multus
+
+To leverage Antrea for secondary network IPAM, Antrea must be used as the CNI
+for the Pods' primary network, while the secondary networks are implemented by
+other CNIs which are managed by Multus. The [Antrea + Multus guide](cookbooks/multus)
+talks about how to use Antrea with Multus, including the option of using Antrea
+IPAM for secondary networks.

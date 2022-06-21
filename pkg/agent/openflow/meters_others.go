@@ -17,11 +17,7 @@
 
 package openflow
 
-import (
-	"antrea.io/antrea/pkg/ovs/ovsconfig"
-)
-
-func ovsMetersAreSupported(ovsDatapathType ovsconfig.OVSDatapathType) bool {
+func ovsMetersAreSupported() bool {
 	// TODO: revisit after Windows OVS supports OpenFlow meters.
 	return false
 }

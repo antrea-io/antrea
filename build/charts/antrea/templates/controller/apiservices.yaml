@@ -1,0 +1,44 @@
+apiVersion: apiregistration.k8s.io/v1
+kind: APIService
+metadata:
+  name: v1beta2.controlplane.antrea.io
+  labels:
+    app: antrea
+spec:
+  group: controlplane.antrea.io
+  groupPriorityMinimum: 100
+  version: v1beta2
+  versionPriority: 100
+  service:
+    name: antrea
+    namespace: {{ .Release.Namespace }}
+---
+apiVersion: apiregistration.k8s.io/v1
+kind: APIService
+metadata:
+  name: v1beta1.system.antrea.io
+  labels:
+    app: antrea
+spec:
+  group: system.antrea.io
+  groupPriorityMinimum: 100
+  version: v1beta1
+  versionPriority: 100
+  service:
+    name: antrea
+    namespace: {{ .Release.Namespace }}
+---
+apiVersion: apiregistration.k8s.io/v1
+kind: APIService
+metadata:
+  name: v1alpha1.stats.antrea.io
+  labels:
+    app: antrea
+spec:
+  group: stats.antrea.io
+  groupPriorityMinimum: 100
+  version: v1alpha1
+  versionPriority: 100
+  service:
+    name: antrea
+    namespace: {{ .Release.Namespace }}

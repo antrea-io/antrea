@@ -43,7 +43,7 @@ func objectTransform(o interface{}, _ map[string]string) (interface{}, error) {
 	group := o.(*cpv1beta.AppliedToGroup)
 	var pods []common.GroupMember
 	for _, pod := range group.GroupMembers {
-		pods = append(pods, common.GroupMemberPodTransform(pod))
+		pods = append(pods, common.GroupMemberTransform(pod))
 	}
 	return Response{Name: group.GetName(), Pods: pods}, nil
 }

@@ -34,7 +34,6 @@ import (
 	"k8s.io/klog/v2"
 	"k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 
-	"antrea.io/antrea/pkg/features"
 	"antrea.io/antrea/pkg/util/env"
 )
 
@@ -84,9 +83,9 @@ func newCACertController(caContentProvider dynamiccertificates.CAContentProvider
 	return c
 }
 
-func (c *CACertController) UpdateCertificate() error {
+func (c *CACertController) UpdateCertificate(ctx context.Context) error {
 	if controller, ok := c.caContentProvider.(dynamiccertificates.ControllerRunner); ok {
-		if err := controller.RunOnce(); err != nil {
+		if err := controller.RunOnce(ctx); err != nil {
 			klog.Warningf("Updating of CA content failed: %v", err)
 			c.Enqueue()
 			return err
@@ -118,17 +117,16 @@ func (c *CACertController) syncCACert() error {
 		return err
 	}
 
-	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
-		if err := c.syncMutatingWebhooks(caCert); err != nil {
-			return err
-		}
-		if err := c.syncValidatingWebhooks(caCert); err != nil {
-			return err
-		}
-		if err := c.syncConversionWebhooks(caCert); err != nil {
-			return err
-		}
+	if err := c.syncMutatingWebhooks(caCert); err != nil {
+		return err
 	}
+	if err := c.syncValidatingWebhooks(caCert); err != nil {
+		return err
+	}
+	if err := c.syncConversionWebhooks(caCert); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -290,9 +288,9 @@ func (c *CACertController) syncConfigMap(caCert []byte) error {
 }
 
 // RunOnce runs a single sync step to ensure that we have a valid starting configuration.
-func (c *CACertController) RunOnce() error {
+func (c *CACertController) RunOnce(ctx context.Context) error {
 	if controller, ok := c.caContentProvider.(dynamiccertificates.ControllerRunner); ok {
-		if err := controller.RunOnce(); err != nil {
+		if err := controller.RunOnce(ctx); err != nil {
 			klog.Warningf("Initial population of CA content failed: %v", err)
 			c.Enqueue()
 			return err
@@ -306,20 +304,22 @@ func (c *CACertController) RunOnce() error {
 	return nil
 }
 
-// Run starts the CACertController and blocks until stopCh is closed.
-func (c *CACertController) Run(workers int, stopCh <-chan struct{}) {
+// Run starts the CACertController and blocks until the context is canceled.
+func (c *CACertController) Run(ctx context.Context, workers int) {
 	defer c.queue.ShutDown()
 
 	klog.Infof("Starting CACertController")
 	defer klog.Infof("Shutting down CACertController")
 
 	if controller, ok := c.caContentProvider.(dynamiccertificates.ControllerRunner); ok {
-		go controller.Run(1, stopCh)
+		// doesn't matter what workers say, only start one.
+		go controller.Run(ctx, 1)
 	}
 
-	go wait.Until(c.runWorker, time.Second, stopCh)
+	// doesn't matter what workers say, only start one.
+	go wait.Until(c.runWorker, time.Second, ctx.Done())
 
-	<-stopCh
+	<-ctx.Done()
 }
 
 func (c *CACertController) runWorker() {

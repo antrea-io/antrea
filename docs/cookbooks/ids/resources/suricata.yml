@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: suricata
+spec:
+  selector:
+    matchLabels:
+      app: suricata
+  template:
+    metadata:
+      labels:
+        app: suricata
+      name: suricata
+    spec:
+      hostNetwork: true
+      containers:
+        - name: suricata
+          image: jasonish/suricata:latest
+          imagePullPolicy: IfNotPresent
+          command:
+            - /usr/bin/suricata
+            - -i
+            - tap0
+          securityContext:
+            capabilities:
+              add:
+                - NET_ADMIN
+                - NET_RAW
+                - SYS_NICE
+          volumeMounts:
+            - name: host-var-log-suricata
+              mountPath: /var/log/suricata
+      volumes:
+        - name: host-var-log-suricata
+          hostPath:
+            path: /var/log/suricata
+            type: DirectoryOrCreate

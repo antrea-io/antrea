@@ -55,7 +55,7 @@ func TestProcessClusterGroup(t *testing.T) {
 			expectedGroup: &antreatypes.Group{
 				UID:      "uidA",
 				Name:     "cgA",
-				Selector: antreatypes.NewGroupSelector("", nil, &selectorA, nil),
+				Selector: antreatypes.NewGroupSelector("", nil, &selectorA, nil, nil),
 			},
 		},
 		{
@@ -69,7 +69,7 @@ func TestProcessClusterGroup(t *testing.T) {
 			expectedGroup: &antreatypes.Group{
 				UID:      "uidB",
 				Name:     "cgB",
-				Selector: antreatypes.NewGroupSelector("", &selectorB, nil, nil),
+				Selector: antreatypes.NewGroupSelector("", &selectorB, nil, nil, nil),
 			},
 		},
 		{
@@ -84,7 +84,7 @@ func TestProcessClusterGroup(t *testing.T) {
 			expectedGroup: &antreatypes.Group{
 				UID:      "uidC",
 				Name:     "cgC",
-				Selector: antreatypes.NewGroupSelector("", &selectorC, &selectorD, nil),
+				Selector: antreatypes.NewGroupSelector("", &selectorC, &selectorD, nil, nil),
 			},
 		},
 		{
@@ -177,7 +177,7 @@ func TestAddClusterGroup(t *testing.T) {
 			expectedGroup: &antreatypes.Group{
 				UID:      "uidA",
 				Name:     "cgA",
-				Selector: antreatypes.NewGroupSelector("", nil, &selectorA, nil),
+				Selector: antreatypes.NewGroupSelector("", nil, &selectorA, nil, nil),
 			},
 		},
 		{
@@ -191,7 +191,7 @@ func TestAddClusterGroup(t *testing.T) {
 			expectedGroup: &antreatypes.Group{
 				UID:      "uidB",
 				Name:     "cgB",
-				Selector: antreatypes.NewGroupSelector("", &selectorB, nil, nil),
+				Selector: antreatypes.NewGroupSelector("", &selectorB, nil, nil, nil),
 			},
 		},
 		{
@@ -206,7 +206,7 @@ func TestAddClusterGroup(t *testing.T) {
 			expectedGroup: &antreatypes.Group{
 				UID:      "uidC",
 				Name:     "cgC",
-				Selector: antreatypes.NewGroupSelector("", &selectorC, &selectorD, nil),
+				Selector: antreatypes.NewGroupSelector("", &selectorC, &selectorD, nil, nil),
 			},
 		},
 		{
@@ -274,7 +274,7 @@ func TestUpdateClusterGroup(t *testing.T) {
 			expectedGroup: &antreatypes.Group{
 				UID:      "uidA",
 				Name:     "cgA",
-				Selector: antreatypes.NewGroupSelector("", nil, &selectorB, nil),
+				Selector: antreatypes.NewGroupSelector("", nil, &selectorB, nil, nil),
 			},
 		},
 		{
@@ -288,7 +288,7 @@ func TestUpdateClusterGroup(t *testing.T) {
 			expectedGroup: &antreatypes.Group{
 				UID:      "uidA",
 				Name:     "cgA",
-				Selector: antreatypes.NewGroupSelector("", &selectorC, nil, nil),
+				Selector: antreatypes.NewGroupSelector("", &selectorC, nil, nil, nil),
 			},
 		},
 		{
@@ -303,7 +303,7 @@ func TestUpdateClusterGroup(t *testing.T) {
 			expectedGroup: &antreatypes.Group{
 				UID:      "uidA",
 				Name:     "cgA",
-				Selector: antreatypes.NewGroupSelector("", &selectorC, &selectorD, nil),
+				Selector: antreatypes.NewGroupSelector("", &selectorC, &selectorD, nil, nil),
 			},
 		},
 		{
@@ -482,7 +482,7 @@ func TestFilterInternalGroupsForService(t *testing.T) {
 			Name:      "svc1",
 			Namespace: metav1.NamespaceDefault,
 		},
-		Selector: antreatypes.NewGroupSelector(metav1.NamespaceDefault, &selectorSpec, nil, nil),
+		Selector: antreatypes.NewGroupSelector(metav1.NamespaceDefault, &selectorSpec, nil, nil, nil),
 	}
 	grp3 := &antreatypes.Group{
 		UID:  "uid3",
@@ -492,7 +492,7 @@ func TestFilterInternalGroupsForService(t *testing.T) {
 			Namespace: "test",
 		},
 		// Selector is out of sync with latest service spec, but the CG should still be returned.
-		Selector: antreatypes.NewGroupSelector("test", nil, nil, nil),
+		Selector: antreatypes.NewGroupSelector("test", nil, nil, nil, nil),
 	}
 	grp4 := &antreatypes.Group{
 		UID:  "uid4",
@@ -598,13 +598,13 @@ func TestServiceToGroupSelector(t *testing.T) {
 			"service-default-ns",
 			svc1,
 			grp1,
-			antreatypes.NewGroupSelector(metav1.NamespaceDefault, &selectorSpec, nil, nil),
+			antreatypes.NewGroupSelector(metav1.NamespaceDefault, &selectorSpec, nil, nil, nil),
 		},
 		{
 			"service-match-name-and-namespace",
 			svc2,
 			grp2,
-			antreatypes.NewGroupSelector("test", &selectorSpec, nil, nil),
+			antreatypes.NewGroupSelector("test", &selectorSpec, nil, nil, nil),
 		},
 		{
 			"service-without-selectors",
@@ -706,17 +706,17 @@ var groups = []antreatypes.Group{
 	{
 		UID:      "groupUID0",
 		Name:     "group0",
-		Selector: antreatypes.NewGroupSelector("test-ns", &metav1.LabelSelector{MatchLabels: map[string]string{"app": "foo"}}, nil, nil),
+		Selector: antreatypes.NewGroupSelector("test-ns", &metav1.LabelSelector{MatchLabels: map[string]string{"app": "foo"}}, nil, nil, nil),
 	},
 	{
 		UID:      "groupUID1",
 		Name:     "group1",
-		Selector: antreatypes.NewGroupSelector("test-ns", nil, nil, nil),
+		Selector: antreatypes.NewGroupSelector("test-ns", nil, nil, nil, nil),
 	},
 	{
 		UID:      "groupUID2",
 		Name:     "group2",
-		Selector: antreatypes.NewGroupSelector("test-ns", &metav1.LabelSelector{MatchLabels: map[string]string{"app": "other"}}, nil, nil),
+		Selector: antreatypes.NewGroupSelector("test-ns", &metav1.LabelSelector{MatchLabels: map[string]string{"app": "other"}}, nil, nil, nil),
 	},
 	{
 		UID:         "groupUID3",
@@ -915,7 +915,7 @@ func TestSyncInternalGroup(t *testing.T) {
 				Action:    &allowAction,
 			},
 		},
-		AppliedToGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", &selectorB, nil, nil).NormalizedName)},
+		AppliedToGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", &selectorB, nil, nil, nil).NormalizedName)},
 	}
 	actualInternalNetworkPolicy1, exists, _ := npc.internalNetworkPolicyStore.Get(internalNetworkPolicyKeyFunc(cnp1))
 	require.True(t, exists)
@@ -939,7 +939,7 @@ func TestSyncInternalGroup(t *testing.T) {
 				Action:    &allowAction,
 			},
 		},
-		AppliedToGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", &selectorC, nil, nil).NormalizedName)},
+		AppliedToGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", &selectorC, nil, nil, nil).NormalizedName)},
 	}
 	actualInternalNetworkPolicy2, exists, _ := npc.internalNetworkPolicyStore.Get(internalNetworkPolicyKeyFunc(cnp2))
 	require.True(t, exists)
@@ -948,7 +948,7 @@ func TestSyncInternalGroup(t *testing.T) {
 	expectedInternalGroup := &antreatypes.Group{
 		UID:             cgUID,
 		Name:            cgName,
-		Selector:        antreatypes.NewGroupSelector("", nil, &selectorA, nil),
+		Selector:        antreatypes.NewGroupSelector("", nil, &selectorA, nil, nil),
 		MembersComputed: corev1.ConditionTrue,
 	}
 	actualInternalGroup, exists, _ := npc.internalGroupStore.Get(internalGroupKeyFunc(cg))

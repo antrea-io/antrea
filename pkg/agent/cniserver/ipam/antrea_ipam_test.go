@@ -39,6 +39,7 @@ import (
 	argtypes "antrea.io/antrea/pkg/agent/cniserver/types"
 	crdv1a2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
 	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions"
+	annotations "antrea.io/antrea/pkg/ipam"
 	fakepoolclient "antrea.io/antrea/pkg/ipam/poolallocator/testing"
 )
 
@@ -101,6 +102,7 @@ func createIPPools(crdClient *fakepoolclient.IPPoolClientset) {
 	subnetInfoPear := crdv1a2.SubnetInfo{
 		Gateway:      "10.2.3.1",
 		PrefixLength: 24,
+		VLAN:         100,
 	}
 	subnetRangePear := crdv1a2.SubnetIPRange{IPRange: ipRangePear,
 		SubnetInfo: subnetInfoPear}
@@ -108,7 +110,7 @@ func createIPPools(crdClient *fakepoolclient.IPPoolClientset) {
 		ObjectMeta: metav1.ObjectMeta{Name: testPear},
 		Spec: crdv1a2.IPPoolSpec{
 			IPRanges:  []crdv1a2.SubnetIPRange{subnetRangePear},
-			IPVersion: 4,
+			IPVersion: crdv1a2.IPv4,
 		},
 		Status: crdv1a2.IPPoolStatus{IPAddresses: []crdv1a2.IPAddressState{{
 			IPAddress: "10.2.3.198",
@@ -153,13 +155,13 @@ func initTestClients() (*fake.Clientset, *fakepoolclient.IPPoolClientset) {
 		&corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:        testApple,
-				Annotations: map[string]string{AntreaIPAMAnnotationKey: testApple, "junk": "garbage"},
+				Annotations: map[string]string{annotations.AntreaIPAMAnnotationKey: testApple, "junk": "garbage"},
 			},
 		},
 		&corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:        testOrange,
-				Annotations: map[string]string{"junk": "garbage", AntreaIPAMAnnotationKey: testOrange},
+				Annotations: map[string]string{"junk": "garbage", annotations.AntreaIPAMAnnotationKey: testOrange},
 			},
 		},
 		&corev1.Namespace{
@@ -171,7 +173,7 @@ func initTestClients() (*fake.Clientset, *fakepoolclient.IPPoolClientset) {
 		&corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:        testJunkAnnotation,
-				Annotations: map[string]string{AntreaIPAMAnnotationKey: testJunkAnnotation},
+				Annotations: map[string]string{annotations.AntreaIPAMAnnotationKey: testJunkAnnotation},
 			},
 		},
 		&corev1.Namespace{
@@ -219,7 +221,7 @@ func initTestClients() (*fake.Clientset, *fakepoolclient.IPPoolClientset) {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:        "pear1",
 				Namespace:   testPear,
-				Annotations: map[string]string{"junk": "garbage", AntreaIPAMAnnotationKey: testPear},
+				Annotations: map[string]string{"junk": "garbage", annotations.AntreaIPAMAnnotationKey: testPear},
 			},
 			Spec: corev1.PodSpec{NodeName: "fakeNode"},
 		},
@@ -227,7 +229,7 @@ func initTestClients() (*fake.Clientset, *fakepoolclient.IPPoolClientset) {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:        "pear2",
 				Namespace:   testPear,
-				Annotations: map[string]string{"junk": "garbage", AntreaIPAMAnnotationKey: testPear, AntreaIPAMPodIPAnnotationKey: " "},
+				Annotations: map[string]string{"junk": "garbage", annotations.AntreaIPAMAnnotationKey: testPear, annotations.AntreaIPAMPodIPAnnotationKey: " "},
 			},
 			Spec: corev1.PodSpec{NodeName: "fakeNode"},
 		},
@@ -235,7 +237,7 @@ func initTestClients() (*fake.Clientset, *fakepoolclient.IPPoolClientset) {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:        "pear3",
 				Namespace:   testPear,
-				Annotations: map[string]string{"junk": "garbage", AntreaIPAMAnnotationKey: testPear, AntreaIPAMPodIPAnnotationKey: "10.2.3.199"},
+				Annotations: map[string]string{"junk": "garbage", annotations.AntreaIPAMAnnotationKey: testPear, annotations.AntreaIPAMPodIPAnnotationKey: "10.2.3.199"},
 			},
 			Spec: corev1.PodSpec{NodeName: "fakeNode"},
 		},
@@ -244,7 +246,7 @@ func initTestClients() (*fake.Clientset, *fakepoolclient.IPPoolClientset) {
 				// conflict
 				Name:        "pear4",
 				Namespace:   testPear,
-				Annotations: map[string]string{"junk": "garbage", AntreaIPAMAnnotationKey: testPear, AntreaIPAMPodIPAnnotationKey: "10.2.3.199"},
+				Annotations: map[string]string{"junk": "garbage", annotations.AntreaIPAMAnnotationKey: testPear, annotations.AntreaIPAMPodIPAnnotationKey: "10.2.3.199"},
 			},
 			Spec: corev1.PodSpec{NodeName: "fakeNode"},
 		},
@@ -253,7 +255,7 @@ func initTestClients() (*fake.Clientset, *fakepoolclient.IPPoolClientset) {
 				// out of range
 				Name:        "pear5",
 				Namespace:   testPear,
-				Annotations: map[string]string{"junk": "garbage", AntreaIPAMAnnotationKey: testPear, AntreaIPAMPodIPAnnotationKey: "10.2.4.199"},
+				Annotations: map[string]string{"junk": "garbage", annotations.AntreaIPAMAnnotationKey: testPear, annotations.AntreaIPAMPodIPAnnotationKey: "10.2.4.199"},
 			},
 			Spec: corev1.PodSpec{NodeName: "fakeNode"},
 		},
@@ -262,7 +264,7 @@ func initTestClients() (*fake.Clientset, *fakepoolclient.IPPoolClientset) {
 				// invalid IP
 				Name:        "pear6",
 				Namespace:   testPear,
-				Annotations: map[string]string{"junk": "garbage", AntreaIPAMAnnotationKey: testPear, AntreaIPAMPodIPAnnotationKey: "junk"},
+				Annotations: map[string]string{"junk": "garbage", annotations.AntreaIPAMAnnotationKey: testPear, annotations.AntreaIPAMPodIPAnnotationKey: "junk"},
 			},
 			Spec: corev1.PodSpec{NodeName: "fakeNode"},
 		},
@@ -271,7 +273,7 @@ func initTestClients() (*fake.Clientset, *fakepoolclient.IPPoolClientset) {
 				// invalid IPPool
 				Name:        "pear7",
 				Namespace:   testPear,
-				Annotations: map[string]string{"junk": "garbage", AntreaIPAMAnnotationKey: testJunkAnnotation},
+				Annotations: map[string]string{"junk": "garbage", annotations.AntreaIPAMAnnotationKey: testJunkAnnotation},
 			},
 			Spec: corev1.PodSpec{NodeName: "fakeNode"},
 		},
@@ -279,7 +281,7 @@ func initTestClients() (*fake.Clientset, *fakepoolclient.IPPoolClientset) {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:            "pear-sts-8",
 				Namespace:       testPear,
-				Annotations:     map[string]string{AntreaIPAMAnnotationKey: testPear},
+				Annotations:     map[string]string{annotations.AntreaIPAMAnnotationKey: testPear},
 				OwnerReferences: []metav1.OwnerReference{{Controller: &bTrue, Kind: "StatefulSet"}},
 			},
 			Spec: corev1.PodSpec{NodeName: "fakeNode"},
@@ -320,7 +322,7 @@ func TestAntreaIPAMDriver(t *testing.T) {
 		listOptions,
 	)
 
-	antreaIPAMController, err := InitializeAntreaIPAMController(k8sClient, crdClient, informerFactory, localPodInformer, crdInformerFactory)
+	antreaIPAMController, err := InitializeAntreaIPAMController(crdClient, informerFactory, crdInformerFactory, localPodInformer, true)
 	require.NoError(t, err, "Expected no error in initialization for Antrea IPAM Controller")
 	informerFactory.Start(stopCh)
 	go localPodInformer.Run(stopCh)
@@ -336,10 +338,11 @@ func TestAntreaIPAMDriver(t *testing.T) {
 	// Test the driver singleton that was assigned to global variable
 	testDriver := antreaIPAMDriver
 
-	networkConfig := []byte("'name': 'testCfg', 'cniVersion': '0.4.0', 'type': 'antrea', 'ipam': {'type': 'antrea-ipam'}}")
+	networkConfig := []byte("'name': 'testCfg', 'cniVersion': '0.4.0', 'type': 'antrea', 'ipam': {'type': 'antrea'}}")
 
 	cniArgsMap := make(map[string]*invoke.Args)
 	k8sArgsMap := make(map[string]*argtypes.K8sArgs)
+	vlanArgsMap := map[string]uint16{"pear1": 100, "pear2": 100, "pear3": 100, "pear-sts-8": 100}
 	for _, test := range []string{"apple1", "apple2", "apple-sts-0", "orange1", "orange2", testNoAnnotation, testJunkAnnotation, "pear1", "pear2", "pear3", "pear4", "pear5", "pear6", "pear7", "pear-sts-8", "pear-sts-9", "pear10"} {
 		// extract Namespace by removing numerals
 		re := regexp.MustCompile("(-sts-)*[0-9]*$")
@@ -361,6 +364,11 @@ func TestAntreaIPAMDriver(t *testing.T) {
 		assert.Equal(t, expectedIP, result.IPs[0].Address.IP.String())
 		assert.Equal(t, expectedMask, result.IPs[0].Address.Mask.String())
 		assert.Equal(t, expectedGW, result.IPs[0].Gateway.String())
+		if vlanID, ok := vlanArgsMap[test]; ok {
+			assert.Equal(t, vlanID, result.VLANID)
+		} else {
+			assert.Equal(t, uint16(0), result.VLANID)
+		}
 
 		podNamespace := string(k8sArgsMap[test].K8S_POD_NAMESPACE)
 		podName := string(k8sArgsMap[test].K8S_POD_NAME)
@@ -508,15 +516,15 @@ func TestAntreaIPAMDriver(t *testing.T) {
 	}
 
 	owns, err = testDriver.Del(cniArgsBadContainer, k8sArgsMap["orange1"], networkConfig)
-	assert.True(t, owns)
+	assert.False(t, owns)
 	require.NoError(t, err, "expected no error in Del call")
 
 	// Make sure repeated Add works for Pod that was previously released
 	testAdd("apple1", "10.2.2.100", "10.2.2.1", "ffffff00", false)
 	testAdd("apple-sts-0", "10.2.2.102", "10.2.2.1", "ffffff00", true)
 
-	// Make sure repeated call for previous container results in error
-	testAddError("apple2")
+	// Make sure repeated call for previous container gets identical result
+	testAdd("apple2", "10.2.2.101", "10.2.2.1", "ffffff00", false)
 
 	// Make sure repeated Add works for pod that was previously released
 	testAdd("pear3", "10.2.3.199", "10.2.3.1", "ffffff00", false)

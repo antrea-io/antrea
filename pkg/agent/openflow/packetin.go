@@ -27,6 +27,9 @@ import (
 type ofpPacketInReason uint8
 
 type PacketInHandler interface {
+	// HandlePacketIn should not modify the input pktIn and should not
+	// assume that the pktIn contents(e.g. NWSrc/NWDst) will not be
+	// modified at a later time.
 	HandlePacketIn(pktIn *ofctrl.PacketIn) error
 }
 
@@ -84,13 +87,13 @@ func newfeatureStartPacketIn(reason uint8, stopCh <-chan struct{}) *featureStart
 }
 
 // StartPacketInHandler is the starting point for processing feature packetin requests.
-func (c *client) StartPacketInHandler(packetInStartedReason []uint8, stopCh <-chan struct{}) {
-	if len(c.packetInHandlers) == 0 || len(packetInStartedReason) == 0 {
+func (c *client) StartPacketInHandler(stopCh <-chan struct{}) {
+	if len(c.packetInHandlers) == 0 {
 		return
 	}
 
 	// Iterate through each feature that starts packetin. Subscribe with their specified reason.
-	for _, reason := range packetInStartedReason {
+	for reason := range c.packetInHandlers {
 		featurePacketIn := newfeatureStartPacketIn(reason, stopCh)
 		err := c.subscribeFeaturePacketIn(featurePacketIn)
 		if err != nil {

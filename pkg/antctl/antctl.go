@@ -19,11 +19,14 @@ import (
 	"reflect"
 
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/agentinfo"
+	"antrea.io/antrea/pkg/agent/apiserver/handlers/multicast"
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/ovsflows"
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/podinterface"
+	"antrea.io/antrea/pkg/agent/apiserver/handlers/serviceexternalip"
 	"antrea.io/antrea/pkg/agent/openflow"
 	fallbackversion "antrea.io/antrea/pkg/antctl/fallback/version"
 	"antrea.io/antrea/pkg/antctl/raw/featuregates"
+	"antrea.io/antrea/pkg/antctl/raw/multicluster"
 	"antrea.io/antrea/pkg/antctl/raw/proxy"
 	"antrea.io/antrea/pkg/antctl/raw/supportbundle"
 	"antrea.io/antrea/pkg/antctl/raw/traceflow"
@@ -78,6 +81,36 @@ var CommandList = &commandList{
 				requestErrorFallback: fallbackversion.RequestErrorFallback,
 			},
 			transformedResponse: reflect.TypeOf(version.Response{}),
+		},
+		{
+			use:   "podmulticaststats",
+			short: "Show multicast statistics",
+			long:  "Show multicast traffic statistics of Pods",
+			example: `  Show multicast traffic statistics of all local Pods on the Node
+$ antctl get podmulticaststats
+Show multicast traffic statistics of a given Pod
+$ antctl get podmulticaststats pod -n namespace`,
+			commandGroup: get,
+			agentEndpoint: &endpoint{
+				nonResourceEndpoint: &nonResourceEndpoint{
+					path:       "/podmulticaststats",
+					outputType: multiple,
+					params: []flagInfo{
+						{
+							name:  "name",
+							usage: "Retrieve Pod Multicast Statistics by name. If present, Namespace must be provided.",
+							arg:   true,
+						},
+						{
+							name:      "namespace",
+							usage:     "Get Pod Multicast Statistics from specific Namespace.",
+							shorthand: "n",
+						},
+					},
+				},
+			},
+
+			transformedResponse: reflect.TypeOf(multicast.Response{}),
 		},
 		{
 			use:   "log-level",
@@ -147,7 +180,7 @@ var CommandList = &commandList{
   Get the list of control plane NetworkPolicies with a specific source Type (supported by agent only)
   $ antctl get networkpolicy -T acnp
   Get the list of control plane NetworkPolicies applied to a Pod (supported by agent only)
-  $ antctl get networkpolicy -p pod1 -n ns1`,
+  $ antctl get networkpolicy -p ns1/pod1`,
 			commandGroup: get,
 			controllerEndpoint: &endpoint{
 				resourceEndpoint: &resourceEndpoint{
@@ -176,7 +209,7 @@ var CommandList = &commandList{
 						},
 						{
 							name:      "pod",
-							usage:     "Get NetworkPolicies applied to the Pod. If present, Namespace must be provided.",
+							usage:     "Get NetworkPolicies applied to the Pod. Pod format is podNamespace/podName.",
 							shorthand: "p",
 						},
 						{
@@ -508,6 +541,32 @@ var CommandList = &commandList{
 			},
 			transformedResponse: reflect.TypeOf(recordmetrics.Response{}),
 		},
+		{
+			use:          "serviceexternalip",
+			short:        "Print Service external IP status",
+			long:         "Print Service external IP status. It includes the external IP, external IP pool and the assigned Node for Services with type LoadBalancer managed by Antrea",
+			commandGroup: get,
+			aliases:      []string{"seip", "serviceexternalips"},
+			agentEndpoint: &endpoint{
+				nonResourceEndpoint: &nonResourceEndpoint{
+					path: "/serviceexternalip",
+					params: []flagInfo{
+						{
+							name:  "name",
+							usage: "Name of the Service; if present, Namespace must be provided as well.",
+							arg:   true,
+						},
+						{
+							name:      "namespace",
+							usage:     "Only get the external IP status for Services in the provided Namespace.",
+							shorthand: "n",
+						},
+					},
+					outputType: multiple,
+				},
+			},
+			transformedResponse: reflect.TypeOf(serviceexternalip.Response{}),
+		},
 	},
 	rawCommands: []rawCommand{
 		{
@@ -530,6 +589,36 @@ var CommandList = &commandList{
 			supportAgent:      true,
 			supportController: true,
 			commandGroup:      get,
+		},
+		{
+			cobraCommand:      multicluster.GetCmd,
+			supportAgent:      false,
+			supportController: false,
+			commandGroup:      mc,
+		},
+		{
+			cobraCommand:      multicluster.AddCmd,
+			supportAgent:      false,
+			supportController: false,
+			commandGroup:      mc,
+		},
+		{
+			cobraCommand:      multicluster.CreateCmd,
+			supportAgent:      false,
+			supportController: false,
+			commandGroup:      mc,
+		},
+		{
+			cobraCommand:      multicluster.DeleteCmd,
+			supportAgent:      false,
+			supportController: false,
+			commandGroup:      mc,
+		},
+		{
+			cobraCommand:      multicluster.DeployCmd,
+			supportAgent:      false,
+			supportController: false,
+			commandGroup:      mc,
 		},
 	},
 	codec: scheme.Codecs,

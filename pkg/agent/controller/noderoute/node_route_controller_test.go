@@ -60,6 +60,12 @@ type fakeController struct {
 	interfaceStore  interfacestore.InterfaceStore
 }
 
+type fakeIPsecCertificateManager struct{}
+
+func (f *fakeIPsecCertificateManager) HasSynced() bool {
+	return true
+}
+
 func newController(t *testing.T, networkConfig *config.NetworkConfig) (*fakeController, func()) {
 	clientset := fake.NewSimpleClientset()
 	informerFactory := informers.NewSharedInformerFactory(clientset, 12*time.Hour)
@@ -68,11 +74,11 @@ func newController(t *testing.T, networkConfig *config.NetworkConfig) (*fakeCont
 	ovsClient := ovsconfigtest.NewMockOVSBridgeClient(ctrl)
 	routeClient := routetest.NewMockInterface(ctrl)
 	interfaceStore := interfacestore.NewInterfaceStore()
-
+	ipsecCertificateManager := &fakeIPsecCertificateManager{}
 	c := NewNodeRouteController(clientset, informerFactory, ofClient, ovsClient, routeClient, interfaceStore, networkConfig, &config.NodeConfig{GatewayConfig: &config.GatewayConfig{
 		IPv4: nil,
 		MAC:  gatewayMAC,
-	}}, nil, false)
+	}}, nil, false, ipsecCertificateManager)
 	return &fakeController{
 		Controller:      c,
 		clientset:       clientset,
@@ -229,12 +235,15 @@ func TestIPInPodSubnets(t *testing.T) {
 	assert.Equal(t, false, c.Controller.IPInPodSubnets(net.ParseIP("8.8.8.8")))
 }
 
-func setup(t *testing.T, ifaces []*interfacestore.InterfaceConfig) (*fakeController, func()) {
+func setup(t *testing.T, ifaces []*interfacestore.InterfaceConfig, authenticationMode config.IPsecAuthenticationMode) (*fakeController, func()) {
 	c, closeFn := newController(t, &config.NetworkConfig{
 		TrafficEncapMode:      0,
 		TunnelType:            ovsconfig.TunnelType("vxlan"),
 		TrafficEncryptionMode: config.TrafficEncryptionModeIPSec,
-		IPSecPSK:              "changeme",
+		IPsecConfig: config.IPsecConfig{
+			PSK:                "changeme",
+			AuthenticationMode: authenticationMode,
+		},
 	})
 	for _, i := range ifaces {
 		c.interfaceStore.AddInterface(i)
@@ -257,7 +266,7 @@ func TestRemoveStaleTunnelPorts(t *testing.T) {
 				PortUUID: "123",
 			},
 		},
-	})
+	}, config.IPsecAuthenticationModePSK)
 
 	defer closeFn()
 	defer c.queue.ShutDown()
@@ -290,7 +299,7 @@ func TestRemoveStaleTunnelPorts(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func TestCreateIPSecTunnelPort(t *testing.T) {
+func TestCreateIPSecTunnelPortPSK(t *testing.T) {
 	c, closeFn := setup(t, []*interfacestore.InterfaceConfig{
 		{
 			Type:          interfacestore.TunnelInterface,
@@ -319,7 +328,7 @@ func TestCreateIPSecTunnelPort(t *testing.T) {
 				OFPort:   int32(5),
 			},
 		},
-	})
+	}, config.IPsecAuthenticationModePSK)
 
 	defer closeFn()
 	defer c.queue.ShutDown()
@@ -332,11 +341,11 @@ func TestCreateIPSecTunnelPort(t *testing.T) {
 	node2PortName := util.GenerateNodeTunnelInterfaceName("xyz-k8s-0-2")
 	c.ovsClient.EXPECT().CreateTunnelPortExt(
 		node1PortName, ovsconfig.TunnelType("vxlan"), int32(0),
-		false, "", nodeIP1.String(), "changeme",
+		false, "", nodeIP1.String(), "", "changeme", nil,
 		map[string]interface{}{ovsExternalIDNodeName: "xyz-k8s-0-1"}).Times(1)
 	c.ovsClient.EXPECT().CreateTunnelPortExt(
 		node2PortName, ovsconfig.TunnelType("vxlan"), int32(0),
-		false, "", nodeIP2.String(), "changeme",
+		false, "", nodeIP2.String(), "", "changeme", nil,
 		map[string]interface{}{ovsExternalIDNodeName: "xyz-k8s-0-2"}).Times(1)
 	c.ovsClient.EXPECT().GetOFPort(node1PortName, false).Return(int32(1), nil)
 	c.ovsClient.EXPECT().GetOFPort(node2PortName, false).Return(int32(2), nil)
@@ -369,6 +378,49 @@ func TestCreateIPSecTunnelPort(t *testing.T) {
 			peerNodeIP: net.ParseIP("10.10.10.1"),
 			wantErr:    false,
 			want:       5,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := c.createIPSecTunnelPort(tt.nodeName, tt.peerNodeIP)
+			hasErr := err != nil
+			assert.Equal(t, tt.wantErr, hasErr)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestCreateIPSecTunnelPortCert(t *testing.T) {
+	c, closeFn := setup(t, nil, config.IPsecAuthenticationModeCert)
+
+	defer closeFn()
+	defer c.queue.ShutDown()
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+	c.informerFactory.Start(stopCh)
+	c.informerFactory.WaitForCacheSync(stopCh)
+
+	node1PortName := util.GenerateNodeTunnelInterfaceName("xyz-k8s-0-1")
+	c.ovsClient.EXPECT().CreateTunnelPortExt(
+		node1PortName, ovsconfig.TunnelType("vxlan"), int32(0),
+		false, "", nodeIP1.String(), "xyz-k8s-0-1", "", nil,
+		map[string]interface{}{ovsExternalIDNodeName: "xyz-k8s-0-1"}).Times(1)
+	c.ovsClient.EXPECT().GetOFPort(node1PortName, false).Return(int32(1), nil)
+
+	tests := []struct {
+		name       string
+		nodeName   string
+		peerNodeIP net.IP
+		wantErr    bool
+		want       int32
+	}{
+		{
+			name:       "create new port",
+			nodeName:   "xyz-k8s-0-1",
+			peerNodeIP: nodeIP1,
+			wantErr:    false,
+			want:       1,
 		},
 	}
 

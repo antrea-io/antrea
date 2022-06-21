@@ -1,4 +1,4 @@
-// Copyright 2021 Antrea Authors
+// Copyright 2022 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -44,6 +44,10 @@ func (c *FakeCrdV1alpha2) ExternalIPPools() v1alpha2.ExternalIPPoolInterface {
 
 func (c *FakeCrdV1alpha2) IPPools() v1alpha2.IPPoolInterface {
 	return &FakeIPPools{c}
+}
+
+func (c *FakeCrdV1alpha2) TrafficControls() v1alpha2.TrafficControlInterface {
+	return &FakeTrafficControls{c}
 }
 
 // RESTClient returns a RESTClient that is used to communicate

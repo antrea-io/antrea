@@ -16,11 +16,13 @@ package stats
 
 import (
 	"fmt"
+	"sync"
 	"time"
 
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/sets"
 	networkinginformers "k8s.io/client-go/informers/networking/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
@@ -28,13 +30,14 @@ import (
 	"antrea.io/antrea/pkg/apis/controlplane"
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	statsv1alpha1 "antrea.io/antrea/pkg/apis/stats/v1alpha1"
-	crdvinformers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha1"
+	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha1"
 	"antrea.io/antrea/pkg/features"
 	"antrea.io/antrea/pkg/util/k8s"
 )
 
 const (
-	uidIndex = "uid"
+	uidIndex           = "uid"
+	GroupNameIndexName = "groupName"
 )
 
 // Aggregator collects the stats from the antrea-agents, aggregates them, caches the result, and provides interfaces
@@ -43,6 +46,7 @@ const (
 // - pkg/apiserver/registry/stats/networkpolicystats.statsProvider
 // - pkg/apiserver/registry/stats/antreaclusternetworkpolicystats.statsProvider
 // - pkg/apiserver/registry/stats/antreanetworkpolicystats.statsProvider
+// - pkg/apiserver/registry/stats/multicastgroup.statsProvider
 type Aggregator struct {
 	// networkPolicyStats caches the statistics of K8s NetworkPolicies collected from the antrea-agents.
 	networkPolicyStats cache.Indexer
@@ -50,6 +54,11 @@ type Aggregator struct {
 	antreaClusterNetworkPolicyStats cache.Indexer
 	// antreaNetworkPolicyStats caches the statistics of Antrea NetworkPolicies collected from the antrea-agents.
 	antreaNetworkPolicyStats cache.Indexer
+	// groupNodePodsMap caches the information of Pods in a Node that have joined multicast groups collected from the antrea-agents.
+	// The map can be interpreted as
+	// map[IP of multicast group]map[name of node]list of PodReference.
+	groupNodePodsMap      map[string]map[string][]statsv1alpha1.PodReference
+	groupNodePodsMapMutex sync.RWMutex
 	// dataCh is the channel that buffers the NodeSummaries sent by antrea-agents.
 	dataCh chan *controlplane.NodeStatsSummary
 	// npListerSynced is a function which returns true if the K8s NetworkPolicy shared informer has been synced at least once.
@@ -69,7 +78,7 @@ func uidIndexFunc(obj interface{}) ([]string, error) {
 	return []string{string(meta.GetUID())}, nil
 }
 
-func NewAggregator(networkPolicyInformer networkinginformers.NetworkPolicyInformer, cnpInformer crdvinformers.ClusterNetworkPolicyInformer, anpInformer crdvinformers.NetworkPolicyInformer) *Aggregator {
+func NewAggregator(networkPolicyInformer networkinginformers.NetworkPolicyInformer, cnpInformer crdinformers.ClusterNetworkPolicyInformer, anpInformer crdinformers.NetworkPolicyInformer) *Aggregator {
 	aggregator := &Aggregator{
 		networkPolicyStats: cache.NewIndexer(cache.MetaNamespaceKeyFunc, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc, uidIndex: uidIndexFunc}),
 		dataCh:             make(chan *controlplane.NodeStatsSummary, 1000),
@@ -111,6 +120,9 @@ func NewAggregator(networkPolicyInformer networkinginformers.NetworkPolicyInform
 			// Set resyncPeriod to 0 to disable resyncing.
 			0,
 		)
+	}
+	if features.DefaultFeatureGate.Enabled(features.Multicast) {
+		aggregator.groupNodePodsMap = make(map[string]map[string][]statsv1alpha1.PodReference)
 	}
 	return aggregator
 }
@@ -245,6 +257,35 @@ func (a *Aggregator) ListAntreaClusterNetworkPolicyStats() []statsv1alpha1.Antre
 	return stats
 }
 
+func (a *Aggregator) ListMulticastGroups() []statsv1alpha1.MulticastGroup {
+	stats := make([]statsv1alpha1.MulticastGroup, 0, len(a.groupNodePodsMap))
+	a.groupNodePodsMapMutex.RLock()
+	defer a.groupNodePodsMapMutex.RUnlock()
+	for group, nodePods := range a.groupNodePodsMap {
+		allPods := make([]statsv1alpha1.PodReference, 0)
+		for _, pods := range nodePods {
+			allPods = append(allPods, pods...)
+		}
+		stats = append(stats, statsv1alpha1.MulticastGroup{ObjectMeta: metav1.ObjectMeta{Name: group}, Group: group, Pods: allPods})
+	}
+	return stats
+}
+
+func (a *Aggregator) GetMulticastGroup(group string) (*statsv1alpha1.MulticastGroup, bool) {
+	a.groupNodePodsMapMutex.RLock()
+	defer a.groupNodePodsMapMutex.RUnlock()
+	nodePods, exist := a.groupNodePodsMap[group]
+	if !exist {
+		return nil, false
+	}
+	allPods := make([]statsv1alpha1.PodReference, 0)
+	for _, pods := range nodePods {
+		allPods = append(allPods, pods...)
+	}
+
+	return &statsv1alpha1.MulticastGroup{ObjectMeta: metav1.ObjectMeta{Name: group}, Group: group, Pods: allPods}, true
+}
+
 func (a *Aggregator) GetAntreaClusterNetworkPolicyStats(name string) (*statsv1alpha1.AntreaClusterNetworkPolicyStats, bool) {
 	obj, exists, _ := a.antreaClusterNetworkPolicyStats.GetByKey(name)
 	if !exists {
@@ -339,6 +380,34 @@ func (a *Aggregator) doCollect(summary *controlplane.NodeStatsSummary) {
 			addUp(&curStats.TrafficStats, &stats.TrafficStats)
 			a.networkPolicyStats.Update(curStats)
 		}
+	}
+	if features.DefaultFeatureGate.Enabled(features.Multicast) {
+		reportedGroups := sets.NewString()
+		a.groupNodePodsMapMutex.Lock()
+		for _, mcastGroupInfo := range summary.Multicast {
+			group := mcastGroupInfo.Group
+			reportedGroups.Insert(group)
+			_, exist := a.groupNodePodsMap[group]
+			if !exist {
+				a.groupNodePodsMap[group] = make(map[string][]statsv1alpha1.PodReference)
+			}
+			statsv1alpha1Pods := make([]statsv1alpha1.PodReference, 0, len(mcastGroupInfo.Pods))
+			for _, pod := range mcastGroupInfo.Pods {
+				statsv1alpha1Pods = append(statsv1alpha1Pods, statsv1alpha1.PodReference{Name: pod.Name, Namespace: pod.Namespace})
+			}
+			a.groupNodePodsMap[group][summary.ObjectMeta.Name] = statsv1alpha1Pods
+		}
+		for group := range a.groupNodePodsMap {
+			// The antrea-agent reports full mcastGroupInfo to the controller, if the group is unreported,
+			// then this group has no Pod joined in this Node.
+			if !reportedGroups.Has(group) {
+				delete(a.groupNodePodsMap[group], summary.ObjectMeta.Name)
+				if len(a.groupNodePodsMap[group]) == 0 {
+					delete(a.groupNodePodsMap, group)
+				}
+			}
+		}
+		a.groupNodePodsMapMutex.Unlock()
 	}
 	if features.DefaultFeatureGate.Enabled(features.AntreaPolicy) {
 		for _, stats := range summary.AntreaClusterNetworkPolicies {

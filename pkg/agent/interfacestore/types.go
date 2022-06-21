@@ -33,6 +33,8 @@ const (
 	UplinkInterface
 	// HostInterface is used to mark current interface is for host
 	HostInterface
+	// TrafficControlInterface is used to mark current interface is for traffic control port
+	TrafficControlInterface
 
 	AntreaInterfaceTypeKey = "antrea-type"
 	AntreaGateway          = "gateway"
@@ -40,6 +42,7 @@ const (
 	AntreaTunnel           = "tunnel"
 	AntreaUplink           = "uplink"
 	AntreaHost             = "host"
+	AntreaTrafficControl   = "traffic-control"
 	AntreaUnset            = ""
 )
 
@@ -68,7 +71,12 @@ type TunnelInterfaceConfig struct {
 	LocalIP net.IP
 	// IP address of the remote Node.
 	RemoteIP net.IP
-	PSK      string
+	// Destination port of the remote Node.
+	DestinationPort int32
+	// CommonName of the remote Name for certificate based authentication.
+	RemoteName string
+	// Pre-shard key for authentication.
+	PSK string
 	// Whether options:csum is set for this tunnel interface.
 	// If true, encapsulation header UDP checksums will be computed on outgoing packets.
 	Csum bool
@@ -80,6 +88,8 @@ type InterfaceConfig struct {
 	InterfaceName string
 	IPs           []net.IP
 	MAC           net.HardwareAddr
+	// VLAN ID of the interface
+	VLANID uint16
 	*OVSPortConfig
 	*ContainerInterfaceConfig
 	*TunnelInterfaceConfig
@@ -112,7 +122,8 @@ func NewContainerInterface(
 	podName string,
 	podNamespace string,
 	mac net.HardwareAddr,
-	ips []net.IP) *InterfaceConfig {
+	ips []net.IP,
+	vlanID uint16) *InterfaceConfig {
 	containerConfig := &ContainerInterfaceConfig{
 		ContainerID:  containerID,
 		PodName:      podName,
@@ -122,6 +133,7 @@ func NewContainerInterface(
 		Type:                     ContainerInterface,
 		IPs:                      ips,
 		MAC:                      mac,
+		VLANID:                   vlanID,
 		ContainerInterfaceConfig: containerConfig}
 }
 
@@ -140,8 +152,8 @@ func NewTunnelInterface(tunnelName string, tunnelType ovsconfig.TunnelType, loca
 
 // NewIPSecTunnelInterface creates InterfaceConfig for the IPsec tunnel to the
 // Node.
-func NewIPSecTunnelInterface(interfaceName string, tunnelType ovsconfig.TunnelType, nodeName string, nodeIP net.IP, psk string) *InterfaceConfig {
-	tunnelConfig := &TunnelInterfaceConfig{Type: tunnelType, NodeName: nodeName, RemoteIP: nodeIP, PSK: psk}
+func NewIPSecTunnelInterface(interfaceName string, tunnelType ovsconfig.TunnelType, nodeName string, nodeIP net.IP, psk, remoteName string) *InterfaceConfig {
+	tunnelConfig := &TunnelInterfaceConfig{Type: tunnelType, NodeName: nodeName, RemoteIP: nodeIP, PSK: psk, RemoteName: remoteName}
 	return &InterfaceConfig{InterfaceName: interfaceName, Type: TunnelInterface, TunnelInterfaceConfig: tunnelConfig}
 }
 
@@ -153,6 +165,11 @@ func NewUplinkInterface(uplinkName string) *InterfaceConfig {
 
 func NewHostInterface(hostInterfaceName string) *InterfaceConfig {
 	return &InterfaceConfig{InterfaceName: hostInterfaceName, Type: HostInterface}
+}
+
+func NewTrafficControlInterface(interfaceName string) *InterfaceConfig {
+	trafficControlConfig := &InterfaceConfig{InterfaceName: interfaceName, Type: TrafficControlInterface}
+	return trafficControlConfig
 }
 
 // TODO: remove this method after IPv4/IPv6 dual-stack is supported completely.

@@ -1,4 +1,4 @@
-// Copyright 2021 Antrea Authors
+// Copyright 2022 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -65,21 +65,20 @@ func testMain(m *testing.M) int {
 	flag.StringVar(&testOptions.leaderClusterKubeConfigPath, "leader-cluster-kubeconfig-path", path.Join(homedir, ".kube", "leader"), "Kubeconfig Path of the leader cluster")
 	flag.StringVar(&testOptions.eastClusterKubeConfigPath, "east-cluster-kubeconfig-path", path.Join(homedir, ".kube", "east"), "Kubeconfig Path of the east cluster")
 	flag.StringVar(&testOptions.westClusterKubeConfigPath, "west-cluster-kubeconfig-path", path.Join(homedir, ".kube", "west"), "Kubeconfig Path of the west cluster")
-
+	flag.BoolVar(&testOptions.enableGateway, "mc-gateway", false, "Run tests with Multicluster Gateway")
 	flag.Parse()
-
-	if err := initProvider(); err != nil {
-		log.Fatalf("Error when initializing provider: %v", err)
-	}
 
 	cleanupLogging := testOptions.setupLogging()
 	defer cleanupLogging()
 
-	testData = &TestData{}
-	log.Println("Creating k8s clientsets")
+	testData = &MCTestData{}
+	log.Println("Creating K8s clientsets for ClusterSet")
 	if err := testData.createClients(); err != nil {
-		log.Fatalf("Error when creating k8s clientset: %v", err)
+		log.Fatalf("Error when creating K8s ClientSet: %v", err)
 		return 1
+	}
+	if err := testData.initProviders(); err != nil {
+		log.Fatalf("Error when initializing providers for ClusterSet: %v", err)
 	}
 	rand.Seed(time.Now().UnixNano())
 
@@ -89,4 +88,34 @@ func testMain(m *testing.M) int {
 
 func TestMain(m *testing.M) {
 	os.Exit(testMain(m))
+}
+
+func TestConnectivity(t *testing.T) {
+	data, err := setupTest(t)
+	if err != nil {
+		t.Fatalf("Error when setting up test: %v", err)
+	}
+	defer teardownTest(t, data)
+
+	if testOptions.enableGateway {
+		initializeGateway(t, data)
+		defer teardownGateway(t, data)
+
+		// Sleep 5s to wait resource export/import process to finish resource
+		// exchange, and data path realization.
+		time.Sleep(5 * time.Second)
+	}
+
+	t.Run("testServiceExport", func(t *testing.T) {
+		testServiceExport(t, data)
+	})
+
+	t.Run("testAntreaPolicy", func(t *testing.T) {
+		defer tearDownForPolicyTest()
+		initializeForPolicyTest(t, data)
+		testMCAntreaPolicy(t, data)
+	})
+	// Wait 5 seconds to let both member and leader controllers clean up all resources,
+	// otherwise, Namespace deletion may stuck into termininating status.
+	time.Sleep(5 * time.Second)
 }

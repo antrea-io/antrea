@@ -1,6 +1,6 @@
 {
   "name": "antreaflowvisibility-grafana-sankey-plugin",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "",
   "scripts": {
     "build": "grafana-toolkit plugin:build",
@@ -10,7 +10,7 @@
     "sign": "grafana-toolkit plugin:sign",
     "start": "yarn watch"
   },
-  "author": "antreaflowvisibility",
+  "author": "antrea.io",
   "license": "Apache-2.0",
   "devDependencies": {
     "@grafana/data": "latest",

@@ -22,16 +22,18 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	k8sscheme "k8s.io/client-go/kubernetes/scheme"
-	ctrl "sigs.k8s.io/controller-runtime"
 	k8smcsapi "sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
 
 	mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
+	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 )
 
 var (
+	localClusterID  = "cluster-a"
+	leaderNamespace = "default"
+
 	svcPort80 = corev1.ServicePort{
 		Name:     "http",
 		Protocol: corev1.ProtocolTCP,
@@ -102,10 +104,6 @@ var (
 		},
 		Subsets: epNginxSubset,
 	}
-	req = ctrl.Request{NamespacedName: types.NamespacedName{
-		Namespace: "default",
-		Name:      "nginx",
-	}}
 
 	ctx    = context.Background()
 	scheme = runtime.NewScheme()
@@ -115,4 +113,5 @@ func init() {
 	utilruntime.Must(mcsv1alpha1.AddToScheme(scheme))
 	utilruntime.Must(k8smcsapi.AddToScheme(scheme))
 	utilruntime.Must(k8sscheme.AddToScheme(scheme))
+	utilruntime.Must(crdv1alpha1.AddToScheme(scheme))
 }

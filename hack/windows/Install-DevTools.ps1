@@ -25,8 +25,8 @@ function InstallSevenZip() {
     if (CommandExists("7z")) {
         return
     }
-    $exePath = "$env:USERPROFILE\7z1900-x64.exe"
-    curl.exe -Lo $exePath https://www.7-zip.org/a/7z1900-x64.exe
+    $exePath = "$env:USERPROFILE\7z2107-x64.exe"
+    curl.exe -Lo $exePath https://www.7-zip.org/a/7z2107-x64.exe
     cmd /c start /wait $exePath /S
     del $exePath
     $sevenZipFolder = 'C:\Program Files\7-Zip'

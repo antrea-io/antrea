@@ -19,7 +19,7 @@ locally:
 ## Supported OSS Licenses
 
 For a list of the OSS licenses accepted or rejected for Antrea dependencies,
-please see [conf.json](conf.json). These lists are not comprehensive and do not
+please see [conf.yml](conf.yml). These lists are not comprehensive and do not
 include all possible OSS licenses - however, they do include the most popular
 ones. If a patch introduces a new dependency, and the license for that
 dependency is listed in "deny", the patch will not be merged. If the license is

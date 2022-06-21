@@ -17,12 +17,17 @@ import corev1 "k8s.io/api/core/v1"
 
 const (
 	AntreaMCServiceAnnotation   = "multicluster.antrea.io/imported-service"
+	AntreaMCACNPAnnotation      = "multicluster.antrea.io/imported-acnp"
 	AntreaMCClusterIDAnnotation = "multicluster.antrea.io/local-cluster-id"
+	GatewayAnnotation           = "multicluster.antrea.io/gateway"
+	GatewayIPAnnotation         = "multicluster.antrea.io/gateway-ip"
 
-	AntreaMCSPrefix   = "antrea-mc-"
-	ServiceKind       = "Service"
-	EndpointsKind     = "Endpoints"
-	ServiceImportKind = "ServiceImport"
+	AntreaMCSPrefix                = "antrea-mc-"
+	ServiceKind                    = "Service"
+	EndpointsKind                  = "Endpoints"
+	AntreaClusterNetworkPolicyKind = "AntreaClusterNetworkPolicy"
+	ServiceImportKind              = "ServiceImport"
+	ClusterInfoKind                = "ClusterInfo"
 
 	SourceName      = "sourceName"
 	SourceNamespace = "sourceNamespace"
@@ -76,4 +81,30 @@ func FilterEndpointSubsets(subsets []corev1.EndpointSubset) []corev1.EndpointSub
 		}
 	}
 	return newSubsets
+}
+
+func GetServiceEndpointSubset(svc *corev1.Service) corev1.EndpointSubset {
+	var epSubset corev1.EndpointSubset
+	for _, ip := range svc.Spec.ClusterIPs {
+		epSubset.Addresses = append(epSubset.Addresses, corev1.EndpointAddress{IP: ip})
+	}
+
+	epSubset.Ports = GetServiceEndpointPorts(svc.Spec.Ports)
+	return epSubset
+}
+
+// GetServiceEndpointPorts converts Service's port to EndpointPort
+func GetServiceEndpointPorts(ports []corev1.ServicePort) []corev1.EndpointPort {
+	if len(ports) == 0 {
+		return nil
+	}
+	var epPorts []corev1.EndpointPort
+	for _, p := range ports {
+		epPorts = append(epPorts, corev1.EndpointPort{
+			Name:     p.Name,
+			Port:     p.Port,
+			Protocol: p.Protocol,
+		})
+	}
+	return epPorts
 }

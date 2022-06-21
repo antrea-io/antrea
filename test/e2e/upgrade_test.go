@@ -54,20 +54,20 @@ func TestUpgrade(t *testing.T) {
 	podName := randName("test-pod-")
 
 	t.Logf("Creating a busybox test Pod on '%s'", nodeName)
-	if err := data.createBusyboxPodOnNode(podName, testNamespace, nodeName, false); err != nil {
+	if err := data.createBusyboxPodOnNode(podName, data.testNamespace, nodeName, false); err != nil {
 		t.Fatalf("Error when creating busybox test Pod: %v", err)
 	}
-	if err := data.podWaitForRunning(defaultTimeout, podName, testNamespace); err != nil {
+	if err := data.podWaitForRunning(defaultTimeout, podName, data.testNamespace); err != nil {
 		t.Fatalf("Error when waiting for Pod '%s' to be in the Running state", podName)
 	}
 
 	namespace := randName("test-namespace-")
 
 	t.Logf("Creating namespace '%s'", namespace)
-	if err := data.createNamespace(namespace, nil); err != nil {
+	if err := data.CreateNamespace(namespace, nil); err != nil {
 		t.Fatalf("Error when creating namespace '%s'", namespace)
 	}
-	defer data.deleteNamespace(namespace, defaultTimeout)
+	defer data.DeleteNamespace(namespace, defaultTimeout)
 
 	data.testPodConnectivitySameNode(t)
 	data.testPodConnectivityDifferentNodes(t)
@@ -96,12 +96,6 @@ func TestUpgrade(t *testing.T) {
 		if err := data.restartAntreaAgentPods(defaultTimeout); err != nil {
 			t.Fatalf("Error when restarting Antrea: %v", err)
 		}
-		// Restart CoreDNS Pods to avoid issues caused by disrupting the datapath (when restarting
-		// Antrea Agent Pods).
-		t.Logf("Restarting CoreDNS Pods")
-		if err := data.restartCoreDNSPods(defaultTimeout); err != nil {
-			t.Fatalf("Error when restarting CoreDNS Pods: %v", err)
-		}
 	}
 
 	data.testPodConnectivitySameNode(t)
@@ -115,9 +109,9 @@ func TestUpgrade(t *testing.T) {
 	checkFn()
 
 	t.Logf("Deleting namespace '%s'", namespace)
-	if err := data.deleteNamespace(namespace, defaultTimeout); err != nil {
+	if err := data.DeleteNamespace(namespace, defaultTimeout); err != nil {
 		t.Errorf("Namespace deletion failed: %v", err)
 	}
 
-	data.testDeletePod(t, podName, nodeName, testNamespace, false)
+	data.testDeletePod(t, podName, nodeName, data.testNamespace, false)
 }

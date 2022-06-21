@@ -39,13 +39,6 @@ enhance existing features and add new features to help diagnose K8s networking
 and NetworkPolicy implementation, and to provide good visibility into the Antrea
 network.
 
-* **Flexible IPAM**
-So far Antrea leverages K8s NodeIPAM for IPAM which allocates a single subnet
-for each K8s Node. NodeIPAM can either run as part of the Antrea Controller, or
-run within kube-controller-manager.
-In future, Antrea will implement its own IPAM, and support more IPAM strategies
-besides subnet per Node, like multiple IP pools per Node or per Namespace.
-
 * **NFV and Telco use cases**
 We plan to explore and provide support for NFV and Telco use cases. We will add
 native Pod multi-interface support in Antrea, and support Pod interfaces on
@@ -60,12 +53,17 @@ observability features to get into application level visibility.
 * **Multi-cluster networking**
 We would extend Antrea from CNI of a single Kubernetes cluster to multi-cluster
 networking, and implement multi-cluster features like multi-cluster Services,
-cross-cluster connectivity, multi-cluster NetworkPolicies.
+cross-cluster connectivity, multi-cluster NetworkPolicies. Antrea multi-cluster
+functionalities are under active development. Check the [Antrea Multi-cluster
+user guide](docs/multicluster/user-guide.md) to learn what features are already
+supported.
 
 * **Analytics**
 With the network flows exported by Antrea, we plan to further build an analytics
 solution that consumes the network flows, and provides traffic analysis,
-NetworkPolicy recommendation, security and network performance monitoring.
+NetworkPolicy recommendation, security and network performance monitoring. We
+already started a sub-project of Antrea - [Theia](https://github.com/antrea-io/theia) -
+for network flow visibility and analytics. Stay tunned!
 
 * **K8s Node security**
 So far Antrea focuses on K8s Pod networking and security, but we would like to

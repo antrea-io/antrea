@@ -1,8 +1,10 @@
-
-# Image URL to use all building/pushing image targets
-IMG ?= antrea/antrea-mc-controller:latest
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
-CRD_OPTIONS ?= "crd:trivialVersions=true,preserveUnknownFields=false"
+# For controller-gen, float value is not allowed by default as it is considered dangerous
+# See https://github.com/kubernetes-sigs/controller-tools/issues/245
+# However the ResourceExport/Import refers to ACNP type definition and the priority field in ACNP spec is type float64.
+# Hence, before any ACNP spec bumps that changes the priorty field to a different type,
+# the allowDangerousTypes flag is needed for CRD manifests to generate correctly.
+CRD_OPTIONS ?= "crd:trivialVersions=true,allowDangerousTypes=true,preserveUnknownFields=false"
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
@@ -47,7 +49,7 @@ help: ## Display this help.
 manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects.
 	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=controller-role webhook paths="./..." output:crd:artifacts:config=config/crd/bases
 	$(CURDIR)/hack/generate-manifest.sh -g > build/yamls/antrea-multicluster-leader-global.yml
-	$(CURDIR)/hack/generate-manifest.sh -l changeme > build/yamls/antrea-multicluster-leader-namespaced.yml
+	$(CURDIR)/hack/generate-manifest.sh -l antrea-multicluster > build/yamls/antrea-multicluster-leader-namespaced.yml
 	$(CURDIR)/hack/generate-manifest.sh -m > build/yamls/antrea-multicluster-member.yml
 
 generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
@@ -85,10 +87,6 @@ build: generate fmt vet ## Build manager binary.
 
 run: manifests generate fmt vet ## Run a controller from your host.
 	go run ./main.go
-
-#docker-build: test ## Build docker image with the manager.
-docker-build: build ## Build docker image with the manager.
-	docker build --target product -f build/images/Dockerfile -t ${IMG} .
 
 ##@ Deployment
 

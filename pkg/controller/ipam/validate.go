@@ -187,20 +187,31 @@ func ipInRange(rangeStart, rangeEnd, ip net.IP) bool {
 	return bytes.Compare(ip16, rangeStart.To16()) >= 0 && bytes.Compare(ip16, rangeEnd.To16()) <= 0
 }
 
-func ipVersion(ip net.IP) int {
+func ipVersion(ip net.IP) crdv1alpha2.IPVersion {
 	if ip.To4() != nil {
-		return 4
+		return crdv1alpha2.IPv4
 	}
-	return 6
+	return crdv1alpha2.IPv6
 }
 
-func validateIPRange(r crdv1alpha2.SubnetIPRange, poolIPVersion int) (bool, string) {
+func validateIPRange(r crdv1alpha2.SubnetIPRange, poolIPVersion crdv1alpha2.IPVersion) (bool, string) {
+	if poolIPVersion == crdv1alpha2.IPv4 {
+		if r.PrefixLength <= 0 || r.PrefixLength >= 32 {
+			return false, fmt.Sprintf("Invalid prefix length %d", r.PrefixLength)
+		}
+	} else if poolIPVersion == crdv1alpha2.IPv6 {
+		if r.PrefixLength <= 0 || r.PrefixLength >= 128 {
+			return false, fmt.Sprintf("Invalid prefix length %d", r.PrefixLength)
+		}
+	} else {
+		return false, fmt.Sprintf("Invalid IP version %d", int(poolIPVersion))
+	}
 	// Validate the integrity the IP range:
 	//  Verify that all the IP ranges have the same IP family as the IP pool
 	//  Verify that the gateway IP is reachable from the IP range
 	gateway := net.ParseIP(r.Gateway)
 	var mask net.IPMask
-	if ipVersion(gateway) == 4 {
+	if ipVersion(gateway) == crdv1alpha2.IPv4 {
 		mask = net.CIDRMask(int(r.PrefixLength), 32)
 	} else {
 		mask = net.CIDRMask(int(r.PrefixLength), 128)
@@ -209,27 +220,26 @@ func validateIPRange(r crdv1alpha2.SubnetIPRange, poolIPVersion int) (bool, stri
 
 	if r.CIDR != "" {
 		_, cidr, _ := net.ParseCIDR(r.CIDR)
-
+		if ipVersion(cidr.IP) != poolIPVersion {
+			return false, fmt.Sprintf(
+				"Range is invalid. IP version of range %s differs from Pool IP version", r.CIDR)
+		}
 		if !netCIDR.Contains(cidr.IP) {
 			return false, fmt.Sprintf(
 				"Range is invalid. CIDR %s is not contained within subnet %s/%d",
 				r.CIDR, netCIDR.IP.String(), r.PrefixLength)
 		}
-		if ipVersion(cidr.IP) != poolIPVersion {
-			return false, fmt.Sprintf(
-				"Range is invalid. IP version of range %s differs from Pool IP version", r.CIDR)
-		}
 	} else {
 		rStart := net.ParseIP(r.Start)
 		rEnd := net.ParseIP(r.End)
+		if ipVersion(rStart) != poolIPVersion || ipVersion(rEnd) != poolIPVersion {
+			return false, fmt.Sprintf(
+				"Range is invalid. IP version of range %s-%s differs from Pool IP version", r.Start, r.End)
+		}
 		if !netCIDR.Contains(rStart) || !netCIDR.Contains(rEnd) {
 			return false, fmt.Sprintf(
 				"Range is invalid. range %s-%s is not contained within subnet %s/%d",
 				r.Start, r.End, netCIDR.IP.String(), r.PrefixLength)
-		}
-		if ipVersion(rStart) != poolIPVersion || ipVersion(rEnd) != poolIPVersion {
-			return false, fmt.Sprintf(
-				"Range is invalid. IP version of range %s-%s differs from Pool IP version", r.Start, r.End)
 		}
 	}
 	return true, ""

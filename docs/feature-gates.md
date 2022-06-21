@@ -42,12 +42,13 @@ example, to enable `AntreaProxy` on Linux, edit the Agent configuration in the
 | `FlowExporter`          | Agent              | `false` | Alpha | v0.9          | N/A          | N/A        | Yes                |       |
 | `NetworkPolicyStats`    | Agent + Controller | `true`  | Beta  | v0.10         | v1.2         | N/A        | No                 |       |
 | `NodePortLocal`         | Agent              | `true`  | Beta  | v0.13         | v1.4         | N/A        | Yes                | Important user-facing change in v1.2.0 |
-| `Egress`                | Agent + Controller | `false` | Alpha | v1.0          | N/A          | N/A        | Yes                |       |
+| `Egress`                | Agent + Controller | `true`  | Beta  | v1.0          | v1.6         | N/A        | Yes                |       |
 | `NodeIPAM`              | Controller         | `false` | Alpha | v1.4          | N/A          | N/A        | Yes                |       |
 | `AntreaIPAM`            | Agent + Controller | `false` | Alpha | v1.4          | N/A          | N/A        | Yes                |       |
 | `Multicast`             | Agent              | `false` | Alpha | v1.5          | N/A          | N/A        | Yes                |       |
 | `SecondaryNetwork`      | Agent              | `false` | Alpha | v1.5          | N/A          | N/A        | Yes                |       |
 | `ServiceExternalIP`     | Agent + Controller | `false` | Alpha | v1.5          | N/A          | N/A        | Yes                |       |
+| `TrafficControl`        | Agent              | `false` | Alpha | v1.7          | N/A          | N/A        | No                 |       |
 
 ## Description and Requirements of Features
 
@@ -66,6 +67,9 @@ Note that this feature must be enabled for Windows. The Antrea Windows YAML
 manifest provided as part of releases enables this feature by default. If you
 edit the manifest, make sure you do not disable it, as it is needed for correct
 NetworkPolicy implementation for Pod-to-Service traffic.
+
+Please refer to this [document](antrea-proxy.md) for extra information on
+AntreaProxy and how it can be configured.
 
 ### EndpointSlice
 
@@ -248,21 +252,33 @@ there is a risk of conflicts in CIDR allocation between the two.
 
 ### AntreaIPAM
 
-`AntreaIPAM` feature allows flexible control over Pod IP addressing. This can be
-achieved by configuring `IPPool` CRD with a desired set of IP ranges. The `IPPool` can be
-annotated to Namespace, Pod and PodTemplate of StatefulSet/Deployment. Antrea will manage
-IP address assignment for corresponding Pods according to `IPPool` spec.
-Refer to this [document](antrea-ipam.md) for more information.
+`AntreaIPAM` feature allocates IP addresses from IPPools. It is required by
+bridging mode Pods. The bridging mode allows flexible control over Pod IP
+addressing. The desired set of IP ranges, optionally with VLANs, are defined
+with `IPPool` CRD. An IPPool can be annotated to Namespace, Pod and PodTemplate
+of StatefulSet/Deployment. Then, Antrea will manage IP address assignment for
+corresponding Pods according to `IPPool` spec. On a Node, cross-Node/VLAN
+traffic of AntreaIPAM Pods is sent to the underlay network, and forwarded/routed
+by the underlay network. For more information, please refer to the
+[Antrea IPAM document](antrea-ipam.md#antrea-flexible-ipam).
+
+This feature gate also needs to be enabled to use Antrea for IPAM when
+configuring secondary network interfaces with Multus, in which case Antrea works
+as an IPAM plugin and allocates IP addresses for Pods' secondary networks,
+again from the configured IPPools of a secondary network. Refer to the
+[secondary network IPAM document](antrea-ipam.md#ipam-for-secondary-network) to
+learn more information.
 
 #### Requirements for this Feature
 
-As of now, this feature is supported on Linux Nodes, with IPv4, `system` OVS datapath
-type, and `noEncap`, `noSNAT` traffic mode.
+Both bridging mode and secondary network IPAM are supported only on Linux Nodes.
 
-The IPs in the `IPPools` must be in the same "underlay" subnet as the Node IP, because
-inter-Node traffic of AntreaIPAM Pods is forwarded by the Node network. Only a single IP
-pool can be included in the Namespace annotation. In the future, annotation of up to two
-pools for IPv4 and IPv6 respectively will be supported.
+The bridging mode works only with `system` OVS datapath type; and `noEncap`,
+`noSNAT` traffic mode. At the moment, it supports only IPv4. The IPs in an IP
+range without a VLAN must be in the same underlay subnet as the Node IPs,
+ because inter-Node traffic of AntreaIPAM Pods is forwarded by the Node network.
+IP ranges with a VLAN must not overlap with other network subnets, and the
+underlay network router should provide the network connectivity for these VLANs.
 
 ### Multicast
 
@@ -303,11 +319,18 @@ Service (through kube-proxy). To enable external IP allocation for a
 `LoadBalancer` Service, you need to annotate the Service with
 `"service.antrea.io/external-ip-pool": "<externalIPPool name>"` and define the
 appropriate `ExternalIPPool` resource.
-
-More documentation will be coming in the future.
+Refer to this [document](service-loadbalancer.md) for more information.
 
 #### Requirements for this Feature
 
-This feature is currently only supported for Nodes running Linux. At the moment,
-it only works with kube-proxy and it requires Antrea ProxyAll to be disabled
-(which is the default Antrea configuration).
+This feature is currently only supported for Nodes running Linux.
+
+### TrafficControl
+
+`TrafficControl` enables a CRD API for Antrea that controls and manipulates the
+transmission of Pod traffic. It allows users to mirror or redirect traffic
+originating from specific Pods or destined for specific Pods to a local network
+device or a remote destination via a tunnel of various types. It enables a
+monitoring solution to get full visibility into network traffic, including both
+north-south and east-west traffic. Refer to this [document](traffic-control.md)
+for more information.

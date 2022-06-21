@@ -1,4 +1,4 @@
-// Copyright 2021 Antrea Authors
+// Copyright 2022 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,7 +23,7 @@ import "k8s.io/apimachinery/pkg/runtime/generated.proto";
 import "k8s.io/apimachinery/pkg/runtime/schema/generated.proto";
 
 // Package-wide variables from generator "generated".
-option go_package = "v1alpha1";
+option go_package = "antrea.io/antrea/pkg/apis/stats/v1alpha1";
 
 // AntreaClusterNetworkPolicyStats is the statistics of a Antrea ClusterNetworkPolicy.
 message AntreaClusterNetworkPolicyStats {
@@ -63,6 +63,25 @@ message AntreaNetworkPolicyStatsList {
   repeated AntreaNetworkPolicyStats items = 2;
 }
 
+// MulticastGroup contains the mapping between multicast group and Pods.
+message MulticastGroup {
+  optional k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
+
+  // Group is the IP of the multicast group.
+  optional string group = 2;
+
+  // Pods is the list of Pods that have joined the multicast group.
+  repeated PodReference pods = 3;
+}
+
+// MulticastGroupList is a list of MulticastGroup.
+message MulticastGroupList {
+  optional k8s.io.apimachinery.pkg.apis.meta.v1.ListMeta metadata = 1;
+
+  // List of MulticastGroup.
+  repeated MulticastGroup items = 2;
+}
+
 // NetworkPolicyStats is the statistics of a K8s NetworkPolicy.
 message NetworkPolicyStats {
   optional k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
@@ -77,6 +96,15 @@ message NetworkPolicyStatsList {
 
   // List of NetworkPolicyStats.
   repeated NetworkPolicyStats items = 2;
+}
+
+// PodReference represents a Pod Reference.
+message PodReference {
+  // The name of this Pod.
+  optional string name = 1;
+
+  // The namespace of this Pod.
+  optional string namespace = 2;
 }
 
 // RuleTrafficStats contains TrafficStats of single rule inside a NetworkPolicy.

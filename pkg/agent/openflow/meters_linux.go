@@ -21,14 +21,10 @@ import (
 	"github.com/blang/semver"
 	"k8s.io/klog/v2"
 
-	"antrea.io/antrea/pkg/ovs/ovsconfig"
 	"antrea.io/antrea/pkg/util/runtime"
 )
 
-func ovsMetersAreSupported(ovsDatapathType ovsconfig.OVSDatapathType) bool {
-	if ovsDatapathType == ovsconfig.OVSDatapathNetdev {
-		return true
-	}
+func ovsMetersAreSupported() bool {
 	// According to the OVS documentation, meters are supported in the kernel module since 4.15
 	// (https://docs.openvswitch.org/en/latest/faq/releases/). However, it turns out that
 	// because of a bug meters cannot be used with kernel versions older than 4.18, which is

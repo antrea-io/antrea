@@ -10,6 +10,140 @@ To report a vulnerability in Antrea, please refer to
 For information about securing Antrea control-plane communications, refer to
 this [document](securing-control-plane.md).
 
+## Protecting Your Cluster Against Privilege Escalations
+
+### Antrea Agent
+
+Like all other K8s Network Plugins, Antrea runs an agent (the Antrea Agent) on
+every Node on the cluster, using a K8s DaemonSet. And just like for other K8s
+Network Plugins, this agent requires a specific set of permissions which grant
+it access to the K8s API using
+[RBAC](https://kubernetes.io/docs/reference/access-authn-authz/rbac/). These
+permissions are required to implement the different features offered by
+Antrea. If any Node in the cluster happens to become compromised (e.g., by an
+escaped container) and the token for the `antrea-agent` ServiceAccount is
+harvested by the attacker, some of these permissions can be leveraged to
+negatively affect other workloads running on the cluster. In particular, the
+Antrea Agent is granted the following permissions:
+
+* `patch` the `pods/status` resources: a successful attacker could abuse this
+  permission to re-label Pods to facilitate [confused deputy
+  attacks](https://en.wikipedia.org/wiki/Confused_deputy_problem) against
+  built-in controllers. For example, making a Pod match a Service selector in
+  order to man-in-the-middle (MITM) the Service traffic, or making a Pod match a
+  ReplicaSet selector so that the ReplicaSet controller deletes legitimate
+  replicas.
+* `patch` the `nodes/status` resources: a successful attacker could abuse this
+  permission to affect scheduling by modifying Node fields like labels,
+  capacity, and conditions.
+
+In both cases, the Antrea Agent only requires the ability to mutate the
+annotations field for all Pods and Nodes, but with K8s RBAC, the lowest
+permission level that we can grant the Antrea Agent to satisfy this requirement
+is the `patch` verb for the `status` subresource for Pods and Nodes (which also
+provides the ability to mutate labels).
+
+To mitigate the risk presented by these permissions in case of a compromised
+token, we suggest that you use
+[Gatekeeper](https://github.com/open-policy-agent/gatekeeper), with the
+appropriate policy. We provide the following Gatekeeper policy, consisting of a
+`ConstraintTemplate` and the corresponding `Constraint`. When using this policy,
+it will no longer be possible for the `antrea-agent` ServiceAccount to mutate
+anything besides annotations for the Pods and Nodes resources.
+
+```yaml
+# ConstraintTemplate
+apiVersion: templates.gatekeeper.sh/v1
+kind: ConstraintTemplate
+metadata:
+  name: antreaagentstatusupdates
+  annotations:
+    description: >-
+      Disallows unauthorized updates to status subresource by Antrea Agent
+      Only annotations can be mutated
+spec:
+  crd:
+    spec:
+      names:
+        kind: AntreaAgentStatusUpdates
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+      rego: |
+        package antreaagentstatusupdates
+        username := object.get(input.review.userInfo, "username", "")
+        targetUsername := "system:serviceaccount:kube-system:antrea-agent"
+
+        allowed_mutation(object, oldObject) {
+            object.status == oldObject.status
+            object.metadata.labels == oldObject.metadata.labels
+        }
+
+        violation[{"msg": msg}] {
+          username == targetUsername
+          input.review.operation == "UPDATE"
+          input.review.requestSubResource == "status"
+          not allowed_mutation(input.review.object, input.review.oldObject)
+          msg := "Antrea Agent is not allowed to mutate this field"
+        }
+```
+
+```yaml
+# Constraint
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: AntreaAgentStatusUpdates
+metadata:
+  name: antrea-agent-status-updates
+spec:
+  match:
+    kinds:
+    - apiGroups: [""]
+      kinds: ["Pod", "Node"]
+```
+
+***Please ensure that the `ValidatingWebhookConfiguration` for your Gatekeeper
+   installation enables policies to be applied on the `pods/status` and
+   `nodes/status` subresources, which may not be the case by default.***
+
+As a reference, the following `ValidatingWebhookConfiguration` rule will cause
+policies to be applied to all resources and their subresources:
+
+```yaml
+  - apiGroups:
+    - '*'
+    apiVersions:
+    - '*'
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - '*/*'
+    scope: '*'
+```
+
+while the following rule will cause policies to be applied to all resources, but
+not their subresources:
+
+```yaml
+  - apiGroups:
+    - '*'
+    apiVersions:
+    - '*'
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - '*'
+    scope: '*'
+```
+
+### Antrea Controller
+
+The Antrea Controller, which runs as a single-replica Deployment, enjoys higher
+level permissions than the Antrea Agent. We recommend for production clusters
+running Antrea to schedule the `antrea-controller` Pod on a "secure" Node, which
+could for example be the Node (or one of the Nodes) running the K8s
+control-plane.
+
 ## Protecting Access to Antrea Configuration Files
 
 Antrea relies on persisting files on each K8s Node's filesystem, in order to

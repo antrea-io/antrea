@@ -125,13 +125,13 @@
           ./ci/jenkins/test-vmc.sh --cluster-name "$BUILD_TAG" --testcase '{conformance_type}' --coverage --codecov-token "${{CODECOV_TOKEN}}" --registry ${{DOCKER_REGISTRY}} --username "${{CAPVC_USERNAME}}" --password "${{CAPVC_PASSWORD}}"
 
 - builder:
-    name: builder-elk-flow-collector
+    name: builder-flow-visibility
     builders:
       - shell: |-
           #!/bin/bash
           set -ex
           ./ci/jenkins/test-vmc.sh --cluster-name "${JOB_NAME}-${BUILD_NUMBER}" --setup-only
-          ./ci/test-elk-flow-collector.sh --kubeconfig jenkins/out/kubeconfig
+          ./ci/test-flow-visibility.sh --kubeconfig jenkins/out/kubeconfig
           ./ci/jenkins/test-vmc.sh --cluster-name "${JOB_NAME}-${BUILD_NUMBER}" --cleanup-only
 
           if !(test -f TEST_FAILURE); then

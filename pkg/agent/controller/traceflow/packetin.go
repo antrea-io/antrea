@@ -160,16 +160,17 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1alpha1.Tracefl
 		obs = append(obs, *ob)
 	}
 
-	// Collect Service DNAT and SNAT.
+	// Collect Service connections.
+	// - For packet is DNATed only, the final state is that ipDst != ctNwDst (in DNAT CT zone).
+	// - For packet is both DNATed and SNATed, the first state is also ipDst != ctNwDst (in DNAT CT zone), but the final
+	//   state is that ipSrc != ctNwSrc (in SNAT CT zone). The state in DNAT CT zone cannot be recognized in SNAT CT zone.
 	if !tfState.receiverOnly {
-		if isValidCtNw(ctNwDst) && ipDst != ctNwDst {
+		if isValidCtNw(ctNwDst) && ipDst != ctNwDst || isValidCtNw(ctNwSrc) && ipSrc != ctNwSrc {
 			ob := &crdv1alpha1.Observation{
 				Component:       crdv1alpha1.ComponentLB,
 				Action:          crdv1alpha1.ActionForwarded,
 				TranslatedDstIP: ipDst,
 			}
-			// Service SNAT can only happen alongside DNAT
-			// and only for hairpinned packets at the moment.
 			if isValidCtNw(ctNwSrc) && ipSrc != ctNwSrc {
 				ob.TranslatedSrcIP = ipSrc
 			}
@@ -207,7 +208,7 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1alpha1.Tracefl
 	// Get drop table.
 	if tableID == openflow.EgressMetricTable.GetID() || tableID == openflow.IngressMetricTable.GetID() {
 		ob := getNetworkPolicyObservation(tableID, tableID == openflow.IngressMetricTable.GetID())
-		if match := getMatchRegField(matchers, openflow.CNPDenyConjIDField); match != nil {
+		if match := getMatchRegField(matchers, openflow.CNPConjIDField); match != nil {
 			notAllowConjInfo, err := getRegValue(match, nil)
 			if err != nil {
 				return nil, nil, nil, err

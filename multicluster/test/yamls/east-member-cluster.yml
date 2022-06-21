@@ -11,7 +11,7 @@ kind: ClusterClaim
 metadata:
   name: clusterset-id
   namespace: kube-system
-name: clusterSet.k8s.io
+name: clusterset.k8s.io
 value: test-clusterset
 ---
 apiVersion: multicluster.crd.antrea.io/v1alpha1
@@ -26,5 +26,5 @@ spec:
       server: https://<LEADER_CLUSTER_IP>:6443
   members:
     - clusterID: test-cluster-east
-  namespace: antrea-mcs-ns
+  namespace: antrea-multicluster
 

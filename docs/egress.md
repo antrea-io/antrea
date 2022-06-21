@@ -40,14 +40,14 @@ This guide demonstrates how to configure `Egress` to achieve the above result.
 
 ## Prerequisites
 
-Egress is introduced in v1.0 as an alpha feature. As with other alpha features,
-a feature gate `Egress` must be enabled on the antrea-controller and
-antrea-agent for the feature to work. The following options in the
-`antrea-config` ConfigMap need to be set:
+Egress was introduced in v1.0 as an alpha feature, and was graduated to beta in
+v1.6, at which time it was enabled by default. Prior to v1.6, a feature gate,
+`Egress` must be enabled on the antrea-controller and antrea-agent in the
+`antrea-config` ConfigMap like the following options for the feature to work:
 
 ```yaml
-kind: ConfigMap
 apiVersion: v1
+kind: ConfigMap
 metadata:
   name: antrea-config-dcfb6k2hkm
   namespace: kube-system
@@ -134,18 +134,18 @@ external network. The IPs in the pool can be allocated to the Egress resources
 as the Egress IPs. A typical ExternalIPPool resource example:
 
 ```yaml
-- apiVersion: crd.antrea.io/v1alpha2
-  kind: ExternalIPPool
-  metadata:
-    name: prod-external-ip-pool
-  spec:
-    ipRanges:
-    - start: 10.10.0.2
-      end: 10.10.0.10
-    - cidr: 10.10.1.0/28
-    nodeSelector:
-      matchLabels:
-        network-role: egress-gateway
+apiVersion: crd.antrea.io/v1alpha2
+kind: ExternalIPPool
+metadata:
+  name: prod-external-ip-pool
+spec:
+  ipRanges:
+  - start: 10.10.0.2
+    end: 10.10.0.10
+  - cidr: 10.10.1.0/28
+  nodeSelector:
+    matchLabels:
+    network-role: egress-gateway
 ```
 
 ### IPRanges
@@ -173,15 +173,15 @@ First, create an `ExternalIPPool` with a list of external routable IPs on the
 network.
 
 ```yaml
-- apiVersion: crd.antrea.io/v1alpha2
-  kind: ExternalIPPool
-  metadata:
-    name: external-ip-pool
-  spec:
-    ipRanges:
-    - start: 10.10.0.11  # 10.10.0.11-10.10.0.20 can be used as Egress IPs
-      end: 10.10.0.20
-    nodeSelector: {}     # All Nodes can be Egress Nodes
+apiVersion: crd.antrea.io/v1alpha2
+kind: ExternalIPPool
+metadata:
+  name: external-ip-pool
+spec:
+  ipRanges:
+  - start: 10.10.0.11  # 10.10.0.11-10.10.0.20 can be used as Egress IPs
+    end: 10.10.0.20
+  nodeSelector: {}     # All Nodes can be Egress Nodes
 ```
 
 Then create two `Egress` resources, each of which applies to web apps in one
@@ -297,3 +297,10 @@ Namespace to the new Node.
 This feature is currently only supported for Nodes running Linux and "encap"
 mode. The support for Windows and other traffic modes will be added in the
 future.
+
+The previous implementation of Antrea Egress before Antrea v1.7.0 does not work
+with the `strictARP` configuration of `kube-proxy` IPVS mode. The `strictARP`
+configuration is required by some Service load balancing solutions including:
+[Antrea Service external IP management, MetalLB](service-loadbalancer.md#interoperability-with-kube-proxy-ipvs-mode),
+and kube-vip. It means Antrea Egress cannot work together with these solutions
+in a cluster using `kube-proxy` IPVS. The issue was fixed in Antrea v1.7.0.

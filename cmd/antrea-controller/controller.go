@@ -15,6 +15,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -23,21 +24,28 @@ import (
 	"time"
 
 	apiextensionclientset "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/fields"
 	genericopenapi "k8s.io/apiserver/pkg/endpoints/openapi"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
 	"k8s.io/client-go/informers"
+	csrinformers "k8s.io/client-go/informers/certificates/v1"
 	clientset "k8s.io/client-go/kubernetes"
+	csrlisters "k8s.io/client-go/listers/certificates/v1"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 	aggregatorclientset "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 	netutils "k8s.io/utils/net"
 
+	antreaapis "antrea.io/antrea/pkg/apis"
 	"antrea.io/antrea/pkg/apiserver"
 	"antrea.io/antrea/pkg/apiserver/certificate"
 	"antrea.io/antrea/pkg/apiserver/openapi"
 	"antrea.io/antrea/pkg/apiserver/storage"
 	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions"
 	"antrea.io/antrea/pkg/clusteridentity"
+	"antrea.io/antrea/pkg/controller/certificatesigningrequest"
 	"antrea.io/antrea/pkg/controller/egress"
 	egressstore "antrea.io/antrea/pkg/controller/egress/store"
 	"antrea.io/antrea/pkg/controller/externalippool"
@@ -104,7 +112,7 @@ func run(o *Options) error {
 	// Create K8s Clientset, Aggregator Clientset, CRD Clientset and SharedInformerFactory for the given config.
 	// Aggregator Clientset is used to update the CABundle of the APIServices backed by antrea-controller so that
 	// the aggregator can verify its serving certificate.
-	client, aggregatorClient, crdClient, apiExtensionClient, err := k8s.CreateClients(o.config.ClientConnection, "")
+	client, aggregatorClient, crdClient, apiExtensionClient, _, err := k8s.CreateClients(o.config.ClientConnection, "")
 	if err != nil {
 		return fmt.Errorf("error creating K8s clients: %v", err)
 	}
@@ -145,6 +153,7 @@ func run(o *Options) error {
 		namespaceInformer,
 		serviceInformer,
 		networkPolicyInformer,
+		nodeInformer,
 		cnpInformer,
 		anpInformer,
 		tierInformer,
@@ -172,6 +181,22 @@ func run(o *Options) error {
 		externalIPPoolController = externalippool.NewExternalIPPoolController(
 			crdClient, externalIPPoolInformer,
 		)
+	}
+
+	var csrApprovingController *certificatesigningrequest.CSRApprovingController
+	var csrSigningController *certificatesigningrequest.IPsecCSRSigningController
+	var csrInformer cache.SharedIndexInformer
+	var csrLister csrlisters.CertificateSigningRequestLister
+	if features.DefaultFeatureGate.Enabled(features.IPsecCertAuth) {
+		csrInformer = csrinformers.NewFilteredCertificateSigningRequestInformer(client, 0, nil, func(listOptions *metav1.ListOptions) {
+			listOptions.FieldSelector = fields.OneTermEqualSelector("spec.signerName", antreaapis.AntreaIPsecCSRSignerName).String()
+		})
+		csrLister = csrlisters.NewCertificateSigningRequestLister(csrInformer.GetIndexer())
+
+		if *o.config.IPsecCSRSignerConfig.AutoApprove {
+			csrApprovingController = certificatesigningrequest.NewCSRApprovingController(client, csrInformer, csrLister)
+		}
+		csrSigningController = certificatesigningrequest.NewIPsecCSRSigningController(client, csrInformer, csrLister, *o.config.IPsecCSRSignerConfig.SelfSignedCA)
 	}
 
 	if features.DefaultFeatureGate.Enabled(features.Egress) {
@@ -243,6 +268,11 @@ func run(o *Options) error {
 	// cause the stopCh channel to be closed; if another signal is received before the program
 	// exits, we will force exit.
 	stopCh := signals.RegisterSignalHandlers()
+	// Generate a context for functions which require one (instead of stopCh).
+	// We cancel the context when the function returns, which in the normal case will be when
+	// stopCh is closed.
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	log.StartLogFileNumberMonitor(stopCh)
 
@@ -261,7 +291,7 @@ func run(o *Options) error {
 
 	go networkPolicyController.Run(stopCh)
 
-	go apiServer.Run(stopCh)
+	go apiServer.Run(ctx)
 
 	if features.DefaultFeatureGate.Enabled(features.NetworkPolicyStats) {
 		go statsAggregator.Run(stopCh)
@@ -310,6 +340,14 @@ func run(o *Options) error {
 
 	if antreaIPAMController != nil {
 		go antreaIPAMController.Run(stopCh)
+	}
+
+	if features.DefaultFeatureGate.Enabled(features.IPsecCertAuth) {
+		go csrInformer.Run(stopCh)
+		if *o.config.IPsecCSRSignerConfig.AutoApprove {
+			go csrApprovingController.Run(stopCh)
+		}
+		go csrSigningController.Run(stopCh)
 	}
 
 	<-stopCh

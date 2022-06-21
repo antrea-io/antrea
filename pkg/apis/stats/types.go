@@ -65,6 +65,38 @@ type AntreaNetworkPolicyStatsList struct {
 	Items []AntreaNetworkPolicyStats
 }
 
+// PodReference represents a Pod Reference.
+type PodReference struct {
+	// The name of this Pod.
+	Name string
+	// The namespace of this Pod.
+	Namespace string
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// MulticastGroup contains the mapping between multicast group and Pods.
+type MulticastGroup struct {
+	metav1.TypeMeta
+	metav1.ObjectMeta
+
+	// Group is the IP of the multicast group.
+	Group string
+	// Pods is the list of Pods that have joined the multicast group.
+	Pods []PodReference
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// MulticastGroupList is a list of MulticastGroup.
+type MulticastGroupList struct {
+	metav1.TypeMeta
+	metav1.ListMeta
+
+	// List of MulticastGroup.
+	Items []MulticastGroup
+}
+
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // NetworkPolicyStats is the statistics of a K8s NetworkPolicy.

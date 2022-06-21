@@ -1,4 +1,4 @@
-// Copyright 2021 Antrea Authors
+// Copyright 2022 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,9 +20,9 @@
 package testing
 
 import (
+	ipam "antrea.io/antrea/pkg/agent/cniserver/ipam"
 	types "antrea.io/antrea/pkg/agent/cniserver/types"
 	invoke "github.com/containernetworking/cni/pkg/invoke"
-	current "github.com/containernetworking/cni/pkg/types/current"
 	gomock "github.com/golang/mock/gomock"
 	reflect "reflect"
 )
@@ -51,11 +51,11 @@ func (m *MockIPAMDriver) EXPECT() *MockIPAMDriverMockRecorder {
 }
 
 // Add mocks base method
-func (m *MockIPAMDriver) Add(arg0 *invoke.Args, arg1 *types.K8sArgs, arg2 []byte) (bool, *current.Result, error) {
+func (m *MockIPAMDriver) Add(arg0 *invoke.Args, arg1 *types.K8sArgs, arg2 []byte) (bool, *ipam.IPAMResult, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Add", arg0, arg1, arg2)
 	ret0, _ := ret[0].(bool)
-	ret1, _ := ret[1].(*current.Result)
+	ret1, _ := ret[1].(*ipam.IPAMResult)
 	ret2, _ := ret[2].(error)
 	return ret0, ret1, ret2
 }

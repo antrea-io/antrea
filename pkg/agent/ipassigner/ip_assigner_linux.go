@@ -28,6 +28,7 @@ import (
 
 	"antrea.io/antrea/pkg/agent/ipassigner/responder"
 	"antrea.io/antrea/pkg/agent/util"
+	"antrea.io/antrea/pkg/agent/util/sysctl"
 )
 
 // ipAssigner creates a dummy device and assigns IPs to it.
@@ -60,11 +61,22 @@ func NewIPAssigner(nodeTransportInterface string, dummyDeviceName string) (*ipAs
 		assignedIPs:       sets.NewString(),
 	}
 	if ipv4 != nil {
-		arpResonder, err := responder.NewARPResponder(externalInterface)
+		// For the Egress scenario, the external IPs should always be present on the dummy
+		// interface as they are used as tunnel endpoints. If arp_ignore is set to a value
+		// other than 0, the host will not reply to ARP requests received on the transport
+		// interface when the target IPs are assigned on the dummy interface. So a userspace
+		// ARP responder is needed to handle ARP requests for the Egress IPs.
+		arpIgnore, err := getARPIgnoreForInterface(externalInterface.Name)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create ARP responder for link %s: %v", externalInterface.Name, err)
+			return nil, err
 		}
-		a.arpResponder = arpResonder
+		if dummyDeviceName == "" || arpIgnore > 0 {
+			arpResonder, err := responder.NewARPResponder(externalInterface)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create ARP responder for link %s: %v", externalInterface.Name, err)
+			}
+			a.arpResponder = arpResonder
+		}
 	}
 	if ipv6 != nil {
 		ndpResponder, err := responder.NewNDPResponder(externalInterface)
@@ -79,11 +91,25 @@ func NewIPAssigner(nodeTransportInterface string, dummyDeviceName string) (*ipAs
 			return nil, fmt.Errorf("error when ensuring dummy device exists: %v", err)
 		}
 		a.dummyDevice = dummyDevice
-		if err := a.loadIPAddresses(); err != nil {
-			return nil, fmt.Errorf("error when loading IP addresses from the system: %v", err)
-		}
 	}
 	return a, nil
+}
+
+// getARPIgnoreForInterface gets the max value of conf/{all,interface}/arp_ignore form sysctl.
+func getARPIgnoreForInterface(iface string) (int, error) {
+	arpIgnoreAll, err := sysctl.GetSysctlNet("ipv4/conf/all/arp_ignore")
+	if err != nil {
+		return 0, fmt.Errorf("failed to get arp_ignore for all interfaces: %w", err)
+	}
+	arpIgnore, err := sysctl.GetSysctlNet(fmt.Sprintf("ipv4/conf/%s/arp_ignore", iface))
+	if err != nil {
+		return 0, fmt.Errorf("failed to get arp_ignore for %s: %w", iface, err)
+	}
+	if arpIgnore > arpIgnoreAll {
+		return arpIgnore, nil
+	}
+	return arpIgnoreAll, nil
+
 }
 
 // ensureDummyDevice creates the dummy device if it doesn't exist.
@@ -102,19 +128,16 @@ func ensureDummyDevice(deviceName string) (netlink.Link, error) {
 }
 
 // loadIPAddresses gets the IP addresses on the dummy device and caches them in memory.
-func (a *ipAssigner) loadIPAddresses() error {
+func (a *ipAssigner) loadIPAddresses() (sets.String, error) {
 	addresses, err := netlink.AddrList(a.dummyDevice, netlink.FAMILY_ALL)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	newAssignIPs := sets.NewString()
 	for _, address := range addresses {
 		newAssignIPs.Insert(address.IP.String())
 	}
-	a.mutex.Lock()
-	defer a.mutex.Unlock()
-	a.assignedIPs = newAssignIPs
-	return nil
+	return newAssignIPs, nil
 }
 
 // AssignIP ensures the provided IP is assigned to the dummy device and the ARP/NDP responders.
@@ -208,13 +231,54 @@ func (a *ipAssigner) AssignedIPs() sets.String {
 	return a.assignedIPs.Union(nil)
 }
 
+// InitIPs loads the IPs from the dummy device and replaces the IPs that are assigned to it
+// with the given ones. This function also adds the given IPs to the ARP/NDP responder if
+// applicable. It can be used to recover the IP assigner to the desired state after Agent restarts.
+func (a *ipAssigner) InitIPs(ips sets.String) error {
+	a.mutex.Lock()
+	defer a.mutex.Unlock()
+	if a.dummyDevice != nil {
+		assigned, err := a.loadIPAddresses()
+		if err != nil {
+			return fmt.Errorf("error when loading IP addresses from the system: %v", err)
+		}
+		for ip := range ips.Difference(assigned) {
+			addr := util.NewIPNet(net.ParseIP(ip))
+			if err := netlink.AddrAdd(a.dummyDevice, &netlink.Addr{IPNet: addr}); err != nil {
+				if !errors.Is(err, unix.EEXIST) {
+					return fmt.Errorf("failed to add IP %v to interface %s: %v", ip, a.dummyDevice.Attrs().Name, err)
+				}
+			}
+		}
+		for ip := range assigned.Difference(ips) {
+			addr := util.NewIPNet(net.ParseIP(ip))
+			if err := netlink.AddrDel(a.dummyDevice, &netlink.Addr{IPNet: addr}); err != nil {
+				if !errors.Is(err, unix.EADDRNOTAVAIL) {
+					return fmt.Errorf("failed to delete IP %v from interface %s: %v", ip, a.dummyDevice.Attrs().Name, err)
+				}
+			}
+		}
+	}
+	for ipStr := range ips {
+		ip := net.ParseIP(ipStr)
+		var err error
+		if utilnet.IsIPv4(ip) && a.arpResponder != nil {
+			err = a.arpResponder.AddIP(ip)
+		}
+		if utilnet.IsIPv6(ip) && a.ndpResponder != nil {
+			err = a.ndpResponder.AddIP(ip)
+		}
+		if err != nil {
+			return err
+		}
+	}
+	a.assignedIPs = ips.Union(nil)
+	return nil
+}
+
 // Run starts the ARP responder and NDP responder.
 func (a *ipAssigner) Run(ch <-chan struct{}) {
-	// Start the ARP responder only when the dummy device is not created. The kernel will handle ARP requests
-	// for IPs assigned to the dummy devices by default.
-	// TODO: Check the arp_ignore sysctl parameter of the transport interface to determine whether to start
-	// the ARP responder or not.
-	if a.dummyDevice == nil && a.arpResponder != nil {
+	if a.arpResponder != nil {
 		go a.arpResponder.Run(ch)
 	}
 	if a.ndpResponder != nil {

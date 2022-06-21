@@ -59,11 +59,11 @@
                 credential-id: RESOURCEPOOLPATH
                 variable: RESOURCEPOOLPATH
       - '{name}-{test_name}-for-period':
-          test_name: daily-elk-flow-collector-validate
+          test_name: daily-flow-visibility-validate
           node: 'antrea-test-node'
-          description: 'This is for validating the elk flow collector manifest daily.'
+          description: 'This is for validating the flow visibility manifest daily.'
           builders:
-            - builder-elk-flow-collector
+            - builder-flow-visibility
           branches:
           - '*/main'
           included_regions: []

@@ -9,6 +9,11 @@ bases:
   - ../../crd
   - ../../default
 
+resources:
+  - service_account.yaml
+  - role.yaml
+  - role_binding.yaml
+
 patchesJson6902:
 - target:
     group: rbac.authorization.k8s.io
@@ -23,3 +28,4 @@ configurations:
 patchesStrategicMerge:
   - manager_command_patch.yaml
   - webhook_patch.yaml
+  - crd_patch.yaml

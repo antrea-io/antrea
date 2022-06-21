@@ -109,30 +109,34 @@ func TestOVSBridge(t *testing.T) {
 		time.Sleep(time.Second)
 	}
 	assert.Equal(t, expectedDatapathID, datapathID)
+	vlanID := uint16(100)
 
 	deleteAllPorts(t, data.br)
 	checkPorts(0)
 
-	uuid1 := testCreatePort(t, data.br, "p1", "internal")
-	uuid2 := testCreatePort(t, data.br, "p2", "")
-	uuid3 := testCreatePort(t, data.br, "p3", "vxlan")
-	uuid4 := testCreatePort(t, data.br, "p4", "geneve")
+	uuid1 := testCreatePort(t, data.br, "p1", "internal", 0)
+	uuid2 := testCreatePort(t, data.br, "p2", "", 0)
+	uuid3 := testCreatePort(t, data.br, "p3", "vxlan", 0)
+	uuid4 := testCreatePort(t, data.br, "p4", "geneve", 0)
+	uuid5 := testCreatePort(t, data.br, "p5", "", vlanID)
 
-	checkPorts(4)
+	checkPorts(5)
 
 	testDeletePort(t, data.br, uuid1)
 	testDeletePort(t, data.br, uuid2)
 	testDeletePort(t, data.br, uuid3)
 	testDeletePort(t, data.br, uuid4)
+	testDeletePort(t, data.br, uuid5)
 
 	checkPorts(0)
 
-	testCreatePort(t, data.br, "p1", "internal")
-	testCreatePort(t, data.br, "p2", "")
-	testCreatePort(t, data.br, "p3", "vxlan")
-	testCreatePort(t, data.br, "p4", "geneve")
+	testCreatePort(t, data.br, "p1", "internal", 0)
+	testCreatePort(t, data.br, "p2", "", 0)
+	testCreatePort(t, data.br, "p3", "vxlan", 0)
+	testCreatePort(t, data.br, "p4", "geneve", 0)
+	testCreatePort(t, data.br, "p5", "", vlanID)
 
-	checkPorts(4)
+	checkPorts(5)
 
 	deleteAllPorts(t, data.br)
 
@@ -148,7 +152,7 @@ func TestOVSDeletePortIdempotent(t *testing.T) {
 
 	deleteAllPorts(t, data.br)
 
-	uuid := testCreatePort(t, data.br, "p1", "internal")
+	uuid := testCreatePort(t, data.br, "p1", "internal", 0)
 	testDeletePort(t, data.br, uuid)
 	testDeletePort(t, data.br, uuid)
 }
@@ -200,13 +204,36 @@ func TestOVSOtherConfig(t *testing.T) {
 	require.Nil(t, err, "Error when getting OVS other_config")
 	require.Equal(t, map[string]string{"flow-restore-wait": "true", "foo1": "bar1", "foo2": "bar2"}, gotOtherConfigs, "other_config mismatched")
 
+	// Expect to modify existing values and insert new values
+	err = data.br.UpdateOVSOtherConfig(map[string]interface{}{"foo2": "bar3", "foo3": "bar2"})
+	require.Nil(t, err, "Error when updating OVS other_config")
+	gotOtherConfigs, err = data.br.GetOVSOtherConfig()
+	require.Nil(t, err, "Error when getting OVS other_config")
+	require.Equal(t, map[string]string{"flow-restore-wait": "true", "foo1": "bar1", "foo2": "bar3", "foo3": "bar2"}, gotOtherConfigs, "other_config mismatched")
+
 	// Expect only the matched config "flow-restore-wait: true" will be deleted.
-	err = data.br.DeleteOVSOtherConfig(map[string]interface{}{"flow-restore-wait": "true", "foo1": "bar2"})
+	err = data.br.DeleteOVSOtherConfig(map[string]interface{}{"flow-restore-wait": "true", "foo1": "bar2", "foo2": "bar1"})
 	require.Nil(t, err, "Error when deleting OVS other_config")
 
 	gotOtherConfigs, err = data.br.GetOVSOtherConfig()
 	require.Nil(t, err, "Error when getting OVS other_config")
-	require.Equal(t, map[string]string{"foo1": "bar1", "foo2": "bar2"}, gotOtherConfigs, "other_config mismatched")
+	require.Equal(t, map[string]string{"foo1": "bar1", "foo2": "bar3", "foo3": "bar2"}, gotOtherConfigs, "other_config mismatched")
+
+	// Expect "foo1" will be deleted
+	err = data.br.DeleteOVSOtherConfig(map[string]interface{}{"foo1": "", "foo2": "bar4"})
+	require.Nil(t, err, "Error when deleting OVS other_config")
+
+	gotOtherConfigs, err = data.br.GetOVSOtherConfig()
+	require.Nil(t, err, "Error when getting OVS other_config")
+	require.Equal(t, map[string]string{"foo2": "bar3", "foo3": "bar2"}, gotOtherConfigs, "other_config mismatched")
+
+	// Expect "foo2" will be deleted
+	err = data.br.DeleteOVSOtherConfig(map[string]interface{}{"foo2": "", "foo4": ""})
+	require.Nil(t, err, "Error when deleting OVS other_config")
+
+	gotOtherConfigs, err = data.br.GetOVSOtherConfig()
+	require.Nil(t, err, "Error when getting OVS other_config")
+	require.Equal(t, map[string]string{"foo3": "bar2"}, gotOtherConfigs, "other_config mismatched")
 }
 
 func TestTunnelOptionCsum(t *testing.T) {
@@ -238,7 +265,7 @@ func TestTunnelOptionCsum(t *testing.T) {
 			defer data.teardown(t)
 
 			name := "vxlan0"
-			_, err := data.br.CreateTunnelPortExt(name, ovsconfig.VXLANTunnel, ofPortRequest, testCase.initialCsum, "", "", "", nil)
+			_, err := data.br.CreateTunnelPortExt(name, ovsconfig.VXLANTunnel, ofPortRequest, testCase.initialCsum, "", "", "", "", nil, nil)
 			require.Nil(t, err, "Error when creating tunnel port")
 			options, err := data.br.GetInterfaceOptions(name)
 			require.Nil(t, err, "Error when getting interface options")
@@ -269,7 +296,7 @@ func deleteAllPorts(t *testing.T, br *ovsconfig.OVSBridge) {
 
 var ofPortRequest int32 = 1
 
-func testCreatePort(t *testing.T, br *ovsconfig.OVSBridge, name string, ifType string) string {
+func testCreatePort(t *testing.T, br *ovsconfig.OVSBridge, name string, ifType string, vlanID uint16) string {
 	var err error
 	var uuid string
 	var externalIDs map[string]interface{}
@@ -278,7 +305,11 @@ func testCreatePort(t *testing.T, br *ovsconfig.OVSBridge, name string, ifType s
 	switch ifType {
 	case "":
 		externalIDs = map[string]interface{}{"k1": "v1", "k2": "v2"}
-		uuid, err = br.CreatePort(name, name, externalIDs)
+		if vlanID == 0 {
+			uuid, err = br.CreatePort(name, name, externalIDs)
+		} else {
+			uuid, err = br.CreateAccessPort(name, name, externalIDs, vlanID)
+		}
 	case "internal":
 		externalIDs = map[string]interface{}{"k1": "v1", "k2": "v2"}
 		uuid, err = br.CreateInternalPort(name, ofPortRequest, externalIDs)
@@ -310,6 +341,7 @@ func testCreatePort(t *testing.T, br *ovsconfig.OVSBridge, name string, ifType s
 	if ifType != "" {
 		assert.Equal(t, ofPort, port.OFPort)
 	}
+	assert.Equal(t, vlanID, port.VLANID)
 
 	for k, v := range externalIDs {
 		rv, ok := port.ExternalIDs[k]

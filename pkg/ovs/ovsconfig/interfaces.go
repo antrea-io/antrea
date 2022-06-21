@@ -23,6 +23,7 @@ const (
 	VXLANTunnel  = "vxlan"
 	GRETunnel    = "gre"
 	STTTunnel    = "stt"
+	ERSPANTunnel = "erspan"
 
 	OVSDatapathSystem OVSDatapathType = "system"
 	OVSDatapathNetdev OVSDatapathType = "netdev"
@@ -37,9 +38,10 @@ type OVSBridgeClient interface {
 	GetInterfaceOptions(name string) (map[string]string, Error)
 	SetInterfaceOptions(name string, options map[string]interface{}) Error
 	CreatePort(name, ifDev string, externalIDs map[string]interface{}) (string, Error)
+	CreateAccessPort(name, ifDev string, externalIDs map[string]interface{}, vlanID uint16) (string, Error)
 	CreateInternalPort(name string, ofPortRequest int32, externalIDs map[string]interface{}) (string, Error)
 	CreateTunnelPort(name string, tunnelType TunnelType, ofPortRequest int32) (string, Error)
-	CreateTunnelPortExt(name string, tunnelType TunnelType, ofPortRequest int32, csum bool, localIP string, remoteIP string, psk string, externalIDs map[string]interface{}) (string, Error)
+	CreateTunnelPortExt(name string, tunnelType TunnelType, ofPortRequest int32, csum bool, localIP string, remoteIP string, remoteName string, psk string, extraOptions, externalIDs map[string]interface{}) (string, Error)
 	CreateUplinkPort(name string, ofPortRequest int32, externalIDs map[string]interface{}) (string, Error)
 	DeletePort(portUUID string) Error
 	DeletePorts(portUUIDList []string) Error
@@ -50,6 +52,7 @@ type OVSBridgeClient interface {
 	GetOVSVersion() (string, Error)
 	AddOVSOtherConfig(configs map[string]interface{}) Error
 	GetOVSOtherConfig() (map[string]string, Error)
+	UpdateOVSOtherConfig(configs map[string]interface{}) Error
 	DeleteOVSOtherConfig(configs map[string]interface{}) Error
 	AddBridgeOtherConfig(configs map[string]interface{}) Error
 	SetBridgeMcastSnooping(enabled bool) Error

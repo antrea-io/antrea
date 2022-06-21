@@ -30,8 +30,13 @@ import (
 )
 
 func TestToAntreaServicesForCRD(t *testing.T) {
+	igmpQuery := int32(17)
+	igmpReport := int32(18)
+	queryStr := "224.0.0.1"
+	reportStr := "225.1.2.3"
 	tables := []struct {
 		ports              []crdv1alpha1.NetworkPolicyPort
+		protocols          []crdv1alpha1.NetworkPolicyProtocol
 		expServices        []controlplane.Service
 		expNamedPortExists bool
 	}{
@@ -82,9 +87,118 @@ func TestToAntreaServicesForCRD(t *testing.T) {
 			},
 			expNamedPortExists: false,
 		},
+		{
+			protocols: []crdv1alpha1.NetworkPolicyProtocol{
+				{
+					ICMP: &crdv1alpha1.ICMPProtocol{
+						ICMPType: &icmpType8,
+						ICMPCode: &icmpCode0,
+					},
+				},
+			},
+			expServices: []controlplane.Service{
+				{
+					Protocol: &protocolICMP,
+					ICMPType: &icmpType8,
+					ICMPCode: &icmpCode0,
+				},
+			},
+			expNamedPortExists: false,
+		},
+		{
+			protocols: []crdv1alpha1.NetworkPolicyProtocol{
+				{
+					IGMP: &crdv1alpha1.IGMPProtocol{
+						IGMPType:     &igmpQuery,
+						GroupAddress: queryStr,
+					},
+				},
+			},
+			expServices: []controlplane.Service{
+				{
+					Protocol:     &protocolIGMP,
+					IGMPType:     &igmpQuery,
+					GroupAddress: queryStr,
+				},
+			},
+		},
+		{
+			protocols: []crdv1alpha1.NetworkPolicyProtocol{
+				{
+					IGMP: &crdv1alpha1.IGMPProtocol{
+						IGMPType:     &igmpReport,
+						GroupAddress: reportStr,
+					},
+				},
+			},
+			expServices: []controlplane.Service{
+				{
+					Protocol:     &protocolIGMP,
+					IGMPType:     &igmpReport,
+					GroupAddress: reportStr,
+				},
+			},
+		},
+		{
+			protocols: []crdv1alpha1.NetworkPolicyProtocol{
+				{
+					ICMP: &crdv1alpha1.ICMPProtocol{
+						ICMPType: &icmpType8,
+					},
+				},
+			},
+			expServices: []controlplane.Service{
+				{
+					Protocol: &protocolICMP,
+					ICMPType: &icmpType8,
+				},
+			},
+			expNamedPortExists: false,
+		},
+		{
+			protocols: []crdv1alpha1.NetworkPolicyProtocol{
+				{
+					ICMP: &crdv1alpha1.ICMPProtocol{},
+				},
+			},
+			expServices: []controlplane.Service{
+				{
+					Protocol: &protocolICMP,
+				},
+			},
+			expNamedPortExists: false,
+		},
+		{
+			ports: []crdv1alpha1.NetworkPolicyPort{
+				{
+					Protocol: &k8sProtocolTCP,
+					Port:     &int80,
+				},
+			},
+			protocols: []crdv1alpha1.NetworkPolicyProtocol{
+				{
+					ICMP: &crdv1alpha1.ICMPProtocol{
+						ICMPType: &icmpType8,
+						ICMPCode: &icmpCode0,
+					},
+				},
+			},
+			expServices: []controlplane.Service{
+				{
+					Protocol: toAntreaProtocol(&k8sProtocolTCP),
+					Port:     &int80,
+				},
+				{
+					Protocol: &protocolICMP,
+					ICMPType: &icmpType8,
+					ICMPCode: &icmpCode0,
+				},
+			},
+			expNamedPortExists: false,
+		},
 	}
 	for _, table := range tables {
-		services, namedPortExist := toAntreaServicesForCRD(table.ports)
+		services, namedPortExist := toAntreaServicesForCRD(table.ports, table.protocols)
 		assert.Equal(t, table.expServices, services)
 		assert.Equal(t, table.expNamedPortExists, namedPortExist)
 	}
@@ -151,7 +265,7 @@ func TestToAntreaPeerForCRD(t *testing.T) {
 	selectorC := metav1.LabelSelector{MatchLabels: map[string]string{"foo3": "bar3"}}
 	selectorAll := metav1.LabelSelector{}
 	matchAllPodsPeer := matchAllPeer
-	matchAllPodsPeer.AddressGroups = []string{getNormalizedUID(antreatypes.NewGroupSelector("", nil, &selectorAll, nil).NormalizedName)}
+	matchAllPodsPeer.AddressGroups = []string{getNormalizedUID(antreatypes.NewGroupSelector("", nil, &selectorAll, nil, nil).NormalizedName)}
 	// cgA with selector present in cache
 	cgA := crdv1alpha3.ClusterGroup{
 		ObjectMeta: metav1.ObjectMeta{Name: "cgA", UID: "uidA"},
@@ -180,8 +294,8 @@ func TestToAntreaPeerForCRD(t *testing.T) {
 			},
 			outPeer: controlplane.NetworkPolicyPeer{
 				AddressGroups: []string{
-					getNormalizedUID(antreatypes.NewGroupSelector("", &selectorA, &selectorB, nil).NormalizedName),
-					getNormalizedUID(antreatypes.NewGroupSelector("", &selectorC, nil, nil).NormalizedName),
+					getNormalizedUID(antreatypes.NewGroupSelector("", &selectorA, &selectorB, nil, nil).NormalizedName),
+					getNormalizedUID(antreatypes.NewGroupSelector("", &selectorC, nil, nil, nil).NormalizedName),
 				},
 			},
 			direction: controlplane.DirectionIn,
@@ -199,8 +313,8 @@ func TestToAntreaPeerForCRD(t *testing.T) {
 			},
 			outPeer: controlplane.NetworkPolicyPeer{
 				AddressGroups: []string{
-					getNormalizedUID(antreatypes.NewGroupSelector("", &selectorA, &selectorB, nil).NormalizedName),
-					getNormalizedUID(antreatypes.NewGroupSelector("", &selectorC, nil, nil).NormalizedName),
+					getNormalizedUID(antreatypes.NewGroupSelector("", &selectorA, &selectorB, nil, nil).NormalizedName),
+					getNormalizedUID(antreatypes.NewGroupSelector("", &selectorC, nil, nil, nil).NormalizedName),
 				},
 			},
 			direction: controlplane.DirectionOut,
@@ -277,6 +391,34 @@ func TestToAntreaPeerForCRD(t *testing.T) {
 			},
 			outPeer: controlplane.NetworkPolicyPeer{
 				AddressGroups: []string{cgA.Name},
+			},
+			direction: controlplane.DirectionOut,
+		},
+		{
+			name: "node-selector-peer-ingress",
+			inPeers: []crdv1alpha1.NetworkPolicyPeer{
+				{
+					NodeSelector: &selectorA,
+				},
+			},
+			outPeer: controlplane.NetworkPolicyPeer{
+				AddressGroups: []string{
+					getNormalizedUID(antreatypes.NewGroupSelector("", nil, nil, nil, &selectorA).NormalizedName),
+				},
+			},
+			direction: controlplane.DirectionIn,
+		},
+		{
+			name: "node-selector-peer-egress",
+			inPeers: []crdv1alpha1.NetworkPolicyPeer{
+				{
+					NodeSelector: &selectorA,
+				},
+			},
+			outPeer: controlplane.NetworkPolicyPeer{
+				AddressGroups: []string{
+					getNormalizedUID(antreatypes.NewGroupSelector("", nil, nil, nil, &selectorA).NormalizedName),
+				},
 			},
 			direction: controlplane.DirectionOut,
 		},

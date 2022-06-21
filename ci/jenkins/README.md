@@ -145,8 +145,9 @@ DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
   [ci/jenkins/jobs](/ci/jenkins/jobs). It validates the syntax of the jenkins jobs'
   configuration.
 
-* Jenkins Windows OVS validator: this job only executes for PRs that include changes to [hack/windows/Install-OVS.ps1](hack/windows/Install-OVS.ps1). It validates
-  if Windows OVS can be installed correctly.
+* Jenkins Windows OVS validator: this job only executes for PRs that include
+  changes to [hack/windows/Install-OVS.ps1](/hack/windows/Install-OVS.ps1).
+  It validates if Windows OVS can be installed correctly.
 
 ```shell
 #!/bin/bash
@@ -177,9 +178,9 @@ DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
   | :------------: | :-----------------: | :-------------: | :------: |
   |    1.21.7      |  Standard_DS2_v2    |  Ubuntu 18.04   |[![Build Status](http://jenkins.antrea-ci.rocks/buildStatus/icon?job=cloud-antrea-aks-conformance-net-policy)](http://jenkins.antrea-ci.rocks/view/cloud/job/cloud-antrea-aks-conformance-net-policy/)|
 
-* [daily-elk-flow-collector-validate](https://jenkins.antrea-ci.rocks/job/antrea-daily-elk-flow-collector-validate-for-period/):
-  [![Build Status](http://jenkins.antrea-ci.rocks/buildStatus/icon?job=antrea-daily-elk-flow-collector-validate-for-period)](http://jenkins.antrea-ci.rocks/view/cloud/job/antrea-daily-elk-flow-collector-validate-for-period/)
-  daily validation of elk flow collector manifest. If build fails, Jenkins will send an email to
+* [daily-flow-visibility-validate](https://jenkins.antrea-ci.rocks/job/antrea-daily-flow-visibility-validate-for-period/):
+  [![Build Status](http://jenkins.antrea-ci.rocks/buildStatus/icon?job=antrea-daily-flow-visibility-validate-for-period)](http://jenkins.antrea-ci.rocks/view/cloud/job/antrea-daily-flow-visibility-validate-for-period/)
+  daily validation of Flow Visibility manifest. If build fails, Jenkins will send an email to
   projectantrea-dev@googlegroups.com for notification.
 
 * [matrix-test [weekly]](https://jenkins.antrea-ci.rocks/job/antrea-weekly-matrix-compatibility-test/):

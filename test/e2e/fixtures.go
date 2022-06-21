@@ -28,6 +28,7 @@ import (
 	"k8s.io/component-base/featuregate"
 
 	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/features"
 )
 
 func skipIfNotBenchmarkTest(tb testing.TB) {
@@ -45,6 +46,18 @@ func skipIfNotAntreaIPAMTest(tb testing.TB) {
 func skipIfAntreaIPAMTest(tb testing.TB) {
 	if testOptions.enableAntreaIPAM {
 		tb.Skipf("Skipping test when running AntreaIPAM: %s", tb.Name())
+	}
+}
+
+func skipIfNotFlowVisibilityTest(tb testing.TB) {
+	if !testOptions.flowVisibility {
+		tb.Skipf("Skipping when not running flow visibility test")
+	}
+}
+
+func skipIfNamespaceIsNotEqual(tb testing.TB, actualNamespace, expectNamespace string) {
+	if actualNamespace != expectNamespace {
+		tb.Skipf("Skipping test when namespace is not: %s", expectNamespace)
 	}
 }
 
@@ -92,11 +105,11 @@ func skipIfNotIPv6Cluster(tb testing.TB) {
 	}
 }
 
-func skipIfMissingKernelModule(tb testing.TB, nodeName string, requiredModules []string) {
+func skipIfMissingKernelModule(tb testing.TB, data *TestData, nodeName string, requiredModules []string) {
 	for _, module := range requiredModules {
 		// modprobe with "--dry-run" does not require root privileges
 		cmd := fmt.Sprintf("modprobe --dry-run %s", module)
-		rc, stdout, stderr, err := RunCommandOnNode(nodeName, cmd)
+		rc, stdout, stderr, err := data.RunCommandOnNode(nodeName, cmd)
 		if err != nil {
 			tb.Skipf("Skipping test as modprobe could not be run to confirm the presence of module '%s': %v", module, err)
 		}
@@ -146,6 +159,10 @@ func skipIfFeatureDisabled(tb testing.TB, feature featuregate.Feature, checkAgen
 	}
 }
 
+func skipIfProxyDisabled(t *testing.T) {
+	skipIfFeatureDisabled(t, features.AntreaProxy, true /* checkAgent */, false /* checkController */)
+}
+
 func ensureAntreaRunning(data *TestData) error {
 	log.Println("Applying Antrea YAML")
 	if err := data.deployAntrea(deployAntreaDefault); err != nil {
@@ -191,18 +208,19 @@ func setupTest(tb testing.TB) (*TestData, error) {
 			exportLogs(tb, testData, "afterSetupTest", true)
 		}
 	}()
-	tb.Logf("Creating '%s' K8s Namespace", testNamespace)
+	testData.testNamespace = randName(strings.ToLower(tb.Name()) + "-")
+	tb.Logf("Creating '%s' K8s Namespace", testData.testNamespace)
 	if err := ensureAntreaRunning(testData); err != nil {
 		return nil, err
 	}
-	if err := testData.createTestNamespace(); err != nil {
+	if err := testData.CreateNamespace(testData.testNamespace, nil); err != nil {
 		return nil, err
 	}
 	success = true
 	return testData, nil
 }
 
-func setupTestWithIPFIXCollector(tb testing.TB) (*TestData, bool, bool, error) {
+func setupTestForFlowAggregator(tb testing.TB) (*TestData, bool, bool, error) {
 	v4Enabled := clusterInfo.podV4NetworkCIDR != ""
 	v6Enabled := clusterInfo.podV6NetworkCIDR != ""
 	testData, err := setupTest(tb)
@@ -210,10 +228,10 @@ func setupTestWithIPFIXCollector(tb testing.TB) (*TestData, bool, bool, error) {
 		return testData, v4Enabled, v6Enabled, err
 	}
 	// Create pod using ipfix collector image
-	if err = testData.createPodOnNode("ipfix-collector", testNamespace, "", ipfixCollectorImage, nil, nil, nil, nil, true, nil); err != nil {
+	if err = testData.createPodOnNode("ipfix-collector", testData.testNamespace, "", ipfixCollectorImage, nil, nil, nil, nil, true, nil); err != nil {
 		tb.Errorf("Error when creating the ipfix collector Pod: %v", err)
 	}
-	ipfixCollectorIP, err := testData.podWaitForIPs(defaultTimeout, "ipfix-collector", testNamespace)
+	ipfixCollectorIP, err := testData.podWaitForIPs(defaultTimeout, "ipfix-collector", testData.testNamespace)
 	if err != nil || len(ipfixCollectorIP.ipStrings) == 0 {
 		tb.Errorf("Error when waiting to get ipfix collector Pod IP: %v", err)
 		return nil, v4Enabled, v6Enabled, err
@@ -226,24 +244,15 @@ func setupTestWithIPFIXCollector(tb testing.TB) (*TestData, bool, bool, error) {
 	}
 	ipfixCollectorAddr := fmt.Sprintf("%s:tcp", net.JoinHostPort(ipStr, ipfixCollectorPort))
 
-	faClusterIPAddr := ""
-	tb.Logf("Applying flow aggregator YAML with ipfix collector address: %s", ipfixCollectorAddr)
-	faClusterIP, err := testData.deployFlowAggregator(ipfixCollectorAddr)
+	tb.Logf("Deploying ClickHouse")
+	chSvcIP, err := testData.deployFlowVisibilityClickHouse()
 	if err != nil {
 		return testData, v4Enabled, v6Enabled, err
 	}
-	if testOptions.providerName == "kind" {
-		// In Kind cluster, there are issues with DNS name resolution on worker nodes.
-		// Please note that CoreDNS services are forced on to control-plane Node.
-		faClusterIPAddr = fmt.Sprintf("%s:%s:tls", faClusterIP, ipfixCollectorPort)
-	}
-	tb.Logf("Deploying flow exporter with collector address: %s", faClusterIPAddr)
-	if err = testData.deployAntreaFlowExporter(faClusterIPAddr); err != nil {
-		return testData, v4Enabled, v6Enabled, err
-	}
-
-	tb.Logf("Checking CoreDNS deployment")
-	if err = testData.checkCoreDNSPods(defaultTimeout); err != nil {
+	tb.Logf("ClickHouse Service created with ClusterIP: %v", chSvcIP)
+	tb.Logf("Applying flow aggregator YAML with ipfix collector: %s and clickHouse enabled",
+		ipfixCollectorAddr)
+	if err := testData.deployFlowAggregator(ipfixCollectorAddr); err != nil {
 		return testData, v4Enabled, v6Enabled, err
 	}
 	return testData, v4Enabled, v6Enabled, nil
@@ -286,7 +295,7 @@ func exportLogs(tb testing.TB, data *TestData, logsSubDir string, writeNodeLogs 
 	// runKubectl runs the provided kubectl command on the control-plane Node and returns the
 	// output. It returns an empty string in case of error.
 	runKubectl := func(cmd string) string {
-		rc, stdout, _, err := RunCommandOnNode(controlPlaneNodeName(), cmd)
+		rc, stdout, _, err := data.RunCommandOnNode(controlPlaneNodeName(), cmd)
 		if err != nil || rc != 0 {
 			tb.Errorf("Error when running this kubectl command on control-plane Node: %s", cmd)
 			return ""
@@ -318,6 +327,12 @@ func exportLogs(tb testing.TB, data *TestData, logsSubDir string, writeNodeLogs 
 
 	// dump the logs for flow-aggregator Pods to disk.
 	data.forAllMatchingPodsInNamespace("", flowAggregatorNamespace, writePodLogs)
+
+	// dump the logs for flow-visibility Pods to disk.
+	data.forAllMatchingPodsInNamespace("", flowVisibilityNamespace, writePodLogs)
+
+	// dump the logs for clickhouse operator Pods to disk.
+	data.forAllMatchingPodsInNamespace("app=clickhouse-operator", kubeNamespace, writePodLogs)
 
 	// dump the output of "kubectl describe" for Antrea pods to disk.
 	data.forAllMatchingPodsInNamespace("app=antrea", antreaNamespace, func(nodeName, podName, nsName string) error {
@@ -358,7 +373,7 @@ func exportLogs(tb testing.TB, data *TestData, logsSubDir string, writeNodeLogs 
 		if clusterInfo.nodesOS[nodeName] == "windows" {
 			cmd = "Get-EventLog -LogName \"System\" -Source \"Service Control Manager\" | grep kubelet ; Get-EventLog -LogName \"Application\" -Source \"nssm\" | grep kubelet"
 		}
-		rc, stdout, _, err := RunCommandOnNode(nodeName, cmd)
+		rc, stdout, _, err := data.RunCommandOnNode(nodeName, cmd)
 		if err != nil || rc != 0 {
 			// return an error and skip subsequent Nodes
 			return fmt.Errorf("error when running journalctl on Node '%s', is it available? Error: %v", nodeName, err)
@@ -383,8 +398,20 @@ func teardownFlowAggregator(tb testing.TB, data *TestData) {
 		}
 	}
 	tb.Logf("Deleting '%s' K8s Namespace", flowAggregatorNamespace)
-	if err := data.deleteNamespace(flowAggregatorNamespace, defaultTimeout); err != nil {
+	if err := data.DeleteNamespace(flowAggregatorNamespace, defaultTimeout); err != nil {
 		tb.Logf("Error when tearing down flow aggregator: %v", err)
+	}
+	tb.Logf("Deleting K8s resources created by flow visibility YAML")
+	if err := data.deleteFlowVisibility(); err != nil {
+		tb.Logf("Error when deleting K8s resources created by flow visibility YAML: %v", err)
+	}
+	tb.Logf("Deleting '%s' K8s Namespace", flowVisibilityNamespace)
+	if err := data.DeleteNamespace(flowVisibilityNamespace, defaultTimeout); err != nil {
+		tb.Logf("Error when deleting flow-visibility namespace: %v", err)
+	}
+	tb.Logf("Deleting ClickHouse Operator")
+	if err := data.deleteClickHouseOperator(); err != nil {
+		tb.Logf("Error when removing ClickHouse Operator: %v", err)
 	}
 }
 
@@ -393,15 +420,15 @@ func teardownTest(tb testing.TB, data *TestData) {
 	if empty, _ := IsDirEmpty(data.logsDirForTestCase); empty {
 		_ = os.Remove(data.logsDirForTestCase)
 	}
-	tb.Logf("Deleting '%s' K8s Namespace", testNamespace)
-	if err := data.deleteTestNamespace(defaultTimeout); err != nil {
+	tb.Logf("Deleting '%s' K8s Namespace", testData.testNamespace)
+	if err := data.DeleteNamespace(testData.testNamespace, -1); err != nil {
 		tb.Logf("Error when tearing down test: %v", err)
 	}
 }
 
 func deletePodWrapper(tb testing.TB, data *TestData, namespace, name string) {
 	tb.Logf("Deleting Pod '%s'", name)
-	if err := data.deletePod(namespace, name); err != nil {
+	if err := data.DeletePod(namespace, name); err != nil {
 		tb.Logf("Error when deleting Pod: %v", err)
 	}
 }
@@ -414,6 +441,18 @@ func deletePodWrapper(tb testing.TB, data *TestData, namespace, name string) {
 // Node. createTestBusyboxPods returns the cleanupFn function which can be used to delete the
 // created Pods. Pods are created in parallel to reduce the time required to run the tests.
 func createTestBusyboxPods(tb testing.TB, data *TestData, num int, ns string, nodeName string) (
+	podNames []string, podIPs []*PodIPs, cleanupFn func(),
+) {
+	return createTestPods(tb, data, num, ns, nodeName, data.createBusyboxPodOnNode)
+}
+
+func createTestAgnhostPods(tb testing.TB, data *TestData, num int, ns string, nodeName string) (
+	podNames []string, podIPs []*PodIPs, cleanupFn func(),
+) {
+	return createTestPods(tb, data, num, ns, nodeName, data.createAgnhostPodOnNode)
+}
+
+func createTestPods(tb testing.TB, data *TestData, num int, ns string, nodeName string, createFunc func(string, string, string, bool) error) (
 	podNames []string, podIPs []*PodIPs, cleanupFn func(),
 ) {
 	cleanupFn = func() {
@@ -436,9 +475,9 @@ func createTestBusyboxPods(tb testing.TB, data *TestData, num int, ns string, no
 
 	createPodAndGetIP := func() (string, *PodIPs, error) {
 		podName := randName("test-pod-")
-		tb.Logf("Creating a busybox test Pod '%s' and waiting for IP", podName)
-		if err := data.createBusyboxPodOnNode(podName, ns, nodeName, false); err != nil {
-			tb.Errorf("Error when creating busybox test Pod '%s': %v", podName, err)
+		tb.Logf("Creating a test Pod '%s' and waiting for IP", podName)
+		if err := createFunc(podName, ns, nodeName, false); err != nil {
+			tb.Errorf("Error when creating test Pod '%s': %v", podName, err)
 			return "", nil, err
 		}
 		podIP, err := data.podWaitForIPs(defaultTimeout, podName, ns)

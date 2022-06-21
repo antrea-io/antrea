@@ -37,7 +37,8 @@ type AgentConfig struct {
 	// - system
 	// - netdev
 	// 'system' is the default value and corresponds to the kernel datapath. Use 'netdev' to run
-	// OVS in userspace mode. Userspace mode requires the tun device driver to be available.
+	// OVS in userspace mode (not fully supported yet). Userspace mode requires the tun device
+	// driver to be available.
 	OVSDatapathType string `yaml:"ovsDatapathType,omitempty"`
 	// Runtime data directory used by Open vSwitch.
 	// Default value:
@@ -103,13 +104,17 @@ type AgentConfig struct {
 	// WireGuard related configurations.
 	WireGuard WireGuardConfig `yaml:"wireGuard"`
 	// Enable bridging mode of Pod network on Nodes, in which the Node's transport interface is connected
-	// to the OVS bridge, and cross-Node/VLAN traffic from AntreaIPAM Pods (Pods whose IP addresses are
-	// allocated by AntreaIPAM from IPPools) is sent to the underlay network via the uplink, and
-	// forwarded/routed by the underlay network.
+	// to the OVS bridge, and cross-Node/VLAN traffic of AntreaIPAM Pods (Pods whose IP addresses are
+	// allocated by AntreaIPAM from IPPools) is sent to the underlay network, and forwarded/routed by the
+	// underlay network.
 	// This option requires the `AntreaIPAM` feature gate to be enabled. At this moment, it supports only
 	// IPv4 and Linux Nodes, and can be enabled only when `ovsDatapathType` is `system`,
 	// `trafficEncapMode` is `noEncap`, and `noSNAT` is true.
 	EnableBridgingMode bool `yaml:"enableBridgingMode,omitempty"`
+	// Disable TX checksum offloading for container network interfaces. It's supposed to be set to true when the
+	// datapath doesn't support TX checksum offloading, which causes packets to be dropped due to bad checksum.
+	// It affects Pods running on Linux Nodes only.
+	DisableTXChecksumOffload bool `yaml:"disableTXChecksumOffload,omitempty"`
 	// APIPort is the port for the antrea-agent APIServer to serve on.
 	// Defaults to 10350.
 	APIPort int `yaml:"apiPort,omitempty"`
@@ -159,7 +164,8 @@ type AgentConfig struct {
 	// Defaults to "". It must be a host string, a host:port pair, or a URL to the base of the apiserver.
 	KubeAPIServerOverride string `yaml:"kubeAPIServerOverride,omitempty"`
 	// Provide the address of DNS server, to override the kube-dns service. It's used to resolve hostname in FQDN policy.
-	// Defaults to "". It must be a host string or a host:port pair of the dns server.
+	// Defaults to "". It must be a host string or a host:port pair of the DNS server (e.g. 10.96.0.10, 10.96.0.10:53,
+	// [fd00:10:96::a]:53).
 	DNSServerOverride string `yaml:"dnsServerOverride,omitempty"`
 	// Cipher suites to use.
 	TLSCipherSuites string `yaml:"tlsCipherSuites,omitempty"`
@@ -183,11 +189,18 @@ type AgentConfig struct {
 	TransportInterfaceCIDRs []string `yaml:"transportInterfaceCIDRs,omitempty"`
 	// The names of the interfaces on Nodes that are used to forward multicast traffic.
 	// Defaults to transport interface if not set.
+	// Deprecated: use Multicast.MulticastInterfaces instead.
 	MulticastInterfaces []string `yaml:"multicastInterfaces,omitempty"`
+	// Multicast configuration options.
+	Multicast MulticastConfig `yaml:"multicast,omitempty"`
 	// AntreaProxy contains AntreaProxy related configuration options.
 	AntreaProxy AntreaProxyConfig `yaml:"antreaProxy,omitempty"`
 	// Egress related configurations.
 	Egress EgressConfig `yaml:"egress"`
+	// IPsec related configurations.
+	IPsec IPsecConfig `yaml:"ipsec"`
+	// Multicluster configuration options.
+	Multicluster MulticlusterConfig `yaml:"multicluster,omitempty"`
 }
 
 type AntreaProxyConfig struct {
@@ -230,6 +243,31 @@ type NodePortLocalConfig struct {
 	PortRange string `yaml:"portRange,omitempty"`
 }
 
+type MulticastConfig struct {
+	// The names of the interfaces on Nodes that are used to forward multicast traffic.
+	// Defaults to transport interface if not set.
+	MulticastInterfaces []string `yaml:"multicastInterfaces,omitempty"`
+	// The interval for antrea-agent to send IGMP queries to Pods.
+	// Defaults to 125 seconds.
+	IGMPQueryInterval string `yaml:"igmpQueryInterval"`
+}
+
 type EgressConfig struct {
 	ExceptCIDRs []string `yaml:"exceptCIDRs,omitempty"`
+}
+
+type IPsecConfig struct {
+	// The authentication mode of IPsec tunnel. It has the following options:
+	// - psk (default): Use pre-shared key (PSK) for IKE authentication.
+	// - cert:          Use CA-signed certificates for IKE authentication.
+	AuthenticationMode string `yaml:"authenticationMode,omitempty"`
+}
+
+type MulticlusterConfig struct {
+	// Enable Multicluster which allow cross-cluster traffic between member clusters
+	// in a ClusterSet.
+	Enable bool `yaml:"enable,omitempty"`
+	// The Namespace where the Antrea Multi-cluster controller is running.
+	// The default is antrea-agent's Namespace.
+	Namespace string `yaml:"namespace,omitempty"`
 }

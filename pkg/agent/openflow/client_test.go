@@ -23,7 +23,6 @@ import (
 	"testing"
 	"time"
 
-	"antrea.io/ofnet/ofctrl"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -43,6 +42,7 @@ var (
 	bridgeMgmtAddr = binding.GetMgmtAddress(ovsconfig.DefaultOVSRunDir, bridgeName)
 	gwMAC, _       = net.ParseMAC("AA:BB:CC:DD:EE:EE")
 	gwIP, ipNet, _ = net.ParseCIDR("10.0.1.1/24")
+	_, nodeIP, _   = net.ParseCIDR("192.168.77.100/24")
 	gwIPv6, _, _   = net.ParseCIDR("f00d::b00:0:0:0/80")
 	gatewayConfig  = &config.GatewayConfig{
 		IPv4: gwIP,
@@ -52,8 +52,12 @@ var (
 	nodeConfig = &config.NodeConfig{
 		GatewayConfig:   gatewayConfig,
 		WireGuardConfig: &config.WireGuardConfig{},
+		PodIPv4CIDR:     ipNet,
+		NodeIPv4Addr:    nodeIP,
 	}
-	networkConfig = &config.NetworkConfig{}
+	networkConfig = &config.NetworkConfig{IPv4Enabled: true}
+	egressConfig  = &config.EgressConfig{}
+	serviceConfig = &config.ServiceConfig{}
 )
 
 func installNodeFlows(ofClient Client, cacheKey string) (int, error) {
@@ -64,7 +68,7 @@ func installNodeFlows(ofClient Client, cacheKey string) (int, error) {
 	}
 	err := ofClient.InstallNodeFlows(hostName, peerConfigs, &utilip.DualStackIPs{IPv4: peerNodeIP}, 0, nil)
 	client := ofClient.(*client)
-	fCacheI, ok := client.nodeFlowCache.Load(hostName)
+	fCacheI, ok := client.featurePodConnectivity.nodeCachedFlows.Load(hostName)
 	if ok {
 		return len(fCacheI.(flowCache)), err
 	}
@@ -76,9 +80,9 @@ func installPodFlows(ofClient Client, cacheKey string) (int, error) {
 	podMAC, _ := net.ParseMAC("AA:BB:CC:DD:EE:EE")
 	podIP := net.ParseIP("10.0.0.2")
 	ofPort := uint32(10)
-	err := ofClient.InstallPodFlows(containerID, []net.IP{podIP}, podMAC, ofPort)
+	err := ofClient.InstallPodFlows(containerID, []net.IP{podIP}, podMAC, ofPort, 0)
 	client := ofClient.(*client)
-	fCacheI, ok := client.podFlowCache.Load(containerID)
+	fCacheI, ok := client.featurePodConnectivity.podCachedFlows.Load(containerID)
 	if ok {
 		return len(fCacheI.(flowCache)), err
 	}
@@ -103,12 +107,16 @@ func TestIdempotentFlowInstallation(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 			m := oftest.NewMockOFEntryOperations(ctrl)
-			ofClient := NewClient(bridgeName, bridgeMgmtAddr, ovsconfig.OVSDatapathSystem, true, false, false, false, false, false, false)
+			ofClient := NewClient(bridgeName, bridgeMgmtAddr, true, false, false, false, false, false, false, false, false)
 			client := ofClient.(*client)
 			client.cookieAllocator = cookie.NewAllocator(0)
 			client.ofEntryOperations = m
 			client.nodeConfig = nodeConfig
 			client.networkConfig = networkConfig
+			client.egressConfig = egressConfig
+			client.serviceConfig = serviceConfig
+			client.ipProtocols = []binding.Protocol{binding.ProtocolIP}
+			client.generatePipelines()
 
 			m.EXPECT().AddAll(gomock.Any()).Return(nil).Times(1)
 			// Installing the flows should succeed, and all the flows should be added into the cache.
@@ -132,12 +140,16 @@ func TestIdempotentFlowInstallation(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 			m := oftest.NewMockOFEntryOperations(ctrl)
-			ofClient := NewClient(bridgeName, bridgeMgmtAddr, ovsconfig.OVSDatapathSystem, true, false, false, false, false, false, false)
+			ofClient := NewClient(bridgeName, bridgeMgmtAddr, true, false, false, false, false, false, false, false, false)
 			client := ofClient.(*client)
 			client.cookieAllocator = cookie.NewAllocator(0)
 			client.ofEntryOperations = m
 			client.nodeConfig = nodeConfig
 			client.networkConfig = networkConfig
+			client.egressConfig = egressConfig
+			client.serviceConfig = serviceConfig
+			client.ipProtocols = []binding.Protocol{binding.ProtocolIP}
+			client.generatePipelines()
 
 			errorCall := m.EXPECT().AddAll(gomock.Any()).Return(errors.New("Bundle error")).Times(1)
 			m.EXPECT().AddAll(gomock.Any()).Return(nil).After(errorCall)
@@ -174,12 +186,16 @@ func TestFlowInstallationFailed(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 			m := oftest.NewMockOFEntryOperations(ctrl)
-			ofClient := NewClient(bridgeName, bridgeMgmtAddr, ovsconfig.OVSDatapathSystem, true, false, false, false, false, false, false)
+			ofClient := NewClient(bridgeName, bridgeMgmtAddr, true, false, false, false, false, false, false, false, false)
 			client := ofClient.(*client)
 			client.cookieAllocator = cookie.NewAllocator(0)
 			client.ofEntryOperations = m
 			client.nodeConfig = nodeConfig
 			client.networkConfig = networkConfig
+			client.egressConfig = egressConfig
+			client.serviceConfig = serviceConfig
+			client.ipProtocols = []binding.Protocol{binding.ProtocolIP}
+			client.generatePipelines()
 
 			// We generate an error for AddAll call.
 			m.EXPECT().AddAll(gomock.Any()).Return(errors.New("Bundle error"))
@@ -209,12 +225,16 @@ func TestConcurrentFlowInstallation(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 			m := oftest.NewMockOFEntryOperations(ctrl)
-			ofClient := NewClient(bridgeName, bridgeMgmtAddr, ovsconfig.OVSDatapathSystem, true, false, false, false, false, false, false)
+			ofClient := NewClient(bridgeName, bridgeMgmtAddr, true, false, false, false, false, false, false, false, false)
 			client := ofClient.(*client)
 			client.cookieAllocator = cookie.NewAllocator(0)
 			client.ofEntryOperations = m
 			client.nodeConfig = nodeConfig
 			client.networkConfig = networkConfig
+			client.egressConfig = egressConfig
+			client.serviceConfig = serviceConfig
+			client.ipProtocols = []binding.Protocol{binding.ProtocolIP}
+			client.generatePipelines()
 
 			var concurrentCalls atomic.Value // set to true if we observe concurrent calls
 			timeoutCh := make(chan struct{})
@@ -258,9 +278,6 @@ func TestConcurrentFlowInstallation(t *testing.T) {
 }
 
 func Test_client_InstallTraceflowFlows(t *testing.T) {
-	type ofSwitch struct {
-		ofctrl.OFSwitch
-	}
 	type fields struct {
 	}
 	type args struct {
@@ -350,6 +367,7 @@ func Test_client_SendTraceflowPacket(t *testing.T) {
 			name: "IPv6 ICMPv6",
 			args: args{
 				Packet: binding.Packet{
+					IsIPv6:         true,
 					SourceMAC:      srcMAC,
 					DestinationMAC: dstMAC,
 					SourceIP:       net.ParseIP("1111::4444"),
@@ -364,6 +382,7 @@ func Test_client_SendTraceflowPacket(t *testing.T) {
 			name: "IPv6 TCP",
 			args: args{
 				Packet: binding.Packet{
+					IsIPv6:         true,
 					SourceMAC:      srcMAC,
 					DestinationMAC: dstMAC,
 					SourceIP:       net.ParseIP("1111::4444"),
@@ -377,6 +396,7 @@ func Test_client_SendTraceflowPacket(t *testing.T) {
 			name: "IPv6 UDP",
 			args: args{
 				Packet: binding.Packet{
+					IsIPv6:         true,
 					SourceMAC:      srcMAC,
 					DestinationMAC: dstMAC,
 					SourceIP:       net.ParseIP("1111::4444"),
@@ -400,25 +420,33 @@ func Test_client_SendTraceflowPacket(t *testing.T) {
 }
 
 func prepareTraceflowFlow(ctrl *gomock.Controller) *client {
-	ofClient := NewClient(bridgeName, bridgeMgmtAddr, ovsconfig.OVSDatapathSystem, true, true, false, false, false, false, false)
+	ofClient := NewClient(bridgeName, bridgeMgmtAddr, true, true, false, false, false, false, false, false, false)
 	c := ofClient.(*client)
 	c.cookieAllocator = cookie.NewAllocator(0)
 	c.nodeConfig = nodeConfig
-	m := ovsoftest.NewMockBridge(ctrl)
-	m.EXPECT().AddFlowsInBundle(gomock.Any(), nil, nil).Return(nil).Times(1)
-	c.bridge = m
+	m := oftest.NewMockOFEntryOperations(ctrl)
+	c.ofEntryOperations = m
+	c.nodeConfig = nodeConfig
+	c.networkConfig = networkConfig
+	c.egressConfig = egressConfig
+	c.serviceConfig = serviceConfig
+	c.ipProtocols = []binding.Protocol{binding.ProtocolIP}
+	c.generatePipelines()
+
+	m.EXPECT().AddAll(gomock.Any()).Return(nil).Times(1)
+	c.bridge = ovsoftest.NewMockBridge(ctrl)
 
 	mFlow := ovsoftest.NewMockFlow(ctrl)
 	ctx := &conjMatchFlowContext{dropFlow: mFlow}
 	mFlow.EXPECT().FlowProtocol().Return(binding.Protocol("ip"))
-	mFlow.EXPECT().CopyToBuilder(priorityNormal+2, false).Return(EgressDefaultTable.BuildFlow(priorityNormal + 2)).Times(1)
-	c.globalConjMatchFlowCache["mockContext"] = ctx
-	c.policyCache.Add(&policyRuleConjunction{metricFlows: []binding.Flow{c.denyRuleMetricFlow(123, false)}})
+	mFlow.EXPECT().CopyToBuilder(priorityNormal+2, false).Return(EgressDefaultTable.ofTable.BuildFlow(priorityNormal + 2)).Times(1)
+	c.featureNetworkPolicy.globalConjMatchFlowCache["mockContext"] = ctx
+	c.featureNetworkPolicy.policyCache.Add(&policyRuleConjunction{metricFlows: []binding.Flow{c.featureNetworkPolicy.denyRuleMetricFlow(123, false, 1)}})
 	return c
 }
 
 func prepareSendTraceflowPacket(ctrl *gomock.Controller, success bool) *client {
-	ofClient := NewClient(bridgeName, bridgeMgmtAddr, ovsconfig.OVSDatapathSystem, true, true, false, false, false, false, false)
+	ofClient := NewClient(bridgeName, bridgeMgmtAddr, true, true, false, false, false, false, false, false, false)
 	c := ofClient.(*client)
 	c.nodeConfig = nodeConfig
 	m := ovsoftest.NewMockBridge(ctrl)
@@ -506,7 +534,7 @@ func Test_client_setBasePacketOutBuilder(t *testing.T) {
 }
 
 func prepareSetBasePacketOutBuilder(ctrl *gomock.Controller, success bool) *client {
-	ofClient := NewClient(bridgeName, bridgeMgmtAddr, ovsconfig.OVSDatapathSystem, true, true, false, false, false, false, false)
+	ofClient := NewClient(bridgeName, bridgeMgmtAddr, true, true, false, false, false, false, false, false, false)
 	c := ofClient.(*client)
 	m := ovsoftest.NewMockBridge(ctrl)
 	c.bridge = m
@@ -516,4 +544,41 @@ func prepareSetBasePacketOutBuilder(ctrl *gomock.Controller, success bool) *clie
 		m.EXPECT().SendPacketOut(gomock.Any()).Times(1)
 	}
 	return c
+}
+
+// TestMulticlusterFlowsInstallation checks that InstallMulticlusterNodeFlows
+// and UninstallMulticlusterFlows works as expected.
+func TestMulticlusterFlowsInstallation(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	m := oftest.NewMockOFEntryOperations(ctrl)
+	ofClient := NewClient(bridgeName, bridgeMgmtAddr, true, false, false, false, false, false, false, false, true)
+	client := ofClient.(*client)
+	client.cookieAllocator = cookie.NewAllocator(0)
+	client.ofEntryOperations = m
+	client.nodeConfig = nodeConfig
+	client.networkConfig = networkConfig
+	client.egressConfig = egressConfig
+	client.serviceConfig = serviceConfig
+	client.ipProtocols = []binding.Protocol{binding.ProtocolIP}
+	client.generatePipelines()
+
+	m.EXPECT().AddAll(gomock.Any()).Return(nil).Times(1)
+	clusterID := "cluster-a"
+	tunnelPeerIP := net.ParseIP("172.17.0.11")
+	peerConfigs := make(map[*net.IPNet]net.IP, 1)
+	_, peerCIDR, _ := net.ParseCIDR("10.16.0.1/18")
+	peerConfigs[peerCIDR] = net.ParseIP("10.17.0.11")
+	err := ofClient.InstallMulticlusterNodeFlows(clusterID, peerConfigs, tunnelPeerIP)
+	require.NoError(t, err)
+	cacheKey := fmt.Sprintf("cluster_%s", clusterID)
+	fCacheI, ok := client.featureMulticluster.cachedFlows.Load(cacheKey)
+	require.True(t, ok)
+	require.Len(t, fCacheI.(flowCache), 2)
+
+	m.EXPECT().DeleteAll(gomock.Any()).Return(nil).Times(1)
+	err = ofClient.UninstallMulticlusterFlows(clusterID)
+	require.NoError(t, err)
+	_, ok = client.featureMulticluster.cachedFlows.Load(cacheKey)
+	require.False(t, ok)
 }

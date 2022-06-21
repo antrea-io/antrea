@@ -20,6 +20,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
 )
 
@@ -45,9 +46,6 @@ type RawResourceExport struct {
 
 // ResourceExportSpec defines the desired state of ResourceExport.
 type ResourceExportSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-
 	// ClusterID specifies the member cluster this resource exported from.
 	ClusterID string `json:"clusterID,omitempty"`
 	// Name of exported resource.
@@ -59,12 +57,16 @@ type ResourceExportSpec struct {
 
 	// If exported resource is Service.
 	Service *ServiceExport `json:"service,omitempty"`
-	// If exported resource is EndPoints.
+	// If exported resource is Endpoints.
 	Endpoints *EndpointsExport `json:"endpoints,omitempty"`
+	// If exported resource is ClusterInfo.
+	ClusterInfo *ClusterInfo `json:"clusterinfo,omitempty"`
 	// If exported resource is ExternalEntity.
 	ExternalEntity *ExternalEntityExport `json:"externalentity,omitempty"`
-	// If exported resource Kind is unknown.
-	Raw RawResourceExport `json:"raw,omitempty"`
+	// If exported resource is AntreaClusterNetworkPolicy.
+	ClusterNetworkPolicy *v1alpha1.ClusterNetworkPolicySpec `json:"clusternetworkpolicy,omitempty"`
+	// If exported resource kind is unknown.
+	Raw *RawResourceExport `json:"raw,omitempty"`
 }
 
 type ResourceExportConditionType string

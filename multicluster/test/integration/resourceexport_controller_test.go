@@ -163,8 +163,8 @@ var _ = Describe("ResourceExport controller", func() {
 				Subsets: []corev1.EndpointSubset{
 					{
 						Addresses: []corev1.EndpointAddress{
+							addr2,
 							addr3,
-							addr4,
 						},
 						Ports: epPorts,
 					},

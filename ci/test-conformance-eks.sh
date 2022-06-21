@@ -20,6 +20,7 @@ function echoerr {
     >&2 echo "$@"
 }
 
+CLUSTER=""
 REGION="us-east-2"
 K8S_VERSION="1.21"
 AWS_NODE_TYPE="t3.medium"
@@ -31,7 +32,8 @@ RUN_CLEANUP_ONLY=false
 KUBECONFIG_PATH="$HOME/jenkins/out/eks"
 MODE="report"
 TEST_SCRIPT_RC=0
-KUBE_CONFORMANCE_IMAGE_VERSION=v1.18.5
+KUBE_CONFORMANCE_IMAGE_VERSION=auto
+INSTALL_EKSCTL=true
 
 _usage="Usage: $0 [--cluster-name <EKSClusterNameToUse>] [--kubeconfig <KubeconfigSavePath>] [--k8s-version <ClusterVersion>]\
                   [--aws-access-key <AccessKey>] [--aws-secret-key <SecretKey>] [--aws-region <Region>] [--ssh-key <SSHKey] \
@@ -48,7 +50,8 @@ Setup a EKS cluster to run K8s e2e community tests (Conformance & Network Policy
         --ssh-key                The path of key to be used for ssh access to worker nodes.
         --log-mode               Use the flag to set either 'report', 'detail', or 'dump' level data for sonobouy results.
         --setup-only             Only perform setting up the cluster and run test.
-        --cleanup-only           Only perform cleaning up the cluster."
+        --cleanup-only           Only perform cleaning up the cluster.
+        --skip-eksctl-install    Do not install the latest eksctl version. Eksctl must be installed already."
 
 function print_usage {
     echoerr "$_usage"
@@ -109,6 +112,10 @@ case $key in
     RUN_ALL=false
     shift
     ;;
+    --skip-eksctl-install)
+    INSTALL_EKSCTL=false
+    shift
+    ;;
     -h|--help)
     print_usage
     exit 0
@@ -119,6 +126,39 @@ case $key in
     ;;
 esac
 done
+
+if [[ "$CLUSTER" == "" ]]; then
+    echoerr "--cluster-name is required"
+    exit 1
+fi
+
+function generate_eksctl_config() {
+    AMI_ID=$(aws ssm get-parameter \
+                 --name /aws/service/eks/optimized-ami/${K8S_VERSION}/amazon-linux-2/recommended/image_id \
+                 --query "Parameter.Value" --output text)
+
+    cat > eksctl-containerd.yaml <<EOF
+---
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+metadata:
+  name: ${CLUSTER}
+  region: ${REGION}
+  version: "${K8S_VERSION}"
+managedNodeGroups:
+  - name: containerd
+    instanceType: ${AWS_NODE_TYPE}
+    desiredCapacity: 2
+    ami: ${AMI_ID}
+    ssh:
+      allow: true
+      publicKeyPath: ${SSH_KEY_PATH}
+    overrideBootstrapCommand: |
+      #!/bin/bash
+      /etc/eks/bootstrap.sh ${CLUSTER} --container-runtime containerd
+EOF
+    echo "eksctl-containerd.yaml"
+}
 
 function setup_eks() {
 
@@ -139,20 +179,21 @@ ${AWS_SECRET_KEY}
 ${REGION}
 JSON
 EOF
-    echo "=== Installing latest version of eksctl ==="
-    curl --silent --location "https://github.com/weaveworks/eksctl/releases/latest/download/eksctl_$(uname -s)_amd64.tar.gz" | tar xz -C /tmp
-    sudo mv /tmp/eksctl /usr/local/bin
+    if [[ "$INSTALL_EKSCTL" == true ]]; then
+        echo "=== Installing latest version of eksctl ==="
+        curl --silent --location "https://github.com/weaveworks/eksctl/releases/latest/download/eksctl_$(uname -s)_amd64.tar.gz" | tar xz -C /tmp
+        sudo mv /tmp/eksctl /usr/local/bin
+    fi
     set -e
     printf "\n"
+    echo "=== Using the following eksctl ==="
+    which eksctl
     echo "=== Using the following kubectl ==="
     which kubectl
 
     echo '=== Creating a cluster in EKS ==='
-    eksctl create cluster \
-      --name ${CLUSTER} --region ${REGION} --version=${K8S_VERSION} \
-      --nodegroup-name workers --node-type ${AWS_NODE_TYPE} --nodes 2 \
-      --ssh-access --ssh-public-key ${SSH_KEY_PATH} \
-      --managed
+    config="$(generate_eksctl_config)"
+    eksctl create cluster -f $config
     if [[ $? -ne 0 ]]; then
         echo "=== Failed to deploy EKS cluster! ==="
         exit 1
@@ -203,7 +244,7 @@ function deliver_antrea_to_eks() {
 
     kubectl get nodes -o wide --no-headers=true | awk '{print $7}' | while read IP; do
         scp -o StrictHostKeyChecking=no -i ${SSH_PRIVATE_KEY_PATH} ${antrea_image}.tar ec2-user@${IP}:~
-        ssh -o StrictHostKeyChecking=no -i ${SSH_PRIVATE_KEY_PATH} -n ec2-user@${IP} "sudo docker load -i ~/${antrea_image}.tar ; sudo docker tag ${DOCKER_IMG_NAME}:${DOCKER_IMG_VERSION} ${DOCKER_IMG_NAME}:latest"
+        ssh -o StrictHostKeyChecking=no -i ${SSH_PRIVATE_KEY_PATH} -n ec2-user@${IP} "sudo ctr -n=k8s.io images import ~/${antrea_image}.tar ; sudo ctr -n=k8s.io images tag ${DOCKER_IMG_NAME}:${DOCKER_IMG_VERSION} ${DOCKER_IMG_NAME}:latest --force"
     done
     rm ${antrea_image}.tar
 

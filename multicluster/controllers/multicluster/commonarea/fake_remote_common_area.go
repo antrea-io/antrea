@@ -67,13 +67,13 @@ func (c *fakeRemoteCommonArea) GetStatus() []multiclusterv1alpha1.ClusterConditi
 
 // NewFakeRemoteCommonArea creates a new fakeRemoteCommonArea for unit test purpose only
 func NewFakeRemoteCommonArea(scheme *runtime.Scheme,
-	remoteCommonAreaManager *RemoteCommonAreaManager,
+	remoteCommonAreaManager RemoteCommonAreaManager,
 	fakeClient client.Client, clusterID string, namespace string) RemoteCommonArea {
 	fakeRemoteCommonArea := &fakeRemoteCommonArea{
 		Client:    fakeClient,
 		ClusterID: common.ClusterID(clusterID),
 		Namespace: namespace,
 	}
-	(*remoteCommonAreaManager).AddRemoteCommonArea(fakeRemoteCommonArea)
+	remoteCommonAreaManager.AddRemoteCommonArea(fakeRemoteCommonArea)
 	return fakeRemoteCommonArea
 }

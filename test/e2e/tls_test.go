@@ -148,7 +148,7 @@ func (data *TestData) opensslConnect(t *testing.T, pod string, container string,
 		if tls12 {
 			cmd = append(cmd, "-tls1_2")
 		}
-		stdout, stderr, err := data.runCommandFromPod(antreaNamespace, pod, container, cmd)
+		stdout, stderr, err := data.RunCommandFromPod(antreaNamespace, pod, container, cmd)
 		assert.NoError(t, err, "failed to run openssl command on Pod '%s'\nstderr: %s", pod, stderr)
 		t.Logf("Ran '%s' on Pod %s", strings.Join(cmd, " "), pod)
 		stdouts = append(stdouts, stdout)

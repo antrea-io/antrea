@@ -37,6 +37,7 @@ import (
 	"antrea.io/antrea/pkg/agent/cniserver"
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/controller/noderoute"
+	"antrea.io/antrea/pkg/agent/controller/trafficcontrol"
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/openflow"
 	"antrea.io/antrea/pkg/agent/openflow/cookie"
@@ -74,6 +75,10 @@ var (
 	getTransportIPNetDeviceByName = GetTransportIPNetDeviceByName
 )
 
+// otherConfigKeysForIPsecCertificates are configurations added to OVS bridge when AuthenticationMode is "cert" and
+// need to be deleted when changing to "psk".
+var otherConfigKeysForIPsecCertificates = []string{"certificate", "private_key", "ca_cert", "remote_cert", "remote_name"}
+
 // Initializer knows how to setup host networking, OpenVSwitch, and Openflow.
 type Initializer struct {
 	client                clientset.Interface
@@ -85,21 +90,18 @@ type Initializer struct {
 	ovsBridge             string
 	hostGateway           string // name of gateway port on the OVS bridge
 	mtu                   int
-	serviceCIDR           *net.IPNet // K8s Service ClusterIP CIDR
-	serviceCIDRv6         *net.IPNet // K8s Service ClusterIP CIDR in IPv6
 	networkConfig         *config.NetworkConfig
 	nodeConfig            *config.NodeConfig
 	wireGuardConfig       *config.WireGuardConfig
 	egressConfig          *config.EgressConfig
+	serviceConfig         *config.ServiceConfig
 	enableProxy           bool
 	connectUplinkToBridge bool
 	// networkReadyCh should be closed once the Node's network is ready.
 	// The CNI server will wait for it before handling any CNI Add requests.
-	proxyAll              bool
-	nodePortAddressesIPv4 []net.IP
-	nodePortAddressesIPv6 []net.IP
-	networkReadyCh        chan<- struct{}
-	stopCh                <-chan struct{}
+	proxyAll       bool
+	networkReadyCh chan<- struct{}
+	stopCh         <-chan struct{}
 }
 
 func NewInitializer(
@@ -111,17 +113,14 @@ func NewInitializer(
 	ovsBridge string,
 	hostGateway string,
 	mtu int,
-	serviceCIDR *net.IPNet,
-	serviceCIDRv6 *net.IPNet,
 	networkConfig *config.NetworkConfig,
 	wireGuardConfig *config.WireGuardConfig,
 	egressConfig *config.EgressConfig,
+	serviceConfig *config.ServiceConfig,
 	networkReadyCh chan<- struct{},
 	stopCh <-chan struct{},
 	enableProxy bool,
 	proxyAll bool,
-	nodePortAddressesIPv4 []net.IP,
-	nodePortAddressesIPv6 []net.IP,
 	connectUplinkToBridge bool,
 ) *Initializer {
 	return &Initializer{
@@ -133,17 +132,14 @@ func NewInitializer(
 		ovsBridge:             ovsBridge,
 		hostGateway:           hostGateway,
 		mtu:                   mtu,
-		serviceCIDR:           serviceCIDR,
-		serviceCIDRv6:         serviceCIDRv6,
 		networkConfig:         networkConfig,
 		wireGuardConfig:       wireGuardConfig,
 		egressConfig:          egressConfig,
+		serviceConfig:         serviceConfig,
 		networkReadyCh:        networkReadyCh,
 		stopCh:                stopCh,
 		enableProxy:           enableProxy,
 		proxyAll:              proxyAll,
-		nodePortAddressesIPv4: nodePortAddressesIPv4,
-		nodePortAddressesIPv6: nodePortAddressesIPv6,
 		connectUplinkToBridge: connectUplinkToBridge,
 	}
 }
@@ -285,6 +281,8 @@ func (i *Initializer) initInterfaceStore() error {
 			case interfacestore.AntreaContainer:
 				// The port should be for a container interface.
 				intf = cniserver.ParseOVSPortInterfaceConfig(port, ovsPort, true)
+			case interfacestore.AntreaTrafficControl:
+				intf = trafficcontrol.ParseTrafficControlInterfaceConfig(port, ovsPort)
 			default:
 				klog.InfoS("Unknown Antrea interface type", "type", interfaceType)
 			}
@@ -357,14 +355,53 @@ func (i *Initializer) Initialize() error {
 	}
 
 	// initializeWireGuard must be executed after setupOVSBridge as it requires gateway addresses on the OVS bridge.
-	switch i.networkConfig.TrafficEncryptionMode {
-	case config.TrafficEncryptionModeIPSec:
-		if err := i.initializeIPSec(); err != nil {
-			return err
-		}
-	case config.TrafficEncryptionModeWireGuard:
+	if i.networkConfig.TrafficEncryptionMode == config.TrafficEncryptionModeWireGuard {
 		if err := i.initializeWireGuard(); err != nil {
 			return err
+		}
+	}
+	// TODO: clean up WireGuard related configurations.
+
+	// Initialize for IPsec PSK mode.
+	if i.networkConfig.TrafficEncryptionMode == config.TrafficEncryptionModeIPSec &&
+		i.networkConfig.IPsecConfig.AuthenticationMode == config.IPsecAuthenticationModePSK {
+		if err := i.waitForIPsecMonitorDaemon(); err != nil {
+			return err
+		}
+		if err := i.readIPSecPSK(); err != nil {
+			return err
+		}
+	}
+
+	// Initialize for IPsec Certificate mode.
+	if i.networkConfig.TrafficEncryptionMode == config.TrafficEncryptionModeIPSec &&
+		i.networkConfig.IPsecConfig.AuthenticationMode == config.IPsecAuthenticationModeCert {
+		if err := i.waitForIPsecMonitorDaemon(); err != nil {
+			return err
+		}
+	} else {
+		configs, err := i.ovsBridgeClient.GetOVSOtherConfig()
+		if err != nil {
+			return fmt.Errorf("failed to get OVS other configs: %w", err)
+		}
+		// Clean up certificate and private key files.
+		if configs["certificate"] != "" {
+			if err := os.Remove(configs["certificate"]); err != nil && !os.IsNotExist(err) {
+				klog.ErrorS(err, "Failed to delete unused IPsec certificate", "file", configs["certificate"])
+			}
+		}
+		if configs["private_key"] != "" {
+			if err := os.Remove(configs["private_key"]); err != nil && !os.IsNotExist(err) {
+				klog.ErrorS(err, "Failed to delete unused IPsec private key", "file", configs["private_key"])
+			}
+		}
+		toDelete := make(map[string]interface{})
+		for _, key := range otherConfigKeysForIPsecCertificates {
+			toDelete[key] = ""
+		}
+		// Clean up stale configs in OVS database.
+		if err := i.ovsBridgeClient.DeleteOVSOtherConfig(toDelete); err != nil {
+			return fmt.Errorf("failed to clean up OVS other configs: %w", err)
 		}
 	}
 
@@ -434,58 +471,10 @@ func (i *Initializer) initOpenFlowPipeline() error {
 	roundInfo := getRoundInfo(i.ovsBridgeClient)
 
 	// Set up all basic flows.
-	ofConnCh, err := i.ofClient.Initialize(roundInfo, i.nodeConfig, i.networkConfig)
+	ofConnCh, err := i.ofClient.Initialize(roundInfo, i.nodeConfig, i.networkConfig, i.egressConfig, i.serviceConfig)
 	if err != nil {
 		klog.Errorf("Failed to initialize openflow client: %v", err)
 		return err
-	}
-
-	// On Windows platform, host network flows are needed for host traffic.
-	if err := i.initHostNetworkFlows(); err != nil {
-		klog.Errorf("Failed to install openflow entries for host network: %v", err)
-		return err
-	}
-
-	// Install OpenFlow entries to enable Pod traffic to external IP
-	// addresses.
-	if err := i.ofClient.InstallExternalFlows(i.egressConfig.ExceptCIDRs); err != nil {
-		klog.Errorf("Failed to install openflow entries for external connectivity: %v", err)
-		return err
-	}
-
-	// Set up flow entries for gateway interface, including classifier, skip spoof guard check,
-	// L3 forwarding and L2 forwarding
-	if err := i.ofClient.InstallGatewayFlows(); err != nil {
-		klog.Errorf("Failed to setup openflow entries for gateway: %v", err)
-		return err
-	}
-
-	if i.networkConfig.TrafficEncapMode.SupportsEncap() {
-		// Set up flow entries for the default tunnel port interface.
-		if err := i.ofClient.InstallDefaultTunnelFlows(); err != nil {
-			klog.Errorf("Failed to setup openflow entries for tunnel interface: %v", err)
-			return err
-		}
-	}
-
-	if !i.enableProxy {
-		// Set up flow entries to enable Service connectivity. Upstream kube-proxy is leveraged to
-		// provide load-balancing, and the flows installed by this method ensure that traffic sent
-		// from local Pods to any Service address can be forwarded to the host gateway interface
-		// correctly. Otherwise packets might be dropped by egress rules before they are DNATed to
-		// backend Pods.
-		if err := i.ofClient.InstallClusterServiceCIDRFlows([]*net.IPNet{i.serviceCIDR, i.serviceCIDRv6}); err != nil {
-			klog.Errorf("Failed to setup OpenFlow entries for Service CIDRs: %v", err)
-			return err
-		}
-	} else {
-		// Set up flow entries to enable Service connectivity. The agent proxy handles
-		// ClusterIP Services while the upstream kube-proxy is leveraged to handle
-		// any other kinds of Services.
-		if err := i.ofClient.InstallDefaultServiceFlows(i.nodePortAddressesIPv4, i.nodePortAddressesIPv6); err != nil {
-			klog.Errorf("Failed to setup default OpenFlow entries for ClusterIP Services: %v", err)
-			return err
-		}
 	}
 
 	go func() {
@@ -705,6 +694,23 @@ func (i *Initializer) setupDefaultTunnelInterface() error {
 		localIPStr = localIP.String()
 	}
 
+	// The correct OVS tunnel type to use GRE with an IPv6 overlay is
+	// "ip6gre" and not "gre". While it would be possible to support GRE for
+	// an IPv6-only cluster (by simply setting the tunnel type to "ip6gre"),
+	// things would be more complicated for a dual-stack cluster. For such a
+	// cluster, we have both IPv4 and IPv6 tunnels for inter-Node
+	// traffic. We would therefore need to create 2 default tunnel ports:
+	// one with type "gre" and one with type "ip6gre". This would introduce
+	// some complexity as the code currently assumes that we have a single
+	// default tunnel port. So for now, we just reject configurations that
+	// request a GRE tunnel when the Node network supports IPv6.
+	// See https://github.com/antrea-io/antrea/issues/3150
+	if i.networkConfig.TrafficEncapMode.SupportsEncap() &&
+		i.networkConfig.TunnelType == ovsconfig.GRETunnel &&
+		i.nodeConfig.NodeIPv6Addr != nil {
+		return fmt.Errorf("GRE tunnel type is not supported for IPv6 overlay")
+	}
+
 	// Enabling UDP checksum can greatly improve the performance for Geneve and
 	// VXLAN tunnels by triggering GRO on the receiver.
 	shouldEnableCsum := i.networkConfig.TunnelType == ovsconfig.GeneveTunnel || i.networkConfig.TunnelType == ovsconfig.VXLANTunnel
@@ -747,7 +753,7 @@ func (i *Initializer) setupDefaultTunnelInterface() error {
 		externalIDs := map[string]interface{}{
 			interfacestore.AntreaInterfaceTypeKey: interfacestore.AntreaTunnel,
 		}
-		tunnelPortUUID, err := i.ovsBridgeClient.CreateTunnelPortExt(tunnelPortName, i.networkConfig.TunnelType, config.DefaultTunOFPort, shouldEnableCsum, localIPStr, "", "", externalIDs)
+		tunnelPortUUID, err := i.ovsBridgeClient.CreateTunnelPortExt(tunnelPortName, i.networkConfig.TunnelType, config.DefaultTunOFPort, shouldEnableCsum, localIPStr, "", "", "", nil, externalIDs)
 		if err != nil {
 			klog.Errorf("Failed to create tunnel port %s type %s on OVS bridge: %v", tunnelPortName, i.networkConfig.TunnelType, err)
 			return err
@@ -782,8 +788,7 @@ func (i *Initializer) initNodeLocalConfig() error {
 	}
 	node, err := i.client.CoreV1().Nodes().Get(context.TODO(), nodeName, metav1.GetOptions{})
 	if err != nil {
-		klog.Errorf("Failed to get node from K8s with name %s: %v", nodeName, err)
-		return err
+		return fmt.Errorf("failed to get Node with name %s from K8s: %w", nodeName, err)
 	}
 
 	// nodeInterface is the interface that has K8s Node IP. transportInterface is the interface that is used for
@@ -850,7 +855,7 @@ func (i *Initializer) initNodeLocalConfig() error {
 	// OVS in noencap case on Windows Nodes. As a mixture of Linux and Windows nodes is possible, Linux Nodes' MAC
 	// addresses should be reported too to make them discoverable for Windows Nodes.
 	if i.networkConfig.TrafficEncapMode.SupportsNoEncap() {
-		klog.Infof("Updating Node MAC annotation")
+		klog.InfoS("Updating Node MAC annotation")
 		if err := i.patchNodeAnnotations(nodeName, types.NodeMACAddressAnnotationKey, transportInterface.HardwareAddr.String()); err != nil {
 			return err
 		}
@@ -875,48 +880,47 @@ func (i *Initializer) initNodeLocalConfig() error {
 		return err
 	}
 	i.nodeConfig.NodeMTU = mtu
-	klog.Infof("Setting Node MTU=%d", mtu)
+	klog.InfoS("Setting Node MTU", "MTU", mtu)
 
 	if i.networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {
 		return nil
 	}
 
-	// Parse all PodCIDRs first, so that we could support IPv4/IPv6 dual-stack configurations.
+	// Parse all PodCIDRs first, so that we can support IPv4/IPv6 dual-stack configurations.
 	if node.Spec.PodCIDRs != nil {
 		for _, podCIDR := range node.Spec.PodCIDRs {
 			_, localSubnet, err := net.ParseCIDR(podCIDR)
 			if err != nil {
-				klog.Errorf("Failed to parse subnet from CIDR string %s: %v", node.Spec.PodCIDR, err)
+				klog.ErrorS(err, "Failed to parse subnet from Pod CIDR string", "CIDR", podCIDR)
 				return err
 			}
 			if localSubnet.IP.To4() != nil {
 				if i.nodeConfig.PodIPv4CIDR != nil {
-					klog.Warningf("One IPv4 PodCIDR is already configured on this Node, ignore the IPv4 Subnet CIDR %s", localSubnet.String())
+					klog.InfoS("One IPv4 PodCIDR is already configured on this Node, ignoring the IPv4 Subnet CIDR", "subnet", localSubnet)
 				} else {
 					i.nodeConfig.PodIPv4CIDR = localSubnet
-					klog.V(2).Infof("Configure IPv4 Subnet CIDR %s on this Node", localSubnet.String())
+					klog.V(2).InfoS("Configured IPv4 Subnet CIDR on this Node", "subnet", localSubnet)
 				}
 				continue
 			}
 			if i.nodeConfig.PodIPv6CIDR != nil {
-				klog.Warningf("One IPv6 PodCIDR is already configured on this Node, ignore the IPv6 subnet CIDR %s", localSubnet.String())
+				klog.InfoS("One IPv6 PodCIDR is already configured on this Node, ignoring the IPv6 Subnet CIDR", "subnet", localSubnet)
 			} else {
 				i.nodeConfig.PodIPv6CIDR = localSubnet
-				klog.V(2).Infof("Configure IPv6 Subnet CIDR %s on this Node", localSubnet.String())
+				klog.V(2).InfoS("Configured IPv6 Subnet CIDR on this Node", "subnet", localSubnet)
 			}
 		}
 		return nil
 	}
 	// Spec.PodCIDR can be empty due to misconfiguration.
 	if node.Spec.PodCIDR == "" {
-		klog.Errorf("Spec.PodCIDR is empty for Node %s. Please make sure --allocate-node-cidrs is enabled "+
-			"for kube-controller-manager and --cluster-cidr specifies a sufficient CIDR range", nodeName)
-		return fmt.Errorf("CIDR string is empty for node %s", nodeName)
+		klog.ErrorS(nil, "Spec.PodCIDR is empty for Node. Please make sure --allocate-node-cidrs is enabled "+
+			"for kube-controller-manager and --cluster-cidr specifies a sufficient CIDR range", "nodeName", nodeName)
+		return fmt.Errorf("CIDR string is empty for Node %s", nodeName)
 	}
 	_, localSubnet, err := net.ParseCIDR(node.Spec.PodCIDR)
 	if err != nil {
-		klog.Errorf("Failed to parse subnet from CIDR string %s: %v", node.Spec.PodCIDR, err)
-		return err
+		return fmt.Errorf("failed to parse subnet from CIDR string %s: %w", node.Spec.PodCIDR, err)
 	}
 	if localSubnet.IP.To4() != nil {
 		i.nodeConfig.PodIPv4CIDR = localSubnet
@@ -926,8 +930,8 @@ func (i *Initializer) initNodeLocalConfig() error {
 	return nil
 }
 
-// initializeIPSec checks if preconditions are met for using IPsec and reads the IPsec PSK value.
-func (i *Initializer) initializeIPSec() error {
+// waitForIPsecMonitorDaemon checks if preconditions are met for using IPsec.
+func (i *Initializer) waitForIPsecMonitorDaemon() error {
 	// At the time the agent is initialized and this code is executed, the
 	// OVS daemons are already running given that we have successfully
 	// connected to OVSDB. Given that the start_ovs script deletes existing
@@ -950,10 +954,6 @@ func (i *Initializer) initializeIPSec() error {
 			return fmt.Errorf("IPsec was requested, but the OVS IPsec monitor does not seem to be running")
 		}
 	}
-
-	if err := i.readIPSecPSK(); err != nil {
-		return err
-	}
 	return nil
 }
 
@@ -971,13 +971,13 @@ func (i *Initializer) initializeWireGuard() error {
 
 // readIPSecPSK reads the IPsec PSK value from environment variable ANTREA_IPSEC_PSK
 func (i *Initializer) readIPSecPSK() error {
-	i.networkConfig.IPSecPSK = os.Getenv(ipsecPSKEnvKey)
-	if i.networkConfig.IPSecPSK == "" {
+	i.networkConfig.IPsecConfig.PSK = os.Getenv(ipsecPSKEnvKey)
+	if i.networkConfig.IPsecConfig.PSK == "" {
 		return fmt.Errorf("IPsec PSK environment variable '%s' is not set or is empty", ipsecPSKEnvKey)
 	}
 
 	// Usually one does not want to log the secret data.
-	klog.V(4).Infof("IPsec PSK value: %s", i.networkConfig.IPSecPSK)
+	klog.V(4).Infof("IPsec PSK value: %s", i.networkConfig.IPsecConfig.PSK)
 	return nil
 }
 

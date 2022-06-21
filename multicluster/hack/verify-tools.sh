@@ -22,7 +22,7 @@ WORKDIR=$1
 os=$(echo $(uname) | tr '[:upper:]' '[:lower:]')
 if ! which kind > /dev/null; then
     if [[ ${os} == 'darwin' || ${os} == 'linux' ]]; then
-        curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/v0.11.1/kind-${os}-amd64
+        curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/v0.12.0/kind-${os}-amd64
         chmod +x ./kind
         if [[ "$WORKDIR" != "" ]];then
           mv kind "$WORKDIR"

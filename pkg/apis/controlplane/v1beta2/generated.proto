@@ -1,4 +1,4 @@
-// Copyright 2021 Antrea Authors
+// Copyright 2022 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,7 +25,7 @@ import "k8s.io/apimachinery/pkg/runtime/schema/generated.proto";
 import "k8s.io/apimachinery/pkg/util/intstr/generated.proto";
 
 // Package-wide variables from generator "generated".
-option go_package = "v1beta2";
+option go_package = "antrea.io/antrea/pkg/apis/controlplane/v1beta2";
 
 // AddressGroup is the message format of antrea/pkg/controller/types.AddressGroup in an API response.
 message AddressGroup {
@@ -81,6 +81,12 @@ message ClusterGroupMembers {
   repeated GroupMember effectiveMembers = 2;
 
   repeated IPNet effectiveIPBlocks = 3;
+
+  optional int64 totalMembers = 4;
+
+  optional int64 totalPages = 5;
+
+  optional int64 currentPage = 6;
 }
 
 message EgressGroup {
@@ -137,6 +143,9 @@ message GroupMember {
 
   // Ports is the list NamedPort of the GroupMember.
   repeated NamedPort ports = 4;
+
+  // Node maintains the reference to the Node.
+  optional NodeReference node = 5;
 }
 
 message GroupReference {
@@ -167,6 +176,15 @@ message IPNet {
   optional bytes ip = 1;
 
   optional int32 prefixLength = 2;
+}
+
+// MulticastGroupInfo contains the list of Pods that have joined a multicast group, for a given Node.
+message MulticastGroupInfo {
+  // Group is the IP of the multicast group.
+  optional string group = 1;
+
+  // Pods is the list of Pods that have joined the multicast group.
+  repeated PodReference pods = 2;
 }
 
 // NamedPort represents a Port with a name on Pod.
@@ -310,6 +328,12 @@ message NetworkPolicyStatus {
   repeated NetworkPolicyNodeStatus nodes = 2;
 }
 
+// NodeReference represents a Node Reference.
+message NodeReference {
+  // The name of this Node.
+  optional string name = 1;
+}
+
 // NodeStatsSummary contains stats produced on a Node. It's used by the antrea-agents to report stats to the antrea-controller.
 message NodeStatsSummary {
   optional k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
@@ -322,6 +346,15 @@ message NodeStatsSummary {
 
   // The TrafficStats of Antrea NetworkPolicies collected from the Node.
   repeated NetworkPolicyStats antreaNetworkPolicies = 4;
+
+  // Multicast group information collected from the Node.
+  repeated MulticastGroupInfo multicast = 5;
+}
+
+message PaginationGetOptions {
+  optional int64 page = 1;
+
+  optional int64 limit = 2;
 }
 
 // PodReference represents a Pod Reference.
@@ -335,12 +368,14 @@ message PodReference {
 
 // Service describes a port to allow traffic on.
 message Service {
-  // The protocol (TCP, UDP, or SCTP) which traffic must match. If not specified, this
+  // The protocol (TCP, UDP, SCTP, or ICMP) which traffic must match. If not specified, this
   // field defaults to TCP.
   // +optional
   optional string protocol = 1;
 
-  // The port name or number on the given protocol. If not specified, this matches all port numbers.
+  // Port and EndPort can only be specified, when the Protocol is TCP, UDP, or SCTP.
+  // Port defines the port name or number on the given protocol. If not specified
+  // and the Protocol is TCP, UDP, or SCTP, this matches all port numbers.
   // +optional
   optional k8s.io.apimachinery.pkg.util.intstr.IntOrString port = 2;
 
@@ -348,6 +383,19 @@ message Service {
   // It can only be specified when a numerical `port` is specified.
   // +optional
   optional int32 endPort = 3;
+
+  // ICMPType and ICMPCode can only be specified, when the Protocol is ICMP. If they
+  // both are not specified and the Protocol is ICMP, this matches all ICMP traffic.
+  // +optional
+  optional int32 icmpType = 4;
+
+  optional int32 icmpCode = 5;
+
+  // IGMPType and GroupAddress can only be specified when the Protocol is IGMP.
+  // +optional
+  optional int32 igmpType = 6;
+
+  optional string groupAddress = 7;
 }
 
 // ServiceReference represents reference to a v1.Service.

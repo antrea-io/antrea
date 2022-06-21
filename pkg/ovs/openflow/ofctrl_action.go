@@ -64,12 +64,14 @@ func (a *ofFlowAction) OutputInPort() FlowBuilder {
 }
 
 // CT is an action to set conntrack marks and return CTAction to add actions that is executed with conntrack context.
-func (a *ofFlowAction) CT(commit bool, tableID uint8, zone int) CTAction {
+// zone will be ignored if zoneSrcField is not nil.
+func (a *ofFlowAction) CT(commit bool, tableID uint8, zone int, zoneSrcField *RegField) CTAction {
 	base := ctBase{
-		commit:  commit,
-		force:   false,
-		ctTable: tableID,
-		ctZone:  uint16(zone),
+		commit:         commit,
+		force:          false,
+		ctTable:        tableID,
+		ctZoneImm:      uint16(zone),
+		ctZoneSrcField: zoneSrcField,
 	}
 	ct := &ofCTAction{
 		ctBase:  base,
@@ -92,9 +94,11 @@ func (a *ofCTAction) LoadToMark(value uint32) CTAction {
 	return a
 }
 
-func (a *ofCTAction) LoadToCtMark(mark *CtMark) CTAction {
+func (a *ofCTAction) LoadToCtMark(marks ...*CtMark) CTAction {
 	field, _, _ := getFieldRange(NxmFieldCtMark)
-	a.load(field, uint64(mark.value), mark.field.rng)
+	for _, mark := range marks {
+		a.load(field, uint64(mark.value), mark.field.rng)
+	}
 	return a
 }
 
@@ -172,7 +176,12 @@ func (a *ofCTAction) NAT() CTAction {
 
 // CTDone sets the conntrack action in the Openflow rule and it returns FlowBuilder.
 func (a *ofCTAction) CTDone() FlowBuilder {
-	conntrackAct := ofctrl.NewNXConnTrackAction(a.commit, a.force, &a.ctTable, &a.ctZone, a.actions...)
+	var conntrackAct *ofctrl.NXConnTrackAction
+	if a.ctZoneSrcField == nil {
+		conntrackAct = ofctrl.NewNXConnTrackAction(a.commit, a.force, &a.ctTable, &a.ctZoneImm, a.actions...)
+	} else {
+		conntrackAct = ofctrl.NewNXConnTrackActionWithZoneField(a.commit, a.force, &a.ctTable, nil, a.ctZoneSrcField.GetNXFieldName(), a.ctZoneSrcField.GetRange().ToNXRange(), a.actions...)
+	}
 	a.builder.ApplyAction(conntrackAct)
 	return a.builder
 }
@@ -240,14 +249,35 @@ func (a *ofFlowAction) SetTunnelDst(addr net.IP) FlowBuilder {
 	return a.builder
 }
 
-// LoadARPOperation is an action to Load data to NXM_OF_ARP_OP field.
+// PopVLAN is an action to pop VLAN ID.
+func (a *ofFlowAction) PopVLAN() FlowBuilder {
+	popVLANAct := &ofctrl.PopVLANAction{}
+	a.builder.ApplyAction(popVLANAct)
+	return a.builder
+}
+
+// PushVLAN is an action to add VLAN ID.
+func (a *ofFlowAction) PushVLAN(etherType uint16) FlowBuilder {
+	pushVLANAct := &ofctrl.PushVLANAction{EtherType: etherType}
+	a.builder.ApplyAction(pushVLANAct)
+	return a.builder
+}
+
+// SetVLAN is an action to set existing VLAN ID.
+func (a *ofFlowAction) SetVLAN(vlanID uint16) FlowBuilder {
+	setVLANAct := &ofctrl.SetVLANAction{VlanID: vlanID}
+	a.builder.ApplyAction(setVLANAct)
+	return a.builder
+}
+
+// LoadARPOperation is an action to load data to NXM_OF_ARP_OP field.
 func (a *ofFlowAction) LoadARPOperation(value uint16) FlowBuilder {
 	loadAct, _ := ofctrl.NewNXLoadAction(NxmFieldARPOp, uint64(value), openflow13.NewNXRange(0, 15))
 	a.builder.ApplyAction(loadAct)
 	return a.builder
 }
 
-// LoadRange is an action to Load data to the target field at specified range.
+// LoadRange is an action to load data to the target field at specified range.
 func (a *ofFlowAction) LoadRange(name string, value uint64, rng *Range) FlowBuilder {
 	loadAct, _ := ofctrl.NewNXLoadAction(name, value, rng.ToNXRange())
 	if a.builder.ofFlow.Table != nil && a.builder.ofFlow.Table.Switch != nil {
@@ -264,8 +294,13 @@ func (a *ofFlowAction) LoadToRegField(field *RegField, value uint32) FlowBuilder
 	return a.builder
 }
 
-func (a *ofFlowAction) LoadRegMark(mark *RegMark) FlowBuilder {
-	return a.LoadToRegField(mark.field, mark.value)
+func (a *ofFlowAction) LoadRegMark(marks ...*RegMark) FlowBuilder {
+	var fb FlowBuilder
+	fb = a.builder
+	for _, mark := range marks {
+		fb = a.LoadToRegField(mark.field, mark.value)
+	}
+	return fb
 }
 
 // LoadToPktMarkRange is an action to load data into pkt_mark at specified range.
@@ -305,8 +340,12 @@ func (a *ofFlowAction) Resubmit(ofPort uint16, tableID uint8) FlowBuilder {
 	return a.builder
 }
 
-func (a *ofFlowAction) ResubmitToTable(table uint8) FlowBuilder {
-	return a.Resubmit(openflow13.OFPP_IN_PORT, table)
+func (a *ofFlowAction) ResubmitToTables(tables ...uint8) FlowBuilder {
+	var fb FlowBuilder
+	for _, t := range tables {
+		fb = a.Resubmit(openflow13.OFPP_IN_PORT, t)
+	}
+	return fb
 }
 
 // DecTTL is an action to decrease TTL. It is used in routing functions implemented by Openflow.
@@ -572,5 +611,18 @@ func getFieldRange(name string) (*openflow13.MatchField, Range, error) {
 // GotoTable is an action to jump to the specified table.
 func (a *ofFlowAction) GotoTable(tableID uint8) FlowBuilder {
 	a.builder.ofFlow.Goto(tableID)
+	return a.builder
+}
+
+func (a *ofFlowAction) NextTable() FlowBuilder {
+	tableID := a.builder.ofFlow.table.next
+	a.builder.ofFlow.Goto(tableID)
+	return a.builder
+}
+
+func (a *ofFlowAction) GotoStage(stage StageID) FlowBuilder {
+	pipeline := pipelineCache[a.builder.ofFlow.table.pipelineID]
+	table := pipeline.GetFirstTableInStage(stage)
+	a.builder.ofFlow.Goto(table.GetID())
 	return a.builder
 }

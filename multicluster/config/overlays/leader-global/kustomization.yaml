@@ -3,3 +3,6 @@ commonLabels:
 
 bases:
   - ../../crd
+
+patchesStrategicMerge:
+  - crd_patch.yaml

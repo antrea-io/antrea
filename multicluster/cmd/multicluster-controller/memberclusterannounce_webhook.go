@@ -43,7 +43,7 @@ func (v *memberClusterAnnounceValidator) Handle(ctx context.Context, req admissi
 	memberClusterAnnounce := &multiclusterv1alpha1.MemberClusterAnnounce{}
 	e := v.decoder.Decode(req, memberClusterAnnounce)
 	if e != nil {
-		klog.ErrorS(e, "error while decoding")
+		klog.ErrorS(e, "Error while decoding")
 		return admission.Errored(http.StatusBadRequest, e)
 	}
 

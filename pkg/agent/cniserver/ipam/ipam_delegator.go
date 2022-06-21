@@ -36,7 +36,7 @@ type IPAMDelegator struct {
 	pluginType string
 }
 
-func (d *IPAMDelegator) Add(args *invoke.Args, k8sArgs *argtypes.K8sArgs, networkConfig []byte) (bool, *current.Result, error) {
+func (d *IPAMDelegator) Add(args *invoke.Args, k8sArgs *argtypes.K8sArgs, networkConfig []byte) (bool, *IPAMResult, error) {
 	var success = false
 	defer func() {
 		if !success {
@@ -59,7 +59,7 @@ func (d *IPAMDelegator) Add(args *invoke.Args, k8sArgs *argtypes.K8sArgs, networ
 	}
 	success = true
 	// IPAM Delegator always owns the request
-	return true, ipamResult, nil
+	return true, &IPAMResult{Result: *ipamResult}, nil
 }
 
 func (d *IPAMDelegator) Del(args *invoke.Args, k8sArgs *argtypes.K8sArgs, networkConfig []byte) (bool, error) {
@@ -125,7 +125,5 @@ func delegateNoResult(delegatePlugin string, networkConfig []byte, args *invoke.
 }
 
 func init() {
-	if err := RegisterIPAMDriver(ipamHostLocal, &IPAMDelegator{pluginType: ipamHostLocal}); err != nil {
-		klog.Errorf("Failed to register IPAM plugin on type %s", ipamHostLocal)
-	}
+	RegisterIPAMDriver(ipamHostLocal, &IPAMDelegator{pluginType: ipamHostLocal})
 }

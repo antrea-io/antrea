@@ -51,12 +51,10 @@ type ControllerConfig struct {
 	// Defaults to true.
 	EnablePrometheusMetrics *bool `yaml:"enablePrometheusMetrics,omitempty"`
 	// Indicates whether to use auto-generated self-signed TLS certificate.
-	// If false, A Secret named "antrea-controller-tls" must be provided with the following keys:
+	// If false, a Secret named "antrea-controller-tls" must be provided with the following keys:
 	//   ca.crt: <CA certificate>
 	//   tls.crt: <TLS certificate>
 	//   tls.key: <TLS private key>
-	// And the Secret must be mounted to directory "/var/run/antrea/antrea-controller-tls" of the
-	// antrea-controller container.
 	// Defaults to true.
 	SelfSignedCert *bool `yaml:"selfSignedCert,omitempty"`
 	// Cipher suites to use.
@@ -67,4 +65,18 @@ type ControllerConfig struct {
 	LegacyCRDMirroring *bool `yaml:"legacyCRDMirroring,omitempty"`
 	// NodeIPAM Configuration
 	NodeIPAM NodeIPAMConfig `yaml:"nodeIPAM"`
+	// IPsec CSR signer configuration
+	IPsecCSRSignerConfig IPsecCSRSignerConfig `yaml:"ipsecCSRSigner"`
+}
+
+type IPsecCSRSignerConfig struct {
+	// Indicates whether to use auto-generated self-signed CA certificate.
+	// If false, a Secret named "antrea-ipsec-ca" must be provided with the following keys:
+	//   tls.crt: <CA certificate>
+	//   tls.key: <CA private key>
+	// Defaults to true.
+	SelfSignedCA *bool `yaml:"selfSignedCA,omitempty"`
+	// Antrea signer auto approve policy.
+	// Defaults to true.
+	AutoApprove *bool `yaml:"autoApprove,omitempty"`
 }

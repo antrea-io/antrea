@@ -34,17 +34,20 @@ import (
 
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
-	agentconfig "antrea.io/antrea/pkg/config/agent"
-	controllerconfig "antrea.io/antrea/pkg/config/controller"
+	"antrea.io/antrea/pkg/features"
 )
 
 const waitEgressRealizedTimeout = 3 * time.Second
 
+func skipIfEgressDisabled(tb testing.TB) {
+	skipIfFeatureDisabled(tb, features.Egress, true, true)
+}
+
 func TestEgress(t *testing.T) {
-	skipIfProviderIs(t, "kind", "pkt_mark field is not properly supported for OVS userspace (netdev) datapath.")
 	skipIfHasWindowsNodes(t)
 	skipIfNumNodesLessThan(t, 2)
 	skipIfAntreaIPAMTest(t)
+	skipIfEgressDisabled(t)
 
 	data, err := setupTest(t)
 	if err != nil {
@@ -53,17 +56,6 @@ func TestEgress(t *testing.T) {
 	defer teardownTest(t, data)
 	// Egress works for encap mode only.
 	skipIfEncapModeIsNot(t, data, config.TrafficEncapModeEncap)
-
-	cc := func(config *controllerconfig.ControllerConfig) {
-		config.FeatureGates["Egress"] = true
-	}
-	ac := func(config *agentconfig.AgentConfig) {
-		config.FeatureGates["Egress"] = true
-	}
-
-	if err := data.mutateAntreaConfigMap(cc, ac, true, true); err != nil {
-		t.Fatalf("Failed to enable Egress feature: %v", err)
-	}
 
 	t.Run("testEgressClientIP", func(t *testing.T) { testEgressClientIP(t, data) })
 	t.Run("testEgressCRUD", func(t *testing.T) { testEgressCRUD(t, data) })
@@ -133,31 +125,31 @@ ip netns exec %[1]s ip link set dev %[1]s-a up && \
 ip netns exec %[1]s ip route replace default via %[3]s && \
 ip netns exec %[1]s /agnhost netexec
 `, tt.fakeServer, tt.serverIP, tt.localIP0, tt.localIP1, tt.ipMaskLen)
-			if err := data.createPodOnNode(tt.fakeServer, testNamespace, egressNode, agnhostImage, []string{"sh", "-c", cmd}, nil, nil, nil, true, func(pod *v1.Pod) {
+			if err := data.createPodOnNode(tt.fakeServer, data.testNamespace, egressNode, agnhostImage, []string{"sh", "-c", cmd}, nil, nil, nil, true, func(pod *v1.Pod) {
 				privileged := true
 				pod.Spec.Containers[0].SecurityContext = &v1.SecurityContext{Privileged: &privileged}
 			}); err != nil {
 				t.Fatalf("Failed to create server Pod: %v", err)
 			}
-			defer deletePodWrapper(t, data, testNamespace, tt.fakeServer)
-			if err := data.podWaitForRunning(defaultTimeout, tt.fakeServer, testNamespace); err != nil {
+			defer deletePodWrapper(t, data, data.testNamespace, tt.fakeServer)
+			if err := data.podWaitForRunning(defaultTimeout, tt.fakeServer, data.testNamespace); err != nil {
 				t.Fatalf("Error when waiting for Pod '%s' to be in the Running state", tt.fakeServer)
 			}
 
 			localPod := fmt.Sprintf("localpod%s", tt.name)
 			remotePod := fmt.Sprintf("remotepod%s", tt.name)
-			if err := data.createBusyboxPodOnNode(localPod, testNamespace, egressNode, false); err != nil {
+			if err := data.createBusyboxPodOnNode(localPod, data.testNamespace, egressNode, false); err != nil {
 				t.Fatalf("Failed to create local Pod: %v", err)
 			}
-			defer deletePodWrapper(t, data, testNamespace, localPod)
-			if err := data.podWaitForRunning(defaultTimeout, localPod, testNamespace); err != nil {
+			defer deletePodWrapper(t, data, data.testNamespace, localPod)
+			if err := data.podWaitForRunning(defaultTimeout, localPod, data.testNamespace); err != nil {
 				t.Fatalf("Error when waiting for Pod '%s' to be in the Running state", localPod)
 			}
-			if err := data.createBusyboxPodOnNode(remotePod, testNamespace, workerNodeName(1), false); err != nil {
+			if err := data.createBusyboxPodOnNode(remotePod, data.testNamespace, workerNodeName(1), false); err != nil {
 				t.Fatalf("Failed to create remote Pod: %v", err)
 			}
-			defer deletePodWrapper(t, data, testNamespace, remotePod)
-			if err := data.podWaitForRunning(defaultTimeout, remotePod, testNamespace); err != nil {
+			defer deletePodWrapper(t, data, data.testNamespace, remotePod)
+			if err := data.podWaitForRunning(defaultTimeout, remotePod, data.testNamespace); err != nil {
 				t.Fatalf("Error when waiting for Pod '%s' to be in the Running state", remotePod)
 			}
 
@@ -168,8 +160,8 @@ ip netns exec %[1]s /agnhost netexec
 
 			// getClientIP gets the translated client IP by accessing the API that replies the request's client IP.
 			getClientIP := func(pod string) (string, string, error) {
-				cmd := []string{"wget", "-T", "3", "-O", "-", fmt.Sprintf("%s:8080/clientip", serverIPStr)}
-				return data.runCommandFromPod(testNamespace, pod, busyboxContainerName, cmd)
+				url := fmt.Sprintf("%s:8080/clientip", serverIPStr)
+				return data.runWgetCommandOnBusyboxWithRetry(pod, data.testNamespace, url, 5)
 			}
 
 			// assertClientIP asserts the Pod is translated to the provided client IP.
@@ -247,13 +239,13 @@ ip netns exec %[1]s /agnhost netexec
 				clientIPStr = fmt.Sprintf("[%s]", clientIPStr)
 			}
 			cmd = fmt.Sprintf("wget -T 3 -O - %s:8080/clientip | grep %s:", serverIPStr, clientIPStr)
-			if err := data.createPodOnNode(initialIPChecker, testNamespace, egressNode, busyboxImage, []string{"sh", "-c", cmd}, nil, nil, nil, false, func(pod *v1.Pod) {
+			if err := data.createPodOnNode(initialIPChecker, data.testNamespace, egressNode, busyboxImage, []string{"sh", "-c", cmd}, nil, nil, nil, false, func(pod *v1.Pod) {
 				pod.Spec.RestartPolicy = v1.RestartPolicyNever
 			}); err != nil {
 				t.Fatalf("Failed to create Pod initial-ip-checker: %v", err)
 			}
-			defer data.deletePod(testNamespace, initialIPChecker)
-			_, err = data.podWaitFor(timeout, initialIPChecker, testNamespace, func(pod *v1.Pod) (bool, error) {
+			defer data.DeletePod(data.testNamespace, initialIPChecker)
+			_, err = data.PodWaitFor(timeout, initialIPChecker, data.testNamespace, func(pod *v1.Pod) (bool, error) {
 				if pod.Status.Phase == v1.PodFailed {
 					return false, fmt.Errorf("Pod terminated with failure")
 				}
@@ -608,7 +600,7 @@ func testEgressNodeFailure(t *testing.T, data *TestData) {
 			}
 			signalAgent := func(nodeName, signal string) {
 				cmd := fmt.Sprintf("pkill -%s antrea-agent", signal)
-				rc, stdout, stderr, err := RunCommandOnNode(nodeName, cmd)
+				rc, stdout, stderr, err := data.RunCommandOnNode(nodeName, cmd)
 				if rc != 0 || err != nil {
 					t.Errorf("Error when running command '%s' on Node '%s', rc: %d, stdout: %s, stderr: %s, error: %v",
 						cmd, nodeName, rc, stdout, stderr, err)
@@ -712,7 +704,7 @@ func hasIP(data *TestData, nodeName string, ip string) (bool, error) {
 		return false, err
 	}
 	cmd := []string{"ip", "-br", "addr"}
-	stdout, _, err := data.runCommandFromPod(antreaNamespace, antreaPodName, agentContainerName, cmd)
+	stdout, _, err := data.RunCommandFromPod(antreaNamespace, antreaPodName, agentContainerName, cmd)
 	if err != nil {
 		return false, err
 	}

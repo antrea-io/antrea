@@ -15,7 +15,6 @@
 package log
 
 import (
-	"flag"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -26,30 +25,34 @@ import (
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 
-	"k8s.io/component-base/logs"
 	"k8s.io/klog/v2"
 )
 
 const oneMB = 1 * 1024 * 1024
 
 var (
-	testFlags          = initFlags()
 	klogDefaultMaxSize = klog.MaxSize
 )
 
-func initFlags() *pflag.FlagSet {
+func getTestFlags() *pflag.FlagSet {
 	flags := pflag.NewFlagSet("test", pflag.ContinueOnError)
 	AddFlags(flags)
-	flags.AddGoFlagSet(flag.CommandLine)
 	return flags
 }
 
 func restoreFlagDefaultValues() {
-	testFlags.Set(logToStdErrFlag, "true")
-	testFlags.Set(logFileFlag, "")
-	testFlags.Set(logDirFlag, "")
-	testFlags.Set(maxSizeFlag, fmt.Sprintf("%d", klogDefaultMaxSize/oneMB))
-	testFlags.Set(maxNumFlag, "0")
+	// The flag values are stored as global variables in klog and the
+	// initial values for the global variables are used as the flag default
+	// values. As a consequence, simply re-initializing the klog flags is
+	// not enough, as the default values are no longer the same after the
+	// first call to Parse. We need to explicitly set the flags to the known
+	// default values, which will in turn reset the corresponding klog
+	// global variables.
+	klogFlags.Set(logToStdErrFlag, "true")
+	klogFlags.Set(logFileFlag, "")
+	klogFlags.Set(logDirFlag, "")
+	klogFlags.Set(maxSizeFlag, fmt.Sprintf("%d", klogDefaultMaxSize/oneMB))
+	klogFlags.Set(maxNumFlag, "0")
 
 	klog.MaxSize = klogDefaultMaxSize
 	logFileMaxNum = 0
@@ -68,7 +71,7 @@ func testLogging() {
 		klog.Infof("%d: %s", i, string(line))
 		klog.Warningf("%d: %s", i, string(line))
 	}
-	logs.FlushLogs()
+	FlushLogs()
 }
 
 func TestKlogFileLimits(t *testing.T) {
@@ -82,9 +85,9 @@ func TestKlogFileLimits(t *testing.T) {
 	testMaxNum := 2
 	args := []string{"--logtostderr=false", "--log_dir=" + testLogDir, "--log_file_max_size=1",
 		fmt.Sprintf("--log_file_max_num=%d", testMaxNum)}
+	testFlags := getTestFlags()
 	testFlags.Parse(args)
-	InitLogFileLimits(testFlags)
-	logs.InitLogs()
+	InitLogs(testFlags)
 	defer restoreFlagDefaultValues()
 
 	// Should generate about 5 log files (100K * 40 / 1M), though it is hard
@@ -187,8 +190,9 @@ func TestFlags(t *testing.T) {
 	}
 
 	for _, test := range testcases {
+		testFlags := getTestFlags()
 		testFlags.Parse(test.args)
-		InitLogFileLimits(testFlags)
+		InitLogs(testFlags)
 		assert.Equal(t, test.maxSize, klog.MaxSize, test.name)
 		assert.Equal(t, test.maxNum, logFileMaxNum, test.name)
 		assert.Equal(t, test.logDir, logDir, test.name)

@@ -17,6 +17,7 @@ package networkpolicy
 import (
 	"context"
 	"fmt"
+	"net"
 	"reflect"
 	"sync"
 	"time"
@@ -24,6 +25,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
+	apitypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/util/workqueue"
@@ -36,6 +38,7 @@ import (
 	proxytypes "antrea.io/antrea/pkg/agent/proxy/types"
 	"antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	"antrea.io/antrea/pkg/querier"
 	"antrea.io/antrea/pkg/util/channel"
 )
@@ -75,6 +78,8 @@ type Controller struct {
 	antreaProxyEnabled bool
 	// statusManagerEnabled indicates whether a statusManager is configured.
 	statusManagerEnabled bool
+	// multicastEnabled indicates whether multicast is enabled.
+	multicastEnabled bool
 	// loggingEnabled indicates where Antrea policy audit logging is enabled.
 	loggingEnabled bool
 	// antreaClientProvider provides interfaces to get antreaClient, which can be
@@ -119,6 +124,7 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 	antreaPolicyEnabled bool,
 	antreaProxyEnabled bool,
 	statusManagerEnabled bool,
+	multicastEnabled bool,
 	loggingEnabled bool,
 	asyncRuleDeleteInterval time.Duration,
 	dnsServerOverride string,
@@ -132,18 +138,22 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 		antreaPolicyEnabled:  antreaPolicyEnabled,
 		antreaProxyEnabled:   antreaProxyEnabled,
 		statusManagerEnabled: statusManagerEnabled,
+		multicastEnabled:     multicastEnabled,
 		loggingEnabled:       loggingEnabled,
 	}
+
 	if antreaPolicyEnabled {
 		var err error
 		if c.fqdnController, err = newFQDNController(ofClient, idAllocator, dnsServerOverride, c.enqueueRule, v4Enabled, v6Enabled); err != nil {
 			return nil, err
 		}
+
 		if c.ofClient != nil {
 			c.ofClient.RegisterPacketInHandler(uint8(openflow.PacketInReasonNP), "dnsresponse", c.fqdnController)
 		}
 	}
-	c.reconciler = newReconciler(ofClient, ifaceStore, idAllocator, c.fqdnController, groupCounters, v4Enabled, v6Enabled)
+	c.reconciler = newReconciler(ofClient, ifaceStore, idAllocator, c.fqdnController, groupCounters,
+		v4Enabled, v6Enabled, antreaPolicyEnabled, multicastEnabled)
 	c.ruleCache = newRuleCache(c.enqueueRule, podUpdateSubscriber, groupIDUpdates)
 	if statusManagerEnabled {
 		c.statusManager = newStatusController(antreaClientGetter, nodeName, c.ruleCache)
@@ -377,7 +387,7 @@ func (c *Controller) GetNetworkPolicies(npFilter *querier.NetworkPolicyQueryFilt
 	return c.ruleCache.getNetworkPolicies(npFilter)
 }
 
-// GetAppliedToNetworkPolicies returns the NetworkPolicies applied to the Pod and match the filter.
+// GetAppliedNetworkPolicies returns the NetworkPolicies applied to the Pod and match the filter.
 func (c *Controller) GetAppliedNetworkPolicies(pod, namespace string, npFilter *querier.NetworkPolicyQueryFilter) []v1beta2.NetworkPolicy {
 	return c.ruleCache.getAppliedNetworkPolicies(pod, namespace, npFilter)
 }
@@ -472,6 +482,55 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 	}
 
 	<-stopCh
+}
+
+func (c *Controller) matchIGMPType(r *rule, igmpType uint8, groupAddress string) bool {
+	for _, s := range r.Services {
+		if (s.IGMPType == nil || uint8(*s.IGMPType) == igmpType) && (s.GroupAddress == "" || s.GroupAddress == groupAddress) {
+			return true
+		}
+	}
+	return false
+}
+
+// Validate checks if there is rule to drop or allow IGMP report from a Pod to a group Address, and returns multicast
+// NetworkPolicy Information
+func (c *Controller) Validate(podName, podNamespace string, groupAddress net.IP, igmpType uint8) (types.McastNPValidationItem, error) {
+	var ruleTypePtr *v1beta2.NetworkPolicyType
+	action, uuid, ruleName := v1alpha1.RuleActionAllow, apitypes.UID(""), ""
+	member := &v1beta2.GroupMember{
+		Pod: &v1beta2.PodReference{
+			Name:      podName,
+			Namespace: podNamespace,
+		},
+	}
+
+	objects, _ := c.ruleCache.rules.ByIndex(toIGMPReportGroupAddressIndex, groupAddress.String())
+	objects2, _ := c.ruleCache.rules.ByIndex(toIGMPReportGroupAddressIndex, "")
+	objects = append(objects, objects2...)
+	var matchedRule *rule
+	for _, obj := range objects {
+		rule := obj.(*rule)
+		groupMembers, anyExists := c.ruleCache.unionAppliedToGroups(rule.AppliedToGroups)
+		if !anyExists {
+			continue
+		}
+		if groupMembers.Has(member) && (matchedRule == nil || matchedRule.Less(rule)) &&
+			c.matchIGMPType(rule, igmpType, groupAddress.String()) {
+			matchedRule = rule
+		}
+	}
+
+	if matchedRule != nil {
+		ruleTypePtr = new(v1beta2.NetworkPolicyType)
+		action, uuid, *ruleTypePtr, ruleName = *matchedRule.Action, matchedRule.PolicyUID, matchedRule.SourceRef.Type, matchedRule.Name
+	}
+	return types.McastNPValidationItem{
+		RuleAction: action,
+		UUID:       uuid,
+		NPType:     ruleTypePtr,
+		Name:       ruleName,
+	}, nil
 }
 
 func (c *Controller) enqueueRule(ruleID string) {

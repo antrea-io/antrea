@@ -39,11 +39,12 @@ var serviceProtocolMap = map[uint8]corev1.Protocol{
 }
 
 type ConntrackConnectionStore struct {
-	connDumper           ConnTrackDumper
-	v4Enabled            bool
-	v6Enabled            bool
-	networkPolicyQuerier querier.AgentNetworkPolicyInfoQuerier
-	pollInterval         time.Duration
+	connDumper            ConnTrackDumper
+	v4Enabled             bool
+	v6Enabled             bool
+	networkPolicyQuerier  querier.AgentNetworkPolicyInfoQuerier
+	pollInterval          time.Duration
+	connectUplinkToBridge bool
 	connectionStore
 }
 
@@ -57,12 +58,13 @@ func NewConntrackConnectionStore(
 	o *flowexporter.FlowExporterOptions,
 ) *ConntrackConnectionStore {
 	return &ConntrackConnectionStore{
-		connDumper:           connTrackDumper,
-		v4Enabled:            v4Enabled,
-		v6Enabled:            v6Enabled,
-		networkPolicyQuerier: npQuerier,
-		pollInterval:         o.PollInterval,
-		connectionStore:      NewConnectionStore(ifaceStore, proxier, o),
+		connDumper:            connTrackDumper,
+		v4Enabled:             v4Enabled,
+		v6Enabled:             v6Enabled,
+		networkPolicyQuerier:  npQuerier,
+		pollInterval:          o.PollInterval,
+		connectionStore:       NewConnectionStore(ifaceStore, proxier, o),
+		connectUplinkToBridge: o.ConnectUplinkToBridge,
 	}
 }
 
@@ -94,11 +96,40 @@ func (cs *ConntrackConnectionStore) Run(stopCh <-chan struct{}) {
 // TODO: As optimization, only poll invalid/closed connections during every poll, and poll the established connections right before the export.
 func (cs *ConntrackConnectionStore) Poll() ([]int, error) {
 	klog.V(2).Infof("Polling conntrack")
-	// Reset IsPresent flag for all connections in connection map before dumping
-	// flows in conntrack module. If the connection does not exist in conntrack
-	// table and has been exported, then we will delete it from connection map.
-	// In addition, if the connection was not exported for a specific time period,
-	// then we consider it to be stale and delete it.
+
+	var zones []uint16
+	var connsLens []int
+	if cs.v4Enabled {
+		if cs.connectUplinkToBridge {
+			zones = append(zones, uint16(openflow.IPCtZoneTypeRegMark.GetValue()<<12))
+		} else {
+			zones = append(zones, openflow.CtZone)
+		}
+	}
+	if cs.v6Enabled {
+		if cs.connectUplinkToBridge {
+			zones = append(zones, uint16(openflow.IPv6CtZoneTypeRegMark.GetValue()<<12))
+		} else {
+			zones = append(zones, openflow.CtZoneV6)
+		}
+	}
+	var totalConns int
+	var filteredConnsList []*flowexporter.Connection
+	for _, zone := range zones {
+		filteredConnsListPerZone, totalConnsPerZone, err := cs.connDumper.DumpFlows(zone)
+		if err != nil {
+			return []int{}, err
+		}
+		totalConns += totalConnsPerZone
+		filteredConnsList = append(filteredConnsList, filteredConnsListPerZone...)
+		connsLens = append(connsLens, len(filteredConnsList))
+	}
+
+	// Reset IsPresent flag for all connections in connection map before updating
+	// the dumped flows information in connection map. If the connection does not
+	// exist in conntrack table and has been exported, then we will delete it from
+	// connection map. In addition, if the connection was not exported for a specific
+	// time period, then we consider it to be stale and delete it.
 	deleteIfStaleOrResetConn := func(key flowexporter.ConnectionKey, conn *flowexporter.Connection) error {
 		if !conn.IsPresent {
 			// Delete the connection if it is ready to delete or it was not exported
@@ -114,31 +145,22 @@ func (cs *ConntrackConnectionStore) Poll() ([]int, error) {
 		return nil
 	}
 
-	if err := cs.ForAllConnectionsDo(deleteIfStaleOrResetConn); err != nil {
+	// Hold the lock until we verify whether the connection exist in conntrack table,
+	// and finish updating the connection store.
+	cs.AcquireConnStoreLock()
+
+	if err := cs.ForAllConnectionsDoWithoutLock(deleteIfStaleOrResetConn); err != nil {
+		cs.ReleaseConnStoreLock()
 		return []int{}, err
 	}
 
-	var zones []uint16
-	var connsLens []int
-	if cs.v4Enabled {
-		zones = append(zones, openflow.CtZone)
+	// Update only the Connection store. IPFIX records are generated based on Connection store.
+	for _, conn := range filteredConnsList {
+		cs.AddOrUpdateConn(conn)
 	}
-	if cs.v6Enabled {
-		zones = append(zones, openflow.CtZoneV6)
-	}
-	var totalConns int
-	for _, zone := range zones {
-		filteredConnsList, totalConnsPerZone, err := cs.connDumper.DumpFlows(zone)
-		if err != nil {
-			return []int{}, err
-		}
-		totalConns += totalConnsPerZone
-		// Update only the Connection store. IPFIX records are generated based on Connection store.
-		for _, conn := range filteredConnsList {
-			cs.AddOrUpdateConn(conn)
-		}
-		connsLens = append(connsLens, len(filteredConnsList))
-	}
+
+	cs.ReleaseConnStoreLock()
+
 	metrics.TotalConnectionsInConnTrackTable.Set(float64(totalConns))
 	maxConns, err := cs.connDumper.GetMaxConnections()
 	if err != nil {
@@ -193,13 +215,12 @@ func (cs *ConntrackConnectionStore) addNetworkPolicyMetadata(conn *flowexporter.
 // AddOrUpdateConn updates the connection if it is already present, i.e., update timestamp, counters etc.,
 // or adds a new connection with the resolved K8s metadata.
 func (cs *ConntrackConnectionStore) AddOrUpdateConn(conn *flowexporter.Connection) {
+	conn.IsPresent = true
 	connKey := flowexporter.NewConnectionKey(conn)
-	cs.mutex.Lock()
-	defer cs.mutex.Unlock()
 
 	existingConn, exists := cs.connections[connKey]
 	if exists {
-		existingConn.IsPresent = true
+		existingConn.IsPresent = conn.IsPresent
 		if flowexporter.IsConnectionDying(existingConn) {
 			return
 		}

@@ -1,0 +1,10 @@
+apiVersion: multicluster.crd.antrea.io/v1alpha1
+kind: ClusterInfoImport
+metadata:
+  name: clusterinfoimport-sample
+  namespace: kube-system
+spec:
+  clusterID: test-cluster-west
+  GatewayInfos:
+  - gatewayIP: 10.10.10.10
+  serviceCIDR: 10.19.0.0/18

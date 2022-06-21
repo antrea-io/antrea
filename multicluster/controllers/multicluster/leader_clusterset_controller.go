@@ -63,13 +63,12 @@ type LeaderClusterSetReconciler struct {
 func (r *LeaderClusterSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	clusterSet := &multiclusterv1alpha1.ClusterSet{}
 	err := r.Get(ctx, req.NamespacedName, clusterSet)
-	defer r.mutex.Unlock()
 	r.mutex.Lock()
+	defer r.mutex.Unlock()
 	if err != nil {
 		if !errors.IsNotFound(err) {
 			return ctrl.Result{}, err
 		}
-		// if errors.IsNotFound(err)
 		klog.InfoS("Received ClusterSet delete", "config", klog.KObj(clusterSet))
 		for _, removedMember := range r.clusterSetConfig.Spec.Members {
 			r.StatusManager.RemoveMember(common.ClusterID(removedMember.ClusterID))
@@ -86,21 +85,21 @@ func (r *LeaderClusterSetReconciler) Reconcile(ctx context.Context, req ctrl.Req
 	// Handle create or update
 	// If create, make sure the local ClusterClaim is part of the leader config
 	if r.clusterSetConfig == nil {
-		clusterId, clusterSetId, err := validateLocalClusterClaim(r.Client, clusterSet)
+		clusterID, clusterSetID, err := validateLocalClusterClaim(r.Client, clusterSet)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
-		if err = validateConfigExists(clusterId, clusterSet.Spec.Leaders); err != nil {
-			err = fmt.Errorf("local cluster %s is not defined as leader in ClusterSet", clusterId)
+		if err = validateConfigExists(clusterID, clusterSet.Spec.Leaders); err != nil {
+			err = fmt.Errorf("local cluster %s is not defined as leader in ClusterSet", clusterID)
 			return ctrl.Result{}, err
 		}
 		if err = validateClusterSetNamespace(clusterSet); err != nil {
 			return ctrl.Result{}, err
 		}
-		r.clusterID = clusterId
-		r.clusterSetID = clusterSetId
+		r.clusterID = clusterID
+		r.clusterSetID = clusterSetID
 	} else {
-		// Make sure clusterSetId has not changed
+		// Make sure clusterSetID has not changed
 		if string(r.clusterSetID) != req.Name {
 			return ctrl.Result{}, fmt.Errorf("ClusterSet Name %s cannot be changed to %s",
 				r.clusterSetID, req.Name)
@@ -143,7 +142,7 @@ func (r *LeaderClusterSetReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&multiclusterv1alpha1.ClusterSet{}).
 		WithOptions(controller.Options{
-			MaxConcurrentReconciles: 5, // TODO: Use a constant after merging with Lan's changes
+			MaxConcurrentReconciles: common.DefaultWorkerCount,
 		}).
 		Complete(r)
 }
@@ -226,7 +225,7 @@ func (r *LeaderClusterSetReconciler) updateStatus() {
 	clusterSet := &multiclusterv1alpha1.ClusterSet{}
 	err := r.Get(context.TODO(), namespacedName, clusterSet)
 	if err != nil {
-		klog.ErrorS(err, "failed to read ClusterSet", "Name", namespacedName)
+		klog.ErrorS(err, "Failed to read ClusterSet", "Name", namespacedName)
 	}
 	status.Conditions = clusterSet.Status.Conditions
 	if (len(clusterSet.Status.Conditions) == 1 && clusterSet.Status.Conditions[0].Status != overallCondition.Status) ||
@@ -236,6 +235,6 @@ func (r *LeaderClusterSetReconciler) updateStatus() {
 	clusterSet.Status = status
 	err = r.Status().Update(context.TODO(), clusterSet)
 	if err != nil {
-		klog.ErrorS(err, "failed to update Status of ClusterSet", "Name", namespacedName)
+		klog.ErrorS(err, "Failed to update Status of ClusterSet", "Name", namespacedName)
 	}
 }

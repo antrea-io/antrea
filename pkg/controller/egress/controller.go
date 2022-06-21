@@ -404,7 +404,7 @@ func (c *EgressController) addEgress(obj interface{}) {
 	}
 	c.egressGroupStore.Create(egressGroup)
 	// Register the group to the grouping interface.
-	groupSelector := antreatypes.NewGroupSelector("", egress.Spec.AppliedTo.PodSelector, egress.Spec.AppliedTo.NamespaceSelector, nil)
+	groupSelector := antreatypes.NewGroupSelector("", egress.Spec.AppliedTo.PodSelector, egress.Spec.AppliedTo.NamespaceSelector, nil, nil)
 	c.groupingInterface.AddGroup(egressGroupType, egress.Name, groupSelector)
 	c.queue.Add(egress.Name)
 }
@@ -417,7 +417,7 @@ func (c *EgressController) updateEgress(old, cur interface{}) {
 	// TODO: Define custom Equal function to be more efficient.
 	if !reflect.DeepEqual(oldEgress.Spec.AppliedTo, curEgress.Spec.AppliedTo) {
 		// Update the group's selector in the grouping interface.
-		groupSelector := antreatypes.NewGroupSelector("", curEgress.Spec.AppliedTo.PodSelector, curEgress.Spec.AppliedTo.NamespaceSelector, nil)
+		groupSelector := antreatypes.NewGroupSelector("", curEgress.Spec.AppliedTo.PodSelector, curEgress.Spec.AppliedTo.NamespaceSelector, nil, nil)
 		c.groupingInterface.AddGroup(egressGroupType, curEgress.Name, groupSelector)
 	}
 	if oldEgress.GetGeneration() != curEgress.GetGeneration() {

@@ -21,7 +21,7 @@ function echoerr {
 }
 
 GKE_ZONE="us-west1-a"
-GKE_HOST="UBUNTU"
+GKE_HOST="UBUNTU_CONTAINERD"
 MACHINE_TYPE="e2-standard-4"
 GKE_SERVICE_CIDR="10.94.0.0/16"
 GKE_PROJECT="antrea"
@@ -31,7 +31,8 @@ RUN_ALL=true
 RUN_SETUP_ONLY=false
 RUN_CLEANUP_ONLY=false
 TEST_SCRIPT_RC=0
-KUBE_CONFORMANCE_IMAGE_VERSION=v1.18.5
+# There is a problem with the netpol suite added in v1.21.0 when running on GKE. See #3762 for details.
+KUBE_CONFORMANCE_IMAGE_VERSION=v1.20.15
 
 _usage="Usage: $0 [--cluster-name <GKEClusterNameToUse>]  [--kubeconfig <KubeconfigSavePath>] [--k8s-version <ClusterVersion>] \
                   [--svc-account <Name>] [--user <Name>] [--gke-project <Project>] [--gke-zone <Zone>] [--log-mode <SonobuoyResultLogLevel>] \
@@ -218,7 +219,7 @@ function deliver_antrea_to_gke() {
     node_names=$(kubectl get nodes -o wide --no-headers=true | awk '{print $1}')
     for node_name in ${node_names}; do
         ${GCLOUD_PATH} compute scp ${antrea_image}.tar ubuntu@${node_name}:~ --zone ${GKE_ZONE}
-        ${GCLOUD_PATH} compute ssh ubuntu@${node_name} --command="sudo docker load -i ~/${antrea_image}.tar ; sudo docker tag ${DOCKER_IMG_NAME}:${DOCKER_IMG_VERSION} ${DOCKER_IMG_NAME}:latest" --zone ${GKE_ZONE}
+        ${GCLOUD_PATH} compute ssh ubuntu@${node_name} --command="sudo ctr -n=k8s.io images import ~/${antrea_image}.tar ; sudo ctr -n=k8s.io images tag ${DOCKER_IMG_NAME}:${DOCKER_IMG_VERSION} ${DOCKER_IMG_NAME}:latest" --zone ${GKE_ZONE}
     done
     rm ${antrea_image}.tar
 

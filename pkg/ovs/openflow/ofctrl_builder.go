@@ -38,6 +38,17 @@ func (b *ofFlowBuilder) MatchTunMetadata(index int, data uint32) FlowBuilder {
 	return b
 }
 
+// MatchVLAN matches the VLAN VID. It holds the VLAN VID in its least significant 12 bits.
+func (b *ofFlowBuilder) MatchVLAN(nonVLAN bool, vlanID uint16, vlanMask *uint16) FlowBuilder {
+	// TODO(gran): correct matchStr
+	matchStr := fmt.Sprintf("dl_vlan=%d", vlanID)
+	b.matchers = append(b.matchers, matchStr)
+	b.Match.NonVlan = nonVLAN
+	b.Match.VlanId = &vlanID
+	b.Match.VlanMask = vlanMask
+	return b
+}
+
 func (b *ofFlowBuilder) SetHardTimeout(timout uint16) FlowBuilder {
 	b.ofFlow.HardTimeout = timout
 	return b
@@ -87,9 +98,6 @@ func (b *ofFlowBuilder) MatchXXReg(regID int, data []byte) FlowBuilder {
 func (b *ofFlowBuilder) matchRegRange(regID int, data uint32, rng *Range) FlowBuilder {
 	s := fmt.Sprintf("reg%d[%d..%d]=0x%x", regID, rng[0], rng[1], data)
 	b.matchers = append(b.matchers, s)
-	if rng[0] > 0 {
-		data <<= rng[0]
-	}
 	reg := &ofctrl.NXRegister{
 		ID:    regID,
 		Data:  data,
@@ -99,8 +107,13 @@ func (b *ofFlowBuilder) matchRegRange(regID int, data uint32, rng *Range) FlowBu
 	return b
 }
 
-func (b *ofFlowBuilder) MatchRegMark(mark *RegMark) FlowBuilder {
-	return b.MatchRegFieldWithValue(mark.field, mark.value)
+func (b *ofFlowBuilder) MatchRegMark(marks ...*RegMark) FlowBuilder {
+	var fb FlowBuilder
+	fb = b
+	for _, mark := range marks {
+		fb = b.MatchRegFieldWithValue(mark.field, mark.value)
+	}
+	return fb
 }
 
 func (b *ofFlowBuilder) MatchRegFieldWithValue(field *RegField, data uint32) FlowBuilder {
@@ -230,17 +243,18 @@ func (b *ofFlowBuilder) MatchCTStateSNAT(set bool) FlowBuilder {
 	return b
 }
 
-func (b *ofFlowBuilder) MatchCTMark(mark *CtMark) FlowBuilder {
-	var ctmarkKey string
-	b.ofFlow.Match.CtMark = mark.GetValue()
-	if mark.isFullRange() {
-		b.ofFlow.Match.CtMarkMask = nil
-		ctmarkKey = fmt.Sprintf("ct_mark=0x%x", mark.value)
-	} else {
-		mask := mark.field.rng.ToNXRange().ToUint32Mask()
-		ctmarkKey = fmt.Sprintf("ct_mark=0x%x/0x%x", mark.GetValue(), mask)
-		b.ofFlow.Match.CtMarkMask = &mask
+func (b *ofFlowBuilder) MatchCTMark(marks ...*CtMark) FlowBuilder {
+	if len(marks) == 0 {
+		return b
 	}
+	var value, mask uint32
+	for _, mark := range marks {
+		value |= mark.GetValue()
+		mask |= mark.field.rng.ToNXRange().ToUint32Mask()
+	}
+	b.ofFlow.Match.CtMark = value
+	b.ofFlow.Match.CtMarkMask = &mask
+	ctmarkKey := fmt.Sprintf("ct_mark=0x%x/0x%x", value, mask)
 	b.matchers = append(b.matchers, ctmarkKey)
 	return b
 }
@@ -344,14 +358,26 @@ func (b *ofFlowBuilder) MatchDstIPNet(ipnet net.IPNet) FlowBuilder {
 	return b
 }
 
+func (b *ofFlowBuilder) MatchICMPType(icmpType byte) FlowBuilder {
+	b.matchers = append(b.matchers, fmt.Sprintf("icmp_type=%d", icmpType))
+	b.Match.Icmp4Type = &icmpType
+	return b
+}
+
+func (b *ofFlowBuilder) MatchICMPCode(icmpCode byte) FlowBuilder {
+	b.matchers = append(b.matchers, fmt.Sprintf("icmp_code=%d", icmpCode))
+	b.Match.Icmp4Code = &icmpCode
+	return b
+}
+
 func (b *ofFlowBuilder) MatchICMPv6Type(icmp6Type byte) FlowBuilder {
-	b.matchers = append(b.matchers, fmt.Sprintf("icmp_type=%d", icmp6Type))
+	b.matchers = append(b.matchers, fmt.Sprintf("icmpv6_type=%d", icmp6Type))
 	b.Match.Icmp6Type = &icmp6Type
 	return b
 }
 
 func (b *ofFlowBuilder) MatchICMPv6Code(icmp6Code byte) FlowBuilder {
-	b.matchers = append(b.matchers, fmt.Sprintf("icmp_code=%d", icmp6Code))
+	b.matchers = append(b.matchers, fmt.Sprintf("icmpv6_code=%d", icmp6Code))
 	b.Match.Icmp6Code = &icmp6Code
 	return b
 }

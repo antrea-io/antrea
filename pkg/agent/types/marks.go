@@ -16,8 +16,8 @@ package types
 
 const (
 	// HostLocalSourceBit is the bit of the iptables fwmark space to mark locally generated packets.
-	// Value must be within the range [0, 31].
-	HostLocalSourceBit = 0
+	// Value must be within the range [0, 31], and should not conflict with bits for other purposes.
+	HostLocalSourceBit = 31
 )
 
 var (

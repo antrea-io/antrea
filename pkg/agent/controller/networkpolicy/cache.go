@@ -28,6 +28,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent/metrics"
+	agenttypes "antrea.io/antrea/pkg/agent/types"
 	v1beta "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	"antrea.io/antrea/pkg/querier"
@@ -36,11 +37,12 @@ import (
 )
 
 const (
-	RuleIDLength        = 16
-	appliedToGroupIndex = "appliedToGroup"
-	addressGroupIndex   = "addressGroup"
-	policyIndex         = "policy"
-	toServicesIndex     = "toServices"
+	RuleIDLength                  = 16
+	appliedToGroupIndex           = "appliedToGroup"
+	addressGroupIndex             = "addressGroup"
+	policyIndex                   = "policy"
+	toServicesIndex               = "toServices"
+	toIGMPReportGroupAddressIndex = "toIGMPReportGroupAddress"
 )
 
 // rule is the struct stored in ruleCache, it contains necessary information
@@ -94,6 +96,35 @@ type rule struct {
 	EnableLogging bool
 }
 
+func (r *rule) Less(r2 *rule) bool {
+	// priorities for rule r
+	tierPriority1, policyPriority1 := int32(0), float64(0)
+	// priorities for rule r2
+	tierPriority2, policyPriority2 := int32(0), float64(0)
+
+	if r.TierPriority != nil {
+		tierPriority1 = *r.TierPriority
+	}
+	if r.PolicyPriority != nil {
+		policyPriority1 = *r.PolicyPriority
+	}
+	if r2.TierPriority != nil {
+		tierPriority2 = *r2.TierPriority
+	}
+	if r2.PolicyPriority != nil {
+		policyPriority2 = *r2.PolicyPriority
+	}
+
+	// compare two rules' priorities
+	if tierPriority1 == tierPriority2 {
+		if policyPriority1 == policyPriority2 {
+			return r.Priority > r2.Priority
+		}
+		return policyPriority1 > policyPriority2
+	}
+	return tierPriority1 > tierPriority2
+}
+
 // hashRule calculates a string based on the rule's content.
 func hashRule(r *rule) string {
 	hash := sha1.New() // #nosec G401: not used for security purposes
@@ -130,6 +161,17 @@ func (r *CompletedRule) String() string {
 // isAntreaNetworkPolicyRule returns true if the rule is part of a Antrea policy.
 func (r *CompletedRule) isAntreaNetworkPolicyRule() bool {
 	return r.SourceRef.Type != v1beta.K8sNetworkPolicy
+}
+
+func (r *CompletedRule) isIGMPEgressPolicyRule() bool {
+	if r.Direction == v1beta.DirectionOut {
+		for _, svc := range r.Services {
+			if svc.Protocol != nil && *svc.Protocol == v1beta.ProtocolIGMP {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // ruleCache caches Antrea AddressGroups, AppliedToGroups and NetworkPolicies,
@@ -220,6 +262,7 @@ func (c *ruleCache) getAppliedNetworkPolicies(pod, namespace string, npFilter *q
 			}
 			if c.networkPolicyMatchFilter(npFilter, np) {
 				policies = append(policies, *np)
+				policyKeys.Insert(string(rule.PolicyUID))
 			}
 		}
 	}
@@ -333,11 +376,34 @@ func toServicesIndexFunc(obj interface{}) ([]string, error) {
 	return toSvcNamespacedName.UnsortedList(), nil
 }
 
+// toIGMPReportGroupAddressIndexFunc knows how to get IGMP report groupAddresses of a *rule
+// It's provided to cache.Indexer to build an index of NetworkPolicy.
+func toIGMPReportGroupAddressIndexFunc(obj interface{}) ([]string, error) {
+	rule := obj.(*rule)
+	mcastGroupAddresses := sets.String{}
+	if rule.Direction == v1beta.DirectionOut {
+		for _, svc := range rule.Services {
+			if svc.Protocol != nil && *svc.Protocol == v1beta.ProtocolIGMP && svc.IGMPType == nil ||
+				svc.IGMPType != nil && (*svc.IGMPType == crdv1alpha1.IGMPReportV1 || *svc.IGMPType == crdv1alpha1.IGMPReportV2 || *svc.IGMPType == crdv1alpha1.IGMPReportV3) {
+				mcastGroupAddresses.Insert(svc.GroupAddress)
+			}
+		}
+	}
+
+	return mcastGroupAddresses.UnsortedList(), nil
+}
+
 // newRuleCache returns a new *ruleCache.
 func newRuleCache(dirtyRuleHandler func(string), podUpdateSubscriber channel.Subscriber, serviceGroupIDUpdate <-chan string) *ruleCache {
 	rules := cache.NewIndexer(
 		ruleKeyFunc,
-		cache.Indexers{addressGroupIndex: addressGroupIndexFunc, appliedToGroupIndex: appliedToGroupIndexFunc, policyIndex: policyIndexFunc, toServicesIndex: toServicesIndexFunc},
+		cache.Indexers{
+			addressGroupIndex:             addressGroupIndexFunc,
+			appliedToGroupIndex:           appliedToGroupIndexFunc,
+			policyIndex:                   policyIndexFunc,
+			toServicesIndex:               toServicesIndexFunc,
+			toIGMPReportGroupAddressIndex: toIGMPReportGroupAddressIndexFunc,
+		},
 	)
 	cache := &ruleCache{
 		appliedToSetByGroup: make(map[string]v1beta.GroupMemberSet),
@@ -360,12 +426,12 @@ func newRuleCache(dirtyRuleHandler func(string), podUpdateSubscriber channel.Sub
 // done if antrea-controller has computed the Pods' policies and propagated
 // them to this Node by their labels and NodeName, instead of waiting for their
 // IPs are reported to kube-apiserver and processed by antrea-controller.
-func (c *ruleCache) processPodUpdate(pod string) {
-	namespace, name := k8s.SplitNamespacedName(pod)
+func (c *ruleCache) processPodUpdate(e interface{}) {
+	podEvent := e.(agenttypes.PodUpdate)
 	member := &v1beta.GroupMember{
 		Pod: &v1beta.PodReference{
-			Name:      name,
-			Namespace: namespace,
+			Name:      podEvent.PodName,
+			Namespace: podEvent.PodNamespace,
 		},
 	}
 	c.appliedToSetLock.RLock()

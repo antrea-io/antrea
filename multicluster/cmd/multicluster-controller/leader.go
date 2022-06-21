@@ -25,6 +25,7 @@ import (
 
 	multiclusterv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
 	multiclustercontrollers "antrea.io/antrea/multicluster/controllers/multicluster"
+	"antrea.io/antrea/pkg/log"
 	"antrea.io/antrea/pkg/util/env"
 )
 
@@ -34,6 +35,8 @@ func newLeaderCommand() *cobra.Command {
 		Short: "Run the MC controller in leader cluster",
 		Long:  "Run the Antrea Multi-Cluster controller for leader cluster",
 		Run: func(cmd *cobra.Command, args []string) {
+			log.InitLogs(cmd.Flags())
+			defer log.FlushLogs()
 			if err := opts.complete(args); err != nil {
 				klog.Fatalf("Failed to complete: %v", err)
 			}
@@ -87,14 +90,6 @@ func runLeader(o *Options) error {
 
 	if err := (&multiclusterv1alpha1.ResourceImport{}).SetupWebhookWithManager(mgr); err != nil {
 		return fmt.Errorf("error creating ResourceImport webhook: %v", err)
-	}
-
-	// Only leader runs the ResourceExportFilterReconciler
-	if err = (&multiclustercontrollers.ResourceExportFilterReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
-		return fmt.Errorf("error creating ResourceExportFilter controller: %v", err)
 	}
 
 	klog.InfoS("Leader MC Controller Starting Manager")
