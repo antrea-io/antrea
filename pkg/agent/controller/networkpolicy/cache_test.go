@@ -193,6 +193,18 @@ func newAddressGroupMember(ips ...string) *v1beta2.GroupMember {
 	return &v1beta2.GroupMember{IPs: ipAddrs}
 }
 
+func newAddressGroupPodMember(name, namespace string, ips ...string) *v1beta2.GroupMember {
+	ipAddrs := make([]v1beta2.IPAddress, len(ips))
+	for idx, ip := range ips {
+		ipAddrs[idx] = v1beta2.IPAddress(net.ParseIP(ip))
+	}
+	pod := &v1beta2.PodReference{
+		Name:      name,
+		Namespace: namespace,
+	}
+	return &v1beta2.GroupMember{Pod: pod, IPs: ipAddrs}
+}
+
 func TestRuleCacheAddAddressGroup(t *testing.T) {
 	rule1 := &rule{
 		ID:   "rule1",
