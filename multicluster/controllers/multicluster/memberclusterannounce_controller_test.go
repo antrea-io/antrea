@@ -114,10 +114,22 @@ func TestStatusAfterAdd(t *testing.T) {
 		},
 	}
 
-	//[]multiclusterv1alpha1.ClusterStatus
-	status := memberClusterAnnounceReconcilerUnderTest.GetMemberClusterStatuses()
-	assert.Equal(t, 1, len(status))
-	verifyStatus(t, expectedStatus, status[0])
+	actualStatus := memberClusterAnnounceReconcilerUnderTest.GetMemberClusterStatuses()
+	actualTimerData := memberClusterAnnounceReconcilerUnderTest.timerData
+	assert.Equal(t, 1, len(actualStatus))
+	assert.Equal(t, 1, len(actualTimerData))
+	verifyStatus(t, expectedStatus, actualStatus[0])
+}
+
+func TestStatusAfterDelete(t *testing.T) {
+	setup()
+	memberClusterAnnounceReconcilerUnderTest.AddMember("east")
+	memberClusterAnnounceReconcilerUnderTest.RemoveMember("east")
+
+	actualStatus := memberClusterAnnounceReconcilerUnderTest.GetMemberClusterStatuses()
+	actualTimerData := memberClusterAnnounceReconcilerUnderTest.timerData
+	assert.Equal(t, 0, len(actualStatus))
+	assert.Equal(t, 0, len(actualTimerData))
 }
 
 func TestStatusAfterReconcile(t *testing.T) {
@@ -159,10 +171,10 @@ func TestStatusAfterReconcile(t *testing.T) {
 	}
 
 	memberClusterAnnounceReconcilerUnderTest.processMCSStatus()
-	status := memberClusterAnnounceReconcilerUnderTest.GetMemberClusterStatuses()
-	klog.V(2).InfoS("Received", "actual", status, "expected", expectedStatus)
-	assert.Equal(t, 1, len(status))
-	verifyStatus(t, expectedStatus, status[0])
+	actualStatus := memberClusterAnnounceReconcilerUnderTest.GetMemberClusterStatuses()
+	klog.V(2).InfoS("Received", "actual", actualStatus, "expected", expectedStatus)
+	assert.Equal(t, 1, len(actualStatus))
+	verifyStatus(t, expectedStatus, actualStatus[0])
 }
 
 func TestStatusAfterLeaderElection(t *testing.T) {
@@ -201,10 +213,10 @@ func TestStatusAfterLeaderElection(t *testing.T) {
 	}
 
 	memberClusterAnnounceReconcilerUnderTest.processMCSStatus()
-	status := memberClusterAnnounceReconcilerUnderTest.GetMemberClusterStatuses()
-	klog.V(2).InfoS("Received", "actual", status, "expected", expectedStatus)
-	assert.Equal(t, 1, len(status))
-	verifyStatus(t, expectedStatus, status[0])
+	actualStatus := memberClusterAnnounceReconcilerUnderTest.GetMemberClusterStatuses()
+	klog.V(2).InfoS("Received", "actual", actualStatus, "expected", expectedStatus)
+	assert.Equal(t, 1, len(actualStatus))
+	verifyStatus(t, expectedStatus, actualStatus[0])
 }
 
 func TestStatusInNonLeaderCase(t *testing.T) {
@@ -243,10 +255,10 @@ func TestStatusInNonLeaderCase(t *testing.T) {
 	}
 
 	memberClusterAnnounceReconcilerUnderTest.processMCSStatus()
-	status := memberClusterAnnounceReconcilerUnderTest.GetMemberClusterStatuses()
-	klog.V(2).InfoS("Received", "actual", status, "expected", expectedStatus)
-	assert.Equal(t, 1, len(status))
-	verifyStatus(t, expectedStatus, status[0])
+	actualStatus := memberClusterAnnounceReconcilerUnderTest.GetMemberClusterStatuses()
+	klog.V(2).InfoS("Received", "actual", actualStatus, "expected", expectedStatus)
+	assert.Equal(t, 1, len(actualStatus))
+	verifyStatus(t, expectedStatus, actualStatus[0])
 }
 
 func verifyStatus(t *testing.T, expected mcsv1alpha1.ClusterStatus, actual mcsv1alpha1.ClusterStatus) {

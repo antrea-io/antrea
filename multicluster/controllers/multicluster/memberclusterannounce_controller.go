@@ -72,8 +72,8 @@ type MemberClusterAnnounceReconciler struct {
 }
 
 type MemberClusterStatusManager interface {
-	AddMember(MemberId common.ClusterID)
-	RemoveMember(MemberId common.ClusterID)
+	AddMember(memberID common.ClusterID)
+	RemoveMember(memberID common.ClusterID)
 
 	GetMemberClusterStatuses() []multiclusterv1alpha1.ClusterStatus
 }
@@ -106,8 +106,8 @@ func (r *MemberClusterAnnounceReconciler) Reconcile(ctx context.Context, req ctr
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	defer r.mapLock.Unlock()
 	r.mapLock.Lock()
+	defer r.mapLock.Unlock()
 
 	if data, ok := r.timerData[common.ClusterID(memberAnnounce.ClusterID)]; ok {
 		klog.V(2).InfoS("Reset lastUpdateTime", "Cluster", memberAnnounce.ClusterID)
@@ -163,8 +163,8 @@ func (r *MemberClusterAnnounceReconciler) SetupWithManager(mgr ctrl.Manager) err
 }
 
 func (r *MemberClusterAnnounceReconciler) processMCSStatus() {
-	defer r.mapLock.Unlock()
 	r.mapLock.Lock()
+	defer r.mapLock.Unlock()
 
 	for member, data := range r.timerData {
 		if data.lastUpdateTime.IsZero() {
@@ -172,11 +172,11 @@ func (r *MemberClusterAnnounceReconciler) processMCSStatus() {
 			continue
 		}
 		status := r.memberStatus[member]
-		// Check if the member has connected atleast once in the last 3 intervals.
+		// Check if the member has connected at least once in the last 3 intervals.
 		duration := time.Since(data.lastUpdateTime)
 		klog.V(2).InfoS("Timer processing", "Cluster", member, "duration", duration)
 		if duration <= ConnectionTimeout {
-			// Member has updated MemberClusterStatus atleast once in the last 3 intervals.
+			// Member has updated MemberClusterStatus at least once in the last 3 intervals.
 			// If last status is not connected, then update the status.
 			for index := range status.Conditions {
 				condition := &status.Conditions[index]
@@ -232,10 +232,10 @@ func (r *MemberClusterAnnounceReconciler) processMCSStatus() {
 
 /******************************* MemberClusterStatusManager methods *******************************/
 
-func (r *MemberClusterAnnounceReconciler) AddMember(MemberId common.ClusterID) {
-	defer r.mapLock.Unlock()
+func (r *MemberClusterAnnounceReconciler) AddMember(memberID common.ClusterID) {
 	r.mapLock.Lock()
-	if _, ok := r.memberStatus[MemberId]; ok {
+	defer r.mapLock.Unlock()
+	if _, ok := r.memberStatus[memberID]; ok {
 		// already present
 		return
 	}
@@ -256,30 +256,25 @@ func (r *MemberClusterAnnounceReconciler) AddMember(MemberId common.ClusterID) {
 		Reason:             ReasonNeverConnected,
 	})
 
-	r.memberStatus[MemberId] = &multiclusterv1alpha1.ClusterStatus{ClusterID: string(MemberId),
+	r.memberStatus[memberID] = &multiclusterv1alpha1.ClusterStatus{ClusterID: string(memberID),
 		Conditions: conditions}
 
-	r.timerData[MemberId] = &timerData{connected: false, lastUpdateTime: time.Time{}}
+	r.timerData[memberID] = &timerData{connected: false, lastUpdateTime: time.Time{}}
+	klog.InfoS("Added member", "member", memberID)
 }
 
-func (r *MemberClusterAnnounceReconciler) RemoveMember(MemberId common.ClusterID) {
-	defer r.mapLock.Unlock()
+func (r *MemberClusterAnnounceReconciler) RemoveMember(memberID common.ClusterID) {
 	r.mapLock.Lock()
+	defer r.mapLock.Unlock()
 
-	if _, ok := r.memberStatus[MemberId]; ok {
-		delete(r.memberStatus, MemberId)
-		return
-	}
-
-	if _, ok := r.timerData[MemberId]; ok {
-		delete(r.timerData, MemberId)
-		return
-	}
+	delete(r.memberStatus, memberID)
+	delete(r.timerData, memberID)
+	klog.InfoS("Removed member", "member", memberID)
 }
 
 func (r *MemberClusterAnnounceReconciler) GetMemberClusterStatuses() []multiclusterv1alpha1.ClusterStatus {
-	defer r.mapLock.Unlock()
 	r.mapLock.Lock()
+	defer r.mapLock.Unlock()
 
 	status := make([]multiclusterv1alpha1.ClusterStatus, len(r.memberStatus))
 
