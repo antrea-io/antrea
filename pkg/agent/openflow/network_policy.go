@@ -25,6 +25,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 
+	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/openflow/cookie"
 	"antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
@@ -1970,6 +1971,7 @@ type featureNetworkPolicy struct {
 	cookieAllocator cookie.Allocator
 	ipProtocols     []binding.Protocol
 	bridge          binding.Bridge
+	nodeType        config.NodeType
 
 	// globalConjMatchFlowCache is a global map for conjMatchFlowContext. The key is a string generated from the
 	// conjMatchFlowContext.
@@ -2008,11 +2010,13 @@ func newFeatureNetworkPolicy(
 	enableAntreaPolicy bool,
 	enableMulticast bool,
 	proxyAll bool,
-	connectUplinkToBridge bool) *featureNetworkPolicy {
+	connectUplinkToBridge bool,
+	nodeType config.NodeType) *featureNetworkPolicy {
 	return &featureNetworkPolicy{
 		cookieAllocator:          cookieAllocator,
 		ipProtocols:              ipProtocols,
 		bridge:                   bridge,
+		nodeType:                 nodeType,
 		globalConjMatchFlowCache: make(map[string]*conjMatchFlowContext),
 		policyCache:              cache.NewIndexer(policyConjKeyFunc, cache.Indexers{priorityIndex: priorityIndexFunc}),
 		enableMulticast:          enableMulticast,
@@ -2034,8 +2038,58 @@ func (f *featureNetworkPolicy) initFlows() []binding.Flow {
 		}
 	}
 	var flows []binding.Flow
-	flows = append(flows, f.establishedConnectionFlows()...)
-	flows = append(flows, f.relatedConnectionFlows()...)
-	flows = append(flows, f.ingressClassifierFlows()...)
+	if f.nodeType == config.K8sNode {
+		flows = append(flows, f.ingressClassifierFlows()...)
+	}
+	flows = append(flows, f.skipPolicyRuleCheckFlows()...)
+	return flows
+}
+
+// skipPolicyRuleCheckFlows generates the flows to forward the packets in an established or related
+// connections to the metric table in the same stage directly, so that these packets would skip the flows
+// for NetworkPolicy rules.
+func (f *featureNetworkPolicy) skipPolicyRuleCheckFlows() []binding.Flow {
+	var flows []binding.Flow
+	cookieID := f.cookieAllocator.Request(f.category).Raw()
+	egressCTStateFlowTable := EgressRuleTable
+	ingressCTStateFlowTable := IngressRuleTable
+	priority := priorityHigh
+	if f.enableAntreaPolicy {
+		egressCTStateFlowTable = AntreaPolicyEgressRuleTable
+		ingressCTStateFlowTable = AntreaPolicyIngressRuleTable
+		priority = priorityTopAntreaPolicy
+	}
+	for _, ipProtocol := range f.ipProtocols {
+		flows = append(flows,
+			egressCTStateFlowTable.ofTable.BuildFlow(priority).
+				Cookie(cookieID).
+				MatchProtocol(ipProtocol).
+				MatchCTStateNew(false).
+				MatchCTStateEst(true).
+				Action().GotoTable(EgressMetricTable.GetID()).
+				Done(),
+			egressCTStateFlowTable.ofTable.BuildFlow(priority).
+				Cookie(cookieID).
+				MatchProtocol(ipProtocol).
+				MatchCTStateNew(false).
+				MatchCTStateRel(true).
+				Action().GotoTable(EgressMetricTable.GetID()).
+				Done(),
+			ingressCTStateFlowTable.ofTable.BuildFlow(priority).
+				Cookie(cookieID).
+				MatchProtocol(ipProtocol).
+				MatchCTStateNew(false).
+				MatchCTStateEst(true).
+				Action().GotoTable(IngressMetricTable.GetID()).
+				Done(),
+			ingressCTStateFlowTable.ofTable.BuildFlow(priority).
+				Cookie(cookieID).
+				MatchProtocol(ipProtocol).
+				MatchCTStateNew(false).
+				MatchCTStateRel(true).
+				Action().GotoTable(IngressMetricTable.GetID()).
+				Done(),
+		)
+	}
 	return flows
 }
