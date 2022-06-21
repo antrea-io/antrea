@@ -326,6 +326,18 @@ type Client interface {
 	// UninstallMulticlusterFlows removes cross-cluster flows matching the given clusterID on
 	// a regular Node or a Gateway.
 	UninstallMulticlusterFlows(clusterID string) error
+
+	// InstallVMUplinkFlows installs flows to forward packet between uplinkPort and hostPort. On a VM, the
+	// uplink and host internal port are paired directly, and no layer 2/3 forwarding flow is installed.
+	InstallVMUplinkFlows(hostInterfaceName string, hostPort int32, uplinkPort int32) error
+
+	// UninstallVMUplinkFlows removes the flows installed to forward packet between uplinkPort and hostPort.
+	UninstallVMUplinkFlows(hostInterfaceName string) error
+
+	// InstallPolicyBypassFlows installs flows to bypass the NetworkPolicy rules on the traffic with the given ipnet
+	// or ip, port, protocol and direction. It is used to bypass NetworkPolicy enforcement on a VM for the particular
+	// traffic.
+	InstallPolicyBypassFlows(protocol binding.Protocol, ipnet *net.IPNet, ip net.IP, port uint16, isIngress bool) error
 }
 
 // GetFlowTableStatus returns an array of flow table status.
@@ -785,6 +797,11 @@ func (c *client) generatePipelines() {
 		c.traceableFeatures = append(c.traceableFeatures, c.featureService)
 	}
 
+	if c.nodeType == config.ExternalNode {
+		c.featureExternalNodeConnectivity = newFeatureExternalNodeConnectivity(c.cookieAllocator, c.ipProtocols)
+		c.activatedFeatures = append(c.activatedFeatures, c.featureExternalNodeConnectivity)
+	}
+
 	c.featureNetworkPolicy = newFeatureNetworkPolicy(c.cookieAllocator,
 		c.ipProtocols,
 		c.bridge,
@@ -792,7 +809,8 @@ func (c *client) generatePipelines() {
 		c.enableDenyTracking,
 		c.enableAntreaPolicy,
 		c.enableMulticast,
-		c.connectUplinkToBridge)
+		c.connectUplinkToBridge,
+		c.nodeType)
 	c.activatedFeatures = append(c.activatedFeatures, c.featureNetworkPolicy)
 	c.traceableFeatures = append(c.traceableFeatures, c.featureNetworkPolicy)
 
@@ -822,6 +840,9 @@ func (c *client) generatePipelines() {
 		if c.enableMulticast {
 			pipelineIDs = append(pipelineIDs, pipelineMulticast)
 		}
+	}
+	if c.nodeType == config.ExternalNode {
+		pipelineIDs = append(pipelineIDs, pipelineNonIP)
 	}
 
 	// For every pipeline, get required tables from every active feature and store the required tables in a map to avoid

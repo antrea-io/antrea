@@ -1177,3 +1177,39 @@ func (i *Initializer) initVMLocalConfig(nodeName string) error {
 	}
 	return nil
 }
+
+// prepareOVSBridge operates OVS bridge.
+func (i *Initializer) prepareOVSBridge() error {
+	if i.nodeType == config.K8sNode {
+		return i.prepareOVSBridgeForK8sNode()
+	}
+	return i.prepareOVSBridgeForVM()
+}
+
+func (i *Initializer) prepareOVSBridgeForVM() error {
+	return i.setOVSDatapath()
+}
+
+// setOVSDatapath generates a static datapath ID for OVS bridge so that the OFSwitch identifier is not
+// changed after the physical interface is attached on the switch.
+func (i *Initializer) setOVSDatapath() error {
+	otherConfig, err := i.ovsBridgeClient.GetOVSOtherConfig()
+	if err != nil {
+		klog.ErrorS(err, "Failed to read OVS bridge other_config")
+		return err
+	}
+	// Check if "datapath-id" exists in "other_config" on OVS bridge or not, and return directly if yes.
+	// Note: function `ovsBridgeClient.GetDatapathID` is not used here, because OVS always has data in "datapath_id"
+	// field. If "datapath-id" is not explicitly set in "other_config", the datapath ID in use may change when uplink
+	// is attached on OVS.
+	if _, exists := otherConfig[ovsconfig.OVSOtherConfigDatapathIDKey]; exists {
+		return nil
+	}
+	randMAC := util.GenerateRandomMAC()
+	datapathID := "0000" + strings.Replace(randMAC.String(), ":", "", -1)
+	if err := i.ovsBridgeClient.SetDatapathID(datapathID); err != nil {
+		klog.ErrorS(err, "Failed to set OVS bridge datapath_id", "datapathID", datapathID)
+		return err
+	}
+	return nil
+}
