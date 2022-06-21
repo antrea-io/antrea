@@ -31,7 +31,6 @@ import (
 	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/core/v1"
 	v1net "k8s.io/api/networking/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -69,13 +68,6 @@ const (
 	logDir          = "/var/log/antrea/networkpolicy/"
 	logfileName     = "np.log"
 	defaultTierName = "application"
-
-	resourceACNP          = "acnp"
-	resourceANP           = "anp"
-	resourceNetworkPolicy = "networkPolicy"
-	resourceCG            = "clusterGroup"
-	resourceSVC           = "service"
-	resourceTier          = "tier"
 )
 
 // TestAntreaPolicyStats is the top-level test which contains all subtests for
@@ -1528,7 +1520,7 @@ func testACNPPortRange(t *testing.T) {
 	builder = builder.SetName("acnp-deny-a-to-z-egress-port-range").
 		SetPriority(1.0).
 		SetAppliedToGroup([]ACNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}}})
-	builder.AddEgress(ProtocolTCP, &p8080, nil, &p8085, nil, nil, nil, nil, nil, nil, map[string]string{"ns": namespaces["z"]},
+	builder.AddEgress(ProtocolTCP, &p8080, nil, &p8082, nil, nil, nil, nil, nil, nil, map[string]string{"ns": namespaces["z"]},
 		nil, nil, false, nil, crdv1alpha1.RuleActionDrop, "", "acnp-port-range", nil)
 
 	reachability := NewReachability(allPods, Connected)
@@ -1538,10 +1530,10 @@ func testACNPPortRange(t *testing.T) {
 	reachability.Expect(Pod(namespaces["z"]+"/a"), Pod(namespaces["z"]+"/c"), Dropped)
 	testSteps := []*TestStep{
 		{
-			fmt.Sprintf("ACNP Drop Ports 8080:8085"),
+			fmt.Sprintf("ACNP Drop Ports 8080:8082"),
 			reachability,
 			[]metav1.Object{builder.Get()},
-			[]int32{8080, 8081, 8082, 8083, 8084, 8085},
+			[]int32{8080, 8081, 8082},
 			ProtocolTCP,
 			0,
 			nil,
@@ -1656,8 +1648,7 @@ func testRejectServiceTraffic(t *testing.T, data *TestData) {
 
 	acnpEgress := builder1.Get()
 	k8sUtils.CreateOrUpdateACNP(acnpEgress)
-	failOnError(waitForResourceReady(acnpEgress, timeout), t)
-	time.Sleep(networkPolicyDelay)
+	failOnError(waitForResourcesReady(t, timeout, acnpEgress, svc1, svc2), t)
 
 	for _, tc := range testcases {
 		log.Tracef("Probing: %s -> %s:%d", tc.clientPod.PodName(), tc.destAddr, tc.destPort)
@@ -1671,8 +1662,6 @@ func testRejectServiceTraffic(t *testing.T, data *TestData) {
 		}
 	}
 	failOnError(k8sUtils.DeleteACNP(builder1.Name), t)
-	failOnError(waitForResourceDelete("", builder1.Name, resourceACNP, timeout), t)
-	time.Sleep(networkPolicyDelay)
 
 	// Test ingress.
 	builder2 := &ClusterNetworkPolicySpecBuilder{}
@@ -1684,8 +1673,7 @@ func testRejectServiceTraffic(t *testing.T, data *TestData) {
 
 	acnpIngress := builder2.Get()
 	k8sUtils.CreateOrUpdateACNP(acnpIngress)
-	failOnError(waitForResourceReady(acnpIngress, timeout), t)
-	time.Sleep(networkPolicyDelay)
+	failOnError(waitForResourceReady(t, timeout, acnpIngress), t)
 
 	for _, tc := range testcases {
 		log.Tracef("Probing: %s -> %s:%d", tc.clientPod.PodName(), tc.destAddr, tc.destPort)
@@ -1699,8 +1687,6 @@ func testRejectServiceTraffic(t *testing.T, data *TestData) {
 		}
 	}
 	failOnError(k8sUtils.DeleteACNP(builder2.Name), t)
-	failOnError(waitForResourceDelete("", builder2.Name, resourceACNP, timeout), t)
-	time.Sleep(networkPolicyDelay)
 }
 
 // RejectNoInfiniteLoop tests that a reject action in both traffic directions won't cause an infinite rejection loop.
@@ -1753,8 +1739,7 @@ func testRejectNoInfiniteLoop(t *testing.T, data *TestData) {
 
 	runTestsWithACNP := func(acnp *crdv1alpha1.ClusterNetworkPolicy, testcases []podToAddrTestStep) {
 		k8sUtils.CreateOrUpdateACNP(acnp)
-		failOnError(waitForResourceReady(acnp, timeout), t)
-		time.Sleep(networkPolicyDelay)
+		failOnError(waitForResourceReady(t, timeout, acnp), t)
 
 		for _, tc := range testcases {
 			log.Tracef("Probing: %s -> %s:%d", tc.clientPod.PodName(), tc.destAddr, tc.destPort)
@@ -1768,8 +1753,6 @@ func testRejectNoInfiniteLoop(t *testing.T, data *TestData) {
 			}
 		}
 		failOnError(k8sUtils.DeleteACNP(acnp.Name), t)
-		failOnError(waitForResourceDelete("", acnp.Name, resourceACNP, timeout), t)
-		time.Sleep(networkPolicyDelay)
 	}
 
 	// Test client and server reject traffic that ingress from each other.
@@ -1825,7 +1808,7 @@ func testANPPortRange(t *testing.T) {
 	builder = builder.SetName(namespaces["y"], "anp-deny-yb-to-xc-egress-port-range").
 		SetPriority(1.0).
 		SetAppliedToGroup([]ANPAppliedToSpec{{PodSelector: map[string]string{"pod": "b"}}})
-	builder.AddEgress(ProtocolTCP, &p8080, nil, &p8085, nil, nil, nil, nil, nil, map[string]string{"pod": "c"}, map[string]string{"ns": namespaces["x"]},
+	builder.AddEgress(ProtocolTCP, &p8080, nil, &p8082, nil, nil, nil, nil, nil, map[string]string{"pod": "c"}, map[string]string{"ns": namespaces["x"]},
 		nil, nil, nil, crdv1alpha1.RuleActionDrop, "anp-port-range")
 
 	reachability := NewReachability(allPods, Connected)
@@ -1833,10 +1816,10 @@ func testANPPortRange(t *testing.T) {
 
 	var testSteps []*TestStep
 	testSteps = append(testSteps, &TestStep{
-		fmt.Sprintf("ANP Drop Ports 8080:8085"),
+		fmt.Sprintf("ANP Drop Ports 8080:8082"),
 		reachability,
 		[]metav1.Object{builder.Get()},
-		[]int32{8080, 8081, 8082, 8083, 8084, 8085},
+		[]int32{8080, 8081, 8082},
 		ProtocolTCP,
 		0,
 		nil,
@@ -1920,7 +1903,7 @@ func testANPMultipleAppliedTo(t *testing.T, data *TestData, singleRule bool) {
 
 	anp, err := k8sUtils.CreateOrUpdateANP(builder.Get())
 	failOnError(err, t)
-	failOnError(data.waitForANPRealized(t, anp.Namespace, anp.Name), t)
+	failOnError(data.waitForANPRealized(t, anp.Namespace, anp.Name, policyRealizedTimeout), t)
 	k8sUtils.Validate(allPods, reachability, []int32{80}, ProtocolTCP)
 	_, wrong, _ := reachability.Summary()
 	if wrong != 0 {
@@ -1976,7 +1959,7 @@ func testAuditLoggingBasic(t *testing.T, data *TestData) {
 
 	acnp, err := k8sUtils.CreateOrUpdateACNP(builder.Get())
 	failOnError(err, t)
-	failOnError(data.waitForACNPRealized(t, acnp.Name), t)
+	failOnError(data.waitForACNPRealized(t, acnp.Name, policyRealizedTimeout), t)
 
 	// generate some traffic that will be dropped by test-log-acnp-deny
 	var wg sync.WaitGroup
@@ -2143,16 +2126,18 @@ func testACNPClusterGroupServiceRefCreateAndUpdate(t *testing.T, data *TestData)
 	// Test update selector of Service referred in cg-svc1, and update serviceReference of cg-svc2.
 	svc1Updated := k8sUtils.BuildService("svc1", namespaces["x"], 80, 80, map[string]string{"app": "b"}, nil)
 	svc3 := k8sUtils.BuildService("svc3", namespaces["y"], 80, 80, map[string]string{"app": "a"}, nil)
+	svc1PodName := randName("test-pod-svc1-")
+	svc3PodName := randName("test-pod-svc3-")
 	cgBuilder2Updated := cgBuilder2.SetServiceReference(namespaces["y"], "svc3")
 	cp := []*CustomProbe{
 		{
 			SourcePod: CustomPod{
-				Pod:    NewPod(namespaces["y"], "test-add-pod-svc3"),
-				Labels: map[string]string{"pod": "test-add-pod-svc3", "app": "a"},
+				Pod:    NewPod(namespaces["y"], svc3PodName),
+				Labels: map[string]string{"pod": svc3PodName, "app": "a"},
 			},
 			DestPod: CustomPod{
-				Pod:    NewPod(namespaces["x"], "test-add-pod-svc1"),
-				Labels: map[string]string{"pod": "test-add-pod-svc1", "app": "b"},
+				Pod:    NewPod(namespaces["x"], svc1PodName),
+				Labels: map[string]string{"pod": svc1PodName, "app": "b"},
 			},
 			ExpectConnectivity: Dropped,
 			Port:               p80,
@@ -2198,6 +2183,7 @@ func testACNPClusterGroupServiceRefCreateAndUpdate(t *testing.T, data *TestData)
 
 func testACNPNestedClusterGroupCreateAndUpdate(t *testing.T, data *TestData) {
 	svc1 := k8sUtils.BuildService("svc1", namespaces["x"], 80, 80, map[string]string{"app": "a"}, nil)
+	svc1PodName := randName("test-pod-svc1-")
 	cg1Name, cg2Name, cg3Name := "cg-svc-x-a", "cg-select-y-b", "cg-select-y-c"
 	cgBuilder1 := &ClusterGroupV1Alpha3SpecBuilder{}
 	cgBuilder1 = cgBuilder1.SetName(cg1Name).SetServiceReference(namespaces["x"], "svc1")
@@ -2246,8 +2232,8 @@ func testACNPNestedClusterGroupCreateAndUpdate(t *testing.T, data *TestData) {
 	cp := []*CustomProbe{
 		{
 			SourcePod: CustomPod{
-				Pod:    NewPod(namespaces["x"], "test-add-pod-svc1"),
-				Labels: map[string]string{"pod": "test-add-pod-svc1", "app": "a"},
+				Pod:    NewPod(namespaces["x"], svc1PodName),
+				Labels: map[string]string{"pod": svc1PodName, "app": "a"},
 			},
 			DestPod: CustomPod{
 				Pod:    NewPod(namespaces["z"], "test-add-pod-ns-z"),
@@ -2510,9 +2496,9 @@ func testFQDNPolicy(t *testing.T) {
 			Connected,
 		},
 	}
-	_, err := k8sUtils.CreateOrUpdateACNP(builder.Get())
+	acnp, err := k8sUtils.CreateOrUpdateACNP(builder.Get())
 	failOnError(err, t)
-	time.Sleep(networkPolicyDelay)
+	failOnError(waitForResourceReady(t, timeout, acnp), t)
 	for _, tc := range testcases {
 		log.Tracef("Probing: %s -> %s", tc.clientPod.PodName(), tc.destAddr)
 		connectivity, err := k8sUtils.ProbeAddr(tc.clientPod.Namespace(), "pod", tc.clientPod.PodName(), tc.destAddr, tc.destPort, ProtocolTCP)
@@ -2526,8 +2512,6 @@ func testFQDNPolicy(t *testing.T) {
 	}
 	// cleanup test resources
 	failOnError(k8sUtils.DeleteACNP(builder.Name), t)
-	failOnError(waitForResourceDelete("", builder.Name, resourceACNP, timeout), t)
-	time.Sleep(networkPolicyDelay)
 }
 
 // testFQDNPolicyInClusterService uses in-cluster headless Services to test FQDN
@@ -2559,7 +2543,7 @@ func testFQDNPolicyInClusterService(t *testing.T) {
 
 	for _, service := range services {
 		k8sUtils.CreateOrUpdateService(service)
-		failOnError(waitForResourceReady(service, timeout), t)
+		failOnError(waitForResourceReady(t, timeout, service), t)
 	}
 
 	svcDNSName := func(service *v1.Service) string {
@@ -2576,7 +2560,7 @@ func testFQDNPolicyInClusterService(t *testing.T) {
 	}
 	acnp := builder.Get()
 	k8sUtils.CreateOrUpdateACNP(acnp)
-	failOnError(waitForResourceReady(acnp, timeout), t)
+	failOnError(waitForResourceReady(t, timeout, acnp), t)
 
 	var testcases []podToAddrTestStep
 	for _, service := range services {
@@ -2620,11 +2604,8 @@ func testFQDNPolicyInClusterService(t *testing.T) {
 	// cleanup test resources
 	for _, service := range services {
 		failOnError(k8sUtils.DeleteService(service.Namespace, service.Name), t)
-		failOnError(waitForResourceDelete(service.Namespace, service.Name, resourceSVC, timeout), t)
 	}
 	failOnError(k8sUtils.DeleteACNP(builder.Name), t)
-	failOnError(waitForResourceDelete("", builder.Name, resourceACNP, timeout), t)
-	time.Sleep(networkPolicyDelay)
 }
 
 func testToServices(t *testing.T) {
@@ -2645,7 +2626,7 @@ func testToServices(t *testing.T) {
 	var builtSvcs []*v1.Service
 	for _, service := range services {
 		builtSvc, _ := k8sUtils.CreateOrUpdateService(service)
-		failOnError(waitForResourceReady(service, timeout), t)
+		failOnError(waitForResourceReady(t, timeout, service), t)
 		svcRefs = append(svcRefs, crdv1alpha1.NamespacedName{
 			Name:      service.Name,
 			Namespace: service.Namespace,
@@ -2662,7 +2643,7 @@ func testToServices(t *testing.T) {
 
 	acnp := builder.Get()
 	k8sUtils.CreateOrUpdateACNP(acnp)
-	failOnError(waitForResourceReady(acnp, timeout), t)
+	failOnError(waitForResourceReady(t, timeout, acnp), t)
 
 	var testcases []podToAddrTestStep
 	for _, service := range builtSvcs {
@@ -2696,11 +2677,8 @@ func testToServices(t *testing.T) {
 	}
 	// cleanup test resources
 	failOnError(k8sUtils.DeleteACNP(builder.Name), t)
-	failOnError(waitForResourceDelete("", builder.Name, resourceACNP, timeout), t)
-	time.Sleep(networkPolicyDelay)
 	for _, service := range services {
 		failOnError(k8sUtils.DeleteService(service.Namespace, service.Name), t)
-		failOnError(waitForResourceDelete(service.Namespace, service.Name, resourceSVC, timeout), t)
 	}
 }
 
@@ -2734,8 +2712,7 @@ func testServiceAccountSelector(t *testing.T, data *TestData) {
 	if err != nil {
 		log.Infof("err %s", err.Error())
 	}
-	failOnError(waitForResourceReady(acnp, timeout), t)
-	time.Sleep(networkPolicyDelay)
+	failOnError(waitForResourceReady(t, timeout, acnp), t)
 
 	var testcases []podToAddrTestStep
 	if clusterInfo.podV4NetworkCIDR != "" {
@@ -2786,8 +2763,6 @@ func testServiceAccountSelector(t *testing.T, data *TestData) {
 		}
 	}
 	failOnError(k8sUtils.DeleteACNP(builder.Name), t)
-	failOnError(waitForResourceDelete("", builder.Name, resourceACNP, timeout), t)
-	time.Sleep(networkPolicyDelay)
 }
 
 func testACNPNodeSelectorEgress(t *testing.T) {
@@ -2851,8 +2826,6 @@ func testACNPNodeSelectorEgress(t *testing.T) {
 	}
 	// cleanup test resources
 	failOnError(k8sUtils.DeleteACNP(builder.Name), t)
-	failOnError(waitForResourceDelete("", builder.Name, resourceACNP, timeout), t)
-	time.Sleep(networkPolicyDelay)
 }
 
 func testACNPNodeSelectorIngress(t *testing.T, data *TestData) {
@@ -2928,8 +2901,6 @@ func testACNPNodeSelectorIngress(t *testing.T, data *TestData) {
 	}
 	// cleanup test resources
 	failOnError(k8sUtils.DeleteACNP(builder.Name), t)
-	failOnError(waitForResourceDelete("", builder.Name, resourceACNP, timeout), t)
-	time.Sleep(networkPolicyDelay)
 }
 
 func testACNPICMPSupport(t *testing.T, data *TestData) {
@@ -3002,8 +2973,6 @@ func testACNPICMPSupport(t *testing.T, data *TestData) {
 	}
 	// cleanup test resources
 	failOnError(k8sUtils.DeleteACNP(builder.Name), t)
-	failOnError(waitForResourceDelete("", builder.Name, resourceACNP, timeout), t)
-	time.Sleep(networkPolicyDelay)
 }
 
 func testACNPIGMPQueryAllow(t *testing.T, data *TestData) {
@@ -3214,7 +3183,6 @@ func executeTestsWithData(t *testing.T, testList []*TestCase, data *TestData) {
 		for _, step := range testCase.Steps {
 			log.Infof("running step %s of test case %s", step.Name, testCase.Name)
 			applyTestStepResources(t, step)
-			time.Sleep(networkPolicyDelay)
 
 			reachability := step.Reachability
 			if reachability != nil {
@@ -3236,9 +3204,8 @@ func executeTestsWithData(t *testing.T, testList []*TestCase, data *TestData) {
 				doProbe(t, data, p, step.Protocol)
 			}
 		}
-		log.Debugf("Cleaning-up all policies and groups created by this Testcase and sleeping for %v", networkPolicyDelay)
+		log.Debug("Cleaning-up all policies and groups created by this Testcase")
 		cleanupTestCaseResources(t, testCase)
-		time.Sleep(networkPolicyDelay)
 	}
 	allTestList = append(allTestList, testList...)
 }
@@ -3285,12 +3252,9 @@ func applyTestStepResources(t *testing.T, step *TestStep) {
 			_, err := k8sUtils.CreateOrUpdateService(o)
 			failOnError(err, t)
 		}
-		failOnError(waitForResourceReady(r, timeout), t)
+
 	}
-	if len(step.TestResources) > 0 {
-		log.Debugf("Sleeping for %v for all policies to take effect", networkPolicyDelay)
-		time.Sleep(networkPolicyDelay)
-	}
+	failOnError(waitForResourcesReady(t, timeout, step.TestResources...), t)
 }
 
 func cleanupTestCaseResources(t *testing.T, c *TestCase) {
@@ -3318,36 +3282,27 @@ func cleanupTestCaseResources(t *testing.T, c *TestCase) {
 	}
 	for acnp := range acnpsToDelete {
 		failOnError(k8sUtils.DeleteACNP(acnp), t)
-		failOnError(waitForResourceDelete("", acnp, resourceACNP, timeout), t)
 	}
 	for anp := range anpsToDelete {
 		namespace := strings.Split(anp, "/")[0]
 		name := strings.Split(anp, "/")[1]
 		failOnError(k8sUtils.DeleteANP(namespace, name), t)
-		failOnError(waitForResourceDelete(namespace, name, resourceANP, timeout), t)
 	}
 	for np := range npsToDelete {
 		namespace := strings.Split(np, "/")[0]
 		name := strings.Split(np, "/")[1]
 		failOnError(k8sUtils.DeleteNetworkPolicy(namespace, name), t)
-		failOnError(waitForResourceDelete(namespace, name, resourceNetworkPolicy, timeout), t)
 	}
 	for cg := range v1a2GroupsToDelete {
 		failOnError(k8sUtils.DeleteV1Alpha2CG(cg), t)
 	}
 	for cg := range v1a3GroupsToDelete {
 		failOnError(k8sUtils.DeleteV1Alpha3CG(cg), t)
-		failOnError(waitForResourceDelete("", cg, resourceCG, timeout), t)
 	}
 	for svc := range svcsToDelete {
 		namespace := strings.Split(svc, "/")[0]
 		name := strings.Split(svc, "/")[1]
 		failOnError(k8sUtils.DeleteService(namespace, name), t)
-		failOnError(waitForResourceDelete(namespace, name, resourceSVC, timeout), t)
-	}
-	if acnpsToDelete.Len()+anpsToDelete.Len()+npsToDelete.Len() > 0 {
-		log.Debugf("Sleeping for %v for all policy deletions to take effect", networkPolicyDelay)
-		time.Sleep(networkPolicyDelay)
 	}
 }
 
@@ -3383,60 +3338,37 @@ func printResults() {
 	fmt.Printf("=== TEST FAILURES: %d/%d ===\n\n", failCount, len(allTestList))
 }
 
-func waitForResourceReady(obj metav1.Object, timeout time.Duration) error {
-	var err error
+func waitForResourceReady(t *testing.T, timeout time.Duration, obj metav1.Object) error {
 	defer timeCost()("ready")
-	if err = wait.Poll(100*time.Millisecond, timeout, func() (bool, error) {
-		switch p := obj.(type) {
-		case *crdv1alpha1.ClusterNetworkPolicy:
-			_, err = k8sUtils.GetACNP(p.Name)
-		case *crdv1alpha1.NetworkPolicy:
-			_, err = k8sUtils.GetANP(p.Namespace, p.Name)
-		case *crdv1alpha1.Tier:
-			_, err = k8sUtils.GetTier(p.Name)
-		case *crdv1alpha2.ClusterGroup:
-			_, err = k8sUtils.GetV1Alpha2CG(p.Name)
-		case *crdv1alpha3.ClusterGroup:
-			_, err = k8sUtils.GetV1Alpha3CG(p.Name)
-		case *v1net.NetworkPolicy:
-			_, err = k8sUtils.GetNetworkPolicy(p.Namespace, p.Name)
-		case *v1.Service:
-			_, err = k8sUtils.GetService(p.Namespace, p.Name)
-		}
-		if err != nil {
-			return false, nil
-		}
-		return true, nil
-	}); err != nil {
-		return err
+	switch p := obj.(type) {
+	case *crdv1alpha1.ClusterNetworkPolicy:
+		return k8sUtils.waitForACNPRealized(t, p.Name, timeout)
+	case *crdv1alpha1.NetworkPolicy:
+		return k8sUtils.waitForANPRealized(t, p.Namespace, p.Name, timeout)
+	case *v1net.NetworkPolicy:
+		time.Sleep(100 * time.Millisecond)
+	case *v1.Service:
+		// The minInterval of AntreaProxy's BoundedFrequencyRunner is 1s, which means a Service may be handled after 1s.
+		time.Sleep(1 * time.Second)
+	case *crdv1alpha1.Tier:
+	case *crdv1alpha2.ClusterGroup:
+	case *crdv1alpha3.ClusterGroup:
 	}
 	return nil
 }
 
-func waitForResourceDelete(namespace, name string, resource string, timeout time.Duration) error {
-	var err error
-	defer timeCost()("deleted")
-	if err = wait.Poll(100*time.Millisecond, timeout, func() (bool, error) {
-		switch resource {
-		case resourceACNP:
-			_, err = k8sUtils.GetACNP(name)
-		case resourceANP:
-			_, err = k8sUtils.GetANP(namespace, name)
-		case resourceTier:
-			_, err = k8sUtils.GetTier(name)
-		case resourceCG:
-			_, err = k8sUtils.GetV1Alpha3CG(name)
-		case resourceNetworkPolicy:
-			_, err = k8sUtils.GetNetworkPolicy(namespace, name)
-		case resourceSVC:
-			_, err = k8sUtils.GetService(namespace, name)
+func waitForResourcesReady(t *testing.T, timeout time.Duration, objs ...metav1.Object) error {
+	resultCh := make(chan error, len(objs))
+	for _, obj := range objs {
+		go func(o metav1.Object) {
+			resultCh <- waitForResourceReady(t, timeout, o)
+		}(obj)
+	}
+
+	for i := 0; i < len(objs); i++ {
+		if err := <-resultCh; err != nil {
+			return err
 		}
-		if err != nil && apierrors.IsNotFound(err) {
-			return true, nil
-		}
-		return false, nil
-	}); err != nil {
-		return err
 	}
 	return nil
 }
@@ -3681,9 +3613,9 @@ func checkACNPStatus(t *testing.T, data *TestData, acnp *crdv1alpha1.ClusterNetw
 // waitForANPRealized waits untils an ANP is realized and returns, or times out. A policy is
 // considered realized when its Status has been updated so that the ObservedGeneration matches the
 // resource's Generation and the Phase is set to Realized.
-func (data *TestData) waitForANPRealized(t *testing.T, namespace string, name string) error {
+func (data *TestData) waitForANPRealized(t *testing.T, namespace string, name string, timeout time.Duration) error {
 	t.Logf("Waiting for ANP '%s/%s' to be realized", namespace, name)
-	if err := wait.Poll(100*time.Millisecond, policyRealizedTimeout, func() (bool, error) {
+	if err := wait.Poll(100*time.Millisecond, timeout, func() (bool, error) {
 		anp, err := data.crdClient.CrdV1alpha1().NetworkPolicies(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 		if err != nil {
 			return false, err
@@ -3698,9 +3630,9 @@ func (data *TestData) waitForANPRealized(t *testing.T, namespace string, name st
 // waitForACNPRealized waits untils an ACNP is realized and returns, or times out. A policy is
 // considered realized when its Status has been updated so that the ObservedGeneration matches the
 // resource's Generation and the Phase is set to Realized.
-func (data *TestData) waitForACNPRealized(t *testing.T, name string) error {
+func (data *TestData) waitForACNPRealized(t *testing.T, name string, timeout time.Duration) error {
 	t.Logf("Waiting for ACNP '%s' to be realized", name)
-	if err := wait.Poll(100*time.Millisecond, policyRealizedTimeout, func() (bool, error) {
+	if err := wait.Poll(100*time.Millisecond, timeout, func() (bool, error) {
 		acnp, err := data.crdClient.CrdV1alpha1().ClusterNetworkPolicies().Get(context.TODO(), name, metav1.GetOptions{})
 		if err != nil {
 			return false, err
@@ -3789,7 +3721,7 @@ func testANPNetworkPolicyStatsWithDropAction(t *testing.T, data *TestData) {
 	}
 
 	// Wait for the policy to be realized before attempting connections
-	failOnError(data.waitForANPRealized(t, anp.Namespace, anp.Name), t)
+	failOnError(data.waitForANPRealized(t, anp.Namespace, anp.Name, policyRealizedTimeout), t)
 
 	sessionsPerAddressFamily := 10
 	var wg sync.WaitGroup
@@ -3924,7 +3856,7 @@ func testAntreaClusterNetworkPolicyStats(t *testing.T, data *TestData) {
 	}
 
 	// Wait for the policy to be realized before attempting connections
-	failOnError(data.waitForACNPRealized(t, acnp.Name), t)
+	failOnError(data.waitForACNPRealized(t, acnp.Name, policyRealizedTimeout), t)
 
 	sessionsPerAddressFamily := 10
 	var wg sync.WaitGroup
