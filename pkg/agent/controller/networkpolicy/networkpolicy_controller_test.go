@@ -677,14 +677,14 @@ func TestValidate(t *testing.T) {
 	controller.ruleCache.appliedToSetByGroup["appliedToGroup01"] = groups
 	controller.ruleCache.rules.Add(rule1)
 	controller.ruleCache.rules.Add(rule2)
-	item, err := controller.Validate("pod1", "ns1", net.ParseIP(groupAddress1), 0x12)
+	item, err := controller.GetIGMPNPRuleInfo("pod1", "ns1", net.ParseIP(groupAddress1), 0x12)
 	if err != nil {
 		t.Fatalf("failed to validate group %s %v", groupAddress1, err)
 	}
 	if item.RuleAction != v1alpha1.RuleActionAllow {
 		t.Fatalf("groupAddress %s expect %v, but got %v", groupAddress1, v1alpha1.RuleActionAllow, item.RuleAction)
 	}
-	item, err = controller.Validate("pod1", "ns1", net.ParseIP(groupAddress2), 0x12)
+	item, err = controller.GetIGMPNPRuleInfo("pod1", "ns1", net.ParseIP(groupAddress2), 0x12)
 	if err != nil {
 		t.Fatalf("failed to validate group %s %+v", groupAddress2, err)
 	}

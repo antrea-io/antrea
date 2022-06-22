@@ -636,7 +636,7 @@ func run(o *Options) error {
 		if err != nil {
 			return fmt.Errorf("failed to create multicast socket")
 		}
-		var validator agenttypes.MulticastValidator
+		var validator agenttypes.McastNetworkPolicyController
 		if antreaPolicyEnabled {
 			validator = networkPolicyController
 		}
