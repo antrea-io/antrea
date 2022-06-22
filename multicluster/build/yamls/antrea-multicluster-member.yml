@@ -16,10 +16,18 @@ spec:
     singular: clusterclaim
   scope: Namespaced
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - description: Value of the ClusterClaim
+      jsonPath: .value
+      name: Value
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: ClusterClaim is the Schema for the clusterclaims API
+        description: ClusterClaim is the Schema for the clusterclaims API.
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
@@ -42,6 +50,7 @@ spec:
         type: object
     served: true
     storage: true
+    subresources: {}
 status:
   acceptedNames:
     kind: ""
@@ -67,7 +76,19 @@ spec:
     singular: clusterinfoimport
   scope: Namespaced
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - description: Member Cluster ID
+      jsonPath: .spec.clusterID
+      name: Cluster ID
+      type: string
+    - description: Service CIDR of the cluster
+      jsonPath: .spec.serviceCIDR
+      name: Service CIDR
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
     schema:
       openAPIV3Schema:
         properties:
@@ -161,10 +182,26 @@ spec:
     singular: clusterset
   scope: Namespaced
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - description: The leader cluster Namespace for the ClusterSet
+      jsonPath: .spec.namespace
+      name: Leader Cluster Namespace
+      type: string
+    - description: Total number of clusters in the ClusterSet
+      jsonPath: .status.totalClusters
+      name: Total Clusters
+      type: string
+    - description: Number of ready clusters in the ClusterSet
+      jsonPath: .status.readyClusters
+      name: Ready Clusters
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: ClusterSet is the Schema for the clustersets API.
+        description: ClusterSet represents a ClusterSet.
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
@@ -225,8 +262,8 @@ spec:
                   type: object
                 type: array
               namespace:
-                description: Namespace to connect to in leader clusters. Used in member
-                  cluster.
+                description: The leader cluster Namespace in which the ClusterSet
+                  is defined. Used in member cluster.
                 type: string
             type: object
           status:
@@ -302,7 +339,7 @@ spec:
                 format: int32
                 type: integer
               totalClusters:
-                description: Total number of member clusters configured in the set.
+                description: Total number of member clusters configured in the ClusterSet.
                 format: int32
                 type: integer
             type: object
@@ -336,7 +373,19 @@ spec:
     singular: gateway
   scope: Namespaced
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - description: Cross-cluster tunnel IP
+      jsonPath: .gatewayIP
+      name: Gateway IP
+      type: string
+    - description: In-cluster tunnel IP
+      jsonPath: .internalIP
+      name: Internal IP
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
     schema:
       openAPIV3Schema:
         description: Gateway includes information of a Multi-cluster Gateway.
@@ -347,11 +396,10 @@ spec:
               internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
             type: string
           gatewayIP:
-            description: Tunnel IP of the Gateway. It might be assigned by user manually
-              through a Node annotation.
+            description: Cross-cluster tunnel IP of the Gateway.
             type: string
           internalIP:
-            description: Internal tunnel IP of the Gateway.
+            description: In-cluster tunnel IP of the Gateway.
             type: string
           kind:
             description: 'Kind is a string value representing the REST resource this

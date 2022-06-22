@@ -16,7 +16,19 @@ spec:
     singular: memberclusterannounce
   scope: Namespaced
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - description: Cluster ID of the member cluster
+      jsonPath: .spec.clusterID
+      name: Cluster ID
+      type: string
+    - description: ClusterSet ID
+      jsonPath: .spec.clusterSetID
+      name: ClusterSet ID
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
     schema:
       openAPIV3Schema:
         description: MemberClusterAnnounce is the Schema for the memberclusterannounces
@@ -28,7 +40,7 @@ spec:
               internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
             type: string
           clusterID:
-            description: ClusterID of the member cluster.
+            description: Cluster ID of the member cluster.
             type: string
           clusterSetID:
             description: ClusterSet this member belongs to.
@@ -46,6 +58,7 @@ spec:
         type: object
     served: true
     storage: true
+    subresources: {}
 status:
   acceptedNames:
     kind: ""

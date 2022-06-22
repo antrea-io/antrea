@@ -16,7 +16,19 @@ spec:
     singular: clusterinfoimport
   scope: Namespaced
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - description: Member Cluster ID
+      jsonPath: .spec.clusterID
+      name: Cluster ID
+      type: string
+    - description: Service CIDR of the cluster
+      jsonPath: .spec.serviceCIDR
+      name: Service CIDR
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
     schema:
       openAPIV3Schema:
         properties:

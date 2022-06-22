@@ -29,15 +29,17 @@ type GatewayInfo struct {
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
 
+// +kubebuilder:printcolumn:name="Gateway IP",type=string,JSONPath=`.gatewayIP`,description="Cross-cluster tunnel IP"
+// +kubebuilder:printcolumn:name="Internal IP",type=string,JSONPath=`.internalIP`,description="In-cluster tunnel IP"
+// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=`.metadata.creationTimestamp`
 // Gateway includes information of a Multi-cluster Gateway.
 type Gateway struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	// Tunnel IP of the Gateway. It might be assigned by user manually
-	// through a Node annotation.
+	// Cross-cluster tunnel IP of the Gateway.
 	GatewayIP string `json:"gatewayIP,omitempty"`
-	// Internal tunnel IP of the Gateway.
+	// In-cluster tunnel IP of the Gateway.
 	InternalIP string `json:"internalIP,omitempty"`
 }
 
