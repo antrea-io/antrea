@@ -16,10 +16,26 @@ spec:
     singular: clusterset
   scope: Namespaced
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - description: The leader cluster Namespace for the ClusterSet
+      jsonPath: .spec.namespace
+      name: Leader Cluster Namespace
+      type: string
+    - description: Total number of clusters in the ClusterSet
+      jsonPath: .status.totalClusters
+      name: Total Clusters
+      type: string
+    - description: Number of ready clusters in the ClusterSet
+      jsonPath: .status.readyClusters
+      name: Ready Clusters
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: ClusterSet is the Schema for the clustersets API.
+        description: ClusterSet represents a ClusterSet.
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
@@ -80,8 +96,8 @@ spec:
                   type: object
                 type: array
               namespace:
-                description: Namespace to connect to in leader clusters. Used in member
-                  cluster.
+                description: The leader cluster Namespace in which the ClusterSet
+                  is defined. Used in member cluster.
                 type: string
             type: object
           status:
@@ -157,7 +173,7 @@ spec:
                 format: int32
                 type: integer
               totalClusters:
-                description: Total number of member clusters configured in the set.
+                description: Total number of member clusters configured in the ClusterSet.
                 format: int32
                 type: integer
             type: object

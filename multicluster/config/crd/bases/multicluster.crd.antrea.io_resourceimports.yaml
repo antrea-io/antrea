@@ -16,7 +16,23 @@ spec:
     singular: resourceimport
   scope: Namespaced
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - description: Kind of the imported resource
+      jsonPath: .spec.kind
+      name: Kind
+      type: string
+    - description: Namespace of the imported resource
+      jsonPath: .spec.namespace
+      name: Namespace
+      type: string
+    - description: Name of the imported resource
+      jsonPath: .spec.name
+      name: Name
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
     schema:
       openAPIV3Schema:
         description: ResourceImport is the Schema for the resourceimports API.

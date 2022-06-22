@@ -23,12 +23,15 @@ import (
 // +genclient
 //+kubebuilder:object:root=true
 
+// +kubebuilder:printcolumn:name="Cluster ID",type=string,JSONPath=`.spec.clusterID`,description="Cluster ID of the member cluster"
+// +kubebuilder:printcolumn:name="ClusterSet ID",type=string,JSONPath=`.spec.clusterSetID`,description="ClusterSet ID"
+// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=`.metadata.creationTimestamp`
 // MemberClusterAnnounce is the Schema for the memberclusterannounces API
 type MemberClusterAnnounce struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	// ClusterID of the member cluster.
+	// Cluster ID of the member cluster.
 	ClusterID string `json:"clusterID,omitempty"`
 	// ClusterSet this member belongs to.
 	ClusterSetID string `json:"clusterSetID,omitempty"`

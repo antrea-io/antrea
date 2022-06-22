@@ -31,14 +31,16 @@ const (
 
 //+kubebuilder:object:root=true
 
+// +kubebuilder:printcolumn:name="Gateway IP Precedence",type=string,JSONPath=`.gatewayIPPrecedence`,description="Precedence of Gateway IP types"
+// +kubebuilder:printcolumn:name="Service CIDR",type=string,JSONPath=`.serviceCIDR`,description="Manually specified Service CIDR"
 type MultiClusterConfig struct {
 	metav1.TypeMeta `json:",inline"`
-	// ControllerManagerConfigurationSpec returns the contfigurations for controllers.
+	// ControllerManagerConfigurationSpec defines the contfigurations for controllers.
 	config.ControllerManagerConfigurationSpec `json:",inline"`
 	// ServiceCIDR allows user to set the ClusterIP range of the cluster manually.
 	ServiceCIDR string `json:"serviceCIDR,omitempty"`
-	// The precedence about which IP (private or public one) of Node is preferred to
-	// be used as tunnel endpoint. if not specified, private IP will be chosen.
+	// The precedence about which IP address (internal or external IP) of Node is preferred to
+	// be used as the cross-cluster tunnel endpoint. if not specified, internal IP will be chosen.
 	GatewayIPPrecedence Precedence `json:"gatewayIPPrecedence,omitempty"`
 }
 

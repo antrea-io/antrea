@@ -29,6 +29,9 @@ type ClusterInfoImportStatus struct {
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
 
+// +kubebuilder:printcolumn:name="Cluster ID",type=string,JSONPath=`.spec.clusterID`,description="Member Cluster ID"
+// +kubebuilder:printcolumn:name="Service CIDR",type=string,JSONPath=`.spec.serviceCIDR`,description="Service CIDR of the cluster"
+// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=`.metadata.creationTimestamp`
 type ClusterInfoImport struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

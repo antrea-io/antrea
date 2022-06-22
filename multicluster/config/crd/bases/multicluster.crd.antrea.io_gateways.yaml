@@ -16,7 +16,19 @@ spec:
     singular: gateway
   scope: Namespaced
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - description: Cross-cluster tunnel IP
+      jsonPath: .gatewayIP
+      name: Gateway IP
+      type: string
+    - description: In-cluster tunnel IP
+      jsonPath: .internalIP
+      name: Internal IP
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
     schema:
       openAPIV3Schema:
         description: Gateway includes information of a Multi-cluster Gateway.
@@ -27,11 +39,10 @@ spec:
               internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
             type: string
           gatewayIP:
-            description: Tunnel IP of the Gateway. It might be assigned by user manually
-              through a Node annotation.
+            description: Cross-cluster tunnel IP of the Gateway.
             type: string
           internalIP:
-            description: Internal tunnel IP of the Gateway.
+            description: In-cluster tunnel IP of the Gateway.
             type: string
           kind:
             description: 'Kind is a string value representing the REST resource this

@@ -16,10 +16,18 @@ spec:
     singular: clusterclaim
   scope: Namespaced
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - description: Value of the ClusterClaim
+      jsonPath: .value
+      name: Value
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: ClusterClaim is the Schema for the clusterclaims API
+        description: ClusterClaim is the Schema for the clusterclaims API.
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
@@ -42,6 +50,7 @@ spec:
         type: object
     served: true
     storage: true
+    subresources: {}
 status:
   acceptedNames:
     kind: ""
