@@ -107,12 +107,10 @@ func TestConnectivity(t *testing.T) {
 	}
 
 	t.Run("TestMCServiceExport", func(t *testing.T) {
-		podName := data.setupTestResources(t)
-		setUpServiceExport(data, t)
-		t.Run("Case=Connectivity", func(t *testing.T) { testProbeMCService(t, data) })
-		t.Run("Case=ANPNoPriority", func(t *testing.T) { testANP(t, data) })
-		tearDownServiceExport(data)
-		data.tearDownTestResources(t, podName)
+		defer tearDownForServiceExportsTest(t, data)
+		initializeForServiceExportsTest(t, data)
+		t.Run("Case=MCServiceConnectivity", func(t *testing.T) { testMCServiceConnectivity(t, data) })
+		t.Run("Case=ANPToServices", func(t *testing.T) { testANPToServices(t, data) })
 	})
 
 	t.Run("TestAntreaPolicy", func(t *testing.T) {

@@ -16,7 +16,6 @@ package e2e
 
 import (
 	"fmt"
-	"math/rand"
 	"os"
 	"strings"
 	"time"
@@ -45,11 +44,12 @@ const (
 	leaderCluster             string = "leader-cluster"
 	serviceExportYML          string = "serviceexport.yml"
 
-	nameSuffixLength int = 8
+	testServerPod           string = "test-nginx-pod"
+	gatewayNodeClientSuffix string = "gateway-client"
+	regularNodeClientSuffix string = "regular-client"
 
 	nginxImage   = "projects.registry.vmware.com/antrea/nginx:1.21.6-alpine"
 	agnhostImage = "agnhost:2.26"
-	nginxPodName = "test-nginx-pod"
 )
 
 var provider providers.ProviderInterface
@@ -201,23 +201,6 @@ func (data *MCTestData) podWaitFor(timeout time.Duration, clusterName, name, nam
 		return d.PodWaitFor(timeout, name, namespace, condition)
 	}
 	return nil, fmt.Errorf("clusterName %s not found", clusterName)
-}
-
-// A DNS-1123 subdomain must consist of lower case alphanumeric characters
-var lettersAndDigits = []rune("abcdefghijklmnopqrstuvwxyz0123456789")
-
-func randSeq(n int) string {
-	b := make([]rune, n)
-	for i := range b {
-		// #nosec G404: random number generator not used for security purposes
-		randIdx := rand.Intn(len(lettersAndDigits))
-		b[i] = lettersAndDigits[randIdx]
-	}
-	return string(b)
-}
-
-func randName(prefix string) string {
-	return prefix + randSeq(nameSuffixLength)
 }
 
 func (data *MCTestData) probeServiceFromPodInCluster(
