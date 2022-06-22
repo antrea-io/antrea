@@ -76,7 +76,7 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1alpha1.Tracefl
 	// Directly read data plane tag from packet.
 	var err error
 	var tag uint8
-	var ctNwDst, ctNwSrc, ipDst, ipSrc string
+	var ctNwDst, ctNwSrc, ipDst, ipSrc, ns, srcPod string
 	etherData := new(protocol.Ethernet)
 	if err := etherData.UnmarshalBinary(pktIn.Data.(*util.Buffer).Bytes()); err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to parse Ethernet packet from packet-in message: %v", err)
@@ -148,6 +148,8 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1alpha1.Tracefl
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to get Traceflow %s CRD: %v", tfState.name, err)
 	}
+	ns = tf.Spec.Source.Namespace
+	srcPod = tf.Spec.Source.Pod
 
 	obs := []crdv1alpha1.Observation{}
 	tableID := pktIn.TableId
@@ -256,11 +258,48 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1alpha1.Tracefl
 		gwPort := c.nodeConfig.GatewayConfig.OFPort
 		tunPort := c.nodeConfig.TunnelOFPort
 		if c.networkConfig.TrafficEncapMode.SupportsEncap() && outputPort == tunPort {
+			var isRemoteEgress uint32
+			if match := getMatchRegField(matchers, openflow.RemoteSNATRegMark.GetField()); match != nil {
+				isRemoteEgress, err = getRegValue(match, openflow.RemoteSNATRegMark.GetField().GetRange().ToNXRange())
+				if err != nil {
+					return nil, nil, nil, err
+				}
+			}
+			if isRemoteEgress == 1 { // an Egress packet, currently on source Node and forwarded to Egress Node.
+				egress, err := c.egressQuerier.GetEgress(ns, srcPod)
+				if err != nil {
+					return nil, nil, nil, err
+				}
+				obEgress := getEgressObservation(false, tunnelDstIP, egress)
+				obs = append(obs, *obEgress)
+			}
 			ob.TunnelDstIP = tunnelDstIP
 			ob.Action = crdv1alpha1.ActionForwarded
 		} else if ipDst == gatewayIP.String() && outputPort == gwPort {
 			ob.Action = crdv1alpha1.ActionDelivered
 		} else if c.networkConfig.TrafficEncapMode.SupportsEncap() && outputPort == gwPort {
+			var pktMark uint32
+			if match := getMatchPktMarkField(matchers); match != nil {
+				pktMark, err = getMarkValue(match)
+				if err != nil {
+					return nil, nil, nil, err
+				}
+			}
+			if pktMark != 0 { // Egress packet on Egress Node
+				egressIP, err := c.egressQuerier.GetEgressIPByMark(pktMark)
+				if err != nil {
+					return nil, nil, nil, err
+				}
+				egress := ""
+				if tunnelDstIP == "" { // Egress Node is Source Node of this Egress packet
+					egress, err = c.egressQuerier.GetEgress(ns, srcPod)
+					if err != nil {
+						return nil, nil, nil, err
+					}
+				}
+				obEgress := getEgressObservation(true, egressIP, egress)
+				obs = append(obs, *obEgress)
+			}
 			ob.Action = crdv1alpha1.ActionForwardedOutOfOverlay
 		} else if outputPort == gwPort { // noEncap
 			ob.Action = crdv1alpha1.ActionForwarded
@@ -277,6 +316,10 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1alpha1.Tracefl
 	return tf, &nodeResult, capturedPacket, nil
 }
 
+func getMatchPktMarkField(matchers *ofctrl.Matchers) *ofctrl.MatchField {
+	return matchers.GetMatchByName("NXM_NX_PKT_MARK")
+}
+
 func getMatchRegField(matchers *ofctrl.Matchers, field *binding.RegField) *ofctrl.MatchField {
 	return openflow.GetMatchFieldByRegID(matchers, field.GetRegID())
 }
@@ -286,6 +329,14 @@ func getMatchTunnelDstField(matchers *ofctrl.Matchers, isIPv6 bool) *ofctrl.Matc
 		return matchers.GetMatchByName("NXM_NX_TUN_IPV6_DST")
 	}
 	return matchers.GetMatchByName("NXM_NX_TUN_IPV4_DST")
+}
+
+func getMarkValue(match *ofctrl.MatchField) (uint32, error) {
+	mark, ok := match.GetValue().(uint32)
+	if !ok {
+		return 0, errors.New("mark value cannot be got")
+	}
+	return mark, nil
 }
 
 func getRegValue(regMatch *ofctrl.MatchField, rng *openflow15.NXRange) (uint32, error) {
@@ -408,4 +459,17 @@ func parseCapturedPacket(pktIn *ofctrl.PacketIn) *crdv1alpha1.Packet {
 		capturedPacket.TransportHeader.ICMP = &crdv1alpha1.ICMPEchoRequestHeader{ID: int32(pkt.ICMPEchoID), Sequence: int32(pkt.ICMPEchoSeq)}
 	}
 	return &capturedPacket
+}
+
+func getEgressObservation(isEgressNode bool, egressIP, egressName string) *crdv1alpha1.Observation {
+	ob := new(crdv1alpha1.Observation)
+	ob.Component = crdv1alpha1.ComponentEgress
+	ob.EgressIP = egressIP
+	ob.Egress = egressName
+	if isEgressNode {
+		ob.Action = crdv1alpha1.ActionMarkedForSNAT
+	} else {
+		ob.Action = crdv1alpha1.ActionForwardedToEgressNode
+	}
+	return ob
 }

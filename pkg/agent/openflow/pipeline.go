@@ -2186,7 +2186,7 @@ func (f *featureEgress) snatRuleFlow(ofPort uint32, snatIP net.IP, snatMark uint
 		Action().SetSrcMAC(localGatewayMAC).
 		Action().SetDstMAC(GlobalVirtualMAC).
 		Action().SetTunnelDst(snatIP). // Set tunnel destination to the SNAT IP.
-		Action().LoadRegMark(ToTunnelRegMark).
+		Action().LoadRegMark(ToTunnelRegMark, RemoteSNATRegMark).
 		Action().GotoStage(stageSwitching).
 		Done()
 }

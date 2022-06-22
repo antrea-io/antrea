@@ -96,6 +96,7 @@ type Controller struct {
 	ovsBridgeClient        ovsconfig.OVSBridgeClient
 	ofClient               openflow.Client
 	networkPolicyQuerier   querier.AgentNetworkPolicyInfoQuerier
+	egressQuerier          querier.EgressQuerier
 	interfaceStore         interfacestore.InterfaceStore
 	networkConfig          *config.NetworkConfig
 	nodeConfig             *config.NodeConfig
@@ -116,6 +117,7 @@ func NewTraceflowController(
 	traceflowInformer crdinformers.TraceflowInformer,
 	client openflow.Client,
 	npQuerier querier.AgentNetworkPolicyInfoQuerier,
+	egressQuerier querier.EgressQuerier,
 	ovsBridgeClient ovsconfig.OVSBridgeClient,
 	interfaceStore interfacestore.InterfaceStore,
 	networkConfig *config.NetworkConfig,
@@ -130,6 +132,7 @@ func NewTraceflowController(
 		ovsBridgeClient:       ovsBridgeClient,
 		ofClient:              client,
 		networkPolicyQuerier:  npQuerier,
+		egressQuerier:         egressQuerier,
 		interfaceStore:        interfaceStore,
 		networkConfig:         networkConfig,
 		nodeConfig:            nodeConfig,

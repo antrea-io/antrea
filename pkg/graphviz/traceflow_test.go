@@ -181,6 +181,52 @@ func TestGenGraph(t *testing.T) {
 		},
 	}
 
+	tfEgressFromLocalNode := crdv1alpha1.Traceflow{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "test-traceflow-egress-local-node",
+		},
+		Spec: crdv1alpha1.TraceflowSpec{
+			Packet: crdv1alpha1.Packet{
+				IPHeader: crdv1alpha1.IPHeader{
+					Protocol: 1,
+				},
+				TransportHeader: crdv1alpha1.TransportHeader{},
+			},
+			Source: crdv1alpha1.Source{
+				Namespace: "default",
+				Pod:       "pod-1",
+			},
+			Destination: crdv1alpha1.Destination{
+				IP: "192.168.100.100",
+			},
+		},
+		Status: crdv1alpha1.TraceflowStatus{
+			Phase: crdv1alpha1.Succeeded,
+			Results: []crdv1alpha1.NodeResult{
+				{
+					Node: "k8s-node-1",
+					Observations: []crdv1alpha1.Observation{
+						{
+							Action:    crdv1alpha1.ActionForwarded,
+							Component: crdv1alpha1.ComponentSpoofGuard,
+						},
+						{
+							Component: crdv1alpha1.ComponentEgress,
+							Action:    crdv1alpha1.ActionMarkedForSNAT,
+							Egress:    "egressA",
+							EgressIP:  "192.168.225.5",
+						},
+						{
+							Action:        crdv1alpha1.ActionForwardedOutOfOverlay,
+							Component:     crdv1alpha1.ComponentForwarding,
+							ComponentInfo: "Output",
+						},
+					},
+				},
+			},
+		},
+	}
+
 	expectedOutputWithSourcePod := `digraph G {
 	center=true;
 	label="test-live-traceflow";
@@ -295,6 +341,36 @@ Delivered", shape=box, style="rounded,filled,solid" ];
 
 }
 `
+
+	expectedOutputEgressFromLocalNode := `digraph G {
+	center=true;
+	label="test-traceflow-egress-local-node";
+	labelloc=t;
+	"default/pod-1"->cluster_source_1[ color="#C0C0C0", dir=forward, minlen=1, penwidth=2.0 ];
+	cluster_source_1->cluster_source_2[ color="#C0C0C0", dir=forward, minlen=1, penwidth=2.0 ];
+	cluster_source_2->cluster_source_3[ color="#C0C0C0", dir=forward, minlen=1, penwidth=2.0 ];
+	subgraph cluster_source {
+	bgcolor="#F8F8FF";
+	label="k8s-node-1";
+	labeljust=l;
+	style="filled,bold";
+	"default/pod-1" [ color="#808080", fillcolor="#C8C8C8", style="filled,bold" ];
+	cluster_source_1 [ color="#696969", fillcolor="#DCDCDC", label="SpoofGuard
+Forwarded", shape=box, style="rounded,filled,solid" ];
+	cluster_source_2 [ color="#696969", fillcolor="#DCDCDC", label="Egress
+MarkedForSNAT
+Egress IP : 192.168.225.5
+Egress : egressA", shape=box, style="rounded,filled,solid" ];
+	cluster_source_3 [ color="#696969", fillcolor="#DCDCDC", label="Forwarding
+Output
+ForwardedOutOfOverlay", shape=box, style="rounded,filled,solid" ];
+
+}
+;
+
+}
+`
+
 	tests := []struct {
 		name           string
 		traceflow      crdv1alpha1.Traceflow
@@ -314,6 +390,11 @@ Delivered", shape=box, style="rounded,filled,solid" ];
 			name:           "traceflow in one Node",
 			traceflow:      tfInOneNode,
 			expectedOutput: expectedOutputInOneNode,
+		},
+		{
+			name:           "traceflow egress from local Node",
+			traceflow:      tfEgressFromLocalNode,
+			expectedOutput: expectedOutputEgressFromLocalNode,
 		},
 	}
 

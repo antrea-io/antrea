@@ -60,6 +60,11 @@ type ControllerNetworkPolicyInfoQuerier interface {
 	GetConnectedAgentNum() int
 }
 
+type EgressQuerier interface {
+	GetEgressIPByMark(mark uint32) (string, error)
+	GetEgress(podNamespace, podName string) (string, error)
+}
+
 // GetSelfPod gets current pod.
 func GetSelfPod() v1.ObjectReference {
 	podName := env.GetPodName()

@@ -1701,7 +1701,7 @@ func prepareEgressMarkFlows(snatIP net.IP, mark, podOFPort, podOFPortRemote uint
 				},
 				{
 					MatchStr: fmt.Sprintf("priority=200,%s,in_port=%d", ipProtoStr, podOFPortRemote),
-					ActStr:   fmt.Sprintf("set_field:%s->eth_src,set_field:%s->eth_dst,set_field:%s->%s,set_field:0x10/0xf0->reg0,goto_table:L2ForwardingCalc", localGwMAC.String(), vMAC.String(), snatIP, tunDstFieldName),
+					ActStr:   fmt.Sprintf("set_field:%s->eth_src,set_field:%s->eth_dst,set_field:%s->%s,set_field:0x10/0xf0->reg0,set_field:0x40000/0x40000->reg0,goto_table:L2ForwardingCalc", localGwMAC.String(), vMAC.String(), snatIP, tunDstFieldName),
 				},
 			},
 		},

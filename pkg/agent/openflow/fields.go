@@ -80,6 +80,8 @@ var (
 	CustomReasonDenyRegMark    = binding.NewRegMark(CustomReasonField, CustomReasonDeny)
 	CustomReasonDNSRegMark     = binding.NewRegMark(CustomReasonField, CustomReasonDNS)
 	CustomReasonIGMPRegMark    = binding.NewRegMark(CustomReasonField, CustomReasonIGMP)
+	// reg0[18]: Mark to indicate remote SNAT for Egress.
+	RemoteSNATRegMark = binding.NewOneBitRegMark(0, 18)
 
 	// reg1(NXM_NX_REG1)
 	// Field to cache the ofPort of the OVS interface where to output packet.

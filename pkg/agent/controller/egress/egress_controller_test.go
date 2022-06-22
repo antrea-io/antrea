@@ -834,3 +834,119 @@ func TestUpdateEgressStatus(t *testing.T) {
 		})
 	}
 }
+
+func TestGetEgress(t *testing.T) {
+	egress := &crdv1a2.Egress{
+		ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
+		Spec:       crdv1a2.EgressSpec{EgressIP: fakeLocalEgressIP1},
+	}
+	egressGroup := &cpv1b2.EgressGroup{
+		ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
+		GroupMembers: []cpv1b2.GroupMember{
+			{Pod: &cpv1b2.PodReference{Name: "pod1", Namespace: "ns1"}},
+		},
+	}
+
+	c := newFakeController(t, []runtime.Object{egress})
+	defer c.mockController.Finish()
+
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+	c.crdInformerFactory.Start(stopCh)
+	c.crdInformerFactory.WaitForCacheSync(stopCh)
+	c.addEgressGroup(egressGroup)
+	c.mockOFClient.EXPECT().InstallSNATMarkFlows(net.ParseIP(fakeLocalEgressIP1), uint32(1))
+	c.mockOFClient.EXPECT().InstallPodSNATFlows(uint32(1), net.ParseIP(fakeLocalEgressIP1), uint32(1))
+	c.mockRouteClient.EXPECT().AddSNATRule(net.ParseIP(fakeLocalEgressIP1), uint32(1))
+	c.mockIPAssigner.EXPECT().UnassignIP(fakeLocalEgressIP1)
+	err := c.syncEgress(egress.Name)
+	require.NoError(t, err)
+
+	type args struct {
+		ns      string
+		podName string
+	}
+	tests := []struct {
+		name               string
+		args               args
+		expectedEgressName string
+		expectedErr        string
+	}{
+		{
+			name: "local egress applied on a pod",
+			args: args{
+				ns:      "ns1",
+				podName: "pod1",
+			},
+			expectedEgressName: "egressA",
+		},
+		{
+			name: "no local egress applied on a pod",
+			args: args{
+				ns:      "ns2",
+				podName: "pod2",
+			},
+			expectedErr: "no Egress applied to Pod ns2/pod2",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotEgressName, err := c.GetEgress(tt.args.ns, tt.args.podName)
+			if tt.expectedErr == "" {
+				require.NoError(t, err)
+			} else {
+				require.EqualError(t, err, tt.expectedErr)
+			}
+			assert.Equal(t, tt.expectedEgressName, gotEgressName)
+		})
+	}
+}
+
+func TestGetEgressIPByMark(t *testing.T) {
+	egress := &crdv1a2.Egress{
+		ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
+		Spec:       crdv1a2.EgressSpec{EgressIP: fakeLocalEgressIP1},
+	}
+
+	c := newFakeController(t, []runtime.Object{egress})
+	defer c.mockController.Finish()
+
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+	c.crdInformerFactory.Start(stopCh)
+	c.crdInformerFactory.WaitForCacheSync(stopCh)
+	c.mockOFClient.EXPECT().InstallSNATMarkFlows(net.ParseIP(fakeLocalEgressIP1), uint32(1))
+	c.mockRouteClient.EXPECT().AddSNATRule(net.ParseIP(fakeLocalEgressIP1), uint32(1))
+	c.mockIPAssigner.EXPECT().UnassignIP(fakeLocalEgressIP1)
+	err := c.syncEgress(egress.Name)
+	require.NoError(t, err)
+
+	tests := []struct {
+		name             string
+		mark             uint32
+		expectedEgressIP string
+		expectedErr      string
+	}{
+		{
+			name:             "snatMark associated with local egressIP",
+			mark:             uint32(1),
+			expectedEgressIP: fakeLocalEgressIP1,
+		},
+		{
+			name:        "snatMark not associated with any local egressIP",
+			mark:        uint32(2),
+			expectedErr: "no EgressIP associated with mark 2",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotEgressIP, err := c.GetEgressIPByMark(tt.mark)
+			if tt.expectedErr == "" {
+				require.NoError(t, err)
+			} else {
+				require.EqualError(t, err, tt.expectedErr)
+			}
+			assert.Equal(t, tt.expectedEgressIP, gotEgressIP)
+		})
+	}
+}

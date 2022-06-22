@@ -38,6 +38,7 @@ const (
 	ComponentRouting       TraceflowComponent = "Routing"
 	ComponentNetworkPolicy TraceflowComponent = "NetworkPolicy"
 	ComponentForwarding    TraceflowComponent = "Forwarding"
+	ComponentEgress        TraceflowComponent = "Egress"
 )
 
 type TraceflowAction string
@@ -51,6 +52,8 @@ const (
 	// ActionForwardedOutOfOverlay indicates that the packet has been forwarded out of the network
 	// managed by Antrea. This indicates that the Traceflow request can be considered complete.
 	ActionForwardedOutOfOverlay TraceflowAction = "ForwardedOutOfOverlay"
+	ActionMarkedForSNAT         TraceflowAction = "MarkedForSNAT"
+	ActionForwardedToEgressNode TraceflowAction = "ForwardedToEgressNode"
 )
 
 // List the supported protocols and their codes in traceflow.
@@ -264,6 +267,8 @@ type Observation struct {
 	DstMAC string `json:"dstMAC,omitempty" yaml:"dstMAC,omitempty"`
 	// NetworkPolicy is the combination of Namespace and NetworkPolicyName.
 	NetworkPolicy string `json:"networkPolicy,omitempty" yaml:"networkPolicy,omitempty"`
+	// Egress is the name of the Egress.
+	Egress string `json:"egress,omitempty" yaml:"egress,omitempty"`
 	// TTL is the observation TTL.
 	TTL int32 `json:"ttl,omitempty" yaml:"ttl,omitempty"`
 	// TranslatedSrcIP is the translated source IP.
@@ -272,6 +277,7 @@ type Observation struct {
 	TranslatedDstIP string `json:"translatedDstIP,omitempty" yaml:"translatedDstIP,omitempty"`
 	// TunnelDstIP is the tunnel destination IP.
 	TunnelDstIP string `json:"tunnelDstIP,omitempty" yaml:"tunnelDstIP,omitempty"`
+	EgressIP    string `json:"egressIP,omitempty" yaml:"egressIP,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
