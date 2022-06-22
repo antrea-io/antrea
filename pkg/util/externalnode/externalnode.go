@@ -14,7 +14,15 @@
 
 package externalnode
 
-import "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+import (
+	"crypto/sha1" // #nosec G505: not used for security purposes
+	"encoding/hex"
+	"io"
+
+	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
+)
+
+const interfaceNameLength = 5
 
 func GenExternalEntityName(externalNode *v1alpha1.ExternalNode) string {
 	if len(externalNode.Spec.Interfaces) == 0 {
@@ -26,6 +34,9 @@ func GenExternalEntityName(externalNode *v1alpha1.ExternalNode) string {
 	if ifName == "" {
 		return externalNode.Name
 	} else {
-		return externalNode.Name + "-" + ifName
+		hash := sha1.New() // #nosec G401: not used for security purposes
+		io.WriteString(hash, ifName)
+		hashedIfName := hex.EncodeToString(hash.Sum(nil))
+		return externalNode.Name + "-" + hashedIfName[:interfaceNameLength]
 	}
 }
