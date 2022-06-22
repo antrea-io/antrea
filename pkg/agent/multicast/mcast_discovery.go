@@ -52,7 +52,7 @@ type IGMPSnooper struct {
 	ofClient      openflow.Client
 	ifaceStore    interfacestore.InterfaceStore
 	eventCh       chan *mcastGroupEvent
-	validator     types.MulticastValidator
+	validator     types.McastNetworkPolicyController
 	queryInterval time.Duration
 	// igmpReportANPStats is a map that saves AntreaNetworkPolicyStats of IGMP report packets.
 	// The map can be interpreted as
@@ -130,20 +130,22 @@ func (s *IGMPSnooper) validate(event *mcastGroupEvent, igmpType uint8, packetInD
 	if event.iface.Type != interfacestore.ContainerInterface {
 		return true, fmt.Errorf("interface is not container")
 	}
-	// Validate checks if packet should be dropped or not, and returns multicast NP information
-	item, err := s.validator.Validate(event.iface.PodName, event.iface.PodNamespace, event.group, igmpType)
+
+	ruleInfo, err := s.validator.GetIGMPNPRuleInfo(event.iface.PodName, event.iface.PodNamespace, event.group, igmpType)
 	if err != nil {
 		// It shall drop the packet if function Validate returns error
 		klog.ErrorS(err, "Failed to validate multicast group event")
 		return false, err
 	}
-	klog.V(2).InfoS("Got NetworkPolicy action for IGMP report", "RuleAction", item.RuleAction, "uuid", item.UUID, "Name", item.Name)
-	if item.NPType != nil {
-		s.addToIGMPReportNPStatsMap(item, uint64(packetInData.Len()))
+
+	if ruleInfo != nil {
+		klog.V(2).InfoS("Got NetworkPolicy action for IGMP report", "RuleAction", ruleInfo.RuleAction, "uuid", ruleInfo.UUID, "Name", ruleInfo.Name)
+		s.addToIGMPReportNPStatsMap(*ruleInfo, uint64(packetInData.Len()))
+		if ruleInfo.RuleAction == v1alpha1.RuleActionDrop {
+			return false, nil
+		}
 	}
-	if item.RuleAction == v1alpha1.RuleActionDrop {
-		return false, nil
-	}
+
 	return true, nil
 }
 
@@ -162,7 +164,7 @@ func (s *IGMPSnooper) validatePacketAndNotify(event *mcastGroupEvent, igmpType u
 	s.eventCh <- event
 }
 
-func (s *IGMPSnooper) addToIGMPReportNPStatsMap(item types.McastNPValidationItem, packetLen uint64) {
+func (s *IGMPSnooper) addToIGMPReportNPStatsMap(item types.IGMPNPRuleInfo, packetLen uint64) {
 	updateRuleStats := func(igmpReportStatsMap map[apitypes.UID]map[string]*types.RuleMetric, uuid apitypes.UID, name string) {
 		if igmpReportStatsMap[uuid] == nil {
 			igmpReportStatsMap[uuid] = make(map[string]*types.RuleMetric)
@@ -330,7 +332,7 @@ func parseIGMPPacket(pkt protocol.Ethernet) (protocol.IGMPMessage, error) {
 	}
 }
 
-func newSnooper(ofClient openflow.Client, ifaceStore interfacestore.InterfaceStore, eventCh chan *mcastGroupEvent, queryInterval time.Duration, multicastValidator types.MulticastValidator) *IGMPSnooper {
+func newSnooper(ofClient openflow.Client, ifaceStore interfacestore.InterfaceStore, eventCh chan *mcastGroupEvent, queryInterval time.Duration, multicastValidator types.McastNetworkPolicyController) *IGMPSnooper {
 	snooper := &IGMPSnooper{ofClient: ofClient, ifaceStore: ifaceStore, eventCh: eventCh, validator: multicastValidator, queryInterval: queryInterval}
 	snooper.igmpReportACNPStats = make(map[apitypes.UID]map[string]*types.RuleMetric)
 	snooper.igmpReportANPStats = make(map[apitypes.UID]map[string]*types.RuleMetric)

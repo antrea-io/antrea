@@ -43,7 +43,7 @@ function generate_mocks {
     "pkg/agent/flowexporter/connections ConnTrackDumper,NetFilterConnTrack testing"
     "pkg/agent/interfacestore InterfaceStore testing"
     "pkg/agent/multicast RouteInterface testing"
-    "pkg/agent/types MulticastValidator testing"
+    "pkg/agent/types McastNetworkPolicyController testing"
     "pkg/agent/nodeportlocal/portcache LocalPortOpener testing"
     "pkg/agent/nodeportlocal/rules PodPortRules testing"
     "pkg/agent/openflow Client,OFEntryOperations testing"

@@ -23,7 +23,7 @@ import (
 	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
 )
 
-type McastNPValidationItem struct {
+type IGMPNPRuleInfo struct {
 	RuleAction v1alpha1.RuleAction
 	UUID       apitypes.UID
 	NPType     *v1beta2.NetworkPolicyType
@@ -35,9 +35,8 @@ var (
 	_, McastCIDR, _ = net.ParseCIDR("224.0.0.0/4")
 )
 
-type MulticastValidator interface {
-	// Validate checks whether IGMP report from Pod(podNamespace/podName) to groupAddress should be dropped,
-	// and returns multicast NetworkPolicy information.
-	// TODO: refacor the function name and return type here
-	Validate(podname, podNamespace string, groupAddress net.IP, igmpType uint8) (McastNPValidationItem, error)
+type McastNetworkPolicyController interface {
+	// GetIGMPNPRuleInfo looks up the IGMP NetworkPolicy rule that matches the given Pod and groupAddress,
+	// and returns the rule information if found.
+	GetIGMPNPRuleInfo(podname, podNamespace string, groupAddress net.IP, igmpType uint8) (*IGMPNPRuleInfo, error)
 }
