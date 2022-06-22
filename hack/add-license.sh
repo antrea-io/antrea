@@ -58,10 +58,11 @@ case $key in
 esac
 done
 
+
 if $ADD; then
     echo "===> Adding License for files <==="
-    addlicense -c "Antrea Authors." -y $(date +%Y) `find . -type f -name "*.go"` `find . -type f -name "*.sh"`
+    addlicense -c "Antrea Authors." -y $(date +%Y) `find . -type f -name "*.go"` `grep -rl "^#!/" --exclude=\*.{md,yml,yaml} | sort -u` `find . -type f -name "Dockerfile*"` 
 else
     echo "===> Checking License for files <==="
-    addlicense -c "Antrea Authors." -check `find . -type f -name "*.go"` `find . -type f -name "*.sh"`
+    addlicense -c "Antrea Authors." -check `find . -type f -name "*.go"` `grep -lr "^#!/" --exclude=\*.{md,yml,yaml} | sort -u` `find . -type f -name "Dockerfile*"` 
 fi
