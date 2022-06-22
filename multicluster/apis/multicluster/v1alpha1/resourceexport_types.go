@@ -105,6 +105,11 @@ type ResourceExportStatus struct {
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
 
+// +kubebuilder:printcolumn:name="Cluster ID",type=string,JSONPath=`.spec.clusterID`,description="Cluster ID of the exporting cluster"
+// +kubebuilder:printcolumn:name="Kind",type=string,JSONPath=`.spec.kind`,description="Kind of the exported resource"
+// +kubebuilder:printcolumn:name="Namespace",type=string,JSONPath=`.spec.namespace`,description="Namespace of the exported resource"
+// +kubebuilder:printcolumn:name="Name",type=string,JSONPath=`.spec.name`,description="Name of the exported resource"
+// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=`.metadata.creationTimestamp`
 // ResourceExport is the Schema for the resourceexports API.
 type ResourceExport struct {
 	metav1.TypeMeta   `json:",inline"`

@@ -40,7 +40,7 @@ type ClusterSetSpec struct {
 	Members []MemberCluster `json:"members,omitempty"`
 	// Leaders include leader clusters known to the member clusters.
 	Leaders []MemberCluster `json:"leaders,omitempty"`
-	// Namespace to connect to in leader clusters.
+	// The leader cluster Namespace in which the ClusterSet is defined.
 	// Used in member cluster.
 	Namespace string `json:"namespace,omitempty"`
 }
@@ -107,7 +107,7 @@ type ClusterStatus struct {
 
 // ClusterSetStatus defines the observed state of ClusterSet.
 type ClusterSetStatus struct {
-	// Total number of member clusters configured in the set.
+	// Total number of member clusters configured in the ClusterSet.
 	TotalClusters int32 `json:"totalClusters,omitempty"`
 	// Total number of clusters ready and connected.
 	ReadyClusters int32 `json:"readyClusters,omitempty"`
@@ -123,7 +123,11 @@ type ClusterSetStatus struct {
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
 
-// ClusterSet is the Schema for the clustersets API.
+// +kubebuilder:printcolumn:name="Leader Cluster Namespace",type=string,JSONPath=`.spec.namespace`,description="The leader cluster Namespace for the ClusterSet"
+// +kubebuilder:printcolumn:name="Total Clusters",type=string,JSONPath=`.status.totalClusters`,description="Total number of clusters in the ClusterSet"
+// +kubebuilder:printcolumn:name="Ready Clusters",type=string,JSONPath=`.status.readyClusters`,description="Number of ready clusters in the ClusterSet"
+// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=`.metadata.creationTimestamp`
+// ClusterSet represents a ClusterSet.
 type ClusterSet struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

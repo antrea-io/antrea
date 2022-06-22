@@ -108,6 +108,10 @@ type ResourceImportStatus struct {
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
 
+// +kubebuilder:printcolumn:name="Kind",type=string,JSONPath=`.spec.kind`,description="Kind of the imported resource"
+// +kubebuilder:printcolumn:name="Namespace",type=string,JSONPath=`.spec.namespace`,description="Namespace of the imported resource"
+// +kubebuilder:printcolumn:name="Name",type=string,JSONPath=`.spec.name`,description="Name of the imported resource"
+// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 // ResourceImport is the Schema for the resourceimports API.
 type ResourceImport struct {
 	metav1.TypeMeta   `json:",inline"`

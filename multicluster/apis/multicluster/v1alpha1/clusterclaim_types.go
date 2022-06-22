@@ -30,7 +30,9 @@ const (
 // +genclient
 //+kubebuilder:object:root=true
 
-// ClusterClaim is the Schema for the clusterclaims API
+// +kubebuilder:printcolumn:name="Value",type=string,JSONPath=`.value`,description="Value of the ClusterClaim"
+// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=`.metadata.creationTimestamp`
+// ClusterClaim is the Schema for the clusterclaims API.
 type ClusterClaim struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
