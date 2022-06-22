@@ -60,8 +60,8 @@ done
 
 if $ADD; then
     echo "===> Adding License for files <==="
-    addlicense -c "Antrea Authors." -y $(date +%Y) `find . -type f -name "*.go"` `find . -type f -name "*.sh"`
+    addlicense -c "Antrea Authors." -y $(date +%Y) `find . -type f -name "*.go"` `grep -r "^#!/" --exclude=\*.{md,yml,yaml}`
 else
     echo "===> Checking License for files <==="
-    addlicense -c "Antrea Authors." -check `find . -type f -name "*.go"` `find . -type f -name "*.sh"`
+    addlicense -c "Antrea Authors." -check `find . -type f -name "*.go"` `grep -r "^#!/" --exclude=\*.{md,yml,yaml}`
 fi

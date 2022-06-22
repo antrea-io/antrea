@@ -1,3 +1,5 @@
+#!/usr/bin/env bash
+
 # Check if the process is running
 function is_process_running() {
     name=$1
