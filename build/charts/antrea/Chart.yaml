@@ -3,8 +3,8 @@ name: antrea
 type: application
 displayName: Antrea
 home: https://antrea.io/
-version: 1.17.0-dev
-appVersion: 1.17.0-dev
+version: 0.0.0
+appversion: 0.0.0
 kubeVersion: ">= 1.16.0-0"
 icon: https://raw.githubusercontent.com/antrea-io/antrea/main/docs/assets/logo/antrea_logo.svg
 description: Kubernetes networking based on Open vSwitch
@@ -14,5 +14,7 @@ keywords:
   - Networking
   - CNI
   - Security
+  - Open vSwitch
+  - OVS
 sources:
   - https://github.com/antrea-io/antrea

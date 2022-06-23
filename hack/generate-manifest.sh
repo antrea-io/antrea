@@ -430,7 +430,7 @@ done
 ANTREA_CHART="$THIS_DIR/../build/charts/antrea"
 # Suppress potential Helm warnings about invalid permissions for Kubeconfig file
 # by throwing away related warnings.
-$HELM template \
+$HELM template --include-crds \
       --namespace kube-system \
       $HELM_VALUES_OPTION \
       $HELM_VALUES_FILES_OPTION \

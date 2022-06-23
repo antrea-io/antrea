@@ -119,6 +119,15 @@ jobs:
         asset_path: ./assets/antrea.yml
         asset_name: antrea.yml
         asset_content_type: application/octet-stream
+    - name: Upload antrea-crds.yml
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./assets/antrea-crds.yml
+        asset_name: antrea-crds.yml
+        asset_content_type: application/octet-stream
     - name: Upload antrea-ipsec.yml
       uses: actions/upload-release-asset@v1
       env:
@@ -244,4 +253,13 @@ jobs:
         upload_url: ${{ github.event.release.upload_url }}
         asset_path: ./assets/Start-AntreaAgent.ps1
         asset_name: Start-AntreaAgent.ps1
+        asset_content_type: application/octet-stream
+    - name: Upload Antrea Helm chart archive
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./assets/antrea-chart.tgz
+        asset_name: antrea-chart.tgz
         asset_content_type: application/octet-stream
