@@ -22,7 +22,6 @@ GOPATH=`go env GOPATH`
 ANTREA_PKG="antrea.io/antrea"
 
 cd multicluster
-rm -rf pkg/client/{clientset,informers,listers}
 
 function reset_year_change {
   set +x
@@ -59,6 +58,8 @@ $GOPATH/bin/informer-gen \
   --listers-package "${ANTREA_PKG}/multicluster/pkg/client/listers" \
   --output-package "${ANTREA_PKG}/multicluster/pkg/client/informers" \
   --go-header-file hack/boilerplate.go.txt
+
+$GOPATH/bin/controller-gen object:headerFile="hack/boilerplate.go.txt",year=$(date "+%Y") paths="./..."
 
 cd ..
 reset_year_change
