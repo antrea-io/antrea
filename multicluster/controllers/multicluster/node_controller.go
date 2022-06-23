@@ -55,7 +55,7 @@ func NewNodeReconciler(
 	namespace string,
 	precedence mcsv1alpha1.Precedence) *NodeReconciler {
 	if string(precedence) == "" {
-		precedence = mcsv1alpha1.PrecedencePrivate
+		precedence = mcsv1alpha1.PrecedenceInternal
 	}
 	reconciler := &NodeReconciler{
 		Client:     client,
@@ -138,12 +138,13 @@ func (r *NodeReconciler) getGatawayNodeIP(node *corev1.Node) (string, string, er
 	var gatewayIP, internalIP string
 	for _, addr := range node.Status.Addresses {
 		if addr.Type == corev1.NodeInternalIP {
-			if r.precedence == mcsv1alpha1.PrecedencePrivate {
+			if r.precedence == mcsv1alpha1.PrecedencePrivate || r.precedence == mcsv1alpha1.PrecedenceInternal {
 				gatewayIP = addr.Address
 			}
 			internalIP = addr.Address
 		}
-		if r.precedence == mcsv1alpha1.PrecedencePublic && addr.Type == corev1.NodeExternalIP {
+		if (r.precedence == mcsv1alpha1.PrecedencePublic || r.precedence == mcsv1alpha1.PrecedenceExternal) &&
+			addr.Type == corev1.NodeExternalIP {
 			gatewayIP = addr.Address
 		}
 	}

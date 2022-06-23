@@ -233,7 +233,7 @@ func TestLeaderClusterStatus(t *testing.T) {
 	actualStatus := clusterSet.Status
 	expectedStatus := mcsv1alpha1.ClusterSetStatus{
 		ObservedGeneration: 1,
-		TotalClusters:      3,
+		TotalClusters:      2,
 		ClusterStatuses:    statues,
 		Conditions: []mcsv1alpha1.ClusterSetCondition{
 			{

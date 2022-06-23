@@ -241,7 +241,7 @@ func (r *MemberClusterSetReconciler) updateStatus() {
 	}
 
 	status := multiclusterv1alpha1.ClusterSetStatus{}
-	status.TotalClusters = int32(len(r.clusterSetConfig.Spec.Members) + len(r.clusterSetConfig.Spec.Leaders))
+	status.TotalClusters = int32(len(r.clusterSetConfig.Spec.Members))
 	status.ObservedGeneration = r.clusterSetConfig.Generation
 	status.ClusterStatuses = r.remoteCommonAreaManager.GetMemberClusterStatues()
 
