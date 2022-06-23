@@ -96,7 +96,7 @@ To deploy Multi-cluster Controller in a dual-role cluster, please refer to
 
   ```bash
   kubectl create ns antrea-multicluster
-  kubectl apply -f https://github.com/antrea-io/antrea/releases/download/$TAG/antrea-multicluster-leader-namespaced.yml >   antrea-multicluster-leader-namespaced.yml
+  kubectl apply -f https://github.com/antrea-io/antrea/releases/download/$TAG/antrea-multicluster-leader-namespaced.yml
   ```
 
 The Multi-cluster Controller in the leader cluster will be deployed in Namespace `antrea-multicluster`
@@ -396,18 +396,12 @@ $kubectl annotate node node-1 multicluster.antrea.io/gateway=true
 ```
 
 Multi-cluster Controller in the member cluster will detect the Gateway Node, and
-create a `Gateway` CR with the same name as the Node. You can check the `Gateway`
-with: `kubectl get gateway node-1 -o yaml`, which should show the Gateway
-information like:
+create a `Gateway` CR with the same name as the Node. You can check it with command:
 
-```yaml
-apiVersion: multicluster.crd.antrea.io/v1alpha1
-kind: Gateway
-metadata:
-  name: node-1
-  namespace: kube-system
-gatewayIP: 10.17.27.55
-internalIP: 10.17.27.55
+```bash
+$kubectl get gateway -n kube-system
+NAME          GATEWAY IP     INTERNAL IP    AGE
+node-1        10.17.27.55    10.17.27.55    10s
 ```
 
 `internalIP` of the Gateway is used for the tunnels between the Gateway Node and
@@ -419,7 +413,7 @@ there are several possibilities:
 
 * By default, the K8s Node's `InternalIP` is used as `gatewayIP` too.
 * You can choose to use the K8s Node's `ExternalIP` as `gatewayIP`, by changing
-the configuration option `gatewayIPPrecedence` to value: `public`, when
+the configuration option `gatewayIPPrecedence` to value: `external`, when
 deploying the member Multi-cluster Controller. The configration option is
 defined in ConfigMap `antrea-mc-controller-config-***` in `antrea-multicluster-member.yml`.
 * When the Gateway Node has a separate IP for external communication or is
@@ -442,21 +436,12 @@ ConfigMap `antrea-mc-controller-config-***`. In other member clusters, a
 ClusterInfoImport CR will be created for the cluster which includes the
 exported network information. For example, in cluster `test-cluster-west`, you
 you can see a ClusterInfoImport CR with name `test-cluster-east-clusterinfo`
-is created for cluster `test-cluster-east`. You can check the
-`ClusterInfoImport` with command: `kubectl get clusterinfoimport -o yaml`,
-which should show information like:
+is created for cluster `test-cluster-east`:
 
-```yaml
-apiVersion: multicluster.crd.antrea.io/v1alpha1
-kind: ClusterInfoImport
-metadata:
-  name: test-cluster-east-clusterinfo
-  namespace: kube-system
-spec:
-  clusterID: test-cluster-east
-  gatewayInfos:
-    - gatewayIP: 10.17.27.55
-  serviceCIDR: 110.96.0.0/20
+```bash
+$kubectl get clusterinfoimport -n kube-system
+NAME                            CLUSTER ID          SERVICE CIDR   AGE
+test-cluster-east-clusterinfo   test-cluster-east   110.96.0.0/20  10s
 ```
 
 Make sure you repeat the same step to assign a Gateway Node in all member
@@ -505,14 +490,14 @@ ResourceImport CRs. You can check them in the leader cluster with commands:
 
 ```bash
 $kubectl get resourceexport -n antrea-multicluster
-NAME                                        AGE
-test-cluster-west-default-nginx-endpoints   30s
-test-cluster-west-default-nginx-service     30s
+NAME                                         CLUSTER ID          KIND          NAMESPACE     NAME      AGE
+test-cluster-west-default-nginx-endpoints    test-cluster-west   Endpoints     default       nginx     30s
+test-cluster-west-default-nginx-service      test-cluster-west   Service       default       nginx     30s
 
 $kubectl get resourceimport -n antrea-multicluster
-NAME                      AGE
-default-nginx-endpoints   99s
-default-nginx-service     99s
+NAME                      KIND            NAMESPACE       NAME           AGE
+default-nginx-endpoints   Endpoints       default         nginx          99s
+default-nginx-service     ServiceImport   default         nginx          99s
 ```
 
 When there is any new change on the exported Service, the imported multi-cluster

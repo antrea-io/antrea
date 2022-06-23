@@ -25,8 +25,10 @@ import (
 type Precedence string
 
 const (
-	PrecedencePrivate = "private"
-	PrecedencePublic  = "public"
+	PrecedencePrivate  = "private"
+	PrecedencePublic   = "public"
+	PrecedenceInternal = "internal"
+	PrecedenceExternal = "external"
 )
 
 //+kubebuilder:object:root=true

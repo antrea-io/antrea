@@ -158,14 +158,14 @@ func (r *LeaderClusterSetReconciler) runBackgroundTasks() {
 }
 
 // updateStatus updates ClusterSet Status as follows:
-// 1. TotalClusters is the number of Leader and Member clusters
-//    in the ClusterSet resource last processed.
+// 1. TotalClusters is the number of member clusters in the
+//    ClusterSet resource last processed.
 // 2. ObservedGeneration is the Generation from the last processed
 //    ClusterSet resource.
 // 3. Individual cluster status is obtained from MemberClusterAnnounce
 //    controller.
-// 3. ReadyClusters is the number of clusters with "Ready" = "True"
-// 4. Overall condition of the ClusterSet is also computed as follows:
+// 4. ReadyClusters is the number of member clusters with "Ready" = "True"
+// 5. Overall condition of the ClusterSet is also computed as follows:
 //    a. "Ready" = "True" if all clusters have "Ready" = "True".
 //       Message & Reason will be absent.
 //    b. "Ready" = "Unknown" if all clusters have "Ready" = "Unknown".
@@ -184,7 +184,7 @@ func (r *LeaderClusterSetReconciler) updateStatus() {
 	}
 
 	status := multiclusterv1alpha1.ClusterSetStatus{}
-	status.TotalClusters = int32(len(r.clusterSetConfig.Spec.Members) + len(r.clusterSetConfig.Spec.Leaders))
+	status.TotalClusters = int32(len(r.clusterSetConfig.Spec.Members))
 	status.ObservedGeneration = r.clusterSetConfig.Generation
 	clusterStatues := r.StatusManager.GetMemberClusterStatuses()
 	status.ClusterStatuses = clusterStatues

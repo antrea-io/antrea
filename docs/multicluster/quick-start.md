@@ -56,7 +56,7 @@ Namepsace `kube-system`.
 ```bash
 $kubectl apply -f https://github.com/antrea-io/antrea/releases/download/$TAG/antrea-multicluster-leader-global.yml
 $kubectl create ns antrea-multicluster
-$kubectl apply -f https://github.com/antrea-io/antrea/releases/download/$TAG/antrea-multicluster-leader-namespaced.yml > antrea-multicluster-leader-namespaced.yml
+$kubectl apply -f https://github.com/antrea-io/antrea/releases/download/$TAG/antrea-multicluster-leader-namespaced.yml
 $kubectl apply -f https://github.com/antrea-io/antrea/releases/download/$TAG/antrea-multicluster-member.yml
 ```
 
