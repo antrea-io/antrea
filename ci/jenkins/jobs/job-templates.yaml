@@ -113,12 +113,6 @@
         num-to-keep: 30
     - github:
         url: 'https://github.com/{org_repo}'
-    - throttle:
-        max-per-node: 1
-        max-total: 0
-        categories: '{throttle_concurrent_builds_category}'
-        option: category
-        enabled: '{throttle_concurrent_builds_enabled}'
     publishers: '{publishers}'
     scm:
     - git:
