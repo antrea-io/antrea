@@ -155,7 +155,12 @@ func (data *MCTestData) deleteTestNamespaces(timeout time.Duration) error {
 func (data *MCTestData) createPod(clusterName, name, nodeName, namespace, ctrName, image string, command []string,
 	args []string, env []corev1.EnvVar, ports []corev1.ContainerPort, hostNetwork bool, mutateFunc func(pod *corev1.Pod)) error {
 	if d, ok := data.clusterTestDataMap[clusterName]; ok {
-		return d.CreatePodOnNodeInNamespace(name, namespace, nodeName, ctrName, image, command, args, env, ports, hostNetwork, mutateFunc)
+		return antreae2e.NewPodBuilder(name, namespace, image).
+			OnNode(nodeName).WithContainerName(ctrName).
+			WithCommand(command).WithArgs(args).
+			WithEnv(env).WithPorts(ports).WithHostNetwork(hostNetwork).
+			WithMutateFunc(mutateFunc).
+			Create(&d)
 	}
 	return fmt.Errorf("clusterName %s not found", clusterName)
 }

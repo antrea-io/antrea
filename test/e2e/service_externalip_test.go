@@ -656,9 +656,7 @@ sleep 3600`, tt.clientName, tt.clientIP, tt.localIP, tt.clientIPMaskLen)
 
 					baseUrl := net.JoinHostPort(externalIP, strconv.FormatInt(int64(port), 10))
 
-					require.NoError(t, data.createPodOnNode(tt.clientName, data.testNamespace, host, agnhostImage, []string{"sh", "-c", cmd}, nil, nil, nil, true, func(pod *v1.Pod) {
-						privileged := true
-						pod.Spec.Containers[0].SecurityContext = &v1.SecurityContext{Privileged: &privileged}
+					require.NoError(t, NewPodBuilder(tt.clientName, data.testNamespace, agnhostImage).OnNode(host).WithCommand([]string{"sh", "-c", cmd}).InHostNetwork().Privileged().WithMutateFunc(func(pod *v1.Pod) {
 						delete(pod.Labels, "app")
 						// curl will exit immediately if the destination IP is unreachable and will NOT retry despite having retry flags set.
 						// Use an exec readiness probe to ensure the route is configured to the interface.
@@ -673,7 +671,7 @@ sleep 3600`, tt.clientName, tt.clientIP, tt.localIP, tt.clientIPMaskLen)
 							InitialDelaySeconds: 1,
 							PeriodSeconds:       1,
 						}
-					}))
+					}).Create(data))
 
 					_, err = data.PodWaitFor(defaultTimeout, tt.clientName, data.testNamespace, func(p *v1.Pod) (bool, error) {
 						for _, condition := range p.Status.Conditions {
