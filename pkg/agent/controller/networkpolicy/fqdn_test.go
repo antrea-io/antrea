@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/util/sets"
 
+	"antrea.io/antrea/pkg/agent/config"
 	openflowtest "antrea.io/antrea/pkg/agent/openflow/testing"
 )
 
@@ -42,6 +43,7 @@ func newMockFQDNController(t *testing.T, controller *gomock.Controller, dnsServe
 		dirtyRuleHandler,
 		true,
 		false,
+		config.HostGatewayOFPort,
 	)
 	require.NoError(t, err)
 	return f, mockOFClient

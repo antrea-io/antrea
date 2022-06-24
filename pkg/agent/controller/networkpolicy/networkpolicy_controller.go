@@ -109,6 +109,8 @@ type Controller struct {
 	ifaceStore            interfacestore.InterfaceStore
 	// denyConnStore is for storing deny connections for flow exporter.
 	denyConnStore *connections.DenyConnectionStore
+	gwPort        uint32
+	tunPort       uint32
 }
 
 // NewNetworkPolicyController returns a new *Controller.
@@ -127,7 +129,8 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 	asyncRuleDeleteInterval time.Duration,
 	dnsServerOverride string,
 	v4Enabled bool,
-	v6Enabled bool) (*Controller, error) {
+	v6Enabled bool,
+	gwPort, tunPort uint32) (*Controller, error) {
 	idAllocator := newIDAllocator(asyncRuleDeleteInterval, dnsInterceptRuleID)
 	c := &Controller{
 		antreaClientProvider: antreaClientGetter,
@@ -138,11 +141,13 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 		statusManagerEnabled: statusManagerEnabled,
 		multicastEnabled:     multicastEnabled,
 		loggingEnabled:       loggingEnabled,
+		gwPort:               gwPort,
+		tunPort:              tunPort,
 	}
 
 	if antreaPolicyEnabled {
 		var err error
-		if c.fqdnController, err = newFQDNController(ofClient, idAllocator, dnsServerOverride, c.enqueueRule, v4Enabled, v6Enabled); err != nil {
+		if c.fqdnController, err = newFQDNController(ofClient, idAllocator, dnsServerOverride, c.enqueueRule, v4Enabled, v6Enabled, gwPort); err != nil {
 			return nil, err
 		}
 

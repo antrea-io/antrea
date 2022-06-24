@@ -73,6 +73,9 @@ type GatewayConfig struct {
 	MAC  net.HardwareAddr
 	// LinkIndex is the link index of host gateway.
 	LinkIndex int
+
+	// OFPort is the OpenFlow port number of host gateway allocated by OVS.
+	OFPort uint32
 }
 
 func (g *GatewayConfig) String() string {
@@ -87,6 +90,8 @@ type AdapterNetConfig struct {
 	Gateway    string
 	DNSServers string
 	Routes     []interface{}
+	// OFPort is the OpenFlow port number of the uplink interface allocated by OVS.
+	OFPort uint32
 }
 
 type WireGuardConfig struct {
@@ -136,6 +141,12 @@ type NodeConfig struct {
 	// Auto discovery will use MTU value of the Node's primary interface.
 	// For Encap and Hybrid mode, Node MTU will be adjusted to account for encap header.
 	NodeMTU int
+	// TunnelOFPort is the OpenFlow port number of tunnel interface allocated by OVS. With noEncap mode, the value is 0.
+	TunnelOFPort uint32
+	// HostInterfaceOFPort is the OpenFlow port number of the host interface allocated by OVS. The host interface is the
+	// one which the IP/MAC of the uplink is moved to. If the host interface is the OVS bridge interface (br-int), the
+	// value is config.BridgeOFPort.
+	HostInterfaceOFPort uint32
 	// The config of the gateway interface on the OVS bridge.
 	GatewayConfig *GatewayConfig
 	// The config of the OVS bridge uplink interface. Only for Windows Node.
