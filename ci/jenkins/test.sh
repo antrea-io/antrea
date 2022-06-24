@@ -40,7 +40,6 @@ WINDOWS_NETWORKPOLICY_SKIP="SCTP"
 CONFORMANCE_SKIP="\[Slow\]|\[Serial\]|\[Disruptive\]|\[Flaky\]|\[Feature:.+\]|\[sig-cli\]|\[sig-storage\]|\[sig-auth\]|\[sig-api-machinery\]|\[sig-apps\]|\[sig-node\]"
 NETWORKPOLICY_SKIP="should allow egress access to server in CIDR block|should enforce except clause while egress access to server in CIDR block"
 
-# TODO: change to "control-plane" when testbeds are updated to K8s v1.20
 CONTROL_PLANE_NODE_ROLE="master|control-plane"
 
 CLEAN_STALE_IMAGES="docker system prune --force --all --filter until=48h"
