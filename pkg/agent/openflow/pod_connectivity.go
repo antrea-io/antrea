@@ -33,6 +33,10 @@ type featurePodConnectivity struct {
 	tcCachedFlows   *flowCategoryCache
 
 	gatewayIPs    map[binding.Protocol]net.IP
+	gatewayPort   uint32
+	uplinkPort    uint32
+	hostIfacePort uint32
+	tunnelPort    uint32
 	ctZones       map[binding.Protocol]int
 	localCIDRs    map[binding.Protocol]net.IPNet
 	nodeIPs       map[binding.Protocol]net.IP
@@ -87,6 +91,15 @@ func newFeaturePodConnectivity(
 		}
 	}
 
+	gatewayPort := uint32(config.HostGatewayOFPort)
+	if nodeConfig.GatewayConfig != nil {
+		gatewayPort = nodeConfig.GatewayConfig.OFPort
+	}
+	uplinkPort := uint32(0)
+	if nodeConfig.UplinkNetConfig != nil {
+		uplinkPort = nodeConfig.UplinkNetConfig.OFPort
+	}
+
 	return &featurePodConnectivity{
 		cookieAllocator:       cookieAllocator,
 		ipProtocols:           ipProtocols,
@@ -94,6 +107,10 @@ func newFeaturePodConnectivity(
 		podCachedFlows:        newFlowCategoryCache(),
 		tcCachedFlows:         newFlowCategoryCache(),
 		gatewayIPs:            gatewayIPs,
+		gatewayPort:           gatewayPort,
+		uplinkPort:            uplinkPort,
+		hostIfacePort:         nodeConfig.HostInterfaceOFPort,
+		tunnelPort:            nodeConfig.TunnelOFPort,
 		ctZones:               ctZones,
 		localCIDRs:            localCIDRs,
 		nodeIPs:               nodeIPs,
@@ -118,17 +135,15 @@ func (f *featurePodConnectivity) initFlows() []binding.Flow {
 			flows = append(flows, f.ipv6Flows()...)
 		} else if ipProtocol == binding.ProtocolIP {
 			flows = append(flows, f.arpNormalFlow())
-			flows = append(flows, f.arpSpoofGuardFlow(f.gatewayIPs[ipProtocol], gatewayMAC, config.HostGatewayOFPort))
+			flows = append(flows, f.arpSpoofGuardFlow(f.gatewayIPs[ipProtocol], gatewayMAC, f.gatewayPort))
 			if f.connectUplinkToBridge {
 				flows = append(flows, f.arpResponderFlow(f.gatewayIPs[ipProtocol], gatewayMAC))
-				flows = append(flows, f.arpSpoofGuardFlow(f.nodeConfig.NodeIPv4Addr.IP, gatewayMAC, config.HostGatewayOFPort))
+				flows = append(flows, f.arpSpoofGuardFlow(f.nodeConfig.NodeIPv4Addr.IP, gatewayMAC, f.gatewayPort))
 				flows = append(flows, f.hostBridgeUplinkVLANFlows()...)
 			}
 			if runtime.IsWindowsPlatform() || f.connectUplinkToBridge {
 				// This installs the flows between bridge local port and uplink port to support host networking.
-				// TODO: support IPv6
-				podCIDRMap := map[binding.Protocol]net.IPNet{binding.ProtocolIP: *f.nodeConfig.PodIPv4CIDR}
-				flows = append(flows, f.hostBridgeUplinkFlows(podCIDRMap)...)
+				flows = append(flows, f.hostBridgeUplinkFlows()...)
 			}
 		}
 	}
@@ -140,15 +155,15 @@ func (f *featurePodConnectivity) initFlows() []binding.Flow {
 	flows = append(flows, f.conntrackFlows()...)
 	flows = append(flows, f.l2ForwardOutputFlow())
 	flows = append(flows, f.gatewayClassifierFlow())
-	flows = append(flows, f.l2ForwardCalcFlow(gatewayMAC, config.HostGatewayOFPort))
+	flows = append(flows, f.l2ForwardCalcFlow(gatewayMAC, f.gatewayPort))
 	flows = append(flows, f.gatewayIPSpoofGuardFlows()...)
 	flows = append(flows, f.l3FwdFlowToGateway()...)
 	// Add flow to ensure the liveliness check packet could be forwarded correctly.
 	flows = append(flows, f.localProbeFlows()...)
 
 	if f.networkConfig.TrafficEncapMode.SupportsEncap() {
-		flows = append(flows, f.tunnelClassifierFlow(config.DefaultTunOFPort))
-		flows = append(flows, f.l2ForwardCalcFlow(GlobalVirtualMAC, config.DefaultTunOFPort))
+		flows = append(flows, f.tunnelClassifierFlow(f.tunnelPort))
+		flows = append(flows, f.l2ForwardCalcFlow(GlobalVirtualMAC, f.tunnelPort))
 	}
 
 	if f.networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {

@@ -15,7 +15,6 @@
 package openflow
 
 import (
-	"antrea.io/antrea/pkg/agent/config"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 )
 
@@ -85,10 +84,6 @@ var (
 	// reg1(NXM_NX_REG1)
 	// Field to cache the ofPort of the OVS interface where to output packet.
 	TargetOFPortField = binding.NewRegField(1, 0, 31, "TargetOFPort")
-	// OutputToBridgeRegMark marks that the output interface is OVS bridge.
-	OutputToBridgeRegMark = binding.NewRegMark(TargetOFPortField, config.BridgeOFPort)
-	// OutputToUplinkRegMark marks that the output interface is uplink.
-	OutputToUplinkRegMark = binding.NewRegMark(TargetOFPortField, config.UplinkOFPort)
 
 	// reg2(NXM_NX_REG2)
 	// Field to help swap values in two different flow fields in the OpenFlow actions. This field is only used in func

@@ -800,7 +800,7 @@ func (c *client) generatePipelines() {
 
 	if c.enableMulticast {
 		// TODO: add support for IPv6 protocol
-		c.featureMulticast = newFeatureMulticast(c.cookieAllocator, []binding.Protocol{binding.ProtocolIP}, c.bridge, c.enableAntreaPolicy)
+		c.featureMulticast = newFeatureMulticast(c.cookieAllocator, []binding.Protocol{binding.ProtocolIP}, c.bridge, c.enableAntreaPolicy, c.nodeConfig.GatewayConfig.OFPort)
 		c.activatedFeatures = append(c.activatedFeatures, c.featureMulticast)
 	}
 
@@ -1200,7 +1200,7 @@ func (c *client) SendIGMPQueryPacketOut(
 	srcIP := c.nodeConfig.GatewayConfig.IPv4.String()
 	dstMACStr := dstMAC.String()
 	dstIPStr := dstIP.String()
-	packetOutBuilder, err := setBasePacketOutBuilder(c.bridge.BuildPacketOut(), srcMAC, dstMACStr, srcIP, dstIPStr, config.HostGatewayOFPort, outPort)
+	packetOutBuilder, err := setBasePacketOutBuilder(c.bridge.BuildPacketOut(), srcMAC, dstMACStr, srcIP, dstIPStr, c.nodeConfig.GatewayConfig.OFPort, outPort)
 	if err != nil {
 		return err
 	}

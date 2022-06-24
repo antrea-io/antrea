@@ -20,13 +20,12 @@ package openflow
 import (
 	"net"
 
-	"antrea.io/antrea/pkg/agent/config"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 )
 
 // hostBridgeUplinkFlows generates the flows that forward traffic between the bridge local port and the uplink port to
 // support the host traffic with outside.
-func (f *featurePodConnectivity) hostBridgeUplinkFlows(localSubnetMap map[binding.Protocol]net.IPNet) []binding.Flow {
+func (f *featurePodConnectivity) hostBridgeUplinkFlows() []binding.Flow {
 	cookieID := f.cookieAllocator.Request(f.category).Raw()
 	flows := f.hostBridgeLocalFlows()
 	flows = append(flows,
@@ -34,25 +33,27 @@ func (f *featurePodConnectivity) hostBridgeUplinkFlows(localSubnetMap map[bindin
 		// to disable flood.
 		ARPSpoofGuardTable.ofTable.BuildFlow(priorityNormal).
 			Cookie(cookieID).
-			MatchInPort(config.UplinkOFPort).
-			Action().Output(config.BridgeOFPort).
+			MatchInPort(f.uplinkPort).
+			Action().Output(f.hostIfacePort).
 			Done(),
 		// This generates the flow to forward ARP packets from bridge local port to uplink port since uplink port is set
 		// to disable flood.
 		ARPSpoofGuardTable.ofTable.BuildFlow(priorityNormal).
 			Cookie(cookieID).
-			MatchInPort(config.BridgeOFPort).
-			Action().Output(config.UplinkOFPort).
+			MatchInPort(f.hostIfacePort).
+			Action().Output(f.uplinkPort).
 			Done(),
 	)
 	if f.networkConfig.TrafficEncapMode.SupportsNoEncap() {
+		// TODO: support IPv6
+		localSubnetMap := map[binding.Protocol]net.IPNet{binding.ProtocolIP: *f.nodeConfig.PodIPv4CIDR}
 		// If NoEncap is enabled, the reply packets from remote Pod can be forwarded to local Pod directly.
 		// by explicitly resubmitting them to ConntrackState stage and marking "macRewriteMark" at same time.
 		for ipProtocol, localSubnet := range localSubnetMap {
 			flows = append(flows, ClassifierTable.ofTable.BuildFlow(priorityHigh).
 				Cookie(cookieID).
 				MatchProtocol(ipProtocol).
-				MatchInPort(config.UplinkOFPort).
+				MatchInPort(f.uplinkPort).
 				MatchDstIPNet(localSubnet).
 				Action().LoadRegMark(FromUplinkRegMark, RewriteMACRegMark).
 				Action().GotoStage(stageConntrackState).
@@ -93,7 +94,7 @@ func (f *featurePodConnectivity) l3FwdFlowToRemoteViaRouting(localGatewayMAC net
 			L2ForwardingCalcTable.ofTable.BuildFlow(priorityNormal).
 				Cookie(cookieID).
 				MatchDstMAC(remoteGatewayMAC).
-				Action().LoadToRegField(TargetOFPortField, config.UplinkOFPort).
+				Action().LoadToRegField(TargetOFPortField, f.uplinkPort).
 				Action().LoadRegMark(OFPortFoundRegMark).
 				Action().GotoStage(stageConntrack).
 				Done(),
