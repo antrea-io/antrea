@@ -148,9 +148,6 @@
           builders:
           - builder-integration
           trigger_phrase: null
-          throttle_concurrent_builds_category:
-            - integration
-          throttle_concurrent_builds_enabled: 'true'
           white_list_target_branches: []
           allow_whitelist_orgs_as_admins: false
           admin_list: []
@@ -194,9 +191,6 @@
           builders:
           - builder-integration
           trigger_phrase: ^(?!Thanks for your PR).*/test-integration.*
-          throttle_concurrent_builds_category:
-            - integration
-          throttle_concurrent_builds_enabled: 'true'
           white_list_target_branches: []
           allow_whitelist_orgs_as_admins: true
           admin_list: '{antrea_admin_list}'
@@ -263,9 +257,6 @@
           builders:
           - builder-multicluster-integration
           trigger_phrase: ^(?!Thanks for your PR).*/test-multicluster-integration.*
-          throttle_concurrent_builds_category:
-            - integration
-          throttle_concurrent_builds_enabled: 'true'
           white_list_target_branches: []
           allow_whitelist_orgs_as_admins: true
           admin_list: '{antrea_admin_list}'
