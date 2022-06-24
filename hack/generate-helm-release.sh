@@ -20,13 +20,13 @@ function echoerr {
     >&2 echo "$@"
 }
 
-_usage="Usage: $0 [--mode (dev|release)] --out <DIR>
+_usage="Usage: $0 [--mode (dev|release)] --out <PATH>
 Package the Antrea chart into a chart archive.
 Environment variable VERSION must be set.
-        --out <DIR>                   Output directory for chart archive
+        --out <PATH>                  Output path for chart archive
         --help, -h                    Print this message and exit
 
-You can set the HELM environment variable to the path of the helm binary you wan t us to
+You can set the HELM environment variable to the path of the helm binary you want us to
 use. Otherwise we will download the appropriate version of the helm binary and use it."
 
 function print_usage {

@@ -35,7 +35,7 @@ are the manifests that are checked-in into the Antrea source tree, and that are 
 assets for each new Antrea release. This script looks for all the Helm values YAML files under
 /build/yamls/chart-values/, and generates the corresponding manifest for each one.
 
-You can set the HELM environment variable to the path of the helm binary you wan t us to
+You can set the HELM environment variable to the path of the helm binary you want us to
 use. Otherwise we will download the appropriate version of the helm binary and use it (this is the
 recommended approach since different versions of helm may create different output YAMLs)."
 
@@ -117,7 +117,7 @@ fi
 
 ANTREA_CHART="$THIS_DIR/../build/charts/antrea"
 VALUES_DIR="$THIS_DIR/../build/yamls/chart-values"
-VALUES_FILES=$(cd $VALUES_DIR && find * -type f -name "*.yml" )
+VALUES_FILES=$(cd $VALUES_DIR && find * -type f -name "*.yml")
 # Suppress potential Helm warnings about invalid permissions for Kubeconfig file
 # by throwing away related warnings.
 for values in $VALUES_FILES; do
@@ -132,9 +132,9 @@ done
 
 # We also generate a manifest which only includes CRD resources (all of them).
 # This is useful for Antrea upgrades when using Helm.
-CRD_FILES=$(cd $ANTREA_CHART/crds && find * -type f -name "*.yaml" )
+CRD_FILES=$(cd $ANTREA_CHART/crds && find * -type f -name "*.yaml" | sort)
 CRD_OUTPUT_FILE="$OUTPUT_DIR/antrea-crds.yml"
-touch "$CRD_OUTPUT_FILE"
+rm -f "$CRD_OUTPUT_FILE"
 for crd in $CRD_FILES; do
     echo "---" >> "$CRD_OUTPUT_FILE"
     cat "$ANTREA_CHART/crds/$crd" >> "$CRD_OUTPUT_FILE"
