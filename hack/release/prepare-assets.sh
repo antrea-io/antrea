@@ -90,5 +90,11 @@ cd multicluster
 ./hack/generate-manifest.sh -g > "$OUTPUT_DIR"/antrea-multicluster-leader-global.yml
 ./hack/generate-manifest.sh -r -l antrea-multicluster > "$OUTPUT_DIR"/antrea-multicluster-leader-namespaced.yml
 ./hack/generate-manifest.sh -r -m > "$OUTPUT_DIR"/antrea-multicluster-member.yml
+cd -
+
+# Package the Antrea chart
+# We need to strip the leading "v" from the version string to ensure that we use
+# a valid SemVer 2 version.
+VERSION=${VERSION:1} ./hack/generate-helm-release.sh --out "$OUTPUT_DIR/antrea-chart.tgz"
 
 ls "$OUTPUT_DIR" | cat
