@@ -16,18 +16,28 @@ package flowaggregator
 
 import (
 	"bytes"
+	"fmt"
+	"os"
+	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/fsnotify/fsnotify"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
 	ipfixentitiestesting "github.com/vmware/go-ipfix/pkg/entities/testing"
 	ipfixintermediate "github.com/vmware/go-ipfix/pkg/intermediate"
 	ipfixregistry "github.com/vmware/go-ipfix/pkg/registry"
+	"gopkg.in/yaml.v2"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
 
+	flowaggregatorconfig "antrea.io/antrea/pkg/config/flowaggregator"
+	"antrea.io/antrea/pkg/flowaggregator/clickhouseclient"
+	"antrea.io/antrea/pkg/flowaggregator/options"
 	ipfixtest "antrea.io/antrea/pkg/ipfix/testing"
 )
 
@@ -277,4 +287,86 @@ func createElement(name string, enterpriseID uint32) ipfixentities.InfoElementWi
 	element, _ := ipfixregistry.GetInfoElement(name, enterpriseID)
 	ieWithValue, _ := ipfixentities.DecodeAndCreateInfoElementWithValue(element, nil)
 	return ieWithValue
+}
+
+func TestFlowAggregator_watchConfiguration(t *testing.T) {
+	dbEP := &clickhouseclient.ClickHouseExportProcess{}
+	var wg sync.WaitGroup
+	testcases := []struct {
+		FlowCollectorEnable       bool
+		FlowCollectorAddress      string
+		ClickHouseEnable          bool
+		externalFlowCollectorAddr string
+		message                   []updateParam
+		dbExportProcess           *clickhouseclient.ClickHouseExportProcess
+	}{
+		{true, "10.10.10.10:155", false, "", []updateParam{updateExternalFlowCollectorAddr}, nil},
+		{false, "", true, "addr", []updateParam{disableFlowCollector}, nil},
+		{false, "", true, "", []updateParam{enableClickHouse}, nil},
+		{false, "", true, "", []updateParam{updateClickHouseParam}, dbEP},
+		{true, "10.10.10.10:155", false, "", []updateParam{updateExternalFlowCollectorAddr, disableClickHouse}, dbEP},
+	}
+
+	for i, tc := range testcases {
+		t.Run(fmt.Sprintf("subtest: %d", i), func(t *testing.T) {
+			stopCh := make(chan struct{})
+			opt := options.Options{
+				Config: &flowaggregatorconfig.FlowAggregatorConfig{
+					FlowCollector: flowaggregatorconfig.FlowCollectorConfig{
+						Enable:  tc.FlowCollectorEnable,
+						Address: tc.FlowCollectorAddress,
+					},
+					ClickHouse: flowaggregatorconfig.ClickHouseConfig{
+						Enable: tc.ClickHouseEnable,
+					},
+				},
+			}
+			// create watcher
+			fileName := fmt.Sprintf("test_%d.config", i)
+			configWatcher, err := fsnotify.NewWatcher()
+			require.NoError(t, err)
+			flowAggregator := &flowAggregator{
+				// use a larger buffer to prevent the buffered channel from blocking
+				updateCh:                  make(chan updateMsg, 100),
+				externalFlowCollectorAddr: tc.externalFlowCollectorAddr,
+				dbExportProcess:           tc.dbExportProcess,
+				configFile:                fileName,
+				configWatcher:             configWatcher,
+			}
+			dir := filepath.Dir(fileName)
+			f, err := os.Create(flowAggregator.configFile)
+			require.NoError(t, err)
+			err = flowAggregator.configWatcher.Add(dir)
+			require.NoError(t, err)
+			err = f.Close()
+			require.NoError(t, err)
+			err = os.Remove(flowAggregator.configFile)
+			require.NoError(t, err)
+			f, err = os.Create(flowAggregator.configFile)
+			require.NoError(t, err)
+			b, err := yaml.Marshal(opt.Config)
+			require.NoError(t, err)
+			_, err = f.Write(b)
+			require.NoError(t, err)
+			err = f.Close()
+			require.NoError(t, err)
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				flowAggregator.watchConfiguration(stopCh)
+			}()
+
+			for _, message := range tc.message {
+				select {
+				case msg := <-flowAggregator.updateCh:
+					assert.Equal(t, message, msg.param)
+				case <-time.After(1 * time.Minute):
+					assert.NoError(t, fmt.Errorf("timeout"))
+				}
+			}
+			close(stopCh)
+			wg.Wait()
+			os.Remove(flowAggregator.configFile)
+		})
+	}
 }

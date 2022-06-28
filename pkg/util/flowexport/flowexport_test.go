@@ -21,7 +21,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"antrea.io/antrea/pkg/flowaggregator"
+	flowaggregatorconfig "antrea.io/antrea/pkg/config/flowaggregator"
 )
 
 const (
@@ -133,24 +133,24 @@ func TestParseFlowIntervalString(t *testing.T) {
 func TestParseTransportProtocol(t *testing.T) {
 	testcases := []struct {
 		// input
-		transportProtocolInput flowaggregator.AggregatorTransportProtocol
+		transportProtocolInput flowaggregatorconfig.AggregatorTransportProtocol
 		// expectations
-		expectedTransportProtocol flowaggregator.AggregatorTransportProtocol
+		expectedTransportProtocol flowaggregatorconfig.AggregatorTransportProtocol
 		expectedError             error
 	}{
 		{
 			transportProtocolInput:    "tcp",
-			expectedTransportProtocol: flowaggregator.AggregatorTransportProtocolTCP,
+			expectedTransportProtocol: flowaggregatorconfig.AggregatorTransportProtocolTCP,
 			expectedError:             nil,
 		},
 		{
 			transportProtocolInput:    "UDP",
-			expectedTransportProtocol: flowaggregator.AggregatorTransportProtocolUDP,
+			expectedTransportProtocol: flowaggregatorconfig.AggregatorTransportProtocolUDP,
 			expectedError:             nil,
 		},
 		{
 			transportProtocolInput:    "Tcp",
-			expectedTransportProtocol: flowaggregator.AggregatorTransportProtocolTCP,
+			expectedTransportProtocol: flowaggregatorconfig.AggregatorTransportProtocolTCP,
 			expectedError:             nil,
 		},
 		{
