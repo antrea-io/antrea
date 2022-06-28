@@ -21,6 +21,7 @@ import (
 	"github.com/spf13/cobra"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	multiclusterv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
@@ -63,10 +64,15 @@ func runLeader(o *Options) error {
 	if err = memberClusterStatusManager.SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("error creating MemberClusterAnnounce controller: %v", err)
 	}
+
+	noCachedClient, err := client.New(mgr.GetConfig(), client.Options{Scheme: mgr.GetScheme(), Mapper: mgr.GetRESTMapper()})
+	if err != nil {
+		return err
+	}
 	hookServer := mgr.GetWebhookServer()
 	hookServer.Register("/validate-multicluster-crd-antrea-io-v1alpha1-memberclusterannounce",
 		&webhook.Admission{Handler: &memberClusterAnnounceValidator{
-			Client:    mgr.GetClient(),
+			Client:    noCachedClient,
 			namespace: env.GetPodNamespace()}})
 
 	clusterSetReconciler := &multiclustercontrollers.LeaderClusterSetReconciler{

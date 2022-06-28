@@ -27,6 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -42,6 +43,8 @@ var (
 	ReasonDisconnected    = "Disconnected"
 	ReasonConnectedLeader = "ConnectedLeader"
 	ReasonNotLeader       = "NotLeader"
+
+	MemberClusterAnnounceFinalizer = "memberclusterannounce.finalizer.antrea.io"
 
 	TimerInterval     = 5 * time.Second
 	ConnectionTimeout = 3 * TimerInterval
@@ -65,7 +68,7 @@ type MemberClusterAnnounceReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
 
-	mapLock      sync.Mutex
+	mapLock      sync.RWMutex
 	memberStatus map[common.ClusterID]*multiclusterv1alpha1.ClusterStatus
 	timerData    map[common.ClusterID]*timerData
 }
@@ -106,8 +109,7 @@ func (r *MemberClusterAnnounceReconciler) Reconcile(ctx context.Context, req ctr
 	}
 
 	r.mapLock.Lock()
-	defer r.mapLock.Unlock()
-
+	// If the member is not found in timerData, it means the member is not added to the ClusterSet or was deleted.
 	if data, ok := r.timerData[common.ClusterID(memberAnnounce.ClusterID)]; ok {
 		klog.V(2).InfoS("Reset lastUpdateTime", "cluster", memberAnnounce.ClusterID)
 		// Reset lastUpdateTime and connectedLeader for this member.
@@ -122,26 +124,51 @@ func (r *MemberClusterAnnounceReconciler) Reconcile(ctx context.Context, req ctr
 				memberAnnounce.ClusterID)
 			data.leaderStatus.reason = ReasonNotLeader
 			// Check whether this local cluster is the leader for this member.
-			clusterClaimList := &multiclusterv1alpha2.ClusterClaimList{}
-			if err := r.List(context.TODO(), clusterClaimList, client.InNamespace(req.Namespace)); err == nil {
-				for _, clusterClaim := range clusterClaimList.Items {
-					if clusterClaim.Name == multiclusterv1alpha2.WellKnownClusterClaimID &&
-						clusterClaim.Value == memberAnnounce.LeaderClusterID {
-						data.leaderStatus.connectedLeader = v1.ConditionTrue
-						data.leaderStatus.message = fmt.Sprintf("Local cluster is the leader of member: %v",
-							memberAnnounce.ClusterID)
-						data.leaderStatus.reason = ReasonConnectedLeader
-						break
-					}
+			clusterClaim := &multiclusterv1alpha2.ClusterClaim{}
+			if err := r.Get(context.TODO(), types.NamespacedName{Name: multiclusterv1alpha2.WellKnownClusterClaimID, Namespace: req.Namespace}, clusterClaim); err == nil {
+				if clusterClaim.Value == memberAnnounce.LeaderClusterID {
+					data.leaderStatus.connectedLeader = v1.ConditionTrue
+					data.leaderStatus.message = fmt.Sprintf("Local cluster is the leader of member: %v",
+						memberAnnounce.ClusterID)
+					data.leaderStatus.reason = ReasonConnectedLeader
 				}
 			}
+			// If err != nil, probably ClusterClaims were deleted during the processing of MemberClusterAnnounce.
+			// Nothing to handle in this case and MemberClusterAnnounce will also be deleted soon.
+			// TODO: Add ClusterClaim webhook to make sure it cannot be deleted while ClusterSet is present.
 		}
-		// If err != nil, probably ClusterClaims were deleted during the processing of MemberClusterAnnounce.
-		// Nothing to handle in this case and MemberClusterAnnounce will also be deleted soon.
-		// TODO: Add ClusterClaim webhook to make sure it cannot be deleted while ClusterSet is present.
 	}
-	// Member not found. If this happens, the MemberClusterAnnounce should soon be deleted.
-	// Nothing to do here.
+	r.mapLock.Unlock()
+
+	finalizer := fmt.Sprintf("%s/%s", MemberClusterAnnounceFinalizer, memberAnnounce.ClusterID)
+	if !memberAnnounce.DeletionTimestamp.IsZero() {
+		if err := r.removeMemberFromClusterSet(memberAnnounce); err != nil {
+			klog.ErrorS(err, "Failed to remove member cluster from the ClusterSet", "cluster", memberAnnounce.ClusterID)
+			return ctrl.Result{}, err
+		}
+		memberAnnounce.Finalizers = common.RemoveStringFromSlice(memberAnnounce.Finalizers, finalizer)
+		if err := r.Update(context.TODO(), memberAnnounce); err != nil {
+			klog.ErrorS(err, "Failed to update MemberClusterAnnounce", "MemberClusterAnnounce", klog.KObj(memberAnnounce))
+			return ctrl.Result{}, err
+		}
+
+		return ctrl.Result{}, nil
+	}
+
+	if common.StringExistsInSlice(memberAnnounce.Finalizers, finalizer) {
+		return ctrl.Result{}, nil
+	}
+	klog.InfoS("Adding member cluster to ClusterSet", "cluster", memberAnnounce.ClusterID)
+	if err := r.addMemberToClusterSet(memberAnnounce); err != nil {
+		klog.ErrorS(err, "Failed to add member cluster to ClusterSet", "cluster", memberAnnounce.ClusterID)
+		return ctrl.Result{}, err
+	}
+	klog.InfoS("Adding finalizer to MemberClusterAnnounce", "MemberClusterAnnounce", klog.KObj(memberAnnounce))
+	memberAnnounce.Finalizers = append(memberAnnounce.Finalizers, finalizer)
+	if err := r.Update(context.TODO(), memberAnnounce); err != nil {
+		klog.ErrorS(err, "Failed to update MemberClusterAnnounce", "MemberClusterAnnounce", klog.KObj(memberAnnounce))
+		return ctrl.Result{}, err
+	}
 
 	return ctrl.Result{}, nil
 }
@@ -272,8 +299,8 @@ func (r *MemberClusterAnnounceReconciler) RemoveMember(memberID common.ClusterID
 }
 
 func (r *MemberClusterAnnounceReconciler) GetMemberClusterStatuses() []multiclusterv1alpha1.ClusterStatus {
-	r.mapLock.Lock()
-	defer r.mapLock.Unlock()
+	r.mapLock.RLock()
+	defer r.mapLock.RUnlock()
 
 	status := make([]multiclusterv1alpha1.ClusterStatus, len(r.memberStatus))
 
@@ -284,4 +311,62 @@ func (r *MemberClusterAnnounceReconciler) GetMemberClusterStatuses() []multiclus
 	}
 
 	return status
+}
+
+func (r *MemberClusterAnnounceReconciler) addMemberToClusterSet(memberClusterAnnounce *multiclusterv1alpha1.MemberClusterAnnounce) error {
+	clusterSetID := memberClusterAnnounce.ClusterSetID
+	clusterSet := &multiclusterv1alpha1.ClusterSet{}
+	if err := r.Get(context.TODO(), types.NamespacedName{Namespace: memberClusterAnnounce.Namespace, Name: clusterSetID}, clusterSet); err != nil {
+		klog.ErrorS(err, "Failed to get ClusterSet in leader cluster", "ClusterSet", clusterSetID)
+		return err
+	}
+
+	exist := false
+	// ClusterSet ID of MemberClusterAnnounce cannot change. It is guaranteed by the MemberClusterAnnounce webhook.
+	for _, member := range clusterSet.Spec.Members {
+		if member.ClusterID == memberClusterAnnounce.ClusterID {
+			exist = true
+			break
+		}
+	}
+
+	if exist {
+		return fmt.Errorf("member cluster %s already exists in ClusterSet %s", memberClusterAnnounce.ClusterID, clusterSetID)
+	}
+
+	clusterSet.Spec.Members = append(clusterSet.Spec.Members, multiclusterv1alpha1.MemberCluster{ClusterID: memberClusterAnnounce.ClusterID})
+	if err := r.Update(context.TODO(), clusterSet); err != nil {
+		klog.ErrorS(err, "Failed to update ClusterSet in leader cluster", "ClusterSet", clusterSetID, "Namespace", clusterSet.Namespace)
+		return err
+	}
+	return nil
+}
+
+func (r *MemberClusterAnnounceReconciler) removeMemberFromClusterSet(memberClusterAnnounce *multiclusterv1alpha1.MemberClusterAnnounce) error {
+	clusterSetID := memberClusterAnnounce.ClusterSetID
+	clusterSet := &multiclusterv1alpha1.ClusterSet{}
+	if err := r.Get(context.TODO(), types.NamespacedName{Namespace: memberClusterAnnounce.Namespace, Name: clusterSetID}, clusterSet); err != nil {
+		klog.ErrorS(err, "Failed to get ClusterSet in leader cluster", "ClusterSet", clusterSetID)
+		return err
+	}
+
+	found := false
+	for i, member := range clusterSet.Spec.Members {
+		if member.ClusterID == memberClusterAnnounce.ClusterID {
+			found = true
+			clusterSet.Spec.Members = append(clusterSet.Spec.Members[:i], clusterSet.Spec.Members[i+1:]...)
+			break
+		}
+	}
+	if !found {
+		klog.InfoS("Member cluster not found in ClusterSet", "ClusterSet", clusterSetID, "cluster", memberClusterAnnounce.ClusterID)
+		return nil
+	}
+
+	klog.InfoS("Removing member cluster from the ClusterSet", "cluster", memberClusterAnnounce.ClusterID, "ClusterSet", klog.KObj(clusterSet))
+	if err := r.Update(context.TODO(), clusterSet); err != nil {
+		klog.ErrorS(err, "Failed to update ClusterSet in leader cluster", "ClusterSet", clusterSetID, "Namespace", clusterSet.Namespace)
+		return err
+	}
+	return nil
 }

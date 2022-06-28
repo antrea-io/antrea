@@ -18,9 +18,11 @@ package main
 
 import (
 	"context"
-	"fmt"
+	"encoding/json"
 	"net/http"
 
+	admissionv1 "k8s.io/api/admission/v1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apiserver/pkg/authentication/serviceaccount"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -54,33 +56,56 @@ func (v *memberClusterAnnounceValidator) Handle(ctx context.Context, req admissi
 		return admission.Errored(http.StatusBadRequest, err)
 	}
 
-	// read the ClusterSet info
-	clusterSetList := &multiclusterv1alpha1.ClusterSetList{}
-	if err := v.Client.List(context.TODO(), clusterSetList, client.InNamespace(v.namespace)); err != nil {
-		klog.ErrorS(err, "Error reading ClusterSet", "Namespace", v.namespace)
+	serviceAccount := &v1.ServiceAccount{}
+	if err := v.Client.Get(ctx, client.ObjectKey{Namespace: v.namespace, Name: saName}, serviceAccount); err != nil {
+		klog.ErrorS(err, "Error getting ServiceAccount", "ServiceAccount", saName, "Namespace", v.namespace, "MemberClusterAnnounce", klog.KObj(memberClusterAnnounce))
 		return admission.Errored(http.StatusPreconditionFailed, err)
 	}
 
-	if len(clusterSetList.Items) != 1 {
-		return admission.Errored(http.StatusPreconditionFailed,
-			fmt.Errorf("invalid ClusterSet config in the leader cluster, please contact your administrator"))
+	var newObj, oldObj *multiclusterv1alpha1.MemberClusterAnnounce
+	if req.Object.Raw != nil {
+		if err := json.Unmarshal(req.Object.Raw, &newObj); err != nil {
+			klog.ErrorS(err, "Error while decoding new MemberClusterAnnounce", "MemberClusterAnnounce", klog.KObj(memberClusterAnnounce))
+			return admission.Errored(http.StatusBadRequest, err)
+		}
 	}
-
-	clusterSet := clusterSetList.Items[0]
-	if clusterSet.Name == memberClusterAnnounce.ClusterSetID {
-		for _, member := range clusterSet.Spec.Members {
-			if member.ClusterID == memberClusterAnnounce.ClusterID {
-				// validate the ServiceAccount used is correct
-				if member.ServiceAccount == saName {
-					return admission.Allowed("")
-				} else {
-					return admission.Denied("Member does not have permissions")
-				}
-			}
+	if req.OldObject.Raw != nil {
+		if err := json.Unmarshal(req.OldObject.Raw, &oldObj); err != nil {
+			klog.ErrorS(err, "Error while decoding old MemberClusterAnnounce", "MemberClusterAnnounce", klog.KObj(memberClusterAnnounce))
+			return admission.Errored(http.StatusBadRequest, err)
 		}
 	}
 
-	return admission.Denied("Unknown member")
+	switch req.Operation {
+	case admissionv1.Create:
+		// Read the ClusterSet info
+		clusterSetList := &multiclusterv1alpha1.ClusterSetList{}
+		if err := v.Client.List(context.TODO(), clusterSetList, client.InNamespace(v.namespace)); err != nil {
+			klog.ErrorS(err, "Error reading ClusterSet", "Namespace", v.namespace)
+			return admission.Errored(http.StatusPreconditionFailed, err)
+		}
+
+		if len(clusterSetList.Items) == 0 {
+			klog.ErrorS(err, "No ClusterSet found", "Namespace", v.namespace)
+			return admission.Errored(http.StatusPreconditionFailed, err)
+		}
+		clusterSet := clusterSetList.Items[0]
+		if clusterSet.Name != memberClusterAnnounce.ClusterSetID {
+			return admission.Denied("Unknown ClusterSet ID")
+		}
+		if clusterSet.Spec.Leaders[0].ClusterID != memberClusterAnnounce.LeaderClusterID {
+			return admission.Denied("Leader cluster ID in the MemberClusterAnnounce does not match that in the ClusterSet")
+		}
+		return admission.Allowed("")
+	case admissionv1.Update:
+		// Member cluster will never change ClusterSet ID in MemberClusterAnnounce
+		if newObj.ClusterSetID != oldObj.ClusterSetID || newObj.LeaderClusterID != oldObj.LeaderClusterID {
+			return admission.Denied("ClusterSet ID or Leader Cluster ID cannot be changed")
+		}
+		return admission.Allowed("")
+	default:
+		return admission.Allowed("")
+	}
 }
 
 func (v *memberClusterAnnounceValidator) InjectDecoder(d *admission.Decoder) error {
