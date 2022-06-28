@@ -2202,7 +2202,7 @@ func (data *TestData) GetMulticastInterfaces(antreaNamespace string) ([]string, 
 }
 
 func GetTransportInterface(data *TestData) (string, error) {
-	_, transportInterfaceUntrimmed, _, err := data.RunCommandOnNode(nodeName(0), fmt.Sprintf("ip -br addr show | grep %s | awk '{print $1}'", clusterInfo.nodes[0].ipv4Addr))
+	_, transportInterfaceUntrimmed, _, err := data.RunCommandOnNode(nodeName(0), fmt.Sprintf("/bin/sh -c ip -br addr show | grep %s | sed \"s/[ @].*//\"", clusterInfo.nodes[0].ipv4Addr))
 	if err != nil {
 		return "", err
 	}

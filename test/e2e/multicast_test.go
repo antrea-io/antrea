@@ -607,7 +607,7 @@ func runTestMulticastBetweenPods(t *testing.T, data *TestData, mc multicastTestc
 	if err := wait.Poll(3*time.Second, defaultTimeout, func() (bool, error) {
 		if !senderReady {
 			// Sender pods should add an outbound multicast route except running as HostNetwork.
-			_, mrouteResult, _, err := data.RunCommandOnNode(nodeName(mc.senderConfig.nodeIdx), fmt.Sprintf("ip mroute show to %s iif %s | grep '%s'", mc.group.String(), gatewayInterface, strings.Join(nodeMulticastInterfaces[mc.senderConfig.nodeIdx], " ")))
+			_, mrouteResult, _, err := data.RunCommandOnNode(nodeName(mc.senderConfig.nodeIdx), fmt.Sprintf("/bin/sh -c ip mroute show iif %s |grep \"%s)\"|grep '%s'", gatewayInterface, mc.group.String(), strings.Join(nodeMulticastInterfaces[mc.senderConfig.nodeIdx], " ")))
 			if err != nil {
 				return false, err
 			}
@@ -630,23 +630,31 @@ func runTestMulticastBetweenPods(t *testing.T, data *TestData, mc multicastTestc
 			}
 			for _, receiverMulticastInterface := range nodeMulticastInterfaces[receiver.nodeIdx] {
 				if checkReceiverRoute {
-					_, mRouteResult, _, err := data.RunCommandOnNode(nodeName(receiver.nodeIdx), fmt.Sprintf("ip mroute show to %s iif %s ", mc.group.String(), receiverMulticastInterface))
+					_, mRouteResult, _, err := data.RunCommandOnNode(nodeName(receiver.nodeIdx), fmt.Sprintf("/bin/sh -c ip mroute show iif %s|grep \"%s)\"", receiverMulticastInterface, mc.group.String()))
 					if err != nil {
 						return false, err
 					}
+
 					// If multicast traffic is sent from non-HostNetwork pods and senders-receivers are located in different nodes,
 					// the receivers should configure corresponding inbound multicast routes.
 					if mc.senderConfig.nodeIdx != receiver.nodeIdx && !receiver.isHostNetwork {
 						if len(mRouteResult) == 0 {
 							return false, nil
 						}
-					} else {
-						if len(mRouteResult) != 0 {
-							return false, nil
+						// If multicast traffic is sent from non-HostNetwork pods and senders-receivers are located in different nodes,
+						// the receivers should configure corresponding inbound multicast routes.
+						if mc.senderConfig.nodeIdx != receiver.nodeIdx && !receiver.isHostNetwork {
+							if len(mRouteResult) == 0 {
+								return false, nil
+							}
+						} else {
+							if len(mRouteResult) != 0 {
+								return false, nil
+							}
 						}
 					}
 				}
-				_, mAddrResult, _, err := data.RunCommandOnNode(nodeName(receiver.nodeIdx), fmt.Sprintf("ip maddr show %s | grep %s", receiverMulticastInterface, mc.group.String()))
+				_, mAddrResult, _, err := data.RunCommandOnNode(nodeName(receiver.nodeIdx), fmt.Sprintf("/bin/sh -c ip maddr show %s | grep %s", receiverMulticastInterface, mc.group.String()))
 				if err != nil {
 					return false, err
 				}

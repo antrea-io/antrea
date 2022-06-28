@@ -54,6 +54,12 @@ func RunSSHCommand(host string, config *ssh.ClientConfig, cmd string, envs map[s
 	if stdin != "" {
 		session.Stdin = strings.NewReader(stdin)
 	}
+	if strings.Contains(cmd, "/bin/sh") {
+		// Just split in to "/bin/sh" "-c" and "actual_cmd"
+		// This is used to keep align with running command in docker.
+		splitCmd := strings.SplitN(cmd, " ", 3)
+		cmd = splitCmd[0] + " -c " + fmt.Sprintf("'%s'", splitCmd[2])
+	}
 
 	if err := session.Run(cmd); err != nil {
 		switch e := err.(type) {

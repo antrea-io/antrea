@@ -138,7 +138,10 @@ trap "quit" INT EXIT
 
 manifest_args="$manifest_args --verbose-log"
 if [ -n "$feature_gates" ]; then
-  manifest_args="$manifest_args --feature-gates $feature_gates"
+    if [[ "$feature_gates" == *"Multicast=true"* ]] || ([[ "$feature_gates" == *"AllAlpha=true"* ]] && [[ "$feature_gates" != *"AllAlpha=false"* ]]); then
+        manifest_args="$manifest_args --extra-helm-values multicast.igmpQueryInterval=10s"
+    fi
+    manifest_args="$manifest_args --feature-gates $feature_gates"
 fi
 if $proxy_all; then
     manifest_args="$manifest_args --proxy-all"
