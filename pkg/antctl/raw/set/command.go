@@ -1,4 +1,4 @@
-// Copyright 2020 Antrea Authors
+// Copyright 2022 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,25 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package querier
+package set
 
 import (
-	ipfixintermediate "github.com/vmware/go-ipfix/pkg/intermediate"
+	"github.com/spf13/cobra"
+
+	flow_aggregator "antrea.io/antrea/pkg/antctl/raw/set/flow-aggregator"
 )
 
-type Metrics struct {
-	NumRecordsExported int64
-	NumRecordsReceived int64
-	NumFlows           int64
-	NumConnToCollector int64
+var SetCmd = &cobra.Command{
+	Use:   "set",
+	Short: "Set configuration parameters",
 }
 
-type FlowAggregatorQuerier interface {
-	GetFlowRecords(flowKey *ipfixintermediate.FlowKey) []map[string]interface{}
-	GetRecordMetrics() Metrics
-}
-
-type ExternalFlowCollectorAddr struct {
-	Address  string
-	Protocol string
+func init() {
+	SetCmd.AddCommand(flow_aggregator.NewFlowAggregatorSetCommand())
 }

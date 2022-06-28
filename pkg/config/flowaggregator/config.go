@@ -14,8 +14,12 @@
 
 package config
 
-import (
-	"antrea.io/antrea/pkg/flowaggregator"
+type AggregatorTransportProtocol string
+
+const (
+	AggregatorTransportProtocolTCP AggregatorTransportProtocol = "TCP"
+	AggregatorTransportProtocolTLS AggregatorTransportProtocol = "TLS"
+	AggregatorTransportProtocolUDP AggregatorTransportProtocol = "UDP"
 )
 
 type FlowAggregatorConfig struct {
@@ -36,7 +40,7 @@ type FlowAggregatorConfig struct {
 	InactiveFlowRecordTimeout string `yaml:"inactiveFlowRecordTimeout,omitempty"`
 	// Transport protocol over which the aggregator collects IPFIX records from all Agents.
 	// Defaults to "tls"
-	AggregatorTransportProtocol flowaggregator.AggregatorTransportProtocol `yaml:"aggregatorTransportProtocol,omitempty"`
+	AggregatorTransportProtocol AggregatorTransportProtocol `yaml:"aggregatorTransportProtocol,omitempty"`
 	// Provide DNS name or IP address of flow aggregator for generating TLS certificate.
 	// Defaults to "flow-aggregator.flow-aggregator.svc"
 	FlowAggregatorAddress string `yaml:"flowAggregatorAddress,omitempty"`

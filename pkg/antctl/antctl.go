@@ -28,6 +28,7 @@ import (
 	"antrea.io/antrea/pkg/antctl/raw/featuregates"
 	"antrea.io/antrea/pkg/antctl/raw/multicluster"
 	"antrea.io/antrea/pkg/antctl/raw/proxy"
+	"antrea.io/antrea/pkg/antctl/raw/set"
 	"antrea.io/antrea/pkg/antctl/raw/supportbundle"
 	"antrea.io/antrea/pkg/antctl/raw/traceflow"
 	"antrea.io/antrea/pkg/antctl/transform/addressgroup"
@@ -619,6 +620,12 @@ $ antctl get podmulticaststats pod -n namespace`,
 			supportAgent:      false,
 			supportController: false,
 			commandGroup:      mc,
+		},
+		{
+			cobraCommand:          set.SetCmd,
+			supportAgent:          false,
+			supportController:     false,
+			supportFlowAggregator: true,
 		},
 	},
 	codec: scheme.Codecs,
