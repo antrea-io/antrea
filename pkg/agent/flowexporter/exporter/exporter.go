@@ -55,8 +55,8 @@ const maxConnsToExport = 64
 
 var (
 	IANAInfoElementsCommon = []string{
-		"flowStartSeconds",
-		"flowEndSeconds",
+		"flowStartMilliseconds",
+		"flowEndMilliseconds",
 		"flowEndReason",
 		"sourceTransportPort",
 		"destinationTransportPort",
@@ -391,10 +391,10 @@ func (exp *FlowExporter) addConnToSet(conn *flowexporter.Connection) error {
 	for i := range eL {
 		ie := eL[i]
 		switch ieName := ie.GetInfoElement().Name; ieName {
-		case "flowStartSeconds":
-			ie.SetUnsigned32Value(uint32(conn.StartTime.Unix()))
-		case "flowEndSeconds":
-			ie.SetUnsigned32Value(uint32(conn.StopTime.Unix()))
+		case "flowStartMilliseconds":
+			ie.SetUnsigned64Value(uint64(conn.StartTime.UnixMilli()))
+		case "flowEndMilliseconds":
+			ie.SetUnsigned64Value(uint64(conn.StopTime.UnixMilli()))
 		case "flowEndReason":
 			if flowexporter.IsConnectionDying(conn) {
 				ie.SetUnsigned8Value(ipfixregistry.EndOfFlowReason)

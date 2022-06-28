@@ -46,8 +46,8 @@ IPFIX-HDR:
   Sequence No.: 27,  Observation Domain ID: 2569248951
 DATA SET:
   DATA RECORD-0:
-    flowStartSeconds: 1637706961
-    flowEndSeconds: 1637706973
+    flowStartMilliseconds: 1637706961
+    flowEndMilliseconds: 1637706973
     flowEndReason: 3
     sourceTransportPort: 44752
     destinationTransportPort: 5201
@@ -99,8 +99,8 @@ DATA SET:
     reversePacketDeltaCountFromDestinationNode: 136211
     reversePacketTotalCountFromSourceNode: 471111
     reversePacketTotalCountFromDestinationNode: 471111
-    flowEndSecondsFromSourceNode: 1637706973
-    flowEndSecondsFromDestinationNode: 1637706973
+    flowEndMillisecondsFromSourceNode: 1637706973
+    flowEndMillisecondsFromDestinationNode: 1637706973
     throughput: 15902813472
     throughputFromSourceNode: 15902813472
     throughputFromDestinationNode: 15902813472
@@ -681,22 +681,22 @@ func checkRecordsForFlowsCollector(t *testing.T, data *TestData, srcIP, dstIP, s
 
 			// Skip the bandwidth check for the iperf control flow records which have 0 throughput.
 			if !strings.Contains(record, "throughput: 0") {
-				flowStartTime := int64(getUint64FieldFromRecord(t, record, "flowStartSeconds"))
-				exportTime := int64(getUint64FieldFromRecord(t, record, "flowEndSeconds"))
+				flowStartTime := int64(getUint64FieldFromRecord(t, record, "flowStartMilliseconds"))
+				exportTime := int64(getUint64FieldFromRecord(t, record, "flowEndMilliseconds"))
 				flowEndReason := int64(getUint64FieldFromRecord(t, record, "flowEndReason"))
 				var recBandwidth float64
 				// flowEndReason == 3 means the end of flow detected
 				if exportTime >= flowStartTime+iperfTimeSec || flowEndReason == 3 {
 					// Check average bandwidth on the last record.
 					octetTotalCount := getUint64FieldFromRecord(t, record, "octetTotalCount")
-					recBandwidth = float64(octetTotalCount) * 8 / float64(iperfTimeSec) / 1000000
+					recBandwidth = float64(octetTotalCount) * 8 * 1000 / float64(iperfTimeSec) / 1000000
 				} else {
 					// Check bandwidth with the field "throughput" except for the last record,
 					// as their throughput may be significantly lower than the average Iperf throughput.
 					throughput := getUint64FieldFromRecord(t, record, "throughput")
-					recBandwidth = float64(throughput) / 1000000
+					recBandwidth = float64(throughput) * 1000 / 1000000
 				}
-				t.Logf("Throughput check on record with flowEndSeconds-flowStartSeconds: %v, Iperf throughput: %.2f Mbits/s, IPFIX record throughput: %.2f Mbits/s", exportTime-flowStartTime, bandwidthInMbps, recBandwidth)
+				t.Logf("Throughput check on record with flowEndMilliseconds-flowStartMilliseconds: %v, Iperf throughput: %.2f Mbits/s, IPFIX record throughput: %.2f Mbits/s", exportTime-flowStartTime, bandwidthInMbps, recBandwidth)
 				assert.InDeltaf(recBandwidth, bandwidthInMbps, bandwidthInMbps*0.15, "Difference between Iperf bandwidth and IPFIX record bandwidth should be lower than 15%%, record: %s", record)
 			}
 		}
@@ -754,20 +754,20 @@ func checkRecordsForFlowsClickHouse(t *testing.T, data *TestData, srcIP, dstIP, 
 
 		// Skip the bandwidth check for the iperf control flow records which have 0 throughput.
 		if record.Throughput > 0 {
-			flowStartTime := record.FlowStartSeconds.Unix()
-			exportTime := record.FlowEndSeconds.Unix()
+			flowStartTime := record.FlowStartMilliseconds.UnixMilli()
+			exportTime := record.FlowEndMilliseconds.UnixMilli()
 			var recBandwidth float64
 			// flowEndReason == 3 means the end of flow detected
 			if exportTime >= flowStartTime+iperfTimeSec || record.FlowEndReason == 3 {
 				octetTotalCount := record.OctetTotalCount
-				recBandwidth = float64(octetTotalCount) * 8 / float64(exportTime-flowStartTime) / 1000000
+				recBandwidth = float64(octetTotalCount) * 8 * 1000 / float64(exportTime-flowStartTime) / 1000000
 			} else {
 				// Check bandwidth with the field "throughput" except for the last record,
 				// as their throughput may be significantly lower than the average Iperf throughput.
 				throughput := record.Throughput
-				recBandwidth = float64(throughput) / 1000000
+				recBandwidth = float64(throughput) * 1000 / 1000000
 			}
-			t.Logf("Throughput check on record with flowEndSeconds-flowStartSeconds: %v, Iperf throughput: %.2f Mbits/s, ClickHouse record throughput: %.2f Mbits/s", exportTime-flowStartTime, bandwidthInMbps, recBandwidth)
+			t.Logf("Throughput check on record with flowEndMilliseconds-flowStartMilliseconds: %v, Iperf throughput: %.2f Mbits/s, ClickHouse record throughput: %.2f Mbits/s", exportTime-flowStartTime, bandwidthInMbps, recBandwidth)
 			assert.InDeltaf(recBandwidth, bandwidthInMbps, bandwidthInMbps*0.15, "Difference between Iperf bandwidth and ClickHouse record bandwidth should be lower than 15%%, record: %v", record)
 		}
 
@@ -1028,8 +1028,8 @@ func getCollectorOutput(t *testing.T, srcIP, dstIP, srcPort string, isDstService
 		src, dst := matchSrcAndDstAddress(srcIP, dstIP, isDstService, isIPv6)
 		if checkAllRecords {
 			for _, record := range recordSlices {
-				flowStartTime := int64(getUint64FieldFromRecord(t, record, "flowStartSeconds"))
-				exportTime := int64(getUint64FieldFromRecord(t, record, "flowEndSeconds"))
+				flowStartTime := int64(getUint64FieldFromRecord(t, record, "flowStarMilliseconds"))
+				exportTime := int64(getUint64FieldFromRecord(t, record, "flowEndMilliseconds"))
 				flowEndReason := int64(getUint64FieldFromRecord(t, record, "flowEndReason"))
 				if strings.Contains(record, src) && strings.Contains(record, dst) && strings.Contains(record, srcPort) {
 					// flowEndReason == 3 means the end of flow detected
@@ -1092,8 +1092,8 @@ func getClickHouseOutput(t *testing.T, data *TestData, srcIP, dstIP, srcPort str
 
 		if checkAllRecords {
 			for _, record := range flowRecords {
-				flowStartTime := record.FlowStartSeconds.Unix()
-				exportTime := record.FlowEndSeconds.Unix()
+				flowStartTime := record.FlowStartMilliseconds.UnixMilli()
+				exportTime := record.FlowEndMilliseconds.UnixMilli()
 				// flowEndReason == 3 means the end of flow detected
 				if exportTime >= flowStartTime+iperfTimeSec || record.FlowEndReason == 3 {
 					return true, nil
@@ -1405,53 +1405,53 @@ func matchSrcAndDstAddress(srcIP string, dstIP string, isDstService bool, isIPv6
 }
 
 type ClickHouseFullRow struct {
-	TimeInserted                         time.Time `json:"timeInserted"`
-	FlowStartSeconds                     time.Time `json:"flowStartSeconds"`
-	FlowEndSeconds                       time.Time `json:"flowEndSeconds"`
-	FlowEndSecondsFromSourceNode         time.Time `json:"flowEndSecondsFromSourceNode"`
-	FlowEndSecondsFromDestinationNode    time.Time `json:"flowEndSecondsFromDestinationNode"`
-	FlowEndReason                        uint8     `json:"flowEndReason"`
-	SourceIP                             string    `json:"sourceIP"`
-	DestinationIP                        string    `json:"destinationIP"`
-	SourceTransportPort                  uint16    `json:"sourceTransportPort"`
-	DestinationTransportPort             uint16    `json:"destinationTransportPort"`
-	ProtocolIdentifier                   uint8     `json:"protocolIdentifier"`
-	PacketTotalCount                     uint64    `json:"packetTotalCount,string"`
-	OctetTotalCount                      uint64    `json:"octetTotalCount,string"`
-	PacketDeltaCount                     uint64    `json:"packetDeltaCount,string"`
-	OctetDeltaCount                      uint64    `json:"octetDeltaCount,string"`
-	ReversePacketTotalCount              uint64    `json:"reversePacketTotalCount,string"`
-	ReverseOctetTotalCount               uint64    `json:"reverseOctetTotalCount,string"`
-	ReversePacketDeltaCount              uint64    `json:"reversePacketDeltaCount,string"`
-	ReverseOctetDeltaCount               uint64    `json:"reverseOctetDeltaCount,string"`
-	SourcePodName                        string    `json:"sourcePodName"`
-	SourcePodNamespace                   string    `json:"sourcePodNamespace"`
-	SourceNodeName                       string    `json:"sourceNodeName"`
-	DestinationPodName                   string    `json:"destinationPodName"`
-	DestinationPodNamespace              string    `json:"destinationPodNamespace"`
-	DestinationNodeName                  string    `json:"destinationNodeName"`
-	DestinationClusterIP                 string    `json:"destinationClusterIP"`
-	DestinationServicePort               uint16    `json:"destinationServicePort"`
-	DestinationServicePortName           string    `json:"destinationServicePortName"`
-	IngressNetworkPolicyName             string    `json:"ingressNetworkPolicyName"`
-	IngressNetworkPolicyNamespace        string    `json:"ingressNetworkPolicyNamespace"`
-	IngressNetworkPolicyRuleName         string    `json:"ingressNetworkPolicyRuleName"`
-	IngressNetworkPolicyRuleAction       uint8     `json:"ingressNetworkPolicyRuleAction"`
-	IngressNetworkPolicyType             uint8     `json:"ingressNetworkPolicyType"`
-	EgressNetworkPolicyName              string    `json:"egressNetworkPolicyName"`
-	EgressNetworkPolicyNamespace         string    `json:"egressNetworkPolicyNamespace"`
-	EgressNetworkPolicyRuleName          string    `json:"egressNetworkPolicyRuleName"`
-	EgressNetworkPolicyRuleAction        uint8     `json:"egressNetworkPolicyRuleAction"`
-	EgressNetworkPolicyType              uint8     `json:"egressNetworkPolicyType"`
-	TcpState                             string    `json:"tcpState"`
-	FlowType                             uint8     `json:"flowType"`
-	SourcePodLabels                      string    `json:"sourcePodLabels"`
-	DestinationPodLabels                 string    `json:"destinationPodLabels"`
-	Throughput                           uint64    `json:"throughput,string"`
-	ReverseThroughput                    uint64    `json:"reverseThroughput,string"`
-	ThroughputFromSourceNode             uint64    `json:"throughputFromSourceNode,string"`
-	ThroughputFromDestinationNode        uint64    `json:"throughputFromDestinationNode,string"`
-	ReverseThroughputFromSourceNode      uint64    `json:"reverseThroughputFromSourceNode,string"`
-	ReverseThroughputFromDestinationNode uint64    `json:"reverseThroughputFromDestinationNode,string"`
-	Trusted                              uint8     `json:"trusted"`
+	TimeInserted                           time.Time `json:"timeInserted"`
+	FlowStartMilliseconds                  time.Time `json:"flowStartMilliseconds"`
+	FlowEndMilliseconds                    time.Time `json:"flowEndMilliseconds"`
+	FlowEndMillisecondsFromSourceNode      time.Time `json:"flowEndMillisecondsFromSourceNode"`
+	FlowEndMillisecondsFromDestinationNode time.Time `json:"flowEndMillisecondsFromDestinationNode"`
+	FlowEndReason                          uint8     `json:"flowEndReason"`
+	SourceIP                               string    `json:"sourceIP"`
+	DestinationIP                          string    `json:"destinationIP"`
+	SourceTransportPort                    uint16    `json:"sourceTransportPort"`
+	DestinationTransportPort               uint16    `json:"destinationTransportPort"`
+	ProtocolIdentifier                     uint8     `json:"protocolIdentifier"`
+	PacketTotalCount                       uint64    `json:"packetTotalCount,string"`
+	OctetTotalCount                        uint64    `json:"octetTotalCount,string"`
+	PacketDeltaCount                       uint64    `json:"packetDeltaCount,string"`
+	OctetDeltaCount                        uint64    `json:"octetDeltaCount,string"`
+	ReversePacketTotalCount                uint64    `json:"reversePacketTotalCount,string"`
+	ReverseOctetTotalCount                 uint64    `json:"reverseOctetTotalCount,string"`
+	ReversePacketDeltaCount                uint64    `json:"reversePacketDeltaCount,string"`
+	ReverseOctetDeltaCount                 uint64    `json:"reverseOctetDeltaCount,string"`
+	SourcePodName                          string    `json:"sourcePodName"`
+	SourcePodNamespace                     string    `json:"sourcePodNamespace"`
+	SourceNodeName                         string    `json:"sourceNodeName"`
+	DestinationPodName                     string    `json:"destinationPodName"`
+	DestinationPodNamespace                string    `json:"destinationPodNamespace"`
+	DestinationNodeName                    string    `json:"destinationNodeName"`
+	DestinationClusterIP                   string    `json:"destinationClusterIP"`
+	DestinationServicePort                 uint16    `json:"destinationServicePort"`
+	DestinationServicePortName             string    `json:"destinationServicePortName"`
+	IngressNetworkPolicyName               string    `json:"ingressNetworkPolicyName"`
+	IngressNetworkPolicyNamespace          string    `json:"ingressNetworkPolicyNamespace"`
+	IngressNetworkPolicyRuleName           string    `json:"ingressNetworkPolicyRuleName"`
+	IngressNetworkPolicyRuleAction         uint8     `json:"ingressNetworkPolicyRuleAction"`
+	IngressNetworkPolicyType               uint8     `json:"ingressNetworkPolicyType"`
+	EgressNetworkPolicyName                string    `json:"egressNetworkPolicyName"`
+	EgressNetworkPolicyNamespace           string    `json:"egressNetworkPolicyNamespace"`
+	EgressNetworkPolicyRuleName            string    `json:"egressNetworkPolicyRuleName"`
+	EgressNetworkPolicyRuleAction          uint8     `json:"egressNetworkPolicyRuleAction"`
+	EgressNetworkPolicyType                uint8     `json:"egressNetworkPolicyType"`
+	TcpState                               string    `json:"tcpState"`
+	FlowType                               uint8     `json:"flowType"`
+	SourcePodLabels                        string    `json:"sourcePodLabels"`
+	DestinationPodLabels                   string    `json:"destinationPodLabels"`
+	Throughput                             uint64    `json:"throughput,string"`
+	ReverseThroughput                      uint64    `json:"reverseThroughput,string"`
+	ThroughputFromSourceNode               uint64    `json:"throughputFromSourceNode,string"`
+	ThroughputFromDestinationNode          uint64    `json:"throughputFromDestinationNode,string"`
+	ReverseThroughputFromSourceNode        uint64    `json:"reverseThroughputFromSourceNode,string"`
+	ReverseThroughputFromDestinationNode   uint64    `json:"reverseThroughputFromDestinationNode,string"`
+	Trusted                                uint8     `json:"trusted"`
 }

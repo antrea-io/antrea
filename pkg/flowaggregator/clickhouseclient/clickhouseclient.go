@@ -148,53 +148,53 @@ func (ci *ClickHouseInput) getDataSourceName() (string, error) {
 }
 
 type ClickHouseFlowRow struct {
-	flowStartSeconds                     time.Time
-	flowEndSeconds                       time.Time
-	flowEndSecondsFromSourceNode         time.Time
-	flowEndSecondsFromDestinationNode    time.Time
-	flowEndReason                        uint8
-	sourceIP                             string
-	destinationIP                        string
-	sourceTransportPort                  uint16
-	destinationTransportPort             uint16
-	protocolIdentifier                   uint8
-	packetTotalCount                     uint64
-	octetTotalCount                      uint64
-	packetDeltaCount                     uint64
-	octetDeltaCount                      uint64
-	reversePacketTotalCount              uint64
-	reverseOctetTotalCount               uint64
-	reversePacketDeltaCount              uint64
-	reverseOctetDeltaCount               uint64
-	sourcePodName                        string
-	sourcePodNamespace                   string
-	sourceNodeName                       string
-	destinationPodName                   string
-	destinationPodNamespace              string
-	destinationNodeName                  string
-	destinationClusterIP                 string
-	destinationServicePort               uint16
-	destinationServicePortName           string
-	ingressNetworkPolicyName             string
-	ingressNetworkPolicyNamespace        string
-	ingressNetworkPolicyRuleName         string
-	ingressNetworkPolicyRuleAction       uint8
-	ingressNetworkPolicyType             uint8
-	egressNetworkPolicyName              string
-	egressNetworkPolicyNamespace         string
-	egressNetworkPolicyRuleName          string
-	egressNetworkPolicyRuleAction        uint8
-	egressNetworkPolicyType              uint8
-	tcpState                             string
-	flowType                             uint8
-	sourcePodLabels                      string
-	destinationPodLabels                 string
-	throughput                           uint64
-	reverseThroughput                    uint64
-	throughputFromSourceNode             uint64
-	throughputFromDestinationNode        uint64
-	reverseThroughputFromSourceNode      uint64
-	reverseThroughputFromDestinationNode uint64
+	flowStartMilliseconds                  time.Time
+	flowEndMilliseconds                    time.Time
+	flowEndMillisecondsFromSourceNode      time.Time
+	flowEndMillisecondsFromDestinationNode time.Time
+	flowEndReason                          uint8
+	sourceIP                               string
+	destinationIP                          string
+	sourceTransportPort                    uint16
+	destinationTransportPort               uint16
+	protocolIdentifier                     uint8
+	packetTotalCount                       uint64
+	octetTotalCount                        uint64
+	packetDeltaCount                       uint64
+	octetDeltaCount                        uint64
+	reversePacketTotalCount                uint64
+	reverseOctetTotalCount                 uint64
+	reversePacketDeltaCount                uint64
+	reverseOctetDeltaCount                 uint64
+	sourcePodName                          string
+	sourcePodNamespace                     string
+	sourceNodeName                         string
+	destinationPodName                     string
+	destinationPodNamespace                string
+	destinationNodeName                    string
+	destinationClusterIP                   string
+	destinationServicePort                 uint16
+	destinationServicePortName             string
+	ingressNetworkPolicyName               string
+	ingressNetworkPolicyNamespace          string
+	ingressNetworkPolicyRuleName           string
+	ingressNetworkPolicyRuleAction         uint8
+	ingressNetworkPolicyType               uint8
+	egressNetworkPolicyName                string
+	egressNetworkPolicyNamespace           string
+	egressNetworkPolicyRuleName            string
+	egressNetworkPolicyRuleAction          uint8
+	egressNetworkPolicyType                uint8
+	tcpState                               string
+	flowType                               uint8
+	sourcePodLabels                        string
+	destinationPodLabels                   string
+	throughput                             uint64
+	reverseThroughput                      uint64
+	throughputFromSourceNode               uint64
+	throughputFromDestinationNode          uint64
+	reverseThroughputFromSourceNode        uint64
+	reverseThroughputFromDestinationNode   uint64
 }
 
 func NewClickHouseClient(input ClickHouseInput) (*ClickHouseExportProcess, error) {
@@ -264,17 +264,17 @@ func (ch *ClickHouseExportProcess) stopExportProcess(flushQueue bool) {
 
 func (ch *ClickHouseExportProcess) getClickHouseFlowRow(record ipfixentities.Record) *ClickHouseFlowRow {
 	chFlowRow := ClickHouseFlowRow{}
-	if flowStartSeconds, _, ok := record.GetInfoElementWithValue("flowStartSeconds"); ok {
-		chFlowRow.flowStartSeconds = time.Unix(int64(flowStartSeconds.GetUnsigned32Value()), 0)
+	if flowStartMilliseconds, _, ok := record.GetInfoElementWithValue("flowStartMilliseconds"); ok {
+		chFlowRow.flowStartMilliseconds = time.UnixMilli(int64(flowStartMilliseconds.GetUnsigned64Value()))
 	}
-	if flowEndSeconds, _, ok := record.GetInfoElementWithValue("flowEndSeconds"); ok {
-		chFlowRow.flowEndSeconds = time.Unix(int64(flowEndSeconds.GetUnsigned32Value()), 0)
+	if flowEndMilliseconds, _, ok := record.GetInfoElementWithValue("flowEndMilliseconds"); ok {
+		chFlowRow.flowEndMilliseconds = time.UnixMilli(int64(flowEndMilliseconds.GetUnsigned64Value()))
 	}
-	if flowEndSecFromSrcNode, _, ok := record.GetInfoElementWithValue("flowEndSecondsFromSourceNode"); ok {
-		chFlowRow.flowEndSecondsFromSourceNode = time.Unix(int64(flowEndSecFromSrcNode.GetUnsigned32Value()), 0)
+	if flowEndMillisecFromSrcNode, _, ok := record.GetInfoElementWithValue("flowEndMillisecondsFromSourceNode"); ok {
+		chFlowRow.flowEndMillisecondsFromSourceNode = time.UnixMilli(int64(flowEndMillisecFromSrcNode.GetUnsigned64Value()))
 	}
-	if flowEndSecFromDstNode, _, ok := record.GetInfoElementWithValue("flowEndSecondsFromDestinationNode"); ok {
-		chFlowRow.flowEndSecondsFromDestinationNode = time.Unix(int64(flowEndSecFromDstNode.GetUnsigned32Value()), 0)
+	if flowEndMillisecFromDstNode, _, ok := record.GetInfoElementWithValue("flowEndMillisecondsFromDestinationNode"); ok {
+		chFlowRow.flowEndMillisecondsFromDestinationNode = time.UnixMilli(int64(flowEndMillisecFromDstNode.GetUnsigned64Value()))
 	}
 	if flowEndReason, _, ok := record.GetInfoElementWithValue("flowEndReason"); ok {
 		chFlowRow.flowEndReason = flowEndReason.GetUnsigned8Value()
@@ -490,10 +490,10 @@ func (ch *ClickHouseExportProcess) batchCommitAll(ctx context.Context) (int, err
 	for _, record := range recordsToExport {
 		_, err := stmt.ExecContext(
 			ctx,
-			record.flowStartSeconds,
-			record.flowEndSeconds,
-			record.flowEndSecondsFromSourceNode,
-			record.flowEndSecondsFromDestinationNode,
+			record.flowStartMilliseconds,
+			record.flowEndMilliseconds,
+			record.flowEndMillisecondsFromSourceNode,
+			record.flowEndMillisecondsFromDestinationNode,
 			record.flowEndReason,
 			record.sourceIP,
 			record.destinationIP,

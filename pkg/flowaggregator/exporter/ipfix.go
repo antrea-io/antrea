@@ -304,7 +304,7 @@ func (e *IPFIXExporter) sendTemplateSet(isIPv6 bool) (int, error) {
 		}
 		elements = append(elements, ie)
 	}
-	for _, ie := range infoelements.AntreaFlowEndSecondsElementList {
+	for _, ie := range infoelements.AntreaFlowEndMillisecondsElementList {
 		ie, err := e.createInfoElementForTemplateSet(ie, ipfixregistry.AntreaEnterpriseID)
 		if err != nil {
 			return 0, err

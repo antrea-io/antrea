@@ -74,6 +74,7 @@ func (ct *connTrackSystem) DumpFlows(zoneFilter uint16) ([]*flowexporter.Connect
 	// Link to issue: https://github.com/ti-mo/conntrack/issues/23
 	// Dump all flows in the conntrack table for now.
 	conns, err := ct.connTrack.DumpFlowsInCtZone(zoneFilter)
+
 	if err != nil {
 		return nil, 0, fmt.Errorf("error when dumping flows from conntrack: %v", err)
 	}
@@ -110,9 +111,17 @@ func (nfct *netFilterConnTrack) DumpFlowsInCtZone(zoneFilter uint16) ([]*flowexp
 		return nil, err
 	}
 	antreaConns := make([]*flowexporter.Connection, len(conns))
+	timeWait, err := GetTCPTimeoutTimeWait()
+	if err != nil {
+		return nil, err
+	}
+	timeClose, err := GetTCPTimeoutClose()
+	if err != nil {
+		return nil, err
+	}
 	for i := range conns {
 		conn := conns[i]
-		antreaConns[i] = NetlinkFlowToAntreaConnection(&conn)
+		antreaConns[i] = NetlinkFlowToAntreaConnection(&conn, timeWait, timeClose)
 	}
 
 	klog.V(2).Infof("Finished dumping -- total no. of flows in conntrack: %d", len(antreaConns))
@@ -121,7 +130,7 @@ func (nfct *netFilterConnTrack) DumpFlowsInCtZone(zoneFilter uint16) ([]*flowexp
 	return antreaConns, nil
 }
 
-func NetlinkFlowToAntreaConnection(conn *conntrack.Flow) *flowexporter.Connection {
+func NetlinkFlowToAntreaConnection(conn *conntrack.Flow, timeWait int, timeClose int) *flowexporter.Connection {
 	tuple := flowexporter.Tuple{
 		SourceAddress:      conn.TupleOrig.IP.SourceAddress,
 		DestinationAddress: conn.TupleReply.IP.SourceAddress,
@@ -153,17 +162,31 @@ func NetlinkFlowToAntreaConnection(conn *conntrack.Flow) *flowexporter.Connectio
 		DestinationPodName:        "",
 		TCPState:                  "",
 	}
+	currentTime := time.Now().UnixMilli()
+	stopTime := currentTime
 	if conn.ProtoInfo.TCP != nil {
 		newConn.TCPState = stateToString(conn.ProtoInfo.TCP.State)
+		switch newConn.TCPState {
+		case "TIME_WAIT":
+			timeDiff := int64(timeWait) - int64(conn.Timeout)
+			stopTime -= 1000 * timeDiff
+		case "CLOSE":
+			timeDiff := int64(timeClose) - int64(conn.Timeout)
+			stopTime -= 1000 * timeDiff
+		}
+	}
+	startTime := newConn.StartTime.UnixMilli()
+	// For short flow (less 1s), the timeDiff might cause stopTime to be less than startTime. We add 1s back to stopTime for this case.
+	if stopTime < startTime {
+		stopTime += 1000
 	}
 
 	// Get the stop time from dumped connection if the connection is terminated(dying state).
 	if conn.Status.Dying() {
 		newConn.StopTime = conn.Timestamp.Stop
 	} else {
-		newConn.StopTime = time.Now()
+		newConn.StopTime = time.UnixMilli(stopTime)
 	}
-
 	return &newConn
 }
 
@@ -179,6 +202,16 @@ func SetupConntrackParameters() error {
 		return fmt.Errorf("the following kernel parameters could not be verified / set: %v", parametersWithErrors)
 	}
 	return nil
+}
+
+func GetTCPTimeoutTimeWait() (int, error) {
+	timeWait, err := sysctl.GetSysctlNet("netfilter/nf_conntrack_tcp_timeout_time_wait")
+	return timeWait, err
+}
+
+func GetTCPTimeoutClose() (int, error) {
+	timeClose, err := sysctl.GetSysctlNet("netfilter/nf_conntrack_tcp_timeout_close")
+	return timeClose, err
 }
 
 func (ct *connTrackSystem) GetMaxConnections() (int, error) {

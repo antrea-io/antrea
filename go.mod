@@ -191,3 +191,5 @@ require (
 )
 
 replace antrea.io/ofnet v0.6.0 => github.com/wenyingd/ofnet v0.0.0-20220817031400-cb451467adc1
+
+replace github.com/vmware/go-ipfix v0.5.12 => github.com/yuntanghsu/go-ipfix v0.2.1-0.20220728004846-ff01b41cc7b4

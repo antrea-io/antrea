@@ -16,8 +16,8 @@ package infoelements
 
 var (
 	IANAInfoElementsCommon = []string{
-		"flowStartSeconds",
-		"flowEndSeconds",
+		"flowStartMilliseconds",
+		"flowEndMilliseconds",
 		"flowEndReason",
 		"sourceTransportPort",
 		"destinationTransportPort",
@@ -62,7 +62,7 @@ var (
 	AntreaInfoElementsIPv6 = append(AntreaInfoElementsCommon, []string{"destinationClusterIPv6"}...)
 
 	NonStatsElementList = []string{
-		"flowEndSeconds",
+		"flowEndMilliseconds",
 		"flowEndReason",
 		"tcpState",
 	}
@@ -101,9 +101,9 @@ var (
 		"sourcePodLabels",
 		"destinationPodLabels",
 	}
-	AntreaFlowEndSecondsElementList = []string{
-		"flowEndSecondsFromSourceNode",
-		"flowEndSecondsFromDestinationNode",
+	AntreaFlowEndMillisecondsElementList = []string{
+		"flowEndMillisecondsFromSourceNode",
+		"flowEndMillisecondsFromDestinationNode",
 	}
 	AntreaThroughputElementList = []string{
 		"throughput",

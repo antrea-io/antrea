@@ -49,6 +49,9 @@ var (
 	}
 )
 
+const defaultTCPTimeoutTimeWait = 120
+const defaultTCPTimeoutClose = 10
+
 func TestConnTrackSystem_DumpFlows(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -242,7 +245,7 @@ func TestNetLinkFlowToAntreaConnection(t *testing.T) {
 		TCPState:                  "",
 	}
 
-	antreaFlow := NetlinkFlowToAntreaConnection(netlinkFlow)
+	antreaFlow := NetlinkFlowToAntreaConnection(netlinkFlow, defaultTCPTimeoutTimeWait, defaultTCPTimeoutClose)
 	// Just add the stop time directly as it will be set to the time of day at
 	// which the function was executed.
 	expectedAntreaFlow.StopTime = antreaFlow.StopTime
@@ -279,6 +282,6 @@ func TestNetLinkFlowToAntreaConnection(t *testing.T) {
 		TCPState:                  "",
 	}
 
-	antreaFlow = NetlinkFlowToAntreaConnection(netlinkFlow)
+	antreaFlow = NetlinkFlowToAntreaConnection(netlinkFlow, defaultTCPTimeoutTimeWait, defaultTCPTimeoutClose)
 	assert.Equalf(t, expectedAntreaFlow, antreaFlow, "both flows should be equal")
 }

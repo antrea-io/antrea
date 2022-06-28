@@ -89,10 +89,10 @@ func TestGetClickHouseFlowRow(t *testing.T) {
 
 		chClient := &ClickHouseExportProcess{}
 		flowRow := chClient.getClickHouseFlowRow(mockRecord)
-		assert.Equal(t, time.Unix(int64(1637706961), 0), flowRow.flowStartSeconds)
-		assert.Equal(t, time.Unix(int64(1637706973), 0), flowRow.flowEndSeconds)
-		assert.Equal(t, time.Unix(int64(1637706974), 0), flowRow.flowEndSecondsFromSourceNode)
-		assert.Equal(t, time.Unix(int64(1637706975), 0), flowRow.flowEndSecondsFromDestinationNode)
+		assert.Equal(t, time.UnixMilli(1637706961), flowRow.flowStartMilliseconds)
+		assert.Equal(t, time.UnixMilli(1637706973), flowRow.flowEndMilliseconds)
+		assert.Equal(t, time.UnixMilli(1637706974), flowRow.flowEndMillisecondsFromSourceNode)
+		assert.Equal(t, time.UnixMilli(1637706975), flowRow.flowEndMillisecondsFromDestinationNode)
 		assert.Equal(t, uint8(3), flowRow.flowEndReason)
 		assert.Equal(t, uint16(44752), flowRow.sourceTransportPort)
 		assert.Equal(t, uint16(5201), flowRow.destinationTransportPort)
@@ -153,21 +153,21 @@ func createElement(name string, enterpriseID uint32) ipfixentities.InfoElementWi
 }
 
 func prepareMockRecord(mockRecord *ipfixentitiestesting.MockRecord, isIPv4 bool) {
-	flowStartSecElem := createElement("flowStartSeconds", ipfixregistry.IANAEnterpriseID)
-	flowStartSecElem.SetUnsigned32Value(uint32(1637706961))
-	mockRecord.EXPECT().GetInfoElementWithValue("flowStartSeconds").Return(flowStartSecElem, 0, true)
+	flowStartSecElem := createElement("flowStartMilliseconds", ipfixregistry.IANAEnterpriseID)
+	flowStartSecElem.SetUnsigned64Value(uint64(1637706961))
+	mockRecord.EXPECT().GetInfoElementWithValue("flowStartMilliseconds").Return(flowStartSecElem, 0, true)
 
-	flowEndSecElem := createElement("flowEndSeconds", ipfixregistry.IANAEnterpriseID)
-	flowEndSecElem.SetUnsigned32Value(uint32(1637706973))
-	mockRecord.EXPECT().GetInfoElementWithValue("flowEndSeconds").Return(flowEndSecElem, 0, true)
+	flowEndSecElem := createElement("flowEndMilliseconds", ipfixregistry.IANAEnterpriseID)
+	flowEndSecElem.SetUnsigned64Value(uint64(1637706973))
+	mockRecord.EXPECT().GetInfoElementWithValue("flowEndMilliseconds").Return(flowEndSecElem, 0, true)
 
-	flowEndSecSrcNodeElem := createElement("flowEndSecondsFromSourceNode", ipfixregistry.AntreaEnterpriseID)
-	flowEndSecSrcNodeElem.SetUnsigned32Value(uint32(1637706974))
-	mockRecord.EXPECT().GetInfoElementWithValue("flowEndSecondsFromSourceNode").Return(flowEndSecSrcNodeElem, 0, true)
+	flowEndSecSrcNodeElem := createElement("flowEndMillisecondsFromSourceNode", ipfixregistry.AntreaEnterpriseID)
+	flowEndSecSrcNodeElem.SetUnsigned64Value(uint64(1637706974))
+	mockRecord.EXPECT().GetInfoElementWithValue("flowEndMillisecondsFromSourceNode").Return(flowEndSecSrcNodeElem, 0, true)
 
-	flowEndSecDstNodeElem := createElement("flowEndSecondsFromDestinationNode", ipfixregistry.AntreaEnterpriseID)
-	flowEndSecDstNodeElem.SetUnsigned32Value(uint32(1637706975))
-	mockRecord.EXPECT().GetInfoElementWithValue("flowEndSecondsFromDestinationNode").Return(flowEndSecDstNodeElem, 0, true)
+	flowEndSecDstNodeElem := createElement("flowEndMillisecondsFromDestinationNode", ipfixregistry.AntreaEnterpriseID)
+	flowEndSecDstNodeElem.SetUnsigned64Value(uint64(1637706975))
+	mockRecord.EXPECT().GetInfoElementWithValue("flowEndMillisecondsFromDestinationNode").Return(flowEndSecDstNodeElem, 0, true)
 
 	flowEndReasonElem := createElement("flowEndReason", ipfixregistry.IANAEnterpriseID)
 	flowEndReasonElem.SetUnsigned8Value(uint8(3))
@@ -388,53 +388,53 @@ func TestCacheRecord(t *testing.T) {
 
 func getTestClickHouseFlowRow() *ClickHouseFlowRow {
 	return &ClickHouseFlowRow{
-		flowStartSeconds:                     time.Unix(int64(1637706961), 0),
-		flowEndSeconds:                       time.Unix(int64(1637706973), 0),
-		flowEndSecondsFromSourceNode:         time.Unix(int64(1637706974), 0),
-		flowEndSecondsFromDestinationNode:    time.Unix(int64(1637706975), 0),
-		flowEndReason:                        3,
-		sourceIP:                             "10.10.0.79",
-		destinationIP:                        "10.10.0.80",
-		sourceTransportPort:                  44752,
-		destinationTransportPort:             5201,
-		protocolIdentifier:                   6,
-		packetTotalCount:                     823188,
-		octetTotalCount:                      30472817041,
-		packetDeltaCount:                     241333,
-		octetDeltaCount:                      8982624938,
-		reversePacketTotalCount:              471111,
-		reverseOctetTotalCount:               24500996,
-		reversePacketDeltaCount:              136211,
-		reverseOctetDeltaCount:               7083284,
-		sourcePodName:                        "perftest-a",
-		sourcePodNamespace:                   "antrea-test",
-		sourceNodeName:                       "k8s-node-control-plane",
-		destinationPodName:                   "perftest-b",
-		destinationPodNamespace:              "antrea-test-b",
-		destinationNodeName:                  "k8s-node-control-plane-b",
-		destinationClusterIP:                 "10.10.1.10",
-		destinationServicePort:               5202,
-		destinationServicePortName:           "perftest",
-		ingressNetworkPolicyName:             "test-flow-aggregator-networkpolicy-ingress-allow",
-		ingressNetworkPolicyNamespace:        "antrea-test-ns",
-		ingressNetworkPolicyRuleName:         "test-flow-aggregator-networkpolicy-rule",
-		ingressNetworkPolicyRuleAction:       2,
-		ingressNetworkPolicyType:             1,
-		egressNetworkPolicyName:              "test-flow-aggregator-networkpolicy-egress-allow",
-		egressNetworkPolicyNamespace:         "antrea-test-ns-e",
-		egressNetworkPolicyRuleName:          "test-flow-aggregator-networkpolicy-rule-e",
-		egressNetworkPolicyRuleAction:        5,
-		egressNetworkPolicyType:              4,
-		tcpState:                             "TIME_WAIT",
-		flowType:                             11,
-		sourcePodLabels:                      "{\"antrea-e2e\":\"perftest-a\",\"app\":\"perftool\"}",
-		destinationPodLabels:                 "{\"antrea-e2e\":\"perftest-b\",\"app\":\"perftool\"}",
-		throughput:                           15902813472,
-		reverseThroughput:                    12381344,
-		throughputFromSourceNode:             15902813473,
-		throughputFromDestinationNode:        15902813474,
-		reverseThroughputFromSourceNode:      12381345,
-		reverseThroughputFromDestinationNode: 12381346,
+		flowStartMilliseconds:                  time.UnixMilli(int64(1637706961)),
+		flowEndMilliseconds:                    time.UnixMilli(int64(1637706973)),
+		flowEndMillisecondsFromSourceNode:      time.UnixMilli(int64(1637706974)),
+		flowEndMillisecondsFromDestinationNode: time.UnixMilli(int64(1637706975)),
+		flowEndReason:                          3,
+		sourceIP:                               "10.10.0.79",
+		destinationIP:                          "10.10.0.80",
+		sourceTransportPort:                    44752,
+		destinationTransportPort:               5201,
+		protocolIdentifier:                     6,
+		packetTotalCount:                       823188,
+		octetTotalCount:                        30472817041,
+		packetDeltaCount:                       241333,
+		octetDeltaCount:                        8982624938,
+		reversePacketTotalCount:                471111,
+		reverseOctetTotalCount:                 24500996,
+		reversePacketDeltaCount:                136211,
+		reverseOctetDeltaCount:                 7083284,
+		sourcePodName:                          "perftest-a",
+		sourcePodNamespace:                     "antrea-test",
+		sourceNodeName:                         "k8s-node-control-plane",
+		destinationPodName:                     "perftest-b",
+		destinationPodNamespace:                "antrea-test-b",
+		destinationNodeName:                    "k8s-node-control-plane-b",
+		destinationClusterIP:                   "10.10.1.10",
+		destinationServicePort:                 5202,
+		destinationServicePortName:             "perftest",
+		ingressNetworkPolicyName:               "test-flow-aggregator-networkpolicy-ingress-allow",
+		ingressNetworkPolicyNamespace:          "antrea-test-ns",
+		ingressNetworkPolicyRuleName:           "test-flow-aggregator-networkpolicy-rule",
+		ingressNetworkPolicyRuleAction:         2,
+		ingressNetworkPolicyType:               1,
+		egressNetworkPolicyName:                "test-flow-aggregator-networkpolicy-egress-allow",
+		egressNetworkPolicyNamespace:           "antrea-test-ns-e",
+		egressNetworkPolicyRuleName:            "test-flow-aggregator-networkpolicy-rule-e",
+		egressNetworkPolicyRuleAction:          5,
+		egressNetworkPolicyType:                4,
+		tcpState:                               "TIME_WAIT",
+		flowType:                               11,
+		sourcePodLabels:                        "{\"antrea-e2e\":\"perftest-a\",\"app\":\"perftool\"}",
+		destinationPodLabels:                   "{\"antrea-e2e\":\"perftest-b\",\"app\":\"perftool\"}",
+		throughput:                             15902813472,
+		reverseThroughput:                      12381344,
+		throughputFromSourceNode:               15902813473,
+		throughputFromDestinationNode:          15902813474,
+		reverseThroughputFromSourceNode:        12381345,
+		reverseThroughputFromDestinationNode:   12381346,
 	}
 }
 
@@ -456,10 +456,10 @@ func TestBatchCommitAll(t *testing.T) {
 	mock.ExpectBegin()
 	mock.ExpectPrepare(insertQuery).ExpectExec().
 		WithArgs(
-			time.Unix(int64(1637706961), 0),
-			time.Unix(int64(1637706973), 0),
-			time.Unix(int64(1637706974), 0),
-			time.Unix(int64(1637706975), 0),
+			time.UnixMilli(int64(1637706961)),
+			time.UnixMilli(int64(1637706973)),
+			time.UnixMilli(int64(1637706974)),
+			time.UnixMilli(int64(1637706975)),
 			3,
 			"10.10.0.79",
 			"10.10.0.80",

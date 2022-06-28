@@ -109,7 +109,7 @@ func TestIPFIXExporter_sendTemplateSet(t *testing.T) {
 			elemList = append(elemList, createElement(infoelements.AntreaDestinationStatsElementList[i], ipfixregistry.AntreaEnterpriseID))
 			mockIPFIXRegistry.EXPECT().GetInfoElement(infoelements.AntreaDestinationStatsElementList[i], ipfixregistry.AntreaEnterpriseID).Return(elemList[len(elemList)-1].GetInfoElement(), nil)
 		}
-		for _, ie := range infoelements.AntreaFlowEndSecondsElementList {
+		for _, ie := range infoelements.AntreaFlowEndMillisecondsElementList {
 			elemList = append(elemList, createElement(ie, ipfixregistry.AntreaEnterpriseID))
 			mockIPFIXRegistry.EXPECT().GetInfoElement(ie, ipfixregistry.AntreaEnterpriseID).Return(elemList[len(elemList)-1].GetInfoElement(), nil)
 		}

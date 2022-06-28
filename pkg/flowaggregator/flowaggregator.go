@@ -48,7 +48,7 @@ var (
 		StatsElements:                      infoelements.StatsElementList,
 		AggregatedSourceStatsElements:      infoelements.AntreaSourceStatsElementList,
 		AggregatedDestinationStatsElements: infoelements.AntreaDestinationStatsElementList,
-		AntreaFlowEndSecondsElements:       infoelements.AntreaFlowEndSecondsElementList,
+		AntreaFlowEndMillisecondsElements:  infoelements.AntreaFlowEndMillisecondsElementList,
 		ThroughputElements:                 infoelements.AntreaThroughputElementList,
 		SourceThroughputElements:           infoelements.AntreaSourceThroughputElementList,
 		DestinationThroughputElements:      infoelements.AntreaDestinationThroughputElementList,
@@ -254,7 +254,7 @@ func (fa *flowAggregator) InitCollectingProcess() error {
 		}
 	}
 	cpInput.NumExtraElements = len(infoelements.AntreaSourceStatsElementList) + len(infoelements.AntreaDestinationStatsElementList) + len(infoelements.AntreaLabelsElementList) +
-		len(infoelements.AntreaFlowEndSecondsElementList) + len(infoelements.AntreaThroughputElementList) + len(infoelements.AntreaSourceThroughputElementList) + len(infoelements.AntreaDestinationThroughputElementList)
+		len(infoelements.AntreaFlowEndMillisecondsElementList) + len(infoelements.AntreaThroughputElementList) + len(infoelements.AntreaSourceThroughputElementList) + len(infoelements.AntreaDestinationThroughputElementList)
 	var err error
 	fa.collectingProcess, err = ipfix.NewIPFIXCollectingProcess(cpInput)
 	return err
