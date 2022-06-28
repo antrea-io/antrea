@@ -21,58 +21,60 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	"antrea.io/antrea/pkg/agent/nodeportlocal/types"
 )
 
 func BenchmarkCompareNPLAnnotationLists(b *testing.B) {
 	const nodeIP = "127.0.0.1"
-	a1 := NPLAnnotation{
+	a1 := types.NPLAnnotation{
 		PodPort:  80,
 		NodeIP:   nodeIP,
 		NodePort: 61000,
 	}
-	a2 := NPLAnnotation{
+	a2 := types.NPLAnnotation{
 		PodPort:  8080,
 		NodeIP:   nodeIP,
 		NodePort: 61001,
 	}
-	a3 := NPLAnnotation{
+	a3 := types.NPLAnnotation{
 		PodPort:  81,
 		NodeIP:   nodeIP,
 		NodePort: 61002,
 	}
-	a4 := NPLAnnotation{
+	a4 := types.NPLAnnotation{
 		PodPort:  8081,
 		NodeIP:   nodeIP,
 		NodePort: 61003,
 	}
 	benchmarkCases := []struct {
 		name         string
-		annotations1 []NPLAnnotation
-		annotations2 []NPLAnnotation
+		annotations1 []types.NPLAnnotation
+		annotations2 []types.NPLAnnotation
 		equal        bool
 	}{
 		{
 			"EqualSameOrder",
-			[]NPLAnnotation{a2, a1, a3},
-			[]NPLAnnotation{a2, a1, a3},
+			[]types.NPLAnnotation{a2, a1, a3},
+			[]types.NPLAnnotation{a2, a1, a3},
 			true,
 		},
 		{
 			"EqualDifferentOrder",
-			[]NPLAnnotation{a1, a2, a3},
-			[]NPLAnnotation{a3, a2, a1},
+			[]types.NPLAnnotation{a1, a2, a3},
+			[]types.NPLAnnotation{a3, a2, a1},
 			true,
 		},
 		{
 			"NotEqualSameLength",
-			[]NPLAnnotation{a1, a2, a3},
-			[]NPLAnnotation{a3, a2, a4},
+			[]types.NPLAnnotation{a1, a2, a3},
+			[]types.NPLAnnotation{a3, a2, a4},
 			false,
 		},
 		{
 			"NotEqualDifferentLength",
-			[]NPLAnnotation{a1, a2, a3},
-			[]NPLAnnotation{a1, a2, a3, a4},
+			[]types.NPLAnnotation{a1, a2, a3},
+			[]types.NPLAnnotation{a1, a2, a3, a4},
 			false,
 		},
 	}

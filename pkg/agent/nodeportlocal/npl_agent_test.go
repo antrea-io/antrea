@@ -40,12 +40,13 @@ import (
 	k8sfake "k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/tools/cache"
 
-	nplk8s "antrea.io/antrea/pkg/agent/nodeportlocal/k8s"
+	"antrea.io/antrea/pkg/agent/nodeportlocal/k8s"
 	"antrea.io/antrea/pkg/agent/nodeportlocal/portcache"
 	portcachetesting "antrea.io/antrea/pkg/agent/nodeportlocal/portcache/testing"
 	"antrea.io/antrea/pkg/agent/nodeportlocal/rules"
 	rulestesting "antrea.io/antrea/pkg/agent/nodeportlocal/rules/testing"
 	npltesting "antrea.io/antrea/pkg/agent/nodeportlocal/testing"
+	"antrea.io/antrea/pkg/agent/nodeportlocal/types"
 )
 
 const (
@@ -138,7 +139,7 @@ func getTestSvc(targetPorts ...int32) *corev1.Service {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        defaultSvcName,
 			Namespace:   defaultNS,
-			Annotations: map[string]string{nplk8s.NPLEnabledAnnotationKey: "true"},
+			Annotations: map[string]string{types.NPLEnabledAnnotationKey: "true"},
 		},
 		Spec: corev1.ServiceSpec{
 			Type:     corev1.ServiceTypeClusterIP,
@@ -153,7 +154,7 @@ func getTestSvcWithPortName(portName string) *corev1.Service {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        defaultSvcName,
 			Namespace:   defaultNS,
-			Annotations: map[string]string{nplk8s.NPLEnabledAnnotationKey: "true"},
+			Annotations: map[string]string{types.NPLEnabledAnnotationKey: "true"},
 		},
 		Spec: corev1.ServiceSpec{
 			Type:     corev1.ServiceTypeClusterIP,
@@ -179,7 +180,7 @@ type testData struct {
 	wg        sync.WaitGroup
 }
 
-func (t *testData) runWrapper(c *nplk8s.NPLController) {
+func (t *testData) runWrapper(c *k8s.NPLController) {
 	t.wg.Add(1)
 	go func() {
 		defer t.wg.Done()
@@ -253,7 +254,7 @@ func setUp(t *testing.T, tc *testConfig, objects ...runtime.Object) *testData {
 	)
 	svcInformer := informerFactory.Core().V1().Services().Informer()
 
-	c := nplk8s.NewNPLController(data.k8sClient, localPodInformer, svcInformer, data.portTable, defaultNodeName)
+	c := k8s.NewNPLController(data.k8sClient, localPodInformer, svcInformer, data.portTable, defaultNodeName)
 
 	data.runWrapper(c)
 	informerFactory.Start(data.stopCh)
@@ -302,7 +303,7 @@ func (t *testData) tearDown() {
 	os.Unsetenv("NODE_NAME")
 }
 
-func (t *testData) pollForPodAnnotation(podName string, found bool) ([]nplk8s.NPLAnnotation, error) {
+func (t *testData) pollForPodAnnotation(podName string, found bool) ([]types.NPLAnnotation, error) {
 	var data string
 	var exists bool
 	// do not use PollImmediate: 1 second is reserved for the controller to do his job and
@@ -311,7 +312,7 @@ func (t *testData) pollForPodAnnotation(podName string, found bool) ([]nplk8s.NP
 		updatedPod, err := t.k8sClient.CoreV1().Pods(defaultNS).Get(context.TODO(), podName, metav1.GetOptions{})
 		require.NoError(t, err, "Failed to get Pod")
 		annotation := updatedPod.GetAnnotations()
-		data, exists = annotation[nplk8s.NPLAnnotationKey]
+		data, exists = annotation[types.NPLAnnotationKey]
 		if found {
 			return exists, nil
 		}
@@ -319,12 +320,12 @@ func (t *testData) pollForPodAnnotation(podName string, found bool) ([]nplk8s.NP
 	})
 
 	if err != nil {
-		return []nplk8s.NPLAnnotation{}, err
+		return []types.NPLAnnotation{}, err
 	}
 	if data == "" {
-		return []nplk8s.NPLAnnotation{}, nil
+		return []types.NPLAnnotation{}, nil
 	}
-	var nplValue []nplk8s.NPLAnnotation
+	var nplValue []types.NPLAnnotation
 	err = json.Unmarshal([]byte(data), &nplValue)
 	return nplValue, err
 }
@@ -394,7 +395,7 @@ func TestSvcUpdateAnnotation(t *testing.T) {
 	defer testData.tearDown()
 
 	// Disable NPL.
-	testSvc.Annotations = map[string]string{nplk8s.NPLEnabledAnnotationKey: "false"}
+	testSvc.Annotations = map[string]string{types.NPLEnabledAnnotationKey: "false"}
 	testData.updateServiceOrFail(testSvc)
 
 	// Check that annotation and the rule is removed.
@@ -403,7 +404,7 @@ func TestSvcUpdateAnnotation(t *testing.T) {
 	assert.False(t, testData.portTable.RuleExists(defaultPodIP, defaultPort, protocolTCP))
 
 	// Enable NPL back.
-	testSvc.Annotations = map[string]string{nplk8s.NPLEnabledAnnotationKey: "true"}
+	testSvc.Annotations = map[string]string{types.NPLEnabledAnnotationKey: "true"}
 	testData.updateServiceOrFail(testSvc)
 
 	_, err = testData.pollForPodAnnotation(testPod.Name, true)
@@ -743,7 +744,7 @@ func TestInitInvalidPod(t *testing.T) {
 	testPod := getTestPod()
 	// assign an invalid annotation
 	annotations := map[string]string{
-		nplk8s.NPLAnnotationKey: "[{\"podPort\":53,\"nodeIP\":\"10.10.10.10\", \"nodePort\": 30000}]",
+		types.NPLAnnotationKey: "[{\"podPort\":53,\"nodeIP\":\"10.10.10.10\", \"nodePort\": 30000}]",
 	}
 	testPod.SetAnnotations(annotations)
 	testData := setUp(t, newTestConfig(), testSvc, testPod)

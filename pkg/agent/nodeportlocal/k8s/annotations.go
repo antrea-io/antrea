@@ -26,29 +26,18 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
+
+	npltypes "antrea.io/antrea/pkg/agent/nodeportlocal/types"
 )
 
-const (
-	NPLAnnotationKey          = "nodeportlocal.antrea.io"
-	NPLEnabledAnnotationKey   = "nodeportlocal.antrea.io/enabled"
-	NPLEnabledAnnotationIndex = "nplEnabledAnnotation"
-)
-
-// NPLAnnotation is the structure used for setting NodePortLocal annotation on the Pods.
-type NPLAnnotation struct {
-	PodPort   int      `json:"podPort"`
-	NodeIP    string   `json:"nodeIP"`
-	NodePort  int      `json:"nodePort"`
-	Protocol  string   `json:"protocol"`
-	Protocols []string `json:"protocols"` // deprecated, array with a single member which is equal to the Protocol field
-}
+const NPLEnabledAnnotationIndex = "nplEnabledAnnotation"
 
 func toJSON(serialize interface{}) string {
 	jsonMarshalled, _ := json.Marshal(serialize)
 	return string(jsonMarshalled)
 }
 
-func (c *NPLController) updatePodNPLAnnotation(pod *corev1.Pod, annotations []NPLAnnotation) error {
+func (c *NPLController) updatePodNPLAnnotation(pod *corev1.Pod, annotations []npltypes.NPLAnnotation) error {
 	if err := patchPod(annotations, pod, c.kubeClient); err != nil {
 		klog.Warningf("Unable to patch NodePortLocal annotation for Pod %s/%s: %v", pod.Namespace, pod.Name, err)
 	}
@@ -56,13 +45,13 @@ func (c *NPLController) updatePodNPLAnnotation(pod *corev1.Pod, annotations []NP
 	return nil
 }
 
-func patchPod(value []NPLAnnotation, pod *corev1.Pod, kubeClient clientset.Interface) error {
+func patchPod(value []npltypes.NPLAnnotation, pod *corev1.Pod, kubeClient clientset.Interface) error {
 	payloadValue := make(map[string]*string)
 	if len(value) > 0 {
 		valueStr := string(toJSON(value))
-		payloadValue[NPLAnnotationKey] = &valueStr
+		payloadValue[npltypes.NPLAnnotationKey] = &valueStr
 	} else {
-		payloadValue[NPLAnnotationKey] = nil
+		payloadValue[npltypes.NPLAnnotationKey] = nil
 	}
 
 	newPayload := map[string]interface{}{
@@ -82,11 +71,11 @@ func patchPod(value []NPLAnnotation, pod *corev1.Pod, kubeClient clientset.Inter
 
 // compareNPLAnnotationLists returns true if and only if the two lists contain the same set of
 // annotations, irrespective of the order.
-func compareNPLAnnotationLists(annotations1, annotations2 []NPLAnnotation) bool {
+func compareNPLAnnotationLists(annotations1, annotations2 []npltypes.NPLAnnotation) bool {
 	if len(annotations1) != len(annotations2) {
 		return false
 	}
-	nplAnnotationLess := func(a1, a2 *NPLAnnotation) bool {
+	nplAnnotationLess := func(a1, a2 *npltypes.NPLAnnotation) bool {
 		return a1.NodePort < a2.NodePort
 
 	}
