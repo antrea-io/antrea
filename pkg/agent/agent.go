@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/containernetworking/plugins/pkg/ip"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	apitypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -800,9 +801,28 @@ func (i *Initializer) initNodeLocalConfig() error {
 	if err != nil {
 		return err
 	}
-	node, err := i.client.CoreV1().Nodes().Get(context.TODO(), nodeName, metav1.GetOptions{})
+
+	var node *v1.Node
+	err = wait.PollImmediate(5*time.Second, 30*time.Second, func() (bool, error) {
+		node, err = i.client.CoreV1().Nodes().Get(context.TODO(), nodeName, metav1.GetOptions{})
+		if err != nil {
+			return false, fmt.Errorf("failed to get Node with name %s from K8s: %w", nodeName, err)
+		}
+
+		// Validate that CIDR for Pods is configured anywhere
+		if node.Spec.PodCIDRs == nil && node.Spec.PodCIDR == "" {
+			klog.V(2).Info("Waiting for Node PodCIDR configuration to complete")
+			return false, nil
+		}
+		return true, nil
+	})
 	if err != nil {
-		return fmt.Errorf("failed to get Node with name %s from K8s: %w", nodeName, err)
+		if node != nil && node.Spec.PodCIDRs == nil && node.Spec.PodCIDR == "" {
+			klog.ErrorS(err, "Spec.PodCIDR is empty for Node. Please make sure --allocate-node-cidrs is enabled "+
+				"for kube-controller-manager and --cluster-cidr specifies a sufficient CIDR range", "nodeName", nodeName)
+			return fmt.Errorf("CIDR string is empty for Node %s", nodeName)
+		}
+		return fmt.Errorf("node retrieval failed with the following error: %v", err)
 	}
 
 	// nodeInterface is the interface that has K8s Node IP. transportInterface is the interface that is used for
