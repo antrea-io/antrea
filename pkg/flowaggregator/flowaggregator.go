@@ -201,6 +201,7 @@ const (
 	enableClickHouse
 	disableClickHouse
 	disableFlowCollector
+	updateIncludePodLabels
 )
 
 type updateMsg struct {
@@ -527,7 +528,6 @@ func (fa *flowAggregator) Run(stopCh <-chan struct{}, wg *sync.WaitGroup) {
 	defer fa.aggregationProcess.Stop()
 	if fa.dbExportProcess != nil {
 		go fa.dbExportProcess.Start()
-		defer fa.dbExportProcess.Stop()
 	}
 	go fa.flowExportLoop(stopCh)
 	go fa.watchConfiguration(stopCh)
@@ -543,10 +543,14 @@ func (fa *flowAggregator) flowExportLoop(stopCh <-chan struct{}) {
 			if fa.exportingProcess != nil {
 				fa.exportingProcess.CloseConnToCollector()
 			}
+			if fa.dbExportProcess != nil {
+				fa.dbExportProcess.Stop()
+			}
 			expireTimer.Stop()
 			return
 		case <-expireTimer.C:
 			if fa.externalFlowCollectorAddr != "" && fa.exportingProcess == nil {
+				klog.InfoS("Setting exporting process")
 				err := fa.initExportingProcess()
 				if err != nil {
 					klog.ErrorS(err, "Error when initializing exporting process", "wait time for retry", fa.activeFlowRecordTimeout)
@@ -554,6 +558,7 @@ func (fa *flowAggregator) flowExportLoop(stopCh <-chan struct{}) {
 					expireTimer.Reset(fa.activeFlowRecordTimeout)
 					continue
 				}
+				klog.InfoS("Exporting process has been setup")
 			}
 			// Pop the flow record item from expire priority queue in the Aggregation
 			// Process and send the flow records.
@@ -602,7 +607,6 @@ func (fa *flowAggregator) flowExportLoop(stopCh <-chan struct{}) {
 				}
 				klog.InfoS("Clickhouse param is", "database", chInput.Database, "databaseURL", chInput.DatabaseURL, "debug", chInput.Debug, "compress", *chInput.Compress, "commitInterval", fa.dbExportProcess.GetCommitInterval().String())
 				go fa.dbExportProcess.Start()
-				defer fa.dbExportProcess.Stop()
 			case updateClickHouseParam:
 				chInput := msg.value.(clickhouseclient.ClickHouseInput)
 				dsn, connect, err := clickhouseclient.PrepareConnection(chInput)
@@ -630,7 +634,7 @@ func (fa *flowAggregator) flowExportLoop(stopCh <-chan struct{}) {
 						fa.exportingProcess.CloseConnToCollector()
 						fa.exportingProcess = nil
 					}
-					klog.Info("Flow-collector disabled ")
+					klog.InfoS("Flow-collector disabled")
 				}
 			case disableClickHouse:
 				if fa.dbExportProcess != nil {
@@ -639,6 +643,14 @@ func (fa *flowAggregator) flowExportLoop(stopCh <-chan struct{}) {
 					fa.dbExportProcess = nil
 					klog.InfoS("Clickhouse disabled")
 				}
+			case updateIncludePodLabels:
+				fa.includePodLabels = msg.value.(bool)
+				if fa.exportingProcess != nil {
+					klog.InfoS("Closing connection to external collector")
+					fa.exportingProcess.CloseConnToCollector()
+					fa.exportingProcess = nil
+				}
+				klog.InfoS("IncludePodLabel has been updated", "value", fa.includePodLabels)
 			}
 		}
 	}
@@ -659,11 +671,16 @@ func (fa *flowAggregator) sendFlowKeyRecord(key ipfixintermediate.FlowKey, recor
 		fa.fillK8sMetadata(key, record.Record)
 		fa.aggregationProcess.SetCorrelatedFieldsFilled(record)
 	}
-	if fa.includePodLabels && !fa.aggregationProcess.AreExternalFieldsFilled(*record) {
+	areExternalFieldsFilled := fa.aggregationProcess.AreExternalFieldsFilled(*record)
+	if fa.includePodLabels && !areExternalFieldsFilled {
 		fa.fillPodLabels(key, record.Record)
 		fa.aggregationProcess.SetExternalFieldsFilled(record)
 	}
-	if err := fa.set.AddRecord(record.Record.GetOrderedElementList(), templateID); err != nil {
+	elementList := record.Record.GetOrderedElementList()
+	if !fa.includePodLabels && areExternalFieldsFilled {
+		elementList = fa.filterPodLabelFields(elementList)
+	}
+	if err := fa.set.AddRecord(elementList, templateID); err != nil {
 		return err
 	}
 	if fa.exportingProcess != nil {
@@ -957,6 +974,12 @@ func (fa *flowAggregator) handleWatcherEvent() error {
 
 func (fa *flowAggregator) updateFlowAggregator(opt *options.Options) {
 	klog.InfoS("Updating Flow Aggregator")
+	if opt.Config.RecordContents.PodLabels != fa.includePodLabels {
+		fa.updateCh <- updateMsg{
+			param: updateIncludePodLabels,
+			value: opt.Config.RecordContents.PodLabels,
+		}
+	}
 	if opt.Config.FlowCollector.Enable {
 		query := querier.ExternalFlowCollectorAddr{
 			Address:  opt.ExternalFlowCollectorAddr,
@@ -1001,4 +1024,15 @@ func (fa *flowAggregator) updateFlowAggregator(opt *options.Options) {
 			}
 		}
 	}
+}
+
+func (fa *flowAggregator) filterPodLabelFields(list []ipfixentities.InfoElementWithValue) []ipfixentities.InfoElementWithValue {
+	klog.InfoS("Removing PodLabel related fields in record")
+	var elementList []ipfixentities.InfoElementWithValue
+	for _, element := range list {
+		if element.GetName() != "sourcePodLabels" && element.GetName() != "destinationPodLabels" {
+			elementList = append(elementList, element)
+		}
+	}
+	return elementList
 }

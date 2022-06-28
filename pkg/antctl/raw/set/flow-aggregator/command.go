@@ -56,6 +56,8 @@ var example = strings.Trim(`
   $ antctl set flow-aggregator flowCollector.address=<IP>:<port>[:<proto>]
   Enable IPFIX Flow Collector
   $ antctl set flow-aggregator flowCollector.enable=true
+  Update includePodLabels value
+  $ antctl set flow-aggregator recordContents.podLabels=true
 `, "\n")
 
 func NewFlowAggregatorSetCommand() *cobra.Command {
@@ -93,6 +95,9 @@ func NewFlowAggregatorSetCommand() *cobra.Command {
 		"flowCollector.address": func(c *flowaggregatorconfig.FlowAggregatorConfig, value string) error {
 			return setStringOrFail(&c.FlowCollector.Address, value)
 		},
+		"recordContents.podLabels": func(c *flowaggregatorconfig.FlowAggregatorConfig, value string) error {
+			return setBoolOrFail(&c.RecordContents.PodLabels, value)
+		},
 	}
 	return Command
 }
@@ -122,7 +127,7 @@ func updateRunE(cmd *cobra.Command, args []string) error {
 		}
 		mutatorFn, ok := mutators[pair[0]]
 		if !ok {
-			return fmt.Errorf("unknown configuration parameter, please check antctl set flow-aggregator -h")
+			return fmt.Errorf("unknown configuration parameter: %v, please check antctl set flow-aggregator -h", pair[0])
 		}
 		if err := mutatorFn(&flowAggregatorConf, pair[1]); err != nil {
 			return err
