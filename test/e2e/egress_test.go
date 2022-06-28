@@ -600,6 +600,9 @@ func testEgressNodeFailure(t *testing.T, data *TestData) {
 			}
 			signalAgent := func(nodeName, signal string) {
 				cmd := fmt.Sprintf("pkill -%s antrea-agent", signal)
+				if testOptions.providerName != "kind" {
+					cmd = "sudo " + cmd
+				}
 				rc, stdout, stderr, err := data.RunCommandOnNode(nodeName, cmd)
 				if rc != 0 || err != nil {
 					t.Errorf("Error when running command '%s' on Node '%s', rc: %d, stdout: %s, stderr: %s, error: %v",
