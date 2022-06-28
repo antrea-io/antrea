@@ -37,8 +37,7 @@ SECRET_EXIST=false
 TEST_FAILURE=false
 CLUSTER_READY=false
 DOCKER_REGISTRY=""
-# TODO: change to "control-plane" when testbeds are updated to K8s v1.20
-CONTROL_PLANE_NODE_ROLE="master"
+CONTROL_PLANE_NODE_ROLE="master|control-plane"
 
 _usage="Usage: $0 [--cluster-name <VMCClusterNameToUse>] [--kubeconfig <KubeconfigSavePath>] [--workdir <HomePath>]
                   [--log-mode <SonobuoyResultLogLevel>] [--testcase <e2e|conformance|all-features-conformance|whole-conformance|networkpolicy>]
