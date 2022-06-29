@@ -1981,32 +1981,30 @@ func (data *TestData) isProxyAll() (bool, error) {
 	return agentConf.AntreaProxy.ProxyAll, nil
 }
 
-func getFeatures(confName string) (featuregate.FeatureGate, error) {
+func GetAgentFeatures() (featuregate.FeatureGate, error) {
 	featureGate := features.DefaultMutableFeatureGate.DeepCopy()
-	var cfg interface{}
-	if err := yaml.Unmarshal([]byte(AntreaConfigMap.Data[confName]), &cfg); err != nil {
+	var cfg agentconfig.AgentConfig
+	if err := yaml.Unmarshal([]byte(AntreaConfigMap.Data[antreaAgentConfName]), &cfg); err != nil {
 		return nil, err
 	}
-	rawFeatureGateMap, ok := cfg.(map[interface{}]interface{})["featureGates"]
-	if !ok || rawFeatureGateMap == nil {
-		return featureGate, nil
-	}
-	featureGateMap := make(map[string]bool)
-	for k, v := range rawFeatureGateMap.(map[interface{}]interface{}) {
-		featureGateMap[k.(string)] = v.(bool)
-	}
-	if err := featureGate.SetFromMap(featureGateMap); err != nil {
+	err := featureGate.SetFromMap(cfg.FeatureGates)
+	if err != nil {
 		return nil, err
 	}
 	return featureGate, nil
 }
 
-func GetAgentFeatures() (featuregate.FeatureGate, error) {
-	return getFeatures(antreaAgentConfName)
-}
-
 func GetControllerFeatures() (featuregate.FeatureGate, error) {
-	return getFeatures(antreaControllerConfName)
+	featureGate := features.DefaultMutableFeatureGate.DeepCopy()
+	var cfg controllerconfig.ControllerConfig
+	if err := yaml.Unmarshal([]byte(AntreaConfigMap.Data[antreaControllerConfName]), &cfg); err != nil {
+		return nil, err
+	}
+	err := featureGate.SetFromMap(cfg.FeatureGates)
+	if err != nil {
+		return nil, err
+	}
+	return featureGate, nil
 }
 
 func (data *TestData) GetAntreaWindowsConfigMap(antreaNamespace string) (*corev1.ConfigMap, error) {

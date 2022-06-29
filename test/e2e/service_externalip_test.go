@@ -37,8 +37,7 @@ import (
 
 	antreaagenttypes "antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
-	agentconfig "antrea.io/antrea/pkg/config/agent"
-	controllerconfig "antrea.io/antrea/pkg/config/controller"
+	"antrea.io/antrea/pkg/features"
 	"antrea.io/antrea/pkg/querier"
 )
 
@@ -46,23 +45,13 @@ func TestServiceExternalIP(t *testing.T) {
 	skipIfHasWindowsNodes(t)
 	skipIfNumNodesLessThan(t, 2)
 	skipIfAntreaIPAMTest(t)
+	skipIfFeatureDisabled(t, features.ServiceExternalIP, true, true)
 
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
 	defer teardownTest(t, data)
-
-	cc := func(config *controllerconfig.ControllerConfig) {
-		config.FeatureGates["ServiceExternalIP"] = true
-	}
-	ac := func(config *agentconfig.AgentConfig) {
-		config.FeatureGates["ServiceExternalIP"] = true
-	}
-
-	if err := data.mutateAntreaConfigMap(cc, ac, true, true); err != nil {
-		t.Fatalf("Failed to enable ServiceExternalIP feature: %v", err)
-	}
 
 	t.Run("testServiceWithExternalIPCRUD", func(t *testing.T) { testServiceWithExternalIPCRUD(t, data) })
 	t.Run("testServiceUpdateExternalIP", func(t *testing.T) { testServiceUpdateExternalIP(t, data) })
