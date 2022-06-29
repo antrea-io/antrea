@@ -170,7 +170,7 @@ FLOW_VIS_YML="/tmp/flow-visibility.yml"
 # manifest to enable FlowExporter.
 if [[ $FLOW_COLLECTOR != "" ]]; then
     echo "Generating manifest with FlowExporter enabled"
-    $THIS_DIR/../../../../hack/generate-manifest.sh --mode dev --flow-exporter > "${ANTREA_YML}"
+    $THIS_DIR/../../../../hack/generate-manifest.sh --mode dev --feature-gates FlowExporter=true > "${ANTREA_YML}"
 fi
 
 # Push Antrea image and related manifest.

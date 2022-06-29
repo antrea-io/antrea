@@ -75,6 +75,7 @@ const (
 func TestAntreaPolicyStats(t *testing.T) {
 	skipIfHasWindowsNodes(t)
 	skipIfAntreaPolicyDisabled(t)
+	skipIfNetworkPolicyStatsDisabled(t)
 
 	data, err := setupTest(t)
 	if err != nil {
@@ -83,11 +84,9 @@ func TestAntreaPolicyStats(t *testing.T) {
 	defer teardownTest(t, data)
 
 	t.Run("testANPNetworkPolicyStatsWithDropAction", func(t *testing.T) {
-		skipIfNetworkPolicyStatsDisabled(t)
 		testANPNetworkPolicyStatsWithDropAction(t, data)
 	})
 	t.Run("testAntreaClusterNetworkPolicyStats", func(t *testing.T) {
-		skipIfNetworkPolicyStatsDisabled(t)
 		testAntreaClusterNetworkPolicyStats(t, data)
 	})
 }

@@ -28,7 +28,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
-	agentconfig "antrea.io/antrea/pkg/config/agent"
+	"antrea.io/antrea/pkg/features"
 )
 
 type trafficControlTestConfig struct {
@@ -54,20 +54,13 @@ var (
 
 func TestTrafficControl(t *testing.T) {
 	skipIfHasWindowsNodes(t)
+	skipIfFeatureDisabled(t, features.TrafficControl, true, false)
 
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
 	defer teardownTest(t, data)
-
-	ac := func(config *agentconfig.AgentConfig) {
-		config.FeatureGates["TrafficControl"] = true
-	}
-
-	if err = data.mutateAntreaConfigMap(nil, ac, true, true); err != nil {
-		t.Fatalf("Failed to enable TrafficControl feature: %v", err)
-	}
 
 	tcTestConfig.nodeName = controlPlaneNodeName()
 

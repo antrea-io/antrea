@@ -22,13 +22,12 @@ function echoerr {
     >&2 echo "$@"
 }
 
-_usage="Usage: $0 [--encap-mode <mode>] [--ip-family <v4|v6>] [--no-proxy] [--np] [--coverage] [--help|-h]
+_usage="Usage: $0 [--encap-mode <mode>] [--ip-family <v4|v6>] [--coverage] [--help|-h]
         --encap-mode                  Traffic encapsulation mode. (default is 'encap').
         --ip-family                   Configures the ipFamily for the KinD cluster.
-        --no-proxy                    Disables Antrea proxy.
+        --feature-gates               A comma-separated list of key=value pairs that describe feature gates, e.g. AntreaProxy=true,Egress=false.
+        --run                         Run only tests matching the regexp.
         --proxy-all                   Enables Antrea proxy with all Service support.
-        --endpointslice               Enables Antrea proxy and EndpointSlice support.
-        --no-np                       Disables Antrea-native policies.
         --flow-visibility             Only run flow visibility related e2e tests.
         --skip                        A comma-separated list of keywords, with which tests should be skipped.
         --coverage                    Enables measure Antrea code coverage when run e2e tests on kind.
@@ -61,24 +60,27 @@ function quit {
 
 mode=""
 ipfamily="v4"
-proxy=true
+feature_gates=""
 proxy_all=false
-endpointslice=false
-np=true
 flow_visibility=false
 coverage=false
 skiplist=""
 setup_only=false
 cleanup_only=false
 test_only=false
+run=""
 while [[ $# -gt 0 ]]
 do
 key="$1"
 
 case $key in
-    --no-proxy)
-    proxy=false
-    shift
+    --run)
+    run="$2"
+    shift 2
+    ;;
+    --feature-gates)
+    feature_gates="$2"
+    shift 2
     ;;
     --proxy-all)
     proxy_all=true
@@ -87,14 +89,6 @@ case $key in
     --ip-family)
     ipfamily="$2"
     shift 2
-    ;;
-    --endpointslice)
-    endpointslice=true
-    shift
-    ;;
-    --no-np)
-    np=false
-    shift
     ;;
     --flow-visibility)
     flow_visibility=true
@@ -142,25 +136,15 @@ fi
 
 trap "quit" INT EXIT
 
-manifest_args=""
-if ! $proxy; then
-    manifest_args="$manifest_args --no-proxy"
+manifest_args="$manifest_args --verbose-log"
+if [ -n "$feature_gates" ]; then
+  manifest_args="$manifest_args --feature-gates $feature_gates"
 fi
 if $proxy_all; then
-    if ! $proxy; then
-      echoerr "--proxy-all requires AntreaProxy, so it cannot be used with --no-proxy"
-      exit 1
-    fi
     manifest_args="$manifest_args --proxy-all"
 fi
-if $endpointslice; then
-    manifest_args="$manifest_args --endpointslice"
-fi
-if ! $np; then
-    manifest_args="$manifest_args --no-np"
-fi
 if $flow_visibility; then
-    manifest_args="$manifest_args --flow-exporter --extra-helm-values-file $FLOW_VISIBILITY_HELM_VALUES"
+    manifest_args="$manifest_args --feature-gates FlowExporter=true --extra-helm-values-file $FLOW_VISIBILITY_HELM_VALUES"
 fi
 
 COMMON_IMAGES_LIST=("k8s.gcr.io/e2e-test-images/agnhost:2.29" \
@@ -254,7 +238,11 @@ function run_test {
   fi
   sleep 1
 
-  go test -v -timeout=$timeout antrea.io/antrea/test/e2e $flow_visibility_args -provider=kind --logs-export-dir=$ANTREA_LOG_DIR --skip=$skiplist $coverage_args
+  RUN_OPT=""
+  if [ -n "$run" ]; then
+    RUN_OPT="-run $run"
+  fi
+  go test -v -timeout=$timeout $RUN_OPT antrea.io/antrea/test/e2e $flow_visibility_args -provider=kind --logs-export-dir=$ANTREA_LOG_DIR --skip=$skiplist $coverage_args
 }
 
 if [[ "$mode" == "" ]] || [[ "$mode" == "encap" ]]; then

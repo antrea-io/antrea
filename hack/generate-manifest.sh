@@ -20,18 +20,14 @@ function echoerr {
     >&2 echo "$@"
 }
 
-_usage="Usage: $0 [--mode (dev|release)] [--encap-mode] [--ipsec] [--no-proxy] [--no-np] [--keep] [--tun (geneve|vxlan|gre|stt)] [--verbose-log] [--help|-h]
+_usage="Usage: $0 [--mode (dev|release)] [--encap-mode] [--ipsec] [--tun (geneve|vxlan|gre|stt)] [--verbose-log] [--help|-h]
 Generate a YAML manifest for Antrea using Helm and print it to stdout.
         --mode (dev|release)          Choose the configuration variant that you need (default is 'dev')
         --encap-mode                  Traffic encapsulation mode. (default is 'encap')
         --cloud                       Generate a manifest appropriate for running Antrea in Public Cloud
         --ipsec                       Generate a manifest with IPsec encryption of tunnel traffic enabled
-        --all-features                Generate a manifest with all alpha features enabled
-        --no-proxy                    Generate a manifest with Antrea proxy disabled
+        --feature-gates               A comma-separated list of key=value pairs that describe feature gates, e.g. AntreaProxy=true,Egress=false.
         --proxy-all                   Generate a manifest with Antrea proxy with all Service support enabled
-        --endpointslice               Generate a manifest with EndpointSlice support enabled
-        --flow-exporter               Generate a manifest with FlowExporter support enabled
-        --no-np                       Generate a manifest with Antrea-native policies disabled
         --tun (geneve|vxlan|gre|stt)  Choose encap tunnel type from geneve, gre, stt and vxlan (default is geneve)
         --verbose-log                 Generate a manifest with increased log-level (level 4) for Antrea agent and controller.
                                       This option will work only in 'dev' mode.
@@ -67,15 +63,10 @@ function print_help {
     echoerr "Try '$0 --help' for more information."
 }
 
+FEATURE_GATES=""
 MODE="dev"
 IPSEC=false
-ALLFEATURES=false
-PROXY=true
 PROXY_ALL=false
-ENDPOINTSLICE=false
-FLOW_EXPORTER=false
-NP=true
-KEEP=false
 ENCAP_MODE=""
 CLOUD=""
 TUN_TYPE="geneve"
@@ -118,40 +109,19 @@ case $key in
     IPSEC=true
     shift
     ;;
-    --all-features)
-    ALLFEATURES=true
-    shift
-    ;;
-    --no-proxy)
-    PROXY=false
-    shift
+    --feature-gates)
+    FEATURE_GATES="$2"
+    shift 2
     ;;
     --proxy-all)
     PROXY=true
     PROXY_ALL=true
     shift
     ;;
-    --endpointslice)
-    PROXY=true
-    ENDPOINTSLICE=true
-    shift
-    ;;
-    --flow-exporter)
-    FLOW_EXPORTER=true
-    shift
-    ;;
-    --no-np)
-    NP=false
-    shift
-    ;;
     --k8s-1.15)
     echoerr "The --k8s-1.15 flag is no longer supported"
     exit 1
     K8S_115=true
-    shift
-    ;;
-    --keep)
-    KEEP=true
     shift
     ;;
     --tun)
@@ -225,18 +195,6 @@ case $key in
 esac
 done
 
-if [ "$PROXY" == false ] && [ "$ENDPOINTSLICE" == true ]; then
-    echoerr "--endpointslice requires AntreaProxy, so it cannot be used with --no-proxy"
-    print_help
-    exit 1
-fi
-
-if [ "$PROXY" == false ] && [ "$PROXY_ALL" == true ]; then
-    echoerr "--proxy-all requires AntreaProxy, so it cannot be used with --no-proxy"
-    print_help
-    exit 1
-fi
-
 if [ "$MODE" != "dev" ] && [ "$MODE" != "release" ]; then
     echoerr "--mode must be one of 'dev' or 'release'"
     print_help
@@ -278,11 +236,6 @@ if $COVERAGE && $VERBOSE_LOG; then
     VERBOSE_LOG=false
 fi
 
-if [[ "$ENCAP_MODE" != "" ]] && [[ "$ENCAP_MODE" != "encap" ]] && ! $PROXY; then
-    echoerr "Cannot use '--no-proxy' when '--encap-mode' is not 'encap'"
-    exit 1
-fi
-
 if [[ "$ENCAP_MODE" != "" ]] && [[ "$ENCAP_MODE" != "encap" ]] && $IPSEC; then
     echoerr "Encap mode '$ENCAP_MODE' does not make sense with IPsec"
     exit 1
@@ -314,28 +267,13 @@ if $MULTICAST; then
     HELM_VALUES+=("trafficEncapMode=noEncap" "featureGates.Multicast=true" "multicast.multicastInterfaces={$MULTICAST_INTERFACES}")
 fi
 
-if $ALLFEATURES; then
-    HELM_VALUES+=("featureGates.FlowExporter=true" "featureGates.EndpointSlice=true" "antreaProxy.proxyAll=true")
-fi
-
-if ! $PROXY; then
-    HELM_VALUES+=("featureGates.AntreaProxy=false")
-fi
+IFS=',' read -r -a feature_gates <<< "$FEATURE_GATES"
+for feature_gate in "${feature_gates[@]}"; do
+    HELM_VALUES+=("featureGates.${feature_gate}")
+done
 
 if $PROXY_ALL; then
     HELM_VALUES+=("antreaProxy.proxyAll=true")
-fi
-
-if $ENDPOINTSLICE; then
-    HELM_VALUES+=("featureGates.EndpointSlice=true")
-fi
-
-if $FLOW_EXPORTER; then
-    HELM_VALUES+=("featureGates.FlowExporter=true")
-fi
-
-if ! $NP; then
-    HELM_VALUES+=("featureGates.AntreaPolicy=false")
 fi
 
 if [[ $ENCAP_MODE != "" ]]; then

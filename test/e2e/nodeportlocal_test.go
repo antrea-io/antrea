@@ -78,13 +78,14 @@ func configureNPLForAgent(t *testing.T, data *TestData, startPort, endPort int) 
 func TestNodePortLocal(t *testing.T) {
 	skipIfNotIPv4Cluster(t)
 	skipIfHasWindowsNodes(t)
+	skipIfNodePortLocalDisabled(t)
 
 	data, err := setupTest(t)
 	if err != nil {
 		t.Fatalf("Error when setting up test: %v", err)
 	}
 	defer teardownTest(t, data)
-	skipIfNodePortLocalDisabled(t)
+
 	configureNPLForAgent(t, data, defaultStartPort, defaultEndPort)
 	t.Run("testNPLAddPod", func(t *testing.T) { testNPLAddPod(t, data) })
 	t.Run("testNPLMultiplePodsAgentRestart", func(t *testing.T) { testNPLMultiplePodsAgentRestart(t, data) })
