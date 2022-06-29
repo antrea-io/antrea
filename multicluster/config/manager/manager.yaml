@@ -15,6 +15,7 @@ spec:
       labels:
         component: antrea-mc-controller
     spec:
+      hostNetwork: true
       containers:
       - command:
         image: antrea/antrea-mc-controller:latest
