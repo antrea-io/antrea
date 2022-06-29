@@ -228,7 +228,7 @@ func setupTestForFlowAggregator(tb testing.TB) (*TestData, bool, bool, error) {
 		return testData, v4Enabled, v6Enabled, err
 	}
 	// Create pod using ipfix collector image
-	if err = testData.createPodOnNode("ipfix-collector", testData.testNamespace, "", ipfixCollectorImage, nil, nil, nil, nil, true, nil); err != nil {
+	if err := NewPodBuilder("ipfix-collector", testData.testNamespace, ipfixCollectorImage).InHostNetwork().Create(testData); err != nil {
 		tb.Errorf("Error when creating the ipfix collector Pod: %v", err)
 	}
 	ipfixCollectorIP, err := testData.podWaitForIPs(defaultTimeout, "ipfix-collector", testData.testNamespace)

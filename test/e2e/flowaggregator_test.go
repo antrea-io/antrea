@@ -1269,7 +1269,11 @@ func deployDenyNetworkPolicies(t *testing.T, data *TestData, pod1, pod2 string) 
 }
 
 func createPerftestPods(data *TestData) (podAIPs *PodIPs, podBIPs *PodIPs, podCIPs *PodIPs, podDIPs *PodIPs, podEIPs *PodIPs, err error) {
-	if err := data.createPodOnNode("perftest-a", data.testNamespace, controlPlaneNodeName(), perftoolImage, nil, nil, nil, nil, false, nil); err != nil {
+	create := func(name string, nodeName string, ports []corev1.ContainerPort) error {
+		return NewPodBuilder(name, data.testNamespace, perftoolImage).OnNode(nodeName).WithPorts(ports).Create(data)
+	}
+
+	if err := create("perftest-a", controlPlaneNodeName(), nil); err != nil {
 		return nil, nil, nil, nil, nil, fmt.Errorf("Error when creating the perftest client Pod: %v", err)
 	}
 	podAIPs, err = data.podWaitForIPs(defaultTimeout, "perftest-a", data.testNamespace)
@@ -1277,7 +1281,7 @@ func createPerftestPods(data *TestData) (podAIPs *PodIPs, podBIPs *PodIPs, podCI
 		return nil, nil, nil, nil, nil, fmt.Errorf("Error when waiting for the perftest client Pod: %v", err)
 	}
 
-	if err := data.createPodOnNode("perftest-b", data.testNamespace, controlPlaneNodeName(), perftoolImage, nil, nil, nil, []corev1.ContainerPort{{Protocol: corev1.ProtocolTCP, ContainerPort: iperfPort}}, false, nil); err != nil {
+	if err := create("perftest-b", controlPlaneNodeName(), []corev1.ContainerPort{{Protocol: corev1.ProtocolTCP, ContainerPort: iperfPort}}); err != nil {
 		return nil, nil, nil, nil, nil, fmt.Errorf("Error when creating the perftest server Pod: %v", err)
 	}
 	podBIPs, err = data.podWaitForIPs(defaultTimeout, "perftest-b", data.testNamespace)
@@ -1285,7 +1289,7 @@ func createPerftestPods(data *TestData) (podAIPs *PodIPs, podBIPs *PodIPs, podCI
 		return nil, nil, nil, nil, nil, fmt.Errorf("Error when getting the perftest server Pod's IPs: %v", err)
 	}
 
-	if err := data.createPodOnNode("perftest-c", data.testNamespace, workerNodeName(1), perftoolImage, nil, nil, nil, []corev1.ContainerPort{{Protocol: corev1.ProtocolTCP, ContainerPort: iperfPort}}, false, nil); err != nil {
+	if err := create("perftest-c", workerNodeName(1), []corev1.ContainerPort{{Protocol: corev1.ProtocolTCP, ContainerPort: iperfPort}}); err != nil {
 		return nil, nil, nil, nil, nil, fmt.Errorf("Error when creating the perftest server Pod: %v", err)
 	}
 	podCIPs, err = data.podWaitForIPs(defaultTimeout, "perftest-c", data.testNamespace)
@@ -1293,7 +1297,7 @@ func createPerftestPods(data *TestData) (podAIPs *PodIPs, podBIPs *PodIPs, podCI
 		return nil, nil, nil, nil, nil, fmt.Errorf("Error when getting the perftest server Pod's IPs: %v", err)
 	}
 
-	if err := data.createPodOnNode("perftest-d", data.testNamespace, controlPlaneNodeName(), perftoolImage, nil, nil, nil, []corev1.ContainerPort{{Protocol: corev1.ProtocolTCP, ContainerPort: iperfPort}}, false, nil); err != nil {
+	if err := create("perftest-d", controlPlaneNodeName(), []corev1.ContainerPort{{Protocol: corev1.ProtocolTCP, ContainerPort: iperfPort}}); err != nil {
 		return nil, nil, nil, nil, nil, fmt.Errorf("Error when creating the perftest server Pod: %v", err)
 	}
 	podDIPs, err = data.podWaitForIPs(defaultTimeout, "perftest-d", data.testNamespace)
@@ -1301,7 +1305,7 @@ func createPerftestPods(data *TestData) (podAIPs *PodIPs, podBIPs *PodIPs, podCI
 		return nil, nil, nil, nil, nil, fmt.Errorf("Error when getting the perftest server Pod's IPs: %v", err)
 	}
 
-	if err := data.createPodOnNode("perftest-e", data.testNamespace, workerNodeName(1), perftoolImage, nil, nil, nil, []corev1.ContainerPort{{Protocol: corev1.ProtocolTCP, ContainerPort: iperfPort}}, false, nil); err != nil {
+	if err := create("perftest-e", workerNodeName(1), []corev1.ContainerPort{{Protocol: corev1.ProtocolTCP, ContainerPort: iperfPort}}); err != nil {
 		return nil, nil, nil, nil, nil, fmt.Errorf("Error when creating the perftest server Pod: %v", err)
 	}
 	podEIPs, err = data.podWaitForIPs(defaultTimeout, "perftest-e", data.testNamespace)
