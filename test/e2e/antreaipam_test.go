@@ -28,7 +28,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	utilnet "k8s.io/utils/net"
@@ -328,16 +327,12 @@ func testAntreaIPAMStatefulSet(t *testing.T, data *TestData, dedicatedIPPoolKey 
 	}
 	checkStatefulSetIPPoolAllocation(t, data, stsName, testAntreaIPAMNamespace, ipPoolName, ipOffsets, reservedIPOffsets)
 
-	podMutateFunc := func(pod *corev1.Pod) {
-		if pod.Annotations == nil {
-			pod.Annotations = map[string]string{}
-		}
-		if dedicatedIPPoolKey != nil {
-			pod.Annotations[annotation.AntreaIPAMAnnotationKey] = ipPoolName
-		}
-	}
 	podName := randName("test-standalone-pod-")
-	err = data.createPodOnNode(podName, testAntreaIPAMNamespace, controlPlaneNodeName(), agnhostImage, []string{"sleep", "3600"}, nil, nil, nil, false, podMutateFunc)
+	podAnnotations := map[string]string{}
+	if dedicatedIPPoolKey != nil {
+		podAnnotations[annotation.AntreaIPAMAnnotationKey] = ipPoolName
+	}
+	err = NewPodBuilder(podName, testAntreaIPAMNamespace, agnhostImage).OnNode(controlPlaneNodeName()).WithCommand([]string{"sleep", "3600"}).WithAnnotations(podAnnotations).Create(data)
 	if err != nil {
 		t.Fatalf("Error when creating Pod '%s': %v", podName, err)
 	}

@@ -1100,58 +1100,150 @@ func getImageName(uri string) string {
 	return paths[len(paths)-1]
 }
 
-// createPodOnNode creates a pod in the test namespace with a container whose type is decided by imageName.
-// Pod will be scheduled on the specified Node (if nodeName is not empty).
-// mutateFunc can be used to customize the Pod if the other parameters don't meet the requirements.
-func (data *TestData) createPodOnNode(name string, ns string, nodeName string, image string, command []string, args []string, env []corev1.EnvVar, ports []corev1.ContainerPort, hostNetwork bool, mutateFunc func(*corev1.Pod)) error {
-	// image could be a fully qualified URI which can't be used as container name and label value,
-	// extract the image name from it.
-	imageName := getImageName(image)
-	return data.CreatePodOnNodeInNamespace(name, ns, nodeName, imageName, image, command, args, env, ports, hostNetwork, mutateFunc)
+type PodBuilder struct {
+	Name               string
+	Namespace          string
+	Image              string
+	ContainerName      string
+	Command            []string
+	Args               []string
+	Env                []corev1.EnvVar
+	Ports              []corev1.ContainerPort
+	HostNetwork        bool
+	IsPrivileged       bool
+	ServiceAccountName string
+	Annotations        map[string]string
+	Labels             map[string]string
+	NodeName           string
+	MutateFunc         func(*corev1.Pod)
 }
 
-// CreatePodOnNodeInNamespace creates a pod in the provided namespace with a container whose type is decided by imageName.
-// Pod will be scheduled on the specified Node (if nodeName is not empty).
-// mutateFunc can be used to customize the Pod if the other parameters don't meet the requirements.
-func (data *TestData) CreatePodOnNodeInNamespace(name, ns string, nodeName, ctrName string, image string, command []string, args []string, env []corev1.EnvVar, ports []corev1.ContainerPort, hostNetwork bool, mutateFunc func(*corev1.Pod)) error {
+func NewPodBuilder(name, ns, image string) *PodBuilder {
+	return &PodBuilder{
+		Name:      name,
+		Namespace: ns,
+		Image:     image,
+	}
+}
+
+func (b *PodBuilder) WithContainerName(ctrName string) *PodBuilder {
+	b.ContainerName = ctrName
+	return b
+}
+
+func (b *PodBuilder) WithCommand(command []string) *PodBuilder {
+	b.Command = command
+	return b
+}
+
+func (b *PodBuilder) WithArgs(args []string) *PodBuilder {
+	b.Args = args
+	return b
+}
+
+func (b *PodBuilder) WithEnv(env []corev1.EnvVar) *PodBuilder {
+	b.Env = env
+	return b
+}
+
+func (b *PodBuilder) WithPorts(ports []corev1.ContainerPort) *PodBuilder {
+	b.Ports = ports
+	return b
+}
+
+func (b *PodBuilder) WithHostNetwork(v bool) *PodBuilder {
+	b.HostNetwork = v
+	return b
+}
+
+func (b *PodBuilder) InHostNetwork() *PodBuilder {
+	return b.WithHostNetwork(true)
+}
+
+func (b *PodBuilder) Privileged() *PodBuilder {
+	b.IsPrivileged = true
+	return b
+}
+
+func (b *PodBuilder) WithServiceAccountName(name string) *PodBuilder {
+	b.ServiceAccountName = name
+	return b
+}
+
+func (b *PodBuilder) WithAnnotations(annotations map[string]string) *PodBuilder {
+	b.Annotations = annotations
+	return b
+}
+
+func (b *PodBuilder) WithLabels(labels map[string]string) *PodBuilder {
+	b.Labels = labels
+	return b
+}
+
+func (b *PodBuilder) OnNode(nodeName string) *PodBuilder {
+	b.NodeName = nodeName
+	return b
+}
+
+func (b *PodBuilder) WithMutateFunc(f func(*corev1.Pod)) *PodBuilder {
+	b.MutateFunc = f
+	return b
+}
+
+func (b *PodBuilder) Create(data *TestData) error {
+	containerName := b.ContainerName
+	if containerName == "" {
+		containerName = getImageName(b.Image)
+	}
 	podSpec := corev1.PodSpec{
 		Containers: []corev1.Container{
 			{
-				Name:            ctrName,
-				Image:           image,
+				Name:            containerName,
+				Image:           b.Image,
 				ImagePullPolicy: corev1.PullIfNotPresent,
-				Command:         command,
-				Args:            args,
-				Env:             env,
-				Ports:           ports,
+				Command:         b.Command,
+				Args:            b.Args,
+				Env:             b.Env,
+				Ports:           b.Ports,
+				SecurityContext: &corev1.SecurityContext{
+					Privileged: &b.IsPrivileged,
+				},
 			},
 		},
-		RestartPolicy: corev1.RestartPolicyNever,
-		HostNetwork:   hostNetwork,
+		RestartPolicy:      corev1.RestartPolicyNever,
+		HostNetwork:        b.HostNetwork,
+		ServiceAccountName: b.ServiceAccountName,
 	}
-	if nodeName != "" {
+	if b.NodeName != "" {
 		podSpec.NodeSelector = map[string]string{
-			"kubernetes.io/hostname": nodeName,
+			"kubernetes.io/hostname": b.NodeName,
 		}
 	}
-	if nodeName == controlPlaneNodeName() {
+	if b.NodeName == controlPlaneNodeName() {
 		// tolerate NoSchedule taint if we want Pod to run on control-plane Node
 		podSpec.Tolerations = controlPlaneNoScheduleTolerations()
 	}
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: name,
+			Name:        b.Name,
+			Annotations: map[string]string{},
 			Labels: map[string]string{
-				"antrea-e2e": name,
-				"app":        ctrName,
+				"antrea-e2e": b.Name,
+				"app":        containerName,
 			},
 		},
 		Spec: podSpec,
 	}
-	if mutateFunc != nil {
-		mutateFunc(pod)
+	for k, v := range b.Annotations {
+		pod.Annotations[k] = v
 	}
-	if _, err := data.clientset.CoreV1().Pods(ns).Create(context.TODO(), pod, metav1.CreateOptions{}); err != nil {
+	for k, v := range b.Labels {
+		pod.Labels[k] = v
+	}
+	if b.MutateFunc != nil {
+		b.MutateFunc(pod)
+	}
+	if _, err := data.clientset.CoreV1().Pods(b.Namespace).Create(context.TODO(), pod, metav1.CreateOptions{}); err != nil {
 		return err
 	}
 	return nil
@@ -1160,41 +1252,35 @@ func (data *TestData) CreatePodOnNodeInNamespace(name, ns string, nodeName, ctrN
 // createBusyboxPodOnNode creates a Pod in the test namespace with a single busybox container. The
 // Pod will be scheduled on the specified Node (if nodeName is not empty).
 func (data *TestData) createBusyboxPodOnNode(name string, ns string, nodeName string, hostNetwork bool) error {
-	sleepDuration := 3600 // seconds
-	return data.createPodOnNode(name, ns, nodeName, busyboxImage, []string{"sleep", strconv.Itoa(sleepDuration)}, nil, nil, nil, hostNetwork, nil)
+	return NewPodBuilder(name, ns, busyboxImage).OnNode(nodeName).WithCommand([]string{"sleep", "3600"}).WithHostNetwork(hostNetwork).Create(data)
 }
 
 // createMcJoinPodOnNode creates a Pod in the test namespace with a single mcjoin container. The
 // Pod will be scheduled on the specified Node (if nodeName is not empty).
 func (data *TestData) createMcJoinPodOnNode(name string, ns string, nodeName string, hostNetwork bool) error {
-	sleepDuration := 3600 // seconds
-	return data.createPodOnNode(name, ns, nodeName, mcjoinImage, []string{"sleep", strconv.Itoa(sleepDuration)}, nil, nil, nil, hostNetwork, nil)
+	return NewPodBuilder(name, ns, mcjoinImage).OnNode(nodeName).WithCommand([]string{"sleep", "3600"}).WithHostNetwork(hostNetwork).Create(data)
 }
 
 // createNetshootPodOnNode creates a Pod in the test namespace with a single netshoot container. The
 // Pod will be scheduled on the specified Node (if nodeName is not empty).
 func (data *TestData) createNetshootPodOnNode(name string, ns string, nodeName string, hostNetwork bool) error {
-	sleepDuration := 3600 // seconds
-	return data.createPodOnNode(name, ns, nodeName, netshootImage, []string{"sleep", strconv.Itoa(sleepDuration)}, nil, nil, nil, hostNetwork, nil)
+	return NewPodBuilder(name, ns, netshootImage).OnNode(nodeName).WithCommand([]string{"sleep", "3600"}).WithHostNetwork(hostNetwork).Create(data)
 }
 
 // createNginxPodOnNode creates a Pod in the test namespace with a single nginx container. The
 // Pod will be scheduled on the specified Node (if nodeName is not empty).
 func (data *TestData) createNginxPodOnNode(name string, ns string, nodeName string, hostNetwork bool) error {
-	var mutateImage func(*corev1.Pod)
-	mutateImage = nil
+	image := nginxImage
 	if clusterInfo.nodesOS[nodeName] == "windows" {
-		mutateImage = func(pod *corev1.Pod) {
-			pod.Spec.Containers[0].Image = iisImage
-		}
+		image = iisImage
 	}
-	return data.createPodOnNode(name, ns, nodeName, nginxImage, []string{}, nil, nil, []corev1.ContainerPort{
+	return NewPodBuilder(name, ns, image).OnNode(nodeName).WithPorts([]corev1.ContainerPort{
 		{
 			Name:          "http",
 			ContainerPort: 80,
 			Protocol:      corev1.ProtocolTCP,
 		},
-	}, hostNetwork, mutateImage)
+	}).WithHostNetwork(hostNetwork).Create(data)
 }
 
 // createServerPod creates a Pod that can listen to specified port and have named port set.
@@ -1207,7 +1293,7 @@ func (data *TestData) createServerPod(name string, ns string, portName string, p
 		// If hostPort is to be set, it must match the container port number.
 		port.HostPort = int32(portNum)
 	}
-	return data.createPodOnNode(name, ns, "", agnhostImage, nil, []string{cmd}, []corev1.EnvVar{env}, []corev1.ContainerPort{port}, hostNetwork, nil)
+	return NewPodBuilder(name, ns, agnhostImage).WithArgs([]string{cmd}).WithEnv([]corev1.EnvVar{env}).WithPorts([]corev1.ContainerPort{port}).WithHostNetwork(hostNetwork).Create(data)
 }
 
 // createCustomPod creates a Pod in given Namespace with custom labels.
@@ -1216,12 +1302,7 @@ func (data *TestData) createServerPodWithLabels(name, ns string, portNum int32, 
 	env := corev1.EnvVar{Name: fmt.Sprintf("SERVE_PORT_%d", portNum), Value: "foo"}
 	port := corev1.ContainerPort{ContainerPort: portNum}
 	containerName := fmt.Sprintf("c%v", portNum)
-	mutateLabels := func(pod *corev1.Pod) {
-		for k, v := range labels {
-			pod.Labels[k] = v
-		}
-	}
-	return data.CreatePodOnNodeInNamespace(name, ns, "", containerName, agnhostImage, cmd, nil, []corev1.EnvVar{env}, []corev1.ContainerPort{port}, false, mutateLabels)
+	return NewPodBuilder(name, ns, agnhostImage).WithContainerName(containerName).WithCommand(cmd).WithEnv([]corev1.EnvVar{env}).WithPorts([]corev1.ContainerPort{port}).WithLabels(labels).Create(data)
 }
 
 // DeletePod deletes a Pod in the test namespace.
@@ -2426,29 +2507,18 @@ func (data *TestData) copyNodeFiles(nodeName string, fileName string, covDir str
 // createAgnhostPodOnNode creates a Pod in the test namespace with a single agnhost container. The
 // Pod will be scheduled on the specified Node (if nodeName is not empty).
 func (data *TestData) createAgnhostPodOnNode(name string, ns string, nodeName string, hostNetwork bool) error {
-	sleepDuration := 3600 // seconds
-	return data.createPodOnNode(name, ns, nodeName, agnhostImage, []string{"sleep", strconv.Itoa(sleepDuration)}, nil, nil, nil, hostNetwork, nil)
+	return NewPodBuilder(name, ns, agnhostImage).OnNode(nodeName).WithCommand([]string{"sleep", "3600"}).WithHostNetwork(hostNetwork).Create(data)
 }
 
 // createAgnhostPodWithSAOnNode creates a Pod in the test namespace with a single
 // agnhost container and a specific ServiceAccount. The Pod will be scheduled on
 // the specified Node (if nodeName is not empty).
 func (data *TestData) createAgnhostPodWithSAOnNode(name string, ns string, nodeName string, hostNetwork bool, serviceAccountName string) error {
-	sleepDuration := 3600 // seconds
-	mutateFunc := func(pod *corev1.Pod) {
-		pod.Spec.ServiceAccountName = serviceAccountName
-	}
-	return data.createPodOnNode(name, ns, nodeName, agnhostImage, []string{"sleep", strconv.Itoa(sleepDuration)}, nil, nil, nil, hostNetwork, mutateFunc)
+	return NewPodBuilder(name, ns, agnhostImage).OnNode(nodeName).WithCommand([]string{"sleep", "3600"}).WithHostNetwork(hostNetwork).WithServiceAccountName(serviceAccountName).Create(data)
 }
 
 func (data *TestData) createAgnhostPodOnNodeWithAnnotations(name string, ns string, nodeName string, annotations map[string]string) error {
-	sleepDuration := 3600 // seconds
-	mutateFunc := func(pod *corev1.Pod) {
-		for k, v := range annotations {
-			pod.Annotations[k] = v
-		}
-	}
-	return data.createPodOnNode(name, ns, nodeName, agnhostImage, []string{"sleep", strconv.Itoa(sleepDuration)}, nil, nil, nil, false, mutateFunc)
+	return NewPodBuilder(name, ns, agnhostImage).OnNode(nodeName).WithCommand([]string{"sleep", "3600"}).WithAnnotations(annotations).Create(data)
 }
 
 func (data *TestData) createDaemonSet(name string, ns string, ctrName string, image string, cmd []string, args []string) (*appsv1.DaemonSet, func() error, error) {

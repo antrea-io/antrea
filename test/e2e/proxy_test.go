@@ -448,10 +448,7 @@ ip netns exec %[1]s ip link set dev %[1]s-a up && \
 ip netns exec %[1]s ip route replace default via %[3]s && \
 sleep 3600
 `, testNetns, "1.1.1.1", "1.1.1.254", 24)
-	if err := data.createPodOnNode(testPod, data.testNamespace, controlPlaneNodeName(), agnhostImage, []string{"sh", "-c", cmd}, nil, nil, nil, true, func(pod *corev1.Pod) {
-		privileged := true
-		pod.Spec.Containers[0].SecurityContext = &corev1.SecurityContext{Privileged: &privileged}
-	}); err != nil {
+	if err := NewPodBuilder(testPod, data.testNamespace, agnhostImage).OnNode(controlPlaneNodeName()).WithCommand([]string{"sh", "-c", cmd}).InHostNetwork().Privileged().Create(data); err != nil {
 		t.Fatalf("Failed to create client Pod: %v", err)
 	}
 	defer deletePodWrapper(t, data, data.testNamespace, testPod)
@@ -474,7 +471,7 @@ func createAgnhostPod(t *testing.T, data *TestData, podName string, node string,
 		},
 	}
 
-	require.NoError(t, data.createPodOnNode(podName, data.testNamespace, node, agnhostImage, []string{}, args, nil, ports, hostNetwork, nil))
+	require.NoError(t, NewPodBuilder(podName, data.testNamespace, agnhostImage).OnNode(node).WithArgs(args).WithPorts(ports).WithHostNetwork(hostNetwork).Create(data))
 	_, err := data.podWaitForIPs(defaultTimeout, podName, data.testNamespace)
 	require.NoError(t, err)
 	require.NoError(t, data.podWaitForRunning(defaultTimeout, podName, data.testNamespace))

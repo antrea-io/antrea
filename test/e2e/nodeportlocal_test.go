@@ -426,17 +426,16 @@ func NPLTestPodAddMultiPort(t *testing.T, data *TestData) {
 	expectedAnnotations := newExpectedNPLAnnotations(defaultStartPort, defaultEndPort).
 		Add(nil, 80, "tcp").Add(nil, 8080, "tcp")
 
-	podcmd := "porter"
-
+	podCmd := "porter"
 	// Creating a Pod using agnhost image to support multiple ports, instead of nginx.
-	err := testData.createPodOnNode(testPodName, data.testNamespace, node, agnhostImage, nil, []string{podcmd}, []corev1.EnvVar{
+	err := NewPodBuilder(testPodName, data.testNamespace, agnhostImage).OnNode(node).WithArgs([]string{podCmd}).WithEnv([]corev1.EnvVar{
 		{
 			Name: fmt.Sprintf("SERVE_PORT_%d", 80), Value: "foo",
 		},
 		{
 			Name: fmt.Sprintf("SERVE_PORT_%d", 8080), Value: "bar",
 		},
-	}, []corev1.ContainerPort{
+	}).WithPorts([]corev1.ContainerPort{
 		{
 			Name:          "http1",
 			ContainerPort: 80,
@@ -447,8 +446,7 @@ func NPLTestPodAddMultiPort(t *testing.T, data *TestData) {
 			ContainerPort: 8080,
 			Protocol:      corev1.ProtocolTCP,
 		},
-	}, false, nil)
-
+	}).Create(data)
 	r.NoError(err, "Error creating test Pod: %v", err)
 
 	nplAnnotations, testPodIP := getNPLAnnotations(t, testData, r, testPodName)
@@ -501,13 +499,7 @@ func NPLTestPodAddMultiProtocol(t *testing.T, data *TestData) {
 	}
 	port := corev1.ContainerPort{ContainerPort: 8080}
 	containerName := fmt.Sprintf("c%v", 8080)
-	mutateLabels := func(pod *corev1.Pod) {
-		for k, v := range selector {
-			pod.Labels[k] = v
-		}
-	}
-	err := testData.CreatePodOnNodeInNamespace(testPodName, data.testNamespace, node, containerName, agnhostImage, cmd, args, []corev1.EnvVar{}, []corev1.ContainerPort{port}, false, mutateLabels)
-
+	err := NewPodBuilder(testPodName, data.testNamespace, agnhostImage).OnNode(node).WithContainerName(containerName).WithCommand(cmd).WithArgs(args).WithPorts([]corev1.ContainerPort{port}).WithLabels(selector).Create(testData)
 	r.NoError(err, "Error creating test Pod: %v", err)
 
 	nplAnnotations, testPodIP := getNPLAnnotations(t, testData, r, testPodName)

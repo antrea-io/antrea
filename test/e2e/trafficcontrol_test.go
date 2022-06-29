@@ -81,13 +81,8 @@ func createTrafficControlTestPod(t *testing.T, data *TestData, podName string) {
 			Protocol:      corev1.ProtocolTCP,
 		},
 	}
-	mutateLabels := func(pod *corev1.Pod) {
-		for k, v := range labels {
-			pod.Labels[k] = v
-		}
-	}
 
-	require.NoError(t, data.createPodOnNode(podName, data.testNamespace, tcTestConfig.nodeName, agnhostImage, []string{}, args, nil, ports, false, mutateLabels))
+	require.NoError(t, NewPodBuilder(podName, data.testNamespace, agnhostImage).OnNode(tcTestConfig.nodeName).WithArgs(args).WithPorts(ports).WithLabels(labels).Create(data))
 	ips, err := data.podWaitForIPs(defaultTimeout, podName, data.testNamespace)
 	if err != nil {
 		t.Fatalf("Error when waiting for IP for Pod '%s': %v", podName, err)
@@ -103,10 +98,7 @@ func createTrafficControlTestPod(t *testing.T, data *TestData, podName string) {
 }
 
 func createTrafficControlPacketsCollectorPod(t *testing.T, data *TestData, podName string) {
-	require.NoError(t, data.createPodOnNode(podName, data.testNamespace, tcTestConfig.nodeName, agnhostImage, []string{"sleep"}, []string{"3600"}, nil, nil, false, func(pod *corev1.Pod) {
-		privileged := true
-		pod.Spec.Containers[0].SecurityContext = &corev1.SecurityContext{Privileged: &privileged}
-	}))
+	require.NoError(t, NewPodBuilder(podName, data.testNamespace, agnhostImage).OnNode(tcTestConfig.nodeName).WithCommand([]string{"sleep", "3600"}).Privileged().Create(data))
 	ips, err := data.podWaitForIPs(defaultTimeout, podName, data.testNamespace)
 	if err != nil {
 		t.Fatalf("Error when waiting for IP for Pod '%s': %v", podName, err)
@@ -307,10 +299,7 @@ func testRedirectToLocal(t *testing.T, data *TestData) {
 ip link add dev %[1]s type veth peer name %[2]s && \
 ip link set dev %[1]s up && \
 ip link set dev %[2]s up`, targetPortName, returnPortName)
-	if err := data.createPodOnNode(tempPodName, data.testNamespace, tcTestConfig.nodeName, agnhostImage, []string{"sleep", "3600"}, nil, nil, nil, true, func(pod *corev1.Pod) {
-		privileged := true
-		pod.Spec.Containers[0].SecurityContext = &corev1.SecurityContext{Privileged: &privileged}
-	}); err != nil {
+	if err := NewPodBuilder(tempPodName, data.testNamespace, agnhostImage).OnNode(tcTestConfig.nodeName).WithCommand([]string{"sleep", "3600"}).InHostNetwork().Privileged().Create(data); err != nil {
 		t.Fatalf("Failed to create Pod %s: %v", tempPodName, err)
 	}
 	require.NoError(t, data.podWaitForRunning(defaultTimeout, tempPodName, data.testNamespace))

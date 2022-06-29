@@ -178,13 +178,13 @@ func (data *TestData) testNodePort(t *testing.T, isWindows bool, clientNamespace
 func (data *TestData) createAgnhostServiceAndBackendPods(t *testing.T, name, namespace string, node string, svcType corev1.ServiceType) (*corev1.Service, func()) {
 	ipProtocol := corev1.IPv4Protocol
 	args := []string{"netexec", "--http-port=80", "--udp-port=80"}
-	require.NoError(t, data.createPodOnNode(name, namespace, node, agnhostImage, []string{}, args, nil, []corev1.ContainerPort{
+	require.NoError(t, NewPodBuilder(name, namespace, agnhostImage).OnNode(node).WithArgs(args).WithPorts([]corev1.ContainerPort{
 		{
 			Name:          "http",
 			ContainerPort: 80,
 			Protocol:      corev1.ProtocolTCP,
 		},
-	}, false, nil))
+	}).Create(data))
 	podIPs, err := data.podWaitForIPs(defaultTimeout, name, namespace)
 	require.NoError(t, err)
 	t.Logf("Created service Pod IPs %v", podIPs.ipStrings)
