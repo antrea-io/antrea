@@ -1281,17 +1281,26 @@ spec:
       schema:
         openAPIV3Schema:
           type: object
+          required:
+            - spec
           properties:
             spec:
               type: object
+              required:
+                - interfaces
               properties:
                 interfaces:
                   type: array
+                  minItems: 1
+                  maxItems: 1
+                  required:
+                    - ips
                   items:
                     type: object
                     properties:
                       ips:
                         type: array
+                        minItems: 1
                         items:
                           type: string
                           oneOf:

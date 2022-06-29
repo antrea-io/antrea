@@ -16,6 +16,7 @@ package externalnode
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 	"time"
 
@@ -151,7 +152,10 @@ func (c *ExternalNodeController) reconcileExternalNodes() error {
 		if err = c.addExternalNode(en); err != nil {
 			return err
 		}
-		eeName := externalnode.GenExternalEntityName(en)
+		eeName, err := externalnode.GenExternalEntityName(en)
+		if err != nil {
+			return err
+		}
 		enUIDEENameMap[en.UID] = eeName
 	}
 	externalEntities, err := c.externalEntityLister.List(labels.Everything())
@@ -225,13 +229,15 @@ func (c *ExternalNodeController) syncExternalNode(key string) error {
 // addExternalNode creates ExternalEntity for each NetworkInterface in the ExternalNode.
 // Only one interface is supported for now and there should be one ExternalEntity generated for one ExternalNode.
 func (c *ExternalNodeController) addExternalNode(en *v1alpha1.ExternalNode) error {
-	eeName := externalnode.GenExternalEntityName(en)
-	if eeName == "" {
-		klog.InfoS("Interfaces are empty for ExternalNode", "ExternalNode", klog.KObj(en))
-		return nil
+	eeName, err := externalnode.GenExternalEntityName(en)
+	if err != nil {
+		return err
 	}
-	ee := genExternalEntity(eeName, en)
-	err := c.createExternalEntity(ee)
+	ee, err := genExternalEntity(eeName, en)
+	if err != nil {
+		return err
+	}
+	err = c.createExternalEntity(ee)
 	if err != nil {
 		return err
 	}
@@ -254,32 +260,36 @@ func (c *ExternalNodeController) updateExternalNode(preEn *v1alpha1.ExternalNode
 	}
 	// Delete the previous ExternalEntity and create a new one if the name of the generated ExternalEntity is changed.
 	// Otherwise, update the ExternalEntity.
-	preEEName := externalnode.GenExternalEntityName(preEn)
-	curEEName := externalnode.GenExternalEntityName(curEn)
-	if preEEName == "" && curEEName == "" {
-		return nil
-	} else if preEEName != curEEName {
-		if preEEName != "" {
-			err := c.deleteExternalEntity(preEn.Namespace, preEEName)
-			if err != nil {
-				return err
-			}
+	preEEName, err := externalnode.GenExternalEntityName(preEn)
+	if err != nil {
+		return err
+	}
+	curEEName, err := externalnode.GenExternalEntityName(curEn)
+	if err != nil {
+		return err
+	}
+
+	if preEEName != curEEName {
+		if err = c.deleteExternalEntity(preEn.Namespace, preEEName); err != nil {
+			return err
 		}
-		if curEEName != "" {
-			curEE := genExternalEntity(curEEName, curEn)
-			err := c.createExternalEntity(curEE)
-			if err != nil {
-				return err
-			}
+		curEE, err := genExternalEntity(curEEName, curEn)
+		if err != nil {
+			return err
 		}
+		if err = c.createExternalEntity(curEE); err != nil {
+			return err
+		}
+
 	} else {
 		preIPs := sets.NewString(preEn.Spec.Interfaces[0].IPs...)
 		curIPs := sets.NewString(curEn.Spec.Interfaces[0].IPs...)
 		if (!reflect.DeepEqual(preEn.Labels, curEn.Labels)) || (!preIPs.Equal(curIPs)) {
-			eeName := externalnode.GenExternalEntityName(curEn)
-			updatedEE := genExternalEntity(eeName, curEn)
-			err := c.updateExternalEntity(updatedEE)
+			updatedEE, err := genExternalEntity(curEEName, curEn)
 			if err != nil {
+				return err
+			}
+			if err = c.updateExternalEntity(updatedEE); err != nil {
 				return err
 			}
 		}
@@ -316,12 +326,11 @@ func (c *ExternalNodeController) deleteExternalNode(namespace string, name strin
 		return nil
 	}
 	en := obj.(*v1alpha1.ExternalNode)
-	eeName := externalnode.GenExternalEntityName(en)
-	if eeName == "" {
-		klog.InfoS("Interfaces are empty for ExternalNode", "ExternalNode", klog.KObj(en))
-		return nil
+	eeName, err := externalnode.GenExternalEntityName(en)
+	if err != nil {
+		return err
 	}
-	err := c.deleteExternalEntity(namespace, eeName)
+	err = c.deleteExternalEntity(namespace, eeName)
 	if err != nil {
 		return err
 	}
@@ -338,7 +347,7 @@ func (c *ExternalNodeController) deleteExternalEntity(namespace string, name str
 	return err
 }
 
-func genExternalEntity(eeName string, en *v1alpha1.ExternalNode) *v1alpha2.ExternalEntity {
+func genExternalEntity(eeName string, en *v1alpha1.ExternalNode) (*v1alpha2.ExternalEntity, error) {
 	ownerRef := &metav1.OwnerReference{
 		APIVersion: "v1alpha1",
 		Kind:       "ExternalNode",
@@ -346,19 +355,17 @@ func genExternalEntity(eeName string, en *v1alpha1.ExternalNode) *v1alpha2.Exter
 		UID:        en.GetUID(),
 	}
 	endpoints := make([]v1alpha2.Endpoint, 0)
-	// Generate one/multiple endpoint(s) if one/multiple IP(s) are specified for interface[0].
-	// Generate one endpoint with name only if IP is not specified for interface[0].
-	if len(en.Spec.Interfaces[0].IPs) > 0 {
-		for _, ip := range en.Spec.Interfaces[0].IPs {
-			endpoints = append(endpoints, v1alpha2.Endpoint{
-				IP:   ip,
-				Name: en.Spec.Interfaces[0].Name,
-			})
-		}
-	} else {
-		klog.InfoS("Cannot generate endpoints as Interfaces[0].IPs is empty", "ExternalNode", klog.KObj(en))
+	if len(en.Spec.Interfaces[0].IPs) == 0 {
+		// This should not happen since openAPIV3Schema checks it.
+		return nil, fmt.Errorf("failed to get IPs form Interfaces[0] from ExternalNode %s", en.Name)
 	}
-
+	// Generate one/multiple endpoint(s) if one/multiple IP(s) are specified for interface[0]
+	for _, ip := range en.Spec.Interfaces[0].IPs {
+		endpoints = append(endpoints, v1alpha2.Endpoint{
+			IP:   ip,
+			Name: en.Spec.Interfaces[0].Name,
+		})
+	}
 	ee := &v1alpha2.ExternalEntity{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:            eeName,
@@ -371,5 +378,5 @@ func genExternalEntity(eeName string, en *v1alpha1.ExternalNode) *v1alpha2.Exter
 			ExternalNode: en.Name,
 		},
 	}
-	return ee
+	return ee, nil
 }
