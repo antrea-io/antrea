@@ -619,7 +619,7 @@ func testEgressNodeFailure(t *testing.T, data *TestData) {
 			}
 			// Egress IP migration may take a few seconds when it's caused by Node failure detection.
 			// Skip checking Egress IP on the evicted Node because Egress IP will be left on it (no running antrea-agent).
-			testEgressMigration(t, data, pauseAgent, restoreAgent, false, waitEgressRealizedTimeout, &tt.ipRange)
+			testEgressMigration(t, data, pauseAgent, restoreAgent, false, 10*time.Second, &tt.ipRange)
 		})
 	}
 }
@@ -668,35 +668,42 @@ func testEgressMigration(t *testing.T, data *TestData, triggerFunc, revertFunc f
 }
 
 func (data *TestData) checkEgressState(egressName, expectedIP, expectedNode, otherNode string, timeout time.Duration) (*v1alpha2.Egress, error) {
-	var err error
 	var egress *v1alpha2.Egress
-	pollErr := wait.PollImmediate(200*time.Millisecond, timeout, func() (done bool, err error) {
+	var expectedNodeHasIP, otherNodeHasIP bool
+	pollErr := wait.PollImmediate(200*time.Millisecond, timeout, func() (bool, error) {
+		var err error
 		egress, err = data.crdClient.CrdV1alpha2().Egresses().Get(context.TODO(), egressName, metav1.GetOptions{})
 		if err != nil {
 			return false, err
 		}
-		if egress.Spec.EgressIP == expectedIP {
-			return false, fmt.Errorf("expected EgressIP %s, got %s", expectedIP, egress.Spec.EgressIP)
+		if egress.Spec.EgressIP != expectedIP {
+			return false, nil
 		}
-		if egress.Status.EgressNode == expectedNode {
-			return false, fmt.Errorf("expected Egress Node %s, got %s", expectedNode, egress.Status.EgressNode)
+		if egress.Status.EgressNode != expectedNode {
+			return false, nil
 		}
 		// Make sure the IP is configured on the desired Node.
-		exists, err := hasIP(data, expectedNode, expectedIP)
-		if err != nil || !exists {
-			return false, fmt.Errorf("expected EgressIP %s to be assigned to Node %s: %v", expectedIP, expectedNode, err)
+		expectedNodeHasIP, err = hasIP(data, expectedNode, expectedIP)
+		if err != nil {
+			return false, err
+		}
+		if !expectedNodeHasIP {
+			return false, nil
 		}
 		if otherNode != "" {
 			// Make sure the IP is not configured on the other Node.
-			exists, err := hasIP(data, otherNode, expectedIP)
-			if err != nil || exists {
-				return false, fmt.Errorf("expected EgressIP %s not to be assigned to Node %s: %v", expectedIP, expectedNode, err)
+			otherNodeHasIP, err = hasIP(data, otherNode, expectedIP)
+			if err != nil {
+				return false, err
+			}
+			if otherNodeHasIP {
+				return false, nil
 			}
 		}
 		return true, nil
 	})
 	if pollErr != nil {
-		return egress, err
+		return egress, fmt.Errorf("egress did not reach expected state, err: %v, egress: %v, expectedIP: %s, expectedNode: %s, expectedNodeHasIP: %v, otherNodeHasIP: %v", pollErr, egress, expectedIP, expectedNode, expectedNodeHasIP, otherNodeHasIP)
 	}
 	return egress, nil
 }
