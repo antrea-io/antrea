@@ -1100,7 +1100,11 @@ func (c *Client) DeleteSNATRule(mark uint32) error {
 	}
 	c.markToSNATIP.Delete(mark)
 	snatIP := value.(net.IP)
-	return c.ipt.DeleteRule(iptables.ProtocolDual, iptables.NATTable, antreaPostRoutingChain, c.snatRuleSpec(snatIP, mark))
+	protocol := iptables.ProtocolIPv4
+	if snatIP.To4() == nil {
+		protocol = iptables.ProtocolIPv6
+	}
+	return c.ipt.DeleteRule(protocol, iptables.NATTable, antreaPostRoutingChain, c.snatRuleSpec(snatIP, mark))
 }
 
 // addVirtualServiceIPRoute is used to add routing entry which is used to forward the packets whose destination IP is
