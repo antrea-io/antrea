@@ -18,13 +18,10 @@ package v1alpha1
 
 import (
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 )
-
-// log is for logging in this package.
-var clusterclaimlog = logf.Log.WithName("clusterclaim-resource")
 
 func (r *ClusterClaim) SetupWebhookWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewWebhookManagedBy(mgr).
@@ -38,7 +35,7 @@ var _ webhook.Defaulter = &ClusterClaim{}
 
 // Default implements webhook.Defaulter so a webhook will be registered for the type
 func (r *ClusterClaim) Default() {
-	clusterclaimlog.Info("default", "name", r.Name)
+	klog.InfoS("default", "name", r.Name)
 
 	// TODO(user): fill in your defaulting logic.
 }
@@ -50,7 +47,7 @@ var _ webhook.Validator = &ClusterClaim{}
 
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type
 func (r *ClusterClaim) ValidateCreate() error {
-	clusterclaimlog.Info("validate create", "name", r.Name)
+	klog.InfoS("validate create", "name", r.Name)
 
 	// TODO(user): fill in your validation logic upon object creation.
 	return nil
@@ -58,7 +55,7 @@ func (r *ClusterClaim) ValidateCreate() error {
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
 func (r *ClusterClaim) ValidateUpdate(old runtime.Object) error {
-	clusterclaimlog.Info("validate update", "name", r.Name)
+	klog.InfoS("validate update", "name", r.Name)
 
 	// TODO(user): fill in your validation logic upon object update.
 	return nil
@@ -66,7 +63,7 @@ func (r *ClusterClaim) ValidateUpdate(old runtime.Object) error {
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type
 func (r *ClusterClaim) ValidateDelete() error {
-	clusterclaimlog.Info("validate delete", "name", r.Name)
+	klog.InfoS("validate delete", "name", r.Name)
 
 	// TODO(user): fill in your validation logic upon object deletion.
 	return nil

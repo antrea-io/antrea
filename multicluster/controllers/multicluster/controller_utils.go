@@ -29,11 +29,15 @@ import (
 	"antrea.io/antrea/multicluster/controllers/multicluster/common"
 )
 
+//+kubebuilder:rbac:groups=multicluster.crd.antrea.io,resources=clusterclaims,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=multicluster.crd.antrea.io,resources=clusterclaims/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=multicluster.crd.antrea.io,resources=clusterclaims/finalizers,verbs=update
+
 func validateLocalClusterClaim(c client.Client, clusterSet *multiclusterv1alpha1.ClusterSet) (clusterID common.ClusterID, clusterSetID common.ClusterSetID, err error) {
 	configNamespace := clusterSet.GetNamespace()
 
 	clusterClaimList := &multiclusterv1alpha1.ClusterClaimList{}
-	klog.InfoS("Validating cluster claim in", "Namespace", configNamespace)
+	klog.InfoS("Validating ClusterClaim", "namespace", configNamespace)
 	if err = c.List(context.TODO(), clusterClaimList, client.InNamespace(configNamespace)); err != nil {
 		return
 	}
@@ -45,7 +49,7 @@ func validateLocalClusterClaim(c client.Client, clusterSet *multiclusterv1alpha1
 	wellKnownClusterSetClaimIDExist := false
 	wellKnownClusterClaimIDExist := false
 	for _, clusterClaim := range clusterClaimList.Items {
-		klog.InfoS("Processing ClusterClaim", "Name", clusterClaim.Name, "Value", clusterClaim.Value)
+		klog.InfoS("Processing ClusterClaim", "name", clusterClaim.Name, "value", clusterClaim.Value)
 		if clusterClaim.Name == multiclusterv1alpha1.WellKnownClusterClaimClusterSet {
 			wellKnownClusterSetClaimIDExist = true
 			clusterSetID = common.ClusterSetID(clusterClaim.Value)

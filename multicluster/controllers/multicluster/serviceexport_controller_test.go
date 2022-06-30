@@ -124,15 +124,7 @@ func TestServiceExportReconciler_ExportNotFoundService(t *testing.T) {
 			if *reason != "not_found_service" {
 				t.Errorf("latest ServiceExport status should be 'not_found_service' but got %v", reason)
 			}
-			checkAnnotation(t, newSvcExport)
 		}
-	}
-}
-
-func checkAnnotation(t *testing.T, svcExport *k8smcsv1alpha1.ServiceExport) {
-	id, ok := svcExport.Annotations[common.AntreaMCClusterIDAnnotation]
-	if id != localClusterID || !ok {
-		t.Errorf("latest ServiceExport annotation should be %v but got %v", localClusterID, id)
 	}
 }
 
@@ -169,7 +161,6 @@ func TestServiceExportReconciler_ExportMCSService(t *testing.T) {
 			if *reason != "imported_service" {
 				t.Errorf("latest ServiceExport status should be 'imported_service' but got %v", reason)
 			}
-			checkAnnotation(t, newSvcExport)
 		}
 	}
 }
@@ -208,7 +199,6 @@ func TestServiceExportReconciler_handleServiceExportCreateEvent(t *testing.T) {
 		}
 		newSvcExport := &k8smcsv1alpha1.ServiceExport{}
 		fakeClient.Get(ctx, types.NamespacedName{Namespace: "default", Name: "nginx"}, newSvcExport)
-		checkAnnotation(t, newSvcExport)
 	}
 }
 
@@ -309,7 +299,6 @@ func TestServiceExportReconciler_handleServiceUpdateEvent(t *testing.T) {
 		}
 		newSvcExport := &k8smcsv1alpha1.ServiceExport{}
 		fakeClient.Get(ctx, types.NamespacedName{Namespace: "default", Name: "nginx"}, newSvcExport)
-		checkAnnotation(t, newSvcExport)
 	}
 }
 

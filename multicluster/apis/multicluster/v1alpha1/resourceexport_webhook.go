@@ -17,16 +17,12 @@ limitations under the License.
 package v1alpha1
 
 import (
-	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	"antrea.io/antrea/multicluster/controllers/multicluster/common"
 )
-
-// log is for logging in this package.
-var resourceexportlog = logf.Log.WithName("resourceexport-resource")
 
 func (r *ResourceExport) SetupWebhookWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewWebhookManagedBy(mgr).
@@ -40,7 +36,7 @@ var _ webhook.Defaulter = &ResourceExport{}
 
 // Default implements webhook.Defaulter so a webhook will be registered for the type
 func (r *ResourceExport) Default() {
-	resourceexportlog.Info("default", "name", r.Name)
+	klog.InfoS("default", "name", r.Name)
 	if r.Spec.ClusterNetworkPolicy == nil {
 		// Only mutate ResourceExport created for ClusterNetworkPolicy resources
 		return
@@ -60,26 +56,4 @@ func (r *ResourceExport) Default() {
 	if r.DeletionTimestamp.IsZero() && !common.StringExistsInSlice(r.Finalizers, common.ResourceExportFinalizer) {
 		r.Finalizers = append(r.Finalizers, common.ResourceExportFinalizer)
 	}
-}
-
-//+kubebuilder:webhook:path=/validate-multicluster-crd-antrea-io-v1alpha1-resourceexport,mutating=false,failurePolicy=fail,sideEffects=None,groups=multicluster.crd.antrea.io,resources=resourceexports,verbs=create;update,versions=v1alpha1,name=vresourceexport.kb.io,admissionReviewVersions={v1,v1beta1}
-
-var _ webhook.Validator = &ResourceExport{}
-
-// ValidateCreate implements webhook.Validator so a webhook will be registered for the type
-func (r *ResourceExport) ValidateCreate() error {
-	resourceexportlog.Info("validate create", "name", r.Name)
-	return nil
-}
-
-// ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
-func (r *ResourceExport) ValidateUpdate(old runtime.Object) error {
-	resourceexportlog.Info("validate update", "name", r.Name)
-	return nil
-}
-
-// ValidateDelete implements webhook.Validator so a webhook will be registered for the type
-func (r *ResourceExport) ValidateDelete() error {
-	resourceexportlog.Info("validate delete", "name", r.Name)
-	return nil
 }
