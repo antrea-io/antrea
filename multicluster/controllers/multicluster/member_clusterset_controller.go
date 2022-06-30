@@ -33,6 +33,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	multiclusterv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
 	"antrea.io/antrea/multicluster/controllers/multicluster/common"
@@ -74,10 +75,6 @@ func NewMemberClusterSetReconciler(client client.Client,
 
 // Reconcile ClusterSet changes
 func (r *MemberClusterSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	if req.Namespace != r.Namespace {
-		klog.V(2).InfoS("Skip reconciling ClusterSet", "clusterset", req.String())
-		return ctrl.Result{}, nil
-	}
 	clusterSet := &multiclusterv1alpha1.ClusterSet{}
 	err := r.Get(ctx, req.NamespacedName, clusterSet)
 	r.mutex.Lock()
@@ -86,7 +83,7 @@ func (r *MemberClusterSetReconciler) Reconcile(ctx context.Context, req ctrl.Req
 		if !apierrors.IsNotFound(err) {
 			return ctrl.Result{}, err
 		}
-		klog.InfoS("Received ClusterSet delete", "clusterset", klog.KObj(clusterSet))
+		klog.InfoS("Received ClusterSet delete", "clusterset", req.NamespacedName)
 		stopErr := r.remoteCommonAreaManager.Stop()
 		r.remoteCommonAreaManager = nil
 		r.clusterSetConfig = nil
@@ -100,7 +97,7 @@ func (r *MemberClusterSetReconciler) Reconcile(ctx context.Context, req ctrl.Req
 
 	// Handle create or update
 	if r.clusterSetConfig == nil {
-		// If create, make sure the local ClusterClaim is part of the member config
+		// If create, make sure the local ClusterClaim is part of the member ClusterSet.
 		clusterID, clusterSetID, err := validateLocalClusterClaim(r.Client, clusterSet)
 		if err != nil {
 			return ctrl.Result{}, err
@@ -114,7 +111,7 @@ func (r *MemberClusterSetReconciler) Reconcile(ctx context.Context, req ctrl.Req
 	} else {
 		if string(r.clusterSetID) != clusterSet.Name {
 			return ctrl.Result{}, fmt.Errorf("ClusterSet Name %s cannot be changed to %s",
-				r.clusterSetID, req.Name)
+				r.clusterSetID, clusterSet.Name)
 		}
 	}
 	r.clusterSetConfig = clusterSet.DeepCopy()
@@ -138,8 +135,18 @@ func (r *MemberClusterSetReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		}
 	}()
 
+	// Only register this controller to reconcile the ClusterSet in the same Namespace
+	namespaceFilter := func(object client.Object) bool {
+		if clusterSet, ok := object.(*multiclusterv1alpha1.ClusterSet); ok {
+			return clusterSet.Namespace == r.Namespace
+		}
+		return false
+	}
+	namespacePredicate := predicate.NewPredicateFuncs(namespaceFilter)
+
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&multiclusterv1alpha1.ClusterSet{}).
+		WithEventFilter(namespacePredicate).
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: common.DefaultWorkerCount,
 		}).

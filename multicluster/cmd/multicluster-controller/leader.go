@@ -88,10 +88,6 @@ func runLeader(o *Options) error {
 		return fmt.Errorf("error creating ResourceExport webhook: %v", err)
 	}
 
-	if err := (&multiclusterv1alpha1.ResourceImport{}).SetupWebhookWithManager(mgr); err != nil {
-		return fmt.Errorf("error creating ResourceImport webhook: %v", err)
-	}
-
 	klog.InfoS("Leader MC Controller Starting Manager")
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		return fmt.Errorf("error running Manager: %v", err)

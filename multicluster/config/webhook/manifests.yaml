@@ -68,27 +68,6 @@ webhooks:
     resources:
     - resourceexports
   sideEffects: None
-- admissionReviewVersions:
-  - v1
-  - v1beta1
-  clientConfig:
-    service:
-      name: webhook-service
-      namespace: system
-      path: /mutate-multicluster-crd-antrea-io-v1alpha1-resourceimport
-  failurePolicy: Fail
-  name: mresourceimport.kb.io
-  rules:
-  - apiGroups:
-    - multicluster.crd.antrea.io
-    apiVersions:
-    - v1alpha1
-    operations:
-    - CREATE
-    - UPDATE
-    resources:
-    - resourceimports
-  sideEffects: None
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingWebhookConfiguration
@@ -137,48 +116,6 @@ webhooks:
     - UPDATE
     resources:
     - clustersets
-  sideEffects: None
-- admissionReviewVersions:
-  - v1
-  - v1beta1
-  clientConfig:
-    service:
-      name: webhook-service
-      namespace: system
-      path: /validate-multicluster-crd-antrea-io-v1alpha1-resourceexport
-  failurePolicy: Fail
-  name: vresourceexport.kb.io
-  rules:
-  - apiGroups:
-    - multicluster.crd.antrea.io
-    apiVersions:
-    - v1alpha1
-    operations:
-    - CREATE
-    - UPDATE
-    resources:
-    - resourceexports
-  sideEffects: None
-- admissionReviewVersions:
-  - v1
-  - v1beta1
-  clientConfig:
-    service:
-      name: webhook-service
-      namespace: system
-      path: /validate-multicluster-crd-antrea-io-v1alpha1-resourceimport
-  failurePolicy: Fail
-  name: vresourceimport.kb.io
-  rules:
-  - apiGroups:
-    - multicluster.crd.antrea.io
-    apiVersions:
-    - v1alpha1
-    operations:
-    - CREATE
-    - UPDATE
-    resources:
-    - resourceimports
   sideEffects: None
 - admissionReviewVersions:
   - v1
