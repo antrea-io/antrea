@@ -1,0 +1,5 @@
+The Antrea Flow Aggregator has been successfully installed
+
+You are using version {{ .Chart.Version }}
+
+For the Antrea documentation, please visit https://antrea.io

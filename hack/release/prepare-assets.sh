@@ -95,6 +95,6 @@ cd -
 # Package the Antrea chart
 # We need to strip the leading "v" from the version string to ensure that we use
 # a valid SemVer 2 version.
-VERSION=${VERSION:1} ./hack/generate-helm-release.sh --out "$OUTPUT_DIR/antrea-chart.tgz"
+VERSION=${VERSION:1} ./hack/generate-helm-release.sh --out "$OUTPUT_DIR"
 
 ls "$OUTPUT_DIR" | cat

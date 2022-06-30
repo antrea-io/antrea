@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: flow-aggregator-configmap
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: flow-aggregator
+data:
+{{ tpl (.Files.Glob "conf/*").AsConfig . | indent 2 | replace "  \n" "\n" }}

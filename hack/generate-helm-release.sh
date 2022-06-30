@@ -20,10 +20,10 @@ function echoerr {
     >&2 echo "$@"
 }
 
-_usage="Usage: $0 [--mode (dev|release)] --out <PATH>
-Package the Antrea chart into a chart archive.
+_usage="Usage: $0 [--mode (dev|release)] --out <DIR>
+Package the Antrea chart and the Flow Aggregator chart into chart archives.
 Environment variable VERSION must be set.
-        --out <PATH>                  Output path for chart archive
+        --out <DIR>                   Output directory for chart archives
         --help, -h                    Print this message and exit
 
 You can set the HELM environment variable to the path of the helm binary you want us to
@@ -90,4 +90,8 @@ fi
 
 ANTREA_CHART="$THIS_DIR/../build/charts/antrea"
 $HELM package --app-version $VERSION --version $VERSION $ANTREA_CHART
-mv "antrea-$VERSION.tgz" $OUT
+mv "antrea-$VERSION.tgz" "$OUT/antrea-chart.tgz"
+
+FLOW_AGGREGATOR_CHART="$THIS_DIR/../build/charts/flow-aggregator"
+$HELM package --app-version $VERSION --version $VERSION $FLOW_AGGREGATOR_CHART
+mv "flow-aggregator-$VERSION.tgz" "$OUT/flow-aggregator-chart.tgz"
