@@ -247,7 +247,8 @@ func run(o *Options) error {
 		o.config.ExternalNode.ExternalNodeNamespace,
 		features.DefaultFeatureGate.Enabled(features.AntreaProxy),
 		o.config.AntreaProxy.ProxyAll,
-		connectUplinkToBridge)
+		connectUplinkToBridge,
+		o.config.DisableTXChecksumOffload)
 	err = agentInitializer.Initialize()
 	if err != nil {
 		return fmt.Errorf("error initializing agent: %v", err)

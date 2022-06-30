@@ -499,3 +499,7 @@ func (i *Initializer) installVMInitialFlows() error {
 	}
 	return nil
 }
+
+func (i *Initializer) setTXChecksumOffload() error {
+	return nil
+}

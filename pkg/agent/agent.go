@@ -85,23 +85,24 @@ var otherConfigKeysForIPsecCertificates = []string{"certificate", "private_key",
 
 // Initializer knows how to setup host networking, OpenVSwitch, and Openflow.
 type Initializer struct {
-	client                clientset.Interface
-	crdClient             versioned.Interface
-	ovsBridgeClient       ovsconfig.OVSBridgeClient
-	ofClient              openflow.Client
-	routeClient           route.Interface
-	wireGuardClient       wireguard.Interface
-	ifaceStore            interfacestore.InterfaceStore
-	ovsBridge             string
-	hostGateway           string // name of gateway port on the OVS bridge
-	mtu                   int
-	networkConfig         *config.NetworkConfig
-	nodeConfig            *config.NodeConfig
-	wireGuardConfig       *config.WireGuardConfig
-	egressConfig          *config.EgressConfig
-	serviceConfig         *config.ServiceConfig
-	enableProxy           bool
-	connectUplinkToBridge bool
+	client                   clientset.Interface
+	crdClient                versioned.Interface
+	ovsBridgeClient          ovsconfig.OVSBridgeClient
+	ofClient                 openflow.Client
+	routeClient              route.Interface
+	wireGuardClient          wireguard.Interface
+	ifaceStore               interfacestore.InterfaceStore
+	ovsBridge                string
+	hostGateway              string // name of gateway port on the OVS bridge
+	mtu                      int
+	networkConfig            *config.NetworkConfig
+	nodeConfig               *config.NodeConfig
+	wireGuardConfig          *config.WireGuardConfig
+	egressConfig             *config.EgressConfig
+	serviceConfig            *config.ServiceConfig
+	enableProxy              bool
+	connectUplinkToBridge    bool
+	disableTXChecksumOffload bool
 	// networkReadyCh should be closed once the Node's network is ready.
 	// The CNI server will wait for it before handling any CNI Add requests.
 	proxyAll              bool
@@ -132,28 +133,30 @@ func NewInitializer(
 	enableProxy bool,
 	proxyAll bool,
 	connectUplinkToBridge bool,
+	disableTXChecksumOffload bool,
 ) *Initializer {
 	return &Initializer{
-		ovsBridgeClient:       ovsBridgeClient,
-		client:                k8sClient,
-		crdClient:             crdClient,
-		ifaceStore:            ifaceStore,
-		ofClient:              ofClient,
-		routeClient:           routeClient,
-		ovsBridge:             ovsBridge,
-		hostGateway:           hostGateway,
-		mtu:                   mtu,
-		networkConfig:         networkConfig,
-		wireGuardConfig:       wireGuardConfig,
-		egressConfig:          egressConfig,
-		serviceConfig:         serviceConfig,
-		networkReadyCh:        networkReadyCh,
-		stopCh:                stopCh,
-		nodeType:              nodeType,
-		externalNodeNamespace: externalNodeNamespace,
-		enableProxy:           enableProxy,
-		proxyAll:              proxyAll,
-		connectUplinkToBridge: connectUplinkToBridge,
+		ovsBridgeClient:          ovsBridgeClient,
+		client:                   k8sClient,
+		crdClient:                crdClient,
+		ifaceStore:               ifaceStore,
+		ofClient:                 ofClient,
+		routeClient:              routeClient,
+		ovsBridge:                ovsBridge,
+		hostGateway:              hostGateway,
+		mtu:                      mtu,
+		networkConfig:            networkConfig,
+		wireGuardConfig:          wireGuardConfig,
+		egressConfig:             egressConfig,
+		serviceConfig:            serviceConfig,
+		networkReadyCh:           networkReadyCh,
+		stopCh:                   stopCh,
+		nodeType:                 nodeType,
+		externalNodeNamespace:    externalNodeNamespace,
+		enableProxy:              enableProxy,
+		proxyAll:                 proxyAll,
+		connectUplinkToBridge:    connectUplinkToBridge,
+		disableTXChecksumOffload: disableTXChecksumOffload,
 	}
 }
 
@@ -714,6 +717,10 @@ func (i *Initializer) configureGatewayInterface(gatewayIface *interfacestore.Int
 	// the first address in the subnet is assigned to the host gateway interface.
 	podCIDRs := []*net.IPNet{i.nodeConfig.PodIPv4CIDR, i.nodeConfig.PodIPv6CIDR}
 	if err := i.allocateGatewayAddresses(podCIDRs, gatewayIface); err != nil {
+		return err
+	}
+
+	if err := i.setTXChecksumOffload(); err != nil {
 		return err
 	}
 

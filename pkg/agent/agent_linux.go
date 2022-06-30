@@ -30,6 +30,7 @@ import (
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/util"
+	"antrea.io/antrea/pkg/agent/util/ethtool"
 	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	utilip "antrea.io/antrea/pkg/util/ip"
 )
@@ -310,5 +311,14 @@ func (i *Initializer) prepareOVSBridgeForVM() error {
 }
 
 func (i *Initializer) installVMInitialFlows() error {
+	return nil
+}
+
+func (i *Initializer) setTXChecksumOffload() error {
+	if i.disableTXChecksumOffload {
+		if err := ethtool.EthtoolTXHWCsumOff(i.hostGateway); err != nil {
+			return fmt.Errorf("error when disabling TX checksum offload on %s: %v", i.hostGateway, err)
+		}
+	}
 	return nil
 }
