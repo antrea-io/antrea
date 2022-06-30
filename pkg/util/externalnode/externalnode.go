@@ -17,6 +17,7 @@ package externalnode
 import (
 	"crypto/sha1" // #nosec G505: not used for security purposes
 	"encoding/hex"
+	"fmt"
 	"io"
 
 	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
@@ -24,19 +25,20 @@ import (
 
 const interfaceNameLength = 5
 
-func GenExternalEntityName(externalNode *v1alpha1.ExternalNode) string {
+func GenExternalEntityName(externalNode *v1alpha1.ExternalNode) (string, error) {
 	if len(externalNode.Spec.Interfaces) == 0 {
-		return ""
+		// This should not happen since openAPIV3Schema checks it.
+		return "", fmt.Errorf("failed to get interface from ExternalNode %s", externalNode.Name)
 	}
 	// Only one network interface is supported now.
 	// Other interfaces except interfaces[0] will be ignored if there are more than one interfaces.
 	ifName := externalNode.Spec.Interfaces[0].Name
 	if ifName == "" {
-		return externalNode.Name
+		return externalNode.Name, nil
 	} else {
 		hash := sha1.New() // #nosec G401: not used for security purposes
 		io.WriteString(hash, ifName)
 		hashedIfName := hex.EncodeToString(hash.Sum(nil))
-		return externalNode.Name + "-" + hashedIfName[:interfaceNameLength]
+		return externalNode.Name + "-" + hashedIfName[:interfaceNameLength], nil
 	}
 }
