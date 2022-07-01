@@ -263,3 +263,12 @@ jobs:
         asset_path: ./assets/antrea-chart.tgz
         asset_name: antrea-chart.tgz
         asset_content_type: application/octet-stream
+    - name: Upload Flow Aggregator Helm chart archive
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./assets/flow-aggregator-chart.tgz
+        asset_name: flow-aggregator-chart.tgz
+        asset_content_type: application/octet-stream

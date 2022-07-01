@@ -12,6 +12,9 @@ bin
 # Emacs
 *~
 
+# Common backup files
+*.bak
+
 .idea/
 .vscode/
 vendor

@@ -20,13 +20,12 @@ function echoerr {
     >&2 echo "$@"
 }
 
-_usage="Usage: $0 [--mode (dev|release)] [-fc|--flow-collector <addr>] [-ch|--clickhouse] [--keep] [--help|-h]
-Generate a YAML manifest for the Flow Aggregator, using Kustomize, and print it to stdout.
+_usage="Usage: $0 [--mode (dev|release)] [-fc|--flow-collector <addr>] [-ch|--clickhouse] [--verbose-log] [--help|-h]
+Generate a YAML manifest for the Flow Aggregator, using Helm and Kustomize, and print it to stdout.
         --mode (dev|release)            Choose the configuration variant that you need (default is 'dev').
         --flow-collector, -fc <addr>    Specify the flowCollector address.
                                         It should be given in format IP:port:proto. Example: 192.168.1.100:4739:udp.
         --clickhouse, -ch               Enable exporting flow records to default ClickHouse service address.
-        --keep                          Debug flag which will preserve the generated kustomization.yml.
         --coverage                      Generate a manifest which supports measuring code coverage of the Flow Aggregator binaries.
         --verbose-log                   Generate a manifest with increased log-level (level 4) for the Flow Aggregator.
                                         This option will work only with 'dev' mode.
@@ -34,10 +33,14 @@ Generate a YAML manifest for the Flow Aggregator, using Kustomize, and print it 
 
 In 'release' mode, environment variables IMG_NAME and IMG_TAG must be set.
 
-This tool uses kustomize (https://github.com/kubernetes-sigs/kustomize) to generate manifests for
-running Antrea on Windows Nodes. You can set the KUSTOMIZE environment variable to the path of the
-kustomize binary you want us to use. Otherwise we will look for kustomize in your PATH and your
-GOPATH. If we cannot find kustomize there, we will try to install it."
+In 'dev' mode, environment variable IMG_NAME can be set to use a custom image.
+
+This tool uses Helm 3 (https://helm.sh/) and Kustomize (https://github.com/kubernetes-sigs/kustomize)
+to generate the manifest for Flow Aggregator. You can set the HELM and KUSTOMIZE environment
+variable to the paths of the helm and kustomize binaries you want us to use. Otherwise we
+will download the appropriate version of the helm and kustomize binary and use it (this is
+the recommended approach since different versions of helm and kustomize may create different
+output YAMLs)."
 
 function print_usage {
     echoerr "$_usage"
@@ -48,7 +51,6 @@ function print_help {
 }
 
 MODE="dev"
-KEEP=false
 FLOW_COLLECTOR=""
 CLICKHOUSE=false
 COVERAGE=false
@@ -69,10 +71,6 @@ case $key in
     ;;
     -ch|--clickhouse)
     CLICKHOUSE=true
-    shift
-    ;;
-    --keep)
-    KEEP=true
     shift
     ;;
     --coverage)
@@ -112,13 +110,28 @@ if [ "$MODE" == "release" ] && [ -z "$IMG_TAG" ]; then
     exit 1
 fi
 
-if [ "$MODE" == "release" ] && $VERBOSE_LOG; then
+if [ "$MODE" != "dev" ] && $VERBOSE_LOG; then
     echoerr "--verbose-log works only with 'dev' mode"
     print_help
     exit 1
 fi
 
+if $COVERAGE && $VERBOSE_LOG; then
+    echoerr "--coverage has enabled verbose log"
+    VERBOSE_LOG=false
+fi
+
 THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+
+source $THIS_DIR/verify-helm.sh
+
+if [ -z "$HELM" ]; then
+    HELM="$(verify_helm)"
+elif ! $HELM version > /dev/null 2>&1; then
+    echoerr "$HELM does not appear to be a valid helm binary"
+    print_help
+    exit 1
+fi
 
 source $THIS_DIR/verify-kustomize.sh
 
@@ -130,76 +143,63 @@ elif ! $KUSTOMIZE version > /dev/null 2>&1; then
     exit 1
 fi
 
-KUSTOMIZATION_DIR=$THIS_DIR/../build/yamls/flow-aggregator
+HELM_VALUES=()
 
-TMP_DIR=$(mktemp -d $KUSTOMIZATION_DIR/overlays.XXXXXXXX)
-
-pushd $TMP_DIR > /dev/null
-
-BASE=../../base
-
-# do all ConfigMap edits
-mkdir configMap && cd configMap
-# user is not expected to make changes directly to flow-aggregator.conf,
-# but instead to the generated YAML manifest, so our regexs need not be too robust.
-cp $KUSTOMIZATION_DIR/base/conf/flow-aggregator.conf flow-aggregator.conf
 if [[ $FLOW_COLLECTOR != "" ]]; then
-    perl -i -p0e 's/  # Enable is the switch to enable exporting flow records to external flow collector.\n  #enable: false/  # Enable is the switch to enable exporting flow records to external flow collector.\n  enable: true/' flow-aggregator.conf
-    sed -i.bak -E "s/^[[:space:]]*#[[:space:]]*address[[:space:]]*:[[:space:]]\"\"+[[:space:]]*$/  address: \"$FLOW_COLLECTOR\"/" flow-aggregator.conf
+    HELM_VALUES+=("flowCollector.enable=true,flowCollector.address=$FLOW_COLLECTOR")
 fi
 
 if $CLICKHOUSE; then
-    perl -i -p0e 's/  # Enable is the switch to enable exporting flow records to ClickHouse.\n  #enable: false/  # Enable is the switch to enable exporting flow records to ClickHouse.\n  enable: true/' flow-aggregator.conf
+    HELM_VALUES+=("clickhouse.enable=true")
 fi
-
-# unfortunately 'kustomize edit add configmap' does not support specifying 'merge' as the behavior,
-# which is why we use a template kustomization file.
-sed -e "s/<FLOW_AGG_CONF_FILE>/flow-aggregator.conf/" ../../patches/kustomization.configMap.tpl.yml > kustomization.yml
-$KUSTOMIZE edit add base $BASE
-BASE=../configMap
-cd ..
 
 if $COVERAGE; then
-    mkdir coverage && cd coverage
-    cp $KUSTOMIZATION_DIR/patches/coverage/*.yml .
-    touch kustomization.yml
-    $KUSTOMIZE edit add base $BASE
-    # this runs flow-aggregator via the instrumented binary.
-    $KUSTOMIZE edit add patch --path startFlowAggCov.yml
-    BASE=../coverage
-    cd ..
-fi
-
-mkdir $MODE && cd $MODE
-touch kustomization.yml
-$KUSTOMIZE edit add base $BASE
-# ../../patches/$MODE may be empty so we use find and not simply cp
-find ../../patches/$MODE -name \*.yml -exec cp {} . \;
+    HELM_VALUES+=("testing.coverage=true")
+fi 
 
 if [ "$MODE" == "dev" ]; then
-    if $COVERAGE; then
-        $KUSTOMIZE edit set image flow-aggregator=antrea/flow-aggregator-coverage:latest
+    if [[ -z "$IMG_NAME" ]]; then
+        if $COVERAGE; then
+            HELM_VALUES+=("image.repository=antrea/flow-aggregator-coverage")
+        fi
     else
-        $KUSTOMIZE edit set image flow-aggregator=projects.registry.vmware.com/antrea/flow-aggregator:latest
+        HELM_VALUES+=("image.repository=$IMG_NAME")
     fi
 
-    $KUSTOMIZE edit add patch --path imagePullPolicy.yml
-
     if $VERBOSE_LOG; then
-        $KUSTOMIZE edit add patch --path flowAggregatorVerboseLog.yml
+        HELM_VALUES+=("logVerbosity=4")
     fi
 fi
 
 if [ "$MODE" == "release" ]; then
-    $KUSTOMIZE edit set image flow-aggregator=$IMG_NAME:$IMG_TAG
+    HELM_VALUES+=("image.repository=$IMG_NAME,image.tag=$IMG_TAG")
 fi
 
+delim=""
+HELM_VALUES_OPTION=""
+for v in "${HELM_VALUES[@]}"; do
+    HELM_VALUES_OPTION="$HELM_VALUES_OPTION$delim$v"
+    delim=","
+done
+if [ "$HELM_VALUES_OPTION" != "" ]; then
+    HELM_VALUES_OPTION="--set $HELM_VALUES_OPTION"
+fi
+
+ANTREA_CHART=$THIS_DIR/../build/charts/flow-aggregator
+KUSTOMIZATION_DIR=$THIS_DIR/../build/yamls/flow-aggregator
+# intermediate manifest
+MANIFEST=$KUSTOMIZATION_DIR/base/manifest.yaml
+# Suppress potential Helm warnings about invalid permissions for Kubeconfig file
+# by throwing away related warnings.
+$HELM template \
+      --namespace flow-aggregator \
+      $HELM_VALUES_OPTION \
+      "$ANTREA_CHART"\
+      2> >(grep -v 'This is insecure' >&2)\
+      > $MANIFEST
+
+# Add flow-aggregator Namespace resource with Kustomize
+cd $KUSTOMIZATION_DIR/base
 $KUSTOMIZE build
 
-popd > /dev/null
-
-if $KEEP; then
-    echoerr "Kustomization file is at $TMP_DIR/$MODE/kustomization.yml"
-else
-    rm -rf $TMP_DIR
-fi
+rm -rf $MANIFEST
