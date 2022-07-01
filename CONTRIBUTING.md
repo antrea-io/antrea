@@ -9,7 +9,7 @@ to effectively get it merged upstream.
 - [Getting Started](#getting-started)
   - [Accounts Setup](#accounts-setup)
 - [Contribute](#contribute)
-  - [Pre-Commit Hook](#pre-commit-hook)
+  - [Git Client Hooks](#git-client-hooks)
   - [GitHub Workflow](#github-workflow)
   - [Getting reviewers](#getting-reviewers)
   - [Getting your PR verified by CI](#getting-your-pr-verified-by-ci)
@@ -58,12 +58,12 @@ In order to help you get your hands "dirty", there is a list of
 [starter](https://github.com/antrea-io/antrea/labels/Good%20first%20issue)
 issues from which you can choose.
 
-### Pre-Commit Hook
+### Git Client Hooks
 
-There is a recommended pre-commit git hook which we advise you use. You can find
-it here:
-[hack/git_client_side_hooks/pre-commit](hack/git_client_side_hooks/pre-commit).
-You can run `make install-hooks` to copy it to your local `.git/hooks/` folder, and remove it via `make uninstall-hooks`
+ There are a few recommended git client hooks which we advise you to use. You can find
+ them here:
+ [hack/git_client_side_hooks](hack/git_client_side_hooks).
+ You can run `make install-hooks` to copy them to your local `.git/hooks/` folder, and remove them via `make uninstall-hooks`
 
 ### GitHub Workflow
 
