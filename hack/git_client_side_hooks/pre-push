@@ -1,0 +1,53 @@
+#!/bin/sh
+
+# Copyright 2022 Antrea Authors
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# This script will verify sign-off info and prevent push of commits if sign-off is missing.
+# Information about the commits which are being pushed is supplied as lines to
+# the standard input in the form:
+#
+#   <LOCAL_REF> <LOCAL_SHA> <REMOTE_REF> <REMOTE_SHA>
+# 
+#    https://www.git-scm.com/docs/githooks#_pre_push
+
+DUMMY_SHA=0000000000000000000000000000000000000000
+AUTHOR=$(git var GIT_AUTHOR_IDENT | sed -n 's/^\(.*>\).*$/\1/p')
+
+while read -r LOCAL_REF LOCAL_SHA REMOTE_REF REMOTE_SHA;
+do
+  if [ "$LOCAL_SHA" = $DUMMY_SHA ]
+  then
+    # Branch deleted. Do nothing.
+    exit 0
+  else
+    if [ "$REMOTE_SHA" = $DUMMY_SHA ]
+    then
+      RANGE="$LOCAL_SHA~1..$LOCAL_SHA"
+    else
+      RANGE="$REMOTE_SHA..$LOCAL_SHA"
+    fi
+    
+    NOT_SIGNED_OFF=$(git rev-list --no-merges --author "$AUTHOR" --grep="^Signed-off-by: " --invert-grep "$RANGE")
+    if [ -n "$NOT_SIGNED_OFF" ]
+    then
+      echo >&2 "ERROR: The following commits have no DCO sign-off:"
+      while read -r commit; do
+        echo "  $(git log --pretty=oneline --abbrev-commit -n 1 "$commit")"
+      done <<< "$NOT_SIGNED_OFF"
+      exit 1
+    fi
+ fi
+done
+exit 0
