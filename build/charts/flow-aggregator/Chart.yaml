@@ -1,0 +1,24 @@
+apiVersion: v2
+name: flow-aggregator
+type: application
+displayName: Antrea Flow Aggregator
+home: https://antrea.io/
+version: 0.0.0
+appVersion: 0.0.0
+kubeVersion: ">= 1.16.0-0"
+icon: https://raw.githubusercontent.com/antrea-io/antrea/main/docs/assets/logo/antrea_logo.svg
+description: Antrea Flow Aggregator
+keywords:
+  - Kubernetes
+  - CNCF
+  - Networking
+  - CNI
+  - Security
+  - Open vSwitch
+  - OVS
+  - Antrea
+  - Observability
+  - Flow Visibility
+  - Flow Aggregator
+sources:
+  - https://github.com/antrea-io/antrea
