@@ -27,7 +27,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
-	"antrea.io/antrea/multicluster/controllers/multicluster/common"
 	"antrea.io/antrea/multicluster/test/mocks"
 )
 
@@ -37,21 +36,18 @@ var (
 
 func TestMemberAnnounce(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
-	mockRemoteCommonAreaManager := NewMockRemoteCommonAreaManager(mockCtrl)
-	mockRemoteCommonAreaManager.EXPECT().GetLocalClusterID().Return(common.ClusterID("memberA")).AnyTimes()
 	mockManager := mocks.NewMockManager(mockCtrl)
 
 	remoteCommonAreaUnderTest := &remoteCommonArea{
-		Client:                  fakeRemoteClient,
-		ClusterManager:          mockManager, // Ok to use a mock as long the remoteCommonArea.StartWatching is not tested
-		ClusterSetID:            "clusterSetA",
-		ClusterID:               "leaderA",
-		config:                  nil, // Not used for this test
-		scheme:                  scheme,
-		Namespace:               "cluster-a-ns",
-		connected:               false,
-		localClusterClient:      nil, // Not used for this test
-		remoteCommonAreaManager: mockRemoteCommonAreaManager,
+		Client:             fakeRemoteClient,
+		ClusterManager:     mockManager, // Ok to use a mock as long the remoteCommonArea.StartWatching is not tested
+		ClusterSetID:       "clusterSetA",
+		ClusterID:          "leaderA",
+		config:             nil, // Not used for this test
+		scheme:             scheme,
+		Namespace:          "cluster-a-ns",
+		connected:          false,
+		localClusterClient: nil, // Not used for this test
 	}
 
 	remoteCommonAreaUnderTest.Start()

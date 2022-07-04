@@ -200,12 +200,9 @@ func TestGatewayReconciler(t *testing.T) {
 		if tt.resExport != nil {
 			fakeRemoteClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects(tt.resExport).Build()
 		}
-		remoteMgr := commonarea.NewRemoteCommonAreaManager("test-clusterset", common.ClusterID(localClusterID), "kube-system")
-		remoteMgr.Start()
-		defer remoteMgr.Stop()
-		_ = commonarea.NewFakeRemoteCommonArea(scheme, remoteMgr, fakeRemoteClient, "leader-cluster", leaderNamespace)
+		commonArea := commonarea.NewFakeRemoteCommonArea(scheme, fakeRemoteClient, "leader-cluster", localClusterID, leaderNamespace)
 		mcReconciler := NewMemberClusterSetReconciler(fakeClient, scheme, "default")
-		mcReconciler.SetRemoteCommonAreaManager(remoteMgr)
+		mcReconciler.SetRemoteCommonArea(commonArea)
 		commonAreaGatter := mcReconciler
 		r := NewGatewayReconciler(fakeClient, scheme, "default", "10.96.0.0/12", commonAreaGatter)
 		t.Run(tt.name, func(t *testing.T) {

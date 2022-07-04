@@ -157,9 +157,6 @@ func TestResourceImportReconciler_handleClusterInfo(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			remoteMgr := NewRemoteCommonAreaManager("test-clusterset", common.ClusterID("cluster-d"), "default")
-			remoteMgr.Start()
-			defer remoteMgr.Stop()
 			fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects().Build()
 			if tt.existingCIImport != nil {
 				fakeClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects(tt.existingCIImport).Build()
@@ -168,7 +165,7 @@ func TestResourceImportReconciler_handleClusterInfo(t *testing.T) {
 			if tt.isDelete {
 				fakeRemoteClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects().Build()
 			}
-			remoteCluster := NewFakeRemoteCommonArea(scheme, remoteMgr, fakeRemoteClient, "leader-cluster", "default")
+			remoteCluster := NewFakeRemoteCommonArea(scheme, fakeRemoteClient, "leader-cluster", "cluster-d", "default")
 			r := NewResourceImportReconciler(fakeClient, scheme, fakeClient, "cluster-d", "default", remoteCluster)
 			if tt.isDelete {
 				r.installedResImports.Add(*ciResImportC)

@@ -187,11 +187,11 @@ func (r *LeaderClusterSetReconciler) updateStatus() {
 	status := multiclusterv1alpha1.ClusterSetStatus{}
 	status.TotalClusters = int32(len(r.clusterSetConfig.Spec.Members))
 	status.ObservedGeneration = r.clusterSetConfig.Generation
-	clusterStatues := r.StatusManager.GetMemberClusterStatuses()
-	status.ClusterStatuses = clusterStatues
+	clusterStatuses := r.StatusManager.GetMemberClusterStatuses()
+	status.ClusterStatuses = clusterStatuses
 	readyClusters := 0
 	unknownClusters := 0
-	for _, cluster := range clusterStatues {
+	for _, cluster := range clusterStatuses {
 		for _, condition := range cluster.Conditions {
 			if condition.Type == multiclusterv1alpha1.ClusterReady {
 				switch condition.Status {
@@ -226,7 +226,7 @@ func (r *LeaderClusterSetReconciler) updateStatus() {
 	clusterSet := &multiclusterv1alpha1.ClusterSet{}
 	err := r.Get(context.TODO(), namespacedName, clusterSet)
 	if err != nil {
-		klog.ErrorS(err, "Failed to read ClusterSet", "Name", namespacedName)
+		klog.ErrorS(err, "Failed to read ClusterSet", "name", namespacedName)
 	}
 	status.Conditions = clusterSet.Status.Conditions
 	if (len(clusterSet.Status.Conditions) == 1 && clusterSet.Status.Conditions[0].Status != overallCondition.Status) ||
@@ -236,6 +236,6 @@ func (r *LeaderClusterSetReconciler) updateStatus() {
 	clusterSet.Status = status
 	err = r.Status().Update(context.TODO(), clusterSet)
 	if err != nil {
-		klog.ErrorS(err, "Failed to update Status of ClusterSet", "Name", namespacedName)
+		klog.ErrorS(err, "Failed to update Status of ClusterSet", "name", namespacedName)
 	}
 }

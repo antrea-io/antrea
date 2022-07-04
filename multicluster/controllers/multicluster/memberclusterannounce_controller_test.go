@@ -106,7 +106,7 @@ func TestStatusAfterAdd(t *testing.T) {
 				Reason:  "NeverConnected",
 			},
 			{
-				Type:    "ImportsResources",
+				Type:    "ClusterConnected",
 				Status:  "False",
 				Message: "Member created",
 				Reason:  "NeverConnected",
@@ -163,9 +163,9 @@ func TestStatusAfterReconcile(t *testing.T) {
 				Reason: "Connected",
 			},
 			{
-				Type:    "ImportsResources",
+				Type:    "ClusterConnected",
 				Status:  "Unknown",
-				Message: "Leader has not been elected yet",
+				Message: "Not connected to leader yet",
 			},
 		},
 	}
@@ -204,10 +204,10 @@ func TestStatusAfterLeaderElection(t *testing.T) {
 				Reason: "Connected",
 			},
 			{
-				Type:    "ImportsResources",
+				Type:    "ClusterConnected",
 				Status:  "True",
-				Message: "Local cluster is the elected leader of member: east",
-				Reason:  "ElectedLeader",
+				Message: "Local cluster is the leader of member: east",
+				Reason:  "ConnectedLeader",
 			},
 		},
 	}
@@ -246,10 +246,10 @@ func TestStatusInNonLeaderCase(t *testing.T) {
 				Reason: "Connected",
 			},
 			{
-				Type:    "ImportsResources",
+				Type:    "ClusterConnected",
 				Status:  "False",
-				Message: "Local cluster is not the elected leader of member: east",
-				Reason:  "NotElectedLeader",
+				Message: "Local cluster is not the leader of member: east",
+				Reason:  "NotLeader",
 			},
 		},
 	}

@@ -43,9 +43,6 @@ var (
 )
 
 func TestServiceExportReconciler_handleDeleteEvent(t *testing.T) {
-	remoteMgr := commonarea.NewRemoteCommonAreaManager("test-clusterset", common.ClusterID(localClusterID), "kube-system")
-	remoteMgr.Start()
-	defer remoteMgr.Stop()
 	existSvcResExport := &mcsv1alpha1.ResourceExport{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: leaderNamespace,
@@ -63,9 +60,9 @@ func TestServiceExportReconciler_handleDeleteEvent(t *testing.T) {
 	fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(exportedSvcNginx).Build()
 	fakeRemoteClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(existSvcResExport, existEpResExport).Build()
 
-	_ = commonarea.NewFakeRemoteCommonArea(scheme, remoteMgr, fakeRemoteClient, "leader-cluster", "default")
+	commonArea := commonarea.NewFakeRemoteCommonArea(scheme, fakeRemoteClient, "leader-cluster", localClusterID, "default")
 	mcReconciler := NewMemberClusterSetReconciler(fakeClient, scheme, "default")
-	mcReconciler.SetRemoteCommonAreaManager(remoteMgr)
+	mcReconciler.SetRemoteCommonArea(commonArea)
 	r := NewServiceExportReconciler(fakeClient, scheme, mcReconciler)
 	r.installedSvcs.Add(&svcInfo{
 		name:      svcNginx.Name,
@@ -94,10 +91,6 @@ func TestServiceExportReconciler_handleDeleteEvent(t *testing.T) {
 }
 
 func TestServiceExportReconciler_ExportNotFoundService(t *testing.T) {
-	remoteMgr := commonarea.NewRemoteCommonAreaManager("test-clusterset", common.ClusterID(localClusterID), "kube-system")
-	remoteMgr.Start()
-	defer remoteMgr.Stop()
-
 	existSvcExport := &k8smcsv1alpha1.ServiceExport{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
@@ -107,10 +100,10 @@ func TestServiceExportReconciler_ExportNotFoundService(t *testing.T) {
 
 	fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(existSvcExport).Build()
 	fakeRemoteClient := fake.NewClientBuilder().WithScheme(scheme).Build()
-	_ = commonarea.NewFakeRemoteCommonArea(scheme, remoteMgr, fakeRemoteClient, "leader-cluster", "default")
+	commonArea := commonarea.NewFakeRemoteCommonArea(scheme, fakeRemoteClient, "leader-cluster", localClusterID, "default")
 
 	mcReconciler := NewMemberClusterSetReconciler(fakeClient, scheme, "default")
-	mcReconciler.SetRemoteCommonAreaManager(remoteMgr)
+	mcReconciler.SetRemoteCommonArea(commonArea)
 	r := NewServiceExportReconciler(fakeClient, scheme, mcReconciler)
 	if _, err := r.Reconcile(ctx, nginxReq); err != nil {
 		t.Errorf("ServiceExport Reconciler should update ServiceExport status to 'not_found_service' but got error = %v", err)
@@ -129,10 +122,6 @@ func TestServiceExportReconciler_ExportNotFoundService(t *testing.T) {
 }
 
 func TestServiceExportReconciler_ExportMCSService(t *testing.T) {
-	remoteMgr := commonarea.NewRemoteCommonAreaManager("test-clusterset", common.ClusterID(localClusterID), "kube-system")
-	remoteMgr.Start()
-	defer remoteMgr.Stop()
-
 	mcsSvc := svcNginx.DeepCopy()
 	mcsSvc.Annotations = map[string]string{common.AntreaMCServiceAnnotation: "true"}
 	existSvcExport := &k8smcsv1alpha1.ServiceExport{
@@ -145,9 +134,9 @@ func TestServiceExportReconciler_ExportMCSService(t *testing.T) {
 	fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(mcsSvc, existSvcExport).Build()
 	fakeRemoteClient := fake.NewClientBuilder().WithScheme(scheme).Build()
 
-	_ = commonarea.NewFakeRemoteCommonArea(scheme, remoteMgr, fakeRemoteClient, "leader-cluster", "default")
+	commonArea := commonarea.NewFakeRemoteCommonArea(scheme, fakeRemoteClient, "leader-cluster", localClusterID, "default")
 	mcReconciler := NewMemberClusterSetReconciler(fakeClient, scheme, "default")
-	mcReconciler.SetRemoteCommonAreaManager(remoteMgr)
+	mcReconciler.SetRemoteCommonArea(commonArea)
 	r := NewServiceExportReconciler(fakeClient, scheme, mcReconciler)
 	if _, err := r.Reconcile(ctx, nginxReq); err != nil {
 		t.Errorf("ServiceExport Reconciler should update ServiceExport status to 'imported_service' but got error = %v", err)
@@ -166,10 +155,6 @@ func TestServiceExportReconciler_ExportMCSService(t *testing.T) {
 }
 
 func TestServiceExportReconciler_handleServiceExportCreateEvent(t *testing.T) {
-	remoteMgr := commonarea.NewRemoteCommonAreaManager("test-clusterset", common.ClusterID(localClusterID), "kube-system")
-	remoteMgr.Start()
-	defer remoteMgr.Stop()
-
 	existSvcExport := &k8smcsv1alpha1.ServiceExport{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
@@ -180,9 +165,9 @@ func TestServiceExportReconciler_handleServiceExportCreateEvent(t *testing.T) {
 	fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(svcNginx, epNginx, existSvcExport).Build()
 	fakeRemoteClient := fake.NewClientBuilder().WithScheme(scheme).Build()
 
-	_ = commonarea.NewFakeRemoteCommonArea(scheme, remoteMgr, fakeRemoteClient, "leader-cluster", "default")
+	commonArea := commonarea.NewFakeRemoteCommonArea(scheme, fakeRemoteClient, "leader-cluster", localClusterID, "default")
 	mcReconciler := NewMemberClusterSetReconciler(fakeClient, scheme, "default")
-	mcReconciler.SetRemoteCommonAreaManager(remoteMgr)
+	mcReconciler.SetRemoteCommonArea(commonArea)
 	r := NewServiceExportReconciler(fakeClient, scheme, mcReconciler)
 	if _, err := r.Reconcile(ctx, nginxReq); err != nil {
 		t.Errorf("ServiceExport Reconciler should create ResourceExports but got error = %v", err)
@@ -203,10 +188,6 @@ func TestServiceExportReconciler_handleServiceExportCreateEvent(t *testing.T) {
 }
 
 func TestServiceExportReconciler_handleServiceUpdateEvent(t *testing.T) {
-	remoteMgr := commonarea.NewRemoteCommonAreaManager("test-clusterset", common.ClusterID(localClusterID), "kube-system")
-	remoteMgr.Start()
-	defer remoteMgr.Stop()
-
 	existSvcExport := &k8smcsv1alpha1.ServiceExport{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
@@ -252,9 +233,9 @@ func TestServiceExportReconciler_handleServiceUpdateEvent(t *testing.T) {
 	fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(newSvcNginx, existSvcExport).Build()
 	fakeRemoteClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(existSvcRe, existEpRe).Build()
 
-	_ = commonarea.NewFakeRemoteCommonArea(scheme, remoteMgr, fakeRemoteClient, "leader-cluster", "default")
+	commonArea := commonarea.NewFakeRemoteCommonArea(scheme, fakeRemoteClient, "leader-cluster", localClusterID, "default")
 	mcReconciler := NewMemberClusterSetReconciler(fakeClient, scheme, "default")
-	mcReconciler.SetRemoteCommonAreaManager(remoteMgr)
+	mcReconciler.SetRemoteCommonArea(commonArea)
 	r := NewServiceExportReconciler(fakeClient, scheme, mcReconciler)
 	r.installedSvcs.Add(sinfo)
 	if _, err := r.Reconcile(ctx, nginxReq); err != nil {

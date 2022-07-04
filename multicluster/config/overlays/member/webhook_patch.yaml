@@ -31,13 +31,6 @@ webhooks:
   namespaceSelector:
     matchLabels:
       kubernetes.io/metadata.name: kube-system
-- admissionReviewVersions:
-  - v1
-  - v1beta1
-  name: mclusterset.kb.io
-  namespaceSelector:
-    matchLabels:
-      kubernetes.io/metadata.name: kube-system
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingWebhookConfiguration
@@ -48,13 +41,6 @@ webhooks:
   - v1
   - v1beta1
   name: vclusterclaim.kb.io
-  namespaceSelector:
-    matchLabels:
-      kubernetes.io/metadata.name: kube-system
-- admissionReviewVersions:
-  - v1
-  - v1beta1
-  name: vclusterset.kb.io
   namespaceSelector:
     matchLabels:
       kubernetes.io/metadata.name: kube-system

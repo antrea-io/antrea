@@ -29,8 +29,9 @@ import (
 // fakeRemoteCommonArea is a fake RemoteCommonArea for unit test purpose
 type fakeRemoteCommonArea struct {
 	client.Client
-	ClusterID common.ClusterID
-	Namespace string
+	ClusterID      common.ClusterID
+	LocalClusterID string
+	Namespace      string
 }
 
 func (c *fakeRemoteCommonArea) GetClusterID() common.ClusterID {
@@ -41,13 +42,13 @@ func (c *fakeRemoteCommonArea) GetNamespace() string {
 	return c.Namespace
 }
 
-func (c *fakeRemoteCommonArea) Start() (context.CancelFunc, error) {
+func (c *fakeRemoteCommonArea) Start() context.CancelFunc {
 	_, stopFunc := context.WithCancel(context.Background())
-	return stopFunc, nil
+	return stopFunc
 }
 
-func (c *fakeRemoteCommonArea) Stop() error {
-	return nil
+func (c *fakeRemoteCommonArea) Stop() {
+	return
 }
 
 func (c *fakeRemoteCommonArea) IsConnected() bool {
@@ -65,15 +66,18 @@ func (c *fakeRemoteCommonArea) GetStatus() []multiclusterv1alpha1.ClusterConditi
 	return nil
 }
 
+func (c *fakeRemoteCommonArea) GetLocalClusterID() string {
+	return c.LocalClusterID
+}
+
 // NewFakeRemoteCommonArea creates a new fakeRemoteCommonArea for unit test purpose only
 func NewFakeRemoteCommonArea(scheme *runtime.Scheme,
-	remoteCommonAreaManager RemoteCommonAreaManager,
-	fakeClient client.Client, clusterID string, namespace string) RemoteCommonArea {
+	fakeClient client.Client, clusterID string, localClusterID string, namespace string) RemoteCommonArea {
 	fakeRemoteCommonArea := &fakeRemoteCommonArea{
-		Client:    fakeClient,
-		ClusterID: common.ClusterID(clusterID),
-		Namespace: namespace,
+		Client:         fakeClient,
+		ClusterID:      common.ClusterID(clusterID),
+		LocalClusterID: localClusterID,
+		Namespace:      namespace,
 	}
-	remoteCommonAreaManager.AddRemoteCommonArea(fakeRemoteCommonArea)
 	return fakeRemoteCommonArea
 }
