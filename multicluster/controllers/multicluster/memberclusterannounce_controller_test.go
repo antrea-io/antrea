@@ -28,6 +28,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
+	mcsv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
 )
 
 var (
@@ -60,22 +61,20 @@ func setup() {
 			Namespace: "mcs1",
 		},
 	}
-	existingClusterClaimList := &mcsv1alpha1.ClusterClaimList{
-		Items: []mcsv1alpha1.ClusterClaim{
+	existingClusterClaimList := &mcsv1alpha2.ClusterClaimList{
+		Items: []mcsv1alpha2.ClusterClaim{
 			{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "clustersetid",
+					Name:      mcsv1alpha2.WellKnownClusterClaimClusterSet,
 					Namespace: "mcs1",
 				},
-				Name:  mcsv1alpha1.WellKnownClusterClaimClusterSet,
 				Value: "clusterset1",
 			},
 			{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "clusterid",
+					Name:      mcsv1alpha2.WellKnownClusterClaimID,
 					Namespace: "mcs1",
 				},
-				Name:  mcsv1alpha1.WellKnownClusterClaimID,
 				Value: "leader1",
 			},
 		},
@@ -83,6 +82,7 @@ func setup() {
 
 	scheme := runtime.NewScheme()
 	mcsv1alpha1.AddToScheme(scheme)
+	mcsv1alpha2.AddToScheme(scheme)
 	mcaTestFakeRemoteClient = fake.NewClientBuilder().WithScheme(scheme).
 		WithObjects(existingClusterSet, &existingClusterClaimList.Items[0], &existingClusterClaimList.Items[1]).
 		Build()

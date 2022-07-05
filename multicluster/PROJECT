@@ -11,19 +11,6 @@ resources:
   controller: true
   domain: crd.antrea.io
   group: multicluster
-  kind: ClusterClaim
-  path: antrea.io/antrea/multicluster/apis/multicluster/v1alpha1
-  version: v1alpha1
-  webhooks:
-    defaulting: true
-    validation: true
-    webhookVersion: v1
-- api:
-    crdVersion: v1
-    namespaced: true
-  controller: true
-  domain: crd.antrea.io
-  group: multicluster
   kind: MemberClusterAnnounce
   path: antrea.io/antrea/multicluster/apis/multicluster/v1alpha1
   version: v1alpha1
@@ -96,4 +83,13 @@ resources:
   kind: Gateway
   path: antrea.io/antrea/multicluster/apis/multicluster/v1alpha1
   version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: crd.antrea.io
+  group: multicluster
+  kind: ClusterClaim
+  path: antrea.io/antrea/multicluster/apis/multicluster/v1alpha2
+  version: v1alpha2
 version: "3"

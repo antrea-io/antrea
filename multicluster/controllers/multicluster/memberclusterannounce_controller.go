@@ -32,6 +32,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	multiclusterv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
+	multiclusterv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
 	"antrea.io/antrea/multicluster/controllers/multicluster/common"
 )
 
@@ -123,10 +124,10 @@ func (r *MemberClusterAnnounceReconciler) Reconcile(ctx context.Context, req ctr
 				memberAnnounce.ClusterID)
 			data.leaderStatus.reason = ReasonNotElectedLeader
 			// Check whether this local cluster is the leader for this member.
-			clusterClaimList := &multiclusterv1alpha1.ClusterClaimList{}
+			clusterClaimList := &multiclusterv1alpha2.ClusterClaimList{}
 			if err := r.List(context.TODO(), clusterClaimList, client.InNamespace(req.Namespace)); err == nil {
 				for _, clusterClaim := range clusterClaimList.Items {
-					if clusterClaim.Name == multiclusterv1alpha1.WellKnownClusterClaimID &&
+					if clusterClaim.Name == multiclusterv1alpha2.WellKnownClusterClaimID &&
 						clusterClaim.Value == memberAnnounce.LeaderClusterID {
 						data.leaderStatus.electedLocalAsLeaderCluster = v1.ConditionTrue
 						data.leaderStatus.message = fmt.Sprintf("Local cluster is the elected leader of member: %v",
