@@ -406,6 +406,17 @@ endif
 	docker tag antrea/antrea-mc-controller:$(DOCKER_IMG_VERSION) projects.registry.vmware.com/antrea/antrea-mc-controller
 	docker tag antrea/antrea-mc-controller:$(DOCKER_IMG_VERSION) projects.registry.vmware.com/antrea/antrea-mc-controller:$(DOCKER_IMG_VERSION)
 
+.PHONY: antrea-mc-controller-coverage
+antrea-mc-controller-coverage:
+	@echo "===> Building antrea/antrea-mc-controller-coverage Docker image <==="
+ifneq ($(NO_PULL),)
+	docker build -t antrea/antrea-mc-controller-coverage:$(DOCKER_IMG_VERSION) -f multicluster/build/images/Dockerfile.build.coverage $(DOCKER_BUILD_ARGS) .
+else
+	docker build --pull -t antrea/antrea-mc-controller-coverage:$(DOCKER_IMG_VERSION) -f multicluster/build/images/Dockerfile.build.coverage $(DOCKER_BUILD_ARGS) .
+endif
+	docker tag antrea/antrea-mc-controller-coverage:$(DOCKER_IMG_VERSION) antrea/antrea-mc-controller-coverage
+	docker tag antrea/antrea-mc-controller-coverage:$(DOCKER_IMG_VERSION) projects.registry.vmware.com/antrea/antrea-mc-controller-coverage
+
 .PHONY: flow-visibility-clickhouse-monitor
 flow-visibility-clickhouse-monitor:
 	@echo "===> Building antrea/flow-visibility-clickhouse-monitor Docker image <==="

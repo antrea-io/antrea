@@ -41,7 +41,7 @@ CONTROL_PLANE_NODE_ROLE="master|control-plane"
 
 _usage="Usage: $0 [--cluster-name <VMCClusterNameToUse>] [--kubeconfig <KubeconfigSavePath>] [--workdir <HomePath>]
                   [--log-mode <SonobuoyResultLogLevel>] [--testcase <e2e|conformance|all-features-conformance|whole-conformance|networkpolicy>]
-                  [--garbage-collection] [--setup-only] [--cleanup-only] [--coverage] [--test-only] [--registry]
+                  [--garbage-collection] [--setup-only] [--cleanup-only] [--coverage] [--test-only] [--codecov-token] [--registry]
 
 Setup a VMC cluster to run K8s e2e community tests (E2e, Conformance, all features Conformance, whole Conformance & Network Policy).
 
@@ -300,7 +300,7 @@ function copy_image {
   ${SSH_WITH_ANTREA_CI_KEY} -n capv@${IP} "sudo crictl images | grep '<none>' | awk '{print \$3}' | xargs -r crictl rmi"
 }
 
-# We run the function in a subshell with "set -e" to ensure that it exists in
+# We run the function in a subshell with "set -e" to ensure that it exits in
 # case of error (e.g. integrity check), no matter the context in which the
 # function is called.
 function run_codecov { (set -e
