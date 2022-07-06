@@ -148,6 +148,16 @@ func YamlOutput(obj interface{}, writer io.Writer) error {
 	return nil
 }
 
+// RawOutput is an output formatter whose output is similar to fmt.Print(responseString)
+// to better display multiple-line string responses.
+func RawOutput(obj interface{}, writer io.Writer) error {
+	_, err := fmt.Fprintf(writer, "%v", obj)
+	if err != nil {
+		return fmt.Errorf("error when outputing in raw format: %w", err)
+	}
+	return nil
+}
+
 // tableOutputForGetCommands formats the table output for "get" commands.
 func TableOutputForGetCommands(obj interface{}, writer io.Writer) error {
 	var list []common.TableOutput

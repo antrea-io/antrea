@@ -41,6 +41,7 @@ const (
 	jsonFormatter  formatterType = "json"
 	yamlFormatter  formatterType = "yaml"
 	tableFormatter formatterType = "table"
+	rawFormatter   formatterType = "raw"
 )
 
 const (
@@ -541,6 +542,8 @@ func (cd *commandDefinition) output(resp io.Reader, writer io.Writer, ft formatt
 		} else {
 			return output.TableOutput(obj, writer)
 		}
+	case rawFormatter:
+		return output.RawOutput(obj, writer)
 	default:
 		return fmt.Errorf("unsupported format type: %v", ft)
 	}
@@ -648,11 +651,11 @@ func (cd *commandDefinition) applyFlagsToCommand(cmd *cobra.Command) {
 		cmd.Args = cobra.NoArgs
 	}
 	if cd.commandGroup == get {
-		cmd.Flags().StringP("output", "o", "table", "output format: json|table|yaml")
+		cmd.Flags().StringP("output", "o", "table", "output format: json|table|yaml|raw")
 	} else if cd.commandGroup == query {
-		cmd.Flags().StringP("output", "o", "table", "output format: json|table|yaml")
+		cmd.Flags().StringP("output", "o", "table", "output format: json|table|yaml|raw")
 	} else {
-		cmd.Flags().StringP("output", "o", "yaml", "output format: json|table|yaml")
+		cmd.Flags().StringP("output", "o", "yaml", "output format: json|table|yaml|raw")
 	}
 }
 
