@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package v1alpha1
+package v1alpha2
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -36,8 +36,6 @@ const (
 type ClusterClaim struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
-	// Name of the ClusterClaim.
-	Name string `json:"name,omitempty"` // TODO: Remove the name as it is already part of ObjectMeta and its confusing to have two names
 	// Value of the ClusterClaim.
 	Value string `json:"value,omitempty"`
 }

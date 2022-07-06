@@ -25,7 +25,7 @@ import (
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	multiclusterv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
+	multiclusterv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
 	"antrea.io/antrea/pkg/antctl/raw"
 	multiclusterscheme "antrea.io/antrea/pkg/antctl/raw/multicluster/scheme"
 )
@@ -93,59 +93,57 @@ func clusterClaimRunE(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	clusterClaim := &multiclusterv1alpha1.ClusterClaim{
+	clusterClaim := &multiclusterv1alpha2.ClusterClaim{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      multiclusterv1alpha1.WellKnownClusterClaimID,
+			Name:      multiclusterv1alpha2.WellKnownClusterClaimID,
 			Namespace: clusterClaimOpt.namespace,
 		},
 		Value: clusterClaimOpt.clusterID,
-		Name:  multiclusterv1alpha1.WellKnownClusterClaimID,
 	}
 
 	var createErr error
 	createErr = k8sClient.Create(context.TODO(), clusterClaim)
 	if createErr != nil {
 		if errors.IsAlreadyExists(createErr) {
-			fmt.Fprintf(cmd.OutOrStdout(), "ClusterClaim \"%s\" already exists\n", multiclusterv1alpha1.WellKnownClusterClaimID)
+			fmt.Fprintf(cmd.OutOrStdout(), "ClusterClaim \"%s\" already exists\n", multiclusterv1alpha2.WellKnownClusterClaimID)
 			createErr = nil
 		} else {
-			fmt.Fprintf(cmd.OutOrStdout(), "Failed to create ClusterClaim \"%s\", error: %s\n", multiclusterv1alpha1.WellKnownClusterClaimID, createErr.Error())
+			fmt.Fprintf(cmd.OutOrStdout(), "Failed to create ClusterClaim \"%s\", error: %s\n", multiclusterv1alpha2.WellKnownClusterClaimID, createErr.Error())
 			return createErr
 		}
 	} else {
-		fmt.Fprintf(cmd.OutOrStdout(), "ClusterClaim \"%s\" with Value \"%s\" created\n", multiclusterv1alpha1.WellKnownClusterClaimID, clusterClaimOpt.clusterID)
+		fmt.Fprintf(cmd.OutOrStdout(), "ClusterClaim \"%s\" with Value \"%s\" created\n", multiclusterv1alpha2.WellKnownClusterClaimID, clusterClaimOpt.clusterID)
 		defer func() {
 			if createErr != nil {
 				err := k8sClient.Delete(context.TODO(), clusterClaim)
 				if err != nil {
 					fmt.Fprintf(cmd.OutOrStdout(), "Failed to delete ClusterClaim \"%s\", error: \n", err.Error())
 				} else {
-					fmt.Fprintf(cmd.OutOrStdout(), "ClusterClaim \"%s\" deleted\n", multiclusterv1alpha1.WellKnownClusterClaimID)
+					fmt.Fprintf(cmd.OutOrStdout(), "ClusterClaim \"%s\" deleted\n", multiclusterv1alpha2.WellKnownClusterClaimID)
 				}
 			}
 		}()
 	}
 
-	clustersetClaim := &multiclusterv1alpha1.ClusterClaim{
+	clustersetClaim := &multiclusterv1alpha2.ClusterClaim{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      multiclusterv1alpha1.WellKnownClusterClaimClusterSet,
+			Name:      multiclusterv1alpha2.WellKnownClusterClaimClusterSet,
 			Namespace: clusterClaimOpt.namespace,
 		},
 		Value: clusterClaimOpt.clusterSetID,
-		Name:  multiclusterv1alpha1.WellKnownClusterClaimClusterSet,
 	}
 
 	createErr = k8sClient.Create(context.TODO(), clustersetClaim)
 	if createErr != nil {
 		if errors.IsAlreadyExists(createErr) {
-			fmt.Fprintf(cmd.OutOrStdout(), "ClusterClaim \"%s\" already exists\n", multiclusterv1alpha1.WellKnownClusterClaimClusterSet)
+			fmt.Fprintf(cmd.OutOrStdout(), "ClusterClaim \"%s\" already exists\n", multiclusterv1alpha2.WellKnownClusterClaimClusterSet)
 			createErr = nil
 		} else {
-			fmt.Fprintf(cmd.OutOrStdout(), "Failed to create ClusterClaim \"%s\", start rollback\n", multiclusterv1alpha1.WellKnownClusterClaimClusterSet)
+			fmt.Fprintf(cmd.OutOrStdout(), "Failed to create ClusterClaim \"%s\", start rollback\n", multiclusterv1alpha2.WellKnownClusterClaimClusterSet)
 			return createErr
 		}
 	} else {
-		fmt.Fprintf(cmd.OutOrStdout(), "ClusterClaim \"%s\" with Value \"%s\" created\n", multiclusterv1alpha1.WellKnownClusterClaimClusterSet, clusterClaimOpt.clusterSetID)
+		fmt.Fprintf(cmd.OutOrStdout(), "ClusterClaim \"%s\" with Value \"%s\" created\n", multiclusterv1alpha2.WellKnownClusterClaimClusterSet, clusterClaimOpt.clusterSetID)
 	}
 
 	return nil

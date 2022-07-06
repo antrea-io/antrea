@@ -26,6 +26,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	multiclusterv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
+	multiclusterv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
 	"antrea.io/antrea/multicluster/controllers/multicluster/common"
 )
 
@@ -36,7 +37,7 @@ import (
 func validateLocalClusterClaim(c client.Client, clusterSet *multiclusterv1alpha1.ClusterSet) (clusterID common.ClusterID, clusterSetID common.ClusterSetID, err error) {
 	configNamespace := clusterSet.GetNamespace()
 
-	clusterClaimList := &multiclusterv1alpha1.ClusterClaimList{}
+	clusterClaimList := &multiclusterv1alpha2.ClusterClaimList{}
 	klog.InfoS("Validating ClusterClaim", "namespace", configNamespace)
 	if err = c.List(context.TODO(), clusterClaimList, client.InNamespace(configNamespace)); err != nil {
 		return
@@ -50,10 +51,10 @@ func validateLocalClusterClaim(c client.Client, clusterSet *multiclusterv1alpha1
 	wellKnownClusterClaimIDExist := false
 	for _, clusterClaim := range clusterClaimList.Items {
 		klog.InfoS("Processing ClusterClaim", "name", clusterClaim.Name, "value", clusterClaim.Value)
-		if clusterClaim.Name == multiclusterv1alpha1.WellKnownClusterClaimClusterSet {
+		if clusterClaim.Name == multiclusterv1alpha2.WellKnownClusterClaimClusterSet {
 			wellKnownClusterSetClaimIDExist = true
 			clusterSetID = common.ClusterSetID(clusterClaim.Value)
-		} else if clusterClaim.Name == multiclusterv1alpha1.WellKnownClusterClaimID {
+		} else if clusterClaim.Name == multiclusterv1alpha2.WellKnownClusterClaimID {
 			wellKnownClusterClaimIDExist = true
 			clusterID = common.ClusterID(clusterClaim.Value)
 		}
@@ -61,19 +62,19 @@ func validateLocalClusterClaim(c client.Client, clusterSet *multiclusterv1alpha1
 
 	if !wellKnownClusterSetClaimIDExist {
 		err = fmt.Errorf("ClusterClaim not configured for Name=%s",
-			multiclusterv1alpha1.WellKnownClusterClaimClusterSet)
+			multiclusterv1alpha2.WellKnownClusterClaimClusterSet)
 		return
 	}
 
 	if !wellKnownClusterClaimIDExist {
 		err = fmt.Errorf("ClusterClaim not configured for Name=%s",
-			multiclusterv1alpha1.WellKnownClusterClaimID)
+			multiclusterv1alpha2.WellKnownClusterClaimID)
 		return
 	}
 
 	if clusterSet.Name != string(clusterSetID) {
 		err = fmt.Errorf("ClusterSet Name=%s is not same as ClusterClaim Value=%s for Name=%s",
-			clusterSet.Name, clusterSetID, multiclusterv1alpha1.WellKnownClusterClaimClusterSet)
+			clusterSet.Name, clusterSetID, multiclusterv1alpha2.WellKnownClusterClaimClusterSet)
 		return
 	}
 

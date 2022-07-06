@@ -24,7 +24,7 @@ spec:
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
-    name: v1alpha1
+    name: v1alpha2
     schema:
       openAPIV3Schema:
         description: ClusterClaim is the Schema for the clusterclaims API.
@@ -41,9 +41,6 @@ spec:
             type: string
           metadata:
             type: object
-          name:
-            description: Name of the ClusterClaim.
-            type: string
           value:
             description: Value of the ClusterClaim.
             type: string
@@ -1049,7 +1046,7 @@ webhooks:
     service:
       name: antrea-mc-webhook-service
       namespace: kube-system
-      path: /mutate-multicluster-crd-antrea-io-v1alpha1-clusterclaim
+      path: /mutate-multicluster-crd-antrea-io-v1alpha2-clusterclaim
   failurePolicy: Fail
   name: mclusterclaim.kb.io
   namespaceSelector:
@@ -1059,7 +1056,7 @@ webhooks:
   - apiGroups:
     - multicluster.crd.antrea.io
     apiVersions:
-    - v1alpha1
+    - v1alpha2
     operations:
     - CREATE
     - UPDATE
@@ -1105,7 +1102,7 @@ webhooks:
     service:
       name: antrea-mc-webhook-service
       namespace: kube-system
-      path: /validate-multicluster-crd-antrea-io-v1alpha1-clusterclaim
+      path: /validate-multicluster-crd-antrea-io-v1alpha2-clusterclaim
   failurePolicy: Fail
   name: vclusterclaim.kb.io
   namespaceSelector:
@@ -1115,7 +1112,7 @@ webhooks:
   - apiGroups:
     - multicluster.crd.antrea.io
     apiVersions:
-    - v1alpha1
+    - v1alpha2
     operations:
     - CREATE
     - UPDATE

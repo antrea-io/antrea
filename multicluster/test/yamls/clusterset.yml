@@ -1,17 +1,15 @@
-apiVersion: multicluster.crd.antrea.io/v1alpha1
+apiVersion: multicluster.crd.antrea.io/v1alpha2
 kind: ClusterClaim
 metadata:
-  name: leadercluster-id
+  name: id.k8s.io
   namespace: antrea-multicluster
-name: id.k8s.io
 value: test-cluster-leader
 ---
-apiVersion: multicluster.crd.antrea.io/v1alpha1
+apiVersion: multicluster.crd.antrea.io/v1alpha2
 kind: ClusterClaim
 metadata:
-  name: clusterset-id
+  name: clusterset.k8s.io
   namespace: antrea-multicluster
-name: clusterset.k8s.io
 value: test-clusterset
 ---
 apiVersion: multicluster.crd.antrea.io/v1alpha1
