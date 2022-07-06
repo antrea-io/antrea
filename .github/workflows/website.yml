@@ -1,4 +1,4 @@
-name: Update main docs in antrea.io website
+name: Update antrea.io website for main branch
 
 on:
   push:
@@ -11,8 +11,8 @@ on:
       - 'hack/**'
 
 jobs:
-  trigger:
-    name: Trigger main docs update
+  update-website:
+    name: Trigger website update for main
     runs-on: ubuntu-latest
     steps:
     - uses: benc-uk/workflow-dispatch@v1
