@@ -401,6 +401,7 @@ spec:
         - mountPath: /controller_manager_config.yaml
           name: antrea-mc-controller-config
           subPath: controller_manager_config.yaml
+      hostNetwork: true
       serviceAccountName: antrea-mc-controller
       terminationGracePeriodSeconds: 10
       volumes:
