@@ -1,4 +1,4 @@
-// Copyright 2021 Antrea Authors
+// Copyright 2022 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@ import (
 	"fmt"
 
 	v1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
+	v1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	cache "k8s.io/client-go/tools/cache"
 )
@@ -50,8 +51,6 @@ func (f *genericInformer) Lister() cache.GenericLister {
 func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource) (GenericInformer, error) {
 	switch resource {
 	// Group=multicluster.crd.antrea.io, Version=v1alpha1
-	case v1alpha1.SchemeGroupVersion.WithResource("clusterclaims"):
-		return &genericInformer{resource: resource.GroupResource(), informer: f.Multicluster().V1alpha1().ClusterClaims().Informer()}, nil
 	case v1alpha1.SchemeGroupVersion.WithResource("clusterinfoimports"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Multicluster().V1alpha1().ClusterInfoImports().Informer()}, nil
 	case v1alpha1.SchemeGroupVersion.WithResource("clustersets"):
@@ -64,6 +63,10 @@ func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Multicluster().V1alpha1().ResourceExports().Informer()}, nil
 	case v1alpha1.SchemeGroupVersion.WithResource("resourceimports"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Multicluster().V1alpha1().ResourceImports().Informer()}, nil
+
+		// Group=multicluster.crd.antrea.io, Version=v1alpha2
+	case v1alpha2.SchemeGroupVersion.WithResource("clusterclaims"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Multicluster().V1alpha2().ClusterClaims().Informer()}, nil
 
 	}
 

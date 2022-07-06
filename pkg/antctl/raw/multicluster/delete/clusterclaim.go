@@ -25,7 +25,7 @@ import (
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	multiclusterv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
+	multiclusterv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
 	"antrea.io/antrea/pkg/antctl/raw"
 	multiclusterscheme "antrea.io/antrea/pkg/antctl/raw/multicluster/scheme"
 )
@@ -52,7 +52,7 @@ func (o *clusterClaimOptions) validateAndComplete() error {
 func NewClusterClaimCmd() *cobra.Command {
 	command := &cobra.Command{
 		Use:     "clusterclaims",
-		Args:    cobra.MaximumNArgs(1),
+		Args:    cobra.MaximumNArgs(0),
 		Short:   "Delete the ClusterClaims in a specified Namespace",
 		Long:    "Delete the ClusterClaims in a specified Namespace. One for the leader or member cluster, and another for the ClusterSet",
 		Example: clusterClaimExamples,
@@ -83,16 +83,16 @@ func clusterClaimRunE(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	clusterClaims := []*multiclusterv1alpha1.ClusterClaim{
+	clusterClaims := []*multiclusterv1alpha2.ClusterClaim{
 		{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      multiclusterv1alpha1.WellKnownClusterClaimID,
+				Name:      multiclusterv1alpha2.WellKnownClusterClaimID,
 				Namespace: clusterClaimOpt.namespace,
 			},
 		},
 		{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      multiclusterv1alpha1.WellKnownClusterClaimClusterSet,
+				Name:      multiclusterv1alpha2.WellKnownClusterClaimClusterSet,
 				Namespace: clusterClaimOpt.namespace,
 			},
 		},
@@ -107,7 +107,7 @@ func clusterClaimRunE(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func deleteClusterClaim(cmd *cobra.Command, k8sClient client.Client, clusterClaim *multiclusterv1alpha1.ClusterClaim) error {
+func deleteClusterClaim(cmd *cobra.Command, k8sClient client.Client, clusterClaim *multiclusterv1alpha2.ClusterClaim) error {
 	err := k8sClient.Delete(context.TODO(), clusterClaim)
 	if err != nil {
 		if !errors.IsNotFound(err) {

@@ -203,20 +203,18 @@ with the following YAML manifest (you can also refer to
 [multicluster_membercluster_template.yaml](../../multicluster/config/samples/clusterset_init/multicluster_membercluster_template.yaml)):
 
 ```yaml
-apiVersion: multicluster.crd.antrea.io/v1alpha1
+apiVersion: multicluster.crd.antrea.io/v1alpha2
 kind: ClusterClaim
 metadata:
   name: id.k8s.io
   namespace: kube-system
-name: id.k8s.io
 value: test-cluster-east
 ---
-apiVersion: multicluster.crd.antrea.io/v1alpha1
+apiVersion: multicluster.crd.antrea.io/v1alpha2
 kind: ClusterClaim
 metadata:
   name: clusterset.k8s.io
   namespace: kube-system
-name: clusterset.k8s.io
 value: test-clusterset
 ---
 apiVersion: multicluster.crd.antrea.io/v1alpha1
@@ -245,15 +243,13 @@ kind: ClusterClaim
 metadata:
   name: id.k8s.io
   namespace: kube-system
-name: id.k8s.io
 value: test-cluster-west
 ---
-apiVersion: multicluster.crd.antrea.io/v1alpha1
+apiVersion: multicluster.crd.antrea.io/v1alpha2
 kind: ClusterClaim
 metadata:
   name: clusterset.k8s.io
   namespace: kube-system
-name: clusterset.k8s.io
 value: test-clusterset
 ---
 apiVersion: multicluster.crd.antrea.io/v1alpha1
@@ -276,20 +272,18 @@ spec:
 [multicluster_clusterset_template.yaml](../../multicluster/config/samples/clusterset_init/multicluster_clusterset_template.yaml)):
 
 ```yaml
-apiVersion: multicluster.crd.antrea.io/v1alpha1
+apiVersion: multicluster.crd.antrea.io/v1alpha2
 kind: ClusterClaim
 metadata:
   name: id.k8s.io
   namespace: antrea-multicluster
-name: id.k8s.io
 value: test-cluster-north
 ---
-apiVersion: multicluster.crd.antrea.io/v1alpha1
+apiVersion: multicluster.crd.antrea.io/v1alpha2
 kind: ClusterClaim
 metadata:
   name: clusterset.k8s.io
   namespace: antrea-multicluster
-name: clusterset.k8s.io
 value: test-clusterset
 ---
 apiVersion: multicluster.crd.antrea.io/v1alpha1
@@ -324,20 +318,18 @@ Then create the `ClusterClaim` and `ClusterSet` CRs in cluster
 Multi-cluster Controller runs):
 
 ```yaml
-apiVersion: multicluster.crd.antrea.io/v1alpha1
+apiVersion: multicluster.crd.antrea.io/v1alpha2
 kind: ClusterClaim
 metadata:
   name: id.k8s.io
   namespace: kube-system
-name: id.k8s.io
 value: test-cluster-north
 ---
-apiVersion: multicluster.crd.antrea.io/v1alpha1
+apiVersion: multicluster.crd.antrea.io/v1alpha2
 kind: ClusterClaim
 metadata:
   name: clusterset.k8s.io
   namespace: kube-system
-name: clusterset.k8s.io
 value: test-clusterset
 ---
 apiVersion: multicluster.crd.antrea.io/v1alpha1

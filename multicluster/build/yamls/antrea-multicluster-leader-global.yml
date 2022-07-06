@@ -24,7 +24,7 @@ spec:
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
-    name: v1alpha1
+    name: v1alpha2
     schema:
       openAPIV3Schema:
         description: ClusterClaim is the Schema for the clusterclaims API.
@@ -41,9 +41,6 @@ spec:
             type: string
           metadata:
             type: object
-          name:
-            description: Name of the ClusterClaim.
-            type: string
           value:
             description: Value of the ClusterClaim.
             type: string

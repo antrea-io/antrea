@@ -41,12 +41,14 @@ $GOPATH/bin/client-gen \
   --clientset-name versioned \
   --input-base "${ANTREA_PKG}/multicluster/apis" \
   --input "multicluster/v1alpha1" \
+  --input "multicluster/v1alpha2" \
   --output-package "${ANTREA_PKG}/multicluster/pkg/client/clientset" \
   --go-header-file hack/boilerplate.go.txt
 
 # Generate listers with K8s codegen tools.
 $GOPATH/bin/lister-gen \
   --input-dirs "${ANTREA_PKG}/multicluster/apis/multicluster/v1alpha1" \
+  --input-dirs "${ANTREA_PKG}/multicluster/apis/multicluster/v1alpha2" \
   --output-package "${ANTREA_PKG}/multicluster/pkg/client/listers" \
   --go-header-file hack/boilerplate.go.txt
 
@@ -54,6 +56,7 @@ $GOPATH/bin/lister-gen \
 # Generate informers with K8s codegen tools.
 $GOPATH/bin/informer-gen \
   --input-dirs "${ANTREA_PKG}/multicluster/apis/multicluster/v1alpha1" \
+  --input-dirs "${ANTREA_PKG}/multicluster/apis/multicluster/v1alpha2" \
   --versioned-clientset-package "${ANTREA_PKG}/multicluster/pkg/client/clientset/versioned" \
   --listers-package "${ANTREA_PKG}/multicluster/pkg/client/listers" \
   --output-package "${ANTREA_PKG}/multicluster/pkg/client/informers" \

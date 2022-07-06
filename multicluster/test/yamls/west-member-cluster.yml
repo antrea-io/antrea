@@ -1,17 +1,15 @@
-apiVersion: multicluster.crd.antrea.io/v1alpha1
+apiVersion: multicluster.crd.antrea.io/v1alpha2
 kind: ClusterClaim
 metadata:
-  name: west-membercluster-id
+  name: id.k8s.io
   namespace: kube-system
-name: id.k8s.io
 value: test-cluster-west
 ---
-apiVersion: multicluster.crd.antrea.io/v1alpha1
+apiVersion: multicluster.crd.antrea.io/v1alpha2
 kind: ClusterClaim
 metadata:
-  name: clusterset-id
+  name: clusterset.k8s.io
   namespace: kube-system
-name: clusterset.k8s.io
 value: test-clusterset
 ---
 apiVersion: multicluster.crd.antrea.io/v1alpha1

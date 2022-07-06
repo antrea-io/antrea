@@ -36,6 +36,7 @@ import (
 	mcsscheme "sigs.k8s.io/mcs-api/pkg/client/clientset/versioned/scheme"
 
 	mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
+	mcsv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
 	multiclustercontrollers "antrea.io/antrea/multicluster/controllers/multicluster"
 	antreamcscheme "antrea.io/antrea/multicluster/pkg/client/clientset/versioned/scheme"
 	antreascheme "antrea.io/antrea/pkg/client/clientset/versioned/scheme"
@@ -185,20 +186,18 @@ var _ = BeforeSuite(func() {
 }, 60)
 
 func configureClusterSet() {
-	clusterIDClaim := &mcsv1alpha1.ClusterClaim{
+	clusterIDClaim := &mcsv1alpha2.ClusterClaim{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: LeaderNamespace,
-			Name:      "local-cluster-id",
+			Name:      mcsv1alpha2.WellKnownClusterClaimID,
 		},
-		Name:  "id.k8s.io",
 		Value: LocalClusterID,
 	}
-	clusterSetIDClaim := &mcsv1alpha1.ClusterClaim{
+	clusterSetIDClaim := &mcsv1alpha2.ClusterClaim{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: LeaderNamespace,
-			Name:      "clusterset-id",
+			Name:      mcsv1alpha2.WellKnownClusterClaimClusterSet,
 		},
-		Name:  "clusterset.k8s.io",
 		Value: clusterSetID,
 	}
 	clusterSet := &mcsv1alpha1.ClusterSet{

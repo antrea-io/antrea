@@ -1,4 +1,4 @@
-// Copyright 2021 Antrea Authors
+// Copyright 2022 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@ import (
 	"net/http"
 
 	multiclusterv1alpha1 "antrea.io/antrea/multicluster/pkg/client/clientset/versioned/typed/multicluster/v1alpha1"
+	multiclusterv1alpha2 "antrea.io/antrea/multicluster/pkg/client/clientset/versioned/typed/multicluster/v1alpha2"
 	discovery "k8s.io/client-go/discovery"
 	rest "k8s.io/client-go/rest"
 	flowcontrol "k8s.io/client-go/util/flowcontrol"
@@ -28,6 +29,7 @@ import (
 type Interface interface {
 	Discovery() discovery.DiscoveryInterface
 	MulticlusterV1alpha1() multiclusterv1alpha1.MulticlusterV1alpha1Interface
+	MulticlusterV1alpha2() multiclusterv1alpha2.MulticlusterV1alpha2Interface
 }
 
 // Clientset contains the clients for groups. Each group has exactly one
@@ -35,11 +37,17 @@ type Interface interface {
 type Clientset struct {
 	*discovery.DiscoveryClient
 	multiclusterV1alpha1 *multiclusterv1alpha1.MulticlusterV1alpha1Client
+	multiclusterV1alpha2 *multiclusterv1alpha2.MulticlusterV1alpha2Client
 }
 
 // MulticlusterV1alpha1 retrieves the MulticlusterV1alpha1Client
 func (c *Clientset) MulticlusterV1alpha1() multiclusterv1alpha1.MulticlusterV1alpha1Interface {
 	return c.multiclusterV1alpha1
+}
+
+// MulticlusterV1alpha2 retrieves the MulticlusterV1alpha2Client
+func (c *Clientset) MulticlusterV1alpha2() multiclusterv1alpha2.MulticlusterV1alpha2Interface {
+	return c.multiclusterV1alpha2
 }
 
 // Discovery retrieves the DiscoveryClient
@@ -90,6 +98,10 @@ func NewForConfigAndClient(c *rest.Config, httpClient *http.Client) (*Clientset,
 	if err != nil {
 		return nil, err
 	}
+	cs.multiclusterV1alpha2, err = multiclusterv1alpha2.NewForConfigAndClient(&configShallowCopy, httpClient)
+	if err != nil {
+		return nil, err
+	}
 
 	cs.DiscoveryClient, err = discovery.NewDiscoveryClientForConfigAndClient(&configShallowCopy, httpClient)
 	if err != nil {
@@ -112,6 +124,7 @@ func NewForConfigOrDie(c *rest.Config) *Clientset {
 func New(c rest.Interface) *Clientset {
 	var cs Clientset
 	cs.multiclusterV1alpha1 = multiclusterv1alpha1.New(c)
+	cs.multiclusterV1alpha2 = multiclusterv1alpha2.New(c)
 
 	cs.DiscoveryClient = discovery.NewDiscoveryClient(c)
 	return &cs
