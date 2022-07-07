@@ -66,6 +66,7 @@ func testMain(m *testing.M) int {
 	flag.StringVar(&testOptions.eastClusterKubeConfigPath, "east-cluster-kubeconfig-path", path.Join(homedir, ".kube", "east"), "Kubeconfig Path of the east cluster")
 	flag.StringVar(&testOptions.westClusterKubeConfigPath, "west-cluster-kubeconfig-path", path.Join(homedir, ".kube", "west"), "Kubeconfig Path of the west cluster")
 	flag.BoolVar(&testOptions.enableGateway, "mc-gateway", false, "Run tests with Multicluster Gateway")
+	flag.StringVar(&testOptions.providerName, "provider", "", "K8s test cluster provider")
 	flag.Parse()
 
 	cleanupLogging := testOptions.setupLogging()

@@ -167,7 +167,7 @@ func (data *MCTestData) verifyMCServiceACNP(t *testing.T, clientPodName, eastIP 
 }
 
 func (data *MCTestData) deployServiceExport(clusterName string) error {
-	rc, _, stderr, err := provider.RunCommandOnNode(clusterName, fmt.Sprintf("kubectl apply -f %s", serviceExportYML))
+	rc, _, stderr, err := provider.RunCommandOnNode(data.getControlPlaneNodeName(clusterName), fmt.Sprintf("kubectl apply -f %s", serviceExportYML))
 	if err != nil || rc != 0 || stderr != "" {
 		return fmt.Errorf("error when deploying the ServiceExport: %v, stderr: %s", err, stderr)
 	}
@@ -176,7 +176,7 @@ func (data *MCTestData) deployServiceExport(clusterName string) error {
 }
 
 func (data *MCTestData) deleteServiceExport(clusterName string) error {
-	rc, _, stderr, err := provider.RunCommandOnNode(clusterName, fmt.Sprintf("kubectl delete -f %s", serviceExportYML))
+	rc, _, stderr, err := provider.RunCommandOnNode(data.getControlPlaneNodeName(clusterName), fmt.Sprintf("kubectl delete -f %s", serviceExportYML))
 	if err != nil || rc != 0 || stderr != "" {
 		return fmt.Errorf("error when deleting the ServiceExport: %v, stderr: %s", err, stderr)
 	}
@@ -186,8 +186,8 @@ func (data *MCTestData) deleteServiceExport(clusterName string) error {
 
 // getNodeNamesFromCluster will pick up a Node randomly as the Gateway
 // and also a regular Node from the specified cluster.
-func getNodeNamesFromCluster(clusterName string) (string, string, error) {
-	rc, output, stderr, err := provider.RunCommandOnNode(clusterName, "kubectl get node -o jsonpath='{range .items[*]}{.metadata.name}{\" \"}{end}'")
+func (data *MCTestData) getNodeNamesFromCluster(clusterName string) (string, string, error) {
+	rc, output, stderr, err := provider.RunCommandOnNode(data.getControlPlaneNodeName(clusterName), "/bin/sh -c kubectl get nodes -o custom-columns=:.metadata.name --no-headers | tr '\n' ' '")
 	if err != nil || rc != 0 || stderr != "" {
 		return "", "", fmt.Errorf("error when getting Node list: %v, stderr: %s", err, stderr)
 	}
@@ -205,7 +205,7 @@ func getNodeNamesFromCluster(clusterName string) (string, string, error) {
 
 // setGatewayNode adds an annotation to assign it as Gateway Node.
 func (data *MCTestData) setGatewayNode(t *testing.T, clusterName string, nodeName string) error {
-	rc, _, stderr, err := provider.RunCommandOnNode(clusterName, fmt.Sprintf("kubectl annotate node %s multicluster.antrea.io/gateway=true", nodeName))
+	rc, _, stderr, err := provider.RunCommandOnNode(data.getControlPlaneNodeName(clusterName), fmt.Sprintf("kubectl annotate node %s multicluster.antrea.io/gateway=true", nodeName))
 	if err != nil || rc != 0 || stderr != "" {
 		return fmt.Errorf("error when annotate the Node %s: %s, stderr: %s", nodeName, err, stderr)
 	}
@@ -214,11 +214,19 @@ func (data *MCTestData) setGatewayNode(t *testing.T, clusterName string, nodeNam
 }
 
 func (data *MCTestData) unsetGatewayNode(clusterName string, nodeName string) error {
-	rc, _, stderr, err := provider.RunCommandOnNode(clusterName, fmt.Sprintf("kubectl annotate node %s multicluster.antrea.io/gateway-", nodeName))
+	rc, _, stderr, err := provider.RunCommandOnNode(data.getControlPlaneNodeName(clusterName), fmt.Sprintf("kubectl annotate node %s multicluster.antrea.io/gateway-", nodeName))
 	if err != nil || rc != 0 || stderr != "" {
 		return fmt.Errorf("error when cleaning up annotation of the Node: %v, stderr: %s", err, stderr)
 	}
 	return nil
+}
+
+func (data *MCTestData) getControlPlaneNodeName(clusterName string) string {
+	controlplaneNodeName := clusterName
+	if testOptions.providerName == "kind" {
+		controlplaneNodeName = data.controlPlaneNames[clusterName]
+	}
+	return controlplaneNodeName
 }
 
 func initializeGateway(t *testing.T, data *MCTestData) {
@@ -230,7 +238,7 @@ func initializeGateway(t *testing.T, data *MCTestData) {
 			// Skip Gateway initialization for the leader cluster
 			continue
 		}
-		gwName, regularNode, err := getNodeNamesFromCluster(clusterName)
+		gwName, regularNode, err := data.getNodeNamesFromCluster(clusterName)
 		failOnError(err, t)
 		err = data.setGatewayNode(t, clusterName, gwName)
 		failOnError(err, t)

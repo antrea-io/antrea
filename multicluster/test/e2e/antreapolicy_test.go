@@ -151,7 +151,7 @@ func executeTestsOnAllMemberClusters(t *testing.T, testList []*antreae2e.TestCas
 
 func (data *MCTestData) deployACNPResourceExport(t *testing.T, reFileName string) error {
 	t.Logf("Creating ResourceExport %s in the leader cluster", reFileName)
-	rc, _, stderr, err := provider.RunCommandOnNode(leaderCluster, fmt.Sprintf("kubectl apply -f %s", reFileName))
+	rc, _, stderr, err := provider.RunCommandOnNode(data.getControlPlaneNodeName(leaderCluster), fmt.Sprintf("kubectl apply -f %s", reFileName))
 	if err != nil || rc != 0 || stderr != "" {
 		return fmt.Errorf("error when deploying the ACNP ResourceExport in leader cluster: %v, stderr: %s", err, stderr)
 	}
@@ -159,7 +159,7 @@ func (data *MCTestData) deployACNPResourceExport(t *testing.T, reFileName string
 }
 
 func (data *MCTestData) deleteACNPResourceExport(reFileName string) error {
-	rc, _, stderr, err := provider.RunCommandOnNode(leaderCluster, fmt.Sprintf("kubectl delete -f %s", reFileName))
+	rc, _, stderr, err := provider.RunCommandOnNode(data.getControlPlaneNodeName(leaderCluster), fmt.Sprintf("kubectl delete -f %s", reFileName))
 	if err != nil || rc != 0 || stderr != "" {
 		return fmt.Errorf("error when deleting the ACNP ResourceExport in leader cluster: %v, stderr: %s", err, stderr)
 	}
