@@ -365,26 +365,63 @@ func getLocalAntreaFlexibleIPAMPodIPSetName(isIPv6 bool) string {
 	}
 }
 
-// writeEKSMangleRule writes an additional iptables mangle rule to the
-// iptablesData buffer, which is required to ensure that the reverse path for
-// NodePort Service traffic is correct on EKS.
-// See https://github.com/antrea-io/antrea/issues/678.
-func (c *Client) writeEKSMangleRule(iptablesData *bytes.Buffer) {
+// writeEKSMangleRules writes an additional iptables mangle rule to the
+// iptablesData buffer, to set the traffic mark to the connection mark for
+// traffic coming out of the gateway. This rule is needed for 2 cases:
+//  * for the reverse path for NodePort Service traffic (see
+//    https://github.com/antrea-io/antrea/issues/678).
+//  * for Pod-to-external traffic that needs to be SNATed (see
+//    https://github.com/antrea-io/antrea/issues/3946).
+func (c *Client) writeEKSMangleRules(iptablesData *bytes.Buffer) {
 	// TODO: the following should be taking into account:
-	//   1) AWS_VPC_CNI_NODE_PORT_SUPPORT may be set to false (by default is
-	//   true), in which case we do not need to install the rule.
+	//   1) this rule is only needed if AWS_VPC_CNI_NODE_PORT_SUPPORT is set
+	//   to true (which is the default) or if AWS_VPC_K8S_CNI_EXTERNALSNAT
+	//   is set to false (which is also the default). If both settings are
+	//   changed, we do not need to install the rule.
 	//   2) this option is not documented but the mark value can be
 	//   configured with AWS_VPC_K8S_CNI_CONNMARK.
-	// We could look for the rule added by AWS VPC CNI to the mangle
-	// table. If it does not exist, we do not need to install this rule. If
-	// it does exist we can scan for the mark value and use that in our
-	// rule.
-	klog.V(2).Infof("Add iptable mangle rule for EKS to ensure correct reverse path for NodePort Service traffic")
+	// While we do not have access to these environment variables, we could
+	// look for existing rules installed by the AWS VPC CNI, and determine
+	// whether we need to install this rule.
+	klog.V(2).InfoS("Add iptables mangle rules for EKS")
 	writeLine(iptablesData, []string{
 		"-A", antreaMangleChain,
 		"-m", "comment", "--comment", `"Antrea: AWS, primary ENI"`,
 		"-i", c.nodeConfig.GatewayConfig.Name, "-j", "CONNMARK",
 		"--restore-mark", "--nfmask", "0x80", "--ctmask", "0x80",
+	}...)
+}
+
+// writeEKSNATRules writes additional iptables nat rules to the iptablesData
+// buffer. The first rule sets the connection mark for Pod-to-external traffic
+// that needs to be SNATed. Without the mark, this traffic is not routed using
+// the correct route table for Pods getting an IP address from a secondary
+// network interface (ENI). The second rule restores the packet mark from the
+// connection mark. That rule will only apply to the first packet of the
+// connection. For subsequent packets, the rule installed buy writeEKSMangleRule
+// will take care of restoring the mark. We need that rule because the mangle
+// table is traversed before the nat table.
+// See https://docs.aws.amazon.com/eks/latest/userguide/external-snat.html and
+// https://github.com/antrea-io/antrea/issues/3946 for more details.
+func (c *Client) writeEKSNATRules(iptablesData *bytes.Buffer) {
+	// TODO: just like for writeEKSMangleRule, these rules should ideally be
+	// installed conditionally, when AWS_VPC_K8S_CNI_EXTERNALSNAT is set to
+	// false (which is the default value).
+	klog.V(2).InfoS("Add iptables nat rules for EKS")
+	writeLine(iptablesData, []string{
+		"-A", antreaPreRoutingChain,
+		"-i", c.nodeConfig.GatewayConfig.Name,
+		"-m", "comment", "--comment", `"Antrea: AWS, outbound connections"`,
+		"-j", "AWS-CONNMARK-CHAIN-0",
+	}...)
+	// The AWS VPC CNI already installs the same rule in the PREROUTING
+	// chain. However, that rule will typically be visited before the
+	// ANTREA-PREROUTING chain, hence we need to install our own copy of the
+	// rule.
+	writeLine(iptablesData, []string{
+		"-A", antreaPreRoutingChain,
+		"-m", "comment", "--comment", `"Antrea: AWS, CONNMARK (first packet)"`,
+		"-j", "CONNMARK", "--restore-mark", "--nfmask", "0x80", "--ctmask", "0x80",
 	}...)
 }
 
@@ -400,7 +437,13 @@ func (c *Client) syncIPTables() error {
 	// Create the antrea managed chains and link them to built-in chains.
 	// We cannot use iptables-restore for these jump rules because there
 	// are non antrea managed rules in built-in chains.
-	jumpRules := []struct{ table, srcChain, dstChain, comment string }{
+	type jumpRule struct {
+		table    string
+		srcChain string
+		dstChain string
+		comment  string
+	}
+	jumpRules := []jumpRule{
 		{iptables.RawTable, iptables.PreRoutingChain, antreaPreRoutingChain, "Antrea: jump to Antrea prerouting rules"},
 		{iptables.RawTable, iptables.OutputChain, antreaOutputChain, "Antrea: jump to Antrea output rules"},
 		{iptables.FilterTable, iptables.ForwardChain, antreaForwardChain, "Antrea: jump to Antrea forwarding rules"},
@@ -408,13 +451,11 @@ func (c *Client) syncIPTables() error {
 		{iptables.MangleTable, iptables.PreRoutingChain, antreaMangleChain, "Antrea: jump to Antrea mangle rules"}, // TODO: unify the chain naming style
 		{iptables.MangleTable, iptables.OutputChain, antreaOutputChain, "Antrea: jump to Antrea output rules"},
 	}
+	if c.proxyAll || env.IsCloudEKS() {
+		jumpRules = append(jumpRules, jumpRule{iptables.NATTable, iptables.PreRoutingChain, antreaPreRoutingChain, "Antrea: jump to Antrea prerouting rules"})
+	}
 	if c.proxyAll {
-		jumpRules = append(jumpRules,
-			[]struct{ table, srcChain, dstChain, comment string }{
-				{iptables.NATTable, iptables.PreRoutingChain, antreaPreRoutingChain, "Antrea: jump to Antrea prerouting rules"},
-				{iptables.NATTable, iptables.OutputChain, antreaOutputChain, "Antrea: jump to Antrea output rules"},
-			}...,
-		)
+		jumpRules = append(jumpRules, jumpRule{iptables.NATTable, iptables.OutputChain, antreaOutputChain, "Antrea: jump to Antrea output rules"})
 	}
 	for _, rule := range jumpRules {
 		if err := c.ipt.EnsureChain(iptables.ProtocolDual, rule.table, rule.dstChain); err != nil {
@@ -438,6 +479,7 @@ func (c *Client) syncIPTables() error {
 		}
 		return true
 	})
+
 	// Use iptables-restore to configure IPv4 settings.
 	if c.networkConfig.IPv4Enabled {
 		iptablesData := c.restoreIptablesData(c.nodeConfig.PodIPv4CIDR,
@@ -446,7 +488,9 @@ func (c *Client) syncIPTables() error {
 			antreaNodePortIPSet,
 			config.VirtualNodePortDNATIPv4,
 			config.VirtualServiceIPv4,
-			snatMarkToIPv4)
+			snatMarkToIPv4,
+			false)
+
 		// Setting --noflush to keep the previous contents (i.e. non antrea managed chains) of the tables.
 		if err := c.ipt.Restore(iptablesData.Bytes(), false, false); err != nil {
 			return err
@@ -461,12 +505,14 @@ func (c *Client) syncIPTables() error {
 			antreaNodePortIP6Set,
 			config.VirtualNodePortDNATIPv6,
 			config.VirtualServiceIPv6,
-			snatMarkToIPv6)
+			snatMarkToIPv6,
+			true)
 		// Setting --noflush to keep the previous contents (i.e. non antrea managed chains) of the tables.
 		if err := c.ipt.Restore(iptablesData.Bytes(), false, true); err != nil {
 			return err
 		}
 	}
+
 	return nil
 }
 
@@ -476,7 +522,8 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet,
 	nodePortIPSet string,
 	nodePortDNATVirtualIP,
 	serviceVirtualIP net.IP,
-	snatMarkToIP map[uint32]net.IP) *bytes.Buffer {
+	snatMarkToIP map[uint32]net.IP,
+	isIPv6 bool) *bytes.Buffer {
 	// Create required rules in the antrea chains.
 	// Use iptables-restore as it flushes the involved chains and creates the desired rules
 	// with a single call, instead of string matching to clean up stale rules.
@@ -520,10 +567,11 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet,
 	writeLine(iptablesData, iptables.MakeChainLine(antreaMangleChain))
 	writeLine(iptablesData, iptables.MakeChainLine(antreaOutputChain))
 
-	// When Antrea is used to enforce NetworkPolicies in EKS, an additional iptables
-	// mangle rule is required. See https://github.com/antrea-io/antrea/issues/678.
-	if env.IsCloudEKS() {
-		c.writeEKSMangleRule(iptablesData)
+	// When Antrea is used to enforce NetworkPolicies in EKS, additional iptables
+	// mangle rules are required. See https://github.com/antrea-io/antrea/issues/678.
+	// These rules are only needed for IPv4.
+	if env.IsCloudEKS() && !isIPv6 {
+		c.writeEKSMangleRules(iptablesData)
 	}
 
 	// To make liveness/readiness probe traffic bypass ingress rules of Network Policies, mark locally generated packets
@@ -582,8 +630,10 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet,
 	writeLine(iptablesData, "COMMIT")
 
 	writeLine(iptablesData, "*nat")
-	if c.proxyAll {
+	if c.proxyAll || env.IsCloudEKS() {
 		writeLine(iptablesData, iptables.MakeChainLine(antreaPreRoutingChain))
+	}
+	if c.proxyAll {
 		writeLine(iptablesData, []string{
 			"-A", antreaPreRoutingChain,
 			"-m", "comment", "--comment", `"Antrea: DNAT external to NodePort packets"`,
@@ -682,6 +732,13 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet,
 			"-m", "set", "--match-set", localAntreaFlexibleIPAMPodIPSet, "dst",
 			"-j", iptables.MasqueradeTarget,
 		}...)
+	}
+
+	// When Antrea is used to enforce NetworkPolicies in EKS, additional iptables
+	// nat rules are required. See https://github.com/antrea-io/antrea/issues/3946.
+	// These rules are only needed for IPv4.
+	if env.IsCloudEKS() && !isIPv6 {
+		c.writeEKSNATRules(iptablesData)
 	}
 
 	writeLine(iptablesData, "COMMIT")
