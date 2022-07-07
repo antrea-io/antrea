@@ -29,20 +29,21 @@ import (
 	e2euttils "antrea.io/antrea/test/e2e/utils"
 )
 
-func testServiceExport(t *testing.T, data *MCTestData) {
-	data.testServiceExport(t)
+func initializeForServiceExportsTest(t *testing.T, data *MCTestData) {
+	data.setupServerPodAndService(t)
+	data.setUpServiceExport(t)
+	data.setUpClientPodInCluster(t)
 }
 
-// testServiceExport is used to test the connectivity of Multicluster Service between
-// member clusters. We create a nginx Pod and Service in one member cluster, and try to
-// curl it from a Pod in another cluster. If we get status code 200, it means that the
-// resources are exported and imported successfully in each member cluster.
-func (data *MCTestData) testServiceExport(t *testing.T) {
-	podName := randName("test-nginx-")
-	clientPodName := "test-service-client"
+func tearDownForServiceExportsTest(t *testing.T, data *MCTestData) {
+	data.tearDownClientPodInCluster(t)
+	data.tearDownServiceExport()
+	data.tearDownServerPodAndService(t)
+}
 
+func (data *MCTestData) setupServerPodAndService(t *testing.T) {
 	createPodAndService := func(clusterName, clusterServiceName string) {
-		if err := createPodWrapper(t, data, clusterName, multiClusterTestNamespace, podName, "", nginxImage, "nginx", nil, nil, nil, nil, false, nil); err != nil {
+		if err := createPodWrapper(t, data, clusterName, multiClusterTestNamespace, testServerPod, "", nginxImage, "nginx", nil, nil, nil, nil, false, nil); err != nil {
 			t.Fatalf("Error when creating nginx Pod in cluster %s: %v", clusterName, err)
 		}
 		if _, err := data.createService(clusterName, clusterServiceName, multiClusterTestNamespace, 80, 80, corev1.ProtocolTCP, map[string]string{"app": "nginx"}, false,
@@ -50,101 +51,94 @@ func (data *MCTestData) testServiceExport(t *testing.T) {
 			t.Fatalf("Error when creating Service %s in cluster %s: %v", clusterServiceName, clusterName, err)
 		}
 	}
-	// Create Pod and Service in west cluster
+	// Create Pod and Service in west and east clusters
 	createPodAndService(westCluster, westClusterTestService)
-	defer deletePodWrapper(t, data, westCluster, multiClusterTestNamespace, podName)
-	defer deleteServiceWrapper(t, testData, westCluster, multiClusterTestNamespace, westClusterTestService)
-
-	// Create Pod and Service in east cluster
 	createPodAndService(eastCluster, eastClusterTestService)
-	defer deletePodWrapper(t, data, eastCluster, multiClusterTestNamespace, podName)
-	defer deleteServiceWrapper(t, testData, eastCluster, multiClusterTestNamespace, eastClusterTestService)
-
-	deployServiceExport := func(clusterName string) {
-		if err := data.deployServiceExport(clusterName); err != nil {
-			t.Fatalf("Error when deploy ServiceExport in cluster %s: %v", clusterName, err)
-		}
-	}
-
-	// Deploy ServiceExport in west cluster
-	deployServiceExport(westCluster)
-	defer data.deleteServiceExport(westCluster)
-
-	// Deploy ServiceExport in east cluster
-	deployServiceExport(eastCluster)
-	defer data.deleteServiceExport(eastCluster)
-	time.Sleep(importServiceDelay)
-
-	svc, err := data.getService(eastCluster, multiClusterTestNamespace, fmt.Sprintf("antrea-mc-%s", westClusterTestService))
-	if err != nil {
-		t.Fatalf("Error when getting the imported service %s: %v", fmt.Sprintf("antrea-mc-%s", westClusterTestService), err)
-	}
-
-	eastIP := svc.Spec.ClusterIP
-	gwClientName := clientPodName + "-gateway"
-	regularClientName := clientPodName + "-regularnode"
-
-	createEastPod := func(nodeName string, podName string) {
-		if err := data.createPod(eastCluster, podName, nodeName, multiClusterTestNamespace, "client", agnhostImage,
-			[]string{"sleep", strconv.Itoa(3600)}, nil, nil, nil, false, nil); err != nil {
-			t.Fatalf("Error when creating client Pod in east cluster: %v", err)
-		}
-		t.Logf("Checking Pod status %s in Namespace %s of cluster %s", podName, multiClusterTestNamespace, eastCluster)
-		_, err := data.podWaitFor(defaultTimeout, eastCluster, podName, multiClusterTestNamespace, func(pod *corev1.Pod) (bool, error) {
-			return pod.Status.Phase == corev1.PodRunning, nil
-		})
-		if err != nil {
-			deletePodWrapper(t, data, eastCluster, multiClusterTestNamespace, podName)
-			t.Fatalf("Error when waiting for Pod '%s' in east cluster: %v", podName, err)
-		}
-	}
-
-	// Create a Pod in east cluster's Gateway and verify the MC Service connectivity from it.
-	createEastPod(data.clusterGateways[eastCluster], gwClientName)
-	defer deletePodWrapper(t, data, eastCluster, multiClusterTestNamespace, gwClientName)
-
-	t.Logf("Probing Service from client Pod %s in cluster %s", gwClientName, eastCluster)
-	if err := data.probeServiceFromPodInCluster(eastCluster, gwClientName, "client", multiClusterTestNamespace, eastIP); err != nil {
-		t.Fatalf("Error when probing Service from client Pod %s in cluster %s, err: %v", gwClientName, eastCluster, err)
-	}
-
-	// Create a Pod in east cluster's regular Node and verify the MC Service connectivity from it.
-	createEastPod(data.clusterRegularNodes[eastCluster], regularClientName)
-	defer deletePodWrapper(t, data, eastCluster, multiClusterTestNamespace, regularClientName)
-
-	t.Logf("Probing Service from client Pod %s in cluster %s", regularClientName, eastCluster)
-	if err := data.probeServiceFromPodInCluster(eastCluster, regularClientName, "client", multiClusterTestNamespace, eastIP); err != nil {
-		t.Fatalf("Error when probing Service from client Pod %s in cluster %s, err: %v", regularClientName, eastCluster, err)
-	}
-
-	// Create a Pod in west cluster and verify the MC Service connectivity from it.
-	if err := data.createPod(westCluster, clientPodName, "", multiClusterTestNamespace, "client", agnhostImage,
-		[]string{"sleep", strconv.Itoa(3600)}, nil, nil, nil, false, nil); err != nil {
-		t.Fatalf("Error when creating client Pod in west cluster: %v", err)
-	}
-	defer deletePodWrapper(t, data, westCluster, multiClusterTestNamespace, clientPodName)
-	_, err = data.podWaitFor(defaultTimeout, westCluster, clientPodName, multiClusterTestNamespace, func(pod *corev1.Pod) (bool, error) {
-		return pod.Status.Phase == corev1.PodRunning, nil
-	})
-	if err != nil {
-		t.Fatalf("Error when waiting for Pod '%s' in west cluster: %v", clientPodName, err)
-	}
-
-	svc, err = data.getService(westCluster, multiClusterTestNamespace, fmt.Sprintf("antrea-mc-%s", eastClusterTestService))
-	if err != nil {
-		t.Fatalf("Error when getting the imported service %s: %v", fmt.Sprintf("antrea-mc-%s", eastClusterTestService), err)
-	}
-	westIP := svc.Spec.ClusterIP
-	if err := data.probeServiceFromPodInCluster(westCluster, clientPodName, "client", multiClusterTestNamespace, westIP); err != nil {
-		t.Fatalf("Error when probing service from %s, err: %v", westCluster, err)
-	}
-
-	// Verify that ACNP works fine with new Multicluster Service.
-	data.verifyMCServiceACNP(t, gwClientName, eastIP)
 }
 
-func (data *MCTestData) verifyMCServiceACNP(t *testing.T, clientPodName, eastIP string) {
-	var err error
+func (data *MCTestData) tearDownServerPodAndService(t *testing.T) {
+	deleteServiceWrapper(t, testData, westCluster, multiClusterTestNamespace, westClusterTestService)
+	deleteServiceWrapper(t, testData, eastCluster, multiClusterTestNamespace, eastClusterTestService)
+	deletePodWrapper(t, data, westCluster, multiClusterTestNamespace, testServerPod)
+	deletePodWrapper(t, data, eastCluster, multiClusterTestNamespace, testServerPod)
+}
+
+// Deploy ServiceExports in east and west clusters
+func (data *MCTestData) setUpServiceExport(t *testing.T) {
+	if err := data.deployServiceExport(westCluster); err != nil {
+		t.Fatalf("Error when deploy ServiceExport in west cluster: %v", err)
+	}
+	if err := data.deployServiceExport(eastCluster); err != nil {
+		t.Fatalf("Error when deploy ServiceExport in east cluster: %v", err)
+	}
+	time.Sleep(importServiceDelay)
+}
+
+func (data *MCTestData) tearDownServiceExport() {
+	data.deleteServiceExport(westCluster)
+	data.deleteServiceExport(eastCluster)
+}
+
+func (data *MCTestData) setUpClientPodInCluster(t *testing.T) {
+	data.createClientPodInCluster(t, eastCluster, data.clusterGateways[eastCluster], getClusterGatewayClientPodName(eastCluster))
+	data.createClientPodInCluster(t, eastCluster, data.clusterRegularNodes[eastCluster], getClusterRegularClientPodName(eastCluster))
+	data.createClientPodInCluster(t, westCluster, data.clusterGateways[westCluster], getClusterGatewayClientPodName(westCluster))
+	data.createClientPodInCluster(t, westCluster, data.clusterRegularNodes[westCluster], getClusterRegularClientPodName(westCluster))
+}
+
+func (data *MCTestData) tearDownClientPodInCluster(t *testing.T) {
+	deletePodWrapper(t, data, eastCluster, multiClusterTestNamespace, getClusterGatewayClientPodName(eastCluster))
+	deletePodWrapper(t, data, eastCluster, multiClusterTestNamespace, getClusterRegularClientPodName(eastCluster))
+	deletePodWrapper(t, data, westCluster, multiClusterTestNamespace, getClusterGatewayClientPodName(westCluster))
+	deletePodWrapper(t, data, westCluster, multiClusterTestNamespace, getClusterRegularClientPodName(westCluster))
+}
+
+// Try to curl the counter part Services in east and west clusters.
+// If we get status code 200, it means that the resources are exported by the east
+// cluster and imported by the west cluster.
+func testMCServiceConnectivity(t *testing.T, data *MCTestData) {
+	data.testMCServiceConnectivity(t)
+}
+
+func testANPToServices(t *testing.T, data *MCTestData) {
+	data.testANPToServices(t)
+}
+
+func (data *MCTestData) testMCServiceConnectivity(t *testing.T) {
+	data.probeMCServiceFromCluster(t, eastCluster, westClusterTestService)
+	data.probeMCServiceFromCluster(t, westCluster, eastClusterTestService)
+}
+
+func (data *MCTestData) probeMCServiceFromCluster(t *testing.T, clusterName string, serviceName string) {
+	svc, err := data.getService(clusterName, multiClusterTestNamespace, fmt.Sprintf("antrea-mc-%s", serviceName))
+	if err != nil {
+		t.Fatalf("Error when getting the imported Service %s: %v", fmt.Sprintf("antrea-mc-%s", serviceName), err)
+	}
+	ip := svc.Spec.ClusterIP
+	gwClientName := getClusterGatewayClientPodName(clusterName)
+	regularClientName := getClusterRegularClientPodName(clusterName)
+
+	t.Logf("Probing Service from client Pod %s in cluster %s", gwClientName, clusterName)
+	if err := data.probeServiceFromPodInCluster(clusterName, gwClientName, "client", multiClusterTestNamespace, ip); err != nil {
+		t.Fatalf("Error when probing Service from client Pod %s in cluster %s, err: %v", gwClientName, clusterName, err)
+	}
+	t.Logf("Probing Service from client Pod %s in cluster %s", regularClientName, clusterName)
+	if err := data.probeServiceFromPodInCluster(clusterName, regularClientName, "client", multiClusterTestNamespace, ip); err != nil {
+		t.Fatalf("Error when probing Service from client Pod %s in cluster %s, err: %v", regularClientName, clusterName, err)
+	}
+	return
+}
+
+func (data *MCTestData) testANPToServices(t *testing.T) {
+	svc, err := data.getService(eastCluster, multiClusterTestNamespace, fmt.Sprintf("antrea-mc-%s", westClusterTestService))
+	if err != nil {
+		t.Fatalf("Error when getting the imported Service %s: %v", fmt.Sprintf("antrea-mc-%s", westClusterTestService), err)
+	}
+	eastIP := svc.Spec.ClusterIP
+	eastGwClientName := getClusterGatewayClientPodName(eastCluster)
+	eastRegularClientName := getClusterRegularClientPodName(eastCluster)
+
+	// Verify that ACNP ToServices works fine with the new Multi-cluster Service.
 	anpBuilder := &e2euttils.AntreaNetworkPolicySpecBuilder{}
 	anpBuilder = anpBuilder.SetName(multiClusterTestNamespace, "block-west-exported-service").
 		SetPriority(1.0).
@@ -158,11 +152,33 @@ func (data *MCTestData) verifyMCServiceACNP(t *testing.T, clientPodName, eastIP 
 	}
 	defer data.deleteANP(eastCluster, multiClusterTestNamespace, anpBuilder.Name)
 
-	connectivity := data.probeFromPodInCluster(eastCluster, multiClusterTestNamespace, clientPodName, "client", eastIP, fmt.Sprintf("antrea-mc-%s", westClusterTestService), 80, corev1.ProtocolTCP)
+	connectivity := data.probeFromPodInCluster(eastCluster, multiClusterTestNamespace, eastGwClientName, "client", eastIP, fmt.Sprintf("antrea-mc-%s", westClusterTestService), 80, corev1.ProtocolTCP)
 	if connectivity == antreae2e.Error {
 		t.Errorf("Failure -- could not complete probeFromPodInCluster: %v", err)
 	} else if connectivity != antreae2e.Dropped {
-		t.Errorf("Failure -- wrong result from probing exported Service after applying toService AntreaNetworkPolicy. Expected: %v, Actual: %v", antreae2e.Dropped, connectivity)
+		t.Errorf("Failure -- wrong result from probing exported Service from gateway clientPod after applying toServices AntreaNetworkPolicy. Expected: %v, Actual: %v", antreae2e.Dropped, connectivity)
+	}
+
+	connectivity = data.probeFromPodInCluster(eastCluster, multiClusterTestNamespace, eastRegularClientName, "client", eastIP, fmt.Sprintf("antrea-mc-%s", westClusterTestService), 80, corev1.ProtocolTCP)
+	if connectivity == antreae2e.Error {
+		t.Errorf("Failure -- could not complete probeFromPodInCluster: %v", err)
+	} else if connectivity != antreae2e.Dropped {
+		t.Errorf("Failure -- wrong result from probing exported Service from regular clientPod after applying toServices AntreaNetworkPolicy. Expected: %v, Actual: %v", antreae2e.Dropped, connectivity)
+	}
+}
+
+func (data *MCTestData) createClientPodInCluster(t *testing.T, cluster string, nodeName string, podName string) {
+	if err := data.createPod(cluster, podName, nodeName, multiClusterTestNamespace, "client", agnhostImage,
+		[]string{"sleep", strconv.Itoa(3600)}, nil, nil, nil, false, nil); err != nil {
+		t.Fatalf("Error when creating client Pod in cluster '%s': %v", cluster, err)
+	}
+	t.Logf("Checking Pod status %s in Namespace %s of cluster %s", podName, multiClusterTestNamespace, cluster)
+	_, err := data.podWaitFor(defaultTimeout, cluster, podName, multiClusterTestNamespace, func(pod *corev1.Pod) (bool, error) {
+		return pod.Status.Phase == corev1.PodRunning, nil
+	})
+	if err != nil {
+		deletePodWrapper(t, data, cluster, multiClusterTestNamespace, podName)
+		t.Fatalf("Error when waiting for Pod '%s' in cluster '%s': %v", podName, cluster, err)
 	}
 }
 
@@ -251,4 +267,12 @@ func teardownGateway(t *testing.T, data *MCTestData) {
 			}
 		}
 	}
+}
+
+func getClusterGatewayClientPodName(cluster string) string {
+	return cluster + "-" + gatewayNodeClientSuffix
+}
+
+func getClusterRegularClientPodName(cluster string) string {
+	return cluster + "-" + regularNodeClientSuffix
 }

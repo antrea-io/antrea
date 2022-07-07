@@ -106,11 +106,14 @@ func TestConnectivity(t *testing.T) {
 		time.Sleep(5 * time.Second)
 	}
 
-	t.Run("testServiceExport", func(t *testing.T) {
-		testServiceExport(t, data)
+	t.Run("TestMCServiceExport", func(t *testing.T) {
+		defer tearDownForServiceExportsTest(t, data)
+		initializeForServiceExportsTest(t, data)
+		t.Run("Case=MCServiceConnectivity", func(t *testing.T) { testMCServiceConnectivity(t, data) })
+		t.Run("Case=ANPToServices", func(t *testing.T) { testANPToServices(t, data) })
 	})
 
-	t.Run("testAntreaPolicy", func(t *testing.T) {
+	t.Run("TestAntreaPolicy", func(t *testing.T) {
 		defer tearDownForPolicyTest()
 		initializeForPolicyTest(t, data)
 		testMCAntreaPolicy(t, data)
