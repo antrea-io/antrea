@@ -15,7 +15,8 @@ jobs:
     name: Trigger website update for main
     runs-on: ubuntu-latest
     steps:
-    - uses: benc-uk/workflow-dispatch@v1
+    - name: Update website source
+      uses: benc-uk/workflow-dispatch@v1
       with:
         repo: antrea-io/website
         ref: refs/heads/main
