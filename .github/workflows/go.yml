@@ -29,14 +29,14 @@ jobs:
     outputs:
       has_changes: ${{ steps.check_diff.outputs.has_changes }}
 
-  test-unit:
+  # test-unit-ubuntu and test-unit-windows are intentionally not merged into one job with os matrix, otherwise the job
+  # wouldn't be expanded if it's skipped and the report of the required check would be missing.
+  # See https://github.com/antrea-io/antrea/issues/3563.
+  test-unit-ubuntu:
     needs: check-changes
     if: ${{ needs.check-changes.outputs.has_changes == 'yes' }}
-    name: Unit test
-    strategy:
-      matrix:
-        os: [ubuntu-latest, windows-2019]
-    runs-on: ${{ matrix.os }}
+    name: Unit test (ubuntu-latest)
+    runs-on: [ubuntu-latest]
     steps:
     - name: Set up Go 1.17
       uses: actions/setup-go@v3
@@ -68,14 +68,50 @@ jobs:
         flags: unit-tests
         name: codecov-unit-test
 
-  golangci-lint:
+  test-unit-windows:
     needs: check-changes
     if: ${{ needs.check-changes.outputs.has_changes == 'yes' }}
-    name: Golangci-lint
-    strategy:
-      matrix:
-        platform: [ubuntu-latest, macos-latest]
-    runs-on: ${{ matrix.platform }}
+    name: Unit test (windows-2019)
+    runs-on: [windows-2019]
+    steps:
+      - name: Set up Go 1.17
+        uses: actions/setup-go@v3
+        with:
+          go-version: 1.17
+      - name: Check-out code
+        uses: actions/checkout@v3
+      - uses: actions/cache@v3
+        with:
+          # In order:
+          # * Module download cache
+          # * Build cache (Linux)
+          # * Build cache (Mac)
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+            ~/Library/Caches/go-build
+            %LocalAppData%\go-build
+          key: ${{ runner.os }}-${{ env.go-cache-name }}-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ env.go-cache-name }}-
+      - name: Run unit tests
+        run: make test-unit
+      - name: Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          file: .coverage/coverage-unit.txt
+          flags: unit-tests
+          name: codecov-unit-test
+
+  # golangci-lint-ubuntu and golangci-lint-macos are intentionally not merged into one job with os matrix, otherwise the
+  # job wouldn't be expanded if it's skipped and the report of the required check would be missing.
+  # See https://github.com/antrea-io/antrea/issues/3563.
+  golangci-lint-ubuntu:
+    needs: check-changes
+    if: ${{ needs.check-changes.outputs.has_changes == 'yes' }}
+    name: Golangci-lint (ubuntu-latest)
+    runs-on: [ubuntu-latest]
     steps:
     - name: Set up Go 1.17
       uses: actions/setup-go@v3
@@ -102,6 +138,38 @@ jobs:
     - name: Run golangci-lint for netpol
       working-directory: hack/netpol
       run: make golangci
+
+  golangci-lint-macos:
+    needs: check-changes
+    if: ${{ needs.check-changes.outputs.has_changes == 'yes' }}
+    name: Golangci-lint (macos-latest)
+    runs-on: [macos-latest]
+    steps:
+      - name: Set up Go 1.17
+        uses: actions/setup-go@v3
+        with:
+          go-version: 1.17
+      - name: Check-out code
+        uses: actions/checkout@v3
+      - uses: actions/cache@v3
+        with:
+          # In order:
+          # * Module download cache
+          # * Build cache (Linux)
+          # * Build cache (Mac)
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+            ~/Library/Caches/go-build
+            %LocalAppData%\go-build
+          key: ${{ runner.os }}-${{ env.go-cache-name }}-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ env.go-cache-name }}-
+      - name: Run golangci-lint
+        run: make golangci
+      - name: Run golangci-lint for netpol
+        working-directory: hack/netpol
+        run: make golangci
 
   bin:
     needs: check-changes
