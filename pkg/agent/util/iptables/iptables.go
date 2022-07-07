@@ -173,7 +173,7 @@ func (c *Client) AppendRule(protocol Protocol, table string, chain string, ruleS
 	return nil
 }
 
-// InsertRule checks if target rule already exists, inserts it if not.
+// InsertRule checks if target rule already exists, inserts it at the beginning of the chain if not.
 func (c *Client) InsertRule(protocol Protocol, table string, chain string, ruleSpec []string) error {
 	for p := range c.ipts {
 		ipt := c.ipts[p]
@@ -190,7 +190,7 @@ func (c *Client) InsertRule(protocol Protocol, table string, chain string, ruleS
 		if err := ipt.Insert(table, chain, 1, ruleSpec...); err != nil {
 			return fmt.Errorf("error inserting rule %v to table %s chain %s: %v", ruleSpec, table, chain, err)
 		}
-		klog.V(2).InfoS("Inserted a rule", "rule", ruleSpec, "table", table, "chain", chain)
+		klog.V(2).InfoS("Inserted a rule", "rule", ruleSpec, "table", table, "chain", chain, "index", 1)
 	}
 	return nil
 }
