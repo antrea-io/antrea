@@ -1,0 +1,6 @@
+- defaults:
+    name: global
+    ghpr_auth:
+    antrea_admin_list: []
+    antrea_org_list: []
+    antrea_white_list: []
