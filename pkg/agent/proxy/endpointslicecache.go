@@ -44,13 +44,14 @@ import (
 	"strings"
 	"sync"
 
-	v1 "k8s.io/api/core/v1"
-	discovery "k8s.io/api/discovery/v1beta1"
+	discovery "k8s.io/api/discovery/v1"
 	apimachinerytypes "k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2"
 	utilnet "k8s.io/utils/net"
 
 	"antrea.io/antrea/pkg/agent/proxy/types"
+	"antrea.io/antrea/pkg/features"
 	"antrea.io/antrea/third_party/proxy"
 )
 
@@ -93,10 +94,16 @@ type endpointSliceInfo struct {
 
 // endpointInfo contains just the attributes kube-proxy cares about.
 // Used for caching. Intentionally small to limit memory util.
-// Addresses and Topology are copied from EndpointSlice Endpoints.
+// Addresses, NodeName, and Zone are copied from EndpointSlice Endpoints.
 type endpointInfo struct {
 	Addresses []string
-	Topology  map[string]string
+	NodeName  *string
+	Zone      *string
+	ZoneHints sets.String
+
+	Ready       bool
+	Serving     bool
+	Terminating bool
 }
 
 // spToEndpointMap stores groups Endpoint objects by ServicePortName and
@@ -134,12 +141,27 @@ func newEndpointSliceInfo(endpointSlice *discovery.EndpointSlice, remove bool) *
 
 	if !remove {
 		for _, endpoint := range endpointSlice.Endpoints {
-			if endpoint.Conditions.Ready == nil || *endpoint.Conditions.Ready {
-				esInfo.Endpoints = append(esInfo.Endpoints, &endpointInfo{
-					Addresses: endpoint.Addresses,
-					Topology:  endpoint.Topology,
-				})
+			epInfo := &endpointInfo{
+				Addresses: endpoint.Addresses,
+				Zone:      endpoint.Zone,
+				NodeName:  endpoint.NodeName,
+
+				// conditions
+				Ready:       endpoint.Conditions.Ready == nil || *endpoint.Conditions.Ready,
+				Serving:     endpoint.Conditions.Serving == nil || *endpoint.Conditions.Serving,
+				Terminating: endpoint.Conditions.Terminating != nil && *endpoint.Conditions.Terminating,
 			}
+
+			if features.DefaultFeatureGate.Enabled(features.TopologyAwareHints) {
+				if endpoint.Hints != nil && len(endpoint.Hints.ForZones) > 0 {
+					epInfo.ZoneHints = sets.String{}
+					for _, zone := range endpoint.Hints.ForZones {
+						epInfo.ZoneHints.Insert(zone.Name)
+					}
+				}
+			}
+
+			esInfo.Endpoints = append(esInfo.Endpoints, epInfo)
 		}
 
 		sort.Sort(byAddress(esInfo.Endpoints))
@@ -152,7 +174,7 @@ func newEndpointSliceInfo(endpointSlice *discovery.EndpointSlice, remove bool) *
 func (cache *EndpointSliceCache) updatePending(endpointSlice *discovery.EndpointSlice, remove bool) bool {
 	serviceKey, sliceKey, err := endpointSliceCacheKeys(endpointSlice)
 	if err != nil {
-		klog.Warningf("Error getting endpoint slice cache keys: %v", err)
+		klog.ErrorS(err, "Error getting endpoint slice cache keys")
 		return false
 	}
 
@@ -236,15 +258,15 @@ func (cache *EndpointSliceCache) endpointInfoByServicePort(serviceNN apimachiner
 				Protocol:       *port.Protocol,
 			}
 
-			endpointInfoBySP[svcPortName] = cache.addEndpointsByIP(serviceNN, int(*port.Port), endpointInfoBySP[svcPortName], sliceInfo.Endpoints)
+			endpointInfoBySP[svcPortName] = cache.addEndpoints(serviceNN, int(*port.Port), endpointInfoBySP[svcPortName], sliceInfo.Endpoints)
 		}
 	}
 
 	return endpointInfoBySP
 }
 
-// addEndpointsByIP adds endpointInfo for each IP.
-func (cache *EndpointSliceCache) addEndpointsByIP(serviceNN apimachinerytypes.NamespacedName, portNum int, endpointsByIP map[string]proxy.Endpoint, endpoints []*endpointInfo) map[string]proxy.Endpoint {
+// addEndpoints adds endpointInfo for each IP.
+func (cache *EndpointSliceCache) addEndpoints(serviceNN apimachinerytypes.NamespacedName, portNum int, endpointsByIP map[string]proxy.Endpoint, endpoints []*endpointInfo) map[string]proxy.Endpoint {
 	if endpointsByIP == nil {
 		endpointsByIP = map[string]proxy.Endpoint{}
 	}
@@ -252,7 +274,7 @@ func (cache *EndpointSliceCache) addEndpointsByIP(serviceNN apimachinerytypes.Na
 	// iterate through endpoints to add them to endpointsByIP.
 	for _, endpoint := range endpoints {
 		if len(endpoint.Addresses) == 0 {
-			klog.Warningf("Ignoring invalid endpoint port %s with empty addresses", endpoint)
+			klog.ErrorS(nil, "Ignoring invalid endpoint port with empty address", "endpoint", endpoint)
 			continue
 		}
 
@@ -261,10 +283,20 @@ func (cache *EndpointSliceCache) addEndpointsByIP(serviceNN apimachinerytypes.Na
 		if cache.isIPv6Mode && utilnet.IsIPv6String(endpoint.Addresses[0]) != cache.isIPv6Mode {
 			continue
 		}
+		isLocal := false
+		nodeName := ""
+		if endpoint.NodeName != nil {
+			isLocal = cache.isLocal(*endpoint.NodeName)
+			nodeName = *endpoint.NodeName
+		}
 
-		isLocal := cache.isLocal(endpoint.Topology[v1.LabelHostname])
-		endpointInfo := proxy.NewBaseEndpointInfo(endpoint.Addresses[0], portNum, isLocal, endpoint.Topology)
+		zone := ""
+		if endpoint.Zone != nil {
+			zone = *endpoint.Zone
+		}
 
+		endpointInfo := proxy.NewBaseEndpointInfo(endpoint.Addresses[0], nodeName, zone, portNum, isLocal,
+			endpoint.Ready, endpoint.Serving, endpoint.Terminating, endpoint.ZoneHints)
 		// This logic ensures we're deduping potential overlapping endpoints
 		// isLocal should not vary between matching IPs, but if it does, we
 		// favor a true value here if it exists.

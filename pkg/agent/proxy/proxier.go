@@ -18,13 +18,14 @@ import (
 	"fmt"
 	"math"
 	"net"
+	"reflect"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/api/discovery/v1beta1"
+	discovery "k8s.io/api/discovery/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	k8sapitypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -76,12 +77,14 @@ type proxier struct {
 	endpointSliceConfig *config.EndpointSliceConfig
 	endpointsConfig     *config.EndpointsConfig
 	serviceConfig       *config.ServiceConfig
+	nodeConfig          *config.NodeConfig
 	// endpointsChanges and serviceChanges contains all changes to endpoints and
 	// services that happened since last syncProxyRules call. For a single object,
 	// changes are accumulated. Once both endpointsChanges and serviceChanges
 	// have been synced, syncProxyRules will start syncing rules to OVS.
 	endpointsChanges *endpointsChangesTracker
 	serviceChanges   *serviceChangesTracker
+	nodeLabels       map[string]string
 	// serviceMap stores services we expect to be installed.
 	serviceMap k8sproxy.ServiceMap
 	// serviceInstalledMap stores services we actually installed.
@@ -91,7 +94,7 @@ type proxier struct {
 	// endpointsInstalledMap stores endpoints we actually installed.
 	endpointsInstalledMap types.EndpointsMap
 	// serviceEndpointsMapsMutex protects serviceMap, serviceInstalledMap,
-	// endpointsMap, and endpointsInstalledMap, which can be read by
+	// endpointsMap, nodeLabels, and endpointsInstalledMap, which can be read by
 	// GetServiceFlowKeys() called by the "/ovsflows" API handler.
 	serviceEndpointsMapsMutex sync.Mutex
 	// endpointReferenceCounter stores the number of times an Endpoint is referenced by Services.
@@ -109,16 +112,18 @@ type proxier struct {
 	syncedOnce      bool
 	syncedOnceMutex sync.RWMutex
 
-	runner               *k8sproxy.BoundedFrequencyRunner
-	stopChan             <-chan struct{}
-	ofClient             openflow.Client
-	routeClient          route.Interface
-	nodePortAddresses    []net.IP
-	hostGateWay          string
-	isIPv6               bool
-	proxyAll             bool
-	endpointSliceEnabled bool
-	proxyLoadBalancerIPs bool
+	runner                    *k8sproxy.BoundedFrequencyRunner
+	stopChan                  <-chan struct{}
+	ofClient                  openflow.Client
+	routeClient               route.Interface
+	nodePortAddresses         []net.IP
+	hostGateWay               string
+	hostname                  string
+	isIPv6                    bool
+	proxyAll                  bool
+	endpointSliceEnabled      bool
+	proxyLoadBalancerIPs      bool
+	topologyAwareHintsEnabled bool
 }
 
 func (p *proxier) SyncedOnce() bool {
@@ -357,6 +362,9 @@ func (p *proxier) installServices() {
 			p.endpointsInstalledMap[svcPortName] = endpointsInstalled
 		}
 		endpoints := p.endpointsMap[svcPortName]
+		if p.topologyAwareHintsEnabled {
+			endpoints = filterEndpoints(endpoints, svcInfo, p.nodeLabels)
+		}
 		// If both expected Endpoints number and installed Endpoints number are 0, we don't need to take care of this Service.
 		if len(endpoints) == 0 && len(endpointsInstalled) == 0 {
 			continue
@@ -744,19 +752,19 @@ func (p *proxier) OnEndpointsSynced() {
 	}
 }
 
-func (p *proxier) OnEndpointSliceAdd(endpointSlice *v1beta1.EndpointSlice) {
+func (p *proxier) OnEndpointSliceAdd(endpointSlice *discovery.EndpointSlice) {
 	if p.endpointsChanges.OnEndpointSliceUpdate(endpointSlice, false) && p.isInitialized() {
 		p.runner.Run()
 	}
 }
 
-func (p *proxier) OnEndpointSliceUpdate(oldEndpointSlice, newEndpointSlice *v1beta1.EndpointSlice) {
+func (p *proxier) OnEndpointSliceUpdate(oldEndpointSlice, newEndpointSlice *discovery.EndpointSlice) {
 	if p.endpointsChanges.OnEndpointSliceUpdate(newEndpointSlice, false) && p.isInitialized() {
 		p.runner.Run()
 	}
 }
 
-func (p *proxier) OnEndpointSliceDelete(endpointSlice *v1beta1.EndpointSlice) {
+func (p *proxier) OnEndpointSliceDelete(endpointSlice *discovery.EndpointSlice) {
 	if p.endpointsChanges.OnEndpointSliceUpdate(endpointSlice, true) && p.isInitialized() {
 		p.runner.Run()
 	}
@@ -795,6 +803,68 @@ func (p *proxier) OnServiceSynced() {
 	if p.isInitialized() {
 		p.runner.Run()
 	}
+}
+
+// OnNodeAdd is called whenever creation of new node object
+// is observed.
+func (p *proxier) OnNodeAdd(node *corev1.Node) {
+	if node.Name != p.hostname {
+		return
+	}
+
+	if reflect.DeepEqual(p.nodeLabels, node.Labels) {
+		return
+	}
+
+	p.serviceEndpointsMapsMutex.Lock()
+	p.nodeLabels = map[string]string{}
+	for k, v := range node.Labels {
+		p.nodeLabels[k] = v
+	}
+	p.serviceEndpointsMapsMutex.Unlock()
+	klog.V(4).InfoS("Updated proxier Node labels", "labels", node.Labels)
+
+	p.syncProxyRules()
+}
+
+// OnNodeUpdate is called whenever modification of an existing
+// node object is observed.
+func (p *proxier) OnNodeUpdate(oldNode, node *corev1.Node) {
+	if node.Name != p.hostname {
+		return
+	}
+
+	if reflect.DeepEqual(p.nodeLabels, node.Labels) {
+		return
+	}
+
+	p.serviceEndpointsMapsMutex.Lock()
+	p.nodeLabels = map[string]string{}
+	for k, v := range node.Labels {
+		p.nodeLabels[k] = v
+	}
+	p.serviceEndpointsMapsMutex.Unlock()
+	klog.V(4).InfoS("Updated proxier Node labels", "labels", node.Labels)
+
+	p.syncProxyRules()
+}
+
+// OnNodeDelete is called whenever deletion of an existing node
+// object is observed.
+func (p *proxier) OnNodeDelete(node *corev1.Node) {
+	if node.Name != p.hostname {
+		return
+	}
+	p.serviceEndpointsMapsMutex.Lock()
+	p.nodeLabels = nil
+	p.serviceEndpointsMapsMutex.Unlock()
+
+	p.syncProxyRules()
+}
+
+// OnNodeSynced is called once all the initial event handlers were
+// called and the state is fully propagated to local cache.
+func (p *proxier) OnNodeSynced() {
 }
 
 func (p *proxier) GetServiceByIP(serviceStr string) (k8sproxy.ServicePortName, bool) {
@@ -900,39 +970,47 @@ func NewProxier(
 	klog.V(2).Infof("Creating proxier with IPv6 enabled=%t", isIPv6)
 
 	endpointSliceEnabled := features.DefaultFeatureGate.Enabled(features.EndpointSlice)
+	topologyAwareHintsEnabled := features.DefaultFeatureGate.Enabled(features.TopologyAwareHints)
 	ipFamily := corev1.IPv4Protocol
 	if isIPv6 {
 		ipFamily = corev1.IPv6Protocol
 	}
 
 	p := &proxier{
-		endpointsConfig:          config.NewEndpointsConfig(informerFactory.Core().V1().Endpoints(), resyncPeriod),
-		serviceConfig:            config.NewServiceConfig(informerFactory.Core().V1().Services(), resyncPeriod),
-		endpointsChanges:         newEndpointsChangesTracker(hostname, endpointSliceEnabled, isIPv6),
-		serviceChanges:           newServiceChangesTracker(recorder, ipFamily, skipServices),
-		serviceMap:               k8sproxy.ServiceMap{},
-		serviceInstalledMap:      k8sproxy.ServiceMap{},
-		endpointsInstalledMap:    types.EndpointsMap{},
-		endpointsMap:             types.EndpointsMap{},
-		endpointReferenceCounter: map[string]int{},
-		serviceStringMap:         map[string]k8sproxy.ServicePortName{},
-		oversizeServiceSet:       sets.NewString(),
-		groupCounter:             groupCounter,
-		ofClient:                 ofClient,
-		routeClient:              routeClient,
-		nodePortAddresses:        nodePortAddresses,
-		isIPv6:                   isIPv6,
-		proxyAll:                 proxyAllEnabled,
-		endpointSliceEnabled:     endpointSliceEnabled,
-		proxyLoadBalancerIPs:     proxyLoadBalancerIPs,
+		endpointsConfig:           config.NewEndpointsConfig(informerFactory.Core().V1().Endpoints(), resyncPeriod),
+		serviceConfig:             config.NewServiceConfig(informerFactory.Core().V1().Services(), resyncPeriod),
+		endpointsChanges:          newEndpointsChangesTracker(hostname, endpointSliceEnabled, isIPv6),
+		serviceChanges:            newServiceChangesTracker(recorder, ipFamily, skipServices),
+		serviceMap:                k8sproxy.ServiceMap{},
+		serviceInstalledMap:       k8sproxy.ServiceMap{},
+		endpointsInstalledMap:     types.EndpointsMap{},
+		endpointsMap:              types.EndpointsMap{},
+		endpointReferenceCounter:  map[string]int{},
+		nodeLabels:                map[string]string{},
+		serviceStringMap:          map[string]k8sproxy.ServicePortName{},
+		oversizeServiceSet:        sets.NewString(),
+		groupCounter:              groupCounter,
+		ofClient:                  ofClient,
+		routeClient:               routeClient,
+		nodePortAddresses:         nodePortAddresses,
+		isIPv6:                    isIPv6,
+		proxyAll:                  proxyAllEnabled,
+		endpointSliceEnabled:      endpointSliceEnabled,
+		topologyAwareHintsEnabled: topologyAwareHintsEnabled,
+		proxyLoadBalancerIPs:      proxyLoadBalancerIPs,
+		hostname:                  hostname,
 	}
 
 	p.serviceConfig.RegisterEventHandler(p)
 	p.endpointsConfig.RegisterEventHandler(p)
 	p.runner = k8sproxy.NewBoundedFrequencyRunner(componentName, p.syncProxyRules, time.Second, 30*time.Second, 2)
 	if endpointSliceEnabled {
-		p.endpointSliceConfig = config.NewEndpointSliceConfig(informerFactory.Discovery().V1beta1().EndpointSlices(), resyncPeriod)
+		p.endpointSliceConfig = config.NewEndpointSliceConfig(informerFactory.Discovery().V1().EndpointSlices(), resyncPeriod)
 		p.endpointSliceConfig.RegisterEventHandler(p)
+		if p.topologyAwareHintsEnabled {
+			p.nodeConfig = config.NewNodeConfig(informerFactory.Core().V1().Nodes(), resyncPeriod)
+			p.nodeConfig.RegisterEventHandler(p)
+		}
 	} else {
 		p.endpointsConfig = config.NewEndpointsConfig(informerFactory.Core().V1().Endpoints(), resyncPeriod)
 		p.endpointsConfig.RegisterEventHandler(p)
