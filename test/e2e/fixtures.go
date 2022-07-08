@@ -93,6 +93,12 @@ func skipIfNotIPv4Cluster(tb testing.TB) {
 	}
 }
 
+func skipIfNoExternalHosts(tb testing.TB) {
+	if len(externalHostInfo.hosts) == 0 {
+		tb.Skipf("Skipping test as it requires external hosts info but the external hosts info is not set")
+	}
+}
+
 func skipIfIPv6Cluster(tb testing.TB) {
 	if clusterInfo.podV6NetworkCIDR != "" {
 		tb.Skipf("Skipping test as it is not supported in IPv6 cluster")

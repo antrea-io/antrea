@@ -19,6 +19,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"math/rand"
 	"net"
 	"os"
@@ -154,6 +155,15 @@ type ClusterNode struct {
 	os               string
 }
 
+type ExternalHost struct {
+	Name       string                  `yaml:"name"`
+	Interfaces []ExternalHostInterface `yaml:"interfaces,flow"`
+}
+
+type ExternalHostInterface struct {
+	Name string `name`
+}
+
 func (n ClusterNode) ip() string {
 	if n.ipv4Addr != "" {
 		return n.ipv4Addr
@@ -180,17 +190,28 @@ type ClusterInfo struct {
 
 var clusterInfo ClusterInfo
 
+type ExternalHostsConfig struct {
+	ExternalHosts []ExternalHost `yaml:"externalHosts,flow"`
+}
+
+var externalHostInfo ExternalHostInfo
+
+type ExternalHostInfo struct {
+	hosts map[int]ExternalHost
+}
+
 type TestOptions struct {
-	providerName        string
-	providerConfigPath  string
-	logsExportDir       string
-	logsExportOnSuccess bool
-	withBench           bool
-	enableCoverage      bool
-	enableAntreaIPAM    bool
-	flowVisibility      bool
-	coverageDir         string
-	skipCases           string
+	providerName            string
+	providerConfigPath      string
+	logsExportDir           string
+	logsExportOnSuccess     bool
+	withBench               bool
+	enableCoverage          bool
+	enableAntreaIPAM        bool
+	flowVisibility          bool
+	coverageDir             string
+	skipCases               string
+	externalHostsConfigPath string
 }
 
 var testOptions TestOptions
@@ -359,6 +380,14 @@ func nodeName(idx int) string {
 	return node.name
 }
 
+func externalHostName(idx int) string {
+	host, ok := externalHostInfo.hosts[idx]
+	if !ok {
+		return ""
+	}
+	return host.Name
+}
+
 // nodeIP returns an empty string if there is no Node with the provided idx. If idx is 0, the IP
 // of the control-plane Node will be returned.
 func nodeIP(idx int) string {
@@ -423,6 +452,29 @@ func (data *TestData) RunCommandOnNode(nodeName string, cmd string) (code int, s
 func (data *TestData) RunCommandOnNodeExt(nodeName, cmd string, envs map[string]string, stdin string, sudo bool) (
 	code int, stdout, stderr string, err error) {
 	return data.provider.RunCommandOnNodeExt(nodeName, cmd, envs, stdin, sudo)
+}
+
+func (data *TestData) collectExternalHostsInfo(path string) error {
+	externalHostInfo = ExternalHostInfo{}
+	externalHostInfo.hosts = make(map[int]ExternalHost)
+	filePath, _ := filepath.Abs(path)
+	yamlFile, err := ioutil.ReadFile(filePath)
+
+	if err != nil {
+		panic(err)
+	}
+
+	var config ExternalHostsConfig
+
+	err = yaml.Unmarshal(yamlFile, &config)
+	if err != nil {
+		panic(err)
+	}
+	for i, v := range config.ExternalHosts {
+		externalHostInfo.hosts[i] = v
+		fmt.Printf("The information of external host index %d is: %+v\n", i, externalHostInfo.hosts[i])
+	}
+	return nil
 }
 
 func (data *TestData) collectClusterInfo() error {

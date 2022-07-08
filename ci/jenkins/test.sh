@@ -53,13 +53,14 @@ _usage="Usage: $0 [--kubeconfig <KubeconfigSavePath>] [--workdir <HomePath>]
 
 Run K8s e2e community tests (Conformance & Network Policy) or Antrea e2e tests on a remote (Jenkins) Windows or Linux cluster.
 
-        --kubeconfig             Path of cluster kubeconfig.
-        --workdir                Home path for Go, vSphere information and antrea_logs during cluster setup. Default is $WORKDIR.
-        --testcase               Windows install OVS, Conformance and Network Policy or Antrea e2e testcases on a Windows or Linux cluster. It can also be flexible ipam or multicast e2e test.
-        --registry               The docker registry to use instead of dockerhub.
-        --proxyall               Enable proxyAll to test AntreaProxy.
-        --testbed-type           The testbed type to run tests. It can be flexible-ipam, jumper or legacy.
-        --ip-mode                IP mode for flexible-ipam e2e test. Default is $DEFAULT_IP_MODE. It can also be ipv6 or ds."
+        --kubeconfig                    Path of cluster kubeconfig.
+        --workdir                       Home path for Go, vSphere information and antrea_logs during cluster setup. Default is $WORKDIR.
+        --testcase                      Windows install OVS, Conformance and Network Policy or Antrea e2e testcases on a Windows or Linux cluster. It can also be flexible ipam or multicast e2e test.
+        --registry                      The docker registry to use instead of dockerhub.
+        --proxyall                      Enable proxyAll to test AntreaProxy.
+        --testbed-type                  The testbed type to run tests. It can be flexible-ipam, jumper or legacy.
+        --ip-mode                       IP mode for flexible-ipam e2e test. Default is $DEFAULT_IP_MODE. It can also be ipv6 or ds.
+        --external-hosts-config-path    The path of external host configuration file."
 
 function print_usage {
     echoerr "$_usage"
@@ -76,6 +77,10 @@ key="$1"
 case $key in
     --kubeconfig)
     KUBECONFIG_PATH="$2"
+    shift 2
+    ;;
+    --external-hosts-config-path)
+    EXTERNAL_HOSTS_CONFIG_PATH="$2"
     shift 2
     ;;
     --workdir)
@@ -120,6 +125,9 @@ if [[ "${IP_MODE}" != "${DEFAULT_IP_MODE}" && "${IP_MODE}" != "ipv6" && "${IP_MO
     echoerr "--ip-mode must be ipv4, ipv6 or ds"
     exit 1
 fi
+
+EXTERNAL_HOSTS_CONFIG_PATH="ci/jenkins/external-hosts-config.yml"
+
 if [[ "$WORKDIR" != "$DEFAULT_WORKDIR" && "$KUBECONFIG_PATH" == "$DEFAULT_KUBECONFIG_PATH" ]]; then
     KUBECONFIG_PATH=${WORKDIR}/.kube/config
 fi
@@ -516,6 +524,21 @@ function deliver_antrea {
     fi
 }
 
+function add_sshconfig_entry {
+    sshconfig_nodeip="$1"
+    sshconfig_nodename="$2"
+    cp ci/jenkins/ssh-config "${SSH_CONFIG_DST}.new"
+    sed -i "s/SSHCONFIGNODEIP/${sshconfig_nodeip}/g" "${SSH_CONFIG_DST}.new"
+    sed -i "s/SSHCONFIGNODENAME/${sshconfig_nodename}/g" "${SSH_CONFIG_DST}.new"
+    if [[ "${sshconfig_nodename}" =~ "win" ]]; then
+        sed -i "s/capv/administrator/g" "${SSH_CONFIG_DST}.new"
+    else
+        sed -i "s/capv/jenkins/g" "${SSH_CONFIG_DST}.new"
+    fi
+    echo "    IdentityFile ${WORKDIR}/.ssh/id_rsa" >> "${SSH_CONFIG_DST}.new"
+    cat "${SSH_CONFIG_DST}.new" >> "${SSH_CONFIG_DST}"
+}
+
 function generate_ssh_config {
     echo "=== Generate ssh-config ==="
     SSH_CONFIG_DST="${WORKDIR}/.ssh/config"
@@ -527,17 +550,14 @@ function generate_ssh_config {
         if [[ ! "${sshconfig_nodeip}" =~ ^[0-9]+(\.[0-9]+){3}$ ]];then
             sshconfig_nodeip="[${sshconfig_nodeip}]"
         fi
-        cp ci/jenkins/ssh-config "${SSH_CONFIG_DST}.new"
-        sed -i "s/SSHCONFIGNODEIP/${sshconfig_nodeip}/g" "${SSH_CONFIG_DST}.new"
-        sed -i "s/SSHCONFIGNODENAME/${sshconfig_nodename}/g" "${SSH_CONFIG_DST}.new"
-        if [[ "${sshconfig_nodename}" =~ "win" ]]; then
-            sed -i "s/capv/administrator/g" "${SSH_CONFIG_DST}.new"
-        else
-            sed -i "s/capv/jenkins/g" "${SSH_CONFIG_DST}.new"
-        fi
-        echo "    IdentityFile ${WORKDIR}/.ssh/id_rsa" >> "${SSH_CONFIG_DST}.new"
-        cat "${SSH_CONFIG_DST}.new" >> "${SSH_CONFIG_DST}"
+        add_sshconfig_entry "$sshconfig_nodeip" "${sshconfig_nodename}"
     done
+    if [[ -n ${EXTERNAL_HOSTS_CONFIG_PATH} ]]; then
+        yq -r '.externalHosts.[] | {.name:.sshIP}' "$EXTERNAL_HOSTS_CONFIG_PATH" | while IFS=' :' read -r ssh_hostname ssh_ip; do
+            echo "adding ssh config for external host with hostname:$ssh_hostname and IP:$ssh_ip"
+            add_sshconfig_entry "$ssh_ip" "$ssh_hostname"
+        done
+    fi
 }
 
 function run_e2e {
@@ -552,15 +572,17 @@ function run_e2e {
     mkdir -p "${WORKDIR}/.ssh"
     cp -f "${WORKDIR}/kube.conf" "${WORKDIR}/.kube/config"
     generate_ssh_config
-
+    if [[ -n ${EXTERNAL_HOSTS_CONFIG_PATH} ]]; then
+        EXTERNAL_HOSTS_CONFIG_PATH="../../${EXTERNAL_HOSTS_CONFIG_PATH}"
+    fi
     set +e
     mkdir -p `pwd`/antrea-test-logs
     # HACK: see https://github.com/antrea-io/antrea/issues/2292
     go mod edit -replace github.com/moby/spdystream=github.com/antoninbas/spdystream@v0.2.1 && go mod tidy
     if [[ $TESTBED_TYPE == "flexible-ipam" ]]; then
-        go test -v antrea.io/antrea/test/e2e --logs-export-dir `pwd`/antrea-test-logs --provider remote -timeout=100m --prometheus --antrea-ipam
+        go test -v antrea.io/antrea/test/e2e --logs-export-dir `pwd`/antrea-test-logs --external-hosts-config-path "$EXTERNAL_HOSTS_CONFIG_PATH" --provider remote -timeout=100m --prometheus --antrea-ipam
     else
-        go test -v antrea.io/antrea/test/e2e --logs-export-dir `pwd`/antrea-test-logs --provider remote -timeout=100m --prometheus
+        go test -run=TestMulticast -v antrea.io/antrea/test/e2e --logs-export-dir `pwd`/antrea-test-logs --external-hosts-config-path "$EXTERNAL_HOSTS_CONFIG_PATH" --provider remote -timeout=20m --prometheus
     fi
     if [[ "$?" != "0" ]]; then
         TEST_FAILURE=true
@@ -614,10 +636,12 @@ function run_e2e_windows {
     mkdir -p "${WORKDIR}/.ssh"
     cp -f "${WORKDIR}/kube.conf" "${WORKDIR}/.kube/config"
     generate_ssh_config
-
+    if [[ -n ${EXTERNAL_HOSTS_CONFIG_PATH} ]]; then
+        EXTERNAL_HOSTS_CONFIG_PATH="../../${EXTERNAL_HOSTS_CONFIG_PATH}"
+    fi
     set +e
     mkdir -p `pwd`/antrea-test-logs
-    go test -v antrea.io/antrea/test/e2e --logs-export-dir `pwd`/antrea-test-logs --provider remote -timeout=50m --prometheus
+    go test -v antrea.io/antrea/test/e2e --logs-export-dir `pwd`/antrea-test-logs --external-hosts-config-path "$EXTERNAL_HOSTS_CONFIG_PATH" --provider remote -timeout=50m --prometheus
     if [[ "$?" != "0" ]]; then
         TEST_FAILURE=true
     fi

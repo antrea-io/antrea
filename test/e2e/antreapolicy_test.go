@@ -2987,12 +2987,11 @@ func testACNPIGMPQuery(t *testing.T, data *TestData, acnpName, caseName, groupAd
 	testNamespace := data.testNamespace
 	mc := multicastTestcase{
 		name:            caseName,
-		senderConfig:    multicastTestPodConfig{nodeIdx: 0, isHostNetwork: false},
-		receiverConfigs: []multicastTestPodConfig{{1, false}},
+		receiverIndices: []int{1},
 		port:            3457,
 		group:           net.ParseIP(groupAddress),
 	}
-	senderName, _, cleanupFunc := createAndWaitForPod(t, data, data.createMcJoinPodOnNode, "test-sender-", nodeName(mc.senderConfig.nodeIdx), testNamespace, mc.senderConfig.isHostNetwork)
+	senderName, _, cleanupFunc := createAndWaitForPod(t, data, data.createMcJoinPodOnNode, "test-sender-", nodeName(0), testNamespace, false)
 	defer cleanupFunc()
 	var wg sync.WaitGroup
 	receiverNames, cleanupFuncs := setupReceivers(t, data, mc, mcjoinWaitTimeout, &wg)
@@ -3006,11 +3005,11 @@ func testACNPIGMPQuery(t *testing.T, data *TestData, acnpName, caseName, groupAd
 		data.RunCommandFromPod(testNamespace, senderName, mcjoinContainerName, sendMulticastCommand)
 	}()
 
-	tcpdumpName, _, cleanupFunc := createAndWaitForPod(t, data, data.createNetshootPodOnNode, "test-tcpdump-", nodeName(mc.receiverConfigs[0].nodeIdx), testNamespace, true)
+	tcpdumpName, _, cleanupFunc := createAndWaitForPod(t, data, data.createNetshootPodOnNode, "test-tcpdump-", nodeName(mc.receiverIndices[0]), testNamespace, true)
 	defer cleanupFunc()
 
 	queryGroupAddress := "224.0.0.1"
-	cmd, err := generatePacketCaptureCmd(t, data, 15, queryGroupAddress, nodeName(mc.receiverConfigs[0].nodeIdx), receiverNames[0])
+	cmd, err := generatePacketCaptureCmd(t, data, 15, queryGroupAddress, nodeName(mc.receiverIndices[0]), receiverNames[0])
 	if err != nil {
 		t.Fatalf("failed to call generateConnCheckCmd: %v", err)
 	}
@@ -3073,12 +3072,11 @@ func testACNPMulticastEgress(t *testing.T, data *TestData, acnpName, caseName, g
 	testNamespace := data.testNamespace
 	mc := multicastTestcase{
 		name:            caseName,
-		senderConfig:    multicastTestPodConfig{nodeIdx: 0, isHostNetwork: false},
-		receiverConfigs: []multicastTestPodConfig{{1, false}},
+		receiverIndices: []int{1},
 		port:            3457,
 		group:           net.ParseIP(groupAddress),
 	}
-	senderName, _, cleanupFunc := createAndWaitForPod(t, data, data.createMcJoinPodOnNode, "test-sender-", nodeName(mc.senderConfig.nodeIdx), testNamespace, mc.senderConfig.isHostNetwork)
+	senderName, _, cleanupFunc := createAndWaitForPod(t, data, data.createMcJoinPodOnNode, "test-sender-", nodeName(0), testNamespace, false)
 	defer cleanupFunc()
 	var wg sync.WaitGroup
 	receiverNames, cleanupFuncs := setupReceivers(t, data, mc, mcjoinWaitTimeout, &wg)
@@ -3093,9 +3091,9 @@ func testACNPMulticastEgress(t *testing.T, data *TestData, acnpName, caseName, g
 		data.RunCommandFromPod(testNamespace, senderName, mcjoinContainerName, sendMulticastCommand)
 	}()
 	// check if receiver can receive multicast packet
-	tcpdumpName, _, cleanupFunc := createAndWaitForPod(t, data, data.createNetshootPodOnNode, "test-tcpdump-", nodeName(mc.receiverConfigs[0].nodeIdx), testNamespace, true)
+	tcpdumpName, _, cleanupFunc := createAndWaitForPod(t, data, data.createNetshootPodOnNode, "test-tcpdump-", nodeName(mc.receiverIndices[0]), testNamespace, true)
 	defer cleanupFunc()
-	cmd, err := generatePacketCaptureCmd(t, data, 5, mc.group.String(), nodeName(mc.receiverConfigs[0].nodeIdx), receiverNames[0])
+	cmd, err := generatePacketCaptureCmd(t, data, 5, mc.group.String(), nodeName(mc.receiverIndices[0]), receiverNames[0])
 	if err != nil {
 		t.Fatalf("failed to call generateConnCheckCmd: %v", err)
 	}

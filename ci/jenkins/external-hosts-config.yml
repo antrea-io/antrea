@@ -1,0 +1,8 @@
+externalHosts:
+  - sshIP: 10.1.10.10
+    name: antrea-multicast-external
+    interfaces:
+      - name: ens224
+        ipv4: 10.1.10.10
+        clusterInterfaces:
+          antrea-multicast-0-0: [ens224]

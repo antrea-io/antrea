@@ -75,6 +75,7 @@ func (tOptions *TestOptions) setupCoverage() func() {
 // testMain is meant to be called by TestMain and enables the use of defer statements.
 func testMain(m *testing.M) int {
 	flag.StringVar(&testOptions.providerName, "provider", "vagrant", "K8s test cluster provider")
+	flag.StringVar(&testOptions.externalHostsConfigPath, "external-hosts-config-path", "", "Path of external hosts config file")
 	flag.StringVar(&testOptions.providerConfigPath, "provider-cfg-path", "", "Optional config file for provider")
 	flag.StringVar(&testOptions.logsExportDir, "logs-export-dir", "", "Export directory for test logs")
 	flag.BoolVar(&testOptions.logsExportOnSuccess, "logs-export-on-success", false, "Export logs even when a test is successful")
@@ -104,6 +105,12 @@ func testMain(m *testing.M) int {
 	log.Println("Collecting information about K8s cluster")
 	if err := testData.collectClusterInfo(); err != nil {
 		log.Fatalf("Error when collecting information about K8s cluster: %v", err)
+	}
+	if testOptions.externalHostsConfigPath != "" {
+		log.Println("Collecting external information about K8s cluster")
+		if err := testData.collectExternalHostsInfo(testOptions.externalHostsConfigPath); err != nil {
+			log.Fatalf("Error when collecting information about external hosts: %v", err)
+		}
 	}
 	if clusterInfo.podV4NetworkCIDR != "" {
 		log.Printf("Pod IPv4 network: '%s'", clusterInfo.podV4NetworkCIDR)
