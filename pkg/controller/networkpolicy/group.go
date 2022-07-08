@@ -214,50 +214,10 @@ func (n *NetworkPolicyController) syncInternalNamespacedGroup(grp *antreatypes.G
 // triggerANPUpdates triggers processing of Antrea NetworkPolicies associated with the input Group.
 func (n *NetworkPolicyController) triggerANPUpdates(g string) {
 	// If a Group is added/updated, it might have a reference in Antrea NetworkPolicy.
-	anps, err := n.anpInformer.Informer().GetIndexer().ByIndex(GroupIndex, g)
-	if err != nil {
-		klog.Errorf("Error retrieving Antrea NetworkPolicies corresponding to Group %s", g)
-		return
-	}
+	anps, _ := n.anpInformer.Informer().GetIndexer().ByIndex(GroupIndex, g)
 	for _, obj := range anps {
-		anp := obj.(*crdv1alpha1.NetworkPolicy)
-		// Re-process Antrea NetworkPolicies which may be affected due to updates to Group.
-		curInternalNP := n.processAntreaNetworkPolicy(anp)
-		klog.V(2).InfoS("Updating existing internal NetworkPolicy for Antrea NetworkPolicy", "internalNP", curInternalNP.Name, "ANP", curInternalNP.SourceRef.ToString())
-		key := internalNetworkPolicyKeyFunc(anp)
-		// Lock access to internal NetworkPolicy store such that concurrent access
-		// to an internal NetworkPolicy is not allowed. This will avoid the
-		// case in which an Update to an internal NetworkPolicy object may
-		// cause the SpanMeta member to be overridden with stale SpanMeta members
-		// from an older internal NetworkPolicy.
-		n.internalNetworkPolicyMutex.Lock()
-		oldInternalNPObj, _, _ := n.internalNetworkPolicyStore.Get(key)
-		oldInternalNP := oldInternalNPObj.(*antreatypes.NetworkPolicy)
-		// Must preserve old internal NetworkPolicy Span.
-		curInternalNP.SpanMeta = oldInternalNP.SpanMeta
-		n.internalNetworkPolicyStore.Update(curInternalNP)
-		// Unlock the internal NetworkPolicy store.
-		n.internalNetworkPolicyMutex.Unlock()
-		// Enqueue addressGroup keys to update their group members.
-		// TODO: optimize this to avoid enqueueing address groups when not updated.
-		for _, atg := range curInternalNP.AppliedToGroups {
-			n.enqueueAppliedToGroup(atg)
-		}
-		for _, rule := range curInternalNP.Rules {
-			for _, addrGroupName := range rule.From.AddressGroups {
-				n.enqueueAddressGroup(addrGroupName)
-			}
-			for _, addrGroupName := range rule.To.AddressGroups {
-				n.enqueueAddressGroup(addrGroupName)
-			}
-		}
-		n.enqueueInternalNetworkPolicy(key)
-		for _, atg := range oldInternalNP.AppliedToGroups {
-			n.deleteDereferencedAppliedToGroup(atg)
-		}
-		n.deleteDereferencedAddressGroups(oldInternalNP)
+		n.enqueueInternalNetworkPolicy(getANPReference(obj.(*crdv1alpha1.NetworkPolicy)))
 	}
-	return
 }
 
 // updateGroupStatus updates the Status subresource for a Group.

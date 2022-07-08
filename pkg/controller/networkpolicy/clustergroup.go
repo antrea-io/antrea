@@ -261,7 +261,7 @@ func getClusterGroupSourceRef(cg *crdv1alpha3.ClusterGroup) *controlplane.GroupR
 	}
 }
 
-func (c *NetworkPolicyController) triggerParentGroupSync(grp string) {
+func (c *NetworkPolicyController) triggerParentGroupUpdates(grp string) {
 	// TODO: if the max supported group nesting level increases, a Group having children
 	//  will no longer be a valid indication that it cannot have parents.
 	parentGroupObjs, err := c.internalGroupStore.GetByIndex(store.ChildGroupIndex, grp)
@@ -275,6 +275,22 @@ func (c *NetworkPolicyController) triggerParentGroupSync(grp string) {
 	}
 }
 
+// triggerDerivedGroupUpdates triggers processing of AppliedToGroup and AddressGroup derived from the provided group.
+func (c *NetworkPolicyController) triggerDerivedGroupUpdates(grp string) {
+	_, exists, _ := c.appliedToGroupStore.Get(grp)
+	if exists {
+		// It's fine if the group is deleted after checking its existence as syncAppliedToGroup will do nothing when it
+		// doesn't find the group.
+		c.enqueueAppliedToGroup(grp)
+	}
+	_, exists, _ = c.addressGroupStore.Get(grp)
+	if exists {
+		// It's fine if the group is deleted after checking its existence as syncAddressGroup will do nothing when it
+		// doesn't find the group.
+		c.enqueueAddressGroup(grp)
+	}
+}
+
 // triggerCNPUpdates triggers processing of ClusterNetworkPolicies associated with the input ClusterGroup.
 func (c *NetworkPolicyController) triggerCNPUpdates(cg string) {
 	// If a ClusterGroup is added/updated, it might have a reference in ClusterNetworkPolicy.
@@ -284,8 +300,7 @@ func (c *NetworkPolicyController) triggerCNPUpdates(cg string) {
 		return
 	}
 	for _, obj := range cnps {
-		// ClusterGroup may be used by AppliedToGroup, enqueuing them after reprocessing CNP.
-		c.reprocessCNP(obj.(*crdv1alpha1.ClusterNetworkPolicy), true)
+		c.enqueueInternalNetworkPolicy(getACNPReference(obj.(*crdv1alpha1.ClusterNetworkPolicy)))
 	}
 }
 
