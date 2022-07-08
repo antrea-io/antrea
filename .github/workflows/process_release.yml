@@ -284,10 +284,27 @@ jobs:
       run: |
         version=${TAG:10}
         echo "::set-output name=version::$version"
-    - uses: benc-uk/workflow-dispatch@v1
+    - name: Update website source
+      uses: benc-uk/workflow-dispatch@v1
       with:
         repo: antrea-io/website
         ref: refs/heads/main
         workflow: Update website source
         token: ${{ secrets.ANTREA_WEBSITE_WORKFLOW_DISPATCH_PAT }}
         inputs: ${{ format('{{ "antrea-repository":"antrea-io/antrea", "antrea-ref":"{0}" }}', steps.get-version.outputs.version) }}
+    - name: Update Helm index with Antrea archive
+      uses: benc-uk/workflow-dispatch@v1
+      with:
+        repo: antrea-io/website
+        ref: refs/heads/main
+        workflow: Update Helm index
+        token: ${{ secrets.ANTREA_WEBSITE_WORKFLOW_DISPATCH_PAT }}
+        inputs: ${{ format('{{ "archive-url":"https://github.com/antrea-io/antrea/releases/download/{0}/antrea-chart.tgz" }}', steps.get-version.outputs.version) }}
+    - name: Update Helm index with Flow Aggregator archive
+      uses: benc-uk/workflow-dispatch@v1
+      with:
+        repo: antrea-io/website
+        ref: refs/heads/main
+        workflow: Update Helm index
+        token: ${{ secrets.ANTREA_WEBSITE_WORKFLOW_DISPATCH_PAT }}
+        inputs: ${{ format('{{ "archive-url":"https://github.com/antrea-io/antrea/releases/download/{0}/flow-aggregator-chart.tgz" }}', steps.get-version.outputs.version) }}
