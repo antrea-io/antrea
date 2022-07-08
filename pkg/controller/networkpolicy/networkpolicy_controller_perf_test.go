@@ -26,6 +26,8 @@ import (
 	"testing"
 	"time"
 
+	"antrea.io/antrea/pkg/apis/controlplane"
+
 	"github.com/google/uuid"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
@@ -442,7 +444,8 @@ func BenchmarkSyncAddressGroup(b *testing.B) {
 	}
 	for c.internalNetworkPolicyQueue.Len() > 0 {
 		key, _ := c.internalNetworkPolicyQueue.Get()
-		c.syncInternalNetworkPolicy(key.(string))
+		networkPolicyRef := key.(controlplane.NetworkPolicyReference)
+		c.syncInternalNetworkPolicy(&networkPolicyRef)
 		c.internalNetworkPolicyQueue.Done(key)
 	}
 	key, _ := c.addressGroupQueue.Get()
@@ -519,7 +522,8 @@ func benchmarkInit(b *testing.B, namespaces []*corev1.Namespace, networkPolicies
 		}
 		for c.internalNetworkPolicyQueue.Len() > 0 {
 			key, _ := c.internalNetworkPolicyQueue.Get()
-			c.syncInternalNetworkPolicy(key.(string))
+			networkPolicyRef := key.(controlplane.NetworkPolicyReference)
+			c.syncInternalNetworkPolicy(&networkPolicyRef)
 			c.internalNetworkPolicyQueue.Done(key)
 		}
 		for c.addressGroupQueue.Len() > 0 {

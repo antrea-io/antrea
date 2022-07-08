@@ -15,7 +15,6 @@
 package types
 
 import (
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 
@@ -48,7 +47,7 @@ type AppliedToGroup struct {
 	// Name of this group, currently it's same as UID.
 	Name string
 	// Selector describes how the group selects pods.
-	Selector GroupSelector
+	Selector *GroupSelector
 	// GroupMemberByNode is a mapping from nodeName to a set of GroupMembers on the Node,
 	// either GroupMembers or ExternalEntity on the external node.
 	// It will be converted to a slice of GroupMember for transferring according
@@ -97,10 +96,22 @@ type NetworkPolicy struct {
 	// AppliedToPerRule tracks if appliedTo is set per rule basis rather than in policy spec.
 	// Must be false for K8s NetworkPolicy.
 	AppliedToPerRule bool
-	// PerNamespaceSelectors maintains a list of unique Namespace selectors of appliedTo groups
-	// of the NetworkPolicy, for which a per-namespace rule is created.
-	// It is used as an index so that Namespace updates can trigger corresponding rules
-	// to re-calculate affected Namespaces.
-	// It is set only for AntreaClusterNetworkPolicies with per-namespace rules.
-	PerNamespaceSelectors []labels.Selector
+	// RealizationError stores realization error of the internal Network Policy.
+	// It is set when processing the original Network Policy.
+	RealizationError error
+}
+
+// GetAddressGroups returns AddressGroups used by this NetworkPolicy.
+func (p *NetworkPolicy) GetAddressGroups() sets.String {
+	addressGroups := sets.NewString()
+	for _, rule := range p.Rules {
+		addressGroups.Insert(rule.From.AddressGroups...)
+		addressGroups.Insert(rule.To.AddressGroups...)
+	}
+	return addressGroups
+}
+
+// GetAppliedToGroups returns AppliedToGroups used by this NetworkPolicy.
+func (p *NetworkPolicy) GetAppliedToGroups() sets.String {
+	return sets.NewString(p.AppliedToGroups...)
 }

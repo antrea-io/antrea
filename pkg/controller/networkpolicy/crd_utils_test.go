@@ -428,7 +428,7 @@ func TestToAntreaPeerForCRD(t *testing.T) {
 			_, npc := newController()
 			npc.addClusterGroup(&cgA)
 			npc.cgStore.Add(&cgA)
-			actualPeer := npc.toAntreaPeerForCRD(tt.inPeers, testCNPObj, tt.direction, tt.namedPortExists)
+			actualPeer, _ := npc.toAntreaPeerForCRD(tt.inPeers, testCNPObj, tt.direction, tt.namedPortExists)
 			if !reflect.DeepEqual(tt.outPeer.AddressGroups, actualPeer.AddressGroups) {
 				t.Errorf("Unexpected AddressGroups in Antrea Peer conversion. Expected %v, got %v", tt.outPeer.AddressGroups, actualPeer.AddressGroups)
 			}

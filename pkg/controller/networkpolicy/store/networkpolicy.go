@@ -29,10 +29,8 @@ import (
 )
 
 const (
-	AppliedToGroupIndex   = "appliedToGroup"
-	AddressGroupIndex     = "addressGroup"
-	PerNamespaceRuleIndex = "hasPerNamespaceRule"
-	HasPerNamespaceRule   = "true"
+	AppliedToGroupIndex = "appliedToGroup"
+	AddressGroupIndex   = "addressGroup"
 )
 
 // networkPolicyEvent implements storage.InternalEvent.
@@ -166,16 +164,6 @@ func NewNetworkPolicyStore() storage.Interface {
 				}
 			}
 			return groupNames, nil
-		},
-		PerNamespaceRuleIndex: func(obj interface{}) ([]string, error) {
-			fp, ok := obj.(*types.NetworkPolicy)
-			if !ok {
-				return []string{}, nil
-			}
-			if len(fp.PerNamespaceSelectors) > 0 {
-				return []string{HasPerNamespaceRule}, nil
-			}
-			return []string{}, nil
 		},
 	}
 	return ram.NewStore(NetworkPolicyKeyFunc, indexers, genNetworkPolicyEvent, keyAndSpanSelectFunc, func() runtime.Object { return new(controlplane.NetworkPolicy) })
