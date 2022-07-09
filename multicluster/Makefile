@@ -70,7 +70,7 @@ test-unit: fmt vet .coverage
 	@echo "==> Running unit tests <=="
 	go test -race -coverprofile=.coverage/coverage-unit.txt -covermode=atomic -cover antrea.io/antrea/multicluster/controllers/multicluster/...
 test-integration: .coverage
-	@echo "==> Running integration tests <=="
+	@echo "==> Running Multi-cluster integration tests <=="
 ifneq ($(NO_LOCAL),)
 	@echo "===> Building Antrea Multi-cluster Integration Test Docker image <==="
 	docker build -t antrea/mc-test -f build/images/test/Dockerfile $(DOCKER_BUILD_ARGS) .
