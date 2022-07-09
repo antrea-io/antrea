@@ -58,10 +58,13 @@ case $key in
 esac
 done
 
+go_files=`find . -type f -name "*.go"`
+sh_files=`find . -type f -name "*.sh"`
+docker_files=`find . -type f -name "Dockerfile*"`
 if $ADD; then
     echo "===> Adding License for files <==="
-    addlicense -c "Antrea Authors." -y $(date +%Y) `find . -type f -name "*.go"` `find . -type f -name "*.sh"`
+    addlicense -c "Antrea Authors." -y $(date +%Y) $go_files $sh_files $docker_files
 else
     echo "===> Checking License for files <==="
-    addlicense -c "Antrea Authors." -check `find . -type f -name "*.go"` `find . -type f -name "*.sh"`
+    addlicense -c "Antrea Authors." -check $go_files $sh_files $docker_files
 fi
