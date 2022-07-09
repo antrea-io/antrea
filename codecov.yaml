@@ -32,10 +32,6 @@ coverage:
         target: auto
         flags:
           - kind-e2e-tests
-      antrea-mc-integration-tests:
-        target: auto
-        flags:
-          - mc-integration-tests
 
 flag_management:
   default_rules:
