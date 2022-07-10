@@ -2005,6 +2005,14 @@ func (f *featureNetworkPolicy) addFlowMatch(fb binding.FlowBuilder, matchKey *ty
 		fallthrough
 	case MatchDstIPNetv6:
 		fb = fb.MatchProtocol(matchKey.GetOFProtocol()).MatchDstIPNet(matchValue.(net.IPNet))
+	case MatchCTDstIP:
+		fallthrough
+	case MatchCTDstIPv6:
+		fb = fb.MatchCTStateNew(true).MatchProtocol(matchKey.GetOFProtocol()).MatchCTDstIP(matchValue.(net.IP))
+	case MatchCTDstIPNet:
+		fallthrough
+	case MatchCTDstIPNetv6:
+		fb = fb.MatchCTStateNew(true).MatchProtocol(matchKey.GetOFProtocol()).MatchCTDstIPNet(matchValue.(net.IPNet))
 	case MatchSrcIP:
 		fallthrough
 	case MatchSrcIPv6:
@@ -2013,6 +2021,14 @@ func (f *featureNetworkPolicy) addFlowMatch(fb binding.FlowBuilder, matchKey *ty
 		fb = fb.MatchProtocol(matchKey.GetOFProtocol()).MatchSrcIPNet(matchValue.(net.IPNet))
 	case MatchSrcIPNetv6:
 		fb = fb.MatchProtocol(matchKey.GetOFProtocol()).MatchSrcIPNet(matchValue.(net.IPNet))
+	case MatchCTSrcIP:
+		fallthrough
+	case MatchCTSrcIPv6:
+		fb = fb.MatchCTStateNew(true).MatchProtocol(matchKey.GetOFProtocol()).MatchCTSrcIP(matchValue.(net.IP))
+	case MatchCTSrcIPNet:
+		fallthrough
+	case MatchCTSrcIPNetv6:
+		fb = fb.MatchCTStateNew(true).MatchProtocol(matchKey.GetOFProtocol()).MatchCTSrcIPNet(matchValue.(net.IPNet))
 	case MatchTCPDstPort:
 		fallthrough
 	case MatchTCPv6DstPort:
@@ -2185,7 +2201,7 @@ func (f *featurePodConnectivity) localProbeFlows() []binding.Flow {
 // tables within stageIngressSecurity.
 func (f *featureNetworkPolicy) ingressClassifierFlows() []binding.Flow {
 	cookieID := f.cookieAllocator.Request(f.category).Raw()
-	return []binding.Flow{
+	flows := []binding.Flow{
 		// This generates the flow to match the packets to the Antrea gateway and forward them to IngressMetricTable.
 		IngressSecurityClassifierTable.ofTable.BuildFlow(priorityNormal).
 			Cookie(cookieID).
@@ -2205,6 +2221,16 @@ func (f *featureNetworkPolicy) ingressClassifierFlows() []binding.Flow {
 			Action().GotoTable(IngressMetricTable.GetID()).
 			Done(),
 	}
+	if f.proxyAll {
+		// This generates the flow to match the NodePort Service packets and forward them to AntreaPolicyIngressRuleTable.
+		// Policies applied on NodePort Service will be enforced in AntreaPolicyIngressRuleTable.
+		flows = append(flows, IngressSecurityClassifierTable.ofTable.BuildFlow(priorityNormal+1).
+			Cookie(cookieID).
+			MatchRegMark(ToNodePortAddressRegMark).
+			Action().GotoTable(AntreaPolicyIngressRuleTable.GetID()).
+			Done())
+	}
+	return flows
 }
 
 // snatSkipNodeFlow generates the flow to skip SNAT for connection destined for the transport IP of a remote Node.

@@ -777,6 +777,7 @@ func (c *client) generatePipelines() {
 		c.enableDenyTracking,
 		c.enableAntreaPolicy,
 		c.enableMulticast,
+		c.proxyAll,
 		c.connectUplinkToBridge)
 	c.activatedFeatures = append(c.activatedFeatures, c.featureNetworkPolicy)
 	c.traceableFeatures = append(c.traceableFeatures, c.featureNetworkPolicy)

@@ -1027,11 +1027,17 @@ func schema_pkg_apis_controlplane_v1beta2_GroupMember(ref common.ReferenceCallba
 							Ref:         ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.NodeReference"),
 						},
 					},
+					"service": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Service is the reference to the Service. It can only be used in an AppliedTo Group and only a NodePort type Service can be referred by this field.",
+							Ref:         ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.ServiceReference"),
+						},
+					},
 				},
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.ExternalEntityReference", "antrea.io/antrea/pkg/apis/controlplane/v1beta2.NamedPort", "antrea.io/antrea/pkg/apis/controlplane/v1beta2.NodeReference", "antrea.io/antrea/pkg/apis/controlplane/v1beta2.PodReference"},
+			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.ExternalEntityReference", "antrea.io/antrea/pkg/apis/controlplane/v1beta2.NamedPort", "antrea.io/antrea/pkg/apis/controlplane/v1beta2.NodeReference", "antrea.io/antrea/pkg/apis/controlplane/v1beta2.PodReference", "antrea.io/antrea/pkg/apis/controlplane/v1beta2.ServiceReference"},
 	}
 }
 

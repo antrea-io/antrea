@@ -170,9 +170,10 @@ func NewAppliedToGroupStore() storage.Interface {
 	indexers := cache.Indexers{
 		cache.NamespaceIndex: func(obj interface{}) ([]string, error) {
 			atg, ok := obj.(*types.AppliedToGroup)
-			if !ok {
+			if !ok || atg.Selector == nil {
 				return []string{}, nil
 			}
+
 			return []string{atg.Selector.Namespace}, nil
 		},
 	}

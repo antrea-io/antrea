@@ -38,10 +38,18 @@ var (
 	MatchSrcIP          = types.NewMatchKey(binding.ProtocolIP, types.IPAddr, "nw_src")
 	MatchDstIPNet       = types.NewMatchKey(binding.ProtocolIP, types.IPNetAddr, "nw_dst")
 	MatchSrcIPNet       = types.NewMatchKey(binding.ProtocolIP, types.IPNetAddr, "nw_src")
+	MatchCTDstIP        = types.NewMatchKey(binding.ProtocolIP, types.IPAddr, "ct_nw_dst")
+	MatchCTSrcIP        = types.NewMatchKey(binding.ProtocolIP, types.IPAddr, "ct_nw_src")
+	MatchCTDstIPNet     = types.NewMatchKey(binding.ProtocolIP, types.IPNetAddr, "ct_nw_dst")
+	MatchCTSrcIPNet     = types.NewMatchKey(binding.ProtocolIP, types.IPNetAddr, "ct_nw_src")
 	MatchDstIPv6        = types.NewMatchKey(binding.ProtocolIPv6, types.IPAddr, "ipv6_dst")
 	MatchSrcIPv6        = types.NewMatchKey(binding.ProtocolIPv6, types.IPAddr, "ipv6_src")
 	MatchDstIPNetv6     = types.NewMatchKey(binding.ProtocolIPv6, types.IPNetAddr, "ipv6_dst")
 	MatchSrcIPNetv6     = types.NewMatchKey(binding.ProtocolIPv6, types.IPNetAddr, "ipv6_src")
+	MatchCTDstIPv6      = types.NewMatchKey(binding.ProtocolIPv6, types.IPAddr, "ct_ipv6_dst")
+	MatchCTSrcIPv6      = types.NewMatchKey(binding.ProtocolIPv6, types.IPAddr, "ct_ipv6_src")
+	MatchCTDstIPNetv6   = types.NewMatchKey(binding.ProtocolIPv6, types.IPNetAddr, "ct_ipv6_dst")
+	MatchCTSrcIPNetv6   = types.NewMatchKey(binding.ProtocolIPv6, types.IPNetAddr, "ct_ipv6_src")
 	MatchDstOFPort      = types.NewMatchKey(binding.ProtocolIP, types.OFPortAddr, "reg1[0..31]")
 	MatchSrcOFPort      = types.NewMatchKey(binding.ProtocolIP, types.OFPortAddr, "in_port")
 	MatchTCPDstPort     = types.NewMatchKey(binding.ProtocolTCP, types.L4PortAddr, "tp_dst")
@@ -190,6 +198,78 @@ func (a *ServiceGroupIDAddress) GetValue() interface{} {
 func NewServiceGroupIDAddress(groupID binding.GroupIDType) *ServiceGroupIDAddress {
 	a := ServiceGroupIDAddress(groupID)
 	return &a
+}
+
+// CT IP address calculated from Pod's address.
+type CTIPAddress net.IP
+
+func (a *CTIPAddress) GetMatchKey(addrType types.AddressType) *types.MatchKey {
+	ipArr := net.IP(*a)
+	switch addrType {
+	case types.SrcAddress:
+		if ipArr.To4() != nil {
+			return MatchCTSrcIP
+		}
+		return MatchCTSrcIPv6
+	case types.DstAddress:
+		if ipArr.To4() != nil {
+			return MatchCTDstIP
+		}
+		return MatchCTDstIPv6
+	default:
+		klog.Errorf("Unknown AddressType %d in CTIPAddress", addrType)
+		return Unsupported
+	}
+}
+
+func (a *CTIPAddress) GetMatchValue() string {
+	addr := net.IP(*a)
+	return addr.String()
+}
+
+func (a *CTIPAddress) GetValue() interface{} {
+	return net.IP(*a)
+}
+
+func NewCTIPAddress(addr net.IP) *CTIPAddress {
+	cia := CTIPAddress(addr)
+	return &cia
+}
+
+// CT IP block calculated from Pod's address.
+type CTIPNetAddress net.IPNet
+
+func (a *CTIPNetAddress) GetMatchKey(addrType types.AddressType) *types.MatchKey {
+	ipAddr := net.IPNet(*a)
+	switch addrType {
+	case types.SrcAddress:
+		if ipAddr.IP.To4() != nil {
+			return MatchCTSrcIPNet
+		}
+		return MatchCTSrcIPNetv6
+	case types.DstAddress:
+		if ipAddr.IP.To4() != nil {
+			return MatchCTDstIPNet
+		}
+		return MatchCTDstIPNetv6
+	default:
+		klog.Errorf("Unknown AddressType %d in CTIPNetAddress", addrType)
+		return Unsupported
+	}
+}
+
+func (a *CTIPNetAddress) GetMatchValue() string {
+	addr := net.IPNet(*a)
+	return addr.String()
+}
+
+func (a *CTIPNetAddress) GetValue() interface{} {
+	return net.IPNet(*a)
+}
+
+func NewCTIPNetAddress(addr net.IPNet) *CTIPNetAddress {
+	ia := CTIPNetAddress(addr)
+	return &ia
 }
 
 // ConjunctionNotFound is an error response when the specified policyRuleConjunction is not found from the local cache.
@@ -1892,6 +1972,7 @@ type featureNetworkPolicy struct {
 	enableDenyTracking    bool
 	enableAntreaPolicy    bool
 	enableMulticast       bool
+	proxyAll              bool
 	ctZoneSrcField        *binding.RegField
 	// deterministic represents whether to generate flows deterministically.
 	// For example, if a flow has multiple actions, setting it to true can get consistent flow.
@@ -1913,6 +1994,7 @@ func newFeatureNetworkPolicy(
 	enableDenyTracking,
 	enableAntreaPolicy bool,
 	enableMulticast bool,
+	proxyAll bool,
 	connectUplinkToBridge bool) *featureNetworkPolicy {
 	return &featureNetworkPolicy{
 		cookieAllocator:          cookieAllocator,
@@ -1924,6 +2006,7 @@ func newFeatureNetworkPolicy(
 		ovsMetersAreSupported:    ovsMetersAreSupported,
 		enableDenyTracking:       enableDenyTracking,
 		enableAntreaPolicy:       enableAntreaPolicy,
+		proxyAll:                 proxyAll,
 		category:                 cookie.NetworkPolicy,
 		ctZoneSrcField:           getZoneSrcField(connectUplinkToBridge),
 	}

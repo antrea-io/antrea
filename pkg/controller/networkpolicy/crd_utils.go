@@ -18,6 +18,7 @@ import (
 	"strings"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/klog/v2"
 
@@ -25,6 +26,7 @@ import (
 	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	"antrea.io/antrea/pkg/controller/networkpolicy/store"
 	antreatypes "antrea.io/antrea/pkg/controller/types"
+	"antrea.io/antrea/pkg/util/k8s"
 )
 
 var (
@@ -197,6 +199,29 @@ func (n *NetworkPolicyController) createAppliedToGroupForClusterGroupCRD(intGrp 
 		Name: key,
 	}
 	klog.V(2).Infof("Creating new AppliedToGroup %v corresponding to ClusterGroup CRD %s", appliedToGroup.UID, intGrp.Name)
+	n.appliedToGroupStore.Create(appliedToGroup)
+	n.enqueueAppliedToGroup(key)
+	return key
+}
+
+// createAppliedToGroupForService creates an AppliedToGroup object corresponding to a Service if it is not created already.
+func (n *NetworkPolicyController) createAppliedToGroupForService(service *v1alpha1.NamespacedName) string {
+	key := getNormalizedUID(k8s.NamespacedName(service.Namespace, service.Name))
+	// Check to see if the AppliedToGroup already exists
+	_, found, _ := n.appliedToGroupStore.Get(key)
+	if found {
+		return key
+	}
+	// Create an AppliedToGroup object for this Service.
+	appliedToGroup := &antreatypes.AppliedToGroup{
+		UID:  types.UID(key),
+		Name: key,
+		Service: &controlplane.ServiceReference{
+			Namespace: service.Namespace,
+			Name:      service.Name,
+		},
+	}
+	klog.V(2).Infof("Creating new AppliedToGroup %v corresponding to a Service %s", appliedToGroup.UID, k8s.NamespacedName(service.Namespace, service.Name))
 	n.appliedToGroupStore.Create(appliedToGroup)
 	n.enqueueAppliedToGroup(key)
 	return key

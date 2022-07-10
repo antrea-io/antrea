@@ -450,6 +450,13 @@ type NetworkPolicyPeer struct {
 	// A NodeSelector cannot be set in AppliedTo field or set with any other selector.
 	// +optional
 	NodeSelector *metav1.LabelSelector `json:"nodeSelector,omitempty"`
+	// Select a certain Service which matches the NamespacedName.
+	// A Service can only be set in either policy level AppliedTo field in a policy
+	// that only has ingress rules or rule level AppliedTo field in an ingress rule.
+	// Only a NodePort Service can be referred by this field.
+	// Cannot be set with any other selector.
+	// +optional
+	Service *NamespacedName `json:"service,omitempty"`
 }
 
 type PeerNamespaces struct {

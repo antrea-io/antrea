@@ -45,6 +45,10 @@ func normalizeGroupMember(member *GroupMember) groupMemberKey {
 		b.WriteString(member.ExternalEntity.Namespace)
 		b.WriteString(delimiter)
 		b.WriteString(member.ExternalEntity.Name)
+	} else if member.Service != nil {
+		b.WriteString(member.Service.Namespace)
+		b.WriteString(delimiter)
+		b.WriteString(member.Service.Name)
 	}
 	for _, ip := range member.IPs {
 		b.Write(ip)

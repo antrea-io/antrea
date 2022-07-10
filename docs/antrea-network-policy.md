@@ -39,6 +39,7 @@
   - [Node Selector](#node-selector)
   - [toServices egress rules](#toservices-egress-rules)
   - [ServiceAccount based selection](#serviceaccount-based-selection)
+  - [ACNP appliedTo NodePort Service](#acnp-appliedto-nodeport-service)
 - [ClusterGroup](#clustergroup)
   - [ClusterGroup CRD](#clustergroup-crd)
   - [kubectl commands for ClusterGroup](#kubectl-commands-for-clustergroup)
@@ -482,6 +483,10 @@ Specific Pods from specific Namespaces can be selected by providing both a
 `podSelector` and a `namespaceSelector` in the same `appliedTo` entry.
 The `appliedTo` field can also reference a ClusterGroup resource by setting
 the ClusterGroup's name in `group` field in place of the stand-alone selectors.
+The `appliedTo` field can also reference a Service by setting the Service's name
+and namespace in `service` field in place of the stand-alone selectors. Only a
+NodePort Service can be referred by this field. More details can be found in the
+[ACNPAppliedToNodePortService](#acnp-appliedto-nodeport-service) section.
 IPBlock cannot be set in the `appliedTo` field.
 An IPBlock ClusterGroup referenced in an `appliedTo` field will be ignored,
 and the policy will have no effect.
@@ -1295,6 +1300,47 @@ After this policy is applied, traffic from "appliedToPods" to "egressPods" will 
 Note: Antrea will use a reserved label key for internal processing `serviceAccount`.
 The reserved label looks like: `internal.antrea.io/service-account:[ServiceAccountName]`. Users should avoid using
 this label key in any entities no matter if a policy with `serviceAccount` is applied in the cluster.
+
+### ACNP appliedTo NodePort Service
+
+Antrea ClusterNetworkPolicy features a `service` field in `appliedTo` field to enable the ACNP could be enforced
+on the traffic from external client to a NodePort Service.
+
+`service` uses `namespace` and `name` to select the Service with a specific name under a specific namespace and
+only a NodePort Service can be referred by `service` field.
+
+`service` field cannot be used with any other fields and a policy or a rule can't be applied to NodePort Service
+and other peers at the same time.
+
+Since `service` field is used to control the external access of a NodePort Service, then
+
+1. If a `appliedTo` with `service` is used at policy level, then this policy can only contain ingress rules.
+2. If a `appliedTo` with `service` is used at rule level, then this rule can only be an ingress rule.
+3. If an ingress rule is applied to a NodePort Service, then this ingress can only use `ipBlock` in its `from` field.
+
+An example policy using `service` in `appliedTo` could look like this:
+
+```yaml
+apiVersion: crd.antrea.io/v1alpha1
+kind: ClusterNetworkPolicy
+metadata:
+  name: acnp-deny-external-client-nodeport-svc-access
+spec:
+    priority: 5
+    tier: securityops
+    appliedTo:
+      - service:
+          name: svc-1
+          namespace: ns-1
+    ingress:
+      - action: Drop
+        from:
+          - ipBlock:
+              cidr: 1.1.1.0/24
+```
+
+In this example, the policy will be applied to the NodePort Service `svc-1` in Namespace `ns-1`
+and drop all packets from CIDR `1.1.1.0/24`.
 
 ## ClusterGroup
 

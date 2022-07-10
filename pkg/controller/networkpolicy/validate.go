@@ -415,6 +415,10 @@ func (v *antreaPolicyValidator) createValidate(curObj interface{}, userInfo auth
 	if !allowed {
 		return reason, allowed
 	}
+	reason, allowed = v.validateAppliedToServiceIngressPeer(specAppliedTo, ingress)
+	if !allowed {
+		return reason, allowed
+	}
 	reason, allowed = v.validateFQDNSelectors(egress)
 	if !allowed {
 		return reason, allowed
@@ -472,7 +476,14 @@ func (v *antreaPolicyValidator) validateAppliedTo(ingress, egress []crdv1alpha1.
 		return "appliedTo field should either be set in all rules or in none of them", false
 	}
 
-	checkAppliedTo := func(appliedTo []crdv1alpha1.NetworkPolicyPeer) (string, bool) {
+	var (
+		appliedToPolicy      = 0
+		appliedToIngressRule = 1
+		appliedToEgressRule  = 2
+	)
+
+	checkAppliedTo := func(appliedTo []crdv1alpha1.NetworkPolicyPeer, appliedToScope int) (string, bool) {
+		appliedToSvcNum := 0
 		for _, eachAppliedTo := range appliedTo {
 			appliedToFieldsNum := numFieldsSetInPeer(eachAppliedTo)
 			if eachAppliedTo.Group != "" && appliedToFieldsNum > 1 {
@@ -481,26 +492,38 @@ func (v *antreaPolicyValidator) validateAppliedTo(ingress, egress []crdv1alpha1.
 			if eachAppliedTo.ServiceAccount != nil && appliedToFieldsNum > 1 {
 				return "serviceAccount cannot be set with other peers in appliedTo", false
 			}
+			if eachAppliedTo.Service != nil {
+				if appliedToFieldsNum > 1 {
+					return "service cannot be set with other peers in appliedTo", false
+				}
+				if appliedToScope == appliedToEgressRule || appliedToScope == appliedToPolicy && len(egress) > 0 {
+					return "egress rule cannot be applied to Services", false
+				}
+				appliedToSvcNum++
+			}
 			if reason, allowed := checkSelectorsLabels(eachAppliedTo.PodSelector, eachAppliedTo.NamespaceSelector, eachAppliedTo.ExternalEntitySelector); !allowed {
 				return reason, allowed
 			}
 		}
+		if appliedToSvcNum > 0 && appliedToSvcNum < len(appliedTo) {
+			return "a rule/policy cannot be applied to Services and other peers at the same time", false
+		}
 		return "", true
 	}
 
-	reason, allowed := checkAppliedTo(specAppliedTo)
+	reason, allowed := checkAppliedTo(specAppliedTo, appliedToPolicy)
 	if !allowed {
 		return reason, allowed
 	}
 
 	for _, eachIngress := range ingress {
-		reason, allowed = checkAppliedTo(eachIngress.AppliedTo)
+		reason, allowed = checkAppliedTo(eachIngress.AppliedTo, appliedToIngressRule)
 		if !allowed {
 			return reason, allowed
 		}
 	}
 	for _, eachEgress := range egress {
-		reason, allowed = checkAppliedTo(eachEgress.AppliedTo)
+		reason, allowed = checkAppliedTo(eachEgress.AppliedTo, appliedToEgressRule)
 		if !allowed {
 			return reason, allowed
 		}
@@ -550,6 +573,28 @@ func (v *antreaPolicyValidator) validatePeers(ingress, egress []crdv1alpha1.Rule
 		msg, isValid := checkPeers(rule.To)
 		if !isValid {
 			return msg, false
+		}
+	}
+	return "", true
+}
+
+// validateAppliedToServiceIngressPeer ensures that if a policy or an ingress rule
+// is applied to Services, the ingress rule can only use ipBlock to select workloads.
+func (v *antreaPolicyValidator) validateAppliedToServiceIngressPeer(specAppliedTo []crdv1alpha1.NetworkPolicyPeer, ingress []crdv1alpha1.Rule) (string, bool) {
+	isAppliedToService := func(peers []crdv1alpha1.NetworkPolicyPeer) bool {
+		if len(peers) > 0 {
+			return peers[0].Service != nil
+		}
+		return false
+	}
+	policyAppliedToService := isAppliedToService(specAppliedTo)
+	for _, rule := range ingress {
+		if policyAppliedToService || isAppliedToService(rule.AppliedTo) {
+			for _, peer := range rule.From {
+				if peer.IPBlock == nil || numFieldsSetInPeer(peer) > 1 {
+					return "a rule/policy that is applied to Services can only use ipBlock to select workloads", false
+				}
+			}
 		}
 	}
 	return "", true

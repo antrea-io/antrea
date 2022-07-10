@@ -231,7 +231,7 @@ func TestAddSingleGroupRule(t *testing.T) {
 		rule:          &rule{Direction: v1beta2.DirectionIn, Services: services},
 		FromAddresses: v1beta2.NewGroupMemberSet(newAddressGroupMember("1.1.1.1"), newAddressGroupMember("2.2.2.2")),
 		ToAddresses:   v1beta2.NewGroupMemberSet(),
-		TargetMembers: v1beta2.NewGroupMemberSet(newAppliedToGroupMember("pod1", "ns1")),
+		TargetMembers: v1beta2.NewGroupMemberSet(newAppliedToGroupMemberPod("pod1", "ns1")),
 	}
 	stopCh := make(chan struct{})
 	defer close(stopCh)
@@ -266,7 +266,7 @@ func TestAddSingleGroupRule(t *testing.T) {
 	assert.Equal(t, 0, controller.GetAppliedToGroupNum())
 
 	// appliedToGroup1 comes, policy1 will be synced.
-	appliedToGroupWatcher.Add(newAppliedToGroup("appliedToGroup1", []v1beta2.GroupMember{*newAppliedToGroupMember("pod1", "ns1")}))
+	appliedToGroupWatcher.Add(newAppliedToGroup("appliedToGroup1", []v1beta2.GroupMember{*newAppliedToGroupMemberPod("pod1", "ns1")}))
 	appliedToGroupWatcher.Action(watch.Bookmark, nil)
 	select {
 	case ruleID := <-reconciler.updated:
@@ -311,7 +311,7 @@ func TestAddMultipleGroupsRule(t *testing.T) {
 		rule:          &rule{Direction: v1beta2.DirectionIn, Services: services},
 		FromAddresses: v1beta2.NewGroupMemberSet(newAddressGroupMember("1.1.1.1"), newAddressGroupMember("2.2.2.2"), newAddressGroupMember("3.3.3.3")),
 		ToAddresses:   nil,
-		TargetMembers: v1beta2.NewGroupMemberSet(newAppliedToGroupMember("pod1", "ns1"), newAppliedToGroupMember("pod2", "ns2")),
+		TargetMembers: v1beta2.NewGroupMemberSet(newAppliedToGroupMemberPod("pod1", "ns1"), newAppliedToGroupMemberPod("pod2", "ns2")),
 	}
 	stopCh := make(chan struct{})
 	defer close(stopCh)
@@ -321,7 +321,7 @@ func TestAddMultipleGroupsRule(t *testing.T) {
 	addressGroupWatcher.Add(newAddressGroup("addressGroup1", []v1beta2.GroupMember{*newAddressGroupMember("1.1.1.1"), *newAddressGroupMember("2.2.2.2")}))
 	addressGroupWatcher.Action(watch.Bookmark, nil)
 	// appliedToGroup1 comes, no rule will be synced.
-	appliedToGroupWatcher.Add(newAppliedToGroup("appliedToGroup1", []v1beta2.GroupMember{*newAppliedToGroupMember("pod1", "ns1")}))
+	appliedToGroupWatcher.Add(newAppliedToGroup("appliedToGroup1", []v1beta2.GroupMember{*newAppliedToGroupMemberPod("pod1", "ns1")}))
 	appliedToGroupWatcher.Action(watch.Bookmark, nil)
 	// policy1 comes first, no rule will be synced due to missing addressGroup2 and appliedToGroup2.
 	policy1 := newNetworkPolicy("policy1", "uid1", []string{"addressGroup1", "addressGroup2"}, []string{}, []string{"appliedToGroup1", "appliedToGroup2"}, services)
@@ -348,7 +348,7 @@ func TestAddMultipleGroupsRule(t *testing.T) {
 		assert.ElementsMatch(t, actualRule.Services, desiredRule.Services)
 		assert.Equal(t, actualRule.FromAddresses, desiredRule.FromAddresses)
 		assert.Equal(t, actualRule.ToAddresses, desiredRule.ToAddresses)
-		assert.Equal(t, actualRule.TargetMembers, v1beta2.NewGroupMemberSet(newAppliedToGroupMember("pod1", "ns1")))
+		assert.Equal(t, actualRule.TargetMembers, v1beta2.NewGroupMemberSet(newAppliedToGroupMemberPod("pod1", "ns1")))
 	case <-time.After(time.Millisecond * 100):
 		t.Fatal("Expected one update, got none")
 	}
@@ -357,7 +357,7 @@ func TestAddMultipleGroupsRule(t *testing.T) {
 	assert.Equal(t, 1, controller.GetAppliedToGroupNum())
 
 	// appliedToGroup2 comes, policy1 will be synced with the TargetMembers populated from appliedToGroup1 and appliedToGroup2.
-	appliedToGroupWatcher.Add(newAppliedToGroup("appliedToGroup2", []v1beta2.GroupMember{*newAppliedToGroupMember("pod2", "ns2")}))
+	appliedToGroupWatcher.Add(newAppliedToGroup("appliedToGroup2", []v1beta2.GroupMember{*newAppliedToGroupMemberPod("pod2", "ns2")}))
 	select {
 	case ruleID := <-reconciler.updated:
 		actualRule, _ := reconciler.getLastRealized(ruleID)
@@ -393,7 +393,7 @@ func TestDeleteRule(t *testing.T) {
 
 	addressGroupWatcher.Add(newAddressGroup("addressGroup1", []v1beta2.GroupMember{*newAddressGroupMember("1.1.1.1"), *newAddressGroupMember("2.2.2.2")}))
 	addressGroupWatcher.Action(watch.Bookmark, nil)
-	appliedToGroupWatcher.Add(newAppliedToGroup("appliedToGroup1", []v1beta2.GroupMember{*newAppliedToGroupMember("pod1", "ns1")}))
+	appliedToGroupWatcher.Add(newAppliedToGroup("appliedToGroup1", []v1beta2.GroupMember{*newAppliedToGroupMemberPod("pod1", "ns1")}))
 	appliedToGroupWatcher.Action(watch.Bookmark, nil)
 	networkPolicyWatcher.Add(newNetworkPolicy("policy1", "uid1", []string{"addressGroup1"}, []string{}, []string{"appliedToGroup1"}, services))
 	networkPolicyWatcher.Action(watch.Bookmark, nil)
@@ -439,13 +439,13 @@ func TestAddNetworkPolicyWithMultipleRules(t *testing.T) {
 		rule:          &rule{Direction: v1beta2.DirectionIn, Services: services},
 		FromAddresses: v1beta2.NewGroupMemberSet(newAddressGroupMember("1.1.1.1"), newAddressGroupMember("2.2.2.2")),
 		ToAddresses:   v1beta2.NewGroupMemberSet(),
-		TargetMembers: v1beta2.NewGroupMemberSet(newAppliedToGroupMember("pod1", "ns1")),
+		TargetMembers: v1beta2.NewGroupMemberSet(newAppliedToGroupMemberPod("pod1", "ns1")),
 	}
 	desiredRule2 := &CompletedRule{
 		rule:          &rule{Direction: v1beta2.DirectionOut, Services: services},
 		FromAddresses: v1beta2.NewGroupMemberSet(),
 		ToAddresses:   v1beta2.NewGroupMemberSet(newAddressGroupMember("3.3.3.3"), newAddressGroupMember("4.4.4.4")),
-		TargetMembers: v1beta2.NewGroupMemberSet(newAppliedToGroupMember("pod1", "ns1")),
+		TargetMembers: v1beta2.NewGroupMemberSet(newAppliedToGroupMemberPod("pod1", "ns1")),
 	}
 	stopCh := make(chan struct{})
 	defer close(stopCh)
@@ -458,7 +458,7 @@ func TestAddNetworkPolicyWithMultipleRules(t *testing.T) {
 	addressGroupWatcher.Add(newAddressGroup("addressGroup1", []v1beta2.GroupMember{*newAddressGroupMember("1.1.1.1"), *newAddressGroupMember("2.2.2.2")}))
 	addressGroupWatcher.Add(newAddressGroup("addressGroup2", []v1beta2.GroupMember{*newAddressGroupMember("3.3.3.3"), *newAddressGroupMember("4.4.4.4")}))
 	addressGroupWatcher.Action(watch.Bookmark, nil)
-	appliedToGroupWatcher.Add(newAppliedToGroup("appliedToGroup1", []v1beta2.GroupMember{*newAppliedToGroupMember("pod1", "ns1")}))
+	appliedToGroupWatcher.Add(newAppliedToGroup("appliedToGroup1", []v1beta2.GroupMember{*newAppliedToGroupMemberPod("pod1", "ns1")}))
 	appliedToGroupWatcher.Action(watch.Bookmark, nil)
 	for i := 0; i < 2; i++ {
 		select {
@@ -594,7 +594,7 @@ func TestNetworkPolicyMetrics(t *testing.T) {
 	policy1 := newNetworkPolicy("policy1", "uid1", []string{"addressGroup1"}, []string{}, []string{"appliedToGroup1"}, services)
 	addressGroupWatcher.Add(newAddressGroup("addressGroup1", []v1beta2.GroupMember{*newAddressGroupMember("1.1.1.1"), *newAddressGroupMember("2.2.2.2")}))
 	addressGroupWatcher.Action(watch.Bookmark, nil)
-	appliedToGroupWatcher.Add(newAppliedToGroup("appliedToGroup1", []v1beta2.GroupMember{*newAppliedToGroupMember("pod1", "ns1")}))
+	appliedToGroupWatcher.Add(newAppliedToGroup("appliedToGroup1", []v1beta2.GroupMember{*newAppliedToGroupMemberPod("pod1", "ns1")}))
 	appliedToGroupWatcher.Action(watch.Bookmark, nil)
 	networkPolicyWatcher.Add(policy1)
 	networkPolicyWatcher.Action(watch.Bookmark, nil)
@@ -605,7 +605,7 @@ func TestNetworkPolicyMetrics(t *testing.T) {
 	policy2 := newNetworkPolicyWithMultipleRules("policy2", "uid2", []string{"addressGroup2"}, []string{"addressGroup2"}, []string{"appliedToGroup2"}, services)
 	addressGroupWatcher.Add(newAddressGroup("addressGroup2", []v1beta2.GroupMember{*newAddressGroupMember("3.3.3.3"), *newAddressGroupMember("4.4.4.4")}))
 	addressGroupWatcher.Action(watch.Bookmark, nil)
-	appliedToGroupWatcher.Add(newAppliedToGroup("appliedToGroup2", []v1beta2.GroupMember{*newAppliedToGroupMember("pod2", "ns2")}))
+	appliedToGroupWatcher.Add(newAppliedToGroup("appliedToGroup2", []v1beta2.GroupMember{*newAppliedToGroupMemberPod("pod2", "ns2")}))
 	appliedToGroupWatcher.Action(watch.Bookmark, nil)
 	networkPolicyWatcher.Add(policy2)
 	waitForReconcilerUpdated()
@@ -674,7 +674,7 @@ func TestValidate(t *testing.T) {
 	groups := v1beta2.GroupMemberSet{}
 	groupAddress1, groupAddress2 := "225.1.2.3", "225.1.2.4"
 
-	groups["ns1/pod1"] = newAppliedToGroupMember("pod1", "ns1")
+	groups["ns1/pod1"] = newAppliedToGroupMemberPod("pod1", "ns1")
 	controller.ruleCache.appliedToSetByGroup["appliedToGroup01"] = groups
 	controller.ruleCache.rules.Add(rule1)
 	controller.ruleCache.rules.Add(rule2)

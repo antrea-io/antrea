@@ -19,6 +19,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -450,13 +451,7 @@ func (c *ruleCache) processGroupIDUpdates() {
 	for {
 		select {
 		case svcStr := <-c.groupIDUpdates:
-			toSvcRules, err := c.rules.ByIndex(toServicesIndex, svcStr)
-			if err != nil {
-				continue
-			}
-			for _, toSvcRule := range toSvcRules {
-				c.dirtyRuleHandler(toSvcRule.(*rule).ID)
-			}
+			c.processServiceGroupIDUpdate(svcStr)
 		}
 	}
 }
@@ -910,4 +905,36 @@ func (c *ruleCache) unionAppliedToGroups(groupNames []string) (v1beta.GroupMembe
 		set.Merge(curSet)
 	}
 	return set, anyExists
+}
+
+// processServiceGroupIDUpdate gets names of AppliedToGroup by Service NamespacedName.
+func (c *ruleCache) processServiceGroupIDUpdate(svcStr string) {
+	c.appliedToSetLock.RLock()
+	defer c.appliedToSetLock.RUnlock()
+
+	// Reprocess rules if the Service referred by this rule's ToServices has updated.
+	toSvcRules, err := c.rules.ByIndex(toServicesIndex, svcStr)
+	if err != nil {
+		return
+	}
+	for _, toSvcRule := range toSvcRules {
+		c.dirtyRuleHandler(toSvcRule.(*rule).ID)
+	}
+
+	// Reprocess rules if the Service referred by rule's AppliedToGroup has updated.
+	strListSvcRef := strings.Split(svcStr, "/")
+	if len(strListSvcRef) != 2 {
+		return
+	}
+	member := &v1beta.GroupMember{
+		Service: &v1beta.ServiceReference{
+			Name:      strListSvcRef[1],
+			Namespace: strListSvcRef[0],
+		},
+	}
+	for group, memberSet := range c.appliedToSetByGroup {
+		if memberSet.Has(member) {
+			c.onAppliedToGroupUpdate(group)
+		}
+	}
 }

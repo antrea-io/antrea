@@ -162,9 +162,10 @@ type lastRealized struct {
 	// the fqdn selector of this policy rule. It must be empty for policy rule
 	// that is not egress and does not have toFQDN field.
 	fqdnIPAddresses sets.String
-	// groupIDAddresses tracks the last realized set of groupIDs resolved for
-	// the toServices of this policy rule. It must be empty for policy rule
-	// that is not egress and does not have toServices field.
+	// groupIDAddresses tracks the last realized set of groupIDs resolved for the
+	// toServices of this policy rule or services of TargetMember of this policy rule.
+	// It must be empty for policy rule that is neither an egress rule with toServices
+	// field nor an ingress rule that is applied to Services.
 	groupIDAddresses sets.Int64
 	// groupAddresses track the latest realized set of multicast groups for the multicast traffic
 	groupAddresses sets.String
@@ -541,18 +542,31 @@ func (r *reconciler) computeOFRulesForAdd(rule *CompletedRule, ofPriority *uint1
 		return ofRuleByServicesMap, lastRealized
 	}
 	if rule.Direction == v1beta2.DirectionIn {
+		isRuleAppliedToService := isRuleAppliedToService(rule.TargetMembers)
 		// Addresses got from source GroupMembers' IPs.
 		from1 := groupMembersToOFAddresses(rule.FromAddresses)
 		// Get addresses that in From IPBlock but not in Except IPBlocks.
-		from2 := ipBlocksToOFAddresses(rule.From.IPBlocks, r.ipv4Enabled, r.ipv6Enabled)
+		from2 := ipBlocksToOFAddresses(rule.From.IPBlocks, r.ipv4Enabled, r.ipv6Enabled, isRuleAppliedToService)
 		membersByServicesMap, servicesMap := groupMembersByServices(rule.Services, rule.TargetMembers)
 		for svcKey, members := range membersByServicesMap {
-			ofPorts := r.getOFPorts(members)
-			lastRealized.podOFPorts[svcKey] = ofPorts
+			toAddresses := make([]types.Address, 0)
+			if isRuleAppliedToService {
+				addressSet := sets.NewInt64()
+				for _, member := range members.Items() {
+					curAddresses, curAddressSet := r.svcRefToOFAddresses(*member.Service)
+					toAddresses = append(toAddresses, curAddresses...)
+					addressSet = addressSet.Union(curAddressSet)
+				}
+				lastRealized.groupIDAddresses = addressSet
+			} else {
+				ofPorts := r.getOFPorts(members)
+				toAddresses = ofPortsToOFAddresses(ofPorts)
+				lastRealized.podOFPorts[svcKey] = ofPorts
+			}
 			ofRuleByServicesMap[svcKey] = &types.PolicyRule{
 				Direction:     v1beta2.DirectionIn,
 				From:          append(from1, from2...),
-				To:            ofPortsToOFAddresses(ofPorts),
+				To:            toAddresses,
 				Service:       filterUnresolvablePort(servicesMap[svcKey]),
 				Action:        rule.Action,
 				Name:          rule.Name,
@@ -617,7 +631,7 @@ func (r *reconciler) computeOFRulesForAdd(rule *CompletedRule, ofPriority *uint1
 			}
 			if len(rule.To.IPBlocks) > 0 {
 				// Diff Addresses between To and Except of IPBlocks
-				to := ipBlocksToOFAddresses(rule.To.IPBlocks, r.ipv4Enabled, r.ipv6Enabled)
+				to := ipBlocksToOFAddresses(rule.To.IPBlocks, r.ipv4Enabled, r.ipv6Enabled, false)
 				ofRule.To = append(ofRule.To, to...)
 			}
 			if r.fqdnController != nil && len(rule.To.FQDNs) > 0 {
@@ -636,12 +650,9 @@ func (r *reconciler) computeOFRulesForAdd(rule *CompletedRule, ofPriority *uint1
 				var addresses []types.Address
 				addressSet := sets.NewInt64()
 				for _, svcRef := range rule.To.ToServices {
-					for _, groupCounter := range r.groupCounters {
-						for _, groupID := range groupCounter.GetAllGroupIDs(k8s.NamespacedName(svcRef.Namespace, svcRef.Name)) {
-							addresses = append(addresses, openflow.NewServiceGroupIDAddress(groupID))
-							addressSet.Insert(int64(groupID))
-						}
-					}
+					curAddresses, curAddressSet := r.svcRefToOFAddresses(svcRef)
+					addresses = append(addresses, curAddresses...)
+					addressSet = addressSet.Union(curAddressSet)
 				}
 				ofRule.To = append(ofRule.To, addresses...)
 				// If the rule installation fails, this will be reset.
@@ -742,21 +753,33 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule, 
 	// As rule identifier is calculated from the rule's content, the update can
 	// only happen to Group members.
 	if newRule.Direction == v1beta2.DirectionIn {
+		isRuleAppliedToService := isRuleAppliedToService(newRule.TargetMembers)
 		from1 := groupMembersToOFAddresses(newRule.FromAddresses)
-		from2 := ipBlocksToOFAddresses(newRule.From.IPBlocks, r.ipv4Enabled, r.ipv6Enabled)
+		from2 := ipBlocksToOFAddresses(newRule.From.IPBlocks, r.ipv4Enabled, r.ipv6Enabled, isRuleAppliedToService)
 		addedFrom := ipsToOFAddresses(newRule.FromAddresses.IPDifference(lastRealized.FromAddresses))
 		deletedFrom := ipsToOFAddresses(lastRealized.FromAddresses.IPDifference(newRule.FromAddresses))
 
 		membersByServicesMap, servicesMap := groupMembersByServices(newRule.Services, newRule.TargetMembers)
 		for svcKey, members := range membersByServicesMap {
 			newOFPorts := r.getOFPorts(members)
+			newGroupIDAddressSet := sets.NewInt64()
 			ofID, exists := lastRealized.ofIDs[svcKey]
+			toAddresses := make([]types.Address, 0)
+			if isRuleAppliedToService {
+				for _, member := range members.Items() {
+					curAddresses, curAddressSet := r.svcRefToOFAddresses(*member.Service)
+					toAddresses = append(toAddresses, curAddresses...)
+					newGroupIDAddressSet = newGroupIDAddressSet.Union(curAddressSet)
+				}
+			} else {
+				toAddresses = ofPortsToOFAddresses(newOFPorts)
+			}
 			// Install a new Openflow rule if this group doesn't exist, otherwise do incremental update.
 			if !exists {
 				ofRule := &types.PolicyRule{
 					Direction:     v1beta2.DirectionIn,
 					From:          append(from1, from2...),
-					To:            ofPortsToOFAddresses(newOFPorts),
+					To:            toAddresses,
 					Service:       filterUnresolvablePort(servicesMap[svcKey]),
 					Action:        newRule.Action,
 					Priority:      ofPriority,
@@ -776,6 +799,21 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule, 
 			} else {
 				addedTo := ofPortsToOFAddresses(newOFPorts.Difference(lastRealized.podOFPorts[svcKey]))
 				deletedTo := ofPortsToOFAddresses(lastRealized.podOFPorts[svcKey].Difference(newOFPorts))
+				if isRuleAppliedToService {
+					originalGroupIDAddressSet := sets.NewInt64()
+					if lastRealized.groupIDAddresses != nil {
+						originalGroupIDAddressSet = lastRealized.groupIDAddresses
+					}
+					addedGroupIDAddress := newGroupIDAddressSet.Difference(originalGroupIDAddressSet)
+					removedGroupIDAddress := originalGroupIDAddressSet.Difference(newGroupIDAddressSet)
+					for a := range addedGroupIDAddress {
+						addedTo = append(addedTo, openflow.NewServiceGroupIDAddress(binding.GroupIDType(a)))
+					}
+					for r := range removedGroupIDAddress {
+						deletedTo = append(deletedTo, openflow.NewServiceGroupIDAddress(binding.GroupIDType(r)))
+					}
+					lastRealized.groupIDAddresses = newGroupIDAddressSet
+				}
 				if err := r.updateOFRule(ofID, addedFrom, addedTo, deletedFrom, deletedTo, ofPriority); err != nil {
 					return err
 				}
@@ -822,7 +860,7 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule, 
 				// If the PolicyRule for the original services doesn't exist and IPBlocks is present, it means the
 				// reconciler hasn't installed flows for IPBlocks, then it must be added to the new PolicyRule.
 				if svcKey == originalSvcKey && len(newRule.To.IPBlocks) > 0 {
-					to := ipBlocksToOFAddresses(newRule.To.IPBlocks, r.ipv4Enabled, r.ipv6Enabled)
+					to := ipBlocksToOFAddresses(newRule.To.IPBlocks, r.ipv4Enabled, r.ipv6Enabled, false)
 					ofRule.To = append(ofRule.To, to...)
 				}
 				err := r.idAllocator.allocateForRule(ofRule)
@@ -862,11 +900,8 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule, 
 				}
 				if len(newRule.To.ToServices) > 0 {
 					for _, svcRef := range newRule.To.ToServices {
-						for _, groupCounter := range r.groupCounters {
-							for _, groupID := range groupCounter.GetAllGroupIDs(k8s.NamespacedName(svcRef.Namespace, svcRef.Name)) {
-								newGroupIDAddressSet.Insert(int64(groupID))
-							}
-						}
+						_, groupIDSets := r.svcRefToOFAddresses(svcRef)
+						newGroupIDAddressSet = newGroupIDAddressSet.Union(groupIDSets)
 					}
 					addedGroupIDAddress := newGroupIDAddressSet.Difference(originalGroupIDAddressSet)
 					removedGroupIDAddress := originalGroupIDAddressSet.Difference(newGroupIDAddressSet)
@@ -1108,6 +1143,18 @@ func ofPortsToOFAddresses(ofPorts sets.Int32) []types.Address {
 	return addresses
 }
 
+func (r *reconciler) svcRefToOFAddresses(svcRef v1beta2.ServiceReference) ([]types.Address, sets.Int64) {
+	var addresses []types.Address
+	addressSet := sets.NewInt64()
+	for _, groupCounter := range r.groupCounters {
+		for _, groupID := range groupCounter.GetAllGroupIDs(k8s.NamespacedName(svcRef.Namespace, svcRef.Name)) {
+			addresses = append(addresses, openflow.NewServiceGroupIDAddress(groupID))
+			addressSet.Insert(int64(groupID))
+		}
+	}
+	return addresses, addressSet
+}
+
 func groupMembersToOFAddresses(groupMemberSet v1beta2.GroupMemberSet) []types.Address {
 	// Must not return nil as it means not restricted by addresses in Openflow implementation.
 	addresses := make([]types.Address, 0, len(groupMemberSet))
@@ -1119,7 +1166,7 @@ func groupMembersToOFAddresses(groupMemberSet v1beta2.GroupMemberSet) []types.Ad
 	return addresses
 }
 
-func ipBlocksToOFAddresses(ipBlocks []v1beta2.IPBlock, ipv4Enabled, ipv6Enabled bool) []types.Address {
+func ipBlocksToOFAddresses(ipBlocks []v1beta2.IPBlock, ipv4Enabled, ipv6Enabled, ctMatch bool) []types.Address {
 	// Must not return nil as it means not restricted by addresses in Openflow implementation.
 	addresses := make([]types.Address, 0)
 	for _, b := range ipBlocks {
@@ -1140,7 +1187,11 @@ func ipBlocksToOFAddresses(ipBlocks []v1beta2.IPBlock, ipv4Enabled, ipv6Enabled 
 			continue
 		}
 		for _, d := range diffCIDRs {
-			addresses = append(addresses, openflow.NewIPNetAddress(*d))
+			if ctMatch {
+				addresses = append(addresses, openflow.NewCTIPNetAddress(*d))
+			} else {
+				addresses = append(addresses, openflow.NewIPNetAddress(*d))
+			}
 		}
 	}
 
@@ -1203,4 +1254,15 @@ func resolveService(service *v1beta2.Service, member *v1beta2.GroupMember) *v1be
 	// If not resolvable, return it as is.
 	// The group members that cannot resolve it will be grouped together.
 	return service
+}
+
+func isRuleAppliedToService(memberSet v1beta2.GroupMemberSet) bool {
+	for _, member := range memberSet.Items() {
+		if member.Service != nil {
+			return true
+		} else {
+			return false
+		}
+	}
+	return false
 }

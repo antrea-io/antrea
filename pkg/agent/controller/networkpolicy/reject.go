@@ -74,6 +74,10 @@ const (
 	// Service traffic, when AntreaProxy is disabled. The EndpointPod is on a remote
 	// Node and the dstPod of the reject response is on the local Node.
 	RejectNoAPServiceRemoteToLocal
+	// RejectServiceRemoteToExternal represents this packetOut is used to reject
+	// Service traffic, when AntreaProxy is enabled. The EndpointPod is on a remote
+	// Node and the destination of the reject response is an external client.
+	RejectServiceRemoteToExternal
 	// Unsupported indicates that Antrea couldn't generate packetOut for current
 	// packetIn.
 	Unsupported
@@ -139,6 +143,9 @@ func (c *Controller) rejectRequest(pktIn *ofctrl.PacketIn) error {
 	packetOutType := getRejectType(isServiceTraffic(), c.antreaProxyEnabled, srcFound, dstFound)
 	if packetOutType == Unsupported {
 		return fmt.Errorf("error when generating reject response for the packet from: %s to %s: neither source nor destination are on this Node", dstIP, srcIP)
+	}
+	if packetOutType == RejectServiceRemoteToExternal {
+		dstMAC = "aa:bb:cc:dd:ee:ff"
 	}
 	// When in AntreaIPAM mode, even though srcPod and dstPod are on the same Node, MAC
 	// will still be re-written in L3ForwardingTable. During rejection, the reject
@@ -242,7 +249,7 @@ func getRejectType(isServiceTraffic, antreaProxyEnabled, srcIsLocal, dstIsLocal 
 	if dstIsLocal {
 		return RejectServiceRemoteToLocal
 	}
-	return Unsupported
+	return RejectServiceRemoteToExternal
 }
 
 // getRejectOFPorts returns the inPort and outPort of a packetOut based on the RejectType.
@@ -268,6 +275,8 @@ func getRejectOFPorts(rejectType RejectType, sIface, dIface *interfacestore.Inte
 	case RejectNoAPServiceRemoteToLocal:
 		inPort = tunOFPort
 		outPort = gwOFPort
+	case RejectServiceRemoteToExternal:
+		inPort = tunOFPort
 	}
 	return inPort, outPort
 }

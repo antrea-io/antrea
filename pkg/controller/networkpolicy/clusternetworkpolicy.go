@@ -510,6 +510,8 @@ func (n *NetworkPolicyController) processClusterAppliedTo(appliedTo []crdv1alpha
 		var atg string
 		if at.Group != "" {
 			atg = n.processAppliedToGroupForCG(at.Group)
+		} else if at.Service != nil {
+			atg = n.createAppliedToGroupForService(at.Service)
 		} else if at.ServiceAccount != nil {
 			atg = n.createAppliedToGroup(at.ServiceAccount.Namespace, serviceAccountNameToPodSelector(at.ServiceAccount.Name), nil, nil)
 		} else {

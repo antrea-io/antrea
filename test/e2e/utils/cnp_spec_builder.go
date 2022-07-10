@@ -32,6 +32,7 @@ type ACNPAppliedToSpec struct {
 	PodSelectorMatchExp []metav1.LabelSelectorRequirement
 	NSSelectorMatchExp  []metav1.LabelSelectorRequirement
 	Group               string
+	Service             *crdv1alpha1.NamespacedName
 }
 
 func (b *ClusterNetworkPolicySpecBuilder) Get() *crdv1alpha1.ClusterNetworkPolicy {
@@ -66,7 +67,7 @@ func (b *ClusterNetworkPolicySpecBuilder) SetTier(tier string) *ClusterNetworkPo
 
 func (b *ClusterNetworkPolicySpecBuilder) SetAppliedToGroup(specs []ACNPAppliedToSpec) *ClusterNetworkPolicySpecBuilder {
 	for _, spec := range specs {
-		appliedToPeer := b.GetAppliedToPeer(spec.PodSelector, spec.NSSelector, spec.PodSelectorMatchExp, spec.NSSelectorMatchExp, spec.Group)
+		appliedToPeer := b.GetAppliedToPeer(spec.PodSelector, spec.NSSelector, spec.PodSelectorMatchExp, spec.NSSelectorMatchExp, spec.Group, spec.Service)
 		b.Spec.AppliedTo = append(b.Spec.AppliedTo, appliedToPeer)
 	}
 	return b
@@ -76,7 +77,8 @@ func (b *ClusterNetworkPolicySpecBuilder) GetAppliedToPeer(podSelector map[strin
 	nsSelector map[string]string,
 	podSelectorMatchExp []metav1.LabelSelectorRequirement,
 	nsSelectorMatchExp []metav1.LabelSelectorRequirement,
-	appliedToCG string) crdv1alpha1.NetworkPolicyPeer {
+	appliedToCG string,
+	service *crdv1alpha1.NamespacedName) crdv1alpha1.NetworkPolicyPeer {
 
 	var ps *metav1.LabelSelector
 	var ns *metav1.LabelSelector
@@ -99,6 +101,9 @@ func (b *ClusterNetworkPolicySpecBuilder) GetAppliedToPeer(podSelector map[strin
 	}
 	if appliedToCG != "" {
 		peer.Group = appliedToCG
+	}
+	if service != nil {
+		peer.Service = service
 	}
 	return peer
 }
@@ -143,7 +148,7 @@ func (b *ClusterNetworkPolicySpecBuilder) AddIngress(protoc AntreaPolicyProtocol
 		}
 	}
 	for _, at := range ruleAppliedToSpecs {
-		appliedTos = append(appliedTos, b.GetAppliedToPeer(at.PodSelector, at.NSSelector, at.PodSelectorMatchExp, at.NSSelectorMatchExp, at.Group))
+		appliedTos = append(appliedTos, b.GetAppliedToPeer(at.PodSelector, at.NSSelector, at.PodSelectorMatchExp, at.NSSelectorMatchExp, at.Group, at.Service))
 	}
 	// An empty From/To in ACNP rules evaluates to match all addresses.
 	policyPeer := make([]crdv1alpha1.NetworkPolicyPeer, 0)
@@ -197,7 +202,7 @@ func (b *ClusterNetworkPolicySpecBuilder) AddNodeSelectorRule(nodeSelector *meta
 	ruleAppliedToSpecs []ACNPAppliedToSpec, action crdv1alpha1.RuleAction, isEgress bool) *ClusterNetworkPolicySpecBuilder {
 	var appliedTos []crdv1alpha1.NetworkPolicyPeer
 	for _, at := range ruleAppliedToSpecs {
-		appliedTos = append(appliedTos, b.GetAppliedToPeer(at.PodSelector, at.NSSelector, at.PodSelectorMatchExp, at.NSSelectorMatchExp, at.Group))
+		appliedTos = append(appliedTos, b.GetAppliedToPeer(at.PodSelector, at.NSSelector, at.PodSelectorMatchExp, at.NSSelectorMatchExp, at.Group, at.Service))
 	}
 	policyPeer := []crdv1alpha1.NetworkPolicyPeer{{NodeSelector: nodeSelector}}
 	k8sProtocol, _ := AntreaPolicyProtocolToK8sProtocol(protoc)
@@ -224,7 +229,7 @@ func (b *ClusterNetworkPolicySpecBuilder) AddFQDNRule(fqdn string,
 	ruleAppliedToSpecs []ACNPAppliedToSpec, action crdv1alpha1.RuleAction) *ClusterNetworkPolicySpecBuilder {
 	var appliedTos []crdv1alpha1.NetworkPolicyPeer
 	for _, at := range ruleAppliedToSpecs {
-		appliedTos = append(appliedTos, b.GetAppliedToPeer(at.PodSelector, at.NSSelector, at.PodSelectorMatchExp, at.NSSelectorMatchExp, at.Group))
+		appliedTos = append(appliedTos, b.GetAppliedToPeer(at.PodSelector, at.NSSelector, at.PodSelectorMatchExp, at.NSSelectorMatchExp, at.Group, at.Service))
 	}
 	policyPeer := []crdv1alpha1.NetworkPolicyPeer{{FQDN: fqdn}}
 	ports, _ := GenPortsOrProtocols(protoc, port, portName, endPort, nil, nil, nil, nil)
@@ -243,7 +248,7 @@ func (b *ClusterNetworkPolicySpecBuilder) AddToServicesRule(svcRefs []crdv1alpha
 	name string, ruleAppliedToSpecs []ACNPAppliedToSpec, action crdv1alpha1.RuleAction) *ClusterNetworkPolicySpecBuilder {
 	var appliedTos []crdv1alpha1.NetworkPolicyPeer
 	for _, at := range ruleAppliedToSpecs {
-		appliedTos = append(appliedTos, b.GetAppliedToPeer(at.PodSelector, at.NSSelector, at.PodSelectorMatchExp, at.NSSelectorMatchExp, at.Group))
+		appliedTos = append(appliedTos, b.GetAppliedToPeer(at.PodSelector, at.NSSelector, at.PodSelectorMatchExp, at.NSSelectorMatchExp, at.Group, at.Service))
 	}
 	newRule := crdv1alpha1.Rule{
 		To:         make([]crdv1alpha1.NetworkPolicyPeer, 0),
