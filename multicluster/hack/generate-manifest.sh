@@ -27,6 +27,7 @@ Generate a YAML manifest for Antrea MultiCluster using Kustomize and print it to
         --leader  | -l                      Generate a per-namespace manifest for a Cluster as leader in a ClusterSet.
                                             All resources will be in the given namespace
         --member  | -m                      Generate a manifest for a Cluster as member in a ClusterSet
+        --coverage| -c                      Generate a manifest which supports measuring code coverage
         --help    | -h                      Print this message and exit
 
 Environment variables IMG_NAME and IMG_TAG must be set when release mode is enabled.
@@ -43,6 +44,7 @@ function print_help {
 OVERLAY=member
 NAMESPACE=antrea-multicluster
 MODE=""
+COVERAGE=false
 
 while [[ $# -gt 0 ]]
 do
@@ -50,6 +52,10 @@ key="$1"
 case $key in
     --release|-r)
     MODE="release"
+    shift
+    ;;
+    --coverage|-c)
+    COVERAGE=true
     shift
     ;;
     --leader|-l)
@@ -113,7 +119,7 @@ then
     cp $KUSTOMIZATION_DIR/overlays/leader-ns/prefix_transformer.yaml .
     sed -ie "s/antrea-multicluster/$NAMESPACE/g" prefix_transformer.yaml
 
-cat << EOF > kustomization.yaml
+    cat << EOF > kustomization.yaml
 namespace: $NAMESPACE
 
 bases:
@@ -122,8 +128,13 @@ bases:
 transformers:
   - prefix_transformer.yaml
 EOF
+
+    if $COVERAGE; then
+        cp ../../overlays/$OVERLAY/coverage/manager_command_patch_coverage.yaml .
+        $KUSTOMIZE edit add patch --path ./manager_command_patch_coverage.yaml
+    fi
 else
-cat << EOF > kustomization.yaml
+    cat << EOF > kustomization.yaml
 bases:
   - ../overlays/$OVERLAY
 EOF
@@ -134,5 +145,11 @@ if [ "$MODE" == "release" ]; then
 else
     $KUSTOMIZE edit set image antrea/antrea-mc-controller=projects.registry.vmware.com/antrea/antrea-mc-controller:latest
 fi
+
+if [ "$OVERLAY" == "member" ] && $COVERAGE; then
+    cp ../overlays/$OVERLAY/coverage/manager_command_patch_coverage.yaml .
+    $KUSTOMIZE edit add patch --path ./manager_command_patch_coverage.yaml
+fi
+
 $KUSTOMIZE build
 rm -rf $TMP_DIR

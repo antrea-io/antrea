@@ -34,6 +34,8 @@ EAST_CLUSTER_CONFIG="--kubeconfig=$MULTICLUSTER_KUBECONFIG_PATH/east"
 WEST_CLUSTER_CONFIG="--kubeconfig=$MULTICLUSTER_KUBECONFIG_PATH/west"
 ENABLE_MC_GATEWAY=false
 IS_CONTAINERD=false
+CODECOV_TOKEN=""
+COVERAGE=false
 
 multicluster_kubeconfigs=($EAST_CLUSTER_CONFIG $LEADER_CLUSTER_CONFIG $WEST_CLUSTER_CONFIG)
 membercluster_kubeconfigs=($EAST_CLUSTER_CONFIG $WEST_CLUSTER_CONFIG)
@@ -42,7 +44,7 @@ membercluster_kubeconfigs=($EAST_CLUSTER_CONFIG $WEST_CLUSTER_CONFIG)
 CLEAN_STALE_IMAGES="docker system prune --force --all --filter until=48h"
 
 _usage="Usage: $0 [--kubeconfigs-path <KubeconfigSavePath>] [--workdir <HomePath>]
-                  [--testcase <e2e>] [--mc-gateway]
+                  [--testcase <e2e>] [--mc-gateway] [--codecov-token] [--coverage]
 
 Run Antrea multi-cluster e2e tests on a remote (Jenkins) Linux Cluster Set.
 
@@ -50,7 +52,9 @@ Run Antrea multi-cluster e2e tests on a remote (Jenkins) Linux Cluster Set.
         --workdir                     Home path for Go, vSphere information and antrea_logs during cluster setup. Default is $WORKDIR.
         --testcase                    Antrea multi-cluster e2e test cases on a Linux cluster set.
         --registry                    The docker registry to use instead of dockerhub.
-        --mc-gateway                  Enable Multicluster Gateway."
+        --mc-gateway                  Enable Multicluster Gateway.
+        --codecov-token               Token used to upload coverage report(s) to Codecov.
+        --coverage                    Run e2e with coverage."
 
 function print_usage {
     echoerr "$_usage"
@@ -80,6 +84,14 @@ case $key in
     ;;
     --mc-gateway)
     ENABLE_MC_GATEWAY=true
+    shift
+    ;;
+    --codecov-token)
+    CODECOV_TOKEN="$2"
+    shift 2
+    ;;
+    --coverage)
+    COVERAGE=true
     shift
     ;;
     -h|--help)
@@ -161,10 +173,9 @@ function wait_for_antrea_multicluster_pods_ready {
 function wait_for_multicluster_controller_ready {
     echo "====== Deploying Antrea Multicluster Leader Cluster with ${LEADER_CLUSTER_CONFIG} ======"
     kubectl create ns antrea-multicluster  "${LEADER_CLUSTER_CONFIG}" || true
-    kubectl apply -f ./multicluster/test/yamls/manifest.yml "${LEADER_CLUSTER_CONFIG}"
     kubectl apply -f ./multicluster/build/yamls/antrea-multicluster-leader-global.yml "${LEADER_CLUSTER_CONFIG}"
+    kubectl apply -f ./multicluster/test/yamls/leader-manifest.yml "${LEADER_CLUSTER_CONFIG}"
     kubectl rollout status deployment/antrea-mc-controller -n antrea-multicluster "${LEADER_CLUSTER_CONFIG}" || true
-    kubectl apply -f ./multicluster/test/yamls/manifest.yml "${LEADER_CLUSTER_CONFIG}"
     kubectl create -f ./multicluster/test/yamls/leader-access-token-secret.yml "${LEADER_CLUSTER_CONFIG}" || true
     kubectl get secret -n antrea-multicluster leader-access-token "${LEADER_CLUSTER_CONFIG}" -o yaml > ./multicluster/test/yamls/leader-access-token.yml
 
@@ -180,7 +191,7 @@ function wait_for_multicluster_controller_ready {
     for config in "${membercluster_kubeconfigs[@]}";
     do
         echo "====== Deploying Antrea Multicluster Member Cluster with ${config} ======"
-        kubectl apply -f ./multicluster/build/yamls/antrea-multicluster-member.yml ${config}
+        kubectl apply -f ./multicluster/test/yamls/member-manifest.yml ${config}
         kubectl rollout status deployment/antrea-mc-controller -n kube-system ${config}
         kubectl apply -f ./multicluster/test/yamls/leader-access-token.yml ${config}
     done
@@ -190,6 +201,34 @@ function wait_for_multicluster_controller_ready {
     kubectl apply -f ./multicluster/test/yamls/west-member-cluster.yml "${WEST_CLUSTER_CONFIG}"
     kubectl apply -f ./multicluster/test/yamls/clusterset.yml "${LEADER_CLUSTER_CONFIG}"
 }
+
+# We run the function in a subshell with "set -e" to ensure that it exits in
+# case of error (e.g. integrity check), no matter the context in which the
+# function is called.
+function run_codecov { (set -e
+    flag=$1
+    file=$2
+    dir=$3
+
+    rm -f trustedkeys.gpg codecov
+    # This is supposed to be a one-time step, but there should be no harm in
+    # getting the key every time. It does not come from the codecov.io
+    # website. Anyway, this is needed when the VM is re-created for every test.
+    curl https://keybase.io/codecovsecurity/pgp_keys.asc | gpg --no-default-keyring --keyring trustedkeys.gpg --import
+    curl -Os https://uploader.codecov.io/latest/linux/codecov
+    curl -Os https://uploader.codecov.io/latest/linux/codecov.SHA256SUM
+    curl -Os https://uploader.codecov.io/latest/linux/codecov.SHA256SUM.sig
+
+    # Check that the sha256 matches the signature
+    gpgv codecov.SHA256SUM.sig codecov.SHA256SUM
+    # Then check the integrity of the codecov binary
+    shasum -a 256 -c codecov.SHA256SUM
+
+    chmod +x codecov
+    ./codecov -c -t ${CODECOV_TOKEN} -F ${flag} -f ${file} -s ${dir} -C ${GIT_COMMIT} -r antrea-io/antrea
+
+    rm -f trustedkeys.gpg codecov
+)}
 
 function deliver_antrea_multicluster {
     echo "====== Building Antrea for the Following Commit ======"
@@ -231,10 +270,17 @@ function deliver_multicluster_controller {
     export GOROOT=/usr/local/go
     export PATH=${GOROOT}/bin:$PATH
 
-    export NO_PULL=1;make antrea-mc-controller
-
-    docker save "${DOCKER_REGISTRY}"/antrea/antrea-mc-controller:latest -o "${WORKDIR}"/antrea-mcs.tar
-    ./multicluster/hack/generate-manifest.sh -l antrea-multicluster > ./multicluster/test/yamls/manifest.yml
+    if $COVERAGE;then
+      export NO_PULL=1;make antrea-mc-controller-coverage
+      docker save "${DOCKER_REGISTRY}"/antrea/antrea-mc-controller-coverage:latest -o "${WORKDIR}"/antrea-mcs.tar
+      ./multicluster/hack/generate-manifest.sh -l antrea-multicluster -c > ./multicluster/test/yamls/leader-manifest.yml
+      ./multicluster/hack/generate-manifest.sh -m -c > ./multicluster/test/yamls/member-manifest.yml
+    else
+      export NO_PULL=1;make antrea-mc-controller
+      docker save "${DOCKER_REGISTRY}"/antrea/antrea-mc-controller:latest -o "${WORKDIR}"/antrea-mcs.tar
+      ./multicluster/hack/generate-manifest.sh -l antrea-multicluster > ./multicluster/test/yamls/leader-manifest.yml
+      ./multicluster/hack/generate-manifest.sh -m > ./multicluster/test/yamls/member-manifest.yml
+    fi
 
     for kubeconfig in "${multicluster_kubeconfigs[@]}"
     do
@@ -264,7 +310,7 @@ function deliver_multicluster_controller {
 }
 
 function run_multicluster_e2e {
-   echo "====== Running Multicluster e2e Tests ======"
+    echo "====== Running Multicluster e2e Tests ======"
     export GO111MODULE=on
     export GOPATH=${WORKDIR}/go
     export GOROOT=/usr/local/go
@@ -311,17 +357,34 @@ EOF
     done
 
     set +e
-    mkdir -p `pwd`/antrea-multicluster-test-logs
+    CURRENT_DIR=`pwd`
+    mkdir -p ${CURRENT_DIR}/antrea-multicluster-test-logs
     if ${ENABLE_MC_GATEWAY};then
-      go test -v antrea.io/antrea/multicluster/test/e2e --logs-export-dir  `pwd`/antrea-multicluster-test-logs --mc-gateway
+      go test -v antrea.io/antrea/multicluster/test/e2e --logs-export-dir `pwd`/antrea-multicluster-test-logs --mc-gateway
     else
-      go test -v antrea.io/antrea/multicluster/test/e2e --logs-export-dir  `pwd`/antrea-multicluster-test-logs
+      go test -v antrea.io/antrea/multicluster/test/e2e --logs-export-dir `pwd`/antrea-multicluster-test-logs
     fi
 
     if [[ "$?" != "0" ]]; then
         TEST_FAILURE=true
     fi
     set -e
+}
+
+function collect_coverage {
+    COVERAGE_DIR=$1
+    timestamp=$(date +%Y%m%d%H%M%S)
+    echo "====== Collect Multicluster e2e Tests Coverage Files ======"
+    for kubeconfig in "${multicluster_kubeconfigs[@]}"; do
+      namespace="kube-system"
+      if [[ ${kubeconfig} =~ "leader" ]];then
+        namespace="antrea-multicluster"
+      fi
+      mc_controller_pod_name="$(kubectl get pods --selector=app=antrea,component=antrea-mc-controller -n ${namespace} --no-headers=true ${kubeconfig} | awk '{ print $1 }')"
+      controller_pid="$(kubectl exec -i $mc_controller_pod_name -n ${namespace} ${kubeconfig} -- pgrep antrea)"
+      kubectl exec -i $mc_controller_pod_name -n ${namespace} ${kubeconfig} -- kill -SIGINT $controller_pid
+      kubectl cp ${namespace}/$mc_controller_pod_name:antrea-mc-controller.cov.out ${COVERAGE_DIR}/$mc_controller_pod_name-$timestamp ${kubeconfig}
+    done
 }
 
 trap clean_multicluster EXIT
@@ -341,6 +404,16 @@ if [[ ${TESTCASE} =~ "e2e" ]]; then
     deliver_antrea_multicluster
     deliver_multicluster_controller
     run_multicluster_e2e
+    if $COVERAGE;then
+      CURRENT_DIR=`pwd`
+      rm -rf mc-e2e-coverage
+      mkdir -p mc-e2e-coverage
+      collect_coverage ${CURRENT_DIR}/mc-e2e-coverage
+      # Backup coverage files for later analysis
+      set +e;find ${DEFAULT_WORKDIR}/mc-e2e-coverage -maxdepth 1 -mtime +1 -type f | xargs -n 1 rm;set -e; # Clean up backup files older than one day.
+      cp -r mc-e2e-coverage ${DEFAULT_WORKDIR}
+      run_codecov "e2e-tests" "*antrea-mc*" "${CURRENT_DIR}/mc-e2e-coverage"
+    fi
 fi
 
 if [[ ${TEST_FAILURE} == true ]]; then
