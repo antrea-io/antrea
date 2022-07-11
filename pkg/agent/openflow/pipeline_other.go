@@ -22,14 +22,15 @@ package openflow
 import (
 	"net"
 
-	"antrea.io/antrea/pkg/agent/config"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 )
 
 // hostBridgeUplinkFlows generates the flows that forward traffic between the bridge local port and the uplink port to
 // support the host traffic.
 // TODO(gran): sync latest changes from pipeline_windows.go
-func (f *featurePodConnectivity) hostBridgeUplinkFlows(localSubnetMap map[binding.Protocol]net.IPNet) []binding.Flow {
+func (f *featurePodConnectivity) hostBridgeUplinkFlows() []binding.Flow {
+	// outputToBridgeRegMark marks that the output interface is OVS bridge.
+	outputToBridgeRegMark := binding.NewRegMark(TargetOFPortField, f.hostIfacePort)
 	cookieID := f.cookieAllocator.Request(f.category).Raw()
 	flows := f.hostBridgeLocalFlows()
 	flows = append(flows,
@@ -37,7 +38,7 @@ func (f *featurePodConnectivity) hostBridgeUplinkFlows(localSubnetMap map[bindin
 		// flood.
 		ARPSpoofGuardTable.ofTable.BuildFlow(priorityHigh).
 			Cookie(cookieID).
-			MatchInPort(config.UplinkOFPort).
+			MatchInPort(f.uplinkPort).
 			MatchProtocol(binding.ProtocolARP).
 			Action().Normal().
 			Done(),
@@ -45,7 +46,7 @@ func (f *featurePodConnectivity) hostBridgeUplinkFlows(localSubnetMap map[bindin
 		// flood.
 		ARPSpoofGuardTable.ofTable.BuildFlow(priorityHigh).
 			Cookie(cookieID).
-			MatchInPort(config.BridgeOFPort).
+			MatchInPort(f.hostIfacePort).
 			MatchProtocol(binding.ProtocolARP).
 			Action().Normal().
 			Done(),
@@ -58,21 +59,21 @@ func (f *featurePodConnectivity) hostBridgeUplinkFlows(localSubnetMap map[bindin
 		L2ForwardingCalcTable.ofTable.BuildFlow(priorityNormal).
 			Cookie(cookieID).
 			MatchDstMAC(f.nodeConfig.UplinkNetConfig.MAC).
-			Action().LoadToRegField(TargetOFPortField, config.BridgeOFPort).
+			Action().LoadToRegField(TargetOFPortField, f.hostIfacePort).
 			Action().LoadRegMark(OFPortFoundRegMark).
 			Action().GotoStage(stageConntrack).
 			Done(),
 		L2ForwardingOutTable.ofTable.BuildFlow(priorityHigh).
 			Cookie(cookieID).
 			MatchProtocol(binding.ProtocolIP).
-			MatchRegMark(OutputToBridgeRegMark, OFPortFoundRegMark).
-			Action().Output(config.BridgeOFPort).
+			MatchRegMark(outputToBridgeRegMark, OFPortFoundRegMark).
+			Action().Output(f.hostIfacePort).
 			Done(),
 		// Handle outgoing packet from AntreaFlexibleIPAM Pods. Broadcast is not supported.
 		L2ForwardingCalcTable.ofTable.BuildFlow(priorityLow).
 			Cookie(cookieID).
 			MatchRegMark(AntreaFlexibleIPAMRegMark).
-			Action().LoadToRegField(TargetOFPortField, config.UplinkOFPort).
+			Action().LoadToRegField(TargetOFPortField, f.uplinkPort).
 			Action().LoadRegMark(OFPortFoundRegMark).
 			Action().GotoStage(stageConntrack).
 			Done())

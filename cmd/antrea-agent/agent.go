@@ -348,7 +348,9 @@ func run(o *Options) error {
 		asyncRuleDeleteInterval,
 		o.dnsServerOverride,
 		v4Enabled,
-		v6Enabled)
+		v6Enabled,
+		nodeConfig.GatewayConfig.OFPort,
+		nodeConfig.TunnelOFPort)
 	if err != nil {
 		return fmt.Errorf("error creating new NetworkPolicy controller: %v", err)
 	}
