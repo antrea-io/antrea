@@ -1,6 +1,6 @@
 # antrea
 
-![Version: 1.7.0-dev](https://img.shields.io/badge/Version-1.7.0--dev-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 1.7.0-dev](https://img.shields.io/badge/AppVersion-1.7.0--dev-informational?style=flat-square)
+![Version: 1.7.0-dev](https://img.shields.io/badge/Version-1.7.0--dev-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: latest](https://img.shields.io/badge/AppVersion-latest-informational?style=flat-square)
 
 Kubernetes networking based on Open vSwitch
 
@@ -73,7 +73,7 @@ Kubernetes: `>= 1.16.0-0`
 | flowCollector.flowPollInterval | string | `"5s"` | Determines how often the flow exporter polls for new connections. |
 | flowCollector.idleFlowExportTimeout | string | `"15s"` | timeout after which a flow record is sent to the collector for idle flows. |
 | hostGateway | string | `"antrea-gw0"` | Name of the interface antrea-agent will create and use for host <-> Pod communication. |
-| image | object | `{"pullPolicy":"IfNotPresent","repository":"projects.registry.vmware.com/antrea/antrea-ubuntu","tag":"latest"}` | Container image to use for Antrea components. |
+| image | object | `{"pullPolicy":"IfNotPresent","repository":"projects.registry.vmware.com/antrea/antrea-ubuntu","tag":""}` | Container image to use for Antrea components. |
 | ipsec.authenticationMode | string | `"psk"` | The authentication mode to use for IPsec. Must be one of "psk" or "cert". |
 | ipsec.csrSigner | object | `{"autoApprove":true,"selfSignedCA":true}` | CSR signer configuration when the authenticationMode is "cert". |
 | ipsec.csrSigner.autoApprove | bool | `true` | - Enable auto approval of Antrea signer for IPsec certificates. |

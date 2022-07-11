@@ -2,7 +2,8 @@
 image: 
   repository: "projects.registry.vmware.com/antrea/flow-aggregator"
   pullPolicy: "IfNotPresent"
-  tag: "latest"
+  tag: ""
+
 # -- Provide the active flow record timeout as a duration string.
 # Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
 activeFlowRecordTimeout: 60s
