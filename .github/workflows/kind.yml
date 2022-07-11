@@ -403,6 +403,182 @@ jobs:
           path: log.tar.gz
           retention-days: 30
 
+  test-upgrade-from-N-1:
+    name: Upgrade from Antrea version N-1
+    needs: build-antrea-coverage-image
+    runs-on: [ubuntu-latest]
+    steps:
+      - name: Free disk space
+        # https://github.com/actions/virtual-environments/issues/709
+        run: |
+          sudo apt-get clean
+          df -h
+      - uses: actions/checkout@v3
+      - uses: actions/setup-go@v3
+        with:
+          go-version: 1.17
+      - name: Download Antrea image from previous job
+        uses: actions/download-artifact@v3
+        with:
+          name: antrea-ubuntu-cov
+          path: antrea-ubuntu-cov
+      - name: Load Antrea image
+        run:  |
+          docker load -i antrea-ubuntu-cov/antrea-ubuntu.tar
+          docker tag antrea/antrea-ubuntu-coverage:latest antrea/antrea-ubuntu:latest
+          docker tag antrea/antrea-ubuntu-coverage:latest projects.registry.vmware.com/antrea/antrea-ubuntu:latest
+      - name: Install Kind
+        run: |
+          curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-$(uname)-amd64
+          chmod +x ./kind
+          sudo mv kind /usr/local/bin
+      - name: Run test
+        run: |
+          mkdir log
+          ANTREA_LOG_DIR=$PWD/log ./ci/kind/test-upgrade-antrea.sh --from-version-n-minus 1
+      - name: Tar log files
+        if: ${{ failure() }}
+        run: tar -czf log.tar.gz log
+      - name: Upload test log
+        uses: actions/upload-artifact@v3
+        if: ${{ failure() }}
+        with:
+          name: upgrade-from-antrea-version-n-1.tar.gz
+          path: log.tar.gz
+          retention-days: 30
+
+  test-upgrade-from-N-2:
+    name: Upgrade from Antrea version N-2
+    needs: build-antrea-coverage-image
+    runs-on: [ubuntu-latest]
+    steps:
+      - name: Free disk space
+        # https://github.com/actions/virtual-environments/issues/709
+        run: |
+          sudo apt-get clean
+          df -h
+      - uses: actions/checkout@v3
+      - uses: actions/setup-go@v3
+        with:
+          go-version: 1.17
+      - name: Download Antrea image from previous job
+        uses: actions/download-artifact@v3
+        with:
+          name: antrea-ubuntu-cov
+          path: antrea-ubuntu-cov
+      - name: Load Antrea image
+        run:  |
+          docker load -i antrea-ubuntu-cov/antrea-ubuntu.tar
+          docker tag antrea/antrea-ubuntu-coverage:latest antrea/antrea-ubuntu:latest
+          docker tag antrea/antrea-ubuntu-coverage:latest projects.registry.vmware.com/antrea/antrea-ubuntu:latest
+      - name: Install Kind
+        run: |
+          curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-$(uname)-amd64
+          chmod +x ./kind
+          sudo mv kind /usr/local/bin
+      - name: Run test
+        run: |
+          mkdir log
+          ANTREA_LOG_DIR=$PWD/log ./ci/kind/test-upgrade-antrea.sh --from-version-n-minus 2
+      - name: Tar log files
+        if: ${{ failure() }}
+        run: tar -czf log.tar.gz log
+      - name: Upload test log
+        uses: actions/upload-artifact@v3
+        if: ${{ failure() }}
+        with:
+          name: upgrade-from-antrea-version-n-2.tar.gz
+          path: log.tar.gz
+          retention-days: 30
+
+  test-compatible-N-1:
+    name: API compatible with client version N-1
+    needs: build-antrea-coverage-image
+    runs-on: [ubuntu-latest]
+    steps:
+      - name: Free disk space
+        # https://github.com/actions/virtual-environments/issues/709
+        run: |
+          sudo apt-get clean
+          df -h
+      - uses: actions/checkout@v3
+      - uses: actions/setup-go@v3
+        with:
+          go-version: 1.17
+      - name: Download Antrea image from previous job
+        uses: actions/download-artifact@v3
+        with:
+          name: antrea-ubuntu-cov
+          path: antrea-ubuntu-cov
+      - name: Load Antrea image
+        run:  |
+          docker load -i antrea-ubuntu-cov/antrea-ubuntu.tar
+          docker tag antrea/antrea-ubuntu-coverage:latest antrea/antrea-ubuntu:latest
+          docker tag antrea/antrea-ubuntu-coverage:latest projects.registry.vmware.com/antrea/antrea-ubuntu:latest
+      - name: Install Kind
+        run: |
+          curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-$(uname)-amd64
+          chmod +x ./kind
+          sudo mv kind /usr/local/bin
+      - name: Run test
+        run: |
+          mkdir log
+          ANTREA_LOG_DIR=$PWD/log ./ci/kind/test-upgrade-antrea.sh --from-version-n-minus 1 --controller-only
+      - name: Tar log files
+        if: ${{ failure() }}
+        run: tar -czf log.tar.gz log
+      - name: Upload test log
+        uses: actions/upload-artifact@v3
+        if: ${{ failure() }}
+        with:
+          name: api-compatible-with-client-version-n-1.tar.gz
+          path: log.tar.gz
+          retention-days: 30
+
+  test-compatible-N-2:
+    name: API compatible with client version N-2
+    needs: build-antrea-coverage-image
+    runs-on: [ubuntu-latest]
+    steps:
+      - name: Free disk space
+        # https://github.com/actions/virtual-environments/issues/709
+        run: |
+          sudo apt-get clean
+          df -h
+      - uses: actions/checkout@v3
+      - uses: actions/setup-go@v3
+        with:
+          go-version: 1.17
+      - name: Download Antrea image from previous job
+        uses: actions/download-artifact@v3
+        with:
+          name: antrea-ubuntu-cov
+          path: antrea-ubuntu-cov
+      - name: Load Antrea image
+        run:  |
+          docker load -i antrea-ubuntu-cov/antrea-ubuntu.tar
+          docker tag antrea/antrea-ubuntu-coverage:latest antrea/antrea-ubuntu:latest
+          docker tag antrea/antrea-ubuntu-coverage:latest projects.registry.vmware.com/antrea/antrea-ubuntu:latest
+      - name: Install Kind
+        run: |
+          curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-$(uname)-amd64
+          chmod +x ./kind
+          sudo mv kind /usr/local/bin
+      - name: Run test
+        run: |
+          mkdir log
+          ANTREA_LOG_DIR=$PWD/log ./ci/kind/test-upgrade-antrea.sh --from-version-n-minus 2 --controller-only
+      - name: Tar log files
+        if: ${{ failure() }}
+        run: tar -czf log.tar.gz log
+      - name: Upload test log
+        uses: actions/upload-artifact@v3
+        if: ${{ failure() }}
+        with:
+          name: api-compatible-with-client-version-n-2.tar.gz
+          path: log.tar.gz
+          retention-days: 30
+
   test-netpol-tmp:
     name: Run experimental network policy tests (netpol) on Kind cluster
     needs: build-antrea-coverage-image
@@ -472,14 +648,27 @@ jobs:
         run: |
           ./ci/kind/validate-metrics-doc.sh
 
-  # Runs after all other jobs in the workflow and deletes Antrea Docker images uploaded as temporary
+  # Runs after all other jobs in the workflow succeed and deletes Antrea Docker images uploaded as temporary
   # artifacts. It uses a third-party, MIT-licensed action (geekyeggo/delete-artifact). While Github
   # exposes an API for deleting artifacts, they do not support an official delete-artifact action
   # yet.
   artifact-cleanup:
     name: Delete uploaded images
-    needs: [build-antrea-coverage-image, build-flow-aggregator-coverage-image, test-e2e-encap, test-e2e-encap-no-proxy, test-e2e-encap-all-features-enabled, test-e2e-noencap, test-e2e-hybrid, test-netpol-tmp, validate-prometheus-metrics-doc, test-e2e-flow-visibility]
-    if: ${{ always() &&  (needs.build-antrea-coverage-image.result == 'success' || needs.build-flow-aggregator-coverage-image.result == 'success') }}
+    needs:
+    - build-antrea-coverage-image
+    - build-flow-aggregator-coverage-image
+    - test-e2e-encap
+    - test-e2e-encap-no-proxy
+    - test-e2e-encap-all-features-enabled
+    - test-e2e-noencap
+    - test-e2e-hybrid
+    - test-upgrade-from-N-1
+    - test-upgrade-from-N-2
+    - test-compatible-N-1
+    - test-compatible-N-2
+    - test-netpol-tmp
+    - validate-prometheus-metrics-doc
+    - test-e2e-flow-visibility
     runs-on: [ubuntu-latest]
     steps:
     - name: Delete antrea-ubuntu-cov
