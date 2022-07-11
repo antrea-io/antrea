@@ -150,7 +150,7 @@ if [[ $FLOW_COLLECTOR != "" ]]; then
 fi
 
 if $CLICKHOUSE; then
-    HELM_VALUES+=("clickhouse.enable=true")
+    HELM_VALUES+=("clickHouse.enable=true")
 fi
 
 if $COVERAGE; then
