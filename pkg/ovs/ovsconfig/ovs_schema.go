@@ -36,4 +36,5 @@ type Interface struct {
 	Type          string        `json:"type,omitempty"`
 	OFPortRequest int32         `json:"ofport_request,omitempty"`
 	Options       []interface{} `json:"options,omitempty"`
+	MAC           string        `json:"mac,omitempty"`
 }
