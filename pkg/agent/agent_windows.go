@@ -150,7 +150,7 @@ func (i *Initializer) prepareOVSBridge() error {
 		externalIDs := map[string]interface{}{
 			interfacestore.AntreaInterfaceTypeKey: interfacestore.AntreaHost,
 		}
-		if _, err = i.ovsBridgeClient.CreateInternalPort(brName, config.AutoAssignedOFPort, externalIDs); err != nil {
+		if _, err = i.ovsBridgeClient.CreateInternalPort(brName, config.AutoAssignedOFPort, "", externalIDs); err != nil {
 			return err
 		}
 	}
@@ -165,7 +165,7 @@ func (i *Initializer) prepareOVSBridge() error {
 		return nil
 	}
 	// Create uplink port.
-	freePort, err := i.getFreeOFPort(config.UplinkOFPort)
+	freePort, err := i.ovsBridgeClient.AllocateOFPort(config.UplinkOFPort)
 	if err != nil {
 		klog.ErrorS(err, "Failed to find a free port on OVS")
 		return err

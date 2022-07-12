@@ -23,10 +23,12 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"time"
 
 	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/vishvananda/netlink"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
 )
 
@@ -236,4 +238,36 @@ func SetAdapterMACAddress(adapterName string, macConfig *net.HardwareAddr) error
 func DeleteOVSPort(brName, portName string) error {
 	cmd := exec.Command("ovs-vsctl", "--if-exists", "del-port", brName, portName)
 	return cmd.Run()
+}
+
+func RenameInterface(from, to string) error {
+	klog.InfoS("Renaming interface", "oldName", from, "newName", to)
+	var renameErr error
+	pollErr := wait.Poll(time.Millisecond*100, time.Second, func() (done bool, err error) {
+		renameErr = renameHostInterface(from, to)
+		if renameErr != nil {
+			klog.InfoS("Unable to rename host interface name with error, retrying", "oldName", from, "newName", to, "err", renameErr)
+			return false, nil
+		}
+		return true, nil
+	})
+	if pollErr != nil {
+		return fmt.Errorf("failed to rename host interface name %s to %s", from, to)
+	}
+	return nil
+}
+
+func renameHostInterface(oriName string, newName string) error {
+	link, err := netlink.LinkByName(oriName)
+	if err != nil {
+		return err
+	}
+	if err := netlink.LinkSetDown(link); err != nil {
+		return err
+	}
+	defer netlink.LinkSetUp(link)
+	if err := netlink.LinkSetName(link, newName); err != nil {
+		return err
+	}
+	return nil
 }

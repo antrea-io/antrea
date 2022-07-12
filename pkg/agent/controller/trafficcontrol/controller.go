@@ -585,7 +585,7 @@ func ParseTrafficControlInterfaceConfig(portData *ovsconfig.OVSPortData, portCon
 // createOVSInternalPort creates an OVS internal port on OVS and corresponding interface on host. Note that, host interface
 // might not be available immediately after creating OVS internal port.
 func (c *Controller) createOVSInternalPort(portName string) (string, error) {
-	portUUID, err := c.ovsBridgeClient.CreateInternalPort(portName, 0, trafficControlPortExternalIDs)
+	portUUID, err := c.ovsBridgeClient.CreateInternalPort(portName, 0, "", trafficControlPortExternalIDs)
 	if err != nil {
 		return "", err
 	}

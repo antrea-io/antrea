@@ -38,6 +38,8 @@ const (
 
 	FamilyIPv4 uint8 = 4
 	FamilyIPv6 uint8 = 6
+
+	bridgedUplinkSuffix = "~"
 )
 
 func generateInterfaceName(key string, name string, useHead bool) string {
@@ -241,6 +243,25 @@ func GetIPNetDeviceByCIDRs(cidrsList []string) (v4IPNet, v6IPNet *net.IPNet, lin
 	return nil, nil, nil, fmt.Errorf("unable to find local IP and device")
 }
 
+func GetAllIPNetsByName(ifaceName string) ([]*net.IPNet, error) {
+	ips := []*net.IPNet{}
+	adapter, err := net.InterfaceByName(ifaceName)
+	if err != nil {
+		return nil, err
+	}
+	addrs, _ := adapter.Addrs()
+	for _, addr := range addrs {
+		if ip, ipNet, err := net.ParseCIDR(addr.String()); err != nil {
+			klog.Warningf("Unable to parse addr %+v, err=%+v", addr, err)
+		} else if !ip.IsLinkLocalUnicast() {
+			ipNet.IP = ip
+			ips = append(ips, ipNet)
+		}
+	}
+	klog.InfoS("Found IPs on interface", "IPs", ips, "interface", ifaceName)
+	return ips, nil
+}
+
 func GetIPv4Addr(ips []net.IP) net.IP {
 	for _, ip := range ips {
 		if ip.To4() != nil {
@@ -377,4 +398,9 @@ func PortToUint16(port int) uint16 {
 	}
 	klog.Errorf("Port value %d out-of-bounds", port)
 	return 0
+}
+
+// GenerateUplinkInterfaceName generates the uplink interface name after bridged to OVS
+func GenerateUplinkInterfaceName(name string) string {
+	return name + bridgedUplinkSuffix
 }

@@ -606,7 +606,7 @@ func (i *Initializer) setupGatewayInterface() error {
 		externalIDs := map[string]interface{}{
 			interfacestore.AntreaInterfaceTypeKey: interfacestore.AntreaGateway,
 		}
-		gwPortUUID, err := i.ovsBridgeClient.CreateInternalPort(i.hostGateway, config.HostGatewayOFPort, externalIDs)
+		gwPortUUID, err := i.ovsBridgeClient.CreateInternalPort(i.hostGateway, config.HostGatewayOFPort, "", externalIDs)
 		if err != nil {
 			klog.ErrorS(err, "Failed to create gateway port on OVS bridge", "port", i.hostGateway)
 			return err
@@ -1139,25 +1139,4 @@ func (i *Initializer) patchNodeAnnotations(nodeName, key string, value interface
 // with NetworkPolicyOnly mode on public cloud setup, e.g., AKS.
 func (i *Initializer) getNodeInterfaceFromIP(nodeIPs *utilip.DualStackIPs) (v4IPNet *net.IPNet, v6IPNet *net.IPNet, iface *net.Interface, err error) {
 	return getIPNetDeviceFromIP(nodeIPs, sets.NewString(i.hostGateway))
-}
-
-// getFreeOFPort returns an OpenFlow port number which is not used by any existing OVS port. Note that, the returned port
-// is not saved in OVSDB yet before the real port is created, so it might introduce an issue for the same return value
-// if it is called multiple times before OVS port creation.
-func (i *Initializer) getFreeOFPort(startPort int) (int32, error) {
-	existingOFPorts := sets.NewInt32()
-	ports, err := i.ovsBridgeClient.GetPortList()
-	if err != nil {
-		return 0, err
-	}
-	for _, p := range ports {
-		existingOFPorts.Insert(p.OFPort)
-	}
-	port := int32(startPort)
-	for ; ; port++ {
-		if !existingOFPorts.Has(port) {
-			break
-		}
-	}
-	return port, nil
 }
