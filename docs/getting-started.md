@@ -108,6 +108,11 @@ the arm/v7 and arm64 Docker images (using [k3s](https://k3s.io/) as the
 Kubernetes distribution), our testing is not as thorough as for the amd64
 image. However, we do not anticipate any issue.
 
+### Install with Helm
+
+Starting with v1.8, Antrea can be installed and updated with Helm. Please refer
+to these [installation instructions](helm.md).
+
 ### Deploying Antrea on a Cluster with Existing CNI
 
 The instructions above only apply when deploying Antrea in a new cluster. If you
