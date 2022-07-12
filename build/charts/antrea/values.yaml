@@ -2,7 +2,7 @@
 image:
   repository: "projects.registry.vmware.com/antrea/antrea-ubuntu"
   pullPolicy: "IfNotPresent"
-  tag: "latest"
+  tag: ""
 
 # -- Determines how traffic is encapsulated. It must be one of "encap",
 # "noEncap", "hybrid", or "networkPolicyOnly".

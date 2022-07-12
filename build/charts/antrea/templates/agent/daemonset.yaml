@@ -66,7 +66,7 @@ spec:
       serviceAccountName: antrea-agent
       initContainers:
         - name: install-cni
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          image: "{{ .Values.image.repository }}:{{ default .Chart.AppVersion .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           resources: {{- .Values.agent.installCNI.resources | toYaml | nindent 12 }}
           {{- if eq .Values.trafficEncapMode "networkPolicyOnly" }}
@@ -102,7 +102,7 @@ spec:
             mountPath: /var/run/antrea
         {{- if .Values.whereabouts.enable }}
         - name: install-whereabouts-config
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          image: "{{ .Values.image.repository }}:{{ default .Chart.AppVersion .Values.image.tag }}"
           resources:
             requests:
               cpu: "100m"
@@ -115,7 +115,7 @@ spec:
         {{- end }}
       containers:
         - name: antrea-agent
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          image: "{{ .Values.image.repository }}:{{ default .Chart.AppVersion .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           {{- if ((.Values.testing).coverage) }}
           command: ["/bin/sh"]
@@ -242,7 +242,7 @@ spec:
           {{- toYaml . | trim | nindent 10 }}
           {{- end }}
         - name: antrea-ovs
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          image: "{{ .Values.image.repository }}:{{ default .Chart.AppVersion .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           resources: {{- .Values.agent.antreaOVS.resources | toYaml | nindent 12 }}
           command: ["start_ovs"]
@@ -284,7 +284,7 @@ spec:
             subPath: openvswitch
         {{- if eq .Values.trafficEncryptionMode "ipsec" }}
         - name: antrea-ipsec
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          image: "{{ .Values.image.repository }}:{{ default .Chart.AppVersion .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           resources: {{- .Values.agent.antreaIPsec.resources | toYaml | nindent 12 }}
           command: ["start_ovs_ipsec"]
