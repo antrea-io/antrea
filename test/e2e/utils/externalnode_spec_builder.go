@@ -21,31 +21,43 @@ import (
 )
 
 type ExternalNodeSpecBuilder struct {
-	Spec      crdv1alpha1.ExternalNodeSpec
-	Name      string
-	Namespace string
+	spec      crdv1alpha1.ExternalNodeSpec
+	name      string
+	namespace string
+	labels    map[string]string
 }
 
 func (t *ExternalNodeSpecBuilder) SetName(namespace string, name string) *ExternalNodeSpecBuilder {
-	t.Namespace = namespace
-	t.Name = name
+	t.namespace = namespace
+	t.name = name
 	return t
 }
 
 func (t *ExternalNodeSpecBuilder) AddInterface(name string, ips []string) *ExternalNodeSpecBuilder {
-	t.Spec.Interfaces = append(t.Spec.Interfaces, crdv1alpha1.NetworkInterface{
+	t.spec.Interfaces = append(t.spec.Interfaces, crdv1alpha1.NetworkInterface{
 		Name: name,
 		IPs:  ips,
 	})
 	return t
 }
 
+func (t *ExternalNodeSpecBuilder) AddLabels(labels map[string]string) *ExternalNodeSpecBuilder {
+	if t.labels == nil {
+		t.labels = make(map[string]string)
+	}
+	for k, v := range labels {
+		t.labels[k] = v
+	}
+	return t
+}
+
 func (t *ExternalNodeSpecBuilder) Get() *crdv1alpha1.ExternalNode {
 	return &crdv1alpha1.ExternalNode{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      t.Name,
-			Namespace: t.Namespace,
+			Name:      t.name,
+			Namespace: t.namespace,
+			Labels:    t.labels,
 		},
-		Spec: t.Spec,
+		Spec: t.spec,
 	}
 }
