@@ -20,7 +20,7 @@ Starting with Antrea v1.8, Antrea can be installed and updated using
 
 We provide the following Helm charts:
 
-* `antrea/antrea`: the Antrea network plugin
+* `antrea/antrea`: the Antrea network plugin.
 * `antrea/flow-aggregator`: the Antrea Flow Aggregator; see
   [here](network-flow-visibility.md) for more details.
 * `antrea/theia`: Theia, the Antrea network observability solution; refer to the
@@ -43,7 +43,7 @@ Helm installation is currently considered Alpha.
 * Add the Antrea Helm chart repository:
 
   ```bash
-  helm repo add https://charts.antrea.io
+  helm repo add antrea https://charts.antrea.io
   helm repo update
   ```
 
@@ -67,9 +67,9 @@ specific version of Antrea (>= v1.8.0) with `--version <TAG>`.
 To upgrade the Antrea Helm chart, use the following commands:
 
 ```bash
-# Upgrading CRDs requires an extra step, see explanation below
+# Upgrading CRDs requires an extra step; see explanation below
 kubectl apply -f https://github.com/antrea-io/antrea/releases/download/<TAG>/antrea-crds.yml
-helm upgrade antrea antrea/antrea --version <TAG>
+helm upgrade antrea antrea/antrea --namespace kube-system --version <TAG>
 ```
 
 #### An important note on CRDs
@@ -95,7 +95,7 @@ is required for upgrading the chart:
 kubectl apply -f https://github.com/antrea-io/antrea/releases/download/<TAG>/antrea-crds.yml
 ```
 
-When upgrading CRDs in production, it is recommended to make a back up of your
+When upgrading CRDs in production, it is recommended to make a backup of your
 Custom Resources (CRs) first.
 
 ### Flow Aggregator chart
@@ -117,10 +117,10 @@ also install a specific version (>= v1.8.0) with `--version <TAG>`.
 
 #### Upgrade
 
-To upgrade the Antrea Helm chart, use the following command:
+To upgrade the Flow Aggregator Helm chart, use the following command:
 
 ```bash
-helm upgrade antrea antrea/antrea --version <TAG>
+helm upgrade flow-aggregator antrea/flow-aggregator --namespace flow-aggregator --version <TAG>
 ```
 
 ### Theia chart
