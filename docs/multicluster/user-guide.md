@@ -238,7 +238,7 @@ correct leader cluster API server address.
 - Create `ClusterClaim` and `ClusterSet` in member cluster `test-cluster-west`:
 
 ```yaml
-apiVersion: multicluster.crd.antrea.io/v1alpha1
+apiVersion: multicluster.crd.antrea.io/v1alpha2
 kind: ClusterClaim
 metadata:
   name: id.k8s.io
