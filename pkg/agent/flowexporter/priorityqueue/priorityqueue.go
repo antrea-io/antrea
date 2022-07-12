@@ -96,6 +96,18 @@ func (pq *ExpirePriorityQueue) Update(item *flowexporter.ItemToExpire, activeExp
 	heap.Fix(pq, item.Index)
 }
 
+// Remove removes and returns an Item by key from priority queue if it exists.
+func (pq *ExpirePriorityQueue) Remove(connKey flowexporter.ConnectionKey) *flowexporter.ItemToExpire {
+	item, exists := pq.KeyToItem[connKey]
+	if !exists {
+		return nil
+	}
+
+	removedItem := heap.Remove(pq, item.Index)
+	delete(pq.KeyToItem, connKey)
+	return removedItem.(*flowexporter.ItemToExpire)
+}
+
 // GetExpiryFromExpirePriorityQueue returns the shortest expire time duration
 // from expire priority queue.
 func (pq *ExpirePriorityQueue) GetExpiryFromExpirePriorityQueue() time.Duration {
@@ -114,13 +126,18 @@ func (pq *ExpirePriorityQueue) GetExpiryFromExpirePriorityQueue() time.Duration 
 	return pq.IdleFlowTimeout
 }
 
-func (pq *ExpirePriorityQueue) AddItemToQueue(connKey flowexporter.ConnectionKey, conn *flowexporter.Connection) {
+// WriteItemToQueue adds conn with connKey into the queue. If an existing item
+// has the same connKey, it will be overwritten by the new item.
+func (pq *ExpirePriorityQueue) WriteItemToQueue(connKey flowexporter.ConnectionKey, conn *flowexporter.Connection) {
 	currTime := time.Now()
 	pqItem := &flowexporter.ItemToExpire{
 		Conn:             conn,
 		ActiveExpireTime: currTime.Add(pq.ActiveFlowTimeout),
 		IdleExpireTime:   currTime.Add(pq.IdleFlowTimeout),
 	}
+	// If connKey exists in pq, it is removed first to avoid having multiple pqItems with same key
+	// in the queue, which can cause memory leak as the previous one can't be updated or removed.
+	pq.Remove(connKey)
 	heap.Push(pq, pqItem)
 	pq.KeyToItem[connKey] = pqItem
 }

@@ -135,6 +135,11 @@ func (cs *ConntrackConnectionStore) Poll() ([]int, error) {
 			// Delete the connection if it is ready to delete or it was not exported
 			// in the time period as specified by the stale connection timeout.
 			if conn.ReadyToDelete || time.Since(conn.LastExportTime) >= cs.staleConnectionTimeout {
+				if removedItem := cs.expirePriorityQueue.Remove(key); removedItem != nil {
+					// In case ReadyToDelete is true, item should already have been removed from pq
+					klog.V(4).InfoS("Conn removed from cs pq due to stale timeout",
+						"key", key, "conn", removedItem.Conn)
+				}
 				if err := cs.deleteConnWithoutLock(key); err != nil {
 					return err
 				}
@@ -239,7 +244,7 @@ func (cs *ConntrackConnectionStore) AddOrUpdateConn(conn *flowexporter.Connectio
 				// If the connKey:pqItem pair does not exist in the map, it shows the
 				// conn was inactive, and was removed from PQ and map. Since it becomes
 				// active again now, we create a new pqItem and add it to PQ and map.
-				cs.expirePriorityQueue.AddItemToQueue(connKey, existingConn)
+				cs.expirePriorityQueue.WriteItemToQueue(connKey, existingConn)
 			} else {
 				cs.connectionStore.expirePriorityQueue.Update(existingItem, existingItem.ActiveExpireTime,
 					time.Now().Add(cs.connectionStore.expirePriorityQueue.IdleFlowTimeout))
@@ -264,11 +269,12 @@ func (cs *ConntrackConnectionStore) AddOrUpdateConn(conn *flowexporter.Connectio
 			conn.StartTime = time.Now()
 			conn.StopTime = time.Now()
 		}
+		conn.LastExportTime = conn.StartTime
 		metrics.TotalAntreaConnectionsInConnTrackTable.Inc()
 		conn.IsActive = true
 		// Add new antrea connection to connection store and PQ.
 		cs.connections[connKey] = conn
-		cs.expirePriorityQueue.AddItemToQueue(connKey, conn)
+		cs.expirePriorityQueue.WriteItemToQueue(connKey, conn)
 		klog.V(4).InfoS("New Antrea flow added", "connection", conn)
 	}
 }
