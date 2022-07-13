@@ -11,8 +11,7 @@ on:
     - release-*
     - feature/*
   release:
-    types:
-      - created
+    types: [published]
 
 jobs:
   check-changes:
