@@ -49,6 +49,11 @@ func (ds *DenyConnectionStore) RunPeriodicDeletion(stopCh <-chan struct{}) {
 		case <-pollTicker.C:
 			deleteIfStaleConn := func(key flowexporter.ConnectionKey, conn *flowexporter.Connection) error {
 				if conn.ReadyToDelete || time.Since(conn.LastExportTime) >= ds.staleConnectionTimeout {
+					if removedItem := ds.expirePriorityQueue.Remove(key); removedItem != nil {
+						// In case ReadyToDelete is true, item should already have been removed from pq
+						klog.V(4).InfoS("Conn removed from ds pq due to stale timeout",
+							"key", key, "conn", removedItem.Conn)
+					}
 					if err := ds.deleteConnWithoutLock(key); err != nil {
 						return err
 					}
@@ -78,7 +83,7 @@ func (ds *DenyConnectionStore) AddOrUpdateConn(conn *flowexporter.Connection, ti
 		conn.IsActive = true
 		existingItem, exists := ds.expirePriorityQueue.KeyToItem[connKey]
 		if !exists {
-			ds.expirePriorityQueue.AddItemToQueue(connKey, conn)
+			ds.expirePriorityQueue.WriteItemToQueue(connKey, conn)
 		} else {
 			ds.connectionStore.expirePriorityQueue.Update(existingItem, existingItem.ActiveExpireTime,
 				time.Now().Add(ds.connectionStore.expirePriorityQueue.IdleFlowTimeout))
@@ -87,6 +92,7 @@ func (ds *DenyConnectionStore) AddOrUpdateConn(conn *flowexporter.Connection, ti
 	} else {
 		conn.StartTime = timeSeen
 		conn.StopTime = timeSeen
+		conn.LastExportTime = timeSeen
 		conn.OriginalBytes = bytes
 		conn.OriginalPackets = uint64(1)
 		ds.fillPodInfo(conn)
@@ -96,7 +102,7 @@ func (ds *DenyConnectionStore) AddOrUpdateConn(conn *flowexporter.Connection, ti
 		metrics.TotalDenyConnections.Inc()
 		conn.IsActive = true
 		ds.connections[connKey] = conn
-		ds.expirePriorityQueue.AddItemToQueue(connKey, conn)
+		ds.expirePriorityQueue.WriteItemToQueue(connKey, conn)
 		klog.V(4).InfoS("New deny connection added", "connection", conn)
 	}
 }
