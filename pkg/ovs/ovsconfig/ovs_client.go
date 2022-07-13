@@ -1093,3 +1093,9 @@ func (br *OVSBridge) SetInterfaceMTU(name string, MTU int) error {
 
 	return nil
 }
+
+func (br *OVSBridge) CreatePatchPort(brName string, ifName string, peerIfName string) (string, Error) {
+	options := make(map[string]interface{})
+	options["peer"] = peerIfName
+	return br.createPort(brName, ifName, string("patch"), 4, 0, options, nil)
+}

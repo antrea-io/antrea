@@ -27,6 +27,7 @@ const (
 
 	OVSDatapathSystem OVSDatapathType = "system"
 	OVSDatapathNetdev OVSDatapathType = "netdev"
+	OVSPatchPort                      = "patch"
 )
 
 type OVSBridgeClient interface {
@@ -38,6 +39,7 @@ type OVSBridgeClient interface {
 	GetInterfaceOptions(name string) (map[string]string, Error)
 	SetInterfaceOptions(name string, options map[string]interface{}) Error
 	CreatePort(name, ifDev string, externalIDs map[string]interface{}) (string, Error)
+	CreatePatchPort(brName string, ifName string, peerIfName string) (string, Error)
 	CreateAccessPort(name, ifDev string, externalIDs map[string]interface{}, vlanID uint16) (string, Error)
 	CreateInternalPort(name string, ofPortRequest int32, mac string, externalIDs map[string]interface{}) (string, Error)
 	CreateTunnelPort(name string, tunnelType TunnelType, ofPortRequest int32) (string, Error)

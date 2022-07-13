@@ -56,6 +56,7 @@ import (
 	"antrea.io/antrea/pkg/agent/querier"
 	"antrea.io/antrea/pkg/agent/route"
 	"antrea.io/antrea/pkg/agent/secondarynetwork/cnipodcache"
+	secnetinfra "antrea.io/antrea/pkg/agent/secondarynetwork/infra"
 	"antrea.io/antrea/pkg/agent/secondarynetwork/podwatch"
 	"antrea.io/antrea/pkg/agent/stats"
 	agenttypes "antrea.io/antrea/pkg/agent/types"
@@ -421,12 +422,20 @@ func run(o *Options) error {
 
 	var cniPodInfoStore cnipodcache.CNIPodInfoStore
 	if features.DefaultFeatureGate.Enabled(features.SecondaryNetwork) {
+		klog.Infof("[Arun] Secondary network Infra init in progress")
 		cniPodInfoStore = cnipodcache.NewCNIPodInfoStore()
 		err = cniServer.Initialize(ovsBridgeClient, ofClient, ifaceStore, podUpdateChannel, cniPodInfoStore)
 		if err != nil {
 			return fmt.Errorf("error initializing CNI server with cniPodInfoStore cache: %v", err)
 		}
+		// Initialize secondary network infrastructure (create OVS bridges and datapath configuration).
+		secNetOpt := secnetinfra.NewSecondaryNetworkOptions(ifaceStore)
+		secNetOpt.LoadSecondaryNetworkConfigAndSetDefaults()
+		if err := secnetinfra.ConfigureSecondaryNetworkInfra(secNetOpt); err != nil {
+			return fmt.Errorf("Failed to configure secondary network infrastructure: %v", err)
+		}
 	} else {
+		klog.Infof("[Arun] NO Secondary network support")
 		err = cniServer.Initialize(ovsBridgeClient, ofClient, ifaceStore, podUpdateChannel, nil)
 		if err != nil {
 			return fmt.Errorf("error initializing CNI server: %v", err)

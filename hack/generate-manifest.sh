@@ -45,6 +45,7 @@ Generate a YAML manifest for Antrea using Helm and print it to stdout.
         --multicast-interfaces        Multicast interface names (default is empty)
         --extra-helm-values-file      Optional extra helm values file to override the default config values
         --extra-helm-values           Optional extra helm values to override the default config values
+	--secondary-network-config    Generates secondary network specific antrea-agent config file.
 
 In 'release' mode, environment variables IMG_NAME and IMG_TAG must be set.
 
@@ -82,6 +83,7 @@ WHEREABOUTS=false
 FLEXIBLE_IPAM=false
 MULTICAST=false
 MULTICAST_INTERFACES=""
+SECONDARY_NETWORK_CONFIG=false
 HELM_VALUES_FILES=()
 HELM_VALUES=()
 
@@ -162,6 +164,10 @@ case $key in
     ;;
     --whereabouts)
     WHEREABOUTS=true
+    shift
+    ;;
+    --secondary-network-config)
+    SECONDARY_NETWORK_CONFIG=true
     shift
     ;;
     --multicast)
@@ -326,6 +332,19 @@ fi
 
 if $WHEREABOUTS; then
     HELM_VALUES+=("whereabouts.enable=true")
+fi
+
+if $SECONDARY_NETWORK_CONFIG; then
+    cat << EOF > $TMP_DIR/antrea-agent-secondary-network.yml
+agent:
+  antreaAgent:
+    extraVolumeMounts:
+    - mountPath: /etc/antrea/antrea-agent-secondary-network.conf
+      name: antrea-secondary-network-config
+      readOnly: true
+      subPath: antrea-agent-secondary-network.conf
+EOF
+    HELM_VALUES_FILES+=("$TMP_DIR/antrea-agent-secondary-network.yml")
 fi
 
 if [ "$MODE" == "dev" ]; then
