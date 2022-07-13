@@ -15,6 +15,7 @@ package priorityqueue
 
 import (
 	"container/heap"
+	"fmt"
 	"testing"
 	"time"
 
@@ -41,8 +42,39 @@ func TestExpirePriorityQueue(t *testing.T) {
 			Index:            key,
 		}
 		testPriorityQueue.items = append(testPriorityQueue.items, item)
+		testPriorityQueue.KeyToItem[flowexporter.ConnectionKey{fmt.Sprintf("%d", key)}] = item
 	}
 	heap.Init(testPriorityQueue)
+
+	// Test WriteItemToQueue
+	connKey := flowexporter.ConnectionKey{"3"}
+	conn := flowexporter.Connection{}
+	testPriorityQueue.WriteItemToQueue(connKey, &conn)
+	assert.Equal(t, &conn, testPriorityQueue.KeyToItem[connKey].Conn, "WriteItemToQueue didn't add new conn to map")
+	newConn := flowexporter.Connection{}
+	testPriorityQueue.WriteItemToQueue(connKey, &newConn)
+	assert.Equal(t, &newConn, testPriorityQueue.KeyToItem[connKey].Conn, "WriteItemToQueue didn't overwrite existing conn to map")
+	hasOld, hasNew := false, false
+	for _, item := range testPriorityQueue.items {
+		if item.Conn == &conn {
+			hasOld = true
+		}
+		if item.Conn == &newConn {
+			hasNew = true
+		}
+	}
+	assert.False(t, hasOld && hasNew, "WriteItemToQueue shouldn't add two items with same key to heap")
+
+	// Test Remove
+	removedItem := testPriorityQueue.Remove(connKey)
+	assert.Equal(t, &newConn, removedItem.Conn, "Remove didn't return correct item")
+	_, exist := testPriorityQueue.KeyToItem[connKey]
+	assert.False(t, exist, "Remove didn't delete KeyToItem entry")
+	for _, item := range testPriorityQueue.items {
+		if item.Conn == &newConn {
+			assert.Fail(t, "Remove didn't delete item from queue")
+		}
+	}
 
 	// Add new flow to the priority queue
 	testFlowsWithExpire[3] = []time.Time{startTime.Add(3 * time.Second), startTime.Add(500 * time.Millisecond)}
