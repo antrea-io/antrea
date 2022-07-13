@@ -1,5 +1,12 @@
 # Changelog 1.7
 
+## 1.7.1 - 2022-07-14
+
+### Fixed
+- Fix FlowExporter memory bloat when export process is dead. ([#3994](https://github.com/antrea-io/antrea/pull/3994), [@wsquan171])
+- Fix Pod-to-external traffic on EKS in policyOnly mode. ([#3975](https://github.com/antrea-io/antrea/pull/3975), [@antoninbas])
+- Use uplink interface name for host interface internal port to support DHCP client. ([#3938](https://github.com/antrea-io/antrea/pull/3938), [@gran-vmv])
+
 ## 1.7.0 - 2022-06-15
 
 ### Added
