@@ -32,6 +32,9 @@ TESTBED_TYPE="legacy"
 GO_VERSION=$(head -n1 "${WORKSPACE}/build/images/deps/go-version")
 IMAGE_PULL_POLICY="Always"
 PROXY_ALL=false
+DEFAULT_IP_MODE="ipv4"
+IP_MODE=""
+K8S_VERSION="1.23.6-00"
 
 WINDOWS_CONFORMANCE_FOCUS="\[sig-network\].+\[Conformance\]|\[sig-windows\]"
 WINDOWS_CONFORMANCE_SKIP="\[LinuxOnly\]|\[Slow\]|\[Serial\]|\[Disruptive\]|\[Flaky\]|\[Feature:.+\]|\[sig-cli\]|\[sig-storage\]|\[sig-auth\]|\[sig-api-machinery\]|\[sig-apps\]|\[sig-node\]|\[Privileged\]|should be able to change the type from|\[sig-network\] Services should be able to create a functioning NodePort service \[Conformance\]|Service endpoints latency should not be very high|should be able to create a functioning NodePort service for Windows"
@@ -55,7 +58,8 @@ Run K8s e2e community tests (Conformance & Network Policy) or Antrea e2e tests o
         --testcase               Windows install OVS, Conformance and Network Policy or Antrea e2e testcases on a Windows or Linux cluster. It can also be flexible ipam or multicast e2e test.
         --registry               The docker registry to use instead of dockerhub.
         --proxyall               Enable proxyAll to test AntreaProxy.
-        --testbed-type           The testbed type to run tests. It can be flexible-ipam, jumper or legacy."
+        --testbed-type           The testbed type to run tests. It can be flexible-ipam, jumper or legacy.
+        --ip-mode                IP mode for flexible-ipam e2e test. Default is $DEFAULT_IP_MODE. It can also be ipv6 or ds."
 
 function print_usage {
     echoerr "$_usage"
@@ -94,6 +98,10 @@ case $key in
     PROXY_ALL=true
     shift
     ;;
+    --ip-mode)
+    IP_MODE="$2"
+    shift 2
+    ;;
     -h|--help)
     print_usage
     exit 0
@@ -105,6 +113,13 @@ case $key in
 esac
 done
 
+if [[ "${IP_MODE}" == "" ]]; then
+    IP_MODE=${DEFAULT_IP_MODE}
+fi
+if [[ "${IP_MODE}" != "${DEFAULT_IP_MODE}" && "${IP_MODE}" != "ipv6" && "${IP_MODE}" != "ds" ]]; then
+    echoerr "--ip-mode must be ipv4, ipv6 or ds"
+    exit 1
+fi
 if [[ "$WORKDIR" != "$DEFAULT_WORKDIR" && "$KUBECONFIG_PATH" == "$DEFAULT_KUBECONFIG_PATH" ]]; then
     KUBECONFIG_PATH=${WORKDIR}/.kube/config
 fi
@@ -410,14 +425,17 @@ function deliver_antrea_windows {
 
 function deliver_antrea {
     echo "====== Cleanup Antrea Installation ======"
-    clean_up_one_ns "monitoring"
-    clean_up_one_ns "antrea-ipam-test-11"
-    clean_up_one_ns "antrea-ipam-test-12"
-    clean_up_one_ns "antrea-ipam-test"
-    clean_up_one_ns "antrea-test"
+    clean_up_one_ns "monitoring" || true
+    clean_up_one_ns "antrea-ipam-test-11" || true
+    clean_up_one_ns "antrea-ipam-test-12" || true
+    clean_up_one_ns "antrea-ipam-test" || true
+    clean_up_one_ns "antrea-test" || true
     kubectl delete -f ${WORKDIR}/antrea-prometheus.yml || true
     kubectl delete daemonset antrea-agent -n kube-system || true
     kubectl delete -f ${WORKDIR}/antrea.yml || true
+    if [[ $TESTBED_TYPE == "flexible-ipam" ]]; then
+        redeploy_k8s_if_ip_mode_changes
+    fi
 
     echo "====== Building Antrea for the Following Commit ======"
     export GO111MODULE=on
@@ -461,13 +479,14 @@ function deliver_antrea {
 
     if [[ $TESTBED_TYPE == "flexible-ipam" ]]; then
         control_plane_ip="$(kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 ~ role {print $6}')"
-        scp -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i "${WORKDIR}/jenkins_id_rsa" build/yamls/*.yml jenkins@${control_plane_ip}:~
+        scp -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i "${WORKDIR}/jenkins_id_rsa" build/yamls/*.yml jenkins@[${control_plane_ip}]:~
     elif [[ $TESTBED_TYPE == "jumper" ]]; then
         control_plane_ip="$(kubectl get nodes -o wide --no-headers=true | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 ~ role {print $6}')"
         scp -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i "${WORKDIR}/.ssh/id_rsa" build/yamls/*.yml jenkins@${control_plane_ip}:${WORKDIR}/
     else
         cp -f build/yamls/*.yml $WORKDIR
     fi
+    cp -f build/yamls/*.yml $WORKDIR
 
     echo "====== Delivering Antrea to all the Nodes ======"
     docker save -o antrea-ubuntu.tar projects.registry.vmware.com/antrea/antrea-ubuntu:latest
@@ -475,8 +494,8 @@ function deliver_antrea {
 
     if [[ $TESTBED_TYPE == "flexible-ipam" ]]; then
         kubectl get nodes -o wide --no-headers=true | awk '{print $6}' | while read IP; do
-            scp -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i "${WORKDIR}/jenkins_id_rsa" antrea-ubuntu.tar jenkins@${IP}:${DEFAULT_WORKDIR}/antrea-ubuntu.tar
-            scp -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i "${WORKDIR}/jenkins_id_rsa" flow-aggregator.tar jenkins@${IP}:${DEFAULT_WORKDIR}/flow-aggregator.tar
+            scp -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i "${WORKDIR}/jenkins_id_rsa" antrea-ubuntu.tar jenkins@[${IP}]:${DEFAULT_WORKDIR}/antrea-ubuntu.tar
+            scp -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i "${WORKDIR}/jenkins_id_rsa" flow-aggregator.tar jenkins@[${IP}]:${DEFAULT_WORKDIR}/flow-aggregator.tar
             ssh -o StrictHostKeyChecking=no -i "${WORKDIR}/jenkins_id_rsa" -n jenkins@${IP} "${CLEAN_STALE_IMAGES}; docker load -i ${DEFAULT_WORKDIR}/antrea-ubuntu.tar; docker load -i ${DEFAULT_WORKDIR}/flow-aggregator.tar" || true
         done
     elif [[ $TESTBED_TYPE == "jumper" ]]; then
@@ -678,6 +697,177 @@ function clean_tmp() {
         find /tmp -name "${item}" -mtime +7 -exec rm -rf {} \; 2>&1 | grep -v "Permission denied" || true
     done
     find ${WORKDIR} -name "support-bundles*" -mtime +7 -exec rm -rf {} \; 2>&1 | grep -v "Permission denied" || true
+}
+
+# redeploy_k8s_if_ip_mode_changes redeploys K8s cluster when flexible-ipam is set and existing cluster ip-mode doesn't match input ip-mode
+function redeploy_k8s_if_ip_mode_changes() {
+    echo "===== Read K8s Node info ====="
+    WORKER_HOSTNAMES=()
+    HOSTNAMES=()
+    WORKER_IPV4S=()
+    IPV4S=()
+    WORKER_IPV6S=()
+    IPV6S=()
+    NODE_HOSTNAMES=`cat ${WORKDIR}/nodes | awk '{print $1}'`
+    while read HOSTNAME; do
+        if [ ${CONTROL_PLANE_HOSTNAME} ]; then
+            WORKER_HOSTNAMES+=("${HOSTNAME}")
+        else
+            CONTROL_PLANE_HOSTNAME=${HOSTNAME}
+        fi
+        HOSTNAMES+=("${HOSTNAME}")
+    done <<< ${NODE_HOSTNAMES}
+    NODE_IPV4S=`cat ${WORKDIR}/nodes | awk '{print $2}'`
+    while read IPV4; do
+        if [ ${CONTROL_PLANE_IPV4} ]; then
+            WORKER_IPV4S+=("${IPV4}")
+        else
+            CONTROL_PLANE_IPV4=${IPV4}
+        fi
+        IPV4S+=("${IPV4}")
+    done <<< ${NODE_IPV4S}
+    NODE_IPV6S=`cat ${WORKDIR}/nodes | awk '{print $3}'`
+    while read IPV6; do
+        if [ ${CONTROL_PLANE_IPV6} ]; then
+            WORKER_IPV6S+=("${IPV6}")
+        else
+            CONTROL_PLANE_IPV6=${IPV6}
+        fi
+        IPV6S+=("${IPV6}")
+    done <<< ${NODE_IPV6S}
+
+    echo "===== Check K8s cluster status ====="
+    INITIAL_VALUE=10
+    HAS_IPV4=${INITIAL_VALUE}
+    HAS_IPV6=${INITIAL_VALUE}
+    POD_CIDRS=($( (kubectl get node ${CONTROL_PLANE_HOSTNAME} -o json | jq -r '.spec.podCIDRs | @sh') | tr -d \'\")) || true
+    echo "POD_CIDRS=${POD_CIDRS[*]}"
+    for POD_CIDR in "${POD_CIDRS[@]}"; do
+        if [[ $POD_CIDR =~ .*:.* ]]
+        then
+            (( HAS_IPV6++ ))
+        else
+            (( HAS_IPV4++ ))
+        fi
+    done
+    if [[ ${IP_MODE} == "ipv4" ]]; then
+        (( HAS_IPV4-- ))
+    elif [[ ${IP_MODE} == "ipv6" ]]; then
+        (( HAS_IPV6-- ))
+    else
+        (( HAS_IPV4-- ))
+        (( HAS_IPV6-- ))
+    fi
+    if [ ${HAS_IPV4} -eq ${INITIAL_VALUE} ] && [ ${HAS_IPV6} -eq ${INITIAL_VALUE} ]; then
+      return 0
+    fi
+
+    echo "===== Reset K8s cluster Nodes ====="
+    for IPV4 in "${IPV4S[@]}"; do
+        ssh -o StrictHostKeyChecking=no -i "${WORKDIR}/id_rsa" -n ubuntu@${IPV4} "sudo kubeadm reset -f; sudo netplan apply; sudo ip link set br-int down || true"
+    done
+
+    echo "===== Redeploy K8s utils ====="
+    sudo apt update < /dev/null
+    sudo apt remove -y kubectl < /dev/null
+    sudo apt install -y kubectl=${K8S_VERSION} < /dev/null
+    for IPV4 in "${IPV4S[@]}"; do
+        ssh -o StrictHostKeyChecking=no -i "${WORKDIR}/id_rsa" -n ubuntu@${IPV4} "sudo apt update < /dev/null; sudo apt remove -y kubectl kubelet kubeadm < /dev/null; sudo apt install -y kubectl=${K8S_VERSION} kubelet=${K8S_VERSION} kubeadm=${K8S_VERSION} < /dev/null"
+    done
+
+    echo "===== Configure kubelet ====="
+    for (( i=0; i<${#IPV4S[@]}; i++ )); do
+        NODE_IP_STRING=""
+        if [[ ${IP_MODE} == "ipv4" ]]; then
+            NODE_IP_STRING=${IPV4S[i]}
+        elif [[ ${IP_MODE} == "ipv6" ]]; then
+            NODE_IP_STRING=${IPV6S[i]}
+        else
+            NODE_IP_STRING="${IPV4S[i]},${IPV6S[i]}"
+        fi
+        ssh -o StrictHostKeyChecking=no -i "${WORKDIR}/id_rsa" -n ubuntu@${IPV4S[i]} "echo \"KUBELET_EXTRA_ARGS=--node-ip=${NODE_IP_STRING}\" | sudo tee /etc/default/kubelet; sudo systemctl restart kubelet"
+    done
+
+    echo "===== Set up K8s cluster ====="
+    TOKEN=`ssh -o StrictHostKeyChecking=no -i "${WORKDIR}/id_rsa" -n ubuntu@${CONTROL_PLANE_IPV4} "kubeadm token generate"`
+    echo "===== Generated K8s cluster token ${TOKEN} ====="
+    POD_SUBNET_IPV4="192.168.248.0/21"
+    POD_SUBNET_IPV6="fd02:0:0:f8::/61"
+    SERVICE_SUBNET_IPV4="10.96.0.0/16"
+    SERVICE_SUBNET_IPV6="2001:db8:42:1::/112"
+    POD_SUBNET_STRING=""
+    SERVICE_SUBNET_STRING=""
+    ADVERTISE_ADDRESS_STRING=""
+    FEATURE_GATES_STRING=""
+    if [[ ${IP_MODE} == "ipv4" ]]; then
+        POD_SUBNET_STRING=${POD_SUBNET_IPV4}
+        SERVICE_SUBNET_STRING=${SERVICE_SUBNET_IPV4}
+        ADVERTISE_ADDRESS_STRING=${CONTROL_PLANE_IPV4}
+        APISERVER_IP_STRING=${ADVERTISE_ADDRESS_STRING}
+    elif [[ ${IP_MODE} == "ipv6" ]]; then
+        POD_SUBNET_STRING=${POD_SUBNET_IPV6}
+        SERVICE_SUBNET_STRING=${SERVICE_SUBNET_IPV6}
+        ADVERTISE_ADDRESS_STRING=${CONTROL_PLANE_IPV6}
+        APISERVER_IP_STRING="[${ADVERTISE_ADDRESS_STRING}]"
+    else
+        POD_SUBNET_STRING="${POD_SUBNET_IPV4},${POD_SUBNET_IPV6}"
+        SERVICE_SUBNET_STRING="${SERVICE_SUBNET_IPV4},${SERVICE_SUBNET_IPV6}"
+        ADVERTISE_ADDRESS_STRING=${CONTROL_PLANE_IPV4}
+        if [[ ${K8S_VERSION} =~ 1.19. ]] || [[ ${K8S_VERSION} =~ 1.20. ]]; then
+          FEATURE_GATES_STRING=`echo -e "featureGates:\n  IPv6DualStack: true"`
+        fi
+        APISERVER_IP_STRING=${ADVERTISE_ADDRESS_STRING}
+    fi
+    cat <<EOF | tee ${WORKDIR}/kubeadm.conf
+apiVersion: kubeadm.k8s.io/v1beta2
+kind: InitConfiguration
+bootstrapTokens:
+- groups:
+  token: ${TOKEN}
+nodeRegistration:
+  name: "${CONTROL_PLANE_HOSTNAME}"
+localAPIEndpoint:
+  advertiseAddress: "${ADVERTISE_ADDRESS_STRING}"
+---
+apiVersion: kubeadm.k8s.io/v1beta2
+kind: ClusterConfiguration
+${FEATURE_GATES_STRING}
+networking:
+  podSubnet: "${POD_SUBNET_STRING}"
+  serviceSubnet: "${SERVICE_SUBNET_STRING}"
+apiServer:
+  certSANs:
+  - "${ADVERTISE_ADDRESS_STRING}"
+EOF
+    scp -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i "${WORKDIR}/id_rsa" ${WORKDIR}/kubeadm.conf ubuntu@${CONTROL_PLANE_IPV4}:${WORKDIR}/kubeadm.conf
+    ssh -o StrictHostKeyChecking=no -i "${WORKDIR}/id_rsa" -n ubuntu@${CONTROL_PLANE_IPV4} "sudo kubeadm init --config ${WORKDIR}/kubeadm.conf"
+    ssh -o StrictHostKeyChecking=no -i "${WORKDIR}/id_rsa" -n ubuntu@${CONTROL_PLANE_IPV4} "mkdir -p \$HOME/.kube"
+    ssh -o StrictHostKeyChecking=no -i "${WORKDIR}/id_rsa" -n ubuntu@${CONTROL_PLANE_IPV4} "sudo cp -f /etc/kubernetes/admin.conf \$HOME/.kube/config"
+    ssh -o StrictHostKeyChecking=no -i "${WORKDIR}/id_rsa" -n ubuntu@${CONTROL_PLANE_IPV4} "sudo chown \$(id -u):\$(id -g) \$HOME/.kube/config"
+    ssh -o StrictHostKeyChecking=no -i "${WORKDIR}/jenkins_id_rsa" -n jenkins@${CONTROL_PLANE_IPV4} "mkdir -p \$HOME/.kube"
+    ssh -o StrictHostKeyChecking=no -i "${WORKDIR}/id_rsa" -n ubuntu@${CONTROL_PLANE_IPV4} "sudo cp -f /etc/kubernetes/admin.conf \`getent passwd jenkins | cut -d: -f6\`/.kube/config"
+    ssh -o StrictHostKeyChecking=no -i "${WORKDIR}/id_rsa" -n ubuntu@${CONTROL_PLANE_IPV4} "sudo chown jenkins:jenkins \`getent passwd jenkins | cut -d: -f6\`/.kube/config"
+    for WORKER_IPV4 in "${WORKER_IPV4S[@]}"; do
+        ssh -o StrictHostKeyChecking=no -i "${WORKDIR}/id_rsa" -n ubuntu@${WORKER_IPV4} "sudo kubeadm join ${APISERVER_IP_STRING}:6443 --token ${TOKEN} --discovery-token-unsafe-skip-ca-verification"
+    done
+    mkdir -p $HOME/.kube
+    scp -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i "${WORKDIR}/id_rsa" ubuntu@${CONTROL_PLANE_IPV4}:\$HOME/.kube/config ${WORKDIR}/.kube/
+    cp -f "${WORKDIR}/.kube/config" "${WORKDIR}/kube.conf"
+
+    echo "===== Configure routes ====="
+    sudo ip route flush root ${POD_SUBNET_IPV4}
+    sudo ip -6 route flush root ${POD_SUBNET_IPV6}
+    for (( i=0; i<${#HOSTNAMES[@]}; i++ )); do
+        POD_CIDRS=($( (kubectl get node ${HOSTNAMES[i]} -o json | jq -r '.spec.podCIDRs | @sh') | tr -d \'\"))
+        for POD_CIDR in "${POD_CIDRS[@]}"; do
+            if [[ $POD_CIDR =~ .*:.* ]]
+            then
+                sudo ip -6 route add ${POD_CIDR} via ${IPV6S[i]}
+            else
+                sudo ip route add ${POD_CIDR} via ${IPV4S[i]}
+            fi
+        done
+    done
 }
 
 export KUBECONFIG=${KUBECONFIG_PATH}
