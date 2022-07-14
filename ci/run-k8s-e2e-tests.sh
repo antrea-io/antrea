@@ -28,6 +28,7 @@ function echoerr {
 RUN_CONFORMANCE=false
 RUN_WHOLE_CONFORMANCE=false
 RUN_NETWORK_POLICY=false
+RUN_SIG_NETWORK=false
 RUN_E2E_FOCUS=""
 RUN_E2E_SKIP=""
 KUBECONFIG_OPTION=""
@@ -35,6 +36,8 @@ DEFAULT_E2E_CONFORMANCE_FOCUS="\[Conformance\]"
 DEFAULT_E2E_CONFORMANCE_SKIP="\[Slow\]|\[Serial\]|\[Disruptive\]|\[Flaky\]|\[Feature:.+\]|\[sig-cli\]|\[sig-storage\]|\[sig-auth\]|\[sig-api-machinery\]|\[sig-apps\]|\[sig-node\]|\[sig-instrumentation\]"
 DEFAULT_E2E_NETWORKPOLICY_FOCUS="\[Feature:NetworkPolicy\]"
 DEFAULT_E2E_NETWORKPOLICY_SKIP=""
+DEFAULT_E2E_SIG_NETWORK_FOCUS="\[sig-network\]"
+DEFAULT_E2E_SIG_NETWORK_SKIP="\[Slow\]|\[Serial\]|\[Disruptive\]|\[GCE\]|\[Feature:.+\]|\[Feature:IPv6DualStack\]|\[Feature:IPv6DualStackAlphaFeature\]|should create pod that uses dns|should provide Internet connection for containers"
 MODE="report"
 THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 KUBE_CONFORMANCE_IMAGE_OPTION=""
@@ -53,6 +56,7 @@ least one failed) and 2 (internal error when running tests, not a test failure).
         --e2e-conformance                                         Run Conformance tests.
         --e2e-whole-conformance                                   Run whole Conformance tests.
         --e2e-network-policy                                      Run Network Policy tests.
+        --e2e-sig-network                                         Run Sig-network tests.
         --e2e-all                                                 Run both Conformance and Network Policy tests.
         --e2e-focus TestRegex                                     Run only tests matching a specific regex, this is useful to run a single tests for example.
         --e2e-skip TestRegex                                      Skip some tests matching a specific regex.
@@ -106,9 +110,14 @@ case $key in
     RUN_NETWORK_POLICY=true
     shift
     ;;
+    --e2e-sig-network)
+    RUN_SIG_NETWORK=true
+    shift
+    ;;
     --e2e-all)
     RUN_CONFORMANCE=true
     RUN_NETWORK_POLICY=true
+    RUN_SIG_NETWORK=true
     shift
     ;;
     --e2e-focus)
@@ -222,6 +231,19 @@ function run_network_policy() {
     run_sonobuoy "${DEFAULT_E2E_NETWORKPOLICY_FOCUS}" "${e2e_skip}"
 }
 
+function run_sig_network() {
+    local e2e_skip="${DEFAULT_E2E_SIG_NETWORK_SKIP}"
+
+    if [[ "$RUN_E2E_FOCUS" != "" ]]; then
+        echo "It is not allowed to specify focus when running sig-network tests"
+        exit 1
+    fi
+    if [[ "$RUN_E2E_SKIP" != "" ]]; then
+        e2e_skip="$RUN_E2E_SKIP"
+    fi
+    run_sonobuoy "${DEFAULT_E2E_SIG_NETWORK_FOCUS}" "${e2e_skip}"
+}
+
 if [[ "$RUN_E2E_FOCUS" != "" ]]; then
     run_sonobuoy "$RUN_E2E_FOCUS" "$RUN_E2E_SKIP"
 fi
@@ -236,6 +258,10 @@ fi
 
 if $RUN_NETWORK_POLICY; then
     run_network_policy
+fi
+
+if $RUN_SIG_NETWORK; then
+    run_sig_network
 fi
 
 echoerr "Deleting sonobuoy resources"

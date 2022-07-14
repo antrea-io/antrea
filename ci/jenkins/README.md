@@ -204,6 +204,8 @@ subset of community tests for Antrea:
   [--kubeconfig <Kubeconfig>]`.
 * To run network policy tests: `./run-k8s-e2e-tests.sh --e2e-network-policy
   [--kubeconfig <Kubeconfig>]`.
+* To run sig-network tests: `./run-k8s-e2e-tests.sh --e2e-sig-network
+  [--kubeconfig <Kubeconfig>]`.
 * To run a single test by name: `./run-k8s-e2e-tests.sh --e2e-focus <TestRegex>
   [--kubeconfig <Kubeconfig>]`.
 
