@@ -65,12 +65,29 @@ spec:
       {{- end }}
       serviceAccountName: antrea-agent
       initContainers:
+        {{- if .Values.whereabouts.enable }}
+        - name: install-whereabouts-config
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          resources:
+            requests:
+              cpu: "100m"
+          command: ["install_whereabouts_config"]
+          volumeMounts:
+          - name: whereabouts-cni-conf
+            mountPath: /host/etc/cni/net.d/whereabouts.d
+          - name: whereabouts-secret
+            mountPath: /var/run/secrets/whereabouts
+        {{- end }}
+      {{- if eq .Values.trafficEncapMode "networkPolicyOnly" }}
+      containers:
+      {{- end }}
         - name: install-cni
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           resources: {{- .Values.agent.installCNI.resources | toYaml | nindent 12 }}
           {{- if eq .Values.trafficEncapMode "networkPolicyOnly" }}
           command: ["install_cni_chaining"]
+          args: ["--monitor"]
           {{- else }}
           command: ["install_cni"]
           {{- end }}
@@ -100,20 +117,9 @@ spec:
           # For changing the default permissions of the run directory.
           - name: host-var-run-antrea
             mountPath: /var/run/antrea
-        {{- if .Values.whereabouts.enable }}
-        - name: install-whereabouts-config
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
-          resources:
-            requests:
-              cpu: "100m"
-          command: ["install_whereabouts_config"]
-          volumeMounts:
-          - name: whereabouts-cni-conf
-            mountPath: /host/etc/cni/net.d/whereabouts.d
-          - name: whereabouts-secret
-            mountPath: /var/run/secrets/whereabouts
-        {{- end }}
+      {{- if ne .Values.trafficEncapMode "networkPolicyOnly" }}
       containers:
+      {{- end }}
         - name: antrea-agent
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
