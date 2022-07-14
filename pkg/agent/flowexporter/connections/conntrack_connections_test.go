@@ -115,6 +115,7 @@ func TestConntrackConnectionStore_AddOrUpdateConn(t *testing.T) {
 			expectedConn: flowexporter.Connection{
 				StartTime:                      refTime,
 				StopTime:                       refTime,
+				LastExportTime:                 refTime,
 				FlowKey:                        tuple1,
 				Labels:                         []byte{0x0, 0x0, 0x0, 0x1, 0x0, 0x0, 0x0, 0x0},
 				Mark:                           openflow.ServiceCTMark.GetValue(),
@@ -136,6 +137,7 @@ func TestConntrackConnectionStore_AddOrUpdateConn(t *testing.T) {
 			oldConn: &flowexporter.Connection{
 				StartTime:       refTime.Add(-(time.Second * 50)),
 				StopTime:        refTime.Add(-(time.Second * 30)),
+				LastExportTime:  refTime.Add(-(time.Second * 50)),
 				OriginalPackets: 0xfff,
 				OriginalBytes:   0xbaaaaa00000000,
 				ReversePackets:  0xf,
@@ -156,6 +158,7 @@ func TestConntrackConnectionStore_AddOrUpdateConn(t *testing.T) {
 			expectedConn: flowexporter.Connection{
 				StartTime:       refTime.Add(-(time.Second * 50)),
 				StopTime:        refTime,
+				LastExportTime:  refTime.Add(-(time.Second * 50)),
 				OriginalPackets: 0xffff,
 				OriginalBytes:   0xbaaaaa0000000000,
 				ReversePackets:  0xff,
@@ -173,6 +176,7 @@ func TestConntrackConnectionStore_AddOrUpdateConn(t *testing.T) {
 			oldConn: &flowexporter.Connection{
 				StartTime:       refTime.Add(-(time.Second * 50)),
 				StopTime:        refTime.Add(-(time.Second * 30)),
+				LastExportTime:  refTime.Add(-(time.Second * 50)),
 				OriginalPackets: 0xfff,
 				OriginalBytes:   0xbaaaaa00000000,
 				ReversePackets:  0xf,
@@ -195,6 +199,7 @@ func TestConntrackConnectionStore_AddOrUpdateConn(t *testing.T) {
 			expectedConn: flowexporter.Connection{
 				StartTime:       refTime.Add(-(time.Second * 50)),
 				StopTime:        refTime.Add(-(time.Second * 30)),
+				LastExportTime:  refTime.Add(-(time.Second * 50)),
 				OriginalPackets: 0xfff,
 				OriginalBytes:   0xbaaaaa00000000,
 				ReversePackets:  0xf,
@@ -249,7 +254,7 @@ func testAddNewConn(mockIfaceStore *interfacestoretest.MockInterfaceStore, mockP
 func addConnToStore(cs *ConntrackConnectionStore, conn *flowexporter.Connection) {
 	connKey := flowexporter.NewConnectionKey(conn)
 	cs.AddConnToMap(&connKey, conn)
-	cs.expirePriorityQueue.AddItemToQueue(connKey, conn)
+	cs.expirePriorityQueue.WriteItemToQueue(connKey, conn)
 	metrics.TotalAntreaConnectionsInConnTrackTable.Inc()
 }
 
