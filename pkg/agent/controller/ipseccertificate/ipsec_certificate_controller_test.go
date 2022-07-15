@@ -353,6 +353,12 @@ func signCSR(t *testing.T, controller *fakeController,
 	assert.Empty(t, remain)
 	req, err := x509.ParseCertificateRequest(block.Bytes)
 	assert.NoError(t, err)
+
+	// Wait one second as the fake clientset doesn't support watching with specific resourceVersion.
+	// Otherwise the update event would be missed by the watcher used in csrutil.WaitForCertificate()
+	// if it happens to be generated in-between the List and Watch calls.
+	time.Sleep(1 * time.Second)
+
 	newCert := createCertificate(t, req.Subject.CommonName, controller.caCert,
 		controller.caKey, req.PublicKey, csr.CreationTimestamp.Time, expirationDuration)
 	toUpdate := csr.DeepCopy()
@@ -369,6 +375,7 @@ func signCSR(t *testing.T, controller *fakeController,
 	_, err = controller.kubeClient.CertificatesV1().CertificateSigningRequests().
 		UpdateStatus(context.TODO(), toUpdate, metav1.UpdateOptions{})
 	assert.NoError(t, err)
+	t.Logf("Sign CSR %q successfully", csr.Name)
 }
 
 func Test_jitteryDuration(t *testing.T) {
