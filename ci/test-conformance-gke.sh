@@ -31,8 +31,7 @@ RUN_ALL=true
 RUN_SETUP_ONLY=false
 RUN_CLEANUP_ONLY=false
 TEST_SCRIPT_RC=0
-# There is a problem with the netpol suite added in v1.21.0 when running on GKE. See #3762 for details.
-KUBE_CONFORMANCE_IMAGE_VERSION=v1.20.15
+KUBE_CONFORMANCE_IMAGE_VERSION=auto
 
 _usage="Usage: $0 [--cluster-name <GKEClusterNameToUse>]  [--kubeconfig <KubeconfigSavePath>] [--k8s-version <ClusterVersion>] \
                   [--svc-account <Name>] [--user <Name>] [--gke-project <Project>] [--gke-zone <Zone>] [--log-mode <SonobuoyResultLogLevel>] \
@@ -262,9 +261,15 @@ function run_conformance() {
     # Allow nodeport traffic by external IP
     ${GCLOUD_PATH} compute firewall-rules create allow-nodeport --allow tcp:30000-32767
 
-    ${GIT_CHECKOUT_DIR}/ci/run-k8s-e2e-tests.sh --e2e-conformance --e2e-network-policy \
+    ${GIT_CHECKOUT_DIR}/ci/run-k8s-e2e-tests.sh --e2e-conformance \
       --kube-conformance-image-version ${KUBE_CONFORMANCE_IMAGE_VERSION} \
-      --log-mode ${MODE} > ${GIT_CHECKOUT_DIR}/gke-test.log || TEST_SCRIPT_RC=$?
+      --log-mode ${MODE} > ${GIT_CHECKOUT_DIR}/gke-test.log && \
+   # Skip Netpol tests for GKE as the test suite's Namespace creation function is not robust, which leads to test
+   # failures. See https://github.com/antrea-io/antrea/issues/3762#issuecomment-1195865441.
+    ${GIT_CHECKOUT_DIR}/ci/run-k8s-e2e-tests.sh --e2e-network-policy --e2e-skip "Netpol" \
+      --kube-conformance-image-version ${KUBE_CONFORMANCE_IMAGE_VERSION} \
+      --log-mode ${MODE} >> ${GIT_CHECKOUT_DIR}/gke-test.log || \
+    TEST_SCRIPT_RC=$?
 
     if [[ $TEST_SCRIPT_RC -eq 0 ]]; then
         echo "All tests passed."

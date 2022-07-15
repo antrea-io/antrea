@@ -247,10 +247,14 @@ function run_conformance() {
     echo "=== Running Antrea Conformance and Network Policy Tests ==="
     # Skip NodePort related cases for AKS since as Nodes in AKS cluster seem not accessible from other Nodes
     # through public IPs by default. See https://github.com/antrea-io/antrea/issues/2409
-    skip_regex="\[Slow\]|\[Serial\]|\[Disruptive\]|\[Flaky\]|\[Feature:.+\]|\[sig-cli\]|\[sig-storage\]|\[sig-auth\]|\[sig-api-machinery\]|\[sig-apps\]|\[sig-node\]|NodePort"
-    ${GIT_CHECKOUT_DIR}/ci/run-k8s-e2e-tests.sh --e2e-conformance --e2e-network-policy --e2e-skip ${skip_regex} \
+    skip_regex="\[Slow\]|\[Serial\]|\[Disruptive\]|\[Flaky\]|\[Feature:.+\]|\[sig-cli\]|\[sig-storage\]|\[sig-auth\]|\[sig-api-machinery\]|\[sig-apps\]|\[sig-node\]|\[sig-instrumentation\]|NodePort"
+    ${GIT_CHECKOUT_DIR}/ci/run-k8s-e2e-tests.sh --e2e-conformance --e2e-skip ${skip_regex} \
       --kube-conformance-image-version ${KUBE_CONFORMANCE_IMAGE_VERSION} \
-      --log-mode ${MODE} > ${GIT_CHECKOUT_DIR}/aks-test.log || TEST_SCRIPT_RC=$?
+      --log-mode ${MODE} > ${GIT_CHECKOUT_DIR}/aks-test.log && \
+    ${GIT_CHECKOUT_DIR}/ci/run-k8s-e2e-tests.sh --e2e-network-policy --e2e-skip "Netpol" \
+      --kube-conformance-image-version ${KUBE_CONFORMANCE_IMAGE_VERSION} \
+      --log-mode ${MODE} >> ${GIT_CHECKOUT_DIR}/aks-test.log || \
+    TEST_SCRIPT_RC=$?
 
     if [[ $TEST_SCRIPT_RC -eq 0 ]]; then
         echo "All tests passed."
