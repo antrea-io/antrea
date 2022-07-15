@@ -22,3 +22,7 @@ keywords:
   - Flow Aggregator
 sources:
   - https://github.com/antrea-io/antrea
+annotations:
+  artifacthub.io/license: Apache-2.0
+  artifacthub.io/operator: "false"
+  artifacthub.io/prerelease: "false"

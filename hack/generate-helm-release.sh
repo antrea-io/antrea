@@ -89,9 +89,18 @@ elif ! $HELM version > /dev/null 2>&1; then
 fi
 
 ANTREA_CHART="$THIS_DIR/../build/charts/antrea"
+# create a backup file before making changes.
+# note that the backup file will not be included in the release: .bak files are
+# ignored as per the .helmignore file.
+cp "$ANTREA_CHART/Chart.yaml" "$ANTREA_CHART/Chart.yaml.bak"
+yq -i '.annotations."artifacthub.io/prerelease" = strenv(PRERELEASE)' "$ANTREA_CHART/Chart.yaml"
 $HELM package --app-version $VERSION --version $VERSION $ANTREA_CHART
 mv "antrea-$VERSION.tgz" "$OUT/antrea-chart.tgz"
+mv "$ANTREA_CHART/Chart.yaml.bak" "$ANTREA_CHART/Chart.yaml"
 
 FLOW_AGGREGATOR_CHART="$THIS_DIR/../build/charts/flow-aggregator"
+cp "$FLOW_AGGREGATOR_CHART/Chart.yaml" "$FLOW_AGGREGATOR_CHART/Chart.yaml.bak"
+yq -i '.annotations."artifacthub.io/prerelease" = strenv(PRERELEASE)' "$FLOW_AGGREGATOR_CHART/Chart.yaml"
 $HELM package --app-version $VERSION --version $VERSION $FLOW_AGGREGATOR_CHART
 mv "flow-aggregator-$VERSION.tgz" "$OUT/flow-aggregator-chart.tgz"
+mv "$FLOW_AGGREGATOR_CHART/Chart.yaml.bak" "$FLOW_AGGREGATOR_CHART/Chart.yaml"

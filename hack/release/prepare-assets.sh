@@ -17,6 +17,9 @@
 # This script generates all the assets required for an Antrea Github release to
 # the provided directory.
 # Usage: VERSION=v1.0.0 ./prepare-assets.sh <output dir>
+# In addition to the VERSION environment variable (which is required), the
+# PRERELEASE environment variable can also be set to true or false (it will
+# default to false).
 
 set -eo pipefail
 
@@ -32,6 +35,12 @@ fi
 if [ -z "$1" ]; then
     echoerr "Argument required: output directory for assets"
 fi
+
+: "${PRERELEASE:=false}"
+if [ "$PRERELEASE" != "true" ] && [ "$PRERELEASE" != "false" ]; then
+    echoerr "Environment variable PRERELEASE should only be set to 'true' or 'false'"
+fi
+export PRERELEASE
 
 THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
