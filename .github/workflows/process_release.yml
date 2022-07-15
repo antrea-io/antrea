@@ -2,8 +2,7 @@ name: Process new release
 
 on:
   release:
-    types:
-      - created
+    types: [published]
 
 jobs:
   upload-release-assets:
@@ -17,6 +16,7 @@ jobs:
     - name: Build assets
       env:
         TAG: ${{ github.ref }}
+        PRERELEASE: ${{ github.event.release.prerelease }}
       run: |
         mkdir assets
         VERSION="${TAG:10}" ./hack/release/prepare-assets.sh ./assets
