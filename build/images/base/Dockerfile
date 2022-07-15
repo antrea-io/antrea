@@ -2,7 +2,7 @@ ARG OVS_VERSION
 FROM ubuntu:20.04 as cni-binaries
 
 ARG CNI_BINARIES_VERSION
-ARG WHEREABOUTS_VERSION=v0.5.1
+ARG WHEREABOUTS_VERSION=v0.5.4
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends wget ca-certificates
