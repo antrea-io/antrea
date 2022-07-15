@@ -34,6 +34,7 @@ import (
 	"antrea.io/antrea/pkg/agent/util"
 	"antrea.io/antrea/pkg/agent/util/arping"
 	"antrea.io/antrea/pkg/agent/util/ethtool"
+	"antrea.io/antrea/pkg/agent/util/ndp"
 	cnipb "antrea.io/antrea/pkg/apis/cni/v1beta1"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 )
@@ -301,24 +302,33 @@ func (ic *ifConfigurator) advertiseContainerAddr(containerNetNS string, containe
 			klog.Errorf("Failed to find container interface %s in ns %s: %v", containerIfaceName, containerNetNS, err)
 			return nil
 		}
-		var targetIP net.IP
+		var targetIPv4, targetIPv6 net.IP
 		for _, ipc := range result.IPs {
 			if ipc.Version == "4" {
-				targetIP = ipc.Address.IP
+				targetIPv4 = ipc.Address.IP
+			} else if ipc.Version == "6" {
+				targetIPv6 = ipc.Address.IP
 			}
 		}
-		if targetIP == nil {
-			klog.V(2).Infof("No IPv4 address found for container interface %s in ns %s, skip sending Gratuitous ARP", containerIfaceName, containerNetNS)
+		if targetIPv4 == nil && targetIPv6 == nil {
+			klog.V(2).Infof("No IPv4 and IPv6 address found for container interface %s in ns %s, skip sending Gratuitous ARP/NDP", containerIfaceName, containerNetNS)
 			return nil
 		}
 		ticker := time.NewTicker(50 * time.Millisecond)
 		defer ticker.Stop()
 		count := 0
 		for {
-			// Send gratuitous ARP to network in case of stale mappings for this IP address
+			// Send gratuitous ARP/NDP to network in case of stale mappings for this IP address
 			// (e.g. if a previous - deleted - Pod was using the same IP).
-			if err := arping.GratuitousARPOverIface(targetIP, iface); err != nil {
-				klog.Warningf("Failed to send gratuitous ARP #%d: %v", count, err)
+			if targetIPv4 != nil {
+				if err := arping.GratuitousARPOverIface(targetIPv4, iface); err != nil {
+					klog.Warningf("Failed to send gratuitous ARP #%d: %v", count, err)
+				}
+			}
+			if targetIPv6 != nil {
+				if err := ndp.GratuitousNDPOverIface(targetIPv6, iface); err != nil {
+					klog.Warningf("Failed to send gratuitous NDP #%d: %v", count, err)
+				}
 			}
 			count++
 			if count == 3 {
