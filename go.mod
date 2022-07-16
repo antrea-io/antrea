@@ -19,14 +19,14 @@ require (
 	github.com/containernetworking/plugins v0.8.7
 	github.com/coreos/go-iptables v0.6.0
 	github.com/fsnotify/fsnotify v1.5.4
-	github.com/gammazero/deque v0.1.0
+	github.com/gammazero/deque v0.2.0
 	github.com/go-logr/logr v1.2.0
 	github.com/gogo/protobuf v1.3.2
 	github.com/golang/mock v1.6.0
 	github.com/golang/protobuf v1.5.2
 	github.com/google/btree v1.0.1
 	github.com/google/uuid v1.1.2
-	github.com/hashicorp/memberlist v0.2.4
+	github.com/hashicorp/memberlist v0.3.1
 	github.com/k8snetworkplumbingwg/network-attachment-definition-client v1.1.0
 	github.com/k8snetworkplumbingwg/sriov-cni v2.1.0+incompatible
 	github.com/kevinburke/ssh_config v0.0.0-20190725054713-01f96b0aa0cd
