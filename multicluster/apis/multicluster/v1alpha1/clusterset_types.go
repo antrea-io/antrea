@@ -39,6 +39,8 @@ type ClusterSetSpec struct {
 	// Used in leader cluster.
 	Members []MemberCluster `json:"members,omitempty"`
 	// Leaders include leader clusters known to the member clusters.
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=1
 	Leaders []MemberCluster `json:"leaders,omitempty"`
 	// The leader cluster Namespace in which the ClusterSet is defined.
 	// Used in member cluster.
@@ -71,15 +73,15 @@ type ClusterSetCondition struct {
 type ClusterConditionType string
 
 const (
-	// ClusterReady indicates whether Cluster is ready and connected.
+	// ClusterReady indicates whether cluster is ready and connected.
 	ClusterReady ClusterConditionType = "Ready"
-	// ClusterIsElectedLeader indicates whether the leader cluster is the elected leader.
-	// Used in Member clusters only.
-	ClusterIsElectedLeader ClusterConditionType = "IsElectedLeader"
-	// ClusterImportsResources indicates whether the member cluster has elected the
-	// local cluster as the elected leader and imports resources from it.
-	// Used in Leader clusters only.
-	ClusterImportsResources ClusterConditionType = "ImportsResources"
+	// ClusterIsLeader indicates whether the cluster is the leader of the local cluster.
+	// Used in member clusters only.
+	ClusterIsLeader ClusterConditionType = "IsLeader"
+	// ClusterConnected indicates whether the member cluster has connected to the
+	// local cluster as the leader.
+	// Used in leader clusters only.
+	ClusterConnected ClusterConditionType = "ClusterConnected"
 )
 
 // ClusterCondition indicates the readiness condition of a cluster.

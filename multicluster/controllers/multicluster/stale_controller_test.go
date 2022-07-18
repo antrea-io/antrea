@@ -35,10 +35,6 @@ import (
 )
 
 func TestStaleController_CleanupService(t *testing.T) {
-	remoteMgr := commonarea.NewRemoteCommonAreaManager("test-clusterset", common.ClusterID(localClusterID), "kube-system")
-	remoteMgr.Start()
-	defer remoteMgr.Stop()
-
 	mcSvcNginx := svcNginx.DeepCopy()
 	mcSvcNginx.Name = "antrea-mc-nginx"
 	mcSvcNginx.Annotations = map[string]string{common.AntreaMCServiceAnnotation: "true"}
@@ -96,9 +92,9 @@ func TestStaleController_CleanupService(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithLists(tt.existSvcList, tt.existSvcImpList).Build()
 			fakeRemoteClient := fake.NewClientBuilder().WithScheme(scheme).WithLists(tt.existingResImpList).Build()
-			_ = commonarea.NewFakeRemoteCommonArea(scheme, remoteMgr, fakeRemoteClient, "leader-cluster", "default")
+			commonArea := commonarea.NewFakeRemoteCommonArea(scheme, fakeRemoteClient, "leader-cluster", localClusterID, "default")
 			mcReconciler := NewMemberClusterSetReconciler(fakeClient, scheme, "default")
-			mcReconciler.SetRemoteCommonAreaManager(remoteMgr)
+			mcReconciler.SetRemoteCommonArea(commonArea)
 			c := NewStaleResCleanupController(fakeClient, scheme, "default", mcReconciler)
 			if err := c.cleanup(); err != nil {
 				t.Errorf("StaleController.cleanup() should clean up all stale Service and ServiceImport but got err = %v", err)
@@ -129,10 +125,6 @@ func TestStaleController_CleanupService(t *testing.T) {
 }
 
 func TestStaleController_CleanupACNP(t *testing.T) {
-	remoteMgr := commonarea.NewRemoteCommonAreaManager("test-clusterset", common.ClusterID(localClusterID), "kube-system")
-	remoteMgr.Start()
-	defer remoteMgr.Stop()
-
 	acnpImportName := "acnp-for-isolation"
 	acnpResImportName := leaderNamespace + "-" + acnpImportName
 	acnpResImport := mcsv1alpha1.ResourceImport{
@@ -194,10 +186,10 @@ func TestStaleController_CleanupACNP(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithLists(tt.existingACNPList).Build()
 			fakeRemoteClient := fake.NewClientBuilder().WithScheme(scheme).WithLists(tt.existingResImpList).Build()
-			_ = commonarea.NewFakeRemoteCommonArea(scheme, remoteMgr, fakeRemoteClient, "leader-cluster", "default")
+			commonArea := commonarea.NewFakeRemoteCommonArea(scheme, fakeRemoteClient, "leader-cluster", localClusterID, "default")
 
 			mcReconciler := NewMemberClusterSetReconciler(fakeClient, scheme, "default")
-			mcReconciler.SetRemoteCommonAreaManager(remoteMgr)
+			mcReconciler.SetRemoteCommonArea(commonArea)
 			c := NewStaleResCleanupController(fakeClient, scheme, "default", mcReconciler)
 			if err := c.cleanup(); err != nil {
 				t.Errorf("StaleController.cleanup() should clean up all stale ACNPs but got err = %v", err)
@@ -219,10 +211,6 @@ func TestStaleController_CleanupACNP(t *testing.T) {
 }
 
 func TestStaleController_CleanupResourceExport(t *testing.T) {
-	remoteMgr := commonarea.NewRemoteCommonAreaManager("test-clusterset", common.ClusterID(localClusterID), "kube-system")
-	remoteMgr.Start()
-	defer remoteMgr.Stop()
-
 	svcExpNginx := k8smcsv1alpha1.ServiceExport{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
@@ -327,10 +315,10 @@ func TestStaleController_CleanupResourceExport(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithLists(tt.existSvcExpList).Build()
 			fakeRemoteClient := fake.NewClientBuilder().WithScheme(scheme).WithLists(tt.existResExpList).Build()
-			_ = commonarea.NewFakeRemoteCommonArea(scheme, remoteMgr, fakeRemoteClient, "leader-cluster", "default")
+			commonArea := commonarea.NewFakeRemoteCommonArea(scheme, fakeRemoteClient, "leader-cluster", localClusterID, "default")
 
 			mcReconciler := NewMemberClusterSetReconciler(fakeClient, scheme, "default")
-			mcReconciler.SetRemoteCommonAreaManager(remoteMgr)
+			mcReconciler.SetRemoteCommonArea(commonArea)
 			c := NewStaleResCleanupController(fakeClient, scheme, "default", mcReconciler)
 			if err := c.cleanup(); err != nil {
 				t.Errorf("StaleController.cleanup() should clean up all stale ResourceExports but got err = %v", err)
@@ -354,9 +342,6 @@ func TestStaleController_CleanupResourceExport(t *testing.T) {
 }
 
 func TestStaleController_CleanupClusterInfoImport(t *testing.T) {
-	remoteMgr := commonarea.NewRemoteCommonAreaManager("test-clusterset", common.ClusterID(localClusterID), "kube-system")
-	remoteMgr.Start()
-	defer remoteMgr.Stop()
 	ci := mcsv1alpha1.ClusterInfo{
 		ClusterID:   "cluster-a",
 		ServiceCIDR: "10.10.1.0/16",
@@ -411,10 +396,10 @@ func TestStaleController_CleanupClusterInfoImport(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithLists(tt.existCIImpList).Build()
 			fakeRemoteClient := fake.NewClientBuilder().WithScheme(scheme).WithLists(tt.existingResImpList).Build()
-			_ = commonarea.NewFakeRemoteCommonArea(scheme, remoteMgr, fakeRemoteClient, "leader-cluster", "antrea-mcs")
+			commonarea := commonarea.NewFakeRemoteCommonArea(scheme, fakeRemoteClient, "leader-cluster", localClusterID, "antrea-mcs")
 
 			mcReconciler := NewMemberClusterSetReconciler(fakeClient, scheme, "default")
-			mcReconciler.SetRemoteCommonAreaManager(remoteMgr)
+			mcReconciler.SetRemoteCommonArea(commonarea)
 			c := NewStaleResCleanupController(fakeClient, scheme, "default", mcReconciler)
 			if err := c.cleanup(); err != nil {
 				t.Errorf("StaleController.cleanup() should clean up all stale ClusterInfoImport but got err = %v", err)

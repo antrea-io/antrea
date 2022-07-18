@@ -119,13 +119,9 @@ func init() {
 }
 
 func TestResourceImportReconciler_handleCreateEvent(t *testing.T) {
-	remoteMgr := NewRemoteCommonAreaManager("test-clusterset", common.ClusterID(localClusterID), "kube-system")
-	remoteMgr.Start()
-	defer remoteMgr.Stop()
-
 	fakeClient := fake.NewClientBuilder().WithScheme(scheme).Build()
 	fakeRemoteClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(svcResImport, epResImport).Build()
-	remoteCluster := NewFakeRemoteCommonArea(scheme, remoteMgr, fakeRemoteClient, "leader-cluster", "default")
+	remoteCluster := NewFakeRemoteCommonArea(scheme, fakeRemoteClient, "leader-cluster", localClusterID, "default")
 
 	tests := []struct {
 		name    string
@@ -174,10 +170,6 @@ func TestResourceImportReconciler_handleCreateEvent(t *testing.T) {
 }
 
 func TestResourceImportReconciler_handleDeleteEvent(t *testing.T) {
-	remoteMgr := NewRemoteCommonAreaManager("test-clusterset", common.ClusterID(localClusterID), "kube-system")
-	remoteMgr.Start()
-	defer remoteMgr.Stop()
-
 	existSvc := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
@@ -199,7 +191,7 @@ func TestResourceImportReconciler_handleDeleteEvent(t *testing.T) {
 
 	fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(existSvc, existEp, existSvcImp).Build()
 	fakeRemoteClient := fake.NewClientBuilder().WithScheme(scheme).Build()
-	remoteCluster := NewFakeRemoteCommonArea(scheme, remoteMgr, fakeRemoteClient, "leader-cluster", "default")
+	remoteCluster := NewFakeRemoteCommonArea(scheme, fakeRemoteClient, "leader-cluster", localClusterID, "default")
 
 	tests := []struct {
 		name    string
@@ -249,10 +241,6 @@ func TestResourceImportReconciler_handleDeleteEvent(t *testing.T) {
 }
 
 func TestResourceImportReconciler_handleUpdateEvent(t *testing.T) {
-	remoteMgr := NewRemoteCommonAreaManager("test-clusterset", common.ClusterID(localClusterID), "kube-system")
-	remoteMgr.Start()
-	defer remoteMgr.Stop()
-
 	nginxPorts := []corev1.ServicePort{
 		{
 			Protocol: corev1.ProtocolTCP,
@@ -404,7 +392,7 @@ func TestResourceImportReconciler_handleUpdateEvent(t *testing.T) {
 		existSvc, existMCSvcConflicts, existMCEpConflicts, svcWithoutAutoAnnotation, epWithoutAutoAnnotation).Build()
 	fakeRemoteClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(updatedEpResImport, updatedSvcResImport,
 		svcResImportWithConflicts, epResImportWithConflicts).Build()
-	remoteCluster := NewFakeRemoteCommonArea(scheme, remoteMgr, fakeRemoteClient, "leader-cluster", "default")
+	remoteCluster := NewFakeRemoteCommonArea(scheme, fakeRemoteClient, "leader-cluster", localClusterID, "default")
 
 	tests := []struct {
 		name             string

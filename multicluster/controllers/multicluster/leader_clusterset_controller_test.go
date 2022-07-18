@@ -183,7 +183,7 @@ func TestLeaderClusterStatus(t *testing.T) {
 	eventTime := time.Date(2021, 12, 12, 12, 12, 12, 0, time.Local)
 	metaTime := metav1.Time{Time: eventTime}
 
-	statues := []mcsv1alpha1.ClusterStatus{
+	statuses := []mcsv1alpha1.ClusterStatus{
 		{
 			ClusterID: "east",
 			Conditions: []mcsv1alpha1.ClusterCondition{
@@ -199,7 +199,7 @@ func TestLeaderClusterStatus(t *testing.T) {
 					Message:            "Member created",
 					Reason:             "NeverConnected",
 					Status:             v1.ConditionFalse,
-					Type:               mcsv1alpha1.ClusterImportsResources,
+					Type:               mcsv1alpha1.ClusterConnected,
 				},
 			},
 		},
@@ -213,16 +213,16 @@ func TestLeaderClusterStatus(t *testing.T) {
 				},
 				{
 					LastTransitionTime: metaTime,
-					Message:            "Local leader cluster is the elected leader of member: west",
-					Reason:             "ElectedLeader",
+					Message:            "Local leader cluster is the leader of member: west",
+					Reason:             "IsLeader",
 					Status:             v1.ConditionFalse,
-					Type:               mcsv1alpha1.ClusterImportsResources,
+					Type:               mcsv1alpha1.ClusterConnected,
 				},
 			},
 		},
 	}
 
-	mockStatusManager.EXPECT().GetMemberClusterStatuses().Return(statues).Times(1)
+	mockStatusManager.EXPECT().GetMemberClusterStatuses().Return(statuses).Times(1)
 
 	leaderClusterSetReconcilerUnderTest.updateStatus()
 
@@ -234,7 +234,7 @@ func TestLeaderClusterStatus(t *testing.T) {
 	expectedStatus := mcsv1alpha1.ClusterSetStatus{
 		ObservedGeneration: 1,
 		TotalClusters:      2,
-		ClusterStatuses:    statues,
+		ClusterStatuses:    statuses,
 		Conditions: []mcsv1alpha1.ClusterSetCondition{
 			{
 				Reason: "NoReadyCluster",

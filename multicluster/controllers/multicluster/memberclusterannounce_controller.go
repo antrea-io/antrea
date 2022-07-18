@@ -37,23 +37,21 @@ import (
 )
 
 var (
-	ReasonNeverConnected   = "NeverConnected"
-	ReasonConnected        = "Connected"
-	ReasonDisconnected     = "Disconnected"
-	ReasonElectedLeader    = "ElectedLeader"
-	ReasonNotElectedLeader = "NotElectedLeader"
+	ReasonNeverConnected  = "NeverConnected"
+	ReasonConnected       = "Connected"
+	ReasonDisconnected    = "Disconnected"
+	ReasonConnectedLeader = "ConnectedLeader"
+	ReasonNotLeader       = "NotLeader"
 
 	TimerInterval     = 5 * time.Second
 	ConnectionTimeout = 3 * TimerInterval
 )
 
 type leaderStatus struct {
-	// electedLocalAsLeaderCluster indicates the member has elected the local cluster
-	// as the elected leader from which it watches resources for the MCS resource exchange
-	// pipeline.
-	electedLocalAsLeaderCluster v1.ConditionStatus
-	message                     string
-	reason                      string
+	// connectedLeader indicates this member has connected to the local cluster which is the leader.
+	connectedLeader v1.ConditionStatus
+	message         string
+	reason          string
 }
 
 type timerData struct {
@@ -111,28 +109,28 @@ func (r *MemberClusterAnnounceReconciler) Reconcile(ctx context.Context, req ctr
 	defer r.mapLock.Unlock()
 
 	if data, ok := r.timerData[common.ClusterID(memberAnnounce.ClusterID)]; ok {
-		klog.V(2).InfoS("Reset lastUpdateTime", "Cluster", memberAnnounce.ClusterID)
-		// Reset lastUpdateTime and electedLocalAsLeaderCluster for this member.
+		klog.V(2).InfoS("Reset lastUpdateTime", "cluster", memberAnnounce.ClusterID)
+		// Reset lastUpdateTime and connectedLeader for this member.
 		data.lastUpdateTime = time.Now()
 		if len(memberAnnounce.LeaderClusterID) == 0 {
-			data.leaderStatus.electedLocalAsLeaderCluster = v1.ConditionUnknown
-			data.leaderStatus.message = "Leader has not been elected yet"
+			data.leaderStatus.connectedLeader = v1.ConditionUnknown
+			data.leaderStatus.message = "Not connected to leader yet"
 			data.leaderStatus.reason = ""
 		} else {
-			data.leaderStatus.electedLocalAsLeaderCluster = v1.ConditionFalse
-			data.leaderStatus.message = fmt.Sprintf("Local cluster is not the elected leader of member: %v",
+			data.leaderStatus.connectedLeader = v1.ConditionFalse
+			data.leaderStatus.message = fmt.Sprintf("Local cluster is not the leader of member: %v",
 				memberAnnounce.ClusterID)
-			data.leaderStatus.reason = ReasonNotElectedLeader
+			data.leaderStatus.reason = ReasonNotLeader
 			// Check whether this local cluster is the leader for this member.
 			clusterClaimList := &multiclusterv1alpha2.ClusterClaimList{}
 			if err := r.List(context.TODO(), clusterClaimList, client.InNamespace(req.Namespace)); err == nil {
 				for _, clusterClaim := range clusterClaimList.Items {
 					if clusterClaim.Name == multiclusterv1alpha2.WellKnownClusterClaimID &&
 						clusterClaim.Value == memberAnnounce.LeaderClusterID {
-						data.leaderStatus.electedLocalAsLeaderCluster = v1.ConditionTrue
-						data.leaderStatus.message = fmt.Sprintf("Local cluster is the elected leader of member: %v",
+						data.leaderStatus.connectedLeader = v1.ConditionTrue
+						data.leaderStatus.message = fmt.Sprintf("Local cluster is the leader of member: %v",
 							memberAnnounce.ClusterID)
-						data.leaderStatus.reason = ReasonElectedLeader
+						data.leaderStatus.reason = ReasonConnectedLeader
 						break
 					}
 				}
@@ -175,7 +173,7 @@ func (r *MemberClusterAnnounceReconciler) processMCSStatus() {
 		status := r.memberStatus[member]
 		// Check if the member has connected at least once in the last 3 intervals.
 		duration := time.Since(data.lastUpdateTime)
-		klog.V(2).InfoS("Timer processing", "Cluster", member, "duration", duration)
+		klog.V(2).InfoS("Timer processing", "cluster", member, "duration", duration)
 		if duration <= ConnectionTimeout {
 			// Member has updated MemberClusterStatus at least once in the last 3 intervals.
 			// If last status is not connected, then update the status.
@@ -191,10 +189,10 @@ func (r *MemberClusterAnnounceReconciler) processMCSStatus() {
 							condition.Reason = ReasonConnected
 						}
 					}
-				case multiclusterv1alpha1.ClusterImportsResources:
+				case multiclusterv1alpha1.ClusterConnected:
 					{
-						if data.leaderStatus.electedLocalAsLeaderCluster != condition.Status {
-							condition.Status = data.leaderStatus.electedLocalAsLeaderCluster
+						if data.leaderStatus.connectedLeader != condition.Status {
+							condition.Status = data.leaderStatus.connectedLeader
 							condition.Message = data.leaderStatus.message
 							condition.LastTransitionTime = metav1.Now()
 							condition.Reason = data.leaderStatus.reason
@@ -216,7 +214,7 @@ func (r *MemberClusterAnnounceReconciler) processMCSStatus() {
 							condition.Reason = ReasonDisconnected
 						}
 					}
-				case multiclusterv1alpha1.ClusterImportsResources:
+				case multiclusterv1alpha1.ClusterConnected:
 					{
 						if condition.Status != v1.ConditionFalse || condition.Reason != ReasonDisconnected {
 							condition.Status = v1.ConditionFalse
@@ -250,7 +248,7 @@ func (r *MemberClusterAnnounceReconciler) AddMember(memberID common.ClusterID) {
 		Reason:             ReasonNeverConnected,
 	})
 	conditions = append(conditions, multiclusterv1alpha1.ClusterCondition{
-		Type:               multiclusterv1alpha1.ClusterImportsResources,
+		Type:               multiclusterv1alpha1.ClusterConnected,
 		Status:             v1.ConditionFalse,
 		LastTransitionTime: metav1.Now(),
 		Message:            "Member created",

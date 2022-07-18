@@ -150,10 +150,6 @@ func setupManagerAndCertController(o *Options) (manager.Manager, error) {
 		return nil, fmt.Errorf("error create ClusterClaim webhook: %v", err)
 	}
 
-	if err = (&multiclusterv1alpha1.ClusterSet{}).SetupWebhookWithManager(mgr); err != nil {
-		return nil, fmt.Errorf("error creating ClusterSet webhook: %v", err)
-	}
-
 	//+kubebuilder:scaffold:builder
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {

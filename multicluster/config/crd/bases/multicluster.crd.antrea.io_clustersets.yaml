@@ -71,6 +71,8 @@ spec:
                         into leader cluster.
                       type: string
                   type: object
+                maxItems: 1
+                minItems: 1
                 type: array
               members:
                 description: Members include member clusters known to the leader clusters.
