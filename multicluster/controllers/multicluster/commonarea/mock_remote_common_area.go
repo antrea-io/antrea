@@ -22,14 +22,234 @@ import (
 	context "context"
 	reflect "reflect"
 
+	v1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
+	common "antrea.io/antrea/multicluster/controllers/multicluster/common"
 	gomock "github.com/golang/mock/gomock"
 	meta "k8s.io/apimachinery/pkg/api/meta"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	client "sigs.k8s.io/controller-runtime/pkg/client"
-
-	v1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
-	common "antrea.io/antrea/multicluster/controllers/multicluster/common"
 )
+
+// MockCommonArea is a mock of CommonArea interface.
+type MockCommonArea struct {
+	ctrl     *gomock.Controller
+	recorder *MockCommonAreaMockRecorder
+}
+
+// MockCommonAreaMockRecorder is the mock recorder for MockCommonArea.
+type MockCommonAreaMockRecorder struct {
+	mock *MockCommonArea
+}
+
+// NewMockCommonArea creates a new mock instance.
+func NewMockCommonArea(ctrl *gomock.Controller) *MockCommonArea {
+	mock := &MockCommonArea{ctrl: ctrl}
+	mock.recorder = &MockCommonAreaMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockCommonArea) EXPECT() *MockCommonAreaMockRecorder {
+	return m.recorder
+}
+
+// Create mocks base method.
+func (m *MockCommonArea) Create(ctx context.Context, obj client.Object, opts ...client.CreateOption) error {
+	m.ctrl.T.Helper()
+	varargs := []interface{}{ctx, obj}
+	for _, a := range opts {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "Create", varargs...)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Create indicates an expected call of Create.
+func (mr *MockCommonAreaMockRecorder) Create(ctx, obj interface{}, opts ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]interface{}{ctx, obj}, opts...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Create", reflect.TypeOf((*MockCommonArea)(nil).Create), varargs...)
+}
+
+// Delete mocks base method.
+func (m *MockCommonArea) Delete(ctx context.Context, obj client.Object, opts ...client.DeleteOption) error {
+	m.ctrl.T.Helper()
+	varargs := []interface{}{ctx, obj}
+	for _, a := range opts {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "Delete", varargs...)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Delete indicates an expected call of Delete.
+func (mr *MockCommonAreaMockRecorder) Delete(ctx, obj interface{}, opts ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]interface{}{ctx, obj}, opts...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockCommonArea)(nil).Delete), varargs...)
+}
+
+// DeleteAllOf mocks base method.
+func (m *MockCommonArea) DeleteAllOf(ctx context.Context, obj client.Object, opts ...client.DeleteAllOfOption) error {
+	m.ctrl.T.Helper()
+	varargs := []interface{}{ctx, obj}
+	for _, a := range opts {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "DeleteAllOf", varargs...)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteAllOf indicates an expected call of DeleteAllOf.
+func (mr *MockCommonAreaMockRecorder) DeleteAllOf(ctx, obj interface{}, opts ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]interface{}{ctx, obj}, opts...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteAllOf", reflect.TypeOf((*MockCommonArea)(nil).DeleteAllOf), varargs...)
+}
+
+// Get mocks base method.
+func (m *MockCommonArea) Get(ctx context.Context, key client.ObjectKey, obj client.Object) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Get", ctx, key, obj)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Get indicates an expected call of Get.
+func (mr *MockCommonAreaMockRecorder) Get(ctx, key, obj interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockCommonArea)(nil).Get), ctx, key, obj)
+}
+
+// GetClusterID mocks base method.
+func (m *MockCommonArea) GetClusterID() common.ClusterID {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetClusterID")
+	ret0, _ := ret[0].(common.ClusterID)
+	return ret0
+}
+
+// GetClusterID indicates an expected call of GetClusterID.
+func (mr *MockCommonAreaMockRecorder) GetClusterID() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetClusterID", reflect.TypeOf((*MockCommonArea)(nil).GetClusterID))
+}
+
+// GetNamespace mocks base method.
+func (m *MockCommonArea) GetNamespace() string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetNamespace")
+	ret0, _ := ret[0].(string)
+	return ret0
+}
+
+// GetNamespace indicates an expected call of GetNamespace.
+func (mr *MockCommonAreaMockRecorder) GetNamespace() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNamespace", reflect.TypeOf((*MockCommonArea)(nil).GetNamespace))
+}
+
+// List mocks base method.
+func (m *MockCommonArea) List(ctx context.Context, list client.ObjectList, opts ...client.ListOption) error {
+	m.ctrl.T.Helper()
+	varargs := []interface{}{ctx, list}
+	for _, a := range opts {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "List", varargs...)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// List indicates an expected call of List.
+func (mr *MockCommonAreaMockRecorder) List(ctx, list interface{}, opts ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]interface{}{ctx, list}, opts...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "List", reflect.TypeOf((*MockCommonArea)(nil).List), varargs...)
+}
+
+// Patch mocks base method.
+func (m *MockCommonArea) Patch(ctx context.Context, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
+	m.ctrl.T.Helper()
+	varargs := []interface{}{ctx, obj, patch}
+	for _, a := range opts {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "Patch", varargs...)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Patch indicates an expected call of Patch.
+func (mr *MockCommonAreaMockRecorder) Patch(ctx, obj, patch interface{}, opts ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]interface{}{ctx, obj, patch}, opts...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Patch", reflect.TypeOf((*MockCommonArea)(nil).Patch), varargs...)
+}
+
+// RESTMapper mocks base method.
+func (m *MockCommonArea) RESTMapper() meta.RESTMapper {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RESTMapper")
+	ret0, _ := ret[0].(meta.RESTMapper)
+	return ret0
+}
+
+// RESTMapper indicates an expected call of RESTMapper.
+func (mr *MockCommonAreaMockRecorder) RESTMapper() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RESTMapper", reflect.TypeOf((*MockCommonArea)(nil).RESTMapper))
+}
+
+// Scheme mocks base method.
+func (m *MockCommonArea) Scheme() *runtime.Scheme {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Scheme")
+	ret0, _ := ret[0].(*runtime.Scheme)
+	return ret0
+}
+
+// Scheme indicates an expected call of Scheme.
+func (mr *MockCommonAreaMockRecorder) Scheme() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Scheme", reflect.TypeOf((*MockCommonArea)(nil).Scheme))
+}
+
+// Status mocks base method.
+func (m *MockCommonArea) Status() client.StatusWriter {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Status")
+	ret0, _ := ret[0].(client.StatusWriter)
+	return ret0
+}
+
+// Status indicates an expected call of Status.
+func (mr *MockCommonAreaMockRecorder) Status() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Status", reflect.TypeOf((*MockCommonArea)(nil).Status))
+}
+
+// Update mocks base method.
+func (m *MockCommonArea) Update(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+	m.ctrl.T.Helper()
+	varargs := []interface{}{ctx, obj}
+	for _, a := range opts {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "Update", varargs...)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Update indicates an expected call of Update.
+func (mr *MockCommonAreaMockRecorder) Update(ctx, obj interface{}, opts ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]interface{}{ctx, obj}, opts...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Update", reflect.TypeOf((*MockCommonArea)(nil).Update), varargs...)
+}
 
 // MockRemoteCommonArea is a mock of RemoteCommonArea interface.
 type MockRemoteCommonArea struct {
@@ -137,6 +357,20 @@ func (m *MockRemoteCommonArea) GetClusterID() common.ClusterID {
 func (mr *MockRemoteCommonAreaMockRecorder) GetClusterID() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetClusterID", reflect.TypeOf((*MockRemoteCommonArea)(nil).GetClusterID))
+}
+
+// GetLocalClusterID mocks base method.
+func (m *MockRemoteCommonArea) GetLocalClusterID() string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetLocalClusterID")
+	ret0, _ := ret[0].(string)
+	return ret0
+}
+
+// GetLocalClusterID indicates an expected call of GetLocalClusterID.
+func (mr *MockRemoteCommonAreaMockRecorder) GetLocalClusterID() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLocalClusterID", reflect.TypeOf((*MockRemoteCommonArea)(nil).GetLocalClusterID))
 }
 
 // GetNamespace mocks base method.
@@ -248,12 +482,11 @@ func (mr *MockRemoteCommonAreaMockRecorder) Scheme() *gomock.Call {
 }
 
 // Start mocks base method.
-func (m *MockRemoteCommonArea) Start() (context.CancelFunc, error) {
+func (m *MockRemoteCommonArea) Start() context.CancelFunc {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Start")
 	ret0, _ := ret[0].(context.CancelFunc)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	return ret0
 }
 
 // Start indicates an expected call of Start.
@@ -291,11 +524,9 @@ func (mr *MockRemoteCommonAreaMockRecorder) Status() *gomock.Call {
 }
 
 // Stop mocks base method.
-func (m *MockRemoteCommonArea) Stop() error {
+func (m *MockRemoteCommonArea) Stop() {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Stop")
-	ret0, _ := ret[0].(error)
-	return ret0
+	m.ctrl.Call(m, "Stop")
 }
 
 // Stop indicates an expected call of Stop.
