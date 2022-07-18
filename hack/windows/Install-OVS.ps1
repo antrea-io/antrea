@@ -199,6 +199,34 @@ function InstallOVS() {
     SetEnvVar "Path" $env:Path
 }
 
+function InstallDependency() {
+    # Check if SSL library has been installed
+    $pathEntries = $env:Path.Split(";") | ForEach-Object {
+        if ((Test-Path "$_/ssleay32.dll" -PathType Leaf) -and (Test-Path "$_/libeay32.dll" -PathType Leaf)) {
+            Log "Found existing SSL library."
+            return
+        }
+    }
+    $SSLZip = "openssl-1.0.2u-x64_86-win64.zip"
+    $SSLMD5 = "E723E1C479983F35A0901243881FA046"
+    $SSLDownloadURL = "https://indy.fulgan.com/SSL/$SSLZip"
+    curl.exe -LO $SSLDownloadURL
+    If (!$?) {
+        Log "Download SSL files failed, URL: $SSLDownloadURL"
+        Log "Please install ssleay32.dll and libeay32.dll to $OVSInstallDir\usr\sbin\ manually"
+        exit 1
+    }
+    $MD5Result = Get-FileHash $SSLZip -Algorithm MD5 | Select -ExpandProperty "Hash"
+    If ($MD5Result -ne $SSLMD5){
+        Log "Wrong md5sum, Please check the file integrity"
+        exit 1
+    }
+    Expand-Archive $SSLZip -DestinationPath openssl
+    cp -Force openssl/*.dll $OVSInstallDir\usr\sbin\
+    rm -Recurse -Force openssl
+    rm $SSLZip
+}
+
 function ConfigOVS() {
     # Create ovsdb config file
     $OVS_DB_SCHEMA_PATH = "$OVSInstallDir\usr\share\openvswitch\vswitch.ovsschema"
@@ -230,6 +258,8 @@ CheckIfOVSInstalled
 DownloadOVS
 
 InstallOVS
+
+InstallDependency
 
 ConfigOVS
 
