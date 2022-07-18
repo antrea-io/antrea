@@ -114,7 +114,8 @@ sleep 30
 certfile=$(mktemp /tmp/cacert.XXXXXX)
 mv "${certfile}" "${certfile}.ca"
 certfile="${certfile}.ca"
-secret_name=$(kubectl get serviceaccounts -n monitoring prometheus -o jsonpath="{.secrets[*].name}")
+# this name is specified in build/yamls/antrea-prometheus-rbac.yml
+secret_name="prometheus-service-account-token"
 kubectl get secrets -n monitoring $secret_name -o jsonpath="{.data.ca\.crt}" | base64 -d > $certfile
 token=$(kubectl get secrets -n monitoring $secret_name --template "{{.data.token}}" | base64 -d)
 
