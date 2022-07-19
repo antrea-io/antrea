@@ -34,8 +34,26 @@ const (
 // memberPattern is used to match the members part of ipset list result.
 var memberPattern = regexp.MustCompile("(?m)^(.*\n)*Members:\n")
 
+type Interface interface {
+	CreateIPSet(name string, setType SetType, isIPv6 bool) error
+
+	AddEntry(name string, entry string) error
+
+	DelEntry(name string, entry string) error
+
+	ListEntries(name string) ([]string, error)
+}
+
+type Client struct{}
+
+var _ Interface = &Client{}
+
+func NewClient() *Client {
+	return &Client{}
+}
+
 // CreateIPSet creates a new set, it will ignore error when the set already exists.
-func CreateIPSet(name string, setType SetType, isIPv6 bool) error {
+func (c *Client) CreateIPSet(name string, setType SetType, isIPv6 bool) error {
 	var cmd *exec.Cmd
 	if isIPv6 {
 		// #nosec G204 -- inputs are not controlled by users
@@ -51,7 +69,7 @@ func CreateIPSet(name string, setType SetType, isIPv6 bool) error {
 }
 
 // AddEntry adds a new entry to the set, it will ignore error when the entry already exists.
-func AddEntry(name string, entry string) error {
+func (c *Client) AddEntry(name string, entry string) error {
 	cmd := exec.Command("ipset", "add", name, entry, "-exist")
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("error adding entry %s to ipset %s: %v", entry, name, err)
@@ -60,7 +78,7 @@ func AddEntry(name string, entry string) error {
 }
 
 // DelEntry deletes the entry from the set, it will ignore error when the entry doesn't exist.
-func DelEntry(name string, entry string) error {
+func (c *Client) DelEntry(name string, entry string) error {
 	cmd := exec.Command("ipset", "del", name, entry, "-exist")
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("error deleting entry %s from ipset %s: %v", entry, name, err)
@@ -69,7 +87,7 @@ func DelEntry(name string, entry string) error {
 }
 
 // ListEntries lists all the entries of the set.
-func ListEntries(name string) ([]string, error) {
+func (c *Client) ListEntries(name string) ([]string, error) {
 	cmd := exec.Command("ipset", "list", name)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
