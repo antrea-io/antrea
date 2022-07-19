@@ -26,7 +26,7 @@ import (
 	"sync"
 	"time"
 
-	uuid "github.com/satori/go.uuid"
+	"github.com/google/uuid"
 	v1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -92,8 +92,8 @@ var (
 	// used to generate uuid.UUID for internal Antrea objects like
 	// AppliedToGroup, AddressGroup etc.
 	// e4f24a48-ca1f-4d5b-819c-ea7632b22115 was generated using
-	// uuid.NewV4() function.
-	uuidNamespace = uuid.FromStringOrNil("e4f24a48-ca1f-4d5b-819c-ea7632b22115")
+	// uuid.NewRandom() function.
+	uuidNamespace = uuid.Must(uuid.Parse("e4f24a48-ca1f-4d5b-819c-ea7632b22115"))
 
 	// matchAllPeer is a NetworkPolicyPeer matching all source/destination IP addresses. Both IPv4 Any (0.0.0.0/0) and
 	// IPv6 Any (::/0) are added into the IPBlocks, and Antrea Agent should decide if both two are used according the
@@ -450,7 +450,7 @@ func (n *NetworkPolicyController) GetConnectedAgentNum() int {
 // For example, it can be used to generate keys using normalized selectors
 // unique within the Namespace by adding the constant UID.
 func getNormalizedUID(name string) string {
-	return uuid.NewV5(uuidNamespace, name).String()
+	return uuid.NewSHA1(uuidNamespace, []byte(name)).String()
 }
 
 // createAppliedToGroup creates an AppliedToGroup object in store if it is not created already.
