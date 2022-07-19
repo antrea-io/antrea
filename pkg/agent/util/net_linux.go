@@ -33,16 +33,6 @@ import (
 	"k8s.io/klog/v2"
 )
 
-// GetNetLink returns dev link from name.
-func GetNetLink(dev string) netlink.Link {
-	link, err := netlink.LinkByName(dev)
-	if err != nil {
-		klog.Errorf("Failed to find dev %s: %v", dev, err)
-		return nil
-	}
-	return link
-}
-
 // GetNSPeerDevBridge returns peer device and its attached bridge (if applicable)
 // for device dev in network space indicated by nsPath
 func GetNSPeerDevBridge(nsPath, dev string) (*net.Interface, string, error) {
