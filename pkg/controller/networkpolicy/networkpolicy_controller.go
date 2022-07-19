@@ -81,6 +81,8 @@ const (
 	PriorityIndex = "priority"
 	// ClusterGroupIndex is used to index ClusterNetworkPolicies by ClusterGroup names.
 	ClusterGroupIndex = "clustergroup"
+	// EnableNPLoggingAnnotationKey can be added to Namespace to enable logging K8s NP.
+	EnableNPLoggingAnnotationKey = "policy.antrea.io/enable-np-logging"
 
 	appliedToGroupType grouping.GroupType = "appliedToGroup"
 	addressGroupType   grouping.GroupType = "addressGroup"
@@ -566,6 +568,12 @@ func (n *NetworkPolicyController) processNetworkPolicy(np *networkingv1.NetworkP
 	appliedToGroupKey := n.createAppliedToGroup(np.Namespace, &np.Spec.PodSelector, nil, nil)
 	appliedToGroupNames := []string{appliedToGroupKey}
 	rules := make([]controlplane.NetworkPolicyRule, 0, len(np.Spec.Ingress)+len(np.Spec.Egress))
+	// Retrieve Namespace logging annotation.
+	enableLogging := false
+	namespace, err := n.namespaceLister.Get(np.Namespace)
+	if err == nil {
+		enableLogging, _ = strconv.ParseBool(namespace.Annotations[EnableNPLoggingAnnotationKey])
+	}
 	var ingressRuleExists, egressRuleExists bool
 	// Compute NetworkPolicyRule for Ingress Rule.
 	for _, ingressRule := range np.Spec.Ingress {
@@ -577,7 +585,7 @@ func (n *NetworkPolicyController) processNetworkPolicy(np *networkingv1.NetworkP
 			Services:      services,
 			Priority:      defaultRulePriority,
 			Action:        &defaultAction,
-			EnableLogging: false,
+			EnableLogging: enableLogging,
 		})
 	}
 	// Compute NetworkPolicyRule for Egress Rule.
@@ -590,7 +598,7 @@ func (n *NetworkPolicyController) processNetworkPolicy(np *networkingv1.NetworkP
 			Services:      services,
 			Priority:      defaultRulePriority,
 			Action:        &defaultAction,
-			EnableLogging: false,
+			EnableLogging: enableLogging,
 		})
 	}
 
