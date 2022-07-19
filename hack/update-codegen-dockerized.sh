@@ -52,6 +52,9 @@ function generate_mocks {
     "pkg/agent/querier AgentQuerier testing"
     "pkg/agent/route Interface testing"
     "pkg/agent/ipassigner IPAssigner testing"
+    "pkg/agent/util/ipset Interface testing"
+    "pkg/agent/util/iptables Interface testing mock_iptables_linux.go" # Must specify linux.go suffix, otherwise compilation would fail on windows platform as source file has linux build tag.
+    "pkg/agent/util/netlink Interface testing mock_netlink_linux.go"
     "pkg/antctl AntctlClient ."
     "pkg/controller/networkpolicy EndpointQuerier testing"
     "pkg/controller/querier ControllerQuerier testing"
@@ -68,21 +71,29 @@ function generate_mocks {
   current_year=$(date +"%Y")
   sed -i "s/YEAR/${current_year}/g" hack/boilerplate/license_header.raw.txt
   for target in "${MOCKGEN_TARGETS[@]}"; do
-    read -r package interfaces mock_package <<<"${target}"
-    package_name=$(basename "${package}")
-    if [[ "${mock_package}" == "." ]]; then # generate mocks in same package as src
-        $GOPATH/bin/mockgen \
-            -copyright_file hack/boilerplate/license_header.raw.txt \
-            -destination "${package}/mock_${package_name}_test.go" \
-            -package="${package_name}" \
-            "${ANTREA_PKG}/${package}" "${interfaces}"
-    else # generate mocks in subpackage
-        $GOPATH/bin/mockgen \
-            -copyright_file hack/boilerplate/license_header.raw.txt \
-            -destination "${package}/${mock_package}/mock_${package_name}.go" \
-            -package="${mock_package}" \
-            "${ANTREA_PKG}/${package}" "${interfaces}"
+    read -r src_package interfaces dst_package_name dst_file_name <<<"${target}"
+    src_package_name=$(basename "${src_package}")
+    # Generate mocks in the same package as src if dst_file_name is ".", otherwise create a sub package.
+    if [[ "${dst_package_name}" == "." ]]; then
+      package="${src_package_name}"
+      if [ -n "${dst_file_name}" ]; then
+        destination="${src_package}/${dst_file_name}"
+      else
+        destination="${src_package}/mock_${src_package_name}_test.go"
+      fi
+    else
+      package="${dst_package_name}"
+      if [ -n "${dst_file_name}" ]; then
+        destination="${src_package}/${dst_package_name}/${dst_file_name}"
+      else
+        destination="${src_package}/${dst_package_name}/mock_${src_package_name}.go"
+      fi
     fi
+    $GOPATH/bin/mockgen \
+      -copyright_file hack/boilerplate/license_header.raw.txt \
+      -destination "${destination}" \
+      -package "${package}" \
+      "${ANTREA_PKG}/${src_package}" "${interfaces}"
   done
   git checkout HEAD -- hack/boilerplate/license_header.raw.txt
 }

@@ -110,7 +110,7 @@ func (ipt *iptablesRules) AddAllRules(nplList []PodNodePort) error {
 		}
 	}
 	writeLine(iptablesData, "COMMIT")
-	if err := ipt.table.Restore(iptablesData.Bytes(), false, false); err != nil {
+	if err := ipt.table.Restore(iptablesData.String(), false, false); err != nil {
 		return err
 	}
 	return nil
