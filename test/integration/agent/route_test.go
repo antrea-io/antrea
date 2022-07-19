@@ -187,6 +187,7 @@ func TestInitialize(t *testing.T) {
 		case <-inited2:
 		}
 
+		ipset := ipset.NewClient()
 		// verify ipset
 		err = exec.Command("ipset", "list", "ANTREA-POD-IP").Run()
 		assert.NoError(t, err, "ipset not exist")
@@ -381,6 +382,8 @@ func TestAddAndDeleteRoutes(t *testing.T) {
 			ipRoute = ipRoute[:len(expRouteStr)]
 		}
 		assert.Equal(t, expRouteStr, ipRoute, "route mismatch")
+
+		ipset := ipset.NewClient()
 
 		entries, err := ipset.ListEntries("ANTREA-POD-IP")
 		assert.NoError(t, err, "list ipset entries failed")
@@ -586,6 +589,7 @@ func TestReconcile(t *testing.T) {
 			assert.Equal(t, fmt.Sprint(expNum), output, "mismatch number of routes to %s", dst)
 		}
 
+		ipset := ipset.NewClient()
 		entries, err := ipset.ListEntries("ANTREA-POD-IP")
 		assert.NoError(t, err, "list ipset entries failed")
 		assert.ElementsMatch(t, entries, tc.desiredPeerCIDRs, "mismatch ipset entries")
