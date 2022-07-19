@@ -2,30 +2,134 @@
 
 source logging
 
+HOST_CNI_NET_DIR="/host/etc/cni/net.d"
+
+run_monitor="false"
+
+function usage {
+    echo "install_cni_chaining"
+    echo -e "  -h|--help           Print help message"
+    echo -e "  --monitor           Monitor the CNI conf file and re-apply changes every time it is overwritten"
+}
+
+while (( "$#" )); do
+  case "$1" in
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    --monitor)
+      run_monitor="true"
+      ;;
+    -*|--*) # unsupported flags
+      echo "Error: unsupported flag $1" >&2
+      exit 1
+      ;;
+    *) # standalone arguments are not supported
+      echo "Error: unsupported argument $1" >&2
+      exit 1
+      ;;
+  esac
+  shift
+done
+
 # Find the cni conf file with lowest name
 while true; do
-  cni_conf=$(ls /host/etc/cni/net.d | head -n1)
-  if [[ ! -z $cni_conf ]]; then
+  cni_conf_name=$(ls "$HOST_CNI_NET_DIR" | head -n1)
+  if [[ ! -z $cni_conf_name ]]; then
     break
   fi
-  log_info "CNI conf file not found. Retrying after 2 secs"
+  log_info "install_cni_chaining" "CNI conf file not found. Retrying after 2 secs"
   sleep 2s
 done
-cni_conf="/host/etc/cni/net.d/$cni_conf"
+cni_conf_path="$HOST_CNI_NET_DIR/$cni_conf_name"
 
-if grep -sq "azure" $cni_conf; then
-  sed -i 's/"mode":"bridge",/"mode":"transparent",/g' $cni_conf
-fi
+function update_cni_conf {
+    log_info "install_cni_chaining" "updating CNI conf file $cni_conf_name"
 
-cat $cni_conf | jq '.plugins[] | .type' | grep antrea > /dev/null 2>&1
-if [[ $? != 0 ]]; then
-  content=$(cat $cni_conf | jq '.plugins += [{"type": "antrea"}]')
-  echo "$content" > $cni_conf
-fi
+    # To limit the risk of issue because of race conditions, we use the
+    # following steps:
+    # 1. read the file once and store its contents in a variable
+    # 2. perform the necessary changes on the variable contents
+    # 3. compute the sha of the updated variable contents
+    # 4. write the variable contents back to the file
+    content=$(cat $cni_conf_path)
+
+    echo "$content" | grep -sq "azure"
+    if [[ $? == 0 ]]; then
+        # Note that in more recent AKS versions, transparent is the default:
+        # https://github.com/Azure/azure-container-networking/pull/709
+        content="$(echo "$content" | sed 's/"mode":"bridge",/"mode":"transparent",/g')"
+    fi
+
+    echo "$content" | jq '.plugins[] | .type' | grep -sq antrea
+    if [[ $? != 0 ]]; then
+        content="$(echo "$content" | jq '.plugins += [{"type": "antrea"}]')"
+    fi
+
+    cni_conf_sha="$(echo "$content" | sha256sum | while read -r s _; do echo "$s"; done)"
+
+    echo "$content" > $cni_conf_path
+}
+
+# monitor will start a watch on host's CNI config directory.
+# when we detect a change to the CNI conf file, we call update_cni_conf.
+function monitor {
+    inotifywait -m "$HOST_CNI_NET_DIR" -e create,close_write |
+        while read -r directory action filename; do
+            if [[ "$filename" == "$cni_conf_name" ]]; then
+                log_info "install_cni_chaining" "inotify event in $directory: $action $filename"
+                sha="$(sha256sum "$directory/$filename" | while read -r s _; do echo "$s"; done)"
+                if [[ "$sha" == "" ]]; then
+                    log_warning "install_cni_chaining" "unable to compute sha, file may have been deleted"
+                    continue
+                fi
+                if [[ "$sha" == "$cni_conf_sha" ]]; then
+                    log_info "install_cni_chaining" "sha matches existing one, ignoring event"
+                    continue
+                fi
+                update_cni_conf
+            fi
+        done
+}
+
+# Update conf file the first time
+update_cni_conf
 
 # Install Antrea binary file
 install -m 755 /usr/local/bin/antrea-cni /host/opt/cni/bin/antrea
 
 id
 # Load the OVS kernel module
-modprobe openvswitch || (echo "Failed to load the OVS kernel module from the container, try running 'modprobe openvswitch' on your Nodes"; exit 1)
+modprobe openvswitch || { echo "Failed to load the OVS kernel module from the container, try running 'modprobe openvswitch' on your Nodes"; exit 1;}
+
+if [[ "$run_monitor" == "false" ]]; then
+    exit 0
+fi
+
+SLEEP_PID=
+MONITOR_PID=
+function quit {
+    log_info "install_cni_chaining" "Exiting"
+    # terminate background monitor process
+    if [ "$MONITOR_PID" != "" ]; then kill $MONITOR_PID > /dev/null 2>&1 || true; fi
+    # terminate background sleep process
+    if [ "$SLEEP_PID" != "" ]; then kill $SLEEP_PID > /dev/null 2>&1 || true; fi
+    exit 0
+}
+
+# Do not trap EXIT as it would then ignore the "exit 0" statement in quit and
+# exit with code 128 + SIGNAL
+trap "quit" INT TERM HUP
+
+log_info "install_cni_chaining" "Starting inotify monitor for $cni_conf_name"
+
+monitor &
+MONITOR_PID=$!
+while true; do
+  # sleep so script never finishes
+  # we start sleep in bg so we can trap signals
+  sleep 3600 &
+  SLEEP_PID=$!
+  wait $SLEEP_PID
+done

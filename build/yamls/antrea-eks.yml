@@ -3711,6 +3711,7 @@ spec:
           operator: Exists
       serviceAccountName: antrea-agent
       initContainers:
+      containers:
         - name: install-cni
           image: "projects.registry.vmware.com/antrea/antrea-ubuntu:latest"
           imagePullPolicy: IfNotPresent
@@ -3718,6 +3719,7 @@ spec:
             requests:
               cpu: 100m
           command: ["install_cni_chaining"]
+          args: ["--monitor"]
           securityContext:
             capabilities:
               add:
@@ -3744,7 +3746,6 @@ spec:
           # For changing the default permissions of the run directory.
           - name: host-var-run-antrea
             mountPath: /var/run/antrea
-      containers:
         - name: antrea-agent
           image: "projects.registry.vmware.com/antrea/antrea-ubuntu:latest"
           imagePullPolicy: IfNotPresent
