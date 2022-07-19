@@ -42,16 +42,21 @@ spec:
               set -o pipefail
               set -o nounset
 
-              # The STARTUP_SCRIPT environment variable (which is set to the contents of this
-              # script) will be available when the script is executed :)
-              checkpoint_path="/opt/cni/antrea-node-init-status-$(md5sum <<<"${STARTUP_SCRIPT}" | cut -c-32)"
+              echo "Initializing Node for Antrea"
 
-              if [ -f "$checkpoint_path" ]; then
-                  echo "Antrea node init already done. Exiting"
-                  exit
-              fi
+              while true; do
+                  curl -sS -o /dev/null localhost:61679 && retry=false || retry=true
+                  if [ $retry == false ]; then break ; fi
+                  sleep 2s
+                  echo "Waiting for aws-k8s-agent"
+              done
 
-              echo "Initializing node for Antrea"
+              # This gives aws-k8s-agent enough time to write the CNI file.
+              # It typically only takes a couple of seconds.
+              # In case of a restart, we want to wait until aws-k8s-agent has
+              # had the chance to overwrite the previous CNI conf file.
+              echo "aws-k8s-agent is running, sleeping for 10s"
+              sleep 10s
 
               while true; do
                   cni_conf=$(ls /etc/cni/net.d | head -n1)
@@ -76,15 +81,8 @@ spec:
               # https://github.com/kubernetes/kubernetes/blob/master/pkg/kubelet/dockershim/network/cni/cni.go#L50
               sleep 5s
 
-              while true; do
-                  curl localhost:61679 && retry=false || retry=true
-                  if [ $retry == false ]; then break ; fi
-                  sleep 2s
-                  echo "Waiting for aws-k8s-agent"
-              done
-
               # Fetch running containers from aws-k8s-agent and kill them
-              echo "\n"
+              echo
               for container_id in $(cat /var/run/aws-node/ipam.json | jq -r '.allocations | .[] | .containerID'); do
                   echo "Restarting container with ID: ${container_id}"
                   if [[ "$container_runtime" == "docker" ]]; then
@@ -94,12 +92,7 @@ spec:
                   fi
               done
 
-              # Save the Node init status, to avoid container restart in case of node-init Pod
-              # restart or worker Node reboot.
-              # Note that gcr.io/google-containers/startup-script:v2 also includes a similar
-              # mechanism but it doesn't prevent the script from being run again when the Node
-              # restarts, since the checkpoint path is located in the /tmp folder.
+              # The script will run again in case of worker Node reboot or if
+              # the contents of this script change.
               # See https://github.com/kubernetes-retired/contrib/blob/master/startup-script/manage-startup-script.sh.
-              touch "$checkpoint_path"
-
               echo "Node initialization completed"
