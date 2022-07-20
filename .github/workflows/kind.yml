@@ -79,11 +79,13 @@ jobs:
     - uses: actions/setup-go@v3
       with:
         go-version: 1.17
-    - name: Download Antrea images from previous jobs
+    - name: Download Antrea image from previous job
       uses: actions/download-artifact@v3
+      with:
+        name: antrea-ubuntu-cov
     - name: Load Antrea image
-      run:  |
-        docker load -i antrea-ubuntu-cov/antrea-ubuntu.tar
+      run: |
+        docker load -i antrea-ubuntu.tar
     - name: Install Kind
       run: |
         curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-$(uname)-amd64
@@ -135,11 +137,13 @@ jobs:
     - uses: actions/setup-go@v3
       with:
         go-version: 1.17
-    - name: Download Antrea images from previous jobs
+    - name: Download Antrea image from previous job
       uses: actions/download-artifact@v3
+      with:
+        name: antrea-ubuntu-cov
     - name: Load Antrea image
       run: |
-        docker load -i antrea-ubuntu-cov/antrea-ubuntu.tar
+        docker load -i antrea-ubuntu.tar
     - name: Install Kind
       run: |
         curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-$(uname)-amd64
@@ -191,11 +195,13 @@ jobs:
       - uses: actions/setup-go@v3
         with:
           go-version: 1.17
-      - name: Download Antrea images from previous jobs
+      - name: Download Antrea image from previous job
         uses: actions/download-artifact@v3
+        with:
+          name: antrea-ubuntu-cov
       - name: Load Antrea image
         run: |
-          docker load -i antrea-ubuntu-cov/antrea-ubuntu.tar
+          docker load -i antrea-ubuntu.tar
       - name: Install Kind
         run: |
           curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-$(uname)-amd64
@@ -248,11 +254,13 @@ jobs:
     - uses: actions/setup-go@v3
       with:
         go-version: 1.17
-    - name: Download Antrea images from previous jobs
+    - name: Download Antrea image from previous job
       uses: actions/download-artifact@v3
+      with:
+        name: antrea-ubuntu-cov
     - name: Load Antrea image
       run: |
-        docker load -i antrea-ubuntu-cov/antrea-ubuntu.tar
+        docker load -i antrea-ubuntu.tar
     - name: Install Kind
       run: |
         curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-$(uname)-amd64
@@ -304,11 +312,13 @@ jobs:
     - uses: actions/setup-go@v3
       with:
         go-version: 1.17
-    - name: Download Antrea images from previous jobs
+    - name: Download Antrea image from previous job
       uses: actions/download-artifact@v3
+      with:
+        name: antrea-ubuntu-cov
     - name: Load Antrea image
       run: |
-        docker load -i antrea-ubuntu-cov/antrea-ubuntu.tar
+        docker load -i antrea-ubuntu.tar
     - name: Install Kind
       run: |
         curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-$(uname)-amd64
@@ -360,12 +370,20 @@ jobs:
       - uses: actions/setup-go@v3
         with:
           go-version: 1.17
-      - name: Download Antrea images from previous jobs
+      - name: Download Antrea image from previous job
         uses: actions/download-artifact@v3
+        with:
+          name: antrea-ubuntu-cov
       - name: Load Antrea image
-        run:  |
-          docker load -i antrea-ubuntu-cov/antrea-ubuntu.tar
-          docker load -i flow-aggregator-cov/flow-aggregator.tar
+        run: |
+          docker load -i antrea-ubuntu.tar
+      - name: Download Flow Aggregator image from previous job
+        uses: actions/download-artifact@v3
+        with:
+          name: flow-aggregator-cov
+      - name: Load Flow Aggregator image
+        run: |
+          docker load -i flow-aggregator.tar
       - name: Install Kind
         run: |
           curl -Lo ./kind https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-$(uname)-amd64
@@ -421,10 +439,9 @@ jobs:
         uses: actions/download-artifact@v3
         with:
           name: antrea-ubuntu-cov
-          path: antrea-ubuntu-cov
       - name: Load Antrea image
-        run:  |
-          docker load -i antrea-ubuntu-cov/antrea-ubuntu.tar
+        run: |
+          docker load -i antrea-ubuntu.tar
           docker tag antrea/antrea-ubuntu-coverage:latest antrea/antrea-ubuntu:latest
           docker tag antrea/antrea-ubuntu-coverage:latest projects.registry.vmware.com/antrea/antrea-ubuntu:latest
       - name: Install Kind
@@ -465,10 +482,9 @@ jobs:
         uses: actions/download-artifact@v3
         with:
           name: antrea-ubuntu-cov
-          path: antrea-ubuntu-cov
       - name: Load Antrea image
-        run:  |
-          docker load -i antrea-ubuntu-cov/antrea-ubuntu.tar
+        run: |
+          docker load -i antrea-ubuntu.tar
           docker tag antrea/antrea-ubuntu-coverage:latest antrea/antrea-ubuntu:latest
           docker tag antrea/antrea-ubuntu-coverage:latest projects.registry.vmware.com/antrea/antrea-ubuntu:latest
       - name: Install Kind
@@ -509,10 +525,9 @@ jobs:
         uses: actions/download-artifact@v3
         with:
           name: antrea-ubuntu-cov
-          path: antrea-ubuntu-cov
       - name: Load Antrea image
-        run:  |
-          docker load -i antrea-ubuntu-cov/antrea-ubuntu.tar
+        run: |
+          docker load -i antrea-ubuntu.tar
           docker tag antrea/antrea-ubuntu-coverage:latest antrea/antrea-ubuntu:latest
           docker tag antrea/antrea-ubuntu-coverage:latest projects.registry.vmware.com/antrea/antrea-ubuntu:latest
       - name: Install Kind
@@ -553,10 +568,9 @@ jobs:
         uses: actions/download-artifact@v3
         with:
           name: antrea-ubuntu-cov
-          path: antrea-ubuntu-cov
       - name: Load Antrea image
-        run:  |
-          docker load -i antrea-ubuntu-cov/antrea-ubuntu.tar
+        run: |
+          docker load -i antrea-ubuntu.tar
           docker tag antrea/antrea-ubuntu-coverage:latest antrea/antrea-ubuntu:latest
           docker tag antrea/antrea-ubuntu-coverage:latest projects.registry.vmware.com/antrea/antrea-ubuntu:latest
       - name: Install Kind
@@ -597,10 +611,9 @@ jobs:
       uses: actions/download-artifact@v3
       with:
         name: antrea-ubuntu-cov
-        path: antrea-ubuntu-cov
     - name: Load Antrea image
       run: |
-        docker load -i antrea-ubuntu-cov/antrea-ubuntu.tar
+        docker load -i antrea-ubuntu.tar
         docker tag antrea/antrea-ubuntu-coverage:latest antrea/antrea-ubuntu:latest
         docker tag antrea/antrea-ubuntu-coverage:latest projects.registry.vmware.com/antrea/antrea-ubuntu:latest
     - name: Install Kind
@@ -633,10 +646,9 @@ jobs:
         uses: actions/download-artifact@v3
         with:
           name: antrea-ubuntu-cov
-          path: antrea-ubuntu-cov
       - name: Load Antrea image
         run: |
-          docker load -i antrea-ubuntu-cov/antrea-ubuntu.tar
+          docker load -i antrea-ubuntu.tar
           docker tag antrea/antrea-ubuntu-coverage:latest antrea/antrea-ubuntu:latest
           docker tag antrea/antrea-ubuntu-coverage:latest projects.registry.vmware.com/antrea/antrea-ubuntu:latest
       - name: Install Kind
