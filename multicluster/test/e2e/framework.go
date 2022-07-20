@@ -59,6 +59,7 @@ type TestOptions struct {
 	westClusterKubeConfigPath   string
 	eastClusterKubeConfigPath   string
 	enableGateway               bool
+	providerName                string
 	logsExportDir               string
 }
 
@@ -67,6 +68,7 @@ var testOptions TestOptions
 type MCTestData struct {
 	clusters            []string
 	clusterTestDataMap  map[string]antreae2e.TestData
+	controlPlaneNames   map[string]string
 	logsDirForTestCase  string
 	clusterGateways     map[string]string
 	clusterRegularNodes map[string]string
@@ -91,17 +93,30 @@ func (data *MCTestData) createClients() error {
 		}
 		data.clusterTestDataMap[cluster] = testData
 	}
+	data.controlPlaneNames = map[string]string{
+		"east-cluster":   "east-control-plane",
+		"west-cluster":   "west-control-plane",
+		"leader-cluster": "leader-control-plane",
+	}
 	return nil
 }
 
 func (data *MCTestData) initProviders() error {
+	providerName := "remote"
+	if testOptions.providerName == "kind" {
+		providerName = testOptions.providerName
+	}
 	for cluster, d := range data.clusterTestDataMap {
-		if err := d.InitProvider("remote", "multicluster"); err != nil {
+		if err := d.InitProvider(providerName, "multicluster"); err != nil {
 			log.Errorf("Failed to initialize provider for cluster %s", cluster)
 			return err
 		}
 	}
-	provider, _ = providers.NewRemoteProvider("multicluster")
+	if testOptions.providerName == "kind" {
+		provider, _ = providers.NewKindProvider("multicluster")
+	} else {
+		provider, _ = providers.NewRemoteProvider("multicluster")
+	}
 	return nil
 }
 
@@ -138,19 +153,6 @@ func (data *MCTestData) getService(clusterName, namespace, name string) (*corev1
 		return d.GetService(namespace, name)
 	}
 	return nil, fmt.Errorf("clusterName %s not found", clusterName)
-}
-
-func (data *MCTestData) deleteTestNamespaces(timeout time.Duration) error {
-	var failedClusters []string
-	for cluster, d := range data.clusterTestDataMap {
-		if err := d.DeleteNamespace(multiClusterTestNamespace, timeout); err != nil {
-			failedClusters = append(failedClusters, cluster)
-		}
-	}
-	if len(failedClusters) > 0 {
-		return fmt.Errorf("failed to delete Namespace %s in clusters %v", multiClusterTestNamespace, failedClusters)
-	}
-	return nil
 }
 
 func (data *MCTestData) createPod(clusterName, name, nodeName, namespace, ctrName, image string, command []string,
