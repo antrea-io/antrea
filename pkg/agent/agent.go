@@ -803,20 +803,22 @@ func (i *Initializer) initNodeLocalConfig() error {
 	}
 
 	var node *v1.Node
-	err = wait.PollImmediate(5*time.Second, 30*time.Second, func() (bool, error) {
+	if err := wait.PollImmediate(5*time.Second, 30*time.Second, func() (bool, error) {
 		node, err = i.client.CoreV1().Nodes().Get(context.TODO(), nodeName, metav1.GetOptions{})
 		if err != nil {
 			return false, fmt.Errorf("failed to get Node with name %s from K8s: %w", nodeName, err)
 		}
 
-		// Validate that CIDR for Pods is configured anywhere
-		if node.Spec.PodCIDRs == nil && node.Spec.PodCIDR == "" {
-			klog.V(2).Info("Waiting for Node PodCIDR configuration to complete")
-			return false, nil
+		// Except in networkPolicyOnly mode, we need a PodCIDR for the Node.
+		if !i.networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {
+			// Validate that PodCIDR has been configured.
+			if node.Spec.PodCIDRs == nil && node.Spec.PodCIDR == "" {
+				klog.V(2).Info("Waiting for Node PodCIDR configuration to complete")
+				return false, nil
+			}
 		}
 		return true, nil
-	})
-	if err != nil {
+	}); err != nil {
 		if node != nil && node.Spec.PodCIDRs == nil && node.Spec.PodCIDR == "" {
 			klog.ErrorS(err, "Spec.PodCIDR is empty for Node. Please make sure --allocate-node-cidrs is enabled "+
 				"for kube-controller-manager and --cluster-cidr specifies a sufficient CIDR range", "nodeName", nodeName)
@@ -946,12 +948,7 @@ func (i *Initializer) initNodeLocalConfig() error {
 		}
 		return nil
 	}
-	// Spec.PodCIDR can be empty due to misconfiguration.
-	if node.Spec.PodCIDR == "" {
-		klog.ErrorS(nil, "Spec.PodCIDR is empty for Node. Please make sure --allocate-node-cidrs is enabled "+
-			"for kube-controller-manager and --cluster-cidr specifies a sufficient CIDR range", "nodeName", nodeName)
-		return fmt.Errorf("CIDR string is empty for Node %s", nodeName)
-	}
+	// at this stage, node.Spec.PodCIDR is guaranteed to NOT be empty
 	_, localSubnet, err := net.ParseCIDR(node.Spec.PodCIDR)
 	if err != nil {
 		return fmt.Errorf("failed to parse subnet from CIDR string %s: %w", node.Spec.PodCIDR, err)
