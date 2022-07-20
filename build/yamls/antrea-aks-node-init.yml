@@ -21,7 +21,7 @@ spec:
       hostNetwork: true
       containers:
         - name: node-init
-          image: gcr.io/google-containers/startup-script:v1
+          image: gcr.io/google-containers/startup-script:v2
           imagePullPolicy: IfNotPresent
           securityContext:
             privileged: true
