@@ -13,6 +13,7 @@ GO_VERSION         := $(shell head -n 1 build/images/deps/go-version)
 CNI_BINARIES_VERSION := $(shell head -n 1 build/images/deps/cni-binaries-version)
 NANOSERVER_VERSION := $(shell head -n 1 build/images/deps/nanoserver-version)
 WIN_BUILD_TAG      := $(shell echo $(GO_VERSION) $(CNI_BINARIES_VERSION) $(NANOSERVER_VERSION)|md5sum|head -c 10)
+GIT_HOOKS := $(shell find hack/git_client_side_hooks -type f -print)
 
 DOCKER_BUILD_ARGS = --build-arg OVS_VERSION=$(OVS_VERSION)
 DOCKER_BUILD_ARGS += --build-arg GO_VERSION=$(GO_VERSION)
@@ -35,12 +36,13 @@ GRPID   := $(shell id -g)
 .PHONY: install-hooks
 install-hooks:
 	@echo "===> Copying Antrea git hooks to local <==="
-	install hack/git_client_side_hooks/pre-commit .git/hooks/
+	@mkdir -p .git/hooks
+	install $(GIT_HOOKS) .git/hooks/
 
 .PHONY: uninstall-hooks
 uninstall-hooks:
 	@echo "===> Removing Antrea git hooks from local <==="
-	rm .git/hooks/pre-commit
+	rm $(addprefix .git/hooks/,$(notdir $(GIT_HOOKS)))
 
 .PHONY: bin
 bin:
