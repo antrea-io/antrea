@@ -36,12 +36,14 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	k8smcsv1alpha1 "sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
 
 	multiclusterv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
 	multiclusterv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
 	antreacrd "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	"antrea.io/antrea/pkg/apiserver/certificate"
+	"antrea.io/antrea/pkg/util/env"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -149,6 +151,12 @@ func setupManagerAndCertController(o *Options) (manager.Manager, error) {
 	if err = (&multiclusterv1alpha2.ClusterClaim{}).SetupWebhookWithManager(mgr); err != nil {
 		return nil, fmt.Errorf("error create ClusterClaim webhook: %v", err)
 	}
+
+	hookServer := mgr.GetWebhookServer()
+	hookServer.Register("/validate-multicluster-crd-antrea-io-v1alpha1-clusterset",
+		&webhook.Admission{Handler: &clusterSetValidator{
+			Client:    mgr.GetClient(),
+			namespace: env.GetPodNamespace()}})
 
 	//+kubebuilder:scaffold:builder
 

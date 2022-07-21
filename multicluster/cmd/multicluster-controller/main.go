@@ -48,7 +48,7 @@ func main() {
 func newControllerCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:  "antrea-mc-controller",
-		Long: "The Antrea MultiCluster Controller.",
+		Long: "The Antrea Multi-cluster Controller.",
 		Run: func(cmd *cobra.Command, args []string) {
 			fmt.Println("Error: must be run in leader or member mode")
 		},
