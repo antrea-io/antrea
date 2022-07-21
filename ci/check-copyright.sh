@@ -22,7 +22,10 @@ THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 pushd $THIS_DIR/.. > /dev/null
 
 make add-copyright
-diff="$(git status --porcelain `find . -type f -name "*.go"` `find . -type f -name "*.sh"`)"
+go_files=`find . -type f -name "*.go"`
+sh_files=`find . -type f -name "*.sh"`
+docker_files=`find . -type f -name "Dockerfile*"`
+diff="$(git status --porcelain $go_files $sh_files $docker_files)"
 
 if [ ! -z "$diff" ]; then
     echoerr "The copyrights of some files are not generated"
