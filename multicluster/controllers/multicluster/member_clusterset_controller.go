@@ -92,6 +92,9 @@ func (r *MemberClusterSetReconciler) Reconcile(ctx context.Context, req ctrl.Req
 		}
 		klog.InfoS("Received ClusterSet delete", "clusterset", req.NamespacedName)
 		if r.remoteCommonArea != nil {
+			if err := r.deleteMemberClusterAnnounce(ctx); err != nil {
+				return ctrl.Result{}, fmt.Errorf("failed to delete MemberClusterAnnounce in the leader cluster: %v", err)
+			}
 			r.remoteCommonArea.Stop()
 			r.remoteCommonArea = nil
 			r.clusterSetConfig = nil
@@ -133,6 +136,19 @@ func (r *MemberClusterSetReconciler) Reconcile(ctx context.Context, req ctrl.Req
 	return ctrl.Result{}, nil
 }
 
+func (r *MemberClusterSetReconciler) deleteMemberClusterAnnounce(ctx context.Context) error {
+	memberClusterAnnounce := &multiclusterv1alpha1.MemberClusterAnnounce{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "member-announce-from-" + r.remoteCommonArea.GetLocalClusterID(),
+			Namespace: r.remoteCommonArea.GetNamespace(),
+		},
+	}
+	if err := r.remoteCommonArea.Delete(ctx, memberClusterAnnounce, &client.DeleteOptions{}); err != nil {
+		return client.IgnoreNotFound(err)
+	}
+	return nil
+}
+
 // SetupWithManager sets up the controller with the Manager.
 func (r *MemberClusterSetReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	// Update status periodically
@@ -152,9 +168,13 @@ func (r *MemberClusterSetReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	}
 	namespacePredicate := predicate.NewPredicateFuncs(namespaceFilter)
 
+	// Ignore status update event via GenerationChangedPredicate
+	generationPredicate := predicate.GenerationChangedPredicate{}
+	filter := predicate.And(generationPredicate, namespacePredicate)
+
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&multiclusterv1alpha1.ClusterSet{}).
-		WithEventFilter(namespacePredicate).
+		WithEventFilter(filter).
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: common.DefaultWorkerCount,
 		}).
