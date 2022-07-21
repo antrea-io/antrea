@@ -158,6 +158,7 @@ func newControllerWithoutEventHandler(k8sObjects, crdObjects []runtime.Object) (
 	addressGroupStore := store.NewAddressGroupStore()
 	internalNetworkPolicyStore := store.NewNetworkPolicyStore()
 	internalGroupStore := store.NewGroupStore()
+	namespaceInformer := informerFactory.Core().V1().Namespaces()
 	networkPolicyInformer := informerFactory.Networking().V1().NetworkPolicies()
 	tierInformer := crdInformerFactory.Crd().V1alpha1().Tiers()
 	cnpInformer := crdInformerFactory.Crd().V1alpha1().ClusterNetworkPolicies()
@@ -167,6 +168,7 @@ func newControllerWithoutEventHandler(k8sObjects, crdObjects []runtime.Object) (
 	npController := &NetworkPolicyController{
 		kubeClient:                 client,
 		crdClient:                  crdClient,
+		namespaceLister:            namespaceInformer.Lister(),
 		networkPolicyInformer:      networkPolicyInformer,
 		networkPolicyLister:        networkPolicyInformer.Lister(),
 		networkPolicyListerSynced:  networkPolicyInformer.Informer().HasSynced,

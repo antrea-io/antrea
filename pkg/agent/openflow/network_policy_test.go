@@ -105,7 +105,7 @@ func TestPolicyRuleConjunction(t *testing.T) {
 
 	var addedAddrs = parseAddresses([]string{"192.168.1.3", "192.168.1.30", "192.168.2.0/24", "103", "104"})
 	expectConjunctionsCount([]*expectConjunctionTimes{{5, ruleID1, clauseID, nClause}})
-	flowChanges1 := clause1.addAddrFlows(c.featureNetworkPolicy, types.SrcAddress, addedAddrs, nil)
+	flowChanges1 := clause1.addAddrFlows(c.featureNetworkPolicy, types.SrcAddress, addedAddrs, nil, false)
 	err := c.featureNetworkPolicy.applyConjunctiveMatchFlows(flowChanges1)
 	require.Nil(t, err, "Failed to invoke addAddrFlows")
 	checkFlowCount(t, len(addedAddrs))
@@ -130,7 +130,7 @@ func TestPolicyRuleConjunction(t *testing.T) {
 	var addedAddrs2 = parseAddresses([]string{"192.168.1.30", "192.168.1.50"})
 	expectConjunctionsCount([]*expectConjunctionTimes{{2, ruleID2, clauseID2, nClause}})
 	expectConjunctionsCount([]*expectConjunctionTimes{{1, ruleID1, clauseID, nClause}})
-	flowChanges3 := clause2.addAddrFlows(c.featureNetworkPolicy, types.SrcAddress, addedAddrs2, nil)
+	flowChanges3 := clause2.addAddrFlows(c.featureNetworkPolicy, types.SrcAddress, addedAddrs2, nil, false)
 	err = c.featureNetworkPolicy.applyConjunctiveMatchFlows(flowChanges3)
 	require.Nil(t, err, "Failed to invoke addAddrFlows")
 	testAddr := NewIPAddress(net.ParseIP("192.168.1.30"))
@@ -146,7 +146,7 @@ func TestPolicyRuleConjunction(t *testing.T) {
 	nClause3 := uint8(1)
 	clause3 := conj3.newClause(clauseID3, nClause3, mockEgressRuleTable, mockEgressDefaultTable)
 	var addedAddrs3 = parseAddresses([]string{"192.168.1.30"})
-	flowChanges4 := clause3.addAddrFlows(c.featureNetworkPolicy, types.SrcAddress, addedAddrs3, nil)
+	flowChanges4 := clause3.addAddrFlows(c.featureNetworkPolicy, types.SrcAddress, addedAddrs3, nil, false)
 	err = c.featureNetworkPolicy.applyConjunctiveMatchFlows(flowChanges4)
 	require.Nil(t, err, "Failed to invoke addAddrFlows")
 	checkConjMatchFlowActions(t, c, clause3, testAddr, types.SrcAddress, 2, 1)
@@ -643,7 +643,7 @@ func TestConjMatchFlowContextKeyConflict(t *testing.T) {
 		id: ruleID1,
 	}
 	clause1 := conj1.newClause(1, 3, mockEgressRuleTable, mockEgressDefaultTable)
-	flowChange1 := clause1.addAddrFlows(c.featureNetworkPolicy, types.DstAddress, parseAddresses([]string{ip.String()}), nil)
+	flowChange1 := clause1.addAddrFlows(c.featureNetworkPolicy, types.DstAddress, parseAddresses([]string{ip.String()}), nil, false)
 	err := c.featureNetworkPolicy.applyConjunctiveMatchFlows(flowChange1)
 	require.Nil(t, err, "no error expect in applyConjunctiveMatchFlows")
 
@@ -652,7 +652,7 @@ func TestConjMatchFlowContextKeyConflict(t *testing.T) {
 		id: ruleID2,
 	}
 	clause2 := conj2.newClause(1, 3, mockEgressRuleTable, mockEgressDefaultTable)
-	flowChange2 := clause2.addAddrFlows(c.featureNetworkPolicy, types.DstAddress, parseAddresses([]string{ipNet.String()}), nil)
+	flowChange2 := clause2.addAddrFlows(c.featureNetworkPolicy, types.DstAddress, parseAddresses([]string{ipNet.String()}), nil, false)
 	err = c.featureNetworkPolicy.applyConjunctiveMatchFlows(flowChange2)
 	require.Nil(t, err, "no error expect in applyConjunctiveMatchFlows")
 	expectedMatchKey := fmt.Sprintf("table:%d,priority:%s,matchPair:%s", EgressRuleTable.GetID(), strconv.Itoa(int(priorityNormal)), singleMatchPair.KeyString())

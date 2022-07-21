@@ -28,6 +28,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent/openflow"
+	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 	"antrea.io/antrea/pkg/util/ip"
 	"antrea.io/antrea/pkg/util/logdir"
@@ -196,13 +197,17 @@ func getNetworkPolicyInfo(pktIn *ofctrl.PacketIn, c *Controller, ob *logInfo) er
 	// Set match to corresponding ingress/egress reg according to disposition.
 	match = getMatch(matchers, tableID, info)
 
-	// Get Network Policy full name and OF priority of the conjunction.
-	info, err = getInfoInReg(match, nil)
-	if err != nil {
-		return fmt.Errorf("received error while unloading conjunction id from reg: %v", err)
+	if match != nil {
+		// Get Network Policy full name and OF priority of the conjunction.
+		info, err = getInfoInReg(match, nil)
+		if err != nil {
+			return fmt.Errorf("received error while unloading conjunction id from reg: %v", err)
+		}
+		ob.npRef, ob.ofPriority = c.ofClient.GetPolicyInfoFromConjunction(info)
+	} else {
+		// For K8s NetworkPolicy implicit drop action, we cannot get name/namespace.
+		ob.npRef, ob.ofPriority = string(v1beta2.K8sNetworkPolicy), "-1"
 	}
-	ob.npRef, ob.ofPriority = c.ofClient.GetPolicyInfoFromConjunction(info)
-
 	return nil
 }
 

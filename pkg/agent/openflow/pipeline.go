@@ -2118,22 +2118,32 @@ func (f *featureNetworkPolicy) conjunctiveMatchFlow(tableID uint8, matchPairs []
 }
 
 // defaultDropFlow generates the flow to drop packets if the match condition is matched.
-func (f *featureNetworkPolicy) defaultDropFlow(table binding.Table, matchPairs []matchPair) binding.Flow {
+func (f *featureNetworkPolicy) defaultDropFlow(table binding.Table, matchPairs []matchPair, enableLogging bool) binding.Flow {
 	cookieID := f.cookieAllocator.Request(f.category).Raw()
 	fb := table.BuildFlow(priorityNormal)
 	for _, eachMatchPair := range matchPairs {
 		fb = f.addFlowMatch(fb, eachMatchPair.matchKey, eachMatchPair.matchValue)
 	}
+	fb = fb.Action().Drop()
+
+	var customReason int
 	if f.enableDenyTracking {
-		return fb.Action().Drop().
-			Action().LoadRegMark(DispositionDropRegMark, CustomReasonDenyRegMark).
-			Action().SendToController(uint8(PacketInReasonNP)).
-			Cookie(cookieID).
-			Done()
+		customReason += CustomReasonDeny
+		fb = fb.
+			Action().LoadRegMark(DispositionDropRegMark, CustomReasonDenyRegMark)
 	}
-	return fb.Action().Drop().
-		Cookie(cookieID).
-		Done()
+	if enableLogging {
+		customReason += CustomReasonLogging
+		fb = fb.
+			Action().LoadRegMark(DispositionDropRegMark, CustomReasonDenyRegMark)
+	}
+
+	if enableLogging || f.enableDenyTracking {
+		fb = fb.
+			Action().LoadToRegField(CustomReasonField, uint32(customReason)).
+			Action().SendToController(uint8(PacketInReasonNP))
+	}
+	return fb.Cookie(cookieID).Done()
 }
 
 // dnsPacketInFlow generates the flow to send dns response packets of fqdn policy selected Pods to the fqdnController for
