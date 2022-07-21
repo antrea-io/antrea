@@ -90,9 +90,6 @@ export IMG_NAME=projects.registry.vmware.com/antrea/antrea-windows
 export IMG_NAME=projects.registry.vmware.com/antrea/flow-aggregator
 ./hack/generate-manifest-flow-aggregator.sh --mode release > "$OUTPUT_DIR"/flow-aggregator.yml
 
-export IMG_NAME=projects.registry.vmware.com/antrea/flow-visibility-clickhouse-monitor
-./hack/generate-manifest-flow-visibility.sh --mode release > "$OUTPUT_DIR"/flow-visibility.yml
-
 # Generate multicluster manifests
 export IMG_NAME=projects.registry.vmware.com/antrea/antrea-mc-controller
 cd multicluster

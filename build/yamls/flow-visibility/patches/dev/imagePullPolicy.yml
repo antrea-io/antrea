@@ -1,3 +1,0 @@
-- op: add
-  path: /spec/templates/podTemplates/0/spec/containers/1/imagePullPolicy
-  value: IfNotPresent
