@@ -50,7 +50,7 @@ mode, and all member clusters in a ClusterSet must use the same tunnel type.
 
 Run the following commands to deploy Multi-cluster Controller for the leader
 into Namespace `antrea-multicluster` (Namespace `antrea-multicluster` will be
-created by the commands), and  Multi-cluster Controller for the member into
+created by the commands), and Multi-cluster Controller for the member into
 Namepsace `kube-system`.
 
 ```bash
@@ -84,13 +84,13 @@ to access the leader cluster (cluster A in our case) apiserver.
 
 ```bash
 $kubectl apply -f https://raw.githubusercontent.com/antrea-io/antrea/$TAG/multicluster/config/samples/clusterset_init/multicluster_clusterset_template.yaml
-$kubectl apply -f  https://raw.githubusercontent.com/antrea-io/antrea/$TAG/multicluster/config/samples/clusterset_init/multicluster_leader_access_token_template.yaml
-$kubectl get secret leader-access-token -n antrea-multicluster -o yaml | grep -w -e '^apiVersion' -e '^data' -e '^metadata' -e '^ *name:'  -e   '^kind' -e '  ca.crt' -e '  token:' -e '^type' -e '  namespace' | sed -e 's/kubernetes.io\/service-account-token/Opaque/g' -e 's/antrea-multicluster/kube-system/g' >  leader-access-token.yml
+$kubectl apply -f https://raw.githubusercontent.com/antrea-io/antrea/$TAG/multicluster/config/samples/clusterset_init/multicluster_leader_access_token_template.yaml
+$kubectl get secret leader-access-token -n antrea-multicluster -o yaml | grep -w -e '^apiVersion' -e '^data' -e '^metadata' -e '^ *name:' -e '^kind' -e '  ca.crt' -e '  token:' -e '^type' -e '  namespace' | sed -e 's/kubernetes.io\/service-account-token/Opaque/g' -e 's/antrea-multicluster/kube-system/g' > leader-access-token.yml
 ```
 
 The last command saves the ServiceAccount token to `leader-access-token.yml`
 which will be needed for member clusters to join the ClusterSet. Note, in this
-guide, we use a shared default  ServiceAccount `antrea-mc-member-access-sa` for
+guide, we use a shared default ServiceAccount `antrea-mc-member-access-sa` for
 all member clusters. If you want to create a separate ServiceAccount for each
 member cluster for security considerations, you can follow the instructions in
 the [Multi-cluster User Guide](user-guide.md#set-up-access-to-leader-cluster).
@@ -100,7 +100,7 @@ member:
 
 ```bash
 $kubectl apply -f leader-access-token.yml
-$curl -L https://raw.githubusercontent.com/antrea-io/antrea/v1.7.0/multicluster/config/samples/clusterset_init/multicluster_membercluster_template.yaml  > multicluster_membercluster.yaml
+$curl -L https://raw.githubusercontent.com/antrea-io/antrea/v1.7.0/multicluster/config/samples/clusterset_init/multicluster_membercluster_template.yaml > multicluster_membercluster.yaml
 $sed -e 's/test-cluster-member/test-cluster-leader/g' -e 's/<LEADER_CLUSTER_IP>/172.10.0.11/g' multicluster_membercluster.yaml | kubectl apply -f -
 ```
 
@@ -156,7 +156,7 @@ Run the following commands to make cluster B join the ClusterSet:
 
 ```bash
 $kubectl apply -f leader-access-token.yml
-$curl -L https://raw.githubusercontent.com/antrea-io/antrea/$TAG/multicluster/config/samples/clusterset_init/multicluster_membercluster_template.yaml  > multicluster_membercluster.yaml
+$curl -L https://raw.githubusercontent.com/antrea-io/antrea/$TAG/multicluster/config/samples/clusterset_init/multicluster_membercluster_template.yaml > multicluster_membercluster.yaml
 $sed -e 's/<LEADER_CLUSTER_IP>/172.10.0.11/g' multicluster_membercluster.yaml | kubectl apply -f -
 ```
 
