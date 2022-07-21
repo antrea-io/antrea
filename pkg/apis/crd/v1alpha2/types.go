@@ -266,14 +266,7 @@ type IPRange struct {
 }
 
 type ExternalIPPoolStatus struct {
-	Usage ExternalIPPoolUsage `json:"usage,omitempty"`
-}
-
-type ExternalIPPoolUsage struct {
-	// Total number of IPs.
-	Total int `json:"total"`
-	// Number of allocated IPs.
-	Used int `json:"used"`
+	Usage IPPoolUsage `json:"usage,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -337,9 +330,15 @@ type SubnetIPRange struct {
 
 type IPPoolStatus struct {
 	IPAddresses []IPAddressState `json:"ipAddresses,omitempty"`
-	// TODO: add usage statistics
+	Usage       IPPoolUsage      `json:"usage,omitempty"`
 }
 
+type IPPoolUsage struct {
+	// Total number of IPs.
+	Total int `json:"total"`
+	// Number of allocated IPs.
+	Used int `json:"used"`
+}
 type IPAddressPhase string
 
 const (

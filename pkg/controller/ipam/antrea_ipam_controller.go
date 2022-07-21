@@ -56,6 +56,9 @@ const (
 	maxRetryDelay = 300 * time.Second
 
 	garbageCollectionInterval = 10 * time.Minute
+
+	// Default number of workers processing an IPPool change.
+	defaultWorkers = 4
 )
 
 // AntreaIPAMController is responsible for:
@@ -84,6 +87,9 @@ type AntreaIPAMController struct {
 	ipPoolInformer     crdinformers.IPPoolInformer
 	ipPoolLister       crdlisters.IPPoolLister
 	ipPoolListerSynced cache.InformerSynced
+
+	// statusQueue maintains the IPPool objects that need to be synced.
+	statusQueue workqueue.RateLimitingInterface
 }
 
 func statefulSetIndexFunc(obj interface{}) ([]string, error) {
@@ -124,6 +130,7 @@ func NewAntreaIPAMController(crdClient versioned.Interface,
 		ipPoolInformer:          ipPoolInformer,
 		ipPoolLister:            ipPoolInformer.Lister(),
 		ipPoolListerSynced:      ipPoolInformer.Informer().HasSynced,
+		statusQueue:             workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "IPPoolStatus"),
 	}
 
 	// Add handlers for Stateful Set events.
@@ -362,13 +369,92 @@ func (c *AntreaIPAMController) processNextStatefulSetWorkItem() bool {
 	return true
 }
 
+func (c *AntreaIPAMController) updateIPPoolCounters(poolName string) error {
+	ipPool, err := c.ipPoolLister.Get(poolName)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			return nil
+		}
+		return fmt.Errorf("failed to retrieve IPPool %s, error: %v", poolName, err)
+	}
+
+	allocator, err := poolallocator.NewIPPoolAllocator(ipPool.Name, c.crdClient, c.ipPoolLister)
+
+	if err != nil {
+		return fmt.Errorf("failed to initialize allocator for IPPool %s, error: %v", poolName, err)
+	}
+
+	// Total is fetched from allocator as here are trapped changes to CRD, e.g addition of new IPRange
+	total := allocator.Total()
+
+	// Used is gathered from IP allocation status within the CRD - as it can be set by each one of the agents
+	used := len(ipPool.Status.IPAddresses)
+
+	// If update has no effect, exit
+	if ipPool.Status.Usage.Used == used && ipPool.Status.Usage.Total == total {
+		return nil
+	}
+
+	ipPoolToUpdate := ipPool.DeepCopy()
+	ipPoolToUpdate.Status.Usage.Used = used
+	ipPoolToUpdate.Status.Usage.Total = total
+
+	_, err = c.crdClient.CrdV1alpha2().IPPools().UpdateStatus(context.TODO(), ipPoolToUpdate, metav1.UpdateOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to update IPPool %s counters, error: %v", poolName, err)
+	}
+
+	return nil
+}
+
+func (c *AntreaIPAMController) createHandler(obj interface{}) {
+	ipPool := obj.(*crdv1a2.IPPool)
+	c.statusQueue.Add(ipPool.Name)
+}
+
+func (c *AntreaIPAMController) updateHandler(oldObj, newObj interface{}) {
+	ipPool := newObj.(*crdv1a2.IPPool)
+	c.statusQueue.Add(ipPool.Name)
+}
+
+func (c *AntreaIPAMController) processNextWorkItem() bool {
+	key, quit := c.statusQueue.Get()
+	if quit {
+		return false
+	}
+	defer c.statusQueue.Done(key)
+
+	err := c.updateIPPoolCounters(key.(string))
+	if err != nil {
+		// Put the item back in the workqueue to handle any transient errors.
+		c.statusQueue.AddRateLimited(key)
+		klog.ErrorS(err, "Failed to sync IPPool status", "IPPool", key)
+		return true
+	}
+	// If no error occurs we Forget this item so it does not get queued again until
+	// another change happens.
+	c.statusQueue.Forget(key)
+	return true
+}
+
+func (c *AntreaIPAMController) worker() {
+	for c.processNextWorkItem() {
+	}
+}
+
 // Run begins watching and syncing of a AntreaIPAMController.
 func (c *AntreaIPAMController) Run(stopCh <-chan struct{}) {
 
 	defer c.statefulSetQueue.ShutDown()
+	defer c.statusQueue.ShutDown()
 
 	klog.InfoS("Starting", "controller", controllerName)
 	defer klog.InfoS("Shutting down", "controller", controllerName)
+
+	c.ipPoolInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc:    c.createHandler,
+		UpdateFunc: c.updateHandler,
+	})
 
 	cacheSyncs := []cache.InformerSynced{c.namespaceListerSynced, c.podInformerSynced, c.statefulSetListerSynced, c.ipPoolListerSynced}
 	if !cache.WaitForNamedCacheSync(controllerName, stopCh, cacheSyncs...) {
@@ -379,6 +465,10 @@ func (c *AntreaIPAMController) Run(stopCh <-chan struct{}) {
 	go wait.NonSlidingUntil(c.cleanupStaleAddresses, garbageCollectionInterval, stopCh)
 
 	go wait.Until(c.statefulSetWorker, time.Second, stopCh)
+
+	for i := 0; i < defaultWorkers; i++ {
+		go wait.Until(c.worker, time.Second, stopCh)
+	}
 
 	<-stopCh
 }

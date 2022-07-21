@@ -100,6 +100,13 @@ spec:
                         type: string
                     type: object
                   type: array
+                usage:
+                  properties:
+                    used:
+                      type: integer
+                    total:
+                      type: integer
+                  type: object
               type: object
       subresources:
         status: {}
