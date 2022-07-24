@@ -234,7 +234,7 @@ func (r *remoteCommonArea) SendMemberAnnounce() error {
 		}
 		// Add timestamp to force update on MemberClusterAnnounce. Leader cluster requires
 		// periodic updates to detect connectivity. Without this, no-op updates will be ignored.
-		localClusterMemberAnnounce.Annotations[TimestampAnnotationKey] = time.Now().String()
+		localClusterMemberAnnounce.Annotations[TimestampAnnotationKey] = time.Now().Format(time.RFC3339)
 		if err := r.Update(context.TODO(), &localClusterMemberAnnounce, &client.UpdateOptions{}); err != nil {
 			klog.ErrorS(err, "Error updating MemberClusterAnnounce", "cluster", r.GetClusterID())
 			return err

@@ -19,7 +19,9 @@ package multicluster
 import (
 	"context"
 	"testing"
+	"time"
 
+	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -95,7 +97,7 @@ func TestStaleController_CleanupService(t *testing.T) {
 			commonArea := commonarea.NewFakeRemoteCommonArea(scheme, fakeRemoteClient, "leader-cluster", localClusterID, "default")
 			mcReconciler := NewMemberClusterSetReconciler(fakeClient, scheme, "default")
 			mcReconciler.SetRemoteCommonArea(commonArea)
-			c := NewStaleResCleanupController(fakeClient, scheme, "default", mcReconciler)
+			c := NewStaleResCleanupController(fakeClient, scheme, "default", mcReconciler, MemberCluster)
 			if err := c.cleanup(); err != nil {
 				t.Errorf("StaleController.cleanup() should clean up all stale Service and ServiceImport but got err = %v", err)
 			}
@@ -190,7 +192,7 @@ func TestStaleController_CleanupACNP(t *testing.T) {
 
 			mcReconciler := NewMemberClusterSetReconciler(fakeClient, scheme, "default")
 			mcReconciler.SetRemoteCommonArea(commonArea)
-			c := NewStaleResCleanupController(fakeClient, scheme, "default", mcReconciler)
+			c := NewStaleResCleanupController(fakeClient, scheme, "default", mcReconciler, MemberCluster)
 			if err := c.cleanup(); err != nil {
 				t.Errorf("StaleController.cleanup() should clean up all stale ACNPs but got err = %v", err)
 			}
@@ -319,7 +321,7 @@ func TestStaleController_CleanupResourceExport(t *testing.T) {
 
 			mcReconciler := NewMemberClusterSetReconciler(fakeClient, scheme, "default")
 			mcReconciler.SetRemoteCommonArea(commonArea)
-			c := NewStaleResCleanupController(fakeClient, scheme, "default", mcReconciler)
+			c := NewStaleResCleanupController(fakeClient, scheme, "default", mcReconciler, MemberCluster)
 			if err := c.cleanup(); err != nil {
 				t.Errorf("StaleController.cleanup() should clean up all stale ResourceExports but got err = %v", err)
 			}
@@ -400,7 +402,7 @@ func TestStaleController_CleanupClusterInfoImport(t *testing.T) {
 
 			mcReconciler := NewMemberClusterSetReconciler(fakeClient, scheme, "default")
 			mcReconciler.SetRemoteCommonArea(commonarea)
-			c := NewStaleResCleanupController(fakeClient, scheme, "default", mcReconciler)
+			c := NewStaleResCleanupController(fakeClient, scheme, "default", mcReconciler, MemberCluster)
 			if err := c.cleanup(); err != nil {
 				t.Errorf("StaleController.cleanup() should clean up all stale ClusterInfoImport but got err = %v", err)
 			}
@@ -415,6 +417,121 @@ func TestStaleController_CleanupClusterInfoImport(t *testing.T) {
 			} else {
 				t.Errorf("Should list ClusterInfoImport successfully but got err = %v", err)
 			}
+		})
+	}
+}
+
+func TestStaleController_CleanupMemberClusterAnnounce(t *testing.T) {
+	tests := []struct {
+		name                              string
+		memberClusterAnnounceList         *mcsv1alpha1.MemberClusterAnnounceList
+		clusterSet                        *mcsv1alpha1.ClusterSetList
+		exceptMemberClusterAnnounceNumber int
+	}{
+		{
+			name:                              "no MemberClusterAnnounce to clean up when there is no resource",
+			clusterSet:                        &mcsv1alpha1.ClusterSetList{},
+			memberClusterAnnounceList:         &mcsv1alpha1.MemberClusterAnnounceList{},
+			exceptMemberClusterAnnounceNumber: 0,
+		},
+		{
+			name:                              "no MemberClusterAnnounce to clean up when the resource has a valid update time",
+			exceptMemberClusterAnnounceNumber: 1,
+			clusterSet: &mcsv1alpha1.ClusterSetList{
+				Items: []mcsv1alpha1.ClusterSet{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Namespace: "default",
+							Name:      "clusterset",
+						},
+						Spec: mcsv1alpha1.ClusterSetSpec{
+							Members: []mcsv1alpha1.MemberCluster{
+								{
+									ClusterID: "cluster-a",
+								},
+							},
+						},
+					},
+				},
+			},
+			memberClusterAnnounceList: &mcsv1alpha1.MemberClusterAnnounceList{
+				Items: []mcsv1alpha1.MemberClusterAnnounce{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Namespace: "default",
+							Name:      "member-cluster-from-cluster-a",
+							Annotations: map[string]string{
+								commonarea.TimestampAnnotationKey: time.Now().Format(time.RFC3339),
+							},
+						},
+						ClusterID: "cluster-a",
+					},
+				},
+			},
+		},
+		{
+			name:                              "clean up outdated MemberClusterAnnounce",
+			exceptMemberClusterAnnounceNumber: 1,
+			clusterSet: &mcsv1alpha1.ClusterSetList{
+				Items: []mcsv1alpha1.ClusterSet{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Namespace: "default",
+							Name:      "clusterset",
+						},
+						Spec: mcsv1alpha1.ClusterSetSpec{
+							Members: []mcsv1alpha1.MemberCluster{
+								{
+									ClusterID: "cluster-a",
+								},
+								{
+									ClusterID: "cluster-outdated",
+								},
+							},
+						},
+					},
+				},
+			},
+			memberClusterAnnounceList: &mcsv1alpha1.MemberClusterAnnounceList{
+				Items: []mcsv1alpha1.MemberClusterAnnounce{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Namespace: "default",
+							Name:      "member-cluster-from-cluster-a",
+							Annotations: map[string]string{
+								commonarea.TimestampAnnotationKey: time.Now().Format(time.RFC3339),
+							},
+						},
+						ClusterID: "cluster-a",
+					},
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Namespace: "default",
+							Name:      "member-cluster-from-cluster-outdated",
+							Annotations: map[string]string{
+								commonarea.TimestampAnnotationKey: time.Now().Add(-1 * time.Hour).Format(time.RFC3339),
+							},
+						},
+						ClusterID: "cluster-outdated",
+					},
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithLists(tt.memberClusterAnnounceList).WithLists(tt.clusterSet).Build()
+
+			mcReconciler := NewMemberClusterSetReconciler(fakeClient, scheme, "default")
+			c := NewStaleResCleanupController(fakeClient, scheme, "default", mcReconciler, LeaderCluster)
+			assert.Equal(t, nil, c.cleanup())
+
+			memberClusterAnnounceList := &mcsv1alpha1.MemberClusterAnnounceList{}
+			if err := fakeClient.List(context.TODO(), memberClusterAnnounceList, &client.ListOptions{}); err != nil {
+				t.Errorf("Should list MemberClusterAnnounce successfully but got err = %v", err)
+			}
+
+			assert.Equal(t, tt.exceptMemberClusterAnnounceNumber, len(memberClusterAnnounceList.Items))
 		})
 	}
 }
