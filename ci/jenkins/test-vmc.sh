@@ -236,12 +236,12 @@ function setup_aws_sg() {
     clusterctl init --infrastructure aws
 
     aws ec2 create-security-group --description capi-controlplane --group-name capi-controlplane --vpc-id $AWS_VPC_ID
-    export CONTROLPLANE_SGID=$(aws ec2 describe-security-groups | grep -A1 capi-controlplane | grep GroupId | awk '{print $2}')
+    export CONTROLPLANE_SGID=$(aws ec2 --output yaml describe-security-groups | grep -A1 capi-controlplane | grep GroupId | awk '{print $2}')
     # All allow from subnet
     aws ec2 authorize-security-group-ingress --group-id $CONTROLPLANE_SGID --protocol "-1" --cidr 0.0.0.0/0
     # New node security group
     aws ec2 create-security-group --description capi-node --group-name capi-node --vpc-id $AWS_VPC_ID
-    export NODE_SGID=$(aws ec2 describe-security-groups | grep -A1 capi-node | grep GroupId | awk '{print $2}')
+    export NODE_SGID=$(aws ec2 --output yaml describe-security-groups | grep -A1 capi-node | grep GroupId | awk '{print $2}')
     # All allow from subnet
     aws ec2 authorize-security-group-ingress --group-id $NODE_SGID --protocol "-1" --cidr 0.0.0.0/0
     set -e

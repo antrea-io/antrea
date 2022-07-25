@@ -1140,7 +1140,7 @@
                  type: absolute
       - '{name}-{test_name}-for-period':
           test_name: daily-capa-aws-test
-          node: 'antrea-test-node'
+          node: 'capa-test'
           description: 'This is for testing AWS capa daily.'
           builders:
             - builder-capa-aws
@@ -1165,7 +1165,7 @@
                 credential-id: CAPA_SUBNET
                 variable: CAPA_SUBNET
             - ssh-user-private-key:
-                credential-id: CAPA_SSH_RSA
+                credential-id: AWS_DEFAULT_SSH_KEY
                 key-file-variable: KEY_FILE_VARIABLE
                 username-variable: USER_NAME_VARIABLE
                 passphrase-variable: PASSPHRASE_VARIABLE
