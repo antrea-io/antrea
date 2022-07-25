@@ -31,8 +31,6 @@ func (r *ClusterClaim) SetupWebhookWithManager(mgr ctrl.Manager) error {
 		Complete()
 }
 
-//+kubebuilder:webhook:path=/mutate-multicluster-crd-antrea-io-v1alpha2-clusterclaim,mutating=true,failurePolicy=fail,sideEffects=None,groups=multicluster.crd.antrea.io,resources=clusterclaims,verbs=create;update,versions=v1alpha2,name=mclusterclaim.kb.io,admissionReviewVersions={v1,v1beta1}
-
 var _ webhook.Defaulter = &ClusterClaim{}
 
 // Default implements webhook.Defaulter so a webhook will be registered for the type
@@ -49,9 +47,9 @@ var _ webhook.Validator = &ClusterClaim{}
 
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type
 func (r *ClusterClaim) ValidateCreate() error {
-	klog.InfoS("validate create", "name", r.Name)
+	klog.InfoS("Validate create", "name", r.Name)
 	if r.Name != WellKnownClusterClaimClusterSet && r.Name != WellKnownClusterClaimID {
-		err := fmt.Errorf("The name %s is not valid, only 'id.k8s.io' and 'clusterset.k8s.io' are valid names for ClusterClaim", r.Name)
+		err := fmt.Errorf("name %s is not valid, only 'id.k8s.io' and 'clusterset.k8s.io' are valid names for ClusterClaim", r.Name)
 		return err
 	}
 
@@ -60,15 +58,19 @@ func (r *ClusterClaim) ValidateCreate() error {
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
 func (r *ClusterClaim) ValidateUpdate(old runtime.Object) error {
-	klog.InfoS("validate update", "name", r.Name)
+	klog.InfoS("Validate update", "name", r.Name)
 
-	// TODO(user): fill in your validation logic upon object update.
+	oldClusterClaim := old.(*ClusterClaim)
+	if r.Value != oldClusterClaim.Value {
+		err := fmt.Errorf("the field 'value' is immutable")
+		return err
+	}
 	return nil
 }
 
 // ValidateDelete implements webhook.Validator so a webhook will be registered for the type
 func (r *ClusterClaim) ValidateDelete() error {
-	klog.InfoS("validate delete", "name", r.Name)
+	klog.InfoS("Validate delete", "name", r.Name)
 
 	// TODO(user): fill in your validation logic upon object deletion.
 	return nil
