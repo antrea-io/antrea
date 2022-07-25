@@ -61,12 +61,13 @@ Setup a VMC cluster to run K8s e2e community tests (E2e, Conformance, all featur
         --test-only              Only run test on current cluster. Not set up/clean up the cluster.
         --codecov-token          Token used to upload coverage report(s) to Codecov.
         --registry               Using private registry to pull images.
-        --provider               Select the coud provider for the testbed.
+        --provider               Select the cloud provider for the testbed.
         --aws-region             AWS region to use.
         --aws-access-key-id      AWS access key id.
         --aws-secret-access-key  AWS secret access key.
         --aws-vpc-id             AWS VPC id.
-        --aws-subnet-id          AWS subnet id."
+        --aws-subnet-id          AWS subnet id.
+        --aws-ssh-key-path       AWS SSH key file path"
 
 function print_usage {
     echoerr "$_usage"
@@ -797,7 +798,7 @@ function cleanup_cluster() {
     echo "=== Cleaning up cluster ${CLUSTER} ==="
     export KUBECONFIG=$KUBECONFIG_PATH
 
-    kubectl delete ${CLUSTER} -n ${CLUSTER}
+    kubectl delete cluster ${CLUSTER} -n ${CLUSTER}
 
     kubectl delete ns ${CLUSTER}
     rm -rf "${GIT_CHECKOUT_DIR}/jenkins"

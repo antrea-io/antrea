@@ -175,4 +175,24 @@
           #!/bin/bash
           set -ex
           ./ci/jenkins/test-vmc.sh --cluster-name "${JOB_NAME}-${BUILD_NUMBER}" --setup-only --provider aws --aws-region "us-west-2" --aws-access-key-id "${CAPA_ACCESS_KEY}" --aws-secret-access-key "${CAPA_SECRET_ACCESS_KEY}" --aws-vpc-id "${CAPA_VPC}" --aws-subnet-id "${CAPA_SUBNET}" --aws-ssh-key-path "${KEY_FILE_VARIABLE}"
+
+          set +e
+          for testcase in e2e conformance networkpolicy do
+            ./test-vmc.sh --test-only --testcase "$testcase"
+            test_result=$?
+            echo "$test_result" > "test-$testcase-rc.txt"
+          done
+
+          set -e
           ./ci/jenkins/test-vmc.sh --cluster-name "${JOB_NAME}-${BUILD_NUMBER}" --cleanup-only
+          success=ok
+          for result in test-*-rc.txt; do
+            r="${cat $result}"
+            if ["$r" -ne 0]; then
+              echo Test Failed: $result : $r
+            fi
+          done
+
+          if ["$success" != "ok"]; then
+            exit 1
+          fi
