@@ -167,3 +167,12 @@
             echo "Whole Conformance Test failed!"
           fi
           exit $((TEST_FAIL_E2E + TEST_FAIL_NP + TEST_FAIL_CONFORMANCE))
+
+- builder:
+    name: builder-capa-aws
+    builders:
+      - shell: |-
+          #!/bin/bash
+          set -ex
+          ./ci/jenkins/test-vmc.sh --cluster-name "${JOB_NAME}-${BUILD_NUMBER}" --setup-only --provider aws --aws-region "us-west-2" --aws-access-key-id "${CAPA_ACCESS_KEY}" --aws-secret-access-key "${CAPA_SECRET_ACCESS_KEY}" --aws-vpc-id "${CAPA_VPC}" --aws-subnet-id "${CAPA_SUBNET}" --aws-ssh-key-path "${KEY_FILE_VARIABLE}"
+          ./ci/jenkins/test-vmc.sh --cluster-name "${JOB_NAME}-${BUILD_NUMBER}" --cleanup-only

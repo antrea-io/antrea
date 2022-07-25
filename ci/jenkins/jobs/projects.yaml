@@ -1138,3 +1138,34 @@
              - timeout:
                  timeout: 600
                  type: absolute
+      - '{name}-{test_name}-for-period':
+          test_name: daily-capa-aws-test
+          node: 'antrea-test-node'
+          description: 'This is for testing AWS capa daily.'
+          builders:
+            - builder-capa-aws
+          branches:
+          - '*/main'
+          included_regions: []
+          cron: 'H H * * *'
+          ignore_post_commit_hooks: false
+          publishers: []
+          wrappers:
+          - credentials-binding:
+            - text:
+                credential-id: CAPA_ACCESS_KEY
+                variable: CAPA_ACCESS_KEY
+            - text:
+                credential-id: CAPA_SECRET_ACCESS_KEY
+                variable: CAPA_SECRET_ACCESS_KEY
+            - text:
+                credential-id: CAPA_VPC
+                variable: CAPA_VPC
+            - text:
+                credential-id: CAPA_SUBNET
+                variable: CAPA_SUBNET
+            - ssh-user-private-key:
+                credential-id: CAPA_SSH_RSA
+                key-file-variable: KEY_FILE_VARIABLE
+                username-variable: USER_NAME_VARIABLE
+                passphrase-variable: PASSPHRASE_VARIABLE

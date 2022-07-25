@@ -40,6 +40,7 @@ DOCKER_REGISTRY=""
 CONTROL_PLANE_NODE_ROLE="master|control-plane"
 provider="vsphere"
 SSH_USERNAME='capv'
+AWS_SSH_KEY_PATH=""
 
 _usage="Usage: $0 [--cluster-name <VMCClusterNameToUse>] [--kubeconfig <KubeconfigSavePath>] [--workdir <HomePath>]
                   [--log-mode <SonobuoyResultLogLevel>] [--testcase <e2e|conformance|all-features-conformance|whole-conformance|networkpolicy>]
@@ -167,6 +168,10 @@ case $key in
     CODECOV_TOKEN="$2"
     shift 2
     ;;
+    --aws-ssh-key-path)
+    AWS_SSH_KEY_PATH="$2"
+    shift 2
+    ;;
     -h|--help)
     print_usage
     exit 0
@@ -255,7 +260,7 @@ function setup_aws_cluster() {
 
     echo '=== Prepare key pair ==='
     mkdir -p ${GIT_CHECKOUT_DIR}/jenkins/key
-    cp ${GIT_CHECKOUT_DIR}/ci/cluster-api/aws/default-aws ${GIT_CHECKOUT_DIR}/jenkins/key/antrea-ci-key
+    cp ${AWS_SSH_KEY_PATH} ${GIT_CHECKOUT_DIR}/jenkins/key/antrea-ci-key
 
     echo "=== setup AWS security group ==="
     setup_aws_sg
