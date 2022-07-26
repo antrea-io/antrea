@@ -47,9 +47,9 @@ while (( "$#" )); do
   shift
 done
 
-# Find the cni conf file with lowest name
+# Find the cni conf file with lowest name, which is not installed by us
 while true; do
-  cni_conf_name=$(ls "$HOST_CNI_NET_DIR" | head -n1)
+  cni_conf_name=$(ls "$HOST_CNI_NET_DIR" | grep -v antrea | head -n1)
   if [[ ! -z $cni_conf_name ]]; then
     break
   fi
@@ -58,16 +58,22 @@ while true; do
 done
 cni_conf_path="$HOST_CNI_NET_DIR/$cni_conf_name"
 
-function update_cni_conf {
-    log_info "install_cni_chaining" "updating CNI conf file $cni_conf_name"
+# EKS uses 10-aws.conflist
+# AKS uses 10-azure.conflist
+cni_conf_name_antrea="05-antrea.conflist"
+cni_conf_path_antrea="$HOST_CNI_NET_DIR/$cni_conf_name_antrea"
 
-    # To limit the risk of issue because of race conditions, we use the
-    # following steps:
-    # 1. read the file once and store its contents in a variable
+cni_conf_sha=""
+
+function update_cni_conf {
+    log_info "install_cni_chaining" "updating CNI conf file $cni_conf_name -> $cni_conf_name_antrea"
+
+    # We use the following steps:
+    # 1. read the input file once and store its contents in a variable
     # 2. perform the necessary changes on the variable contents
-    # 3. compute the sha of the updated variable contents
-    # 4. write the variable contents back to the file
+    # 3. write the variable contents to the output file if necessary
     content=$(cat $cni_conf_path)
+    cni_conf_sha="$(echo -n "$content" | sha256sum | while read -r s _; do echo "$s"; done)"
 
     echo "$content" | grep -sq "azure"
     if [[ $? == 0 ]]; then
@@ -81,9 +87,13 @@ function update_cni_conf {
         content="$(echo "$content" | jq '.plugins += [{"type": "antrea"}]')"
     fi
 
-    cni_conf_sha="$(echo "$content" | sha256sum | while read -r s _; do echo "$s"; done)"
-
-    echo "$content" > $cni_conf_path
+    # we only write to the file if an update is necessary
+    cmp -s <(echo "$content") $cni_conf_path_antrea
+    if [[ $? != 0 ]]; then
+        echo "$content" > $cni_conf_path_antrea
+    else
+        log_info "install_cni_chaining" "CNI conf file is already up-to-date"
+    fi
 }
 
 # monitor will start a watch on host's CNI config directory.
