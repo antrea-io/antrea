@@ -45,7 +45,7 @@ AWS_SSH_KEY_PATH=""
 _usage="Usage: $0 [--cluster-name <VMCClusterNameToUse>] [--kubeconfig <KubeconfigSavePath>] [--workdir <HomePath>]
                   [--log-mode <SonobuoyResultLogLevel>] [--testcase <e2e|conformance|all-features-conformance|whole-conformance|networkpolicy>]
                   [--garbage-collection] [--setup-only] [--cleanup-only] [--coverage] [--test-only] [--codecov-token] [--registry]
-                  [--provider vsphere/aws] [--aws-region <Region>] [--aws-access-key-id <blah>] [--aws-secret-access-key <blah>] [--aws-vpc-id <VPCID>] [--aws-subnet-id <SubnetID>]
+                  [--provider vsphere/aws] [--aws-region <Region>] [--aws-access-key-id <blah>] [--aws-secret-access-key <blah>] [--aws-vpc-id <VPCID>] [--aws-subnet-id <SubnetID> [--aws-ssh-key-path <blah>]]
 
 Setup a VMC cluster to run K8s e2e community tests (E2e, Conformance, all features Conformance, whole Conformance & Network Policy).
 
