@@ -612,8 +612,39 @@ func (data *TestData) CreateNamespace(namespace string, mutateFunc func(*corev1.
 	return nil
 }
 
+func (data *TestData) UpdateNamespace(namespace string, mutateFunc func(*corev1.Namespace)) error {
+	ns := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: namespace,
+		},
+	}
+	if mutateFunc != nil {
+		mutateFunc(ns)
+	}
+	if ns, err := data.clientset.CoreV1().Namespaces().Update(context.TODO(), ns, metav1.UpdateOptions{}); err != nil {
+		// Check namespace phase
+		if ns.Status.Phase == corev1.NamespaceTerminating {
+			return fmt.Errorf("error when updating '%s' Namespace: namespace is in 'Terminating' phase", namespace)
+		}
+		return fmt.Errorf("error when updating '%s' Namespace: %v", namespace, err)
+	}
+	return nil
+}
+
 // createNamespaceWithAnnotations creates the namespace with Annotations.
 func (data *TestData) createNamespaceWithAnnotations(namespace string, annotations map[string]string) error {
+	mutateFunc := data.generateNamespaceAnnotationsMutateFunc(annotations)
+	return data.CreateNamespace(namespace, mutateFunc)
+}
+
+// updateNamespaceWithAnnotations updates the given namespace with Annotations.
+func (data *TestData) updateNamespaceWithAnnotations(namespace string, annotations map[string]string) error {
+	mutateFunc := data.generateNamespaceAnnotationsMutateFunc(annotations)
+	return data.UpdateNamespace(namespace, mutateFunc)
+}
+
+// generateAnnotationsMutateFunc generates a mutate function to add given annotations to a namespace.
+func (data *TestData) generateNamespaceAnnotationsMutateFunc(annotations map[string]string) func(*corev1.Namespace) {
 	var mutateFunc func(*corev1.Namespace)
 	if annotations != nil {
 		mutateFunc = func(namespace *corev1.Namespace) {
@@ -625,7 +656,7 @@ func (data *TestData) createNamespaceWithAnnotations(namespace string, annotatio
 			}
 		}
 	}
-	return data.CreateNamespace(namespace, mutateFunc)
+	return mutateFunc
 }
 
 // DeleteNamespace deletes the provided Namespace, and waits for deletion to actually complete if timeout>=0
