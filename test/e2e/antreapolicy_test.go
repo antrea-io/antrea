@@ -15,7 +15,6 @@
 package e2e
 
 import (
-	"antrea.io/antrea/pkg/controller/networkpolicy"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -41,6 +40,7 @@ import (
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	crdv1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
 	crdv1alpha3 "antrea.io/antrea/pkg/apis/crd/v1alpha3"
+	"antrea.io/antrea/pkg/controller/networkpolicy"
 	"antrea.io/antrea/pkg/features"
 	. "antrea.io/antrea/test/e2e/utils"
 )
@@ -2123,6 +2123,7 @@ func testAuditLoggingEnableNP(t *testing.T, data *TestData) {
 		t.Errorf("Error when polling audit log files for required entries: %v", err)
 	}
 	failOnError(k8sUtils.DeleteNetworkPolicy(namespaces["x"], "allow-x-b-to-x-a"), t)
+	data.updateNamespaceWithAnnotations(namespaces["x"], map[string]string{})
 }
 
 func testAppliedToPerRule(t *testing.T) {
@@ -3649,7 +3650,6 @@ func TestAntreaPolicy(t *testing.T) {
 		t.Run("Case=AuditLoggingBasic", func(t *testing.T) { testAuditLoggingBasic(t, data) })
 		t.Run("Case=AuditLoggingEnableNP", func(t *testing.T) { testAuditLoggingEnableNP(t, data) })
 	})
-	printResults()
 
 	t.Run("TestMulticastNP", func(t *testing.T) {
 		skipIfMulticastDisabled(t)

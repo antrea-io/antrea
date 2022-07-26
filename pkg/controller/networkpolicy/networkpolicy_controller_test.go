@@ -231,9 +231,9 @@ func newClientset(objects ...runtime.Object) *fake.Clientset {
 	return client
 }
 
-type mockNamespaceAnnotationLog struct{}
+type mockNamespaceListerWithLogAnnotation struct{}
 
-func (s *mockNamespaceAnnotationLog) List(selector labels.Selector) (ret []*corev1.Namespace, err error) {
+func (s *mockNamespaceListerWithLogAnnotation) List(selector labels.Selector) (ret []*corev1.Namespace, err error) {
 	testNamespace := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace:   corev1.NamespaceDefault,
@@ -244,7 +244,7 @@ func (s *mockNamespaceAnnotationLog) List(selector labels.Selector) (ret []*core
 	return []*corev1.Namespace{testNamespace}, nil
 }
 
-func (s *mockNamespaceAnnotationLog) Get(name string) (*corev1.Namespace, error) {
+func (s *mockNamespaceListerWithLogAnnotation) Get(name string) (*corev1.Namespace, error) {
 	testNamespace := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace:   corev1.NamespaceDefault,
@@ -2823,7 +2823,7 @@ func TestProcessNetworkPolicyLogging(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			_, c := newController()
 			// Replace with custom lister that returns Namespace with logging Annotation.
-			c.namespaceLister = &mockNamespaceAnnotationLog{}
+			c.namespaceLister = &mockNamespaceListerWithLogAnnotation{}
 
 			if actualPolicy := c.processNetworkPolicy(tt.inputPolicy); !reflect.DeepEqual(actualPolicy, tt.expectedPolicy) {
 				t.Errorf("processNetworkPolicy() got %v, want %v", actualPolicy, tt.expectedPolicy)

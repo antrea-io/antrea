@@ -1156,7 +1156,7 @@ func (f *featureNetworkPolicy) addRuleToConjunctiveMatch(conj *policyRuleConjunc
 		for _, eachService := range rule.Service {
 			matches := generateServiceConjMatches(conj.serviceClause.ruleTable.GetID(), eachService, rule.Priority, f.ipProtocols, false)
 			for _, match := range matches {
-				f.addActionToConjunctiveMatch(conj.serviceClause, match, rule.EnableLogging)
+				f.addActionToConjunctiveMatch(conj.serviceClause, match, false)
 			}
 		}
 	}

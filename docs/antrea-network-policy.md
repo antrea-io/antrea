@@ -652,6 +652,25 @@ The rules are logged in the following format:
     2021/06/24 23:56:41.346165 AntreaPolicyEgressRule AntreaNetworkPolicy:default/test-anp Drop 44900 10.10.1.65 35402 10.0.0.5 80 TCP 60 [3 packets in 1.011379442s]
 ```
 
+Kubernetes Network Policies can also be audited using Antrea logging to the same file
+(`/var/log/antrea/networkpolicy/np.log`). Set the Namespace Annotations to
+`policy.antrea.io/enable-np-logging: "true"`, then all the rules of Kubernetes
+Network Policies in this Namespace will be processed similar to setting their
+`enableLogging` field to true. Packet of any connection that matches the rules
+will be logged with Kubernetes Network Policy reference, but packets dropped by
+implicit default drop will only be logged with consistent name `K8sNetworkPolicy`
+for reference. The rules are logged in the following format:
+
+```text
+    <yyyy/mm/dd> <time> <ovs-table-name> <k8s-network-policy-reference> Allow <openflow-priority> <source-ip> <source-port> <destination-ip> <destination-port> <protocol> <packet-length>
+    Default dropped traffic:
+    <yyyy/mm/dd> <time> <ovs-table-name> K8sNetworkPolicy Drop -1 <source-ip> <source-port> <destination-ip> <destination-port> <protocol> <packet-length> [<num of packets> packets in <duplicate duration>]
+
+    Example:
+    2022/07/26 06:55:56.170456 IngressRule K8sNetworkPolicy:default/test-np-log Allow 190 10.10.1.82 49518 10.10.1.84 80 TCP 60
+    2022/07/26 06:55:57.142206 IngressDefaultRule K8sNetworkPolicy Drop -1 10.10.1.83 38608 10.10.1.84 80 TCP 60
+```
+
 Fluentd can be used to assist with collecting and analyzing the logs. Refer to the
 [Fluentd cookbook](cookbooks/fluentd) for documentation.
 
