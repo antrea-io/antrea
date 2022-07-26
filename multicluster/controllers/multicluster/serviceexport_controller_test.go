@@ -40,6 +40,13 @@ var (
 		Namespace: "default",
 		Name:      "nginx",
 	}}
+
+	existSvcExport = &k8smcsv1alpha1.ServiceExport{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "default",
+			Name:      "nginx",
+		},
+	}
 )
 
 func TestServiceExportReconciler_handleDeleteEvent(t *testing.T) {
@@ -90,78 +97,141 @@ func TestServiceExportReconciler_handleDeleteEvent(t *testing.T) {
 	}
 }
 
-func TestServiceExportReconciler_ExportNotFoundService(t *testing.T) {
-	existSvcExport := &k8smcsv1alpha1.ServiceExport{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: "default",
-			Name:      "nginx",
-		},
-	}
-
-	fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(existSvcExport).Build()
-	fakeRemoteClient := fake.NewClientBuilder().WithScheme(scheme).Build()
-	commonArea := commonarea.NewFakeRemoteCommonArea(scheme, fakeRemoteClient, "leader-cluster", localClusterID, "default")
-
-	mcReconciler := NewMemberClusterSetReconciler(fakeClient, scheme, "default")
-	mcReconciler.SetRemoteCommonArea(commonArea)
-	r := NewServiceExportReconciler(fakeClient, scheme, mcReconciler)
-	if _, err := r.Reconcile(ctx, nginxReq); err != nil {
-		t.Errorf("ServiceExport Reconciler should update ServiceExport status to 'not_found_service' but got error = %v", err)
-	} else {
-		newSvcExport := &k8smcsv1alpha1.ServiceExport{}
-		err := fakeClient.Get(ctx, types.NamespacedName{Namespace: "default", Name: "nginx"}, newSvcExport)
-		if err != nil {
-			t.Errorf("ServiceExport Reconciler should get new ServiceExport successfully but got error = %v", err)
-		} else {
-			reason := newSvcExport.Status.Conditions[0].Reason
-			if *reason != "not_found_service" {
-				t.Errorf("latest ServiceExport status should be 'not_found_service' but got %v", reason)
-			}
-		}
-	}
-}
-
-func TestServiceExportReconciler_ExportMCSService(t *testing.T) {
+func TestServiceExportReconciler_CheckExportStatus(t *testing.T) {
 	mcsSvc := svcNginx.DeepCopy()
+	mcsSvc.Name = "antrea-mc-nginx"
 	mcsSvc.Annotations = map[string]string{common.AntreaMCServiceAnnotation: "true"}
-	existSvcExport := &k8smcsv1alpha1.ServiceExport{
+	mcsSvcExport := &k8smcsv1alpha1.ServiceExport{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
-			Name:      "nginx",
+			Name:      "antrea-mc-nginx",
 		},
 	}
 
-	fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(mcsSvc, existSvcExport).Build()
-	fakeRemoteClient := fake.NewClientBuilder().WithScheme(scheme).Build()
+	nginx0Svc := svcNginx.DeepCopy()
+	nginx0Svc.Name = "nginx0"
+	nginx0SvcExport := &k8smcsv1alpha1.ServiceExport{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "default",
+			Name:      "nginx0",
+		},
+	}
 
+	nginx1Svc := svcNginx.DeepCopy()
+	nginx1Svc.Name = "nginx1"
+	now := metav1.Now()
+	reason := "service_without_endpoints"
+	message := "the Service has no Endpoints, failed to export"
+	nginx1SvcExportWithStatus := &k8smcsv1alpha1.ServiceExport{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "default",
+			Name:      "nginx1",
+		},
+		Status: k8smcsv1alpha1.ServiceExportStatus{
+			Conditions: []k8smcsv1alpha1.ServiceExportCondition{
+				{
+					Type:               k8smcsv1alpha1.ServiceExportValid,
+					Status:             corev1.ConditionFalse,
+					LastTransitionTime: &now,
+					Reason:             &reason,
+					Message:            &message,
+				},
+			},
+		},
+	}
+
+	nginx1EP := &corev1.Endpoints{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "default",
+			Name:      "nginx1",
+		},
+		Subsets: epNginxSubset,
+	}
+
+	nginx2Svc := svcNginx.DeepCopy()
+	nginx2Svc.Name = "nginx2"
+	nginx2SvcExportWithStatus := nginx1SvcExportWithStatus.DeepCopy()
+	nginx2SvcExportWithStatus.Name = "nginx2"
+	existingMessage := "the Service has no related Endpoints"
+	nginx2SvcExportWithStatus.Status.Conditions[0].Message = &existingMessage
+	tests := []struct {
+		name            string
+		expectedReason  string
+		expectedMessage string
+		req             ctrl.Request
+	}{
+		{
+			name:           "export non-existing Service",
+			expectedReason: "service_not_found",
+			req:            nginxReq,
+		},
+		{
+			name:           "export multi-cluster Service",
+			expectedReason: "imported_service",
+			req: ctrl.Request{NamespacedName: types.NamespacedName{
+				Namespace: "default",
+				Name:      "antrea-mc-nginx",
+			}},
+		},
+		{
+			name:           "export Service without Endpoints",
+			expectedReason: "service_without_endpoints",
+			req: ctrl.Request{NamespacedName: types.NamespacedName{
+				Namespace: "default",
+				Name:      "nginx0",
+			}},
+		},
+		{
+			name:           "export Service and update status successfully",
+			expectedReason: "export_succeeded",
+			req: ctrl.Request{NamespacedName: types.NamespacedName{
+				Namespace: "default",
+				Name:      "nginx1",
+			}},
+		},
+		{
+			name:            "skip update status",
+			expectedReason:  "service_without_endpoints",
+			expectedMessage: "the Service has no related Endpoints",
+			req: ctrl.Request{NamespacedName: types.NamespacedName{
+				Namespace: "default",
+				Name:      "nginx2",
+			}},
+		},
+	}
+
+	fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(mcsSvc, nginx0Svc, nginx1Svc, nginx1EP, nginx2Svc, existSvcExport,
+		nginx0SvcExport, nginx1SvcExportWithStatus, nginx2SvcExportWithStatus, mcsSvcExport).Build()
+	fakeRemoteClient := fake.NewClientBuilder().WithScheme(scheme).Build()
 	commonArea := commonarea.NewFakeRemoteCommonArea(scheme, fakeRemoteClient, "leader-cluster", localClusterID, "default")
+
 	mcReconciler := NewMemberClusterSetReconciler(fakeClient, scheme, "default")
 	mcReconciler.SetRemoteCommonArea(commonArea)
 	r := NewServiceExportReconciler(fakeClient, scheme, mcReconciler)
-	if _, err := r.Reconcile(ctx, nginxReq); err != nil {
-		t.Errorf("ServiceExport Reconciler should update ServiceExport status to 'imported_service' but got error = %v", err)
-	} else {
-		newSvcExport := &k8smcsv1alpha1.ServiceExport{}
-		err := fakeClient.Get(ctx, types.NamespacedName{Namespace: "default", Name: "nginx"}, newSvcExport)
-		if err != nil {
-			t.Errorf("ServiceExport Reconciler should get new ServiceExport successfully but got error = %v", err)
-		} else {
-			reason := newSvcExport.Status.Conditions[0].Reason
-			if *reason != "imported_service" {
-				t.Errorf("latest ServiceExport status should be 'imported_service' but got %v", reason)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, err := r.Reconcile(ctx, tt.req); err != nil {
+				t.Errorf("ServiceExport Reconciler should update ServiceExport status successfully but got error = %v", err)
+			} else {
+				newSvcExport := &k8smcsv1alpha1.ServiceExport{}
+				err := fakeClient.Get(ctx, types.NamespacedName{Namespace: tt.req.Namespace, Name: tt.req.Name}, newSvcExport)
+				if err != nil {
+					t.Errorf("ServiceExport Reconciler should get new ServiceExport successfully but got error = %v", err)
+				} else {
+					reason := newSvcExport.Status.Conditions[0].Reason
+					if *reason != tt.expectedReason {
+						t.Errorf("Expected ServiceExport status should be %s but got %v", tt.expectedReason, *reason)
+					}
+					if tt.expectedMessage != "" && tt.expectedMessage != *newSvcExport.Status.Conditions[0].Message {
+						t.Errorf("Expected message %s but got %s", tt.expectedMessage, *newSvcExport.Status.Conditions[0].Message)
+					}
+				}
 			}
-		}
+		})
 	}
 }
 
 func TestServiceExportReconciler_handleServiceExportCreateEvent(t *testing.T) {
-	existSvcExport := &k8smcsv1alpha1.ServiceExport{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: "default",
-			Name:      "nginx",
-		},
-	}
-
 	fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(svcNginx, epNginx, existSvcExport).Build()
 	fakeRemoteClient := fake.NewClientBuilder().WithScheme(scheme).Build()
 
@@ -183,18 +253,18 @@ func TestServiceExportReconciler_handleServiceExportCreateEvent(t *testing.T) {
 			t.Errorf("ServiceExport Reconciler should get new Endpoints kind of ResourceExport successfully but got error = %v", err)
 		}
 		newSvcExport := &k8smcsv1alpha1.ServiceExport{}
-		fakeClient.Get(ctx, types.NamespacedName{Namespace: "default", Name: "nginx"}, newSvcExport)
+		if err = fakeClient.Get(ctx, types.NamespacedName{Namespace: "default", Name: "nginx"}, newSvcExport); err != nil {
+			t.Errorf("Should get ServiceExport successfully but got error = %v", err)
+		} else {
+			reason := newSvcExport.Status.Conditions[0].Reason
+			if *reason != "export_succeeded" {
+				t.Errorf("Expected ServiceExport status should be 'export_succeeded' but got %v", *reason)
+			}
+		}
 	}
 }
 
 func TestServiceExportReconciler_handleServiceUpdateEvent(t *testing.T) {
-	existSvcExport := &k8smcsv1alpha1.ServiceExport{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: "default",
-			Name:      "nginx",
-		},
-	}
-
 	sinfo := &svcInfo{
 		name:       svcNginx.Name,
 		namespace:  svcNginx.Namespace,
@@ -205,7 +275,13 @@ func TestServiceExportReconciler_handleServiceUpdateEvent(t *testing.T) {
 
 	newSvcNginx := svcNginx.DeepCopy()
 	newSvcNginx.Spec.Ports = []corev1.ServicePort{svcPort8080}
-
+	svcNginxEPs := &corev1.Endpoints{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "nginx",
+			Namespace: "default",
+		},
+		Subsets: epNginxSubset,
+	}
 	re := mcsv1alpha1.ResourceExport{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: leaderNamespace,
@@ -230,7 +306,7 @@ func TestServiceExportReconciler_handleServiceUpdateEvent(t *testing.T) {
 	existEpRe.Name = "cluster-a-default-nginx-endpoints"
 	existEpRe.Spec.Endpoints = &mcsv1alpha1.EndpointsExport{Subsets: epNginxSubset}
 
-	fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(newSvcNginx, existSvcExport).Build()
+	fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(newSvcNginx, svcNginxEPs, existSvcExport).Build()
 	fakeRemoteClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(existSvcRe, existEpRe).Build()
 
 	commonArea := commonarea.NewFakeRemoteCommonArea(scheme, fakeRemoteClient, "leader-cluster", localClusterID, "default")
@@ -309,8 +385,8 @@ func Test_serviceMapFunc(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := serviceMapFunc(tt.obj); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Test_serviceMapFunc() = %v, want %v", got, tt.want)
+			if got := objectMapFunc(tt.obj); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("Test_objectMapFunc() = %v, want %v", got, tt.want)
 			}
 		})
 	}
