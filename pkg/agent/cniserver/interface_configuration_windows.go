@@ -138,9 +138,7 @@ func (ic *ifConfigurator) configureContainerLink(
 	containerIface, err := attachContainerLink(endpoint, containerID, containerNetNS, containerIFDev)
 	if err != nil {
 		klog.V(2).Infof("Failed to attach HNS Endpoint to the container, remove it.")
-		if isInfraContainer(containerNetNS) {
-			ic.removeHNSEndpoint(endpoint, containerID)
-		}
+		ic.removeHNSEndpoint(endpoint, containerID)
 		return fmt.Errorf("failed to configure container IP: %v", err)
 	}
 
@@ -234,7 +232,9 @@ func attachContainerLink(ep *hcsshim.HNSEndpoint, containerID, sandbox, containe
 		if hcnEp == nil {
 			// Docker runtime
 			if err := hcsshim.HotAttachEndpoint(containerID, ep.Id); err != nil {
-				return nil, err
+				if isInfraContainer(sandbox) || hcsshim.ErrComputeSystemDoesNotExist != err {
+					return nil, err
+				}
 			}
 		} else {
 			// Containerd runtime
