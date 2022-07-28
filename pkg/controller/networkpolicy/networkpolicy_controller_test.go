@@ -231,28 +231,20 @@ func newClientset(objects ...runtime.Object) *fake.Clientset {
 	return client
 }
 
-type mockNamespaceListerWithLogAnnotation struct{}
-
-func (s *mockNamespaceListerWithLogAnnotation) List(selector labels.Selector) (ret []*corev1.Namespace, err error) {
-	testNamespace := &corev1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace:   corev1.NamespaceDefault,
-			Name:        "test-ns",
-			Annotations: map[string]string{"policy.antrea.io/enable-np-logging": "true"},
-		},
-	}
-	return []*corev1.Namespace{testNamespace}, nil
+type mockNamespaceLister struct {
+	mockNamespaceStore map[string]*corev1.Namespace
 }
 
-func (s *mockNamespaceListerWithLogAnnotation) Get(name string) (*corev1.Namespace, error) {
-	testNamespace := &corev1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace:   corev1.NamespaceDefault,
-			Name:        name,
-			Annotations: map[string]string{"policy.antrea.io/enable-np-logging": "true"},
-		},
+func (s *mockNamespaceLister) List(selector labels.Selector) (ret []*corev1.Namespace, err error) {
+	namespaces := make([]*corev1.Namespace, 0, len(s.mockNamespaceStore))
+	for _, ns := range s.mockNamespaceStore {
+		namespaces = append(namespaces, ns)
 	}
-	return testNamespace, nil
+	return namespaces, nil
+}
+
+func (s *mockNamespaceLister) Get(name string) (*corev1.Namespace, error) {
+	return s.mockNamespaceStore[name], nil
 }
 
 func TestAddNetworkPolicy(t *testing.T) {
@@ -2823,7 +2815,14 @@ func TestProcessNetworkPolicyLogging(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			_, c := newController()
 			// Replace with custom lister that returns Namespace with logging Annotation.
-			c.namespaceLister = &mockNamespaceListerWithLogAnnotation{}
+			testNamespace := &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace:   corev1.NamespaceDefault,
+					Name:        "nsA",
+					Annotations: map[string]string{"policy.antrea.io/enable-np-logging": "true"},
+				},
+			}
+			c.namespaceLister = &mockNamespaceLister{mockNamespaceStore: map[string]*corev1.Namespace{"nsA": testNamespace}}
 
 			if actualPolicy := c.processNetworkPolicy(tt.inputPolicy); !reflect.DeepEqual(actualPolicy, tt.expectedPolicy) {
 				t.Errorf("processNetworkPolicy() got %v, want %v", actualPolicy, tt.expectedPolicy)
