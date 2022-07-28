@@ -2129,17 +2129,14 @@ func (f *featureNetworkPolicy) defaultDropFlow(table binding.Table, matchPairs [
 	var customReason int
 	if f.enableDenyTracking {
 		customReason += CustomReasonDeny
-		fb = fb.
-			Action().LoadRegMark(DispositionDropRegMark, CustomReasonDenyRegMark)
 	}
 	if enableLogging {
 		customReason += CustomReasonLogging
-		fb = fb.
-			Action().LoadRegMark(DispositionDropRegMark, CustomReasonDenyRegMark)
 	}
 
 	if enableLogging || f.enableDenyTracking {
 		fb = fb.
+			Action().LoadRegMark(DispositionDropRegMark).
 			Action().LoadToRegField(CustomReasonField, uint32(customReason)).
 			Action().SendToController(uint8(PacketInReasonNP))
 	}
