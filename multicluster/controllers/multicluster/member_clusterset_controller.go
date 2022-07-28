@@ -93,6 +93,8 @@ func (r *MemberClusterSetReconciler) Reconcile(ctx context.Context, req ctrl.Req
 		klog.InfoS("Received ClusterSet delete", "clusterset", req.NamespacedName)
 		if r.remoteCommonArea != nil {
 			if err := r.deleteMemberClusterAnnounce(ctx); err != nil {
+				// MemberClusterAnnounce could be kept in the leader cluster, if antrea-mc-controller crashes after the failure.
+				// Leader cluster will delete the stale MemberClusterAnnounce with a garbage collection mechanism in this case.
 				return ctrl.Result{}, fmt.Errorf("failed to delete MemberClusterAnnounce in the leader cluster: %v", err)
 			}
 			r.remoteCommonArea.Stop()

@@ -16,6 +16,7 @@ package multicluster
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -89,6 +90,76 @@ func setup() {
 
 	memberClusterAnnounceReconcilerUnderTest = NewMemberClusterAnnounceReconciler(
 		mcaTestFakeRemoteClient, scheme)
+}
+
+func TestAddMemberToClusterSet(t *testing.T) {
+	setup()
+
+	memberCluster := &mcsv1alpha1.MemberClusterAnnounce{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "member-announce-from-south",
+			Namespace: "mcs1",
+		},
+		ClusterSetID: "clusterset1",
+		ClusterID:    "south",
+	}
+
+	err := memberClusterAnnounceReconcilerUnderTest.addMemberToClusterSet(memberCluster)
+	assert.Equal(t, nil, err)
+
+	clusterSet := &mcsv1alpha1.ClusterSet{}
+	err = mcaTestFakeRemoteClient.Get(context.TODO(), types.NamespacedName{Namespace: "mcs1", Name: "clusterset1"}, clusterSet)
+	assert.Equal(t, nil, err)
+	assert.Equal(t, 3, len(clusterSet.Spec.Members))
+}
+
+func TestAddDuplicateMember(t *testing.T) {
+	setup()
+
+	memberCluster := &mcsv1alpha1.MemberClusterAnnounce{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "member-announce-from-east",
+			Namespace: "mcs1",
+		},
+		ClusterSetID: "clusterset1",
+		ClusterID:    "east",
+	}
+
+	err := memberClusterAnnounceReconcilerUnderTest.addMemberToClusterSet(memberCluster)
+	exceptErr := fmt.Errorf("member cluster east already exists in ClusterSet clusterset1")
+
+	assert.Equal(t, exceptErr, err)
+}
+
+func TestRemoveMemberCluster(t *testing.T) {
+	setup()
+
+	memberCluster := &mcsv1alpha1.MemberClusterAnnounce{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "member-announce-from-east",
+			Namespace: "mcs1",
+		},
+		ClusterSetID: "clusterset1",
+		ClusterID:    "east",
+	}
+	err := memberClusterAnnounceReconcilerUnderTest.removeMemberFromClusterSet(memberCluster)
+	assert.Equal(t, nil, err)
+}
+
+func TestRemoveMemberClusterNotExist(t *testing.T) {
+	setup()
+
+	memberCluster := &mcsv1alpha1.MemberClusterAnnounce{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "member-announce-from-not-exist",
+			Namespace: "mcs1",
+		},
+		ClusterSetID: "clusterset1",
+		ClusterID:    "not-exist",
+	}
+	err := memberClusterAnnounceReconcilerUnderTest.removeMemberFromClusterSet(memberCluster)
+
+	assert.Equal(t, nil, err)
 }
 
 func TestStatusAfterAdd(t *testing.T) {

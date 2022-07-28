@@ -247,6 +247,7 @@ func (r *remoteCommonArea) SendMemberAnnounce() error {
 		localClusterMemberAnnounce.Name = "member-announce-from-" + r.GetLocalClusterID()
 		localClusterMemberAnnounce.Namespace = r.Namespace
 		localClusterMemberAnnounce.ClusterSetID = string(r.ClusterSetID)
+		localClusterMemberAnnounce.LeaderClusterID = string(r.GetClusterID())
 		if err := r.Create(context.TODO(), &localClusterMemberAnnounce, &client.CreateOptions{}); err != nil {
 			klog.ErrorS(err, "Error creating MemberClusterAnnounce", "cluster", r.GetClusterID())
 			return err
