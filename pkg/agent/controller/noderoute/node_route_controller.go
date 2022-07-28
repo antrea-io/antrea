@@ -501,8 +501,9 @@ func (c *Controller) addNodeRoute(nodeName string, node *corev1.Node) error {
 	if err != nil {
 		return fmt.Errorf("error when retrieving MAC of Node %s: %v", nodeName, err)
 	}
-	peerNodeIPs, err := c.getNodeTransportAddrs(node)
+	peerNodeIPs, err := k8s.GetNodeTransportAddrs(node)
 	if err != nil {
+		klog.ErrorS(err, "Failed to retrieve Node IP addresses", "node", node.Name)
 		return err
 	}
 	peerWireGuardPublicKey := node.Annotations[types.NodeWireGuardPublicAnnotationKey]
@@ -798,24 +799,4 @@ func getNodeMAC(node *corev1.Node) (net.HardwareAddr, error) {
 		return nil, fmt.Errorf("failed to parse MAC `%s`: %v", macStr, err)
 	}
 	return mac, nil
-}
-
-func (c *Controller) getNodeTransportAddrs(node *corev1.Node) (*utilip.DualStackIPs, error) {
-	if c.networkConfig.TransportIface != "" || len(c.networkConfig.TransportIfaceCIDRs) > 0 {
-		transportAddrs, err := k8s.GetNodeAddrsFromAnnotations(node, types.NodeTransportAddressAnnotationKey)
-		if err != nil {
-			return nil, err
-		}
-		if transportAddrs != nil {
-			return transportAddrs, nil
-		}
-		klog.InfoS("Transport address is not found, using NodeIP instead", "node", node.Name)
-	}
-	// Use NodeIP if the transport IP address is not set or not found.
-	peerNodeIPs, err := k8s.GetNodeAddrs(node)
-	if err != nil {
-		klog.ErrorS(err, "Failed to retrieve Node IP addresses", "node", node.Name)
-		return nil, err
-	}
-	return peerNodeIPs, nil
 }

@@ -32,7 +32,7 @@ const (
 	MulticastRecvBufferSize = 128
 )
 
-func newRouteClient(nodeconfig *config.NodeConfig, groupCache cache.Indexer, multicastSocket RouteInterface, multicastInterfaces sets.String) *MRouteClient {
+func newRouteClient(nodeconfig *config.NodeConfig, groupCache cache.Indexer, multicastSocket RouteInterface, multicastInterfaces sets.String, encapEnabled bool) *MRouteClient {
 	var m = &MRouteClient{
 		igmpMsgChan:         make(chan []byte, workerCount),
 		nodeConfig:          nodeconfig,
@@ -83,11 +83,11 @@ type MRouteClient struct {
 // by making these interfaces accept multicast traffic with multicast ip:mgroup.
 // https://tldp.org/HOWTO/Multicast-HOWTO-6.html#ss6.4
 func (c *MRouteClient) multicastInterfacesJoinMgroup(mgroup net.IP) error {
+	groupIP := mgroup.To4()
 	for _, config := range c.multicastInterfaceConfigs {
 		addrIP := config.IPv4Addr.IP.To4()
-		groupIP := mgroup.To4()
 		err := c.socket.MulticastInterfaceJoinMgroup(groupIP, addrIP, config.Name)
-		if err != nil {
+		if err != nil && !strings.Contains(err.Error(), "address already in use") {
 			return err
 		}
 	}
@@ -95,9 +95,9 @@ func (c *MRouteClient) multicastInterfacesJoinMgroup(mgroup net.IP) error {
 }
 
 func (c *MRouteClient) multicastInterfacesLeaveMgroup(mgroup net.IP) error {
+	groupIP := mgroup.To4()
 	for _, config := range c.multicastInterfaceConfigs {
 		addrIP := config.IPv4Addr.IP.To4()
-		groupIP := mgroup.To4()
 		err := c.socket.MulticastInterfaceLeaveMgroup(groupIP, addrIP, config.Name)
 		if err != nil {
 			return err
@@ -158,7 +158,7 @@ func (c *MRouteClient) deleteInboundMrouteEntryByGroup(group net.IP) (err error)
 }
 
 // addOutboundMrouteEntry configures multicast route from Antrea gateway to all the multicast interfaces,
-// allowing multicast sender Pods to send multicast traffic to external.
+// allowing multicast srcNode Pods to send multicast traffic to external.
 func (c *MRouteClient) addOutboundMrouteEntry(src net.IP, group net.IP) (err error) {
 	klog.V(2).InfoS("Adding outbound multicast route entry", "src", src, "group", group, "outboundVIFs", c.externalInterfaceVIFs)
 	err = c.socket.AddMrouteEntry(src, group, c.internalInterfaceVIF, c.externalInterfaceVIFs)

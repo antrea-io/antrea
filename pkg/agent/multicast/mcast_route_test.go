@@ -33,9 +33,10 @@ import (
 )
 
 var (
-	addrIf1    = &net.IPNet{IP: nodeIf1IP, Mask: net.IPv4Mask(255, 255, 255, 0)}
-	addrIf2    = &net.IPNet{IP: externalInterfaceIP, Mask: net.IPv4Mask(255, 255, 255, 0)}
-	nodeConfig = &config.NodeConfig{GatewayConfig: &config.GatewayConfig{Name: "antrea-gw0"}, NodeIPv4Addr: addrIf1}
+	externalInterfaceIP = net.ParseIP("192.168.50.23")
+	addrIf1             = &net.IPNet{IP: nodeIf1IP, Mask: net.IPv4Mask(255, 255, 255, 0)}
+	addrIf2             = &net.IPNet{IP: externalInterfaceIP, Mask: net.IPv4Mask(255, 255, 255, 0)}
+	nodeConfig          = &config.NodeConfig{GatewayConfig: &config.GatewayConfig{Name: "antrea-gw0"}, NodeIPv4Addr: addrIf1}
 )
 
 func TestParseIGMPMsg(t *testing.T) {
@@ -117,7 +118,7 @@ func newMockMulticastRouteClient(t *testing.T) *MRouteClient {
 	groupCache := cache.NewIndexer(getGroupEventKey, cache.Indexers{
 		podInterfaceIndex: podInterfaceIndexFunc,
 	})
-	return newRouteClient(nodeConfig, groupCache, mockMulticastSocket, sets.NewString(if1.InterfaceName))
+	return newRouteClient(nodeConfig, groupCache, mockMulticastSocket, sets.NewString(if1.InterfaceName), false)
 }
 
 func (c *MRouteClient) initialize(t *testing.T) error {

@@ -342,6 +342,7 @@ type BucketBuilder interface {
 	LoadRegRange(regID int, data uint32, rng *Range) BucketBuilder
 	LoadToRegField(field *RegField, data uint32) BucketBuilder
 	ResubmitToTable(tableID uint8) BucketBuilder
+	SetTunnelDst(addr net.IP) BucketBuilder
 	Done() Group
 }
 

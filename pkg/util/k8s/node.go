@@ -145,3 +145,19 @@ func GetNodeAllAddrs(node *v1.Node) (ips sets.String, err error) {
 
 	return
 }
+
+func GetNodeTransportAddrs(node *v1.Node) (*ip.DualStackIPs, error) {
+	transportAddrs, err := GetNodeAddrsFromAnnotations(node, types.NodeTransportAddressAnnotationKey)
+	if err != nil {
+		return nil, err
+	}
+	if transportAddrs != nil {
+		return transportAddrs, nil
+	}
+	// Use NodeIP if the transport IP address is not set or not found.
+	nodeAddrs, err := GetNodeAddrs(node)
+	if err != nil {
+		return nil, err
+	}
+	return nodeAddrs, nil
+}

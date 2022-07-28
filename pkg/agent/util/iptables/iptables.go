@@ -36,6 +36,7 @@ const (
 	RawTable    = "raw"
 
 	AcceptTarget     = "ACCEPT"
+	DROPTarget       = "DROP"
 	MasqueradeTarget = "MASQUERADE"
 	MarkTarget       = "MARK"
 	ReturnTarget     = "RETURN"

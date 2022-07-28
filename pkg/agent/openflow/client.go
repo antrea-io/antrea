@@ -19,6 +19,7 @@ import (
 	"math/rand"
 	"net"
 
+	"antrea.io/libOpenflow/openflow13"
 	"antrea.io/libOpenflow/protocol"
 	ofutil "antrea.io/libOpenflow/util"
 	v1 "k8s.io/api/core/v1"
@@ -280,11 +281,19 @@ type Client interface {
 	// InstallMulticastInitialFlows installs OpenFlow to packetIn the IGMP messages and output the Multicast traffic to
 	// antrea-gw0 so that local Pods could access external Multicast servers.
 	InstallMulticastInitialFlows(pktInReason uint8) error
+
 	// InstallMulticastFlows installs the flow to forward Multicast traffic normally, and output it to antrea-gw0
 	// to ensure it can be forwarded to the external addresses.
 	InstallMulticastFlows(multicastIP net.IP, groupID binding.GroupIDType) error
+
 	// UninstallMulticastFlows removes the flow matching the given multicastIP.
 	UninstallMulticastFlows(multicastIP net.IP) error
+
+	// InstallMulticastRemoteReportFlows installs flows to forward the IGMP report messages to the other Nodes,
+	// and packetIn the report messages to Antrea Agent which is received via tunnel port.
+	// The OpenFlow group identified by groupID is used to forward packet to all other Nodes in the cluster
+	// over tunnel.
+	InstallMulticastRemoteReportFlows(groupID binding.GroupIDType) error
 	// SendIGMPQueryPacketOut sends the IGMPQuery packet as a packet-out to OVS from the gateway port.
 	SendIGMPQueryPacketOut(
 		dstMAC net.HardwareAddr,
@@ -304,7 +313,13 @@ type Client interface {
 	// UninstallTrafficControlReturnPortFlow removes the flow to classify the packets from a return port.
 	UninstallTrafficControlReturnPortFlow(returnOFPort uint32) error
 
-	InstallMulticastGroup(ofGroupID binding.GroupIDType, localReceivers []uint32) error
+	InstallMulticastGroup(ofGroupID binding.GroupIDType, localReceivers []uint32, remoteNodeReceivers []net.IP) error
+
+	// SendIGMPRemoteReportPacketOut sends the IGMP report packet as a packet-out to remote Nodes via the tunnel port.
+	SendIGMPRemoteReportPacketOut(
+		dstMAC net.HardwareAddr,
+		dstIP net.IP,
+		igmp ofutil.Message) error
 
 	// InstallMulticlusterNodeFlows installs flows to handle cross-cluster packets between a regular
 	// Node and a local Gateway.
@@ -800,7 +815,7 @@ func (c *client) generatePipelines() {
 
 	if c.enableMulticast {
 		// TODO: add support for IPv6 protocol
-		c.featureMulticast = newFeatureMulticast(c.cookieAllocator, []binding.Protocol{binding.ProtocolIP}, c.bridge, c.enableAntreaPolicy, c.nodeConfig.GatewayConfig.OFPort)
+		c.featureMulticast = newFeatureMulticast(c.cookieAllocator, []binding.Protocol{binding.ProtocolIP}, c.bridge, c.enableAntreaPolicy, c.nodeConfig.GatewayConfig.OFPort, c.networkConfig.TrafficEncapMode.SupportsEncap(), config.DefaultTunOFPort)
 		c.activatedFeatures = append(c.activatedFeatures, c.featureMulticast)
 	}
 
@@ -1190,6 +1205,15 @@ func (c *client) UninstallMulticastFlows(multicastIP net.IP) error {
 	return c.deleteFlows(c.featureMulticast.cachedFlows, cacheKey)
 }
 
+func (c *client) InstallMulticastRemoteReportFlows(groupID binding.GroupIDType) error {
+	firstMulticastTable := c.pipelines[pipelineMulticast].GetFirstTable()
+	flows := c.featureMulticast.multicastRemoteReportFlows(groupID, firstMulticastTable)
+	cacheKey := "multicast_encap"
+	c.replayMutex.RLock()
+	defer c.replayMutex.RUnlock()
+	return c.addFlows(c.featureMulticast.cachedFlows, cacheKey, flows)
+}
+
 func (c *client) SendIGMPQueryPacketOut(
 	dstMAC net.HardwareAddr,
 	dstIP net.IP,
@@ -1240,7 +1264,25 @@ func (c *client) UninstallTrafficControlReturnPortFlow(returnOFPort uint32) erro
 	return c.deleteFlows(c.featurePodConnectivity.tcCachedFlows, cacheKey)
 }
 
-func (c *client) InstallMulticastGroup(groupID binding.GroupIDType, localReceivers []uint32) error {
+func (c *client) SendIGMPRemoteReportPacketOut(
+	dstMAC net.HardwareAddr,
+	dstIP net.IP,
+	igmp ofutil.Message) error {
+	srcMAC := c.nodeConfig.GatewayConfig.MAC.String()
+	srcIP := c.nodeConfig.NodeTransportIPv4Addr.IP.String()
+	dstMACStr := dstMAC.String()
+	dstIPStr := dstIP.String()
+	packetOutBuilder, err := setBasePacketOutBuilder(c.bridge.BuildPacketOut(), srcMAC, dstMACStr, srcIP, dstIPStr, openflow13.P_CONTROLLER, 0)
+	if err != nil {
+		return err
+	}
+	// Set protocol, L4 message, and target OF Group ID.
+	packetOutBuilder = packetOutBuilder.SetIPProtocol(binding.ProtocolIGMP).SetL4Packet(igmp)
+	packetOutObj := packetOutBuilder.Done()
+	return c.bridge.SendPacketOut(packetOutObj)
+}
+
+func (c *client) InstallMulticastGroup(groupID binding.GroupIDType, localReceivers []uint32, remoteNodeReceivers []net.IP) error {
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
 	table := MulticastOutputTable
@@ -1248,7 +1290,7 @@ func (c *client) InstallMulticastGroup(groupID binding.GroupIDType, localReceive
 		table = MulticastIngressRuleTable
 	}
 
-	if err := c.featureMulticast.multicastReceiversGroup(groupID, table.GetID(), localReceivers...); err != nil {
+	if err := c.featureMulticast.multicastReceiversGroup(groupID, table.GetID(), localReceivers, remoteNodeReceivers); err != nil {
 		return err
 	}
 	return nil
