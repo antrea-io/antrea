@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/admission/v1"
 	authenticationv1 "k8s.io/api/authentication/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -63,11 +64,28 @@ func setup() {
 		},
 	}
 
+	existingServiceAccounts := &corev1.ServiceAccountList{
+		Items: []corev1.ServiceAccount{
+			{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "mcs1",
+					Name:      "east-access-sa",
+				},
+			},
+			{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "mcs1",
+					Name:      "west-access-sa",
+				},
+			},
+		},
+	}
+
 	newScheme := runtime.NewScheme()
 	utilruntime.Must(clientgoscheme.AddToScheme(newScheme))
 	utilruntime.Must(k8smcsv1alpha1.AddToScheme(newScheme))
 	utilruntime.Must(mcsv1alpha1.AddToScheme(newScheme))
-	fakeClient := fake.NewClientBuilder().WithScheme(newScheme).WithObjects(existingClusterSet).Build()
+	fakeClient := fake.NewClientBuilder().WithScheme(newScheme).WithObjects(existingClusterSet).WithLists(existingServiceAccounts).Build()
 
 	mcaWebhookUnderTest = &memberClusterAnnounceValidator{
 		Client:    fakeClient,
@@ -130,7 +148,56 @@ func TestWebhookAllow(t *testing.T) {
 	assert.Equal(t, true, response.Allowed)
 }
 
-func TestWebhookDeniedUnknownMember(t *testing.T) {
+func TestWebhookJoinAllow(t *testing.T) {
+	setup()
+
+	mca := &mcsv1alpha1.MemberClusterAnnounce{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "member-announce-from-south",
+			Namespace: "mcs1",
+		},
+		ClusterID:       "south",
+		ClusterSetID:    "clusterset1",
+		LeaderClusterID: "leader1",
+	}
+	b, _ := j.Marshal(mca)
+
+	req := admission.Request{
+		AdmissionRequest: v1.AdmissionRequest{
+			UID: "07e52e8d-4513-11e9-a716-42010a800270",
+			Kind: metav1.GroupVersionKind{
+				Group:   "multicluster.crd.antrea.io",
+				Version: "v1alpha1",
+				Kind:    "MemberClusterAnnounce",
+			},
+			Resource: metav1.GroupVersionResource{
+				Group:    "multicluster.crd.antrea.io",
+				Version:  "v1alpha1",
+				Resource: "memberclusterannounces",
+			},
+			Name:      "member-announce-from-south",
+			Namespace: "mcs1",
+			Operation: v1.Create,
+			Object: runtime.RawExtension{
+				Raw: b,
+			},
+			UserInfo: authenticationv1.UserInfo{
+				Username: "system:serviceaccount:mcs1:east-access-sa",
+				UID:      "4842eb60-68e3-4e38-adad-3abfd6117241",
+				Groups: []string{
+					"system:serviceaccounts",
+					"system:serviceaccounts:mcs1",
+					"system:authenticated",
+				},
+			},
+		},
+	}
+
+	response := mcaWebhookUnderTest.Handle(context.Background(), req)
+	assert.Equal(t, true, response.Allowed)
+}
+
+func TestWebhookDeniedDifferentClusterSet(t *testing.T) {
 	setup()
 
 	mca := &mcsv1alpha1.MemberClusterAnnounce{
@@ -139,7 +206,7 @@ func TestWebhookDeniedUnknownMember(t *testing.T) {
 			Namespace: "mcs1",
 		},
 		ClusterID:       "north",
-		ClusterSetID:    "clusterset1",
+		ClusterSetID:    "another-clusterset",
 		LeaderClusterID: "leader1",
 	}
 	b, _ := j.Marshal(mca)
@@ -177,18 +244,66 @@ func TestWebhookDeniedUnknownMember(t *testing.T) {
 
 	response := mcaWebhookUnderTest.Handle(context.Background(), req)
 	assert.Equal(t, false, response.Allowed)
-	assert.Equal(t, metav1.StatusReason("Unknown member"), response.Result.Reason)
 }
 
-func TestWebhookDeniedNoPermission(t *testing.T) {
+func TestWebhookDeniedDifferentLeaderCluster(t *testing.T) {
 	setup()
 
 	mca := &mcsv1alpha1.MemberClusterAnnounce{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "member-announce-from-east",
+			Name:      "member-announce-from-north",
 			Namespace: "mcs1",
 		},
-		ClusterID:       "east",
+		ClusterID:       "north",
+		ClusterSetID:    "clusterset1",
+		LeaderClusterID: "different-leader",
+	}
+	b, _ := j.Marshal(mca)
+
+	req := admission.Request{
+		AdmissionRequest: v1.AdmissionRequest{
+			UID: "07e52e8d-4513-11e9-a716-42010a800270",
+			Kind: metav1.GroupVersionKind{
+				Group:   "multicluster.crd.antrea.io",
+				Version: "v1alpha1",
+				Kind:    "MemberClusterAnnounce",
+			},
+			Resource: metav1.GroupVersionResource{
+				Group:    "multicluster.crd.antrea.io",
+				Version:  "v1alpha1",
+				Resource: "memberclusterannounces",
+			},
+			Name:      "member-announce-from-north",
+			Namespace: "mcs1",
+			Operation: v1.Create,
+			Object: runtime.RawExtension{
+				Raw: b,
+			},
+			UserInfo: authenticationv1.UserInfo{
+				Username: "system:serviceaccount:mcs1:east-access-sa",
+				UID:      "4842eb60-68e3-4e38-adad-3abfd6117241",
+				Groups: []string{
+					"system:serviceaccounts",
+					"system:serviceaccounts:mcs1",
+					"system:authenticated",
+				},
+			},
+		},
+	}
+
+	response := mcaWebhookUnderTest.Handle(context.Background(), req)
+	assert.Equal(t, false, response.Allowed)
+}
+
+func TestWebhookDeniedUnknownServiceAccount(t *testing.T) {
+	setup()
+
+	mca := &mcsv1alpha1.MemberClusterAnnounce{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "member-announce-from-south",
+			Namespace: "mcs1",
+		},
+		ClusterID:       "south",
 		ClusterSetID:    "clusterset1",
 		LeaderClusterID: "leader1",
 	}
@@ -207,14 +322,14 @@ func TestWebhookDeniedNoPermission(t *testing.T) {
 				Version:  "v1alpha1",
 				Resource: "memberclusterannounces",
 			},
-			Name:      "member-announce-from-east",
+			Name:      "member-announce-from-south",
 			Namespace: "mcs1",
 			Operation: v1.Create,
 			Object: runtime.RawExtension{
 				Raw: b,
 			},
 			UserInfo: authenticationv1.UserInfo{
-				Username: "system:serviceaccount:mcs1:north-access-sa",
+				Username: "system:serviceaccount:mcs1:unknown-access-sa",
 				UID:      "4842eb60-68e3-4e38-adad-3abfd6117241",
 				Groups: []string{
 					"system:serviceaccounts",
@@ -227,5 +342,66 @@ func TestWebhookDeniedNoPermission(t *testing.T) {
 
 	response := mcaWebhookUnderTest.Handle(context.Background(), req)
 	assert.Equal(t, false, response.Allowed)
-	assert.Equal(t, metav1.StatusReason("Member does not have permissions"), response.Result.Reason)
+}
+
+func TestUpdateClusterSetID(t *testing.T) {
+	setup()
+
+	mca := &mcsv1alpha1.MemberClusterAnnounce{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "member-announce-from-south",
+			Namespace: "mcs1",
+		},
+		ClusterID:       "south",
+		ClusterSetID:    "clusterset-changed",
+		LeaderClusterID: "leader1",
+	}
+	oldMca := &mcsv1alpha1.MemberClusterAnnounce{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "member-announce-from-south",
+			Namespace: "mcs1",
+		},
+		ClusterID:       "south",
+		ClusterSetID:    "clusterset",
+		LeaderClusterID: "leader1",
+	}
+	b, _ := j.Marshal(mca)
+	old, _ := j.Marshal(oldMca)
+
+	req := admission.Request{
+		AdmissionRequest: v1.AdmissionRequest{
+			UID: "07e52e8d-4513-11e9-a716-42010a800270",
+			Kind: metav1.GroupVersionKind{
+				Group:   "multicluster.crd.antrea.io",
+				Version: "v1alpha1",
+				Kind:    "MemberClusterAnnounce",
+			},
+			Resource: metav1.GroupVersionResource{
+				Group:    "multicluster.crd.antrea.io",
+				Version:  "v1alpha1",
+				Resource: "memberclusterannounces",
+			},
+			Name:      "member-announce-from-south",
+			Namespace: "mcs1",
+			Operation: v1.Update,
+			Object: runtime.RawExtension{
+				Raw: b,
+			},
+			OldObject: runtime.RawExtension{
+				Raw: old,
+			},
+			UserInfo: authenticationv1.UserInfo{
+				Username: "system:serviceaccount:mcs1:east-access-sa",
+				UID:      "4842eb60-68e3-4e38-adad-3abfd6117241",
+				Groups: []string{
+					"system:serviceaccounts",
+					"system:serviceaccounts:mcs1",
+					"system:authenticated",
+				},
+			},
+		},
+	}
+
+	response := mcaWebhookUnderTest.Handle(context.Background(), req)
+	assert.Equal(t, false, response.Allowed)
 }
