@@ -652,7 +652,9 @@ func run(o *Options) error {
 			ovsBridgeClient,
 			podUpdateChannel,
 			o.igmpQueryInterval,
-			validator)
+			validator,
+			networkConfig.TrafficEncapMode.SupportsEncap(),
+			informerFactory)
 		if err := mcastController.Initialize(); err != nil {
 			return err
 		}

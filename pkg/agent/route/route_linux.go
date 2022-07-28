@@ -57,6 +57,10 @@ const (
 	localAntreaFlexibleIPAMPodIPSet = "LOCAL-FLEXIBLE-IPAM-POD-IP"
 	// localAntreaFlexibleIPAMPodIP6Set contains all AntreaFlexibleIPAM Pod IPv6s of this Node.
 	localAntreaFlexibleIPAMPodIP6Set = "LOCAL-FLEXIBLE-IPAM-POD-IP6"
+	// clusterNodeIPSet contains all other Node IPs in the cluster.
+	clusterNodeIPSet = "CLUSTER-NODE-IP"
+	// clusterNodeIP6Set contains all other Node IP6s in the cluster.
+	clusterNodeIP6Set = "CLUSTER-NODE-IP6"
 
 	// Antrea proxy NodePort IP
 	antreaNodePortIPSet  = "ANTREA-NODEPORT-IP"
@@ -114,6 +118,10 @@ type Client struct {
 	clusterIPv4CIDR *net.IPNet
 	// clusterIPv6CIDR stores the calculated ClusterIP CIDR for IPv6.
 	clusterIPv6CIDR *net.IPNet
+	// clusterNodeIPs stores the IPv4 of all other Nodes in the cluster
+	clusterNodeIPs sync.Map
+	// clusterNodeIP6s stores the IPv6 of all other Nodes in the cluster
+	clusterNodeIP6s sync.Map
 }
 
 // NewClient returns a route client.
@@ -339,6 +347,29 @@ func (c *Client) syncIPSet() error {
 		}
 	}
 
+	if c.multicastEnabled && c.networkConfig.TrafficEncapMode.SupportsEncap() {
+		if err := ipset.CreateIPSet(clusterNodeIPSet, ipset.HashIP, false); err != nil {
+			return err
+		}
+		if err := ipset.CreateIPSet(clusterNodeIP6Set, ipset.HashIP, true); err != nil {
+			return err
+		}
+		c.clusterNodeIPs.Range(func(_, v interface{}) bool {
+			ipsetEntry := v.(string)
+			if err := ipset.AddEntry(clusterNodeIPSet, ipsetEntry); err != nil {
+				return false
+			}
+			return true
+		})
+		c.clusterNodeIP6s.Range(func(_, v interface{}) bool {
+			ipSetEntry := v.(string)
+			if err := ipset.AddEntry(clusterNodeIP6Set, ipSetEntry); err != nil {
+				return false
+			}
+			return true
+		})
+	}
+
 	return nil
 }
 
@@ -486,6 +517,7 @@ func (c *Client) syncIPTables() error {
 			antreaPodIPSet,
 			localAntreaFlexibleIPAMPodIPSet,
 			antreaNodePortIPSet,
+			clusterNodeIPSet,
 			config.VirtualNodePortDNATIPv4,
 			config.VirtualServiceIPv4,
 			snatMarkToIPv4,
@@ -503,6 +535,7 @@ func (c *Client) syncIPTables() error {
 			antreaPodIP6Set,
 			localAntreaFlexibleIPAMPodIP6Set,
 			antreaNodePortIP6Set,
+			clusterNodeIP6Set,
 			config.VirtualNodePortDNATIPv6,
 			config.VirtualServiceIPv6,
 			snatMarkToIPv6,
@@ -519,7 +552,8 @@ func (c *Client) syncIPTables() error {
 func (c *Client) restoreIptablesData(podCIDR *net.IPNet,
 	podIPSet,
 	localAntreaFlexibleIPAMPodIPSet,
-	nodePortIPSet string,
+	nodePortIPSet,
+	clusterNodeIPSet string,
 	nodePortDNATVirtualIP,
 	serviceVirtualIP net.IP,
 	snatMarkToIP map[uint32]net.IP,
@@ -557,6 +591,19 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet,
 				"-m", "udp", "-p", "udp", "--dport", strconv.Itoa(udpPort),
 				"-m", "addrtype", "--src-type", "LOCAL",
 				"-j", iptables.NoTrackTarget,
+			}...)
+		}
+
+		if c.multicastEnabled && c.networkConfig.TrafficEncapMode.SupportsEncap() {
+			// Drop the multicast packets forwarded from other Nodes in the cluster. This is because
+			// the packet sent out from the sender Pod is already received via tunnel port with encap mode,
+			// and the one forwarded via the underlay network is to send to external receivers
+			writeLine(iptablesData, []string{
+				"-A", antreaPreRoutingChain,
+				"-m", "comment", "--comment", `"Antrea: drop Pod multicast traffic forwarded via underlay network"`,
+				"-m", "set", "--match-set", clusterNodeIPSet, "src",
+				"-d", types.McastCIDR.String(),
+				"-j", iptables.DROPTarget,
 			}...)
 		}
 	}
@@ -1025,6 +1072,10 @@ func (c *Client) AddRoutes(podCIDR *net.IPNet, nodeName string, nodeIP, nodeGwIP
 		c.nodeNeighbors.Store(podCIDRStr, neigh)
 	}
 
+	if err := c.addNodeIP(podCIDR, nodeIP); err != nil {
+		return err
+	}
+
 	c.nodeRoutes.Store(podCIDRStr, routes)
 	return nil
 }
@@ -1047,6 +1098,9 @@ func (c *Client) DeleteRoutes(podCIDR *net.IPNet) error {
 				c.nodeRoutes.Store(podCIDRStr, routes)
 				return err
 			}
+		}
+		if err := c.deleteNodeIP(podCIDR); err != nil {
+			return err
 		}
 	}
 	if podCIDR.IP.To4() == nil {
@@ -1474,6 +1528,62 @@ func (c *Client) DeleteLocalAntreaFlexibleIPAMPodRule(podAddresses []net.IP) err
 		if err := ipset.DelEntry(ipSetName, ipSetEntry); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+// addNodeIP adds nodeIP into the ipset when a new Node joins the cluster.
+// The ipset is consumed with encap mode when multicast is enabled.
+func (c *Client) addNodeIP(podCIDR *net.IPNet, nodeIP net.IP) error {
+	if !c.multicastEnabled || !c.networkConfig.TrafficEncapMode.SupportsEncap() {
+		return nil
+	}
+	if nodeIP == nil {
+		return nil
+	}
+	ipSetEntry := nodeIP.String()
+	if nodeIP.To4() != nil {
+		if err := ipset.AddEntry(clusterNodeIPSet, ipSetEntry); err != nil {
+			return err
+		}
+		c.clusterNodeIPs.Store(podCIDR.String(), ipSetEntry)
+	} else {
+		if err := ipset.AddEntry(clusterNodeIP6Set, ipSetEntry); err != nil {
+			return err
+		}
+		c.clusterNodeIP6s.Store(podCIDR.String(), ipSetEntry)
+	}
+	return nil
+}
+
+// deleteNodeIP deletes NodeIPs from the ipset when a Node leaves the cluster.
+// The ipset is consumed with encap mode when multicast is enabled.
+func (c *Client) deleteNodeIP(podCIDR *net.IPNet) error {
+	if !c.multicastEnabled || !c.networkConfig.TrafficEncapMode.SupportsEncap() {
+		return nil
+	}
+
+	podCIDRStr := podCIDR.String()
+	if podCIDR.IP.To4() != nil {
+		obj, exists := c.clusterNodeIPs.Load(podCIDRStr)
+		if !exists {
+			return nil
+		}
+		ipSetEntry := obj.(string)
+		if err := ipset.DelEntry(clusterNodeIPSet, ipSetEntry); err != nil {
+			return err
+		}
+		c.clusterNodeIPs.Delete(podCIDRStr)
+	} else {
+		obj, exists := c.clusterNodeIP6s.Load(podCIDRStr)
+		if !exists {
+			return nil
+		}
+		ipSetEntry := obj.(string)
+		if err := ipset.DelEntry(clusterNodeIP6Set, ipSetEntry); err != nil {
+			return err
+		}
+		c.clusterNodeIP6s.Delete(podCIDRStr)
 	}
 	return nil
 }
