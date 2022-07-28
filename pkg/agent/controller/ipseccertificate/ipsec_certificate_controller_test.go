@@ -209,11 +209,16 @@ func TestController_syncConfigurations(t *testing.T) {
 		assert.Equal(t, 0, fakeController.queue.Len())
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
+		signCh := make(chan struct{})
 		watcher, err := fakeController.kubeClient.CertificatesV1().CertificateSigningRequests().Watch(ctx, metav1.ListOptions{})
 		require.NoError(t, err)
+		defer func() {
+			<-signCh
+		}()
 		defer watcher.Stop()
 		// start a fake signer in background to sign CSRs.
 		go func() {
+			defer close(signCh)
 			for ev := range watcher.ResultChan() {
 				switch ev.Type {
 				case watch.Added:
