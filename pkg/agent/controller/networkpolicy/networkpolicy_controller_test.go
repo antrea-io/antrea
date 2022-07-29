@@ -674,7 +674,7 @@ func TestValidate(t *testing.T) {
 	groups := v1beta2.GroupMemberSet{}
 	groupAddress1, groupAddress2 := "225.1.2.3", "225.1.2.4"
 
-	groups["ns1/pod1"] = newAppliedToGroupMemberPod("pod1", "ns1")
+	groups["Pod:ns1/pod1"] = newAppliedToGroupMemberPod("pod1", "ns1")
 	controller.ruleCache.appliedToSetByGroup["appliedToGroup01"] = groups
 	controller.ruleCache.rules.Add(rule1)
 	controller.ruleCache.rules.Add(rule2)

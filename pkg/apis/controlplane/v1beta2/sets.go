@@ -30,7 +30,7 @@ type groupMemberKey string
 type GroupMemberSet map[groupMemberKey]*GroupMember
 
 // normalizeGroupMember calculates the groupMemberKey of the provided
-// GroupMember based on the Pod/ExternalEntity's namespaced name and IPs.
+// GroupMember based on the Pod/ExternalEntity/Service's namespaced name and IPs.
 // For GroupMembers in appliedToGroups, the IPs are not set, so the
 // generated key does not contain IP information.
 func normalizeGroupMember(member *GroupMember) groupMemberKey {
@@ -38,14 +38,17 @@ func normalizeGroupMember(member *GroupMember) groupMemberKey {
 	const delimiter = "/"
 	var b strings.Builder
 	if member.Pod != nil {
+		b.WriteString("Pod:")
 		b.WriteString(member.Pod.Namespace)
 		b.WriteString(delimiter)
 		b.WriteString(member.Pod.Name)
 	} else if member.ExternalEntity != nil {
+		b.WriteString("ExternalEntity:")
 		b.WriteString(member.ExternalEntity.Namespace)
 		b.WriteString(delimiter)
 		b.WriteString(member.ExternalEntity.Name)
 	} else if member.Service != nil {
+		b.WriteString("Service:")
 		b.WriteString(member.Service.Namespace)
 		b.WriteString(delimiter)
 		b.WriteString(member.Service.Name)

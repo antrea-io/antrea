@@ -162,24 +162,24 @@ type lastRealized struct {
 	// the fqdn selector of this policy rule. It must be empty for policy rule
 	// that is not egress and does not have toFQDN field.
 	fqdnIPAddresses sets.String
-	// groupIDAddresses tracks the last realized set of groupIDs resolved for the
+	// serviceGroupIDs tracks the last realized set of groupIDs resolved for the
 	// toServices of this policy rule or services of TargetMember of this policy rule.
 	// It must be empty for policy rule that is neither an egress rule with toServices
 	// field nor an ingress rule that is applied to Services.
-	groupIDAddresses sets.Int64
+	serviceGroupIDs sets.Int64
 	// groupAddresses track the latest realized set of multicast groups for the multicast traffic
 	groupAddresses sets.String
 }
 
 func newLastRealized(rule *CompletedRule) *lastRealized {
 	return &lastRealized{
-		ofIDs:            map[servicesKey]uint32{},
-		CompletedRule:    rule,
-		podOFPorts:       map[servicesKey]sets.Int32{},
-		podIPs:           nil,
-		fqdnIPAddresses:  nil,
-		groupIDAddresses: nil,
-		groupAddresses:   nil,
+		ofIDs:           map[servicesKey]uint32{},
+		CompletedRule:   rule,
+		podOFPorts:      map[servicesKey]sets.Int32{},
+		podIPs:          nil,
+		fqdnIPAddresses: nil,
+		serviceGroupIDs: nil,
+		groupAddresses:  nil,
 	}
 }
 
@@ -504,7 +504,7 @@ func (r *reconciler) add(rule *CompletedRule, ofPriority *uint16, table uint8) e
 			if r.fqdnController != nil {
 				lastRealized.fqdnIPAddresses = nil
 			}
-			lastRealized.groupIDAddresses = nil
+			lastRealized.serviceGroupIDs = nil
 			return err
 		}
 		// Record ofID only if its Openflow is installed successfully.
@@ -549,15 +549,11 @@ func (r *reconciler) computeOFRulesForAdd(rule *CompletedRule, ofPriority *uint1
 		from2 := ipBlocksToOFAddresses(rule.From.IPBlocks, r.ipv4Enabled, r.ipv6Enabled, isRuleAppliedToService)
 		membersByServicesMap, servicesMap := groupMembersByServices(rule.Services, rule.TargetMembers)
 		for svcKey, members := range membersByServicesMap {
-			toAddresses := make([]types.Address, 0)
+			var toAddresses []types.Address
 			if isRuleAppliedToService {
-				addressSet := sets.NewInt64()
-				for _, member := range members.Items() {
-					curAddresses, curAddressSet := r.svcRefToOFAddresses(*member.Service)
-					toAddresses = append(toAddresses, curAddresses...)
-					addressSet = addressSet.Union(curAddressSet)
-				}
-				lastRealized.groupIDAddresses = addressSet
+				svcGroupIDs := r.getSvcGroupIDs(members)
+				toAddresses = svcGroupIDsToOFAddresses(svcGroupIDs)
+				lastRealized.serviceGroupIDs = svcGroupIDs
 			} else {
 				ofPorts := r.getOFPorts(members)
 				toAddresses = ofPortsToOFAddresses(ofPorts)
@@ -647,16 +643,11 @@ func (r *reconciler) computeOFRulesForAdd(rule *CompletedRule, ofPriority *uint1
 				lastRealized.fqdnIPAddresses = addressSet
 			}
 			if len(rule.To.ToServices) > 0 {
-				var addresses []types.Address
-				addressSet := sets.NewInt64()
-				for _, svcRef := range rule.To.ToServices {
-					curAddresses, curAddressSet := r.svcRefToOFAddresses(svcRef)
-					addresses = append(addresses, curAddresses...)
-					addressSet = addressSet.Union(curAddressSet)
-				}
+				svcGroupIDs := r.svcRefsToGroupIDs(rule.To.ToServices)
+				addresses := svcGroupIDsToOFAddresses(svcGroupIDs)
 				ofRule.To = append(ofRule.To, addresses...)
 				// If the rule installation fails, this will be reset.
-				lastRealized.groupIDAddresses = addressSet
+				lastRealized.serviceGroupIDs = svcGroupIDs
 			}
 		}
 	}
@@ -762,18 +753,14 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule, 
 		membersByServicesMap, servicesMap := groupMembersByServices(newRule.Services, newRule.TargetMembers)
 		for svcKey, members := range membersByServicesMap {
 			newOFPorts := r.getOFPorts(members)
-			newGroupIDAddressSet := sets.NewInt64()
-			ofID, exists := lastRealized.ofIDs[svcKey]
-			toAddresses := make([]types.Address, 0)
+			newGroupIDSet := r.getSvcGroupIDs(members)
+			var toAddresses []types.Address
 			if isRuleAppliedToService {
-				for _, member := range members.Items() {
-					curAddresses, curAddressSet := r.svcRefToOFAddresses(*member.Service)
-					toAddresses = append(toAddresses, curAddresses...)
-					newGroupIDAddressSet = newGroupIDAddressSet.Union(curAddressSet)
-				}
+				toAddresses = svcGroupIDsToOFAddresses(newGroupIDSet)
 			} else {
 				toAddresses = ofPortsToOFAddresses(newOFPorts)
 			}
+			ofID, exists := lastRealized.ofIDs[svcKey]
 			// Install a new Openflow rule if this group doesn't exist, otherwise do incremental update.
 			if !exists {
 				ofRule := &types.PolicyRule{
@@ -797,22 +784,21 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule, 
 				}
 				lastRealized.ofIDs[svcKey] = ofRule.FlowID
 			} else {
-				addedTo := ofPortsToOFAddresses(newOFPorts.Difference(lastRealized.podOFPorts[svcKey]))
-				deletedTo := ofPortsToOFAddresses(lastRealized.podOFPorts[svcKey].Difference(newOFPorts))
+				var addedTo, deletedTo []types.Address
 				if isRuleAppliedToService {
-					originalGroupIDAddressSet := sets.NewInt64()
-					if lastRealized.groupIDAddresses != nil {
-						originalGroupIDAddressSet = lastRealized.groupIDAddresses
+					originalGroupIDSet := sets.NewInt64()
+					if lastRealized.serviceGroupIDs != nil {
+						originalGroupIDSet = lastRealized.serviceGroupIDs
 					}
-					addedGroupIDAddress := newGroupIDAddressSet.Difference(originalGroupIDAddressSet)
-					removedGroupIDAddress := originalGroupIDAddressSet.Difference(newGroupIDAddressSet)
-					for a := range addedGroupIDAddress {
-						addedTo = append(addedTo, openflow.NewServiceGroupIDAddress(binding.GroupIDType(a)))
+					addedTo = svcGroupIDsToOFAddresses(newGroupIDSet.Difference(originalGroupIDSet))
+					deletedTo = svcGroupIDsToOFAddresses(originalGroupIDSet.Difference(newGroupIDSet))
+				} else {
+					originalOfPortsSet := sets.NewInt32()
+					if lastRealized.podOFPorts[svcKey] != nil {
+						originalOfPortsSet = lastRealized.podOFPorts[svcKey]
 					}
-					for r := range removedGroupIDAddress {
-						deletedTo = append(deletedTo, openflow.NewServiceGroupIDAddress(binding.GroupIDType(r)))
-					}
-					lastRealized.groupIDAddresses = newGroupIDAddressSet
+					addedTo = ofPortsToOFAddresses(newOFPorts.Difference(originalOfPortsSet))
+					deletedTo = ofPortsToOFAddresses(originalOfPortsSet.Difference(newOFPorts))
 				}
 				if err := r.updateOFRule(ofID, addedFrom, addedTo, deletedFrom, deletedTo, ofPriority); err != nil {
 					return err
@@ -821,6 +807,7 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule, 
 				delete(staleOFIDs, svcKey)
 			}
 			lastRealized.podOFPorts[svcKey] = newOFPorts
+			lastRealized.serviceGroupIDs = newGroupIDSet
 		}
 	} else {
 		if r.fqdnController != nil && len(newRule.To.FQDNs) > 0 {
@@ -894,23 +881,14 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule, 
 						}
 					}
 				}
-				originalGroupIDAddressSet, newGroupIDAddressSet := sets.NewInt64(), sets.NewInt64()
-				if lastRealized.groupIDAddresses != nil {
-					originalGroupIDAddressSet = lastRealized.groupIDAddresses
-				}
+				originalGroupIDSet, newGroupIDSet := sets.NewInt64(), sets.NewInt64()
 				if len(newRule.To.ToServices) > 0 {
-					for _, svcRef := range newRule.To.ToServices {
-						_, groupIDSets := r.svcRefToOFAddresses(svcRef)
-						newGroupIDAddressSet = newGroupIDAddressSet.Union(groupIDSets)
+					if lastRealized.serviceGroupIDs != nil {
+						originalGroupIDSet = lastRealized.serviceGroupIDs
 					}
-					addedGroupIDAddress := newGroupIDAddressSet.Difference(originalGroupIDAddressSet)
-					removedGroupIDAddress := originalGroupIDAddressSet.Difference(newGroupIDAddressSet)
-					for a := range addedGroupIDAddress {
-						addedTo = append(addedTo, openflow.NewServiceGroupIDAddress(binding.GroupIDType(a)))
-					}
-					for r := range removedGroupIDAddress {
-						deletedTo = append(deletedTo, openflow.NewServiceGroupIDAddress(binding.GroupIDType(r)))
-					}
+					newGroupIDSet = r.svcRefsToGroupIDs(newRule.To.ToServices)
+					addedTo = svcGroupIDsToOFAddresses(newGroupIDSet.Difference(originalGroupIDSet))
+					deletedTo = svcGroupIDsToOFAddresses(originalGroupIDSet.Difference(newGroupIDSet))
 				}
 				if err := r.updateOFRule(ofID, addedFrom, addedTo, deletedFrom, deletedTo, ofPriority); err != nil {
 					return err
@@ -920,7 +898,7 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule, 
 					lastRealized.fqdnIPAddresses = newFQDNAddressSet
 				}
 				// Update the groupID address set if rule installation succeeds.
-				lastRealized.groupIDAddresses = newGroupIDAddressSet
+				lastRealized.serviceGroupIDs = newGroupIDSet
 				// Delete valid servicesKey from staleOFIDs.
 				delete(staleOFIDs, svcKey)
 			}
@@ -1094,6 +1072,19 @@ func (r *reconciler) getIPs(members v1beta2.GroupMemberSet) sets.String {
 	return ips
 }
 
+func (r *reconciler) getSvcGroupIDs(members v1beta2.GroupMemberSet) sets.Int64 {
+	var svcRefs []v1beta2.ServiceReference
+	for _, m := range members {
+		if m.Service != nil {
+			svcRefs = append(svcRefs, v1beta2.ServiceReference{
+				Name:      m.Service.Name,
+				Namespace: m.Service.Namespace,
+			})
+		}
+	}
+	return r.svcRefsToGroupIDs(svcRefs)
+}
+
 // groupMembersByServices groups the provided groupMembers based on their services resolving result.
 // A map of servicesHash to the grouped members and a map of servicesHash to the services resolving result will be returned.
 func groupMembersByServices(services []v1beta2.Service, memberSet v1beta2.GroupMemberSet) (map[servicesKey]v1beta2.GroupMemberSet, map[servicesKey][]v1beta2.Service) {
@@ -1143,16 +1134,25 @@ func ofPortsToOFAddresses(ofPorts sets.Int32) []types.Address {
 	return addresses
 }
 
-func (r *reconciler) svcRefToOFAddresses(svcRef v1beta2.ServiceReference) ([]types.Address, sets.Int64) {
-	var addresses []types.Address
-	addressSet := sets.NewInt64()
-	for _, groupCounter := range r.groupCounters {
-		for _, groupID := range groupCounter.GetAllGroupIDs(k8s.NamespacedName(svcRef.Namespace, svcRef.Name)) {
-			addresses = append(addresses, openflow.NewServiceGroupIDAddress(groupID))
-			addressSet.Insert(int64(groupID))
+func (r *reconciler) svcRefsToGroupIDs(svcRefs []v1beta2.ServiceReference) sets.Int64 {
+	groupIDs := sets.NewInt64()
+	for _, svcRef := range svcRefs {
+		for _, groupCounter := range r.groupCounters {
+			for _, groupID := range groupCounter.GetAllGroupIDs(k8s.NamespacedName(svcRef.Namespace, svcRef.Name)) {
+				groupIDs.Insert(int64(groupID))
+			}
 		}
 	}
-	return addresses, addressSet
+	return groupIDs
+}
+
+func svcGroupIDsToOFAddresses(groupIDs sets.Int64) []types.Address {
+	// Must not return nil as it means not restricted by addresses in Openflow implementation.
+	addresses := make([]types.Address, 0, len(groupIDs))
+	for _, groupID := range groupIDs.List() {
+		addresses = append(addresses, openflow.NewServiceGroupIDAddress(binding.GroupIDType(groupID)))
+	}
+	return addresses
 }
 
 func groupMembersToOFAddresses(groupMemberSet v1beta2.GroupMemberSet) []types.Address {

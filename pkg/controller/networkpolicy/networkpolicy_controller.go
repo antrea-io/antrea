@@ -18,7 +18,6 @@
 package networkpolicy
 
 import (
-	"context"
 	"fmt"
 	"net"
 	"reflect"
@@ -1250,13 +1249,14 @@ func (n *NetworkPolicyController) syncAppliedToGroup(key string) error {
 	var updatedAppliedToGroup *antreatypes.AppliedToGroup
 	if appliedToGroup.Service != nil {
 		// AppliedToGroup for NodePort Service span to all Nodes.
-		nodeList, err := n.kubeClient.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{})
+		nodeList, err := n.nodeLister.List(labels.Everything())
 		if err != nil {
 			return fmt.Errorf("unable to list Nodes")
 		}
-		for _, node := range nodeList.Items {
+		serviceGroupMemberSet := controlplane.NewGroupMemberSet(serviceToGroupMember(appliedToGroup.Service))
+		for _, node := range nodeList {
 			appGroupNodeNames.Insert(node.Name)
-			memberSetByNode[node.Name] = controlplane.NewGroupMemberSet(serviceToGroupMember(appliedToGroup.Service))
+			memberSetByNode[node.Name] = serviceGroupMemberSet
 		}
 		updatedAppliedToGroup = &antreatypes.AppliedToGroup{
 			UID:               appliedToGroup.UID,

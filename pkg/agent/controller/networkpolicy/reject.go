@@ -145,7 +145,7 @@ func (c *Controller) rejectRequest(pktIn *ofctrl.PacketIn) error {
 		return fmt.Errorf("error when generating reject response for the packet from: %s to %s: neither source nor destination are on this Node", dstIP, srcIP)
 	}
 	if packetOutType == RejectServiceRemoteToExternal {
-		dstMAC = "aa:bb:cc:dd:ee:ff"
+		dstMAC = openflow.GlobalVirtualMAC.String()
 	}
 	// When in AntreaIPAM mode, even though srcPod and dstPod are on the same Node, MAC
 	// will still be re-written in L3ForwardingTable. During rejection, the reject
