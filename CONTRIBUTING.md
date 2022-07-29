@@ -133,7 +133,9 @@ and *merged* sorts of commits.
 
 To make it easier for reviewers to review your PR, consider the following:
 
-1. Follow the golang [coding conventions](https://github.com/golang/go/wiki/CodeReviewComments).
+1. Follow the golang [coding conventions](https://github.com/golang/go/wiki/CodeReviewComments)
+   and check out this [document](https://github.com/tnqn/code-review-comments#code-review-comments)
+   for common comments we made during reviews and suggestions for fixing them.
 2. Format your code with `make golangci-fix`; if the [linters](ci/README.md) flag an issue that
    cannot be fixed automatically, an error message will be displayed so you can address the issue.
 3. Follow [git commit](https://chris.beams.io/posts/git-commit/) guidelines.
