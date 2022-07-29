@@ -19,10 +19,7 @@ function usage() {
     Push the latest Antrea image to all vagrant nodes and restart the Antrea daemons
           --prometheus                 Deploy Prometheus service to scrape metrics
                                        from Antrea Agents and Controllers.
-          --flow-collector <Addr|Grafana>
-                                       Provide either the external IPFIX collector
-                                       address or specify 'Grafana' to deploy the
-                                       Grafana flow collector.
+          --flow-collector <Addr>      Provide the external IPFIX collector address.
                                        The address should be given in the format IP:port:proto.
                                        Example: 192.168.1.100:4739:udp.
                                        Please note that with this option we deploy
@@ -163,9 +160,6 @@ FLOW_AGG_YML="/tmp/flow-aggregator.yml"
 SAVED_FLOW_AGG_IMG=/tmp/flow-aggregator.tar
 FLOW_AGG_IMG_NAME=projects.registry.vmware.com/antrea/flow-aggregator:latest
 
-CH_OPERATOR_INSTALL_BUNDLE_YML=$THIS_DIR/../../../../build/yamls/clickhouse-operator-install-bundle.yml
-FLOW_VIS_YML="/tmp/flow-visibility.yml"
-
 # If a flow collector address is also provided, we update the Antrea
 # manifest to enable FlowExporter.
 if [[ $FLOW_COLLECTOR != "" ]]; then
@@ -189,32 +183,7 @@ rm "${ANTREA_YML}"
 if [ "$FLOW_AGGREGATOR" == "true" ]; then
     pushImgToNodes "$FLOW_AGG_IMG_NAME" "$SAVED_FLOW_AGG_IMG"
     if [[ $FLOW_COLLECTOR != "" ]]; then
-        if [[ $FLOW_COLLECTOR == "Grafana" ]]; then
-            echo "Deploy ClickHouse flow collector"
-            # Generate manifest
-            $THIS_DIR/../../../../hack/generate-manifest-flow-visibility.sh --mode dev > "${FLOW_VIS_YML}"
-            $THIS_DIR/../../../../hack/generate-manifest-flow-aggregator.sh --mode dev -ch > "${FLOW_AGG_YML}"
-
-            # Push ClickHouse Monitor image
-            SAVED_CH_MONITOR_IMG=/tmp/flow-visibility-clickhouse-monitor.tar
-            CH_MONITOR_IMG_NAME=projects.registry.vmware.com/antrea/flow-visibility-clickhouse-monitor:latest
-            pushImgToNodes "$CH_MONITOR_IMG_NAME" "$SAVED_CH_MONITOR_IMG"
-
-            # Copy manifests to nodes
-            copyManifestToNodes "$FLOW_VIS_YML"
-            copyManifestToNodes "$CH_OPERATOR_INSTALL_BUNDLE_YML"
-
-            # Apply needed yaml files
-            # Grafana flow collector needs a few minutes (2-5 mins.) to finish its deployment. It depends on the wait conditions below.
-            ssh -F ssh-config k8s-node-control-plane kubectl apply -f clickhouse-operator-install-bundle.yml
-            ssh -F ssh-config k8s-node-control-plane kubectl wait --for=condition=ready pod -l app=clickhouse-operator -n kube-system --timeout=180s
-            ssh -F ssh-config k8s-node-control-plane kubectl apply -f flow-visibility.yml
-            ssh -F ssh-config k8s-node-control-plane kubectl wait --for=condition=ready pod -l app=grafana -n flow-visibility --timeout=180s
-            ssh -F ssh-config k8s-node-control-plane kubectl wait --for=condition=ready pod -l app=clickhouse -n flow-visibility --timeout=180s
-            rm "${FLOW_VIS_YML}"
-        else
-            $THIS_DIR/../../../../hack/generate-manifest-flow-aggregator.sh --mode dev -fc $FLOW_COLLECTOR > "${FLOW_AGG_YML}"
-        fi
+        $THIS_DIR/../../../../hack/generate-manifest-flow-aggregator.sh --mode dev -fc $FLOW_COLLECTOR > "${FLOW_AGG_YML}"
     else
         $THIS_DIR/../../../../hack/generate-manifest-flow-aggregator.sh --mode dev > "${FLOW_AGG_YML}"
     fi
