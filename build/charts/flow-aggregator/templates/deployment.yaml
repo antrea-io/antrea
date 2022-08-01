@@ -56,6 +56,21 @@ spec:
                 key: password
           - name: FA_CONFIG_MAP_NAME
             value: flow-aggregator-configmap
+          - name: AWS_ACCESS_KEY_ID
+            valueFrom:
+              secretKeyRef:
+                name: flow-aggregator-aws-credentials
+                key: aws_access_key_id
+          - name: AWS_SECRET_ACCESS_KEY
+            valueFrom:
+              secretKeyRef:
+                name: flow-aggregator-aws-credentials
+                key: aws_secret_access_key
+          - name: AWS_SESSION_TOKEN
+            valueFrom:
+              secretKeyRef:
+                name: flow-aggregator-aws-credentials
+                key: aws_session_token
         ports:
           - containerPort: 4739
         volumeMounts:
