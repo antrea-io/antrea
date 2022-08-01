@@ -448,7 +448,6 @@ webhooks:
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingWebhookConfiguration
 metadata:
-  creationTimestamp: null
   labels:
     app: antrea
   name: antrea-multicluster-antrea-mc-validating-webhook-configuration
