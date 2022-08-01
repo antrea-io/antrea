@@ -145,8 +145,8 @@ func NewGatewayInterface(gatewayName string) *InterfaceConfig {
 
 // NewTunnelInterface creates InterfaceConfig for the default tunnel port
 // interface.
-func NewTunnelInterface(tunnelName string, tunnelType ovsconfig.TunnelType, localIP net.IP, csum bool) *InterfaceConfig {
-	tunnelConfig := &TunnelInterfaceConfig{Type: tunnelType, LocalIP: localIP, Csum: csum}
+func NewTunnelInterface(tunnelName string, tunnelType ovsconfig.TunnelType, destinationPort int32, localIP net.IP, csum bool) *InterfaceConfig {
+	tunnelConfig := &TunnelInterfaceConfig{Type: tunnelType, DestinationPort: destinationPort, LocalIP: localIP, Csum: csum}
 	return &InterfaceConfig{InterfaceName: tunnelName, Type: TunnelInterface, TunnelInterfaceConfig: tunnelConfig}
 }
 

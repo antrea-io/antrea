@@ -287,6 +287,75 @@ func TestTunnelOptionCsum(t *testing.T) {
 	}
 }
 
+func TestTunnelOptionTunnelPort(t *testing.T) {
+	testCases := map[string]struct {
+		initialTunnelPort int32
+		updatedTunnelPort int32
+	}{
+		"initial zero, kept zero": {
+			initialTunnelPort: 0,
+			updatedTunnelPort: 0,
+		},
+		"initial zero, updated to 8472": {
+			initialTunnelPort: 0,
+			updatedTunnelPort: 8472,
+		},
+		"initial 8472, kept 8473": {
+			initialTunnelPort: 8472,
+			updatedTunnelPort: 8473,
+		},
+		"initial 8472, updated to zero": {
+			initialTunnelPort: 8472,
+			updatedTunnelPort: 0,
+		},
+	}
+	for name, testCase := range testCases {
+		t.Run(name, func(t *testing.T) {
+			data := &testData{}
+			data.setup(t)
+			defer data.teardown(t)
+
+			name := "vxlan0"
+			extraOptions := map[string]interface{}{}
+			if testCase.initialTunnelPort != 0 {
+				extraOptions["dst_port"] = strconv.Itoa(int(testCase.initialTunnelPort))
+			}
+			_, err := data.br.CreateTunnelPortExt(name, ovsconfig.VXLANTunnel, ofPortRequest, true, "", "", "", "", extraOptions, nil)
+			require.Nil(t, err, "Error when creating tunnel port")
+			options, err := data.br.GetInterfaceOptions(name)
+			require.Nil(t, err, "Error when getting interface options")
+			dstPort, exists := options["dst_port"]
+			if testCase.initialTunnelPort != 0 {
+				actualInitialTunnelPort, _ := strconv.ParseInt(dstPort, 10, 32)
+				require.Equal(t, testCase.initialTunnelPort, int32(actualInitialTunnelPort))
+			} else {
+				require.Equal(t, exists, false)
+			}
+
+			updatedOptions := map[string]interface{}{}
+			for k, v := range options {
+				updatedOptions[k] = v
+			}
+			if testCase.updatedTunnelPort != 0 {
+				updatedOptions["dst_port"] = strconv.Itoa(int(testCase.updatedTunnelPort))
+			} else if _, ok := updatedOptions["dst_port"]; ok {
+				delete(updatedOptions, "dst_port")
+			}
+			err = data.br.SetInterfaceOptions(name, updatedOptions)
+			require.Nil(t, err, "Error when setting interface options")
+			options, err = data.br.GetInterfaceOptions(name)
+			require.Nil(t, err, "Error when getting interface options")
+			dstPort, exists = options["dst_port"]
+			if testCase.updatedTunnelPort != 0 {
+				actualTunnelPort, _ := strconv.ParseInt(dstPort, 10, 32)
+				require.Equal(t, testCase.updatedTunnelPort, int32(actualTunnelPort))
+			} else {
+				require.Equal(t, exists, false)
+			}
+		})
+	}
+}
+
 func deleteAllPorts(t *testing.T, br *ovsconfig.OVSBridge) {
 	portList, err := br.GetPortUUIDList()
 	require.Nil(t, err, "Error when retrieving port list")

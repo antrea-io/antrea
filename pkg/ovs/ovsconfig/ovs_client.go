@@ -500,15 +500,16 @@ func (br *OVSBridge) SetInterfaceOptions(name string, options map[string]interfa
 
 // ParseTunnelInterfaceOptions reads remote IP, local IP, IPsec PSK, and csum
 // from the tunnel interface options and returns them.
-func ParseTunnelInterfaceOptions(portData *OVSPortData) (net.IP, net.IP, string, string, bool) {
+func ParseTunnelInterfaceOptions(portData *OVSPortData) (net.IP, net.IP, int32, string, string, bool) {
 	if portData.Options == nil {
-		return nil, nil, "", "", false
+		return nil, nil, 0, "", "", false
 	}
 
 	var ok bool
 	var remoteIPStr, localIPStr, psk, remoteName string
 	var remoteIP, localIP net.IP
 	var csum bool
+	var destinationPort int64
 
 	if remoteIPStr, ok = portData.Options["remote_ip"]; ok {
 		if remoteIPStr != "flow" {
@@ -523,7 +524,10 @@ func ParseTunnelInterfaceOptions(portData *OVSPortData) (net.IP, net.IP, string,
 		csum, _ = strconv.ParseBool(csumStr)
 	}
 	remoteName = portData.Options["remote_name"]
-	return remoteIP, localIP, psk, remoteName, csum
+	if destinationPortStr, ok := portData.Options["dst_port"]; ok {
+		destinationPort, _ = strconv.ParseInt(destinationPortStr, 10, 32)
+	}
+	return remoteIP, localIP, int32(destinationPort), psk, remoteName, csum
 }
 
 // CreateUplinkPort creates uplink port.
