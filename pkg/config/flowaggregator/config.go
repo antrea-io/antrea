@@ -53,6 +53,8 @@ type FlowAggregatorConfig struct {
 	FlowCollector FlowCollectorConfig `yaml:"flowCollector,omitempty"`
 	// clickHouse contains ClickHouse related configuration options.
 	ClickHouse ClickHouseConfig `yaml:"clickHouse,omitempty"`
+	// s3Uploader contains configuration options for uploading flow records to AWS S3.
+	S3Uploader S3UploaderConfig `yaml:"s3Uploader,omitempty"`
 }
 
 type RecordContentsConfig struct {
@@ -88,7 +90,7 @@ type FlowCollectorConfig struct {
 }
 
 type ClickHouseConfig struct {
-	// Enable is the switch of enabling exporting flow records to ClickHouse.
+	// Enable is the switch to enable exporting flow records to ClickHouse.
 	Enable bool `yaml:"enable,omitempty"`
 	// Database is the name of database where Antrea "flows" table is created.
 	Database string `yaml:"database,omitempty"`
@@ -103,4 +105,35 @@ type ClickHouseConfig struct {
 	// Defaults to "8s". Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h".
 	// Min value allowed is "1s".
 	CommitInterval string `yaml:"commitInterval,omitempty"`
+}
+
+type S3UploaderConfig struct {
+	// Enable is the switch to enable exporting flow records to AWS S3.
+	// At the moment, the flow aggregator will look for the "standard" environment variables to
+	// authenticate to AWS. These can be static credentials (AWS_ACCESS_KEY_ID,
+	// AWS_SECRET_ACCESS_KEY, AWS_SESSION_TOKEN) or a Web Identity Token
+	// (AWS_WEB_IDENTITY_TOKEN_FILE).
+	Enable bool `yaml:"enable,omitempty"`
+	// BucketName is the name of the S3 bucket to which flow records will be uploaded. If this
+	// field is empty, initialization will fail.
+	BucketName string `yaml:"bucketName"`
+	// BucketPrefix is the prefix ("folder") under which flow records will be uploaded. If this
+	// is omitted, flow records will be uploaded to the root of the bucket.
+	BucketPrefix string `yaml:"bucketPrefix,omitempty"`
+	// Region is used as a "hint" to get the region in which the provided bucket is located.
+	// An error will occur if the bucket does not exist in the AWS partition the region hint
+	// belongs to. If region is omitted, the value of the AWS_REGION environment variable will
+	// be used, and if it is missing, we will default to "us-west-2".
+	Region string `yaml:"region,omitempty"`
+	// RecordFormat defines the format of the flow records uploaded to S3. Only "CSV" is
+	// supported at the moment.
+	RecordFormat string `yaml:"recordFormat,omitempty"`
+	// Compress enables gzip compression when uploading files to S3. Defaults to true.
+	Compress *bool `yaml:"compress,omitempty"`
+	// MaxRecordsPerFile is the maximum number of records per file uploaded. It is not recommended
+	// to change this value. Defaults to 1,000,000.
+	MaxRecordsPerFile int32 `yaml:"maxRecordsPerFile,omitempty"`
+	// UploadInterval is the duration between each file upload to S3. If the number of pending
+	// records reaches maxRecordsPerFile, we will not wait for this full duration before uploading.
+	UploadInterval string `yaml:"uploadInterval,omitempty"`
 }
