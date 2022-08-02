@@ -28,6 +28,8 @@ import (
 	"antrea.io/antrea/pkg/controller/types"
 )
 
+const IsAppliedToServiceIndex = "isAppliedToService"
+
 // appliedToGroupEvent implements storage.InternalEvent.
 type appliedToGroupEvent struct {
 	// The current version of the stored AppliedToGroup.
@@ -175,6 +177,13 @@ func NewAppliedToGroupStore() storage.Interface {
 			}
 
 			return []string{atg.Selector.Namespace}, nil
+		},
+		IsAppliedToServiceIndex: func(obj interface{}) ([]string, error) {
+			atg, ok := obj.(*types.AppliedToGroup)
+			if !ok || atg.Service == nil {
+				return []string{}, nil
+			}
+			return []string{"true"}, nil
 		},
 	}
 	return ram.NewStore(AppliedToGroupKeyFunc, indexers, genAppliedToGroupEvent, keyAndSpanSelectFunc, func() runtime.Object { return new(controlplane.AppliedToGroup) })

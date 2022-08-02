@@ -271,11 +271,26 @@ func (c *NetworkPolicyController) filterAGsFromNodeLabels(node *v1.Node) sets.St
 	return ags
 }
 
+func (c *NetworkPolicyController) getATGsAppliedToService() sets.String {
+	atgs := sets.NewString()
+	appliedToGroupObjs, _ := c.appliedToGroupStore.GetByIndex(store.IsAppliedToServiceIndex, "true")
+	for _, appliedToGroupObj := range appliedToGroupObjs {
+		appliedToGroup := appliedToGroupObj.(*antreatypes.AppliedToGroup)
+		atgs.Insert(appliedToGroup.Name)
+	}
+	return atgs
+}
+
 func (c *NetworkPolicyController) addNode(obj interface{}) {
 	node := obj.(*v1.Node)
 	affectedAGs := c.filterAGsFromNodeLabels(node)
 	for key := range affectedAGs {
 		c.enqueueAddressGroup(key)
+	}
+	// All AppliedToGroups that are applied to Services need re-sync.
+	affectedATGs := c.getATGsAppliedToService()
+	for key := range affectedATGs {
+		c.enqueueAppliedToGroup(key)
 	}
 	klog.V(2).InfoS("Processed Node CREATE event", "nodeName", node.Name, "affectedAGs", affectedAGs.Len())
 }
@@ -298,6 +313,11 @@ func (c *NetworkPolicyController) deleteNode(obj interface{}) {
 	affectedAGs := c.filterAGsFromNodeLabels(node)
 	for key := range affectedAGs {
 		c.enqueueAddressGroup(key)
+	}
+	// All AppliedToGroups that are applied to Services need re-sync.
+	affectedATGs := c.getATGsAppliedToService()
+	for key := range affectedATGs {
+		c.enqueueAppliedToGroup(key)
 	}
 	klog.V(2).InfoS("Processed Node DELETE event", "nodeName", node.Name, "affectedAGs", affectedAGs.Len())
 }

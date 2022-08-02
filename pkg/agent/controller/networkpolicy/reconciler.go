@@ -553,6 +553,9 @@ func (r *reconciler) computeOFRulesForAdd(rule *CompletedRule, ofPriority *uint1
 			if isRuleAppliedToService {
 				svcGroupIDs := r.getSvcGroupIDs(members)
 				toAddresses = svcGroupIDsToOFAddresses(svcGroupIDs)
+				// If rule is applied to Services, there will be only one svcKey, which is "", in
+				// membersByServicesMap. So lastRealized.serviceGroupIDs won't be overwritten in
+				// this for-loop.
 				lastRealized.serviceGroupIDs = svcGroupIDs
 			} else {
 				ofPorts := r.getOFPorts(members)
