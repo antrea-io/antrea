@@ -145,6 +145,7 @@ func (a *IPPoolAllocator) appendPoolUsage(ipPool *v1alpha2.IPPool, ip net.IP, st
 	}
 
 	newPool.Status.IPAddresses = append(newPool.Status.IPAddresses, usageEntry)
+	a.updateUsage(newPool)
 	_, err := a.crdClient.CrdV1alpha2().IPPools().UpdateStatus(context.TODO(), newPool, metav1.UpdateOptions{})
 	if err != nil {
 		klog.Warningf("IP Pool %s update with status %+v failed: %+v", newPool.Name, newPool.Status, err)
@@ -239,6 +240,7 @@ func (a *IPPoolAllocator) removeIPAddressState(ipPool *v1alpha2.IPPool, ip net.I
 	}
 
 	newPool.Status.IPAddresses = newList
+	a.updateUsage(newPool)
 
 	_, err := a.crdClient.CrdV1alpha2().IPPools().UpdateStatus(context.TODO(), newPool, metav1.UpdateOptions{})
 	if err != nil {
@@ -621,4 +623,9 @@ func (a IPPoolAllocator) Total() int {
 		return 0
 	}
 	return allocators.Total()
+}
+
+func (a *IPPoolAllocator) updateUsage(ipPool *v1alpha2.IPPool) {
+	ipPool.Status.Usage.Total = a.Total()
+	ipPool.Status.Usage.Used = len(ipPool.Status.IPAddresses)
 }
