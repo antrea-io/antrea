@@ -10,6 +10,7 @@ rules:
       - whereabouts.cni.cncf.io
     resources:
       - ippools
+      - overlappingrangeipreservations
     verbs:
       - get
       - put
@@ -19,4 +20,13 @@ rules:
       - patch
       - create
       - delete
+  - apiGroups:
+      - coordination.k8s.io
+    resources:
+      - leases
+    verbs:
+      - create
+      - get
+      - list
+      - update
 {{- end }}

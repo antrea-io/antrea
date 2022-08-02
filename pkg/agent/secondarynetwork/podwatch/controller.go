@@ -127,12 +127,24 @@ func generatePodSecondaryIfaceName(podCNIInfo *cnipodcache.CNIConfigInfo) string
 	return string("eth") + strconv.Itoa(rand.IntnRange(end_iface_index, max_rand_index))
 }
 
+func whereaboutsArgsBuilder(cmd string, interfaceName string, podCNIInfo *cnipodcache.CNIConfigInfo) *invoke.Args {
+	// PluginArgs added to provide additional arguments required for whereabouts v0.5.1 and above.
+	return &invoke.Args{Command: cmd, ContainerID: podCNIInfo.ContainerID,
+		NetNS: podCNIInfo.ContainerNetNS, IfName: interfaceName,
+		Path: cniPath, PluginArgs: [][2]string{
+			{"K8S_POD_NAME", podCNIInfo.PodName},
+			{"K8S_POD_NAMESPACE", podCNIInfo.PodNameSpace},
+			{"K8S_POD_INFRA_CONTAINER_ID", podCNIInfo.ContainerID},
+		}}
+
+}
+
 func removePodAllSecondaryNetwork(podCNIInfo *cnipodcache.CNIConfigInfo) error {
 	var cmdArgs *invoke.Args
 	// Clean-up IPAM at whereabouts db (etcd or kubernetes API server) for all the secondary networks of the Pod which is getting removed.
+	// PluginArgs added to provide additional arguments required for whereabouts v0.5.1 and above.
 	// NOTE: SR-IOV VF interface clean-up, upon Pod delete will be handled by SR-IOV device plugin. Not handled here.
-	cmdArgs = &invoke.Args{Command: string("DEL"), ContainerID: podCNIInfo.ContainerID,
-		NetNS: podCNIInfo.ContainerNetNS, Path: cniPath}
+	cmdArgs = whereaboutsArgsBuilder("DEL", "", podCNIInfo)
 	// example: podCNIInfo.NetworkConfig = {"eth1": net1-cniconfig, "eth2": net2-cniconfig}
 	for secNetInstIface, secNetInstConfig := range podCNIInfo.NetworkConfig {
 		cmdArgs.IfName = secNetInstIface
@@ -190,7 +202,7 @@ func (pc *PodController) handleAddUpdatePod(obj interface{}) error {
 	// Avoid processing Pod annotation, if we already have at least one secondary network successfully configured on this Pod.
 	// We do not support/handle Annotation updates yet.
 	if len(podCNIInfo.NetworkConfig) > 0 {
-		klog.InfoS("Secondary network already configured on this Pod. Annotation update not supported.", klog.KObj(pod))
+		klog.InfoS("Secondary network already configured on this Pod and annotation update not supported, skipping update", "pod", klog.KObj(pod))
 		return nil
 	}
 	// Parse Pod annotation and proceed with the secondary network configuration.
@@ -293,9 +305,8 @@ func (pc *PodController) configureSecondaryInterface(pod *corev1.Pod, netinfo *S
 		netinfo.InterfaceName = generatePodSecondaryIfaceName(podCNIInfo)
 	}
 	if netinfo.InterfaceType == sriovInterfaceType {
-		cmdArgs = &invoke.Args{Command: string("ADD"), ContainerID: podCNIInfo.ContainerID,
-			NetNS: podCNIInfo.ContainerNetNS, IfName: netinfo.InterfaceName,
-			Path: cniPath}
+		// PluginArgs added to provide additional arguments required for whereabouts v0.5.1 and above.
+		cmdArgs = whereaboutsArgsBuilder("ADD", netinfo.InterfaceName, podCNIInfo)
 		ipamResult, err = ipam.GetIPAMSubnetAddress(cniconfig, cmdArgs)
 		if err != nil {
 			return errors.New("secondary network IPAM failed")
@@ -329,7 +340,7 @@ func (pc *PodController) configureSecondaryInterface(pod *corev1.Pod, netinfo *S
 func (pc *PodController) configureSecondaryNetwork(pod *corev1.Pod, networklist []*SecondaryNetworkObject, podCNIInfo *cnipodcache.CNIConfigInfo) error {
 
 	for _, netinfo := range networklist {
-		klog.InfoS("Secondary Network Information:", netinfo)
+		klog.InfoS("Secondary Network Information:", "Info", netinfo)
 		if len(netinfo.NetworkName) > 0 {
 			netDefCRD, err := pc.netAttachDefClient.NetworkAttachmentDefinitions(pod.Namespace).Get(context.TODO(), netinfo.NetworkName, metav1.GetOptions{})
 			if err != nil {
@@ -353,10 +364,10 @@ func (pc *PodController) configureSecondaryNetwork(pod *corev1.Pod, networklist 
 
 func (pc *PodController) Run(stopCh <-chan struct{}) {
 	defer func() {
-		klog.InfoS("Shutting down", controllerName)
+		klog.InfoS("Shutting down", "controller", controllerName)
 		pc.queue.ShutDown()
 	}()
-	klog.InfoS("Starting ", controllerName)
+	klog.InfoS("Starting ", "controller", controllerName)
 	go pc.podInformer.Run(stopCh)
 	if !cache.WaitForNamedCacheSync(controllerName, stopCh, pc.podInformer.HasSynced) {
 		return
