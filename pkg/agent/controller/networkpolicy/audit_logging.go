@@ -198,7 +198,7 @@ func getNetworkPolicyInfo(pktIn *ofctrl.PacketIn, c *Controller, ob *logInfo) er
 	match = getMatch(matchers, tableID, info)
 
 	if match != nil {
-		// Get Network Policy full name and OF priority of the conjunction.
+		// Get NetworkPolicy full name and OF priority of the conjunction.
 		info, err = getInfoInReg(match, nil)
 		if err != nil {
 			return fmt.Errorf("received error while unloading conjunction id from reg: %v", err)

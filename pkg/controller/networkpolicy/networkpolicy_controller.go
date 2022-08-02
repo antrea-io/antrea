@@ -82,7 +82,7 @@ const (
 	// ClusterGroupIndex is used to index ClusterNetworkPolicies by ClusterGroup names.
 	ClusterGroupIndex = "clustergroup"
 	// EnableNPLoggingAnnotationKey can be added to Namespace to enable logging K8s NP.
-	EnableNPLoggingAnnotationKey = "policy.antrea.io/enable-np-logging"
+	EnableNPLoggingAnnotationKey = "networkpolicy.antrea.io/enable-logging"
 
 	appliedToGroupType grouping.GroupType = "appliedToGroup"
 	addressGroupType   grouping.GroupType = "addressGroup"

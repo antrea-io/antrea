@@ -2135,8 +2135,7 @@ func (f *featureNetworkPolicy) defaultDropFlow(table binding.Table, matchPairs [
 	}
 
 	if enableLogging || f.enableDenyTracking {
-		fb = fb.
-			Action().LoadRegMark(DispositionDropRegMark).
+		fb = fb.Action().LoadRegMark(DispositionDropRegMark).
 			Action().LoadToRegField(CustomReasonField, uint32(customReason)).
 			Action().SendToController(uint8(PacketInReasonNP))
 	}

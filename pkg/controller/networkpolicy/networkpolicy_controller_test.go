@@ -231,22 +231,6 @@ func newClientset(objects ...runtime.Object) *fake.Clientset {
 	return client
 }
 
-type mockNamespaceLister struct {
-	mockNamespaceStore map[string]*corev1.Namespace
-}
-
-func (s *mockNamespaceLister) List(selector labels.Selector) (ret []*corev1.Namespace, err error) {
-	namespaces := make([]*corev1.Namespace, 0, len(s.mockNamespaceStore))
-	for _, ns := range s.mockNamespaceStore {
-		namespaces = append(namespaces, ns)
-	}
-	return namespaces, nil
-}
-
-func (s *mockNamespaceLister) Get(name string) (*corev1.Namespace, error) {
-	return s.mockNamespaceStore[name], nil
-}
-
 func TestAddNetworkPolicy(t *testing.T) {
 	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
 	selectorB := metav1.LabelSelector{MatchLabels: map[string]string{"foo2": "bar2"}}
@@ -2814,15 +2798,13 @@ func TestProcessNetworkPolicyLogging(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, c := newController()
-			// Replace with custom lister that returns Namespace with logging Annotation.
-			testNamespace := &corev1.Namespace{
+			nsA := corev1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
-					Namespace:   corev1.NamespaceDefault,
 					Name:        "nsA",
-					Annotations: map[string]string{"policy.antrea.io/enable-np-logging": "true"},
+					Annotations: map[string]string{"networkpolicy.antrea.io/enable-logging": "true"},
 				},
 			}
-			c.namespaceLister = &mockNamespaceLister{mockNamespaceStore: map[string]*corev1.Namespace{"nsA": testNamespace}}
+			c.namespaceStore.Add(&nsA)
 
 			if actualPolicy := c.processNetworkPolicy(tt.inputPolicy); !reflect.DeepEqual(actualPolicy, tt.expectedPolicy) {
 				t.Errorf("processNetworkPolicy() got %v, want %v", actualPolicy, tt.expectedPolicy)

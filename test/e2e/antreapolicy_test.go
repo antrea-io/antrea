@@ -2036,7 +2036,7 @@ func testAuditLoggingBasic(t *testing.T, data *TestData) {
 }
 
 // testAuditLoggingEnableNP tests that audit logs are generated when K8s NP is applied
-// tests both Allow traffic by K8s NP and Drop traffic by implicit K8s drop
+// tests both Allow traffic by K8s NP and Drop traffic by implicit K8s policy drop
 func testAuditLoggingEnableNP(t *testing.T, data *TestData) {
 	data.updateNamespaceWithAnnotations(namespaces["x"], map[string]string{networkpolicy.EnableNPLoggingAnnotationKey: "true"})
 	// Add a K8s namespaced NetworkPolicy in ns x that allow ingress traffic from
