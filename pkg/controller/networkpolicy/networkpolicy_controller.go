@@ -1145,7 +1145,7 @@ func (n *NetworkPolicyController) getMemberSetForGroupType(groupType grouping.Gr
 		groupMemberSet.Insert(podToGroupMember(pod, true))
 	}
 	for _, ee := range externalEntities {
-		groupMemberSet.Insert(externalEntityToGroupMember(ee))
+		groupMemberSet.Insert(externalEntityToGroupMember(ee, true))
 	}
 	return groupMemberSet
 }
@@ -1203,10 +1203,9 @@ func serviceToGroupMember(serviceReference *controlplane.ServiceReference) (memb
 	}
 }
 
-func externalEntityToGroupMember(ee *v1alpha2.ExternalEntity) *controlplane.GroupMember {
+func externalEntityToGroupMember(ee *v1alpha2.ExternalEntity, includeIP bool) *controlplane.GroupMember {
 	memberEntity := &controlplane.GroupMember{}
 	namedPorts := make([]controlplane.NamedPort, len(ee.Spec.Ports))
-	var ips []controlplane.IPAddress
 	for i, port := range ee.Spec.Ports {
 		namedPorts[i] = controlplane.NamedPort{
 			Port:     port.Port,
@@ -1214,8 +1213,10 @@ func externalEntityToGroupMember(ee *v1alpha2.ExternalEntity) *controlplane.Grou
 			Protocol: controlplane.Protocol(port.Protocol),
 		}
 	}
-	for _, ep := range ee.Spec.Endpoints {
-		ips = append(ips, ipStrToIPAddress(ep.IP))
+	if includeIP {
+		for _, ep := range ee.Spec.Endpoints {
+			memberEntity.IPs = append(memberEntity.IPs, ipStrToIPAddress(ep.IP))
+		}
 	}
 	eeRef := controlplane.ExternalEntityReference{
 		Name:      ee.Name,
@@ -1223,7 +1224,6 @@ func externalEntityToGroupMember(ee *v1alpha2.ExternalEntity) *controlplane.Grou
 	}
 	memberEntity.ExternalEntity = &eeRef
 	memberEntity.Ports = namedPorts
-	memberEntity.IPs = ips
 	return memberEntity
 }
 
@@ -1295,7 +1295,7 @@ func (n *NetworkPolicyController) syncAppliedToGroup(key string) error {
 			if entitySet == nil {
 				entitySet = controlplane.GroupMemberSet{}
 			}
-			entitySet.Insert(externalEntityToGroupMember(extEntity))
+			entitySet.Insert(externalEntityToGroupMember(extEntity, false))
 			memberSetByNode[extEntity.Spec.ExternalNode] = entitySet
 			appGroupNodeNames.Insert(extEntity.Spec.ExternalNode)
 		}

@@ -81,7 +81,7 @@ func (i *Initializer) prepareHNSNetworkAndOVSExtension() error {
 	}
 	i.nodeConfig.UplinkNetConfig.Name = adapter.Name
 	i.nodeConfig.UplinkNetConfig.MAC = adapter.HardwareAddr
-	i.nodeConfig.UplinkNetConfig.IP = i.nodeConfig.NodeTransportIPv4Addr
+	i.nodeConfig.UplinkNetConfig.IPs = []*net.IPNet{i.nodeConfig.NodeTransportIPv4Addr}
 	i.nodeConfig.UplinkNetConfig.Index = adapter.Index
 	defaultGW, err := util.GetDefaultGatewayByInterfaceIndex(adapter.Index)
 	if err != nil {
