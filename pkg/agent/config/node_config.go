@@ -103,7 +103,8 @@ type AdapterNetConfig struct {
 	Name       string
 	Index      int
 	MAC        net.HardwareAddr
-	IP         *net.IPNet
+	IPs        []*net.IPNet
+	MTU        int
 	Gateway    string
 	DNSServers string
 	Routes     []interface{}
