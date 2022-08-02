@@ -113,6 +113,7 @@ func TestAllocateIP(t *testing.T) {
 
 	allocator := newTestIPPoolAllocator(&pool, stopCh)
 	require.NotNil(t, allocator)
+	assert.Equal(t, 21, allocator.Total())
 
 	// Allocate specific IP from the range
 	returnInfo, err := allocator.AllocateIP(net.ParseIP("10.2.2.101"), crdv1a2.IPAddressPhaseAllocated, fakePodOwner)
@@ -135,7 +136,7 @@ func TestAllocateNext(t *testing.T) {
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 
-	poolName := uuid.New().String()
+	poolName := "fakePool"
 	ipRange := crdv1a2.IPRange{
 		Start: "10.2.2.100",
 		End:   "10.2.2.120",
@@ -154,6 +155,7 @@ func TestAllocateNext(t *testing.T) {
 
 	allocator := newTestIPPoolAllocator(&pool, stopCh)
 	require.NotNil(t, allocator)
+	assert.Equal(t, 21, allocator.Total())
 
 	validateAllocationSequence(t, allocator, subnetInfo, []string{"10.2.2.100", "10.2.2.101"})
 }
@@ -185,6 +187,7 @@ func TestAllocateNextMultiRange(t *testing.T) {
 
 	allocator := newTestIPPoolAllocator(&pool, stopCh)
 	require.NotNil(t, allocator)
+	assert.Equal(t, 16, allocator.Total())
 
 	// Allocate the 2 available IPs from first range then switch to second range
 	validateAllocationSequence(t, allocator, subnetInfo, []string{"10.2.2.100", "10.2.2.101", "10.2.2.2", "10.2.2.3"})
@@ -220,6 +223,7 @@ func TestAllocateNextMultiRangeExausted(t *testing.T) {
 
 	allocator := newTestIPPoolAllocator(&pool, stopCh)
 	require.NotNil(t, allocator)
+	assert.Equal(t, 3, allocator.Total())
 
 	// Allocate all available IPs
 	validateAllocationSequence(t, allocator, subnetInfo, []string{"10.2.2.100", "10.2.2.101", "10.2.2.200"})
@@ -324,6 +328,7 @@ func TestReleaseResource(t *testing.T) {
 
 	allocator := newTestIPPoolAllocator(&pool, stopCh)
 	require.NotNil(t, allocator)
+	assert.Equal(t, 15, allocator.Total())
 
 	// Allocate the single available IPs from first range then 3 IPs from second range
 	validateAllocationSequence(t, allocator, subnetInfo, []string{"2001::1000", "2001::2", "2001::3", "2001::4", "2001::5"})

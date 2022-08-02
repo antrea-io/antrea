@@ -247,6 +247,11 @@ func (a *SingleIPAllocator) Free() int {
 	return a.max - a.count - len(a.reservedIPs)
 }
 
+// Total returns the number total of IPs within the pool.
+func (a *SingleIPAllocator) Total() int {
+	return a.max - len(a.reservedIPs)
+}
+
 // Has returns whether the provided IP is in the range or not.
 func (a *SingleIPAllocator) Has(ip net.IP) bool {
 	offset := a.getOffset(ip)
@@ -322,7 +327,7 @@ func (ma MultiIPAllocator) Free() int {
 func (ma MultiIPAllocator) Total() int {
 	total := 0
 	for _, a := range ma {
-		total += a.max - len(a.reservedIPs)
+		total += a.Total()
 	}
 	return total
 }

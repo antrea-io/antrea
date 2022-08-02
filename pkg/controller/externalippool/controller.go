@@ -308,7 +308,7 @@ func (c *ExternalIPPoolController) updateExternalIPPoolStatus(poolName string) e
 	var getErr error
 	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		actualStatus := eip.Status
-		usage := antreacrds.ExternalIPPoolUsage{Total: total, Used: used}
+		usage := antreacrds.IPPoolUsage{Total: total, Used: used}
 		if actualStatus.Usage == usage {
 			return nil
 		}

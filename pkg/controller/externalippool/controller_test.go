@@ -79,7 +79,7 @@ func TestAllocateIPFromPool(t *testing.T) {
 		allocateFrom         string
 		expectedIP           string
 		expectError          bool
-		expectedIPPoolStatus []antreacrds.ExternalIPPoolUsage
+		expectedIPPoolStatus []antreacrds.IPPoolUsage
 	}{
 		{
 			name: "allocate from proper IP pool",
@@ -90,7 +90,7 @@ func TestAllocateIPFromPool(t *testing.T) {
 			allocateFrom: "eip1",
 			expectedIP:   "10.10.10.2",
 			expectError:  false,
-			expectedIPPoolStatus: []antreacrds.ExternalIPPoolUsage{
+			expectedIPPoolStatus: []antreacrds.IPPoolUsage{
 				{Total: 2, Used: 1},
 			},
 		},
@@ -109,7 +109,7 @@ func TestAllocateIPFromPool(t *testing.T) {
 			allocateFrom: "eip1",
 			expectedIP:   "",
 			expectError:  true,
-			expectedIPPoolStatus: []antreacrds.ExternalIPPoolUsage{
+			expectedIPPoolStatus: []antreacrds.IPPoolUsage{
 				{Total: 2, Used: 2},
 			},
 		},
@@ -122,7 +122,7 @@ func TestAllocateIPFromPool(t *testing.T) {
 			allocateFrom: "eip2",
 			expectedIP:   "",
 			expectError:  true,
-			expectedIPPoolStatus: []antreacrds.ExternalIPPoolUsage{
+			expectedIPPoolStatus: []antreacrds.IPPoolUsage{
 				{Total: 2, Used: 0},
 			},
 		},
@@ -164,7 +164,7 @@ func TestReleaseIP(t *testing.T) {
 		ipPoolToRelease      string
 		ipToRelease          string
 		expectError          bool
-		expectedIPPoolStatus []antreacrds.ExternalIPPoolUsage
+		expectedIPPoolStatus []antreacrds.IPPoolUsage
 	}{
 		{
 			name: "release IP to pool",
@@ -181,7 +181,7 @@ func TestReleaseIP(t *testing.T) {
 			ipPoolToRelease: "eip1",
 			ipToRelease:     "10.10.10.2",
 			expectError:     false,
-			expectedIPPoolStatus: []antreacrds.ExternalIPPoolUsage{
+			expectedIPPoolStatus: []antreacrds.IPPoolUsage{
 				{Total: 2, Used: 1},
 			},
 		},
@@ -200,7 +200,7 @@ func TestReleaseIP(t *testing.T) {
 			ipPoolToRelease: "eip1",
 			ipToRelease:     "10.10.11.2",
 			expectError:     true,
-			expectedIPPoolStatus: []antreacrds.ExternalIPPoolUsage{
+			expectedIPPoolStatus: []antreacrds.IPPoolUsage{
 				{Total: 2, Used: 2},
 			},
 		},
@@ -455,7 +455,7 @@ func TestIPPoolHasIP(t *testing.T) {
 	}
 }
 
-func checkExternalIPPoolStatus(t *testing.T, controller *controller, poolName string, expectedStatus antreacrds.ExternalIPPoolUsage) {
+func checkExternalIPPoolStatus(t *testing.T, controller *controller, poolName string, expectedStatus antreacrds.IPPoolUsage) {
 	exists := controller.IPPoolExists(poolName)
 	require.True(t, exists)
 	err := wait.PollImmediate(50*time.Millisecond, 2*time.Second, func() (found bool, err error) {
@@ -475,7 +475,7 @@ func TestExternalIPPoolController_RestoreIPAllocations(t *testing.T) {
 		allocations          []IPAllocation
 		allocationsToRestore []IPAllocation
 		expectedSucceeded    []IPAllocation
-		expectedIPPoolStatus []antreacrds.ExternalIPPoolUsage
+		expectedIPPoolStatus []antreacrds.IPPoolUsage
 	}{
 		{
 			name: "restore all IP successfully",
@@ -516,7 +516,7 @@ func TestExternalIPPoolController_RestoreIPAllocations(t *testing.T) {
 					net.ParseIP("10.10.11.2"),
 				},
 			},
-			expectedIPPoolStatus: []antreacrds.ExternalIPPoolUsage{
+			expectedIPPoolStatus: []antreacrds.IPPoolUsage{
 				{Total: 2, Used: 1},
 				{Total: 2, Used: 1},
 			},
@@ -561,7 +561,7 @@ func TestExternalIPPoolController_RestoreIPAllocations(t *testing.T) {
 					net.ParseIP("10.10.11.2"),
 				},
 			},
-			expectedIPPoolStatus: []antreacrds.ExternalIPPoolUsage{
+			expectedIPPoolStatus: []antreacrds.IPPoolUsage{
 				{Total: 2, Used: 1},
 				{Total: 2, Used: 1},
 			},
@@ -598,7 +598,7 @@ func TestExternalIPPoolController_RestoreIPAllocations(t *testing.T) {
 					net.ParseIP("10.10.11.2"),
 				},
 			},
-			expectedIPPoolStatus: []antreacrds.ExternalIPPoolUsage{
+			expectedIPPoolStatus: []antreacrds.IPPoolUsage{
 				{Total: 2, Used: 0},
 				{Total: 2, Used: 1},
 			},
