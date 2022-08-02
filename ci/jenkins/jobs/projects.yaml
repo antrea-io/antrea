@@ -1147,9 +1147,18 @@
           branches:
           - '*/main'
           included_regions: []
-          cron: 'H H * * *'
+          cron: '' # 'H H * * *'
           ignore_post_commit_hooks: false
-          publishers: []
+          publishers: 
+          - email:
+              recipients: liujunhan@sjtu.edu.cn
+          - archive:
+              allow-empty: true
+              artifacts: 'antrea-test-logs.tar.gz, ci/jenkins/*sonobuoy*.tar.gz'
+              case-sensitive: true
+              default-excludes: true
+              fingerprint: false
+              only-if-success: false
           wrappers:
           - credentials-binding:
             - text:
