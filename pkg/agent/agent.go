@@ -38,6 +38,7 @@ import (
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/controller/noderoute"
 	"antrea.io/antrea/pkg/agent/controller/trafficcontrol"
+	"antrea.io/antrea/pkg/agent/externalnode"
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/openflow"
 	"antrea.io/antrea/pkg/agent/openflow/cookie"
@@ -45,6 +46,7 @@ import (
 	"antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/agent/util"
 	"antrea.io/antrea/pkg/agent/wireguard"
+	"antrea.io/antrea/pkg/client/clientset/versioned"
 	"antrea.io/antrea/pkg/features"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 	"antrea.io/antrea/pkg/ovs/ovsctl"
@@ -82,6 +84,7 @@ var otherConfigKeysForIPsecCertificates = []string{"certificate", "private_key",
 // Initializer knows how to setup host networking, OpenVSwitch, and Openflow.
 type Initializer struct {
 	client                clientset.Interface
+	crdClient             versioned.Interface
 	ovsBridgeClient       ovsconfig.OVSBridgeClient
 	ofClient              openflow.Client
 	routeClient           route.Interface
@@ -99,14 +102,16 @@ type Initializer struct {
 	connectUplinkToBridge bool
 	// networkReadyCh should be closed once the Node's network is ready.
 	// The CNI server will wait for it before handling any CNI Add requests.
-	proxyAll       bool
-	networkReadyCh chan<- struct{}
-	stopCh         <-chan struct{}
-	nodeType       config.NodeType
+	proxyAll              bool
+	networkReadyCh        chan<- struct{}
+	stopCh                <-chan struct{}
+	nodeType              config.NodeType
+	externalNodeNamespace string
 }
 
 func NewInitializer(
 	k8sClient clientset.Interface,
+	crdClient versioned.Interface,
 	ovsBridgeClient ovsconfig.OVSBridgeClient,
 	ofClient openflow.Client,
 	routeClient route.Interface,
@@ -121,6 +126,7 @@ func NewInitializer(
 	networkReadyCh chan<- struct{},
 	stopCh <-chan struct{},
 	nodeType config.NodeType,
+	externalNodeNamespace string,
 	enableProxy bool,
 	proxyAll bool,
 	connectUplinkToBridge bool,
@@ -128,6 +134,7 @@ func NewInitializer(
 	return &Initializer{
 		ovsBridgeClient:       ovsBridgeClient,
 		client:                k8sClient,
+		crdClient:             crdClient,
 		ifaceStore:            ifaceStore,
 		ofClient:              ofClient,
 		routeClient:           routeClient,
@@ -141,6 +148,7 @@ func NewInitializer(
 		networkReadyCh:        networkReadyCh,
 		stopCh:                stopCh,
 		nodeType:              nodeType,
+		externalNodeNamespace: externalNodeNamespace,
 		enableProxy:           enableProxy,
 		proxyAll:              proxyAll,
 		connectUplinkToBridge: connectUplinkToBridge,
@@ -280,9 +288,16 @@ func (i *Initializer) initInterfaceStore() error {
 			case interfacestore.AntreaTunnel:
 				intf = parseTunnelInterfaceFunc(port, ovsPort)
 			case interfacestore.AntreaHost:
-				// Not load the host interface, because it is configured on the OVS bridge port, and we don't need a
-				// specific interface in the interfaceStore.
-				intf = nil
+				if port.Name == i.ovsBridge {
+					// Need not to load the OVS bridge port to the interfaceStore
+					intf = nil
+				} else {
+					var err error
+					intf, err = externalnode.ParseHostInterfaceConfig(i.ovsBridgeClient, port, ovsPort)
+					if err != nil {
+						return err
+					}
+				}
 			case interfacestore.AntreaContainer:
 				// The port should be for a container interface.
 				intf = cniserver.ParseOVSPortInterfaceConfig(port, ovsPort, true)
@@ -1170,11 +1185,24 @@ func (i *Initializer) initNodeLocalConfig() error {
 }
 
 func (i *Initializer) initVMLocalConfig(nodeName string) error {
+	klog.InfoS("Initializing VM config", "ExternalNode", nodeName)
+	if err := wait.PollImmediateUntil(10*time.Second, func() (done bool, err error) {
+		_, err = i.crdClient.CrdV1alpha1().ExternalNodes(i.externalNodeNamespace).Get(context.TODO(), nodeName, metav1.GetOptions{})
+		if err != nil {
+			return false, nil
+		}
+		return true, nil
+	}, i.stopCh); err != nil {
+		klog.Info("Stopped waiting for ExternalNode")
+		return err
+	}
+
 	i.nodeConfig = &config.NodeConfig{
 		Name:      nodeName,
 		Type:      config.ExternalNode,
 		OVSBridge: i.ovsBridge,
 	}
+	klog.InfoS("Finished VM config initialization", "ExternalNode", nodeName)
 	return nil
 }
 

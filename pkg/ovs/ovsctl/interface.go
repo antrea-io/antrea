@@ -60,6 +60,8 @@ type OVSCtlClient interface {
 	RunAppctlCmd(cmd string, needsBridge bool, args ...string) ([]byte, *ExecError)
 	// GetDPFeatures executes "ovs-appctl dpif/show-dp-features" to check supported DP features.
 	GetDPFeatures() (map[DPFeature]bool, error)
+	// DeleteDPInterface executes "ovs-appctl dpctl/del-if ovs-system $name" to delete OVS datapath interface.
+	DeleteDPInterface(name string) error
 }
 
 type BadRequestError string

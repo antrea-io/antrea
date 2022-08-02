@@ -415,3 +415,17 @@ func GenerateRandomMAC() net.HardwareAddr {
 	buf[0] |= 2
 	return buf
 }
+
+func GetIPNetsByLink(link *net.Interface) ([]*net.IPNet, error) {
+	addrList, err := link.Addrs()
+	if err != nil {
+		return nil, err
+	}
+	var addrs []*net.IPNet
+	for _, a := range addrList {
+		if ipNet, ok := a.(*net.IPNet); ok {
+			addrs = append(addrs, ipNet)
+		}
+	}
+	return addrs, nil
+}
