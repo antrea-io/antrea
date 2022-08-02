@@ -42,6 +42,25 @@ var _ = Describe("ServiceExport controller", func() {
 		Ports: svcPorts,
 	}
 
+	endpoint := &corev1.Endpoints{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "nginx-svc",
+			Namespace: testNamespace,
+		},
+		Subsets: []corev1.EndpointSubset{
+			{
+				Addresses: []corev1.EndpointAddress{
+					{IP: "1.2.3.4"},
+				},
+				Ports: []corev1.EndpointPort{
+					{
+						Name:     "http",
+						Port:     80,
+						Protocol: corev1.ProtocolTCP},
+				},
+			},
+		},
+	}
 	svc := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "nginx-svc",
@@ -85,6 +104,7 @@ var _ = Describe("ServiceExport controller", func() {
 	ctx := context.Background()
 	It("Should create ResourceExports when new ServiceExport for ClusterIP Service is created", func() {
 		By("By exposing a ClusterIP type of Service")
+		Expect(k8sClient.Create(ctx, endpoint)).Should(Succeed())
 		Expect(k8sClient.Create(ctx, svc)).Should(Succeed())
 		Expect(k8sClient.Create(ctx, svcExport)).Should(Succeed())
 		var err error

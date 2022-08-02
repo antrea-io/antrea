@@ -32,6 +32,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 	k8smcsv1alpha1 "sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
@@ -70,8 +71,10 @@ const (
 type reason int
 
 const (
-	notFound reason = iota
-	importedService
+	serviceNotFound reason = iota
+	isImportedService
+	serviceWithoutEndpoints
+	serviceExported
 )
 
 func NewServiceExportReconciler(
@@ -118,7 +121,7 @@ func (r *ServiceExportReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		return ctrl.Result{}, err
 	}
 
-	// return faster during initilization instead of handling all Service/Endpoint events
+	// Return faster during initilization instead of handling all Service/Endpoints events
 	if len(svcExportList.Items) == 0 && len(r.installedSvcs.List()) == 0 {
 		klog.InfoS("Skip reconciling, no corresponding ServiceExport")
 		return ctrl.Result{}, nil
@@ -138,15 +141,18 @@ func (r *ServiceExportReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	epResExportName := getResourceExportName(r.localClusterID, req, "endpoints")
 
 	cleanup := func() error {
+		// When controller restarts, the Service is not in cache, but it is still possible
+		// we need to remove ResourceExports. So leave it to the caller to check the 'svcInstalled'
+		// before deletion or try to delete any way.
+		err = r.handleServiceDeleteEvent(ctx, req, commonArea)
+		if err != nil {
+			return err
+		}
+		err = r.handleEndpointDeleteEvent(ctx, req, commonArea)
+		if err != nil {
+			return err
+		}
 		if svcInstalled {
-			err = r.handleServiceDeleteEvent(ctx, req, commonArea)
-			if err != nil {
-				return err
-			}
-			err = r.handleEndpointDeleteEvent(ctx, req, commonArea)
-			if err != nil {
-				return err
-			}
 			r.installedSvcs.Delete(svcObj)
 		}
 		return nil
@@ -157,14 +163,18 @@ func (r *ServiceExportReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			klog.ErrorS(err, "Unable to fetch ServiceExport", "serviceexport", req.String())
 			return ctrl.Result{}, err
 		}
-		if err := cleanup(); err != nil {
-			return ctrl.Result{}, err
+		// Stale resources will be cleaned up by stale controller if controller restart,
+		// so here we check if Service is installed or not to avoid unnecessary deletion.
+		if svcInstalled {
+			if err := cleanup(); err != nil {
+				return ctrl.Result{}, err
+			}
 		}
 		return ctrl.Result{}, nil
 	}
 
-	// if corresponding Service doesn't exist, update ServiceExport's status reason to not_found_service,
-	// and clean up remote ResourceExport if it's an installed Service.
+	// If the corresponding Service doesn't exist, update ServiceExport's status reason to
+	// 'service_not_found', and clean up remote ResourceExport.
 	svc := &corev1.Service{}
 	err = r.Client.Get(ctx, req.NamespacedName, svc)
 	if err != nil {
@@ -172,27 +182,52 @@ func (r *ServiceExportReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			if err := cleanup(); err != nil {
 				return ctrl.Result{}, err
 			}
-			err = r.updateSvcExportStatus(ctx, req, notFound)
+			err = r.updateSvcExportStatus(ctx, req, serviceNotFound)
 			if err != nil {
 				return ctrl.Result{}, err
 			}
 			return ctrl.Result{}, nil
-		} else {
-			klog.ErrorS(err, "Failed to get Service ", req.String())
-			return ctrl.Result{}, err
 		}
+		klog.ErrorS(err, "Failed to get Service", req.String())
+		return ctrl.Result{}, err
 	}
 
-	// Skip if ServiceExport is trying to export MC Service.
+	// Skip if ServiceExport is trying to export a multi-cluster Service.
 	if !svcInstalled {
 		if _, ok := svc.Annotations[common.AntreaMCServiceAnnotation]; ok {
 			klog.InfoS("It's not allowed to export the multi-cluster controller auto-generated Service", "service", req.String())
-			err = r.updateSvcExportStatus(ctx, req, importedService)
+			err = r.updateSvcExportStatus(ctx, req, isImportedService)
 			if err != nil {
 				return ctrl.Result{}, err
 			}
 			return ctrl.Result{}, nil
 		}
+	}
+
+	// Delete existing ResourceExport if the exported Service has no ready Endpoints,
+	// and update the ServiceExport status.
+	svcEPs := &corev1.Endpoints{}
+	readyAddresses := 0
+	err = r.Client.Get(ctx, req.NamespacedName, svcEPs)
+	if err == nil {
+		for _, subsets := range svcEPs.Subsets {
+			readyAddresses = readyAddresses + len(subsets.Addresses)
+		}
+	} else {
+		if !apierrors.IsNotFound(err) {
+			klog.ErrorS(err, "Failed to get Endpoints", req.String())
+			return ctrl.Result{}, err
+		}
+	}
+	if readyAddresses == 0 || apierrors.IsNotFound(err) {
+		if err := cleanup(); err != nil {
+			return ctrl.Result{}, err
+		}
+		err = r.updateSvcExportStatus(ctx, req, serviceWithoutEndpoints)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{}, nil
 	}
 
 	// We also watch Service events via events mapping function.
@@ -254,6 +289,11 @@ func (r *ServiceExportReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			klog.ErrorS(err, "Failed to handle Endpoints change", "endpoints", req.String())
 			return ctrl.Result{}, err
 		}
+
+		err = r.updateSvcExportStatus(ctx, req, serviceExported)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
 	}
 
 	return ctrl.Result{}, nil
@@ -311,40 +351,52 @@ func (r *ServiceExportReconciler) updateSvcExportStatus(ctx context.Context, req
 		return client.IgnoreNotFound(err)
 	}
 	now := metav1.Now()
-	var res, message *string
-	switch cause {
-	case notFound:
-		res = getStringPointer("not_found_service")
-		message = getStringPointer("the Service does not exist")
-	case importedService:
-		res = getStringPointer("imported_service")
-		message = getStringPointer("the Service is imported, not allowed to export")
-	default:
-		res = getStringPointer("invalid_service")
-		message = getStringPointer("the Service is not valid to export")
-	}
-
-	svcExportConditions := svcExport.Status.DeepCopy().Conditions
-	invalidCondition := k8smcsv1alpha1.ServiceExportCondition{
+	newCondition := k8smcsv1alpha1.ServiceExportCondition{
 		Type:               k8smcsv1alpha1.ServiceExportValid,
 		Status:             corev1.ConditionFalse,
 		LastTransitionTime: &now,
-		Reason:             res,
-		Message:            message,
 	}
 
-	matchedCondition := false
+	switch cause {
+	case serviceNotFound:
+		newCondition.Reason = getStringPointer("service_not_found")
+		newCondition.Message = getStringPointer("the Service does not exist")
+	case serviceWithoutEndpoints:
+		newCondition.Reason = getStringPointer("service_without_endpoints")
+		newCondition.Message = getStringPointer("the Service has no Endpoints, failed to export")
+	case isImportedService:
+		newCondition.Reason = getStringPointer("imported_service")
+		newCondition.Message = getStringPointer("the Service is imported, not allowed to export")
+	case serviceExported:
+		newCondition.Status = corev1.ConditionTrue
+		newCondition.Reason = getStringPointer("export_succeeded")
+		newCondition.Message = getStringPointer("the Service is exported successfully")
+	}
+
+	svcExportConditions := svcExport.Status.DeepCopy().Conditions
+	var existingCondition k8smcsv1alpha1.ServiceExportCondition
+	matchedConditionIdx := 0
 	for n, c := range svcExportConditions {
 		if c.Type == k8smcsv1alpha1.ServiceExportValid {
-			matchedCondition = true
-			svcExportConditions[n] = invalidCondition
+			existingCondition = c
+			matchedConditionIdx = n
 			break
 		}
 	}
-	if !matchedCondition {
-		svcExportConditions = append(svcExportConditions, invalidCondition)
 
+	if existingCondition != (k8smcsv1alpha1.ServiceExportCondition{}) {
+		if *existingCondition.Reason == *newCondition.Reason {
+			// No need to update the ServiceExport when there is no status change.
+			return nil
+		}
 	}
+
+	if existingCondition != (k8smcsv1alpha1.ServiceExportCondition{}) {
+		svcExportConditions[matchedConditionIdx] = newCondition
+	} else {
+		svcExportConditions = append(svcExportConditions, newCondition)
+	}
+
 	svcExport.Status = k8smcsv1alpha1.ServiceExportStatus{
 		Conditions: svcExportConditions,
 	}
@@ -358,20 +410,28 @@ func (r *ServiceExportReconciler) updateSvcExportStatus(ctx context.Context, req
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *ServiceExportReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	// Ignore status update event via GenerationChangedPredicate
+	ignoreStatus := predicate.GenerationChangedPredicate{}
+	// Watch events only when resource version changes
+	versionChange := predicate.ResourceVersionChangedPredicate{}
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&k8smcsv1alpha1.ServiceExport{}).
-		Watches(&source.Kind{Type: &corev1.Service{}}, handler.EnqueueRequestsFromMapFunc(serviceMapFunc)).
+		WithEventFilter(ignoreStatus).
+		Watches(&source.Kind{Type: &corev1.Service{}}, handler.EnqueueRequestsFromMapFunc(objectMapFunc)).
+		WithEventFilter(versionChange).
+		Watches(&source.Kind{Type: &corev1.Endpoints{}}, handler.EnqueueRequestsFromMapFunc(objectMapFunc)).
+		WithEventFilter(versionChange).
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: common.DefaultWorkerCount,
 		}).
 		Complete(r)
 }
 
-// serviceMapFunc simply maps all Service events to ServiceExports.
-// When there are any Service changes, it might be reflected in ResourceExport
-// in Leader cluster as well, so ServiceExportReconciler also needs to watch
-// Service events.
-func serviceMapFunc(a client.Object) []reconcile.Request {
+// objectMapFunc simply maps all Serivce and Endpoints events to ServiceExports.
+// When there are any Service or Endpoints changes, it might be reflected in ResourceExport
+// in leader cluster as well, so ServiceExportReconciler also needs to watch
+// Service and Endpoints events.
+func objectMapFunc(a client.Object) []reconcile.Request {
 	return []reconcile.Request{
 		{
 			NamespacedName: types.NamespacedName{
