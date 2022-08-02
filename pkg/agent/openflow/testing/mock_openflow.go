@@ -423,17 +423,17 @@ func (mr *MockClientMockRecorder) InstallPodSNATFlows(arg0, arg1, arg2 interface
 }
 
 // InstallPolicyBypassFlows mocks base method
-func (m *MockClient) InstallPolicyBypassFlows(arg0 openflow.Protocol, arg1 *net.IPNet, arg2 net.IP, arg3 uint16, arg4 bool) error {
+func (m *MockClient) InstallPolicyBypassFlows(arg0 openflow.Protocol, arg1 *net.IPNet, arg2 uint16, arg3 bool) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "InstallPolicyBypassFlows", arg0, arg1, arg2, arg3, arg4)
+	ret := m.ctrl.Call(m, "InstallPolicyBypassFlows", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // InstallPolicyBypassFlows indicates an expected call of InstallPolicyBypassFlows
-func (mr *MockClientMockRecorder) InstallPolicyBypassFlows(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
+func (mr *MockClientMockRecorder) InstallPolicyBypassFlows(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallPolicyBypassFlows", reflect.TypeOf((*MockClient)(nil).InstallPolicyBypassFlows), arg0, arg1, arg2, arg3, arg4)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallPolicyBypassFlows", reflect.TypeOf((*MockClient)(nil).InstallPolicyBypassFlows), arg0, arg1, arg2, arg3)
 }
 
 // InstallPolicyRuleFlows mocks base method

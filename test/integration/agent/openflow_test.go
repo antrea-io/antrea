@@ -196,9 +196,11 @@ func TestAntreaFlexibleIPAMConnectivityFlows(t *testing.T) {
 		Name:  "fake-uplink",
 		Index: 0,
 		MAC:   uplinkMAC,
-		IP: &net.IPNet{
-			IP:   nil,
-			Mask: nil,
+		IPs: []*net.IPNet{
+			{
+				IP:   nil,
+				Mask: nil,
+			},
 		},
 		Gateway:    "",
 		DNSServers: "",
