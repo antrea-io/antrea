@@ -53,7 +53,7 @@ func (i *Initializer) prepareOVSBridgeForK8sNode() error {
 	uplinkNetConfig := i.nodeConfig.UplinkNetConfig
 	uplinkNetConfig.Name = adapter.Name
 	uplinkNetConfig.MAC = adapter.HardwareAddr
-	uplinkNetConfig.IP = i.nodeConfig.NodeIPv4Addr
+	uplinkNetConfig.IPs = []*net.IPNet{i.nodeConfig.NodeIPv4Addr}
 	uplinkNetConfig.Index = adapter.Index
 	// Gateway and DNSServers are not configured at adapter in Linux
 	// Limitation: dynamic DNS servers will be lost after DHCP lease expired

@@ -25,6 +25,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/sets"
 
+	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	"antrea.io/antrea/pkg/util/channel"
@@ -282,7 +283,7 @@ func newFakeRuleCache() (*ruleCache, *dirtyRuleRecorder, *channel.SubscribableCh
 	recorder := newDirtyRuleRecorder()
 	podUpdateChannel := channel.NewSubscribableChannel("PodUpdate", 100)
 	serviceGroupIDUpdateChannel := make(chan string, 100)
-	c := newRuleCache(recorder.Record, podUpdateChannel, serviceGroupIDUpdateChannel)
+	c := newRuleCache(recorder.Record, podUpdateChannel, nil, serviceGroupIDUpdateChannel, config.K8sNode)
 	return c, recorder, podUpdateChannel, serviceGroupIDUpdateChannel
 }
 

@@ -24,6 +24,7 @@ import (
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 
+	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	"antrea.io/antrea/pkg/util/channel"
 )
@@ -51,7 +52,7 @@ func (c *fakeNetworkPolicyControl) getNetworkPolicyStatus() *v1beta2.NetworkPoli
 }
 
 func newTestStatusController() (*StatusController, *ruleCache, *fakeNetworkPolicyControl) {
-	ruleCache := newRuleCache(func(s string) {}, channel.NewSubscribableChannel("PodUpdate", 100), make(chan string, 100))
+	ruleCache := newRuleCache(func(s string) {}, channel.NewSubscribableChannel("PodUpdate", 100), nil, make(chan string, 100), config.K8sNode)
 	statusControl := &fakeNetworkPolicyControl{}
 	statusController := newStatusController(nil, testNode1, ruleCache)
 	statusController.statusControlInterface = statusControl

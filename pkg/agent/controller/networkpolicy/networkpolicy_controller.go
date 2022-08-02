@@ -31,6 +31,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent"
+	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/flowexporter/connections"
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/openflow"
@@ -80,6 +81,8 @@ type Controller struct {
 	multicastEnabled bool
 	// loggingEnabled indicates where Antrea policy audit logging is enabled.
 	loggingEnabled bool
+	// nodeType indicates type of the Node where Antrea Agent is running on.
+	nodeType config.NodeType
 	// antreaClientProvider provides interfaces to get antreaClient, which can be
 	// used to watch Antrea AddressGroups, AppliedToGroups, and NetworkPolicies.
 	// We need to get antreaClient dynamically because the apiserver cert can be
@@ -119,6 +122,7 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 	ifaceStore interfacestore.InterfaceStore,
 	nodeName string,
 	podUpdateSubscriber channel.Subscriber,
+	externalEntityUpdateSubscriber channel.Subscriber,
 	groupCounters []proxytypes.GroupCounter,
 	groupIDUpdates <-chan string,
 	antreaPolicyEnabled bool,
@@ -128,6 +132,7 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 	loggingEnabled bool,
 	asyncRuleDeleteInterval time.Duration,
 	dnsServerOverride string,
+	nodeType config.NodeType,
 	v4Enabled bool,
 	v6Enabled bool,
 	gwPort, tunPort uint32) (*Controller, error) {
@@ -136,6 +141,7 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 		antreaClientProvider: antreaClientGetter,
 		queue:                workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "networkpolicyrule"),
 		ofClient:             ofClient,
+		nodeType:             nodeType,
 		antreaPolicyEnabled:  antreaPolicyEnabled,
 		antreaProxyEnabled:   antreaProxyEnabled,
 		statusManagerEnabled: statusManagerEnabled,
@@ -157,7 +163,7 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 	}
 	c.reconciler = newReconciler(ofClient, ifaceStore, idAllocator, c.fqdnController, groupCounters,
 		v4Enabled, v6Enabled, antreaPolicyEnabled, multicastEnabled)
-	c.ruleCache = newRuleCache(c.enqueueRule, podUpdateSubscriber, groupIDUpdates)
+	c.ruleCache = newRuleCache(c.enqueueRule, podUpdateSubscriber, externalEntityUpdateSubscriber, groupIDUpdates, nodeType)
 	if statusManagerEnabled {
 		c.statusManager = newStatusController(antreaClientGetter, nodeName, c.ruleCache)
 	}

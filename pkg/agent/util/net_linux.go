@@ -23,6 +23,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/containernetworking/plugins/pkg/ip"
@@ -193,7 +194,7 @@ func ConfigureLinkAddresses(idx int, ipNets []*net.IPNet) error {
 
 	for _, addr := range addrsToAdd {
 		klog.V(2).Infof("Adding address %v to interface %s", addr, ifaceName)
-		if err := netlink.AddrAdd(link, addr); err != nil {
+		if err := netlink.AddrAdd(link, addr); err != nil && !strings.Contains(err.Error(), "file exists") {
 			return fmt.Errorf("failed to add address %v to interface %s: %v", addr, ifaceName, err)
 		}
 	}
@@ -240,6 +241,34 @@ func DeleteOVSPort(brName, portName string) error {
 	return cmd.Run()
 }
 
+func HostInterfaceExists(ifName string) bool {
+	_, err := netlink.LinkByName(ifName)
+	if err == nil {
+		return true
+	}
+	if _, ok := err.(netlink.LinkNotFoundError); ok {
+		return false
+	}
+	klog.ErrorS(err, "Failed to find host interface", "name", ifName)
+	return false
+}
+
+func GetInterfaceConfig(ifName string) (*net.Interface, []*net.IPNet, []interface{}, error) {
+	iface, err := net.InterfaceByName(ifName)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to get interface by name %s, err %v", ifName, err)
+	}
+	addrs, err := GetIPNetsByLink(iface)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to get address for interface %s, err %v", ifName, err)
+	}
+	routes, err := getRoutesOnInterface(iface.Index)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to get routes for iface.Index %d, err %v", iface.Index, err)
+	}
+	return iface, addrs, routes, nil
+}
+
 func RenameInterface(from, to string) error {
 	klog.InfoS("Renaming interface", "oldName", from, "newName", to)
 	var renameErr error
@@ -255,6 +284,59 @@ func RenameInterface(from, to string) error {
 		return fmt.Errorf("failed to rename host interface name %s to %s", from, to)
 	}
 	return nil
+}
+
+func RemoveLinkIPs(link netlink.Link) error {
+	addrs, err := netlink.AddrList(link, netlink.FAMILY_ALL)
+	if err != nil {
+		return err
+	}
+	for i := range addrs {
+		if err = netlink.AddrDel(link, &addrs[i]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func RemoveLinkRoutes(link netlink.Link) error {
+	routes, err := netlink.RouteList(link, netlink.FAMILY_ALL)
+	if err != nil {
+		return err
+	}
+	for i := range routes {
+		if err = netlink.RouteDel(&routes[i]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func ConfigureLinkRoutes(link netlink.Link, routes []interface{}) error {
+	for _, r := range routes {
+		rt := r.(netlink.Route)
+		rt.LinkIndex = link.Attrs().Index
+		if err := netlink.RouteReplace(&rt); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func getRoutesOnInterface(linkIndex int) ([]interface{}, error) {
+	link, err := netlink.LinkByIndex(linkIndex)
+	if err != nil {
+		return nil, err
+	}
+	rs, err := netlink.RouteList(link, netlink.FAMILY_ALL)
+	if err != nil {
+		return nil, err
+	}
+	var routes []interface{}
+	for _, r := range rs {
+		routes = append(routes, r)
+	}
+	return routes, nil
 }
 
 func renameHostInterface(oriName string, newName string) error {

@@ -23,6 +23,7 @@ import (
 
 	"github.com/spf13/pflag"
 	"gopkg.in/yaml.v2"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/component-base/featuregate"
 	"k8s.io/klog/v2"
 
@@ -496,9 +497,37 @@ func (o *Options) validateExternalNodeOptions() error {
 	if unsupported != nil {
 		return fmt.Errorf("unsupported features on Virtual Machine: {%s}", strings.Join(unsupported, ", "))
 	}
+	if err := o.validatePolicyBypassRulesConfig(); err != nil {
+		return fmt.Errorf("policyBypassRules configuration is invalid: %w", err)
+	}
 	return nil
 }
 
+func (o *Options) validatePolicyBypassRulesConfig() error {
+	if len(o.config.ExternalNode.PolicyBypassRules) == 0 {
+		return nil
+	}
+	allowedProtocols := sets.NewString("tcp", "udp", "icmp", "ip")
+	for _, rule := range o.config.ExternalNode.PolicyBypassRules {
+		if rule.Direction != "ingress" && rule.Direction != "egress" {
+			return fmt.Errorf("direction %s for policyBypassRule is invalid", rule.Direction)
+		}
+		if !allowedProtocols.Has(rule.Protocol) {
+			return fmt.Errorf("protocol %s for policyBypassRule is invalid", rule.Protocol)
+		}
+		if _, _, err := net.ParseCIDR(rule.CIDR); err != nil {
+			return fmt.Errorf("cidr %s for policyBypassRule is invalid", rule.CIDR)
+		}
+		if rule.Port == 0 && (rule.Protocol == "tcp" || rule.Protocol == "udp") {
+			return fmt.Errorf("missing port for policyBypassRule when protocol is %s", rule.Protocol)
+		}
+		if rule.Port < 0 || rule.Port > 65535 {
+			return fmt.Errorf("port %d for policyBypassRule is invalid", rule.Port)
+		}
+	}
+	return nil
+
+}
 func (o *Options) setExternalNodeDefaultOptions() {
 	// Following options are default values for agent running on a Virtual Machine.
 	// They are set to avoid unexpected agent crash.
@@ -508,5 +537,8 @@ func (o *Options) setExternalNodeDefaultOptions() {
 	if o.config.EnablePrometheusMetrics == nil {
 		o.config.EnablePrometheusMetrics = new(bool)
 		*o.config.EnablePrometheusMetrics = false
+	}
+	if o.config.ExternalNode.ExternalNodeNamespace == "" {
+		o.config.ExternalNode.ExternalNodeNamespace = "default"
 	}
 }

@@ -2771,9 +2771,6 @@ data:
     # Enable certificated-based authentication for IPsec.
     #  IPsecCertAuth: false
 
-    # Enable running agent on an unmanaged VM/BM.
-    #  ExternalNode: false
-
     # Name of the OpenVSwitch bridge antrea-agent will create and use.
     # Make sure it doesn't conflict with your existing OpenVSwitch bridges.
     ovsBridge: "br-int"
@@ -4010,7 +4007,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 7b6ba1830aabcf74b5b0a71c74edf49254c4237d604f9d984428252903901f98
+        checksum/config: 6fceb3665d21444d3e3555239e3aefad12ebf3dd175211e5db10d8b5117293d4
         checksum/ipsec-secret: d0eb9c52d0cd4311b6d252a951126bf9bea27ec05590bed8a394f0f792dcb2a4
       labels:
         app: antrea
@@ -4296,7 +4293,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 7b6ba1830aabcf74b5b0a71c74edf49254c4237d604f9d984428252903901f98
+        checksum/config: 6fceb3665d21444d3e3555239e3aefad12ebf3dd175211e5db10d8b5117293d4
       labels:
         app: antrea
         component: antrea-controller

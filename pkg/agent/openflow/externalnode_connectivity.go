@@ -152,7 +152,7 @@ func (f *featureExternalNodeConnectivity) replayFlows() []binding.Flow {
 	return flows
 }
 
-func (f *featureExternalNodeConnectivity) policyBypassFlow(protocol binding.Protocol, ipnet *net.IPNet, ip net.IP, port uint16, isIngress bool) binding.Flow {
+func (f *featureExternalNodeConnectivity) policyBypassFlow(protocol binding.Protocol, ipNet *net.IPNet, port uint16, isIngress bool) binding.Flow {
 	cookieID := f.cookieAllocator.Request(f.category).Raw()
 	var flowBuilder binding.FlowBuilder
 	var nextTable *Table
@@ -161,26 +161,16 @@ func (f *featureExternalNodeConnectivity) policyBypassFlow(protocol binding.Prot
 			Cookie(cookieID).
 			MatchProtocol(protocol).
 			MatchCTStateNew(true).
-			MatchCTStateTrk(true)
-		if ipnet != nil {
-			flowBuilder.MatchSrcIPNet(*ipnet)
-		}
-		if ip != nil {
-			flowBuilder.MatchSrcIP(ip)
-		}
+			MatchCTStateTrk(true).
+			MatchSrcIPNet(*ipNet)
 		nextTable = IngressMetricTable
 	} else {
 		flowBuilder = EgressSecurityClassifierTable.ofTable.BuildFlow(priorityNormal).
 			Cookie(cookieID).
 			MatchProtocol(protocol).
 			MatchCTStateNew(true).
-			MatchCTStateTrk(true)
-		if ipnet != nil {
-			flowBuilder.MatchDstIPNet(*ipnet)
-		}
-		if ip != nil {
-			flowBuilder.MatchDstIP(ip)
-		}
+			MatchCTStateTrk(true).
+			MatchDstIPNet(*ipNet)
 		nextTable = EgressMetricTable
 	}
 	return flowBuilder.MatchDstPort(port, nil).
@@ -210,8 +200,8 @@ func (c *client) UninstallVMUplinkFlows(hostIFName string) error {
 	return c.deleteFlows(c.featureExternalNodeConnectivity.uplinkFlowCache, hostIFName)
 }
 
-func (c *client) InstallPolicyBypassFlows(protocol binding.Protocol, ipnet *net.IPNet, ip net.IP, port uint16, isIngress bool) error {
-	flow := c.featureExternalNodeConnectivity.policyBypassFlow(protocol, ipnet, ip, port, isIngress)
+func (c *client) InstallPolicyBypassFlows(protocol binding.Protocol, ipNet *net.IPNet, port uint16, isIngress bool) error {
+	flow := c.featureExternalNodeConnectivity.policyBypassFlow(protocol, ipNet, port, isIngress)
 	if err := c.ofEntryOperations.Add(flow); err != nil {
 		return err
 	}

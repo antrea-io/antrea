@@ -895,3 +895,13 @@ func ReplaceNetNeighbor(neighbor *Neighbor) error {
 func VirtualAdapterName(name string) string {
 	return fmt.Sprintf("%s (%s)", ContainerVNICPrefix, name)
 }
+
+// TODO: Implement GetInterfaceConfig for Windows
+func GetInterfaceConfig(ifName string) (*net.Interface, []*net.IPNet, []interface{}, error) {
+	return nil, nil, nil, nil
+}
+
+// TODO: Implement RenameInterface for Windows
+func RenameInterface(from, to string) error {
+	return nil
+}
