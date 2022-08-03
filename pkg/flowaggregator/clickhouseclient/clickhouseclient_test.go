@@ -397,9 +397,10 @@ func TestBatchCommitAll(t *testing.T) {
 	defer db.Close()
 
 	chExportProc := ClickHouseExportProcess{
-		db:    db,
-		deque: deque.New(),
-		mutex: sync.RWMutex{},
+		db:        db,
+		deque:     deque.New(),
+		mutex:     sync.RWMutex{},
+		queueSize: maxQueueSize,
 	}
 
 	recordRow := ClickHouseFlowRow{
@@ -526,9 +527,10 @@ func TestBatchCommitAllMultiRecord(t *testing.T) {
 	defer db.Close()
 
 	chExportProc := ClickHouseExportProcess{
-		db:    db,
-		deque: deque.New(),
-		mutex: sync.RWMutex{},
+		db:        db,
+		deque:     deque.New(),
+		mutex:     sync.RWMutex{},
+		queueSize: maxQueueSize,
 	}
 	recordRow := ClickHouseFlowRow{}
 	fieldCount := reflect.TypeOf(recordRow).NumField()
@@ -564,9 +566,10 @@ func TestBatchCommitAllError(t *testing.T) {
 	defer db.Close()
 
 	chExportProc := ClickHouseExportProcess{
-		db:    db,
-		deque: deque.New(),
-		mutex: sync.RWMutex{},
+		db:        db,
+		deque:     deque.New(),
+		mutex:     sync.RWMutex{},
+		queueSize: maxQueueSize,
 	}
 	recordRow := ClickHouseFlowRow{}
 	chExportProc.deque.PushBack(&recordRow)
@@ -590,4 +593,42 @@ func TestBatchCommitAllError(t *testing.T) {
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Errorf("Exists unfulfilled expectations for db sql operation: %s", err)
 	}
+}
+
+func TestPushRecordsToFrontOfQueue(t *testing.T) {
+	chExportProc := ClickHouseExportProcess{
+		deque:     deque.New(),
+		mutex:     sync.RWMutex{},
+		queueSize: 4,
+	}
+
+	// init deque [0]
+	records := make([]*ClickHouseFlowRow, 5)
+	for i := 0; i < 5; i++ {
+		records[i] = &ClickHouseFlowRow{sourceTransportPort: uint16(i)}
+	}
+	chExportProc.deque.PushBack(records[0])
+
+	// all records should be pushed to front of deque if cap allows.
+	// deque before [0], cap: 4
+	// pushfront([1,2])
+	// expected deque: [1,2,0]
+	pushbackRecords := records[1:3]
+	chExportProc.pushRecordsToFrontOfQueue(pushbackRecords)
+	assert.Equal(t, 3, chExportProc.deque.Len(), "deque size mismatch")
+	assert.Equal(t, records[1], chExportProc.deque.At(0), "deque has wrong item at index 0")
+	assert.Equal(t, records[2], chExportProc.deque.At(1), "deque has wrong item at index 1")
+	assert.Equal(t, records[0], chExportProc.deque.At(2), "deque has wrong item at index 2")
+
+	// only newest items should be pushed to front of deque if hitting capacity.
+	// deque before [1,2,0], cap: 4
+	// pushfront([3,4])
+	// expected deque: [4,1,2,0]
+	pushbackRecords = records[3:]
+	chExportProc.pushRecordsToFrontOfQueue(pushbackRecords)
+	assert.Equal(t, 4, chExportProc.deque.Len(), "deque size mismatch")
+	assert.Equal(t, records[4], chExportProc.deque.At(0), "deque has wrong item at index 0")
+	assert.Equal(t, records[1], chExportProc.deque.At(1), "deque has wrong item at index 1")
+	assert.Equal(t, records[2], chExportProc.deque.At(2), "deque has wrong item at index 2")
+	assert.Equal(t, records[0], chExportProc.deque.At(3), "deque has wrong item at index 3")
 }

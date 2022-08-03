@@ -412,7 +412,9 @@ func (ch *ClickHouseExportProcess) flowRecordPeriodicCommit() {
 // Returns the number of records successfully committed, and error if encountered.
 // Cached records will be removed only after successful commit.
 func (ch *ClickHouseExportProcess) batchCommitAll() (int, error) {
+	ch.mutex.RLock()
 	currSize := ch.deque.Len()
+	ch.mutex.RUnlock()
 	if currSize == 0 {
 		return 0, nil
 	}
@@ -431,11 +433,20 @@ func (ch *ClickHouseExportProcess) batchCommitAll() (int, error) {
 	}
 
 	// populate items from deque
+	ch.mutex.Lock()
+	// currSize could have increased due to CacheSet being called in between.
+	currSize = ch.deque.Len()
+	recordsToExport := make([]*ClickHouseFlowRow, 0, currSize)
 	for i := 0; i < currSize; i++ {
-		record, ok := ch.deque.At(i).(*ClickHouseFlowRow)
+		record, ok := ch.deque.PopFront().(*ClickHouseFlowRow)
 		if !ok {
 			continue
 		}
+		recordsToExport = append(recordsToExport, record)
+	}
+	ch.mutex.Unlock()
+
+	for _, record := range recordsToExport {
 		_, err := stmt.Exec(
 			record.flowStartSeconds,
 			record.flowEndSeconds,
@@ -487,6 +498,7 @@ func (ch *ClickHouseExportProcess) batchCommitAll() (int, error) {
 
 		if err != nil {
 			klog.ErrorS(err, "Error when adding record")
+			ch.pushRecordsToFrontOfQueue(recordsToExport)
 			_ = tx.Rollback()
 			return 0, err
 		}
@@ -494,17 +506,25 @@ func (ch *ClickHouseExportProcess) batchCommitAll() (int, error) {
 
 	if err := tx.Commit(); err != nil {
 		klog.ErrorS(err, "Error when committing record")
+		ch.pushRecordsToFrontOfQueue(recordsToExport)
 		return 0, err
 	}
 
-	// remove committed record from deque
+	return len(recordsToExport), nil
+}
+
+// pushRecordsToFrontOfQueue pushes records to the front of deque without exceeding its capacity.
+// Items with lower index (older records) will be dropped first if deque is to be filled.
+func (ch *ClickHouseExportProcess) pushRecordsToFrontOfQueue(records []*ClickHouseFlowRow) {
 	ch.mutex.Lock()
 	defer ch.mutex.Unlock()
-	for i := 0; i < currSize; i++ {
-		ch.deque.PopFront()
-	}
 
-	return currSize, nil
+	for i := len(records) - 1; i >= 0; i-- {
+		if ch.deque.Len() >= ch.queueSize {
+			break
+		}
+		ch.deque.PushFront(records[i])
+	}
 }
 
 func PrepareConnection(input ClickHouseInput) (string, *sql.DB, error) {
