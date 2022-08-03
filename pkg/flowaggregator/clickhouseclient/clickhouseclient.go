@@ -15,6 +15,7 @@
 package clickhouseclient
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"strings"
@@ -82,6 +83,10 @@ const (
                            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 )
 
+type stopPayload struct {
+	flushQueue bool
+}
+
 type ClickHouseExportProcess struct {
 	// db holds sql connection struct to clickhouse db.
 	db *sql.DB
@@ -89,16 +94,21 @@ type ClickHouseExportProcess struct {
 	dsn string
 	// deque buffers flows records between batch commits.
 	deque *deque.Deque
-	// mutex is for concurrency between adding and removing records from deque.
-	mutex sync.RWMutex
+	// dequeMutex is for concurrency between adding and removing records from deque.
+	dequeMutex sync.Mutex
 	// queueSize is the max size of deque
 	queueSize int
 	// commitInterval is the interval between batch commits
 	commitInterval time.Duration
 	// stopCh is the channel to receive stop message
-	stopCh chan bool
+	stopCh chan stopPayload
+	// exportWg is to ensure that all messages have been flushed from the queue when we stop
+	exportWg sync.WaitGroup
 	// commitTicker is a ticker, containing a channel used to trigger batchCommitAll() for every commitInterval period
-	commitTicker *time.Ticker
+	commitTicker         *time.Ticker
+	exportProcessRunning bool
+	// mutex protects configuration state from concurrent access
+	mutex sync.Mutex
 }
 
 type ClickHouseInput struct {
@@ -187,7 +197,6 @@ type ClickHouseFlowRow struct {
 }
 
 func NewClickHouseClient(input ClickHouseInput) (*ClickHouseExportProcess, error) {
-
 	dsn, connect, err := PrepareConnection(input)
 	if err != nil {
 		return nil, err
@@ -197,21 +206,18 @@ func NewClickHouseClient(input ClickHouseInput) (*ClickHouseExportProcess, error
 		db:             connect,
 		dsn:            dsn,
 		deque:          deque.New(),
-		mutex:          sync.RWMutex{},
 		queueSize:      maxQueueSize,
 		commitInterval: input.CommitInterval,
-		stopCh:         make(chan bool),
 		commitTicker:   time.NewTicker(input.CommitInterval),
 	}
 	return chClient, nil
 }
 
-func (ch *ClickHouseExportProcess) CacheSet(set ipfixentities.Set) {
-	record := set.GetRecords()[0]
+func (ch *ClickHouseExportProcess) CacheRecord(record ipfixentities.Record) {
 	chRow := ch.getClickHouseFlowRow(record)
 
-	ch.mutex.Lock()
-	defer ch.mutex.Unlock()
+	ch.dequeMutex.Lock()
+	defer ch.dequeMutex.Unlock()
 	for ch.deque.Len() >= ch.queueSize {
 		ch.deque.PopFront()
 	}
@@ -219,12 +225,39 @@ func (ch *ClickHouseExportProcess) CacheSet(set ipfixentities.Set) {
 }
 
 func (ch *ClickHouseExportProcess) Start() {
-	go ch.flowRecordPeriodicCommit()
-	<-ch.stopCh
+	ch.startExportProcess()
 }
 
 func (ch *ClickHouseExportProcess) Stop() {
-	close(ch.stopCh)
+	ch.stopExportProcess(true)
+}
+
+func (ch *ClickHouseExportProcess) startExportProcess() {
+	ch.mutex.Lock()
+	defer ch.mutex.Unlock()
+	if ch.exportProcessRunning {
+		return
+	}
+	ch.exportProcessRunning = true
+	ch.stopCh = make(chan stopPayload, 1)
+	ch.exportWg.Add(1)
+	go func() {
+		defer ch.exportWg.Done()
+		ch.flowRecordPeriodicCommit()
+	}()
+}
+
+func (ch *ClickHouseExportProcess) stopExportProcess(flushQueue bool) {
+	ch.mutex.Lock()
+	defer ch.mutex.Unlock()
+	if !ch.exportProcessRunning {
+		return
+	}
+	ch.exportProcessRunning = false
+	ch.stopCh <- stopPayload{
+		flushQueue: flushQueue,
+	}
+	ch.exportWg.Wait()
 }
 
 func (ch *ClickHouseExportProcess) getClickHouseFlowRow(record ipfixentities.Record) *ClickHouseFlowRow {
@@ -380,24 +413,32 @@ func (ch *ClickHouseExportProcess) getClickHouseFlowRow(record ipfixentities.Rec
 }
 
 func (ch *ClickHouseExportProcess) flowRecordPeriodicCommit() {
+	klog.InfoS("Starting ClickHouse exporting process")
+	ctx := context.Background()
+	const flushTimeout = 10 * time.Second
 	logTicker := time.NewTicker(time.Minute)
+	defer logTicker.Stop()
+	defer ch.commitTicker.Stop()
 	committedRec := 0
 	for {
 		select {
-		case <-ch.stopCh:
+		case stop := <-ch.stopCh:
 			klog.InfoS("Stopping ClickHouse exporting process")
-			committed, err := ch.batchCommitAll()
+			if !stop.flushQueue {
+				return
+			}
+			ctx, cancelFn := context.WithTimeout(ctx, flushTimeout)
+			defer cancelFn()
+			committed, err := ch.batchCommitAll(ctx)
 			if err != nil {
-				klog.ErrorS(err, "Error when doing last batchCommitAll")
+				klog.ErrorS(err, "Error when doing batchCommitAll on stop")
 			} else {
 				committedRec += committed
 				klog.V(4).InfoS("Total number of records committed to DB", "count", committedRec)
 			}
-			ch.commitTicker.Stop()
-			logTicker.Stop()
 			return
 		case <-ch.commitTicker.C:
-			committed, err := ch.batchCommitAll()
+			committed, err := ch.batchCommitAll(ctx)
 			if err == nil {
 				committedRec += committed
 			}
@@ -411,10 +452,10 @@ func (ch *ClickHouseExportProcess) flowRecordPeriodicCommit() {
 // batchCommitAll commits all flow records cached in local deque in one INSERT query.
 // Returns the number of records successfully committed, and error if encountered.
 // Cached records will be removed only after successful commit.
-func (ch *ClickHouseExportProcess) batchCommitAll() (int, error) {
-	ch.mutex.RLock()
+func (ch *ClickHouseExportProcess) batchCommitAll(ctx context.Context) (int, error) {
+	ch.dequeMutex.Lock()
 	currSize := ch.deque.Len()
-	ch.mutex.RUnlock()
+	ch.dequeMutex.Unlock()
 	if currSize == 0 {
 		return 0, nil
 	}
@@ -422,9 +463,9 @@ func (ch *ClickHouseExportProcess) batchCommitAll() (int, error) {
 	var stmt *sql.Stmt
 
 	// start new connection
-	tx, err := ch.db.Begin()
+	tx, err := ch.db.BeginTx(ctx, nil)
 	if err == nil {
-		stmt, err = tx.Prepare(insertQuery)
+		stmt, err = tx.PrepareContext(ctx, insertQuery)
 	}
 	if err != nil {
 		klog.ErrorS(err, "Error when preparing insert statement")
@@ -433,7 +474,7 @@ func (ch *ClickHouseExportProcess) batchCommitAll() (int, error) {
 	}
 
 	// populate items from deque
-	ch.mutex.Lock()
+	ch.dequeMutex.Lock()
 	// currSize could have increased due to CacheSet being called in between.
 	currSize = ch.deque.Len()
 	recordsToExport := make([]*ClickHouseFlowRow, 0, currSize)
@@ -444,10 +485,11 @@ func (ch *ClickHouseExportProcess) batchCommitAll() (int, error) {
 		}
 		recordsToExport = append(recordsToExport, record)
 	}
-	ch.mutex.Unlock()
+	ch.dequeMutex.Unlock()
 
 	for _, record := range recordsToExport {
-		_, err := stmt.Exec(
+		_, err := stmt.ExecContext(
+			ctx,
 			record.flowStartSeconds,
 			record.flowEndSeconds,
 			record.flowEndSecondsFromSourceNode,
@@ -516,8 +558,8 @@ func (ch *ClickHouseExportProcess) batchCommitAll() (int, error) {
 // pushRecordsToFrontOfQueue pushes records to the front of deque without exceeding its capacity.
 // Items with lower index (older records) will be dropped first if deque is to be filled.
 func (ch *ClickHouseExportProcess) pushRecordsToFrontOfQueue(records []*ClickHouseFlowRow) {
-	ch.mutex.Lock()
-	defer ch.mutex.Unlock()
+	ch.dequeMutex.Lock()
+	defer ch.dequeMutex.Unlock()
 
 	for i := len(records) - 1; i >= 0; i-- {
 		if ch.deque.Len() >= ch.queueSize {
@@ -559,23 +601,30 @@ func (ch *ClickHouseExportProcess) GetDsnMap() map[string]string {
 	return m
 }
 
-func (ch *ClickHouseExportProcess) UpdateCH(input *ClickHouseExportProcess, dsn string, connect *sql.DB) {
-	input.mutex.Lock()
-	defer input.mutex.Unlock()
-	input.dsn = dsn
-	input.db = connect
+func (ch *ClickHouseExportProcess) UpdateCH(dsn string, connect *sql.DB) {
+	ch.stopExportProcess(false) // do not flush the queue
+	ch.mutex.Lock()
+	defer ch.mutex.Unlock()
+	ch.dsn = dsn
+	ch.db = connect
 }
 
 func (ch *ClickHouseExportProcess) GetCommitInterval() time.Duration {
+	ch.mutex.Lock()
+	defer ch.mutex.Unlock()
 	return ch.commitInterval
 }
 
 func (ch *ClickHouseExportProcess) SetCommitInterval(commitInterval time.Duration) {
+	ch.mutex.Lock()
+	defer ch.mutex.Unlock()
 	ch.commitInterval = commitInterval
 	ch.commitTicker.Reset(ch.commitInterval)
 }
 
 func (ch *ClickHouseExportProcess) GetDsn() string {
+	ch.mutex.Lock()
+	defer ch.mutex.Unlock()
 	return ch.dsn
 }
 

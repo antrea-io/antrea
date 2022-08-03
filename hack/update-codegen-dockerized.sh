@@ -54,6 +54,7 @@ function generate_mocks {
     "pkg/antctl AntctlClient ."
     "pkg/controller/networkpolicy EndpointQuerier testing"
     "pkg/controller/querier ControllerQuerier testing"
+    "pkg/flowaggregator/exporter Interface testing"
     "pkg/ipfix IPFIXExportingProcess,IPFIXRegistry,IPFIXCollectingProcess,IPFIXAggregationProcess testing"
     "pkg/ovs/openflow Bridge,Table,Flow,Action,CTAction,FlowBuilder testing"
     "pkg/ovs/ovsconfig OVSBridgeClient testing"
