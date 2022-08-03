@@ -96,16 +96,6 @@ func validateConfigExists(clusterID common.ClusterID, clusters []multiclusterv1a
 	return
 }
 
-func validateClusterSetNamespace(clusterSet *multiclusterv1alpha1.ClusterSet) (err error) {
-	//  validate the Namespace is the same
-	if clusterSet.Spec.Namespace != clusterSet.GetNamespace() {
-		err = fmt.Errorf("ClusterSet Namespace %s is different from %s",
-			clusterSet.Spec.Namespace, clusterSet.GetNamespace())
-		return
-	}
-	return
-}
-
 // findServiceCIDRByInvalidServiceCreation creates an invalid Service to get returned error, and analyzes
 // the error message to get Service CIDR.
 // TODO: add dual-stack support.
