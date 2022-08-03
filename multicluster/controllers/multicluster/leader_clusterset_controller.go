@@ -94,9 +94,6 @@ func (r *LeaderClusterSetReconciler) Reconcile(ctx context.Context, req ctrl.Req
 			err = fmt.Errorf("local cluster %s is not defined as leader in ClusterSet", clusterID)
 			return ctrl.Result{}, err
 		}
-		if err = validateClusterSetNamespace(clusterSet); err != nil {
-			return ctrl.Result{}, err
-		}
 		r.clusterID = clusterID
 		r.clusterSetID = clusterSetID
 	} else {
