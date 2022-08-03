@@ -20,7 +20,7 @@ require (
 	github.com/coreos/go-iptables v0.6.0
 	github.com/fsnotify/fsnotify v1.5.4
 	github.com/gammazero/deque v0.1.2
-	github.com/go-logr/logr v1.2.0
+	github.com/go-logr/logr v1.2.3
 	github.com/gogo/protobuf v1.3.2
 	github.com/golang/mock v1.6.0
 	github.com/golang/protobuf v1.5.2
