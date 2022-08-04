@@ -695,7 +695,7 @@ func (c *client) NewDNSpacketInConjunction(id uint32) error {
 
 func (c *client) AddAddressToDNSConjunction(id uint32, addrs []types.Address) error {
 	dnsPriority := priorityDNSIntercept
-	return c.AddPolicyRuleAddress(id, types.DstAddress, addrs, &dnsPriority)
+	return c.AddPolicyRuleAddress(id, types.DstAddress, addrs, &dnsPriority, false)
 }
 
 func (c *client) DeleteAddressFromDNSConjunction(id uint32, addrs []types.Address) error {
@@ -729,6 +729,13 @@ func (c *clause) addConjunctiveMatchFlow(featureNetworkPolicy *featureNetworkPol
 			dropFlow = &flowChange{
 				flow:       context.featureNetworkPolicy.defaultDropFlow(c.dropTable, match.matchPairs, enableLogging),
 				changeType: insertion,
+			}
+		}
+	} else {
+		if c.dropTable != nil && context.dropFlow != nil {
+			dropFlow = &flowChange{
+				flow:       context.featureNetworkPolicy.defaultDropFlow(c.dropTable, match.matchPairs, enableLogging),
+				changeType: modification,
 			}
 		}
 	}
@@ -1156,7 +1163,7 @@ func (f *featureNetworkPolicy) addRuleToConjunctiveMatch(conj *policyRuleConjunc
 		for _, eachService := range rule.Service {
 			matches := generateServiceConjMatches(conj.serviceClause.ruleTable.GetID(), eachService, rule.Priority, f.ipProtocols, false)
 			for _, match := range matches {
-				f.addActionToConjunctiveMatch(conj.serviceClause, match, false)
+				f.addActionToConjunctiveMatch(conj.serviceClause, match, rule.EnableLogging)
 			}
 		}
 	}
@@ -1377,7 +1384,7 @@ func (c *policyRuleConjunction) calculateChangesForRuleCreation(featureNetworkPo
 		ctxChanges = append(ctxChanges, c.toClause.addAddrFlows(featureNetworkPolicy, types.DstAddress, rule.To, rule.Priority, rule.EnableLogging)...)
 	}
 	if c.serviceClause != nil {
-		ctxChanges = append(ctxChanges, c.serviceClause.addServiceFlows(featureNetworkPolicy, rule.Service, rule.Priority, false)...)
+		ctxChanges = append(ctxChanges, c.serviceClause.addServiceFlows(featureNetworkPolicy, rule.Service, rule.Priority, rule.EnableLogging)...)
 	}
 	return ctxChanges
 }
@@ -1550,7 +1557,7 @@ func (f *featureNetworkPolicy) replayFlows() []binding.Flow {
 
 // AddPolicyRuleAddress adds one or multiple addresses to the specified NetworkPolicy rule. If addrType is srcAddress, the
 // addresses are added to PolicyRule.From, else to PolicyRule.To.
-func (c *client) AddPolicyRuleAddress(ruleID uint32, addrType types.AddressType, addresses []types.Address, priority *uint16) error {
+func (c *client) AddPolicyRuleAddress(ruleID uint32, addrType types.AddressType, addresses []types.Address, priority *uint16, enableLogging bool) error {
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
 
@@ -1569,7 +1576,7 @@ func (c *client) AddPolicyRuleAddress(ruleID uint32, addrType types.AddressType,
 
 	c.featureNetworkPolicy.conjMatchFlowLock.Lock()
 	defer c.featureNetworkPolicy.conjMatchFlowLock.Unlock()
-	flowChanges := clause.addAddrFlows(c.featureNetworkPolicy, addrType, addresses, priority, false)
+	flowChanges := clause.addAddrFlows(c.featureNetworkPolicy, addrType, addresses, priority, enableLogging)
 	return c.featureNetworkPolicy.applyConjunctiveMatchFlows(flowChanges)
 }
 

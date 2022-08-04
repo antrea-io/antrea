@@ -313,10 +313,10 @@ func TestReplayFlowsNetworkPolicyFlows(t *testing.T) {
 	err = c.InstallPolicyRuleFlows(rule)
 	require.Nil(t, err, "Failed to InstallPolicyRuleFlows")
 
-	err = c.AddPolicyRuleAddress(ruleID, types.SrcAddress, prepareIPNetAddresses([]string{"192.168.5.0/24", "192.169.1.0/24"}), nil)
+	err = c.AddPolicyRuleAddress(ruleID, types.SrcAddress, prepareIPNetAddresses([]string{"192.168.5.0/24", "192.169.1.0/24"}), nil, false)
 	require.Nil(t, err, "Failed to AddPolicyRuleAddress")
 	ofport := int32(100)
-	err = c.AddPolicyRuleAddress(ruleID, types.DstAddress, []types.Address{ofClient.NewOFPortAddress(ofport)}, nil)
+	err = c.AddPolicyRuleAddress(ruleID, types.DstAddress, []types.Address{ofClient.NewOFPortAddress(ofport)}, nil, false)
 	require.Nil(t, err, "Failed to AddPolicyRuleAddress")
 
 	testReplayFlows(t)
@@ -496,7 +496,7 @@ func TestNetworkPolicyFlows(t *testing.T) {
 	checkDeleteAddress(t, ingressRuleTable, priorityNormal, ruleID, addedFrom, types.SrcAddress)
 
 	ofport := int32(100)
-	err = c.AddPolicyRuleAddress(ruleID, types.DstAddress, []types.Address{ofClient.NewOFPortAddress(ofport)}, nil)
+	err = c.AddPolicyRuleAddress(ruleID, types.DstAddress, []types.Address{ofClient.NewOFPortAddress(ofport)}, nil, false)
 	require.Nil(t, err, "Failed to AddPolicyRuleAddress")
 
 	// Dump flows.
@@ -795,7 +795,7 @@ func checkDefaultDropFlows(t *testing.T, table string, priority int, addrType ty
 }
 
 func checkAddAddress(t *testing.T, ruleTable string, priority int, ruleID uint32, addedAddress []types.Address, addrType types.AddressType) {
-	err := c.AddPolicyRuleAddress(ruleID, addrType, addedAddress, nil)
+	err := c.AddPolicyRuleAddress(ruleID, addrType, addedAddress, nil, false)
 	require.Nil(t, err, "Failed to AddPolicyRuleAddress")
 
 	// dump flows

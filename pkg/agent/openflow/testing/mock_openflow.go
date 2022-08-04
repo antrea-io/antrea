@@ -71,17 +71,17 @@ func (mr *MockClientMockRecorder) AddAddressToDNSConjunction(arg0, arg1 interfac
 }
 
 // AddPolicyRuleAddress mocks base method
-func (m *MockClient) AddPolicyRuleAddress(arg0 uint32, arg1 types.AddressType, arg2 []types.Address, arg3 *uint16) error {
+func (m *MockClient) AddPolicyRuleAddress(arg0 uint32, arg1 types.AddressType, arg2 []types.Address, arg3 *uint16, arg4 bool) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AddPolicyRuleAddress", arg0, arg1, arg2, arg3)
+	ret := m.ctrl.Call(m, "AddPolicyRuleAddress", arg0, arg1, arg2, arg3, arg4)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // AddPolicyRuleAddress indicates an expected call of AddPolicyRuleAddress
-func (mr *MockClientMockRecorder) AddPolicyRuleAddress(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+func (mr *MockClientMockRecorder) AddPolicyRuleAddress(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddPolicyRuleAddress", reflect.TypeOf((*MockClient)(nil).AddPolicyRuleAddress), arg0, arg1, arg2, arg3)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddPolicyRuleAddress", reflect.TypeOf((*MockClient)(nil).AddPolicyRuleAddress), arg0, arg1, arg2, arg3, arg4)
 }
 
 // BatchInstallPolicyRuleFlows mocks base method
