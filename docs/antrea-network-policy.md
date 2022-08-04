@@ -1311,11 +1311,12 @@ only a NodePort Service can be referred by `service` field.
 
 There are a few **restrictions** on configuring a policy/rule that applies to NodePort Services:
 
-1. `service` field cannot be used with any other fields in `appliedTo`.
-2. a policy or a rule can't be applied to both a NodePort Service and other entities at the same time.
-3. If a `appliedTo` with `service` is used at policy level, then this policy can only contain ingress rules.
-4. If a `appliedTo` with `service` is used at rule level, then this rule can only be an ingress rule.
-5. If an ingress rule is applied to a NodePort Service, then this rule can only use `ipBlock` in its `from` field.
+1. This feature can only work when Antrea proxyAll is enabled and kube-proxy is disabled.
+2. `service` field cannot be used with any other fields in `appliedTo`.
+3. a policy or a rule can't be applied to both a NodePort Service and other entities at the same time.
+4. If a `appliedTo` with `service` is used at policy level, then this policy can only contain ingress rules.
+5. If a `appliedTo` with `service` is used at rule level, then this rule can only be an ingress rule.
+6. If an ingress rule is applied to a NodePort Service, then this rule can only use `ipBlock` in its `from` field.
 
 An example policy using `service` in `appliedTo` could look like this:
 
