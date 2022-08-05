@@ -317,7 +317,7 @@ func (fa *flowAggregator) flowExportLoop(stopCh <-chan struct{}) {
 		case <-logTicker.C:
 			// Add visibility of processing stats of Flow Aggregator
 			klog.V(4).InfoS("Total number of records received", "count", fa.collectingProcess.GetNumRecordsReceived())
-			klog.V(4).InfoS("Total number of records exported", "count", fa.numRecordsExported)
+			klog.V(4).InfoS("Total number of records exported by each active exporter", "count", fa.numRecordsExported)
 			klog.V(4).InfoS("Total number of flows stored in Flow Aggregator", "count", fa.aggregationProcess.GetNumFlows())
 			klog.V(4).InfoS("Number of exporters connected with Flow Aggregator", "count", fa.collectingProcess.GetNumConnToCollector())
 		case opt := <-fa.updateCh:

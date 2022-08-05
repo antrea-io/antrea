@@ -208,7 +208,6 @@ func NewClickHouseClient(input ClickHouseInput) (*ClickHouseExportProcess, error
 		deque:          deque.New(),
 		queueSize:      maxQueueSize,
 		commitInterval: input.CommitInterval,
-		commitTicker:   time.NewTicker(input.CommitInterval),
 	}
 	return chClient, nil
 }
@@ -239,6 +238,7 @@ func (ch *ClickHouseExportProcess) startExportProcess() {
 		return
 	}
 	ch.exportProcessRunning = true
+	ch.commitTicker = time.NewTicker(ch.commitInterval)
 	ch.stopCh = make(chan stopPayload, 1)
 	ch.exportWg.Add(1)
 	go func() {
@@ -254,6 +254,7 @@ func (ch *ClickHouseExportProcess) stopExportProcess(flushQueue bool) {
 		return
 	}
 	ch.exportProcessRunning = false
+	defer ch.commitTicker.Stop()
 	ch.stopCh <- stopPayload{
 		flushQueue: flushQueue,
 	}
@@ -418,7 +419,6 @@ func (ch *ClickHouseExportProcess) flowRecordPeriodicCommit() {
 	const flushTimeout = 10 * time.Second
 	logTicker := time.NewTicker(time.Minute)
 	defer logTicker.Stop()
-	defer ch.commitTicker.Stop()
 	committedRec := 0
 	for {
 		select {
@@ -603,6 +603,7 @@ func (ch *ClickHouseExportProcess) GetDsnMap() map[string]string {
 
 func (ch *ClickHouseExportProcess) UpdateCH(dsn string, connect *sql.DB) {
 	ch.stopExportProcess(false) // do not flush the queue
+	defer ch.startExportProcess()
 	ch.mutex.Lock()
 	defer ch.mutex.Unlock()
 	ch.dsn = dsn
@@ -619,7 +620,9 @@ func (ch *ClickHouseExportProcess) SetCommitInterval(commitInterval time.Duratio
 	ch.mutex.Lock()
 	defer ch.mutex.Unlock()
 	ch.commitInterval = commitInterval
-	ch.commitTicker.Reset(ch.commitInterval)
+	if ch.commitTicker != nil {
+		ch.commitTicker.Reset(ch.commitInterval)
+	}
 }
 
 func (ch *ClickHouseExportProcess) GetDsn() string {

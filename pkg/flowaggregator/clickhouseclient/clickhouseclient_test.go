@@ -32,6 +32,7 @@ import (
 	ipfixentitiestesting "github.com/vmware/go-ipfix/pkg/entities/testing"
 	"github.com/vmware/go-ipfix/pkg/registry"
 	ipfixregistry "github.com/vmware/go-ipfix/pkg/registry"
+	"k8s.io/apimachinery/pkg/util/wait"
 )
 
 func init() {
@@ -617,21 +618,16 @@ func TestFlushCacheOnStop(t *testing.T) {
 	defer db.Close()
 
 	// something arbitrarily large
-	commitInterval := time.Hour
+	const commitInterval = time.Hour
 
 	chExportProc := ClickHouseExportProcess{
 		db:             db,
 		deque:          deque.New(),
 		queueSize:      maxQueueSize,
 		commitInterval: commitInterval,
-		commitTicker:   time.NewTicker(commitInterval),
 	}
-	// Stop() is already called by chExportProc.Stop() but this is to be on
-	// the safe side and Stop() can be called multiple times safely.
-	defer chExportProc.commitTicker.Stop()
 
 	recordRow := getTestClickHouseFlowRow()
-
 	chExportProc.deque.PushBack(recordRow)
 
 	mock.ExpectBegin()
@@ -645,4 +641,63 @@ func TestFlushCacheOnStop(t *testing.T) {
 	chExportProc.Stop()
 
 	assert.NoError(t, mock.ExpectationsWereMet(), "unfulfilled expectations for db sql operation")
+}
+
+func TestUpdateCH(t *testing.T) {
+	db1, mock1, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherEqual))
+	require.NoError(t, err, "error when opening a stub database connection")
+	defer db1.Close()
+
+	db2, mock2, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherEqual))
+	require.NoError(t, err, "error when opening a stub database connection")
+	defer db2.Close()
+
+	// something small for the sake of the test
+	const commitInterval = 100 * time.Millisecond
+
+	chExportProc := ClickHouseExportProcess{
+		db:             db1,
+		deque:          deque.New(),
+		queueSize:      maxQueueSize,
+		commitInterval: commitInterval,
+	}
+
+	recordRow := getTestClickHouseFlowRow()
+	func() {
+		// commitTicker is ticking so the export process may be
+		// accessing the queue at the same time.
+		chExportProc.dequeMutex.Lock()
+		defer chExportProc.dequeMutex.Unlock()
+		chExportProc.deque.PushBack(recordRow)
+	}()
+
+	mock1.ExpectBegin()
+	mock1.ExpectPrepare(insertQuery).ExpectExec().WillReturnResult(sqlmock.NewResult(0, 1))
+	mock1.ExpectCommit()
+
+	chExportProc.Start()
+	defer chExportProc.Stop()
+
+	require.NoError(t, wait.Poll(commitInterval, time.Second, func() (bool, error) {
+		err := mock1.ExpectationsWereMet()
+		return (err == nil), nil
+	}), "timeout while waiting for first flow record to be committed (before DB connection update)")
+
+	mock2.ExpectBegin()
+	mock2.ExpectPrepare(insertQuery).ExpectExec().WillReturnResult(sqlmock.NewResult(0, 1))
+	mock2.ExpectCommit()
+
+	t.Logf("Calling UpdateCH to update DB connection")
+	chExportProc.UpdateCH("", db2)
+
+	func() {
+		chExportProc.dequeMutex.Lock()
+		defer chExportProc.dequeMutex.Unlock()
+		chExportProc.deque.PushBack(recordRow)
+	}()
+
+	require.NoError(t, wait.Poll(commitInterval, time.Second, func() (bool, error) {
+		err := mock2.ExpectationsWereMet()
+		return (err == nil), nil
+	}), "timeout while waiting for second flow record to be committed (after DB connection update)")
 }

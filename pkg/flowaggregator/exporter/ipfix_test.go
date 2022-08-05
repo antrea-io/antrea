@@ -15,17 +15,21 @@
 package exporter
 
 import (
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/gammazero/deque"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
 	ipfixentitiestesting "github.com/vmware/go-ipfix/pkg/entities/testing"
 	ipfixregistry "github.com/vmware/go-ipfix/pkg/registry"
+	"k8s.io/apimachinery/pkg/util/wait"
 
 	"antrea.io/antrea/pkg/flowaggregator/infoelements"
+	"antrea.io/antrea/pkg/flowaggregator/options"
 	ipfixtesting "antrea.io/antrea/pkg/ipfix/testing"
 )
 
@@ -190,4 +194,94 @@ func TestFlushQueueOnStop(t *testing.T) {
 	// we delay the SendSet call above.
 	ipfixExporter.Stop()
 	assert.True(t, sendCompleted, "queue not flushed on stop")
+}
+
+func TestUpdateOptions(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockIPFIXExpProc := ipfixtesting.NewMockIPFIXExportingProcess(ctrl)
+	mockIPFIXRegistry := ipfixtesting.NewMockIPFIXRegistry(ctrl)
+	mockTempSet := ipfixentitiestesting.NewMockSet(ctrl)
+	mockRecord := ipfixentitiestesting.NewMockRecord(ctrl)
+
+	// we override the initIPFIXExportingProcess var function: it will
+	// simply set the exportingProcess member field of the ipfixExporter to
+	// our mock instance.
+	// note that even though we "update" the external flow collector address
+	// as part of the test, we still use the same mock for simplicity's sake.
+	initIPFIXExportingProcessSaved := initIPFIXExportingProcess
+	initIPFIXExportingProcess = func(exporter *IPFIXExporter) error {
+		exporter.exportingProcess = mockIPFIXExpProc
+		return nil
+	}
+	defer func() {
+		initIPFIXExportingProcess = initIPFIXExportingProcessSaved
+	}()
+
+	ipfixExporter := IPFIXExporter{
+		externalFlowCollectorAddr:  "",
+		externalFlowCollectorProto: "",
+		templateIDv4:               testTemplateIDv4,
+		templateIDv6:               testTemplateIDv6,
+		registry:                   mockIPFIXRegistry,
+		set:                        mockTempSet,
+		observationDomainID:        testObservationDomainID,
+		deque:                      deque.New(),
+		queueSize:                  maxQueueSize,
+		// something small for the test
+		sendInterval: 100 * time.Millisecond,
+	}
+	testTemplateID := testTemplateIDv4
+
+	qRecord := queuedRecord{
+		record:       mockRecord,
+		isRecordIPv6: false,
+	}
+
+	var setCount int32
+	mockTempSet.EXPECT().ResetSet().Times(2)
+	mockTempSet.EXPECT().PrepareSet(gomock.Any(), testTemplateID).Return(nil).Times(2)
+	mockRecord.EXPECT().GetOrderedElementList().Return(nil).Times(2)
+	mockTempSet.EXPECT().AddRecord(gomock.Any(), testTemplateID).Return(nil).Times(2)
+	mockIPFIXExpProc.EXPECT().SendSet(mockTempSet).Do(func(set interface{}) {
+		atomic.AddInt32(&setCount, 1)
+	}).Return(0, nil).Times(2)
+	mockIPFIXExpProc.EXPECT().CloseConnToCollector().Times(2)
+
+	func() {
+		ipfixExporter.dequeMutex.Lock()
+		defer ipfixExporter.dequeMutex.Unlock()
+		ipfixExporter.deque.PushBack(qRecord)
+	}()
+
+	ipfixExporter.Start()
+	defer ipfixExporter.Stop()
+
+	require.NoError(t, wait.Poll(ipfixExporter.sendInterval, time.Second, func() (bool, error) {
+		return (atomic.LoadInt32(&setCount) >= 1), nil
+	}), "timeout while waiting for first flow record to be sent (before options update)")
+
+	const newAddr = "newAddr"
+	const newProto = "newProto"
+
+	ipfixExporter.UpdateOptions(&options.Options{
+		ExternalFlowCollectorAddr:  newAddr,
+		ExternalFlowCollectorProto: newProto,
+	})
+
+	func() {
+		ipfixExporter.dequeMutex.Lock()
+		defer ipfixExporter.dequeMutex.Unlock()
+		ipfixExporter.deque.PushBack(qRecord)
+	}()
+
+	require.NoError(t, wait.Poll(ipfixExporter.sendInterval, time.Second, func() (bool, error) {
+		return (atomic.LoadInt32(&setCount) >= 2), nil
+	}), "timeout while waiting for second flow record to be sent (after options update)")
+
+	assert.Equal(t, newAddr, ipfixExporter.externalFlowCollectorAddr)
+	assert.Equal(t, newProto, ipfixExporter.externalFlowCollectorProto)
+
+	assert.EqualValues(t, 2, setCount, "Invalid number of flow sets sent by exporter")
 }

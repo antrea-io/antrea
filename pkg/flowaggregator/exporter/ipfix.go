@@ -45,6 +45,13 @@ type stopPayload struct {
 	flushQueue bool
 }
 
+// this is used for unit testing
+var (
+	initIPFIXExportingProcess = func(exporter *IPFIXExporter) error {
+		return exporter.initExportingProcess()
+	}
+)
+
 type IPFIXExporter struct {
 	externalFlowCollectorAddr  string
 	externalFlowCollectorProto string
@@ -228,6 +235,12 @@ func (e *IPFIXExporter) runExportingProcess() {
 	const flushTimeout = 5 * time.Second
 	sendTimer := time.NewTimer(e.sendInterval)
 	defer sendTimer.Stop()
+	defer func() {
+		if e.exportingProcess != nil {
+			e.exportingProcess.CloseConnToCollector()
+			e.exportingProcess = nil
+		}
+	}()
 	for {
 		select {
 		case stop := <-e.stopCh:
@@ -242,12 +255,10 @@ func (e *IPFIXExporter) runExportingProcess() {
 			if err := e.sendAllQueuedRecords(ctx); err != nil {
 				klog.ErrorS(err, "Error when flushing queued records, some records may be lost")
 			}
-			e.exportingProcess.CloseConnToCollector()
-			e.exportingProcess = nil
 			return
 		case <-sendTimer.C:
 			if e.exportingProcess == nil {
-				if err := e.initExportingProcess(); err != nil {
+				if err := initIPFIXExportingProcess(e); err != nil {
 					klog.ErrorS(err, "Error when initializing exporting process", "wait time for retry", initRetryDelay)
 					sendTimer.Reset(initRetryDelay)
 					continue
