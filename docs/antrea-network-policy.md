@@ -659,6 +659,8 @@ for all NetworkPolicies in the Namespace. Packets of any connection that match
 a NetworkPolicy rule will be logged with a reference to the NetworkPolicy name,
 but packets dropped by the implicit "default drop" (not allowed by any NetworkPolicy)
 will only be logged with consistent name `K8sNetworkPolicy` for reference.
+Note that currently, Antrea only retrieves the logging Annotation once when adding
+NetworkPolicies and in case of agent restart, it does not monitor Annotation updates.
 The rules are logged in the following format:
 
 ```text

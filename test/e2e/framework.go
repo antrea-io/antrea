@@ -613,11 +613,7 @@ func (data *TestData) CreateNamespace(namespace string, mutateFunc func(*corev1.
 }
 
 func (data *TestData) UpdateNamespace(namespace string, mutateFunc func(*corev1.Namespace)) error {
-	ns := &corev1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: namespace,
-		},
-	}
+	ns, _ := data.clientset.CoreV1().Namespaces().Get(context.TODO(), namespace, metav1.GetOptions{})
 	if mutateFunc != nil {
 		mutateFunc(ns)
 	}

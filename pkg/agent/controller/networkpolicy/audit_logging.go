@@ -205,7 +205,7 @@ func getNetworkPolicyInfo(pktIn *ofctrl.PacketIn, c *Controller, ob *logInfo) er
 		}
 		ob.npRef, ob.ofPriority = c.ofClient.GetPolicyInfoFromConjunction(info)
 	} else {
-		// For K8s NetworkPolicy implicit drop action, we cannot get name/namespace.
+		// For K8s NetworkPolicy implicit drop action, we cannot get Namespace/name.
 		ob.npRef, ob.ofPriority = string(v1beta2.K8sNetworkPolicy), "-1"
 	}
 	return nil

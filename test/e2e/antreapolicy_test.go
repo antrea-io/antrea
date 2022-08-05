@@ -2123,7 +2123,9 @@ func testAuditLoggingEnableNP(t *testing.T, data *TestData) {
 		t.Errorf("Error when polling audit log files for required entries: %v", err)
 	}
 	failOnError(k8sUtils.DeleteNetworkPolicy(namespaces["x"], "allow-x-b-to-x-a"), t)
-	data.updateNamespaceWithAnnotations(namespaces["x"], map[string]string{})
+	data.UpdateNamespace(namespaces["x"], func(namespace *v1.Namespace) {
+		delete(namespace.Annotations, networkpolicy.EnableNPLoggingAnnotationKey)
+	})
 }
 
 func testAppliedToPerRule(t *testing.T) {
