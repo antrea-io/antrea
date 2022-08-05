@@ -71,15 +71,8 @@ test-unit: fmt vet .coverage
 	go test -race -coverprofile=.coverage/coverage-unit.txt -covermode=atomic -cover antrea.io/antrea/multicluster/controllers/multicluster/...
 test-integration: .coverage
 	@echo "==> Running Multi-cluster integration tests <=="
-ifneq ($(NO_LOCAL),)
-	@echo "===> Building Antrea Multi-cluster Integration Test Docker image <==="
-	docker build -t antrea/mc-test -f build/images/test/Dockerfile $(DOCKER_BUILD_ARGS) .
-	$(CURDIR)/hack/verify-tools.sh "/home/jenkins"
-	$(CURDIR)/hack/mc-integration-test.sh "/home/jenkins"
-else
 	$(CURDIR)/hack/verify-tools.sh
 	$(CURDIR)/hack/mc-integration-test.sh
-endif
 ##@ Build
 
 build: fmt vet ## Build manager binary.
