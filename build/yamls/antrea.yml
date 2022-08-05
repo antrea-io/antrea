@@ -3514,6 +3514,7 @@ rules:
       - ippools/status
     verbs:
       - update
+      - patch
   - apiGroups:
       - apps
     resources:
