@@ -26,6 +26,6 @@ import (
 type Interface interface {
 	Start()
 	Stop()
-	AddRecord(record ipfixentities.Record, isRecordIPv6 bool)
+	AddRecord(record ipfixentities.Record, isRecordIPv6 bool) error
 	UpdateOptions(opt *options.Options)
 }

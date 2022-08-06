@@ -337,10 +337,14 @@ func (fa *flowAggregator) sendFlowKeyRecord(key ipfixintermediate.FlowKey, recor
 		fa.aggregationProcess.SetExternalFieldsFilled(record)
 	}
 	if fa.ipfixExporter != nil {
-		fa.ipfixExporter.AddRecord(record.Record, !isRecordIPv4)
+		if err := fa.ipfixExporter.AddRecord(record.Record, !isRecordIPv4); err != nil {
+			return err
+		}
 	}
 	if fa.clickHouseExporter != nil {
-		fa.clickHouseExporter.AddRecord(record.Record, !isRecordIPv4)
+		if err := fa.clickHouseExporter.AddRecord(record.Record, !isRecordIPv4); err != nil {
+			return err
+		}
 	}
 	if err := fa.aggregationProcess.ResetStatAndThroughputElementsInRecord(record.Record); err != nil {
 		return err

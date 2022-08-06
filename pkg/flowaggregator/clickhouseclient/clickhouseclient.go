@@ -30,8 +30,9 @@ import (
 )
 
 const (
-	maxQueueSize = 1 << 19 // 524288. ~500MB assuming 1KB per record
-	insertQuery  = `INSERT INTO flows (
+	maxQueueSize      = 1 << 19 // 524288. ~500MB assuming 1KB per record
+	queueFlushTimeout = 10 * time.Second
+	insertQuery       = `INSERT INTO flows (
                    flowStartSeconds,
                    flowEndSeconds,
                    flowEndSecondsFromSourceNode,
@@ -416,7 +417,6 @@ func (ch *ClickHouseExportProcess) getClickHouseFlowRow(record ipfixentities.Rec
 func (ch *ClickHouseExportProcess) flowRecordPeriodicCommit() {
 	klog.InfoS("Starting ClickHouse exporting process")
 	ctx := context.Background()
-	const flushTimeout = 10 * time.Second
 	logTicker := time.NewTicker(time.Minute)
 	defer logTicker.Stop()
 	committedRec := 0
@@ -427,7 +427,7 @@ func (ch *ClickHouseExportProcess) flowRecordPeriodicCommit() {
 			if !stop.flushQueue {
 				return
 			}
-			ctx, cancelFn := context.WithTimeout(ctx, flushTimeout)
+			ctx, cancelFn := context.WithTimeout(ctx, queueFlushTimeout)
 			defer cancelFn()
 			committed, err := ch.batchCommitAll(ctx)
 			if err != nil {

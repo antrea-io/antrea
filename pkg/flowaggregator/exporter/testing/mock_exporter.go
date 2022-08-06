@@ -50,9 +50,11 @@ func (m *MockInterface) EXPECT() *MockInterfaceMockRecorder {
 }
 
 // AddRecord mocks base method
-func (m *MockInterface) AddRecord(arg0 entities.Record, arg1 bool) {
+func (m *MockInterface) AddRecord(arg0 entities.Record, arg1 bool) error {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "AddRecord", arg0, arg1)
+	ret := m.ctrl.Call(m, "AddRecord", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
 }
 
 // AddRecord indicates an expected call of AddRecord

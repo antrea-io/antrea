@@ -54,8 +54,9 @@ func NewClickHouseExporter(opt *options.Options) (*ClickHouseExporter, error) {
 	}, nil
 }
 
-func (e *ClickHouseExporter) AddRecord(record ipfixentities.Record, isRecordIPv6 bool) {
+func (e *ClickHouseExporter) AddRecord(record ipfixentities.Record, isRecordIPv6 bool) error {
 	e.chExportProcess.CacheRecord(record)
+	return nil
 }
 
 func (e *ClickHouseExporter) Start() {

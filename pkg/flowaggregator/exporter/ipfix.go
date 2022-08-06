@@ -15,13 +15,11 @@
 package exporter
 
 import (
-	"context"
 	"fmt"
 	"hash/fnv"
 	"sync"
 	"time"
 
-	"github.com/gammazero/deque"
 	"github.com/google/uuid"
 	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
 	"github.com/vmware/go-ipfix/pkg/exporter"
@@ -35,15 +33,6 @@ import (
 	"antrea.io/antrea/pkg/flowaggregator/options"
 	"antrea.io/antrea/pkg/ipfix"
 )
-
-const (
-	maxQueueSize = 1 << 16 // 65536. ~50MB assuming 1KB per record
-	sendInterval = 1 * time.Second
-)
-
-type stopPayload struct {
-	flushQueue bool
-}
 
 // this is used for unit testing
 var (
@@ -63,25 +52,8 @@ type IPFIXExporter struct {
 	templateIDv6               uint16
 	set                        ipfixentities.Set
 	registry                   ipfix.IPFIXRegistry
-	exportingProcessRunning    bool
 	// mutex protects configuration state from concurrent access
 	mutex sync.Mutex
-	// deque buffers flows records between batch commits.
-	deque *deque.Deque
-	// dequeMutex is for concurrency between adding and removing records from deque.
-	dequeMutex sync.Mutex
-	// queueSize is the max size of deque
-	queueSize    int
-	sendInterval time.Duration
-	// stopCh is the channel to receive stop message
-	stopCh chan stopPayload
-	// exportWg is to ensure that all messages have been flushed from the queue when we stop
-	exportWg sync.WaitGroup
-}
-
-type queuedRecord struct {
-	record       ipfixentities.Record
-	isRecordIPv6 bool
 }
 
 // genObservationDomainID generates an IPFIX Observation Domain ID when one is not provided by the
@@ -148,147 +120,29 @@ func NewIPFIXExporter(
 		observationDomainID:        observationDomainID,
 		registry:                   registry,
 		set:                        ipfixentities.NewSet(false),
-		deque:                      deque.New(),
-		queueSize:                  maxQueueSize,
-		sendInterval:               sendInterval,
 	}
 
 	return exporter
 }
 
 func (e *IPFIXExporter) Start() {
-	e.startExportingProcess()
+	// no-op
 }
 
 func (e *IPFIXExporter) Stop() {
-	e.stopExportingProcess(true)
+	// no-op
 }
 
-func (e *IPFIXExporter) startExportingProcess() {
-	e.mutex.Lock()
-	defer e.mutex.Unlock()
-	if e.exportingProcessRunning {
-		return
-	}
-	e.exportingProcessRunning = true
-	e.stopCh = make(chan stopPayload, 1)
-	e.exportWg.Add(1)
-	go func() {
-		defer e.exportWg.Done()
-		e.runExportingProcess()
-	}()
-}
-
-func (e *IPFIXExporter) stopExportingProcess(flushQueue bool) {
-	e.mutex.Lock()
-	defer e.mutex.Unlock()
-	if !e.exportingProcessRunning {
-		return
-	}
-	e.exportingProcessRunning = false
-	e.stopCh <- stopPayload{
-		flushQueue: flushQueue,
-	}
-	e.exportWg.Wait()
-}
-
-// sendFirstQueuedRecord returns true if the function is invoked but the queue
-// is empty.
-func (e *IPFIXExporter) sendFirstQueuedRecord() (bool, error) {
-	e.dequeMutex.Lock()
-	defer e.dequeMutex.Unlock()
-	if e.deque.Len() == 0 {
-		return true, nil
-	}
-	qRecord := e.deque.At(0).(queuedRecord)
-	err := e.sendRecord(qRecord.record, qRecord.isRecordIPv6)
-	if err != nil {
-		return false, err
-	}
-	e.deque.PopFront()
-	// The queue may be empty now if the initial length was 1. However we
-	// don't return true. Instead, we just let the caller call
-	// sendFirstQueuedRecord again, at which point we will return true.
-	return false, nil
-}
-
-func (e *IPFIXExporter) sendAllQueuedRecords(ctx context.Context) error {
-	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-			empty, err := e.sendFirstQueuedRecord()
-			if err != nil {
-				return err
-			}
-			if empty {
-				return nil
-			}
-		}
-	}
-}
-
-func (e *IPFIXExporter) runExportingProcess() {
-	ctx := context.Background()
-	const initRetryDelay = 10 * time.Second
-	const flushTimeout = 5 * time.Second
-	sendTimer := time.NewTimer(e.sendInterval)
-	defer sendTimer.Stop()
-	defer func() {
+func (e *IPFIXExporter) AddRecord(record ipfixentities.Record, isRecordIPv6 bool) error {
+	if err := e.sendRecord(record, isRecordIPv6); err != nil {
 		if e.exportingProcess != nil {
 			e.exportingProcess.CloseConnToCollector()
 			e.exportingProcess = nil
 		}
-	}()
-	for {
-		select {
-		case stop := <-e.stopCh:
-			if !stop.flushQueue {
-				return
-			}
-			if e.exportingProcess == nil {
-				return
-			}
-			ctx, cancelFn := context.WithTimeout(ctx, flushTimeout)
-			defer cancelFn()
-			if err := e.sendAllQueuedRecords(ctx); err != nil {
-				klog.ErrorS(err, "Error when flushing queued records, some records may be lost")
-			}
-			return
-		case <-sendTimer.C:
-			if e.exportingProcess == nil {
-				if err := initIPFIXExportingProcess(e); err != nil {
-					klog.ErrorS(err, "Error when initializing exporting process", "wait time for retry", initRetryDelay)
-					sendTimer.Reset(initRetryDelay)
-					continue
-				}
-			}
-			if err := e.sendAllQueuedRecords(ctx); err != nil {
-				// If there is an error when sending flow records because of intermittent connectivity, we reset the connection
-				// to IPFIX collector and retry in the next export cycle to reinitialize the connection and send flow records.
-				klog.ErrorS(err, "Error when sending queued records")
-				e.exportingProcess.CloseConnToCollector()
-				e.exportingProcess = nil
-			}
-			sendTimer.Reset(time.Second)
-		}
+		// in case of error, the FlowAggregator flowExportLoop will retry after activeFlowRecordTimeout
+		return fmt.Errorf("error when sending IPFIX record: %v", err)
 	}
-}
-
-func (e *IPFIXExporter) AddRecord(record ipfixentities.Record, isRecordIPv6 bool) {
-	e.dequeMutex.Lock()
-	defer e.dequeMutex.Unlock()
-	if e.deque.Len() >= e.queueSize {
-		klog.V(2).InfoS("Queue for IPFIX exporter is full, dropping records")
-	}
-	for e.deque.Len() >= e.queueSize {
-		e.deque.PopFront()
-	}
-	e.deque.PushBack(queuedRecord{
-		record:       record,
-		isRecordIPv6: isRecordIPv6,
-	})
+	return nil
 }
 
 func (e *IPFIXExporter) updateExternalFlowCollectorAddr(address, protocol string) {
@@ -296,11 +150,13 @@ func (e *IPFIXExporter) updateExternalFlowCollectorAddr(address, protocol string
 		return
 	}
 	klog.InfoS("Updating flow-collector address")
-	e.stopExportingProcess(false)
 	e.externalFlowCollectorAddr = address
 	e.externalFlowCollectorProto = protocol
 	klog.InfoS("Config ExternalFlowCollectorAddr is changed", "address", e.externalFlowCollectorAddr, "protocol", e.externalFlowCollectorProto)
-	e.startExportingProcess()
+	if e.exportingProcess != nil {
+		e.exportingProcess.CloseConnToCollector()
+		e.exportingProcess = nil
+	}
 }
 
 func (e *IPFIXExporter) UpdateOptions(opt *options.Options) {
@@ -312,6 +168,14 @@ func (e *IPFIXExporter) sendRecord(record ipfixentities.Record, isRecordIPv6 boo
 	if isRecordIPv6 {
 		templateID = e.templateIDv6
 	}
+
+	if e.exportingProcess == nil {
+		if err := initIPFIXExportingProcess(e); err != nil {
+			// in case of error, the FlowAggregator flowExportLoop will retry after activeFlowRecordTimeout
+			return fmt.Errorf("error when initializing IPFIX exporting process: %v", err)
+		}
+	}
+
 	// TODO: more records per data set will be supported when go-ipfix supports size check when adding records
 	e.set.ResetSet()
 	if err := e.set.PrepareSet(ipfixentities.Data, templateID); err != nil {
@@ -320,13 +184,11 @@ func (e *IPFIXExporter) sendRecord(record ipfixentities.Record, isRecordIPv6 boo
 	if err := e.set.AddRecord(record.GetOrderedElementList(), templateID); err != nil {
 		return err
 	}
-	if e.exportingProcess != nil {
-		sentBytes, err := e.exportingProcess.SendSet(e.set)
-		if err != nil {
-			return err
-		}
-		klog.V(4).InfoS("Data set sent successfully", "bytes sent", sentBytes)
+	sentBytes, err := e.exportingProcess.SendSet(e.set)
+	if err != nil {
+		return err
 	}
+	klog.V(4).InfoS("Data set sent successfully", "bytes sent", sentBytes)
 	return nil
 }
 
