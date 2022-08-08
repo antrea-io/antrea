@@ -23,6 +23,8 @@ import (
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
+	v1 "k8s.io/api/core/v1"
+	k8stypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
 
@@ -33,6 +35,7 @@ import (
 	"antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/agent/util"
 	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
+	"antrea.io/antrea/third_party/proxy"
 )
 
 var (
@@ -41,19 +44,19 @@ var (
 	ipv6AddressGroup1 = v1beta2.NewGroupMemberSet(newAddressGroupMember("2002:1a23:fb44::1"))
 	dualAddressGroup1 = v1beta2.NewGroupMemberSet(newAddressGroupMember("1.1.1.1", "2002:1a23:fb44::1"))
 
-	appliedToGroup1                     = v1beta2.NewGroupMemberSet(newAppliedToGroupMember("pod1", "ns1"))
-	appliedToGroup2                     = v1beta2.NewGroupMemberSet(newAppliedToGroupMember("pod2", "ns1"))
-	appliedToGroup3                     = v1beta2.NewGroupMemberSet(newAppliedToGroupMember("pod4", "ns1"))
+	appliedToGroup1                     = v1beta2.NewGroupMemberSet(newAppliedToGroupMemberPod("pod1", "ns1"))
+	appliedToGroup2                     = v1beta2.NewGroupMemberSet(newAppliedToGroupMemberPod("pod2", "ns1"))
+	appliedToGroup3                     = v1beta2.NewGroupMemberSet(newAppliedToGroupMemberPod("pod4", "ns1"))
 	appliedToGroupWithSameContainerPort = v1beta2.NewGroupMemberSet(
-		newAppliedToGroupMember("pod1", "ns1", v1beta2.NamedPort{Name: "http", Protocol: v1beta2.ProtocolTCP, Port: 80}),
-		newAppliedToGroupMember("pod3", "ns1", v1beta2.NamedPort{Name: "http", Protocol: v1beta2.ProtocolTCP, Port: 80}),
+		newAppliedToGroupMemberPod("pod1", "ns1", v1beta2.NamedPort{Name: "http", Protocol: v1beta2.ProtocolTCP, Port: 80}),
+		newAppliedToGroupMemberPod("pod3", "ns1", v1beta2.NamedPort{Name: "http", Protocol: v1beta2.ProtocolTCP, Port: 80}),
 	)
 	appliedToGroupWithDiffContainerPort = v1beta2.NewGroupMemberSet(
-		newAppliedToGroupMember("pod1", "ns1", v1beta2.NamedPort{Name: "http", Protocol: v1beta2.ProtocolTCP, Port: 80}),
-		newAppliedToGroupMember("pod3", "ns1", v1beta2.NamedPort{Name: "http", Protocol: v1beta2.ProtocolTCP, Port: 443}),
+		newAppliedToGroupMemberPod("pod1", "ns1", v1beta2.NamedPort{Name: "http", Protocol: v1beta2.ProtocolTCP, Port: 80}),
+		newAppliedToGroupMemberPod("pod3", "ns1", v1beta2.NamedPort{Name: "http", Protocol: v1beta2.ProtocolTCP, Port: 443}),
 	)
 	appliedToGroupWithSingleContainerPort = v1beta2.NewGroupMemberSet(
-		newAppliedToGroupMember("pod1", "ns1", v1beta2.NamedPort{Name: "http", Protocol: v1beta2.ProtocolTCP, Port: 80}))
+		newAppliedToGroupMemberPod("pod1", "ns1", v1beta2.NamedPort{Name: "http", Protocol: v1beta2.ProtocolTCP, Port: 80}))
 
 	protocolTCP = v1beta2.ProtocolTCP
 
@@ -566,6 +569,249 @@ func TestReconcilerReconcile(t *testing.T) {
 	}
 }
 
+func TestReconcilerReconcileServiceRelatedRule(t *testing.T) {
+	ifaceStore := interfacestore.NewInterfaceStore()
+	ifaceStore.AddInterface(&interfacestore.InterfaceConfig{
+		InterfaceName:            util.GenerateContainerInterfaceName("pod1", "ns1", "container1"),
+		IPs:                      []net.IP{net.ParseIP("1.1.1.1")},
+		ContainerInterfaceConfig: &interfacestore.ContainerInterfaceConfig{PodName: "pod1", PodNamespace: "ns1", ContainerID: "container1"},
+		OVSPortConfig:            &interfacestore.OVSPortConfig{OFPort: 1},
+	})
+
+	ipNet := newCIDR("10.10.0.0/16")
+	ipBlock := v1beta2.IPBlock{
+		CIDR: v1beta2.IPNet{IP: v1beta2.IPAddress(ipNet.IP), PrefixLength: 16},
+	}
+
+	svc1Ref := v1beta2.ServiceReference{
+		Name:      "svc1",
+		Namespace: "ns1",
+	}
+	svc2Ref := v1beta2.ServiceReference{
+		Name:      "svc2",
+		Namespace: "ns2",
+	}
+
+	appliedToGroupWithServices := v1beta2.NewGroupMemberSet(
+		newAppliedToGroupMemberService(svc1Ref.Name, svc1Ref.Namespace),
+		newAppliedToGroupMemberService(svc2Ref.Name, svc2Ref.Namespace),
+	)
+
+	svc1PortName := proxy.ServicePortName{
+		NamespacedName: k8stypes.NamespacedName{
+			Namespace: svc1Ref.Namespace,
+			Name:      svc1Ref.Name,
+		},
+		Port:     "80",
+		Protocol: v1.ProtocolTCP,
+	}
+	svc2PortName := proxy.ServicePortName{
+		NamespacedName: k8stypes.NamespacedName{
+			Namespace: svc2Ref.Namespace,
+			Name:      svc2Ref.Name,
+		},
+		Port:     "80",
+		Protocol: v1.ProtocolTCP,
+	}
+
+	tests := []struct {
+		name            string
+		completeRule    *CompletedRule
+		existSvc        []proxy.ServicePortName
+		expectedOFRules []*types.PolicyRule
+		wantErr         bool
+	}{
+		{
+			"applied-to-services-no-exist",
+			&CompletedRule{
+				rule: &rule{
+					ID:        "ingress-rule",
+					Direction: v1beta2.DirectionIn,
+					From: v1beta2.NetworkPolicyPeer{
+						IPBlocks: []v1beta2.IPBlock{ipBlock},
+					},
+					Services:  nil,
+					SourceRef: &np1,
+				},
+				TargetMembers: appliedToGroupWithServices,
+			},
+			[]proxy.ServicePortName{},
+			[]*types.PolicyRule{
+				{
+					Direction: v1beta2.DirectionIn,
+					From:      []types.Address{openflow.NewCTIPNetAddress(*ipNet)},
+					To:        []types.Address{},
+					Service:   nil,
+					PolicyRef: &np1,
+				},
+			},
+			false,
+		},
+		{
+			"applied-to-services-one-exist",
+			&CompletedRule{
+				rule: &rule{
+					ID:        "ingress-rule",
+					Direction: v1beta2.DirectionIn,
+					From: v1beta2.NetworkPolicyPeer{
+						IPBlocks: []v1beta2.IPBlock{ipBlock},
+					},
+					Services:  nil,
+					SourceRef: &np1,
+				},
+				TargetMembers: appliedToGroupWithServices,
+			},
+			[]proxy.ServicePortName{
+				svc1PortName,
+			},
+			[]*types.PolicyRule{
+				{
+					Direction: v1beta2.DirectionIn,
+					From:      []types.Address{openflow.NewCTIPNetAddress(*ipNet)},
+					To: []types.Address{
+						openflow.NewServiceGroupIDAddress(1),
+					},
+					Service:   nil,
+					PolicyRef: &np1,
+				},
+			},
+			false,
+		},
+		{
+			"applied-to-services-all-exist",
+			&CompletedRule{
+				rule: &rule{
+					ID:        "ingress-rule",
+					Direction: v1beta2.DirectionIn,
+					From: v1beta2.NetworkPolicyPeer{
+						IPBlocks: []v1beta2.IPBlock{ipBlock},
+					},
+					Services:  nil,
+					SourceRef: &np1,
+				},
+				TargetMembers: appliedToGroupWithServices,
+			},
+			[]proxy.ServicePortName{
+				svc1PortName,
+				svc2PortName,
+			},
+			[]*types.PolicyRule{
+				{
+					Direction: v1beta2.DirectionIn,
+					From:      []types.Address{openflow.NewCTIPNetAddress(*ipNet)},
+					To: []types.Address{
+						openflow.NewServiceGroupIDAddress(1),
+						openflow.NewServiceGroupIDAddress(2),
+					},
+					Service:   nil,
+					PolicyRef: &np1,
+				},
+			},
+			false,
+		},
+		{
+			"to-services-no-exist",
+			&CompletedRule{
+				rule: &rule{
+					ID:        "egress-rule",
+					Direction: v1beta2.DirectionOut,
+					To: v1beta2.NetworkPolicyPeer{
+						ToServices: []v1beta2.ServiceReference{svc1Ref, svc2Ref},
+					},
+					SourceRef: &np1,
+				},
+				TargetMembers: appliedToGroup1,
+			},
+			[]proxy.ServicePortName{},
+			[]*types.PolicyRule{
+				{
+					Direction: v1beta2.DirectionOut,
+					From:      ipsToOFAddresses(sets.NewString("1.1.1.1")),
+					To:        []types.Address{},
+					Service:   nil,
+					PolicyRef: &np1,
+				},
+			},
+			false,
+		},
+		{
+			"to-services-one-exist",
+			&CompletedRule{
+				rule: &rule{
+					ID:        "egress-rule",
+					Direction: v1beta2.DirectionOut,
+					To: v1beta2.NetworkPolicyPeer{
+						ToServices: []v1beta2.ServiceReference{svc1Ref, svc2Ref},
+					},
+					SourceRef: &np1,
+				},
+				TargetMembers: appliedToGroup1,
+			},
+			[]proxy.ServicePortName{svc1PortName},
+			[]*types.PolicyRule{
+				{
+					Direction: v1beta2.DirectionOut,
+					From:      ipsToOFAddresses(sets.NewString("1.1.1.1")),
+					To: []types.Address{
+						openflow.NewServiceGroupIDAddress(1),
+					},
+					Service:   nil,
+					PolicyRef: &np1,
+				},
+			},
+			false,
+		},
+		{
+			"to-services-all-exist",
+			&CompletedRule{
+				rule: &rule{
+					ID:        "egress-rule",
+					Direction: v1beta2.DirectionOut,
+					To: v1beta2.NetworkPolicyPeer{
+						ToServices: []v1beta2.ServiceReference{svc1Ref, svc2Ref},
+					},
+					SourceRef: &np1,
+				},
+				TargetMembers: appliedToGroup1,
+			},
+			[]proxy.ServicePortName{svc1PortName, svc2PortName},
+			[]*types.PolicyRule{
+				{
+					Direction: v1beta2.DirectionOut,
+					From:      ipsToOFAddresses(sets.NewString("1.1.1.1")),
+					To: []types.Address{
+						openflow.NewServiceGroupIDAddress(1),
+						openflow.NewServiceGroupIDAddress(2),
+					},
+					Service:   nil,
+					PolicyRef: &np1,
+				},
+			},
+			false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			controller := gomock.NewController(t)
+			defer controller.Finish()
+			mockOFClient := openflowtest.NewMockClient(controller)
+			// TODO: mock idAllocator and priorityAssigner
+			for i := 0; i < len(tt.expectedOFRules); i++ {
+				mockOFClient.EXPECT().InstallPolicyRuleFlows(newPolicyRulesMatcher(tt.expectedOFRules[i]))
+			}
+			r := newTestReconciler(t, controller, ifaceStore, mockOFClient, true, false)
+			for _, counter := range r.groupCounters {
+				for _, svc := range tt.existSvc {
+					counter.AllocateIfNotExist(svc, true)
+				}
+			}
+			if err := r.Reconcile(tt.completeRule); (err != nil) != tt.wantErr {
+				t.Fatalf("Reconcile() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
 // TestReconcileWithTransientError ensures the reconciler can reconcile a rule properly after the first attempt meets
 // transient error.
 // The input rule is an egress rule with named port, applying to 3 Pods and 1 IPBlock. The first 2 Pods have different
@@ -611,7 +857,7 @@ func TestReconcileWithTransientError(t *testing.T) {
 			},
 		},
 		ToAddresses:   v1beta2.NewGroupMemberSet(member1, member2, member3),
-		TargetMembers: v1beta2.NewGroupMemberSet(newAppliedToGroupMember("pod1", "ns1")),
+		TargetMembers: v1beta2.NewGroupMemberSet(newAppliedToGroupMemberPod("pod1", "ns1")),
 	}
 
 	controller := gomock.NewController(t)

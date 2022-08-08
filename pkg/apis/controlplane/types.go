@@ -88,6 +88,9 @@ type GroupMember struct {
 	IPs []IPAddress
 	// Ports is the list NamedPort of the GroupMember.
 	Ports []NamedPort
+	// Service is the reference to the Service. It can only be used in an AppliedTo
+	// Group and only a NodePort type Service can be referred by this field.
+	Service *ServiceReference
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

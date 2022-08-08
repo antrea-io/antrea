@@ -911,6 +911,7 @@ func autoConvert_v1beta2_GroupMember_To_controlplane_GroupMember(in *GroupMember
 	out.IPs = *(*[]controlplane.IPAddress)(unsafe.Pointer(&in.IPs))
 	out.Ports = *(*[]controlplane.NamedPort)(unsafe.Pointer(&in.Ports))
 	out.Node = (*controlplane.NodeReference)(unsafe.Pointer(in.Node))
+	out.Service = (*controlplane.ServiceReference)(unsafe.Pointer(in.Service))
 	return nil
 }
 
@@ -925,6 +926,7 @@ func autoConvert_controlplane_GroupMember_To_v1beta2_GroupMember(in *controlplan
 	out.Node = (*NodeReference)(unsafe.Pointer(in.Node))
 	out.IPs = *(*[]IPAddress)(unsafe.Pointer(&in.IPs))
 	out.Ports = *(*[]NamedPort)(unsafe.Pointer(&in.Ports))
+	out.Service = (*ServiceReference)(unsafe.Pointer(in.Service))
 	return nil
 }
 

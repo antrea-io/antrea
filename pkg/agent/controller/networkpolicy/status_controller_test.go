@@ -106,7 +106,7 @@ func TestSyncStatusForNewPolicy(t *testing.T) {
 			go statusController.Run(stopCh)
 
 			ruleCache.AddNetworkPolicy(tt.policy)
-			ruleCache.AddAppliedToGroup(newAppliedToGroup("appliedToGroup1", []v1beta2.GroupMember{*newAppliedToGroupMember("pod1", "ns1")}))
+			ruleCache.AddAppliedToGroup(newAppliedToGroup("appliedToGroup1", []v1beta2.GroupMember{*newAppliedToGroupMemberPod("pod1", "ns1")}))
 			rules := ruleCache.getEffectiveRulesByNetworkPolicy(string(tt.policy.UID))
 			for i, rule := range rules {
 				// Only make specified number of rules realized.
@@ -128,7 +128,7 @@ func TestSyncStatusUpForUpdatedPolicy(t *testing.T) {
 	defer close(stopCh)
 	go statusController.Run(stopCh)
 
-	ruleCache.AddAppliedToGroup(newAppliedToGroup("appliedToGroup1", []v1beta2.GroupMember{*newAppliedToGroupMember("pod1", "ns1")}))
+	ruleCache.AddAppliedToGroup(newAppliedToGroup("appliedToGroup1", []v1beta2.GroupMember{*newAppliedToGroupMemberPod("pod1", "ns1")}))
 	policy := newNetworkPolicy("policy1", "uid1", []string{"addressGroup1"}, []string{}, []string{"appliedToGroup1"}, nil)
 	policy.Generation = 1
 	ruleCache.AddNetworkPolicy(policy)

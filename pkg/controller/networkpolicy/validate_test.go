@@ -1053,6 +1053,176 @@ func TestValidateAntreaPolicy(t *testing.T) {
 			},
 			expectedReason: "Invalid label key: foo=: name part must consist of alphanumeric characters, '-', '_' or '.', and must start and end with an alphanumeric character (e.g. 'MyName',  or 'my.name',  or '123-abc', regex used for validation is '([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9]')",
 		},
+		{
+			name: "acnp-appliedto-service-set-with-psel",
+			policy: &crdv1alpha1.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "acnp-appliedto-service-set-with-psel",
+				},
+				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
+					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+						{
+							PodSelector: &metav1.LabelSelector{
+								MatchLabels: map[string]string{"foo1": "bar1"},
+							},
+							Service: &crdv1alpha1.NamespacedName{
+								Namespace: "foo2",
+								Name:      "bar2",
+							},
+						},
+					},
+				},
+			},
+			expectedReason: "service cannot be set with other peers in appliedTo",
+		},
+		{
+			name: "acnp-appliedto-service-and-psel",
+			policy: &crdv1alpha1.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "acnp-appliedto-service-and-psel",
+				},
+				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
+					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+						{
+							PodSelector: &metav1.LabelSelector{
+								MatchLabels: map[string]string{"foo1": "bar1"},
+							},
+						},
+						{
+							Service: &crdv1alpha1.NamespacedName{
+								Namespace: "foo2",
+								Name:      "bar2",
+							},
+						},
+					},
+				},
+			},
+			expectedReason: "a rule/policy cannot be applied to Services and other peers at the same time",
+		},
+		{
+			name: "acnp-appliedto-service-with-egress-rule",
+			policy: &crdv1alpha1.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "acnp-appliedto-service-with-egress-rule",
+				},
+				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
+					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+						{
+							Service: &crdv1alpha1.NamespacedName{
+								Namespace: "foo1",
+								Name:      "bar1",
+							},
+						},
+					},
+					Egress: []crdv1alpha1.Rule{
+						{
+							Action: &allowAction,
+							To: []crdv1alpha1.NetworkPolicyPeer{
+								{
+									IPBlock: &crdv1alpha1.IPBlock{
+										CIDR: "10.0.0.10/32",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedReason: "egress rule cannot be applied to Services",
+		},
+		{
+			name: "egress-rule-appliedto-service",
+			policy: &crdv1alpha1.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "egress-rule-appliedto-service",
+				},
+				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
+					Egress: []crdv1alpha1.Rule{
+						{
+							Action: &allowAction,
+							To: []crdv1alpha1.NetworkPolicyPeer{
+								{
+									IPBlock: &crdv1alpha1.IPBlock{
+										CIDR: "10.0.0.10/32",
+									},
+								},
+							},
+							AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+								{
+									Service: &crdv1alpha1.NamespacedName{
+										Namespace: "foo1",
+										Name:      "bar1",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedReason: "egress rule cannot be applied to Services",
+		},
+		{
+			name: "acnp-appliedto-service-from-psel",
+			policy: &crdv1alpha1.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "egress-rule-appliedto-service",
+				},
+				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
+					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+						{
+							Service: &crdv1alpha1.NamespacedName{
+								Namespace: "foo1",
+								Name:      "bar1",
+							},
+						},
+					},
+					Ingress: []crdv1alpha1.Rule{
+						{
+							Action: &allowAction,
+							From: []crdv1alpha1.NetworkPolicyPeer{
+								{
+									PodSelector: &metav1.LabelSelector{
+										MatchLabels: map[string]string{"foo1": "bar1"},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedReason: "a rule/policy that is applied to Services can only use ipBlock to select workloads",
+		},
+		{
+			name: "acnp-appliedto-service-valid",
+			policy: &crdv1alpha1.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "egress-rule-appliedto-service",
+				},
+				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
+					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+						{
+							Service: &crdv1alpha1.NamespacedName{
+								Namespace: "foo1",
+								Name:      "bar1",
+							},
+						},
+					},
+					Ingress: []crdv1alpha1.Rule{
+						{
+							Action: &allowAction,
+							From: []crdv1alpha1.NetworkPolicyPeer{
+								{
+									IPBlock: &crdv1alpha1.IPBlock{
+										CIDR: "10.0.0.10/32",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedReason: "",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

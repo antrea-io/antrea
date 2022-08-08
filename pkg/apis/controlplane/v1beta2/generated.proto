@@ -146,6 +146,10 @@ message GroupMember {
 
   // Node maintains the reference to the Node.
   optional NodeReference node = 5;
+
+  // Service is the reference to the Service. It can only be used in an AppliedTo
+  // Group and only a NodePort type Service can be referred by this field.
+  optional ServiceReference service = 6;
 }
 
 message GroupReference {

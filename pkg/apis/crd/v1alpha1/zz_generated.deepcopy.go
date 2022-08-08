@@ -371,6 +371,11 @@ func (in *NetworkPolicyPeer) DeepCopyInto(out *NetworkPolicyPeer) {
 		*out = new(v1.LabelSelector)
 		(*in).DeepCopyInto(*out)
 	}
+	if in.Service != nil {
+		in, out := &in.Service, &out.Service
+		*out = new(NamespacedName)
+		**out = **in
+	}
 	return
 }
 

@@ -117,6 +117,16 @@ spec:
                         required:
                         - name
                         - namespace
+                      service:
+                        type: object
+                        properties:
+                          name:
+                            type: string
+                          namespace:
+                            type: string
+                        required:
+                        - name
+                        - namespace
                 ingress:
                   type: array
                   items:
@@ -181,6 +191,16 @@ spec:
                             group:
                               type: string
                             serviceAccount:
+                              type: object
+                              properties:
+                                name:
+                                  type: string
+                                namespace:
+                                  type: string
+                              required:
+                              - name
+                              - namespace
+                            service:
                               type: object
                               properties:
                                 name:

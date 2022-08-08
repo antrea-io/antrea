@@ -88,6 +88,9 @@ type GroupMember struct {
 	Ports []NamedPort `json:"ports,omitempty" protobuf:"bytes,4,rep,name=ports"`
 	// Node maintains the reference to the Node.
 	Node *NodeReference `json:"node,omitempty" protobuf:"bytes,5,opt,name=node"`
+	// Service is the reference to the Service. It can only be used in an AppliedTo
+	// Group and only a NodePort type Service can be referred by this field.
+	Service *ServiceReference `json:"service,omitempty" protobuf:"bytes,6,opt,name=service"`
 }
 
 // +genclient

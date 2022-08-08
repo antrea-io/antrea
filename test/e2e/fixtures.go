@@ -163,6 +163,16 @@ func skipIfProxyDisabled(t *testing.T) {
 	skipIfFeatureDisabled(t, features.AntreaProxy, true /* checkAgent */, false /* checkController */)
 }
 
+func skipIfProxyAllDisabled(t *testing.T, data *TestData) {
+	isProxyAll, err := data.isProxyAll()
+	if err != nil {
+		t.Fatalf("Error getting option antreaProxy.proxyAll value")
+	}
+	if !isProxyAll {
+		t.Skipf("Skipping test because option antreaProxy.proxyAll is not enabled")
+	}
+}
+
 func ensureAntreaRunning(data *TestData) error {
 	log.Println("Applying Antrea YAML")
 	if err := data.deployAntrea(deployAntreaDefault); err != nil {

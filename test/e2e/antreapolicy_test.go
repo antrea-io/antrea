@@ -2974,6 +2974,86 @@ func testACNPICMPSupport(t *testing.T, data *TestData) {
 	failOnError(k8sUtils.DeleteACNP(builder.Name), t)
 }
 
+func testACNPNodePortServiceSupport(t *testing.T, data *TestData) {
+	skipIfProxyAllDisabled(t, data)
+
+	// Create a client on Node 0, one NodePort Service whose Endpoint is on Node 0 and
+	// another NodePort Service whose Endpoint is on Node 1. Initiate traffic from this
+	// client to these two Services Node 1 NodePort to simulate the traffic from
+	// external client to NodePort.
+	clientName := "agnhost-client"
+	failOnError(data.createAgnhostPodOnNode(clientName, data.testNamespace, nodeName(0), true), t)
+	defer data.deletePodAndWait(defaultTimeout, clientName, data.testNamespace)
+	ips, err := data.podWaitForIPs(defaultTimeout, clientName, data.testNamespace)
+	failOnError(err, t)
+
+	var cidr string
+	if clusterInfo.podV4NetworkCIDR != "" {
+		cidr = ips.ipv4.String()
+	} else {
+		cidr = ips.ipv6.String()
+	}
+	cidr += "/32"
+
+	svc1, cleanup1 := data.createAgnhostServiceAndBackendPods(t, "svc1", data.testNamespace, nodeName(0), v1.ServiceTypeNodePort)
+	defer cleanup1()
+
+	svc2, cleanup2 := data.createAgnhostServiceAndBackendPods(t, "svc2", data.testNamespace, nodeName(1), v1.ServiceTypeNodePort)
+	defer cleanup2()
+
+	builder := &ClusterNetworkPolicySpecBuilder{}
+	builder = builder.SetName("test-acnp-nodeport-svc").
+		SetPriority(1.0).
+		SetAppliedToGroup([]ACNPAppliedToSpec{
+			{
+				Service: &crdv1alpha1.NamespacedName{
+					Name:      svc1.Name,
+					Namespace: svc1.Namespace,
+				},
+			},
+			{
+				Service: &crdv1alpha1.NamespacedName{
+					Name:      svc2.Name,
+					Namespace: svc2.Namespace,
+				},
+			},
+		})
+	builder.AddIngress(ProtocolTCP, nil, nil, nil, nil, nil, nil, nil, &cidr, nil, nil,
+		nil, nil, false, nil, crdv1alpha1.RuleActionReject, "", "", nil)
+
+	testcases := []podToAddrTestStep{
+		{
+			Pod(fmt.Sprintf("%s/%s", data.testNamespace, clientName)),
+			nodeIP(1),
+			svc1.Spec.Ports[0].NodePort,
+			Rejected,
+		},
+		{
+			Pod(fmt.Sprintf("%s/%s", data.testNamespace, clientName)),
+			nodeIP(1),
+			svc2.Spec.Ports[0].NodePort,
+			Rejected,
+		},
+	}
+
+	acnp, err := k8sUtils.CreateOrUpdateACNP(builder.Get())
+	failOnError(err, t)
+	failOnError(waitForResourceReady(t, timeout, acnp), t)
+	for _, tc := range testcases {
+		log.Tracef("Probing: %s -> %s:%d", cidr, tc.destAddr, tc.destPort)
+		connectivity, err := k8sUtils.ProbeAddr(tc.clientPod.Namespace(), "antrea-e2e", tc.clientPod.PodName(), tc.destAddr, tc.destPort, ProtocolTCP)
+		if err != nil {
+			t.Errorf("failure -- could not complete probe: %v", err)
+		}
+		if connectivity != tc.expectedConnectivity {
+			t.Errorf("failure -- wrong results for probe: Source %s --> Dest %s:%d connectivity: %v, expected: %v",
+				cidr, tc.destAddr, tc.destPort, connectivity, tc.expectedConnectivity)
+		}
+	}
+	// cleanup test resources
+	failOnError(k8sUtils.DeleteACNP(builder.Name), t)
+}
+
 func testACNPIGMPQueryAllow(t *testing.T, data *TestData) {
 	testACNPIGMPQuery(t, data, "test-acnp-igmp-query-allow", "testMulticastIGMPQueryAllow", "224.3.4.13", crdv1alpha1.RuleActionAllow)
 }
@@ -3469,6 +3549,7 @@ func TestAntreaPolicy(t *testing.T) {
 		t.Run("Case=ACNPNodeSelectorEgress", func(t *testing.T) { testACNPNodeSelectorEgress(t) })
 		t.Run("Case=ACNPNodeSelectorIngress", func(t *testing.T) { testACNPNodeSelectorIngress(t, data) })
 		t.Run("Case=ACNPICMPSupport", func(t *testing.T) { testACNPICMPSupport(t, data) })
+		t.Run("Case=ACNPNodePortServiceSupport", func(t *testing.T) { testACNPNodePortServiceSupport(t, data) })
 	})
 	// print results for reachability tests
 	printResults()
