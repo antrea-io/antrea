@@ -77,7 +77,6 @@ func configureNPLForAgent(t *testing.T, data *TestData, startPort, endPort int) 
 // NodePortLocal related test cases so they can share setup, teardown.
 func TestNodePortLocal(t *testing.T) {
 	skipIfNotIPv4Cluster(t)
-	skipIfHasWindowsNodes(t)
 	skipIfNodePortLocalDisabled(t)
 
 	data, err := setupTest(t)
@@ -367,12 +366,12 @@ func NPLTestMultiplePods(t *testing.T, data *TestData) {
 	annotation := make(map[string]string)
 	annotation[types.NPLEnabledAnnotationKey] = "true"
 	ipFamily := corev1.IPv4Protocol
-	testData.createNginxClusterIPServiceWithAnnotations(false, &ipFamily, annotation)
 	node := nodeName(0)
 	workerNode := node
 	if len(clusterInfo.windowsNodes) != 0 {
 		workerNode = workerNodeName(clusterInfo.windowsNodes[0])
 	}
+	testData.createNginxClusterIPServiceWithAnnotations(workerNode, false, &ipFamily, annotation)
 	var testPods []string
 
 	for i := 0; i < 4; i++ {
@@ -534,13 +533,14 @@ func NPLTestLocalAccess(t *testing.T, data *TestData) {
 	annotation := make(map[string]string)
 	annotation[types.NPLEnabledAnnotationKey] = "true"
 	ipFamily := corev1.IPv4Protocol
-	testData.createNginxClusterIPServiceWithAnnotations(false, &ipFamily, annotation)
-	expectedAnnotations := newExpectedNPLAnnotations(defaultStartPort, defaultEndPort).Add(nil, defaultTargetPort, "tcp")
 
 	node := nodeName(0)
 	if len(clusterInfo.windowsNodes) != 0 {
 		node = workerNodeName(clusterInfo.windowsNodes[0])
 	}
+
+	testData.createNginxClusterIPServiceWithAnnotations(node, false, &ipFamily, annotation)
+	expectedAnnotations := newExpectedNPLAnnotations(defaultStartPort, defaultEndPort).Add(nil, defaultTargetPort, "tcp")
 
 	testPodName := randName("test-pod-")
 	err := testData.createNginxPodOnNode(testPodName, data.testNamespace, node, false)
@@ -578,7 +578,6 @@ func testNPLMultiplePodsAgentRestart(t *testing.T, data *TestData) {
 	annotation := make(map[string]string)
 	annotation[types.NPLEnabledAnnotationKey] = "true"
 	ipFamily := corev1.IPv4Protocol
-	data.createNginxClusterIPServiceWithAnnotations(false, &ipFamily, annotation)
 
 	node := nodeName(0)
 	winenv := false
@@ -586,6 +585,7 @@ func testNPLMultiplePodsAgentRestart(t *testing.T, data *TestData) {
 		node = workerNodeName(clusterInfo.windowsNodes[0])
 		winenv = true
 	}
+	data.createNginxClusterIPServiceWithAnnotations(node, false, &ipFamily, annotation)
 	var testPods []string
 	var err error
 	for i := 0; i < 4; i++ {
@@ -654,12 +654,12 @@ func testNPLChangePortRangeAgentRestart(t *testing.T, data *TestData) {
 	annotation := make(map[string]string)
 	annotation[types.NPLEnabledAnnotationKey] = "true"
 	ipFamily := corev1.IPv4Protocol
-	data.createNginxClusterIPServiceWithAnnotations(false, &ipFamily, annotation)
 
 	node := nodeName(0)
 	if len(clusterInfo.windowsNodes) != 0 {
 		node = workerNodeName(clusterInfo.windowsNodes[0])
 	}
+	data.createNginxClusterIPServiceWithAnnotations(node, false, &ipFamily, annotation)
 	var testPods []string
 	var err error
 	for i := 0; i < 4; i++ {

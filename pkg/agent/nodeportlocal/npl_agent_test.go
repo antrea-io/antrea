@@ -67,13 +67,16 @@ const (
 
 func newPortTable(mockIPTables rules.PodPortRules, mockPortOpener portcache.LocalPortOpener) *portcache.PortTable {
 	return &portcache.PortTable{
-		NodePortTable:    make(map[string]*portcache.NodePortData),
-		PodEndpointTable: make(map[string]*portcache.NodePortData),
-		StartPort:        defaultStartPort,
-		EndPort:          defaultEndPort,
-		PortSearchStart:  defaultStartPort,
-		PodPortRules:     mockIPTables,
-		LocalPortOpener:  mockPortOpener,
+		PortTableCache: cache.NewIndexer(portcache.GetPortTableKey, cache.Indexers{
+			portcache.NodePortIndex:    portcache.NodePortIndexFunc,
+			portcache.PodEndpointIndex: portcache.PodEndpointIndexFunc,
+			portcache.PodIPIndex:       portcache.PodIPIndexFunc,
+		}),
+		StartPort:       defaultStartPort,
+		EndPort:         defaultEndPort,
+		PortSearchStart: defaultStartPort,
+		PodPortRules:    mockIPTables,
+		LocalPortOpener: mockPortOpener,
 	}
 }
 
@@ -657,8 +660,8 @@ func TestMultiplePods(t *testing.T) {
 
 // TestMultipleProtocols creates multiple Pods with multiple protocols and verifies that
 // NPL annotations and iptable rules for both Pods and Protocols are updated correctly.
-// In particular we make sure that a given NodePort is never used by more than one Pod,
-// irrespective of which protocol is in use.
+// In particular we make sure that a given NodePort is never used by more than one Pod.
+// One Pod could use multiple NodePorts for different protocols with the same Pod port.
 func TestMultipleProtocols(t *testing.T) {
 	tcpUdpSvcLabel := map[string]string{"tcp": "true", "udp": "true"}
 	udpSvcLabel := map[string]string{"tcp": "false", "udp": "true"}
@@ -702,8 +705,7 @@ func TestMultipleProtocols(t *testing.T) {
 	assert.True(t, testData.portTable.RuleExists(testPod2.Status.PodIP, defaultPort, protocolUDP))
 
 	// Update testSvc2 to serve TCP/80 and UDP/81 both, so pod2 is
-	// exposed on both TCP and UDP, with the same NodePort.
-
+	// exposed on both TCP and UDP, with different NodePorts.
 	testSvc2.Spec.Ports = append(testSvc2.Spec.Ports, corev1.ServicePort{
 		Port:     80,
 		Protocol: corev1.ProtocolTCP,
@@ -716,7 +718,16 @@ func TestMultipleProtocols(t *testing.T) {
 
 	pod2ValueUpdate, err := testData.pollForPodAnnotation(testPod2.Name, true)
 	require.NoError(t, err, "Poll for annotation check failed")
-	expectedAnnotationsPod2.Add(&pod2Value[0].NodePort, defaultPort, protocolTCP)
+
+	// The new NodePort should be the next available port number,
+	// because the implementation allocates ports sequentially.
+	var pod2nodeport int
+	if pod1Value[0].NodePort > pod2Value[0].NodePort {
+		pod2nodeport = pod1Value[0].NodePort + 1
+	} else {
+		pod2nodeport = pod2Value[0].NodePort + 1
+	}
+	expectedAnnotationsPod2.Add(&pod2nodeport, defaultPort, protocolTCP)
 	expectedAnnotationsPod2.Check(t, pod2ValueUpdate)
 }
 
@@ -761,22 +772,17 @@ var (
 	portTakenError = fmt.Errorf("Port taken")
 )
 
-// TestNodePortAlreadyBoundTo validates that when a port is already bound to, a different port will
-// be selected for NPL.
+// TestNodePortAlreadyBoundTo validates that when a port with TCP protocol is already bound to,
+// the next sequential TCP port should be selected for NPL when it is available.
 func TestNodePortAlreadyBoundTo(t *testing.T) {
 	nodePort1 := defaultStartPort
 	nodePort2 := nodePort1 + 1
 	testConfig := newTestConfig().withCustomPortOpenerExpectations(func(mockPortOpener *portcachetesting.MockLocalPortOpener) {
 		gomock.InOrder(
-			// Based on the implementation, we know that TCP is checked first...
-			// 1. port1 is checked for TCP availability -> success
-			mockPortOpener.EXPECT().OpenLocalPort(nodePort1, protocolTCP).Return(&fakeSocket{}, nil),
-			// 2. port1 is checked for UDP availability (even if the Service uses TCP only) -> error
-			mockPortOpener.EXPECT().OpenLocalPort(nodePort1, protocolUDP).Return(nil, portTakenError),
-			// 3. port2 is checked for TCP availability -> success
+			// 1. port1 is checked for TCP availability -> error
+			mockPortOpener.EXPECT().OpenLocalPort(nodePort1, protocolTCP).Return(nil, portTakenError),
+			// 2. port2 is checked for TCP availability -> success
 			mockPortOpener.EXPECT().OpenLocalPort(nodePort2, protocolTCP).Return(&fakeSocket{}, nil),
-			// 4. port2 is checked for UDP availability -> success
-			mockPortOpener.EXPECT().OpenLocalPort(nodePort2, protocolUDP).Return(&fakeSocket{}, nil),
 		)
 	})
 	customNodePort := defaultStartPort + 1
