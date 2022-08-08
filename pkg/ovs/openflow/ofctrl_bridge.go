@@ -21,7 +21,7 @@ import (
 	"sync"
 	"time"
 
-	"antrea.io/libOpenflow/openflow13"
+	"antrea.io/libOpenflow/openflow15"
 	"antrea.io/ofnet/ofctrl"
 	"golang.org/x/time/rate"
 	"k8s.io/klog/v2"
@@ -138,17 +138,31 @@ func (t *ofTable) DumpFlows(cookieID, cookieMask uint64) (map[uint64]*FlowStates
 	if ofStats == nil {
 		return nil, nil
 	}
+	return parseFlowStats(ofStats), nil
+}
+
+func parseFlowStats(ofStats []*openflow15.FlowDesc) map[uint64]*FlowStates {
 	flowStats := make(map[uint64]*FlowStates)
 	for _, stat := range ofStats {
 		cookie := stat.Cookie
 		s := &FlowStates{
-			TableID:         stat.TableId,
-			PacketCount:     stat.PacketCount,
-			DurationNSecond: stat.DurationNSec,
+			TableID: stat.TableId,
+		}
+		for _, field := range stat.Stats.Fields {
+			switch count := field.(type) {
+			case *openflow15.PBCountStatField:
+				if count.Header.Field == openflow15.XST_OFB_PACKET_COUNT {
+					s.PacketCount = count.Count
+				}
+			case *openflow15.TimeStatField:
+				if count.Header.Field == openflow15.XST_OFB_DURATION {
+					s.DurationNSecond = count.NSec
+				}
+			}
 		}
 		flowStats[cookie] = s
 	}
-	return flowStats, nil
+	return flowStats
 }
 
 func NewOFTable(id uint8, name string, stageID StageID, pipelineID PipelineID, missAction MissActionType) Table {
@@ -186,7 +200,10 @@ type OFBridge struct {
 	connected chan bool
 	// pktConsumers is a map from PacketIn reason to the channel that is used to publish the PacketIn message.
 	pktConsumers      sync.Map
-	multipartReplyChs map[uint32]chan *openflow13.MultipartReply
+	multipartReplyChs map[uint32]chan *openflow15.MultipartReply
+	// tunMetadataLengthMap is used to store the tlv-map settings on the OVS bridge. Key is the index of tunnel metedata,
+	// and value is the length configured in this tunnel metadata.
+	tunMetadataLengthMap map[uint16]uint8
 }
 
 func (b *OFBridge) CreateGroupTypeAll(id GroupIDType) Group {
@@ -242,9 +259,9 @@ func (b *OFBridge) DeleteMeterAll() error {
 	// Clear all existing meter entries
 	// TODO: this should be defined in libOpenflow
 	const OFPM_ALL = 0xffffffff // Represents all meters
-	meterMod := openflow13.NewMeterMod()
+	meterMod := openflow15.NewMeterMod()
 	meterMod.MeterId = OFPM_ALL
-	meterMod.Command = openflow13.OFPMC_DELETE
+	meterMod.Command = openflow15.MC_DELETE
 	if err := b.ofSwitch.Send(meterMod); err != nil {
 		return err
 	}
@@ -320,7 +337,7 @@ func (b *OFBridge) SwitchConnected(sw *ofctrl.OFSwitch) {
 
 // MultipartReply is a callback when multipartReply message is received on ofctrl.OFSwitch is connected.
 // Client uses this method to handle the reply message if it has customized MultipartRequest message.
-func (b *OFBridge) MultipartReply(sw *ofctrl.OFSwitch, rep *openflow13.MultipartReply) {
+func (b *OFBridge) MultipartReply(sw *ofctrl.OFSwitch, rep *openflow15.MultipartReply) {
 	if ch, ok := b.multipartReplyChs[rep.Xid]; ok {
 		ch <- rep
 	}
@@ -396,28 +413,18 @@ func (b *OFBridge) DumpFlows(cookieID, cookieMask uint64) (map[uint64]*FlowState
 	if ofStats == nil {
 		return nil, nil
 	}
-	flowStats := make(map[uint64]*FlowStates)
-	for _, stat := range ofStats {
-		cookie := stat.Cookie
-		s := &FlowStates{
-			TableID:         stat.TableId,
-			PacketCount:     stat.PacketCount,
-			DurationNSecond: stat.DurationNSec,
-		}
-		flowStats[cookie] = s
-	}
-	return flowStats, nil
+	return parseFlowStats(ofStats), nil
 }
 
 // DeleteFlowsByCookie removes Openflow entries from OFSwitch. The removed Openflow entries use the specific CookieID.
 func (b *OFBridge) DeleteFlowsByCookie(cookieID, cookieMask uint64) error {
-	flowMod := openflow13.NewFlowMod()
-	flowMod.Command = openflow13.FC_DELETE
+	flowMod := openflow15.NewFlowMod()
+	flowMod.Command = openflow15.FC_DELETE
 	flowMod.Cookie = cookieID
 	flowMod.CookieMask = cookieMask
-	flowMod.OutPort = openflow13.P_ANY
-	flowMod.OutGroup = openflow13.OFPG_ANY
-	flowMod.TableId = openflow13.OFPTT_ALL
+	flowMod.OutPort = openflow15.P_ANY
+	flowMod.OutGroup = openflow15.OFPG_ANY
+	flowMod.TableId = openflow15.OFPTT_ALL
 	return b.ofSwitch.Send(flowMod)
 }
 
@@ -462,15 +469,15 @@ func (b *OFBridge) AddFlowsInBundle(addflows []Flow, modFlows []Flow, delFlows [
 	}
 
 	// Install new Openflow entries with the opened bundle.
-	if err := syncFlows(addflows, openflow13.FC_ADD); err != nil {
+	if err := syncFlows(addflows, openflow15.FC_ADD); err != nil {
 		return err
 	}
 	// Modify existing Openflow entries with the opened bundle.
-	if err := syncFlows(modFlows, openflow13.FC_MODIFY_STRICT); err != nil {
+	if err := syncFlows(modFlows, openflow15.FC_MODIFY_STRICT); err != nil {
 		return err
 	}
 	// Delete Openflow entries with the opened bundle.
-	if err := syncFlows(delFlows, openflow13.FC_DELETE_STRICT); err != nil {
+	if err := syncFlows(delFlows, openflow15.FC_DELETE_STRICT); err != nil {
 		return err
 	}
 
@@ -662,6 +669,7 @@ func (b *OFBridge) AddTLVMap(optClass uint16, optType uint8, optLength uint8, tu
 	if err := b.ofSwitch.AddTunnelTLVMap(optClass, optType, optLength, tunMetadataIndex); err != nil {
 		return err
 	}
+	b.tunMetadataLengthMap[tunMetadataIndex] = optLength
 	return nil
 }
 
@@ -687,17 +695,17 @@ func (b *OFBridge) RetryInterval() time.Duration {
 }
 
 func (b *OFBridge) queryTableFeatures() {
-	mpartRequest := &openflow13.MultipartRequest{
-		Header: openflow13.NewOfp13Header(),
-		Type:   openflow13.MultipartType_TableFeatures,
+	mpartRequest := &openflow15.MultipartRequest{
+		Header: openflow15.NewOfp15Header(),
+		Type:   openflow15.MultipartType_TableFeatures,
 		Flags:  0,
 	}
-	mpartRequest.Header.Type = openflow13.Type_MultiPartRequest
+	mpartRequest.Header.Type = openflow15.Type_MultiPartRequest
 	mpartRequest.Header.Length = mpartRequest.Len()
 	// Use a buffer for the channel to avoid blocking the OpenFlow connection inbound channel, since it takes time when
 	// sending the Multipart Request messages to modify the tables' names. The buffer size "20" is the observed number
 	// of the Multipart Reply messages sent from OVS.
-	tableFeatureCh := make(chan *openflow13.MultipartReply, 20)
+	tableFeatureCh := make(chan *openflow15.MultipartReply, 20)
 	b.multipartReplyChs[mpartRequest.Xid] = tableFeatureCh
 	go func() {
 		// Delete the channel which is used to receive the MultipartReply message after all tables' features are received.
@@ -709,24 +717,24 @@ func (b *OFBridge) queryTableFeatures() {
 	b.ofSwitch.Send(mpartRequest)
 }
 
-func (b *OFBridge) processTableFeatures(ch chan *openflow13.MultipartReply) {
-	header := openflow13.NewOfp13Header()
-	header.Type = openflow13.Type_MultiPartRequest
+func (b *OFBridge) processTableFeatures(ch chan *openflow15.MultipartReply) {
+	header := openflow15.NewOfp15Header()
+	header.Type = openflow15.Type_MultiPartRequest
 	// Since the initial MultipartRequest doesn't specify any table ID, OVS will reply all tables' (except the hidden one)
 	// features in the reply. Here we complete the loop after we receive all the reply messages, while the reply message
 	// is configured with Flags=0.
 	for {
 		select {
 		case rpl := <-ch:
-			request := &openflow13.MultipartRequest{
+			request := &openflow15.MultipartRequest{
 				Header: header,
-				Type:   openflow13.MultipartType_TableFeatures,
+				Type:   openflow15.MultipartType_TableFeatures,
 				Flags:  rpl.Flags,
 			}
 			// A MultipartReply message may have one or many OFPTableFeatures messages, and MultipartReply.Body is a
 			// slice of these messages.
 			for _, body := range rpl.Body {
-				tableFeature := body.(*openflow13.OFPTableFeatures)
+				tableFeature := body.(*openflow15.TableFeatures)
 				// Modify table name if the table is in the pipeline, otherwise use the default table features.
 				// OVS doesn't allow to skip any table except the hidden table (always the last table) in a table_features
 				// request. So use the existing table features for the tables that Antrea doesn't define in the pipeline.
@@ -749,12 +757,13 @@ func (b *OFBridge) processTableFeatures(ch chan *openflow13.MultipartReply) {
 
 func NewOFBridge(br string, mgmtAddr string) Bridge {
 	s := &OFBridge{
-		bridgeName:        br,
-		mgmtAddr:          mgmtAddr,
-		tableCache:        make(map[uint8]*ofTable),
-		retryInterval:     1 * time.Second,
-		pktConsumers:      sync.Map{},
-		multipartReplyChs: make(map[uint32]chan *openflow13.MultipartReply),
+		bridgeName:           br,
+		mgmtAddr:             mgmtAddr,
+		tableCache:           make(map[uint8]*ofTable),
+		retryInterval:        1 * time.Second,
+		pktConsumers:         sync.Map{},
+		multipartReplyChs:    make(map[uint32]chan *openflow15.MultipartReply),
+		tunMetadataLengthMap: make(map[uint16]uint8),
 	}
 	s.controller = ofctrl.NewController(s)
 	return s

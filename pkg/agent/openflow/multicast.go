@@ -19,7 +19,7 @@ import (
 	"net"
 	"sync"
 
-	"antrea.io/libOpenflow/openflow13"
+	"antrea.io/libOpenflow/openflow15"
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent/config"
@@ -194,14 +194,14 @@ func (f *featureMulticast) multicastRemoteReportFlows(groupID binding.GroupIDTyp
 		MulticastRoutingTable.ofTable.BuildFlow(priorityHigh).
 			Cookie(f.cookieAllocator.Request(f.category).Raw()).
 			MatchProtocol(binding.ProtocolIGMP).
-			MatchInPort(openflow13.P_CONTROLLER).
+			MatchInPort(openflow15.P_CONTROLLER).
 			Action().LoadRegMark(CustomReasonIGMPRegMark).
 			Action().Group(groupID).
 			Done(),
 		// This flow ensures the IGMP report message sent from Antrea Agent to bypass the check in SpoofGuardTable.
 		ClassifierTable.ofTable.BuildFlow(priorityNormal).
 			Cookie(f.cookieAllocator.Request(f.category).Raw()).
-			MatchInPort(openflow13.P_CONTROLLER).
+			MatchInPort(openflow15.P_CONTROLLER).
 			Action().GotoTable(SpoofGuardTable.GetNext()).
 			Done(),
 		// This flow ensures the multicast packet sent from a different Node via the tunnel port to enter Multicast

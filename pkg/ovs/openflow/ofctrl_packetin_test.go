@@ -168,6 +168,19 @@ func TestParsePacketIn(t *testing.T) {
 	testBytes, _ := testTCP.MarshalBinary()
 	testBuffer := new(util.Buffer)
 	testBuffer.UnmarshalBinary(testBytes)
+	ethPkt := protocol.NewEthernet()
+	ethPkt.HWDst = testMac1
+	ethPkt.HWSrc = testMac2
+	ethPkt.Ethertype = protocol.IPv6_MSG
+	ethPkt.Data = util.Message(&protocol.IPv6{
+		Length:     1,
+		NextHeader: protocol.Type_TCP,
+		HopLimit:   0,
+		NWSrc:      testIP1,
+		NWDst:      testIP2,
+		Data:       testBuffer,
+	})
+	pktBytes, _ := ethPkt.MarshalBinary()
 	tests := []struct {
 		name       string
 		pktIn      *ofctrl.PacketIn
@@ -178,19 +191,7 @@ func TestParsePacketIn(t *testing.T) {
 			"ParsePacketIn-ipv6",
 			&ofctrl.PacketIn{
 				Reason: 1,
-				Data: protocol.Ethernet{
-					Ethertype: protocol.IPv6_MSG,
-					HWDst:     testMac1,
-					HWSrc:     testMac2,
-					Data: util.Message(&protocol.IPv6{
-						Length:     1,
-						NextHeader: protocol.Type_TCP,
-						HopLimit:   0,
-						NWSrc:      testIP1,
-						NWDst:      testIP2,
-						Data:       testBuffer,
-					}),
-				},
+				Data:   util.NewBuffer(pktBytes),
 			},
 			&Packet{
 				IsIPv6:          true,

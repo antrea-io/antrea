@@ -160,7 +160,7 @@ table=70, priority=200,ip,nw_dst=$peerPodSubnet actions=mod_dl_dst:$peerNodeMAC,
 table=70, priority=200,ct_state=+rpl+trk,ip,nw_dst=$peerNodeIP actions=mod_dl_dst:$peerNodeMAC,resubmit(,80)
 
 L2ForwardingCalcTable: 80
-table=80, priority=200,dl_dst=$peerNodeMAC actions=load:$uplink->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],resubmit(,105)
+table=80, priority=200,dl_dst=$peerNodeMAC actions=load:$uplink->NXM_NX_REG1[],set_field:0x10000/0x10000->reg0,resubmit(,105)
 ```
 
 ### SNAT configuration

@@ -18,13 +18,15 @@ import (
 	"fmt"
 	"net"
 
-	"antrea.io/libOpenflow/openflow13"
+	"antrea.io/libOpenflow/openflow15"
+	"antrea.io/libOpenflow/util"
 	"antrea.io/ofnet/ofctrl"
 )
 
 type ofGroup struct {
-	ofctrl *ofctrl.Group
-	bridge *OFBridge
+	ofctrl       *ofctrl.Group
+	bridge       *OFBridge
+	bucketsCount int
 }
 
 // Reset creates a new ofctrl.Group object for the updated ofSwitch. The
@@ -62,9 +64,10 @@ func (g *ofGroup) KeyString() string {
 }
 
 func (g *ofGroup) Bucket() BucketBuilder {
+	id := uint32(len(g.ofctrl.Buckets))
 	return &bucketBuilder{
 		group:  g,
-		bucket: openflow13.NewBucket(),
+		bucket: openflow15.NewBucket(id),
 	}
 }
 
@@ -72,11 +75,11 @@ func (g *ofGroup) GetBundleMessage(entryOper OFOperation) (ofctrl.OpenFlowModMes
 	var operation int
 	switch entryOper {
 	case AddMessage:
-		operation = openflow13.OFPGC_ADD
+		operation = openflow15.OFPGC_ADD
 	case ModifyMessage:
-		operation = openflow13.OFPGC_MODIFY
+		operation = openflow15.OFPGC_MODIFY
 	case DeleteMessage:
-		operation = openflow13.OFPGC_DELETE
+		operation = openflow15.OFPGC_DELETE
 	}
 	message := g.ofctrl.GetBundleMessage(operation)
 	return message, nil
@@ -89,7 +92,7 @@ func (g *ofGroup) ResetBuckets() Group {
 
 type bucketBuilder struct {
 	group  *ofGroup
-	bucket *openflow13.Bucket
+	bucket *openflow15.Bucket
 }
 
 // LoadReg makes the learned flow to load data to reg[regID] with specific range.
@@ -99,23 +102,34 @@ func (b *bucketBuilder) LoadReg(regID int, data uint32) BucketBuilder {
 
 // LoadXXReg makes the learned flow to load data to xxreg[regID] with specific range.
 func (b *bucketBuilder) LoadXXReg(regID int, data []byte) BucketBuilder {
-	regAction := &ofctrl.NXLoadXXRegAction{FieldNumber: uint8(regID), Value: data, Mask: nil}
-	b.bucket.AddAction(regAction.GetActionMessage())
+	field, _ := openflow15.FindFieldHeaderByName(fmt.Sprintf("NXM_NX_XXREG%d", regID), false)
+	field.Value = util.NewBuffer(data)
+	b.bucket.AddAction(openflow15.NewActionSetField(*field))
 	return b
 }
 
 // LoadRegRange is an action to load data to the target register at specified range.
 func (b *bucketBuilder) LoadRegRange(regID int, data uint32, rng *Range) BucketBuilder {
-	reg := fmt.Sprintf("%s%d", NxmFieldReg, regID)
-	regField, _ := openflow13.FindFieldHeaderByName(reg, true)
-	b.bucket.AddAction(openflow13.NewNXActionRegLoad(rng.ToNXRange().ToOfsBits(), regField, uint64(data)))
+	valueData := data
+	mask := uint32(0)
+	if rng != nil {
+		mask = ^mask >> (32 - rng.Length()) << rng.Offset()
+		valueData = valueData << rng.Offset()
+	}
+	tgtField := openflow15.NewRegMatchFieldWithMask(regID, valueData, mask)
+	b.bucket.AddAction(openflow15.NewActionSetField(*tgtField))
 	return b
 }
 
 func (b *bucketBuilder) LoadToRegField(field *RegField, data uint32) BucketBuilder {
-	reg := field.GetNXFieldName()
-	regField, _ := openflow13.FindFieldHeaderByName(reg, true)
-	b.bucket.AddAction(openflow13.NewNXActionRegLoad(field.rng.ToNXRange().ToOfsBits(), regField, uint64(data)))
+	valueData := data
+	mask := uint32(0)
+	if field.rng != nil {
+		mask = ^mask >> (32 - field.rng.Length()) << field.rng.Offset()
+		valueData = valueData << field.rng.Offset()
+	}
+	tgtField := openflow15.NewRegMatchFieldWithMask(field.regID, valueData, mask)
+	b.bucket.AddAction(openflow15.NewActionSetField(*tgtField))
 	return b
 }
 
@@ -125,7 +139,7 @@ func (b *bucketBuilder) LoadRegMark(mark *RegMark) BucketBuilder {
 
 // ResubmitToTable is an action to resubmit packet to the specified table when the bucket is selected.
 func (b *bucketBuilder) ResubmitToTable(tableID uint8) BucketBuilder {
-	b.bucket.AddAction(openflow13.NewNXActionResubmitTableAction(openflow13.OFPP_IN_PORT, tableID))
+	b.bucket.AddAction(openflow15.NewNXActionResubmitTableAction(openflow15.OFPP_IN_PORT, tableID))
 	return b
 }
 
@@ -138,7 +152,8 @@ func (b *bucketBuilder) SetTunnelDst(addr net.IP) BucketBuilder {
 
 // Weight sets the weight of a bucket.
 func (b *bucketBuilder) Weight(val uint16) BucketBuilder {
-	b.bucket.Weight = val
+	weight := openflow15.NewGroupBucketPropWeight(val)
+	b.bucket.AddProperty(weight)
 	return b
 }
 

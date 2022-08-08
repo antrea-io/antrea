@@ -19,6 +19,7 @@ import (
 	"math/rand"
 	"net"
 
+	"antrea.io/libOpenflow/openflow15"
 	"antrea.io/libOpenflow/protocol"
 	"antrea.io/libOpenflow/util"
 	"antrea.io/ofnet/ofctrl"
@@ -112,7 +113,7 @@ func (b *ofPacketOutBuilder) SetIPProtocol(proto Protocol) PacketOutBuilder {
 	return b
 }
 
-// ofPacketOutBuilder sets IP protocol in the packet's IP header with the
+// SetIPProtocolValue sets IP protocol in the packet's IP header with the
 // intetger protocol value.
 func (b *ofPacketOutBuilder) SetIPProtocolValue(isIPv6 bool, protoValue uint8) PacketOutBuilder {
 	if isIPv6 {
@@ -153,7 +154,7 @@ func (b *ofPacketOutBuilder) SetIPFlags(flags uint16) PacketOutBuilder {
 	return b
 }
 
-// SetIPFlags sets flags in the packet's IP header. IPv4 only.
+// SetIPHeaderID sets identifier field in the packet's IP header. IPv4 only.
 func (b *ofPacketOutBuilder) SetIPHeaderID(id uint16) PacketOutBuilder {
 	if b.pktOut.IPv6Header == nil {
 		if b.pktOut.IPHeader == nil {
@@ -242,7 +243,7 @@ func (b *ofPacketOutBuilder) SetICMPCode(icmpCode uint8) PacketOutBuilder {
 	return b
 }
 
-// SetICMs sets the identifier in the packet's ICMP header.
+// SetICMPID sets the identifier in the packet's ICMP header.
 func (b *ofPacketOutBuilder) SetICMPID(id uint16) PacketOutBuilder {
 	if b.pktOut.ICMPHeader == nil {
 		b.pktOut.ICMPHeader = new(protocol.ICMP)
@@ -283,7 +284,7 @@ func (b *ofPacketOutBuilder) SetInport(inPort uint32) PacketOutBuilder {
 }
 
 // SetOutport sets the output port of the packetOut message. If the message is expected to go through OVS pipeline
-// from table0, use openflow13.P_TABLE, which is also the default value.
+// from table0, use openflow15.P_TABLE, which is also the default value.
 func (b *ofPacketOutBuilder) SetOutport(outport uint32) PacketOutBuilder {
 	b.pktOut.OutPort = outport
 	return b
@@ -296,16 +297,28 @@ func (b *ofPacketOutBuilder) SetL4Packet(packet util.Message) PacketOutBuilder {
 	return b
 }
 
-// AddLoadAction loads the data to the target field at specified range when the packet is received by OVS Switch.
-func (b *ofPacketOutBuilder) AddLoadAction(name string, data uint64, rng *Range) PacketOutBuilder {
-	act, _ := ofctrl.NewNXLoadAction(name, data, rng.ToNXRange())
+// AddSetIPToSAction sets the IP_TOS field in the packet-out message. The action clears the two ECN bits as 0,
+// and only 2-7 bits of the DSCP field in IP header is set.
+func (b *ofPacketOutBuilder) AddSetIPTOSAction(data uint8) PacketOutBuilder {
+	field, _ := openflow15.FindFieldHeaderByName(NxmFieldIPToS, true)
+	field.Value = &openflow15.IpDscpField{Dscp: data << IPDSCPToSRange.Offset()}
+	field.Mask = &openflow15.IpDscpField{Dscp: uint8(0xff) >> (8 - IPDSCPToSRange.Length()) << IPDSCPToSRange.Offset()}
+	act := ofctrl.NewSetFieldAction(field)
 	b.pktOut.Actions = append(b.pktOut.Actions, act)
 	return b
 }
 
 func (b *ofPacketOutBuilder) AddLoadRegMark(mark *RegMark) PacketOutBuilder {
-	name := mark.field.GetNXFieldName()
-	return b.AddLoadAction(name, uint64(mark.value), mark.field.rng)
+	valueData := mark.value
+	mask := uint32(0)
+	if mark.field.rng != nil {
+		mask = ^mask >> (32 - mark.field.rng.Length()) << mark.field.rng.Offset()
+		valueData = valueData << mark.field.rng.Offset()
+	}
+	tgtField := openflow15.NewRegMatchFieldWithMask(mark.field.regID, valueData, mask)
+	act := ofctrl.NewSetFieldAction(tgtField)
+	b.pktOut.Actions = append(b.pktOut.Actions, act)
+	return b
 }
 
 func (b *ofPacketOutBuilder) AddResubmitAction(inPort *uint16, table *uint8) PacketOutBuilder {

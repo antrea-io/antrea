@@ -20,10 +20,10 @@ import (
 	"net"
 	"strings"
 
-	utilnet "k8s.io/utils/net"
-
-	"antrea.io/libOpenflow/openflow13"
+	"antrea.io/libOpenflow/openflow15"
+	"antrea.io/libOpenflow/util"
 	"antrea.io/ofnet/ofctrl"
+	utilnet "k8s.io/utils/net"
 )
 
 type ofFlowAction struct {
@@ -83,59 +83,80 @@ func (a *ofFlowAction) CT(commit bool, tableID uint8, zone int, zoneSrcField *Re
 // ofCTAction is a struct to implement CTAction.
 type ofCTAction struct {
 	ctBase
-	actions []openflow13.Action
+	actions []openflow15.Action
 	builder *ofFlowBuilder
 }
 
 // LoadToMark is an action to load data into ct_mark.
 func (a *ofCTAction) LoadToMark(value uint32) CTAction {
-	field, rng, _ := getFieldRange(NxmFieldCtMark)
-	a.load(field, uint64(value), &rng)
+	ctMarkField := openflow15.NewCTMarkMatchField(value, nil)
+	action := openflow15.NewActionSetField(*ctMarkField)
+	a.actions = append(a.actions, action)
 	return a
 }
 
 func (a *ofCTAction) LoadToCtMark(marks ...*CtMark) CTAction {
-	field, _, _ := getFieldRange(NxmFieldCtMark)
 	for _, mark := range marks {
-		a.load(field, uint64(mark.value), mark.field.rng)
+		var mask *uint32
+		maskData := uint32(0)
+		valueData := mark.value
+		if mark.field.rng != nil {
+			maskData = ^maskData >> (32 - mark.field.rng.Length()) << mark.field.rng.Offset()
+			mask = &maskData
+			valueData = valueData << mark.field.rng.Offset()
+		}
+		ctMarkField := openflow15.NewCTMarkMatchField(valueData, mask)
+		action := openflow15.NewActionSetField(*ctMarkField)
+		a.actions = append(a.actions, action)
 	}
 	return a
 }
 
 func (a *ofCTAction) LoadToLabelField(value uint64, labelField *CtLabel) CTAction {
-	field, _, _ := getFieldRange(NxmFieldCtLabel)
-	a.load(field, value, labelField.rng)
-	return a
-}
-
-func (a *ofCTAction) load(field *openflow13.MatchField, value uint64, rng *Range) {
-	action := openflow13.NewNXActionRegLoad(rng.ToNXRange().ToOfsBits(), field, value)
+	var labelBytes, maskBytes [16]byte
+	valueData := value
+	if labelField.rng != nil {
+		mask := ^uint64(0) >> (64 - labelField.rng.Length()) << labelField.rng.Offset()
+		valueData = valueData << (labelField.rng.Offset() % 64)
+		if labelField.rng.Offset() > 64 {
+			binary.BigEndian.PutUint64(maskBytes[0:8], mask)
+			binary.BigEndian.PutUint64(labelBytes[0:8], valueData)
+		} else {
+			binary.BigEndian.PutUint64(maskBytes[8:], mask)
+			binary.BigEndian.PutUint64(labelBytes[8:], valueData)
+		}
+	} else {
+		binary.BigEndian.PutUint64(labelBytes[0:8], valueData)
+	}
+	ctLabelField := openflow15.NewCTLabelMatchField(labelBytes, &maskBytes)
+	action := openflow15.NewActionSetField(*ctLabelField)
 	a.actions = append(a.actions, action)
+	return a
 }
 
 // MoveToLabel is an action to move data into ct_label.
 func (a *ofCTAction) MoveToLabel(fromName string, fromRng, labelRng *Range) CTAction {
-	fromField, _ := openflow13.FindFieldHeaderByName(fromName, false)
-	toField, _ := openflow13.FindFieldHeaderByName(NxmFieldCtLabel, false)
+	fromField, _ := openflow15.FindOxmIdByName(fromName, false)
+	toField, _ := openflow15.FindOxmIdByName(NxmFieldCtLabel, false)
 	a.move(fromField, toField, uint16(fromRng.Length()), uint16(fromRng[0]), uint16(labelRng[0]))
 	return a
 }
 
 // MoveToCtMarkField is an action to move data into ct_mark.
 func (a *ofCTAction) MoveToCtMarkField(fromRegField *RegField, ctMarkField *CtMarkField) CTAction {
-	fromField, _ := openflow13.FindFieldHeaderByName(fromRegField.GetNXFieldName(), false)
-	toField, _ := openflow13.FindFieldHeaderByName(NxmFieldCtMark, false)
+	fromField, _ := openflow15.FindOxmIdByName(fromRegField.GetNXFieldName(), false)
+	toField, _ := openflow15.FindOxmIdByName(NxmFieldCtMark, false)
 	a.move(fromField, toField, uint16(fromRegField.GetRange().Length()), uint16(fromRegField.GetRange()[0]), uint16(ctMarkField.rng[0]))
 	return a
 }
 
-func (a *ofCTAction) move(fromField *openflow13.MatchField, toField *openflow13.MatchField, nBits, fromStart, toStart uint16) {
-	action := openflow13.NewNXActionRegMove(nBits, fromStart, toStart, fromField, toField)
+func (a *ofCTAction) move(fromField *openflow15.OxmId, toField *openflow15.OxmId, nBits, fromStart, toStart uint16) {
+	action := openflow15.NewActionCopyField(nBits, fromStart, toStart, *fromField, *toField)
 	a.actions = append(a.actions, action)
 }
 
 func (a *ofCTAction) natAction(isSNAT bool, ipRange *IPRange, portRange *PortRange) CTAction {
-	action := openflow13.NewNXActionCTNAT()
+	action := openflow15.NewNXActionCTNAT()
 	if isSNAT {
 		action.SetSNAT()
 	} else {
@@ -169,7 +190,7 @@ func (a *ofCTAction) DNAT(ipRange *IPRange, portRange *PortRange) CTAction {
 }
 
 func (a *ofCTAction) NAT() CTAction {
-	action := openflow13.NewNXActionCTNAT()
+	action := openflow15.NewNXActionCTNAT()
 	a.actions = append(a.actions, action)
 	return a
 }
@@ -272,25 +293,39 @@ func (a *ofFlowAction) SetVLAN(vlanID uint16) FlowBuilder {
 
 // LoadARPOperation is an action to load data to NXM_OF_ARP_OP field.
 func (a *ofFlowAction) LoadARPOperation(value uint16) FlowBuilder {
-	loadAct, _ := ofctrl.NewNXLoadAction(NxmFieldARPOp, uint64(value), openflow13.NewNXRange(0, 15))
+	loadAct := &ofctrl.SetARPOpAction{Value: value}
 	a.builder.ApplyAction(loadAct)
 	return a.builder
 }
 
 // LoadRange is an action to load data to the target field at specified range.
 func (a *ofFlowAction) LoadRange(name string, value uint64, rng *Range) FlowBuilder {
-	loadAct, _ := ofctrl.NewNXLoadAction(name, value, rng.ToNXRange())
-	if a.builder.ofFlow.Table != nil && a.builder.ofFlow.Table.Switch != nil {
-		loadAct.ResetFieldLength(a.builder.ofFlow.Table.Switch)
+	hasMask := rng != nil
+	field, _ := openflow15.FindFieldHeaderByName(name, hasMask)
+	valueBytes := make([]byte, 8)
+	maskBytes := make([]byte, 8)
+	valueData := value
+	if hasMask {
+		mask := ^uint64(0) >> (64 - rng.Length()) << rng.Offset()
+		binary.BigEndian.PutUint64(maskBytes, mask)
+		field.Mask = util.NewBuffer(maskBytes)
+		valueData = valueData << rng.Offset()
 	}
-	a.builder.ApplyAction(loadAct)
-	return a.builder
+	binary.BigEndian.PutUint64(valueBytes, valueData)
+	field.Value = util.NewBuffer(valueBytes)
+	return a.setField(field)
 }
 
 func (a *ofFlowAction) LoadToRegField(field *RegField, value uint32) FlowBuilder {
-	name := field.GetNXFieldName()
-	loadAct, _ := ofctrl.NewNXLoadAction(name, uint64(value), field.rng.ToNXRange())
-	a.builder.ApplyAction(loadAct)
+	valueData := value
+	mask := uint32(0)
+	if field.rng != nil {
+		mask = ^mask >> (32 - field.rng.Length()) << field.rng.Offset()
+		valueData = valueData << field.rng.Offset()
+	}
+	f := openflow15.NewRegMatchFieldWithMask(field.regID, valueData, mask)
+	act := ofctrl.NewSetFieldAction(f)
+	a.builder.ApplyAction(act)
 	return a.builder
 }
 
@@ -303,14 +338,36 @@ func (a *ofFlowAction) LoadRegMark(marks ...*RegMark) FlowBuilder {
 	return fb
 }
 
-// LoadToPktMarkRange is an action to load data into pkt_mark at specified range.
+// LoadPktMarkRange is an action to load data into pkt_mark at specified range.
 func (a *ofFlowAction) LoadPktMarkRange(value uint32, rng *Range) FlowBuilder {
-	return a.LoadRange(NxmFieldPktMark, uint64(value), rng)
+	pktMarkField, _ := openflow15.FindFieldHeaderByName(NxmFieldPktMark, true)
+	valueBytes := make([]byte, 4)
+	maskBytes := make([]byte, 4)
+	valueData := value
+	mask := uint32(0)
+	if rng != nil {
+		mask = ^mask >> (32 - rng.Length()) << rng.Offset()
+		binary.BigEndian.PutUint32(maskBytes, mask)
+		pktMarkField.Mask = util.NewBuffer(maskBytes)
+		valueData = valueData << rng.Offset()
+	}
+	binary.BigEndian.PutUint32(valueBytes, valueData)
+	pktMarkField.Value = util.NewBuffer(valueBytes)
+	return a.setField(pktMarkField)
 }
 
 // LoadIPDSCP is an action to load data to IP DSCP bits.
 func (a *ofFlowAction) LoadIPDSCP(value uint8) FlowBuilder {
-	return a.LoadRange(NxmFieldIPToS, uint64(value), IPDSCPToSRange)
+	field, _ := openflow15.FindFieldHeaderByName(NxmFieldIPToS, true)
+	field.Value = &openflow15.IpDscpField{Dscp: value << IPDSCPToSRange.Offset()}
+	field.Mask = &openflow15.IpDscpField{Dscp: uint8(0xff) >> (8 - IPDSCPToSRange.Length()) << IPDSCPToSRange.Offset()}
+	return a.setField(field)
+}
+
+func (a *ofFlowAction) setField(field *openflow15.MatchField) FlowBuilder {
+	loadAct := ofctrl.NewSetFieldAction(field)
+	a.builder.ApplyAction(loadAct)
+	return a.builder
 }
 
 // Move is an action to copy all data from "fromField" to "toField". Fields with name "fromField" and "fromField" should
@@ -323,12 +380,24 @@ func (a *ofFlowAction) Move(fromField, toField string) FlowBuilder {
 
 // MoveRange is an action to move data from "fromField" at "fromRange" to "toField" at "toRange".
 func (a *ofFlowAction) MoveRange(fromField, toField string, fromRange, toRange Range) FlowBuilder {
-	moveAct, _ := ofctrl.NewNXMoveAction(fromField, toField, fromRange.ToNXRange(), toRange.ToNXRange())
-	if a.builder.ofFlow.Table != nil && a.builder.ofFlow.Table.Switch != nil {
-		moveAct.ResetFieldsLength(a.builder.ofFlow.Table.Switch)
-	}
+	srcOxmId, _ := openflow15.FindOxmIdByName(fromField, false)
+	dstOxmId, _ := openflow15.FindOxmIdByName(toField, false)
+	return a.copyField(srcOxmId, dstOxmId, fromRange, toRange)
+}
+
+func (a *ofFlowAction) copyField(srcOxmId, dstOxmId *openflow15.OxmId, fromRange, toRange Range) FlowBuilder {
+	nBits := fromRange.ToNXRange().GetNbits()
+	srcOffset := fromRange.ToNXRange().GetOfs()
+	dstOffset := toRange.ToNXRange().GetOfs()
+	moveAct := ofctrl.NewCopyFieldAction(nBits, srcOffset, dstOffset, srcOxmId, dstOxmId)
 	a.builder.ApplyAction(moveAct)
 	return a.builder
+}
+
+func (a *ofFlowAction) MoveFromTunMetadata(fromTunMetadataID int, toField string, fromRange, toRange Range, tlvLength uint8) FlowBuilder {
+	dstOxmID, _ := openflow15.FindOxmIdByName(toField, false)
+	srcOxmID := getTunMetadataOxmId(fromTunMetadataID, tlvLength)
+	return a.copyField(srcOxmID, dstOxmID, fromRange, toRange)
 }
 
 // Resubmit is an action to resubmit packet to the specified table with the port as new in_port. If port is empty string,
@@ -343,7 +412,7 @@ func (a *ofFlowAction) Resubmit(ofPort uint16, tableID uint8) FlowBuilder {
 func (a *ofFlowAction) ResubmitToTables(tables ...uint8) FlowBuilder {
 	var fb FlowBuilder
 	for _, t := range tables {
-		fb = a.Resubmit(openflow13.OFPP_IN_PORT, t)
+		fb = a.Resubmit(openflow15.OFPP_IN_PORT, t)
 	}
 	return fb
 }
@@ -399,11 +468,12 @@ func (a *ofFlowAction) SendToController(reason uint8) FlowBuilder {
 }
 
 func (a *ofFlowAction) Meter(meterID uint32) FlowBuilder {
-	a.builder.ofFlow.Meter(meterID)
+	meterAction := ofctrl.NewMeterAction(meterID)
+	a.builder.ApplyAction(meterAction)
 	return a.builder
 }
 
-//  Learn is an action which adds or modifies a flow in an OpenFlow table.
+// Learn is an action which adds or modifies a flow in an OpenFlow table.
 func (a *ofFlowAction) Learn(id uint8, priority uint16, idleTimeout, hardTimeout uint16, cookieID uint64) LearnAction {
 	la := &ofLearnAction{
 		flowBuilder: a.builder,
@@ -600,8 +670,8 @@ func (a *ofLearnAction) Done() FlowBuilder {
 	return a.flowBuilder
 }
 
-func getFieldRange(name string) (*openflow13.MatchField, Range, error) {
-	field, err := openflow13.FindFieldHeaderByName(name, false)
+func getFieldRange(name string) (*openflow15.MatchField, Range, error) {
+	field, err := openflow15.FindFieldHeaderByName(name, false)
 	if err != nil {
 		return field, Range{0, 0}, err
 	}
@@ -625,4 +695,11 @@ func (a *ofFlowAction) GotoStage(stage StageID) FlowBuilder {
 	table := pipeline.GetFirstTableInStage(stage)
 	a.builder.ofFlow.Goto(table.GetID())
 	return a.builder
+}
+
+func getTunMetadataOxmId(id int, tlvLength uint8) *openflow15.OxmId {
+	field := fmt.Sprintf("%s%d", NxmFieldTunMetadata, id)
+	oxmID, _ := openflow15.FindOxmIdByName(field, false)
+	oxmID.Length = tlvLength
+	return oxmID
 }

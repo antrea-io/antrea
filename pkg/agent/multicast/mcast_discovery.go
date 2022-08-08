@@ -21,7 +21,7 @@ import (
 	"sync"
 	"time"
 
-	"antrea.io/libOpenflow/openflow13"
+	"antrea.io/libOpenflow/openflow15"
 	"antrea.io/libOpenflow/protocol"
 	"antrea.io/libOpenflow/util"
 	"antrea.io/ofnet/ofctrl"
@@ -73,9 +73,9 @@ type IGMPSnooper struct {
 }
 
 func (s *IGMPSnooper) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
-	matches := pktIn.GetMatches()
+	matchers := pktIn.GetMatches()
 	// Get custom reasons in this packet-in.
-	match := matches.GetMatchByName(openflow.CustomReasonField.GetNXFieldName())
+	match := openflow.GetMatchFieldByRegID(matchers, openflow.CustomReasonField.GetRegID())
 	customReasons, err := getInfoInReg(match, openflow.CustomReasonField.GetRange().ToNXRange())
 	if err != nil {
 		klog.ErrorS(err, "Received error while unloading customReason from OVS reg", "regField", openflow.CustomReasonField.GetName())
@@ -87,7 +87,7 @@ func (s *IGMPSnooper) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
 	return nil
 }
 
-func getInfoInReg(regMatch *ofctrl.MatchField, rng *openflow13.NXRange) (uint32, error) {
+func getInfoInReg(regMatch *ofctrl.MatchField, rng *openflow15.NXRange) (uint32, error) {
 	regValue, ok := regMatch.GetValue().(*ofctrl.NXRegister)
 	if !ok {
 		return 0, errors.New("register value cannot be retrieved")
@@ -268,7 +268,11 @@ func (s *IGMPSnooper) processPacketIn(pktIn *ofctrl.PacketIn) error {
 			return err
 		}
 	}
-	igmp, err := parseIGMPPacket(pktIn.Data)
+	pktData := new(protocol.Ethernet)
+	if err := pktData.UnmarshalBinary(pktIn.Data.(*util.Buffer).Bytes()); err != nil {
+		return fmt.Errorf("failed to parse ethernet packet from packet-in message: %v", err)
+	}
+	igmp, err := parseIGMPPacket(*pktData)
 	if err != nil {
 		return err
 	}
@@ -285,7 +289,7 @@ func (s *IGMPSnooper) processPacketIn(pktIn *ofctrl.PacketIn) error {
 			time:  now,
 			iface: iface,
 		}
-		s.validatePacketAndNotify(event, igmpType, pktIn.Data)
+		s.validatePacketAndNotify(event, igmpType, *pktData)
 	case protocol.IGMPv3Report:
 		msg := igmp.(*protocol.IGMPv3MembershipReport)
 		for _, gr := range msg.GroupRecords {
@@ -302,7 +306,7 @@ func (s *IGMPSnooper) processPacketIn(pktIn *ofctrl.PacketIn) error {
 				iface:   iface,
 				srcNode: srcNode,
 			}
-			s.validatePacketAndNotify(event, igmpType, pktIn.Data)
+			s.validatePacketAndNotify(event, igmpType, *pktData)
 		}
 	case protocol.IGMPv2LeaveGroup:
 		mgroup := igmp.(*protocol.IGMPv1or2).GroupAddress

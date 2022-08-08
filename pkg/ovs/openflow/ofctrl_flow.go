@@ -18,7 +18,7 @@ import (
 	"fmt"
 	"strings"
 
-	"antrea.io/libOpenflow/openflow13"
+	"antrea.io/libOpenflow/openflow15"
 	"antrea.io/ofnet/ofctrl"
 )
 
@@ -42,9 +42,9 @@ type ofFlow struct {
 	// ctStateString is a temporary variable for the readable ct_state configuration. Its value is changed when the client
 	// updates the matching condition of "ct_states". When FlowBuilder.Done is called, its value is added into the matchers.
 	ctStateString string
-	// ctStates is a temporary variable to maintain openflow13.CTStates. When FlowBuilder.Done is called, it is used to
+	// ctStates is a temporary variable to maintain openflow15.CTStates. When FlowBuilder.Done is called, it is used to
 	// set the CtStates field in ofctrl.Flow.Match.
-	ctStates *openflow13.CTStates
+	ctStates *openflow15.CTStates
 	// isDropFlow is true if this flow actions contain "drop"
 	isDropFlow bool
 }
@@ -69,7 +69,7 @@ func (f *ofFlow) Reset() {
 }
 
 func (f *ofFlow) Add() error {
-	err := f.Flow.Send(openflow13.FC_ADD)
+	err := f.Flow.Send(openflow15.FC_ADD)
 	if err != nil {
 		return err
 	}
@@ -78,7 +78,7 @@ func (f *ofFlow) Add() error {
 }
 
 func (f *ofFlow) Modify() error {
-	err := f.Flow.Send(openflow13.FC_MODIFY_STRICT)
+	err := f.Flow.Send(openflow15.FC_MODIFY_STRICT)
 	if err != nil {
 		return err
 	}
@@ -88,7 +88,7 @@ func (f *ofFlow) Modify() error {
 
 func (f *ofFlow) Delete() error {
 	f.Flow.UpdateInstallStatus(true)
-	err := f.Flow.Send(openflow13.FC_DELETE_STRICT)
+	err := f.Flow.Send(openflow15.FC_DELETE_STRICT)
 	if err != nil {
 		return err
 	}
@@ -128,11 +128,11 @@ func (f *ofFlow) GetBundleMessage(entryOper OFOperation) (ofctrl.OpenFlowModMess
 	var operation int
 	switch entryOper {
 	case AddMessage:
-		operation = openflow13.FC_ADD
+		operation = openflow15.FC_ADD
 	case ModifyMessage:
-		operation = openflow13.FC_MODIFY_STRICT
+		operation = openflow15.FC_MODIFY_STRICT
 	case DeleteMessage:
-		operation = openflow13.FC_DELETE_STRICT
+		operation = openflow15.FC_DELETE_STRICT
 	}
 	message, err := f.Flow.GetBundleMessage(operation)
 	if err != nil {
@@ -175,8 +175,8 @@ func (f *ofFlow) IsDropFlow() bool {
 	return f.isDropFlow
 }
 
-func (r *Range) ToNXRange() *openflow13.NXRange {
-	return openflow13.NewNXRange(int(r[0]), int(r[1]))
+func (r *Range) ToNXRange() *openflow15.NXRange {
+	return openflow15.NewNXRange(int(r[0]), int(r[1]))
 }
 
 func (r *Range) Length() uint32 {

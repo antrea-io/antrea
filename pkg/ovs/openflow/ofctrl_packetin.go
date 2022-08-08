@@ -63,39 +63,50 @@ func GetUDPHeaderData(ipPkt util.Message) (udpSrcPort, udpDstPort uint16, err er
 }
 
 func getICMPHeaderData(ipPkt util.Message) (icmpType, icmpCode uint8, icmpEchoID, icmpEchoSeq uint16, err error) {
-	var icmpIn *protocol.ICMP
 	switch typedIPPkt := ipPkt.(type) {
 	case *protocol.IPv4:
-		icmpIn = typedIPPkt.Data.(*protocol.ICMP)
+		icmpIn := typedIPPkt.Data.(*protocol.ICMP)
+		if icmpIn.Type == icmpEchoRequestType {
+			if len(icmpIn.Data) < 4 {
+				return 0, 0, 0, 0, errors.New("ICMP payload is too short to unmarshal an ICMP echo message")
+			}
+			icmpEchoID = binary.BigEndian.Uint16(icmpIn.Data[:2])
+			icmpEchoSeq = binary.BigEndian.Uint16(icmpIn.Data[2:4])
+		}
+		icmpType = icmpIn.Type
+		icmpCode = icmpIn.Code
 	case *protocol.IPv6:
-		icmpIn = typedIPPkt.Data.(*protocol.ICMP)
+		icmpIn := typedIPPkt.Data.(*protocol.ICMPv6EchoReqRpl)
+		if icmpIn.Type == icmp6EchoRequestType {
+			icmpEchoID = icmpIn.Identifier
+			icmpEchoSeq = icmpIn.SeqNum
+		}
+		icmpType = icmpIn.Type
+		icmpCode = icmpIn.Code
 	}
 
-	if icmpIn.Type == icmpEchoRequestType || icmpIn.Type == icmp6EchoRequestType {
-		if len(icmpIn.Data) < 4 {
-			return 0, 0, 0, 0, errors.New("ICMP payload is too short to unmarshal an ICMP echo message")
-		}
-		icmpEchoID = binary.BigEndian.Uint16(icmpIn.Data[:2])
-		icmpEchoSeq = binary.BigEndian.Uint16(icmpIn.Data[2:4])
-	}
-	return icmpIn.Type, icmpIn.Code, icmpEchoID, icmpEchoSeq, nil
+	return icmpType, icmpCode, icmpEchoID, icmpEchoSeq, nil
 }
 
 func ParsePacketIn(pktIn *ofctrl.PacketIn) (*Packet, error) {
 	packet := Packet{}
-	packet.DestinationMAC = pktIn.Data.HWDst
-	packet.SourceMAC = pktIn.Data.HWSrc
+	ethernetData := new(protocol.Ethernet)
+	if err := ethernetData.UnmarshalBinary(pktIn.Data.(*util.Buffer).Bytes()); err != nil {
+		return nil, err
+	}
+	packet.DestinationMAC = ethernetData.HWDst
+	packet.SourceMAC = ethernetData.HWSrc
 
-	if pktIn.Data.Ethertype == protocol.IPv4_MSG {
-		ipPkt := pktIn.Data.Data.(*protocol.IPv4)
+	if ethernetData.Ethertype == protocol.IPv4_MSG {
+		ipPkt := ethernetData.Data.(*protocol.IPv4)
 		packet.DestinationIP = ipPkt.NWDst
 		packet.SourceIP = ipPkt.NWSrc
 		packet.TTL = ipPkt.TTL
 		packet.IPProto = ipPkt.Protocol
 		packet.IPFlags = ipPkt.Flags
 		packet.IPLength = ipPkt.Length
-	} else if pktIn.Data.Ethertype == protocol.IPv6_MSG {
-		ipPkt := pktIn.Data.Data.(*protocol.IPv6)
+	} else if ethernetData.Ethertype == protocol.IPv6_MSG {
+		ipPkt := ethernetData.Data.(*protocol.IPv6)
 		packet.DestinationIP = ipPkt.NWDst
 		packet.SourceIP = ipPkt.NWSrc
 		packet.TTL = ipPkt.HopLimit
@@ -111,11 +122,11 @@ func ParsePacketIn(pktIn *ofctrl.PacketIn) (*Packet, error) {
 
 	var err error
 	if packet.IPProto == protocol.Type_TCP {
-		packet.SourcePort, packet.DestinationPort, _, _, packet.TCPFlags, err = GetTCPHeaderData(pktIn.Data.Data)
+		packet.SourcePort, packet.DestinationPort, _, _, packet.TCPFlags, err = GetTCPHeaderData(ethernetData.Data)
 	} else if packet.IPProto == protocol.Type_UDP {
-		packet.SourcePort, packet.DestinationPort, err = GetUDPHeaderData(pktIn.Data.Data)
+		packet.SourcePort, packet.DestinationPort, err = GetUDPHeaderData(ethernetData.Data)
 	} else if packet.IPProto == protocol.Type_ICMP || packet.IPProto == protocol.Type_IPv6ICMP {
-		_, _, packet.ICMPEchoID, packet.ICMPEchoSeq, err = getICMPHeaderData(pktIn.Data.Data)
+		_, _, packet.ICMPEchoID, packet.ICMPEchoSeq, err = getICMPHeaderData(ethernetData.Data)
 	}
 	if err != nil {
 		return nil, err

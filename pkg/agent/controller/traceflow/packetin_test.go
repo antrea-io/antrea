@@ -171,7 +171,11 @@ func TestParseCapturedPacket(t *testing.T) {
 			if tt.isIPv6 {
 				ethType = uint16(protocol.IPv6_MSG)
 			}
-			pktIn := ofctrl.PacketIn{Data: protocol.Ethernet{Ethertype: ethType, Data: tt.pktInData}}
+			etherPkt := protocol.NewEthernet()
+			etherPkt.Ethertype = ethType
+			etherPkt.Data = tt.pktInData
+			pktBytes, _ := etherPkt.MarshalBinary()
+			pktIn := ofctrl.PacketIn{Data: util.NewBuffer(pktBytes)}
 			packet := parseCapturedPacket(&pktIn)
 			assert.True(t, reflect.DeepEqual(packet, tt.pktCap), "parsed packet does not match the expected")
 		})

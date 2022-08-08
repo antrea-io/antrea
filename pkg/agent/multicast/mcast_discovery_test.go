@@ -19,7 +19,7 @@ import (
 	"sync"
 	"testing"
 
-	"antrea.io/libOpenflow/openflow13"
+	"antrea.io/libOpenflow/openflow15"
 	"antrea.io/libOpenflow/protocol"
 	"antrea.io/libOpenflow/util"
 	"antrea.io/ofnet/ofctrl"
@@ -149,11 +149,11 @@ func TestIGMPRemoteReport(t *testing.T) {
 }
 
 func generatePacket(m util.Message, ofport uint32, srcNodeIP net.IP) ofctrl.PacketIn {
-	pkt := openflow13.NewPacketIn()
-	matchInport := openflow13.NewInPortField(ofport)
+	pkt := openflow15.NewPacketIn()
+	matchInport := openflow15.NewInPortField(ofport)
 	pkt.Match.AddField(*matchInport)
 	if srcNodeIP != nil {
-		matchTunSrc := openflow13.NewTunnelIpv4SrcField(srcNodeIP, nil)
+		matchTunSrc := openflow15.NewTunnelIpv4SrcField(srcNodeIP, nil)
 		pkt.Match.AddField(*matchTunSrc)
 	}
 	ipPacket := &protocol.IPv4{
@@ -163,12 +163,13 @@ func generatePacket(m util.Message, ofport uint32, srcNodeIP net.IP) ofctrl.Pack
 		Length:   20 + m.Len(),
 		Data:     m,
 	}
-	pkt.Data = protocol.Ethernet{
-		HWDst:     pktInDstMAC,
-		HWSrc:     pktInSrcMAC,
-		Ethertype: protocol.IPv4_MSG,
-		Data:      ipPacket,
-	}
+	ethernetPkt := protocol.NewEthernet()
+	ethernetPkt.HWDst = pktInDstMAC
+	ethernetPkt.HWSrc = pktInSrcMAC
+	ethernetPkt.Ethertype = protocol.IPv4_MSG
+	ethernetPkt.Data = ipPacket
+	pktBytes, _ := ethernetPkt.MarshalBinary()
+	pkt.Data = util.NewBuffer(pktBytes)
 	return ofctrl.PacketIn(*pkt)
 }
 

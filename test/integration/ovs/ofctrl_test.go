@@ -17,7 +17,6 @@ package ovs
 import (
 	"fmt"
 	"net"
-	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -30,6 +29,7 @@ import (
 	"golang.org/x/time/rate"
 	"k8s.io/apimachinery/pkg/util/wait"
 
+	"antrea.io/antrea/pkg/agent/openflow"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 	"antrea.io/antrea/pkg/ovs/ovsctl"
@@ -324,11 +324,15 @@ func TestOFctrlGroup(t *testing.T) {
 					assert.True(t, strings.Contains(dumpedGroup[i+1], fmt.Sprintf("weight:%d", bucket.weight)))
 				}
 				for _, loading := range bucket.reg2reg {
-					rngStr := "[]"
+					rngStr := ""
+					data := loading[1]
 					if !(loading[2] == 0 && loading[3] == 31) {
-						rngStr = fmt.Sprintf("[%d..%d]", loading[2], loading[3])
+						length := loading[3] - loading[2] + 1
+						mask := ^uint32(0) >> (32 - length) << loading[2]
+						rngStr = fmt.Sprintf("/0x%x", mask)
+						data = data << loading[2]
 					}
-					loadStr := fmt.Sprintf("load:0x%x->NXM_NX_REG%d%s", loading[1], loading[0], rngStr)
+					loadStr := fmt.Sprintf("set_field:0x%x%s->reg%d", data, rngStr, loading[0])
 					assert.Contains(t, dumpedGroup[i+1], loadStr)
 				}
 				if bucket.resubmitTable != 0 {
@@ -575,8 +579,8 @@ func TestBundleWithGroupAndFlow(t *testing.T) {
 		},
 	}
 
-	bucket0 := "weight:100,actions=load:0xa0a0002->NXM_NX_REG1[],load:0x35->NXM_NX_REG2[],load:0xfff1->NXM_NX_REG3[],resubmit(,3)"
-	bucket1 := "weight:100,actions=load:0xa0a0202->NXM_NX_REG1[],load:0x35->NXM_NX_REG2[],load:0xfff1->NXM_NX_REG3[],resubmit(,3)"
+	bucket0 := "weight:100,actions=set_field:0xa0a0002->reg1,set_field:0x35->reg2,set_field:0xfff1->reg3,resubmit(,3)"
+	bucket1 := "weight:100,actions=set_field:0xa0a0202->reg1,set_field:0x35->reg2,set_field:0xfff1->reg3,resubmit(,3)"
 	expectedGroupBuckets := []string{bucket0, bucket1}
 	err = bridge.AddOFEntriesInBundle([]binding.OFEntry{flow, group}, nil, nil)
 	require.Nil(t, err)
@@ -625,7 +629,7 @@ func TestPacketOutIn(t *testing.T) {
 		pktIn := pktInQueue.GetRateLimited(make(chan struct{}))
 		matchers := pktIn.GetMatches()
 
-		reg2Match := matchers.GetMatchByName("NXM_NX_REG2")
+		reg2Match := openflow.GetMatchFieldByRegID(matchers, 2)
 		assert.NotNil(t, reg2Match)
 		reg2Value := reg2Match.GetValue()
 		assert.NotNil(t, reg2Value)
@@ -633,7 +637,7 @@ func TestPacketOutIn(t *testing.T) {
 		assert.True(t, ok2)
 		assert.Equal(t, reg2Data, ofctrl.GetUint32ValueWithRange(value2.Data, reg2Field.GetRange().ToNXRange()))
 
-		reg3Match := matchers.GetMatchByName("NXM_NX_REG3")
+		reg3Match := openflow.GetMatchFieldByRegID(matchers, 3)
 		assert.NotNil(t, reg3Match)
 		reg3Value := reg3Match.GetValue()
 		assert.NotNil(t, reg3Value)
@@ -654,10 +658,11 @@ func TestPacketOutIn(t *testing.T) {
 
 	pktBuilder := bridge.BuildPacketOut()
 	regField := binding.NewRegField(0, 18, 18, "field")
+	mark := binding.NewRegMark(regField, 0x1)
 	pkt := pktBuilder.SetSrcMAC(srcMAC).SetDstMAC(dstcMAC).
 		SetDstIP(dstIP).SetSrcIP(srcIP).SetIPProtocol(binding.ProtocolTCP).
 		SetTCPSrcPort(srcPort).SetTCPDstPort(dstPort).
-		AddLoadAction(regField.GetNXFieldName(), uint64(0x1), regField.GetRange()).
+		AddLoadRegMark(mark).
 		Done()
 	require.Nil(t, err)
 	flow0 := table0.BuildFlow(100).
@@ -736,7 +741,7 @@ func TestMoveTunMetadata(t *testing.T) {
 	time.Sleep(1 * time.Second)
 	flow1 := table.BuildFlow(100).
 		MatchProtocol(binding.ProtocolIP).MatchTunMetadata(0, 0x1234).
-		Action().MoveRange("NXM_NX_TUN_METADATA0", "NXM_NX_REG0", binding.Range{28, 31}, binding.Range{28, 31}).
+		Action().MoveFromTunMetadata(0, "NXM_NX_REG0", binding.Range{28, 31}, binding.Range{28, 31}, 4).
 		Action().NextTable().
 		Done()
 	err = bridge.AddFlowsInBundle([]binding.Flow{flow1}, nil, nil)
@@ -866,7 +871,6 @@ func prepareFlows(table binding.Table) ([]binding.Flow, []*ExpectFlow) {
 	var flows []binding.Flow
 	_, AllIPs, _ := net.ParseCIDR("0.0.0.0/0")
 	_, conjSrcIPNet, _ := net.ParseCIDR("192.168.3.0/24")
-	gwMACData, _ := strconv.ParseUint(strings.Replace(gwMAC.String(), ":", "", -1), 16, 64)
 	_, peerSubnetIPv6, _ := net.ParseCIDR("fd74:ca9b:172:21::/64")
 	tunnelPeerIPv6 := net.ParseIP("20:ca9b:172:35::3")
 	regField0 := binding.NewRegField(0, 0, 15, "field0")
@@ -944,7 +948,7 @@ func prepareFlows(table binding.Table) ([]binding.Flow, []*ExpectFlow) {
 			Cookie(getCookieID()).
 			MatchCTMark(gatewayCTMark).
 			MatchCTStateNew(false).MatchCTStateTrk(true).
-			Action().LoadRange(binding.NxmFieldDstMAC, gwMACData, &binding.Range{0, 47}).
+			Action().SetDstMAC(gwMAC).
 			Action().NextTable().
 			Done(),
 		table.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
@@ -1033,23 +1037,23 @@ func prepareFlows(table binding.Table) ([]binding.Flow, []*ExpectFlow) {
 	gotoTableAction := fmt.Sprintf("goto_table:%d", table.GetNext())
 	var flowStrs []*ExpectFlow
 	flowStrs = append(flowStrs,
-		&ExpectFlow{"priority=190,in_port=3", fmt.Sprintf("load:0x2->NXM_NX_REG0[0..15],%s", gotoTableAction)},
+		&ExpectFlow{"priority=190,in_port=3", fmt.Sprintf("set_field:0x2/0xffff->reg0,%s", gotoTableAction)},
 		&ExpectFlow{"priority=200,arp,in_port=3,arp_spa=192.168.1.3,arp_sha=aa:aa:aa:aa:aa:13", gotoTableAction},
 		&ExpectFlow{"priority=200,ip,in_port=3,dl_src=aa:aa:aa:aa:aa:13,nw_src=192.168.1.3", gotoTableAction},
-		&ExpectFlow{"priority=200,arp,arp_tpa=192.168.2.1,arp_op=1", "move:NXM_OF_ETH_SRC[]->NXM_OF_ETH_DST[],set_field:aa:bb:cc:dd:ee:ff->eth_src,load:0x2->NXM_OF_ARP_OP[],move:NXM_NX_ARP_SHA[]->NXM_NX_ARP_THA[],set_field:aa:bb:cc:dd:ee:ff->arp_sha,move:NXM_OF_ARP_SPA[]->NXM_OF_ARP_TPA[],set_field:192.168.2.1->arp_spa,IN_PORT"},
+		&ExpectFlow{"priority=200,arp,arp_tpa=192.168.2.1,arp_op=1", "move:NXM_OF_ETH_SRC[]->NXM_OF_ETH_DST[],set_field:aa:bb:cc:dd:ee:ff->eth_src,set_field:2->arp_op,move:NXM_NX_ARP_SHA[]->NXM_NX_ARP_THA[],set_field:aa:bb:cc:dd:ee:ff->arp_sha,move:NXM_OF_ARP_SPA[]->NXM_OF_ARP_TPA[],set_field:192.168.2.1->arp_spa,IN_PORT"},
 		&ExpectFlow{"priority=190,arp", "NORMAL"},
 		&ExpectFlow{"priority=200,tcp", fmt.Sprintf("learn(table=%d,idle_timeout=10,priority=190,delete_learned,cookie=0x1,eth_type=0x800,nw_proto=6,NXM_OF_TCP_DST[],NXM_NX_REG0[0..15]=0xfff,load:NXM_NX_REG0[0..15]->NXM_NX_REG0[0..15],load:0xffe->NXM_NX_REG0[16..31]),goto_table:%d", table.GetID(), table.GetNext())},
 		&ExpectFlow{"priority=200,ip", fmt.Sprintf("ct(table=%d,zone=65520)", table.GetNext())},
 		&ExpectFlow{"priority=210,ct_state=-new+trk,ct_mark=0x2/0x2,ip,reg0=0x1/0xffff", gotoTableAction},
-		&ExpectFlow{"priority=200,ct_state=+new+trk,ip,reg0=0x1/0xffff", fmt.Sprintf("ct(commit,table=%d,zone=65520,exec(load:0x1->NXM_NX_CT_MARK[1])", table.GetNext())},
-		&ExpectFlow{"priority=200,ct_state=-new+trk,ct_mark=0x2/0x2,ip", fmt.Sprintf("load:0xaaaaaaaaaa11->NXM_OF_ETH_DST[],%s", gotoTableAction)},
+		&ExpectFlow{"priority=200,ct_state=+new+trk,ip,reg0=0x1/0xffff", fmt.Sprintf("ct(commit,table=%d,zone=65520,exec(set_field:0x2/0x2->ct_mark)", table.GetNext())},
+		&ExpectFlow{"priority=200,ct_state=-new+trk,ct_mark=0x2/0x2,ip", fmt.Sprintf("set_field:aa:aa:aa:aa:aa:11->eth_dst,%s", gotoTableAction)},
 		&ExpectFlow{"priority=200,ct_state=+new+inv,ip", "drop"},
 		&ExpectFlow{"priority=190,ct_state=+new+trk,ip", fmt.Sprintf("ct(commit,table=%d,zone=65520)", table.GetNext())},
 		&ExpectFlow{"priority=200,ip,dl_dst=aa:bb:cc:dd:ee:ff,nw_dst=192.168.1.3", fmt.Sprintf("set_field:aa:aa:aa:aa:aa:11->eth_src,set_field:aa:aa:aa:aa:aa:13->eth_dst,dec_ttl,%s", gotoTableAction)},
 		&ExpectFlow{"priority=200,ip,nw_dst=192.168.2.0/24", fmt.Sprintf("dec_ttl,set_field:aa:aa:aa:aa:aa:11->eth_src,set_field:aa:bb:cc:dd:ee:ff->eth_dst,set_field:10.1.1.2->tun_dst,%s", gotoTableAction)},
 		&ExpectFlow{"priority=200,ipv6,ipv6_dst=fd74:ca9b:172:21::/64", fmt.Sprintf("dec_ttl,set_field:aa:aa:aa:aa:aa:11->eth_src,set_field:aa:bb:cc:dd:ee:ff->eth_dst,set_field:20:ca9b:172:35::3->tun_ipv6_dst,%s", gotoTableAction)},
 		&ExpectFlow{"priority=200,ip,nw_dst=192.168.1.1", fmt.Sprintf("set_field:aa:aa:aa:aa:aa:11->eth_dst,%s", gotoTableAction)},
-		&ExpectFlow{"priority=200,dl_dst=aa:aa:aa:aa:aa:13", fmt.Sprintf("load:0x3->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],%s", gotoTableAction)},
+		&ExpectFlow{"priority=200,dl_dst=aa:aa:aa:aa:aa:13", fmt.Sprintf("set_field:0x3->reg1,set_field:0x10000/0x10000->reg0,%s", gotoTableAction)},
 		&ExpectFlow{"priority=200,ip,reg0=0x10000/0x10000", "output:NXM_NX_REG1[]"},
 		&ExpectFlow{"priority=200,ip,nw_dst=172.16.0.0/16", "output:1"},
 		&ExpectFlow{fmt.Sprintf("priority=200,ip,nw_src=192.168.1.3,nw_tos=%d", ipDSCP<<2), gotoTableAction},
@@ -1117,19 +1121,19 @@ func prepareNATflows(table binding.Table) ([]binding.Flow, []*ExpectFlow) {
 	flowStrs := []*ExpectFlow{
 		{"priority=200,ip", fmt.Sprintf("ct(table=%d,zone=65520,nat)", table.GetNext())},
 		{"priority=200,ip,reg0=0x20000/0x20000",
-			fmt.Sprintf("ct(commit,table=%d,zone=65520,nat(src=%s),exec(load:0x40->NXM_NX_CT_MARK[0..7]))",
+			fmt.Sprintf("ct(commit,table=%d,zone=65520,nat(src=%s),exec(set_field:0x40/0xff->ct_mark))",
 				table.GetNext(), natedIP1.String()),
 		},
 		{"priority=200,ip,reg0=0x40000/0x40000",
-			fmt.Sprintf("ct(commit,table=%d,zone=65520,nat(src=%s-%s),exec(load:0x40->NXM_NX_CT_MARK[0..7]))",
+			fmt.Sprintf("ct(commit,table=%d,zone=65520,nat(src=%s-%s),exec(set_field:0x40/0xff->ct_mark))",
 				table.GetNext(), natedIP1.String(), natedIP2.String()),
 		},
 		{"priority=200,ip,reg0=0x80000/0x80000",
-			fmt.Sprintf("ct(commit,table=%d,zone=65520,nat(dst=%s),exec(load:0x40->NXM_NX_CT_MARK[0..7]))",
+			fmt.Sprintf("ct(commit,table=%d,zone=65520,nat(dst=%s),exec(set_field:0x40/0xff->ct_mark))",
 				table.GetNext(), natedIP1.String()),
 		},
 		{"priority=200,ip,reg0=0x100000/0x100000",
-			fmt.Sprintf("ct(commit,table=%d,zone=65520,nat(dst=%s-%s),exec(load:0x40->NXM_NX_CT_MARK[0..7]))",
+			fmt.Sprintf("ct(commit,table=%d,zone=65520,nat(dst=%s-%s),exec(set_field:0x40/0xff->ct_mark))",
 				table.GetNext(), natedIP1.String(), natedIP2.String()),
 		},
 	}

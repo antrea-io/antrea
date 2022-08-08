@@ -17,7 +17,7 @@ package openflow
 import (
 	"fmt"
 
-	"antrea.io/libOpenflow/openflow13"
+	"antrea.io/libOpenflow/openflow15"
 	"antrea.io/libOpenflow/util"
 	"antrea.io/ofnet/ofctrl"
 )
@@ -55,11 +55,11 @@ func (m *ofMeter) GetBundleMessage(entryOper OFOperation) (ofctrl.OpenFlowModMes
 	var operation int
 	switch entryOper {
 	case AddMessage:
-		operation = openflow13.OFPMC_ADD
+		operation = openflow15.MC_ADD
 	case ModifyMessage:
-		operation = openflow13.OFPMC_MODIFY
+		operation = openflow15.MC_MODIFY
 	case DeleteMessage:
-		operation = openflow13.OFPMC_DELETE
+		operation = openflow15.MC_DELETE
 	}
 	message := m.ofctrl.GetBundleMessage(operation)
 	return message, nil
@@ -73,7 +73,7 @@ func (m *ofMeter) ResetMeterBands() Meter {
 func (m *ofMeter) MeterBand() MeterBandBuilder {
 	return &meterBandBuilder{
 		meter:           m,
-		meterBandHeader: openflow13.NewMeterBandHeader(),
+		meterBandHeader: openflow15.NewMeterBandHeader(),
 		prevLevel:       0,
 		experimenter:    0,
 	}
@@ -81,7 +81,7 @@ func (m *ofMeter) MeterBand() MeterBandBuilder {
 
 type meterBandBuilder struct {
 	meter           *ofMeter
-	meterBandHeader *openflow13.MeterBandHeader
+	meterBandHeader *openflow15.MeterBandHeader
 	prevLevel       uint8
 	experimenter    uint32
 }
@@ -115,16 +115,16 @@ func (m *meterBandBuilder) Done() Meter {
 	var mb util.Message
 	switch m.meterBandHeader.Type {
 	case uint16(ofctrl.MeterDrop):
-		mbDrop := new(openflow13.MeterBandDrop)
+		mbDrop := new(openflow15.MeterBandDrop)
 		mbDrop.MeterBandHeader = *m.meterBandHeader
 		mb = mbDrop
 	case uint16(ofctrl.MeterDSCPRemark):
-		mbDscp := new(openflow13.MeterBandDSCP)
+		mbDscp := new(openflow15.MeterBandDSCP)
 		mbDscp.MeterBandHeader = *m.meterBandHeader
 		mbDscp.PrecLevel = m.prevLevel
 		mb = mbDscp
 	case uint16(ofctrl.MeterExperimenter):
-		mbExp := new(openflow13.MeterBandExperimenter)
+		mbExp := new(openflow15.MeterBandExperimenter)
 		mbExp.MeterBandHeader = *m.meterBandHeader
 		mbExp.Experimenter = m.experimenter
 	}
