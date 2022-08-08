@@ -24,6 +24,7 @@ import (
 
 var (
 	capturedSignals = []os.Signal{syscall.SIGTERM, syscall.SIGINT, syscall.SIGQUIT}
+	notifyCh        = make(chan os.Signal, 2)
 )
 
 // RegisterSignalHandlers registers a signal handler for capturedSignals and starts a goroutine that
@@ -31,7 +32,6 @@ var (
 // be closed, giving the opportunity to the program to exist gracefully. If a second signal is
 // received before then, we will force exit with code 1.
 func RegisterSignalHandlers() <-chan struct{} {
-	notifyCh := make(chan os.Signal, 2)
 	stopCh := make(chan struct{})
 
 	go func() {
@@ -46,4 +46,8 @@ func RegisterSignalHandlers() <-chan struct{} {
 	signal.Notify(notifyCh, capturedSignals...)
 
 	return stopCh
+}
+
+func GenerateStopSignal() {
+	notifyCh <- syscall.SIGTERM
 }
