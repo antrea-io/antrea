@@ -282,10 +282,10 @@ Example outputs of dumping Pod and NetworkPolicy OVS flows:
 # Dump OVS flows of Pod "coredns-6955765f44-zcbwj"
 $ antctl get of -p coredns-6955765f44-zcbwj -n kube-system
 FLOW
-table=classification, n_packets=513122, n_bytes=42615080, priority=190,in_port="coredns--d0c58e" actions=load:0x2->NXM_NX_REG0[0..15],resubmit(,10)
+table=classification, n_packets=513122, n_bytes=42615080, priority=190,in_port="coredns--d0c58e" actions=set_field:0x2/0xffff->reg0,resubmit(,10)
 table=10, n_packets=513122, n_bytes=42615080, priority=200,ip,in_port="coredns--d0c58e",dl_src=52:bd:c6:e0:eb:c1,nw_src=172.100.1.7 actions=resubmit(,30)
 table=10, n_packets=0, n_bytes=0, priority=200,arp,in_port="coredns--d0c58e",arp_spa=172.100.1.7,arp_sha=52:bd:c6:e0:eb:c1 actions=resubmit(,20)
-table=80, n_packets=556468, n_bytes=166477824, priority=200,dl_dst=52:bd:c6:e0:eb:c1 actions=load:0x5->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],resubmit(,90)
+table=80, n_packets=556468, n_bytes=166477824, priority=200,dl_dst=52:bd:c6:e0:eb:c1 actions=load:0x5->NXM_NX_REG1[],set_field:0x10000/0x10000->reg0,resubmit(,90)
 table=70, n_packets=0, n_bytes=0, priority=200,ip,dl_dst=aa:bb:cc:dd:ee:ff,nw_dst=172.100.1.7 actions=set_field:62:39:b4:e8:05:76->eth_src,set_field:52:bd:c6:e0:eb:c1->eth_dst,dec_ttl,resubmit(,80)
 
 # Get NetworkPolicies applied to Pod "coredns-6955765f44-zcbwj"
@@ -378,8 +378,8 @@ result: |
       dec_ttl
       resubmit(,80)
   80. dl_dst=52:bd:c6:e0:eb:c1, priority 200, cookie 0x5e030000000000
-      load:0x5->NXM_NX_REG1[]
-      load:0x1->NXM_NX_REG0[16]
+      set_field:0x5->reg1
+      set_field:0x10000/0x10000->reg0
       resubmit(,90)
   90. conj_id=2,ip, priority 190, cookie 0x5e050000000000
       resubmit(,105)

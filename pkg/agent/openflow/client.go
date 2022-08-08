@@ -19,7 +19,7 @@ import (
 	"math/rand"
 	"net"
 
-	"antrea.io/libOpenflow/openflow13"
+	"antrea.io/libOpenflow/openflow15"
 	"antrea.io/libOpenflow/protocol"
 	ofutil "antrea.io/libOpenflow/util"
 	v1 "k8s.io/api/core/v1"
@@ -997,8 +997,7 @@ func (c *client) SendTraceflowPacket(dataplaneTag uint8, packet *binding.Packet,
 	if outPort != -1 {
 		packetOutBuilder = packetOutBuilder.SetOutport(uint32(outPort))
 	}
-	packetOutBuilder = packetOutBuilder.AddLoadAction(binding.NxmFieldIPToS, uint64(dataplaneTag), traceflowTagToSRange)
-
+	packetOutBuilder = packetOutBuilder.AddSetIPTOSAction(dataplaneTag)
 	packetOutObj := packetOutBuilder.Done()
 	return c.bridge.SendPacketOut(packetOutObj)
 }
@@ -1024,7 +1023,7 @@ func (c *client) UninstallTraceflowFlows(dataplaneTag uint8) error {
 	return c.deleteFlows(c.featureTraceflow.cachedFlows, cacheKey)
 }
 
-// Add TLV map optClass 0x0104, optType 0x80 optLength 4 tunMetadataIndex 0 to store data plane tag
+// InitialTLVMap adds TLV map optClass 0x0104, optType 0x80 optLength 4 tunMetadataIndex 0 to store data plane tag
 // in tunnel. Data plane tag will be stored to NXM_NX_TUN_METADATA0[28..31] when packet get encapsulated
 // into geneve, and will be stored back to NXM_NX_REG9[28..31] when packet get decapsulated.
 func (c *client) InitialTLVMap() error {
@@ -1273,7 +1272,7 @@ func (c *client) SendIGMPRemoteReportPacketOut(
 	srcIP := c.nodeConfig.NodeTransportIPv4Addr.IP.String()
 	dstMACStr := dstMAC.String()
 	dstIPStr := dstIP.String()
-	packetOutBuilder, err := setBasePacketOutBuilder(c.bridge.BuildPacketOut(), srcMAC, dstMACStr, srcIP, dstIPStr, openflow13.P_CONTROLLER, 0)
+	packetOutBuilder, err := setBasePacketOutBuilder(c.bridge.BuildPacketOut(), srcMAC, dstMACStr, srcIP, dstIPStr, openflow15.P_CONTROLLER, 0)
 	if err != nil {
 		return err
 	}

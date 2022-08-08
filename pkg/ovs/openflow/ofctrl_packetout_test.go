@@ -805,7 +805,7 @@ func Test_ofPacketOutBuilder_Done(t *testing.T) {
 				t.Errorf("Done() = %v, want %v", got.ICMPHeader, tt.want.ICMPHeader)
 			}
 			if !reflect.DeepEqual(got.TCPHeader, tt.want.TCPHeader) {
-				t.Errorf("Done() = %v, want %v", got.TCPHeader, tt.want.TCPHeader)
+				t.Errorf("Done() = %+v, want %+v", got.TCPHeader, tt.want.TCPHeader)
 			}
 			if !reflect.DeepEqual(got.UDPHeader, tt.want.UDPHeader) {
 				t.Errorf("Done() = %v, want %v", got.UDPHeader, tt.want.UDPHeader)
@@ -817,7 +817,7 @@ func Test_ofPacketOutBuilder_Done(t *testing.T) {
 				t.Errorf("Done() = %v, want %v", got.IPv6Header, tt.want.IPv6Header)
 			}
 			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Done() = %v, want %v", got, tt.want)
+				t.Errorf("Done() = %+v, want %+v", got, tt.want)
 			}
 		})
 	}

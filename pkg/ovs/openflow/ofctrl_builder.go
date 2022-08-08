@@ -19,7 +19,7 @@ import (
 	"net"
 	"strings"
 
-	"antrea.io/libOpenflow/openflow13"
+	"antrea.io/libOpenflow/openflow15"
 	"antrea.io/ofnet/ofctrl"
 )
 
@@ -28,7 +28,7 @@ type ofFlowBuilder struct {
 }
 
 func (b *ofFlowBuilder) MatchTunMetadata(index int, data uint32) FlowBuilder {
-	rng := openflow13.NewNXRange(0, 31)
+	rng := openflow15.NewNXRange(0, 31)
 	tm := &ofctrl.NXTunMetadata{
 		ID:    index,
 		Data:  data,
@@ -133,7 +133,7 @@ func (b *ofFlowBuilder) addCTStateString(value string) {
 
 func (b *ofFlowBuilder) MatchCTStateNew(set bool) FlowBuilder {
 	if b.ctStates == nil {
-		b.ctStates = openflow13.NewCTStates()
+		b.ctStates = openflow15.NewCTStates()
 	}
 	if set {
 		b.ctStates.SetNew()
@@ -147,7 +147,7 @@ func (b *ofFlowBuilder) MatchCTStateNew(set bool) FlowBuilder {
 
 func (b *ofFlowBuilder) MatchCTStateRel(set bool) FlowBuilder {
 	if b.ctStates == nil {
-		b.ctStates = openflow13.NewCTStates()
+		b.ctStates = openflow15.NewCTStates()
 	}
 	if set {
 		b.ctStates.SetRel()
@@ -161,7 +161,7 @@ func (b *ofFlowBuilder) MatchCTStateRel(set bool) FlowBuilder {
 
 func (b *ofFlowBuilder) MatchCTStateRpl(set bool) FlowBuilder {
 	if b.ctStates == nil {
-		b.ctStates = openflow13.NewCTStates()
+		b.ctStates = openflow15.NewCTStates()
 	}
 	if set {
 		b.ctStates.SetRpl()
@@ -175,7 +175,7 @@ func (b *ofFlowBuilder) MatchCTStateRpl(set bool) FlowBuilder {
 
 func (b *ofFlowBuilder) MatchCTStateEst(set bool) FlowBuilder {
 	if b.ctStates == nil {
-		b.ctStates = openflow13.NewCTStates()
+		b.ctStates = openflow15.NewCTStates()
 	}
 	if set {
 		b.ctStates.SetEst()
@@ -189,7 +189,7 @@ func (b *ofFlowBuilder) MatchCTStateEst(set bool) FlowBuilder {
 
 func (b *ofFlowBuilder) MatchCTStateTrk(set bool) FlowBuilder {
 	if b.ctStates == nil {
-		b.ctStates = openflow13.NewCTStates()
+		b.ctStates = openflow15.NewCTStates()
 	}
 	if set {
 		b.ctStates.SetTrk()
@@ -203,7 +203,7 @@ func (b *ofFlowBuilder) MatchCTStateTrk(set bool) FlowBuilder {
 
 func (b *ofFlowBuilder) MatchCTStateInv(set bool) FlowBuilder {
 	if b.ctStates == nil {
-		b.ctStates = openflow13.NewCTStates()
+		b.ctStates = openflow15.NewCTStates()
 	}
 	if set {
 		b.ctStates.SetInv()
@@ -217,7 +217,7 @@ func (b *ofFlowBuilder) MatchCTStateInv(set bool) FlowBuilder {
 
 func (b *ofFlowBuilder) MatchCTStateDNAT(set bool) FlowBuilder {
 	if b.ctStates == nil {
-		b.ctStates = openflow13.NewCTStates()
+		b.ctStates = openflow15.NewCTStates()
 	}
 	if set {
 		b.ctStates.SetDNAT()
@@ -231,7 +231,7 @@ func (b *ofFlowBuilder) MatchCTStateDNAT(set bool) FlowBuilder {
 
 func (b *ofFlowBuilder) MatchCTStateSNAT(set bool) FlowBuilder {
 	if b.ctStates == nil {
-		b.ctStates = openflow13.NewCTStates()
+		b.ctStates = openflow15.NewCTStates()
 	}
 	if set {
 		b.ctStates.SetSNAT()

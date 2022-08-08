@@ -21,8 +21,9 @@ import (
 	"net"
 	"time"
 
-	"antrea.io/libOpenflow/openflow13"
+	"antrea.io/libOpenflow/openflow15"
 	"antrea.io/libOpenflow/protocol"
+	"antrea.io/libOpenflow/util"
 	"antrea.io/ofnet/ofctrl"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/util/retry"
@@ -39,8 +40,7 @@ func (c *Controller) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
 	}
 	oldTf, nodeResult, packet, err := c.parsePacketIn(pktIn)
 	if err != nil {
-		klog.Errorf("parsePacketIn error: %+v", err)
-		return err
+		return fmt.Errorf("parsePacketIn error: %v", err)
 	}
 
 	// Retry when update CRD conflict which caused by multiple agents updating one CRD at same time.
@@ -64,9 +64,9 @@ func (c *Controller) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
 		return nil
 	})
 	if err != nil {
-		klog.Errorf("Update traceflow error: %+v", err)
+		return fmt.Errorf("update traceflow error: %v", err)
 	}
-	return err
+	return nil
 }
 
 func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1alpha1.Traceflow, *crdv1alpha1.NodeResult, *crdv1alpha1.Packet, error) {
@@ -77,8 +77,12 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1alpha1.Tracefl
 	var err error
 	var tag uint8
 	var ctNwDst, ctNwSrc, ipDst, ipSrc string
-	if pktIn.Data.Ethertype == protocol.IPv4_MSG {
-		ipPacket, ok := pktIn.Data.Data.(*protocol.IPv4)
+	etherData := new(protocol.Ethernet)
+	if err := etherData.UnmarshalBinary(pktIn.Data.(*util.Buffer).Bytes()); err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to parse Ethernet packet from packet-in message: %v", err)
+	}
+	if etherData.Ethertype == protocol.IPv4_MSG {
+		ipPacket, ok := etherData.Data.(*protocol.IPv4)
 		if !ok {
 			return nil, nil, nil, errors.New("invalid traceflow IPv4 packet")
 		}
@@ -93,8 +97,8 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1alpha1.Tracefl
 		}
 		ipDst = ipPacket.NWDst.String()
 		ipSrc = ipPacket.NWSrc.String()
-	} else if pktIn.Data.Ethertype == protocol.IPv6_MSG {
-		ipv6Packet, ok := pktIn.Data.Data.(*protocol.IPv6)
+	} else if etherData.Ethertype == protocol.IPv6_MSG {
+		ipv6Packet, ok := etherData.Data.(*protocol.IPv6)
 		if !ok {
 			return nil, nil, nil, errors.New("invalid traceflow IPv6 packet")
 		}
@@ -110,7 +114,7 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1alpha1.Tracefl
 		ipDst = ipv6Packet.NWDst.String()
 		ipSrc = ipv6Packet.NWSrc.String()
 	} else {
-		return nil, nil, nil, fmt.Errorf("unsupported traceflow packet Ethertype: %d", pktIn.Data.Ethertype)
+		return nil, nil, nil, fmt.Errorf("unsupported traceflow packet Ethertype: %d", etherData.Ethertype)
 	}
 
 	firstPacket := false
@@ -246,7 +250,7 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1alpha1.Tracefl
 			}
 		}
 		gatewayIP := c.nodeConfig.GatewayConfig.IPv4
-		if pktIn.Data.Ethertype == protocol.IPv6_MSG {
+		if etherData.Ethertype == protocol.IPv6_MSG {
 			gatewayIP = c.nodeConfig.GatewayConfig.IPv6
 		}
 		gwPort := c.nodeConfig.GatewayConfig.OFPort
@@ -274,7 +278,7 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1alpha1.Tracefl
 }
 
 func getMatchRegField(matchers *ofctrl.Matchers, field *binding.RegField) *ofctrl.MatchField {
-	return matchers.GetMatchByName(field.GetNXFieldName())
+	return openflow.GetMatchFieldByRegID(matchers, field.GetRegID())
 }
 
 func getMatchTunnelDstField(matchers *ofctrl.Matchers, isIPv6 bool) *ofctrl.MatchField {
@@ -284,7 +288,7 @@ func getMatchTunnelDstField(matchers *ofctrl.Matchers, isIPv6 bool) *ofctrl.Matc
 	return matchers.GetMatchByName("NXM_NX_TUN_IPV4_DST")
 }
 
-func getRegValue(regMatch *ofctrl.MatchField, rng *openflow13.NXRange) (uint32, error) {
+func getRegValue(regMatch *ofctrl.MatchField, rng *openflow15.NXRange) (uint32, error) {
 	regValue, ok := regMatch.GetValue().(*ofctrl.NXRegister)
 	if !ok {
 		return 0, errors.New("register value cannot be got")

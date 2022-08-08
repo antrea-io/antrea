@@ -54,8 +54,8 @@ const (
 	openvSwitchSchema = "Open_vSwitch"
 	// Openflow protocol version 1.0.
 	openflowProtoVersion10 = "OpenFlow10"
-	// Openflow protocol version 1.3.
-	openflowProtoVersion13 = "OpenFlow13"
+	// Openflow protocol version 1.5.
+	openflowProtoVersion15 = "OpenFlow15"
 	// Maximum allowed value of ofPortRequest.
 	ofPortRequestMax = 65279
 	hardwareOffload  = "hw-offload"
@@ -102,7 +102,7 @@ func NewOVSBridge(bridgeName string, ovsDatapathType OVSDatapathType, ovsdb *ovs
 }
 
 // Create looks up or creates the bridge. If the bridge with name bridgeName
-// does not exist, it will be created. Openflow protocol version 1.0 and 1.3
+// does not exist, it will be created. Openflow protocol version 1.0 and 1.5
 // will be enabled for the bridge.
 func (br *OVSBridge) Create() Error {
 	var err Error
@@ -150,13 +150,13 @@ func (br *OVSBridge) lookupByName() (bool, Error) {
 
 func (br *OVSBridge) updateBridgeConfiguration() Error {
 	tx := br.ovsdb.Transaction(openvSwitchSchema)
-	// Use Openflow protocol version 1.0 and 1.3.
+	// Use Openflow protocol version 1.0 and 1.5.
 	tx.Update(dbtransaction.Update{
 		Table: "Bridge",
 		Where: [][]interface{}{{"name", "==", br.name}},
 		Row: map[string]interface{}{
 			"protocols": makeOVSDBSetFromList([]string{openflowProtoVersion10,
-				openflowProtoVersion13}),
+				openflowProtoVersion15}),
 			"datapath_type": br.datapathType,
 		},
 	})
@@ -172,9 +172,9 @@ func (br *OVSBridge) create() Error {
 	tx := br.ovsdb.Transaction(openvSwitchSchema)
 	bridge := Bridge{
 		Name: br.name,
-		// Use Openflow protocol version 1.0 and 1.3.
+		// Use Openflow protocol version 1.0 and 1.5.
 		Protocols: makeOVSDBSetFromList([]string{openflowProtoVersion10,
-			openflowProtoVersion13}),
+			openflowProtoVersion15}),
 		DatapathType: string(br.datapathType),
 	}
 	namedUUID := tx.Insert(dbtransaction.Insert{

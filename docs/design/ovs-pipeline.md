@@ -234,10 +234,10 @@ should be performed for the packet in [L3ForwardingTable].
 If you dump the flows for this table, you may see the following:
 
 ```text
-1. table=0, priority=200,in_port=2 actions=load:0x1->NXM_NX_REG0[0..3],resubmit(,10)
-2. table=0, priority=200,in_port=1 actions=load:0->NXM_NX_REG0[0..3],load:0x1->NXM_NX_REG0[19],resubmit(,30)
-3. table=0, priority=190,in_port=4 actions=load:0x2->NXM_NX_REG0[0..3],resubmit(,10)
-4. table=0, priority=190,in_port=3 actions=load:0x2->NXM_NX_REG0[0..3],resubmit(,10)
+1. table=0, priority=200,in_port=2 actions=set_field:0x1/0xf->reg0,resubmit(,10)
+2. table=0, priority=200,in_port=1 actions=set_field:0/0xf->reg0,load:0x1->NXM_NX_REG0[19],resubmit(,30)
+3. table=0, priority=190,in_port=4 actions=set_field:0x2/0xf->reg0,resubmit(,10)
+4. table=0, priority=190,in_port=3 actions=set_field:0x2/0xf->reg0,resubmit(,10)
 5. table=0, priority=0 actions=drop
 ```
 
@@ -305,7 +305,7 @@ address for all the traffic being tunnelled.
 If you dump the flows for this table, you may see the following:
 
 ```text
-1. table=20, priority=200,arp,arp_tpa=10.10.1.1,arp_op=1 actions=move:NXM_OF_ETH_SRC[]->NXM_OF_ETH_DST[],mod_dl_src:aa:bb:cc:dd:ee:ff,load:0x2->NXM_OF_ARP_OP[],move:NXM_NX_ARP_SHA[]->NXM_NX_ARP_THA[],load:0xaabbccddeeff->NXM_NX_ARP_SHA[],move:NXM_OF_ARP_SPA[]->NXM_OF_ARP_TPA[],load:0xa0a0101->NXM_OF_ARP_SPA[],IN_PORT
+1. table=20, priority=200,arp,arp_tpa=10.10.1.1,arp_op=1 actions=move:NXM_OF_ETH_SRC[]->NXM_OF_ETH_DST[],mod_dl_src:aa:bb:cc:dd:ee:ff,set_field:2->arp_op,move:NXM_NX_ARP_SHA[]->NXM_NX_ARP_THA[],load:0xaabbccddeeff->NXM_NX_ARP_SHA[],move:NXM_OF_ARP_SPA[]->NXM_OF_ARP_TPA[],load:0xa0a0101->NXM_OF_ARP_SPA[],IN_PORT
 2. table=20, priority=190,arp actions=NORMAL
 3. table=20, priority=0 actions=drop
 ```
@@ -781,7 +781,7 @@ table=70, priority=210,ct_state=+rpl+trk,ct_mark=0x20,ip actions=mod_dl_dst:e2:e
   For a given peer Node, the flow may look like this:
 
 ```text
-table=70, priority=200,ip,nw_dst=10.10.1.0/24 actions=mod_dl_src:e2:e5:a4:9b:1c:b1,mod_dl_dst:aa:bb:cc:dd:ee:ff,load:0x1->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],load:0xc0a80102->NXM_NX_TUN_IPV4_DST[],goto_table:72
+table=70, priority=200,ip,nw_dst=10.10.1.0/24 actions=mod_dl_src:e2:e5:a4:9b:1c:b1,mod_dl_dst:aa:bb:cc:dd:ee:ff,load:0x1->NXM_NX_REG1[],set_field:0x10000/0x10000->reg0,load:0xc0a80102->NXM_NX_TUN_IPV4_DST[],goto_table:72
 ```
 
 If none of the flows described above are hit, traffic goes directly to
@@ -842,7 +842,7 @@ the right SNAT IP (Antrea Agent adds an iptables SNAT rule for each local SNAT
 IP that matches the ID).
 
 ```text
-table=71, priority=200,ct_state=+new+trk,ip,in_port="pod1-7e503a" actions=load:0x1->NXM_NX_PKT_MARK[0..7],goto_table:80
+table=71, priority=200,ct_state=+new+trk,ip,in_port="pod1-7e503a" actions=set_field:0x1/0xff->pkt_mark,goto_table:80
 ```
 
 When the SNAT IP of the Egress is on a remote Node, the flow will tunnel the
@@ -853,7 +853,7 @@ destination MAC addresses, load the SNAT IP to NXM_NX_TUN_IPV4_DST, and send the
 packets to [L3DecTTLTable].
 
 ```text
-table=71, priority=200,ct_state=+new+trk,ip,in_port="pod2-357c21" actions=mod_dl_src:e2:e5:a4:9b:1c:b1,mod_dl_dst:aa:bb:cc:dd:ee:ff,load:0x1->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],load:0xc0a80a66->NXM_NX_TUN_IPV4_DST[],goto_table:72
+table=71, priority=200,ct_state=+new+trk,ip,in_port="pod2-357c21" actions=mod_dl_src:e2:e5:a4:9b:1c:b1,mod_dl_dst:aa:bb:cc:dd:ee:ff,load:0x1->NXM_NX_REG1[],set_field:0x10000/0x10000->reg0,load:0xc0a80a66->NXM_NX_TUN_IPV4_DST[],goto_table:72
 ```
 
 Last, when a SNAT IP configured for Egresses is on the local Node, an additional
@@ -862,7 +862,7 @@ use the SNAT IP. The flow matches the tunnel destination IP (which should be
 equal to the SNAT IP), and sets the 8 bits ID of the SNAT IP to pkt_mark.
 
 ```text
-table=71, priority=200,ct_state=+new+trk,ip,tun_dst="192.168.10.101" actions=load:0x1->NXM_NX_PKT_MARK[0..7],goto_table:80
+table=71, priority=200,ct_state=+new+trk,ip,tun_dst="192.168.10.101" actions=set_field:0x1/0xff->pkt_mark,goto_table:80
 ```
 
 ### L3DecTTLTable (72)
@@ -891,10 +891,10 @@ port (tunnel port, gateway port, and local Pod ports), as you can see if you
 dump the flows:
 
 ```text
-1. table=80, priority=200,dl_dst=aa:bb:cc:dd:ee:ff actions=load:0x1->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],goto_table:105
-2. table=80, priority=200,dl_dst=e2:e5:a4:9b:1c:b1 actions=load:0x2->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],goto_table:105
-3. table=80, priority=200,dl_dst=12:9e:a6:47:d0:70 actions=load:0x3->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],goto_table:90
-4. table=80, priority=200,dl_dst=ba:a8:13:ca:ed:cf actions=load:0x4->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],goto_table:90
+1. table=80, priority=200,dl_dst=aa:bb:cc:dd:ee:ff actions=set_field:0x1->reg1,set_field:0x10000/0x10000->reg0,goto_table:105
+2. table=80, priority=200,dl_dst=e2:e5:a4:9b:1c:b1 actions=set_field:0x2->reg1,set_field:0x10000/0x10000->reg0,goto_table:105
+3. table=80, priority=200,dl_dst=12:9e:a6:47:d0:70 actions=set_field:0x3->reg1,set_field:0x10000/0x10000->reg0,goto_table:90
+4. table=80, priority=200,dl_dst=ba:a8:13:ca:ed:cf actions=set_field:0x4->reg1,set_field:0x10000/0x10000->reg0,goto_table:90
 5. table=80, priority=0 actions=goto_table:105
 ```
 
@@ -1149,7 +1149,7 @@ across the different backends for each Service.
 If you dump the flows for this table, you should see something like this:
 
 ```text
-1. table=40, priority=200,ip,nw_dst=10.96.0.0/12 actions=load:0x2->NXM_NX_REG1[],load:0x1->NXM_NX_REG0[16],goto_table:105
+1. table=40, priority=200,ip,nw_dst=10.96.0.0/12 actions=set_field:0x2->reg1,load:0x1->NXM_NX_REG0[16],goto_table:105
 2. table=40, priority=0 actions=goto_table:45
 ```
 

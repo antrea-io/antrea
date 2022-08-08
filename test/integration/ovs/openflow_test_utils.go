@@ -37,7 +37,7 @@ func PrepareOVSBridge(brName string) error {
 	// using the netdev datapath type does not impact test coverage but
 	// ensures that the integration tests can be run with Docker Desktop on
 	// macOS.
-	cmdStr := fmt.Sprintf("ovs-vsctl --may-exist add-br %s -- set Bridge %s protocols='OpenFlow10,OpenFlow13' datapath_type=netdev", brName, brName)
+	cmdStr := fmt.Sprintf("ovs-vsctl --may-exist add-br %s -- set Bridge %s protocols='OpenFlow10,OpenFlow15' datapath_type=netdev", brName, brName)
 	err := exec.Command("/bin/sh", "-c", cmdStr).Run()
 	if err != nil {
 		return err
@@ -114,7 +114,12 @@ func CheckGroupExists(t *testing.T, ovsCtlClient ovsctl.OVSCtlClient, groupID bi
 		found := false
 		for _, groupElems := range groupList {
 			groupEntry := fmt.Sprintf("%s,bucket=", groupElems[0])
-			groupEntry = fmt.Sprintf("%s%s", groupEntry, strings.Join(groupElems[1:], ",bucket="))
+			var groupElemStrs []string
+			for _, elem := range groupElems[1:] {
+				elemStr := strings.Join(strings.Split(elem, ",")[1:], ",")
+				groupElemStrs = append(groupElemStrs, elemStr)
+			}
+			groupEntry = fmt.Sprintf("%s%s", groupEntry, strings.Join(groupElemStrs, ",bucket="))
 			if strings.Contains(groupEntry, groupStr) {
 				found = true
 				break
@@ -148,7 +153,7 @@ func formatFlowDump(rawFlows []string) []string {
 	for _, flow := range rawFlows {
 		felem := strings.Fields(flow)
 		if len(felem) > 2 {
-			felem = append(felem[:1], felem[3:]...)
+			felem = append(felem[:1], felem[4:]...)
 			fstr := strings.Join(felem, " ")
 			flowList = append(flowList, fstr)
 		}

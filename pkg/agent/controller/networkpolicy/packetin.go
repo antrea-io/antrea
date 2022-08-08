@@ -20,7 +20,9 @@ import (
 	"net"
 	"time"
 
-	"antrea.io/libOpenflow/openflow13"
+	"antrea.io/libOpenflow/openflow15"
+	"antrea.io/libOpenflow/protocol"
+	"antrea.io/libOpenflow/util"
 	"antrea.io/ofnet/ofctrl"
 	"github.com/vmware/go-ipfix/pkg/registry"
 	"k8s.io/klog/v2"
@@ -70,7 +72,7 @@ func (c *Controller) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
 
 // getMatchRegField returns match to the regNum register.
 func getMatchRegField(matchers *ofctrl.Matchers, field *binding.RegField) *ofctrl.MatchField {
-	return matchers.GetMatchByName(field.GetNXFieldName())
+	return openflow.GetMatchFieldByRegID(matchers, field.GetRegID())
 }
 
 // getMatch receives ofctrl matchers and table id, match field.
@@ -95,7 +97,7 @@ func getMatch(matchers *ofctrl.Matchers, tableID uint8, disposition uint32) *ofc
 }
 
 // getInfoInReg unloads and returns data stored in the match field.
-func getInfoInReg(regMatch *ofctrl.MatchField, rng *openflow13.NXRange) (uint32, error) {
+func getInfoInReg(regMatch *ofctrl.MatchField, rng *openflow15.NXRange) (uint32, error) {
 	regValue, ok := regMatch.GetValue().(*ofctrl.NXRegister)
 	if !ok {
 		return 0, errors.New("register value cannot be retrieved")
@@ -207,4 +209,12 @@ func isAntreaPolicyEgressTable(tableID uint8) bool {
 		}
 	}
 	return false
+}
+
+func getEthernetPacket(pktIn *ofctrl.PacketIn) (*protocol.Ethernet, error) {
+	ethernetPkt := new(protocol.Ethernet)
+	if err := ethernetPkt.UnmarshalBinary(pktIn.Data.(*util.Buffer).Bytes()); err != nil {
+		return nil, fmt.Errorf("failed to parse ethernet packet from packet-in message: %v", err)
+	}
+	return ethernetPkt, nil
 }
