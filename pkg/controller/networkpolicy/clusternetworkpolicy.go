@@ -227,7 +227,12 @@ func (n *NetworkPolicyController) updateNamespace(oldObj, curObj interface{}) {
 			n.reprocessCNP(cnp, false)
 		}
 	}
-	// TODO: Reprocess K8s NetworkPolicies when logging annotation has changed.
+	if oldNamespace.Annotations[EnableNPLoggingAnnotationKey] != curNamespace.Annotations[EnableNPLoggingAnnotationKey] {
+		affectedNPs, _ := n.networkPolicyLister.NetworkPolicies(curNamespace.Name).List(labels.Everything())
+		for _, np := range affectedNPs {
+			n.updateNetworkPolicy(np, np)
+		}
+	}
 }
 
 // deleteNamespace receives Namespace DELETE events and triggers all ClusterNetworkPolicies that have a

@@ -422,6 +422,8 @@ type conjMatchFlowContext struct {
 	// empty, and uninstalled when both two are empty. When the dropFlow is uninstalled from the switch, the
 	// conjMatchFlowContext is removed from the cache.
 	dropFlow binding.Flow
+	// dropFlowEnableLogging describes the logging requirement of the dropFlow.
+	dropFlowEnableLogging bool
 }
 
 // createOrUpdateConjunctiveMatchFlow creates or updates the conjunctive match flow with the latest actions. It returns
@@ -718,9 +720,10 @@ func (c *clause) addConjunctiveMatchFlow(featureNetworkPolicy *featureNetworkPol
 	context, found = featureNetworkPolicy.globalConjMatchFlowCache[matcherKey]
 	if !found {
 		context = &conjMatchFlowContext{
-			conjunctiveMatch:     match,
-			actions:              make(map[uint32]*conjunctiveAction),
-			featureNetworkPolicy: featureNetworkPolicy,
+			conjunctiveMatch:      match,
+			actions:               make(map[uint32]*conjunctiveAction),
+			featureNetworkPolicy:  featureNetworkPolicy,
+			dropFlowEnableLogging: enableLogging,
 		}
 		ctxType = insertion
 
@@ -729,6 +732,15 @@ func (c *clause) addConjunctiveMatchFlow(featureNetworkPolicy *featureNetworkPol
 			dropFlow = &flowChange{
 				flow:       context.featureNetworkPolicy.defaultDropFlow(c.dropTable, match.matchPairs, enableLogging),
 				changeType: insertion,
+			}
+		}
+	} else if context.dropFlowEnableLogging != enableLogging {
+		// Logging requirement of the rule has changed, modify default drop flow accordingly.
+		context.dropFlowEnableLogging = enableLogging
+		if c.dropTable != nil && context.dropFlow != nil {
+			dropFlow = &flowChange{
+				flow:       context.featureNetworkPolicy.defaultDropFlow(c.dropTable, match.matchPairs, enableLogging),
+				changeType: modification,
 			}
 		}
 	}
@@ -1178,9 +1190,10 @@ func (f *featureNetworkPolicy) addActionToConjunctiveMatch(clause *clause, match
 	context, found = f.globalConjMatchFlowCache[matcherKey]
 	if !found {
 		context = &conjMatchFlowContext{
-			conjunctiveMatch:     match,
-			actions:              make(map[uint32]*conjunctiveAction),
-			featureNetworkPolicy: f,
+			conjunctiveMatch:      match,
+			actions:               make(map[uint32]*conjunctiveAction),
+			featureNetworkPolicy:  f,
+			dropFlowEnableLogging: enableLogging,
 		}
 		// Generate the default drop flow if dropTable is not nil.
 		if clause.dropTable != nil {
