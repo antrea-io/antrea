@@ -38,6 +38,10 @@ func (c *FakeCrdV1alpha1) NetworkPolicies(namespace string) v1alpha1.NetworkPoli
 	return &FakeNetworkPolicies{c, namespace}
 }
 
+func (c *FakeCrdV1alpha1) SupportBundles() v1alpha1.SupportBundleInterface {
+	return &FakeSupportBundles{c}
+}
+
 func (c *FakeCrdV1alpha1) Tiers() v1alpha1.TierInterface {
 	return &FakeTiers{c}
 }

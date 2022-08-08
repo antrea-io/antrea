@@ -28,6 +28,8 @@ type Interface interface {
 	ExternalNodes() ExternalNodeInformer
 	// NetworkPolicies returns a NetworkPolicyInformer.
 	NetworkPolicies() NetworkPolicyInformer
+	// SupportBundles returns a SupportBundleInformer.
+	SupportBundles() SupportBundleInformer
 	// Tiers returns a TierInformer.
 	Tiers() TierInformer
 	// Traceflows returns a TraceflowInformer.
@@ -58,6 +60,11 @@ func (v *version) ExternalNodes() ExternalNodeInformer {
 // NetworkPolicies returns a NetworkPolicyInformer.
 func (v *version) NetworkPolicies() NetworkPolicyInformer {
 	return &networkPolicyInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+}
+
+// SupportBundles returns a SupportBundleInformer.
+func (v *version) SupportBundles() SupportBundleInformer {
+	return &supportBundleInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
 }
 
 // Tiers returns a TierInformer.

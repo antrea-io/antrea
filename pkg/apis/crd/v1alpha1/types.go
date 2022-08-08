@@ -15,6 +15,8 @@
 package v1alpha1
 
 import (
+	"time"
+
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -708,4 +710,137 @@ type ExternalNodeList struct {
 	metav1.ListMeta `json:"metadata,omitempty"`
 
 	Items []ExternalNode `json:"items,omitempty"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+type SupportBundleList struct {
+	metav1.TypeMeta `json:",inline"`
+	// +optional
+	metav1.ListMeta `json:"metadata,omitempty"`
+
+	Items []SupportBundle `json:"items"`
+}
+
+// +genclient
+// +genclient:nonNamespaced
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+type SupportBundle struct {
+	metav1.TypeMeta `json:",inline"`
+	// Standard metadata of the object.
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	// Specification of the desired behavior of SupportBundle.
+	Spec BundleSpec `json:"spec"`
+	// Most recently observed status of the SupportBundle.
+	Status BundleStatus `json:"status"`
+}
+
+type BundleSpec struct {
+	Nodes         BundleNodes          `json:"nodes,omitempty"`
+	ExternalNodes []BundleExternalNode `json:"externalNodes,omitempty"`
+	// Timeout defines in how many seconds the SupportBundle request is expired
+	// and is marked as BundleFailed if it is not succeeded.
+	// Default is 3600.
+	Timeout int32 `json:"timeout"`
+	// Duration defines a relative time newer than which the Agent logs are expected.
+	// A valid value is like, 1d, 2h, 30min.
+	Duration      *time.Duration            `json:"duration,omitempty"`
+	FileServer    BundleFileServer          `json:"fileServer"`
+	Authorization BundleUploadAuthorization `json:"authorization"`
+}
+
+// BundlePhase defines the phase in which a SupportBundle is.
+type BundlePhase string
+
+const (
+	// BundlePending means the SupportBundle has been accepted by the system, but it has not been processed by Antrea.
+	BundlePending BundlePhase = "Pending"
+	// BundleProcessing means the SupportBundle has been observed by Antrea and is being processed.
+	BundleProcessing BundlePhase = "Processing"
+	// BundleProcessed means the SupportBundle has been processed by all Nodes or ExternalNodes it requires.
+	BundleProcessed BundlePhase = "Processed"
+	// BundleFailed means the SupportBundle has been marked by Antrea when time is up. This is used when any of the
+	// required Node or ExternalNode fails to process the request.
+	BundleFailed BundlePhase = "Failed"
+)
+
+// BundleFailedReason defines the reason why a SupportBundle is marked as Failed.
+type BundleFailedReason string
+
+const (
+	// Timeout means any of the required Nodes or ExternalNodes fails to process the SupportBundle request
+	// in the given timeout.
+	Timeout BundleFailedReason = "Timeout"
+	// ControllerError means an error occurs on Antrea Controller which breaks processing the SupportBundle.
+	ControllerError BundleFailedReason = "Controller error"
+	// UnknownError means an unknown error occurs in Antrea when processing the SupportBundle
+	UnknownError BundleFailedReason = "Unknown"
+)
+
+type BundleStatus struct {
+	Phase BundlePhase `json:"phase"`
+	// The generation observed by Antrea.
+	ObservedGeneration int64 `json:"observedGeneration"`
+	// The number of Nodes and ExternalNodes that have processed the SupportBundle.
+	CurrentNodes int32 `json:"currentNodes"`
+	// The total number of Nodes and ExternalNodes that should process the SupportBundle.
+	DesiredNodes int32 `json:"desiredNodes"`
+	// The reason why the SupportBundle phase is marked as Failed.
+	FailedReason BundleFailedReason `json:"failedReason,omitempty"`
+}
+
+type BundleNodes struct {
+	// List the names of certain Nodes which are expected to collect and upload
+	// bundle files.
+	// +optional
+	NodeNames []string `json:"nodeNames,omitempty"`
+	// Select certain Nodes which match the label selector.
+	// +optional
+	NodeSelector *metav1.LabelSelector `json:"nodeSelector,omitempty"`
+}
+
+type BundleExternalNode struct {
+	Namespace string
+	Nodes     BundleNodes
+}
+
+// BundleUploadScheme defines the scheme that the BundleFileServer uses in the url to upload bundle files.
+type BundleUploadScheme string
+
+const (
+	HTTPScheme  BundleUploadScheme = "http"
+	HTTPSScheme BundleUploadScheme = "https"
+)
+
+// BundleUploadVerb defines the verb to upload bundle files to the URL provided by the BundleFileServer.
+type BundleUploadVerb string
+
+const (
+	PostBundle BundleUploadVerb = "post"
+	PutBundle  BundleUploadVerb = "put"
+)
+
+// BundleFileServer defines how to upload bundle files.
+type BundleFileServer struct {
+	Host   string             `json:"host"`
+	Path   string             `json:"path"`
+	Scheme BundleUploadScheme `json:"scheme"`
+	Verb   BundleUploadVerb   `json:"verb"`
+}
+
+// BundleAuthorizationType defines the authorization type to access the BundleFileServer.
+type BundleAuthorizationType string
+
+const (
+	APIKey      BundleAuthorizationType = "apiKey"
+	BearerToken BundleAuthorizationType = "bearerToken"
+)
+
+// BundleUploadAuthorization defines the authentication Antrea uses to access the BundleFileServer.
+type BundleUploadAuthorization struct {
+	AuthType BundleAuthorizationType `json:"authType"`
+	// AuthSecret is a Secret reference which stores the authorization value.
+	AuthSecret *v1.SecretReference `json:"authSecret"`
 }

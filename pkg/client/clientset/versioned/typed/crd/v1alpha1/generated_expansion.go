@@ -22,6 +22,8 @@ type ExternalNodeExpansion interface{}
 
 type NetworkPolicyExpansion interface{}
 
+type SupportBundleExpansion interface{}
+
 type TierExpansion interface{}
 
 type TraceflowExpansion interface{}
