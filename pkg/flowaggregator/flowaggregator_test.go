@@ -329,3 +329,122 @@ func TestFlowAggregator_updateFlowAggregator(t *testing.T) {
 		flowAggregator.updateFlowAggregator(opt)
 	})
 }
+
+func TestFlowAggregator_Run(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockIPFIXExporter := exportertesting.NewMockInterface(ctrl)
+	mockClickHouseExporter := exportertesting.NewMockInterface(ctrl)
+	mockCollectingProcess := ipfixtesting.NewMockIPFIXCollectingProcess(ctrl)
+	mockAggregationProcess := ipfixtesting.NewMockIPFIXAggregationProcess(ctrl)
+
+	newIPFIXExporterSaved := newIPFIXExporter
+	newClickHouseExporterSaved := newClickHouseExporter
+	defer func() {
+		newIPFIXExporter = newIPFIXExporterSaved
+		newClickHouseExporter = newClickHouseExporterSaved
+	}()
+	newIPFIXExporter = func(kubernetes.Interface, *options.Options, ipfix.IPFIXRegistry) exporter.Interface {
+		return mockIPFIXExporter
+	}
+	newClickHouseExporter = func(*options.Options) (exporter.Interface, error) {
+		return mockClickHouseExporter, nil
+	}
+
+	// create dummy watcher: we will not add any files or directory to it.
+	configWatcher, err := fsnotify.NewWatcher()
+	require.NoError(t, err)
+	defer configWatcher.Close()
+
+	updateCh := make(chan *options.Options)
+
+	updateOptions := func(opt *options.Options) {
+		// this is somewhat hacky: we use a non-buffered channel and
+		// every update is sent once. This way, we can guarantee that by
+		// the time the second statement returns, the options have been
+		// processed at least once.
+		updateCh <- opt
+		updateCh <- opt
+	}
+
+	flowAggregator := &flowAggregator{
+		activeFlowRecordTimeout: 1 * time.Hour,
+		logTickerDuration:       1 * time.Hour,
+		collectingProcess:       mockCollectingProcess,
+		aggregationProcess:      mockAggregationProcess,
+		ipfixExporter:           mockIPFIXExporter,
+		configWatcher:           configWatcher,
+		updateCh:                updateCh,
+	}
+
+	mockCollectingProcess.EXPECT().Start()
+	mockCollectingProcess.EXPECT().Stop()
+	mockAggregationProcess.EXPECT().Start()
+	mockAggregationProcess.EXPECT().Stop()
+
+	// this is not really relevant; but in practice there will be one call
+	// to mockClickHouseExporter.UpdateOptions because of the hack used to
+	// implement updateOptions above.
+	mockIPFIXExporter.EXPECT().UpdateOptions(gomock.Any()).AnyTimes()
+	mockClickHouseExporter.EXPECT().UpdateOptions(gomock.Any()).AnyTimes()
+
+	stopCh := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		flowAggregator.Run(stopCh)
+	}()
+
+	disableIPFIXOptions := &options.Options{
+		Config: &flowaggregatorconfig.FlowAggregatorConfig{
+			FlowCollector: flowaggregatorconfig.FlowCollectorConfig{
+				Enable: false,
+			},
+		},
+	}
+	enableIPFIXOptions := &options.Options{
+		Config: &flowaggregatorconfig.FlowAggregatorConfig{
+			FlowCollector: flowaggregatorconfig.FlowCollectorConfig{
+				Enable: true,
+			},
+		},
+	}
+	enableClickHouseOptions := &options.Options{
+		Config: &flowaggregatorconfig.FlowAggregatorConfig{
+			ClickHouse: flowaggregatorconfig.ClickHouseConfig{
+				Enable: true,
+			},
+		},
+	}
+	disableClickHouseOptions := &options.Options{
+		Config: &flowaggregatorconfig.FlowAggregatorConfig{
+			ClickHouse: flowaggregatorconfig.ClickHouseConfig{
+				Enable: false,
+			},
+		},
+	}
+
+	mockIPFIXExporter.EXPECT().Start().Times(2)
+	mockIPFIXExporter.EXPECT().Stop().Times(2)
+	mockClickHouseExporter.EXPECT().Start()
+	mockClickHouseExporter.EXPECT().Stop()
+
+	// we do a few operations: the main purpose is to ensure that cleanup
+	// (i.e., stopping the exporters) is done properly. This sequence of
+	// updates determines the mock expectations above.
+	// 1. The IPFIXExporter is enabled on start, so we expect a call to mockIPFIXExporter.Start()
+	// 2. The IPFIXExporter is then disabled, so we expect a call to mockIPFIXExporter.Stop()
+	// 3. The ClickHouseExporter is then enabled, so we expect a call to mockClickHouseExporter.Start()
+	// 4. The ClickHouseExporter is then disabled, so we expect a call to mockClickHouseExporter.Stop()
+	// 5. The IPFIXExporter is then re-enabled, so we expect a second call to mockIPFIXExporter.Start()
+	// 6. Finally, when Run() is stopped, we expect a second call to mockIPFIXExporter.Stop()
+	updateOptions(disableIPFIXOptions)
+	updateOptions(enableClickHouseOptions)
+	updateOptions(disableClickHouseOptions)
+	updateOptions(enableIPFIXOptions)
+
+	close(stopCh)
+	wg.Wait()
+}

@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
@@ -280,15 +281,22 @@ func (fa *flowAggregator) Run(stopCh <-chan struct{}) {
 	defer fa.aggregationProcess.Stop()
 	if fa.ipfixExporter != nil {
 		fa.ipfixExporter.Start()
-		defer fa.ipfixExporter.Stop()
 	}
 	if fa.clickHouseExporter != nil {
 		fa.clickHouseExporter.Start()
-		defer fa.clickHouseExporter.Stop()
 	}
-	go fa.flowExportLoop(stopCh)
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		// We want to make sure that flowExportLoop returns before
+		// returning from this runction. This is because flowExportLoop
+		// is in charge of cleanely stopping the exporters.
+		defer wg.Done()
+		fa.flowExportLoop(stopCh)
+	}()
 	go fa.watchConfiguration(stopCh)
 	<-stopCh
+	wg.Wait()
 }
 
 // flowExportLoop is the main loop for the FlowAggregator. It runs in a single
@@ -300,6 +308,16 @@ func (fa *flowAggregator) flowExportLoop(stopCh <-chan struct{}) {
 	defer expireTimer.Stop()
 	logTicker := time.NewTicker(fa.logTickerDuration)
 	defer logTicker.Stop()
+	defer func() {
+		// We stop the exporters from flowExportLoop and not from Run,
+		// to avoid any possible race condition.
+		if fa.ipfixExporter != nil {
+			fa.ipfixExporter.Stop()
+		}
+		if fa.clickHouseExporter != nil {
+			fa.clickHouseExporter.Stop()
+		}
+	}()
 	for {
 		select {
 		case <-stopCh:
@@ -521,7 +539,7 @@ func (fa *flowAggregator) updateFlowAggregator(opt *options.Options) {
 			klog.InfoS("Enabling Flow-Collector")
 			fa.ipfixExporter = newIPFIXExporter(fa.k8sClient, opt, fa.registry)
 			fa.ipfixExporter.Start()
-			klog.InfoS("Flow-Collector enabled")
+			klog.InfoS("Enabled Flow-Collector")
 		} else {
 			fa.ipfixExporter.UpdateOptions(opt)
 		}
@@ -530,7 +548,7 @@ func (fa *flowAggregator) updateFlowAggregator(opt *options.Options) {
 			klog.InfoS("Disabling Flow-Collector")
 			fa.ipfixExporter.Stop()
 			fa.ipfixExporter = nil
-			klog.Info("Flow-collector disabled ")
+			klog.Info("Disabled Flow-collector")
 		}
 	}
 	if opt.Config.ClickHouse.Enable {
@@ -543,6 +561,7 @@ func (fa *flowAggregator) updateFlowAggregator(opt *options.Options) {
 				return
 			}
 			fa.clickHouseExporter.Start()
+			klog.InfoS("Enabled ClickHouse")
 		} else {
 			fa.clickHouseExporter.UpdateOptions(opt)
 		}
@@ -551,7 +570,7 @@ func (fa *flowAggregator) updateFlowAggregator(opt *options.Options) {
 			klog.InfoS("Disabling Clickhouse")
 			fa.clickHouseExporter.Stop()
 			fa.clickHouseExporter = nil
-			klog.InfoS("Clickhouse disabled")
+			klog.InfoS("Disabled Clickhouse")
 		}
 	}
 }
