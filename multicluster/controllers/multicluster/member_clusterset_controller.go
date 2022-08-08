@@ -115,10 +115,6 @@ func (r *MemberClusterSetReconciler) Reconcile(ctx context.Context, req ctrl.Req
 		if err != nil {
 			return ctrl.Result{}, err
 		}
-		if err = validateConfigExists(clusterID, clusterSet.Spec.Members); err != nil {
-			err = fmt.Errorf("local cluster %s is not defined as member in ClusterSet", clusterID)
-			return ctrl.Result{}, err
-		}
 		r.clusterID = clusterID
 		r.clusterSetID = clusterSetID
 	} else {
