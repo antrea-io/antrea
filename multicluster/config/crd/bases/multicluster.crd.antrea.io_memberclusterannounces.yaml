@@ -17,11 +17,11 @@ spec:
   versions:
   - additionalPrinterColumns:
     - description: Cluster ID of the member cluster
-      jsonPath: .spec.clusterID
+      jsonPath: .clusterID
       name: Cluster ID
       type: string
     - description: ClusterSet ID
-      jsonPath: .spec.clusterSetID
+      jsonPath: .clusterSetID
       name: ClusterSet ID
       type: string
     - jsonPath: .metadata.creationTimestamp

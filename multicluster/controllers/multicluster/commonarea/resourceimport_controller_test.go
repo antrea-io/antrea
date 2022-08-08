@@ -121,7 +121,7 @@ func init() {
 func TestResourceImportReconciler_handleCreateEvent(t *testing.T) {
 	fakeClient := fake.NewClientBuilder().WithScheme(scheme).Build()
 	fakeRemoteClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(svcResImport, epResImport).Build()
-	remoteCluster := NewFakeRemoteCommonArea(scheme, fakeRemoteClient, "leader-cluster", localClusterID, "default")
+	remoteCluster := NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", localClusterID, "default")
 
 	tests := []struct {
 		name    string
@@ -191,7 +191,7 @@ func TestResourceImportReconciler_handleDeleteEvent(t *testing.T) {
 
 	fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(existSvc, existEp, existSvcImp).Build()
 	fakeRemoteClient := fake.NewClientBuilder().WithScheme(scheme).Build()
-	remoteCluster := NewFakeRemoteCommonArea(scheme, fakeRemoteClient, "leader-cluster", localClusterID, "default")
+	remoteCluster := NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", localClusterID, "default")
 
 	tests := []struct {
 		name    string
@@ -392,7 +392,7 @@ func TestResourceImportReconciler_handleUpdateEvent(t *testing.T) {
 		existSvc, existMCSvcConflicts, existMCEpConflicts, svcWithoutAutoAnnotation, epWithoutAutoAnnotation).Build()
 	fakeRemoteClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(updatedEpResImport, updatedSvcResImport,
 		svcResImportWithConflicts, epResImportWithConflicts).Build()
-	remoteCluster := NewFakeRemoteCommonArea(scheme, fakeRemoteClient, "leader-cluster", localClusterID, "default")
+	remoteCluster := NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", localClusterID, "default")
 
 	tests := []struct {
 		name             string

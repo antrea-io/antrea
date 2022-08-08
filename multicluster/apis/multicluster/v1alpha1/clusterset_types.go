@@ -41,7 +41,8 @@ type ClusterSetSpec struct {
 	// Leaders include leader clusters known to the member clusters.
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=1
-	Leaders []MemberCluster `json:"leaders,omitempty"`
+	// +kubebuilder:validation:Required
+	Leaders []MemberCluster `json:"leaders"`
 	// The leader cluster Namespace in which the ClusterSet is defined.
 	// Used in member cluster.
 	Namespace string `json:"namespace,omitempty"`

@@ -23,8 +23,8 @@ import (
 // +genclient
 //+kubebuilder:object:root=true
 
-// +kubebuilder:printcolumn:name="Cluster ID",type=string,JSONPath=`.spec.clusterID`,description="Cluster ID of the member cluster"
-// +kubebuilder:printcolumn:name="ClusterSet ID",type=string,JSONPath=`.spec.clusterSetID`,description="ClusterSet ID"
+// +kubebuilder:printcolumn:name="Cluster ID",type=string,JSONPath=`.clusterID`,description="Cluster ID of the member cluster"
+// +kubebuilder:printcolumn:name="ClusterSet ID",type=string,JSONPath=`.clusterSetID`,description="ClusterSet ID"
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=`.metadata.creationTimestamp`
 // MemberClusterAnnounce is the Schema for the memberclusterannounces API
 type MemberClusterAnnounce struct {
