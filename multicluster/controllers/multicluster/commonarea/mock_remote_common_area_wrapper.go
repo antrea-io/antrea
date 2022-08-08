@@ -19,7 +19,6 @@ package commonarea
 import (
 	"context"
 
-	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	multiclusterv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
@@ -71,8 +70,7 @@ func (c *fakeRemoteCommonArea) GetLocalClusterID() string {
 }
 
 // NewFakeRemoteCommonArea creates a new fakeRemoteCommonArea for unit test purpose only
-func NewFakeRemoteCommonArea(scheme *runtime.Scheme,
-	fakeClient client.Client, clusterID string, localClusterID string, namespace string) RemoteCommonArea {
+func NewFakeRemoteCommonArea(fakeClient client.Client, clusterID string, localClusterID string, namespace string) RemoteCommonArea {
 	fakeRemoteCommonArea := &fakeRemoteCommonArea{
 		Client:         fakeClient,
 		ClusterID:      common.ClusterID(clusterID),

@@ -44,6 +44,8 @@ spec:
           value:
             description: Value of the ClusterClaim.
             type: string
+        required:
+        - value
         type: object
     served: true
     storage: true
@@ -252,6 +254,8 @@ spec:
                 description: The leader cluster Namespace in which the ClusterSet
                   is defined. Used in member cluster.
                 type: string
+            required:
+            - leaders
             type: object
           status:
             description: ClusterSetStatus defines the observed state of ClusterSet.

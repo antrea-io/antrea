@@ -43,6 +43,8 @@ spec:
           value:
             description: Value of the ClusterClaim.
             type: string
+        required:
+        - value
         type: object
     served: true
     storage: true
