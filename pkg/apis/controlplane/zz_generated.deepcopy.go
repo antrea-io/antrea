@@ -465,6 +465,11 @@ func (in *GroupMember) DeepCopyInto(out *GroupMember) {
 		*out = make([]NamedPort, len(*in))
 		copy(*out, *in)
 	}
+	if in.Service != nil {
+		in, out := &in.Service, &out.Service
+		*out = new(ServiceReference)
+		**out = **in
+	}
 	return
 }
 

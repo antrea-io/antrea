@@ -38,17 +38,22 @@ func (meta *SpanMeta) Has(nodeName string) bool {
 	return meta.NodeNames.Has(nodeName)
 }
 
-// AppliedToGroup describes a set of GroupMembers to apply Network Policies to.
+// AppliedToGroup describes a set of GroupMembers or a Service to apply Network Policies to.
 type AppliedToGroup struct {
 	SpanMeta
-	// UID is generated from the hash value of GroupSelector.NormalizedName.
-	// In case the AppliedToGroup is created for a ClusterGroup, the UID is
-	// that of the corresponding ClusterGroup.
+	// If the AppliedToGroup is created from GroupSelector, UID is generated from the hash value of GroupSelector.NormalizedName.
+	// If the AppliedToGroup is created for a ClusterGroup, the UID is that of the corresponding ClusterGroup.
+	// If the AppliedToGroup is created for a Service, the UID is generated from the hash value of NamespacedName of the Service.
 	UID types.UID
 	// Name of this group, currently it's same as UID.
 	Name string
 	// Selector describes how the group selects pods.
-	Selector GroupSelector
+	// Selector can't be used with Service.
+	Selector *GroupSelector
+	// Service refers to the Service this group selects. Only a NodePort type Service
+	// can be referred by this field.
+	// Service can't be used with Selector.
+	Service *controlplane.ServiceReference
 	// GroupMemberByNode is a mapping from nodeName to a set of GroupMembers on the Node,
 	// either GroupMembers or ExternalEntity on the external node.
 	// It will be converted to a slice of GroupMember for transferring according

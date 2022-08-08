@@ -27,6 +27,7 @@ import (
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	crdv1alpha3 "antrea.io/antrea/pkg/apis/crd/v1alpha3"
 	antreatypes "antrea.io/antrea/pkg/controller/types"
+	"antrea.io/antrea/pkg/util/k8s"
 )
 
 func TestProcessClusterNetworkPolicy(t *testing.T) {
@@ -73,6 +74,8 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 			Namespace: nsA.Name,
 		},
 	}
+
+	ipA := "1.1.1.1"
 
 	allowAction := crdv1alpha1.RuleActionAllow
 	dropAction := crdv1alpha1.RuleActionDrop
@@ -1372,6 +1375,72 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 					},
 				},
 				AppliedToGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", &selectorA, nil, nil, nil).NormalizedName)},
+			},
+			expectedAppliedToGroups: 1,
+			expectedAddressGroups:   0,
+		},
+		{
+			name: "appliedTo-service",
+			inputPolicy: &crdv1alpha1.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "cnpM", UID: "uidM"},
+				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
+					AppliedTo: nil,
+					Priority:  p10,
+					Ingress: []crdv1alpha1.Rule{
+						{
+							AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+								{
+									Service: &crdv1alpha1.NamespacedName{
+										Name:      svcA.Name,
+										Namespace: svcA.Namespace,
+									},
+								},
+							},
+							From: []crdv1alpha1.NetworkPolicyPeer{
+								{
+									IPBlock: &crdv1alpha1.IPBlock{
+										CIDR: ipA + "/32",
+									},
+								},
+							},
+							Action: &allowAction,
+						},
+					},
+				},
+			},
+			expectedPolicy: &antreatypes.NetworkPolicy{
+				UID:  "uidM",
+				Name: "uidM",
+				SourceRef: &controlplane.NetworkPolicyReference{
+					Type: controlplane.AntreaClusterNetworkPolicy,
+					Name: "cnpM",
+					UID:  "uidM",
+				},
+				Priority:     &p10,
+				TierPriority: &DefaultTierPriority,
+				Rules: []controlplane.NetworkPolicyRule{
+					{
+						Direction:       controlplane.DirectionIn,
+						AppliedToGroups: []string{getNormalizedUID(k8s.NamespacedName(svcA.Namespace, svcA.Name))},
+						From: controlplane.NetworkPolicyPeer{
+							IPBlocks: []controlplane.IPBlock{
+								{
+									CIDR: controlplane.IPNet{
+										IP:           controlplane.IPAddress(net.ParseIP(ipA)),
+										PrefixLength: 32,
+									},
+									Except: []controlplane.IPNet{},
+								},
+							},
+						},
+						Priority: 0,
+						Action:   &allowAction,
+					},
+				},
+				AppliedToGroups: []string{
+					getNormalizedUID(k8s.NamespacedName(svcA.Namespace, svcA.Name)),
+				},
+				AppliedToPerRule: true,
 			},
 			expectedAppliedToGroups: 1,
 			expectedAddressGroups:   0,
