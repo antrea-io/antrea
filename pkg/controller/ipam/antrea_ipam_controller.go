@@ -19,6 +19,7 @@ package ipam
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -27,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	apitypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/informers"
@@ -395,11 +397,16 @@ func (c *AntreaIPAMController) updateIPPoolCounters(poolName string) error {
 		return nil
 	}
 
-	ipPoolToUpdate := ipPool.DeepCopy()
-	ipPoolToUpdate.Status.Usage.Used = used
-	ipPoolToUpdate.Status.Usage.Total = total
+	patch, _ := json.Marshal(map[string]interface{}{
+		"status": map[string]interface{}{
+			"usage": map[string]interface{}{
+				"used":  used,
+				"total": total,
+			},
+		},
+	})
 
-	_, err = c.crdClient.CrdV1alpha2().IPPools().UpdateStatus(context.TODO(), ipPoolToUpdate, metav1.UpdateOptions{})
+	_, err = c.crdClient.CrdV1alpha2().IPPools().Patch(context.TODO(), ipPool.Name, apitypes.MergePatchType, patch, metav1.PatchOptions{}, "status")
 	if err != nil {
 		return fmt.Errorf("failed to update IPPool %s counters, error: %v", poolName, err)
 	}
