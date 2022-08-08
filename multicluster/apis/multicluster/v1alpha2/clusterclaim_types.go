@@ -37,7 +37,8 @@ type ClusterClaim struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 	// Value of the ClusterClaim.
-	Value string `json:"value,omitempty"`
+	// +kubebuilder:validation:Required
+	Value string `json:"value"`
 }
 
 //+kubebuilder:object:root=true
