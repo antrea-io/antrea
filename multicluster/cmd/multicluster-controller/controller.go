@@ -148,13 +148,13 @@ func setupManagerAndCertController(o *Options) (manager.Manager, error) {
 		return nil, fmt.Errorf("error starting manager: %v", err)
 	}
 
-	if err = (&multiclusterv1alpha2.ClusterClaim{}).SetupWebhookWithManager(mgr); err != nil {
-		return nil, fmt.Errorf("error create ClusterClaim webhook: %v", err)
-	}
-
 	hookServer := mgr.GetWebhookServer()
 	hookServer.Register("/validate-multicluster-crd-antrea-io-v1alpha1-clusterset",
 		&webhook.Admission{Handler: &clusterSetValidator{
+			Client:    mgr.GetClient(),
+			namespace: env.GetPodNamespace()}})
+	hookServer.Register("/validate-multicluster-crd-antrea-io-v1alpha2-clusterclaim",
+		&webhook.Admission{Handler: &clusterClaimValidator{
 			Client:    mgr.GetClient(),
 			namespace: env.GetPodNamespace()}})
 

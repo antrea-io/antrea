@@ -125,7 +125,6 @@ func (r *MemberClusterSetReconciler) Reconcile(ctx context.Context, req ctrl.Req
 	}
 	r.clusterSetConfig = clusterSet.DeepCopy()
 
-	// handle create and update
 	err = r.createOrUpdateRemoteCommonArea(clusterSet)
 	if err != nil {
 		return ctrl.Result{}, err

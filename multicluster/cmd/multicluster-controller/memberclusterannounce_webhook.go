@@ -33,7 +33,6 @@ import (
 
 //+kubebuilder:webhook:path=/validate-multicluster-crd-antrea-io-v1alpha1-memberclusterannounce,mutating=false,failurePolicy=fail,sideEffects=None,groups=multicluster.crd.antrea.io,resources=memberclusterannounces,verbs=create;update,versions=v1alpha1,name=vmemberclusterannounce.kb.io,admissionReviewVersions={v1,v1beta1}
 
-// member cluster announce validator
 type memberClusterAnnounceValidator struct {
 	Client    client.Client
 	decoder   *admission.Decoder
