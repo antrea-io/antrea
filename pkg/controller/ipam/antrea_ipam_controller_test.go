@@ -31,7 +31,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
-	"k8s.io/klog/v2"
 
 	crdv1a2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
 	fakecrd "antrea.io/antrea/pkg/client/clientset/versioned/fake"
@@ -145,48 +144,49 @@ func TestStatefulSetLifecycle(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		stopCh := make(chan struct{})
-		defer close(stopCh)
+		t.Run(tt.name, func(t *testing.T) {
+			stopCh := make(chan struct{})
+			defer close(stopCh)
 
-		klog.InfoS("Running", "test", tt.name)
-		namespace, pool, statefulSet := initTestObjects(!tt.dedicatedPool, tt.dedicatedPool, tt.replicas)
-		crdClient := fakecrd.NewSimpleClientset(pool)
-		k8sClient := fake.NewSimpleClientset(namespace, statefulSet)
+			namespace, pool, statefulSet := initTestObjects(!tt.dedicatedPool, tt.dedicatedPool, tt.replicas)
+			crdClient := fakecrd.NewSimpleClientset(pool)
+			k8sClient := fake.NewSimpleClientset(namespace, statefulSet)
 
-		informerFactory := informers.NewSharedInformerFactory(k8sClient, 0)
+			informerFactory := informers.NewSharedInformerFactory(k8sClient, 0)
 
-		crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, 0)
-		poolInformer := crdInformerFactory.Crd().V1alpha2().IPPools()
-		poolLister := poolInformer.Lister()
+			crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, 0)
+			poolInformer := crdInformerFactory.Crd().V1alpha2().IPPools()
+			poolLister := poolInformer.Lister()
 
-		controller := NewAntreaIPAMController(crdClient, informerFactory, crdInformerFactory)
-		require.NotNil(t, controller)
-		informerFactory.Start(stopCh)
-		crdInformerFactory.Start(stopCh)
+			controller := NewAntreaIPAMController(crdClient, informerFactory, crdInformerFactory)
+			require.NotNil(t, controller)
+			informerFactory.Start(stopCh)
+			crdInformerFactory.Start(stopCh)
 
-		go controller.Run(stopCh)
+			go controller.Run(stopCh)
 
-		var allocator *poolallocator.IPPoolAllocator
-		var err error
-		// Wait until pool propagates to the informer
-		pollErr := wait.PollImmediate(100*time.Millisecond, 1*time.Second, func() (bool, error) {
-			allocator, err = poolallocator.NewIPPoolAllocator(pool.Name, crdClient, poolLister)
-			if err != nil {
-				return false, nil
-			}
-			return true, nil
+			var allocator *poolallocator.IPPoolAllocator
+			var err error
+			// Wait until pool propagates to the informer
+			pollErr := wait.PollImmediate(100*time.Millisecond, 3*time.Second, func() (bool, error) {
+				allocator, err = poolallocator.NewIPPoolAllocator(pool.Name, crdClient, poolLister)
+				if err != nil {
+					return false, nil
+				}
+				return true, nil
+			})
+			require.NoError(t, pollErr)
+			defer allocator.ReleaseStatefulSet(statefulSet.Namespace, statefulSet.Name)
+
+			// Verify create event was handled by the controller
+			verifyPoolAllocatedSize(t, pool.Name, poolLister, tt.expectAllocatedSize)
+
+			// Delete StatefulSet
+			k8sClient.AppsV1().StatefulSets(namespace.Name).Delete(context.TODO(), statefulSet.Name, metav1.DeleteOptions{})
+
+			// Verify Delete event was processed
+			verifyPoolAllocatedSize(t, pool.Name, poolLister, 0)
 		})
-		require.NoError(t, pollErr)
-		defer allocator.ReleaseStatefulSet(statefulSet.Namespace, statefulSet.Name)
-
-		// Verify create event was handled by the controller
-		verifyPoolAllocatedSize(t, pool.Name, poolLister, tt.expectAllocatedSize)
-
-		// Delete StatefulSet
-		k8sClient.AppsV1().StatefulSets(namespace.Name).Delete(context.TODO(), statefulSet.Name, metav1.DeleteOptions{})
-
-		// Verify Delete event was processed
-		verifyPoolAllocatedSize(t, pool.Name, poolLister, 0)
 	}
 }
 
