@@ -11,12 +11,12 @@ simplicity, the diagram just shows two Nodes for each cluster).
 
 ## Preparation
 
-We assume an Antrea version >= `v1.7.0` is used in this guide, and the Antrea
+We assume an Antrea version >= `v1.8.0` is used in this guide, and the Antrea
 version is set to an environment variable `TAG`. For example, the following
-command sets the Antrea version to `v1.7.0`.
+command sets the Antrea version to `v1.8.0`.
 
 ```bash
-export TAG=v1.7.0
+export TAG=v1.8.0
 ```
 
 To use the latest version of Antrea Multi-cluster from the Antrea main branch,
@@ -80,11 +80,11 @@ Antrea provides several template YAML manifests to set up a ClusterSet quicker.
 You can run the following commands that use the template manifests to create a
 ClusterSet named `test-clusteraset` in the leader cluster and get a
 ServiceAccount token for the member clusters (both cluster A and B in our case)
-to access the leader cluster (cluster A in our case) apiserver.
+to access the leader cluster (cluster A in our case) API server.
 
 ```bash
-$kubectl apply -f https://raw.githubusercontent.com/antrea-io/antrea/$TAG/multicluster/config/samples/clusterset_init/multicluster_clusterset_template.yaml
-$kubectl apply -f https://raw.githubusercontent.com/antrea-io/antrea/$TAG/multicluster/config/samples/clusterset_init/multicluster_leader_access_token_template.yaml
+$kubectl apply -f https://raw.githubusercontent.com/antrea-io/antrea/$TAG/multicluster/config/samples/clusterset_init/leader-clusterset-template.yml
+$kubectl apply -f https://raw.githubusercontent.com/antrea-io/antrea/$TAG/multicluster/config/samples/clusterset_init/leader-access-token-template.yml
 $kubectl get secret leader-access-token -n antrea-multicluster -o yaml | grep -w -e '^apiVersion' -e '^data' -e '^metadata' -e '^ *name:' -e '^kind' -e '  ca.crt' -e '  token:' -e '^type' -e '  namespace' | sed -e 's/kubernetes.io\/service-account-token/Opaque/g' -e 's/antrea-multicluster/kube-system/g' > leader-access-token.yml
 ```
 
@@ -100,8 +100,8 @@ member:
 
 ```bash
 $kubectl apply -f leader-access-token.yml
-$curl -L https://raw.githubusercontent.com/antrea-io/antrea/v1.7.0/multicluster/config/samples/clusterset_init/multicluster_membercluster_template.yaml > multicluster_membercluster.yaml
-$sed -e 's/test-cluster-member/test-cluster-leader/g' -e 's/<LEADER_CLUSTER_IP>/172.10.0.11/g' multicluster_membercluster.yaml | kubectl apply -f -
+$curl -L https://raw.githubusercontent.com/antrea-io/antrea/$TAG/multicluster/config/samples/clusterset_init/member-clusterset-template.yml > member-clusterset.yml
+$sed -e 's/test-cluster-member/test-cluster-leader/g' -e 's/<LEADER_CLUSTER_IP>/172.10.0.11/g' member-clusterset.yml | kubectl apply -f -
 ```
 
 Here, `172.10.0.11` is the `kube-apiserver` IP of cluster A. You should replace
@@ -150,14 +150,14 @@ NAMESPACE             NAME                                   READY   UP-TO-DATE 
 kube-system           deployment.apps/antrea-mc-controller   1/1     1            1           40s
 ```
 
-### Step 2 - initialize ClusterSet
+### Step 2 - join ClusterSet
 
 Run the following commands to make cluster B join the ClusterSet:
 
 ```bash
 $kubectl apply -f leader-access-token.yml
-$curl -L https://raw.githubusercontent.com/antrea-io/antrea/$TAG/multicluster/config/samples/clusterset_init/multicluster_membercluster_template.yaml > multicluster_membercluster.yaml
-$sed -e 's/<LEADER_CLUSTER_IP>/172.10.0.11/g' multicluster_membercluster.yaml | kubectl apply -f -
+$curl -L https://raw.githubusercontent.com/antrea-io/antrea/$TAG/multicluster/config/samples/clusterset_init/member-clusterset-template.yml > member-clusterset.yml
+$sed -e 's/<LEADER_CLUSTER_IP>/172.10.0.11/g' member-clusterset.yml | kubectl apply -f -
 ```
 
 `leader-access-token.yml` saves the leader cluster ServiceAccount token which
@@ -181,21 +181,13 @@ and [ClusterNetworkPolicy Replication](user-guide.md#multi-cluster-clusternetwor
 Please check the relevant Antrea Multi-cluster User Guide sections to learn more.
 
 If you want to add a new member cluster to your ClusterSet, you can follow the
-steps for cluster B to do so. But note, you will need the following two changes:
-
-1. You need to add the new mumber cluster to the `ClusterSet` in the leader
-cluster (cluster A). You can do that by adding the cluster ID of the new member
-to `multicluster_clusterset_template.yaml` and re-applying the manifest in
-cluster A.
-
-2. You need to update the member cluster ID in
-`multicluster_membercluster_template.yaml` to the cluster ID of the new member
-cluster in the step 2 of initializing ClusterSet. For example, you can run the
-following commands to initialize the ClusterSet for a member cluster with ID
-`test-cluster-member2`:
+steps for cluster B to do so. Remember to update the member cluster ID in
+`member-clusterset-template.yml` to the new member cluster's ID in the step 2 of
+joining ClusterSet. For example, you can run the following commands to join the
+ClusterSet in a member cluster with ID `test-cluster-member2`:
 
 ```bash
 $kubectl apply -f leader-access-token.yml
-$curl -L https://raw.githubusercontent.com/antrea-io/antrea/$TAG/multicluster/config/samples/clusterset_init/multicluster_membercluster_template.yaml  > multicluster_membercluster.yaml
-$sed -e 's/<LEADER_CLUSTER_IP>/172.10.0.11/g' -e 's/test-cluster-member/test-cluster-member2/g' multicluster_membercluster.yaml | kubectl apply -f -
+$curl -L https://raw.githubusercontent.com/antrea-io/antrea/$TAG/multicluster/config/samples/clusterset_init/member-clusterset-template.yml  > member-clusterset.yml
+$sed -e 's/<LEADER_CLUSTER_IP>/172.10.0.11/g' -e 's/test-cluster-member/test-cluster-member2/g' member-clusterset.yml | kubectl apply -f -
 ```

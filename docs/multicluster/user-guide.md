@@ -35,12 +35,12 @@ with two clusters quickly.
 
 ### Preparation
 
-We assume an Antrea version >= `v1.7.0` is used in this guide, and the Antrea
+We assume an Antrea version >= `v1.8.0` is used in this guide, and the Antrea
 version is set to an environment variable `TAG`. For example, the following
-command sets the Antrea version to `v1.7.0`.
+command sets the Antrea version to `v1.8.0`.
 
 ```bash
-export TAG=v1.7.0
+export TAG=v1.8.0
 ```
 
 To use the latest version of Antrea Multi-cluster from the Antrea main branch,
@@ -198,9 +198,38 @@ In all clusters, a `ClusterSet` CR must be created to define the ClusterSet, and
 two `ClusterClaim` CRs must be created to claim the ClusterSet and claim the
 cluster is a member of the ClusterSet.
 
+- Create `ClusterClaim` and `ClusterSet` in the leader cluster
+`test-cluster-north` with the following YAML manifest (you can also refer to
+[leader-clusterset-template.yml](../../multicluster/config/samples/clusterset_init/leader-clusterset-template.yml)):
+
+```yaml
+apiVersion: multicluster.crd.antrea.io/v1alpha2
+kind: ClusterClaim
+metadata:
+  name: id.k8s.io
+  namespace: antrea-multicluster
+value: test-cluster-north
+---
+apiVersion: multicluster.crd.antrea.io/v1alpha2
+kind: ClusterClaim
+metadata:
+  name: clusterset.k8s.io
+  namespace: antrea-multicluster
+value: test-clusterset
+---
+apiVersion: multicluster.crd.antrea.io/v1alpha1
+kind: ClusterSet
+metadata:
+  name: test-clusterset
+  namespace: antrea-multicluster
+spec:
+  leaders:
+    - clusterID: test-cluster-north
+```
+
 - Create `ClusterClaim` and `ClusterSet` in member cluster `test-cluster-east`
 with the following YAML manifest (you can also refer to
-[multicluster_membercluster_template.yaml](../../multicluster/config/samples/clusterset_init/multicluster_membercluster_template.yaml)):
+[member-clusterset-template.yml](../../multicluster/config/samples/clusterset_init/member-clusterset-template.yml)):
 
 ```yaml
 apiVersion: multicluster.crd.antrea.io/v1alpha2
@@ -227,8 +256,6 @@ spec:
     - clusterID: test-cluster-north
       secret: "member-east-access-token"
       server: "https://172.18.0.1:6443"
-  members:
-    - clusterID: test-cluster-east
   namespace: antrea-multicluster
 ```
 
@@ -262,48 +289,8 @@ spec:
     - clusterID: test-cluster-north
       secret: "member-west-access-token"
       server: "https://172.18.0.1:6443"
-  members:
-    - clusterID: test-cluster-west
   namespace: antrea-multicluster
 ```
-
-- Create `ClusterClaim` and `ClusterSet` in the leader cluster
-`test-cluster-north` with the following YAML manifest (you can also refer to
-[multicluster_clusterset_template.yaml](../../multicluster/config/samples/clusterset_init/multicluster_clusterset_template.yaml)):
-
-```yaml
-apiVersion: multicluster.crd.antrea.io/v1alpha2
-kind: ClusterClaim
-metadata:
-  name: id.k8s.io
-  namespace: antrea-multicluster
-value: test-cluster-north
----
-apiVersion: multicluster.crd.antrea.io/v1alpha2
-kind: ClusterClaim
-metadata:
-  name: clusterset.k8s.io
-  namespace: antrea-multicluster
-value: test-clusterset
----
-apiVersion: multicluster.crd.antrea.io/v1alpha1
-kind: ClusterSet
-metadata:
-  name: test-clusterset
-  namespace: antrea-multicluster
-spec:
-  leaders:
-    - clusterID: test-cluster-north
-  members:
-    - clusterID: test-cluster-east
-      serviceAccount: "member-east-access-sa"
-    - clusterID: test-cluster-west
-      serviceAccount: "member-west-access-sa"
-  namespace: antrea-multicluster
-```
-
-In the leader cluster, the `ClusterSet` spec should include all member clusters
-of the ClusterSet.
 
 #### Initialize ClusterSet for a Dual-role Cluster
 
@@ -342,31 +329,6 @@ spec:
     - clusterID: test-cluster-north
       secret: "member-north-access-token"
       server: "https://172.18.0.1:6443"
-  members:
-    - clusterID: test-cluster-north
-  namespace: antrea-multicluster
-```
-
-Last, update the ClusterSet `test-clusterset` in Namepsace `antrea-multicluster`
-(where the leader Multi-cluster Controller runs) to include `test-cluster-north`
-as a member cluster of the ClusterSet:
-
-```yaml
-apiVersion: multicluster.crd.antrea.io/v1alpha1
-kind: ClusterSet
-metadata:
-  name: test-clusterset
-  namespace: antrea-multicluster
-spec:
-  leaders:
-    - clusterID: test-cluster-north
-  members:
-    - clusterID: test-cluster-east
-      serviceAccount: "member-east-access-sa"
-    - clusterID: test-cluster-west
-      serviceAccount: "member-west-access-sa"
-    - clusterID: test-cluster-north
-      serviceAccount: "member-north-access-sa"
   namespace: antrea-multicluster
 ```
 
