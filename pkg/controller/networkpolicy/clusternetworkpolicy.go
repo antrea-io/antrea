@@ -214,6 +214,8 @@ func (n *NetworkPolicyController) addNamespace(obj interface{}) {
 
 // updateNamespace receives Namespace UPDATE events and triggers all ClusterNetworkPolicies that have a
 // per-namespace rule applied to either the original or the new Namespace to be re-processed.
+// It also triggers all K8s NetworkPolicies in the new Namespace to be re-processed
+// if the logging Annotation changes.
 func (n *NetworkPolicyController) updateNamespace(oldObj, curObj interface{}) {
 	defer n.heartbeat("updateNamespace")
 	oldNamespace, curNamespace := oldObj.(*v1.Namespace), curObj.(*v1.Namespace)
