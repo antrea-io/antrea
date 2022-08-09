@@ -142,6 +142,12 @@ func skipIfNoWindowsNodes(tb testing.TB) {
 	}
 }
 
+func skipIfNoVMs(tb testing.TB) {
+	if testOptions.linuxVMs == "" && testOptions.windowsVMs == "" {
+		tb.Skipf("Skipping test as there no Linux or Windows VMs")
+	}
+}
+
 func skipIfFeatureDisabled(tb testing.TB, feature featuregate.Feature, checkAgent bool, checkController bool) {
 	if checkAgent {
 		if featureGate, err := GetAgentFeatures(); err != nil {
@@ -398,6 +404,32 @@ func exportLogs(tb testing.TB, data *TestData, logsSubDir string, writeNodeLogs 
 		return nil
 	}); err != nil {
 		tb.Logf("Error when exporting kubelet logs: %v", err)
+	}
+
+	writeVMAgentLog := func(cmd string, targetVMs string) {
+		vms := strings.Split(targetVMs, ",")
+		for _, vm := range vms {
+			tb.Logf("Exporting logs from %s", vm)
+			_, stdout, _, err := data.RunCommandOnNode(vm, cmd)
+			if err != nil {
+				tb.Errorf("Error when exporting antrea-agent logs from %s: %v", vm, err)
+			}
+			w := getNodeWriter(vm, "antrea-agent")
+			if w == nil {
+				// move on to the next VM
+				continue
+			}
+			w.WriteString(stdout)
+			w.Close()
+		}
+	}
+	if testOptions.linuxVMs != "" {
+		cmd := "cat /var/log/antrea/antrea-agent.log"
+		writeVMAgentLog(cmd, testOptions.linuxVMs)
+	}
+	if testOptions.windowsVMs != "" {
+		cmd := "cat c:/antrea-agent/antrea-agent.log"
+		writeVMAgentLog(cmd, testOptions.windowsVMs)
 	}
 }
 
