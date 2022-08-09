@@ -158,7 +158,9 @@ var _ = BeforeSuite(func() {
 		k8sManager.GetClient(),
 		k8sManager.GetScheme(),
 		"default",
-		clusterSetReconciler)
+		clusterSetReconciler,
+		multiclustercontrollers.MemberCluster,
+	)
 
 	go staleController.Run(stopCh)
 	// Make sure to trigger clean up process every 5 seconds
