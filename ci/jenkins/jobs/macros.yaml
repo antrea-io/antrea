@@ -140,3 +140,12 @@
             echo "Whole Conformance Test failed!"
           fi
           exit $((TEST_FAIL_E2E + TEST_FAIL_NP + TEST_FAIL_CONFORMANCE))
+
+- builder:
+    name: builder-vm-e2e
+    builders:
+      - shell: |-
+          #!/bin/bash
+          set -e
+          DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
+          ./ci/jenkins/test-vm.sh  --registry ${DOCKER_REGISTRY} --kubeconfig /var/lib/jenkins/.kube/config
