@@ -10,6 +10,10 @@ trafficEncapMode: "encap"
 # -- Tunnel protocol used for encapsulating traffic across Nodes. It must be one
 # of "geneve", "vxlan", "gre", "stt".
 tunnelType: "geneve"
+# -- TunnelPort is the destination port for UDP and TCP based tunnel protocols
+# (Geneve, VXLAN, and STT). If zero, it will use the assigned IANA port for the
+# protocol, i.e. 6081 for Geneve, 4789 for VXLAN, and 7471 for STT.
+tunnelPort: 0
 # -- Determines how tunnel traffic is encrypted. Currently encryption only works
 # with encap mode.It must be one of "none", "ipsec", "wireGuard".
 trafficEncryptionMode: "none"

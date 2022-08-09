@@ -2686,6 +2686,11 @@ data:
     # Note that "gre" is not supported for IPv6 clusters (IPv6-only or dual-stack clusters).
     tunnelType: "geneve"
 
+    # TunnelPort is the destination port for UDP and TCP based tunnel protocols (Geneve, VXLAN, and STT).
+    # If zero, it will use the assigned IANA port for the protocol, i.e. 6081 for Geneve, 4789 for VXLAN,
+    # and 7471 for STT.
+    tunnelPort: 0
+
     # Determines how tunnel traffic is encrypted. Currently encryption only works with encap mode.
     # It has the following options:
     # - none (default):  Inter-node Pod traffic will not be encrypted.
@@ -3732,7 +3737,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 741b313c6ab0ed98e7d994985861722f503a93529f90a5141b8a6e0c124d8904
+        checksum/config: 3f9907e9f0f4db91b926904114567c4e2c496f6fe03abb4ef80df5af937c0f19
       labels:
         app: antrea
         component: antrea-agent
@@ -3972,7 +3977,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 741b313c6ab0ed98e7d994985861722f503a93529f90a5141b8a6e0c124d8904
+        checksum/config: 3f9907e9f0f4db91b926904114567c4e2c496f6fe03abb4ef80df5af937c0f19
       labels:
         app: antrea
         component: antrea-controller

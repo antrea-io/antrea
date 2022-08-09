@@ -106,6 +106,7 @@ Kubernetes: `>= 1.16.0-0`
 | trafficEncryptionMode | string | `"none"` | Determines how tunnel traffic is encrypted. Currently encryption only works with encap mode.It must be one of "none", "ipsec", "wireGuard". |
 | transportInterface | string | `""` | Name of the interface on Node which is used for tunneling or routing the traffic across Nodes. |
 | transportInterfaceCIDRs | list | `[]` | Network CIDRs of the interface on Node which is used for tunneling or routing the traffic across Nodes. |
+| tunnelPort | int | `0` | TunnelPort is the destination port for UDP and TCP based tunnel protocols (Geneve, VXLAN, and STT). If zero, it will use the assigned IANA port for the protocol, i.e. 6081 for Geneve, 4789 for VXLAN, and 7471 for STT. |
 | tunnelType | string | `"geneve"` | Tunnel protocol used for encapsulating traffic across Nodes. It must be one of "geneve", "vxlan", "gre", "stt". |
 | webhooks.labelsMutator.enable | bool | `false` |  |
 | whereabouts.enable | bool | `false` |  |
