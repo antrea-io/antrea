@@ -40,6 +40,7 @@ import (
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	crdv1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
 	crdv1alpha3 "antrea.io/antrea/pkg/apis/crd/v1alpha3"
+	"antrea.io/antrea/pkg/controller/networkpolicy"
 	"antrea.io/antrea/pkg/features"
 	. "antrea.io/antrea/test/e2e/utils"
 )
@@ -1946,7 +1947,7 @@ func testANPMultipleAppliedTo(t *testing.T, data *TestData, singleRule bool) {
 	failOnError(k8sUtils.DeleteANP(builder.Namespace, builder.Name), t)
 }
 
-// testAuditLoggingBasic tests that a audit log is generated when egress drop applied
+// testAuditLoggingBasic tests that audit logs are generated when egress drop applied
 func testAuditLoggingBasic(t *testing.T, data *TestData) {
 	builder := &ClusterNetworkPolicySpecBuilder{}
 	builder = builder.SetName("test-log-acnp-deny").
@@ -2032,6 +2033,99 @@ func testAuditLoggingBasic(t *testing.T, data *TestData) {
 	}
 
 	failOnError(k8sUtils.CleanACNPs(), t)
+}
+
+// testAuditLoggingEnableNP tests that audit logs are generated when K8s NP is applied
+// tests both Allow traffic by K8s NP and Drop traffic by implicit K8s policy drop
+func testAuditLoggingEnableNP(t *testing.T, data *TestData) {
+	data.updateNamespaceWithAnnotations(namespaces["x"], map[string]string{networkpolicy.EnableNPLoggingAnnotationKey: "true"})
+	// Add a K8s namespaced NetworkPolicy in ns x that allow ingress traffic from
+	// Pod x/b to x/a which default denies other ingress including from Pod x/c to x/a
+	k8sNPBuilder := &NetworkPolicySpecBuilder{}
+	k8sNPBuilder = k8sNPBuilder.SetName(namespaces["x"], "allow-x-b-to-x-a").
+		SetPodSelector(map[string]string{"pod": "a"}).
+		SetTypeIngress().
+		AddIngress(v1.ProtocolTCP, &p80, nil, nil, nil,
+			map[string]string{"pod": "b"}, nil, nil, nil)
+
+	knp, err := k8sUtils.CreateOrUpdateNetworkPolicy(k8sNPBuilder.Get())
+	failOnError(err, t)
+	failOnError(waitForResourceReady(t, timeout, knp), t)
+
+	// generate some traffic that will be dropped by implicit K8s policy drop
+	var wg sync.WaitGroup
+	oneProbe := func(ns1, pod1, ns2, pod2 string) {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			k8sUtils.Probe(ns1, pod1, ns2, pod2, p80, ProtocolTCP)
+		}()
+	}
+	oneProbe(namespaces["x"], "b", namespaces["x"], "a")
+	oneProbe(namespaces["x"], "c", namespaces["x"], "a")
+	wg.Wait()
+
+	podXA, err := k8sUtils.GetPodByLabel(namespaces["x"], "a")
+	if err != nil {
+		t.Errorf("Failed to get Pod in Namespace x with label 'pod=a': %v", err)
+	}
+	// nodeName is guaranteed to be set at this stage, since the framework waits for all Pods to be in Running phase
+	nodeName := podXA.Spec.NodeName
+	antreaPodName, err := data.getAntreaPodOnNode(nodeName)
+	if err != nil {
+		t.Errorf("Error occurred when trying to get the Antrea Agent Pod running on Node %s: %v", nodeName, err)
+	}
+	cmd := []string{"cat", logDir + logfileName}
+
+	if err := wait.Poll(1*time.Second, 10*time.Second, func() (bool, error) {
+		stdout, stderr, err := data.RunCommandFromPod(antreaNamespace, antreaPodName, "antrea-agent", cmd)
+		if err != nil || stderr != "" {
+			// file may not exist yet
+			t.Logf("Error when printing the audit log file, err: %v, stderr: %v", err, stderr)
+			return false, nil
+		}
+		if !strings.Contains(stdout, "K8sNetworkPolicy") {
+			t.Logf("Audit log file does not contain entries for 'test-log-acnp-deny' yet")
+			return false, nil
+		}
+
+		var expectedNumEntries, actualNumEntries int
+		srcPods := []string{namespaces["x"] + "/b", namespaces["x"] + "/c"}
+		expectedLogPrefix := []string{"allow-x-b-to-x-a Allow [0-9]+ ", "K8sNetworkPolicy Drop -1 "}
+		destIPs, _ := podIPs[namespaces["x"]+"/a"]
+		for i := 0; i < len(srcPods); i++ {
+			srcIPs, _ := podIPs[srcPods[i]]
+			for _, srcIP := range srcIPs {
+				for _, destIP := range destIPs {
+					// only look for an entry in the audit log file if srcIP and
+					// dstIP are of the same family
+					if strings.Contains(srcIP, ".") != strings.Contains(destIP, ".") {
+						continue
+					}
+					expectedNumEntries += 1
+					// The audit log should contain log entry `... Drop <ofPriority> <x/a IP> <z/* IP> ...`
+					re := regexp.MustCompile(expectedLogPrefix[i] + srcIP + ` [0-9]+ ` + destIP + ` ` + strconv.Itoa(int(p80)))
+					if re.MatchString(stdout) {
+						actualNumEntries += 1
+					} else {
+						t.Logf("Audit log does not contain expected entry from %s (%s) to x/a (%s)", srcPods[i], srcIP, destIP)
+					}
+					break
+				}
+			}
+		}
+		if actualNumEntries != expectedNumEntries {
+			t.Logf("Missing entries in audit log with K8s NP: expected %d but found %d", expectedNumEntries, actualNumEntries)
+			return false, nil
+		}
+		return true, nil
+	}); err != nil {
+		t.Errorf("Error when polling audit log files for required entries: %v", err)
+	}
+	failOnError(k8sUtils.DeleteNetworkPolicy(namespaces["x"], "allow-x-b-to-x-a"), t)
+	data.UpdateNamespace(namespaces["x"], func(namespace *v1.Namespace) {
+		delete(namespace.Annotations, networkpolicy.EnableNPLoggingAnnotationKey)
+	})
 }
 
 func testAppliedToPerRule(t *testing.T) {
@@ -3556,6 +3650,7 @@ func TestAntreaPolicy(t *testing.T) {
 
 	t.Run("TestGroupAuditLogging", func(t *testing.T) {
 		t.Run("Case=AuditLoggingBasic", func(t *testing.T) { testAuditLoggingBasic(t, data) })
+		t.Run("Case=AuditLoggingEnableNP", func(t *testing.T) { testAuditLoggingEnableNP(t, data) })
 	})
 
 	t.Run("TestMulticastNP", func(t *testing.T) {
