@@ -158,6 +158,7 @@ func newControllerWithoutEventHandler(k8sObjects, crdObjects []runtime.Object) (
 	addressGroupStore := store.NewAddressGroupStore()
 	internalNetworkPolicyStore := store.NewNetworkPolicyStore()
 	internalGroupStore := store.NewGroupStore()
+	namespaceInformer := informerFactory.Core().V1().Namespaces()
 	networkPolicyInformer := informerFactory.Networking().V1().NetworkPolicies()
 	tierInformer := crdInformerFactory.Crd().V1alpha1().Tiers()
 	cnpInformer := crdInformerFactory.Crd().V1alpha1().ClusterNetworkPolicies()
@@ -167,6 +168,7 @@ func newControllerWithoutEventHandler(k8sObjects, crdObjects []runtime.Object) (
 	npController := &NetworkPolicyController{
 		kubeClient:                 client,
 		crdClient:                  crdClient,
+		namespaceLister:            namespaceInformer.Lister(),
 		networkPolicyInformer:      networkPolicyInformer,
 		networkPolicyLister:        networkPolicyInformer.Lister(),
 		networkPolicyListerSynced:  networkPolicyInformer.Informer().HasSynced,
@@ -2532,11 +2534,12 @@ func TestProcessNetworkPolicy(t *testing.T) {
 					UID:       "uidA",
 				},
 				Rules: []controlplane.NetworkPolicyRule{{
-					Direction: controlplane.DirectionIn,
-					From:      matchAllPeer,
-					Services:  nil,
-					Priority:  defaultRulePriority,
-					Action:    &defaultAction,
+					Direction:     controlplane.DirectionIn,
+					From:          matchAllPeer,
+					Services:      nil,
+					Priority:      defaultRulePriority,
+					Action:        &defaultAction,
+					EnableLogging: false,
 				}},
 				AppliedToGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("nsA", &metav1.LabelSelector{}, nil, nil, nil).NormalizedName)},
 			},
@@ -2626,8 +2629,9 @@ func TestProcessNetworkPolicy(t *testing.T) {
 								Port:     &int80,
 							},
 						},
-						Priority: defaultRulePriority,
-						Action:   &defaultAction,
+						Priority:      defaultRulePriority,
+						Action:        &defaultAction,
+						EnableLogging: false,
 					},
 					{
 						Direction: controlplane.DirectionOut,
@@ -2640,8 +2644,9 @@ func TestProcessNetworkPolicy(t *testing.T) {
 								Port:     &int81,
 							},
 						},
-						Priority: defaultRulePriority,
-						Action:   &defaultAction,
+						Priority:      defaultRulePriority,
+						Action:        &defaultAction,
+						EnableLogging: false,
 					},
 				},
 				AppliedToGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("nsA", &selectorA, nil, nil, nil).NormalizedName)},
@@ -2704,8 +2709,9 @@ func TestProcessNetworkPolicy(t *testing.T) {
 								Port:     &int80,
 							},
 						},
-						Priority: defaultRulePriority,
-						Action:   &defaultAction,
+						Priority:      defaultRulePriority,
+						Action:        &defaultAction,
+						EnableLogging: false,
 					},
 					{
 						Direction: controlplane.DirectionIn,
@@ -2718,8 +2724,9 @@ func TestProcessNetworkPolicy(t *testing.T) {
 								Port:     &int81,
 							},
 						},
-						Priority: defaultRulePriority,
-						Action:   &defaultAction,
+						Priority:      defaultRulePriority,
+						Action:        &defaultAction,
+						EnableLogging: false,
 					},
 				},
 				AppliedToGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("nsA", &selectorA, nil, nil, nil).NormalizedName)},
@@ -2738,6 +2745,69 @@ func TestProcessNetworkPolicy(t *testing.T) {
 
 			if actualAddressGroups := len(c.addressGroupStore.List()); actualAddressGroups != tt.expectedAddressGroups {
 				t.Errorf("len(addressGroupStore.List()) got %v, want %v", actualAddressGroups, tt.expectedAddressGroups)
+			}
+
+			if actualAppliedToGroups := len(c.appliedToGroupStore.List()); actualAppliedToGroups != tt.expectedAppliedToGroups {
+				t.Errorf("len(appliedToGroupStore.List()) got %v, want %v", actualAppliedToGroups, tt.expectedAppliedToGroups)
+			}
+		})
+	}
+}
+
+func TestProcessNetworkPolicyLogging(t *testing.T) {
+	tests := []struct {
+		name                    string
+		inputPolicy             *networkingv1.NetworkPolicy
+		expectedPolicy          *antreatypes.NetworkPolicy
+		expectedAppliedToGroups int
+		expectedAddressGroups   int
+	}{
+		{
+			name: "default-allow-ingress",
+			inputPolicy: &networkingv1.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "npA", UID: "uidA"},
+				Spec: networkingv1.NetworkPolicySpec{
+					PodSelector: metav1.LabelSelector{},
+					PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
+					Ingress:     []networkingv1.NetworkPolicyIngressRule{{}},
+				},
+			},
+			expectedPolicy: &antreatypes.NetworkPolicy{
+				UID:  "uidA",
+				Name: "uidA",
+				SourceRef: &controlplane.NetworkPolicyReference{
+					Type:      controlplane.K8sNetworkPolicy,
+					Namespace: "nsA",
+					Name:      "npA",
+					UID:       "uidA",
+				},
+				Rules: []controlplane.NetworkPolicyRule{{
+					Direction:     controlplane.DirectionIn,
+					From:          matchAllPeer,
+					Services:      nil,
+					Priority:      defaultRulePriority,
+					Action:        &defaultAction,
+					EnableLogging: true,
+				}},
+				AppliedToGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("nsA", &metav1.LabelSelector{}, nil, nil, nil).NormalizedName)},
+			},
+			expectedAppliedToGroups: 1,
+			expectedAddressGroups:   0,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, c := newController()
+			nsA := corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        "nsA",
+					Annotations: map[string]string{"networkpolicy.antrea.io/enable-logging": "true"},
+				},
+			}
+			c.namespaceStore.Add(&nsA)
+
+			if actualPolicy := c.processNetworkPolicy(tt.inputPolicy); !reflect.DeepEqual(actualPolicy, tt.expectedPolicy) {
+				t.Errorf("processNetworkPolicy() got %v, want %v", actualPolicy, tt.expectedPolicy)
 			}
 
 			if actualAppliedToGroups := len(c.appliedToGroupStore.List()); actualAppliedToGroups != tt.expectedAppliedToGroups {

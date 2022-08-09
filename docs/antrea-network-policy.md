@@ -647,9 +647,31 @@ The rules are logged in the following format:
     Deduplication:
     <yyyy/mm/dd> <time> <ovs-table-name> <antrea-native-policy-reference> <action> <openflow-priority> <source-ip> <source-port> <destination-ip> <destination-port> <protocol> <packet-length> [<num of packets> packets in <duplicate duration>]
 
-    Example:
+    Examples:
     2020/11/02 22:21:21.148395 AntreaPolicyAppTierIngressRule AntreaNetworkPolicy:default/test-anp Allow 61800 10.10.1.65 35402 10.0.0.5 80 TCP 60
     2021/06/24 23:56:41.346165 AntreaPolicyEgressRule AntreaNetworkPolicy:default/test-anp Drop 44900 10.10.1.65 35402 10.0.0.5 80 TCP 60 [3 packets in 1.011379442s]
+```
+
+Kubernetes NetworkPolicies can also be audited using Antrea logging to the same file
+(`/var/log/antrea/networkpolicy/np.log`). Add Annotation
+`networkpolicy.antrea.io/enable-logging: "true` on a Namespace to enable logging
+for all NetworkPolicies in the Namespace. Packets of any connection that match
+a NetworkPolicy rule will be logged with a reference to the NetworkPolicy name,
+but packets dropped by the implicit "default drop" (not allowed by any NetworkPolicy)
+will only be logged with consistent name `K8sNetworkPolicy` for reference.
+Note that currently, Antrea only retrieves the logging Annotation once when adding
+NetworkPolicies and in case of agent restart, users should not update Namespace
+logging Annotations, otherwise it would risk NetworkPolicies working in a stale state.
+The rules are logged in the following format:
+
+```text
+    <yyyy/mm/dd> <time> <ovs-table-name> <k8s-network-policy-reference> Allow <openflow-priority> <source-ip> <source-port> <destination-ip> <destination-port> <protocol> <packet-length>
+    Default dropped traffic:
+    <yyyy/mm/dd> <time> <ovs-table-name> K8sNetworkPolicy Drop -1 <source-ip> <source-port> <destination-ip> <destination-port> <protocol> <packet-length> [<num of packets> packets in <duplicate duration>]
+
+    Examples:
+    2022/07/26 06:55:56.170456 IngressRule K8sNetworkPolicy:default/test-np-log Allow 190 10.10.1.82 49518 10.10.1.84 80 TCP 60
+    2022/07/26 06:55:57.142206 IngressDefaultRule K8sNetworkPolicy Drop -1 10.10.1.83 38608 10.10.1.84 80 TCP 60
 ```
 
 Fluentd can be used to assist with collecting and analyzing the logs. Refer to the

@@ -180,7 +180,7 @@ func (c *Controller) storeDenyConnection(pktIn *ofctrl.PacketIn) error {
 			denyConn.EgressNetworkPolicyRuleAction = flowexporter.RuleActionToUint8(disposition)
 		}
 	} else {
-		// For K8s NetworkPolicy implicit drop action, we cannot get name/namespace.
+		// For K8s NetworkPolicy implicit drop action, we cannot get Namespace/name.
 		if tableID == openflow.IngressDefaultTable.GetID() {
 			denyConn.IngressNetworkPolicyType = registry.PolicyTypeK8sNetworkPolicy
 			denyConn.IngressNetworkPolicyRuleAction = flowexporter.RuleActionToUint8(disposition)

@@ -1256,10 +1256,10 @@ func TestReconcilerUpdate(t *testing.T) {
 				mockOFClient.EXPECT().UninstallPolicyRuleFlows(gomock.Any())
 			}
 			if len(tt.expectedAddedFrom) > 0 {
-				mockOFClient.EXPECT().AddPolicyRuleAddress(gomock.Any(), types.SrcAddress, gomock.InAnyOrder(tt.expectedAddedFrom), priority)
+				mockOFClient.EXPECT().AddPolicyRuleAddress(gomock.Any(), types.SrcAddress, gomock.InAnyOrder(tt.expectedAddedFrom), priority, false)
 			}
 			if len(tt.expectedAddedTo) > 0 {
-				mockOFClient.EXPECT().AddPolicyRuleAddress(gomock.Any(), types.DstAddress, gomock.InAnyOrder(tt.expectedAddedTo), priority)
+				mockOFClient.EXPECT().AddPolicyRuleAddress(gomock.Any(), types.DstAddress, gomock.InAnyOrder(tt.expectedAddedTo), priority, false)
 			}
 			if len(tt.expectedDeletedFrom) > 0 {
 				mockOFClient.EXPECT().DeletePolicyRuleAddress(gomock.Any(), types.SrcAddress, gomock.InAnyOrder(tt.expectedDeletedFrom), priority)

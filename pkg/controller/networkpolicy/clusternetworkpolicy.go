@@ -214,10 +214,12 @@ func (n *NetworkPolicyController) addNamespace(obj interface{}) {
 
 // updateNamespace receives Namespace UPDATE events and triggers all ClusterNetworkPolicies that have a
 // per-namespace rule applied to either the original or the new Namespace to be re-processed.
+// It also triggers all K8s NetworkPolicies in the new Namespace to be re-processed
+// if the logging Annotation changes.
 func (n *NetworkPolicyController) updateNamespace(oldObj, curObj interface{}) {
 	defer n.heartbeat("updateNamespace")
 	oldNamespace, curNamespace := oldObj.(*v1.Namespace), curObj.(*v1.Namespace)
-	klog.V(2).Infof("Processing Namespace %s UPDATE event, labels: %v", curNamespace.Name, curNamespace.Labels)
+	klog.V(2).Infof("Processing Namespace %s UPDATE event, labels: %v, annotations: %v", curNamespace.Name, curNamespace.Labels, curNamespace.Annotations)
 	oldLabelSet, curLabelSet := labels.Set(oldNamespace.Labels), labels.Set(curNamespace.Labels)
 	affectedACNPsByOldLabels := n.filterPerNamespaceRuleACNPsByNSLabels(oldLabelSet)
 	affectedACNPsByCurLabels := n.filterPerNamespaceRuleACNPsByNSLabels(curLabelSet)
@@ -225,6 +227,12 @@ func (n *NetworkPolicyController) updateNamespace(oldObj, curObj interface{}) {
 	for cnpName := range affectedACNPs {
 		if cnp, err := n.cnpLister.Get(cnpName); err == nil {
 			n.reprocessCNP(cnp, false)
+		}
+	}
+	if oldNamespace.Annotations[EnableNPLoggingAnnotationKey] != curNamespace.Annotations[EnableNPLoggingAnnotationKey] {
+		affectedNPs, _ := n.networkPolicyLister.NetworkPolicies(curNamespace.Name).List(labels.Everything())
+		for _, np := range affectedNPs {
+			n.updateNetworkPolicy(np, np)
 		}
 	}
 }

@@ -437,7 +437,7 @@ func prepareTraceflowFlow(ctrl *gomock.Controller) *client {
 	c.bridge = ovsoftest.NewMockBridge(ctrl)
 
 	mFlow := ovsoftest.NewMockFlow(ctrl)
-	ctx := &conjMatchFlowContext{dropFlow: mFlow}
+	ctx := &conjMatchFlowContext{dropFlow: mFlow, dropFlowEnableLogging: false}
 	mFlow.EXPECT().FlowProtocol().Return(binding.Protocol("ip"))
 	mFlow.EXPECT().CopyToBuilder(priorityNormal+2, false).Return(EgressDefaultTable.ofTable.BuildFlow(priorityNormal + 2)).Times(1)
 	c.featureNetworkPolicy.globalConjMatchFlowCache["mockContext"] = ctx

@@ -734,7 +734,7 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule, 
 		} else {
 			addedTo := ofPortsToOFAddresses(newOFPorts.Difference(lastRealized.podOFPorts[igmpServicesKey]))
 			deletedTo := ofPortsToOFAddresses(lastRealized.podOFPorts[igmpServicesKey].Difference(newOFPorts))
-			if err := r.updateOFRule(ofID, nil, addedTo, nil, deletedTo, ofPriority); err != nil {
+			if err := r.updateOFRule(ofID, nil, addedTo, nil, deletedTo, ofPriority, newRule.EnableLogging); err != nil {
 				return err
 			}
 		}
@@ -803,7 +803,7 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule, 
 					addedTo = ofPortsToOFAddresses(newOFPorts.Difference(originalOfPortsSet))
 					deletedTo = ofPortsToOFAddresses(originalOfPortsSet.Difference(newOFPorts))
 				}
-				if err := r.updateOFRule(ofID, addedFrom, addedTo, deletedFrom, deletedTo, ofPriority); err != nil {
+				if err := r.updateOFRule(ofID, addedFrom, addedTo, deletedFrom, deletedTo, ofPriority, newRule.EnableLogging); err != nil {
 					return err
 				}
 				// Delete valid servicesKey from staleOFIDs.
@@ -893,7 +893,7 @@ func (r *reconciler) update(lastRealized *lastRealized, newRule *CompletedRule, 
 					addedTo = svcGroupIDsToOFAddresses(newGroupIDSet.Difference(originalGroupIDSet))
 					deletedTo = svcGroupIDsToOFAddresses(originalGroupIDSet.Difference(newGroupIDSet))
 				}
-				if err := r.updateOFRule(ofID, addedFrom, addedTo, deletedFrom, deletedTo, ofPriority); err != nil {
+				if err := r.updateOFRule(ofID, addedFrom, addedTo, deletedFrom, deletedTo, ofPriority, newRule.EnableLogging); err != nil {
 					return err
 				}
 				if r.fqdnController != nil {
@@ -930,17 +930,17 @@ func (r *reconciler) installOFRule(ofRule *types.PolicyRule) error {
 	return nil
 }
 
-func (r *reconciler) updateOFRule(ofID uint32, addedFrom []types.Address, addedTo []types.Address, deletedFrom []types.Address, deletedTo []types.Address, priority *uint16) error {
+func (r *reconciler) updateOFRule(ofID uint32, addedFrom []types.Address, addedTo []types.Address, deletedFrom []types.Address, deletedTo []types.Address, priority *uint16, enableLogging bool) error {
 	klog.V(2).Infof("Updating ofRule %d (addedFrom: %d, addedTo: %d, deleteFrom: %d, deletedTo: %d)",
 		ofID, len(addedFrom), len(addedTo), len(deletedFrom), len(deletedTo))
 	// TODO: This might be unnecessarily complex and hard for error handling, consider revising the Openflow interfaces.
 	if len(addedFrom) > 0 {
-		if err := r.ofClient.AddPolicyRuleAddress(ofID, types.SrcAddress, addedFrom, priority); err != nil {
+		if err := r.ofClient.AddPolicyRuleAddress(ofID, types.SrcAddress, addedFrom, priority, enableLogging); err != nil {
 			return fmt.Errorf("error adding policy rule source addresses for ofRule %v: %v", ofID, err)
 		}
 	}
 	if len(addedTo) > 0 {
-		if err := r.ofClient.AddPolicyRuleAddress(ofID, types.DstAddress, addedTo, priority); err != nil {
+		if err := r.ofClient.AddPolicyRuleAddress(ofID, types.DstAddress, addedTo, priority, enableLogging); err != nil {
 			return fmt.Errorf("error adding policy rule destination addresses for ofRule %v: %v", ofID, err)
 		}
 	}
