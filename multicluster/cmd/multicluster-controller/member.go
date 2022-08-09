@@ -95,7 +95,9 @@ func runMember(o *Options) error {
 		mgr.GetClient(),
 		mgr.GetScheme(),
 		env.GetPodNamespace(),
-		commonAreaGetter)
+		commonAreaGetter,
+		multiclustercontrollers.MemberCluster,
+	)
 
 	go staleController.Run(stopCh)
 	// Member runs ResourceImportReconciler from RemoteCommonArea only

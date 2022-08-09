@@ -35,16 +35,26 @@ import (
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 )
 
+const (
+	LeaderCluster = "leader"
+	MemberCluster = "member"
+
+	memberClusterAnnounceStaleTime = 5 * time.Minute
+)
+
 // StaleResCleanupController will clean up ServiceImport, MC Service, ACNP, ClusterInfoImport resources
 // if no corresponding ResourceImports in the leader cluster and remove stale ResourceExports
-// in the leader cluster if no corresponding ServiceExport or Gateway in the member cluster.
-// It will only run in the member cluster.
+// in the leader cluster if no corresponding ServiceExport or Gateway in the member cluster when it runs in
+// the member cluster.
+// It will clean up stale MemberClusterAnnounce resources in the leader cluster if no corresponding member
+// cluster in the ClusterSet.Spec.Members when it runs in the leader cluster.
 type StaleResCleanupController struct {
 	client.Client
 	Scheme           *runtime.Scheme
 	localClusterID   string
 	commonAreaGetter RemoteCommonAreaGetter
 	namespace        string
+	clusterRole      string
 	// queue only ever has one item, but it has nice error handling backoff/retry semantics
 	queue workqueue.RateLimitingInterface
 }
@@ -53,12 +63,15 @@ func NewStaleResCleanupController(
 	Client client.Client,
 	Scheme *runtime.Scheme,
 	namespace string,
-	commonAreaGetter RemoteCommonAreaGetter) *StaleResCleanupController {
+	commonAreaGetter RemoteCommonAreaGetter,
+	clusterRole string,
+) *StaleResCleanupController {
 	reconciler := &StaleResCleanupController{
 		Client:           Client,
 		Scheme:           Scheme,
 		namespace:        namespace,
 		commonAreaGetter: commonAreaGetter,
+		clusterRole:      clusterRole,
 		queue:            workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "StaleResCleanupController"),
 	}
 	return reconciler
@@ -70,6 +83,20 @@ func NewStaleResCleanupController(
 //+kubebuilder:rbac:groups=multicluster.crd.antrea.io,resources=resourceexports,verbs=get;list;watch;delete
 
 func (c *StaleResCleanupController) cleanup() error {
+	switch c.clusterRole {
+	case LeaderCluster:
+		return c.cleanupStaleResourcesOnLeader()
+	case MemberCluster:
+		return c.cleanupStaleResourcesOnMember()
+	}
+	return nil
+}
+
+func (c *StaleResCleanupController) cleanupStaleResourcesOnLeader() error {
+	return c.cleanupMemberClusterAnnounces()
+}
+
+func (c *StaleResCleanupController) cleanupStaleResourcesOnMember() error {
 	var err error
 	var commonArea commonarea.RemoteCommonArea
 	commonArea, c.localClusterID, err = c.commonAreaGetter.GetRemoteCommonAreaAndLocalID()
@@ -264,6 +291,32 @@ func (c *StaleResCleanupController) cleanupClusterInfoResourceExport(commonArea 
 		}
 		klog.InfoS("Cleaning up stale ClusterInfo kind of ResourceExport", "resourceexport", klog.KObj(ciExport))
 		if err := commonArea.Delete(ctx, ciExport, &client.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
+			return err
+		}
+	}
+	return nil
+}
+
+func (c *StaleResCleanupController) cleanupMemberClusterAnnounces() error {
+	memberClusterAnnounceList := &mcsv1alpha1.MemberClusterAnnounceList{}
+	if err := c.List(ctx, memberClusterAnnounceList, &client.ListOptions{}); err != nil {
+		return err
+	}
+
+	for _, m := range memberClusterAnnounceList.Items {
+		memberClusterAnnounce := m
+		lastUpdateTime, err := time.Parse(time.RFC3339, memberClusterAnnounce.Annotations[commonarea.TimestampAnnotationKey])
+		if err == nil && time.Now().Sub(lastUpdateTime) < memberClusterAnnounceStaleTime {
+			continue
+		}
+		if err == nil {
+			klog.InfoS("Cleaning up stale MemberClusterAnnounce. It has not been updated within the agreed period", "MemberClusterAnnounce", klog.KObj(&memberClusterAnnounce), "agreedPeriod", memberClusterAnnounceStaleTime)
+		} else {
+			klog.InfoS("Cleaning up stale MemberClusterAnnounce. The latest update time is not in RFC3339 format", "MemberClusterAnnounce", klog.KObj(&memberClusterAnnounce))
+		}
+
+		if err := c.Client.Delete(ctx, &memberClusterAnnounce, &client.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
+			klog.ErrorS(err, "Failed to delete stale MemberClusterAnnounce", "MemberClusterAnnounce", klog.KObj(&memberClusterAnnounce))
 			return err
 		}
 	}

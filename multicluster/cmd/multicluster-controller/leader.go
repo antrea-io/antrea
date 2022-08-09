@@ -27,6 +27,7 @@ import (
 	multiclusterv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
 	multiclustercontrollers "antrea.io/antrea/multicluster/controllers/multicluster"
 	"antrea.io/antrea/pkg/log"
+	"antrea.io/antrea/pkg/signals"
 	"antrea.io/antrea/pkg/util/env"
 )
 
@@ -93,6 +94,16 @@ func runLeader(o *Options) error {
 	if err = (&multiclusterv1alpha1.ResourceExport{}).SetupWebhookWithManager(mgr); err != nil {
 		return fmt.Errorf("error creating ResourceExport webhook: %v", err)
 	}
+	stopCh := signals.RegisterSignalHandlers()
+	staleController := multiclustercontrollers.NewStaleResCleanupController(
+		mgr.GetClient(),
+		mgr.GetScheme(),
+		env.GetPodNamespace(),
+		nil,
+		multiclustercontrollers.LeaderCluster,
+	)
+
+	go staleController.Run(stopCh)
 
 	klog.InfoS("Leader MC Controller Starting Manager")
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
