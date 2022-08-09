@@ -40,16 +40,16 @@ DOCKER_REGISTRY=""
 CONTROL_PLANE_NODE_ROLE="master|control-plane"
 
 _usage="Usage: $0 [--cluster-name <VMCClusterNameToUse>] [--kubeconfig <KubeconfigSavePath>] [--workdir <HomePath>]
-                  [--log-mode <SonobuoyResultLogLevel>] [--testcase <e2e|integration|conformance|all-features-conformance|whole-conformance|networkpolicy>]
+                  [--log-mode <SonobuoyResultLogLevel>] [--testcase <e2e|conformance|all-features-conformance|whole-conformance|networkpolicy>]
                   [--garbage-collection] [--setup-only] [--cleanup-only] [--coverage] [--test-only] [--codecov-token] [--registry]
 
-Setup a VMC cluster to run K8s e2e community tests (E2e, Integration, Conformance, all features Conformance, whole Conformance & Network Policy).
+Setup a VMC cluster to run K8s e2e community tests (E2e, Conformance, all features Conformance, whole Conformance & Network Policy).
 
         --cluster-name           The cluster name to be used for the generated VMC cluster.
         --kubeconfig             Path to save kubeconfig of generated VMC cluster.
         --workdir                Home path for Go, vSphere information and antrea_logs during cluster setup. Default is $WORKDIR.
         --log-mode               Use the flag to set either 'report', 'detail', or 'dump' level data for sonobouy results.
-        --testcase               The testcase to run: e2e, integration, conformance, all-features-conformance, whole-conformance or networkpolicy.
+        --testcase               The testcase to run: e2e, conformance, all-features-conformance, whole-conformance or networkpolicy.
         --garbage-collection     Do garbage collection to clean up some unused testbeds.
         --setup-only             Only perform setting up the cluster and run test.
         --cleanup-only           Only perform cleaning up the cluster.
@@ -466,26 +466,6 @@ function deliver_antrea {
     done
 }
 
-function run_integration {
-    flag=$1
-    VM_NAME="antrea-integration-0"
-    export GOVC_INSECURE=1
-    export GOVC_URL=${GOVC_URL}
-    export GOVC_USERNAME=${GOVC_USERNAME}
-    export GOVC_PASSWORD=${GOVC_PASSWORD}
-    VM_IP=$(govc vm.ip ${VM_NAME})
-    govc snapshot.revert -vm.ip ${VM_IP} initial
-    VM_IP=$(govc vm.ip ${VM_NAME}) # wait for VM to be on
-
-    set -x
-    echo "===== Run Integration tests ====="
-    # umask ensures that files are cloned with the correct permissions so that Docker caching can be leveraged
-    ${SSH_WITH_UTILS_KEY} -n jenkins@${VM_IP} "umask 0022 && git clone ${ghprbAuthorRepoGitUrl} antrea && cd antrea && git checkout ${GIT_BRANCH} && DOCKER_REGISTRY=${DOCKER_REGISTRY} ./build/images/ovs/build.sh --pull && NO_PULL=${NO_PULL} make docker-test-integration;cd multicluster && NO_LOCAL=true make test-integration"
-    if [[ "$COVERAGE" == true ]]; then
-      run_codecov "integration-tests" "coverage-integration.txt" "" true ${VM_IP}
-    fi
-}
-
 function run_e2e {
     echo "====== Running Antrea E2E Tests ======"
 
@@ -707,8 +687,8 @@ if [[ "$RUN_CLEANUP_ONLY" == true ]]; then
     exit 0
 fi
 
-if [[ "$TESTCASE" != "e2e" && "$TESTCASE" != "conformance" && "$TESTCASE" != "all-features-conformance" && "$TESTCASE" != "whole-conformance" && "$TESTCASE" != "networkpolicy" && "$TESTCASE" != "integration" ]]; then
-    echoerr "testcase should be e2e, integration, conformance, all-features-conformance, whole-conformance or networkpolicy"
+if [[ "$TESTCASE" != "e2e" && "$TESTCASE" != "conformance" && "$TESTCASE" != "all-features-conformance" && "$TESTCASE" != "whole-conformance" && "$TESTCASE" != "networkpolicy" ]]; then
+    echoerr "testcase should be e2e, conformance, all-features-conformance, whole-conformance or networkpolicy"
     exit 1
 fi
 
@@ -721,11 +701,6 @@ if [[ "$RUN_TEST_ONLY" == true ]]; then
     if [[ "$TEST_FAILURE" == true ]]; then
         exit 1
     fi
-    exit 0
-fi
-
-if [[ "$TESTCASE" == "integration" ]]; then
-    run_integration
     exit 0
 fi
 
