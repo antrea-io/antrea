@@ -104,6 +104,48 @@ jobs:
           flags: unit-tests
           name: codecov-unit-test
 
+  test-integration:
+    needs: check-changes
+    if: ${{ needs.check-changes.outputs.has_changes == 'yes' }}
+    name: Integration test
+    runs-on: [ubuntu-latest]
+    steps:
+      - name: Set up Go 1.17
+        uses: actions/setup-go@v3
+        with:
+          go-version: 1.17
+      - name: Check-out code
+        uses: actions/checkout@v3
+      - uses: actions/cache@v3
+        with:
+          # In order:
+          # * Module download cache
+          # * Build cache (Linux)
+          # * Build cache (Mac)
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+            ~/Library/Caches/go-build
+            %LocalAppData%\go-build
+          key: ${{ runner.os }}-${{ env.go-cache-name }}-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ env.go-cache-name }}-
+      - name: Run integration tests
+        run: |
+          ./build/images/ovs/build.sh
+          NO_PULL=1 make docker-test-integration
+      - name: Run integration tests for multicluster
+        run: |
+          cd multicluster
+          make test-integration
+      - name: Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: .coverage/coverage-integration.txt,multicluster/.coverage/coverage-integration.txt
+          flags: integration-tests
+          name: codecov-integration-test
+
   # golangci-lint-ubuntu and golangci-lint-macos are intentionally not merged into one job with os matrix, otherwise the
   # job wouldn't be expanded if it's skipped and the report of the required check would be missing.
   # See https://github.com/antrea-io/antrea/issues/3563.

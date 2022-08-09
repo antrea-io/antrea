@@ -36,16 +36,4 @@ kubectl create namespace leader-ns
 # Here we simply create a cluster-admin user for member to access leader
 kubectl apply -f test/integration/cluster-admin.yml
 
-if [[ $NO_LOCAL == "true" ]];then
-  # Run go test in a Docker container
-  container_ip=$(docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' antrea-integration-control-plane)
-  sed -i "s|server: https://.*|server: https://${container_ip}:6443|" /tmp/mc-integration-kubeconfig
-  docker run --network kind --privileged --rm \
-	  -w /usr/src/antrea.io/antrea \
-    -v /tmp/mc-integration-kubeconfig:/tmp/mc-integration-kubeconfig \
-	  -v ${BASEDIR}/../.coverage:/usr/src/antrea.io/antrea/multicluster/.coverage \
-	  -v ${BASEDIR}/../..:/usr/src/antrea.io/antrea:ro \
-	  antrea/mc-test test-integration
-else
-    go test -coverpkg=antrea.io/antrea/multicluster/controllers/multicluster/... -coverprofile=../.coverage/coverage-integration.txt -covermode=atomic -cover antrea.io/antrea/multicluster/test/integration/...
-fi
+go test -coverpkg=antrea.io/antrea/multicluster/controllers/multicluster/... -coverprofile=.coverage/coverage-integration.txt -covermode=atomic -cover antrea.io/antrea/multicluster/test/integration/...

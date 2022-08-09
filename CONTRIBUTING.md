@@ -161,7 +161,6 @@ the repo. It's a Github security mechanism.
 
 Here are the trigger phrases for individual checks:
 
-* `/test-integration`: Integration tests
 * `/test-e2e`: Linux IPv4 e2e tests
 * `/test-conformance`: Linux IPv4 conformance tests
 * `/test-networkpolicy`: Linux IPv4 networkpolicy tests
@@ -187,7 +186,7 @@ Here are the trigger phrases for groups of checks:
 * `/test-ipv6-only-all`: Linux IPv6 only tests
 
 Besides, you can skip a check with `/skip-*`, e.g. `/skip-e2e`: skip Linux IPv4
-e2e tests. Integration check cannot be skipped.
+e2e tests.
 
 Skipping a check should be used only when the change doesn't influence the
 specific function. For example:
