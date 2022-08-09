@@ -172,6 +172,7 @@ type IPsecConfig struct {
 type NetworkConfig struct {
 	TrafficEncapMode      TrafficEncapModeType
 	TunnelType            ovsconfig.TunnelType
+	TunnelPort            int32
 	TrafficEncryptionMode TrafficEncryptionModeType
 	IPsecConfig           IPsecConfig
 	TransportIface        string

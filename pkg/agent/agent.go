@@ -726,6 +726,7 @@ func (i *Initializer) setupDefaultTunnelInterface() error {
 	if portExists {
 		if i.networkConfig.TrafficEncapMode.SupportsEncap() &&
 			tunnelIface.TunnelInterfaceConfig.Type == i.networkConfig.TunnelType &&
+			tunnelIface.TunnelInterfaceConfig.DestinationPort == i.networkConfig.TunnelPort &&
 			tunnelIface.TunnelInterfaceConfig.LocalIP.Equal(localIP) {
 			klog.V(2).Infof("Tunnel port %s already exists on OVS bridge", tunnelPortName)
 			// This could happen when upgrading from previous versions that didn't set it.
@@ -761,7 +762,12 @@ func (i *Initializer) setupDefaultTunnelInterface() error {
 		externalIDs := map[string]interface{}{
 			interfacestore.AntreaInterfaceTypeKey: interfacestore.AntreaTunnel,
 		}
-		tunnelPortUUID, err := i.ovsBridgeClient.CreateTunnelPortExt(tunnelPortName, i.networkConfig.TunnelType, config.DefaultTunOFPort, shouldEnableCsum, localIPStr, "", "", "", nil, externalIDs)
+		extraOptions := map[string]interface{}{}
+		if i.networkConfig.TunnelPort != 0 {
+			extraOptions["dst_port"] = strconv.Itoa(int(i.networkConfig.TunnelPort))
+		}
+		tunnelPortUUID, err := i.ovsBridgeClient.CreateTunnelPortExt(tunnelPortName,
+			i.networkConfig.TunnelType, config.DefaultTunOFPort, shouldEnableCsum, localIPStr, "", "", "", extraOptions, externalIDs)
 		if err != nil {
 			klog.ErrorS(err, "Failed to create tunnel port on OVS bridge", "port", tunnelPortName, "type", i.networkConfig.TunnelType)
 			return err
@@ -772,7 +778,7 @@ func (i *Initializer) setupDefaultTunnelInterface() error {
 			return err
 		}
 		klog.InfoS("Allocated OpenFlow port for tunnel interface", "port", tunnelPortName, "ofPort", tunPort)
-		tunnelIface = interfacestore.NewTunnelInterface(tunnelPortName, i.networkConfig.TunnelType, localIP, shouldEnableCsum)
+		tunnelIface = interfacestore.NewTunnelInterface(tunnelPortName, i.networkConfig.TunnelType, i.networkConfig.TunnelPort, localIP, shouldEnableCsum)
 		tunnelIface.OVSPortConfig = &interfacestore.OVSPortConfig{PortUUID: tunnelPortUUID, OFPort: tunPort}
 		i.ifaceStore.AddInterface(tunnelIface)
 		i.nodeConfig.TunnelOFPort = uint32(tunPort)

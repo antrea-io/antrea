@@ -71,6 +71,10 @@ type AgentConfig struct {
 	// - gre
 	// - stt
 	TunnelType string `yaml:"tunnelType,omitempty"`
+	// TunnelPort is the destination port for UDP and TCP based tunnel protocols (Geneve, VXLAN, and STT).
+	// If zero, it will use the assigned IANA port for the protocol, i.e. 6081 for Geneve, 4789 for VXLAN,
+	// and 7471 for STT.
+	TunnelPort int32 `yaml:"tunnelPort,omitempty"`
 	// Default MTU to use for the host gateway interface and the network interface of each Pod.
 	// If omitted, antrea-agent will discover the MTU of the Node's primary interface and
 	// also adjust MTU to accommodate for tunnel encapsulation overhead (if applicable).
