@@ -105,7 +105,7 @@ func setupVMAgentTest(t *testing.T, data *TestData) ([]vmInfo, error) {
 // and verifies uplink configuration is restored.
 func teardownVMAgentTest(t *testing.T, data *TestData, vmList []vmInfo) {
 	verifyUpLinkAfterCleanup := func(vm vmInfo) {
-		err := wait.PollImmediate(30*time.Second, 1*time.Minute, func() (done bool, err error) {
+		err := wait.PollImmediate(10*time.Second, 1*time.Minute, func() (done bool, err error) {
 			var tempVM vmInfo
 			if vm.osType == "Linux" {
 				tempVM = getVMInfo(t, data, vm.nodeName)
@@ -166,7 +166,7 @@ func verifyExternalEntityExistence(t *testing.T, data *TestData, eeName string, 
 
 func testExternalNode(t *testing.T, data *TestData, vmList []vmInfo) {
 	verifyExternalNodeRealization := func(vm vmInfo) {
-		err := wait.PollImmediate(30*time.Second, 1*time.Minute, func() (done bool, err error) {
+		err := wait.PollImmediate(10*time.Second, 1*time.Minute, func() (done bool, err error) {
 			t.Logf("Verify host interface configuration for VM: %s", vm.nodeName)
 			exists, err := verifyInterfaceIsInOVS(t, data, vm)
 			return exists, err
