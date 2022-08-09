@@ -115,7 +115,7 @@ func findContainerIPConfig(ips []*current.IPConfig) (*current.IPConfig, error) {
 // configureContainerLink creates a HNSEndpoint for the container using the IPAM result, and then attach it on the container interface.
 func (ic *ifConfigurator) configureContainerLink(
 	podName string,
-	podNameSpace string,
+	podNamespace string,
 	containerID string,
 	containerNetNS string,
 	containerIFDev string,
@@ -134,7 +134,7 @@ func (ic *ifConfigurator) configureContainerLink(
 	// We must use the infra container to generate the endpoint name to ensure infra and workload containers use the
 	// same HNSEndpoint.
 	infraContainerID := getInfraContainer(containerID, containerNetNS)
-	epName := util.GenerateContainerInterfaceName(podName, podNameSpace, infraContainerID)
+	epName := util.GenerateContainerInterfaceName(podName, podNamespace, infraContainerID)
 	// Search endpoint from local cache.
 	endpoint, found := ic.getEndpoint(epName)
 	if !found {
@@ -142,7 +142,7 @@ func (ic *ifConfigurator) configureContainerLink(
 			return fmt.Errorf("failed to find HNSEndpoint: %s", epName)
 		}
 		// Only create HNS Endpoint for infra container.
-		ep, err := ic.createContainerLink(epName, result, containerID, podName, podNameSpace)
+		ep, err := ic.createContainerLink(epName, result, containerID, podName, podNamespace)
 		if err != nil {
 			return err
 		}
@@ -307,7 +307,7 @@ func (ic *ifConfigurator) removeHNSEndpoint(endpoint *hcsshim.HNSEndpoint, conta
 		if hcnEndpoint != nil && isValidHostNamespace(hcnEndpoint.HostComputeNamespace) {
 			err := removeEndpointFromNamespaceFunc(hcnEndpoint.HostComputeNamespace, hcnEndpoint.Id)
 			if err != nil {
-				klog.Errorf("Failed to remove HostComputeEndpoint %s from HostComputeNameSpace %s: %v", hcnEndpoint.Name, hcnEndpoint.HostComputeNamespace, err)
+				klog.Errorf("Failed to remove HostComputeEndpoint %s from HostComputeNamespace %s: %v", hcnEndpoint.Name, hcnEndpoint.HostComputeNamespace, err)
 				deleteCh <- err
 				return
 			}

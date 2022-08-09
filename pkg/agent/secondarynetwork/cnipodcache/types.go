@@ -17,7 +17,7 @@ package cnipodcache
 type CNIConfigInfo struct {
 	CNIVersion     string
 	PodName        string
-	PodNameSpace   string
+	PodNamespace   string
 	ContainerID    string
 	ContainerNetNS string
 	MTU            int

@@ -75,7 +75,7 @@ type podSriovVFDeviceIDInfo struct {
 }
 
 type InterfaceConfigurator interface {
-	ConfigureSriovSecondaryInterface(podName string, podNameSpace string, containerID string, containerNetNS string, containerIFDev string, mtu int, podSriovVFDeviceID string, result *current.Result) error
+	ConfigureSriovSecondaryInterface(podName string, podNamespace string, containerID string, containerNetNS string, containerIFDev string, mtu int, podSriovVFDeviceID string, result *current.Result) error
 }
 
 type PodController struct {
@@ -197,7 +197,7 @@ func whereaboutsArgsBuilder(cmd string, interfaceName string, podCNIInfo *cnipod
 		NetNS: podCNIInfo.ContainerNetNS, IfName: interfaceName,
 		Path: cniPath, PluginArgs: [][2]string{
 			{"K8S_POD_NAME", podCNIInfo.PodName},
-			{"K8S_POD_NAMESPACE", podCNIInfo.PodNameSpace},
+			{"K8S_POD_NAMESPACE", podCNIInfo.PodNamespace},
 			{"K8S_POD_INFRA_CONTAINER_ID", podCNIInfo.ContainerID},
 		}}
 
@@ -302,7 +302,7 @@ func (pc *PodController) handleRemovePod(key string) error {
 			// Delete cache entry from podCNIInfo.
 			pc.podCache.DeleteCNIConfigInfo(containerInfo)
 			// Delete Pod specific VF cache (if one exists)
-			pc.deleteVFDeviceIDListPerPod(containerInfo.PodName, containerInfo.PodNameSpace)
+			pc.deleteVFDeviceIDListPerPod(containerInfo.PodName, containerInfo.PodNamespace)
 		}
 	}
 	return nil
@@ -349,7 +349,7 @@ func (pc *PodController) configureSriovAsSecondaryInterface(pod *corev1.Pod, net
 
 	if err = pc.interfaceConfigurator.ConfigureSriovSecondaryInterface(
 		containerInfo.PodName,
-		containerInfo.PodNameSpace,
+		containerInfo.PodNamespace,
 		containerInfo.ContainerID,
 		containerInfo.ContainerNetNS,
 		network.InterfaceRequest,

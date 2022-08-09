@@ -305,12 +305,12 @@ func (c *ExternalNodeController) updateExternalEntity(ee *v1alpha2.ExternalEntit
 		if errors.IsNotFound(err) {
 			_, err = c.crdClient.CrdV1alpha2().ExternalEntities(ee.Namespace).Create(context.TODO(), ee, metav1.CreateOptions{})
 			if err != nil {
-				klog.ErrorS(err, "Failed to create ExternalEntity", "entityName", ee.Name, "entityNameSpace", ee.Namespace)
+				klog.ErrorS(err, "Failed to create ExternalEntity", "entityName", ee.Name, "entityNamespace", ee.Namespace)
 				return err
 			}
 			return nil
 		}
-		klog.ErrorS(err, "Failed to get ExternalEntity", "entityName", ee.Name, "entityNameSpace", ee.Namespace)
+		klog.ErrorS(err, "Failed to get ExternalEntity", "entityName", ee.Name, "entityNamespace", ee.Namespace)
 		return err
 	}
 	isChanged := false

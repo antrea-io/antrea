@@ -241,7 +241,7 @@ func TestCreateOVSPort(t *testing.T) {
 	controller := gomock.NewController(t)
 	containerID := generateUUID(t)
 	podName := "p0"
-	podNameSpace := testPodNamespace
+	podNamespace := testPodNamespace
 
 	for _, tc := range []struct {
 		name                string
@@ -268,7 +268,7 @@ func TestCreateOVSPort(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			testIfaceConfigurator := &fakeInterfaceConfigurator{ovsInterfaceTypeMapping: map[string]int{tc.portName: tc.portType}}
 			podConfigurator := createPodConfigurator(controller, testIfaceConfigurator)
-			containerConfig := buildContainerConfig(tc.portName, containerID, podName, podNameSpace, &current.Interface{Mac: "01:02:03:04:05:06"}, ipamResult.IPs, tc.vlanID)
+			containerConfig := buildContainerConfig(tc.portName, containerID, podName, podNamespace, &current.Interface{Mac: "01:02:03:04:05:06"}, ipamResult.IPs, tc.vlanID)
 			attachInfo := BuildOVSPortExternalIDs(containerConfig)
 			if tc.createOVSPort {
 				mockOVSBridgeClient.EXPECT().CreatePort(tc.portName, tc.portName, attachInfo).Times(1).Return(generateUUID(t), nil)
