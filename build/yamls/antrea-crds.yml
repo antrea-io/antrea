@@ -1383,6 +1383,18 @@ spec:
                       type: integer
                   type: object
               type: object
+      additionalPrinterColumns:
+        - description: The number of total IPs
+          jsonPath: .status.usage.total
+          name: Total
+          type: integer
+        - description: The number of allocated IPs
+          jsonPath: .status.usage.used
+          name: Used
+          type: integer
+        - jsonPath: .metadata.creationTimestamp
+          name: Age
+          type: date
       subresources:
         status: {}
   scope: Cluster
