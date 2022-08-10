@@ -152,22 +152,22 @@ fine-grained access control.
    apiVersion: v1
    kind: ServiceAccount
    metadata:
-     name: member-east-access-sa
+     name: member-east
      namespace: antrea-multicluster
    ---
    apiVersion: v1
    kind: Secret
    metadata:
-     name: member-east-access-token
+     name: member-east-token
      namespace: antrea-multicluster
      annotations:
-       kubernetes.io/service-account.name: member-east-access-sa
+       kubernetes.io/service-account.name: member-east
    type: kubernetes.io/service-account-token
    ---
    apiVersion: rbac.authorization.k8s.io/v1
    kind: RoleBinding
    metadata:
-     name: member-east-access-rolebinding
+     name: member-east
      namespace: antrea-multicluster
    roleRef:
      apiGroup: rbac.authorization.k8s.io
@@ -175,18 +175,18 @@ fine-grained access control.
      name: antrea-mc-member-cluster-role
    subjects:
      - kind: ServiceAccount
-       name: member-east-access-sa
+       name: member-east
        namespace: antrea-multicluster
    ```
 
-2. Generate the access token file from the leader cluster, and create a Secret
-   with the token in member cluster `test-cluster-east`, e.g.:
+2. Generate the token Secret manifest from the leader cluster, and create a
+   Secret with the manifest in member cluster `test-cluster-east`, e.g.:
 
    ```bash
-   # Generate the file 'member-east-access-token.yml' from your leader cluster
-   kubectl get secret member-east-access-token -n antrea-multicluster -o yaml | grep -w -e '^apiVersion' -e '^data' -e '^metadata' -e '^ *name:'  -e   '^kind' -e '  ca.crt' -e '  token:' -e '^type' -e '  namespace' | sed -e 's/kubernetes.io\/service-account-token/Opaque/g' -e 's/antrea-multicluster/kube-system/g' >  member-east-access-token.yml
-   # Apply 'member-east-access-token.yml' to the member cluster.
-   kubectl apply -f member-east-access-token.yml --kubeconfig=/path/to/kubeconfig-of-member-test-cluster-east
+   # Generate the file 'member-east-token.yml' from your leader cluster
+   kubectl get secret member-east-token -n antrea-multicluster -o yaml | grep -w -e '^apiVersion' -e '^data' -e '^metadata' -e '^ *name:'  -e   '^kind' -e '  ca.crt' -e '  token:' -e '^type' -e '  namespace' | sed -e 's/kubernetes.io\/service-account-token/Opaque/g' -e 's/antrea-multicluster/kube-system/g' >  member-east-token.yml
+   # Apply 'member-east-token.yml' to the member cluster.
+   kubectl apply -f member-east-token.yml --kubeconfig=/path/to/kubeconfig-of-member-test-cluster-east
    ```
 
 3. Replace all `east` to `west` and repeat step 1/2 for the other member cluster
@@ -254,7 +254,7 @@ metadata:
 spec:
   leaders:
     - clusterID: test-cluster-north
-      secret: "member-east-access-token"
+      secret: "member-east-token"
       server: "https://172.18.0.1:6443"
   namespace: antrea-multicluster
 ```
@@ -287,7 +287,7 @@ metadata:
 spec:
   leaders:
     - clusterID: test-cluster-north
-      secret: "member-west-access-token"
+      secret: "member-west-token"
       server: "https://172.18.0.1:6443"
   namespace: antrea-multicluster
 ```
@@ -327,7 +327,7 @@ metadata:
 spec:
   leaders:
     - clusterID: test-cluster-north
-      secret: "member-north-access-token"
+      secret: "member-north-token"
       server: "https://172.18.0.1:6443"
   namespace: antrea-multicluster
 ```
