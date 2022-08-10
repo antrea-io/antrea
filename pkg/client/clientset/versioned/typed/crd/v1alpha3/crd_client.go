@@ -27,6 +27,7 @@ import (
 type CrdV1alpha3Interface interface {
 	RESTClient() rest.Interface
 	ClusterGroupsGetter
+	GroupsGetter
 }
 
 // CrdV1alpha3Client is used to interact with features provided by the crd.antrea.io group.
@@ -36,6 +37,10 @@ type CrdV1alpha3Client struct {
 
 func (c *CrdV1alpha3Client) ClusterGroups() ClusterGroupInterface {
 	return newClusterGroups(c)
+}
+
+func (c *CrdV1alpha3Client) Groups(namespace string) GroupInterface {
+	return newGroups(c, namespace)
 }
 
 // NewForConfig creates a new CrdV1alpha3Client for the given config.

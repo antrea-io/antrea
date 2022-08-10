@@ -30,6 +30,10 @@ func (c *FakeCrdV1alpha3) ClusterGroups() v1alpha3.ClusterGroupInterface {
 	return &FakeClusterGroups{c}
 }
 
+func (c *FakeCrdV1alpha3) Groups(namespace string) v1alpha3.GroupInterface {
+	return &FakeGroups{c, namespace}
+}
+
 // RESTClient returns a RESTClient that is used to communicate
 // with API server by this client implementation.
 func (c *FakeCrdV1alpha3) RESTClient() rest.Interface {

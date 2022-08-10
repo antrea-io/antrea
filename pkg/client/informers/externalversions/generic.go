@@ -80,6 +80,8 @@ func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource
 		// Group=crd.antrea.io, Version=v1alpha3
 	case v1alpha3.SchemeGroupVersion.WithResource("clustergroups"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Crd().V1alpha3().ClusterGroups().Informer()}, nil
+	case v1alpha3.SchemeGroupVersion.WithResource("groups"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Crd().V1alpha3().Groups().Informer()}, nil
 
 		// Group=crd.antrea.io, Version=v1beta1
 	case v1beta1.SchemeGroupVersion.WithResource("antreaagentinfos"):

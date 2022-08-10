@@ -16,14 +16,17 @@ package networkpolicy
 
 import (
 	"strings"
+	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/conversion"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/apis/controlplane"
 	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	crdv1alpha3 "antrea.io/antrea/pkg/apis/crd/v1alpha3"
 	"antrea.io/antrea/pkg/controller/networkpolicy/store"
 	antreatypes "antrea.io/antrea/pkg/controller/types"
 	"antrea.io/antrea/pkg/util/k8s"
@@ -36,6 +39,37 @@ var (
 		NamespaceSelector: &metav1.LabelSelector{},
 	}
 )
+
+// semanticIgnoreLastTransitionTime does semantic deep equality checks for
+// NetworkPolicyCondition but excludes LastTransitionTime. They are used when
+// comparing NetworkPolicyCondition in NetworkPolicyStatus objects to avoid
+// unnecessary updates caused different status generation time.
+var semanticIgnoreLastTransitionTime = conversion.EqualitiesOrDie(
+	func(a, b v1alpha1.NetworkPolicyCondition) bool {
+		a.LastTransitionTime = metav1.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC)
+		b.LastTransitionTime = metav1.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC)
+		return a == b
+	},
+)
+
+// NetworkPolicyStatusEqual compares two NetworkPolicyStatus objects. It disregards
+// the LastTransitionTime field in the status Conditions.
+func NetworkPolicyStatusEqual(oldStatus, newStatus v1alpha1.NetworkPolicyStatus) bool {
+	return semanticIgnoreLastTransitionTime.DeepEqual(oldStatus, newStatus)
+}
+
+// groupMembersComputedConditionEqual checks whether the condition status for GroupMembersComputed condition
+// is same. Returns true if equal, otherwise returns false. It disregards the lastTransitionTime field.
+func groupMembersComputedConditionEqual(conds []crdv1alpha3.GroupCondition, condition crdv1alpha3.GroupCondition) bool {
+	for _, c := range conds {
+		if c.Type == crdv1alpha3.GroupMembersComputed {
+			if c.Status == condition.Status {
+				return true
+			}
+		}
+	}
+	return false
+}
 
 // toAntreaServicesForCRD converts a slice of v1alpha1.NetworkPolicyPort objects
 // and a slice of v1alpha1.NetworkPolicyProtocol objects to a slice of Antrea
@@ -127,7 +161,7 @@ func (n *NetworkPolicyController) toAntreaPeerForCRD(peers []v1alpha1.NetworkPol
 			}
 			ipBlocks = append(ipBlocks, *ipBlock)
 		} else if peer.Group != "" {
-			normalizedUID, groupIPBlocks := n.processRefCG(peer.Group)
+			normalizedUID, groupIPBlocks := n.processRefGroupOrClusterGroup(peer.Group, np.GetNamespace())
 			if normalizedUID != "" {
 				addressGroups = append(addressGroups, normalizedUID)
 			}
@@ -179,11 +213,11 @@ func (n *NetworkPolicyController) svcRefToPeerForCRD(svcRefs []v1alpha1.Namespac
 	return &controlplane.NetworkPolicyPeer{ToServices: controlplaneSvcRefs}
 }
 
-// createAppliedToGroupForClusterGroupCRD creates an AppliedToGroup object corresponding to a
+// createAppliedToGroupForInternalGroup creates an AppliedToGroup object corresponding to an
 // internal Group. If the AppliedToGroup already exists, it returns the key
 // otherwise it copies the internal Group contents to an AppliedToGroup resource and returns
 // its key.
-func (n *NetworkPolicyController) createAppliedToGroupForClusterGroupCRD(intGrp *antreatypes.Group) string {
+func (n *NetworkPolicyController) createAppliedToGroupForInternalGroup(intGrp *antreatypes.Group) string {
 	key, err := store.GroupKeyFunc(intGrp)
 	if err != nil {
 		return ""
@@ -198,7 +232,7 @@ func (n *NetworkPolicyController) createAppliedToGroupForClusterGroupCRD(intGrp 
 		UID:  intGrp.UID,
 		Name: key,
 	}
-	klog.V(2).Infof("Creating new AppliedToGroup %v corresponding to ClusterGroup CRD %s", appliedToGroup.UID, intGrp.Name)
+	klog.V(2).InfoS("Creating new AppliedToGroup corresponding to internal Group", "AppliedToGroup", appliedToGroup.UID, "internalGroup", intGrp.SourceReference.ToTypedString())
 	n.appliedToGroupStore.Create(appliedToGroup)
 	n.enqueueAppliedToGroup(key)
 	return key
@@ -231,7 +265,7 @@ func (n *NetworkPolicyController) createAppliedToGroupForService(service *v1alph
 // ClusterGroup spec. If the AddressGroup already exists, it returns the key
 // otherwise it copies the ClusterGroup CRD contents to an AddressGroup resource and returns
 // its key. If the corresponding internal Group is not found return empty.
-func (n *NetworkPolicyController) createAddressGroupForClusterGroupCRD(intGrp *antreatypes.Group) string {
+func (n *NetworkPolicyController) createAddressGroupForInternalGroup(intGrp *antreatypes.Group) string {
 	key, err := store.GroupKeyFunc(intGrp)
 	if err != nil {
 		return ""
@@ -247,7 +281,7 @@ func (n *NetworkPolicyController) createAddressGroupForClusterGroupCRD(intGrp *a
 		Name: key,
 	}
 	n.addressGroupStore.Create(addressGroup)
-	klog.V(2).Infof("Created new AddressGroup %v corresponding to ClusterGroup CRD %s", addressGroup.UID, intGrp.Name)
+	klog.V(2).InfoS("Created new AddressGroup corresponding to internal Group", "AddressGroup", addressGroup.UID, "internalGroup", intGrp.SourceReference.ToTypedString())
 	return key
 }
 
@@ -283,4 +317,23 @@ func getNormalizedNameForSelector(sel *antreatypes.GroupSelector) string {
 		return sel.NormalizedName
 	}
 	return ""
+}
+
+func (n *NetworkPolicyController) syncInternalGroup(key string) error {
+	defer n.triggerANPUpdates(key)
+	defer n.triggerCNPUpdates(key)
+	defer n.triggerParentGroupSync(key)
+	// Retrieve the internal Group corresponding to this key.
+	grpObj, found, _ := n.internalGroupStore.Get(key)
+	if !found {
+		klog.V(2).InfoS("Internal group not found.", "internalGroup", key)
+		n.groupingInterface.DeleteGroup(internalGroupType, key)
+		return nil
+	}
+	grp := grpObj.(*antreatypes.Group)
+	if grp.SourceReference.Namespace != "" {
+		// Sync the Group as a Namespaced Group.
+		return n.syncInternalNamespacedGroup(grp)
+	}
+	return n.syncInternalClusterGroup(grp)
 }

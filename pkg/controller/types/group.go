@@ -115,8 +115,8 @@ type Group struct {
 	// UID is a unique identifier of this internal Group. It is same as that of the ClusterGroup
 	// resource UID.
 	UID types.UID
-	// Name of the ClusterGroup for which this internal Group is created.
-	Name string
+	// Reference of the ClusterGroup/Group for which this internal Group is created.
+	SourceReference *controlplane.GroupReference
 	// MembersComputed knows whether the controller has computed the comprehensive members
 	// of the Group. It is updated during the syncInternalGroup process.
 	MembersComputed v1.ConditionStatus
@@ -128,6 +128,6 @@ type Group struct {
 	// ServiceReference is reference to a v1.Service, which this Group keeps in sync
 	// and updates Selector based on the Service's selector.
 	ServiceReference *controlplane.ServiceReference
-	// ChildGroups is the list of Group names that belongs to this Group.
+	// ChildGroups is the list of Group names that belong to this Group.
 	ChildGroups []string
 }

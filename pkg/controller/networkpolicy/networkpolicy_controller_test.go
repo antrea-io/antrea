@@ -80,6 +80,7 @@ type networkPolicyController struct {
 	cnpStore                   cache.Store
 	tierStore                  cache.Store
 	cgStore                    cache.Store
+	gStore                     cache.Store
 	appliedToGroupStore        storage.Interface
 	addressGroupStore          storage.Interface
 	internalNetworkPolicyStore storage.Interface
@@ -99,6 +100,7 @@ func newController(objects ...runtime.Object) (*fake.Clientset, *networkPolicyCo
 	internalNetworkPolicyStore := store.NewNetworkPolicyStore()
 	internalGroupStore := store.NewGroupStore()
 	cgInformer := crdInformerFactory.Crd().V1alpha3().ClusterGroups()
+	gInformer := crdInformerFactory.Crd().V1alpha3().Groups()
 	groupEntityIndex := grouping.NewGroupEntityIndex()
 	groupingController := grouping.NewGroupEntityController(groupEntityIndex,
 		informerFactory.Core().V1().Pods(),
@@ -115,6 +117,7 @@ func newController(objects ...runtime.Object) (*fake.Clientset, *networkPolicyCo
 		crdInformerFactory.Crd().V1alpha1().NetworkPolicies(),
 		crdInformerFactory.Crd().V1alpha1().Tiers(),
 		cgInformer,
+		gInformer,
 		addressGroupStore,
 		appliedToGroupStore,
 		internalNetworkPolicyStore,
@@ -138,6 +141,7 @@ func newController(objects ...runtime.Object) (*fake.Clientset, *networkPolicyCo
 		crdInformerFactory.Crd().V1alpha1().ClusterNetworkPolicies().Informer().GetStore(),
 		crdInformerFactory.Crd().V1alpha1().Tiers().Informer().GetStore(),
 		crdInformerFactory.Crd().V1alpha3().ClusterGroups().Informer().GetStore(),
+		crdInformerFactory.Crd().V1alpha3().Groups().Informer().GetStore(),
 		appliedToGroupStore,
 		addressGroupStore,
 		internalNetworkPolicyStore,
@@ -164,6 +168,7 @@ func newControllerWithoutEventHandler(k8sObjects, crdObjects []runtime.Object) (
 	cnpInformer := crdInformerFactory.Crd().V1alpha1().ClusterNetworkPolicies()
 	anpInformer := crdInformerFactory.Crd().V1alpha1().NetworkPolicies()
 	cgInformer := crdInformerFactory.Crd().V1alpha3().ClusterGroups()
+	groupInformer := crdInformerFactory.Crd().V1alpha3().Groups()
 	groupEntityIndex := grouping.NewGroupEntityIndex()
 	npController := &NetworkPolicyController{
 		kubeClient:                 client,
@@ -205,6 +210,7 @@ func newControllerWithoutEventHandler(k8sObjects, crdObjects []runtime.Object) (
 		cnpInformer.Informer().GetStore(),
 		tierInformer.Informer().GetStore(),
 		cgInformer.Informer().GetStore(),
+		groupInformer.Informer().GetStore(),
 		appliedToGroupStore,
 		addressGroupStore,
 		internalNetworkPolicyStore,
@@ -3099,6 +3105,16 @@ func TestInternalGroupKeyFunc(t *testing.T) {
 		},
 	}
 	actualValue := internalGroupKeyFunc(&cg)
+	assert.Equal(t, expValue, actualValue)
+
+	expValue = "nsA/gA"
+	g := v1alpha3.Group{
+		ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "gA", UID: "uid-a"},
+		Spec: v1alpha3.GroupSpec{
+			NamespaceSelector: &selectorA,
+		},
+	}
+	actualValue = internalGroupKeyFunc(&g)
 	assert.Equal(t, expValue, actualValue)
 }
 

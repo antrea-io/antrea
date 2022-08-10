@@ -44,18 +44,27 @@ func TestRESTGet(t *testing.T) {
 	groups := map[string][]antreatypes.Group{
 		"default/podA": {
 			{
-				UID:  "groupUID1",
-				Name: "cg1",
+				UID: "groupUID1",
+				SourceReference: &controlplane.GroupReference{
+					Name: "cg1",
+					UID:  "groupUID1",
+				},
 			},
 		},
 		"default/podB": {
 			{
-				UID:  "groupUID2",
-				Name: "cg2",
+				UID: "groupUID2",
+				SourceReference: &controlplane.GroupReference{
+					Name: "cg2",
+					UID:  "groupUID2",
+				},
 			},
 			{
-				UID:  "groupUID3",
-				Name: "cg3",
+				UID: "groupUID3",
+				SourceReference: &controlplane.GroupReference{
+					Name: "cg3",
+					UID:  "groupUID3",
+				},
 			},
 		},
 	}

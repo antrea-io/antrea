@@ -1,0 +1,282 @@
+// Copyright 2021 Antrea Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package networkpolicy
+
+import (
+	"context"
+
+	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/client-go/tools/cache"
+	"k8s.io/klog/v2"
+
+	"antrea.io/antrea/pkg/apis/controlplane"
+	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	crdv1alpha3 "antrea.io/antrea/pkg/apis/crd/v1alpha3"
+	antreatypes "antrea.io/antrea/pkg/controller/types"
+)
+
+// addGroup is responsible for processing the ADD event of a Group resource.
+func (n *NetworkPolicyController) addGroup(curObj interface{}) {
+	g := curObj.(*crdv1alpha3.Group)
+	key := internalGroupKeyFunc(g)
+	klog.V(2).InfoS("Processing ADD event for Group", "Group", key)
+	newGroup := n.processGroup(g)
+	klog.V(2).InfoS("Creating new internal Group", "internalGroup", newGroup.UID)
+	n.internalGroupStore.Create(newGroup)
+	n.enqueueInternalGroup(key)
+}
+
+// updateGroup is responsible for processing the UPDATE event of a Group resource.
+func (n *NetworkPolicyController) updateGroup(oldObj, curObj interface{}) {
+	cg := curObj.(*crdv1alpha3.Group)
+	og := oldObj.(*crdv1alpha3.Group)
+	key := internalGroupKeyFunc(cg)
+	klog.V(2).InfoS("Processing UPDATE event for Group", "Group", key)
+	newGroup := n.processGroup(cg)
+	oldGroup := n.processGroup(og)
+
+	selectorUpdated := func() bool {
+		return getNormalizedNameForSelector(newGroup.Selector) != getNormalizedNameForSelector(oldGroup.Selector)
+	}
+	svcRefUpdated := func() bool {
+		oldSvc, newSvc := oldGroup.ServiceReference, newGroup.ServiceReference
+		if oldSvc != nil && newSvc != nil && oldSvc.Name == newSvc.Name && oldSvc.Namespace == newSvc.Namespace {
+			return false
+		} else if oldSvc == nil && newSvc == nil {
+			return false
+		}
+		return true
+	}
+	ipBlocksUpdated := func() bool {
+		oldIPBs, newIPBs := sets.String{}, sets.String{}
+		for _, ipb := range oldGroup.IPBlocks {
+			oldIPBs.Insert(ipb.CIDR.String())
+		}
+		for _, ipb := range newGroup.IPBlocks {
+			newIPBs.Insert(ipb.CIDR.String())
+		}
+		return oldIPBs.Equal(newIPBs)
+	}
+	childGroupsUpdated := func() bool {
+		oldChildGroups, newChildGroups := sets.String{}, sets.String{}
+		for _, c := range oldGroup.ChildGroups {
+			oldChildGroups.Insert(c)
+		}
+		for _, c := range newGroup.ChildGroups {
+			newChildGroups.Insert(c)
+		}
+		return !oldChildGroups.Equal(newChildGroups)
+	}
+	if !ipBlocksUpdated() && !svcRefUpdated() && !selectorUpdated() && !childGroupsUpdated() {
+		// No change in the contents of the Group. No need to enqueue for further sync.
+		return
+	}
+	n.internalGroupStore.Update(newGroup)
+	n.enqueueInternalGroup(key)
+}
+
+// deleteGroup is responsible for processing the DELETE event of a Group resource.
+func (n *NetworkPolicyController) deleteGroup(oldObj interface{}) {
+	og, ok := oldObj.(*crdv1alpha3.Group)
+	klog.V(2).InfoS("Processing DELETE event for Group", "Group", internalGroupKeyFunc(og))
+	if !ok {
+		tombstone, ok := oldObj.(cache.DeletedFinalStateUnknown)
+		if !ok {
+			klog.Errorf("Error decoding object when deleting Group, invalid type: %v", oldObj)
+			return
+		}
+		og, ok = tombstone.Obj.(*crdv1alpha3.Group)
+		if !ok {
+			klog.Errorf("Error decoding object tombstone when deleting Group, invalid type: %v", tombstone.Obj)
+			return
+		}
+	}
+	key := internalGroupKeyFunc(og)
+	klog.V(2).InfoS("Deleting internal Group", "Group", key)
+	err := n.internalGroupStore.Delete(key)
+	if err != nil {
+		klog.Errorf("Unable to delete internal Group %s from store: %v", key, err)
+	}
+	n.enqueueInternalGroup(key)
+}
+
+func (n *NetworkPolicyController) processGroup(g *crdv1alpha3.Group) *antreatypes.Group {
+	internalGroup := antreatypes.Group{
+		SourceReference: getGroupSourceRef(g),
+		UID:             g.UID,
+	}
+	if len(g.Spec.ChildGroups) > 0 {
+		for _, childGName := range g.Spec.ChildGroups {
+			internalGroup.ChildGroups = append(internalGroup.ChildGroups, string(childGName))
+		}
+		return &internalGroup
+	}
+	if len(g.Spec.IPBlocks) > 0 {
+		for i := range g.Spec.IPBlocks {
+			ipb, _ := toAntreaIPBlockForCRD(&g.Spec.IPBlocks[i])
+			internalGroup.IPBlocks = append(internalGroup.IPBlocks, *ipb)
+		}
+		return &internalGroup
+	}
+	svcSelector := g.Spec.ServiceReference
+	if svcSelector != nil {
+		// ServiceReference will be converted to groupSelector once the internalGroup is synced.
+		internalGroup.ServiceReference = &controlplane.ServiceReference{
+			Namespace: svcSelector.Namespace,
+			Name:      svcSelector.Name,
+		}
+	} else {
+		groupSelector := antreatypes.NewGroupSelector(g.Namespace, g.Spec.PodSelector, g.Spec.NamespaceSelector, g.Spec.ExternalEntitySelector, nil)
+		internalGroup.Selector = groupSelector
+	}
+	return &internalGroup
+}
+
+func getGroupSourceRef(g *crdv1alpha3.Group) *controlplane.GroupReference {
+	return &controlplane.GroupReference{
+		Name:      g.GetName(),
+		Namespace: g.GetNamespace(),
+		UID:       g.GetUID(),
+	}
+}
+
+func (n *NetworkPolicyController) syncInternalNamespacedGroup(grp *antreatypes.Group) error {
+	originalMembersComputedStatus := grp.MembersComputed
+	// Retrieve the Group corresponding to this key.
+	g, err := n.grpLister.Groups(grp.SourceReference.Namespace).Get(grp.SourceReference.Name)
+	if err != nil {
+		klog.InfoS("Didn't find Group, skip processing of internal group", "Group", grp.SourceReference.ToTypedString())
+		return nil
+	}
+	key := internalGroupKeyFunc(g)
+	selectorUpdated := n.processServiceReference(grp)
+	if grp.Selector != nil {
+		n.groupingInterface.AddGroup(internalGroupType, key, grp.Selector)
+	} else {
+		n.groupingInterface.DeleteGroup(internalGroupType, key)
+	}
+
+	membersComputed, membersComputedStatus := true, v1.ConditionFalse
+	// Update the Group status to Realized as Antrea has recognized the Group and
+	// processed its group members. The Group is considered realized if:
+	//   1. It does not have child groups. The group members are immediately considered
+	//      computed during syncInternalGroup, as the group selector is finalized.
+	//   2. All its child groups are created and realized.
+	if len(grp.ChildGroups) > 0 {
+		for _, cgName := range grp.ChildGroups {
+			internalGroup, found, _ := n.internalGroupStore.Get(grp.SourceReference.Namespace + "/" + cgName)
+			if !found || internalGroup.(*antreatypes.Group).MembersComputed != v1.ConditionTrue {
+				membersComputed = false
+				break
+			}
+		}
+	}
+	if membersComputed {
+		klog.V(4).InfoS("Updating GroupMembersComputed Status for Group %s/%s", "Group", key)
+		err = n.updateGroupStatus(g, v1.ConditionTrue)
+		if err != nil {
+			klog.Errorf("Failed to update Group %s/%s GroupMembersComputed condition to %s: %v", g.Namespace, g.Name, v1.ConditionTrue, err)
+		} else {
+			membersComputedStatus = v1.ConditionTrue
+		}
+	}
+	if selectorUpdated || membersComputedStatus != originalMembersComputedStatus {
+		// Update the internal Group object in the store with the new selector and status.
+		updatedGrp := &antreatypes.Group{
+			UID:              grp.UID,
+			SourceReference:  grp.SourceReference,
+			MembersComputed:  membersComputedStatus,
+			Selector:         grp.Selector,
+			IPBlocks:         grp.IPBlocks,
+			ServiceReference: grp.ServiceReference,
+			ChildGroups:      grp.ChildGroups,
+		}
+		klog.V(2).InfoS("Updating existing internal Group", "internalGroup", grp.SourceReference.ToGroupName())
+		n.internalGroupStore.Update(updatedGrp)
+	}
+	return err
+}
+
+// triggerANPUpdates triggers processing of Antrea NetworkPolicies associated with the input Group.
+func (n *NetworkPolicyController) triggerANPUpdates(g string) {
+	// If a Group is added/updated, it might have a reference in Antrea NetworkPolicy.
+	anps, err := n.anpInformer.Informer().GetIndexer().ByIndex(GroupIndex, g)
+	if err != nil {
+		klog.Errorf("Error retrieving Antrea NetworkPolicies corresponding to Group %s", g)
+		return
+	}
+	for _, obj := range anps {
+		anp := obj.(*crdv1alpha1.NetworkPolicy)
+		// Re-process Antrea NetworkPolicies which may be affected due to updates to Group.
+		curInternalNP := n.processAntreaNetworkPolicy(anp)
+		klog.V(2).InfoS("Updating existing internal NetworkPolicy for Antrea NetworkPolicy", "internalNP", curInternalNP.Name, "ANP", curInternalNP.SourceRef.ToString())
+		key := internalNetworkPolicyKeyFunc(anp)
+		// Lock access to internal NetworkPolicy store such that concurrent access
+		// to an internal NetworkPolicy is not allowed. This will avoid the
+		// case in which an Update to an internal NetworkPolicy object may
+		// cause the SpanMeta member to be overridden with stale SpanMeta members
+		// from an older internal NetworkPolicy.
+		n.internalNetworkPolicyMutex.Lock()
+		oldInternalNPObj, _, _ := n.internalNetworkPolicyStore.Get(key)
+		oldInternalNP := oldInternalNPObj.(*antreatypes.NetworkPolicy)
+		// Must preserve old internal NetworkPolicy Span.
+		curInternalNP.SpanMeta = oldInternalNP.SpanMeta
+		n.internalNetworkPolicyStore.Update(curInternalNP)
+		// Unlock the internal NetworkPolicy store.
+		n.internalNetworkPolicyMutex.Unlock()
+		// Enqueue addressGroup keys to update their group members.
+		// TODO: optimize this to avoid enqueueing address groups when not updated.
+		for _, atg := range curInternalNP.AppliedToGroups {
+			n.enqueueAppliedToGroup(atg)
+		}
+		for _, rule := range curInternalNP.Rules {
+			for _, addrGroupName := range rule.From.AddressGroups {
+				n.enqueueAddressGroup(addrGroupName)
+			}
+			for _, addrGroupName := range rule.To.AddressGroups {
+				n.enqueueAddressGroup(addrGroupName)
+			}
+		}
+		n.enqueueInternalNetworkPolicy(key)
+		for _, atg := range oldInternalNP.AppliedToGroups {
+			n.deleteDereferencedAppliedToGroup(atg)
+		}
+		n.deleteDereferencedAddressGroups(oldInternalNP)
+	}
+	return
+}
+
+// updateGroupStatus updates the Status subresource for a Group.
+func (n *NetworkPolicyController) updateGroupStatus(g *crdv1alpha3.Group, cStatus v1.ConditionStatus) error {
+	condStatus := crdv1alpha3.GroupCondition{
+		Status: cStatus,
+		Type:   crdv1alpha3.GroupMembersComputed,
+	}
+	if groupMembersComputedConditionEqual(g.Status.Conditions, condStatus) {
+		// There is no change in conditions.
+		return nil
+	}
+	condStatus.LastTransitionTime = metav1.Now()
+	status := crdv1alpha3.GroupStatus{
+		Conditions: []crdv1alpha3.GroupCondition{condStatus},
+	}
+	klog.V(4).InfoS("Updating Group status", "Group", internalGroupKeyFunc(g), "status", condStatus)
+	toUpdate := g.DeepCopy()
+	toUpdate.Status = status
+	_, err := n.crdClient.CrdV1alpha3().Groups(g.GetNamespace()).UpdateStatus(context.TODO(), toUpdate, metav1.UpdateOptions{})
+	return err
+}

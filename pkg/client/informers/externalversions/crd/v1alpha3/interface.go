@@ -24,6 +24,8 @@ import (
 type Interface interface {
 	// ClusterGroups returns a ClusterGroupInformer.
 	ClusterGroups() ClusterGroupInformer
+	// Groups returns a GroupInformer.
+	Groups() GroupInformer
 }
 
 type version struct {
@@ -40,4 +42,9 @@ func New(f internalinterfaces.SharedInformerFactory, namespace string, tweakList
 // ClusterGroups returns a ClusterGroupInformer.
 func (v *version) ClusterGroups() ClusterGroupInformer {
 	return &clusterGroupInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
+}
+
+// Groups returns a GroupInformer.
+func (v *version) Groups() GroupInformer {
+	return &groupInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }

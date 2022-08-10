@@ -15,6 +15,7 @@
 package networkpolicy
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -24,6 +25,7 @@ import (
 
 	"antrea.io/antrea/pkg/apis/controlplane"
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	crdv1alpha3 "antrea.io/antrea/pkg/apis/crd/v1alpha3"
 	antreatypes "antrea.io/antrea/pkg/controller/types"
 )
 
@@ -750,6 +752,78 @@ func TestDeleteANP(t *testing.T) {
 	key := internalNetworkPolicyKeyFunc(anpObj)
 	_, found, _ = npc.internalNetworkPolicyStore.Get(key)
 	assert.False(t, found, "expected internal NetworkPolicy to be deleted")
+}
+
+func TestProcessAppliedToGroupsForGroup(t *testing.T) {
+	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
+	cidr := "10.0.0.0/24"
+	// gA with selector present in cache
+	gA := crdv1alpha3.Group{
+		ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "gA", UID: "uidA"},
+		Spec: crdv1alpha3.GroupSpec{
+			PodSelector: &selectorA,
+		},
+	}
+	// gB with IPBlock present in cache
+	gB := crdv1alpha3.Group{
+		ObjectMeta: metav1.ObjectMeta{Namespace: "nsB", Name: "gB", UID: "uidB"},
+		Spec: crdv1alpha3.GroupSpec{
+			IPBlocks: []crdv1alpha1.IPBlock{
+				{
+					CIDR: cidr,
+				},
+			},
+		},
+	}
+	// gC not found in cache
+	gC := crdv1alpha3.Group{
+		ObjectMeta: metav1.ObjectMeta{Namespace: "nsC", Name: "gC", UID: "uidC"},
+		Spec: crdv1alpha3.GroupSpec{
+			NamespaceSelector: &selectorA,
+		},
+	}
+	_, npc := newController()
+	npc.addGroup(&gA)
+	npc.addGroup(&gB)
+	npc.gStore.Add(&gA)
+	npc.gStore.Add(&gB)
+	tests := []struct {
+		name       string
+		namespace  string
+		inputG     string
+		expectedAG string
+	}{
+		{
+			name:       "empty-grp-no-result",
+			namespace:  "nsA",
+			inputG:     "",
+			expectedAG: "",
+		},
+		{
+			name:       "ipblock-grp-no-result",
+			namespace:  "nsB",
+			inputG:     gB.Name,
+			expectedAG: "",
+		},
+		{
+			name:       "selector-grp-missing-no-result",
+			namespace:  "nsC",
+			inputG:     gC.Name,
+			expectedAG: "",
+		},
+		{
+			name:       "selector-grp",
+			namespace:  "nsA",
+			inputG:     gA.Name,
+			expectedAG: fmt.Sprintf("%s/%s", gA.Namespace, gA.Name),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			actualAG, _ := npc.processAppliedToGroupForNamespacedGroup(tt.namespace, tt.inputG)
+			assert.Equal(t, tt.expectedAG, actualAG, "appliedToGroup list does not match")
+		})
+	}
 }
 
 // util functions for testing.
