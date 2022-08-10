@@ -2646,7 +2646,7 @@ func testAuditLoggingBasic(t *testing.T, data *TestData) {
 // testAuditLoggingEnableNP tests that audit logs are generated when K8s NP is applied
 // tests both Allow traffic by K8s NP and Drop traffic by implicit K8s policy drop
 func testAuditLoggingEnableNP(t *testing.T, data *TestData) {
-	data.updateNamespaceWithAnnotations(namespaces["x"], map[string]string{networkpolicy.EnableNPLoggingAnnotationKey: "true"})
+	failOnError(data.updateNamespaceWithAnnotations(namespaces["x"], map[string]string{networkpolicy.EnableNPLoggingAnnotationKey: "true"}), t)
 	// Add a K8s namespaced NetworkPolicy in ns x that allow ingress traffic from
 	// Pod x/b to x/a which default denies other ingress including from Pod x/c to x/a
 	k8sNPBuilder := &NetworkPolicySpecBuilder{}
@@ -2731,9 +2731,9 @@ func testAuditLoggingEnableNP(t *testing.T, data *TestData) {
 		t.Errorf("Error when polling audit log files for required entries: %v", err)
 	}
 	failOnError(k8sUtils.DeleteNetworkPolicy(namespaces["x"], "allow-x-b-to-x-a"), t)
-	data.UpdateNamespace(namespaces["x"], func(namespace *v1.Namespace) {
+	failOnError(data.UpdateNamespace(namespaces["x"], func(namespace *v1.Namespace) {
 		delete(namespace.Annotations, networkpolicy.EnableNPLoggingAnnotationKey)
-	})
+	}), t)
 }
 
 func testAppliedToPerRule(t *testing.T) {
