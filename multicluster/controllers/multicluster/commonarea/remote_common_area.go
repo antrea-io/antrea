@@ -136,7 +136,7 @@ func NewRemoteCommonArea(clusterID common.ClusterID, clusterSetID common.Cluster
 	scheme *runtime.Scheme, localClusterClient client.Client, clusterSetNamespace string, localNamespace string) (RemoteCommonArea, error) {
 	klog.InfoS("Create a RemoteCommonArea", "cluster", clusterID)
 
-	crtData, token, err := getSecretCACrtAndToken(secret)
+	crtData, token, err := GetSecretCACrtAndToken(secret)
 	if err != nil {
 		return nil, err
 	}
@@ -189,9 +189,9 @@ func NewRemoteCommonArea(clusterID common.ClusterID, clusterSetID common.Cluster
 }
 
 /**
- * getSecretCACrtAndToken returns the access credentials from Secret.
+ * GetSecretCACrtAndToken returns the access credentials from Secret.
  */
-func getSecretCACrtAndToken(secretObj *v1.Secret) ([]byte, []byte, error) {
+func GetSecretCACrtAndToken(secretObj *v1.Secret) ([]byte, []byte, error) {
 	caData, found := secretObj.Data[v1.ServiceAccountRootCAKey]
 	if !found {
 		return nil, nil, fmt.Errorf("ca.crt data not found in Secret %v", secretObj.GetName())

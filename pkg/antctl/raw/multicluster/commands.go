@@ -17,9 +17,7 @@ package multicluster
 import (
 	"github.com/spf13/cobra"
 
-	"antrea.io/antrea/pkg/antctl/raw/multicluster/add"
 	"antrea.io/antrea/pkg/antctl/raw/multicluster/create"
-	deleteCmd "antrea.io/antrea/pkg/antctl/raw/multicluster/delete"
 	"antrea.io/antrea/pkg/antctl/raw/multicluster/deploy"
 	"antrea.io/antrea/pkg/antctl/raw/multicluster/get"
 )
@@ -34,32 +32,21 @@ var CreateCmd = &cobra.Command{
 	Short: "Create multi-cluster resources",
 }
 
-var AddCmd = &cobra.Command{
-	Use:   "add",
-	Short: "Add a new member cluster to a ClusterSet",
-}
-
-var DeleteCmd = &cobra.Command{
-	Use:   "delete",
-	Short: "Delete multi-cluster resources",
-}
-
 var DeployCmd = &cobra.Command{
 	Use:   "deploy",
 	Short: "Deploy Antrea Multi-cluster Controller to a leader or member cluster",
 }
 
+var JoinCmd = NewJoinCommand()
+var LeaveCmd = NewLeaveCommand()
+var InitCmd = NewInitCommand()
+var DestroyCmd = NewDestroyCommand()
+
 func init() {
 	GetCmd.AddCommand(get.NewClusterSetCommand())
 	GetCmd.AddCommand(get.NewResourceImportCommand())
 	GetCmd.AddCommand(get.NewResourceExportCommand())
-	CreateCmd.AddCommand(create.NewClusterClaimCmd())
 	CreateCmd.AddCommand(create.NewAccessTokenCmd())
-	CreateCmd.AddCommand(create.NewClusterSetCmd())
-	DeleteCmd.AddCommand(deleteCmd.NewMemberClusterCmd())
-	DeleteCmd.AddCommand(deleteCmd.NewClusterSetCmd())
-	DeleteCmd.AddCommand(deleteCmd.NewClusterClaimCmd())
-	AddCmd.AddCommand(add.NewMemberClusterCmd())
 	DeployCmd.AddCommand(deploy.NewLeaderClusterCmd())
 	DeployCmd.AddCommand(deploy.NewMemberClusterCmd())
 }
