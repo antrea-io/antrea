@@ -636,7 +636,7 @@ func TestFlushCacheOnStop(t *testing.T) {
 	mock.ExpectCommit()
 
 	chExportProc.Start()
-	// this should bock for about 1 second, which is the duration by which
+	// this should block for about 1 second, which is the duration by which
 	// we delay the SQL transaction.
 	chExportProc.Stop()
 

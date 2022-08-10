@@ -475,7 +475,7 @@ func (ch *ClickHouseExportProcess) batchCommitAll(ctx context.Context) (int, err
 
 	// populate items from deque
 	ch.dequeMutex.Lock()
-	// currSize could have increased due to CacheSet being called in between.
+	// currSize could have increased due to CacheRecord being called in between.
 	currSize = ch.deque.Len()
 	recordsToExport := make([]*ClickHouseFlowRow, 0, currSize)
 	for i := 0; i < currSize; i++ {

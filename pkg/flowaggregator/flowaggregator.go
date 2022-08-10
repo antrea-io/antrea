@@ -181,7 +181,7 @@ func NewFlowAggregator(
 		var err error
 		fa.clickHouseExporter, err = newClickHouseExporter(opt)
 		if err != nil {
-			return nil, fmt.Errorf("error when creating db export process: %v", err)
+			return nil, fmt.Errorf("error when creating ClickHouse export process: %v", err)
 		}
 	}
 	if opt.Config.FlowCollector.Enable {
@@ -289,8 +289,8 @@ func (fa *flowAggregator) Run(stopCh <-chan struct{}) {
 	wg.Add(1)
 	go func() {
 		// We want to make sure that flowExportLoop returns before
-		// returning from this runction. This is because flowExportLoop
-		// is in charge of cleanely stopping the exporters.
+		// returning from this function. This is because flowExportLoop
+		// is in charge of cleanly stopping the exporters.
 		defer wg.Done()
 		fa.flowExportLoop(stopCh)
 	}()
@@ -548,7 +548,7 @@ func (fa *flowAggregator) updateFlowAggregator(opt *options.Options) {
 			klog.InfoS("Disabling Flow-Collector")
 			fa.ipfixExporter.Stop()
 			fa.ipfixExporter = nil
-			klog.Info("Disabled Flow-collector")
+			klog.InfoS("Disabled Flow-Collector")
 		}
 	}
 	if opt.Config.ClickHouse.Enable {
@@ -557,7 +557,7 @@ func (fa *flowAggregator) updateFlowAggregator(opt *options.Options) {
 			var err error
 			fa.clickHouseExporter, err = newClickHouseExporter(opt)
 			if err != nil {
-				klog.ErrorS(err, "Error when creating db export process")
+				klog.ErrorS(err, "Error when creating ClickHouse export process")
 				return
 			}
 			fa.clickHouseExporter.Start()
@@ -567,10 +567,10 @@ func (fa *flowAggregator) updateFlowAggregator(opt *options.Options) {
 		}
 	} else {
 		if fa.clickHouseExporter != nil {
-			klog.InfoS("Disabling Clickhouse")
+			klog.InfoS("Disabling ClickHouse")
 			fa.clickHouseExporter.Stop()
 			fa.clickHouseExporter = nil
-			klog.InfoS("Disabled Clickhouse")
+			klog.InfoS("Disabled ClickHouse")
 		}
 	}
 }

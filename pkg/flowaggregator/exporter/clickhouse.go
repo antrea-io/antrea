@@ -43,7 +43,7 @@ func buildClickHouseInput(opt *options.Options) clickhouseclient.ClickHouseInput
 
 func NewClickHouseExporter(opt *options.Options) (*ClickHouseExporter, error) {
 	chInput := buildClickHouseInput(opt)
-	klog.InfoS("Clickhouse configuration", "database", chInput.Database, "databaseURL", chInput.DatabaseURL, "debug", chInput.Debug, "compress", *chInput.Compress, "commitInterval", chInput.CommitInterval)
+	klog.InfoS("ClickHouse configuration", "database", chInput.Database, "databaseURL", chInput.DatabaseURL, "debug", chInput.Debug, "compress", *chInput.Compress, "commitInterval", chInput.CommitInterval)
 	chExportProcess, err := clickhouseclient.NewClickHouseClient(chInput)
 	if err != nil {
 		return nil, err
@@ -84,5 +84,5 @@ func (e *ClickHouseExporter) UpdateOptions(opt *options.Options) {
 	if dsn != e.chExportProcess.GetDsn() {
 		e.chExportProcess.UpdateCH(dsn, connect)
 	}
-	klog.InfoS("New Clickhouse configuration", "database", chInput.Database, "databaseURL", chInput.DatabaseURL, "debug", chInput.Debug, "compress", *chInput.Compress, "commitInterval", chInput.CommitInterval)
+	klog.InfoS("New ClickHouse configuration", "database", chInput.Database, "databaseURL", chInput.DatabaseURL, "debug", chInput.Debug, "compress", *chInput.Compress, "commitInterval", chInput.CommitInterval)
 }
