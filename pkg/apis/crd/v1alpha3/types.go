@@ -99,3 +99,30 @@ type ClusterGroupList struct {
 
 	Items []ClusterGroup `json:"items,omitempty"`
 }
+
+// +genclient
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// Group can be used in AntreaNetworkPolicies. When used with AppliedTo, it cannot include NamespaceSelector,
+// otherwise, Antrea will not realize the NetworkPolicy or rule, but will just update the NetworkPolicy
+// Status as "Unrealizable".
+type Group struct {
+	metav1.TypeMeta `json:",inline"`
+	// Standard metadata of the object.
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	// Desired state of the group.
+	Spec GroupSpec `json:"spec"`
+	// Most recently observed status of the group.
+	Status GroupStatus `json:"status"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+type GroupList struct {
+	metav1.TypeMeta `json:",inline"`
+	// +optional
+	metav1.ListMeta `json:"metadata,omitempty"`
+
+	Items []Group `json:"items,omitempty"`
+}

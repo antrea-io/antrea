@@ -22,3 +22,19 @@ func (r *NetworkPolicyReference) ToString() string {
 	}
 	return fmt.Sprintf("%s:%s/%s", r.Type, r.Namespace, r.Name)
 }
+
+func (r *GroupReference) ToGroupName() string {
+	if r.Namespace == "" {
+		return r.Name
+	}
+	return fmt.Sprintf("%s/%s", r.Namespace, r.Name)
+}
+
+// ToTypedString returns the Group or ClusterGroup namespaced name as a string along with its type.
+// Typed strings are typically used in log messages.
+func (r *GroupReference) ToTypedString() string {
+	if r.Namespace == "" {
+		return fmt.Sprintf("ClusterGroup:%s", r.Name)
+	}
+	return fmt.Sprintf("Group:%s/%s", r.Namespace, r.Name)
+}

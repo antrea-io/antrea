@@ -443,3 +443,150 @@ func TestToAntreaPeerForCRD(t *testing.T) {
 		})
 	}
 }
+
+func TestProcessRefGroupOrClusterGroup(t *testing.T) {
+	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
+	cidr := "10.0.0.0/24"
+	cidrIPNet, _ := cidrStrToIPNet(cidr)
+	// cgA with selector present in cache
+	cgA := crdv1alpha3.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{Name: "cgA", UID: "uidA"},
+		Spec: crdv1alpha3.GroupSpec{
+			NamespaceSelector: &selectorA,
+		},
+	}
+	// cgB with IPBlock present in cache
+	cgB := crdv1alpha3.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{Name: "cgB", UID: "uidB"},
+		Spec: crdv1alpha3.GroupSpec{
+			IPBlocks: []crdv1alpha1.IPBlock{
+				{
+					CIDR: cidr,
+				},
+			},
+		},
+	}
+	// cgC not found in cache
+	cgC := crdv1alpha3.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{Name: "cgC", UID: "uidC"},
+		Spec: crdv1alpha3.GroupSpec{
+			NamespaceSelector: &selectorA,
+		},
+	}
+
+	// gA with selector present in cache
+	gA := crdv1alpha3.Group{
+		ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "gA", UID: "uidGA"},
+		Spec: crdv1alpha3.GroupSpec{
+			NamespaceSelector: &selectorA,
+		},
+	}
+	// gB with IPBlock present in cache
+	gB := crdv1alpha3.Group{
+		ObjectMeta: metav1.ObjectMeta{Namespace: "nsB", Name: "gB", UID: "uidGB"},
+		Spec: crdv1alpha3.GroupSpec{
+			IPBlocks: []crdv1alpha1.IPBlock{
+				{
+					CIDR: cidr,
+				},
+			},
+		},
+	}
+	// gC not found in cache
+	gC := crdv1alpha3.Group{
+		ObjectMeta: metav1.ObjectMeta{Namespace: "nsC", Name: "gC", UID: "uidGC"},
+		Spec: crdv1alpha3.GroupSpec{
+			NamespaceSelector: &selectorA,
+		},
+	}
+	_, npc := newController()
+	npc.addClusterGroup(&cgA)
+	npc.addClusterGroup(&cgB)
+	npc.cgStore.Add(&cgA)
+	npc.cgStore.Add(&cgB)
+	npc.addGroup(&gA)
+	npc.addGroup(&gB)
+	npc.gStore.Add(&gA)
+	npc.gStore.Add(&gB)
+	tests := []struct {
+		name           string
+		inputGroupOrCG string
+		inputNamespace string
+		expectedAG     string
+		expectedIPB    []controlplane.IPBlock
+	}{
+		{
+			name:           "empty-cg-no-result",
+			inputGroupOrCG: "",
+			inputNamespace: "",
+			expectedAG:     "",
+			expectedIPB:    nil,
+		},
+		{
+			name:           "cg-with-selector",
+			inputGroupOrCG: cgA.Name,
+			inputNamespace: "",
+			expectedAG:     cgA.Name,
+			expectedIPB:    nil,
+		},
+		{
+			name:           "cg-with-selector-not-found",
+			inputGroupOrCG: cgC.Name,
+			inputNamespace: "",
+			expectedAG:     "",
+			expectedIPB:    nil,
+		},
+		{
+			name:           "cg-with-ipblock",
+			inputGroupOrCG: cgB.Name,
+			inputNamespace: "",
+			expectedAG:     "",
+			expectedIPB: []controlplane.IPBlock{
+				{
+					CIDR:   *cidrIPNet,
+					Except: []controlplane.IPNet{},
+				},
+			},
+		},
+		{
+			name:           "empty-g-no-result",
+			inputGroupOrCG: "",
+			inputNamespace: "",
+			expectedAG:     "",
+			expectedIPB:    nil,
+		},
+		{
+			name:           "g-with-selector",
+			inputGroupOrCG: gA.Name,
+			inputNamespace: gA.Namespace,
+			expectedAG:     fmt.Sprintf("%s/%s", gA.Namespace, gA.Name),
+			expectedIPB:    nil,
+		},
+		{
+			name:           "g-with-selector-not-found",
+			inputGroupOrCG: gC.Name,
+			inputNamespace: gC.Namespace,
+			expectedAG:     "",
+			expectedIPB:    nil,
+		},
+		{
+			name:           "g-with-ipblock",
+			inputGroupOrCG: gB.Name,
+			inputNamespace: gB.Namespace,
+			expectedAG:     "",
+			expectedIPB: []controlplane.IPBlock{
+				{
+					CIDR:   *cidrIPNet,
+					Except: []controlplane.IPNet{},
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			actualAG, actualIPB := npc.processRefGroupOrClusterGroup(tt.inputGroupOrCG, tt.inputNamespace)
+			assert.Equal(t, tt.expectedIPB, actualIPB, "IPBlock does not match")
+			assert.Equal(t, tt.expectedAG, actualAG, "addressGroup does not match")
+		})
+	}
+}

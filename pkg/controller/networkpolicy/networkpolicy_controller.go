@@ -81,12 +81,15 @@ const (
 	PriorityIndex = "priority"
 	// ClusterGroupIndex is used to index ClusterNetworkPolicies by ClusterGroup names.
 	ClusterGroupIndex = "clustergroup"
+	// GroupIndex is used to index Antrea NetworkPolicies by Group names.
+	GroupIndex = "group"
+
 	// EnableNPLoggingAnnotationKey can be added to Namespace to enable logging K8s NP.
 	EnableNPLoggingAnnotationKey = "networkpolicy.antrea.io/enable-logging"
 
 	appliedToGroupType grouping.GroupType = "appliedToGroup"
 	addressGroupType   grouping.GroupType = "addressGroup"
-	clusterGroupType   grouping.GroupType = "clusterGroup"
+	internalGroupType  grouping.GroupType = "internalGroup"
 )
 
 var (
@@ -182,6 +185,14 @@ type NetworkPolicyController struct {
 	nodeLister corelisters.NodeLister
 	// nodeListerSynced is a function which returns true if the Node shared informer has been synced at least once.
 	nodeListerSynced cache.InformerSynced
+
+	grpInformer crdv1a3informers.GroupInformer
+	// grpLister is able to list/get Groups and is populated by the shared informer passed to
+	// NewGroupController.
+	grpLister crdv1a3listers.GroupLister
+	// grpListerSynced is a function which returns true if the Group shared informer has been synced at least
+	// once.
+	grpListerSynced cache.InformerSynced
 
 	// addressGroupStore is the storage where the populated Address Groups are stored.
 	addressGroupStore storage.Interface
@@ -290,6 +301,46 @@ var anpIndexers = cache.Indexers{
 		}
 		return []string{anp.Spec.Tier}, nil
 	},
+	GroupIndex: func(obj interface{}) ([]string, error) {
+		anp, ok := obj.(*secv1alpha1.NetworkPolicy)
+		if !ok {
+			return []string{}, nil
+		}
+		ns := anp.Namespace + "/"
+		groupNames := sets.String{}
+		for _, appTo := range anp.Spec.AppliedTo {
+			if appTo.Group != "" {
+				groupNames.Insert(ns + appTo.Group)
+			}
+		}
+		if len(anp.Spec.Ingress) == 0 && len(anp.Spec.Egress) == 0 {
+			return groupNames.List(), nil
+		}
+		appendGroups := func(rule secv1alpha1.Rule) {
+			for _, peer := range rule.To {
+				if peer.Group != "" {
+					groupNames.Insert(ns + peer.Group)
+				}
+			}
+			for _, peer := range rule.From {
+				if peer.Group != "" {
+					groupNames.Insert(ns + peer.Group)
+				}
+			}
+			for _, appTo := range rule.AppliedTo {
+				if appTo.Group != "" {
+					groupNames.Insert(ns + appTo.Group)
+				}
+			}
+		}
+		for _, rule := range anp.Spec.Egress {
+			appendGroups(rule)
+		}
+		for _, rule := range anp.Spec.Ingress {
+			appendGroups(rule)
+		}
+		return groupNames.List(), nil
+	},
 }
 
 // NewNetworkPolicyController returns a new *NetworkPolicyController.
@@ -304,6 +355,7 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 	anpInformer secinformers.NetworkPolicyInformer,
 	tierInformer secinformers.TierInformer,
 	cgInformer crdv1a3informers.ClusterGroupInformer,
+	grpInformer crdv1a3informers.GroupInformer,
 	addressGroupStore storage.Interface,
 	appliedToGroupStore storage.Interface,
 	internalNetworkPolicyStore storage.Interface,
@@ -327,7 +379,7 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 	}
 	n.groupingInterface.AddEventHandler(appliedToGroupType, n.enqueueAppliedToGroup)
 	n.groupingInterface.AddEventHandler(addressGroupType, n.enqueueAddressGroup)
-	n.groupingInterface.AddEventHandler(clusterGroupType, n.enqueueInternalGroup)
+	n.groupingInterface.AddEventHandler(internalGroupType, n.enqueueInternalGroup)
 	// Add handlers for NetworkPolicy events.
 	networkPolicyInformer.Informer().AddEventHandlerWithResyncPeriod(
 		cache.ResourceEventHandlerFuncs{
@@ -360,6 +412,9 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 		n.cgInformer = cgInformer
 		n.cgLister = cgInformer.Lister()
 		n.cgListerSynced = cgInformer.Informer().HasSynced
+		n.grpInformer = grpInformer
+		n.grpLister = grpInformer.Lister()
+		n.grpListerSynced = grpInformer.Informer().HasSynced
 		// Add handlers for Namespace events.
 		n.namespaceInformer.Informer().AddEventHandlerWithResyncPeriod(
 			cache.ResourceEventHandlerFuncs{
@@ -411,6 +466,15 @@ func NewNetworkPolicyController(kubeClient clientset.Interface,
 				AddFunc:    n.addClusterGroup,
 				UpdateFunc: n.updateClusterGroup,
 				DeleteFunc: n.deleteClusterGroup,
+			},
+			resyncPeriod,
+		)
+		// Add event handlers for Group notification.
+		grpInformer.Informer().AddEventHandlerWithResyncPeriod(
+			cache.ResourceEventHandlerFuncs{
+				AddFunc:    n.addGroup,
+				UpdateFunc: n.updateGroup,
+				DeleteFunc: n.deleteGroup,
 			},
 			resyncPeriod,
 		)
@@ -1107,7 +1171,7 @@ func (n *NetworkPolicyController) getAddressGroupMemberSet(g *antreatypes.Addres
 		// childGroup with ipBlocks, this function only returns the aggregated GroupMemberSet
 		// computed from childGroup with selectors, as ipBlocks will be processed differently.
 		group := groupObj.(*antreatypes.Group)
-		members, _ := n.getClusterGroupMembers(group)
+		members, _ := n.getInternalGroupMembers(group)
 		return members
 	}
 	if g.Selector.NodeSelector != nil {
@@ -1116,22 +1180,23 @@ func (n *NetworkPolicyController) getAddressGroupMemberSet(g *antreatypes.Addres
 	return n.getMemberSetForGroupType(addressGroupType, g.Name)
 }
 
-// getClusterGroupMembers knows how to construct a GroupMemberSet and ipBlocks that contains
-// all the entities selected by a ClusterGroup. For ClusterGroup that has childGroups,
+// getInternalGroupMembers knows how to construct a GroupMemberSet and ipBlocks that contains
+// all the entities selected by an internal Group. For internal Groups that has childGroups,
 // the members are computed as the union of all its childGroup's members.
-func (n *NetworkPolicyController) getClusterGroupMembers(group *antreatypes.Group) (controlplane.GroupMemberSet, []controlplane.IPBlock) {
+func (n *NetworkPolicyController) getInternalGroupMembers(group *antreatypes.Group) (controlplane.GroupMemberSet, []controlplane.IPBlock) {
 	if len(group.IPBlocks) > 0 {
 		return nil, group.IPBlocks
 	} else if len(group.ChildGroups) == 0 {
-		return n.getMemberSetForGroupType(clusterGroupType, group.Name), nil
+		return n.getMemberSetForGroupType(internalGroupType, group.SourceReference.ToGroupName()), nil
 	}
 	var ipBlocks []controlplane.IPBlock
 	groupMemberSet := controlplane.GroupMemberSet{}
 	for _, childName := range group.ChildGroups {
+		childName = k8s.NamespacedName(group.SourceReference.Namespace, childName)
 		childGroup, found, _ := n.internalGroupStore.Get(childName)
 		if found {
 			child := childGroup.(*antreatypes.Group)
-			members, ipb := n.getClusterGroupMembers(child)
+			members, ipb := n.getInternalGroupMembers(child)
 			ipBlocks = append(ipBlocks, ipb...)
 			groupMemberSet.Merge(members)
 		}
@@ -1344,22 +1409,24 @@ func (n *NetworkPolicyController) getAppliedToWorkloads(g *antreatypes.AppliedTo
 	if found {
 		// This AppliedToGroup is derived from a ClusterGroup.
 		grp := group.(*antreatypes.Group)
-		return n.getClusterGroupWorkloads(grp)
+		return n.getInternalGroupWorkloads(grp)
 	}
 	return n.groupingInterface.GetEntities(appliedToGroupType, g.Name)
 }
 
-// getClusterGroupWorkloads returns a list of workloads (Pods and ExternalEntities) selected by a ClusterGroup.
+// getInternalGroupWorkloads returns a list of workloads (Pods and ExternalEntities) selected by a ClusterGroup.
 // For ClusterGroup that has childGroups, the workloads are computed as the union of all its childGroup's workloads.
-func (n *NetworkPolicyController) getClusterGroupWorkloads(group *antreatypes.Group) ([]*v1.Pod, []*v1alpha2.ExternalEntity) {
+func (n *NetworkPolicyController) getInternalGroupWorkloads(group *antreatypes.Group) ([]*v1.Pod, []*v1alpha2.ExternalEntity) {
 	if len(group.ChildGroups) == 0 {
-		return n.groupingInterface.GetEntities(clusterGroupType, group.Name)
+		return n.groupingInterface.GetEntities(internalGroupType, group.SourceReference.ToGroupName())
 	}
 	podNameSet, eeNameSet := sets.String{}, sets.String{}
 	var pods []*v1.Pod
 	var ees []*v1alpha2.ExternalEntity
 	for _, childName := range group.ChildGroups {
-		childPods, childEEs := n.groupingInterface.GetEntities(clusterGroupType, childName)
+		// childNameString will either be name of the child ClusterGroup or Namespaced name of the child Group.
+		childNameString := k8s.NamespacedName(group.SourceReference.Namespace, childName)
+		childPods, childEEs := n.groupingInterface.GetEntities(internalGroupType, childNameString)
 		for _, pod := range childPods {
 			podString := k8s.NamespacedName(pod.Namespace, pod.Name)
 			if !podNameSet.Has(podString) {
@@ -1425,6 +1492,7 @@ func (n *NetworkPolicyController) syncInternalNetworkPolicy(key string) error {
 		PerNamespaceSelectors: internalNP.PerNamespaceSelectors,
 		SpanMeta:              antreatypes.SpanMeta{NodeNames: nodeNames},
 		Generation:            internalNP.Generation,
+		RealizationError:      internalNP.RealizationError,
 	}
 	klog.V(4).Infof("Updating internal NetworkPolicy %s with %d Nodes", key, nodeNames.Len())
 	n.internalNetworkPolicyStore.Update(updatedNetworkPolicy)
@@ -1483,7 +1551,11 @@ func internalNetworkPolicyKeyFunc(obj metav1.Object) string {
 }
 
 // internalGroupKeyFunc knows how to generate the key for an internal Group based on the object metadata
-// of the corresponding ClusterGroup resource. Currently the Name of the ClusterGroup is used to ensure uniqueness.
+// of the corresponding Group and ClusterGroup resource. Currently the Name of the ClusterGroup is used to ensure
+// uniqueness. Similarly, the Namespaced Name of the Group is used to ensure uniqueness for the Group resource.
 func internalGroupKeyFunc(obj metav1.Object) string {
+	if len(obj.GetNamespace()) > 0 {
+		return obj.GetNamespace() + "/" + obj.GetName()
+	}
 	return obj.GetName()
 }

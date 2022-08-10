@@ -2333,7 +2333,7 @@ func TestProcessRefCG(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			actualAG, actualIPB := npc.processRefCG(tt.inputCG)
+			actualAG, actualIPB := npc.processRefGroupOrClusterGroup(tt.inputCG, "")
 			assert.Equal(t, tt.expectedIPB, actualIPB, "IPBlock does not match")
 			assert.Equal(t, tt.expectedAG, actualAG, "addressGroup does not match")
 		})

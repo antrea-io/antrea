@@ -7,7 +7,7 @@
 - [Tier](#tier)
   - [Tier CRDs](#tier-crds)
   - [Static tiers](#static-tiers)
-  - [kubectl commands for Tier](#kubectl-commands-for-tier)
+  - [<em>kubectl</em> commands for Tier](#kubectl-commands-for-tier)
 - [Antrea ClusterNetworkPolicy](#antrea-clusternetworkpolicy)
   - [The Antrea ClusterNetworkPolicy resource](#the-antrea-clusternetworkpolicy-resource)
     - [ACNP with stand-alone selectors](#acnp-with-stand-alone-selectors)
@@ -21,11 +21,12 @@
     - [ACNP for multicast egress traffic](#acnp-for-multicast-egress-traffic)
   - [Behavior of <em>to</em> and <em>from</em> selectors](#behavior-of-to-and-from-selectors)
   - [Key differences from K8s NetworkPolicy](#key-differences-from-k8s-networkpolicy)
-  - [kubectl commands for Antrea ClusterNetworkPolicy](#kubectl-commands-for-antrea-clusternetworkpolicy)
+  - [<em>kubectl</em> commands for Antrea ClusterNetworkPolicy](#kubectl-commands-for-antrea-clusternetworkpolicy)
 - [Antrea NetworkPolicy](#antrea-networkpolicy)
   - [The Antrea NetworkPolicy resource](#the-antrea-networkpolicy-resource)
   - [Key differences from Antrea ClusterNetworkPolicy](#key-differences-from-antrea-clusternetworkpolicy)
-  - [kubectl commands for Antrea NetworkPolicy](#kubectl-commands-for-antrea-networkpolicy)
+  - [Antrea NetworkPolicy with Group reference](#antrea-networkpolicy-with-group-reference)
+  - [<em>kubectl</em> commands for Antrea NetworkPolicy](#kubectl-commands-for-antrea-networkpolicy)
 - [Antrea-native Policy ordering based on priorities](#antrea-native-policy-ordering-based-on-priorities)
   - [Ordering based on Tier priority](#ordering-based-on-tier-priority)
   - [Ordering based on policy priority](#ordering-based-on-policy-priority)
@@ -42,7 +43,11 @@
   - [Apply to NodePort Service](#apply-to-nodeport-service)
 - [ClusterGroup](#clustergroup)
   - [ClusterGroup CRD](#clustergroup-crd)
-  - [kubectl commands for ClusterGroup](#kubectl-commands-for-clustergroup)
+  - [<em>kubectl</em> commands for ClusterGroup](#kubectl-commands-for-clustergroup)
+- [Group](#group)
+  - [Group CRD](#group-crd)
+  - [Restrictions and Key differences from ClusterGroup](#restrictions-and-key-differences-from-clustergroup)
+  - [<em>kubectl</em> commands for Group](#kubectl-commands-for-group)
 - [RBAC](#rbac)
 - [Notes and constraints](#notes-and-constraints)
 <!-- /toc -->
@@ -154,9 +159,9 @@ by creating an Antrea-native policy with an "allow" action in the "baseline" Tie
 For this reason, it generally does not make sense to create policies in the "baseline"
 Tier with the "allow" action.
 
-### kubectl commands for Tier
+### *kubectl* commands for Tier
 
-The following kubectl commands can be used to retrieve Tier resources:
+The following `kubectl` commands can be used to retrieve Tier resources:
 
 ```bash
     # Use long name
@@ -774,9 +779,9 @@ expressions, when defining `egress` rules. For more information on its usage, re
 - Rules assume the priority in which they are written. i.e. rule set at top
   takes precedence over a rule set below it.
 
-### kubectl commands for Antrea ClusterNetworkPolicy
+### *kubectl* commands for Antrea ClusterNetworkPolicy
 
-The following kubectl commands can be used to retrieve ACNP resources:
+The following `kubectl` commands can be used to retrieve ACNP resources:
 
 ```bash
     # Use long name
@@ -868,14 +873,57 @@ policy CRDs.
 - `podSelector` without a `namespaceSelector`, set within a NetworkPolicy Peer
   of any rule, selects Pods from the Namespace in which the Antrea
   NetworkPolicy is created. This behavior is similar to the K8s NetworkPolicy.
-- Antrea NetworkPolicy only supports stand-alone selectors. i.e. no support for
-  ClusterGroup references.
-- Antrea NetworkPolicy does not support `namespaces` field within a peer, as ANP
-  themselves are scoped to a single Namespace.
+- Antrea NetworkPolicy supports both stand-alone selectors and Group references.
+- Antrea NetworkPolicy does not support `namespaces` field within a peer, as Antrea
+  NetworkPolicy themselves are scoped to a single Namespace.
 
-### kubectl commands for Antrea NetworkPolicy
+### Antrea NetworkPolicy with Group reference
 
-The following kubectl commands can be used to retrieve ANP resources:
+Groups can be referenced in `appliedTo` and `to`/`from`. Refer to the [Group](#group)
+section for detailed information.
+
+The following example Antrea NetworkPolicy realizes the same network policy as the
+[previous example](#the-antrea-networkpolicy-resource). It refers to three separately
+defined Groups - "test-grp-with-db-selector" that selects all Pods labeled "role: db",
+"test-grp-with-frontend-selector" that selects all Pods labeled "role: frontend" and
+Pods labeled "role: nondb" in Namespaces labeled "role: db", "test-grp-with-ip-block"
+that selects `ipblock` "10.0.10.0/24".
+
+```yaml
+apiVersion: crd.antrea.io/v1alpha1
+kind: NetworkPolicy
+metadata:
+  name: anp-with-groups
+  namespace: default
+spec:
+  priority: 5
+  tier: securityops
+  appliedTo:
+    - group: "test-grp-with-db-selector"
+  ingress:
+    - action: Allow
+      from:
+        - group: "test-grp-with-frontend-selector"
+      ports:
+        - protocol: TCP
+          port: 8080
+          endPort: 9000
+      name: AllowFromFrontend
+      enableLogging: false
+  egress:
+    - action: Drop
+      to:
+        - group: "test-grp-with-ip-block"
+      ports:
+        - protocol: TCP
+          port: 5978
+      name: DropToThirdParty
+      enableLogging: true
+```
+
+### *kubectl* commands for Antrea NetworkPolicy
+
+The following `kubectl` commands can be used to retrieve ANP resources:
 
 ```bash
     # Use long name with API Group
@@ -1404,7 +1452,7 @@ kind: ClusterGroup
 metadata:
   name: test-cg-ip-block
 spec:
-  # IPBlocks cannot be set along with PodSelector, NamespaceSelector or serviceReference.
+  # ipBlocks cannot be set along with podSelector, namespaceSelector or serviceReference.
   ipBlocks:
     - cidr: 10.0.10.0/24
 ---
@@ -1413,7 +1461,7 @@ kind: ClusterGroup
 metadata:
   name: test-cg-svc-ref
 spec:
-  # ServiceReference cannot be set along with PodSelector, NamespaceSelector or ipBlocks.
+  # serviceReference cannot be set along with podSelector, namespaceSelector or ipBlocks.
   serviceReference:
     name: test-service
     namespace: default
@@ -1476,7 +1524,7 @@ cluster-wide group.
   Service.
 
 - **childGroups**: This selects existing ClusterGroups by name. The effective members
-  of the "parent" ClusterGrup will be the union of all its childGroups' members.
+  of the "parent" ClusterGroup will be the union of all its childGroups' members.
   See the section above for restrictions.
 
 **status**: The ClusterGroup `status` field determines the overall realization
@@ -1486,9 +1534,9 @@ status of the group.
   when the controller has calculated all the corresponding workloads that match the
   selectors set in the group.
 
-### kubectl commands for ClusterGroup
+### *kubectl* commands for ClusterGroup
 
-The following kubectl commands can be used to retrieve CG resources:
+The following `kubectl` commands can be used to retrieve CG resources:
 
 ```bash
     # Use long name with API Group
@@ -1499,6 +1547,108 @@ The following kubectl commands can be used to retrieve CG resources:
 
     # Use short name with API Group
     kubectl get cg.crd.antrea.io
+```
+
+## Group
+
+A Group CRD represents a different way for specifying how workloads are grouped
+together, and is conceptually similar to the ClusterGroup CRD. Users will be able
+to refer to Groups in Antrea NetworkPolicy resources instead of specifying Pod and
+Namespace selectors every time.
+
+### Group CRD
+
+Below are some example Group specs:
+
+```yaml
+# Group that selects all Pods labeled role: db in the default Namespace
+apiVersion: crd.antrea.io/v1alpha3
+kind: Group
+metadata:
+  name: test-grp-sel
+  namespace: default
+spec:
+  podSelector:
+    matchLabels:
+      role: db
+---
+# Group that selects all Pods labeled role: db in Namespaces labeled env: prod.
+# This Group cannot be used in Antrea NetworkPolicy appliedTo because of the namespaceSelector.
+apiVersion: crd.antrea.io/v1alpha3
+kind: Group
+metadata:
+  name: test-grp-with-namespace
+spec:
+  podSelector:
+    matchLabels:
+      role: db
+  namespaceSelector:
+    matchLabels:
+      env: prod
+---
+# Group that selects IP block 10.0.10.0/24.
+apiVersion: crd.antrea.io/v1alpha3
+kind: Group
+metadata:
+  name: test-grp-ip-block
+spec:
+  # ipBlocks cannot be set along with podSelector, namespaceSelector or serviceReference.
+  ipBlocks:
+    - cidr: 10.0.10.0/24
+---
+# Group that selects Service named test-service in the default Namespace.
+apiVersion: crd.antrea.io/v1alpha3
+kind: Group
+metadata:
+  name: test-grp-svc-ref
+spec:
+  # serviceReference cannot be set along with podSelector, namespaceSelector or ipBlocks.
+  serviceReference:
+    name: test-service
+    namespace: default
+---
+# Group that includes the previous Groups as childGroups.
+apiVersion: crd.antrea.io/v1alpha3
+kind: Group
+metadata:
+  name: test-grp-nested
+spec:
+  childGroups: [test-grp-sel, test-grp-ip-blocks, test-grp-svc-ref]
+```
+
+### Restrictions and Key differences from ClusterGroup
+
+Group has a similar spec with ClusterGroup. However, there are key differences and
+restrictions.
+
+- A Group can be set in an Antrea NetworkPolicy's `appliedTo` and `to`/`from` peers.
+  When set in the `appliedTo` field, it cannot include `namespaceSelector`, since
+  Antrea NetworkPolicy is Namespace scoped. For example, the
+  `test-grp-with-namespace` Group in the [sample](#group-crd) cannot be
+  used by Antrea NetworkPolicy `appliedTo`.
+- Antrea will not validate the referenced Group resources for the `appliedTo` convention;
+  if the convention is violated in the Antrea NetworkPolicy's `appliedTo` section
+  or for any of the rules' `appliedTo`, then Antrea will report a condition
+  `Realizable=False` in the NetworkPolicy status, the condition includes
+  `NetworkPolicyAppliedToUnsupportedGroup` reason and a detailed message.
+- `childGroups` only accepts strings, and they will be considered as names of
+  the Groups and will be looked up in the policy's own Namespace. For example, if
+  child Group `child-0` exists in `ns-2`, it should not be added as a child Group for
+  `ns-1/parentGroup-0`.
+
+### *kubectl* commands for Group
+
+The following `kubectl` commands can be used to retrieve Group resources:
+
+```bash
+    # Use long name with API Group
+    kubectl get groups.crd.antrea.io
+
+    # Use short name
+    kubectl get grp
+
+    # Use short name with API Group
+    kubectl get grp.crd.antrea.io
 ```
 
 ## RBAC

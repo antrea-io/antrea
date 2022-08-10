@@ -31,14 +31,13 @@ const (
 	ChildGroupIndex = "childGroup"
 )
 
-// GroupKeyFunc knows how to get the key of an Group.
+// GroupKeyFunc knows how to get the key of a Group.
 func GroupKeyFunc(obj interface{}) (string, error) {
 	group, ok := obj.(*antreatypes.Group)
 	if !ok {
 		return "", fmt.Errorf("object is not *types.Group: %v", obj)
 	}
-	// Replace empty Namespace with Group.Namespace once Namespaced Groups are introduced.
-	return k8s.NamespacedName("", group.Name), nil
+	return k8s.NamespacedName(group.SourceReference.Namespace, group.SourceReference.Name), nil
 }
 
 // NewGroupStore creates a store of Group.
@@ -62,6 +61,13 @@ func NewGroupStore() storage.Interface {
 			g, ok := obj.(*antreatypes.Group)
 			if !ok {
 				return []string{}, nil
+			}
+			if g.SourceReference.Namespace != "" {
+				namespacedCG := make([]string, len(g.ChildGroups))
+				for _, childGroup := range g.ChildGroups {
+					namespacedCG = append(namespacedCG, g.SourceReference.Namespace+"/"+childGroup)
+				}
+				return namespacedCG, nil
 			}
 			return g.ChildGroups, nil
 		},

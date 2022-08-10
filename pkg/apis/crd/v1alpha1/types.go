@@ -327,6 +327,9 @@ type NetworkPolicySpec struct {
 // NetworkPolicyPhase defines the phase in which a NetworkPolicy is.
 type NetworkPolicyPhase string
 
+// NetworkPolicyConditionType describes the condition types of NetworkPolicies.
+type NetworkPolicyConditionType string
+
 // These are the valid values for NetworkPolicyPhase.
 const (
 	// NetworkPolicyPending means the NetworkPolicy has been accepted by the system, but it has not been processed by Antrea.
@@ -336,6 +339,30 @@ const (
 	// NetworkPolicyRealized means the NetworkPolicy has been enforced to all Pods on all Nodes it applies to.
 	NetworkPolicyRealized NetworkPolicyPhase = "Realized"
 )
+
+// These are valid conditions of a deployment.
+const (
+	// NetworkPolicyConditionRealizable means the condition stores information about
+	// various realizable conditions of the NetworkPolicy.
+	NetworkPolicyConditionRealizable NetworkPolicyConditionType = "Realizable"
+)
+
+// NetworkPolicyCondition describes the state of a NetworkPolicy at a certain point.
+type NetworkPolicyCondition struct {
+	// Type of StatefulSet condition.
+	Type NetworkPolicyConditionType `json:"type"`
+	// Status of the condition, one of True, False, Unknown.
+	Status metav1.ConditionStatus `json:"status"`
+	// Last time the condition transitioned from one status to another.
+	// +optional
+	LastTransitionTime metav1.Time `json:"lastTransitionTime,omitempty"`
+	// The reason for the condition's last transition.
+	// +optional
+	Reason string `json:"reason,omitempty"`
+	// A human-readable message indicating details about the transition.
+	// +optional
+	Message string `json:"message,omitempty"`
+}
 
 // NetworkPolicyStatus represents information about the status of a NetworkPolicy.
 type NetworkPolicyStatus struct {
@@ -347,6 +374,8 @@ type NetworkPolicyStatus struct {
 	CurrentNodesRealized int32 `json:"currentNodesRealized"`
 	// The total number of nodes that should realize the NetworkPolicy.
 	DesiredNodesRealized int32 `json:"desiredNodesRealized"`
+	// Represents the latest available observations of a NetworkPolicy current state.
+	Conditions []NetworkPolicyCondition `json:"conditions"`
 }
 
 // Rule describes the traffic allowed to/from the workloads selected by

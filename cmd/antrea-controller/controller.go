@@ -102,6 +102,7 @@ var allowedPaths = []string{
 	"/validate/clustergroup",
 	"/validate/externalippool",
 	"/validate/egress",
+	"/validate/group",
 	"/validate/ippool",
 	"/convert/clustergroup",
 }
@@ -129,6 +130,7 @@ func run(o *Options) error {
 	tierInformer := crdInformerFactory.Crd().V1alpha1().Tiers()
 	tfInformer := crdInformerFactory.Crd().V1alpha1().Traceflows()
 	cgInformer := crdInformerFactory.Crd().V1alpha3().ClusterGroups()
+	grpInformer := crdInformerFactory.Crd().V1alpha3().Groups()
 	egressInformer := crdInformerFactory.Crd().V1alpha2().Egresses()
 	externalIPPoolInformer := crdInformerFactory.Crd().V1alpha2().ExternalIPPools()
 
@@ -158,6 +160,7 @@ func run(o *Options) error {
 		anpInformer,
 		tierInformer,
 		cgInformer,
+		grpInformer,
 		addressGroupStore,
 		appliedToGroupStore,
 		networkPolicyStore,

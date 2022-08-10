@@ -53,8 +53,11 @@ func TestProcessClusterGroup(t *testing.T) {
 				},
 			},
 			expectedGroup: &antreatypes.Group{
-				UID:      "uidA",
-				Name:     "cgA",
+				UID: "uidA",
+				SourceReference: &controlplane.GroupReference{
+					Name: "cgA",
+					UID:  "uidA",
+				},
 				Selector: antreatypes.NewGroupSelector("", nil, &selectorA, nil, nil),
 			},
 		},
@@ -67,8 +70,11 @@ func TestProcessClusterGroup(t *testing.T) {
 				},
 			},
 			expectedGroup: &antreatypes.Group{
-				UID:      "uidB",
-				Name:     "cgB",
+				UID: "uidB",
+				SourceReference: &controlplane.GroupReference{
+					Name: "cgB",
+					UID:  "uidB",
+				},
 				Selector: antreatypes.NewGroupSelector("", &selectorB, nil, nil, nil),
 			},
 		},
@@ -82,8 +88,11 @@ func TestProcessClusterGroup(t *testing.T) {
 				},
 			},
 			expectedGroup: &antreatypes.Group{
-				UID:      "uidC",
-				Name:     "cgC",
+				UID: "uidC",
+				SourceReference: &controlplane.GroupReference{
+					Name: "cgC",
+					UID:  "uidC",
+				},
 				Selector: antreatypes.NewGroupSelector("", &selectorC, &selectorD, nil, nil),
 			},
 		},
@@ -100,8 +109,11 @@ func TestProcessClusterGroup(t *testing.T) {
 				},
 			},
 			expectedGroup: &antreatypes.Group{
-				UID:  "uidD",
-				Name: "cgD",
+				UID: "uidD",
+				SourceReference: &controlplane.GroupReference{
+					Name: "cgD",
+					UID:  "uidD",
+				},
 				IPBlocks: []controlplane.IPBlock{
 					{
 						CIDR:   *cidrIPNet,
@@ -122,8 +134,11 @@ func TestProcessClusterGroup(t *testing.T) {
 				},
 			},
 			expectedGroup: &antreatypes.Group{
-				UID:  "uidE",
-				Name: "cgE",
+				UID: "uidE",
+				SourceReference: &controlplane.GroupReference{
+					Name: "cgE",
+					UID:  "uidE",
+				},
 				ServiceReference: &controlplane.ServiceReference{
 					Name:      "test-svc",
 					Namespace: "test-ns",
@@ -139,8 +154,11 @@ func TestProcessClusterGroup(t *testing.T) {
 				},
 			},
 			expectedGroup: &antreatypes.Group{
-				UID:         "uidF",
-				Name:        "cgF",
+				UID: "uidF",
+				SourceReference: &controlplane.GroupReference{
+					Name: "cgF",
+					UID:  "uidF",
+				},
 				ChildGroups: []string{"cgA", "cgB"},
 			},
 		},
@@ -175,8 +193,11 @@ func TestAddClusterGroup(t *testing.T) {
 				},
 			},
 			expectedGroup: &antreatypes.Group{
-				UID:      "uidA",
-				Name:     "cgA",
+				UID: "uidA",
+				SourceReference: &controlplane.GroupReference{
+					Name: "cgA",
+					UID:  "uidA",
+				},
 				Selector: antreatypes.NewGroupSelector("", nil, &selectorA, nil, nil),
 			},
 		},
@@ -189,8 +210,11 @@ func TestAddClusterGroup(t *testing.T) {
 				},
 			},
 			expectedGroup: &antreatypes.Group{
-				UID:      "uidB",
-				Name:     "cgB",
+				UID: "uidB",
+				SourceReference: &controlplane.GroupReference{
+					Name: "cgB",
+					UID:  "uidB",
+				},
 				Selector: antreatypes.NewGroupSelector("", &selectorB, nil, nil, nil),
 			},
 		},
@@ -204,8 +228,11 @@ func TestAddClusterGroup(t *testing.T) {
 				},
 			},
 			expectedGroup: &antreatypes.Group{
-				UID:      "uidC",
-				Name:     "cgC",
+				UID: "uidC",
+				SourceReference: &controlplane.GroupReference{
+					Name: "cgC",
+					UID:  "uidC",
+				},
 				Selector: antreatypes.NewGroupSelector("", &selectorC, &selectorD, nil, nil),
 			},
 		},
@@ -222,8 +249,11 @@ func TestAddClusterGroup(t *testing.T) {
 				},
 			},
 			expectedGroup: &antreatypes.Group{
-				UID:  "uidD",
-				Name: "cgD",
+				UID: "uidD",
+				SourceReference: &controlplane.GroupReference{
+					Name: "cgD",
+					UID:  "uidD",
+				},
 				IPBlocks: []controlplane.IPBlock{
 					{
 						CIDR:   *cidrIPNet,
@@ -272,8 +302,11 @@ func TestUpdateClusterGroup(t *testing.T) {
 				},
 			},
 			expectedGroup: &antreatypes.Group{
-				UID:      "uidA",
-				Name:     "cgA",
+				UID: "uidA",
+				SourceReference: &controlplane.GroupReference{
+					Name: "cgA",
+					UID:  "uidA",
+				},
 				Selector: antreatypes.NewGroupSelector("", nil, &selectorB, nil, nil),
 			},
 		},
@@ -286,8 +319,11 @@ func TestUpdateClusterGroup(t *testing.T) {
 				},
 			},
 			expectedGroup: &antreatypes.Group{
-				UID:      "uidA",
-				Name:     "cgA",
+				UID: "uidA",
+				SourceReference: &controlplane.GroupReference{
+					Name: "cgA",
+					UID:  "uidA",
+				},
 				Selector: antreatypes.NewGroupSelector("", &selectorC, nil, nil, nil),
 			},
 		},
@@ -301,8 +337,11 @@ func TestUpdateClusterGroup(t *testing.T) {
 				},
 			},
 			expectedGroup: &antreatypes.Group{
-				UID:      "uidA",
-				Name:     "cgA",
+				UID: "uidA",
+				SourceReference: &controlplane.GroupReference{
+					Name: "cgA",
+					UID:  "uidA",
+				},
 				Selector: antreatypes.NewGroupSelector("", &selectorC, &selectorD, nil, nil),
 			},
 		},
@@ -319,8 +358,11 @@ func TestUpdateClusterGroup(t *testing.T) {
 				},
 			},
 			expectedGroup: &antreatypes.Group{
-				UID:  "uidA",
-				Name: "cgA",
+				UID: "uidA",
+				SourceReference: &controlplane.GroupReference{
+					Name: "cgA",
+					UID:  "uidA",
+				},
 				IPBlocks: []controlplane.IPBlock{
 					{
 						CIDR:   *cidrIPNet,
@@ -341,8 +383,11 @@ func TestUpdateClusterGroup(t *testing.T) {
 				},
 			},
 			expectedGroup: &antreatypes.Group{
-				UID:  "uidA",
-				Name: "cgA",
+				UID: "uidA",
+				SourceReference: &controlplane.GroupReference{
+					Name: "cgA",
+					UID:  "uidA",
+				},
 				ServiceReference: &controlplane.ServiceReference{
 					Name:      "test-svc",
 					Namespace: "test-ns",
@@ -358,8 +403,11 @@ func TestUpdateClusterGroup(t *testing.T) {
 				},
 			},
 			expectedGroup: &antreatypes.Group{
-				UID:         "uidA",
-				Name:        "cgA",
+				UID: "uidA",
+				SourceReference: &controlplane.GroupReference{
+					Name: "cgA",
+					UID:  "uidA",
+				},
 				ChildGroups: []string{"cgB", "cgC"},
 			},
 		},
@@ -393,7 +441,7 @@ func TestDeleteCG(t *testing.T) {
 	assert.False(t, found, "expected internal Group to be deleted")
 }
 
-func TestGroupMembersComputedConditionEqual(t *testing.T) {
+func TestClusterClusterGroupMembersComputedConditionEqual(t *testing.T) {
 	tests := []struct {
 		name          string
 		existingConds []crdv1alpha3.GroupCondition
@@ -468,16 +516,22 @@ func TestFilterInternalGroupsForService(t *testing.T) {
 		},
 	}
 	grp1 := &antreatypes.Group{
-		UID:  "uid1",
-		Name: "cgA",
+		UID: "uid1",
+		SourceReference: &controlplane.GroupReference{
+			Name: "cgA",
+			UID:  "uid1",
+		},
 		ServiceReference: &controlplane.ServiceReference{
 			Name:      "svc1",
 			Namespace: metav1.NamespaceDefault,
 		},
 	}
 	grp2 := &antreatypes.Group{
-		UID:  "uid2",
-		Name: "cgB",
+		UID: "uid2",
+		SourceReference: &controlplane.GroupReference{
+			Name: "cgB",
+			UID:  "uid1",
+		},
 		ServiceReference: &controlplane.ServiceReference{
 			Name:      "svc1",
 			Namespace: metav1.NamespaceDefault,
@@ -485,8 +539,11 @@ func TestFilterInternalGroupsForService(t *testing.T) {
 		Selector: antreatypes.NewGroupSelector(metav1.NamespaceDefault, &selectorSpec, nil, nil, nil),
 	}
 	grp3 := &antreatypes.Group{
-		UID:  "uid3",
-		Name: "cgC",
+		UID: "uid3",
+		SourceReference: &controlplane.GroupReference{
+			Name: "cgC",
+			UID:  "uid3",
+		},
 		ServiceReference: &controlplane.ServiceReference{
 			Name:      "svc2",
 			Namespace: "test",
@@ -495,8 +552,11 @@ func TestFilterInternalGroupsForService(t *testing.T) {
 		Selector: antreatypes.NewGroupSelector("test", nil, nil, nil, nil),
 	}
 	grp4 := &antreatypes.Group{
-		UID:  "uid4",
-		Name: "cgD",
+		UID: "uid4",
+		SourceReference: &controlplane.GroupReference{
+			Name: "cgD",
+			UID:  "uid4",
+		},
 		ServiceReference: &controlplane.ServiceReference{
 			Name: "svc3",
 		},
@@ -565,24 +625,33 @@ func TestServiceToGroupSelector(t *testing.T) {
 	}
 
 	grp1 := &antreatypes.Group{
-		UID:  "uid1",
-		Name: "cgA",
+		UID: "uid1",
+		SourceReference: &controlplane.GroupReference{
+			Name: "cgA",
+			UID:  "uid1",
+		},
 		ServiceReference: &controlplane.ServiceReference{
 			Name:      "svc1",
 			Namespace: metav1.NamespaceDefault,
 		},
 	}
 	grp2 := &antreatypes.Group{
-		UID:  "uid2",
-		Name: "cgB",
+		UID: "uid2",
+		SourceReference: &controlplane.GroupReference{
+			Name: "cg2",
+			UID:  "uidB",
+		},
 		ServiceReference: &controlplane.ServiceReference{
 			Name:      "svc2",
 			Namespace: "test",
 		},
 	}
 	grp3 := &antreatypes.Group{
-		UID:  "uid3",
-		Name: "cgC",
+		UID: "uid3",
+		SourceReference: &controlplane.GroupReference{
+			Name: "cgC",
+			UID:  "uid3",
+		},
 		ServiceReference: &controlplane.ServiceReference{
 			Name:      "svc3",
 			Namespace: "test",
@@ -704,33 +773,51 @@ var externalEntities = []*crdv1alpha2.ExternalEntity{
 
 var groups = []antreatypes.Group{
 	{
-		UID:      "groupUID0",
-		Name:     "group0",
+		UID: "groupUID0",
+		SourceReference: &controlplane.GroupReference{
+			Name: "group0",
+			UID:  "groupUID0",
+		},
 		Selector: antreatypes.NewGroupSelector("test-ns", &metav1.LabelSelector{MatchLabels: map[string]string{"app": "foo"}}, nil, nil, nil),
 	},
 	{
-		UID:      "groupUID1",
-		Name:     "group1",
+		UID: "groupUID1",
+		SourceReference: &controlplane.GroupReference{
+			Name: "group1",
+			UID:  "groupUID1",
+		},
 		Selector: antreatypes.NewGroupSelector("test-ns", nil, nil, nil, nil),
 	},
 	{
-		UID:      "groupUID2",
-		Name:     "group2",
+		UID: "groupUID2",
+		SourceReference: &controlplane.GroupReference{
+			Name: "group2",
+			UID:  "groupUID2",
+		},
 		Selector: antreatypes.NewGroupSelector("test-ns", &metav1.LabelSelector{MatchLabels: map[string]string{"app": "other"}}, nil, nil, nil),
 	},
 	{
-		UID:         "groupUID3",
-		Name:        "group3",
+		UID: "groupUID3",
+		SourceReference: &controlplane.GroupReference{
+			Name: "group3",
+			UID:  "groupUID3",
+		},
 		ChildGroups: []string{"group0", "group1"},
 	},
 	{
-		UID:         "groupUID4",
-		Name:        "group4",
+		UID: "groupUID4",
+		SourceReference: &controlplane.GroupReference{
+			Name: "group4",
+			UID:  "groupUID4",
+		},
 		ChildGroups: []string{"group0", "group2"},
 	},
 	{
-		UID:         "groupUID5",
-		Name:        "group5",
+		UID: "groupUID5",
+		SourceReference: &controlplane.GroupReference{
+			Name: "group5",
+			UID:  "groupUID5",
+		},
 		ChildGroups: []string{"group1", "group2"},
 	},
 }
@@ -777,7 +864,7 @@ func TestGetAssociatedGroups(t *testing.T) {
 			for i, g := range tt.existingGroups {
 				npc.internalGroupStore.Create(&tt.existingGroups[i])
 				if g.Selector != nil {
-					npc.groupingInterface.AddGroup(clusterGroupType, g.Name, g.Selector)
+					npc.groupingInterface.AddGroup(internalGroupType, g.SourceReference.Name, g.Selector)
 				}
 			}
 			groups, err := npc.GetAssociatedGroups(tt.queryName, tt.queryNamespace)
@@ -824,8 +911,8 @@ func TestGetGroupMembers(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			npc.internalGroupStore.Create(&tt.group)
-			npc.groupingInterface.AddGroup(clusterGroupType, tt.group.Name, tt.group.Selector)
-			members, _, err := npc.GetGroupMembers(tt.group.Name)
+			npc.groupingInterface.AddGroup(internalGroupType, tt.group.SourceReference.Name, tt.group.Selector)
+			members, _, err := npc.GetGroupMembers(tt.group.SourceReference.Name)
 			assert.Equal(t, nil, err)
 			assert.Equal(t, tt.expectedMembers, members)
 		})
@@ -946,8 +1033,11 @@ func TestSyncInternalGroup(t *testing.T) {
 	assert.Equal(t, expectedInternalNetworkPolicy2, actualInternalNetworkPolicy2)
 
 	expectedInternalGroup := &antreatypes.Group{
-		UID:             cgUID,
-		Name:            cgName,
+		UID: cgUID,
+		SourceReference: &controlplane.GroupReference{
+			Name: cgName,
+			UID:  cgUID,
+		},
 		Selector:        antreatypes.NewGroupSelector("", nil, &selectorA, nil, nil),
 		MembersComputed: corev1.ConditionTrue,
 	}
@@ -980,4 +1070,30 @@ func TestSyncInternalGroup(t *testing.T) {
 
 	_, exists, _ = npc.addressGroupStore.Get(cgName)
 	require.False(t, exists, "The AddressGroup for the ClusterGroup should be deleted when it's no longer referenced by any ClusterNetworkPolicy")
+}
+
+func TestGetClusterGroupSourceRef(t *testing.T) {
+	tests := []struct {
+		name        string
+		group       *crdv1alpha3.ClusterGroup
+		expectedRef *controlplane.GroupReference
+	}{
+		{
+			name: "cg-ref",
+			group: &crdv1alpha3.ClusterGroup{
+				ObjectMeta: metav1.ObjectMeta{Name: "cgA", UID: "uidA"},
+			},
+			expectedRef: &controlplane.GroupReference{
+				Name:      "cgA",
+				Namespace: "",
+				UID:       "uidA",
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			actualRef := getClusterGroupSourceRef(tt.group)
+			assert.Equal(t, tt.expectedRef, actualRef)
+		})
+	}
 }

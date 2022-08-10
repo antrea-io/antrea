@@ -65,6 +65,21 @@ webhooks:
     admissionReviewVersions: ["v1", "v1beta1"]
     sideEffects: None
     timeoutSeconds: 5
+  - name: "groupvalidator.antrea.io"
+    clientConfig:
+      service:
+        name: "antrea"
+        namespace: "kube-system"
+        path: "/validate/group"
+    rules:
+      - operations: [ "CREATE", "UPDATE" ]
+        apiGroups: [ "crd.antrea.io" ]
+        apiVersions: [ "v1alpha3" ]
+        resources: [ "groups" ]
+        scope: "Namespaced"
+    admissionReviewVersions: [ "v1", "v1beta1" ]
+    sideEffects: None
+    timeoutSeconds: 5
   - name: "externalippoolvalidator.antrea.io"
     clientConfig:
       service:
