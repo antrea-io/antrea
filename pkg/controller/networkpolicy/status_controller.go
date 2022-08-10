@@ -111,7 +111,7 @@ func NewStatusController(antreaClient antreaclientset.Interface, internalNetwork
 func (c *StatusController) updateCNP(old, cur interface{}) {
 	curCNP := cur.(*crdv1alpha1.ClusterNetworkPolicy)
 	oldCNP := old.(*crdv1alpha1.ClusterNetworkPolicy)
-	if CompareNetworkPolicyStatus(oldCNP.Status, curCNP.Status) {
+	if NetworkPolicyStatusEqual(oldCNP.Status, curCNP.Status) {
 		return
 	}
 	key := internalNetworkPolicyKeyFunc(oldCNP)
@@ -121,7 +121,7 @@ func (c *StatusController) updateCNP(old, cur interface{}) {
 func (c *StatusController) updateANP(old, cur interface{}) {
 	curANP := cur.(*crdv1alpha1.NetworkPolicy)
 	oldANP := old.(*crdv1alpha1.NetworkPolicy)
-	if CompareNetworkPolicyStatus(oldANP.Status, curANP.Status) {
+	if NetworkPolicyStatusEqual(oldANP.Status, curANP.Status) {
 		return
 	}
 	key := internalNetworkPolicyKeyFunc(oldANP)
@@ -274,7 +274,7 @@ func (c *StatusController) syncHandler(key string) error {
 		status := &crdv1alpha1.NetworkPolicyStatus{
 			Phase:              crdv1alpha1.NetworkPolicyPending,
 			ObservedGeneration: internalNP.Generation,
-			Conditions:         GenerateNetworkPolicyCondition(""),
+			Conditions:         GenerateNetworkPolicyCondition(nil),
 		}
 		if internalNP.SourceRef.Type == controlplane.AntreaNetworkPolicy {
 			return c.npControlInterface.UpdateAntreaNetworkPolicyStatus(internalNP.SourceRef.Namespace, internalNP.SourceRef.Name, status)
@@ -284,13 +284,12 @@ func (c *StatusController) syncHandler(key string) error {
 
 	// It means the NetworkPolicy has been processed, and marked as unrealizable. It will enter unrealizable phase
 	// instead of being further realized. Antrea-agents will not process further.
-	if internalNP.RealizableMessage != "" {
+	if internalNP.RealizationError != nil {
 		status := &crdv1alpha1.NetworkPolicyStatus{
 			Phase:              crdv1alpha1.NetworkPolicyPending,
 			ObservedGeneration: internalNP.Generation,
-			Conditions:         GenerateNetworkPolicyCondition(internalNP.RealizableMessage),
+			Conditions:         GenerateNetworkPolicyCondition(internalNP.RealizationError),
 		}
-		internalNP.SpanMeta.NodeNames = nil
 		if internalNP.SourceRef.Type == controlplane.AntreaNetworkPolicy {
 			return c.npControlInterface.UpdateAntreaNetworkPolicyStatus(internalNP.SourceRef.Namespace, internalNP.SourceRef.Name, status)
 		}
@@ -321,7 +320,7 @@ func (c *StatusController) syncHandler(key string) error {
 		ObservedGeneration:   internalNP.Generation,
 		CurrentNodesRealized: int32(currentNodes),
 		DesiredNodesRealized: int32(desiredNodes),
-		Conditions:           GenerateNetworkPolicyCondition(""),
+		Conditions:           GenerateNetworkPolicyCondition(nil),
 	}
 	klog.V(2).Infof("Updating NetworkPolicy %s status: %v", internalNP.SourceRef.ToString(), status)
 	if internalNP.SourceRef.Type == controlplane.AntreaNetworkPolicy {
@@ -349,7 +348,7 @@ func (c *networkPolicyControl) UpdateAntreaNetworkPolicyStatus(namespace, name s
 		klog.Infof("Didn't find the original Antrea NetworkPolicy %s/%s, skip updating status", namespace, name)
 		return nil
 	}
-	if CompareNetworkPolicyStatus(anp.Status, *status) {
+	if NetworkPolicyStatusEqual(anp.Status, *status) {
 		return nil
 	}
 
@@ -382,7 +381,7 @@ func (c *networkPolicyControl) UpdateAntreaClusterNetworkPolicyStatus(name strin
 		return nil
 	}
 	// If the current status equals to the desired status, no need to update.
-	if CompareNetworkPolicyStatus(cnp.Status, *status) {
+	if NetworkPolicyStatusEqual(cnp.Status, *status) {
 		return nil
 	}
 
@@ -408,25 +407,25 @@ func (c *networkPolicyControl) UpdateAntreaClusterNetworkPolicyStatus(name strin
 	return updateErr
 }
 
-// GenerateNetworkPolicyCondition generates conditions based on the given error message.
-// Empty error message generates stale NetworkPolicyCondition of True status.
+// GenerateNetworkPolicyCondition generates conditions based on the given error type.
+// Error of nil type means the NetworkPolicyCondition status is True.
 // Supports ErrNetworkPolicyAppliedToUnsupportedGroup error.
-func GenerateNetworkPolicyCondition(message string) []crdv1alpha1.NetworkPolicyCondition {
+func GenerateNetworkPolicyCondition(err error) []crdv1alpha1.NetworkPolicyCondition {
 	var conditions []crdv1alpha1.NetworkPolicyCondition
-	switch message {
-	case "":
+	switch err.(type) {
+	case nil:
 		conditions = append(conditions, crdv1alpha1.NetworkPolicyCondition{
 			Type:               crdv1alpha1.NetworkPolicyConditionRealizable,
 			Status:             v1.ConditionTrue,
 			LastTransitionTime: v1.Now(),
 		})
-	case ErrNetworkPolicyAppliedToUnsupportedGroup.Error():
+	case ErrNetworkPolicyAppliedToUnsupportedGroup:
 		conditions = append(conditions, crdv1alpha1.NetworkPolicyCondition{
 			Type:               crdv1alpha1.NetworkPolicyConditionRealizable,
 			Status:             v1.ConditionFalse,
 			LastTransitionTime: v1.Now(),
 			Reason:             "NetworkPolicyAppliedToUnsupportedGroup",
-			Message:            message,
+			Message:            err.Error(),
 		})
 	}
 	return conditions

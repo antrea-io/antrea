@@ -163,14 +163,14 @@ func TestCreateAntreaNetworkPolicy(t *testing.T) {
 				ObservedGeneration:   1,
 				CurrentNodesRealized: 0,
 				DesiredNodesRealized: 2,
-				Conditions:           GenerateNetworkPolicyCondition(""),
+				Conditions:           GenerateNetworkPolicyCondition(nil),
 			},
 			expectedCNPStatus: &crdv1alpha1.NetworkPolicyStatus{
 				Phase:                crdv1alpha1.NetworkPolicyRealizing,
 				ObservedGeneration:   1,
 				CurrentNodesRealized: 0,
 				DesiredNodesRealized: 2,
-				Conditions:           GenerateNetworkPolicyCondition(""),
+				Conditions:           GenerateNetworkPolicyCondition(nil),
 			},
 		},
 		{
@@ -190,14 +190,14 @@ func TestCreateAntreaNetworkPolicy(t *testing.T) {
 				ObservedGeneration:   2,
 				CurrentNodesRealized: 1,
 				DesiredNodesRealized: 2,
-				Conditions:           GenerateNetworkPolicyCondition(""),
+				Conditions:           GenerateNetworkPolicyCondition(nil),
 			},
 			expectedCNPStatus: &crdv1alpha1.NetworkPolicyStatus{
 				Phase:                crdv1alpha1.NetworkPolicyRealizing,
 				ObservedGeneration:   3,
 				CurrentNodesRealized: 1,
 				DesiredNodesRealized: 2,
-				Conditions:           GenerateNetworkPolicyCondition(""),
+				Conditions:           GenerateNetworkPolicyCondition(nil),
 			},
 		},
 		{
@@ -217,14 +217,14 @@ func TestCreateAntreaNetworkPolicy(t *testing.T) {
 				ObservedGeneration:   3,
 				CurrentNodesRealized: 2,
 				DesiredNodesRealized: 2,
-				Conditions:           GenerateNetworkPolicyCondition(""),
+				Conditions:           GenerateNetworkPolicyCondition(nil),
 			},
 			expectedCNPStatus: &crdv1alpha1.NetworkPolicyStatus{
 				Phase:                crdv1alpha1.NetworkPolicyRealized,
 				ObservedGeneration:   4,
 				CurrentNodesRealized: 2,
 				DesiredNodesRealized: 2,
-				Conditions:           GenerateNetworkPolicyCondition(""),
+				Conditions:           GenerateNetworkPolicyCondition(nil),
 			},
 		},
 	}
@@ -249,8 +249,8 @@ func TestCreateAntreaNetworkPolicy(t *testing.T) {
 
 			// TODO: Use a determinate mechanism.
 			time.Sleep(500 * time.Millisecond)
-			assert.True(t, CompareNetworkPolicyStatus(*tt.expectedANPStatus, *networkPolicyControl.getAntreaNetworkPolicyStatus()))
-			assert.True(t, CompareNetworkPolicyStatus(*tt.expectedCNPStatus, *networkPolicyControl.getAntreaClusterNetworkPolicyStatus()))
+			assert.True(t, NetworkPolicyStatusEqual(*tt.expectedANPStatus, *networkPolicyControl.getAntreaNetworkPolicyStatus()))
+			assert.True(t, NetworkPolicyStatusEqual(*tt.expectedCNPStatus, *networkPolicyControl.getAntreaClusterNetworkPolicyStatus()))
 		})
 	}
 }
@@ -273,19 +273,19 @@ func TestUpdateAntreaNetworkPolicy(t *testing.T) {
 	statusController.UpdateStatus(newNetworkPolicyStatus("cnp1", "node5", 2))
 	// TODO: Use a determinate mechanism.
 	time.Sleep(500 * time.Millisecond)
-	assert.True(t, CompareNetworkPolicyStatus(crdv1alpha1.NetworkPolicyStatus{
+	assert.True(t, NetworkPolicyStatusEqual(crdv1alpha1.NetworkPolicyStatus{
 		Phase:                crdv1alpha1.NetworkPolicyRealized,
 		ObservedGeneration:   1,
 		CurrentNodesRealized: 2,
 		DesiredNodesRealized: 2,
-		Conditions:           GenerateNetworkPolicyCondition(""),
+		Conditions:           GenerateNetworkPolicyCondition(nil),
 	}, *networkPolicyControl.getAntreaNetworkPolicyStatus()))
-	assert.True(t, CompareNetworkPolicyStatus(crdv1alpha1.NetworkPolicyStatus{
+	assert.True(t, NetworkPolicyStatusEqual(crdv1alpha1.NetworkPolicyStatus{
 		Phase:                crdv1alpha1.NetworkPolicyRealized,
 		ObservedGeneration:   2,
 		CurrentNodesRealized: 3,
 		DesiredNodesRealized: 3,
-		Conditions:           GenerateNetworkPolicyCondition(""),
+		Conditions:           GenerateNetworkPolicyCondition(nil),
 	}, *networkPolicyControl.getAntreaClusterNetworkPolicyStatus()))
 
 	anp1Updated := newInternalNetworkPolicy("anp1", 2, []string{"node1", "node2", "node3"}, newAntreaNetworkPolicyReference("ns1", "anp1"))
@@ -294,19 +294,19 @@ func TestUpdateAntreaNetworkPolicy(t *testing.T) {
 	networkPolicyStore.Update(cnp1Updated)
 	// TODO: Use a determinate mechanism.
 	time.Sleep(500 * time.Millisecond)
-	assert.True(t, CompareNetworkPolicyStatus(crdv1alpha1.NetworkPolicyStatus{
+	assert.True(t, NetworkPolicyStatusEqual(crdv1alpha1.NetworkPolicyStatus{
 		Phase:                crdv1alpha1.NetworkPolicyRealizing,
 		ObservedGeneration:   2,
 		CurrentNodesRealized: 0,
 		DesiredNodesRealized: 3,
-		Conditions:           GenerateNetworkPolicyCondition(""),
+		Conditions:           GenerateNetworkPolicyCondition(nil),
 	}, *networkPolicyControl.getAntreaNetworkPolicyStatus()))
-	assert.True(t, CompareNetworkPolicyStatus(crdv1alpha1.NetworkPolicyStatus{
+	assert.True(t, NetworkPolicyStatusEqual(crdv1alpha1.NetworkPolicyStatus{
 		Phase:                crdv1alpha1.NetworkPolicyRealizing,
 		ObservedGeneration:   3,
 		CurrentNodesRealized: 0,
 		DesiredNodesRealized: 2,
-		Conditions:           GenerateNetworkPolicyCondition(""),
+		Conditions:           GenerateNetworkPolicyCondition(nil),
 	}, *networkPolicyControl.getAntreaClusterNetworkPolicyStatus()))
 }
 

@@ -266,7 +266,7 @@ func (n *NetworkPolicyController) updateGroupStatus(g *crdv1alpha3.Group, cStatu
 		Status: cStatus,
 		Type:   crdv1alpha3.GroupMembersComputed,
 	}
-	if compareGroupMembersComputedConditionEqual(g.Status.Conditions, condStatus) {
+	if groupMembersComputedConditionEqual(g.Status.Conditions, condStatus) {
 		// There is no change in conditions.
 		return nil
 	}

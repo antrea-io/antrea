@@ -15,7 +15,7 @@
 package networkpolicy
 
 import (
-	"errors"
+	"fmt"
 
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/tools/cache"
@@ -25,9 +25,6 @@ import (
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	antreatypes "antrea.io/antrea/pkg/controller/types"
 )
-
-// ErrNetworkPolicyAppliedToUnsupportedGroup is one of the unrealizable conditions of an internal Network Policy.
-var ErrNetworkPolicyAppliedToUnsupportedGroup = errors.New("group with IPBlocks or NamespaceSelector can not be used as AppliedTo")
 
 // addANP receives AntreaNetworkPolicy ADD events and creates resources
 // which can be consumed by agents to configure corresponding rules on the Nodes.
@@ -143,10 +140,10 @@ func (n *NetworkPolicyController) processAntreaNetworkPolicy(np *crdv1alpha1.Net
 				Name:      np.Name,
 				UID:       np.UID,
 			},
-			Name:              internalNetworkPolicyKeyFunc(np),
-			UID:               np.UID,
-			Generation:        np.Generation,
-			RealizableMessage: err.Error(),
+			Name:             internalNetworkPolicyKeyFunc(np),
+			UID:              np.UID,
+			Generation:       np.Generation,
+			RealizationError: err,
 		}
 	}
 	// Create AppliedToGroup for each AppliedTo present in AntreaNetworkPolicy spec.
@@ -241,6 +238,17 @@ func (n *NetworkPolicyController) processAppliedTo(namespace string, appliedTo [
 	return appliedToGroupNames, nil
 }
 
+// ErrNetworkPolicyAppliedToUnsupportedGroup is an error response when
+// a Group with IPBlocks or NamespaceSelector is used as AppliedTo.
+type ErrNetworkPolicyAppliedToUnsupportedGroup struct {
+	namespace string
+	groupName string
+}
+
+func (e ErrNetworkPolicyAppliedToUnsupportedGroup) Error() string {
+	return fmt.Sprintf("group %s/%s with IPBlocks or NamespaceSelector can not be used as AppliedTo", e.namespace, e.groupName)
+}
+
 func (n *NetworkPolicyController) processAppliedToGroupForNamespacedGroup(namespace, groupName string) (string, error) {
 	// Retrieve Group for corresponding entry in the AppliedToGroup.
 	g, err := n.grpLister.Groups(namespace).Get(groupName)
@@ -260,7 +268,7 @@ func (n *NetworkPolicyController) processAppliedToGroupForNamespacedGroup(namesp
 	intGrp := ig.(*antreatypes.Group)
 	if len(intGrp.IPBlocks) > 0 || (intGrp.Selector != nil && intGrp.Selector.NamespaceSelector != nil) {
 		klog.V(2).InfoS("Group with IPBlocks or NamespaceSelector can not be used as AppliedTo", "Group", g)
-		return "", ErrNetworkPolicyAppliedToUnsupportedGroup
+		return "", ErrNetworkPolicyAppliedToUnsupportedGroup{namespace: namespace, groupName: groupName}
 	}
 	return n.createAppliedToGroupForInternalGroup(intGrp), nil
 }

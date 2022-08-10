@@ -108,7 +108,7 @@ type NetworkPolicy struct {
 	// to re-calculate affected Namespaces.
 	// It is set only for AntreaClusterNetworkPolicies with per-namespace rules.
 	PerNamespaceSelectors []labels.Selector
-	// RealizableMessage stores realizable information of the internal Network Policy.
+	// RealizationError stores realization error of the internal Network Policy.
 	// It is set when processing the original Network Policy.
-	RealizableMessage string
+	RealizationError error
 }

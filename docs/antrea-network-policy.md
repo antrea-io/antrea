@@ -1626,11 +1626,11 @@ restrictions.
   Antrea NetworkPolicy is Namespace scoped. For example, the
   `test-grp-with-namespace` Group in the [sample](#group-crd) cannot be
   used by Antrea NetworkPolicy `appliedTo`.
-- Antrea will not validate the referenced Group resources; if the convention is
-  violated in the Antrea NetworkPolicy's `appliedTo` section or for any of the rules'
-  `appliedTo`, then Antrea will report a condition of type `Realizable` in the
-  NetworkPolicy status with `False` status, `NetworkPolicyAppliedToUnsupportedGroup`
-  reason and a detailed message.
+- Antrea will not validate the referenced Group resources for the `appliedTo` convention;
+  if the convention is violated in the Antrea NetworkPolicy's `appliedTo` section
+  or for any of the rules' `appliedTo`, then Antrea will report a condition
+  `Realizable=False` in the NetworkPolicy status, the condition includes
+  `NetworkPolicyAppliedToUnsupportedGroup` reason and a detailed message.
 - `childGroups` only accepts strings, and they will be considered as names of
   the Groups and will be looked up in the policy's own Namespace. For example, if
   child Group `child-0` exists in `ns-2`, it should not be added as a child Group for

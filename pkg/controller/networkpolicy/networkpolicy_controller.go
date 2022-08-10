@@ -1492,7 +1492,7 @@ func (n *NetworkPolicyController) syncInternalNetworkPolicy(key string) error {
 		PerNamespaceSelectors: internalNP.PerNamespaceSelectors,
 		SpanMeta:              antreatypes.SpanMeta{NodeNames: nodeNames},
 		Generation:            internalNP.Generation,
-		RealizableMessage:     internalNP.RealizableMessage,
+		RealizationError:      internalNP.RealizationError,
 	}
 	klog.V(4).Infof("Updating internal NetworkPolicy %s with %d Nodes", key, nodeNames.Len())
 	n.internalNetworkPolicyStore.Update(updatedNetworkPolicy)

@@ -295,7 +295,7 @@ func (c *NetworkPolicyController) updateClusterGroupStatus(cg *crdv1alpha3.Clust
 		Status: cStatus,
 		Type:   crdv1alpha3.GroupMembersComputed,
 	}
-	if compareGroupMembersComputedConditionEqual(cg.Status.Conditions, condStatus) {
+	if groupMembersComputedConditionEqual(cg.Status.Conditions, condStatus) {
 		// There is no change in conditions.
 		return nil
 	}

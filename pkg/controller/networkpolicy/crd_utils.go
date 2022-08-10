@@ -52,15 +52,15 @@ var semanticIgnoreLastTransitionTime = conversion.EqualitiesOrDie(
 	},
 )
 
-// CompareNetworkPolicyStatus compares two NetworkPolicyStatus objects, ignoring
-// LastTransitionTime equality in the status Conditions.
-func CompareNetworkPolicyStatus(oldStatus, newStatus v1alpha1.NetworkPolicyStatus) bool {
+// NetworkPolicyStatusEqual compares two NetworkPolicyStatus objects. It disregards
+// the LastTransitionTime field in the status Conditions.
+func NetworkPolicyStatusEqual(oldStatus, newStatus v1alpha1.NetworkPolicyStatus) bool {
 	return semanticIgnoreLastTransitionTime.DeepEqual(oldStatus, newStatus)
 }
 
-// compareGroupMembersComputedConditionEqual checks whether the condition status for GroupMembersComputed condition
+// groupMembersComputedConditionEqual checks whether the condition status for GroupMembersComputed condition
 // is same. Returns true if equal, otherwise returns false. It disregards the lastTransitionTime field.
-func compareGroupMembersComputedConditionEqual(conds []crdv1alpha3.GroupCondition, condition crdv1alpha3.GroupCondition) bool {
+func groupMembersComputedConditionEqual(conds []crdv1alpha3.GroupCondition, condition crdv1alpha3.GroupCondition) bool {
 	for _, c := range conds {
 		if c.Type == crdv1alpha3.GroupMembersComputed {
 			if c.Status == condition.Status {

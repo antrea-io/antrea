@@ -4340,7 +4340,7 @@ func TestAntreaPolicyStatus(t *testing.T) {
 		ObservedGeneration:   1,
 		CurrentNodesRealized: 2,
 		DesiredNodesRealized: 2,
-		Conditions:           networkpolicy.GenerateNetworkPolicyCondition(""),
+		Conditions:           networkpolicy.GenerateNetworkPolicyCondition(nil),
 	}
 	checkANPStatus(t, data, anp, expectedStatus)
 	checkACNPStatus(t, data, acnp, expectedStatus)
@@ -4379,7 +4379,7 @@ func TestAntreaPolicyStatusWithAppliedToPerRule(t *testing.T) {
 		ObservedGeneration:   1,
 		CurrentNodesRealized: 2,
 		DesiredNodesRealized: 2,
-		Conditions:           networkpolicy.GenerateNetworkPolicyCondition(""),
+		Conditions:           networkpolicy.GenerateNetworkPolicyCondition(nil),
 	})
 
 	// Remove the second ingress rule.
@@ -4391,7 +4391,7 @@ func TestAntreaPolicyStatusWithAppliedToPerRule(t *testing.T) {
 		ObservedGeneration:   2,
 		CurrentNodesRealized: 1,
 		DesiredNodesRealized: 1,
-		Conditions:           networkpolicy.GenerateNetworkPolicyCondition(""),
+		Conditions:           networkpolicy.GenerateNetworkPolicyCondition(nil),
 	})
 }
 
@@ -4402,7 +4402,7 @@ func checkANPStatus(t *testing.T, data *TestData, anp *crdv1alpha1.NetworkPolicy
 		if err != nil {
 			return false, err
 		}
-		return networkpolicy.CompareNetworkPolicyStatus(anp.Status, expectedStatus), nil
+		return networkpolicy.NetworkPolicyStatusEqual(anp.Status, expectedStatus), nil
 	})
 	assert.NoError(t, err, "Antrea NetworkPolicy failed to reach expected status")
 	return anp
@@ -4415,7 +4415,7 @@ func checkACNPStatus(t *testing.T, data *TestData, acnp *crdv1alpha1.ClusterNetw
 		if err != nil {
 			return false, err
 		}
-		return networkpolicy.CompareNetworkPolicyStatus(acnp.Status, expectedStatus), nil
+		return networkpolicy.NetworkPolicyStatusEqual(acnp.Status, expectedStatus), nil
 	})
 	assert.NoError(t, err, "Antrea ClusterNetworkPolicy failed to reach expected status")
 	return acnp

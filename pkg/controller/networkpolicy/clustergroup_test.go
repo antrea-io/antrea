@@ -487,7 +487,7 @@ func TestClusterClusterGroupMembersComputedConditionEqual(t *testing.T) {
 				Type:   crdv1alpha3.GroupMembersComputed,
 				Status: tt.checkStatus,
 			}
-			actualValue := compareGroupMembersComputedConditionEqual(tt.existingConds, inCond)
+			actualValue := groupMembersComputedConditionEqual(tt.existingConds, inCond)
 			assert.Equal(t, tt.expValue, actualValue)
 		})
 	}
