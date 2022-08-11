@@ -322,6 +322,19 @@ spec:
                                 contains only "value". The requirements are ANDed.
                               type: object
                           type: object
+                        service:
+                          description: Select a certain Service which matches the
+                            NamespacedName. A Service can only be set in either policy
+                            level AppliedTo field in a policy that only has ingress
+                            rules or rule level AppliedTo field in an ingress rule.
+                            Only a NodePort Service can be referred by this field.
+                            Cannot be set with any other selector.
+                          properties:
+                            name:
+                              type: string
+                            namespace:
+                              type: string
+                          type: object
                         serviceAccount:
                           description: Select all Pods with the ServiceAccount matched
                             by this field, as workloads in AppliedTo/To/From fields.
@@ -600,6 +613,20 @@ spec:
                                       The requirements are ANDed.
                                     type: object
                                 type: object
+                              service:
+                                description: Select a certain Service which matches
+                                  the NamespacedName. A Service can only be set in
+                                  either policy level AppliedTo field in a policy
+                                  that only has ingress rules or rule level AppliedTo
+                                  field in an ingress rule. Only a NodePort Service
+                                  can be referred by this field. Cannot be set with
+                                  any other selector.
+                                properties:
+                                  name:
+                                    type: string
+                                  namespace:
+                                    type: string
+                                type: object
                               serviceAccount:
                                 description: Select all Pods with the ServiceAccount
                                   matched by this field, as workloads in AppliedTo/To/From
@@ -869,6 +896,20 @@ spec:
                                       and the values array contains only "value".
                                       The requirements are ANDed.
                                     type: object
+                                type: object
+                              service:
+                                description: Select a certain Service which matches
+                                  the NamespacedName. A Service can only be set in
+                                  either policy level AppliedTo field in a policy
+                                  that only has ingress rules or rule level AppliedTo
+                                  field in an ingress rule. Only a NodePort Service
+                                  can be referred by this field. Cannot be set with
+                                  any other selector.
+                                properties:
+                                  name:
+                                    type: string
+                                  namespace:
+                                    type: string
                                 type: object
                               serviceAccount:
                                 description: Select all Pods with the ServiceAccount
@@ -1208,6 +1249,20 @@ spec:
                                       and the values array contains only "value".
                                       The requirements are ANDed.
                                     type: object
+                                type: object
+                              service:
+                                description: Select a certain Service which matches
+                                  the NamespacedName. A Service can only be set in
+                                  either policy level AppliedTo field in a policy
+                                  that only has ingress rules or rule level AppliedTo
+                                  field in an ingress rule. Only a NodePort Service
+                                  can be referred by this field. Cannot be set with
+                                  any other selector.
+                                properties:
+                                  name:
+                                    type: string
+                                  namespace:
+                                    type: string
                                 type: object
                               serviceAccount:
                                 description: Select all Pods with the ServiceAccount
@@ -1508,6 +1563,20 @@ spec:
                                       The requirements are ANDed.
                                     type: object
                                 type: object
+                              service:
+                                description: Select a certain Service which matches
+                                  the NamespacedName. A Service can only be set in
+                                  either policy level AppliedTo field in a policy
+                                  that only has ingress rules or rule level AppliedTo
+                                  field in an ingress rule. Only a NodePort Service
+                                  can be referred by this field. Cannot be set with
+                                  any other selector.
+                                properties:
+                                  name:
+                                    type: string
+                                  namespace:
+                                    type: string
+                                type: object
                               serviceAccount:
                                 description: Select all Pods with the ServiceAccount
                                   matched by this field, as workloads in AppliedTo/To/From
@@ -1777,6 +1846,20 @@ spec:
                                       and the values array contains only "value".
                                       The requirements are ANDed.
                                     type: object
+                                type: object
+                              service:
+                                description: Select a certain Service which matches
+                                  the NamespacedName. A Service can only be set in
+                                  either policy level AppliedTo field in a policy
+                                  that only has ingress rules or rule level AppliedTo
+                                  field in an ingress rule. Only a NodePort Service
+                                  can be referred by this field. Cannot be set with
+                                  any other selector.
+                                properties:
+                                  name:
+                                    type: string
+                                  namespace:
+                                    type: string
                                 type: object
                               serviceAccount:
                                 description: Select all Pods with the ServiceAccount
@@ -2116,6 +2199,20 @@ spec:
                                       and the values array contains only "value".
                                       The requirements are ANDed.
                                     type: object
+                                type: object
+                              service:
+                                description: Select a certain Service which matches
+                                  the NamespacedName. A Service can only be set in
+                                  either policy level AppliedTo field in a policy
+                                  that only has ingress rules or rule level AppliedTo
+                                  field in an ingress rule. Only a NodePort Service
+                                  can be referred by this field. Cannot be set with
+                                  any other selector.
+                                properties:
+                                  name:
+                                    type: string
+                                  namespace:
+                                    type: string
                                 type: object
                               serviceAccount:
                                 description: Select all Pods with the ServiceAccount
