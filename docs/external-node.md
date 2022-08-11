@@ -34,7 +34,7 @@ and security on a Non-Kubernetes Node (like a virtual machine or a bare-metal
 server). It supports specifying which network interfaces on the external Node
 are expected to be protected with Antrea NetworkPolicy rules. The virtual machine
 or bare-metal server represented by an `ExternalNode` resource can be either
-Linux or Windows. "external Node" will be used to designate such a virtual
+Linux or Windows. "External Node" will be used to designate such a virtual
 machine or bare-metal server in the rest of this document.
 
 Antrea NetworkPolicies are applied to an external Node by leveraging the
@@ -423,8 +423,8 @@ is deleted by `antrea-controller` when the `ExternalNode` is deleted.
 ### Antrea NetworkPolicy configuration
 
 An Antrea NetworkPolicy is applied to an `ExternalNode` by providing an
-`externalEntitySelector` in the `appliedTo` field. **The `ExternalEntity`
-resource is automatically created for each interface of an `ExternalNode`**.
+`externalEntitySelector` in the `appliedTo` field. The `ExternalEntity`
+resource is automatically created for each interface of an `ExternalNode`.
 `ExternalEntity` resources are used by `antrea-controller` to process the
 NetworkPolicies, and each `antrea-agent` (including those running on external
 Nodes) receives the appropriate internal AntreaNetworkPolicy objects.
@@ -511,11 +511,11 @@ port is output to the uplink.
 
 A new OpenFlow pipeline is set up on external Nodes to process IP packets.
 Antrea NetworkPolicy enforcement is the major function in this new pipeline, and
-the OpenFlow tables used are similar to the Pod pipeline. **No L3 routing is
-provided on an external Node**, and a simple L2 forwarding policy is
-implemented. OVS connection tracking is used to assist the NetworkPolicy function;
-as a result only the first packet is validated by the OpenFlow entries, and the
-subsequent packets in an accepted connection are allowed directly.
+the OpenFlow tables used are similar to the Pod pipeline. No L3 routing is
+provided on an external Node, and a simple L2 forwarding policy is implemented.
+OVS connection tracking is used to assist the NetworkPolicy function; as a result
+only the first packet is validated by the OpenFlow entries, and the subsequent
+packets in an accepted connection are allowed directly.
 
 - Egress/Ingress Tables
 
