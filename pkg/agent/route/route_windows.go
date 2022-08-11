@@ -387,7 +387,7 @@ func (c *Client) DeleteSNATRule(mark uint32) error {
 
 // TODO: nodePortAddresses is not supported currently.
 func (c *Client) AddNodePort(nodePortAddresses []net.IP, port uint16, protocol binding.Protocol) error {
-	return util.ReplaceNetNatStaticMapping(antreaNatNodePort, "0.0.0.0", port, config.VirtualServiceIPv4.String(), port, string(protocol))
+	return util.ReplaceNetNatStaticMapping(antreaNatNodePort, "0.0.0.0", port, config.VirtualNodePortDNATIPv4.String(), port, string(protocol))
 }
 
 func (c *Client) DeleteNodePort(nodePortAddresses []net.IP, port uint16, protocol binding.Protocol) error {
