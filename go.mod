@@ -190,7 +190,3 @@ require (
 	sigs.k8s.io/structured-merge-diff/v4 v4.2.1 // indirect
 	sigs.k8s.io/yaml v1.3.0 // indirect
 )
-
-// Newer version of github.com/googleapis/gnostic make use of newer gopkg.in/yaml(v3), which conflicts with
-// explicit imports of gopkg.in/yaml.v2.
-replace github.com/googleapis/gnostic v0.5.5 => github.com/googleapis/gnostic v0.4.1
