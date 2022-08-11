@@ -29,6 +29,9 @@ import (
 const (
 	defaultToken = "default-member-token"
 
+	// We comment out these ClusterSetJoinConfig fields in the generated
+	// join config file, so they can be populated by command line options of
+	// the "antctl mc join" command.
 	optionalFields = `#clusterID: ""
 #namespace: ""
 # Use the pre-created token Secret.
@@ -84,7 +87,8 @@ func NewInitCommand() *cobra.Command {
 	command.Flags().StringVarP(&o.namespace, "namespace", "n", "", "Namespace of the ClusterSet")
 	command.Flags().StringVarP(&o.clusterSet, "clusterset", "", "", "ClusterSet ID of the leader cluster")
 	command.Flags().StringVarP(&o.clusterID, "clusterid", "", "", "ClusterID of the leader cluster")
-	command.Flags().BoolVarP(&o.createToken, "create-token", "", false, "If specified, a default member token will be created")
+	command.Flags().BoolVarP(&o.createToken, "create-token", "", false, "If specified, a default member token will be created. "+
+		"If the output file is also specified, the token Secret manifest will be saved to the file after the join config.")
 	command.Flags().StringVarP(&o.output, "output-file", "o", "", "Output file to save the member cluster join config")
 
 	return command

@@ -81,7 +81,7 @@ To see the usage examples of this command, you may also run `antctl mc init --he
 ClusterSet and ClusterClaims for the member cluster. Users can use command line options or a config file (which can
 be the output file of the `anctl mc init` command) to specify the ClusterSet join arguments.
 
-When the config file is provided, the command line options may be overwritten by the file. A token is needed for a
+When the config file is provided, the command line options may be overridden by the file. A token is needed for a
 member cluster to access the leader cluster API server. Users can either specify a pre-created token Secret with the
 `--token-secret-name` option, or pass a Secret manifest to create the Secret with either the `--token-secret-file`
 option or the config file.
