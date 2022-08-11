@@ -100,9 +100,6 @@ func TestLeaderClusterSetAdd(t *testing.T) {
 		StatusManager: mockStatusManager,
 	}
 
-	mockStatusManager.EXPECT().AddMember(common.ClusterID("east"))
-	mockStatusManager.EXPECT().AddMember(common.ClusterID("west"))
-
 	req := ctrl.Request{
 		NamespacedName: types.NamespacedName{
 			Namespace: "mcs1",
@@ -142,9 +139,6 @@ func TestLeaderClusterSetUpdate(t *testing.T) {
 	err = fakeRemoteClient.Update(context.TODO(), clusterSet)
 	assert.Equal(t, nil, err)
 
-	mockStatusManager.EXPECT().AddMember(common.ClusterID("north"))
-	mockStatusManager.EXPECT().RemoveMember(common.ClusterID("west"))
-
 	req := ctrl.Request{
 		NamespacedName: types.NamespacedName{
 			Name:      "clusterset1",
@@ -164,9 +158,6 @@ func TestLeaderClusterSetDelete(t *testing.T) {
 	err = fakeRemoteClient.Delete(context.TODO(), clusterSet)
 	assert.Equal(t, nil, err)
 
-	mockStatusManager.EXPECT().RemoveMember(common.ClusterID("east"))
-	mockStatusManager.EXPECT().RemoveMember(common.ClusterID("west"))
-
 	req := ctrl.Request{
 		NamespacedName: types.NamespacedName{
 			Name:      "clusterset1",
@@ -175,6 +166,8 @@ func TestLeaderClusterSetDelete(t *testing.T) {
 	}
 	_, err = leaderClusterSetReconcilerUnderTest.Reconcile(context.Background(), req)
 	assert.Equal(t, nil, err)
+	assert.Equal(t, common.InvalidClusterID, leaderClusterSetReconcilerUnderTest.clusterID)
+	assert.Equal(t, common.InvalidClusterSetID, leaderClusterSetReconcilerUnderTest.clusterSetID)
 }
 
 func TestLeaderClusterStatus(t *testing.T) {
@@ -189,17 +182,10 @@ func TestLeaderClusterStatus(t *testing.T) {
 			Conditions: []mcsv1alpha1.ClusterCondition{
 				{
 					LastTransitionTime: metaTime,
-					Message:            "Member created",
-					Reason:             "NeverConnected",
-					Status:             v1.ConditionUnknown,
+					Message:            "Member Connected",
+					Reason:             "Connected",
+					Status:             v1.ConditionTrue,
 					Type:               mcsv1alpha1.ClusterReady,
-				},
-				{
-					LastTransitionTime: metaTime,
-					Message:            "Member created",
-					Reason:             "NeverConnected",
-					Status:             v1.ConditionFalse,
-					Type:               mcsv1alpha1.ClusterConnected,
 				},
 			},
 		},
@@ -208,15 +194,10 @@ func TestLeaderClusterStatus(t *testing.T) {
 			Conditions: []mcsv1alpha1.ClusterCondition{
 				{
 					LastTransitionTime: metaTime,
-					Status:             v1.ConditionTrue,
-					Type:               mcsv1alpha1.ClusterReady,
-				},
-				{
-					LastTransitionTime: metaTime,
-					Message:            "Local leader cluster is the leader of member: west",
-					Reason:             "IsLeader",
+					Message:            "Member Connected",
+					Reason:             "Disconnected",
 					Status:             v1.ConditionFalse,
-					Type:               mcsv1alpha1.ClusterConnected,
+					Type:               mcsv1alpha1.ClusterReady,
 				},
 			},
 		},

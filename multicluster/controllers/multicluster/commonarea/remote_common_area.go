@@ -23,8 +23,10 @@ import (
 	"time"
 
 	v1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
@@ -41,8 +43,7 @@ const (
 )
 
 var (
-	ReasonDisconnected              = "Disconnected"
-	ReasonConnectionCheckInProgress = "LeaderCheckInProgress"
+	ReasonDisconnected = "Disconnected"
 )
 
 // CommonArea is an interface that provides access to the Common Area of a ClusterSet.
@@ -206,29 +207,21 @@ func GetSecretCACrtAndToken(secretObj *v1.Secret) ([]byte, []byte, error) {
 }
 
 func (r *remoteCommonArea) SendMemberAnnounce() error {
-	memberAnnounceList := &multiclusterv1alpha1.MemberClusterAnnounceList{}
-	if err := r.List(context.TODO(), memberAnnounceList, client.InNamespace(r.GetNamespace())); err != nil {
+	var err error
+	memberAnnounceName := "member-announce-from-" + r.GetLocalClusterID()
+	existingMemberAnnounce := &multiclusterv1alpha1.MemberClusterAnnounce{}
+	if err = r.Get(context.TODO(), types.NamespacedName{
+		Namespace: r.GetNamespace(),
+		Name:      memberAnnounceName,
+	}, existingMemberAnnounce); err != nil && !apierrors.IsNotFound(err) {
 		return err
 	}
-	var localClusterMemberAnnounce multiclusterv1alpha1.MemberClusterAnnounce
-	localClusterMemberAnnounceExist := false
-	if len(memberAnnounceList.Items) != 0 {
-		for _, memberAnnounce := range memberAnnounceList.Items {
-			if memberAnnounce.ClusterID == r.GetLocalClusterID() {
-				localClusterMemberAnnounceExist = true
-				localClusterMemberAnnounce = memberAnnounce
-				break
-			}
-		}
-	}
-	if localClusterMemberAnnounceExist {
-		localClusterMemberAnnounce.LeaderClusterID = ""
-		leaderID := r.ClusterID
-		r.updateLeaderStatus(leaderID)
-		if leaderID != common.InvalidClusterID {
-			localClusterMemberAnnounce.LeaderClusterID = string(leaderID)
-		}
 
+	localClusterMemberAnnounceExists := err == nil
+	localClusterMemberAnnounce := *existingMemberAnnounce
+
+	if localClusterMemberAnnounceExists {
+		r.updateLeaderStatus()
 		if localClusterMemberAnnounce.Annotations == nil {
 			localClusterMemberAnnounce.Annotations = make(map[string]string)
 		}
@@ -239,21 +232,20 @@ func (r *remoteCommonArea) SendMemberAnnounce() error {
 			klog.ErrorS(err, "Error updating MemberClusterAnnounce", "cluster", r.GetClusterID())
 			return err
 		}
-	} else {
-		// Create happens first before the leader validation pass. When the creation is successful,
-		// it marks the connectivity status and then the validation on the leader can happen.
-		// Therefore, the first create will not populate the leader ClusterID.
-		localClusterMemberAnnounce.ClusterID = r.GetLocalClusterID()
-		localClusterMemberAnnounce.Name = "member-announce-from-" + r.GetLocalClusterID()
-		localClusterMemberAnnounce.Namespace = r.Namespace
-		localClusterMemberAnnounce.ClusterSetID = string(r.ClusterSetID)
-		localClusterMemberAnnounce.LeaderClusterID = string(r.GetClusterID())
-		if err := r.Create(context.TODO(), &localClusterMemberAnnounce, &client.CreateOptions{}); err != nil {
-			klog.ErrorS(err, "Error creating MemberClusterAnnounce", "cluster", r.GetClusterID())
-			return err
-		}
+		return nil
 	}
 
+	// Create happens first before the leader validation passes. When the creation is successful,
+	// it marks the connectivity status and then the validation on the leader can happen.
+	localClusterMemberAnnounce.ClusterID = r.GetLocalClusterID()
+	localClusterMemberAnnounce.Name = memberAnnounceName
+	localClusterMemberAnnounce.Namespace = r.Namespace
+	localClusterMemberAnnounce.ClusterSetID = string(r.ClusterSetID)
+	localClusterMemberAnnounce.LeaderClusterID = string(r.GetClusterID())
+	if err := r.Create(context.TODO(), &localClusterMemberAnnounce, &client.CreateOptions{}); err != nil {
+		klog.ErrorS(err, "Error creating MemberClusterAnnounce", "cluster", r.GetClusterID())
+		return err
+	}
 	return nil
 }
 
@@ -279,25 +271,13 @@ func (r *remoteCommonArea) updateRemoteCommonAreaStatus(connected bool, err erro
 	}
 }
 
-func (r *remoteCommonArea) updateLeaderStatus(leaderID common.ClusterID) {
+func (r *remoteCommonArea) updateLeaderStatus() {
 	defer r.mutex.Unlock()
 	r.mutex.Lock()
 
-	if leaderID == common.InvalidClusterID {
-		if r.leaderStatus.Status != v1.ConditionUnknown {
-			r.leaderStatus.Status = v1.ConditionUnknown
-			r.leaderStatus.Message = ""
-			r.leaderStatus.Reason = ReasonConnectionCheckInProgress
-			r.leaderStatus.LastTransitionTime = metav1.Now()
-		}
-	} else if r.ClusterID == leaderID && r.leaderStatus.Status != v1.ConditionTrue {
+	if r.leaderStatus.Status != v1.ConditionTrue {
 		r.leaderStatus.Status = v1.ConditionTrue
 		r.leaderStatus.Message = "This leader cluster is the leader for local cluster"
-		r.leaderStatus.Reason = ""
-		r.leaderStatus.LastTransitionTime = metav1.Now()
-	} else if r.ClusterID != leaderID && r.leaderStatus.Status != v1.ConditionFalse {
-		r.leaderStatus.Status = v1.ConditionFalse
-		r.leaderStatus.Message = "This leader cluster is not the leader for local cluster"
 		r.leaderStatus.Reason = ""
 		r.leaderStatus.LastTransitionTime = metav1.Now()
 	}
@@ -330,9 +310,7 @@ func (r *remoteCommonArea) GetNamespace() string {
 func (r *remoteCommonArea) Start() context.CancelFunc {
 	stopCtx, stopFunc := context.WithCancel(context.Background())
 
-	// Start a Timer for every 5 seconds
-	// TODO: make the interval longer? the webhook API is called every 5s to RemoteCommonArea now
-	ticker := time.NewTicker(5 * time.Second)
+	ticker := time.NewTicker(10 * time.Second)
 
 	go func() {
 		klog.InfoS("Starting MemberAnnounce to RemoteCommonArea", "cluster", r.GetClusterID())
@@ -364,7 +342,7 @@ func (r *remoteCommonArea) Start() context.CancelFunc {
 
 func (r *remoteCommonArea) doMemberAnnounce() {
 	if err := r.SendMemberAnnounce(); err != nil {
-		klog.ErrorS(err, "Error writing member announce", "cluster", r.GetClusterID())
+		klog.ErrorS(err, "Error updating MemberClusterAnnounce", "cluster", r.GetClusterID())
 		r.updateRemoteCommonAreaStatus(false, err)
 	} else {
 		r.updateRemoteCommonAreaStatus(true, nil)
@@ -379,8 +357,6 @@ func (r *remoteCommonArea) Stop() {
 	r.stopFunc = nil
 
 	r.StopWatching()
-
-	return
 }
 
 func (r *remoteCommonArea) IsConnected() bool {

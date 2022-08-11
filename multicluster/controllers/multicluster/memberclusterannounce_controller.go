@@ -20,11 +20,11 @@ package multicluster
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
 	v1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -33,34 +33,22 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	multiclusterv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
-	multiclusterv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
 	"antrea.io/antrea/multicluster/controllers/multicluster/common"
 )
 
 var (
-	ReasonNeverConnected  = "NeverConnected"
-	ReasonConnected       = "Connected"
-	ReasonDisconnected    = "Disconnected"
-	ReasonConnectedLeader = "ConnectedLeader"
-	ReasonNotLeader       = "NotLeader"
+	ReasonConnected    = "Connected"
+	ReasonDisconnected = "Disconnected"
 
 	MemberClusterAnnounceFinalizer = "memberclusterannounce.finalizer.antrea.io"
 
-	TimerInterval     = 5 * time.Second
+	TimerInterval     = 10 * time.Second
 	ConnectionTimeout = 3 * TimerInterval
 )
 
-type leaderStatus struct {
-	// connectedLeader indicates this member has connected to the local cluster which is the leader.
-	connectedLeader v1.ConditionStatus
-	message         string
-	reason          string
-}
-
-type timerData struct {
-	connected      bool
+type memberData struct {
 	lastUpdateTime time.Time
-	leaderStatus   leaderStatus
+	status         *multiclusterv1alpha1.ClusterStatus
 }
 
 // MemberClusterAnnounceReconciler reconciles a MemberClusterAnnounce object
@@ -68,24 +56,19 @@ type MemberClusterAnnounceReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
 
-	mapLock      sync.RWMutex
-	memberStatus map[common.ClusterID]*multiclusterv1alpha1.ClusterStatus
-	timerData    map[common.ClusterID]*timerData
+	mapLock         sync.RWMutex
+	memberStatusMap map[common.ClusterID]*memberData
 }
 
 type MemberClusterStatusManager interface {
-	AddMember(memberID common.ClusterID)
-	RemoveMember(memberID common.ClusterID)
-
 	GetMemberClusterStatuses() []multiclusterv1alpha1.ClusterStatus
 }
 
 func NewMemberClusterAnnounceReconciler(client client.Client, scheme *runtime.Scheme) *MemberClusterAnnounceReconciler {
 	return &MemberClusterAnnounceReconciler{
-		Client:       client,
-		Scheme:       scheme,
-		memberStatus: make(map[common.ClusterID]*multiclusterv1alpha1.ClusterStatus),
-		timerData:    make(map[common.ClusterID]*timerData),
+		Client:          client,
+		Scheme:          scheme,
+		memberStatusMap: make(map[common.ClusterID]*memberData),
 	}
 }
 
@@ -97,48 +80,13 @@ func NewMemberClusterAnnounceReconciler(client client.Client, scheme *runtime.Sc
 // Reconcile implements cluster status management on the leader cluster
 func (r *MemberClusterAnnounceReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	memberAnnounce := &multiclusterv1alpha1.MemberClusterAnnounce{}
+	memberID := getIDFromName(req.Name)
 	err := r.Get(ctx, req.NamespacedName, memberAnnounce)
 	if err != nil {
-		if !errors.IsNotFound(err) {
-			// Cannot read the requested resource. Return error, so reconciliation will be retried.
-			return ctrl.Result{}, err
-		}
-		// If MemberClusterAnnounce is deleted, no need to process because RemoveMember must already
-		// be called.
+		// If MemberClusterAnnounce is deleted, no further processing is needed, as cleanup
+		// must have been done when the Finalizer was removed.
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
-
-	r.mapLock.Lock()
-	// If the member is not found in timerData, it means the member is not added to the ClusterSet or was deleted.
-	if data, ok := r.timerData[common.ClusterID(memberAnnounce.ClusterID)]; ok {
-		klog.V(2).InfoS("Reset lastUpdateTime", "cluster", memberAnnounce.ClusterID)
-		// Reset lastUpdateTime and connectedLeader for this member.
-		data.lastUpdateTime = time.Now()
-		if len(memberAnnounce.LeaderClusterID) == 0 {
-			data.leaderStatus.connectedLeader = v1.ConditionUnknown
-			data.leaderStatus.message = "Not connected to leader yet"
-			data.leaderStatus.reason = ""
-		} else {
-			data.leaderStatus.connectedLeader = v1.ConditionFalse
-			data.leaderStatus.message = fmt.Sprintf("Local cluster is not the leader of member: %v",
-				memberAnnounce.ClusterID)
-			data.leaderStatus.reason = ReasonNotLeader
-			// Check whether this local cluster is the leader for this member.
-			clusterClaim := &multiclusterv1alpha2.ClusterClaim{}
-			if err := r.Get(context.TODO(), types.NamespacedName{Name: multiclusterv1alpha2.WellKnownClusterClaimID, Namespace: req.Namespace}, clusterClaim); err == nil {
-				if clusterClaim.Value == memberAnnounce.LeaderClusterID {
-					data.leaderStatus.connectedLeader = v1.ConditionTrue
-					data.leaderStatus.message = fmt.Sprintf("Local cluster is the leader of member: %v",
-						memberAnnounce.ClusterID)
-					data.leaderStatus.reason = ReasonConnectedLeader
-				}
-			}
-			// If err != nil, probably ClusterClaims were deleted during the processing of MemberClusterAnnounce.
-			// Nothing to handle in this case and MemberClusterAnnounce will also be deleted soon.
-			// TODO: Add ClusterClaim webhook to make sure it cannot be deleted while ClusterSet is present.
-		}
-	}
-	r.mapLock.Unlock()
 
 	finalizer := fmt.Sprintf("%s/%s", MemberClusterAnnounceFinalizer, memberAnnounce.ClusterID)
 	if !memberAnnounce.DeletionTimestamp.IsZero() {
@@ -146,6 +94,7 @@ func (r *MemberClusterAnnounceReconciler) Reconcile(ctx context.Context, req ctr
 			klog.ErrorS(err, "Failed to remove member cluster from the ClusterSet", "cluster", memberAnnounce.ClusterID)
 			return ctrl.Result{}, err
 		}
+		r.removeMemberStatus(memberID)
 		memberAnnounce.Finalizers = common.RemoveStringFromSlice(memberAnnounce.Finalizers, finalizer)
 		if err := r.Update(context.TODO(), memberAnnounce); err != nil {
 			klog.ErrorS(err, "Failed to update MemberClusterAnnounce", "MemberClusterAnnounce", klog.KObj(memberAnnounce))
@@ -155,6 +104,7 @@ func (r *MemberClusterAnnounceReconciler) Reconcile(ctx context.Context, req ctr
 		return ctrl.Result{}, nil
 	}
 
+	r.addOrUpdateMemberStatus(memberID)
 	if common.StringExistsInSlice(memberAnnounce.Finalizers, finalizer) {
 		return ctrl.Result{}, nil
 	}
@@ -192,12 +142,8 @@ func (r *MemberClusterAnnounceReconciler) processMCSStatus() {
 	r.mapLock.Lock()
 	defer r.mapLock.Unlock()
 
-	for member, data := range r.timerData {
-		if data.lastUpdateTime.IsZero() {
-			// Member has never connected to the local cluster, no status update
-			continue
-		}
-		status := r.memberStatus[member]
+	for member, data := range r.memberStatusMap {
+		status := r.memberStatusMap[member].status
 		// Check if the member has connected at least once in the last 3 intervals.
 		duration := time.Since(data.lastUpdateTime)
 		klog.V(2).InfoS("Timer processing", "cluster", member, "duration", duration)
@@ -212,17 +158,8 @@ func (r *MemberClusterAnnounceReconciler) processMCSStatus() {
 						if condition.Status != v1.ConditionTrue {
 							condition.Status = v1.ConditionTrue
 							condition.LastTransitionTime = metav1.Now()
-							condition.Message = ""
+							condition.Message = "Member Connected"
 							condition.Reason = ReasonConnected
-						}
-					}
-				case multiclusterv1alpha1.ClusterConnected:
-					{
-						if data.leaderStatus.connectedLeader != condition.Status {
-							condition.Status = data.leaderStatus.connectedLeader
-							condition.Message = data.leaderStatus.message
-							condition.LastTransitionTime = metav1.Now()
-							condition.Reason = data.leaderStatus.reason
 						}
 					}
 				}
@@ -237,16 +174,7 @@ func (r *MemberClusterAnnounceReconciler) processMCSStatus() {
 						if condition.Status != v1.ConditionFalse {
 							condition.Status = v1.ConditionFalse
 							condition.LastTransitionTime = metav1.Now()
-							condition.Message = fmt.Sprintf("No MemberClusterAnnounce update after %v", data.lastUpdateTime)
-							condition.Reason = ReasonDisconnected
-						}
-					}
-				case multiclusterv1alpha1.ClusterConnected:
-					{
-						if condition.Status != v1.ConditionFalse || condition.Reason != ReasonDisconnected {
-							condition.Status = v1.ConditionFalse
-							condition.Message = fmt.Sprintf("No MemberClusterAnnounce update after %v", data.lastUpdateTime)
-							condition.LastTransitionTime = metav1.Now()
+							condition.Message = fmt.Sprintf("No MemberClusterAnnounce update after %s", data.lastUpdateTime.Format(time.UnixDate))
 							condition.Reason = ReasonDisconnected
 						}
 					}
@@ -256,61 +184,47 @@ func (r *MemberClusterAnnounceReconciler) processMCSStatus() {
 	}
 }
 
-/******************************* MemberClusterStatusManager methods *******************************/
-
-func (r *MemberClusterAnnounceReconciler) AddMember(memberID common.ClusterID) {
+func (r *MemberClusterAnnounceReconciler) addOrUpdateMemberStatus(memberID common.ClusterID) {
 	r.mapLock.Lock()
 	defer r.mapLock.Unlock()
-	if _, ok := r.memberStatus[memberID]; ok {
-		// already present
+	if data, ok := r.memberStatusMap[memberID]; ok {
+		klog.V(2).InfoS("Reset lastUpdateTime", "cluster", memberID)
+		// Reset lastUpdateTime for this member.
+		data.lastUpdateTime = time.Now()
+		for i, c := range data.status.Conditions {
+			if c.Type == multiclusterv1alpha1.ClusterConnected && data.status.Conditions[i].Reason != ReasonConnected {
+				data.status.Conditions[i].LastTransitionTime = metav1.Now()
+				data.status.Conditions[i].Message = "Member Connected"
+				data.status.Conditions[i].Reason = ReasonConnected
+			}
+		}
 		return
 	}
 
-	conditions := make([]multiclusterv1alpha1.ClusterCondition, 0, 2)
+	conditions := make([]multiclusterv1alpha1.ClusterCondition, 0, 1)
 	conditions = append(conditions, multiclusterv1alpha1.ClusterCondition{
 		Type:               multiclusterv1alpha1.ClusterReady,
-		Status:             v1.ConditionUnknown,
+		Status:             v1.ConditionTrue,
 		LastTransitionTime: metav1.Now(),
-		Message:            "Member created",
-		Reason:             ReasonNeverConnected,
-	})
-	conditions = append(conditions, multiclusterv1alpha1.ClusterCondition{
-		Type:               multiclusterv1alpha1.ClusterConnected,
-		Status:             v1.ConditionFalse,
-		LastTransitionTime: metav1.Now(),
-		Message:            "Member created",
-		Reason:             ReasonNeverConnected,
+		Message:            "Member Connected",
+		Reason:             ReasonConnected,
 	})
 
-	r.memberStatus[memberID] = &multiclusterv1alpha1.ClusterStatus{ClusterID: string(memberID),
-		Conditions: conditions}
+	status := &multiclusterv1alpha1.ClusterStatus{
+		ClusterID:  string(memberID),
+		Conditions: conditions,
+	}
+	r.memberStatusMap[memberID] = &memberData{status: status, lastUpdateTime: time.Now()}
 
-	r.timerData[memberID] = &timerData{connected: false, lastUpdateTime: time.Time{}}
-	klog.InfoS("Added member", "member", memberID)
+	klog.InfoS("Added member cluster", "cluster", memberID)
 }
 
-func (r *MemberClusterAnnounceReconciler) RemoveMember(memberID common.ClusterID) {
+func (r *MemberClusterAnnounceReconciler) removeMemberStatus(memberID common.ClusterID) {
 	r.mapLock.Lock()
 	defer r.mapLock.Unlock()
 
-	delete(r.memberStatus, memberID)
-	delete(r.timerData, memberID)
-	klog.InfoS("Removed member", "member", memberID)
-}
-
-func (r *MemberClusterAnnounceReconciler) GetMemberClusterStatuses() []multiclusterv1alpha1.ClusterStatus {
-	r.mapLock.RLock()
-	defer r.mapLock.RUnlock()
-
-	status := make([]multiclusterv1alpha1.ClusterStatus, len(r.memberStatus))
-
-	index := 0
-	for _, v := range r.memberStatus {
-		status[index] = *v // This will do a deep copy
-		index += 1
-	}
-
-	return status
+	delete(r.memberStatusMap, memberID)
+	klog.InfoS("Removed member cluster", "cluster", memberID)
 }
 
 func (r *MemberClusterAnnounceReconciler) addMemberToClusterSet(memberClusterAnnounce *multiclusterv1alpha1.MemberClusterAnnounce) error {
@@ -331,7 +245,8 @@ func (r *MemberClusterAnnounceReconciler) addMemberToClusterSet(memberClusterAnn
 	}
 
 	if exist {
-		return fmt.Errorf("member cluster %s already exists in ClusterSet %s", memberClusterAnnounce.ClusterID, clusterSetID)
+		klog.InfoS("Member cluster already exists in ClusterSet", "cluster", memberClusterAnnounce.ClusterID, "ClusterSet", clusterSetID)
+		return nil
 	}
 
 	clusterSet.Spec.Members = append(clusterSet.Spec.Members, multiclusterv1alpha1.MemberCluster{ClusterID: memberClusterAnnounce.ClusterID})
@@ -369,4 +284,25 @@ func (r *MemberClusterAnnounceReconciler) removeMemberFromClusterSet(memberClust
 		return err
 	}
 	return nil
+}
+
+func getIDFromName(name string) common.ClusterID {
+	return common.ClusterID(strings.TrimPrefix(name, "member-announce-from-"))
+}
+
+/******************************* MemberClusterStatusManager methods *******************************/
+
+func (r *MemberClusterAnnounceReconciler) GetMemberClusterStatuses() []multiclusterv1alpha1.ClusterStatus {
+	r.mapLock.RLock()
+	defer r.mapLock.RUnlock()
+
+	status := make([]multiclusterv1alpha1.ClusterStatus, len(r.memberStatusMap))
+
+	index := 0
+	for _, v := range r.memberStatusMap {
+		status[index] = *v.status.DeepCopy()
+		index += 1
+	}
+
+	return status
 }

@@ -31,6 +31,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	multiclusterv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
 	"antrea.io/antrea/multicluster/controllers/multicluster/common"
@@ -70,9 +71,6 @@ func (r *LeaderClusterSetReconciler) Reconcile(ctx context.Context, req ctrl.Req
 			return ctrl.Result{}, err
 		}
 		klog.InfoS("Received ClusterSet delete", "clusterset", req.NamespacedName)
-		for _, removedMember := range r.clusterSetConfig.Spec.Members {
-			r.StatusManager.RemoveMember(common.ClusterID(removedMember.ClusterID))
-		}
 		r.clusterSetConfig = nil
 		r.clusterID = common.InvalidClusterID
 		r.clusterSetID = common.InvalidClusterSetID
@@ -104,31 +102,6 @@ func (r *LeaderClusterSetReconciler) Reconcile(ctx context.Context, req ctrl.Req
 		}
 	}
 
-	// Handle create/update.
-	var addedMembers []common.ClusterID
-	var currentMembers = make(map[common.ClusterID]interface{})
-	if r.clusterSetConfig != nil {
-		for _, m := range r.clusterSetConfig.Spec.Members {
-			currentMembers[common.ClusterID(m.ClusterID)] = nil
-		}
-	}
-	for _, member := range clusterSet.Spec.Members {
-		memberID := common.ClusterID(member.ClusterID)
-		_, found := currentMembers[memberID]
-		if !found {
-			addedMembers = append(addedMembers, memberID)
-		} else {
-			// In the end currentMembers will only have removed members.
-			delete(currentMembers, memberID)
-		}
-	}
-	for _, addedMember := range addedMembers {
-		r.StatusManager.AddMember(addedMember)
-	}
-	for removedMember := range currentMembers {
-		r.StatusManager.RemoveMember(removedMember)
-	}
-
 	r.clusterSetConfig = clusterSet.DeepCopy()
 	return ctrl.Result{}, nil
 }
@@ -136,9 +109,11 @@ func (r *LeaderClusterSetReconciler) Reconcile(ctx context.Context, req ctrl.Req
 // SetupWithManager sets up the controller with the Manager.
 func (r *LeaderClusterSetReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.runBackgroundTasks()
-
+	// Ignore status update event via GenerationChangedPredicate
+	instance := predicate.GenerationChangedPredicate{}
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&multiclusterv1alpha1.ClusterSet{}).
+		WithEventFilter(instance).
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: common.DefaultWorkerCount,
 		}).
@@ -182,10 +157,12 @@ func (r *LeaderClusterSetReconciler) updateStatus() {
 	}
 
 	status := multiclusterv1alpha1.ClusterSetStatus{}
-	status.TotalClusters = int32(len(r.clusterSetConfig.Spec.Members))
 	status.ObservedGeneration = r.clusterSetConfig.Generation
 	clusterStatuses := r.StatusManager.GetMemberClusterStatuses()
+	klog.InfoS("size of cluster", "size", len(clusterStatuses))
 	status.ClusterStatuses = clusterStatuses
+	sizeOfMembers := len(clusterStatuses)
+	status.TotalClusters = int32(sizeOfMembers)
 	readyClusters := 0
 	unknownClusters := 0
 	for _, cluster := range clusterStatuses {
@@ -208,10 +185,10 @@ func (r *LeaderClusterSetReconciler) updateStatus() {
 		Reason:             NoReadyCluster,
 		LastTransitionTime: metav1.Now(),
 	}
-	if readyClusters == len(r.clusterSetConfig.Spec.Members) {
+	if readyClusters == sizeOfMembers {
 		overallCondition.Status = v1.ConditionTrue
 		overallCondition.Reason = ""
-	} else if unknownClusters == len(r.clusterSetConfig.Spec.Members) {
+	} else if unknownClusters == sizeOfMembers {
 		overallCondition.Status = v1.ConditionUnknown
 		overallCondition.Message = "All clusters have an unknown status"
 	}
