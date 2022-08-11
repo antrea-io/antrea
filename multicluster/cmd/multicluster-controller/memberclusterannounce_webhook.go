@@ -52,7 +52,7 @@ func (v *memberClusterAnnounceValidator) Handle(ctx context.Context, req admissi
 	ui := req.UserInfo
 	_, saName, err := serviceaccount.SplitUsername(ui.Username)
 	if err != nil {
-		klog.ErrorS(err, "Error getting ServiceAccount name", "request", req)
+		klog.ErrorS(err, "Error getting ServiceAccount name", "MemberClusterAnnounce", req.Namespace+"/"+req.Name)
 		return admission.Errored(http.StatusBadRequest, err)
 	}
 
