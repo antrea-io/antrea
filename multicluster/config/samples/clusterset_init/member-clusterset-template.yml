@@ -20,6 +20,6 @@ metadata:
 spec:
   leaders:
     - clusterID: test-cluster-leader
-      secret: leader-access-token
-      server: https://<LEADER_CLUSTER_IP>:6443
+      secret: default-member-token
+      server: https://<LEADER_APISERVER_IP>:6443
   namespace: antrea-multicluster

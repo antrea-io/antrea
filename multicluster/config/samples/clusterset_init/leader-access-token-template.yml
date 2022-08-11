@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: Secret
 metadata:
-  name: leader-access-token
+  name: default-member-token
   namespace: antrea-multicluster
   annotations:
     kubernetes.io/service-account.name: antrea-mc-member-access-sa

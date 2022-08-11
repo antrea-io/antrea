@@ -1,14 +1,15 @@
 # Antctl Multi-cluster commands
 
 Starting from version 1.6.0, Antrea supports the `antctl mc` commands, which can
-collect information from a leader cluster in a ClusterSet for troubleshooting
-issues in an Antrea Multi-cluster ClusterSet, create and delete resources in an
-Antrea Multi-cluster ClusterSet, and so on. The command `antctl mc get` is supported
-since Antrea version 1.6.0 and other commands are supported from 1.7.0. These commands
-cannot run inside the `antrea-controller`, `antrea-agent` and `antrea-mc-controller`
-Pods. The antctl will look for your kubeconfig file at `$HOME/.kube/config` by default.
-You can select a different one by setting the `KUBECONFIG` environment variable or with
-`--kubeconfig`.
+collect information from a leader cluster for troubleshooting Antrea
+Multi-cluster issues, deploy Antrea Multi-cluster and set up ClusterSets in both
+leader and member clusters. The `antctl mc get` command is supported since
+Antrea v1.6.0, while other commands are supported since v1.8.0. These commands
+cannot run inside the `antrea-controller`, `antrea-agent` or
+`antrea-mc-controller` Pods. antctl needs a kubeconfig file to access the target
+cluster's API server, and it will look for the kubeconfig file at
+`$HOME/.kube/config` by default. You can select a different file by setting the
+`KUBECONFIG` environment variable or with the `--kubeconfig` option of antctl.
 
 ## antctl mc get
 
