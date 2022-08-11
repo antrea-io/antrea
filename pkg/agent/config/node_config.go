@@ -51,7 +51,6 @@ var (
 	// - The IP is used as destination IP in host routing entry to forward replied SNATed Service packets back to Antrea
 	//   gateway.
 	// - The IP is used as the next hop of host routing entry for ClusterIP and virtual NodePort DNAT IP.
-	// - The IP is used for InternalIPAddress parameter of Add-NetNatStaticMapping on Windows.
 	//   The IP cannot be one used in the network, and cannot be within the 169.254.1.0 - 169.254.254.255 range
 	//   according to https://datatracker.ietf.org/doc/html/rfc3927#section-2.1
 	VirtualServiceIPv4 = net.ParseIP("169.254.0.253")
