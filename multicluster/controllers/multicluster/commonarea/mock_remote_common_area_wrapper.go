@@ -46,9 +46,7 @@ func (c *fakeRemoteCommonArea) Start() context.CancelFunc {
 	return stopFunc
 }
 
-func (c *fakeRemoteCommonArea) Stop() {
-	return
-}
+func (c *fakeRemoteCommonArea) Stop() {}
 
 func (c *fakeRemoteCommonArea) IsConnected() bool {
 	return true

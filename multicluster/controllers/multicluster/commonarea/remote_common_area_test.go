@@ -43,6 +43,7 @@ func TestMemberAnnounce(t *testing.T) {
 		ClusterManager:     mockManager, // Ok to use a mock as long the remoteCommonArea.StartWatching is not tested
 		ClusterSetID:       "clusterSetA",
 		ClusterID:          "leaderA",
+		localClusterID:     "clusterA",
 		config:             nil, // Not used for this test
 		scheme:             scheme,
 		Namespace:          "cluster-a-ns",
