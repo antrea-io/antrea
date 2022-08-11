@@ -41,19 +41,23 @@ const (
 	defaultMemberNamespace = "kube-system"
 )
 
+// "omitempty" fields (clusterID, namespace, tokenSecretName, tokenSecretFile)
+// can be populated by the corresponding command line options if not set in the
+// config file.
 type ClusterSetJoinConfig struct {
-	Kind            string     `yaml:"kind"`
-	APIVersion      string     `yaml:"apiVersion"`
-	ClusterSetID    string     `yaml:"clusterSetID"`
-	ClusterID       string     `yaml:"clusterID,omitempty"`
-	Namespace       string     `yaml:"namespace,omitempty"`
-	LeaderClusterID string     `yaml:"leaderClusterID"`
-	LeaderNamespace string     `yaml:"leaderNamespace"`
-	LeaderAPIServer string     `yaml:"leaderAPIServer"`
-	TokenSecretName string     `yaml:"tokenSecretName,omitempty"`
-	TokenSecretFile string     `yaml:"tokenSecretFile,omitempty"`
-	ConfigFile      string     `yaml:"-"`
-	Secret          *v1.Secret `yaml:"-"`
+	Kind            string `yaml:"kind"`
+	APIVersion      string `yaml:"apiVersion"`
+	ClusterSetID    string `yaml:"clusterSetID"`
+	ClusterID       string `yaml:"clusterID,omitempty"`
+	Namespace       string `yaml:"namespace,omitempty"`
+	LeaderClusterID string `yaml:"leaderClusterID"`
+	LeaderNamespace string `yaml:"leaderNamespace"`
+	LeaderAPIServer string `yaml:"leaderAPIServer"`
+	TokenSecretName string `yaml:"tokenSecretName,omitempty"`
+	TokenSecretFile string `yaml:"tokenSecretFile,omitempty"`
+	// The following fields are not included in the config file.
+	ConfigFile string     `yaml:"-"`
+	Secret     *v1.Secret `yaml:"-"`
 }
 
 var joinOpts *ClusterSetJoinConfig
@@ -72,6 +76,7 @@ func (o *ClusterSetJoinConfig) validateAndComplete() error {
 		}
 
 		if o.TokenSecretName == "" && o.TokenSecretFile == "" {
+			// Try reading the Secret manifest from the config file.
 			o.Secret, err = unmarshallSecret(raw)
 			if err != nil {
 				return fmt.Errorf("failed to unmarshall Secret from config file: %v", err)
@@ -114,7 +119,7 @@ func (o *ClusterSetJoinConfig) validateAndComplete() error {
 		o.Namespace = defaultMemberNamespace
 	}
 
-	// Always set the Secret Namespace with the member cluster Multi-cluster Namespace
+	// Always set the Secret Namespace with the member cluster Multi-cluster Namespace.
 	if o.Secret != nil {
 		o.Secret.Namespace = o.Namespace
 	}
@@ -130,8 +135,9 @@ func yamlUnmarshall(raw []byte, v interface{}) error {
 func unmarshallSecret(raw []byte) (*v1.Secret, error) {
 	decoder := yamlutil.NewYAMLOrJSONDecoder(bytes.NewReader(raw), 100)
 	secret := &v1.Secret{}
-	// We need to skip the first object, as the Secret object is always the second object when unmarshalling the
-	// config file or the token Secret file.
+	// We need to skip the first object. The Secret object is the second
+	// object in the config file, and we also need to skip starting "---"
+	// when decoding the token Secret file.
 	u := unstructured.Unstructured{}
 	if err := decoder.Decode(&u); err != nil {
 		return nil, err
