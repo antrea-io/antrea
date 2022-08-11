@@ -314,23 +314,20 @@ data:
     apiVersion: multicluster.crd.antrea.io/v1alpha1
     kind: MultiClusterConfig
     health:
-      healthProbeBindAddress: :8081
+      healthProbeBindAddress: :8080
     metrics:
-      bindAddress: 127.0.0.1:8080
+      bindAddress: 0
     webhook:
       port: 9443
     leaderElection:
       leaderElect: false
-      resourceName: 6536456a.crd.antrea.io
-      leaseDuration: "30s"
-      renewDeadline: "20s"
     serviceCIDR: ""
     gatewayIPPrecedence: "private"
 kind: ConfigMap
 metadata:
   labels:
     app: antrea
-  name: antrea-mc-controller-config-t2b9525b7f
+  name: antrea-mc-controller-config-hbdmg9b87m
   namespace: antrea-multicluster
 ---
 apiVersion: v1
@@ -384,7 +381,7 @@ spec:
         livenessProbe:
           httpGet:
             path: /healthz
-            port: 8081
+            port: 8080
           initialDelaySeconds: 15
           periodSeconds: 20
         name: antrea-mc-controller
@@ -395,7 +392,7 @@ spec:
         readinessProbe:
           httpGet:
             path: /readyz
-            port: 8081
+            port: 8080
           initialDelaySeconds: 5
           periodSeconds: 10
         resources:
@@ -412,7 +409,7 @@ spec:
       terminationGracePeriodSeconds: 10
       volumes:
       - configMap:
-          name: antrea-mc-controller-config-t2b9525b7f
+          name: antrea-mc-controller-config-hbdmg9b87m
         name: antrea-mc-controller-config
 ---
 apiVersion: admissionregistration.k8s.io/v1
