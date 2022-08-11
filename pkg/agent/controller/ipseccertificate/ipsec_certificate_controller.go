@@ -23,7 +23,6 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sync/atomic"
@@ -303,7 +302,7 @@ func (c *Controller) HasSynced() bool {
 }
 
 func loadRootCA(caPath string) ([]*x509.Certificate, error) {
-	pemBlock, err := ioutil.ReadFile(caPath)
+	pemBlock, err := os.ReadFile(caPath)
 	if err != nil {
 		return nil, err
 	}
@@ -331,7 +330,7 @@ func loadPrivateKey(privateKeyPath string) (crypto.Signer, error) {
 	_, err := os.Stat(privateKeyPath)
 	if err == nil {
 		// Load the private key contents from file.
-		keyPEMBytes, err = ioutil.ReadFile(privateKeyPath)
+		keyPEMBytes, err = os.ReadFile(privateKeyPath)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read key file %s: %v", privateKeyPath, err)
 		}
@@ -356,7 +355,7 @@ func loadCertificate(certPath string) ([]*x509.Certificate, error) {
 	_, err := os.Stat(certPath)
 	if err == nil {
 		// Load the certificate from file.
-		certPEMBytes, err = ioutil.ReadFile(certPath)
+		certPEMBytes, err = os.ReadFile(certPath)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read certificate file %s: %w", certPath, err)
 		}

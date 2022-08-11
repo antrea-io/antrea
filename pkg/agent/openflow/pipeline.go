@@ -2046,9 +2046,10 @@ func (f *featureNetworkPolicy) dnsPacketInFlow(conjunctionID uint32) binding.Flo
 // ingress rule of Network Policies. The packets are sent by kubelet to probe the liveness/readiness of local Pods.
 // On Linux and when OVS kernel datapath is used, the probe packets are identified by matching the HostLocalSourceMark.
 // On Windows or when OVS userspace (netdev) datapath is used, we need a different approach because:
-// 1. On Windows, kube-proxy userspace mode is used, and currently there is no way to distinguish kubelet generated traffic
-//    from kube-proxy proxied traffic.
-// 2. pkt_mark field is not properly supported for OVS userspace (netdev) datapath.
+//  1. On Windows, kube-proxy userspace mode is used, and currently there is no way to distinguish kubelet generated traffic
+//     from kube-proxy proxied traffic.
+//  2. pkt_mark field is not properly supported for OVS userspace (netdev) datapath.
+//
 // When proxyAll is disabled, the probe packets are identified by matching the source IP is the Antrea gateway IP;
 // otherwise, the packets are identified by matching both the Antrea gateway IP and NotServiceCTMark. Note that, when
 // proxyAll is disabled, currently there is no way to distinguish kubelet generated traffic from kube-proxy proxied traffic
@@ -2744,19 +2745,21 @@ func (f *featurePodConnectivity) l3FwdFlowToNode() []binding.Flow {
 
 // l3FwdFlowToExternal generates the flow to forward packets destined for external network. Corresponding cases are listed
 // in the follows:
-//  - when Egress is disabled, request packets of connections sourced from local Pods and destined for external network.
-//  - when AntreaIPAM is enabled, request packets of connections sourced from local AntreaIPAM Pods and destined for external network.
+//   - when Egress is disabled, request packets of connections sourced from local Pods and destined for external network.
+//   - when AntreaIPAM is enabled, request packets of connections sourced from local AntreaIPAM Pods and destined for external network.
+//
 // TODO: load ToUplinkRegMark to packets sourced from AntreaIPAM Pods and destined for external network.
-//  Due to the lack of defined variables of flow priority, there are not enough flow priority to install the flows to
-//  differentiate the packets sourced from AntreaIPAM Pods and non-AntreaIPAM Pods. For the packets sourced from AntreaIPAM
-//  Pods and destined for external network, they are forwarded via uplink port, not Antrea gateway. Apparently, loading
-//  ToGatewayRegMark to such packets is not right. However, packets sourced from AntreaIPAM Pods with ToGatewayRegMark
-//  don't cause unexpected effects to the consumers of ToGatewayRegMark and ToUplinkRegMark. Consumers of these two
-//  marks are listed in the follows:
-//  - In IngressSecurityClassifierTable, flows are installed to forward the packets with ToGatewayRegMark, ToGatewayRegMark
-//    or ToUplinkRegMark to IngressMetricTable directly.
-//  - In ServiceMarkTable, ToGatewayRegMark is used with FromGatewayRegMark together.
-//  - In ServiceMarkTable, ToUplinkRegMark is only used in noEncap mode + Windows.
+//
+// Due to the lack of defined variables of flow priority, there are not enough flow priority to install the flows to
+// differentiate the packets sourced from AntreaIPAM Pods and non-AntreaIPAM Pods. For the packets sourced from AntreaIPAM
+// Pods and destined for external network, they are forwarded via uplink port, not Antrea gateway. Apparently, loading
+// ToGatewayRegMark to such packets is not right. However, packets sourced from AntreaIPAM Pods with ToGatewayRegMark
+// don't cause unexpected effects to the consumers of ToGatewayRegMark and ToUplinkRegMark. Consumers of these two
+// marks are listed in the follows:
+//   - In IngressSecurityClassifierTable, flows are installed to forward the packets with ToGatewayRegMark, ToGatewayRegMark
+//     or ToUplinkRegMark to IngressMetricTable directly.
+//   - In ServiceMarkTable, ToGatewayRegMark is used with FromGatewayRegMark together.
+//   - In ServiceMarkTable, ToUplinkRegMark is only used in noEncap mode + Windows.
 func (f *featurePodConnectivity) l3FwdFlowToExternal() binding.Flow {
 	return L3ForwardingTable.ofTable.BuildFlow(priorityMiss).
 		Cookie(f.cookieAllocator.Request(f.category).Raw()).

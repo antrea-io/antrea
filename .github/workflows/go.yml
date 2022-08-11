@@ -38,12 +38,12 @@ jobs:
     name: Unit test (ubuntu-latest)
     runs-on: [ubuntu-latest]
     steps:
-    - name: Set up Go 1.17
-      uses: actions/setup-go@v3
-      with:
-        go-version: 1.17
     - name: Check-out code
       uses: actions/checkout@v3
+    - name: Set up Go using version from go.mod
+      uses: actions/setup-go@v3
+      with:
+        go-version-file: 'go.mod'
     - uses: actions/cache@v3
       with:
         # In order:
@@ -74,12 +74,12 @@ jobs:
     name: Unit test (windows-2019)
     runs-on: [windows-2019]
     steps:
-      - name: Set up Go 1.17
-        uses: actions/setup-go@v3
-        with:
-          go-version: 1.17
       - name: Check-out code
         uses: actions/checkout@v3
+      - name: Set up Go using version from go.mod
+        uses: actions/setup-go@v3
+        with:
+          go-version-file: 'go.mod'
       - uses: actions/cache@v3
         with:
           # In order:
@@ -110,12 +110,12 @@ jobs:
     name: Integration test
     runs-on: [ubuntu-latest]
     steps:
-      - name: Set up Go 1.17
-        uses: actions/setup-go@v3
-        with:
-          go-version: 1.17
       - name: Check-out code
         uses: actions/checkout@v3
+      - name: Set up Go using version from go.mod
+        uses: actions/setup-go@v3
+        with:
+          go-version-file: 'go.mod'
       - uses: actions/cache@v3
         with:
           # In order:
@@ -155,12 +155,12 @@ jobs:
     name: Golangci-lint (ubuntu-latest)
     runs-on: [ubuntu-latest]
     steps:
-    - name: Set up Go 1.17
-      uses: actions/setup-go@v3
-      with:
-        go-version: 1.17
     - name: Check-out code
       uses: actions/checkout@v3
+    - name: Set up Go using version from go.mod
+      uses: actions/setup-go@v3
+      with:
+        go-version-file: 'go.mod'
     - uses: actions/cache@v3
       with:
         # In order:
@@ -187,12 +187,12 @@ jobs:
     name: Golangci-lint (macos-latest)
     runs-on: [macos-latest]
     steps:
-      - name: Set up Go 1.17
-        uses: actions/setup-go@v3
-        with:
-          go-version: 1.17
       - name: Check-out code
         uses: actions/checkout@v3
+      - name: Set up Go using version from go.mod
+        uses: actions/setup-go@v3
+        with:
+          go-version-file: 'go.mod'
       - uses: actions/cache@v3
         with:
           # In order:
@@ -219,12 +219,12 @@ jobs:
     name: Build Antrea and antctl binaries
     runs-on: [ubuntu-latest]
     steps:
-    - name: Set up Go 1.17
-      uses: actions/setup-go@v3
-      with:
-        go-version: 1.17
     - name: Check-out code
       uses: actions/checkout@v3
+    - name: Set up Go using version from go.mod
+      uses: actions/setup-go@v3
+      with:
+        go-version-file: 'go.mod'
     - uses: actions/cache@v3
       with:
         # In order:
@@ -258,12 +258,12 @@ jobs:
     name: Build Antrea Windows binaries
     runs-on: [ubuntu-latest]
     steps:
-    - name: Set up Go 1.17
-      uses: actions/setup-go@v3
-      with:
-        go-version: 1.17
     - name: Check-out code
       uses: actions/checkout@v3
+    - name: Set up Go using version from go.mod
+      uses: actions/setup-go@v3
+      with:
+        go-version-file: 'go.mod'
     - uses: actions/cache@v3
       with:
         # In order:
@@ -287,12 +287,12 @@ jobs:
     name: Check tidy, code generation and manifest
     runs-on: [ubuntu-latest]
     steps:
-    - name: Set up Go 1.17
-      uses: actions/setup-go@v3
-      with:
-        go-version: 1.17
     - name: Check-out code
       uses: actions/checkout@v3
+    - name: Set up Go using version from go.mod
+      uses: actions/setup-go@v3
+      with:
+        go-version-file: 'go.mod'
     # tidy check need to be run before code generation which will regenerate codes.
     - name: Check tidy
       run: make test-tidy
@@ -307,12 +307,12 @@ jobs:
     name: Verify docs and spelling
     runs-on: [ubuntu-latest]
     steps:
-    - name: Set up Go 1.17
-      uses: actions/setup-go@v3
-      with:
-        go-version: 1.17
     - name: Check-out code
       uses: actions/checkout@v3
+    - name: Set up Go using version from go.mod
+      uses: actions/setup-go@v3
+      with:
+        go-version-file: 'go.mod'
     - name: Run verify scripts
       run: make verify
     - name: Checking for broken Markdown links
@@ -343,11 +343,11 @@ jobs:
     name: Go benchmark test
     runs-on: [ubuntu-latest]
     steps:
-      - name: Set up Go 1.17
-        uses: actions/setup-go@v3
-        with:
-          go-version: 1.17
       - name: Check-out code
         uses: actions/checkout@v3
+      - name: Set up Go using version from go.mod
+        uses: actions/setup-go@v3
+        with:
+          go-version-file: 'go.mod'
       - name: Run Go benchmark test
         run: go test -run '^$' -bench . -benchtime 1x -timeout 10m -cpu 4 -v -benchmem ./pkg/...

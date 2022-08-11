@@ -22,7 +22,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"os"
 	"strings"
@@ -666,7 +665,7 @@ func TestAntreaServerFunc(t *testing.T) {
 		originalNS, err = testutils.NewNS()
 		require.Nil(t, err)
 
-		dataDir, err = ioutil.TempDir("", "antrea_server_test")
+		dataDir, err = os.MkdirTemp("", "antrea_server_test")
 		require.Nil(t, err)
 
 		ipamMock.EXPECT().Del(mock.Any(), mock.Any(), mock.Any()).Return(true, nil).AnyTimes()

@@ -543,11 +543,11 @@ type conjMatchFlowContextChange struct {
 }
 
 // updateContextStatus changes conjMatchFlowContext's status, including,
-// 1) reset flow and dropFlow after the flow changes have been applied to the OVS bridge,
-// 2) modify the actions with the changed action,
-// 3) update the mapping of denyAllRules and corresponding policyRuleConjunction,
-// 4) add the new conjMatchFlowContext into the globalConjMatchFlowCache, or remove the deleted conjMatchFlowContext
-//    from the globalConjMatchFlowCache.
+//  1. reset flow and dropFlow after the flow changes have been applied to the OVS bridge,
+//  2. modify the actions with the changed action,
+//  3. update the mapping of denyAllRules and corresponding policyRuleConjunction,
+//  4. add the new conjMatchFlowContext into the globalConjMatchFlowCache, or remove the deleted conjMatchFlowContext
+//     from the globalConjMatchFlowCache.
 func (c *conjMatchFlowContextChange) updateContextStatus() {
 	matcherKey := c.context.generateGlobalMapKey()
 	// Update clause.matches with the conjMatchFlowContext, and update conjMatchFlowContext.actions with the changed
@@ -616,19 +616,19 @@ func (c *conjMatchFlowContextChange) updateContextStatus() {
 // policyRuleConjunction is responsible to build Openflow entries for Pods that are in a NetworkPolicy rule's AppliedToGroup.
 // The Openflow entries include conjunction action flows, conjunctive match flows, and default drop flows in the dropTable.
 // NetworkPolicyController will make sure only one goroutine operates on a policyRuleConjunction.
-// 1) Conjunction action flows use policyRuleConjunction ID as match condition. policyRuleConjunction ID is the single
-// 	  match condition for conjunction action flows to allow packets. If the NetworkPolicy rule has also configured excepts
-// 	  in From or To, Openflow entries are installed only for diff IPBlocks between From/To and Excepts. These are added as
-//	  conjunctive match flows as described below.
-// 2) Conjunctive match flows adds conjunctive actions in Openflow entry, and they are grouped by clauses. The match
-// 	  condition in one clause is one of these three types: from address(for fromClause), or to address(for toClause), or
-// 	  service ports(for serviceClause) configured in the NetworkPolicy rule. Each conjunctive match flow entry is
-// 	  maintained by one specific conjMatchFlowContext which is stored in globalConjMatchFlowCache, and shared by clauses
-// 	  if they have the same match conditions. clause adds or deletes conjunctive action to conjMatchFlowContext actions.
-// 	  A clause is hit if the packet matches any conjunctive match flow that are grouped by this clause. Conjunction
-// 	  action flow is hit only if all clauses in the policyRuleConjunction are hit.
-// 3) Default drop flows are also maintained by conjMatchFlowContext. It is used to drop packets sent from or to the
-// 	  AppliedToGroup but not pass the Network Policy rule.
+//  1. Conjunction action flows use policyRuleConjunction ID as match condition. policyRuleConjunction ID is the single
+//     match condition for conjunction action flows to allow packets. If the NetworkPolicy rule has also configured excepts
+//     in From or To, Openflow entries are installed only for diff IPBlocks between From/To and Excepts. These are added as
+//     conjunctive match flows as described below.
+//  2. Conjunctive match flows adds conjunctive actions in Openflow entry, and they are grouped by clauses. The match
+//     condition in one clause is one of these three types: from address(for fromClause), or to address(for toClause), or
+//     service ports(for serviceClause) configured in the NetworkPolicy rule. Each conjunctive match flow entry is
+//     maintained by one specific conjMatchFlowContext which is stored in globalConjMatchFlowCache, and shared by clauses
+//     if they have the same match conditions. clause adds or deletes conjunctive action to conjMatchFlowContext actions.
+//     A clause is hit if the packet matches any conjunctive match flow that are grouped by this clause. Conjunction
+//     action flow is hit only if all clauses in the policyRuleConjunction are hit.
+//  3. Default drop flows are also maintained by conjMatchFlowContext. It is used to drop packets sent from or to the
+//     AppliedToGroup but not pass the Network Policy rule.
 type policyRuleConjunction struct {
 	id            uint32
 	fromClause    *clause
@@ -1667,11 +1667,13 @@ func getMatchFlowUpdates(conj *policyRuleConjunction, newPriority uint16) (add, 
 
 // processFlowUpdates identifies the update cases in flow adds and deletes.
 // For conjunctiveMatchFlow updates, the following scenario is possible:
-//  A flow {priority=100,ip,reg1=0x1f action=conjunction(1,1/3)} need to be re-assigned priority=99.
-//  In this case, an addFlow of <priority=99,ip,reg1=0x1f> and delFlow <priority=100,ip,reg1=0x1f> will be issued.
-//  At the same time, another flow {priority=99,ip,reg1=0x1f action=conjunction(2,1/3)} exists and now needs to
-//  be re-assigned priority 98. This operation will issue a delFlow <priority=99,ip,reg1=0x1f>, which
-//  would essentially void the add flow for conj=1.
+//
+// A flow {priority=100,ip,reg1=0x1f action=conjunction(1,1/3)} need to be re-assigned priority=99.
+// In this case, an addFlow of <priority=99,ip,reg1=0x1f> and delFlow <priority=100,ip,reg1=0x1f> will be issued.
+// At the same time, another flow {priority=99,ip,reg1=0x1f action=conjunction(2,1/3)} exists and now needs to
+// be re-assigned priority 98. This operation will issue a delFlow <priority=99,ip,reg1=0x1f>, which
+// would essentially void the add flow for conj=1.
+//
 // In this case, we remove the conflicting delFlow and set addFlow as a modifyFlow.
 func (f *featureNetworkPolicy) processFlowUpdates(addFlows, delFlows []binding.Flow) (add, update, del []binding.Flow) {
 	for _, a := range addFlows {

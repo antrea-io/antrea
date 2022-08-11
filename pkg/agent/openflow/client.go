@@ -1358,10 +1358,10 @@ func (c *client) InstallMulticlusterGatewayFlows(clusterID string,
 }
 
 // InstallMulticlusterClassifierFlows adds the following flows:
-// * One flow in L2ForwardingCalcTable for the global virtual multicluster MAC 'aa:bb:cc:dd:ee:f0'
-//   to set its target output port as 'antrea-tun0'. This flow will be on both Gateway and regular Node.
-// * One flow to match MC virtual MAC 'aa:bb:cc:dd:ee:f0' in ClassifierTable for Gateway only.
-// * One flow in L2ForwardingOutTable to allow multicluster hairpin traffic for Gateway only.
+//   - One flow in L2ForwardingCalcTable for the global virtual multicluster MAC 'aa:bb:cc:dd:ee:f0'
+//     to set its target output port as 'antrea-tun0'. This flow will be on both Gateway and regular Node.
+//   - One flow to match MC virtual MAC 'aa:bb:cc:dd:ee:f0' in ClassifierTable for Gateway only.
+//   - One flow in L2ForwardingOutTable to allow multicluster hairpin traffic for Gateway only.
 func (c *client) InstallMulticlusterClassifierFlows(tunnelOFPort uint32, isGateway bool) error {
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()

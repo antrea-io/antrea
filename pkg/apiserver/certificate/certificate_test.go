@@ -16,7 +16,6 @@ package certificate
 
 import (
 	"bytes"
-	"io/ioutil"
 	"os"
 	"path"
 	"testing"
@@ -160,12 +159,12 @@ func TestApplyServerCert(t *testing.T) {
 				PairName:    "antrea-controller",
 			}
 			var err error
-			caConfig.CertDir, err = ioutil.TempDir("", "antrea-tls-test")
+			caConfig.CertDir, err = os.MkdirTemp("", "antrea-tls-test")
 			if err != nil {
 				t.Fatalf("Unable to create temporary directory: %v", err)
 			}
 			defer os.RemoveAll(caConfig.CertDir)
-			caConfig.SelfSignedCertDir, err = ioutil.TempDir("", "antrea-self-signed")
+			caConfig.SelfSignedCertDir, err = os.MkdirTemp("", "antrea-self-signed")
 			if err != nil {
 				t.Fatalf("Unable to create temporary directory: %v", err)
 			}

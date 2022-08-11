@@ -19,24 +19,7 @@ COPY . /antrea
 
 WORKDIR /antrea/plugins/octant
 
-# We disable cgo to avoid the following issue when building
-# github.com/containers/storage (an indirect dependency of Octant).
-# The code that requires cgo is not actually used by Octant / us, so there is no
-# issue associated with disabling cgo. Note that when  we build the plugin
-# binaries to upload them as release assets, cgo is always disabled.
-#14 69.00 # pkg-config --cflags  -- devmapper
-#14 69.00 Package devmapper was not found in the pkg-config search path.
-#14 69.00 Perhaps you should add the directory containing `devmapper.pc'
-#14 69.00 to the PKG_CONFIG_PATH environment variable
-#14 69.00 No package 'devmapper' found
-#14 69.00 pkg-config: exit status 1
-#14 79.65 # github.com/containers/storage/drivers/btrfs
-#14 79.65 /go/pkg/mod/github.com/containers/storage@v1.32.6/drivers/btrfs/btrfs.go:8:10: fatal error: btrfs/ioctl.h: No such file or directory
-#14 79.65     8 | #include <btrfs/ioctl.h>
-#14 79.65       |          ^~~~~~~~~~~~~~~
-#14 79.65 compilation terminated.
-#14 87.20 make: *** [Makefile:16: octant-plugins] Error 2
-RUN CGO_ENABLED=0 make octant-plugins
+RUN make octant-plugins
 
 FROM ubuntu:20.04
 

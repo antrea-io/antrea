@@ -20,7 +20,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
@@ -151,7 +151,7 @@ func getMetricsFromAPIServer(t *testing.T, url string, token string) string {
 		defer resp.Body.Close()
 
 		body = []byte{}
-		body, err = ioutil.ReadAll(resp.Body)
+		body, err = io.ReadAll(resp.Body)
 		if err != nil {
 			t.Fatalf("Error retrieving metrics from %s. response: %v", url, err)
 		}
@@ -294,7 +294,7 @@ func testMetricsFromPrometheusServer(t *testing.T, data *TestData, prometheusJob
 		}
 		defer resp.Body.Close()
 
-		body, err := ioutil.ReadAll(resp.Body)
+		body, err := io.ReadAll(resp.Body)
 		if err != nil {
 			t.Fatalf("Failed to retrieve JSON data from Prometheus: %v", err)
 		}

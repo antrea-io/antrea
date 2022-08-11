@@ -23,7 +23,7 @@ push-release: build
 
 .golangci-bin:
 	@echo "===> Installing Golangci-lint <==="
-	@curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $@ v1.32.1
+	@curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $@ v1.48.0
 
 .PHONY: golangci
 golangci: .golangci-bin

@@ -18,7 +18,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	"sync"
 	"time"
@@ -144,7 +144,7 @@ func NewFlowAggregator(
 		return nil, fmt.Errorf("error when starting file watch on configuration dir: %v", err)
 	}
 
-	data, err := ioutil.ReadFile(configFile)
+	data, err := os.ReadFile(configFile)
 	if err != nil {
 		return nil, fmt.Errorf("cannot read FlowAggregator configuration file: %v", err)
 	}
@@ -522,7 +522,7 @@ func (fa *flowAggregator) watchConfiguration(stopCh <-chan struct{}) {
 }
 
 func (fa *flowAggregator) handleWatcherEvent() error {
-	data, err := ioutil.ReadFile(fa.configFile)
+	data, err := os.ReadFile(fa.configFile)
 	if err != nil {
 		return fmt.Errorf("cannot read FlowAggregator configuration file: %v", err)
 	}

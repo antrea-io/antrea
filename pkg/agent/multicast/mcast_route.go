@@ -4,7 +4,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//	http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -187,11 +187,13 @@ func (c *MRouteClient) addInboundMrouteEntry(src net.IP, group net.IP, inboundVI
 
 // inboundMulticastRouteEntry encodes the inbound multicast routing entry.
 // For example,
-// type inboundMulticastRouteEntry struct {
-//	group "226.94.9.9"
-//	src   "10.0.0.55"
-//	vif   vif of wlan0
-// } encodes the multicast route entry from wlan0 to Antrea gateway
+//
+//	type inboundMulticastRouteEntry struct {
+//		group "226.94.9.9"
+//		src   "10.0.0.55"
+//		vif   vif of wlan0
+//	} encodes the multicast route entry from wlan0 to Antrea gateway
+//
 // (10.0.0.55,226.94.9.9)           Iif: wlan0      Oifs: antrea-gw0.
 // The oif is always Antrea gateway so we do not put it in the struct.
 type inboundMulticastRouteEntry struct {

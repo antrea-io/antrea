@@ -35,6 +35,7 @@ const (
 
 	defaultAntreaNamespace = "kube-system"
 
+	// #nosec G101 -- not credentials
 	allowNoEncapWithoutAntreaProxyEnvKey = "ALLOW_NO_ENCAP_WITHOUT_ANTREA_PROXY"
 )
 

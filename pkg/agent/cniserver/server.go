@@ -135,10 +135,10 @@ type CNIConfig struct {
 }
 
 // updateResultIfaceConfig processes the result from the IPAM plugin and does the following:
-//   * updates the IP configuration for each assigned IP address: this includes computing the
+//   - updates the IP configuration for each assigned IP address: this includes computing the
 //     gateway (if missing) based on the subnet and setting the interface pointer to the container
 //     interface
-//   * if there is no default route, add one using the provided default gateway
+//   - if there is no default route, add one using the provided default gateway
 func updateResultIfaceConfig(result *current.Result, defaultIPv4Gateway net.IP, defaultIPv6Gateway net.IP) {
 	for _, ipc := range result.IPs {
 		// result.Interfaces[0] is host interface, and result.Interfaces[1] is container interface

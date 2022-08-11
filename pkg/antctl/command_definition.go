@@ -54,7 +54,8 @@ const (
 // antctl framework will generate a same name sub-command of the root command for
 // each of them, any commands specified as one of these group will need to be invoked
 // as:
-//   antctl <commandGroup> <command>
+//
+//	antctl <commandGroup> <command>
 type commandGroup uint
 type OutputType uint
 

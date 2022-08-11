@@ -13,12 +13,13 @@ linters-settings:
     ignore-generated-header: false
     severity: warning
     confidence: 0.8
+    # errorf, var-declaration temporarily disabled because of https://github.com/golangci/golangci-lint/issues/2997
     rules:
       - name: unreachable-code
-      - name: errorf
+      # - name: errorf
       - name: range
       - name: superfluous-else
-      - name: var-declaration
+      # - name: var-declaration
 
 linters:
   disable-all: true

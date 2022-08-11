@@ -38,7 +38,7 @@ type egressGroupEvent struct {
 	ResourceVersion uint64
 }
 
-/// ToWatchEvent converts the egressGroupEvent to *watch.Event based on the provided Selectors. It has the following features:
+// ToWatchEvent converts the egressGroupEvent to *watch.Event based on the provided Selectors. It has the following features:
 // 1. Added event will be generated if the Selectors was not interested in the object but is now.
 // 2. Modified event will be generated if the Selectors was and is interested in the object.
 // 3. Deleted event will be generated if the Selectors was interested in the object but is not now.

@@ -15,9 +15,9 @@
 ARG GO_VERSION
 FROM golang:${GO_VERSION} as install
 
-ARG LICHEN_VERSION=v0.1.3
+ARG LICHEN_VERSION=v0.1.7
 
-RUN GO111MODULE=on GOBIN=/lichen/ go get github.com/uw-labs/lichen@$LICHEN_VERSION
+RUN GO111MODULE=on GOBIN=/lichen/ go install github.com/uw-labs/lichen@$LICHEN_VERSION
 
 ADD https://raw.githubusercontent.com/uw-labs/lichen/$LICHEN_VERSION/LICENSE /lichen/LICENSE
 
