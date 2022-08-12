@@ -189,7 +189,7 @@
           success=ok
           for result in test-*-rc.txt; 
           do
-            r="${cat $result}"
+            r="$(cat $result)"
             if [ "$r" -ne 0 ]; then
               echo Test Failed: $result : $r
             fi

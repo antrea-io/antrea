@@ -37,6 +37,8 @@ spec:
     securityGroupOverrides:
       node: NODESG
       controlplane: CONTROLPLANESG
+  AWSLoadBalancerSpec:
+    scheme: internal
 ---
 apiVersion: controlplane.cluster.x-k8s.io/v1beta1
 kind: KubeadmControlPlane
@@ -123,6 +125,7 @@ spec:
     spec:
       subnet:
         id: SUBNETID
+      publicIP: false
       iamInstanceProfile: nodes.cluster-api-provider-aws.sigs.k8s.io
       instanceType: t3.large
       sshKeyName: SSHAUTHORIZEDKEYS
