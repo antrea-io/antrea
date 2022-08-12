@@ -17,6 +17,7 @@ package e2e
 import (
 	"context"
 	"fmt"
+	"net"
 	"strings"
 	"testing"
 	"time"
@@ -34,8 +35,17 @@ import (
 )
 
 const (
-	namespace      = "vm-ns"
-	serviceAccount = "vm-agent"
+	namespace            = "vm-ns"
+	serviceAccount       = "vm-agent"
+	externalNodeLabelKey = "antrea-external-node"
+	iperfSeconds         = 2
+	windowsOS            = "Windows"
+	linuxOS              = "Linux"
+)
+
+var (
+	icmpType = int32(8)
+	icmpCode = int32(0)
 )
 
 type vmInfo struct {
@@ -63,6 +73,7 @@ func TestVMAgent(t *testing.T) {
 	}
 	defer teardownVMAgentTest(t, data, vmList)
 	t.Run("testExternalNode", func(t *testing.T) { testExternalNode(t, data, vmList) })
+	t.Run("testExternalNodeWithANP", func(t *testing.T) { testExternalNodeWithANP(t, data, vmList) })
 }
 
 // setupVMAgentTest creates ExternalNode, starts antrea-agent
@@ -106,7 +117,7 @@ func teardownVMAgentTest(t *testing.T, data *TestData, vmList []vmInfo) {
 	verifyUpLinkAfterCleanup := func(vm vmInfo) {
 		err := wait.PollImmediate(10*time.Second, 1*time.Minute, func() (done bool, err error) {
 			var tempVM vmInfo
-			if vm.osType == "Linux" {
+			if vm.osType == linuxOS {
 				tempVM = getVMInfo(t, data, vm.nodeName)
 			} else {
 				tempVM = getWindowsVMInfo(t, data, vm.nodeName)
@@ -172,7 +183,7 @@ func testExternalNode(t *testing.T, data *TestData, vmList []vmInfo) {
 		assert.NoError(t, err, "Failed to verify host interface in OVS, vmInfo %+v", vm)
 
 		var tempVM vmInfo
-		if vm.osType == "Windows" {
+		if vm.osType == windowsOS {
 			tempVM = getWindowsVMInfo(t, data, vm.nodeName)
 		} else {
 			tempVM = getVMInfo(t, data, vm.nodeName)
@@ -193,7 +204,7 @@ func getVMInfo(t *testing.T, data *TestData, nodeName string) (info vmInfo) {
 	vm.nodeName = nodeName
 	var cmd string
 	cmd = "ip -o -4 route show to default | awk '{print $5}'"
-	vm.osType = "Linux"
+	vm.osType = linuxOS
 	rc, ifName, stderr, err := data.RunCommandOnNode(nodeName, cmd)
 	require.NoError(t, err, "Failed to run command <%s> on VM %s, err %v", cmd, nodeName, err)
 	require.Equal(t, 0, rc, "Failed to run command: <%s>, stdout: <%v>, stderr: <%v>", cmd, ifName, stderr)
@@ -211,7 +222,7 @@ func getVMInfo(t *testing.T, data *TestData, nodeName string) (info vmInfo) {
 func getWindowsVMInfo(t *testing.T, data *TestData, nodeName string) (vm vmInfo) {
 	var err error
 	vm.nodeName = nodeName
-	vm.osType = "Windows"
+	vm.osType = windowsOS
 	cmd := fmt.Sprintf("powershell 'Get-WmiObject -Class Win32_IP4RouteTable | Where { $_.destination -eq \"0.0.0.0\" -and $_.mask -eq \"0.0.0.0\"} | Sort-Object metric1 | select interfaceindex | ft -HideTableHeaders'")
 	rc, ifIndex, stderr, err := data.RunCommandOnNode(nodeName, cmd)
 	require.NoError(t, err, "Failed to run command <%s> on VM %s, err %v", cmd, nodeName, err)
@@ -237,7 +248,7 @@ func getWindowsVMInfo(t *testing.T, data *TestData, nodeName string) (vm vmInfo)
 func startAntreaAgent(t *testing.T, data *TestData, vm vmInfo) {
 	t.Logf("Starting antrea-agent on VM: %s", vm.nodeName)
 	var cmd string
-	if vm.osType == "Windows" {
+	if vm.osType == windowsOS {
 		cmd = "nssm start antrea-agent"
 	} else {
 		cmd = "sudo systemctl start antrea-agent"
@@ -250,7 +261,7 @@ func startAntreaAgent(t *testing.T, data *TestData, vm vmInfo) {
 func stopAntreaAgent(t *testing.T, data *TestData, vm vmInfo) {
 	t.Logf("Stopping antrea-agent on VM: %s", vm.nodeName)
 	var cmd string
-	if vm.osType == "Windows" {
+	if vm.osType == windowsOS {
 		cmd = "nssm stop antrea-agent"
 	} else {
 		cmd = "sudo systemctl stop antrea-agent"
@@ -262,7 +273,7 @@ func stopAntreaAgent(t *testing.T, data *TestData, vm vmInfo) {
 
 func verifyInterfaceIsInOVS(t *testing.T, data *TestData, vm vmInfo) (found bool, err error) {
 	var cmd string
-	if vm.osType == "Windows" {
+	if vm.osType == windowsOS {
 		cmd = fmt.Sprintf("ovs-vsctl --column=name list port '%s'", vm.ifName)
 	} else {
 		cmd = fmt.Sprintf("sudo ovs-vsctl --column=name list port %s", vm.ifName)
@@ -289,5 +300,378 @@ func createExternalNodeCRD(data *TestData, nodeName string, ifName string, ip st
 	var ipList []string
 	ipList = append(ipList, ip)
 	testEn.AddInterface(ifName, ipList)
+	// Add labels on the VMs.
+	testEn.AddLabels(map[string]string{externalNodeLabelKey: nodeName})
 	return data.crdClient.CrdV1alpha1().ExternalNodes(namespace).Create(context.TODO(), testEn.Get(), metav1.CreateOptions{})
+}
+
+func testExternalNodeWithANP(t *testing.T, data *TestData, vmList []vmInfo) {
+	if len(vmList) < 2 {
+		t.Skipf("Skipping test as it requires 2 different VMs but the setup has %d", len(vmList))
+	}
+	t.Run("testANPOnLinuxVM", func(t *testing.T) { testANPOnVMs(t, data, vmList, linuxOS) })
+	t.Run("testANPOnWindowsVM", func(t *testing.T) { testANPOnVMs(t, data, vmList, windowsOS) })
+}
+
+func testANPOnVMs(t *testing.T, data *TestData, vmList []vmInfo, osType string) {
+	appliedToVM, peerVM, err := getVMsByOSType(vmList, osType)
+	if err != nil {
+		t.Skipf("Skip case testANPOnVMs: %v", err)
+	}
+	// Test TCP rules in ANP
+	t.Run("testANPOnExternalNodeWithTCP", func(t *testing.T) {
+		// Use ExternalEntity in an ingress rule configuration.
+		testANPProtocolTCPOrUDP(t, data, "anp-vmagent-ingress-tcp-entity", namespace, *appliedToVM, peerVM, ProtocolTCP, true, crdv1alpha1.RuleActionDrop, true)
+		// Use IP in an egress rule configuration.
+		testANPProtocolTCPOrUDP(t, data, "anp-vmagent-egress-tcp-ip", namespace, *appliedToVM, peerVM, ProtocolTCP, false, crdv1alpha1.RuleActionDrop, false)
+	})
+	// Test UDP rules in ANP
+	t.Run("testANPOnExternalNodeWithUDP", func(t *testing.T) {
+		testANPProtocolTCPOrUDP(t, data, "anp-vmagent-ingress-udp-entity", namespace, *appliedToVM, peerVM, ProtocolUDP, true, crdv1alpha1.RuleActionReject, false)
+	})
+	// Test ICMP rules in ANP
+	t.Run("testANPOnExternalNodeWithICMP", func(t *testing.T) {
+		testANPProtocolICMP(t, data, "anp-vmagent-ingress-icmp-ip", namespace, *appliedToVM, crdv1alpha1.RuleActionDrop)
+	})
+	// Test FQDN rules in ANP
+	t.Run("testANPOnExternalNodeWithFQDN", func(t *testing.T) {
+		testANPWithFQDN(t, data, "anp-vmagent-fqdn", namespace, *appliedToVM, []string{"www.facebook.com"}, []string{"docs.google.com"}, []string{"maps.google.com"})
+	})
+}
+
+// getVMsByOSType returns the appliedTo VM and a different VM to run test. The appliedTo VM is configured with the given
+// osType, and the other VM returned is the next one of the appliedTo VM in the given vmList.
+func getVMsByOSType(vmList []vmInfo, osType string) (*vmInfo, *vmInfo, error) {
+	for i := range vmList {
+		if vmList[i].osType == osType {
+			return &vmList[i], &vmList[(i+1)%len(vmList)], nil
+		}
+	}
+	return nil, nil, fmt.Errorf("not found a VM configured with OS type %s in vmList", osType)
+}
+
+func testANPWithFQDN(t *testing.T, data *TestData, name string, namespace string, appliedToVM vmInfo, allowedURLs []string, droppedURLs []string, rejectedURLs []string) {
+	var err error
+	allURLs := append(append(allowedURLs, droppedURLs...), rejectedURLs...)
+	for _, url := range allURLs {
+		err := runCurlCommandOnVM(data, appliedToVM, url, crdv1alpha1.RuleActionAllow)
+		assert.NoError(t, err, "Failed to run curl command on URL %s on VM %s", url, appliedToVM.nodeName)
+	}
+
+	fqdnSettings := make(map[string]*crdv1alpha1.RuleAction, 0)
+	for _, url := range allowedURLs {
+		action := crdv1alpha1.RuleActionAllow
+		fqdnSettings[url] = &action
+	}
+	for _, url := range droppedURLs {
+		action := crdv1alpha1.RuleActionDrop
+		fqdnSettings[url] = &action
+	}
+	for _, url := range rejectedURLs {
+		action := crdv1alpha1.RuleActionReject
+		fqdnSettings[url] = &action
+	}
+
+	anp := createANPWithFQDN(t, data, name, namespace, appliedToVM, fqdnSettings)
+	for url, action := range fqdnSettings {
+		err = runCurlCommandOnVM(data, appliedToVM, url, *action)
+		assert.NoError(t, err, "Failed to run curl command on URL %s on VM %s", url, appliedToVM.nodeName)
+	}
+	err = data.DeleteANP(anp.Namespace, anp.Name)
+	require.Nil(t, err)
+	for _, url := range allURLs {
+		err := runCurlCommandOnVM(data, appliedToVM, url, crdv1alpha1.RuleActionAllow)
+		assert.NoError(t, err, "Failed to run curl command on URL %s on VM %s", url, appliedToVM.nodeName)
+	}
+}
+
+// testANPProtocolICMP uses a constant client to ping the given appliedToVM to verify ANP realization.
+// Note: master Node is used as the client in the test. This is because the Windows native ping utility always uses 256
+// as the identifier in any ICMP echo request packet, and this setting introduces a mis-match in OVS conntrack when
+// identifying a new connection.
+func testANPProtocolICMP(t *testing.T, data *TestData, name string, namespace string, appliedToVM vmInfo, ruleAction crdv1alpha1.RuleAction) {
+	// The initial network connectivity is working as expected before ANP is created.
+	err := runPingCommandOnVM(data, appliedToVM, true)
+	require.NoError(t, err, "Failed to verify connectivity before applying ANP")
+	anp := createANPForExternalNode(t, data, name, namespace, true, ProtocolICMP, appliedToVM, nil, false, ruleAction)
+	// The network connectivity is impacted by ANP.
+	err = runPingCommandOnVM(data, appliedToVM, false)
+	assert.NoError(t, err, "Failed to verify connectivity after applying ANP")
+
+	err = data.DeleteANP(anp.Namespace, anp.Name)
+	require.NoError(t, err, "Failed to remove ANP %s", name)
+	t.Logf("ANP test with nameE %s is done", name)
+}
+
+func testANPProtocolTCPOrUDP(t *testing.T, data *TestData, name string, namespace string, appliedToVM vmInfo, peerVM *vmInfo, proto AntreaPolicyProtocol, ingress bool, ruleAction crdv1alpha1.RuleAction, matchPeerEntity bool) {
+	var srcVM, dstVM vmInfo
+	if ingress {
+		srcVM = *peerVM
+		dstVM = appliedToVM
+	} else {
+		srcVM = appliedToVM
+		dstVM = *peerVM
+	}
+	err := runIperfServer(t, data, dstVM, iperfPort)
+	require.NoError(t, err, "Failed to run iperf server on VM %s", dstVM.nodeName)
+	defer func() {
+		assert.NoError(t, stopIperfCommand(t, data, dstVM), "Failed to stop iperf3 command on VM %s", dstVM.nodeName)
+	}()
+
+	// The initial network connectivity is working as expected before ANP is created.
+	err = runIperfCommandOnVMs(t, data, srcVM, dstVM, true, proto == ProtocolUDP, ruleAction)
+	require.NoError(t, err, "Failed to verify connectivity before applying ANP")
+	anp := createANPForExternalNode(t, data, name, namespace, ingress, proto, appliedToVM, peerVM, matchPeerEntity, ruleAction)
+	// The network connectivity is impacted by ANP.
+	err = runIperfCommandOnVMs(t, data, srcVM, dstVM, false, proto == ProtocolUDP, ruleAction)
+	assert.NoError(t, err, "Failed to verify connectivity after applying ANP")
+
+	err = data.DeleteANP(anp.Namespace, anp.Name)
+	require.NoError(t, err, "Failed to remove ANP %s", name)
+	t.Logf("ANP test with name %s is done", name)
+}
+
+func createANPForExternalNode(t *testing.T, data *TestData, name, namespace string, ingress bool, proto AntreaPolicyProtocol,
+	appliedToVM vmInfo, peerVM *vmInfo, matchLabel bool, ruleAction crdv1alpha1.RuleAction) *crdv1alpha1.NetworkPolicy {
+	eeSelector := map[string]string{externalNodeLabelKey: appliedToVM.nodeName}
+	builder := &AntreaNetworkPolicySpecBuilder{}
+	builder = builder.
+		SetName(namespace, name).
+		SetPriority(1.0).
+		SetAppliedToGroup([]ANPAppliedToSpec{{ExternalEntitySelector: eeSelector}})
+
+	ruleFunc := builder.AddIngress
+	if !ingress {
+		ruleFunc = builder.AddEgress
+	}
+
+	switch proto {
+	case ProtocolTCP:
+		fallthrough
+	case ProtocolUDP:
+		var peerLabel map[string]string
+		var cidr *string
+		if matchLabel {
+			peerLabel = map[string]string{
+				externalNodeLabelKey: peerVM.nodeName,
+			}
+		} else {
+			peerIPCIDR := fmt.Sprintf("%s/32", peerVM.ip)
+			cidr = &peerIPCIDR
+		}
+		port := int32(iperfPort)
+		ruleFunc(proto, &port, nil, nil, nil, nil, nil, nil, cidr, nil, nil, peerLabel,
+			nil, nil, nil, nil, ruleAction, "", "")
+	case ProtocolICMP:
+		peerIPCIDR := fmt.Sprintf("%s/32", nodeIP(0))
+		ruleFunc(ProtocolICMP, nil, nil, nil, &icmpType, &icmpCode, nil, nil, &peerIPCIDR, nil, nil, nil,
+			nil, nil, nil, nil, ruleAction, "", "")
+	}
+	anpRule := builder.Get()
+
+	anp, err := data.CreateOrUpdateANP(anpRule)
+	assert.Nil(t, err, "Failed to create Antrea NetworkPolicy")
+	assert.Nil(t, data.waitForANPRealized(t, anp.Namespace, anp.Name, policyRealizedTimeout), "Failed to realize Antrea NetworkPolicy")
+	return anp
+}
+
+func createANPWithFQDN(t *testing.T, data *TestData, name string, namespace string, appliedToVM vmInfo, fqdnSettings map[string]*crdv1alpha1.RuleAction) *crdv1alpha1.NetworkPolicy {
+	eeSelector := map[string]string{externalNodeLabelKey: appliedToVM.nodeName}
+	builder := &AntreaNetworkPolicySpecBuilder{}
+	builder = builder.
+		SetName(namespace, name).
+		SetPriority(3.0).
+		SetAppliedToGroup([]ANPAppliedToSpec{{ExternalEntitySelector: eeSelector}})
+	anpRule := builder.Get()
+	i := 0
+	for fqdn, action := range fqdnSettings {
+		ruleName := fmt.Sprintf("name-%d", i)
+		policyPeer := []crdv1alpha1.NetworkPolicyPeer{{FQDN: fqdn}}
+		ports, _ := GenPortsOrProtocols(ProtocolTCP, nil, nil, nil, nil, nil, nil, nil)
+		newRule := crdv1alpha1.Rule{
+			To:     policyPeer,
+			Ports:  ports,
+			Action: action,
+			Name:   ruleName,
+		}
+		anpRule.Spec.Egress = append(anpRule.Spec.Egress, newRule)
+		i += 1
+	}
+
+	anp, err := data.CreateOrUpdateANP(anpRule)
+	require.NoError(t, err, "Failed to create Antrea NetworkPolicy")
+	require.NoError(t, data.waitForANPRealized(t, anp.Namespace, anp.Name, policyRealizedTimeout), "Failed to realize Antrea NetworkPolicy")
+	return anp
+}
+
+func runPingCommandOnVM(data *TestData, dstVM vmInfo, connected bool) error {
+	dstIP := net.ParseIP(dstVM.ip)
+	cmd := getPingCommand(pingCount, 0, strings.ToLower(linuxOS), &dstIP)
+	cmdStr := strings.Join(cmd, " ")
+	expCount := pingCount
+	if !connected {
+		expCount = 0
+	}
+	expOutput := fmt.Sprintf("%d packets transmitted, %d received", pingCount, expCount)
+	// Use master Node to run ping command.
+	pingClient := nodeName(0)
+	err := wait.PollImmediate(time.Second*5, time.Second*20, func() (done bool, err error) {
+		if err := runCommandAndCheckResult(data, pingClient, cmdStr, expOutput, ""); err != nil {
+			return false, nil
+		}
+		return true, nil
+	})
+	return err
+}
+
+func runIperfCommandOnVMs(t *testing.T, data *TestData, srcVM vmInfo, dstVM vmInfo, connected bool, isUDP bool, ruleAction crdv1alpha1.RuleAction) error {
+	svrIP := net.ParseIP(dstVM.ip)
+	err := wait.PollImmediate(time.Second*5, time.Second*20, func() (done bool, err error) {
+		if err := runIperfClient(t, data, srcVM, svrIP, iperfPort, isUDP, connected, ruleAction); err != nil {
+			return false, nil
+		}
+		return true, nil
+	})
+	return err
+}
+
+func runIperfServer(t *testing.T, data *TestData, vm vmInfo, dstPort int32) error {
+	cmd := getIperf3Command(vm.osType, nil, dstPort, false, true)
+	cmdStr := strings.Join(cmd, " ")
+	if vm.osType == windowsOS {
+		cmdStr = fmt.Sprintf(`cmd.exe /c "%s"`, cmdStr)
+	}
+	_, _, _, err := data.provider.RunCommandOnNode(vm.nodeName, cmdStr)
+	if err != nil {
+		return err
+	}
+	t.Logf("Run iperf3 server on VM %s with command %s", vm.nodeName, cmdStr)
+	return nil
+}
+
+func stopIperfCommand(t *testing.T, data *TestData, vm vmInfo) error {
+	cmdStr := `cmd.exe /c "taskkill /IM iperf3.exe /F"`
+	if vm.osType == linuxOS {
+		cmdStr = "pkill iperf3"
+	}
+	_, _, _, err := data.provider.RunCommandOnNode(vm.nodeName, cmdStr)
+	if err != nil {
+		return err
+	}
+	t.Logf("Stopped iperf3 on VM %s", vm.nodeName)
+	return nil
+}
+
+func runIperfClient(t *testing.T, data *TestData, targetVM vmInfo, svrIP net.IP, dstPort int32, isUDP bool, connected bool, ruleAction crdv1alpha1.RuleAction) error {
+	cmd := getIperf3Command(targetVM.osType, svrIP, dstPort, isUDP, false)
+	cmdStr := strings.Join(cmd, " ")
+	if targetVM.osType == windowsOS {
+		cmdStr = fmt.Sprintf(`cmd.exe /c "%s"`, cmdStr)
+	}
+	expectedOutput := "iperf Done"
+	if !connected {
+		switch ruleAction {
+		case crdv1alpha1.RuleActionDrop:
+			expectedOutput = "Connection timed out"
+		case crdv1alpha1.RuleActionReject:
+			if isUDP {
+				expectedOutput = "No route to host"
+			} else {
+				expectedOutput = "Connection refused"
+			}
+		}
+	}
+
+	errCh := make(chan error, 0)
+	go func() {
+		err := runCommandAndCheckResult(data, targetVM.nodeName, cmdStr, expectedOutput, "")
+		errCh <- err
+	}()
+
+	select {
+	// Complete the iperf3 command in 10s forcibly if it does not return. The stuck in iperf3 command possibly happens
+	// when it is running as a client on Windows, if the port opened on iperf server is blocking by ANP rule. To avoid
+	// the test is blocking, we forcibly stop the client. As the iperf client is configured with parameter "-t 2" meaning
+	// the utility is expected to send packets in 2s. The force quit should not break the testing workloads.
+	case <-time.After(time.Second * 10):
+		t.Logf("Iperf3 command %s did not return in 10s, stopping it forcibly", cmdStr)
+		err := stopIperfCommand(t, data, targetVM)
+		assert.NoError(t, err, "Failed to stop iperf3 command after 10s")
+		if !connected {
+			return nil
+		}
+		return fmt.Errorf("unable to complete iperf3 command %s in 10s", cmdStr)
+	case err := <-errCh:
+		return err
+	}
+}
+
+func runCurlCommandOnVM(data *TestData, targetVM vmInfo, url string, action crdv1alpha1.RuleAction) error {
+	cmd := getCurlCommand(targetVM.osType, url)
+	cmdStr := strings.Join(cmd, " ")
+
+	var expectedErr, expectedOutput string
+	switch action {
+	case crdv1alpha1.RuleActionAllow:
+		expectedOutput = "HTTP/1.1"
+	case crdv1alpha1.RuleActionDrop:
+		expectedErr = "Connection timed out"
+	case crdv1alpha1.RuleActionReject:
+		expectedErr = "Connection refused"
+	}
+	err := wait.PollImmediate(time.Second*5, time.Second*20, func() (done bool, err error) {
+		if err := runCommandAndCheckResult(data, targetVM.nodeName, cmdStr, expectedOutput, expectedErr); err != nil {
+			return false, nil
+		}
+		return true, nil
+	})
+	return err
+}
+
+func runCommandAndCheckResult(data *TestData, targetVM string, cmd string, expectedOutput string, expectedError string) error {
+	_, out, stderr, err := data.provider.RunCommandOnNode(targetVM, cmd)
+	if err != nil {
+		return fmt.Errorf("failed to run command %s on VM %s: %v", cmd, targetVM, err)
+	}
+	if expectedError != "" && strings.Contains(stderr, expectedError) {
+		return nil
+	}
+	if expectedOutput != "" && strings.Contains(out, expectedOutput) {
+		return nil
+	}
+	return fmt.Errorf("command result is not as expected, out: %s, stderr: %s, expectOut: %s, expectErr: %s", out, stderr, expectedOutput, expectedError)
+}
+
+func getCurlCommand(osType string, url string) []string {
+	var cmd []string
+	if osType == windowsOS {
+		cmd = append(cmd, "curl.exe")
+	} else {
+		cmd = append(cmd, "curl")
+	}
+	cmd = append(cmd, "--connect-timeout", "2", "-i", url)
+	return cmd
+}
+
+func getIperf3Command(osType string, svrIP net.IP, port int32, isUDP bool, isServer bool) []string {
+	var cmd []string
+	if osType == windowsOS {
+		cmd = append(cmd, "iperf3.exe")
+	} else {
+		cmd = append(cmd, "iperf3")
+	}
+	if isServer {
+		cmd = append(cmd, "-s", "-D")
+	} else {
+		cmd = append(cmd, "-c")
+		if svrIP.To4() == nil {
+			cmd = append(cmd, "-6")
+		}
+		cmd = append(cmd, svrIP.String(), "-t", fmt.Sprintf("%d", iperfSeconds))
+		if isUDP {
+			cmd = append(cmd, "-u")
+		}
+	}
+	cmd = append(cmd, "-p", fmt.Sprintf("%d", port))
+	return cmd
 }
