@@ -83,6 +83,13 @@ function configure_networks {
   networks=$(docker network ls -f name=antrea --format '{{.Name}}')
   networks="$(echo $networks)"
   if [[ -z $SUBNETS ]] && [[ -z $networks ]]; then
+    docker network create -d bridge multicast-bridge
+    node="$(kind get nodes --name kind | grep control-plane)"
+    docker network connect multicast-bridge $node
+    docker run -d --name mcjoin --network multicast-bridge troglobit/mcjoin
+    docker run -d --name mcjoin1 --network kind troglobit/mcjoin
+    docker run -d --name mcjoin2  --network kind troglobit/mcjoin
+    docker run -d --name mcjoin3 --network kind troglobit/mcjoin
     echo "Using default kind docker network"
     return
   fi

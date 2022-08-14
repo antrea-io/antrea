@@ -3777,12 +3777,12 @@ func testACNPIGMPQuery(t *testing.T, data *TestData, acnpName, caseName, groupAd
 	testNamespace := data.testNamespace
 	mc := multicastTestcase{
 		name:            caseName,
-		senderConfig:    multicastTestPodConfig{nodeIdx: 0, isHostNetwork: false},
+		senderConfig:    multicastTestPodConfig{nodeIdx: 0, isExternalHost: false},
 		receiverConfigs: []multicastTestPodConfig{{1, false}},
 		port:            3457,
 		group:           net.ParseIP(groupAddress),
 	}
-	senderName, _, cleanupFunc := createAndWaitForPod(t, data, data.createMcJoinPodOnNode, "test-sender-", nodeName(mc.senderConfig.nodeIdx), testNamespace, mc.senderConfig.isHostNetwork)
+	senderName, _, cleanupFunc := createAndWaitForPod(t, data, data.createMcJoinPodOnNode, "test-sender-", nodeName(mc.senderConfig.nodeIdx), testNamespace, mc.senderConfig.isExternalHost)
 	defer cleanupFunc()
 	var wg sync.WaitGroup
 	receiverNames, cleanupFuncs := setupReceivers(t, data, mc, mcjoinWaitTimeout, &wg)
@@ -3863,12 +3863,12 @@ func testACNPMulticastEgress(t *testing.T, data *TestData, acnpName, caseName, g
 	testNamespace := data.testNamespace
 	mc := multicastTestcase{
 		name:            caseName,
-		senderConfig:    multicastTestPodConfig{nodeIdx: 0, isHostNetwork: false},
+		senderConfig:    multicastTestPodConfig{nodeIdx: 0, isExternalHost: false},
 		receiverConfigs: []multicastTestPodConfig{{1, false}},
 		port:            3457,
 		group:           net.ParseIP(groupAddress),
 	}
-	senderName, _, cleanupFunc := createAndWaitForPod(t, data, data.createMcJoinPodOnNode, "test-sender-", nodeName(mc.senderConfig.nodeIdx), testNamespace, mc.senderConfig.isHostNetwork)
+	senderName, _, cleanupFunc := createAndWaitForPod(t, data, data.createMcJoinPodOnNode, "test-sender-", nodeName(mc.senderConfig.nodeIdx), testNamespace, mc.senderConfig.isExternalHost)
 	defer cleanupFunc()
 	var wg sync.WaitGroup
 	receiverNames, cleanupFuncs := setupReceivers(t, data, mc, mcjoinWaitTimeout, &wg)

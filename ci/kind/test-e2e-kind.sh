@@ -139,7 +139,7 @@ trap "quit" INT EXIT
 manifest_args="$manifest_args --verbose-log"
 if [ -n "$feature_gates" ]; then
     if [[ "$feature_gates" == *"Multicast=true"* ]] || ([[ "$feature_gates" == *"AllAlpha=true"* ]] && [[ "$feature_gates" != *"AllAlpha=false"* ]]); then
-        manifest_args="$manifest_args --extra-helm-values multicast.igmpQueryInterval=10s"
+        manifest_args="$manifest_args --multicast --multicast-interfaces eth1 --extra-helm-values multicast.igmpQueryInterval=10s"
     fi
     manifest_args="$manifest_args --feature-gates $feature_gates"
 fi
@@ -163,7 +163,7 @@ if $coverage; then
     manifest_args="$manifest_args --coverage"
     COMMON_IMAGES_LIST+=("antrea/antrea-ubuntu-coverage:latest")
 else
-    COMMON_IMAGES_LIST+=("antrea/antrea-ubuntu:latest")
+    COMMON_IMAGES_LIST+=("projects.registry.vmware.com/antrea/antrea-ubuntu:latest")
 fi
 if $proxy_all; then
     COMMON_IMAGES_LIST+=("k8s.gcr.io/echoserver:1.10")

@@ -59,51 +59,53 @@ func TestMulticast(t *testing.T) {
 		t.Fatalf("Error computing multicast interfaces: %v", err)
 	}
 	t.Run("testMulticastWithNoEncap", func(t *testing.T) {
+		t.Logf("haha")
 		skipIfEncapModeIsNot(t, data, config.TrafficEncapModeNoEncap)
-		runMulticastTestCases(t, data, nodeMulticastInterfaces, true)
+		runMulticastTestCases(t, data, nodeMulticastInterfaces, true, "225.3")
 	})
 	t.Run("testMulticastWithEncap", func(t *testing.T) {
+		t.Logf("wawa")
 		ac := func(config *agentconfig.AgentConfig) {
 			config.TrafficEncapMode = "encap"
 		}
 		if err := data.mutateAntreaConfigMap(nil, ac, true, true); err != nil {
 			t.Fatalf("Failed to deploy cluster with encap mode: %v", err)
 		}
-		runMulticastTestCases(t, data, nodeMulticastInterfaces, false)
+		skipIfEncapModeIsNot(t, data, config.TrafficEncapModeEncap)
+		runMulticastTestCases(t, data, nodeMulticastInterfaces, false, "225.4")
 	})
 }
 
-func runMulticastTestCases(t *testing.T, data *TestData, nodeMulticastInterfaces map[int][]string, checkReceiverRoute bool) {
+func runMulticastTestCases(t *testing.T, data *TestData, nodeMulticastInterfaces map[int][]string, checkReceiverRoute bool, ipPrefix string) {
 	t.Run("testMulticastBetweenPodsInTwoNodes", func(t *testing.T) {
-		skipIfNumNodesLessThan(t, 2)
 		testcases := []multicastTestcase{
 			{
 				name:            "testMulticastForLocalPods",
-				senderConfig:    multicastTestPodConfig{nodeIdx: 0, isHostNetwork: false},
+				senderConfig:    multicastTestPodConfig{nodeIdx: 0, isExternalHost: false},
 				receiverConfigs: []multicastTestPodConfig{{0, false}},
 				port:            3456,
-				group:           net.ParseIP("224.3.4.5"),
+				group:           net.ParseIP(ipStrByPrefix(ipPrefix, 4, 5)),
 			},
 			{
 				name:            "testMulticastForInterNodePods",
-				senderConfig:    multicastTestPodConfig{nodeIdx: 0, isHostNetwork: false},
+				senderConfig:    multicastTestPodConfig{nodeIdx: 0, isExternalHost: false},
 				receiverConfigs: []multicastTestPodConfig{{1, false}},
 				port:            3457,
-				group:           net.ParseIP("224.3.4.6"),
+				group:           net.ParseIP(ipStrByPrefix(ipPrefix, 4, 6)),
 			},
 			{
 				name:            "testMulticastTrafficFromExternal",
-				senderConfig:    multicastTestPodConfig{nodeIdx: 0, isHostNetwork: true},
+				senderConfig:    multicastTestPodConfig{nodeIdx: 0, isExternalHost: true},
 				receiverConfigs: []multicastTestPodConfig{{1, false}},
 				port:            3458,
-				group:           net.ParseIP("224.3.4.7"),
+				group:           net.ParseIP(ipStrByPrefix(ipPrefix, 4, 7)),
 			},
 			{
 				name:            "testMulticastTrafficToExternal",
-				senderConfig:    multicastTestPodConfig{nodeIdx: 0, isHostNetwork: false},
+				senderConfig:    multicastTestPodConfig{nodeIdx: 0, isExternalHost: false},
 				receiverConfigs: []multicastTestPodConfig{{1, true}},
 				port:            3459,
-				group:           net.ParseIP("224.3.4.8"),
+				group:           net.ParseIP(ipStrByPrefix(ipPrefix, 4, 8)),
 			},
 		}
 		for _, mc := range testcases {
@@ -119,31 +121,31 @@ func runMulticastTestCases(t *testing.T, data *TestData, nodeMulticastInterfaces
 		testcases := []multicastTestcase{
 			{
 				name:            "testMulticastMultipleReceiversOnSameNode",
-				senderConfig:    multicastTestPodConfig{nodeIdx: 0, isHostNetwork: false},
+				senderConfig:    multicastTestPodConfig{nodeIdx: 0, isExternalHost: false},
 				receiverConfigs: []multicastTestPodConfig{{0, false}, {0, false}},
 				port:            3460,
-				group:           net.ParseIP("224.3.4.9"),
+				group:           net.ParseIP(ipStrByPrefix(ipPrefix, 4, 9)),
 			},
 			{
 				name:            "testMulticastMultipleReceiversForInterNodePods",
-				senderConfig:    multicastTestPodConfig{nodeIdx: 0, isHostNetwork: false},
+				senderConfig:    multicastTestPodConfig{nodeIdx: 0, isExternalHost: false},
 				receiverConfigs: []multicastTestPodConfig{{1, false}, {2, false}},
 				port:            3461,
-				group:           net.ParseIP("224.3.4.10"),
+				group:           net.ParseIP(ipStrByPrefix(ipPrefix, 4, 10)),
 			},
 			{
 				name:            "testMulticastMultipleReceiversTrafficFromExternal",
-				senderConfig:    multicastTestPodConfig{nodeIdx: 0, isHostNetwork: true},
+				senderConfig:    multicastTestPodConfig{nodeIdx: 0, isExternalHost: true},
 				receiverConfigs: []multicastTestPodConfig{{1, false}, {2, true}},
 				port:            3462,
-				group:           net.ParseIP("224.3.4.11"),
+				group:           net.ParseIP(ipStrByPrefix(ipPrefix, 4, 11)),
 			},
 			{
 				name:            "testMulticastMultipleReceiversTrafficToExternal",
-				senderConfig:    multicastTestPodConfig{nodeIdx: 0, isHostNetwork: false},
+				senderConfig:    multicastTestPodConfig{nodeIdx: 0, isExternalHost: false},
 				receiverConfigs: []multicastTestPodConfig{{1, true}, {2, false}},
 				port:            3463,
-				group:           net.ParseIP("224.3.4.12"),
+				group:           net.ParseIP(ipStrByPrefix(ipPrefix, 4, 12)),
 			},
 		}
 		for _, mc := range testcases {
@@ -170,7 +172,7 @@ func runMulticastTestCases(t *testing.T, data *TestData, nodeMulticastInterfaces
 		if !multipleInterfacesFound {
 			t.Skip("Skipping test because none of the Nodes has more than one multicast enabled interface")
 		}
-		testMulticastForwardToMultipleInterfaces(t, data, nodeIdx, 3464, "224.3.4.13", nodeMulticastInterfaces[nodeIdx])
+		testMulticastForwardToMultipleInterfaces(t, data, nodeIdx, 3464, ipStrByPrefix(ipPrefix, 4, 13), nodeMulticastInterfaces[nodeIdx])
 	})
 	t.Run("testMulticaststats", func(t *testing.T) {
 		skipIfNumNodesLessThan(t, 2)
@@ -178,15 +180,15 @@ func runMulticastTestCases(t *testing.T, data *TestData, nodeMulticastInterfaces
 			{
 				name: "testMulticastNetworkPolicyStats",
 				senderConfigs: []senderConfigs{
-					{nodeName: nodeName(0), name: "test1-sender-1", IPs: []string{"225.20.2.2", "225.20.2.3"}, sendSessions: 10},
+					{nodeName: nodeName(0), name: "test1-sender-1", IPs: []string{ipStrByPrefix(ipPrefix, 5, 2), ipStrByPrefix(ipPrefix, 5, 3)}, sendSessions: 10},
 				},
 				multicastANPConfigs: []ANPConfigs{
 					{
 						name:         "anp1-multicast",
 						appliedToPod: "test1-sender-1",
 						ruleConfigs: []ruleConfig{
-							{name: "allow-multicast-traffic", address: "225.20.2.3", action: crdv1alpha1.RuleActionAllow},
-							{name: "drop-multicast-traffic", address: "225.20.2.2", action: crdv1alpha1.RuleActionDrop},
+							{name: "allow-multicast-traffic", address: ipStrByPrefix(ipPrefix, 5, 3), action: crdv1alpha1.RuleActionAllow},
+							{name: "drop-multicast-traffic", address: ipStrByPrefix(ipPrefix, 5, 2), action: crdv1alpha1.RuleActionDrop},
 						},
 					},
 				},
@@ -200,15 +202,15 @@ func runMulticastTestCases(t *testing.T, data *TestData, nodeMulticastInterfaces
 			{
 				name: "testIGMPNetworkPolicyStats",
 				receiverConfigs: []receiverConfigs{
-					{nodeName: nodeName(1), name: "test2-receiver-1", IPs: []string{"225.20.3.2", "225.20.3.3"}},
+					{nodeName: nodeName(1), name: "test2-receiver-1", IPs: []string{ipStrByPrefix(ipPrefix, 6, 2), ipStrByPrefix(ipPrefix, 6, 3)}},
 				},
 				igmpANPConfigs: []ANPConfigs{
 					{
 						name:         "anp1-igmp",
 						appliedToPod: "test2-receiver-1",
 						ruleConfigs: []ruleConfig{
-							{name: "allow-igmp-report", address: "225.20.3.3", action: crdv1alpha1.RuleActionAllow},
-							{name: "drop-igmp-report", address: "225.20.3.2", action: crdv1alpha1.RuleActionDrop},
+							{name: "allow-igmp-report", address: ipStrByPrefix(ipPrefix, 6, 3), action: crdv1alpha1.RuleActionAllow},
+							{name: "drop-igmp-report", address: ipStrByPrefix(ipPrefix, 6, 2), action: crdv1alpha1.RuleActionDrop},
 						},
 					},
 				},
@@ -219,26 +221,26 @@ func runMulticastTestCases(t *testing.T, data *TestData, nodeMulticastInterfaces
 					"anp1-igmp": sets.NewString("allow-igmp-report", "drop-igmp-report"),
 				},
 				multicastGroupsResult: map[string]sets.String{
-					"225.20.3.3": sets.NewString("test2-receiver-1"),
+					ipStrByPrefix(ipPrefix, 6, 3): sets.NewString("test2-receiver-1"),
 				},
 			},
 			{
 				name: "testMulticastStatsWithMixedANPs",
 				senderConfigs: []senderConfigs{
-					{nodeName: nodeName(0), name: "test3-sender-1", IPs: []string{"225.20.1.2", "225.20.1.3"}, sendSessions: 10},
-					{nodeName: nodeName(1), name: "test3-sender-2", IPs: []string{"225.20.1.2", "225.20.1.3"}, sendSessions: 10},
+					{nodeName: nodeName(0), name: "test3-sender-1", IPs: []string{ipStrByPrefix(ipPrefix, 7, 2), ipStrByPrefix(ipPrefix, 7, 3)}, sendSessions: 10},
+					{nodeName: nodeName(1), name: "test3-sender-2", IPs: []string{ipStrByPrefix(ipPrefix, 7, 2), ipStrByPrefix(ipPrefix, 7, 3)}, sendSessions: 10},
 				},
 				receiverConfigs: []receiverConfigs{
-					{nodeName: nodeName(1), name: "test3-receiver-1", IPs: []string{"225.20.1.2", "225.20.1.3"}},
-					{nodeName: nodeName(0), name: "test3-receiver-2", IPs: []string{"225.20.1.2", "225.20.1.3"}},
+					{nodeName: nodeName(1), name: "test3-receiver-1", IPs: []string{ipStrByPrefix(ipPrefix, 7, 2), ipStrByPrefix(ipPrefix, 7, 3)}},
+					{nodeName: nodeName(0), name: "test3-receiver-2", IPs: []string{ipStrByPrefix(ipPrefix, 7, 2), ipStrByPrefix(ipPrefix, 7, 3)}},
 				},
 				multicastANPConfigs: []ANPConfigs{
 					{
 						name:         "anp1-mixed",
 						appliedToPod: "test3-sender-1",
 						ruleConfigs: []ruleConfig{
-							{name: "allow-multicast-traffic", address: "225.20.1.3", action: crdv1alpha1.RuleActionAllow},
-							{name: "drop-multicast-traffic", address: "225.20.1.2", action: crdv1alpha1.RuleActionDrop},
+							{name: "allow-multicast-traffic", address: ipStrByPrefix(ipPrefix, 7, 3), action: crdv1alpha1.RuleActionAllow},
+							{name: "drop-multicast-traffic", address: ipStrByPrefix(ipPrefix, 7, 2), action: crdv1alpha1.RuleActionDrop},
 						},
 					},
 				},
@@ -247,8 +249,8 @@ func runMulticastTestCases(t *testing.T, data *TestData, nodeMulticastInterfaces
 						name:         "anp2-mixed",
 						appliedToPod: "test3-receiver-1",
 						ruleConfigs: []ruleConfig{
-							{name: "allow-igmp-report", address: "225.20.1.2", action: crdv1alpha1.RuleActionAllow},
-							{name: "drop-igmp-report", address: "225.20.1.3", action: crdv1alpha1.RuleActionDrop},
+							{name: "allow-igmp-report", address: ipStrByPrefix(ipPrefix, 7, 2), action: crdv1alpha1.RuleActionAllow},
+							{name: "drop-igmp-report", address: ipStrByPrefix(ipPrefix, 7, 3), action: crdv1alpha1.RuleActionDrop},
 						},
 					},
 					{
@@ -271,8 +273,8 @@ func runMulticastTestCases(t *testing.T, data *TestData, nodeMulticastInterfaces
 					"anp3-mixed": sets.NewString("allow-igmp-query"),
 				},
 				multicastGroupsResult: map[string]sets.String{
-					"225.20.1.2": sets.NewString("test3-receiver-2", "test3-receiver-1"),
-					"225.20.1.3": sets.NewString("test3-receiver-2"),
+					ipStrByPrefix(ipPrefix, 7, 2): sets.NewString("test3-receiver-2", "test3-receiver-1"),
+					ipStrByPrefix(ipPrefix, 7, 3): sets.NewString("test3-receiver-2"),
 				},
 			},
 		}
@@ -286,8 +288,8 @@ func runMulticastTestCases(t *testing.T, data *TestData, nodeMulticastInterfaces
 }
 
 type multicastTestPodConfig struct {
-	nodeIdx       int
-	isHostNetwork bool
+	nodeIdx        int
+	isExternalHost bool
 }
 
 type multicastTestcase struct {
@@ -550,45 +552,78 @@ func testMulticastForwardToMultipleInterfaces(t *testing.T, data *TestData, send
 	mcjoinWaitTimeout := defaultTimeout / time.Second
 	senderName, _, cleanupFunc := createAndWaitForPod(t, data, data.createMcJoinPodOnNode, "test-sender-", nodeName(senderIdx), data.testNamespace, false)
 	defer cleanupFunc()
-	tcpdumpName, _, cleanupFunc := createAndWaitForPod(t, data, data.createNetshootPodOnNode, "test-tcpdump-", nodeName(senderIdx), data.testNamespace, true)
-	defer cleanupFunc()
-	// Wait 2 seconds(-w 2) before sending multicast traffic.
-	// It sends two multicast packets for every second(-f 500 means it takes 500 milliseconds for sending one packet).
-	sendMulticastCommand := []string{"/bin/sh", "-c", fmt.Sprintf("timeout 90s mcjoin -f 500 -o -p %d -s -t 3 -w 2 -W %d %s", senderPort, mcjoinWaitTimeout, senderGroup)}
-	go func() {
-		data.RunCommandFromPod(data.testNamespace, senderName, mcjoinContainerName, sendMulticastCommand)
-	}()
+	if testOptions.providerName == "kind" {
+		sendMulticastCommand := []string{"/bin/sh", "-c", fmt.Sprintf("timeout 90s mcjoin -f 500 -o -p %d -s -t 3 -w 2 -W %d %s", senderPort, mcjoinWaitTimeout, senderGroup)}
+		go func() {
+			data.RunCommandFromPod(data.testNamespace, senderName, mcjoinContainerName, sendMulticastCommand)
+		}()
+		if err := wait.Poll(5*time.Second, defaultTimeout*3, func() (bool, error) {
+			// Check whether multicast interfaces can receive multicast traffic in the server side.
+			// The check is needed for verifying external interfaces acting as multicast interfaces are able to forward multicast traffic.
+			// If multicast traffic is sent from non-HostNetwork pods, all multicast interfaces in senders should receive multicast traffic.
+			receiverMulticastCommand := []string{"/bin/sh", "-c", fmt.Sprintf("timeout 5s mcjoin -c 1 -o -p %d %s", senderPort, senderGroup)}
 
-	if err := wait.Poll(5*time.Second, defaultTimeout, func() (bool, error) {
-		// Check whether multicast interfaces can receive multicast traffic in the server side.
-		// The check is needed for verifying external interfaces acting as multicast interfaces are able to forward multicast traffic.
-		// If multicast traffic is sent from non-HostNetwork pods, all multicast interfaces in senders should receive multicast traffic.
-		for _, multicastInterface := range senderMulticastInterfaces {
-			tcpdumpReceiveMulticastCommand := []string{"/bin/sh", "-c", fmt.Sprintf("timeout 5s tcpdump -q -i %s -c 1 -W 90 host %s", multicastInterface, senderGroup)}
-			_, stderr, err := data.RunCommandFromPod(data.testNamespace, tcpdumpName, tcpdumpContainerName, tcpdumpReceiveMulticastCommand)
+			t.Logf("%+v", receiverMulticastCommand)
+			_, stdout, _, err := data.RunCommandOnNode("mcjoin", strings.Join(receiverMulticastCommand, " "))
+
 			if err != nil {
 				return false, err
 			}
-			if !strings.Contains(stderr, "1 packet captured") {
+			if !strings.Contains(stdout, "1 packets") {
 				return false, nil
 			}
+			return true, nil
+		}); err != nil {
+			t.Fatalf("Error when waiting for capturing multicast traffic on all multicast interfaces: %v", err)
 		}
-		return true, nil
-	}); err != nil {
-		t.Fatalf("Error when waiting for capturing multicast traffic on all multicast interfaces: %v", err)
+	} else {
+
+		tcpdumpName, _, cleanupFunc := createAndWaitForPod(t, data, data.createNetshootPodOnNode, "test-tcpdump-", nodeName(senderIdx), data.testNamespace, true)
+		defer cleanupFunc()
+		// Wait 2 seconds(-w 2) before sending multicast traffic.
+		// It sends two multicast packets for every second(-f 500 means it takes 500 milliseconds for sending one packet).
+		sendMulticastCommand := []string{"/bin/sh", "-c", fmt.Sprintf("timeout 90s mcjoin -f 500 -o -p %d -s -t 3 -w 2 -W %d %s", senderPort, mcjoinWaitTimeout, senderGroup)}
+		go func() {
+			data.RunCommandFromPod(data.testNamespace, senderName, mcjoinContainerName, sendMulticastCommand)
+		}()
+
+		if err := wait.Poll(5*time.Second, defaultTimeout, func() (bool, error) {
+			// Check whether multicast interfaces can receive multicast traffic in the server side.
+			// The check is needed for verifying external interfaces acting as multicast interfaces are able to forward multicast traffic.
+			// If multicast traffic is sent from non-HostNetwork pods, all multicast interfaces in senders should receive multicast traffic.
+			for _, multicastInterface := range senderMulticastInterfaces {
+				tcpdumpReceiveMulticastCommand := []string{"/bin/sh", "-c", fmt.Sprintf("timeout 5s tcpdump -q -i %s -c 1 -W 90 host %s", multicastInterface, senderGroup)}
+				t.Logf("%+v", tcpdumpReceiveMulticastCommand)
+				_, stderr, err := data.RunCommandFromPod(data.testNamespace, tcpdumpName, tcpdumpContainerName, tcpdumpReceiveMulticastCommand)
+				if err != nil {
+					return false, err
+				}
+				if !strings.Contains(stderr, "1 packet captured") {
+					return false, nil
+				}
+			}
+			return true, nil
+		}); err != nil {
+			t.Fatalf("Error when waiting for capturing multicast traffic on all multicast interfaces: %v", err)
+		}
 	}
 }
 
 func runTestMulticastBetweenPods(t *testing.T, data *TestData, mc multicastTestcase, nodeMulticastInterfaces map[int][]string, checkReceiverRoute bool) {
 	currentEncapMode, _ := data.GetEncapMode()
-	if requiresExternalHostSupport(mc) && currentEncapMode == config.TrafficEncapModeEncap {
+	if requiresExternalHostSupport(mc) && currentEncapMode == config.TrafficEncapModeEncap && testOptions.providerName != "kind" {
 		t.Skipf("Multicast does not support using hostNetwork Pod to simulate the external host with encap mode, skip the case")
 	}
 	mcjoinWaitTimeout := defaultTimeout / time.Second
 	gatewayInterface, err := data.GetGatewayInterfaceName(antreaNamespace)
 	failOnError(err, t)
-	senderName, _, cleanupFunc := createAndWaitForPod(t, data, data.createMcJoinPodOnNode, "test-sender-", nodeName(mc.senderConfig.nodeIdx), data.testNamespace, mc.senderConfig.isHostNetwork)
-	defer cleanupFunc()
+
+	senderName := "mcjoin1"
+	if !(testOptions.providerName == "kind" && mc.senderConfig.isExternalHost) {
+		var cleanupFunc func()
+		senderName, _, cleanupFunc = createAndWaitForPod(t, data, data.createMcJoinPodOnNode, "test-sender-", nodeName(mc.senderConfig.nodeIdx), data.testNamespace, mc.senderConfig.isExternalHost)
+		defer cleanupFunc()
+	}
 	var wg sync.WaitGroup
 	_, cleanupFuncs := setupReceivers(t, data, mc, mcjoinWaitTimeout, &wg)
 	for _, cleanupFunc := range cleanupFuncs {
@@ -597,10 +632,16 @@ func runTestMulticastBetweenPods(t *testing.T, data *TestData, mc multicastTestc
 
 	// Wait 2 seconds(-w 2) before sending multicast traffic.
 	// It sends two multicast packets for every second(-f 500 means it takes 500 milliseconds for sending one packet).
-	sendMulticastCommand := []string{"/bin/sh", "-c", fmt.Sprintf("mcjoin -f 500 -o -p %d -s -t 3 -w 2 -W %d %s", mc.port, mcjoinWaitTimeout, mc.group.String())}
-	go func() {
-		data.RunCommandFromPod(data.testNamespace, senderName, mcjoinContainerName, sendMulticastCommand)
-	}()
+	sendMulticastCommand := []string{"/bin/sh", "-c", fmt.Sprintf("mcjoin -f 500 -o -p %d -t 3 -w 2 -W %d -s %s", mc.port, mcjoinWaitTimeout, mc.group.String())}
+	if !(testOptions.providerName == "kind" && mc.senderConfig.isExternalHost) {
+		go func() {
+			data.RunCommandFromPod(data.testNamespace, senderName, mcjoinContainerName, sendMulticastCommand)
+		}()
+	} else {
+		go func() {
+			data.RunCommandOnNode(senderName, strings.Join(sendMulticastCommand, " "))
+		}()
+	}
 
 	readyReceivers := sets.NewInt()
 	senderReady := false
@@ -611,7 +652,7 @@ func runTestMulticastBetweenPods(t *testing.T, data *TestData, mc multicastTestc
 			if err != nil {
 				return false, err
 			}
-			if !mc.senderConfig.isHostNetwork {
+			if !mc.senderConfig.isExternalHost {
 				if len(mrouteResult) == 0 {
 					return false, nil
 				}
@@ -637,13 +678,13 @@ func runTestMulticastBetweenPods(t *testing.T, data *TestData, mc multicastTestc
 
 					// If multicast traffic is sent from non-HostNetwork pods and senders-receivers are located in different nodes,
 					// the receivers should configure corresponding inbound multicast routes.
-					if mc.senderConfig.nodeIdx != receiver.nodeIdx && !receiver.isHostNetwork {
+					if mc.senderConfig.nodeIdx != receiver.nodeIdx && !receiver.isExternalHost {
 						if len(mRouteResult) == 0 {
 							return false, nil
 						}
 						// If multicast traffic is sent from non-HostNetwork pods and senders-receivers are located in different nodes,
 						// the receivers should configure corresponding inbound multicast routes.
-						if mc.senderConfig.nodeIdx != receiver.nodeIdx && !receiver.isHostNetwork {
+						if mc.senderConfig.nodeIdx != receiver.nodeIdx && !receiver.isExternalHost {
 							if len(mRouteResult) == 0 {
 								return false, nil
 							}
@@ -661,7 +702,7 @@ func runTestMulticastBetweenPods(t *testing.T, data *TestData, mc multicastTestc
 				// The receivers should also join multicast group.
 				// Note that in HostNetwork mode, the "join multicast" action is taken by mcjoin,
 				// which will not persist after mcjoin exits.
-				if !receiver.isHostNetwork {
+				if !receiver.isExternalHost {
 					if len(mAddrResult) == 0 {
 						return false, nil
 					}
@@ -681,25 +722,50 @@ func runTestMulticastBetweenPods(t *testing.T, data *TestData, mc multicastTestc
 }
 
 func setupReceivers(t *testing.T, data *TestData, mc multicastTestcase, mcjoinWaitTimeout time.Duration, wg *sync.WaitGroup) ([]string, []func()) {
+	receiverNamesMap := make(map[string]bool, 0)
 	receiverNames := make([]string, 0)
 	cleanupFuncs := []func(){}
-	for _, receiver := range mc.receiverConfigs {
-		receiverName, _, cleanupFunc := createAndWaitForPod(t, data, data.createMcJoinPodOnNode, "test-receiver-", nodeName(receiver.nodeIdx), data.testNamespace, receiver.isHostNetwork)
-		receiverNames = append(receiverNames, receiverName)
-		cleanupFuncs = append(cleanupFuncs, cleanupFunc)
-	}
 
-	for _, receiverName := range receiverNames {
-		r := receiverName
+	podNames := []string{"mcjoin1", "mcjoin2", "mcjoin3"}
+
+	for _, receiver := range mc.receiverConfigs {
+		var receiverName string
+		var cleanupFunc func()
+		if !receiver.isExternalHost || testOptions.providerName != "kind" {
+			receiverName, _, cleanupFunc = createAndWaitForPod(t, data, data.createMcJoinPodOnNode, "test-receiver-", nodeName(receiver.nodeIdx), data.testNamespace, receiver.isExternalHost)
+			cleanupFuncs = append(cleanupFuncs, cleanupFunc)
+		} else {
+			receiverName = podNames[receiver.nodeIdx]
+		}
+		receiverNames = append(receiverNames, receiverName)
+		receiverNamesMap[receiverName] = receiver.isExternalHost
+	}
+	for receiverName, isExternalHost := range receiverNamesMap {
 		wg.Add(1)
+		r := receiverName
+		isExternalHost := isExternalHost
 		go func() {
 			defer wg.Done()
+
 			// The following command joins a multicast group and sets the timeout to 100 seconds(-W 100) before exit.
 			// The command will return after receiving 10 packet(-c 10).
+			var res string
+			var err error
 			receiveMulticastCommand := []string{"/bin/sh", "-c", fmt.Sprintf("mcjoin -c 10 -o -p %d -W %d %s", mc.port, mcjoinWaitTimeout, mc.group.String())}
-			res, _, err := data.RunCommandFromPod(data.testNamespace, r, mcjoinContainerName, receiveMulticastCommand)
+			if isExternalHost && testOptions.providerName == "kind" {
+				_, res, _, err = data.RunCommandOnNode(r, strings.Join(receiveMulticastCommand, " "))
+			} else {
+				t.Logf("%+v", receiveMulticastCommand)
+				res, _, err = data.RunCommandFromPod(data.testNamespace, r, mcjoinContainerName, receiveMulticastCommand)
+			}
 			failOnError(err, t)
-			assert.Contains(t, res, "Total: 10 packets")
+			currentEncapMode, err := data.GetEncapMode()
+			if err != nil {
+				failOnError(err, t)
+			}
+			if !(currentEncapMode == config.TrafficEncapModeEncap && isExternalHost) {
+				assert.Contains(t, res, "Total: 10 packets")
+			}
 		}()
 	}
 	return receiverNames, cleanupFuncs
@@ -746,13 +812,17 @@ func checkAntctlResult(t *testing.T, data *TestData, antreaPodName, containerPod
 }
 
 func requiresExternalHostSupport(mc multicastTestcase) bool {
-	if mc.senderConfig.isHostNetwork {
+	if mc.senderConfig.isExternalHost {
 		return true
 	}
 	for _, receiver := range mc.receiverConfigs {
-		if receiver.isHostNetwork {
+		if receiver.isExternalHost {
 			return true
 		}
 	}
 	return false
+}
+
+func ipStrByPrefix(prefix string, thirdByte, leastByte int) string {
+	return fmt.Sprintf("%s.%d.%d", prefix, thirdByte, leastByte)
 }
