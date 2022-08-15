@@ -9,6 +9,7 @@ require (
 )
 
 require (
+	github.com/Azure/go-ansiterm v0.0.0-20210617225240-d185dfc1b5a1 // indirect
 	github.com/BurntSushi/toml v0.3.1 // indirect
 	github.com/Microsoft/go-winio v0.5.0 // indirect
 	github.com/Microsoft/hcsshim v0.8.20 // indirect
@@ -42,7 +43,6 @@ require (
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/golang/snappy v0.0.3 // indirect
-	github.com/google/gnostic v0.5.7-v3refs // indirect
 	github.com/google/go-cmp v0.5.5 // indirect
 	github.com/google/go-intervals v0.0.2 // indirect
 	github.com/google/gofuzz v1.2.0 // indirect
@@ -137,6 +137,10 @@ replace (
 	// The current version of Octant does not build with version v0.24.0 of
 	// the K8s libraries.
 	k8s.io/api => k8s.io/api v0.21.3
+	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.21.3
 	k8s.io/apimachinery => k8s.io/apimachinery v0.21.3
 	k8s.io/client-go => k8s.io/client-go v0.21.3
+	k8s.io/kube-aggregator => k8s.io/kube-aggregator v0.21.3
+	k8s.io/kube-openapi => k8s.io/kube-openapi v0.0.0-20210305001622-591a79e4bda7
+	k8s.io/metrics => k8s.io/metrics v0.21.3
 )
