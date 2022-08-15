@@ -1302,6 +1302,57 @@ spec:
       - eip
 
 ---
+# Source: crds/externalnode.yaml
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  labels:
+    app: antrea
+  name: externalnodes.crd.antrea.io
+spec:
+  group: crd.antrea.io
+  versions:
+    - name: v1alpha1
+      schema:
+        openAPIV3Schema:
+          type: object
+          required:
+            - spec
+          properties:
+            spec:
+              type: object
+              required:
+                - interfaces
+              properties:
+                interfaces:
+                  type: array
+                  minItems: 1
+                  maxItems: 1
+                  required:
+                    - ips
+                  items:
+                    type: object
+                    properties:
+                      ips:
+                        type: array
+                        minItems: 1
+                        items:
+                          type: string
+                          oneOf:
+                            - format: ipv4
+                            - format: ipv6
+                      name:
+                        type: string
+      served: true
+      storage: true
+  scope: Namespaced
+  names:
+    kind: ExternalNode
+    plural: externalnodes
+    shortNames:
+      - en
+    singular: externalnode
+---
 # Source: crds/ippool.yaml
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
@@ -1496,6 +1547,30 @@ spec:
                     type: object
                     # Ensure that Spec.AppliedTo does not allow NamespaceSelector/IPBlock field
                     properties:
+                      externalEntitySelector:
+                        type: object
+                        properties:
+                          matchExpressions:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                key:
+                                  type: string
+                                operator:
+                                  enum:
+                                    - In
+                                    - NotIn
+                                    - Exists
+                                    - DoesNotExist
+                                  type: string
+                                values:
+                                  type: array
+                                  items:
+                                    type: string
+                                    pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
+                          matchLabels:
+                            x-kubernetes-preserve-unknown-fields: true
                       podSelector:
                         type: object
                         properties:
@@ -2976,6 +3051,9 @@ data:
     # Enable certificated-based authentication for IPsec.
     #  IPsecCertAuth: false
 
+    # Enable managing ExternalNode for unmanaged VM/BM.
+    #  ExternalNode: false
+
     # The port for the antrea-controller APIServer to serve on.
     # Note that if it's set to another value, the `containerPort` of the `api` port of the
     # `antrea-controller` container must be set to the same value.
@@ -3222,9 +3300,7 @@ rules:
       - antreaagentinfos
     verbs:
       - get
-      - create
       - update
-      - delete
   - apiGroups:
       - controlplane.antrea.io
     resources:
@@ -3630,6 +3706,7 @@ rules:
       - antreaagentinfos
     verbs:
       - list
+      - create
       - delete
   - apiGroups:
       - crd.antrea.io
@@ -3724,6 +3801,14 @@ rules:
     verbs:
       - update
       - patch
+  - apiGroups:
+      - crd.antrea.io
+    resources:
+      - externalnodes
+    verbs:
+      - get
+      - watch
+      - list
   - apiGroups:
       - apps
     resources:
@@ -3909,7 +3994,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 05340bff4942128434fb2b7ab2c0288d9586d3324d58da987c1a58db78aab6d3
+        checksum/config: b7ddaa189bfec76b90f129f3fd8d1482edcfaf8c42772956d6e4aa5134e3c3cb
       labels:
         app: antrea
         component: antrea-agent
@@ -4149,7 +4234,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 05340bff4942128434fb2b7ab2c0288d9586d3324d58da987c1a58db78aab6d3
+        checksum/config: b7ddaa189bfec76b90f129f3fd8d1482edcfaf8c42772956d6e4aa5134e3c3cb
       labels:
         app: antrea
         component: antrea-controller

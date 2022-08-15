@@ -341,6 +341,18 @@ type Client interface {
 	// UninstallMulticlusterFlows removes cross-cluster flows matching the given clusterID on
 	// a regular Node or a Gateway.
 	UninstallMulticlusterFlows(clusterID string) error
+
+	// InstallVMUplinkFlows installs flows to forward packet between uplinkPort and hostPort. On a VM, the
+	// uplink and host internal port are paired directly, and no layer 2/3 forwarding flow is installed.
+	InstallVMUplinkFlows(hostInterfaceName string, hostPort int32, uplinkPort int32) error
+
+	// UninstallVMUplinkFlows removes the flows installed to forward packet between uplinkPort and hostPort.
+	UninstallVMUplinkFlows(hostInterfaceName string) error
+
+	// InstallPolicyBypassFlows installs flows to bypass the NetworkPolicy rules on the traffic with the given ipnet
+	// or ip, port, protocol and direction. It is used to bypass NetworkPolicy enforcement on a VM for the particular
+	// traffic.
+	InstallPolicyBypassFlows(protocol binding.Protocol, ipNet *net.IPNet, port uint16, isIngress bool) error
 }
 
 // GetFlowTableStatus returns an array of flow table status.
@@ -728,6 +740,7 @@ func (c *client) Initialize(roundInfo types.RoundInfo,
 	c.networkConfig = networkConfig
 	c.egressConfig = egressConfig
 	c.serviceConfig = serviceConfig
+	c.nodeType = nodeConfig.Type
 
 	if networkConfig.IPv4Enabled {
 		c.ipProtocols = append(c.ipProtocols, binding.ProtocolIP)
@@ -774,16 +787,35 @@ func (c *client) Initialize(roundInfo types.RoundInfo,
 // generatePipelines generates table list for every pipeline from all activated features. Note that, tables are not realized
 // in OVS bridge in this function.
 func (c *client) generatePipelines() {
-	c.featurePodConnectivity = newFeaturePodConnectivity(c.cookieAllocator,
-		c.ipProtocols,
-		c.nodeConfig,
-		c.networkConfig,
-		c.connectUplinkToBridge,
-		c.enableMulticast,
-		c.proxyAll,
-		c.enableTrafficControl)
-	c.activatedFeatures = append(c.activatedFeatures, c.featurePodConnectivity)
-	c.traceableFeatures = append(c.traceableFeatures, c.featurePodConnectivity)
+	if c.nodeType == config.K8sNode {
+		c.featurePodConnectivity = newFeaturePodConnectivity(c.cookieAllocator,
+			c.ipProtocols,
+			c.nodeConfig,
+			c.networkConfig,
+			c.connectUplinkToBridge,
+			c.enableMulticast,
+			c.proxyAll,
+			c.enableTrafficControl)
+		c.activatedFeatures = append(c.activatedFeatures, c.featurePodConnectivity)
+		c.traceableFeatures = append(c.traceableFeatures, c.featurePodConnectivity)
+
+		c.featureService = newFeatureService(c.cookieAllocator,
+			c.ipProtocols,
+			c.nodeConfig,
+			c.networkConfig,
+			c.serviceConfig,
+			c.bridge,
+			c.enableProxy,
+			c.proxyAll,
+			c.connectUplinkToBridge)
+		c.activatedFeatures = append(c.activatedFeatures, c.featureService)
+		c.traceableFeatures = append(c.traceableFeatures, c.featureService)
+	}
+
+	if c.nodeType == config.ExternalNode {
+		c.featureExternalNodeConnectivity = newFeatureExternalNodeConnectivity(c.cookieAllocator, c.ipProtocols)
+		c.activatedFeatures = append(c.activatedFeatures, c.featureExternalNodeConnectivity)
+	}
 
 	c.featureNetworkPolicy = newFeatureNetworkPolicy(c.cookieAllocator,
 		c.ipProtocols,
@@ -793,21 +825,10 @@ func (c *client) generatePipelines() {
 		c.enableAntreaPolicy,
 		c.enableMulticast,
 		c.proxyAll,
-		c.connectUplinkToBridge)
+		c.connectUplinkToBridge,
+		c.nodeType)
 	c.activatedFeatures = append(c.activatedFeatures, c.featureNetworkPolicy)
 	c.traceableFeatures = append(c.traceableFeatures, c.featureNetworkPolicy)
-
-	c.featureService = newFeatureService(c.cookieAllocator,
-		c.ipProtocols,
-		c.nodeConfig,
-		c.networkConfig,
-		c.serviceConfig,
-		c.bridge,
-		c.enableProxy,
-		c.proxyAll,
-		c.connectUplinkToBridge)
-	c.activatedFeatures = append(c.activatedFeatures, c.featureService)
-	c.traceableFeatures = append(c.traceableFeatures, c.featureService)
 
 	if c.enableEgress {
 		c.featureEgress = newFeatureEgress(c.cookieAllocator, c.ipProtocols, c.nodeConfig, c.egressConfig)
@@ -835,6 +856,9 @@ func (c *client) generatePipelines() {
 		if c.enableMulticast {
 			pipelineIDs = append(pipelineIDs, pipelineMulticast)
 		}
+	}
+	if c.nodeType == config.ExternalNode {
+		pipelineIDs = append(pipelineIDs, pipelineNonIP)
 	}
 
 	// For every pipeline, get required tables from every active feature and store the required tables in a map to avoid
@@ -911,7 +935,9 @@ func (c *client) ReplayFlows() {
 		klog.Errorf("Error during flow replay: %v", err)
 	}
 
-	c.featureService.replayGroups()
+	if c.featureService != nil {
+		c.featureService.replayGroups()
+	}
 	if c.enableMulticast {
 		c.featureMulticast.replayGroups()
 	}

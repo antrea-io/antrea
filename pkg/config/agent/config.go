@@ -205,6 +205,11 @@ type AgentConfig struct {
 	IPsec IPsecConfig `yaml:"ipsec"`
 	// Multicluster configuration options.
 	Multicluster MulticlusterConfig `yaml:"multicluster,omitempty"`
+	// NodeType is type of the Node where Antrea Agent is running.
+	// Defaults to "k8sNode". Valid values include "k8sNode", and "externalNode".
+	NodeType string `yaml:"nodeType,omitempty"`
+	// ExternalNode related configurations.
+	ExternalNode ExternalNodeConfig `yaml:"externalNode,omitempty"`
 }
 
 type AntreaProxyConfig struct {
@@ -274,4 +279,27 @@ type MulticlusterConfig struct {
 	// The Namespace where the Antrea Multi-cluster controller is running.
 	// The default is antrea-agent's Namespace.
 	Namespace string `yaml:"namespace,omitempty"`
+}
+
+type ExternalNodeConfig struct {
+	// The expected Namespace in which the ExternalNode should be created for a VM or baremetal server Node.
+	// The default value is "default".
+	// It is used only when NodeType is externalNode.
+	ExternalNodeNamespace string `yaml:"externalNodeNamespace,omitempty"`
+	// The policy bypass rules define traffic that should bypass NetworkPolicy rules.
+	// Each rule contains the following four attributes:
+	// direction (ingress|egress), protocol(tcp/udp/icmp/ip), remote CIDR, dst port (ICMP doesn't require),
+	// It is used only when NodeType is externalNode.
+	PolicyBypassRules []PolicyBypassRule `yaml:"policyBypassRules,omitempty"`
+}
+
+type PolicyBypassRule struct {
+	// The direction value can be ingress or egress.
+	Direction string `yaml:"direction,omitempty"`
+	// The protocol which traffic must match. Supported values are TCP, UDP, ICMP and IP.
+	Protocol string `yaml:"protocol,omitempty"`
+	// CIDR marks the destination CIDR for Egress and source CIDR for Ingress.
+	CIDR string `json:"cidr,omitempty"`
+	// The destination port of the given protocol.
+	Port int `yaml:"port,omitempty"`
 }

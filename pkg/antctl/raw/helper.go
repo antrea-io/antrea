@@ -28,7 +28,6 @@ import (
 	agentapiserver "antrea.io/antrea/pkg/agent/apiserver"
 	"antrea.io/antrea/pkg/antctl/runtime"
 	"antrea.io/antrea/pkg/apis"
-	clusterinformationv1beta1 "antrea.io/antrea/pkg/apis/crd/v1beta1"
 	controllerapiserver "antrea.io/antrea/pkg/apiserver"
 	antrea "antrea.io/antrea/pkg/client/clientset/versioned"
 	"antrea.io/antrea/pkg/client/clientset/versioned/scheme"
@@ -82,21 +81,12 @@ func CreateAgentClientCfg(k8sClientset kubernetes.Interface, antreaClientset ant
 	if err != nil {
 		return nil, fmt.Errorf("error when looking up Node %s: %w", nodeName, err)
 	}
-	// TODO: filter by Node name, but that would require API support
-	agentInfoList, err := antreaClientset.CrdV1beta1().AntreaAgentInfos().List(context.TODO(), metav1.ListOptions{ResourceVersion: "0"})
+	agentInfo, err := antreaClientset.CrdV1beta1().AntreaAgentInfos().Get(context.TODO(), nodeName, metav1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}
-	var agentInfo *clusterinformationv1beta1.AntreaAgentInfo
-	for i := range agentInfoList.Items {
-		ai := agentInfoList.Items[i]
-		if ai.NodeRef.Name == nodeName {
-			agentInfo = &ai
-			break
-		}
-	}
-	if agentInfo == nil {
-		return nil, fmt.Errorf("no Antrea Agent found for Node name %s", nodeName)
+	if agentInfo.NodeRef.Name == "" {
+		return nil, fmt.Errorf("AntreaAgentInfo is not ready for Node %s", nodeName)
 	}
 	nodeIPs, err := k8s.GetNodeAddrs(node)
 	if err != nil {

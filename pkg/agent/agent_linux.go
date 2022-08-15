@@ -30,6 +30,7 @@ import (
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/util"
+	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	utilip "antrea.io/antrea/pkg/util/ip"
 )
 
@@ -38,8 +39,8 @@ func (i *Initializer) prepareHostNetwork() error {
 	return nil
 }
 
-func (i *Initializer) prepareOVSBridge() error {
-	// Return immediately on Linux if connectUplinkToBridge is false.
+// prepareOVSBridgeForK8sNode returns immediately on Linux if connectUplinkToBridge is false.
+func (i *Initializer) prepareOVSBridgeForK8sNode() error {
 	if !i.connectUplinkToBridge {
 		return nil
 	}
@@ -53,7 +54,7 @@ func (i *Initializer) prepareOVSBridge() error {
 	uplinkNetConfig := i.nodeConfig.UplinkNetConfig
 	uplinkNetConfig.Name = adapter.Name
 	uplinkNetConfig.MAC = adapter.HardwareAddr
-	uplinkNetConfig.IP = i.nodeConfig.NodeIPv4Addr
+	uplinkNetConfig.IPs = []*net.IPNet{i.nodeConfig.NodeIPv4Addr}
 	uplinkNetConfig.Index = adapter.Index
 	// Gateway and DNSServers are not configured at adapter in Linux
 	// Limitation: dynamic DNS servers will be lost after DHCP lease expired
@@ -293,4 +294,21 @@ func (i *Initializer) RestoreOVSBridge() {
 
 func (i *Initializer) setInterfaceMTU(iface string, mtu int) error {
 	return i.ovsBridgeClient.SetInterfaceMTU(iface, mtu)
+}
+
+func (i *Initializer) setVMNodeConfig(en *v1alpha1.ExternalNode, nodeName string) error {
+	i.nodeConfig = &config.NodeConfig{
+		Name:      nodeName,
+		Type:      config.ExternalNode,
+		OVSBridge: i.ovsBridge,
+	}
+	return nil
+}
+
+func (i *Initializer) prepareOVSBridgeForVM() error {
+	return i.setOVSDatapath()
+}
+
+func (i *Initializer) installVMInitialFlows() error {
+	return nil
 }

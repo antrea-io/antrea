@@ -179,6 +179,7 @@ rules:
       - antreaagentinfos
     verbs:
       - list
+      - create
       - delete
   - apiGroups:
       - crd.antrea.io
@@ -273,6 +274,14 @@ rules:
     verbs:
       - update
       - patch
+  - apiGroups:
+      - crd.antrea.io
+    resources:
+      - externalnodes
+    verbs:
+      - get
+      - watch
+      - list
   - apiGroups:
       - apps
     resources:
