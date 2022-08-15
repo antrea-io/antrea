@@ -59,6 +59,9 @@ func GetTrafficEncapModes() []TrafficEncapModeType {
 
 // String returns value in string.
 func (m TrafficEncapModeType) String() string {
+	if m == TrafficEncapModeInvalid {
+		return "invalid"
+	}
 	return modeStrs[m]
 }
 
