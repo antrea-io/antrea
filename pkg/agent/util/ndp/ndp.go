@@ -31,6 +31,7 @@ func GratuitousNDPOverIface(srcIP net.IP, iface *net.Interface) error {
 	if err != nil {
 		return fmt.Errorf("failed to create NDP responder for %q: %s", iface.Name, err)
 	}
+	defer conn.Close()
 
 	na := &ndp.NeighborAdvertisement{
 		Override:      true,
