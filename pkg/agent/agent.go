@@ -39,6 +39,7 @@ import (
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/controller/noderoute"
 	"antrea.io/antrea/pkg/agent/controller/trafficcontrol"
+	"antrea.io/antrea/pkg/agent/externalnode"
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/openflow"
 	"antrea.io/antrea/pkg/agent/openflow/cookie"
@@ -46,6 +47,8 @@ import (
 	"antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/agent/util"
 	"antrea.io/antrea/pkg/agent/wireguard"
+	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	"antrea.io/antrea/pkg/client/clientset/versioned"
 	"antrea.io/antrea/pkg/features"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 	"antrea.io/antrea/pkg/ovs/ovsctl"
@@ -83,6 +86,7 @@ var otherConfigKeysForIPsecCertificates = []string{"certificate", "private_key",
 // Initializer knows how to setup host networking, OpenVSwitch, and Openflow.
 type Initializer struct {
 	client                clientset.Interface
+	crdClient             versioned.Interface
 	ovsBridgeClient       ovsconfig.OVSBridgeClient
 	ofClient              openflow.Client
 	routeClient           route.Interface
@@ -100,13 +104,16 @@ type Initializer struct {
 	connectUplinkToBridge bool
 	// networkReadyCh should be closed once the Node's network is ready.
 	// The CNI server will wait for it before handling any CNI Add requests.
-	proxyAll       bool
-	networkReadyCh chan<- struct{}
-	stopCh         <-chan struct{}
+	proxyAll              bool
+	networkReadyCh        chan<- struct{}
+	stopCh                <-chan struct{}
+	nodeType              config.NodeType
+	externalNodeNamespace string
 }
 
 func NewInitializer(
 	k8sClient clientset.Interface,
+	crdClient versioned.Interface,
 	ovsBridgeClient ovsconfig.OVSBridgeClient,
 	ofClient openflow.Client,
 	routeClient route.Interface,
@@ -120,6 +127,8 @@ func NewInitializer(
 	serviceConfig *config.ServiceConfig,
 	networkReadyCh chan<- struct{},
 	stopCh <-chan struct{},
+	nodeType config.NodeType,
+	externalNodeNamespace string,
 	enableProxy bool,
 	proxyAll bool,
 	connectUplinkToBridge bool,
@@ -127,6 +136,7 @@ func NewInitializer(
 	return &Initializer{
 		ovsBridgeClient:       ovsBridgeClient,
 		client:                k8sClient,
+		crdClient:             crdClient,
 		ifaceStore:            ifaceStore,
 		ofClient:              ofClient,
 		routeClient:           routeClient,
@@ -139,6 +149,8 @@ func NewInitializer(
 		serviceConfig:         serviceConfig,
 		networkReadyCh:        networkReadyCh,
 		stopCh:                stopCh,
+		nodeType:              nodeType,
+		externalNodeNamespace: externalNodeNamespace,
 		enableProxy:           enableProxy,
 		proxyAll:              proxyAll,
 		connectUplinkToBridge: connectUplinkToBridge,
@@ -158,7 +170,7 @@ func (i *Initializer) GetWireGuardClient() wireguard.Interface {
 // setupOVSBridge sets up the OVS bridge and create host gateway interface and tunnel port
 func (i *Initializer) setupOVSBridge() error {
 	if err := i.ovsBridgeClient.Create(); err != nil {
-		klog.Error("Failed to create OVS bridge: ", err)
+		klog.ErrorS(err, "Failed to create OVS bridge")
 		return err
 	}
 
@@ -175,13 +187,15 @@ func (i *Initializer) setupOVSBridge() error {
 		return err
 	}
 
-	if err := i.setupDefaultTunnelInterface(); err != nil {
-		return err
-	}
-	// Set up host gateway interface
-	err := i.setupGatewayInterface()
-	if err != nil {
-		return err
+	if i.nodeType == config.K8sNode {
+		if err := i.setupDefaultTunnelInterface(); err != nil {
+			return err
+		}
+		// Set up host gateway interface
+		err := i.setupGatewayInterface()
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -276,9 +290,16 @@ func (i *Initializer) initInterfaceStore() error {
 			case interfacestore.AntreaTunnel:
 				intf = parseTunnelInterfaceFunc(port, ovsPort)
 			case interfacestore.AntreaHost:
-				// Not load the host interface, because it is configured on the OVS bridge port, and we don't need a
-				// specific interface in the interfaceStore.
-				intf = nil
+				if port.Name == i.ovsBridge {
+					// Need not to load the OVS bridge port to the interfaceStore
+					intf = nil
+				} else {
+					var err error
+					intf, err = externalnode.ParseHostInterfaceConfig(i.ovsBridgeClient, port, ovsPort)
+					if err != nil {
+						return fmt.Errorf("failed to get interfaceConfig by port %s: %v", port.Name, err)
+					}
+				}
 			case interfacestore.AntreaContainer:
 				// The port should be for a container interface.
 				intf = cniserver.ParseOVSPortInterfaceConfig(port, ovsPort, true)
@@ -326,6 +347,7 @@ func (i *Initializer) initInterfaceStore() error {
 			}
 		}
 		if intf != nil {
+			klog.V(2).InfoS("Adding interface to cache", "interfaceName", intf.InterfaceName)
 			ifaceList = append(ifaceList, intf)
 		}
 	}
@@ -343,9 +365,6 @@ func (i *Initializer) Initialize() error {
 	if err := i.initNodeLocalConfig(); err != nil {
 		return err
 	}
-
-	i.networkConfig.IPv4Enabled = config.IsIPv4Enabled(i.nodeConfig, i.networkConfig.TrafficEncapMode)
-	i.networkConfig.IPv6Enabled = config.IsIPv6Enabled(i.nodeConfig, i.networkConfig.TrafficEncapMode)
 
 	if err := i.prepareHostNetwork(); err != nil {
 		return err
@@ -406,23 +425,30 @@ func (i *Initializer) Initialize() error {
 		}
 	}
 
-	wg.Add(1)
-	// routeClient.Initialize() should be after i.setupOVSBridge() which
-	// creates the host gateway interface.
-	if err := i.routeClient.Initialize(i.nodeConfig, wg.Done); err != nil {
-		return err
-	}
+	if i.nodeType == config.K8sNode {
+		wg.Add(1)
+		// routeClient.Initialize() should be after i.setupOVSBridge() which
+		// creates the host gateway interface.
+		if err := i.routeClient.Initialize(i.nodeConfig, wg.Done); err != nil {
+			return err
+		}
 
-	// Install OpenFlow entries on OVS bridge.
-	if err := i.initOpenFlowPipeline(); err != nil {
-		return err
-	}
+		// Install OpenFlow entries on OVS bridge.
+		if err := i.initOpenFlowPipeline(); err != nil {
+			return err
+		}
 
-	// The Node's network is ready only when both synchronous and asynchronous initialization are done.
-	go func() {
-		wg.Wait()
-		close(i.networkReadyCh)
-	}()
+		// The Node's network is ready only when both synchronous and asynchronous initialization are done.
+		go func() {
+			wg.Wait()
+			close(i.networkReadyCh)
+		}()
+	} else {
+		// Install OpenFlow entries on OVS bridge.
+		if err := i.initOpenFlowPipeline(); err != nil {
+			return err
+		}
+	}
 	klog.Infof("Agent initialized NodeConfig=%v, NetworkConfig=%v", i.nodeConfig, i.networkConfig)
 	return nil
 }
@@ -476,6 +502,12 @@ func (i *Initializer) initOpenFlowPipeline() error {
 	if err != nil {
 		klog.Errorf("Failed to initialize openflow client: %v", err)
 		return err
+	}
+
+	if i.nodeType == config.ExternalNode {
+		if err := i.installVMInitialFlows(); err != nil {
+			return err
+		}
 	}
 
 	go func() {
@@ -800,16 +832,12 @@ func (i *Initializer) enableTunnelCsum(tunnelPortName string) error {
 	return i.ovsBridgeClient.SetInterfaceOptions(tunnelPortName, updatedOptions)
 }
 
-// initNodeLocalConfig retrieves node's subnet CIDR from node.spec.PodCIDR, which is used for IPAM and setup
+// initK8sNodeLocalConfig retrieves node's subnet CIDR from node.spec.PodCIDR, which is used for IPAM and setup
 // host gateway interface.
-func (i *Initializer) initNodeLocalConfig() error {
-	nodeName, err := env.GetNodeName()
-	if err != nil {
-		return err
-	}
-
+func (i *Initializer) initK8sNodeLocalConfig(nodeName string) error {
 	var node *v1.Node
 	if err := wait.PollImmediate(5*time.Second, 30*time.Second, func() (bool, error) {
+		var err error
 		node, err = i.client.CoreV1().Nodes().Get(context.TODO(), nodeName, metav1.GetOptions{})
 		if err != nil {
 			return false, fmt.Errorf("failed to get Node with name %s from K8s: %w", nodeName, err)
@@ -905,6 +933,7 @@ func (i *Initializer) initNodeLocalConfig() error {
 
 	i.nodeConfig = &config.NodeConfig{
 		Name:                       nodeName,
+		Type:                       config.K8sNode,
 		OVSBridge:                  i.ovsBridge,
 		DefaultTunName:             defaultTunInterfaceName,
 		NodeIPv4Addr:               nodeIPv4Addr,
@@ -1162,4 +1191,79 @@ func (i *Initializer) patchNodeAnnotations(nodeName, key string, value interface
 // with NetworkPolicyOnly mode on public cloud setup, e.g., AKS.
 func (i *Initializer) getNodeInterfaceFromIP(nodeIPs *utilip.DualStackIPs) (v4IPNet *net.IPNet, v6IPNet *net.IPNet, iface *net.Interface, err error) {
 	return getIPNetDeviceFromIP(nodeIPs, sets.NewString(i.hostGateway))
+}
+
+func (i *Initializer) initNodeLocalConfig() error {
+	nodeName, err := env.GetNodeName()
+	if err != nil {
+		return err
+	}
+	if i.nodeType == config.K8sNode {
+		if err := i.initK8sNodeLocalConfig(nodeName); err != nil {
+			return err
+		}
+
+		i.networkConfig.IPv4Enabled = config.IsIPv4Enabled(i.nodeConfig, i.networkConfig.TrafficEncapMode)
+		i.networkConfig.IPv6Enabled = config.IsIPv6Enabled(i.nodeConfig, i.networkConfig.TrafficEncapMode)
+		return nil
+	}
+	if err := i.initVMLocalConfig(nodeName); err != nil {
+		return err
+	}
+	// Only IPv4 is supported on a VM Node.
+	i.networkConfig.IPv4Enabled = true
+	return nil
+}
+
+func (i *Initializer) initVMLocalConfig(nodeName string) error {
+	var en *v1alpha1.ExternalNode
+	klog.InfoS("Initializing VM config", "ExternalNode", nodeName)
+	if err := wait.PollImmediateUntil(10*time.Second, func() (done bool, err error) {
+		en, err = i.crdClient.CrdV1alpha1().ExternalNodes(i.externalNodeNamespace).Get(context.TODO(), nodeName, metav1.GetOptions{})
+		if err != nil {
+			return false, nil
+		}
+		return true, nil
+	}, i.stopCh); err != nil {
+		klog.Info("Stopped waiting for ExternalNode")
+		return err
+	}
+
+	if err := i.setVMNodeConfig(en, nodeName); err != nil {
+		return err
+	}
+	klog.InfoS("Finished VM config initialization", "ExternalNode", nodeName)
+	return nil
+}
+
+// prepareOVSBridge operates OVS bridge.
+func (i *Initializer) prepareOVSBridge() error {
+	if i.nodeType == config.K8sNode {
+		return i.prepareOVSBridgeForK8sNode()
+	}
+	return i.prepareOVSBridgeForVM()
+}
+
+// setOVSDatapath generates a static datapath ID for OVS bridge so that the OFSwitch identifier is not
+// changed after the physical interface is attached on the switch.
+func (i *Initializer) setOVSDatapath() error {
+	otherConfig, err := i.ovsBridgeClient.GetOVSOtherConfig()
+	if err != nil {
+		klog.ErrorS(err, "Failed to read OVS bridge other_config")
+		return err
+	}
+	// Check if "datapath-id" exists in "other_config" on OVS bridge or not, and return directly if yes.
+	// Note: function `ovsBridgeClient.GetDatapathID` is not used here, because OVS always has data in "datapath_id"
+	// field. If "datapath-id" is not explicitly set in "other_config", the datapath ID in use may change when uplink
+	// is attached on OVS.
+	if _, exists := otherConfig[ovsconfig.OVSOtherConfigDatapathIDKey]; exists {
+		return nil
+	}
+	randMAC := util.GenerateRandomMAC()
+	datapathID := "0000" + strings.Replace(randMAC.String(), ":", "", -1)
+	if err := i.ovsBridgeClient.SetDatapathID(datapathID); err != nil {
+		klog.ErrorS(err, "Failed to set OVS bridge datapath_id", "datapathID", datapathID)
+		return err
+	}
+	return nil
 }

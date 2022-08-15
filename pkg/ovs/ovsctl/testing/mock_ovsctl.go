@@ -1,4 +1,4 @@
-// Copyright 2021 Antrea Authors
+// Copyright 2022 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -46,6 +46,20 @@ func NewMockOVSCtlClient(ctrl *gomock.Controller) *MockOVSCtlClient {
 // EXPECT returns an object that allows the caller to indicate expected use
 func (m *MockOVSCtlClient) EXPECT() *MockOVSCtlClientMockRecorder {
 	return m.recorder
+}
+
+// DeleteDPInterface mocks base method
+func (m *MockOVSCtlClient) DeleteDPInterface(arg0 string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteDPInterface", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteDPInterface indicates an expected call of DeleteDPInterface
+func (mr *MockOVSCtlClientMockRecorder) DeleteDPInterface(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteDPInterface", reflect.TypeOf((*MockOVSCtlClient)(nil).DeleteDPInterface), arg0)
 }
 
 // DumpFlows mocks base method

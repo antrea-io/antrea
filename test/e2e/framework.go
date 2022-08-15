@@ -191,6 +191,8 @@ type TestOptions struct {
 	flowVisibility      bool
 	coverageDir         string
 	skipCases           string
+	linuxVMs            string
+	windowsVMs          string
 }
 
 var testOptions TestOptions
@@ -1970,25 +1972,17 @@ func parseArpingStdout(out string) (sent uint32, received uint32, loss float32, 
 }
 
 func (data *TestData) runPingCommandFromTestPod(podInfo podInfo, ns string, targetPodIPs *PodIPs, ctrName string, count int, size int) error {
-	countOption, sizeOption := "-c", "-s"
-	if podInfo.os == "windows" {
-		countOption = "-n"
-		sizeOption = "-l"
-	} else if podInfo.os != "linux" {
+	if podInfo.os != "windows" && podInfo.os != "linux" {
 		return fmt.Errorf("OS of Pod '%s' is not clear", podInfo.name)
 	}
-	cmd := []string{"ping", countOption, strconv.Itoa(count)}
-	if size != 0 {
-		cmd = append(cmd, sizeOption, strconv.Itoa(size))
-	}
 	if targetPodIPs.ipv4 != nil {
-		cmdV4 := append(cmd, "-4", targetPodIPs.ipv4.String())
+		cmdV4 := getPingCommand(count, size, podInfo.os, targetPodIPs.ipv4)
 		if stdout, stderr, err := data.RunCommandFromPod(ns, podInfo.name, ctrName, cmdV4); err != nil {
 			return fmt.Errorf("error when running ping command '%s': %v - stdout: %s - stderr: %s", strings.Join(cmdV4, " "), err, stdout, stderr)
 		}
 	}
 	if targetPodIPs.ipv6 != nil {
-		cmdV6 := append(cmd, "-6", targetPodIPs.ipv6.String())
+		cmdV6 := getPingCommand(count, size, podInfo.os, targetPodIPs.ipv6)
 		if stdout, stderr, err := data.RunCommandFromPod(ns, podInfo.name, ctrName, cmdV6); err != nil {
 			return fmt.Errorf("error when running ping command '%s': %v - stdout: %s - stderr: %s", strings.Join(cmdV6, " "), err, stdout, stderr)
 		}
@@ -2732,4 +2726,40 @@ func isConnectionLostError(err error) bool {
 // e2e script might get ConnectionLost error when accessing k8s apiserver if AntreaIPAM is enabled and antrea-agent is restarted.
 func retryOnConnectionLostError(backoff wait.Backoff, fn func() error) error {
 	return retry.OnError(backoff, isConnectionLostError, fn)
+}
+
+func (data *TestData) checkAntreaAgentInfo(interval time.Duration, timeout time.Duration, name string) error {
+	err := wait.Poll(interval, timeout, func() (bool, error) {
+		aai, err := data.crdClient.CrdV1beta1().AntreaAgentInfos().Get(context.TODO(), name, metav1.GetOptions{})
+		if err != nil {
+			if errors.IsNotFound(err) {
+				return false, nil
+			}
+			return false, fmt.Errorf("failed to get AntreaAgentInfo %s: %v", name, err)
+		}
+		if aai.NodeRef.Name == "" {
+			// keep trying
+			return false, nil
+		}
+		return true, nil
+	})
+	return err
+}
+
+func getPingCommand(count int, size int, os string, ip *net.IP) []string {
+	countOption, sizeOption := "-c", "-s"
+	if os == "windows" {
+		countOption = "-n"
+		sizeOption = "-l"
+	}
+	cmd := []string{"ping", countOption, strconv.Itoa(count)}
+	if size != 0 {
+		cmd = append(cmd, sizeOption, strconv.Itoa(size))
+	}
+	if ip.To4() != nil {
+		cmd = append(cmd, "-4", ip.String())
+	} else {
+		cmd = append(cmd, "-6", ip.String())
+	}
+	return cmd
 }

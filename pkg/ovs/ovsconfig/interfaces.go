@@ -27,6 +27,8 @@ const (
 
 	OVSDatapathSystem OVSDatapathType = "system"
 	OVSDatapathNetdev OVSDatapathType = "netdev"
+
+	OVSOtherConfigDatapathIDKey string = "datapath-id"
 )
 
 type OVSBridgeClient interface {
@@ -34,6 +36,7 @@ type OVSBridgeClient interface {
 	Delete() Error
 	GetExternalIDs() (map[string]string, Error)
 	SetExternalIDs(externalIDs map[string]interface{}) Error
+	GetDatapathID() (string, Error)
 	SetDatapathID(datapathID string) Error
 	GetInterfaceOptions(name string) (map[string]string, Error)
 	SetInterfaceOptions(name string, options map[string]interface{}) Error

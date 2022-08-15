@@ -1029,12 +1029,14 @@ func (r *reconciler) getOFPorts(members v1beta2.GroupMemberSet) sets.Int32 {
 	ofPorts := sets.NewInt32()
 	for _, m := range members {
 		var entityName, ns string
+		var ifaces []*interfacestore.InterfaceConfig
 		if m.Pod != nil {
 			entityName, ns = m.Pod.Name, m.Pod.Namespace
+			ifaces = r.ifaceStore.GetContainerInterfacesByPod(entityName, ns)
 		} else if m.ExternalEntity != nil {
 			entityName, ns = m.ExternalEntity.Name, m.ExternalEntity.Namespace
+			ifaces = r.ifaceStore.GetInterfacesByEntity(entityName, ns)
 		}
-		ifaces := r.ifaceStore.GetInterfacesByEntity(entityName, ns)
 		if len(ifaces) == 0 {
 			// This might be because the container has been deleted during realization or hasn't been set up yet.
 			klog.Infof("Can't find interface for %s/%s, skipping", ns, entityName)
@@ -1052,12 +1054,14 @@ func (r *reconciler) getIPs(members v1beta2.GroupMemberSet) sets.String {
 	ips := sets.NewString()
 	for _, m := range members {
 		var entityName, ns string
+		var ifaces []*interfacestore.InterfaceConfig
 		if m.Pod != nil {
 			entityName, ns = m.Pod.Name, m.Pod.Namespace
+			ifaces = r.ifaceStore.GetContainerInterfacesByPod(entityName, ns)
 		} else if m.ExternalEntity != nil {
 			entityName, ns = m.ExternalEntity.Name, m.ExternalEntity.Namespace
+			ifaces = r.ifaceStore.GetInterfacesByEntity(entityName, ns)
 		}
-		ifaces := r.ifaceStore.GetInterfacesByEntity(entityName, ns)
 		if len(ifaces) == 0 {
 			// This might be because the container has been deleted during realization or hasn't been set up yet.
 			klog.Infof("Can't find interface for %s/%s, skipping", ns, entityName)
