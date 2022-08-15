@@ -81,6 +81,7 @@ type networkPolicyController struct {
 	serviceStore               cache.Store
 	networkPolicyStore         cache.Store
 	cnpStore                   cache.Store
+	anpStore                   cache.Store
 	tierStore                  cache.Store
 	cgStore                    cache.Store
 	gStore                     cache.Store
@@ -142,6 +143,7 @@ func newController(objects ...runtime.Object) (*fake.Clientset, *networkPolicyCo
 		informerFactory.Core().V1().Services().Informer().GetStore(),
 		informerFactory.Networking().V1().NetworkPolicies().Informer().GetStore(),
 		crdInformerFactory.Crd().V1alpha1().ClusterNetworkPolicies().Informer().GetStore(),
+		crdInformerFactory.Crd().V1alpha1().NetworkPolicies().Informer().GetStore(),
 		crdInformerFactory.Crd().V1alpha1().Tiers().Informer().GetStore(),
 		crdInformerFactory.Crd().V1alpha3().ClusterGroups().Informer().GetStore(),
 		crdInformerFactory.Crd().V1alpha3().Groups().Informer().GetStore(),
@@ -211,6 +213,7 @@ func newControllerWithoutEventHandler(k8sObjects, crdObjects []runtime.Object) (
 		informerFactory.Core().V1().Services().Informer().GetStore(),
 		informerFactory.Networking().V1().NetworkPolicies().Informer().GetStore(),
 		cnpInformer.Informer().GetStore(),
+		anpInformer.Informer().GetStore(),
 		tierInformer.Informer().GetStore(),
 		cgInformer.Informer().GetStore(),
 		groupInformer.Informer().GetStore(),
@@ -2600,7 +2603,8 @@ func TestGetAppliedToWorkloads(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			actualPods, actualEEs := c.getAppliedToWorkloads(tt.inATG)
+			actualPods, actualEEs, actualErr := c.getAppliedToWorkloads(tt.inATG)
+			assert.NoError(t, actualErr)
 			assert.Equal(t, tt.expEEs, actualEEs)
 			assert.Equal(t, tt.expPods, actualPods)
 		})
@@ -3137,6 +3141,242 @@ func TestSyncInternalNetworkPolicyConcurrently(t *testing.T) {
 	require.False(t, exists)
 	checkGroupItemExistence(t, c.addressGroupStore)
 	checkGroupItemExistence(t, c.appliedToGroupStore)
+}
+
+func TestSyncInternalNetworkPolicyWithGroups(t *testing.T) {
+	p10 := float64(10)
+	allowAction := crdv1alpha1.RuleActionAllow
+	podA := getPod("podA", "nsA", "nodeA", "10.0.0.1", false)
+	podA.Labels = selectorA.MatchLabels
+	podB := getPod("podB", "nsB", "nodeB", "10.0.0.2", false)
+	podB.Labels = selectorA.MatchLabels
+	selectorBGroup := getNormalizedUID(antreatypes.NewGroupSelector("nsA", &selectorB, nil, nil, nil).NormalizedName)
+
+	tests := []struct {
+		name           string
+		groups         []*v1alpha3.Group
+		inputPolicy    *crdv1alpha1.NetworkPolicy
+		expectedPolicy *antreatypes.NetworkPolicy
+	}{
+		{
+			name: "anp with valid group",
+			groups: []*v1alpha3.Group{
+				{
+					ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "groupA"},
+					Spec:       v1alpha3.GroupSpec{PodSelector: &selectorA},
+				},
+			},
+			inputPolicy: &crdv1alpha1.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "anpA", UID: "uidA"},
+				Spec: crdv1alpha1.NetworkPolicySpec{
+					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+						{Group: "groupA"},
+					},
+					Priority: p10,
+					Ingress: []crdv1alpha1.Rule{
+						{
+							From:   []crdv1alpha1.NetworkPolicyPeer{{PodSelector: &selectorB}},
+							Action: &allowAction,
+						},
+					},
+				},
+			},
+			expectedPolicy: &antreatypes.NetworkPolicy{
+				UID:      "uidA",
+				Name:     "uidA",
+				SpanMeta: antreatypes.SpanMeta{NodeNames: sets.NewString("nodeA")},
+				SourceRef: &controlplane.NetworkPolicyReference{
+					Type:      controlplane.AntreaNetworkPolicy,
+					Namespace: "nsA",
+					Name:      "anpA",
+					UID:       "uidA",
+				},
+				Priority:     &p10,
+				TierPriority: &DefaultTierPriority,
+				Rules: []controlplane.NetworkPolicyRule{
+					{
+						Direction: controlplane.DirectionIn,
+						From:      controlplane.NetworkPolicyPeer{AddressGroups: []string{selectorBGroup}},
+						Action:    &allowAction,
+					},
+				},
+				AppliedToGroups: []string{"nsA/groupA"},
+			},
+		},
+		{
+			name: "anp with valid parent group",
+			groups: []*v1alpha3.Group{
+				{
+					ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "parentGroup"},
+					Spec:       v1alpha3.GroupSpec{ChildGroups: []v1alpha3.ClusterGroupReference{"groupA"}},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "groupA"},
+					Spec:       v1alpha3.GroupSpec{PodSelector: &selectorA},
+				},
+			},
+			inputPolicy: &crdv1alpha1.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "anpA", UID: "uidA"},
+				Spec: crdv1alpha1.NetworkPolicySpec{
+					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+						{Group: "parentGroup"},
+					},
+					Priority: p10,
+					Ingress: []crdv1alpha1.Rule{
+						{
+							From:   []crdv1alpha1.NetworkPolicyPeer{{PodSelector: &selectorB}},
+							Action: &allowAction,
+						},
+					},
+				},
+			},
+			expectedPolicy: &antreatypes.NetworkPolicy{
+				UID:      "uidA",
+				Name:     "uidA",
+				SpanMeta: antreatypes.SpanMeta{NodeNames: sets.NewString("nodeA")},
+				SourceRef: &controlplane.NetworkPolicyReference{
+					Type:      controlplane.AntreaNetworkPolicy,
+					Namespace: "nsA",
+					Name:      "anpA",
+					UID:       "uidA",
+				},
+				Priority:     &p10,
+				TierPriority: &DefaultTierPriority,
+				Rules: []controlplane.NetworkPolicyRule{
+					{
+						Direction: controlplane.DirectionIn,
+						From:      controlplane.NetworkPolicyPeer{AddressGroups: []string{selectorBGroup}},
+						Action:    &allowAction,
+					},
+				},
+				AppliedToGroups: []string{"nsA/parentGroup"},
+			},
+		},
+		{
+			name: "anp with invalid group selecting pods in multiple Namespaces",
+			groups: []*v1alpha3.Group{
+				{
+					ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "groupA"},
+					Spec:       v1alpha3.GroupSpec{NamespaceSelector: &metav1.LabelSelector{}, PodSelector: &selectorA},
+				},
+			},
+			inputPolicy: &crdv1alpha1.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "anpA", UID: "uidA"},
+				Spec: crdv1alpha1.NetworkPolicySpec{
+					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+						{Group: "groupA"},
+					},
+					Priority: p10,
+					Ingress: []crdv1alpha1.Rule{
+						{
+							From:   []crdv1alpha1.NetworkPolicyPeer{{PodSelector: &selectorB}},
+							Action: &allowAction,
+						},
+					},
+				},
+			},
+			expectedPolicy: &antreatypes.NetworkPolicy{
+				UID:  "uidA",
+				Name: "uidA",
+				SourceRef: &controlplane.NetworkPolicyReference{
+					Type:      controlplane.AntreaNetworkPolicy,
+					Namespace: "nsA",
+					Name:      "anpA",
+					UID:       "uidA",
+				},
+				Priority:     &p10,
+				TierPriority: &DefaultTierPriority,
+				Rules: []controlplane.NetworkPolicyRule{
+					{
+						Direction: controlplane.DirectionIn,
+						From:      controlplane.NetworkPolicyPeer{AddressGroups: []string{selectorBGroup}},
+						Action:    &allowAction,
+					},
+				},
+				AppliedToGroups: []string{"nsA/groupA"},
+				SyncError:       &ErrNetworkPolicyAppliedToUnsupportedGroup{groupName: "groupA", namespace: "nsA"},
+			},
+		},
+		{
+			name: "anp with invalid parent group selecting pods in multiple Namespaces",
+			groups: []*v1alpha3.Group{
+				{
+					ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "parentGroup"},
+					Spec:       v1alpha3.GroupSpec{ChildGroups: []v1alpha3.ClusterGroupReference{"groupA"}},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "groupA"},
+					Spec:       v1alpha3.GroupSpec{NamespaceSelector: &metav1.LabelSelector{}, PodSelector: &selectorA},
+				},
+			},
+			inputPolicy: &crdv1alpha1.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "anpA", UID: "uidA"},
+				Spec: crdv1alpha1.NetworkPolicySpec{
+					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+						{Group: "parentGroup"},
+					},
+					Priority: p10,
+					Ingress: []crdv1alpha1.Rule{
+						{
+							From:   []crdv1alpha1.NetworkPolicyPeer{{PodSelector: &selectorB}},
+							Action: &allowAction,
+						},
+					},
+				},
+			},
+			expectedPolicy: &antreatypes.NetworkPolicy{
+				UID:  "uidA",
+				Name: "uidA",
+				SourceRef: &controlplane.NetworkPolicyReference{
+					Type:      controlplane.AntreaNetworkPolicy,
+					Namespace: "nsA",
+					Name:      "anpA",
+					UID:       "uidA",
+				},
+				Priority:     &p10,
+				TierPriority: &DefaultTierPriority,
+				Rules: []controlplane.NetworkPolicyRule{
+					{
+						Direction: controlplane.DirectionIn,
+						From:      controlplane.NetworkPolicyPeer{AddressGroups: []string{selectorBGroup}},
+						Action:    &allowAction,
+					},
+				},
+				AppliedToGroups: []string{"nsA/parentGroup"},
+				SyncError:       &ErrNetworkPolicyAppliedToUnsupportedGroup{groupName: "parentGroup", namespace: "nsA"},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, c := newController(podA, podB)
+			stopCh := make(chan struct{})
+			defer close(stopCh)
+			c.informerFactory.Start(stopCh)
+			c.crdInformerFactory.Start(stopCh)
+			c.informerFactory.WaitForCacheSync(stopCh)
+			c.crdInformerFactory.WaitForCacheSync(stopCh)
+			go c.groupingInterface.Run(stopCh)
+			go c.groupingController.Run(stopCh)
+			go c.Run(stopCh)
+
+			for _, group := range tt.groups {
+				c.crdClient.CrdV1alpha3().Groups(group.Namespace).Create(context.TODO(), group, metav1.CreateOptions{})
+			}
+			c.crdClient.CrdV1alpha1().NetworkPolicies(tt.inputPolicy.Namespace).Create(context.TODO(), tt.inputPolicy, metav1.CreateOptions{})
+
+			var gotPolicy *antreatypes.NetworkPolicy
+			err := wait.PollImmediate(100*time.Millisecond, 3*time.Second, func() (done bool, err error) {
+				obj, exists, _ := c.internalNetworkPolicyStore.Get(tt.expectedPolicy.Name)
+				if !exists {
+					return false, nil
+				}
+				gotPolicy = obj.(*antreatypes.NetworkPolicy)
+				return reflect.DeepEqual(tt.expectedPolicy, gotPolicy), nil
+			})
+			assert.NoError(t, err, "Expected %#v\ngot %#v", tt.expectedPolicy, gotPolicy)
+		})
+	}
 }
 
 func checkQueueItemExistence(t *testing.T, queue workqueue.RateLimitingInterface, items ...string) {

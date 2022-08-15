@@ -58,6 +58,8 @@ type AppliedToGroup struct {
 	// It will be converted to a slice of GroupMember for transferring according
 	// to client's selection.
 	GroupMemberByNode map[string]controlplane.GroupMemberSet
+	// SyncError is the Error encountered when syncing this AppliedToGroup.
+	SyncError error
 }
 
 // AddressGroup describes a set of addresses used as source or destination of Network Policy rules.
@@ -101,9 +103,8 @@ type NetworkPolicy struct {
 	// AppliedToPerRule tracks if appliedTo is set per rule basis rather than in policy spec.
 	// Must be false for K8s NetworkPolicy.
 	AppliedToPerRule bool
-	// RealizationError stores realization error of the internal Network Policy.
-	// It is set when processing the original Network Policy.
-	RealizationError error
+	// SyncError is the Error encountered when syncing this NetworkPolicy.
+	SyncError error
 }
 
 // GetAddressGroups returns AddressGroups used by this NetworkPolicy.

@@ -1241,49 +1241,58 @@ func (n *NetworkPolicyController) syncAppliedToGroup(key string) error {
 			GroupMemberByNode: memberSetByNode,
 			SpanMeta:          antreatypes.SpanMeta{NodeNames: appGroupNodeNames},
 		}
-		klog.V(2).Infof("Updating existing AppliedToGroup %s on %d Nodes", key, appGroupNodeNames.Len())
+		klog.V(2).InfoS("Updating existing AppliedToGroup", "Service", *appliedToGroup.Service, "numNodes", appGroupNodeNames.Len())
 	} else {
-		scheduledPodNum, scheduledExtEntityNum := 0, 0
-		pods, externalEntities := n.getAppliedToWorkloads(appliedToGroup)
-		for _, pod := range pods {
-			if pod.Spec.NodeName == "" || pod.Spec.HostNetwork == true {
-				// No need to process Pod when it's not scheduled.
-				// HostNetwork Pods will not be applied to by policies.
-				continue
+		pods, externalEntities, err := n.getAppliedToWorkloads(appliedToGroup)
+		if err != nil {
+			klog.ErrorS(err, "Error when getting AppliedTo workloads for AppliedToGroup", "AppliedToGroup", appliedToGroup.Name)
+			updatedAppliedToGroup = &antreatypes.AppliedToGroup{
+				UID:       appliedToGroup.UID,
+				Name:      appliedToGroup.Name,
+				Selector:  appliedToGroup.Selector,
+				SyncError: err,
 			}
-			scheduledPodNum++
-			podSet := memberSetByNode[pod.Spec.NodeName]
-			if podSet == nil {
-				podSet = controlplane.GroupMemberSet{}
+		} else {
+			scheduledPodNum, scheduledExtEntityNum := 0, 0
+			for _, pod := range pods {
+				if pod.Spec.NodeName == "" || pod.Spec.HostNetwork == true {
+					// No need to process Pod when it's not scheduled.
+					// HostNetwork Pods will not be applied to by policies.
+					continue
+				}
+				scheduledPodNum++
+				podSet := memberSetByNode[pod.Spec.NodeName]
+				if podSet == nil {
+					podSet = controlplane.GroupMemberSet{}
+				}
+				podSet.Insert(podToGroupMember(pod, false))
+				// Update the Pod references by Node.
+				memberSetByNode[pod.Spec.NodeName] = podSet
+				// Update the NodeNames in order to set the SpanMeta for AppliedToGroup.
+				appGroupNodeNames.Insert(pod.Spec.NodeName)
 			}
-			podSet.Insert(podToGroupMember(pod, false))
-			// Update the Pod references by Node.
-			memberSetByNode[pod.Spec.NodeName] = podSet
-			// Update the NodeNames in order to set the SpanMeta for AppliedToGroup.
-			appGroupNodeNames.Insert(pod.Spec.NodeName)
+			for _, extEntity := range externalEntities {
+				if extEntity.Spec.ExternalNode == "" {
+					continue
+				}
+				scheduledExtEntityNum++
+				entitySet := memberSetByNode[extEntity.Spec.ExternalNode]
+				if entitySet == nil {
+					entitySet = controlplane.GroupMemberSet{}
+				}
+				entitySet.Insert(externalEntityToGroupMember(extEntity, false))
+				memberSetByNode[extEntity.Spec.ExternalNode] = entitySet
+				appGroupNodeNames.Insert(extEntity.Spec.ExternalNode)
+			}
+			updatedAppliedToGroup = &antreatypes.AppliedToGroup{
+				UID:               appliedToGroup.UID,
+				Name:              appliedToGroup.Name,
+				Selector:          appliedToGroup.Selector,
+				GroupMemberByNode: memberSetByNode,
+				SpanMeta:          antreatypes.SpanMeta{NodeNames: appGroupNodeNames},
+			}
+			klog.V(2).InfoS("Updating existing AppliedToGroup", "numPods", scheduledPodNum, "numExternalEntities", scheduledExtEntityNum, "numNodes", appGroupNodeNames.Len())
 		}
-		for _, extEntity := range externalEntities {
-			if extEntity.Spec.ExternalNode == "" {
-				continue
-			}
-			scheduledExtEntityNum++
-			entitySet := memberSetByNode[extEntity.Spec.ExternalNode]
-			if entitySet == nil {
-				entitySet = controlplane.GroupMemberSet{}
-			}
-			entitySet.Insert(externalEntityToGroupMember(extEntity, false))
-			memberSetByNode[extEntity.Spec.ExternalNode] = entitySet
-			appGroupNodeNames.Insert(extEntity.Spec.ExternalNode)
-		}
-		updatedAppliedToGroup = &antreatypes.AppliedToGroup{
-			UID:               appliedToGroup.UID,
-			Name:              appliedToGroup.Name,
-			Selector:          appliedToGroup.Selector,
-			GroupMemberByNode: memberSetByNode,
-			SpanMeta:          antreatypes.SpanMeta{NodeNames: appGroupNodeNames},
-		}
-		klog.V(2).Infof("Updating existing AppliedToGroup %s with %d Pods and %d External Entities on %d Nodes",
-			key, scheduledPodNum, scheduledExtEntityNum, appGroupNodeNames.Len())
 	}
 	n.appliedToGroupStore.Update(updatedAppliedToGroup)
 	// Get all internal NetworkPolicy objects that refers this AppliedToGroup.
@@ -1304,22 +1313,48 @@ func (n *NetworkPolicyController) syncAppliedToGroup(key string) error {
 
 // getAppliedToWorkloads returns a list of workloads (Pods and ExternalEntities) selected by an AppliedToGroup
 // for standalone selectors or corresponding to a ClusterGroup.
-func (n *NetworkPolicyController) getAppliedToWorkloads(g *antreatypes.AppliedToGroup) ([]*v1.Pod, []*v1alpha2.ExternalEntity) {
-	// Check if an internal Group object exists corresponding to this AppliedToGroup.
+func (n *NetworkPolicyController) getAppliedToWorkloads(g *antreatypes.AppliedToGroup) ([]*v1.Pod, []*v1alpha2.ExternalEntity, error) {
+	// Check if an internal Group object exists corresponding to this AppliedToGroup
 	group, found, _ := n.internalGroupStore.Get(g.Name)
 	if found {
 		// This AppliedToGroup is derived from a ClusterGroup.
 		grp := group.(*antreatypes.Group)
 		return n.getInternalGroupWorkloads(grp)
 	}
-	return n.groupingInterface.GetEntities(appliedToGroupType, g.Name)
+	pods, ees := n.groupingInterface.GetEntities(appliedToGroupType, g.Name)
+	return pods, ees, nil
 }
 
 // getInternalGroupWorkloads returns a list of workloads (Pods and ExternalEntities) selected by a ClusterGroup.
 // For ClusterGroup that has childGroups, the workloads are computed as the union of all its childGroup's workloads.
-func (n *NetworkPolicyController) getInternalGroupWorkloads(group *antreatypes.Group) ([]*v1.Pod, []*v1alpha2.ExternalEntity) {
+func (n *NetworkPolicyController) getInternalGroupWorkloads(group *antreatypes.Group) ([]*v1.Pod, []*v1alpha2.ExternalEntity, error) {
+	validateNamespace := func(pods []*v1.Pod, ees []*v1alpha2.ExternalEntity) bool {
+		// ClusterGroup can select entities in all Namespaces when used as AppliedTo.
+		if group.SourceReference.Namespace == "" {
+			return true
+		}
+		// Namespaced Group can only select entities in the same Namespace as the Group when used as AppliedTo.
+		if group.SourceReference.Namespace != "" {
+			for _, pod := range pods {
+				if pod.Namespace != group.SourceReference.Namespace {
+					return false
+				}
+			}
+			for _, ee := range ees {
+				if ee.Namespace != group.SourceReference.Namespace {
+					return false
+				}
+			}
+		}
+		return true
+	}
+
 	if len(group.ChildGroups) == 0 {
-		return n.groupingInterface.GetEntities(internalGroupType, group.SourceReference.ToGroupName())
+		pods, ees := n.groupingInterface.GetEntities(internalGroupType, group.SourceReference.ToGroupName())
+		if !validateNamespace(pods, ees) {
+			return nil, nil, &ErrNetworkPolicyAppliedToUnsupportedGroup{groupName: group.SourceReference.Name, namespace: group.SourceReference.Namespace}
+		}
+		return pods, ees, nil
 	}
 	podNameSet, eeNameSet := sets.String{}, sets.String{}
 	var pods []*v1.Pod
@@ -1328,6 +1363,9 @@ func (n *NetworkPolicyController) getInternalGroupWorkloads(group *antreatypes.G
 		// childNameString will either be name of the child ClusterGroup or Namespaced name of the child Group.
 		childNameString := k8s.NamespacedName(group.SourceReference.Namespace, childName)
 		childPods, childEEs := n.groupingInterface.GetEntities(internalGroupType, childNameString)
+		if !validateNamespace(childPods, childEEs) {
+			return nil, nil, &ErrNetworkPolicyAppliedToUnsupportedGroup{groupName: group.SourceReference.Name, namespace: group.SourceReference.Namespace}
+		}
 		for _, pod := range childPods {
 			podString := k8s.NamespacedName(pod.Namespace, pod.Name)
 			if !podNameSet.Has(podString) {
@@ -1343,7 +1381,7 @@ func (n *NetworkPolicyController) getInternalGroupWorkloads(group *antreatypes.G
 			}
 		}
 	}
-	return pods, ees
+	return pods, ees, nil
 }
 
 // syncInternalNetworkPolicy retrieves all the AppliedToGroups associated with
@@ -1386,18 +1424,29 @@ func (n *NetworkPolicyController) syncInternalNetworkPolicy(key *controlplane.Ne
 		newInternalNetworkPolicy, newAppliedToGroups, newAddressGroups = n.processNetworkPolicy(knp)
 	}
 
-	newNodeNames := sets.NewString()
-	// Calculate the set of Node names based on the span of the
-	// AppliedToGroups referenced by this NetworkPolicy.
-	for appliedToGroupName := range newAppliedToGroups {
-		appGroupObj, found, _ := n.appliedToGroupStore.Get(appliedToGroupName)
-		if !found {
-			continue
+	newNodeNames, err := func() (sets.String, error) {
+		nodeNames := sets.NewString()
+		// Calculate the set of Node names based on the span of the
+		// AppliedToGroups referenced by this NetworkPolicy.
+		for appliedToGroupName := range newAppliedToGroups {
+			appGroupObj, found, _ := n.appliedToGroupStore.Get(appliedToGroupName)
+			if !found {
+				continue
+			}
+			appGroup := appGroupObj.(*antreatypes.AppliedToGroup)
+			if appGroup.SyncError != nil {
+				return nil, appGroup.SyncError
+			}
+			utilsets.MergeString(nodeNames, appGroup.SpanMeta.NodeNames)
 		}
-		appGroup := appGroupObj.(*antreatypes.AppliedToGroup)
-		utilsets.MergeString(newNodeNames, appGroup.SpanMeta.NodeNames)
+		return nodeNames, nil
+	}()
+	if err != nil {
+		klog.ErrorS(err, "Error when processing AppliedToGroups for internal NetworkPolicy", "key", key)
+		newInternalNetworkPolicy.SyncError = err
+	} else {
+		newInternalNetworkPolicy.NodeNames = newNodeNames
 	}
-	newInternalNetworkPolicy.NodeNames = newNodeNames
 
 	var oldInternalNetworkPolicy *antreatypes.NetworkPolicy
 	oldInternalNetworkPolicyObj, oldInternalPolicyExists, _ := n.internalNetworkPolicyStore.Get(internalNetworkPolicyName)

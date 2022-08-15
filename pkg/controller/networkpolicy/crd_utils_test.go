@@ -443,3 +443,89 @@ func TestToAntreaPeerForCRD(t *testing.T) {
 		})
 	}
 }
+
+func TestCreateAppliedToGroupsForGroup(t *testing.T) {
+	selector := metav1.LabelSelector{MatchLabels: map[string]string{"foo": "bar"}}
+	cidr := "10.0.0.0/24"
+	// cgA with selector present in cache
+	clusterGroupWithSelector := &crdv1alpha3.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{Name: "cgA", UID: "uidA"},
+		Spec:       crdv1alpha3.GroupSpec{NamespaceSelector: &selector},
+	}
+	// cgB with IPBlock present in cache
+	clusterGroupWithIPBlock := &crdv1alpha3.ClusterGroup{
+		ObjectMeta: metav1.ObjectMeta{Name: "cgB", UID: "uidB"},
+		Spec:       crdv1alpha3.GroupSpec{IPBlocks: []crdv1alpha1.IPBlock{{CIDR: cidr}}},
+	}
+	groupWithSelector := &crdv1alpha3.Group{
+		ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "gA", UID: "uidA"},
+		Spec:       crdv1alpha3.GroupSpec{PodSelector: &selector},
+	}
+	// gB with IPBlock present in cache
+	groupWithIPBlock := &crdv1alpha3.Group{
+		ObjectMeta: metav1.ObjectMeta{Namespace: "nsB", Name: "gB", UID: "uidB"},
+		Spec:       crdv1alpha3.GroupSpec{IPBlocks: []crdv1alpha1.IPBlock{{CIDR: cidr}}},
+	}
+	_, npc := newController()
+	npc.addClusterGroup(clusterGroupWithSelector)
+	npc.addClusterGroup(clusterGroupWithIPBlock)
+	npc.addGroup(groupWithSelector)
+	npc.addGroup(groupWithIPBlock)
+	tests := []struct {
+		name           string
+		inputNamespace string
+		inputGroup     string
+		expectedATG    *antreatypes.AppliedToGroup
+	}{
+		{
+			name:        "empty cluster group name",
+			inputGroup:  "",
+			expectedATG: nil,
+		},
+		{
+			name:        "cluster group with IPBlock",
+			inputGroup:  clusterGroupWithIPBlock.Name,
+			expectedATG: nil,
+		},
+		{
+			name:        "non-existing cluster group",
+			inputGroup:  "foo",
+			expectedATG: nil,
+		},
+		{
+			name:        "cluster group with selectors",
+			inputGroup:  clusterGroupWithSelector.Name,
+			expectedATG: &antreatypes.AppliedToGroup{UID: clusterGroupWithSelector.UID, Name: clusterGroupWithSelector.Name},
+		},
+		{
+			name:           "empty group name",
+			inputNamespace: "default",
+			inputGroup:     "",
+			expectedATG:    nil,
+		},
+		{
+			name:           "group with IPBlock",
+			inputNamespace: groupWithIPBlock.Namespace,
+			inputGroup:     groupWithIPBlock.Name,
+			expectedATG:    nil,
+		},
+		{
+			name:           "non-existing group",
+			inputNamespace: "foo",
+			inputGroup:     "bar",
+			expectedATG:    nil,
+		},
+		{
+			name:           "group with selectors",
+			inputNamespace: groupWithSelector.Namespace,
+			inputGroup:     groupWithSelector.Name,
+			expectedATG:    &antreatypes.AppliedToGroup{UID: groupWithSelector.UID, Name: fmt.Sprintf("%s/%s", groupWithSelector.Namespace, groupWithSelector.Name)},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			actualATG := npc.createAppliedToGroupForGroup(tt.inputNamespace, tt.inputGroup)
+			assert.Equal(t, tt.expectedATG, actualATG, "appliedToGroup does not match")
+		})
+	}
+}

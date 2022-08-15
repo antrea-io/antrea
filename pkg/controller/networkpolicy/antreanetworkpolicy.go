@@ -24,7 +24,6 @@ import (
 	"antrea.io/antrea/pkg/apis/controlplane"
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	antreatypes "antrea.io/antrea/pkg/controller/types"
-	"antrea.io/antrea/pkg/util/k8s"
 )
 
 func getANPReference(anp *crdv1alpha1.NetworkPolicy) *controlplane.NetworkPolicyReference {
@@ -87,35 +86,15 @@ func (n *NetworkPolicyController) processAntreaNetworkPolicy(np *crdv1alpha1.Net
 	appliedToGroups := map[string]*antreatypes.AppliedToGroup{}
 	addressGroups := map[string]*antreatypes.AddressGroup{}
 	rules := make([]controlplane.NetworkPolicyRule, 0, len(np.Spec.Ingress)+len(np.Spec.Egress))
-	newUnrealizableInternalNetworkPolicy := func(err error) *antreatypes.NetworkPolicy {
-		return &antreatypes.NetworkPolicy{
-			SourceRef: &controlplane.NetworkPolicyReference{
-				Type:      controlplane.AntreaNetworkPolicy,
-				Namespace: np.Namespace,
-				Name:      np.Name,
-				UID:       np.UID,
-			},
-			Name:             internalNetworkPolicyKeyFunc(np),
-			UID:              np.UID,
-			Generation:       np.Generation,
-			RealizationError: err,
-		}
-	}
 	// Create AppliedToGroup for each AppliedTo present in AntreaNetworkPolicy spec.
-	atgs, err := n.processAppliedTo(np.Namespace, np.Spec.AppliedTo)
-	if err != nil {
-		return newUnrealizableInternalNetworkPolicy(err), nil, nil
-	}
+	atgs := n.processAppliedTo(np.Namespace, np.Spec.AppliedTo)
 	appliedToGroups = mergeAppliedToGroups(appliedToGroups, atgs...)
 	// Compute NetworkPolicyRule for Ingress Rule.
 	for idx, ingressRule := range np.Spec.Ingress {
 		// Set default action to ALLOW to allow traffic.
 		services, namedPortExists := toAntreaServicesForCRD(ingressRule.Ports, ingressRule.Protocols)
 		// Create AppliedToGroup for each AppliedTo present in the ingress rule.
-		atgs, err := n.processAppliedTo(np.Namespace, ingressRule.AppliedTo)
-		if err != nil {
-			return newUnrealizableInternalNetworkPolicy(err), nil, nil
-		}
+		atgs := n.processAppliedTo(np.Namespace, ingressRule.AppliedTo)
 		appliedToGroups = mergeAppliedToGroups(appliedToGroups, atgs...)
 		peer, ags := n.toAntreaPeerForCRD(ingressRule.From, np, controlplane.DirectionIn, namedPortExists)
 		addressGroups = mergeAddressGroups(addressGroups, ags...)
@@ -135,10 +114,7 @@ func (n *NetworkPolicyController) processAntreaNetworkPolicy(np *crdv1alpha1.Net
 		// Set default action to ALLOW to allow traffic.
 		services, namedPortExists := toAntreaServicesForCRD(egressRule.Ports, egressRule.Protocols)
 		// Create AppliedToGroup for each AppliedTo present in the egress rule.
-		atgs, err := n.processAppliedTo(np.Namespace, egressRule.AppliedTo)
-		if err != nil {
-			return newUnrealizableInternalNetworkPolicy(err), nil, nil
-		}
+		atgs := n.processAppliedTo(np.Namespace, egressRule.AppliedTo)
 		appliedToGroups = mergeAppliedToGroups(appliedToGroups, atgs...)
 		var peer *controlplane.NetworkPolicyPeer
 		if egressRule.ToServices != nil {
@@ -179,16 +155,12 @@ func (n *NetworkPolicyController) processAntreaNetworkPolicy(np *crdv1alpha1.Net
 	return internalNetworkPolicy, appliedToGroups, addressGroups
 }
 
-func (n *NetworkPolicyController) processAppliedTo(namespace string, appliedTo []crdv1alpha1.NetworkPolicyPeer) ([]*antreatypes.AppliedToGroup, error) {
+func (n *NetworkPolicyController) processAppliedTo(namespace string, appliedTo []crdv1alpha1.NetworkPolicyPeer) []*antreatypes.AppliedToGroup {
 	var appliedToGroups []*antreatypes.AppliedToGroup
 	for _, at := range appliedTo {
 		var atg *antreatypes.AppliedToGroup
 		if at.Group != "" {
-			var err error
-			atg, err = n.createAppliedToGroupForNamespacedGroup(namespace, at.Group)
-			if err != nil {
-				return nil, err
-			}
+			atg = n.createAppliedToGroupForGroup(namespace, at.Group)
 		} else {
 			atg = n.createAppliedToGroup(namespace, at.PodSelector, at.NamespaceSelector, at.ExternalEntitySelector)
 		}
@@ -196,37 +168,16 @@ func (n *NetworkPolicyController) processAppliedTo(namespace string, appliedTo [
 			appliedToGroups = append(appliedToGroups, atg)
 		}
 	}
-	return appliedToGroups, nil
+	return appliedToGroups
 }
 
 // ErrNetworkPolicyAppliedToUnsupportedGroup is an error response when
-// a Group with IPBlocks or NamespaceSelector is used as AppliedTo.
+// a Group with Pods in other Namespaces is used as AppliedTo.
 type ErrNetworkPolicyAppliedToUnsupportedGroup struct {
 	namespace string
 	groupName string
 }
 
-func (e ErrNetworkPolicyAppliedToUnsupportedGroup) Error() string {
-	return fmt.Sprintf("group %s/%s with IPBlocks or NamespaceSelector can not be used as AppliedTo", e.namespace, e.groupName)
-}
-
-func (n *NetworkPolicyController) createAppliedToGroupForNamespacedGroup(namespace, groupName string) (*antreatypes.AppliedToGroup, error) {
-	// Namespaced group uses NAMESPACE/NAME as the key of the corresponding internal group.
-	key := k8s.NamespacedName(namespace, groupName)
-	// Find the internal Group corresponding to this Group.
-	// There is no need to check if the namespaced group exists in groupLister because its existence will eventually be
-	// reflected in internalGroupStore.
-	ig, found, _ := n.internalGroupStore.Get(key)
-	if !found {
-		// Internal Group is not found, which means the corresponding namespaced group is either not created yet or not
-		// processed yet. Once the internal Group is created and processed, the sync worker for internal group will
-		// re-enqueue the ClusterNetworkPolicy processing which will trigger the creation of AppliedToGroup.
-		return nil, nil
-	}
-	intGrp := ig.(*antreatypes.Group)
-	if len(intGrp.IPBlocks) > 0 || (intGrp.Selector != nil && intGrp.Selector.NamespaceSelector != nil) {
-		klog.V(2).InfoS("Group with IPBlocks or NamespaceSelector can not be used as AppliedTo", "Group", key)
-		return nil, ErrNetworkPolicyAppliedToUnsupportedGroup{namespace: namespace, groupName: groupName}
-	}
-	return &antreatypes.AppliedToGroup{UID: intGrp.UID, Name: key}, nil
+func (e *ErrNetworkPolicyAppliedToUnsupportedGroup) Error() string {
+	return fmt.Sprintf("Group %s/%s with Pods in other Namespaces can not be used as AppliedTo", e.namespace, e.groupName)
 }
