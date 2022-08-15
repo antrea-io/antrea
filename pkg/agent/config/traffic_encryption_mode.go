@@ -56,5 +56,8 @@ func GetTrafficEncryptionModes() []TrafficEncryptionModeType {
 
 // String returns value in string.
 func (m TrafficEncryptionModeType) String() string {
+	if m == TrafficEncryptionModeInvalid {
+		return "invalid"
+	}
 	return encryptionModeStrs[m]
 }

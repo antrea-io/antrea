@@ -58,6 +58,7 @@ func TestTrafficEncapModeTypeString(t *testing.T) {
 		{"no-encap-mode", 1, "noEncap"},
 		{"hybrid-mode", 2, "hybrid"},
 		{"policy-only-mode-valid", 3, "networkPolicyOnly"},
+		{"invalid-str", -1, "invalid"},
 	}
 
 	for _, tt := range tests {
