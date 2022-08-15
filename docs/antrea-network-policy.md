@@ -644,8 +644,8 @@ which the rule is applied. These log files can then be retrieved for further
 analysis. By default, rules are not logged. The example policy logs all
 traffic that matches the "DropToThirdParty" egress rule, while the rule
 "AllowFromFrontend" is not logged. Specifically for drop and reject rules,
-deduplication is applied to simplify multiple logs. Duplication buffer length is set as 1 second.
-The rules are logged in the following format:
+deduplication is applied to reduce duplicated logs, and duplication buffer
+length is set to 1 second. The rules are logged in the following format:
 
 ```text
     <yyyy/mm/dd> <time> <ovs-table-name> <antrea-native-policy-reference> <action> <openflow-priority> <source-ip> <source-port> <destination-ip> <destination-port> <protocol> <packet-length>
@@ -664,9 +664,6 @@ for all NetworkPolicies in the Namespace. Packets of any connection that match
 a NetworkPolicy rule will be logged with a reference to the NetworkPolicy name,
 but packets dropped by the implicit "default drop" (not allowed by any NetworkPolicy)
 will only be logged with consistent name `K8sNetworkPolicy` for reference.
-Note that currently, Antrea only retrieves the logging Annotation once when adding
-NetworkPolicies and in case of agent restart, users should not update Namespace
-logging Annotations, otherwise it would risk NetworkPolicies working in a stale state.
 The rules are logged in the following format:
 
 ```text
