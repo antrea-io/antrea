@@ -18,7 +18,8 @@ docker push antrea/base-windows:$WIN_BUILD_TAG
 The `docker push` command will fail if you do not have permission to push to the
 `antrea` Dockerhub repository.
 
-However, the easiest way topush a new image on Dockerhub is to run the `Manually
-update antrea/base-windows Docker image` Github workflow. Only contributors with
-`write` access to the antrea-io/antrea Github repository can trigger the
-workflow. If you need to update the image, please check with a maintainer first.
+However, the easiest way to push a new image on Dockerhub is to run the
+`Manually update antrea/base-windows Docker image` Github workflow. Only
+contributors with `write` access to the antrea-io/antrea Github repository can
+trigger the workflow. If you need to update the image, please check with a
+maintainer first.
