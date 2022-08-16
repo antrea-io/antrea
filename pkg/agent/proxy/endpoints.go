@@ -200,6 +200,7 @@ func (t *endpointsChangesTracker) endpointsToEndpointsMap(endpoints *corev1.Endp
 				ei := types.NewEndpointInfo(&k8sproxy.BaseEndpointInfo{
 					Endpoint: net.JoinHostPort(addr.IP, fmt.Sprint(port.Port)),
 					IsLocal:  isLocal,
+					Ready:    true,
 				})
 				endpointsMap[svcPortName][ei.String()] = ei
 			}
@@ -208,14 +209,20 @@ func (t *endpointsChangesTracker) endpointsToEndpointsMap(endpoints *corev1.Endp
 	return endpointsMap
 }
 
-// Update updates an EndpointsMap based on current changes.
-func (t *endpointsChangesTracker) Update(em types.EndpointsMap) {
+// Update updates an EndpointsMap and numLocalEndpoints based on current changes.
+func (t *endpointsChangesTracker) Update(em types.EndpointsMap, numLocalEndpoints map[apimachinerytypes.NamespacedName]int) {
 	for _, change := range t.checkoutChanges() {
 		for spn := range change.previous {
 			delete(em, spn)
+			delete(numLocalEndpoints, spn.NamespacedName)
 		}
 		for spn, endpoints := range change.current {
 			em[spn] = endpoints
+			for _, endpoint := range endpoints {
+				if endpoint.GetIsLocal() && endpoint.IsReady() {
+					numLocalEndpoints[spn.NamespacedName] += 1
+				}
+			}
 		}
 	}
 }
