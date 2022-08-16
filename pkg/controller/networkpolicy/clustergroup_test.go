@@ -970,23 +970,13 @@ func TestSyncInternalGroup(t *testing.T) {
 	npc.crdInformerFactory.Start(stopCh)
 	npc.crdInformerFactory.WaitForCacheSync(stopCh)
 
-	// After creating a ClusterGroup:
-	// - A corresponding internal group should be added for it.
-	// - The internal NetworkPolicies for the ClusterNetworkPolicies that use it should reference to it regardless of
-	//   whether they are added before the ClusterGroup or after it.
-	// - An AddressGroup should be created for it.
-
-	// cnp1 is added before the ClusterGroup.
-	npc.addCNP(cnp1)
-	npc.addClusterGroup(cg)
-	err := npc.syncInternalGroup(internalGroupKeyFunc(cg))
-	require.NoError(t, err)
-	// cnp2 is added after the ClusterGroup.
-	npc.addCNP(cnp2)
-
+	// cnp1 is synced before the ClusterGroup. The rule's From should be empty as the ClusterGroup hasn't been synced,
+	require.NoError(t, npc.syncInternalNetworkPolicy(getACNPReference(cnp1)))
+	assert.Equal(t, 0, npc.internalNetworkPolicyQueue.Len())
 	expectedInternalNetworkPolicy1 := &antreatypes.NetworkPolicy{
-		UID:  "uid1",
-		Name: "uid1",
+		UID:      "uid1",
+		Name:     "uid1",
+		SpanMeta: antreatypes.SpanMeta{NodeNames: sets.NewString()},
 		SourceRef: &controlplane.NetworkPolicyReference{
 			Type: controlplane.AntreaClusterNetworkPolicy,
 			Name: "cnp1",
@@ -997,7 +987,6 @@ func TestSyncInternalGroup(t *testing.T) {
 		Rules: []controlplane.NetworkPolicyRule{
 			{
 				Direction: controlplane.DirectionIn,
-				From:      controlplane.NetworkPolicyPeer{AddressGroups: []string{cgName}},
 				Priority:  0,
 				Action:    &allowAction,
 			},
@@ -1006,11 +995,39 @@ func TestSyncInternalGroup(t *testing.T) {
 	}
 	actualInternalNetworkPolicy1, exists, _ := npc.internalNetworkPolicyStore.Get(internalNetworkPolicyKeyFunc(cnp1))
 	require.True(t, exists)
-	assert.Equal(t, expectedInternalNetworkPolicy1, actualInternalNetworkPolicy1)
+	require.Equal(t, expectedInternalNetworkPolicy1, actualInternalNetworkPolicy1)
 
+	// After creating a ClusterGroup:
+	// - A corresponding internal group should be added for it.
+	// - The internal NetworkPolicies for the ClusterNetworkPolicies that use it should be enqueued.
+	// - An AddressGroup should be created for it.
+	npc.addClusterGroup(cg)
+	err := npc.syncInternalGroup(internalGroupKeyFunc(cg))
+	require.NoError(t, err)
+	require.Equal(t, 2, npc.internalNetworkPolicyQueue.Len())
+	expectedKeys := []controlplane.NetworkPolicyReference{
+		*getACNPReference(cnp1),
+		*getACNPReference(cnp2),
+	}
+	actualKeys := make([]controlplane.NetworkPolicyReference, 0, 2)
+	for i := 0; i < 2; i++ {
+		key, _ := npc.internalNetworkPolicyQueue.Get()
+		actualKeys = append(actualKeys, key.(controlplane.NetworkPolicyReference))
+		npc.internalNetworkPolicyQueue.Done(key)
+	}
+	assert.ElementsMatch(t, expectedKeys, actualKeys)
+
+	expectedInternalNetworkPolicy1.Rules[0].From = controlplane.NetworkPolicyPeer{AddressGroups: []string{cgName}}
+	require.NoError(t, npc.syncInternalNetworkPolicy(getACNPReference(cnp1)))
+	actualInternalNetworkPolicy1, exists, _ = npc.internalNetworkPolicyStore.Get(internalNetworkPolicyKeyFunc(cnp1))
+	require.True(t, exists)
+	require.Equal(t, expectedInternalNetworkPolicy1, actualInternalNetworkPolicy1)
+
+	// cnp2 is synced after the ClusterGroup.
 	expectedInternalNetworkPolicy2 := &antreatypes.NetworkPolicy{
-		UID:  "uid2",
-		Name: "uid2",
+		UID:      "uid2",
+		Name:     "uid2",
+		SpanMeta: antreatypes.SpanMeta{NodeNames: sets.NewString()},
 		SourceRef: &controlplane.NetworkPolicyReference{
 			Type: controlplane.AntreaClusterNetworkPolicy,
 			Name: "cnp2",
@@ -1028,6 +1045,7 @@ func TestSyncInternalGroup(t *testing.T) {
 		},
 		AppliedToGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", &selectorC, nil, nil, nil).NormalizedName)},
 	}
+	require.NoError(t, npc.syncInternalNetworkPolicy(getACNPReference(cnp2)))
 	actualInternalNetworkPolicy2, exists, _ := npc.internalNetworkPolicyStore.Get(internalNetworkPolicyKeyFunc(cnp2))
 	require.True(t, exists)
 	assert.Equal(t, expectedInternalNetworkPolicy2, actualInternalNetworkPolicy2)
@@ -1055,14 +1073,17 @@ func TestSyncInternalGroup(t *testing.T) {
 	err = npc.syncInternalGroup(internalGroupKeyFunc(cg))
 	require.NoError(t, err)
 
+	require.Equal(t, 2, npc.internalNetworkPolicyQueue.Len())
 	_, exists, _ = npc.internalGroupStore.Get(internalGroupKeyFunc(cg))
 	require.False(t, exists)
 
+	require.NoError(t, npc.syncInternalNetworkPolicy(getACNPReference(cnp1)))
 	expectedInternalNetworkPolicy1.Rules[0].From.AddressGroups = nil
 	actualInternalNetworkPolicy1, exists, _ = npc.internalNetworkPolicyStore.Get(internalNetworkPolicyKeyFunc(cnp1))
 	require.True(t, exists)
 	assert.Equal(t, expectedInternalNetworkPolicy1, actualInternalNetworkPolicy1)
 
+	require.NoError(t, npc.syncInternalNetworkPolicy(getACNPReference(cnp2)))
 	expectedInternalNetworkPolicy2.Rules[0].From.AddressGroups = nil
 	actualInternalNetworkPolicy2, exists, _ = npc.internalNetworkPolicyStore.Get(internalNetworkPolicyKeyFunc(cnp2))
 	require.True(t, exists)

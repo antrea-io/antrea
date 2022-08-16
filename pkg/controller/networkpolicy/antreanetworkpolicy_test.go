@@ -19,9 +19,9 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/intstr"
 
 	"antrea.io/antrea/pkg/apis/controlplane"
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
@@ -33,7 +33,6 @@ var (
 	selectorA = metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
 	selectorB = metav1.LabelSelector{MatchLabels: map[string]string{"foo2": "bar2"}}
 	selectorC = metav1.LabelSelector{MatchLabels: map[string]string{"foo3": "bar3"}}
-	selectorD = metav1.LabelSelector{MatchLabels: map[string]string{"foo4": "bar4"}}
 
 	icmpType8 = int32(8)
 	icmpCode0 = int32(0)
@@ -577,181 +576,48 @@ func TestProcessAntreaNetworkPolicy(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			_, c := newController()
 			c.serviceStore.Add(&svcA)
-			assert.Equal(t, tt.expectedPolicy, c.processAntreaNetworkPolicy(tt.inputPolicy))
-			assert.Equal(t, tt.expectedAddressGroups, len(c.addressGroupStore.List()))
-			assert.Equal(t, tt.expectedAppliedToGroups, len(c.appliedToGroupStore.List()))
+			actualPolicy, actualAppliedToGroups, actualAddressGroups := c.processAntreaNetworkPolicy(tt.inputPolicy)
+			assert.Equal(t, tt.expectedPolicy, actualPolicy)
+			assert.Equal(t, tt.expectedAddressGroups, len(actualAddressGroups))
+			assert.Equal(t, tt.expectedAppliedToGroups, len(actualAppliedToGroups))
 		})
 	}
 }
 
 func TestAddANP(t *testing.T) {
-	p10 := float64(10)
-	allowAction := crdv1alpha1.RuleActionAllow
-	protocolTCP := controlplane.ProtocolTCP
-	int80 := intstr.FromInt(80)
-	selectorAll := metav1.LabelSelector{}
-	matchAllPeerEgress := matchAllPeer
-	matchAllPeerEgress.AddressGroups = []string{getNormalizedUID(antreatypes.NewGroupSelector("", nil, &selectorAll, nil, nil).NormalizedName)}
-	tests := []struct {
-		name               string
-		inputPolicy        *crdv1alpha1.NetworkPolicy
-		expPolicy          *antreatypes.NetworkPolicy
-		expAppliedToGroups int
-		expAddressGroups   int
-	}{
-		{
-			name: "application-tier-policy",
-			inputPolicy: &crdv1alpha1.NetworkPolicy{
-				ObjectMeta: metav1.ObjectMeta{Namespace: "nsA", Name: "anpA", UID: "uidA"},
-				Spec: crdv1alpha1.NetworkPolicySpec{
-					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
-						{PodSelector: &selectorA},
-					},
-					Priority: p10,
-					Tier:     "Application",
-					Ingress: []crdv1alpha1.Rule{
-						{
-							Ports: []crdv1alpha1.NetworkPolicyPort{
-								{
-									Port: &int80,
-								},
-							},
-							From: []crdv1alpha1.NetworkPolicyPeer{
-								{
-									PodSelector:            &selectorB,
-									NamespaceSelector:      &selectorC,
-									ExternalEntitySelector: &selectorD,
-								},
-							},
-							Action: &allowAction,
-						},
-					},
-				},
-			},
-			expPolicy: &antreatypes.NetworkPolicy{
-				UID:  "uidA",
-				Name: "uidA",
-				SourceRef: &controlplane.NetworkPolicyReference{
-					Type:      controlplane.AntreaNetworkPolicy,
-					Namespace: "nsA",
-					Name:      "anpA",
-					UID:       "uidA",
-				},
-				Priority:     &p10,
-				TierPriority: &DefaultTierPriority,
-				Rules: []controlplane.NetworkPolicyRule{
-					{
-						Direction: controlplane.DirectionIn,
-						From: controlplane.NetworkPolicyPeer{
-							AddressGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", &selectorB, &selectorC, &selectorD, nil).NormalizedName)},
-						},
-						Services: []controlplane.Service{
-							{
-								Protocol: &protocolTCP,
-								Port:     &int80,
-							},
-						},
-						Priority: 0,
-						Action:   &allowAction,
-					},
-				},
-				AppliedToGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("nsA", &selectorA, nil, nil, nil).NormalizedName)},
-			},
-			expAppliedToGroups: 1,
-			expAddressGroups:   1,
-		},
-		{
-			name: "with-port-range",
-			inputPolicy: &crdv1alpha1.NetworkPolicy{
-				ObjectMeta: metav1.ObjectMeta{Namespace: "nsB", Name: "npB", UID: "uidB"},
-				Spec: crdv1alpha1.NetworkPolicySpec{
-					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
-						{PodSelector: &selectorA},
-					},
-					Priority: p10,
-					Ingress: []crdv1alpha1.Rule{
-						{
-							Ports: []crdv1alpha1.NetworkPolicyPort{
-								{
-									Protocol: &k8sProtocolTCP,
-									Port:     &int1000,
-									EndPort:  &int32For1999,
-								},
-							},
-							From: []crdv1alpha1.NetworkPolicyPeer{
-								{
-									PodSelector:       &selectorB,
-									NamespaceSelector: &selectorC,
-								},
-							},
-							Action: &allowAction,
-						},
-					},
-				},
-			},
-			expPolicy: &antreatypes.NetworkPolicy{
-				UID:  "uidB",
-				Name: "uidB",
-				SourceRef: &controlplane.NetworkPolicyReference{
-					Type:      controlplane.AntreaNetworkPolicy,
-					Namespace: "nsB",
-					Name:      "npB",
-					UID:       "uidB",
-				},
-				Priority:     &p10,
-				TierPriority: &DefaultTierPriority,
-				Rules: []controlplane.NetworkPolicyRule{
-					{
-						Direction: controlplane.DirectionIn,
-						From: controlplane.NetworkPolicyPeer{
-							AddressGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", &selectorB, &selectorC, nil, nil).NormalizedName)},
-						},
-						Services: []controlplane.Service{
-							{
-								Protocol: toAntreaProtocol(&k8sProtocolTCP),
-								Port:     &int1000,
-								EndPort:  &int32For1999,
-							},
-						},
-						Priority: 0,
-						Action:   &allowAction,
-					},
-				},
-				AppliedToGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("nsB", &selectorA, nil, nil, nil).NormalizedName)},
-			},
-			expAppliedToGroups: 1,
-			expAddressGroups:   1,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, npc := newController()
-			npc.addANP(tt.inputPolicy)
-			key := internalNetworkPolicyKeyFunc(tt.inputPolicy)
-			actualPolicyObj, _, _ := npc.internalNetworkPolicyStore.Get(key)
-			actualPolicy := actualPolicyObj.(*antreatypes.NetworkPolicy)
+	_, npc := newController()
+	anp := getANP()
+	npc.addANP(anp)
+	require.Equal(t, 1, npc.internalNetworkPolicyQueue.Len())
+	key, done := npc.internalNetworkPolicyQueue.Get()
+	expectedKey := getANPReference(anp)
+	assert.Equal(t, *expectedKey, key)
+	assert.False(t, done)
+}
 
-			assert.Equal(t, tt.expPolicy, actualPolicy)
-			assert.Equal(t, tt.expAddressGroups, len(npc.addressGroupStore.List()))
-			assert.Equal(t, tt.expAppliedToGroups, len(npc.appliedToGroupStore.List()))
-		})
-	}
+func TestUpdateANP(t *testing.T) {
+	_, npc := newController()
+	anp := getANP()
+	newANP := anp.DeepCopy()
+	// Make a change to the ANP.
+	newANP.Annotations = map[string]string{"foo": "bar"}
+	npc.updateANP(anp, newANP)
+	require.Equal(t, 1, npc.internalNetworkPolicyQueue.Len())
+	key, done := npc.internalNetworkPolicyQueue.Get()
+	expectedKey := getANPReference(anp)
+	assert.Equal(t, *expectedKey, key)
+	assert.False(t, done)
 }
 
 func TestDeleteANP(t *testing.T) {
-	selectorA := metav1.LabelSelector{MatchLabels: map[string]string{"foo1": "bar1"}}
-	anpObj := getANP()
-	apgID := getNormalizedUID(antreatypes.NewGroupSelector("test-ns", &selectorA, nil, nil, nil).NormalizedName)
 	_, npc := newController()
-	npc.addANP(anpObj)
-	npc.deleteANP(anpObj)
-	_, found, _ := npc.appliedToGroupStore.Get(apgID)
-	assert.False(t, found, "expected AppliedToGroup to be deleted")
-	adgs := npc.addressGroupStore.List()
-	assert.Len(t, adgs, 0, "expected empty AddressGroup list")
-	key := internalNetworkPolicyKeyFunc(anpObj)
-	_, found, _ = npc.internalNetworkPolicyStore.Get(key)
-	assert.False(t, found, "expected internal NetworkPolicy to be deleted")
+	anp := getANP()
+	npc.deleteANP(anp)
+	require.Equal(t, 1, npc.internalNetworkPolicyQueue.Len())
+	key, done := npc.internalNetworkPolicyQueue.Get()
+	expectedKey := getANPReference(anp)
+	assert.Equal(t, *expectedKey, key)
+	assert.False(t, done)
 }
 
 func TestProcessAppliedToGroupsForGroup(t *testing.T) {
@@ -788,40 +654,43 @@ func TestProcessAppliedToGroupsForGroup(t *testing.T) {
 	npc.gStore.Add(&gA)
 	npc.gStore.Add(&gB)
 	tests := []struct {
-		name       string
-		namespace  string
-		inputG     string
-		expectedAG string
+		name        string
+		namespace   string
+		inputG      string
+		expectedAG  *antreatypes.AppliedToGroup
+		expectedErr error
 	}{
 		{
 			name:       "empty-grp-no-result",
 			namespace:  "nsA",
 			inputG:     "",
-			expectedAG: "",
+			expectedAG: nil,
 		},
 		{
-			name:       "ipblock-grp-no-result",
-			namespace:  "nsB",
-			inputG:     gB.Name,
-			expectedAG: "",
+			name:        "ipblock-grp-no-result",
+			namespace:   "nsB",
+			inputG:      gB.Name,
+			expectedAG:  nil,
+			expectedErr: ErrNetworkPolicyAppliedToUnsupportedGroup{namespace: "nsB", groupName: gB.Name},
 		},
 		{
 			name:       "selector-grp-missing-no-result",
 			namespace:  "nsC",
 			inputG:     gC.Name,
-			expectedAG: "",
+			expectedAG: nil,
 		},
 		{
 			name:       "selector-grp",
 			namespace:  "nsA",
 			inputG:     gA.Name,
-			expectedAG: fmt.Sprintf("%s/%s", gA.Namespace, gA.Name),
+			expectedAG: &antreatypes.AppliedToGroup{UID: gA.UID, Name: fmt.Sprintf("%s/%s", gA.Namespace, gA.Name)},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			actualAG, _ := npc.processAppliedToGroupForNamespacedGroup(tt.namespace, tt.inputG)
+			actualAG, actualErr := npc.createAppliedToGroupForNamespacedGroup(tt.namespace, tt.inputG)
 			assert.Equal(t, tt.expectedAG, actualAG, "appliedToGroup list does not match")
+			assert.ErrorIs(t, actualErr, tt.expectedErr)
 		})
 	}
 }

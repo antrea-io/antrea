@@ -124,8 +124,9 @@ var policies = []*networkingv1.NetworkPolicy{
 	},
 	{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "default-deny-egress",
-			UID:  types.UID("uid-2"),
+			Name:      "default-deny-egress",
+			Namespace: "testNamespace",
+			UID:       types.UID("uid-2"),
 		},
 		Spec: networkingv1.NetworkPolicySpec{
 			PodSelector: metav1.LabelSelector{
@@ -156,6 +157,9 @@ func makeControllerAndEndpointQuerier(objects ...runtime.Object) *endpointQuerie
 	querier := NewEndpointQuerier(c.NetworkPolicyController)
 	// start informers and run controller
 	c.informerFactory.Start(stopCh)
+	c.crdInformerFactory.Start(stopCh)
+	go c.groupingController.Run(stopCh)
+	go c.groupingInterface.Run(stopCh)
 	go c.Run(stopCh)
 	// wait until computation is done, we assume it is done when no signal has been received on heartbeat channel for 3s.
 	idleTimeout := 3 * time.Second
