@@ -107,25 +107,17 @@ func (r *ResourceImportReconciler) handleResImpUpdateForClusterNetworkPolicy(ctx
 }
 
 func (r *ResourceImportReconciler) handleResImpDeleteForClusterNetworkPolicy(ctx context.Context, resImp *multiclusterv1alpha1.ResourceImport) (ctrl.Result, error) {
-	acnpName := types.NamespacedName{
-		Namespace: "",
-		Name:      common.AntreaMCSPrefix + resImp.Spec.Name,
-	}
+	acnpName := common.AntreaMCSPrefix + resImp.Spec.Name
 	klog.InfoS("Deleting ACNP corresponding to ResourceImport",
-		"acnp", acnpName.String(), "resourceimport", klog.KObj(resImp))
+		"acnp", acnpName, "resourceimport", klog.KObj(resImp))
 
-	acnp := &v1alpha1.ClusterNetworkPolicy{}
-	err := r.localClusterClient.Get(ctx, acnpName, acnp)
-	if err != nil {
-		if apierrors.IsNotFound(err) {
-			klog.V(2).InfoS("ACNP corresponding to ResourceImport has already been deleted",
-				"acnp", acnpName.String(), "resourceimport", klog.KObj(resImp))
-			return ctrl.Result{}, nil
-		}
-		return ctrl.Result{}, err
+	acnp := &v1alpha1.ClusterNetworkPolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: acnpName,
+		},
 	}
-	if err = r.localClusterClient.Delete(ctx, acnp, &client.DeleteOptions{}); err != nil {
-		return ctrl.Result{}, err
+	if err := r.localClusterClient.Delete(ctx, acnp, &client.DeleteOptions{}); err != nil {
+		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 	return ctrl.Result{}, nil
 }
