@@ -18,145 +18,40 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"hash/fnv"
 	"io/ioutil"
-	"os"
 	"path/filepath"
 	"sync"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
-	"github.com/google/uuid"
 	"github.com/vmware/go-ipfix/pkg/collector"
 	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
-	"github.com/vmware/go-ipfix/pkg/exporter"
 	ipfixintermediate "github.com/vmware/go-ipfix/pkg/intermediate"
 	ipfixregistry "github.com/vmware/go-ipfix/pkg/registry"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/util/wait"
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 
-	"antrea.io/antrea/pkg/clusteridentity"
 	flowaggregatorconfig "antrea.io/antrea/pkg/config/flowaggregator"
-	"antrea.io/antrea/pkg/flowaggregator/clickhouseclient"
+	"antrea.io/antrea/pkg/flowaggregator/exporter"
+	"antrea.io/antrea/pkg/flowaggregator/infoelements"
 	"antrea.io/antrea/pkg/flowaggregator/options"
 	"antrea.io/antrea/pkg/flowaggregator/querier"
 	"antrea.io/antrea/pkg/ipfix"
 )
 
 var (
-	ianaInfoElementsCommon = []string{
-		"flowStartSeconds",
-		"flowEndSeconds",
-		"flowEndReason",
-		"sourceTransportPort",
-		"destinationTransportPort",
-		"protocolIdentifier",
-		"packetTotalCount",
-		"octetTotalCount",
-		"packetDeltaCount",
-		"octetDeltaCount",
-	}
-	ianaInfoElementsIPv4    = append(ianaInfoElementsCommon, []string{"sourceIPv4Address", "destinationIPv4Address"}...)
-	ianaInfoElementsIPv6    = append(ianaInfoElementsCommon, []string{"sourceIPv6Address", "destinationIPv6Address"}...)
-	ianaReverseInfoElements = []string{
-		"reversePacketTotalCount",
-		"reverseOctetTotalCount",
-		"reversePacketDeltaCount",
-		"reverseOctetDeltaCount",
-	}
-	antreaInfoElementsCommon = []string{
-		"sourcePodName",
-		"sourcePodNamespace",
-		"sourceNodeName",
-		"destinationPodName",
-		"destinationPodNamespace",
-		"destinationNodeName",
-		"destinationServicePort",
-		"destinationServicePortName",
-		"ingressNetworkPolicyName",
-		"ingressNetworkPolicyNamespace",
-		"ingressNetworkPolicyType",
-		"ingressNetworkPolicyRuleName",
-		"ingressNetworkPolicyRuleAction",
-		"egressNetworkPolicyName",
-		"egressNetworkPolicyNamespace",
-		"egressNetworkPolicyType",
-		"egressNetworkPolicyRuleName",
-		"egressNetworkPolicyRuleAction",
-		"tcpState",
-		"flowType",
-	}
-	antreaInfoElementsIPv4 = append(antreaInfoElementsCommon, []string{"destinationClusterIPv4"}...)
-	antreaInfoElementsIPv6 = append(antreaInfoElementsCommon, []string{"destinationClusterIPv6"}...)
-
-	nonStatsElementList = []string{
-		"flowEndSeconds",
-		"flowEndReason",
-		"tcpState",
-	}
-	statsElementList = []string{
-		"octetDeltaCount",
-		"octetTotalCount",
-		"packetDeltaCount",
-		"packetTotalCount",
-		"reverseOctetDeltaCount",
-		"reverseOctetTotalCount",
-		"reversePacketDeltaCount",
-		"reversePacketTotalCount",
-	}
-	antreaSourceStatsElementList = []string{
-		"octetDeltaCountFromSourceNode",
-		"octetTotalCountFromSourceNode",
-		"packetDeltaCountFromSourceNode",
-		"packetTotalCountFromSourceNode",
-		"reverseOctetDeltaCountFromSourceNode",
-		"reverseOctetTotalCountFromSourceNode",
-		"reversePacketDeltaCountFromSourceNode",
-		"reversePacketTotalCountFromSourceNode",
-	}
-	antreaDestinationStatsElementList = []string{
-		"octetDeltaCountFromDestinationNode",
-		"octetTotalCountFromDestinationNode",
-		"packetDeltaCountFromDestinationNode",
-		"packetTotalCountFromDestinationNode",
-		"reverseOctetDeltaCountFromDestinationNode",
-		"reverseOctetTotalCountFromDestinationNode",
-		"reversePacketDeltaCountFromDestinationNode",
-		"reversePacketTotalCountFromDestinationNode",
-	}
-	antreaLabelsElementList = []string{
-		"sourcePodLabels",
-		"destinationPodLabels",
-	}
-	antreaFlowEndSecondsElementList = []string{
-		"flowEndSecondsFromSourceNode",
-		"flowEndSecondsFromDestinationNode",
-	}
-	antreaThroughputElementList = []string{
-		"throughput",
-		"reverseThroughput",
-	}
-	antreaSourceThroughputElementList = []string{
-		"throughputFromSourceNode",
-		"reverseThroughputFromSourceNode",
-	}
-	antreaDestinationThroughputElementList = []string{
-		"throughputFromDestinationNode",
-		"reverseThroughputFromDestinationNode",
-	}
 	aggregationElements = &ipfixintermediate.AggregationElements{
-		NonStatsElements:                   nonStatsElementList,
-		StatsElements:                      statsElementList,
-		AggregatedSourceStatsElements:      antreaSourceStatsElementList,
-		AggregatedDestinationStatsElements: antreaDestinationStatsElementList,
-		AntreaFlowEndSecondsElements:       antreaFlowEndSecondsElementList,
-		ThroughputElements:                 antreaThroughputElementList,
-		SourceThroughputElements:           antreaSourceThroughputElementList,
-		DestinationThroughputElements:      antreaDestinationThroughputElementList,
+		NonStatsElements:                   infoelements.NonStatsElementList,
+		StatsElements:                      infoelements.StatsElementList,
+		AggregatedSourceStatsElements:      infoelements.AntreaSourceStatsElementList,
+		AggregatedDestinationStatsElements: infoelements.AntreaDestinationStatsElementList,
+		AntreaFlowEndSecondsElements:       infoelements.AntreaFlowEndSecondsElementList,
+		ThroughputElements:                 infoelements.AntreaThroughputElementList,
+		SourceThroughputElements:           infoelements.AntreaSourceThroughputElementList,
+		DestinationThroughputElements:      infoelements.AntreaDestinationThroughputElementList,
 	}
 
 	correlateFields = []string{
@@ -193,48 +88,37 @@ const (
 	podInfoIndex = "podInfo"
 )
 
-type updateParam int
-
-const (
-	updateExternalFlowCollectorAddr updateParam = iota
-	updateClickHouseParam
-	enableClickHouse
-	disableClickHouse
-	disableFlowCollector
+// these are used for unit testing
+var (
+	newIPFIXExporter = func(k8sClient kubernetes.Interface, opt *options.Options, registry ipfix.IPFIXRegistry) exporter.Interface {
+		return exporter.NewIPFIXExporter(k8sClient, opt, registry)
+	}
+	newClickHouseExporter = func(opt *options.Options) (exporter.Interface, error) {
+		return exporter.NewClickHouseExporter(opt)
+	}
 )
 
-type updateMsg struct {
-	param updateParam
-	value interface{}
-}
-
 type flowAggregator struct {
-	externalFlowCollectorAddr   string
-	externalFlowCollectorProto  string
 	aggregatorTransportProtocol flowaggregatorconfig.AggregatorTransportProtocol
 	collectingProcess           ipfix.IPFIXCollectingProcess
 	aggregationProcess          ipfix.IPFIXAggregationProcess
-	dbExportProcess             *clickhouseclient.ClickHouseExportProcess
 	activeFlowRecordTimeout     time.Duration
 	inactiveFlowRecordTimeout   time.Duration
-	exportingProcess            ipfix.IPFIXExportingProcess
-	templateIDv4                uint16
-	templateIDv6                uint16
 	registry                    ipfix.IPFIXRegistry
-	set                         ipfixentities.Set
 	flowAggregatorAddress       string
 	includePodLabels            bool
 	k8sClient                   kubernetes.Interface
-	observationDomainID         uint32
 	podInformer                 coreinformers.PodInformer
-	sendJSONRecord              bool
 	numRecordsExported          int64
 	numRecordsReceived          int64
-	updateCh                    chan updateMsg
+	updateCh                    chan *options.Options
 	configFile                  string
 	configWatcher               *fsnotify.Watcher
 	configData                  []byte
 	APIServer                   flowaggregatorconfig.APIServerConfig
+	ipfixExporter               exporter.Interface
+	clickHouseExporter          exporter.Interface
+	logTickerDuration           time.Duration
 }
 
 func NewFlowAggregator(
@@ -269,40 +153,21 @@ func NewFlowAggregator(
 		return nil, err
 	}
 
-	var observationDomainID uint32
-	if opt.Config.FlowCollector.ObservationDomainID != nil {
-		observationDomainID = *opt.Config.FlowCollector.ObservationDomainID
-	} else {
-		observationDomainID = genObservationDomainID(k8sClient)
-	}
-	klog.InfoS("Flow aggregator Observation Domain ID", "Domain ID", observationDomainID)
-
-	var sendJSONRecord bool
-	if opt.Config.FlowCollector.RecordFormat == "JSON" {
-		sendJSONRecord = true
-	} else {
-		sendJSONRecord = false
-	}
-
 	fa := &flowAggregator{
-		externalFlowCollectorAddr:   opt.ExternalFlowCollectorAddr,
-		externalFlowCollectorProto:  opt.ExternalFlowCollectorProto,
 		aggregatorTransportProtocol: opt.AggregatorTransportProtocol,
 		activeFlowRecordTimeout:     opt.ActiveFlowRecordTimeout,
 		inactiveFlowRecordTimeout:   opt.InactiveFlowRecordTimeout,
 		registry:                    registry,
-		set:                         ipfixentities.NewSet(false),
 		flowAggregatorAddress:       opt.Config.FlowAggregatorAddress,
 		includePodLabels:            opt.Config.RecordContents.PodLabels,
 		k8sClient:                   k8sClient,
-		observationDomainID:         observationDomainID,
 		podInformer:                 podInformer,
-		sendJSONRecord:              sendJSONRecord,
-		updateCh:                    make(chan updateMsg),
+		updateCh:                    make(chan *options.Options),
 		configFile:                  configFile,
 		configWatcher:               configWatcher,
 		configData:                  data,
 		APIServer:                   opt.Config.APIServer,
+		logTickerDuration:           time.Minute,
 	}
 	err = fa.InitCollectingProcess()
 	if err != nil {
@@ -313,58 +178,17 @@ func NewFlowAggregator(
 		return nil, fmt.Errorf("error when creating aggregation process: %v", err)
 	}
 	if opt.Config.ClickHouse.Enable {
-		chInput := clickhouseclient.ClickHouseInput{
-			Username:       os.Getenv("CH_USERNAME"),
-			Password:       os.Getenv("CH_PASSWORD"),
-			Database:       opt.Config.ClickHouse.Database,
-			DatabaseURL:    opt.Config.ClickHouse.DatabaseURL,
-			Debug:          opt.Config.ClickHouse.Debug,
-			Compress:       opt.Config.ClickHouse.Compress,
-			CommitInterval: opt.ClickHouseCommitInterval,
-		}
-		err = fa.InitDBExportProcess(chInput)
+		var err error
+		fa.clickHouseExporter, err = newClickHouseExporter(opt)
 		if err != nil {
-			return nil, fmt.Errorf("error when creating db export process: %v", err)
+			return nil, fmt.Errorf("error when creating ClickHouse export process: %v", err)
 		}
+	}
+	if opt.Config.FlowCollector.Enable {
+		fa.ipfixExporter = newIPFIXExporter(k8sClient, opt, registry)
 	}
 	podInformer.Informer().AddIndexers(cache.Indexers{podInfoIndex: podInfoIndexFunc})
 	return fa, nil
-}
-
-// genObservationDomainID generates an IPFIX Observation Domain ID when one is not provided by the
-// user through the flow aggregator configuration. It will first try to generate one
-// deterministically based on the cluster UUID (if available, with a timeout of 10s). Otherwise, it
-// will generate a random one. The cluster UUID should be available if Antrea is deployed to the
-// cluster ahead of the flow aggregator, which is the expectation since when deploying flow
-// aggregator as a Pod, networking needs to be configured by the CNI plugin.
-func genObservationDomainID(k8sClient kubernetes.Interface) uint32 {
-	const retryInterval = time.Second
-	const timeout = 10 * time.Second
-	const defaultAntreaNamespace = "kube-system"
-
-	clusterIdentityProvider := clusteridentity.NewClusterIdentityProvider(
-		defaultAntreaNamespace,
-		clusteridentity.DefaultClusterIdentityConfigMapName,
-		k8sClient,
-	)
-	var clusterUUID uuid.UUID
-	if err := wait.PollImmediate(retryInterval, timeout, func() (bool, error) {
-		clusterIdentity, _, err := clusterIdentityProvider.Get()
-		if err != nil {
-			return false, nil
-		}
-		clusterUUID = clusterIdentity.UUID
-		return true, nil
-	}); err != nil {
-		klog.InfoS(
-			"Unable to retrieve cluster UUID; will generate a random observation domain ID", "timeout", timeout, "ConfigMapNameSpace", defaultAntreaNamespace, "ConfigMapName", clusteridentity.DefaultClusterIdentityConfigMapName,
-		)
-		clusterUUID = uuid.New()
-	}
-	h := fnv.New32()
-	h.Write(clusterUUID[:])
-	observationDomainID := h.Sum32()
-	return observationDomainID
 }
 
 func podInfoIndexFunc(obj interface{}) ([]string, error) {
@@ -429,8 +253,8 @@ func (fa *flowAggregator) InitCollectingProcess() error {
 			IsEncrypted:   false,
 		}
 	}
-	cpInput.NumExtraElements = len(antreaSourceStatsElementList) + len(antreaDestinationStatsElementList) + len(antreaLabelsElementList) +
-		len(antreaFlowEndSecondsElementList) + len(antreaThroughputElementList) + len(antreaSourceThroughputElementList) + len(antreaDestinationThroughputElementList)
+	cpInput.NumExtraElements = len(infoelements.AntreaSourceStatsElementList) + len(infoelements.AntreaDestinationStatsElementList) + len(infoelements.AntreaLabelsElementList) +
+		len(infoelements.AntreaFlowEndSecondsElementList) + len(infoelements.AntreaThroughputElementList) + len(infoelements.AntreaSourceThroughputElementList) + len(infoelements.AntreaDestinationThroughputElementList)
 	var err error
 	fa.collectingProcess, err = ipfix.NewIPFIXCollectingProcess(cpInput)
 	return err
@@ -450,121 +274,59 @@ func (fa *flowAggregator) InitAggregationProcess() error {
 	return err
 }
 
-func (fa *flowAggregator) InitDBExportProcess(chInput clickhouseclient.ClickHouseInput) error {
-	var err error
-	fa.dbExportProcess, err = clickhouseclient.NewClickHouseClient(chInput)
-	return err
-}
-
-func (fa *flowAggregator) createAndSendTemplate(isRecordIPv6 bool) error {
-	templateID := fa.exportingProcess.NewTemplateID()
-	recordIPFamily := "IPv4"
-	if isRecordIPv6 {
-		recordIPFamily = "IPv6"
-	}
-	if isRecordIPv6 {
-		fa.templateIDv6 = templateID
-	} else {
-		fa.templateIDv4 = templateID
-	}
-	bytesSent, err := fa.sendTemplateSet(isRecordIPv6)
-	if err != nil {
-		fa.exportingProcess.CloseConnToCollector()
-		fa.exportingProcess = nil
-		fa.set.ResetSet()
-		return fmt.Errorf("sending %s template set failed, err: %v", recordIPFamily, err)
-	}
-	klog.V(2).InfoS("Exporting process initialized", "bytesSent", bytesSent, "templateSetIPFamily", recordIPFamily)
-	return nil
-}
-
-func (fa *flowAggregator) initExportingProcess() error {
-	// TODO: This code can be further simplified by changing the go-ipfix API to accept
-	// externalFlowCollectorAddr and externalFlowCollectorProto instead of net.Addr input.
-	var expInput exporter.ExporterInput
-	if fa.externalFlowCollectorProto == "tcp" {
-		// TCP transport does not need any tempRefTimeout, so sending 0.
-		expInput = exporter.ExporterInput{
-			CollectorAddress:    fa.externalFlowCollectorAddr,
-			CollectorProtocol:   fa.externalFlowCollectorProto,
-			ObservationDomainID: fa.observationDomainID,
-			TempRefTimeout:      0,
-			IsEncrypted:         false,
-			SendJSONRecord:      fa.sendJSONRecord,
-		}
-	} else {
-		// For UDP transport, hardcoding tempRefTimeout value as 1800s. So we will send out template every 30 minutes.
-		expInput = exporter.ExporterInput{
-			CollectorAddress:    fa.externalFlowCollectorAddr,
-			CollectorProtocol:   fa.externalFlowCollectorProto,
-			ObservationDomainID: fa.observationDomainID,
-			TempRefTimeout:      1800,
-			IsEncrypted:         false,
-			SendJSONRecord:      fa.sendJSONRecord,
-		}
-	}
-	ep, err := ipfix.NewIPFIXExportingProcess(expInput)
-	if err != nil {
-		return fmt.Errorf("got error when initializing IPFIX exporting process: %v", err)
-	}
-	fa.exportingProcess = ep
-	// Currently, we send two templates for IPv4 and IPv6 regardless of the IP families supported by cluster
-	if err = fa.createAndSendTemplate(false); err != nil {
-		return err
-	}
-	if err = fa.createAndSendTemplate(true); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (fa *flowAggregator) Run(stopCh <-chan struct{}, wg *sync.WaitGroup) {
-	defer wg.Done()
+func (fa *flowAggregator) Run(stopCh <-chan struct{}) {
 	go fa.collectingProcess.Start()
 	defer fa.collectingProcess.Stop()
 	go fa.aggregationProcess.Start()
 	defer fa.aggregationProcess.Stop()
-	if fa.dbExportProcess != nil {
-		go fa.dbExportProcess.Start()
-		defer fa.dbExportProcess.Stop()
+	if fa.ipfixExporter != nil {
+		fa.ipfixExporter.Start()
 	}
-	go fa.flowExportLoop(stopCh)
+	if fa.clickHouseExporter != nil {
+		fa.clickHouseExporter.Start()
+	}
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		// We want to make sure that flowExportLoop returns before
+		// returning from this function. This is because flowExportLoop
+		// is in charge of cleanly stopping the exporters.
+		defer wg.Done()
+		fa.flowExportLoop(stopCh)
+	}()
 	go fa.watchConfiguration(stopCh)
 	<-stopCh
+	wg.Wait()
 }
 
+// flowExportLoop is the main loop for the FlowAggregator. It runs in a single
+// goroutine. All calls to exporter.Interface methods happen within this
+// function, hence preventing any concurrency issue as the exporter.Interface
+// implementations are not safe for concurrent access.
 func (fa *flowAggregator) flowExportLoop(stopCh <-chan struct{}) {
 	expireTimer := time.NewTimer(fa.activeFlowRecordTimeout)
-	logTicker := time.NewTicker(time.Minute)
+	defer expireTimer.Stop()
+	logTicker := time.NewTicker(fa.logTickerDuration)
+	defer logTicker.Stop()
+	defer func() {
+		// We stop the exporters from flowExportLoop and not from Run,
+		// to avoid any possible race condition.
+		if fa.ipfixExporter != nil {
+			fa.ipfixExporter.Stop()
+		}
+		if fa.clickHouseExporter != nil {
+			fa.clickHouseExporter.Stop()
+		}
+	}()
 	for {
 		select {
 		case <-stopCh:
-			if fa.exportingProcess != nil {
-				fa.exportingProcess.CloseConnToCollector()
-			}
-			expireTimer.Stop()
 			return
 		case <-expireTimer.C:
-			if fa.externalFlowCollectorAddr != "" && fa.exportingProcess == nil {
-				err := fa.initExportingProcess()
-				if err != nil {
-					klog.ErrorS(err, "Error when initializing exporting process", "wait time for retry", fa.activeFlowRecordTimeout)
-					// Initializing exporting process fails, will retry in next cycle.
-					expireTimer.Reset(fa.activeFlowRecordTimeout)
-					continue
-				}
-			}
 			// Pop the flow record item from expire priority queue in the Aggregation
 			// Process and send the flow records.
 			if err := fa.aggregationProcess.ForAllExpiredFlowRecordsDo(fa.sendFlowKeyRecord); err != nil {
 				klog.ErrorS(err, "Error when sending expired flow records")
-				// If there is an error when sending flow records because of intermittent connectivity, we reset the connection
-				// to IPFIX collector and retry in the next export cycle to reinitialize the connection and send flow records.
-				if fa.exportingProcess != nil {
-					fa.exportingProcess.CloseConnToCollector()
-					fa.exportingProcess = nil
-				}
 				expireTimer.Reset(fa.activeFlowRecordTimeout)
 				continue
 			}
@@ -573,88 +335,17 @@ func (fa *flowAggregator) flowExportLoop(stopCh <-chan struct{}) {
 		case <-logTicker.C:
 			// Add visibility of processing stats of Flow Aggregator
 			klog.V(4).InfoS("Total number of records received", "count", fa.collectingProcess.GetNumRecordsReceived())
-			klog.V(4).InfoS("Total number of records exported", "count", fa.numRecordsExported)
+			klog.V(4).InfoS("Total number of records exported by each active exporter", "count", fa.numRecordsExported)
 			klog.V(4).InfoS("Total number of flows stored in Flow Aggregator", "count", fa.aggregationProcess.GetNumFlows())
 			klog.V(4).InfoS("Number of exporters connected with Flow Aggregator", "count", fa.collectingProcess.GetNumConnToCollector())
-		case msg := <-fa.updateCh:
-			switch msg.param {
-			case updateExternalFlowCollectorAddr:
-				//modify addr and proto if changes.
-				newAddr := msg.value.(querier.ExternalFlowCollectorAddr)
-				if newAddr.Address == fa.externalFlowCollectorAddr && newAddr.Protocol == fa.externalFlowCollectorProto {
-					continue
-				}
-				klog.InfoS("Updating flow-collector address")
-				fa.externalFlowCollectorAddr = newAddr.Address
-				fa.externalFlowCollectorProto = newAddr.Protocol
-				klog.InfoS("Config ExternalFlowCollectorAddr is changed", "address", fa.externalFlowCollectorAddr, "protocol", fa.externalFlowCollectorProto)
-				if fa.exportingProcess != nil {
-					fa.exportingProcess.CloseConnToCollector()
-					fa.exportingProcess = nil
-				}
-			case enableClickHouse:
-				klog.InfoS("Enabling ClickHouse")
-				chInput := msg.value.(clickhouseclient.ClickHouseInput)
-				err := fa.InitDBExportProcess(chInput)
-				if err != nil {
-					klog.ErrorS(err, "Error when creating db export process")
-					continue
-				}
-				klog.InfoS("Clickhouse param is", "database", chInput.Database, "databaseURL", chInput.DatabaseURL, "debug", chInput.Debug, "compress", *chInput.Compress, "commitInterval", fa.dbExportProcess.GetCommitInterval().String())
-				go fa.dbExportProcess.Start()
-				defer fa.dbExportProcess.Stop()
-			case updateClickHouseParam:
-				chInput := msg.value.(clickhouseclient.ClickHouseInput)
-				dsn, connect, err := clickhouseclient.PrepareConnection(chInput)
-				if err != nil {
-					klog.ErrorS(err, "Error when checking new connection")
-					continue
-				}
-				if dsn == fa.dbExportProcess.GetDsn() && chInput.CommitInterval.String() == fa.dbExportProcess.GetCommitInterval().String() {
-					continue
-				}
-				klog.InfoS("Updating ClickHouse")
-				if dsn != fa.dbExportProcess.GetDsn() {
-					fa.dbExportProcess.UpdateCH(fa.dbExportProcess, dsn, connect)
-				}
-				if chInput.CommitInterval.String() != fa.dbExportProcess.GetCommitInterval().String() {
-					fa.dbExportProcess.SetCommitInterval(chInput.CommitInterval)
-				}
-				klog.InfoS("New clickhouse param is", "database", chInput.Database, "databaseURL", chInput.DatabaseURL, "debug", chInput.Debug, "compress", *chInput.Compress, "commitInterval", fa.dbExportProcess.GetCommitInterval().String())
-			case disableFlowCollector:
-				if fa.exportingProcess != nil || fa.externalFlowCollectorAddr != "" {
-					klog.InfoS("Disabling Flow-Collector")
-					fa.externalFlowCollectorAddr = ""
-					fa.externalFlowCollectorProto = ""
-					if fa.exportingProcess != nil {
-						fa.exportingProcess.CloseConnToCollector()
-						fa.exportingProcess = nil
-					}
-					klog.Info("Flow-collector disabled ")
-				}
-			case disableClickHouse:
-				if fa.dbExportProcess != nil {
-					klog.InfoS("Disabling Clickhouse")
-					fa.dbExportProcess.Stop()
-					fa.dbExportProcess = nil
-					klog.InfoS("Clickhouse disabled")
-				}
-			}
+		case opt := <-fa.updateCh:
+			fa.updateFlowAggregator(opt)
 		}
 	}
 }
 
 func (fa *flowAggregator) sendFlowKeyRecord(key ipfixintermediate.FlowKey, record *ipfixintermediate.AggregationFlowRecord) error {
 	isRecordIPv4 := fa.aggregationProcess.IsAggregatedRecordIPv4(*record)
-	templateID := fa.templateIDv4
-	if !isRecordIPv4 {
-		templateID = fa.templateIDv6
-	}
-	// TODO: more records per data set will be supported when go-ipfix supports size check when adding records
-	fa.set.ResetSet()
-	if err := fa.set.PrepareSet(ipfixentities.Data, templateID); err != nil {
-		return err
-	}
 	if !fa.aggregationProcess.AreCorrelatedFieldsFilled(*record) {
 		fa.fillK8sMetadata(key, record.Record)
 		fa.aggregationProcess.SetCorrelatedFieldsFilled(record)
@@ -663,124 +354,21 @@ func (fa *flowAggregator) sendFlowKeyRecord(key ipfixintermediate.FlowKey, recor
 		fa.fillPodLabels(key, record.Record)
 		fa.aggregationProcess.SetExternalFieldsFilled(record)
 	}
-	if err := fa.set.AddRecord(record.Record.GetOrderedElementList(), templateID); err != nil {
-		return err
-	}
-	if fa.exportingProcess != nil {
-		sentBytes, err := fa.exportingProcess.SendSet(fa.set)
-		if err != nil {
+	if fa.ipfixExporter != nil {
+		if err := fa.ipfixExporter.AddRecord(record.Record, !isRecordIPv4); err != nil {
 			return err
 		}
-		klog.V(4).InfoS("Data set sent successfully", "bytes sent", sentBytes)
 	}
-	if fa.dbExportProcess != nil {
-		fa.dbExportProcess.CacheSet(fa.set)
+	if fa.clickHouseExporter != nil {
+		if err := fa.clickHouseExporter.AddRecord(record.Record, !isRecordIPv4); err != nil {
+			return err
+		}
 	}
 	if err := fa.aggregationProcess.ResetStatAndThroughputElementsInRecord(record.Record); err != nil {
 		return err
 	}
 	fa.numRecordsExported = fa.numRecordsExported + 1
 	return nil
-}
-
-func (fa *flowAggregator) sendTemplateSet(isIPv6 bool) (int, error) {
-	elements := make([]ipfixentities.InfoElementWithValue, 0)
-	ianaInfoElements := ianaInfoElementsIPv4
-	antreaInfoElements := antreaInfoElementsIPv4
-	templateID := fa.templateIDv4
-	if isIPv6 {
-		ianaInfoElements = ianaInfoElementsIPv6
-		antreaInfoElements = antreaInfoElementsIPv6
-		templateID = fa.templateIDv6
-	}
-	for _, ie := range ianaInfoElements {
-		ie, err := fa.createInfoElementForTemplateSet(ie, ipfixregistry.IANAEnterpriseID)
-		if err != nil {
-			return 0, err
-		}
-		elements = append(elements, ie)
-	}
-	for _, ie := range ianaReverseInfoElements {
-		ie, err := fa.createInfoElementForTemplateSet(ie, ipfixregistry.IANAReversedEnterpriseID)
-		if err != nil {
-			return 0, err
-		}
-		elements = append(elements, ie)
-	}
-	for _, ie := range antreaInfoElements {
-		ie, err := fa.createInfoElementForTemplateSet(ie, ipfixregistry.AntreaEnterpriseID)
-		if err != nil {
-			return 0, err
-		}
-		elements = append(elements, ie)
-	}
-	// The order of source and destination stats elements needs to match the order specified in
-	// addFieldsForStatsAggregation method in go-ipfix aggregation process.
-	for i := range statsElementList {
-		// Add Antrea source stats fields
-		ieName := antreaSourceStatsElementList[i]
-		ie, err := fa.createInfoElementForTemplateSet(ieName, ipfixregistry.AntreaEnterpriseID)
-		if err != nil {
-			return 0, err
-		}
-		elements = append(elements, ie)
-		// Add Antrea destination stats fields
-		ieName = antreaDestinationStatsElementList[i]
-		ie, err = fa.createInfoElementForTemplateSet(ieName, ipfixregistry.AntreaEnterpriseID)
-		if err != nil {
-			return 0, err
-		}
-		elements = append(elements, ie)
-	}
-	for _, ie := range antreaFlowEndSecondsElementList {
-		ie, err := fa.createInfoElementForTemplateSet(ie, ipfixregistry.AntreaEnterpriseID)
-		if err != nil {
-			return 0, err
-		}
-		elements = append(elements, ie)
-	}
-	for i := range antreaThroughputElementList {
-		// Add common throughput fields
-		ieName := antreaThroughputElementList[i]
-		ie, err := fa.createInfoElementForTemplateSet(ieName, ipfixregistry.AntreaEnterpriseID)
-		if err != nil {
-			return 0, err
-		}
-		elements = append(elements, ie)
-		// Add source node specific throughput fields
-		ieName = antreaSourceThroughputElementList[i]
-		ie, err = fa.createInfoElementForTemplateSet(ieName, ipfixregistry.AntreaEnterpriseID)
-		if err != nil {
-			return 0, err
-		}
-		elements = append(elements, ie)
-		// Add destination node specific throughput fields
-		ieName = antreaDestinationThroughputElementList[i]
-		ie, err = fa.createInfoElementForTemplateSet(ieName, ipfixregistry.AntreaEnterpriseID)
-		if err != nil {
-			return 0, err
-		}
-		elements = append(elements, ie)
-	}
-	if fa.includePodLabels {
-		for _, ie := range antreaLabelsElementList {
-			ie, err := fa.createInfoElementForTemplateSet(ie, ipfixregistry.AntreaEnterpriseID)
-			if err != nil {
-				return 0, err
-			}
-			elements = append(elements, ie)
-		}
-	}
-	fa.set.ResetSet()
-	if err := fa.set.PrepareSet(ipfixentities.Template, templateID); err != nil {
-		return 0, err
-	}
-	err := fa.set.AddRecord(elements, templateID)
-	if err != nil {
-		return 0, fmt.Errorf("error when adding record to set, error: %v", err)
-	}
-	bytesSent, err := fa.exportingProcess.SendSet(fa.set)
-	return bytesSent, err
 }
 
 // fillK8sMetadata fills Pod name, Pod namespace and Node name for inter-Node flows
@@ -895,18 +483,6 @@ func (fa *flowAggregator) GetRecordMetrics() querier.Metrics {
 	}
 }
 
-func (fa *flowAggregator) createInfoElementForTemplateSet(ieName string, enterpriseID uint32) (ipfixentities.InfoElementWithValue, error) {
-	element, err := fa.registry.GetInfoElement(ieName, enterpriseID)
-	if err != nil {
-		return nil, fmt.Errorf("%s not present. returned error: %v", ieName, err)
-	}
-	ie, err := ipfixentities.DecodeAndCreateInfoElementWithValue(element, nil)
-	if err != nil {
-		return nil, err
-	}
-	return ie, nil
-}
-
 func (fa *flowAggregator) watchConfiguration(stopCh <-chan struct{}) {
 	klog.InfoS("Watching for FlowAggregator configuration file")
 	for {
@@ -951,54 +527,50 @@ func (fa *flowAggregator) handleWatcherEvent() error {
 		return nil
 	}
 	fa.configData = data
-	fa.updateFlowAggregator(opt)
+	klog.InfoS("Updating Flow Aggregator")
+	// all updates must be performed within flowExportLoop
+	fa.updateCh <- opt
 	return nil
 }
 
 func (fa *flowAggregator) updateFlowAggregator(opt *options.Options) {
-	klog.InfoS("Updating Flow Aggregator")
 	if opt.Config.FlowCollector.Enable {
-		query := querier.ExternalFlowCollectorAddr{
-			Address:  opt.ExternalFlowCollectorAddr,
-			Protocol: opt.ExternalFlowCollectorProto,
-		}
-		fa.updateCh <- updateMsg{
-			param: updateExternalFlowCollectorAddr,
-			value: query,
+		if fa.ipfixExporter == nil {
+			klog.InfoS("Enabling Flow-Collector")
+			fa.ipfixExporter = newIPFIXExporter(fa.k8sClient, opt, fa.registry)
+			fa.ipfixExporter.Start()
+			klog.InfoS("Enabled Flow-Collector")
+		} else {
+			fa.ipfixExporter.UpdateOptions(opt)
 		}
 	} else {
-		if fa.exportingProcess != nil || fa.externalFlowCollectorAddr != "" {
-			fa.updateCh <- updateMsg{
-				param: disableFlowCollector,
-			}
+		if fa.ipfixExporter != nil {
+			klog.InfoS("Disabling Flow-Collector")
+			fa.ipfixExporter.Stop()
+			fa.ipfixExporter = nil
+			klog.InfoS("Disabled Flow-Collector")
 		}
 	}
 	if opt.Config.ClickHouse.Enable {
-		chInput := clickhouseclient.ClickHouseInput{
-			Username:       os.Getenv("CH_USERNAME"),
-			Password:       os.Getenv("CH_PASSWORD"),
-			Database:       opt.Config.ClickHouse.Database,
-			DatabaseURL:    opt.Config.ClickHouse.DatabaseURL,
-			Debug:          opt.Config.ClickHouse.Debug,
-			Compress:       opt.Config.ClickHouse.Compress,
-			CommitInterval: opt.ClickHouseCommitInterval,
-		}
-		if fa.dbExportProcess == nil {
-			fa.updateCh <- updateMsg{
-				param: enableClickHouse,
-				value: chInput,
+		if fa.clickHouseExporter == nil {
+			klog.InfoS("Enabling ClickHouse")
+			var err error
+			fa.clickHouseExporter, err = newClickHouseExporter(opt)
+			if err != nil {
+				klog.ErrorS(err, "Error when creating ClickHouse export process")
+				return
 			}
+			fa.clickHouseExporter.Start()
+			klog.InfoS("Enabled ClickHouse")
 		} else {
-			fa.updateCh <- updateMsg{
-				param: updateClickHouseParam,
-				value: chInput,
-			}
+			fa.clickHouseExporter.UpdateOptions(opt)
 		}
 	} else {
-		if fa.dbExportProcess != nil {
-			fa.updateCh <- updateMsg{
-				param: disableClickHouse,
-			}
+		if fa.clickHouseExporter != nil {
+			klog.InfoS("Disabling ClickHouse")
+			fa.clickHouseExporter.Stop()
+			fa.clickHouseExporter = nil
+			klog.InfoS("Disabled ClickHouse")
 		}
 	}
 }
