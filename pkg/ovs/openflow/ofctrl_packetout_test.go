@@ -15,6 +15,7 @@
 package openflow
 
 import (
+	"math/rand"
 	"net"
 	"reflect"
 	"testing"
@@ -602,6 +603,9 @@ func Test_ofPacketOutBuilder_SetIPFlags(t *testing.T) {
 }
 
 func Test_ofPacketOutBuilder_Done(t *testing.T) {
+	// reset the rand seed in case there are any other test cases use math/rand to generate
+	// random numbers before running this test case.
+	rand.Seed(1)
 	type fields struct {
 		pktOut  *ofctrl.PacketOut
 		icmpID  *uint16
