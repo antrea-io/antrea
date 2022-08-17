@@ -61,7 +61,10 @@ func run(configFile string) error {
 	}
 	var wg sync.WaitGroup
 	wg.Add(1)
-	go flowAggregator.Run(stopCh, &wg)
+	go func() {
+		defer wg.Done()
+		flowAggregator.Run(stopCh)
+	}()
 
 	cipherSuites, err := cipher.GenerateCipherSuitesList(flowAggregator.APIServer.TLSCipherSuites)
 	if err != nil {

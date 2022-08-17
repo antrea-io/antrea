@@ -15,11 +15,11 @@
 package clickhouseclient
 
 import (
+	"context"
 	"database/sql/driver"
 	"fmt"
 	"net"
 	"reflect"
-	"sync"
 	"testing"
 	"time"
 
@@ -27,10 +27,12 @@ import (
 	"github.com/gammazero/deque"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
 	ipfixentitiestesting "github.com/vmware/go-ipfix/pkg/entities/testing"
 	"github.com/vmware/go-ipfix/pkg/registry"
 	ipfixregistry "github.com/vmware/go-ipfix/pkg/registry"
+	"k8s.io/apimachinery/pkg/util/wait"
 )
 
 func init() {
@@ -63,8 +65,8 @@ func TestGetDataSourceName(t *testing.T) {
 
 	for _, tc := range testcases {
 		dsn, err := tc.input.getDataSourceName()
-		if tc.expectedErr && err == nil {
-			t.Errorf("ClickHouseInput %v unexpectedly returns no error when getting DSN", tc.input)
+		if tc.expectedErr {
+			assert.Errorf(t, err, "ClickHouseInput %v unexpectedly returns no error when getting DSN", tc.input)
 		}
 		assert.Equal(t, tc.expectedDSN, dsn)
 	}
@@ -360,50 +362,32 @@ func prepareMockRecord(mockRecord *ipfixentitiestesting.MockRecord, isIPv4 bool)
 	}
 }
 
-func TestCacheSet(t *testing.T) {
+func TestCacheRecord(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
 	chExportProc := ClickHouseExportProcess{
 		deque: deque.New(),
-		mutex: sync.RWMutex{},
 	}
 
 	chExportProc.queueSize = 1
 	// First call. only populate row.
 	mockRecord := ipfixentitiestesting.NewMockRecord(ctrl)
 	prepareMockRecord(mockRecord, true)
-	mockSet := ipfixentitiestesting.NewMockSet(ctrl)
-	mockSet.EXPECT().GetRecords().Return([]ipfixentities.Record{mockRecord}).AnyTimes()
-	chExportProc.CacheSet(mockSet)
+	chExportProc.CacheRecord(mockRecord)
 	assert.Equal(t, 1, chExportProc.deque.Len())
 	assert.Equal(t, "10.10.0.79", chExportProc.deque.At(0).(*ClickHouseFlowRow).sourceIP)
 
 	// Second call. discard prev row and add new row.
 	mockRecord = ipfixentitiestesting.NewMockRecord(ctrl)
 	prepareMockRecord(mockRecord, false)
-	mockSet = ipfixentitiestesting.NewMockSet(ctrl)
-	mockSet.EXPECT().GetRecords().Return([]ipfixentities.Record{mockRecord}).AnyTimes()
-	chExportProc.CacheSet(mockSet)
+	chExportProc.CacheRecord(mockRecord)
 	assert.Equal(t, 1, chExportProc.deque.Len())
 	assert.Equal(t, "2001:0:3238:dfe1:63::fefb", chExportProc.deque.At(0).(*ClickHouseFlowRow).sourceIP)
 }
 
-func TestBatchCommitAll(t *testing.T) {
-	db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherEqual))
-	if err != nil {
-		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
-	}
-	defer db.Close()
-
-	chExportProc := ClickHouseExportProcess{
-		db:        db,
-		deque:     deque.New(),
-		mutex:     sync.RWMutex{},
-		queueSize: maxQueueSize,
-	}
-
-	recordRow := ClickHouseFlowRow{
+func getTestClickHouseFlowRow() *ClickHouseFlowRow {
+	return &ClickHouseFlowRow{
 		flowStartSeconds:                     time.Unix(int64(1637706961), 0),
 		flowEndSeconds:                       time.Unix(int64(1637706973), 0),
 		flowEndSecondsFromSourceNode:         time.Unix(int64(1637706974), 0),
@@ -452,8 +436,22 @@ func TestBatchCommitAll(t *testing.T) {
 		reverseThroughputFromSourceNode:      12381345,
 		reverseThroughputFromDestinationNode: 12381346,
 	}
+}
 
-	chExportProc.deque.PushBack(&recordRow)
+func TestBatchCommitAll(t *testing.T) {
+	db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherEqual))
+	require.NoError(t, err, "error when opening a stub database connection")
+	defer db.Close()
+
+	chExportProc := ClickHouseExportProcess{
+		db:        db,
+		deque:     deque.New(),
+		queueSize: maxQueueSize,
+	}
+
+	recordRow := getTestClickHouseFlowRow()
+
+	chExportProc.deque.PushBack(recordRow)
 
 	mock.ExpectBegin()
 	mock.ExpectPrepare(insertQuery).ExpectExec().
@@ -508,28 +506,21 @@ func TestBatchCommitAll(t *testing.T) {
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
 
-	count, err := chExportProc.batchCommitAll()
-	if err != nil {
-		t.Errorf("Error occurred when committing record with mock sql db: %s", err)
-	}
+	count, err := chExportProc.batchCommitAll(context.Background())
+	assert.NoError(t, err, "error occurred when committing record with mock sql db")
 	assert.Equal(t, 1, count)
 	assert.Equal(t, 0, chExportProc.deque.Len())
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Errorf("Exists unfulfilled expectations for db sql operation: %s", err)
-	}
+	assert.NoError(t, mock.ExpectationsWereMet(), "unfulfilled expectations for db sql operation")
 }
 
 func TestBatchCommitAllMultiRecord(t *testing.T) {
 	db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherEqual))
-	if err != nil {
-		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
-	}
+	require.NoError(t, err, "error when opening a stub database connection")
 	defer db.Close()
 
 	chExportProc := ClickHouseExportProcess{
 		db:        db,
 		deque:     deque.New(),
-		mutex:     sync.RWMutex{},
 		queueSize: maxQueueSize,
 	}
 	recordRow := ClickHouseFlowRow{}
@@ -547,28 +538,21 @@ func TestBatchCommitAllMultiRecord(t *testing.T) {
 	}
 	mock.ExpectCommit()
 
-	count, err := chExportProc.batchCommitAll()
-	if err != nil {
-		t.Errorf("Error occurred when committing record with mock sql db: %s", err)
-	}
+	count, err := chExportProc.batchCommitAll(context.Background())
+	assert.NoError(t, err, "error occurred when committing record with mock sql db")
 	assert.Equal(t, 10, count)
 	assert.Equal(t, 0, chExportProc.deque.Len())
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Errorf("Exists unfulfilled expectations for db sql operation: %s", err)
-	}
+	assert.NoError(t, mock.ExpectationsWereMet(), "unfulfilled expectations for db sql operation")
 }
 
 func TestBatchCommitAllError(t *testing.T) {
 	db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherEqual))
-	if err != nil {
-		t.Fatalf("Error '%s' was not expected when opening a stub database connection", err)
-	}
+	require.NoError(t, err, "error when opening a stub database connection")
 	defer db.Close()
 
 	chExportProc := ClickHouseExportProcess{
 		db:        db,
 		deque:     deque.New(),
-		mutex:     sync.RWMutex{},
 		queueSize: maxQueueSize,
 	}
 	recordRow := ClickHouseFlowRow{}
@@ -584,21 +568,16 @@ func TestBatchCommitAllError(t *testing.T) {
 		fmt.Errorf("mock error for sql stmt exec"))
 	mock.ExpectRollback()
 
-	count, err := chExportProc.batchCommitAll()
-	if err == nil {
-		t.Errorf("Expect error when if encounter issue when committing reocrds")
-	}
+	count, err := chExportProc.batchCommitAll(context.Background())
+	assert.Error(t, err, "expected error when SQL transaction error")
 	assert.Equal(t, 0, count)
 	assert.Equal(t, 1, chExportProc.deque.Len())
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Errorf("Exists unfulfilled expectations for db sql operation: %s", err)
-	}
+	assert.NoError(t, mock.ExpectationsWereMet(), "unfulfilled expectations for db sql operation")
 }
 
 func TestPushRecordsToFrontOfQueue(t *testing.T) {
 	chExportProc := ClickHouseExportProcess{
 		deque:     deque.New(),
-		mutex:     sync.RWMutex{},
 		queueSize: 4,
 	}
 
@@ -631,4 +610,94 @@ func TestPushRecordsToFrontOfQueue(t *testing.T) {
 	assert.Equal(t, records[1], chExportProc.deque.At(1), "deque has wrong item at index 1")
 	assert.Equal(t, records[2], chExportProc.deque.At(2), "deque has wrong item at index 2")
 	assert.Equal(t, records[0], chExportProc.deque.At(3), "deque has wrong item at index 3")
+}
+
+func TestFlushCacheOnStop(t *testing.T) {
+	db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherEqual))
+	require.NoError(t, err, "error when opening a stub database connection")
+	defer db.Close()
+
+	// something arbitrarily large
+	const commitInterval = time.Hour
+
+	chExportProc := ClickHouseExportProcess{
+		db:             db,
+		deque:          deque.New(),
+		queueSize:      maxQueueSize,
+		commitInterval: commitInterval,
+	}
+
+	recordRow := getTestClickHouseFlowRow()
+	chExportProc.deque.PushBack(recordRow)
+
+	mock.ExpectBegin()
+	mock.ExpectPrepare(insertQuery).ExpectExec().WillDelayFor(time.Second).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+
+	chExportProc.Start()
+	// this should block for about 1 second, which is the duration by which
+	// we delay the SQL transaction.
+	chExportProc.Stop()
+
+	assert.NoError(t, mock.ExpectationsWereMet(), "unfulfilled expectations for db sql operation")
+}
+
+func TestUpdateCH(t *testing.T) {
+	db1, mock1, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherEqual))
+	require.NoError(t, err, "error when opening a stub database connection")
+	defer db1.Close()
+
+	db2, mock2, err := sqlmock.New(sqlmock.QueryMatcherOption(sqlmock.QueryMatcherEqual))
+	require.NoError(t, err, "error when opening a stub database connection")
+	defer db2.Close()
+
+	// something small for the sake of the test
+	const commitInterval = 100 * time.Millisecond
+
+	chExportProc := ClickHouseExportProcess{
+		db:             db1,
+		deque:          deque.New(),
+		queueSize:      maxQueueSize,
+		commitInterval: commitInterval,
+	}
+
+	recordRow := getTestClickHouseFlowRow()
+	func() {
+		// commitTicker is ticking so the export process may be
+		// accessing the queue at the same time.
+		chExportProc.dequeMutex.Lock()
+		defer chExportProc.dequeMutex.Unlock()
+		chExportProc.deque.PushBack(recordRow)
+	}()
+
+	mock1.ExpectBegin()
+	mock1.ExpectPrepare(insertQuery).ExpectExec().WillReturnResult(sqlmock.NewResult(0, 1))
+	mock1.ExpectCommit()
+
+	chExportProc.Start()
+	defer chExportProc.Stop()
+
+	require.NoError(t, wait.Poll(commitInterval, time.Second, func() (bool, error) {
+		err := mock1.ExpectationsWereMet()
+		return (err == nil), nil
+	}), "timeout while waiting for first flow record to be committed (before DB connection update)")
+
+	mock2.ExpectBegin()
+	mock2.ExpectPrepare(insertQuery).ExpectExec().WillReturnResult(sqlmock.NewResult(0, 1))
+	mock2.ExpectCommit()
+
+	t.Logf("Calling UpdateCH to update DB connection")
+	chExportProc.UpdateCH("", db2)
+
+	func() {
+		chExportProc.dequeMutex.Lock()
+		defer chExportProc.dequeMutex.Unlock()
+		chExportProc.deque.PushBack(recordRow)
+	}()
+
+	require.NoError(t, wait.Poll(commitInterval, time.Second, func() (bool, error) {
+		err := mock2.ExpectationsWereMet()
+		return (err == nil), nil
+	}), "timeout while waiting for second flow record to be committed (after DB connection update)")
 }

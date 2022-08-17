@@ -16,7 +16,6 @@ package flowaggregator
 
 import (
 	"bytes"
-	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
@@ -33,21 +32,21 @@ import (
 	ipfixregistry "github.com/vmware/go-ipfix/pkg/registry"
 	"gopkg.in/yaml.v2"
 	"k8s.io/client-go/informers"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
 
 	flowaggregatorconfig "antrea.io/antrea/pkg/config/flowaggregator"
-	"antrea.io/antrea/pkg/flowaggregator/clickhouseclient"
+	"antrea.io/antrea/pkg/flowaggregator/exporter"
+	exportertesting "antrea.io/antrea/pkg/flowaggregator/exporter/testing"
 	"antrea.io/antrea/pkg/flowaggregator/options"
-	ipfixtest "antrea.io/antrea/pkg/ipfix/testing"
+	"antrea.io/antrea/pkg/ipfix"
+	ipfixtesting "antrea.io/antrea/pkg/ipfix/testing"
 )
 
 const (
-	testTemplateIDv4        = uint16(256)
-	testTemplateIDv6        = uint16(257)
-	testActiveTimeout       = 60 * time.Second
-	testInactiveTimeout     = 180 * time.Second
-	testObservationDomainID = 0xabcd
-	informerDefaultResync   = 12 * time.Hour
+	testActiveTimeout     = 60 * time.Second
+	testInactiveTimeout   = 180 * time.Second
+	informerDefaultResync = 12 * time.Hour
 )
 
 func init() {
@@ -58,34 +57,31 @@ func TestFlowAggregator_sendFlowKeyRecord(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockIPFIXExpProc := ipfixtest.NewMockIPFIXExportingProcess(ctrl)
-	mockIPFIXRegistry := ipfixtest.NewMockIPFIXRegistry(ctrl)
-	mockDataSet := ipfixentitiestesting.NewMockSet(ctrl)
+	mockIPFIXExporter := exportertesting.NewMockInterface(ctrl)
+	mockClickHouseExporter := exportertesting.NewMockInterface(ctrl)
+	mockIPFIXRegistry := ipfixtesting.NewMockIPFIXRegistry(ctrl)
 	mockRecord := ipfixentitiestesting.NewMockRecord(ctrl)
-	mockAggregationProcess := ipfixtest.NewMockIPFIXAggregationProcess(ctrl)
+	mockAggregationProcess := ipfixtesting.NewMockIPFIXAggregationProcess(ctrl)
 
 	client := fake.NewSimpleClientset()
 	informerFactory := informers.NewSharedInformerFactory(client, informerDefaultResync)
 
 	newFlowAggregator := func(includePodLabels bool) *flowAggregator {
 		return &flowAggregator{
-			externalFlowCollectorAddr:   "",
-			externalFlowCollectorProto:  "",
 			aggregatorTransportProtocol: "tcp",
 			aggregationProcess:          mockAggregationProcess,
 			activeFlowRecordTimeout:     testActiveTimeout,
 			inactiveFlowRecordTimeout:   testInactiveTimeout,
-			exportingProcess:            mockIPFIXExpProc,
-			templateIDv4:                testTemplateIDv4,
-			templateIDv6:                testTemplateIDv6,
+			ipfixExporter:               mockIPFIXExporter,
+			clickHouseExporter:          mockClickHouseExporter,
 			registry:                    mockIPFIXRegistry,
-			set:                         mockDataSet,
 			flowAggregatorAddress:       "",
 			includePodLabels:            includePodLabels,
-			observationDomainID:         testObservationDomainID,
 			podInformer:                 informerFactory.Core().V1().Pods(),
 		}
 	}
+
+	mockExporters := []*exportertesting.MockInterface{mockIPFIXExporter, mockClickHouseExporter}
 
 	ipv4Key := ipfixintermediate.FlowKey{
 		SourceAddress:      "10.0.0.1",
@@ -147,16 +143,9 @@ func TestFlowAggregator_sendFlowKeyRecord(t *testing.T) {
 
 	for _, tc := range testcases {
 		fa := newFlowAggregator(tc.includePodLabels)
-		templateID := fa.templateIDv4
-		if tc.isIPv6 {
-			templateID = fa.templateIDv6
+		for _, exporter := range mockExporters {
+			exporter.EXPECT().AddRecord(mockRecord, tc.isIPv6)
 		}
-		mockDataSet.EXPECT().ResetSet()
-		mockDataSet.EXPECT().PrepareSet(ipfixentities.Data, templateID).Return(nil)
-		elementList := make([]ipfixentities.InfoElementWithValue, 0)
-		mockRecord.EXPECT().GetOrderedElementList().Return(elementList)
-		mockDataSet.EXPECT().AddRecord(elementList, templateID).Return(nil)
-		mockIPFIXExpProc.EXPECT().SendSet(mockDataSet).Return(0, nil)
 		mockAggregationProcess.EXPECT().ResetStatAndThroughputElementsInRecord(mockRecord).Return(nil)
 		mockAggregationProcess.EXPECT().AreCorrelatedFieldsFilled(*tc.flowRecord).Return(false)
 		emptyStr := make([]byte, 0)
@@ -184,189 +173,278 @@ func TestFlowAggregator_sendFlowKeyRecord(t *testing.T) {
 	}
 }
 
-func TestFlowAggregator_sendTemplateSet(t *testing.T) {
+func TestFlowAggregator_watchConfiguration(t *testing.T) {
+	opt := options.Options{
+		Config: &flowaggregatorconfig.FlowAggregatorConfig{
+			FlowCollector: flowaggregatorconfig.FlowCollectorConfig{
+				Enable:  true,
+				Address: "10.10.10.10:155",
+			},
+			ClickHouse: flowaggregatorconfig.ClickHouseConfig{
+				Enable: true,
+			},
+		},
+	}
+	wd, err := os.Getwd()
+	require.NoError(t, err)
+	// fsnotify does not seem to work when using the default tempdir on MacOS, which is why we
+	// use the current working directory.
+	f, err := os.CreateTemp(wd, "test_*.config")
+	require.NoError(t, err, "Failed to create test config file")
+	fileName := f.Name()
+	defer os.Remove(fileName)
+	// create watcher
+	configWatcher, err := fsnotify.NewWatcher()
+	require.NoError(t, err)
+	defer configWatcher.Close()
+	flowAggregator := &flowAggregator{
+		// use a larger buffer to prevent the buffered channel from blocking
+		updateCh:      make(chan *options.Options, 100),
+		configFile:    fileName,
+		configWatcher: configWatcher,
+	}
+	dir := filepath.Dir(fileName)
+	t.Logf("DIR: %s", dir)
+	require.NoError(t, err)
+	err = flowAggregator.configWatcher.Add(dir)
+	require.NoError(t, err)
+	err = f.Close()
+	require.NoError(t, err)
+	err = os.Remove(flowAggregator.configFile)
+	require.NoError(t, err)
+	f, err = os.Create(flowAggregator.configFile)
+	require.NoError(t, err)
+	b, err := yaml.Marshal(opt.Config)
+	require.NoError(t, err)
+	_, err = f.Write(b)
+	require.NoError(t, err)
+	err = f.Close()
+	require.NoError(t, err)
+	stopCh := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		flowAggregator.watchConfiguration(stopCh)
+	}()
+
+	select {
+	case msg := <-flowAggregator.updateCh:
+		assert.Equal(t, opt.Config.FlowCollector.Enable, msg.Config.FlowCollector.Enable)
+		assert.Equal(t, opt.Config.FlowCollector.Address, msg.Config.FlowCollector.Address)
+		assert.Equal(t, opt.Config.ClickHouse.Enable, msg.Config.ClickHouse.Enable)
+	case <-time.After(5 * time.Second):
+		t.Errorf("Timeout while waiting for update")
+	}
+	close(stopCh)
+	wg.Wait()
+}
+
+func TestFlowAggregator_updateFlowAggregator(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockIPFIXExporter := exportertesting.NewMockInterface(ctrl)
+	mockClickHouseExporter := exportertesting.NewMockInterface(ctrl)
+
+	newIPFIXExporterSaved := newIPFIXExporter
+	newClickHouseExporterSaved := newClickHouseExporter
+	defer func() {
+		newIPFIXExporter = newIPFIXExporterSaved
+		newClickHouseExporter = newClickHouseExporterSaved
+	}()
+	newIPFIXExporter = func(kubernetes.Interface, *options.Options, ipfix.IPFIXRegistry) exporter.Interface {
+		return mockIPFIXExporter
+	}
+	newClickHouseExporter = func(*options.Options) (exporter.Interface, error) {
+		return mockClickHouseExporter, nil
+	}
+
+	t.Run("updateIPFIX", func(t *testing.T) {
+		flowAggregator := &flowAggregator{
+			ipfixExporter: mockIPFIXExporter,
+		}
+		opt := &options.Options{
+			Config: &flowaggregatorconfig.FlowAggregatorConfig{
+				FlowCollector: flowaggregatorconfig.FlowCollectorConfig{
+					Enable:  true,
+					Address: "10.10.10.10:155",
+				},
+			},
+		}
+		mockIPFIXExporter.EXPECT().UpdateOptions(opt)
+		flowAggregator.updateFlowAggregator(opt)
+	})
+	t.Run("disableIPFIX", func(t *testing.T) {
+		flowAggregator := &flowAggregator{
+			ipfixExporter: mockIPFIXExporter,
+		}
+		opt := &options.Options{
+			Config: &flowaggregatorconfig.FlowAggregatorConfig{
+				FlowCollector: flowaggregatorconfig.FlowCollectorConfig{
+					Enable: false,
+				},
+			},
+		}
+		mockIPFIXExporter.EXPECT().Stop()
+		flowAggregator.updateFlowAggregator(opt)
+	})
+	t.Run("enableClickHouse", func(t *testing.T) {
+		flowAggregator := &flowAggregator{}
+		opt := &options.Options{
+			Config: &flowaggregatorconfig.FlowAggregatorConfig{
+				ClickHouse: flowaggregatorconfig.ClickHouseConfig{
+					Enable: true,
+				},
+			},
+		}
+		mockClickHouseExporter.EXPECT().Start()
+		flowAggregator.updateFlowAggregator(opt)
+	})
+	t.Run("disableClickHouse", func(t *testing.T) {
+		flowAggregator := &flowAggregator{
+			clickHouseExporter: mockClickHouseExporter,
+		}
+		opt := &options.Options{
+			Config: &flowaggregatorconfig.FlowAggregatorConfig{
+				ClickHouse: flowaggregatorconfig.ClickHouseConfig{
+					Enable: false,
+				},
+			},
+		}
+		mockClickHouseExporter.EXPECT().Stop()
+		flowAggregator.updateFlowAggregator(opt)
+	})
+	t.Run("updateClickHouse", func(t *testing.T) {
+		flowAggregator := &flowAggregator{
+			clickHouseExporter: mockClickHouseExporter,
+		}
+		opt := &options.Options{
+			Config: &flowaggregatorconfig.FlowAggregatorConfig{
+				ClickHouse: flowaggregatorconfig.ClickHouseConfig{
+					Enable: true,
+				},
+			},
+		}
+		mockClickHouseExporter.EXPECT().UpdateOptions(opt)
+		flowAggregator.updateFlowAggregator(opt)
+	})
+}
+
+func TestFlowAggregator_Run(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockIPFIXExpProc := ipfixtest.NewMockIPFIXExportingProcess(ctrl)
-	mockIPFIXRegistry := ipfixtest.NewMockIPFIXRegistry(ctrl)
-	mockTempSet := ipfixentitiestesting.NewMockSet(ctrl)
+	mockIPFIXExporter := exportertesting.NewMockInterface(ctrl)
+	mockClickHouseExporter := exportertesting.NewMockInterface(ctrl)
+	mockCollectingProcess := ipfixtesting.NewMockIPFIXCollectingProcess(ctrl)
+	mockAggregationProcess := ipfixtesting.NewMockIPFIXAggregationProcess(ctrl)
 
-	newFlowAggregator := func(includePodLabels bool) *flowAggregator {
-		return &flowAggregator{
-			externalFlowCollectorAddr:   "",
-			externalFlowCollectorProto:  "",
-			aggregatorTransportProtocol: "tcp",
-			collectingProcess:           nil,
-			aggregationProcess:          nil,
-			activeFlowRecordTimeout:     testActiveTimeout,
-			exportingProcess:            mockIPFIXExpProc,
-			templateIDv4:                testTemplateIDv4,
-			templateIDv6:                testTemplateIDv6,
-			registry:                    mockIPFIXRegistry,
-			set:                         mockTempSet,
-			flowAggregatorAddress:       "",
-			includePodLabels:            includePodLabels,
-			k8sClient:                   nil,
-			observationDomainID:         testObservationDomainID,
-		}
+	newIPFIXExporterSaved := newIPFIXExporter
+	newClickHouseExporterSaved := newClickHouseExporter
+	defer func() {
+		newIPFIXExporter = newIPFIXExporterSaved
+		newClickHouseExporter = newClickHouseExporterSaved
+	}()
+	newIPFIXExporter = func(kubernetes.Interface, *options.Options, ipfix.IPFIXRegistry) exporter.Interface {
+		return mockIPFIXExporter
+	}
+	newClickHouseExporter = func(*options.Options) (exporter.Interface, error) {
+		return mockClickHouseExporter, nil
 	}
 
-	testcases := []struct {
-		isIPv6           bool
-		includePodLabels bool
-	}{
-		{false, true},
-		{true, true},
-		{false, false},
-		{true, false},
+	// create dummy watcher: we will not add any files or directory to it.
+	configWatcher, err := fsnotify.NewWatcher()
+	require.NoError(t, err)
+	defer configWatcher.Close()
+
+	updateCh := make(chan *options.Options)
+
+	updateOptions := func(opt *options.Options) {
+		// this is somewhat hacky: we use a non-buffered channel and
+		// every update is sent once. This way, we can guarantee that by
+		// the time the second statement returns, the options have been
+		// processed at least once.
+		updateCh <- opt
+		updateCh <- opt
 	}
 
-	for _, tc := range testcases {
-		fa := newFlowAggregator(tc.includePodLabels)
-		ianaInfoElements := ianaInfoElementsIPv4
-		antreaInfoElements := antreaInfoElementsIPv4
-		testTemplateID := fa.templateIDv4
-		if tc.isIPv6 {
-			ianaInfoElements = ianaInfoElementsIPv6
-			antreaInfoElements = antreaInfoElementsIPv6
-			testTemplateID = fa.templateIDv6
-		}
-		// Following consists of all elements that are in ianaInfoElements and antreaInfoElements (globals)
-		// Only the element name is needed, other arguments have dummy values.
-		elemList := make([]ipfixentities.InfoElementWithValue, 0)
-		for _, ie := range ianaInfoElements {
-			elemList = append(elemList, createElement(ie, ipfixregistry.IANAEnterpriseID))
-			mockIPFIXRegistry.EXPECT().GetInfoElement(ie, ipfixregistry.IANAEnterpriseID).Return(elemList[len(elemList)-1].GetInfoElement(), nil)
-		}
-		for _, ie := range ianaReverseInfoElements {
-			elemList = append(elemList, createElement(ie, ipfixregistry.IANAReversedEnterpriseID))
-			mockIPFIXRegistry.EXPECT().GetInfoElement(ie, ipfixregistry.IANAReversedEnterpriseID).Return(elemList[len(elemList)-1].GetInfoElement(), nil)
-		}
-		for _, ie := range antreaInfoElements {
-			elemList = append(elemList, createElement(ie, ipfixregistry.AntreaEnterpriseID))
-			mockIPFIXRegistry.EXPECT().GetInfoElement(ie, ipfixregistry.AntreaEnterpriseID).Return(elemList[len(elemList)-1].GetInfoElement(), nil)
-		}
-		for i := range statsElementList {
-			elemList = append(elemList, createElement(antreaSourceStatsElementList[i], ipfixregistry.AntreaEnterpriseID))
-			mockIPFIXRegistry.EXPECT().GetInfoElement(antreaSourceStatsElementList[i], ipfixregistry.AntreaEnterpriseID).Return(elemList[len(elemList)-1].GetInfoElement(), nil)
-			elemList = append(elemList, createElement(antreaDestinationStatsElementList[i], ipfixregistry.AntreaEnterpriseID))
-			mockIPFIXRegistry.EXPECT().GetInfoElement(antreaDestinationStatsElementList[i], ipfixregistry.AntreaEnterpriseID).Return(elemList[len(elemList)-1].GetInfoElement(), nil)
-		}
-		for _, ie := range antreaFlowEndSecondsElementList {
-			elemList = append(elemList, createElement(ie, ipfixregistry.AntreaEnterpriseID))
-			mockIPFIXRegistry.EXPECT().GetInfoElement(ie, ipfixregistry.AntreaEnterpriseID).Return(elemList[len(elemList)-1].GetInfoElement(), nil)
-		}
-		for i := range antreaThroughputElementList {
-			elemList = append(elemList, createElement(antreaThroughputElementList[i], ipfixregistry.AntreaEnterpriseID))
-			mockIPFIXRegistry.EXPECT().GetInfoElement(antreaThroughputElementList[i], ipfixregistry.AntreaEnterpriseID).Return(elemList[len(elemList)-1].GetInfoElement(), nil)
-			elemList = append(elemList, createElement(antreaSourceThroughputElementList[i], ipfixregistry.AntreaEnterpriseID))
-			mockIPFIXRegistry.EXPECT().GetInfoElement(antreaSourceThroughputElementList[i], ipfixregistry.AntreaEnterpriseID).Return(elemList[len(elemList)-1].GetInfoElement(), nil)
-			elemList = append(elemList, createElement(antreaDestinationThroughputElementList[i], ipfixregistry.AntreaEnterpriseID))
-			mockIPFIXRegistry.EXPECT().GetInfoElement(antreaDestinationThroughputElementList[i], ipfixregistry.AntreaEnterpriseID).Return(elemList[len(elemList)-1].GetInfoElement(), nil)
-		}
-		if tc.includePodLabels {
-			for _, ie := range antreaLabelsElementList {
-				elemList = append(elemList, createElement(ie, ipfixregistry.AntreaEnterpriseID))
-				mockIPFIXRegistry.EXPECT().GetInfoElement(ie, ipfixregistry.AntreaEnterpriseID).Return(elemList[len(elemList)-1].GetInfoElement(), nil)
-			}
-		}
-		mockTempSet.EXPECT().ResetSet()
-		mockTempSet.EXPECT().PrepareSet(ipfixentities.Template, testTemplateID).Return(nil)
-		mockTempSet.EXPECT().AddRecord(elemList, testTemplateID).Return(nil)
-		// Passing 0 for sentBytes as it is not used anywhere in the test. If this not a call to mock, the actual sentBytes
-		// above elements: ianaInfoElements, ianaReverseInfoElements and antreaInfoElements.
-		mockIPFIXExpProc.EXPECT().SendSet(mockTempSet).Return(0, nil)
-
-		_, err := fa.sendTemplateSet(tc.isIPv6)
-		assert.NoErrorf(t, err, "Error in sending template record: %v, isIPv6: %v", err, tc.isIPv6)
+	flowAggregator := &flowAggregator{
+		activeFlowRecordTimeout: 1 * time.Hour,
+		logTickerDuration:       1 * time.Hour,
+		collectingProcess:       mockCollectingProcess,
+		aggregationProcess:      mockAggregationProcess,
+		ipfixExporter:           mockIPFIXExporter,
+		configWatcher:           configWatcher,
+		updateCh:                updateCh,
 	}
-}
 
-func createElement(name string, enterpriseID uint32) ipfixentities.InfoElementWithValue {
-	element, _ := ipfixregistry.GetInfoElement(name, enterpriseID)
-	ieWithValue, _ := ipfixentities.DecodeAndCreateInfoElementWithValue(element, nil)
-	return ieWithValue
-}
+	mockCollectingProcess.EXPECT().Start()
+	mockCollectingProcess.EXPECT().Stop()
+	mockAggregationProcess.EXPECT().Start()
+	mockAggregationProcess.EXPECT().Stop()
 
-func TestFlowAggregator_watchConfiguration(t *testing.T) {
-	dbEP := &clickhouseclient.ClickHouseExportProcess{}
+	// this is not really relevant; but in practice there will be one call
+	// to mockClickHouseExporter.UpdateOptions because of the hack used to
+	// implement updateOptions above.
+	mockIPFIXExporter.EXPECT().UpdateOptions(gomock.Any()).AnyTimes()
+	mockClickHouseExporter.EXPECT().UpdateOptions(gomock.Any()).AnyTimes()
+
+	stopCh := make(chan struct{})
 	var wg sync.WaitGroup
-	testcases := []struct {
-		FlowCollectorEnable       bool
-		FlowCollectorAddress      string
-		ClickHouseEnable          bool
-		externalFlowCollectorAddr string
-		message                   []updateParam
-		dbExportProcess           *clickhouseclient.ClickHouseExportProcess
-	}{
-		{true, "10.10.10.10:155", false, "", []updateParam{updateExternalFlowCollectorAddr}, nil},
-		{false, "", true, "addr", []updateParam{disableFlowCollector}, nil},
-		{false, "", true, "", []updateParam{enableClickHouse}, nil},
-		{false, "", true, "", []updateParam{updateClickHouseParam}, dbEP},
-		{true, "10.10.10.10:155", false, "", []updateParam{updateExternalFlowCollectorAddr, disableClickHouse}, dbEP},
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		flowAggregator.Run(stopCh)
+	}()
+
+	disableIPFIXOptions := &options.Options{
+		Config: &flowaggregatorconfig.FlowAggregatorConfig{
+			FlowCollector: flowaggregatorconfig.FlowCollectorConfig{
+				Enable: false,
+			},
+		},
+	}
+	enableIPFIXOptions := &options.Options{
+		Config: &flowaggregatorconfig.FlowAggregatorConfig{
+			FlowCollector: flowaggregatorconfig.FlowCollectorConfig{
+				Enable: true,
+			},
+		},
+	}
+	enableClickHouseOptions := &options.Options{
+		Config: &flowaggregatorconfig.FlowAggregatorConfig{
+			ClickHouse: flowaggregatorconfig.ClickHouseConfig{
+				Enable: true,
+			},
+		},
+	}
+	disableClickHouseOptions := &options.Options{
+		Config: &flowaggregatorconfig.FlowAggregatorConfig{
+			ClickHouse: flowaggregatorconfig.ClickHouseConfig{
+				Enable: false,
+			},
+		},
 	}
 
-	for i, tc := range testcases {
-		t.Run(fmt.Sprintf("subtest: %d", i), func(t *testing.T) {
-			stopCh := make(chan struct{})
-			opt := options.Options{
-				Config: &flowaggregatorconfig.FlowAggregatorConfig{
-					FlowCollector: flowaggregatorconfig.FlowCollectorConfig{
-						Enable:  tc.FlowCollectorEnable,
-						Address: tc.FlowCollectorAddress,
-					},
-					ClickHouse: flowaggregatorconfig.ClickHouseConfig{
-						Enable: tc.ClickHouseEnable,
-					},
-				},
-			}
-			// create watcher
-			fileName := fmt.Sprintf("test_%d.config", i)
-			configWatcher, err := fsnotify.NewWatcher()
-			require.NoError(t, err)
-			flowAggregator := &flowAggregator{
-				// use a larger buffer to prevent the buffered channel from blocking
-				updateCh:                  make(chan updateMsg, 100),
-				externalFlowCollectorAddr: tc.externalFlowCollectorAddr,
-				dbExportProcess:           tc.dbExportProcess,
-				configFile:                fileName,
-				configWatcher:             configWatcher,
-			}
-			dir := filepath.Dir(fileName)
-			f, err := os.Create(flowAggregator.configFile)
-			require.NoError(t, err)
-			err = flowAggregator.configWatcher.Add(dir)
-			require.NoError(t, err)
-			err = f.Close()
-			require.NoError(t, err)
-			err = os.Remove(flowAggregator.configFile)
-			require.NoError(t, err)
-			f, err = os.Create(flowAggregator.configFile)
-			require.NoError(t, err)
-			b, err := yaml.Marshal(opt.Config)
-			require.NoError(t, err)
-			_, err = f.Write(b)
-			require.NoError(t, err)
-			err = f.Close()
-			require.NoError(t, err)
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				flowAggregator.watchConfiguration(stopCh)
-			}()
+	mockIPFIXExporter.EXPECT().Start().Times(2)
+	mockIPFIXExporter.EXPECT().Stop().Times(2)
+	mockClickHouseExporter.EXPECT().Start()
+	mockClickHouseExporter.EXPECT().Stop()
 
-			for _, message := range tc.message {
-				select {
-				case msg := <-flowAggregator.updateCh:
-					assert.Equal(t, message, msg.param)
-				case <-time.After(1 * time.Minute):
-					assert.NoError(t, fmt.Errorf("timeout"))
-				}
-			}
-			close(stopCh)
-			wg.Wait()
-			os.Remove(flowAggregator.configFile)
-		})
-	}
+	// we do a few operations: the main purpose is to ensure that cleanup
+	// (i.e., stopping the exporters) is done properly. This sequence of
+	// updates determines the mock expectations above.
+	// 1. The IPFIXExporter is enabled on start, so we expect a call to mockIPFIXExporter.Start()
+	// 2. The IPFIXExporter is then disabled, so we expect a call to mockIPFIXExporter.Stop()
+	// 3. The ClickHouseExporter is then enabled, so we expect a call to mockClickHouseExporter.Start()
+	// 4. The ClickHouseExporter is then disabled, so we expect a call to mockClickHouseExporter.Stop()
+	// 5. The IPFIXExporter is then re-enabled, so we expect a second call to mockIPFIXExporter.Start()
+	// 6. Finally, when Run() is stopped, we expect a second call to mockIPFIXExporter.Stop()
+	updateOptions(disableIPFIXOptions)
+	updateOptions(enableClickHouseOptions)
+	updateOptions(disableClickHouseOptions)
+	updateOptions(enableIPFIXOptions)
+
+	close(stopCh)
+	wg.Wait()
 }
