@@ -16,9 +16,7 @@
 
 source daemon_status
 
-if [ $1 == agent ]; then
-    exit 0
-elif [ $1 == ovs ]; then
+if [ $1 == ovs ]; then
     check_ovs_status && exit 0
 elif [ $1 == ovs-ipsec ]; then
     check_ovs_ipsec_status && exit 0

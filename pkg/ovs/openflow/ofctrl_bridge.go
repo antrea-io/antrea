@@ -185,6 +185,7 @@ type OFBridge struct {
 	// tableCache is used to cache ofTables.
 	tableCache map[uint8]*ofTable
 
+	ofSwitchMutex sync.RWMutex
 	// ofSwitch is the target OFSwitch.
 	ofSwitch *ofctrl.OFSwitch
 	// controller helps maintain connections to remote OFSwitch.
@@ -322,9 +323,13 @@ func (b *OFBridge) PacketRcvd(sw *ofctrl.OFSwitch, packet *ofctrl.PacketIn) {
 // SwitchConnected is a callback when the remote OFSwitch is connected.
 func (b *OFBridge) SwitchConnected(sw *ofctrl.OFSwitch) {
 	klog.Infof("OFSwitch is connected: %v", sw.DPID())
-	// initialize tables.
-	b.ofSwitch = sw
+	func() {
+		b.ofSwitchMutex.Lock()
+		defer b.ofSwitchMutex.Unlock()
+		b.ofSwitch = sw
+	}()
 	b.ofSwitch.EnableMonitor()
+	// initialize tables.
 	b.initialize()
 	go func() {
 		// b.connected is nil if it is an automatic reconnection but not triggered by OFSwitch.Connect.
@@ -429,7 +434,15 @@ func (b *OFBridge) DeleteFlowsByCookie(cookieID, cookieMask uint64) error {
 }
 
 func (b *OFBridge) IsConnected() bool {
-	return b.ofSwitch.IsReady()
+	sw := func() *ofctrl.OFSwitch {
+		b.ofSwitchMutex.RLock()
+		defer b.ofSwitchMutex.RUnlock()
+		return b.ofSwitch
+	}()
+	if sw == nil {
+		return false
+	}
+	return sw.IsReady()
 }
 
 func (b *OFBridge) AddFlowsInBundle(addflows []Flow, modFlows []Flow, delFlows []Flow) error {
@@ -755,7 +768,7 @@ func (b *OFBridge) processTableFeatures(ch chan *openflow15.MultipartReply) {
 	}
 }
 
-func NewOFBridge(br string, mgmtAddr string) Bridge {
+func NewOFBridge(br string, mgmtAddr string) *OFBridge {
 	s := &OFBridge{
 		bridgeName:           br,
 		mgmtAddr:             mgmtAddr,
