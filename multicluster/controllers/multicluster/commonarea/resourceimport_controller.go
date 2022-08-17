@@ -232,37 +232,30 @@ func (r *ResourceImportReconciler) handleResImpUpdateForService(ctx context.Cont
 }
 
 func (r *ResourceImportReconciler) handleResImpDeleteForService(ctx context.Context, resImp *multiclusterv1alpha1.ResourceImport) (ctrl.Result, error) {
-	svcImpName := types.NamespacedName{Namespace: resImp.Spec.Namespace, Name: resImp.Spec.Name}
-	svcName := types.NamespacedName{Namespace: resImp.Spec.Namespace, Name: common.AntreaMCSPrefix + resImp.Spec.Name}
-	klog.InfoS("Deleting Service and ServiceImport corresponding to ResourceImport", "service", svcName.String(),
-		"service", svcImpName.String(), "resourceimport", klog.KObj(resImp))
+	svcImpName := common.NamespacedName(resImp.Spec.Namespace, resImp.Spec.Name)
+	svcName := common.NamespacedName(resImp.Spec.Namespace, common.AntreaMCSPrefix+resImp.Spec.Name)
+	klog.InfoS("Deleting Service and ServiceImport corresponding to ResourceImport", "service", svcName,
+		"serviceImport", svcImpName, "resourceimport", klog.KObj(resImp))
 
-	var err error
-	cleanupServiceImport := func() (ctrl.Result, error) {
-		svcImp := &k8smcsv1alpha1.ServiceImport{}
-		err = r.localClusterClient.Get(ctx, svcImpName, svcImp)
-		if err != nil {
-			return ctrl.Result{}, client.IgnoreNotFound(err)
-		}
-		err = r.localClusterClient.Delete(ctx, svcImp, &client.DeleteOptions{})
-		return ctrl.Result{}, client.IgnoreNotFound(err)
+	svc := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: resImp.Spec.Namespace,
+			Name:      common.AntreaMCSPrefix + resImp.Spec.Name,
+		},
 	}
-
-	svc := &corev1.Service{}
-	err = r.localClusterClient.Get(ctx, svcName, svc)
-	if err != nil {
-		if apierrors.IsNotFound(err) {
-			klog.V(2).InfoS("Service corresponding to ResourceImport has already been deleted",
-				"service", svcName.String(), "resourceimport", klog.KObj(resImp))
-			return cleanupServiceImport()
-		}
+	err := r.localClusterClient.Delete(ctx, svc, &client.DeleteOptions{})
+	if err != nil && !apierrors.IsNotFound(err) {
 		return ctrl.Result{}, err
 	}
-	err = r.localClusterClient.Delete(ctx, svc, &client.DeleteOptions{})
-	if err != nil {
-		return ctrl.Result{}, err
+
+	svcImp := &k8smcsv1alpha1.ServiceImport{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: resImp.Spec.Namespace,
+			Name:      resImp.Spec.Name,
+		},
 	}
-	return cleanupServiceImport()
+	err = r.localClusterClient.Delete(ctx, svcImp, &client.DeleteOptions{})
+	return ctrl.Result{}, client.IgnoreNotFound(err)
 }
 
 func (r *ResourceImportReconciler) handleResImpUpdateForEndpoints(ctx context.Context, resImp *multiclusterv1alpha1.ResourceImport) (ctrl.Result, error) {
@@ -322,19 +315,19 @@ func (r *ResourceImportReconciler) handleResImpUpdateForEndpoints(ctx context.Co
 
 func (r *ResourceImportReconciler) handleResImpDeleteForEndpoints(ctx context.Context, resImp *multiclusterv1alpha1.ResourceImport) (ctrl.Result, error) {
 	epName := common.AntreaMCSPrefix + resImp.Spec.Name
-	epNamespaced := types.NamespacedName{Namespace: resImp.Spec.Namespace, Name: epName}
-	klog.InfoS("Deleting Endpoints corresponding to ResourceImport", "endpoints", epNamespaced.String(),
+	epNamespacedName := common.NamespacedName(resImp.Spec.Namespace, epName)
+	klog.InfoS("Deleting Endpoints corresponding to ResourceImport", "endpoints", epNamespacedName,
 		"resourceimport", klog.KObj(resImp))
 
-	ep := &corev1.Endpoints{}
-	err := r.localClusterClient.Get(ctx, epNamespaced, ep)
-	if err != nil {
-		klog.InfoS("Unable to fetch imported Endpoints", "endpoints", epNamespaced.String(), "err", err)
-		return ctrl.Result{}, client.IgnoreNotFound(err)
+	ep := &corev1.Endpoints{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      epName,
+			Namespace: resImp.Spec.Namespace,
+		},
 	}
-	err = r.localClusterClient.Delete(ctx, ep, &client.DeleteOptions{})
+	err := r.localClusterClient.Delete(ctx, ep, &client.DeleteOptions{})
 	if err != nil {
-		klog.InfoS("Failed to delete imported Endpoints", "endpoints", epNamespaced.String(), "err", err)
+		klog.InfoS("Failed to delete imported Endpoints", "endpoints", epNamespacedName, "err", err)
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 	return ctrl.Result{}, nil
