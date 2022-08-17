@@ -229,6 +229,35 @@ func (n *NetworkPolicyController) createAppliedToGroupForService(service *v1alph
 	return appliedToGroup
 }
 
+// createAppliedToGroupForGroup creates an AppliedToGroup object corresponding to a ClusterGroup or a Group.
+// The namespace parameter is only provided when the group is namespace scoped.
+func (n *NetworkPolicyController) createAppliedToGroupForGroup(namespace, group string) *antreatypes.AppliedToGroup {
+	// Cluster group uses NAME and Namespaced group uses NAMESPACE/NAME as the key of the corresponding internal group.
+	key := k8s.NamespacedName(namespace, group)
+	// Find the internal Group corresponding to this ClusterGroup/Group.
+	// There is no need to check if the ClusterGroup/Group exists in clusterGroupLister/groupLister because its
+	// existence will eventually be reflected in internalGroupStore.
+	ig, found, _ := n.internalGroupStore.Get(key)
+	if !found {
+		// Internal Group was not found. Once the internal Group is created, the sync worker for internal group will
+		// re-enqueue the ClusterNetworkPolicy/AntreaNetworkPolicy processing which will call this method again. So it's
+		// fine to ignore NotFound case.
+		return nil
+	}
+	intGrp := ig.(*antreatypes.Group)
+	// A Group may have child Groups, some of which contain regular Pod selectors and some of which contain IPBlocks.
+	// When the Group is used as AppliedTo, it seems obvious that we should just apply NetworkPolicy to the selected
+	// Pods and ignore the IPBlocks, instead of reporting errors and asking users to remove IPBlocks from child Groups,
+	// as the Group could also be used as AddressGroup.
+	// To keep the behavior consistent regarding IPBlocks, we ignore Groups containing only IPBlocks when it's used as
+	// AppliedTo.
+	if len(intGrp.IPBlocks) > 0 {
+		klog.V(2).InfoS("Group with IPBlocks can not be used as AppliedTo", "Group", key)
+		return nil
+	}
+	return &antreatypes.AppliedToGroup{UID: intGrp.UID, Name: key}
+}
+
 // getTierPriority retrieves the priority associated with the input Tier name.
 // If the Tier name is empty, by default, the lowest priority Application Tier
 // is returned.

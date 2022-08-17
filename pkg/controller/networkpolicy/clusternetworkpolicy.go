@@ -490,7 +490,7 @@ func (n *NetworkPolicyController) processClusterAppliedTo(appliedTo []crdv1alpha
 	for _, at := range appliedTo {
 		var atg *antreatypes.AppliedToGroup
 		if at.Group != "" {
-			atg = n.createAppliedToGroupForCG(at.Group)
+			atg = n.createAppliedToGroupForGroup("", at.Group)
 		} else if at.Service != nil {
 			atg = n.createAppliedToGroupForService(at.Service)
 		} else if at.ServiceAccount != nil {
@@ -601,23 +601,4 @@ func (n *NetworkPolicyController) processRefGroupOrClusterGroup(g, namespace str
 		return ag, ipb
 	}
 	return nil, ipb
-}
-
-func (n *NetworkPolicyController) createAppliedToGroupForCG(clusterGroupName string) *antreatypes.AppliedToGroup {
-	// Find the internal Group corresponding to this ClusterGroup
-	// There is no need to check if the ClusterGroup exists in clusterGroupLister because its existence will eventually
-	// be reflected in internalGroupStore.
-	ig, found, _ := n.internalGroupStore.Get(clusterGroupName)
-	if !found {
-		// Internal Group was not found. Once the internal Group is created, the sync
-		// worker for internal group will re-enqueue the ClusterNetworkPolicy processing
-		// which will trigger the creation of AddressGroup.
-		return nil
-	}
-	intGrp := ig.(*antreatypes.Group)
-	if len(intGrp.IPBlocks) > 0 {
-		klog.V(2).InfoS("ClusterGroup with IPBlocks will not be processed as AppliedTo", "ClusterGroup", clusterGroupName)
-		return nil
-	}
-	return &antreatypes.AppliedToGroup{UID: intGrp.UID, Name: clusterGroupName}
 }
