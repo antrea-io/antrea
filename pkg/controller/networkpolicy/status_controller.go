@@ -268,14 +268,15 @@ func (c *StatusController) syncHandler(key string) error {
 	}
 	internalNP := internalNPObj.(*antreatypes.NetworkPolicy)
 
-	// It means the NetworkPolicy hasn't been processed once. Set it to Pending to differentiate from NetworkPolicies
-	// that spans 0 Node.
-	if internalNP.SpanMeta.NodeNames == nil {
+	updateStatus := func(phase crdv1alpha1.NetworkPolicyPhase, currentNodes, desiredNodes int) error {
 		status := &crdv1alpha1.NetworkPolicyStatus{
-			Phase:              crdv1alpha1.NetworkPolicyPending,
-			ObservedGeneration: internalNP.Generation,
-			Conditions:         GenerateNetworkPolicyCondition(nil),
+			Phase:                phase,
+			ObservedGeneration:   internalNP.Generation,
+			CurrentNodesRealized: int32(currentNodes),
+			DesiredNodesRealized: int32(desiredNodes),
+			Conditions:           GenerateNetworkPolicyCondition(internalNP.SyncError),
 		}
+		klog.V(2).Infof("Updating NetworkPolicy %s status: %v", internalNP.SourceRef.ToString(), status)
 		if internalNP.SourceRef.Type == controlplane.AntreaNetworkPolicy {
 			return c.npControlInterface.UpdateAntreaNetworkPolicyStatus(internalNP.SourceRef.Namespace, internalNP.SourceRef.Name, status)
 		}
@@ -284,16 +285,14 @@ func (c *StatusController) syncHandler(key string) error {
 
 	// It means the NetworkPolicy has been processed, and marked as unrealizable. It will enter unrealizable phase
 	// instead of being further realized. Antrea-agents will not process further.
-	if internalNP.RealizationError != nil {
-		status := &crdv1alpha1.NetworkPolicyStatus{
-			Phase:              crdv1alpha1.NetworkPolicyPending,
-			ObservedGeneration: internalNP.Generation,
-			Conditions:         GenerateNetworkPolicyCondition(internalNP.RealizationError),
-		}
-		if internalNP.SourceRef.Type == controlplane.AntreaNetworkPolicy {
-			return c.npControlInterface.UpdateAntreaNetworkPolicyStatus(internalNP.SourceRef.Namespace, internalNP.SourceRef.Name, status)
-		}
-		return c.npControlInterface.UpdateAntreaClusterNetworkPolicyStatus(internalNP.SourceRef.Name, status)
+	if internalNP.SyncError != nil {
+		return updateStatus(crdv1alpha1.NetworkPolicyPending, 0, 0)
+	}
+
+	// It means the NetworkPolicy hasn't been processed once. Set it to Pending to differentiate from NetworkPolicies
+	// that spans 0 Node.
+	if internalNP.SpanMeta.NodeNames == nil {
+		return updateStatus(crdv1alpha1.NetworkPolicyPending, 0, 0)
 	}
 
 	desiredNodes := len(internalNP.SpanMeta.NodeNames)
@@ -315,18 +314,7 @@ func (c *StatusController) syncHandler(key string) error {
 		phase = crdv1alpha1.NetworkPolicyRealized
 	}
 
-	status := &crdv1alpha1.NetworkPolicyStatus{
-		Phase:                phase,
-		ObservedGeneration:   internalNP.Generation,
-		CurrentNodesRealized: int32(currentNodes),
-		DesiredNodesRealized: int32(desiredNodes),
-		Conditions:           GenerateNetworkPolicyCondition(nil),
-	}
-	klog.V(2).Infof("Updating NetworkPolicy %s status: %v", internalNP.SourceRef.ToString(), status)
-	if internalNP.SourceRef.Type == controlplane.AntreaNetworkPolicy {
-		return c.npControlInterface.UpdateAntreaNetworkPolicyStatus(internalNP.SourceRef.Namespace, internalNP.SourceRef.Name, status)
-	}
-	return c.npControlInterface.UpdateAntreaClusterNetworkPolicyStatus(internalNP.SourceRef.Name, status)
+	return updateStatus(phase, currentNodes, desiredNodes)
 }
 
 // networkPolicyControlInterface is an interface that knows how to update Antrea NetworkPolicy status.
@@ -419,7 +407,7 @@ func GenerateNetworkPolicyCondition(err error) []crdv1alpha1.NetworkPolicyCondit
 			Status:             v1.ConditionTrue,
 			LastTransitionTime: v1.Now(),
 		})
-	case ErrNetworkPolicyAppliedToUnsupportedGroup:
+	case *ErrNetworkPolicyAppliedToUnsupportedGroup:
 		conditions = append(conditions, crdv1alpha1.NetworkPolicyCondition{
 			Type:               crdv1alpha1.NetworkPolicyConditionRealizable,
 			Status:             v1.ConditionFalse,
