@@ -186,7 +186,7 @@ func (n *NetworkPolicyController) syncInternalNamespacedGroup(grp *antreatypes.G
 		}
 	}
 	if membersComputed {
-		klog.V(4).InfoS("Updating GroupMembersComputed Status for Group %s/%s", "Group", key)
+		klog.V(4).InfoS("Updating GroupMembersComputed Status for Group", "Group", key)
 		err = n.updateGroupStatus(g, v1.ConditionTrue)
 		if err != nil {
 			klog.Errorf("Failed to update Group %s/%s GroupMembersComputed condition to %s: %v", g.Namespace, g.Name, v1.ConditionTrue, err)
