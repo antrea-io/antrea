@@ -99,9 +99,19 @@ func installAPIGroup(s *genericapiserver.GenericAPIServer, aq agentquerier.Agent
 }
 
 // New creates an APIServer for running in antrea agent.
-func New(aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolicyInfoQuerier, mq querier.AgentMulticastInfoQuerier, seipq querier.ServiceExternalIPStatusQuerier,
-	bindPort int, enableMetrics bool, kubeconfig string, cipherSuites []uint16, tlsMinVersion uint16, v4Enabled, v6Enabled bool) (*agentAPIServer, error) {
-	cfg, err := newConfig(npq, bindPort, enableMetrics, kubeconfig)
+func New(aq agentquerier.AgentQuerier,
+	npq querier.AgentNetworkPolicyInfoQuerier,
+	mq querier.AgentMulticastInfoQuerier,
+	seipq querier.ServiceExternalIPStatusQuerier,
+	secureServing *genericoptions.SecureServingOptionsWithLoopback,
+	authentication *genericoptions.DelegatingAuthenticationOptions,
+	authorization *genericoptions.DelegatingAuthorizationOptions,
+	enableMetrics bool,
+	kubeconfig string,
+	v4Enabled,
+	v6Enabled bool,
+) (*agentAPIServer, error) {
+	cfg, err := newConfig(aq, npq, secureServing, authentication, authorization, enableMetrics, kubeconfig)
 	if err != nil {
 		return nil, err
 	}
@@ -109,8 +119,6 @@ func New(aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolicyInfoQuerier
 	if err != nil {
 		return nil, err
 	}
-	s.SecureServingInfo.CipherSuites = cipherSuites
-	s.SecureServingInfo.MinTLSVersion = tlsMinVersion
 	if err := installAPIGroup(s, aq, npq, v4Enabled, v6Enabled); err != nil {
 		return nil, err
 	}
@@ -118,11 +126,14 @@ func New(aq agentquerier.AgentQuerier, npq querier.AgentNetworkPolicyInfoQuerier
 	return &agentAPIServer{GenericAPIServer: s}, nil
 }
 
-func newConfig(npq querier.AgentNetworkPolicyInfoQuerier, bindPort int, enableMetrics bool, kubeconfig string) (*genericapiserver.CompletedConfig, error) {
-	secureServing := genericoptions.NewSecureServingOptions().WithLoopback()
-	authentication := genericoptions.NewDelegatingAuthenticationOptions()
-	authorization := genericoptions.NewDelegatingAuthorizationOptions().WithAlwaysAllowPaths("/healthz", "/livez", "/readyz")
-
+func newConfig(aq agentquerier.AgentQuerier,
+	npq querier.AgentNetworkPolicyInfoQuerier,
+	secureServing *genericoptions.SecureServingOptionsWithLoopback,
+	authentication *genericoptions.DelegatingAuthenticationOptions,
+	authorization *genericoptions.DelegatingAuthorizationOptions,
+	enableMetrics bool,
+	kubeconfig string,
+) (*genericapiserver.CompletedConfig, error) {
 	// kubeconfig file is useful when antrea-agent isn't running as a Pod.
 	if len(kubeconfig) > 0 {
 		authentication.RemoteKubeConfigFile = kubeconfig
@@ -132,8 +143,6 @@ func newConfig(npq querier.AgentNetworkPolicyInfoQuerier, bindPort int, enableMe
 	// Set the PairName but leave certificate directory blank to generate in-memory by default.
 	secureServing.ServerCert.CertDirectory = ""
 	secureServing.ServerCert.PairName = Name
-	secureServing.BindAddress = net.IPv4zero
-	secureServing.BindPort = bindPort
 
 	if err := secureServing.MaybeDefaultWithSelfSignedCerts("localhost", nil, []net.IP{net.ParseIP("127.0.0.1"), net.IPv6loopback}); err != nil {
 		return nil, fmt.Errorf("error creating self-signed certificates: %v", err)
@@ -164,13 +173,22 @@ func newConfig(npq querier.AgentNetworkPolicyInfoQuerier, bindPort int, enableMe
 	}
 	serverConfig.EnableMetrics = enableMetrics
 	// Add readiness probe to check the status of watchers.
-	check := healthz.NamedCheck("watcher", func(_ *http.Request) error {
+	watcherCheck := healthz.NamedCheck("watcher", func(_ *http.Request) error {
 		if npq.GetControllerConnectionStatus() {
 			return nil
 		}
 		return fmt.Errorf("some watchers may not be connected")
 	})
-	serverConfig.ReadyzChecks = append(serverConfig.ReadyzChecks, check)
+	serverConfig.ReadyzChecks = append(serverConfig.ReadyzChecks, watcherCheck)
+	// Add liveness probe to check the connection with OFSwitch.
+	// This helps automatic recovery if some issues cause OFSwitch reconnection to not work properly, e.g. issue #4092.
+	ovsConnCheck := healthz.NamedCheck("ovs", func(_ *http.Request) error {
+		if aq.GetOpenflowClient().IsConnected() {
+			return nil
+		}
+		return fmt.Errorf("disconnected from OFSwitch")
+	})
+	serverConfig.LivezChecks = append(serverConfig.LivezChecks, ovsConnCheck)
 
 	completedServerCfg := serverConfig.Complete(nil)
 	return &completedServerCfg, nil
