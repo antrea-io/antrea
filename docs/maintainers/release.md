@@ -27,7 +27,8 @@ release. We use `<TAG>` as a placeholder for the release tag (e.g. `v1.4.0`).
      be used to easily generate links to PRs and the Github profiles of PR
      authors.
    - a commit to update [VERSION](../../VERSION) as needed, using the following
-     commit message: `"Set VERSION to <TAG>"`.
+     commit message: `"Set VERSION to <TAG>"`. Before committing, ensure that
+     you run `make -C build/charts/ helm-docs` and include the changes.
 
 3. Run all the tests for the PR, investigating test failures and re-triggering
    the tests as needed.
@@ -80,5 +81,7 @@ release. We use `<TAG>` as a placeholder for the release tag (e.g. `v1.4.0`).
 8. *For a minor release* Finally, open a PR against the main branch with a
    single commit, to update [VERSION](../../VERSION) to the next minor version
    (with `-dev` suffix). For example, if the release was for `v1.4.0`, the
-   VERSION file should be updated to `v1.5.0-dev`. After a patch release, the
-   VERSION file in the main branch is never updated.
+   VERSION file should be updated to `v1.5.0-dev`. Before committing, ensure
+   that you run `make -C build/charts/ helm-docs` and include the changes. Note
+   that after a patch release, the VERSION file in the main branch is never
+   updated, so no additional commit is needed.
