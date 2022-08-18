@@ -361,7 +361,7 @@ func TestFlowAggregator_Run(t *testing.T) {
 
 	updateOptions := func(opt *options.Options) {
 		// this is somewhat hacky: we use a non-buffered channel and
-		// every update is sent once. This way, we can guarantee that by
+		// every update is sent twice. This way, we can guarantee that by
 		// the time the second statement returns, the options have been
 		// processed at least once.
 		updateCh <- opt
@@ -447,4 +447,53 @@ func TestFlowAggregator_Run(t *testing.T) {
 
 	close(stopCh)
 	wg.Wait()
+}
+
+// When the FlowAggregator is stopped (stopCh is closed), watchConfiguration and
+// flowExportLoop are stopped asynchronosuly. If watchConfiguration is stopped
+// "first" and the updateCh is closed, we need to make sure that flowExportLoop
+// (which reads from updateCh) can handle correctly the channel closing.
+func TestFlowAggregator_closeUpdateChBeforeFlowExportLoopReturns(t *testing.T) {
+	wd, err := os.Getwd()
+	require.NoError(t, err)
+	// fsnotify does not seem to work when using the default tempdir on MacOS, which is why we
+	// use the current working directory.
+	f, err := os.CreateTemp(wd, "test_*.config")
+	require.NoError(t, err, "Failed to create test config file")
+	fileName := f.Name()
+	defer os.Remove(fileName)
+	// create watcher
+	configWatcher, err := fsnotify.NewWatcher()
+	require.NoError(t, err)
+	defer configWatcher.Close()
+	flowAggregator := &flowAggregator{
+		updateCh:                make(chan *options.Options),
+		configFile:              fileName,
+		configWatcher:           configWatcher,
+		activeFlowRecordTimeout: 1 * time.Hour,
+		logTickerDuration:       1 * time.Hour,
+	}
+
+	stopCh1 := make(chan struct{})
+	var wg1 sync.WaitGroup
+	wg1.Add(1)
+	go func() {
+		defer wg1.Done()
+		flowAggregator.watchConfiguration(stopCh1)
+	}()
+
+	stopCh2 := make(chan struct{})
+	var wg2 sync.WaitGroup
+	wg2.Add(1)
+	go func() {
+		defer wg2.Done()
+		flowAggregator.flowExportLoop(stopCh2)
+	}()
+
+	// stop watchConfiguration, wait, then stop flowExportLoop.
+	// the test is essentially successful if it doesn't panic.
+	close(stopCh1)
+	wg1.Wait()
+	close(stopCh2)
+	wg2.Wait()
 }
