@@ -318,6 +318,7 @@ func (fa *flowAggregator) flowExportLoop(stopCh <-chan struct{}) {
 			fa.clickHouseExporter.Stop()
 		}
 	}()
+	updateCh := fa.updateCh
 	for {
 		select {
 		case <-stopCh:
@@ -338,7 +339,15 @@ func (fa *flowAggregator) flowExportLoop(stopCh <-chan struct{}) {
 			klog.V(4).InfoS("Total number of records exported by each active exporter", "count", fa.numRecordsExported)
 			klog.V(4).InfoS("Total number of flows stored in Flow Aggregator", "count", fa.aggregationProcess.GetNumFlows())
 			klog.V(4).InfoS("Number of exporters connected with Flow Aggregator", "count", fa.collectingProcess.GetNumConnToCollector())
-		case opt := <-fa.updateCh:
+		case opt, ok := <-updateCh:
+			if !ok {
+				// set the channel to nil and essentially disable this select case.
+				// we could also just return straightaway as this should only happen
+				// when stopCh is closed, but maybe it's better to keep stopCh as
+				// the only signal for stopping the event loop.
+				updateCh = nil
+				break
+			}
 			fa.updateFlowAggregator(opt)
 		}
 	}
