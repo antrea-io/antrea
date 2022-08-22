@@ -32,10 +32,9 @@ function exit_handler() {
 
 function get_metrics_url() {
         pod_name=$1
-        host_ip=$(kubectl get pod -n kube-system $pod_name -o jsonpath="{.status.hostIP}")
         host_port=$(kubectl get pod -n kube-system $pod_name -o jsonpath="{.spec.containers[*].ports[*].hostPort}")
 
-        echo "https://$host_ip:$host_port/metrics"
+        echo "https://localhost:$host_port/metrics"
 }
 
 function format_metrics() {
