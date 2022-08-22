@@ -31,4 +31,9 @@ LABEL description="The docker image for the flow aggregator"
 COPY --from=flow-aggregator-build /antrea/bin/flow-aggregator /
 COPY --from=flow-aggregator-build /antrea/bin/antctl /usr/local/bin/
 
+# install ca-certificates
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
 ENTRYPOINT ["/flow-aggregator"]

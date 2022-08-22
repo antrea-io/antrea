@@ -77,8 +77,7 @@ s3Uploader:
   # -- MaxRecordsPerFile is the maximum number of records per file uploaded. It is not recommended
   # to change this value.
   maxRecordsPerFile: 1000000
-  # -- UploadInterval is the duration between each file upload to S3. If the number of pending
-  # records reaches maxRecordsPerFile, we will not wait for this full duration before uploading.
+  # -- UploadInterval is the duration between each file upload to S3.
   uploadInterval: "60s"
   # -- Credentials to authenticate to AWS. They will be stored in a Secret and injected into the Pod
   # as environment variables.

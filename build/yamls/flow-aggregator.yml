@@ -271,10 +271,9 @@ data:
 
       # MaxRecordsPerFile is the maximum number of records per file uploaded. It is not recommended
       # to change this value.
-      maxRecordsPerFile: 1000000
+      maxRecordsPerFile: 1e+06
 
-      # UploadInterval is the duration between each file upload to S3. If the number of pending
-      # records reaches maxRecordsPerFile, we will not wait for this full duration before uploading.
+      # UploadInterval is the duration between each file upload to S3.
       uploadInterval: "60s"
 kind: ConfigMap
 metadata:
