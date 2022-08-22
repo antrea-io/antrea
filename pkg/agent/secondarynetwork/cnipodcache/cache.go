@@ -100,7 +100,7 @@ func getCNIPodInfoKey(obj interface{}) (string, error) {
 	return key, nil
 }
 
-func NewCNIPodInfoStore() CNIPodInfoStore {
+func NewCNIPodInfoStore() *CNIPodInfoCache {
 	return &CNIPodInfoCache{
 		cache: cache.NewIndexer(getCNIPodInfoKey, cache.Indexers{
 			podIndex: podIndexFunc,

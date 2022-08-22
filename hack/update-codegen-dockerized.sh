@@ -51,6 +51,8 @@ function generate_mocks {
     "pkg/agent/querier AgentQuerier testing"
     "pkg/agent/route Interface testing"
     "pkg/agent/ipassigner IPAssigner testing"
+    "pkg/agent/secondarynetwork/podwatch InterfaceConfigurator testing"
+    "pkg/agent/secondarynetwork/ipam IPAMDelegator testing"
     "pkg/antctl AntctlClient ."
     "pkg/controller/networkpolicy EndpointQuerier testing"
     "pkg/controller/querier ControllerQuerier testing"

@@ -30,7 +30,18 @@ const (
 	defaultCNIPath  = "/opt/cni/bin"
 )
 
-func GetIPAMSubnetAddress(netConfig []byte, cmdArgs *invoke.Args) (*current.Result, error) {
+type IPAMDelegator interface {
+	GetIPAMSubnetAddress(netConfig []byte, cmdArgs *invoke.Args) (*current.Result, error)
+	DelIPAMSubnetAddress(netConfig []byte, cmdArgs *invoke.Args) error
+}
+
+type delegator struct{}
+
+func NewIPAMDelegator() *delegator {
+	return &delegator{}
+}
+
+func (d *delegator) GetIPAMSubnetAddress(netConfig []byte, cmdArgs *invoke.Args) (*current.Result, error) {
 	var success = false
 	defer func() {
 		if !success {
@@ -56,7 +67,7 @@ func GetIPAMSubnetAddress(netConfig []byte, cmdArgs *invoke.Args) (*current.Resu
 	return ipamResult, nil
 }
 
-func DelIPAMSubnetAddress(netConfig []byte, cmdArgs *invoke.Args) error {
+func (d *delegator) DelIPAMSubnetAddress(netConfig []byte, cmdArgs *invoke.Args) error {
 	cmdArgs.Command = "DEL"
 	if err := delegateNoResult(ipamWhereabouts, netConfig, cmdArgs); err != nil {
 		return err
