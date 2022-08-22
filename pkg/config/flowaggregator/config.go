@@ -133,7 +133,6 @@ type S3UploaderConfig struct {
 	// MaxRecordsPerFile is the maximum number of records per file uploaded. It is not recommended
 	// to change this value. Defaults to 1,000,000.
 	MaxRecordsPerFile int32 `yaml:"maxRecordsPerFile,omitempty"`
-	// UploadInterval is the duration between each file upload to S3. If the number of pending
-	// records reaches maxRecordsPerFile, we will not wait for this full duration before uploading.
+	// UploadInterval is the duration between each file upload to S3.
 	UploadInterval string `yaml:"uploadInterval,omitempty"`
 }

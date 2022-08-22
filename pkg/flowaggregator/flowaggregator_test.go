@@ -183,6 +183,10 @@ func TestFlowAggregator_watchConfiguration(t *testing.T) {
 			ClickHouse: flowaggregatorconfig.ClickHouseConfig{
 				Enable: true,
 			},
+			S3Uploader: flowaggregatorconfig.S3UploaderConfig{
+				Enable:     true,
+				BucketName: "test-bucket-name",
+			},
 		},
 	}
 	wd, err := os.Getwd()
@@ -233,6 +237,8 @@ func TestFlowAggregator_watchConfiguration(t *testing.T) {
 		assert.Equal(t, opt.Config.FlowCollector.Enable, msg.Config.FlowCollector.Enable)
 		assert.Equal(t, opt.Config.FlowCollector.Address, msg.Config.FlowCollector.Address)
 		assert.Equal(t, opt.Config.ClickHouse.Enable, msg.Config.ClickHouse.Enable)
+		assert.Equal(t, opt.Config.S3Uploader.Enable, msg.Config.S3Uploader.Enable)
+		assert.Equal(t, opt.Config.S3Uploader.BucketName, msg.Config.S3Uploader.BucketName)
 	case <-time.After(5 * time.Second):
 		t.Errorf("Timeout while waiting for update")
 	}
@@ -245,18 +251,24 @@ func TestFlowAggregator_updateFlowAggregator(t *testing.T) {
 	defer ctrl.Finish()
 	mockIPFIXExporter := exportertesting.NewMockInterface(ctrl)
 	mockClickHouseExporter := exportertesting.NewMockInterface(ctrl)
+	mockS3Exporter := exportertesting.NewMockInterface(ctrl)
 
 	newIPFIXExporterSaved := newIPFIXExporter
 	newClickHouseExporterSaved := newClickHouseExporter
+	newS3ExporterSaved := newS3Exporter
 	defer func() {
 		newIPFIXExporter = newIPFIXExporterSaved
 		newClickHouseExporter = newClickHouseExporterSaved
+		newS3Exporter = newS3ExporterSaved
 	}()
 	newIPFIXExporter = func(kubernetes.Interface, *options.Options, ipfix.IPFIXRegistry) exporter.Interface {
 		return mockIPFIXExporter
 	}
 	newClickHouseExporter = func(*options.Options) (exporter.Interface, error) {
 		return mockClickHouseExporter, nil
+	}
+	newS3Exporter = func(*options.Options) (exporter.Interface, error) {
+		return mockS3Exporter, nil
 	}
 
 	t.Run("updateIPFIX", func(t *testing.T) {
@@ -328,6 +340,48 @@ func TestFlowAggregator_updateFlowAggregator(t *testing.T) {
 		mockClickHouseExporter.EXPECT().UpdateOptions(opt)
 		flowAggregator.updateFlowAggregator(opt)
 	})
+	t.Run("enableS3Uploader", func(t *testing.T) {
+		flowAggregator := &flowAggregator{}
+		opt := &options.Options{
+			Config: &flowaggregatorconfig.FlowAggregatorConfig{
+				S3Uploader: flowaggregatorconfig.S3UploaderConfig{
+					Enable:     true,
+					BucketName: "test-bucket-name",
+				},
+			},
+		}
+		mockS3Exporter.EXPECT().Start()
+		flowAggregator.updateFlowAggregator(opt)
+	})
+	t.Run("disableS3Uploader", func(t *testing.T) {
+		flowAggregator := &flowAggregator{
+			s3Exporter: mockS3Exporter,
+		}
+		opt := &options.Options{
+			Config: &flowaggregatorconfig.FlowAggregatorConfig{
+				S3Uploader: flowaggregatorconfig.S3UploaderConfig{
+					Enable: false,
+				},
+			},
+		}
+		mockS3Exporter.EXPECT().Stop()
+		flowAggregator.updateFlowAggregator(opt)
+	})
+	t.Run("updateS3Uploader", func(t *testing.T) {
+		flowAggregator := &flowAggregator{
+			s3Exporter: mockS3Exporter,
+		}
+		opt := &options.Options{
+			Config: &flowaggregatorconfig.FlowAggregatorConfig{
+				S3Uploader: flowaggregatorconfig.S3UploaderConfig{
+					Enable:     true,
+					BucketName: "test-bucket-name",
+				},
+			},
+		}
+		mockS3Exporter.EXPECT().UpdateOptions(opt)
+		flowAggregator.updateFlowAggregator(opt)
+	})
 }
 
 func TestFlowAggregator_Run(t *testing.T) {
@@ -336,20 +390,26 @@ func TestFlowAggregator_Run(t *testing.T) {
 
 	mockIPFIXExporter := exportertesting.NewMockInterface(ctrl)
 	mockClickHouseExporter := exportertesting.NewMockInterface(ctrl)
+	mockS3Exporter := exportertesting.NewMockInterface(ctrl)
 	mockCollectingProcess := ipfixtesting.NewMockIPFIXCollectingProcess(ctrl)
 	mockAggregationProcess := ipfixtesting.NewMockIPFIXAggregationProcess(ctrl)
 
 	newIPFIXExporterSaved := newIPFIXExporter
 	newClickHouseExporterSaved := newClickHouseExporter
+	newS3ExporterSaved := newS3Exporter
 	defer func() {
 		newIPFIXExporter = newIPFIXExporterSaved
 		newClickHouseExporter = newClickHouseExporterSaved
+		newS3Exporter = newS3ExporterSaved
 	}()
 	newIPFIXExporter = func(kubernetes.Interface, *options.Options, ipfix.IPFIXRegistry) exporter.Interface {
 		return mockIPFIXExporter
 	}
 	newClickHouseExporter = func(*options.Options) (exporter.Interface, error) {
 		return mockClickHouseExporter, nil
+	}
+	newS3Exporter = func(*options.Options) (exporter.Interface, error) {
+		return mockS3Exporter, nil
 	}
 
 	// create dummy watcher: we will not add any files or directory to it.
@@ -388,6 +448,7 @@ func TestFlowAggregator_Run(t *testing.T) {
 	// implement updateOptions above.
 	mockIPFIXExporter.EXPECT().UpdateOptions(gomock.Any()).AnyTimes()
 	mockClickHouseExporter.EXPECT().UpdateOptions(gomock.Any()).AnyTimes()
+	mockS3Exporter.EXPECT().UpdateOptions(gomock.Any()).AnyTimes()
 
 	stopCh := make(chan struct{})
 	var wg sync.WaitGroup
@@ -425,11 +486,27 @@ func TestFlowAggregator_Run(t *testing.T) {
 			},
 		},
 	}
+	enableS3UploaderOptions := &options.Options{
+		Config: &flowaggregatorconfig.FlowAggregatorConfig{
+			S3Uploader: flowaggregatorconfig.S3UploaderConfig{
+				Enable: true,
+			},
+		},
+	}
+	disableS3UploaderOptions := &options.Options{
+		Config: &flowaggregatorconfig.FlowAggregatorConfig{
+			S3Uploader: flowaggregatorconfig.S3UploaderConfig{
+				Enable: false,
+			},
+		},
+	}
 
 	mockIPFIXExporter.EXPECT().Start().Times(2)
 	mockIPFIXExporter.EXPECT().Stop().Times(2)
 	mockClickHouseExporter.EXPECT().Start()
 	mockClickHouseExporter.EXPECT().Stop()
+	mockS3Exporter.EXPECT().Start()
+	mockS3Exporter.EXPECT().Stop()
 
 	// we do a few operations: the main purpose is to ensure that cleanup
 	// (i.e., stopping the exporters) is done properly. This sequence of
@@ -438,11 +515,15 @@ func TestFlowAggregator_Run(t *testing.T) {
 	// 2. The IPFIXExporter is then disabled, so we expect a call to mockIPFIXExporter.Stop()
 	// 3. The ClickHouseExporter is then enabled, so we expect a call to mockClickHouseExporter.Start()
 	// 4. The ClickHouseExporter is then disabled, so we expect a call to mockClickHouseExporter.Stop()
-	// 5. The IPFIXExporter is then re-enabled, so we expect a second call to mockIPFIXExporter.Start()
-	// 6. Finally, when Run() is stopped, we expect a second call to mockIPFIXExporter.Stop()
+	// 5. The S3Uploader is then enabled, so we expect a call to mockS3Exporter.Start()
+	// 6. The S3Uploader is then disabled, so we expect a call to mockS3Exporter.Stop()
+	// 7. The IPFIXExporter is then re-enabled, so we expect a second call to mockIPFIXExporter.Start()
+	// 8. Finally, when Run() is stopped, we expect a second call to mockIPFIXExporter.Stop()
 	updateOptions(disableIPFIXOptions)
 	updateOptions(enableClickHouseOptions)
 	updateOptions(disableClickHouseOptions)
+	updateOptions(enableS3UploaderOptions)
+	updateOptions(disableS3UploaderOptions)
 	updateOptions(enableIPFIXOptions)
 
 	close(stopCh)
