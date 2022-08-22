@@ -264,9 +264,20 @@ networking:
 nodes:
 - role: control-plane
 EOF
+
   for (( i=0; i<$NUM_WORKERS; i++ )); do
     echo -e "- role: worker" >> $config_file
   done
+
+  # When only the control plane Node is provisioned (no worker Node),
+  # we configure port mappings so that the Antrea Agent and Controller
+  # running on the control plane Node can be easily accessed, including on macOS.
+  # This is useful for accessing Antrea APIs. With worker Nodes, 
+  # we don't configure these port mappings: in particular,
+  # we wouldn't know on which Node the Controller is running.
+  if [[ $NUM_WORKERS == 0 ]]; then
+    echo -e "  extraPortMappings:\n  - containerPort: 10349\n    hostPort: 10349\n  - containerPort: 10350\n    hostPort: 10350" >> $config_file
+  fi
 
   IMAGE_OPT=""
   if [[ "$K8S_VERSION" != "" ]]; then
