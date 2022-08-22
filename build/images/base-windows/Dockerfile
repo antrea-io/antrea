@@ -43,7 +43,7 @@ RUN curl.exe -LO https://www.7-zip.org/a/7z2107-x64.exe; \
     mkdir C:\wins; \
     curl.exe -Lo C:/wins/wins.exe https://github.com/rancher/wins/releases/download/v0.0.4/wins.exe
 
-FROM golang:${GO_VERSION}-nanoserver as antrea-golang
+FROM golang:${GO_VERSION}-nanoserver as windows-golang
 
 FROM mcr.microsoft.com/windows/nanoserver:${NANOSERVER_VERSION}
 
@@ -58,6 +58,6 @@ COPY --from=windows-utility-base ["C:\\\\Program Files\\\\7-Zip","C:\\\\Program 
 COPY --from=windows-utility-base ["C:\\\\git","C:\\\\git"]
 COPY --from=windows-utility-base ["C:\\\\mingw64","C:\\\\mingw64"]
 COPY --from=windows-utility-base ["C:\\\\wins","C:\\\\wins"]
-COPY --from=antrea-golang ["C:\\\\Program Files\\\\Go", "C:\\\\Program Files\\\\Go"]
+COPY --from=windows-golang ["C:\\\\Program Files\\\\Go", "C:\\\\Program Files\\\\Go"]
 
 RUN setx /m PATH "C:\Program Files\7-Zip;C:\git\bin;C:\git\usr\bin;C:\mingw64\bin;C:\Program Files\Go\bin;%GOPATH\bin%;%PATH%"
