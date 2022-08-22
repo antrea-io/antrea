@@ -40,6 +40,8 @@ type Options struct {
 	ExternalFlowCollectorProto string
 	// clickHouseCommitInterval flow records batch commit interval to clickhouse in the flow aggregator
 	ClickHouseCommitInterval time.Duration
+	// Flow records batch upload interval from flow aggregator to S3 bucket
+	S3UploadInterval time.Duration
 }
 
 func LoadConfig(configBytes []byte) (*Options, error) {
@@ -52,8 +54,11 @@ func LoadConfig(configBytes []byte) (*Options, error) {
 	if opt.Config.FlowCollector.Enable && opt.Config.FlowCollector.Address == "" {
 		return nil, fmt.Errorf("external flow collector enabled without providing address")
 	}
-	if !opt.Config.FlowCollector.Enable && !opt.Config.ClickHouse.Enable {
-		return nil, fmt.Errorf("external flow collector or ClickHouse should be configured")
+	if opt.Config.S3Uploader.Enable && opt.Config.S3Uploader.BucketName == "" {
+		return nil, fmt.Errorf("s3Uploader enabled without specifying bucket name")
+	}
+	if !opt.Config.FlowCollector.Enable && !opt.Config.ClickHouse.Enable && !opt.Config.S3Uploader.Enable {
+		return nil, fmt.Errorf("external flow collector or ClickHouse or S3Uploader should be configured")
 	}
 	// Validate common parameters
 	var err error
@@ -91,8 +96,22 @@ func LoadConfig(configBytes []byte) (*Options, error) {
 			return nil, err
 		}
 		if opt.ClickHouseCommitInterval < flowaggregatorconfig.MinClickHouseCommitInterval {
-			return nil, fmt.Errorf("commitInterval %s is too small: shortest supported interval is %s",
+			return nil, fmt.Errorf("commitInterval %s is too small: shortest supported interval is %v",
 				opt.Config.ClickHouse.CommitInterval, flowaggregatorconfig.MinClickHouseCommitInterval)
+		}
+	}
+	// Validate S3Uploader specific parameters
+	if opt.Config.S3Uploader.Enable {
+		if opt.Config.S3Uploader.RecordFormat != "CSV" {
+			return nil, fmt.Errorf("record format %s is not supported", opt.Config.S3Uploader.RecordFormat)
+		}
+		opt.S3UploadInterval, err = time.ParseDuration(opt.Config.S3Uploader.UploadInterval)
+		if err != nil {
+			return nil, err
+		}
+		if opt.S3UploadInterval < flowaggregatorconfig.MinS3CommitInterval {
+			return nil, fmt.Errorf("uploadInterval %s is too small: shortest supported interval is %v",
+				opt.Config.S3Uploader.UploadInterval, flowaggregatorconfig.MinS3CommitInterval)
 		}
 	}
 	return &opt, nil

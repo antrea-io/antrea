@@ -32,3 +32,7 @@ USER root
 COPY --from=flow-aggregator-build /antrea/bin/flow-aggregator* /usr/local/bin/
 COPY --from=flow-aggregator-build /antrea/test/e2e/coverage/flow-aggregator-arg-file /
 COPY --from=flow-aggregator-build /antrea/bin/antctl* /usr/local/bin/
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates \
+    && rm -rf /var/lib/apt/lists/*

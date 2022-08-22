@@ -26,7 +26,7 @@ Kubernetes: `>= 1.16.0-0`
 | clickHouse.commitInterval | string | `"8s"` | CommitInterval is the periodical interval between batch commit of flow records to DB. Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h". |
 | clickHouse.compress | bool | `true` | Compress enables lz4 compression when committing flow records. |
 | clickHouse.connectionSecret | object | `{"password":"clickhouse_operator_password","username":"clickhouse_operator"}` | Credentials to connect to ClickHouse. They will be stored in a Secret. |
-| clickHouse.databaseURL | string | `"tcp://clickhouse-clickhouse.flow-visibility.svc:9000"` |  |
+| clickHouse.databaseURL | string | `"tcp://clickhouse-clickhouse.flow-visibility.svc:9000"` | DatabaseURL is the url to the database. TCP protocol is required. |
 | clickHouse.debug | bool | `false` | Debug enables debug logs from ClickHouse sql driver. |
 | clickHouse.enable | bool | `false` | Determine whether to enable exporting flow records to ClickHouse. |
 | flowAggregatorAddress | string | `"flow-aggregator.flow-aggregator.svc"` | Provide DNS name or IP address of flow aggregator for generating TLS certificate. It must match the flowCollectorAddr parameter in the antrea-agent config. |
@@ -38,6 +38,15 @@ Kubernetes: `>= 1.16.0-0`
 | inactiveFlowRecordTimeout | string | `"90s"` | Provide the inactive flow record timeout as a duration string. Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h". |
 | logVerbosity | int | `0` |  |
 | recordContents.podLabels | bool | `false` | Determine whether source and destination Pod labels will be included in the flow records. |
+| s3Uploader.awsCredentials | object | `{"aws_access_key_id":"changeme","aws_secret_access_key":"changeme","aws_session_token":""}` | Credentials to authenticate to AWS. They will be stored in a Secret and injected into the Pod as environment variables. |
+| s3Uploader.bucketName | string | `""` | BucketName is the name of the S3 bucket to which flow records will be uploaded. It is required. |
+| s3Uploader.bucketPrefix | string | `""` | BucketPrefix is the prefix ("folder") under which flow records will be uploaded. |
+| s3Uploader.compress | bool | `true` | Compress enables gzip compression when uploading files to S3. |
+| s3Uploader.enable | bool | `false` | Determine whether to enable exporting flow records to AWS S3. |
+| s3Uploader.maxRecordsPerFile | int | `1000000` | MaxRecordsPerFile is the maximum number of records per file uploaded. It is not recommended to change this value. |
+| s3Uploader.recordFormat | string | `"CSV"` | RecordFormat defines the format of the flow records uploaded to S3. Only "CSV" is supported at the moment. |
+| s3Uploader.region | string | `"us-west-2"` | Region is used as a "hint" to get the region in which the provided bucket is located. An error will occur if the bucket does not exist in the AWS partition the region hint belongs to. |
+| s3Uploader.uploadInterval | string | `"60s"` | UploadInterval is the duration between each file upload to S3. |
 | testing.coverage | bool | `false` |  |
 
 ----------------------------------------------
