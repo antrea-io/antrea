@@ -161,7 +161,7 @@ spec:
                   type: object
                   properties:
                     matchExpressions:
-                      type: arraygit push origin HEAD:topic/shengkailin/capi-aws
+                      type: array
                       items:
                         type: object
                         properties:
