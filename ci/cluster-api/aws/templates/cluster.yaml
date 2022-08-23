@@ -87,6 +87,8 @@ spec:
       subnet:
         id: SUBNETID
       publicIP: false
+      ami:
+        id: AMIID
       iamInstanceProfile: control-plane.cluster-api-provider-aws.sigs.k8s.io
       instanceType: t3.large
       sshKeyName: SSHAUTHORIZEDKEYS
@@ -131,6 +133,8 @@ spec:
       subnet:
         id: SUBNETID
       publicIP: false
+      ami:
+        id: AMIID
       iamInstanceProfile: nodes.cluster-api-provider-aws.sigs.k8s.io
       instanceType: t3.large
       sshKeyName: SSHAUTHORIZEDKEYS

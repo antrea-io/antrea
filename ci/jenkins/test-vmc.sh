@@ -255,9 +255,11 @@ function setup_aws_cluster() {
       export K8S_VERSION=v1.19.1
     fi
     if [ -z $TEST_OS ]; then
-      export TEST_OS=ubuntu-1804
+      export TEST_OS=ubuntu-18.04
     fi
     rm -rf ${GIT_CHECKOUT_DIR}/jenkins || true
+
+    export AMI_ID=$(clusterawsadm ami list --kubernetes-version=$K8S_VERSION --os=$TEST_OS --region=$AWS_REGION | grep ami- | awk '{print $5}')
 
     echo '=== Prepare key pair ==='
     mkdir -p ${GIT_CHECKOUT_DIR}/jenkins/key
@@ -276,6 +278,7 @@ function setup_aws_cluster() {
 
     sed -i "s/CLUSTERNAMESPACE/${CLUSTER}/g" ${GIT_CHECKOUT_DIR}/jenkins/out/cluster.yaml
     sed -i "s/K8SVERSION/${K8S_VERSION}/g" ${GIT_CHECKOUT_DIR}/jenkins/out/cluster.yaml
+    sed -i "s/AMIID/${AMI_ID}/g" ${GIT_CHECKOUT_DIR}/jenkins/out/cluster.yaml
     sed -i "s/CLUSTERNAME/${CLUSTER}/g" ${GIT_CHECKOUT_DIR}/jenkins/out/cluster.yaml
     sed -i "s|SSHAUTHORIZEDKEYS|${publickey}|g" ${GIT_CHECKOUT_DIR}/jenkins/out/cluster.yaml
     sed -i "s/CLUSTERNAMESPACE/${CLUSTER}/g" ${GIT_CHECKOUT_DIR}/jenkins/out/namespace.yaml

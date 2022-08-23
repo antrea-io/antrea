@@ -1144,6 +1144,7 @@
           description: 'This is for testing AWS capa daily.'
           builders:
             - builder-capa-aws
+          org_repo: edwardbadboy/antrea
           branches:
           - '*/main'
           included_regions: []
@@ -1178,3 +1179,17 @@
                 key-file-variable: KEY_FILE_VARIABLE
                 username-variable: USER_NAME_VARIABLE
                 passphrase-variable: PASSPHRASE_VARIABLE
+      - '{name}-{test_name}-for-period':
+          test_name: clean-up-old-clusters
+          node: 'capa-test'
+          description: 'This is for cleaning up old AWS capa clusters daily.'
+          builders:
+            - builder-capa-aws-clean-up
+          org_repo: edwardbadboy/antrea
+          branches:
+          - '*/topic/shengkailin'
+          included_regions: []
+          cron: '' # 'H H * * *'
+          ignore_post_commit_hooks: false
+          publishers: []
+          wrappers: []

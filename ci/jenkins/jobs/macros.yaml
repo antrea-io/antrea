@@ -198,3 +198,17 @@
           if [ "$success" != "ok" ]; then
             exit 1
           fi
+
+- builder:
+    name: builder-capa-aws-clean-up
+    builders:
+      - shell: |-
+          #!/bin/bash
+          for clustername in `kubectl get clusters -A --no-headers | grep test | awk '{print $1}'`;
+          do 
+              echo $clustername;
+              timeout 2m echo ./ci/jenkins/test-vmc.sh --cluster-name "$clustername" --cleanup-only --provider aws
+              if [[ $? == 124 ]]; then
+                  echo "#error# clean up job of ${clustername} time out"
+              fi
+          done
