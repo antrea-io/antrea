@@ -105,7 +105,7 @@ spec:
                   properties:
                     authType:
                       type: string
-                      enum: ["BearerToken", "APIKey"]
+                      enum: ["BearerToken", "APIKey", "BasicAuthentication"]
                     authSecret:
                       type: object
                       properties:

@@ -1,0 +1,27 @@
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: antrea-secret-reader
+  labels:
+    app: antrea
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - secrets
+    verbs:
+      - get
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: antrea-read-secrets
+  namespace: kube-system  # Change the Namespace to where the Secret for file server's authentication credential is created.
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: antrea-secret-reader
+subjects:
+  - kind: ServiceAccount
+    name: antrea-controller
+    namespace: kube-system

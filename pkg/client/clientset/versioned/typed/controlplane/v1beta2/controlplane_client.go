@@ -33,6 +33,7 @@ type ControlplaneV1beta2Interface interface {
 	GroupAssociationsGetter
 	NetworkPoliciesGetter
 	NodeStatsSummariesGetter
+	SupportBundleCollectionsGetter
 }
 
 // ControlplaneV1beta2Client is used to interact with features provided by the controlplane.antrea.io group.
@@ -66,6 +67,10 @@ func (c *ControlplaneV1beta2Client) NetworkPolicies() NetworkPolicyInterface {
 
 func (c *ControlplaneV1beta2Client) NodeStatsSummaries() NodeStatsSummaryInterface {
 	return newNodeStatsSummaries(c)
+}
+
+func (c *ControlplaneV1beta2Client) SupportBundleCollections() SupportBundleCollectionInterface {
+	return newSupportBundleCollections(c)
 }
 
 // NewForConfig creates a new ControlplaneV1beta2Client for the given config.

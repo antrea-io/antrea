@@ -14,7 +14,9 @@
 
 package v1beta2
 
-import "fmt"
+import (
+	"fmt"
+)
 
 func (r *NetworkPolicyReference) ToString() string {
 	if r.Type == AntreaClusterNetworkPolicy {
