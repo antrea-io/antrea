@@ -709,3 +709,160 @@ type ExternalNodeList struct {
 
 	Items []ExternalNode `json:"items,omitempty"`
 }
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+type SupportBundleCollectionList struct {
+	metav1.TypeMeta `json:",inline"`
+	// +optional
+	metav1.ListMeta `json:"metadata,omitempty"`
+
+	Items []SupportBundleCollection `json:"items"`
+}
+
+// +genclient
+// +genclient:nonNamespaced
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+type SupportBundleCollection struct {
+	metav1.TypeMeta `json:",inline"`
+	// Standard metadata of the object.
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	// Specification of the desired behavior of SupportBundleCollection.
+	Spec SupportBundleCollectionSpec `json:"spec"`
+	// Most recently observed status of the SupportBundleCollection.
+	Status SupportBundleCollectionStatus `json:"status"`
+}
+
+type SupportBundleCollectionSpec struct {
+	Nodes         *BundleNodes         `json:"nodes,omitempty"`
+	ExternalNodes *BundleExternalNodes `json:"externalNodes,omitempty"`
+	// ExpirationMinutes is the requested duration of validity of the SupportBundleCollection.
+	// A SupportBundleCollection will be marked as Failed if it does not finish before expiration.
+	// Default is 60.
+	ExpirationMinutes int32 `json:"expirationMinutes"`
+	// SinceTime specifies a relative time before the current time from which to collect logs
+	// A valid value is like: 1d, 2h, 30m.
+	SinceTime      string                        `json:"sinceTime,omitempty"`
+	FileServer     BundleFileServer              `json:"fileServer"`
+	Authentication BundleServerAuthConfiguration `json:"authentication"`
+}
+
+// BundlePhase defines the phase in which a SupportBundleCollection is.
+type BundlePhase string
+
+const (
+	// BundlePending means the SupportBundleCollection has been accepted by the system,
+	// but it has not been processed by Antrea.
+	BundlePending BundlePhase = "Pending"
+	// BundleProcessing means the SupportBundleCollection is being processed by Antrea.
+	BundleProcessing BundlePhase = "Processing"
+	// BundleCompleted means the SupportBundleCollection is completed by all Nodes
+	// or ExternalNodes it requires.
+	BundleCompleted BundlePhase = "Completed"
+	// BundlePartialSuccess means some required Nodes or ExternalNodes succeed to collect
+	// bundle files and upload to the file server, but others fail.
+	BundlePartialSuccess BundlePhase = "PartialSuccess"
+	// BundleFailed means the SupportBundleCollection failed. It can happen when Antrea
+	// Controller fails to create internal objects, or none of the required Nodes or
+	// ExternalNodes succeeds to process the request.
+	BundleFailed BundlePhase = "Failed"
+)
+
+type SupportBundleCollectionStatus struct {
+	Phase BundlePhase `json:"phase"`
+	// The generation observed by Antrea.
+	ObservedGeneration int64 `json:"observedGeneration"`
+	// The number of Nodes and ExternalNodes that have completed the SupportBundleCollection.
+	CollectedNodes int32 `json:"collectedNodes"`
+	// The total number of Nodes and ExternalNodes that should process the SupportBundleCollection.
+	DesiredNodes int32                              `json:"desiredNodes"`
+	Conditions   []SupportBundleCollectionCondition `json:"conditions"`
+}
+
+type SupportBundleCollectionConditionType string
+
+const (
+	// Started means Antrea Controller has created the internal resource for the SupportBundleCollectionCondition.
+	Started SupportBundleCollectionConditionType = "started"
+	// Collected means all Antrea Agents have successfully processed the SupportBundleCollectionCondition request.
+	Collected SupportBundleCollectionConditionType = "collected"
+)
+
+// SupportBundleCollectionCondition describes the state of a SupportBundleCollection at a certain point.
+type SupportBundleCollectionCondition struct {
+	// Type of StatefulSet condition.
+	Type SupportBundleCollectionConditionType `json:"type"`
+	// Status of the condition, one of True, False, Unknown.
+	Status metav1.ConditionStatus `json:"status"`
+	// Last time the condition transitioned from one status to another.
+	// +optional
+	LastTransitionTime metav1.Time `json:"lastTransitionTime,omitempty"`
+	// The reason for the condition's last transition.
+	// +optional
+	Reason string `json:"reason,omitempty"`
+	// A human-readable message indicating details about the transition.
+	// +optional
+	Message string `json:"message,omitempty"`
+}
+
+type BundleNodes struct {
+	// List the names of certain Nodes which are expected to collect and upload
+	// bundle files.
+	// +optional
+	NodeNames []string `json:"nodeNames,omitempty"`
+	// Select certain Nodes which match the label selector.
+	// +optional
+	NodeSelector *metav1.LabelSelector `json:"nodeSelector,omitempty"`
+}
+
+type BundleExternalNodes struct {
+	Namespace string
+	// List the names of certain ExternalNodes which are expected to collect and upload
+	// bundle files.
+	// +optional
+	NodeNames []string `json:"nodeNames,omitempty"`
+	// Select certain ExternalNodes which match the label selector.
+	// +optional
+	NodeSelector *metav1.LabelSelector `json:"nodeSelector,omitempty"`
+}
+
+// BundleUploadProtocol defines the scheme that the BundleFileServer uses in the url to
+// upload bundle files.
+type BundleUploadProtocol string
+
+const (
+	HTTPS BundleUploadProtocol = "https"
+)
+
+// BundleUploadVerb defines the verb to upload bundle files to the URL provided by
+// the BundleFileServer.
+type BundleUploadVerb string
+
+const (
+	PostBundle BundleUploadVerb = "post"
+)
+
+// BundleFileServer specifies the bundle file server information.
+type BundleFileServer struct {
+	HTTPServer string               `json:"httpServer"`
+	Protocol   BundleUploadProtocol `json:"protocol"`
+	Verb       BundleUploadVerb     `json:"verb"`
+}
+
+// BundleServerAuthType defines the authentication type to access the BundleFileServer.
+type BundleServerAuthType string
+
+const (
+	APIKey      BundleServerAuthType = "apiKey"
+	BearerToken BundleServerAuthType = "bearerToken"
+)
+
+// BundleServerAuthConfiguration defines the authentication parameters that Antrea uses to access
+// the BundleFileServer.
+type BundleServerAuthConfiguration struct {
+	AuthType BundleServerAuthType `json:"authType"`
+	// AuthSecret is a Secret reference which stores the authentication value.
+	AuthSecret *v1.SecretReference `json:"authSecret"`
+}

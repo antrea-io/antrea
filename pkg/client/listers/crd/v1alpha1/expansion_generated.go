@@ -36,6 +36,10 @@ type NetworkPolicyListerExpansion interface{}
 // NetworkPolicyNamespaceLister.
 type NetworkPolicyNamespaceListerExpansion interface{}
 
+// SupportBundleCollectionListerExpansion allows custom methods to be added to
+// SupportBundleCollectionLister.
+type SupportBundleCollectionListerExpansion interface{}
+
 // TierListerExpansion allows custom methods to be added to
 // TierLister.
 type TierListerExpansion interface{}
