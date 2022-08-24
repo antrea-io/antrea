@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
       - name: flow-aggregator
-        image: {{ .Values.image.repository }}:{{ default .Chart.AppVersion .Values.image.tag }}
+        image: {{ include "flowAggregatorImage" . | quote }}
         imagePullPolicy: {{ .Values.image.pullPolicy }}
         {{- if .Values.testing.coverage }}
         command: [ "/bin/sh" ]
