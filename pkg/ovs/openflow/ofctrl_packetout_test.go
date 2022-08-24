@@ -15,12 +15,14 @@
 package openflow
 
 import (
+	"math/rand"
 	"net"
 	"reflect"
 	"testing"
 
 	"antrea.io/libOpenflow/protocol"
 	"antrea.io/ofnet/ofctrl"
+	"github.com/stretchr/testify/assert"
 )
 
 func Test_ofPacketOutBuilder_SetSrcIP(t *testing.T) {
@@ -644,6 +646,7 @@ func Test_ofPacketOutBuilder_Done(t *testing.T) {
 					Version:  0x4,
 					Length:   28,
 					Checksum: 46753,
+					Id:       1090,
 				},
 				ICMPHeader: &protocol.ICMP{
 					Type:     3,
@@ -669,13 +672,16 @@ func Test_ofPacketOutBuilder_Done(t *testing.T) {
 				IPHeader: &protocol.IPv4{
 					Version:  0x4,
 					Length:   40,
-					Checksum: 45409,
+					Checksum: 8009,
+					Id:       39822,
 				},
 				TCPHeader: &protocol.TCP{
 					PortSrc:  10000,
 					PortDst:  10001,
 					HdrLen:   5,
-					Checksum: 63286,
+					Checksum: 40408,
+					SeqNum:   2596996162,
+					AckNum:   4039455774,
 				},
 			},
 		},
@@ -694,7 +700,8 @@ func Test_ofPacketOutBuilder_Done(t *testing.T) {
 				IPHeader: &protocol.IPv4{
 					Version:  0x4,
 					Length:   28,
-					Checksum: 45025,
+					Checksum: 46753,
+					Id:       1090,
 				},
 				UDPHeader: &protocol.UDP{
 					PortSrc:  10000,
@@ -751,7 +758,9 @@ func Test_ofPacketOutBuilder_Done(t *testing.T) {
 					PortSrc:  10000,
 					PortDst:  10001,
 					HdrLen:   5,
-					Checksum: 26538,
+					Checksum: 40408,
+					SeqNum:   2596996162,
+					AckNum:   4039455774,
 				},
 			},
 		},
@@ -782,43 +791,16 @@ func Test_ofPacketOutBuilder_Done(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// Specify a hardcoded seed for testing to make output predictable.
+			// #nosec G404: random number generator not used for security purposes
+			pktRand = rand.New(rand.NewSource(1))
 			b := &ofPacketOutBuilder{
 				pktOut:  tt.fields.pktOut,
 				icmpID:  tt.fields.icmpID,
 				icmpSeq: tt.fields.icmpSeq,
 			}
 			got := b.Done()
-			if got == nil {
-				if tt.want != nil {
-					t.Errorf("Done() = %v, want %v", got, tt.want)
-				}
-				return
-			}
-			if got.IPHeader != nil {
-				got.IPHeader.Id = 0
-			}
-			if got.TCPHeader != nil {
-				got.TCPHeader.SeqNum = 0
-				got.TCPHeader.AckNum = 0
-			}
-			if !reflect.DeepEqual(got.ICMPHeader, tt.want.ICMPHeader) {
-				t.Errorf("Done() = %v, want %v", got.ICMPHeader, tt.want.ICMPHeader)
-			}
-			if !reflect.DeepEqual(got.TCPHeader, tt.want.TCPHeader) {
-				t.Errorf("Done() = %+v, want %+v", got.TCPHeader, tt.want.TCPHeader)
-			}
-			if !reflect.DeepEqual(got.UDPHeader, tt.want.UDPHeader) {
-				t.Errorf("Done() = %v, want %v", got.UDPHeader, tt.want.UDPHeader)
-			}
-			if !reflect.DeepEqual(got.IPHeader, tt.want.IPHeader) {
-				t.Errorf("Done() = %v, want %v", got.IPHeader, tt.want.IPHeader)
-			}
-			if !reflect.DeepEqual(got.IPv6Header, tt.want.IPv6Header) {
-				t.Errorf("Done() = %v, want %v", got.IPv6Header, tt.want.IPv6Header)
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Done() = %+v, want %+v", got, tt.want)
-			}
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }
