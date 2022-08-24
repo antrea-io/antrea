@@ -16,7 +16,6 @@ package e2e
 
 import (
 	"flag"
-	"io/ioutil"
 	"log"
 	"math/rand"
 	"os"
@@ -28,7 +27,7 @@ import (
 // was provided by the user, it checks that the directory exists.
 func (tOptions *TestOptions) setupLogging() func() {
 	if tOptions.logsExportDir == "" {
-		name, err := ioutil.TempDir("", "antrea-test-")
+		name, err := os.MkdirTemp("", "antrea-test-")
 		if err != nil {
 			log.Fatalf("Error when creating temporary directory to export logs: %v", err)
 		}

@@ -17,13 +17,12 @@ package ovstracing
 import (
 	"encoding/json"
 	"io"
-	"io/ioutil"
 
 	"antrea.io/antrea/pkg/agent/apiserver/handlers/ovstracing"
 )
 
 func Transform(reader io.Reader, _ bool, _ map[string]string) (interface{}, error) {
-	b, err := ioutil.ReadAll(reader)
+	b, err := io.ReadAll(reader)
 	if err != nil {
 		return nil, err
 	}

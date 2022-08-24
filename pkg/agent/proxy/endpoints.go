@@ -73,8 +73,10 @@ func newEndpointsChangesTracker(hostname string, enableEndpointSlice bool, isIPv
 // For example,
 // Add item
 //   - pass <nil, Endpoints> as the <previous, current> pair.
+//
 // Update item
 //   - pass <oldEndpoints, Endpoints> as the <previous, current> pair.
+//
 // Delete item
 //   - pass <Endpoints, nil> as the <previous, current> pair.
 func (t *endpointsChangesTracker) OnEndpointUpdate(previous, current *corev1.Endpoints) bool {

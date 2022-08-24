@@ -399,10 +399,10 @@ func getLocalAntreaFlexibleIPAMPodIPSetName(isIPv6 bool) string {
 // writeEKSMangleRules writes an additional iptables mangle rule to the
 // iptablesData buffer, to set the traffic mark to the connection mark for
 // traffic coming out of the gateway. This rule is needed for 2 cases:
-//  * for the reverse path for NodePort Service traffic (see
-//    https://github.com/antrea-io/antrea/issues/678).
-//  * for Pod-to-external traffic that needs to be SNATed (see
-//    https://github.com/antrea-io/antrea/issues/3946).
+//   - for the reverse path for NodePort Service traffic (see
+//     https://github.com/antrea-io/antrea/issues/678).
+//   - for Pod-to-external traffic that needs to be SNATed (see
+//     https://github.com/antrea-io/antrea/issues/3946).
 func (c *Client) writeEKSMangleRules(iptablesData *bytes.Buffer) {
 	// TODO: the following should be taking into account:
 	//   1) this rule is only needed if AWS_VPC_CNI_NODE_PORT_SUPPORT is set

@@ -67,8 +67,10 @@ func (c Category) String() string {
 }
 
 // ID defines segments a cookie ID contains. An ID is composed like:
-//  |------------------------- ID --------------------------|
-//  |- round 16bits -|- category 8bits -|- reserved 8bits -|- objectID 32bits -|
+//
+//	|------------------------- ID --------------------------|
+//	|- round 16bits -|- category 8bits -|- reserved 8bits -|- objectID 32bits -|
+//
 // The round segment represents the round id.
 // The category segment represents the category of flow this ID belongs.
 type ID uint64

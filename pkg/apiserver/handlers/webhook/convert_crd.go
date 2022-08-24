@@ -18,7 +18,7 @@ package webhook
 import (
 	"fmt"
 	"html"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"strings"
 
@@ -110,7 +110,7 @@ func HandleCRDConversion(crdConvertFunc convertFunc) http.HandlerFunc {
 		klog.V(2).Info("Received request to convert CRD version")
 		var body []byte
 		if r.Body != nil {
-			if data, err := ioutil.ReadAll(r.Body); err == nil {
+			if data, err := io.ReadAll(r.Body); err == nil {
 				body = data
 			}
 		}

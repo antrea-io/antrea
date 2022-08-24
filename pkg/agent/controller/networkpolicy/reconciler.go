@@ -110,29 +110,32 @@ func normalizeServices(services []v1beta2.Service) servicesKey {
 // if an ingress rule applies to 3 Pods like below:
 //
 // NetworkPolicy rule:
-// spec:
-//  ingress:
-//  - from:
-//    - namespaceSelector: {}
-//    ports:
-//    - port: http
-//      protocol: TCP
+//
+//	spec:
+//	 ingress:
+//	 - from:
+//	   - namespaceSelector: {}
+//	   ports:
+//	   - port: http
+//	     protocol: TCP
 //
 // Pod A and Pod B:
-// spec:
-//   containers:
-//   - ports:
-//     - containerPort: 80
-//       name: http
-//       protocol: TCP
+//
+//	spec:
+//	  containers:
+//	  - ports:
+//	    - containerPort: 80
+//	      name: http
+//	      protocol: TCP
 //
 // Pod C:
-// spec:
-//   containers:
-//   - ports:
-//     - containerPort: 8080
-//       name: http
-//       protocol: TCP
+//
+//	spec:
+//	  containers:
+//	  - ports:
+//	    - containerPort: 8080
+//	      name: http
+//	      protocol: TCP
 //
 // Then Pod A and B will share an Openflow rule as both of them resolve "http" to 80,
 // while Pod C will have another Openflow rule as it resolves "http" to 8080.

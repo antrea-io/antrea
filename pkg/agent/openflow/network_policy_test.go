@@ -958,8 +958,7 @@ func parseAddresses(addrs []string) []types.Address {
 	var addresses = make([]types.Address, 0)
 	for _, addr := range addrs {
 		if !strings.Contains(addr, ".") && !strings.Contains(addr, ":") {
-			// #nosec G109: parseAddresses is only called on constant test inputs, no potential integer overflow
-			ofPort, _ := strconv.Atoi(addr)
+			ofPort, _ := strconv.ParseInt(addr, 10, 32)
 			addresses = append(addresses, NewOFPortAddress(int32(ofPort)))
 		} else if strings.Contains(addr, "/") {
 			_, ipnet, _ := net.ParseCIDR(addr)

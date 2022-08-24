@@ -17,8 +17,8 @@ package main
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"net"
+	"os"
 
 	"github.com/spf13/pflag"
 	"gopkg.in/yaml.v2"
@@ -148,7 +148,7 @@ func (o *Options) validateNodeIPAMControllerOptions() error {
 }
 
 func (o *Options) loadConfigFromFile() error {
-	data, err := ioutil.ReadFile(o.configFile)
+	data, err := os.ReadFile(o.configFile)
 	if err != nil {
 		return err
 	}

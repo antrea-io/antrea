@@ -1,6 +1,6 @@
 module antrea.io/antrea/plugins/octant
 
-go 1.17
+go 1.19
 
 require (
 	antrea.io/antrea v0.0.0

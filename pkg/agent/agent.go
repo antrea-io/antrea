@@ -475,14 +475,15 @@ func persistRoundNum(num uint64, bridgeClient ovsconfig.OVSBridgeClient, interva
 
 // initOpenFlowPipeline sets up necessary Openflow entries, including pipeline, classifiers, conn_track, and gateway flows
 // Every time the agent is (re)started, we go through the following sequence:
-//   1. agent determines the new round number (this is done by incrementing the round number
-//   persisted in OVSDB, or if it's not available by picking round 1).
-//   2. any existing flow for which the round number matches the round number obtained from step 1
-//   is deleted.
-//   3. all required flows are installed, using the round number obtained from step 1.
-//   4. after convergence, all existing flows for which the round number matches the previous round
-//   number (i.e. the round number which was persisted in OVSDB, if any) are deleted.
-//   5. the new round number obtained from step 1 is persisted to OVSDB.
+//  1. agent determines the new round number (this is done by incrementing the round number
+//     persisted in OVSDB, or if it's not available by picking round 1).
+//  2. any existing flow for which the round number matches the round number obtained from step 1
+//     is deleted.
+//  3. all required flows are installed, using the round number obtained from step 1.
+//  4. after convergence, all existing flows for which the round number matches the previous round
+//     number (i.e. the round number which was persisted in OVSDB, if any) are deleted.
+//  5. the new round number obtained from step 1 is persisted to OVSDB.
+//
 // The rationale for not persisting the new round number until after all previous flows have been
 // deleted is to avoid a situation in which some stale flows are never deleted because of successive
 // agent restarts (with the agent crashing before step 4 can be completed). With the sequence

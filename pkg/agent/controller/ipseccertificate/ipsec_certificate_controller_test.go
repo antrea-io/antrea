@@ -23,7 +23,6 @@ import (
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"fmt"
-	"io/ioutil"
 	"math/big"
 	"os"
 	"path/filepath"
@@ -122,7 +121,7 @@ func newFakeController(t *testing.T) *fakeController {
 	require.NoError(t, err)
 	rootCA, err := certutil.NewSelfSignedCACert(cfg, key)
 	require.NoError(t, err)
-	tempDir, err := ioutil.TempDir("", "antrea-ipsec-test")
+	tempDir, err := os.MkdirTemp("", "antrea-ipsec-test")
 	require.NoError(t, err)
 	defaultCertificatesPath = tempDir
 	defer func() {
@@ -186,8 +185,8 @@ func TestController_syncConfigurations(t *testing.T) {
 		ch := make(chan struct{})
 		fakeController.rotateCertificate = func() (*certificateKeyPair, error) {
 			close(ch)
-			require.NoError(t, ioutil.WriteFile(certPath, nil, 0600))
-			require.NoError(t, ioutil.WriteFile(keyPath, nil, 0400))
+			require.NoError(t, os.WriteFile(certPath, nil, 0600))
+			require.NoError(t, os.WriteFile(keyPath, nil, 0400))
 			return &certificateKeyPair{
 				certificatePath: certPath,
 				privateKeyPath:  keyPath,

@@ -25,11 +25,14 @@ override:
 # under CC-BY-SA-4.0.
 - path: "github.com/docker/go-metrics"
   licenses: ["Apache-2.0"]
+# License detected as Apache-2.0 + ImageMagick for some reason. License is just
+# Apache-2.0. Note that ImageMagick is nearly identical to Apache-2.0.
+# see https://spdx.org/licenses/ImageMagick.html
+- path: "github.com/TomCodeLV/OVSDB-golang-lib"
+  licenses: ["Apache-2.0"]
 
 exceptions:
   unresolvableLicense:
-  - path: "github.com/TomCodeLV/OVSDB-golang-lib"
-    licenses: ["Apache-2.0"]
   # Missing LICENSE file but Github license field set to MIT
   - path: "github.com/BurntSushi/toml"
     licenses: ["MIT"]

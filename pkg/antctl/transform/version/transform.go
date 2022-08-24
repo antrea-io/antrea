@@ -17,7 +17,6 @@ package version
 import (
 	"encoding/json"
 	"io"
-	"io/ioutil"
 
 	k8sversion "k8s.io/apimachinery/pkg/version"
 	"k8s.io/klog/v2"
@@ -37,7 +36,7 @@ type Response struct {
 // will try to parse the response as a AgentVersionResponse and then populate
 // it with the version of antctl to a transformedVersionResponse object.
 func AgentTransform(reader io.Reader, _ bool, _ map[string]string) (interface{}, error) {
-	b, err := ioutil.ReadAll(reader)
+	b, err := io.ReadAll(reader)
 	if err != nil {
 		return nil, err
 	}
@@ -62,7 +61,7 @@ func AgentTransform(reader io.Reader, _ bool, _ map[string]string) (interface{},
 }
 
 func ControllerTransform(reader io.Reader, _ bool, _ map[string]string) (interface{}, error) {
-	b, err := ioutil.ReadAll(reader)
+	b, err := io.ReadAll(reader)
 	if err != nil {
 		return nil, err
 	}
@@ -83,7 +82,7 @@ func ControllerTransform(reader io.Reader, _ bool, _ map[string]string) (interfa
 // This function will try to parse the response as a FlowAggregatorVersionResponse and
 // then populate it with the version of antctl to a transformedVersionResponse object.
 func FlowAggregatorTransform(reader io.Reader, _ bool, _ map[string]string) (interface{}, error) {
-	b, err := ioutil.ReadAll(reader)
+	b, err := io.ReadAll(reader)
 	if err != nil {
 		return nil, err
 	}

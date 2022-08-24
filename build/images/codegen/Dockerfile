@@ -38,18 +38,18 @@ ARG K8S_VERSION=1.24.0
 # correct K8s version).
 ARG KUBEOPENAPI_VERSION=v0.0.0-20220328201542-3ee0da9b0b42
 
-RUN go get k8s.io/code-generator/cmd/client-gen@kubernetes-$K8S_VERSION && \
-    go get k8s.io/code-generator/cmd/deepcopy-gen@kubernetes-$K8S_VERSION && \
-    go get k8s.io/code-generator/cmd/conversion-gen@kubernetes-$K8S_VERSION && \
-    go get k8s.io/code-generator/cmd/lister-gen@kubernetes-$K8S_VERSION && \
-    go get k8s.io/code-generator/cmd/informer-gen@kubernetes-$K8S_VERSION && \
-    go get k8s.io/kube-openapi/cmd/openapi-gen@$KUBEOPENAPI_VERSION && \
-    go get k8s.io/code-generator/cmd/go-to-protobuf@kubernetes-$K8S_VERSION && \
-    go get k8s.io/code-generator/cmd/go-to-protobuf/protoc-gen-gogo@kubernetes-$K8S_VERSION && \
-    go get github.com/golang/mock/mockgen@v1.4.4 && \
-    go get github.com/golang/protobuf/protoc-gen-go@v1.5.2 && \
-    go get golang.org/x/tools/cmd/goimports && \
-    go get sigs.k8s.io/controller-tools/cmd/controller-gen@v0.9.0
+RUN go install k8s.io/code-generator/cmd/client-gen@kubernetes-$K8S_VERSION && \
+    go install k8s.io/code-generator/cmd/deepcopy-gen@kubernetes-$K8S_VERSION && \
+    go install k8s.io/code-generator/cmd/conversion-gen@kubernetes-$K8S_VERSION && \
+    go install k8s.io/code-generator/cmd/lister-gen@kubernetes-$K8S_VERSION && \
+    go install k8s.io/code-generator/cmd/informer-gen@kubernetes-$K8S_VERSION && \
+    go install k8s.io/kube-openapi/cmd/openapi-gen@$KUBEOPENAPI_VERSION && \
+    go install k8s.io/code-generator/cmd/go-to-protobuf@kubernetes-$K8S_VERSION && \
+    go install k8s.io/code-generator/cmd/go-to-protobuf/protoc-gen-gogo@kubernetes-$K8S_VERSION && \
+    go install github.com/golang/mock/mockgen@v1.4.4 && \
+    go install github.com/golang/protobuf/protoc-gen-go@v1.5.2 && \
+    go install golang.org/x/tools/cmd/goimports@latest && \
+    go install sigs.k8s.io/controller-tools/cmd/controller-gen@v0.9.0
 
 COPY --from=protoc /tmp/protoc/bin /usr/local/bin
 COPY --from=protoc /tmp/protoc/include /usr/local/include

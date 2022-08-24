@@ -16,8 +16,8 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
 	"net"
+	"os"
 	"strings"
 	"time"
 
@@ -140,7 +140,7 @@ func (o *Options) validate(args []string) error {
 }
 
 func (o *Options) loadConfigFromFile() error {
-	data, err := ioutil.ReadFile(o.configFile)
+	data, err := os.ReadFile(o.configFile)
 	if err != nil {
 		return err
 	}

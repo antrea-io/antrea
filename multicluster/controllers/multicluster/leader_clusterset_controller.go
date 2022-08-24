@@ -131,22 +131,22 @@ func (r *LeaderClusterSetReconciler) runBackgroundTasks() {
 }
 
 // updateStatus updates ClusterSet Status as follows:
-// 1. TotalClusters is the number of member clusters in the
-//    ClusterSet resource last processed.
-// 2. ObservedGeneration is the Generation from the last processed
-//    ClusterSet resource.
-// 3. Individual cluster status is obtained from MemberClusterAnnounce
-//    controller.
-// 4. ReadyClusters is the number of member clusters with "Ready" = "True"
-// 5. Overall condition of the ClusterSet is also computed as follows:
-//    a. "Ready" = "True" if all clusters have "Ready" = "True".
-//       Message & Reason will be absent.
-//    b. "Ready" = "Unknown" if all clusters have "Ready" = "Unknown".
-//       Message will be "All clusters have an unknown status"
-//       and Reason will be "NoReadyCluster"
-//    c. "Ready" = "False" for any other combination of cluster
-//       statues across all clusters. Message will be empty and Reason
-//       will be "NoReadyCluster"
+//  1. TotalClusters is the number of member clusters in the
+//     ClusterSet resource last processed.
+//  2. ObservedGeneration is the Generation from the last processed
+//     ClusterSet resource.
+//  3. Individual cluster status is obtained from MemberClusterAnnounce
+//     controller.
+//  4. ReadyClusters is the number of member clusters with "Ready" = "True"
+//  5. Overall condition of the ClusterSet is also computed as follows:
+//     a. "Ready" = "True" if all clusters have "Ready" = "True".
+//     Message & Reason will be absent.
+//     b. "Ready" = "Unknown" if all clusters have "Ready" = "Unknown".
+//     Message will be "All clusters have an unknown status"
+//     and Reason will be "NoReadyCluster"
+//     c. "Ready" = "False" for any other combination of cluster
+//     statues across all clusters. Message will be empty and Reason
+//     will be "NoReadyCluster"
 func (r *LeaderClusterSetReconciler) updateStatus() {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()

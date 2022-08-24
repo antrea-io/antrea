@@ -22,7 +22,7 @@ package v1beta1
 
 import (
 	context "context"
-	any "github.com/golang/protobuf/ptypes/any"
+	any1 "github.com/golang/protobuf/ptypes/any"
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
@@ -262,9 +262,9 @@ type Error struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Code    ErrorCode  `protobuf:"varint,1,opt,name=code,proto3,enum=antrea_io.antrea.pkg.apis.cni.v1beta1.ErrorCode" json:"code,omitempty"`
-	Message string     `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
-	Details []*any.Any `protobuf:"bytes,3,rep,name=details,proto3" json:"details,omitempty"`
+	Code    ErrorCode   `protobuf:"varint,1,opt,name=code,proto3,enum=antrea_io.antrea.pkg.apis.cni.v1beta1.ErrorCode" json:"code,omitempty"`
+	Message string      `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
+	Details []*any1.Any `protobuf:"bytes,3,rep,name=details,proto3" json:"details,omitempty"`
 }
 
 func (x *Error) Reset() {
@@ -313,7 +313,7 @@ func (x *Error) GetMessage() string {
 	return ""
 }
 
-func (x *Error) GetDetails() []*any.Any {
+func (x *Error) GetDetails() []*any1.Any {
 	if x != nil {
 		return x.Details
 	}
@@ -489,7 +489,7 @@ var file_pkg_apis_cni_v1beta1_cni_proto_goTypes = []interface{}{
 	(*CniCmdRequest)(nil),  // 2: antrea_io.antrea.pkg.apis.cni.v1beta1.CniCmdRequest
 	(*Error)(nil),          // 3: antrea_io.antrea.pkg.apis.cni.v1beta1.Error
 	(*CniCmdResponse)(nil), // 4: antrea_io.antrea.pkg.apis.cni.v1beta1.CniCmdResponse
-	(*any.Any)(nil),        // 5: google.protobuf.Any
+	(*any1.Any)(nil),       // 5: google.protobuf.Any
 }
 var file_pkg_apis_cni_v1beta1_cni_proto_depIdxs = []int32{
 	1, // 0: antrea_io.antrea.pkg.apis.cni.v1beta1.CniCmdRequest.cni_args:type_name -> antrea_io.antrea.pkg.apis.cni.v1beta1.CniCmdArgs

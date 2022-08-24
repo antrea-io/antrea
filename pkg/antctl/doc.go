@@ -12,5 +12,5 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//Package antctl provides the antctl framework and antctl command implementations.
+// Package antctl provides the antctl framework and antctl command implementations.
 package antctl

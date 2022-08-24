@@ -49,24 +49,29 @@ const (
 // backwards-compatibility is broken.
 //
 // Here are some potential scenarios we need to accommodate:
-//   * major API refactor that breaks backwards-compatibility: in this case we would increase the
+//
+//  1. major API refactor that breaks backwards-compatibility: in this case we would increase the
 //     major version number.
-//   * support for a new CNI version:
-//       - introduction of a new RPC (e.g. when the CHECK command was added in version 0.4.0 of the
-//         CNI spec). In such a case we would increment the minor version number (backwards-
-//         compatibility is not broken). If antrea-cni does not support this new version, it will
-//         not list the new CNI spec version as supported and there will be no issue. If antrea-cni
-//         supports it but not the antrea-agent, the gRPC server will return an UNIMPLEMENTED error
-//         which we can propagate to the runtime. There is no way to handle this last case better
-//         with the current design unless we introduce a different RPC (e.g. Capabilities) early to
-//         query the server for the supported API version. This would also require an additional RPC
-//         for each CNI binary invocation.
-//       - introduction of a new field to a proto message: highly unlikely because we just send the
-//         CNI input / output as bytes.
-//       - no changes are needed if only the CNI parameters or CNI result format changed. In this
-//         case either antrea-cni or antrea-agent will reject the CNI request by validating the
-//         cniVersion against the list of supported versions. This is independent of which version
-//         of the gRPC service is used by either antrea-cni or antrea-agent.
+//
+//  2. support for a new CNI version:
+//
+//     - introduction of a new RPC (e.g. when the CHECK command was added in version 0.4.0 of the
+//     CNI spec). In such a case we would increment the minor version number (backwards-
+//     compatibility is not broken). If antrea-cni does not support this new version, it will
+//     not list the new CNI spec version as supported and there will be no issue. If antrea-cni
+//     supports it but not the antrea-agent, the gRPC server will return an UNIMPLEMENTED error
+//     which we can propagate to the runtime. There is no way to handle this last case better
+//     with the current design unless we introduce a different RPC (e.g. Capabilities) early to
+//     query the server for the supported API version. This would also require an additional RPC
+//     for each CNI binary invocation.
+//
+//     - introduction of a new field to a proto message: highly unlikely because we just send the
+//     CNI input / output as bytes.
+//
+//     -  no changes are needed if only the CNI parameters or CNI result format changed. In this
+//     case either antrea-cni or antrea-agent will reject the CNI request by validating the
+//     cniVersion against the list of supported versions. This is independent of which version
+//     of the gRPC service is used by either antrea-cni or antrea-agent.
 //
 // The gRPC server will return UNIMPLEMENTED if the service is unknown (mismatch in package name,
 // i.e. mismatch in major version number) or if the method is unknown. In both cases we return an

@@ -15,8 +15,8 @@ limitations under the License.
 */
 
 // Package v1alpha2 contains API Schema definitions for the multicluster v1alpha2 API group
-//+kubebuilder:object:generate=true
-//+groupName=multicluster.crd.antrea.io
+// +kubebuilder:object:generate=true
+// +groupName=multicluster.crd.antrea.io
 package v1alpha2
 
 import (

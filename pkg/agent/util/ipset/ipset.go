@@ -38,8 +38,10 @@ var memberPattern = regexp.MustCompile("(?m)^(.*\n)*Members:\n")
 func CreateIPSet(name string, setType SetType, isIPv6 bool) error {
 	var cmd *exec.Cmd
 	if isIPv6 {
+		// #nosec G204 -- inputs are not controlled by users
 		cmd = exec.Command("ipset", "create", name, string(setType), "family", "inet6", "-exist")
 	} else {
+		// #nosec G204 -- inputs are not controlled by users
 		cmd = exec.Command("ipset", "create", name, string(setType), "-exist")
 	}
 	if err := cmd.Run(); err != nil {

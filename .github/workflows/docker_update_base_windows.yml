@@ -35,12 +35,12 @@ jobs:
         username: ${{ secrets.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_PASSWORD }}
     - name: Build and push Docker images
-      if: ${{ github.event.inputs.push == true }}
+      if: ${{ github.event.inputs.push == "true" }}
       run: |
         ./hack/build-antrea-windows-all.sh --pull --push-base-images
       shell: bash
     - name: Build Docker images without pushing
-      if: ${{ github.event.inputs.push == false }}
+      if: ${{ github.event.inputs.push == "false" }}
       run: |
         ./hack/build-antrea-windows-all.sh --pull
       shell: bash
