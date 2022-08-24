@@ -18,7 +18,7 @@
 package sysctl
 
 import (
-	"io/ioutil"
+	"os"
 	"path"
 	"strconv"
 	"strings"
@@ -32,7 +32,7 @@ const (
 
 // GetSysctlNet returns the value for sysctl net.* settings
 func GetSysctlNet(sysctl string) (int, error) {
-	data, err := ioutil.ReadFile(path.Join(sysctlNet, sysctl))
+	data, err := os.ReadFile(path.Join(sysctlNet, sysctl))
 	if err != nil {
 		return -1, err
 	}
@@ -46,7 +46,7 @@ func GetSysctlNet(sysctl string) (int, error) {
 // SetSysctlNet sets the specified sysctl net.* parameter to the new value.
 func SetSysctlNet(sysctl string, newVal int) error {
 	// #nosec G306: provided permissions match /proc/sys file permissions
-	return ioutil.WriteFile(path.Join(sysctlNet, sysctl), []byte(strconv.Itoa(newVal)), 0640)
+	return os.WriteFile(path.Join(sysctlNet, sysctl), []byte(strconv.Itoa(newVal)), 0640)
 }
 
 // EnsureSysctlNetValue checks if the specified sysctl net.* parameter is already set to the

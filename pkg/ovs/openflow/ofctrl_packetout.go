@@ -252,7 +252,7 @@ func (b *ofPacketOutBuilder) SetICMPID(id uint16) PacketOutBuilder {
 	return b
 }
 
-//SetICMPSequence sets the sequence number in the packet's ICMP header.
+// SetICMPSequence sets the sequence number in the packet's ICMP header.
 func (b *ofPacketOutBuilder) SetICMPSequence(seq uint16) PacketOutBuilder {
 	if b.pktOut.ICMPHeader == nil {
 		b.pktOut.ICMPHeader = new(protocol.ICMP)

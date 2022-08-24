@@ -91,6 +91,7 @@ docker build --target windows-utility-base \
        --build-arg NANOSERVER_VERSION=$NANOSERVER_VERSION .
 docker build --target windows-golang \
        --cache-from antrea/windows-golang:$WIN_BUILD_TAG \
+       -t antrea/windows-golang:$WIN_BUILD_TAG \
        --build-arg GO_VERSION=$GO_VERSION \
        --build-arg NANOSERVER_VERSION=$NANOSERVER_VERSION .
 docker build \

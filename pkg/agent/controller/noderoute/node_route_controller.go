@@ -429,11 +429,13 @@ func (c *Controller) processNextWorkItem() bool {
 
 // syncNode manages connectivity to "peer" Node with name nodeName
 // If we have not established connectivity to the Node yet:
-//   * we install the appropriate Linux route:
+//   - we install the appropriate Linux route:
+//
 // Destination     Gateway         Use Iface
 // peerPodCIDR     peerGatewayIP   localGatewayIface (e.g antrea-gw0)
-//   * we install the appropriate OpenFlow flows to ensure that all the traffic destined to
-//   peerPodCIDR goes through the correct L3 tunnel.
+//   - we install the appropriate OpenFlow flows to ensure that all the traffic destined to
+//     peerPodCIDR goes through the correct L3 tunnel.
+//
 // If the Node no longer exists (cannot be retrieved by name from nodeLister) we delete the route
 // and OpenFlow flows associated with it.
 func (c *Controller) syncNodeRoute(nodeName string) error {

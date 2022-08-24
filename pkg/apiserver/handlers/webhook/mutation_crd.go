@@ -17,7 +17,7 @@ package webhook
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 
 	admv1 "k8s.io/api/admission/v1"
@@ -31,7 +31,7 @@ func HandleMutationNetworkPolicy(m *networkpolicy.NetworkPolicyMutator) http.Han
 		klog.V(2).Info("Received request to mutate Antrea-native Policy CRD")
 		var reqBody []byte
 		if r.Body != nil {
-			reqBody, _ = ioutil.ReadAll(r.Body)
+			reqBody, _ = io.ReadAll(r.Body)
 		}
 		if len(reqBody) == 0 {
 			klog.Errorf("Mutation webhook crdmutator received empty request body")

@@ -18,7 +18,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"strings"
 	"time"
 
@@ -64,7 +64,7 @@ var joinOpts *ClusterSetJoinConfig
 
 func (o *ClusterSetJoinConfig) validateAndComplete() error {
 	if o.ConfigFile != "" {
-		raw, err := ioutil.ReadFile(o.ConfigFile)
+		raw, err := os.ReadFile(o.ConfigFile)
 		if err != nil {
 			return err
 		}
@@ -86,7 +86,7 @@ func (o *ClusterSetJoinConfig) validateAndComplete() error {
 
 	// The precedence order is that TokenSecretName > TokenSecretFile > JoinConfigFile.
 	if o.TokenSecretName == "" && o.TokenSecretFile != "" {
-		raw, err := ioutil.ReadFile(o.TokenSecretFile)
+		raw, err := os.ReadFile(o.TokenSecretFile)
 		if err != nil {
 			return err
 		}

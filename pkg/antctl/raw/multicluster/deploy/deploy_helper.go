@@ -18,8 +18,9 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
+	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -145,7 +146,7 @@ func createResources(cmd *cobra.Command, content []byte) error {
 
 func deploy(cmd *cobra.Command, role string, version string, namespace string, filename string) error {
 	if filename != "" {
-		content, err := ioutil.ReadFile(filename)
+		content, err := os.ReadFile(filename)
 		if err != nil {
 			return err
 		}
@@ -163,7 +164,7 @@ func deploy(cmd *cobra.Command, role string, version string, namespace string, f
 			if err != nil {
 				return err
 			}
-			b, err := ioutil.ReadAll(resp.Body)
+			b, err := io.ReadAll(resp.Body)
 			if err != nil {
 				return err
 			}

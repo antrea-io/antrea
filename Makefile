@@ -146,7 +146,7 @@ DOCKER_ENV := \
 		-v $(DOCKER_CACHE)/gopath:/tmp/gopath \
 		-v $(DOCKER_CACHE)/gocache:/tmp/gocache \
 		-v $(CURDIR):/usr/src/antrea.io/antrea \
-		golang:1.17
+		golang:$(GO_VERSION)
 
 .PHONY: docker-bin
 docker-bin: $(DOCKER_CACHE)
@@ -258,7 +258,7 @@ fmt:
 
 .golangci-bin:
 	@echo "===> Installing Golangci-lint <==="
-	@curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $@ v1.41.1
+	@curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $@ v1.48.0
 
 .PHONY: golangci
 golangci: .golangci-bin
@@ -267,9 +267,9 @@ golangci: .golangci-bin
 	@echo "===> Running golangci (windows) <==="
 	@GOOS=windows $(CURDIR)/.golangci-bin/golangci-lint run -c $(CURDIR)/.golangci.yml
 	@echo "===> Running golangci for Octant plugin (linux) <==="
-	@cd plugins/octant && GOOS=linux $(CURDIR)/.golangci-bin/golangci-lint run -c $(CURDIR)/.golangci.yml
+	@cd plugins/octant && GOOS=linux CGO_ENABLED=0 $(CURDIR)/.golangci-bin/golangci-lint run -c $(CURDIR)/.golangci.yml
 	@echo "===> Running golangci for Octant plugin (windows) <==="
-	@cd plugins/octant && GOOS=windows $(CURDIR)/.golangci-bin/golangci-lint run -c $(CURDIR)/.golangci.yml
+	@cd plugins/octant && GOOS=windows CGO_ENABLED=0 $(CURDIR)/.golangci-bin/golangci-lint run -c $(CURDIR)/.golangci.yml
 
 .PHONY: golangci-fix
 golangci-fix: .golangci-bin
@@ -278,9 +278,9 @@ golangci-fix: .golangci-bin
 	@echo "===> Running golangci (windows) <==="
 	@GOOS=windows $(CURDIR)/.golangci-bin/golangci-lint run -c $(CURDIR)/.golangci.yml --fix
 	@echo "===> Running golangci for Octant plugin (linux) <==="
-	@cd plugins/octant && GOOS=linux $(CURDIR)/.golangci-bin/golangci-lint run -c $(CURDIR)/.golangci.yml --fix
+	@cd plugins/octant && GOOS=linux CGO_ENABLED=0 $(CURDIR)/.golangci-bin/golangci-lint run -c $(CURDIR)/.golangci.yml --fix
 	@echo "===> Running golangci for Octant plugin (windows) <==="
-	@cd plugins/octant && GOOS=windows $(CURDIR)/.golangci-bin/golangci-lint run -c $(CURDIR)/.golangci.yml --fix
+	@cd plugins/octant && GOOS=windows CGO_ENABLED=0 $(CURDIR)/.golangci-bin/golangci-lint run -c $(CURDIR)/.golangci.yml --fix
 
 .PHONY: clean
 clean:

@@ -51,11 +51,11 @@ const (
 // to construct a complete rule that can be used by reconciler to enforce.
 // The K8s NetworkPolicy object doesn't provide ID for its rule, here we
 // calculate an ID based on the rule's fields. That means:
-// 1. If a rule's selector/services/direction changes, it becomes "another" rule.
-// 2. If inserting rules before a rule or shuffling rules in a NetworkPolicy, we
-//    can know the existing rules don't change and skip processing them. Note that
-//    if a CNP/ANP rule's position (from top down) within a networkpolicy changes, it
-//    affects the Priority of the rule.
+//  1. If a rule's selector/services/direction changes, it becomes "another" rule.
+//  2. If inserting rules before a rule or shuffling rules in a NetworkPolicy, we
+//     can know the existing rules don't change and skip processing them. Note that
+//     if a CNP/ANP rule's position (from top down) within a networkpolicy changes, it
+//     affects the Priority of the rule.
 type rule struct {
 	// ID is calculated from the hash value of all other fields.
 	ID string
@@ -841,6 +841,7 @@ func (c *ruleCache) deleteNetworkPolicyLocked(uid string) {
 //   - The original policy has multiple AppliedToGroups and some AppliedToGroups' span does not include this Node.
 //   - The original policy is appliedTo-per-rule, and some of the rule's AppliedToGroups do not include this Node.
 //   - The original policy is appliedTo-per-rule, none of the rule's AppliedToGroups includes this Node, but some other rules' (in the same policy) AppliedToGroups include this Node.
+//
 // In these cases, it is not guaranteed that all AppliedToGroups in the rule will eventually be present in the cache.
 // Only the AppliedToGroups whose span includes this Node will eventually be received.
 func (c *ruleCache) GetCompletedRule(ruleID string) (completedRule *CompletedRule, effective bool, realizable bool) {

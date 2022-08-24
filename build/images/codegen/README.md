@@ -20,6 +20,7 @@ Here is the table of codegen images that have been uploaded:
 
 | Tag                            | Change                                  |
 | :----------------------------- | --------------------------------------- |
+| kubernetes-1.24.0-build.1      | Upgraded Go to v1.19                   |
 | kubernetes-1.24.0-build.0      | Add controller-gen v0.9.0               |
 | kubernetes-1.24.0              | Upgraded K8s libraries to v1.24.0       |
 | kubernetes-1.21.0-build.1      | Upgraded protoc-gen-go to v1.5.2        |

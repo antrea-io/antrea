@@ -17,7 +17,6 @@ package controllerinfo
 import (
 	"encoding/json"
 	"io"
-	"io/ioutil"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/klog/v2"
@@ -39,7 +38,7 @@ type Response struct {
 }
 
 func Transform(reader io.Reader, _ bool, _ map[string]string) (interface{}, error) {
-	b, err := ioutil.ReadAll(reader)
+	b, err := io.ReadAll(reader)
 	if err != nil {
 		return nil, err
 	}

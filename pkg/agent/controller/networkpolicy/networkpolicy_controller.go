@@ -62,13 +62,12 @@ var emptyWatch = watch.NewEmptyWatch()
 // and NetworkPolicies, feeding them to ruleCache, getting dirty rules from
 // ruleCache, invoking reconciler to reconcile them.
 //
-//          a.Feed AddressGroups,AppliedToGroups
-//               and NetworkPolicies
-//  |-----------|    <--------    |----------- |  c. Reconcile dirty rules |----------- |
-//  | ruleCache |                 | Controller |     ------------>         | reconciler |
-//  | ----------|    -------->    |----------- |                           |----------- |
-//              b. Notify dirty rules
-//
+//	        a.Feed AddressGroups,AppliedToGroups
+//	             and NetworkPolicies
+//	|-----------|    <--------    |----------- |  c. Reconcile dirty rules |----------- |
+//	| ruleCache |                 | Controller |     ------------>         | reconciler |
+//	| ----------|    -------->    |----------- |                           |----------- |
+//	            b. Notify dirty rules
 type Controller struct {
 	// antreaPolicyEnabled indicates whether Antrea NetworkPolicy and
 	// ClusterNetworkPolicy are enabled.

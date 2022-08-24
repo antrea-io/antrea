@@ -1,6 +1,6 @@
 module antrea.io/antrea/hack/netpol
 
-go 1.17
+go 1.19
 
 require (
 	github.com/imdario/mergo v0.3.8 // indirect

@@ -17,7 +17,6 @@ package exec
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os/exec"
 	"strings"
 	"sync"
@@ -81,11 +80,11 @@ func RunDockerExecCommand(container, cmd, workdir string, envs map[string]string
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		stdoutBytes, _ = ioutil.ReadAll(stdoutPipe)
+		stdoutBytes, _ = io.ReadAll(stdoutPipe)
 	}()
 	go func() {
 		defer wg.Done()
-		stderrBytes, _ = ioutil.ReadAll(stderrPipe)
+		stderrBytes, _ = io.ReadAll(stderrPipe)
 	}()
 	wg.Wait()
 
@@ -119,8 +118,8 @@ func RunDockerPsFilterCommand(filter string) (
 		return 0, "", "", fmt.Errorf("error when starting command: %v", err)
 	}
 
-	stdoutBytes, _ := ioutil.ReadAll(stdoutPipe)
-	stderrBytes, _ := ioutil.ReadAll(stderrPipe)
+	stdoutBytes, _ := io.ReadAll(stdoutPipe)
+	stderrBytes, _ := io.ReadAll(stderrPipe)
 
 	if err := dockerCmd.Wait(); err != nil {
 		if e, ok := err.(*exec.ExitError); ok {

@@ -17,7 +17,7 @@ package webhook
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 
 	admv1 "k8s.io/api/admission/v1"
@@ -32,7 +32,7 @@ func HandlerForValidateFunc(fn validateFunc) http.HandlerFunc {
 		klog.V(2).Info("Received request to validate Antrea CRD")
 		var reqBody []byte
 		if r.Body != nil {
-			reqBody, _ = ioutil.ReadAll(r.Body)
+			reqBody, _ = io.ReadAll(r.Body)
 		}
 		if len(reqBody) == 0 {
 			klog.Errorf("Validation webhook crdvalidator received empty request body")

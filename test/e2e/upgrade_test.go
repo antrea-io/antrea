@@ -34,10 +34,11 @@ func skipIfNotUpgradeTest(t *testing.T) {
 // TestUpgrade tests that some basic functionalities are not broken when
 // upgrading from one version of Antrea to another. At the moment it checks
 // that:
-//  * connectivity (intra and inter Node) is not broken
-//  * NetworkPolicy can take effect
-//  * namespaces can be deleted
-//  * Pod deletion leads to correct resource cleanup
+//   - connectivity (intra and inter Node) is not broken
+//   - NetworkPolicy can take effect
+//   - namespaces can be deleted
+//   - Pod deletion leads to correct resource cleanup
+//
 // To run the test, provide the -upgrade.toYML flag.
 func TestUpgrade(t *testing.T) {
 	skipIfNotUpgradeTest(t)

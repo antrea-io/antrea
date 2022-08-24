@@ -16,7 +16,6 @@ package log
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"strings"
 	"testing"
@@ -75,7 +74,7 @@ func testLogging() {
 }
 
 func TestKlogFileLimits(t *testing.T) {
-	testLogDir, err := ioutil.TempDir("", "antrea-log-test")
+	testLogDir, err := os.MkdirTemp("", "antrea-log-test")
 	if err != nil {
 		t.Errorf("Failed to create tmp log dir: %v", err)
 		return

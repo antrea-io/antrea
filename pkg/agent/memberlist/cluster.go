@@ -17,7 +17,7 @@ package memberlist
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net"
 	"reflect"
 	"sync"
@@ -152,7 +152,7 @@ func NewCluster(
 	conf.AdvertisePort = c.bindPort
 	conf.AdvertiseAddr = nodeIP.String()
 	conf.Events = &memberlist.ChannelEventDelegate{Ch: nodeEventCh}
-	conf.LogOutput = ioutil.Discard
+	conf.LogOutput = io.Discard
 	klog.V(1).InfoS("New memberlist cluster", "config", conf)
 
 	mList, err := memberlist.Create(conf)

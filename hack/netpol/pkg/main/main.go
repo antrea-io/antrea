@@ -274,7 +274,8 @@ func executeTests(k8s *Kubernetes, testList []*TestCase) []*TestCase {
 	return modifiedTestList
 }
 
-/**
+/*
+*
 ginkgo.It("should enforce multiple egress policies with egress allow-all policy taking precedence [Feature:NetworkPolicy]", func() {
 ginkgo.It("should enforce policies to check ingress and egress policies can be controlled independently based on PodSelector [Feature:NetworkPolicy]", func() {
 ginkgo.It("should enforce egress policy allowing traffic to a server in a different namespace based on PodSelector and NamespaceSelector [Feature:NetworkPolicy]", func() {
