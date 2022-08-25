@@ -406,7 +406,7 @@ func run(o *Options) error {
 			return fmt.Errorf("invalid Node Transport IPAddr in Node config: %v", nodeConfig)
 		}
 		memberlistCluster, err = memberlist.NewCluster(nodeTransportIP, o.config.ClusterMembershipPort,
-			nodeConfig.Name, nodeInformer, externalIPPoolInformer,
+			nodeConfig.Name, nodeInformer, externalIPPoolInformer, nil,
 		)
 		if err != nil {
 			return fmt.Errorf("error creating new memberlist cluster: %v", err)
