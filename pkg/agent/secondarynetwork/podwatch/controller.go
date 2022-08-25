@@ -52,7 +52,6 @@ const (
 const (
 	networkAttachDefAnnotationKey = "k8s.v1.cni.cncf.io/networks"
 	cniPath                       = "/opt/cni/bin/"
-	sriovInterfaceType            = "sriov"
 	defaultSecondaryInterfaceName = "eth1"
 	startIfaceIndex               = 1
 	endIfaceIndex                 = 11
@@ -364,9 +363,9 @@ func (pc *PodController) configureSecondaryNetwork(pod *corev1.Pod, networklist 
 			klog.InfoS("NetworkAttachmentDefinition is not of type 'antrea', ignoring", "NetworkAttachmentDefinition", klog.KObj(netDefCRD))
 			continue
 		}
-		if networkConfig.Mode != sriovInterfaceType {
+		if networkConfig.NetworkType != sriovNetworkType {
 			// same as above, if updated, we will not process the request again.
-			klog.ErrorS(err, "InterfaceType ('mode') not supported for Pod", "NetworkAttachmentDefinition", klog.KObj(netDefCRD), "Pod", klog.KObj(pod))
+			klog.ErrorS(err, "NetworkType not supported for Pod", "NetworkAttachmentDefinition", klog.KObj(netDefCRD), "Pod", klog.KObj(pod))
 			return nil
 		}
 		// secondary network information retrieved from API server. Proceed to configure secondary interface now.

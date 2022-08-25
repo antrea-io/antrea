@@ -49,7 +49,7 @@ const (
 	netAttachConfig = `{
     "cniVersion": "0.3.0",
     "type": "antrea",
-    "mode": "sriov",
+    "networkType": "sriov",
     "ipam": {
         "type": "whereabouts",
         "datastore": "kubernetes",
