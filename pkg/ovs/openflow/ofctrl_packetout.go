@@ -18,6 +18,7 @@ import (
 	"encoding/binary"
 	"math/rand"
 	"net"
+	"time"
 
 	"antrea.io/libOpenflow/openflow15"
 	"antrea.io/libOpenflow/protocol"
@@ -25,6 +26,9 @@ import (
 	"antrea.io/ofnet/ofctrl"
 	"k8s.io/klog/v2"
 )
+
+// #nosec G404: random number generator not used for security purposes
+var pktRand = rand.New(rand.NewSource(time.Now().UnixNano()))
 
 type ofPacketOutBuilder struct {
 	pktOut  *ofctrl.PacketOut
@@ -341,11 +345,13 @@ func (b *ofPacketOutBuilder) Done() *ofctrl.PacketOut {
 			b.pktOut.IPHeader.Length = 20 + b.pktOut.ICMPHeader.Len()
 		} else if b.pktOut.TCPHeader != nil {
 			b.pktOut.TCPHeader.HdrLen = 5
-			// #nosec G404: random number generator not used for security purposes
-			b.pktOut.TCPHeader.SeqNum = rand.Uint32()
+			if b.pktOut.TCPHeader.SeqNum == 0 {
+				// #nosec G404: random number generator not used for security purposes
+				b.pktOut.TCPHeader.SeqNum = pktRand.Uint32()
+			}
 			if b.pktOut.TCPHeader.AckNum == 0 {
 				// #nosec G404: random number generator not used for security purposes
-				b.pktOut.TCPHeader.AckNum = rand.Uint32()
+				b.pktOut.TCPHeader.AckNum = pktRand.Uint32()
 			}
 			b.pktOut.TCPHeader.Checksum = b.tcpHeaderChecksum()
 			b.pktOut.IPHeader.Length = 20 + b.pktOut.TCPHeader.Len()
@@ -368,7 +374,7 @@ func (b *ofPacketOutBuilder) Done() *ofctrl.PacketOut {
 		}
 		if b.pktOut.IPHeader.Id == 0 {
 			// #nosec G404: random number generator not used for security purposes
-			b.pktOut.IPHeader.Id = uint16(rand.Uint32())
+			b.pktOut.IPHeader.Id = uint16(pktRand.Uint32())
 		}
 		// Set IP version in the IP Header.
 		b.pktOut.IPHeader.Version = 0x4
@@ -382,11 +388,13 @@ func (b *ofPacketOutBuilder) Done() *ofctrl.PacketOut {
 			b.pktOut.IPv6Header.Length = b.pktOut.ICMPHeader.Len()
 		} else if b.pktOut.TCPHeader != nil {
 			b.pktOut.TCPHeader.HdrLen = 5
-			// #nosec G404: random number generator not used for security purposes
-			b.pktOut.TCPHeader.SeqNum = rand.Uint32()
+			if b.pktOut.TCPHeader.SeqNum == 0 {
+				// #nosec G404: random number generator not used for security purposes
+				b.pktOut.TCPHeader.SeqNum = pktRand.Uint32()
+			}
 			if b.pktOut.TCPHeader.AckNum == 0 {
 				// #nosec G404: random number generator not used for security purposes
-				b.pktOut.TCPHeader.AckNum = rand.Uint32()
+				b.pktOut.TCPHeader.AckNum = pktRand.Uint32()
 			}
 			b.pktOut.TCPHeader.Checksum = b.tcpHeaderChecksum()
 			b.pktOut.IPv6Header.Length = b.pktOut.TCPHeader.Len()
