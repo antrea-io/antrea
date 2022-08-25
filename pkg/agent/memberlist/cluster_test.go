@@ -45,9 +45,7 @@ type fakeCluster struct {
 	crdClient *fakeversioned.Clientset
 }
 
-func newFakeCluster(nodeConfig *config.NodeConfig, stopCh <-chan struct{}, i int) (*fakeCluster, error) {
-	port := apis.AntreaAgentClusterMembershipPort + i
-
+func newFakeCluster(nodeConfig *config.NodeConfig, stopCh <-chan struct{}) (*fakeCluster, error) {
 	clientset := fake.NewSimpleClientset()
 	informerFactory := informers.NewSharedInformerFactory(clientset, 0)
 
@@ -56,7 +54,10 @@ func newFakeCluster(nodeConfig *config.NodeConfig, stopCh <-chan struct{}, i int
 	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, 0)
 	ipPoolInformer := crdInformerFactory.Crd().V1alpha2().ExternalIPPools()
 	ip := net.ParseIP("127.0.0.1")
-	cluster, err := NewCluster(ip, port, nodeConfig.Name, nodeInformer, ipPoolInformer)
+	// Use mock network to avoid port conflict with system network and any impact on the system network.
+	mockNetwork := &memberlist.MockNetwork{}
+	mockTransport := mockNetwork.NewTransport(nodeConfig.Name)
+	cluster, err := NewCluster(ip, apis.AntreaAgentClusterMembershipPort, nodeConfig.Name, nodeInformer, ipPoolInformer, mockTransport)
 	if err != nil {
 		return nil, err
 	}
@@ -132,7 +133,7 @@ func TestCluster_Run(t *testing.T) {
 			expectEgressSelectResult: false,
 		},
 	}
-	for i, tCase := range testCases {
+	for _, tCase := range testCases {
 		t.Run(tCase.name, func(t *testing.T) {
 			nodeConfig := &config.NodeConfig{
 				Name:         localNodeName,
@@ -140,7 +141,7 @@ func TestCluster_Run(t *testing.T) {
 			}
 			stopCh := make(chan struct{})
 			defer close(stopCh)
-			fakeCluster, err := newFakeCluster(nodeConfig, stopCh, i)
+			fakeCluster, err := newFakeCluster(nodeConfig, stopCh)
 			if err != nil {
 				t.Fatalf("New fake memberlist server error: %v", err)
 			}
@@ -186,7 +187,7 @@ func TestCluster_RunClusterEvents(t *testing.T) {
 		Spec:       crdv1a2.EgressSpec{ExternalIPPool: fakeEIP1.Name, EgressIP: "1.1.1.2"},
 	}
 
-	fakeCluster, err := newFakeCluster(nodeConfig, stopCh, 10)
+	fakeCluster, err := newFakeCluster(nodeConfig, stopCh)
 	if err != nil {
 		t.Fatalf("New fake memberlist server error: %v", err)
 	}
