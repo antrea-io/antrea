@@ -129,6 +129,7 @@ func NewCluster(
 	nodeName string,
 	nodeInformer coreinformers.NodeInformer,
 	externalIPPoolInformer crdinformers.ExternalIPPoolInformer,
+	transport memberlist.Transport, // Parameterized for testing, could be left nil for production code.
 ) (*Cluster, error) {
 	// The Node join/leave events will be notified via it.
 	nodeEventCh := make(chan memberlist.NodeEvent, 1024)
@@ -148,6 +149,7 @@ func NewCluster(
 
 	conf := memberlist.DefaultLocalConfig()
 	conf.Name = c.nodeName
+	conf.Transport = transport
 	conf.BindPort = c.bindPort
 	conf.AdvertisePort = c.bindPort
 	conf.AdvertiseAddr = nodeIP.String()
