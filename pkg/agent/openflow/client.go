@@ -211,7 +211,7 @@ type Client interface {
 	InitialTLVMap() error
 
 	// Find Network Policy reference and OFpriority by conjunction ID.
-	GetPolicyInfoFromConjunction(ruleID uint32) (string, string)
+	GetPolicyInfoFromConjunction(ruleID uint32) (string, string, string)
 
 	// RegisterPacketInHandler uses SubscribePacketIn to get PacketIn message and process received
 	// packets through registered handlers.

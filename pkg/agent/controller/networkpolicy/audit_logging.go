@@ -66,7 +66,8 @@ type AntreaPolicyLogger struct {
 // logInfo will be set by retrieving info from packetin and register.
 type logInfo struct {
 	tableName   string // name of the table sending packetin
-	npRef       string // Network Policy name reference for Antrea NetworkPolicy
+	npRef       string // Network Policy name reference
+	ruleName    string // Network Policy rule name for Antrea-native policies
 	disposition string // Allow/Drop of the rule sending packetin
 	ofPriority  string // openflow priority of the flow sending packetin
 	srcIP       string // source IP of the traffic logged
@@ -134,7 +135,7 @@ func (l *AntreaPolicyLogger) updateLogKey(logMsg string, bufferLength time.Durat
 // LogDedupPacket logs information in ob based on disposition and duplication conditions.
 func (l *AntreaPolicyLogger) LogDedupPacket(ob *logInfo) {
 	// Deduplicate non-Allow packet log.
-	logMsg := fmt.Sprintf("%s %s %s %s %s %s %s %s %s %d", ob.tableName, ob.npRef, ob.disposition, ob.ofPriority, ob.srcIP, ob.srcPort, ob.destIP, ob.destPort, ob.protocolStr, ob.pktLength)
+	logMsg := fmt.Sprintf("%s %s %s %s %s %s %s %s %s %s %d", ob.tableName, ob.npRef, ob.ruleName, ob.disposition, ob.ofPriority, ob.srcIP, ob.srcPort, ob.destIP, ob.destPort, ob.protocolStr, ob.pktLength)
 	if ob.disposition == openflow.DispositionToString[openflow.DispositionAllow] {
 		l.anpLogger.Printf(logMsg)
 	} else {
@@ -188,27 +189,49 @@ func getNetworkPolicyInfo(pktIn *ofctrl.PacketIn, c *Controller, ob *logInfo) er
 
 	// Get disposition Allow or Drop.
 	match = getMatchRegField(matchers, openflow.APDispositionField)
-	info, err := getInfoInReg(match, openflow.APDispositionField.GetRange().ToNXRange())
+	disposition, err := getInfoInReg(match, openflow.APDispositionField.GetRange().ToNXRange())
 	if err != nil {
 		return fmt.Errorf("received error while unloading disposition from reg: %v", err)
 	}
-	ob.disposition = openflow.DispositionToString[info]
+	ob.disposition = openflow.DispositionToString[disposition]
 
 	// Set match to corresponding ingress/egress reg according to disposition.
-	match = getMatch(matchers, tableID, info)
+	match = getMatch(matchers, tableID, disposition)
 
 	if match != nil {
 		// Get NetworkPolicy full name and OF priority of the conjunction.
-		info, err = getInfoInReg(match, nil)
+		conjID, err := getInfoInReg(match, nil)
 		if err != nil {
 			return fmt.Errorf("received error while unloading conjunction id from reg: %v", err)
 		}
-		ob.npRef, ob.ofPriority = c.ofClient.GetPolicyInfoFromConjunction(info)
+		ob.npRef, ob.ofPriority, ob.ruleName = c.ofClient.GetPolicyInfoFromConjunction(conjID)
+		if ob.npRef == "" || ob.ofPriority == "" {
+			return fmt.Errorf("networkpolicy not found for conjunction id: %v", conjID)
+		}
+		// Placeholder for K8s NetworkPolicies without rule names.
+		if ob.ruleName == "" {
+			ob.ruleName = "<nil>"
+		}
 	} else {
 		// For K8s NetworkPolicy implicit drop action, we cannot get Namespace/name.
-		ob.npRef, ob.ofPriority = string(v1beta2.K8sNetworkPolicy), "-1"
+		ob.npRef, ob.ofPriority, ob.ruleName = string(v1beta2.K8sNetworkPolicy), "<nil>", "<nil>"
 	}
 	return nil
+}
+
+// getPacketInfo fills in IP, packet length, protocol, port number of logInfo ob.
+func getPacketInfo(packet *binding.Packet, ob *logInfo) {
+	ob.srcIP = packet.SourceIP.String()
+	ob.destIP = packet.DestinationIP.String()
+	ob.pktLength = packet.IPLength
+	ob.protocolStr = ip.IPProtocolNumberToString(packet.IPProto, "UnknownProtocol")
+	if ob.protocolStr == "TCP" || ob.protocolStr == "UDP" {
+		ob.srcPort = strconv.Itoa(int(packet.SourcePort))
+		ob.destPort = strconv.Itoa(int(packet.DestinationPort))
+	} else {
+		// Placeholders for ICMP packets without port numbers.
+		ob.srcPort, ob.destPort = "<nil>", "<nil>"
+	}
 }
 
 // logPacket retrieves information from openflow reg, controller cache, packet-in
@@ -226,17 +249,7 @@ func (c *Controller) logPacket(pktIn *ofctrl.PacketIn) error {
 	if err != nil {
 		return fmt.Errorf("received error while retrieving NetworkPolicy info: %v", err)
 	}
-	ob.srcIP = packet.SourceIP.String()
-	ob.destIP = packet.DestinationIP.String()
-	ob.pktLength = packet.IPLength
-	ob.protocolStr = ip.IPProtocolNumberToString(packet.IPProto, "UnknownProtocol")
-	if ob.protocolStr == "TCP" || ob.protocolStr == "UDP" {
-		ob.srcPort = strconv.Itoa(int(packet.SourcePort))
-		ob.destPort = strconv.Itoa(int(packet.DestinationPort))
-	} else {
-		// Placeholders for ICMP packets without port numbers.
-		ob.srcPort, ob.destPort = "<nil>", "<nil>"
-	}
+	getPacketInfo(packet, ob)
 
 	// Log the ob info to corresponding file w/ deduplication.
 	c.antreaPolicyLogger.LogDedupPacket(ob)
