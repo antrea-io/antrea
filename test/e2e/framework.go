@@ -1145,6 +1145,8 @@ type PodBuilder struct {
 	Labels             map[string]string
 	NodeName           string
 	MutateFunc         func(*corev1.Pod)
+	ResourceRequests   corev1.ResourceList
+	ResourceLimits     corev1.ResourceList
 }
 
 func NewPodBuilder(name, ns, image string) *PodBuilder {
@@ -1219,6 +1221,12 @@ func (b *PodBuilder) WithMutateFunc(f func(*corev1.Pod)) *PodBuilder {
 	return b
 }
 
+func (b *PodBuilder) WithResources(ResourceRequests, ResourceLimits corev1.ResourceList) *PodBuilder {
+	b.ResourceRequests = ResourceRequests
+	b.ResourceLimits = ResourceLimits
+	return b
+}
+
 func (b *PodBuilder) Create(data *TestData) error {
 	containerName := b.ContainerName
 	if containerName == "" {
@@ -1234,6 +1242,10 @@ func (b *PodBuilder) Create(data *TestData) error {
 				Args:            b.Args,
 				Env:             b.Env,
 				Ports:           b.Ports,
+				Resources: corev1.ResourceRequirements{
+					Requests: b.ResourceRequests,
+					Limits:   b.ResourceLimits,
+				},
 				SecurityContext: &corev1.SecurityContext{
 					Privileged: &b.IsPrivileged,
 				},
