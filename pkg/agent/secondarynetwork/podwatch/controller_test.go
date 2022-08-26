@@ -46,6 +46,10 @@ const (
 	testNamespace = "nsA"
 	testNode      = "test-node"
 
+	// the ipam information is not actually used when testing, given that we
+	// use a mock IPAMDelegator. But this is what the ipam information would
+	// look like when using the actual IPAMDelegator implementation, which
+	// invokes the whereabouts plugin.
 	netAttachConfig = `{
     "cniVersion": "0.3.0",
     "type": "antrea",
@@ -53,6 +57,9 @@ const (
     "ipam": {
         "type": "whereabouts",
         "datastore": "kubernetes",
+        "kubernetes": {
+            "kubeconfig": "/host/etc/cni/net.d/whereabouts.d/whereabouts.kubeconfig"
+        },
         "range": "148.14.24.0/24"
     }
 }`
