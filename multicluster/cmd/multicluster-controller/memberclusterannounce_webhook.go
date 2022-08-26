@@ -19,6 +19,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	admissionv1 "k8s.io/api/admission/v1"
@@ -85,8 +86,8 @@ func (v *memberClusterAnnounceValidator) Handle(ctx context.Context, req admissi
 		}
 
 		if len(clusterSetList.Items) == 0 {
-			klog.ErrorS(err, "No ClusterSet found", "Namespace", v.namespace)
-			return admission.Errored(http.StatusPreconditionFailed, err)
+			klog.ErrorS(nil, "No ClusterSet found", "Namespace", v.namespace)
+			return admission.Errored(http.StatusPreconditionFailed, fmt.Errorf("no ClusterSet found in Namespace %s", v.namespace))
 		}
 		clusterSet := clusterSetList.Items[0]
 		if clusterSet.Name != memberClusterAnnounce.ClusterSetID {
