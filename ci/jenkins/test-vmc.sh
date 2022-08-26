@@ -42,7 +42,7 @@ provider="vsphere"
 SSH_USERNAME='capv'
 AWS_SSH_KEY_PATH=""
 
-_usage="Usage: $0 [--cluster-name <VMCClusterNameToUse>] [--kubeconfig <KubeconfigSavePath>] [--workdir <HomePath>]
+_usage="Usage: $0 [--cluster-name <VMCClusterNameToUse>] [--kubeconfig <KubeconfigSavePath>] [--workdir <HomePath>] [--k8s-version <k8s-version>] [--test-os <test-os>]
                   [--log-mode <SonobuoyResultLogLevel>] [--testcase <e2e|conformance|all-features-conformance|whole-conformance|networkpolicy>]
                   [--garbage-collection] [--setup-only] [--cleanup-only] [--coverage] [--test-only] [--codecov-token] [--registry]
                   [--provider vsphere/aws] [--aws-region <Region>] [--aws-access-key-id <blah>] [--aws-secret-access-key <blah>] [--aws-vpc-id <VPCID>] [--aws-subnet-id <SubnetID> [--aws-ssh-key-path <blah>]]
@@ -51,6 +51,8 @@ Setup a VMC cluster to run K8s e2e community tests (E2e, Conformance, all featur
 
         --cluster-name           The cluster name to be used for the generated VMC cluster.
         --kubeconfig             Path to save kubeconfig of generated VMC cluster.
+        --k8s-version            Test k8s version, like v1.19.1
+        --test-os                Test OS version, like 'ubuntu-18.04','ubuntu-20.04'
         --workdir                Home path for Go, vSphere information and antrea_logs during cluster setup. Default is $WORKDIR.
         --log-mode               Use the flag to set either 'report', 'detail', or 'dump' level data for sonobouy results.
         --testcase               The testcase to run: e2e, conformance, all-features-conformance, whole-conformance or networkpolicy.
@@ -92,6 +94,10 @@ case $key in
     ;;
     --k8s-version)
     K8S_VERSION="$2"
+    shift 2
+    ;;
+    --test-os)
+    TEST_OS="$2"
     shift 2
     ;;
     --workdir)
