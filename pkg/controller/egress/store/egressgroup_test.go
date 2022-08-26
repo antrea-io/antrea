@@ -1,3 +1,17 @@
+// Copyright 2022 Antrea Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package store
 
 import (
@@ -9,7 +23,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
-	types2 "k8s.io/apimachinery/pkg/types"
+	k8stypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/watch"
 
@@ -22,12 +36,15 @@ func TestWatchEgressGroupEvent(t *testing.T) {
 	egTypeInvalid := types.EgressGroup{}
 
 	egressName := "egress"
-	egressUID := types2.UID("uid")
+	egressUID := k8stypes.UID("uid")
+	pod1 := &controlplane.PodReference{Name: "pod1", Namespace: "namespace1"}
 	eg1 := &types.EgressGroup{
-		SpanMeta:          types.SpanMeta{NodeNames: sets.NewString("node-local")},
-		UID:               egressUID,
-		Name:              egressName,
-		GroupMemberByNode: map[string]controlplane.GroupMemberSet{},
+		SpanMeta: types.SpanMeta{NodeNames: sets.NewString("node-local")},
+		UID:      egressUID,
+		Name:     egressName,
+		GroupMemberByNode: map[string]controlplane.GroupMemberSet{
+			"node-local": controlplane.NewGroupMemberSet(&controlplane.GroupMember{Pod: pod1}),
+		},
 	}
 
 	eg2 := &types.EgressGroup{
@@ -37,13 +54,13 @@ func TestWatchEgressGroupEvent(t *testing.T) {
 		GroupMemberByNode: map[string]controlplane.GroupMemberSet{},
 	}
 
-	pod1 := &controlplane.PodReference{Name: "pod1", Namespace: "namespace1"}
+	pod2 := &controlplane.PodReference{Name: "pod2", Namespace: "namespace2"}
 	eg3 := &types.EgressGroup{
 		SpanMeta: types.SpanMeta{NodeNames: sets.NewString("node-local")},
 		UID:      egressUID,
 		Name:     egressName,
 		GroupMemberByNode: map[string]controlplane.GroupMemberSet{
-			"node-local": controlplane.NewGroupMemberSet(&controlplane.GroupMember{Pod: pod1}),
+			"node-local": controlplane.NewGroupMemberSet(&controlplane.GroupMember{Pod: pod2}),
 		},
 	}
 
@@ -68,7 +85,7 @@ func TestWatchEgressGroupEvent(t *testing.T) {
 						Name: egressName,
 						UID:  egressUID,
 					},
-					GroupMembers: nil,
+					GroupMembers: []controlplane.GroupMember{{Pod: pod1}},
 				}},
 			},
 		},
@@ -87,7 +104,7 @@ func TestWatchEgressGroupEvent(t *testing.T) {
 						Name: egressName,
 						UID:  egressUID,
 					},
-					GroupMembers: nil,
+					GroupMembers: []controlplane.GroupMember{{Pod: pod1}},
 				}},
 				{Type: watch.Deleted, Object: &controlplane.EgressGroup{
 					TypeMeta: metav1.TypeMeta{},
@@ -116,7 +133,7 @@ func TestWatchEgressGroupEvent(t *testing.T) {
 						Name: egressName,
 						UID:  egressUID,
 					},
-					GroupMembers: nil,
+					GroupMembers: []controlplane.GroupMember{{Pod: pod1}},
 				}},
 				{Type: watch.Modified, Object: &controlplane.EgressGroupPatch{
 					TypeMeta: metav1.TypeMeta{},
@@ -124,7 +141,8 @@ func TestWatchEgressGroupEvent(t *testing.T) {
 						Name: egressName,
 						UID:  egressUID,
 					},
-					AddedGroupMembers: []controlplane.GroupMember{{Pod: pod1}},
+					AddedGroupMembers:   []controlplane.GroupMember{{Pod: pod2}},
+					RemovedGroupMembers: []controlplane.GroupMember{{Pod: pod1}},
 				}},
 			},
 		},
@@ -143,7 +161,7 @@ func TestWatchEgressGroupEvent(t *testing.T) {
 						Name: egressName,
 						UID:  egressUID,
 					},
-					GroupMembers: nil,
+					GroupMembers: []controlplane.GroupMember{{Pod: pod1}},
 				}},
 				{Type: watch.Modified, Object: &controlplane.EgressGroupPatch{
 					TypeMeta: metav1.TypeMeta{},
@@ -151,33 +169,35 @@ func TestWatchEgressGroupEvent(t *testing.T) {
 						Name: egressName,
 						UID:  egressUID,
 					},
-					AddedGroupMembers: []controlplane.GroupMember{{Pod: pod1}},
+					AddedGroupMembers:   []controlplane.GroupMember{{Pod: pod2}},
+					RemovedGroupMembers: []controlplane.GroupMember{{Pod: pod1}},
 				}},
 			},
 		},
 	}
 	for _, tc := range tests {
-		store := NewEgressGroupStore()
-		w, err := store.Watch(context.Background(), "", labels.Everything(), tc.fieldSelector)
-		if err != nil {
-			t.Fatalf("Failed to watch object: %v", err)
-		}
-		tc.operations(store)
-		ch := w.ResultChan()
-		for _, expectedEvent := range tc.expectedEvents {
-			select {
-			case actualEvent := <-ch:
-				if !assert.Equal(t, expectedEvent, actualEvent) {
-					t.Errorf("Expected event %v, got %v", expectedEvent, actualEvent)
-				}
-			case <-time.After(5 * time.Second):
-				t.Errorf("Wait expected event timeout")
+		t.Run(tc.name, func(t *testing.T) {
+			store := NewEgressGroupStore()
+			w, err := store.Watch(context.Background(), "", labels.Everything(), tc.fieldSelector)
+			if err != nil {
+				t.Fatalf("Failed to watch object: %v", err)
 			}
-		}
-		select {
-		case obj, ok := <-ch:
-			t.Errorf("Unexpected excess event: %v %t", obj, ok)
-		default:
-		}
+			defer w.Stop()
+			tc.operations(store)
+			ch := w.ResultChan()
+			for _, expectedEvent := range tc.expectedEvents {
+				select {
+				case actualEvent := <-ch:
+					assert.Equal(t, expectedEvent, actualEvent)
+				case <-time.After(5 * time.Second):
+					t.Errorf("Wait expected event timeout")
+				}
+			}
+			select {
+			case obj, ok := <-ch:
+				t.Errorf("Unexpected excess event: %v %t", obj, ok)
+			default:
+			}
+		})
 	}
 }
