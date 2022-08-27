@@ -613,12 +613,12 @@ func TestServiceGroupInstallAndUninstall(t *testing.T) {
 	groupID1 := binding.GroupIDType(1)
 	groupID2 := binding.GroupIDType(2)
 	for _, tc := range []struct {
-		groupID         binding.GroupIDType
-		sessionAffinity bool
-		deleteSucceeded bool
+		groupID          binding.GroupIDType
+		sessionAffinity  bool
+		deleteGroupError error
 	}{
-		{groupID: groupID1, deleteSucceeded: false, sessionAffinity: true},
-		{groupID: groupID2, deleteSucceeded: true, sessionAffinity: false},
+		{groupID: groupID1, deleteGroupError: fmt.Errorf("failed to delete"), sessionAffinity: true},
+		{groupID: groupID2, deleteGroupError: nil, sessionAffinity: false},
 	} {
 		mockGroup := ovsoftest.NewMockGroup(ctrl)
 		mockBucketBuilder := ovsoftest.NewMockBucketBuilder(ctrl)
@@ -638,10 +638,10 @@ func TestServiceGroupInstallAndUninstall(t *testing.T) {
 		require.NoError(t, err)
 		_, exists := client.featureService.groupCache.Load(tc.groupID)
 		assert.True(t, exists)
-		mockOFBridge.EXPECT().DeleteGroup(tc.groupID).Return(tc.deleteSucceeded)
+		mockOFBridge.EXPECT().DeleteGroup(tc.groupID).Return(tc.deleteGroupError)
 		err = client.UninstallServiceGroup(tc.groupID)
 		_, exists = client.featureService.groupCache.Load(tc.groupID)
-		if tc.deleteSucceeded {
+		if tc.deleteGroupError == nil {
 			assert.NoError(t, err)
 			assert.False(t, exists)
 		} else {
@@ -675,11 +675,11 @@ func TestMulticastGroupInstallAndUninstall(t *testing.T) {
 	groupID1 := binding.GroupIDType(1)
 	groupID2 := binding.GroupIDType(2)
 	for _, tc := range []struct {
-		groupID         binding.GroupIDType
-		deleteSucceeded bool
+		groupID          binding.GroupIDType
+		deleteGroupError error
 	}{
-		{groupID: groupID1, deleteSucceeded: false},
-		{groupID: groupID2, deleteSucceeded: true},
+		{groupID: groupID1, deleteGroupError: fmt.Errorf("failed to delete")},
+		{groupID: groupID2, deleteGroupError: nil},
 	} {
 		mockGroup := ovsoftest.NewMockGroup(ctrl)
 		mockBucketBuilder := ovsoftest.NewMockBucketBuilder(ctrl)
@@ -696,9 +696,9 @@ func TestMulticastGroupInstallAndUninstall(t *testing.T) {
 		require.NoError(t, err)
 		_, exists := client.featureMulticast.groupCache.Load(tc.groupID)
 		assert.True(t, exists)
-		mockOFBridge.EXPECT().DeleteGroup(tc.groupID).Return(tc.deleteSucceeded)
+		mockOFBridge.EXPECT().DeleteGroup(tc.groupID).Return(tc.deleteGroupError)
 		err = client.UninstallMulticastGroup(tc.groupID)
-		if tc.deleteSucceeded {
+		if tc.deleteGroupError == nil {
 			assert.NoError(t, err)
 			_, exists = client.featureMulticast.groupCache.Load(tc.groupID)
 			assert.False(t, exists)

@@ -96,7 +96,7 @@ type Bridge interface {
 	DeleteTable(id uint8) bool
 	CreateGroupTypeAll(id GroupIDType) Group
 	CreateGroup(id GroupIDType) Group
-	DeleteGroup(id GroupIDType) bool
+	DeleteGroup(id GroupIDType) error
 	CreateMeter(id MeterIDType, flags ofctrl.MeterFlag) Meter
 	DeleteMeter(id MeterIDType) bool
 	DeleteMeterAll() error
@@ -183,9 +183,9 @@ type OFEntry interface {
 	// Modify / Delete methods can be called on this object. This method
 	// should be called if a reconnection event happened.
 	Reset()
-	// GetBundleMessage returns ofctrl.OpenFlowModMessage which can be used in Bundle messages. operation specifies what
-	// operation is expected to be taken on the OFEntry.
-	GetBundleMessage(operation OFOperation) (ofctrl.OpenFlowModMessage, error)
+	// GetBundleMessages returns a slice of ofctrl.OpenFlowModMessage which can be used in Bundle messages. operation
+	// specifies what operation is expected to be taken on the OFEntry.
+	GetBundleMessages(operation OFOperation) ([]ofctrl.OpenFlowModMessage, error)
 }
 
 type Flow interface {
