@@ -124,7 +124,7 @@ func (f *ofFlow) FlowProtocol() Protocol {
 	return f.protocol
 }
 
-func (f *ofFlow) GetBundleMessage(entryOper OFOperation) (ofctrl.OpenFlowModMessage, error) {
+func (f *ofFlow) GetBundleMessages(entryOper OFOperation) ([]ofctrl.OpenFlowModMessage, error) {
 	var operation int
 	switch entryOper {
 	case AddMessage:
@@ -138,7 +138,7 @@ func (f *ofFlow) GetBundleMessage(entryOper OFOperation) (ofctrl.OpenFlowModMess
 	if err != nil {
 		return nil, err
 	}
-	return message, nil
+	return []ofctrl.OpenFlowModMessage{message}, nil
 }
 
 // CopyToBuilder returns a new FlowBuilder that copies the table, protocols,

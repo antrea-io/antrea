@@ -191,10 +191,10 @@ func (mr *MockBridgeMockRecorder) DeleteFlowsByCookie(arg0, arg1 interface{}) *g
 }
 
 // DeleteGroup mocks base method
-func (m *MockBridge) DeleteGroup(arg0 openflow.GroupIDType) bool {
+func (m *MockBridge) DeleteGroup(arg0 openflow.GroupIDType) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "DeleteGroup", arg0)
-	ret0, _ := ret[0].(bool)
+	ret0, _ := ret[0].(error)
 	return ret0
 }
 
@@ -569,19 +569,19 @@ func (mr *MockFlowMockRecorder) FlowProtocol() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FlowProtocol", reflect.TypeOf((*MockFlow)(nil).FlowProtocol))
 }
 
-// GetBundleMessage mocks base method
-func (m *MockFlow) GetBundleMessage(arg0 openflow.OFOperation) (ofctrl.OpenFlowModMessage, error) {
+// GetBundleMessages mocks base method
+func (m *MockFlow) GetBundleMessages(arg0 openflow.OFOperation) ([]ofctrl.OpenFlowModMessage, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetBundleMessage", arg0)
-	ret0, _ := ret[0].(ofctrl.OpenFlowModMessage)
+	ret := m.ctrl.Call(m, "GetBundleMessages", arg0)
+	ret0, _ := ret[0].([]ofctrl.OpenFlowModMessage)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// GetBundleMessage indicates an expected call of GetBundleMessage
-func (mr *MockFlowMockRecorder) GetBundleMessage(arg0 interface{}) *gomock.Call {
+// GetBundleMessages indicates an expected call of GetBundleMessages
+func (mr *MockFlowMockRecorder) GetBundleMessages(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBundleMessage", reflect.TypeOf((*MockFlow)(nil).GetBundleMessage), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBundleMessages", reflect.TypeOf((*MockFlow)(nil).GetBundleMessages), arg0)
 }
 
 // IsDropFlow mocks base method
@@ -2234,19 +2234,19 @@ func (mr *MockGroupMockRecorder) Delete() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockGroup)(nil).Delete))
 }
 
-// GetBundleMessage mocks base method
-func (m *MockGroup) GetBundleMessage(arg0 openflow.OFOperation) (ofctrl.OpenFlowModMessage, error) {
+// GetBundleMessages mocks base method
+func (m *MockGroup) GetBundleMessages(arg0 openflow.OFOperation) ([]ofctrl.OpenFlowModMessage, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetBundleMessage", arg0)
-	ret0, _ := ret[0].(ofctrl.OpenFlowModMessage)
+	ret := m.ctrl.Call(m, "GetBundleMessages", arg0)
+	ret0, _ := ret[0].([]ofctrl.OpenFlowModMessage)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// GetBundleMessage indicates an expected call of GetBundleMessage
-func (mr *MockGroupMockRecorder) GetBundleMessage(arg0 interface{}) *gomock.Call {
+// GetBundleMessages indicates an expected call of GetBundleMessages
+func (mr *MockGroupMockRecorder) GetBundleMessages(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBundleMessage", reflect.TypeOf((*MockGroup)(nil).GetBundleMessage), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBundleMessages", reflect.TypeOf((*MockGroup)(nil).GetBundleMessages), arg0)
 }
 
 // KeyString mocks base method

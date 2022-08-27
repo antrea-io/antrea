@@ -157,12 +157,14 @@ func (f *featureService) replayFlows() []binding.Flow {
 }
 
 func (f *featureService) replayGroups() {
+	var groups []binding.OFEntry
 	f.groupCache.Range(func(id, value interface{}) bool {
 		group := value.(binding.Group)
 		group.Reset()
-		if err := group.Add(); err != nil {
-			klog.Errorf("Error when replaying cached group %d: %v", id, err)
-		}
+		groups = append(groups, group)
 		return true
 	})
+	if err := f.bridge.AddOFEntriesInBundle(groups, nil, nil); err != nil {
+		klog.ErrorS(err, "error when replaying cached groups for Service")
+	}
 }
