@@ -635,7 +635,8 @@ func run(o *Options) error {
 			localPodInformer,
 			nodeConfig.Name,
 			cniPodInfoStore,
-			cniServer)
+			// safe to call given that cniServer.Initialize has been called already.
+			cniServer.GetPodConfigurator())
 		go podWatchController.Run(stopCh)
 	}
 
