@@ -204,7 +204,7 @@ func (s *CNIServer) isCNIVersionSupported(reqVersion string) bool {
 	return exist
 }
 
-func (s *CNIServer) valiateCNIAndIPAMType(cniConfig *CNIConfig) *cnipb.CniCmdResponse {
+func (s *CNIServer) validateCNIAndIPAMType(cniConfig *CNIConfig) *cnipb.CniCmdResponse {
 	var ipamType string
 	if cniConfig.IPAM != nil {
 		ipamType = cniConfig.IPAM.Type
@@ -251,7 +251,7 @@ func (s *CNIServer) validateRequestMessage(request *cnipb.CniCmdRequest) (*CNICo
 		return nil, s.incompatibleCniVersionResponse(cniVersion)
 	}
 
-	if resp := s.valiateCNIAndIPAMType(cniConfig); resp != nil {
+	if resp := s.validateCNIAndIPAMType(cniConfig); resp != nil {
 		return nil, resp
 	}
 	if !s.isChaining && !cniConfig.secondaryNetworkIPAM {

@@ -27,15 +27,16 @@ type IPAMConfig struct {
 	Gateway    string    `json:"gateway,omitempty"`
 }
 
-type SecondaryNetworkConfig struct {
-	CNIVersion string     `json:"cniVersion,omitempty"`
-	Name       string     `json:"name,omitempty"`
-	Type       string     `json:"type,omitempty"`
-	IPAM       IPAMConfig `json:"ipam,omitempty"`
-}
+const (
+	sriovNetworkType = "sriov"
+)
 
-type SecondaryNetworkObject struct {
-	NetworkName   string `json:"name,omitempty"`
-	InterfaceName string `json:"interface,omitempty"`
-	InterfaceType string `json:"type"`
+type SecondaryNetworkConfig struct {
+	CNIVersion string `json:"cniVersion,omitempty"`
+	Name       string `json:"name,omitempty"`
+	// Set type to "antrea"
+	Type string `json:"type,omitempty"`
+	// Set networkType to "sriov"
+	NetworkType string     `json:"networkType,omitempty"`
+	IPAM        IPAMConfig `json:"ipam,omitempty"`
 }
