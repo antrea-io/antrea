@@ -158,6 +158,6 @@ func (b *bucketBuilder) Weight(val uint16) BucketBuilder {
 }
 
 func (b *bucketBuilder) Done() Group {
-	b.group.ofctrl.AddBuckets(b.bucket)
+	b.group.ofctrl.Buckets = append(b.group.ofctrl.Buckets, b.bucket)
 	return b.group
 }
