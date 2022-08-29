@@ -266,23 +266,44 @@ func TestFlowExporter_initFlowExporter(t *testing.T) {
 	metrics.InitializeConnectionMetrics()
 	udpAddr, err := net.ResolveUDPAddr("udp", "127.0.0.1:0")
 	if err != nil {
-		t.Fatalf("error when resolving UDP address: %v", err)
+		t.Fatalf("Error when resolving UDP address: %v", err)
 	}
-	conn, err := net.ListenUDP("udp", udpAddr)
+	conn1, err := net.ListenUDP("udp", udpAddr)
 	if err != nil {
-		t.Fatalf("error when creating a local server: %v", err)
+		t.Fatalf("Error when creating a local server: %v", err)
 	}
-	defer conn.Close()
-	exp := &FlowExporter{
-		process: nil,
-		exporterInput: exporter.ExporterInput{
-			CollectorProtocol: conn.LocalAddr().Network(),
-			CollectorAddress:  conn.LocalAddr().String(),
-		},
+	defer conn1.Close()
+	tcpAddr, err := net.ResolveTCPAddr("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Error when resolving TCP address: %v", err)
 	}
-	err = exp.initFlowExporter()
-	assert.NoError(t, err)
-	checkTotalReconnectionsMetric(t)
+	conn2, err := net.ListenTCP("tcp", tcpAddr)
+	if err != nil {
+		t.Fatalf("Error when creating a local server: %v", err)
+	}
+	defer conn2.Close()
+
+	for _, tc := range []struct {
+		protocol               string
+		address                string
+		expectedTempRefTimeout uint32
+	}{
+		{conn1.LocalAddr().Network(), conn1.LocalAddr().String(), uint32(1800)},
+		{conn2.Addr().Network(), conn2.Addr().String(), uint32(0)},
+	} {
+		exp := &FlowExporter{
+			process: nil,
+			exporterInput: exporter.ExporterInput{
+				CollectorProtocol: tc.protocol,
+				CollectorAddress:  tc.address,
+			},
+		}
+		err = exp.initFlowExporter()
+		assert.NoError(t, err)
+		assert.Equal(t, tc.expectedTempRefTimeout, exp.exporterInput.TempRefTimeout)
+		checkTotalReconnectionsMetric(t)
+		metrics.ReconnectionsToFlowCollector.Dec()
+	}
 }
 
 func checkTotalReconnectionsMetric(t *testing.T) {
@@ -422,7 +443,8 @@ func testSendFlowRecords(t *testing.T, v4Enabled bool, v6Enabled bool) {
 		elementsListv6: elemListv6,
 		templateIDv4:   testTemplateIDv4,
 		templateIDv6:   testTemplateIDv6,
-		v4Enabled:      true}
+		v4Enabled:      v4Enabled,
+		v6Enabled:      v6Enabled}
 
 	if v4Enabled {
 		runSendFlowRecordTests(t, flowExp, false)
@@ -650,4 +672,45 @@ func createElement(name string, enterpriseID uint32) ipfixentities.InfoElementWi
 	element, _ := ipfixregistry.GetInfoElement(name, enterpriseID)
 	ieWithValue, _ := ipfixentities.DecodeAndCreateInfoElementWithValue(element, nil)
 	return ieWithValue
+}
+
+func TestFlowExporter_prepareExporterInputArgs(t *testing.T) {
+	for _, tc := range []struct {
+		collectorAddr               string
+		collectorProto              string
+		nodeName                    string
+		expectedObservationDomainID uint32
+		expectedIsEncrypted         bool
+		expectedProto               string
+	}{
+		{"10.10.0.79:4739", "tls", "kind-worker", 801257890, true, "tcp"},
+		{"10.10.0.80:4739", "tcp", "kind-worker", 801257890, false, "tcp"},
+		{"10.10.0.81:4739", "udp", "kind-worker", 801257890, false, "udp"},
+	} {
+		expInput := prepareExporterInputArgs(tc.collectorAddr, tc.collectorProto, tc.nodeName)
+		assert.Equal(t, tc.collectorAddr, expInput.CollectorAddress)
+		assert.Equal(t, tc.expectedObservationDomainID, expInput.ObservationDomainID)
+		assert.Equal(t, tc.expectedIsEncrypted, expInput.IsEncrypted)
+		assert.Equal(t, tc.expectedProto, expInput.CollectorProtocol)
+	}
+}
+
+func TestFlowExporter_findFlowType(t *testing.T) {
+	conn1 := flowexporter.Connection{SourcePodName: "podA", DestinationPodName: "podB"}
+	conn2 := flowexporter.Connection{SourcePodName: "podA", DestinationPodName: ""}
+	for _, tc := range []struct {
+		isNetworkPolicyOnly bool
+		conn                flowexporter.Connection
+		expectedFlowType    uint8
+	}{
+		{true, conn1, 1},
+		{true, conn2, 2},
+		{false, conn1, 0},
+	} {
+		flowExp := &FlowExporter{
+			isNetworkPolicyOnly: tc.isNetworkPolicyOnly,
+		}
+		flowType := flowExp.findFlowType(tc.conn)
+		assert.Equal(t, tc.expectedFlowType, flowType)
+	}
 }

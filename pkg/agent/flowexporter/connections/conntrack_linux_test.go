@@ -282,3 +282,24 @@ func TestNetLinkFlowToAntreaConnection(t *testing.T) {
 	antreaFlow = NetlinkFlowToAntreaConnection(netlinkFlow)
 	assert.Equalf(t, expectedAntreaFlow, antreaFlow, "both flows should be equal")
 }
+
+func TestStateToString(t *testing.T) {
+	for _, tc := range []struct {
+		state          uint8
+		expectedResult string
+	}{
+		{0, "NONE"},
+		{1, "SYN_SENT"},
+		{2, "SYN_RECV"},
+		{3, "ESTABLISHED"},
+		{4, "FIN_WAIT"},
+		{5, "CLOSE_WAIT"},
+		{6, "LAST_ACK"},
+		{7, "TIME_WAIT"},
+		{8, "CLOSE"},
+		{9, "SYN_SENT2"},
+	} {
+		result := stateToString(tc.state)
+		assert.Equal(t, tc.expectedResult, result)
+	}
+}
