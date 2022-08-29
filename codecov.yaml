@@ -44,8 +44,14 @@ coverage:
         flags:
           - kind-e2e-tests
 
-flag_management:
-  default_rules:
+flags:
+  unit-tests:
+    carryforward: true
+  integration-tests:
+    carryforward: true
+  e2e-tests:
+    carryforward: true
+  kind-e2e-tests:
     carryforward: true
 
 ignore:
