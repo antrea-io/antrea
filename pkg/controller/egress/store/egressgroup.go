@@ -45,7 +45,6 @@ type egressGroupEvent struct {
 // 4. If nodeName is specified, only GroupMembers that hosted by the Node will be in the event.
 func (event *egressGroupEvent) ToWatchEvent(selectors *storage.Selectors, isInitEvent bool) *watch.Event {
 	prevObjSelected, currObjSelected := isSelected(event.Key, event.PrevGroup, event.CurrGroup, selectors, isInitEvent)
-
 	// If nodeName is specified in selectors, only GroupMembers that hosted by the Node should be in the event.
 	nodeName, nodeSpecified := selectors.Field.RequiresExactMatch("nodeName")
 
@@ -169,7 +168,7 @@ func NewEgressGroupStore() storage.Interface {
 	return ram.NewStore(EgressGroupKeyFunc, nil, genEgressGroupEvent, keyAndSpanSelectFunc, func() runtime.Object { return new(controlplane.EgressGroup) })
 }
 
-// keyAndSpanSelectFunc returns whether the provided selectors matches the key and/or the nodeNames.
+// keyAndSpanSelectFunc returns whether the provided selectors match the key and/or the nodeNames.
 func keyAndSpanSelectFunc(selectors *storage.Selectors, key string, obj interface{}) bool {
 	// If Key is present in selectors, the provided key must match it.
 	if selectors.Key != "" && key != selectors.Key {
