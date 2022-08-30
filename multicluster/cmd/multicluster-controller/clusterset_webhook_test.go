@@ -168,6 +168,16 @@ func TestWebhookClusterSetEvents(t *testing.T) {
 		AdmissionRequest: *labelUpdateReqCopy,
 	}
 
+	memberUpdatedReqInvalidUser := admission.Request{
+		AdmissionRequest: *memberUpdateReq1Copy,
+	}
+	memberUpdatedReqInvalidUser.UserInfo = authenticationv1.UserInfo{
+		Username: "system:user:east-access-sa",
+		UID:      "4842eb60-68e3-4e38-adad-3abfd6117241",
+		Groups: []string{
+			"system:authenticated",
+		},
+	}
 	tests := []struct {
 		name               string
 		req                admission.Request
@@ -199,6 +209,13 @@ func TestWebhookClusterSetEvents(t *testing.T) {
 			newClusterSet:      memberUpdatedClusterSet,
 			req:                memberUpdatedReq1,
 			isAllowed:          true,
+		},
+		{
+			name:               "update a new ClusterSet's member list with  invalid user info",
+			existingClusterSet: existingClusterSet1,
+			newClusterSet:      memberUpdatedClusterSet,
+			req:                memberUpdatedReqInvalidUser,
+			isAllowed:          false,
 		},
 		{
 			name:               "update a new ClusterSet's member list without mc ServiceAccount",
