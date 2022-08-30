@@ -18,13 +18,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/apimachinery/pkg/util/wait"
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
@@ -54,8 +52,7 @@ const (
 	cniPath                       = "/opt/cni/bin/"
 	defaultSecondaryInterfaceName = "eth1"
 	startIfaceIndex               = 1
-	endIfaceIndex                 = 11
-	maxRandIndex                  = 25
+	endIfaceIndex                 = 101
 )
 
 // Set resyncPeriod to 0 to disable resyncing.
@@ -117,23 +114,21 @@ func podKeyGet(pod *corev1.Pod) string {
 	return pod.Namespace + "/" + pod.Name
 }
 
-func generatePodSecondaryIfaceName(podCNIInfo *cnipodcache.CNIConfigInfo) string {
+func generatePodSecondaryIfaceName(podCNIInfo *cnipodcache.CNIConfigInfo) (string, error) {
 	// Assign default interface name, if podCNIInfo.NetworkConfig is empty.
 	if count := len(podCNIInfo.NetworkConfig); count == 0 {
-		return defaultSecondaryInterfaceName
+		return defaultSecondaryInterfaceName, nil
 	} else {
-		// Generate new interface name (eth1,eth2..eth10) and return to caller.
+		// Generate new interface name (eth1,eth2..eth100) and return to caller.
 		for ifaceIndex := startIfaceIndex; ifaceIndex < endIfaceIndex; ifaceIndex++ {
 			ifName := fmt.Sprintf("%s%d", "eth", ifaceIndex)
 			_, exist := podCNIInfo.NetworkConfig[ifName]
 			if !exist {
-				return ifName
+				return ifName, nil
 			}
 		}
 	}
-	// Generates random interface name and return. Above execution will try to ensure allocating interface names in order.
-	// If none available between eth1 to eth10 (already used per Pod), generate random name with the integer range.
-	return string("eth") + strconv.Itoa(rand.IntnRange(endIfaceIndex, maxRandIndex))
+	return "", fmt.Errorf("no more interface names")
 }
 
 func whereaboutsArgsBuilder(cmd string, interfaceName string, podCNIInfo *cnipodcache.CNIConfigInfo) *invoke.Args {
@@ -309,7 +304,12 @@ func (pc *PodController) configureSriovAsSecondaryInterface(pod *corev1.Pod, net
 func (pc *PodController) configureSecondaryInterface(pod *corev1.Pod, network *netdefv1.NetworkSelectionElement, podCNIInfo *cnipodcache.CNIConfigInfo, cniConfig []byte) error {
 	// Generate and assign new interface name, If secondary interface name was not provided in Pod annotation.
 	if len(network.InterfaceRequest) == 0 {
-		network.InterfaceRequest = generatePodSecondaryIfaceName(podCNIInfo)
+		var err error
+		if network.InterfaceRequest, err = generatePodSecondaryIfaceName(podCNIInfo); err != nil {
+			klog.ErrorS(err, "cannot generate interface name", "Pod", klog.KObj(pod))
+			// do not return error: no need to requeue
+			return nil
+		}
 	}
 	// PluginArgs added to provide additional arguments required for whereabouts v0.5.1 and above.
 	cmdArgs := whereaboutsArgsBuilder("ADD", network.InterfaceRequest, podCNIInfo)
@@ -366,7 +366,7 @@ func (pc *PodController) configureSecondaryNetwork(pod *corev1.Pod, networklist 
 		if networkConfig.NetworkType != sriovNetworkType {
 			// same as above, if updated, we will not process the request again.
 			klog.ErrorS(err, "NetworkType not supported for Pod", "NetworkAttachmentDefinition", klog.KObj(netDefCRD), "Pod", klog.KObj(pod))
-			return nil
+			continue
 		}
 		// secondary network information retrieved from API server. Proceed to configure secondary interface now.
 		if err = pc.configureSecondaryInterface(pod, network, podCNIInfo, cniConfig); err != nil {

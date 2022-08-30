@@ -275,11 +275,11 @@ func TestPodControllerAddPod(t *testing.T) {
 			podIP,
 			netdefv1.NetworkSelectionElement{
 				Name:             "net1",
-				InterfaceRequest: "eth1",
+				InterfaceRequest: "eth10",
 			},
 			netdefv1.NetworkSelectionElement{
 				Name:             "net2",
-				InterfaceRequest: "eth2",
+				InterfaceRequest: "eth11",
 			},
 		)
 		network1 := testNetwork("net1")
@@ -290,7 +290,7 @@ func TestPodControllerAddPod(t *testing.T) {
 			testNamespace,
 			containerID,
 			containerNetNs(containerID),
-			"eth1",
+			"eth10",
 			defaultMTU,
 			gomock.Any(),
 			gomock.Any(),
@@ -300,7 +300,7 @@ func TestPodControllerAddPod(t *testing.T) {
 			testNamespace,
 			containerID,
 			containerNetNs(containerID),
-			"eth2",
+			"eth11",
 			defaultMTU,
 			gomock.Any(),
 			gomock.Any(),
@@ -351,7 +351,7 @@ func TestPodControllerAddPod(t *testing.T) {
 		defer ctrl.Finish()
 		podController, _, _ := newPodController(ctrl)
 
-		pod, cniConfig := testPod(podName, containerID, podIP)
+		pod, cniConfig := testPod(podName, containerID, "")
 		network := testNetwork(networkName)
 
 		podController.podCache.AddCNIConfigInfo(cniConfig)
@@ -401,6 +401,107 @@ func TestPodControllerAddPod(t *testing.T) {
 		require.NoError(t, err, "error when creating test Pod")
 		_, err = podController.netAttachDefClient.NetworkAttachmentDefinitions(networkNamespace).Create(context.Background(), network, metav1.CreateOptions{})
 		require.NoError(t, err, "error when creating test NetworkAttachmentDefinition")
+		assert.NoError(t, podController.handleAddUpdatePod(pod))
+	})
+
+	t.Run("no interface name", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		podController, mockIPAM, interfaceConfigurator := newPodController(ctrl)
+
+		pod, cniConfig := testPod(
+			podName,
+			containerID,
+			podIP,
+			netdefv1.NetworkSelectionElement{
+				Name:             networkName,
+				InterfaceRequest: "",
+			},
+			netdefv1.NetworkSelectionElement{
+				Name:             networkName,
+				InterfaceRequest: "",
+			},
+		)
+		network := testNetwork(networkName)
+
+		interfaceConfigurator.EXPECT().ConfigureSriovSecondaryInterface(
+			podName,
+			testNamespace,
+			containerID,
+			containerNetNs(containerID),
+			"eth1",
+			defaultMTU,
+			gomock.Any(),
+			gomock.Any(),
+		)
+		interfaceConfigurator.EXPECT().ConfigureSriovSecondaryInterface(
+			podName,
+			testNamespace,
+			containerID,
+			containerNetNs(containerID),
+			"eth2",
+			defaultMTU,
+			gomock.Any(),
+			gomock.Any(),
+		)
+
+		mockIPAM.EXPECT().GetIPAMSubnetAddress(gomock.Any(), gomock.Any()).Return(testIPAMResult("148.14.24.100/24"), nil)
+		mockIPAM.EXPECT().GetIPAMSubnetAddress(gomock.Any(), gomock.Any()).Return(testIPAMResult("148.14.24.101/24"), nil)
+
+		podController.podCache.AddCNIConfigInfo(cniConfig)
+		_, err := podController.kubeClient.CoreV1().Pods(testNamespace).Create(context.Background(), pod, metav1.CreateOptions{})
+		require.NoError(t, err, "error when creating test Pod")
+		_, err = podController.netAttachDefClient.NetworkAttachmentDefinitions(testNamespace).Create(context.Background(), network, metav1.CreateOptions{})
+		require.NoError(t, err, "error when creating test NetworkAttachmentDefinition")
+		assert.NoError(t, podController.handleAddUpdatePod(pod))
+	})
+
+	t.Run("error when creating interface", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		podController, mockIPAM, interfaceConfigurator := newPodController(ctrl)
+
+		network := testNetwork(networkName)
+
+		interfaceConfigurator.EXPECT().ConfigureSriovSecondaryInterface(
+			podName,
+			testNamespace,
+			containerID,
+			containerNetNs(containerID),
+			interfaceName,
+			defaultMTU,
+			gomock.Any(),
+			gomock.Any(),
+		).Return(fmt.Errorf("error when creating interface"))
+
+		mockIPAM.EXPECT().GetIPAMSubnetAddress(gomock.Any(), gomock.Any()).Return(testIPAMResult("148.14.24.100/24"), nil)
+		mockIPAM.EXPECT().DelIPAMSubnetAddress(gomock.Any(), gomock.Any())
+
+		podController.podCache.AddCNIConfigInfo(cniConfig)
+		_, err := podController.kubeClient.CoreV1().Pods(testNamespace).Create(context.Background(), pod, metav1.CreateOptions{})
+		require.NoError(t, err, "error when creating test Pod")
+		_, err = podController.netAttachDefClient.NetworkAttachmentDefinitions(testNamespace).Create(context.Background(), network, metav1.CreateOptions{})
+		require.NoError(t, err, "error when creating test NetworkAttachmentDefinition")
+		assert.Error(t, podController.handleAddUpdatePod(pod))
+	})
+
+	t.Run("invalid networks annotation", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		podController, _, _ := newPodController(ctrl)
+
+		pod, cniConfig := testPod(podName, containerID, podIP)
+		pod.Annotations = map[string]string{
+			networkAttachDefAnnotationKey: "<invalid>",
+		}
+		network := testNetwork(networkName)
+
+		podController.podCache.AddCNIConfigInfo(cniConfig)
+		_, err := podController.kubeClient.CoreV1().Pods(testNamespace).Create(context.Background(), pod, metav1.CreateOptions{})
+		require.NoError(t, err, "error when creating test Pod")
+		_, err = podController.netAttachDefClient.NetworkAttachmentDefinitions(testNamespace).Create(context.Background(), network, metav1.CreateOptions{})
+		require.NoError(t, err, "error when creating test NetworkAttachmentDefinition")
+		// we don't expect an error here, no requeueing
 		assert.NoError(t, podController.handleAddUpdatePod(pod))
 	})
 }
