@@ -84,9 +84,9 @@ type Client interface {
 	// InstallServiceGroup installs a group for Service LB. Each endpoint
 	// is a bucket of the group. For now, each bucket has the same weight.
 	InstallServiceGroup(groupID binding.GroupIDType, withSessionAffinity bool, endpoints []proxy.Endpoint) error
-	// UninstallGroup removes the group and its buckets that are
-	// installed by InstallServiceGroup or InstallMulticastGroup.
-	UninstallGroup(groupID binding.GroupIDType) error
+	// UninstallServiceGroup removes the group and its buckets that are
+	// installed by InstallServiceGroup.
+	UninstallServiceGroup(groupID binding.GroupIDType) error
 
 	// InstallEndpointFlows installs flows for accessing Endpoints.
 	// If an Endpoint is on the current Node, then flows for hairpin and endpoint
@@ -314,6 +314,9 @@ type Client interface {
 	UninstallTrafficControlReturnPortFlow(returnOFPort uint32) error
 
 	InstallMulticastGroup(ofGroupID binding.GroupIDType, localReceivers []uint32, remoteNodeReceivers []net.IP) error
+	// UninstallMulticastGroup removes the group and its buckets that are
+	// installed by InstallMulticastGroup.
+	UninstallMulticastGroup(groupID binding.GroupIDType) error
 
 	// SendIGMPRemoteReportPacketOut sends the IGMP report packet as a packet-out to remote Nodes via the tunnel port.
 	SendIGMPRemoteReportPacketOut(
@@ -627,7 +630,7 @@ func (c *client) InstallServiceGroup(groupID binding.GroupIDType, withSessionAff
 	return nil
 }
 
-func (c *client) UninstallGroup(groupID binding.GroupIDType) error {
+func (c *client) UninstallServiceGroup(groupID binding.GroupIDType) error {
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
 	if !c.bridge.DeleteGroup(groupID) {
@@ -1319,6 +1322,16 @@ func (c *client) InstallMulticastGroup(groupID binding.GroupIDType, localReceive
 	if err := c.featureMulticast.multicastReceiversGroup(groupID, table.GetID(), localReceivers, remoteNodeReceivers); err != nil {
 		return err
 	}
+	return nil
+}
+
+func (c *client) UninstallMulticastGroup(groupID binding.GroupIDType) error {
+	c.replayMutex.RLock()
+	defer c.replayMutex.RUnlock()
+	if !c.bridge.DeleteGroup(groupID) {
+		return fmt.Errorf("group %d delete failed", groupID)
+	}
+	c.featureMulticast.groupCache.Delete(groupID)
 	return nil
 }
 
