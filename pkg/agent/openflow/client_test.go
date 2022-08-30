@@ -34,6 +34,7 @@ import (
 	ovsoftest "antrea.io/antrea/pkg/ovs/openflow/testing"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 	utilip "antrea.io/antrea/pkg/util/ip"
+	k8sproxy "antrea.io/antrea/third_party/proxy"
 )
 
 const bridgeName = "dummy-br"
@@ -581,4 +582,122 @@ func TestMulticlusterFlowsInstallation(t *testing.T) {
 	require.NoError(t, err)
 	_, ok = client.featureMulticluster.cachedFlows.Load(cacheKey)
 	require.False(t, ok)
+}
+
+func TestServiceGroupInstallAndUninstall(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockOFBridge := ovsoftest.NewMockBridge(ctrl)
+	m := oftest.NewMockOFEntryOperations(ctrl)
+	ofClient := NewClient(bridgeName, bridgeMgmtAddr, true, false, false, false, true, false, false, false, false)
+	client := ofClient.(*client)
+	client.bridge = mockOFBridge
+	client.cookieAllocator = cookie.NewAllocator(0)
+	client.ofEntryOperations = m
+	client.nodeConfig = nodeConfig
+	client.networkConfig = networkConfig
+	client.serviceConfig = serviceConfig
+	client.ipProtocols = []binding.Protocol{binding.ProtocolIP}
+	client.generatePipelines()
+	endpoints := []k8sproxy.Endpoint{
+		&k8sproxy.BaseEndpointInfo{
+			Endpoint: net.JoinHostPort("192.168.1.2", "8081"),
+			IsLocal:  true,
+		},
+		&k8sproxy.BaseEndpointInfo{
+			Endpoint: net.JoinHostPort("10.20.1.11", "8081"),
+			IsLocal:  false,
+		},
+	}
+	groupID1 := binding.GroupIDType(1)
+	groupID2 := binding.GroupIDType(2)
+	for _, tc := range []struct {
+		groupID         binding.GroupIDType
+		sessionAffinity bool
+		deleteSucceeded bool
+	}{
+		{groupID: groupID1, deleteSucceeded: false, sessionAffinity: true},
+		{groupID: groupID2, deleteSucceeded: true, sessionAffinity: false},
+	} {
+		mockGroup := ovsoftest.NewMockGroup(ctrl)
+		mockBucketBuilder := ovsoftest.NewMockBucketBuilder(ctrl)
+		mockOFBridge.EXPECT().CreateGroup(tc.groupID).Return(mockGroup).Times(1)
+		mockGroup.EXPECT().ResetBuckets().Return(mockGroup).Times(1)
+		mockGroup.EXPECT().Bucket().Return(mockBucketBuilder).Times(len(endpoints))
+		mockBucketBuilder.EXPECT().Weight(gomock.Any()).Return(mockBucketBuilder).Times(len(endpoints))
+		mockBucketBuilder.EXPECT().LoadToRegField(gomock.Any(), gomock.Any()).Return(mockBucketBuilder).AnyTimes()
+		if tc.sessionAffinity {
+			mockBucketBuilder.EXPECT().ResubmitToTable(ServiceLBTable.GetID()).Return(mockBucketBuilder).Times(len(endpoints))
+		} else {
+			mockBucketBuilder.EXPECT().ResubmitToTable(EndpointDNATTable.GetID()).Return(mockBucketBuilder).Times(len(endpoints))
+		}
+		mockBucketBuilder.EXPECT().Done().Return(mockGroup).Times(len(endpoints))
+		mockGroup.EXPECT().Add().Return(nil)
+		err := client.InstallServiceGroup(tc.groupID, tc.sessionAffinity, endpoints)
+		require.NoError(t, err)
+		_, exists := client.featureService.groupCache.Load(tc.groupID)
+		assert.True(t, exists)
+		mockOFBridge.EXPECT().DeleteGroup(tc.groupID).Return(tc.deleteSucceeded)
+		err = client.UninstallServiceGroup(tc.groupID)
+		_, exists = client.featureService.groupCache.Load(tc.groupID)
+		if tc.deleteSucceeded {
+			assert.NoError(t, err)
+			assert.False(t, exists)
+		} else {
+			assert.Error(t, err)
+			assert.True(t, exists)
+		}
+	}
+}
+
+func TestMulticastGroupInstallAndUninstall(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockOFBridge := ovsoftest.NewMockBridge(ctrl)
+	m := oftest.NewMockOFEntryOperations(ctrl)
+	ofClient := NewClient(bridgeName, bridgeMgmtAddr, false, true, false, false, false, false, true, false, false)
+	client := ofClient.(*client)
+	client.bridge = mockOFBridge
+	client.cookieAllocator = cookie.NewAllocator(0)
+	client.ofEntryOperations = m
+	client.nodeConfig = nodeConfig
+	client.networkConfig = networkConfig
+	client.serviceConfig = serviceConfig
+	client.ipProtocols = []binding.Protocol{binding.ProtocolIP}
+	client.generatePipelines()
+	localReceivers := []uint32{101, 102}
+	groupID1 := binding.GroupIDType(1)
+	groupID2 := binding.GroupIDType(2)
+	for _, tc := range []struct {
+		groupID         binding.GroupIDType
+		deleteSucceeded bool
+	}{
+		{groupID: groupID1, deleteSucceeded: false},
+		{groupID: groupID2, deleteSucceeded: true},
+	} {
+		mockGroup := ovsoftest.NewMockGroup(ctrl)
+		mockBucketBuilder := ovsoftest.NewMockBucketBuilder(ctrl)
+		mockOFBridge.EXPECT().CreateGroupTypeAll(tc.groupID).Return(mockGroup).Times(1)
+		mockGroup.EXPECT().ResetBuckets().Return(mockGroup).Times(1)
+		mockGroup.EXPECT().Bucket().Return(mockBucketBuilder).Times(len(localReceivers))
+		mockBucketBuilder.EXPECT().LoadToRegField(gomock.Any(), gomock.Any()).Return(mockBucketBuilder).AnyTimes()
+		mockBucketBuilder.EXPECT().ResubmitToTable(MulticastIngressRuleTable.GetID()).Return(mockBucketBuilder).Times(len(localReceivers))
+		mockBucketBuilder.EXPECT().Done().Return(mockGroup).Times(len(localReceivers))
+		mockGroup.EXPECT().Add().Return(nil)
+		err := client.InstallMulticastGroup(tc.groupID, localReceivers)
+		require.NoError(t, err)
+		_, exists := client.featureMulticast.groupCache.Load(tc.groupID)
+		assert.True(t, exists)
+		mockOFBridge.EXPECT().DeleteGroup(tc.groupID).Return(tc.deleteSucceeded)
+		err = client.UninstallMulticastGroup(tc.groupID)
+		if tc.deleteSucceeded {
+			assert.NoError(t, err)
+			_, exists = client.featureMulticast.groupCache.Load(tc.groupID)
+			assert.False(t, exists)
+		} else {
+			assert.Error(t, err)
+			_, exists = client.featureMulticast.groupCache.Load(tc.groupID)
+			assert.True(t, exists)
+		}
+	}
 }
