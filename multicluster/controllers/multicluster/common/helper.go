@@ -62,26 +62,6 @@ func RemoveStringFromSlice(slice []string, s string) (result []string) {
 	return
 }
 
-// FilterEndpointSubsets keeps IPs only and removes others which are unnecessary information for other member clusters.
-func FilterEndpointSubsets(subsets []corev1.EndpointSubset) []corev1.EndpointSubset {
-	newSubsets := []corev1.EndpointSubset{}
-	for _, s := range subsets {
-		subset := corev1.EndpointSubset{}
-		newAddresses := []corev1.EndpointAddress{}
-		for _, addr := range s.Addresses {
-			newAddresses = append(newAddresses, corev1.EndpointAddress{
-				IP: addr.IP,
-			})
-		}
-		if len(newAddresses) > 0 {
-			subset.Addresses = newAddresses
-			subset.Ports = s.Ports
-			newSubsets = append(newSubsets, subset)
-		}
-	}
-	return newSubsets
-}
-
 func GetServiceEndpointSubset(svc *corev1.Service) corev1.EndpointSubset {
 	var epSubset corev1.EndpointSubset
 	for _, ip := range svc.Spec.ClusterIPs {
