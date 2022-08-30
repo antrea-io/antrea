@@ -29,18 +29,30 @@ type Response struct {
 }
 
 func Transform(r interface{}, single bool) (interface{}, error) {
+	if single {
+		return listTransform([]multiclusterv1alpha1.ClusterSet{r.(multiclusterv1alpha1.ClusterSet)})
+	}
 	return listTransform(r)
 }
 
 func listTransform(l interface{}) (interface{}, error) {
-	clusterSet := l.(multiclusterv1alpha1.ClusterSet)
+	clusterSets := l.([]multiclusterv1alpha1.ClusterSet)
 	var result []interface{}
 
-	for i := range clusterSet.Status.ClusterStatuses {
-		r := clusterSet.Status.ClusterStatuses[i]
-		for j := range r.Conditions {
-			condition := r.Conditions[j]
-			o, _ := objectTransform(clusterSet, r, condition)
+	for _, clusterSet := range clusterSets {
+		if len(clusterSet.Status.ClusterStatuses) > 0 {
+			for i := range clusterSet.Status.ClusterStatuses {
+				r := clusterSet.Status.ClusterStatuses[i]
+				for j := range r.Conditions {
+					condition := r.Conditions[j]
+					o, _ := objectTransform(clusterSet, r, condition)
+					result = append(result, o.(Response))
+				}
+			}
+		} else {
+			// When the ClusterSet has no status, we should print it with empty status.
+			o, _ := objectTransform(clusterSet, multiclusterv1alpha1.ClusterStatus{},
+				multiclusterv1alpha1.ClusterCondition{})
 			result = append(result, o.(Response))
 		}
 	}

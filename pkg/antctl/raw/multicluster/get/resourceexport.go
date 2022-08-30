@@ -151,6 +151,6 @@ func runEResourceExport(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	return output(resExports, false, optionsResourceExport.outputFormat, resourceexport.Transform)
+	return output(resExports, false, optionsResourceExport.outputFormat, cmd.OutOrStdout(), resourceexport.Transform)
 
 }

@@ -15,19 +15,20 @@
 package get
 
 import (
-	"os"
+	"io"
 
-	antcltOutput "antrea.io/antrea/pkg/antctl/output"
+	antctlOutput "antrea.io/antrea/pkg/antctl/output"
 )
 
-func output(resources interface{}, single bool, outputFormat string, transform func(r interface{}, single bool) (interface{}, error)) error {
+func output(resources interface{}, single bool, outputFormat string, output io.Writer,
+	transform func(r interface{}, single bool) (interface{}, error)) error {
 	switch outputFormat {
 	case "json":
-		if err := antcltOutput.JsonOutput(resources, os.Stdout); err != nil {
+		if err := antctlOutput.JsonOutput(resources, output); err != nil {
 			return err
 		}
 	case "yaml":
-		if err := antcltOutput.YamlOutput(resources, os.Stdout); err != nil {
+		if err := antctlOutput.YamlOutput(resources, output); err != nil {
 			return err
 		}
 	default:
@@ -35,7 +36,7 @@ func output(resources interface{}, single bool, outputFormat string, transform f
 		if err != nil {
 			return err
 		}
-		err = antcltOutput.TableOutputForGetCommands(obj, os.Stdout)
+		err = antctlOutput.TableOutputForGetCommands(obj, output)
 		if err != nil {
 			return err
 		}
