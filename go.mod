@@ -3,7 +3,7 @@ module antrea.io/antrea
 go 1.19
 
 require (
-	antrea.io/libOpenflow v0.8.0
+	antrea.io/libOpenflow v0.8.1
 	antrea.io/ofnet v0.6.1
 	github.com/ClickHouse/clickhouse-go v1.5.4
 	github.com/DATA-DOG/go-sqlmock v1.5.0
@@ -25,7 +25,7 @@ require (
 	github.com/golang/mock v1.6.0
 	github.com/golang/protobuf v1.5.2
 	github.com/google/btree v1.1.2
-	github.com/google/uuid v1.1.2
+	github.com/google/uuid v1.3.0
 	github.com/hashicorp/memberlist v0.4.0
 	github.com/k8snetworkplumbingwg/network-attachment-definition-client v1.1.0
 	github.com/k8snetworkplumbingwg/sriov-cni v2.1.0+incompatible
