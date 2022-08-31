@@ -62,6 +62,7 @@ function generate_mocks {
     "pkg/ovs/ovsconfig OVSBridgeClient testing"
     "pkg/ovs/ovsctl OVSCtlClient testing"
     "pkg/querier AgentNetworkPolicyInfoQuerier,AgentMulticastInfoQuerier testing"
+    "pkg/flowaggregator/querier FlowAggregatorQuerier testing"
     "third_party/proxy Provider testing"
   )
 
