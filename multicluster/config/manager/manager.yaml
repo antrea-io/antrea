@@ -14,6 +14,8 @@ spec:
     metadata:
       labels:
         component: antrea-mc-controller
+      annotations:
+        checksum/config: checksum-placeholder
     spec:
       hostNetwork: true
       containers:
