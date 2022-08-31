@@ -306,7 +306,7 @@ func (pc *PodController) configureSecondaryInterface(pod *corev1.Pod, network *n
 	if len(network.InterfaceRequest) == 0 {
 		var err error
 		if network.InterfaceRequest, err = generatePodSecondaryIfaceName(podCNIInfo); err != nil {
-			klog.ErrorS(err, "cannot generate interface name", "Pod", klog.KObj(pod))
+			klog.ErrorS(err, "Cannot generate interface name", "Pod", klog.KObj(pod))
 			// do not return error: no need to requeue
 			return nil
 		}
