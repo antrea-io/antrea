@@ -45,7 +45,7 @@ func HandleFunc(faq querier.FlowAggregatorQuerier) http.HandlerFunc {
 		err := json.NewEncoder(w).Encode(metricsResponse)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
-			klog.Errorf("Error when encoding AntreaAgentInfo to json: %v", err)
+			klog.Errorf("Error when encoding record metrics to json: %v", err)
 		}
 	}
 }
