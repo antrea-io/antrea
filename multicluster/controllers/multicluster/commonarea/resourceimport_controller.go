@@ -96,14 +96,6 @@ func NewResourceImportReconciler(client client.Client, scheme *runtime.Scheme, l
 func (r *ResourceImportReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	klog.V(2).InfoS("Reconciling ResourceImport", "resourceimport", req.NamespacedName)
 	// TODO: Must check whether this ResourceImport must be reconciled by this member cluster. Check `spec.clusters` field.
-	if r.localClusterClient == nil {
-		return ctrl.Result{}, errors.New("localClusterClient has not been initialized properly, no local cluster client")
-	}
-
-	if r.remoteCommonArea == nil {
-		return ctrl.Result{}, errors.New("remoteCommonArea has not been initialized properly, no remote common area")
-	}
-
 	var resImp multiclusterv1alpha1.ResourceImport
 	err := r.remoteCommonArea.Get(ctx, req.NamespacedName, &resImp)
 	var isDeleted bool
@@ -123,7 +115,6 @@ func (r *ResourceImportReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 			}
 		}
 	}
-
 	switch resImp.Spec.Kind {
 	case common.ServiceImportKind:
 		if isDeleted {
@@ -145,6 +136,9 @@ func (r *ResourceImportReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 			return r.handleResImpDeleteForClusterInfo(ctx, req, &resImp)
 		}
 		return r.handleResImpUpdateForClusterInfo(ctx, req, &resImp)
+	}
+	if isDeleted {
+		r.installedResImports.Delete(resImp)
 	}
 	return ctrl.Result{}, nil
 }
@@ -375,7 +369,7 @@ func getMCServiceImport(resImp *multiclusterv1alpha1.ResourceImport) *k8smcsv1al
 func (r *ResourceImportReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	// Ignore status update event via GenerationChangedPredicate
 	generationPredicate := predicate.GenerationChangedPredicate{}
-	// Register this controller to ignore LabelIdentity kind of ResourceImport
+	// Register this filter to ignore LabelIdentity kind of ResourceImport
 	labelIdentityResImportFilter := func(object client.Object) bool {
 		if resImport, ok := object.(*multiclusterv1alpha1.ResourceImport); ok {
 			return resImport.Spec.Kind != common.LabelIdentityKind

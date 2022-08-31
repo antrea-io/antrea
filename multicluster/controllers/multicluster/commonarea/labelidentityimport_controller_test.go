@@ -122,10 +122,6 @@ func TestLabelIdentityResourceImportReconclie(t *testing.T) {
 		fakeRemoteClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(tt.existResImp).Build()
 		remoteCluster := NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", localClusterID, "default")
 		r := NewLabelIdentityResourceImportReconciler(fakeClient, scheme, fakeClient, localClusterID, "default", remoteCluster)
-
-		if tt.existResImp != nil {
-			r.installedLabelImports.Add(*tt.existResImp)
-		}
 		if tt.isDeleted {
 			r.remoteCommonArea.Delete(ctx, tt.existResImp)
 		}

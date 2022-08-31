@@ -63,7 +63,7 @@ type ResourceImportSpec struct {
 	// If imported resource is AntreaClusterNetworkPolicy.
 	ClusterNetworkPolicy *v1alpha1.ClusterNetworkPolicySpec `json:"clusternetworkpolicy,omitempty"`
 	// If imported resource kind is LabelIdentity.
-	LabelIdentity *LabelIdentitySpec `json:"labelidentity,omitempty"`
+	LabelIdentity *LabelIdentitySpec `json:"labelIdentity,omitempty"`
 	// If imported resource kind is unknown.
 	Raw *RawResourceImport `json:"raw,omitempty"`
 }

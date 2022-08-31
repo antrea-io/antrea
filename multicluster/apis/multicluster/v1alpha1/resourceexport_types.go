@@ -70,7 +70,7 @@ type ResourceExportSpec struct {
 	// If exported resource is AntreaClusterNetworkPolicy.
 	ClusterNetworkPolicy *v1alpha1.ClusterNetworkPolicySpec `json:"clusterNetworkPolicy,omitempty"`
 	// If exported resource is LabelIdentity of a cluster.
-	LabelIdentity *LabelIdentityExport `json:"labelIdentities,omitempty"`
+	LabelIdentity *LabelIdentityExport `json:"labelIdentity,omitempty"`
 	// If exported resource kind is unknown.
 	Raw *RawResourceExport `json:"raw,omitempty"`
 }
