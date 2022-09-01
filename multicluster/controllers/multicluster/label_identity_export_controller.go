@@ -39,8 +39,8 @@ import (
 )
 
 const (
-	// TODO(grayson) evalute what is an appropriate max id
-	maxAlloctedID = 65535
+	// 24 bits are available in VNI. The max value 16777215 is reserved for unknown ID.
+	maxAlloctedID = 16777214
 )
 
 type (

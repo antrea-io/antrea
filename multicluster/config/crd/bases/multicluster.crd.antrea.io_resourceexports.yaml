@@ -2514,8 +2514,8 @@ spec:
               kind:
                 description: Kind of exported resource.
                 type: string
-              labelIdentities:
-                description: If exported resource is LabelIdentities of a cluster.
+              labelIdentity:
+                description: If exported resource is LabelIdentity of a cluster.
                 properties:
                   normalizedLabel:
                     type: string
