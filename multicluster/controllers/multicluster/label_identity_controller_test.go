@@ -44,47 +44,43 @@ const (
 var (
 	ns = &v1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "ns",
+			Name: "test-ns",
 			Labels: map[string]string{
-				"kubernetes.io/metadata.name": "ns",
+				"kubernetes.io/metadata.name": "test-ns",
 			},
 		},
 	}
-	newNS = &v1.Namespace{
+	podA = &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "ns",
-			Labels: map[string]string{
-				"kubernetes.io/metadata.name": "ns",
-				"level":                       "admin",
-			},
-		},
-	}
-
-	pod = &v1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: "ns",
-			Name:      "pod",
+			Namespace: "test-ns",
+			Name:      "pod-a",
 			Labels: map[string]string{
 				"app": "client",
 			},
 		},
 	}
-
-	newPod = &v1.Pod{
+	newPodA = &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace: "ns",
-			Name:      "pod",
+			Namespace: "test-ns",
+			Name:      "pod-a",
 			Labels: map[string]string{
 				"app": "db",
 			},
 		},
 	}
+	podB = &v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "test-ns",
+			Name:      "pod-b",
+			Labels: map[string]string{
+				"app": "web",
+			},
+		},
+	}
 
-	normalizedLabelDB    = "ns:kubernetes.io/metadata.name=ns&pod:app=db"
-	normalizedLabelAdmin = "ns:kubernetes.io/metadata.name=ns,level=admin&pod:app=client"
-
-	podNamespacedName = &types.NamespacedName{Namespace: "ns", Name: "pod"}
-	nsNamespacedName  = &types.NamespacedName{Namespace: "", Name: "ns"}
+	normalizedLabelDB  = "ns:kubernetes.io/metadata.name=test-ns&pod:app=db"
+	podANamespacedName = &types.NamespacedName{Namespace: "test-ns", Name: "pod-a"}
+	podBNamespacedName = &types.NamespacedName{Namespace: "test-ns", Name: "pod-b"}
 )
 
 func TestLabelIdentityReconciler(t *testing.T) {
@@ -103,55 +99,42 @@ func TestLabelIdentityReconciler(t *testing.T) {
 	}{
 		{
 			"pod add event",
-			pod,
+			podA,
 			ns,
 			nil,
 			nil,
-			podNamespacedName,
+			podANamespacedName,
 			nil,
 			normalizedLabel,
-			map[string]sets.String{normalizedLabel: sets.NewString(podNamespacedName.String())},
-			map[string]string{podNamespacedName.String(): normalizedLabel},
+			map[string]sets.String{normalizedLabel: sets.NewString(podANamespacedName.String())},
+			map[string]string{podANamespacedName.String(): normalizedLabel},
 			addEvent,
 		},
 		{
 			"pod update event",
-			pod,
+			podA,
 			ns,
-			newPod,
+			newPodA,
 			nil,
-			podNamespacedName,
+			podANamespacedName,
 			nil,
 			normalizedLabelDB,
-			map[string]sets.String{normalizedLabelDB: sets.NewString(podNamespacedName.String())},
-			map[string]string{podNamespacedName.String(): normalizedLabelDB},
+			map[string]sets.String{normalizedLabelDB: sets.NewString(podANamespacedName.String())},
+			map[string]string{podANamespacedName.String(): normalizedLabelDB},
 			updateEvent,
 		},
 		{
 			"pod delete event",
-			pod,
+			podA,
 			ns,
 			nil,
 			nil,
-			podNamespacedName,
+			podANamespacedName,
 			nil,
 			"",
 			map[string]sets.String{},
 			map[string]string{},
 			deleteEvent,
-		},
-		{
-			"ns update event",
-			pod,
-			ns,
-			nil,
-			newNS,
-			nil,
-			nsNamespacedName,
-			normalizedLabelAdmin,
-			map[string]sets.String{normalizedLabelAdmin: sets.NewString(podNamespacedName.String())},
-			map[string]string{podNamespacedName.String(): normalizedLabelAdmin},
-			updateEvent,
 		},
 	}
 
@@ -218,18 +201,21 @@ func TestLabelIdentityReconciler(t *testing.T) {
 }
 
 func TestNamespaceMapFunc(t *testing.T) {
-	ns := &v1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "test-ns",
-		},
-	}
 	expReq := []reconcile.Request{
 		{
-			NamespacedName: types.NamespacedName{
-				Name: "test-ns",
-			},
+			NamespacedName: *podANamespacedName,
+		},
+		{
+			NamespacedName: *podBNamespacedName,
 		},
 	}
-	actualReq := namespaceMapFunc(ns)
+	fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(podA, podB, ns).Build()
+	fakeRemoteClient := fake.NewClientBuilder().WithScheme(scheme).Build()
+	commonArea := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", localClusterID, leaderNamespace)
+	mcReconciler := NewMemberClusterSetReconciler(fakeClient, scheme, "default")
+	mcReconciler.SetRemoteCommonArea(commonArea)
+
+	r := NewLabelIdentityReconciler(fakeClient, scheme, mcReconciler)
+	actualReq := r.namespaceMapFunc(ns)
 	assert.ElementsMatch(t, expReq, actualReq)
 }

@@ -88,18 +88,6 @@ func (r *LabelIdentityReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	var pod v1.Pod
 	var ns v1.Namespace
 
-	if req.NamespacedName.Namespace == "" {
-		err := r.Client.Get(ctx, req.NamespacedName, &ns)
-		if err == nil {
-			if ns.DeletionTimestamp.IsZero() {
-				// Based on the predicates used to register the reconciler, this can only be a
-				// Namespace add or Namespace label update event
-				return ctrl.Result{}, r.onNamespaceCreateOrUpdate(ctx, req.Name, ns.Labels)
-			}
-			return ctrl.Result{}, nil
-		}
-		return ctrl.Result{}, client.IgnoreNotFound(err)
-	}
 	if err := r.Client.Get(ctx, req.NamespacedName, &pod); err != nil {
 		if apierrors.IsNotFound(err) {
 			klog.V(2).InfoS("Pod is deleted", "pod", req.NamespacedName)
@@ -122,70 +110,28 @@ func (r *LabelIdentityReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&v1.Pod{}).
 		WithEventFilter(instance).
-		Watches(&source.Kind{Type: &v1.Namespace{}},
-			handler.EnqueueRequestsFromMapFunc(namespaceMapFunc)).
+		Watches(&source.Kind{Type: &v1.Namespace{}}, handler.EnqueueRequestsFromMapFunc(r.namespaceMapFunc)).
 		WithOptions(controller.Options{
 			MaxConcurrentReconciles: common.DefaultWorkerCount,
 		}).
 		Complete(r)
 }
 
-// namespaceMapFunc enqueues Namespace events to the reconciler.
-func namespaceMapFunc(o client.Object) []reconcile.Request {
-	return []reconcile.Request{
-		{
+// namespaceMapFunc handles Namespace update events (Namespace label change) by enqueuing
+// all Pods in the Namespace into the reconciler processing queue.
+func (r *LabelIdentityReconciler) namespaceMapFunc(ns client.Object) []reconcile.Request {
+	podList := &v1.PodList{}
+	r.Client.List(context.TODO(), podList, client.InNamespace(ns.GetName()))
+	requests := make([]reconcile.Request, len(podList.Items))
+	for i, pod := range podList.Items {
+		requests[i] = reconcile.Request{
 			NamespacedName: types.NamespacedName{
-				Name: o.GetName(),
+				Name:      pod.GetName(),
+				Namespace: pod.GetNamespace(),
 			},
-		},
-	}
-}
-
-// onNamespaceCreateOrUpdate updates the label identities cached for all Pods in
-// the Namespace in case the Namespace's labels change.
-func (r *LabelIdentityReconciler) onNamespaceCreateOrUpdate(ctx context.Context, namespace string, nsLabels map[string]string) error {
-	labelsToAdd, labelsToDelete, err := r.getLabelUpdatesForNamespaceEvent(namespace, nsLabels)
-	if err != nil {
-		return err
-	}
-	for _, lDel := range labelsToDelete {
-		if err := r.addLabelIdentityResourceExport(ctx, lDel); err != nil {
-			return err
 		}
 	}
-	for _, lAdd := range labelsToAdd {
-		if err := r.addLabelIdentityResourceExport(ctx, lAdd); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// getLabelUpdatesForNamespaceEvent gets all label identities to be added and to be
-// deleted due to Namespace update event. It is protected with labelMutex so that
-// concurrent individual Pod update events will not interfere with the label update
-// calculations.
-func (r *LabelIdentityReconciler) getLabelUpdatesForNamespaceEvent(namespace string, nsLabels map[string]string) (labelsToAdd, labelsToDelete []string, err error) {
-	r.labelMutex.Lock()
-	defer r.labelMutex.Unlock()
-
-	var pods v1.PodList
-	if err := r.Client.List(ctx, &pods, &client.ListOptions{Namespace: namespace}); err != nil {
-		klog.Errorf("Failed to list Pods in Namespace %s", namespace)
-		return nil, nil, err
-	}
-	for _, p := range pods.Items {
-		podKey, updatedLabel := p.Namespace+"/"+p.Name, getNormalizedLabel(nsLabels, p.Labels)
-		klog.V(4).InfoS("Re-processing Pod for label identity sync due to Namespace label updates", "pod", podKey)
-		lAdd, lDel := r.getLabelToUpdateLocked(podKey, updatedLabel)
-		if lAdd != "" {
-			labelsToAdd = append(labelsToAdd, lAdd)
-		}
-		if lDel != "" {
-			labelsToDelete = append(labelsToDelete, lDel)
-		}
-	}
-	return
+	return requests
 }
 
 // onPodDelete removes the Pod and label identity mapping from the cache, and
@@ -197,6 +143,7 @@ func (r *LabelIdentityReconciler) onPodDelete(ctx context.Context, podKey string
 		if err := r.deleteLabelIdentityResourceExport(ctx, labelToDelete); err != nil {
 			return err
 		}
+		r.updateLabelCache(podKey, "", labelToDelete)
 	}
 	return nil
 }
@@ -211,11 +158,13 @@ func (r *LabelIdentityReconciler) onPodCreateOrUpdate(ctx context.Context, podKe
 		if err := r.deleteLabelIdentityResourceExport(ctx, labelToDelete); err != nil {
 			return err
 		}
+		r.updateLabelCache(podKey, "", labelToDelete)
 	}
 	if labelToAdd != "" {
 		if err := r.addLabelIdentityResourceExport(ctx, labelToAdd); err != nil {
 			return err
 		}
+		r.updateLabelCache(podKey, labelToAdd, "")
 	}
 	return nil
 }
@@ -224,44 +173,42 @@ func (r *LabelIdentityReconciler) onPodCreateOrUpdate(ctx context.Context, podKe
 // update event. It is protected with labelMutex so that concurrent Pod update events
 // will not interfere with the label update calculations.
 func (r *LabelIdentityReconciler) getLabelToUpdate(podKey, normalizedLabel string) (labelToAdd string, labelToDelete string) {
+	r.labelMutex.RLock()
+	defer r.labelMutex.RUnlock()
+
+	originalLabel, isCached := r.podLabelCache[podKey]
+	if isCached && originalLabel != normalizedLabel {
+		labelToDelete = originalLabel
+	}
+	if normalizedLabel != "" {
+		labelToAdd = normalizedLabel
+	}
+	return
+}
+
+// updateLabelCache updates podLabelCache and labelToPodsCache once the ResourceExport
+// create/update/delete operation is successful.
+func (r *LabelIdentityReconciler) updateLabelCache(podKey, updatedLabel, deletedLabel string) {
 	r.labelMutex.Lock()
 	defer r.labelMutex.Unlock()
 
-	return r.getLabelToUpdateLocked(podKey, normalizedLabel)
-}
-
-// getLabelToUpdateLocked gets all label identities to be added and to be deleted.
-// Caller should have labelMutex locked.
-func (r *LabelIdentityReconciler) getLabelToUpdateLocked(podKey, normalizedLabel string) (labelToAdd string, labelToDelete string) {
-	addPodLabel := func(podKey, normalizedLabel string) string {
-		r.podLabelCache[podKey] = normalizedLabel
-		if _, ok := r.labelToPodsCache[normalizedLabel]; !ok {
-			r.labelToPodsCache[normalizedLabel] = sets.NewString(podKey)
-			return normalizedLabel
+	if updatedLabel != "" {
+		r.podLabelCache[podKey] = updatedLabel
+		if _, ok := r.labelToPodsCache[updatedLabel]; !ok {
+			r.labelToPodsCache[updatedLabel] = sets.NewString(podKey)
 		}
-		r.labelToPodsCache[normalizedLabel].Insert(podKey)
-		return ""
+		r.labelToPodsCache[updatedLabel].Insert(podKey)
 	}
-	deletePodLabel := func(podKey, normalizedLabel string) string {
+	if deletedLabel != "" {
 		delete(r.podLabelCache, podKey)
-		if podNames, ok := r.labelToPodsCache[normalizedLabel]; ok {
+		if podNames, ok := r.labelToPodsCache[deletedLabel]; ok {
 			podNames.Delete(podKey)
 			if len(podNames) == 0 {
-				klog.V(2).InfoS("Label no longer exists in the cluster", "label", normalizedLabel)
-				delete(r.labelToPodsCache, normalizedLabel)
-				return normalizedLabel
+				klog.V(2).InfoS("Label no longer exists in the cluster", "label", deletedLabel)
+				delete(r.labelToPodsCache, deletedLabel)
 			}
 		}
-		return ""
 	}
-	originalLabel, isCached := r.podLabelCache[podKey]
-	if isCached && originalLabel != normalizedLabel {
-		labelToDelete = deletePodLabel(podKey, originalLabel)
-	}
-	if normalizedLabel != "" {
-		labelToAdd = addPodLabel(podKey, normalizedLabel)
-	}
-	return
 }
 
 func (r *LabelIdentityReconciler) addLabelIdentityResourceExport(ctx context.Context, normalizedLabel string) error {
