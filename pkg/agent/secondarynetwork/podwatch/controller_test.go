@@ -204,10 +204,16 @@ func TestPodControllerRun(t *testing.T) {
 	mockIPAM.EXPECT().GetIPAMSubnetAddress(gomock.Any(), gomock.Any()).Return(ipamResult, nil)
 
 	podCache.AddCNIConfigInfo(cniConfig)
-	_, err := client.CoreV1().Pods(testNamespace).Create(context.Background(), pod, metav1.CreateOptions{})
-	require.NoError(t, err, "error when creating test Pod")
-	_, err = netdefclient.NetworkAttachmentDefinitions(testNamespace).Create(context.Background(), network, metav1.CreateOptions{})
+	// the NetworkAttachmentDefinition must be created before the Pod: if handleAddUpdatePod
+	// runs before the NetworkAttachmentDefinition has been created, it will return an
+	// error. The Pod will then be requeued, but the Poll below will timeout before the Pod has
+	// a chance to be processed again. Rather than increase the timeout or change the queue's
+	// minRetryDelay for tests, we ensure that the NetworkAttachmentDefinition exists by the
+	// time handleAddUpdatePod runs.
+	_, err := netdefclient.NetworkAttachmentDefinitions(testNamespace).Create(context.Background(), network, metav1.CreateOptions{})
 	require.NoError(t, err, "error when creating test NetworkAttachmentDefinition")
+	_, err = client.CoreV1().Pods(testNamespace).Create(context.Background(), pod, metav1.CreateOptions{})
+	require.NoError(t, err, "error when creating test Pod")
 
 	// unfortunately, we cannot use the podcache being updated by the controller as a signal
 	// here: the podcache is not thread-safe and is only meant to be accessed by the controller
