@@ -47,6 +47,10 @@ func TestProxy(t *testing.T) {
 	}
 	defer teardownTest(t, data)
 
+	t.Run("testProxyHealthCase", func(t *testing.T) {
+		testProxyHealthCase(t, data)
+	})
+
 	t.Run("testProxyServiceSessionAffinityCase", func(t *testing.T) {
 		testProxyServiceSessionAffinityCase(t, data)
 	})
@@ -56,6 +60,28 @@ func TestProxy(t *testing.T) {
 	t.Run("testProxyServiceLifeCycleCase", func(t *testing.T) {
 		testProxyServiceLifeCycleCase(t, data)
 	})
+}
+
+func testProxyHealthCase(t *testing.T, data *TestData) {
+	skipIfProxyDisabled(t)
+	skipIfNumNodesLessThan(t, 2)
+	skipIfProxyAllDisabled(t, data)
+
+	// Setup the health checks.
+	healthPort := "10256"
+	nodes := []string{nodeName(0), nodeName(1)}
+	nodeIPs := []string{controlPlaneNodeIPv4(), workerNodeIPv4(1)}
+	var healthUrls []string
+	for _, nodeIP := range nodeIPs {
+		healthUrls = append(healthUrls, net.JoinHostPort(nodeIP, healthPort))
+	}
+	for _, node := range nodes {
+		for _, healthUrl := range healthUrls {
+			healthOutput, _, err := probeHealthFromNode(node, healthUrl, data)
+			require.NoError(t, err, "Proxy should have a response for healthcheck")
+			require.Contains(t, healthOutput, "lastUpdated")
+		}
+	}
 }
 
 func testProxyServiceSessionAffinityCase(t *testing.T, data *TestData) {

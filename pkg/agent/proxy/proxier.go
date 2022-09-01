@@ -110,6 +110,7 @@ type proxier struct {
 	// oversizeServiceSet records the Services that have more than 800 Endpoints.
 	oversizeServiceSet sets.String
 
+	healthzServer       healthcheck.ProxierHealthUpdater
 	serviceHealthServer healthcheck.ServiceHealthServer
 	numLocalEndpoints   map[apimachinerytypes.NamespacedName]int
 
@@ -687,6 +688,9 @@ func (p *proxier) syncProxyRules() {
 		klog.V(4).Info("Not syncing rules until both Services and Endpoints have been synced")
 		return
 	}
+	if p.healthzServer != nil {
+		p.healthzServer.QueuedUpdate()
+	}
 
 	start := time.Now()
 	defer func() {
@@ -729,6 +733,10 @@ func (p *proxier) syncProxyRules() {
 	} else {
 		metrics.ServicesInstalledTotal.Set(float64(len(p.serviceMap)))
 		metrics.EndpointsInstalledTotal.Set(float64(counter))
+	}
+
+	if p.healthzServer != nil {
+		p.healthzServer.Updated()
 	}
 
 	p.syncedOnceMutex.Lock()
@@ -906,6 +914,9 @@ func (p *proxier) deleteServiceByIP(serviceStr string) {
 func (p *proxier) Run(stopCh <-chan struct{}) {
 	p.once.Do(func() {
 		go p.serviceConfig.Run(stopCh)
+		if p.healthzServer != nil {
+			go p.healthzServer.Run()
+		}
 		if p.endpointSliceEnabled {
 			go p.endpointSliceConfig.Run(stopCh)
 		} else {
@@ -975,7 +986,8 @@ func NewProxier(
 	proxyAllEnabled bool,
 	skipServices []string,
 	proxyLoadBalancerIPs bool,
-	groupCounter types.GroupCounter) *proxier {
+	groupCounter types.GroupCounter,
+	healthzServer healthcheck.ProxierHealthUpdater) *proxier {
 	recorder := record.NewBroadcaster().NewRecorder(
 		runtime.NewScheme(),
 		corev1.EventSource{Component: componentName, Host: hostname},
@@ -1022,6 +1034,7 @@ func NewProxier(
 		topologyAwareHintsEnabled: topologyAwareHintsEnabled,
 		proxyLoadBalancerIPs:      proxyLoadBalancerIPs,
 		hostname:                  hostname,
+		healthzServer:             healthzServer,
 		serviceHealthServer:       serviceHealthServer,
 		numLocalEndpoints:         map[apimachinerytypes.NamespacedName]int{},
 	}
@@ -1083,13 +1096,14 @@ func NewDualStackProxier(
 	skipServices []string,
 	proxyLoadBalancerIPs bool,
 	v4groupCounter types.GroupCounter,
-	v6groupCounter types.GroupCounter) *metaProxierWrapper {
+	v6groupCounter types.GroupCounter,
+	healthzServer healthcheck.ProxierHealthUpdater) *metaProxierWrapper {
 
 	// Create an IPv4 instance of the single-stack proxier.
-	ipv4Proxier := NewProxier(hostname, informerFactory, ofClient, false, routeClient, nodePortAddressesIPv4, proxyAllEnabled, skipServices, proxyLoadBalancerIPs, v4groupCounter)
+	ipv4Proxier := NewProxier(hostname, informerFactory, ofClient, false, routeClient, nodePortAddressesIPv4, proxyAllEnabled, skipServices, proxyLoadBalancerIPs, v4groupCounter, healthzServer)
 
 	// Create an IPv6 instance of the single-stack proxier.
-	ipv6Proxier := NewProxier(hostname, informerFactory, ofClient, true, routeClient, nodePortAddressesIPv6, proxyAllEnabled, skipServices, proxyLoadBalancerIPs, v6groupCounter)
+	ipv6Proxier := NewProxier(hostname, informerFactory, ofClient, true, routeClient, nodePortAddressesIPv6, proxyAllEnabled, skipServices, proxyLoadBalancerIPs, v6groupCounter, healthzServer)
 
 	// Create a meta-proxier that dispatch calls between the two
 	// single-stack proxier instances.
