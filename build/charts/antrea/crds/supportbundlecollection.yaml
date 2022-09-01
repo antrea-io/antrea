@@ -1,0 +1,146 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: supportbundlecollections.crd.antrea.io
+spec:
+  group: crd.antrea.io
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required:
+                - fileServer
+                - authentication
+              anyOf:
+                - required:
+                    - nodes
+                - required:
+                    - externalNodes
+              properties:
+                nodes:
+                  type: object
+                  properties:
+                    nodeNames:
+                      type: array
+                      items:
+                        type: string
+                    nodeSelector:
+                      type: object
+                      properties:
+                        matchExpressions:
+                          items:
+                            properties:
+                              key:
+                                type: string
+                              operator:
+                                enum:
+                                  - In
+                                  - NotIn
+                                  - Exists
+                                  - DoesNotExist
+                                type: string
+                              values:
+                                items:
+                                  type: string
+                                  pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
+                                type: array
+                            type: object
+                          type: array
+                        matchLabels:
+                          x-kubernetes-preserve-unknown-fields: true
+                externalNodes:
+                  type: object
+                  required:
+                    - namespace
+                  properties:
+                    namespace:
+                      type: string
+                    nodeNames:
+                      type: array
+                      items:
+                        type: string
+                    nodeSelector:
+                      type: object
+                      properties:
+                        matchExpressions:
+                          items:
+                            properties:
+                              key:
+                                type: string
+                              operator:
+                                enum:
+                                  - In
+                                  - NotIn
+                                  - Exists
+                                  - DoesNotExist
+                                type: string
+                              values:
+                                items:
+                                  type: string
+                                  pattern: "^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$"
+                                type: array
+                            type: object
+                          type: array
+                        matchLabels:
+                          x-kubernetes-preserve-unknown-fields: true
+                expirationMinutes:
+                  type: integer
+                  default: 60
+                sinceTime:
+                  type: string
+                  format: duration
+                fileServer:
+                  type: object
+                  properties:
+                    url:
+                      type: string
+                authentication:
+                  type: object
+                  properties:
+                    authType:
+                      type: string
+                      enum: ["BearerToken", "APIKey"]
+                    authSecret:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                        namespace:
+                          type: string
+            status:
+              type: object
+              properties:
+                collectedNodes:
+                  type: integer
+                desiredNodes:
+                  type: integer
+                conditions:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      type:
+                        type: string
+                      status:
+                        type: string
+                      lastTransitionTime:
+                        type: string
+                      reason:
+                        type: string
+                      message:
+                        type: string
+      subresources:
+        status: {}
+  scope: Cluster
+  names:
+    plural: supportbundlecollections
+    singular: supportbundlecollection
+    kind: SupportBundleCollection
+    shortNames:
+      - sbc
