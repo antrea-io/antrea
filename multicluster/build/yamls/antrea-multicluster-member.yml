@@ -951,7 +951,7 @@ kind: ConfigMap
 metadata:
   labels:
     app: antrea
-  name: antrea-mc-controller-config-6b7ccgh6k9
+  name: antrea-mc-controller-config
   namespace: kube-system
 ---
 apiVersion: v1
@@ -985,6 +985,8 @@ spec:
       component: antrea-mc-controller
   template:
     metadata:
+      annotations:
+        checksum/config: 7c5790c03e84cdb0a2ea8f4fb685a604cf6a1901e241a679afe996a0141ccea0
       labels:
         app: antrea
         component: antrea-mc-controller
@@ -1033,7 +1035,7 @@ spec:
       terminationGracePeriodSeconds: 10
       volumes:
       - configMap:
-          name: antrea-mc-controller-config-6b7ccgh6k9
+          name: antrea-mc-controller-config
         name: antrea-mc-controller-config
 ---
 apiVersion: admissionregistration.k8s.io/v1

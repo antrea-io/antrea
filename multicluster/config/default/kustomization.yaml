@@ -25,3 +25,5 @@ configMapGenerator:
   - name: controller-config
     files:
       - configmap/controller_manager_config.yaml
+generatorOptions:
+  disableNameSuffixHash: true
