@@ -4395,6 +4395,75 @@ func TestAntreaPolicyStatusWithAppliedToPerRule(t *testing.T) {
 	})
 }
 
+func TestAntreaPolicyStatusWithAppliedToUnsupportedGroup(t *testing.T) {
+	skipIfHasWindowsNodes(t)
+	skipIfAntreaPolicyDisabled(t)
+
+	data, err := setupTest(t)
+	if err != nil {
+		t.Fatalf("Error when setting up test: %v", err)
+	}
+	defer teardownTest(t, data)
+
+	initialize(t, data)
+
+	testNamespace := namespaces["x"]
+	// Build a Group with namespaceSelector selecting namespaces outside testNamespace.
+	grpName := "grp-with-ns-selector"
+	grpBuilder := &GroupSpecBuilder{}
+	grpBuilder = grpBuilder.SetName(grpName).SetNamespace(testNamespace).
+		SetPodSelector(map[string]string{"pod": "b"}, nil).
+		SetNamespaceSelector(map[string]string{"ns": namespaces["y"]}, nil)
+	grp, err := k8sUtils.CreateOrUpdateV1Alpha3Group(grpBuilder.Get())
+	failOnError(err, t)
+	failOnError(waitForResourceReady(t, timeout, grp), t)
+	// Build a Group with the unsupported Group as child Group.
+	grpNestedName := "grp-nested"
+	grpBuilderNested := &GroupSpecBuilder{}
+	grpBuilderNested = grpBuilderNested.SetName(grpNestedName).SetNamespace(testNamespace).SetChildGroups([]string{grpName})
+	grp, err = k8sUtils.CreateOrUpdateV1Alpha3Group(grpBuilderNested.Get())
+	failOnError(err, t)
+	failOnError(waitForResourceReady(t, timeout, grp), t)
+
+	anpBuilder := &AntreaNetworkPolicySpecBuilder{}
+	anpBuilder = anpBuilder.SetName(testNamespace, "anp-applied-to-unsupported-group").
+		SetPriority(1.0).
+		SetAppliedToGroup([]ANPAppliedToSpec{{Group: grpName}})
+	anp, err := k8sUtils.CreateOrUpdateANP(anpBuilder.Get())
+	failOnError(err, t)
+	expectedStatus := crdv1alpha1.NetworkPolicyStatus{
+		Phase:                crdv1alpha1.NetworkPolicyPending,
+		ObservedGeneration:   1,
+		CurrentNodesRealized: 0,
+		DesiredNodesRealized: 0,
+		Conditions: []crdv1alpha1.NetworkPolicyCondition{
+			{
+				Type:               crdv1alpha1.NetworkPolicyConditionRealizable,
+				Status:             metav1.ConditionFalse,
+				LastTransitionTime: metav1.Now(),
+				Reason:             "NetworkPolicyAppliedToUnsupportedGroup",
+				Message:            fmt.Sprintf("Group %s/%s with Pods in other Namespaces can not be used as AppliedTo", testNamespace, grpName),
+			},
+		},
+	}
+	checkANPStatus(t, data, anp, expectedStatus)
+
+	anpBuilder2 := &AntreaNetworkPolicySpecBuilder{}
+	anpBuilder2 = anpBuilder2.SetName(testNamespace, "anp-applied-to-unsupported-child-group").
+		SetPriority(1.0).
+		SetAppliedToGroup([]ANPAppliedToSpec{{Group: grpNestedName}})
+	anp2, err := k8sUtils.CreateOrUpdateANP(anpBuilder2.Get())
+	failOnError(err, t)
+	expectedStatus.Conditions[0].Message = fmt.Sprintf("Group %s/%s with Pods in other Namespaces can not be used as AppliedTo", testNamespace, grpNestedName)
+	checkANPStatus(t, data, anp2, expectedStatus)
+
+	failOnError(k8sUtils.DeleteANP(anp.Namespace, anp.Name), t)
+	failOnError(k8sUtils.DeleteANP(anp2.Namespace, anp2.Name), t)
+	failOnError(k8sUtils.DeleteV1Alpha3Group(testNamespace, grpName), t)
+	failOnError(k8sUtils.DeleteV1Alpha3Group(testNamespace, grpNestedName), t)
+	k8sUtils.Cleanup(namespaces)
+}
+
 func checkANPStatus(t *testing.T, data *TestData, anp *crdv1alpha1.NetworkPolicy, expectedStatus crdv1alpha1.NetworkPolicyStatus) *crdv1alpha1.NetworkPolicy {
 	err := wait.Poll(100*time.Millisecond, policyRealizedTimeout, func() (bool, error) {
 		var err error
@@ -4421,7 +4490,7 @@ func checkACNPStatus(t *testing.T, data *TestData, acnp *crdv1alpha1.ClusterNetw
 	return acnp
 }
 
-// waitForANPRealized waits untils an ANP is realized and returns, or times out. A policy is
+// waitForANPRealized waits until an ANP is realized and returns, or times out. A policy is
 // considered realized when its Status has been updated so that the ObservedGeneration matches the
 // resource's Generation and the Phase is set to Realized.
 func (data *TestData) waitForANPRealized(t *testing.T, namespace string, name string, timeout time.Duration) error {
@@ -4438,7 +4507,7 @@ func (data *TestData) waitForANPRealized(t *testing.T, namespace string, name st
 	return nil
 }
 
-// waitForACNPRealized waits untils an ACNP is realized and returns, or times out. A policy is
+// waitForACNPRealized waits until an ACNP is realized and returns, or times out. A policy is
 // considered realized when its Status has been updated so that the ObservedGeneration matches the
 // resource's Generation and the Phase is set to Realized.
 func (data *TestData) waitForACNPRealized(t *testing.T, name string, timeout time.Duration) error {
