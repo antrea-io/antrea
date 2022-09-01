@@ -27,6 +27,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	discovery "k8s.io/api/discovery/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	apimachinerytypes "k8s.io/apimachinery/pkg/types"
 	k8sapitypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/client-go/informers"
@@ -43,6 +44,7 @@ import (
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 	k8sproxy "antrea.io/antrea/third_party/proxy"
 	"antrea.io/antrea/third_party/proxy/config"
+	"antrea.io/antrea/third_party/proxy/healthcheck"
 )
 
 const (
@@ -107,6 +109,9 @@ type proxier struct {
 	serviceStringMapMutex sync.Mutex
 	// oversizeServiceSet records the Services that have more than 800 Endpoints.
 	oversizeServiceSet sets.String
+
+	serviceHealthServer healthcheck.ServiceHealthServer
+	numLocalEndpoints   map[apimachinerytypes.NamespacedName]int
 
 	// syncedOnce returns true if the proxier has synced rules at least once.
 	syncedOnce      bool
@@ -698,12 +703,21 @@ func (p *proxier) syncProxyRules() {
 	// GetServiceFlowKeys().
 	p.serviceEndpointsMapsMutex.Lock()
 	defer p.serviceEndpointsMapsMutex.Unlock()
-	p.endpointsChanges.Update(p.endpointsMap)
-	p.serviceChanges.Update(p.serviceMap)
+	p.endpointsChanges.Update(p.endpointsMap, p.numLocalEndpoints)
+	serviceUpdateResult := p.serviceChanges.Update(p.serviceMap)
 
 	p.removeStaleServices()
 	p.installServices()
 	p.removeStaleEndpoints()
+
+	if p.serviceHealthServer != nil {
+		if err := p.serviceHealthServer.SyncServices(serviceUpdateResult.HCServiceNodePorts); err != nil {
+			klog.ErrorS(err, "Error syncing healthcheck Services")
+		}
+		if err := p.serviceHealthServer.SyncEndpoints(p.numLocalEndpoints); err != nil {
+			klog.ErrorS(err, "Error syncing healthcheck Endpoints")
+		}
+	}
 
 	counter := 0
 	for _, endpoints := range p.endpointsMap {
@@ -976,6 +990,15 @@ func NewProxier(
 		ipFamily = corev1.IPv6Protocol
 	}
 
+	var serviceHealthServer healthcheck.ServiceHealthServer
+	if proxyAllEnabled {
+		nodePortAddressesString := make([]string, len(nodePortAddresses))
+		for i, address := range nodePortAddresses {
+			nodePortAddressesString[i] = address.String()
+		}
+		serviceHealthServer = healthcheck.NewServiceHealthServer(hostname, nil, nodePortAddressesString)
+	}
+
 	p := &proxier{
 		endpointsConfig:           config.NewEndpointsConfig(informerFactory.Core().V1().Endpoints(), resyncPeriod),
 		serviceConfig:             config.NewServiceConfig(informerFactory.Core().V1().Services(), resyncPeriod),
@@ -999,6 +1022,8 @@ func NewProxier(
 		topologyAwareHintsEnabled: topologyAwareHintsEnabled,
 		proxyLoadBalancerIPs:      proxyLoadBalancerIPs,
 		hostname:                  hostname,
+		serviceHealthServer:       serviceHealthServer,
+		numLocalEndpoints:         map[apimachinerytypes.NamespacedName]int{},
 	}
 
 	p.serviceConfig.RegisterEventHandler(p)
