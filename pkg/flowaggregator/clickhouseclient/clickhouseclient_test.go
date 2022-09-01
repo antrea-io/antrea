@@ -65,7 +65,7 @@ func TestGetDataSourceName(t *testing.T) {
 	}
 
 	for _, tc := range testcases {
-		dsn, err := tc.input.getDataSourceName()
+		dsn, err := tc.input.GetDataSourceName()
 		if tc.expectedErr {
 			assert.Errorf(t, err, "ClickHouseInput %v unexpectedly returns no error when getting DSN", tc.input)
 		}

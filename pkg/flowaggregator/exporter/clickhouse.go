@@ -69,7 +69,7 @@ func (e *ClickHouseExporter) Stop() {
 
 func (e *ClickHouseExporter) UpdateOptions(opt *options.Options) {
 	chInput := buildClickHouseInput(opt)
-	dsn, connect, err := clickhouseclient.PrepareConnection(chInput)
+	dsn, connect, err := clickhouseclient.PrepareClickHouseConnection(chInput)
 	if err != nil {
 		klog.ErrorS(err, "Error when checking new connection")
 		return
