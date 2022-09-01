@@ -81,6 +81,12 @@ func probeFromNode(node string, url string, data *TestData) error {
 	return err
 }
 
+func probeHealthFromNode(node string, baseUrl string, data *TestData) (string, string, error) {
+	url := fmt.Sprintf("%s/%s", baseUrl, "healthz")
+	_, stdout, stderr, err := data.RunCommandOnNode(node, fmt.Sprintf("curl --connect-timeout 1 --retry 5 --retry-connrefused %s", url))
+	return stdout, stderr, err
+}
+
 func probeHostnameFromNode(node string, baseUrl string, data *TestData) (string, error) {
 	url := fmt.Sprintf("%s/%s", baseUrl, "hostname")
 	_, hostname, _, err := data.RunCommandOnNode(node, fmt.Sprintf("curl --connect-timeout 1 --retry 5 --retry-connrefused %s", url))
@@ -191,8 +197,25 @@ func testProxyLoadBalancerService(t *testing.T, isIPv6 bool) {
 	// of another one is Local.
 	_, err = data.createAgnhostLoadBalancerService("agnhost-cluster", true, false, clusterIngressIP, &ipProtocol)
 	require.NoError(t, err)
-	_, err = data.createAgnhostLoadBalancerService("agnhost-local", true, true, localIngressIP, &ipProtocol)
+	svc, err := data.createAgnhostLoadBalancerService("agnhost-local", true, true, localIngressIP, &ipProtocol)
 	require.NoError(t, err)
+
+	// For the 'Local' externalTrafficPolicy, setup the health checks.
+	healthPort := fmt.Sprint(svc.Spec.HealthCheckNodePort)
+	require.NotEqual(t, "", healthPort, "HealthCheckNodePort port number should not be empty")
+	nodeIPs := []string{controlPlaneNodeIPv4(), workerNodeIPv4(1)}
+	var healthUrls []string
+	for _, nodeIP := range nodeIPs {
+		healthUrls = append(healthUrls, net.JoinHostPort(nodeIP, healthPort))
+	}
+	healthOutputTmpl := `{
+	"service": {
+		"namespace": "%s",
+		"name": "agnhost-local"
+	},
+	"localEndpoints": 1
+}`
+	healthExpected := fmt.Sprintf(healthOutputTmpl, data.testNamespace)
 
 	port := "8080"
 	clusterUrl := net.JoinHostPort(clusterIngressIP[0], port)
@@ -204,7 +227,7 @@ func testProxyLoadBalancerService(t *testing.T, isIPv6 bool) {
 		createAgnhostPod(t, data, agnhosts[idx], node, false)
 	}
 	t.Run("Non-HostNetwork Endpoints", func(t *testing.T) {
-		loadBalancerTestCases(t, data, clusterUrl, localUrl, nodes, busyboxes, busyboxIPs, agnhosts)
+		loadBalancerTestCases(t, data, clusterUrl, localUrl, healthExpected, nodes, healthUrls, busyboxes, busyboxIPs, agnhosts)
 	})
 
 	// Delete agnhost Pods which are not on host network and create new agnhost Pods which are on host network.
@@ -214,11 +237,11 @@ func testProxyLoadBalancerService(t *testing.T, isIPv6 bool) {
 		createAgnhostPod(t, data, hostAgnhosts[idx], node, true)
 	}
 	t.Run("HostNetwork Endpoints", func(t *testing.T) {
-		loadBalancerTestCases(t, data, clusterUrl, localUrl, nodes, busyboxes, busyboxIPs, nodes)
+		loadBalancerTestCases(t, data, clusterUrl, localUrl, healthExpected, nodes, healthUrls, busyboxes, busyboxIPs, nodes)
 	})
 }
 
-func loadBalancerTestCases(t *testing.T, data *TestData, clusterUrl, localUrl string, nodes, pods, podIPs, hostnames []string) {
+func loadBalancerTestCases(t *testing.T, data *TestData, clusterUrl, localUrl, healthExpected string, nodes, healthUrls, pods, podIPs, hostnames []string) {
 	t.Run("ExternalTrafficPolicy:Cluster/Client:Node", func(t *testing.T) {
 		testLoadBalancerClusterFromNode(t, data, nodes, clusterUrl)
 	})
@@ -226,7 +249,7 @@ func loadBalancerTestCases(t *testing.T, data *TestData, clusterUrl, localUrl st
 		testLoadBalancerClusterFromPod(t, data, pods, clusterUrl)
 	})
 	t.Run("ExternalTrafficPolicy:Local/Client:Node", func(t *testing.T) {
-		testLoadBalancerLocalFromNode(t, data, nodes, localUrl, hostnames)
+		testLoadBalancerLocalFromNode(t, data, nodes, healthUrls, healthExpected, localUrl, hostnames)
 	})
 	t.Run("ExternalTrafficPolicy:Local/Client:Pod", func(t *testing.T) {
 		testLoadBalancerLocalFromPod(t, data, pods, localUrl, podIPs, hostnames)
@@ -246,12 +269,18 @@ func testLoadBalancerClusterFromPod(t *testing.T, data *TestData, pods []string,
 	}
 }
 
-func testLoadBalancerLocalFromNode(t *testing.T, data *TestData, nodes []string, url string, expectedHostnames []string) {
+func testLoadBalancerLocalFromNode(t *testing.T, data *TestData, nodes, healthUrls []string, healthExpected, url string, expectedHostnames []string) {
 	skipIfKubeProxyEnabled(t, data)
 	for idx, node := range nodes {
 		hostname, err := probeHostnameFromNode(node, url, data)
 		require.NoError(t, err, "Service LoadBalancer whose externalTrafficPolicy is Local should be able to be connected from Node")
 		require.Equal(t, hostname, expectedHostnames[idx])
+
+		for _, healthUrl := range healthUrls {
+			healthOutput, _, err := probeHealthFromNode(node, healthUrl, data)
+			require.NoError(t, err, "Service LoadBalancer whose externalTrafficPolicy is Local should have a response for healthcheck")
+			require.Equal(t, healthOutput, healthExpected)
+		}
 	}
 }
 

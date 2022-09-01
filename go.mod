@@ -30,6 +30,7 @@ require (
 	github.com/k8snetworkplumbingwg/network-attachment-definition-client v1.1.0
 	github.com/k8snetworkplumbingwg/sriov-cni v2.1.0+incompatible
 	github.com/kevinburke/ssh_config v0.0.0-20190725054713-01f96b0aa0cd
+	github.com/lithammer/dedent v1.1.0
 	github.com/mdlayher/arp v0.0.0-20191213142603-f72070a231fc
 	github.com/mdlayher/ethernet v0.0.0-20190606142754-0394541c37b7
 	github.com/mdlayher/ndp v0.0.0-20210831201139-f982b8766fb5
