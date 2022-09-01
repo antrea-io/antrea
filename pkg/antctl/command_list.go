@@ -136,13 +136,14 @@ func (cl *commandList) GetDebugCommands(mode string) [][]string {
 		}
 	}
 	for _, cmd := range cl.rawCommands {
-		if cmd.cobraCommand.Use == "proxy" {
-			// proxy will keep running until interrupted so it
-			// cannot be used as is in e2e tests.
+		if cmd.cobraCommand.Use == "proxy" || cmd.cobraCommand.Use == "set" {
+			// proxy will keep running until interrupted, so it cannot be used as is in e2e tests.
+			// "set" need to be provided with specific parameter
 			continue
 		}
 		if mode == runtime.ModeController && cmd.supportController ||
-			mode == runtime.ModeAgent && cmd.supportAgent {
+			mode == runtime.ModeAgent && cmd.supportAgent ||
+			mode == runtime.ModeFlowAggregator && cmd.supportFlowAggregator {
 			var currentCommand []string
 			if group, ok := groupCommands[cmd.commandGroup]; ok {
 				currentCommand = append(currentCommand, group.Use)

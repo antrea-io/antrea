@@ -27,6 +27,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	ipfixregistry "github.com/vmware/go-ipfix/pkg/registry"
+	"gopkg.in/yaml.v2"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -36,6 +37,7 @@ import (
 	"antrea.io/antrea/pkg/antctl"
 	"antrea.io/antrea/pkg/antctl/runtime"
 	secv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	"antrea.io/antrea/pkg/flowaggregator/options"
 	"antrea.io/antrea/test/e2e/utils"
 )
 
@@ -139,6 +141,8 @@ const (
 	antreaIngressTableInitFlowCount = 6
 	ingressTableInitFlowCount       = 1
 	egressTableInitFlowCount        = 1
+	retryInterval                   = 1 * time.Second
+	retryTimeout                    = 2 * time.Minute
 )
 
 var (
@@ -535,7 +539,107 @@ func testHelper(t *testing.T, data *TestData, podAIPs, podBIPs, podCIPs, podDIPs
 		t.Run("GetFlowRecordsJson", func(t *testing.T) {
 			checkAntctlGetFlowRecordsJson(t, data, podName, podAIPs, podBIPs, isIPv6)
 		})
+		// this test need to be put at the last one, since the parameters in flow-aggregator will be changed.
+		t.Run("AntctlSetFlowAggregator", func(t *testing.T) {
+			checkAntctlSetFlowAggregator(t, data, podName)
+		})
 	})
+}
+
+func checkAntctlSetFlowAggregator(t *testing.T, data *TestData, podName string) {
+	args := []string{"set", "flow-aggregator", "clickHouse.enable=true", "clickHouse.database=test",
+		"clickHouse.databaseURL=http://hostTest", "clickHouse.debug=true", "clickHouse.commitInterval=5s",
+		"flowCollector.enable=true", "flowCollector.address=addressTest", "clickHouse.compress=false"}
+	command := transformAntctlCommand(args)
+	t.Logf("Run command: %s", command)
+	configMap := sendCommandAndWaitConfigMapUpdated(t, data, podName, command)
+
+	// check modification is updated to mounted configMap
+	var opt options.Options
+	err := yaml.UnmarshalStrict([]byte(configMap), &opt.Config)
+	require.NoErrorf(t, err, "error when unmarshalling configMap")
+	assert.Equal(t, true, opt.Config.ClickHouse.Enable)
+	assert.Equal(t, "test", opt.Config.ClickHouse.Database)
+	assert.Equal(t, "http://hostTest", opt.Config.ClickHouse.DatabaseURL)
+	assert.Equal(t, true, opt.Config.ClickHouse.Debug)
+	assert.Equal(t, false, *opt.Config.ClickHouse.Compress)
+	assert.Equal(t, "5s", opt.Config.ClickHouse.CommitInterval)
+	assert.Equal(t, true, opt.Config.FlowCollector.Enable)
+	assert.Equal(t, "addressTest", opt.Config.FlowCollector.Address)
+
+	// check logs of flow-aggregator
+	cmdLog := fmt.Sprintf("kubectl logs %s -n %s", podName, flowAggregatorNamespace)
+	_, stdout, stderr, err := data.RunCommandOnNode(controlPlaneNodeName(), cmdLog)
+	require.NoErrorf(t, err, "Error when running %v from %s: %v\nstdout:%s\nstderr:%s", cmdLog, controlPlaneNodeName(), err, stdout, stderr)
+	assert.Containsf(t, stdout, "\"Updating flow-collector address\"", "External flow-collector should be updated")
+	assert.Containsf(t, stdout, "\"Config ExternalFlowCollectorAddr is changed\" address=\"addressTest:4739\"", "Address should be addressTest")
+	// ClickHouse will do retry when the connection is not successful. Retry here as connection is expected to fail.
+	err = wait.PollImmediate(retryInterval, retryTimeout, func() (bool, error) {
+		_, stdout, stderr, err = data.RunCommandOnNode(controlPlaneNodeName(), cmdLog)
+		require.NoErrorf(t, err, "Error when running %v from %s: %v\nstdout:%s\nstderr:%s", cmdLog, controlPlaneNodeName(), err, stdout, stderr)
+		bool1 := strings.Contains(stdout, "[clickhouse]host(s)=hostTest, database=test, username=clickhouse_operator")
+		bool2 := strings.Contains(stdout, "\"Error when checking new connection\"")
+		if bool1 && bool2 {
+			return true, nil
+		} else {
+			return false, nil
+		}
+	})
+	require.NoErrorf(t, err, "error when checking log")
+
+	args = []string{"set", "flow-aggregator", "clickHouse.enable=false"}
+	command = transformAntctlCommand(args)
+	t.Logf("Run command: %s", command)
+	sendCommandAndWaitConfigMapUpdated(t, data, podName, command)
+	_, stdout, stderr, err = data.RunCommandOnNode(controlPlaneNodeName(), cmdLog)
+	require.NoErrorf(t, err, "Error when running %v from %s: %v\nstdout:%s\nstderr:%s", cmdLog, controlPlaneNodeName(), err, stdout, stderr)
+	assert.Containsf(t, stdout, "\"Disabled ClickHouse\"", "ClickHouse should be disabled")
+
+	args = []string{"set", "flow-aggregator", "clickHouse.enable=true", "clickHouse.database=default",
+		"clickHouse.databaseURL=tcp://clickhouse-clickhouse.flow-visibility.svc:9000", "flowCollector.enable=false",
+		"clickHouse.debug=false"}
+	command = transformAntctlCommand(args)
+	t.Logf("Run command: %s", command)
+	sendCommandAndWaitConfigMapUpdated(t, data, podName, command)
+	_, stdout, stderr, err = data.RunCommandOnNode(controlPlaneNodeName(), cmdLog)
+	require.NoErrorf(t, err, "Error when running %v from %s: %v\nstdout:%s\nstderr:%s", cmdLog, controlPlaneNodeName(), err, stdout, stderr)
+	assert.Containsf(t, stdout, "\"Enabling ClickHouse\"", "ClickHouse should be enable")
+	assert.Containsf(t, stdout, "\"ClickHouse configuration\" database=\"default\" databaseURL=\"tcp://clickhouse-clickhouse.flow-visibility.svc:9000\" debug=false compress=false commitInterval=\"5s", "New parameters of clickhouse should be printed in log")
+	assert.Containsf(t, stdout, "\"Disabled Flow-Collector\"", "Flow-collector should be disabled")
+}
+
+func sendCommandAndWaitConfigMapUpdated(t *testing.T, data *TestData, podName string, cmd []string) string {
+	command := []string{"cat", "etc/flow-aggregator/flow-aggregator.conf"}
+	configMapPrev, _, err := data.RunCommandFromPod(flowAggregatorNamespace, podName, flowAggregatorContainerName, command)
+	require.NoErrorf(t, err, "Error when accessing mounted config file")
+
+	stdout, stderr, err := runAntctl(podName, cmd, data)
+	require.NoErrorf(t, err, "Error when running '%s' from %s: %v\n%s", cmd, podName, err, antctlOutput(stdout, stderr))
+
+	var configMapCur string
+	err = wait.PollImmediate(retryInterval, retryTimeout, func() (bool, error) {
+		command = []string{"cat", "etc/flow-aggregator/flow-aggregator.conf"}
+		configMapCur, _, err = data.RunCommandFromPod(flowAggregatorNamespace, podName, flowAggregatorContainerName, command)
+		require.NoError(t, err, "Error when accessing mounted config file")
+		if configMapCur != configMapPrev {
+			return true, nil
+		} else {
+			return false, nil
+		}
+	})
+	require.NoErrorf(t, err, "Error when checking mounted config file")
+	return configMapCur
+}
+
+func transformAntctlCommand(args []string) []string {
+	var command []string
+	if testOptions.enableCoverage {
+		antctlCovArgs := antctlCoverageArgs("antctl-coverage")
+		command = append(antctlCovArgs, args...)
+	} else {
+		command = append([]string{"antctl"}, args...)
+	}
+	return command
 }
 
 func checkAntctlGetFlowRecordsJson(t *testing.T, data *TestData, podName string, podAIPs, podBIPs *PodIPs, isIPv6 bool) {
