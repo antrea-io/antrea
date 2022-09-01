@@ -29,6 +29,7 @@ type CrdV1alpha1Interface interface {
 	ClusterNetworkPoliciesGetter
 	ExternalNodesGetter
 	NetworkPoliciesGetter
+	SupportBundleCollectionsGetter
 	TiersGetter
 	TraceflowsGetter
 }
@@ -48,6 +49,10 @@ func (c *CrdV1alpha1Client) ExternalNodes(namespace string) ExternalNodeInterfac
 
 func (c *CrdV1alpha1Client) NetworkPolicies(namespace string) NetworkPolicyInterface {
 	return newNetworkPolicies(c, namespace)
+}
+
+func (c *CrdV1alpha1Client) SupportBundleCollections() SupportBundleCollectionInterface {
+	return newSupportBundleCollections(c)
 }
 
 func (c *CrdV1alpha1Client) Tiers() TierInterface {

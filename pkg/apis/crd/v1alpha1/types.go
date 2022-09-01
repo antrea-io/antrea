@@ -709,3 +709,127 @@ type ExternalNodeList struct {
 
 	Items []ExternalNode `json:"items,omitempty"`
 }
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+type SupportBundleCollectionList struct {
+	metav1.TypeMeta `json:",inline"`
+	// +optional
+	metav1.ListMeta `json:"metadata,omitempty"`
+
+	Items []SupportBundleCollection `json:"items"`
+}
+
+// +genclient
+// +genclient:nonNamespaced
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+type SupportBundleCollection struct {
+	metav1.TypeMeta `json:",inline"`
+	// Standard metadata of the object.
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	// Specification of the desired behavior of SupportBundleCollection.
+	Spec SupportBundleCollectionSpec `json:"spec"`
+	// Most recently observed status of the SupportBundleCollection.
+	Status SupportBundleCollectionStatus `json:"status"`
+}
+
+type SupportBundleCollectionSpec struct {
+	Nodes         *BundleNodes         `json:"nodes,omitempty"`
+	ExternalNodes *BundleExternalNodes `json:"externalNodes,omitempty"`
+	// ExpirationMinutes is the requested duration of validity of the SupportBundleCollection.
+	// A SupportBundleCollection will be marked as Failed if it does not finish before expiration.
+	// Default is 60.
+	ExpirationMinutes int32 `json:"expirationMinutes"`
+	// SinceTime specifies a relative time before the current time from which to collect logs
+	// A valid value is like: 1d, 2h, 30m.
+	SinceTime      string                        `json:"sinceTime,omitempty"`
+	FileServer     BundleFileServer              `json:"fileServer"`
+	Authentication BundleServerAuthConfiguration `json:"authentication"`
+}
+
+type SupportBundleCollectionStatus struct {
+	// The number of Nodes and ExternalNodes that have completed the SupportBundleCollection.
+	SucceededNodes int32 `json:"succeededNodes"`
+	// The total number of Nodes and ExternalNodes that should process the SupportBundleCollection.
+	DesiredNodes int32 `json:"desiredNodes"`
+	// Represents the latest available observations of a SupportBundleCollection current state.
+	Conditions []SupportBundleCollectionCondition `json:"conditions"`
+}
+
+type SupportBundleCollectionConditionType string
+
+const (
+	// CollectionStarted is added in a SupportBundleCollection when Antrea Controller has started to handle the request.
+	CollectionStarted SupportBundleCollectionConditionType = "Started"
+	// CollectionCompleted is added in a SupportBundleCollection when Antrea has finished processing the collection.
+	CollectionCompleted SupportBundleCollectionConditionType = "Completed"
+	// CollectionFailure is added in a SupportBundleCollection when one of its required Nodes/ExternalNodes fails
+	// to process the request.
+	CollectionFailure SupportBundleCollectionConditionType = "CollectionFailure"
+	// BundleCollected is added in a SupportBundleCollection when at least one of its required Nodes/ExternalNodes
+	// successfully uploaded files to the file server.
+	BundleCollected SupportBundleCollectionConditionType = "BundleCollected"
+)
+
+// SupportBundleCollectionCondition describes the state of a SupportBundleCollection at a certain point.
+type SupportBundleCollectionCondition struct {
+	// Type of StatefulSet condition.
+	Type SupportBundleCollectionConditionType `json:"type"`
+	// Status of the condition, one of True, False, Unknown.
+	Status metav1.ConditionStatus `json:"status"`
+	// Last time the condition transitioned from one status to another.
+	// +optional
+	LastTransitionTime metav1.Time `json:"lastTransitionTime,omitempty"`
+	// The reason for the condition's last transition.
+	// +optional
+	Reason string `json:"reason,omitempty"`
+	// A human-readable message indicating details about the transition.
+	// +optional
+	Message string `json:"message,omitempty"`
+}
+
+type BundleNodes struct {
+	// List the names of certain Nodes which are expected to collect and upload
+	// bundle files.
+	// +optional
+	NodeNames []string `json:"nodeNames,omitempty"`
+	// Select certain Nodes which match the label selector.
+	// +optional
+	NodeSelector *metav1.LabelSelector `json:"nodeSelector,omitempty"`
+}
+
+type BundleExternalNodes struct {
+	Namespace string
+	// List the names of certain ExternalNodes which are expected to collect and upload
+	// bundle files.
+	// +optional
+	NodeNames []string `json:"nodeNames,omitempty"`
+	// Select certain ExternalNodes which match the label selector.
+	// +optional
+	NodeSelector *metav1.LabelSelector `json:"nodeSelector,omitempty"`
+}
+
+// BundleFileServer specifies the bundle file server information.
+type BundleFileServer struct {
+	// The URL of the bundle file server. It is set with format: scheme://host[:port][/path],
+	// e.g, https://api.example.com:8443/v1/supportbundles/. If scheme is not set, https is used by default.
+	URL string `json:"url"`
+}
+
+// BundleServerAuthType defines the authentication type to access the BundleFileServer.
+type BundleServerAuthType string
+
+const (
+	APIKey      BundleServerAuthType = "APIKey"
+	BearerToken BundleServerAuthType = "BearerToken"
+)
+
+// BundleServerAuthConfiguration defines the authentication parameters that Antrea uses to access
+// the BundleFileServer.
+type BundleServerAuthConfiguration struct {
+	AuthType BundleServerAuthType `json:"authType"`
+	// AuthSecret is a Secret reference which stores the authentication value.
+	AuthSecret *v1.SecretReference `json:"authSecret"`
+}
