@@ -12,10 +12,10 @@ require (
 	github.com/Microsoft/hcsshim v0.8.9
 	github.com/TomCodeLV/OVSDB-golang-lib v0.0.0-20200116135253-9bbdfadcd881
 	github.com/awalterschulze/gographviz v2.0.1+incompatible
-	github.com/aws/aws-sdk-go-v2 v1.16.10
-	github.com/aws/aws-sdk-go-v2/config v1.16.0
-	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.11.23
-	github.com/aws/aws-sdk-go-v2/service/s3 v1.27.4
+	github.com/aws/aws-sdk-go-v2 v1.16.13
+	github.com/aws/aws-sdk-go-v2/config v1.17.4
+	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.11.30
+	github.com/aws/aws-sdk-go-v2/service/s3 v1.27.8
 	github.com/blang/semver v3.5.1+incompatible
 	github.com/cheggaaa/pb/v3 v3.1.0
 	github.com/confluentinc/bincover v0.1.0
@@ -42,7 +42,7 @@ require (
 	github.com/miekg/dns v1.1.50
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822
 	github.com/onsi/ginkgo v1.16.5
-	github.com/onsi/gomega v1.18.1
+	github.com/onsi/gomega v1.20.2
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.13.0
 	github.com/prometheus/common v0.37.0
@@ -57,7 +57,7 @@ require (
 	golang.org/x/crypto v0.0.0-20220214200702-86341886e292
 	golang.org/x/exp v0.0.0-20200224162631-6cc2880d07d6
 	golang.org/x/mod v0.6.0-dev.0.20220106191415-9b9b3d81d5e3
-	golang.org/x/net v0.0.0-20220225172249-27dd8689420f
+	golang.org/x/net v0.0.0-20220722155237-a158d28d115b
 	golang.org/x/sync v0.0.0-20220601150217-0de741cfad7f
 	golang.org/x/sys v0.0.0-20220728004956-3c1f35247d10
 	golang.org/x/time v0.0.0-20220210224613-90d013bbcef8
@@ -97,20 +97,21 @@ require (
 	github.com/PuerkitoBio/urlesc v0.0.0-20170810143723-de5bf2ad4578 // indirect
 	github.com/VividCortex/ewma v1.1.1 // indirect
 	github.com/armon/go-metrics v0.0.0-20180917152333-f0300d1749da // indirect
-	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.4.4 // indirect
-	github.com/aws/aws-sdk-go-v2/credentials v1.12.12 // indirect
-	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.12.11 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/configsources v1.1.17 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.4.11 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/ini v1.3.18 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/v4a v1.0.8 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.9.4 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/checksum v1.1.12 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.9.11 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.13.11 // indirect
-	github.com/aws/aws-sdk-go-v2/service/sso v1.11.15 // indirect
-	github.com/aws/aws-sdk-go-v2/service/sts v1.16.12 // indirect
-	github.com/aws/smithy-go v1.12.1 // indirect
+	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.4.6 // indirect
+	github.com/aws/aws-sdk-go-v2/credentials v1.12.17 // indirect
+	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.12.14 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/configsources v1.1.20 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.4.14 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/ini v1.3.21 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/v4a v1.0.11 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.9.7 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/checksum v1.1.15 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.9.14 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.13.14 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sso v1.11.20 // indirect
+	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.13.2 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sts v1.16.16 // indirect
+	github.com/aws/smithy-go v1.13.1 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/blang/semver/v4 v4.0.0 // indirect
 	github.com/cenk/hub v1.0.1 // indirect
