@@ -20,11 +20,8 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	multiclusterv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
@@ -37,6 +34,7 @@ type resourceImportOptions struct {
 	namespace     string
 	outputFormat  string
 	allNamespaces bool
+	k8sClient     client.Client
 }
 
 var options *resourceImportOptions
@@ -54,15 +52,24 @@ Get the specified ResourceImport
 $ antctl mc get resourceimport <RESOURCEIMPORT> -n <NAMESPACE>
 `, "\n")
 
-func (o *resourceImportOptions) validateAndComplete() {
+func (o *resourceImportOptions) validateAndComplete(cmd *cobra.Command) error {
 	if o.allNamespaces {
 		o.namespace = metav1.NamespaceAll
-		return
-	}
-	if o.namespace == "" {
+	} else if o.namespace == "" {
 		o.namespace = metav1.NamespaceDefault
-		return
 	}
+	if o.k8sClient == nil {
+		kubeconfig, err := raw.ResolveKubeconfig(cmd)
+		if err != nil {
+			return err
+		}
+
+		o.k8sClient, err = client.New(kubeconfig, client.Options{Scheme: scheme.Scheme})
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func NewResourceImportCommand() *cobra.Command {
@@ -87,47 +94,34 @@ func NewResourceImportCommand() *cobra.Command {
 }
 
 func runE(cmd *cobra.Command, args []string) error {
-	options.validateAndComplete()
+	err := options.validateAndComplete(cmd)
+	if err != nil {
+		return err
+	}
 	argsNum := len(args)
-	if options.allNamespaces && argsNum > 0 {
-		return fmt.Errorf("a resource cannot be retrieved by name across all Namespaces")
-	}
-
-	kubeconfig, err := raw.ResolveKubeconfig(cmd)
-	if err != nil {
-		return err
-	}
-	kubeconfig.GroupVersion = &schema.GroupVersion{Group: "", Version: ""}
-	restconfigTmpl := rest.CopyConfig(kubeconfig)
-	raw.SetupKubeconfig(restconfigTmpl)
-
-	k8sClient, err := client.New(kubeconfig, client.Options{Scheme: scheme.Scheme})
-	if err != nil {
-		return err
-	}
-
 	singleResource := false
 	if argsNum > 0 {
 		singleResource = true
 	}
+
+	if options.allNamespaces && singleResource {
+		return fmt.Errorf("a resource cannot be retrieved by name across all Namespaces")
+	}
+
 	var res interface{}
 
 	if singleResource {
 		resourceImportName := args[0]
 		resourceImport := multiclusterv1alpha1.ResourceImport{}
-		err = k8sClient.Get(context.TODO(), types.NamespacedName{
+		err = options.k8sClient.Get(context.TODO(), types.NamespacedName{
 			Namespace: options.namespace,
 			Name:      resourceImportName,
 		}, &resourceImport)
 		if err != nil {
-			if apierrors.IsNotFound(err) {
-				return fmt.Errorf("ResourceImport %s not found in Namespace %s", resourceImportName, options.namespace)
-			}
-
 			return err
 		}
 
-		gvks, unversioned, err := k8sClient.Scheme().ObjectKinds(&resourceImport)
+		gvks, unversioned, err := options.k8sClient.Scheme().ObjectKinds(&resourceImport)
 		if err != nil {
 			return err
 		}
@@ -137,16 +131,15 @@ func runE(cmd *cobra.Command, args []string) error {
 		res = resourceImport
 	} else {
 		resourceImportList := &multiclusterv1alpha1.ResourceImportList{}
-		err = k8sClient.List(context.TODO(), resourceImportList, &client.ListOptions{Namespace: options.namespace})
+		err = options.k8sClient.List(context.TODO(), resourceImportList, &client.ListOptions{Namespace: options.namespace})
 		if err != nil {
 			return err
 		}
-
 		if len(resourceImportList.Items) == 0 {
 			if options.namespace != "" {
 				fmt.Fprintf(cmd.ErrOrStderr(), "No resources found in Namespace %s\n", options.namespace)
 			} else {
-				fmt.Fprintln(cmd.ErrOrStderr(), "No resources found in all Namespaces")
+				fmt.Fprintln(cmd.ErrOrStderr(), "No resources found")
 			}
 			return nil
 		}

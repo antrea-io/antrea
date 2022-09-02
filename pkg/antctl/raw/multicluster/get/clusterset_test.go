@@ -46,7 +46,6 @@ func TestGetClusterSet(t *testing.T) {
 		output              string
 		allNamespaces       bool
 		donotFake           bool
-		expectedErr         string
 		expectedOutput      string
 	}{
 		{
@@ -70,9 +69,9 @@ func TestGetClusterSet(t *testing.T) {
 			expectedOutput:      "- apiVersion: multicluster.crd.antrea.io/v1alpha1\n  kind: ClusterSet\n  metadata:\n    creationTimestamp: null\n    name: clusterset-name\n    namespace: default\n    resourceVersion: \"999\"\n  spec:\n    leaders: null\n  status: {}\n",
 		},
 		{
-			name:        "get non-existing ClusterSet",
-			args:        []string{"clusterset1"},
-			expectedErr: "clustersets.multicluster.crd.antrea.io \"clusterset1\" not found",
+			name:           "get non-existing ClusterSet",
+			args:           []string{"clusterset1"},
+			expectedOutput: "clustersets.multicluster.crd.antrea.io \"clusterset1\" not found",
 		},
 		{
 			name:          "get all ClusterSets",
@@ -120,9 +119,9 @@ func TestGetClusterSet(t *testing.T) {
 			expectedOutput: "No resource found in Namespace default\n",
 		},
 		{
-			name:        "error due to no kubeconfig",
-			expectedErr: "flag accessed but not defined: kubeconfig",
-			donotFake:   true,
+			name:           "error due to no kubeconfig",
+			expectedOutput: "flag accessed but not defined: kubeconfig",
+			donotFake:      true,
 		},
 	}
 
@@ -151,7 +150,7 @@ func TestGetClusterSet(t *testing.T) {
 			}
 			err := cmd.Execute()
 			if err != nil {
-				assert.Equal(t, tt.expectedErr, err.Error())
+				assert.Equal(t, tt.expectedOutput, err.Error())
 			} else {
 				assert.Equal(t, tt.expectedOutput, buf.String())
 			}

@@ -21,34 +21,44 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 type CleanOptions struct {
 	Namespace  string
 	ClusterSet string
+	K8sClient  client.Client
 }
 
-func (o *CleanOptions) validate() error {
+func (o *CleanOptions) validate(cmd *cobra.Command) error {
 	if o.ClusterSet == "" {
-		return fmt.Errorf("ClusterSet is required")
+		return fmt.Errorf("the ClusterSet is required")
 	}
 
+	if o.Namespace == "" {
+		return fmt.Errorf("the Namespace is required")
+	}
+
+	var err error
+	if o.K8sClient == nil {
+		o.K8sClient, err = NewClient(cmd)
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
 func Cleanup(cmd *cobra.Command, cleanOpts *CleanOptions) error {
-	if err := cleanOpts.validate(); err != nil {
+	if err := cleanOpts.validate(cmd); err != nil {
 		return err
 	}
-	k8sClient, err := NewClient(cmd)
-	if err != nil {
-		return err
-	}
-	deleteClusterSet(cmd, k8sClient, cleanOpts.Namespace, cleanOpts.ClusterSet)
-	deleteClusterClaims(cmd, k8sClient, cleanOpts.Namespace)
-	deleteSecrets(cmd, k8sClient, cleanOpts.Namespace)
-	deleteServiceAccounts(cmd, k8sClient, cleanOpts.Namespace)
-	deleteRoleBindings(cmd, k8sClient, cleanOpts.Namespace)
+
+	deleteClusterSet(cmd, cleanOpts.K8sClient, cleanOpts.Namespace, cleanOpts.ClusterSet)
+	deleteClusterClaims(cmd, cleanOpts.K8sClient, cleanOpts.Namespace)
+	deleteSecrets(cmd, cleanOpts.K8sClient, cleanOpts.Namespace)
+	deleteServiceAccounts(cmd, cleanOpts.K8sClient, cleanOpts.Namespace)
+	deleteRoleBindings(cmd, cleanOpts.K8sClient, cleanOpts.Namespace)
 
 	return nil
 }

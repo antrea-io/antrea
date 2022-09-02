@@ -39,7 +39,7 @@ func listTransform(l interface{}) (interface{}, error) {
 
 	for i := range resourceExports {
 		item := resourceExports[i]
-		o, _ := objectTransform(&item)
+		o, _ := objectTransform(item)
 		result = append(result, o.(Response))
 	}
 
@@ -47,7 +47,7 @@ func listTransform(l interface{}) (interface{}, error) {
 }
 
 func objectTransform(o interface{}) (interface{}, error) {
-	resourceExport := o.(*multiclusterv1alpha1.ResourceExport)
+	resourceExport := o.(multiclusterv1alpha1.ResourceExport)
 
 	return Response{
 		ClusterID: resourceExport.Labels["sourceClusterID"],
