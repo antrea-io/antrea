@@ -21,6 +21,7 @@ import (
 	"github.com/spf13/cobra"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	multiclustercontrollers "antrea.io/antrea/multicluster/controllers/multicluster"
 	"antrea.io/antrea/pkg/log"
@@ -53,6 +54,12 @@ func runMember(o *Options) error {
 	if err != nil {
 		return err
 	}
+
+	hookServer := mgr.GetWebhookServer()
+	hookServer.Register("/validate-multicluster-crd-antrea-io-v1alpha1-gateway",
+		&webhook.Admission{Handler: &gatewayValidator{
+			Client:    mgr.GetClient(),
+			namespace: env.GetPodNamespace()}})
 
 	clusterSetReconciler := multiclustercontrollers.NewMemberClusterSetReconciler(mgr.GetClient(),
 		mgr.GetScheme(),

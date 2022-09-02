@@ -54,3 +54,4 @@ resources:
 
 patchesStrategicMerge:
   - manager_command_patch.yaml
+  - webhook_patch.yaml
