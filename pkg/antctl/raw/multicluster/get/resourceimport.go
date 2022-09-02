@@ -153,5 +153,5 @@ func runE(cmd *cobra.Command, args []string) error {
 		res = resourceImportList.Items
 	}
 
-	return output(res, singleResource, options.outputFormat, resourceimport.Transform)
+	return output(res, singleResource, options.outputFormat, cmd.OutOrStdout(), resourceimport.Transform)
 }
