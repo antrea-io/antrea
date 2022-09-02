@@ -33,7 +33,7 @@ import (
 )
 
 var (
-	normalizedLabel = "ns:kubernetes.io/metadata.name=ns&pod:app=client"
+	normalizedLabel = "ns:kubernetes.io/metadata.name=test-ns&pod:app=client"
 	labelHash       = common.HashLabelIdentity(normalizedLabel)
 
 	resExpNamespacedName = types.NamespacedName{
@@ -194,7 +194,7 @@ func TestIDAllocatorBasic(t *testing.T) {
 		} else {
 			idAllocator.release(step.idExpectedOrReleasing)
 		}
-		if idAllocator.availableForReuseIDs.Len() != step.expectedAvailableReuseIDs {
+		if idAllocator.releasedIDs.Len() != step.expectedAvailableReuseIDs {
 			t.Errorf("Unexpected number of IDs available for reuse")
 		}
 	}
@@ -286,13 +286,13 @@ func TestIDAllocatorWithPreAllocation(t *testing.T) {
 		case "release":
 			idAllocator.release(step.id)
 		}
-		if idAllocator.preAllocatedIDs.Len() != step.expectedPreAllocatedIDs {
+		if idAllocator.previouslyAllocatedIDs.Len() != step.expectedPreAllocatedIDs {
 			t.Errorf("Unexpected number of pre-allocated IDs on step %s %d, expect: %d actual: %d",
-				step.op, step.id, step.expectedPreAllocatedIDs, idAllocator.preAllocatedIDs.Len())
+				step.op, step.id, step.expectedPreAllocatedIDs, idAllocator.previouslyAllocatedIDs.Len())
 		}
-		if idAllocator.availableForReuseIDs.Len() != step.expectedAvailableReuseIDs {
+		if idAllocator.releasedIDs.Len() != step.expectedAvailableReuseIDs {
 			t.Errorf("Unexpected number of IDs available for reuse on step %s %d, expect: %d actual: %d",
-				step.op, step.id, step.expectedAvailableReuseIDs, idAllocator.availableForReuseIDs.Len())
+				step.op, step.id, step.expectedAvailableReuseIDs, idAllocator.releasedIDs.Len())
 		}
 	}
 }

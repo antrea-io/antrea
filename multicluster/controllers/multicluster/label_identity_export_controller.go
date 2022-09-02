@@ -40,7 +40,7 @@ import (
 
 const (
 	// 24 bits are available in VNI. The max value 16777215 is reserved for unknown ID.
-	maxAlloctedID = 16777214
+	maxIDForAllocation = 16777214
 )
 
 type (
@@ -67,7 +67,7 @@ func NewLabelIdentityExportReconciler(
 		clusterToLabels:  map[string]sets.String{},
 		labelsToClusters: map[string]sets.String{},
 		labelsToID:       map[string]uint32{},
-		allocator:        newIDAllocator(1, maxAlloctedID),
+		allocator:        newIDAllocator(1, maxIDForAllocation),
 	}
 }
 
@@ -94,7 +94,10 @@ func (r *LabelIdentityExportReconciler) Reconcile(ctx context.Context, req ctrl.
 func (r *LabelIdentityExportReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	// Ignore status update event via GenerationChangedPredicate
 	generationPredicate := predicate.GenerationChangedPredicate{}
-	// Only register this controller to reconcile LabelIdentity kind of ResourceExport
+	// Only register this controller to reconcile LabelIdentity kind of ResourceExport.
+	// We expect LabelIdentity ResourceExport events to have higher volume than the other (i.e. Service or
+	// ACNP ResourceExport), and do not want sync of these resources to be blocked by potentially huge number
+	// of LabelIdentity ResourceExport requests. Hence, LabelIdentity reconciler has dedicated workers.
 	labelIdentityResExportFilter := func(object client.Object) bool {
 		if resExport, ok := object.(*mcsv1alpha1.ResourceExport); ok {
 			return resExport.Spec.Kind == common.LabelIdentityKind
@@ -235,6 +238,7 @@ func getLabelIdentityResImport(labelHash, label, ns string, id uint32) *mcsv1alp
 			Namespace: ns,
 		},
 		Spec: mcsv1alpha1.ResourceImportSpec{
+			Kind: common.LabelIdentityKind,
 			LabelIdentity: &mcsv1alpha1.LabelIdentitySpec{
 				Label: label,
 				ID:    id,
@@ -252,13 +256,13 @@ func parseLabelIdentityExportNamespacedName(namespacedName types.NamespacedName)
 	return clusterID, labelHash
 }
 
-// idAllocator allocates a unqiue uint32 ID for each label identity.
+// idAllocator allocates an unqiue uint32 ID for each label identity.
 type idAllocator struct {
 	sync.Mutex
-	maxID                uint32
-	nextID               uint32
-	preAllocatedIDs      intsets.Sparse
-	availableForReuseIDs intsets.Sparse
+	maxID                  uint32
+	nextID                 uint32
+	previouslyAllocatedIDs intsets.Sparse
+	releasedIDs            intsets.Sparse
 }
 
 // allocate will first try to allocate an ID within the pool of IDs that has been
@@ -270,10 +274,10 @@ func (a *idAllocator) allocate() (uint32, error) {
 	defer a.Unlock()
 
 	available := -1
-	if ok := a.availableForReuseIDs.TakeMin(&available); ok {
+	if ok := a.releasedIDs.TakeMin(&available); ok {
 		return uint32(available), nil
 	}
-	for a.preAllocatedIDs.Has(int(a.nextID)) {
+	for a.previouslyAllocatedIDs.Has(int(a.nextID)) {
 		a.nextID += 1
 	}
 	if a.nextID <= a.maxID {
@@ -290,11 +294,11 @@ func (a *idAllocator) setAllocated(id uint32) error {
 	a.Lock()
 	defer a.Unlock()
 
-	if a.availableForReuseIDs.Has(int(id)) {
-		a.availableForReuseIDs.Remove(int(id))
+	if a.releasedIDs.Has(int(id)) {
+		a.releasedIDs.Remove(int(id))
 		return nil
 	} else if id >= a.nextID {
-		a.preAllocatedIDs.Insert(int(id))
+		a.previouslyAllocatedIDs.Insert(int(id))
 		return nil
 	}
 	return fmt.Errorf("ID %d has already been allocated", id)
@@ -304,18 +308,18 @@ func (a *idAllocator) release(id uint32) {
 	a.Lock()
 	defer a.Unlock()
 
-	a.availableForReuseIDs.Insert(int(id))
-	if a.preAllocatedIDs.Has(int(a.nextID)) {
-		a.preAllocatedIDs.Remove(int(id))
+	a.releasedIDs.Insert(int(id))
+	if a.previouslyAllocatedIDs.Has(int(a.nextID)) {
+		a.previouslyAllocatedIDs.Remove(int(id))
 	}
 }
 
 func newIDAllocator(minID, maxID uint32) *idAllocator {
 	preAllocated, availableIDs := intsets.Sparse{}, intsets.Sparse{}
 	return &idAllocator{
-		nextID:               minID,
-		maxID:                maxID,
-		preAllocatedIDs:      preAllocated,
-		availableForReuseIDs: availableIDs,
+		nextID:                 minID,
+		maxID:                  maxID,
+		previouslyAllocatedIDs: preAllocated,
+		releasedIDs:            availableIDs,
 	}
 }
