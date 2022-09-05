@@ -520,7 +520,7 @@ func (c *Controller) syncGroup(groupKey string) error {
 					return err
 				}
 				// Remove the multicast flow entry if no local Pod is in the group.
-				if err := c.ofClient.UninstallGroup(status.ofGroupID); err != nil {
+				if err := c.ofClient.UninstallMulticastGroup(status.ofGroupID); err != nil {
 					klog.ErrorS(err, "Failed to uninstall multicast group", "group", groupKey)
 					return err
 				}
