@@ -35,6 +35,9 @@ type Options struct {
 	// The precedence about which IP (private or public one) of Node is preferred to
 	// be used as tunnel endpoint. If not specified, private IP will be chosen.
 	GatewayIPPrecedence mcsv1alpha1.Precedence
+	// The type of IP address (ClusterIP or PodIP) to be used as the Multi-cluster
+	// Services' Endpoints.
+	EndpointIPType string
 }
 
 func newOptions() *Options {
@@ -63,6 +66,11 @@ func (o *Options) complete(args []string) error {
 		}
 		o.ServiceCIDR = ctrlConfig.ServiceCIDR
 		o.GatewayIPPrecedence = ctrlConfig.GatewayIPPrecedence
+		if ctrlConfig.EndpointIPType == "" {
+			o.EndpointIPType = "ClusterIP"
+		} else {
+			o.EndpointIPType = ctrlConfig.EndpointIPType
+		}
 		klog.InfoS("Using config from file", "config", o.options)
 	} else {
 		klog.InfoS("Using default config", "config", o.options)

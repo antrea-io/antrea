@@ -145,7 +145,8 @@ var _ = BeforeSuite(func() {
 	svcExportReconciler := multiclustercontrollers.NewServiceExportReconciler(
 		k8sManager.GetClient(),
 		k8sManager.GetScheme(),
-		clusterSetReconciler)
+		clusterSetReconciler,
+		"ClusterIP")
 	err = svcExportReconciler.SetupWithManager(k8sManager)
 	Expect(err).ToNot(HaveOccurred())
 

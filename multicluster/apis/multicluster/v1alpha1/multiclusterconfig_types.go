@@ -44,6 +44,13 @@ type MultiClusterConfig struct {
 	// The precedence about which IP address (internal or external IP) of Node is preferred to
 	// be used as the cross-cluster tunnel endpoint. if not specified, internal IP will be chosen.
 	GatewayIPPrecedence Precedence `json:"gatewayIPPrecedence,omitempty"`
+	// The type of IP address (ClusterIP or PodIP) to be used as the Multi-cluster
+	// Services' Endpoints. Defaults to ClusterIP. All member clusters should use the same type
+	// in a ClusterSet. Existing ServiceExports should be re-exported after changing
+	// EndpointIPType. ClusterIP type requires that Multi-cluster Gateway is configured.
+	// PodIP type requires Multi-cluster Gateway too when there is no direct Pod-to-Pod
+	// connectivity across member clusters.
+	EndpointIPType string `json:"endpointIPType,omitempty"`
 }
 
 func init() {

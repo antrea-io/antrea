@@ -73,7 +73,8 @@ func runMember(o *Options) error {
 	svcExportReconciler := multiclustercontrollers.NewServiceExportReconciler(
 		mgr.GetClient(),
 		mgr.GetScheme(),
-		commonAreaGetter)
+		commonAreaGetter,
+		o.EndpointIPType)
 	if err = svcExportReconciler.SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("error creating ServiceExport controller: %v", err)
 	}
