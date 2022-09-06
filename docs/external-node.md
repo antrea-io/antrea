@@ -25,7 +25,6 @@
   - [Non-IP packet](#non-ip-packet)
   - [IP packet](#ip-packet)
 - [Limitations](#limitations)
-- [Known issues](#known-issues)
 <!-- /toc -->
 
 ## What is ExternalNode?
@@ -195,21 +194,23 @@ spec:
    change `vm-ns` to the right Namespace.
 
    ```bash
-   kubectl apply -f https://raw.githubusercontent.com/antrea-io/antrea/feature/externalnode/build/yamls/externalnode/vm-agent-rbac.yml
+   kubectl apply -f https://raw.githubusercontent.com/antrea-io/antrea/main/build/yamls/externalnode/vm-agent-rbac.yml
    ```
 
 4. Create `antrea-agent.kubeconfig` file for `antrea-agent` to access the K8S
    API server.
 
    ```bash
-   export CLUSTER_NAME="kubernetes"
-   export SERVICE_ACCOUNT="vm-agent"
+   CLUSTER_NAME="kubernetes"
+   SERVICE_ACCOUNT="vm-agent"
+   NAMESPACE="vm-ns"
+   KUBECONFIG="antrea-agent.kubeconfig"
    APISERVER=$(kubectl config view -o jsonpath="{.clusters[?(@.name==\"$CLUSTER_NAME\")].cluster.server}")
-   TOKEN=$(kubectl -n vm-ns get secrets -o jsonpath="{.items[?(@.metadata.annotations['kubernetes\.io/service-account\.name']=='$SERVICE_ACCOUNT')].data.token}"|base64 --decode)
-   kubectl config --kubeconfig=antrea-agent.kubeconfig set-cluster $CLUSTER_NAME --server=$APISERVER --insecure-skip-tls-verify=true
-   kubectl config --kubeconfig=antrea-agent.kubeconfig set-credentials antrea-agent --token=$TOKEN
-   kubectl config --kubeconfig=antrea-agent.kubeconfig set-context antrea-agent@$CLUSTER_NAME --cluster=$CLUSTER_NAME --user=antrea-agent
-   kubectl config --kubeconfig=antrea-agent.kubeconfig use-context antrea-agent@$CLUSTER_NAME
+   TOKEN=$(kubectl -n $NAMESPACE get secrets -o jsonpath="{.items[?(@.metadata.annotations['kubernetes\.io/service-account\.name']=='$SERVICE_ACCOUNT')].data.token}"|base64 --decode)
+   kubectl config --kubeconfig=$KUBECONFIG set-cluster $CLUSTER_NAME --server=$APISERVER --insecure-skip-tls-verify=true
+   kubectl config --kubeconfig=$KUBECONFIG set-credentials antrea-agent --token=$TOKEN
+   kubectl config --kubeconfig=$KUBECONFIG set-context antrea-agent@$CLUSTER_NAME --cluster=$CLUSTER_NAME --user=antrea-agent
+   kubectl config --kubeconfig=$KUBECONFIG use-context antrea-agent@$CLUSTER_NAME
    # Copy antrea-agent.kubeconfig to the VM
    ```
 
@@ -219,13 +220,15 @@ spec:
    ```bash
    # Specify the antrea-controller API server endpoint. Antrea-Controller needs
    # to be exposed via the Node IP or a public IP that is reachable from the VM
-   export ANTREA_API_SERVER="https://172.18.0.1:443"
-   export ANTREA_CLUSTER_NAME="antrea"
-   TOKEN=$(kubectl -n vm-ns get secrets -o jsonpath="{.items[?(@.metadata.annotations['kubernetes\.io/service-account\.name']=='$SERVICE_ACCOUNT')].data.token}"|base64 --decode)
-   kubectl config --kubeconfig=antrea-agent.antrea.kubeconfig set-cluster $ANTREA_CLUSTER_NAME --server=$ANTREA_API_SERVER --insecure-skip-tls-verify=true
-   kubectl config --kubeconfig=antrea-agent.antrea.kubeconfig set-credentials antrea-agent --token=$TOKEN
-   kubectl config --kubeconfig=antrea-agent.antrea.kubeconfig set-context antrea-agent@$ANTREA_CLUSTER_NAME --cluster=$ANTREA_CLUSTER_NAME --user=antrea-agent
-   kubectl config --kubeconfig=antrea-agent.antrea.kubeconfig use-context antrea-agent@$ANTREA_CLUSTER_NAME
+   ANTREA_API_SERVER="https://172.18.0.1:443"
+   ANTREA_CLUSTER_NAME="antrea"
+   NAMESPACE="vm-ns"
+   KUBECONFIG="antrea-agent.antrea.kubeconfig"
+   TOKEN=$(kubectl -n $NAMESPACE get secrets -o jsonpath="{.items[?(@.metadata.annotations['kubernetes\.io/service-account\.name']=='$SERVICE_ACCOUNT')].data.token}"|base64 --decode)
+   kubectl config --kubeconfig=$KUBECONFIG set-cluster $ANTREA_CLUSTER_NAME --server=$ANTREA_API_SERVER --insecure-skip-tls-verify=true
+   kubectl config --kubeconfig=$KUBECONFIG set-credentials antrea-agent --token=$TOKEN
+   kubectl config --kubeconfig=$KUBECONFIG set-context antrea-agent@$ANTREA_CLUSTER_NAME --cluster=$ANTREA_CLUSTER_NAME --user=antrea-agent
+   kubectl config --kubeconfig=$KUBECONFIG use-context antrea-agent@$ANTREA_CLUSTER_NAME
    # Copy antrea-agent.antrea.kubeconfig to the VM
    ```
 
@@ -592,39 +595,3 @@ interfaces will be added in the future.
 
 `ExternalNode` name must be unique in the `cluster` scope even though it is
 itself a Namespaced resource.
-
-## Known issues
-
-`antrea-agent` will fail to re-attach the VM's network interface to the OVS
-bridge if the VM is rebooted. On a Windows VM, network connectivity will be
-lost after reboot.
-
-As a workaround for [this issue](https://github.com/antrea-io/antrea/issues/4122),
-you can manually remove OVS configurations and then restart `antrea-agent` after
-the VM is rebooted.
-
-To remove OVS configurations and restart `antrea-agent` on Linux VM,
-
-```shell
-sudo systemctl stop antrea-agent
-sudo ovs-vsctl del-br br-int
-sudo systemctl start antrea-agent
-```
-
-To remove OVS configurations and restart `antrea-agent` on Windows VM,
-
-```powershell
-$adapterName="Ethernet 0"
-Stop-Service antrea-agent
-ovs-vsctl.exe del-br br-int
-Remove-VMSwitch -ComputerName $(hostname.exe) antrea-switch -Force
-Rename-NetAdapter -Name "$adapterName~" -NewName "$adapterName"
-Start-Service antrea-agent
-```
-
-Note:
-
-- `$adapterName` should be set to the `ExternalNode` interface.
-- You may need a separate network interface to RDP into the Windows VM to run
-  these commands, since the network connectivity on the `ExternalNode` interface
-  is lost.
