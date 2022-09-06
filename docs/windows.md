@@ -99,7 +99,7 @@ New-KubeProxyServiceInterface
 
 New-DirectoryIfNotExist "${AntreaHome}/logs"
 New-DirectoryIfNotExist "${KubeProxyLogPath}"
-nssm install kube-proxy "${KubernetesHome}/kube-proxy.exe" "--proxy-mode=userspace --kubeconfig=${KubeProxyKubeconfigPath} --log-dir=${KubeProxyLogPath} --logtostderr=false --alsologtostderr"
+nssm install kube-proxy "${KubernetesHome}/kube-proxy.exe" "--proxy-mode=vmkernel --kubeconfig=${KubeProxyKubeconfigPath} --log-dir=${KubeProxyLogPath} --logtostderr=false --alsologtostderr"
 nssm install antrea-agent "${AntreaHome}/bin/antrea-agent.exe" "--config=${AntreaHome}/etc/antrea-agent.conf --logtostderr=false --log_dir=${AntreaHome}/logs --alsologtostderr --log_file_max_size=100 --log_file_max_num=4"
 
 nssm set antrea-agent DependOnService kube-proxy ovs-vswitchd
@@ -152,7 +152,7 @@ data:
     cp -force /var/lib/kube-proxy/* /host/var/lib/kube-proxy
     cp -force /var/run/secrets/kubernetes.io/serviceaccount/* /host/var/lib/kube-proxy/var/run/secrets/kubernetes.io/serviceaccount
 
-    wins cli process run --path /k/kube-proxy/kube-proxy.exe --args "--v=3 --config=/var/lib/kube-proxy/config.conf --proxy-mode=userspace --hostname-override=$env:NODE_NAME"
+    wins cli process run --path /k/kube-proxy/kube-proxy.exe --args "--v=3 --config=/var/lib/kube-proxy/config.conf --proxy-mode=vmkernel --hostname-override=$env:NODE_NAME"
 
 kind: ConfigMap
 metadata:

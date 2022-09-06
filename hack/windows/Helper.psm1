@@ -190,7 +190,7 @@ function Start-KubeProxy {
 
     New-KubeProxyServiceInterface
 
-    Start-Process -FilePath $KubeProxy -ArgumentList "--proxy-mode=userspace --kubeconfig=$KubeConfig --log-dir=$LogDir --logtostderr=false --alsologtostderr"
+    Start-Process -FilePath $KubeProxy -ArgumentList "--proxy-mode=vmkernel --kubeconfig=$KubeConfig --log-dir=$LogDir --logtostderr=false --alsologtostderr"
     return $true
 }
 
