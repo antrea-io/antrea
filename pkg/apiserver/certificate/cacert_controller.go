@@ -18,7 +18,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"sync"
 	"time"
 
 	v1 "k8s.io/api/admissionregistration/v1"
@@ -44,8 +43,6 @@ const (
 // CACertController is responsible for taking the CA certificate from the
 // caContentProvider and publishing it to the ConfigMap and the APIServices.
 type CACertController struct {
-	mutex sync.RWMutex
-
 	// caContentProvider provides the very latest content of the ca bundle.
 	caContentProvider dynamiccertificates.CAContentProvider
 	// queue only ever has one item, but it has nice error handling backoff/retry semantics
@@ -177,7 +174,7 @@ func (c *CACertController) syncConversionWebhooks(caCert []byte) error {
 		}
 		if updated {
 			if _, err := c.apiExtensionClient.ApiextensionsV1().CustomResourceDefinitions().Update(context.TODO(), crdDef, metav1.UpdateOptions{}); err != nil {
-				return err
+				return fmt.Errorf("error updating antrea CA cert of CustomResourceDefinition %s: %v", name, err)
 			}
 		}
 	}
