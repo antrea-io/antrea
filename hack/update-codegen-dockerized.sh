@@ -55,7 +55,7 @@ function generate_mocks {
     "pkg/controller/networkpolicy EndpointQuerier testing"
     "pkg/controller/querier ControllerQuerier testing"
     "pkg/ipfix IPFIXExportingProcess,IPFIXRegistry,IPFIXCollectingProcess,IPFIXAggregationProcess testing"
-    "pkg/ovs/openflow Bridge,Table,Flow,Action,CTAction,FlowBuilder testing"
+    "pkg/ovs/openflow Bridge,Table,Flow,Action,CTAction,FlowBuilder,Group,BucketBuilder testing"
     "pkg/ovs/ovsconfig OVSBridgeClient testing"
     "pkg/ovs/ovsctl OVSCtlClient testing"
     "pkg/querier AgentNetworkPolicyInfoQuerier,AgentMulticastInfoQuerier testing"
