@@ -156,12 +156,12 @@ func TestCheckLastMember(t *testing.T) {
 		if ev != nil {
 			status.group = ev.group
 			if ev.eType == groupLeave {
-				mockOFClient.EXPECT().UninstallGroup(gomock.Any())
+				mockOFClient.EXPECT().UninstallMulticastGroup(gomock.Any())
 				mockOFClient.EXPECT().UninstallMulticastFlows(status.group)
 			}
 		} else {
 			status.group = mgroup
-			mockOFClient.EXPECT().UninstallGroup(gomock.Any())
+			mockOFClient.EXPECT().UninstallMulticastGroup(gomock.Any())
 			mockOFClient.EXPECT().UninstallMulticastFlows(status.group)
 		}
 		_ = mctrl.groupCache.Add(status)
@@ -265,7 +265,7 @@ func TestClearStaleGroups(t *testing.T) {
 			fakePort++
 		}
 	}
-	mockOFClient.EXPECT().UninstallGroup(gomock.Any()).Times(len(staleGroups))
+	mockOFClient.EXPECT().UninstallMulticastGroup(gomock.Any()).Times(len(staleGroups))
 	mockOFClient.EXPECT().UninstallMulticastFlows(gomock.Any()).Times(len(staleGroups))
 	mockMulticastSocket.EXPECT().MulticastInterfaceLeaveMgroup(gomock.Any(), gomock.Any(), gomock.Any()).Times(len(staleGroups))
 	mctrl.clearStaleGroups()
