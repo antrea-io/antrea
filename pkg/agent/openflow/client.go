@@ -1220,6 +1220,9 @@ func (c *client) InstallMulticastInitialFlows(pktInReason uint8) error {
 	flows := c.featureMulticast.igmpPktInFlows(pktInReason)
 	flows = append(flows, c.featureMulticast.externalMulticastReceiverFlow())
 	flows = append(flows, c.featureMulticast.multicastSkipIGMPMetricFlows()...)
+	if c.enableAntreaPolicy {
+		flows = append(flows, c.featureMulticast.igmpEgressFlow())
+	}
 	cacheKey := "multicast"
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()

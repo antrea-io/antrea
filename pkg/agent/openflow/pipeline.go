@@ -2579,6 +2579,18 @@ func pipelineClassifyFlow(cookieID uint64, protocol binding.Protocol, pipeline b
 		Done()
 }
 
+// igmpEgressFlow generates flows to match IGMP report to jump to table MulticastRoutingTable.
+// This is because normal multicast egress rule can match IGMP v1 report, when there is egress
+// rule to block multicast traffic, IGMP v1 report will also be blocked, which is not expected.
+func (f *featureMulticast) igmpEgressFlow() binding.Flow {
+	return MulticastEgressRuleTable.ofTable.BuildFlow(priorityTopAntreaPolicy).
+		Cookie(f.cookieAllocator.Request(f.category).Raw()).
+		MatchProtocol(binding.ProtocolIGMP).
+		MatchRegMark(FromLocalRegMark).
+		Action().GotoStage(stageRouting).
+		Done()
+}
+
 // igmpPktInFlows generates the flow to load CustomReasonIGMPRegMark to mark the IGMP packet in MulticastRoutingTable
 // and sends it to antrea-agent.
 func (f *featureMulticast) igmpPktInFlows(reason uint8) []binding.Flow {
