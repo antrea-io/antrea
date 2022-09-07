@@ -159,7 +159,6 @@ func (r *LeaderClusterSetReconciler) updateStatus() {
 	status := multiclusterv1alpha1.ClusterSetStatus{}
 	status.ObservedGeneration = r.clusterSetConfig.Generation
 	clusterStatuses := r.StatusManager.GetMemberClusterStatuses()
-	klog.InfoS("size of cluster", "size", len(clusterStatuses))
 	status.ClusterStatuses = clusterStatuses
 	sizeOfMembers := len(clusterStatuses)
 	status.TotalClusters = int32(sizeOfMembers)
