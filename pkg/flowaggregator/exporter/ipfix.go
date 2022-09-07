@@ -18,17 +18,14 @@ import (
 	"fmt"
 	"hash/fnv"
 	"sync"
-	"time"
 
 	"github.com/google/uuid"
 	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
 	"github.com/vmware/go-ipfix/pkg/exporter"
 	ipfixregistry "github.com/vmware/go-ipfix/pkg/registry"
-	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 
-	"antrea.io/antrea/pkg/clusteridentity"
 	"antrea.io/antrea/pkg/flowaggregator/infoelements"
 	"antrea.io/antrea/pkg/flowaggregator/options"
 	"antrea.io/antrea/pkg/ipfix"
@@ -59,31 +56,11 @@ type IPFIXExporter struct {
 // genObservationDomainID generates an IPFIX Observation Domain ID when one is not provided by the
 // user through the flow aggregator configuration. It will first try to generate one
 // deterministically based on the cluster UUID (if available, with a timeout of 10s). Otherwise, it
-// will generate a random one. The cluster UUID should be available if Antrea is deployed to the
-// cluster ahead of the flow aggregator, which is the expectation since when deploying flow
-// aggregator as a Pod, networking needs to be configured by the CNI plugin.
+// will generate a random one.
 func genObservationDomainID(k8sClient kubernetes.Interface) uint32 {
-	const retryInterval = time.Second
-	const timeout = 10 * time.Second
-	const defaultAntreaNamespace = "kube-system"
-
-	clusterIdentityProvider := clusteridentity.NewClusterIdentityProvider(
-		defaultAntreaNamespace,
-		clusteridentity.DefaultClusterIdentityConfigMapName,
-		k8sClient,
-	)
-	var clusterUUID uuid.UUID
-	if err := wait.PollImmediate(retryInterval, timeout, func() (bool, error) {
-		clusterIdentity, _, err := clusterIdentityProvider.Get()
-		if err != nil {
-			return false, nil
-		}
-		clusterUUID = clusterIdentity.UUID
-		return true, nil
-	}); err != nil {
-		klog.InfoS(
-			"Unable to retrieve cluster UUID; will generate a random observation domain ID", "timeout", timeout, "ConfigMapNameSpace", defaultAntreaNamespace, "ConfigMapName", clusteridentity.DefaultClusterIdentityConfigMapName,
-		)
+	clusterUUID, err := getClusterUUID(k8sClient)
+	if err != nil {
+		klog.ErrorS(err, "Error when retrieving cluster UUID; will generate a random observation domain ID")
 		clusterUUID = uuid.New()
 	}
 	h := fnv.New32()

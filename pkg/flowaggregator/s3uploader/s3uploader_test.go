@@ -26,6 +26,7 @@ import (
 	s3manager "github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/golang/mock/gomock"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	ipfixentitiestesting "github.com/vmware/go-ipfix/pkg/entities/testing"
 	"github.com/vmware/go-ipfix/pkg/registry"
@@ -35,11 +36,13 @@ import (
 	flowaggregatortesting "antrea.io/antrea/pkg/flowaggregator/testing"
 )
 
-const (
-	seed          = 1
-	recordStrIPv4 = "1637706961,1637706973,1637706974,1637706975,3,10.10.0.79,10.10.0.80,44752,5201,6,823188,30472817041,241333,8982624938,471111,24500996,136211,7083284,perftest-a,antrea-test,k8s-node-control-plane,perftest-b,antrea-test-b,k8s-node-control-plane-b,10.10.1.10,5202,perftest,test-flow-aggregator-networkpolicy-ingress-allow,antrea-test-ns,test-flow-aggregator-networkpolicy-rule,2,1,test-flow-aggregator-networkpolicy-egress-allow,antrea-test-ns-e,test-flow-aggregator-networkpolicy-rule-e,5,4,TIME_WAIT,11,{\"antrea-e2e\":\"perftest-a\",\"app\":\"perftool\"},{\"antrea-e2e\":\"perftest-b\",\"app\":\"perftool\"},15902813472,12381344,15902813473,15902813474,12381345,12381346"
-	recordStrIPv6 = "1637706961,1637706973,1637706974,1637706975,3,2001:0:3238:dfe1:63::fefb,2001:0:3238:dfe1:63::fefc,44752,5201,6,823188,30472817041,241333,8982624938,471111,24500996,136211,7083284,perftest-a,antrea-test,k8s-node-control-plane,perftest-b,antrea-test-b,k8s-node-control-plane-b,2001:0:3238:dfe1:64::a,5202,perftest,test-flow-aggregator-networkpolicy-ingress-allow,antrea-test-ns,test-flow-aggregator-networkpolicy-rule,2,1,test-flow-aggregator-networkpolicy-egress-allow,antrea-test-ns-e,test-flow-aggregator-networkpolicy-rule-e,5,4,TIME_WAIT,11,{\"antrea-e2e\":\"perftest-a\",\"app\":\"perftool\"},{\"antrea-e2e\":\"perftest-b\",\"app\":\"perftool\"},15902813472,12381344,15902813473,15902813474,12381345,12381346"
+var (
+	fakeClusterUUID = uuid.New().String()
+	recordStrIPv4   = "1637706961,1637706973,1637706974,1637706975,3,10.10.0.79,10.10.0.80,44752,5201,6,823188,30472817041,241333,8982624938,471111,24500996,136211,7083284,perftest-a,antrea-test,k8s-node-control-plane,perftest-b,antrea-test-b,k8s-node-control-plane-b,10.10.1.10,5202,perftest,test-flow-aggregator-networkpolicy-ingress-allow,antrea-test-ns,test-flow-aggregator-networkpolicy-rule,2,1,test-flow-aggregator-networkpolicy-egress-allow,antrea-test-ns-e,test-flow-aggregator-networkpolicy-rule-e,5,4,TIME_WAIT,11,{\"antrea-e2e\":\"perftest-a\",\"app\":\"perftool\"},{\"antrea-e2e\":\"perftest-b\",\"app\":\"perftool\"},15902813472,12381344,15902813473,15902813474,12381345,12381346," + fakeClusterUUID
+	recordStrIPv6   = "1637706961,1637706973,1637706974,1637706975,3,2001:0:3238:dfe1:63::fefb,2001:0:3238:dfe1:63::fefc,44752,5201,6,823188,30472817041,241333,8982624938,471111,24500996,136211,7083284,perftest-a,antrea-test,k8s-node-control-plane,perftest-b,antrea-test-b,k8s-node-control-plane-b,2001:0:3238:dfe1:64::a,5202,perftest,test-flow-aggregator-networkpolicy-ingress-allow,antrea-test-ns,test-flow-aggregator-networkpolicy-rule,2,1,test-flow-aggregator-networkpolicy-egress-allow,antrea-test-ns-e,test-flow-aggregator-networkpolicy-rule-e,5,4,TIME_WAIT,11,{\"antrea-e2e\":\"perftest-a\",\"app\":\"perftool\"},{\"antrea-e2e\":\"perftest-b\",\"app\":\"perftool\"},15902813472,12381344,15902813473,15902813474,12381345,12381346," + fakeClusterUUID
 )
+
+const seed = 1
 
 type mockS3Uploader struct {
 	testReader      *bytes.Buffer
@@ -83,6 +86,7 @@ func TestCacheRecord(t *testing.T) {
 		maxRecordPerFile: 2,
 		currentBuffer:    &bytes.Buffer{},
 		bufferQueue:      make([]*bytes.Buffer, 0, maxNumBuffersPendingUpload),
+		clusterUUID:      fakeClusterUUID,
 	}
 
 	// First call, cache the record in currentBuffer.
@@ -115,6 +119,7 @@ func TestBatchUploadAll(t *testing.T) {
 		buffersToUpload:  make([]*bytes.Buffer, 0, maxNumBuffersPendingUpload),
 		s3UploaderAPI:    mockS3Uploader,
 		nameRand:         nameRand,
+		clusterUUID:      fakeClusterUUID,
 	}
 	testRecord := flowrecordtesting.PrepareTestFlowRecord()
 	s3UploadProc.writeRecordToBuffer(testRecord)
@@ -173,6 +178,7 @@ func TestFlowRecordPeriodicCommit(t *testing.T) {
 		buffersToUpload:  make([]*bytes.Buffer, 0, maxNumBuffersPendingUpload),
 		s3UploaderAPI:    mockS3Uploader,
 		nameRand:         nameRand,
+		clusterUUID:      fakeClusterUUID,
 	}
 	testRecord := flowrecordtesting.PrepareTestFlowRecord()
 	s3UploadProc.writeRecordToBuffer(testRecord)
@@ -209,6 +215,7 @@ func TestFlushCacheOnStop(t *testing.T) {
 		buffersToUpload:  make([]*bytes.Buffer, 0, maxNumBuffersPendingUpload),
 		s3UploaderAPI:    mockS3Uploader,
 		nameRand:         nameRand,
+		clusterUUID:      fakeClusterUUID,
 	}
 	testRecord := flowrecordtesting.PrepareTestFlowRecord()
 	s3UploadProc.writeRecordToBuffer(testRecord)
