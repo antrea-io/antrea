@@ -364,7 +364,7 @@ spec:
                 description: ClusterID specifies the member cluster this resource
                   exported from.
                 type: string
-              clusterinfo:
+              clusterInfo:
                 description: If exported resource is ClusterInfo.
                 properties:
                   clusterID:
@@ -383,7 +383,7 @@ spec:
                     description: ServiceCIDR is the IP ranges used by Service ClusterIP.
                     type: string
                 type: object
-              clusternetworkpolicy:
+              clusterNetworkPolicy:
                 description: If exported resource is AntreaClusterNetworkPolicy.
                 properties:
                   appliedTo:
@@ -2765,10 +2765,10 @@ spec:
                       type: object
                     type: array
                 type: object
-              externalentity:
+              externalEntity:
                 description: If exported resource is ExternalEntity.
                 properties:
-                  externalentityspec:
+                  externalEntitySpec:
                     description: ExternalEntitySpec defines the desired state for
                       ExternalEntity.
                     properties:
