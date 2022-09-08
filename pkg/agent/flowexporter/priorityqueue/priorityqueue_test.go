@@ -117,3 +117,73 @@ func TestExpirePriorityQueue(t *testing.T) {
 		}
 	}
 }
+
+func TestExpirePriorityQueue_GetExpiryFromExpirePriorityQueue(t *testing.T) {
+	startTime := time.Now()
+	item1 := &flowexporter.ItemToExpire{
+		ActiveExpireTime: startTime.Add(10 * time.Second),
+		IdleExpireTime:   startTime.Add(20 * time.Second),
+		Index:            0,
+	}
+	item2 := &flowexporter.ItemToExpire{
+		ActiveExpireTime: startTime.Add(-10 * time.Second),
+		IdleExpireTime:   startTime,
+		Index:            0,
+	}
+
+	for _, tc := range []struct {
+		pqActiveTimeout time.Duration
+		pqIdleTimeout   time.Duration
+		pqItem          *flowexporter.ItemToExpire
+		expectedResult  time.Duration
+	}{
+		{1 * time.Second, 1 * time.Second, item1, minExpiryTime + 10*time.Second}, // should return expiryDuration
+		{1 * time.Second, 1 * time.Second, item2, minExpiryTime},                  // should return minExpiryTime
+		{1 * time.Second, 2 * time.Second, nil, 1 * time.Second},                  // should return activeFlowTimeout
+		{1 * time.Second, 500 * time.Millisecond, nil, 500 * time.Millisecond},    // should return idleFlowTimeout
+	} {
+		pq := NewExpirePriorityQueue(tc.pqActiveTimeout, tc.pqIdleTimeout)
+		if tc.pqItem != nil {
+			heap.Push(pq, tc.pqItem)
+		}
+		result := pq.GetExpiryFromExpirePriorityQueue()
+		// We are unable to get the real currTime value in while executing
+		// GetExpiryFromExpirePriorityQueue, but it should be greater than startTime.
+		// Therefore, minExpiryTime + startTime.Add(10 * time.Second).Sub(currTime)
+		// should be less than minExpiryTime + 10 * time.Second
+		if tc.pqItem == item1 {
+			assert.GreaterOrEqual(t, tc.expectedResult, result)
+			assert.NotEqual(t, minExpiryTime, result)
+			assert.NotEqual(t, tc.pqActiveTimeout, result)
+			assert.NotEqual(t, tc.pqIdleTimeout, result)
+		} else {
+			assert.Equal(t, tc.expectedResult, result)
+		}
+
+	}
+}
+
+func TestExpirePriorityQueue_GetTopExpiredItem(t *testing.T) {
+	startTime := time.Now()
+	item := &flowexporter.ItemToExpire{
+		ActiveExpireTime: startTime.Add(10 * time.Second),
+		IdleExpireTime:   startTime.Add(20 * time.Second),
+		Index:            0,
+	}
+	for _, tc := range []struct {
+		currTime       time.Time
+		topItem        *flowexporter.ItemToExpire
+		expectedResult *flowexporter.ItemToExpire
+	}{
+		{startTime, nil, nil},                         // topItem is nil
+		{startTime, item, nil},                        // topItem has not expired
+		{startTime.Add(15 * time.Second), item, item}, // topItem has expired
+	} {
+		pq := NewExpirePriorityQueue(1*time.Second, 1*time.Second)
+		if tc.topItem != nil {
+			heap.Push(pq, tc.topItem)
+		}
+		result := pq.GetTopExpiredItem(tc.currTime)
+		assert.Equal(t, tc.expectedResult, result)
+	}
+}
