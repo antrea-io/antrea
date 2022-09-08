@@ -23,6 +23,7 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	antreae2e "antrea.io/antrea/test/e2e"
@@ -100,6 +101,18 @@ func testMCServiceConnectivity(t *testing.T, data *MCTestData) {
 	data.testMCServiceConnectivity(t)
 }
 
+// Delete existing Pod to scale down the number of Endpoints to zero, then
+// the Multi-cluster Service should be deleted due to empty Endpoints.
+func testScaleDownMCServiceEndpoints(t *testing.T, data *MCTestData) {
+	deletePodWrapper(t, data, eastCluster, multiClusterTestNamespace, testServerPod)
+	time.Sleep(2 * time.Second)
+	mcServiceName := fmt.Sprintf("antrea-mc-%s", eastClusterTestService)
+	_, err := data.getService(westCluster, multiClusterTestNamespace, mcServiceName)
+	if !apierrors.IsNotFound(err) {
+		t.Fatalf("Expected to get not found error when getting the imported Service %s, but got: %v", mcServiceName, err)
+	}
+}
+
 func testANPToServices(t *testing.T, data *MCTestData) {
 	data.testANPToServices(t)
 }
@@ -126,7 +139,6 @@ func (data *MCTestData) probeMCServiceFromCluster(t *testing.T, clusterName stri
 	if err := data.probeServiceFromPodInCluster(clusterName, regularClientName, "client", multiClusterTestNamespace, ip); err != nil {
 		t.Fatalf("Error when probing Service from client Pod %s in cluster %s, err: %v", regularClientName, clusterName, err)
 	}
-	return
 }
 
 func (data *MCTestData) testANPToServices(t *testing.T) {
