@@ -21,7 +21,7 @@ should be deleted. This ensures that all tests are run on a clean testbed.
 [![Build Status](http://jenkins.antrea-ci.rocks/buildStatus/icon?job=cloud-antrea-eks-conformance-net-policy&subject=EKS%20Conformance/NetworkPolicy)](http://jenkins.antrea-ci.rocks/view/cloud/job/cloud-antrea-eks-conformance-net-policy/) [![Build Status](http://jenkins.antrea-ci.rocks/buildStatus/icon?job=cloud-antrea-gke-conformance-net-policy&subject=GKE%20Conformance/NetworkPolicy%20)](http://jenkins.antrea-ci.rocks/view/cloud/job/cloud-antrea-gke-conformance-net-policy/) [![Build Status](http://jenkins.antrea-ci.rocks/buildStatus/icon?job=cloud-antrea-aks-conformance-net-policy&subject=AKS%20Conformance/NetworkPolicy%20)](http://jenkins.antrea-ci.rocks/view/cloud/job/cloud-antrea-aks-conformance-net-policy/)
 
 * [e2e [gated check-in]](https://jenkins.antrea-ci.rocks/job/antrea-e2e-for-pull-request/):
-  [end-to-end tests](/test/e2e) for Antrea.
+  [end-to-end tests](../../test/e2e) for Antrea.
 
 * [conformance [gated check-in]](https://jenkins.antrea-ci.rocks/job/antrea-conformance-for-pull-request/):
   community tests using sonobuoy, focusing on "Conformance", and skipping "Slow",
@@ -142,11 +142,11 @@ DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
   It skips: "[LinuxOnly]|[Slow]|[Serial]|[Disruptive]|[Flaky]|[Feature:.+]|[sig-cli]|[sig-storage]|[sig-auth]|[sig-api-machinery]|[sig-apps]|[sig-node]|[Privileged]|should be able to change the type from|[sig-network] Services should be able to create a functioning NodePort service [Conformance]".
 
 * Jenkins jobs validator [gated check-in]: this job only executes for PRs that include changes to
-  [ci/jenkins/jobs](/ci/jenkins/jobs). It validates the syntax of the jenkins jobs'
+  [ci/jenkins/jobs](jobs). It validates the syntax of the jenkins jobs'
   configuration.
 
 * Jenkins Windows OVS validator: this job only executes for PRs that include
-  changes to [hack/windows/Install-OVS.ps1](/hack/windows/Install-OVS.ps1).
+  changes to [hack/windows/Install-OVS.ps1](../../hack/windows/Install-OVS.ps1).
   It validates if Windows OVS can be installed correctly.
 
 ```shell
@@ -188,7 +188,7 @@ DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
   |    1.18.2      |  Photon 3.0     |[![Build Status](https://jenkins.antrea-ci.rocks/buildStatus/icon?job=antrea-weekly-matrix-compatibility-test%2FIS_MATRIX_TEST%3DTrue%2CK8S_VERSION%3Dv1.18.2%2CTEST_OS%3Dphoton-3%2Clabels%3Dantrea-test-node)](https://jenkins.antrea-ci.rocks/job/antrea-weekly-matrix-compatibility-test/IS_MATRIX_TEST=True,K8S_VERSION=v1.18.2,TEST_OS=photon-3,labels=antrea-test-node/)|
 
 If you need to run the K8s community tests locally, you may use the
-[ci/run-k8s-e2e-tests.sh](/ci/run-k8s-e2e-tests.sh) script. It takes care of
+[ci/run-k8s-e2e-tests.sh](../run-k8s-e2e-tests.sh) script. It takes care of
 installing the correct version of
 [sonobuoy](https://github.com/vmware-tanzu/sonobuoy) and running the correct
 subset of community tests for Antrea:
@@ -206,19 +206,19 @@ subset of community tests for Antrea:
 
 ## Requirements
 
-Yaml files under [ci/jenkins/jobs](/ci/jenkins/jobs) can be generated via
+Yaml files under [ci/jenkins/jobs](jobs) can be generated via
 jenkins-job-builder. If you want to try out the tests on your local jenkins
 setup, please notice the following requirements:
 
 * Jenkins setup
   * Plugins: ghprb, throttle-concurrents
 * Install
-  [jenkins-job-builder](https://docs.openstack.org/infra/jenkins-job-builder/index.html)
+  [jenkins-job-builder](https://docs.openstack.org/infra/jenkins-job-builder/attic/)
 * Define your `ANTREA_GIT_CREDENTIAL` which is the credential for your private
   repo
 * Define your `ghpr_auth`, `antrea_admin_list`, `antrea_org_list` and
   `antrea_white_list` as
-  [defaults](https://docs.openstack.org/infra/jenkins-job-builder/definition.html#defaults)
+  [defaults](https://docs.openstack.org/infra/jenkins-job-builder/attic/definition.html#defaults)
   variables in a separate file
 
 ### Apply the jobs
@@ -238,10 +238,10 @@ jenkins-jobs update -r ci/jenkins/jobs
 ## Jenkins job updater
 
 To follow GitOps best practices, there is a job-updater job in Jenkins to detect
-any change in [ci/jenkins/jobs](/ci/jenkins/jobs) for every 15 min. As long as
+any change in [ci/jenkins/jobs](jobs) for every 15 min. As long as
 a PR to modify code under that path is merged, Jenkins jobs on cloud should be
 updated with new code.
 
 ## Tips for Developer
 
-* [macro.yaml](/ci/jenkins/jobs/macros.yaml): Use "{{}}" instead of "{}" in "builder-list-tests" and "builder-conformance".
+* [macro.yaml](jobs/macros.yaml): Use "{{}}" instead of "{}" in "builder-list-tests" and "builder-conformance".
