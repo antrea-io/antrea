@@ -785,7 +785,7 @@ type SupportBundleCollectionSpec struct {
 
 type SupportBundleCollectionStatus struct {
 	// The number of Nodes and ExternalNodes that have completed the SupportBundleCollection.
-	SucceededNodes int32 `json:"succeededNodes"`
+	CollectedNodes int32 `json:"collectedNodes"`
 	// The total number of Nodes and ExternalNodes that should process the SupportBundleCollection.
 	DesiredNodes int32 `json:"desiredNodes"`
 	// Represents the latest available observations of a SupportBundleCollection current state.

@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"sort"
 	"sync"
 	"testing"
 	"time"
@@ -455,7 +456,7 @@ func TestSupportBundleCollectionEvents(t *testing.T) {
 
 	updateBundleStatus(bundleCollection, v1alpha1.SupportBundleCollectionStatus{
 		DesiredNodes:   10,
-		SucceededNodes: 0,
+		CollectedNodes: 0,
 		Conditions: []v1alpha1.SupportBundleCollectionCondition{
 			{
 				Type:   v1alpha1.CollectionStarted,
@@ -465,7 +466,7 @@ func TestSupportBundleCollectionEvents(t *testing.T) {
 	})
 	updateBundleStatus(bundleCollection, v1alpha1.SupportBundleCollectionStatus{
 		DesiredNodes:   10,
-		SucceededNodes: 1,
+		CollectedNodes: 1,
 		Conditions: []v1alpha1.SupportBundleCollectionCondition{
 			{
 				Type:   v1alpha1.CollectionStarted,
@@ -478,7 +479,7 @@ func TestSupportBundleCollectionEvents(t *testing.T) {
 	})
 	updateBundleStatus(existingBundleCollection, v1alpha1.SupportBundleCollectionStatus{
 		DesiredNodes:   10,
-		SucceededNodes: 5,
+		CollectedNodes: 5,
 		Conditions: []v1alpha1.SupportBundleCollectionCondition{
 			{
 				Type:   v1alpha1.CollectionStarted,
@@ -491,7 +492,7 @@ func TestSupportBundleCollectionEvents(t *testing.T) {
 	})
 	updateBundleStatus(existingBundleCollection, v1alpha1.SupportBundleCollectionStatus{
 		DesiredNodes:   10,
-		SucceededNodes: 7,
+		CollectedNodes: 7,
 		Conditions: []v1alpha1.SupportBundleCollectionCondition{
 			{
 				Type:   v1alpha1.CollectionStarted,
@@ -874,7 +875,7 @@ func TestCreateAndDeleteInternalSupportBundleCollection(t *testing.T) {
 			return false, getErr
 		})
 		assert.NoError(t, err)
-		err = controller.createInternalSupportBundleCollection(bundle)
+		_, err = controller.createInternalSupportBundleCollection(bundle)
 		if tc.expectedError != "" {
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), tc.expectedError)
@@ -923,7 +924,7 @@ func TestCreateAndDeleteInternalSupportBundleCollection(t *testing.T) {
 		})
 	// Wait for data sync between client and nodeLister
 	time.Sleep(time.Millisecond * 500)
-	err = controller.createInternalSupportBundleCollection(updatedBundleCollection)
+	_, err = controller.createInternalSupportBundleCollection(updatedBundleCollection)
 	assert.NoError(t, err)
 
 	// Test deletion.
@@ -1276,6 +1277,525 @@ func TestIsCollectionAvailable(t *testing.T) {
 			assert.NoError(t, err)
 		}
 	}
+}
+
+func TestSupportBundleCollectionStatusEqual(t *testing.T) {
+	for _, tc := range []struct {
+		oldStatus v1alpha1.SupportBundleCollectionStatus
+		newStatus v1alpha1.SupportBundleCollectionStatus
+		equal     bool
+	}{
+		{
+			oldStatus: v1alpha1.SupportBundleCollectionStatus{
+				DesiredNodes:   100,
+				CollectedNodes: 4,
+				Conditions: []v1alpha1.SupportBundleCollectionCondition{
+					{Type: v1alpha1.CollectionStarted, Status: metav1.ConditionTrue},
+				},
+			},
+			newStatus: v1alpha1.SupportBundleCollectionStatus{
+				DesiredNodes:   100,
+				CollectedNodes: 5,
+				Conditions: []v1alpha1.SupportBundleCollectionCondition{
+					{Type: v1alpha1.CollectionStarted, Status: metav1.ConditionTrue},
+				},
+			},
+			equal: false,
+		},
+		{
+			oldStatus: v1alpha1.SupportBundleCollectionStatus{
+				DesiredNodes:   100,
+				CollectedNodes: 4,
+				Conditions: []v1alpha1.SupportBundleCollectionCondition{
+					{Type: v1alpha1.CollectionStarted, Status: metav1.ConditionTrue},
+				},
+			},
+			newStatus: v1alpha1.SupportBundleCollectionStatus{
+				DesiredNodes:   100,
+				CollectedNodes: 4,
+				Conditions: []v1alpha1.SupportBundleCollectionCondition{
+					{Type: v1alpha1.CollectionStarted, Status: metav1.ConditionTrue},
+					{Type: v1alpha1.BundleCollected, Status: metav1.ConditionTrue},
+				},
+			},
+			equal: false,
+		},
+		{
+			oldStatus: v1alpha1.SupportBundleCollectionStatus{
+				DesiredNodes:   100,
+				CollectedNodes: 4,
+				Conditions: []v1alpha1.SupportBundleCollectionCondition{
+					{Type: v1alpha1.BundleCollected, Status: metav1.ConditionTrue},
+					{Type: v1alpha1.CollectionStarted, Status: metav1.ConditionTrue},
+				},
+			},
+			newStatus: v1alpha1.SupportBundleCollectionStatus{
+				DesiredNodes:   100,
+				CollectedNodes: 4,
+				Conditions: []v1alpha1.SupportBundleCollectionCondition{
+					{Type: v1alpha1.CollectionStarted, Status: metav1.ConditionTrue},
+					{Type: v1alpha1.BundleCollected, Status: metav1.ConditionTrue},
+				},
+			},
+			equal: true,
+		}, {
+			oldStatus: v1alpha1.SupportBundleCollectionStatus{
+				DesiredNodes:   100,
+				CollectedNodes: 4,
+				Conditions: []v1alpha1.SupportBundleCollectionCondition{
+					{Type: v1alpha1.CollectionStarted, Status: metav1.ConditionTrue, LastTransitionTime: metav1.NewTime(time.Now())},
+				},
+			},
+			newStatus: v1alpha1.SupportBundleCollectionStatus{
+				DesiredNodes:   100,
+				CollectedNodes: 4,
+				Conditions: []v1alpha1.SupportBundleCollectionCondition{
+					{Type: v1alpha1.CollectionStarted, Status: metav1.ConditionTrue, LastTransitionTime: metav1.NewTime(time.Now().Add(time.Minute))},
+				},
+			},
+			equal: true,
+		}, {
+			oldStatus: v1alpha1.SupportBundleCollectionStatus{
+				DesiredNodes:   100,
+				CollectedNodes: 4,
+				Conditions: []v1alpha1.SupportBundleCollectionCondition{
+					{Type: v1alpha1.CollectionStarted, Status: metav1.ConditionTrue, LastTransitionTime: metav1.NewTime(time.Now())},
+				},
+			},
+			newStatus: v1alpha1.SupportBundleCollectionStatus{
+				DesiredNodes:   100,
+				CollectedNodes: 4,
+				Conditions: []v1alpha1.SupportBundleCollectionCondition{
+					{Type: v1alpha1.CollectionStarted, Status: metav1.ConditionFalse, LastTransitionTime: metav1.NewTime(time.Now())},
+				},
+			},
+			equal: false,
+		},
+	} {
+		for _, conditions := range [][]v1alpha1.SupportBundleCollectionCondition{
+			tc.oldStatus.Conditions, tc.newStatus.Conditions,
+		} {
+			sort.Slice(conditions, func(i, j int) bool {
+				a := conditions[i]
+				b := conditions[j]
+				if a.Type == b.Type {
+					return a.Status < b.Status
+				}
+				return a.Type < b.Type
+			})
+		}
+
+		equals := supportBundleCollectionStatusEqual(tc.oldStatus, tc.newStatus)
+		assert.Equal(t, tc.equal, equals)
+	}
+}
+
+func TestUpdateSupportBundleCollectionStatus(t *testing.T) {
+	now := time.Now()
+	for _, tc := range []struct {
+		existingCollection *v1alpha1.SupportBundleCollection
+		updateStatus       *v1alpha1.SupportBundleCollectionStatus
+		expectedStatus     v1alpha1.SupportBundleCollectionStatus
+	}{
+		{
+			existingCollection: &v1alpha1.SupportBundleCollection{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "b1",
+				},
+			},
+			updateStatus: &v1alpha1.SupportBundleCollectionStatus{
+				DesiredNodes:   10,
+				CollectedNodes: 0,
+				Conditions: []v1alpha1.SupportBundleCollectionCondition{
+					{Type: v1alpha1.CollectionStarted, Status: metav1.ConditionTrue, LastTransitionTime: metav1.NewTime(now)},
+				},
+			},
+			expectedStatus: v1alpha1.SupportBundleCollectionStatus{
+				DesiredNodes:   10,
+				CollectedNodes: 0,
+				Conditions: []v1alpha1.SupportBundleCollectionCondition{
+					{Type: v1alpha1.CollectionStarted, Status: metav1.ConditionTrue, LastTransitionTime: metav1.NewTime(now)},
+				},
+			},
+		},
+		{
+			existingCollection: &v1alpha1.SupportBundleCollection{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "b1",
+				},
+				Status: v1alpha1.SupportBundleCollectionStatus{
+					Conditions: []v1alpha1.SupportBundleCollectionCondition{
+						{Type: v1alpha1.CollectionStarted, Status: metav1.ConditionFalse, LastTransitionTime: metav1.NewTime(now)},
+					},
+				},
+			},
+			updateStatus: &v1alpha1.SupportBundleCollectionStatus{
+				DesiredNodes:   10,
+				CollectedNodes: 0,
+				Conditions: []v1alpha1.SupportBundleCollectionCondition{
+					{Type: v1alpha1.CollectionStarted, Status: metav1.ConditionTrue, LastTransitionTime: metav1.NewTime(now.Add(time.Second))},
+				},
+			},
+			expectedStatus: v1alpha1.SupportBundleCollectionStatus{
+				DesiredNodes:   10,
+				CollectedNodes: 0,
+				Conditions: []v1alpha1.SupportBundleCollectionCondition{
+					{Type: v1alpha1.CollectionStarted, Status: metav1.ConditionTrue, LastTransitionTime: metav1.NewTime(now.Add(time.Second))},
+				},
+			},
+		},
+		{
+			existingCollection: &v1alpha1.SupportBundleCollection{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "b1",
+				},
+				Status: v1alpha1.SupportBundleCollectionStatus{
+					DesiredNodes:   10,
+					CollectedNodes: 0,
+					Conditions: []v1alpha1.SupportBundleCollectionCondition{
+						{Type: v1alpha1.CollectionStarted, Status: metav1.ConditionTrue, LastTransitionTime: metav1.NewTime(now)},
+					},
+				},
+			},
+			updateStatus: &v1alpha1.SupportBundleCollectionStatus{
+				DesiredNodes:   10,
+				CollectedNodes: 1,
+				Conditions: []v1alpha1.SupportBundleCollectionCondition{
+					{Type: v1alpha1.CollectionStarted, Status: metav1.ConditionTrue, LastTransitionTime: metav1.NewTime(now)},
+					{Type: v1alpha1.BundleCollected, Status: metav1.ConditionTrue, LastTransitionTime: metav1.NewTime(now.Add(time.Second * 10))},
+				},
+			},
+			expectedStatus: v1alpha1.SupportBundleCollectionStatus{
+				DesiredNodes:   10,
+				CollectedNodes: 1,
+				Conditions: []v1alpha1.SupportBundleCollectionCondition{
+					{Type: v1alpha1.CollectionStarted, Status: metav1.ConditionTrue, LastTransitionTime: metav1.NewTime(now)},
+					{Type: v1alpha1.BundleCollected, Status: metav1.ConditionTrue, LastTransitionTime: metav1.NewTime(now.Add(time.Second * 10))},
+				},
+			},
+		},
+		{
+			existingCollection: &v1alpha1.SupportBundleCollection{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "b1",
+				},
+				Status: v1alpha1.SupportBundleCollectionStatus{
+					DesiredNodes:   10,
+					CollectedNodes: 1,
+					Conditions: []v1alpha1.SupportBundleCollectionCondition{
+						{Type: v1alpha1.CollectionStarted, Status: metav1.ConditionTrue, LastTransitionTime: metav1.NewTime(now)},
+					},
+				},
+			},
+			updateStatus: &v1alpha1.SupportBundleCollectionStatus{
+				DesiredNodes:   10,
+				CollectedNodes: 5,
+				Conditions: []v1alpha1.SupportBundleCollectionCondition{
+					{Type: v1alpha1.CollectionStarted, Status: metav1.ConditionTrue, LastTransitionTime: metav1.NewTime(now)},
+					{Type: v1alpha1.BundleCollected, Status: metav1.ConditionTrue, LastTransitionTime: metav1.NewTime(now.Add(time.Second * 10))},
+				},
+			},
+			expectedStatus: v1alpha1.SupportBundleCollectionStatus{
+				DesiredNodes:   10,
+				CollectedNodes: 5,
+				Conditions: []v1alpha1.SupportBundleCollectionCondition{
+					{Type: v1alpha1.CollectionStarted, Status: metav1.ConditionTrue, LastTransitionTime: metav1.NewTime(now)},
+					{Type: v1alpha1.BundleCollected, Status: metav1.ConditionTrue, LastTransitionTime: metav1.NewTime(now.Add(time.Second * 10))},
+				},
+			},
+		},
+		{
+			existingCollection: &v1alpha1.SupportBundleCollection{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "b1",
+				},
+				Status: v1alpha1.SupportBundleCollectionStatus{
+					DesiredNodes:   10,
+					CollectedNodes: 5,
+					Conditions: []v1alpha1.SupportBundleCollectionCondition{
+						{Type: v1alpha1.CollectionStarted, Status: metav1.ConditionTrue, LastTransitionTime: metav1.NewTime(now)},
+						{Type: v1alpha1.BundleCollected, Status: metav1.ConditionTrue, LastTransitionTime: metav1.NewTime(now.Add(time.Second * 10))},
+					},
+				},
+			},
+			updateStatus: &v1alpha1.SupportBundleCollectionStatus{
+				DesiredNodes:   10,
+				CollectedNodes: 8,
+				Conditions: []v1alpha1.SupportBundleCollectionCondition{
+					{Type: v1alpha1.CollectionStarted, Status: metav1.ConditionTrue, LastTransitionTime: metav1.NewTime(now)},
+					{Type: v1alpha1.BundleCollected, Status: metav1.ConditionTrue, LastTransitionTime: metav1.NewTime(now.Add(time.Second * 10))},
+					{Type: v1alpha1.CollectionFailure, Status: metav1.ConditionTrue, LastTransitionTime: metav1.NewTime(now.Add(time.Second * 20)), Reason: string(metav1.StatusReasonInternalError), Message: "Agent error"},
+					{Type: v1alpha1.CollectionCompleted, Status: metav1.ConditionTrue, LastTransitionTime: metav1.NewTime(now.Add(time.Second * 20))},
+				},
+			},
+			expectedStatus: v1alpha1.SupportBundleCollectionStatus{
+				DesiredNodes:   10,
+				CollectedNodes: 8,
+				Conditions: []v1alpha1.SupportBundleCollectionCondition{
+					{Type: v1alpha1.CollectionStarted, Status: metav1.ConditionTrue, LastTransitionTime: metav1.NewTime(now)},
+					{Type: v1alpha1.BundleCollected, Status: metav1.ConditionTrue, LastTransitionTime: metav1.NewTime(now.Add(time.Second * 10))},
+					{Type: v1alpha1.CollectionFailure, Status: metav1.ConditionTrue, LastTransitionTime: metav1.NewTime(now.Add(time.Second * 20)), Reason: string(metav1.StatusReasonInternalError), Message: "Agent error"},
+					{Type: v1alpha1.CollectionCompleted, Status: metav1.ConditionTrue, LastTransitionTime: metav1.NewTime(now.Add(time.Second * 20))},
+				},
+			},
+		},
+		{
+			existingCollection: &v1alpha1.SupportBundleCollection{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "b1",
+				},
+				Status: v1alpha1.SupportBundleCollectionStatus{
+					DesiredNodes:   10,
+					CollectedNodes: 8,
+					Conditions: []v1alpha1.SupportBundleCollectionCondition{
+						{Type: v1alpha1.CollectionStarted, Status: metav1.ConditionTrue, LastTransitionTime: metav1.NewTime(now)},
+						{Type: v1alpha1.BundleCollected, Status: metav1.ConditionTrue, LastTransitionTime: metav1.NewTime(now.Add(time.Second * 10))},
+					},
+				},
+			},
+			updateStatus: &v1alpha1.SupportBundleCollectionStatus{
+				DesiredNodes:   10,
+				CollectedNodes: 10,
+				Conditions: []v1alpha1.SupportBundleCollectionCondition{
+					{Type: v1alpha1.CollectionStarted, Status: metav1.ConditionTrue, LastTransitionTime: metav1.NewTime(now)},
+					{Type: v1alpha1.BundleCollected, Status: metav1.ConditionTrue, LastTransitionTime: metav1.NewTime(now.Add(time.Second * 10))},
+					{Type: v1alpha1.CollectionFailure, Status: metav1.ConditionFalse, LastTransitionTime: metav1.NewTime(now.Add(time.Second * 20))},
+					{Type: v1alpha1.CollectionCompleted, Status: metav1.ConditionTrue, LastTransitionTime: metav1.NewTime(now.Add(time.Second * 20))},
+				},
+			},
+			expectedStatus: v1alpha1.SupportBundleCollectionStatus{
+				DesiredNodes:   10,
+				CollectedNodes: 10,
+				Conditions: []v1alpha1.SupportBundleCollectionCondition{
+					{Type: v1alpha1.CollectionStarted, Status: metav1.ConditionTrue, LastTransitionTime: metav1.NewTime(now)},
+					{Type: v1alpha1.BundleCollected, Status: metav1.ConditionTrue, LastTransitionTime: metav1.NewTime(now.Add(time.Second * 10))},
+					{Type: v1alpha1.CollectionFailure, Status: metav1.ConditionFalse, LastTransitionTime: metav1.NewTime(now.Add(time.Second * 20))},
+					{Type: v1alpha1.CollectionCompleted, Status: metav1.ConditionTrue, LastTransitionTime: metav1.NewTime(now.Add(time.Second * 20))},
+				},
+			},
+		},
+	} {
+		testClient := newTestClient(nil, []runtime.Object{tc.existingCollection})
+		controller := newController(testClient)
+		stopCh := make(chan struct{})
+		testClient.start(stopCh)
+		testClient.waitForSync(stopCh)
+		collectionName := tc.existingCollection.Name
+		err := controller.updateSupportBundleCollectionStatus(collectionName, tc.updateStatus)
+		require.NoError(t, err)
+		updatedCollection, err := controller.crdClient.CrdV1alpha1().SupportBundleCollections().Get(context.TODO(), collectionName, metav1.GetOptions{})
+		require.NoError(t, err)
+		for _, conditions := range [][]v1alpha1.SupportBundleCollectionCondition{
+			tc.expectedStatus.Conditions, updatedCollection.Status.Conditions,
+		} {
+			sort.Slice(conditions, func(i, j int) bool {
+				a := conditions[i]
+				b := conditions[j]
+				if a.Type == b.Type {
+					return a.Status < b.Status
+				}
+				return a.Type < b.Type
+			})
+		}
+		assert.True(t, supportBundleCollectionStatusEqual(tc.expectedStatus, updatedCollection.Status))
+	}
+}
+
+func TestUpdateStatus(t *testing.T) {
+	var controller *Controller
+	getSpan := func(nodesCount int) []string {
+		nodes := make([]string, nodesCount)
+		for i := 0; i < nodesCount; i++ {
+			nodes[i] = fmt.Sprintf("n%d", i)
+		}
+		return nodes
+	}
+	prepareController := func(collectionName string, desiredNodes int) {
+		testClient := newTestClient(nil, []runtime.Object{
+			&v1alpha1.SupportBundleCollection{
+				ObjectMeta: metav1.ObjectMeta{Name: collectionName},
+				Spec: v1alpha1.SupportBundleCollectionSpec{
+					FileServer: v1alpha1.BundleFileServer{
+						URL: "sftp://1.1.1.1/supportbundles/upload",
+					},
+					ExpirationMinutes: 60,
+					SinceTime:         "2h",
+				},
+				Status: v1alpha1.SupportBundleCollectionStatus{
+					DesiredNodes:   int32(desiredNodes),
+					CollectedNodes: 0,
+					Conditions: []v1alpha1.SupportBundleCollectionCondition{
+						{Type: v1alpha1.CollectionStarted, Status: metav1.ConditionTrue, LastTransitionTime: metav1.NewTime(time.Now())},
+					},
+				},
+			},
+		})
+		controller = newController(testClient)
+		controller.supportBundleCollectionStore.Create(&types.SupportBundleCollection{
+			Name: collectionName,
+			SpanMeta: types.SpanMeta{
+				NodeNames: sets.NewString(getSpan(desiredNodes)...),
+			},
+		})
+		stopCh := make(chan struct{})
+		testClient.start(stopCh)
+		testClient.waitForSync(stopCh)
+	}
+
+	updateStatusFunc := func(collectionName string, nodeStatus controlplane.SupportBundleCollectionNodeStatus) {
+		status := &controlplane.SupportBundleCollectionStatus{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: collectionName,
+			},
+			Nodes: []controlplane.SupportBundleCollectionNodeStatus{
+				nodeStatus,
+			},
+		}
+		err := controller.UpdateStatus(status)
+		require.NoError(t, err)
+	}
+
+	syncSupportBundleCollection := func() {
+		key, _ := controller.queue.Get()
+		controller.queue.Done(key)
+		err := controller.syncSupportBundleCollection(key.(string))
+		assert.NoError(t, err)
+	}
+
+	namespace := "ns1"
+	agentReportStatus := func(nodesCount, failedNodes int, collectionName string) {
+		for i := 0; i < nodesCount; i++ {
+			nodeName := fmt.Sprintf("n%d", i)
+			nodeType := controlplane.SupportBundleCollectionNodeTypeNode
+			if i%2 == 0 {
+				nodeType = controlplane.SupportBundleCollectionNodeTypeExternalNode
+			}
+			completed := true
+			if i < failedNodes {
+				completed = false
+			}
+			nodeStatus := controlplane.SupportBundleCollectionNodeStatus{
+				NodeName:  nodeName,
+				NodeType:  nodeType,
+				Completed: completed,
+			}
+			if nodeType == controlplane.SupportBundleCollectionNodeTypeExternalNode {
+				nodeStatus.NodeNamespace = namespace
+			}
+			updateStatusFunc(collectionName, nodeStatus)
+		}
+	}
+
+	updateFailure := func(collectionName, name string, errMessage string) {
+		nodeStatus := controlplane.SupportBundleCollectionNodeStatus{
+			NodeName:  name,
+			NodeType:  controlplane.SupportBundleCollectionNodeTypeNode,
+			Completed: false,
+			Error:     errMessage,
+		}
+		updateStatusFunc(collectionName, nodeStatus)
+	}
+
+	checkCompletedStatus := func(bundleCollection *v1alpha1.SupportBundleCollection) {
+		collectionName := bundleCollection.Name
+		assert.True(t, conditionExistsIgnoreLastTransitionTime(bundleCollection.Status.Conditions, v1alpha1.SupportBundleCollectionCondition{
+			Type:   v1alpha1.CollectionCompleted,
+			Status: metav1.ConditionTrue,
+		}))
+		assert.Eventually(t, func() bool {
+			err := controller.syncSupportBundleCollection(collectionName)
+			assert.NoError(t, err)
+			_, exists, err := controller.supportBundleCollectionStore.Get(collectionName)
+			assert.NoError(t, err)
+			return !exists
+		}, time.Second, time.Millisecond*10)
+
+		_, exists := controller.statuses[collectionName]
+		assert.False(t, exists)
+	}
+
+	t.Run("all-agent-succeeded", func(t *testing.T) {
+		collectionName := "b1"
+		desiredNodes := 5
+		prepareController(collectionName, desiredNodes)
+		agentReportStatus(desiredNodes, 0, collectionName)
+		syncSupportBundleCollection()
+		bundleCollection, err := controller.crdClient.CrdV1alpha1().SupportBundleCollections().Get(context.Background(), collectionName, metav1.GetOptions{})
+		assert.NoError(t, err)
+		assert.Equal(t, int32(desiredNodes), bundleCollection.Status.CollectedNodes)
+		checkCompletedStatus(bundleCollection)
+	})
+
+	t.Run("agent-failure", func(t *testing.T) {
+		collectionName := "b2"
+		desiredNodes := 6
+		prepareController(collectionName, desiredNodes)
+		reportedNodes := 5
+		agentReportStatus(reportedNodes, 2, collectionName)
+		syncSupportBundleCollection()
+		bundleCollection, err := controller.crdClient.CrdV1alpha1().SupportBundleCollections().Get(context.Background(), collectionName, metav1.GetOptions{})
+		assert.NoError(t, err)
+		assert.Equal(t, int32(3), bundleCollection.Status.CollectedNodes)
+		failureStatus := v1alpha1.SupportBundleCollectionCondition{
+			Type:    v1alpha1.CollectionFailure,
+			Status:  metav1.ConditionTrue,
+			Reason:  string(metav1.StatusReasonInternalError),
+			Message: fmt.Sprintf(`Failed Agent count: 2, "unknown error":[n0, n1]`),
+		}
+		assert.True(t, conditionExistsIgnoreLastTransitionTime(bundleCollection.Status.Conditions, failureStatus))
+		// Test merging failure message.
+		updateFailure(collectionName, "n5", "agent internal error")
+		syncSupportBundleCollection()
+		bundleCollection, err = controller.crdClient.CrdV1alpha1().SupportBundleCollections().Get(context.Background(), collectionName, metav1.GetOptions{})
+		assert.NoError(t, err)
+		assert.True(t, conditionExistsIgnoreLastTransitionTime(bundleCollection.Status.Conditions, v1alpha1.SupportBundleCollectionCondition{
+			Type:    v1alpha1.CollectionFailure,
+			Status:  metav1.ConditionTrue,
+			Reason:  string(metav1.StatusReasonInternalError),
+			Message: fmt.Sprintf(`Failed Agent count: 3, "agent internal error":[n5], "unknown error":[n0, n1]`),
+		}))
+		assert.False(t, conditionExistsIgnoreLastTransitionTime(bundleCollection.Status.Conditions, failureStatus))
+		assert.True(t, conditionExistsIgnoreLastTransitionTime(bundleCollection.Status.Conditions, v1alpha1.SupportBundleCollectionCondition{
+			Type:   v1alpha1.CollectionCompleted,
+			Status: metav1.ConditionTrue,
+		}))
+		checkCompletedStatus(bundleCollection)
+	})
+
+	t.Run("unknown-agent-report", func(t *testing.T) {
+		collectionName := "b3"
+		desiredNodes := 3
+		prepareController(collectionName, desiredNodes)
+		reportedNodes := 1
+		agentReportStatus(reportedNodes, 0, collectionName)
+		statusPerNode, _ := controller.statuses[collectionName]
+		assert.Equal(t, reportedNodes, len(statusPerNode))
+		syncSupportBundleCollection()
+		assert.Equal(t, reportedNodes, len(statusPerNode))
+		// Test status report from the Agent which is not in the SupportBundleCollection span
+		updateStatusFunc(collectionName, controlplane.SupportBundleCollectionNodeStatus{
+			NodeName:  "n10",
+			NodeType:  controlplane.SupportBundleCollectionNodeTypeNode,
+			Completed: true,
+		})
+		statusPerNode, _ = controller.statuses[collectionName]
+		assert.Equal(t, reportedNodes+1, len(statusPerNode))
+		syncSupportBundleCollection()
+		statusPerNode, _ = controller.statuses[collectionName]
+		assert.Equal(t, reportedNodes, len(statusPerNode))
+	})
+
+	t.Run("non-existing-collection", func(t *testing.T) {
+		// Test UpdateStatus with non-existing SupportBundleCollection
+		nonExistCollectionName := "no-existing-collection"
+		updateStatusFunc(nonExistCollectionName, controlplane.SupportBundleCollectionNodeStatus{
+			NodeName:  "n1",
+			NodeType:  "Node",
+			Completed: true,
+		})
+		_, exists := controller.statuses[nonExistCollectionName]
+		assert.False(t, exists)
+	})
 }
 
 func newController(tc *testClient) *Controller {
