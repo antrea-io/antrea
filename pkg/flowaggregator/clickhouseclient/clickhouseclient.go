@@ -86,6 +86,13 @@ const (
                            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 )
 
+// PrepareClickHouseConnection is used for unit testing
+var (
+	PrepareClickHouseConnection = func(input ClickHouseInput) (string, *sql.DB, error) {
+		return PrepareConnection(input)
+	}
+)
+
 type stopPayload struct {
 	flushQueue bool
 }
@@ -124,7 +131,7 @@ type ClickHouseInput struct {
 	CommitInterval time.Duration
 }
 
-func (ci *ClickHouseInput) getDataSourceName() (string, error) {
+func (ci *ClickHouseInput) GetDataSourceName() (string, error) {
 	if len(ci.DatabaseURL) == 0 || len(ci.Username) == 0 || len(ci.Password) == 0 {
 		return "", fmt.Errorf("URL, Username or Password missing for clickhouse DSN")
 	}
@@ -150,7 +157,7 @@ func (ci *ClickHouseInput) getDataSourceName() (string, error) {
 }
 
 func NewClickHouseClient(input ClickHouseInput) (*ClickHouseExportProcess, error) {
-	dsn, connect, err := PrepareConnection(input)
+	dsn, connect, err := PrepareClickHouseConnection(input)
 	if err != nil {
 		return nil, err
 	}
@@ -370,7 +377,7 @@ func (ch *ClickHouseExportProcess) pushRecordsToFrontOfQueue(records []*flowreco
 }
 
 func PrepareConnection(input ClickHouseInput) (string, *sql.DB, error) {
-	dsn, err := input.getDataSourceName()
+	dsn, err := input.GetDataSourceName()
 	if err != nil {
 		return "", nil, fmt.Errorf("error when parsing ClickHouse DSN: %v", err)
 	}
