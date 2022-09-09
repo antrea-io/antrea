@@ -607,8 +607,8 @@ github.com/jstemmer/go-junit-report v0.9.1/go.mod h1:Brl9GWCQeLvo8nXZwPNNblvFj/X
 github.com/jtolds/gls v4.20.0+incompatible/go.mod h1:QJZ7F/aHp+rZTRtaJ1ow/lLfFfVYBRgL+9YlvaHOwJU=
 github.com/julienschmidt/httprouter v1.2.0/go.mod h1:SYymIcj16QtmaHHD7aYtjjsJG7VTCxuUUipMqKk8s4w=
 github.com/julienschmidt/httprouter v1.3.0/go.mod h1:JR6WtHb+2LUe8TCKY3cZOxFyyO8IZAc4RVcycCCAKdM=
-github.com/k8snetworkplumbingwg/network-attachment-definition-client v1.1.0 h1:IwEFm6n6dvFAqpi3BtcTgnjwM/oj9hA30ZV7d4I0FGU=
-github.com/k8snetworkplumbingwg/network-attachment-definition-client v1.1.0/go.mod h1:+1DpV8uIwteAhxNO0lgRox8gHkTG6w3OeDfAlg+qqjA=
+github.com/k8snetworkplumbingwg/network-attachment-definition-client v1.1.1 h1:JGytz/ycswKVpQl81Pb6YS2RNAWtMqLxB2qO1ucDhRg=
+github.com/k8snetworkplumbingwg/network-attachment-definition-client v1.1.1/go.mod h1:+1DpV8uIwteAhxNO0lgRox8gHkTG6w3OeDfAlg+qqjA=
 github.com/k8snetworkplumbingwg/sriov-cni v2.1.0+incompatible h1:5comk9qUB9j99Oc+rvnm92RWWe9urdJ1TP3cXM3fmmc=
 github.com/k8snetworkplumbingwg/sriov-cni v2.1.0+incompatible/go.mod h1:sVTfViXOlaxc7X9fnixa5L1FQqEAybehD20yXyagYLE=
 github.com/kevinburke/ssh_config v0.0.0-20190725054713-01f96b0aa0cd h1:Coekwdh0v2wtGp9Gmz1Ze3eVRAWJMLokvN3QjdzCHLY=

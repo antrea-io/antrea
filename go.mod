@@ -31,7 +31,7 @@ require (
 	github.com/google/btree v1.1.2
 	github.com/google/uuid v1.3.0
 	github.com/hashicorp/memberlist v0.4.0
-	github.com/k8snetworkplumbingwg/network-attachment-definition-client v1.1.0
+	github.com/k8snetworkplumbingwg/network-attachment-definition-client v1.1.1
 	github.com/k8snetworkplumbingwg/sriov-cni v2.1.0+incompatible
 	github.com/kevinburke/ssh_config v0.0.0-20190725054713-01f96b0aa0cd
 	github.com/lithammer/dedent v1.1.0
