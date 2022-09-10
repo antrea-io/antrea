@@ -494,7 +494,7 @@ metadata:
 spec:
   kind: AntreaClusterNetworkPolicy
   name: strict-namespace-isolation # In each importing cluster, an ACNP of name antrea-mc-strict-namespace-isolation will be created with the spec below
-  clusternetworkpolicy:
+  clusterNetworkPolicy:
     priority: 1
     tier: securityops
     appliedTo:

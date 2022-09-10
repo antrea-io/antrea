@@ -93,6 +93,31 @@ func TestResourceImportReconciler_handleClusterInfo(t *testing.T) {
 			Namespace: "default",
 		},
 	}
+	ciResImportEmptySpec := &mcsv1alpha1.ResourceImport{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "default",
+			Name:      "cluster-a-default-clusterinfo-empty",
+		},
+		Spec: mcsv1alpha1.ResourceImportSpec{
+			Kind:      common.ClusterInfoKind,
+			Name:      "node-1",
+			Namespace: "default",
+		},
+	}
+	ciResImportLocal := &mcsv1alpha1.ResourceImport{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "default",
+			Name:      "cluster-d-default-clusterinfo-empty",
+		},
+		Spec: mcsv1alpha1.ResourceImportSpec{
+			Kind:      common.ClusterInfoKind,
+			Name:      "node-1",
+			Namespace: "default",
+			ClusterInfo: &mcsv1alpha1.ClusterInfo{
+				ClusterID: "cluster-d",
+			},
+		},
+	}
 	ciImportA := mcsv1alpha1.ClusterInfoImport{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
@@ -134,6 +159,16 @@ func TestResourceImportReconciler_handleClusterInfo(t *testing.T) {
 			name:                "create ClusterInfoImport successfully",
 			existingCIResImport: ciResImportA,
 			expectedCIImport:    &ciImportA,
+		},
+		{
+			name:                "skip import empty ResourceImport",
+			existingCIResImport: ciResImportEmptySpec,
+			expectedCIImport:    nil,
+		},
+		{
+			name:                "skip import ResourceImport from local",
+			existingCIResImport: ciResImportLocal,
+			expectedCIImport:    nil,
 		},
 		{
 			name:                "update ClusterInfoImport successfully",
