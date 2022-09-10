@@ -43,6 +43,10 @@ var (
 )
 
 func (r *ResourceImportReconciler) handleResImpUpdateForClusterNetworkPolicy(ctx context.Context, resImp *multiclusterv1alpha1.ResourceImport) (ctrl.Result, error) {
+	if resImp.Spec.ClusterNetworkPolicy == nil {
+		klog.V(2).InfoS("Skip reconciling ResourceImport for ClusterNetworkPolicy since it has no valid spec", "resourceimport", klog.KObj(resImp))
+		return ctrl.Result{}, nil
+	}
 	acnpName := types.NamespacedName{
 		Namespace: "",
 		Name:      common.AntreaMCSPrefix + resImp.Spec.Name,
