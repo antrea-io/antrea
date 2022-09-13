@@ -51,8 +51,8 @@ Setup a VMC cluster to run K8s e2e community tests (E2e, Conformance, all featur
 
         --cluster-name           The cluster name to be used for the generated VMC cluster.
         --kubeconfig             Path to save kubeconfig of generated VMC cluster.
-        --k8s-version            Test k8s version, like v1.19.1
-        --test-os                Test OS version, like 'ubuntu-18.04','ubuntu-20.04'
+        --k8s-version            Test k8s version, like v1.19.1.
+        --test-os                Test OS version, like 'ubuntu-18.04','ubuntu-20.04' for AWS, like 'ubuntu-1804' for VC.
         --workdir                Home path for Go, vSphere information and antrea_logs during cluster setup. Default is $WORKDIR.
         --log-mode               Use the flag to set either 'report', 'detail', or 'dump' level data for sonobouy results.
         --testcase               The testcase to run: e2e, conformance, all-features-conformance, whole-conformance or networkpolicy.
@@ -265,7 +265,11 @@ function setup_aws_cluster() {
     fi
     rm -rf ${GIT_CHECKOUT_DIR}/jenkins || true
 
-    export AMI_ID=$(clusterawsadm ami list --kubernetes-version=$K8S_VERSION --os=$TEST_OS --region=$AWS_REGION | grep ami- | awk '{print $5}')
+    export AMI_ID=$(clusterawsadm ami list --kubernetes-version=$K8S_VERSION --os=$TEST_OS --region=$AWS_REGION | grep ami- | awk '{print $5}' | head -1)
+    if [ -z "$AMI_ID" ]; then
+        echo "failed to locate the ami id for kubernetes-version=$K8S_VERSION os=$TEST_OS region=$AWS_REGION" 
+        return 1
+    fi
 
     echo '=== Prepare key pair ==='
     mkdir -p ${GIT_CHECKOUT_DIR}/jenkins/key

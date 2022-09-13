@@ -3,6 +3,7 @@ kind: Cluster
 metadata:
   labels:
     cluster.x-k8s.io/cluster-name: CLUSTERNAME
+    jenkins-test: 
   name: CLUSTERNAME
   namespace: CLUSTERNAMESPACE
 spec:

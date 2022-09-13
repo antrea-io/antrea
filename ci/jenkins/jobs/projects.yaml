@@ -1138,6 +1138,7 @@
              - timeout:
                  timeout: 600
                  type: absolute
+
       - '{name}-{test_name}-for-period':
           test_name: daily-capa-aws-test
           node: 'capa-test'
@@ -1179,17 +1180,141 @@
                 key-file-variable: KEY_FILE_VARIABLE
                 username-variable: USER_NAME_VARIABLE
                 passphrase-variable: PASSPHRASE_VARIABLE
+
       - '{name}-{test_name}-for-period':
-          test_name: clean-up-old-clusters
+          test_name: daily-capa-aws-clean-up-old-clusters
           node: 'capa-test'
           description: 'This is for cleaning up old AWS capa clusters daily.'
           builders:
             - builder-capa-aws-clean-up
           org_repo: edwardbadboy/antrea
           branches:
-          - '*/topic/shengkailin'
+          - '*/topic/shengkailin/capi-aws'
           included_regions: []
           cron: '' # 'H H * * *'
           ignore_post_commit_hooks: false
+          publishers: []
+          wrappers: []
+
+      - '{name}-{test_name}-matrix-compatibility-test':
+          test_name: daily-capa-aws
+          node: 'capa-test'
+          description: 'This is daily matrix compatibility test for testing AWS capa + antrea.'
+          axes:
+            - axis:
+               type: user-defined
+               name: TEST_OS
+               values:
+                - ubuntu-18.04
+                - ubuntu-20.04
+            - axis:
+               type: user-defined
+               name: K8S_VERSION
+               values:
+                - v1.23.1
+                - v1.24.1
+            - axis:
+               type: slave # TODO: use different term when Jenkins & Jenkins Job Builder are updated
+               name: labels
+               values:
+                - capa-test
+          builders:
+            - builder-capa-matrix
+          org_repo: edwardbadboy/antrea
+          branches:
+          - '*/topic/shengkailin/capi-aws'
+          included_regions: []
+          cron: '' #'H 20 * * 6'
+          ignore_post_commit_hooks: false
+          parameters: []
+          publishers: []
+          wrappers:
+          - credentials-binding:
+            - text:
+                credential-id: CAPA_ACCESS_KEY
+                variable: CAPA_ACCESS_KEY
+            - text:
+                credential-id: CAPA_SECRET_ACCESS_KEY
+                variable: CAPA_SECRET_ACCESS_KEY
+            - text:
+                credential-id: CAPA_VPC
+                variable: CAPA_VPC
+            - text:
+                credential-id: CAPA_SUBNET
+                variable: CAPA_SUBNET
+            - ssh-user-private-key:
+                credential-id: AWS_DEFAULT_SSH_KEY
+                key-file-variable: KEY_FILE_VARIABLE
+                username-variable: USER_NAME_VARIABLE
+                passphrase-variable: PASSPHRASE_VARIABLE
+        
+      - '{name}-{test_name}-capa-aws-for-period':
+          test_name: daily-echo
+          node: 'capa-test'
+          description: 'This is for testing AWS capa daily.'
+          builders:
+            - builder-capa-aws-echo
+          org_repo: edwardbadboy/antrea
+          branches:
+          - '*/main'
+          included_regions: []
+          cron: '' # 'H H * * *'
+          ignore_post_commit_hooks: false
+          publishers: 
+          - email:
+              recipients: liujunhan@sjtu.edu.cn
+          wrappers:
+          - inject:
+              properties-file: properties.txt
+          - credentials-binding:
+            - text:
+                credential-id: CAPA_ACCESS_KEY
+                variable: CAPA_ACCESS_KEY
+            - text:
+                credential-id: CAPA_SECRET_ACCESS_KEY
+                variable: CAPA_SECRET_ACCESS_KEY
+            - text:
+                credential-id: CAPA_VPC
+                variable: CAPA_VPC
+            - text:
+                credential-id: CAPA_SUBNET
+                variable: CAPA_SUBNET
+            - ssh-user-private-key:
+                credential-id: AWS_DEFAULT_SSH_KEY
+                key-file-variable: KEY_FILE_VARIABLE
+                username-variable: USER_NAME_VARIABLE
+                passphrase-variable: PASSPHRASE_VARIABLE
+
+      - '{name}-{test_name}-matrix-compatibility-test':
+          test_name: daily-capa-aws-downstream
+          node: 'capa-test'
+          description: 'This is daily matrix compatibility test for testing AWS capa + antrea using downstream method.'
+          axes:
+            - axis:
+               type: user-defined
+               name: TEST_OS
+               values:
+                - ubuntu-18.04
+                - ubuntu-20.04
+            - axis:
+               type: user-defined
+               name: K8S_VERSION
+               values:
+                - v1.23.1
+                - v1.24.1
+            - axis:
+               type: slave # TODO: use different term when Jenkins & Jenkins Job Builder are updated
+               name: labels
+               values:
+                - capa-test
+          builders:
+            - builder-capa-aws-matrix-trigger-compatibility-jobs
+          org_repo: edwardbadboy/antrea
+          branches:
+          - '*/topic/shengkailin/capi-aws'
+          included_regions: []
+          cron: '' #'H 20 * * 6'
+          ignore_post_commit_hooks: false
+          parameters: []
           publishers: []
           wrappers: []

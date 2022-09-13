@@ -415,3 +415,45 @@
     publishers: '{publishers}'
     parameters: '{parameters}'
     wrappers: '{wrappers}'
+
+- job-template:
+    name: '{name}-{test_name}-capa-aws-for-period'
+    node: '{node}'
+    block-downstream: false
+    block-upstream: false
+    builders: '{builders}'
+    parameters:
+     - string:
+         default: v1.19.1
+         description: k8s version.
+         name: K8S_VERSION
+         trim: 'true'
+     - string:
+         default: ubuntu-18.04
+         description: test os version.
+         name: TEST_OS
+         trim: 'true'
+    concurrent: true
+    description: '{description}'
+    project-type: freestyle
+    properties:
+    - build-discarder:
+        artifact-days-to-keep: -1
+        artifact-num-to-keep: -1
+        days-to-keep: 7
+        num-to-keep: 30
+    triggers:
+    - pollscm:
+        cron: '{cron}'
+        ignore-post-commit-hooks: '{ignore_post_commit_hooks}'
+    scm:
+    - git:
+        branches: '{branches}'
+        credentials-id: '{git_credentials_id}'
+        name: origin
+        refspec: +refs/heads/*:refs/remotes/origin/* +refs/pull/${{ghprbPullId}}/*:refs/remotes/origin/pr/${{ghprbPullId}}/*
+        url: 'https://github.com/{org_repo}'
+        wipe-workspace: true
+        included-regions: '{included_regions}'
+    publishers: '{publishers}'
+    wrappers: '{wrappers}'

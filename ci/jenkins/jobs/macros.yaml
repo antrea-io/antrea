@@ -204,11 +204,52 @@
     builders:
       - shell: |-
           #!/bin/bash
-          for clustername in `kubectl get clusters -A --no-headers | grep test | awk '{print $1}'`;
+          for clustername in `kubectl get clusters -A -l jenkins-test --no-headers | grep test | awk '{print $1}'`;
           do 
               echo $clustername;
-              timeout 2m echo ./ci/jenkins/test-vmc.sh --cluster-name "$clustername" --cleanup-only --provider aws
-              if [[ $? == 124 ]]; then
+              timestamp="$(kubectl get clusters -o jsonpath="{.metadata.creationTimestamp}" $clustername -n $clustername)"
+              t1=$(date -d "$timestamp" "+%s")
+              now=$( date "+%s")
+              delta=$((now-t1))
+              if [ "$delta" -gt "14400" ]; then 
+                timeout 2m echo ./ci/jenkins/test-vmc.sh --cluster-name "$clustername" --cleanup-only --provider 
+                result=$?
+                if [[ $result == 124 ]]; then
                   echo "#error# clean up job of ${clustername} time out"
+                fi
+                if [[ $result == 124 ]]; then
+                  echo "delete old job successfully"
+                fi
               fi
           done
+- builder:
+    name: builder-capa-matrix
+    builders:
+      - shell: |-
+          #!/bin/bash
+          set -ex
+          echo ./ci/jenkins/test-vmc.sh --cluster-name "${JOB_NAME}-${BUILD_NUMBER}" --setup-only --k8s-version "${K8S_VERSION}" --test-os "${TEST_OS}" --provider aws --aws-region "us-west-2" --aws-access-key-id "${CAPA_ACCESS_KEY}" --aws-secret-access-key "${CAPA_SECRET_ACCESS_KEY}" --aws-vpc-id "${CAPA_VPC}" --aws-subnet-id "${CAPA_SUBNET}" --aws-ssh-key-path "${KEY_FILE_VARIABLE}"
+
+- builder:
+    name: builder-capa-aws-echo
+    builders:
+      - shell: |-
+          #!/bin/bash
+          set -ex
+          echo ./ci/jenkins/test-vmc.sh --cluster-name "${JOB_NAME}-${BUILD_NUMBER}" --setup-only k8s-version "${K8S_VERSION}" --test-os "${TEST_OS}" --provider aws --aws-region "us-west-2" --aws-access-key-id "${CAPA_ACCESS_KEY}" --aws-secret-access-key "${CAPA_SECRET_ACCESS_KEY}" --aws-vpc-id "${CAPA_VPC}" --aws-subnet-id "${CAPA_SUBNET}" --aws-ssh-key-path "${KEY_FILE_VARIABLE}"
+
+- builder:
+    name: builder-capa-aws-matrix-trigger-compatibility-jobs
+    builders:
+      - shell: |-
+          #!/bin/bash
+          set -ex
+          rm -f properties.txt
+          echo K8S_VERSION=${K8S_VERSION} >> properties.txt
+          echo TEST_OS=${TEST_OS} >> properties.txt
+      - trigger-builds:
+        - project:
+          - "antrea-daily-echo-capa-aws-for-period"
+          block: true
+          property-file: properties.txt
+
