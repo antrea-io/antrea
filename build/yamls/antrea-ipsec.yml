@@ -2924,11 +2924,8 @@ data:
     # Make sure it doesn't conflict with your existing OpenVSwitch bridges.
     ovsBridge: "br-int"
 
-    # Datapath type to use for the OpenVSwitch bridge created by Antrea. Supported values are:
-    # - system
-    # - netdev
-    # 'system' is the default value and corresponds to the kernel datapath. Use 'netdev' to run
-    # OVS in userspace mode. Userspace mode requires the tun device driver to be available.
+    # Datapath type to use for the OpenVSwitch bridge created by Antrea. At the moment, the only
+    # supported value is 'system', which corresponds to the kernel datapath.
     #ovsDatapathType: system
 
     # Name of the interface antrea-agent will create and use for host <--> pod communication.
@@ -4156,7 +4153,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 6fceb3665d21444d3e3555239e3aefad12ebf3dd175211e5db10d8b5117293d4
+        checksum/config: 0d23a6a2c5f2f815ef77b338ae72534ce3715e5f0a84de4c2910ddf2fd013f5b
         checksum/ipsec-secret: d0eb9c52d0cd4311b6d252a951126bf9bea27ec05590bed8a394f0f792dcb2a4
       labels:
         app: antrea
@@ -4442,7 +4439,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 6fceb3665d21444d3e3555239e3aefad12ebf3dd175211e5db10d8b5117293d4
+        checksum/config: 0d23a6a2c5f2f815ef77b338ae72534ce3715e5f0a84de4c2910ddf2fd013f5b
       labels:
         app: antrea
         component: antrea-controller

@@ -26,7 +26,6 @@ const (
 	ERSPANTunnel = "erspan"
 
 	OVSDatapathSystem OVSDatapathType = "system"
-	OVSDatapathNetdev OVSDatapathType = "netdev"
 
 	OVSOtherConfigDatapathIDKey string = "datapath-id"
 )
