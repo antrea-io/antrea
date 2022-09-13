@@ -52,11 +52,6 @@ func TestCheckUnsupportedFeatures(t *testing.T) {
 			true,
 		},
 		{
-			"netdev datapath",
-			agentconfig.AgentConfig{OVSDatapathType: string(ovsconfig.OVSDatapathNetdev)},
-			false,
-		},
-		{
 			"noEncap mode",
 			agentconfig.AgentConfig{TrafficEncapMode: config.TrafficEncapModeNoEncap.String()},
 			true,

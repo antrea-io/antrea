@@ -117,11 +117,8 @@ func (o *Options) validate(args []string) error {
 		return fmt.Errorf("no positional arguments are supported")
 	}
 
-	if o.config.OVSDatapathType != string(ovsconfig.OVSDatapathSystem) && o.config.OVSDatapathType != string(ovsconfig.OVSDatapathNetdev) {
+	if o.config.OVSDatapathType != string(ovsconfig.OVSDatapathSystem) {
 		return fmt.Errorf("OVS datapath type %s is not supported", o.config.OVSDatapathType)
-	}
-	if o.config.OVSDatapathType == string(ovsconfig.OVSDatapathNetdev) {
-		klog.Info("OVS 'netdev' datapath is not fully supported at the moment")
 	}
 
 	if config.ExternalNode.String() == o.config.NodeType && !features.DefaultFeatureGate.Enabled(features.ExternalNode) {
@@ -272,11 +269,6 @@ func (o *Options) validateAntreaIPAMConfig() error {
 	}
 	if !features.DefaultFeatureGate.Enabled(features.AntreaIPAM) {
 		return fmt.Errorf("AntreaIPAM feature gate must be enabled to configure bridging mode")
-	}
-	// Bridging mode will connect uplink to OVS bridge, which is not compatible with OVSDatapathSystem 'netdev'.
-	if o.config.OVSDatapathType != string(ovsconfig.OVSDatapathSystem) {
-		return fmt.Errorf("Bridging mode requires 'system' OVSDatapathType, current: %s",
-			o.config.OVSDatapathType)
 	}
 	if !strings.EqualFold(o.config.TrafficEncapMode, config.TrafficEncapModeNoEncap.String()) {
 		return fmt.Errorf("Bridging mode requires 'noEncap' TrafficEncapMode, current: %s",
