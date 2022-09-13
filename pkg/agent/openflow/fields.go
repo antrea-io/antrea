@@ -35,7 +35,7 @@ var (
 	//   - 4: from uplink port.
 	//   - 5: from bridge local port.
 	//   - 6: from traffic control return port.
-	PktSourceField      = binding.NewRegField(0, 0, 3, "PacketSource")
+	PktSourceField      = binding.NewRegField(0, 0, 3)
 	FromTunnelRegMark   = binding.NewRegMark(PktSourceField, tunnelVal)
 	FromGatewayRegMark  = binding.NewRegMark(PktSourceField, gatewayVal)
 	FromLocalRegMark    = binding.NewRegMark(PktSourceField, localVal)
@@ -48,23 +48,23 @@ var (
 	//   - 3: to local Pods.
 	//   - 4: to uplink port.
 	//   - 5: to bridge local port.
-	PktDestinationField = binding.NewRegField(0, 4, 7, "PacketDestination")
+	PktDestinationField = binding.NewRegField(0, 4, 7)
 	ToTunnelRegMark     = binding.NewRegMark(PktDestinationField, tunnelVal)
 	ToGatewayRegMark    = binding.NewRegMark(PktDestinationField, gatewayVal)
 	ToUplinkRegMark     = binding.NewRegMark(PktDestinationField, uplinkVal)
 	// reg0[8]: Mark to indicate the ofPort number of an interface is found.
-	OFPortFoundRegMark = binding.NewOneBitRegMark(0, 8, "OFPortFound")
+	OFPortFoundRegMark = binding.NewOneBitRegMark(0, 8)
 	// reg0[9]: Field to indicate whether the packet's source / destination MAC address needs to be rewritten.
-	RewriteMACRegMark    = binding.NewOneBitRegMark(0, 9, "RewriteMAC")
-	NotRewriteMACRegMark = binding.NewOneBitZeroRegMark(0, 9, "NotRewriteMAC")
+	RewriteMACRegMark    = binding.NewOneBitRegMark(0, 9)
+	NotRewriteMACRegMark = binding.NewOneBitZeroRegMark(0, 9)
 	// reg0[10]: Mark to indicate the packet is denied(Drop/Reject).
-	CnpDenyRegMark = binding.NewOneBitRegMark(0, 10, "CNPDeny")
+	CnpDenyRegMark = binding.NewOneBitRegMark(0, 10)
 	// reg0[11..12]: Field to indicate disposition of Antrea Policy. It could have more bits to support more dispositions
 	// that Antrea Policy support in the future. Marks in this field include:
 	//   - 0b00: allow
 	//   - 0b01: drop
 	//   - 0b11: pass
-	APDispositionField      = binding.NewRegField(0, 11, 12, "APDisposition")
+	APDispositionField      = binding.NewRegField(0, 11, 12)
 	DispositionAllowRegMark = binding.NewRegMark(APDispositionField, DispositionAllow)
 	DispositionDropRegMark  = binding.NewRegMark(APDispositionField, DispositionDrop)
 	DispositionPassRegMark  = binding.NewRegMark(APDispositionField, DispositionPass)
@@ -74,7 +74,7 @@ var (
 	//   - 0b00100: deny (used by Flow Exporter)
 	//   - 0b01000: DNS packet (used by FQDN)
 	//   - 0b10000: IGMP packet (used by Multicast)
-	CustomReasonField          = binding.NewRegField(0, 13, 17, "PacketInReason")
+	CustomReasonField          = binding.NewRegField(0, 13, 17)
 	CustomReasonLoggingRegMark = binding.NewRegMark(CustomReasonField, CustomReasonLogging)
 	CustomReasonRejectRegMark  = binding.NewRegMark(CustomReasonField, CustomReasonReject)
 	CustomReasonDenyRegMark    = binding.NewRegMark(CustomReasonField, CustomReasonDeny)
@@ -83,77 +83,77 @@ var (
 
 	// reg1(NXM_NX_REG1)
 	// Field to cache the ofPort of the OVS interface where to output packet.
-	TargetOFPortField = binding.NewRegField(1, 0, 31, "TargetOFPort")
+	TargetOFPortField = binding.NewRegField(1, 0, 31)
 
 	// reg2(NXM_NX_REG2)
 	// Field to help swap values in two different flow fields in the OpenFlow actions. This field is only used in func
 	// `arpResponderStaticFlow`.
-	SwapField = binding.NewRegField(2, 0, 31, "SwapValue")
+	SwapField = binding.NewRegField(2, 0, 31)
 
 	// reg3(NXM_NX_REG3)
 	// Field to store the selected Service Endpoint IP
-	EndpointIPField = binding.NewRegField(3, 0, 31, "EndpointIP")
+	EndpointIPField = binding.NewRegField(3, 0, 31)
 	// Field to store the conjunction ID which is for rule in CNP. It shares the same register with EndpointIPField,
 	// since the service selection will finish when a packet hitting NetworkPolicy related rules.
-	CNPConjIDField = binding.NewRegField(3, 0, 31, "CNPConjunctionID")
+	CNPConjIDField = binding.NewRegField(3, 0, 31)
 
 	// reg4(NXM_NX_REG4)
 	// reg4[0..15]: Field to store the selected Service Endpoint port.
-	EndpointPortField = binding.NewRegField(4, 0, 15, "EndpointPort")
+	EndpointPortField = binding.NewRegField(4, 0, 15)
 	// reg4[16..18]: Field to store the state of a packet accessing a Service. Marks in this field include:
 	//	- 0b001: packet need to do service selection.
 	//	- 0b010: packet has done service selection.
 	//	- 0b011: packet has done service selection and the selection result needs to be cached.
-	ServiceEPStateField = binding.NewRegField(4, 16, 18, "EndpointState")
+	ServiceEPStateField = binding.NewRegField(4, 16, 18)
 	EpToSelectRegMark   = binding.NewRegMark(ServiceEPStateField, 0b001)
 	EpSelectedRegMark   = binding.NewRegMark(ServiceEPStateField, 0b010)
 	EpToLearnRegMark    = binding.NewRegMark(ServiceEPStateField, 0b011)
 	// reg4[0..18]: Field to store the union value of Endpoint port and Endpoint status. It is used as a single match
 	// when needed.
-	EpUnionField = binding.NewRegField(4, 0, 18, "EndpointUnion")
+	EpUnionField = binding.NewRegField(4, 0, 18)
 	// reg4[19]: Mark to indicate the Service type is NodePort.
-	ToNodePortAddressRegMark = binding.NewOneBitRegMark(4, 19, "NodePortAddress")
+	ToNodePortAddressRegMark = binding.NewOneBitRegMark(4, 19)
 	// reg4[16..19]: Field to store the union value of Endpoint state and the mark of whether Service type is NodePort.
-	NodePortUnionField = binding.NewRegField(4, 16, 19, "NodePortUnion")
+	NodePortUnionField = binding.NewRegField(4, 16, 19)
 	// reg4[20]: Field to indicate whether the packet is from local Antrea IPAM Pod. NotAntreaFlexibleIPAMRegMark will
 	// be used with RewriteMACRegMark, thus the reg id must not be same due to the limitation of ofnet library.
-	AntreaFlexibleIPAMRegMark    = binding.NewOneBitRegMark(4, 20, "AntreaFlexibleIPAM")
-	NotAntreaFlexibleIPAMRegMark = binding.NewOneBitZeroRegMark(4, 20, "NotAntreaFlexibleIPAM")
+	AntreaFlexibleIPAMRegMark    = binding.NewOneBitRegMark(4, 20)
+	NotAntreaFlexibleIPAMRegMark = binding.NewOneBitZeroRegMark(4, 20)
 	// reg4[21]: Mark to indicate whether the packet is accessing a NodePort or a LoadBalancer IP of a Service whose
 	// externalTrafficPolicy is Cluster.
-	ToClusterServiceRegMark = binding.NewOneBitRegMark(4, 21, "ToClusterService")
+	ToClusterServiceRegMark = binding.NewOneBitRegMark(4, 21)
 	// reg4[22..23]: Field to store the action of a traffic control rule. Marks in this field include:
-	TrafficControlActionField     = binding.NewRegField(4, 22, 23, "TrafficControlAction")
+	TrafficControlActionField     = binding.NewRegField(4, 22, 23)
 	TrafficControlMirrorRegMark   = binding.NewRegMark(TrafficControlActionField, 0b01)
 	TrafficControlRedirectRegMark = binding.NewRegMark(TrafficControlActionField, 0b10)
 
 	// reg5(NXM_NX_REG5)
 	// Field to cache the Egress conjunction ID hit by TraceFlow packet.
-	TFEgressConjIDField = binding.NewRegField(5, 0, 31, "TFEgressConjunctionID")
+	TFEgressConjIDField = binding.NewRegField(5, 0, 31)
 
 	// reg6(NXM_NX_REG6)
 	// Field to store the Ingress conjunction ID hit by TraceFlow packet.
-	TFIngressConjIDField = binding.NewRegField(6, 0, 31, "TFIngressConjunctionID")
+	TFIngressConjIDField = binding.NewRegField(6, 0, 31)
 
 	// reg7(NXM_NX_REG7)
 	// Field to store the GroupID corresponding to the Service.
-	ServiceGroupIDField = binding.NewRegField(7, 0, 31, "ServiceGroupID")
+	ServiceGroupIDField = binding.NewRegField(7, 0, 31)
 
 	// reg8(NXM_NX_REG8)
 	// Field to store the VLAN ID. Valid value is 0~4094. value=0 indicates packet without 802.1q header.
 	// VLANIDField for all incoming IP/IPv6 traffic with VLAN must be set explicitly at ClassifierTable or SpoofGuardTable.
-	VLANIDField = binding.NewRegField(8, 0, 11, "VLANID")
+	VLANIDField = binding.NewRegField(8, 0, 11)
 	// Field to store the CtZone type.
 	// CtZoneTypeField for all incoming IP/IPv6 traffic must be set explicitly at ClassifierTable or SpoofGuardTable.
-	CtZoneTypeField       = binding.NewRegField(8, 12, 15, "CtZoneType")
+	CtZoneTypeField       = binding.NewRegField(8, 12, 15)
 	IPCtZoneTypeRegMark   = binding.NewRegMark(CtZoneTypeField, 0b0001)
 	IPv6CtZoneTypeRegMark = binding.NewRegMark(CtZoneTypeField, 0b0011)
 	// Field to store the CtZone ID, which is a combination of VLANIDField and CtZoneTypeField to indicate CtZone for DstNAT.
-	CtZoneField = binding.NewRegField(8, 0, 15, "CtZoneID")
+	CtZoneField = binding.NewRegField(8, 0, 15)
 
 	// reg9(NXM_NX_REG9)
 	// Field to cache the ofPort of the OVS interface to output traffic control packets.
-	TrafficControlTargetOFPortField = binding.NewRegField(9, 0, 31, "TrafficControlTargetOFPort")
+	TrafficControlTargetOFPortField = binding.NewRegField(9, 0, 31)
 )
 
 // Fields using xxreg.
@@ -193,8 +193,8 @@ var (
 // Fields using CT label.
 var (
 	// Field to store the ingress rule ID.
-	IngressRuleCTLabel = binding.NewCTLabel(0, 31, "ingressRuleCTLabel")
+	IngressRuleCTLabel = binding.NewCTLabel(0, 31)
 
 	// Field to store the egress rule ID.
-	EgressRuleCTLabel = binding.NewCTLabel(32, 63, "egressRuleCTLabel")
+	EgressRuleCTLabel = binding.NewCTLabel(32, 63)
 )

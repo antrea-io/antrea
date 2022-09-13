@@ -87,25 +87,11 @@ type ofCTAction struct {
 	builder *ofFlowBuilder
 }
 
-// LoadToMark is an action to load data into ct_mark.
-func (a *ofCTAction) LoadToMark(value uint32) CTAction {
-	ctMarkField := openflow15.NewCTMarkMatchField(value, nil)
-	action := openflow15.NewActionSetField(*ctMarkField)
-	a.actions = append(a.actions, action)
-	return a
-}
-
 func (a *ofCTAction) LoadToCtMark(marks ...*CtMark) CTAction {
 	for _, mark := range marks {
-		var mask *uint32
-		maskData := uint32(0)
-		valueData := mark.value
-		if mark.field.rng != nil {
-			maskData = ^maskData >> (32 - mark.field.rng.Length()) << mark.field.rng.Offset()
-			mask = &maskData
-			valueData = valueData << mark.field.rng.Offset()
-		}
-		ctMarkField := openflow15.NewCTMarkMatchField(valueData, mask)
+		maskData := ^uint32(0) >> (32 - mark.field.rng.Length()) << mark.field.rng.Offset()
+		valueData := mark.value << mark.field.rng.Offset()
+		ctMarkField := openflow15.NewCTMarkMatchField(valueData, &maskData)
 		action := openflow15.NewActionSetField(*ctMarkField)
 		a.actions = append(a.actions, action)
 	}
@@ -114,19 +100,15 @@ func (a *ofCTAction) LoadToCtMark(marks ...*CtMark) CTAction {
 
 func (a *ofCTAction) LoadToLabelField(value uint64, labelField *CtLabel) CTAction {
 	var labelBytes, maskBytes [16]byte
-	valueData := value
-	if labelField.rng != nil {
-		mask := ^uint64(0) >> (64 - labelField.rng.Length()) << labelField.rng.Offset()
-		valueData = valueData << (labelField.rng.Offset() % 64)
-		if labelField.rng.Offset() > 64 {
-			binary.BigEndian.PutUint64(maskBytes[0:8], mask)
-			binary.BigEndian.PutUint64(labelBytes[0:8], valueData)
-		} else {
-			binary.BigEndian.PutUint64(maskBytes[8:], mask)
-			binary.BigEndian.PutUint64(labelBytes[8:], valueData)
-		}
-	} else {
+
+	mask := ^uint64(0) >> (64 - labelField.rng.Length()) << (labelField.rng.Offset() % 64)
+	valueData := value << (labelField.rng.Offset() % 64)
+	if labelField.rng.Offset() > 63 {
+		binary.BigEndian.PutUint64(maskBytes[0:8], mask)
 		binary.BigEndian.PutUint64(labelBytes[0:8], valueData)
+	} else {
+		binary.BigEndian.PutUint64(maskBytes[8:], mask)
+		binary.BigEndian.PutUint64(labelBytes[8:], valueData)
 	}
 	ctLabelField := openflow15.NewCTLabelMatchField(labelBytes, &maskBytes)
 	action := openflow15.NewActionSetField(*ctLabelField)
@@ -607,15 +589,17 @@ func (a *ofLearnAction) MatchLearnedDstIPv6() LearnAction {
 	return a
 }
 
-func (a *ofLearnAction) MatchRegMark(mark *RegMark) LearnAction {
-	toField := &ofctrl.LearnField{Name: mark.field.GetNXFieldName(), Start: uint16(mark.field.rng[0])}
-	valBuf := make([]byte, 4)
-	binary.BigEndian.PutUint32(valBuf, mark.value)
-	offset := (mark.field.rng.Length()-1)/8 + 1
-	if offset < 2 {
-		offset = 2
+func (a *ofLearnAction) MatchRegMark(marks ...*RegMark) LearnAction {
+	for _, mark := range marks {
+		toField := &ofctrl.LearnField{Name: mark.field.GetNXFieldName(), Start: uint16(mark.field.rng[0])}
+		valBuf := make([]byte, 4)
+		binary.BigEndian.PutUint32(valBuf, mark.value)
+		offset := (mark.field.rng.Length() + 7) / 8
+		if offset < 2 {
+			offset = 2
+		}
+		a.nxLearn.AddMatch(toField, uint16(mark.field.rng.Length()), nil, valBuf[4-offset:])
 	}
-	a.nxLearn.AddMatch(toField, uint16(mark.field.rng.Length()), nil, valBuf[4-offset:])
 	return a
 }
 
@@ -647,15 +631,17 @@ func (a *ofLearnAction) LoadXXRegToXXReg(fromXXField, toXXField *XXRegField) Lea
 	return a
 }
 
-func (a *ofLearnAction) LoadRegMark(mark *RegMark) LearnAction {
-	toField := &ofctrl.LearnField{Name: mark.field.GetNXFieldName(), Start: uint16(mark.field.rng[0])}
-	valBuf := make([]byte, 4)
-	binary.BigEndian.PutUint32(valBuf, mark.value)
-	offset := (mark.field.rng.Length()-1)/8 + 1
-	if offset < 2 {
-		offset = 2
+func (a *ofLearnAction) LoadRegMark(marks ...*RegMark) LearnAction {
+	for _, mark := range marks {
+		toField := &ofctrl.LearnField{Name: mark.field.GetNXFieldName(), Start: uint16(mark.field.rng[0])}
+		valBuf := make([]byte, 4)
+		binary.BigEndian.PutUint32(valBuf, mark.value)
+		offset := (mark.field.rng.Length() + 7) / 8
+		if offset < 2 {
+			offset = 2
+		}
+		a.nxLearn.AddLoadAction(toField, uint16(mark.field.rng.Length()), nil, valBuf[4-offset:])
 	}
-	a.nxLearn.AddLoadAction(toField, uint16(mark.field.rng.Length()), nil, valBuf[4-offset:])
 	return a
 }
 
