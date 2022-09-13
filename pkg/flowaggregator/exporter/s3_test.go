@@ -18,11 +18,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"antrea.io/antrea/pkg/config/flowaggregator"
 	"antrea.io/antrea/pkg/flowaggregator/options"
+	"antrea.io/antrea/pkg/flowaggregator/s3uploader"
 )
 
 func TestS3_UpdateOptions(t *testing.T) {
@@ -40,8 +42,10 @@ func TestS3_UpdateOptions(t *testing.T) {
 		},
 		S3UploadInterval: 8 * time.Second,
 	}
-	s3Exporter, err := NewS3Exporter(opt)
+	s3Input := buildS3Input(opt)
+	s3UploadProcess, err := s3uploader.NewS3UploadProcess(s3Input, uuid.New().String())
 	require.NoError(t, err)
+	s3Exporter := S3Exporter{s3Input: &s3Input, s3UploadProcess: s3UploadProcess}
 	s3Exporter.Start()
 	assert.Equal(t, s3Exporter.s3UploadProcess.GetBucketName(), "defaultBucketName")
 	assert.Equal(t, s3Exporter.s3UploadProcess.GetBucketPrefix(), "defaultBucketPrefix")

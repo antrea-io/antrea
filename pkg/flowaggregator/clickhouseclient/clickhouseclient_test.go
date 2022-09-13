@@ -25,6 +25,7 @@ import (
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/gammazero/deque"
 	"github.com/golang/mock/gomock"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	ipfixentitiestesting "github.com/vmware/go-ipfix/pkg/entities/testing"
@@ -39,6 +40,8 @@ import (
 func init() {
 	registry.LoadRegistry()
 }
+
+var fakeClusterUUID = uuid.New().String()
 
 func TestGetDataSourceName(t *testing.T) {
 	chInput := ClickHouseInput{
@@ -103,9 +106,10 @@ func TestBatchCommitAll(t *testing.T) {
 	defer db.Close()
 
 	chExportProc := ClickHouseExportProcess{
-		db:        db,
-		deque:     deque.New(),
-		queueSize: maxQueueSize,
+		db:          db,
+		deque:       deque.New(),
+		queueSize:   maxQueueSize,
+		clusterUUID: fakeClusterUUID,
 	}
 
 	recordRow := flowrecordtesting.PrepareTestFlowRecord()
@@ -161,7 +165,8 @@ func TestBatchCommitAll(t *testing.T) {
 			15902813473,
 			15902813474,
 			12381345,
-			12381346).
+			12381346,
+			fakeClusterUUID).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
 
@@ -183,7 +188,7 @@ func TestBatchCommitAllMultiRecord(t *testing.T) {
 		queueSize: maxQueueSize,
 	}
 	recordRow := flowrecord.FlowRecord{}
-	fieldCount := reflect.TypeOf(recordRow).NumField()
+	fieldCount := reflect.TypeOf(recordRow).NumField() + 1
 	argList := make([]driver.Value, fieldCount)
 	for i := 0; i < len(argList); i++ {
 		argList[i] = sqlmock.AnyArg()
@@ -216,7 +221,7 @@ func TestBatchCommitAllError(t *testing.T) {
 	}
 	recordRow := flowrecord.FlowRecord{}
 	chExportProc.deque.PushBack(&recordRow)
-	fieldCount := reflect.TypeOf(recordRow).NumField()
+	fieldCount := reflect.TypeOf(recordRow).NumField() + 1
 	argList := make([]driver.Value, fieldCount)
 	for i := 0; i < len(argList); i++ {
 		argList[i] = sqlmock.AnyArg()

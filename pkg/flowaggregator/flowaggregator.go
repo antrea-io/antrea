@@ -93,11 +93,11 @@ var (
 	newIPFIXExporter = func(k8sClient kubernetes.Interface, opt *options.Options, registry ipfix.IPFIXRegistry) exporter.Interface {
 		return exporter.NewIPFIXExporter(k8sClient, opt, registry)
 	}
-	newClickHouseExporter = func(opt *options.Options) (exporter.Interface, error) {
-		return exporter.NewClickHouseExporter(opt)
+	newClickHouseExporter = func(k8sClient kubernetes.Interface, opt *options.Options) (exporter.Interface, error) {
+		return exporter.NewClickHouseExporter(k8sClient, opt)
 	}
-	newS3Exporter = func(opt *options.Options) (exporter.Interface, error) {
-		return exporter.NewS3Exporter(opt)
+	newS3Exporter = func(k8sClient kubernetes.Interface, opt *options.Options) (exporter.Interface, error) {
+		return exporter.NewS3Exporter(k8sClient, opt)
 	}
 )
 
@@ -183,14 +183,14 @@ func NewFlowAggregator(
 	}
 	if opt.Config.ClickHouse.Enable {
 		var err error
-		fa.clickHouseExporter, err = newClickHouseExporter(opt)
+		fa.clickHouseExporter, err = newClickHouseExporter(k8sClient, opt)
 		if err != nil {
 			return nil, fmt.Errorf("error when creating ClickHouse export process: %v", err)
 		}
 	}
 	if opt.Config.S3Uploader.Enable {
 		var err error
-		fa.s3Exporter, err = newS3Exporter(opt)
+		fa.s3Exporter, err = newS3Exporter(k8sClient, opt)
 		if err != nil {
 			return nil, fmt.Errorf("error when creating S3 export process: %v", err)
 		}
@@ -586,7 +586,7 @@ func (fa *flowAggregator) updateFlowAggregator(opt *options.Options) {
 		if fa.clickHouseExporter == nil {
 			klog.InfoS("Enabling ClickHouse")
 			var err error
-			fa.clickHouseExporter, err = newClickHouseExporter(opt)
+			fa.clickHouseExporter, err = newClickHouseExporter(fa.k8sClient, opt)
 			if err != nil {
 				klog.ErrorS(err, "Error when creating ClickHouse export process")
 				return
@@ -608,7 +608,7 @@ func (fa *flowAggregator) updateFlowAggregator(opt *options.Options) {
 		if fa.s3Exporter == nil {
 			klog.InfoS("Enabling S3Uploader")
 			var err error
-			fa.s3Exporter, err = newS3Exporter(opt)
+			fa.s3Exporter, err = newS3Exporter(fa.k8sClient, opt)
 			if err != nil {
 				klog.ErrorS(err, "Error when creating S3 export process")
 				return

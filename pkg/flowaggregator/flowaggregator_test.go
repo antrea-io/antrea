@@ -264,10 +264,10 @@ func TestFlowAggregator_updateFlowAggregator(t *testing.T) {
 	newIPFIXExporter = func(kubernetes.Interface, *options.Options, ipfix.IPFIXRegistry) exporter.Interface {
 		return mockIPFIXExporter
 	}
-	newClickHouseExporter = func(*options.Options) (exporter.Interface, error) {
+	newClickHouseExporter = func(kubernetes.Interface, *options.Options) (exporter.Interface, error) {
 		return mockClickHouseExporter, nil
 	}
-	newS3Exporter = func(*options.Options) (exporter.Interface, error) {
+	newS3Exporter = func(kubernetes.Interface, *options.Options) (exporter.Interface, error) {
 		return mockS3Exporter, nil
 	}
 
@@ -405,10 +405,10 @@ func TestFlowAggregator_Run(t *testing.T) {
 	newIPFIXExporter = func(kubernetes.Interface, *options.Options, ipfix.IPFIXRegistry) exporter.Interface {
 		return mockIPFIXExporter
 	}
-	newClickHouseExporter = func(*options.Options) (exporter.Interface, error) {
+	newClickHouseExporter = func(kubernetes.Interface, *options.Options) (exporter.Interface, error) {
 		return mockClickHouseExporter, nil
 	}
-	newS3Exporter = func(*options.Options) (exporter.Interface, error) {
+	newS3Exporter = func(kubernetes.Interface, *options.Options) (exporter.Interface, error) {
 		return mockS3Exporter, nil
 	}
 

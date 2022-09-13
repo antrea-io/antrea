@@ -20,6 +20,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -54,8 +55,10 @@ func TestClickHouse_UpdateOptions(t *testing.T) {
 		},
 		ClickHouseCommitInterval: 8 * time.Second,
 	}
-	clickHouseExporter, err := NewClickHouseExporter(opt)
+	chInput := buildClickHouseInput(opt)
+	chExportProcess, err := clickhouseclient.NewClickHouseClient(chInput, uuid.New().String())
 	require.NoError(t, err)
+	clickHouseExporter := ClickHouseExporter{chInput: &chInput, chExportProcess: chExportProcess}
 	clickHouseExporter.Start()
 	assert.Equal(t, clickHouseExporter.chExportProcess.GetDsn(), "tcp://clickhouse-clickhouse.flow-visibility.svc:9000?username=default&password=default&database=default&debug=true&compress=false")
 	assert.Equal(t, clickHouseExporter.chExportProcess.GetCommitInterval().String(), "8s")
