@@ -90,6 +90,7 @@ data:
             throughputFromDestinationNode UInt64,
             reverseThroughputFromSourceNode UInt64,
             reverseThroughputFromDestinationNode UInt64,
+            clusterUUID String,
             trusted UInt8 DEFAULT 0
         ) engine=MergeTree
         ORDER BY (timeInserted, flowEndSeconds)

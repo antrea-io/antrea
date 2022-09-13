@@ -18,6 +18,7 @@ import (
 	"os"
 
 	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/flowaggregator/clickhouseclient"
@@ -41,10 +42,14 @@ func buildClickHouseInput(opt *options.Options) clickhouseclient.ClickHouseInput
 	}
 }
 
-func NewClickHouseExporter(opt *options.Options) (*ClickHouseExporter, error) {
+func NewClickHouseExporter(k8sClient kubernetes.Interface, opt *options.Options) (*ClickHouseExporter, error) {
 	chInput := buildClickHouseInput(opt)
 	klog.InfoS("ClickHouse configuration", "database", chInput.Database, "databaseURL", chInput.DatabaseURL, "debug", chInput.Debug, "compress", *chInput.Compress, "commitInterval", chInput.CommitInterval)
-	chExportProcess, err := clickhouseclient.NewClickHouseClient(chInput)
+	clusterUUID, err := getClusterUUID(k8sClient)
+	if err != nil {
+		return nil, err
+	}
+	chExportProcess, err := clickhouseclient.NewClickHouseClient(chInput, clusterUUID.String())
 	if err != nil {
 		return nil, err
 	}

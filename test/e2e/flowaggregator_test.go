@@ -1453,5 +1453,6 @@ type ClickHouseFullRow struct {
 	ThroughputFromDestinationNode        uint64    `json:"throughputFromDestinationNode,string"`
 	ReverseThroughputFromSourceNode      uint64    `json:"reverseThroughputFromSourceNode,string"`
 	ReverseThroughputFromDestinationNode uint64    `json:"reverseThroughputFromDestinationNode,string"`
+	ClusterUUID                          string    `json:"clusterUUID"`
 	Trusted                              uint8     `json:"trusted"`
 }

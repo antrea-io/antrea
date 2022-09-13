@@ -79,6 +79,7 @@ type S3UploadProcess struct {
 	// s3UploaderAPI wraps the call made by awsS3Uploader
 	s3UploaderAPI S3UploaderAPI
 	nameRand      *rand.Rand
+	clusterUUID   string
 }
 
 type S3Input struct {
@@ -99,7 +100,7 @@ func (u *S3Uploader) Upload(ctx context.Context, input *s3.PutObjectInput, awsS3
 	return awsS3Uploader.Upload(ctx, input, opts...)
 }
 
-func NewS3UploadProcess(input S3Input) (*S3UploadProcess, error) {
+func NewS3UploadProcess(input S3Input, clusterUUID string) (*S3UploadProcess, error) {
 	config := input.Config
 	cfg, err := awsconfig.LoadDefaultConfig(context.TODO(), awsconfig.WithRegion(config.Region))
 	if err != nil {
@@ -126,6 +127,7 @@ func NewS3UploadProcess(input S3Input) (*S3UploadProcess, error) {
 		awsS3Uploader:    awsS3Uploader,
 		s3UploaderAPI:    &S3Uploader{},
 		nameRand:         nameRand,
+		clusterUUID:      clusterUUID,
 	}
 	return s3ExportProcess, nil
 }
@@ -303,7 +305,7 @@ func (p *S3UploadProcess) writeRecordToBuffer(record *flowrecord.FlowRecord) {
 	if p.compress {
 		writer = p.gzipWriter
 	}
-	writeRecord(writer, record)
+	writeRecord(writer, record, p.clusterUUID)
 	io.WriteString(writer, "\n")
 	p.cachedRecordCount += 1
 }
@@ -352,7 +354,7 @@ func randSeq(randSrc *rand.Rand, n int) string {
 	return string(b)
 }
 
-func writeRecord(w io.Writer, r *flowrecord.FlowRecord) {
+func writeRecord(w io.Writer, r *flowrecord.FlowRecord, clusterUUID string) {
 	io.WriteString(w, fmt.Sprintf("%d", r.FlowStartSeconds.Unix()))
 	io.WriteString(w, ",")
 	io.WriteString(w, fmt.Sprintf("%d", r.FlowEndSeconds.Unix()))
@@ -446,6 +448,8 @@ func writeRecord(w io.Writer, r *flowrecord.FlowRecord) {
 	io.WriteString(w, fmt.Sprintf("%d", r.ReverseThroughputFromSourceNode))
 	io.WriteString(w, ",")
 	io.WriteString(w, fmt.Sprintf("%d", r.ReverseThroughputFromDestinationNode))
+	io.WriteString(w, ",")
+	io.WriteString(w, clusterUUID)
 	io.WriteString(w, ",")
 	io.WriteString(w, fmt.Sprintf("%d", time.Now().Unix()))
 }

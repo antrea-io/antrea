@@ -81,9 +81,10 @@ const (
                    throughputFromSourceNode,
                    throughputFromDestinationNode,
                    reverseThroughputFromSourceNode,
-                   reverseThroughputFromDestinationNode) 
+                   reverseThroughputFromDestinationNode,
+                   clusterUUID)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 
-                           ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+                           ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 )
 
 // PrepareClickHouseConnection is used for unit testing
@@ -118,7 +119,8 @@ type ClickHouseExportProcess struct {
 	commitTicker         *time.Ticker
 	exportProcessRunning bool
 	// mutex protects configuration state from concurrent access
-	mutex sync.Mutex
+	mutex       sync.Mutex
+	clusterUUID string
 }
 
 type ClickHouseInput struct {
@@ -156,7 +158,7 @@ func (ci *ClickHouseInput) GetDataSourceName() (string, error) {
 	return sb.String(), nil
 }
 
-func NewClickHouseClient(input ClickHouseInput) (*ClickHouseExportProcess, error) {
+func NewClickHouseClient(input ClickHouseInput, clusterUUID string) (*ClickHouseExportProcess, error) {
 	dsn, connect, err := PrepareClickHouseConnection(input)
 	if err != nil {
 		return nil, err
@@ -168,6 +170,7 @@ func NewClickHouseClient(input ClickHouseInput) (*ClickHouseExportProcess, error
 		deque:          deque.New(),
 		queueSize:      maxQueueSize,
 		commitInterval: input.CommitInterval,
+		clusterUUID:    clusterUUID,
 	}
 	return chClient, nil
 }
@@ -343,7 +346,8 @@ func (ch *ClickHouseExportProcess) batchCommitAll(ctx context.Context) (int, err
 			record.ThroughputFromSourceNode,
 			record.ThroughputFromDestinationNode,
 			record.ReverseThroughputFromSourceNode,
-			record.ReverseThroughputFromDestinationNode)
+			record.ReverseThroughputFromDestinationNode,
+			ch.clusterUUID)
 
 		if err != nil {
 			klog.ErrorS(err, "Error when adding record")
