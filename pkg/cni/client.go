@@ -24,6 +24,7 @@ import (
 	"github.com/containernetworking/cni/pkg/types"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	grpcinsecure "google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 
 	"antrea.io/antrea/pkg/agent/util"
@@ -89,7 +90,7 @@ var withClient = rpcClient
 func rpcClient(f func(client cnipb.CniClient) error) error {
 	conn, err := grpc.Dial(
 		AntreaCNISocketAddr,
-		grpc.WithInsecure(),
+		grpc.WithTransportCredentials(grpcinsecure.NewCredentials()),
 		grpc.WithContextDialer(func(ctx context.Context, addr string) (conn net.Conn, e error) {
 			return util.DialLocalSocket(addr)
 		}),
