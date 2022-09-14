@@ -21,6 +21,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"antrea.io/antrea/pkg/antctl/raw"
 	"antrea.io/antrea/pkg/antctl/raw/multicluster/common"
@@ -37,7 +38,7 @@ const (
 # Use the pre-created token Secret.
 #tokenSecretName: ""
 # Create a token Secret with the manifest file.
-#toeknSecretFile: ""
+#tokenSecretFile: ""
 `
 )
 
@@ -47,19 +48,27 @@ type initOptions struct {
 	clusterID   string
 	createToken bool
 	output      string
+	k8sClient   client.Client
 }
 
 var initOpts *initOptions
 
-func (o *initOptions) validate() error {
+func (o *initOptions) validate(cmd *cobra.Command) error {
 	if o.namespace == "" {
-		return fmt.Errorf("Namespace is required")
+		return fmt.Errorf("the Namespace is required")
 	}
 	if o.clusterSet == "" {
-		return fmt.Errorf("ClusterSet is required")
+		return fmt.Errorf("the ClusterSet is required")
 	}
 	if o.clusterID == "" {
-		return fmt.Errorf("ClusterID is required")
+		return fmt.Errorf("the ClusterID is required")
+	}
+	var err error
+	if o.k8sClient == nil {
+		o.k8sClient, err = common.NewClient(cmd)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -95,11 +104,7 @@ func NewInitCommand() *cobra.Command {
 }
 
 func initRunE(cmd *cobra.Command, args []string) error {
-	if err := initOpts.validate(); err != nil {
-		return err
-	}
-	k8sClient, err := common.NewClient(cmd)
-	if err != nil {
+	if err := initOpts.validate(cmd); err != nil {
 		return err
 	}
 	createdRes := []map[string]interface{}{}
@@ -107,33 +112,34 @@ func initRunE(cmd *cobra.Command, args []string) error {
 	defer func() {
 		if createErr != nil {
 			fmt.Fprintf(cmd.OutOrStderr(), "Failed to init the Antrea Multi-cluster. Deleting the created resources\n")
-			if err := common.Rollback(cmd, k8sClient, createdRes); err != nil {
+			if err := common.Rollback(cmd, initOpts.k8sClient, createdRes); err != nil {
 				fmt.Fprintf(cmd.OutOrStdout(), "Failed to rollback: %v\n", err)
 			}
 		}
 	}()
-	createErr = common.CreateClusterClaim(cmd, k8sClient, initOpts.namespace, initOpts.clusterSet, initOpts.clusterID, &createdRes)
+	createErr = common.CreateClusterClaim(cmd, initOpts.k8sClient, initOpts.namespace, initOpts.clusterSet, initOpts.clusterID, &createdRes)
 	if createErr != nil {
 		return createErr
 	}
-	createErr = common.CreateClusterSet(cmd, k8sClient, initOpts.namespace, initOpts.clusterSet, "", "", "", initOpts.clusterID, initOpts.namespace, &createdRes)
+	createErr = common.CreateClusterSet(cmd, initOpts.k8sClient, initOpts.namespace, initOpts.clusterSet, "", "", "", initOpts.clusterID, initOpts.namespace, &createdRes)
 	if createErr != nil {
 		return createErr
 	}
 
+	var err error
 	var file *os.File
 	if initOpts.output != "" {
 		if file, err = os.OpenFile(initOpts.output, os.O_WRONLY|os.O_CREATE|os.O_TRUNC|os.O_APPEND, 0644); err != nil {
 			fmt.Fprintf(cmd.OutOrStderr(), "Failed to open file %s: %v\n", initOpts.output, err)
 		}
+		defer file.Close()
 	}
-	defer file.Close()
 
 	if err := outputConfig(cmd, file); err != nil {
 		return err
 	}
 	if initOpts.createToken {
-		if createErr = common.CreateMemberToken(cmd, k8sClient, defaultToken, initOpts.namespace, file, &createdRes); createErr != nil {
+		if createErr = common.CreateMemberToken(cmd, initOpts.k8sClient, defaultToken, initOpts.namespace, file, &createdRes); createErr != nil {
 			fmt.Fprintf(cmd.OutOrStderr(), "Failed to create Secret: %v\n", createErr)
 			return createErr
 		}

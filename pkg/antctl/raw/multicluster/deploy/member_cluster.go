@@ -45,7 +45,6 @@ func (o *memberClusterOptions) validateAndComplete() error {
 		if _, err := os.Stat(o.filename); err != nil {
 			return err
 		}
-		return nil
 	}
 	if o.namespace == "" {
 		return fmt.Errorf("the Namespace cannot be empty")
