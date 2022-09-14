@@ -43,6 +43,9 @@ const (
 	ClusterSetJoinConfigKind       = "ClusterSetJoinConfig"
 
 	CreateByAntctlAnnotation = "multicluster.antrea.io/created-by-antctl"
+
+	DefaultMemberNamespace = "kube-system"
+	DefaultLeaderNamespace = "antrea-multicluster"
 )
 
 func NewClient(cmd *cobra.Command) (client.Client, error) {
@@ -65,7 +68,6 @@ func CreateClusterClaim(cmd *cobra.Command, k8sClient client.Client, namespace s
 	var createErr error
 	var unstructuredClusterClaim map[string]interface{}
 	clusterClaim := newClusterClaim(clusterID, namespace, false)
-	unstructuredClusterClaim, _ = runtime.DefaultUnstructuredConverter.ToUnstructured(clusterClaim)
 
 	if createErr = k8sClient.Create(context.TODO(), clusterClaim); createErr != nil {
 		if !apierrors.IsAlreadyExists(createErr) {
@@ -77,12 +79,11 @@ func CreateClusterClaim(cmd *cobra.Command, k8sClient client.Client, namespace s
 		createErr = nil
 	} else {
 		fmt.Fprintf(cmd.OutOrStdout(), "ClusterClaim \"%s\" created in Namespace %s\n", multiclusterv1alpha2.WellKnownClusterClaimID, namespace)
+		unstructuredClusterClaim, _ = runtime.DefaultUnstructuredConverter.ToUnstructured(clusterClaim)
 		*createdRes = append(*createdRes, unstructuredClusterClaim)
 	}
 
 	clusterClaim = newClusterClaim(clusterset, namespace, true)
-	unstructuredClusterClaim, _ = runtime.DefaultUnstructuredConverter.ToUnstructured(clusterClaim)
-
 	if createErr = k8sClient.Create(context.TODO(), clusterClaim); createErr != nil {
 		if !apierrors.IsAlreadyExists(createErr) {
 			fmt.Fprintf(cmd.OutOrStdout(), "Failed to create ClusterClaim \"%s\": %v\n", multiclusterv1alpha2.WellKnownClusterClaimClusterSet, createErr)
@@ -92,6 +93,7 @@ func CreateClusterClaim(cmd *cobra.Command, k8sClient client.Client, namespace s
 		createErr = nil
 	} else {
 		fmt.Fprintf(cmd.OutOrStdout(), "ClusterClaim \"%s\" created in Namespace %s\n", multiclusterv1alpha2.WellKnownClusterClaimClusterSet, namespace)
+		unstructuredClusterClaim, _ = runtime.DefaultUnstructuredConverter.ToUnstructured(clusterClaim)
 		*createdRes = append(*createdRes, unstructuredClusterClaim)
 	}
 
@@ -100,9 +102,7 @@ func CreateClusterClaim(cmd *cobra.Command, k8sClient client.Client, namespace s
 
 func CreateClusterSet(cmd *cobra.Command, k8sClient client.Client, namespace string, clusterset string,
 	leaderServer string, secret string, memberClusterID string, leaderClusterID string, leaderClusterNamespace string, createdRes *[]map[string]interface{}) error {
-	var unstructuredClusterSet map[string]interface{}
 	clusterSet := newClusterSet(clusterset, namespace, leaderServer, secret, memberClusterID, leaderClusterID, leaderClusterNamespace)
-	unstructuredClusterSet, _ = runtime.DefaultUnstructuredConverter.ToUnstructured(clusterSet)
 
 	if err := k8sClient.Create(context.TODO(), clusterSet); err != nil {
 		if !apierrors.IsAlreadyExists(err) {
@@ -112,41 +112,49 @@ func CreateClusterSet(cmd *cobra.Command, k8sClient client.Client, namespace str
 		fmt.Fprintf(cmd.OutOrStdout(), "ClusterSet \"%s\" already exists in Namespace %s\n", clusterSet.Name, clusterSet.Namespace)
 	} else {
 		fmt.Fprintf(cmd.OutOrStdout(), "ClusterSet \"%s\" created in Namespace %s\n", clusterSet.Name, clusterSet.Namespace)
+		unstructuredClusterSet, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(clusterSet)
 		*createdRes = append(*createdRes, unstructuredClusterSet)
 	}
 
 	return nil
 }
 
-func deleteClusterClaims(cmd *cobra.Command, k8sClient client.Client, namespace string) error {
-	var e error
-	clusterClaimNames := []string{multiclusterv1alpha2.WellKnownClusterClaimID, multiclusterv1alpha2.WellKnownClusterClaimClusterSet}
+func deleteClusterClaims(cmd *cobra.Command, k8sClient client.Client, namespace string) {
+	clusterClaimNames := []string{
+		multiclusterv1alpha2.WellKnownClusterClaimID,
+		multiclusterv1alpha2.WellKnownClusterClaimClusterSet,
+	}
 	for _, name := range clusterClaimNames {
-		if err := k8sClient.Delete(context.TODO(), newClusterClaim(name, namespace, name == multiclusterv1alpha2.WellKnownClusterClaimClusterSet)); err != nil {
-			fmt.Fprintf(cmd.OutOrStdout(), "Failed to delete ClusterClaim \"%s\": %v\n", name, err)
-			e = err
+		if err := k8sClient.Delete(context.TODO(), newClusterClaim(name, namespace, name == multiclusterv1alpha2.WellKnownClusterClaimClusterSet)); err == nil {
+			fmt.Fprintf(cmd.OutOrStdout(), "ClusterClaim \"%s\" deleted in Namespace %s\n", name, namespace)
+		} else {
+			if apierrors.IsNotFound(err) {
+				fmt.Fprintf(cmd.OutOrStdout(), "ClusterClaim \"%s\" not found in Namespace %s\n", name, namespace)
+			} else {
+				fmt.Fprintf(cmd.OutOrStdout(), "Failed to delete ClusterClaim \"%s\": %v\n", name, err)
+			}
 		}
-		fmt.Fprintf(cmd.OutOrStdout(), "ClusterClaim \"%s\" deleted in Namespace %s\n", name, namespace)
 	}
-	return e
 }
 
-func deleteClusterSet(cmd *cobra.Command, k8sClient client.Client, namespace string, clusterSet string) error {
+func deleteClusterSet(cmd *cobra.Command, k8sClient client.Client, namespace string, clusterSet string) {
 	var err error
-	if err = k8sClient.Delete(context.TODO(), newClusterSet(clusterSet, namespace, "", "", "", "", "")); err != nil && !apierrors.IsNotFound(err) {
-		fmt.Fprintf(cmd.OutOrStdout(), "Failed to delete ClusterSet \"%s\": %v\n", clusterSet, err)
-		return err
-	}
-	if err == nil {
+	if err = k8sClient.Delete(context.TODO(), newClusterSet(clusterSet, namespace, "", "", "", "", "")); err == nil {
 		fmt.Fprintf(cmd.OutOrStdout(), "ClusterSet \"%s\" deleted in Namespace %s\n", clusterSet, namespace)
+		return
 	}
-	return nil
+	if apierrors.IsNotFound(err) {
+		fmt.Fprintf(cmd.OutOrStdout(), "ClusterSet \"%s\" not found in Namespace %s\n", clusterSet, namespace)
+		return
+	}
+	fmt.Fprintf(cmd.OutOrStdout(), "Failed to delete ClusterSet \"%s\": %v\n", clusterSet, err)
 }
 
-func deleteSecrets(cmd *cobra.Command, k8sClient client.Client, namespace string) error {
+func deleteSecrets(cmd *cobra.Command, k8sClient client.Client, namespace string) {
 	secretList := &corev1.SecretList{}
 	if err := k8sClient.List(context.TODO(), secretList, client.InNamespace(namespace)); err != nil {
 		fmt.Fprintf(cmd.OutOrStdout(), "Failed to list Secrets in Namespace %s: %v\n", namespace, err)
+		return
 	}
 
 	for _, s := range secretList.Items {
@@ -157,18 +165,17 @@ func deleteSecrets(cmd *cobra.Command, k8sClient client.Client, namespace string
 
 		if err := k8sClient.Delete(context.TODO(), &secret); err != nil {
 			fmt.Fprintf(cmd.OutOrStdout(), "Failed to delete Secret \"%s\": %v\n", secret.Name, err)
-			return err
+			return
 		}
 		fmt.Fprintf(cmd.OutOrStdout(), "Secret \"%s\" deleted in Namespace %s\n", secret.Name, namespace)
 	}
-
-	return nil
 }
 
-func deleteRoleBindings(cmd *cobra.Command, k8sClient client.Client, namespace string) error {
+func deleteRoleBindings(cmd *cobra.Command, k8sClient client.Client, namespace string) {
 	roleBindingList := &rbacv1.RoleBindingList{}
 	if err := k8sClient.List(context.TODO(), roleBindingList, client.InNamespace(namespace)); err != nil {
 		fmt.Fprintf(cmd.OutOrStdout(), "Failed to list RoleBindings in Namespace %s: %v\n", namespace, err)
+		return
 	}
 
 	for _, r := range roleBindingList.Items {
@@ -179,18 +186,17 @@ func deleteRoleBindings(cmd *cobra.Command, k8sClient client.Client, namespace s
 
 		if err := k8sClient.Delete(context.TODO(), &roleBinding); err != nil {
 			fmt.Fprintf(cmd.OutOrStdout(), "Failed to delete RoleBinding \"%s\": %v\n", roleBinding.Name, err)
-			return err
+			return
 		}
 		fmt.Fprintf(cmd.OutOrStdout(), "RoleBinding \"%s\" deleted in Namespace %s\n", roleBinding.Name, namespace)
 	}
-
-	return nil
 }
 
-func deleteServiceAccounts(cmd *cobra.Command, k8sClient client.Client, namespace string) error {
+func deleteServiceAccounts(cmd *cobra.Command, k8sClient client.Client, namespace string) {
 	serviceAccountList := &corev1.ServiceAccountList{}
 	if err := k8sClient.List(context.TODO(), serviceAccountList, client.InNamespace(namespace)); err != nil {
 		fmt.Fprintf(cmd.OutOrStdout(), "Failed to list ServiceAccounts in Namespace %s: %v\n", namespace, err)
+		return
 	}
 
 	for _, sa := range serviceAccountList.Items {
@@ -201,19 +207,15 @@ func deleteServiceAccounts(cmd *cobra.Command, k8sClient client.Client, namespac
 
 		if err := k8sClient.Delete(context.TODO(), &serviceAccount); err != nil {
 			fmt.Fprintf(cmd.OutOrStdout(), "Failed to delete ServiceAccount \"%s\": %v\n", serviceAccount.Name, err)
-			return err
+			return
 		}
 		fmt.Fprintf(cmd.OutOrStdout(), "ServiceAccount \"%s\" deleted in Namespace %s\n", serviceAccount.Name, namespace)
 	}
-
-	return nil
 }
 
 func CreateMemberToken(cmd *cobra.Command, k8sClient client.Client, name string, namespace string, file *os.File, createdRes *[]map[string]interface{}) error {
 	var createErr error
 	serviceAccount := newServiceAccount(name, namespace)
-	unstructuredSA, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(serviceAccount)
-
 	createErr = k8sClient.Create(context.TODO(), serviceAccount)
 	if createErr != nil {
 		if !apierrors.IsAlreadyExists(createErr) {
@@ -224,12 +226,11 @@ func CreateMemberToken(cmd *cobra.Command, k8sClient client.Client, name string,
 		createErr = nil
 	} else {
 		fmt.Fprintf(cmd.OutOrStdout(), "ServiceAccount \"%s\" created\n", serviceAccount.Name)
+		unstructuredSA, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(serviceAccount)
 		*createdRes = append(*createdRes, unstructuredSA)
 	}
 
 	roleBinding := newRoleBinding(name, name, namespace)
-	unstructuredRoleBinding, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(roleBinding)
-
 	createErr = k8sClient.Create(context.TODO(), roleBinding)
 	if createErr != nil {
 		if !apierrors.IsAlreadyExists(createErr) {
@@ -240,13 +241,15 @@ func CreateMemberToken(cmd *cobra.Command, k8sClient client.Client, name string,
 		createErr = nil
 	} else {
 		fmt.Fprintf(cmd.OutOrStdout(), "RoleBinding \"%s\" created\n", roleBinding.Name)
+		unstructuredRoleBinding, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(roleBinding)
 		*createdRes = append(*createdRes, unstructuredRoleBinding)
 	}
-
+	var secretAlreadyExists bool
 	secret := newSecret(name, name, namespace)
 	createErr = k8sClient.Create(context.TODO(), secret)
 	if createErr != nil {
-		if !apierrors.IsAlreadyExists(createErr) {
+		secretAlreadyExists = apierrors.IsAlreadyExists(createErr)
+		if !secretAlreadyExists {
 			fmt.Fprintf(cmd.OutOrStdout(), "Failed to create Secret \"%s\", start rollback\n", name)
 			return createErr
 		}
@@ -255,8 +258,13 @@ func CreateMemberToken(cmd *cobra.Command, k8sClient client.Client, name string,
 	// It will take one or two seconds to wait for the Data.token to be created.
 	if err := waitForSecretReady(k8sClient, name, namespace); err != nil {
 		return err
+	} else {
+		fmt.Fprintf(cmd.OutOrStdout(), "Secret \"%s\" created\n", secret.Name)
+		if !secretAlreadyExists {
+			unstructuredSecret, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(secret)
+			*createdRes = append(*createdRes, unstructuredSecret)
+		}
 	}
-	fmt.Fprintf(cmd.OutOrStdout(), "Secret \"%s\" created\n", secret.Name)
 
 	if file == nil {
 		return nil

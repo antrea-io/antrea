@@ -37,10 +37,6 @@ import (
 	"antrea.io/antrea/pkg/antctl/raw/multicluster/common"
 )
 
-const (
-	defaultMemberNamespace = "kube-system"
-)
-
 // "omitempty" fields (clusterID, namespace, tokenSecretName, tokenSecretFile)
 // can be populated by the corresponding command line options if not set in the
 // config file.
@@ -58,11 +54,12 @@ type ClusterSetJoinConfig struct {
 	// The following fields are not included in the config file.
 	ConfigFile string     `yaml:"-"`
 	Secret     *v1.Secret `yaml:"-"`
+	k8sClient  client.Client
 }
 
 var joinOpts *ClusterSetJoinConfig
 
-func (o *ClusterSetJoinConfig) validateAndComplete() error {
+func (o *ClusterSetJoinConfig) validateAndComplete(cmd *cobra.Command) error {
 	if o.ConfigFile != "" {
 		raw, err := os.ReadFile(o.ConfigFile)
 		if err != nil {
@@ -92,7 +89,7 @@ func (o *ClusterSetJoinConfig) validateAndComplete() error {
 		}
 		o.Secret, err = unmarshallSecret(raw)
 		if err != nil {
-			return fmt.Errorf("failed to unmarshall Secret from token Secret file: %v", err)
+			return fmt.Errorf("failed to unmarshall Secret from token Secret file: %s, error: %v", o.TokenSecretFile, err)
 		}
 	}
 
@@ -112,16 +109,24 @@ func (o *ClusterSetJoinConfig) validateAndComplete() error {
 		return fmt.Errorf("the ClusterSet ID is required")
 	}
 	if o.ClusterID == "" {
-		return fmt.Errorf("the member ClusterID is required")
+		return fmt.Errorf("the ClusterID of member cluster is required")
 	}
 	if o.Namespace == "" {
-		fmt.Printf("Antrea Multi-cluster Namespace is not specified. Use %s\n.", defaultMemberNamespace)
-		o.Namespace = defaultMemberNamespace
+		fmt.Printf("Antrea Multi-cluster Namespace is not specified. Use %s\n.", common.DefaultMemberNamespace)
+		o.Namespace = common.DefaultMemberNamespace
 	}
 
 	// Always set the Secret Namespace with the member cluster Multi-cluster Namespace.
 	if o.Secret != nil {
 		o.Secret.Namespace = o.Namespace
+	}
+
+	var err error
+	if o.k8sClient == nil {
+		o.k8sClient, err = common.NewClient(cmd)
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -145,7 +150,6 @@ func unmarshallSecret(raw []byte) (*v1.Secret, error) {
 	if err := decoder.Decode(secret); err != nil {
 		return nil, err
 	}
-
 	return secret, nil
 }
 
@@ -215,7 +219,7 @@ func NewJoinCommand() *cobra.Command {
 	command.Flags().StringVarP(&joinOpts.TokenSecretName, "token-secret-name", "", "", "Name of the Secret resource that contains the member token. "+
 		"Token Secret name takes precedence over token Secret file and the Secret manifest in the join config file")
 	command.Flags().StringVarP(&joinOpts.LeaderAPIServer, "leader-apiserver", "", "", "API Server endpoint of the leader cluster")
-	command.Flags().StringVarP(&joinOpts.Namespace, "namespace", "n", defaultMemberNamespace, "Antrea Multi-cluster Namespace. Defaults to "+defaultMemberNamespace)
+	command.Flags().StringVarP(&joinOpts.Namespace, "namespace", "n", common.DefaultMemberNamespace, "Antrea Multi-cluster Namespace. Defaults to "+common.DefaultMemberNamespace)
 	command.Flags().StringVarP(&joinOpts.ClusterID, "clusterid", "", "", "Cluster ID of the member cluster")
 	command.Flags().StringVarP(&joinOpts.ClusterSetID, "clusterset", "", "", "ClusterSet ID")
 	command.Flags().StringVarP(&joinOpts.TokenSecretFile, "token-secret-file", "", "", "Secret manifest for the member token. If specified, a Secret will be created with the manifest. "+
@@ -228,10 +232,9 @@ func NewJoinCommand() *cobra.Command {
 
 func joinRunE(cmd *cobra.Command, args []string) error {
 	var err error
-	if err = joinOpts.validateAndComplete(); err != nil {
+	if err = joinOpts.validateAndComplete(cmd); err != nil {
 		return err
 	}
-	k8sClient, err := common.NewClient(cmd)
 
 	memberClusterNamespace := joinOpts.Namespace
 	memberClusterID := joinOpts.ClusterID
@@ -240,7 +243,7 @@ func joinRunE(cmd *cobra.Command, args []string) error {
 	defer func() {
 		if err != nil {
 			fmt.Fprintf(cmd.OutOrStdout(), "Failed to join the ClusterSet. Deleting the created resources\n")
-			if err := common.Rollback(cmd, k8sClient, createdRes); err != nil {
+			if err := common.Rollback(cmd, joinOpts.k8sClient, createdRes); err != nil {
 				fmt.Fprintf(cmd.OutOrStdout(), "Failed to rollback: %v\n", err)
 			}
 		}
@@ -250,7 +253,7 @@ func joinRunE(cmd *cobra.Command, args []string) error {
 		joinOpts.Secret.Annotations = map[string]string{
 			common.CreateByAntctlAnnotation: "true",
 		}
-		if err := k8sClient.Create(context.TODO(), joinOpts.Secret); err != nil {
+		if err := joinOpts.k8sClient.Create(context.TODO(), joinOpts.Secret); err != nil {
 			fmt.Fprintf(cmd.OutOrStdout(), "Failed to create the Secret from the config file: %v\n", err)
 			return err
 		}
@@ -262,17 +265,17 @@ func joinRunE(cmd *cobra.Command, args []string) error {
 		joinOpts.TokenSecretName = joinOpts.Secret.Name
 	}
 
-	err = common.CreateClusterClaim(cmd, k8sClient, memberClusterNamespace, memberClusterSet, memberClusterID, &createdRes)
+	err = common.CreateClusterClaim(cmd, joinOpts.k8sClient, memberClusterNamespace, memberClusterSet, memberClusterID, &createdRes)
 	if err != nil {
 		return err
 	}
-	err = common.CreateClusterSet(cmd, k8sClient, memberClusterNamespace, memberClusterSet, joinOpts.LeaderAPIServer, joinOpts.TokenSecretName,
+	err = common.CreateClusterSet(cmd, joinOpts.k8sClient, memberClusterNamespace, memberClusterSet, joinOpts.LeaderAPIServer, joinOpts.TokenSecretName,
 		joinOpts.ClusterID, joinOpts.LeaderClusterID, joinOpts.LeaderNamespace, &createdRes)
 	if err != nil {
 		return err
 	}
 	fmt.Fprintf(cmd.OutOrStdout(), "Waiting for member cluster ready\n")
-	if err = waitForMemberClusterReady(cmd, k8sClient); err != nil {
+	if err = waitForMemberClusterReady(cmd, joinOpts.k8sClient); err != nil {
 		fmt.Fprintf(cmd.OutOrStdout(), "Failed to wait for member cluster ready: %v\n", err)
 		return err
 	}

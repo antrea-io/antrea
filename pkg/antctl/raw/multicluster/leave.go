@@ -40,7 +40,7 @@ func NewLeaveCommand() *cobra.Command {
 
 	o := common.CleanOptions{}
 	leaveOpts = &o
-	command.Flags().StringVarP(&o.Namespace, "namespace", "n", defaultMemberNamespace, "Antrea Multi-cluster Namespace. Defaults to "+defaultMemberNamespace)
+	command.Flags().StringVarP(&o.Namespace, "namespace", "n", common.DefaultMemberNamespace, "Antrea Multi-cluster Namespace. Defaults to "+common.DefaultMemberNamespace)
 	command.Flags().StringVarP(&o.ClusterSet, "clusterset", "", "", "ClusterSet ID")
 
 	return command

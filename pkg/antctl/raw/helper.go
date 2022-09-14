@@ -59,8 +59,8 @@ func ResolveKubeconfig(cmd *cobra.Command) (*rest.Config, error) {
 	return kubeconfig, nil
 }
 
-// TODO: generate kubeconfig in Antrea agent for antctl in-Pod access.
 func SetupKubeconfig(kubeconfig *rest.Config) {
+	// TODO: generate kubeconfig in Antrea agent for antctl in-Pod access.
 	kubeconfig.NegotiatedSerializer = scheme.Codecs.WithoutConversion()
 	kubeconfig.Insecure = true
 	kubeconfig.CAFile = ""

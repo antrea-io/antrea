@@ -55,7 +55,8 @@ achieve the same using YAML manifests.
 To execute any command in this section, `antctl` needs access to the target
 cluster's API server, and it needs a kubeconfig file for that. Please refer to
 the [`antctl` Multi-cluster manual](antctl.md) to learn more about the
-kubeconfig file configuration, and the `antctl` Multi-cluster commands.
+kubeconfig file configuration, and the `antctl` Multi-cluster commands. For
+installation of `antctl`, please refer to the [installation guide](../antctl.md#installation).
 
 ### Set up Leader and Member in Cluster A
 

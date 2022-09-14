@@ -37,6 +37,7 @@ import (
 	"k8s.io/client-go/restmapper"
 
 	"antrea.io/antrea/pkg/antctl/raw"
+	"antrea.io/antrea/pkg/antctl/raw/multicluster/common"
 )
 
 const (
@@ -74,29 +75,13 @@ func generateManifests(role string, version string) ([]string, error) {
 			}
 		}
 	default:
-		return manifests, fmt.Errorf("invalid role %s", role)
+		return nil, fmt.Errorf("invalid role: %s", role)
 	}
-
 	return manifests, nil
 }
 
-func createResources(cmd *cobra.Command, content []byte) error {
-	kubeconfig, err := raw.ResolveKubeconfig(cmd)
-	if err != nil {
-		return err
-	}
-	restconfigTmpl := rest.CopyConfig(kubeconfig)
-	raw.SetupKubeconfig(restconfigTmpl)
-
-	k8sClient, err := kubernetes.NewForConfig(kubeconfig)
-	if err != nil {
-		return err
-	}
-	dynamicClient, err := dynamic.NewForConfig(kubeconfig)
-	if err != nil {
-		return err
-	}
-
+func createResources(cmd *cobra.Command, k8sClient kubernetes.Interface, dynamicClient dynamic.Interface, content []byte) error {
+	var err error
 	decoder := yamlutil.NewYAMLOrJSONDecoder(bytes.NewReader([]byte(content)), 100)
 	for {
 		var rawObj runtime.RawExtension
@@ -137,20 +122,37 @@ func createResources(cmd *cobra.Command, content []byte) error {
 			if !kerrors.IsAlreadyExists(err) {
 				return err
 			}
+			fmt.Fprintf(cmd.OutOrStdout(), "%s/%s already exists\n", unstructuredObj.GetKind(), unstructuredObj.GetName())
+		} else {
+			fmt.Fprintf(cmd.OutOrStdout(), "%s/%s created\n", unstructuredObj.GetKind(), unstructuredObj.GetName())
 		}
-		fmt.Fprintf(cmd.OutOrStdout(), "%s/%s created\n", unstructuredObj.GetKind(), unstructuredObj.GetName())
 	}
-
 	return nil
 }
 
 func deploy(cmd *cobra.Command, role string, version string, namespace string, filename string) error {
+	kubeconfig, err := raw.ResolveKubeconfig(cmd)
+	if err != nil {
+		return err
+	}
+	restconfigTmpl := rest.CopyConfig(kubeconfig)
+	raw.SetupKubeconfig(restconfigTmpl)
+
+	k8sClient, err := kubernetes.NewForConfig(kubeconfig)
+	if err != nil {
+		return err
+	}
+	dynamicClient, err := dynamic.NewForConfig(kubeconfig)
+	if err != nil {
+		return err
+	}
+
 	if filename != "" {
 		content, err := os.ReadFile(filename)
 		if err != nil {
 			return err
 		}
-		if err := createResources(cmd, content); err != nil {
+		if err := createResources(cmd, k8sClient, dynamicClient, content); err != nil {
 			return err
 		}
 	} else {
@@ -170,19 +172,17 @@ func deploy(cmd *cobra.Command, role string, version string, namespace string, f
 			}
 
 			content := string(b)
-			if role == leaderRole && strings.Contains(manifest, "namespaced") {
-				content = strings.ReplaceAll(content, "antrea-multicluster", namespace)
+			if role == leaderRole && strings.Contains(manifest, "namespaced") && namespace != common.DefaultLeaderNamespace {
+				content = strings.ReplaceAll(content, common.DefaultLeaderNamespace, namespace)
 			}
-			if role == memberRole && strings.Contains(manifest, "member") {
-				content = strings.ReplaceAll(content, "kube-system", namespace)
+			if role == memberRole && strings.Contains(manifest, "member") && namespace != common.DefaultMemberNamespace {
+				content = strings.ReplaceAll(content, common.DefaultMemberNamespace, namespace)
 			}
-
-			if err := createResources(cmd, []byte(content)); err != nil {
+			if err := createResources(cmd, k8sClient, dynamicClient, []byte(content)); err != nil {
 				return err
 			}
 		}
 	}
 	fmt.Fprintf(cmd.OutOrStdout(), "The %s cluster resources are deployed\n", role)
-
 	return nil
 }
