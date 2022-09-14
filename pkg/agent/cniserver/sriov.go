@@ -23,6 +23,7 @@ import (
 
 	"github.com/containernetworking/cni/pkg/types/current"
 	"google.golang.org/grpc"
+	grpcinsecure "google.golang.org/grpc/credentials/insecure"
 	"k8s.io/klog/v2"
 
 	// Version v1 of the Kubelet API was introduced in K8s v1.20.
@@ -47,10 +48,14 @@ func GetPodContainerDeviceIDs(podName string, podNamespace string) ([]string, er
 	ctx, cancel := context.WithTimeout(context.Background(), connectionTimeout)
 	defer cancel()
 
-	conn, err := grpc.DialContext(ctx, path.Join(kubeletPodResourcesPath, kubeletSocket),
-		grpc.WithInsecure(), grpc.WithContextDialer(func(ctx context.Context, addr string) (conn net.Conn, e error) {
+	conn, err := grpc.DialContext(
+		ctx,
+		path.Join(kubeletPodResourcesPath, kubeletSocket),
+		grpc.WithTransportCredentials(grpcinsecure.NewCredentials()),
+		grpc.WithContextDialer(func(ctx context.Context, addr string) (conn net.Conn, e error) {
 			return util.DialLocalSocket(addr)
-		}))
+		}),
+	)
 	if err != nil {
 		return []string{}, fmt.Errorf("error getting the gRPC client for Pod resources: %v", err)
 	}
