@@ -3164,23 +3164,31 @@ func testFQDNPolicy(t *testing.T) {
 	log.SetLevel(log.TraceLevel)
 	defer log.SetLevel(logLevel)
 	builder := &ClusterNetworkPolicySpecBuilder{}
-	builder = builder.SetName("test-acnp-drop-all-google").
+	builder = builder.SetName("test-acnp-reject-all-github").
 		SetTier("application").
 		SetPriority(1.0).
 		SetAppliedToGroup([]ACNPAppliedToSpec{{NSSelector: map[string]string{}}})
-	builder.AddFQDNRule("*google.com", ProtocolTCP, nil, nil, nil, "r1", nil, crdv1alpha1.RuleActionReject)
+	// The DNS server of e2e testbeds may reply large DNS response with a long list of AUTHORITY SECTION and ADDITIONAL
+	// SECTION, which causes the response to be truncated and the clients to retry over TCP. However, antrea-agent only
+	// inspects DNS UDP packets, the DNS resolution result will be missed by it if the clients uses DNS over TCP. And if
+	// the IP got from DNS/TCP response is different from the IP got from the first DNS/UDP response, the following
+	// application traffic will bypass FQDN NetworkPolicy.
+	// So we changed the target domain from google.com to github.com, which has a more stable DNS resolution result. The
+	// change could be reverted once we support inspecting DNS/TCP traffic.
+	// See https://github.com/antrea-io/antrea/issues/4130 for more details.
+	builder.AddFQDNRule("*github.com", ProtocolTCP, nil, nil, nil, "r1", nil, crdv1alpha1.RuleActionReject)
 	builder.AddFQDNRule("wayfair.com", ProtocolTCP, nil, nil, nil, "r2", nil, crdv1alpha1.RuleActionDrop)
 
 	testcases := []podToAddrTestStep{
 		{
 			Pod(namespaces["x"] + "/a"),
-			"drive.google.com",
+			"docs.github.com",
 			80,
 			Rejected,
 		},
 		{
 			Pod(namespaces["x"] + "/b"),
-			"maps.google.com",
+			"api.github.com",
 			80,
 			Rejected,
 		},
