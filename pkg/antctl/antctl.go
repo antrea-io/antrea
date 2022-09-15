@@ -33,9 +33,12 @@ import (
 	"antrea.io/antrea/pkg/antctl/raw/traceflow"
 	"antrea.io/antrea/pkg/antctl/transform/addressgroup"
 	"antrea.io/antrea/pkg/antctl/transform/appliedtogroup"
+
+	//"antrea.io/antrea/pkg/antctl/transform/common"
 	"antrea.io/antrea/pkg/antctl/transform/controllerinfo"
 	"antrea.io/antrea/pkg/antctl/transform/networkpolicy"
 	"antrea.io/antrea/pkg/antctl/transform/ovstracing"
+	"antrea.io/antrea/pkg/antctl/transform/sorter"
 	"antrea.io/antrea/pkg/antctl/transform/version"
 	cpv1beta "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	systemv1beta1 "antrea.io/antrea/pkg/apis/system/v1beta1"
@@ -172,6 +175,8 @@ $ antctl get podmulticaststats pod -n namespace`,
   $ antctl get networkpolicy 6001549b-ba63-4752-8267-30f52b4332db
   Get the list of all control plane NetworkPolicies
   $ antctl get networkpolicy
+  Get all the list of appliedtogroups,sorted by the order of their CreationTimestamp
+  $antctl get appliedtogroups --sort-by=CreationTimestamp
   Get the list of all control plane NetworkPolicies, sorted by the order in which the policies are evaluated.
   $ antctl get networkpolicy --sort-by=effectivePriority
   Get the control plane NetworkPolicy with a specific source (supported by agent only)
@@ -187,7 +192,7 @@ $ antctl get podmulticaststats pod -n namespace`,
 				resourceEndpoint: &resourceEndpoint{
 					groupVersionResource: &cpv1beta.NetworkPolicyVersionResource,
 				},
-				addonTransform: networkpolicy.Transform,
+				addonTransform: sorter.NPTransform,
 			},
 			agentEndpoint: &endpoint{
 				nonResourceEndpoint: &nonResourceEndpoint{
@@ -221,61 +226,67 @@ $ antctl get podmulticaststats pod -n namespace`,
 					}, getSortByFlag()),
 					outputType: multiple,
 				},
-				addonTransform: networkpolicy.Transform,
+				addonTransform: sorter.NPTransform,
 			},
 			transformedResponse: reflect.TypeOf(networkpolicy.Response{}),
 		},
 		{
-			use:          "appliedtogroup",
-			aliases:      []string{"appliedtogroups", "atg"},
-			short:        "Print appliedto groups",
-			long:         "Print appliedto groups in ${component}",
+			use:     "appliedtogroup",
+			aliases: []string{"appliedtogroups", "atg"},
+			short:   "Print appliedto groups",
+			long:    "Print appliedto groups in ${component}",
+			example: `Get all the list of appliedtogroups,sorted by the order of their CreationTimestamp
+  $antctl get appliedtogroups --sort-by=CreationTimestamp`,
 			commandGroup: get,
 			controllerEndpoint: &endpoint{
 				resourceEndpoint: &resourceEndpoint{
 					groupVersionResource: &cpv1beta.AppliedToGroupVersionResource,
 				},
-				addonTransform: appliedtogroup.Transform,
+				addonTransform: sorter.APTransform,
 			},
 			agentEndpoint: &endpoint{
 				nonResourceEndpoint: &nonResourceEndpoint{
 					path: "/appliedtogroups",
-					params: []flagInfo{
+					params: append([]flagInfo{
 						{
 							usage: "Retrieve resource by name",
 							name:  "name",
 							arg:   true,
 						},
-					},
+					}, getSortByFlag()),
+					outputType: multiple,
 				},
-				addonTransform: appliedtogroup.Transform,
+				addonTransform: sorter.APTransform,
 			},
 			transformedResponse: reflect.TypeOf(appliedtogroup.Response{}),
 		},
 		{
-			use:          "addressgroup",
-			aliases:      []string{"addressgroups", "ag"},
-			short:        "Print address groups",
-			long:         "Print address groups in ${component}",
+			use:     "addressgroup",
+			aliases: []string{"addressgroups", "ag"},
+			short:   "Print address groups",
+			long:    "Print address groups in ${component}",
+			example: `Get all the list of addressgroups,sorted by the order of their CreationTimestamp
+  $antctl get addressgroups --sort-by=CreationTimestamp`,
 			commandGroup: get,
 			controllerEndpoint: &endpoint{
 				resourceEndpoint: &resourceEndpoint{
 					groupVersionResource: &cpv1beta.AddressGroupVersionResource,
 				},
-				addonTransform: addressgroup.Transform,
+				addonTransform: sorter.ADTransform,
 			},
 			agentEndpoint: &endpoint{
 				nonResourceEndpoint: &nonResourceEndpoint{
 					path: "/addressgroups",
-					params: []flagInfo{
+					params: append([]flagInfo{
 						{
 							usage: "Retrieve resource by name",
 							name:  "name",
 							arg:   true,
 						},
-					},
+					}, getSortByFlag()),
+					outputType: multiple,
 				},
-				addonTransform: addressgroup.Transform,
+				addonTransform: sorter.ADTransform,
 			},
 			transformedResponse: reflect.TypeOf(addressgroup.Response{}),
 		},

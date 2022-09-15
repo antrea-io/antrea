@@ -47,6 +47,15 @@ const (
 const (
 	sortByEffectivePriority string = "effectivePriority"
 )
+const (
+	sortBycreationtime string = ".metadata.creationTimestamp"
+)
+const (
+	sortByName string = ".metadata.name"
+)
+const (
+	sortByrestartCount string = ".status.containerStatuses[0].restartcount"
+)
 
 // commandGroup is used to group commands, it could be specified in commandDefinition.
 // The default commandGroup of a commandDefinition is `flat` which means the command
@@ -131,7 +140,13 @@ func (e *resourceEndpoint) flags() []flagInfo {
 			usage:        "Filter the resource by namespace",
 		})
 	}
+	if e.groupVersionResource == &v1beta2.AddressGroupVersionResource {
+		flags = append(flags, getSortByFlag())
+	}
 	if e.groupVersionResource == &v1beta2.NetworkPolicyVersionResource {
+		flags = append(flags, getSortByFlag())
+	}
+	if e.groupVersionResource == &v1beta2.AppliedToGroupVersionResource {
 		flags = append(flags, getSortByFlag())
 	}
 	return flags
@@ -141,8 +156,8 @@ func getSortByFlag() flagInfo {
 	return flagInfo{
 		name:            "sort-by",
 		defaultValue:    "",
-		supportedValues: []string{sortByEffectivePriority},
-		usage:           "Get NetworkPolicies in specific order. Current supported value is effectivePriority.",
+		supportedValues: []string{sortByEffectivePriority, sortBycreationtime, sortByName, sortByrestartCount},
+		usage:           "Get NetworkPolicies in specific order. Current supported value is effectivePriority. Get Addressgroups in specific order .Current supported value is CreationTimestamp.Get Appliedtogroups in specific order .Current supported value is CreationTimestamp",
 	}
 }
 

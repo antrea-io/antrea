@@ -15,24 +15,39 @@
 package common
 
 import (
+	//"encoding/json"
+
 	"fmt"
 	"net"
 	"sort"
 	"strconv"
 
+	//"time"
+
+	/*corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/api/resource"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/kubectl/pkg/cmd/get" */
+
+	//"antrea.io/antrea/pkg/agent/interfacestore"
+
+	//"antrea.io/antrea/pkg/antctl/transform/networkpolicy"
 	cpv1beta "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
+	//"antrea.io/antrea/pkg/controller/appliedtogroup"
 )
 
 type GroupMember struct {
-	Pod  *cpv1beta.PodReference  `json:"pod,omitempty"`
-	Node *cpv1beta.NodeReference `json:"node,omitempty"`
+	Pod *cpv1beta.PodReference `json:"pod,omitempty"`
 	// IP maintains the IPAddresses associated with the Pod.
 	IP string `json:"ip,omitempty"`
 	// Ports maintain the named port mapping of this Pod.
 	Ports []cpv1beta.NamedPort `json:"ports,omitempty"`
 }
 
-func GroupMemberTransform(member cpv1beta.GroupMember) GroupMember {
+func GroupMemberPodTransform(member cpv1beta.GroupMember) GroupMember {
 	var ipStr string
 	for i, ip := range member.IPs {
 		if i != 0 {
@@ -40,7 +55,7 @@ func GroupMemberTransform(member cpv1beta.GroupMember) GroupMember {
 		}
 		ipStr += net.IP(ip).String()
 	}
-	return GroupMember{Pod: member.Pod, IP: ipStr, Ports: member.Ports, Node: member.Node}
+	return GroupMember{Pod: member.Pod, IP: ipStr, Ports: member.Ports}
 }
 
 type TableOutput interface {

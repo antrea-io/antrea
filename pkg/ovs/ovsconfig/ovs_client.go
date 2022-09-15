@@ -66,6 +66,8 @@ const (
 // If address is set to "", the default UNIX domain socket path
 // "/run/openvswitch/db.sock" will be used.
 // Returns the OVSDB struct on success.
+// NewOVSDBConnectionUDS connects directly to ovsdb using unix or windows sockets , never using any SSL(secure socket layer) connection options.
+
 func NewOVSDBConnectionUDS(address string) (*ovsdb.OVSDB, Error) {
 	klog.Infof("Connecting to OVSDB at address %s", address)
 

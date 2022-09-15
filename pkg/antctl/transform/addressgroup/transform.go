@@ -14,11 +14,10 @@
 
 package addressgroup
 
-import (
-	"io"
-	"reflect"
-
-	"antrea.io/antrea/pkg/antctl/transform"
+import ( //"io"
+	//"reflect"
+	//"sort"
+	//"antrea.io/antrea/pkg/antctl/transform"
 	"antrea.io/antrea/pkg/antctl/transform/common"
 	cpv1beta "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 )
@@ -29,12 +28,21 @@ type Response struct {
 	Nodes []common.GroupMember `json:"nodes,omitempty"`
 }
 
-func listTransform(l interface{}, opts map[string]string) (interface{}, error) {
+/*func listTransform(l interface{}, opts map[string]string) (interface{}, error) {
 	groups := l.(*cpv1beta.AddressGroupList)
-	result := []interface{}{}
-	for i := range groups.Items {
-		item := groups.Items[i]
-		o, _ := objectTransform(&item, opts)
+	sortBy := ""
+	if sb, ok := opts["sort-by"]; ok {
+		sortBy = sb
+	}
+	adsorter := &Adsorter{
+		addressgroups: groups.Items,
+		sortBy:        sortBy,
+	}
+	sort.Sort(adsorter)
+
+	result := make([]Response, 0, len(groups.Items))
+	for i := range adsorter.addressgroups {
+		o, _ := objectTransform(&adsorter.addressgroups[i], opts)
 		result = append(result, o.(Response))
 	}
 	return result, nil
@@ -63,6 +71,32 @@ func Transform(reader io.Reader, single bool, opts map[string]string) (interface
 		opts,
 	)(reader, single)
 }
+*/
+
+/*const sortBycreationtime = "CreationTimestamp"
+
+type TimeSlice []time.Time
+*/
+type Adsorter struct {
+	Addressgroups []cpv1beta.AddressGroup
+	SortBy        string
+}
+
+/*
+func (ads *Adsorter) Len() int { return len(ads.Addressgroups) }
+func (ads *Adsorter) Swap(i, j int) {
+	ads.Addressgroups[i], ads.Addressgroups[j] = ads.Addressgroups[j], ads.Addressgroups[i]
+}
+
+func (ads *Adsorter) Less(i, j int) bool {
+	switch ads.SortBy {
+	case sortBycreationtime:
+		return ads.Addressgroups[i].CreationTimestamp.Before(&ads.Addressgroups[j].CreationTimestamp)
+	default:
+		return ads.Addressgroups[i].Name < ads.Addressgroups[j].Name
+	}
+}
+*/
 
 var _ common.TableOutput = new(Response)
 
