@@ -6,7 +6,7 @@ metadata:
 spec:
   kind: AntreaClusterNetworkPolicy
   name: strict-namespace-isolation
-  clusternetworkpolicy:
+  clusterNetworkPolicy:
     priority: 1
     tier: securityops
     appliedTo:

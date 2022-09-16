@@ -417,11 +417,10 @@ EOF
 
     set -x
     go test -v antrea.io/antrea/multicluster/test/e2e --logs-export-dir `pwd`/antrea-multicluster-test-logs $options
-    set +x
-
     if [[ "$?" != "0" ]]; then
         TEST_FAILURE=true
     fi
+    set +x
     set -e
 }
 
