@@ -158,7 +158,7 @@ for img in "${DOCKER_IMAGES[@]}"; do
     done
 done
 
-DOCKER_IMAGES+=("projects.registry.vmware.com/antrea/antrea-ubuntu:latest")
+DOCKER_IMAGES+=("antrea/antrea-ubuntu:latest")
 
 echo "Creating Kind cluster"
 IMAGES="${DOCKER_IMAGES[@]}"

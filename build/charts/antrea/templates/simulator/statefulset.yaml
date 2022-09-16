@@ -45,7 +45,7 @@ spec:
           path: /var/log
       containers:
       - name: simulator
-        image: projects.registry.vmware.com/antrea/antrea-ubuntu-simulator:latest
+        image: antrea/antrea-ubuntu-simulator:latest
         imagePullPolicy: IfNotPresent
         command: ['/usr/local/bin/antrea-agent-simulator', '-v', '5']
         env:

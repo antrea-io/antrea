@@ -160,7 +160,7 @@ if $coverage; then
     manifest_args="$manifest_args --coverage"
     COMMON_IMAGES_LIST+=("antrea/antrea-ubuntu-coverage:latest")
 else
-    COMMON_IMAGES_LIST+=("projects.registry.vmware.com/antrea/antrea-ubuntu:latest")
+    COMMON_IMAGES_LIST+=("antrea/antrea-ubuntu:latest")
 fi
 if $proxy_all; then
     COMMON_IMAGES_LIST+=("k8s.gcr.io/echoserver:1.10")
@@ -170,7 +170,7 @@ if $flow_visibility; then
     if $coverage; then
         COMMON_IMAGES_LIST+=("antrea/flow-aggregator-coverage:latest")
     else
-        COMMON_IMAGES_LIST+=("projects.registry.vmware.com/antrea/flow-aggregator:latest")
+        COMMON_IMAGES_LIST+=("antrea/flow-aggregator:latest")
     fi
 fi
 for image in "${COMMON_IMAGES_LIST[@]}"; do

@@ -239,7 +239,7 @@ function deliver_antrea_to_eks() {
     echo "=== Loading the Antrea image to each Node ==="
     antrea_image="antrea-ubuntu"
     DOCKER_IMG_VERSION=${CLUSTER}
-    DOCKER_IMG_NAME="projects.registry.vmware.com/antrea/antrea-ubuntu"
+    DOCKER_IMG_NAME="antrea/antrea-ubuntu"
     docker save -o ${antrea_image}.tar ${DOCKER_IMG_NAME}:${DOCKER_IMG_VERSION}
 
     kubectl get nodes -o wide --no-headers=true | awk '{print $7}' | while read IP; do

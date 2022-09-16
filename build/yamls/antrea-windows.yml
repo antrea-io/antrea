@@ -209,7 +209,7 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: spec.nodeName
-        image: projects.registry.vmware.com/antrea/antrea-windows:latest
+        image: antrea/antrea-windows:latest
         imagePullPolicy: IfNotPresent
         name: antrea-agent
         volumeMounts:
@@ -230,7 +230,7 @@ spec:
         - /k/antrea/Install-WindowsCNI.ps1
         command:
         - pwsh
-        image: projects.registry.vmware.com/antrea/antrea-windows:latest
+        image: antrea/antrea-windows:latest
         imagePullPolicy: IfNotPresent
         name: install-cni
         volumeMounts:

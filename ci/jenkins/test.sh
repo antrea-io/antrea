@@ -316,7 +316,7 @@ function deliver_antrea_windows {
     fi
 
     cp -f build/yamls/*.yml $WORKDIR
-    docker save -o antrea-ubuntu.tar projects.registry.vmware.com/antrea/antrea-ubuntu:latest
+    docker save -o antrea-ubuntu.tar antrea/antrea-ubuntu:latest
 
     echo "===== Pull necessary images on Control-Plane node ====="
     harbor_images=("agnhost:2.13" "nginx:1.15-alpine")
@@ -491,8 +491,8 @@ function deliver_antrea {
     cp -f build/yamls/*.yml $WORKDIR
 
     echo "====== Delivering Antrea to all the Nodes ======"
-    docker save -o antrea-ubuntu.tar projects.registry.vmware.com/antrea/antrea-ubuntu:latest
-    docker save -o flow-aggregator.tar projects.registry.vmware.com/antrea/flow-aggregator:latest
+    docker save -o antrea-ubuntu.tar antrea/antrea-ubuntu:latest
+    docker save -o flow-aggregator.tar antrea/flow-aggregator:latest
 
     if [[ $TESTBED_TYPE == "flexible-ipam" ]]; then
         kubectl get nodes -o wide --no-headers=true | awk '{print $6}' | while read IP; do
