@@ -146,60 +146,60 @@ func TestLabelIdentityReconciler(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithLists(tt.existingPods).WithObjects(ns).Build()
-		fakeRemoteClient := fake.NewClientBuilder().WithScheme(scheme).Build()
-		commonArea := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", localClusterID, leaderNamespace)
-		mcReconciler := NewMemberClusterSetReconciler(fakeClient, scheme, "default")
-		mcReconciler.SetRemoteCommonArea(commonArea)
-		r := NewLabelIdentityReconciler(fakeClient, scheme, mcReconciler)
+		t.Run(tt.name, func(t *testing.T) {
+			fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithLists(tt.existingPods).WithObjects(ns).Build()
+			fakeRemoteClient := fake.NewClientBuilder().WithScheme(scheme).Build()
+			commonArea := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", localClusterID, leaderNamespace)
+			mcReconciler := NewMemberClusterSetReconciler(fakeClient, scheme, "default")
+			mcReconciler.SetRemoteCommonArea(commonArea)
+			r := NewLabelIdentityReconciler(fakeClient, scheme, mcReconciler)
 
-		for _, p := range tt.existingPods.Items {
-			req := ctrl.Request{
-				NamespacedName: types.NamespacedName{
-					Namespace: p.Namespace,
-					Name:      p.Name,
-				},
+			for _, p := range tt.existingPods.Items {
+				req := ctrl.Request{
+					NamespacedName: types.NamespacedName{
+						Namespace: p.Namespace,
+						Name:      p.Name,
+					},
+				}
+				if _, err := r.Reconcile(ctx, req); err != nil {
+					t.Errorf("LabelIdentity Reconciler got error during reconciling. error = %v", err)
+					continue
+				}
 			}
-			if _, err := r.Reconcile(ctx, req); err != nil {
-				t.Errorf("LabelIdentity Reconciler got error during reconciling. error = %v", err)
-				continue
+			req := ctrl.Request{NamespacedName: *tt.podEventNamespaceName}
+			switch tt.eventType {
+			case updateEvent:
+				r.Client.Update(ctx, tt.podUpdated, &client.UpdateOptions{})
+				if _, err := r.Reconcile(ctx, req); err != nil {
+					t.Errorf("LabelIdentity Reconciler got error during reconciling. error = %v", err)
+				}
+			case deleteEvent:
+				r.Client.Delete(ctx, tt.podUpdated, &client.DeleteOptions{})
+				if _, err := r.Reconcile(ctx, req); err != nil {
+					t.Errorf("LabelIdentity Reconciler got error during reconciling. error = %v", err)
+				}
 			}
-		}
-		req := ctrl.Request{NamespacedName: *tt.podEventNamespaceName}
-		if tt.eventType == updateEvent {
-			r.Client.Update(ctx, tt.podUpdated, &client.UpdateOptions{})
-			if _, err := r.Reconcile(ctx, req); err != nil {
-				t.Errorf("LabelIdentity Reconciler got error during reconciling. error = %v", err)
-				continue
+			if !reflect.DeepEqual(r.labelToPodsCache, tt.expLabelsToPodsCache) {
+				t.Errorf("Unexpected labelToPodsCache in LabelIdentity Reconciler. Exp: %s, Act: %s", tt.expLabelsToPodsCache, r.labelToPodsCache)
 			}
-		} else if tt.eventType == deleteEvent {
-			r.Client.Delete(ctx, tt.podUpdated, &client.DeleteOptions{})
-			if _, err := r.Reconcile(ctx, req); err != nil {
-				t.Errorf("LabelIdentity Reconciler got error during reconciling. error = %v", err)
-				continue
+			if !reflect.DeepEqual(r.podLabelCache, tt.expPodLabelCache) {
+				t.Errorf("Unexpected podLabelCache in LabelIdentity Reconciler. Exp: %s, Act: %s", tt.expPodLabelCache, r.podLabelCache)
 			}
-		}
 
-		if !reflect.DeepEqual(r.labelToPodsCache, tt.expLabelsToPodsCache) {
-			t.Errorf("Unexpected labelToPodsCache in LabelIdentity Reconciler in step %s. Exp: %s, Act: %s", tt.name, tt.expLabelsToPodsCache, r.labelToPodsCache)
-		}
-		if !reflect.DeepEqual(r.podLabelCache, tt.expPodLabelCache) {
-			t.Errorf("Unexpected podLabelCache in LabelIdentity Reconciler in step %s. Exp: %s, Act: %s", tt.name, tt.expPodLabelCache, r.podLabelCache)
-		}
-
-		actLabelIdentityResourceExports := &mcsv1alpha1.ResourceExportList{}
-		err := commonArea.List(ctx, actLabelIdentityResourceExports)
-		if err != nil {
-			t.Errorf("Failed to list ResourceExports after reconciliation in step %s", tt.name)
-		}
-		var actNormalizedLabels []string
-		for _, re := range actLabelIdentityResourceExports.Items {
-			if re.Spec.LabelIdentity != nil {
-				actNormalizedLabels = append(actNormalizedLabels, re.Spec.LabelIdentity.NormalizedLabel)
+			actLabelIdentityResourceExports := &mcsv1alpha1.ResourceExportList{}
+			err := commonArea.List(ctx, actLabelIdentityResourceExports)
+			if err != nil {
+				t.Errorf("Failed to list ResourceExports after reconciliation")
 			}
-		}
-		assert.ElementsMatchf(t, tt.expNormalizedLabels, actNormalizedLabels,
-			"Unexpected LabelIdentity ResourceExports, expect ResourceExports for labels: %s, actual: %s", tt.expNormalizedLabels, actNormalizedLabels)
+			var actNormalizedLabels []string
+			for _, re := range actLabelIdentityResourceExports.Items {
+				if re.Spec.LabelIdentity != nil {
+					actNormalizedLabels = append(actNormalizedLabels, re.Spec.LabelIdentity.NormalizedLabel)
+				}
+			}
+			assert.ElementsMatchf(t, tt.expNormalizedLabels, actNormalizedLabels,
+				"Unexpected LabelIdentity ResourceExports, expect ResourceExports for labels: %s, actual: %s", tt.expNormalizedLabels, actNormalizedLabels)
+		})
 	}
 }
 
@@ -221,4 +221,35 @@ func TestNamespaceMapFunc(t *testing.T) {
 	r := NewLabelIdentityReconciler(fakeClient, scheme, mcReconciler)
 	actualReq := r.namespaceMapFunc(ns)
 	assert.ElementsMatch(t, expReq, actualReq)
+}
+
+func TestGetNormalizedLabel(t *testing.T) {
+	tests := []struct {
+		name               string
+		namespace          string
+		podLabels          map[string]string
+		nsLabels           map[string]string
+		expNormalizedLabel string
+	}{
+		{
+			"regular Pod",
+			"test-ns",
+			map[string]string{"purpose": "test"},
+			map[string]string{v1.LabelMetadataName: "test-ns"},
+			"ns:kubernetes.io/metadata.name=test-ns&pod:purpose=test",
+		},
+		{
+			"no Namespace default name label",
+			"test-ns",
+			map[string]string{"purpose": "test"},
+			map[string]string{"region": "west"},
+			"ns:kubernetes.io/metadata.name=test-ns,region=west&pod:purpose=test",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			normalizedLabel := getNormalizedLabel(tt.nsLabels, tt.podLabels, tt.namespace)
+			assert.Equal(t, tt.expNormalizedLabel, normalizedLabel)
+		})
+	}
 }

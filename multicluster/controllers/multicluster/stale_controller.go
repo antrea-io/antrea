@@ -262,7 +262,7 @@ func (c *StaleResCleanupController) cleanupLabelIdentities(resImpList *mcsv1alph
 	}
 	for _, l := range staleLabelIdentities {
 		labelIdentity := l
-		klog.V(2).InfoS("Cleaning up stale LabelIdentity", "labelidentity", klog.KObj(&labelIdentity))
+		klog.V(2).InfoS("Cleaning up stale imported LabelIdentity", "labelidentity", klog.KObj(&labelIdentity))
 		if err := c.Client.Delete(ctx, &labelIdentity, &client.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
 			return err
 		}
@@ -298,7 +298,7 @@ func (c *StaleResCleanupController) cleanupServiceResourceExport(commonArea comm
 
 	for _, r := range staleResExpItems {
 		re := r
-		klog.InfoS("Cleaning up ResourceExport", "ResourceExport", klog.KObj(&re))
+		klog.InfoS("Cleaning up stale ResourceExport", "ResourceExport", klog.KObj(&re))
 		if err := commonArea.Delete(ctx, &re, &client.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
 			return err
 		}

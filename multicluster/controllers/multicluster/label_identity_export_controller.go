@@ -78,7 +78,7 @@ func (r *LabelIdentityExportReconciler) Reconcile(ctx context.Context, req ctrl.
 	clusterID, labelHash := parseLabelIdentityExportNamespacedName(req.NamespacedName)
 	if err := r.Client.Get(ctx, req.NamespacedName, &resExport); err != nil {
 		if apierrors.IsNotFound(err) {
-			klog.V(2).InfoS("ResourceExport is deleted", "resourceexport", req.NamespacedName)
+			klog.V(2).InfoS("ResourceExport is deleted", "resourceexport", req.NamespacedName, "cluster", clusterID)
 			return ctrl.Result{}, r.onLabelExportDelete(ctx, clusterID, labelHash)
 		}
 		return ctrl.Result{}, err
@@ -141,8 +141,8 @@ func (r *LabelIdentityExportReconciler) refreshLabelIdentityResourceImports(ctx 
 	clusterID, addedClusterLabelHash, addedLabel string) error {
 	if _, ok := r.labelsToClusters[addedClusterLabelHash]; !ok {
 		// This is a new label identity in the entire ClusterSet.
-		if !r.handleLabelIdentityAdd(ctx, addedClusterLabelHash, addedLabel, clusterID, r.namespace) {
-			return fmt.Errorf("failed to reconcile LabelIdentity kind of ResourceImport for label %v", addedClusterLabelHash)
+		if !r.handleLabelIdentityAdd(ctx, addedClusterLabelHash, addedLabel, clusterID) {
+			return fmt.Errorf("failed to create LabelIdentity kind of ResourceImport for label %v of cluster %s", addedClusterLabelHash, clusterID)
 		}
 	}
 	return nil
@@ -156,8 +156,8 @@ func (r *LabelIdentityExportReconciler) cleanupLabelIdentityResourceImports(ctx 
 	if clusters, ok := r.labelsToClusters[deletedClusterLabelHash]; ok && clusters.Equal(deletedCluster) {
 		// The cluster where the label identity is being deleted was the only cluster that has
 		// the label identity. Hence, the label identity is no longer present in the ClusterSet.
-		if !r.handleLabelIdentityDelete(ctx, deletedClusterLabelHash, clusterID, r.namespace) {
-			return fmt.Errorf("failed to reconcile LabelIdentity kind of ResourceImport for label %v", deletedClusterLabelHash)
+		if !r.handleLabelIdentityDelete(ctx, deletedClusterLabelHash, clusterID) {
+			return fmt.Errorf("failed to delete LabelIdentity kind of ResourceImport for label %v of cluster %s", deletedClusterLabelHash, clusterID)
 		}
 	}
 	return nil
@@ -168,11 +168,11 @@ func (r *LabelIdentityExportReconciler) cleanupLabelIdentityResourceImports(ctx 
 // identity hash is only released if the deletion of its corresponding
 // ResourceImport succeeded.
 func (r *LabelIdentityExportReconciler) handleLabelIdentityDelete(ctx context.Context,
-	deletedLabelHash, clusterID, namespace string) bool {
+	deletedLabelHash, clusterID string) bool {
 	labelIdentityImport := &mcsv1alpha1.ResourceImport{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      deletedLabelHash,
-			Namespace: namespace,
+			Namespace: r.namespace,
 		},
 	}
 	if err := r.Client.Delete(ctx, labelIdentityImport, &client.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
@@ -194,9 +194,9 @@ func (r *LabelIdentityExportReconciler) handleLabelIdentityDelete(ctx context.Co
 // the ClusterSet. Note that the ID of a label identity is only allocated and stored
 // if the creation of its corresponding ResourceImport succeeded.
 func (r *LabelIdentityExportReconciler) handleLabelIdentityAdd(ctx context.Context,
-	labelHash, label, clusterID, namespace string) bool {
+	labelHash, label, clusterID string) bool {
 	labelIdentityResImport := &mcsv1alpha1.ResourceImport{}
-	ResImpKey := types.NamespacedName{Name: labelHash, Namespace: namespace}
+	ResImpKey := types.NamespacedName{Name: labelHash, Namespace: r.namespace}
 	if err := r.Client.Get(ctx, ResImpKey, labelIdentityResImport); err == nil {
 		idAllocated := labelIdentityResImport.Spec.LabelIdentity.ID
 		if err := r.allocator.setAllocated(idAllocated); err == nil {
@@ -208,10 +208,10 @@ func (r *LabelIdentityExportReconciler) handleLabelIdentityAdd(ctx context.Conte
 	}
 	id, err := r.allocator.allocate()
 	if err != nil {
-		klog.ErrorS(err, "Failed to allocate ID for new labels", "label", labelHash)
+		klog.ErrorS(err, "Failed to allocate ID for new label", "label", label)
 		return false
 	}
-	labelIdentityResImport = getLabelIdentityResImport(labelHash, label, namespace, id)
+	labelIdentityResImport = getLabelIdentityResImport(labelHash, label, r.namespace, id)
 	if err := r.Client.Create(ctx, labelIdentityResImport, &client.CreateOptions{}); err != nil {
 		klog.ErrorS(err, "Failed to create LabelIdentity kind of ResourceImport for new label", "label", label)
 		r.allocator.release(id)
@@ -289,7 +289,7 @@ func (a *idAllocator) allocate() (uint32, error) {
 }
 
 // setAllocated reserves IDs allocated during the previous round of label identity
-// ResourceExport reconcilaion.
+// ResourceExport reconcilaion, before controller restarted.
 func (a *idAllocator) setAllocated(id uint32) error {
 	a.Lock()
 	defer a.Unlock()

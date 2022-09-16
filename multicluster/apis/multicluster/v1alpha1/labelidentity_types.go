@@ -23,6 +23,9 @@ import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:path=labelidentities,scope=Cluster
 
+// +kubebuilder:printcolumn:name="Label",type=string,JSONPath=`.spec.label`,description="Normalized string of a label identity"
+// +kubebuilder:printcolumn:name="ID",type=string,JSONPath=`.spec.id`,description="ID allocated for the label identity by the leader cluster"
+// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=`.metadata.creationTimestamp`
 // LabelIdentity is an imported label identity from the ClusterSet.
 // For each unique label identity, a LabelIdentity will be created in the member cluster.
 type LabelIdentity struct {
