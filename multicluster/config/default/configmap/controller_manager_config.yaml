@@ -10,3 +10,4 @@ leaderElection:
   leaderElect: false
 serviceCIDR: ""
 gatewayIPPrecedence: "private"
+endpointIPType: "ClusterIP"

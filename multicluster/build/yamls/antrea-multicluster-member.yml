@@ -947,6 +947,7 @@ data:
       leaderElect: false
     serviceCIDR: ""
     gatewayIPPrecedence: "private"
+    endpointIPType: "ClusterIP"
 kind: ConfigMap
 metadata:
   labels:
@@ -986,7 +987,7 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/config: 7c5790c03e84cdb0a2ea8f4fb685a604cf6a1901e241a679afe996a0141ccea0
+        checksum/config: ab74dc9fd6d27a934c61d50e51dbf331ef6d57ab28c1121df3520bef6aad1f79
       labels:
         app: antrea
         component: antrea-mc-controller

@@ -51,21 +51,24 @@ type (
 		svcType    string
 	}
 
+	epInfo struct {
+		name      string
+		namespace string
+		subsets   []corev1.EndpointSubset
+	}
+
 	// ServiceExportReconciler reconciles a ServiceExport object in the member cluster.
 	ServiceExportReconciler struct {
 		client.Client
 		Scheme           *runtime.Scheme
 		commonAreaGetter RemoteCommonAreaGetter
 		installedSvcs    cache.Indexer
+		installedEps     cache.Indexer
 		leaderNamespace  string
 		leaderClusterID  string
 		localClusterID   string
+		endpointIPType   string
 	}
-)
-
-const (
-	// cached indexer
-	svcIndexerByType = "svc.type"
 )
 
 type reason int
@@ -80,14 +83,15 @@ const (
 func NewServiceExportReconciler(
 	client client.Client,
 	scheme *runtime.Scheme,
-	commonAreaGetter RemoteCommonAreaGetter) *ServiceExportReconciler {
+	commonAreaGetter RemoteCommonAreaGetter,
+	endpointIPType string) *ServiceExportReconciler {
 	reconciler := &ServiceExportReconciler{
 		Client:           client,
 		Scheme:           scheme,
 		commonAreaGetter: commonAreaGetter,
-		installedSvcs: cache.NewIndexer(svcInfoKeyFunc, cache.Indexers{
-			svcIndexerByType: svcIndexerByTypeFunc,
-		}),
+		endpointIPType:   endpointIPType,
+		installedSvcs:    cache.NewIndexer(svcInfoKeyFunc, cache.Indexers{}),
+		installedEps:     cache.NewIndexer(epInfoKeyFunc, cache.Indexers{}),
 	}
 	return reconciler
 }
@@ -97,8 +101,9 @@ func svcInfoKeyFunc(obj interface{}) (string, error) {
 	return common.NamespacedName(svc.namespace, svc.name), nil
 }
 
-func svcIndexerByTypeFunc(obj interface{}) ([]string, error) {
-	return []string{obj.(*svcInfo).svcType}, nil
+func epInfoKeyFunc(obj interface{}) (string, error) {
+	ep := obj.(*epInfo)
+	return common.NamespacedName(ep.namespace, ep.name), nil
 }
 
 //+kubebuilder:rbac:groups=multicluster.crd.antrea.io,resources=resourceexports,verbs=get;list;watch;create;update;patch;delete
@@ -111,7 +116,7 @@ func svcIndexerByTypeFunc(obj interface{}) ([]string, error) {
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
 // For ServiceExport Reconcile, it watches events of ServiceExport resources,
-// and also Services resource. It will create/update/remove ResourceExport
+// and also Services/Endpoints resources. It will create/update/remove ResourceExport
 // in a leader cluster for corresponding ServiceExport from a member cluster.
 func (r *ServiceExportReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	klog.V(2).InfoS("Reconciling ServiceExport", "serviceexport", req.NamespacedName)
@@ -121,7 +126,7 @@ func (r *ServiceExportReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		return ctrl.Result{}, err
 	}
 
-	// Return faster during initilization instead of handling all Service/Endpoints events
+	// Return faster during initialization instead of handling all Service/Endpoints events
 	if len(svcExportList.Items) == 0 && len(r.installedSvcs.List()) == 0 {
 		klog.InfoS("Skip reconciling, no corresponding ServiceExport")
 		return ctrl.Result{}, nil
@@ -137,6 +142,7 @@ func (r *ServiceExportReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 
 	var svcExport k8smcsv1alpha1.ServiceExport
 	svcObj, svcInstalled, _ := r.installedSvcs.GetByKey(req.String())
+	epsObj, epsInstalled, _ := r.installedEps.GetByKey(req.String())
 	svcResExportName := getResourceExportName(r.localClusterID, req, "service")
 	epResExportName := getResourceExportName(r.localClusterID, req, "endpoints")
 
@@ -154,6 +160,9 @@ func (r *ServiceExportReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		}
 		if svcInstalled {
 			r.installedSvcs.Delete(svcObj)
+		}
+		if epsInstalled {
+			r.installedEps.Delete(epsObj)
 		}
 		return nil
 	}
@@ -206,11 +215,16 @@ func (r *ServiceExportReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 
 	// Delete existing ResourceExport if the exported Service has no ready Endpoints,
 	// and update the ServiceExport status.
-	svcEPs := &corev1.Endpoints{}
+	eps := &corev1.Endpoints{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      req.Name,
+			Namespace: req.Namespace,
+		},
+	}
 	readyAddresses := 0
-	err = r.Client.Get(ctx, req.NamespacedName, svcEPs)
+	err = r.Client.Get(ctx, req.NamespacedName, eps)
 	if err == nil {
-		for _, subsets := range svcEPs.Subsets {
+		for _, subsets := range eps.Subsets {
 			readyAddresses = readyAddresses + len(subsets.Addresses)
 		}
 	} else {
@@ -232,7 +246,7 @@ func (r *ServiceExportReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 
 	// We also watch Service events via events mapping function.
 	// Need to check cache and compare with cache if there is any change for Service.
-	var svcNoChange bool
+	var svcNoChange, epNoChange bool
 	svcExportNSName := common.NamespacedName(r.leaderNamespace, svcResExportName)
 	epExportNSName := common.NamespacedName(r.leaderNamespace, epResExportName)
 	if svcInstalled {
@@ -245,15 +259,24 @@ func (r *ServiceExportReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		}
 	}
 
-	ep := &corev1.Endpoints{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      req.Name,
-			Namespace: req.Namespace,
-		},
+	if r.endpointIPType == "ClusterIP" {
+		eps.Subsets = []corev1.EndpointSubset{common.GetServiceEndpointSubset(svc)}
+	} else {
+		newSubsets := common.FilterEndpointSubsets(eps.Subsets)
+		if epsInstalled {
+			installedEp := epsObj.(*epInfo)
+			if apiequality.Semantic.DeepEqual(newSubsets, installedEp.subsets) {
+				klog.InfoS("Endpoints has been converted into ResourceExport and no change, skip it", "endpoints",
+					req.String(), "resourceexport", epExportNSName)
+				epNoChange = true
+			}
+		}
+		if !epNoChange {
+			eps.Subsets = newSubsets
+		}
 	}
-	ep.Subsets = []corev1.EndpointSubset{common.GetServiceEndpointSubset(svc)}
 
-	if svcNoChange {
+	if svcNoChange && epNoChange {
 		return ctrl.Result{}, nil
 	}
 
@@ -282,16 +305,18 @@ func (r *ServiceExportReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 			return ctrl.Result{}, err
 		}
 
-		klog.InfoS("Endpoints have new change, update ResourceExport", "endpoints",
-			req.String(), "resourceexport", epExportNSName)
-		err = r.endpointsHandler(ctx, req, ep, epResExportName, re, commonArea)
-		if err != nil {
-			klog.ErrorS(err, "Failed to handle Endpoints change", "endpoints", req.String())
-			return ctrl.Result{}, err
-		}
-
 		err = r.updateSvcExportStatus(ctx, req, serviceExported)
 		if err != nil {
+			return ctrl.Result{}, err
+		}
+	}
+
+	if !epNoChange {
+		klog.InfoS("Endpoints have new change, update ResourceExport", "endpoints",
+			req.String(), "resourceexport", epExportNSName)
+		err = r.endpointsHandler(ctx, req, eps, epResExportName, re, commonArea)
+		if err != nil {
+			klog.ErrorS(err, "Failed to handle Endpoints change", "endpoints", req.String())
 			return ctrl.Result{}, err
 		}
 	}
@@ -410,15 +435,11 @@ func (r *ServiceExportReconciler) updateSvcExportStatus(ctx context.Context, req
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *ServiceExportReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	// Ignore status update event via GenerationChangedPredicate
-	ignoreStatus := predicate.GenerationChangedPredicate{}
 	// Watch events only when resource version changes
 	versionChange := predicate.ResourceVersionChangedPredicate{}
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&k8smcsv1alpha1.ServiceExport{}).
-		WithEventFilter(ignoreStatus).
 		Watches(&source.Kind{Type: &corev1.Service{}}, handler.EnqueueRequestsFromMapFunc(objectMapFunc)).
-		WithEventFilter(versionChange).
 		Watches(&source.Kind{Type: &corev1.Endpoints{}}, handler.EnqueueRequestsFromMapFunc(objectMapFunc)).
 		WithEventFilter(versionChange).
 		WithOptions(controller.Options{
@@ -481,12 +502,17 @@ func (r *ServiceExportReconciler) serviceHandler(
 func (r *ServiceExportReconciler) endpointsHandler(
 	ctx context.Context,
 	req ctrl.Request,
-	ep *corev1.Endpoints,
+	eps *corev1.Endpoints,
 	resName string,
 	re mcsv1alpha1.ResourceExport,
 	rc commonarea.RemoteCommonArea) error {
 	kind := common.EndpointsKind
-	r.refreshResourceExport(resName, kind, nil, ep, &re)
+	epInfo := &epInfo{
+		name:      eps.Name,
+		namespace: eps.Namespace,
+		subsets:   eps.Subsets,
+	}
+	r.refreshResourceExport(resName, kind, nil, eps, &re)
 	existingResExport := &mcsv1alpha1.ResourceExport{}
 	resNamespaced := types.NamespacedName{Namespace: rc.GetNamespace(), Name: resName}
 	err := rc.Get(ctx, resNamespaced, existingResExport)
@@ -499,6 +525,7 @@ func (r *ServiceExportReconciler) endpointsHandler(
 	if err = r.updateOrCreateResourceExport(resName, ctx, req, &re, existingResExport, rc); err != nil {
 		return err
 	}
+	r.installedEps.Add(epInfo)
 	return nil
 }
 
