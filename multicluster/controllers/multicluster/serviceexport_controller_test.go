@@ -70,7 +70,7 @@ func TestServiceExportReconciler_handleDeleteEvent(t *testing.T) {
 	commonArea := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", localClusterID, "default")
 	mcReconciler := NewMemberClusterSetReconciler(fakeClient, scheme, "default")
 	mcReconciler.SetRemoteCommonArea(commonArea)
-	r := NewServiceExportReconciler(fakeClient, scheme, mcReconciler)
+	r := NewServiceExportReconciler(fakeClient, scheme, mcReconciler, "ClusterIP")
 	r.installedSvcs.Add(&svcInfo{
 		name:      svcNginx.Name,
 		namespace: svcNginx.Namespace,
@@ -207,7 +207,7 @@ func TestServiceExportReconciler_CheckExportStatus(t *testing.T) {
 
 	mcReconciler := NewMemberClusterSetReconciler(fakeClient, scheme, "default")
 	mcReconciler.SetRemoteCommonArea(commonArea)
-	r := NewServiceExportReconciler(fakeClient, scheme, mcReconciler)
+	r := NewServiceExportReconciler(fakeClient, scheme, mcReconciler, "ClusterIP")
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if _, err := r.Reconcile(ctx, tt.req); err != nil {
@@ -238,7 +238,7 @@ func TestServiceExportReconciler_handleServiceExportCreateEvent(t *testing.T) {
 	commonArea := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", localClusterID, "default")
 	mcReconciler := NewMemberClusterSetReconciler(fakeClient, scheme, "default")
 	mcReconciler.SetRemoteCommonArea(commonArea)
-	r := NewServiceExportReconciler(fakeClient, scheme, mcReconciler)
+	r := NewServiceExportReconciler(fakeClient, scheme, mcReconciler, "ClusterIP")
 	if _, err := r.Reconcile(ctx, nginxReq); err != nil {
 		t.Errorf("ServiceExport Reconciler should create ResourceExports but got error = %v", err)
 	} else {
@@ -264,7 +264,7 @@ func TestServiceExportReconciler_handleServiceExportCreateEvent(t *testing.T) {
 	}
 }
 
-func TestServiceExportReconciler_handleServiceUpdateEvent(t *testing.T) {
+func TestServiceExportReconciler_handleUpdateEvent(t *testing.T) {
 	sinfo := &svcInfo{
 		name:       svcNginx.Name,
 		namespace:  svcNginx.Namespace,
@@ -273,8 +273,17 @@ func TestServiceExportReconciler_handleServiceUpdateEvent(t *testing.T) {
 		svcType:    string(svcNginx.Spec.Type),
 	}
 
+	epInfo := &epInfo{
+		name:      epNginx.Name,
+		namespace: epNginx.Namespace,
+		subsets:   common.FilterEndpointSubsets(epNginx.Subsets),
+	}
+
 	newSvcNginx := svcNginx.DeepCopy()
 	newSvcNginx.Spec.Ports = []corev1.ServicePort{svcPort8080}
+	newEpNginx := epNginx.DeepCopy()
+	newEpNginx.Subsets[0].Ports = epPorts8080
+
 	svcNginxEPs := &corev1.Endpoints{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "nginx",
@@ -304,43 +313,29 @@ func TestServiceExportReconciler_handleServiceUpdateEvent(t *testing.T) {
 
 	existEpRe := re.DeepCopy()
 	existEpRe.Name = "cluster-a-default-nginx-endpoints"
-	existEpRe.Spec.Endpoints = &mcsv1alpha1.EndpointsExport{Subsets: epNginxSubset}
+	existEpRe.Spec.Endpoints = &mcsv1alpha1.EndpointsExport{Subsets: common.FilterEndpointSubsets(epNginxSubset)}
 
-	fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(newSvcNginx, svcNginxEPs, existSvcExport).Build()
-	fakeRemoteClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(existSvcRe, existEpRe).Build()
-
-	commonArea := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", localClusterID, "default")
-	mcReconciler := NewMemberClusterSetReconciler(fakeClient, scheme, "default")
-	mcReconciler.SetRemoteCommonArea(commonArea)
-	r := NewServiceExportReconciler(fakeClient, scheme, mcReconciler)
-	r.installedSvcs.Add(sinfo)
-	if _, err := r.Reconcile(ctx, nginxReq); err != nil {
-		t.Errorf("ServiceExport Reconciler should update ResourceExports but got error = %v", err)
-	} else {
-		svcResExport := &mcsv1alpha1.ResourceExport{}
-		err := fakeRemoteClient.Get(ctx, types.NamespacedName{Namespace: "default", Name: "cluster-a-default-nginx-service"}, svcResExport)
-		if err != nil {
-			t.Errorf("ServiceExport Reconciler should get new Service kind of ResourceExport successfully but got error = %v", err)
-		} else {
-			ports := svcResExport.Spec.Service.ServiceSpec.Ports
-			expectedPorts := []corev1.ServicePort{
+	tests := []struct {
+		name              string
+		existingEndpoints *corev1.Endpoints
+		existingService   *corev1.Service
+		expectedPorts     []corev1.ServicePort
+		expectedSubsets   []corev1.EndpointSubset
+		endpointIPType    string
+	}{
+		{
+			name:              "update ResourceExport successfully with ClusterIP",
+			existingEndpoints: svcNginxEPs,
+			existingService:   newSvcNginx,
+			endpointIPType:    "ClusterIP",
+			expectedPorts: []corev1.ServicePort{
 				{
 					Name:     "http",
 					Protocol: corev1.ProtocolTCP,
 					Port:     8080,
 				},
-			}
-			if !reflect.DeepEqual(ports, expectedPorts) {
-				t.Errorf("expected Service ports are %v but got %v", expectedPorts, ports)
-			}
-		}
-		epResExport := &mcsv1alpha1.ResourceExport{}
-		err = fakeRemoteClient.Get(ctx, types.NamespacedName{Namespace: "default", Name: "cluster-a-default-nginx-endpoints"}, epResExport)
-		if err != nil {
-			t.Errorf("ServiceExport Reconciler should get new Endpoints kind of ResourceExport successfully but got error = %v", err)
-		} else {
-			subsets := epResExport.Spec.Endpoints.Subsets
-			expectedSubsets := []corev1.EndpointSubset{
+			},
+			expectedSubsets: []corev1.EndpointSubset{
 				{
 					Addresses: []corev1.EndpointAddress{
 						{
@@ -349,13 +344,92 @@ func TestServiceExportReconciler_handleServiceUpdateEvent(t *testing.T) {
 					},
 					Ports: epPorts8080,
 				},
+			},
+		},
+		{
+			name:              "update ResourceExport successfully with Pod IP",
+			existingEndpoints: newEpNginx,
+			existingService:   newSvcNginx,
+			endpointIPType:    "PodIP",
+			expectedPorts: []corev1.ServicePort{
+				{
+					Name:     "http",
+					Protocol: corev1.ProtocolTCP,
+					Port:     8080,
+				},
+			},
+			expectedSubsets: []corev1.EndpointSubset{
+				{
+					Addresses: []corev1.EndpointAddress{
+						{
+							IP: "192.168.17.11",
+						},
+					},
+					Ports: epPorts8080,
+				},
+			},
+		},
+		{
+			name:              "update ResourceExport successfully without change",
+			existingEndpoints: svcNginxEPs,
+			existingService:   svcNginx,
+			endpointIPType:    "PodIP",
+			expectedPorts: []corev1.ServicePort{
+				{
+					Name:     "http",
+					Protocol: corev1.ProtocolTCP,
+					Port:     80,
+				},
+			},
+			expectedSubsets: []corev1.EndpointSubset{
+				{
+					Addresses: []corev1.EndpointAddress{
+						{
+							IP: "192.168.17.11",
+						},
+					},
+					Ports: epPorts80,
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(tt.existingService, tt.existingEndpoints, existSvcExport).Build()
+			fakeRemoteClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(existSvcRe, existEpRe).Build()
+
+			commonArea := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", localClusterID, "default")
+			mcReconciler := NewMemberClusterSetReconciler(fakeClient, scheme, "default")
+			mcReconciler.SetRemoteCommonArea(commonArea)
+			r := NewServiceExportReconciler(fakeClient, scheme, mcReconciler, tt.endpointIPType)
+			r.installedSvcs.Add(sinfo)
+			r.installedEps.Add(epInfo)
+			if _, err := r.Reconcile(ctx, nginxReq); err != nil {
+				t.Errorf("ServiceExport Reconciler should update ResourceExports but got error = %v", err)
+			} else {
+				svcResExport := &mcsv1alpha1.ResourceExport{}
+				err := fakeRemoteClient.Get(ctx, types.NamespacedName{Namespace: "default", Name: "cluster-a-default-nginx-service"}, svcResExport)
+				if err != nil {
+					t.Errorf("ServiceExport Reconciler should get new Service kind of ResourceExport successfully but got error = %v", err)
+				} else {
+					ports := svcResExport.Spec.Service.ServiceSpec.Ports
+					if !reflect.DeepEqual(ports, tt.expectedPorts) {
+						t.Errorf("Expected Service ports are %v but got %v", tt.expectedPorts, ports)
+					}
+				}
+				epResExport := &mcsv1alpha1.ResourceExport{}
+				err = fakeRemoteClient.Get(ctx, types.NamespacedName{Namespace: "default", Name: "cluster-a-default-nginx-endpoints"}, epResExport)
+				if err != nil {
+					t.Errorf("ServiceExport Reconciler should get new Endpoints kind of ResourceExport successfully but got error = %v", err)
+				} else {
+					subsets := epResExport.Spec.Endpoints.Subsets
+					if !reflect.DeepEqual(subsets, tt.expectedSubsets) {
+						t.Errorf("Expected Endpoints subsets are %v but got %v", tt.expectedSubsets, subsets)
+					}
+				}
 			}
-			if !reflect.DeepEqual(subsets, expectedSubsets) {
-				t.Errorf("expected Endpoints subsets are %v but got %v", expectedSubsets, subsets)
-			}
-		}
-		newSvcExport := &k8smcsv1alpha1.ServiceExport{}
-		fakeClient.Get(ctx, types.NamespacedName{Namespace: "default", Name: "nginx"}, newSvcExport)
+		})
 	}
 }
 
