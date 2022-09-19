@@ -88,11 +88,7 @@ const (
 )
 
 // PrepareClickHouseConnection is used for unit testing
-var (
-	PrepareClickHouseConnection = func(input ClickHouseInput) (string, *sql.DB, error) {
-		return PrepareConnection(input)
-	}
-)
+var PrepareClickHouseConnection = prepareConnection
 
 type stopPayload struct {
 	flushQueue bool
@@ -380,7 +376,7 @@ func (ch *ClickHouseExportProcess) pushRecordsToFrontOfQueue(records []*flowreco
 	}
 }
 
-func PrepareConnection(input ClickHouseInput) (string, *sql.DB, error) {
+func prepareConnection(input ClickHouseInput) (string, *sql.DB, error) {
 	dsn, err := input.GetDataSourceName()
 	if err != nil {
 		return "", nil, fmt.Errorf("error when parsing ClickHouse DSN: %v", err)
