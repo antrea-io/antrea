@@ -36,6 +36,10 @@ var DeployCmd = &cobra.Command{
 	Use:   "deploy",
 	Short: "Deploy Antrea Multi-cluster Controller to a leader or member cluster",
 }
+var DeleteCmd = &cobra.Command{
+	Use:   "delete",
+	Short: "Delete multi-cluster resources",
+}
 
 var JoinCmd = NewJoinCommand()
 var LeaveCmd = NewLeaveCommand()

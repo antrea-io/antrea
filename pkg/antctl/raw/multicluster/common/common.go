@@ -295,6 +295,30 @@ func CreateMemberToken(cmd *cobra.Command, k8sClient client.Client, name string,
 	return nil
 }
 
+func DeleteMemberToken(cmd *cobra.Command, k8sClient client.Client, name string, namespace string) error {
+	secret := newSecret(name, name, namespace)
+	deleteErr := k8sClient.Delete(context.TODO(), secret)
+	if deleteErr != nil {
+		fmt.Fprintf(cmd.OutOrStderr(), "Failed to delete Secret \"%s\", error: %s\n", name, deleteErr)
+	}
+
+	roleBinding := newRoleBinding(name, name, namespace)
+	deleteErr = k8sClient.Create(context.TODO(), roleBinding)
+
+	if deleteErr != nil {
+		fmt.Fprintf(cmd.OutOrStderr(), "Failed to delete RoleBinding \"%s\", error: %s\n", name, deleteErr)
+	}
+
+	serviceAccount := newServiceAccount(name, namespace)
+	deleteErr = k8sClient.Delete(context.TODO(), serviceAccount)
+
+	if deleteErr != nil {
+		fmt.Fprintf(cmd.OutOrStderr(), "Failed to delete ServiceAccount \"%s\", error: %s\n", name, deleteErr)
+	}
+
+	return nil
+}
+
 func waitForSecretReady(client client.Client, secretName string, namespace string) error {
 	return wait.PollImmediate(
 		1*time.Second,
