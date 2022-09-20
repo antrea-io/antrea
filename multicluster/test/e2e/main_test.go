@@ -110,6 +110,7 @@ func TestConnectivity(t *testing.T) {
 		defer tearDownForServiceExportsTest(t, data)
 		initializeForServiceExportsTest(t, data)
 		t.Run("Case=MCServiceConnectivity", func(t *testing.T) { testMCServiceConnectivity(t, data) })
+		t.Run("Case=ScaleDownMCServiceEndpoints", func(t *testing.T) { testScaleDownMCServiceEndpoints(t, data) })
 		t.Run("Case=ANPToServices", func(t *testing.T) { testANPToServices(t, data) })
 	})
 
