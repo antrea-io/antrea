@@ -51,11 +51,14 @@ type (
 		commonAreaGetter RemoteCommonAreaGetter
 		remoteCommonArea commonarea.RemoteCommonArea
 		// labelMutex prevents concurrent access to labelToPodsCache and podLabelCache.
-		// It also prevents concurrent updates to ResourceExports.
+		// It also prevents concurrent updates to labelExportUpdatesInProgress.
 		labelMutex sync.Mutex
-		// labelToPodsCache stores mapping from label identities to Pods that have this label identity
+		// labelToPodsCache stores mapping from label identities to Pods that have this label identity.
 		labelToPodsCache map[string]sets.String
-		// podLabelCache stores mapping from Pods to their label identities
+		// labelExportUpdatesInProgress keeps track of label identities whose corresponding ResourceExports are
+		// currently being created/deleted in the CommonArea. It is protected by labelMutex.
+		labelExportUpdatesInProgress sets.String
+		// podLabelCache stores mapping from Pods to their label identities.
 		podLabelCache  map[string]string
 		localClusterID string
 	}
@@ -66,11 +69,12 @@ func NewLabelIdentityReconciler(
 	scheme *runtime.Scheme,
 	commonAreaGetter RemoteCommonAreaGetter) *LabelIdentityReconciler {
 	return &LabelIdentityReconciler{
-		Client:           client,
-		Scheme:           scheme,
-		commonAreaGetter: commonAreaGetter,
-		labelToPodsCache: map[string]sets.String{},
-		podLabelCache:    map[string]string{},
+		Client:                       client,
+		Scheme:                       scheme,
+		commonAreaGetter:             commonAreaGetter,
+		labelToPodsCache:             map[string]sets.String{},
+		labelExportUpdatesInProgress: sets.NewString(),
+		podLabelCache:                map[string]string{},
 	}
 }
 
@@ -92,7 +96,8 @@ func (r *LabelIdentityReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	if err := r.Client.Get(ctx, req.NamespacedName, &pod); err != nil {
 		if apierrors.IsNotFound(err) {
 			klog.V(2).InfoS("Pod is deleted", "pod", req.NamespacedName)
-			return ctrl.Result{}, r.onPodDelete(ctx, req.NamespacedName.String())
+			defer r.labelMutex.Unlock()
+			return r.removeLabelForPod(ctx, req.NamespacedName.String())
 		}
 		return ctrl.Result{}, err
 	}
@@ -100,8 +105,8 @@ func (r *LabelIdentityReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		klog.ErrorS(err, "Cannot get corresponding Namespace of the Pod", "pod", req.NamespacedName)
 		return ctrl.Result{}, err
 	}
-	nsLabels, podLabels := ns.Labels, pod.Labels
-	return ctrl.Result{}, r.onPodCreateOrUpdate(ctx, req.NamespacedName.String(), getNormalizedLabel(nsLabels, podLabels, ns.Name))
+	normalizedLabel := getNormalizedLabel(ns.Labels, pod.Labels, ns.Name)
+	return r.onPodCreateOrUpdate(ctx, req.NamespacedName.String(), normalizedLabel)
 }
 
 // SetupWithManager sets up the controller with the Manager.
@@ -133,124 +138,135 @@ func (r *LabelIdentityReconciler) namespaceMapFunc(ns client.Object) []reconcile
 	return requests
 }
 
-// onPodDelete removes the Pod and label identity mapping from the cache, and
-// updates label identity ResourceExport if necessary (the Pod deletion event
-// causes a label identity no longer present in the cluster).
-func (r *LabelIdentityReconciler) onPodDelete(ctx context.Context, podNamespacedName string) error {
-	r.labelMutex.Lock()
-	defer r.labelMutex.Unlock()
+// This function needs to be called with labelMutex acquired.
+func (r *LabelIdentityReconciler) setLabelExportUpdatesInProgress(label string) {
+	r.labelExportUpdatesInProgress.Insert(label)
+	// Unlock the labelMutex to allow cache updates for other labels. Any worker operating on
+	// the label will be blocked as it is added into labelExportUpdateInProgress.
+	r.labelMutex.Unlock()
+}
 
-	labelToDelete := r.getLabelToDelete(podNamespacedName)
-	if labelToDelete != "" {
-		if err := r.deleteLabelIdentityResExport(ctx, labelToDelete); err != nil {
-			return err
+func (r *LabelIdentityReconciler) unsetLabelExportUpdatesInProgress(label string) {
+	r.labelMutex.Lock()
+	r.labelExportUpdatesInProgress.Delete(label)
+}
+
+// removeLabelForPod removes the Pod and label identity mapping from the cache, and deletes label
+// identity ResourceExport if necessary (the Pod update/deletion event causes a label identity no
+// longer present in the cluster).
+// Note that this function will acquire the reconciler's labelMutex, and will keep it locked after
+// it returns. This is useful for eliminating additional context switching when handling Pod
+// update events, since after deleting stale label the labelMutex will immediately need to be held
+// again for checking label add.
+func (r *LabelIdentityReconciler) removeLabelForPod(ctx context.Context, podNamespacedName string) (ctrl.Result, error) {
+	r.labelMutex.Lock()
+	if originalLabel, isCached := r.podLabelCache[podNamespacedName]; isCached {
+		if r.labelExportUpdatesInProgress.Has(originalLabel) {
+			return ctrl.Result{Requeue: true}, nil
 		}
-		r.deleteFromLabelCache(podNamespacedName, labelToDelete)
+		// Check if the original label is stale.
+		if podNames, ok := r.labelToPodsCache[originalLabel]; ok && len(podNames) == 1 && podNames.Has(podNamespacedName) {
+			klog.V(2).InfoS("Label no longer exists in the cluster, deleting corresponding ResourceExport", "label", originalLabel)
+			r.setLabelExportUpdatesInProgress(originalLabel)
+			err := r.deleteLabelIdentityResExport(ctx, originalLabel)
+			r.unsetLabelExportUpdatesInProgress(originalLabel)
+			if err != nil {
+				return ctrl.Result{}, err
+			}
+			r.deleteFromLabelCache(podNamespacedName, originalLabel)
+		} else {
+			// The original label still has other Pod that refers to it. Update the cache with
+			// labelMutex acquired.
+			podNames.Delete(podNamespacedName)
+			delete(r.podLabelCache, podNamespacedName)
+		}
 	}
-	return nil
+	return ctrl.Result{}, nil
 }
 
 // onPodCreateOrUpdate updates the Pod and label identity mapping in the cache, and
 // updates label identity ResourceExport if necessary (the Pod creation/update
 // event causes a new label identity to appear in the cluster or a label identity
-// no longer present in the cluster).
-func (r *LabelIdentityReconciler) onPodCreateOrUpdate(ctx context.Context, podNamespacedName, normalizedLabel string) error {
-	r.labelMutex.Lock()
+// no longer present in the cluster or both).
+func (r *LabelIdentityReconciler) onPodCreateOrUpdate(ctx context.Context, podNamespacedName, currentLabel string) (ctrl.Result, error) {
+	// Based on the reconciler's predicate, the Pod has updated labels.
+	// Remove any original Pod-label mapping.
+	if result, err := r.removeLabelForPod(ctx, podNamespacedName); err != nil || result.Requeue {
+		r.labelMutex.Unlock()
+		return result, err
+	}
+	if r.labelExportUpdatesInProgress.Has(currentLabel) {
+		r.labelMutex.Unlock()
+		return ctrl.Result{Requeue: true}, nil
+	}
 	defer r.labelMutex.Unlock()
-
-	labelToAdd, labelToDelete := r.getLabelToUpdate(podNamespacedName, normalizedLabel)
-	if labelToDelete != "" {
-		if err := r.deleteLabelIdentityResExport(ctx, labelToDelete); err != nil {
-			return err
+	// Check if ResourceExport creation is needed for the updated label.
+	// If the previous part of the function did not return, the labelMutex is still
+	// locked at this point.
+	podNames, ok := r.labelToPodsCache[currentLabel]
+	if ok {
+		// This is a seen label and there's no other worker trying to delete the ResourceExport
+		// of the label concurrently. Update the cache immediately.
+		podNames.Insert(podNamespacedName)
+		r.podLabelCache[podNamespacedName] = currentLabel
+	} else {
+		// Create a ResourceExport for this label as this is a new label.
+		klog.V(2).InfoS("Creating ResourceExport for label", "label", currentLabel)
+		r.setLabelExportUpdatesInProgress(currentLabel)
+		err := r.createLabelIdentityResExport(ctx, currentLabel)
+		r.unsetLabelExportUpdatesInProgress(currentLabel)
+		if err != nil {
+			return ctrl.Result{}, err
 		}
-		r.deleteFromLabelCache(podNamespacedName, labelToDelete)
+		r.updateLabelCache(podNamespacedName, currentLabel)
 	}
-	if labelToAdd != "" {
-		if err := r.createLabelIdentityResExport(ctx, labelToAdd); err != nil {
-			return err
-		}
-		r.updateLabelCache(podNamespacedName, labelToAdd)
-	}
-	return nil
-}
-
-// getLabelToUpdate gets all label identities to be added and to be deleted due to Pod
-// update event. It needs to be protected with labelMutex so that concurrent Pod update
-// events will not interfere with the label cache update calculations.
-func (r *LabelIdentityReconciler) getLabelToUpdate(podNamespacedName, normalizedLabel string) (labelToAdd string, labelToDelete string) {
-	originalLabel, isCached := r.podLabelCache[podNamespacedName]
-	if !isCached {
-		return normalizedLabel, ""
-	} else if originalLabel != normalizedLabel {
-		// Pod has updated labels. Check if the original label is stale.
-		if podNames, ok := r.labelToPodsCache[originalLabel]; ok && len(podNames) == 1 && podNames.Has(podNamespacedName) {
-			klog.V(2).InfoS("Label no longer exists in the cluster", "label", originalLabel)
-			return normalizedLabel, originalLabel
-		}
-	}
-	return "", ""
-}
-
-// getLabelToDelete gets all label identities to be deleted due to Pod delete event.
-// It needs to be protected with labelMutex so that concurrent Pod update events
-// will not interfere with the label cache update calculations.
-func (r *LabelIdentityReconciler) getLabelToDelete(podNamespacedName string) string {
-	if originalLabel, isCached := r.podLabelCache[podNamespacedName]; isCached {
-		if podNames, ok := r.labelToPodsCache[originalLabel]; ok && len(podNames) == 1 && podNames.Has(podNamespacedName) {
-			klog.V(2).InfoS("Label no longer exists in the cluster", "label", originalLabel)
-			return originalLabel
-		} else if ok {
-			// No ResourceExport deletion is needed. Update the caches immediately.
-			delete(r.podLabelCache, podNamespacedName)
-			podNames.Delete(podNamespacedName)
-		}
-	}
-	return ""
+	return ctrl.Result{}, nil
 }
 
 // updateLabelCache updates podLabelCache and labelToPodsCache once the ResourceExport
-// create/update operation is successful.
+// create operation is successful.
 func (r *LabelIdentityReconciler) updateLabelCache(podNamespacedName, updatedLabel string) {
+	r.labelExportUpdatesInProgress.Delete(updatedLabel)
 	r.podLabelCache[podNamespacedName] = updatedLabel
-	if _, ok := r.labelToPodsCache[updatedLabel]; !ok {
-		r.labelToPodsCache[updatedLabel] = sets.NewString(podNamespacedName)
-	}
-	r.labelToPodsCache[updatedLabel].Insert(podNamespacedName)
+	r.labelToPodsCache[updatedLabel] = sets.NewString(podNamespacedName)
 }
 
 // deleteFromLabelCache deletes a label from the podLabelCache and labelToPodsCache once
 // the ResourceExport delete operation is successful.
 func (r *LabelIdentityReconciler) deleteFromLabelCache(podNamespacedName, deletedLabel string) {
+	r.labelExportUpdatesInProgress.Delete(deletedLabel)
 	delete(r.podLabelCache, podNamespacedName)
-	if podNames, ok := r.labelToPodsCache[deletedLabel]; ok {
-		podNames.Delete(podNamespacedName)
-		delete(r.labelToPodsCache, deletedLabel)
-	}
+	delete(r.labelToPodsCache, deletedLabel)
 }
 
-func (r *LabelIdentityReconciler) createLabelIdentityResExport(ctx context.Context, normalizedLabel string) error {
-	resExportName := getResourceExportNameForLabelIdentity(r.localClusterID, normalizedLabel)
-	labelResExport := r.getLabelIdentityResourceExport(r.remoteCommonArea.GetNamespace(), resExportName, normalizedLabel)
-	if err := r.remoteCommonArea.Create(ctx, labelResExport, &client.CreateOptions{}); err != nil && !apierrors.IsAlreadyExists(err) {
+// createLabelIdentityResExport creates a ResourceExport for a newly added label. The function should be
+// invoked with the labelMutex locked, and will return with labelMutex remain locked.
+func (r *LabelIdentityReconciler) createLabelIdentityResExport(ctx context.Context, labelToAdd string) error {
+	resExportName := getResourceExportNameForLabelIdentity(r.localClusterID, labelToAdd)
+	labelResExport := r.getLabelIdentityResourceExport(r.remoteCommonArea.GetNamespace(), resExportName, labelToAdd)
+	klog.V(4).InfoS("Creating ResourceExport for label", "resourceExport", labelResExport.Name, "label", labelToAdd)
+	err := r.remoteCommonArea.Create(ctx, labelResExport, &client.CreateOptions{})
+	if err != nil && !apierrors.IsAlreadyExists(err) {
 		return err
 	}
 	return nil
 }
 
-func (r *LabelIdentityReconciler) deleteLabelIdentityResExport(ctx context.Context, normalizedLabel string) error {
+// deleteLabelIdentityResExport deletes a ResourceExport for a stale label. The function should be
+// invoked with the labelMutex locked, and will return with labelMutex remain locked.
+func (r *LabelIdentityReconciler) deleteLabelIdentityResExport(ctx context.Context, labelToDelete string) error {
 	labelResExport := &mcsv1alpha1.ResourceExport{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      getResourceExportNameForLabelIdentity(r.localClusterID, normalizedLabel),
+			Name:      getResourceExportNameForLabelIdentity(r.localClusterID, labelToDelete),
 			Namespace: r.remoteCommonArea.GetNamespace(),
 		},
 	}
-	if err := r.remoteCommonArea.Delete(ctx, labelResExport, &client.DeleteOptions{}); err != nil {
-		return client.IgnoreNotFound(err)
-	}
-	return nil
+	klog.V(4).InfoS("Deleting ResourceExport for label", "resourceExport", labelResExport.Name, "label", labelToDelete)
+	err := r.remoteCommonArea.Delete(ctx, labelResExport, &client.DeleteOptions{})
+	return client.IgnoreNotFound(err)
 }
 
-func (r *LabelIdentityReconciler) getLabelIdentityResourceExport(resExportNamespace, name string, normalizedLabel string) *mcsv1alpha1.ResourceExport {
+func (r *LabelIdentityReconciler) getLabelIdentityResourceExport(resExportNamespace, name, normalizedLabel string) *mcsv1alpha1.ResourceExport {
 	return &mcsv1alpha1.ResourceExport{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -282,6 +298,6 @@ func getNormalizedLabel(nsLabels, podLabels map[string]string, ns string) string
 
 // getResourceExportNameForLabelIdentity retrieves the ResourceExport name for exporting
 // label identities in that cluster.
-func getResourceExportNameForLabelIdentity(clusterID string, normalizedLabel string) string {
+func getResourceExportNameForLabelIdentity(clusterID, normalizedLabel string) string {
 	return clusterID + "-" + common.HashLabelIdentity(normalizedLabel)
 }

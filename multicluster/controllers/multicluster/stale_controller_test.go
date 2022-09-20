@@ -595,3 +595,86 @@ func TestStaleController_CleanupMemberClusterAnnounce(t *testing.T) {
 		})
 	}
 }
+
+func TestStaleController_CleanupLabelIdentites(t *testing.T) {
+	normalizedLabelA := "namespace:kubernetes.io/metadata.name=test&pod:app=client"
+	normalizedLabelB := "namespace:kubernetes.io/metadata.name=test&pod:app=db"
+	labelHashA := common.HashLabelIdentity(normalizedLabelA)
+	labelHashB := common.HashLabelIdentity(normalizedLabelB)
+	labelIdentityA := mcsv1alpha1.LabelIdentity{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: labelHashA,
+		},
+		Spec: mcsv1alpha1.LabelIdentitySpec{
+			Label: normalizedLabelA,
+			ID:    1,
+		},
+	}
+	resImpA := mcsv1alpha1.ResourceImport{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "antrea-mcs",
+			Name:      labelHashA,
+		},
+		Spec: mcsv1alpha1.ResourceImportSpec{
+			Kind: common.LabelIdentityKind,
+			LabelIdentity: &mcsv1alpha1.LabelIdentitySpec{
+				Label: normalizedLabelA,
+				ID:    1,
+			},
+		},
+	}
+	labelIdentityB := mcsv1alpha1.LabelIdentity{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: labelHashB,
+		},
+		Spec: mcsv1alpha1.LabelIdentitySpec{
+			Label: normalizedLabelB,
+			ID:    2,
+		},
+	}
+	tests := []struct {
+		name                   string
+		existLabelIdentityList *mcsv1alpha1.LabelIdentityList
+		existingResImpList     *mcsv1alpha1.ResourceImportList
+		wantErr                bool
+	}{
+		{
+			name: "clean up LabelIdentities successfully",
+			existLabelIdentityList: &mcsv1alpha1.LabelIdentityList{
+				Items: []mcsv1alpha1.LabelIdentity{
+					labelIdentityA, labelIdentityB,
+				},
+			},
+			existingResImpList: &mcsv1alpha1.ResourceImportList{
+				Items: []mcsv1alpha1.ResourceImport{
+					resImpA,
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithLists(tt.existLabelIdentityList).Build()
+			fakeRemoteClient := fake.NewClientBuilder().WithScheme(scheme).WithLists(tt.existingResImpList).Build()
+			ca := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", localClusterID, "antrea-mcs")
+
+			mcReconciler := NewMemberClusterSetReconciler(fakeClient, scheme, "default")
+			mcReconciler.SetRemoteCommonArea(ca)
+			c := NewStaleResCleanupController(fakeClient, scheme, "default", mcReconciler, MemberCluster)
+			if err := c.cleanup(); err != nil {
+				t.Errorf("StaleController.cleanup() should clean up all stale LabelIdentities but got err = %v", err)
+			}
+			ctx := context.TODO()
+			labelList := &mcsv1alpha1.LabelIdentityList{}
+			err := fakeClient.List(ctx, labelList, &client.ListOptions{})
+			labelListLen := len(labelList.Items)
+			if err == nil {
+				if labelListLen != 1 {
+					t.Errorf("Should only one valid LabelIdentity left but got %v", labelListLen)
+				}
+			} else {
+				t.Errorf("Should list LabelIdentity successfully but got err = %v", err)
+			}
+		})
+	}
+}

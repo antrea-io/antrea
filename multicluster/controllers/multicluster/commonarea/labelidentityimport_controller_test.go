@@ -17,9 +17,10 @@ limitations under the License.
 package commonarea
 
 import (
-	"reflect"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -82,69 +83,53 @@ var (
 	}
 )
 
-func TestLabelIdentityResourceImportReconclie(t *testing.T) {
+func TestLabelIdentityResourceImportReconcile(t *testing.T) {
 	tests := []struct {
 		name                    string
 		existLabelIdentity      *mcsv1alpha1.LabelIdentity
-		existResImp             *mcsv1alpha1.ResourceImport
+		existResImp             mcsv1alpha1.ResourceImportList
 		resImportNamespacedName types.NamespacedName
-		expLabelIdentity        *mcsv1alpha1.LabelIdentitySpec
+		expLabelIdentity        mcsv1alpha1.LabelIdentitySpec
 		isDeleted               bool
 	}{
 		{
 			"create LabelIdentity",
 			&mcsv1alpha1.LabelIdentity{},
-			labelIdentityResImp1,
+			mcsv1alpha1.ResourceImportList{Items: []mcsv1alpha1.ResourceImport{*labelIdentityResImp1}},
 			resImpNamespacedName,
-			&labelIdentity1.Spec,
+			labelIdentity1.Spec,
 			false,
 		},
 		{
 			"update LabelIdentity",
 			labelIdentity1,
-			labelIdentityResImp2,
+			mcsv1alpha1.ResourceImportList{Items: []mcsv1alpha1.ResourceImport{*labelIdentityResImp2}},
 			resImpNamespacedName,
-			&labelIdentity2.Spec,
+			labelIdentity2.Spec,
 			false,
 		},
 		{
 			"delete LabelIdentity",
 			labelIdentity1,
-			labelIdentityResImp1,
+			mcsv1alpha1.ResourceImportList{},
 			resImpNamespacedName,
-			&mcsv1alpha1.LabelIdentitySpec{},
+			mcsv1alpha1.LabelIdentitySpec{},
 			true,
 		},
 	}
 
 	for _, tt := range tests {
 		fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(tt.existLabelIdentity).Build()
-		fakeRemoteClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(tt.existResImp).Build()
+		fakeRemoteClient := fake.NewClientBuilder().WithScheme(scheme).WithLists(&tt.existResImp).Build()
 		remoteCluster := NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", localClusterID, "default")
 		r := NewLabelIdentityResourceImportReconciler(fakeClient, scheme, fakeClient, localClusterID, "default", remoteCluster)
-		if tt.isDeleted {
-			r.remoteCommonArea.Delete(ctx, tt.existResImp)
-		}
 
 		resImpReq := ctrl.Request{NamespacedName: tt.resImportNamespacedName}
-		if _, err := r.Reconcile(ctx, resImpReq); err != nil {
-			t.Errorf("LabelIdentityResourceImport Reconciler should handle LabelIdentity event successfully but got error = %v", err)
-		} else {
-			actLabelIdentity := &mcsv1alpha1.LabelIdentity{}
-			err := fakeClient.Get(ctx, types.NamespacedName{Namespace: "", Name: tt.resImportNamespacedName.Name}, actLabelIdentity)
-			if err == nil {
-				if !reflect.DeepEqual(*tt.expLabelIdentity, actLabelIdentity.Spec) {
-					t.Errorf("LabelIdentityResourceImport Reconciler imported a LabelIdentity incorrectly. Exp: %v, Act: %v", *tt.expLabelIdentity, actLabelIdentity.Spec)
-				}
-			} else {
-				if tt.isDeleted {
-					if !apierrors.IsNotFound(err) {
-						t.Errorf("LabelIdentityResourceImport Reconciler expects not found error but got error = %v", err)
-					}
-				} else {
-					t.Errorf("Expected a LabelIdentity but got error = %v", err)
-				}
-			}
-		}
+		_, err := r.Reconcile(ctx, resImpReq)
+		require.NoError(t, err, "LabelIdentityResourceImport Reconciler should handle LabelIdentity event successfully but got error")
+		actLabelIdentity := &mcsv1alpha1.LabelIdentity{}
+		err = fakeClient.Get(ctx, types.NamespacedName{Namespace: "", Name: tt.resImportNamespacedName.Name}, actLabelIdentity)
+		assert.Equal(t, tt.isDeleted, apierrors.IsNotFound(err))
+		assert.Equal(t, tt.expLabelIdentity, actLabelIdentity.Spec)
 	}
 }

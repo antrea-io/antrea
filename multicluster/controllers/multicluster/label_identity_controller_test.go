@@ -90,61 +90,85 @@ var (
 	podANamespacedName = &types.NamespacedName{Namespace: "test-ns", Name: "pod-a"}
 	podBNamespacedName = &types.NamespacedName{Namespace: "test-ns", Name: "pod-b"}
 	podCNamespacedName = &types.NamespacedName{Namespace: "test-ns", Name: "pod-c"}
+	podAName           = podANamespacedName.String()
+	podBName           = podBNamespacedName.String()
 )
 
 func TestLabelIdentityReconciler(t *testing.T) {
 	tests := []struct {
-		name                  string
-		existingPods          *v1.PodList
-		podUpdated            *v1.Pod
-		podEventNamespaceName *types.NamespacedName
-		eventType             int
-		expNormalizedLabels   []string
-		expLabelsToPodsCache  map[string]sets.String
-		expPodLabelCache      map[string]string
+		name                   string
+		existingPods           *v1.PodList
+		podEvent               *v1.Pod
+		podNamespaceName       *types.NamespacedName
+		eventType              int
+		expRequeue             bool
+		labelUpdatesInProgress sets.String
+		expNormalizedLabels    []string
+		expLabelsToPodsCache   map[string]sets.String
+		expPodLabelCache       map[string]string
 	}{
 		{
-			"pod add event",
-			&v1.PodList{Items: []v1.Pod{*podA}},
-			nil,
-			podANamespacedName,
-			addEvent,
-			[]string{normalizedLabel},
-			map[string]sets.String{normalizedLabel: sets.NewString(podANamespacedName.String())},
-			map[string]string{podANamespacedName.String(): normalizedLabel},
+			name:                 "pod add event",
+			existingPods:         &v1.PodList{Items: []v1.Pod{}},
+			podEvent:             podA,
+			podNamespaceName:     podANamespacedName,
+			eventType:            addEvent,
+			expNormalizedLabels:  []string{normalizedLabel},
+			expLabelsToPodsCache: map[string]sets.String{normalizedLabel: sets.NewString(podAName)},
+			expPodLabelCache:     map[string]string{podANamespacedName.String(): normalizedLabel},
 		},
 		{
-			"pod update event",
-			&v1.PodList{Items: []v1.Pod{*podA}},
-			newPodA,
-			podANamespacedName,
-			updateEvent,
-			[]string{normalizedLabelDB},
-			map[string]sets.String{normalizedLabelDB: sets.NewString(podANamespacedName.String())},
-			map[string]string{podANamespacedName.String(): normalizedLabelDB},
+			name:                 "pod add event existing label",
+			existingPods:         &v1.PodList{Items: []v1.Pod{*podA}},
+			podEvent:             podB,
+			podNamespaceName:     podBNamespacedName,
+			eventType:            addEvent,
+			expNormalizedLabels:  []string{normalizedLabel},
+			expLabelsToPodsCache: map[string]sets.String{normalizedLabel: sets.NewString(podAName, podBName)},
+			expPodLabelCache:     map[string]string{podAName: normalizedLabel, podBName: normalizedLabel},
 		},
 		{
-			"pod delete event stale label",
-			&v1.PodList{Items: []v1.Pod{*podA}},
-			podA,
-			podANamespacedName,
-			deleteEvent,
-			[]string{},
-			map[string]sets.String{},
-			map[string]string{},
+			name:                   "pod add event label resExport creating/deleting",
+			existingPods:           &v1.PodList{Items: []v1.Pod{}},
+			podEvent:               podB,
+			podNamespaceName:       podBNamespacedName,
+			eventType:              addEvent,
+			labelUpdatesInProgress: sets.NewString(normalizedLabel),
+			expRequeue:             true,
+			expLabelsToPodsCache:   map[string]sets.String{},
+			expPodLabelCache:       map[string]string{},
 		},
 		{
-			"pod delete event no stale label",
-			&v1.PodList{Items: []v1.Pod{*podA, *podB}},
-			podB,
-			podBNamespacedName,
-			deleteEvent,
-			[]string{normalizedLabel},
-			map[string]sets.String{normalizedLabel: sets.NewString(podANamespacedName.String())},
-			map[string]string{podANamespacedName.String(): normalizedLabel},
+			name:                 "pod update event",
+			existingPods:         &v1.PodList{Items: []v1.Pod{*podA}},
+			podEvent:             newPodA,
+			podNamespaceName:     podANamespacedName,
+			eventType:            updateEvent,
+			expNormalizedLabels:  []string{normalizedLabelDB},
+			expLabelsToPodsCache: map[string]sets.String{normalizedLabelDB: sets.NewString(podAName)},
+			expPodLabelCache:     map[string]string{podAName: normalizedLabelDB},
+		},
+		{
+			name:                 "pod delete event stale label",
+			existingPods:         &v1.PodList{Items: []v1.Pod{*podA}},
+			podEvent:             podA,
+			podNamespaceName:     podANamespacedName,
+			eventType:            deleteEvent,
+			expNormalizedLabels:  []string{},
+			expLabelsToPodsCache: map[string]sets.String{},
+			expPodLabelCache:     map[string]string{},
+		},
+		{
+			name:                 "pod delete event no stale label",
+			existingPods:         &v1.PodList{Items: []v1.Pod{*podA, *podB}},
+			podEvent:             podB,
+			podNamespaceName:     podBNamespacedName,
+			eventType:            deleteEvent,
+			expNormalizedLabels:  []string{normalizedLabel},
+			expLabelsToPodsCache: map[string]sets.String{normalizedLabel: sets.NewString(podAName)},
+			expPodLabelCache:     map[string]string{podAName: normalizedLabel},
 		},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithLists(tt.existingPods).WithObjects(ns).Build()
@@ -161,36 +185,37 @@ func TestLabelIdentityReconciler(t *testing.T) {
 						Name:      p.Name,
 					},
 				}
-				if _, err := r.Reconcile(ctx, req); err != nil {
-					t.Errorf("LabelIdentity Reconciler got error during reconciling. error = %v", err)
-					continue
-				}
+				_, err := r.Reconcile(ctx, req)
+				assert.NoError(t, err, "LabelIdentity Reconciler got error during reconciling initial Pod events")
 			}
-			req := ctrl.Request{NamespacedName: *tt.podEventNamespaceName}
+			if len(tt.labelUpdatesInProgress) > 0 {
+				r.labelExportUpdatesInProgress = tt.labelUpdatesInProgress
+			}
 			switch tt.eventType {
+			case addEvent:
+				tt.podEvent.ResourceVersion = ""
+				r.Client.Create(ctx, tt.podEvent, &client.CreateOptions{})
 			case updateEvent:
-				r.Client.Update(ctx, tt.podUpdated, &client.UpdateOptions{})
-				if _, err := r.Reconcile(ctx, req); err != nil {
-					t.Errorf("LabelIdentity Reconciler got error during reconciling. error = %v", err)
-				}
+				r.Client.Update(ctx, tt.podEvent, &client.UpdateOptions{})
 			case deleteEvent:
-				r.Client.Delete(ctx, tt.podUpdated, &client.DeleteOptions{})
-				if _, err := r.Reconcile(ctx, req); err != nil {
-					t.Errorf("LabelIdentity Reconciler got error during reconciling. error = %v", err)
-				}
+				r.Client.Delete(ctx, tt.podEvent, &client.DeleteOptions{})
 			}
+			var err error
+			req := ctrl.Request{NamespacedName: *tt.podNamespaceName}
+
+			ctrlResult, err := r.Reconcile(ctx, req)
+			assert.NoError(t, err, "LabelIdentity Reconciler got error during reconciling Pod event")
+			assert.Equal(t, tt.expRequeue, ctrlResult.Requeue, "Unexpected requeue result from reconciling")
+
 			if !reflect.DeepEqual(r.labelToPodsCache, tt.expLabelsToPodsCache) {
 				t.Errorf("Unexpected labelToPodsCache in LabelIdentity Reconciler. Exp: %s, Act: %s", tt.expLabelsToPodsCache, r.labelToPodsCache)
 			}
 			if !reflect.DeepEqual(r.podLabelCache, tt.expPodLabelCache) {
 				t.Errorf("Unexpected podLabelCache in LabelIdentity Reconciler. Exp: %s, Act: %s", tt.expPodLabelCache, r.podLabelCache)
 			}
-
 			actLabelIdentityResourceExports := &mcsv1alpha1.ResourceExportList{}
-			err := commonArea.List(ctx, actLabelIdentityResourceExports)
-			if err != nil {
-				t.Errorf("Failed to list ResourceExports after reconciliation")
-			}
+			err = commonArea.List(ctx, actLabelIdentityResourceExports)
+			assert.NoError(t, err, "Failed to list ResourceExports after reconciliation")
 			var actNormalizedLabels []string
 			for _, re := range actLabelIdentityResourceExports.Items {
 				if re.Spec.LabelIdentity != nil {

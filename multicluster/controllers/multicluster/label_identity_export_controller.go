@@ -43,16 +43,20 @@ const (
 	maxIDForAllocation = 16777214
 )
 
+// LabelIdentityExportReconciler watches LabelIdentity ResourceExport events in the Common Area,
+// computes if such event cause a new LabelIdentity to become present/stale in the entire
+// ClusterSet, and update ResourceImports accordingly.
 type (
 	LabelIdentityExportReconciler struct {
 		client.Client
-		Scheme           *runtime.Scheme
-		mutex            sync.RWMutex
-		namespace        string
-		clusterToLabels  map[string]sets.String
-		labelsToClusters map[string]sets.String
-		labelsToID       map[string]uint32
-		allocator        *idAllocator
+		Scheme                    *runtime.Scheme
+		mutex                     sync.RWMutex
+		namespace                 string
+		clusterToLabels           map[string]sets.String
+		labelsToClusters          map[string]sets.String
+		labelImpUpdatesInProgress sets.String
+		labelsToID                map[string]uint32
+		allocator                 *idAllocator
 	}
 )
 
@@ -61,13 +65,14 @@ func NewLabelIdentityExportReconciler(
 	scheme *runtime.Scheme,
 	namespace string) *LabelIdentityExportReconciler {
 	return &LabelIdentityExportReconciler{
-		Client:           client,
-		Scheme:           scheme,
-		namespace:        namespace,
-		clusterToLabels:  map[string]sets.String{},
-		labelsToClusters: map[string]sets.String{},
-		labelsToID:       map[string]uint32{},
-		allocator:        newIDAllocator(1, maxIDForAllocation),
+		Client:                    client,
+		Scheme:                    scheme,
+		namespace:                 namespace,
+		clusterToLabels:           map[string]sets.String{},
+		labelsToClusters:          map[string]sets.String{},
+		labelImpUpdatesInProgress: sets.NewString(),
+		labelsToID:                map[string]uint32{},
+		allocator:                 newIDAllocator(1, maxIDForAllocation),
 	}
 }
 
@@ -79,15 +84,12 @@ func (r *LabelIdentityExportReconciler) Reconcile(ctx context.Context, req ctrl.
 	if err := r.Client.Get(ctx, req.NamespacedName, &resExport); err != nil {
 		if apierrors.IsNotFound(err) {
 			klog.V(2).InfoS("ResourceExport is deleted", "resourceexport", req.NamespacedName, "cluster", clusterID)
-			return ctrl.Result{}, r.onLabelExportDelete(ctx, clusterID, labelHash)
+			return r.onLabelExportDelete(ctx, clusterID, labelHash)
 		}
 		return ctrl.Result{}, err
 	}
 	normalizedLabel := resExport.Spec.LabelIdentity.NormalizedLabel
-	if err := r.onLabelExportAdd(ctx, clusterID, labelHash, normalizedLabel); err != nil {
-		return ctrl.Result{}, err
-	}
-	return ctrl.Result{}, nil
+	return r.onLabelExportAdd(ctx, clusterID, labelHash, normalizedLabel)
 }
 
 // SetupWithManager sets up the controller with the Manager.
@@ -115,69 +117,61 @@ func (r *LabelIdentityExportReconciler) SetupWithManager(mgr ctrl.Manager) error
 		Complete(r)
 }
 
-func (r *LabelIdentityExportReconciler) onLabelExportDelete(ctx context.Context, clusterID, labelHash string) error {
+// This function needs to be called with labelMutex acquired.
+func (r *LabelIdentityExportReconciler) setLabelExportUpdatesInProgress(labelHash string) {
+	r.labelImpUpdatesInProgress.Insert(labelHash)
+	// Unlock the mutex to allow cache updates for other labelHashes. Any worker operating on
+	// the same labelHash will be blocked as it is added into labelImpUpdatesInProgress.
+	r.mutex.Unlock()
+}
+
+func (r *LabelIdentityExportReconciler) unsetLabelExportUpdatesInProgress(labelHash string) {
+	r.mutex.Lock()
+	r.labelImpUpdatesInProgress.Delete(labelHash)
+}
+
+// onLabelExportDelete updates the label to cluster caches, and deletes stale LabelIdentity kind of
+// ResourceImport object if needed.
+func (r *LabelIdentityExportReconciler) onLabelExportDelete(ctx context.Context, clusterID, labelHash string) (ctrl.Result, error) {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
-	originalClusterLabels, ok := r.clusterToLabels[clusterID]
-	if !ok || !originalClusterLabels.Has(labelHash) {
-		return nil
-	}
-	return r.cleanupLabelIdentityResourceImports(ctx, clusterID, labelHash)
-}
 
-func (r *LabelIdentityExportReconciler) onLabelExportAdd(ctx context.Context, clusterID, labelHash, label string) error {
-	r.mutex.Lock()
-	defer r.mutex.Unlock()
-	originalClusterLabels, ok := r.clusterToLabels[clusterID]
-	if ok && originalClusterLabels.Has(labelHash) {
-		return nil
+	if r.labelImpUpdatesInProgress.Has(labelHash) {
+		return ctrl.Result{Requeue: true}, nil
 	}
-	return r.refreshLabelIdentityResourceImports(ctx, clusterID, labelHash, label)
-}
-
-// refreshLabelIdentityResourceImports creates new LabelIdentity kind of
-// ResourceImport object if needed.
-func (r *LabelIdentityExportReconciler) refreshLabelIdentityResourceImports(ctx context.Context,
-	clusterID, addedClusterLabelHash, addedLabel string) error {
-	if _, ok := r.labelsToClusters[addedClusterLabelHash]; !ok {
-		// This is a new label identity in the entire ClusterSet.
-		if !r.handleLabelIdentityAdd(ctx, addedClusterLabelHash, addedLabel, clusterID) {
-			return fmt.Errorf("failed to create LabelIdentity kind of ResourceImport for label %v of cluster %s", addedClusterLabelHash, clusterID)
-		}
-	}
-	return nil
-}
-
-// cleanupLabelIdentityResourceImports deletes stale LabelIdentity kind of
-// ResourceImport object if needed.
-func (r *LabelIdentityExportReconciler) cleanupLabelIdentityResourceImports(ctx context.Context,
-	clusterID, deletedClusterLabelHash string) error {
-	deletedCluster := sets.NewString(clusterID)
-	if clusters, ok := r.labelsToClusters[deletedClusterLabelHash]; ok && clusters.Equal(deletedCluster) {
+	if clusters, ok := r.labelsToClusters[labelHash]; ok && len(clusters) == 1 && clusters.Has(clusterID) {
 		// The cluster where the label identity is being deleted was the only cluster that has
 		// the label identity. Hence, the label identity is no longer present in the ClusterSet.
-		if !r.handleLabelIdentityDelete(ctx, deletedClusterLabelHash, clusterID) {
-			return fmt.Errorf("failed to delete LabelIdentity kind of ResourceImport for label %v of cluster %s", deletedClusterLabelHash, clusterID)
+		return r.handleLabelIdentityDelete(ctx, labelHash, clusterID)
+	} else {
+		// Remove mapping from label to cluster
+		clusters.Delete(clusterID)
+		if clusterLabels, ok := r.clusterToLabels[clusterID]; ok {
+			clusterLabels.Delete(labelHash)
 		}
+		return ctrl.Result{}, nil
 	}
-	return nil
 }
 
-// handleLabelIdentityDelete deletes the ResourceImport of a label identity
-// hash that no longer exists in the ClusterSet. Note that the ID of a label
-// identity hash is only released if the deletion of its corresponding
-// ResourceImport succeeded.
+// handleLabelIdentityDelete deletes the ResourceImport of a label identity hash that no longer exists
+// in the ClusterSet. Note that the ID of a label identity hash is only released if the deletion of its
+// corresponding ResourceImport succeeded.
+// This function needs to be called with reconciler's mutex acquired, and will return with the mutex
+// remain locked.
 func (r *LabelIdentityExportReconciler) handleLabelIdentityDelete(ctx context.Context,
-	deletedLabelHash, clusterID string) bool {
+	deletedLabelHash, clusterID string) (ctrl.Result, error) {
+	r.setLabelExportUpdatesInProgress(deletedLabelHash)
 	labelIdentityImport := &mcsv1alpha1.ResourceImport{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      deletedLabelHash,
 			Namespace: r.namespace,
 		},
 	}
-	if err := r.Client.Delete(ctx, labelIdentityImport, &client.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
+	err := r.Client.Delete(ctx, labelIdentityImport, &client.DeleteOptions{})
+	r.unsetLabelExportUpdatesInProgress(deletedLabelHash)
+	if err != nil && !apierrors.IsNotFound(err) {
 		klog.ErrorS(err, "Failed to delete LabelIdentity kind of ResourceImport for stale label", "label", deletedLabelHash)
-		return false
+		return ctrl.Result{}, err
 	}
 	// Delete caches for the label and release the ID assigned for the label
 	id := r.labelsToID[deletedLabelHash]
@@ -187,36 +181,74 @@ func (r *LabelIdentityExportReconciler) handleLabelIdentityDelete(ctx context.Co
 	if clusterLabels, ok := r.clusterToLabels[clusterID]; ok {
 		clusterLabels.Delete(deletedLabelHash)
 	}
-	return true
+	return ctrl.Result{}, nil
 }
 
-// handleLabelIdentityAdd creates ResourceImport of a label identity that is added in
-// the ClusterSet. Note that the ID of a label identity is only allocated and stored
-// if the creation of its corresponding ResourceImport succeeded.
+// onLabelExportAdd updates the label to cluster caches, and creates LabelIdentity kind of
+// ResourceImport object if needed.
+func (r *LabelIdentityExportReconciler) onLabelExportAdd(ctx context.Context, clusterID, labelHash, label string) (ctrl.Result, error) {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+
+	if r.labelImpUpdatesInProgress.Has(labelHash) {
+		return ctrl.Result{Requeue: true}, nil
+	}
+	if clusters, ok := r.labelsToClusters[labelHash]; !ok {
+		// This is a new label identity in the entire ClusterSet.
+		return r.handleLabelIdentityAdd(ctx, labelHash, label, clusterID)
+	} else {
+		clusters.Insert(clusterID)
+		if labels, ok := r.clusterToLabels[clusterID]; ok {
+			labels.Insert(labelHash)
+		} else {
+			r.clusterToLabels[clusterID] = sets.NewString(labelHash)
+		}
+		return ctrl.Result{}, nil
+	}
+}
+
+// handleLabelIdentityAdd creates ResourceImport of a label identity that is added in the ClusterSet.
+// Note that the ID of a label identity is only allocated and stored if the creation of its corresponding
+// ResourceImport succeeded.
+// This function needs to be called with reconciler's mutex acquired, and will return with the mutex
+// remain locked.
 func (r *LabelIdentityExportReconciler) handleLabelIdentityAdd(ctx context.Context,
-	labelHash, label, clusterID string) bool {
+	labelHash, label, clusterID string) (ctrl.Result, error) {
+
 	labelIdentityResImport := &mcsv1alpha1.ResourceImport{}
 	ResImpKey := types.NamespacedName{Name: labelHash, Namespace: r.namespace}
-	if err := r.Client.Get(ctx, ResImpKey, labelIdentityResImport); err == nil {
+	err := r.Client.Get(ctx, ResImpKey, labelIdentityResImport)
+	if err == nil {
 		idAllocated := labelIdentityResImport.Spec.LabelIdentity.ID
 		if err := r.allocator.setAllocated(idAllocated); err == nil {
-			return true
-		} else if err := r.Client.Delete(ctx, labelIdentityResImport, &client.DeleteOptions{}); err != nil {
-			// ResourceImport with stale label identity to ID mapping must be deleted.
-			klog.ErrorS(err, "Failed to delete outdated LabelIdentity kind of ResourceImport for label", "label", label)
+			r.updateClusterLabelIDCache(clusterID, labelHash, idAllocated)
+			return ctrl.Result{}, nil
+		} else {
+			if err := r.Client.Delete(ctx, labelIdentityResImport, &client.DeleteOptions{}); err != nil {
+				klog.ErrorS(err, "Failed to delete outdated LabelIdentity kind of ResourceImport for label", "label", label)
+				return ctrl.Result{}, err
+			}
 		}
 	}
 	id, err := r.allocator.allocate()
 	if err != nil {
 		klog.ErrorS(err, "Failed to allocate ID for new label", "label", label)
-		return false
+		return ctrl.Result{}, err
 	}
+	r.setLabelExportUpdatesInProgress(labelHash)
 	labelIdentityResImport = getLabelIdentityResImport(labelHash, label, r.namespace, id)
-	if err := r.Client.Create(ctx, labelIdentityResImport, &client.CreateOptions{}); err != nil {
+	err = r.Client.Create(ctx, labelIdentityResImport, &client.CreateOptions{})
+	r.unsetLabelExportUpdatesInProgress(labelHash)
+	if err != nil {
 		klog.ErrorS(err, "Failed to create LabelIdentity kind of ResourceImport for new label", "label", label)
 		r.allocator.release(id)
-		return false
+		return ctrl.Result{}, err
 	}
+	r.updateClusterLabelIDCache(clusterID, labelHash, id)
+	return ctrl.Result{}, nil
+}
+
+func (r *LabelIdentityExportReconciler) updateClusterLabelIDCache(clusterID, labelHash string, id uint32) {
 	r.labelsToID[labelHash] = id
 	if clusters, ok := r.labelsToClusters[labelHash]; ok {
 		clusters.Insert(clusterID)
@@ -228,7 +260,6 @@ func (r *LabelIdentityExportReconciler) handleLabelIdentityAdd(ctx context.Conte
 	} else {
 		r.clusterToLabels[clusterID] = sets.NewString(labelHash)
 	}
-	return true
 }
 
 func getLabelIdentityResImport(labelHash, label, ns string, id uint32) *mcsv1alpha1.ResourceImport {
