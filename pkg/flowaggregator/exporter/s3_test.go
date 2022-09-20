@@ -15,6 +15,7 @@
 package exporter
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -28,6 +29,13 @@ import (
 )
 
 func TestS3_UpdateOptions(t *testing.T) {
+	GetS3BucketRegionSaved := s3uploader.GetS3BucketRegion
+	s3uploader.GetS3BucketRegion = func(ctx context.Context, bucket string, regionHint string) (string, error) {
+		return "us-west-2", nil
+	}
+	defer func() {
+		s3uploader.GetS3BucketRegion = GetS3BucketRegionSaved
+	}()
 	compress := true
 	opt := &options.Options{
 		Config: &flowaggregator.FlowAggregatorConfig{

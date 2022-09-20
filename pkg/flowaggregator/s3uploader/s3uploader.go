@@ -40,6 +40,9 @@ const (
 	maxNumBuffersPendingUpload = 5
 )
 
+// GetS3BucketRegion is used for unit testing
+var GetS3BucketRegion = getBucketRegion
+
 type stopPayload struct {
 	flushQueue bool
 }
@@ -100,14 +103,37 @@ func (u *S3Uploader) Upload(ctx context.Context, input *s3.PutObjectInput, awsS3
 	return awsS3Uploader.Upload(ctx, input, opts...)
 }
 
+// getBucketRegion determines the exact region in which the bucket is
+// located. regionHint can be any region in the same partition as the one in
+// which the bucket is located.
+func getBucketRegion(ctx context.Context, bucket string, regionHint string) (string, error) {
+	awsCfg, err := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion(regionHint))
+	if err != nil {
+		return "", fmt.Errorf("unable to load AWS SDK config: %w", err)
+
+	}
+	s3Client := s3.NewFromConfig(awsCfg)
+	bucketRegion, err := s3manager.GetBucketRegion(ctx, s3Client, bucket)
+	if err != nil {
+		return "", fmt.Errorf("unable to determine region for bucket '%s', make sure the bucket exists and set the region parameter appropriately: %w", bucket, err)
+	}
+	return bucketRegion, err
+}
+
 func NewS3UploadProcess(input S3Input, clusterUUID string) (*S3UploadProcess, error) {
 	config := input.Config
-	cfg, err := awsconfig.LoadDefaultConfig(context.TODO(), awsconfig.WithRegion(config.Region))
+	region, err := GetS3BucketRegion(context.TODO(), config.BucketName, config.Region)
+	if err != nil {
+		return nil, err
+	}
+	klog.InfoS("S3 bucket region successfully determined for flow upload", "bucket", config.BucketName, "region", region)
+	awsCfg, err := awsconfig.LoadDefaultConfig(context.TODO(), awsconfig.WithRegion(region))
 	if err != nil {
 		return nil, fmt.Errorf("error when loading AWS config: %w", err)
 	}
-	awsS3Client := s3.NewFromConfig(cfg)
+	awsS3Client := s3.NewFromConfig(awsCfg)
 	awsS3Uploader := s3manager.NewUploader(awsS3Client)
+
 	buf := &bytes.Buffer{}
 	// #nosec G404: random number generator not used for security purposes
 	nameRand := rand.New(rand.NewSource(time.Now().UnixNano()))
@@ -115,7 +141,7 @@ func NewS3UploadProcess(input S3Input, clusterUUID string) (*S3UploadProcess, er
 	s3ExportProcess := &S3UploadProcess{
 		bucketName:       config.BucketName,
 		bucketPrefix:     config.BucketPrefix,
-		region:           config.Region,
+		region:           region,
 		compress:         *config.Compress,
 		maxRecordPerFile: config.MaxRecordsPerFile,
 		uploadInterval:   input.UploadInterval,
