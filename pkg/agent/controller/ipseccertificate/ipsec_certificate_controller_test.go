@@ -311,10 +311,16 @@ func TestController_RotateCertificates(t *testing.T) {
 	if delta < 0 {
 		delta = -delta
 	}
-	// the rotation interval should be in [7s, 9s], but it takes time to process the CSR request,
-	// so add one second to the upper bound.
-	assert.Less(t, delta, time.Second*10)
-	assert.LessOrEqual(t, time.Second*7, delta)
+	// the rotation interval is determined by nextRotationDeadline as notBefore + (notAfter -
+	// notBefore) * k, where k is >= 0.7 and <= 0.9. We would therefore expect the delta to
+	// fall in the interval [7s, 9s]. However we have to account for the following:
+	// a) the accuracy of notAfter is at the second level, which means that it will be
+	// truncated, which means that there can actually be less than 7s between the
+	// CreationTimestamp of the first certificate and the rotation deadline. As a result, we
+	// need to set the lower bound to 6s.
+	// b) it takes time to process the CSR request so we add one second to the upper bound.
+	assert.Less(t, delta, 10*time.Second)
+	assert.LessOrEqual(t, 6*time.Second, delta)
 }
 
 func newIPsecCertTemplate(t *testing.T, nodeName string, notBefore, notAfter time.Time) *x509.Certificate {
