@@ -430,9 +430,9 @@ func (o *Options) validateK8sNodeOptions() error {
 		}
 	}
 	if (features.DefaultFeatureGate.Enabled(features.Multicluster) || o.config.Multicluster.Enable) &&
-		encapMode != config.TrafficEncapModeEncap {
-		// Only Encap mode is supported for Multi-cluster feature.
-		return fmt.Errorf("Multicluster is only applicable to the %s mode", config.TrafficEncapModeEncap)
+		!(encapMode == config.TrafficEncapModeEncap || encapMode == config.TrafficEncapModeNetworkPolicyOnly) {
+		// Only Encap or networkPolicyOnly is supported for Multi-cluster feature.
+		return fmt.Errorf("Multicluster is only applicable to the %s mode or %s mode", config.TrafficEncapModeEncap, config.TrafficEncapModeNetworkPolicyOnly)
 	}
 	if features.DefaultFeatureGate.Enabled(features.NodePortLocal) {
 		startPort, endPort, err := parsePortRange(o.config.NodePortLocal.PortRange)

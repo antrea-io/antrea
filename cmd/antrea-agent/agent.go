@@ -134,6 +134,7 @@ func run(o *Options) error {
 	enableBridgingMode := enableAntreaIPAM && o.config.EnableBridgingMode
 	// Bridging mode will connect the uplink interface to the OVS bridge.
 	connectUplinkToBridge := enableBridgingMode
+	multiclusterEnabled := features.DefaultFeatureGate.Enabled(features.Multicluster) && o.config.Multicluster.Enable
 
 	ovsDatapathType := ovsconfig.OVSDatapathType(o.config.OVSDatapathType)
 	ovsBridgeClient := ovsconfig.NewOVSBridge(o.config.OVSBridge, ovsDatapathType, ovsdbConnection)
@@ -148,7 +149,7 @@ func run(o *Options) error {
 		connectUplinkToBridge,
 		multicastEnabled,
 		features.DefaultFeatureGate.Enabled(features.TrafficControl),
-		features.DefaultFeatureGate.Enabled(features.Multicluster),
+		multiclusterEnabled,
 	)
 
 	var serviceCIDRNet *net.IPNet
@@ -247,7 +248,8 @@ func run(o *Options) error {
 		o.config.ExternalNode.ExternalNodeNamespace,
 		features.DefaultFeatureGate.Enabled(features.AntreaProxy),
 		o.config.AntreaProxy.ProxyAll,
-		connectUplinkToBridge)
+		connectUplinkToBridge,
+		multiclusterEnabled)
 	err = agentInitializer.Initialize()
 	if err != nil {
 		return fmt.Errorf("error initializing agent: %v", err)
@@ -281,7 +283,7 @@ func run(o *Options) error {
 	var mcRouteController *mcroute.MCRouteController
 	var mcInformerFactory mcinformers.SharedInformerFactory
 
-	if features.DefaultFeatureGate.Enabled(features.Multicluster) && o.config.Multicluster.Enable {
+	if multiclusterEnabled {
 		mcNamespace := env.GetPodNamespace()
 		if o.config.Multicluster.Namespace != "" {
 			mcNamespace = o.config.Multicluster.Namespace
@@ -723,7 +725,7 @@ func run(o *Options) error {
 		go mcastController.Run(stopCh)
 	}
 
-	if features.DefaultFeatureGate.Enabled(features.Multicluster) && o.config.Multicluster.Enable {
+	if multiclusterEnabled {
 		mcInformerFactory.Start(stopCh)
 		go mcRouteController.Run(stopCh)
 	}
