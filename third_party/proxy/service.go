@@ -207,7 +207,10 @@ func (sct *ServiceChangeTracker) newBaseServiceInfo(port *v1.ServicePort, servic
 	// Obtain Load Balancer Ingress IPs
 	var ips []string
 	for _, ing := range service.Status.LoadBalancer.Ingress {
-		ips = append(ips, ing.IP)
+		// IP is optional and may be not set for load-balancer ingress points that are DNS based.
+		if ing.IP != "" {
+			ips = append(ips, ing.IP)
+		}
 	}
 
 	if len(ips) > 0 {
@@ -286,8 +289,10 @@ func NewServiceChangeTracker(makeServiceInfo makeServicePortFunc,
 // otherwise return false.  Update can be used to add/update/delete items of ServiceChangeMap.  For example,
 // Add item
 //   - pass <nil, service> as the <previous, current> pair.
+//
 // Update item
 //   - pass <oldService, service> as the <previous, current> pair.
+//
 // Delete item
 //   - pass <service, nil> as the <previous, current> pair.
 func (sct *ServiceChangeTracker) Update(previous, current *v1.Service) bool {
@@ -409,17 +414,18 @@ func (sm *ServiceMap) apply(changes *ServiceChangeTracker, UDPStaleClusterIP set
 // tell if a service is deleted or updated.
 // The returned value is one of the arguments of ServiceMap.unmerge().
 // ServiceMap A Merge ServiceMap B will do following 2 things:
-//   * update ServiceMap A.
-//   * produce a string set which stores all other ServiceMap's ServicePortName.String().
+//   - update ServiceMap A.
+//   - produce a string set which stores all other ServiceMap's ServicePortName.String().
+//
 // For example,
 //   - A{}
 //   - B{{"ns", "cluster-ip", "http"}: {"172.16.55.10", 1234, "TCP"}}
-//     - A updated to be {{"ns", "cluster-ip", "http"}: {"172.16.55.10", 1234, "TCP"}}
-//     - produce string set {"ns/cluster-ip:http"}
+//   - A updated to be {{"ns", "cluster-ip", "http"}: {"172.16.55.10", 1234, "TCP"}}
+//   - produce string set {"ns/cluster-ip:http"}
 //   - A{{"ns", "cluster-ip", "http"}: {"172.16.55.10", 345, "UDP"}}
 //   - B{{"ns", "cluster-ip", "http"}: {"172.16.55.10", 1234, "TCP"}}
-//     - A updated to be {{"ns", "cluster-ip", "http"}: {"172.16.55.10", 1234, "TCP"}}
-//     - produce string set {"ns/cluster-ip:http"}
+//   - A updated to be {{"ns", "cluster-ip", "http"}: {"172.16.55.10", 1234, "TCP"}}
+//   - produce string set {"ns/cluster-ip:http"}
 func (sm *ServiceMap) merge(other ServiceMap) sets.String {
 	// existingPorts is going to store all identifiers of all services in `other` ServiceMap.
 	existingPorts := sets.NewString()
