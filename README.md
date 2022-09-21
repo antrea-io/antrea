@@ -87,12 +87,12 @@ Also check out [@ProjectAntrea](https://twitter.com/ProjectAntrea) on Twitter!
 * **Run everywhere**: Run Antrea in private clouds, public clouds and on bare
   metal, and select the appropriate traffic mode (with or without overlay) based
   on your infrastructure and use case.
-* **Windows Node support**: Thanks to the portability of Open vSwitch, Antrea
-  can use the same data plane implementation on both Linux and Windows
-  Kubernetes Nodes.
 * **Comprehensive policy model**: Antrea provides a comprehensive network policy
   model, which builds upon Kubernetes Network Policies with new features such as
   policy tiering, rule priorities and cluster-level policies.
+* **Windows Node support**: Thanks to the portability of Open vSwitch, Antrea
+  can use the same data plane implementation on both Linux and Windows
+  Kubernetes Nodes.
 * **Troubleshooting and monitoring tools**: Antrea comes with CLI and UI tools
   which provide visibility and diagnostics capabilities (packet tracing, policy
   analysis, flow inspection). It exposes Prometheus metrics and supports
@@ -101,6 +101,10 @@ Also check out [@ProjectAntrea](https://twitter.com/ProjectAntrea) on Twitter!
   enable fine-grained visibility into the communication among Kubernetes
   workloads. Theia provides visualization for Antrea network flows in Grafana
   dashboards, and recommends Network Policies to secure the workloads.
+* **Network Policies for virtual machines**: Antrea native policies can be
+  enforced on non-Kubernetes Nodes including VMs and baremetal servers. Project
+  [Nephe](https://github.com/antrea-io/nephe) implements security policies for
+  VMs across clouds, leveraging Antrea native policies.
 * **Encryption**: Encryption of inter-Node Pod traffic with IPsec or WireGuard
   tunnels.
 * **Easy deployment**: Antrea is deployed by applying a single YAML manifest
