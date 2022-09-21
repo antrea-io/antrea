@@ -3,8 +3,8 @@ package sorter
 import (
 	//"encoding/json"
 	"errors"
-	//"fmt"
 	"io"
+
 	//"net"
 	"reflect"
 	"sort"
@@ -18,6 +18,8 @@ import (
 	"antrea.io/antrea/pkg/antctl/transform/addressgroup"
 	"antrea.io/antrea/pkg/antctl/transform/appliedtogroup"
 	"antrea.io/antrea/pkg/antctl/transform/networkpolicy"
+
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/kubectl/pkg/cmd/get"
 )
@@ -30,11 +32,16 @@ func objectTransform(o interface{}, _ map[string]string) (interface{}, error) {
 
 	case *cpv1beta.AddressGroup:
 		group := o.(*cpv1beta.AddressGroup)
-		var pods []common.GroupMember
-		for _, pod := range group.GroupMembers {
-			pods = append(pods, common.GroupMemberPodTransform(pod))
+		var pods, nodes []common.GroupMember
+		for _, member := range group.GroupMembers {
+			gm := common.GroupMemberPodTransform(member)
+			if member.Node != nil {
+				nodes = append(nodes, gm)
+				continue
+			}
+			pods = append(pods, gm)
 		}
-		return addressgroup.Response{Name: group.Name, Pods: pods}, nil
+		return addressgroup.Response{Name: group.Name, Pods: pods, Nodes: nodes}, nil
 
 	case *cpv1beta.AppliedToGroup:
 		group := o.(*cpv1beta.AppliedToGroup)
@@ -43,7 +50,6 @@ func objectTransform(o interface{}, _ map[string]string) (interface{}, error) {
 			pods = append(pods, common.GroupMemberPodTransform(pod))
 		}
 		return appliedtogroup.Response{Name: group.GetName(), Pods: pods}, nil
-
 	default:
 		return o, errors.New("please specify right resource ")
 
@@ -59,16 +65,76 @@ func listTransform(l interface{}, opts map[string]string) (interface{}, error) {
 		if sb, ok := opts["sort-by"]; ok {
 			sortBy = sb
 		}
+		//var nlist []cpv1beta.NetworkPolicy
+		//flagvalue := sortByEffectivePriority, sortBycreationtime, sortByName, sortByresourceVersion
+		//flagvalue = [4]string{"sortByEffectivePriority, sortBycreationtime, sortByName, sortByresourceVersion"}
+		//const sortByEffectivePriority = "effectivePriority"
+		const (
+			sortBycreationtime string = ".metadata.creationTimestamp"
+		)
+		const (
+			sortByname = ".metadata.name"
+		)
+		const (
+			sortByresourceVersion = ".metadata.resourceVersion"
+		)
+		const (
+			sortByuid = ".metadata.uid"
+		)
+		/*npSorter := &networkpolicy.NPSorter{
+			NetworkPolicies: policyList.Items,
+			SortBy:          sortBy,
+		}*/
+		switch sortBy {
+		case sortBycreationtime:
+			nlist := sortbynpflag(policyList, sortBycreationtime)
+			result := make([]networkpolicy.Response, 0, len(policyList.Items))
+			for i := range nlist.Items {
+				o, _ := objectTransform(&nlist.Items[i], opts)
+				result = append(result, o.(networkpolicy.Response))
+			}
+			return result, nil
+		case sortByname:
+			nlist := sortbynpflag(policyList, sortByname)
+			result := make([]networkpolicy.Response, 0, len(policyList.Items))
+			for i := range nlist.Items {
+				o, _ := objectTransform(&nlist.Items[i], opts)
+				result = append(result, o.(networkpolicy.Response))
+			}
+			return result, nil
+		case sortByresourceVersion:
+			nlist := sortbynpflag(policyList, sortByresourceVersion)
+			result := make([]networkpolicy.Response, 0, len(policyList.Items))
+			for i := range nlist.Items {
+				o, _ := objectTransform(&nlist.Items[i], opts)
+				result = append(result, o.(networkpolicy.Response))
+			}
+			return result, nil
+		case sortByuid:
+			nlist := sortbynpflag(policyList, sortByuid)
+			result := make([]networkpolicy.Response, 0, len(policyList.Items))
+			for i := range nlist.Items {
+				o, _ := objectTransform(&nlist.Items[i], opts)
+				result = append(result, o.(networkpolicy.Response))
+			}
+			return result, nil
+		default:
+			nlist := sortbynpflag(policyList, sortByname)
+			result := make([]networkpolicy.Response, 0, len(policyList.Items))
+			for i := range nlist.Items {
+				o, _ := objectTransform(&nlist.Items[i], opts)
+				result = append(result, o.(networkpolicy.Response))
+			}
+			return result, nil
 
-		flagvalue := sortBy
-		nlist := sortbynpflag(policyList.Items, flagvalue)
-
+		}
+		/*nlist := sortbynpflag(policyList.Items, flagvalue)
 		result := make([]networkpolicy.Response, 0, len(policyList.Items))
 		for i := range nlist {
-			o, _ := objectTransform(&nlist[i], opts)
+			o, _ := objectTransform(&nlist.Items[i], opts)
 			result = append(result, o.(networkpolicy.Response))
 		}
-		return result, nil
+		return result, nil*/
 
 	case *cpv1beta.AddressGroupList:
 		groups := l.(*cpv1beta.AddressGroupList)
@@ -76,16 +142,16 @@ func listTransform(l interface{}, opts map[string]string) (interface{}, error) {
 		if sb, ok := opts["sort-by"]; ok {
 			sortBy = sb
 		}
-		adsorter := &addressgroup.Adsorter{
+		/*adsorter := &addressgroup.Adsorter{
 			Addressgroups: groups.Items,
 			SortBy:        sortBy,
-		}
+		}*/
 		flagvalue := sortBy
 		adlist := sortbyadflag(groups.Items, flagvalue)
 
 		result := make([]addressgroup.Response, 0, len(groups.Items))
 		for i := range adlist {
-			o, _ := objectTransform(&adsorter.Addressgroups[i], opts)
+			o, _ := objectTransform(&adlist[i], opts)
 			result = append(result, o.(addressgroup.Response))
 		}
 		return result, nil
@@ -146,12 +212,13 @@ func APTransform(reader io.Reader, single bool, opts map[string]string) (interfa
 	)(reader, single)
 }
 
-func sortbynpflag(pList []cpv1beta.NetworkPolicy, flagv string) []cpv1beta.NetworkPolicy {
+func sortbynpflag(npList *cpv1beta.NetworkPolicyList, flagv string) *cpv1beta.NetworkPolicyList {
 
-	var obj []runtime.Object
+	//var obj []runtime.Object
+	obj, _ := meta.ExtractList(npList)
 	runtimeSortName := get.NewRuntimeSort(flagv, obj)
 	sort.Sort(runtimeSortName)
-	return pList
+	return npList
 }
 func sortbyadflag(adList []cpv1beta.AddressGroup, flagv string) []cpv1beta.AddressGroup {
 
@@ -168,3 +235,14 @@ func sortbyapflag(apList []cpv1beta.AppliedToGroup, flagv string) []cpv1beta.App
 	sort.Sort(runtimeSortName)
 	return apList
 }
+
+/*objs, _ := meta.ExtractList(A)
+fieldName := "{.metadata.name}"
+runtimeSortName := get.NewRuntimeSort(fieldName, objs)
+sort.Sort(runtimeSortName)
+	for _, i := range objs {
+	fmt.Println(i.(*corev1.Pod).Spec)
+
+
+	}
+*/

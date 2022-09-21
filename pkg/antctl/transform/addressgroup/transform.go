@@ -52,7 +52,7 @@ func objectTransform(o interface{}, _ map[string]string) (interface{}, error) {
 	group := o.(*cpv1beta.AddressGroup)
 	var pods, nodes []common.GroupMember
 	for _, member := range group.GroupMembers {
-		gm := common.GroupMemberTransform(member)
+		gm := common.GroupMemberPodTransform(member)
 		if member.Node != nil {
 			nodes = append(nodes, gm)
 			continue

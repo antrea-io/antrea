@@ -44,9 +44,9 @@ const (
 	rawFormatter   formatterType = "raw"
 )
 
-const (
+/*const (
 	sortByEffectivePriority string = "effectivePriority"
-)
+)*/
 const (
 	sortBycreationtime string = ".metadata.creationTimestamp"
 )
@@ -54,7 +54,7 @@ const (
 	sortByName string = ".metadata.name"
 )
 const (
-	sortByrestartCount string = ".status.containerStatuses[0].restartcount"
+	sortByresourceVersion string = ".metadata.resourceVersion"
 )
 
 // commandGroup is used to group commands, it could be specified in commandDefinition.
@@ -156,7 +156,7 @@ func getSortByFlag() flagInfo {
 	return flagInfo{
 		name:            "sort-by",
 		defaultValue:    "",
-		supportedValues: []string{sortByEffectivePriority, sortBycreationtime, sortByName, sortByrestartCount},
+		supportedValues: []string{sortBycreationtime, sortByName, sortByresourceVersion},
 		usage:           "Get NetworkPolicies in specific order. Current supported value is effectivePriority. Get Addressgroups in specific order .Current supported value is CreationTimestamp.Get Appliedtogroups in specific order .Current supported value is CreationTimestamp",
 	}
 }
