@@ -410,15 +410,11 @@ func (r *ServiceExportReconciler) updateSvcExportStatus(ctx context.Context, req
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *ServiceExportReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	// Ignore status update event via GenerationChangedPredicate
-	ignoreStatus := predicate.GenerationChangedPredicate{}
 	// Watch events only when resource version changes
 	versionChange := predicate.ResourceVersionChangedPredicate{}
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&k8smcsv1alpha1.ServiceExport{}).
-		WithEventFilter(ignoreStatus).
 		Watches(&source.Kind{Type: &corev1.Service{}}, handler.EnqueueRequestsFromMapFunc(objectMapFunc)).
-		WithEventFilter(versionChange).
 		Watches(&source.Kind{Type: &corev1.Endpoints{}}, handler.EnqueueRequestsFromMapFunc(objectMapFunc)).
 		WithEventFilter(versionChange).
 		WithOptions(controller.Options{
