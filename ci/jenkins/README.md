@@ -130,6 +130,15 @@ DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
 ./ci/jenkins/test.sh --testcase multicast-e2e --registry ${DOCKER_REGISTRY}
 ```
 
+* Flexible-ipam e2e: e2e tests in a flexible-ipam cluster
+
+```shell
+#!/bin/bash
+set -e
+DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
+./ci/jenkins/test.sh --testcase e2e --registry ${DOCKER_REGISTRY} --testbed-type "flexible-ipam"
+```
+
 * [whole-conformance [daily]](https://jenkins.antrea-ci.rocks/job/antrea-whole-conformance-for-pull-request/):
   community tests using sonobuoy, with certified-conformance mode.
 
@@ -220,6 +229,7 @@ setup, please notice the following requirements:
   `antrea_white_list` as
   [defaults](https://docs.openstack.org/infra/jenkins-job-builder/attic/definition.html#defaults)
   variables in a separate file
+* Select only one project([projects-cloud.yaml](jobs/projects-cloud.yaml)|[projects-lab.yaml](jobs/projects-lab.yaml)) file to keep for your needs and remove others
 
 ### Apply the jobs
 
