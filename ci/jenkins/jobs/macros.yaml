@@ -3,6 +3,7 @@
     builders:
       - shell: |-
           cp /var/lib/jenkins/utils/defaults.yaml ci/jenkins/jobs
+          find ci/jenkins/jobs/ | grep ci/jenkins/jobs/projects | grep -v projects-{jenkins_location}.yaml | xargs rm
           jenkins-jobs update -r ci/jenkins/jobs
           rm ci/jenkins/jobs/defaults.yaml
 
@@ -14,6 +15,15 @@
             set -e
             DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
             ./ci/jenkins/test-vmc.sh --testcase integration --coverage --codecov-token "${CODECOV_TOKEN}" --registry ${DOCKER_REGISTRY}
+
+- builder:
+      name: builder-multicluster-integration
+      builders:
+        - shell: |-
+            #!/bin/bash
+            set -e
+            DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
+            ./ci/jenkins/test-vmc.sh --testcase multicluster-integration --coverage --codecov-token "${CODECOV_TOKEN}" --registry ${DOCKER_REGISTRY}
 
 - builder:
     name: builder-eks-cluster-cleanup
@@ -88,6 +98,10 @@
     builders:
       - shell: |-
           cp /var/lib/jenkins/utils/defaults.yaml ci/jenkins/jobs
+          mv ci/jenkins/jobs/projects-lab.yaml ci/jenkins/projects-lab.yaml
+          jenkins-jobs test -r ci/jenkins/jobs
+          mv ci/jenkins/projects-lab.yaml ci/jenkins/jobs/projects-lab.yaml
+          rm ci/jenkins/jobs/projects-cloud.yaml
           jenkins-jobs test -r ci/jenkins/jobs/
           rm ci/jenkins/jobs/defaults.yaml
 
@@ -113,6 +127,66 @@
           set -ex
           DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
           ./ci/jenkins/test-vmc.sh --cluster-name "$BUILD_TAG" --testcase '{conformance_type}' --coverage --codecov-token "${{CODECOV_TOKEN}}" --registry ${{DOCKER_REGISTRY}} --username "${{CAPVC_USERNAME}}" --password "${{CAPVC_PASSWORD}}"
+
+- builder:
+    name: builder-install-ovs
+    builders:
+      - shell: |-
+          #!/bin/bash
+          ./ci/jenkins/test.sh --testcase windows-install-ovs
+
+- builder:
+    name: builder-e2e-win
+    builders:
+      - shell: |-
+          #!/bin/bash
+          set -ex
+          DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
+          ./ci/jenkins/test.sh --testcase windows-e2e --registry ${DOCKER_REGISTRY}
+
+- builder:
+    name: builder-conformance-win
+    builders:
+      - shell: |-
+          #!/bin/bash
+          set -ex
+          DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
+          ./ci/jenkins/test.sh --testcase '{conformance_type}' --registry ${{DOCKER_REGISTRY}} 
+
+- builder:
+    name: builder-e2e-proxyall-win
+    builders:
+      - shell: |-
+          #!/bin/bash
+          set -ex
+          DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
+          ./ci/jenkins/test.sh --testcase windows-e2e --registry ${DOCKER_REGISTRY} --proxyall
+
+- builder:
+    name: builder-flexible-ipam-e2e
+    builders:
+      - shell: |-
+          #!/bin/bash
+          set -e
+          DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
+          ./ci/jenkins/test.sh --testcase e2e --registry ${DOCKER_REGISTRY} --workdir "/home/ubuntu" --kubeconfig "/home/ubuntu/kube.conf" --testbed-type "flexible-ipam"
+
+- builder:
+    name: builder-flow-visibility
+    builders:
+      - shell: |-
+          #!/bin/bash
+          set -ex
+          ./ci/jenkins/test-vmc.sh --cluster-name "${JOB_NAME}-${BUILD_NUMBER}" --setup-only
+          ./ci/test-flow-visibility.sh --kubeconfig jenkins/out/kubeconfig
+          ./ci/jenkins/test-vmc.sh --cluster-name "${JOB_NAME}-${BUILD_NUMBER}" --cleanup-only
+
+          if !(test -f TEST_FAILURE); then
+            echo "=== SUCCESS !!! ==="
+            exit 0
+          fi
+          echo "=== FAILURE !!! ==="
+          exit 1
 
 - builder:
     name: builder-matrix
