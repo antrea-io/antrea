@@ -84,6 +84,7 @@ func runMember(o *Options) error {
 		mgr.GetScheme(),
 		env.GetPodNamespace(),
 		opts.ServiceCIDR,
+		opts.PodCIDRs,
 		commonAreaGetter)
 	if err = gwReconciler.SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("error creating Gateway controller: %v", err)

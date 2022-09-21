@@ -10,6 +10,7 @@ leaderElection:
   leaderElect: false
 serviceCIDR: ""
 podCIDRs:
+  - "10.10.0.0/16"
   - ""
 gatewayIPPrecedence: "private"
 endpointIPType: "ClusterIP"

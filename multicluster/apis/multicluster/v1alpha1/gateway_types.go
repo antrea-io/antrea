@@ -50,6 +50,8 @@ type ClusterInfo struct {
 	ServiceCIDR string `json:"serviceCIDR,omitempty"`
 	// GatewayInfos has information of Gateways
 	GatewayInfos []GatewayInfo `json:"gatewayInfos,omitempty"`
+	// PodCIDRs is the Pod IP address CIDRs.
+	PodCIDRs []string `json:"podCIDRs,omitempty"`
 }
 
 //+kubebuilder:object:root=true

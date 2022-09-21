@@ -111,6 +111,11 @@ spec:
                       type: string
                   type: object
                 type: array
+              podCIDRs:
+                description: PodCIDRs is the Pod IP address CIDRs.
+                items:
+                  type: string
+                type: array
               serviceCIDR:
                 description: ServiceCIDR is the IP ranges used by Service ClusterIP.
                 type: string
@@ -946,6 +951,8 @@ data:
     leaderElection:
       leaderElect: false
     serviceCIDR: ""
+    podCIDRs:
+      - ""
     gatewayIPPrecedence: "private"
     endpointIPType: "ClusterIP"
 kind: ConfigMap
