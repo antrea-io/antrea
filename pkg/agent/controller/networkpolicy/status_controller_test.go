@@ -92,8 +92,9 @@ func TestSyncStatusForNewPolicy(t *testing.T) {
 				},
 				Nodes: []v1beta2.NetworkPolicyNodeStatus{
 					{
-						NodeName:   testNode1,
-						Generation: 1,
+						NodeName:           testNode1,
+						Generation:         1,
+						RealizationFailure: false,
 					},
 				},
 			},

@@ -387,6 +387,10 @@ type NetworkPolicyNodeStatus struct {
 	NodeName string
 	// The generation realized by the Node.
 	Generation int64
+	// The flag to mark the NetworkPolicy realization is failed on the Node or not.
+	RealizationFailure bool
+	// The error message to describe why the NetworkPolicy realization is failed on the Node.
+	Message string
 }
 
 type GroupReference struct {
