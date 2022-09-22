@@ -45,7 +45,6 @@ LABEL description="A Docker image based on UBI8 which includes Open vSwitch buil
 # Change Repository from UBI8’s to CentOS because UBI8's repository does not contain
 # enough packages required by OVS installation.
 # Using the official RHEL repository would be the best choice but it's not publicly accessible.
-# TODO: update the strongSwan logging config.
 COPY CentOS.repo /tmp/CentOS.repo
 COPY charon-logging.conf /tmp
 COPY --from=ovs-rpms /tmp/ovs-rpms/* /tmp/ovs-rpms/
@@ -54,7 +53,11 @@ RUN rm -f /etc/yum.repos.d/* && mv /tmp/CentOS.repo /etc/yum.repos.d/CentOS.repo
     subscription-manager config --rhsm.manage_repos=0 && \
     yum clean all -y && yum reinstall yum -y && \
     yum install /tmp/ovs-rpms/* -y && yum install epel-release -y && \
-    yum install iptables logrotate strongswan -y && \
+    yum install iptables logrotate -y && \
     mv /etc/logrotate.d/openvswitch /etc/logrotate.d/openvswitch-switch && \
     sed -i "/rotate /a\    #size 100M" /etc/logrotate.d/openvswitch-switch && \
+    # https://github.com/libreswan/libreswan/blob/main/programs/setup/setup.in
+    # The init system is configured to systemd by default. Change it to namespaces
+    # to spawn the ipsec process directly.
+    sed -i 's/^initsystem=.*$/initsystem="namespaces"/' /usr/libexec/ipsec/setup && \
     rm -rf /tmp/* && yum clean all
