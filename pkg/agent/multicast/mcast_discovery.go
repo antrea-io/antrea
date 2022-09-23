@@ -78,7 +78,7 @@ func (s *IGMPSnooper) HandlePacketIn(pktIn *ofctrl.PacketIn) error {
 	match := openflow.GetMatchFieldByRegID(matchers, openflow.CustomReasonField.GetRegID())
 	customReasons, err := getInfoInReg(match, openflow.CustomReasonField.GetRange().ToNXRange())
 	if err != nil {
-		klog.ErrorS(err, "Received error while unloading customReason from OVS reg", "regField", openflow.CustomReasonField.GetName())
+		klog.ErrorS(err, "Received error while unloading customReason from OVS reg")
 		return err
 	}
 	if customReasons&openflow.CustomReasonIGMP == openflow.CustomReasonIGMP {

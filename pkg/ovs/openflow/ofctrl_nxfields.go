@@ -28,25 +28,21 @@ func (f *RegField) GetNXFieldName() string {
 	return fmt.Sprintf("%s%d", NxmFieldReg, f.regID)
 }
 
-func (f *RegField) GetName() string {
-	return f.name
-}
-
 func (f *RegField) isFullRange() bool {
 	return f.rng.Length() == 32
 }
 
-func NewRegField(id int, start, end uint32, name string) *RegField {
-	return &RegField{regID: id, rng: &Range{start, end}, name: name}
+func NewRegField(id int, start, end uint32) *RegField {
+	return &RegField{regID: id, rng: &Range{start, end}}
 }
 
-func NewOneBitRegMark(id int, bit uint32, name string) *RegMark {
-	field := NewRegField(id, bit, bit, name)
+func NewOneBitRegMark(id int, bit uint32) *RegMark {
+	field := NewRegField(id, bit, bit)
 	return &RegMark{value: 1, field: field}
 }
 
-func NewOneBitZeroRegMark(id int, bit uint32, name string) *RegMark {
-	field := NewRegField(id, bit, bit, name)
+func NewOneBitZeroRegMark(id int, bit uint32) *RegMark {
+	field := NewRegField(id, bit, bit)
 	return &RegMark{value: 0, field: field}
 }
 
@@ -114,16 +110,12 @@ func NewCTMark(field *CtMarkField, value uint32) *CtMark {
 	return &CtMark{value: value, field: field}
 }
 
-func NewCTLabel(start, end uint32, name string) *CtLabel {
-	return &CtLabel{name: name, rng: &Range{start, end}}
+func NewCTLabel(start, end uint32) *CtLabel {
+	return &CtLabel{rng: &Range{start, end}}
 }
 
 func (f *CtLabel) GetNXFieldName() string {
 	return NxmFieldCtLabel
-}
-
-func (f *CtLabel) GetName() string {
-	return f.name
 }
 
 func (f *CtLabel) GetRange() *Range {

@@ -2278,8 +2278,7 @@ func (f *featureService) serviceLearnFlow(groupID binding.GroupIDType,
 			MatchLearnedSrcIP().
 			LoadFieldToField(EndpointIPField, EndpointIPField).
 			LoadFieldToField(EndpointPortField, EndpointPortField).
-			LoadRegMark(EpSelectedRegMark).
-			LoadRegMark(RewriteMACRegMark).
+			LoadRegMark(EpSelectedRegMark, RewriteMACRegMark).
 			Done().
 			Action().LoadRegMark(EpSelectedRegMark).
 			Action().NextTable().
@@ -2290,8 +2289,7 @@ func (f *featureService) serviceLearnFlow(groupID binding.GroupIDType,
 			MatchLearnedSrcIPv6().
 			LoadXXRegToXXReg(EndpointIP6Field, EndpointIP6Field).
 			LoadFieldToField(EndpointPortField, EndpointPortField).
-			LoadRegMark(EpSelectedRegMark).
-			LoadRegMark(RewriteMACRegMark).
+			LoadRegMark(EpSelectedRegMark, RewriteMACRegMark).
 			Done().
 			Action().LoadRegMark(EpSelectedRegMark).
 			Action().NextTable().

@@ -127,6 +127,7 @@ func (m *meterBandBuilder) Done() Meter {
 		mbExp := new(openflow15.MeterBandExperimenter)
 		mbExp.MeterBandHeader = *m.meterBandHeader
 		mbExp.Experimenter = m.experimenter
+		mb = mbExp
 	}
 	m.meter.ofctrl.AddMeterBand(&mb)
 	return m.meter
