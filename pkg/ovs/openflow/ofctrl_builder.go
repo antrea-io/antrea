@@ -28,6 +28,8 @@ type ofFlowBuilder struct {
 }
 
 func (b *ofFlowBuilder) MatchTunMetadata(index int, data uint32) FlowBuilder {
+	s := fmt.Sprintf("tun_metadata%d=0x%x", index, data)
+	b.matchers = append(b.matchers, s)
 	rng := openflow15.NewNXRange(0, 31)
 	tm := &ofctrl.NXTunMetadata{
 		ID:    index,
@@ -140,7 +142,7 @@ func (b *ofFlowBuilder) MatchCTStateNew(set bool) FlowBuilder {
 		b.addCTStateString("+new")
 	} else {
 		b.ctStates.UnsetNew()
-		b.addCTStateString("-trk")
+		b.addCTStateString("-new")
 	}
 	return b
 }
@@ -521,7 +523,7 @@ func (b *ofFlowBuilder) MatchProtocol(protocol Protocol) FlowBuilder {
 	return b
 }
 
-// MatchProtocol adds match condition for IP protocol with the intetger value.
+// MatchIPProtocolValue adds match condition for IP protocol with the integer value.
 func (b *ofFlowBuilder) MatchIPProtocolValue(isIPv6 bool, protoValue uint8) FlowBuilder {
 	if isIPv6 {
 		b.Match.Ethertype = 0x86dd
@@ -539,7 +541,7 @@ func (b *ofFlowBuilder) MatchDstPort(port uint16, portMask *uint16) FlowBuilder 
 	b.Match.DstPortMask = portMask
 	matchStr := fmt.Sprintf("tp_dst=0x%x", port)
 	if portMask != nil {
-		matchStr = fmt.Sprintf("%s/0x%x", matchStr, portMask)
+		matchStr = fmt.Sprintf("%s/0x%x", matchStr, *portMask)
 	}
 	b.matchers = append(b.matchers, matchStr)
 	return b
@@ -552,7 +554,7 @@ func (b *ofFlowBuilder) MatchSrcPort(port uint16, portMask *uint16) FlowBuilder 
 	b.Match.SrcPortMask = portMask
 	matchStr := fmt.Sprintf("tp_src=0x%x", port)
 	if portMask != nil {
-		matchStr = fmt.Sprintf("%s/0x%x", matchStr, portMask)
+		matchStr = fmt.Sprintf("%s/0x%x", matchStr, *portMask)
 	}
 	b.matchers = append(b.matchers, matchStr)
 	return b
@@ -563,15 +565,24 @@ func (b *ofFlowBuilder) MatchSrcPort(port uint16, portMask *uint16) FlowBuilder 
 // "+new", "+est", "+rel" and "+trk-inv".
 func (b *ofFlowBuilder) MatchCTSrcIP(ip net.IP) FlowBuilder {
 	b.Match.CtIpSa = &ip
-	b.matchers = append(b.matchers, fmt.Sprintf("ct_nw_src=%s", ip.String()))
+	if ip.To4() != nil {
+		b.matchers = append(b.matchers, fmt.Sprintf("ct_nw_src=%s", ip.String()))
+	} else {
+		b.matchers = append(b.matchers, fmt.Sprintf("ct_ipv6_src=%s", ip.String()))
+	}
+
 	return b
 }
 
 // MatchCTSrcIPNet is the same as MatchCTSrcIP but supports IP masking.
 func (b *ofFlowBuilder) MatchCTSrcIPNet(ipNet net.IPNet) FlowBuilder {
-	b.matchers = append(b.matchers, fmt.Sprintf("nw_dst=%s", ipNet.String()))
 	b.Match.CtIpSa = &ipNet.IP
 	b.Match.CtIpSaMask = maskToIP(ipNet.Mask)
+	if ipNet.IP.To4() != nil {
+		b.matchers = append(b.matchers, fmt.Sprintf("ct_nw_src=%s", ipNet.String()))
+	} else {
+		b.matchers = append(b.matchers, fmt.Sprintf("ct_ipv6_src=%s", ipNet.String()))
+	}
 	return b
 }
 
@@ -580,7 +591,11 @@ func (b *ofFlowBuilder) MatchCTSrcIPNet(ipNet net.IPNet) FlowBuilder {
 // include "+new", "+est", "+rel" and "+trk-inv".
 func (b *ofFlowBuilder) MatchCTDstIP(ip net.IP) FlowBuilder {
 	b.Match.CtIpDa = &ip
-	b.matchers = append(b.matchers, fmt.Sprintf("ct_nw_dst=%s", ip.String()))
+	if ip.To4() != nil {
+		b.matchers = append(b.matchers, fmt.Sprintf("ct_nw_dst=%s", ip.String()))
+	} else {
+		b.matchers = append(b.matchers, fmt.Sprintf("ct_ipv6_dst=%s", ip.String()))
+	}
 	return b
 }
 
@@ -588,7 +603,11 @@ func (b *ofFlowBuilder) MatchCTDstIP(ip net.IP) FlowBuilder {
 func (b *ofFlowBuilder) MatchCTDstIPNet(ipNet net.IPNet) FlowBuilder {
 	b.Match.CtIpDa = &ipNet.IP
 	b.Match.CtIpDaMask = maskToIP(ipNet.Mask)
-	b.matchers = append(b.matchers, fmt.Sprintf("ct_nw_dst=%s", ipNet.String()))
+	if ipNet.IP.To4() != nil {
+		b.matchers = append(b.matchers, fmt.Sprintf("ct_nw_dst=%s", ipNet.String()))
+	} else {
+		b.matchers = append(b.matchers, fmt.Sprintf("ct_ipv6_dst=%s", ipNet.String()))
+	}
 	return b
 }
 

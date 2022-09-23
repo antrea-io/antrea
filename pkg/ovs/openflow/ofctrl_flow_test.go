@@ -21,7 +21,7 @@ import (
 )
 
 var (
-	testField = NewRegField(1, 0, 15, "testField")
+	testField = NewRegField(1, 0, 15)
 	t0        = uint8(0)
 	t1        = uint8(1)
 )

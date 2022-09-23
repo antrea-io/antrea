@@ -843,20 +843,6 @@ func (mr *MockActionMockRecorder) LoadPktMarkRange(arg0, arg1 interface{}) *gomo
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadPktMarkRange", reflect.TypeOf((*MockAction)(nil).LoadPktMarkRange), arg0, arg1)
 }
 
-// LoadRange mocks base method
-func (m *MockAction) LoadRange(arg0 string, arg1 uint64, arg2 *openflow.Range) openflow.FlowBuilder {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "LoadRange", arg0, arg1, arg2)
-	ret0, _ := ret[0].(openflow.FlowBuilder)
-	return ret0
-}
-
-// LoadRange indicates an expected call of LoadRange
-func (mr *MockActionMockRecorder) LoadRange(arg0, arg1, arg2 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadRange", reflect.TypeOf((*MockAction)(nil).LoadRange), arg0, arg1, arg2)
-}
-
 // LoadRegMark mocks base method
 func (m *MockAction) LoadRegMark(arg0 ...*openflow.RegMark) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
@@ -1069,20 +1055,6 @@ func (m *MockAction) PushVLAN(arg0 uint16) openflow.FlowBuilder {
 func (mr *MockActionMockRecorder) PushVLAN(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PushVLAN", reflect.TypeOf((*MockAction)(nil).PushVLAN), arg0)
-}
-
-// Resubmit mocks base method
-func (m *MockAction) Resubmit(arg0 uint16, arg1 byte) openflow.FlowBuilder {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Resubmit", arg0, arg1)
-	ret0, _ := ret[0].(openflow.FlowBuilder)
-	return ret0
-}
-
-// Resubmit indicates an expected call of Resubmit
-func (mr *MockActionMockRecorder) Resubmit(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Resubmit", reflect.TypeOf((*MockAction)(nil).Resubmit), arg0, arg1)
 }
 
 // ResubmitToTables mocks base method
@@ -1338,20 +1310,6 @@ func (m *MockCTAction) LoadToLabelField(arg0 uint64, arg1 *openflow.CtLabel) ope
 func (mr *MockCTActionMockRecorder) LoadToLabelField(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadToLabelField", reflect.TypeOf((*MockCTAction)(nil).LoadToLabelField), arg0, arg1)
-}
-
-// LoadToMark mocks base method
-func (m *MockCTAction) LoadToMark(arg0 uint32) openflow.CTAction {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "LoadToMark", arg0)
-	ret0, _ := ret[0].(openflow.CTAction)
-	return ret0
-}
-
-// LoadToMark indicates an expected call of LoadToMark
-func (mr *MockCTActionMockRecorder) LoadToMark(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadToMark", reflect.TypeOf((*MockCTAction)(nil).LoadToMark), arg0)
 }
 
 // MoveToCtMarkField mocks base method

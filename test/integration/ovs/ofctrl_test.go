@@ -42,9 +42,9 @@ var (
 
 	priorityNormal = uint16(200)
 
-	portFoundMark   = binding.NewOneBitRegMark(0, 16, "OFPortFound")
-	portCacheField  = binding.NewRegField(1, 0, 31, "OFPortCache")
-	sourceField     = binding.NewRegField(0, 0, 15, "PacketSourceField")
+	portFoundMark   = binding.NewOneBitRegMark(0, 16)
+	portCacheField  = binding.NewRegField(1, 0, 31)
+	sourceField     = binding.NewRegField(0, 0, 15)
 	fromLocalMark   = binding.NewRegMark(sourceField, 2)
 	fromGatewayMark = binding.NewRegMark(sourceField, 1)
 
@@ -304,7 +304,7 @@ func TestOFctrlGroup(t *testing.T) {
 					bucketBuilder = bucketBuilder.ResubmitToTable(bucket.resubmitTable)
 				}
 				for _, loading := range bucket.reg2reg {
-					regField := binding.NewRegField(int(loading[0]), loading[2], loading[3], "field")
+					regField := binding.NewRegField(int(loading[0]), loading[2], loading[3])
 					bucketBuilder = bucketBuilder.LoadToRegField(regField, loading[1])
 				}
 				group = bucketBuilder.Done()
@@ -549,9 +549,9 @@ func TestBundleWithGroupAndFlow(t *testing.T) {
 	ovsCtlClient := ovsctl.NewClient(br)
 
 	groupID := binding.GroupIDType(4)
-	field1 := binding.NewRegField(1, 0, 31, "field1")
-	field2 := binding.NewRegField(2, 0, 31, "field2")
-	field3 := binding.NewRegField(3, 0, 31, "field3")
+	field1 := binding.NewRegField(1, 0, 31)
+	field2 := binding.NewRegField(2, 0, 31)
+	field3 := binding.NewRegField(3, 0, 31)
 	group := bridge.CreateGroup(groupID).
 		Bucket().Weight(100).
 		LoadToRegField(field1, uint32(0xa0a0002)).
@@ -564,7 +564,7 @@ func TestBundleWithGroupAndFlow(t *testing.T) {
 		LoadToRegField(field3, uint32(0xfff1)).
 		ResubmitToTable(table.GetNext()).Done()
 
-	reg3Field := binding.NewRegField(3, 0, 31, "reg3Field")
+	reg3Field := binding.NewRegField(3, 0, 31)
 	flow := table.BuildFlow(priorityNormal).
 		Cookie(getCookieID()).
 		MatchProtocol(binding.ProtocolTCP).
@@ -620,9 +620,9 @@ func TestPacketOutIn(t *testing.T) {
 	srcPort := uint16(10001)
 	dstPort := uint16(8080)
 	reg2Data := uint32(0x1234)
-	reg2Field := binding.NewRegField(2, 0, 15, "reg2Field")
+	reg2Field := binding.NewRegField(2, 0, 15)
 	reg3Data := uint32(0x1234)
-	reg3Field := binding.NewRegField(3, 0, 31, "reg3Field")
+	reg3Field := binding.NewRegField(3, 0, 31)
 	stopCh := make(chan struct{})
 
 	go func() {
@@ -657,7 +657,7 @@ func TestPacketOutIn(t *testing.T) {
 	}()
 
 	pktBuilder := bridge.BuildPacketOut()
-	regField := binding.NewRegField(0, 18, 18, "field")
+	regField := binding.NewRegField(0, 18, 18)
 	mark := binding.NewRegMark(regField, 0x1)
 	pkt := pktBuilder.SetSrcMAC(srcMAC).SetDstMAC(dstcMAC).
 		SetDstIP(dstIP).SetSrcIP(srcIP).SetIPProtocol(binding.ProtocolTCP).
@@ -867,15 +867,81 @@ func TestNoteAction(t *testing.T) {
 	CheckFlowExists(t, ofctlClient, "", table.GetID(), false, expectFlows)
 }
 
+func TestLoadToLabelFieldAction(t *testing.T) {
+	br := "br13"
+	err := PrepareOVSBridge(br)
+	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge: %v", err))
+	defer DeleteOVSBridge(br)
+
+	bridge := newOFBridge(br)
+	table = bridge.CreateTable(t2, t3.GetID(), binding.TableMissActionNext)
+
+	err = bridge.Connect(maxRetry, make(chan struct{}))
+	require.Nil(t, err, "Failed to start OFService")
+	defer bridge.Disconnect()
+
+	ovsCtlClient := ovsctl.NewClient(br)
+	priority := uint16(1001)
+
+	testCases := []struct {
+		ctLabel *binding.CtLabel
+		data    uint64
+	}{
+		{
+			ctLabel: binding.NewCTLabel(16, 31),
+			data:    0x1001,
+		},
+		{
+			ctLabel: binding.NewCTLabel(0, 63),
+			data:    0x1001100110011001,
+		},
+		{
+			ctLabel: binding.NewCTLabel(80, 95),
+			data:    0x1001,
+		},
+		{
+			ctLabel: binding.NewCTLabel(64, 127),
+			data:    0x1001100110011001,
+		},
+	}
+
+	srcIP := net.ParseIP("1.1.1.2")
+	for _, tc := range testCases {
+		maskStr := fmt.Sprintf("0x%x", ^uint64(0)>>(64-tc.ctLabel.GetRange().Length())<<(tc.ctLabel.GetRange().Offset()%64))
+		dataStr := fmt.Sprintf("0x%x", tc.data<<(tc.ctLabel.GetRange().Offset()%64))
+		if tc.ctLabel.GetRange().Offset() > 63 {
+			maskStr += "0000000000000000"
+			dataStr += "0000000000000000"
+		}
+		expectFlows := []*ExpectFlow{
+			{fmt.Sprintf("priority=%d,ip,nw_src=%s", priority, srcIP.String()),
+				fmt.Sprintf("ct(commit,table=%d,zone=65520,exec(set_field:%s/%s->ct_label))", table.GetNext(), dataStr, maskStr)},
+		}
+		flow1 := table.BuildFlow(priority).
+			MatchProtocol(binding.ProtocolIP).
+			MatchSrcIP(srcIP).
+			Action().CT(true, table.GetNext(), 65520, nil).
+			LoadToLabelField(tc.data, tc.ctLabel).
+			CTDone().
+			Done()
+		err = flow1.Add()
+		assert.Nil(t, err, "expected no error when adding flow")
+		CheckFlowExists(t, ovsCtlClient, "", table.GetID(), true, expectFlows)
+		err = flow1.Delete()
+		assert.Nil(t, err, "expected no error when deleting flow")
+		CheckFlowExists(t, ovsCtlClient, "", table.GetID(), false, expectFlows)
+	}
+}
+
 func prepareFlows(table binding.Table) ([]binding.Flow, []*ExpectFlow) {
 	var flows []binding.Flow
 	_, AllIPs, _ := net.ParseCIDR("0.0.0.0/0")
 	_, conjSrcIPNet, _ := net.ParseCIDR("192.168.3.0/24")
 	_, peerSubnetIPv6, _ := net.ParseCIDR("fd74:ca9b:172:21::/64")
 	tunnelPeerIPv6 := net.ParseIP("20:ca9b:172:35::3")
-	regField0 := binding.NewRegField(0, 0, 15, "field0")
+	regField0 := binding.NewRegField(0, 0, 15)
 	mark0 := binding.NewRegMark(regField0, 0x0fff)
-	regField1 := binding.NewRegField(0, 16, 31, "field1")
+	regField1 := binding.NewRegField(0, 16, 31)
 	mark1 := binding.NewRegMark(regField1, 0x0ffe)
 	//gatewayCTMark := binding.NewCTMark()
 	flows = append(flows,
@@ -1075,10 +1141,10 @@ func prepareNATflows(table binding.Table) ([]binding.Flow, []*ExpectFlow) {
 	natIPRange1 := &binding.IPRange{StartIP: natedIP1, EndIP: natedIP1}
 	natIPRange2 := &binding.IPRange{StartIP: natedIP1, EndIP: natedIP2}
 	snatCTMark := binding.NewCTMark(binding.NewCTMarkField(0, 7), 0x40)
-	snatMark1 := binding.NewOneBitRegMark(marksReg, 17, "SNATMark1")
-	snatMark2 := binding.NewOneBitRegMark(marksReg, 18, "SNATMark2")
-	dnatMark1 := binding.NewOneBitRegMark(marksReg, 19, "DNATMark1")
-	dnatMark2 := binding.NewOneBitRegMark(marksReg, 20, "DNATMark2")
+	snatMark1 := binding.NewOneBitRegMark(marksReg, 17)
+	snatMark2 := binding.NewOneBitRegMark(marksReg, 18)
+	dnatMark1 := binding.NewOneBitRegMark(marksReg, 19)
+	dnatMark2 := binding.NewOneBitRegMark(marksReg, 20)
 	flows := []binding.Flow{
 		table.BuildFlow(priorityNormal).MatchProtocol(binding.ProtocolIP).
 			Action().CT(false, table.GetNext(), ctZone, nil).NAT().CTDone().
