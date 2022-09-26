@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -67,6 +68,12 @@ var (
 	getPodContainerDeviceIDs = cniserver.GetPodContainerDeviceIDs
 )
 
+// Structure to associate a unique VF's PCI Address to the Linux ethernet interface.
+type podSriovVFDeviceIDInfo struct {
+	vfDeviceID string
+	ifName     string
+}
+
 type InterfaceConfigurator interface {
 	ConfigureSriovSecondaryInterface(podName string, podNameSpace string, containerID string, containerNetNS string, containerIFDev string, mtu int, podSriovVFDeviceID string, result *current.Result) error
 }
@@ -79,6 +86,7 @@ type PodController struct {
 	nodeName              string
 	podCache              cnipodcache.CNIPodInfoStore
 	interfaceConfigurator InterfaceConfigurator
+	vfDeviceIDUsageMap    sync.Map
 }
 
 func NewPodController(
@@ -98,7 +106,6 @@ func NewPodController(
 		podCache:              podCache,
 		interfaceConfigurator: interfaceConfigurator,
 	}
-
 	podInformer.AddEventHandlerWithResyncPeriod(
 		cache.ResourceEventHandlerFuncs{
 			AddFunc:    pc.enqueuePod,
@@ -112,6 +119,48 @@ func NewPodController(
 
 func podKeyGet(pod *corev1.Pod) string {
 	return pod.Namespace + "/" + pod.Name
+}
+
+// buildVFDeviceIDListPerPod is a helper function to build a cache structure with the
+// list of all the PCI addresses allocated per Pod based on their resource requests (in Pod spec).
+// When there is a request for a VF resource (to associate it for a secondary network interface),
+// getUnusedSriovVFDeviceIDPerPod will use this cache information to pick up a unique PCI address
+// which is still not associated with a network device name.
+// NOTE: buildVFDeviceIDListPerPod is called only if a Pod specific VF to Interface mapping cache
+// was not build earlier. Sample initial entry per Pod: "{18:01.1,""},{18:01.2,""},{18:01.3,""}"
+func (pc *PodController) buildVFDeviceIDListPerPod(podName, podNamespace string) ([]podSriovVFDeviceIDInfo, error) {
+	podKey := podNamespace + "/" + podName
+	deviceCache, cacheFound := pc.vfDeviceIDUsageMap.Load(podKey)
+	if cacheFound {
+		return deviceCache.([]podSriovVFDeviceIDInfo), nil
+	}
+	podSriovVFDeviceIDs, err := getPodContainerDeviceIDs(podName, podNamespace)
+	if err != nil {
+		return nil, fmt.Errorf("getPodContainerDeviceIDs failed: %v", err)
+	}
+	var vfDeviceIDInfoCache []podSriovVFDeviceIDInfo
+	for _, pciAddress := range podSriovVFDeviceIDs {
+		initSriovVfDeviceID := podSriovVFDeviceIDInfo{vfDeviceID: pciAddress, ifName: ""}
+		vfDeviceIDInfoCache = append(vfDeviceIDInfoCache, initSriovVfDeviceID)
+	}
+	pc.vfDeviceIDUsageMap.Store(podKey, vfDeviceIDInfoCache)
+	return vfDeviceIDInfoCache, nil
+}
+
+func (pc *PodController) assignUnusedSriovVFDeviceIDPerPod(podName, podNamespace, interfaceName string) (string, error) {
+	var cache []podSriovVFDeviceIDInfo
+	cache, err := pc.buildVFDeviceIDListPerPod(podName, podNamespace)
+	if err != nil {
+		return "", err
+	}
+	for idx := 0; idx < len(cache); idx++ {
+		if cache[idx].ifName == "" {
+			// Unused PCI address found. Associate PCI address to the interface.
+			cache[idx].ifName = interfaceName
+			return cache[idx].vfDeviceID, nil
+		}
+	}
+	return "", err
 }
 
 func generatePodSecondaryIfaceName(podCNIInfo *cnipodcache.CNIConfigInfo) (string, error) {
@@ -280,7 +329,7 @@ func (pc *PodController) processNextWorkItem() bool {
 
 // Configure SRIOV VF as a Secondary Network Interface.
 func (pc *PodController) configureSriovAsSecondaryInterface(pod *corev1.Pod, network *netdefv1.NetworkSelectionElement, containerInfo *cnipodcache.CNIConfigInfo, result *current.Result) error {
-	podSriovVFDeviceID, err := getPodContainerDeviceIDs(pod.Name, pod.Namespace)
+	podSriovVFDeviceID, err := pc.assignUnusedSriovVFDeviceIDPerPod(pod.Name, pod.Namespace, network.InterfaceRequest)
 	if err != nil {
 		return fmt.Errorf("getPodContainerDeviceIDs failed: %v", err)
 	}
@@ -292,7 +341,7 @@ func (pc *PodController) configureSriovAsSecondaryInterface(pod *corev1.Pod, net
 		containerInfo.ContainerNetNS,
 		network.InterfaceRequest,
 		containerInfo.MTU,
-		podSriovVFDeviceID[0],
+		podSriovVFDeviceID,
 		result,
 	); err != nil {
 		return fmt.Errorf("SRIOV Interface creation failed: %v", err)
