@@ -62,7 +62,7 @@ esac
 done
 
 SAVED_ANTREA_IMG=/tmp/antrea-ubuntu.tar
-ANTREA_IMG_NAME=projects.registry.vmware.com/antrea/antrea-ubuntu:latest
+ANTREA_IMG_NAME=antrea/antrea-ubuntu:latest
 
 THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
@@ -158,7 +158,7 @@ function copyManifestToNodes() {
 
 FLOW_AGG_YML="/tmp/flow-aggregator.yml"
 SAVED_FLOW_AGG_IMG=/tmp/flow-aggregator.tar
-FLOW_AGG_IMG_NAME=projects.registry.vmware.com/antrea/flow-aggregator:latest
+FLOW_AGG_IMG_NAME=antrea/flow-aggregator:latest
 
 # If a flow collector address is also provided, we update the Antrea
 # manifest to enable FlowExporter.

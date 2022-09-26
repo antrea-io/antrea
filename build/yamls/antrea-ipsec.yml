@@ -4174,7 +4174,7 @@ spec:
       serviceAccountName: antrea-agent
       initContainers:
         - name: install-cni
-          image: "projects.registry.vmware.com/antrea/antrea-ubuntu:latest"
+          image: "antrea/antrea-ubuntu:latest"
           imagePullPolicy: IfNotPresent
           resources:
             requests:
@@ -4208,7 +4208,7 @@ spec:
             mountPath: /var/run/antrea
       containers:
         - name: antrea-agent
-          image: "projects.registry.vmware.com/antrea/antrea-ubuntu:latest"
+          image: "antrea/antrea-ubuntu:latest"
           imagePullPolicy: IfNotPresent
           command: ["antrea-agent"]
           # Log to both "/var/log/antrea/" and stderr (so "kubectl logs" can work).-
@@ -4309,7 +4309,7 @@ spec:
           - name: xtables-lock
             mountPath: /run/xtables.lock
         - name: antrea-ovs
-          image: "projects.registry.vmware.com/antrea/antrea-ubuntu:latest"
+          image: "antrea/antrea-ubuntu:latest"
           imagePullPolicy: IfNotPresent
           resources:
             requests:
@@ -4346,7 +4346,7 @@ spec:
             mountPath: /var/log/openvswitch
             subPath: openvswitch
         - name: antrea-ipsec
-          image: "projects.registry.vmware.com/antrea/antrea-ubuntu:latest"
+          image: "antrea/antrea-ubuntu:latest"
           imagePullPolicy: IfNotPresent
           resources:
             requests:
@@ -4458,7 +4458,7 @@ spec:
       serviceAccountName: antrea-controller
       containers:
         - name: antrea-controller
-          image: "projects.registry.vmware.com/antrea/antrea-ubuntu:latest"
+          image: "antrea/antrea-ubuntu:latest"
           imagePullPolicy: IfNotPresent
           resources:
             requests:

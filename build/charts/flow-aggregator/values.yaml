@@ -1,6 +1,6 @@
 # -- Container image used by Flow Aggregator.
 image: 
-  repository: "projects.registry.vmware.com/antrea/flow-aggregator"
+  repository: "antrea/flow-aggregator"
   pullPolicy: "IfNotPresent"
   tag: ""
 

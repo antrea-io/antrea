@@ -30,7 +30,7 @@ These instructions assume that you have built the Antrea Docker image locally
 
 ```bash
 # load the Antrea Docker image in the minikube nodes
-minikube image load projects.registry.vmware.com/antrea/antrea-ubuntu:latest
+minikube image load antrea/antrea-ubuntu:latest
 # deploy Antrea
 kubectl apply -f antrea/build/yamls/antrea.yml
 ```

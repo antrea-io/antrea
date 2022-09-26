@@ -132,7 +132,7 @@ These instructions assume that you have built the Antrea Docker image locally
 
 ```bash
 # load the Antrea Docker image in the Nodes
-kind load docker-image projects.registry.vmware.com/antrea/antrea-ubuntu:latest
+kind load docker-image antrea/antrea-ubuntu:latest
 # deploy Antrea
 kubectl apply -f build/yamls/antrea.yml
 ```

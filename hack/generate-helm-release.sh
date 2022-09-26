@@ -94,13 +94,17 @@ ANTREA_CHART="$THIS_DIR/../build/charts/antrea"
 # ignored as per the .helmignore file.
 cp "$ANTREA_CHART/Chart.yaml" "$ANTREA_CHART/Chart.yaml.bak"
 yq -i '.annotations."artifacthub.io/prerelease" = strenv(PRERELEASE)' "$ANTREA_CHART/Chart.yaml"
+sed -i.bak 's=antrea/antrea-ubuntu=projects.registry.vmware.com/antrea/antrea-ubuntu=g' "$ANTREA_CHART/values.yaml"
 $HELM package --app-version $VERSION --version $VERSION $ANTREA_CHART
 mv "antrea-$VERSION.tgz" "$OUT/antrea-chart.tgz"
 mv "$ANTREA_CHART/Chart.yaml.bak" "$ANTREA_CHART/Chart.yaml"
+mv "$ANTREA_CHART/values.yaml.bak" "$ANTREA_CHART/values.yaml"
 
 FLOW_AGGREGATOR_CHART="$THIS_DIR/../build/charts/flow-aggregator"
 cp "$FLOW_AGGREGATOR_CHART/Chart.yaml" "$FLOW_AGGREGATOR_CHART/Chart.yaml.bak"
 yq -i '.annotations."artifacthub.io/prerelease" = strenv(PRERELEASE)' "$FLOW_AGGREGATOR_CHART/Chart.yaml"
+sed -i.bak 's=antrea/flow-aggregator=projects.registry.vmware.com/antrea/flow-aggregator=g' "$FLOW_AGGREGATOR_CHART/values.yaml"
 $HELM package --app-version $VERSION --version $VERSION $FLOW_AGGREGATOR_CHART
 mv "flow-aggregator-$VERSION.tgz" "$OUT/flow-aggregator-chart.tgz"
 mv "$FLOW_AGGREGATOR_CHART/Chart.yaml.bak" "$FLOW_AGGREGATOR_CHART/Chart.yaml"
+mv "$FLOW_AGGREGATOR_CHART/values.yaml.bak" "$FLOW_AGGREGATOR_CHART/values.yaml"

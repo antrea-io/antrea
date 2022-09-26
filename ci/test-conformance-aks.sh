@@ -201,7 +201,7 @@ function deliver_antrea_to_aks() {
 
     antrea_image="antrea-ubuntu"
     DOCKER_IMG_VERSION=${CLUSTER}
-    DOCKER_IMG_NAME="projects.registry.vmware.com/antrea/antrea-ubuntu"
+    DOCKER_IMG_NAME="antrea/antrea-ubuntu"
     docker save -o ${antrea_image}.tar ${DOCKER_IMG_NAME}:${DOCKER_IMG_VERSION}
 
     CLUSTER_RESOURCE_GROUP=$(az aks show --resource-group ${RESOURCE_GROUP} --name ${CLUSTER} --query nodeResourceGroup -o tsv)

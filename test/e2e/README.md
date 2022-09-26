@@ -207,10 +207,10 @@ usage of this script and the options, run:
 ```
 
 You can also run the e2e tests with an existing Kind cluster. Refer to this
-[document](/docs/kind.md) for instructions on how to create a Kind cluster and
-use Antrea as the CNI. You need at least one control-plane Node and one worker
-Node. Before running the Go e2e tests, you will also need to copy the Antrea
-manifest to the control-plane Docker container:
+[document](../../docs/kind.md) for instructions on how to create a Kind cluster
+and use Antrea as the CNI. You need at least one control-plane Node and one
+worker Node. Before running the Go e2e tests, you will also need to copy the
+Antrea manifest to the control-plane Docker container:
 
 ```bash
 ./hack/generate-manifest.sh | docker exec -i kind-control-plane dd of=/root/antrea.yml
@@ -231,7 +231,7 @@ then make the code changes on the local repo and
 You can load the new image into the kind cluster using the command below:
 
 ```bash
-kind load docker-image projects.registry.vmware.com/antrea/antrea-ubuntu:latest --name <kind_cluster_name>
+kind load docker-image antrea/antrea-ubuntu:latest --name <kind_cluster_name>
 ```
 
 By default, if a test case fails, we write some useful debug information to a

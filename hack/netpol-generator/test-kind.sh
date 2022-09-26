@@ -27,7 +27,7 @@ JOB_NAME=job.batch/cyclonus
 
 
 kind create cluster --config "$KIND_CONFIG"
-kind load docker-image projects.registry.vmware.com/antrea/antrea-ubuntu:latest
+kind load docker-image antrea/antrea-ubuntu:latest
 
 # pre-load cyclonus image
 docker pull mfenwick100/cyclonus:v0.4.7
