@@ -389,7 +389,7 @@ spec:
             secretKeyRef:
               key: aws_session_token
               name: flow-aggregator-aws-credentials
-        image: projects.registry.vmware.com/antrea/flow-aggregator:latest
+        image: antrea/flow-aggregator:latest
         imagePullPolicy: IfNotPresent
         name: flow-aggregator
         ports:

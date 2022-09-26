@@ -1,6 +1,6 @@
 # -- Container image to use for Antrea components.
 image:
-  repository: "projects.registry.vmware.com/antrea/antrea-ubuntu"
+  repository: "antrea/antrea-ubuntu"
   pullPolicy: "IfNotPresent"
   tag: ""
 
