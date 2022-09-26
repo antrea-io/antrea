@@ -312,8 +312,8 @@ func TestStaleController_CleanupResourceExport(t *testing.T) {
 			},
 		},
 	}
-	labelNormalizedExist := "namespace:purpose=test&pod:app=web"
-	labelNormalizedNonExist := "namespace:purpose=test&pod:app=db"
+	labelNormalizedExist := "namespace:kubernetes.io/metadata.name=test-ns,purpose=test&pod:app=web"
+	labelNormalizedNonExist := "namespace:kubernetes.io/metadata.name=test-ns,purpose=test&pod:app=db"
 	toKeepLabelResExport := mcsv1alpha1.ResourceExport{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
@@ -347,13 +347,14 @@ func TestStaleController_CleanupResourceExport(t *testing.T) {
 		},
 	}
 	tests := []struct {
-		name               string
-		existSvcList       *corev1.ServiceList
-		existPodList       *corev1.PodList
-		existNamespaceList *corev1.NamespaceList
-		existSvcExpList    *k8smcsv1alpha1.ServiceExportList
-		existResExpList    *mcsv1alpha1.ResourceExportList
-		wantErr            bool
+		name                   string
+		existSvcList           *corev1.ServiceList
+		existPodList           *corev1.PodList
+		existNamespaceList     *corev1.NamespaceList
+		existLabelIdentityList *mcsv1alpha1.LabelIdentityList
+		existSvcExpList        *k8smcsv1alpha1.ServiceExportList
+		existResExpList        *mcsv1alpha1.ResourceExportList
+		wantErr                bool
 	}{
 		{
 			name:               "clean up ResourceExport successfully",

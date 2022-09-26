@@ -142,7 +142,7 @@ func (c *StaleResCleanupController) cleanupStaleResourcesOnMember() error {
 	if err := c.cleanupClusterInfoResourceExport(commonArea, resExpList); err != nil {
 		return err
 	}
-	if err := c.cleanLabelIdentityResourceExport(commonArea, resExpList); err != nil {
+	if err := c.cleanupLabelIdentityResourceExport(commonArea, resExpList); err != nil {
 		return err
 	}
 	return nil
@@ -306,7 +306,7 @@ func (c *StaleResCleanupController) cleanupServiceResourceExport(commonArea comm
 	return nil
 }
 
-func (c *StaleResCleanupController) cleanLabelIdentityResourceExport(commonArea commonarea.RemoteCommonArea,
+func (c *StaleResCleanupController) cleanupLabelIdentityResourceExport(commonArea commonarea.RemoteCommonArea,
 	resExpList *mcsv1alpha1.ResourceExportList) error {
 	podList, nsList := &corev1.PodList{}, &corev1.NamespaceList{}
 	if err := c.List(ctx, podList, &client.ListOptions{}); err != nil {
@@ -322,12 +322,17 @@ func (c *StaleResCleanupController) cleanLabelIdentityResourceExport(commonArea 
 			staleResExpItems[resExp.Spec.LabelIdentity.NormalizedLabel] = resExp
 		}
 	}
-	nsLabels := map[string]string{}
+	nsLabelMap := map[string]string{}
 	for _, ns := range nsList.Items {
-		nsLabels[ns.Name] = "namespace:" + labels.FormatLabels(ns.Labels)
+		if _, ok := ns.Labels[corev1.LabelMetadataName]; !ok {
+			// NamespaceDefaultLabelName is supported from K8s v1.21. For K8s versions before v1.21,
+			// we append the Namespace name label to the Namespace label set.
+			ns.Labels[corev1.LabelMetadataName] = ns.Name
+		}
+		nsLabelMap[ns.Name] = "namespace:" + labels.FormatLabels(ns.Labels)
 	}
 	for _, p := range podList.Items {
-		podNSlabel, ok := nsLabels[p.Namespace]
+		podNSlabel, ok := nsLabelMap[p.Namespace]
 		if !ok {
 			continue
 		}
@@ -336,7 +341,7 @@ func (c *StaleResCleanupController) cleanLabelIdentityResourceExport(commonArea 
 	}
 	for _, r := range staleResExpItems {
 		re := r
-		klog.InfoS("Cleaning up ResourceExport", "ResourceExport", klog.KObj(&re))
+		klog.InfoS("Cleaning up stale ResourceExport", "ResourceExport", klog.KObj(&re))
 		if err := commonArea.Delete(ctx, &re, &client.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
 			return err
 		}

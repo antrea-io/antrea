@@ -113,7 +113,7 @@ func (r *LabelIdentityResourceImportReconciler) handleLabelIdentityImpDelete(ctx
 		},
 	}
 	if err := r.localClusterClient.Delete(ctx, labelIdentity, &client.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
-		klog.ErrorS(err, "Failed to delete LabelIdentity", "labelIdentity", labelIdentity.Name)
+		klog.ErrorS(err, "Failed to delete LabelIdentity", "clusterID", r.localClusterID, "labelIdentity", labelIdentity.Name)
 		return ctrl.Result{}, err
 	}
 	return ctrl.Result{}, nil

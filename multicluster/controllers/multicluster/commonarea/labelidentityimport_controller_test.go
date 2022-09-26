@@ -119,17 +119,19 @@ func TestLabelIdentityResourceImportReconcile(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(tt.existLabelIdentity).Build()
-		fakeRemoteClient := fake.NewClientBuilder().WithScheme(scheme).WithLists(&tt.existResImp).Build()
-		remoteCluster := NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", localClusterID, "default")
-		r := NewLabelIdentityResourceImportReconciler(fakeClient, scheme, fakeClient, localClusterID, "default", remoteCluster)
+		t.Run(tt.name, func(t *testing.T) {
+			fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(tt.existLabelIdentity).Build()
+			fakeRemoteClient := fake.NewClientBuilder().WithScheme(scheme).WithLists(&tt.existResImp).Build()
+			remoteCluster := NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", localClusterID, "default")
+			r := NewLabelIdentityResourceImportReconciler(fakeClient, scheme, fakeClient, localClusterID, "default", remoteCluster)
 
-		resImpReq := ctrl.Request{NamespacedName: tt.resImportNamespacedName}
-		_, err := r.Reconcile(ctx, resImpReq)
-		require.NoError(t, err, "LabelIdentityResourceImport Reconciler should handle LabelIdentity event successfully but got error")
-		actLabelIdentity := &mcsv1alpha1.LabelIdentity{}
-		err = fakeClient.Get(ctx, types.NamespacedName{Namespace: "", Name: tt.resImportNamespacedName.Name}, actLabelIdentity)
-		assert.Equal(t, tt.isDeleted, apierrors.IsNotFound(err))
-		assert.Equal(t, tt.expLabelIdentity, actLabelIdentity.Spec)
+			resImpReq := ctrl.Request{NamespacedName: tt.resImportNamespacedName}
+			_, err := r.Reconcile(ctx, resImpReq)
+			require.NoError(t, err, "LabelIdentityResourceImport Reconciler should handle LabelIdentity event successfully but got error")
+			actLabelIdentity := &mcsv1alpha1.LabelIdentity{}
+			err = fakeClient.Get(ctx, types.NamespacedName{Namespace: "", Name: tt.resImportNamespacedName.Name}, actLabelIdentity)
+			assert.Equal(t, tt.isDeleted, apierrors.IsNotFound(err))
+			assert.Equal(t, tt.expLabelIdentity, actLabelIdentity.Spec)
+		})
 	}
 }

@@ -137,9 +137,6 @@ func (r *ResourceImportReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		}
 		return r.handleResImpUpdateForClusterInfo(ctx, req, &resImp)
 	}
-	if isDeleted {
-		r.installedResImports.Delete(resImp)
-	}
 	return ctrl.Result{}, nil
 }
 

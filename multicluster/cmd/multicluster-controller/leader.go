@@ -52,6 +52,7 @@ func newLeaderCommand() *cobra.Command {
 func runLeader(o *Options) error {
 	// on the leader we want the reconciler to run for a given Namespace instead of cluster scope
 	o.options.Namespace = env.GetPodNamespace()
+	stopCh := signals.RegisterSignalHandlers()
 
 	mgr, err := setupManagerAndCertController(o)
 	if err != nil {
@@ -96,10 +97,11 @@ func runLeader(o *Options) error {
 	if err = labelExportReconciler.SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("error creating LabelIdentityExport controller: %v", err)
 	}
+	go labelExportReconciler.Run(stopCh)
+
 	if err = (&multiclusterv1alpha1.ResourceExport{}).SetupWebhookWithManager(mgr); err != nil {
 		return fmt.Errorf("error creating ResourceExport webhook: %v", err)
 	}
-	stopCh := signals.RegisterSignalHandlers()
 	staleController := multiclustercontrollers.NewStaleResCleanupController(
 		mgr.GetClient(),
 		mgr.GetScheme(),

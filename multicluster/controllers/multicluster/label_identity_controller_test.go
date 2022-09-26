@@ -19,6 +19,7 @@ package multicluster
 import (
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/core/v1"
@@ -96,16 +97,15 @@ var (
 
 func TestLabelIdentityReconciler(t *testing.T) {
 	tests := []struct {
-		name                   string
-		existingPods           *v1.PodList
-		podEvent               *v1.Pod
-		podNamespaceName       *types.NamespacedName
-		eventType              int
-		expRequeue             bool
-		labelUpdatesInProgress sets.String
-		expNormalizedLabels    []string
-		expLabelsToPodsCache   map[string]sets.String
-		expPodLabelCache       map[string]string
+		name                 string
+		existingPods         *v1.PodList
+		podEvent             *v1.Pod
+		podNamespaceName     *types.NamespacedName
+		eventType            int
+		expLabelsQueued      bool
+		expNormalizedLabels  []string
+		expLabelsToPodsCache map[string]sets.String
+		expPodLabelCache     map[string]string
 	}{
 		{
 			name:                 "pod add event",
@@ -113,6 +113,7 @@ func TestLabelIdentityReconciler(t *testing.T) {
 			podEvent:             podA,
 			podNamespaceName:     podANamespacedName,
 			eventType:            addEvent,
+			expLabelsQueued:      true,
 			expNormalizedLabels:  []string{normalizedLabel},
 			expLabelsToPodsCache: map[string]sets.String{normalizedLabel: sets.NewString(podAName)},
 			expPodLabelCache:     map[string]string{podANamespacedName.String(): normalizedLabel},
@@ -123,20 +124,10 @@ func TestLabelIdentityReconciler(t *testing.T) {
 			podEvent:             podB,
 			podNamespaceName:     podBNamespacedName,
 			eventType:            addEvent,
+			expLabelsQueued:      false,
 			expNormalizedLabels:  []string{normalizedLabel},
 			expLabelsToPodsCache: map[string]sets.String{normalizedLabel: sets.NewString(podAName, podBName)},
 			expPodLabelCache:     map[string]string{podAName: normalizedLabel, podBName: normalizedLabel},
-		},
-		{
-			name:                   "pod add event label resExport creating/deleting",
-			existingPods:           &v1.PodList{Items: []v1.Pod{}},
-			podEvent:               podB,
-			podNamespaceName:       podBNamespacedName,
-			eventType:              addEvent,
-			labelUpdatesInProgress: sets.NewString(normalizedLabel),
-			expRequeue:             true,
-			expLabelsToPodsCache:   map[string]sets.String{},
-			expPodLabelCache:       map[string]string{},
 		},
 		{
 			name:                 "pod update event",
@@ -144,6 +135,7 @@ func TestLabelIdentityReconciler(t *testing.T) {
 			podEvent:             newPodA,
 			podNamespaceName:     podANamespacedName,
 			eventType:            updateEvent,
+			expLabelsQueued:      true,
 			expNormalizedLabels:  []string{normalizedLabelDB},
 			expLabelsToPodsCache: map[string]sets.String{normalizedLabelDB: sets.NewString(podAName)},
 			expPodLabelCache:     map[string]string{podAName: normalizedLabelDB},
@@ -154,6 +146,7 @@ func TestLabelIdentityReconciler(t *testing.T) {
 			podEvent:             podA,
 			podNamespaceName:     podANamespacedName,
 			eventType:            deleteEvent,
+			expLabelsQueued:      true,
 			expNormalizedLabels:  []string{},
 			expLabelsToPodsCache: map[string]sets.String{},
 			expPodLabelCache:     map[string]string{},
@@ -164,6 +157,7 @@ func TestLabelIdentityReconciler(t *testing.T) {
 			podEvent:             podB,
 			podNamespaceName:     podBNamespacedName,
 			eventType:            deleteEvent,
+			expLabelsQueued:      false,
 			expNormalizedLabels:  []string{normalizedLabel},
 			expLabelsToPodsCache: map[string]sets.String{normalizedLabel: sets.NewString(podAName)},
 			expPodLabelCache:     map[string]string{podAName: normalizedLabel},
@@ -171,12 +165,16 @@ func TestLabelIdentityReconciler(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			stopCh := make(chan struct{})
+			defer close(stopCh)
+
 			fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithLists(tt.existingPods).WithObjects(ns).Build()
 			fakeRemoteClient := fake.NewClientBuilder().WithScheme(scheme).Build()
 			commonArea := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", localClusterID, leaderNamespace)
 			mcReconciler := NewMemberClusterSetReconciler(fakeClient, scheme, "default")
 			mcReconciler.SetRemoteCommonArea(commonArea)
 			r := NewLabelIdentityReconciler(fakeClient, scheme, mcReconciler)
+			go r.Run(stopCh)
 
 			for _, p := range tt.existingPods.Items {
 				req := ctrl.Request{
@@ -188,9 +186,8 @@ func TestLabelIdentityReconciler(t *testing.T) {
 				_, err := r.Reconcile(ctx, req)
 				assert.NoError(t, err, "LabelIdentity Reconciler got error during reconciling initial Pod events")
 			}
-			if len(tt.labelUpdatesInProgress) > 0 {
-				r.labelExportUpdatesInProgress = tt.labelUpdatesInProgress
-			}
+			time.Sleep(10 * time.Millisecond)
+			assert.Equalf(t, r.labelQueue.Len(), 0, "LabelIdentity Reconciler failed to process label ResourceExport for existing Pods")
 			switch tt.eventType {
 			case addEvent:
 				tt.podEvent.ResourceVersion = ""
@@ -203,9 +200,8 @@ func TestLabelIdentityReconciler(t *testing.T) {
 			var err error
 			req := ctrl.Request{NamespacedName: *tt.podNamespaceName}
 
-			ctrlResult, err := r.Reconcile(ctx, req)
+			_, err = r.Reconcile(ctx, req)
 			assert.NoError(t, err, "LabelIdentity Reconciler got error during reconciling Pod event")
-			assert.Equal(t, tt.expRequeue, ctrlResult.Requeue, "Unexpected requeue result from reconciling")
 
 			if !reflect.DeepEqual(r.labelToPodsCache, tt.expLabelsToPodsCache) {
 				t.Errorf("Unexpected labelToPodsCache in LabelIdentity Reconciler. Exp: %s, Act: %s", tt.expLabelsToPodsCache, r.labelToPodsCache)
@@ -213,6 +209,8 @@ func TestLabelIdentityReconciler(t *testing.T) {
 			if !reflect.DeepEqual(r.podLabelCache, tt.expPodLabelCache) {
 				t.Errorf("Unexpected podLabelCache in LabelIdentity Reconciler. Exp: %s, Act: %s", tt.expPodLabelCache, r.podLabelCache)
 			}
+			time.Sleep(10 * time.Millisecond)
+			assert.Equalf(t, r.labelQueue.Len(), 0, "LabelIdentity Reconciler failed to process label ResourceExport for testcase Pod")
 			actLabelIdentityResourceExports := &mcsv1alpha1.ResourceExportList{}
 			err = commonArea.List(ctx, actLabelIdentityResourceExports)
 			assert.NoError(t, err, "Failed to list ResourceExports after reconciliation")

@@ -20,6 +20,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -86,19 +87,33 @@ func TestLabelIdentityResourceExportReconclie(t *testing.T) {
 		originalClusterToLabels  map[string]sets.String
 		expLabelsToClusters      map[string]sets.String
 		expClusterToLabels       map[string]sets.String
-		expLabelResImpDelete     bool
+		expLabelResImpDeleted    bool
 	}{
 		{
 			name: "create LabelIdentity kind of ResImp",
 			existResExp: &mcsv1alpha1.ResourceExportList{
 				Items: []mcsv1alpha1.ResourceExport{*labelIdentityResExp},
 			},
-			existResImp:          &mcsv1alpha1.ResourceImportList{},
-			resExpNamespacedName: resExpNamespacedName,
-			expNormalizedLabel:   normalizedLabel,
-			expLabelsToClusters:  map[string]sets.String{labelHash: sets.NewString(localClusterID)},
-			expClusterToLabels:   map[string]sets.String{localClusterID: sets.NewString(labelHash)},
-			expLabelResImpDelete: false,
+			existResImp:           &mcsv1alpha1.ResourceImportList{},
+			resExpNamespacedName:  resExpNamespacedName,
+			expNormalizedLabel:    normalizedLabel,
+			expLabelsToClusters:   map[string]sets.String{labelHash: sets.NewString(localClusterID)},
+			expClusterToLabels:    map[string]sets.String{localClusterID: sets.NewString(labelHash)},
+			expLabelResImpDeleted: false,
+		},
+		{
+			name: "LabelIdentity kind of ResImp already exist",
+			existResExp: &mcsv1alpha1.ResourceExportList{
+				Items: []mcsv1alpha1.ResourceExport{*labelIdentityResExp},
+			},
+			existResImp: &mcsv1alpha1.ResourceImportList{
+				Items: []mcsv1alpha1.ResourceImport{*labelIdentityResImp},
+			},
+			resExpNamespacedName:  resExpNamespacedName,
+			expNormalizedLabel:    normalizedLabel,
+			expLabelsToClusters:   map[string]sets.String{labelHash: sets.NewString(localClusterID)},
+			expClusterToLabels:    map[string]sets.String{localClusterID: sets.NewString(labelHash)},
+			expLabelResImpDeleted: false,
 		},
 		{
 			name: "ResExport delete LabelIdentity not stale in ClusterSet",
@@ -114,30 +129,36 @@ func TestLabelIdentityResourceExportReconclie(t *testing.T) {
 			originalClusterToLabels:  map[string]sets.String{localClusterID: sets.NewString(labelHash), clusterBID: sets.NewString(labelHash)},
 			expLabelsToClusters:      map[string]sets.String{labelHash: sets.NewString(localClusterID)},
 			expClusterToLabels:       map[string]sets.String{localClusterID: sets.NewString(labelHash), clusterBID: sets.NewString()},
-			expLabelResImpDelete:     false,
+			expLabelResImpDeleted:    false,
 		},
 		{
-			name:                     "delete LabelIdentity kind of ResImp",
-			existResExp:              &mcsv1alpha1.ResourceExportList{},
-			existResImp:              &mcsv1alpha1.ResourceImportList{},
+			name:        "delete LabelIdentity kind of ResImp",
+			existResExp: &mcsv1alpha1.ResourceExportList{},
+			existResImp: &mcsv1alpha1.ResourceImportList{
+				Items: []mcsv1alpha1.ResourceImport{*labelIdentityResImp},
+			},
 			resExpNamespacedName:     resExpNamespacedName,
 			expNormalizedLabel:       "",
 			originalLabelsToClusters: map[string]sets.String{labelHash: sets.NewString(localClusterID)},
 			originalClusterToLabels:  map[string]sets.String{localClusterID: sets.NewString(labelHash)},
 			expLabelsToClusters:      map[string]sets.String{},
 			expClusterToLabels:       map[string]sets.String{localClusterID: sets.NewString()},
-			expLabelResImpDelete:     true,
+			expLabelResImpDeleted:    true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			stopCh := make(chan struct{})
+			defer close(stopCh)
+
 			fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithLists(tt.existResExp, tt.existResImp).Build()
 			r := NewLabelIdentityExportReconciler(fakeClient, scheme, leaderNamespace)
 			if len(tt.originalLabelsToClusters) > 0 {
 				r.clusterToLabels = tt.originalClusterToLabels
 				r.labelsToClusters = tt.originalLabelsToClusters
 			}
+			go r.Run(stopCh)
 			resExpReq := ctrl.Request{NamespacedName: tt.resExpNamespacedName}
 			if _, err := r.Reconcile(ctx, resExpReq); err != nil {
 				t.Errorf("LabelIdentityExport Reconciler got error during reconciling. error = %v", err)
@@ -150,11 +171,16 @@ func TestLabelIdentityResourceExportReconclie(t *testing.T) {
 				t.Errorf("LabelIdentityExport Reconciler operated clusterToLabels incorrectly. Exp: %s, Act: %s", tt.expClusterToLabels, r.clusterToLabels)
 			}
 
+			time.Sleep(100 * time.Millisecond)
 			actLabelIdentityResImp := &mcsv1alpha1.ResourceImport{}
 			lastIdx := strings.LastIndex(tt.resExpNamespacedName.Name, "-")
 			parsedLabelHash := tt.resExpNamespacedName.Name[lastIdx+1:]
 			err := fakeClient.Get(ctx, types.NamespacedName{Namespace: "default", Name: parsedLabelHash}, actLabelIdentityResImp)
-			assert.Equalf(t, tt.expLabelResImpDelete, apierrors.IsNotFound(err), "unexpected error status when getting LabelIdentity kind of ResourceImport: %v", err)
+			assert.Equalf(t, tt.expLabelResImpDeleted, apierrors.IsNotFound(err), "Unexpected error status when getting LabelIdentity kind of ResourceImport: %v", err)
+			if tt.expNormalizedLabel != "" {
+				actualLabel := actLabelIdentityResImp.Spec.LabelIdentity.Label
+				assert.Equalf(t, tt.expNormalizedLabel, actualLabel, "Unexpected normalized label in ResourceImport. Exp: %s, Act: %s", tt.expNormalizedLabel, actualLabel)
+			}
 		})
 	}
 }
@@ -173,22 +199,26 @@ func TestIDAllocatorBasic(t *testing.T) {
 			false,
 		},
 		{
-			"allocate", 2,
+			"allocate",
+			2,
 			0,
 			false,
 		},
 		{
-			"allocate", 3,
+			"allocate",
+			3,
 			0,
 			false,
 		},
 		{
-			"release", 2,
+			"release",
+			2,
 			1,
 			false,
 		},
 		{
-			"release", 1,
+			"release",
+			1,
 			2,
 			false,
 		},
@@ -199,7 +229,8 @@ func TestIDAllocatorBasic(t *testing.T) {
 			false,
 		},
 		{
-			"allocate", 2,
+			"allocate",
+			2,
 			0,
 			false,
 		},
