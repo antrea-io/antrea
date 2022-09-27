@@ -623,8 +623,15 @@ func (c *client) InstallServiceGroup(groupID binding.GroupIDType, withSessionAff
 	defer c.replayMutex.RUnlock()
 
 	group := c.featureService.serviceEndpointGroup(groupID, withSessionAffinity, endpoints...)
-	if err := group.Add(); err != nil {
-		return fmt.Errorf("error when installing Service Endpoints Group: %w", err)
+	_, installed := c.featureService.groupCache.Load(groupID)
+	if !installed {
+		if err := group.Add(); err != nil {
+			return fmt.Errorf("error when installing Service Endpoints Group %d: %w", groupID, err)
+		}
+	} else {
+		if err := group.Modify(); err != nil {
+			return fmt.Errorf("error when modifying Service Endpoints Group %d: %w", groupID, err)
+		}
 	}
 	c.featureService.groupCache.Store(groupID, group)
 	return nil
@@ -633,8 +640,8 @@ func (c *client) InstallServiceGroup(groupID binding.GroupIDType, withSessionAff
 func (c *client) UninstallServiceGroup(groupID binding.GroupIDType) error {
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
-	if !c.bridge.DeleteGroup(groupID) {
-		return fmt.Errorf("group %d delete failed", groupID)
+	if err := c.bridge.DeleteGroup(groupID); err != nil {
+		return fmt.Errorf("error when deleting Service Endpoints Group %d: %w", groupID, err)
 	}
 	c.featureService.groupCache.Delete(groupID)
 	return nil
@@ -1328,8 +1335,8 @@ func (c *client) InstallMulticastGroup(groupID binding.GroupIDType, localReceive
 func (c *client) UninstallMulticastGroup(groupID binding.GroupIDType) error {
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
-	if !c.bridge.DeleteGroup(groupID) {
-		return fmt.Errorf("group %d delete failed", groupID)
+	if err := c.bridge.DeleteGroup(groupID); err != nil {
+		return fmt.Errorf("error when deleting Multicast receiver Group %d: %w", groupID, err)
 	}
 	c.featureMulticast.groupCache.Delete(groupID)
 	return nil
