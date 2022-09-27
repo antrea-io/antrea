@@ -229,10 +229,16 @@ func TestResourceImportReconciler_handleDeleteEvent(t *testing.T) {
 					if err := fakeClient.Get(ctx, types.NamespacedName{Namespace: "default", Name: "nginx"}, svcImp); !apierrors.IsNotFound(err) {
 						t.Errorf("ResourceImport Reconciler should delete a ServiceImport successfully but got error = %v", err)
 					}
+					if _, exists, _ := r.installedResImports.Get(*svcResImport); exists {
+						t.Errorf("Reconciler should delete ResImport from installedResImports after successful resource deletion")
+					}
 				case "Endpoints":
 					ep := &corev1.Endpoints{}
 					if err := fakeClient.Get(ctx, types.NamespacedName{Namespace: "default", Name: "antrea-mc-nginx"}, ep); !apierrors.IsNotFound(err) {
 						t.Errorf("ResourceImport Reconciler should delete an Endpoint successfully but got error = %v", err)
+					}
+					if _, exists, _ := r.installedResImports.Get(*epResImport); exists {
+						t.Errorf("Reconciler should delete ResImport from installedResImports after successful resource deletion")
 					}
 				}
 			}

@@ -75,8 +75,13 @@ func (r *ResourceImportReconciler) handleResImpUpdateForClusterInfo(ctx context.
 func (r *ResourceImportReconciler) handleResImpDeleteForClusterInfo(ctx context.Context, req ctrl.Request, resImp *mcsv1alpha1.ResourceImport) (ctrl.Result, error) {
 	clusterInfoImport, clusterInfoImportName := newClusterInfoImport(req.Name, r.namespace)
 	klog.InfoS("Deleting ClusterInfoImport", "clusterinfoimport", clusterInfoImportName.String())
-	err := r.localClusterClient.Delete(ctx, clusterInfoImport, &client.DeleteOptions{})
-	return ctrl.Result{}, client.IgnoreNotFound(err)
+	err := client.IgnoreNotFound(r.localClusterClient.Delete(ctx, clusterInfoImport, &client.DeleteOptions{}))
+	if err != nil {
+		klog.ErrorS(err, "Failed to delete imported ClusterInfo", "clusterInfo", clusterInfoImportName)
+		return ctrl.Result{}, err
+	}
+	r.installedResImports.Delete(*resImp)
+	return ctrl.Result{}, nil
 }
 
 func newClusterInfoImport(name, namespace string) (*mcsv1alpha1.ClusterInfoImport, types.NamespacedName) {

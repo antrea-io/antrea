@@ -120,9 +120,12 @@ func (r *ResourceImportReconciler) handleResImpDeleteForClusterNetworkPolicy(ctx
 			Name: acnpName,
 		},
 	}
-	if err := r.localClusterClient.Delete(ctx, acnp, &client.DeleteOptions{}); err != nil {
-		return ctrl.Result{}, client.IgnoreNotFound(err)
+	err := client.IgnoreNotFound(r.localClusterClient.Delete(ctx, acnp, &client.DeleteOptions{}))
+	if err != nil {
+		klog.ErrorS(err, "Failed to delete imported ACNP", "acnp", acnpName)
+		return ctrl.Result{}, err
 	}
+	r.installedResImports.Delete(*resImp)
 	return ctrl.Result{}, nil
 }
 
