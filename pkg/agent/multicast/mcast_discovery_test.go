@@ -180,7 +180,6 @@ func generatePacketInForRemoteReport(t *testing.T, snooper *IGMPSnooper, groups 
 }
 
 func createTunnelInterface(tunnelPort uint32, localNodeIP net.IP) *interfacestore.InterfaceConfig {
-	tunnelInterface := interfacestore.NewTunnelInterface("antrea-tun0", ovsconfig.GeneveTunnel, 6081, localNodeIP, false)
-	tunnelInterface.OVSPortConfig = &interfacestore.OVSPortConfig{OFPort: int32(tunnelPort)}
+	tunnelInterface := interfacestore.NewTunnelInterface("antrea-tun0", ovsconfig.GeneveTunnel, 6081, localNodeIP, false, &interfacestore.OVSPortConfig{OFPort: int32(tunnelPort)})
 	return tunnelInterface
 }

@@ -2952,6 +2952,14 @@ data:
     # and 7471 for STT.
     tunnelPort: 0
 
+    # TunnelCsum determines whether to compute UDP encapsulation header (Geneve or VXLAN) checksums on outgoing
+    # packets. For Linux kernel before Mar 2021, UDP checksum must be present to trigger GRO on the receiver for better
+    # performance of Geneve and VXLAN tunnels. The issue has been fixed by
+    # https://github.com/torvalds/linux/commit/89e5c58fc1e2857ccdaae506fb8bc5fed57ee063, thus computing UDP checksum is
+    # no longer necessary.
+    # It should only be set to true when you are using an unpatched Linux kernel and observing poor transfer performance.
+    tunnelCsum: false
+
     # Determines how tunnel traffic is encrypted. Currently encryption only works with encap mode.
     # It has the following options:
     # - none (default):  Inter-node Pod traffic will not be encrypted.
@@ -4140,7 +4148,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 030faeb129b70e3abd5720d2262d122abea2428e342f02836846a3af26f20999
+        checksum/config: ec59529f4b774af0f12a30c31eb48e5494ac6371ce624e872d1e6b76b797325e
       labels:
         app: antrea
         component: antrea-agent
@@ -4383,7 +4391,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 030faeb129b70e3abd5720d2262d122abea2428e342f02836846a3af26f20999
+        checksum/config: ec59529f4b774af0f12a30c31eb48e5494ac6371ce624e872d1e6b76b797325e
       labels:
         app: antrea
         component: antrea-controller
