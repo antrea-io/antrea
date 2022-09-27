@@ -223,15 +223,16 @@ func (b *OFBridge) createGroupWithType(id GroupIDType, groupType ofctrl.GroupTyp
 	return g
 }
 
-func (b *OFBridge) DeleteGroup(id GroupIDType) bool {
-	g := b.ofSwitch.GetGroup(uint32(id))
-	if g == nil {
-		return true
+func (b *OFBridge) DeleteGroup(id GroupIDType) error {
+	ofctrlGroup := b.ofSwitch.GetGroup(uint32(id))
+	if ofctrlGroup == nil {
+		return nil
 	}
+	g := &ofGroup{bridge: b, ofctrl: ofctrlGroup}
 	if err := g.Delete(); err != nil {
-		return false
+		return fmt.Errorf("failed to delete the group: %w", err)
 	}
-	return true
+	return b.ofSwitch.DeleteGroup(uint32(id))
 }
 
 func (b *OFBridge) CreateMeter(id MeterIDType, flags ofctrl.MeterFlag) Meter {
@@ -552,26 +553,30 @@ func (b *OFBridge) AddOFEntriesInBundle(addEntries []OFEntry, modEntries []OFEnt
 		return err
 	}
 
+	var sentMessages int
 	addMessage := func(entrySet []entryOperation) error {
 		if entrySet == nil {
 			return nil
 		}
 		for _, e := range entrySet {
-			msg, err := e.entry.GetBundleMessage(e.operation)
+			messages, err := e.entry.GetBundleMessages(e.operation)
 			if err != nil {
 				return err
 			}
+			sentMessages += len(messages)
 			// "AddMessage" operation is async, the function only returns error which occur when constructing and sending
 			// the BundleAdd message. An absence of error does not mean that all OpenFlow entries are added into the
 			// bundle by the switch. The number of entries successfully added to the bundle by the switch will be
 			// returned by function "Complete".
-			if err := tx.AddMessage(msg); err != nil {
-				// Close the bundle and cancel it if there is error when adding the FlowMod message.
-				_, err := tx.Complete()
-				if err == nil {
-					tx.Abort()
+			for _, message := range messages {
+				if err := tx.AddMessage(message); err != nil {
+					// Close the bundle and cancel it if there is error when adding the FlowMod message.
+					_, err := tx.Complete()
+					if err == nil {
+						tx.Abort()
+					}
+					return err
 				}
-				return err
 			}
 		}
 		return nil
@@ -592,7 +597,7 @@ func (b *OFBridge) AddOFEntriesInBundle(addEntries []OFEntry, modEntries []OFEnt
 	count, err := tx.Complete()
 	if err != nil {
 		return err
-	} else if count != len(addEntries)+len(modEntries)+len(delEntries) {
+	} else if count != sentMessages {
 		// This case should not be possible if all the calls to "tx.AddMessage" returned nil. This is just a sanity check.
 		tx.Abort()
 		return errors.New("failed to add all Openflow entries in one transaction, cancelling it")

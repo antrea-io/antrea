@@ -99,8 +99,16 @@ func (f *featureMulticast) multicastReceiversGroup(groupID binding.GroupIDType, 
 			ResubmitToTable(MulticastOutputTable.GetID()).
 			Done()
 	}
-	if err := group.Add(); err != nil {
-		return fmt.Errorf("error when installing Multicast receiver Group: %w", err)
+
+	_, installed := f.groupCache.Load(groupID)
+	if !installed {
+		if err := group.Add(); err != nil {
+			return fmt.Errorf("error when installing Multicast receiver Group %d: %w", groupID, err)
+		}
+	} else {
+		if err := group.Modify(); err != nil {
+			return fmt.Errorf("error when modifying Multicast receiver Group %d: %w", groupID, err)
+		}
 	}
 	f.groupCache.Store(groupID, group)
 	return nil
@@ -176,14 +184,16 @@ func (f *featureMulticast) multicastPodMetricFlows(podIP net.IP, podOFPort uint3
 }
 
 func (f *featureMulticast) replayGroups() {
+	var groups []binding.OFEntry
 	f.groupCache.Range(func(id, value interface{}) bool {
 		group := value.(binding.Group)
 		group.Reset()
-		if err := group.Add(); err != nil {
-			klog.ErrorS(err, "Error when replaying cached group", "group", id)
-		}
+		groups = append(groups, group)
 		return true
 	})
+	if err := f.bridge.AddOFEntriesInBundle(groups, nil, nil); err != nil {
+		klog.ErrorS(err, "error when replaying cached groups for Multicast")
+	}
 }
 
 func (f *featureMulticast) multicastRemoteReportFlows(groupID binding.GroupIDType, firstMulticastTable binding.Table) []binding.Flow {
