@@ -300,7 +300,19 @@ func (c *ExternalNodeController) updateExternalNode(preEn *v1alpha1.ExternalNode
 func (c *ExternalNodeController) updateExternalEntity(ee *v1alpha2.ExternalEntity) error {
 	// resourceVersion must be specified for update operation,
 	// so it gets the existing ExternalEntity and modifies the changed fields.
-	existingEE, _ := c.crdClient.CrdV1alpha2().ExternalEntities(ee.Namespace).Get(context.TODO(), ee.Name, metav1.GetOptions{})
+	existingEE, err := c.crdClient.CrdV1alpha2().ExternalEntities(ee.Namespace).Get(context.TODO(), ee.Name, metav1.GetOptions{})
+	if err != nil {
+		if errors.IsNotFound(err) {
+			_, err = c.crdClient.CrdV1alpha2().ExternalEntities(ee.Namespace).Create(context.TODO(), ee, metav1.CreateOptions{})
+			if err != nil {
+				klog.ErrorS(err, "Failed to create ExternalEntity", "entityName", ee.Name, "entityNameSpace", ee.Namespace)
+				return err
+			}
+			return nil
+		}
+		klog.ErrorS(err, "Failed to get ExternalEntity", "entityName", ee.Name, "entityNameSpace", ee.Namespace)
+		return err
+	}
 	isChanged := false
 	if !reflect.DeepEqual(existingEE.Spec, ee.Spec) {
 		existingEE.Spec = ee.Spec
@@ -349,7 +361,7 @@ func (c *ExternalNodeController) deleteExternalEntity(namespace string, name str
 
 func genExternalEntity(eeName string, en *v1alpha1.ExternalNode) (*v1alpha2.ExternalEntity, error) {
 	ownerRef := &metav1.OwnerReference{
-		APIVersion: "v1alpha1",
+		APIVersion: "crd.antrea.io/v1alpha1",
 		Kind:       "ExternalNode",
 		Name:       en.GetName(),
 		UID:        en.GetUID(),
