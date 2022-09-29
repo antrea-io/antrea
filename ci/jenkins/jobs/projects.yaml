@@ -832,7 +832,8 @@
               #!/bin/bash
               source /home/ubuntu/.bashrc
               sudo ./ci/test-conformance-eks.sh --aws-access-key ${{AWS_ACCESS_KEY}} --aws-secret-key ${{AWS_SECRET_KEY}} \
-                --cluster-name ${{JOB_NAME}}-${{BUILD_NUMBER}} --log-mode detail --setup-only
+                --aws-service-user-role-arn ${{AWS_SERVICE_USER_ROLE_ARN}} --aws-service-user ${{AWS_SERVICE_USER_NAME}} --cluster-name ${{JOB_NAME}}-${{BUILD_NUMBER}} \
+                --log-mode detail --setup-only
           triggers:
           - timed: H H */2 * *
           publishers:
@@ -853,11 +854,17 @@
           wrappers:
           - credentials-binding:
             - text:
-                credential-id: AWS_ACCESS_KEY # Jenkins secret that stores aws access key
+                credential-id: AWS_SERVICE_USER_ACCESS_KEY # Jenkins secret that stores aws access key
                 variable: AWS_ACCESS_KEY
             - text:
-                credential-id: AWS_SECRET_KEY # Jenkins secret that stores aws secret key
+                credential-id: AWS_SERVICE_USER_SECRET_KEY # Jenkins secret that stores aws secret key
                 variable: AWS_SECRET_KEY
+            - text:
+                credential-id: AWS_SERVICE_USER_ROLE_ARN # Jenkins secret that stores aws role arn
+                variable: AWS_SERVICE_USER_ROLE_ARN
+            - text:
+                credential-id: AWS_SERVICE_USER_NAME # Jenkins secret that stores aws source profile
+                variable: AWS_SERVICE_USER_NAME
       - 'cloud-{name}-{test_name}-cleanup':
           test_name: eks
           description: This is for deleting EKS test clusters.
