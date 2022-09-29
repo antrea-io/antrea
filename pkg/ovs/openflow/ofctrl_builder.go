@@ -98,7 +98,8 @@ func (b *ofFlowBuilder) MatchXXReg(regID int, data []byte) FlowBuilder {
 
 // matchRegRange adds match condition for matching data in the target register at specified range.
 func (b *ofFlowBuilder) matchRegRange(regID int, data uint32, rng *Range) FlowBuilder {
-	s := fmt.Sprintf("reg%d[%d..%d]=0x%x", regID, rng[0], rng[1], data)
+	mask := rng.ToNXRange().ToUint32Mask()
+	s := fmt.Sprintf("reg%d=0x%x/0x%x", regID, (data<<rng.Offset())&mask, mask)
 	b.matchers = append(b.matchers, s)
 	reg := &ofctrl.NXRegister{
 		ID:    regID,
@@ -302,31 +303,31 @@ func ctLabelRange(high, low uint64, rng *Range, match *ofctrl.FlowMatch) {
 	match.CtLabelLo = low
 	match.CtLabelHiMask = 0xffff_ffff_ffff_ffff
 	match.CtLabelLoMask = 0xffff_ffff_ffff_ffff
-	if rng[0] == rng[1] {
-		if rng[0] < 64 {
-			match.CtLabelLoMask = 1 << rng[0]
-			match.CtLabelHiMask = 0
-		} else {
-			match.CtLabelHiMask = 1 << (rng[0] - 64)
-			match.CtLabelLoMask = 0
-		}
-	} else if rng[0] < 64 && rng[1] >= 64 {
-		match.CtLabelLoMask <<= rng[0]
-		match.CtLabelHiMask >>= 127 - rng[1]
-	} else if rng[1] < 64 {
+	if rng[1] < 64 {
 		match.CtLabelLoMask &= 0xffff_ffff_ffff_ffff << rng[0]
 		match.CtLabelLoMask &= 0xffff_ffff_ffff_ffff >> (63 - rng[1])
+		match.CtLabelHi = 0
 		match.CtLabelHiMask = 0
 	} else if rng[0] >= 64 {
 		match.CtLabelHiMask &= 0xffff_ffff_ffff_ffff << (rng[0] - 64)
 		match.CtLabelHiMask &= 0xffff_ffff_ffff_ffff >> (127 - rng[1])
+		match.CtLabelLo = 0
 		match.CtLabelLoMask = 0
+	} else {
+		match.CtLabelLoMask <<= rng[0]
+		match.CtLabelHiMask >>= 127 - rng[1]
 	}
 }
 
 func (b *ofFlowBuilder) MatchCTLabelField(high, low uint64, field *CtLabel) FlowBuilder {
-	b.matchers = append(b.matchers, fmt.Sprintf("ct_label[%d..%d]=0x%x%x", field.rng[0], field.rng[1], high, low))
 	ctLabelRange(high, low, field.GetRange(), &b.ofFlow.Match)
+	var matchStr string
+	if field.rng[1] < 64 {
+		matchStr = fmt.Sprintf("ct_label=0x%x/0x%x", b.ofFlow.Match.CtLabelLo, b.ofFlow.Match.CtLabelLoMask)
+	} else {
+		matchStr = fmt.Sprintf("ct_label=0x%x%016x/0x%x%016x", b.ofFlow.Match.CtLabelHi, b.ofFlow.Match.CtLabelLo, b.ofFlow.Match.CtLabelHiMask, b.ofFlow.Match.CtLabelLoMask)
+	}
+	b.matchers = append(b.matchers, matchStr)
 	return b
 }
 
@@ -373,13 +374,13 @@ func (b *ofFlowBuilder) MatchICMPCode(icmpCode byte) FlowBuilder {
 }
 
 func (b *ofFlowBuilder) MatchICMPv6Type(icmp6Type byte) FlowBuilder {
-	b.matchers = append(b.matchers, fmt.Sprintf("icmpv6_type=%d", icmp6Type))
+	b.matchers = append(b.matchers, fmt.Sprintf("icmp_type=%d", icmp6Type))
 	b.Match.Icmp6Type = &icmp6Type
 	return b
 }
 
 func (b *ofFlowBuilder) MatchICMPv6Code(icmp6Code byte) FlowBuilder {
-	b.matchers = append(b.matchers, fmt.Sprintf("icmpv6_code=%d", icmp6Code))
+	b.matchers = append(b.matchers, fmt.Sprintf("icmp_code=%d", icmp6Code))
 	b.Match.Icmp6Code = &icmp6Code
 	return b
 }
@@ -564,23 +565,25 @@ func (b *ofFlowBuilder) MatchSrcPort(port uint16, portMask *uint16) FlowBuilder 
 // a match to valid connection tracking state as a prerequisite, and valid connection tracking state matches include
 // "+new", "+est", "+rel" and "+trk-inv".
 func (b *ofFlowBuilder) MatchCTSrcIP(ip net.IP) FlowBuilder {
-	b.Match.CtIpSa = &ip
 	if ip.To4() != nil {
+		b.Match.CtIpSa = &ip
 		b.matchers = append(b.matchers, fmt.Sprintf("ct_nw_src=%s", ip.String()))
 	} else {
+		b.Match.CtIpv6Sa = &ip
 		b.matchers = append(b.matchers, fmt.Sprintf("ct_ipv6_src=%s", ip.String()))
 	}
-
 	return b
 }
 
 // MatchCTSrcIPNet is the same as MatchCTSrcIP but supports IP masking.
 func (b *ofFlowBuilder) MatchCTSrcIPNet(ipNet net.IPNet) FlowBuilder {
-	b.Match.CtIpSa = &ipNet.IP
-	b.Match.CtIpSaMask = maskToIP(ipNet.Mask)
 	if ipNet.IP.To4() != nil {
+		b.Match.CtIpSa = &ipNet.IP
+		b.Match.CtIpSaMask = maskToIP(ipNet.Mask)
 		b.matchers = append(b.matchers, fmt.Sprintf("ct_nw_src=%s", ipNet.String()))
 	} else {
+		b.Match.CtIpv6Sa = &ipNet.IP
+		b.Match.CtIpv6SaMask = maskToIP(ipNet.Mask)
 		b.matchers = append(b.matchers, fmt.Sprintf("ct_ipv6_src=%s", ipNet.String()))
 	}
 	return b
@@ -590,10 +593,11 @@ func (b *ofFlowBuilder) MatchCTSrcIPNet(ipNet net.IPNet) FlowBuilder {
 // requires a match to valid connection tracking state as a prerequisite, and valid connection tracking state matches
 // include "+new", "+est", "+rel" and "+trk-inv".
 func (b *ofFlowBuilder) MatchCTDstIP(ip net.IP) FlowBuilder {
-	b.Match.CtIpDa = &ip
 	if ip.To4() != nil {
+		b.Match.CtIpDa = &ip
 		b.matchers = append(b.matchers, fmt.Sprintf("ct_nw_dst=%s", ip.String()))
 	} else {
+		b.Match.CtIpv6Da = &ip
 		b.matchers = append(b.matchers, fmt.Sprintf("ct_ipv6_dst=%s", ip.String()))
 	}
 	return b
@@ -601,11 +605,13 @@ func (b *ofFlowBuilder) MatchCTDstIP(ip net.IP) FlowBuilder {
 
 // MatchCTDstIPNet is the same as MatchCTDstIP but supports IP masking.
 func (b *ofFlowBuilder) MatchCTDstIPNet(ipNet net.IPNet) FlowBuilder {
-	b.Match.CtIpDa = &ipNet.IP
-	b.Match.CtIpDaMask = maskToIP(ipNet.Mask)
 	if ipNet.IP.To4() != nil {
+		b.Match.CtIpDa = &ipNet.IP
+		b.Match.CtIpDaMask = maskToIP(ipNet.Mask)
 		b.matchers = append(b.matchers, fmt.Sprintf("ct_nw_dst=%s", ipNet.String()))
 	} else {
+		b.Match.CtIpv6Da = &ipNet.IP
+		b.Match.CtIpv6DaMask = maskToIP(ipNet.Mask)
 		b.matchers = append(b.matchers, fmt.Sprintf("ct_ipv6_dst=%s", ipNet.String()))
 	}
 	return b
@@ -634,14 +640,16 @@ func (b *ofFlowBuilder) MatchCTDstPort(port uint16) FlowBuilder {
 // "+new", "+est", "+rel" and "+trk-inv".
 func (b *ofFlowBuilder) MatchCTProtocol(proto Protocol) FlowBuilder {
 	switch proto {
-	case ProtocolTCP:
+	case ProtocolTCP, ProtocolTCPv6:
 		b.Match.CtIpProto = 6
-	case ProtocolUDP:
+	case ProtocolUDP, ProtocolUDPv6:
 		b.Match.CtIpProto = 17
-	case ProtocolSCTP:
+	case ProtocolSCTP, ProtocolSCTPv6:
 		b.Match.CtIpProto = 132
 	case ProtocolICMP:
 		b.Match.CtIpProto = 1
+	case ProtocolICMPv6:
+		b.Match.CtIpProto = 58
 	}
 	b.matchers = append(b.matchers, fmt.Sprintf("ct_nw_proto=%d", b.Match.CtIpProto))
 	return b
