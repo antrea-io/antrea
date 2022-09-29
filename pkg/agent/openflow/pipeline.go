@@ -2113,15 +2113,6 @@ func (f *featureNetworkPolicy) ingressClassifierFlows() []binding.Flow {
 			Action().GotoTable(IngressMetricTable.GetID()).
 			Done(),
 	}
-	if f.proxyAll {
-		// This generates the flow to match the NodePort Service packets and forward them to AntreaPolicyIngressRuleTable.
-		// Policies applied on NodePort Service will be enforced in AntreaPolicyIngressRuleTable.
-		flows = append(flows, IngressSecurityClassifierTable.ofTable.BuildFlow(priorityNormal+1).
-			Cookie(cookieID).
-			MatchRegMark(ToNodePortAddressRegMark).
-			Action().GotoTable(AntreaPolicyIngressRuleTable.GetID()).
-			Done())
-	}
 	return flows
 }
 
