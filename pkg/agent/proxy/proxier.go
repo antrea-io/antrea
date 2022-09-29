@@ -48,7 +48,7 @@ const (
 	resyncPeriod  = time.Minute
 	componentName = "antrea-agent-proxy"
 	// SessionAffinity timeout is implemented using a hard_timeout in OVS. hard_timeout is
-	// represented by a uint16 in the OpenFlow protocol,
+	// represented by an uint16 in the OpenFlow protocol,
 	maxSupportedAffinityTimeout = math.MaxUint16
 )
 
@@ -146,45 +146,48 @@ func (p *proxier) removeStaleServices() {
 			continue
 		}
 		svcInfo := svcPort.(*types.ServiceInfo)
-		klog.V(2).Infof("Removing stale Service: %s %s", svcPortName.Name, svcInfo.String())
-		if err := p.ofClient.UninstallServiceFlows(svcInfo.ClusterIP(), uint16(svcInfo.Port()), svcInfo.OFProtocol); err != nil {
-			klog.ErrorS(err, "Failed to remove flows of Service", "Service", svcPortName)
+		klog.V(2).InfoS("Removing stale Service", "Service", svcPortName, "ServiceInfo", svcInfo)
+
+		// Remove ClusterIP flows.
+		if err := p.removeClusterIPFlows(svcInfo); err != nil {
+			klog.ErrorS(err, "Failed to remove ClusterIP flows", "Service", svcPortName, "ServiceInfo", svcInfo)
 			continue
 		}
+		klog.V(2).InfoS("ClusterIP flows have been installed successfully", "Service", svcPortName, "ServiceInfo", svcInfo)
 
-		if p.proxyAll {
-			// Remove NodePort flows and configurations.
-			if svcInfo.NodePort() > 0 {
-				if err := p.uninstallNodePortService(uint16(svcInfo.NodePort()), svcInfo.OFProtocol); err != nil {
-					klog.ErrorS(err, "Failed to remove flows and configurations of Service", "Service", svcPortName)
-					continue
-				}
-			}
-		}
-		// Remove LoadBalancer flows and configurations.
-		if p.proxyLoadBalancerIPs && len(svcInfo.LoadBalancerIPStrings()) > 0 {
-			if err := p.uninstallLoadBalancerService(svcInfo.LoadBalancerIPStrings(), uint16(svcInfo.Port()), svcInfo.OFProtocol); err != nil {
-				klog.ErrorS(err, "Failed to remove flows and configurations of Service", "Service", svcPortName)
+		// Remove NodePort flows and ipsets.
+		if p.proxyAll && svcInfo.NodePort() > 0 {
+			if err := p.uninstallNodePortService(svcInfo); err != nil {
+				klog.ErrorS(err, "Failed to remove NodePort flows and ipsets", "Service", svcPortName, "ServiceInfo", svcInfo)
 				continue
 			}
+			klog.V(2).InfoS("NodePort flows and ipsets have been installed successfully", "Service", svcPortName, "ServiceInfo", svcInfo)
 		}
-		// Remove Service group whose Endpoints are local.
-		if svcInfo.NodeLocalExternal() {
-			if groupIDLocal, exist := p.groupCounter.Get(svcPortName, true); exist {
-				if err := p.ofClient.UninstallServiceGroup(groupIDLocal); err != nil {
-					klog.ErrorS(err, "Failed to remove Group of local Endpoints for Service", "Service", svcPortName)
-					continue
-				}
-				p.groupCounter.Recycle(svcPortName, true)
+		// Remove LoadBalancer flows and routes.
+		if p.proxyLoadBalancerIPs && len(svcInfo.LoadBalancerIPStrings()) > 0 {
+			if err := p.uninstallLoadBalancerService(svcInfo); err != nil {
+				klog.ErrorS(err, "Failed to remove LoadBalancer flows and routes", "Service", svcPortName, "ServiceInfo", svcInfo)
+				continue
 			}
+			klog.V(2).InfoS("LoadBalancer flows and routes have been installed successfully", "Service", svcPortName, "ServiceInfo", svcInfo)
 		}
-		// Remove Service group which has all Endpoints.
+		// Remove Service group which has only local Endpoints if existing.
+		if groupID, exist := p.groupCounter.Get(svcPortName, true); exist {
+			if err := p.ofClient.UninstallServiceGroup(groupID); err != nil {
+				klog.ErrorS(err, "Failed to remove group which has only local Endpoints", "Service", svcPortName, "ServiceInfo", svcInfo)
+				continue
+			}
+			p.groupCounter.Recycle(svcPortName, true)
+			klog.V(2).InfoS("Group that has only local Endpoints has been installed successfully", "Service", svcPortName, "ServiceInfo", svcInfo)
+		}
+		// Remove Service group which has all Endpoints if existing.
 		if groupID, exist := p.groupCounter.Get(svcPortName, false); exist {
 			if err := p.ofClient.UninstallServiceGroup(groupID); err != nil {
-				klog.ErrorS(err, "Failed to remove Group of all Endpoints for Service", "Service", svcPortName)
+				klog.ErrorS(err, "Failed to remove group which has all Endpoints", "Service", svcPortName, "ServiceInfo", svcInfo)
 				continue
 			}
 			p.groupCounter.Recycle(svcPortName, false)
+			klog.V(2).InfoS("Group that has all Endpoints has been installed successfully", "Service", svcPortName, "ServiceInfo", svcInfo)
 		}
 
 		delete(p.serviceInstalledMap, svcPortName)
@@ -255,14 +258,6 @@ func (p *proxier) removeStaleEndpoints() {
 	}
 }
 
-func serviceIdentityChanged(svcInfo, pSvcInfo *types.ServiceInfo) bool {
-	return svcInfo.ClusterIP().String() != pSvcInfo.ClusterIP().String() ||
-		svcInfo.Port() != pSvcInfo.Port() ||
-		svcInfo.OFProtocol != pSvcInfo.OFProtocol ||
-		svcInfo.NodePort() != pSvcInfo.NodePort() ||
-		svcInfo.NodeLocalExternal() != pSvcInfo.NodeLocalExternal()
-}
-
 // smallSliceDifference builds a slice which includes all the strings from s1
 // which are not in s2.
 func smallSliceDifference(s1, s2 []string) []string {
@@ -284,66 +279,467 @@ func smallSliceDifference(s1, s2 []string) []string {
 	return diff
 }
 
-func (p *proxier) installNodePortService(groupID binding.GroupIDType, svcPort uint16, protocol binding.Protocol, affinityTimeout uint16, nodeLocalExternal bool) error {
+func (p *proxier) uninstallNodePortService(svcInfo *types.ServiceInfo) error {
 	svcIP := agentconfig.VirtualNodePortDNATIPv4
 	if p.isIPv6 {
 		svcIP = agentconfig.VirtualNodePortDNATIPv6
 	}
-	if err := p.ofClient.InstallServiceFlows(groupID, svcIP, svcPort, protocol, affinityTimeout, nodeLocalExternal, corev1.ServiceTypeNodePort); err != nil {
-		return fmt.Errorf("failed to install Service NodePort load balancing flows: %w", err)
+	if err := p.removeNodePortFlows(svcIP, svcInfo); err != nil {
+		return err
 	}
-	if err := p.routeClient.AddNodePort(p.nodePortAddresses, svcPort, protocol); err != nil {
-		return fmt.Errorf("failed to install Service NodePort traffic redirecting flows: %w", err)
+	if err := p.removeNodePortIPSets(svcInfo); err != nil {
+		return err
 	}
 	return nil
 }
 
-func (p *proxier) uninstallNodePortService(svcPort uint16, protocol binding.Protocol) error {
+func (p *proxier) uninstallLoadBalancerService(svcInfo *types.ServiceInfo) error {
+	loadBalancerIPStrings := svcInfo.LoadBalancerIPStrings()
+	if err := p.removeLoadBalancerFlows(loadBalancerIPStrings, svcInfo); err != nil {
+		return err
+	}
+	if p.proxyAll && len(loadBalancerIPStrings) > 0 {
+		if err := p.removeLoadBalancerRoutes(loadBalancerIPStrings); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// updateEndpoints updates Endpoint OVS flows and groups for a Service.
+func (p *proxier) updateEndpoints(pSvcInfo,
+	svcInfo *types.ServiceInfo,
+	svcPortName k8sproxy.ServicePortName,
+	allEndpointUpdateList,
+	localEndpointUpdateList []k8sproxy.Endpoint,
+	endpointsInstalled map[string]k8sproxy.Endpoint) error {
+	internalNodeLocal := svcInfo.NodeLocalInternal()
+	externalNodeLocal := svcInfo.NodeLocalExternal()
+	affinityTimeout := getAffinityTimeout(pSvcInfo, svcInfo, svcPortName)
+	var endpointUpdateList []k8sproxy.Endpoint
+	// If the type of the Service is NodePort or LoadBalancer and both internalTrafficPolicy and externalTrafficPolicy
+	// are Local, or the type of the Service is ClusterIP and internalTrafficPolicy is Local, then only local
+	// Endpoints should be installed, otherwise all Endpoints should be installed.
+	if internalNodeLocal && (externalNodeLocal || svcInfo.NodePort() == 0) {
+		endpointUpdateList = localEndpointUpdateList
+	} else {
+		endpointUpdateList = allEndpointUpdateList
+	}
+	// Install Endpoint flows.
+	err := p.ofClient.InstallEndpointFlows(svcInfo.OFProtocol, endpointUpdateList)
+	if err != nil {
+		return fmt.Errorf("error when installing Endpoint flows: %w", err)
+	}
+	if internalNodeLocal != externalNodeLocal {
+		if svcInfo.NodePort() > 0 {
+			// If the type of the Service is NodePort or LoadBalancer, when internalTrafficPolicy and externalTrafficPolicy
+			// of the Service are different, install two groups. One group has all Endpoints, the other has only
+			// local Endpoints.
+			groupID := p.groupCounter.AllocateIfNotExist(svcPortName, true)
+			if err = p.ofClient.InstallServiceGroup(groupID, affinityTimeout != 0, localEndpointUpdateList); err != nil {
+				return fmt.Errorf("error when installing group which only has local Endpoints: %w", err)
+			}
+			groupID = p.groupCounter.AllocateIfNotExist(svcPortName, false)
+			if err = p.ofClient.InstallServiceGroup(groupID, affinityTimeout != 0, allEndpointUpdateList); err != nil {
+				return fmt.Errorf("error when installing group which has all Endpoints: %w", err)
+			}
+		} else {
+			// If the type of the Service is ClusterIP, install a group according to internalTrafficPolicy.
+			groupID := p.groupCounter.AllocateIfNotExist(svcPortName, internalNodeLocal)
+			if err = p.ofClient.InstallServiceGroup(groupID, affinityTimeout != 0, endpointUpdateList); err != nil {
+				return fmt.Errorf("error when installing group: %w", err)
+			}
+			// Regardless of the value of internalTrafficPolicy, unconditionally uninstall the another group which is
+			// got by the opposite value of internalTrafficPolicy if it exists.
+			if groupID, exist := p.groupCounter.Get(svcPortName, !internalNodeLocal); exist {
+				if err := p.ofClient.UninstallServiceGroup(groupID); err != nil {
+					return fmt.Errorf("error when uninstalling stale group: %w", err)
+				}
+				p.groupCounter.Recycle(svcPortName, !internalNodeLocal)
+			}
+		}
+	} else {
+		// Regardless of the type of the Service, when internalTrafficPolicy and externalTrafficPolicy of the Service
+		// are the same, only install one group and unconditionally uninstall another group. If both internalTrafficPolicy
+		// and externalTrafficPolicy are Local, install the group that has only local Endpoints and unconditionally
+		// uninstall the group which has all Endpoints; if both internalTrafficPolicy and externalTrafficPolicy are
+		// Cluster, install the group which has all Endpoints and unconditionally uninstall the group which has
+		// only local Endpoints. Note that, if a group doesn't exist on OVS, then the return value will be nil.
+		nodeLocalVal := internalNodeLocal && externalNodeLocal
+		groupID := p.groupCounter.AllocateIfNotExist(svcPortName, nodeLocalVal)
+		if err = p.ofClient.InstallServiceGroup(groupID, affinityTimeout != 0, endpointUpdateList); err != nil {
+			return fmt.Errorf("error when installing group: %w", err)
+		}
+		if groupID, exist := p.groupCounter.Get(svcPortName, !nodeLocalVal); exist {
+			if err := p.ofClient.UninstallServiceGroup(groupID); err != nil {
+				return fmt.Errorf("error when uninstalling stale group: %w", err)
+			}
+			p.groupCounter.Recycle(svcPortName, !nodeLocalVal)
+		}
+	}
+
+	for _, e := range endpointUpdateList {
+		// If the Endpoint is newly installed, add a reference.
+		if _, ok := endpointsInstalled[e.String()]; !ok {
+			key := endpointKey(e, svcInfo.OFProtocol)
+			p.endpointReferenceCounter[key] = p.endpointReferenceCounter[key] + 1
+			endpointsInstalled[e.String()] = e
+		}
+	}
+	return nil
+}
+
+// removeClusterIPFlows removes ClusterIP OVS flows for a Service.
+func (p *proxier) removeClusterIPFlows(svcInfo *types.ServiceInfo) error {
+	if err := p.ofClient.UninstallServiceFlows(svcInfo.ClusterIP(), uint16(svcInfo.Port()), svcInfo.OFProtocol); err != nil {
+		return fmt.Errorf("error when uninstalling ClusterIP flows: %w", err)
+	}
+	return nil
+}
+
+// updateClusterIPFlows updates ClusterIP OVS flows for a Service. The flows are used to do service LB in OVS.
+func (p *proxier) updateClusterIPFlows(pSvcInfo, svcInfo *types.ServiceInfo, svcPortName k8sproxy.ServicePortName) error {
+	if pSvcInfo != nil {
+		if err := p.removeClusterIPFlows(pSvcInfo); err != nil {
+			return err
+		}
+	}
+	groupID := p.groupCounter.AllocateIfNotExist(svcPortName, svcInfo.NodeLocalInternal())
+	if err := p.ofClient.InstallServiceFlows(groupID,
+		svcInfo.ClusterIP(),
+		uint16(svcInfo.Port()),
+		svcInfo.OFProtocol,
+		getAffinityTimeout(pSvcInfo, svcInfo, svcPortName),
+		svcInfo.NodeLocalExternal(),
+		corev1.ServiceTypeClusterIP); err != nil {
+		return fmt.Errorf("error when installing ClusterIP flows : %w", err)
+	}
+	return nil
+}
+
+// updateClusterIPRoutes updates ClusterIP routes for a Service. The routes are used to forward ClusterIP traffic to
+// OVS via Antrea gateway.
+func (p *proxier) updateClusterIPRoutes(pSvcInfo, svcInfo *types.ServiceInfo) error {
+	if err := p.routeClient.AddClusterIPRoute(svcInfo.ClusterIP()); err != nil {
+		return fmt.Errorf("error when installing CluterIP route: %w", err)
+	}
+	if pSvcInfo != nil {
+		if err := p.routeClient.DeleteClusterIPRoute(pSvcInfo.ClusterIP()); err != nil {
+			return fmt.Errorf("error when uninstalling stale CluterIP route: %w", err)
+		}
+	}
+	return nil
+}
+
+// removeNodePortFlows removes NodePort OVS flows for a Service.
+func (p *proxier) removeNodePortFlows(svcIP net.IP, svcInfo *types.ServiceInfo) error {
+	if err := p.ofClient.UninstallServiceFlows(svcIP, uint16(svcInfo.NodePort()), svcInfo.OFProtocol); err != nil {
+		return fmt.Errorf("error when uninstalling NodePort flows: %w", err)
+	}
+	return nil
+}
+
+// updateNodePortFlows updates NodePort OVS flows for a Service. The flows are used to do service LB in OVS.
+func (p *proxier) updateNodePortFlows(pSvcInfo, svcInfo *types.ServiceInfo, svcPortName k8sproxy.ServicePortName) error {
 	svcIP := agentconfig.VirtualNodePortDNATIPv4
 	if p.isIPv6 {
 		svcIP = agentconfig.VirtualNodePortDNATIPv6
 	}
-	if err := p.ofClient.UninstallServiceFlows(svcIP, svcPort, protocol); err != nil {
-		return fmt.Errorf("failed to remove Service NodePort NodePort load balancing flows: %w", err)
+	if pSvcInfo != nil {
+		if err := p.removeNodePortFlows(svcIP, pSvcInfo); err != nil {
+			return err
+		}
 	}
-	if err := p.routeClient.DeleteNodePort(p.nodePortAddresses, svcPort, protocol); err != nil {
-		return fmt.Errorf("failed to remove Service NodePort traffic redirecting flows: %w", err)
+	groupID := p.groupCounter.AllocateIfNotExist(svcPortName, svcInfo.NodeLocalExternal())
+	if err := p.ofClient.InstallServiceFlows(groupID,
+		svcIP,
+		uint16(svcInfo.NodePort()),
+		svcInfo.OFProtocol,
+		getAffinityTimeout(pSvcInfo, svcInfo, svcPortName),
+		svcInfo.NodeLocalExternal(),
+		corev1.ServiceTypeNodePort); err != nil {
+		return fmt.Errorf("error when installing NodePort flows: %w", err)
 	}
 	return nil
 }
 
-func (p *proxier) installLoadBalancerService(groupID binding.GroupIDType, loadBalancerIPStrings []string, svcPort uint16, protocol binding.Protocol, affinityTimeout uint16, nodeLocalExternal bool) error {
-	for _, ingress := range loadBalancerIPStrings {
-		if ingress != "" {
-			if err := p.ofClient.InstallServiceFlows(groupID, net.ParseIP(ingress), svcPort, protocol, affinityTimeout, nodeLocalExternal, corev1.ServiceTypeLoadBalancer); err != nil {
-				return fmt.Errorf("failed to install Service LoadBalancer load balancing flows: %w", err)
-			}
+// removeNodePortIPSets removes ClusterIP ipsets for a Service.
+func (p *proxier) removeNodePortIPSets(svcInfo *types.ServiceInfo) error {
+	if err := p.routeClient.DeleteNodePort(p.nodePortAddresses, uint16(svcInfo.NodePort()), svcInfo.OFProtocol); err != nil {
+		return fmt.Errorf("error when uninstalling stale NodePort ipsets: %w", err)
+	}
+	return nil
+}
+
+// updateNodePortIPSets updates ClusterIP ipsets for a Service. The ipsets are used to match NodePort traffic, and they
+// are used in iptables to forward matched traffic to OVS via Antrea gateway.
+func (p *proxier) updateNodePortIPSets(pSvcInfo, svcInfo *types.ServiceInfo) error {
+	if err := p.routeClient.AddNodePort(p.nodePortAddresses, uint16(svcInfo.NodePort()), svcInfo.OFProtocol); err != nil {
+		return fmt.Errorf("error when installing NodePort ipsets: %w", err)
+	}
+	if pSvcInfo != nil {
+		if err := p.removeNodePortIPSets(pSvcInfo); err != nil {
+			return err
 		}
 	}
-	if p.proxyAll {
-		if err := p.routeClient.AddLoadBalancer(loadBalancerIPStrings); err != nil {
-			return fmt.Errorf("failed to install Service LoadBalancer traffic redirecting flows: %w", err)
+	return nil
+}
+
+// removeLoadBalancerFlows removes LoadBalancer OVS flows for a Service.
+func (p *proxier) removeLoadBalancerFlows(toDeleteLoadBalancerIPs []string, svcInfo *types.ServiceInfo) error {
+	for _, ingress := range toDeleteLoadBalancerIPs {
+		if err := p.ofClient.UninstallServiceFlows(net.ParseIP(ingress), uint16(svcInfo.Port()), svcInfo.OFProtocol); err != nil {
+			return fmt.Errorf("error when uninstalling stale LoadBalancer flows: %w", err)
+		}
+	}
+	return nil
+}
+
+// updateLoadBalancerFlows updates LoadBalancer OVS flows for a Service. The flows are used to do service LB in OVS.
+func (p *proxier) updateLoadBalancerFlows(pSvcInfo, svcInfo *types.ServiceInfo, svcPortName k8sproxy.ServicePortName, needUpdateAllFlows bool) error {
+	var toAddLoadBalancerIPs, toDeleteLoadBalancerIPs []string
+	if pSvcInfo != nil {
+		if needUpdateAllFlows {
+			// When all flows should be updated, all stale flows should be uninstalled before installing new flows.
+			toDeleteLoadBalancerIPs = pSvcInfo.LoadBalancerIPStrings()
+			toAddLoadBalancerIPs = svcInfo.LoadBalancerIPStrings()
+		} else {
+			// When not all flows should be updated, only process the changes of LoadBalancer IPs.
+			toDeleteLoadBalancerIPs = smallSliceDifference(pSvcInfo.LoadBalancerIPStrings(), svcInfo.LoadBalancerIPStrings())
+			toAddLoadBalancerIPs = smallSliceDifference(svcInfo.LoadBalancerIPStrings(), pSvcInfo.LoadBalancerIPStrings())
+		}
+	} else {
+		toDeleteLoadBalancerIPs = []string{}
+		toAddLoadBalancerIPs = svcInfo.LoadBalancerIPStrings()
+	}
+	if err := p.removeLoadBalancerFlows(toDeleteLoadBalancerIPs, pSvcInfo); err != nil {
+		return err
+	}
+	groupID := p.groupCounter.AllocateIfNotExist(svcPortName, svcInfo.NodeLocalExternal())
+	for _, ingress := range toAddLoadBalancerIPs {
+		if err := p.ofClient.InstallServiceFlows(groupID,
+			net.ParseIP(ingress),
+			uint16(svcInfo.Port()),
+			svcInfo.OFProtocol,
+			getAffinityTimeout(pSvcInfo, svcInfo, svcPortName),
+			svcInfo.NodeLocalExternal(),
+			corev1.ServiceTypeLoadBalancer); err != nil {
+			return fmt.Errorf("error when installing LoadBalancer flows: %w", err)
 		}
 	}
 
 	return nil
 }
 
-func (p *proxier) uninstallLoadBalancerService(loadBalancerIPStrings []string, svcPort uint16, protocol binding.Protocol) error {
-	for _, ingress := range loadBalancerIPStrings {
-		if ingress != "" {
-			if err := p.ofClient.UninstallServiceFlows(net.ParseIP(ingress), svcPort, protocol); err != nil {
-				return fmt.Errorf("failed to remove Service LoadBalancer load balancing flows: %w", err)
-			}
-		}
+// removeLoadBalancerRoutes removes LoadBalancer routes for a Service.
+func (p *proxier) removeLoadBalancerRoutes(toDeleteLoadBalancerIPs []string) error {
+	if err := p.routeClient.DeleteLoadBalancer(toDeleteLoadBalancerIPs); err != nil {
+		return fmt.Errorf("error when uninstalling stale LoadBalancer routes: %w", err)
 	}
-	if p.proxyAll {
-		if err := p.routeClient.DeleteLoadBalancer(loadBalancerIPStrings); err != nil {
-			return fmt.Errorf("failed to remove Service LoadBalancer traffic redirecting flows: %w", err)
-		}
-	}
-
 	return nil
+}
+
+// updateLoadBalancerRoutes updates LoadBalancer routes for a Service. The routes are used to forward LoadBalancer traffic
+// to OVS via Antrea gateway.
+func (p *proxier) updateLoadBalancerRoutes(pSvcInfo, svcInfo *types.ServiceInfo) error {
+	var toAddLoadBalancerIPs, toDeleteLoadBalancerIPs []string
+	if pSvcInfo != nil {
+		toDeleteLoadBalancerIPs = smallSliceDifference(pSvcInfo.LoadBalancerIPStrings(), svcInfo.LoadBalancerIPStrings())
+		toAddLoadBalancerIPs = smallSliceDifference(svcInfo.LoadBalancerIPStrings(), pSvcInfo.LoadBalancerIPStrings())
+	} else {
+		toDeleteLoadBalancerIPs = []string{}
+		toAddLoadBalancerIPs = svcInfo.LoadBalancerIPStrings()
+	}
+	if err := p.routeClient.AddLoadBalancer(toAddLoadBalancerIPs); err != nil {
+		return fmt.Errorf("error when installing LoadBalancer routes: %w", err)
+	}
+	if len(toDeleteLoadBalancerIPs) > 0 {
+		if err := p.removeLoadBalancerRoutes(toDeleteLoadBalancerIPs); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// ifNeedUpdateClusterIPFlows returns that if ClusterIP OVS flows should be updated.
+func (p *proxier) ifNeedUpdateClusterIPFlows(pSvcInfo, svcInfo *types.ServiceInfo) bool {
+	// For a new ClusterIP, ClusterIP flows should be installed.
+	if pSvcInfo == nil {
+		return true
+	}
+	// When one or more ClusterIP related attributes listed below are updated, corresponding ClusterIP flows should be
+	// also updated.
+	// - ClusterIP:           update corresponding OVS flow matching condition "nw_dst" or "ipv6_dst".
+	// - Port:                update corresponding OVS flow matching condition "tp_dst".
+	// - SessionAffinityType: changes in the number of corresponding OVS flows.
+	// - NodeLocalInternal:   update corresponding OVS flow action "group".
+	// - StickyMaxAgeSeconds: update corresponding OVS flow action "learn" (field "hard_timeout").
+	return pSvcInfo.ClusterIP().String() != svcInfo.ClusterIP().String() ||
+		pSvcInfo.Port() != svcInfo.Port() ||
+		pSvcInfo.NodeLocalInternal() != svcInfo.NodeLocalInternal() ||
+		pSvcInfo.SessionAffinityType() != svcInfo.SessionAffinityType() ||
+		pSvcInfo.StickyMaxAgeSeconds() != svcInfo.StickyMaxAgeSeconds()
+}
+
+// ifNeedUpdateClusterIPRoutes returns that if ClusterIP routes should be updated. The update is only triggered by updating
+// attribute ClusterIP of Service
+//
+//	ClusterIP.
+func (p *proxier) ifNeedUpdateClusterIPRoutes(pSvcInfo, svcInfo *types.ServiceInfo) bool {
+	// Without enabling proxyAll, ClusterIP routes should not be installed.
+	if !p.proxyAll {
+		return false
+	}
+	// For a new ClusterIP, ClusterIP routes should be installed.
+	if pSvcInfo == nil {
+		return true
+	}
+	return pSvcInfo.ClusterIP().String() != svcInfo.ClusterIP().String()
+}
+
+// ifNeedUpdateNodePortFlows returns that if NodePort OVS flows should be updated.
+func (p *proxier) ifNeedUpdateNodePortFlows(pSvcInfo, svcInfo *types.ServiceInfo) bool {
+	// Without enabling proxyAll, NodePort flows should not be installed.
+	if !p.proxyAll {
+		return false
+	}
+	// Without attribute NodePort, NodePort flows should not be installed.
+	if svcInfo.NodePort() == 0 {
+		return false
+	}
+	// For a new NodePort, NodePort flows should be installed.
+	if pSvcInfo == nil {
+		return true
+	}
+	// When one or more NodePort related attributes listed below are updated, corresponding NodePort flows should be
+	// also updated.
+	// - NodePort:            update corresponding OVS flow matching condition "tp_dst".
+	// - SessionAffinityType: changes in the number of corresponding OVS flows.
+	// - NodeLocalExternal:   update corresponding OVS flow action "group".
+	// - StickyMaxAgeSeconds: update corresponding OVS flow action "learn" (field "hard_timeout").
+	return pSvcInfo.NodePort() != svcInfo.NodePort() ||
+		pSvcInfo.NodeLocalExternal() != svcInfo.NodeLocalExternal() ||
+		pSvcInfo.SessionAffinityType() != svcInfo.SessionAffinityType() ||
+		pSvcInfo.StickyMaxAgeSeconds() != svcInfo.StickyMaxAgeSeconds()
+}
+
+// ifNeedUpdateNodePortIPSets returns that if NodePort ipsets should be updated. The update is only triggered by updating
+// attribute NodePort of Service NodePort.
+func (p *proxier) ifNeedUpdateNodePortIPSets(pSvcInfo, svcInfo *types.ServiceInfo) bool {
+	// Without enabling proxyAll, NodePort ipsets should not be installed.
+	if !p.proxyAll {
+		return false
+	}
+	// Without attribute NodePort, NodePort ipsets should not be installed.
+	if svcInfo.NodePort() == 0 {
+		return false
+	}
+	// For a new NodePort, NodePort ipsets should be installed.
+	if pSvcInfo == nil {
+		return true
+	}
+	return pSvcInfo.NodePort() != svcInfo.NodePort()
+}
+
+// ifNeedUpdateLoadBalancerFlows returns that if LoadBalancer OVS flows should be updated.
+func (p *proxier) ifNeedUpdateLoadBalancerFlows(pSvcInfo, svcInfo *types.ServiceInfo) (bool, bool) {
+	// Without enabling proxyLoadBalancerIPs, LoadBalancer OVS flows should not be installed.
+	if !p.proxyLoadBalancerIPs {
+		return false, false
+	}
+	// Without a LoadBalancer IP, LoadBalancer OVS flows should not be installed.
+	if len(svcInfo.LoadBalancerIPStrings()) == 0 {
+		return false, false
+	}
+	// For a new LoadBalancer, only with LoadBalancer IPs, LoadBalancer OVS flows should be installed, otherwise no flow
+	// should be installed.
+	if pSvcInfo == nil {
+		if len(svcInfo.LoadBalancerIPStrings()) > 0 {
+			return true, false
+		}
+		return false, false
+	}
+	// When one or more LoadBalancer related attributes listed below are updated, corresponding LoadBalancer flows should
+	// be also updated.
+	// - Port:                  update corresponding OVS flow matching condition "tp_dst".
+	// - SessionAffinityType:   changes in the number of corresponding OVS flows.
+	// - NodeLocalExternal:     update corresponding OVS flow action "group".
+	// - StickyMaxAgeSeconds:   update corresponding OVS flow action "learn" (field "hard_timeout").
+	// - LoadBalancerIPStrings: changes in the number of corresponding OVS flows.
+
+	// When one or more LoadBalancer related attributes listed below are updated, OVS flows of every LoadBalancer ingress
+	// IP should be updated. Note that, every LoadBalancer ingress IP has its own corresponding OVS flows by calling
+	// InstallServiceFlows.
+	// - Port:                  update corresponding OVS flow matching condition "tp_dst".
+	// - SessionAffinityType:   changes in the number of corresponding OVS flows.
+	// - NodeLocalExternal:     update corresponding OVS flow action "group".
+	// - StickyMaxAgeSeconds:   update corresponding OVS flow action "learn" (field "hard_timeout").
+	deletedLoadBalancerIPs := smallSliceDifference(pSvcInfo.LoadBalancerIPStrings(), svcInfo.LoadBalancerIPStrings())
+	addedLoadBalancerIPs := smallSliceDifference(svcInfo.LoadBalancerIPStrings(), pSvcInfo.LoadBalancerIPStrings())
+	return pSvcInfo.Port() != svcInfo.Port() ||
+			pSvcInfo.NodeLocalExternal() != svcInfo.NodeLocalExternal() ||
+			pSvcInfo.SessionAffinityType() != svcInfo.SessionAffinityType() ||
+			pSvcInfo.StickyMaxAgeSeconds() != svcInfo.StickyMaxAgeSeconds() ||
+			len(deletedLoadBalancerIPs) > 0 ||
+			len(addedLoadBalancerIPs) > 0,
+		pSvcInfo.Port() != svcInfo.Port() ||
+			pSvcInfo.SessionAffinityType() != svcInfo.SessionAffinityType() ||
+			pSvcInfo.NodeLocalExternal() != svcInfo.NodeLocalExternal() ||
+			pSvcInfo.StickyMaxAgeSeconds() != svcInfo.StickyMaxAgeSeconds()
+}
+
+// ifNeedUpdateLoadBalancerRoutes returns that if LoadBalancer routes should be updated. The update is only triggered by
+// changes of LoadBalancer IPs.
+func (p *proxier) ifNeedUpdateLoadBalancerRoutes(pSvcInfo, svcInfo *types.ServiceInfo) bool {
+	// Without enabling proxyAll and proxyLoadBalancerIPs, LoadBalancer routes should not be installed.
+	if !(p.proxyAll && p.proxyLoadBalancerIPs) {
+		return false
+	}
+	// Without a LoadBalancer IP, LoadBalancer OVS routes should not be installed.
+	if len(svcInfo.LoadBalancerIPStrings()) == 0 {
+		return false
+	}
+	// For a new LoadBalancer, only with LoadBalancer IPs, LoadBalancer routes should be installed, otherwise no routes
+	// should be installed.
+	if pSvcInfo == nil {
+		if len(svcInfo.LoadBalancerIPStrings()) > 0 {
+			return true
+		}
+		return false
+	}
+	deletedLoadBalancerIPs := smallSliceDifference(pSvcInfo.LoadBalancerIPStrings(), svcInfo.LoadBalancerIPStrings())
+	addedLoadBalancerIPs := smallSliceDifference(svcInfo.LoadBalancerIPStrings(), pSvcInfo.LoadBalancerIPStrings())
+	return len(deletedLoadBalancerIPs) > 0 || len(addedLoadBalancerIPs) > 0
+}
+
+func (p *proxier) ifNeedUpdateEndpoints(pSvcInfo, svcInfo *types.ServiceInfo) bool {
+	if pSvcInfo == nil {
+		return false
+	}
+	return pSvcInfo.NodeLocalExternal() != svcInfo.NodeLocalExternal() ||
+		pSvcInfo.NodeLocalInternal() != svcInfo.NodeLocalInternal()
+}
+
+func getAffinityTimeout(pSvcInfo, svcInfo *types.ServiceInfo, svcPortName k8sproxy.ServicePortName) uint16 {
+	affinityTimeout := svcInfo.StickyMaxAgeSeconds()
+	if svcInfo.StickyMaxAgeSeconds() > maxSupportedAffinityTimeout {
+		// SessionAffinity timeout is implemented using a hard_timeout in OVS. hard_timeout is represented by an uint16
+		// in the OpenFlow protocol, hence we cannot support timeouts greater than 65535 seconds. However, the K8s
+		// Service spec allows timeout values up to 86400 seconds (https://godoc.org/k8s.io/api/core/v1#ClientIPConfig).
+		// For values greater than 65535 seconds, we need to set the hard_timeout to 65535 rather than let the timeout
+		// value wrap around.
+		affinityTimeout = maxSupportedAffinityTimeout
+		if pSvcInfo == nil || (svcInfo.StickyMaxAgeSeconds() != pSvcInfo.StickyMaxAgeSeconds()) {
+			// We only log a warning when the Service hasn't been installed yet, or when the timeout has changed.
+			klog.InfoS("The timeout configured for ClientIP-based session affinity exceeds the max supported value",
+				"Service", svcPortName.String(),
+				"timeout", svcInfo.StickyMaxAgeSeconds(),
+				"maxTimeout", maxSupportedAffinityTimeout,
+			)
+		}
+	}
+	return uint16(affinityTimeout)
 }
 
 func (p *proxier) installServices() {
@@ -355,6 +751,7 @@ func (p *proxier) installServices() {
 			p.endpointsInstalledMap[svcPortName] = endpointsInstalled
 		}
 		endpoints := p.endpointsMap[svcPortName]
+		// Filter Endpoints with hints if feature TopologyAwareHints is enabled.
 		if p.topologyAwareHintsEnabled {
 			endpoints = filterEndpoints(endpoints, svcInfo, p.nodeLabels)
 		}
@@ -363,41 +760,18 @@ func (p *proxier) installServices() {
 			continue
 		}
 
-		installedSvcPort, ok := p.serviceInstalledMap[svcPortName]
 		var pSvcInfo *types.ServiceInfo
-		var needRemoval, needUpdateService, needUpdateEndpoints bool
-		if ok { // Need to update.
+		installedSvcPort, ok := p.serviceInstalledMap[svcPortName]
+		if ok {
 			pSvcInfo = installedSvcPort.(*types.ServiceInfo)
-			needRemoval = serviceIdentityChanged(svcInfo, pSvcInfo) || (svcInfo.SessionAffinityType() != pSvcInfo.SessionAffinityType())
-			needUpdateService = needRemoval || (svcInfo.StickyMaxAgeSeconds() != pSvcInfo.StickyMaxAgeSeconds())
-			needUpdateEndpoints = pSvcInfo.SessionAffinityType() != svcInfo.SessionAffinityType() ||
-				pSvcInfo.NodeLocalExternal() != svcInfo.NodeLocalExternal() ||
-				pSvcInfo.NodeLocalInternal() != svcInfo.NodeLocalInternal()
-		} else { // Need to install.
-			needUpdateService = true
 		}
-
-		affinityTimeout := svcInfo.StickyMaxAgeSeconds()
-		if svcInfo.StickyMaxAgeSeconds() > maxSupportedAffinityTimeout {
-			// SessionAffinity timeout is implemented using a hard_timeout in
-			// OVS. hard_timeout is represented by a uint16 in the OpenFlow protocol,
-			// hence we cannot support timeouts greater than 65535 seconds. However, the
-			// K8s Service spec allows timeout values up to 86400 seconds
-			// (https://godoc.org/k8s.io/api/core/v1#ClientIPConfig). For values greater
-			// than 65535 seconds, we need to set the hard_timeout to 65535 rather than
-			// let the timeout value wrap around.
-			affinityTimeout = maxSupportedAffinityTimeout
-			if !ok || (svcInfo.StickyMaxAgeSeconds() != pSvcInfo.StickyMaxAgeSeconds()) {
-				// We only log a warning when the Service hasn't been installed
-				// yet, or when the timeout has changed.
-				klog.InfoS(
-					"The timeout configured for ClientIP-based session affinity exceeds the max supported value",
-					"service", svcPortName.String(),
-					"timeout", svcInfo.StickyMaxAgeSeconds(),
-					"maxTimeout", maxSupportedAffinityTimeout,
-				)
-			}
-		}
+		needUpdateEndpoints := p.ifNeedUpdateEndpoints(pSvcInfo, svcInfo)
+		needUpdateClusterIPFlows := p.ifNeedUpdateClusterIPFlows(pSvcInfo, svcInfo)
+		needUpdateClusterIPRoutes := p.ifNeedUpdateClusterIPRoutes(pSvcInfo, svcInfo)
+		needUpdateNodePortFlows := p.ifNeedUpdateNodePortFlows(pSvcInfo, svcInfo)
+		needUpdateNodePortIPSets := p.ifNeedUpdateNodePortIPSets(pSvcInfo, svcInfo)
+		needUpdateLoadBalancerFlows, needUpdateAllLoadBalancerFlows := p.ifNeedUpdateLoadBalancerFlows(pSvcInfo, svcInfo)
+		needUpdateLoadBalancerRoutes := p.ifNeedUpdateLoadBalancerRoutes(pSvcInfo, svcInfo)
 
 		var internalNodeLocal, externalNodeLocal bool
 		if svcInfo.NodeLocalInternal() {
@@ -426,186 +800,120 @@ func (p *proxier) installServices() {
 		// If there are expired Endpoints, Endpoints installed should be updated.
 		if internalNodeLocal && externalNodeLocal && len(localEndpointUpdateList) < len(endpointsInstalled) ||
 			!(internalNodeLocal && externalNodeLocal) && len(allEndpointUpdateList) < len(endpointsInstalled) {
-			klog.V(2).Infof("Some Endpoints of Service %s removed, updating Endpoints", svcInfo.String())
+			klog.V(2).InfoS("Some Endpoints of the Service are remove, Endpoints flows will be updated", "Service", svcPortName, "ServiceInfo", svcInfo)
 			needUpdateEndpoints = true
 		}
 
-		var deletedLoadBalancerIPs, addedLoadBalancerIPs []string
-		if p.proxyLoadBalancerIPs {
-			if pSvcInfo != nil {
-				deletedLoadBalancerIPs = smallSliceDifference(pSvcInfo.LoadBalancerIPStrings(), svcInfo.LoadBalancerIPStrings())
-				addedLoadBalancerIPs = smallSliceDifference(svcInfo.LoadBalancerIPStrings(), pSvcInfo.LoadBalancerIPStrings())
-			} else {
-				deletedLoadBalancerIPs = []string{}
-				addedLoadBalancerIPs = svcInfo.LoadBalancerIPStrings()
-			}
-			if len(deletedLoadBalancerIPs) > 0 || len(addedLoadBalancerIPs) > 0 {
-				needUpdateService = true
-			}
-		}
-
 		// If neither the Service nor Endpoints of the Service need to be updated, we skip.
-		if !needUpdateService && !needUpdateEndpoints {
+		if !needUpdateEndpoints &&
+			!needUpdateClusterIPFlows &&
+			!needUpdateClusterIPRoutes &&
+			!needUpdateNodePortFlows &&
+			!needUpdateNodePortIPSets &&
+			!needUpdateLoadBalancerFlows &&
+			!needUpdateLoadBalancerRoutes {
 			continue
 		}
 
 		if pSvcInfo != nil {
-			klog.V(2).Infof("Updating Service %s %s", svcPortName.Name, svcInfo.String())
+			klog.V(2).InfoS("Updating Service", "Service", svcPortName, "ServiceInfo", svcInfo)
 		} else {
-			klog.V(2).Infof("Installing Service %s %s", svcPortName.Name, svcInfo.String())
+			klog.V(2).InfoS("Installing Service", "Service", svcPortName, "ServiceInfo", svcInfo)
 		}
 
 		if needUpdateEndpoints {
-			var endpointUpdateList []k8sproxy.Endpoint
-			// If the type of the Service is NodePort or LoadBalancer and both internalTrafficPolicy and externalTrafficPolicy
-			// are Local, or the type of the Service is ClusterIP and internalTrafficPolicy is Local, then only local
-			// Endpoints should be installed, otherwise all Endpoints should be installed.
-			if internalNodeLocal && (externalNodeLocal || svcInfo.NodePort() == 0) {
-				endpointUpdateList = localEndpointUpdateList
-			} else {
-				endpointUpdateList = allEndpointUpdateList
-			}
-			// Install Endpoints.
-			err := p.ofClient.InstallEndpointFlows(svcInfo.OFProtocol, endpointUpdateList)
+			err := p.updateEndpoints(pSvcInfo,
+				svcInfo,
+				svcPortName,
+				allEndpointUpdateList,
+				localEndpointUpdateList,
+				endpointsInstalled)
 			if err != nil {
-				klog.ErrorS(err, "Error when installing Endpoints flows")
+				klog.ErrorS(err, "Failed to update Endpoint flows and groups", "Service", svcPortName, "ServiceInfo", svcInfo)
 				continue
 			}
-			if internalNodeLocal != externalNodeLocal {
-				if svcInfo.NodePort() > 0 {
-					// If the type of the Service is NodePort or LoadBalancer, when internalTrafficPolicy and externalTrafficPolicy
-					// of the Service are different, install two groups. One group has all Endpoints, the other has only
-					// local Endpoints.
-					groupID := p.groupCounter.AllocateIfNotExist(svcPortName, true)
-					if err = p.ofClient.InstallServiceGroup(groupID, affinityTimeout != 0, localEndpointUpdateList); err != nil {
-						klog.ErrorS(err, "Error when installing Group of local Endpoints for Service", "Service", svcPortName)
-						continue
-					}
-					groupID = p.groupCounter.AllocateIfNotExist(svcPortName, false)
-					if err = p.ofClient.InstallServiceGroup(groupID, affinityTimeout != 0, allEndpointUpdateList); err != nil {
-						klog.ErrorS(err, "Error when installing Group of all Endpoints for Service", "Service", svcPortName)
-						continue
-					}
-				} else {
-					// If the type of the Service is ClusterIP, install a group according to internalTrafficPolicy.
-					groupID := p.groupCounter.AllocateIfNotExist(svcPortName, internalNodeLocal)
-					if err = p.ofClient.InstallServiceGroup(groupID, affinityTimeout != 0, endpointUpdateList); err != nil {
-						klog.ErrorS(err, "Error when installing Group of Endpoints for Service", "Service", svcPortName)
-						continue
-					}
-				}
+			if pSvcInfo != nil {
+				klog.V(2).InfoS("Endpoint flows and groups have been updated successfully", "Service", svcPortName, "ServiceInfo", svcInfo)
 			} else {
-				// Regardless of the type of the Service, when internalTrafficPolicy and externalTrafficPolicy of the Service
-				// are the same, only install one group and unconditionally uninstall another group. If both internalTrafficPolicy
-				// and externalTrafficPolicy are Local, install the group that has only local Endpoints and unconditionally
-				// uninstall the group which has all Endpoints; if both internalTrafficPolicy and externalTrafficPolicy are
-				// Cluster, install the group which has all Endpoints and unconditionally uninstall the group which has
-				// only local Endpoints. Note that, if a group doesn't exist on OVS, then the return value will be nil.
-				nodeLocalVal := internalNodeLocal && externalNodeLocal
-				groupID := p.groupCounter.AllocateIfNotExist(svcPortName, nodeLocalVal)
-				if err = p.ofClient.InstallServiceGroup(groupID, affinityTimeout != 0, endpointUpdateList); err != nil {
-					klog.ErrorS(err, "Error when installing Group of local Endpoints for Service", "Service", svcPortName)
-					continue
-				}
-				if groupID, exist := p.groupCounter.Get(svcPortName, !nodeLocalVal); exist {
-					if err := p.ofClient.UninstallServiceGroup(groupID); err != nil {
-						klog.ErrorS(err, "Failed to uninstall Group of all Endpoints for Service", "Service", svcPortName)
-						continue
-					}
-					p.groupCounter.Recycle(svcPortName, !nodeLocalVal)
-				}
-			}
-
-			for _, e := range endpointUpdateList {
-				// If the Endpoint is newly installed, add a reference.
-				if _, ok := endpointsInstalled[e.String()]; !ok {
-					key := endpointKey(e, svcInfo.OFProtocol)
-					p.endpointReferenceCounter[key] = p.endpointReferenceCounter[key] + 1
-					endpointsInstalled[e.String()] = e
-				}
+				klog.V(2).InfoS("Endpoint flows and groups have been installed successfully", "Service", svcPortName, "ServiceInfo", svcInfo)
 			}
 		}
 
-		if needUpdateService {
-			// Delete previous flow.
-			if needRemoval {
-				// If previous Service should be removed, remove ClusterIP flows of previous Service.
-				if err := p.ofClient.UninstallServiceFlows(pSvcInfo.ClusterIP(), uint16(pSvcInfo.Port()), pSvcInfo.OFProtocol); err != nil {
-					klog.ErrorS(err, "Failed to remove flows of Service", "Service", svcPortName)
-					continue
-				}
-
-				if p.proxyAll {
-					// If previous Service which has NodePort should be removed, remove NodePort flows and configurations of previous Service.
-					if pSvcInfo.NodePort() > 0 {
-						if err := p.uninstallNodePortService(uint16(pSvcInfo.NodePort()), pSvcInfo.OFProtocol); err != nil {
-							klog.ErrorS(err, "Failed to remove flows and configurations of Service", "Service", svcPortName)
-							continue
-						}
-					}
-					// If previous Service which has ClusterIP should be removed, remove ClusterIP routes.
-					if svcInfo.ClusterIP() != nil {
-						if err := p.routeClient.DeleteClusterIPRoute(pSvcInfo.ClusterIP()); err != nil {
-							klog.ErrorS(err, "Failed to remove ClusterIP Service routes", "Service", svcPortName)
-							continue
-						}
-					}
-				}
-			}
-
-			// Install ClusterIP flows for the Service.
-			groupID := p.groupCounter.AllocateIfNotExist(svcPortName, internalNodeLocal)
-			if err := p.ofClient.InstallServiceFlows(groupID, svcInfo.ClusterIP(), uint16(svcInfo.Port()), svcInfo.OFProtocol, uint16(affinityTimeout), externalNodeLocal, corev1.ServiceTypeClusterIP); err != nil {
-				klog.Errorf("Error when installing Service flows: %v", err)
+		if needUpdateClusterIPFlows {
+			err := p.updateClusterIPFlows(pSvcInfo, svcInfo, svcPortName)
+			if err != nil {
+				klog.ErrorS(err, "Failed to update ClusterIP flows", "Service", svcPortName, "ServiceInfo", svcInfo)
 				continue
 			}
-
-			if p.proxyAll {
-				nGroupID := p.groupCounter.AllocateIfNotExist(svcPortName, externalNodeLocal)
-				// Install ClusterIP route on Node so that ClusterIP can be accessed on Node. Every time a new ClusterIP
-				// is created, the routing target IP block will be recalculated for expansion to be able to route the new
-				// created ClusterIP. Deleting a ClusterIP will not shrink the target routing IP block. The Service CIDR
-				// can be finally calculated after creating enough ClusterIPs.
-				if err := p.routeClient.AddClusterIPRoute(svcInfo.ClusterIP()); err != nil {
-					klog.ErrorS(err, "Failed to install ClusterIP route of Service", "Service", svcPortName)
-					continue
-				}
-
-				// If previous Service is nil or NodePort flows and configurations of previous Service have been removed,
-				// install NodePort flows and configurations for current Service.
-				if svcInfo.NodePort() > 0 && (pSvcInfo == nil || needRemoval) {
-					if err := p.installNodePortService(nGroupID, uint16(svcInfo.NodePort()), svcInfo.OFProtocol, uint16(affinityTimeout), svcInfo.NodeLocalExternal()); err != nil {
-						klog.ErrorS(err, "Failed to install NodePort flows and configurations of Service", "Service", svcPortName)
-						continue
-					}
-				}
+			if pSvcInfo != nil {
+				klog.V(2).InfoS("ClusterIP flows have been updated successfully", "Service", svcPortName, "ServiceInfo", svcInfo)
+			} else {
+				klog.V(2).InfoS("ClusterIP flows have been installed successfully", "Service", svcPortName, "ServiceInfo", svcInfo)
 			}
+		}
 
-			if p.proxyLoadBalancerIPs {
-				nGroupID := p.groupCounter.AllocateIfNotExist(svcPortName, externalNodeLocal)
-				// Service LoadBalancer flows can be partially updated.
-				var toDelete, toAdd []string
-				if needRemoval {
-					toDelete = pSvcInfo.LoadBalancerIPStrings()
-					toAdd = svcInfo.LoadBalancerIPStrings()
-				} else {
-					toDelete = deletedLoadBalancerIPs
-					toAdd = addedLoadBalancerIPs
-				}
-				// Remove LoadBalancer flows and configurations.
-				if len(toDelete) > 0 {
-					if err := p.uninstallLoadBalancerService(toDelete, uint16(pSvcInfo.Port()), pSvcInfo.OFProtocol); err != nil {
-						klog.ErrorS(err, "Failed to remove flows and configurations of Service", "Service", svcPortName)
-						continue
-					}
-				}
-				// Install LoadBalancer flows and configurations.
-				if len(toAdd) > 0 {
-					if err := p.installLoadBalancerService(nGroupID, toAdd, uint16(svcInfo.Port()), svcInfo.OFProtocol, uint16(affinityTimeout), svcInfo.NodeLocalExternal()); err != nil {
-						klog.ErrorS(err, "Failed to install LoadBalancer flows and configurations of Service", "Service", svcPortName)
-						continue
-					}
-				}
+		if needUpdateClusterIPRoutes {
+			err := p.updateClusterIPRoutes(pSvcInfo, svcInfo)
+			if err != nil {
+				klog.ErrorS(err, "Failed to update ClusterIP routes", "Service", svcPortName, "ServiceInfo", svcInfo)
+				continue
+			}
+			if pSvcInfo != nil {
+				klog.V(2).InfoS("ClusterIP routes have been updated successfully", "Service", svcPortName, "ServiceInfo", svcInfo)
+			} else {
+				klog.V(2).InfoS("ClusterIP routes have been installed successfully", "Service", svcPortName, "ServiceInfo", svcInfo)
+			}
+		}
+
+		if needUpdateNodePortFlows {
+			err := p.updateNodePortFlows(pSvcInfo, svcInfo, svcPortName)
+			if err != nil {
+				klog.ErrorS(err, "Failed to update NodePort flows", "Service", svcPortName, "ServiceInfo", svcInfo)
+				continue
+			}
+			if pSvcInfo != nil {
+				klog.V(2).InfoS("NodePort flows have been updated successfully", "Service", svcPortName, "ServiceInfo", svcInfo)
+			} else {
+				klog.V(2).InfoS("NodePort flows have been installed successfully", "Service", svcPortName, "ServiceInfo", svcInfo)
+			}
+		}
+
+		if needUpdateNodePortIPSets {
+			err := p.updateNodePortIPSets(pSvcInfo, svcInfo)
+			if err != nil {
+				klog.ErrorS(err, "Failed to update NodePort ipsets", "Service", svcPortName, "ServiceInfo", svcInfo)
+				continue
+			}
+			if pSvcInfo != nil {
+				klog.V(2).InfoS("NodePort ipsets have been updated successfully", "Service", svcPortName, "ServiceInfo", svcInfo)
+			} else {
+				klog.V(2).InfoS("NodePort ipsets have been installed successfully", "Service", svcPortName, "ServiceInfo", svcInfo)
+			}
+		}
+
+		if needUpdateLoadBalancerFlows {
+			err := p.updateLoadBalancerFlows(pSvcInfo, svcInfo, svcPortName, needUpdateAllLoadBalancerFlows)
+			if err != nil {
+				klog.ErrorS(err, "Failed to update LoadBalancer flows", "Service", svcPortName, "ServiceInfo", svcInfo)
+				continue
+			}
+			if pSvcInfo != nil {
+				klog.V(2).InfoS("LoadBalancer flows have been updated successfully", "Service", svcPortName, "ServiceInfo", svcInfo)
+			} else {
+				klog.V(2).InfoS("LoadBalancer flows have been installed successfully", "Service", svcPortName, "ServiceInfo", svcInfo)
+			}
+		}
+
+		if needUpdateLoadBalancerRoutes {
+			err := p.updateLoadBalancerRoutes(pSvcInfo, svcInfo)
+			if err != nil {
+				klog.ErrorS(err, "Failed to update LoadBalancer routes", "Service", svcPortName, "ServiceInfo", svcInfo)
+				continue
+			}
+			if pSvcInfo != nil {
+				klog.V(2).InfoS("LoadBalancer routes have been updated successfully", "Service", svcPortName, "ServiceInfo", svcInfo)
+			} else {
+				klog.V(2).InfoS("LoadBalancer routes have been installed successfully", "Service", svcPortName, "ServiceInfo", svcInfo)
 			}
 		}
 
@@ -619,7 +927,7 @@ func (p *proxier) installServices() {
 // endpoints or services resources are not synced. syncProxyRules is only called
 // through the Run method of the runner object, and all calls are serialized.
 // This method is the only one that changes internal state, but
-// GetServiceFlowKeys(), which is called by the the "/ovsflows" API handler,
+// GetServiceFlowKeys(), which is called by the "/ovsflows" API handler,
 // also reads service and endpoints maps, so serviceEndpointsMapsMutex is used
 // to protect these two maps.
 func (p *proxier) syncProxyRules() {
@@ -639,8 +947,7 @@ func (p *proxier) syncProxyRules() {
 		klog.V(4).Infof("syncProxyRules took %v", time.Since(start))
 	}()
 
-	// Protect Service and endpoints maps, which can be read by
-	// GetServiceFlowKeys().
+	// Protect Service and endpoints maps, which can be read by GetServiceFlowKeys().
 	p.serviceEndpointsMapsMutex.Lock()
 	defer p.serviceEndpointsMapsMutex.Unlock()
 	p.endpointsChanges.Update(p.endpointsMap, p.numLocalEndpoints)
