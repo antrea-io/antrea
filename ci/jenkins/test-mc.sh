@@ -243,7 +243,7 @@ function run_codecov { (set -e
     shasum -a 256 -c codecov.SHA256SUM
 
     chmod +x codecov
-    ./codecov -c -t ${CODECOV_TOKEN} -F ${flag} -f ${file} -s ${dir} -C ${GIT_COMMIT} -r antrea-io/antrea
+    #./codecov -c -t ${CODECOV_TOKEN} -F ${flag} -f ${file} -s ${dir} -C ${GIT_COMMIT} -r antrea-io/antrea
 
     rm -f trustedkeys.gpg codecov
 )}
