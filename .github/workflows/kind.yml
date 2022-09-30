@@ -98,20 +98,20 @@ jobs:
         ANTREA_LOG_DIR=$PWD/log ANTREA_COV_DIR=$PWD/test-e2e-encap-coverage ./ci/kind/test-e2e-kind.sh --encap-mode encap --coverage
     - name: Tar coverage files
       run: tar -czf test-e2e-encap-coverage.tar.gz test-e2e-encap-coverage
-    - name: Upload coverage for test-e2e-encap-coverage
-      uses: actions/upload-artifact@v3
-      with:
-        name: test-e2e-encap-coverage
-        path: test-e2e-encap-coverage.tar.gz
-        retention-days: 30
-    - name: Codecov
-      uses: codecov/codecov-action@v3
-      with:
-        token: ${{ secrets.CODECOV_TOKEN }}
-        file: '*.cov.out*'
-        flags: kind-e2e-tests
-        name: codecov-test-e2e-encap
-        directory: test-e2e-encap-coverage
+#    - name: Upload coverage for test-e2e-encap-coverage
+#      uses: actions/upload-artifact@v3
+#      with:
+#        name: test-e2e-encap-coverage
+#        path: test-e2e-encap-coverage.tar.gz
+#        retention-days: 30
+#    - name: Codecov
+#      uses: codecov/codecov-action@v3
+#      with:
+#        token: ${{ secrets.CODECOV_TOKEN }}
+#        file: '*.cov.out*'
+#        flags: kind-e2e-tests
+#        name: codecov-test-e2e-encap
+#        directory: test-e2e-encap-coverage
     - name: Tar log files
       if: ${{ failure() }}
       run: tar -czf log.tar.gz log
@@ -156,20 +156,20 @@ jobs:
         ANTREA_LOG_DIR=$PWD/log ANTREA_COV_DIR=$PWD/test-e2e-encap-no-proxy-coverage ./ci/kind/test-e2e-kind.sh --encap-mode encap --feature-gates AntreaProxy=false --coverage --skip mode-irrelevant
     - name: Tar coverage files
       run: tar -czf test-e2e-encap-no-proxy-coverage.tar.gz test-e2e-encap-no-proxy-coverage
-    - name: Upload coverage for test-e2e-encap-no-proxy-coverage
-      uses: actions/upload-artifact@v3
-      with:
-        name: test-e2e-encap-no-proxy-coverage
-        path: test-e2e-encap-no-proxy-coverage.tar.gz
-        retention-days: 30
-    - name: Codecov
-      uses: codecov/codecov-action@v3
-      with:
-        token: ${{ secrets.CODECOV_TOKEN }}
-        file: '*.cov.out*'
-        flags: kind-e2e-tests
-        name: codecov-test-e2e-encap-no-proxy
-        directory: test-e2e-encap-no-proxy-coverage
+#    - name: Upload coverage for test-e2e-encap-no-proxy-coverage
+#      uses: actions/upload-artifact@v3
+#      with:
+#        name: test-e2e-encap-no-proxy-coverage
+#        path: test-e2e-encap-no-proxy-coverage.tar.gz
+#        retention-days: 30
+#    - name: Codecov
+#      uses: codecov/codecov-action@v3
+#      with:
+#        token: ${{ secrets.CODECOV_TOKEN }}
+#        file: '*.cov.out*'
+#        flags: kind-e2e-tests
+#        name: codecov-test-e2e-encap-no-proxy
+#        directory: test-e2e-encap-no-proxy-coverage
     - name: Tar log files
       if: ${{ failure() }}
       run: tar -czf log.tar.gz log
@@ -215,20 +215,20 @@ jobs:
           ANTREA_LOG_DIR=$PWD/log ANTREA_COV_DIR=$PWD/test-e2e-encap-all-features-enabled-coverage ./ci/kind/test-e2e-kind.sh --encap-mode encap --coverage --feature-gates AllAlpha=true,AllBeta=true,Multicast=false --proxy-all
       - name: Tar coverage files
         run: tar -czf test-e2e-encap-all-features-enabled-coverage.tar.gz test-e2e-encap-all-features-enabled-coverage
-      - name: Upload coverage for test-e2e-encap-all-features-enabled-coverage
-        uses: actions/upload-artifact@v3
-        with:
-          name: test-e2e-encap-all-features-enabled-coverage
-          path: test-e2e-encap-all-features-enabled-coverage.tar.gz
-          retention-days: 30
-      - name: Codecov
-        uses: codecov/codecov-action@v3
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          file: '*.cov.out*'
-          flags: kind-e2e-tests
-          name: codecov-test-e2e-encap-all-features-enabled
-          directory: test-e2e-encap-all-features-enabled-coverage
+#      - name: Upload coverage for test-e2e-encap-all-features-enabled-coverage
+#        uses: actions/upload-artifact@v3
+#        with:
+#          name: test-e2e-encap-all-features-enabled-coverage
+#          path: test-e2e-encap-all-features-enabled-coverage.tar.gz
+#          retention-days: 30
+#      - name: Codecov
+#        uses: codecov/codecov-action@v3
+#        with:
+#          token: ${{ secrets.CODECOV_TOKEN }}
+#          file: '*.cov.out*'
+#          flags: kind-e2e-tests
+#          name: codecov-test-e2e-encap-all-features-enabled
+#          directory: test-e2e-encap-all-features-enabled-coverage
       - name: Tar log files
         if: ${{ failure() }}
         run: tar -czf log.tar.gz log
@@ -273,20 +273,20 @@ jobs:
         ANTREA_LOG_DIR=$PWD/log ANTREA_COV_DIR=$PWD/test-e2e-noencap-coverage ./ci/kind/test-e2e-kind.sh --encap-mode noEncap --coverage --skip mode-irrelevant
     - name: Tar coverage files
       run: tar -czf test-e2e-noencap-coverage.tar.gz test-e2e-noencap-coverage
-    - name: Upload coverage for test-e2e-noencap-coverage
-      uses: actions/upload-artifact@v3
-      with:
-        name: test-e2e-noencap-coverage
-        path: test-e2e-noencap-coverage.tar.gz
-        retention-days: 30
-    - name: Codecov
-      uses: codecov/codecov-action@v3
-      with:
-        token: ${{ secrets.CODECOV_TOKEN }}
-        file: '*.cov.out*'
-        flags: kind-e2e-tests
-        name: codecov-test-e2e-noencap
-        directory: test-e2e-noencap-coverage
+#    - name: Upload coverage for test-e2e-noencap-coverage
+#      uses: actions/upload-artifact@v3
+#      with:
+#        name: test-e2e-noencap-coverage
+#        path: test-e2e-noencap-coverage.tar.gz
+#        retention-days: 30
+#    - name: Codecov
+#      uses: codecov/codecov-action@v3
+#      with:
+#        token: ${{ secrets.CODECOV_TOKEN }}
+#        file: '*.cov.out*'
+#        flags: kind-e2e-tests
+#        name: codecov-test-e2e-noencap
+#        directory: test-e2e-noencap-coverage
     - name: Tar log files
       if: ${{ failure() }}
       run: tar -czf log.tar.gz log
@@ -331,20 +331,20 @@ jobs:
         ANTREA_LOG_DIR=$PWD/log ANTREA_COV_DIR=$PWD/test-e2e-hybrid-coverage ./ci/kind/test-e2e-kind.sh --encap-mode hybrid --coverage --skip mode-irrelevant
     - name: Tar coverage files
       run: tar -czf test-e2e-hybrid-coverage.tar.gz test-e2e-hybrid-coverage
-    - name: Upload coverage for test-e2e-hybrid-coverage
-      uses: actions/upload-artifact@v3
-      with:
-        name: test-e2e-hybrid-coverage
-        path: test-e2e-hybrid-coverage.tar.gz
-        retention-days: 30
-    - name: Codecov
-      uses: codecov/codecov-action@v3
-      with:
-        token: ${{ secrets.CODECOV_TOKEN }}
-        file: '*.cov.out*'
-        flags: kind-e2e-tests
-        name: codecov-test-e2e-hybrid
-        directory: test-e2e-hybrid-coverage
+#    - name: Upload coverage for test-e2e-hybrid-coverage
+#      uses: actions/upload-artifact@v3
+#      with:
+#        name: test-e2e-hybrid-coverage
+#        path: test-e2e-hybrid-coverage.tar.gz
+#        retention-days: 30
+#    - name: Codecov
+#      uses: codecov/codecov-action@v3
+#      with:
+#        token: ${{ secrets.CODECOV_TOKEN }}
+#        file: '*.cov.out*'
+#        flags: kind-e2e-tests
+#        name: codecov-test-e2e-hybrid
+#        directory: test-e2e-hybrid-coverage
     - name: Tar log files
       if: ${{ failure() }}
       run: tar -czf log.tar.gz log
@@ -396,20 +396,20 @@ jobs:
           ANTREA_LOG_DIR=$PWD/log ANTREA_COV_DIR=$PWD/test-e2e-fa-coverage ./ci/kind/test-e2e-kind.sh --encap-mode encap --coverage --flow-visibility
       - name: Tar coverage files
         run: tar -czf test-e2e-fa-coverage.tar.gz test-e2e-fa-coverage
-      - name: Upload coverage for test-e2e-fa-coverage
-        uses: actions/upload-artifact@v3
-        with:
-          name: test-e2e-fa-coverage
-          path: test-e2e-fa-coverage.tar.gz
-          retention-days: 30
-      - name: Codecov
-        uses: codecov/codecov-action@v3
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          file: '*.cov.out*'
-          flags: kind-e2e-tests
-          name: codecov-test-e2e-fa
-          directory: test-e2e-fa-coverage
+#      - name: Upload coverage for test-e2e-fa-coverage
+#        uses: actions/upload-artifact@v3
+#        with:
+#          name: test-e2e-fa-coverage
+#          path: test-e2e-fa-coverage.tar.gz
+#          retention-days: 30
+#      - name: Codecov
+#        uses: codecov/codecov-action@v3
+#        with:
+#          token: ${{ secrets.CODECOV_TOKEN }}
+#          file: '*.cov.out*'
+#          flags: kind-e2e-tests
+#          name: codecov-test-e2e-fa
+#          directory: test-e2e-fa-coverage
       - name: Tar log files
         if: ${{ failure() }}
         run: tar -czf log.tar.gz log

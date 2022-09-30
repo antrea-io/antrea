@@ -8,7 +8,7 @@ comment:
   require_changes: no
   require_base: no
   require_head: no
-  after_n_builds: 1
+  after_n_builds: 2
   show_carryforward_flags: true
 
 github_checks:
@@ -31,18 +31,6 @@ coverage:
         target: auto
         flags:
           - unit-tests
-      antrea-integration-tests:
-        target: auto
-        flags:
-          - integration-tests
-      antrea-e2e-tests:
-        target: auto
-        flags:
-          - e2e-tests
-      antrea-kind-e2e-tests:
-        target: auto
-        flags:
-          - kind-e2e-tests
 
 flag_management:
   default_rules:

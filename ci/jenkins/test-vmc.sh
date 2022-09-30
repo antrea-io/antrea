@@ -326,12 +326,6 @@ function run_codecov { (set -e
 
     chmod +x codecov
 
-    if [[ $remote == true ]]; then
-        ${SCP_WITH_UTILS_KEY} codecov jenkins@${ip}:~
-        ${SSH_WITH_UTILS_KEY} -n jenkins@${ip} "cd antrea; ~/codecov -c -t ${CODECOV_TOKEN} -F ${flag} -f ${file} -C ${GIT_COMMIT} -r antrea-io/antrea"
-    else
-        ./codecov -c -t ${CODECOV_TOKEN} -F ${flag} -f ${file} -s ${dir} -C ${GIT_COMMIT} -r antrea-io/antrea
-    fi
     rm -f trustedkeys.gpg codecov
 )}
 
