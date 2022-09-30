@@ -138,13 +138,13 @@ jobs:
         run: |
           cd multicluster
           make test-integration
-      - name: Codecov
-        uses: codecov/codecov-action@v3
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: .coverage/coverage-integration.txt,multicluster/.coverage/coverage-integration.txt
-          flags: integration-tests
-          name: codecov-integration-test
+#      - name: Codecov
+#        uses: codecov/codecov-action@v3
+#        with:
+#          token: ${{ secrets.CODECOV_TOKEN }}
+#          files: .coverage/coverage-integration.txt,multicluster/.coverage/coverage-integration.txt
+#          flags: integration-tests
+#          name: codecov-integration-test
 
   # golangci-lint-ubuntu and golangci-lint-macos are intentionally not merged into one job with os matrix, otherwise the
   # job wouldn't be expanded if it's skipped and the report of the required check would be missing.
