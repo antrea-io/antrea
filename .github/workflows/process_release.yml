@@ -218,13 +218,40 @@ jobs:
         asset_path: ./assets/antrea-multicluster-member.yml
         asset_name: antrea-multicluster-member.yml
         asset_content_type: application/octet-stream
+    - name: Upload antrea-agent-linux-x86_64
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./assets/antrea-agent-linux-x86_64
+        asset_name: antrea-agent-linux-x86_64
+        asset_content_type: application/octet-stream
+    - name: Upload antrea-agent-linux-arm64
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./assets/antrea-agent-linux-arm64
+        asset_name: antrea-agent-linux-arm64
+        asset_content_type: application/octet-stream
+    - name: Upload antrea-agent-linux-arm
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./assets/antrea-agent-linux-arm
+        asset_name: antrea-agent-linux-arm
+        asset_content_type: application/octet-stream
     - name: Upload antrea-agent-windows-x86_64.exe
       uses: actions/upload-release-asset@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ github.event.release.upload_url }}
-        asset_path: ./assets/antrea-agent.exe
+        asset_path: ./assets/antrea-agent-windows-x86_64.exe
         asset_name: antrea-agent-windows-x86_64.exe
         asset_content_type: application/octet-stream
     - name: Upload antrea-cni-windows-x86_64.exe
@@ -233,7 +260,7 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ github.event.release.upload_url }}
-        asset_path: ./assets/antrea-cni.exe
+        asset_path: ./assets/antrea-cni-windows-x86_64.exe
         asset_name: antrea-cni-windows-x86_64.exe
         asset_content_type: application/octet-stream
     - name: Upload Start-AntreaAgent.ps1
@@ -262,6 +289,24 @@ jobs:
         upload_url: ${{ github.event.release.upload_url }}
         asset_path: ./assets/flow-aggregator-chart.tgz
         asset_name: flow-aggregator-chart.tgz
+        asset_content_type: application/octet-stream
+    - name: Upload install-vm.sh
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./assets/install-vm.sh
+        asset_name: install-vm.sh
+        asset_content_type: application/octet-stream
+    - name: Upload install-vm.ps1
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./assets/install-vm.ps1
+        asset_name: install-vm.ps1
         asset_content_type: application/octet-stream
 
   update-website:

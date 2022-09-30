@@ -63,18 +63,45 @@ for build in "${ANTREA_BUILDS[@]}"; do
     arch="${args[1]}"
     suffix="${args[2]}"
 
-    # cgo is disabled by default when cross-compiling, but enabled by default
-    # for native builds. We ensure it is always disabled for portability since
-    # these binaries will be distributed as release assets.
-    GOOS=$os GOARCH=$arch CGO_ENABLED=0 ANTCTL_BINARY_NAME="antctl-$suffix" BINDIR="$OUTPUT_DIR"/ make antctl-release
-    cd ./plugins/octant && GOOS=$os GOARCH=$arch CGO_ENABLED=0 ANTREA_OCTANT_PLUGIN_BINARY_NAME="antrea-octant-plugin-$suffix" \
-    BINDIR="$OUTPUT_DIR" make antrea-octant-plugin-release && cd ../..
+    # all "*-release" targets disable cgo, which is appropriate when
+    # distributing release assets, for portability.
+    GOOS=$os GOARCH=$arch ANTCTL_BINARY_NAME="antctl-$suffix" BINDIR="$OUTPUT_DIR" make antctl-release
+    cd ./plugins/octant && GOOS=$os GOARCH=$arch BINDIR="$OUTPUT_DIR" ANTREA_OCTANT_PLUGIN_BINARY_NAME="antrea-octant-plugin-$suffix" make antrea-octant-plugin-release && cd ../..
 done
 
-# the windows-bin Makefile target builds antrea-cni and antrea-agent with cgo
-# explicitly disabled.
-BINDIR="$OUTPUT_DIR" make windows-bin
+ANTREA_AGENT_BUILDS=(
+    "linux amd64 linux-x86_64"
+    "linux arm64 linux-arm64"
+    "linux arm linux-arm"
+    "windows amd64 windows-x86_64.exe"
+)
+
+for build in "${ANTREA_AGENT_BUILDS[@]}"; do
+    args=($build)
+    os="${args[0]}"
+    arch="${args[1]}"
+    suffix="${args[2]}"
+
+    GOOS=$os GOARCH=$arch BINDIR="$OUTPUT_DIR" ANTREA_AGENT_BINARY_NAME="antrea-agent-$suffix" make antrea-agent-release
+done
+
+ANTREA_CNI_BUILDS=(
+    "windows amd64 windows-x86_64.exe"
+)
+
+for build in "${ANTREA_CNI_BUILDS[@]}"; do
+    args=($build)
+    os="${args[0]}"
+    arch="${args[1]}"
+    suffix="${args[2]}"
+
+    GOOS=$os GOARCH=$arch BINDIR="$OUTPUT_DIR" ANTREA_CNI_BINARY_NAME="antrea-cni-$suffix" make antrea-cni-release
+done
+
 sed "s/AntreaVersion=\"latest\"/AntreaVersion=\"$VERSION\"/" ./hack/windows/Start-AntreaAgent.ps1 > "$OUTPUT_DIR"/Start-AntreaAgent.ps1
+
+cp ./hack/externalnode/install-vm.sh "$OUTPUT_DIR/"
+cp ./hack/externalnode/install-vm.ps1 "$OUTPUT_DIR/"
 
 export IMG_TAG=$VERSION
 
