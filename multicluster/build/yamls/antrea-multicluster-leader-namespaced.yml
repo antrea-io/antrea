@@ -322,6 +322,8 @@ data:
     leaderElection:
       leaderElect: false
     serviceCIDR: ""
+    podCIDRs:
+      - ""
     gatewayIPPrecedence: "private"
     endpointIPType: "ClusterIP"
 kind: ConfigMap

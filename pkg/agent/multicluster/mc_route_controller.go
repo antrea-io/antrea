@@ -331,7 +331,8 @@ func (c *MCRouteController) addMCFlowsForSingleCIImp(activeGW *mcv1alpha1.Gatewa
 
 	if installedCIImp != nil {
 		oldTunnelPeerIPToRemoteGW := getPeerGatewayIP(installedCIImp.Spec)
-		if oldTunnelPeerIPToRemoteGW.Equal(tunnelPeerIPToRemoteGW) && installedCIImp.Spec.ServiceCIDR == ciImport.Spec.ServiceCIDR {
+		if oldTunnelPeerIPToRemoteGW.Equal(tunnelPeerIPToRemoteGW) && installedCIImp.Spec.ServiceCIDR == ciImport.Spec.ServiceCIDR &&
+			sets.NewString(installedCIImp.Spec.PodCIDRs...).Equal(sets.NewString(ciImport.Spec.PodCIDRs...)) {
 			klog.V(2).InfoS("No difference between new and installed ClusterInfoImports, skip updating", "clusterinfoimport", ciImport.Name)
 			return nil
 		}
@@ -339,7 +340,7 @@ func (c *MCRouteController) addMCFlowsForSingleCIImp(activeGW *mcv1alpha1.Gatewa
 
 	klog.InfoS("Adding/updating remote Gateway Node flows for Multi-cluster", "gateway", klog.KObj(activeGW),
 		"node", c.nodeConfig.Name, "peer", tunnelPeerIPToRemoteGW)
-	allCIDRs := []string{ciImport.Spec.ServiceCIDR}
+	allCIDRs := append([]string{ciImport.Spec.ServiceCIDR}, ciImport.Spec.PodCIDRs...)
 	peerConfigs, err := generatePeerConfigs(allCIDRs, tunnelPeerIPToRemoteGW)
 	if err != nil {
 		klog.ErrorS(err, "Parse error for serviceCIDR from remote cluster", "clusterinfoimport", ciImport.Name, "gateway", activeGW.Name)

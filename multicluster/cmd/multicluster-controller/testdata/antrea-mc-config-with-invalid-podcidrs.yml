@@ -8,8 +8,9 @@ webhook:
   port: 9443
 leaderElection:
   leaderElect: false
-serviceCIDR: ""
+serviceCIDR: "10.100.0.0/16"
 podCIDRs:
+  - "10.10a.0.0/16"
   - ""
 gatewayIPPrecedence: "private"
 endpointIPType: "ClusterIP"

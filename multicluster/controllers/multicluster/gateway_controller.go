@@ -44,6 +44,7 @@ type (
 		namespace        string
 		localClusterID   string
 		serviceCIDR      string
+		podCIDRs         []string
 		leaderNamespace  string
 	}
 )
@@ -55,12 +56,14 @@ func NewGatewayReconciler(
 	scheme *runtime.Scheme,
 	namespace string,
 	serviceCIDR string,
+	podCIDRs []string,
 	commonAreaGetter RemoteCommonAreaGetter) *GatewayReconciler {
 	reconciler := &GatewayReconciler{
 		Client:           client,
 		Scheme:           scheme,
 		namespace:        namespace,
 		serviceCIDR:      serviceCIDR,
+		podCIDRs:         podCIDRs,
 		commonAreaGetter: commonAreaGetter,
 	}
 	return reconciler
@@ -144,6 +147,7 @@ func (r *GatewayReconciler) updateResourceExport(ctx context.Context, req ctrl.R
 	resExportSpec.ClusterInfo = &mcsv1alpha1.ClusterInfo{
 		ClusterID:    r.localClusterID,
 		ServiceCIDR:  r.serviceCIDR,
+		PodCIDRs:     r.podCIDRs,
 		GatewayInfos: []mcsv1alpha1.GatewayInfo{*gwInfo},
 	}
 	if reflect.DeepEqual(existingResExport.Spec, resExportSpec) {
@@ -171,6 +175,7 @@ func (r *GatewayReconciler) createResourceExport(ctx context.Context, req ctrl.R
 	resExportSpec.ClusterInfo = &mcsv1alpha1.ClusterInfo{
 		ClusterID:   r.localClusterID,
 		ServiceCIDR: r.serviceCIDR,
+		PodCIDRs:    r.podCIDRs,
 		GatewayInfos: []mcsv1alpha1.GatewayInfo{
 			{
 				GatewayIP: gatewayIP,
