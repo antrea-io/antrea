@@ -41,6 +41,8 @@ type MultiClusterConfig struct {
 	config.ControllerManagerConfigurationSpec `json:",inline"`
 	// ServiceCIDR allows user to set the ClusterIP range of the cluster manually.
 	ServiceCIDR string `json:"serviceCIDR,omitempty"`
+	// PodCIDRs is the Pod IP address CIDRs.
+	PodCIDRs []string `json:"podCIDRs,omitempty"`
 	// The precedence about which IP address (internal or external IP) of Node is preferred to
 	// be used as the cross-cluster tunnel endpoint. if not specified, internal IP will be chosen.
 	GatewayIPPrecedence Precedence `json:"gatewayIPPrecedence,omitempty"`

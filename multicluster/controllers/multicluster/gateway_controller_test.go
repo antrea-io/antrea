@@ -141,7 +141,7 @@ func TestGatewayReconciler(t *testing.T) {
 		mcReconciler := NewMemberClusterSetReconciler(fakeClient, scheme, "default")
 		mcReconciler.SetRemoteCommonArea(commonArea)
 		commonAreaGatter := mcReconciler
-		r := NewGatewayReconciler(fakeClient, scheme, "default", "10.96.0.0/12", commonAreaGatter)
+		r := NewGatewayReconciler(fakeClient, scheme, "default", "10.96.0.0/12", []string{"10.200.1.1/16"}, commonAreaGatter)
 		t.Run(tt.name, func(t *testing.T) {
 			req := ctrl.Request{NamespacedName: tt.namespacedName}
 			if _, err := r.Reconcile(ctx, req); err != nil {
