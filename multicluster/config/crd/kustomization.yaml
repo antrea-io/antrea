@@ -11,6 +11,7 @@ resources:
 - k8smcs/multicluster.x-k8s.io_serviceimports.yaml
 - bases/multicluster.crd.antrea.io_clusterinfoimports.yaml
 - bases/multicluster.crd.antrea.io_gateways.yaml
+- bases/multicluster.crd.antrea.io_labelidentities.yaml
 #+kubebuilder:scaffold:crdkustomizeresource
 
 patchesStrategicMerge:

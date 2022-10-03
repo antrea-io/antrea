@@ -55,6 +55,7 @@ func runMember(o *Options) error {
 		return err
 	}
 
+	stopCh := signals.RegisterSignalHandlers()
 	hookServer := mgr.GetWebhookServer()
 	hookServer.Register("/validate-multicluster-crd-antrea-io-v1alpha1-gateway",
 		&webhook.Admission{Handler: &gatewayValidator{
@@ -78,6 +79,15 @@ func runMember(o *Options) error {
 	if err = svcExportReconciler.SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("error creating ServiceExport controller: %v", err)
 	}
+	labelIdentityReconciler := multiclustercontrollers.NewLabelIdentityReconciler(
+		mgr.GetClient(),
+		mgr.GetScheme(),
+		commonAreaGetter)
+	if err = labelIdentityReconciler.SetupWithManager(mgr); err != nil {
+		return fmt.Errorf("error creating LabelIdentity controller: %v", err)
+	}
+
+	go labelIdentityReconciler.Run(stopCh)
 
 	gwReconciler := multiclustercontrollers.NewGatewayReconciler(
 		mgr.GetClient(),
@@ -99,7 +109,6 @@ func runMember(o *Options) error {
 		return fmt.Errorf("error creating Node controller: %v", err)
 	}
 
-	stopCh := signals.RegisterSignalHandlers()
 	staleController := multiclustercontrollers.NewStaleResCleanupController(
 		mgr.GetClient(),
 		mgr.GetScheme(),

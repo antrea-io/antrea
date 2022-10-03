@@ -41,6 +41,22 @@ rules:
 - apiGroups:
   - ""
   resources:
+  - pods
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - namespaces
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
   - services
   verbs:
   - create
@@ -188,6 +204,18 @@ rules:
   - get
   - patch
   - update
+- apiGroups:
+  - multicluster.crd.antrea.io
+  resources:
+  - labelidentities
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
 - apiGroups:
   - multicluster.crd.antrea.io
   resources:

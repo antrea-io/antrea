@@ -65,9 +65,9 @@ func NewResourceExportReconciler(
 	return reconciler
 }
 
-//+kubebuilder:rbac:groups=multicluster.crd.antrea.io,resources=resourceexports,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=multicluster.crd.antrea.io,resources=resourceexports/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=multicluster.crd.antrea.io,resources=resourceexports/finalizers,verbs=update
+// +kubebuilder:rbac:groups=multicluster.crd.antrea.io,resources=resourceexports,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=multicluster.crd.antrea.io,resources=resourceexports/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=multicluster.crd.antrea.io,resources=resourceexports/finalizers,verbs=update
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -470,7 +470,16 @@ func (r *ResourceExportReconciler) deleteResourceExport(resExport *mcsv1alpha1.R
 // SetupWithManager sets up the controller with the Manager.
 func (r *ResourceExportReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	// Ignore status update event via GenerationChangedPredicate
-	instance := predicate.GenerationChangedPredicate{}
+	generationPredicate := predicate.GenerationChangedPredicate{}
+	// Register this controller to ignore LabelIdentity kind of ResourceExport
+	labelIdentityResExportFilter := func(object client.Object) bool {
+		if resExport, ok := object.(*mcsv1alpha1.ResourceExport); ok {
+			return resExport.Spec.Kind != common.LabelIdentityKind
+		}
+		return false
+	}
+	labelIdentityResExportPredicate := predicate.NewPredicateFuncs(labelIdentityResExportFilter)
+	instance := predicate.And(generationPredicate, labelIdentityResExportPredicate)
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&mcsv1alpha1.ResourceExport{}).
 		WithEventFilter(instance).

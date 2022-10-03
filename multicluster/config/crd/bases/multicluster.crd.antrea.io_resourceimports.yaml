@@ -2517,6 +2517,20 @@ spec:
               kind:
                 description: Kind of imported resource.
                 type: string
+              labelIdentity:
+                description: If imported resource kind is LabelIdentity.
+                properties:
+                  id:
+                    description: ID is the ID allocated for the label identity by
+                      the leader cluster.
+                    format: int32
+                    type: integer
+                  label:
+                    description: Label is the normalized string of a label identity.
+                      The format of normalized label identity is `ns:(?P<nslabels>(.)*)&pod:(?P<podlabels>(.)*)`
+                      E.g., `ns:kubernetes.io/metadata.name=kube-system&pod:app=db`
+                    type: string
+                type: object
               name:
                 description: Name of imported resource.
                 type: string
@@ -2524,10 +2538,7 @@ spec:
                 description: Namespace of imported resource.
                 type: string
               raw:
-                description: 'If imported resource is ANP. TODO: ANP uses float64
-                  as priority.  Type float64 is discouraged by k8s, and is not supported
-                  by controller-gen tools. NetworkPolicy *v1alpha1.NetworkPolicySpec
-                  `json:"networkpolicy,omitempty"` If imported resource kind is unknown.'
+                description: If imported resource kind is unknown.
                 properties:
                   data:
                     format: byte

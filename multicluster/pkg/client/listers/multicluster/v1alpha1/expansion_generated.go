@@ -39,6 +39,10 @@ type GatewayListerExpansion interface{}
 // GatewayNamespaceLister.
 type GatewayNamespaceListerExpansion interface{}
 
+// LabelIdentityListerExpansion allows custom methods to be added to
+// LabelIdentityLister.
+type LabelIdentityListerExpansion interface{}
+
 // MemberClusterAnnounceListerExpansion allows custom methods to be added to
 // MemberClusterAnnounceLister.
 type MemberClusterAnnounceListerExpansion interface{}
