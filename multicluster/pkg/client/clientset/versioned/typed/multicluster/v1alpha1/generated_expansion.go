@@ -21,6 +21,8 @@ type ClusterSetExpansion interface{}
 
 type GatewayExpansion interface{}
 
+type LabelIdentityExpansion interface{}
+
 type MemberClusterAnnounceExpansion interface{}
 
 type ResourceExportExpansion interface{}

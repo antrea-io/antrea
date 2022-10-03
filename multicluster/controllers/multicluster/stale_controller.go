@@ -22,6 +22,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/util/workqueue"
@@ -42,8 +43,8 @@ const (
 	memberClusterAnnounceStaleTime = 5 * time.Minute
 )
 
-// StaleResCleanupController will clean up ServiceImport, MC Service, ACNP, ClusterInfoImport resources
-// if no corresponding ResourceImports in the leader cluster and remove stale ResourceExports
+// StaleResCleanupController will clean up ServiceImport, MC Service, ACNP, ClusterInfoImport and LabelIdentity
+// resources if no corresponding ResourceImports in the leader cluster and remove stale ResourceExports
 // in the leader cluster if no corresponding ServiceExport or Gateway in the member cluster when it runs in
 // the member cluster.
 // It will clean up stale MemberClusterAnnounce resources in the leader cluster if no corresponding member
@@ -77,10 +78,10 @@ func NewStaleResCleanupController(
 	return reconciler
 }
 
-//+kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch;delete
-//+kubebuilder:rbac:groups=multicluster.x-k8s.io,resources=serviceimports,verbs=get;list;watch;delete
-//+kubebuilder:rbac:groups=multicluster.crd.antrea.io,resources=resourceimports,verbs=get;list;watch;
-//+kubebuilder:rbac:groups=multicluster.crd.antrea.io,resources=resourceexports,verbs=get;list;watch;delete
+// +kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch;delete
+// +kubebuilder:rbac:groups=multicluster.x-k8s.io,resources=serviceimports,verbs=get;list;watch;delete
+// +kubebuilder:rbac:groups=multicluster.crd.antrea.io,resources=resourceimports,verbs=get;list;watch;
+// +kubebuilder:rbac:groups=multicluster.crd.antrea.io,resources=resourceexports,verbs=get;list;watch;delete
 
 func (c *StaleResCleanupController) cleanup() error {
 	switch c.clusterRole {
@@ -109,13 +110,20 @@ func (c *StaleResCleanupController) cleanupStaleResourcesOnMember() error {
 		return err
 	}
 	if err := c.cleanupStaleServiceResources(commonArea, resImpList); err != nil {
+		klog.ErrorS(err, "Failed to cleanup stale imported Services")
 		return err
 	}
-
+	// Cleanup any imported ACNPs that do not have corresponding ResourceImport anymore
 	if err := c.cleanupACNPResources(resImpList); err != nil {
+		klog.ErrorS(err, "Failed to cleanup stale imported ACNPs")
 		return err
 	}
 	if err := c.cleanupClusterInfoImport(resImpList); err != nil {
+		klog.ErrorS(err, "Failed to cleanup stale ClusterInfoImports")
+		return err
+	}
+	if err := c.cleanupLabelIdentities(resImpList); err != nil {
+		klog.ErrorS(err, "Failed to cleanup stale imported LabelIdentities")
 		return err
 	}
 
@@ -132,6 +140,9 @@ func (c *StaleResCleanupController) cleanupStaleResourcesOnMember() error {
 		return err
 	}
 	if err := c.cleanupClusterInfoResourceExport(commonArea, resExpList); err != nil {
+		return err
+	}
+	if err := c.cleanupLabelIdentityResourceExport(commonArea, resExpList); err != nil {
 		return err
 	}
 	return nil
@@ -170,7 +181,7 @@ func (c *StaleResCleanupController) cleanupStaleServiceResources(commonArea comm
 
 	for _, staleSvc := range mcsSvcItems {
 		svc := staleSvc
-		klog.InfoS("Cleaning up stale Service", "service", klog.KObj(&svc))
+		klog.InfoS("Cleaning up stale imported Service", "service", klog.KObj(&svc))
 		if err := c.Client.Delete(ctx, &svc, &client.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
 			return err
 		}
@@ -204,7 +215,7 @@ func (c *StaleResCleanupController) cleanupACNPResources(resImpList *mcsv1alpha1
 	}
 	for _, stalePolicy := range staleMCACNPItems {
 		acnp := stalePolicy
-		klog.InfoS("Cleaning up stale ACNP", "acnp", klog.KObj(&acnp))
+		klog.InfoS("Cleaning up stale imported ACNP", "acnp", klog.KObj(&acnp))
 		if err := c.Client.Delete(ctx, &acnp, &client.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
 			return err
 		}
@@ -231,6 +242,28 @@ func (c *StaleResCleanupController) cleanupClusterInfoImport(resImpList *mcsv1al
 		ciImp := staleCIImp
 		klog.InfoS("Cleaning up stale ClusterInfoImport", "clusterinfoimport", klog.KObj(&ciImp))
 		if err := c.Client.Delete(ctx, &ciImp, &client.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
+			return err
+		}
+	}
+	return nil
+}
+
+func (c *StaleResCleanupController) cleanupLabelIdentities(resImpList *mcsv1alpha1.ResourceImportList) error {
+	labelIdentityList := &mcsv1alpha1.LabelIdentityList{}
+	if err := c.List(ctx, labelIdentityList, &client.ListOptions{}); err != nil {
+		return err
+	}
+	staleLabelIdentities := map[string]mcsv1alpha1.LabelIdentity{}
+	for _, labelIdentityObj := range labelIdentityList.Items {
+		staleLabelIdentities[labelIdentityObj.Name] = labelIdentityObj
+	}
+	for _, labelImp := range resImpList.Items {
+		delete(staleLabelIdentities, labelImp.Name)
+	}
+	for _, l := range staleLabelIdentities {
+		labelIdentity := l
+		klog.V(2).InfoS("Cleaning up stale imported LabelIdentity", "labelidentity", klog.KObj(&labelIdentity))
+		if err := c.Client.Delete(ctx, &labelIdentity, &client.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
 			return err
 		}
 	}
@@ -265,7 +298,50 @@ func (c *StaleResCleanupController) cleanupServiceResourceExport(commonArea comm
 
 	for _, r := range staleResExpItems {
 		re := r
-		klog.InfoS("Cleaning up ResourceExport", "ResourceExport", klog.KObj(&re))
+		klog.InfoS("Cleaning up stale ResourceExport", "ResourceExport", klog.KObj(&re))
+		if err := commonArea.Delete(ctx, &re, &client.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
+			return err
+		}
+	}
+	return nil
+}
+
+func (c *StaleResCleanupController) cleanupLabelIdentityResourceExport(commonArea commonarea.RemoteCommonArea,
+	resExpList *mcsv1alpha1.ResourceExportList) error {
+	podList, nsList := &corev1.PodList{}, &corev1.NamespaceList{}
+	if err := c.List(ctx, podList, &client.ListOptions{}); err != nil {
+		return err
+	}
+	if err := c.List(ctx, nsList, &client.ListOptions{}); err != nil {
+		return err
+	}
+	allResExpItems := resExpList.Items
+	staleResExpItems := map[string]mcsv1alpha1.ResourceExport{}
+	for _, resExp := range allResExpItems {
+		if resExp.Spec.Kind == common.LabelIdentityKind && resExp.Labels[common.SourceClusterID] == c.localClusterID {
+			staleResExpItems[resExp.Spec.LabelIdentity.NormalizedLabel] = resExp
+		}
+	}
+	nsLabelMap := map[string]string{}
+	for _, ns := range nsList.Items {
+		if _, ok := ns.Labels[corev1.LabelMetadataName]; !ok {
+			// NamespaceDefaultLabelName is supported from K8s v1.21. For K8s versions before v1.21,
+			// we append the Namespace name label to the Namespace label set.
+			ns.Labels[corev1.LabelMetadataName] = ns.Name
+		}
+		nsLabelMap[ns.Name] = "namespace:" + labels.FormatLabels(ns.Labels)
+	}
+	for _, p := range podList.Items {
+		podNSlabel, ok := nsLabelMap[p.Namespace]
+		if !ok {
+			continue
+		}
+		normalizedLabel := podNSlabel + "&pod:" + labels.FormatLabels(p.Labels)
+		delete(staleResExpItems, normalizedLabel)
+	}
+	for _, r := range staleResExpItems {
+		re := r
+		klog.InfoS("Cleaning up stale ResourceExport", "ResourceExport", klog.KObj(&re))
 		if err := commonArea.Delete(ctx, &re, &client.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
 			return err
 		}

@@ -62,10 +62,8 @@ type ResourceImportSpec struct {
 	ExternalEntity *ExternalEntityImport `json:"externalentity,omitempty"`
 	// If imported resource is AntreaClusterNetworkPolicy.
 	ClusterNetworkPolicy *v1alpha1.ClusterNetworkPolicySpec `json:"clusternetworkpolicy,omitempty"`
-	// If imported resource is ANP.
-	// TODO:
-	// ANP uses float64 as priority.  Type float64 is discouraged by k8s, and is not supported by controller-gen tools.
-	// NetworkPolicy *v1alpha1.NetworkPolicySpec `json:"networkpolicy,omitempty"`
+	// If imported resource kind is LabelIdentity.
+	LabelIdentity *LabelIdentitySpec `json:"labelIdentity,omitempty"`
 	// If imported resource kind is unknown.
 	Raw *RawResourceImport `json:"raw,omitempty"`
 }
@@ -105,8 +103,8 @@ type ResourceImportStatus struct {
 }
 
 // +genclient
-//+kubebuilder:object:root=true
-//+kubebuilder:subresource:status
+// +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
 
 // +kubebuilder:printcolumn:name="Kind",type=string,JSONPath=`.spec.kind`,description="Kind of the imported resource"
 // +kubebuilder:printcolumn:name="Namespace",type=string,JSONPath=`.spec.namespace`,description="Namespace of the imported resource"
@@ -121,7 +119,7 @@ type ResourceImport struct {
 	Status ResourceImportStatus `json:"status,omitempty"`
 }
 
-//+kubebuilder:object:root=true
+// +kubebuilder:object:root=true
 
 // ResourceImportList contains a list of ResourceImport.
 type ResourceImportList struct {
@@ -131,5 +129,8 @@ type ResourceImportList struct {
 }
 
 func init() {
-	SchemeBuilder.Register(&ResourceImport{}, &ResourceImportList{})
+	SchemeBuilder.Register(
+		&ResourceImport{},
+		&ResourceImportList{},
+	)
 }
