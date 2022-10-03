@@ -275,4 +275,4 @@ spec:
 With the `TrafficControl` capability, Antrea can be used with threat detection
 engines to provide network-based IDS/IPS to Pods. We provide a reference
 cookbook on how to implement IDS using Suricata. For more information, refer to
-the [cookbook](cookbooks/ids).
+the [cookbook](cookbooks/ids/readme).
