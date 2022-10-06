@@ -267,6 +267,35 @@
         included-regions: '{included_regions}'
     publishers: '{publishers}'
     wrappers: '{wrappers}'
+- job-template:
+    name: '{name}-{test_name}-for-full-test'
+    node: '{node}'
+    block-downstream: false
+    block-upstream: false
+    builders: '{builders}'
+    description: '{description}'
+    project-type: freestyle
+    build-discarder:
+       artifact-days-to-keep: -1
+       artifact-num-to-keep: -1
+       days-to-keep: 7
+       num-to-keep: 30
+    triggers:
+    - pollscm:
+        cron: '{cron}'
+        ignore-post-commit-hooks: '{ignore_post_commit_hooks}'
+    scm:
+    - git:
+        branches: '{branches}'
+        credentials-id: '{git_credentials_id}'
+        name: origin
+        refspec: +refs/heads/*:refs/remotes/origin/* +refs/pull/${{ghprbPullId}}/*:refs/remotes/origin/pr/${{ghprbPullId}}/*
+        url: 'https://github.com/{org_repo}'
+        wipe-workspace: true
+        included-regions: '{included_regions}'
+    publishers: '{publishers}'
+    wrappers: '{wrappers}'
+    commit_hash: '{commit_hash}'
 
 - job-template:
     name: '{name}-{test_name}-for-gc'

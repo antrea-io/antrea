@@ -20,6 +20,59 @@
           ignore_post_commit_hooks: false
           publishers: []
           wrappers: []
+      - '{name}-{test_name}-for-full-test':
+          test_name: daily
+          node: 'antrea-test-node'
+          description: 'This is for running fully test on main branch.'
+          builders:
+          - trigger-builds:
+            - jobs:
+                - antrea-conformance-networkpolicy-e2e-for-full-test
+                - antrea-unit-integration-for-full-test
+          branches:
+          - '*/main'
+          included_regions:
+          - ci/jenkins/jobs/.*
+          cron: ''
+          ignore_post_commit_hooks: false
+          publishers: []
+          wrappers: []
+      - '{name}-{test_name}-for-full-test':
+          test_name: conformance-networkpolicy-e2e
+          node: 'antrea-test-node'
+          description: 'This is for running fully test on main branch.'
+          builders:
+            - builder-conformance:
+                conformance_type: 'all-features-conformance'
+            - builder-conformance: 
+                conformance_type: 'networkpolicy'
+            - builder-e2e
+          branches:
+          - '*/main'
+          included_regions:
+          - ci/jenkins/jobs/.*
+          cron: ''
+          ignore_post_commit_hooks: false
+          publishers: []
+          wrappers: []
+          commit_hash: GIT_COMMIT
+      - '{name}-{test_name}-for-full-test':
+          test_name: unit-integration
+          node: 'antrea-test-node'
+          description: 'This is for running fully test on main branch.'
+          builders:
+           - builder-unit
+           - builder-integration
+           - builder-multicluster-e2e
+          branches:
+          - '*/main'
+          included_regions:
+          - ci/jenkins/jobs/.*
+          cron: ''
+          ignore_post_commit_hooks: false
+          publishers: []
+          wrappers: []
+          commit_hash: GIT_COMMIT
       - '{name}-{test_name}-for-period':
           test_name: daily-whole-conformance
           node: 'antrea-test-node'

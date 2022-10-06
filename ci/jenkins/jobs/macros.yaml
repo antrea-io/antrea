@@ -14,7 +14,7 @@
             #!/bin/bash
             set -e
             DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
-            ./ci/jenkins/test-vmc.sh --testcase integration --coverage --codecov-token "${CODECOV_TOKEN}" --registry ${DOCKER_REGISTRY}
+            ./ci/jenkins/test-unit-integration.sh --testcase integration --coverage --codecov-token "${CODECOV_TOKEN}" --registry ${DOCKER_REGISTRY}
 
 - builder:
       name: builder-multicluster-integration
@@ -118,6 +118,24 @@
           set -ex
           DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
           ./ci/jenkins/test-vmc.sh --cluster-name "$BUILD_TAG" --testcase e2e --coverage --codecov-token "${CODECOV_TOKEN}" --registry ${DOCKER_REGISTRY} --username "${CAPVC_USERNAME}" --password "${CAPVC_PASSWORD}"
+
+- builder:
+    name: builder-unit
+    builders:
+      - shell: |-
+          #!/bin/bash
+          set -ex
+          DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
+          ./ci/jenkins/test-unit-integration.sh --testcase unit --coverage --codecov-token "${CODECOV_TOKEN}" --registry ${DOCKER_REGISTRY}      
+
+- builder:
+    name: builder-multicluster-e2e
+    builders:
+      - shell: |-
+          #!/bin/bash
+          set -e
+          DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
+          ./ci/jenkins/test-mc.sh --testcase e2e --registry ${DOCKER_REGISTRY}
 
 - builder:
     name: builder-conformance
