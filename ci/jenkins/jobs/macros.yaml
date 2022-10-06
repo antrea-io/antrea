@@ -106,6 +106,24 @@
           ./ci/jenkins/test-vmc.sh --cluster-name "$BUILD_TAG" --testcase e2e --coverage --codecov-token "${CODECOV_TOKEN}" --registry ${DOCKER_REGISTRY} --username "${CAPVC_USERNAME}" --password "${CAPVC_PASSWORD}"
 
 - builder:
+    name: builder-unit
+    builders:
+      - shell: |-
+          #!/bin/bash
+          set -ex
+          DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
+          pwd        
+
+- builder:
+    name: builder-multicluster-e2e
+    builders:
+      - shell: |-
+          #!/bin/bash
+          set -e
+          DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
+          ./ci/jenkins/test-mc.sh --testcase e2e --registry ${DOCKER_REGISTRY}
+
+- builder:
     name: builder-conformance
     builders:
       - shell: |-
