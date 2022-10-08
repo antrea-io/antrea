@@ -279,7 +279,7 @@ func generateTrafficControlState(direction v1alpha2.Direction,
 }
 
 func waitEvents(t *testing.T, expectedEvents int, c *fakeController) {
-	require.NoError(t, wait.PollImmediate(10*time.Millisecond, time.Second, func() (done bool, err error) {
+	require.NoError(t, wait.PollImmediate(10*time.Millisecond, 5*time.Second, func() (done bool, err error) {
 		return c.queue.Len() == expectedEvents, nil
 	}))
 }
