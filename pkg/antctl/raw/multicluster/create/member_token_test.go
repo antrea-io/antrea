@@ -54,17 +54,18 @@ type: Opaque`)
 		expectedOutput string
 		secretFile     bool
 		failureType    string
-		tokeName       string
+		tokenName      string
+		extraArg       string
 	}{
 		{
 			name:           "create successfully",
-			tokeName:       "default-member-token",
+			tokenName:      "default-member-token",
 			namespace:      "default",
 			expectedOutput: "You can now run the \"antctl mc join\" command with the token to have the cluster join the ClusterSet\n",
 		},
 		{
 			name:           "create successfully with file",
-			tokeName:       "default-member-token",
+			tokenName:      "default-member-token",
 			namespace:      "default",
 			expectedOutput: "You can now run the \"antctl mc join\" command with the token to have the cluster join the ClusterSet\n",
 			secretFile:     true,
@@ -72,10 +73,17 @@ type: Opaque`)
 		{
 			name:           "fail to create without name",
 			namespace:      "default",
-			expectedOutput: "exactly one NAME is required, got 0",
+			expectedOutput: "token name must be specified",
 		},
 		{
-			name:           "fail to create without namespace",
+			name:           "fail to create with more than one args",
+			namespace:      "default",
+			tokenName:      "t1",
+			extraArg:       "a1",
+			expectedOutput: "only one argument is accepted",
+		},
+		{
+			name:           "fail to create without Namespace",
 			namespace:      "",
 			expectedOutput: "the Namespace is required",
 		},
@@ -83,13 +91,13 @@ type: Opaque`)
 			name:           "fail to create and rollback",
 			namespace:      "default",
 			failureType:    "create",
-			tokeName:       "default-member-token",
+			tokenName:      "default-member-token",
 			expectedOutput: "failed to create object",
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cmd := NewAccessTokenCmd()
+			cmd := NewMemberTokenCmd()
 			buf := new(bytes.Buffer)
 			cmd.SetOutput(buf)
 			cmd.SetOut(buf)
@@ -103,8 +111,11 @@ type: Opaque`)
 					ShouldError: true,
 				}
 			}
-			if tt.tokeName != "" {
-				cmd.SetArgs([]string{tt.tokeName})
+			if tt.tokenName != "" {
+				cmd.SetArgs([]string{tt.tokenName})
+			}
+			if tt.extraArg != "" {
+				cmd.SetArgs([]string{tt.extraArg})
 			}
 			if tt.secretFile {
 				secret, err := os.CreateTemp("", "secret")

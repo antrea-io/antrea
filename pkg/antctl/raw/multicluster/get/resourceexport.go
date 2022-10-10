@@ -43,9 +43,9 @@ type resourceExportOptions struct {
 var optionsResourceExport *resourceExportOptions
 
 var resourceExportExamples = strings.Trim(`
-Get all ResourceExports of ClusterSet in default Namesapce
+Get all ResourceExports in the default Namesapce
 $ antctl mc get resourceexport
-Get all ResourceExports of ClusterSet in all Namespaces
+Get all ResourceExports in all Namespaces
 $ antctl mc get resourceexport -A
 Get all ResourceExports in the specified Namespace
 $ antctl mc get resourceexport -n <NAMESPACE>

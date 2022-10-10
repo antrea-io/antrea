@@ -42,7 +42,7 @@ type clusterSetOptions struct {
 var optionsClusterSet *clusterSetOptions
 
 var clusterSetExamples = strings.Trim(`
-Gel all ClusterSets in default Namesapce
+Gel all ClusterSets in the default Namesapce
 $ antctl mc get clusterset
 Get all ClusterSets in all Namespaces
 $ antctl mc get clusterset -A
@@ -51,7 +51,7 @@ $ antctl mc get clusterset -n <NAMESPACE>
 Get all ClusterSets and print them in JSON format
 $ antctl mc get clusterset -o json
 Get the specified ClusterSet
-$ antctl mc get clusterset <CLUSTERSETID>
+$ antctl mc get clusterset <CLUSTERSET_ID>
 `, "\n")
 
 func (o *clusterSetOptions) validateAndComplete(cmd *cobra.Command) error {

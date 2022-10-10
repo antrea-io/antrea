@@ -37,16 +37,16 @@ var Command *cobra.Command
 func init() {
 	Command = &cobra.Command{
 		Use:   "featuregates",
-		Short: "Get feature gates list",
+		Short: "Print feature gates list",
 	}
 	if runtime.Mode == runtime.ModeAgent {
 		Command.RunE = agentRunE
-		Command.Long = "Get current Antrea agent feature gates info"
+		Command.Long = "Print current Antrea agent feature gates info"
 	} else if runtime.Mode == runtime.ModeController && runtime.InPod {
 		Command.RunE = controllerLocalRunE
-		Command.Long = "Get Antrea feature gates info including Controller and Agent"
+		Command.Long = "Print Antrea feature gates info including Controller and Agent"
 	} else if runtime.Mode == runtime.ModeController && !runtime.InPod {
-		Command.Long = "Get Antrea feature gates info including Controller and Agent"
+		Command.Long = "Print Antrea feature gates info including Controller and Agent"
 		Command.RunE = controllerRemoteRunE
 	}
 }

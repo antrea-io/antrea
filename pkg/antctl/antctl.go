@@ -604,6 +604,12 @@ $ antctl get podmulticaststats pod -n namespace`,
 			commandGroup:      mc,
 		},
 		{
+			cobraCommand:      multicluster.DeleteCmd,
+			supportAgent:      false,
+			supportController: false,
+			commandGroup:      mc,
+		},
+		{
 			cobraCommand:      multicluster.DeployCmd,
 			supportAgent:      false,
 			supportController: false,

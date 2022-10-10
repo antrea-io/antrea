@@ -303,6 +303,43 @@ func CreateMemberToken(cmd *cobra.Command, k8sClient client.Client, name string,
 	return nil
 }
 
+// DeleteMemberToken deletes the Secret, ServiceAccount and RoleBinding created for the member token.
+func DeleteMemberToken(cmd *cobra.Command, k8sClient client.Client, name string, namespace string) error {
+	var err error
+
+	errFunc := func(kind string) {
+		if err == nil {
+			fmt.Fprintf(cmd.OutOrStdout(), "%s \"%s\" deleted in Namespace %s\n", kind, name, namespace)
+			return
+		}
+		if !apierrors.IsNotFound(err) {
+			fmt.Fprintf(cmd.OutOrStdout(), "Failed to delete %s \"%s\": %v\n", kind, name, err)
+			return
+		}
+		fmt.Fprintf(cmd.OutOrStdout(), "%s \"%s\" not found in Namespace %s\n", kind, name, namespace)
+		err = nil
+	}
+
+	secret := newSecret(name, name, namespace)
+	err = k8sClient.Delete(context.TODO(), secret)
+	errFunc("Secret")
+	if err != nil {
+		return err
+	}
+
+	rb := newRoleBinding(name, name, namespace)
+	err = k8sClient.Delete(context.TODO(), rb)
+	errFunc("RoleBinding")
+	if err != nil {
+		return err
+	}
+
+	serviceAccount := newServiceAccount(name, namespace)
+	err = k8sClient.Delete(context.TODO(), serviceAccount)
+	errFunc("ServiceAccount")
+	return err
+}
+
 func waitForSecretReady(client client.Client, secretName string, namespace string) error {
 	return wait.PollImmediate(
 		1*time.Second,
