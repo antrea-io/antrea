@@ -36,7 +36,6 @@ import (
 
 	"antrea.io/antrea/pkg/apis/controlplane"
 	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
-	corev1a2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
 	"antrea.io/antrea/pkg/client/clientset/versioned"
 	fakeversioned "antrea.io/antrea/pkg/client/clientset/versioned/fake"
 	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions"
@@ -69,7 +68,7 @@ func newEgress(name, egressIP, externalIPPool string, podSelector, namespaceSele
 	egress := &v1alpha2.Egress{
 		ObjectMeta: metav1.ObjectMeta{Name: name},
 		Spec: v1alpha2.EgressSpec{
-			AppliedTo: corev1a2.AppliedTo{
+			AppliedTo: v1alpha2.AppliedTo{
 				PodSelector:       podSelector,
 				NamespaceSelector: namespaceSelector,
 			},
@@ -87,10 +86,10 @@ func newExternalIPPool(name, cidr, start, end string) *v1alpha2.ExternalIPPool {
 		},
 	}
 	if len(cidr) > 0 {
-		pool.Spec.IPRanges = append(pool.Spec.IPRanges, corev1a2.IPRange{CIDR: cidr})
+		pool.Spec.IPRanges = append(pool.Spec.IPRanges, v1alpha2.IPRange{CIDR: cidr})
 	}
 	if len(start) > 0 && len(end) > 0 {
-		pool.Spec.IPRanges = append(pool.Spec.IPRanges, corev1a2.IPRange{Start: start, End: end})
+		pool.Spec.IPRanges = append(pool.Spec.IPRanges, v1alpha2.IPRange{Start: start, End: end})
 	}
 	return pool
 }
@@ -171,7 +170,7 @@ func TestAddEgress(t *testing.T) {
 			inputEgress: &v1alpha2.Egress{
 				ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
 				Spec: v1alpha2.EgressSpec{
-					AppliedTo: corev1a2.AppliedTo{
+					AppliedTo: v1alpha2.AppliedTo{
 						PodSelector: &metav1.LabelSelector{
 							MatchLabels: map[string]string{"app": "foo"},
 						},
@@ -205,7 +204,7 @@ func TestAddEgress(t *testing.T) {
 			inputEgress: &v1alpha2.Egress{
 				ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
 				Spec: v1alpha2.EgressSpec{
-					AppliedTo: corev1a2.AppliedTo{
+					AppliedTo: v1alpha2.AppliedTo{
 						NamespaceSelector: &metav1.LabelSelector{
 							MatchLabels: nsDefault.Labels,
 						},
@@ -237,7 +236,7 @@ func TestAddEgress(t *testing.T) {
 			inputEgress: &v1alpha2.Egress{
 				ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
 				Spec: v1alpha2.EgressSpec{
-					AppliedTo: corev1a2.AppliedTo{
+					AppliedTo: v1alpha2.AppliedTo{
 						PodSelector: &metav1.LabelSelector{
 							MatchLabels: map[string]string{"app": "foo"},
 						},
@@ -269,7 +268,7 @@ func TestAddEgress(t *testing.T) {
 			inputEgress: &v1alpha2.Egress{
 				ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
 				Spec: v1alpha2.EgressSpec{
-					AppliedTo: corev1a2.AppliedTo{
+					AppliedTo: v1alpha2.AppliedTo{
 						PodSelector: &metav1.LabelSelector{
 							MatchLabels: map[string]string{"app": "foo"},
 						},
@@ -374,7 +373,7 @@ func TestUpdateEgress(t *testing.T) {
 	egress := &v1alpha2.Egress{
 		ObjectMeta: metav1.ObjectMeta{Name: "egressA", UID: "uidA"},
 		Spec: v1alpha2.EgressSpec{
-			AppliedTo: corev1a2.AppliedTo{
+			AppliedTo: v1alpha2.AppliedTo{
 				PodSelector: &metav1.LabelSelector{
 					MatchLabels: map[string]string{"app": "foo"},
 				},
@@ -449,7 +448,7 @@ func TestUpdateEgress(t *testing.T) {
 	}, getEvent())
 
 	// Updating the Egress's spec to make it match no Pods on this Node and use a new ExternalIPPool.
-	egress.Spec.AppliedTo = corev1a2.AppliedTo{
+	egress.Spec.AppliedTo = v1alpha2.AppliedTo{
 		PodSelector: &metav1.LabelSelector{
 			MatchLabels: map[string]string{"app": "non-existing-app"},
 		},
