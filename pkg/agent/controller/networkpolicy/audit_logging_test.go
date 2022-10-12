@@ -18,14 +18,23 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net"
 	"strconv"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"antrea.io/libOpenflow/openflow15"
+	"antrea.io/ofnet/ofctrl"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"antrea.io/antrea/pkg/agent/openflow"
+	openflowtest "antrea.io/antrea/pkg/agent/openflow/testing"
+	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
+	binding "antrea.io/antrea/pkg/ovs/openflow"
+	"antrea.io/antrea/pkg/util/ip"
 )
 
 const (
@@ -115,6 +124,7 @@ func newLogInfo(disposition string) (*logInfo, string) {
 	testLogInfo := &logInfo{
 		tableName:   "AntreaPolicyIngressRule",
 		npRef:       "AntreaNetworkPolicy:default/test",
+		ruleName:    "test-rule",
 		ofPriority:  "0",
 		disposition: disposition,
 		srcIP:       "0.0.0.0",
@@ -124,8 +134,8 @@ func newLogInfo(disposition string) (*logInfo, string) {
 		protocolStr: "TCP",
 		pktLength:   60,
 	}
-	expected := fmt.Sprintf("%s %s %s %s %s %s %s %s %s %d", testLogInfo.tableName, testLogInfo.npRef, testLogInfo.disposition,
-		testLogInfo.ofPriority, testLogInfo.srcIP, testLogInfo.srcPort, testLogInfo.destIP, testLogInfo.destPort,
+	expected := fmt.Sprintf("%s %s %s %s %s %s %s %s %s %s %d", testLogInfo.tableName, testLogInfo.npRef, testLogInfo.ruleName,
+		testLogInfo.disposition, testLogInfo.ofPriority, testLogInfo.srcIP, testLogInfo.srcPort, testLogInfo.destIP, testLogInfo.destPort,
 		testLogInfo.protocolStr, testLogInfo.pktLength)
 	return testLogInfo, expected
 }
@@ -219,4 +229,86 @@ func TestDropPacketMultiDedupLog(t *testing.T) {
 	c2, err := consumeLog()
 	require.NoError(t, err)
 	assert.Equal(t, 1, c2)
+}
+
+func TestGetNetworkPolicyInfo(t *testing.T) {
+	openflow.InitMockTables(
+		map[*openflow.Table]uint8{
+			openflow.AntreaPolicyEgressRuleTable:  uint8(5),
+			openflow.EgressRuleTable:              uint8(6),
+			openflow.EgressDefaultTable:           uint8(7),
+			openflow.AntreaPolicyIngressRuleTable: uint8(12),
+			openflow.IngressRuleTable:             uint8(13),
+			openflow.IngressDefaultTable:          uint8(14),
+		})
+	c := &Controller{ofClient: &openflowtest.MockClient{}}
+	ob := new(logInfo)
+	regID := openflow.APDispositionField.GetRegID()
+	dispositionMatch := openflow15.MatchField{
+		Class:   openflow15.OXM_CLASS_PACKET_REGS,
+		Field:   uint8(regID / 2),
+		HasMask: false,
+		Value:   &openflow15.ByteArrayField{Data: []byte{1, 1, 1, 1}},
+	}
+	matchers := []openflow15.MatchField{dispositionMatch}
+	pktIn := &ofctrl.PacketIn{TableId: 17, Match: openflow15.Match{Fields: matchers}}
+
+	err := getNetworkPolicyInfo(pktIn, c, ob)
+	assert.Equal(t, string(v1beta2.K8sNetworkPolicy), ob.npRef)
+	assert.Equal(t, "<nil>", ob.ofPriority)
+	assert.Equal(t, "<nil>", ob.ruleName)
+	require.NoError(t, err)
+}
+
+func TestGetPacketInfo(t *testing.T) {
+	tests := []struct {
+		name   string
+		packet *binding.Packet
+		ob     *logInfo
+		wantOb *logInfo
+	}{
+		{
+			name: "TCP packet",
+			packet: &binding.Packet{
+				SourceIP:        net.IPv4zero,
+				DestinationIP:   net.IPv4(1, 1, 1, 1),
+				IPLength:        60,
+				IPProto:         ip.TCPProtocol,
+				SourcePort:      35402,
+				DestinationPort: 80,
+			},
+			ob: new(logInfo),
+			wantOb: &logInfo{
+				srcIP:       "0.0.0.0",
+				srcPort:     "35402",
+				destIP:      "1.1.1.1",
+				destPort:    "80",
+				protocolStr: "TCP",
+				pktLength:   60,
+			},
+		},
+		{
+			name: "ICMP packet",
+			packet: &binding.Packet{
+				SourceIP:      net.IPv4zero,
+				DestinationIP: net.IPv4(1, 1, 1, 1),
+				IPLength:      60,
+				IPProto:       ip.ICMPProtocol,
+			},
+			ob: new(logInfo),
+			wantOb: &logInfo{
+				srcIP:       "0.0.0.0",
+				srcPort:     "<nil>",
+				destIP:      "1.1.1.1",
+				destPort:    "<nil>",
+				protocolStr: "ICMP",
+				pktLength:   60,
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		getPacketInfo(tc.packet, tc.ob)
+		assert.Equal(t, tc.wantOb, tc.ob)
+	}
 }

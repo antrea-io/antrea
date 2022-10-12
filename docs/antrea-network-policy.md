@@ -636,7 +636,7 @@ to select Pods. More details can be found in the [ServiceAccountSelector](#servi
 **Note**: The order in which the egress rules are specified matters, i.e., rules will
 be enforced in the order in which they are written.
 
-**enableLogging**: A ClusterNetworkPolicy ingress or egress rule can be
+**enableLogging**: Antrea-native policy ingress or egress rules can be
 audited by enabling its logging field. When `enableLogging` field is set to
 true, the first packet of any connection that matches this rule will be logged
 to a separate file (`/var/log/antrea/networkpolicy/np.log`) on the Node on
@@ -645,16 +645,19 @@ analysis. By default, rules are not logged. The example policy logs all
 traffic that matches the "DropToThirdParty" egress rule, while the rule
 "AllowFromFrontend" is not logged. Specifically for drop and reject rules,
 deduplication is applied to reduce duplicated logs, and duplication buffer
-length is set to 1 second. The rules are logged in the following format:
+length is set to 1 second. If a rule name is not provided, an identifiable
+name will be generated for the rule and displayed in the log.
+The rules are logged in the following format:
 
 ```text
-    <yyyy/mm/dd> <time> <ovs-table-name> <antrea-native-policy-reference> <action> <openflow-priority> <source-ip> <source-port> <destination-ip> <destination-port> <protocol> <packet-length>
+    <yyyy/mm/dd> <time> <ovs-table-name> <antrea-native-policy-reference> <rule-name> <action> <openflow-priority> <source-ip> <source-port> <destination-ip> <destination-port> <protocol> <packet-length>
     Deduplication:
-    <yyyy/mm/dd> <time> <ovs-table-name> <antrea-native-policy-reference> <action> <openflow-priority> <source-ip> <source-port> <destination-ip> <destination-port> <protocol> <packet-length> [<num of packets> packets in <duplicate duration>]
+    <yyyy/mm/dd> <time> <ovs-table-name> <antrea-native-policy-reference> <rule-name> <action> <openflow-priority> <source-ip> <source-port> <destination-ip> <destination-port> <protocol> <packet-length> [<num of packets> packets in <duplicate duration>]
 
     Examples:
-    2020/11/02 22:21:21.148395 AntreaPolicyAppTierIngressRule AntreaNetworkPolicy:default/test-anp Allow 61800 10.10.1.65 35402 10.0.0.5 80 TCP 60
-    2021/06/24 23:56:41.346165 AntreaPolicyEgressRule AntreaNetworkPolicy:default/test-anp Drop 44900 10.10.1.65 35402 10.0.0.5 80 TCP 60 [3 packets in 1.011379442s]
+    2020/11/02 22:21:21.148395 AntreaPolicyAppTierIngressRule AntreaNetworkPolicy:default/test-anp test-rule Allow 61800 10.10.1.65 35402 10.0.0.5 80 TCP 60
+    2021/06/24 23:56:41.346165 AntreaPolicyEgressRule AntreaNetworkPolicy:default/test-anp test-rule Drop 44900 10.10.1.65 35402 10.0.0.5 80 TCP 60 [3 packets in 1.011379442s]
+    2022/09/20 02:21:25.879364 AntreaPolicyIngressRule AntreaNetworkPolicy:default/test-anp ingress-drop-1cffec1 Drop 44900 10.10.1.14 <nil> 10.10.1.15 <nil> ICMP 84
 ```
 
 Kubernetes NetworkPolicies can also be audited using Antrea logging to the same file
@@ -663,17 +666,18 @@ Kubernetes NetworkPolicies can also be audited using Antrea logging to the same 
 for all NetworkPolicies in the Namespace. Packets of any connection that match
 a NetworkPolicy rule will be logged with a reference to the NetworkPolicy name,
 but packets dropped by the implicit "default drop" (not allowed by any NetworkPolicy)
-will only be logged with consistent name `K8sNetworkPolicy` for reference.
-The rules are logged in the following format:
+will only be logged with consistent name `K8sNetworkPolicy` for reference. When
+using Antrea logging for Kubernetes NetworkPolicies, the rule name field is not
+set and defaults to `<nil>` value. The rules are logged in the following format:
 
 ```text
-    <yyyy/mm/dd> <time> <ovs-table-name> <k8s-network-policy-reference> Allow <openflow-priority> <source-ip> <source-port> <destination-ip> <destination-port> <protocol> <packet-length>
+    <yyyy/mm/dd> <time> <ovs-table-name> <k8s-network-policy-reference> <nil> Allow <openflow-priority> <source-ip> <source-port> <destination-ip> <destination-port> <protocol> <packet-length>
     Default dropped traffic:
-    <yyyy/mm/dd> <time> <ovs-table-name> K8sNetworkPolicy Drop -1 <source-ip> <source-port> <destination-ip> <destination-port> <protocol> <packet-length> [<num of packets> packets in <duplicate duration>]
+    <yyyy/mm/dd> <time> <ovs-table-name> K8sNetworkPolicy <nil> Drop <nil> <source-ip> <source-port> <destination-ip> <destination-port> <protocol> <packet-length> [<num of packets> packets in <duplicate duration>]
 
     Examples:
-    2022/07/26 06:55:56.170456 IngressRule K8sNetworkPolicy:default/test-np-log Allow 190 10.10.1.82 49518 10.10.1.84 80 TCP 60
-    2022/07/26 06:55:57.142206 IngressDefaultRule K8sNetworkPolicy Drop -1 10.10.1.83 38608 10.10.1.84 80 TCP 60
+    2022/07/26 06:55:56.170456 IngressRule K8sNetworkPolicy:default/test-np-log <nil> Allow 190 10.10.1.82 49518 10.10.1.84 80 TCP 60
+    2022/07/26 06:55:57.142206 IngressDefaultRule K8sNetworkPolicy <nil> Drop <nil> 10.10.1.83 38608 10.10.1.84 80 TCP 60
 ```
 
 Fluentd can be used to assist with collecting and analyzing the logs. Refer to the

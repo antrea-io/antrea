@@ -639,6 +639,7 @@ type policyRuleConjunction struct {
 	// NetworkPolicy reference information for debugging usage, its value can be nil
 	// for conjunctions that are not built for a specific NetworkPolicy, e.g. DNS packetin Conjunction.
 	npRef       *v1beta2.NetworkPolicyReference
+	ruleName    string
 	ruleTableID uint8
 }
 
@@ -1109,8 +1110,9 @@ func (f *featureNetworkPolicy) calculateActionFlowChangesForRule(rule *types.Pol
 		return nil
 	}
 	conj = &policyRuleConjunction{
-		id:    ruleOfID,
-		npRef: rule.PolicyRef,
+		id:       ruleOfID,
+		npRef:    rule.PolicyRef,
+		ruleName: rule.Name,
 	}
 	nClause, ruleTable, dropTable := conj.calculateClauses(rule)
 	conj.ruleTableID = rule.TableID
@@ -1450,16 +1452,16 @@ func (f *featureNetworkPolicy) getPolicyRuleConjunction(ruleID uint32) *policyRu
 	return conj.(*policyRuleConjunction)
 }
 
-func (c *client) GetPolicyInfoFromConjunction(ruleID uint32) (string, string) {
+func (c *client) GetPolicyInfoFromConjunction(ruleID uint32) (string, string, string) {
 	conjunction := c.featureNetworkPolicy.getPolicyRuleConjunction(ruleID)
 	if conjunction == nil {
-		return "", ""
+		return "", "", ""
 	}
 	priorities := conjunction.ActionFlowPriorities()
 	if len(priorities) == 0 {
-		return "", ""
+		return "", "", ""
 	}
-	return conjunction.npRef.ToString(), priorities[0]
+	return conjunction.npRef.ToString(), priorities[0], conjunction.ruleName
 }
 
 // UninstallPolicyRuleFlows removes the Openflow entry relevant to the specified NetworkPolicy rule.
@@ -1709,6 +1711,7 @@ func (f *featureNetworkPolicy) updateConjunctionActionFlows(conj *policyRuleConj
 		serviceClause: conj.serviceClause,
 		actionFlows:   newActionFlows,
 		npRef:         conj.npRef,
+		ruleName:      conj.ruleName,
 		ruleTableID:   conj.ruleTableID,
 	}
 	return newConj
