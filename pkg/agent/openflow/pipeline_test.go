@@ -262,11 +262,13 @@ func TestBuildPipeline(t *testing.T) {
 				pipelineMulticast: {
 					MulticastEgressRuleTable,
 					MulticastEgressMetricTable,
+					MulticastEgressPodMetricTable,
 
 					MulticastRoutingTable,
 
 					MulticastIngressRuleTable,
 					MulticastIngressMetricTable,
+					MulticastIngressPodMetricTable,
 
 					MulticastOutputTable,
 				},
