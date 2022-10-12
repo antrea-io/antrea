@@ -27,7 +27,6 @@ import (
 	discovery "k8s.io/api/discovery/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	apimachinerytypes "k8s.io/apimachinery/pkg/types"
-	k8sapitypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/klog/v2"
@@ -863,7 +862,7 @@ func (p *proxier) GetProxyProvider() k8sproxy.Provider {
 }
 
 func (p *proxier) GetServiceFlowKeys(serviceName, namespace string) ([]string, []binding.GroupIDType, bool) {
-	namespacedName := k8sapitypes.NamespacedName{Namespace: namespace, Name: serviceName}
+	namespacedName := apimachinerytypes.NamespacedName{Namespace: namespace, Name: serviceName}
 	p.serviceEndpointsMapsMutex.Lock()
 	defer p.serviceEndpointsMapsMutex.Unlock()
 

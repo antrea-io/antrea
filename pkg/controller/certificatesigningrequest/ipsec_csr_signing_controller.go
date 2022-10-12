@@ -38,7 +38,6 @@ import (
 	corev1informers "k8s.io/client-go/informers/core/v1"
 	clientset "k8s.io/client-go/kubernetes"
 	csrlister "k8s.io/client-go/listers/certificates/v1"
-	csrlisters "k8s.io/client-go/listers/certificates/v1"
 	corev1listers "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
 	certutil "k8s.io/client-go/util/cert"
@@ -110,7 +109,7 @@ func (c *certificateAuthority) signCSR(template *x509.Certificate, requestKey cr
 }
 
 // NewIPsecCSRSigningController returns a new *IPsecCSRSigningController.
-func NewIPsecCSRSigningController(client clientset.Interface, csrInformer cache.SharedIndexInformer, csrLister csrlisters.CertificateSigningRequestLister, selfSignedCA bool) *IPsecCSRSigningController {
+func NewIPsecCSRSigningController(client clientset.Interface, csrInformer cache.SharedIndexInformer, csrLister csrlister.CertificateSigningRequestLister, selfSignedCA bool) *IPsecCSRSigningController {
 
 	caConfigMapInformer := corev1informers.NewFilteredConfigMapInformer(client, env.GetAntreaNamespace(), resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, func(listOptions *metav1.ListOptions) {
 		listOptions.FieldSelector = fields.OneTermEqualSelector("metadata.name", ipsecRootCAName).String()

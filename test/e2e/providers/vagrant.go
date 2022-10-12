@@ -139,7 +139,7 @@ func (provider *VagrantProvider) GetKubeconfigPath() (string, error) {
 	}
 	kubeconfigPath := path.Join(vagrantPath, "playbook", "kube", "config")
 	if _, err := os.Stat(kubeconfigPath); os.IsNotExist(err) {
-		return "", fmt.Errorf("Kubeconfig file not found at expected location '%s'", kubeconfigPath)
+		return "", fmt.Errorf("kubeconfig file not found at expected location '%s'", kubeconfigPath)
 	}
 	return kubeconfigPath, nil
 }

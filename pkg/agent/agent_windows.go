@@ -31,7 +31,6 @@ import (
 	"antrea.io/antrea/pkg/agent/util"
 	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	"antrea.io/antrea/pkg/ovs/ovsctl"
-	"antrea.io/antrea/pkg/util/ip"
 	utilip "antrea.io/antrea/pkg/util/ip"
 )
 
@@ -65,7 +64,7 @@ func (i *Initializer) prepareHNSNetworkAndOVSExtension() error {
 	// Get uplink network configuration. The uplink interface is the one used for transporting Pod traffic across Nodes.
 	// Use the interface specified with "transportInterface" in the configuration if configured, otherwise the interface
 	// configured with NodeIP is used as uplink.
-	_, _, adapter, err := i.getNodeInterfaceFromIP(&ip.DualStackIPs{IPv4: i.nodeConfig.NodeTransportIPv4Addr.IP})
+	_, _, adapter, err := i.getNodeInterfaceFromIP(&utilip.DualStackIPs{IPv4: i.nodeConfig.NodeTransportIPv4Addr.IP})
 	if err != nil {
 		return err
 	}

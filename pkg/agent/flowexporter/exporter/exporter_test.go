@@ -26,7 +26,6 @@ import (
 	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
 	ipfixentitiestesting "github.com/vmware/go-ipfix/pkg/entities/testing"
 	"github.com/vmware/go-ipfix/pkg/exporter"
-	"github.com/vmware/go-ipfix/pkg/registry"
 	ipfixregistry "github.com/vmware/go-ipfix/pkg/registry"
 	"k8s.io/component-base/metrics/legacyregistry"
 
@@ -45,7 +44,7 @@ const (
 )
 
 func init() {
-	registry.LoadRegistry()
+	ipfixregistry.LoadRegistry()
 }
 
 func TestFlowExporter_sendTemplateSet(t *testing.T) {
@@ -389,11 +388,11 @@ func getConnection(isIPv6 bool, isPresent bool, statusFlag uint32, protoID uint8
 		DestinationPodName:            "",
 		IngressNetworkPolicyName:      "",
 		IngressNetworkPolicyNamespace: "",
-		IngressNetworkPolicyType:      registry.PolicyTypeK8sNetworkPolicy,
+		IngressNetworkPolicyType:      ipfixregistry.PolicyTypeK8sNetworkPolicy,
 		IngressNetworkPolicyRuleName:  "",
 		EgressNetworkPolicyName:       "np",
 		EgressNetworkPolicyNamespace:  "np-ns",
-		EgressNetworkPolicyType:       registry.PolicyTypeK8sNetworkPolicy,
+		EgressNetworkPolicyType:       ipfixregistry.PolicyTypeK8sNetworkPolicy,
 		EgressNetworkPolicyRuleName:   "",
 		DestinationServicePortName:    "service",
 		TCPState:                      tcpState,
