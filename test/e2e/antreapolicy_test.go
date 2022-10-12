@@ -2557,12 +2557,14 @@ func testANPMultipleAppliedTo(t *testing.T, data *TestData, singleRule bool) {
 
 // testAuditLoggingBasic tests that audit logs are generated when egress drop applied
 func testAuditLoggingBasic(t *testing.T, data *TestData) {
+	npRef := "test-log-acnp-deny"
+	ruleName := "DropToZ"
 	builder := &ClusterNetworkPolicySpecBuilder{}
-	builder = builder.SetName("test-log-acnp-deny").
+	builder = builder.SetName(npRef).
 		SetPriority(1.0).
 		SetAppliedToGroup([]ACNPAppliedToSpec{{PodSelector: map[string]string{"pod": "a"}, NSSelector: map[string]string{"ns": namespaces["x"]}}})
 	builder.AddEgress(ProtocolTCP, &p80, nil, nil, nil, nil, nil, nil, nil, nil, map[string]string{"ns": namespaces["z"]},
-		nil, nil, false, nil, crdv1alpha1.RuleActionDrop, "", "", nil)
+		nil, nil, false, nil, crdv1alpha1.RuleActionDrop, "", ruleName, nil)
 	builder.AddEgressLogging()
 
 	acnp, err := k8sUtils.CreateOrUpdateACNP(builder.Get())
@@ -2621,7 +2623,7 @@ func testAuditLoggingBasic(t *testing.T, data *TestData) {
 					}
 					expectedNumEntries += 1
 					// The audit log should contain log entry `... Drop <ofPriority> <x/a IP> <z/* IP> ...`
-					re := regexp.MustCompile(`Drop [0-9]+ ` + srcIPs[i] + ` [0-9]+ ` + dstIPs[j] + ` ` + strconv.Itoa(int(p80)))
+					re := regexp.MustCompile(npRef + ` ` + ruleName + ` Drop [0-9]+ ` + srcIPs[i] + ` [0-9]+ ` + dstIPs[j] + ` ` + strconv.Itoa(int(p80)))
 					if re.MatchString(stdout) {
 						actualNumEntries += 1
 					} else {
@@ -2649,8 +2651,9 @@ func testAuditLoggingEnableNP(t *testing.T, data *TestData) {
 	failOnError(data.updateNamespaceWithAnnotations(namespaces["x"], map[string]string{networkpolicy.EnableNPLoggingAnnotationKey: "true"}), t)
 	// Add a K8s namespaced NetworkPolicy in ns x that allow ingress traffic from
 	// Pod x/b to x/a which default denies other ingress including from Pod x/c to x/a
+	npRef := "allow-x-b-to-x-a"
 	k8sNPBuilder := &NetworkPolicySpecBuilder{}
-	k8sNPBuilder = k8sNPBuilder.SetName(namespaces["x"], "allow-x-b-to-x-a").
+	k8sNPBuilder = k8sNPBuilder.SetName(namespaces["x"], npRef).
 		SetPodSelector(map[string]string{"pod": "a"}).
 		SetTypeIngress().
 		AddIngress(v1.ProtocolTCP, &p80, nil, nil, nil,
@@ -2699,7 +2702,7 @@ func testAuditLoggingEnableNP(t *testing.T, data *TestData) {
 
 		var expectedNumEntries, actualNumEntries int
 		srcPods := []string{namespaces["x"] + "/b", namespaces["x"] + "/c"}
-		expectedLogPrefix := []string{"allow-x-b-to-x-a Allow [0-9]+ ", "K8sNetworkPolicy Drop -1 "}
+		expectedLogPrefix := []string{npRef + " <nil> Allow [0-9]+ ", "K8sNetworkPolicy <nil> Drop <nil> "}
 		destIPs, _ := podIPs[namespaces["x"]+"/a"]
 		for i := 0; i < len(srcPods); i++ {
 			srcIPs, _ := podIPs[srcPods[i]]

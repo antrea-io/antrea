@@ -1263,3 +1263,71 @@ func setMockOFTables(ctrl *gomock.Controller, tableMap map[*Table]**mocks.MockTa
 		*mockTable = t // Update the value with generated mock table.
 	}
 }
+
+func TestClient_GetPolicyInfoFromConjunction(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	preparePipelines()
+	c = prepareClient(ctrl, false)
+
+	ruleID1 := uint32(101)
+	ruleID2 := uint32(102)
+	npRef := &v1beta2.NetworkPolicyReference{
+		Type:      v1beta2.K8sNetworkPolicy,
+		Namespace: "ns1",
+		Name:      "np1",
+		UID:       "id1",
+	}
+	conj1 := &policyRuleConjunction{
+		id:       ruleID1,
+		npRef:    npRef,
+		ruleName: fmt.Sprint(ruleID1),
+	}
+	conj2 := &policyRuleConjunction{
+		id:          ruleID2,
+		actionFlows: []binding.Flow{EgressRuleTable.ofTable.BuildFlow(priority100).Done()},
+		npRef:       npRef,
+		ruleName:    fmt.Sprint(ruleID2),
+	}
+	c.featureNetworkPolicy.policyCache.Add(conj1)
+	c.featureNetworkPolicy.policyCache.Add(conj2)
+
+	tests := []struct {
+		name         string
+		ruleID       uint32
+		wantNpRef    string
+		wantPriority string
+		wantRuleName string
+	}{
+		{
+			name:         "conjunction not found",
+			ruleID:       uint32(100),
+			wantNpRef:    "",
+			wantPriority: "",
+			wantRuleName: "",
+		},
+		{
+			name:         "conjunction empty priorities",
+			ruleID:       ruleID1,
+			wantNpRef:    "",
+			wantPriority: "",
+			wantRuleName: "",
+		},
+		{
+			name:         "conjunction no error",
+			ruleID:       ruleID2,
+			wantNpRef:    "K8sNetworkPolicy:ns1/np1",
+			wantPriority: "100",
+			wantRuleName: fmt.Sprint(ruleID2),
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			gotNpRef, gotPriority, gotRuleName := c.GetPolicyInfoFromConjunction(tc.ruleID)
+			assert.Equal(t, tc.wantNpRef, gotNpRef)
+			assert.Equal(t, tc.wantPriority, gotPriority)
+			assert.Equal(t, tc.wantRuleName, gotRuleName)
+		})
+	}
+}
