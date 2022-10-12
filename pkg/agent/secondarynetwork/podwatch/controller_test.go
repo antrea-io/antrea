@@ -510,4 +510,23 @@ func TestPodControllerAddPod(t *testing.T) {
 		// we don't expect an error here, no requeueing
 		assert.NoError(t, podController.handleAddUpdatePod(pod))
 	})
+
+	t.Run("Error when adding VF deviceID cache per Pod", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		network := testNetwork(networkName)
+		podController, _, _ := newPodController(ctrl)
+		podController.podCache.AddCNIConfigInfo(cniConfig)
+		_, err := podController.kubeClient.CoreV1().Pods(testNamespace).Create(context.Background(), pod, metav1.CreateOptions{})
+		require.NoError(t, err, "error when creating test Pod")
+		_, err = podController.netAttachDefClient.NetworkAttachmentDefinitions(testNamespace).Create(context.Background(), network, metav1.CreateOptions{})
+		require.NoError(t, err, "error when creating test NetworkAttachmentDefinition")
+
+		_, err = podController.assignUnusedSriovVFDeviceIDPerPod(podName, testNamespace, interfaceName)
+		require.NoError(t, err, "error while assigning unused VfDevice ID")
+
+		podController.deleteVFDeviceIDListPerPod(podName, testNamespace)
+		require.NoError(t, err, "error deleting cache")
+
+	})
 }
