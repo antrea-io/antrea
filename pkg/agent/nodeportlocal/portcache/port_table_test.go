@@ -1,7 +1,4 @@
-//go:build !windows
-// +build !windows
-
-// Copyright 2021 Antrea Authors
+// Copyright 2022 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,21 +15,17 @@
 package portcache
 
 import (
-	"testing"
-	"time"
-
-	"github.com/golang/mock/gomock"
-
-	portcachetesting "antrea.io/antrea/pkg/agent/nodeportlocal/portcache/testing"
-	"antrea.io/antrea/pkg/agent/nodeportlocal/rules"
-	rulestesting "antrea.io/antrea/pkg/agent/nodeportlocal/rules/testing"
-
 	"k8s.io/client-go/tools/cache"
+
+	"antrea.io/antrea/pkg/agent/nodeportlocal/rules"
 )
 
 const (
 	startPort = 61000
 	endPort   = 65000
+	podIP     = "10.0.0.1"
+	nodePort1 = startPort
+	nodePort2 = startPort + 1
 )
 
 func newPortTable(mockIPTables rules.PodPortRules, mockPortOpener LocalPortOpener) *PortTable {
@@ -47,58 +40,5 @@ func newPortTable(mockIPTables rules.PodPortRules, mockPortOpener LocalPortOpene
 		PortSearchStart: startPort,
 		PodPortRules:    mockIPTables,
 		LocalPortOpener: mockPortOpener,
-	}
-}
-
-func TestRestoreRules(t *testing.T) {
-	mockCtrl := gomock.NewController(t)
-	defer mockCtrl.Finish()
-	mockIPTables := rulestesting.NewMockPodPortRules(mockCtrl)
-	mockPortOpener := portcachetesting.NewMockLocalPortOpener(mockCtrl)
-	portTable := newPortTable(mockIPTables, mockPortOpener)
-	podIP := "10.0.0.1"
-	nodePort1 := startPort
-	nodePort2 := startPort + 1
-	allNPLPorts := []rules.PodNodePort{
-		{
-			NodePort:  nodePort1,
-			PodPort:   1001,
-			PodIP:     podIP,
-			Protocol:  "tcp",
-			Protocols: []string{"tcp"},
-		},
-		{
-			NodePort:  nodePort1,
-			PodPort:   1001,
-			PodIP:     podIP,
-			Protocol:  "udp",
-			Protocols: []string{"udp"},
-		},
-		{
-			NodePort:  nodePort2,
-			PodPort:   1002,
-			PodIP:     podIP,
-			Protocol:  "udp",
-			Protocols: []string{"udp"},
-		},
-	}
-
-	mockIPTables.EXPECT().AddAllRules(gomock.InAnyOrder(allNPLPorts))
-	gomock.InOrder(
-		mockPortOpener.EXPECT().OpenLocalPort(nodePort1, "tcp"),
-		mockPortOpener.EXPECT().OpenLocalPort(nodePort1, "udp"),
-		mockPortOpener.EXPECT().OpenLocalPort(nodePort2, "udp"),
-	)
-
-	syncedCh := make(chan struct{})
-	const timeout = 1 * time.Second
-	portTable.RestoreRules(allNPLPorts, syncedCh)
-	select {
-	case <-syncedCh:
-		break
-	case <-time.After(timeout):
-		// this will not kill the goroutine created by RestoreRules,
-		// which should be acceptable.
-		t.Fatalf("Rule restoration not complete after %v", timeout)
 	}
 }
