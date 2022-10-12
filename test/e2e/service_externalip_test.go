@@ -26,7 +26,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -215,7 +214,7 @@ func testServiceExternalTrafficPolicyLocal(t *testing.T, data *TestData) {
 				antreaagenttypes.ServiceExternalIPPoolAnnotationKey: ipPool.Name,
 			}
 			service, err = data.CreateServiceWithAnnotations(fmt.Sprintf("test-svc-local-%d", idx),
-				data.testNamespace, 80, 80, corev1.ProtocolTCP, nil, false, true, v1.ServiceTypeLoadBalancer, nil, annotation)
+				data.testNamespace, 80, 80, v1.ProtocolTCP, nil, false, true, v1.ServiceTypeLoadBalancer, nil, annotation)
 			require.NoError(t, err)
 			defer data.clientset.CoreV1().Services(service.Namespace).Delete(context.TODO(), service.Name, metav1.DeleteOptions{})
 
@@ -332,7 +331,7 @@ func testServiceWithExternalIPCRUD(t *testing.T, data *TestData) {
 				antreaagenttypes.ServiceExternalIPPoolAnnotationKey: ipPool.Name,
 			}
 			service, err = data.CreateServiceWithAnnotations(fmt.Sprintf("test-svc-eip-%d", idx),
-				data.testNamespace, 80, 80, corev1.ProtocolTCP, nil, false, false, v1.ServiceTypeLoadBalancer, nil, annotation)
+				data.testNamespace, 80, 80, v1.ProtocolTCP, nil, false, false, v1.ServiceTypeLoadBalancer, nil, annotation)
 			require.NoError(t, err)
 
 			defer data.clientset.CoreV1().Services(service.Namespace).Delete(context.TODO(), service.Name, metav1.DeleteOptions{})
@@ -424,7 +423,7 @@ func testServiceUpdateExternalIP(t *testing.T, data *TestData) {
 				antreaagenttypes.ServiceExternalIPPoolAnnotationKey: originalPool.Name,
 			}
 			service, err := data.CreateServiceWithAnnotations(fmt.Sprintf("test-update-eip-%d", idx),
-				data.testNamespace, 80, 80, corev1.ProtocolTCP, nil, false, false, v1.ServiceTypeLoadBalancer, nil, annotation)
+				data.testNamespace, 80, 80, v1.ProtocolTCP, nil, false, false, v1.ServiceTypeLoadBalancer, nil, annotation)
 			require.NoError(t, err)
 			defer data.clientset.CoreV1().Services(service.Namespace).Delete(context.TODO(), service.Name, metav1.DeleteOptions{})
 
@@ -506,7 +505,7 @@ func testServiceNodeFailure(t *testing.T, data *TestData) {
 				antreaagenttypes.ServiceExternalIPPoolAnnotationKey: externalIPPoolTwoNodes.Name,
 			}
 			service, err := data.CreateServiceWithAnnotations("test-service-node-failure", data.testNamespace, 80, 80,
-				corev1.ProtocolTCP, nil, false, false, v1.ServiceTypeLoadBalancer, nil, annotation)
+				v1.ProtocolTCP, nil, false, false, v1.ServiceTypeLoadBalancer, nil, annotation)
 			require.NoError(t, err)
 			defer data.clientset.CoreV1().Services(service.Namespace).Delete(context.TODO(), service.Name, metav1.DeleteOptions{})
 
@@ -565,10 +564,10 @@ func testExternalIPAccess(t *testing.T, data *TestData) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ipFamily := corev1.IPv4Protocol
+			ipFamily := v1.IPv4Protocol
 			if utilnet.IsIPv6CIDRString(tt.externalIPCIDR) {
 				skipIfNotIPv6Cluster(t)
-				ipFamily = corev1.IPv6Protocol
+				ipFamily = v1.IPv6Protocol
 			} else {
 				skipIfNotIPv4Cluster(t)
 			}
@@ -624,7 +623,7 @@ func testExternalIPAccess(t *testing.T, data *TestData) {
 					annotations := map[string]string{
 						antreaagenttypes.ServiceExternalIPPoolAnnotationKey: ipPool.Name,
 					}
-					service, err := data.CreateServiceWithAnnotations(et.serviceName, data.testNamespace, port, port, corev1.ProtocolTCP, map[string]string{"app": "agnhost"}, false, et.externalTrafficPolicyLocal, corev1.ServiceTypeLoadBalancer, &ipFamily, annotations)
+					service, err := data.CreateServiceWithAnnotations(et.serviceName, data.testNamespace, port, port, v1.ProtocolTCP, map[string]string{"app": "agnhost"}, false, et.externalTrafficPolicyLocal, v1.ServiceTypeLoadBalancer, &ipFamily, annotations)
 					require.NoError(t, err)
 					defer data.deleteService(service.Namespace, service.Name)
 
@@ -664,8 +663,8 @@ sleep 3600`, tt.clientName, tt.clientIP, tt.localIP, tt.clientIPMaskLen)
 
 					_, err = data.PodWaitFor(defaultTimeout, tt.clientName, data.testNamespace, func(p *v1.Pod) (bool, error) {
 						for _, condition := range p.Status.Conditions {
-							if condition.Type == corev1.PodReady {
-								return condition.Status == corev1.ConditionTrue, nil
+							if condition.Type == v1.PodReady {
+								return condition.Status == v1.ConditionTrue, nil
 							}
 						}
 						return false, nil
@@ -722,7 +721,7 @@ func (data *TestData) getServiceAssignedNode(node string, service *v1.Service) (
 	return serviceExternalIPInfo[0].AssignedNode, nil
 }
 
-func (data *TestData) waitForServiceConfigured(service *v1.Service, expectedExternalIP string, expectedNodeName string) (*corev1.Service, string, error) {
+func (data *TestData) waitForServiceConfigured(service *v1.Service, expectedExternalIP string, expectedNodeName string) (*v1.Service, string, error) {
 	var assignedNode string
 	err := wait.PollImmediate(200*time.Millisecond, 15*time.Second, func() (done bool, err error) {
 		service, err = data.clientset.CoreV1().Services(service.Namespace).Get(context.TODO(), service.Name, metav1.GetOptions{})
