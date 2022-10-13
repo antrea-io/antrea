@@ -60,7 +60,9 @@ import (
 	"antrea.io/antrea/pkg/agent/secondarynetwork/cnipodcache"
 	"antrea.io/antrea/pkg/agent/secondarynetwork/podwatch"
 	"antrea.io/antrea/pkg/agent/stats"
+	support "antrea.io/antrea/pkg/agent/supportbundlecollection"
 	agenttypes "antrea.io/antrea/pkg/agent/types"
+	"antrea.io/antrea/pkg/apis/controlplane"
 	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions"
 	crdv1alpha1informers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha1"
 	"antrea.io/antrea/pkg/controller/externalippool"
@@ -753,6 +755,18 @@ func run(o *Options) error {
 	agentMonitor := monitor.NewAgentMonitor(crdClient, agentQuerier)
 
 	go agentMonitor.Run(stopCh)
+
+	if features.DefaultFeatureGate.Enabled(features.SupportBundleCollection) {
+		nodeNamespace := ""
+		nodeType := controlplane.SupportBundleCollectionNodeTypeNode
+		if o.nodeType == config.ExternalNode {
+			nodeNamespace = o.config.ExternalNode.ExternalNodeNamespace
+			nodeType = controlplane.SupportBundleCollectionNodeTypeExternalNode
+		}
+		supportBundleController := support.NewSupportBundleController(nodeConfig.Name, nodeType, nodeNamespace, antreaClientProvider,
+			ovsctl.NewClient(o.config.OVSBridge), agentQuerier, networkPolicyController, v4Enabled, v6Enabled)
+		go supportBundleController.Run(stopCh)
+	}
 
 	bindAddress := net.IPv4zero
 	if o.nodeType == config.ExternalNode {

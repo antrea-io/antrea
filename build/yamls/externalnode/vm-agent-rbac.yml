@@ -68,6 +68,20 @@ rules:
     verbs:
       - create
       - get
+  - apiGroups:
+      - controlplane.antrea.io
+    resources:
+      - supportbundlecollections
+    verbs:
+      - get
+      - watch
+      - list
+  - apiGroups:
+      - controlplane.antrea.io
+    resources:
+      - supportbundlecollections/status
+    verbs:
+      - create
 ---
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
