@@ -100,18 +100,16 @@ func testGatewayInterface(t *testing.T) {
 
 func testTunnelInterface(t *testing.T) {
 	store := NewInterfaceStore()
-	tunnelInterface := NewTunnelInterface("antrea-tun0", ovsconfig.GeneveTunnel, 6081, hostIP, false)
-	tunnelInterface.IPs = []net.IP{hostIP}
-	tunnelInterface.OVSPortConfig = &OVSPortConfig{
+	tunnelInterface := NewTunnelInterface("antrea-tun0", ovsconfig.GeneveTunnel, 6081, hostIP, false, &OVSPortConfig{
 		OFPort:   14,
 		PortUUID: "1234567890",
-	}
-	ipsecTunnelInterface := NewIPSecTunnelInterface("antrea-ipsec0", ovsconfig.ERSPANTunnel, nodeName, hostIP, "abcdefg", peerNodeName)
-	ipsecTunnelInterface.IPs = []net.IP{ipsecTunnelIP}
-	ipsecTunnelInterface.OVSPortConfig = &OVSPortConfig{
+	})
+	tunnelInterface.IPs = []net.IP{hostIP}
+	ipsecTunnelInterface := NewIPSecTunnelInterface("antrea-ipsec0", ovsconfig.ERSPANTunnel, nodeName, hostIP, "abcdefg", peerNodeName, &OVSPortConfig{
 		OFPort:   15,
 		PortUUID: "1234567890",
-	}
+	})
+	ipsecTunnelInterface.IPs = []net.IP{ipsecTunnelIP}
 	store.Initialize([]*InterfaceConfig{tunnelInterface, ipsecTunnelInterface})
 	assert.Equal(t, 2, store.Len())
 	for _, tunIface := range []*InterfaceConfig{tunnelInterface, ipsecTunnelInterface} {
