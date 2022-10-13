@@ -15,15 +15,9 @@
 package supportbundle
 
 import (
-	"archive/tar"
-	"compress/gzip"
 	"context"
-	"crypto/sha256"
 	"fmt"
 	"io"
-	"os"
-	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 
@@ -41,6 +35,7 @@ import (
 	"antrea.io/antrea/pkg/ovs/ovsctl"
 	"antrea.io/antrea/pkg/querier"
 	"antrea.io/antrea/pkg/support"
+	"antrea.io/antrea/pkg/util/compress"
 )
 
 const (
@@ -226,9 +221,9 @@ func (r *supportBundleREST) collect(ctx context.Context, dumpers ...func(string)
 		return nil, fmt.Errorf("error when creating output tarfile: %w", err)
 	}
 	defer outputFile.Close()
-	hashSum, err := packDir(basedir, outputFile)
+	hashSum, err := compress.PackDir(defaultFS, basedir, outputFile)
 	if err != nil {
-		return nil, fmt.Errorf("error when packaing supportBundle: %w", err)
+		return nil, fmt.Errorf("error when packaging supportBundle: %w", err)
 	}
 
 	select {
@@ -302,42 +297,6 @@ func (r *supportBundleREST) clean(ctx context.Context, bundlePath string, durati
 		}()
 	}
 	defaultFS.Remove(bundlePath)
-}
-
-func packDir(dir string, writer io.Writer) ([]byte, error) {
-	hash := sha256.New()
-	gzWriter := gzip.NewWriter(io.MultiWriter(hash, writer))
-	targzWriter := tar.NewWriter(gzWriter)
-	err := afero.Walk(defaultFS, dir, func(filePath string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if !info.Mode().IsRegular() || info.IsDir() {
-			return nil
-		}
-		header, err := tar.FileInfoHeader(info, info.Name())
-		if err != nil {
-			return err
-		}
-		header.Name = strings.TrimPrefix(strings.ReplaceAll(filePath, dir, ""), string(filepath.Separator))
-		err = targzWriter.WriteHeader(header)
-		if err != nil {
-			return err
-		}
-		f, err := defaultFS.Open(filePath)
-		if err != nil {
-			return err
-		}
-		defer f.Close()
-		_, err = io.Copy(targzWriter, f)
-		return err
-	})
-	if err != nil {
-		return nil, err
-	}
-	targzWriter.Close()
-	gzWriter.Close()
-	return hash.Sum(nil), nil
 }
 
 var (
