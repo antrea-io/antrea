@@ -747,8 +747,10 @@ func (i *Initializer) setupDefaultTunnelInterface() error {
 	}
 
 	// Enabling UDP checksum can greatly improve the performance for Geneve and
-	// VXLAN tunnels by triggering GRO on the receiver.
-	shouldEnableCsum := i.networkConfig.TunnelType == ovsconfig.GeneveTunnel || i.networkConfig.TunnelType == ovsconfig.VXLANTunnel
+	// VXLAN tunnels by triggering GRO on the receiver for old Linux kernel versions.
+	// It's not necessary for new Linux kernel versions with the following patch:
+	// https://github.com/torvalds/linux/commit/89e5c58fc1e2857ccdaae506fb8bc5fed57ee063.
+	shouldEnableCsum := i.networkConfig.TunnelCsum && (i.networkConfig.TunnelType == ovsconfig.GeneveTunnel || i.networkConfig.TunnelType == ovsconfig.VXLANTunnel)
 
 	// Check the default tunnel port.
 	if portExists {
@@ -757,12 +759,12 @@ func (i *Initializer) setupDefaultTunnelInterface() error {
 			tunnelIface.TunnelInterfaceConfig.DestinationPort == i.networkConfig.TunnelPort &&
 			tunnelIface.TunnelInterfaceConfig.LocalIP.Equal(localIP) {
 			klog.V(2).Infof("Tunnel port %s already exists on OVS bridge", tunnelPortName)
-			// This could happen when upgrading from previous versions that didn't set it.
-			if shouldEnableCsum && !tunnelIface.TunnelInterfaceConfig.Csum {
-				if err := i.enableTunnelCsum(tunnelPortName); err != nil {
-					return fmt.Errorf("failed to enable csum for tunnel port %s: %v", tunnelPortName, err)
+			if shouldEnableCsum != tunnelIface.TunnelInterfaceConfig.Csum {
+				klog.InfoS("Updating csum for tunnel port", "port", tunnelPortName, "csum", shouldEnableCsum)
+				if err := i.setTunnelCsum(tunnelPortName, shouldEnableCsum); err != nil {
+					return fmt.Errorf("failed to update csum for tunnel port %s to %v: %v", tunnelPortName, shouldEnableCsum, err)
 				}
-				tunnelIface.TunnelInterfaceConfig.Csum = true
+				tunnelIface.TunnelInterfaceConfig.Csum = shouldEnableCsum
 			}
 			i.nodeConfig.TunnelOFPort = uint32(tunnelIface.OFPort)
 			return nil
@@ -806,15 +808,15 @@ func (i *Initializer) setupDefaultTunnelInterface() error {
 			return err
 		}
 		klog.InfoS("Allocated OpenFlow port for tunnel interface", "port", tunnelPortName, "ofPort", tunPort)
-		tunnelIface = interfacestore.NewTunnelInterface(tunnelPortName, i.networkConfig.TunnelType, i.networkConfig.TunnelPort, localIP, shouldEnableCsum)
-		tunnelIface.OVSPortConfig = &interfacestore.OVSPortConfig{PortUUID: tunnelPortUUID, OFPort: tunPort}
+		ovsPortConfig := &interfacestore.OVSPortConfig{PortUUID: tunnelPortUUID, OFPort: tunPort}
+		tunnelIface = interfacestore.NewTunnelInterface(tunnelPortName, i.networkConfig.TunnelType, i.networkConfig.TunnelPort, localIP, shouldEnableCsum, ovsPortConfig)
 		i.ifaceStore.AddInterface(tunnelIface)
 		i.nodeConfig.TunnelOFPort = uint32(tunPort)
 	}
 	return nil
 }
 
-func (i *Initializer) enableTunnelCsum(tunnelPortName string) error {
+func (i *Initializer) setTunnelCsum(tunnelPortName string, enable bool) error {
 	options, err := i.ovsBridgeClient.GetInterfaceOptions(tunnelPortName)
 	if err != nil {
 		return fmt.Errorf("error getting interface options: %w", err)
@@ -824,7 +826,7 @@ func (i *Initializer) enableTunnelCsum(tunnelPortName string) error {
 	for k, v := range options {
 		updatedOptions[k] = v
 	}
-	updatedOptions["csum"] = "true"
+	updatedOptions["csum"] = strconv.FormatBool(enable)
 	return i.ovsBridgeClient.SetInterfaceOptions(tunnelPortName, updatedOptions)
 }
 

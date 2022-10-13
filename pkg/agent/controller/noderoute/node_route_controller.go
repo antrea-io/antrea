@@ -704,8 +704,8 @@ func (c *Controller) createIPSecTunnelPort(nodeName string, nodeIP net.IP) (int3
 			nodeIP,
 			psk,
 			remoteName,
+			ovsPortConfig,
 		)
-		interfaceConfig.OVSPortConfig = ovsPortConfig
 		c.interfaceStore.AddInterface(interfaceConfig)
 	}
 	// GetOFPort will wait for up to 1 second for OVSDB to report the OFPort number.
@@ -746,6 +746,7 @@ func ParseTunnelInterfaceConfig(
 			remoteIP,
 			psk,
 			remoteName,
+			portConfig,
 		)
 	} else {
 		interfaceConfig = interfacestore.NewTunnelInterface(
@@ -753,9 +754,9 @@ func ParseTunnelInterfaceConfig(
 			ovsconfig.TunnelType(portData.IFType),
 			tunnelPort,
 			localIP,
-			csum)
+			csum,
+			portConfig)
 	}
-	interfaceConfig.OVSPortConfig = portConfig
 	return interfaceConfig
 }
 
