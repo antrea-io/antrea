@@ -17,7 +17,7 @@
 set -eo pipefail
 
 function echoerr {
-    >&2 echo "$@"
+    echo >&2 "$@"
 }
 
 DEFAULT_WORKDIR="/var/lib/jenkins"
@@ -61,57 +61,55 @@ function print_usage {
     echoerr "$_usage"
 }
 
+while [[ $# -gt 0 ]]; do
+    key="$1"
 
-while [[ $# -gt 0 ]]
-do
-key="$1"
-
-case $key in
+    case $key in
     --kubeconfigs-path)
-    MULTICLUSTER_KUBECONFIG_PATH="$2"
-    shift 2
-    ;;
+        MULTICLUSTER_KUBECONFIG_PATH="$2"
+        shift 2
+        ;;
     --workdir)
-    WORKDIR="$2"
-    shift 2
-    ;;
+        WORKDIR="$2"
+        shift 2
+        ;;
     --testcase)
-    TESTCASE="$2"
-    shift 2
-    ;;
+        TESTCASE="$2"
+        shift 2
+        ;;
     --registry)
-    DOCKER_REGISTRY="$2"
-    shift 2
-    ;;
+        DOCKER_REGISTRY="$2"
+        shift 2
+        ;;
     --mc-gateway)
-    ENABLE_MC_GATEWAY=true
-    shift
-    ;;
+        ENABLE_MC_GATEWAY=true
+        shift
+        ;;
     --codecov-token)
-    CODECOV_TOKEN="$2"
-    shift 2
-    ;;
+        CODECOV_TOKEN="$2"
+        shift 2
+        ;;
     --coverage)
-    COVERAGE=true
-    shift
-    ;;
+        COVERAGE=true
+        shift
+        ;;
     --kind)
-    KIND=true
-    shift
-    ;;
+        KIND=true
+        shift
+        ;;
     --debug)
-    DEBUG=true
-    shift
-    ;;
-    -h|--help)
-    print_usage
-    exit 0
-    ;;
-    *)    # unknown option
-    echoerr "Unknown option $1"
-    exit 1
-    ;;
-esac
+        DEBUG=true
+        shift
+        ;;
+    -h | --help)
+        print_usage
+        exit 0
+        ;;
+    *) # unknown option
+        echoerr "Unknown option $1"
+        exit 1
+        ;;
+    esac
 done
 
 function clean_tmp() {
@@ -131,7 +129,7 @@ function clean_tmp() {
 function clean_images() {
     docker images | grep -E 'mc-controller|antrea-ubuntu' | awk '{print $3}' | xargs -r docker rmi -f || true
     # Clean up dangling images generated in previous builds.
-    docker image prune -f --filter "until=24h" || true > /dev/null
+    docker image prune -f --filter "until=24h" || true >/dev/null
 }
 
 function cleanup_multicluster_ns {
@@ -145,7 +143,7 @@ function cleanup_multicluster_controller {
     echo "====== Cleanup Multicluster Controller Installation ======"
     kubeconfig=$1
     for multicluster_yml in ${WORKSPACE}/multicluster/test/yamls/*.yml; do
-        kubectl delete -f $multicluster_yml $kubeconfig --ignore-not-found=true  --timeout=30s || true
+        kubectl delete -f $multicluster_yml $kubeconfig --ignore-not-found=true --timeout=30s || true
     done
 
     for multicluster_yml in ${WORKSPACE}/multicluster/build/yamls/*.yml; do
@@ -169,8 +167,7 @@ function clean_multicluster {
         fi
     else
         echo "====== Cleanup Multicluster Antrea Installation in clusters ======"
-        for kubeconfig in "${multicluster_kubeconfigs[@]}"
-        do
+        for kubeconfig in "${multicluster_kubeconfigs[@]}"; do
             cleanup_multicluster_ns "antrea-multicluster-test" $kubeconfig
             cleanup_multicluster_ns "antrea-multicluster" $kubeconfig
             cleanup_multicluster_controller $kubeconfig
@@ -190,12 +187,12 @@ function wait_for_antrea_multicluster_pods_ready {
 
 function wait_for_multicluster_controller_ready {
     echo "====== Deploying Antrea Multicluster Leader Cluster with ${LEADER_CLUSTER_CONFIG} ======"
-    kubectl create ns antrea-multicluster  "${LEADER_CLUSTER_CONFIG}" || true
+    kubectl create ns antrea-multicluster "${LEADER_CLUSTER_CONFIG}" || true
     kubectl apply -f ./multicluster/build/yamls/antrea-multicluster-leader-global.yml "${LEADER_CLUSTER_CONFIG}"
     kubectl apply -f ./multicluster/test/yamls/leader-manifest.yml "${LEADER_CLUSTER_CONFIG}"
     kubectl rollout status deployment/antrea-mc-controller -n antrea-multicluster "${LEADER_CLUSTER_CONFIG}" || true
     kubectl create -f ./multicluster/test/yamls/leader-access-token-secret.yml "${LEADER_CLUSTER_CONFIG}" || true
-    kubectl get secret -n antrea-multicluster leader-access-token "${LEADER_CLUSTER_CONFIG}" -o yaml > ./multicluster/test/yamls/leader-access-token.yml
+    kubectl get secret -n antrea-multicluster leader-access-token "${LEADER_CLUSTER_CONFIG}" -o yaml >./multicluster/test/yamls/leader-access-token.yml
 
     sed -i '/uid:/d' ./multicluster/test/yamls/leader-access-token.yml
     sed -i '/resourceVersion/d' ./multicluster/test/yamls/leader-access-token.yml
@@ -204,10 +201,9 @@ function wait_for_multicluster_controller_ready {
     sed -i '/creationTimestamp/d' ./multicluster/test/yamls/leader-access-token.yml
     sed -i 's/antrea-multicluster-member-access-sa/antrea-multicluster-controller/g' ./multicluster/test/yamls/leader-access-token.yml
     sed -i 's/antrea-multicluster/kube-system/g' ./multicluster/test/yamls/leader-access-token.yml
-    echo "type: Opaque" >> ./multicluster/test/yamls/leader-access-token.yml
+    echo "type: Opaque" >>./multicluster/test/yamls/leader-access-token.yml
 
-    for config in "${membercluster_kubeconfigs[@]}";
-    do
+    for config in "${membercluster_kubeconfigs[@]}"; do
         echo "====== Deploying Antrea Multicluster Member Cluster with ${config} ======"
         kubectl apply -f ./multicluster/test/yamls/member-manifest.yml ${config}
         kubectl rollout status deployment/antrea-mc-controller -n kube-system ${config}
@@ -223,7 +219,8 @@ function wait_for_multicluster_controller_ready {
 # We run the function in a subshell with "set -e" to ensure that it exits in
 # case of error (e.g. integrity check), no matter the context in which the
 # function is called.
-function run_codecov { (set -e
+function run_codecov { (
+    set -e
     flag=$1
     file=$2
     dir=$3
@@ -246,7 +243,7 @@ function run_codecov { (set -e
     ./codecov -c -t ${CODECOV_TOKEN} -F ${flag} -f ${file} -s ${dir} -C ${GIT_COMMIT} -r antrea-io/antrea
 
     rm -f trustedkeys.gpg codecov
-)}
+); }
 
 function deliver_antrea_multicluster {
     echo "====== Building Antrea for the Following Commit ======"
@@ -267,21 +264,19 @@ function deliver_antrea_multicluster {
     echo "====== Delivering Antrea to all the Nodes ======"
     docker save -o ${WORKDIR}/antrea-ubuntu.tar antrea/antrea-ubuntu:latest
 
-
     if [[ ${KIND} == "true" ]]; then
         for name in ${CLUSTER_NAMES[*]}; do
             kind load docker-image antrea/antrea-ubuntu:latest --name ${name}
         done
     else
-        for kubeconfig in "${multicluster_kubeconfigs[@]}"
-        do
-            kubectl get nodes -o wide --no-headers=true ${kubeconfig}| awk '{print $6}' | while read IP; do
-                 rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no" "${WORKDIR}"/antrea-ubuntu.tar jenkins@[${IP}]:${WORKDIR}/antrea-ubuntu.tar
-                 if ${IS_CONTAINERD};then
-                   ssh -o StrictHostKeyChecking=no -n jenkins@${IP} "${CLEAN_STALE_IMAGES}; sudo ctr -n=k8s.io images import ${WORKDIR}/antrea-ubuntu.tar" || true
-                 else
-                   ssh -o StrictHostKeyChecking=no -n jenkins@${IP} "${CLEAN_STALE_IMAGES}; docker load -i ${WORKDIR}/antrea-ubuntu.tar" || true
-                 fi
+        for kubeconfig in "${multicluster_kubeconfigs[@]}"; do
+            kubectl get nodes -o wide --no-headers=true ${kubeconfig} | awk '{print $6}' | while read IP; do
+                rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no" "${WORKDIR}"/antrea-ubuntu.tar jenkins@[${IP}]:${WORKDIR}/antrea-ubuntu.tar
+                if ${IS_CONTAINERD}; then
+                    ssh -o StrictHostKeyChecking=no -n jenkins@${IP} "${CLEAN_STALE_IMAGES}; sudo ctr -n=k8s.io images import ${WORKDIR}/antrea-ubuntu.tar" || true
+                else
+                    ssh -o StrictHostKeyChecking=no -n jenkins@${IP} "${CLEAN_STALE_IMAGES}; docker load -i ${WORKDIR}/antrea-ubuntu.tar" || true
+                fi
             done
         done
     fi
@@ -295,17 +290,19 @@ function deliver_multicluster_controller {
     export PATH=${GOROOT}/bin:$PATH
 
     DEFAULT_IMAGE=antrea/antrea-mc-controller:latest
-    if $COVERAGE;then
-        export NO_PULL=1;make antrea-mc-controller-coverage
+    if $COVERAGE; then
+        export NO_PULL=1
+        make antrea-mc-controller-coverage
         DEFAULT_IMAGE=antrea/antrea-mc-controller-coverage:latest
         docker save "${DEFAULT_IMAGE}" -o "${WORKDIR}"/antrea-mcs.tar
-        ./multicluster/hack/generate-manifest.sh -l antrea-multicluster -c > ./multicluster/test/yamls/leader-manifest.yml
-        ./multicluster/hack/generate-manifest.sh -m -c > ./multicluster/test/yamls/member-manifest.yml
+        ./multicluster/hack/generate-manifest.sh -l antrea-multicluster -c >./multicluster/test/yamls/leader-manifest.yml
+        ./multicluster/hack/generate-manifest.sh -m -c >./multicluster/test/yamls/member-manifest.yml
     else
-        export NO_PULL=1;make antrea-mc-controller
+        export NO_PULL=1
+        make antrea-mc-controller
         docker save "${DEFAULT_IMAGE}" -o "${WORKDIR}"/antrea-mcs.tar
-        ./multicluster/hack/generate-manifest.sh -l antrea-multicluster > ./multicluster/test/yamls/leader-manifest.yml
-        ./multicluster/hack/generate-manifest.sh -m > ./multicluster/test/yamls/member-manifest.yml
+        ./multicluster/hack/generate-manifest.sh -l antrea-multicluster >./multicluster/test/yamls/leader-manifest.yml
+        ./multicluster/hack/generate-manifest.sh -m >./multicluster/test/yamls/member-manifest.yml
     fi
 
     if [[ ${KIND} == "true" ]]; then
@@ -313,14 +310,13 @@ function deliver_multicluster_controller {
             kind load docker-image ${DEFAULT_IMAGE} --name ${name}
         done
     else
-        for kubeconfig in "${multicluster_kubeconfigs[@]}"
-        do
+        for kubeconfig in "${multicluster_kubeconfigs[@]}"; do
             kubectl get nodes -o wide --no-headers=true "${kubeconfig}" | awk '{print $6}' | while read IP; do
                 rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no" "${WORKDIR}"/antrea-mcs.tar jenkins@[${IP}]:${WORKDIR}/antrea-mcs.tar
-                if ${IS_CONTAINERD};then
-                  ssh -o StrictHostKeyChecking=no -n jenkins@"${IP}" "${CLEAN_STALE_IMAGES}; sudo ctr -n=k8s.io images import ${WORKDIR}/antrea-mcs.tar" || true
+                if ${IS_CONTAINERD}; then
+                    ssh -o StrictHostKeyChecking=no -n jenkins@"${IP}" "${CLEAN_STALE_IMAGES}; sudo ctr -n=k8s.io images import ${WORKDIR}/antrea-mcs.tar" || true
                 else
-                  ssh -o StrictHostKeyChecking=no -n jenkins@"${IP}" "${CLEAN_STALE_IMAGES}; docker load -i ${WORKDIR}/antrea-mcs.tar" || true
+                    ssh -o StrictHostKeyChecking=no -n jenkins@"${IP}" "${CLEAN_STALE_IMAGES}; docker load -i ${WORKDIR}/antrea-mcs.tar" || true
                 fi
             done
         done
@@ -335,8 +331,7 @@ function deliver_multicluster_controller {
         rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no" ./multicluster/test/yamls/test-acnp-copy-span-ns-isolation.yml jenkins@["${leader_ip}"]:"${WORKDIR}"/test-acnp-copy-span-ns-isolation.yml
     fi
 
-    for kubeconfig in "${membercluster_kubeconfigs[@]}"
-    do
+    for kubeconfig in "${membercluster_kubeconfigs[@]}"; do
         # Remove the longest matched substring '*/' from a string like '--kubeconfig=/var/lib/jenkins/.kube/east'
         # to get the last element which is the cluster name.
         cluster=${kubeconfig##*/}
@@ -358,14 +353,14 @@ function run_multicluster_e2e {
     export PATH=$GOROOT/bin:$PATH
 
     if [[ ${ENABLE_MC_GATEWAY} == "true" ]]; then
-    cat > build/yamls/chart-values/antrea.yml <<EOF
+        cat >build/yamls/chart-values/antrea.yml <<EOF
 multicluster:
   enable: true
 featureGates: {
   Multicluster: true
 }
 EOF
-    make manifest
+        make manifest
     fi
     wait_for_antrea_multicluster_pods_ready "${LEADER_CLUSTER_CONFIG}"
     wait_for_antrea_multicluster_pods_ready "${EAST_CLUSTER_CONFIG}"
@@ -382,7 +377,7 @@ EOF
 
     if [[ ${KIND} == "true" ]]; then
         for name in ${CLUSTER_NAMES[*]}; do
-            if [[ "${name}" == "leader" ]];then
+            if [[ "${name}" == "leader" ]]; then
                 continue
             fi
             kind load docker-image "${DOCKER_REGISTRY}"/antrea/nginx:1.21.6-alpine --name ${name}
@@ -390,22 +385,22 @@ EOF
         done
     else
         for kubeconfig in "${membercluster_kubeconfigs[@]}"; do
-            kubectl get nodes -o wide --no-headers=true "${kubeconfig}"| awk '{print $6}' | while read IP; do
+            kubectl get nodes -o wide --no-headers=true "${kubeconfig}" | awk '{print $6}' | while read IP; do
                 rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no" "${WORKDIR}"/nginx.tar jenkins@["${IP}"]:"${WORKDIR}"/nginx.tar
                 rsync -avr --progress --inplace -e "ssh -o StrictHostKeyChecking=no" "${WORKDIR}"/agnhost.tar jenkins@["${IP}"]:"${WORKDIR}"/agnhost.tar
-            if ${IS_CONTAINERD};then
-                ssh -o StrictHostKeyChecking=no -n jenkins@"${IP}" "${CLEAN_STALE_IMAGES}; sudo ctr -n=k8s.io images import ${WORKDIR}/nginx.tar" || true
-                ssh -o StrictHostKeyChecking=no -n jenkins@"${IP}" "sudo ctr -n=k8s.io images import ${WORKDIR}/agnhost.tar" || true
-            else
-                ssh -o StrictHostKeyChecking=no -n jenkins@"${IP}" "${CLEAN_STALE_IMAGES}; docker load -i ${WORKDIR}/nginx.tar" || true
-                ssh -o StrictHostKeyChecking=no -n jenkins@"${IP}" "docker load -i ${WORKDIR}/agnhost.tar" || true
-            fi
+                if ${IS_CONTAINERD}; then
+                    ssh -o StrictHostKeyChecking=no -n jenkins@"${IP}" "${CLEAN_STALE_IMAGES}; sudo ctr -n=k8s.io images import ${WORKDIR}/nginx.tar" || true
+                    ssh -o StrictHostKeyChecking=no -n jenkins@"${IP}" "sudo ctr -n=k8s.io images import ${WORKDIR}/agnhost.tar" || true
+                else
+                    ssh -o StrictHostKeyChecking=no -n jenkins@"${IP}" "${CLEAN_STALE_IMAGES}; docker load -i ${WORKDIR}/nginx.tar" || true
+                    ssh -o StrictHostKeyChecking=no -n jenkins@"${IP}" "docker load -i ${WORKDIR}/agnhost.tar" || true
+                fi
             done
         done
     fi
 
     set +e
-    CURRENT_DIR=`pwd`
+    CURRENT_DIR=$(pwd)
     mkdir -p ${CURRENT_DIR}/antrea-multicluster-test-logs
     options=""
     if [[ ${ENABLE_MC_GATEWAY} == "true" ]]; then
@@ -416,7 +411,8 @@ EOF
     fi
 
     set -x
-    go test -v antrea.io/antrea/multicluster/test/e2e --logs-export-dir `pwd`/antrea-multicluster-test-logs $options
+
+    go test -v antrea.io/antrea/multicluster/test/e2e --logs-export-dir $(pwd)/antrea-multicluster-test-logs $options
     if [[ "$?" != "0" ]]; then
         TEST_FAILURE=true
     fi
@@ -429,14 +425,14 @@ function collect_coverage {
     timestamp=$(date +%Y%m%d%H%M%S)
     echo "====== Collect Multicluster e2e Tests Coverage Files ======"
     for kubeconfig in "${multicluster_kubeconfigs[@]}"; do
-      namespace="kube-system"
-      if [[ ${kubeconfig} =~ "leader" ]];then
-        namespace="antrea-multicluster"
-      fi
-      mc_controller_pod_name="$(kubectl get pods --selector=app=antrea,component=antrea-mc-controller -n ${namespace} --no-headers=true ${kubeconfig} | awk '{ print $1 }')"
-      controller_pid="$(kubectl exec -i $mc_controller_pod_name -n ${namespace} ${kubeconfig} -- pgrep antrea)"
-      kubectl exec -i $mc_controller_pod_name -n ${namespace} ${kubeconfig} -- kill -SIGINT $controller_pid
-      kubectl cp ${namespace}/$mc_controller_pod_name:antrea-mc-controller.cov.out ${COVERAGE_DIR}/$mc_controller_pod_name-$timestamp ${kubeconfig}
+        namespace="kube-system"
+        if [[ ${kubeconfig} =~ "leader" ]]; then
+            namespace="antrea-multicluster"
+        fi
+        mc_controller_pod_name="$(kubectl get pods --selector=app=antrea,component=antrea-mc-controller -n ${namespace} --no-headers=true ${kubeconfig} | awk '{ print $1 }')"
+        controller_pid="$(kubectl exec -i $mc_controller_pod_name -n ${namespace} ${kubeconfig} -- pgrep antrea)"
+        kubectl exec -i $mc_controller_pod_name -n ${namespace} ${kubeconfig} -- kill -SIGINT $controller_pid
+        kubectl cp ${namespace}/$mc_controller_pod_name:antrea-mc-controller.cov.out ${COVERAGE_DIR}/$mc_controller_pod_name-$timestamp ${kubeconfig}
     done
 }
 
@@ -452,7 +448,7 @@ if [[ ${KIND} == "true" ]]; then
     done
 
     for name in ${CLUSTER_NAMES[*]}; do
-        kind get kubeconfig --name ${name} > ${MULTICLUSTER_KUBECONFIG_PATH}/${name}
+        kind get kubeconfig --name ${name} >${MULTICLUSTER_KUBECONFIG_PATH}/${name}
         set +e
         kubectl taint node ${name}-control-plane --kubeconfig=${MULTICLUSTER_KUBECONFIG_PATH}/${name} node-role.kubernetes.io/master-
         kubectl taint node ${name}-control-plane --kubeconfig=${MULTICLUSTER_KUBECONFIG_PATH}/${name} node-role.kubernetes.io/control-plane-
@@ -464,7 +460,7 @@ fi
 # so check leader cluster only to set IS_CONTAINERD.
 set +e
 kubectl get nodes -o wide --no-headers=true ${LEADER_CLUSTER_CONFIG} | grep containerd
-if [[ $? -eq 0 ]];then
+if [[ $? -eq 0 ]]; then
     IS_CONTAINERD=true
 fi
 set -e
@@ -473,15 +469,17 @@ if [[ ${TESTCASE} =~ "e2e" ]]; then
     deliver_antrea_multicluster
     deliver_multicluster_controller
     run_multicluster_e2e
-    if $COVERAGE;then
-      CURRENT_DIR=`pwd`
-      rm -rf mc-e2e-coverage
-      mkdir -p mc-e2e-coverage
-      collect_coverage ${CURRENT_DIR}/mc-e2e-coverage
-      # Backup coverage files for later analysis
-      set +e;find ${DEFAULT_WORKDIR}/mc-e2e-coverage -maxdepth 1 -mtime +1 -type f | xargs -n 1 rm;set -e; # Clean up backup files older than one day.
-      cp -r mc-e2e-coverage ${DEFAULT_WORKDIR}
-      run_codecov "e2e-tests" "*antrea-mc*" "${CURRENT_DIR}/mc-e2e-coverage"
+    if $COVERAGE; then
+        CURRENT_DIR=$(pwd)
+        rm -rf mc-e2e-coverage
+        mkdir -p mc-e2e-coverage
+        collect_coverage ${CURRENT_DIR}/mc-e2e-coverage
+        # Backup coverage files for later analysis
+        set +e
+        find ${DEFAULT_WORKDIR}/mc-e2e-coverage -maxdepth 1 -mtime +1 -type f | xargs -n 1 rm
+        set -e # Clean up backup files older than one day.
+        cp -r mc-e2e-coverage ${DEFAULT_WORKDIR}
+        run_codecov "e2e-tests" "*antrea-mc*" "${CURRENT_DIR}/mc-e2e-coverage"
     fi
 fi
 

@@ -76,6 +76,7 @@ to participate in discussions on Antrea development.
 
 Also check out [@ProjectAntrea](https://twitter.com/ProjectAntrea) on Twitter!
 
+
 ## Features
 
 * **Kubernetes-native**: Antrea follows best practices to extend the Kubernetes
@@ -130,3 +131,4 @@ in!
 Antrea is licensed under the [Apache License, version 2.0](LICENSE)
 
 [![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fantrea-io%2Fantrea.svg?type=large)](https://app.fossa.com/projects/git%2Bgithub.com%2Fantrea-io%2Fantrea?ref=badge_large)
+
