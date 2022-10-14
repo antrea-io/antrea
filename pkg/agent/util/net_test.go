@@ -20,6 +20,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	"antrea.io/antrea/pkg/util/ip"
@@ -65,4 +66,41 @@ func TestGetDefaultLocalNodeAddr(t *testing.T) {
 		t.Error(err)
 	}
 	t.Logf("IP obtained %s, %v", localAddr, dev)
+}
+
+func TestExtendCIDRWithIP(t *testing.T) {
+	tests := []struct {
+		name         string
+		cidr         string
+		ip           string
+		expectedCIDR string
+		expectedErr  error
+	}{
+		{
+			name:         "IPv4",
+			cidr:         "1.1.1.1/32",
+			ip:           "1.1.1.127",
+			expectedCIDR: "1.1.1.0/25",
+		},
+		{
+			name:         "IPv6",
+			cidr:         "aabb:ccdd::f0/124",
+			ip:           "aabb:ccdd::10",
+			expectedCIDR: "aabb:ccdd::/120",
+		},
+		{
+			name:        "invalid",
+			cidr:        "aabb:ccdd::f0/124",
+			ip:          "1.1.1.127",
+			expectedErr: fmt.Errorf("invalid common prefix length"),
+		},
+	}
+	for _, tt := range tests {
+		_, ipNet, _ := net.ParseCIDR(tt.cidr)
+		ip := net.ParseIP(tt.ip)
+		gotIPNet, gotErr := ExtendCIDRWithIP(ipNet, ip)
+		assert.Equal(t, tt.expectedErr, gotErr)
+		_, expectedIPNet, _ := net.ParseCIDR(tt.expectedCIDR)
+		assert.Equal(t, expectedIPNet, gotIPNet)
+	}
 }
