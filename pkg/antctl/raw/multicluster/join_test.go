@@ -182,87 +182,103 @@ func TestJoinOptValidate(t *testing.T) {
 	tests := []struct {
 		name           string
 		expectedOutput string
-		opts           *ClusterSetJoinConfig
+		opts           *joinOptions
 		secretFile     bool
 	}{
 		{
 			name:           "empty ClusterID",
 			expectedOutput: "the ClusterID of leader cluster is required",
-			opts: &ClusterSetJoinConfig{
-				TokenSecretName: "token-a",
+			opts: &joinOptions{
+				ClusterSetJoinConfig: common.ClusterSetJoinConfig{
+					TokenSecretName: "token-a",
+				},
 			},
 		},
 		{
 			name:           "empty API Server",
 			expectedOutput: "the API server of the leader cluster is required",
-			opts: &ClusterSetJoinConfig{
-				TokenSecretName: "token-a",
-				ClusterID:       "cluster-a",
-				LeaderClusterID: "leader-id",
+			opts: &joinOptions{
+				ClusterSetJoinConfig: common.ClusterSetJoinConfig{
+					TokenSecretName: "token-a",
+					ClusterID:       "cluster-a",
+					LeaderClusterID: "leader-id",
+				},
 			},
 		},
 		{
 			name:           "empty Secret",
 			expectedOutput: "a member token Secret must be provided through the Secret name, or Secret file, or Secret manifest in the config file",
-			opts: &ClusterSetJoinConfig{
-				ClusterID:       "cluster-a",
-				LeaderClusterID: "leader-id",
-				LeaderAPIServer: "http://localhost",
+			opts: &joinOptions{
+				ClusterSetJoinConfig: common.ClusterSetJoinConfig{
+					ClusterID:       "cluster-a",
+					LeaderClusterID: "leader-id",
+					LeaderAPIServer: "http://localhost",
+				},
 			},
 		},
 		{
 			name:           "empty leader Namespace",
 			expectedOutput: "the leader cluster Namespace is required",
-			opts: &ClusterSetJoinConfig{
-				ClusterID:       "cluster-a",
-				LeaderClusterID: "leader-id",
-				LeaderAPIServer: "http://localhost",
-				TokenSecretName: "token-a",
+			opts: &joinOptions{
+				ClusterSetJoinConfig: common.ClusterSetJoinConfig{
+					ClusterID:       "cluster-a",
+					LeaderClusterID: "leader-id",
+					LeaderAPIServer: "http://localhost",
+					TokenSecretName: "token-a",
+				},
 			},
 		},
 		{
 			name:           "empty ClusterSet ID",
 			expectedOutput: "the ClusterSet ID is required",
-			opts: &ClusterSetJoinConfig{
-				ClusterID:       "cluster-a",
-				LeaderClusterID: "leader-id",
-				LeaderAPIServer: "http://localhost",
-				TokenSecretName: "token-a",
-				LeaderNamespace: "default",
+			opts: &joinOptions{
+				ClusterSetJoinConfig: common.ClusterSetJoinConfig{
+					ClusterID:       "cluster-a",
+					LeaderClusterID: "leader-id",
+					LeaderAPIServer: "http://localhost",
+					TokenSecretName: "token-a",
+					LeaderNamespace: "default",
+				},
 			},
 		},
 		{
 			name:           "empty member ClusterID",
 			expectedOutput: "the ClusterID of member cluster is required",
-			opts: &ClusterSetJoinConfig{
-				LeaderClusterID: "leader-id",
-				LeaderAPIServer: "http://localhost",
-				TokenSecretName: "token-a",
-				LeaderNamespace: "default",
-				ClusterSetID:    "test-clusterset",
+			opts: &joinOptions{
+				ClusterSetJoinConfig: common.ClusterSetJoinConfig{
+					LeaderClusterID: "leader-id",
+					LeaderAPIServer: "http://localhost",
+					TokenSecretName: "token-a",
+					LeaderNamespace: "default",
+					ClusterSetID:    "test-clusterset",
+				},
 			},
 		},
 		{
 			name:           "empty kubeconfig",
 			expectedOutput: "flag accessed but not defined: kubeconfig",
-			opts: &ClusterSetJoinConfig{
-				LeaderClusterID: "leader-id",
-				LeaderAPIServer: "http://localhost",
-				TokenSecretName: "token-a",
-				LeaderNamespace: "default",
-				ClusterSetID:    "test-clusterset",
-				ClusterID:       "cluster-a",
+			opts: &joinOptions{
+				ClusterSetJoinConfig: common.ClusterSetJoinConfig{
+					LeaderClusterID: "leader-id",
+					LeaderAPIServer: "http://localhost",
+					TokenSecretName: "token-a",
+					LeaderNamespace: "default",
+					ClusterSetID:    "test-clusterset",
+					ClusterID:       "cluster-a",
+				},
 			},
 		},
 		{
 			name:           "failed to unmarshal Secret file",
 			expectedOutput: "failed to unmarshall Secret from token Secret file",
-			opts: &ClusterSetJoinConfig{
-				LeaderClusterID: "leader-id",
-				LeaderAPIServer: "http://localhost",
-				LeaderNamespace: "default",
-				ClusterSetID:    "test-clusterset",
-				ClusterID:       "cluster-a",
+			opts: &joinOptions{
+				ClusterSetJoinConfig: common.ClusterSetJoinConfig{
+					LeaderClusterID: "leader-id",
+					LeaderAPIServer: "http://localhost",
+					LeaderNamespace: "default",
+					ClusterSetID:    "test-clusterset",
+					ClusterID:       "cluster-a",
+				},
 			},
 			secretFile: true,
 		},

@@ -17,10 +17,12 @@ package common
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"time"
 
 	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v3"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -30,7 +32,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/yaml"
+	k8syaml "sigs.k8s.io/yaml"
 
 	multiclusterv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
 	multiclusterv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
@@ -47,6 +49,22 @@ const (
 	DefaultMemberNamespace = "kube-system"
 	DefaultLeaderNamespace = "antrea-multicluster"
 )
+
+// "omitempty" fields (clusterID, namespace, tokenSecretName, tokenSecretFile)
+// can be populated by the corresponding command line options if not set in the
+// config file.
+type ClusterSetJoinConfig struct {
+	APIVersion      string `yaml:"apiVersion"`
+	Kind            string `yaml:"kind"`
+	ClusterSetID    string `yaml:"clusterSetID"`
+	ClusterID       string `yaml:"clusterID,omitempty"`
+	Namespace       string `yaml:"namespace,omitempty"`
+	LeaderClusterID string `yaml:"leaderClusterID"`
+	LeaderNamespace string `yaml:"leaderNamespace"`
+	LeaderAPIServer string `yaml:"leaderAPIServer"`
+	TokenSecretName string `yaml:"tokenSecretName,omitempty"`
+	TokenSecretFile string `yaml:"tokenSecretFile,omitempty"`
+}
 
 func NewClient(cmd *cobra.Command) (client.Client, error) {
 	kubeconfig, err := raw.ResolveKubeconfig(cmd)
@@ -285,11 +303,11 @@ func CreateMemberToken(cmd *cobra.Command, k8sClient client.Client, name string,
 		Type: corev1.SecretTypeOpaque,
 	}
 
-	b, err := yaml.Marshal(s)
+	b, err := k8syaml.Marshal(s)
 	if err != nil {
 		return err
 	}
-	if _, err := file.Write([]byte("# Manifest to create a Secret for a member cluster token.\n")); err != nil {
+	if _, err := file.Write([]byte("# Manifest to create a Secret for an Antrea Multi-cluster  member cluster token.\n")); err != nil {
 		return err
 	}
 	if _, err := file.Write([]byte("---\n")); err != nil {
@@ -430,4 +448,46 @@ func newServiceAccount(name string, namespace string) *corev1.ServiceAccount {
 			},
 		},
 	}
+}
+
+func OutputJoinConfig(cmd *cobra.Command, writer io.Writer, clusterSetID, leaderClusterID, leaderNamespace string) error {
+	kubeconfig, err := raw.ResolveKubeconfig(cmd)
+	if err != nil {
+		return err
+	}
+
+	config := &ClusterSetJoinConfig{
+		APIVersion:      ClusterSetJoinConfigAPIVersion,
+		Kind:            ClusterSetJoinConfigKind,
+		Namespace:       "",
+		ClusterID:       "",
+		LeaderClusterID: leaderClusterID,
+		LeaderAPIServer: kubeconfig.Host,
+		LeaderNamespace: leaderNamespace,
+		ClusterSetID:    clusterSetID,
+	}
+
+	var writeErr error
+	b, _ := yaml.Marshal(config)
+	if _, writeErr = writer.Write([]byte("---\n")); writeErr != nil {
+		return writeErr
+	}
+	if _, writeErr = writer.Write(b); writeErr != nil {
+		return writeErr
+	}
+
+	// We comment out these ClusterSetJoinConfig fields in the generated
+	// join config file, so they can be populated by command line options of
+	// the "antctl mc join" command.
+	optionalFields := `#clusterID: ""
+#namespace: ""
+# Use the pre-created token Secret.
+#tokenSecretName: ""
+# Create a token Secret with the manifest file.
+#tokenSecretFile: ""
+`
+	if _, writeErr = writer.Write([]byte(optionalFields)); writeErr != nil {
+		return writeErr
+	}
+	return nil
 }
