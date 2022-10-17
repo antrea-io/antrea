@@ -175,13 +175,13 @@ func directoryCopy(fs afero.Fs, targetDir string, srcDir string, prefixFilter st
 		targetPath := path.Join(targetDir, info.Name())
 		targetFile, err := fs.Create(targetPath)
 		if err != nil {
-			return err
+			return fmt.Errorf("error when creating target file %s: %w", targetPath, err)
 		}
 		defer targetFile.Close()
 
 		srcFile, err := fs.Open(filePath)
 		if err != nil {
-			return err
+			return fmt.Errorf("error when opening source file %s: %w", filePath, err)
 		}
 		defer srcFile.Close()
 

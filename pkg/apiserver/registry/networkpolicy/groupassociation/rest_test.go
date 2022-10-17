@@ -40,6 +40,12 @@ func (q fakeQuerier) GetAssociatedGroups(name, namespace string) ([]antreatypes.
 	return []antreatypes.Group{}, nil
 }
 
+func TestREST(t *testing.T) {
+	r := NewREST(nil)
+	assert.Equal(t, &controlplane.GroupAssociation{}, r.New())
+	assert.True(t, r.NamespaceScoped())
+}
+
 func TestRESTGet(t *testing.T) {
 	groups := map[string][]antreatypes.Group{
 		"default/podA": {

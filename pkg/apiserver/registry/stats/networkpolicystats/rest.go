@@ -32,6 +32,16 @@ import (
 	"antrea.io/antrea/pkg/features"
 )
 
+var (
+	tableColumnDefinitions = []metav1.TableColumnDefinition{
+		{Name: "Name", Type: "string", Format: "name", Description: swaggerMetadataDescriptions["name"]},
+		{Name: "Sessions", Type: "integer", Description: "The sessions count hit by the K8s NetworkPolicy."},
+		{Name: "Packets", Type: "integer", Description: "The packets count hit by the K8s NetworkPolicy."},
+		{Name: "Bytes", Type: "integer", Description: "The bytes count hit by the K8s NetworkPolicy."},
+		{Name: "Created At", Type: "date", Description: swaggerMetadataDescriptions["creationTimestamp"]},
+	}
+)
+
 type REST struct {
 	statsProvider statsProvider
 }
@@ -103,13 +113,7 @@ var swaggerMetadataDescriptions = metav1.ObjectMeta{}.SwaggerDoc()
 
 func (r *REST) ConvertToTable(ctx context.Context, obj runtime.Object, tableOptions runtime.Object) (*metav1.Table, error) {
 	table := &metav1.Table{
-		ColumnDefinitions: []metav1.TableColumnDefinition{
-			{Name: "Name", Type: "string", Format: "name", Description: swaggerMetadataDescriptions["name"]},
-			{Name: "Sessions", Type: "integer", Description: "The sessions count hit by the K8s NetworkPolicy."},
-			{Name: "Packets", Type: "integer", Description: "The packets count hit by the K8s NetworkPolicy."},
-			{Name: "Bytes", Type: "integer", Description: "The bytes count hit by the K8s NetworkPolicy."},
-			{Name: "Created At", Type: "date", Description: swaggerMetadataDescriptions["creationTimestamp"]},
-		},
+		ColumnDefinitions: tableColumnDefinitions,
 	}
 	if m, err := meta.ListAccessor(obj); err == nil {
 		table.ResourceVersion = m.GetResourceVersion()

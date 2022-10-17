@@ -19,6 +19,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/internalversion"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -26,6 +27,7 @@ import (
 	clientset "k8s.io/client-go/kubernetes"
 
 	"antrea.io/antrea/pkg/apis/crd/v1beta1"
+	system "antrea.io/antrea/pkg/apis/system/v1beta1"
 )
 
 type fakeControllerQuerier struct{}
@@ -33,6 +35,45 @@ type fakeControllerQuerier struct{}
 func (q *fakeControllerQuerier) GetControllerInfo(info *v1beta1.AntreaControllerInfo, partial bool) {}
 
 func (q *fakeControllerQuerier) GetK8sClient() clientset.Interface { return nil }
+
+func TestREST(t *testing.T) {
+	r := NewREST(nil)
+	assert.Equal(t, &v1beta1.AntreaControllerInfo{}, r.New())
+	assert.Equal(t, &v1beta1.AntreaControllerInfoList{}, r.NewList())
+	assert.False(t, r.NamespaceScoped())
+}
+
+func TestRESTGet(t *testing.T) {
+	tests := []struct {
+		name        string
+		objName     string
+		expectedObj runtime.Object
+		expectedErr error
+	}{
+		{
+			name:    "name matches",
+			objName: ControllerInfoResourceName,
+			expectedObj: &v1beta1.AntreaControllerInfo{
+				ObjectMeta: v1.ObjectMeta{
+					Name: ControllerInfoResourceName,
+				},
+			},
+		},
+		{
+			name:        "name does not match",
+			objName:     "foo",
+			expectedErr: errors.NewNotFound(system.Resource("controllerinfos"), "foo"),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := NewREST(&fakeControllerQuerier{})
+			actualObj, err := r.Get(context.TODO(), tt.objName, &v1.GetOptions{})
+			assert.Equal(t, tt.expectedErr, err)
+			assert.Equal(t, tt.expectedObj, actualObj)
+		})
+	}
+}
 
 func TestRESTList(t *testing.T) {
 	tests := []struct {
