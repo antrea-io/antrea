@@ -1,0 +1,88 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  labels:
+    component: antrea-agent
+  name: antrea-agent-windows
+  namespace: kube-system
+spec:
+  selector:
+    matchLabels:
+      component: antrea-agent
+  template:
+    metadata:
+      annotations:
+        "microsoft.com/hostprocess-inherit-user": "true"
+      labels:
+        component: antrea-agent
+    spec:
+      securityContext:
+        windowsOptions:
+          runAsUserName: "NT AUTHORITY\\SYSTEM"
+          hostProcess: true
+      containers:
+      - args:
+        - -file
+        - $env:CONTAINER_SANDBOX_MOUNT_POINT/var/lib/antrea-windows/Run-AntreaAgent-Containerd.ps1
+        command:
+        - powershell
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        image: antrea-windows
+        name: antrea-agent
+        volumeMounts:
+        - mountPath: /etc/antrea
+          name: antrea-windows-config
+        - mountPath: /var/lib/antrea-windows
+          name: antrea-agent-windows
+        - mountPath: /var/log/antrea/
+          name: var-log-antrea
+      hostNetwork: true
+      initContainers:
+      - args:
+        - -File
+        - $env:CONTAINER_SANDBOX_MOUNT_POINT/var/lib/antrea-windows/Install-WindowsCNI-Containerd.ps1
+        command:
+        - powershell
+        image: antrea-windows
+        name: install-cni
+        volumeMounts:
+        - mountPath: /etc/antrea
+          name: antrea-windows-config
+          readOnly: true
+        - mountPath: /var/lib/antrea-windows
+          name: antrea-agent-windows
+      nodeSelector:
+        kubernetes.io/os: windows
+      priorityClassName: system-node-critical
+      serviceAccountName: antrea-agent
+      tolerations:
+      - key: CriticalAddonsOnly
+        operator: Exists
+      - effect: NoSchedule
+        operator: Exists
+      volumes:
+      - configMap:
+          name: antrea-windows-config
+        name: antrea-windows-config
+      - configMap:
+          defaultMode: 420
+          name: antrea-agent-windows
+        name: antrea-agent-windows
+      - hostPath:
+          path: /var/log/antrea/
+          type: DirectoryOrCreate
+        name: var-log-antrea
+  updateStrategy:
+    type: RollingUpdate
