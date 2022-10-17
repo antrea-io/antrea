@@ -3,6 +3,10 @@
 In this quick start guide, we will set up an Antrea Multi-cluster ClusterSet
 with two clusters. One cluster will serve as the leader of the ClusterSet, and
 meanwhile also join as a member cluster; another cluster will be a member only.
+Antrea Multi-cluster supports two types of IP addresses as multi-cluster
+Service endpoints - exported Services' ClusterIPs or backend Pod IPs.
+We use the default `ClusterIP` endpoint type for multi-cluster Services
+in this guide.
 
 The diagram below shows the two clusters and the ClusterSet to be created (for
 simplicity, the diagram just shows two Nodes for each cluster).
@@ -24,8 +28,10 @@ you can change the YAML manifest path to: `https://github.com/antrea-io/antrea/t
 when applying or downloading an Antrea YAML manifest.
 
 Antrea must be deployed in both cluster A and cluster B, and the `Multicluster`
-feature of `antrea-agent` must be enabled to support multi-cluster Services. The
-two clusters **must have non-overlapping Service CIDRs**. Set the following
+feature of `antrea-agent` must be enabled to support multi-cluster Services. As we
+use `ClusterIP` endpoint type for multi-cluster Services, an Antrea Multi-cluster
+Gateway needs be set up in each member cluster to route Service traffic across clusters,
+and two clusters **must have non-overlapping Service CIDRs**. Set the following
 configuration parameters in `antrea-agent.conf` of the Antrea deployment
 manifest to enable the `Multicluster` feature:
 
