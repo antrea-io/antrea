@@ -336,6 +336,290 @@ func TestCalculateDiff(t *testing.T) {
 	}
 }
 
+func TestCalculateNodeStatsSummary(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	tests := []struct {
+		name                string
+		lastStatsCollection *statsCollection
+		curStatsCollection  *statsCollection
+		expectedSummary     *cpv1beta.NodeStatsSummary
+	}{
+		{
+			name: "only multicaststats",
+			lastStatsCollection: &statsCollection{
+				multicastGroups: map[string][]cpv1beta.PodReference{
+					"225.3.4.5": {
+						{Name: "bar2", Namespace: "foo2"},
+					},
+				},
+			},
+			curStatsCollection: &statsCollection{
+				multicastGroups: map[string][]cpv1beta.PodReference{
+					"225.3.4.5": {
+						{Name: "bar2", Namespace: "foo2"},
+					},
+				},
+			},
+			expectedSummary: nil,
+		},
+		{
+			name: "anp and multicaststats",
+			lastStatsCollection: &statsCollection{
+				multicastGroups: map[string][]cpv1beta.PodReference{
+					"225.3.4.5": {
+						{Name: "bar3", Namespace: "foo3"},
+					},
+				},
+			},
+			curStatsCollection: &statsCollection{
+				networkPolicyStats: map[types.UID]*statsv1alpha1.TrafficStats{
+					np1.UID: {
+						Bytes:    25,
+						Packets:  3,
+						Sessions: 2,
+					},
+				},
+				multicastGroups: map[string][]cpv1beta.PodReference{
+					"225.3.4.5": {
+						{Name: "bar3", Namespace: "foo3"},
+					},
+				},
+			},
+			expectedSummary: &cpv1beta.NodeStatsSummary{
+				Multicast: []cpv1beta.MulticastGroupInfo{
+					{
+						Group: "225.3.4.5", Pods: []cpv1beta.PodReference{
+							{Name: "bar3", Namespace: "foo3"}},
+					},
+				},
+				NetworkPolicies: []cpv1beta.NetworkPolicyStats{
+					{
+						NetworkPolicy: cpv1beta.NetworkPolicyReference{UID: "uid1"},
+						TrafficStats: statsv1alpha1.TrafficStats{
+							Bytes:    25,
+							Packets:  3,
+							Sessions: 2,
+						},
+					},
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mcQuerier := queriertest.NewMockAgentMulticastInfoQuerier(ctrl)
+			mcQuerier.EXPECT().CollectIGMPReportNPStats().AnyTimes()
+
+			m := &Collector{multicastQuerier: mcQuerier, lastStatsCollection: tt.lastStatsCollection, multicastEnabled: true}
+			summary := m.calculateNodeStatsSummary(tt.curStatsCollection)
+			assert.Equal(t, tt.expectedSummary, summary)
+		})
+	}
+}
+
+func TestConvertMulticastGroups(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	tests := []struct {
+		name                      string
+		multicastGroupMap         map[string][]cpv1beta.PodReference
+		expectMulticastGroupInfos []cpv1beta.MulticastGroupInfo
+	}{
+		{
+			name: "test convert group with multiple pods",
+			multicastGroupMap: map[string][]cpv1beta.PodReference{
+				"224.3.4.5": {
+					{Name: "A", Namespace: "B"},
+					{Name: "C", Namespace: "B"},
+				},
+			},
+			expectMulticastGroupInfos: []cpv1beta.MulticastGroupInfo{
+				{Group: "224.3.4.5", Pods: []cpv1beta.PodReference{
+					{Name: "A", Namespace: "B"},
+					{Name: "C", Namespace: "B"},
+				}},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := &Collector{multicastEnabled: true}
+			multicastGroupInfos := m.convertMulticastGroups(tt.multicastGroupMap)
+			assert.Equal(t, tt.expectMulticastGroupInfos, multicastGroupInfos)
+		})
+	}
+}
+
+func TestMergeStatsWithIGMPReports(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	tests := []struct {
+		name              string
+		curAnpStats       []cpv1beta.NetworkPolicyStats
+		curAcnpStats      []cpv1beta.NetworkPolicyStats
+		curMcastAnpStats  map[types.UID]map[string]*agenttypes.RuleMetric
+		curMcastAcnpStats map[types.UID]map[string]*agenttypes.RuleMetric
+		expectAnpStats    []cpv1beta.NetworkPolicyStats
+		expectAcnpStats   []cpv1beta.NetworkPolicyStats
+	}{
+		{
+			name: "merge anp stats and acnp stats with igmp reports stats",
+			curAnpStats: []cpv1beta.NetworkPolicyStats{
+				{
+					NetworkPolicy: cpv1beta.NetworkPolicyReference{UID: "uid1"},
+					RuleTrafficStats: []statsv1alpha1.RuleTrafficStats{
+						{
+							Name: "rule1",
+							TrafficStats: statsv1alpha1.TrafficStats{
+								Bytes:    1,
+								Packets:  9,
+								Sessions: 9,
+							},
+						},
+						{
+							Name: "rule2",
+							TrafficStats: statsv1alpha1.TrafficStats{
+								Bytes:    5,
+								Packets:  5,
+								Sessions: 5,
+							},
+						},
+					},
+				},
+			},
+			curAcnpStats: []cpv1beta.NetworkPolicyStats{
+				{
+					NetworkPolicy: cpv1beta.NetworkPolicyReference{UID: "uid2"},
+					RuleTrafficStats: []statsv1alpha1.RuleTrafficStats{
+						{
+							Name: "rule1",
+							TrafficStats: statsv1alpha1.TrafficStats{
+								Bytes:    2,
+								Packets:  10,
+								Sessions: 10,
+							},
+						},
+						{
+							Name: "rule2",
+							TrafficStats: statsv1alpha1.TrafficStats{
+								Bytes:    6,
+								Packets:  7,
+								Sessions: 8,
+							},
+						},
+					},
+				},
+			},
+			curMcastAnpStats: map[types.UID]map[string]*agenttypes.RuleMetric{
+				"uid1": {
+					"rule4": {
+						Bytes:   6,
+						Packets: 7,
+					},
+				},
+				"uid3": {
+					"rule4": {
+						Bytes:   6,
+						Packets: 7,
+					},
+				},
+			},
+			curMcastAcnpStats: map[types.UID]map[string]*agenttypes.RuleMetric{
+				"uid2": {
+					"rule4": {
+						Bytes:   6,
+						Packets: 7,
+					},
+				},
+			},
+			expectAnpStats: []cpv1beta.NetworkPolicyStats{
+				{
+					NetworkPolicy: cpv1beta.NetworkPolicyReference{UID: "uid1"},
+					RuleTrafficStats: []statsv1alpha1.RuleTrafficStats{
+						{
+							Name: "rule1",
+							TrafficStats: statsv1alpha1.TrafficStats{
+								Bytes:    1,
+								Packets:  9,
+								Sessions: 9,
+							},
+						},
+						{
+							Name: "rule2",
+							TrafficStats: statsv1alpha1.TrafficStats{
+								Bytes:    5,
+								Packets:  5,
+								Sessions: 5,
+							},
+						},
+						{
+							Name: "rule4",
+							TrafficStats: statsv1alpha1.TrafficStats{
+								Bytes:   6,
+								Packets: 7,
+							},
+						},
+					},
+				},
+				{
+					NetworkPolicy: cpv1beta.NetworkPolicyReference{UID: "uid3"},
+					RuleTrafficStats: []statsv1alpha1.RuleTrafficStats{
+						{
+							Name: "rule4",
+							TrafficStats: statsv1alpha1.TrafficStats{
+								Bytes:   6,
+								Packets: 7,
+							},
+						},
+					},
+				},
+			},
+			expectAcnpStats: []cpv1beta.NetworkPolicyStats{
+				{
+					NetworkPolicy: cpv1beta.NetworkPolicyReference{UID: "uid2"},
+					RuleTrafficStats: []statsv1alpha1.RuleTrafficStats{
+						{
+							Name: "rule1",
+							TrafficStats: statsv1alpha1.TrafficStats{
+								Bytes:    2,
+								Packets:  10,
+								Sessions: 10,
+							},
+						},
+						{
+							Name: "rule2",
+							TrafficStats: statsv1alpha1.TrafficStats{
+								Bytes:    6,
+								Packets:  7,
+								Sessions: 8,
+							},
+						},
+						{
+							Name: "rule4",
+							TrafficStats: statsv1alpha1.TrafficStats{
+								Bytes:   6,
+								Packets: 7,
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mcQuerier := queriertest.NewMockAgentMulticastInfoQuerier(ctrl)
+			mcQuerier.EXPECT().CollectIGMPReportNPStats().Return(tt.curMcastAnpStats, tt.curMcastAcnpStats).Times(1)
+			m := &Collector{multicastEnabled: true, multicastQuerier: mcQuerier}
+			acnpStats, anpStats := m.mergeStatsWithIGMPReports(tt.curAcnpStats, tt.curAnpStats)
+			assert.Equal(t, tt.expectAcnpStats, acnpStats)
+			assert.Equal(t, tt.expectAnpStats, anpStats)
+		})
+	}
+}
+
 func TestCalculateRuleDiff(t *testing.T) {
 	tests := []struct {
 		name              string
