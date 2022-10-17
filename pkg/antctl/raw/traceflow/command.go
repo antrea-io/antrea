@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"strconv"
 	"strings"
@@ -36,6 +37,7 @@ import (
 
 	"antrea.io/antrea/pkg/antctl/raw"
 	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	antrea "antrea.io/antrea/pkg/client/clientset/versioned"
 )
 
 const defaultTimeout time.Duration = time.Second * 10
@@ -52,6 +54,7 @@ var (
 		timeout     time.Duration
 		nowait      bool
 	}{}
+	getClients = getK8sClient
 )
 
 var protocols = map[string]int32{
@@ -112,10 +115,22 @@ func init() {
 	Command.Flags().BoolVarP(&option.nowait, "nowait", "", false, "if set, command returns without retrieving results")
 }
 
+func getK8sClient(cmd *cobra.Command) (kubernetes.Interface, antrea.Interface, error) {
+	kubeconfig, err := raw.ResolveKubeconfig(cmd)
+	if err != nil {
+		return nil, nil, err
+	}
+	k8sClientset, client, err := raw.SetupClients(kubeconfig)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create clientset: %w", err)
+	}
+	return k8sClientset, client, nil
+}
+
 func runE(cmd *cobra.Command, _ []string) error {
 	option.timeout, _ = cmd.Flags().GetDuration("timeout")
 	if option.timeout > time.Hour*12 {
-		fmt.Println("Timeout cannot be longer than 12 hours")
+		fmt.Fprintf(cmd.OutOrStdout(), "Timeout cannot be longer than 12 hours")
 		return nil
 	}
 	if option.timeout == 0 {
@@ -123,35 +138,29 @@ func runE(cmd *cobra.Command, _ []string) error {
 	}
 
 	if !option.liveTraffic && option.source == "" {
-		fmt.Println("Please provide source")
+		fmt.Fprintf(cmd.OutOrStdout(), "Please provide source")
 		return nil
 	}
 
 	if !option.liveTraffic && option.destination == "" {
-		fmt.Println("Please provide destination")
+		fmt.Fprintf(cmd.OutOrStdout(), "Please provide destination")
 		return nil
 	}
 
 	if option.source == "" && option.destination == "" {
-		fmt.Println("One of source and destination must be a Pod")
+		fmt.Fprintf(cmd.OutOrStdout(), "One of source and destination must be a Pod")
 		return nil
 	}
 
 	if !option.liveTraffic && option.droppedOnly {
-		fmt.Println("--dropped-only works only with live-traffic Traceflow")
+		fmt.Fprintf(cmd.OutOrStdout(), "--dropped-only works only with live-traffic Traceflow")
 		return nil
 	}
 
-	kubeconfig, err := raw.ResolveKubeconfig(cmd)
+	k8sclient, client, err := getClients(cmd)
 	if err != nil {
 		return err
 	}
-
-	k8sclient, client, err := raw.SetupClients(kubeconfig)
-	if err != nil {
-		return fmt.Errorf("failed to create clientset: %w", err)
-	}
-
 	tf, err := newTraceflow(k8sclient)
 	if err != nil {
 		return fmt.Errorf("error when filling up Traceflow config: %w", err)
@@ -195,7 +204,7 @@ func runE(cmd *cobra.Command, _ []string) error {
 		return fmt.Errorf("error when retrieving Traceflow: %w", err)
 	}
 
-	if err := output(res); err != nil {
+	if err := output(res, cmd.OutOrStdout()); err != nil {
 		return fmt.Errorf("error when outputting result: %w", err)
 	}
 	return err
@@ -381,7 +390,7 @@ func getPortFields(cleanFlow string) (map[string]int, error) {
 	return fields, nil
 }
 
-func output(tf *v1alpha1.Traceflow) error {
+func output(tf *v1alpha1.Traceflow, writer io.Writer) error {
 	r := Response{
 		Name:        tf.Name,
 		Phase:       tf.Status.Phase,
@@ -409,11 +418,11 @@ func output(tf *v1alpha1.Traceflow) error {
 	}
 
 	if option.outputType == "json" {
-		if err := jsonOutput(&r); err != nil {
+		if err := jsonOutput(&r, writer); err != nil {
 			return fmt.Errorf("error when converting output to json: %w", err)
 		}
 	} else if option.outputType == "yaml" {
-		if err := yamlOutput(&r); err != nil {
+		if err := yamlOutput(&r, writer); err != nil {
 			return fmt.Errorf("error when converting output to yaml: %w", err)
 		}
 	} else {
@@ -422,16 +431,19 @@ func output(tf *v1alpha1.Traceflow) error {
 	return nil
 }
 
-func yamlOutput(r *Response) error {
+func yamlOutput(r *Response, writer io.Writer) error {
 	o, err := yaml.Marshal(&r)
 	if err != nil {
 		return err
 	}
-	fmt.Println(string(o))
+	_, err = fmt.Fprintf(writer, "%s", o)
+	if err != nil {
+		return fmt.Errorf("error when outputing in yaml format: %w", err)
+	}
 	return nil
 }
 
-func jsonOutput(r *Response) error {
+func jsonOutput(r *Response, writer io.Writer) error {
 	o, err := json.Marshal(r)
 	if err != nil {
 		return err
@@ -440,7 +452,10 @@ func jsonOutput(r *Response) error {
 	if err = json.Indent(&b, o, "", "  "); err != nil {
 		return err
 	}
-	fmt.Println(string(b.Bytes()))
+	_, err = fmt.Fprintf(writer, "%s", b.String())
+	if err != nil {
+		return fmt.Errorf("error when outputing in json format: %w", err)
+	}
 	return nil
 }
 
