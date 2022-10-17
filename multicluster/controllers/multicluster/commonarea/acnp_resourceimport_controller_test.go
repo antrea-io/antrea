@@ -200,6 +200,9 @@ func TestResourceImportReconciler_handleCopySpanACNPDeleteEvent(t *testing.T) {
 	if err := fakeClient.Get(ctx, types.NamespacedName{Namespace: "", Name: common.AntreaMCSPrefix + acnpImportName}, acnp); !apierrors.IsNotFound(err) {
 		t.Errorf("ResourceImport Reconciler should delete ACNP successfully but got error = %v", err)
 	}
+	if _, exists, _ := r.installedResImports.Get(*acnpResImport); exists {
+		t.Errorf("Reconciler should delete ResImport from installedResImports after successful resource deletion")
+	}
 }
 
 func TestResourceImportReconciler_handleCopySpanACNPUpdateEvent(t *testing.T) {

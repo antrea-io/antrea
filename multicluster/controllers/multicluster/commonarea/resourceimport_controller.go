@@ -236,6 +236,7 @@ func (r *ResourceImportReconciler) handleResImpDeleteForService(ctx context.Cont
 	}
 	err := r.localClusterClient.Delete(ctx, svc, &client.DeleteOptions{})
 	if err != nil && !apierrors.IsNotFound(err) {
+		klog.ErrorS(err, "Failed to delete imported Service", "service", svcName)
 		return ctrl.Result{}, err
 	}
 
@@ -245,8 +246,13 @@ func (r *ResourceImportReconciler) handleResImpDeleteForService(ctx context.Cont
 			Name:      resImp.Spec.Name,
 		},
 	}
-	err = r.localClusterClient.Delete(ctx, svcImp, &client.DeleteOptions{})
-	return ctrl.Result{}, client.IgnoreNotFound(err)
+	err = client.IgnoreNotFound(r.localClusterClient.Delete(ctx, svcImp, &client.DeleteOptions{}))
+	if err != nil {
+		klog.ErrorS(err, "Failed to delete ServiceImport for ResourceImport", "serviceImport", svcImpName)
+		return ctrl.Result{}, err
+	}
+	r.installedResImports.Delete(*resImp)
+	return ctrl.Result{}, nil
 }
 
 func (r *ResourceImportReconciler) handleResImpUpdateForEndpoints(ctx context.Context, resImp *multiclusterv1alpha1.ResourceImport) (ctrl.Result, error) {
@@ -316,11 +322,12 @@ func (r *ResourceImportReconciler) handleResImpDeleteForEndpoints(ctx context.Co
 			Namespace: resImp.Spec.Namespace,
 		},
 	}
-	err := r.localClusterClient.Delete(ctx, ep, &client.DeleteOptions{})
+	err := client.IgnoreNotFound(r.localClusterClient.Delete(ctx, ep, &client.DeleteOptions{}))
 	if err != nil {
-		klog.InfoS("Failed to delete imported Endpoints", "endpoints", epNamespacedName, "err", err)
-		return ctrl.Result{}, client.IgnoreNotFound(err)
+		klog.ErrorS(err, "Failed to delete imported Endpoints", "endpoints", epNamespacedName)
+		return ctrl.Result{}, err
 	}
+	r.installedResImports.Delete(*resImp)
 	return ctrl.Result{}, nil
 }
 
