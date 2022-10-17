@@ -54,6 +54,11 @@ antrea-agent:
 	@mkdir -p $(BINDIR)
 	GOOS=linux $(GO) build -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' antrea.io/antrea/cmd/antrea-agent
 
+.PHONY: antrea-agent-release
+antrea-agent-release:
+	@mkdir -p $(BINDIR)
+	@CGO_ENABLED=0 $(GO) build -o $(BINDIR)/$(ANTREA_AGENT_BINARY_NAME) $(GOFLAGS) -ldflags '$(LDFLAGS)' antrea.io/antrea/cmd/antrea-agent
+
 .PHONY: antrea-agent-simulator
 antrea-agent-simulator:
 	@mkdir -p $(BINDIR)
@@ -85,14 +90,18 @@ antrea-cni:
 	@mkdir -p $(BINDIR)
 	GOOS=linux CGO_ENABLED=0 $(GO) build -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' antrea.io/antrea/cmd/antrea-cni
 
+.PHONY: antrea-cni
+antrea-cni-release:
+	@mkdir -p $(BINDIR)
+	@CGO_ENABLED=0 $(GO) build -o $(BINDIR)/$(ANTREA_CNI_BINARY_NAME) $(GOFLAGS) -ldflags '$(LDFLAGS)' antrea.io/antrea/cmd/antrea-cni
+
 .PHONY: antctl-instr-binary
 antctl-instr-binary:
 	@mkdir -p $(BINDIR)
 	GOOS=linux $(GO) test -tags testbincover -covermode count -coverpkg=antrea.io/antrea/pkg/... -c -o $(BINDIR)/antctl-coverage $(GOFLAGS) -ldflags '$(LDFLAGS)' antrea.io/antrea/cmd/antctl
 
 # diable cgo for antrea-cni and antrea-agent: antrea-cni is meant to be
-# installed on the host and the antrea-agent is run as a process on Windows
-# hosts (we also distribute it as a release binary).
+# installed on the host and the antrea-agent is run as a process on Windows.
 .PHONY: windows-bin
 windows-bin:
 	@mkdir -p $(BINDIR)
@@ -206,7 +215,7 @@ antctl: $(ANTCTL_BINARIES)
 
 .PHONY: antctl-release
 antctl-release:
-	@$(GO) build -o $(BINDIR)/$(ANTCTL_BINARY_NAME) $(GOFLAGS) -ldflags '-s -w $(LDFLAGS)' antrea.io/antrea/cmd/antctl
+	@CGO_ENABLED=0 $(GO) build -o $(BINDIR)/$(ANTCTL_BINARY_NAME) $(GOFLAGS) -ldflags '-s -w $(LDFLAGS)' antrea.io/antrea/cmd/antctl
 
 .PHONY: check-copyright
 check-copyright: 
