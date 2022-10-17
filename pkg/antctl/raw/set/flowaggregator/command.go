@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package flow_aggregator
+package flowaggregator
 
 import (
 	"context"
@@ -38,6 +38,8 @@ var Command *cobra.Command
 type FlowAggregatorConfigMutator func(c *flowaggregatorconfig.FlowAggregatorConfig, value string) error
 
 var mutators map[string]FlowAggregatorConfigMutator
+
+var getClients = getk8sClient
 
 var example = strings.Trim(`
   Enable ClickHouse
@@ -97,12 +99,17 @@ func NewFlowAggregatorSetCommand() *cobra.Command {
 	return Command
 }
 
-func updateRunE(cmd *cobra.Command, args []string) error {
+func getk8sClient(cmd *cobra.Command) (kubernetes.Interface, error) {
 	kubeconfig, err := raw.ResolveKubeconfig(cmd)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	k8sClient, _, err := raw.SetupClients(kubeconfig)
+	return k8sClient, err
+}
+
+func updateRunE(cmd *cobra.Command, args []string) error {
+	k8sClient, err := getClients(cmd)
 	if err != nil {
 		return fmt.Errorf("failed to create clientset: %w", err)
 	}
@@ -132,6 +139,10 @@ func updateRunE(cmd *cobra.Command, args []string) error {
 	b, err := yaml.Marshal(&flowAggregatorConf)
 	if err != nil {
 		return err
+	}
+
+	if configMap.Data == nil {
+		configMap.Data = make(map[string]string)
 	}
 	configMap.Data["flow-aggregator.conf"] = string(b)
 	if _, err := k8sClient.CoreV1().ConfigMaps(os.Getenv("POD_NAMESPACE")).Update(context.TODO(), configMap, metav1.UpdateOptions{}); err != nil {
