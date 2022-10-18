@@ -52,6 +52,7 @@ type (
 	LabelIdentityReconciler struct {
 		client.Client
 		Scheme           *runtime.Scheme
+		commonAreaMutex  sync.Mutex
 		commonAreaGetter RemoteCommonAreaGetter
 		remoteCommonArea commonarea.RemoteCommonArea
 		// labelMutex prevents concurrent access to labelToPodsCache and podLabelCache.
@@ -87,16 +88,11 @@ func NewLabelIdentityReconciler(
 // +kubebuilder:rbac:groups="",resources=namespaces,verbs=get;list;watch
 func (r *LabelIdentityReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	klog.V(2).InfoS("Reconciling Pod for label identity", "pod", req.NamespacedName)
-	var commonArea commonarea.RemoteCommonArea
-	var err error
-	commonArea, r.localClusterID, err = r.commonAreaGetter.GetRemoteCommonAreaAndLocalID()
-	if commonArea == nil {
-		return ctrl.Result{Requeue: true}, err
+	if requeue := r.checkRemoteCommonArea(); requeue {
+		return ctrl.Result{Requeue: true}, nil
 	}
-	r.remoteCommonArea = commonArea
 	var pod v1.Pod
 	var ns v1.Namespace
-
 	if err := r.Client.Get(ctx, req.NamespacedName, &pod); err != nil {
 		if apierrors.IsNotFound(err) {
 			klog.V(2).InfoS("Pod is deleted", "pod", req.NamespacedName)
@@ -112,6 +108,22 @@ func (r *LabelIdentityReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 	normalizedLabel := getNormalizedLabel(ns.Labels, pod.Labels, ns.Name)
 	r.onPodCreateOrUpdate(req.NamespacedName.String(), normalizedLabel)
 	return ctrl.Result{}, nil
+}
+
+// checkRemoteCommonArea initializes remoteCommonArea for the reconciler if necessary,
+// or tells the Reconcile function to requeue if the remoteCommonArea is not ready.
+func (r *LabelIdentityReconciler) checkRemoteCommonArea() bool {
+	r.commonAreaMutex.Lock()
+	defer r.commonAreaMutex.Unlock()
+
+	if r.remoteCommonArea == nil {
+		commonArea, localClusterID, _ := r.commonAreaGetter.GetRemoteCommonAreaAndLocalID()
+		if commonArea == nil {
+			return true
+		}
+		r.remoteCommonArea, r.localClusterID = commonArea, localClusterID
+	}
+	return false
 }
 
 // SetupWithManager sets up the controller with the Manager.
