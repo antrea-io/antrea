@@ -24,6 +24,7 @@ import (
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/apiserver/pkg/server/options"
 	"k8s.io/client-go/informers"
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/tools/cache"
@@ -71,7 +72,6 @@ import (
 	"antrea.io/antrea/pkg/ovs/ovsctl"
 	"antrea.io/antrea/pkg/signals"
 	"antrea.io/antrea/pkg/util/channel"
-	"antrea.io/antrea/pkg/util/cipher"
 	"antrea.io/antrea/pkg/util/env"
 	"antrea.io/antrea/pkg/util/k8s"
 	"antrea.io/antrea/pkg/version"
@@ -750,25 +750,27 @@ func run(o *Options) error {
 
 	go agentMonitor.Run(stopCh)
 
-	cipherSuites, err := cipher.GenerateCipherSuitesList(o.config.TLSCipherSuites)
-	if err != nil {
-		return fmt.Errorf("error generating Cipher Suite list: %v", err)
-	}
 	bindAddress := net.IPv4zero
 	if o.nodeType == config.ExternalNode {
 		bindAddress = ipv4Localhost
 	}
+	secureServing := options.NewSecureServingOptions().WithLoopback()
+	secureServing.BindAddress = bindAddress
+	secureServing.BindPort = o.config.APIPort
+	secureServing.CipherSuites = o.tlsCipherSuites
+	secureServing.MinTLSVersion = o.config.TLSMinVersion
+	authentication := options.NewDelegatingAuthenticationOptions()
+	authorization := options.NewDelegatingAuthorizationOptions().WithAlwaysAllowPaths("/healthz", "/livez", "/readyz")
 	apiServer, err := apiserver.New(
 		agentQuerier,
 		networkPolicyController,
 		mcastController,
 		externalIPController,
-		bindAddress,
-		o.config.APIPort,
+		secureServing,
+		authentication,
+		authorization,
 		*o.config.EnablePrometheusMetrics,
 		o.config.ClientConnection.Kubeconfig,
-		cipherSuites,
-		cipher.TLSVersionMap[o.config.TLSMinVersion],
 		v4Enabled,
 		v6Enabled)
 	if err != nil {
