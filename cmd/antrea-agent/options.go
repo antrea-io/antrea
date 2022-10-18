@@ -24,6 +24,7 @@ import (
 	"github.com/spf13/pflag"
 	"gopkg.in/yaml.v2"
 	"k8s.io/apimachinery/pkg/util/sets"
+	cliflag "k8s.io/component-base/cli/flag"
 	"k8s.io/component-base/featuregate"
 	"k8s.io/klog/v2"
 
@@ -61,6 +62,8 @@ type Options struct {
 	configFile string
 	// The configuration object
 	config *agentconfig.AgentConfig
+	// tlsCipherSuites is a slice of TLSCipherSuites mapped to input provided by user.
+	tlsCipherSuites []string
 	// IPFIX flow collector address
 	flowCollectorAddr string
 	// IPFIX flow collector protocol
@@ -121,6 +124,10 @@ func (o *Options) validate(args []string) error {
 		return fmt.Errorf("OVS datapath type %s is not supported", o.config.OVSDatapathType)
 	}
 
+	if err := o.validateTLSOptions(); err != nil {
+		return err
+	}
+
 	if config.ExternalNode.String() == o.config.NodeType && !features.DefaultFeatureGate.Enabled(features.ExternalNode) {
 		return fmt.Errorf("nodeType %s requires feature gate ExternalNode to be enabled", o.config.NodeType)
 	}
@@ -166,6 +173,23 @@ func (o *Options) setDefaults() {
 	} else {
 		o.setExternalNodeDefaultOptions()
 	}
+}
+
+func (o *Options) validateTLSOptions() error {
+	_, err := cliflag.TLSVersion(o.config.TLSMinVersion)
+	if err != nil {
+		return fmt.Errorf("invalid TLSMinVersion: %v", err)
+	}
+	trimmedTLSCipherSuites := strings.ReplaceAll(o.config.TLSCipherSuites, " ", "")
+	if trimmedTLSCipherSuites != "" {
+		tlsCipherSuites := strings.Split(trimmedTLSCipherSuites, ",")
+		_, err = cliflag.TLSCipherSuites(tlsCipherSuites)
+		if err != nil {
+			return fmt.Errorf("invalid TLSCipherSuites: %v", err)
+		}
+		o.tlsCipherSuites = tlsCipherSuites
+	}
+	return nil
 }
 
 func (o *Options) validateAntreaProxyConfig() error {
