@@ -197,8 +197,9 @@ func (c *StatusController) syncHandler(uid types.UID) error {
 		},
 		Nodes: []v1beta2.NetworkPolicyNodeStatus{
 			{
-				NodeName:   c.nodeName,
-				Generation: policy.Generation,
+				NodeName:           c.nodeName,
+				Generation:         policy.Generation,
+				RealizationFailure: false,
 			},
 		},
 	}

@@ -1360,7 +1360,23 @@ func schema_pkg_apis_controlplane_v1beta2_NetworkPolicyNodeStatus(ref common.Ref
 							Format:      "int64",
 						},
 					},
+					"realizationFailure": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The flag to mark the NetworkPolicy realization is failed on the Node or not.",
+							Default:     false,
+							Type:        []string{"boolean"},
+							Format:      "",
+						},
+					},
+					"message": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The error message to describe why the NetworkPolicy realization is failed on the Node.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 				},
+				Required: []string{"realizationFailure"},
 			},
 		},
 	}

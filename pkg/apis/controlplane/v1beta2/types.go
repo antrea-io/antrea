@@ -389,6 +389,10 @@ type NetworkPolicyNodeStatus struct {
 	NodeName string `json:"nodeName,omitempty" protobuf:"bytes,1,opt,name=nodeName"`
 	// The generation realized by the Node.
 	Generation int64 `json:"generation,omitempty" protobuf:"varint,2,opt,name=generation"`
+	// The flag to mark the NetworkPolicy realization is failed on the Node or not.
+	RealizationFailure bool `json:"realizationFailure" protobuf:"varint,3,opt,name=realizationFailure"`
+	// The error message to describe why the NetworkPolicy realization is failed on the Node.
+	Message string `json:"message,omitempty" protobuf:"bytes,4,opt,name=message"`
 }
 
 type GroupReference struct {

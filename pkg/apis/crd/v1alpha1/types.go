@@ -342,9 +342,10 @@ const (
 
 // These are valid conditions of a deployment.
 const (
-	// NetworkPolicyConditionRealizable means the condition stores information about
-	// various realizable conditions of the NetworkPolicy.
+	// NetworkPolicyConditionRealizable reports whether the NetworkPolicy is realizable and the reasons why it is not.
 	NetworkPolicyConditionRealizable NetworkPolicyConditionType = "Realizable"
+	// NetworkPolicyConditionRealizationFailure reports information about a failure when realizing the NetworkPolicy on a Node.
+	NetworkPolicyConditionRealizationFailure NetworkPolicyConditionType = "RealizationFailure"
 )
 
 // NetworkPolicyCondition describes the state of a NetworkPolicy at a certain point.

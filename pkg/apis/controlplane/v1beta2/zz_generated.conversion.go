@@ -1148,6 +1148,8 @@ func Convert_controlplane_NetworkPolicyList_To_v1beta2_NetworkPolicyList(in *con
 func autoConvert_v1beta2_NetworkPolicyNodeStatus_To_controlplane_NetworkPolicyNodeStatus(in *NetworkPolicyNodeStatus, out *controlplane.NetworkPolicyNodeStatus, s conversion.Scope) error {
 	out.NodeName = in.NodeName
 	out.Generation = in.Generation
+	out.RealizationFailure = in.RealizationFailure
+	out.Message = in.Message
 	return nil
 }
 
@@ -1159,6 +1161,8 @@ func Convert_v1beta2_NetworkPolicyNodeStatus_To_controlplane_NetworkPolicyNodeSt
 func autoConvert_controlplane_NetworkPolicyNodeStatus_To_v1beta2_NetworkPolicyNodeStatus(in *controlplane.NetworkPolicyNodeStatus, out *NetworkPolicyNodeStatus, s conversion.Scope) error {
 	out.NodeName = in.NodeName
 	out.Generation = in.Generation
+	out.RealizationFailure = in.RealizationFailure
+	out.Message = in.Message
 	return nil
 }
 
