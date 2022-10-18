@@ -240,6 +240,12 @@ message NetworkPolicyNodeStatus {
 
   // The generation realized by the Node.
   optional int64 generation = 2;
+
+  // The flag to mark the NetworkPolicy realization is failed on the Node or not.
+  optional bool realizationFailure = 3;
+
+  // The error message to describe why the NetworkPolicy realization is failed on the Node.
+  optional string message = 4;
 }
 
 // NetworkPolicyPeer describes a peer of NetworkPolicyRules.

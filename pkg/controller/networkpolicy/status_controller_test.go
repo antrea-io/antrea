@@ -97,15 +97,21 @@ func newInternalNetworkPolicy(name string, generation int64, nodes []string, ref
 	}
 }
 
-func newNetworkPolicyStatus(name string, nodeName string, generation int64) *controlplane.NetworkPolicyStatus {
+func newNetworkPolicyStatus(name string, nodeName string, generation int64, errorMessage string) *controlplane.NetworkPolicyStatus {
+	failed := false
+	if errorMessage != "" {
+		failed = true
+	}
 	return &controlplane.NetworkPolicyStatus{
 		ObjectMeta: v1.ObjectMeta{
 			Name: name,
 		},
 		Nodes: []controlplane.NetworkPolicyNodeStatus{
 			{
-				NodeName:   nodeName,
-				Generation: generation,
+				NodeName:           nodeName,
+				Generation:         generation,
+				RealizationFailure: failed,
+				Message:            errorMessage,
 			},
 		},
 	}
@@ -144,6 +150,19 @@ func newAntreaClusterNetworkPolicyReference(name string) *controlplane.NetworkPo
 	}
 }
 
+func generateRealizationFailureConditions(failedNodeCount int, failedNodeDetails string) []crdv1alpha1.NetworkPolicyCondition {
+	conditions := GenerateNetworkPolicyCondition(nil)
+	failureMessage := fmt.Sprintf("Failed Nodes count %d: %s", failedNodeCount, failedNodeDetails)
+	conditions = append(conditions, crdv1alpha1.NetworkPolicyCondition{
+		Type:               crdv1alpha1.NetworkPolicyConditionRealizationFailure,
+		Status:             v1.ConditionTrue,
+		LastTransitionTime: v1.Now(),
+		Reason:             "NetworkPolicyRealizationFailedOnNode",
+		Message:            failureMessage,
+	})
+	return conditions
+}
+
 func TestCreateAntreaNetworkPolicy(t *testing.T) {
 	tests := []struct {
 		name                         string
@@ -180,10 +199,10 @@ func TestCreateAntreaNetworkPolicy(t *testing.T) {
 				newInternalNetworkPolicy("cnp1", 3, []string{"node1", "node2"}, newAntreaClusterNetworkPolicyReference("cnp1")),
 			},
 			collectedNetworkPolicyStatus: []*controlplane.NetworkPolicyStatus{
-				newNetworkPolicyStatus("anp1", "node1", 1),
-				newNetworkPolicyStatus("anp1", "node2", 2),
-				newNetworkPolicyStatus("cnp1", "node1", 2),
-				newNetworkPolicyStatus("cnp1", "node2", 3),
+				newNetworkPolicyStatus("anp1", "node1", 1, ""),
+				newNetworkPolicyStatus("anp1", "node2", 2, ""),
+				newNetworkPolicyStatus("cnp1", "node1", 2, ""),
+				newNetworkPolicyStatus("cnp1", "node2", 3, ""),
 			},
 			expectedANPStatus: &crdv1alpha1.NetworkPolicyStatus{
 				Phase:                crdv1alpha1.NetworkPolicyRealizing,
@@ -207,10 +226,10 @@ func TestCreateAntreaNetworkPolicy(t *testing.T) {
 				newInternalNetworkPolicy("cnp1", 4, []string{"node1", "node2"}, newAntreaClusterNetworkPolicyReference("cnp1")),
 			},
 			collectedNetworkPolicyStatus: []*controlplane.NetworkPolicyStatus{
-				newNetworkPolicyStatus("anp1", "node1", 3),
-				newNetworkPolicyStatus("anp1", "node2", 3),
-				newNetworkPolicyStatus("cnp1", "node1", 4),
-				newNetworkPolicyStatus("cnp1", "node2", 4),
+				newNetworkPolicyStatus("anp1", "node1", 3, ""),
+				newNetworkPolicyStatus("anp1", "node2", 3, ""),
+				newNetworkPolicyStatus("cnp1", "node1", 4, ""),
+				newNetworkPolicyStatus("cnp1", "node2", 4, ""),
 			},
 			expectedANPStatus: &crdv1alpha1.NetworkPolicyStatus{
 				Phase:                crdv1alpha1.NetworkPolicyRealized,
@@ -227,7 +246,38 @@ func TestCreateAntreaNetworkPolicy(t *testing.T) {
 				Conditions:           GenerateNetworkPolicyCondition(nil),
 			},
 		},
+		{
+			name: "failed realized",
+			networkPolicy: []*types.NetworkPolicy{
+				newInternalNetworkPolicy("anp1", 4, []string{"node1", "node2"}, newAntreaNetworkPolicyReference("ns1", "anp1")),
+				newInternalNetworkPolicy("cnp1", 5, []string{"node1", "node2"}, newAntreaClusterNetworkPolicyReference("cnp1")),
+			},
+			collectedNetworkPolicyStatus: []*controlplane.NetworkPolicyStatus{
+				newNetworkPolicyStatus("anp1", "node1", 4, "agent failure"),
+				newNetworkPolicyStatus("anp1", "node2", 4, ""),
+				newNetworkPolicyStatus("cnp1", "node1", 5, "agent failure"),
+				newNetworkPolicyStatus("cnp1", "node2", 5, "agent crash"),
+			},
+			expectedANPStatus: &crdv1alpha1.NetworkPolicyStatus{
+				Phase:                crdv1alpha1.NetworkPolicyRealizing,
+				ObservedGeneration:   4,
+				CurrentNodesRealized: 1,
+				DesiredNodesRealized: 2,
+				Conditions:           generateRealizationFailureConditions(1, `"node1":"agent failure"`),
+			},
+			expectedCNPStatus: &crdv1alpha1.NetworkPolicyStatus{
+				Phase:                crdv1alpha1.NetworkPolicyRealizing,
+				ObservedGeneration:   5,
+				CurrentNodesRealized: 0,
+				DesiredNodesRealized: 2,
+				Conditions:           generateRealizationFailureConditions(2, `"node1":"agent failure"...`),
+			},
+		},
 	}
+	maxConditionMessageLength = 45
+	defer func() {
+		maxConditionMessageLength = 100
+	}()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var initObjects []runtime.Object
@@ -266,11 +316,11 @@ func TestUpdateAntreaNetworkPolicy(t *testing.T) {
 
 	networkPolicyStore.Create(anp1)
 	networkPolicyStore.Create(cnp1)
-	statusController.UpdateStatus(newNetworkPolicyStatus("anp1", "node1", 1))
-	statusController.UpdateStatus(newNetworkPolicyStatus("anp1", "node2", 1))
-	statusController.UpdateStatus(newNetworkPolicyStatus("cnp1", "node3", 2))
-	statusController.UpdateStatus(newNetworkPolicyStatus("cnp1", "node4", 2))
-	statusController.UpdateStatus(newNetworkPolicyStatus("cnp1", "node5", 2))
+	statusController.UpdateStatus(newNetworkPolicyStatus("anp1", "node1", 1, ""))
+	statusController.UpdateStatus(newNetworkPolicyStatus("anp1", "node2", 1, ""))
+	statusController.UpdateStatus(newNetworkPolicyStatus("cnp1", "node3", 2, ""))
+	statusController.UpdateStatus(newNetworkPolicyStatus("cnp1", "node4", 2, ""))
+	statusController.UpdateStatus(newNetworkPolicyStatus("cnp1", "node5", 2, ""))
 	// TODO: Use a determinate mechanism.
 	time.Sleep(500 * time.Millisecond)
 	assert.True(t, NetworkPolicyStatusEqual(crdv1alpha1.NetworkPolicyStatus{
@@ -321,8 +371,8 @@ func TestDeleteAntreaNetworkPolicy(t *testing.T) {
 
 	networkPolicyStore.Create(initialNetworkPolicy)
 	statuses := []*controlplane.NetworkPolicyStatus{
-		newNetworkPolicyStatus("anp1", "node1", 1),
-		newNetworkPolicyStatus("anp1", "node2", 1),
+		newNetworkPolicyStatus("anp1", "node1", 1, ""),
+		newNetworkPolicyStatus("anp1", "node2", 1, ""),
 	}
 	for _, status := range statuses {
 		statusController.UpdateStatus(status)
@@ -348,7 +398,7 @@ func BenchmarkSyncHandler(b *testing.B) {
 
 	networkPolicyStore.Create(networkPolicy)
 	for _, node := range nodes {
-		statusController.UpdateStatus(newNetworkPolicyStatus("anp1", node, 1))
+		statusController.UpdateStatus(newNetworkPolicyStatus("anp1", node, 1, ""))
 	}
 
 	b.ReportAllocs()

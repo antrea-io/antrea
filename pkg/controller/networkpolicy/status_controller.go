@@ -16,6 +16,9 @@ package networkpolicy
 
 import (
 	"context"
+	"fmt"
+	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -42,6 +45,13 @@ import (
 
 const (
 	statusControllerName = "NetworkPolicyStatusController"
+)
+
+var (
+	// maxConditionMessageLength defines the max length of the message field in one Condition. If the actual message
+	// length is over size, truncate the string and use "..." in the end.
+	// Use a variable for test.
+	maxConditionMessageLength = 100
 )
 
 // StatusController is responsible for synchronizing the status of Antrea ClusterNetworkPolicy and Antrea NetworkPolicy.
@@ -268,13 +278,13 @@ func (c *StatusController) syncHandler(key string) error {
 	}
 	internalNP := internalNPObj.(*antreatypes.NetworkPolicy)
 
-	updateStatus := func(phase crdv1alpha1.NetworkPolicyPhase, currentNodes, desiredNodes int) error {
+	updateStatus := func(phase crdv1alpha1.NetworkPolicyPhase, currentNodes, desiredNodes int, conditions []crdv1alpha1.NetworkPolicyCondition) error {
 		status := &crdv1alpha1.NetworkPolicyStatus{
 			Phase:                phase,
 			ObservedGeneration:   internalNP.Generation,
 			CurrentNodesRealized: int32(currentNodes),
 			DesiredNodesRealized: int32(desiredNodes),
-			Conditions:           GenerateNetworkPolicyCondition(internalNP.SyncError),
+			Conditions:           conditions,
 		}
 		klog.V(2).Infof("Updating NetworkPolicy %s status: %v", internalNP.SourceRef.ToString(), status)
 		if internalNP.SourceRef.Type == controlplane.AntreaNetworkPolicy {
@@ -283,21 +293,23 @@ func (c *StatusController) syncHandler(key string) error {
 		return c.npControlInterface.UpdateAntreaClusterNetworkPolicyStatus(internalNP.SourceRef.Name, status)
 	}
 
+	conditions := GenerateNetworkPolicyCondition(internalNP.SyncError)
 	// It means the NetworkPolicy has been processed, and marked as unrealizable. It will enter unrealizable phase
 	// instead of being further realized. Antrea-agents will not process further.
 	if internalNP.SyncError != nil {
-		return updateStatus(crdv1alpha1.NetworkPolicyPending, 0, 0)
+		return updateStatus(crdv1alpha1.NetworkPolicyPending, 0, 0, conditions)
 	}
 
 	// It means the NetworkPolicy hasn't been processed once. Set it to Pending to differentiate from NetworkPolicies
 	// that spans 0 Node.
 	if internalNP.SpanMeta.NodeNames == nil {
-		return updateStatus(crdv1alpha1.NetworkPolicyPending, 0, 0)
+		return updateStatus(crdv1alpha1.NetworkPolicyPending, 0, 0, conditions)
 	}
 
 	desiredNodes := len(internalNP.SpanMeta.NodeNames)
 	currentNodes := 0
 	statuses := c.getNodeStatuses(key)
+	failedNodes := make([]string, 0)
 	for _, status := range statuses {
 		// The node is no longer in the span of this policy, delete its status.
 		if !internalNP.NodeNames.Has(status.NodeName) {
@@ -305,8 +317,26 @@ func (c *StatusController) syncHandler(key string) error {
 			continue
 		}
 		if status.Generation == internalNP.Generation {
-			currentNodes += 1
+			if !status.RealizationFailure {
+				currentNodes += 1
+			} else {
+				failedNodes = append(failedNodes, fmt.Sprintf(`"%s":"%s"`, status.NodeName, status.Message))
+			}
 		}
+	}
+	if len(failedNodes) > 0 {
+		sort.Strings(failedNodes)
+		failureMessage := fmt.Sprintf("Failed Nodes count %d: %s", len(failedNodes), strings.Join(failedNodes, ", "))
+		if len(failureMessage) > maxConditionMessageLength {
+			failureMessage = fmt.Sprintf("%s...", failureMessage[:maxConditionMessageLength])
+		}
+		conditions = append(conditions, crdv1alpha1.NetworkPolicyCondition{
+			Type:               crdv1alpha1.NetworkPolicyConditionRealizationFailure,
+			Status:             v1.ConditionTrue,
+			LastTransitionTime: v1.Now(),
+			Reason:             "NetworkPolicyRealizationFailedOnNode",
+			Message:            failureMessage,
+		})
 	}
 
 	phase := crdv1alpha1.NetworkPolicyRealizing
@@ -314,7 +344,7 @@ func (c *StatusController) syncHandler(key string) error {
 		phase = crdv1alpha1.NetworkPolicyRealized
 	}
 
-	return updateStatus(phase, currentNodes, desiredNodes)
+	return updateStatus(phase, currentNodes, desiredNodes, conditions)
 }
 
 // networkPolicyControlInterface is an interface that knows how to update Antrea NetworkPolicy status.
