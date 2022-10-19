@@ -32,6 +32,13 @@ import (
 	"antrea.io/antrea/pkg/util/k8s"
 )
 
+var (
+	tableColumnDefinitions = []metav1.TableColumnDefinition{
+		{Name: "Group", Type: "string", Format: "name", Description: "IP of multicast group."},
+		{Name: "Pods", Type: "string", Description: "List of Pods the has joined the multicast group."},
+	}
+)
+
 type REST struct {
 	statsProvider statsProvider
 }
@@ -90,10 +97,7 @@ func (r *REST) Get(ctx context.Context, name string, options *metav1.GetOptions)
 
 func (r *REST) ConvertToTable(ctx context.Context, obj runtime.Object, tableOptions runtime.Object) (*metav1.Table, error) {
 	table := &metav1.Table{
-		ColumnDefinitions: []metav1.TableColumnDefinition{
-			{Name: "Group", Type: "string", Format: "name", Description: "IP of multicast group."},
-			{Name: "Pods", Type: "string", Description: "List of Pods the has joined the multicast group."},
-		},
+		ColumnDefinitions: tableColumnDefinitions,
 	}
 	if m, err := meta.ListAccessor(obj); err == nil {
 		table.ResourceVersion = m.GetResourceVersion()

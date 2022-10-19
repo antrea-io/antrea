@@ -114,6 +114,12 @@ func getTestIPMembers() map[string][]controlplane.IPBlock {
 	}
 }
 
+func TestREST(t *testing.T) {
+	r := NewREST(nil)
+	assert.Equal(t, &controlplane.ClusterGroupMembers{}, r.New())
+	assert.False(t, r.NamespaceScoped())
+}
+
 func TestRESTGetBasic(t *testing.T) {
 	tests := []struct {
 		name        string
