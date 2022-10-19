@@ -135,7 +135,7 @@ func TestRESTList(t *testing.T) {
 			}
 			actualObj, err := r.List(context.TODO(), &internalversion.ListOptions{})
 			require.NoError(t, err)
-			assert.Equal(t, tt.expectedObj, actualObj)
+			assert.ElementsMatch(t, tt.expectedObj.(*statsv1alpha1.MulticastGroupList).Items, actualObj.(*statsv1alpha1.MulticastGroupList).Items)
 		})
 	}
 }
