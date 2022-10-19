@@ -560,15 +560,13 @@ In future releases, some additional tooling may become available to automate the
 creation of ResourceExports for ACNPs, and provide a user-friendly way to define
 Multi-cluster NetworkPolicies to be enforced in the ClusterSet.
 
-## Multicluster Pod to Pod Connectivity
+## Multicluster Pod-to-Pod Connectivity
 Since Antrea v1.9.0, Multi-cluster supports routing Pod traffic across clusters
-through the Multi-cluster Gateways. Pod IPs can be reached in all member
-clusters within a ClusterSet. To enable this feature, the cluster's Pod CIDRs
-must be set in ConfigMap `antrea-mc-controller-config-**` of each member cluster
-like the example below. Note, **Pod CIDRs must not overlap among clusters to enable
-cross-cluster Pod-to-Pod connectivity.**
-
-Notice: **Pod CIDRs must not overlap among clusters.**
+through Multi-cluster Gateways. Pod IPs can be reached in all member clusters
+within a ClusterSet. To enable this feature, the cluster's Pod CIDRs must be set in
+ConfigMap `antrea-mc-controller-config-**` of each member cluster like the example
+below. Note, **Pod CIDRs must not overlap among clusters to enable cross-cluster
+Pod-to-Pod connectivity**.
 
 ```yaml
 apiVersion: v1
@@ -587,28 +585,27 @@ metadata:
   namespace: kube-system
 ```
 
-You can edit [antrea-multicluster-member.yml](../../multicluster/build/yamls/antrea-multicluster-member.yml)
-or using `kubectl edit` to change the ConfigMap.
+You can edit [antrea-multicluster-member.yml](../../multicluster/build/yamls/antrea-multicluster-member.yml),
+or using `kubectl edit` to change the ConfigMap:
 
 ```bash
-kubectl edit configmap -n kube-system antrea-mc-controller-config
+kubectl edit configmap -n kube-system antrea-mc-controller-config**
 ```
 
 Normally, `podCIDRs` should be the value of `kube-controller-manager`'s
-`cluster-cidr` option, or the `kubeadmin` `pod-network-cidr` option when
-the cluster is created with `kubeadm`. If it's left empty, the Pod-to-Pod
-connectivity feature will not be enabled. If you use `kubectl edit` to
-edit the ConfigMap, then you need to restart the Pod `antrea-mc-controller`
-to load the latest configuration.
+`cluster-cidr` option. If it's left empty, the Pod-to-Pod connectivity feature
+will not be enabled. If you use `kubectl edit` to edit the ConfigMap, then you
+need to restart the Pod `antrea-mc-controller` to load the latest configuration.
 
 ## Build Antrea Multi-cluster Image
 
 If you'd like to build Antrea Multi-cluster Docker image locally, you can follow
 the following steps:
 
-1. Go to your local `antrea` source tree, run `make antrea-mc-controller`, and you will get a new image
-   named `antrea/antrea-mc-controller:latest` locally.
-2. Run `docker save antrea/antrea-mc-controller:latest > antrea-mcs.tar` to save the image.
+1. Go to your local `antrea` source tree, run `make antrea-mc-controller`, and you
+will get a new image named `antrea/antrea-mc-controller:latest` locally.
+2. Run `docker save antrea/antrea-mc-controller:latest > antrea-mcs.tar` to save
+the image.
 3. Copy the image file `antrea-mcs.tar` to the Nodes of your local cluster.
 4. Run `docker load < antrea-mcs.tar` in each Node of your local cluster.
 
