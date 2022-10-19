@@ -64,7 +64,7 @@ func (r *REST) Get(ctx context.Context, name string, options *metav1.GetOptions)
 	info := r.getControllerInfo()
 	// The provided name should match the AntreaControllerInfo.Name.
 	if info.Name != name {
-		return nil, errors.NewNotFound(system.Resource("clusterinfos"), name)
+		return nil, errors.NewNotFound(system.Resource("controllerinfos"), name)
 	}
 	return info, nil
 }
@@ -91,5 +91,5 @@ func (r *REST) NamespaceScoped() bool {
 }
 
 func (r *REST) ConvertToTable(ctx context.Context, obj runtime.Object, tableOptions runtime.Object) (*metav1.Table, error) {
-	return rest.NewDefaultTableConvertor(system.Resource("clusterinfos")).ConvertToTable(ctx, obj, tableOptions)
+	return rest.NewDefaultTableConvertor(system.Resource("controllerinfos")).ConvertToTable(ctx, obj, tableOptions)
 }
