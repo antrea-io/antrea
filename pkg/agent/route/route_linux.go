@@ -36,6 +36,7 @@ import (
 	"antrea.io/antrea/pkg/agent/util"
 	"antrea.io/antrea/pkg/agent/util/ipset"
 	"antrea.io/antrea/pkg/agent/util/iptables"
+	utilnetlink "antrea.io/antrea/pkg/agent/util/netlink"
 	"antrea.io/antrea/pkg/agent/util/sysctl"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
@@ -94,7 +95,9 @@ type Client struct {
 	nodeConfig    *config.NodeConfig
 	networkConfig *config.NetworkConfig
 	noSNAT        bool
-	ipt           *iptables.Client
+	ipt           iptables.Interface
+	ipset         ipset.Interface
+	netlink       utilnetlink.Interface
 	// nodeRoutes caches ip routes to remote Pods. It's a map of podCIDR to routes.
 	nodeRoutes sync.Map
 	// nodeNeighbors caches IPv6 Neighbors to remote host gateway
@@ -106,6 +109,7 @@ type Client struct {
 	proxyAll              bool
 	connectUplinkToBridge bool
 	multicastEnabled      bool
+	isCloudEKS            bool
 	// serviceRoutes caches ip routes about Services.
 	serviceRoutes sync.Map
 	// serviceNeighbors caches neighbors.
@@ -132,6 +136,9 @@ func NewClient(networkConfig *config.NetworkConfig, noSNAT, proxyAll, connectUpl
 		proxyAll:              proxyAll,
 		multicastEnabled:      multicastEnabled,
 		connectUplinkToBridge: connectUplinkToBridge,
+		ipset:                 ipset.NewClient(),
+		netlink:               utilnetlink.NewClient(),
+		isCloudEKS:            env.IsCloudEKS(),
 	}, nil
 }
 
@@ -141,14 +148,20 @@ func (c *Client) Initialize(nodeConfig *config.NodeConfig, done func()) error {
 	c.nodeConfig = nodeConfig
 	c.iptablesInitialized = make(chan struct{})
 
+	var err error
 	// Sets up the ipset that will be used in iptables.
-	if err := c.syncIPSet(); err != nil {
+	if err = c.syncIPSet(); err != nil {
 		return fmt.Errorf("failed to initialize ipset: %v", err)
 	}
 
+	c.ipt, err = iptables.New(c.networkConfig.IPv4Enabled, c.networkConfig.IPv6Enabled)
+	if err != nil {
+		return fmt.Errorf("error creating IPTables instance: %v", err)
+	}
 	// Sets up the iptables infrastructure required to route packets in host network.
 	// It's called in a goroutine because xtables lock may not be acquired immediately.
 	go func() {
+		klog.Info("Initializing iptables")
 		defer done()
 		defer close(c.iptablesInitialized)
 		var backoffTime = 2 * time.Second
@@ -216,7 +229,7 @@ func (c *Client) syncIPInfra() {
 }
 
 func (c *Client) syncRoutes() error {
-	routeList, err := netlink.RouteList(nil, netlink.FAMILY_ALL)
+	routeList, err := c.netlink.RouteList(nil, netlink.FAMILY_ALL)
 	if err != nil {
 		return err
 	}
@@ -233,7 +246,7 @@ func (c *Client) syncRoutes() error {
 		if ok && routeEqual(route, r) {
 			return true
 		}
-		if err := netlink.RouteReplace(route); err != nil {
+		if err := c.netlink.RouteReplace(route); err != nil {
 			klog.Errorf("Failed to add route to the gateway: %v", err)
 			return false
 		}
@@ -296,10 +309,10 @@ func (c *Client) syncIPSet() error {
 	if c.networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {
 		return nil
 	}
-	if err := ipset.CreateIPSet(antreaPodIPSet, ipset.HashNet, false); err != nil {
+	if err := c.ipset.CreateIPSet(antreaPodIPSet, ipset.HashNet, false); err != nil {
 		return err
 	}
-	if err := ipset.CreateIPSet(antreaPodIP6Set, ipset.HashNet, true); err != nil {
+	if err := c.ipset.CreateIPSet(antreaPodIP6Set, ipset.HashNet, true); err != nil {
 		return err
 	}
 
@@ -307,7 +320,7 @@ func (c *Client) syncIPSet() error {
 	for _, podCIDR := range []*net.IPNet{c.nodeConfig.PodIPv4CIDR, c.nodeConfig.PodIPv6CIDR} {
 		if podCIDR != nil {
 			ipsetName := getIPSetName(podCIDR.IP)
-			if err := ipset.AddEntry(ipsetName, podCIDR.String()); err != nil {
+			if err := c.ipset.AddEntry(ipsetName, podCIDR.String()); err != nil {
 				return err
 			}
 		}
@@ -315,23 +328,23 @@ func (c *Client) syncIPSet() error {
 
 	// If proxy full is enabled, create NodePort ipset.
 	if c.proxyAll {
-		if err := ipset.CreateIPSet(antreaNodePortIPSet, ipset.HashIPPort, false); err != nil {
+		if err := c.ipset.CreateIPSet(antreaNodePortIPSet, ipset.HashIPPort, false); err != nil {
 			return err
 		}
-		if err := ipset.CreateIPSet(antreaNodePortIP6Set, ipset.HashIPPort, true); err != nil {
+		if err := c.ipset.CreateIPSet(antreaNodePortIP6Set, ipset.HashIPPort, true); err != nil {
 			return err
 		}
 
 		c.nodePortsIPv4.Range(func(k, _ interface{}) bool {
 			ipSetEntry := k.(string)
-			if err := ipset.AddEntry(antreaNodePortIPSet, ipSetEntry); err != nil {
+			if err := c.ipset.AddEntry(antreaNodePortIPSet, ipSetEntry); err != nil {
 				return false
 			}
 			return true
 		})
 		c.nodePortsIPv6.Range(func(k, _ interface{}) bool {
 			ipSetEntry := k.(string)
-			if err := ipset.AddEntry(antreaNodePortIP6Set, ipSetEntry); err != nil {
+			if err := c.ipset.AddEntry(antreaNodePortIP6Set, ipSetEntry); err != nil {
 				return false
 			}
 			return true
@@ -339,31 +352,31 @@ func (c *Client) syncIPSet() error {
 	}
 
 	if c.connectUplinkToBridge {
-		if err := ipset.CreateIPSet(localAntreaFlexibleIPAMPodIPSet, ipset.HashIP, false); err != nil {
+		if err := c.ipset.CreateIPSet(localAntreaFlexibleIPAMPodIPSet, ipset.HashIP, false); err != nil {
 			return err
 		}
-		if err := ipset.CreateIPSet(localAntreaFlexibleIPAMPodIP6Set, ipset.HashIP, true); err != nil {
+		if err := c.ipset.CreateIPSet(localAntreaFlexibleIPAMPodIP6Set, ipset.HashIP, true); err != nil {
 			return err
 		}
 	}
 
 	if c.multicastEnabled && c.networkConfig.TrafficEncapMode.SupportsEncap() {
-		if err := ipset.CreateIPSet(clusterNodeIPSet, ipset.HashIP, false); err != nil {
+		if err := c.ipset.CreateIPSet(clusterNodeIPSet, ipset.HashIP, false); err != nil {
 			return err
 		}
-		if err := ipset.CreateIPSet(clusterNodeIP6Set, ipset.HashIP, true); err != nil {
+		if err := c.ipset.CreateIPSet(clusterNodeIP6Set, ipset.HashIP, true); err != nil {
 			return err
 		}
 		c.clusterNodeIPs.Range(func(_, v interface{}) bool {
 			ipsetEntry := v.(string)
-			if err := ipset.AddEntry(clusterNodeIPSet, ipsetEntry); err != nil {
+			if err := c.ipset.AddEntry(clusterNodeIPSet, ipsetEntry); err != nil {
 				return false
 			}
 			return true
 		})
 		c.clusterNodeIP6s.Range(func(_, v interface{}) bool {
 			ipSetEntry := v.(string)
-			if err := ipset.AddEntry(clusterNodeIP6Set, ipSetEntry); err != nil {
+			if err := c.ipset.AddEntry(clusterNodeIP6Set, ipSetEntry); err != nil {
 				return false
 			}
 			return true
@@ -459,12 +472,6 @@ func (c *Client) writeEKSNATRules(iptablesData *bytes.Buffer) {
 // syncIPTables ensure that the iptables infrastructure we use is set up.
 // It's idempotent and can safely be called on every startup.
 func (c *Client) syncIPTables() error {
-	var err error
-
-	c.ipt, err = iptables.New(c.networkConfig.IPv4Enabled, c.networkConfig.IPv6Enabled)
-	if err != nil {
-		return fmt.Errorf("error creating IPTables instance: %v", err)
-	}
 	// Create the antrea managed chains and link them to built-in chains.
 	// We cannot use iptables-restore for these jump rules because there
 	// are non antrea managed rules in built-in chains.
@@ -482,7 +489,7 @@ func (c *Client) syncIPTables() error {
 		{iptables.MangleTable, iptables.PreRoutingChain, antreaMangleChain, "Antrea: jump to Antrea mangle rules"}, // TODO: unify the chain naming style
 		{iptables.MangleTable, iptables.OutputChain, antreaOutputChain, "Antrea: jump to Antrea output rules"},
 	}
-	if c.proxyAll || env.IsCloudEKS() {
+	if c.proxyAll || c.isCloudEKS {
 		jumpRules = append(jumpRules, jumpRule{iptables.NATTable, iptables.PreRoutingChain, antreaPreRoutingChain, "Antrea: jump to Antrea prerouting rules"})
 	}
 	if c.proxyAll {
@@ -524,7 +531,7 @@ func (c *Client) syncIPTables() error {
 			false)
 
 		// Setting --noflush to keep the previous contents (i.e. non antrea managed chains) of the tables.
-		if err := c.ipt.Restore(iptablesData.Bytes(), false, false); err != nil {
+		if err := c.ipt.Restore(iptablesData.String(), false, false); err != nil {
 			return err
 		}
 	}
@@ -541,7 +548,7 @@ func (c *Client) syncIPTables() error {
 			snatMarkToIPv6,
 			true)
 		// Setting --noflush to keep the previous contents (i.e. non antrea managed chains) of the tables.
-		if err := c.ipt.Restore(iptablesData.Bytes(), false, true); err != nil {
+		if err := c.ipt.Restore(iptablesData.String(), false, true); err != nil {
 			return err
 		}
 	}
@@ -617,7 +624,7 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet,
 	// When Antrea is used to enforce NetworkPolicies in EKS, additional iptables
 	// mangle rules are required. See https://github.com/antrea-io/antrea/issues/678.
 	// These rules are only needed for IPv4.
-	if env.IsCloudEKS() && !isIPv6 {
+	if c.isCloudEKS && !isIPv6 {
 		c.writeEKSMangleRules(iptablesData)
 	}
 
@@ -677,7 +684,7 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet,
 	writeLine(iptablesData, "COMMIT")
 
 	writeLine(iptablesData, "*nat")
-	if c.proxyAll || env.IsCloudEKS() {
+	if c.proxyAll || c.isCloudEKS {
 		writeLine(iptablesData, iptables.MakeChainLine(antreaPreRoutingChain))
 	}
 	if c.proxyAll {
@@ -784,7 +791,7 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet,
 	// When Antrea is used to enforce NetworkPolicies in EKS, additional iptables
 	// nat rules are required. See https://github.com/antrea-io/antrea/issues/3946.
 	// These rules are only needed for IPv4.
-	if env.IsCloudEKS() && !isIPv6 {
+	if c.isCloudEKS && !isIPv6 {
 		c.writeEKSNATRules(iptablesData)
 	}
 
@@ -794,16 +801,19 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet,
 
 func (c *Client) initIPRoutes() error {
 	if c.networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {
-		gwLink := util.GetNetLink(c.nodeConfig.GatewayConfig.Name)
+		gwLink, err := c.netlink.LinkByName(c.nodeConfig.GatewayConfig.Name)
+		if err != nil {
+			return fmt.Errorf("error getting link %s: %v", c.nodeConfig.GatewayConfig.Name, err)
+		}
 		if c.nodeConfig.NodeTransportIPv4Addr != nil {
 			_, gwIP, _ := net.ParseCIDR(fmt.Sprintf("%s/32", c.nodeConfig.NodeTransportIPv4Addr.IP.String()))
-			if err := netlink.AddrReplace(gwLink, &netlink.Addr{IPNet: gwIP}); err != nil {
+			if err := c.netlink.AddrReplace(gwLink, &netlink.Addr{IPNet: gwIP}); err != nil {
 				return fmt.Errorf("failed to add address %s to gw %s: %v", gwIP, gwLink.Attrs().Name, err)
 			}
 		}
 		if c.nodeConfig.NodeTransportIPv6Addr != nil {
 			_, gwIP, _ := net.ParseCIDR(fmt.Sprintf("%s/128", c.nodeConfig.NodeTransportIPv6Addr.IP.String()))
-			if err := netlink.AddrReplace(gwLink, &netlink.Addr{IPNet: gwIP}); err != nil {
+			if err := c.netlink.AddrReplace(gwLink, &netlink.Addr{IPNet: gwIP}); err != nil {
 				return fmt.Errorf("failed to add address %s to gw %s: %v", gwIP, gwLink.Attrs().Name, err)
 			}
 		}
@@ -840,7 +850,7 @@ func (c *Client) Reconcile(podCIDRs []string, svcIPs map[string]bool) error {
 
 	// Remove orphaned podCIDRs from ipset.
 	for _, ipsetName := range []string{antreaPodIPSet, antreaPodIP6Set} {
-		entries, err := ipset.ListEntries(ipsetName)
+		entries, err := c.ipset.ListEntries(ipsetName)
 		if err != nil {
 			return err
 		}
@@ -849,7 +859,7 @@ func (c *Client) Reconcile(podCIDRs []string, svcIPs map[string]bool) error {
 				continue
 			}
 			klog.Infof("Deleting orphaned Pod IP %s from ipset and route table", entry)
-			if err := ipset.DelEntry(ipsetName, entry); err != nil {
+			if err := c.ipset.DelEntry(ipsetName, entry); err != nil {
 				return err
 			}
 			_, cidr, err := net.ParseCIDR(entry)
@@ -857,12 +867,11 @@ func (c *Client) Reconcile(podCIDRs []string, svcIPs map[string]bool) error {
 				return err
 			}
 			route := &netlink.Route{Dst: cidr}
-			if err := netlink.RouteDel(route); err != nil && err != unix.ESRCH {
+			if err := c.netlink.RouteDel(route); err != nil && err != unix.ESRCH {
 				return err
 			}
 		}
 	}
-
 	// Remove any unknown routes on Antrea gateway.
 	routes, err := c.listIPRoutesOnGW()
 	if err != nil {
@@ -887,7 +896,7 @@ func (c *Client) Reconcile(podCIDRs []string, svcIPs map[string]bool) error {
 		}
 
 		klog.Infof("Deleting unknown route %v", route)
-		if err := netlink.RouteDel(&route); err != nil && err != unix.ESRCH {
+		if err := c.netlink.RouteDel(&route); err != nil && err != unix.ESRCH {
 			return err
 		}
 	}
@@ -911,7 +920,7 @@ func (c *Client) Reconcile(podCIDRs []string, svcIPs map[string]bool) error {
 			continue
 		}
 		klog.V(4).Infof("Deleting orphaned IPv6 neighbor %v", actualNeigh)
-		if err := netlink.NeighDel(actualNeigh); err != nil {
+		if err := c.netlink.NeighDel(actualNeigh); err != nil {
 			return err
 		}
 	}
@@ -931,11 +940,11 @@ func (c *Client) isServiceRoute(route *netlink.Route) bool {
 func (c *Client) listIPRoutesOnGW() ([]netlink.Route, error) {
 	filter := &netlink.Route{
 		LinkIndex: c.nodeConfig.GatewayConfig.LinkIndex}
-	routes, err := netlink.RouteListFiltered(netlink.FAMILY_V4, filter, netlink.RT_FILTER_OIF)
+	routes, err := c.netlink.RouteListFiltered(netlink.FAMILY_V4, filter, netlink.RT_FILTER_OIF)
 	if err != nil {
 		return nil, err
 	}
-	ipv6Routes, err := netlink.RouteListFiltered(netlink.FAMILY_V6, filter, netlink.RT_FILTER_OIF)
+	ipv6Routes, err := c.netlink.RouteListFiltered(netlink.FAMILY_V6, filter, netlink.RT_FILTER_OIF)
 	if err != nil {
 		return nil, err
 	}
@@ -958,7 +967,7 @@ func getIPv6Gateways(podCIDRs []string) sets.String {
 }
 
 func (c *Client) listIPv6NeighborsOnGateway() (map[string]*netlink.Neigh, error) {
-	neighs, err := netlink.NeighList(c.nodeConfig.GatewayConfig.LinkIndex, netlink.FAMILY_V6)
+	neighs, err := c.netlink.NeighList(c.nodeConfig.GatewayConfig.LinkIndex, netlink.FAMILY_V6)
 	if err != nil {
 		return nil, err
 	}
@@ -984,7 +993,7 @@ func (c *Client) AddRoutes(podCIDR *net.IPNet, nodeName string, nodeIP, nodeGwIP
 	podCIDRStr := podCIDR.String()
 	ipsetName := getIPSetName(podCIDR.IP)
 	// Add this podCIDR to antreaPodIPSet so that packets to them won't be masqueraded when they leave the host.
-	if err := ipset.AddEntry(ipsetName, podCIDRStr); err != nil {
+	if err := c.ipset.AddEntry(ipsetName, podCIDRStr); err != nil {
 		return err
 	}
 	// Install routes to this Node.
@@ -1030,7 +1039,7 @@ func (c *Client) AddRoutes(podCIDR *net.IPNet, nodeName string, nodeIP, nodeGwIP
 		klog.InfoS("Skip adding routes to peer", "node", nodeName, "ip", nodeIP, "podCIDR", podCIDR)
 	}
 	for _, route := range routes {
-		if err := netlink.RouteReplace(route); err != nil {
+		if err := c.netlink.RouteReplace(route); err != nil {
 			return fmt.Errorf("failed to install route to peer %s (%s) with netlink. Route config: %s. Error: %v", nodeName, nodeIP, route.String(), err)
 		}
 	}
@@ -1039,7 +1048,7 @@ func (c *Client) AddRoutes(podCIDR *net.IPNet, nodeName string, nodeIP, nodeGwIP
 		routeToNodeGwIPNetv6 := &netlink.Route{
 			Dst: &net.IPNet{IP: nodeGwIP, Mask: net.CIDRMask(128, 128)},
 		}
-		if err := netlink.RouteDel(routeToNodeGwIPNetv6); err == nil {
+		if err := c.netlink.RouteDel(routeToNodeGwIPNetv6); err == nil {
 			klog.InfoS("Deleted route to peer gateway", "node", nodeName, "nodeIP", nodeIP, "nodeGatewayIP", nodeGwIP)
 		} else if err != unix.ESRCH {
 			return fmt.Errorf("failed to delete route to peer gateway on Node %s (%s) with netlink. Route config: %s. Error: %v",
@@ -1050,7 +1059,7 @@ func (c *Client) AddRoutes(podCIDR *net.IPNet, nodeName string, nodeIP, nodeGwIP
 			Family:    netlink.FAMILY_V6,
 			IP:        nodeGwIP,
 		}
-		if err := netlink.NeighDel(neigh); err == nil {
+		if err := c.netlink.NeighDel(neigh); err == nil {
 			klog.InfoS("Deleted neigh to peer gateway", "node", nodeName, "nodeIP", nodeIP, "nodeGatewayIP", nodeGwIP)
 			c.nodeNeighbors.Delete(podCIDRStr)
 		} else if err != unix.ENOENT {
@@ -1066,7 +1075,7 @@ func (c *Client) AddRoutes(podCIDR *net.IPNet, nodeName string, nodeIP, nodeGwIP
 			IP:           nodeGwIP,
 			HardwareAddr: globalVMAC,
 		}
-		if err := netlink.NeighSet(neigh); err != nil {
+		if err := c.netlink.NeighSet(neigh); err != nil {
 			return fmt.Errorf("failed to add neigh %v to gw %s: %v", neigh, c.nodeConfig.GatewayConfig.Name, err)
 		}
 		c.nodeNeighbors.Store(podCIDRStr, neigh)
@@ -1085,7 +1094,7 @@ func (c *Client) DeleteRoutes(podCIDR *net.IPNet) error {
 	podCIDRStr := podCIDR.String()
 	ipsetName := getIPSetName(podCIDR.IP)
 	// Delete this podCIDR from antreaPodIPSet as the CIDR is no longer for Pods.
-	if err := ipset.DelEntry(ipsetName, podCIDRStr); err != nil {
+	if err := c.ipset.DelEntry(ipsetName, podCIDRStr); err != nil {
 		return err
 	}
 
@@ -1094,7 +1103,7 @@ func (c *Client) DeleteRoutes(podCIDR *net.IPNet) error {
 		c.nodeRoutes.Delete(podCIDRStr)
 		for _, r := range routes.([]*netlink.Route) {
 			klog.V(4).Infof("Deleting route %v", r)
-			if err := netlink.RouteDel(r); err != nil && err != unix.ESRCH {
+			if err := c.netlink.RouteDel(r); err != nil && err != unix.ESRCH {
 				c.nodeRoutes.Store(podCIDRStr, routes)
 				return err
 			}
@@ -1106,7 +1115,7 @@ func (c *Client) DeleteRoutes(podCIDR *net.IPNet) error {
 	if podCIDR.IP.To4() == nil {
 		neigh, exists := c.nodeNeighbors.Load(podCIDRStr)
 		if exists {
-			if err := netlink.NeighDel(neigh.(*netlink.Neigh)); err != nil {
+			if err := c.netlink.NeighDel(neigh.(*netlink.Neigh)); err != nil {
 				return err
 			}
 			c.nodeNeighbors.Delete(podCIDRStr)
@@ -1135,28 +1144,31 @@ func writeLine(buf *bytes.Buffer, words ...string) {
 // MigrateRoutesToGw moves routes (including assigned IP addresses if any) from link linkName to
 // host gateway.
 func (c *Client) MigrateRoutesToGw(linkName string) error {
-	gwLink := util.GetNetLink(c.nodeConfig.GatewayConfig.Name)
-	link, err := netlink.LinkByName(linkName)
+	gwLink, err := c.netlink.LinkByName(c.nodeConfig.GatewayConfig.Name)
+	if err != nil {
+		return fmt.Errorf("failed to get link %s: %w", c.nodeConfig.GatewayConfig.Name, err)
+	}
+	link, err := c.netlink.LinkByName(linkName)
 	if err != nil {
 		return fmt.Errorf("failed to get link %s: %w", linkName, err)
 	}
 
 	for _, family := range []int{netlink.FAMILY_V4, netlink.FAMILY_V6} {
 		// Swap route first then address, otherwise route gets removed when address is removed.
-		routes, err := netlink.RouteList(link, family)
+		routes, err := c.netlink.RouteList(link, family)
 		if err != nil {
 			return fmt.Errorf("failed to get routes for link %s: %w", linkName, err)
 		}
 		for i := range routes {
 			route := routes[i]
 			route.LinkIndex = gwLink.Attrs().Index
-			if err = netlink.RouteReplace(&route); err != nil {
+			if err = c.netlink.RouteReplace(&route); err != nil {
 				return fmt.Errorf("failed to add route %v to link %s: %w", &route, gwLink.Attrs().Name, err)
 			}
 		}
 
 		// Swap address if any.
-		addrs, err := netlink.AddrList(link, family)
+		addrs, err := c.netlink.AddrList(link, family)
 		if err != nil {
 			return fmt.Errorf("failed to get addresses for %s: %w", linkName, err)
 		}
@@ -1165,11 +1177,11 @@ func (c *Client) MigrateRoutesToGw(linkName string) error {
 			if addr.IP.IsLinkLocalMulticast() || addr.IP.IsLinkLocalUnicast() {
 				continue
 			}
-			if err = netlink.AddrDel(link, &addr); err != nil {
+			if err = c.netlink.AddrDel(link, &addr); err != nil {
 				klog.Errorf("failed to delete addr %v from %s: %v", addr, link, err)
 			}
 			tmpAddr := &netlink.Addr{IPNet: addr.IPNet}
-			if err = netlink.AddrReplace(gwLink, tmpAddr); err != nil {
+			if err = c.netlink.AddrReplace(gwLink, tmpAddr); err != nil {
 				return fmt.Errorf("failed to add addr %v to gw %s: %w", addr, gwLink.Attrs().Name, err)
 			}
 		}
@@ -1179,16 +1191,18 @@ func (c *Client) MigrateRoutesToGw(linkName string) error {
 
 // UnMigrateRoutesFromGw moves route from gw to link linkName if provided; otherwise route is deleted
 func (c *Client) UnMigrateRoutesFromGw(route *net.IPNet, linkName string) error {
-	gwLink := util.GetNetLink(c.nodeConfig.GatewayConfig.Name)
+	gwLink, err := c.netlink.LinkByName(c.nodeConfig.GatewayConfig.Name)
+	if err != nil {
+		return fmt.Errorf("failed to get link %s: %w", c.nodeConfig.GatewayConfig.Name, err)
+	}
 	var link netlink.Link
-	var err error
 	if len(linkName) > 0 {
-		link, err = netlink.LinkByName(linkName)
+		link, err = c.netlink.LinkByName(linkName)
 		if err != nil {
 			return fmt.Errorf("failed to get link %s: %w", linkName, err)
 		}
 	}
-	routes, err := netlink.RouteList(gwLink, netlink.FAMILY_V4)
+	routes, err := c.netlink.RouteList(gwLink, netlink.FAMILY_V4)
 	if err != nil {
 		return fmt.Errorf("failed to get routes for link %s: %w", gwLink.Attrs().Name, err)
 	}
@@ -1197,9 +1211,9 @@ func (c *Client) UnMigrateRoutesFromGw(route *net.IPNet, linkName string) error 
 		if route.String() == rt.Dst.String() {
 			if link != nil {
 				rt.LinkIndex = link.Attrs().Index
-				return netlink.RouteReplace(&rt)
+				return c.netlink.RouteReplace(&rt)
 			}
-			return netlink.RouteDel(&rt)
+			return c.netlink.RouteDel(&rt)
 		}
 	}
 	return nil
@@ -1252,13 +1266,13 @@ func (c *Client) addVirtualServiceIPRoute(isIPv6 bool) error {
 	}
 
 	neigh := generateNeigh(svcIP, linkIndex)
-	if err := netlink.NeighSet(neigh); err != nil {
+	if err := c.netlink.NeighSet(neigh); err != nil {
 		return fmt.Errorf("failed to add new IP neighbour for %s: %w", svcIP, err)
 	}
 	c.serviceNeighbors.Store(svcIP.String(), neigh)
 
 	route := generateRoute(svcIP, mask, nil, linkIndex, netlink.SCOPE_LINK)
-	if err := netlink.RouteReplace(route); err != nil {
+	if err := c.netlink.RouteReplace(route); err != nil {
 		return fmt.Errorf("failed to install route for virtual Service IP %s: %w", svcIP.String(), err)
 	}
 	c.serviceRoutes.Store(svcIP.String(), route)
@@ -1276,7 +1290,7 @@ func (c *Client) AddNodePort(nodePortAddresses []net.IP, port uint16, protocol b
 
 	for i := range nodePortAddresses {
 		ipSetEntry := fmt.Sprintf("%s,%s:%d", nodePortAddresses[i], transProtocol, port)
-		if err := ipset.AddEntry(ipSetName, ipSetEntry); err != nil {
+		if err := c.ipset.AddEntry(ipSetName, ipSetEntry); err != nil {
 			return err
 		}
 		if isIPv6 {
@@ -1297,7 +1311,7 @@ func (c *Client) DeleteNodePort(nodePortAddresses []net.IP, port uint16, protoco
 
 	for i := range nodePortAddresses {
 		ipSetEntry := fmt.Sprintf("%s,%s:%d", nodePortAddresses[i], transProtocol, port)
-		if err := ipset.DelEntry(ipSetName, ipSetEntry); err != nil {
+		if err := c.ipset.DelEntry(ipSetName, ipSetEntry); err != nil {
 			return err
 		}
 		if isIPv6 {
@@ -1347,7 +1361,7 @@ func (c *Client) AddClusterIPRoute(svcIP net.IP) error {
 	// Generate a route with the new destination CIDR and install it.
 	newClusterIPCIDRMask, _ := newClusterIPCIDR.Mask.Size()
 	route := generateRoute(newClusterIPCIDR.IP, newClusterIPCIDRMask, gw, linkIndex, scope)
-	if err = netlink.RouteReplace(route); err != nil {
+	if err = c.netlink.RouteReplace(route); err != nil {
 		return fmt.Errorf("failed to install new ClusterIP route: %w", err)
 	}
 	// Store the new destination CIDR.
@@ -1382,7 +1396,7 @@ func (c *Client) AddClusterIPRoute(svcIP net.IP) error {
 
 	// Remove stale routes.
 	for _, rt := range staleRoutes {
-		if err = netlink.RouteDel(rt); err != nil {
+		if err = c.netlink.RouteDel(rt); err != nil {
 			return fmt.Errorf("failed to uninstall stale ClusterIP route %s: %w", rt.String(), err)
 		}
 		klog.V(4).InfoS("Uninstalled stale ClusterIP route successfully", "stale route", rt)
@@ -1402,7 +1416,7 @@ func (c *Client) addVirtualNodePortDNATIPRoute(isIPv6 bool) error {
 		mask = ipv6AddrLength
 	}
 	route := generateRoute(vIP, mask, gw, linkIndex, netlink.SCOPE_UNIVERSE)
-	if err := netlink.RouteReplace(route); err != nil {
+	if err := c.netlink.RouteReplace(route); err != nil {
 		return fmt.Errorf("failed to install routing entry for virtual NodePort DNAT IP %s: %w", vIP.String(), err)
 	}
 	klog.V(4).InfoS("Added virtual NodePort DNAT IP route", "route", route)
@@ -1428,7 +1442,7 @@ func (c *Client) addLoadBalancerIngressIPRoute(svcIPStr string) error {
 	}
 
 	route := generateRoute(svcIP, mask, gw, linkIndex, netlink.SCOPE_UNIVERSE)
-	if err := netlink.RouteReplace(route); err != nil {
+	if err := c.netlink.RouteReplace(route); err != nil {
 		return fmt.Errorf("failed to install routing entry for LoadBalancer ingress IP %s: %w", svcIP.String(), err)
 	}
 	klog.V(4).InfoS("Added LoadBalancer ingress IP route", "route", route)
@@ -1454,7 +1468,7 @@ func (c *Client) deleteLoadBalancerIngressIPRoute(svcIPStr string) error {
 	}
 
 	route := generateRoute(svcIP, mask, gw, linkIndex, netlink.SCOPE_UNIVERSE)
-	if err := netlink.RouteDel(route); err != nil {
+	if err := c.netlink.RouteDel(route); err != nil {
 		if err.Error() == "no such process" {
 			klog.InfoS("Failed to delete LoadBalancer ingress IP route since the route has been deleted", "route", route)
 		} else {
@@ -1509,7 +1523,7 @@ func (c *Client) AddLocalAntreaFlexibleIPAMPodRule(podAddresses []net.IP) error 
 		}
 		ipSetEntry := podAddresses[i].String()
 		ipSetName := getLocalAntreaFlexibleIPAMPodIPSetName(isIPv6)
-		if err := ipset.AddEntry(ipSetName, ipSetEntry); err != nil {
+		if err := c.ipset.AddEntry(ipSetName, ipSetEntry); err != nil {
 			return err
 		}
 	}
@@ -1525,7 +1539,7 @@ func (c *Client) DeleteLocalAntreaFlexibleIPAMPodRule(podAddresses []net.IP) err
 		isIPv6 := podAddresses[i].To4() == nil
 		ipSetEntry := podAddresses[i].String()
 		ipSetName := getLocalAntreaFlexibleIPAMPodIPSetName(isIPv6)
-		if err := ipset.DelEntry(ipSetName, ipSetEntry); err != nil {
+		if err := c.ipset.DelEntry(ipSetName, ipSetEntry); err != nil {
 			return err
 		}
 	}
@@ -1543,12 +1557,12 @@ func (c *Client) addNodeIP(podCIDR *net.IPNet, nodeIP net.IP) error {
 	}
 	ipSetEntry := nodeIP.String()
 	if nodeIP.To4() != nil {
-		if err := ipset.AddEntry(clusterNodeIPSet, ipSetEntry); err != nil {
+		if err := c.ipset.AddEntry(clusterNodeIPSet, ipSetEntry); err != nil {
 			return err
 		}
 		c.clusterNodeIPs.Store(podCIDR.String(), ipSetEntry)
 	} else {
-		if err := ipset.AddEntry(clusterNodeIP6Set, ipSetEntry); err != nil {
+		if err := c.ipset.AddEntry(clusterNodeIP6Set, ipSetEntry); err != nil {
 			return err
 		}
 		c.clusterNodeIP6s.Store(podCIDR.String(), ipSetEntry)
@@ -1570,7 +1584,7 @@ func (c *Client) deleteNodeIP(podCIDR *net.IPNet) error {
 			return nil
 		}
 		ipSetEntry := obj.(string)
-		if err := ipset.DelEntry(clusterNodeIPSet, ipSetEntry); err != nil {
+		if err := c.ipset.DelEntry(clusterNodeIPSet, ipSetEntry); err != nil {
 			return err
 		}
 		c.clusterNodeIPs.Delete(podCIDRStr)
@@ -1580,7 +1594,7 @@ func (c *Client) deleteNodeIP(podCIDR *net.IPNet) error {
 			return nil
 		}
 		ipSetEntry := obj.(string)
-		if err := ipset.DelEntry(clusterNodeIP6Set, ipSetEntry); err != nil {
+		if err := c.ipset.DelEntry(clusterNodeIP6Set, ipSetEntry); err != nil {
 			return err
 		}
 		c.clusterNodeIP6s.Delete(podCIDRStr)

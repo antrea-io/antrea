@@ -1,0 +1,1628 @@
+// Copyright 2022 Antrea Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package route
+
+import (
+	"fmt"
+	"net"
+	"sync"
+	"testing"
+
+	"github.com/golang/mock/gomock"
+	"github.com/stretchr/testify/assert"
+	"github.com/vishvananda/netlink"
+
+	"antrea.io/antrea/pkg/agent/config"
+	"antrea.io/antrea/pkg/agent/types"
+	"antrea.io/antrea/pkg/agent/util/ipset"
+	ipsettest "antrea.io/antrea/pkg/agent/util/ipset/testing"
+	"antrea.io/antrea/pkg/agent/util/iptables"
+	iptablestest "antrea.io/antrea/pkg/agent/util/iptables/testing"
+	netlinktest "antrea.io/antrea/pkg/agent/util/netlink/testing"
+	"antrea.io/antrea/pkg/ovs/openflow"
+	"antrea.io/antrea/pkg/ovs/ovsconfig"
+	"antrea.io/antrea/pkg/util/ip"
+)
+
+func TestSyncRoutes(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockNetlink := netlinktest.NewMockInterface(ctrl)
+
+	nodeRoute1 := &netlink.Route{Dst: ip.MustParseCIDR("192.168.1.0/24"), Gw: net.ParseIP("1.1.1.1")}
+	nodeRoute2 := &netlink.Route{Dst: ip.MustParseCIDR("192.168.2.0/24"), Gw: net.ParseIP("1.1.1.2")}
+	serviceRoute1 := &netlink.Route{Dst: ip.MustParseCIDR("169.254.0.253/32"), LinkIndex: 10}
+	serviceRoute2 := &netlink.Route{Dst: ip.MustParseCIDR("169.254.0.252/32"), Gw: net.ParseIP("169.254.0.253")}
+	mockNetlink.EXPECT().RouteList(nil, netlink.FAMILY_ALL).Return([]netlink.Route{*nodeRoute1, *serviceRoute1}, nil)
+	mockNetlink.EXPECT().RouteReplace(nodeRoute2)
+	mockNetlink.EXPECT().RouteReplace(serviceRoute2)
+	mockNetlink.EXPECT().RouteReplace(&netlink.Route{
+		LinkIndex: 10,
+		Dst:       ip.MustParseCIDR("192.168.0.0/24"),
+		Src:       net.ParseIP("192.168.0.1"),
+		Scope:     netlink.SCOPE_LINK,
+	})
+	mockNetlink.EXPECT().RouteReplace(&netlink.Route{
+		LinkIndex: 10,
+		Dst:       ip.MustParseCIDR("aabb:ccdd::/64"),
+		Src:       net.ParseIP("aabb:ccdd::1"),
+		Scope:     netlink.SCOPE_LINK,
+	})
+
+	c := &Client{
+		netlink:       mockNetlink,
+		proxyAll:      true,
+		nodeRoutes:    sync.Map{},
+		serviceRoutes: sync.Map{},
+		nodeConfig: &config.NodeConfig{
+			GatewayConfig: &config.GatewayConfig{LinkIndex: 10, IPv4: net.ParseIP("192.168.0.1"), IPv6: net.ParseIP("aabb:ccdd::1")},
+			PodIPv4CIDR:   ip.MustParseCIDR("192.168.0.0/24"),
+			PodIPv6CIDR:   ip.MustParseCIDR("aabb:ccdd::/64"),
+		},
+	}
+	c.nodeRoutes.Store("192.168.1.0/24", []*netlink.Route{nodeRoute1})
+	c.nodeRoutes.Store("192.168.2.0/24", []*netlink.Route{nodeRoute2})
+	c.serviceRoutes.Store("169.254.0.253/32", serviceRoute1)
+	c.serviceRoutes.Store("169.254.0.252/32", serviceRoute2)
+
+	assert.NoError(t, c.syncRoutes())
+}
+
+func TestSyncIPSet(t *testing.T) {
+	podCIDRStr := "172.16.10.0/24"
+	_, podCIDR, _ := net.ParseCIDR(podCIDRStr)
+	podCIDRv6Str := "2001:ab03:cd04:55ef::/64"
+	_, podCIDRv6, _ := net.ParseCIDR(podCIDRv6Str)
+	tests := []struct {
+		name                  string
+		proxyAll              bool
+		multicastEnabled      bool
+		connectUplinkToBridge bool
+		networkConfig         *config.NetworkConfig
+		nodeConfig            *config.NodeConfig
+		nodePortsIPv4         []string
+		nodePortsIPv6         []string
+		clusterNodeIPs        map[string]string
+		clusterNodeIP6s       map[string]string
+		expectedCalls         func(ipset *ipsettest.MockInterfaceMockRecorder)
+	}{
+		{
+			name: "networkPolicyOnly",
+			networkConfig: &config.NetworkConfig{
+				TrafficEncapMode: config.TrafficEncapModeNetworkPolicyOnly,
+			},
+			expectedCalls: func(mockIPSet *ipsettest.MockInterfaceMockRecorder) {},
+		},
+		{
+			name: "noencap",
+			networkConfig: &config.NetworkConfig{
+				TrafficEncapMode: config.TrafficEncapModeNoEncap,
+				IPv4Enabled:      true,
+				IPv6Enabled:      true,
+			},
+			nodeConfig: &config.NodeConfig{
+				PodIPv4CIDR: podCIDR,
+				PodIPv6CIDR: podCIDRv6,
+			},
+			expectedCalls: func(mockIPSet *ipsettest.MockInterfaceMockRecorder) {
+				mockIPSet.CreateIPSet(antreaPodIPSet, ipset.HashNet, false)
+				mockIPSet.CreateIPSet(antreaPodIP6Set, ipset.HashNet, true)
+				mockIPSet.AddEntry(antreaPodIPSet, podCIDRStr)
+				mockIPSet.AddEntry(antreaPodIP6Set, podCIDRv6Str)
+			},
+		},
+		{
+			name:             "encap, proxyAll=true, multicastEnabled=true",
+			proxyAll:         true,
+			multicastEnabled: true,
+			networkConfig: &config.NetworkConfig{
+				TrafficEncapMode: config.TrafficEncapModeEncap,
+				IPv4Enabled:      true,
+				IPv6Enabled:      true,
+			},
+			nodeConfig: &config.NodeConfig{
+				PodIPv4CIDR: podCIDR,
+				PodIPv6CIDR: podCIDRv6,
+			},
+			nodePortsIPv4:   []string{"192.168.0.2,tcp:10000", "127.0.0.1,tcp:10000"},
+			nodePortsIPv6:   []string{"fe80::e643:4bff:fe44:ee,tcp:10000", "::1,tcp:10000"},
+			clusterNodeIPs:  map[string]string{"172.16.3.0/24": "192.168.0.3", "172.16.4.0/24": "192.168.0.4"},
+			clusterNodeIP6s: map[string]string{"2001:ab03:cd04:5503::/64": "fe80::e643:4bff:fe03", "2001:ab03:cd04:5504::/64": "fe80::e643:4bff:fe04"},
+			expectedCalls: func(mockIPSet *ipsettest.MockInterfaceMockRecorder) {
+				mockIPSet.CreateIPSet(antreaPodIPSet, ipset.HashNet, false)
+				mockIPSet.CreateIPSet(antreaPodIP6Set, ipset.HashNet, true)
+				mockIPSet.AddEntry(antreaPodIPSet, podCIDRStr)
+				mockIPSet.AddEntry(antreaPodIP6Set, podCIDRv6Str)
+				mockIPSet.CreateIPSet(antreaNodePortIPSet, ipset.HashIPPort, false)
+				mockIPSet.CreateIPSet(antreaNodePortIP6Set, ipset.HashIPPort, true)
+				mockIPSet.AddEntry(antreaNodePortIPSet, "192.168.0.2,tcp:10000")
+				mockIPSet.AddEntry(antreaNodePortIPSet, "127.0.0.1,tcp:10000")
+				mockIPSet.AddEntry(antreaNodePortIP6Set, "fe80::e643:4bff:fe44:ee,tcp:10000")
+				mockIPSet.AddEntry(antreaNodePortIP6Set, "::1,tcp:10000")
+				mockIPSet.CreateIPSet(clusterNodeIPSet, ipset.HashIP, false)
+				mockIPSet.CreateIPSet(clusterNodeIP6Set, ipset.HashIP, true)
+				mockIPSet.AddEntry(clusterNodeIPSet, "192.168.0.3")
+				mockIPSet.AddEntry(clusterNodeIPSet, "192.168.0.4")
+				mockIPSet.AddEntry(clusterNodeIP6Set, "fe80::e643:4bff:fe03")
+				mockIPSet.AddEntry(clusterNodeIP6Set, "fe80::e643:4bff:fe04")
+			},
+		},
+		{
+			name:                  "noencap, connectUplinkToBridge=true",
+			connectUplinkToBridge: true,
+			networkConfig: &config.NetworkConfig{
+				TrafficEncapMode: config.TrafficEncapModeNoEncap,
+				IPv4Enabled:      true,
+				IPv6Enabled:      true,
+			},
+			nodeConfig: &config.NodeConfig{
+				PodIPv4CIDR: podCIDR,
+				PodIPv6CIDR: podCIDRv6,
+			},
+			expectedCalls: func(mockIPSet *ipsettest.MockInterfaceMockRecorder) {
+				mockIPSet.CreateIPSet(antreaPodIPSet, ipset.HashNet, false)
+				mockIPSet.CreateIPSet(antreaPodIP6Set, ipset.HashNet, true)
+				mockIPSet.AddEntry(antreaPodIPSet, podCIDRStr)
+				mockIPSet.AddEntry(antreaPodIP6Set, podCIDRv6Str)
+				mockIPSet.CreateIPSet(localAntreaFlexibleIPAMPodIPSet, ipset.HashIP, false)
+				mockIPSet.CreateIPSet(localAntreaFlexibleIPAMPodIP6Set, ipset.HashIP, true)
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			ipset := ipsettest.NewMockInterface(ctrl)
+			c := &Client{ipset: ipset,
+				networkConfig:         tt.networkConfig,
+				nodeConfig:            tt.nodeConfig,
+				proxyAll:              tt.proxyAll,
+				multicastEnabled:      tt.multicastEnabled,
+				connectUplinkToBridge: tt.connectUplinkToBridge,
+				nodePortsIPv4:         sync.Map{},
+				nodePortsIPv6:         sync.Map{},
+				clusterNodeIPs:        sync.Map{},
+				clusterNodeIP6s:       sync.Map{},
+			}
+			for _, nodePortIPv4 := range tt.nodePortsIPv4 {
+				c.nodePortsIPv4.Store(nodePortIPv4, struct{}{})
+			}
+			for _, nodePortIPv6 := range tt.nodePortsIPv6 {
+				c.nodePortsIPv6.Store(nodePortIPv6, struct{}{})
+			}
+			for cidr, nodeIP := range tt.clusterNodeIPs {
+				c.clusterNodeIPs.Store(cidr, nodeIP)
+			}
+			for cidr, nodeIP := range tt.clusterNodeIP6s {
+				c.clusterNodeIP6s.Store(cidr, nodeIP)
+			}
+			tt.expectedCalls(ipset.EXPECT())
+			assert.NoError(t, c.syncIPSet())
+		})
+	}
+}
+
+func TestSyncIPTables(t *testing.T) {
+	tests := []struct {
+		name                  string
+		isCloudEKS            bool
+		proxyAll              bool
+		multicastEnabled      bool
+		connectUplinkToBridge bool
+		networkConfig         *config.NetworkConfig
+		nodeConfig            *config.NodeConfig
+		nodePortsIPv4         []string
+		nodePortsIPv6         []string
+		markToSNATIP          map[uint32]string
+		expectedCalls         func(iptables *iptablestest.MockInterfaceMockRecorder)
+	}{
+		{
+			name:             "encap,egress=true,multicastEnabled=true,proxyAll=true",
+			proxyAll:         true,
+			multicastEnabled: true,
+			networkConfig: &config.NetworkConfig{
+				TrafficEncapMode: config.TrafficEncapModeEncap,
+				TunnelType:       ovsconfig.GeneveTunnel,
+				IPv4Enabled:      true,
+				IPv6Enabled:      true,
+			},
+			nodeConfig: &config.NodeConfig{
+				PodIPv4CIDR: ip.MustParseCIDR("172.16.10.0/24"),
+				PodIPv6CIDR: ip.MustParseCIDR("2001:ab03:cd04:55ef::/64"),
+				GatewayConfig: &config.GatewayConfig{
+					Name: "antrea-gw0",
+				},
+			},
+			markToSNATIP: map[uint32]string{
+				1: "1.1.1.1",
+				2: "fe80::e643:4bff:fe02",
+			},
+			expectedCalls: func(mockIPTables *iptablestest.MockInterfaceMockRecorder) {
+				mockIPTables.EnsureChain(iptables.ProtocolDual, iptables.RawTable, antreaPreRoutingChain)
+				mockIPTables.AppendRule(iptables.ProtocolDual, iptables.RawTable, iptables.PreRoutingChain, []string{"-j", antreaPreRoutingChain, "-m", "comment", "--comment", "Antrea: jump to Antrea prerouting rules"})
+				mockIPTables.EnsureChain(iptables.ProtocolDual, iptables.RawTable, antreaOutputChain)
+				mockIPTables.AppendRule(iptables.ProtocolDual, iptables.RawTable, iptables.OutputChain, []string{"-j", antreaOutputChain, "-m", "comment", "--comment", "Antrea: jump to Antrea output rules"})
+				mockIPTables.EnsureChain(iptables.ProtocolDual, iptables.FilterTable, antreaForwardChain)
+				mockIPTables.AppendRule(iptables.ProtocolDual, iptables.FilterTable, iptables.ForwardChain, []string{"-j", antreaForwardChain, "-m", "comment", "--comment", "Antrea: jump to Antrea forwarding rules"})
+				mockIPTables.EnsureChain(iptables.ProtocolDual, iptables.NATTable, antreaPostRoutingChain)
+				mockIPTables.AppendRule(iptables.ProtocolDual, iptables.NATTable, iptables.PostRoutingChain, []string{"-j", antreaPostRoutingChain, "-m", "comment", "--comment", "Antrea: jump to Antrea postrouting rules"})
+				mockIPTables.EnsureChain(iptables.ProtocolDual, iptables.MangleTable, antreaMangleChain)
+				mockIPTables.AppendRule(iptables.ProtocolDual, iptables.MangleTable, iptables.PreRoutingChain, []string{"-j", antreaMangleChain, "-m", "comment", "--comment", "Antrea: jump to Antrea mangle rules"})
+				mockIPTables.EnsureChain(iptables.ProtocolDual, iptables.MangleTable, antreaOutputChain)
+				mockIPTables.AppendRule(iptables.ProtocolDual, iptables.MangleTable, iptables.OutputChain, []string{"-j", antreaOutputChain, "-m", "comment", "--comment", "Antrea: jump to Antrea output rules"})
+				mockIPTables.EnsureChain(iptables.ProtocolDual, iptables.NATTable, antreaPreRoutingChain)
+				mockIPTables.AppendRule(iptables.ProtocolDual, iptables.NATTable, iptables.PreRoutingChain, []string{"-j", antreaPreRoutingChain, "-m", "comment", "--comment", "Antrea: jump to Antrea prerouting rules"})
+				mockIPTables.EnsureChain(iptables.ProtocolDual, iptables.NATTable, antreaOutputChain)
+				mockIPTables.AppendRule(iptables.ProtocolDual, iptables.NATTable, iptables.OutputChain, []string{"-j", antreaOutputChain, "-m", "comment", "--comment", "Antrea: jump to Antrea output rules"})
+				mockIPTables.Restore(`*raw
+:ANTREA-PREROUTING - [0:0]
+:ANTREA-OUTPUT - [0:0]
+-A ANTREA-PREROUTING -m comment --comment "Antrea: do not track incoming encapsulation packets" -m udp -p udp --dport 6081 -m addrtype --dst-type LOCAL -j NOTRACK
+-A ANTREA-OUTPUT -m comment --comment "Antrea: do not track outgoing encapsulation packets" -m udp -p udp --dport 6081 -m addrtype --src-type LOCAL -j NOTRACK
+-A ANTREA-PREROUTING -m comment --comment "Antrea: drop Pod multicast traffic forwarded via underlay network" -m set --match-set CLUSTER-NODE-IP src -d 224.0.0.0/4 -j DROP
+COMMIT
+*mangle
+:ANTREA-MANGLE - [0:0]
+:ANTREA-OUTPUT - [0:0]
+-A ANTREA-OUTPUT -m comment --comment "Antrea: mark LOCAL output packets" -m addrtype --src-type LOCAL -o antrea-gw0 -j MARK --or-mark 0x80000000
+COMMIT
+*filter
+:ANTREA-FORWARD - [0:0]
+-A ANTREA-FORWARD -m comment --comment "Antrea: accept packets from local Pods" -i antrea-gw0 -j ACCEPT
+-A ANTREA-FORWARD -m comment --comment "Antrea: accept packets to local Pods" -o antrea-gw0 -j ACCEPT
+COMMIT
+*nat
+:ANTREA-PREROUTING - [0:0]
+-A ANTREA-PREROUTING -m comment --comment "Antrea: DNAT external to NodePort packets" -m set --match-set ANTREA-NODEPORT-IP dst,dst -j DNAT --to-destination 169.254.0.252
+:ANTREA-OUTPUT - [0:0]
+-A ANTREA-OUTPUT -m comment --comment "Antrea: DNAT local to NodePort packets" -m set --match-set ANTREA-NODEPORT-IP dst,dst -j DNAT --to-destination 169.254.0.252
+:ANTREA-POSTROUTING - [0:0]
+-A ANTREA-POSTROUTING -m comment --comment "Antrea: SNAT Pod to external packets" ! -o antrea-gw0 -m mark --mark 0x00000001/0x000000ff -j SNAT --to 1.1.1.1
+-A ANTREA-POSTROUTING -m comment --comment "Antrea: masquerade Pod to external packets" -s 172.16.10.0/24 -m set ! --match-set ANTREA-POD-IP dst ! -o antrea-gw0 -j MASQUERADE
+-A ANTREA-POSTROUTING -m comment --comment "Antrea: masquerade LOCAL traffic" -o antrea-gw0 -m addrtype ! --src-type LOCAL --limit-iface-out -m addrtype --src-type LOCAL -j MASQUERADE --random-fully
+-A ANTREA-POSTROUTING -m comment --comment "Antrea: masquerade OVS virtual source IP" -s 169.254.0.253 -j MASQUERADE
+COMMIT
+`, false, false)
+				mockIPTables.Restore(`*raw
+:ANTREA-PREROUTING - [0:0]
+:ANTREA-OUTPUT - [0:0]
+-A ANTREA-PREROUTING -m comment --comment "Antrea: do not track incoming encapsulation packets" -m udp -p udp --dport 6081 -m addrtype --dst-type LOCAL -j NOTRACK
+-A ANTREA-OUTPUT -m comment --comment "Antrea: do not track outgoing encapsulation packets" -m udp -p udp --dport 6081 -m addrtype --src-type LOCAL -j NOTRACK
+-A ANTREA-PREROUTING -m comment --comment "Antrea: drop Pod multicast traffic forwarded via underlay network" -m set --match-set CLUSTER-NODE-IP6 src -d 224.0.0.0/4 -j DROP
+COMMIT
+*mangle
+:ANTREA-MANGLE - [0:0]
+:ANTREA-OUTPUT - [0:0]
+-A ANTREA-OUTPUT -m comment --comment "Antrea: mark LOCAL output packets" -m addrtype --src-type LOCAL -o antrea-gw0 -j MARK --or-mark 0x80000000
+COMMIT
+*filter
+:ANTREA-FORWARD - [0:0]
+-A ANTREA-FORWARD -m comment --comment "Antrea: accept packets from local Pods" -i antrea-gw0 -j ACCEPT
+-A ANTREA-FORWARD -m comment --comment "Antrea: accept packets to local Pods" -o antrea-gw0 -j ACCEPT
+COMMIT
+*nat
+:ANTREA-PREROUTING - [0:0]
+-A ANTREA-PREROUTING -m comment --comment "Antrea: DNAT external to NodePort packets" -m set --match-set ANTREA-NODEPORT-IP6 dst,dst -j DNAT --to-destination fc01::aabb:ccdd:eefe
+:ANTREA-OUTPUT - [0:0]
+-A ANTREA-OUTPUT -m comment --comment "Antrea: DNAT local to NodePort packets" -m set --match-set ANTREA-NODEPORT-IP6 dst,dst -j DNAT --to-destination fc01::aabb:ccdd:eefe
+:ANTREA-POSTROUTING - [0:0]
+-A ANTREA-POSTROUTING -m comment --comment "Antrea: SNAT Pod to external packets" ! -o antrea-gw0 -m mark --mark 0x00000002/0x000000ff -j SNAT --to fe80::e643:4bff:fe02
+-A ANTREA-POSTROUTING -m comment --comment "Antrea: masquerade Pod to external packets" -s 2001:ab03:cd04:55ef::/64 -m set ! --match-set ANTREA-POD-IP6 dst ! -o antrea-gw0 -j MASQUERADE
+-A ANTREA-POSTROUTING -m comment --comment "Antrea: masquerade LOCAL traffic" -o antrea-gw0 -m addrtype ! --src-type LOCAL --limit-iface-out -m addrtype --src-type LOCAL -j MASQUERADE --random-fully
+-A ANTREA-POSTROUTING -m comment --comment "Antrea: masquerade OVS virtual source IP" -s fc01::aabb:ccdd:eeff -j MASQUERADE
+COMMIT
+`, false, true)
+			},
+		},
+		{
+			name:       "encap,eks",
+			isCloudEKS: true,
+			networkConfig: &config.NetworkConfig{
+				TrafficEncapMode: config.TrafficEncapModeEncap,
+				TunnelType:       ovsconfig.GeneveTunnel,
+				IPv4Enabled:      true,
+				IPv6Enabled:      true,
+			},
+			nodeConfig: &config.NodeConfig{
+				PodIPv4CIDR: ip.MustParseCIDR("172.16.10.0/24"),
+				PodIPv6CIDR: ip.MustParseCIDR("2001:ab03:cd04:55ef::/64"),
+				GatewayConfig: &config.GatewayConfig{
+					Name: "antrea-gw0",
+				},
+			},
+			expectedCalls: func(mockIPTables *iptablestest.MockInterfaceMockRecorder) {
+				mockIPTables.EnsureChain(iptables.ProtocolDual, iptables.RawTable, antreaPreRoutingChain)
+				mockIPTables.AppendRule(iptables.ProtocolDual, iptables.RawTable, iptables.PreRoutingChain, []string{"-j", antreaPreRoutingChain, "-m", "comment", "--comment", "Antrea: jump to Antrea prerouting rules"})
+				mockIPTables.EnsureChain(iptables.ProtocolDual, iptables.RawTable, antreaOutputChain)
+				mockIPTables.AppendRule(iptables.ProtocolDual, iptables.RawTable, iptables.OutputChain, []string{"-j", antreaOutputChain, "-m", "comment", "--comment", "Antrea: jump to Antrea output rules"})
+				mockIPTables.EnsureChain(iptables.ProtocolDual, iptables.FilterTable, antreaForwardChain)
+				mockIPTables.AppendRule(iptables.ProtocolDual, iptables.FilterTable, iptables.ForwardChain, []string{"-j", antreaForwardChain, "-m", "comment", "--comment", "Antrea: jump to Antrea forwarding rules"})
+				mockIPTables.EnsureChain(iptables.ProtocolDual, iptables.NATTable, antreaPostRoutingChain)
+				mockIPTables.AppendRule(iptables.ProtocolDual, iptables.NATTable, iptables.PostRoutingChain, []string{"-j", antreaPostRoutingChain, "-m", "comment", "--comment", "Antrea: jump to Antrea postrouting rules"})
+				mockIPTables.EnsureChain(iptables.ProtocolDual, iptables.MangleTable, antreaMangleChain)
+				mockIPTables.AppendRule(iptables.ProtocolDual, iptables.MangleTable, iptables.PreRoutingChain, []string{"-j", antreaMangleChain, "-m", "comment", "--comment", "Antrea: jump to Antrea mangle rules"})
+				mockIPTables.EnsureChain(iptables.ProtocolDual, iptables.MangleTable, antreaOutputChain)
+				mockIPTables.AppendRule(iptables.ProtocolDual, iptables.MangleTable, iptables.OutputChain, []string{"-j", antreaOutputChain, "-m", "comment", "--comment", "Antrea: jump to Antrea output rules"})
+				mockIPTables.EnsureChain(iptables.ProtocolDual, iptables.NATTable, antreaPreRoutingChain)
+				mockIPTables.AppendRule(iptables.ProtocolDual, iptables.NATTable, iptables.PreRoutingChain, []string{"-j", antreaPreRoutingChain, "-m", "comment", "--comment", "Antrea: jump to Antrea prerouting rules"})
+				mockIPTables.Restore(`*raw
+:ANTREA-PREROUTING - [0:0]
+:ANTREA-OUTPUT - [0:0]
+-A ANTREA-PREROUTING -m comment --comment "Antrea: do not track incoming encapsulation packets" -m udp -p udp --dport 6081 -m addrtype --dst-type LOCAL -j NOTRACK
+-A ANTREA-OUTPUT -m comment --comment "Antrea: do not track outgoing encapsulation packets" -m udp -p udp --dport 6081 -m addrtype --src-type LOCAL -j NOTRACK
+COMMIT
+*mangle
+:ANTREA-MANGLE - [0:0]
+:ANTREA-OUTPUT - [0:0]
+-A ANTREA-MANGLE -m comment --comment "Antrea: AWS, primary ENI" -i antrea-gw0 -j CONNMARK --restore-mark --nfmask 0x80 --ctmask 0x80
+-A ANTREA-OUTPUT -m comment --comment "Antrea: mark LOCAL output packets" -m addrtype --src-type LOCAL -o antrea-gw0 -j MARK --or-mark 0x80000000
+COMMIT
+*filter
+:ANTREA-FORWARD - [0:0]
+-A ANTREA-FORWARD -m comment --comment "Antrea: accept packets from local Pods" -i antrea-gw0 -j ACCEPT
+-A ANTREA-FORWARD -m comment --comment "Antrea: accept packets to local Pods" -o antrea-gw0 -j ACCEPT
+COMMIT
+*nat
+:ANTREA-PREROUTING - [0:0]
+:ANTREA-POSTROUTING - [0:0]
+-A ANTREA-POSTROUTING -m comment --comment "Antrea: masquerade Pod to external packets" -s 172.16.10.0/24 -m set ! --match-set ANTREA-POD-IP dst ! -o antrea-gw0 -j MASQUERADE
+-A ANTREA-POSTROUTING -m comment --comment "Antrea: masquerade LOCAL traffic" -o antrea-gw0 -m addrtype ! --src-type LOCAL --limit-iface-out -m addrtype --src-type LOCAL -j MASQUERADE --random-fully
+-A ANTREA-PREROUTING -i antrea-gw0 -m comment --comment "Antrea: AWS, outbound connections" -j AWS-CONNMARK-CHAIN-0
+-A ANTREA-PREROUTING -m comment --comment "Antrea: AWS, CONNMARK (first packet)" -j CONNMARK --restore-mark --nfmask 0x80 --ctmask 0x80
+COMMIT
+`, false, false)
+				mockIPTables.Restore(`*raw
+:ANTREA-PREROUTING - [0:0]
+:ANTREA-OUTPUT - [0:0]
+-A ANTREA-PREROUTING -m comment --comment "Antrea: do not track incoming encapsulation packets" -m udp -p udp --dport 6081 -m addrtype --dst-type LOCAL -j NOTRACK
+-A ANTREA-OUTPUT -m comment --comment "Antrea: do not track outgoing encapsulation packets" -m udp -p udp --dport 6081 -m addrtype --src-type LOCAL -j NOTRACK
+COMMIT
+*mangle
+:ANTREA-MANGLE - [0:0]
+:ANTREA-OUTPUT - [0:0]
+-A ANTREA-OUTPUT -m comment --comment "Antrea: mark LOCAL output packets" -m addrtype --src-type LOCAL -o antrea-gw0 -j MARK --or-mark 0x80000000
+COMMIT
+*filter
+:ANTREA-FORWARD - [0:0]
+-A ANTREA-FORWARD -m comment --comment "Antrea: accept packets from local Pods" -i antrea-gw0 -j ACCEPT
+-A ANTREA-FORWARD -m comment --comment "Antrea: accept packets to local Pods" -o antrea-gw0 -j ACCEPT
+COMMIT
+*nat
+:ANTREA-PREROUTING - [0:0]
+:ANTREA-POSTROUTING - [0:0]
+-A ANTREA-POSTROUTING -m comment --comment "Antrea: masquerade Pod to external packets" -s 2001:ab03:cd04:55ef::/64 -m set ! --match-set ANTREA-POD-IP6 dst ! -o antrea-gw0 -j MASQUERADE
+-A ANTREA-POSTROUTING -m comment --comment "Antrea: masquerade LOCAL traffic" -o antrea-gw0 -m addrtype ! --src-type LOCAL --limit-iface-out -m addrtype --src-type LOCAL -j MASQUERADE --random-fully
+COMMIT
+`, false, true)
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			mockIPTables := iptablestest.NewMockInterface(ctrl)
+			c := &Client{ipt: mockIPTables,
+				networkConfig:         tt.networkConfig,
+				nodeConfig:            tt.nodeConfig,
+				proxyAll:              tt.proxyAll,
+				isCloudEKS:            tt.isCloudEKS,
+				multicastEnabled:      tt.multicastEnabled,
+				connectUplinkToBridge: tt.connectUplinkToBridge,
+				markToSNATIP:          sync.Map{},
+			}
+			for mark, snatIP := range tt.markToSNATIP {
+				c.markToSNATIP.Store(mark, net.ParseIP(snatIP))
+			}
+			tt.expectedCalls(mockIPTables.EXPECT())
+			assert.NoError(t, c.syncIPTables())
+		})
+	}
+}
+
+func TestInitIPRoutes(t *testing.T) {
+	ipv4, nodeTransPortIPv4Addr, _ := net.ParseCIDR("172.16.10.2/24")
+	nodeTransPortIPv4Addr.IP = ipv4
+	ipv6, nodeTransPortIPv6Addr, _ := net.ParseCIDR("fe80::e643:4bff:fe44:ee/64")
+	nodeTransPortIPv6Addr.IP = ipv6
+
+	tests := []struct {
+		name          string
+		networkConfig *config.NetworkConfig
+		nodeConfig    *config.NodeConfig
+		expectedCalls func(mockNetlink *netlinktest.MockInterfaceMockRecorder)
+	}{
+		{
+			name:          "networkPolicyOnly",
+			networkConfig: &config.NetworkConfig{TrafficEncapMode: config.TrafficEncapModeNetworkPolicyOnly},
+			nodeConfig: &config.NodeConfig{
+				GatewayConfig:         &config.GatewayConfig{Name: "antrea-gw0"},
+				NodeTransportIPv4Addr: nodeTransPortIPv4Addr,
+				NodeTransportIPv6Addr: nodeTransPortIPv6Addr,
+			},
+			expectedCalls: func(mockNetlink *netlinktest.MockInterfaceMockRecorder) {
+				mockNetlink.LinkByName("antrea-gw0")
+				_, ipv4, _ := net.ParseCIDR("172.16.10.2/32")
+				mockNetlink.AddrReplace(gomock.Any(), &netlink.Addr{IPNet: ipv4})
+				_, ipv6, _ := net.ParseCIDR("fe80::e643:4bff:fe44:ee/128")
+				mockNetlink.AddrReplace(gomock.Any(), &netlink.Addr{IPNet: ipv6})
+			},
+		},
+		{
+			name:          "encap",
+			networkConfig: &config.NetworkConfig{TrafficEncapMode: config.TrafficEncapModeEncap},
+			nodeConfig: &config.NodeConfig{
+				GatewayConfig:         &config.GatewayConfig{Name: "antrea-gw0"},
+				NodeTransportIPv4Addr: nodeTransPortIPv4Addr,
+				NodeTransportIPv6Addr: nodeTransPortIPv6Addr,
+			},
+			expectedCalls: func(mockNetlink *netlinktest.MockInterfaceMockRecorder) {},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			mockNetlink := netlinktest.NewMockInterface(ctrl)
+			c := &Client{netlink: mockNetlink,
+				networkConfig: tt.networkConfig,
+				nodeConfig:    tt.nodeConfig,
+			}
+			tt.expectedCalls(mockNetlink.EXPECT())
+			assert.NoError(t, c.initIPRoutes())
+		})
+	}
+}
+
+func TestInitServiceIPRoutes(t *testing.T) {
+	tests := []struct {
+		name          string
+		networkConfig *config.NetworkConfig
+		nodeConfig    *config.NodeConfig
+		expectedCalls func(mockNetlink *netlinktest.MockInterfaceMockRecorder)
+	}{
+		{
+			name: "encap",
+			networkConfig: &config.NetworkConfig{
+				TrafficEncapMode: config.TrafficEncapModeEncap,
+				IPv4Enabled:      true,
+				IPv6Enabled:      true,
+			},
+			nodeConfig: &config.NodeConfig{
+				GatewayConfig: &config.GatewayConfig{Name: "antrea-gw0", LinkIndex: 10},
+			},
+			expectedCalls: func(mockNetlink *netlinktest.MockInterfaceMockRecorder) {
+				mockNetlink.NeighSet(&netlink.Neigh{
+					LinkIndex:    10,
+					Family:       netlink.FAMILY_V4,
+					State:        netlink.NUD_PERMANENT,
+					IP:           config.VirtualServiceIPv4,
+					HardwareAddr: globalVMAC,
+				})
+				mockNetlink.RouteReplace(&netlink.Route{
+					Dst: &net.IPNet{
+						IP:   config.VirtualServiceIPv4,
+						Mask: net.CIDRMask(32, 32),
+					},
+					Scope:     netlink.SCOPE_LINK,
+					LinkIndex: 10,
+				})
+				mockNetlink.RouteReplace(&netlink.Route{
+					Dst: &net.IPNet{
+						IP:   config.VirtualNodePortDNATIPv4,
+						Mask: net.CIDRMask(32, 32),
+					},
+					Gw:        config.VirtualServiceIPv4,
+					Scope:     netlink.SCOPE_UNIVERSE,
+					LinkIndex: 10,
+				})
+				mockNetlink.NeighSet(&netlink.Neigh{
+					LinkIndex:    10,
+					Family:       netlink.FAMILY_V6,
+					State:        netlink.NUD_PERMANENT,
+					IP:           config.VirtualServiceIPv6,
+					HardwareAddr: globalVMAC,
+				})
+				mockNetlink.RouteReplace(&netlink.Route{
+					Dst: &net.IPNet{
+						IP:   config.VirtualServiceIPv6,
+						Mask: net.CIDRMask(128, 128),
+					},
+					Scope:     netlink.SCOPE_LINK,
+					LinkIndex: 10,
+				})
+				mockNetlink.RouteReplace(&netlink.Route{
+					Dst: &net.IPNet{
+						IP:   config.VirtualNodePortDNATIPv6,
+						Mask: net.CIDRMask(128, 128),
+					},
+					Gw:        config.VirtualServiceIPv6,
+					Scope:     netlink.SCOPE_UNIVERSE,
+					LinkIndex: 10,
+				})
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			mockNetlink := netlinktest.NewMockInterface(ctrl)
+			c := &Client{netlink: mockNetlink,
+				networkConfig: tt.networkConfig,
+				nodeConfig:    tt.nodeConfig,
+			}
+			tt.expectedCalls(mockNetlink.EXPECT())
+			assert.NoError(t, c.initServiceIPRoutes())
+		})
+	}
+}
+
+func TestReconcile(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockNetlink := netlinktest.NewMockInterface(ctrl)
+	mockIPSet := ipsettest.NewMockInterface(ctrl)
+	c := &Client{netlink: mockNetlink,
+		ipset:         mockIPSet,
+		proxyAll:      true,
+		networkConfig: &config.NetworkConfig{},
+		nodeConfig: &config.NodeConfig{
+			PodIPv4CIDR:   ip.MustParseCIDR("192.168.10.0/24"),
+			PodIPv6CIDR:   ip.MustParseCIDR("2001:ab03:cd04:55ee:100a::/80"),
+			GatewayConfig: &config.GatewayConfig{LinkIndex: 10},
+		},
+	}
+	podCIDRs := []string{"192.168.0.0/24", "192.168.1.0/24", "2001:ab03:cd04:55ee:1001::/80", "2001:ab03:cd04:55ee:1002::/80"}
+
+	mockIPSet.EXPECT().ListEntries(antreaPodIPSet).Return([]string{
+		"192.168.0.0/24", // existing podCIDR, should not be deleted.
+		"192.168.2.0/24", // non-existing podCIDR, should be deleted.
+	}, nil)
+	mockIPSet.EXPECT().ListEntries(antreaPodIP6Set).Return([]string{
+		"2001:ab03:cd04:55ee:1001::/80", // existing podCIDR, should not be deleted.
+		"2001:ab03:cd04:55ee:1003::/80", // non-existing podCIDR, should be deleted.
+	}, nil)
+	mockIPSet.EXPECT().DelEntry(antreaPodIPSet, "192.168.2.0/24")
+	mockIPSet.EXPECT().DelEntry(antreaPodIP6Set, "2001:ab03:cd04:55ee:1003::/80")
+	mockNetlink.EXPECT().RouteDel(&netlink.Route{Dst: ip.MustParseCIDR("192.168.2.0/24")})
+	mockNetlink.EXPECT().RouteDel(&netlink.Route{Dst: ip.MustParseCIDR("2001:ab03:cd04:55ee:1003::/80")})
+
+	mockNetlink.EXPECT().RouteListFiltered(netlink.FAMILY_V4, &netlink.Route{LinkIndex: 10}, netlink.RT_FILTER_OIF).Return([]netlink.Route{
+		{Dst: ip.MustParseCIDR("192.168.10.0/24")},  // local podCIDR, should not be deleted.
+		{Dst: ip.MustParseCIDR("192.168.1.0/24")},   // existing podCIDR, should not be deleted.
+		{Dst: ip.MustParseCIDR("169.254.0.253/32")}, // service route, should not be deleted.
+		{Dst: ip.MustParseCIDR("192.168.11.0/24")},  // non-existing podCIDR, should be deleted.
+	}, nil)
+	mockNetlink.EXPECT().RouteListFiltered(netlink.FAMILY_V6, &netlink.Route{LinkIndex: 10}, netlink.RT_FILTER_OIF).Return([]netlink.Route{
+		{Dst: ip.MustParseCIDR("2001:ab03:cd04:55ee:100a::/80")},   // local podCIDR, should not be deleted.
+		{Dst: ip.MustParseCIDR("2001:ab03:cd04:55ee:1001::1/128")}, // existing podCIDR, should not be deleted.
+		{Dst: ip.MustParseCIDR("fc01::aabb:ccdd:eeff/128")},        // service route, should not be deleted.
+		{Dst: ip.MustParseCIDR("2001:ab03:cd04:55ee:100b::/80")},   // non-existing podCIDR, should be deleted.
+	}, nil)
+	mockNetlink.EXPECT().RouteDel(&netlink.Route{Dst: ip.MustParseCIDR("192.168.11.0/24")})
+	mockNetlink.EXPECT().RouteDel(&netlink.Route{Dst: ip.MustParseCIDR("2001:ab03:cd04:55ee:100b::/80")})
+
+	mockNetlink.EXPECT().NeighList(10, netlink.FAMILY_V6).Return([]netlink.Neigh{
+		{IP: net.ParseIP("2001:ab03:cd04:55ee:1001::1")}, // existing podCIDR, should not be deleted.
+		{IP: net.ParseIP("fc01::aabb:ccdd:eeff")},        // virtual service IP, should not be deleted.
+		{IP: net.ParseIP("2001:ab03:cd04:55ee:100b::1")}, // non-existing podCIDR, should be deleted.
+	}, nil)
+	mockNetlink.EXPECT().NeighDel(&netlink.Neigh{IP: net.ParseIP("2001:ab03:cd04:55ee:100b::1")})
+	assert.NoError(t, c.Reconcile(podCIDRs, nil))
+}
+
+func TestAddRoutes(t *testing.T) {
+	ipv4, nodeTransPortIPv4Addr, _ := net.ParseCIDR("172.16.10.2/24")
+	nodeTransPortIPv4Addr.IP = ipv4
+	ipv6, nodeTransPortIPv6Addr, _ := net.ParseCIDR("fe80::e643:4bff:fe44:ee/64")
+	nodeTransPortIPv6Addr.IP = ipv6
+
+	tests := []struct {
+		name                 string
+		networkConfig        *config.NetworkConfig
+		nodeConfig           *config.NodeConfig
+		podCIDR              *net.IPNet
+		nodeName             string
+		nodeIP               net.IP
+		nodeGwIP             net.IP
+		expectedIPSetCalls   func(mockNetlink *ipsettest.MockInterfaceMockRecorder)
+		expectedNetlinkCalls func(mockNetlink *netlinktest.MockInterfaceMockRecorder)
+	}{
+		{
+			name: "wireGuard IPv4",
+			networkConfig: &config.NetworkConfig{
+				TrafficEncapMode:      config.TrafficEncapModeEncap,
+				TrafficEncryptionMode: config.TrafficEncryptionModeWireGuard,
+				IPv4Enabled:           true,
+			},
+			nodeConfig: &config.NodeConfig{
+				GatewayConfig: &config.GatewayConfig{
+					Name:      "antrea-gw0",
+					IPv4:      net.ParseIP("1.1.1.1"),
+					LinkIndex: 10,
+				},
+				WireGuardConfig:       &config.WireGuardConfig{LinkIndex: 11},
+				NodeTransportIPv4Addr: nodeTransPortIPv4Addr,
+			},
+			podCIDR:  ip.MustParseCIDR("192.168.10.0/24"),
+			nodeName: "node0",
+			nodeIP:   net.ParseIP("1.1.1.10"),
+			nodeGwIP: net.ParseIP("192.168.10.1"),
+			expectedIPSetCalls: func(mockIPSet *ipsettest.MockInterfaceMockRecorder) {
+				mockIPSet.AddEntry(antreaPodIPSet, "192.168.10.0/24")
+			},
+			expectedNetlinkCalls: func(mockNetlink *netlinktest.MockInterfaceMockRecorder) {
+				mockNetlink.RouteReplace(&netlink.Route{
+					Src:       net.ParseIP("1.1.1.1"),
+					Dst:       ip.MustParseCIDR("192.168.10.0/24"),
+					Scope:     netlink.SCOPE_LINK,
+					LinkIndex: 11,
+				})
+			},
+		},
+		{
+			name: "wireGuard IPv6",
+			networkConfig: &config.NetworkConfig{
+				TrafficEncapMode:      config.TrafficEncapModeEncap,
+				TrafficEncryptionMode: config.TrafficEncryptionModeWireGuard,
+				IPv6Enabled:           true,
+			},
+			nodeConfig: &config.NodeConfig{
+				GatewayConfig: &config.GatewayConfig{
+					Name:      "antrea-gw0",
+					IPv6:      net.ParseIP("fe80::e643:4bff:fe44:1"),
+					LinkIndex: 10,
+				},
+				WireGuardConfig:       &config.WireGuardConfig{LinkIndex: 11},
+				NodeTransportIPv6Addr: nodeTransPortIPv6Addr,
+			},
+			podCIDR:  ip.MustParseCIDR("2001:ab03:cd04:55ee:1001::/80"),
+			nodeName: "node0",
+			nodeIP:   net.ParseIP("fe80::e643:4bff:fe44:2"),
+			nodeGwIP: net.ParseIP("2001:ab03:cd04:55ee:1001::1"),
+			expectedIPSetCalls: func(mockIPSet *ipsettest.MockInterfaceMockRecorder) {
+				mockIPSet.AddEntry(antreaPodIP6Set, "2001:ab03:cd04:55ee:1001::/80")
+			},
+			expectedNetlinkCalls: func(mockNetlink *netlinktest.MockInterfaceMockRecorder) {
+				mockNetlink.RouteReplace(&netlink.Route{
+					Src:       net.ParseIP("fe80::e643:4bff:fe44:1"),
+					Dst:       ip.MustParseCIDR("2001:ab03:cd04:55ee:1001::/80"),
+					Scope:     netlink.SCOPE_LINK,
+					LinkIndex: 11,
+				})
+				mockNetlink.RouteDel(&netlink.Route{
+					Dst: &net.IPNet{IP: net.ParseIP("2001:ab03:cd04:55ee:1001::1"), Mask: net.CIDRMask(128, 128)},
+				})
+				mockNetlink.NeighDel(&netlink.Neigh{
+					LinkIndex: 10,
+					Family:    netlink.FAMILY_V6,
+					IP:        net.ParseIP("2001:ab03:cd04:55ee:1001::1"),
+				})
+			},
+		},
+		{
+			name: "encap IPv4",
+			networkConfig: &config.NetworkConfig{
+				TrafficEncapMode: config.TrafficEncapModeEncap,
+				IPv4Enabled:      true,
+			},
+			nodeConfig: &config.NodeConfig{
+				GatewayConfig: &config.GatewayConfig{
+					Name:      "antrea-gw0",
+					IPv4:      net.ParseIP("1.1.1.1"),
+					LinkIndex: 10,
+				},
+				NodeTransportIPv4Addr: nodeTransPortIPv4Addr,
+			},
+			podCIDR:  ip.MustParseCIDR("192.168.10.0/24"),
+			nodeName: "node0",
+			nodeIP:   net.ParseIP("1.1.1.10"),
+			nodeGwIP: net.ParseIP("192.168.10.1"),
+			expectedIPSetCalls: func(mockIPSet *ipsettest.MockInterfaceMockRecorder) {
+				mockIPSet.AddEntry(antreaPodIPSet, "192.168.10.0/24")
+			},
+			expectedNetlinkCalls: func(mockNetlink *netlinktest.MockInterfaceMockRecorder) {
+				mockNetlink.RouteReplace(&netlink.Route{
+					Gw:        net.ParseIP("192.168.10.1"),
+					Dst:       ip.MustParseCIDR("192.168.10.0/24"),
+					Flags:     int(netlink.FLAG_ONLINK),
+					LinkIndex: 10,
+				})
+			},
+		},
+		{
+			name: "encap IPv6",
+			networkConfig: &config.NetworkConfig{
+				TrafficEncapMode: config.TrafficEncapModeEncap,
+				IPv6Enabled:      true,
+			},
+			nodeConfig: &config.NodeConfig{
+				GatewayConfig: &config.GatewayConfig{
+					Name:      "antrea-gw0",
+					IPv6:      net.ParseIP("fe80::e643:4bff:fe44:1"),
+					LinkIndex: 10,
+				},
+				NodeTransportIPv6Addr: nodeTransPortIPv6Addr,
+			},
+			podCIDR:  ip.MustParseCIDR("2001:ab03:cd04:55ee:1001::/80"),
+			nodeName: "node0",
+			nodeIP:   net.ParseIP("fe80::e643:4bff:fe44:2"),
+			nodeGwIP: net.ParseIP("2001:ab03:cd04:55ee:1001::1"),
+			expectedIPSetCalls: func(mockIPSet *ipsettest.MockInterfaceMockRecorder) {
+				mockIPSet.AddEntry(antreaPodIP6Set, "2001:ab03:cd04:55ee:1001::/80")
+			},
+			expectedNetlinkCalls: func(mockNetlink *netlinktest.MockInterfaceMockRecorder) {
+				mockNetlink.RouteReplace(&netlink.Route{
+					Dst:       ip.MustParseCIDR("2001:ab03:cd04:55ee:1001::1/128"),
+					LinkIndex: 10,
+				})
+				mockNetlink.RouteReplace(&netlink.Route{
+					Gw:        net.ParseIP("2001:ab03:cd04:55ee:1001::1"),
+					Dst:       ip.MustParseCIDR("2001:ab03:cd04:55ee:1001::/80"),
+					LinkIndex: 10,
+				})
+				mockNetlink.NeighSet(&netlink.Neigh{
+					LinkIndex:    10,
+					Family:       netlink.FAMILY_V6,
+					State:        netlink.NUD_PERMANENT,
+					IP:           net.ParseIP("2001:ab03:cd04:55ee:1001::1"),
+					HardwareAddr: globalVMAC,
+				})
+			},
+		},
+		{
+			name: "noencap IPv4, direct routing",
+			networkConfig: &config.NetworkConfig{
+				TrafficEncapMode: config.TrafficEncapModeNoEncap,
+				IPv4Enabled:      true,
+			},
+			nodeConfig: &config.NodeConfig{
+				GatewayConfig: &config.GatewayConfig{
+					Name:      "antrea-gw0",
+					IPv4:      net.ParseIP("192.168.1.1"),
+					LinkIndex: 10,
+				},
+				NodeTransportIPv4Addr: nodeTransPortIPv4Addr,
+			},
+			podCIDR:  ip.MustParseCIDR("192.168.10.0/24"),
+			nodeName: "node0",
+			nodeIP:   net.ParseIP("172.16.10.3"), // In the same subnet as local Node IP.
+			nodeGwIP: net.ParseIP("192.168.10.1"),
+			expectedIPSetCalls: func(mockIPSet *ipsettest.MockInterfaceMockRecorder) {
+				mockIPSet.AddEntry(antreaPodIPSet, "192.168.10.0/24")
+			},
+			expectedNetlinkCalls: func(mockNetlink *netlinktest.MockInterfaceMockRecorder) {
+				mockNetlink.RouteReplace(&netlink.Route{
+					Gw:  net.ParseIP("172.16.10.3"),
+					Dst: ip.MustParseCIDR("192.168.10.0/24"),
+				})
+			},
+		},
+		{
+			name: "noencap IPv4, no direct routing",
+			networkConfig: &config.NetworkConfig{
+				TrafficEncapMode: config.TrafficEncapModeNoEncap,
+				IPv4Enabled:      true,
+			},
+			nodeConfig: &config.NodeConfig{
+				GatewayConfig: &config.GatewayConfig{
+					Name:      "antrea-gw0",
+					IPv4:      net.ParseIP("192.168.1.1"),
+					LinkIndex: 10,
+				},
+				NodeTransportIPv4Addr: nodeTransPortIPv4Addr,
+			},
+			podCIDR:  ip.MustParseCIDR("192.168.10.0/24"),
+			nodeName: "node0",
+			nodeIP:   net.ParseIP("172.16.11.3"), // In different subnet from local Node IP.
+			nodeGwIP: net.ParseIP("192.168.10.1"),
+			expectedIPSetCalls: func(mockIPSet *ipsettest.MockInterfaceMockRecorder) {
+				mockIPSet.AddEntry(antreaPodIPSet, "192.168.10.0/24")
+			},
+			expectedNetlinkCalls: func(mockNetlink *netlinktest.MockInterfaceMockRecorder) {},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			mockNetlink := netlinktest.NewMockInterface(ctrl)
+			mockIPSet := ipsettest.NewMockInterface(ctrl)
+			c := &Client{netlink: mockNetlink,
+				ipset:         mockIPSet,
+				networkConfig: tt.networkConfig,
+				nodeConfig:    tt.nodeConfig,
+			}
+			tt.expectedIPSetCalls(mockIPSet.EXPECT())
+			tt.expectedNetlinkCalls(mockNetlink.EXPECT())
+			assert.NoError(t, c.AddRoutes(tt.podCIDR, tt.nodeName, tt.nodeIP, tt.nodeGwIP))
+		})
+	}
+}
+
+func TestDeleteRoutes(t *testing.T) {
+	tests := []struct {
+		name                  string
+		networkConfig         *config.NetworkConfig
+		nodeConfig            *config.NodeConfig
+		podCIDR               *net.IPNet
+		existingNodeRoutes    map[string][]*netlink.Route
+		existingNodeNeighbors map[string]*netlink.Neigh
+		nodeName              string
+		expectedIPSetCalls    func(mockNetlink *ipsettest.MockInterfaceMockRecorder)
+		expectedNetlinkCalls  func(mockNetlink *netlinktest.MockInterfaceMockRecorder)
+	}{
+		{
+			name:    "IPv4",
+			podCIDR: ip.MustParseCIDR("192.168.10.0/24"),
+			existingNodeRoutes: map[string][]*netlink.Route{
+				"192.168.10.0/24": {{Gw: net.ParseIP("172.16.10.3"), Dst: ip.MustParseCIDR("192.168.10.0/24")}},
+				"192.168.11.0/24": {{Gw: net.ParseIP("172.16.10.4"), Dst: ip.MustParseCIDR("192.168.11.0/24")}},
+			},
+			expectedIPSetCalls: func(mockIPSet *ipsettest.MockInterfaceMockRecorder) {
+				mockIPSet.DelEntry(antreaPodIPSet, "192.168.10.0/24")
+			},
+			expectedNetlinkCalls: func(mockNetlink *netlinktest.MockInterfaceMockRecorder) {
+				mockNetlink.RouteDel(&netlink.Route{Gw: net.ParseIP("172.16.10.3"), Dst: ip.MustParseCIDR("192.168.10.0/24")})
+			},
+		},
+		{
+			name:    "IPv6",
+			podCIDR: ip.MustParseCIDR("2001:ab03:cd04:55ee:1001::/80"),
+			existingNodeRoutes: map[string][]*netlink.Route{
+				"2001:ab03:cd04:55ee:1001::/80": {{Gw: net.ParseIP("fe80::e643:4bff:fe44:1"), Dst: ip.MustParseCIDR("2001:ab03:cd04:55ee:1001::/80")}},
+				"2001:ab03:cd04:55ee:1002::/80": {{Gw: net.ParseIP("fe80::e643:4bff:fe44:2"), Dst: ip.MustParseCIDR("2001:ab03:cd04:55ee:1002::/80")}},
+			},
+			existingNodeNeighbors: map[string]*netlink.Neigh{},
+			expectedIPSetCalls: func(mockIPSet *ipsettest.MockInterfaceMockRecorder) {
+				mockIPSet.DelEntry(antreaPodIP6Set, "2001:ab03:cd04:55ee:1001::/80")
+			},
+			expectedNetlinkCalls: func(mockNetlink *netlinktest.MockInterfaceMockRecorder) {
+				mockNetlink.RouteDel(&netlink.Route{Gw: net.ParseIP("fe80::e643:4bff:fe44:1"), Dst: ip.MustParseCIDR("2001:ab03:cd04:55ee:1001::/80")})
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			mockNetlink := netlinktest.NewMockInterface(ctrl)
+			mockIPSet := ipsettest.NewMockInterface(ctrl)
+			c := &Client{netlink: mockNetlink,
+				ipset:         mockIPSet,
+				networkConfig: tt.networkConfig,
+				nodeConfig:    tt.nodeConfig,
+				nodeRoutes:    sync.Map{},
+				nodeNeighbors: sync.Map{},
+			}
+			for podCIDR, nodeRoute := range tt.existingNodeRoutes {
+				c.nodeRoutes.Store(podCIDR, nodeRoute)
+			}
+			for podCIDR, nodeNeighbor := range tt.existingNodeNeighbors {
+				c.nodeNeighbors.Store(podCIDR, nodeNeighbor)
+			}
+			tt.expectedIPSetCalls(mockIPSet.EXPECT())
+			tt.expectedNetlinkCalls(mockNetlink.EXPECT())
+			assert.NoError(t, c.DeleteRoutes(tt.podCIDR))
+		})
+	}
+}
+
+func TestMigrateRoutesToGw(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockNetlink := netlinktest.NewMockInterface(ctrl)
+	mockIPSet := ipsettest.NewMockInterface(ctrl)
+
+	gwLinkName := "antrea-gw0"
+	gwLink := &netlink.Device{LinkAttrs: netlink.LinkAttrs{Index: 11}}
+	linkName := "eth0"
+	link := &netlink.Device{LinkAttrs: netlink.LinkAttrs{Index: 10}}
+	linkAddr1, _ := netlink.ParseAddr("192.168.10.1/32")
+	linkAddr2, _ := netlink.ParseAddr("169.254.0.2/32") // LinkLocalUnicast address should not be migrated.
+	linkAddr3, _ := netlink.ParseAddr("2001:ab03:cd04:55ee:1001::1/80")
+	linkAddr4, _ := netlink.ParseAddr("fe80:ab03:cd04:55ee:1001::1/80") // LinkLocalUnicast address should not be migrated.
+
+	mockNetlink.EXPECT().LinkByName(gwLinkName).Return(gwLink, nil)
+	mockNetlink.EXPECT().LinkByName(linkName).Return(link, nil)
+	mockNetlink.EXPECT().RouteList(link, netlink.FAMILY_V4).Return([]netlink.Route{
+		{Gw: net.ParseIP("172.16.1.10"), Dst: ip.MustParseCIDR("192.168.10.0/24"), LinkIndex: 10},
+	}, nil)
+	mockNetlink.EXPECT().RouteList(link, netlink.FAMILY_V6).Return([]netlink.Route{
+		{Gw: net.ParseIP("fe80::e643:4bff:fe44:1"), Dst: ip.MustParseCIDR("2001:ab03:cd04:55ee:1001::/80"), LinkIndex: 10},
+	}, nil)
+	mockNetlink.EXPECT().RouteReplace(&netlink.Route{Gw: net.ParseIP("172.16.1.10"), Dst: ip.MustParseCIDR("192.168.10.0/24"), LinkIndex: 11})
+	mockNetlink.EXPECT().RouteReplace(&netlink.Route{Gw: net.ParseIP("fe80::e643:4bff:fe44:1"), Dst: ip.MustParseCIDR("2001:ab03:cd04:55ee:1001::/80"), LinkIndex: 11})
+	mockNetlink.EXPECT().AddrList(link, netlink.FAMILY_V4).Return([]netlink.Addr{*linkAddr1, *linkAddr2}, nil)
+	mockNetlink.EXPECT().AddrList(link, netlink.FAMILY_V6).Return([]netlink.Addr{*linkAddr3, *linkAddr4}, nil)
+	mockNetlink.EXPECT().AddrDel(link, linkAddr1)
+	mockNetlink.EXPECT().AddrReplace(gwLink, linkAddr1)
+	mockNetlink.EXPECT().AddrDel(link, linkAddr3)
+	mockNetlink.EXPECT().AddrReplace(gwLink, linkAddr3)
+
+	c := &Client{
+		netlink: mockNetlink,
+		ipset:   mockIPSet,
+		nodeConfig: &config.NodeConfig{
+			GatewayConfig: &config.GatewayConfig{Name: gwLinkName},
+		},
+	}
+	c.MigrateRoutesToGw(linkName)
+}
+
+func TestUnMigrateRoutesToGw(t *testing.T) {
+	gwLink := &netlink.Device{LinkAttrs: netlink.LinkAttrs{Index: 11}}
+	link := &netlink.Device{LinkAttrs: netlink.LinkAttrs{Index: 10}}
+	tests := []struct {
+		name          string
+		nodeConfig    *config.NodeConfig
+		route         string
+		link          string
+		expectedCalls func(mockNetlink *netlinktest.MockInterfaceMockRecorder)
+	}{
+		{
+			name:       "link provided",
+			route:      "192.168.10.0/24",
+			link:       "eth0",
+			nodeConfig: &config.NodeConfig{GatewayConfig: &config.GatewayConfig{Name: "antrea-gw0"}},
+			expectedCalls: func(mockNetlink *netlinktest.MockInterfaceMockRecorder) {
+				mockNetlink.LinkByName("antrea-gw0").Return(gwLink, nil)
+				mockNetlink.LinkByName("eth0").Return(link, nil)
+				mockNetlink.RouteList(gwLink, netlink.FAMILY_V4).Return([]netlink.Route{
+					{Gw: net.ParseIP("172.16.1.10"), Dst: ip.MustParseCIDR("192.168.10.0/24"), LinkIndex: 11},
+				}, nil)
+				mockNetlink.RouteReplace(&netlink.Route{Gw: net.ParseIP("172.16.1.10"), Dst: ip.MustParseCIDR("192.168.10.0/24"), LinkIndex: 10})
+			},
+		},
+		{
+			name:       "link not provided",
+			route:      "192.168.10.0/24",
+			link:       "",
+			nodeConfig: &config.NodeConfig{GatewayConfig: &config.GatewayConfig{Name: "antrea-gw0"}},
+			expectedCalls: func(mockNetlink *netlinktest.MockInterfaceMockRecorder) {
+				mockNetlink.LinkByName("antrea-gw0").Return(gwLink, nil)
+				mockNetlink.RouteList(gwLink, netlink.FAMILY_V4).Return([]netlink.Route{
+					{Gw: net.ParseIP("172.16.1.10"), Dst: ip.MustParseCIDR("192.168.10.0/24"), LinkIndex: 11},
+				}, nil)
+				mockNetlink.RouteDel(&netlink.Route{Gw: net.ParseIP("172.16.1.10"), Dst: ip.MustParseCIDR("192.168.10.0/24"), LinkIndex: 11})
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			mockNetlink := netlinktest.NewMockInterface(ctrl)
+			c := &Client{
+				netlink:    mockNetlink,
+				nodeConfig: tt.nodeConfig,
+			}
+			tt.expectedCalls(mockNetlink.EXPECT())
+			c.UnMigrateRoutesFromGw(ip.MustParseCIDR(tt.route), tt.link)
+		})
+	}
+}
+
+func TestAddSNATRule(t *testing.T) {
+	tests := []struct {
+		name          string
+		networkConfig *config.NetworkConfig
+		nodeConfig    *config.NodeConfig
+		snatIP        net.IP
+		mark          uint32
+		expectedCalls func(mockIPTables *iptablestest.MockInterfaceMockRecorder)
+	}{
+		{
+			name: "IPv4",
+			nodeConfig: &config.NodeConfig{
+				GatewayConfig: &config.GatewayConfig{
+					Name: "antrea-gw0",
+				},
+			},
+			snatIP: net.ParseIP("1.1.1.1"),
+			mark:   10,
+			expectedCalls: func(mockIPTables *iptablestest.MockInterfaceMockRecorder) {
+				mockIPTables.InsertRule(iptables.ProtocolIPv4, iptables.NATTable, antreaPostRoutingChain, []string{
+					"-m", "comment", "--comment", "Antrea: SNAT Pod to external packets",
+					"!", "-o", "antrea-gw0",
+					"-m", "mark", "--mark", fmt.Sprintf("%#08x/%#08x", 10, types.SNATIPMarkMask),
+					"-j", iptables.SNATTarget, "--to", "1.1.1.1",
+				})
+			},
+		},
+		{
+			name: "IPv6",
+			nodeConfig: &config.NodeConfig{
+				GatewayConfig: &config.GatewayConfig{
+					Name: "antrea-gw0",
+				},
+			},
+			snatIP: net.ParseIP("fe80::e643:4bff:fe44:1"),
+			mark:   11,
+			expectedCalls: func(mockIPTables *iptablestest.MockInterfaceMockRecorder) {
+				mockIPTables.InsertRule(iptables.ProtocolIPv6, iptables.NATTable, antreaPostRoutingChain, []string{
+					"-m", "comment", "--comment", "Antrea: SNAT Pod to external packets",
+					"!", "-o", "antrea-gw0",
+					"-m", "mark", "--mark", fmt.Sprintf("%#08x/%#08x", 11, types.SNATIPMarkMask),
+					"-j", iptables.SNATTarget, "--to", "fe80::e643:4bff:fe44:1",
+				})
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			mockIPTables := iptablestest.NewMockInterface(ctrl)
+			c := &Client{ipt: mockIPTables,
+				nodeConfig: tt.nodeConfig,
+			}
+			tt.expectedCalls(mockIPTables.EXPECT())
+			assert.NoError(t, c.AddSNATRule(tt.snatIP, tt.mark))
+		})
+	}
+}
+
+func TestDeleteSNATRule(t *testing.T) {
+	tests := []struct {
+		name          string
+		networkConfig *config.NetworkConfig
+		markToSNATIP  map[uint32]net.IP
+		nodeConfig    *config.NodeConfig
+		mark          uint32
+		expectedCalls func(mockIPTables *iptablestest.MockInterfaceMockRecorder)
+	}{
+		{
+			name: "IPv4",
+			nodeConfig: &config.NodeConfig{
+				GatewayConfig: &config.GatewayConfig{
+					Name: "antrea-gw0",
+				},
+			},
+			markToSNATIP: map[uint32]net.IP{
+				10: net.ParseIP("1.1.1.1"),
+				11: net.ParseIP("1.1.1.2"),
+			},
+			mark: 10,
+			expectedCalls: func(mockIPTables *iptablestest.MockInterfaceMockRecorder) {
+				mockIPTables.DeleteRule(iptables.ProtocolIPv4, iptables.NATTable, antreaPostRoutingChain, []string{
+					"-m", "comment", "--comment", "Antrea: SNAT Pod to external packets",
+					"!", "-o", "antrea-gw0",
+					"-m", "mark", "--mark", fmt.Sprintf("%#08x/%#08x", 10, types.SNATIPMarkMask),
+					"-j", iptables.SNATTarget, "--to", "1.1.1.1",
+				})
+			},
+		},
+		{
+			name: "IPv6",
+			nodeConfig: &config.NodeConfig{
+				GatewayConfig: &config.GatewayConfig{
+					Name: "antrea-gw0",
+				},
+			},
+			markToSNATIP: map[uint32]net.IP{
+				10: net.ParseIP("fe80::e643:4bff:fe44:1"),
+				11: net.ParseIP("fe80::e643:4bff:fe44:2"),
+			},
+			mark: 11,
+			expectedCalls: func(mockIPTables *iptablestest.MockInterfaceMockRecorder) {
+				mockIPTables.DeleteRule(iptables.ProtocolIPv6, iptables.NATTable, antreaPostRoutingChain, []string{
+					"-m", "comment", "--comment", "Antrea: SNAT Pod to external packets",
+					"!", "-o", "antrea-gw0",
+					"-m", "mark", "--mark", fmt.Sprintf("%#08x/%#08x", 11, types.SNATIPMarkMask),
+					"-j", iptables.SNATTarget, "--to", "fe80::e643:4bff:fe44:2",
+				})
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			mockIPTables := iptablestest.NewMockInterface(ctrl)
+			c := &Client{
+				ipt:          mockIPTables,
+				nodeConfig:   tt.nodeConfig,
+				markToSNATIP: sync.Map{},
+			}
+			for mark, snatIP := range tt.markToSNATIP {
+				c.markToSNATIP.Store(mark, snatIP)
+			}
+			tt.expectedCalls(mockIPTables.EXPECT())
+			assert.NoError(t, c.DeleteSNATRule(tt.mark))
+		})
+	}
+}
+
+func TestAddNodePort(t *testing.T) {
+	tests := []struct {
+		name              string
+		nodePortAddresses []net.IP
+		port              uint16
+		protocol          openflow.Protocol
+		expectedCalls     func(ipset *ipsettest.MockInterfaceMockRecorder)
+	}{
+		{
+			name: "ipv4 tcp",
+			nodePortAddresses: []net.IP{
+				net.ParseIP("1.1.1.1"),
+				net.ParseIP("1.1.2.2"),
+			},
+			port:     30000,
+			protocol: openflow.ProtocolTCP,
+			expectedCalls: func(ipset *ipsettest.MockInterfaceMockRecorder) {
+				ipset.AddEntry(antreaNodePortIPSet, "1.1.1.1,tcp:30000")
+				ipset.AddEntry(antreaNodePortIPSet, "1.1.2.2,tcp:30000")
+			},
+		},
+		{
+			name: "ipv6 udp",
+			nodePortAddresses: []net.IP{
+				net.ParseIP("fd00:1234:5678:dead:beaf::1"),
+				net.ParseIP("fd00:1234:5678:dead:beaf::2"),
+			},
+			port:     30001,
+			protocol: openflow.ProtocolUDPv6,
+			expectedCalls: func(ipset *ipsettest.MockInterfaceMockRecorder) {
+				ipset.AddEntry(antreaNodePortIP6Set, "fd00:1234:5678:dead:beaf::1,udp:30001")
+				ipset.AddEntry(antreaNodePortIP6Set, "fd00:1234:5678:dead:beaf::2,udp:30001")
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			ipset := ipsettest.NewMockInterface(ctrl)
+			c := &Client{ipset: ipset}
+			tt.expectedCalls(ipset.EXPECT())
+			assert.NoError(t, c.AddNodePort(tt.nodePortAddresses, tt.port, tt.protocol))
+		})
+	}
+}
+
+func TestDeleteNodePort(t *testing.T) {
+	tests := []struct {
+		name              string
+		nodePortAddresses []net.IP
+		port              uint16
+		protocol          openflow.Protocol
+		expectedCalls     func(ipset *ipsettest.MockInterfaceMockRecorder)
+	}{
+		{
+			name: "ipv4 tcp",
+			nodePortAddresses: []net.IP{
+				net.ParseIP("1.1.1.1"),
+				net.ParseIP("1.1.2.2"),
+			},
+			port:     30000,
+			protocol: openflow.ProtocolTCP,
+			expectedCalls: func(ipset *ipsettest.MockInterfaceMockRecorder) {
+				ipset.DelEntry(antreaNodePortIPSet, "1.1.1.1,tcp:30000")
+				ipset.DelEntry(antreaNodePortIPSet, "1.1.2.2,tcp:30000")
+			},
+		},
+		{
+			name: "ipv6 udp",
+			nodePortAddresses: []net.IP{
+				net.ParseIP("fd00:1234:5678:dead:beaf::1"),
+				net.ParseIP("fd00:1234:5678:dead:beaf::2"),
+			},
+			port:     30001,
+			protocol: openflow.ProtocolUDPv6,
+			expectedCalls: func(ipset *ipsettest.MockInterfaceMockRecorder) {
+				ipset.DelEntry(antreaNodePortIP6Set, "fd00:1234:5678:dead:beaf::1,udp:30001")
+				ipset.DelEntry(antreaNodePortIP6Set, "fd00:1234:5678:dead:beaf::2,udp:30001")
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			ipset := ipsettest.NewMockInterface(ctrl)
+			c := &Client{ipset: ipset}
+			tt.expectedCalls(ipset.EXPECT())
+			assert.NoError(t, c.DeleteNodePort(tt.nodePortAddresses, tt.port, tt.protocol))
+		})
+	}
+}
+
+func TestAddClusterIPRoute(t *testing.T) {
+	nodeConfig := &config.NodeConfig{GatewayConfig: &config.GatewayConfig{LinkIndex: 10}}
+	tests := []struct {
+		name          string
+		clusterIPs    []string
+		expectedCalls func(mockNetlink *netlinktest.MockInterfaceMockRecorder)
+	}{
+		{
+			name:       "IPv4",
+			clusterIPs: []string{"10.96.0.1", "10.96.0.10"},
+			expectedCalls: func(mockNetlink *netlinktest.MockInterfaceMockRecorder) {
+				mockNetlink.RouteReplace(&netlink.Route{
+					Dst:       &net.IPNet{IP: net.ParseIP("10.96.0.1"), Mask: net.CIDRMask(32, 32)},
+					Gw:        config.VirtualServiceIPv4,
+					Scope:     netlink.SCOPE_UNIVERSE,
+					LinkIndex: 10,
+				})
+				mockNetlink.RouteListFiltered(netlink.FAMILY_V4, &netlink.Route{LinkIndex: 10}, netlink.RT_FILTER_OIF).Return([]netlink.Route{
+					{Dst: ip.MustParseCIDR("10.96.0.0/24"), Gw: config.VirtualServiceIPv4},
+				}, nil)
+				mockNetlink.RouteListFiltered(netlink.FAMILY_V6, &netlink.Route{LinkIndex: 10}, netlink.RT_FILTER_OIF).Return([]netlink.Route{}, nil)
+				mockNetlink.RouteDel(&netlink.Route{
+					Dst: ip.MustParseCIDR("10.96.0.0/24"), Gw: config.VirtualServiceIPv4,
+				})
+				mockNetlink.RouteReplace(&netlink.Route{
+					Dst:       &net.IPNet{IP: net.ParseIP("10.96.0.0").To4(), Mask: net.CIDRMask(28, 32)},
+					Gw:        config.VirtualServiceIPv4,
+					Scope:     netlink.SCOPE_UNIVERSE,
+					LinkIndex: 10,
+				})
+				mockNetlink.RouteDel(&netlink.Route{
+					Dst:       &net.IPNet{IP: net.ParseIP("10.96.0.1"), Mask: net.CIDRMask(32, 32)},
+					Gw:        config.VirtualServiceIPv4,
+					Scope:     netlink.SCOPE_UNIVERSE,
+					LinkIndex: 10,
+				})
+			},
+		},
+		{
+			name:       "IPv6",
+			clusterIPs: []string{"fd00:1234:5678:dead:beaf::1", "fd00:1234:5678:dead:beaf::a"},
+			expectedCalls: func(mockNetlink *netlinktest.MockInterfaceMockRecorder) {
+				mockNetlink.RouteReplace(&netlink.Route{
+					Dst:       &net.IPNet{IP: net.ParseIP("fd00:1234:5678:dead:beaf::1"), Mask: net.CIDRMask(128, 128)},
+					Gw:        config.VirtualServiceIPv6,
+					Scope:     netlink.SCOPE_UNIVERSE,
+					LinkIndex: 10,
+				})
+				mockNetlink.RouteListFiltered(netlink.FAMILY_V4, &netlink.Route{LinkIndex: 10}, netlink.RT_FILTER_OIF).Return([]netlink.Route{}, nil)
+				mockNetlink.RouteListFiltered(netlink.FAMILY_V6, &netlink.Route{LinkIndex: 10}, netlink.RT_FILTER_OIF).Return([]netlink.Route{
+					{Dst: ip.MustParseCIDR("fd00:1234:5678:dead:beaf::/80"), Gw: config.VirtualServiceIPv6},
+				}, nil)
+				mockNetlink.RouteDel(&netlink.Route{
+					Dst: ip.MustParseCIDR("fd00:1234:5678:dead:beaf::/80"), Gw: config.VirtualServiceIPv6,
+				})
+				mockNetlink.RouteReplace(&netlink.Route{
+					Dst:       &net.IPNet{IP: net.ParseIP("fd00:1234:5678:dead:beaf::"), Mask: net.CIDRMask(124, 128)},
+					Gw:        config.VirtualServiceIPv6,
+					Scope:     netlink.SCOPE_UNIVERSE,
+					LinkIndex: 10,
+				})
+				mockNetlink.RouteDel(&netlink.Route{
+					Dst:       &net.IPNet{IP: net.ParseIP("fd00:1234:5678:dead:beaf::1"), Mask: net.CIDRMask(128, 128)},
+					Gw:        config.VirtualServiceIPv6,
+					Scope:     netlink.SCOPE_UNIVERSE,
+					LinkIndex: 10,
+				})
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			mockNetlink := netlinktest.NewMockInterface(ctrl)
+			c := &Client{
+				netlink:    mockNetlink,
+				nodeConfig: nodeConfig,
+			}
+			tt.expectedCalls(mockNetlink.EXPECT())
+
+			for _, clusterIP := range tt.clusterIPs {
+				assert.NoError(t, c.AddClusterIPRoute(net.ParseIP(clusterIP)))
+			}
+		})
+	}
+}
+
+func TestAddLoadBalancer(t *testing.T) {
+	nodeConfig := &config.NodeConfig{GatewayConfig: &config.GatewayConfig{LinkIndex: 10}}
+	tests := []struct {
+		name          string
+		externalIPs   []string
+		expectedCalls func(mockNetlink *netlinktest.MockInterfaceMockRecorder)
+	}{
+		{
+			name:        "IPv4",
+			externalIPs: []string{"1.1.1.1", "1.1.1.2"},
+			expectedCalls: func(mockNetlink *netlinktest.MockInterfaceMockRecorder) {
+				mockNetlink.RouteReplace(&netlink.Route{
+					Dst: &net.IPNet{
+						IP:   net.ParseIP("1.1.1.1"),
+						Mask: net.CIDRMask(32, 32),
+					},
+					Gw:        config.VirtualServiceIPv4,
+					Scope:     netlink.SCOPE_UNIVERSE,
+					LinkIndex: 10,
+				})
+				mockNetlink.RouteReplace(&netlink.Route{
+					Dst: &net.IPNet{
+						IP:   net.ParseIP("1.1.1.2"),
+						Mask: net.CIDRMask(32, 32),
+					},
+					Gw:        config.VirtualServiceIPv4,
+					Scope:     netlink.SCOPE_UNIVERSE,
+					LinkIndex: 10,
+				})
+			},
+		},
+		{
+			name:        "IPv6",
+			externalIPs: []string{"fd00:1234:5678:dead:beaf::1", "fd00:1234:5678:dead:beaf::a"},
+			expectedCalls: func(mockNetlink *netlinktest.MockInterfaceMockRecorder) {
+				mockNetlink.RouteReplace(&netlink.Route{
+					Dst:       &net.IPNet{IP: net.ParseIP("fd00:1234:5678:dead:beaf::1"), Mask: net.CIDRMask(128, 128)},
+					Gw:        config.VirtualServiceIPv6,
+					Scope:     netlink.SCOPE_UNIVERSE,
+					LinkIndex: 10,
+				})
+				mockNetlink.RouteReplace(&netlink.Route{
+					Dst:       &net.IPNet{IP: net.ParseIP("fd00:1234:5678:dead:beaf::a"), Mask: net.CIDRMask(128, 128)},
+					Gw:        config.VirtualServiceIPv6,
+					Scope:     netlink.SCOPE_UNIVERSE,
+					LinkIndex: 10,
+				})
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			mockNetlink := netlinktest.NewMockInterface(ctrl)
+			c := &Client{
+				netlink:    mockNetlink,
+				nodeConfig: nodeConfig,
+			}
+			tt.expectedCalls(mockNetlink.EXPECT())
+
+			assert.NoError(t, c.AddLoadBalancer(tt.externalIPs))
+		})
+	}
+}
+
+func TestDeleteLoadBalancer(t *testing.T) {
+	nodeConfig := &config.NodeConfig{GatewayConfig: &config.GatewayConfig{LinkIndex: 10}}
+	tests := []struct {
+		name          string
+		externalIPs   []string
+		expectedCalls func(mockNetlink *netlinktest.MockInterfaceMockRecorder)
+	}{
+		{
+			name:        "IPv4",
+			externalIPs: []string{"1.1.1.1", "1.1.1.2"},
+			expectedCalls: func(mockNetlink *netlinktest.MockInterfaceMockRecorder) {
+				mockNetlink.RouteDel(&netlink.Route{
+					Dst: &net.IPNet{
+						IP:   net.ParseIP("1.1.1.1"),
+						Mask: net.CIDRMask(32, 32),
+					},
+					Gw:        config.VirtualServiceIPv4,
+					Scope:     netlink.SCOPE_UNIVERSE,
+					LinkIndex: 10,
+				})
+				mockNetlink.RouteDel(&netlink.Route{
+					Dst: &net.IPNet{
+						IP:   net.ParseIP("1.1.1.2"),
+						Mask: net.CIDRMask(32, 32),
+					},
+					Gw:        config.VirtualServiceIPv4,
+					Scope:     netlink.SCOPE_UNIVERSE,
+					LinkIndex: 10,
+				})
+			},
+		},
+		{
+			name:        "IPv6",
+			externalIPs: []string{"fd00:1234:5678:dead:beaf::1", "fd00:1234:5678:dead:beaf::a"},
+			expectedCalls: func(mockNetlink *netlinktest.MockInterfaceMockRecorder) {
+				mockNetlink.RouteDel(&netlink.Route{
+					Dst:       &net.IPNet{IP: net.ParseIP("fd00:1234:5678:dead:beaf::1"), Mask: net.CIDRMask(128, 128)},
+					Gw:        config.VirtualServiceIPv6,
+					Scope:     netlink.SCOPE_UNIVERSE,
+					LinkIndex: 10,
+				})
+				mockNetlink.RouteDel(&netlink.Route{
+					Dst:       &net.IPNet{IP: net.ParseIP("fd00:1234:5678:dead:beaf::a"), Mask: net.CIDRMask(128, 128)},
+					Gw:        config.VirtualServiceIPv6,
+					Scope:     netlink.SCOPE_UNIVERSE,
+					LinkIndex: 10,
+				})
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			mockNetlink := netlinktest.NewMockInterface(ctrl)
+			c := &Client{
+				netlink:    mockNetlink,
+				nodeConfig: nodeConfig,
+			}
+			tt.expectedCalls(mockNetlink.EXPECT())
+
+			assert.NoError(t, c.DeleteLoadBalancer(tt.externalIPs))
+		})
+	}
+}
+
+func TestAddLocalAntreaFlexibleIPAMPodRule(t *testing.T) {
+	tests := []struct {
+		name                  string
+		nodeConfig            *config.NodeConfig
+		connectUplinkToBridge bool
+		podAddresses          []net.IP
+		expectedCalls         func(mockIPSet *ipsettest.MockInterfaceMockRecorder)
+	}{
+		{
+			name: "connectUplinkToBridge=false",
+			nodeConfig: &config.NodeConfig{
+				PodIPv4CIDR: ip.MustParseCIDR("1.1.1.0/24"),
+				PodIPv6CIDR: ip.MustParseCIDR("aabb::/64"),
+			},
+			connectUplinkToBridge: false,
+			podAddresses:          []net.IP{net.ParseIP("1.1.1.1"), net.ParseIP("aabb::1")},
+			expectedCalls:         func(mockIPSet *ipsettest.MockInterfaceMockRecorder) {},
+		},
+		{
+			name: "connectUplinkToBridge=true,nodeIPAMPod",
+			nodeConfig: &config.NodeConfig{
+				PodIPv4CIDR: ip.MustParseCIDR("1.1.1.0/24"),
+				PodIPv6CIDR: ip.MustParseCIDR("aabb::/64"),
+			},
+			connectUplinkToBridge: false,
+			podAddresses:          []net.IP{net.ParseIP("1.1.1.1"), net.ParseIP("aabb::1")},
+			expectedCalls:         func(mockIPSet *ipsettest.MockInterfaceMockRecorder) {},
+		},
+		{
+			name: "connectUplinkToBridge=true,antreaIPAMPod",
+			nodeConfig: &config.NodeConfig{
+				PodIPv4CIDR: ip.MustParseCIDR("1.1.1.0/24"),
+				PodIPv6CIDR: ip.MustParseCIDR("aabb::/64"),
+			},
+			connectUplinkToBridge: true,
+			podAddresses:          []net.IP{net.ParseIP("1.1.2.1"), net.ParseIP("aabc::1")},
+			expectedCalls: func(mockIPSet *ipsettest.MockInterfaceMockRecorder) {
+				mockIPSet.AddEntry(localAntreaFlexibleIPAMPodIPSet, "1.1.2.1")
+				mockIPSet.AddEntry(localAntreaFlexibleIPAMPodIP6Set, "aabc::1")
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			mockIPSet := ipsettest.NewMockInterface(ctrl)
+			c := &Client{
+				ipset:                 mockIPSet,
+				nodeConfig:            tt.nodeConfig,
+				connectUplinkToBridge: tt.connectUplinkToBridge,
+			}
+			tt.expectedCalls(mockIPSet.EXPECT())
+
+			assert.NoError(t, c.AddLocalAntreaFlexibleIPAMPodRule(tt.podAddresses))
+		})
+	}
+}
+
+func TestDeleteLocalAntreaFlexibleIPAMPodRule(t *testing.T) {
+	nodeConfig := &config.NodeConfig{GatewayConfig: &config.GatewayConfig{LinkIndex: 10}}
+	tests := []struct {
+		name                  string
+		connectUplinkToBridge bool
+		podAddresses          []net.IP
+		expectedCalls         func(mockIPSet *ipsettest.MockInterfaceMockRecorder)
+	}{
+		{
+			name:                  "connectUplinkToBridge=false",
+			connectUplinkToBridge: false,
+			podAddresses:          []net.IP{net.ParseIP("1.1.1.1"), net.ParseIP("aabb::1")},
+			expectedCalls:         func(mockIPSet *ipsettest.MockInterfaceMockRecorder) {},
+		},
+		{
+			name:                  "connectUplinkToBridge=true",
+			connectUplinkToBridge: true,
+			podAddresses:          []net.IP{net.ParseIP("1.1.1.1"), net.ParseIP("aabb::1")},
+			expectedCalls: func(mockIPSet *ipsettest.MockInterfaceMockRecorder) {
+				mockIPSet.DelEntry(localAntreaFlexibleIPAMPodIPSet, "1.1.1.1")
+				mockIPSet.DelEntry(localAntreaFlexibleIPAMPodIP6Set, "aabb::1")
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			mockIPSet := ipsettest.NewMockInterface(ctrl)
+			c := &Client{
+				ipset:                 mockIPSet,
+				nodeConfig:            nodeConfig,
+				connectUplinkToBridge: tt.connectUplinkToBridge,
+			}
+			tt.expectedCalls(mockIPSet.EXPECT())
+
+			assert.NoError(t, c.DeleteLocalAntreaFlexibleIPAMPodRule(tt.podAddresses))
+		})
+	}
+}
+
+func TestAddAndDeleteNodeIP(t *testing.T) {
+	tests := []struct {
+		name             string
+		multicastEnabled bool
+		networkConfig    *config.NetworkConfig
+		podCIDR          *net.IPNet
+		nodeIP           net.IP
+		expectedCalls    func(mockIPSet *ipsettest.MockInterfaceMockRecorder)
+	}{
+		{
+			name:             "IPv4",
+			multicastEnabled: true,
+			networkConfig:    &config.NetworkConfig{TrafficEncapMode: config.TrafficEncapModeEncap},
+			podCIDR:          ip.MustParseCIDR("192.168.0.0/24"),
+			nodeIP:           net.ParseIP("1.1.1.1"),
+			expectedCalls: func(mockIPSet *ipsettest.MockInterfaceMockRecorder) {
+				mockIPSet.AddEntry(clusterNodeIPSet, "1.1.1.1")
+				mockIPSet.DelEntry(clusterNodeIPSet, "1.1.1.1")
+			},
+		},
+		{
+			name:             "IPv6",
+			multicastEnabled: true,
+			networkConfig:    &config.NetworkConfig{TrafficEncapMode: config.TrafficEncapModeEncap},
+			podCIDR:          ip.MustParseCIDR("1122:3344::/80"),
+			nodeIP:           net.ParseIP("aabb:ccdd::1"),
+			expectedCalls: func(mockIPSet *ipsettest.MockInterfaceMockRecorder) {
+				mockIPSet.AddEntry(clusterNodeIP6Set, "aabb:ccdd::1")
+				mockIPSet.DelEntry(clusterNodeIP6Set, "aabb:ccdd::1")
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			mockIPSet := ipsettest.NewMockInterface(ctrl)
+			c := &Client{
+				ipset:            mockIPSet,
+				networkConfig:    tt.networkConfig,
+				multicastEnabled: tt.multicastEnabled,
+			}
+			tt.expectedCalls(mockIPSet.EXPECT())
+
+			ipv6 := tt.nodeIP.To4() == nil
+			assert.NoError(t, c.addNodeIP(tt.podCIDR, tt.nodeIP))
+			var exists bool
+			if ipv6 {
+				_, exists = c.clusterNodeIP6s.Load(tt.podCIDR.String())
+			} else {
+				_, exists = c.clusterNodeIPs.Load(tt.podCIDR.String())
+			}
+			assert.True(t, exists)
+
+			assert.NoError(t, c.deleteNodeIP(tt.podCIDR))
+			if ipv6 {
+				_, exists = c.clusterNodeIP6s.Load(tt.podCIDR.String())
+			} else {
+				_, exists = c.clusterNodeIPs.Load(tt.podCIDR.String())
+			}
+			assert.False(t, exists)
+		})
+	}
+}
