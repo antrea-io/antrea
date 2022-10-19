@@ -260,7 +260,7 @@ function setup_cluster() {
         do
             sleep 1m
             echo "=== Get node (try for 1m) ==="
-            mdNum="$(kubectl get node | grep -c ${CLUSTER}-md)"
+            mdNum="$(kubectl get node | awk -v role="$CONTROL_PLANE_NODE_ROLE" '$3 !~ role {print $1}' | grep -c ${CLUSTER}-m)"
             if [ "${mdNum}" == "2" ]; then
                 echo "=== Setup workload cluster succeeded ==="
                 CLUSTER_READY=true
