@@ -139,9 +139,9 @@ metadata:
 
 #### IPPool Annotations on Pod (available since Antrea 1.5)
 
-Since Antrea 1.5, Pod IPPool annotation is supported and has a higher priority than the
-Namespace IPPool annotation. This annotation can be added to `PodTemplate` of a
-controller resource such as StatefulSet and Deployment.
+Since Antrea v1.5.0, Pod IPPool annotation is supported and has a higher
+priority than the Namespace IPPool annotation. This annotation can be added to
+`PodTemplate` of a controller resource such as StatefulSet and Deployment.
 
 Pod IP annotation is supported for a single Pod to specify a fixed IP for the Pod.
 
