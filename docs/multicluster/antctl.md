@@ -23,6 +23,9 @@ prints all ResourceExports, a specified ResourceExport, or ResourceExports in a
 specified Namespace.
 - `antctl mc get joinconfig` command prints member cluster join parameters of
 the ClusterSet in a specified leader cluster Namespace.
+- `antctl mc get membertoken` (or `get membertokens`) command prints all member tokens,
+a specified token, or member tokens in a specified Namespace. The command is supported
+only on a leader cluster.
 
 Using the `json` or `yaml` antctl output format can print more information of
 ClusterSet, ResourceImport, and ResourceExport than using the default table
@@ -33,6 +36,7 @@ antctl mc get clusterset [NAME] [-n NAMESPACE] [-o json|yaml] [-A]
 antctl mc get resourceimport [NAME] [-n NAMESPACE] [-o json|yaml] [-A]
 antctl mc get resourceexport [NAME] [-n NAMESPACE] [-clusterid CLUSTERID] [-o json|yaml] [-A]
 antctl mc get joinconfig [-n NAMESPACE]
+antctl mc get membertoken [NAME] [-n NAMESPACE] [-o json|yaml] [-A]
 ```
 
 To see the usage examples of these commands, you may also run `antctl mc get [subcommand] --help`.
@@ -48,6 +52,17 @@ anctcl mc create membertoken NAME -n NAMESPACE [-o OUTPUT_FILE]
 ```
 
 To see the usage examples of these commands, you may also run `antctl mc create [subcommand] --help`.
+
+## antctl mc delete
+
+`antctl mc delete` command deletes a member token of a ClusterSet. The command will delete the
+corresponding Secret, ServiceAccount and RoleBinding if they exist.
+
+```bash
+anctcl mc delete membertoken NAME -n NAMESPACE
+```
+
+To see the usage examples of these commands, you may also run `antctl mc delete [subcommand] --help`.
 
 ## antctl mc deploy
 
