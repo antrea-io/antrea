@@ -604,7 +604,7 @@ type svcConfig struct {
 	withSessionAffinity bool
 }
 
-func TestProxyServiceFlows(t *testing.T) {
+func TestProxyServiceFlowsAntreaPolicyDisabled(t *testing.T) {
 	// Reset OVS metrics (Prometheus) and reinitialize them to test.
 	legacyregistry.Reset()
 	metrics.InitializeOVSMetrics()
@@ -679,7 +679,77 @@ func TestProxyServiceFlows(t *testing.T) {
 
 	for _, tc := range tcs {
 		groupID := ofconfig.GroupIDType(tc.gid)
-		expTableFlows, expGroupBuckets := expectedProxyServiceGroupAndFlows(tc.gid, tc.svc, tc.endpoints, tc.stickyAge)
+		expTableFlows, expGroupBuckets := expectedProxyServiceGroupAndFlows(tc.gid, tc.svc, tc.endpoints, tc.stickyAge, false)
+		installServiceFlows(t, tc.gid, tc.svc, tc.endpoints, tc.stickyAge)
+		for _, tableFlow := range expTableFlows {
+			ofTestUtils.CheckFlowExists(t, ovsCtlClient, tableFlow.tableName, 0, true, tableFlow.flows)
+		}
+		ofTestUtils.CheckGroupExists(t, ovsCtlClient, groupID, "select", expGroupBuckets, true)
+
+		uninstallServiceFlowsFunc(t, tc.gid, tc.svc, tc.endpoints)
+		for _, tableFlow := range expTableFlows {
+			ofTestUtils.CheckFlowExists(t, ovsCtlClient, tableFlow.tableName, 0, false, tableFlow.flows)
+		}
+		ofTestUtils.CheckGroupExists(t, ovsCtlClient, groupID, "select", expGroupBuckets, false)
+	}
+}
+
+func TestProxyServiceFlowsAntreaPoilcyEnabled(t *testing.T) {
+	// Reset OVS metrics (Prometheus) and reinitialize them to test.
+	legacyregistry.Reset()
+	metrics.InitializeOVSMetrics()
+
+	c = ofClient.NewClient(br, bridgeMgmtAddr, true, true, false, false, false, false, false, false, false)
+	err := ofTestUtils.PrepareOVSBridge(br)
+	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge %s", br))
+
+	config := prepareConfiguration(true, false)
+	_, err = c.Initialize(roundInfo, config.nodeConfig, &agentconfig.NetworkConfig{TrafficEncapMode: agentconfig.TrafficEncapModeEncap, IPv4Enabled: true}, &agentconfig.EgressConfig{}, &agentconfig.ServiceConfig{})
+	require.Nil(t, err, "Failed to initialize OFClient")
+
+	defer func() {
+		err = c.Disconnect()
+		assert.Nil(t, err, fmt.Sprintf("Error while disconnecting from OVS bridge: %v", err))
+		err = ofTestUtils.DeleteOVSBridge(br)
+		assert.Nil(t, err, fmt.Sprintf("Error while deleting OVS bridge: %v", err))
+		ofClient.CleanOFTableCache()
+		ofClient.ResetOFTable()
+	}()
+
+	endpoints := []k8sproxy.Endpoint{
+		k8stypes.NewEndpointInfo(&k8sproxy.BaseEndpointInfo{
+			Endpoint: net.JoinHostPort("192.168.1.2", "8081"),
+			IsLocal:  true,
+		}),
+		k8stypes.NewEndpointInfo(&k8sproxy.BaseEndpointInfo{
+			Endpoint: net.JoinHostPort("10.20.1.11", "8081"),
+			IsLocal:  false,
+		}),
+	}
+
+	stickyMaxAgeSeconds := uint16(30)
+
+	tcs := []struct {
+		svc       svcConfig
+		gid       uint32
+		endpoints []k8sproxy.Endpoint
+		stickyAge uint16
+	}{
+		{
+			svc: svcConfig{
+				protocol: ofconfig.ProtocolTCP,
+				ip:       net.ParseIP("10.20.30.41"),
+				port:     uint16(8000),
+			},
+			gid:       2,
+			endpoints: endpoints,
+			stickyAge: stickyMaxAgeSeconds,
+		},
+	}
+
+	for _, tc := range tcs {
+		groupID := ofconfig.GroupIDType(tc.gid)
+		expTableFlows, expGroupBuckets := expectedProxyServiceGroupAndFlows(tc.gid, tc.svc, tc.endpoints, tc.stickyAge, true)
 		installServiceFlows(t, tc.gid, tc.svc, tc.endpoints, tc.stickyAge)
 		for _, tableFlow := range expTableFlows {
 			ofTestUtils.CheckFlowExists(t, ovsCtlClient, tableFlow.tableName, 0, true, tableFlow.flows)
@@ -716,7 +786,7 @@ func uninstallServiceFlowsFunc(t *testing.T, gid uint32, svc svcConfig, endpoint
 	}
 }
 
-func expectedProxyServiceGroupAndFlows(gid uint32, svc svcConfig, endpointList []k8sproxy.Endpoint, stickyAge uint16) (tableFlows []expectTableFlows, groupBuckets []string) {
+func expectedProxyServiceGroupAndFlows(gid uint32, svc svcConfig, endpointList []k8sproxy.Endpoint, stickyAge uint16, antreaPolicyEnabled bool) (tableFlows []expectTableFlows, groupBuckets []string) {
 	nw_proto := 6
 	learnProtoField := "NXM_OF_TCP_DST[]"
 	if svc.protocol == ofconfig.ProtocolUDP {
@@ -732,10 +802,17 @@ func expectedProxyServiceGroupAndFlows(gid uint32, svc svcConfig, endpointList [
 		serviceLearnReg = 3
 	}
 	cookieAllocator := cookie.NewAllocator(roundInfo.RoundNum)
+
+	loadGourpID := ""
+	ctTable := "EgressRule"
+	if antreaPolicyEnabled {
+		loadGourpID = fmt.Sprintf("set_field:0x%x->reg7,", gid)
+		ctTable = "AntreaPolicyEgressRule"
+	}
 	svcFlows := expectTableFlows{tableName: "ServiceLB", flows: []*ofTestUtils.ExpectFlow{
 		{
 			MatchStr: fmt.Sprintf("priority=200,%s,reg4=0x10000/0x70000,nw_dst=%s,tp_dst=%d", string(svc.protocol), svc.ip.String(), svc.port),
-			ActStr:   fmt.Sprintf("set_field:0x%x/0x70000->reg4,set_field:0x200/0x200->reg0,set_field:0x%x->reg7,group:%d", serviceLearnReg<<16, gid, gid),
+			ActStr:   fmt.Sprintf("set_field:0x%x/0x70000->reg4,set_field:0x200/0x200->reg0,%sgroup:%d", serviceLearnReg<<16, loadGourpID, gid),
 		},
 		{
 			MatchStr: fmt.Sprintf("priority=190,%s,reg4=0x30000/0x70000,nw_dst=%s,tp_dst=%d", string(svc.protocol), svc.ip.String(), svc.port),
@@ -754,7 +831,7 @@ func expectedProxyServiceGroupAndFlows(gid uint32, svc svcConfig, endpointList [
 		unionVal := (0b010 << 16) + uint32(epPort)
 		epDNATFlows.flows = append(epDNATFlows.flows, &ofTestUtils.ExpectFlow{
 			MatchStr: fmt.Sprintf("priority=200,%s,reg3=%s,reg4=0x%x/0x7ffff", string(svc.protocol), epIP, unionVal),
-			ActStr:   fmt.Sprintf("ct(commit,table=EgressRule,zone=65520,nat(dst=%s:%d),exec(set_field:0x10/0x10->ct_mark,move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3])", ep.IP(), epPort),
+			ActStr:   fmt.Sprintf("ct(commit,table=%s,zone=65520,nat(dst=%s:%d),exec(set_field:0x10/0x10->ct_mark,move:NXM_NX_REG0[0..3]->NXM_NX_CT_MARK[0..3])", ctTable, ep.IP(), epPort),
 		})
 
 		if ep.GetIsLocal() {
