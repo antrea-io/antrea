@@ -586,7 +586,7 @@ metadata:
 ```
 
 You can edit [antrea-multicluster-member.yml](../../multicluster/build/yamls/antrea-multicluster-member.yml),
-or using `kubectl edit` to change the ConfigMap:
+or use `kubectl edit` to change the ConfigMap:
 
 ```bash
 kubectl edit configmap -n kube-system antrea-mc-controller-config**
@@ -595,7 +595,7 @@ kubectl edit configmap -n kube-system antrea-mc-controller-config**
 Normally, `podCIDRs` should be the value of `kube-controller-manager`'s
 `cluster-cidr` option. If it's left empty, the Pod-to-Pod connectivity feature
 will not be enabled. If you use `kubectl edit` to edit the ConfigMap, then you
-need to restart the Pod `antrea-mc-controller` to load the latest configuration.
+need to restart the `antrea-mc-controller` Pod to load the latest configuration.
 
 ## Build Antrea Multi-cluster Image
 
