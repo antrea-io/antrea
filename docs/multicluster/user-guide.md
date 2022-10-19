@@ -28,10 +28,16 @@ clusters.
 
 ## Quick Start
 
-Please refer to the [Quick Start Guide](./quick-start.md) to learn how to build a ClusterSet
+Please refer to the [Quick Start Guide](quick-start.md) to learn how to build a ClusterSet
 with two clusters quickly.
 
 ## Installation
+
+In this guide, all Multi-cluster installation and ClusterSet configuration are
+done by applying Antrea Multi-cluster YAML manifests. Actually, all operations
+can also be done with `antctl` Multi-cluster commands, which may be more
+convenient in many cases. You can refer to the [Quick Start Guide](quick-start.md)
+and [antctl Guide](antctl.md) to learn how to use the Multi-cluster commands.
 
 ### Preparation
 
@@ -335,12 +341,12 @@ spec:
 ## Multi-cluster Gateway Configuration
 
 Multi-cluster Gateways are required to support multi-cluster Service access
-across member clusters. Each member cluster should have one Node be specified as
-its Multi-cluster Gateway. Multi-cluster Service traffic is routed among clusters
+across member clusters. Each member cluster should have one Node served as its
+Multi-cluster Gateway. Multi-cluster Service traffic is routed among clusters
 through the tunnels between Gateways.
 
 After a member cluster joins a ClusterSet, and the `Multicluster` feature is
-enabled on `antrea-agent`, you can select one Node of the cluster to serve as
+enabled on `antrea-agent`, you can select a Node of the cluster to serve as
 the Multi-cluster Gateway by adding an annotation:
 `multicluster.antrea.io/gateway=true` to the K8s Node. For example, you can run
 the following command to annotate Node `node-1` as the Multi-cluster Gateway:
@@ -349,8 +355,18 @@ the following command to annotate Node `node-1` as the Multi-cluster Gateway:
 $kubectl annotate node node-1 multicluster.antrea.io/gateway=true
 ```
 
-Multi-cluster Controller in the member cluster will detect the Gateway Node, and
-create a `Gateway` CR with the same name as the Node. You can check it with command:
+You can annotate multiple Nodes in a member cluster as the candidates for
+Multi-cluster Gateway, but only one Node will be selected as the active Gateway.
+Before Antrea v1.9.0, the Gateway Node is just randomly selected and will never
+change unless the Node or its `gateway` annotation is deleted. Starting with
+Antrea v1.9.0, Antrea Multi-cluster Controller will guarantee a "ready" Node
+is selected as the Gateway, and when the current Gateway Node's status changes
+to not "ready", Antrea will try selecting another "ready" Node from the
+candidate Nodes to be the Gateway.
+
+Once a Gateway Node is decided, Multi-cluster Controller in the member cluster
+will create a `Gateway` CR with the same name as the Node. You can check it with
+command:
 
 ```bash
 $kubectl get gateway -n kube-system
@@ -375,13 +391,13 @@ associated with a public IP (e.g. an Elastic IP on AWS), but the IP is not added
 to the K8s Node, you can still choose to use the IP as `gatewayIP`, by adding an
 annotation: `multicluster.antrea.io/gateway-ip=<ip-address>` to the K8s Node.
 
-When selecting the Multi-cluster Gateway Node, you need to make sure the
-resulted `gatewayIP` can be reached from the remote Gateways. You may need to
-[configure firewall or security groups](../network-requirements.md) properly to
-allow the tunnels between Gateway Nodes. As of now, only IPv4 Gateway IPs are
+When choosing a candidate Node for Multi-cluster Gateway, you need to make sure
+the resulted `gatewayIP` can be reached from the remote Gateways. You may need
+to [configure firewall or security groups](../network-requirements.md) properly
+to allow the tunnels between Gateway Nodes. As of now, only IPv4 Gateway IPs are
 supported.
 
-After the Gateway is detected, Multi-cluster Controller will be responsible
+After the Gateway is created, Multi-cluster Controller will be responsible
 for exporting the cluster's network information to other member clusters
 through the leader cluster, including the cluster's Gateway IP and Service
 CIDR. Multi-cluster Controller will try to discover the cluster's Service CIDR
