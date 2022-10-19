@@ -93,7 +93,7 @@ Run the following commands to create a ClusterSet with cluster A to be the
 leader, and also join the ClusterSet as a member.
 
 ```bash
-antctl mc init --clusterset test-clusterset --clusterid test-cluster-leader -n antrea-multicluster --create-token -o join-config.yml
+antctl mc init --clusterset test-clusterset --clusterid test-cluster-leader -n antrea-multicluster --create-token -j join-config.yml
 antctl mc join --clusterid test-cluster-leader -n kube-system --config-file join-config.yml
 ```
 

@@ -85,7 +85,7 @@ kind: Config`)
 		{
 			name:           "init successfully",
 			namespace:      "default",
-			expectedOutput: "ClusterClaim \"id.k8s.io\" created in Namespace default\nClusterClaim \"clusterset.k8s.io\" created in Namespace default\nClusterSet \"test-clusterset\" created in Namespace default\nServiceAccount \"default-member-token\" created\nRoleBinding \"default-member-token\" created\nSecret \"default-member-token\" already exists\nSecret \"default-member-token\" created\nSuccessfully initialized ClusterSet test-clusterset\n",
+			expectedOutput: "ClusterClaim \"id.k8s.io\" created in Namespace default\nClusterClaim \"clusterset.k8s.io\" created in Namespace default\nClusterSet \"test-clusterset\" created in Namespace default\nSuccessfully initialized ClusterSet test-clusterset\nServiceAccount \"default-member-token\" created\nRoleBinding \"default-member-token\" created\nSecret \"default-member-token\" already exists\nSecret \"default-member-token\" created\n",
 		},
 		{
 			name:           "init fail due to empty Namespace",
