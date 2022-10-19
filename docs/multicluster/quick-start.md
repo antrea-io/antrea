@@ -114,11 +114,11 @@ antctl mc join --clusterid test-cluster-leader -n kube-system --config-file join
 
 #### Step 3 - specify Multi-cluster Gateway Node
 
-Last, you need to choose a Node in cluster A to serve as the Multi-cluster
-Gateway. The Node should have an IP that is reachable from the cluster B's
-Gateway Node, so a tunnel can be created between the two Gateways. For more
-information about Multi-cluster Gateway, please refer to the [Multi-cluster
-User Guide](user-guide.md#multi-cluster-gateway-configuration).
+Last, you need to choose at least one Node in cluster A to serve as the
+Multi-cluster Gateway. The Node should have an IP that is reachable from the
+cluster B's Gateway Node, so a tunnel can be created between the two Gateways.
+For more information about Multi-cluster Gateway, please refer to the
+[Multi-cluster User Guide](user-guide.md#multi-cluster-gateway-configuration).
 
 Assuming K8s Node `node-a1` is selected for the Multi-cluster Gateway, run
 the following command to annotate the Node with:
