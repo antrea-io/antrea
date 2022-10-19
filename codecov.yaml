@@ -9,7 +9,7 @@ comment:
   require_base: no
   require_head: no
   after_n_builds: 2
-  show_carryforward_flags: true
+  show_carryforward_flags: false
 
 github_checks:
   annotations: true
@@ -34,7 +34,7 @@ coverage:
 
 flag_management:
   default_rules:
-    carryforward: true
+    carryforward: false
 
 ignore:
   - "**/testing/*.go"
