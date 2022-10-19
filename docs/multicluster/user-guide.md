@@ -561,6 +561,7 @@ creation of ResourceExports for ACNPs, and provide a user-friendly way to define
 Multi-cluster NetworkPolicies to be enforced in the ClusterSet.
 
 ## Multi-cluster Pod-to-Pod Connectivity
+
 Since Antrea v1.9.0, Multi-cluster supports routing Pod traffic across clusters
 through Multi-cluster Gateways. Pod IPs can be reached in all member clusters
 within a ClusterSet. To enable this feature, the cluster's Pod CIDRs must be set in
