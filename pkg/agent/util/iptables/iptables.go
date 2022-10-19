@@ -75,6 +75,26 @@ const (
 // iptables-restore: support acquiring the lock.
 var restoreWaitSupportedMinVersion = semver.Version{Major: 1, Minor: 6, Patch: 2}
 
+type Interface interface {
+	EnsureChain(protocol Protocol, table string, chain string) error
+
+	ChainExists(protocol Protocol, table string, chain string) (bool, error)
+
+	AppendRule(protocol Protocol, table string, chain string, ruleSpec []string) error
+
+	InsertRule(protocol Protocol, table string, chain string, ruleSpec []string) error
+
+	DeleteRule(protocol Protocol, table string, chain string, ruleSpec []string) error
+
+	DeleteChain(protocol Protocol, table string, chain string) error
+
+	ListRules(table string, chain string) ([]string, error)
+
+	Restore(data string, flush bool, useIPv6 bool) error
+
+	Save() ([]byte, error)
+}
+
 type Client struct {
 	ipts map[Protocol]*iptables.IPTables
 	// restoreWaitSupported indicates whether iptables-restore (or ip6tables-restore) supports --wait flag.
@@ -271,7 +291,7 @@ func (c *Client) ListRules(table string, chain string) ([]string, error) {
 // Restore calls iptable-restore to restore iptables with the provided content.
 // If flush is true, all previous contents of the respective tables will be flushed.
 // Otherwise only involved chains will be flushed. Restore supports "ip6tables-restore" for IPv6.
-func (c *Client) Restore(data []byte, flush bool, useIPv6 bool) error {
+func (c *Client) Restore(data string, flush bool, useIPv6 bool) error {
 	var args []string
 	if !flush {
 		args = append(args, "--noflush")
@@ -281,7 +301,7 @@ func (c *Client) Restore(data []byte, flush bool, useIPv6 bool) error {
 		iptablesCmd = "ip6tables-restore"
 	}
 	cmd := exec.Command(iptablesCmd, args...)
-	cmd.Stdin = bytes.NewBuffer(data)
+	cmd.Stdin = bytes.NewBuffer([]byte(data))
 	stderr := &bytes.Buffer{}
 	cmd.Stderr = stderr
 	// We acquire xtables lock for iptables-restore to prevent it from conflicting
