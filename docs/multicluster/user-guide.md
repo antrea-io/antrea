@@ -11,7 +11,7 @@
 - [Multi-cluster Gateway Configuration](#multi-cluster-gateway-configuration)
 - [Multi-cluster Service](#multi-cluster-service)
 - [Multi-cluster ClusterNetworkPolicy Replication](#multi-cluster-clusternetworkpolicy-replication)
-- [Multi-cluster Pod to Pod Connectivity](#multicluster-pod-to-pod-connectivity)
+- [Multi-cluster Pod to Pod Connectivity](#multi-cluster-pod-to-pod-connectivity)
 - [Build Antrea Multi-cluster Image](#build-antrea-multi-cluster-image)
 - [Known Issue](#known-issue)
 <!-- /toc -->
@@ -560,7 +560,7 @@ In future releases, some additional tooling may become available to automate the
 creation of ResourceExports for ACNPs, and provide a user-friendly way to define
 Multi-cluster NetworkPolicies to be enforced in the ClusterSet.
 
-## Multicluster Pod-to-Pod Connectivity
+## Multi-cluster Pod-to-Pod Connectivity
 Since Antrea v1.9.0, Multi-cluster supports routing Pod traffic across clusters
 through Multi-cluster Gateways. Pod IPs can be reached in all member clusters
 within a ClusterSet. To enable this feature, the cluster's Pod CIDRs must be set in
