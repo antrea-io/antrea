@@ -37,35 +37,22 @@ import (
 	"antrea.io/antrea/pkg/antctl/raw/multicluster/common"
 )
 
-// "omitempty" fields (clusterID, namespace, tokenSecretName, tokenSecretFile)
-// can be populated by the corresponding command line options if not set in the
-// config file.
-type ClusterSetJoinConfig struct {
-	Kind            string `yaml:"kind"`
-	APIVersion      string `yaml:"apiVersion"`
-	ClusterSetID    string `yaml:"clusterSetID"`
-	ClusterID       string `yaml:"clusterID,omitempty"`
-	Namespace       string `yaml:"namespace,omitempty"`
-	LeaderClusterID string `yaml:"leaderClusterID"`
-	LeaderNamespace string `yaml:"leaderNamespace"`
-	LeaderAPIServer string `yaml:"leaderAPIServer"`
-	TokenSecretName string `yaml:"tokenSecretName,omitempty"`
-	TokenSecretFile string `yaml:"tokenSecretFile,omitempty"`
-	// The following fields are not included in the config file.
-	ConfigFile string     `yaml:"-"`
-	Secret     *v1.Secret `yaml:"-"`
+var joinOpts *joinOptions
+
+type joinOptions struct {
+	common.ClusterSetJoinConfig
+	ConfigFile string
+	Secret     *v1.Secret
 	k8sClient  client.Client
 }
 
-var joinOpts *ClusterSetJoinConfig
-
-func (o *ClusterSetJoinConfig) validateAndComplete(cmd *cobra.Command) error {
+func (o *joinOptions) validateAndComplete(cmd *cobra.Command) error {
 	if o.ConfigFile != "" {
 		raw, err := os.ReadFile(o.ConfigFile)
 		if err != nil {
 			return err
 		}
-		if err := yamlUnmarshall(raw, o); err != nil {
+		if err := yamlUnmarshall(raw, &o.ClusterSetJoinConfig); err != nil {
 			return err
 		}
 		if o.Kind != common.ClusterSetJoinConfigKind || o.APIVersion != common.ClusterSetJoinConfigAPIVersion {
@@ -154,7 +141,7 @@ func unmarshallSecret(raw []byte) (*v1.Secret, error) {
 }
 
 var joinExamples = strings.Trim(`
-# Join the ClusterSet with a pre-created token Secret.
+# Join a ClusterSet with a pre-created token Secret.
   $ antctl mc join --clusterset=clusterset1 \
                    --clusterid=cluster-east \
                    --namespace=kube-system \
@@ -163,7 +150,7 @@ var joinExamples = strings.Trim(`
                    --leader-apiserver=https://172.18.0.3:6443 \
                    --token-secret-name=cluster-east-token
 
-# Join the ClusterSet with a token Secret manifest.
+# Join a ClusterSet with a token Secret manifest.
   $ antctl mc join --clusterset=clusterset1 \
                    --clusterid=cluster-east \
                    --namespace=kube-system \
@@ -172,7 +159,7 @@ var joinExamples = strings.Trim(`
                    --leader-apiserver=https://172.18.0.3:6443 \
                    --token-secret-file=cluster-east-token.yml
 
-# Join the ClusterSet with a config manifest. 
+# Join a ClusterSet with parameters defined in a config file.
   $ antctl mc join --config-file join-config.yml
 
 # Config file example:
@@ -212,20 +199,20 @@ func NewJoinCommand() *cobra.Command {
 		RunE:    joinRunE,
 	}
 
-	o := ClusterSetJoinConfig{}
+	o := joinOptions{}
 	joinOpts = &o
 	command.Flags().StringVarP(&joinOpts.LeaderNamespace, "leader-namespace", "", "", "Namespace of the leader cluster")
 	command.Flags().StringVarP(&joinOpts.LeaderClusterID, "leader-clusterid", "", "", "Cluster ID of the leader cluster")
 	command.Flags().StringVarP(&joinOpts.TokenSecretName, "token-secret-name", "", "", "Name of the Secret resource that contains the member token. "+
-		"Token Secret name takes precedence over token Secret file and the Secret manifest in the join config file")
+		"Token Secret name takes precedence over token Secret file and the Secret manifest in the config file.")
 	command.Flags().StringVarP(&joinOpts.LeaderAPIServer, "leader-apiserver", "", "", "API Server endpoint of the leader cluster")
-	command.Flags().StringVarP(&joinOpts.Namespace, "namespace", "n", common.DefaultMemberNamespace, "Antrea Multi-cluster Namespace. Defaults to "+common.DefaultMemberNamespace)
+	command.Flags().StringVarP(&joinOpts.Namespace, "namespace", "n", common.DefaultMemberNamespace, "Antrea Multi-cluster Namespace. Defaults to "+common.DefaultMemberNamespace+".")
 	command.Flags().StringVarP(&joinOpts.ClusterID, "clusterid", "", "", "Cluster ID of the member cluster")
 	command.Flags().StringVarP(&joinOpts.ClusterSetID, "clusterset", "", "", "ClusterSet ID")
 	command.Flags().StringVarP(&joinOpts.TokenSecretFile, "token-secret-file", "", "", "Secret manifest for the member token. If specified, a Secret will be created with the manifest. "+
-		"Token Secret file takes precedence over the Secret manifest in the join config file, if both are specified.")
-	command.Flags().StringVarP(&joinOpts.ConfigFile, "config-file", "f", "", "Config file that defines all config options. If both command line options and config file are specified, "+
-		"the arguments in config file will be used.")
+		"Token Secret file takes precedence over the Secret manifest in the config file, if both are specified.")
+	command.Flags().StringVarP(&joinOpts.ConfigFile, "config-file", "f", "", "Config file that defines the join parameters. If both command line options and config file are specified, "+
+		"the values in config file take precedence.")
 
 	return command
 }

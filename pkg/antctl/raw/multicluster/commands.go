@@ -46,6 +46,7 @@ func init() {
 	GetCmd.AddCommand(get.NewClusterSetCommand())
 	GetCmd.AddCommand(get.NewResourceImportCommand())
 	GetCmd.AddCommand(get.NewResourceExportCommand())
+	GetCmd.AddCommand(get.NewJoinConfigCommand())
 	CreateCmd.AddCommand(create.NewAccessTokenCmd())
 	DeployCmd.AddCommand(deploy.NewLeaderClusterCmd())
 	DeployCmd.AddCommand(deploy.NewMemberClusterCmd())
