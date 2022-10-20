@@ -50,8 +50,10 @@ const (
 )
 
 var (
+	// Declared as variables for testing.
 	defaultFS       = afero.NewOsFs()
 	defaultExecutor = exec.New()
+	newAgentDumper  = support.NewAgentDumper
 )
 
 // NewControllerStorage creates a support bundle storage for working on antrea controller.
@@ -164,7 +166,7 @@ func (r *supportBundleREST) Create(ctx context.Context, obj runtime.Object, _ re
 			}
 		}()
 
-		if err != nil {
+		if err == nil {
 			r.clean(ctx, b.Filepath, bundleExpireDuration)
 		}
 	}(r.cache.Since)
@@ -257,7 +259,7 @@ func (r *supportBundleREST) collect(ctx context.Context, dumpers ...func(string)
 }
 
 func (r *supportBundleREST) collectAgent(ctx context.Context, since string) (*systemv1beta1.SupportBundle, error) {
-	dumper := support.NewAgentDumper(defaultFS, defaultExecutor, r.ovsCtlClient, r.aq, r.npq, since, r.v4Enabled, r.v6Enabled)
+	dumper := newAgentDumper(defaultFS, defaultExecutor, r.ovsCtlClient, r.aq, r.npq, since, r.v4Enabled, r.v6Enabled)
 	return r.collect(
 		ctx,
 		dumper.DumpLog,
