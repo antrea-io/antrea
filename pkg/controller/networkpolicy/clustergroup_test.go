@@ -932,7 +932,7 @@ func TestSyncInternalGroup(t *testing.T) {
 	cnp1 := &crdv1alpha1.ClusterNetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{Name: "cnp1", UID: "uid1"},
 		Spec: crdv1alpha1.ClusterNetworkPolicySpec{
-			AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+			AppliedTo: []crdv1alpha1.AppliedTo{
 				{PodSelector: &selectorB},
 			},
 			Priority: p10,
@@ -949,7 +949,7 @@ func TestSyncInternalGroup(t *testing.T) {
 	cnp2 := &crdv1alpha1.ClusterNetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{Name: "cnp2", UID: "uid2"},
 		Spec: crdv1alpha1.ClusterNetworkPolicySpec{
-			AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+			AppliedTo: []crdv1alpha1.AppliedTo{
 				{PodSelector: &selectorC},
 			},
 			Priority: p20,
