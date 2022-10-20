@@ -217,7 +217,7 @@ function deliver_antrea_to_aks() {
 
     for IP in ${NODE_IPS}; do
         scp -o StrictHostKeyChecking=no -i ${SSH_PRIVATE_KEY_PATH} ${antrea_image}.tar azureuser@${IP}:~
-        ssh -o StrictHostKeyChecking=no -i ${SSH_PRIVATE_KEY_PATH} -n azureuser@${IP} "sudo ctr -n=k8s.io images import ~/${antrea_image}.tar ; sudo ctr -n=k8s.io images tag ${DOCKER_IMG_NAME}:${DOCKER_IMG_VERSION} ${DOCKER_IMG_NAME}:latest"
+        ssh -o StrictHostKeyChecking=no -i ${SSH_PRIVATE_KEY_PATH} -n azureuser@${IP} "sudo ctr -n=k8s.io images import ~/${antrea_image}.tar ; sudo ctr -n=k8s.io images tag docker.io/${DOCKER_IMG_NAME}:${DOCKER_IMG_VERSION} docker.io/${DOCKER_IMG_NAME}:latest"
     done
     rm ${antrea_image}.tar
 
