@@ -29,8 +29,8 @@ clusters.
 
 ## Quick Start
 
-Please refer to the [Quick Start Guide](quick-start.md) to learn how to build a ClusterSet
-with two clusters quickly.
+Please refer to the [Quick Start Guide](quick-start.md) to learn how to build a
+ClusterSet with two clusters quickly.
 
 ## Installation
 
@@ -56,12 +56,13 @@ when applying or downloading an Antrea YAML manifest.
 
 [Multi-cluster Services](#multi-cluster-service) and
 [multi-cluster Pod-to-Pod connectivity](#multi-cluster-pod-to-pod-connectivity),
-in particular configuration (please check the corresponding sections to learn more information),
-requires an Antrea Multi-cluster Gateway to be set up in each member cluster
-to route Service and Pod traffic across clusters. To support Multi-cluster Gateways,
-`antrea-agent` must be deployed with the `Multicluster` feature enabled in a member
-cluster. You can set the following configuration parameters in `antrea-agent.conf`
-of the Antrea deployment manifest to enable the `Multicluster` feature:
+in particular configuration (please check the corresponding sections to learn more
+information), requires an Antrea Multi-cluster Gateway to be set up in each member
+cluster to route Service and Pod traffic across clusters. To support Multi-cluster
+Gateways, `antrea-agent` must be deployed with the `Multicluster` feature enabled
+in a member cluster. You can set the following configuration parameters in
+`antrea-agent.conf` of the Antrea deployment manifest to enable the `Multicluster`
+feature:
 
 ```yaml
 antrea-agent.conf: |
@@ -488,9 +489,9 @@ export the same Service with the same Ports definition including Port names. At
 the moment, Antrea Multi-cluster supports only IPv4 multi-cluster Services.
 
 By default, a multi-cluster Service will use the exported Services' ClusterIPs (the
-original Service ClusterIPs in the export clusters) as Endpoints. Since
-Antrea v1.9.0, Antrea Multi-cluster also supports using the backend Pod IPs as
-the multi-cluster Service endpoints. You can change the value of configuration option
+original Service ClusterIPs in the export clusters) as Endpoints. Since Antrea
+v1.9.0, Antrea Multi-cluster also supports using the backend Pod IPs as the
+multi-cluster Service endpoints. You can change the value of configuration option
 `endpointIPType` in ConfigMap `antrea-mc-controller-config` from `ClusterIP`
 to `PodIP` to use Pod IPs as endpoints. All member clusters in a ClusterSet should
 use the same endpoint type. Existing ServiceExports should be re-exported after
