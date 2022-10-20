@@ -16,7 +16,6 @@ package create
 
 import (
 	"bytes"
-	"log"
 	"os"
 	"testing"
 
@@ -38,58 +37,61 @@ func TestCreateAccessToken(t *testing.T) {
 		Data: map[string][]byte{"token": []byte("12345")},
 	}
 
-	secretContent := []byte(`apiVersion: v1
+	secretContent := []byte(`# Manifest to create a Secret for an Antrea Multi-cluster  member cluster token.
+---
+apiVersion: v1
+data:
+  token: MTIzNDU=
 kind: Secret
 metadata:
+  creationTimestamp: null
   name: default-member-token
-data:
-  ca.crt: YWJjZAo=
-  namespace: ZGVmYXVsdAo=
-  token: YWJjZAo=
-type: Opaque`)
+  namespace: default
+type: Opaque
+`)
 
 	tests := []struct {
 		name           string
 		namespace      string
 		expectedOutput string
-		secretFile     bool
+		secretFile     string
 		failureType    string
-		tokeName       string
+		tokenName      string
 	}{
 		{
 			name:           "create successfully",
-			tokeName:       "default-member-token",
+			tokenName:      "default-member-token",
 			namespace:      "default",
 			expectedOutput: "You can now run the \"antctl mc join\" command with the token to have the cluster join the ClusterSet\n",
 		},
 		{
 			name:           "create successfully with file",
-			tokeName:       "default-member-token",
+			tokenName:      "default-member-token",
 			namespace:      "default",
 			expectedOutput: "You can now run the \"antctl mc join\" command with the token to have the cluster join the ClusterSet\n",
-			secretFile:     true,
+			secretFile:     "test.yml",
 		},
 		{
 			name:           "fail to create without name",
 			namespace:      "default",
-			expectedOutput: "exactly one NAME is required, got 0",
+			expectedOutput: "token name must be specified",
 		},
 		{
-			name:           "fail to create without namespace",
+			name:           "fail to create without Namespace",
 			namespace:      "",
-			expectedOutput: "the Namespace is required",
+			expectedOutput: "Namespace is required",
 		},
 		{
 			name:           "fail to create and rollback",
 			namespace:      "default",
 			failureType:    "create",
-			tokeName:       "default-member-token",
+			tokenName:      "default-member-token",
 			expectedOutput: "failed to create object",
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cmd := NewAccessTokenCmd()
+			cmd := NewMemberTokenCmd()
 			buf := new(bytes.Buffer)
 			cmd.SetOutput(buf)
 			cmd.SetOut(buf)
@@ -103,19 +105,20 @@ type: Opaque`)
 					ShouldError: true,
 				}
 			}
-			if tt.tokeName != "" {
-				cmd.SetArgs([]string{tt.tokeName})
+			if tt.secretFile != "" {
+				memberTokenOpts.output = tt.secretFile
 			}
-			if tt.secretFile {
-				secret, err := os.CreateTemp("", "secret")
-				if err != nil {
-					log.Fatal(err)
-				}
-				defer os.Remove(secret.Name())
-				secret.Write([]byte(secretContent))
-				memberTokenOpts.output = secret.Name()
+
+			if tt.tokenName != "" {
+				cmd.SetArgs([]string{tt.tokenName})
 			}
 			err := cmd.Execute()
+			if tt.secretFile != "" {
+				defer os.Remove(tt.secretFile)
+				yamlFile, _ := os.ReadFile(tt.secretFile)
+
+				assert.Equal(t, string(yamlFile), string(secretContent))
+			}
 			if err != nil {
 				assert.Contains(t, err.Error(), tt.expectedOutput)
 			} else {

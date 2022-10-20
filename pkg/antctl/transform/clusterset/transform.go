@@ -76,7 +76,7 @@ func objectTransform(clusterSet multiclusterv1alpha1.ClusterSet, status multiclu
 var _ common.TableOutput = new(Response)
 
 func (r Response) GetTableHeader() []string {
-	return []string{"CLUSTER-ID", "NAMESPACE", "CLUSTER-SET-ID", "TYPE", "STATUS", "REASON"}
+	return []string{"CLUSTER-ID", "NAMESPACE", "CLUSTERSET-ID", "TYPE", "STATUS", "REASON"}
 }
 
 func (r Response) GetTableRow(maxColumnLength int) []string {

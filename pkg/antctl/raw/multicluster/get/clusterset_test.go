@@ -52,7 +52,7 @@ func TestGetClusterSet(t *testing.T) {
 			name:                "get single ClusterSet",
 			existingClusterSets: clusterSetList,
 			args:                []string{"clusterset-name"},
-			expectedOutput:      "CLUSTER-ID NAMESPACE CLUSTER-SET-ID  TYPE   STATUS REASON\n<NONE>     default   clusterset-name <NONE> <NONE> <NONE>\n",
+			expectedOutput:      "CLUSTER-ID NAMESPACE CLUSTERSET-ID   TYPE   STATUS REASON\n<NONE>     default   clusterset-name <NONE> <NONE> <NONE>\n",
 		},
 		{
 			name:                "get single ClusterSet with json output",
@@ -107,7 +107,7 @@ func TestGetClusterSet(t *testing.T) {
 					},
 				},
 			},
-			expectedOutput: "CLUSTER-ID NAMESPACE   CLUSTER-SET-ID  TYPE   STATUS REASON   \n<NONE>     default     clusterset-name <NONE> <NONE> <NONE>   \ncluster-a  kube-system clusterset-1    Ready  True   Connected\n",
+			expectedOutput: "CLUSTER-ID NAMESPACE   CLUSTERSET-ID   TYPE   STATUS REASON   \n<NONE>     default     clusterset-name <NONE> <NONE> <NONE>   \ncluster-a  kube-system clusterset-1    Ready  True   Connected\n",
 		},
 		{
 			name:           "get all ClusterSets but empty result",

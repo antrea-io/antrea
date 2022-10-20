@@ -91,7 +91,6 @@ func CreateClusterClaim(cmd *cobra.Command, k8sClient client.Client, namespace s
 		if !apierrors.IsAlreadyExists(createErr) {
 			fmt.Fprintf(cmd.OutOrStdout(), "Failed to create ClusterClaim \"%s\": %v\n", multiclusterv1alpha2.WellKnownClusterClaimID, createErr)
 			return createErr
-
 		}
 		fmt.Fprintf(cmd.OutOrStdout(), "ClusterClaim \"%s\" already exists in Namespace %s\n", multiclusterv1alpha2.WellKnownClusterClaimID, namespace)
 		createErr = nil
@@ -231,6 +230,23 @@ func deleteServiceAccounts(cmd *cobra.Command, k8sClient client.Client, namespac
 	}
 }
 
+// ConvertMemberTokenSecret generates a token Secret manifest for creating the input Secret in a member cluster.
+func ConvertMemberTokenSecret(secret corev1.Secret) corev1.Secret {
+	s := corev1.Secret{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "v1",
+			Kind:       "Secret",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      secret.Name,
+			Namespace: secret.Namespace,
+		},
+		Data: secret.Data,
+		Type: corev1.SecretTypeOpaque,
+	}
+	return s
+}
+
 func CreateMemberToken(cmd *cobra.Command, k8sClient client.Client, name string, namespace string, file *os.File, createdRes *[]map[string]interface{}) error {
 	var createErr error
 	serviceAccount := newServiceAccount(name, namespace)
@@ -291,17 +307,8 @@ func CreateMemberToken(cmd *cobra.Command, k8sClient client.Client, name string,
 	if err := k8sClient.Get(context.TODO(), types.NamespacedName{Name: name, Namespace: namespace}, secret); err != nil {
 		return err
 	}
-	s := &corev1.Secret{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "v1",
-			Kind:       "Secret",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name: name,
-		},
-		Data: secret.Data,
-		Type: corev1.SecretTypeOpaque,
-	}
+
+	s := ConvertMemberTokenSecret(*secret)
 
 	b, err := k8syaml.Marshal(s)
 	if err != nil {
@@ -318,6 +325,83 @@ func CreateMemberToken(cmd *cobra.Command, k8sClient client.Client, name string,
 	}
 	fmt.Fprintf(cmd.OutOrStdout(), "Member token saved to %s\n", file.Name())
 
+	return nil
+}
+
+func DeleteMemberToken(cmd *cobra.Command, k8sClient client.Client, name string, namespace string) error {
+	errFunc := func(kind string, act string, err error) error {
+		if apierrors.IsNotFound(err) {
+			fmt.Fprintf(cmd.OutOrStdout(), "%s %s not found in Namespace %s\n", kind, name, namespace)
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if act == "delete" {
+			fmt.Fprintf(cmd.OutOrStdout(), "%s %s deleted\n", kind, name)
+		}
+		return nil
+	}
+
+	secret := &corev1.Secret{}
+	getErr := k8sClient.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: name}, secret)
+	err := errFunc("Secret", "get", getErr)
+	if err != nil {
+		return err
+	}
+	if secret.Annotations[CreateByAntctlAnnotation] == "true" {
+		deleteErr := k8sClient.Delete(context.TODO(), &corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: namespace,
+				Name:      name,
+			}}, &client.DeleteOptions{})
+		err = errFunc("Secret", "delete", deleteErr)
+		if err != nil {
+			return err
+		}
+	} else {
+		fmt.Fprintf(cmd.OutOrStdout(), "Secret %s is not created by antctl,  ignoring it", name)
+	}
+
+	roleBinding := &rbacv1.RoleBinding{}
+	getErr = k8sClient.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: name}, roleBinding)
+	err = errFunc("RoleBinding", "get", getErr)
+	if err != nil {
+		return err
+	}
+	if roleBinding.Annotations[CreateByAntctlAnnotation] == "true" {
+		deleteErr := k8sClient.Delete(context.TODO(), &rbacv1.RoleBinding{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: namespace,
+				Name:      name,
+			}}, &client.DeleteOptions{})
+		err = errFunc("RoleBinding", "delete", deleteErr)
+		if err != nil {
+			return err
+		}
+	} else {
+		fmt.Fprintf(cmd.OutOrStdout(), "RoleBinding %s is not created by antctl , ignoring it", name)
+	}
+
+	serviceAccount := &corev1.ServiceAccount{}
+	getErr = k8sClient.Get(context.TODO(), types.NamespacedName{Namespace: namespace, Name: name}, serviceAccount)
+	err = errFunc("ServiceAccount", "get", getErr)
+	if err != nil {
+		return err
+	}
+	if serviceAccount.Annotations[CreateByAntctlAnnotation] == "true" {
+		deleteErr := k8sClient.Delete(context.TODO(), &corev1.ServiceAccount{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: namespace,
+				Name:      name,
+			}}, &client.DeleteOptions{})
+		err = errFunc("ServiceAccount", "delete", deleteErr)
+		if err != nil {
+			return err
+		}
+	} else {
+		fmt.Fprintf(cmd.OutOrStdout(), "ServiceAccount %s is not created by antctl, ignoring it", name)
+	}
 	return nil
 }
 
