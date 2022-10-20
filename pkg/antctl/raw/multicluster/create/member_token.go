@@ -34,15 +34,15 @@ type memberTokenOptions struct {
 var memberTokenOpts *memberTokenOptions
 
 var memberTokenExamples = strings.Trim(`
-# Create a member token.
+# Create a member token in the antrea-multicluster Namespace
   $ antctl mc create membertoken cluster-east-token -n antrea-multicluster
-# Create a member token and save the Secret manifest to a file.
+# Create a member token and save the Secret manifest to a file
   $ antctl mc create membertoken cluster-east-token -n antrea-multicluster -o token-secret.yml
 `, "\n")
 
 func (o *memberTokenOptions) validateAndComplete(cmd *cobra.Command) error {
 	if o.namespace == "" {
-		return fmt.Errorf("the Namespace is required")
+		return fmt.Errorf("Namespace is required")
 	}
 	var err error
 	if o.k8sClient == nil {
@@ -54,12 +54,12 @@ func (o *memberTokenOptions) validateAndComplete(cmd *cobra.Command) error {
 	return nil
 }
 
-func NewAccessTokenCmd() *cobra.Command {
+func NewMemberTokenCmd() *cobra.Command {
 	command := &cobra.Command{
 		Use:     "membertoken",
 		Args:    cobra.MaximumNArgs(1),
 		Short:   "Create a member token in a leader cluster",
-		Long:    "Create a member token in a leader cluster, which will be saved in a Secret. A ServiceAccount and a RoleBinding will be created too if they do not exist.",
+		Long:    "Create a member token in a leader cluster, which will be saved in a Secret. A ServiceAccount and a RoleBinding will be created too.",
 		Example: memberTokenExamples,
 		RunE:    memberTokenRunE,
 	}
@@ -76,8 +76,8 @@ func memberTokenRunE(cmd *cobra.Command, args []string) error {
 	if err := memberTokenOpts.validateAndComplete(cmd); err != nil {
 		return err
 	}
-	if len(args) != 1 {
-		return fmt.Errorf("exactly one NAME is required, got %d", len(args))
+	if len(args) == 0 {
+		return fmt.Errorf("token name must be specified")
 	}
 	var createErr error
 	createdRes := []map[string]interface{}{}
