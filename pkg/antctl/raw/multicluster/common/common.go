@@ -253,10 +253,10 @@ func CreateMemberToken(cmd *cobra.Command, k8sClient client.Client, name string,
 	createErr = k8sClient.Create(context.TODO(), serviceAccount)
 	if createErr != nil {
 		if !apierrors.IsAlreadyExists(createErr) {
-			fmt.Fprintf(cmd.OutOrStdout(), "Failed to create ServiceAccount \"%s\", error: %s\n", name, createErr.Error())
+			fmt.Fprintf(cmd.ErrOrStderr(), "Failed to create ServiceAccount \"%s\": %s\n", name, createErr.Error())
 			return createErr
 		}
-		fmt.Fprintf(cmd.OutOrStderr(), "ServiceAccount \"%s\" already exists\n", name)
+		fmt.Fprintf(cmd.OutOrStdout(), "ServiceAccount \"%s\" already exists\n", name)
 		createErr = nil
 	} else {
 		fmt.Fprintf(cmd.OutOrStdout(), "ServiceAccount \"%s\" created\n", serviceAccount.Name)
@@ -268,10 +268,10 @@ func CreateMemberToken(cmd *cobra.Command, k8sClient client.Client, name string,
 	createErr = k8sClient.Create(context.TODO(), roleBinding)
 	if createErr != nil {
 		if !apierrors.IsAlreadyExists(createErr) {
-			fmt.Fprintf(cmd.OutOrStdout(), "Failed to create RoleBinding \"%s\", error: %s\n", name, createErr.Error())
+			fmt.Fprintf(cmd.ErrOrStderr(), "Failed to create RoleBinding \"%s\": %s\n", name, createErr.Error())
 			return createErr
 		}
-		fmt.Fprintf(cmd.OutOrStderr(), "RoleBinding \"%s\" already exists\n", name)
+		fmt.Fprintf(cmd.OutOrStdout(), "RoleBinding \"%s\" already exists\n", name)
 		createErr = nil
 	} else {
 		fmt.Fprintf(cmd.OutOrStdout(), "RoleBinding \"%s\" created\n", roleBinding.Name)
@@ -284,10 +284,10 @@ func CreateMemberToken(cmd *cobra.Command, k8sClient client.Client, name string,
 	if createErr != nil {
 		secretAlreadyExists = apierrors.IsAlreadyExists(createErr)
 		if !secretAlreadyExists {
-			fmt.Fprintf(cmd.OutOrStdout(), "Failed to create Secret \"%s\", start rollback\n", name)
+			fmt.Fprintf(cmd.ErrOrStderr(), "Failed to create Secret \"%s\": %s\n", name, createErr.Error())
 			return createErr
 		}
-		fmt.Fprintf(cmd.OutOrStderr(), "Secret \"%s\" already exists\n", name)
+		fmt.Fprintf(cmd.OutOrStdout(), "Secret \"%s\" already exists\n", name)
 	}
 	// It will take one or two seconds to wait for the Data.token to be created.
 	if err := waitForSecretReady(k8sClient, name, namespace); err != nil {

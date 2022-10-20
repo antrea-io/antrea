@@ -38,7 +38,7 @@ var deleteTokenExamples = strings.Trim(`
 
 func (o *deleteTokenOptions) validateAndComplete(cmd *cobra.Command) error {
 	if o.namespace == "" {
-		return fmt.Errorf("Namespace is required")
+		return fmt.Errorf("Namespace must be specified")
 	}
 
 	var err error

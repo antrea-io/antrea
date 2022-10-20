@@ -40,7 +40,7 @@ func TestDestroy(t *testing.T) {
 		},
 		{
 			name:           "fail to destroy due to empty Namespace",
-			expectedOutput: "the Namespace is required",
+			expectedOutput: "Namespace must be specified",
 			namespace:      "",
 		},
 	}

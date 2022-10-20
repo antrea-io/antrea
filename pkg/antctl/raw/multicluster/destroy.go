@@ -25,14 +25,14 @@ import (
 var destroyOpts *common.CleanOptions
 
 var destroyExamples = strings.Trim(`
-# Destroy ClusterSet in the leader cluster.
+# Destroy the ClusterSet in the antrea-multicluster Namespace
   antctl mc destroy --clusterset clusterset1 -n antrea-multicluster
 `, "\n")
 
 func NewDestroyCommand() *cobra.Command {
 	command := &cobra.Command{
 		Use:     "destroy",
-		Short:   "Destroy ClusterSet in the given Namespace of the leader cluster",
+		Short:   "Destroy the ClusterSet in the given Namespace of the leader cluster",
 		Args:    cobra.MaximumNArgs(0),
 		Example: destroyExamples,
 		RunE:    destroyRunE,

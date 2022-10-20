@@ -29,12 +29,12 @@ func TestValidation(t *testing.T) {
 	}{
 		{
 			name:           "empty ClusterSet",
-			expectedOutput: "the ClusterSet is required",
+			expectedOutput: "ClusterSet must be provided",
 			opts:           &CleanOptions{},
 		},
 		{
 			name:           "empty Namespace",
-			expectedOutput: "the Namespace is required",
+			expectedOutput: "Namespace must be specified",
 			opts:           &CleanOptions{ClusterSet: "test"},
 		},
 	}

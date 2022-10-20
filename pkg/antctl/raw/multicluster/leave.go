@@ -25,8 +25,8 @@ import (
 var leaveOpts *common.CleanOptions
 
 var leaveExamples = strings.Trim(`
-# Leave the ClusterSet from a member cluster.
-  antctl mc leave --clusterset clusterset1 --namespace kube-system
+# Leave the ClusterSet in the kube-system Namespace
+  antctl mc leave --clusterset clusterset1 -n kube-system
 `, "\n")
 
 func NewLeaveCommand() *cobra.Command {

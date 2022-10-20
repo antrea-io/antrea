@@ -90,7 +90,7 @@ kind: Config`)
 		{
 			name:           "init fail due to empty Namespace",
 			namespace:      "",
-			expectedOutput: "the Namespace is required",
+			expectedOutput: "Namespace must be specified",
 		},
 		{
 			name:           "fail to create and rollback",
@@ -141,12 +141,12 @@ func TestInitOptValidate(t *testing.T) {
 	}{
 		{
 			name:           "empty Namespace",
-			expectedOutput: "the Namespace is required",
+			expectedOutput: "Namespace must be specified",
 			opts:           &initOptions{clusterID: "cluster-a"},
 		},
 		{
 			name:           "empty ClusterSet",
-			expectedOutput: "the ClusterSet is required",
+			expectedOutput: "ClusterSet must be provided",
 			opts: &initOptions{
 				clusterID: "cluster-a",
 				namespace: "default",
@@ -154,7 +154,7 @@ func TestInitOptValidate(t *testing.T) {
 		},
 		{
 			name:           "empty ClusterID",
-			expectedOutput: "the ClusterID is required",
+			expectedOutput: "ClusterID must be provided",
 			opts: &initOptions{
 				clusterSet: "clusterset-a",
 				namespace:  "default",

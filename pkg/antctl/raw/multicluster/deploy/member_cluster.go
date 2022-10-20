@@ -31,9 +31,9 @@ type memberClusterOptions struct {
 var memberClusterOpts *memberClusterOptions
 
 var memberClusterExamples = strings.Trim(`
-# Define the member cluster CRDs and deploy the "antrea-mc-controller" Deployment in a specified Namespace
+# Deploy Antrea Multi-cluster of the specified version into a Namespace
   $ antctl mc deploy membercluster --antrea-version <ANTREA_VERSION> -n <NAMESPACE>
-# Define the member cluster CRDs and deploy the "antrea-mc-controller" Deployment using pre-downloaded manifest
+# Deploy Antrea Multi-cluster using a pre-downloaded manifest
   $ antctl mc deploy membercluster -f <PATH_TO_MANIFEST>
 
 The following CRDs will be defined:
@@ -47,7 +47,7 @@ func (o *memberClusterOptions) validateAndComplete() error {
 		}
 	}
 	if o.namespace == "" {
-		return fmt.Errorf("the Namespace cannot be empty")
+		return fmt.Errorf("Namespace must be specified")
 	}
 	if o.antreaVersion == "" {
 		o.antreaVersion = "latest"
@@ -69,7 +69,7 @@ func NewMemberClusterCmd() *cobra.Command {
 	memberClusterOpts = o
 	command.Flags().StringVarP(&o.namespace, "namespace", "n", "", "Namespace to deploy Antrea Multi-cluster")
 	command.Flags().StringVarP(&o.antreaVersion, "antrea-version", "", "",
-		"version of Antrea Multi-cluster to deploy. If not set, the latest version from Antrea main branch will be used. "+
+		"version of Antrea Multi-cluster to deploy. If not specified, the latest version from Antrea main branch will be used. "+
 			"When manifest-file is not provided, the Antrea Multi-cluster deployment manifest of the specified version will be downloaded and applied; "+
 			"when manifest-file is provided, this option will be ignored")
 	command.Flags().StringVarP(&o.filename, "manifest-file", "f", "", "path to the Antrea Multi-cluster deployment manifest file for member cluster")

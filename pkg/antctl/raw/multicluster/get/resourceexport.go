@@ -30,8 +30,6 @@ import (
 	"antrea.io/antrea/pkg/antctl/transform/resourceexport"
 )
 
-var cmdResourceExport *cobra.Command
-
 type resourceExportOptions struct {
 	namespace     string
 	outputFormat  string
@@ -76,7 +74,7 @@ func (o *resourceExportOptions) validateAndComplete(cmd *cobra.Command) error {
 }
 
 func NewResourceExportCommand() *cobra.Command {
-	cmdResourceExport = &cobra.Command{
+	cmdResourceExport := &cobra.Command{
 		Use: "resourceexport",
 		Aliases: []string{
 			"resourceexports",
@@ -148,9 +146,9 @@ func runEResourceExport(cmd *cobra.Command, args []string) error {
 		}
 		if len(resourceExportList.Items) == 0 {
 			if optionsResourceExport.namespace != "" {
-				fmt.Fprintf(cmd.ErrOrStderr(), "No resources found in Namespace %s\n", optionsResourceExport.namespace)
+				fmt.Fprintf(cmd.OutOrStdout(), "No ResourceExport found in Namespace %s\n", optionsResourceExport.namespace)
 			} else {
-				fmt.Fprintln(cmd.ErrOrStderr(), "No resources found")
+				fmt.Fprintln(cmd.OutOrStdout(), "No ResourceExport found")
 			}
 			return nil
 		}

@@ -36,8 +36,6 @@ type tokenOptions struct {
 	k8sClient     client.Client
 }
 
-var cmdToken *cobra.Command
-
 var optionsToken *tokenOptions
 
 var tokenExamples = strings.Trim(`
@@ -53,7 +51,7 @@ var tokenExamples = strings.Trim(`
 
 func (o *tokenOptions) validateAndComplete(cmd *cobra.Command) error {
 	if o.namespace == "" && !o.allNamespaces {
-		return fmt.Errorf("Namespace is required")
+		return fmt.Errorf("Namespace must be specified")
 	}
 	if o.allNamespaces {
 		o.namespace = metav1.NamespaceAll
@@ -70,7 +68,7 @@ func (o *tokenOptions) validateAndComplete(cmd *cobra.Command) error {
 }
 
 func NewMemberTokenCommand() *cobra.Command {
-	cmdToken = &cobra.Command{
+	cmdToken := &cobra.Command{
 		Use: "membertoken",
 		Aliases: []string{
 			"membertokens",
