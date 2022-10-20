@@ -488,7 +488,7 @@ export the same Service with the same Ports definition including Port names. At
 the moment, Antrea Multi-cluster supports only IPv4 multi-cluster Services.
 
 By default, a multi-cluster Service will use the exported Services' ClusterIPs (the
-original Service ClusterIPs in the export clusters) as the endpoints. Since
+original Service ClusterIPs in the export clusters) as Endpoints. Since
 Antrea v1.9.0, Antrea Multi-cluster also supports using the backend Pod IPs as
 the multi-cluster Service endpoints. You can change the value of configuration option
 `endpointIPType` in ConfigMap `antrea-mc-controller-config` from `ClusterIP`
