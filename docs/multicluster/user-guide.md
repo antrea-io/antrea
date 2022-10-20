@@ -496,7 +496,7 @@ to `PodIP` to use Pod IPs as endpoints. All member clusters in a ClusterSet shou
 use the same endpoint type. Existing ServiceExports should be re-exported after
 changing `endpointIPType`. `ClusterIP` type requires that Service CIDRs (ClusterIP
 ranges) must not overlap among member clusters, and always requires Multi-cluster
-Gateways to be configured. `PodIP` type requires Pod CIDRs must not overlap among
+Gateways to be configured. `PodIP` type requires Pod CIDRs not to overlap among
 clusters, and it also requires Multi-cluster Gateways when there is no direct Pod-to-Pod
 connectivity across clusters. Also refer to [Multi-cluster Pod-to-Pod Connectivity](#multi-cluster-pod-to-pod-connectivity)
 for more information.
