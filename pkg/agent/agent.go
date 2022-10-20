@@ -271,6 +271,7 @@ func (i *Initializer) initInterfaceStore() error {
 		return intf
 	}
 	ifaceList := make([]*interfacestore.InterfaceConfig, 0, len(ovsPorts))
+	ovsCtlClient := ovsctl.NewClient(i.ovsBridge)
 	for index := range ovsPorts {
 		port := &ovsPorts[index]
 		ovsPort := &interfacestore.OVSPortConfig{
@@ -305,6 +306,9 @@ func (i *Initializer) initInterfaceStore() error {
 				intf = cniserver.ParseOVSPortInterfaceConfig(port, ovsPort, true)
 			case interfacestore.AntreaTrafficControl:
 				intf = trafficcontrol.ParseTrafficControlInterfaceConfig(port, ovsPort)
+				if err := ovsCtlClient.SetPortNoFlood(int(ovsPort.OFPort)); err != nil {
+					klog.ErrorS(err, "Failed to set port with no-flood config", "PortName", port.Name)
+				}
 			default:
 				klog.InfoS("Unknown Antrea interface type", "type", interfaceType)
 			}
