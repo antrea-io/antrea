@@ -22,7 +22,7 @@ require (
 	github.com/containernetworking/cni v0.8.1
 	github.com/containernetworking/plugins v0.8.7
 	github.com/coreos/go-iptables v0.6.0
-	github.com/fsnotify/fsnotify v1.5.4
+	github.com/fsnotify/fsnotify v1.6.0
 	github.com/gammazero/deque v0.1.2
 	github.com/go-logr/logr v1.2.3
 	github.com/gogo/protobuf v1.3.2
@@ -59,7 +59,7 @@ require (
 	golang.org/x/mod v0.6.0-dev.0.20220106191415-9b9b3d81d5e3
 	golang.org/x/net v0.0.0-20220722155237-a158d28d115b
 	golang.org/x/sync v0.0.0-20220601150217-0de741cfad7f
-	golang.org/x/sys v0.0.0-20220728004956-3c1f35247d10
+	golang.org/x/sys v0.0.0-20220908164124-27713097b956
 	golang.org/x/time v0.0.0-20220210224613-90d013bbcef8
 	golang.org/x/tools v0.1.10-0.20220218145154-897bd77cd717
 	golang.zx2c4.com/wireguard/wgctrl v0.0.0-20210506160403-92e472f520a5
