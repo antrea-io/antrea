@@ -2114,7 +2114,7 @@ func (data *TestData) createANPDenyIngress(key string, value string, name string
 		Spec: v1alpha1.NetworkPolicySpec{
 			Tier:     defaultTierName,
 			Priority: 250,
-			AppliedTo: []v1alpha1.NetworkPolicyPeer{
+			AppliedTo: []v1alpha1.AppliedTo{
 				{
 					PodSelector: &metav1.LabelSelector{
 						MatchLabels: map[string]string{

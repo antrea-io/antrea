@@ -360,7 +360,7 @@ func testMulticastStatsWithSendersReceivers(t *testing.T, data *TestData, mc mul
 			ObjectMeta: metav1.ObjectMeta{Namespace: data.testNamespace, Name: anp.name, Labels: map[string]string{"antrea-e2e": anp.name}},
 			Spec: crdv1alpha1.NetworkPolicySpec{
 				Priority: p10,
-				AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+				AppliedTo: []crdv1alpha1.AppliedTo{
 					{PodSelector: &metav1.LabelSelector{MatchLabels: map[string]string{"antrea-e2e": anp.appliedToPod}}},
 				},
 				Egress: []crdv1alpha1.Rule{},
@@ -394,7 +394,7 @@ func testMulticastStatsWithSendersReceivers(t *testing.T, data *TestData, mc mul
 			ObjectMeta: metav1.ObjectMeta{Namespace: data.testNamespace, Name: anp.name, Labels: map[string]string{"antrea-e2e": anp.name}},
 			Spec: crdv1alpha1.NetworkPolicySpec{
 				Priority: p10,
-				AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+				AppliedTo: []crdv1alpha1.AppliedTo{
 					{PodSelector: &metav1.LabelSelector{MatchLabels: map[string]string{"antrea-e2e": anp.appliedToPod}}},
 				},
 				Egress:  []crdv1alpha1.Rule{},

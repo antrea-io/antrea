@@ -139,7 +139,7 @@ func TestStaleController_CleanupACNP(t *testing.T) {
 			ClusterNetworkPolicy: &v1alpha1.ClusterNetworkPolicySpec{
 				Tier:     "securityops",
 				Priority: 1.0,
-				AppliedTo: []v1alpha1.NetworkPolicyPeer{
+				AppliedTo: []v1alpha1.AppliedTo{
 					{NamespaceSelector: &metav1.LabelSelector{}},
 				},
 			},

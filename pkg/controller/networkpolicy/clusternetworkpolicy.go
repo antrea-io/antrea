@@ -83,7 +83,7 @@ func (n *NetworkPolicyController) deleteCNP(old interface{}) {
 // filterPerNamespaceRuleACNPsByNSLabels gets all ClusterNetworkPolicy names that will need to be
 // re-processed based on the entire label set of an added/updated/deleted Namespace.
 func (n *NetworkPolicyController) filterPerNamespaceRuleACNPsByNSLabels(nsLabels labels.Set) sets.String {
-	namespaceLabelMatches := func(peers []crdv1alpha1.NetworkPolicyPeer) bool {
+	namespaceLabelMatches := func(peers []crdv1alpha1.AppliedTo) bool {
 		for _, peer := range peers {
 			nsLabelSelector := peer.NamespaceSelector
 			if peer.Group != "" {
@@ -485,7 +485,7 @@ func hasPerNamespaceRule(cnp *crdv1alpha1.ClusterNetworkPolicy) bool {
 
 // processClusterAppliedTo processes appliedTo groups in Antrea ClusterNetworkPolicy set
 // at cluster level (appliedTo groups which will not need to be split by Namespaces).
-func (n *NetworkPolicyController) processClusterAppliedTo(appliedTo []crdv1alpha1.NetworkPolicyPeer) []*antreatypes.AppliedToGroup {
+func (n *NetworkPolicyController) processClusterAppliedTo(appliedTo []crdv1alpha1.AppliedTo) []*antreatypes.AppliedToGroup {
 	var appliedToGroups []*antreatypes.AppliedToGroup
 	for _, at := range appliedTo {
 		var atg *antreatypes.AppliedToGroup
@@ -525,7 +525,7 @@ func splitPeersByScope(rule crdv1alpha1.Rule, dir controlplane.Direction) ([]crd
 
 // getAffectedNamespacesForAppliedTo computes the Namespaces currently affected by the appliedTo
 // Namespace selectors.
-func (n *NetworkPolicyController) getAffectedNamespacesForAppliedTo(appliedTo crdv1alpha1.NetworkPolicyPeer) []string {
+func (n *NetworkPolicyController) getAffectedNamespacesForAppliedTo(appliedTo crdv1alpha1.AppliedTo) []string {
 	var affectedNS []string
 
 	nsLabelSelector := appliedTo.NamespaceSelector

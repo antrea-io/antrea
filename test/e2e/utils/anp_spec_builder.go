@@ -78,7 +78,7 @@ func (b *AntreaNetworkPolicySpecBuilder) GetAppliedToPeer(podSelector map[string
 	podSelectorMatchExp []metav1.LabelSelectorRequirement,
 	entitySelector map[string]string,
 	entitySelectorMatchExp []metav1.LabelSelectorRequirement,
-	appliedToGrp string) crdv1alpha1.NetworkPolicyPeer {
+	appliedToGrp string) crdv1alpha1.AppliedTo {
 	var ps, ees *metav1.LabelSelector
 	if len(entitySelector) > 0 || len(entitySelectorMatchExp) > 0 {
 		ees = &metav1.LabelSelector{
@@ -92,7 +92,7 @@ func (b *AntreaNetworkPolicySpecBuilder) GetAppliedToPeer(podSelector map[string
 			MatchExpressions: podSelectorMatchExp,
 		}
 	}
-	peer := crdv1alpha1.NetworkPolicyPeer{
+	peer := crdv1alpha1.AppliedTo{
 		PodSelector:            ps,
 		ExternalEntitySelector: ees,
 	}
@@ -108,7 +108,7 @@ func (b *AntreaNetworkPolicySpecBuilder) AddIngress(protoc AntreaPolicyProtocol,
 	podSelectorMatchExp []metav1.LabelSelectorRequirement, nsSelectorMatchExp []metav1.LabelSelectorRequirement, eeSelectorMatchExp []metav1.LabelSelectorRequirement,
 	ruleAppliedToSpecs []ANPAppliedToSpec, action crdv1alpha1.RuleAction, ruleGroup, name string) *AntreaNetworkPolicySpecBuilder {
 	var ps, ns, ees *metav1.LabelSelector
-	var appliedTos []crdv1alpha1.NetworkPolicyPeer
+	var appliedTos []crdv1alpha1.AppliedTo
 	if b.Spec.Ingress == nil {
 		b.Spec.Ingress = []crdv1alpha1.Rule{}
 	}
@@ -189,7 +189,7 @@ func (b *AntreaNetworkPolicySpecBuilder) AddEgress(protoc AntreaPolicyProtocol,
 
 func (b *AntreaNetworkPolicySpecBuilder) AddToServicesRule(svcRefs []crdv1alpha1.NamespacedName,
 	name string, ruleAppliedToSpecs []ANPAppliedToSpec, action crdv1alpha1.RuleAction) *AntreaNetworkPolicySpecBuilder {
-	var appliedTos []crdv1alpha1.NetworkPolicyPeer
+	var appliedTos []crdv1alpha1.AppliedTo
 	for _, at := range ruleAppliedToSpecs {
 		appliedTos = append(appliedTos, b.GetAppliedToPeer(at.PodSelector, at.PodSelectorMatchExp, at.ExternalEntitySelector, at.ExternalEntitySelectorMatchExp, at.Group))
 	}

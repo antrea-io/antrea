@@ -66,7 +66,7 @@ func TestProcessAntreaNetworkPolicy(t *testing.T) {
 			inputPolicy: &crdv1alpha1.NetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{Namespace: "ns1", Name: "npA", UID: "uidA"},
 				Spec: crdv1alpha1.NetworkPolicySpec{
-					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+					AppliedTo: []crdv1alpha1.AppliedTo{
 						{PodSelector: &selectorA},
 					},
 					Priority: p10,
@@ -155,7 +155,7 @@ func TestProcessAntreaNetworkPolicy(t *testing.T) {
 			inputPolicy: &crdv1alpha1.NetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{Namespace: "ns2", Name: "npB", UID: "uidB"},
 				Spec: crdv1alpha1.NetworkPolicySpec{
-					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+					AppliedTo: []crdv1alpha1.AppliedTo{
 						{PodSelector: &selectorA},
 					},
 					Priority: p10,
@@ -244,7 +244,7 @@ func TestProcessAntreaNetworkPolicy(t *testing.T) {
 					Priority:  p10,
 					Ingress: []crdv1alpha1.Rule{
 						{
-							AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+							AppliedTo: []crdv1alpha1.AppliedTo{
 								{
 									PodSelector: &selectorA,
 								},
@@ -262,7 +262,7 @@ func TestProcessAntreaNetworkPolicy(t *testing.T) {
 							Action: &allowAction,
 						},
 						{
-							AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+							AppliedTo: []crdv1alpha1.AppliedTo{
 								{
 									PodSelector: &selectorB,
 								},
@@ -339,7 +339,7 @@ func TestProcessAntreaNetworkPolicy(t *testing.T) {
 			inputPolicy: &crdv1alpha1.NetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{Namespace: "ns4", Name: "npD", UID: "uidD"},
 				Spec: crdv1alpha1.NetworkPolicySpec{
-					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+					AppliedTo: []crdv1alpha1.AppliedTo{
 						{PodSelector: &selectorA},
 					},
 					Priority: p10,
@@ -401,7 +401,7 @@ func TestProcessAntreaNetworkPolicy(t *testing.T) {
 			inputPolicy: &crdv1alpha1.NetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{Namespace: "ns5", Name: "npE", UID: "uidE"},
 				Spec: crdv1alpha1.NetworkPolicySpec{
-					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+					AppliedTo: []crdv1alpha1.AppliedTo{
 						{PodSelector: &selectorA},
 					},
 					Priority: p10,
@@ -454,7 +454,7 @@ func TestProcessAntreaNetworkPolicy(t *testing.T) {
 			inputPolicy: &crdv1alpha1.NetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{Namespace: "ns6", Name: "npF", UID: "uidF"},
 				Spec: crdv1alpha1.NetworkPolicySpec{
-					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+					AppliedTo: []crdv1alpha1.AppliedTo{
 						{PodSelector: &selectorA},
 					},
 					Priority: p10,
@@ -512,7 +512,7 @@ func TestProcessAntreaNetworkPolicy(t *testing.T) {
 			inputPolicy: &crdv1alpha1.NetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{Namespace: "ns7", Name: "npG", UID: "uidG"},
 				Spec: crdv1alpha1.NetworkPolicySpec{
-					AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+					AppliedTo: []crdv1alpha1.AppliedTo{
 						{PodSelector: &selectorA},
 					},
 					Priority: p10,
@@ -648,7 +648,7 @@ func getANP() *crdv1alpha1.NetworkPolicy {
 	npObj := &crdv1alpha1.NetworkPolicy{
 		ObjectMeta: metav1.ObjectMeta{Namespace: "test-ns", Name: "test-anp"},
 		Spec: crdv1alpha1.NetworkPolicySpec{
-			AppliedTo: []crdv1alpha1.NetworkPolicyPeer{
+			AppliedTo: []crdv1alpha1.AppliedTo{
 				{PodSelector: &selectorA},
 			},
 			Priority: p10,
