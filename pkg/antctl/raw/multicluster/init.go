@@ -40,13 +40,13 @@ var initOpts *initOptions
 
 func (o *initOptions) validate(cmd *cobra.Command) error {
 	if o.namespace == "" {
-		return fmt.Errorf("the Namespace is required")
+		return fmt.Errorf("Namespace must be specified")
 	}
 	if o.clusterSet == "" {
-		return fmt.Errorf("the ClusterSet is required")
+		return fmt.Errorf("ClusterSet must be provided")
 	}
 	if o.clusterID == "" {
-		return fmt.Errorf("the ClusterID is required")
+		return fmt.Errorf("ClusterID must be provided")
 	}
 	var err error
 	if o.k8sClient == nil {
@@ -96,7 +96,7 @@ func initRunE(cmd *cobra.Command, args []string) error {
 	var createErr error
 	defer func() {
 		if createErr != nil {
-			fmt.Fprintf(cmd.OutOrStderr(), "Failed to initialize the ClusterSet. Deleting the created resources\n")
+			fmt.Fprintf(cmd.OutOrStdout(), "Failed to initialize the ClusterSet. Deleting the created resources\n")
 			common.Rollback(cmd, initOpts.k8sClient, createdRes)
 		}
 	}()
@@ -117,7 +117,7 @@ func initRunE(cmd *cobra.Command, args []string) error {
 	var file *os.File
 	if initOpts.output != "" {
 		if file, err = os.OpenFile(initOpts.output, os.O_WRONLY|os.O_CREATE|os.O_TRUNC|os.O_APPEND, 0644); err != nil {
-			fmt.Fprintf(cmd.OutOrStderr(), "Error opening file %s: %v\n", initOpts.output, err)
+			fmt.Fprintf(cmd.ErrOrStderr(), "Error opening file %s: %v\n", initOpts.output, err)
 			return err
 		}
 		defer file.Close()
@@ -129,7 +129,7 @@ func initRunE(cmd *cobra.Command, args []string) error {
 
 	if initOpts.createToken {
 		if err := common.CreateMemberToken(cmd, initOpts.k8sClient, defaultToken, initOpts.namespace, file, &createdRes); err != nil {
-			fmt.Fprintf(cmd.OutOrStderr(), "Failed to create member token\n")
+			fmt.Fprintf(cmd.ErrOrStderr(), "Failed to create member token\n")
 			return err
 		}
 	}

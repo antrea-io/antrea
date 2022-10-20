@@ -30,8 +30,6 @@ import (
 	"antrea.io/antrea/pkg/antctl/transform/clusterset"
 )
 
-var cmdClusterSet *cobra.Command
-
 type clusterSetOptions struct {
 	namespace     string
 	outputFormat  string
@@ -74,7 +72,7 @@ func (o *clusterSetOptions) validateAndComplete(cmd *cobra.Command) error {
 }
 
 func NewClusterSetCommand() *cobra.Command {
-	cmdClusterSet = &cobra.Command{
+	cmdClusterSet := &cobra.Command{
 		Use: "clusterset",
 		Aliases: []string{
 			"clustersets",
@@ -128,9 +126,9 @@ func runEClusterSet(cmd *cobra.Command, args []string) error {
 
 	if len(clusterSets) == 0 {
 		if optionsClusterSet.namespace != "" {
-			fmt.Fprintf(cmd.ErrOrStderr(), "No resource found in Namespace %s\n", optionsClusterSet.namespace)
+			fmt.Fprintf(cmd.OutOrStdout(), "No ClusterSet found in Namespace %s\n", optionsClusterSet.namespace)
 		} else {
-			fmt.Fprintln(cmd.ErrOrStderr(), "No resources found")
+			fmt.Fprintln(cmd.OutOrStdout(), "No ClusterSet found")
 		}
 		return nil
 	}

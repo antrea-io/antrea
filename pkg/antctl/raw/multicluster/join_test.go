@@ -112,7 +112,7 @@ type: Opaque`)
 		{
 			name:           "fail to join due to empty ClusterID",
 			clusterID:      "",
-			expectedOutput: "the ClusterID of member cluster is required",
+			expectedOutput: "ClusterID of member cluster must be provided",
 		},
 		{
 			name:           "fail to join and rollback",
@@ -187,7 +187,7 @@ func TestJoinOptValidate(t *testing.T) {
 	}{
 		{
 			name:           "empty ClusterID",
-			expectedOutput: "the ClusterID of leader cluster is required",
+			expectedOutput: "ClusterID of leader cluster must be provided",
 			opts: &joinOptions{
 				ClusterSetJoinConfig: common.ClusterSetJoinConfig{
 					TokenSecretName: "token-a",
@@ -196,7 +196,7 @@ func TestJoinOptValidate(t *testing.T) {
 		},
 		{
 			name:           "empty API Server",
-			expectedOutput: "the API server of the leader cluster is required",
+			expectedOutput: "API server of the leader cluster must be provided",
 			opts: &joinOptions{
 				ClusterSetJoinConfig: common.ClusterSetJoinConfig{
 					TokenSecretName: "token-a",
@@ -218,7 +218,7 @@ func TestJoinOptValidate(t *testing.T) {
 		},
 		{
 			name:           "empty leader Namespace",
-			expectedOutput: "the leader cluster Namespace is required",
+			expectedOutput: "leader cluster Namespace must be provided",
 			opts: &joinOptions{
 				ClusterSetJoinConfig: common.ClusterSetJoinConfig{
 					ClusterID:       "cluster-a",
@@ -230,7 +230,7 @@ func TestJoinOptValidate(t *testing.T) {
 		},
 		{
 			name:           "empty ClusterSet ID",
-			expectedOutput: "the ClusterSet ID is required",
+			expectedOutput: "ClusterSet ID must be provided",
 			opts: &joinOptions{
 				ClusterSetJoinConfig: common.ClusterSetJoinConfig{
 					ClusterID:       "cluster-a",
@@ -243,7 +243,7 @@ func TestJoinOptValidate(t *testing.T) {
 		},
 		{
 			name:           "empty member ClusterID",
-			expectedOutput: "the ClusterID of member cluster is required",
+			expectedOutput: "ClusterID of member cluster must be provided",
 			opts: &joinOptions{
 				ClusterSetJoinConfig: common.ClusterSetJoinConfig{
 					LeaderClusterID: "leader-id",

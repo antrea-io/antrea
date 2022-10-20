@@ -183,6 +183,6 @@ func deploy(cmd *cobra.Command, role string, version string, namespace string, f
 			}
 		}
 	}
-	fmt.Fprintf(cmd.OutOrStdout(), "The %s cluster resources are deployed\n", role)
+	fmt.Fprintf(cmd.OutOrStdout(), "Antrea Multi-cluster successfully deployed\n")
 	return nil
 }

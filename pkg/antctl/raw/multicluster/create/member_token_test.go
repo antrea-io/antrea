@@ -62,13 +62,13 @@ type: Opaque
 			name:           "create successfully",
 			tokenName:      "default-member-token",
 			namespace:      "default",
-			expectedOutput: "You can now run the \"antctl mc join\" command with the token to have the cluster join the ClusterSet\n",
+			expectedOutput: "You can now run \"antctl mc join\" command with the token in a member cluster to join the ClusterSet\n",
 		},
 		{
 			name:           "create successfully with file",
 			tokenName:      "default-member-token",
 			namespace:      "default",
-			expectedOutput: "You can now run the \"antctl mc join\" command with the token to have the cluster join the ClusterSet\n",
+			expectedOutput: "You can now run \"antctl mc join\" command with the token in a member cluster to join the ClusterSet\n",
 			secretFile:     "test.yml",
 		},
 		{
@@ -79,7 +79,7 @@ type: Opaque
 		{
 			name:           "fail to create without Namespace",
 			namespace:      "",
-			expectedOutput: "Namespace is required",
+			expectedOutput: "Namespace must be specified",
 		},
 		{
 			name:           "fail to create and rollback",

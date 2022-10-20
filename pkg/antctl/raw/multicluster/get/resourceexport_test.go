@@ -99,7 +99,7 @@ func TestGetResourceExport(t *testing.T) {
 		{
 			name:           "get all ResourceExports but empty result",
 			allNamespaces:  true,
-			expectedOutput: "No resources found\n",
+			expectedOutput: "No ResourceExport found\n",
 		},
 		{
 			name:           "error to get a ResourceExport in all Namespaces",
@@ -109,7 +109,7 @@ func TestGetResourceExport(t *testing.T) {
 		},
 		{
 			name:           "get all ResourceExports in default Namespace but empty result",
-			expectedOutput: "No resources found in Namespace default\n",
+			expectedOutput: "No ResourceExport found in Namespace default\n",
 		},
 		{
 			name:           "error due to no kubeconfig",

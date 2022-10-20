@@ -42,7 +42,7 @@ var memberTokenExamples = strings.Trim(`
 
 func (o *memberTokenOptions) validateAndComplete(cmd *cobra.Command) error {
 	if o.namespace == "" {
-		return fmt.Errorf("Namespace is required")
+		return fmt.Errorf("Namespace must be specified")
 	}
 	var err error
 	if o.k8sClient == nil {
@@ -83,10 +83,8 @@ func memberTokenRunE(cmd *cobra.Command, args []string) error {
 	createdRes := []map[string]interface{}{}
 	defer func() {
 		if createErr != nil {
-			fmt.Fprintf(cmd.OutOrStderr(), "Failed to create new member token. Deleting the created resources\n")
-			if err := common.Rollback(cmd, memberTokenOpts.k8sClient, createdRes); err != nil {
-				fmt.Fprintf(cmd.OutOrStdout(), "Failed to rollback: %v\n", err)
-			}
+			fmt.Fprintf(cmd.OutOrStdout(), "Failed to create the member token. Deleting the created resources\n")
+			common.Rollback(cmd, memberTokenOpts.k8sClient, createdRes)
 		}
 	}()
 
@@ -103,6 +101,6 @@ func memberTokenRunE(cmd *cobra.Command, args []string) error {
 		return createErr
 	}
 
-	fmt.Fprintf(cmd.OutOrStdout(), "You can now run the \"antctl mc join\" command with the token to have the cluster join the ClusterSet\n")
+	fmt.Fprintf(cmd.OutOrStdout(), "You can now run \"antctl mc join\" command with the token in a member cluster to join the ClusterSet\n")
 	return nil
 }

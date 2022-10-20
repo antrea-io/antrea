@@ -98,7 +98,7 @@ func TestGetResourceImport(t *testing.T) {
 		{
 			name:           "get all ResourceImports but empty result",
 			allNamespaces:  true,
-			expectedOutput: "No resources found\n",
+			expectedOutput: "No ResourceImport found\n",
 		},
 		{
 			name:           "error to get a ResourceImport in all Namespaces",
@@ -108,7 +108,7 @@ func TestGetResourceImport(t *testing.T) {
 		},
 		{
 			name:           "get all ResourceImports in default Namespace but empty result",
-			expectedOutput: "No resources found in Namespace default\n",
+			expectedOutput: "No ResourceImport found in Namespace default\n",
 		},
 		{
 			name:           "error due to no kubeconfig",

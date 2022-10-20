@@ -137,9 +137,9 @@ func runE(cmd *cobra.Command, args []string) error {
 		}
 		if len(resourceImportList.Items) == 0 {
 			if options.namespace != "" {
-				fmt.Fprintf(cmd.ErrOrStderr(), "No resources found in Namespace %s\n", options.namespace)
+				fmt.Fprintf(cmd.OutOrStdout(), "No ResourceImport found in Namespace %s\n", options.namespace)
 			} else {
-				fmt.Fprintln(cmd.ErrOrStderr(), "No resources found")
+				fmt.Fprintln(cmd.OutOrStdout(), "No ResourceImport found")
 			}
 			return nil
 		}
