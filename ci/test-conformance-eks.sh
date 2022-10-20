@@ -244,7 +244,7 @@ function deliver_antrea_to_eks() {
 
     kubectl get nodes -o wide --no-headers=true | awk '{print $7}' | while read IP; do
         scp -o StrictHostKeyChecking=no -i ${SSH_PRIVATE_KEY_PATH} ${antrea_image}.tar ec2-user@${IP}:~
-        ssh -o StrictHostKeyChecking=no -i ${SSH_PRIVATE_KEY_PATH} -n ec2-user@${IP} "sudo ctr -n=k8s.io images import ~/${antrea_image}.tar ; sudo ctr -n=k8s.io images tag ${DOCKER_IMG_NAME}:${DOCKER_IMG_VERSION} ${DOCKER_IMG_NAME}:latest --force"
+        ssh -o StrictHostKeyChecking=no -i ${SSH_PRIVATE_KEY_PATH} -n ec2-user@${IP} "sudo ctr -n=k8s.io images import ~/${antrea_image}.tar ; sudo ctr -n=k8s.io images tag docker.io/${DOCKER_IMG_NAME}:${DOCKER_IMG_VERSION} docker.io/${DOCKER_IMG_NAME}:latest --force"
     done
     rm ${antrea_image}.tar
 
