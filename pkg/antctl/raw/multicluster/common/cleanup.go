@@ -32,11 +32,11 @@ type CleanOptions struct {
 
 func (o *CleanOptions) validate(cmd *cobra.Command) error {
 	if o.ClusterSet == "" {
-		return fmt.Errorf("the ClusterSet is required")
+		return fmt.Errorf("ClusterSet must be provided")
 	}
 
 	if o.Namespace == "" {
-		return fmt.Errorf("the Namespace is required")
+		return fmt.Errorf("Namespace must be specified")
 	}
 
 	var err error

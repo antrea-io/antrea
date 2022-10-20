@@ -81,22 +81,22 @@ func (o *joinOptions) validateAndComplete(cmd *cobra.Command) error {
 	}
 
 	if o.LeaderClusterID == "" {
-		return fmt.Errorf("the ClusterID of leader cluster is required")
+		return fmt.Errorf("ClusterID of leader cluster must be provided")
 	}
 	if o.LeaderAPIServer == "" {
-		return fmt.Errorf("the API server of the leader cluster is required")
+		return fmt.Errorf("API server of the leader cluster must be provided")
 	}
 	if o.TokenSecretName == "" && o.Secret == nil {
 		return fmt.Errorf("a member token Secret must be provided through the Secret name, or Secret file, or Secret manifest in the config file")
 	}
 	if o.LeaderNamespace == "" {
-		return fmt.Errorf("the leader cluster Namespace is required")
+		return fmt.Errorf("leader cluster Namespace must be provided")
 	}
 	if o.ClusterSetID == "" {
-		return fmt.Errorf("the ClusterSet ID is required")
+		return fmt.Errorf("ClusterSet ID must be provided")
 	}
 	if o.ClusterID == "" {
-		return fmt.Errorf("the ClusterID of member cluster is required")
+		return fmt.Errorf("ClusterID of member cluster must be provided")
 	}
 	if o.Namespace == "" {
 		fmt.Printf("Antrea Multi-cluster Namespace is not specified. Use %s\n.", common.DefaultMemberNamespace)
@@ -141,25 +141,25 @@ func unmarshallSecret(raw []byte) (*v1.Secret, error) {
 }
 
 var joinExamples = strings.Trim(`
-# Join a ClusterSet with a pre-created token Secret.
+# Join a ClusterSet with a pre-created token Secret
   $ antctl mc join --clusterset=clusterset1 \
                    --clusterid=cluster-east \
-                   --namespace=kube-system \
                    --leader-clusterid=cluster-north \
                    --leader-namespace=antrea-multicluster \
                    --leader-apiserver=https://172.18.0.3:6443 \
-                   --token-secret-name=cluster-east-token
+                   --token-secret-name=cluster-east-token \
+                   --n kube-system
 
-# Join a ClusterSet with a token Secret manifest.
+# Join a ClusterSet with a token Secret manifest
   $ antctl mc join --clusterset=clusterset1 \
                    --clusterid=cluster-east \
-                   --namespace=kube-system \
                    --leader-clusterid=cluster-north \
                    --leader-namespace=antrea-multicluster \
                    --leader-apiserver=https://172.18.0.3:6443 \
-                   --token-secret-file=cluster-east-token.yml
+                   --token-secret-file=cluster-east-token.yml \
+                   --n kube-system
 
-# Join a ClusterSet with parameters defined in a config file.
+# Join a ClusterSet with parameters defined in a config file
   $ antctl mc join --config-file join-config.yml
 
 # Config file example:
@@ -230,9 +230,7 @@ func joinRunE(cmd *cobra.Command, args []string) error {
 	defer func() {
 		if err != nil {
 			fmt.Fprintf(cmd.OutOrStdout(), "Failed to join the ClusterSet. Deleting the created resources\n")
-			if err := common.Rollback(cmd, joinOpts.k8sClient, createdRes); err != nil {
-				fmt.Fprintf(cmd.OutOrStdout(), "Failed to rollback: %v\n", err)
-			}
+			common.Rollback(cmd, joinOpts.k8sClient, createdRes)
 		}
 	}()
 
@@ -261,9 +259,8 @@ func joinRunE(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(cmd.OutOrStdout(), "Waiting for member cluster ready\n")
 	if err = waitForMemberClusterReady(cmd, joinOpts.k8sClient); err != nil {
-		fmt.Fprintf(cmd.OutOrStdout(), "Failed to wait for member cluster ready: %v\n", err)
+		fmt.Fprintf(cmd.OutOrStderr(), "Failed to wait for ClusterSet ready: %v\n", err)
 		return err
 	}
 	fmt.Fprintf(cmd.OutOrStdout(), "Member cluster joined successfully\n")
@@ -275,7 +272,6 @@ func waitForMemberClusterReady(cmd *cobra.Command, k8sClient client.Client) erro
 	fmt.Fprintf(cmd.OutOrStdout(), "Waiting for ClusterSet ready\n")
 
 	if err := waitForClusterSetReady(k8sClient, joinOpts.ClusterSetID, joinOpts.Namespace, joinOpts.LeaderClusterID); err != nil {
-		fmt.Fprintf(cmd.OutOrStdout(), "Failed to wait for ClusterSet \"%s\" in Namespace %s in member cluster: %v\n", joinOpts.ClusterSetID, joinOpts.Namespace, err)
 		return err
 	}
 

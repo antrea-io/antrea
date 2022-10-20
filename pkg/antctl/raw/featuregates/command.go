@@ -37,7 +37,7 @@ var Command *cobra.Command
 func init() {
 	Command = &cobra.Command{
 		Use:   "featuregates",
-		Short: "Get feature gates list",
+		Short: "Print Antrea feature gates",
 	}
 	if runtime.Mode == runtime.ModeAgent {
 		Command.RunE = agentRunE

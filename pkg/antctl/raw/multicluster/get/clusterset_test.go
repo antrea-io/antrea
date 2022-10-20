@@ -112,11 +112,11 @@ func TestGetClusterSet(t *testing.T) {
 		{
 			name:           "get all ClusterSets but empty result",
 			allNamespaces:  true,
-			expectedOutput: "No resources found\n",
+			expectedOutput: "No ClusterSet found\n",
 		},
 		{
 			name:           "get all ClusterSets but empty result in default Namespace",
-			expectedOutput: "No resource found in Namespace default\n",
+			expectedOutput: "No ClusterSet found in Namespace default\n",
 		},
 		{
 			name:           "error due to no kubeconfig",

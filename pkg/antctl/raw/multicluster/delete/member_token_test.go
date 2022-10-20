@@ -88,7 +88,7 @@ type: Opaque`)
 		{
 			name:           "fail to delete without namespace",
 			namespace:      "",
-			expectedOutput: "Namespace is required",
+			expectedOutput: "Namespace must be specified",
 		},
 	}
 	for _, tt := range tests {
