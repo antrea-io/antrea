@@ -520,6 +520,7 @@ func (fa *flowAggregator) watchConfiguration(stopCh <-chan struct{}) {
 		select {
 		case <-stopCh:
 			close(fa.updateCh)
+			klog.InfoS("stop watchConfiguration")
 			return
 		case event, ok := <-fa.configWatcher.Events:
 			klog.InfoS("Event happened", "event", event.String())
