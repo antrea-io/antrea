@@ -53,11 +53,13 @@ VALIDATE_OVS_CONFIG=false
 NODE_NAME="$(hostname)"
 
 # List of supported OS versions, verified by antrea.
-declare -a SUPPORTED_OS=("Ubuntu 18.04" "Ubuntu 20.04")
+declare -a SUPPORTED_OS=("Ubuntu 18.04" "Ubuntu 20.04" "Red Hat Enterprise Linux 8.4")
 
 check_supported_platform() {
   echo "Checking supported OS platform"
-  dist_version="$(lsb_release -is) $(lsb_release -rs)"
+  os_name=`grep -Po '^NAME=\K.*' /etc/os-release | sed -e 's/^"//' -e 's/"$//'`
+  os_version=`grep -Po '^VERSION_ID=\K.*' /etc/os-release | sed -e 's/^"//' -e 's/"$//'`
+  dist_version="${os_name} ${os_version}"
   for ver in "${SUPPORTED_OS[@]}"; do
       if [ "$ver" == "$dist_version" ]; then
           return
