@@ -20,14 +20,30 @@ import (
 	"sort"
 	"strconv"
 
+	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/kubectl/pkg/cmd/get"
+	"k8s.io/kubectl/pkg/scheme"
+	"k8s.io/utils/strings/slices"
+
 	"antrea.io/antrea/pkg/antctl/transform"
 	"antrea.io/antrea/pkg/antctl/transform/common"
 	cpv1beta "antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	"antrea.io/antrea/pkg/controller/networkpolicy"
 )
 
+const sortByEffectivePriority = "effectivePriority"
+
 type Response struct {
 	*cpv1beta.NetworkPolicy
+}
+
+// Compute a tierPriority value in between the application tier and the baseline tier,
+// which can be used to sort all policies by tier.
+var effectiveTierPriorityK8sNP = (networkpolicy.DefaultTierPriority + networkpolicy.BaselineTierPriority) / 2
+
+type NPSorter struct {
+	networkPolicies []cpv1beta.NetworkPolicy
+	sortBy          string
 }
 
 func objectTransform(o interface{}, _ map[string]string) (interface{}, error) {
@@ -35,19 +51,40 @@ func objectTransform(o interface{}, _ map[string]string) (interface{}, error) {
 }
 
 func listTransform(l interface{}, opts map[string]string) (interface{}, error) {
+	customSorters := []string{
+		sortByEffectivePriority,
+	}
 	policyList := l.(*cpv1beta.NetworkPolicyList)
-	sortBy := ""
-	if sb, ok := opts["sort-by"]; ok {
-		sortBy = sb
+	if len(policyList.Items) == 0 {
+		return "", nil
 	}
-	npSorter := &NPSorter{
-		networkPolicies: policyList.Items,
-		sortBy:          sortBy,
+	sortField := opts["sort-by"]
+	if sortField == "" {
+		sortField = ".sourceRef.name"
 	}
-	sort.Sort(npSorter)
+	// To check for any special sort cases.
+	if slices.Contains(customSorters, sortField) {
+		npSorter := &NPSorter{
+			networkPolicies: policyList.Items,
+			sortBy:          sortField,
+		}
+		sort.Sort(npSorter)
+		result := make([]Response, 0, len(policyList.Items))
+		for i := range npSorter.networkPolicies {
+			o, _ := objectTransform(&npSorter.networkPolicies[i], opts)
+			result = append(result, o.(Response))
+		}
+		return result, nil
+	}
+
+	policyRuntimeObjectList, _ := meta.ExtractList(policyList)
+	if _, err := get.SortObjects(scheme.Codecs.UniversalDecoder(), policyRuntimeObjectList, sortField); err != nil {
+		return "", err
+	}
+
 	result := make([]Response, 0, len(policyList.Items))
-	for i := range npSorter.networkPolicies {
-		o, _ := objectTransform(&npSorter.networkPolicies[i], opts)
+	for i := range policyRuntimeObjectList {
+		o, _ := objectTransform(policyRuntimeObjectList[i], opts)
 		result = append(result, o.(Response))
 	}
 	return result, nil
@@ -61,17 +98,6 @@ func Transform(reader io.Reader, single bool, opts map[string]string) (interface
 		listTransform,
 		opts,
 	)(reader, single)
-}
-
-const sortByEffectivePriority = "effectivePriority"
-
-// Compute a tierPriority value in between the application tier and the baseline tier,
-// which can be used to sort all policies by tier.
-var effectiveTierPriorityK8sNP = (networkpolicy.DefaultTierPriority + networkpolicy.BaselineTierPriority) / 2
-
-type NPSorter struct {
-	networkPolicies []cpv1beta.NetworkPolicy
-	sortBy          string
 }
 
 func (nps *NPSorter) Len() int { return len(nps.networkPolicies) }

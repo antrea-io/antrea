@@ -204,6 +204,19 @@ antctl get appliedtogroup [NAME] [-o yaml]
 antctl get addressgroup [NAME] [-o yaml]
 ```
 
+NetworkPolicy, AppliedToGroup, and AddressGroup also support `sort-by=''` option,
+which can be used to sort these resources on the basis of a particular field. Any
+valid json path can be passed as flag value. If no value is passed it will use a
+default field to sort results. For NetworkPolicy, the default field is the name of
+the source NetworkPolicy. For AppliedToGroup and AddressGroup, the default field is
+the object name (which is a generated UUID).
+
+```bash
+antctl get networkpolicy --sort-by='.sourceRef.name'
+antctl get appliedtogroup --sort-by='.metadata.name'
+antctl get addressgroup --sort-by='.metadata.name'
+```
+
 NetworkPolicy also supports `sort-by=effectivePriority` option, which can be used to
 view the effective order in which the NetworkPolicies are evaluated. Antrea-native
 NetworkPolicy ordering is documented [here](
