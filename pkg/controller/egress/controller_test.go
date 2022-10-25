@@ -469,29 +469,32 @@ func TestUpdateEgress(t *testing.T) {
 
 	// Delete the IPPool in use. The EgressIP should be released.
 	controller.crdClient.CrdV1alpha2().ExternalIPPools().Delete(context.TODO(), eipFoo2.Name, metav1.DeleteOptions{})
-	err = wait.PollImmediate(50*time.Millisecond, 1*time.Second, func() (found bool, err error) {
+	assert.Eventually(t, func() bool {
 		_, _, exists := controller.getIPAllocation(egress.Name)
-		return !exists, nil
-	})
-	assert.NoError(t, err, "IP allocation was not deleted after the ExternalIPPool was deleted")
-	assert.Equal(t, "", gotEgressIP(), "EgressIP was not deleted after the ExternalIPPool was deleted")
+		if exists {
+			return false
+		}
+		ip := gotEgressIP()
+		if ip != "" {
+			return false
+		}
+		return true
+	}, time.Second, 50*time.Millisecond, "EgressIP was not deleted after the ExternalIPPool was deleted")
 
 	// Recreate the ExternalIPPool. An EgressIP should be allocated.
 	controller.crdClient.CrdV1alpha2().ExternalIPPools().Create(context.TODO(), eipFoo2, metav1.CreateOptions{})
-	err = wait.PollImmediate(50*time.Millisecond, 1*time.Second, func() (found bool, err error) {
+	assert.Eventually(t, func() bool {
 		_, _, exists := controller.getIPAllocation(egress.Name)
-		return exists, nil
-	})
-	assert.NoError(t, err, "IP was not allocated after the ExternalIPPool was created")
+		return exists
+	}, time.Second, 50*time.Millisecond, "IP was not allocated after the ExternalIPPool was created")
 	checkExternalIPPoolUsed(t, controller, eipFoo2.Name, 1)
 
 	// Delete the Egress. The EgressIP should be released.
 	controller.crdClient.CrdV1alpha2().Egresses().Delete(context.TODO(), egress.Name, metav1.DeleteOptions{})
-	err = wait.PollImmediate(50*time.Millisecond, 1*time.Second, func() (found bool, err error) {
+	assert.Eventually(t, func() bool {
 		_, _, exists := controller.getIPAllocation(egress.Name)
-		return !exists, nil
-	})
-	assert.NoError(t, err, "IP allocation was not deleted after the Egress was deleted")
+		return !exists
+	}, time.Second, 50*time.Millisecond, "IP allocation was not deleted after the Egress was deleted")
 	checkExternalIPPoolUsed(t, controller, eipFoo2.Name, 0)
 }
 
