@@ -62,6 +62,15 @@ type fakeController struct {
 	podUpdateChannel    *channel.SubscribableChannel
 }
 
+func (c *fakeController) startInformers(stopCh chan struct{}) {
+	c.informerFactory.Start(stopCh)
+	c.informerFactory.WaitForCacheSync(stopCh)
+	go c.localPodInformer.Run(stopCh)
+	cache.WaitForCacheSync(stopCh, c.localPodInformer.HasSynced)
+	c.crdInformerFactory.Start(stopCh)
+	c.crdInformerFactory.WaitForCacheSync(stopCh)
+}
+
 var (
 	labels1 = map[string]string{"app1": "foo1"}
 	labels2 = map[string]string{"app2": "foo2"}
@@ -475,11 +484,7 @@ func TestTrafficControlAdd(t *testing.T) {
 			stopCh := make(chan struct{})
 			defer close(stopCh)
 
-			c.informerFactory.Start(stopCh)
-			c.informerFactory.WaitForCacheSync(stopCh)
-			go c.localPodInformer.Run(stopCh)
-			c.crdInformerFactory.Start(stopCh)
-			c.crdInformerFactory.WaitForCacheSync(stopCh)
+			c.startInformers(stopCh)
 
 			tt.expectedCalls(c.mockOFClient, c.mockOVSBridgeClient, c.mockOVSCtlClient)
 			assert.NoError(t, c.syncTrafficControl(tt.tc.Name))
@@ -572,11 +577,7 @@ func TestTrafficControlUpdate(t *testing.T) {
 			stopCh := make(chan struct{})
 			defer close(stopCh)
 
-			c.informerFactory.Start(stopCh)
-			c.informerFactory.WaitForCacheSync(stopCh)
-			go c.localPodInformer.Run(stopCh)
-			c.crdInformerFactory.Start(stopCh)
-			c.crdInformerFactory.WaitForCacheSync(stopCh)
+			c.startInformers(stopCh)
 
 			// Fake the status after TrafficControl tc1 is added.
 			c.portToTCBindings = map[string]*portToTCBinding{
@@ -602,13 +603,14 @@ func TestTrafficControlUpdate(t *testing.T) {
 			item, _ := c.queue.Get()
 			c.queue.Done(item)
 
+			tt.updatedTrafficControl.Generation += 1
 			_, err := c.crdClient.CrdV1alpha2().TrafficControls().Update(context.TODO(), tt.updatedTrafficControl, metav1.UpdateOptions{})
 			require.NoError(t, err)
 
 			// Functions are expected to be called after updating TrafficControl tc1.
 			tt.expectedCalls(c.mockOFClient, c.mockOVSBridgeClient, c.mockOVSCtlClient)
 
-			time.Sleep(time.Second)
+			waitEvents(t, 1, c)
 			require.NoError(t, c.syncTrafficControl(tc1Name))
 			require.Equal(t, tt.expectedState, c.tcStates[tc1Name])
 		})
@@ -631,11 +633,7 @@ func TestSharedTargetPort(t *testing.T) {
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 
-	c.informerFactory.Start(stopCh)
-	c.informerFactory.WaitForCacheSync(stopCh)
-	go c.localPodInformer.Run(stopCh)
-	c.crdInformerFactory.Start(stopCh)
-	c.crdInformerFactory.WaitForCacheSync(stopCh)
+	c.startInformers(stopCh)
 
 	// Target port is expected to be crated if it doesn't exist.
 	c.mockOVSBridgeClient.EXPECT().CreatePort(targetPort1Name, targetPort1Name, externalIDs)
@@ -688,11 +686,7 @@ func TestPodUpdateFromCNIServer(t *testing.T) {
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 
-	c.informerFactory.Start(stopCh)
-	c.informerFactory.WaitForCacheSync(stopCh)
-	go c.localPodInformer.Run(stopCh)
-	c.crdInformerFactory.Start(stopCh)
-	c.crdInformerFactory.WaitForCacheSync(stopCh)
+	c.startInformers(stopCh)
 	go c.podUpdateChannel.Run(stopCh)
 
 	// Fake the status after TrafficControl tc1 is added.
@@ -833,11 +827,7 @@ func TestPodLabelsUpdate(t *testing.T) {
 			stopCh := make(chan struct{})
 			defer close(stopCh)
 
-			c.informerFactory.Start(stopCh)
-			c.informerFactory.WaitForCacheSync(stopCh)
-			go c.localPodInformer.Run(stopCh)
-			c.crdInformerFactory.Start(stopCh)
-			c.crdInformerFactory.WaitForCacheSync(stopCh)
+			c.startInformers(stopCh)
 
 			// Fake the status after TrafficControl tc1, tc2 and tc3 is added. TrafficControl tc1 is the effective
 			// TrafficControl of the Pod, and tc2 is the alternative TrafficControl of the Pod.
@@ -1014,11 +1004,7 @@ func TestNamespaceLabelsUpdate(t *testing.T) {
 			stopCh := make(chan struct{})
 			defer close(stopCh)
 
-			c.informerFactory.Start(stopCh)
-			c.informerFactory.WaitForCacheSync(stopCh)
-			go c.localPodInformer.Run(stopCh)
-			c.crdInformerFactory.Start(stopCh)
-			c.crdInformerFactory.WaitForCacheSync(stopCh)
+			c.startInformers(stopCh)
 
 			// Fake the status after TrafficControl tc1, tc2 and tc3 is added. TrafficControl tc1 is the effective
 			// TrafficControl of the Pod, and tc2 is the alternative TrafficControl of the Pod.
@@ -1130,11 +1116,7 @@ func TestPodDelete(t *testing.T) {
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 
-	c.informerFactory.Start(stopCh)
-	c.informerFactory.WaitForCacheSync(stopCh)
-	go c.localPodInformer.Run(stopCh)
-	c.crdInformerFactory.Start(stopCh)
-	c.crdInformerFactory.WaitForCacheSync(stopCh)
+	c.startInformers(stopCh)
 
 	// Fake the status after TrafficControl tc1, tc2 and tc3 is added. TrafficControl tc1 is the effective
 	// TrafficControl of the Pod, and tc2, tc3 is the alternative TrafficControl of the Pods.
