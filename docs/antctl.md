@@ -34,6 +34,7 @@ running in three different modes:
     - [Dumping flow records](#dumping-flow-records)
     - [Record metrics](#record-metrics)
   - [Multi-cluster commands](#multi-cluster-commands)
+  - [Multicast commands](#multicast-commands)
 <!-- /toc -->
 
 ## Installation
@@ -632,3 +633,18 @@ RECORDS-EXPORTED RECORDS-RECEIVED FLOWS EXPORTERS-CONNECTED
 
 For information about Antrea Multi-cluster commands, please refer to the
 [antctl Multi-cluster commands](./multicluster/antctl.md).
+
+### Multicast commands
+
+The `antctl get podmulticaststats [POD_NAME] [-n NAMESPACE]` command prints inbound
+and outbound multicast statistics for each Pod. Note that IGMP packets are not counted.
+
+Example output of podmulticaststats:
+
+```bash
+$ antctl get podmulticaststats
+
+NAMESPACE              NAME                         INBOUND OUTBOUND
+testmulticast-vw7gx5b9 test3-receiver-2             30      0
+testmulticast-vw7gx5b9 test3-sender-1               0       10
+```
