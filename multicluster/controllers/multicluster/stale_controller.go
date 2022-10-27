@@ -329,7 +329,7 @@ func (c *StaleResCleanupController) cleanupLabelIdentityResourceExport(commonAre
 			// we append the Namespace name label to the Namespace label set.
 			ns.Labels[corev1.LabelMetadataName] = ns.Name
 		}
-		nsLabelMap[ns.Name] = "namespace:" + labels.FormatLabels(ns.Labels)
+		nsLabelMap[ns.Name] = "ns:" + labels.FormatLabels(ns.Labels)
 	}
 	for _, p := range podList.Items {
 		podNSlabel, ok := nsLabelMap[p.Namespace]
