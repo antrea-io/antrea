@@ -27,3 +27,5 @@ type EgressGroupExpansion interface{}
 type GroupAssociationExpansion interface{}
 
 type NodeStatsSummaryExpansion interface{}
+
+type SupportBundleCollectionExpansion interface{}

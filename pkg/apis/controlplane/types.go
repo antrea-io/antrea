@@ -440,3 +440,72 @@ type EgressGroupList struct {
 	metav1.ListMeta
 	Items []EgressGroup
 }
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+type SupportBundleCollection struct {
+	metav1.TypeMeta
+	metav1.ObjectMeta
+	ExpiredAt      metav1.Time
+	SinceTime      string
+	FileServer     BundleFileServer
+	Authentication BundleServerAuthConfiguration
+}
+
+// BundleFileServer specifies the bundle file server information.
+type BundleFileServer struct {
+	// The URL of the bundle file server. It is set with format: scheme://host[:port][/path],
+	// e.g, https://api.example.com:8443/v1/supportbundles/. If scheme is not set, https is used by default.
+	URL string
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// SupportBundleCollectionList is a list of SupportBundleCollection objects.
+type SupportBundleCollectionList struct {
+	metav1.TypeMeta
+	metav1.ListMeta
+	Items []SupportBundleCollection
+}
+
+type BasicAuthentication struct {
+	Username string
+	Password string
+}
+
+type BundleServerAuthConfiguration struct {
+	BearerToken         string
+	APIKey              string
+	BasicAuthentication *BasicAuthentication
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// SupportBundleCollectionStatus is the status of a SupportBundleCollection.
+type SupportBundleCollectionStatus struct {
+	metav1.TypeMeta
+	metav1.ObjectMeta
+	// Nodes contains statuses produced on a list of Nodes.
+	Nodes []SupportBundleCollectionNodeStatus
+}
+
+type SupportBundleCollectionNodeType string
+
+const (
+	SupportBundleCollectionNodeTypeNode         SupportBundleCollectionNodeType = "Node"
+	SupportBundleCollectionNodeTypeExternalNode SupportBundleCollectionNodeType = "ExternalNode"
+)
+
+// SupportBundleCollectionNodeStatus is the status of a SupportBundleCollection on a Node.
+type SupportBundleCollectionNodeStatus struct {
+	// The name of the Node that produces the status.
+	NodeName string
+	// The Namespace of the Node produces the status. It is set only when NodeType is externalNode
+	NodeNamespace string
+	// The type of the Node that produces the status. The supported values are "Node" and "ExternalNode".
+	NodeType SupportBundleCollectionNodeType
+	// Completed shows if the SupportBundleCollection is successfully processed on the Node or ExternalNode or not.
+	Completed bool
+	// Error is the reason for which the SupportBundleCollection is failed on the Node.
+	Error string
+}

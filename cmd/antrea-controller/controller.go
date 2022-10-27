@@ -57,6 +57,8 @@ import (
 	"antrea.io/antrea/pkg/controller/querier"
 	"antrea.io/antrea/pkg/controller/serviceexternalip"
 	"antrea.io/antrea/pkg/controller/stats"
+	"antrea.io/antrea/pkg/controller/supportbundlecollection"
+	supportbundlecollectionstore "antrea.io/antrea/pkg/controller/supportbundlecollection/store"
 	"antrea.io/antrea/pkg/controller/traceflow"
 	"antrea.io/antrea/pkg/features"
 	"antrea.io/antrea/pkg/log"
@@ -104,6 +106,7 @@ var allowedPaths = []string{
 	"/validate/egress",
 	"/validate/group",
 	"/validate/ippool",
+	"/validate/supportbundlecollection",
 	"/convert/clustergroup",
 }
 
@@ -170,6 +173,13 @@ func run(o *Options) error {
 	var externalNodeController *externalnode.ExternalNodeController
 	if features.DefaultFeatureGate.Enabled(features.ExternalNode) {
 		externalNodeController = externalnode.NewExternalNodeController(crdClient, externalNodeInformer, eeInformer)
+	}
+
+	var bundleCollectionController *supportbundlecollection.Controller
+	bundleCollectionStore := supportbundlecollectionstore.NewSupportBundleCollectionStore()
+	if features.DefaultFeatureGate.Enabled(features.SupportBundleCollection) {
+		bundleCollectionInformer := crdInformerFactory.Crd().V1alpha1().SupportBundleCollections()
+		bundleCollectionController = supportbundlecollection.NewSupportBundleCollectionController(client, crdClient, bundleCollectionInformer, nodeInformer, externalNodeInformer, bundleCollectionStore)
 	}
 
 	var networkPolicyStatusController *networkpolicy.StatusController
@@ -252,12 +262,14 @@ func run(o *Options) error {
 		networkPolicyStore,
 		groupStore,
 		egressGroupStore,
+		bundleCollectionStore,
 		controllerQuerier,
 		endpointQuerier,
 		networkPolicyController,
 		networkPolicyStatusController,
 		egressController,
 		statsAggregator,
+		bundleCollectionController,
 		*o.config.EnablePrometheusMetrics,
 		cipherSuites,
 		cipher.TLSVersionMap[o.config.TLSMinVersion])
@@ -352,6 +364,10 @@ func run(o *Options) error {
 		go externalNodeController.Run(stopCh)
 	}
 
+	if features.DefaultFeatureGate.Enabled(features.SupportBundleCollection) {
+		go bundleCollectionController.Run(stopCh)
+	}
+
 	if antreaIPAMController != nil {
 		go antreaIPAMController.Run(stopCh)
 	}
@@ -419,12 +435,14 @@ func createAPIServerConfig(kubeconfig string,
 	networkPolicyStore storage.Interface,
 	groupStore storage.Interface,
 	egressGroupStore storage.Interface,
+	supportBundleCollectionStore storage.Interface,
 	controllerQuerier querier.ControllerQuerier,
 	endpointQuerier networkpolicy.EndpointQuerier,
 	npController *networkpolicy.NetworkPolicyController,
 	networkPolicyStatusController *networkpolicy.StatusController,
 	egressController *egress.EgressController,
 	statsAggregator *stats.Aggregator,
+	bundleCollectionStore *supportbundlecollection.Controller,
 	enableMetrics bool,
 	cipherSuites []uint16,
 	tlsMinVersion uint16) (*apiserver.Config, error) {
@@ -479,11 +497,13 @@ func createAPIServerConfig(kubeconfig string,
 		networkPolicyStore,
 		groupStore,
 		egressGroupStore,
+		supportBundleCollectionStore,
 		caCertController,
 		statsAggregator,
 		controllerQuerier,
 		networkPolicyStatusController,
 		endpointQuerier,
 		npController,
-		egressController), nil
+		egressController,
+		bundleCollectionStore), nil
 }

@@ -99,6 +99,36 @@ func RegisterConversions(s *runtime.Scheme) error {
 	}); err != nil {
 		return err
 	}
+	if err := s.AddGeneratedConversionFunc((*BasicAuthentication)(nil), (*controlplane.BasicAuthentication)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_v1beta2_BasicAuthentication_To_controlplane_BasicAuthentication(a.(*BasicAuthentication), b.(*controlplane.BasicAuthentication), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*controlplane.BasicAuthentication)(nil), (*BasicAuthentication)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_controlplane_BasicAuthentication_To_v1beta2_BasicAuthentication(a.(*controlplane.BasicAuthentication), b.(*BasicAuthentication), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*BundleFileServer)(nil), (*controlplane.BundleFileServer)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_v1beta2_BundleFileServer_To_controlplane_BundleFileServer(a.(*BundleFileServer), b.(*controlplane.BundleFileServer), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*controlplane.BundleFileServer)(nil), (*BundleFileServer)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_controlplane_BundleFileServer_To_v1beta2_BundleFileServer(a.(*controlplane.BundleFileServer), b.(*BundleFileServer), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*BundleServerAuthConfiguration)(nil), (*controlplane.BundleServerAuthConfiguration)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_v1beta2_BundleServerAuthConfiguration_To_controlplane_BundleServerAuthConfiguration(a.(*BundleServerAuthConfiguration), b.(*controlplane.BundleServerAuthConfiguration), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*controlplane.BundleServerAuthConfiguration)(nil), (*BundleServerAuthConfiguration)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_controlplane_BundleServerAuthConfiguration_To_v1beta2_BundleServerAuthConfiguration(a.(*controlplane.BundleServerAuthConfiguration), b.(*BundleServerAuthConfiguration), scope)
+	}); err != nil {
+		return err
+	}
 	if err := s.AddGeneratedConversionFunc((*ClusterGroupMembers)(nil), (*controlplane.ClusterGroupMembers)(nil), func(a, b interface{}, scope conversion.Scope) error {
 		return Convert_v1beta2_ClusterGroupMembers_To_controlplane_ClusterGroupMembers(a.(*ClusterGroupMembers), b.(*controlplane.ClusterGroupMembers), scope)
 	}); err != nil {
@@ -356,6 +386,46 @@ func RegisterConversions(s *runtime.Scheme) error {
 	}
 	if err := s.AddGeneratedConversionFunc((*controlplane.ServiceReference)(nil), (*ServiceReference)(nil), func(a, b interface{}, scope conversion.Scope) error {
 		return Convert_controlplane_ServiceReference_To_v1beta2_ServiceReference(a.(*controlplane.ServiceReference), b.(*ServiceReference), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*SupportBundleCollection)(nil), (*controlplane.SupportBundleCollection)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_v1beta2_SupportBundleCollection_To_controlplane_SupportBundleCollection(a.(*SupportBundleCollection), b.(*controlplane.SupportBundleCollection), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*controlplane.SupportBundleCollection)(nil), (*SupportBundleCollection)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_controlplane_SupportBundleCollection_To_v1beta2_SupportBundleCollection(a.(*controlplane.SupportBundleCollection), b.(*SupportBundleCollection), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*SupportBundleCollectionList)(nil), (*controlplane.SupportBundleCollectionList)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_v1beta2_SupportBundleCollectionList_To_controlplane_SupportBundleCollectionList(a.(*SupportBundleCollectionList), b.(*controlplane.SupportBundleCollectionList), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*controlplane.SupportBundleCollectionList)(nil), (*SupportBundleCollectionList)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_controlplane_SupportBundleCollectionList_To_v1beta2_SupportBundleCollectionList(a.(*controlplane.SupportBundleCollectionList), b.(*SupportBundleCollectionList), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*SupportBundleCollectionNodeStatus)(nil), (*controlplane.SupportBundleCollectionNodeStatus)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_v1beta2_SupportBundleCollectionNodeStatus_To_controlplane_SupportBundleCollectionNodeStatus(a.(*SupportBundleCollectionNodeStatus), b.(*controlplane.SupportBundleCollectionNodeStatus), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*controlplane.SupportBundleCollectionNodeStatus)(nil), (*SupportBundleCollectionNodeStatus)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_controlplane_SupportBundleCollectionNodeStatus_To_v1beta2_SupportBundleCollectionNodeStatus(a.(*controlplane.SupportBundleCollectionNodeStatus), b.(*SupportBundleCollectionNodeStatus), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*SupportBundleCollectionStatus)(nil), (*controlplane.SupportBundleCollectionStatus)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_v1beta2_SupportBundleCollectionStatus_To_controlplane_SupportBundleCollectionStatus(a.(*SupportBundleCollectionStatus), b.(*controlplane.SupportBundleCollectionStatus), scope)
+	}); err != nil {
+		return err
+	}
+	if err := s.AddGeneratedConversionFunc((*controlplane.SupportBundleCollectionStatus)(nil), (*SupportBundleCollectionStatus)(nil), func(a, b interface{}, scope conversion.Scope) error {
+		return Convert_controlplane_SupportBundleCollectionStatus_To_v1beta2_SupportBundleCollectionStatus(a.(*controlplane.SupportBundleCollectionStatus), b.(*SupportBundleCollectionStatus), scope)
 	}); err != nil {
 		return err
 	}
@@ -661,6 +731,72 @@ func autoConvert_controlplane_AppliedToGroupPatch_To_v1beta2_AppliedToGroupPatch
 // Convert_controlplane_AppliedToGroupPatch_To_v1beta2_AppliedToGroupPatch is an autogenerated conversion function.
 func Convert_controlplane_AppliedToGroupPatch_To_v1beta2_AppliedToGroupPatch(in *controlplane.AppliedToGroupPatch, out *AppliedToGroupPatch, s conversion.Scope) error {
 	return autoConvert_controlplane_AppliedToGroupPatch_To_v1beta2_AppliedToGroupPatch(in, out, s)
+}
+
+func autoConvert_v1beta2_BasicAuthentication_To_controlplane_BasicAuthentication(in *BasicAuthentication, out *controlplane.BasicAuthentication, s conversion.Scope) error {
+	out.Username = in.Username
+	out.Password = in.Password
+	return nil
+}
+
+// Convert_v1beta2_BasicAuthentication_To_controlplane_BasicAuthentication is an autogenerated conversion function.
+func Convert_v1beta2_BasicAuthentication_To_controlplane_BasicAuthentication(in *BasicAuthentication, out *controlplane.BasicAuthentication, s conversion.Scope) error {
+	return autoConvert_v1beta2_BasicAuthentication_To_controlplane_BasicAuthentication(in, out, s)
+}
+
+func autoConvert_controlplane_BasicAuthentication_To_v1beta2_BasicAuthentication(in *controlplane.BasicAuthentication, out *BasicAuthentication, s conversion.Scope) error {
+	out.Username = in.Username
+	out.Password = in.Password
+	return nil
+}
+
+// Convert_controlplane_BasicAuthentication_To_v1beta2_BasicAuthentication is an autogenerated conversion function.
+func Convert_controlplane_BasicAuthentication_To_v1beta2_BasicAuthentication(in *controlplane.BasicAuthentication, out *BasicAuthentication, s conversion.Scope) error {
+	return autoConvert_controlplane_BasicAuthentication_To_v1beta2_BasicAuthentication(in, out, s)
+}
+
+func autoConvert_v1beta2_BundleFileServer_To_controlplane_BundleFileServer(in *BundleFileServer, out *controlplane.BundleFileServer, s conversion.Scope) error {
+	out.URL = in.URL
+	return nil
+}
+
+// Convert_v1beta2_BundleFileServer_To_controlplane_BundleFileServer is an autogenerated conversion function.
+func Convert_v1beta2_BundleFileServer_To_controlplane_BundleFileServer(in *BundleFileServer, out *controlplane.BundleFileServer, s conversion.Scope) error {
+	return autoConvert_v1beta2_BundleFileServer_To_controlplane_BundleFileServer(in, out, s)
+}
+
+func autoConvert_controlplane_BundleFileServer_To_v1beta2_BundleFileServer(in *controlplane.BundleFileServer, out *BundleFileServer, s conversion.Scope) error {
+	out.URL = in.URL
+	return nil
+}
+
+// Convert_controlplane_BundleFileServer_To_v1beta2_BundleFileServer is an autogenerated conversion function.
+func Convert_controlplane_BundleFileServer_To_v1beta2_BundleFileServer(in *controlplane.BundleFileServer, out *BundleFileServer, s conversion.Scope) error {
+	return autoConvert_controlplane_BundleFileServer_To_v1beta2_BundleFileServer(in, out, s)
+}
+
+func autoConvert_v1beta2_BundleServerAuthConfiguration_To_controlplane_BundleServerAuthConfiguration(in *BundleServerAuthConfiguration, out *controlplane.BundleServerAuthConfiguration, s conversion.Scope) error {
+	out.BearerToken = in.BearerToken
+	out.APIKey = in.APIKey
+	out.BasicAuthentication = (*controlplane.BasicAuthentication)(unsafe.Pointer(in.BasicAuthentication))
+	return nil
+}
+
+// Convert_v1beta2_BundleServerAuthConfiguration_To_controlplane_BundleServerAuthConfiguration is an autogenerated conversion function.
+func Convert_v1beta2_BundleServerAuthConfiguration_To_controlplane_BundleServerAuthConfiguration(in *BundleServerAuthConfiguration, out *controlplane.BundleServerAuthConfiguration, s conversion.Scope) error {
+	return autoConvert_v1beta2_BundleServerAuthConfiguration_To_controlplane_BundleServerAuthConfiguration(in, out, s)
+}
+
+func autoConvert_controlplane_BundleServerAuthConfiguration_To_v1beta2_BundleServerAuthConfiguration(in *controlplane.BundleServerAuthConfiguration, out *BundleServerAuthConfiguration, s conversion.Scope) error {
+	out.BearerToken = in.BearerToken
+	out.APIKey = in.APIKey
+	out.BasicAuthentication = (*BasicAuthentication)(unsafe.Pointer(in.BasicAuthentication))
+	return nil
+}
+
+// Convert_controlplane_BundleServerAuthConfiguration_To_v1beta2_BundleServerAuthConfiguration is an autogenerated conversion function.
+func Convert_controlplane_BundleServerAuthConfiguration_To_v1beta2_BundleServerAuthConfiguration(in *controlplane.BundleServerAuthConfiguration, out *BundleServerAuthConfiguration, s conversion.Scope) error {
+	return autoConvert_controlplane_BundleServerAuthConfiguration_To_v1beta2_BundleServerAuthConfiguration(in, out, s)
 }
 
 func autoConvert_v1beta2_ClusterGroupMembers_To_controlplane_ClusterGroupMembers(in *ClusterGroupMembers, out *controlplane.ClusterGroupMembers, s conversion.Scope) error {
@@ -1486,4 +1622,112 @@ func autoConvert_controlplane_ServiceReference_To_v1beta2_ServiceReference(in *c
 // Convert_controlplane_ServiceReference_To_v1beta2_ServiceReference is an autogenerated conversion function.
 func Convert_controlplane_ServiceReference_To_v1beta2_ServiceReference(in *controlplane.ServiceReference, out *ServiceReference, s conversion.Scope) error {
 	return autoConvert_controlplane_ServiceReference_To_v1beta2_ServiceReference(in, out, s)
+}
+
+func autoConvert_v1beta2_SupportBundleCollection_To_controlplane_SupportBundleCollection(in *SupportBundleCollection, out *controlplane.SupportBundleCollection, s conversion.Scope) error {
+	out.ObjectMeta = in.ObjectMeta
+	out.ExpiredAt = in.ExpiredAt
+	out.SinceTime = in.SinceTime
+	if err := Convert_v1beta2_BundleFileServer_To_controlplane_BundleFileServer(&in.FileServer, &out.FileServer, s); err != nil {
+		return err
+	}
+	if err := Convert_v1beta2_BundleServerAuthConfiguration_To_controlplane_BundleServerAuthConfiguration(&in.Authentication, &out.Authentication, s); err != nil {
+		return err
+	}
+	return nil
+}
+
+// Convert_v1beta2_SupportBundleCollection_To_controlplane_SupportBundleCollection is an autogenerated conversion function.
+func Convert_v1beta2_SupportBundleCollection_To_controlplane_SupportBundleCollection(in *SupportBundleCollection, out *controlplane.SupportBundleCollection, s conversion.Scope) error {
+	return autoConvert_v1beta2_SupportBundleCollection_To_controlplane_SupportBundleCollection(in, out, s)
+}
+
+func autoConvert_controlplane_SupportBundleCollection_To_v1beta2_SupportBundleCollection(in *controlplane.SupportBundleCollection, out *SupportBundleCollection, s conversion.Scope) error {
+	out.ObjectMeta = in.ObjectMeta
+	out.ExpiredAt = in.ExpiredAt
+	out.SinceTime = in.SinceTime
+	if err := Convert_controlplane_BundleFileServer_To_v1beta2_BundleFileServer(&in.FileServer, &out.FileServer, s); err != nil {
+		return err
+	}
+	if err := Convert_controlplane_BundleServerAuthConfiguration_To_v1beta2_BundleServerAuthConfiguration(&in.Authentication, &out.Authentication, s); err != nil {
+		return err
+	}
+	return nil
+}
+
+// Convert_controlplane_SupportBundleCollection_To_v1beta2_SupportBundleCollection is an autogenerated conversion function.
+func Convert_controlplane_SupportBundleCollection_To_v1beta2_SupportBundleCollection(in *controlplane.SupportBundleCollection, out *SupportBundleCollection, s conversion.Scope) error {
+	return autoConvert_controlplane_SupportBundleCollection_To_v1beta2_SupportBundleCollection(in, out, s)
+}
+
+func autoConvert_v1beta2_SupportBundleCollectionList_To_controlplane_SupportBundleCollectionList(in *SupportBundleCollectionList, out *controlplane.SupportBundleCollectionList, s conversion.Scope) error {
+	out.ListMeta = in.ListMeta
+	out.Items = *(*[]controlplane.SupportBundleCollection)(unsafe.Pointer(&in.Items))
+	return nil
+}
+
+// Convert_v1beta2_SupportBundleCollectionList_To_controlplane_SupportBundleCollectionList is an autogenerated conversion function.
+func Convert_v1beta2_SupportBundleCollectionList_To_controlplane_SupportBundleCollectionList(in *SupportBundleCollectionList, out *controlplane.SupportBundleCollectionList, s conversion.Scope) error {
+	return autoConvert_v1beta2_SupportBundleCollectionList_To_controlplane_SupportBundleCollectionList(in, out, s)
+}
+
+func autoConvert_controlplane_SupportBundleCollectionList_To_v1beta2_SupportBundleCollectionList(in *controlplane.SupportBundleCollectionList, out *SupportBundleCollectionList, s conversion.Scope) error {
+	out.ListMeta = in.ListMeta
+	out.Items = *(*[]SupportBundleCollection)(unsafe.Pointer(&in.Items))
+	return nil
+}
+
+// Convert_controlplane_SupportBundleCollectionList_To_v1beta2_SupportBundleCollectionList is an autogenerated conversion function.
+func Convert_controlplane_SupportBundleCollectionList_To_v1beta2_SupportBundleCollectionList(in *controlplane.SupportBundleCollectionList, out *SupportBundleCollectionList, s conversion.Scope) error {
+	return autoConvert_controlplane_SupportBundleCollectionList_To_v1beta2_SupportBundleCollectionList(in, out, s)
+}
+
+func autoConvert_v1beta2_SupportBundleCollectionNodeStatus_To_controlplane_SupportBundleCollectionNodeStatus(in *SupportBundleCollectionNodeStatus, out *controlplane.SupportBundleCollectionNodeStatus, s conversion.Scope) error {
+	out.NodeName = in.NodeName
+	out.NodeNamespace = in.NodeNamespace
+	out.NodeType = controlplane.SupportBundleCollectionNodeType(in.NodeType)
+	out.Completed = in.Completed
+	out.Error = in.Error
+	return nil
+}
+
+// Convert_v1beta2_SupportBundleCollectionNodeStatus_To_controlplane_SupportBundleCollectionNodeStatus is an autogenerated conversion function.
+func Convert_v1beta2_SupportBundleCollectionNodeStatus_To_controlplane_SupportBundleCollectionNodeStatus(in *SupportBundleCollectionNodeStatus, out *controlplane.SupportBundleCollectionNodeStatus, s conversion.Scope) error {
+	return autoConvert_v1beta2_SupportBundleCollectionNodeStatus_To_controlplane_SupportBundleCollectionNodeStatus(in, out, s)
+}
+
+func autoConvert_controlplane_SupportBundleCollectionNodeStatus_To_v1beta2_SupportBundleCollectionNodeStatus(in *controlplane.SupportBundleCollectionNodeStatus, out *SupportBundleCollectionNodeStatus, s conversion.Scope) error {
+	out.NodeName = in.NodeName
+	out.NodeNamespace = in.NodeNamespace
+	out.NodeType = string(in.NodeType)
+	out.Completed = in.Completed
+	out.Error = in.Error
+	return nil
+}
+
+// Convert_controlplane_SupportBundleCollectionNodeStatus_To_v1beta2_SupportBundleCollectionNodeStatus is an autogenerated conversion function.
+func Convert_controlplane_SupportBundleCollectionNodeStatus_To_v1beta2_SupportBundleCollectionNodeStatus(in *controlplane.SupportBundleCollectionNodeStatus, out *SupportBundleCollectionNodeStatus, s conversion.Scope) error {
+	return autoConvert_controlplane_SupportBundleCollectionNodeStatus_To_v1beta2_SupportBundleCollectionNodeStatus(in, out, s)
+}
+
+func autoConvert_v1beta2_SupportBundleCollectionStatus_To_controlplane_SupportBundleCollectionStatus(in *SupportBundleCollectionStatus, out *controlplane.SupportBundleCollectionStatus, s conversion.Scope) error {
+	out.ObjectMeta = in.ObjectMeta
+	out.Nodes = *(*[]controlplane.SupportBundleCollectionNodeStatus)(unsafe.Pointer(&in.Nodes))
+	return nil
+}
+
+// Convert_v1beta2_SupportBundleCollectionStatus_To_controlplane_SupportBundleCollectionStatus is an autogenerated conversion function.
+func Convert_v1beta2_SupportBundleCollectionStatus_To_controlplane_SupportBundleCollectionStatus(in *SupportBundleCollectionStatus, out *controlplane.SupportBundleCollectionStatus, s conversion.Scope) error {
+	return autoConvert_v1beta2_SupportBundleCollectionStatus_To_controlplane_SupportBundleCollectionStatus(in, out, s)
+}
+
+func autoConvert_controlplane_SupportBundleCollectionStatus_To_v1beta2_SupportBundleCollectionStatus(in *controlplane.SupportBundleCollectionStatus, out *SupportBundleCollectionStatus, s conversion.Scope) error {
+	out.ObjectMeta = in.ObjectMeta
+	out.Nodes = *(*[]SupportBundleCollectionNodeStatus)(unsafe.Pointer(&in.Nodes))
+	return nil
+}
+
+// Convert_controlplane_SupportBundleCollectionStatus_To_v1beta2_SupportBundleCollectionStatus is an autogenerated conversion function.
+func Convert_controlplane_SupportBundleCollectionStatus_To_v1beta2_SupportBundleCollectionStatus(in *controlplane.SupportBundleCollectionStatus, out *SupportBundleCollectionStatus, s conversion.Scope) error {
+	return autoConvert_controlplane_SupportBundleCollectionStatus_To_v1beta2_SupportBundleCollectionStatus(in, out, s)
 }

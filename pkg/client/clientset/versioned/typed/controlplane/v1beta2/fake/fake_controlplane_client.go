@@ -54,6 +54,10 @@ func (c *FakeControlplaneV1beta2) NodeStatsSummaries() v1beta2.NodeStatsSummaryI
 	return &FakeNodeStatsSummaries{c}
 }
 
+func (c *FakeControlplaneV1beta2) SupportBundleCollections() v1beta2.SupportBundleCollectionInterface {
+	return &FakeSupportBundleCollections{c}
+}
+
 // RESTClient returns a RESTClient that is used to communicate
 // with API server by this client implementation.
 func (c *FakeControlplaneV1beta2) RESTClient() rest.Interface {
