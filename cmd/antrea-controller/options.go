@@ -58,7 +58,7 @@ func (o *Options) addFlags(fs *pflag.FlagSet) {
 }
 
 // complete completes all the required options.
-func (o *Options) complete(args []string) error {
+func (o *Options) complete() error {
 	if len(o.configFile) > 0 {
 		if err := o.loadConfigFromFile(); err != nil {
 			return err
@@ -107,9 +107,11 @@ func (o *Options) validateNodeIPAMControllerOptions() error {
 	}
 
 	hasIP4, hasIP6 := false, false
+	var ipv6Mask int
 	for _, cidr := range cidrs {
 		if cidr.IP.To4() == nil {
 			hasIP6 = true
+			ipv6Mask, _ = cidr.Mask.Size()
 		} else {
 			hasIP4 = true
 		}
@@ -131,6 +133,15 @@ func (o *Options) validateNodeIPAMControllerOptions() error {
 		if o.config.NodeIPAM.NodeCIDRMaskSizeIPv6 < ipamIPv6MaskLo || o.config.NodeIPAM.NodeCIDRMaskSizeIPv6 > ipamIPv6MaskHi {
 			return fmt.Errorf("node IPv6 CIDR mask size %d is invalid, should be between %d and %d",
 				o.config.NodeIPAM.NodeCIDRMaskSizeIPv6, ipamIPv6MaskLo, ipamIPv6MaskHi)
+		}
+		// The subnet mask size cannot be greater than 16 more than the cluster mask size
+		// clusterSubnetMaxDiff limited to 16 due to the uncompressed bitmap
+		// Due to this limitation the subnet mask for IPv6 cluster cidr needs to be >= 48
+		// as default mask size for IPv6 is 64.
+		//	clusterSubnetMaxDiff = 16
+		// see also: third_party/ipam/nodeipam/ipam/cidrset/cidr_set.go:84, https://github.com/kubernetes/kubernetes/issues/44918
+		if o.config.NodeIPAM.NodeCIDRMaskSizeIPv6-ipv6Mask > 16 {
+			return fmt.Errorf("the node IPv6 CIDR size is too big, the cluster CIDR mask size cannot be greater than 16 more than the Node IPv6 CIDR mask size")
 		}
 	}
 
