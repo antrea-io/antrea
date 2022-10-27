@@ -808,6 +808,7 @@ func (c *client) generatePipelines() {
 			c.networkConfig,
 			c.serviceConfig,
 			c.bridge,
+			c.enableAntreaPolicy,
 			c.enableProxy,
 			c.proxyAll,
 			c.connectUplinkToBridge)

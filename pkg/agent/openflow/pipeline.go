@@ -2112,7 +2112,7 @@ func (f *featureNetworkPolicy) ingressClassifierFlows() []binding.Flow {
 			Action().GotoTable(IngressMetricTable.GetID()).
 			Done(),
 	}
-	if f.proxyAll {
+	if f.enableAntreaPolicy && f.proxyAll {
 		// This generates the flow to match the NodePort Service packets and forward them to AntreaPolicyIngressRuleTable.
 		// Policies applied on NodePort Service will be enforced in AntreaPolicyIngressRuleTable.
 		flows = append(flows, IngressSecurityClassifierTable.ofTable.BuildFlow(priorityNormal+1).
@@ -2345,9 +2345,10 @@ func (f *featureService) serviceLBFlow(groupID binding.GroupIDType,
 			MatchRegMark(EpToSelectRegMark).
 			Action().LoadRegMark(regMarksToLoad...)
 	}
-	return flowBuilder.
-		Action().LoadToRegField(ServiceGroupIDField, uint32(groupID)).
-		Action().Group(groupID).Done()
+	if f.enableAntreaPolicy {
+		flowBuilder = flowBuilder.Action().LoadToRegField(ServiceGroupIDField, uint32(groupID))
+	}
+	return flowBuilder.Action().Group(groupID).Done()
 }
 
 // endpointDNATFlow generates the flow which transforms the Service Cluster IP to the Endpoint IP according to the Endpoint

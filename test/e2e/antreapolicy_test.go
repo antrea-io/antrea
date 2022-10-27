@@ -3679,80 +3679,85 @@ func testACNPICMPSupport(t *testing.T, data *TestData) {
 func testACNPNodePortServiceSupport(t *testing.T, data *TestData) {
 	skipIfProxyAllDisabled(t, data)
 
-	// Create a client on Node 0, one NodePort Service whose Endpoint is on Node 0 and
-	// another NodePort Service whose Endpoint is on Node 1. Initiate traffic from this
-	// client to these two Services Node 1 NodePort to simulate the traffic from
-	// external client to NodePort.
-	clientName := "agnhost-client"
-	failOnError(data.createAgnhostPodOnNode(clientName, data.testNamespace, nodeName(0), true), t)
-	defer data.deletePodAndWait(defaultTimeout, clientName, data.testNamespace)
-	ips, err := data.podWaitForIPs(defaultTimeout, clientName, data.testNamespace)
+	// Create a NodePort Service.
+	ipProtocol := v1.IPv4Protocol
+	var nodePort int32
+	nodePortSvc, err := data.createNginxNodePortService("test-nodeport-svc", false, false, &ipProtocol)
 	failOnError(err, t)
-
-	var cidr string
-	if clusterInfo.podV4NetworkCIDR != "" {
-		cidr = ips.ipv4.String()
-	} else {
-		cidr = ips.ipv6.String()
+	for _, port := range nodePortSvc.Spec.Ports {
+		if port.NodePort != 0 {
+			nodePort = port.NodePort
+			break
+		}
 	}
-	cidr += "/32"
 
-	svc1, cleanup1 := data.createAgnhostServiceAndBackendPods(t, "svc1", data.testNamespace, nodeName(0), v1.ServiceTypeNodePort)
-	defer cleanup1()
+	backendPodName := "test-nodeport-backend-pod"
+	require.NoError(t, data.createNginxPodOnNode(backendPodName, data.testNamespace, nodeName(0), false))
+	if err := data.podWaitForRunning(defaultTimeout, backendPodName, data.testNamespace); err != nil {
+		t.Fatalf("Error when waiting for Pod '%s' to be in the Running state", backendPodName)
+	}
+	defer deletePodWrapper(t, data, data.testNamespace, backendPodName)
 
-	svc2, cleanup2 := data.createAgnhostServiceAndBackendPods(t, "svc2", data.testNamespace, nodeName(1), v1.ServiceTypeNodePort)
-	defer cleanup2()
+	// Create another netns to fake an external network on the host network Pod.
+	testNetns := "test-ns"
+	cmd := fmt.Sprintf(`ip netns add %[1]s && \
+ip link add dev %[1]s-a type veth peer name %[1]s-b && \
+ip link set dev %[1]s-a netns %[1]s && \
+ip addr add %[3]s/%[4]d dev %[1]s-b && \
+ip link set dev %[1]s-b up && \
+ip netns exec %[1]s ip addr add %[2]s/%[4]d dev %[1]s-a && \
+ip netns exec %[1]s ip link set dev %[1]s-a up && \
+ip netns exec %[1]s ip route replace default via %[3]s && \
+sleep 3600
+`, testNetns, "1.1.1.1", "1.1.1.254", 24)
+	clientNames := []string{"client0", "client1"}
+	for idx, clientName := range clientNames {
+		if err := NewPodBuilder(clientName, data.testNamespace, agnhostImage).OnNode(nodeName(idx)).WithCommand([]string{"sh", "-c", cmd}).InHostNetwork().Privileged().Create(data); err != nil {
+			t.Fatalf("Failed to create client Pod: %v", err)
+		}
+		defer data.deletePodAndWait(defaultTimeout, clientName, data.testNamespace)
+		err = data.podWaitForRunning(defaultTimeout, clientName, data.testNamespace)
+		failOnError(err, t)
+	}
 
+	cidr := "1.1.1.1/24"
 	builder := &ClusterNetworkPolicySpecBuilder{}
 	builder = builder.SetName("test-acnp-nodeport-svc").
 		SetPriority(1.0).
 		SetAppliedToGroup([]ACNPAppliedToSpec{
 			{
 				Service: &crdv1alpha1.NamespacedName{
-					Name:      svc1.Name,
-					Namespace: svc1.Namespace,
-				},
-			},
-			{
-				Service: &crdv1alpha1.NamespacedName{
-					Name:      svc2.Name,
-					Namespace: svc2.Namespace,
+					Name:      nodePortSvc.Name,
+					Namespace: nodePortSvc.Namespace,
 				},
 			},
 		})
 	builder.AddIngress(ProtocolTCP, nil, nil, nil, nil, nil, nil, nil, &cidr, nil, nil,
 		nil, nil, false, nil, crdv1alpha1.RuleActionReject, "", "", nil)
 
-	testcases := []podToAddrTestStep{
-		{
-			Pod(fmt.Sprintf("%s/%s", data.testNamespace, clientName)),
-			nodeIP(1),
-			svc1.Spec.Ports[0].NodePort,
-			Rejected,
-		},
-		{
-			Pod(fmt.Sprintf("%s/%s", data.testNamespace, clientName)),
-			nodeIP(1),
-			svc2.Spec.Ports[0].NodePort,
-			Rejected,
-		},
-	}
-
 	acnp, err := k8sUtils.CreateOrUpdateACNP(builder.Get())
 	failOnError(err, t)
 	failOnError(waitForResourceReady(t, timeout, acnp), t)
-	for _, tc := range testcases {
-		log.Tracef("Probing: %s -> %s:%d", cidr, tc.destAddr, tc.destPort)
-		connectivity, err := k8sUtils.ProbeAddr(tc.clientPod.Namespace(), "antrea-e2e", tc.clientPod.PodName(), tc.destAddr, tc.destPort, ProtocolTCP)
-		if err != nil {
-			t.Errorf("failure -- could not complete probe: %v", err)
+	for idx, clientName := range clientNames {
+		log.Tracef("Probing: 1.1.1.1 -> %s:%d", nodeIP(idx), nodePort)
+		// Connect to NodePort in the fake external network.
+		cmd = fmt.Sprintf("for i in $(seq 1 3); do ip netns exec %s /agnhost connect %s:%d --timeout=1s --protocol=tcp; done;", testNetns, nodeIP(idx), nodePort)
+		stdout, stderr, err := data.RunCommandFromPod(data.testNamespace, clientName, agnhostContainerName, []string{"sh", "-c", cmd})
+		connectivity := Connected
+		if err != nil || stderr != "" {
+			// log this error as trace since may be an expected failure
+			log.Tracef("1.1.1.1 -> %s:%d: error when running command: err - %v /// stdout - %s /// stderr - %s", nodeIP(idx), nodePort, err, stdout, stderr)
+			// If err != nil and stderr == "", then it means this probe failed because of
+			// the command instead of connectivity. For example, container name doesn't exist.
+			if stderr == "" {
+				connectivity = Error
+			}
+			connectivity = DecideProbeResult(stderr, 3)
 		}
-		if connectivity != tc.expectedConnectivity {
-			t.Errorf("failure -- wrong results for probe: Source %s --> Dest %s:%d connectivity: %v, expected: %v",
-				cidr, tc.destAddr, tc.destPort, connectivity, tc.expectedConnectivity)
+		if connectivity != Rejected {
+			t.Errorf("failure -- wrong results for probe: Source 1.1.1.1 --> Dest %s:%d connectivity: %v, expected: Rej", nodeIP(idx), nodePort, connectivity)
 		}
 	}
-	// cleanup test resources
 	failOnError(k8sUtils.DeleteACNP(builder.Name), t)
 }
 
