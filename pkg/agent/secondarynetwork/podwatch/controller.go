@@ -144,7 +144,18 @@ func (pc *PodController) buildVFDeviceIDListPerPod(podName, podNamespace string)
 		vfDeviceIDInfoCache = append(vfDeviceIDInfoCache, initSriovVfDeviceID)
 	}
 	pc.vfDeviceIDUsageMap.Store(podKey, vfDeviceIDInfoCache)
+	klog.V(2).InfoS("Pod specific SRIOV VF cache created", "Key", podKey)
 	return vfDeviceIDInfoCache, nil
+}
+
+func (pc *PodController) deleteVFDeviceIDListPerPod(podName, podNamespace string) {
+	podKey := podNamespace + "/" + podName
+	_, cacheFound := pc.vfDeviceIDUsageMap.Load(podKey)
+	if cacheFound {
+		pc.vfDeviceIDUsageMap.Delete(podKey)
+		klog.V(2).InfoS("Pod specific SRIOV VF cache cleared", "Key", podKey)
+	}
+	return
 }
 
 func (pc *PodController) assignUnusedSriovVFDeviceIDPerPod(podName, podNamespace, interfaceName string) (string, error) {
@@ -290,6 +301,8 @@ func (pc *PodController) handleRemovePod(key string) error {
 		} else {
 			// Delete cache entry from podCNIInfo.
 			pc.podCache.DeleteCNIConfigInfo(containerInfo)
+			// Delete Pod specific VF cache (if one exists)
+			pc.deleteVFDeviceIDListPerPod(containerInfo.PodName, containerInfo.PodNameSpace)
 		}
 	}
 	return nil
