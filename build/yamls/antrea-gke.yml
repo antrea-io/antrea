@@ -2155,7 +2155,7 @@ spec:
                   properties:
                     authType:
                       type: string
-                      enum: ["BearerToken", "APIKey"]
+                      enum: ["BearerToken", "APIKey", "BasicAuthentication"]
                     authSecret:
                       type: object
                       properties:
@@ -3208,6 +3208,9 @@ data:
     # Enable managing ExternalNode for unmanaged VM/BM.
     #  ExternalNode: false
 
+    # Enable collecting support bundle files with SupportBundleCollection CRD.
+    #  SupportBundleCollection: false
+
     # The port for the antrea-controller APIServer to serve on.
     # Note that if it's set to another value, the `containerPort` of the `api` port of the
     # `antrea-controller` container must be set to the same value.
@@ -3971,6 +3974,20 @@ rules:
       - get
       - list
       - watch
+  - apiGroups:
+      - crd.antrea.io
+    resources:
+      - supportbundlecollections
+    verbs:
+      - get
+      - watch
+      - list
+  - apiGroups:
+      - crd.antrea.io
+    resources:
+      - supportbundlecollections/status
+    verbs:
+      - update
 ---
 # Source: antrea/templates/crds-rbac/clusterroles.yaml
 apiVersion: rbac.authorization.k8s.io/v1
@@ -4148,7 +4165,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: ae585cead46246e4d15fa336e081caaa51d432909dfd21a22720a1c37b2e37e9
+        checksum/config: 4aaa9260916de6b712215a4deb2b7694dceb17dba615f691f61aaecdd6a61abb
       labels:
         app: antrea
         component: antrea-agent
@@ -4388,7 +4405,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: ae585cead46246e4d15fa336e081caaa51d432909dfd21a22720a1c37b2e37e9
+        checksum/config: 4aaa9260916de6b712215a4deb2b7694dceb17dba615f691f61aaecdd6a61abb
       labels:
         app: antrea
         component: antrea-controller
@@ -4700,6 +4717,21 @@ webhooks:
         apiGroups: ["crd.antrea.io"]
         apiVersions: ["v1alpha2"]
         resources: ["ippools"]
+        scope: "Cluster"
+    admissionReviewVersions: ["v1", "v1beta1"]
+    sideEffects: None
+    timeoutSeconds: 5
+  - name: "supportbundlecollectionvalidator.antrea.io"
+    clientConfig:
+      service:
+        name: "antrea"
+        namespace: kube-system
+        path: "/validate/supportbundlecollection"
+    rules:
+      - operations: ["UPDATE", "DELETE"]
+        apiGroups: ["crd.antrea.io"]
+        apiVersions: ["v1alpha1"]
+        resources: ["supportbundlecollections"]
         scope: "Cluster"
     admissionReviewVersions: ["v1", "v1beta1"]
     sideEffects: None

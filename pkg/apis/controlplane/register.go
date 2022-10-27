@@ -61,6 +61,9 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 		&EgressGroup{},
 		&EgressGroupPatch{},
 		&EgressGroupList{},
+		&SupportBundleCollection{},
+		&SupportBundleCollectionList{},
+		&SupportBundleCollectionStatus{},
 	)
 	return nil
 }

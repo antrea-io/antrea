@@ -43,6 +43,7 @@ import (
 	"antrea.io/antrea/pkg/apiserver/handlers/webhook"
 	"antrea.io/antrea/pkg/apiserver/registry/controlplane/egressgroup"
 	"antrea.io/antrea/pkg/apiserver/registry/controlplane/nodestatssummary"
+	"antrea.io/antrea/pkg/apiserver/registry/controlplane/supportbundlecollection"
 	"antrea.io/antrea/pkg/apiserver/registry/networkpolicy/addressgroup"
 	"antrea.io/antrea/pkg/apiserver/registry/networkpolicy/appliedtogroup"
 	"antrea.io/antrea/pkg/apiserver/registry/networkpolicy/clustergroupmember"
@@ -61,6 +62,7 @@ import (
 	controllernetworkpolicy "antrea.io/antrea/pkg/controller/networkpolicy"
 	"antrea.io/antrea/pkg/controller/querier"
 	"antrea.io/antrea/pkg/controller/stats"
+	controllerbundlecollection "antrea.io/antrea/pkg/controller/supportbundlecollection"
 	"antrea.io/antrea/pkg/features"
 )
 
@@ -93,6 +95,7 @@ type ExtraConfig struct {
 	appliedToGroupStore           storage.Interface
 	networkPolicyStore            storage.Interface
 	egressGroupStore              storage.Interface
+	bundleCollectionStore         storage.Interface
 	controllerQuerier             querier.ControllerQuerier
 	endpointQuerier               controllernetworkpolicy.EndpointQuerier
 	networkPolicyController       *controllernetworkpolicy.NetworkPolicyController
@@ -101,6 +104,7 @@ type ExtraConfig struct {
 	caCertController              *certificate.CACertController
 	statsAggregator               *stats.Aggregator
 	networkPolicyStatusController *controllernetworkpolicy.StatusController
+	bundleCollectionController    *controllerbundlecollection.Controller
 }
 
 // Config defines the config for Antrea apiserver.
@@ -133,14 +137,15 @@ type completedConfig struct {
 func NewConfig(
 	genericConfig *genericapiserver.Config,
 	k8sClient kubernetes.Interface,
-	addressGroupStore, appliedToGroupStore, networkPolicyStore, groupStore, egressGroupStore storage.Interface,
+	addressGroupStore, appliedToGroupStore, networkPolicyStore, groupStore, egressGroupStore, supportBundleCollectionStore storage.Interface,
 	caCertController *certificate.CACertController,
 	statsAggregator *stats.Aggregator,
 	controllerQuerier querier.ControllerQuerier,
 	networkPolicyStatusController *controllernetworkpolicy.StatusController,
 	endpointQuerier controllernetworkpolicy.EndpointQuerier,
 	npController *controllernetworkpolicy.NetworkPolicyController,
-	egressController *egress.EgressController) *Config {
+	egressController *egress.EgressController,
+	bundleCollectionController *controllerbundlecollection.Controller) *Config {
 	return &Config{
 		genericConfig: genericConfig,
 		extraConfig: ExtraConfig{
@@ -149,6 +154,7 @@ func NewConfig(
 			appliedToGroupStore:           appliedToGroupStore,
 			networkPolicyStore:            networkPolicyStore,
 			egressGroupStore:              egressGroupStore,
+			bundleCollectionStore:         supportBundleCollectionStore,
 			caCertController:              caCertController,
 			statsAggregator:               statsAggregator,
 			controllerQuerier:             controllerQuerier,
@@ -156,6 +162,7 @@ func NewConfig(
 			networkPolicyController:       npController,
 			networkPolicyStatusController: networkPolicyStatusController,
 			egressController:              egressController,
+			bundleCollectionController:    bundleCollectionController,
 		},
 	}
 }
@@ -173,6 +180,7 @@ func installAPIGroup(s *APIServer, c completedConfig) error {
 	groupAssociationStorage := groupassociation.NewREST(c.extraConfig.networkPolicyController)
 	nodeStatsSummaryStorage := nodestatssummary.NewREST(c.extraConfig.statsAggregator)
 	egressGroupStorage := egressgroup.NewREST(c.extraConfig.egressGroupStore)
+	bundleCollectionStorage := supportbundlecollection.NewREST(c.extraConfig.bundleCollectionStore)
 	cpGroup := genericapiserver.NewDefaultAPIGroupInfo(controlplane.GroupName, Scheme, parameterCodec, Codecs)
 	cpv1beta2Storage := map[string]rest.Storage{}
 	cpv1beta2Storage["addressgroups"] = addressGroupStorage
@@ -183,6 +191,7 @@ func installAPIGroup(s *APIServer, c completedConfig) error {
 	cpv1beta2Storage["groupassociations"] = groupAssociationStorage
 	cpv1beta2Storage["clustergroupmembers"] = clusterGroupMembershipStorage
 	cpv1beta2Storage["egressgroups"] = egressGroupStorage
+	cpv1beta2Storage["supportbundlecollections"] = bundleCollectionStorage
 	cpGroup.VersionedResourcesStorageMap["v1beta2"] = cpv1beta2Storage
 
 	systemGroup := genericapiserver.NewDefaultAPIGroupInfo(system.GroupName, Scheme, metav1.ParameterCodec, Codecs)
@@ -298,6 +307,10 @@ func installHandlers(c *ExtraConfig, s *genericapiserver.GenericAPIServer) {
 
 	if features.DefaultFeatureGate.Enabled(features.AntreaIPAM) {
 		s.Handler.NonGoRestfulMux.HandleFunc("/validate/ippool", webhook.HandlerForValidateFunc(ipam.ValidateIPPool))
+	}
+
+	if features.DefaultFeatureGate.Enabled(features.SupportBundleCollection) {
+		s.Handler.NonGoRestfulMux.HandleFunc("/validate/supportbundlecollection", webhook.HandlerForValidateFunc(c.bundleCollectionController.Validate))
 	}
 }
 

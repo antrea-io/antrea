@@ -447,3 +447,65 @@ type EgressGroupList struct {
 	metav1.ListMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
 	Items           []EgressGroup `json:"items" protobuf:"bytes,2,rep,name=items"`
 }
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// SupportBundleCollectionStatus is the status of a SupportBundleCollection.
+type SupportBundleCollectionStatus struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
+	// Nodes contains statuses produced on a list of Nodes.
+	Nodes []SupportBundleCollectionNodeStatus `json:"nodes,omitempty" protobuf:"bytes,2,rep,name=nodes"`
+}
+
+// SupportBundleCollectionNodeStatus is the status of a SupportBundleCollection on a Node.
+type SupportBundleCollectionNodeStatus struct {
+	// The name of the Node that produces the status.
+	NodeName string `json:"nodeName,omitempty" protobuf:"bytes,1,opt,name=nodeName"`
+	// The namespace of the Node that produces the status. It is set only when NodeType is ExternalNode.
+	NodeNamespace string `json:"nodeNamespace,omitempty" protobuf:"bytes,2,opt,name=nodeNamespace"`
+	// The type of the Node that produces the status. The values include Node and ExternalNode.
+	NodeType string `json:"nodeType,omitempty" protobuf:"bytes,3,opt,name=nodeType"`
+	// The phase in which a SupportBundleCollection is on the Node.
+	Completed bool   `json:"completed,omitempty" protobuf:"varint,4,opt,name=completed"`
+	Error     string `json:"error,omitempty" protobuf:"bytes,5,opt,name=error"`
+}
+
+type BundleFileServer struct {
+	URL string `json:"url" protobuf:"bytes,1,opt,name=url"`
+}
+
+type BasicAuthentication struct {
+	Username string `json:"username" protobuf:"bytes,1,opt,name=username"`
+	Password string `json:"password" protobuf:"bytes,2,opt,name=password"`
+}
+
+type BundleServerAuthConfiguration struct {
+	BearerToken         string               `json:"bearerToken,omitempty" protobuf:"bytes,1,opt,name=bearerToken"`
+	APIKey              string               `json:"apiKey,omitempty" protobuf:"bytes,2,opt,name=apiKey"`
+	BasicAuthentication *BasicAuthentication `json:"basicAuthentication,omitempty" protobuf:"bytes,3,opt,name=basicAuthentication"`
+}
+
+// +genclient
+// +genclient:nonNamespaced
+// +genclient:onlyVerbs=list,get,watch
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// SupportBundleCollection is the message format of antrea/pkg/controller/types.SupportBundleCollection in an API response.
+type SupportBundleCollection struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
+	ExpiredAt         metav1.Time                   `json:"expiredAt,omitempty" protobuf:"varint,2,opt,name=expiredAt"`
+	SinceTime         string                        `json:"sinceTime,omitempty" protobuf:"bytes,3,opt,name=sinceTime"`
+	FileServer        BundleFileServer              `json:"fileServer,omitempty" protobuf:"bytes,4,opt,name=fileServer"`
+	Authentication    BundleServerAuthConfiguration `json:"authentication,omitempty" protobuf:"bytes,5,opt,name=authentication"`
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// SupportBundleCollectionList is a list of SupportBundleCollection objects.
+type SupportBundleCollectionList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
+	Items           []SupportBundleCollection `json:"items" protobuf:"bytes,2,rep,name=items"`
+}

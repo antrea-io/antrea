@@ -32,24 +32,25 @@ edit the Agent configuration in the
 
 ## List of Available Features
 
-| Feature Name            | Component          | Default | Stage | Alpha Release | Beta Release | GA Release | Extra Requirements | Notes |
-| ----------------------- | ------------------ | ------- | ----- |---------------| ------------ | ---------- | ------------------ | ----- |
-| `AntreaProxy`           | Agent              | `true`  | Beta  | v0.8          | v0.11        | N/A        | Yes                | Must be enabled for Windows. |
-| `EndpointSlice`         | Agent              | `false` | Alpha | v0.13.0       | N/A          | N/A        | Yes                |       |
-| `TopologyAwareHints`    | Agent              | `false` | Alpha | v1.8          | N/A          | N/A        | Yes                |       |
-| `AntreaPolicy`          | Agent + Controller | `true`  | Beta  | v0.8          | v1.0         | N/A        | No                 | Agent side config required from v0.9.0+. |
-| `Traceflow`             | Agent + Controller | `true`  | Beta  | v0.8          | v0.11        | N/A        | Yes                |       |
-| `FlowExporter`          | Agent              | `false` | Alpha | v0.9          | N/A          | N/A        | Yes                |       |
-| `NetworkPolicyStats`    | Agent + Controller | `true`  | Beta  | v0.10         | v1.2         | N/A        | No                 |       |
-| `NodePortLocal`         | Agent              | `true`  | Beta  | v0.13         | v1.4         | N/A        | Yes                | Important user-facing change in v1.2.0 |
-| `Egress`                | Agent + Controller | `true`  | Beta  | v1.0          | v1.6         | N/A        | Yes                |       |
-| `NodeIPAM`              | Controller         | `false` | Alpha | v1.4          | N/A          | N/A        | Yes                |       |
-| `AntreaIPAM`            | Agent + Controller | `false` | Alpha | v1.4          | N/A          | N/A        | Yes                |       |
-| `Multicast`             | Agent              | `false` | Alpha | v1.5          | N/A          | N/A        | Yes                |       |
-| `SecondaryNetwork`      | Agent              | `false` | Alpha | v1.5          | N/A          | N/A        | Yes                |       |
-| `ServiceExternalIP`     | Agent + Controller | `false` | Alpha | v1.5          | N/A          | N/A        | Yes                |       |
-| `TrafficControl`        | Agent              | `false` | Alpha | v1.7          | N/A          | N/A        | No                 |       |
-| `ExternalNode`          | Agent              | `false` | Alpha | v1.8          | N/A          | N/A        | Yes                |       |
+| Feature Name              | Component          | Default | Stage | Alpha Release | Beta Release | GA Release | Extra Requirements | Notes |
+|---------------------------|--------------------| ------- | ----- |---------------| ------------ | ---------- |--------------------| ----- |
+| `AntreaProxy`             | Agent              | `true`  | Beta  | v0.8          | v0.11        | N/A        | Yes                | Must be enabled for Windows. |
+| `EndpointSlice`           | Agent              | `false` | Alpha | v0.13.0       | N/A          | N/A        | Yes                |       |
+| `TopologyAwareHints`      | Agent              | `false` | Alpha | v1.8          | N/A          | N/A        | Yes                |       |
+| `AntreaPolicy`            | Agent + Controller | `true`  | Beta  | v0.8          | v1.0         | N/A        | No                 | Agent side config required from v0.9.0+. |
+| `Traceflow`               | Agent + Controller | `true`  | Beta  | v0.8          | v0.11        | N/A        | Yes                |       |
+| `FlowExporter`            | Agent              | `false` | Alpha | v0.9          | N/A          | N/A        | Yes                |       |
+| `NetworkPolicyStats`      | Agent + Controller | `true`  | Beta  | v0.10         | v1.2         | N/A        | No                 |       |
+| `NodePortLocal`           | Agent              | `true`  | Beta  | v0.13         | v1.4         | N/A        | Yes                | Important user-facing change in v1.2.0 |
+| `Egress`                  | Agent + Controller | `true`  | Beta  | v1.0          | v1.6         | N/A        | Yes                |       |
+| `NodeIPAM`                | Controller         | `false` | Alpha | v1.4          | N/A          | N/A        | Yes                |       |
+| `AntreaIPAM`              | Agent + Controller | `false` | Alpha | v1.4          | N/A          | N/A        | Yes                |       |
+| `Multicast`               | Agent              | `false` | Alpha | v1.5          | N/A          | N/A        | Yes                |       |
+| `SecondaryNetwork`        | Agent              | `false` | Alpha | v1.5          | N/A          | N/A        | Yes                |       |
+| `ServiceExternalIP`       | Agent + Controller | `false` | Alpha | v1.5          | N/A          | N/A        | Yes                |       |
+| `TrafficControl`          | Agent              | `false` | Alpha | v1.7          | N/A          | N/A        | No                 |       |
+| `ExternalNode`            | Agent              | `false` | Alpha | v1.8          | N/A          | N/A        | Yes                |       |
+| `SupportBundleCollection` | Agent + Controller | `false` | Alpha | v1.10         | N/A          | N/A        | Yes                |       |
 
 ## Description and Requirements of Features
 
@@ -321,7 +322,7 @@ The `ExternalNode` feature enables Antrea Agent runs on a virtual machine or a b
 Kubernetes Node, and enforces Antrea NetworkPolicy for the VM/BM. Antrea Agent supports the `ExternalNode` feature on
 both Linux and Windows.
 
-More documentation will be coming in the future.
+Refer to this [document](external-node.md) for more information.
 
 #### Requirements for this Feature
 
@@ -330,3 +331,15 @@ disabled. As of now, this feature requires that `AntreaProxy` and `NetworkPolicy
 
 OVS is required to be installed on the virtual machine or the bare-metal server before running Antrea Agent, and the OVS
 version must be >= 2.13.0.
+
+### SupportBundleCollection
+
+`SupportBundleCollection` feature enables a CRD API for Antrea to collect support bundle files on any Node or
+ExternalNode, and upload to a user defined file server.
+
+More documentation will be coming in the future.
+
+#### Requirements for this Feature
+
+User should provide a file server with this feature, and store its authentication credential in a Secret. Antrea
+Controller is required to be configured with the permission to read the Secret.

@@ -835,7 +835,7 @@ type BundleNodes struct {
 }
 
 type BundleExternalNodes struct {
-	Namespace string
+	Namespace string `json:"namespace"`
 	// List the names of certain ExternalNodes which are expected to collect and upload
 	// bundle files.
 	// +optional
@@ -856,8 +856,9 @@ type BundleFileServer struct {
 type BundleServerAuthType string
 
 const (
-	APIKey      BundleServerAuthType = "APIKey"
-	BearerToken BundleServerAuthType = "BearerToken"
+	APIKey              BundleServerAuthType = "APIKey"
+	BearerToken         BundleServerAuthType = "BearerToken"
+	BasicAuthentication BundleServerAuthType = "BasicAuthentication"
 )
 
 // BundleServerAuthConfiguration defines the authentication parameters that Antrea uses to access

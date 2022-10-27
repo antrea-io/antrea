@@ -74,6 +74,24 @@ message AppliedToGroupPatch {
   repeated GroupMember removedGroupMembers = 3;
 }
 
+message BasicAuthentication {
+  optional string username = 1;
+
+  optional string password = 2;
+}
+
+message BundleFileServer {
+  optional string url = 1;
+}
+
+message BundleServerAuthConfiguration {
+  optional string bearerToken = 1;
+
+  optional string apiKey = 2;
+
+  optional BasicAuthentication basicAuthentication = 3;
+}
+
 // ClusterGroupMembers is a list of GroupMember objects or ipBlocks that are currently selected by a ClusterGroup.
 message ClusterGroupMembers {
   optional k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
@@ -415,5 +433,50 @@ message ServiceReference {
 
   // The Namespace of this Service.
   optional string namespace = 2;
+}
+
+// SupportBundleCollection is the message format of antrea/pkg/controller/types.SupportBundleCollection in an API response.
+message SupportBundleCollection {
+  optional k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
+
+  optional k8s.io.apimachinery.pkg.apis.meta.v1.Time expiredAt = 2;
+
+  optional string sinceTime = 3;
+
+  optional BundleFileServer fileServer = 4;
+
+  optional BundleServerAuthConfiguration authentication = 5;
+}
+
+// SupportBundleCollectionList is a list of SupportBundleCollection objects.
+message SupportBundleCollectionList {
+  optional k8s.io.apimachinery.pkg.apis.meta.v1.ListMeta metadata = 1;
+
+  repeated SupportBundleCollection items = 2;
+}
+
+// SupportBundleCollectionNodeStatus is the status of a SupportBundleCollection on a Node.
+message SupportBundleCollectionNodeStatus {
+  // The name of the Node that produces the status.
+  optional string nodeName = 1;
+
+  // The namespace of the Node that produces the status. It is set only when NodeType is ExternalNode.
+  optional string nodeNamespace = 2;
+
+  // The type of the Node that produces the status. The values include Node and ExternalNode.
+  optional string nodeType = 3;
+
+  // The phase in which a SupportBundleCollection is on the Node.
+  optional bool completed = 4;
+
+  optional string error = 5;
+}
+
+// SupportBundleCollectionStatus is the status of a SupportBundleCollection.
+message SupportBundleCollectionStatus {
+  optional k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 1;
+
+  // Nodes contains statuses produced on a list of Nodes.
+  repeated SupportBundleCollectionNodeStatus nodes = 2;
 }
 
