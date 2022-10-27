@@ -312,8 +312,8 @@ func TestStaleController_CleanupResourceExport(t *testing.T) {
 			},
 		},
 	}
-	labelNormalizedExist := "namespace:kubernetes.io/metadata.name=test-ns,purpose=test&pod:app=web"
-	labelNormalizedNonExist := "namespace:kubernetes.io/metadata.name=test-ns,purpose=test&pod:app=db"
+	labelNormalizedExist := "ns:kubernetes.io/metadata.name=test-ns,purpose=test&pod:app=web"
+	labelNormalizedNonExist := "ns:kubernetes.io/metadata.name=test-ns,purpose=test&pod:app=db"
 	toKeepLabelResExport := mcsv1alpha1.ResourceExport{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: "default",
