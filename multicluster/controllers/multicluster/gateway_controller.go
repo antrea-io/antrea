@@ -238,8 +238,8 @@ func (r *GatewayReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&mcsv1alpha1.Gateway{}).
 		WithOptions(controller.Options{
-			// TODO: add a lock for serviceCIDR if there is any plan to
-			// increase this concurrent number.
+			// TODO: add a lock for r.serviceCIDR and r.localClusterID if
+			//  there is any plan to increase this concurrent number.
 			MaxConcurrentReconciles: 1,
 		}).
 		Complete(r)
