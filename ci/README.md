@@ -67,7 +67,7 @@ As part of CI, we run the following linters via
 
 * [`misspell`](https://github.com/client9/misspell) - Finds commonly misspelled English words in comments.
 * [`gofmt`](https://golang.org/cmd/gofmt/) - Checks whether code was gofmt-ed.
-* [`deadcode`](https://github.com/remyoudompheng/go-misc/tree/master/deadcode) - Finds unused code.
+* [`unused`](https://github.com/dominikh/go-tools/tree/master/unused) - Finds unused code.
 * [`staticcheck`](https://staticcheck.io/) - Static analysis toolset with a large number of tests.
 * [`gosec`](https://github.com/securego/gosec) - Checks for common security problems.
 * [`goimports`](https://godoc.org/golang.org/x/tools/cmd/goimports) - A superset of `gofmt` organizes imports and checks for unused ones.

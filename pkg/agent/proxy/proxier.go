@@ -113,7 +113,6 @@ type proxier struct {
 	ofClient                  openflow.Client
 	routeClient               route.Interface
 	nodePortAddresses         []net.IP
-	hostGateWay               string
 	hostname                  string
 	isIPv6                    bool
 	proxyAll                  bool

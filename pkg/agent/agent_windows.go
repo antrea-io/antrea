@@ -392,30 +392,6 @@ func (i *Initializer) saveHostRoutes() error {
 	return nil
 }
 
-// restoreHostRoutes restores the host routes which are lost when moving the IP
-// configuration of uplink interface to the OVS bridge interface during
-// the antrea network initialize stage.
-// The backup routes are restored after the IP configuration change.
-func (i *Initializer) restoreHostRoutes() error {
-	brInterface, err := net.InterfaceByName(i.ovsBridge)
-	if err != nil {
-		return nil
-	}
-	for _, route := range i.nodeConfig.UplinkNetConfig.Routes {
-		rt := route.(util.Route)
-		newRt := util.Route{
-			LinkIndex:         brInterface.Index,
-			DestinationSubnet: rt.DestinationSubnet,
-			GatewayAddress:    rt.GatewayAddress,
-			RouteMetric:       rt.RouteMetric,
-		}
-		if err := util.NewNetRoute(&newRt); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func GetTransportIPNetDeviceByName(ifaceName string, ovsBridgeName string) (*net.IPNet, *net.IPNet, *net.Interface, error) {
 	// Find transport Interface in the order: ifaceName -> br-int. Return immediately if
 	// an interface using the specified name exists. Using br-int is for restart agent case.

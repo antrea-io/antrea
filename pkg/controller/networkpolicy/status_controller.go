@@ -71,14 +71,8 @@ type StatusController struct {
 	statuses     map[string]map[string]*controlplane.NetworkPolicyNodeStatus
 	statusesLock sync.RWMutex
 
-	// cnpLister is able to list/get ClusterNetworkPolicies and is populated by the shared informer passed to
-	// NewClusterNetworkPolicyController.
-	cnpLister crdlisters.ClusterNetworkPolicyLister
 	// cnpListerSynced is a function which returns true if the ClusterNetworkPolicies shared informer has been synced at least once.
 	cnpListerSynced cache.InformerSynced
-	// anpLister is able to list/get AntreaNetworkPolicies and is populated by the shared informer passed to
-	// NewNetworkPolicyController.
-	anpLister crdlisters.NetworkPolicyLister
 	// anpListerSynced is a function which returns true if the AntreaNetworkPolicies shared informer has been synced at least once.
 	anpListerSynced cache.InformerSynced
 }

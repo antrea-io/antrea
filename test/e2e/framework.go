@@ -728,21 +728,6 @@ func (data *TestData) deployAntrea(option deployAntreaOptions) error {
 	return data.deployAntreaCommon(option.DeployYML(), "", true)
 }
 
-// enableAntreaFlowExporter redeploys Antrea with flow exporter config params enabled.
-func (data *TestData) enableAntreaFlowExporter(ipfixCollector string) error {
-	// Enable flow exporter feature and add related config params to antrea agent configmap.
-	ac := func(config *agentconfig.AgentConfig) {
-		config.FeatureGates["FlowExporter"] = true
-		config.FlowPollInterval = exporterFlowPollInterval.String()
-		config.ActiveFlowExportTimeout = exporterActiveFlowExportTimeout.String()
-		config.IdleFlowExportTimeout = exporterIdleFlowExportTimeout.String()
-		if ipfixCollector != "" {
-			config.FlowCollectorAddr = ipfixCollector
-		}
-	}
-	return data.mutateAntreaConfigMap(nil, ac, false, true)
-}
-
 // deployFlowVisibilityClickHouse deploys ClickHouse operator and DB.
 func (data *TestData) deployFlowVisibilityClickHouse() (string, error) {
 	err := data.CreateNamespace(flowVisibilityNamespace, nil)
