@@ -459,9 +459,11 @@ func writeRecord(w io.Writer, r *flowrecord.FlowRecord, clusterUUID string) {
 	io.WriteString(w, ",")
 	io.WriteString(w, fmt.Sprintf("%d", r.FlowType))
 	io.WriteString(w, ",")
-	io.WriteString(w, r.SourcePodLabels)
+	// Enclose Pod labels with single quote because commas are used to separate
+	// different columns in CSV and Pod labels json string contains commas.
+	io.WriteString(w, fmt.Sprintf("'%s'", r.SourcePodLabels))
 	io.WriteString(w, ",")
-	io.WriteString(w, r.DestinationPodLabels)
+	io.WriteString(w, fmt.Sprintf("'%s'", r.DestinationPodLabels))
 	io.WriteString(w, ",")
 	io.WriteString(w, fmt.Sprintf("%d", r.Throughput))
 	io.WriteString(w, ",")
