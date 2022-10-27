@@ -410,7 +410,7 @@ function deliver_antrea_windows {
                 done
                 echo "=== Build Windows on Windows Node==="
                 ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "docker pull ${DOCKER_REGISTRY}/antrea/golang:${GO_VERSION}-nanoserver && docker tag ${DOCKER_REGISTRY}/antrea/golang:${GO_VERSION}-nanoserver golang:${GO_VERSION}-nanoserver"
-                ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "rm -rf antrea && mkdir antrea && cd antrea && tar -xzf ../antrea_repo.tar.gz > /dev/null && sed -i \"s|build/images/base-windows/Dockerfile|build/images/base-windows/Dockerfile --network host|g\" Makefile && sed -i \"s|build/images/Dockerfile.build.windows|build/images/Dockerfile.build.windows --network host|g\" Makefile && NO_PULL=${NO_PULL} make build-windows && docker save -o antrea-windows.tar ${DOCKER_REGISTRY}/antrea/antrea-windows:latest && gzip -f antrea-windows.tar" || true
+                ssh -o StrictHostKeyChecking=no -n Administrator@${IP} "rm -rf antrea && mkdir antrea && cd antrea && tar -xzf ../antrea_repo.tar.gz > /dev/null && NO_PULL=${NO_PULL}; DOCKER_NETWORK=host make build-windows && docker save -o antrea-windows.tar ${DOCKER_REGISTRY}/antrea/antrea-windows:latest && gzip -f antrea-windows.tar" || true
                 for i in `seq 2`; do
                     timeout 2m scp -o StrictHostKeyChecking=no -T Administrator@${IP}:antrea/antrea-windows.tar.gz . && break
                 done
