@@ -76,7 +76,9 @@ var (
 	// to versioned API objects and back.
 	parameterCodec = runtime.NewParameterCodec(Scheme)
 	// #nosec G101: false positive triggered by variable name which includes "token"
-	TokenPath = "/var/run/antrea/apiserver/loopback-client-token"
+	TokenPath         = "/var/run/antrea/apiserver/loopback-client-token"
+	CertDir           = "/var/run/antrea/antrea-controller-tls"
+	SelfSignedCertDir = "/var/run/antrea/antrea-controller-self-signed"
 )
 
 func init() {
@@ -336,8 +338,8 @@ func DefaultCAConfig() *certificate.CAConfig {
 		CRDsWithConversionWebhooks: []string{
 			"clustergroups.crd.antrea.io",
 		},
-		CertDir:           "/var/run/antrea/antrea-controller-tls",
-		SelfSignedCertDir: "/var/run/antrea/antrea-controller-self-signed",
+		CertDir:           CertDir,
+		SelfSignedCertDir: SelfSignedCertDir,
 		CertReadyTimeout:  2 * time.Minute,
 		MaxRotateDuration: time.Hour * (24 * 365),
 		ServiceName:       certificate.AntreaServiceName,

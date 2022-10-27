@@ -35,6 +35,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
 	aggregatorclientset "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
+	openapicommon "k8s.io/kube-openapi/pkg/common"
 	netutils "k8s.io/utils/net"
 
 	mcinformers "antrea.io/antrea/multicluster/pkg/client/informers/externalversions"
@@ -93,6 +94,12 @@ const (
 	serverMinWatchTimeout = 2 * time.Hour
 )
 
+var (
+	newNodeIpamController   = nodeipam.NewNodeIpamController
+	createK8sClient         = k8s.CreateClients
+	runAntreaControllerFunc = run
+)
+
 var allowedPaths = []string{
 	"/healthz",
 	"/livez",
@@ -118,7 +125,7 @@ func run(o *Options) error {
 	// Create K8s Clientset, Aggregator Clientset, CRD Clientset and SharedInformerFactory for the given config.
 	// Aggregator Clientset is used to update the CABundle of the APIServices backed by antrea-controller so that
 	// the aggregator can verify its serving certificate.
-	client, aggregatorClient, crdClient, apiExtensionClient, mcClient, err := k8s.CreateClients(o.config.ClientConnection, "")
+	client, aggregatorClient, crdClient, apiExtensionClient, mcClient, err := createK8sClient(o.config.ClientConnection, "")
 	if err != nil {
 		return fmt.Errorf("error creating K8s clients: %v", err)
 	}
@@ -318,10 +325,10 @@ func run(o *Options) error {
 	go groupEntityController.Run(stopCh)
 
 	if enableMulticlusterNP {
-		mcInformerFactoty := mcinformers.NewSharedInformerFactory(mcClient, informerDefaultResync)
-		labelIdentityInformer := mcInformerFactoty.Multicluster().V1alpha1().LabelIdentities()
+		mcInformerFactory := mcinformers.NewSharedInformerFactory(mcClient, informerDefaultResync)
+		labelIdentityInformer := mcInformerFactory.Multicluster().V1alpha1().LabelIdentities()
 		labelIdentityController := labelidentity.NewLabelIdentityController(labelIdentityIndex, labelIdentityInformer)
-		mcInformerFactoty.Start(stopCh)
+		mcInformerFactory.Start(stopCh)
 
 		go labelIdentityIndex.Run(stopCh)
 		go labelIdentityController.Run(stopCh)
@@ -329,7 +336,11 @@ func run(o *Options) error {
 
 	go networkPolicyController.Run(stopCh)
 
-	go apiServer.Run(ctx)
+	go func() {
+		if err := apiServer.Run(ctx); err != nil {
+			klog.ErrorS(err, "start APIServer error")
+		}
+	}()
 
 	if features.DefaultFeatureGate.Enabled(features.NetworkPolicyStats) {
 		go statsAggregator.Run(stopCh)
@@ -424,7 +435,7 @@ func startNodeIPAM(client clientset.Interface,
 	stopCh <-chan struct{}) error {
 
 	nodeCIDRMaskSizes := getNodeCIDRMaskSizes(clusterCIDRs, nodeCIDRMaskSizeIPv4, nodeCIDRMaskSizeIPv6)
-	nodeIPAM, err := nodeipam.NewNodeIpamController(
+	nodeIPAM, err := newNodeIpamController(
 		informerFactory.Core().V1().Nodes(),
 		client,
 		clusterCIDRs,
@@ -439,6 +450,47 @@ func startNodeIPAM(client clientset.Interface,
 	go nodeIPAM.Run(stopCh)
 	return nil
 }
+
+type Authentication interface {
+	ApplyTo(authenticationInfo *genericapiserver.AuthenticationInfo, servingInfo *genericapiserver.SecureServingInfo, openAPIConfig *openapicommon.Config) error
+}
+
+type DelegatingAuthenticationOptionsWarp struct {
+	RemoteKubeConfigFile string
+	// AuthenticationOptions *genericoptions.DelegatingAuthenticationOptions
+	AuthenticationOptions Authentication
+}
+
+func NewDelegatingAuthenticationOptionsWarp(o Authentication) *DelegatingAuthenticationOptionsWarp {
+	delegatingAuthenticationOptionsWarp := &DelegatingAuthenticationOptionsWarp{AuthenticationOptions: o}
+	return delegatingAuthenticationOptionsWarp
+}
+
+func (o *DelegatingAuthenticationOptionsWarp) ApplyTo(authenticationInfo *genericapiserver.AuthenticationInfo, servingInfo *genericapiserver.SecureServingInfo, openAPIConfig *openapicommon.Config) error {
+	return o.AuthenticationOptions.ApplyTo(authenticationInfo, servingInfo, openAPIConfig)
+}
+
+var authentication = NewDelegatingAuthenticationOptionsWarp(genericoptions.NewDelegatingAuthenticationOptions())
+
+type Authorization interface {
+	ApplyTo(authorizationInfo *genericapiserver.AuthorizationInfo) error
+}
+
+type DelegatingAuthorizationOptionsWarp struct {
+	RemoteKubeConfigFile string
+	AuthorizationOptions Authorization
+}
+
+func NewDelegatingAuthorizationOptionsWarp(o Authorization) *DelegatingAuthorizationOptionsWarp {
+	delegatingAuthorizationOptionsWarp := &DelegatingAuthorizationOptionsWarp{AuthorizationOptions: o}
+	return delegatingAuthorizationOptionsWarp
+}
+
+func (o *DelegatingAuthorizationOptionsWarp) ApplyTo(authorizationInfo *genericapiserver.AuthorizationInfo) error {
+	return o.AuthorizationOptions.ApplyTo(authorizationInfo)
+}
+
+var authorization = NewDelegatingAuthorizationOptionsWarp(genericoptions.NewDelegatingAuthorizationOptions().WithAlwaysAllowPaths(allowedPaths...))
 
 func createAPIServerConfig(kubeconfig string,
 	client clientset.Interface,
@@ -463,8 +515,6 @@ func createAPIServerConfig(kubeconfig string,
 	cipherSuites []uint16,
 	tlsMinVersion uint16) (*apiserver.Config, error) {
 	secureServing := genericoptions.NewSecureServingOptions().WithLoopback()
-	authentication := genericoptions.NewDelegatingAuthenticationOptions()
-	authorization := genericoptions.NewDelegatingAuthorizationOptions().WithAlwaysAllowPaths(allowedPaths...)
 
 	caCertController, err := certificate.ApplyServerCert(selfSignedCert, client, aggregatorClient, apiExtensionClient, secureServing, apiserver.DefaultCAConfig())
 	if err != nil {

@@ -43,13 +43,13 @@ func newControllerCommand() *cobra.Command {
 		Run: func(cmd *cobra.Command, args []string) {
 			log.InitLogs(cmd.Flags())
 			defer log.FlushLogs()
-			if err := opts.complete(args); err != nil {
+			if err := opts.complete(); err != nil {
 				klog.Fatalf("Failed to complete: %v", err)
 			}
 			if err := opts.validate(args); err != nil {
 				klog.Fatalf("Failed to validate: %v", err)
 			}
-			if err := run(opts); err != nil {
+			if err := runAntreaControllerFunc(opts); err != nil {
 				klog.Fatalf("Error running controller: %v", err)
 			}
 		},
