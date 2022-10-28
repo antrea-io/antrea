@@ -50,11 +50,11 @@ run them locally:
 | **e2e tests**                 | [test/e2e]            | see [test/e2e/README.md]                           | [Github Actions] ([Kind] cluster) + [Jenkins] |
 | **Kubernetes upstream tests** | [upstream Kubernetes] | see [ci/jenkins/README.md]                         | [Jenkins] |
 
-[test/integration]: /test/integration
-[test/e2e]: /test/e2e
-[test/e2e/README.md]: /test/e2e/README.md
-[ci/jenkins/README.md]: /ci/jenkins/README.md
-[Jenkins]: /ci/jenkins/README.md
+[test/integration]: ../test/integration
+[test/e2e]: ../test/e2e
+[test/e2e/README.md]: ../test/e2e/README.md
+[ci/jenkins/README.md]: jenkins/README.md
+[Jenkins]: jenkins/README.md
 [Kind]: https://kind.sigs.k8s.io/
 [upstream Kubernetes]: https://github.com/kubernetes/community/blob/master/contributors/devel/sig-testing/e2e-tests.md
 [`testing`]: https://golang.org/pkg/testing/
