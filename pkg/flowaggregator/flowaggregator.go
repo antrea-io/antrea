@@ -308,7 +308,19 @@ func (fa *flowAggregator) Run(stopCh <-chan struct{}) {
 		defer wg.Done()
 		fa.flowExportLoop(stopCh)
 	}()
-	go fa.watchConfiguration(stopCh)
+	wg.Add(1)
+	go func() {
+		// there is no strong reason to wait for this function to return
+		// on stop, but it does seem like the best thing to do.
+		defer wg.Done()
+		fa.watchConfiguration(stopCh)
+		// the watcher should not be closed until watchConfiguration returns.
+		// note that it is safe to close an fsnotify watcher multiple times,
+		// for example:
+		// https://github.com/fsnotify/fsnotify/blob/v1.6.0/backend_inotify.go#L184
+		// in practice, this should only happen during unit tests.
+		fa.configWatcher.Close()
+	}()
 	<-stopCh
 	wg.Wait()
 }
@@ -554,7 +566,7 @@ func (fa *flowAggregator) handleWatcherEvent() error {
 		return nil
 	}
 	if bytes.Equal(data, fa.configData) {
-		klog.InfoS("Flow-aggregator configuration didn't changed")
+		klog.InfoS("Flow-aggregator configuration didn't change")
 		return nil
 	}
 	fa.configData = data
