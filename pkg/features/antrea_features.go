@@ -208,7 +208,7 @@ func SupportedOnWindows(feature featuregate.Feature) bool {
 	return !exists
 }
 
-// SupportedOnExternalNode checks whether a feature is supported on a external Node.
+// SupportedOnExternalNode checks whether a feature is supported on an external Node.
 func SupportedOnExternalNode(feature featuregate.Feature) bool {
 	_, exists := DefaultAntreaFeatureGates[feature]
 	if !exists {
