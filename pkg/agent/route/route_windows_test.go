@@ -60,10 +60,14 @@ func TestRouteOperation(t *testing.T) {
 
 	require.Nil(t, err)
 	nodeConfig := &config.NodeConfig{
-		OVSBridge: "Loopback Pseudo-Interface 1",
+		HostInterfaceName: "Loopback Pseudo-Interface 1",
 		GatewayConfig: &config.GatewayConfig{
 			Name:      hostGateway,
 			LinkIndex: gwLink,
+		},
+		UplinkNetConfig: &config.AdapterNetConfig{
+			Name:  hostGateway,
+			Index: gwLink,
 		},
 	}
 	called := false

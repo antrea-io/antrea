@@ -308,7 +308,7 @@ func (i *Initializer) initInterfaceStore() error {
 			case interfacestore.AntreaIPsecTunnel:
 				intf = parseTunnelInterfaceFunc(port, ovsPort)
 			case interfacestore.AntreaHost:
-				if port.Name == i.ovsBridge {
+				if i.nodeConfig.Type == config.K8sNode {
 					// Need not to load the OVS bridge port to the interfaceStore
 					intf = nil
 				} else {
