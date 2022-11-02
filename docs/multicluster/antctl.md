@@ -35,7 +35,7 @@ output format.
 antctl mc get clusterset [NAME] [-n NAMESPACE] [-o json|yaml] [-A]
 antctl mc get resourceimport [NAME] [-n NAMESPACE] [-o json|yaml] [-A]
 antctl mc get resourceexport [NAME] [-n NAMESPACE] [-clusterid CLUSTERID] [-o json|yaml] [-A]
-antctl mc get joinconfig [-n NAMESPACE]
+antctl mc get joinconfig [--member-token TOKEN_NAME] [-n NAMESPACE]
 antctl mc get membertoken [NAME] [-n NAMESPACE] [-o json|yaml] [-A]
 ```
 

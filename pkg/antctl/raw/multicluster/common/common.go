@@ -18,7 +18,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"os"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -230,16 +229,16 @@ func deleteServiceAccounts(cmd *cobra.Command, k8sClient client.Client, namespac
 	}
 }
 
-// ConvertMemberTokenSecret generates a token Secret manifest for creating the input Secret in a member cluster.
-func ConvertMemberTokenSecret(secret corev1.Secret) corev1.Secret {
-	s := corev1.Secret{
+// ConvertMemberTokenSecret generates a token Secret manifest for creating the
+// input Secret in a member cluster.
+func ConvertMemberTokenSecret(secret *corev1.Secret) *corev1.Secret {
+	s := &corev1.Secret{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "v1",
 			Kind:       "Secret",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      secret.Name,
-			Namespace: secret.Namespace,
+			Name: secret.Name,
 		},
 		Data: secret.Data,
 		Type: corev1.SecretTypeOpaque,
@@ -247,7 +246,7 @@ func ConvertMemberTokenSecret(secret corev1.Secret) corev1.Secret {
 	return s
 }
 
-func CreateMemberToken(cmd *cobra.Command, k8sClient client.Client, name string, namespace string, file *os.File, createdRes *[]map[string]interface{}) error {
+func CreateMemberToken(cmd *cobra.Command, k8sClient client.Client, name string, namespace string, createdRes *[]map[string]interface{}) error {
 	var createErr error
 	serviceAccount := newServiceAccount(name, namespace)
 	createErr = k8sClient.Create(context.TODO(), serviceAccount)
@@ -278,52 +277,24 @@ func CreateMemberToken(cmd *cobra.Command, k8sClient client.Client, name string,
 		unstructuredRoleBinding, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(roleBinding)
 		*createdRes = append(*createdRes, unstructuredRoleBinding)
 	}
-	var secretAlreadyExists bool
+
 	secret := newSecret(name, name, namespace)
 	createErr = k8sClient.Create(context.TODO(), secret)
 	if createErr != nil {
-		secretAlreadyExists = apierrors.IsAlreadyExists(createErr)
-		if !secretAlreadyExists {
+		if !apierrors.IsAlreadyExists(createErr) {
 			fmt.Fprintf(cmd.ErrOrStderr(), "Failed to create Secret \"%s\": %s\n", name, createErr.Error())
 			return createErr
 		}
 		fmt.Fprintf(cmd.OutOrStdout(), "Secret \"%s\" already exists\n", name)
+	} else {
+		fmt.Fprintf(cmd.OutOrStdout(), "Secret \"%s\" created\n", secret.Name)
+		unstructuredSecret, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(secret)
+		*createdRes = append(*createdRes, unstructuredSecret)
 	}
 	// It will take one or two seconds to wait for the Data.token to be created.
 	if err := waitForSecretReady(k8sClient, name, namespace); err != nil {
 		return err
-	} else {
-		fmt.Fprintf(cmd.OutOrStdout(), "Secret \"%s\" created\n", secret.Name)
-		if !secretAlreadyExists {
-			unstructuredSecret, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(secret)
-			*createdRes = append(*createdRes, unstructuredSecret)
-		}
 	}
-
-	if file == nil {
-		return nil
-	}
-
-	if err := k8sClient.Get(context.TODO(), types.NamespacedName{Name: name, Namespace: namespace}, secret); err != nil {
-		return err
-	}
-
-	s := ConvertMemberTokenSecret(*secret)
-
-	b, err := k8syaml.Marshal(s)
-	if err != nil {
-		return err
-	}
-	if _, err := file.Write([]byte("# Manifest to create a Secret for an Antrea Multi-cluster  member cluster token.\n")); err != nil {
-		return err
-	}
-	if _, err := file.Write([]byte("---\n")); err != nil {
-		return err
-	}
-	if _, err := file.Write(b); err != nil {
-		return err
-	}
-	fmt.Fprintf(cmd.OutOrStdout(), "Member token saved to %s\n", file.Name())
 
 	return nil
 }
@@ -534,7 +505,26 @@ func newServiceAccount(name string, namespace string) *corev1.ServiceAccount {
 	}
 }
 
-func OutputJoinConfig(cmd *cobra.Command, writer io.Writer, clusterSetID, leaderClusterID, leaderNamespace string) error {
+func OutputMemberTokenSecret(tokenSecret *corev1.Secret, writer io.Writer) error {
+	s := ConvertMemberTokenSecret(tokenSecret)
+
+	b, err := k8syaml.Marshal(s)
+	if err != nil {
+		return err
+	}
+	if _, err := writer.Write([]byte("# Manifest to create a Secret for an Antrea Multi-cluster member token.\n")); err != nil {
+		return err
+	}
+	if _, err := writer.Write([]byte("---\n")); err != nil {
+		return err
+	}
+	if _, err := writer.Write(b); err != nil {
+		return err
+	}
+	return nil
+}
+
+func OutputJoinConfig(cmd *cobra.Command, writer io.Writer, clusterSetID, leaderClusterID, leaderNamespace string, tokenSecret *corev1.Secret) error {
 	kubeconfig, err := raw.ResolveKubeconfig(cmd)
 	if err != nil {
 		return err
@@ -573,5 +563,9 @@ func OutputJoinConfig(cmd *cobra.Command, writer io.Writer, clusterSetID, leader
 	if _, writeErr = writer.Write([]byte(optionalFields)); writeErr != nil {
 		return writeErr
 	}
-	return nil
+
+	if tokenSecret == nil {
+		return nil
+	}
+	return OutputMemberTokenSecret(tokenSecret, writer)
 }

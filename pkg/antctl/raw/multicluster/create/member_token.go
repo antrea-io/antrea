@@ -15,11 +15,14 @@
 package create
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"antrea.io/antrea/pkg/antctl/raw/multicluster/common"
@@ -79,6 +82,7 @@ func memberTokenRunE(cmd *cobra.Command, args []string) error {
 	if len(args) == 0 {
 		return fmt.Errorf("token name must be specified")
 	}
+
 	var createErr error
 	createdRes := []map[string]interface{}{}
 	defer func() {
@@ -88,19 +92,27 @@ func memberTokenRunE(cmd *cobra.Command, args []string) error {
 		}
 	}()
 
-	var err error
-	var file *os.File
-	if memberTokenOpts.output != "" {
-		if file, err = os.OpenFile(memberTokenOpts.output, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600); err != nil {
-			return err
-		}
-		defer file.Close()
-	}
-
-	if createErr = common.CreateMemberToken(cmd, memberTokenOpts.k8sClient, args[0], memberTokenOpts.namespace, file, &createdRes); createErr != nil {
+	if createErr = common.CreateMemberToken(cmd, memberTokenOpts.k8sClient, args[0], memberTokenOpts.namespace, &createdRes); createErr != nil {
 		return createErr
 	}
 
 	fmt.Fprintf(cmd.OutOrStdout(), "You can now run \"antctl mc join\" command with the token in a member cluster to join the ClusterSet\n")
-	return nil
+	if memberTokenOpts.output == "" {
+		return nil
+	}
+
+	file, err := os.OpenFile(memberTokenOpts.output, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	tokenSecret := &corev1.Secret{}
+	if err = memberTokenOpts.k8sClient.Get(context.TODO(), types.NamespacedName{
+		Namespace: memberTokenOpts.namespace,
+		Name:      args[0],
+	}, tokenSecret); err != nil {
+		return err
+	}
+	return common.OutputMemberTokenSecret(tokenSecret, file)
 }

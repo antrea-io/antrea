@@ -100,13 +100,13 @@ type: Opaque`)
 		{
 			name:           "join successfully with Secret file",
 			clusterID:      "cluster-a",
-			expectedOutput: "Created the Secret from the config file",
+			expectedOutput: "Created member token Secret token-secret",
 			secretFile:     true,
 		},
 		{
 			name:           "join successfully with config file",
 			clusterID:      "cluster-a",
-			expectedOutput: "Created the Secret from the config file",
+			expectedOutput: "Created member token Secret token-secret",
 			configFile:     true,
 		},
 		{

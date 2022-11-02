@@ -23,6 +23,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -55,6 +56,14 @@ var (
 		Status: mcsv1alpha1.ClusterSetStatus{},
 	}
 
+	tokenSecret = &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "antrea-multi-cluster",
+			Name:      "default-member-token",
+		},
+		Data: map[string][]byte{"token": []byte("12345")},
+	}
+
 	jcOutput = `---
 apiVersion: multicluster.antrea.io/v1alpha1
 kind: ClusterSetJoinConfig
@@ -68,6 +77,18 @@ leaderAPIServer: https://localhost
 #tokenSecretName: ""
 # Create a token Secret with the manifest file.
 #tokenSecretFile: ""
+`
+
+	tkOutput = `# Manifest to create a Secret for an Antrea Multi-cluster member token.
+---
+apiVersion: v1
+data:
+  token: MTIzNDU=
+kind: Secret
+metadata:
+  creationTimestamp: null
+  name: default-member-token
+type: Opaque
 `
 )
 
@@ -91,6 +112,8 @@ func TestJoinConfig(t *testing.T) {
 	tests := []struct {
 		name           string
 		clusterSets    []*mcsv1alpha1.ClusterSet
+		secret         *corev1.Secret
+		tokenName      string
 		expectedOutput string
 	}{
 		{
@@ -112,6 +135,19 @@ func TestJoinConfig(t *testing.T) {
 			clusterSets:    []*mcsv1alpha1.ClusterSet{clusterSet1, invalidClusterSet},
 			expectedOutput: "More than one ClusterSets in Namespace",
 		},
+		{
+			name:           "get with token",
+			clusterSets:    []*mcsv1alpha1.ClusterSet{clusterSet1},
+			secret:         tokenSecret,
+			tokenName:      tokenSecret.Name,
+			expectedOutput: jcOutput + tkOutput,
+		},
+		{
+			name:           "non-existing token",
+			tokenName:      "token0",
+			clusterSets:    []*mcsv1alpha1.ClusterSet{clusterSet1},
+			expectedOutput: "secrets \"token0\" not found",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -119,7 +155,11 @@ func TestJoinConfig(t *testing.T) {
 			for _, cs := range tt.clusterSets {
 				objs = append(objs, cs)
 			}
+			if tt.secret != nil {
+				objs = append(objs, tt.secret)
+			}
 			joinConfigOpts.k8sClient = fake.NewClientBuilder().WithScheme(mcscheme.Scheme).WithObjects(objs...).Build()
+			joinConfigOpts.memberToken = tt.tokenName
 			err := cmd.Execute()
 			if err != nil {
 				assert.Contains(t, err.Error(), tt.expectedOutput)
@@ -148,6 +188,15 @@ func TestOptValidate(t *testing.T) {
 			opts: &joinConfigOptions{
 				namespace: "ns1",
 				k8sClient: fake.NewClientBuilder().WithScheme(mcscheme.Scheme).Build(),
+			},
+			err: nil,
+		},
+		{
+			name: "token specified",
+			opts: &joinConfigOptions{
+				namespace:   "ns1",
+				memberToken: "token1",
+				k8sClient:   fake.NewClientBuilder().WithScheme(mcscheme.Scheme).Build(),
 			},
 			err: nil,
 		},

@@ -20,6 +20,8 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	multiclusterv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
@@ -29,8 +31,9 @@ import (
 )
 
 type joinConfigOptions struct {
-	namespace string
-	k8sClient client.Client
+	namespace   string
+	memberToken string
+	k8sClient   client.Client
 }
 
 var joinConfigOpts *joinConfigOptions
@@ -38,6 +41,10 @@ var joinConfigOpts *joinConfigOptions
 var joinConfigExamples = strings.Trim(`
 Print member join parameters of the ClusterSet in the antrea-multicluster Namespace
 $ antctl mc get joinconfig -n antrea-multicluster
+Print member join parameters and the Secret manifest of the default member token
+$ antctl mc get joinconfig --member-token default-member-token -n antrea-multicluster
+Print member join parameters and the Secret manifest of the specified member token
+$ antctl mc get joinconfig --member-token cluster-east-token -n antrea-multicluster
 `, "\n")
 
 func (o *joinConfigOptions) validateAndComplete(cmd *cobra.Command) error {
@@ -68,6 +75,7 @@ func NewJoinConfigCommand() *cobra.Command {
 	o := &joinConfigOptions{}
 	joinConfigOpts = o
 	cmd.Flags().StringVarP(&o.namespace, "namespace", "n", "", "Namespace of the ClusterSet")
+	cmd.Flags().StringVarP(&o.memberToken, "member-token", "", "", "Member token name. If provided, the Secret manifest of the token will also be printed.")
 
 	return cmd
 }
@@ -95,7 +103,20 @@ func runEJoinConfig(cmd *cobra.Command, args []string) error {
 	if len(cs.Spec.Leaders) == 0 {
 		return fmt.Errorf("Invalid ClusterSet %s: no leader cluster", cs.Name)
 	}
-	if err := common.OutputJoinConfig(cmd, cmd.OutOrStdout(), cs.Name, cs.Spec.Leaders[0].ClusterID, cs.Namespace); err != nil {
+
+	var tokenSecret *corev1.Secret
+	if joinConfigOpts.memberToken != "" {
+		tokenSecret = &corev1.Secret{}
+		err = joinConfigOpts.k8sClient.Get(context.TODO(), types.NamespacedName{
+			Namespace: joinConfigOpts.namespace,
+			Name:      joinConfigOpts.memberToken,
+		}, tokenSecret)
+		if err != nil {
+			return err
+		}
+	}
+
+	if err := common.OutputJoinConfig(cmd, cmd.OutOrStdout(), cs.Name, cs.Spec.Leaders[0].ClusterID, cs.Namespace, tokenSecret); err != nil {
 		return err
 	}
 	return nil
