@@ -2479,6 +2479,13 @@ func schema_pkg_apis_crd_v1beta1_AntreaAgentInfo(ref common.ReferenceCallback) c
 							Format:      "int32",
 						},
 					},
+					"nodePortLocalRange": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The port of antrea agent API Server",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 				},
 			},
 		},
