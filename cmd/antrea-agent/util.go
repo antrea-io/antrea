@@ -23,9 +23,11 @@ import (
 	"antrea.io/antrea/pkg/agent/util"
 )
 
+var getAllNodeAddresses = util.GetAllNodeAddresses
+
 func getAvailableNodePortAddresses(nodePortAddressesFromConfig []string, excludeDevices []string) ([]net.IP, []net.IP, error) {
 	// Get all IP addresses of Node
-	nodeAddressesIPv4, nodeAddressesIPv6, err := util.GetAllNodeAddresses(excludeDevices)
+	nodeAddressesIPv4, nodeAddressesIPv6, err := getAllNodeAddresses(excludeDevices)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -53,7 +55,6 @@ func getAvailableNodePortAddresses(nodePortAddressesFromConfig []string, exclude
 			}
 		}
 	}
-
 	return nodePortAddressesIPv4, nodePortAddressesIPv6, nil
 }
 
