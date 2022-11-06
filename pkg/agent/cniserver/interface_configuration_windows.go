@@ -41,7 +41,23 @@ const (
 	notFoundHNSEndpoint = "The endpoint was not found"
 )
 
-type postInterfaceCreateHook func() error
+var (
+	getHnsNetworkByNameFunc         = hcsshim.GetHNSNetworkByName
+	listHnsEndpointFunc             = hcsshim.HNSListEndpointRequest
+	setInterfaceMTUFunc             = util.SetInterfaceMTU
+	hostInterfaceExistsFunc         = util.HostInterfaceExists
+	getNetInterfaceAddrsFunc        = getNetInterfaceAddrs
+	createHnsEndpointFunc           = createHnsEndpoint
+	getNamespaceEndpointIDsFunc     = hcn.GetNamespaceEndpointIds
+	hotAttachEndpointFunc           = hcsshim.HotAttachEndpoint
+	attachEndpointInNamespaceFunc   = attachEndpointInNamespace
+	isContainerAttachOnEndpointFunc = isContainerAttachOnEndpoint
+	getHcnEndpointByIDFunc          = hcn.GetEndpointByID
+	deleteHnsEndpointFunc           = deleteHnsEndpoint
+	removeEndpointFromNamespaceFunc = hcn.RemoveNamespaceEndpoint
+	getHnsEndpointByNameFunc        = hcsshim.GetHNSEndpointByName
+	getNetInterfaceByNameFunc       = net.InterfaceByName
+)
 
 type ifConfigurator struct {
 	hnsNetwork *hcsshim.HNSNetwork
@@ -50,11 +66,11 @@ type ifConfigurator struct {
 
 // disableTXChecksumOffload is ignored on Windows.
 func newInterfaceConfigurator(ovsDatapathType ovsconfig.OVSDatapathType, isOvsHardwareOffloadEnabled bool, disableTXChecksumOffload bool) (*ifConfigurator, error) {
-	hnsNetwork, err := hcsshim.GetHNSNetworkByName(util.LocalHNSNetwork)
+	hnsNetwork, err := getHnsNetworkByNameFunc(util.LocalHNSNetwork)
 	if err != nil {
 		return nil, err
 	}
-	eps, err := hcsshim.HNSListEndpointRequest()
+	eps, err := listHnsEndpointFunc()
 	if err != nil {
 		return nil, err
 	}
@@ -164,7 +180,7 @@ func (ic *ifConfigurator) configureContainerLink(
 		// and the hcsshim call is not synchronized from the observation.
 		return ic.addPostInterfaceCreateHook(infraContainerID, epName, containerAccess, func() error {
 			ifaceName := util.VirtualAdapterName(epName)
-			if err := util.SetInterfaceMTU(ifaceName, mtu); err != nil {
+			if err := setInterfaceMTUFunc(ifaceName, mtu); err != nil {
 				return fmt.Errorf("failed to configure MTU on container interface '%s': %v", ifaceName, err)
 			}
 			return nil
@@ -187,7 +203,7 @@ func (ic *ifConfigurator) createContainerLink(endpointName string, result *curre
 		GatewayAddress: containerIP.Gateway.String(),
 		IPAddress:      containerIP.Address.IP,
 	}
-	hnsEP, err := epRequest.Create()
+	hnsEP, err := createHnsEndpointFunc(epRequest)
 	if err != nil {
 		return nil, err
 	}
@@ -207,16 +223,16 @@ func attachContainerLink(ep *hcsshim.HNSEndpoint, containerID, sandbox, containe
 	var hcnEp *hcn.HostComputeEndpoint
 	if isDockerContainer(sandbox) {
 		// Docker runtime
-		attached, err = ep.IsAttached(containerID)
+		attached, err = isContainerAttachOnEndpointFunc(ep, containerID)
 		if err != nil {
 			return nil, err
 		}
 	} else {
 		// Containerd runtime
-		if hcnEp, err = hcn.GetEndpointByID(ep.Id); err != nil {
+		if hcnEp, err = getHcnEndpointByIDFunc(ep.Id); err != nil {
 			return nil, err
 		}
-		attachedEpIds, err := hcn.GetNamespaceEndpointIds(sandbox)
+		attachedEpIds, err := getNamespaceEndpointIDsFunc(sandbox)
 		if err != nil {
 			return nil, err
 		}
@@ -233,12 +249,12 @@ func attachContainerLink(ep *hcsshim.HNSEndpoint, containerID, sandbox, containe
 	} else {
 		if hcnEp == nil {
 			// Docker runtime
-			if err := hcsshim.HotAttachEndpoint(containerID, ep.Id); err != nil {
+			if err := hotAttachEndpointFunc(containerID, ep.Id); err != nil {
 				return nil, err
 			}
 		} else {
 			// Containerd runtime
-			if err := hcnEp.NamespaceAttach(sandbox); err != nil {
+			if err := attachEndpointInNamespaceFunc(hcnEp, sandbox); err != nil {
 				return nil, err
 			}
 		}
@@ -249,6 +265,14 @@ func attachContainerLink(ep *hcsshim.HNSEndpoint, containerID, sandbox, containe
 		Sandbox: sandbox,
 	}
 	return containerIface, nil
+}
+
+func isContainerAttachOnEndpoint(endpoint *hcsshim.HNSEndpoint, containerID string) (bool, error) {
+	return endpoint.IsAttached(containerID)
+}
+
+func attachEndpointInNamespace(hcnEp *hcn.HostComputeEndpoint, sandbox string) error {
+	return hcnEp.NamespaceAttach(sandbox)
 }
 
 // advertiseContainerAddr returns immediately as the address is advertised automatically after it is configured on an
@@ -273,16 +297,16 @@ func (ic *ifConfigurator) removeHNSEndpoint(endpoint *hcsshim.HNSEndpoint, conta
 	deleteCh := make(chan error)
 	// Remove HNSEndpoint.
 	go func() {
-		hcnEndpoint, _ := hcn.GetEndpointByID(endpoint.Id)
+		hcnEndpoint, _ := getHcnEndpointByIDFunc(endpoint.Id)
 		if hcnEndpoint != nil && isValidHostNamespace(hcnEndpoint.HostComputeNamespace) {
-			err := hcn.RemoveNamespaceEndpoint(hcnEndpoint.HostComputeNamespace, hcnEndpoint.Id)
+			err := removeEndpointFromNamespaceFunc(hcnEndpoint.HostComputeNamespace, hcnEndpoint.Id)
 			if err != nil {
 				klog.Errorf("Failed to remove HostComputeEndpoint %s from HostComputeNameSpace %s: %v", hcnEndpoint.Name, hcnEndpoint.HostComputeNamespace, err)
 				deleteCh <- err
 				return
 			}
 		}
-		_, err := endpoint.Delete()
+		_, err := deleteHnsEndpointFunc(endpoint)
 		if err != nil && strings.Contains(err.Error(), notFoundHNSEndpoint) {
 			err = nil
 		}
@@ -309,6 +333,10 @@ func (ic *ifConfigurator) removeHNSEndpoint(endpoint *hcsshim.HNSEndpoint, conta
 	// Delete HNSEndpoint from local cache.
 	ic.delEndpoint(epName)
 	return nil
+}
+
+func deleteHnsEndpoint(endpoint *hcsshim.HNSEndpoint) (*hcsshim.HNSEndpoint, error) {
+	return endpoint.Delete()
 }
 
 // isValidHostNamespace checks if the hostNamespace is valid or not. When using Docker runtime, the hostNamespace
@@ -347,7 +375,7 @@ func (ic *ifConfigurator) checkContainerInterface(
 	}
 	hnsEP := strings.Split(containerIface.Name, "_")[0]
 	containerIfaceName := util.VirtualAdapterName(hnsEP)
-	intf, err := net.InterfaceByName(containerIfaceName)
+	intf, err := getNetInterfaceByNameFunc(containerIfaceName)
 	if err != nil {
 		klog.Errorf("Failed to get container %s interface: %v", containerID, err)
 		return nil, err
@@ -381,9 +409,13 @@ func (ic *ifConfigurator) checkContainerInterface(
 	return contVeth, nil
 }
 
+func getNetInterfaceAddrs(intf *net.Interface) ([]net.Addr, error) {
+	return intf.Addrs()
+}
+
 // validateExpectedInterfaceIPs checks if the vNIC for the container has configured with correct IP address.
 func validateExpectedInterfaceIPs(containerIPConfig *current.IPConfig, intf *net.Interface) error {
-	addrs, err := intf.Addrs()
+	addrs, err := getNetInterfaceAddrsFunc(intf)
 	if err != nil {
 		return err
 	}
@@ -416,7 +448,7 @@ func (ic *ifConfigurator) validateContainerPeerInterface(interfaces []*current.I
 			return nil, fmt.Errorf("Host interface name %s doesn't match configured name %s", hostIntf.Name, expectedContainerIfname)
 		}
 
-		ep, err := hcsshim.GetHNSEndpointByName(hostIntf.Name)
+		ep, err := getHnsEndpointByNameFunc(hostIntf.Name)
 		if err != nil {
 			klog.Errorf("Failed to get HNSEndpoint %s: %v", hostIntf.Name, err)
 			return nil, err
@@ -448,9 +480,9 @@ func (ic *ifConfigurator) getInterceptedInterfaces(
 }
 
 // getOVSInterfaceType returns "internal". Windows uses internal OVS interface for container vNIC.
-func (ic *ifConfigurator) getOVSInterfaceType(ovsPortName string) int {
+func getOVSInterfaceType(ovsPortName string) int {
 	ifaceName := fmt.Sprintf("vEthernet (%s)", ovsPortName)
-	if !util.HostInterfaceExists(ifaceName) {
+	if !hostInterfaceExistsFunc(ifaceName) {
 		return defaultOVSInterfaceType
 	}
 	return internalOVSInterfaceType
@@ -479,7 +511,7 @@ func (ic *ifConfigurator) addPostInterfaceCreateHook(containerID, endpointName s
 				klog.InfoS("Detected HNSEndpoint change, exit current goroutine", "HNSEndpoint", endpointName)
 				return true, nil
 			}
-			if !util.HostInterfaceExists(ifaceName) {
+			if !hostInterfaceExistsFunc(ifaceName) {
 				klog.InfoS("Waiting for interface to be created", "interface", ifaceName)
 				return false, nil
 			}
@@ -498,4 +530,8 @@ func (ic *ifConfigurator) addPostInterfaceCreateHook(containerID, endpointName s
 		}
 	}()
 	return nil
+}
+
+func createHnsEndpoint(epRequest *hcsshim.HNSEndpoint) (*hcsshim.HNSEndpoint, error) {
+	return epRequest.Create()
 }
