@@ -18,19 +18,20 @@
 package cniserver
 
 import (
+	"github.com/Mellanox/sriovnet"
 	sriovcniutils "github.com/k8snetworkplumbingwg/sriov-cni/pkg/utils"
 )
 
 // getVFInfo takes in a VF's PCI device ID and returns its PF and VF ID.
-func getVFInfo(vfPCI string) (string, int, error) {
+func (ic *ifConfigurator) getVFInfo(vfPCI string) (string, int, error) {
 	var vfID int
 
-	pf, err := sriovcniutils.GetPfName(vfPCI)
+	pf, err := ic.sriovnet.GetPfName(vfPCI)
 	if err != nil {
 		return "", vfID, err
 	}
 
-	vfID, err = sriovcniutils.GetVfid(vfPCI, pf)
+	vfID, err = ic.sriovnet.GetVfid(vfPCI, pf)
 	if err != nil {
 		return "", vfID, err
 	}
@@ -39,6 +40,40 @@ func getVFInfo(vfPCI string) (string, int, error) {
 }
 
 // getVFLinkName returns a VF's network interface name given its PCI address.
-func getVFLinkName(pciAddress string) (string, error) {
-	return sriovcniutils.GetVFLinkNames(pciAddress)
+func (ic *ifConfigurator) getVFLinkName(pciAddress string) (string, error) {
+	return ic.sriovnet.GetVFLinkNames(pciAddress)
+}
+
+type sriovNet struct{}
+
+func (n *sriovNet) GetNetDevicesFromPci(pciAddress string) ([]string, error) {
+	return sriovnet.GetNetDevicesFromPci(pciAddress)
+}
+
+func (n *sriovNet) GetUplinkRepresentor(pciAddress string) (string, error) {
+	return sriovnet.GetUplinkRepresentor(pciAddress)
+}
+
+func (n *sriovNet) GetVfIndexByPciAddress(vfPciAddress string) (int, error) {
+	return sriovnet.GetVfIndexByPciAddress(vfPciAddress)
+}
+
+func (n *sriovNet) GetVfRepresentor(uplink string, vfIndex int) (string, error) {
+	return sriovnet.GetVfRepresentor(uplink, vfIndex)
+}
+
+func (n *sriovNet) GetPfName(vf string) (string, error) {
+	return sriovcniutils.GetPfName(vf)
+}
+
+func (n *sriovNet) GetVfid(addr string, pfName string) (int, error) {
+	return sriovcniutils.GetVfid(addr, pfName)
+}
+
+func (n *sriovNet) GetVFLinkNames(pciAddr string) (string, error) {
+	return sriovcniutils.GetVFLinkNames(pciAddr)
+}
+
+func newSriovNet() *sriovNet {
+	return &sriovNet{}
 }

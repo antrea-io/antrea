@@ -168,3 +168,12 @@ func getAntreaIPAMDriver() *AntreaIPAM {
 	}
 	return drivers[0].(*AntreaIPAM)
 }
+
+// The following functions are only for testing.
+func ResetIPAMDriver(ipamType string, driver IPAMDriver) {
+	ipamDrivers[ipamType] = []IPAMDriver{driver}
+}
+
+func AddIPAMResult(key string, result *IPAMResult) {
+	ipamResults.Store(key, result)
+}
