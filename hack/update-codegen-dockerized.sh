@@ -39,6 +39,7 @@ ANTREA_PROTO_PKG="antrea_io.antrea"
 function generate_mocks {
   # Generate mocks for testing with mockgen.
   MOCKGEN_TARGETS=(
+    "pkg/agent/cniserver SriovNet testing"
     "pkg/agent/cniserver/ipam IPAMDriver testing"
     "pkg/agent/flowexporter/connections ConnTrackDumper,NetFilterConnTrack testing"
     "pkg/agent/interfacestore InterfaceStore testing"

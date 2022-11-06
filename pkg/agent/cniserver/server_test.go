@@ -12,10 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build linux
-// +build linux
-
-// TODO: fix the CNI ADD test for Windows.
+//go:build linux || windows
+// +build linux windows
 
 package cniserver
 
@@ -47,7 +45,6 @@ import (
 	"antrea.io/antrea/pkg/cni"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 	ovsconfigtest "antrea.io/antrea/pkg/ovs/ovsconfig/testing"
-	"antrea.io/antrea/pkg/util/channel"
 )
 
 const (
@@ -68,10 +65,18 @@ var (
 	routes         = []string{"10.0.0.0/8,10.1.2.1", "0.0.0.0/0,10.1.2.1"}
 	dns            = []string{"192.168.100.1"}
 	ips            = []string{"10.1.2.100/24,10.1.2.1,4"}
+	ipamResult     = ipamtest.GenerateIPAMResult(supportedCNIVersion, []string{"10.1.2.100/24,10.1.2.1,4"}, []string{"10.0.0.0/8,10.1.2.1", "0.0.0.0/0,10.1.2.1"}, []string{"192.168.100.1"})
 	args           = cniservertest.GenerateCNIArgs(testPodNameA, testPodNamespace, testPodInfraContainerID)
 	testNodeConfig *config.NodeConfig
 	gwIPv4         net.IP
 	gwIPv6         net.IP
+
+	mockOVSBridgeClient *ovsconfigtest.MockOVSBridgeClient
+	routeMock           *routetest.MockInterface
+	mockOFClient        *openflowtest.MockClient
+	ifaceStore          interfacestore.InterfaceStore
+
+	emptyResponse = &cnipb.CniCmdResponse{CniResult: []byte("")}
 )
 
 func TestLoadNetConfig(t *testing.T) {
@@ -440,78 +445,6 @@ func TestValidateRequestMessage(t *testing.T) {
 	}
 }
 
-func TestValidatePrevResult(t *testing.T) {
-	cniServer := newCNIServer(t)
-	cniVersion := "0.4.0"
-	networkCfg := generateNetworkConfiguration("", cniVersion, "", testIpamType)
-	k8sPodArgs := &types.K8sArgs{}
-	cnitypes.LoadArgs(args, k8sPodArgs)
-	networkCfg.PrevResult = nil
-	ips := []string{"10.1.2.100/24,10.1.2.1,4"}
-	routes := []string{"10.0.0.0/8,10.1.2.1", "0.0.0.0/0,10.1.2.1"}
-	dns := []string{"192.168.100.1"}
-	ipamResult := ipamtest.GenerateIPAMResult(cniVersion, ips, routes, dns)
-	networkCfg.RawPrevResult, _ = translateRawPrevResult(ipamResult, cniVersion)
-
-	prevResult, _ := cniServer.parsePrevResultFromRequest(networkCfg)
-	containerIface := &current.Interface{Name: ifname, Sandbox: netns}
-	containerID := uuid.New().String()
-	hostIfaceName := util.GenerateContainerInterfaceName(testPodNameA, testPodNamespace, containerID)
-	hostIface := &current.Interface{Name: hostIfaceName}
-
-	baseCNIConfig := func() *CNIConfig {
-		cniConfig := &CNIConfig{NetworkConfig: networkCfg, CniCmdArgs: &cnipb.CniCmdArgs{Args: args}}
-		cniConfig.ContainerId = containerID
-		return cniConfig
-	}
-
-	t.Run("Invalid container interface veth", func(t *testing.T) {
-		cniConfig := baseCNIConfig()
-		cniConfig.Ifname = "invalid_iface" // invalid
-		sriovVFDeviceID := ""
-		prevResult.Interfaces = []*current.Interface{hostIface, containerIface}
-		response := cniServer.validatePrevResult(cniConfig.CniCmdArgs, prevResult, sriovVFDeviceID)
-		checkErrorResponse(
-			t, response, cnipb.ErrorCode_INVALID_NETWORK_CONFIG,
-			"prevResult does not match network configuration",
-		)
-	})
-
-	t.Run("Invalid container interface SR-IOV VF", func(t *testing.T) {
-		cniConfig := baseCNIConfig()
-		cniConfig.Ifname = "invalid_iface" // invalid
-		sriovVFDeviceID := "0000:03:00.6"
-		prevResult.Interfaces = []*current.Interface{hostIface, containerIface}
-		response := cniServer.validatePrevResult(cniConfig.CniCmdArgs, prevResult, sriovVFDeviceID)
-		checkErrorResponse(
-			t, response, cnipb.ErrorCode_INVALID_NETWORK_CONFIG,
-			"prevResult does not match network configuration",
-		)
-	})
-
-	t.Run("Interface check failure veth", func(t *testing.T) {
-		cniConfig := baseCNIConfig()
-		cniConfig.Ifname = ifname
-		cniConfig.Netns = "invalid_netns"
-		sriovVFDeviceID := ""
-		prevResult.Interfaces = []*current.Interface{hostIface, containerIface}
-		cniServer.podConfigurator, _ = newPodConfigurator(nil, nil, nil, nil, nil, "", false, channel.NewSubscribableChannel("PodUpdate", 100), nil, false)
-		response := cniServer.validatePrevResult(cniConfig.CniCmdArgs, prevResult, sriovVFDeviceID)
-		checkErrorResponse(t, response, cnipb.ErrorCode_CHECK_INTERFACE_FAILURE, "")
-	})
-
-	t.Run("Interface check failure SR-IOV VF", func(t *testing.T) {
-		cniConfig := baseCNIConfig()
-		cniConfig.Ifname = ifname
-		cniConfig.Netns = "invalid_netns"
-		sriovVFDeviceID := "0000:03:00.6"
-		prevResult.Interfaces = []*current.Interface{hostIface, containerIface}
-		cniServer.podConfigurator, _ = newPodConfigurator(nil, nil, nil, nil, nil, "", true, channel.NewSubscribableChannel("PodUpdate", 100), nil, false)
-		response := cniServer.validatePrevResult(cniConfig.CniCmdArgs, prevResult, sriovVFDeviceID)
-		checkErrorResponse(t, response, cnipb.ErrorCode_CHECK_INTERFACE_FAILURE, "")
-	})
-}
-
 func TestParsePrevResultFromRequest(t *testing.T) {
 	cniServer := newCNIServer(t)
 
@@ -618,90 +551,6 @@ func TestValidateOVSInterface(t *testing.T) {
 	assert.Nil(t, err, "Failed to validate OVS port configuration")
 }
 
-func TestRemoveInterface(t *testing.T) {
-	controller := gomock.NewController(t)
-	defer controller.Finish()
-	mockOVSBridgeClient := ovsconfigtest.NewMockOVSBridgeClient(controller)
-	mockOFClient := openflowtest.NewMockClient(controller)
-	ifaceStore := interfacestore.NewInterfaceStore()
-	routeMock := routetest.NewMockInterface(controller)
-	gwMAC, _ := net.ParseMAC("00:00:11:11:11:11")
-	podConfigurator, err := newPodConfigurator(mockOVSBridgeClient, mockOFClient, routeMock, ifaceStore, gwMAC, "system", false, channel.NewSubscribableChannel("PodUpdate", 100), nil, false)
-	require.Nil(t, err, "No error expected in podConfigurator constructor")
-
-	containerMAC, _ := net.ParseMAC("aa:bb:cc:dd:ee:ff")
-	containerIP := net.ParseIP("1.1.1.1")
-
-	var cniConfig *CNIConfig
-	var containerID string
-	var podName string
-	var hostIfaceName string
-	var fakePortUUID string
-	var containerConfig *interfacestore.InterfaceConfig
-
-	setup := func(name string) {
-		containerID = uuid.New().String()
-		podName = name
-		hostIfaceName = util.GenerateContainerInterfaceName(podName, testPodNamespace, containerID)
-		fakePortUUID = uuid.New().String()
-
-		netcfg := generateNetworkConfiguration("", supportedCNIVersion, "", testIpamType)
-		cniConfig = &CNIConfig{NetworkConfig: netcfg, CniCmdArgs: &cnipb.CniCmdArgs{}}
-		cniConfig.Ifname = "eth0"
-		cniConfig.ContainerId = containerID
-		cniConfig.Netns = ""
-
-		containerConfig = interfacestore.NewContainerInterface(
-			hostIfaceName,
-			containerID,
-			podName,
-			testPodNamespace,
-			containerMAC,
-			[]net.IP{containerIP},
-			0)
-		containerConfig.OVSPortConfig = &interfacestore.OVSPortConfig{PortUUID: fakePortUUID, OFPort: 0}
-	}
-
-	t.Run("Successful remove", func(t *testing.T) {
-		setup("test1")
-		ifaceStore.AddInterface(containerConfig)
-
-		mockOFClient.EXPECT().UninstallPodFlows(hostIfaceName).Return(nil)
-		mockOVSBridgeClient.EXPECT().DeletePort(fakePortUUID).Return(nil)
-		routeMock.EXPECT().DeleteLocalAntreaFlexibleIPAMPodRule([]net.IP{containerIP}).Return(nil).Times(1)
-
-		err := podConfigurator.removeInterfaces(containerID)
-		require.Nil(t, err, "Failed to remove interface")
-		_, found := ifaceStore.GetContainerInterface(containerID)
-		assert.False(t, found, "Interface should not be in the local cache anymore")
-	})
-
-	t.Run("Error in OVS port delete", func(t *testing.T) {
-		setup("test2")
-		ifaceStore.AddInterface(containerConfig)
-
-		mockOVSBridgeClient.EXPECT().DeletePort(fakePortUUID).Return(ovsconfig.NewTransactionError(fmt.Errorf("error while deleting OVS port"), true))
-		mockOFClient.EXPECT().UninstallPodFlows(hostIfaceName).Return(nil)
-
-		err := podConfigurator.removeInterfaces(containerID)
-		require.NotNil(t, err, "Expected interface remove to fail")
-		_, found := ifaceStore.GetContainerInterface(containerID)
-		assert.True(t, found, "Interface should still be in local cache because of port deletion failure")
-	})
-
-	t.Run("Error in Pod flows delete", func(t *testing.T) {
-		setup("test3")
-		ifaceStore.AddInterface(containerConfig)
-
-		mockOFClient.EXPECT().UninstallPodFlows(hostIfaceName).Return(fmt.Errorf("failed to delete openflow entry"))
-
-		err := podConfigurator.removeInterfaces(containerID)
-		require.NotNil(t, err, "Expected interface remove to fail")
-		_, found := ifaceStore.GetContainerInterface(containerID)
-		assert.True(t, found, "Interface should still be in local cache because of flow deletion failure")
-	})
-}
-
 func TestBuildOVSPortExternalIDs(t *testing.T) {
 	containerID := uuid.New().String()
 	containerMAC, _ := net.ParseMAC("aa:bb:cc:dd:ee:ff")
@@ -736,7 +585,7 @@ func TestBuildOVSPortExternalIDs(t *testing.T) {
 		PortUUID: "12345678",
 		OFPort:   int32(1),
 	}
-	ifaceConfig := ParseOVSPortInterfaceConfig(mockPort, portConfig, true)
+	ifaceConfig := ParseOVSPortInterfaceConfig(mockPort, portConfig)
 	assert.Equal(t, len(containerIPs), len(ifaceConfig.IPs))
 	for _, ip1 := range containerIPs {
 		existed := false

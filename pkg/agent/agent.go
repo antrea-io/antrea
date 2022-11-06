@@ -319,7 +319,7 @@ func (i *Initializer) initInterfaceStore() error {
 				}
 			case interfacestore.AntreaContainer:
 				// The port should be for a container interface.
-				intf = cniserver.ParseOVSPortInterfaceConfig(port, ovsPort, true)
+				intf = cniserver.ParseOVSPortInterfaceConfig(port, ovsPort)
 			case interfacestore.AntreaTrafficControl:
 				intf = trafficcontrol.ParseTrafficControlInterfaceConfig(port, ovsPort)
 				if err := ovsCtlClient.SetPortNoFlood(int(ovsPort.OFPort)); err != nil {
@@ -354,7 +354,7 @@ func (i *Initializer) initInterfaceStore() error {
 				antreaIFType = interfacestore.AntreaHost
 			default:
 				// The port should be for a container interface.
-				intf = cniserver.ParseOVSPortInterfaceConfig(port, ovsPort, true)
+				intf = cniserver.ParseOVSPortInterfaceConfig(port, ovsPort)
 				antreaIFType = interfacestore.AntreaContainer
 			}
 			updatedExtIDs := make(map[string]interface{})
