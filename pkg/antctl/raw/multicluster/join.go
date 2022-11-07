@@ -26,7 +26,6 @@ import (
 	"gopkg.in/yaml.v3"
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -127,13 +126,15 @@ func yamlUnmarshall(raw []byte, v interface{}) error {
 func unmarshallSecret(raw []byte) (*v1.Secret, error) {
 	decoder := yamlutil.NewYAMLOrJSONDecoder(bytes.NewReader(raw), 100)
 	secret := &v1.Secret{}
-	// We need to skip the first object. The Secret object is the second
-	// object in the config file, and we also need to skip starting "---"
-	// when decoding the token Secret file.
-	u := unstructured.Unstructured{}
-	if err := decoder.Decode(&u); err != nil {
+	if err := decoder.Decode(secret); err != nil {
 		return nil, err
 	}
+	if secret.Name != "" {
+		return secret, nil
+	}
+
+	// We may need to skip the first object, which can be comments and the
+	// starting "---" before the Secret.
 	if err := decoder.Decode(secret); err != nil {
 		return nil, err
 	}
@@ -239,10 +240,10 @@ func joinRunE(cmd *cobra.Command, args []string) error {
 			common.CreateByAntctlAnnotation: "true",
 		}
 		if err := joinOpts.k8sClient.Create(context.TODO(), joinOpts.Secret); err != nil {
-			fmt.Fprintf(cmd.OutOrStdout(), "Failed to create the Secret from the config file: %v\n", err)
+			fmt.Fprintf(cmd.ErrOrStderr(), "Failed to create member token Secret: %v\n", err)
 			return err
 		}
-		fmt.Fprintf(cmd.OutOrStdout(), "Created the Secret from the config file\n")
+		fmt.Fprintf(cmd.OutOrStdout(), "Created member token Secret %s\n", joinOpts.Secret.Name)
 		unstructuredSecret, _ := runtime.DefaultUnstructuredConverter.ToUnstructured(joinOpts.Secret)
 		unstructuredSecret["apiVersion"] = "v1"
 		unstructuredSecret["kind"] = "Secret"
@@ -260,7 +261,7 @@ func joinRunE(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	if err = waitForMemberClusterReady(cmd, joinOpts.k8sClient); err != nil {
-		fmt.Fprintf(cmd.OutOrStderr(), "Failed to wait for ClusterSet ready: %v\n", err)
+		fmt.Fprintf(cmd.ErrOrStderr(), "Failed to wait for ClusterSet ready: %v\n", err)
 		return err
 	}
 	fmt.Fprintf(cmd.OutOrStdout(), "Member cluster joined successfully\n")

@@ -15,11 +15,14 @@
 package multicluster
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"antrea.io/antrea/pkg/antctl/raw/multicluster/common"
@@ -112,6 +115,23 @@ func initRunE(cmd *cobra.Command, args []string) error {
 	// Declare ClusterSet init succeeded, even if there is a failure later when creating the
 	// member token or writing the join config file.
 	fmt.Fprintf(cmd.OutOrStdout(), "Successfully initialized ClusterSet %s\n", initOpts.clusterSet)
+	fmt.Fprintf(cmd.OutOrStdout(), "You can run command \"antctl mc get joinconfig -n %s\" to print the parameters needed for a member cluster to join the ClusterSet.\n", initOpts.namespace)
+
+	var tokenSecret *corev1.Secret
+	if initOpts.createToken {
+		if err := common.CreateMemberToken(cmd, initOpts.k8sClient, defaultToken, initOpts.namespace, &createdRes); err != nil {
+			fmt.Fprintf(cmd.ErrOrStderr(), "Failed to create member token. You may run command \"antctl mc create membertoken\" to create a token.\n")
+			return err
+		}
+
+		tokenSecret = &corev1.Secret{}
+		if err := initOpts.k8sClient.Get(context.TODO(), types.NamespacedName{
+			Namespace: initOpts.namespace,
+			Name:      defaultToken,
+		}, tokenSecret); err != nil {
+			return err
+		}
+	}
 
 	var err error
 	var file *os.File
@@ -121,17 +141,10 @@ func initRunE(cmd *cobra.Command, args []string) error {
 			return err
 		}
 		defer file.Close()
-		if err := common.OutputJoinConfig(cmd, file, initOpts.clusterSet, initOpts.clusterID, initOpts.namespace); err != nil {
+		if err := common.OutputJoinConfig(cmd, file, initOpts.clusterSet, initOpts.clusterID, initOpts.namespace, tokenSecret); err != nil {
 			return err
 		}
 		fmt.Fprintf(cmd.OutOrStdout(), "Saved ClusterSet join parameters to file: %s\n", initOpts.output)
-	}
-
-	if initOpts.createToken {
-		if err := common.CreateMemberToken(cmd, initOpts.k8sClient, defaultToken, initOpts.namespace, file, &createdRes); err != nil {
-			fmt.Fprintf(cmd.ErrOrStderr(), "Failed to create member token\n")
-			return err
-		}
 	}
 
 	return nil
