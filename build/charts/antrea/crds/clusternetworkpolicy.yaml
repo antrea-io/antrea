@@ -257,6 +257,23 @@ spec:
                                   oneOf:
                                     - format: ipv4
                                     - format: ipv6
+                      l7Protocols:
+                        type: array
+                        items:
+                          type: object
+                          oneOf:
+                            - required: [http]
+                          properties:
+                            http:
+                              type: object
+                              properties:
+                                host:
+                                  type: string
+                                method:
+                                  type: string
+                                  enum: ['GET', 'POST', 'PUT', 'HEAD', 'DELETE', 'TRACE', 'OPTIONS', 'CONNECT', 'PATCH']
+                                path:
+                                  type: string
                       from:
                         type: array
                         items:
@@ -488,6 +505,23 @@ spec:
                                   oneOf:
                                     - format: ipv4
                                     - format: ipv6
+                      l7Protocols:
+                        type: array
+                        items:
+                          type: object
+                          oneOf:
+                            - required: [http]
+                          properties:
+                            http:
+                              type: object
+                              properties:
+                                host:
+                                  type: string
+                                method:
+                                  type: string
+                                  enum: ['GET', 'POST', 'PUT', 'HEAD', 'DELETE', 'TRACE', 'OPTIONS', 'CONNECT', 'PATCH']
+                                path:
+                                  type: string
                       to:
                         type: array
                         items:

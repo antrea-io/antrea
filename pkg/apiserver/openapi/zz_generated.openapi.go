@@ -47,8 +47,10 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.GroupAssociation":                  schema_pkg_apis_controlplane_v1beta2_GroupAssociation(ref),
 		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.GroupMember":                       schema_pkg_apis_controlplane_v1beta2_GroupMember(ref),
 		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.GroupReference":                    schema_pkg_apis_controlplane_v1beta2_GroupReference(ref),
+		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.HTTPProtocol":                      schema_pkg_apis_controlplane_v1beta2_HTTPProtocol(ref),
 		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.IPBlock":                           schema_pkg_apis_controlplane_v1beta2_IPBlock(ref),
 		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.IPNet":                             schema_pkg_apis_controlplane_v1beta2_IPNet(ref),
+		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.L7Protocol":                        schema_pkg_apis_controlplane_v1beta2_L7Protocol(ref),
 		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.MulticastGroupInfo":                schema_pkg_apis_controlplane_v1beta2_MulticastGroupInfo(ref),
 		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.NamedPort":                         schema_pkg_apis_controlplane_v1beta2_NamedPort(ref),
 		"antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicy":                     schema_pkg_apis_controlplane_v1beta2_NetworkPolicy(ref),
@@ -1159,6 +1161,40 @@ func schema_pkg_apis_controlplane_v1beta2_GroupReference(ref common.ReferenceCal
 	}
 }
 
+func schema_pkg_apis_controlplane_v1beta2_HTTPProtocol(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "HTTPProtocol matches HTTP requests with specific host, method, and path. All fields could be used alone or together. If all fields are not provided, it matches all HTTP requests.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"host": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Host represents the hostname present in the URI or the HTTP Host header to match. It does not contain the port associated with the host.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"method": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Method represents the HTTP method to match. It could be GET, POST, PUT, HEAD, DELETE, TRACE, OPTIONS, CONNECT and PATCH.",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"path": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Path represents the URI path to match (Ex. \"/index.html\", \"/admin\").",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
 func schema_pkg_apis_controlplane_v1beta2_IPBlock(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -1218,6 +1254,26 @@ func schema_pkg_apis_controlplane_v1beta2_IPNet(ref common.ReferenceCallback) co
 				},
 			},
 		},
+	}
+}
+
+func schema_pkg_apis_controlplane_v1beta2_L7Protocol(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "L7Protocol defines application layer protocol to match.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"http": {
+						SchemaProps: spec.SchemaProps{
+							Ref: ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.HTTPProtocol"),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.HTTPProtocol"},
 	}
 }
 
@@ -1681,12 +1737,26 @@ func schema_pkg_apis_controlplane_v1beta2_NetworkPolicyRule(ref common.Reference
 							Format:      "",
 						},
 					},
+					"l7Protocols": {
+						SchemaProps: spec.SchemaProps{
+							Description: "L7Protocols is a list of application layer protocols which should be matched.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("antrea.io/antrea/pkg/apis/controlplane/v1beta2.L7Protocol"),
+									},
+								},
+							},
+						},
+					},
 				},
 				Required: []string{"enableLogging"},
 			},
 		},
 		Dependencies: []string{
-			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyPeer", "antrea.io/antrea/pkg/apis/controlplane/v1beta2.Service"},
+			"antrea.io/antrea/pkg/apis/controlplane/v1beta2.L7Protocol", "antrea.io/antrea/pkg/apis/controlplane/v1beta2.NetworkPolicyPeer", "antrea.io/antrea/pkg/apis/controlplane/v1beta2.Service"},
 	}
 }
 
