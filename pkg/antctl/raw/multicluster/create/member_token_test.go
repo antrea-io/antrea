@@ -37,7 +37,7 @@ func TestCreateAccessToken(t *testing.T) {
 		Data: map[string][]byte{"token": []byte("12345")},
 	}
 
-	secretContent := []byte(`# Manifest to create a Secret for an Antrea Multi-cluster  member cluster token.
+	secretContent := []byte(`# Manifest to create a Secret for an Antrea Multi-cluster member token.
 ---
 apiVersion: v1
 data:
@@ -46,7 +46,6 @@ kind: Secret
 metadata:
   creationTimestamp: null
   name: default-member-token
-  namespace: default
 type: Opaque
 `)
 

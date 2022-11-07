@@ -17,8 +17,6 @@ package common
 import (
 	"bytes"
 	"context"
-	"log"
-	"os"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -418,13 +416,8 @@ func TestCreateMemberToken(t *testing.T) {
 			if tt.existingSecret != nil {
 				obj = append(obj, tt.existingSecret)
 			}
-			file, err := os.CreateTemp("", "membertoken")
-			if err != nil {
-				log.Fatal(err)
-			}
-			defer os.Remove(file.Name())
 			fakeClient := fake.NewClientBuilder().WithScheme(multiclusterscheme.Scheme).WithObjects(obj...).Build()
-			_ = CreateMemberToken(cmd, fakeClient, "membertoken", "default", file, &createdRes)
+			_ = CreateMemberToken(cmd, fakeClient, "membertoken", "default", &createdRes)
 			assert.Equal(t, tt.expectedResLen, len(createdRes))
 		})
 	}

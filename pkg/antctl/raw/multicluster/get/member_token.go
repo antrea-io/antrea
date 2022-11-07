@@ -45,8 +45,10 @@ var tokenExamples = strings.Trim(`
   $ antctl mc get membertoken -A
 # Get the specified member token
   $ antctl mc get membertoken cluster-east-token -n antrea-multicluster
-# Get the specified member token and print the token Secret in YAML format
-  $ antctl mc get membertoken cluster-east-token -n antrea-multicluster -o yaml
+# Get the default member token and print the token Secret in YAML format
+  $ antctl mc get membertoken default-member-token -n antrea-multicluster -o yaml
+# Save the token Secret manifest to a file (which can be used with "antctl mc join" command)
+  $ antctl mc get membertoken cluster-east-token -n antrea-multicluster -o yaml > token.yml
 `, "\n")
 
 func (o *tokenOptions) validateAndComplete(cmd *cobra.Command) error {
@@ -92,11 +94,7 @@ func runEToken(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	var memberTokens []corev1.Secret
-	singleToken := false
-
 	if len(args) > 0 {
-		singleToken = true
 		memberTokenName := args[0]
 		memberToken := corev1.Secret{}
 		err = optionsToken.k8sClient.Get(context.TODO(), types.NamespacedName{
@@ -107,41 +105,42 @@ func runEToken(cmd *cobra.Command, args []string) error {
 			return err
 		}
 
-		memberTokens = append(memberTokens, memberToken)
-	} else {
-		memberTokenList := &corev1.SecretList{}
-		err = optionsToken.k8sClient.List(context.TODO(), memberTokenList, &client.ListOptions{Namespace: optionsToken.namespace})
-		if err != nil {
-			return err
+		outToken := &memberToken
+		if optionsToken.outputFormat != "" {
+			outToken = common.ConvertMemberTokenSecret(outToken)
 		}
-		memberTokens = memberTokenList.Items
+		return output(*outToken, true, optionsToken.outputFormat, cmd.OutOrStdout(), membertoken.Transform)
 	}
 
+	memberTokenList := &corev1.SecretList{}
+	err = optionsToken.k8sClient.List(context.TODO(), memberTokenList, &client.ListOptions{Namespace: optionsToken.namespace})
+	if err != nil {
+		return err
+	}
 	opaqueMemberTokens := []corev1.Secret{}
-	for _, memberToken := range memberTokens {
+	for _, memberToken := range memberTokenList.Items {
+		// Ignore tokens not created by antctl mc command.
 		if memberToken.Annotations[common.CreateByAntctlAnnotation] == "true" {
-			opaqueToken := common.ConvertMemberTokenSecret(memberToken)
-			opaqueMemberTokens = append(opaqueMemberTokens, opaqueToken)
+			t := memberToken
+			outToken := &t
+			if optionsToken.outputFormat != "" {
+				outToken = common.ConvertMemberTokenSecret(outToken)
+				if optionsToken.namespace == "" {
+					// ConvertMemberTokenSecret() does not set Namespace of the Secret.
+					outToken.Namespace = memberToken.Namespace
+				}
+			}
+			opaqueMemberTokens = append(opaqueMemberTokens, *outToken)
 		}
 	}
 
 	if len(opaqueMemberTokens) == 0 {
-		if singleToken {
-			return fmt.Errorf("Member token %s created by antctl is not found", args[0])
-		}
 		if optionsToken.namespace != "" {
-			fmt.Fprintf(cmd.ErrOrStderr(), "No token found in Namespace %s\n", optionsToken.namespace)
+			fmt.Fprintf(cmd.OutOrStdout(), "No token found in Namespace %s\n", optionsToken.namespace)
 		} else {
-			fmt.Fprintln(cmd.ErrOrStderr(), "No token found")
+			fmt.Fprintln(cmd.OutOrStdout(), "No token found")
 		}
 		return nil
 	}
-
-	if singleToken {
-		opaqueMemberToken := opaqueMemberTokens[0]
-		err = output(opaqueMemberToken, singleToken, optionsToken.outputFormat, cmd.OutOrStdout(), membertoken.Transform)
-	} else {
-		err = output(opaqueMemberTokens, singleToken, optionsToken.outputFormat, cmd.OutOrStdout(), membertoken.Transform)
-	}
-	return err
+	return output(opaqueMemberTokens, false, optionsToken.outputFormat, cmd.OutOrStdout(), membertoken.Transform)
 }

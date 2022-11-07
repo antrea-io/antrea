@@ -83,9 +83,17 @@ kind: Config`)
 		outputToFile   bool
 	}{
 		{
-			name:           "init successfully",
-			namespace:      "default",
-			expectedOutput: "ClusterClaim \"id.k8s.io\" created in Namespace default\nClusterClaim \"clusterset.k8s.io\" created in Namespace default\nClusterSet \"test-clusterset\" created in Namespace default\nSuccessfully initialized ClusterSet test-clusterset\nServiceAccount \"default-member-token\" created\nRoleBinding \"default-member-token\" created\nSecret \"default-member-token\" already exists\nSecret \"default-member-token\" created\n",
+			name:      "init successfully",
+			namespace: "default",
+			expectedOutput: `ClusterClaim "id.k8s.io" created in Namespace default
+ClusterClaim "clusterset.k8s.io" created in Namespace default
+ClusterSet "test-clusterset" created in Namespace default
+Successfully initialized ClusterSet test-clusterset
+You can run command "antctl mc get joinconfig -n default" to print the parameters needed for a member cluster to join the ClusterSet.
+ServiceAccount "default-member-token" created
+RoleBinding "default-member-token" created
+Secret "default-member-token" already exists
+`,
 		},
 		{
 			name:           "init fail due to empty Namespace",
@@ -101,7 +109,7 @@ kind: Config`)
 		{
 			name:           "init successfully with output",
 			namespace:      "default",
-			expectedOutput: "Member token saved to",
+			expectedOutput: "Saved ClusterSet join parameters to file:",
 			outputToFile:   true,
 		},
 	}
