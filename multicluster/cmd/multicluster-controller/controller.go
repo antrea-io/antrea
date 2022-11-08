@@ -47,6 +47,9 @@ import (
 var (
 	validationWebhooksNamePattern = "%s%santrea-mc-validating-webhook-configuration"
 	mutationWebhooksNamePattern   = "%s%santrea-mc-mutating-webhook-configuration"
+
+	// The unit test code will change the function to set up a mock manager.
+	setupManagerAndCertControllerFunc = setupManagerAndCertController
 )
 
 const (
