@@ -89,6 +89,7 @@ func TestPolicyRuleConjunction(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	preparePipelines()
+	defer resetPipelines()
 	c = prepareClient(ctrl, false)
 
 	ruleID1 := uint32(1001)
@@ -163,6 +164,7 @@ func TestInstallPolicyRuleFlows(t *testing.T) {
 	defer ctrl.Finish()
 
 	preparePipelines()
+	defer resetPipelines()
 	c = prepareClient(ctrl, false)
 	c.nodeConfig = &config.NodeConfig{PodIPv4CIDR: podIPv4CIDR, PodIPv6CIDR: nil}
 	c.networkConfig = &config.NetworkConfig{}
@@ -308,6 +310,7 @@ func TestInstallPolicyRuleFlows(t *testing.T) {
 
 func TestBatchInstallPolicyRuleFlows(t *testing.T) {
 	preparePipelines()
+	defer resetPipelines()
 	tests := []struct {
 		name            string
 		rules           []*types.PolicyRule
@@ -582,6 +585,7 @@ func BenchmarkBatchInstallPolicyRuleFlows(b *testing.B) {
 	defer ctrl.Finish()
 
 	preparePipelines()
+	defer resetPipelines()
 	c = prepareClient(ctrl, false)
 	// Make it return error so no change gets committed to cache.
 	mockOperations := oftest.NewMockOFEntryOperations(ctrl)
@@ -627,6 +631,7 @@ func TestConjMatchFlowContextKeyConflict(t *testing.T) {
 	defer ctrl.Finish()
 
 	preparePipelines()
+	defer resetPipelines()
 	c = prepareClient(ctrl, false)
 	mockEgressDefaultTable.EXPECT().BuildFlow(gomock.Any()).Return(newMockDropFlowBuilder(ctrl)).AnyTimes()
 	mockEgressRuleTable.EXPECT().BuildFlow(gomock.Any()).Return(newMockRuleFlowBuilder(ctrl)).AnyTimes()
@@ -672,6 +677,7 @@ func TestInstallPolicyRuleFlowsInDualStackCluster(t *testing.T) {
 	defer ctrl.Finish()
 
 	preparePipelines()
+	defer resetPipelines()
 	c = prepareClient(ctrl, true)
 	c.nodeConfig = &config.NodeConfig{PodIPv4CIDR: podIPv4CIDR, PodIPv6CIDR: podIPv6CIDR}
 	c.networkConfig = &config.NetworkConfig{IPv4Enabled: true, IPv6Enabled: true}
@@ -1160,6 +1166,7 @@ func TestNetworkPolicyMetrics(t *testing.T) {
 			defer ctrl.Finish()
 
 			preparePipelines()
+			defer resetPipelines()
 			c = prepareClient(ctrl, false)
 			mockOVSClient := ovsctltest.NewMockOVSCtlClient(ctrl)
 			c.ovsctlClient = mockOVSClient
@@ -1177,6 +1184,7 @@ func TestGetMatchFlowUpdates(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	preparePipelines()
+	defer resetPipelines()
 	c = prepareClient(ctrl, false)
 	c.nodeConfig = &config.NodeConfig{PodIPv4CIDR: podIPv4CIDR, PodIPv6CIDR: nil}
 	c.networkConfig = &config.NetworkConfig{TrafficEncapMode: config.TrafficEncapModeEncap, IPv4Enabled: true}
@@ -1268,6 +1276,7 @@ func TestClient_GetPolicyInfoFromConjunction(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	preparePipelines()
+	defer resetPipelines()
 	c = prepareClient(ctrl, false)
 
 	ruleID1 := uint32(101)

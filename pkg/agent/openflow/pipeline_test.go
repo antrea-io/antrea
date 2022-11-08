@@ -307,11 +307,11 @@ func TestBuildPipeline(t *testing.T) {
 			}
 			require.NotNil(t, tables[len(tables)-1].ofTable, "table %q should be initialized", tables[len(tables)-1].name)
 		}
-		reset()
+		resetPipelines()
 	}
 }
 
-func reset() {
+func resetPipelines() {
 	objs := tableCache.List()
 	for i := 0; i < len(objs); i++ {
 		tableCache.Delete(objs[i])
