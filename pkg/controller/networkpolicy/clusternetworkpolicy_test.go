@@ -17,6 +17,8 @@ package networkpolicy
 import (
 	"fmt"
 	"net"
+	"reflect"
+	"sort"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -32,6 +34,48 @@ import (
 	antreatypes "antrea.io/antrea/pkg/controller/types"
 	"antrea.io/antrea/pkg/util/k8s"
 )
+
+// ruleSemanticallyEqual compares two NetworkPolicyRule objects. It disregards
+// the appliedToGroup slice element order as long as two rules' appliedToGroups
+// have same elements.
+func ruleSemanticallyEqual(a, b controlplane.NetworkPolicyRule) bool {
+	sort.Strings(a.AppliedToGroups)
+	sort.Strings(b.AppliedToGroups)
+	return reflect.DeepEqual(a, b)
+}
+
+// diffNetworkPolicyRuleList checks if elements in two controlplane.NetworkPolicyRule
+// slices are equal. If not, it returns the unmatched NetworkPolicyRules.
+func diffNetworkPolicyRuleList(a, b []controlplane.NetworkPolicyRule) (extraA, extraB []controlplane.NetworkPolicyRule) {
+	if len(a) != len(b) {
+		return nil, nil
+	}
+	// Mark indexes in b that has already matched
+	visited := make([]bool, len(b))
+	for i := 0; i < len(a); i++ {
+		found := false
+		for j := 0; j < len(b); j++ {
+			if visited[j] {
+				continue
+			}
+			if ruleSemanticallyEqual(a[i], b[j]) {
+				visited[j] = true
+				found = true
+				break
+			}
+		}
+		if !found {
+			extraA = append(extraA, a[i])
+		}
+	}
+	for j := 0; j < len(b); j++ {
+		if visited[j] {
+			continue
+		}
+		extraB = append(extraB, b[j])
+	}
+	return
+}
 
 func TestProcessClusterNetworkPolicy(t *testing.T) {
 	p10 := float64(10)
@@ -52,6 +96,12 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 	nsB := v1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:   "nsB",
+			Labels: map[string]string{"foo2": "bar2"},
+		},
+	}
+	nsC := v1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   "nsC",
 			Labels: map[string]string{"foo2": "bar2"},
 		},
 	}
@@ -798,6 +848,21 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 					},
 					{
 						Direction:       controlplane.DirectionIn,
+						AppliedToGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("nsC", nil, nil, nil, nil).NormalizedName)},
+						From: controlplane.NetworkPolicyPeer{
+							AddressGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("nsC", nil, nil, nil, nil).NormalizedName)},
+						},
+						Services: []controlplane.Service{
+							{
+								Protocol: &protocolTCP,
+								Port:     &int80,
+							},
+						},
+						Priority: 0,
+						Action:   &allowAction,
+					},
+					{
+						Direction:       controlplane.DirectionIn,
 						AppliedToGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", nil, &metav1.LabelSelector{}, nil, nil).NormalizedName)},
 						From: controlplane.NetworkPolicyPeer{
 							AddressGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", nil, &selectorA, nil, nil).NormalizedName)},
@@ -815,12 +880,13 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 				AppliedToGroups: []string{
 					getNormalizedUID(antreatypes.NewGroupSelector("nsA", nil, nil, nil, nil).NormalizedName),
 					getNormalizedUID(antreatypes.NewGroupSelector("nsB", nil, nil, nil, nil).NormalizedName),
+					getNormalizedUID(antreatypes.NewGroupSelector("nsC", nil, nil, nil, nil).NormalizedName),
 					getNormalizedUID(antreatypes.NewGroupSelector("", nil, &metav1.LabelSelector{}, nil, nil).NormalizedName),
 				},
 				AppliedToPerRule: true,
 			},
-			expectedAppliedToGroups: 3,
-			expectedAddressGroups:   3,
+			expectedAppliedToGroups: 4,
+			expectedAddressGroups:   4,
 		},
 		{
 			name: "with-per-namespace-rule-applied-to-per-rule",
@@ -915,15 +981,103 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 						Priority: 1,
 						Action:   &dropAction,
 					},
+					{
+						Direction:       controlplane.DirectionIn,
+						AppliedToGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("nsC", nil, nil, nil, nil).NormalizedName)},
+						From: controlplane.NetworkPolicyPeer{
+							AddressGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("nsC", nil, nil, nil, nil).NormalizedName)},
+						},
+						Services: []controlplane.Service{
+							{
+								Protocol: &protocolTCP,
+								Port:     &int81,
+							},
+						},
+						Priority: 1,
+						Action:   &dropAction,
+					},
 				},
 				AppliedToGroups: []string{
 					getNormalizedUID(antreatypes.NewGroupSelector("nsA", &selectorA, nil, nil, nil).NormalizedName),
 					getNormalizedUID(antreatypes.NewGroupSelector("nsB", nil, nil, nil, nil).NormalizedName),
+					getNormalizedUID(antreatypes.NewGroupSelector("nsC", nil, nil, nil, nil).NormalizedName),
 				},
 				AppliedToPerRule: true,
 			},
-			expectedAppliedToGroups: 2,
-			expectedAddressGroups:   2,
+			expectedAppliedToGroups: 3,
+			expectedAddressGroups:   3,
+		},
+		{
+			name: "with-same-labels-namespace-rule",
+			inputPolicy: &crdv1beta1.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "cnpS", UID: "uidS"},
+				Spec: crdv1beta1.ClusterNetworkPolicySpec{
+					AppliedTo: []crdv1beta1.AppliedTo{
+						{
+							NamespaceSelector: &metav1.LabelSelector{},
+						},
+					},
+					Priority: p10,
+					Ingress: []crdv1beta1.Rule{
+						{
+							Ports: []crdv1beta1.NetworkPolicyPort{
+								{
+									Port: &int80,
+								},
+							},
+							From: []crdv1beta1.NetworkPolicyPeer{
+								{
+									Namespaces: &crdv1beta1.PeerNamespaces{
+										SameLabels: []string{"foo2"},
+									},
+								},
+							},
+							Action: &allowAction,
+						},
+					},
+				},
+			},
+			expectedPolicy: &antreatypes.NetworkPolicy{
+				UID:  "uidS",
+				Name: "uidS",
+				SourceRef: &controlplane.NetworkPolicyReference{
+					Type: controlplane.AntreaClusterNetworkPolicy,
+					Name: "cnpS",
+					UID:  "uidS",
+				},
+				Priority:     &p10,
+				TierPriority: &DefaultTierPriority,
+				Rules: []controlplane.NetworkPolicyRule{
+					{
+						Direction: controlplane.DirectionIn,
+						AppliedToGroups: []string{
+							getNormalizedUID(antreatypes.NewGroupSelector("nsC", nil, nil, nil, nil).NormalizedName),
+							getNormalizedUID(antreatypes.NewGroupSelector("nsB", nil, nil, nil, nil).NormalizedName),
+						},
+						From: controlplane.NetworkPolicyPeer{
+							AddressGroups: []string{
+								getNormalizedUID(antreatypes.NewGroupSelector("", nil, &selectorB, nil, nil).NormalizedName),
+							},
+						},
+						Services: []controlplane.Service{
+							{
+								Protocol: &protocolTCP,
+								Port:     &int80,
+							},
+						},
+						Priority: 0,
+						Action:   &allowAction,
+					},
+				},
+				AppliedToGroups: []string{
+					getNormalizedUID(antreatypes.NewGroupSelector("nsA", nil, nil, nil, nil).NormalizedName),
+					getNormalizedUID(antreatypes.NewGroupSelector("nsB", nil, nil, nil, nil).NormalizedName),
+					getNormalizedUID(antreatypes.NewGroupSelector("nsC", nil, nil, nil, nil).NormalizedName),
+				},
+				AppliedToPerRule: true,
+			},
+			expectedAppliedToGroups: 3,
+			expectedAddressGroups:   1,
 		},
 		{
 			name: "rule-with-to-service",
@@ -1782,6 +1936,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 			c.cgStore.Add(&cgA)
 			c.namespaceStore.Add(&nsA)
 			c.namespaceStore.Add(&nsB)
+			c.namespaceStore.Add(&nsC)
 			c.serviceStore.Add(&svcA)
 			c.tierStore.Add(&tierA)
 			actualPolicy, actualAppliedToGroups, actualAddressGroups := c.processClusterNetworkPolicy(tt.inputPolicy)
@@ -1791,7 +1946,10 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 			assert.Equal(t, tt.expectedPolicy.Priority, actualPolicy.Priority)
 			assert.Equal(t, tt.expectedPolicy.TierPriority, actualPolicy.TierPriority)
 			assert.Equal(t, tt.expectedPolicy.AppliedToPerRule, actualPolicy.AppliedToPerRule)
-			assert.ElementsMatch(t, tt.expectedPolicy.Rules, actualPolicy.Rules)
+			missingExpectedRules, extraActualRules := diffNetworkPolicyRuleList(tt.expectedPolicy.Rules, actualPolicy.Rules)
+			if len(missingExpectedRules) > 0 || len(extraActualRules) > 0 {
+				t.Errorf("Unexpected rules in processed policy. Missing expected rules: %v. Extra actual rules: %v", missingExpectedRules, extraActualRules)
+			}
 			assert.ElementsMatch(t, tt.expectedPolicy.AppliedToGroups, actualPolicy.AppliedToGroups)
 			assert.Equal(t, tt.expectedAppliedToGroups, len(actualAppliedToGroups))
 			assert.Equal(t, tt.expectedAddressGroups, len(actualAddressGroups))

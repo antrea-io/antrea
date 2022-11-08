@@ -626,8 +626,14 @@ type AppliedTo struct {
 	NodeSelector *metav1.LabelSelector `json:"nodeSelector,omitempty"`
 }
 
+// PeerNamespaces describes criteria for selecting Pod/ExternalEntity
+// from matched Namespaces. Only one of the criteria can be set.
 type PeerNamespaces struct {
+	// Selects from the same Namespace of the appliedTo workloads.
 	Match NamespaceMatchType `json:"match,omitempty"`
+	// Selects Namespaces that share the same values for the given set of label keys
+	// with the appliedTo Namespace. Namespaces must have all the label keys.
+	SameLabels []string `json:"sameLabels,omitempty"`
 }
 
 // NamespaceMatchType describes Namespace matching strategy.
