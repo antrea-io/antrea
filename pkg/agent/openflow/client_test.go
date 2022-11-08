@@ -119,6 +119,7 @@ func TestIdempotentFlowInstallation(t *testing.T) {
 			client.serviceConfig = serviceConfig
 			client.ipProtocols = []binding.Protocol{binding.ProtocolIP}
 			client.generatePipelines()
+			defer resetPipelines()
 
 			m.EXPECT().AddAll(gomock.Any()).Return(nil).Times(1)
 			// Installing the flows should succeed, and all the flows should be added into the cache.
@@ -152,6 +153,7 @@ func TestIdempotentFlowInstallation(t *testing.T) {
 			client.serviceConfig = serviceConfig
 			client.ipProtocols = []binding.Protocol{binding.ProtocolIP}
 			client.generatePipelines()
+			defer resetPipelines()
 
 			errorCall := m.EXPECT().AddAll(gomock.Any()).Return(errors.New("Bundle error")).Times(1)
 			m.EXPECT().AddAll(gomock.Any()).Return(nil).After(errorCall)
@@ -198,6 +200,7 @@ func TestFlowInstallationFailed(t *testing.T) {
 			client.serviceConfig = serviceConfig
 			client.ipProtocols = []binding.Protocol{binding.ProtocolIP}
 			client.generatePipelines()
+			defer resetPipelines()
 
 			// We generate an error for AddAll call.
 			m.EXPECT().AddAll(gomock.Any()).Return(errors.New("Bundle error"))
@@ -237,6 +240,7 @@ func TestConcurrentFlowInstallation(t *testing.T) {
 			client.serviceConfig = serviceConfig
 			client.ipProtocols = []binding.Protocol{binding.ProtocolIP}
 			client.generatePipelines()
+			defer resetPipelines()
 
 			var concurrentCalls atomic.Value // set to true if we observe concurrent calls
 			timeoutCh := make(chan struct{})
@@ -434,6 +438,7 @@ func prepareTraceflowFlow(ctrl *gomock.Controller) *client {
 	c.serviceConfig = serviceConfig
 	c.ipProtocols = []binding.Protocol{binding.ProtocolIP}
 	c.generatePipelines()
+	defer resetPipelines()
 
 	m.EXPECT().AddAll(gomock.Any()).Return(nil).Times(1)
 	c.bridge = ovsoftest.NewMockBridge(ctrl)
@@ -564,6 +569,7 @@ func TestMulticlusterFlowsInstallation(t *testing.T) {
 	client.serviceConfig = serviceConfig
 	client.ipProtocols = []binding.Protocol{binding.ProtocolIP}
 	client.generatePipelines()
+	defer resetPipelines()
 
 	m.EXPECT().AddAll(gomock.Any()).Return(nil).Times(1)
 	clusterID := "cluster-a"
@@ -600,6 +606,7 @@ func TestServiceGroupInstallAndUninstall(t *testing.T) {
 	client.serviceConfig = serviceConfig
 	client.ipProtocols = []binding.Protocol{binding.ProtocolIP}
 	client.generatePipelines()
+	defer resetPipelines()
 	endpoints := []k8sproxy.Endpoint{
 		&k8sproxy.BaseEndpointInfo{
 			Endpoint: net.JoinHostPort("192.168.1.2", "8081"),
@@ -666,6 +673,7 @@ func TestMulticastGroupInstallAndUninstall(t *testing.T) {
 	client.serviceConfig = serviceConfig
 	client.ipProtocols = []binding.Protocol{binding.ProtocolIP}
 	client.generatePipelines()
+	defer resetPipelines()
 	localReceivers := []uint32{101, 102}
 	remoteIPs := []net.IP{
 		net.ParseIP("1.1.1.2"),
