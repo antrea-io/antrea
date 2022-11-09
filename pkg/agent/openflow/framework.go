@@ -213,6 +213,9 @@ func (f *featureNetworkPolicy) getRequiredTables() []*Table {
 			AntreaPolicyEgressRuleTable,
 			AntreaPolicyIngressRuleTable,
 		)
+		if f.nodeType == config.K8sNode {
+			tables = append(tables, TrafficControlTable) // For L7 NetworkPolicy.
+		}
 		if f.enableMulticast {
 			tables = append(tables,
 				MulticastEgressRuleTable,

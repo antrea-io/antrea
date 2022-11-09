@@ -48,7 +48,8 @@ type Client interface {
 		config *config.NodeConfig,
 		networkConfig *config.NetworkConfig,
 		egressConfig *config.EgressConfig,
-		serviceConfig *config.ServiceConfig) (<-chan struct{}, error)
+		serviceConfig *config.ServiceConfig,
+		l7NetworkPolicyConfig *config.L7NetworkPolicyConfig) (<-chan struct{}, error)
 
 	// InstallNodeFlows should be invoked when a connection to a remote Node is going to be set
 	// up. The hostname is used to identify the added flows. When IPsec tunnel is enabled,
@@ -747,11 +748,13 @@ func (c *client) Initialize(roundInfo types.RoundInfo,
 	nodeConfig *config.NodeConfig,
 	networkConfig *config.NetworkConfig,
 	egressConfig *config.EgressConfig,
-	serviceConfig *config.ServiceConfig) (<-chan struct{}, error) {
+	serviceConfig *config.ServiceConfig,
+	l7NetworkPolicyConfig *config.L7NetworkPolicyConfig) (<-chan struct{}, error) {
 	c.nodeConfig = nodeConfig
 	c.networkConfig = networkConfig
 	c.egressConfig = egressConfig
 	c.serviceConfig = serviceConfig
+	c.l7NetworkPolicyConfig = l7NetworkPolicyConfig
 	c.nodeType = nodeConfig.Type
 
 	if networkConfig.IPv4Enabled {
@@ -833,6 +836,7 @@ func (c *client) generatePipelines() {
 	c.featureNetworkPolicy = newFeatureNetworkPolicy(c.cookieAllocator,
 		c.ipProtocols,
 		c.bridge,
+		c.l7NetworkPolicyConfig,
 		c.ovsMetersAreSupported,
 		c.enableDenyTracking,
 		c.enableAntreaPolicy,

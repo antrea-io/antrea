@@ -69,7 +69,7 @@ type rule struct {
 	// Protocols and Ports of this rule.
 	Services []v1beta.Service
 	// Layer 7 protocols of this rule.
-	L7Protocols []v1beta.Protocol
+	L7Protocols []v1beta.L7Protocol
 	// Name of this rule. Empty for k8s NetworkPolicy.
 	Name string
 	// Action of this rule. nil for k8s NetworkPolicy.
@@ -149,6 +149,8 @@ type CompletedRule struct {
 	ToAddresses v1beta.GroupMemberSet
 	// Target GroupMembers of this rule.
 	TargetMembers v1beta.GroupMemberSet
+	// Vlan ID allocated for this rule if this rule is for L7 NetworkPolicy.
+	L7RuleVlanID *uint32
 }
 
 // String returns the string representation of the CompletedRule.
@@ -676,6 +678,7 @@ func toRule(r *v1beta.NetworkPolicyRule, policy *v1beta.NetworkPolicy, maxPriori
 		From:            r.From,
 		To:              r.To,
 		Services:        r.Services,
+		L7Protocols:     r.L7Protocols,
 		Action:          r.Action,
 		Priority:        r.Priority,
 		PolicyPriority:  policy.Priority,

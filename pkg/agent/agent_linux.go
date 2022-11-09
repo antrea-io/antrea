@@ -312,3 +312,58 @@ func (i *Initializer) prepareOVSBridgeForVM() error {
 func (i *Initializer) installVMInitialFlows() error {
 	return nil
 }
+
+// prepareL7NetworkPolicyInterfaces creates two OVS internal ports. An application-aware engine will connect to OVS
+// through these two ports.
+func (i *Initializer) prepareL7NetworkPolicyInterfaces() error {
+	trafficControlPortExternalIDs := map[string]interface{}{
+		interfacestore.AntreaInterfaceTypeKey: interfacestore.AntreaTrafficControl,
+	}
+
+	for _, portName := range []string{config.L7NetworkPolicyTargetPortName, config.L7NetworkPolicyReturnPortName} {
+		_, exists := i.ifaceStore.GetInterface(portName)
+		if exists {
+			continue
+		}
+
+		portUUID, err := i.ovsBridgeClient.CreateInternalPort(portName, 0, "", trafficControlPortExternalIDs)
+		if err != nil {
+			return err
+		}
+		if pollErr := wait.PollImmediate(time.Second, 5*time.Second, func() (bool, error) {
+			_, _, err := util.SetLinkUp(portName)
+			if err == nil {
+				return true, nil
+			}
+			if _, ok := err.(util.LinkNotFound); ok {
+				return false, nil
+			}
+			return false, err
+		}); pollErr != nil {
+			return pollErr
+		}
+
+		ofPort, err := i.ovsBridgeClient.GetOFPort(portName, false)
+		if err != nil {
+			return err
+		}
+
+		itf := interfacestore.NewTrafficControlInterface(portName)
+		itf.OVSPortConfig = &interfacestore.OVSPortConfig{PortUUID: portUUID, OFPort: ofPort}
+		i.ifaceStore.AddInterface(itf)
+	}
+
+	targetPort, _ := i.ifaceStore.GetInterfaceByName(config.L7NetworkPolicyTargetPortName)
+	returnPort, _ := i.ifaceStore.GetInterfaceByName(config.L7NetworkPolicyReturnPortName)
+	i.l7NetworkPolicyConfig.TargetOFPort = uint32(targetPort.OFPort)
+	i.l7NetworkPolicyConfig.ReturnOFPort = uint32(returnPort.OFPort)
+	// Set the ports with no-flood to reject ARP flood packets.
+	if err := i.ovsCtlClient.SetPortNoFlood(int(targetPort.OFPort)); err != nil {
+		return fmt.Errorf("failed to set port %s with no-flood config: %w", config.L7NetworkPolicyTargetPortName, err)
+	}
+	if err := i.ovsCtlClient.SetPortNoFlood(int(returnPort.OFPort)); err != nil {
+		return fmt.Errorf("failed to set port %s with no-flood config: %w", config.L7NetworkPolicyReturnPortName, err)
+	}
+
+	return nil
+}

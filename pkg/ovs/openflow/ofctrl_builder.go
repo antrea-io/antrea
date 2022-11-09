@@ -20,6 +20,7 @@ import (
 	"strings"
 
 	"antrea.io/libOpenflow/openflow15"
+	"antrea.io/libOpenflow/protocol"
 	"antrea.io/ofnet/ofctrl"
 )
 
@@ -40,10 +41,39 @@ func (b *ofFlowBuilder) MatchTunMetadata(index int, data uint32) FlowBuilder {
 	return b
 }
 
-// MatchVLAN matches the VLAN VID. It holds the VLAN VID in its least significant 12 bits.
+// MatchVLAN can be used as follows:
+// - to match the packets of a specific VLAN, there are two cases:
+//   - to match VLAN 0, nonVLAN should be false, vlanID should be 0, value of vlanMask must be 0x1fff.
+//   - VLAN 1-4095, nonVLAN should be false, vlanID should be the VLAN ID, vlanMask can be nil, or its value can be 0x1fff.
+//
+// - to match the packets of all VLANs, nonVLAN should be false, vlanID must be 0, value of vlanMask must be 0x1000.
+// - to match the packets of non-VLAN, nonVLAN should be true, vlanID must be 0, vlanMask can be nil, or its value can be 0x1000.
 func (b *ofFlowBuilder) MatchVLAN(nonVLAN bool, vlanID uint16, vlanMask *uint16) FlowBuilder {
-	// TODO(gran): correct matchStr
-	matchStr := fmt.Sprintf("dl_vlan=%d", vlanID)
+	if vlanMask == nil {
+		var vlanMaskValue uint16
+		// To match the packets of a VLAN whose VLAN ID is not 0, when vlanMask is nil, set the value of vlanMask to 0x1ffff.
+		if vlanID != 0 {
+			vlanMaskValue = uint16(openflow15.OFPVID_PRESENT | protocol.VID_MASK)
+		}
+		// To match the packets of non-VLAN, when vlanMask is nil, set the value of vlanMask to 0x1000.
+		if nonVLAN {
+			vlanMaskValue = uint16(openflow15.OFPVID_PRESENT)
+		}
+		vlanMask = &vlanMaskValue
+	}
+
+	value := vlanID
+	if !nonVLAN {
+		value |= openflow15.OFPVID_PRESENT
+	}
+	mask := *vlanMask
+
+	var matchStr string
+	if mask == uint16(openflow15.OFPVID_PRESENT|protocol.VID_MASK) {
+		matchStr = fmt.Sprintf("dl_vlan=%d", value&protocol.VID_MASK)
+	} else {
+		matchStr = fmt.Sprintf("vlan_tci=0x%04x/0x%04x", value&openflow15.OFPVID_PRESENT, openflow15.OFPVID_PRESENT)
+	}
 	b.matchers = append(b.matchers, matchStr)
 	b.Match.NonVlan = nonVLAN
 	b.Match.VlanId = &vlanID
