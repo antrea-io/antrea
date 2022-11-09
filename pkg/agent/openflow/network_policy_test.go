@@ -1340,3 +1340,47 @@ func TestClient_GetPolicyInfoFromConjunction(t *testing.T) {
 		})
 	}
 }
+
+func Test_featureNetworkPolicy_initFlows(t *testing.T) {
+	testCases := []struct {
+		name          string
+		nodeType      config.NodeType
+		clientOptions []clientOptionsFn
+		expectedFlows []string
+	}{
+		{
+			name:          "K8s Node",
+			nodeType:      config.K8sNode,
+			clientOptions: []clientOptionsFn{enableMulticast},
+			expectedFlows: []string{
+				"cookie=0x1020000000000, table=IngressSecurityClassifier, priority=200,reg0=0x20/0xf0 actions=goto_table:IngressMetric",
+				"cookie=0x1020000000000, table=IngressSecurityClassifier, priority=200,reg0=0x10/0xf0 actions=goto_table:IngressMetric",
+				"cookie=0x1020000000000, table=IngressSecurityClassifier, priority=200,reg0=0x40/0xf0 actions=goto_table:IngressMetric",
+				"cookie=0x1020000000000, table=AntreaPolicyEgressRule, priority=64990,ct_state=-new+est,ip actions=goto_table:EgressMetric",
+				"cookie=0x1020000000000, table=AntreaPolicyEgressRule, priority=64990,ct_state=-new+rel,ip actions=goto_table:EgressMetric",
+				"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64990,ct_state=-new+est,ip actions=goto_table:IngressMetric",
+				"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64990,ct_state=-new+rel,ip actions=goto_table:IngressMetric",
+			},
+		},
+
+		{
+			name:     "External Node",
+			nodeType: config.ExternalNode,
+			expectedFlows: []string{
+				"cookie=0x1020000000000, table=AntreaPolicyEgressRule, priority=64990,ct_state=-new+est,ip actions=goto_table:EgressMetric",
+				"cookie=0x1020000000000, table=AntreaPolicyEgressRule, priority=64990,ct_state=-new+rel,ip actions=goto_table:EgressMetric",
+				"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64990,ct_state=-new+est,ip actions=goto_table:IngressMetric",
+				"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64990,ct_state=-new+rel,ip actions=goto_table:IngressMetric",
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			fc := newFakeClient(nil, true, false, tc.nodeType, config.TrafficEncapModeEncap, tc.clientOptions...)
+			defer resetPipelines()
+
+			assert.ElementsMatch(t, tc.expectedFlows, getFlowStrings(fc.featureNetworkPolicy.initFlows()))
+		})
+	}
+}

@@ -169,7 +169,9 @@ func (f *featurePodConnectivity) initFlows() []binding.Flow {
 	if f.networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {
 		flows = append(flows, f.l3FwdFlowRouteToGW()...)
 		// If IPv6 is enabled, this flow will never get hit. Replies any ARP request with the same global virtual MAC.
-		flows = append(flows, f.arpResponderStaticFlow())
+		if f.networkConfig.IPv4Enabled {
+			flows = append(flows, f.arpResponderStaticFlow())
+		}
 	} else {
 		// If NetworkPolicyOnly mode is enabled, IPAM is implemented by the primary CNI, which may not use the Pod CIDR
 		// of the Node. Therefore, it doesn't make sense to install flows for the Pod CIDR. Individual flow for each local
