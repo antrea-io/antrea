@@ -15,10 +15,8 @@
 package noderoute
 
 import (
-	"errors"
 	"fmt"
 	"net"
-	"strings"
 	"time"
 
 	"k8s.io/apimachinery/pkg/labels"
@@ -72,10 +70,10 @@ type MCRouteController struct {
 	// in MCRouteController. Need to use mutex to protect 'installedCIImports' if
 	// we change the number of 'defaultWorkers'.
 	installedCIImports map[string]*mcv1alpha1.ClusterInfoImport
-	// Need to use mutex to protect 'installedActiveGWName' if we change
+	// Need to use mutex to protect 'installedActiveGW' if we change
 	// the number of 'defaultWorkers' to run multiple go routines to handle
 	// events.
-	installedActiveGWName string
+	installedActiveGW *mcv1alpha1.Gateway
 	// The Namespace where Antrea Multi-cluster Controller is running.
 	namespace string
 }
@@ -151,6 +149,11 @@ func (c *MCRouteController) enqueueGateway(obj interface{}, isDelete bool) {
 			return
 		}
 	}
+
+	if gw.Namespace != c.namespace {
+		return
+	}
+
 	if !isDelete {
 		if net.ParseIP(gw.InternalIP) == nil || net.ParseIP(gw.GatewayIP) == nil {
 			klog.ErrorS(nil, "No valid Internal IP or Gateway IP is found in Gateway", "gateway", gw.Namespace+"/"+gw.Name)
@@ -173,6 +176,10 @@ func (c *MCRouteController) enqueueClusterInfoImport(obj interface{}, isDelete b
 			klog.ErrorS(nil, "DeletedFinalStateUnknown contains non-ClusterInfoImport object", "object", deletedState.Obj)
 			return
 		}
+	}
+
+	if ciImp.Namespace != c.namespace {
+		return
 	}
 
 	if !isDelete {
@@ -243,34 +250,35 @@ func (c *MCRouteController) syncMCFlows() error {
 	if err != nil {
 		return err
 	}
-	if activeGW == nil && c.installedActiveGWName == "" {
+	if activeGW == nil && c.installedActiveGW == nil {
 		klog.V(2).InfoS("No active Gateway is found")
 		return nil
 	}
 
-	klog.V(2).InfoS("Installed Gateway", "gateway", c.installedActiveGWName)
-	if activeGW != nil && activeGW.Name == c.installedActiveGWName {
-		// Active Gateway name doesn't change but do a full flows resync
+	klog.V(2).InfoS("Installed Gateway", "gateway", klog.KObj(c.installedActiveGW))
+	if activeGW != nil && c.installedActiveGW != nil && activeGW.Name == c.installedActiveGW.Name {
+		// Active Gateway name doesn't change but still do a full flow sync
 		// for any Gateway Spec or ClusterInfoImport changes.
 		if err := c.syncMCFlowsForAllCIImps(activeGW); err != nil {
 			return err
 		}
+		c.installedActiveGW = activeGW
 		return nil
 	}
 
-	if c.installedActiveGWName != "" {
+	if c.installedActiveGW != nil {
 		if err := c.deleteMCFlowsForAllCIImps(); err != nil {
 			return err
 		}
-		klog.V(2).InfoS("Deleted flows for installed Gateway", "gateway", c.installedActiveGWName)
-		c.installedActiveGWName = ""
+		klog.V(2).InfoS("Deleted flows for installed Gateway", "gateway", klog.KObj(c.installedActiveGW))
+		c.installedActiveGW = nil
 	}
 
 	if activeGW != nil {
 		if err := c.ofClient.InstallMulticlusterClassifierFlows(config.DefaultTunOFPort, activeGW.Name == c.nodeConfig.Name); err != nil {
 			return err
 		}
-		c.installedActiveGWName = activeGW.Name
+		c.installedActiveGW = activeGW
 		return c.addMCFlowsForAllCIImps(activeGW)
 	}
 	return nil
@@ -282,15 +290,13 @@ func (c *MCRouteController) syncMCFlowsForAllCIImps(activeGW *mcv1alpha1.Gateway
 		return err
 	}
 
+	activeGWChanged := c.checkGateWayIPChange(activeGW)
 	installedCIImportNames := sets.StringKeySet(c.installedCIImports)
-	for idx := range desiredCIImports {
-		if err = c.addMCFlowsForSingleCIImp(activeGW, desiredCIImports[idx], c.installedCIImports[desiredCIImports[idx].Name]); err != nil {
-			if strings.Contains(err.Error(), "invalid Gateway IP") {
-				continue
-			}
+	for _, ciImp := range desiredCIImports {
+		if err = c.addMCFlowsForSingleCIImp(activeGW, ciImp, c.installedCIImports[ciImp.Name], activeGWChanged); err != nil {
 			return err
 		}
-		installedCIImportNames.Delete(desiredCIImports[idx].Name)
+		installedCIImportNames.Delete(ciImp.Name)
 	}
 
 	for name := range installedCIImportNames {
@@ -299,6 +305,18 @@ func (c *MCRouteController) syncMCFlowsForAllCIImps(activeGW *mcv1alpha1.Gateway
 		}
 	}
 	return nil
+}
+
+func (c *MCRouteController) checkGateWayIPChange(activeGW *mcv1alpha1.Gateway) bool {
+	var activeGWChanged bool
+	if activeGW.Name == c.nodeConfig.Name {
+		// On a Gateway Node, the GatewayIP of the active Gateway will impact the Openflow rules.
+		activeGWChanged = activeGW.GatewayIP != c.installedActiveGW.GatewayIP
+	} else {
+		// On a regular Node, the InternalIP of the active Gateway will impact the Openflow rules.
+		activeGWChanged = activeGW.InternalIP != c.installedActiveGW.InternalIP
+	}
+	return activeGWChanged
 }
 
 func (c *MCRouteController) addMCFlowsForAllCIImps(activeGW *mcv1alpha1.Gateway) error {
@@ -310,12 +328,8 @@ func (c *MCRouteController) addMCFlowsForAllCIImps(activeGW *mcv1alpha1.Gateway)
 		klog.V(2).InfoS("No remote ClusterInfo imported, do nothing")
 		return nil
 	}
-
 	for _, ciImport := range allCIImports {
-		if err := c.addMCFlowsForSingleCIImp(activeGW, ciImport, nil); err != nil {
-			if strings.Contains(err.Error(), "invalid Gateway IP") {
-				continue
-			}
+		if err := c.addMCFlowsForSingleCIImp(activeGW, ciImport, nil, true); err != nil {
 			return err
 		}
 	}
@@ -323,19 +337,24 @@ func (c *MCRouteController) addMCFlowsForAllCIImps(activeGW *mcv1alpha1.Gateway)
 	return nil
 }
 
-func (c *MCRouteController) addMCFlowsForSingleCIImp(activeGW *mcv1alpha1.Gateway, ciImport *mcv1alpha1.ClusterInfoImport, installedCIImp *mcv1alpha1.ClusterInfoImport) error {
+func (c *MCRouteController) addMCFlowsForSingleCIImp(activeGW *mcv1alpha1.Gateway, ciImport *mcv1alpha1.ClusterInfoImport,
+	installedCIImp *mcv1alpha1.ClusterInfoImport, activeGWChanged bool) error {
 	tunnelPeerIPToRemoteGW := getPeerGatewayIP(ciImport.Spec)
 	if tunnelPeerIPToRemoteGW == nil {
-		return errors.New("invalid Gateway IP")
+		klog.ErrorS(nil, "The ClusterInfoImport has no valid Gateway IP, skip it", "clusterinfoimport", klog.KObj(ciImport))
+		return nil
 	}
 
+	var ciImportNoChange bool
 	if installedCIImp != nil {
 		oldTunnelPeerIPToRemoteGW := getPeerGatewayIP(installedCIImp.Spec)
-		if oldTunnelPeerIPToRemoteGW.Equal(tunnelPeerIPToRemoteGW) && installedCIImp.Spec.ServiceCIDR == ciImport.Spec.ServiceCIDR &&
-			sets.NewString(installedCIImp.Spec.PodCIDRs...).Equal(sets.NewString(ciImport.Spec.PodCIDRs...)) {
-			klog.V(2).InfoS("No difference between new and installed ClusterInfoImports, skip updating", "clusterinfoimport", ciImport.Name)
-			return nil
-		}
+		ciImportNoChange = oldTunnelPeerIPToRemoteGW.Equal(tunnelPeerIPToRemoteGW) && installedCIImp.Spec.ServiceCIDR == ciImport.Spec.ServiceCIDR &&
+			sets.NewString(installedCIImp.Spec.PodCIDRs...).Equal(sets.NewString(ciImport.Spec.PodCIDRs...))
+	}
+
+	if ciImportNoChange && !activeGWChanged {
+		klog.V(2).InfoS("ClusterInfoImport and the active Gateway have no change, skip updating", "clusterinfoimport", klog.KObj(ciImport), "gateway", klog.KObj(activeGW))
+		return nil
 	}
 
 	klog.InfoS("Adding/updating remote Gateway Node flows for Multi-cluster", "gateway", klog.KObj(activeGW),
