@@ -32,9 +32,21 @@ func adapterName(name string) string {
 	return fmt.Sprintf("%s (%s)", util.ContainerVNICPrefix, name)
 }
 
+// windowsHyperVEnabled checks if the Hyper-V is enabled on the host.
+// Hyper-V feature contains multiple components/sub-features. According to the
+// test, OVS requires "Microsoft-Hyper-V" feature to be enabled.
+func windowsHyperVEnabled() (bool, error) {
+	cmd := "$(Get-WindowsOptionalFeature -Online -FeatureName Microsoft-Hyper-V).State"
+	result, err := ps.RunCommand(cmd)
+	if err != nil {
+		return false, err
+	}
+	return strings.HasPrefix(result, "Enabled"), nil
+}
+
 func skipIfHyperVDisabled(t *testing.T) {
 	t.Logf("Checking if Hyper-V feature is enabled")
-	enabled, err := util.WindowsHyperVEnabled()
+	enabled, err := windowsHyperVEnabled()
 	require.NoError(t, err)
 	if !enabled {
 		t.Skipf("Skipping test as it requires the Hyper-V feature to be enabled")

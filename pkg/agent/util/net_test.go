@@ -17,6 +17,7 @@ package util
 import (
 	"fmt"
 	"net"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -24,6 +25,23 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	"antrea.io/antrea/pkg/util/ip"
+)
+
+var (
+	ipv6Global      = net.ParseIP("2000::")
+	ipv4Public      = net.ParseIP("8.8.8.8")
+	ipv4PublicIPNet = net.IPNet{
+		IP:   ipv4Public,
+		Mask: net.CIDRMask(32, 32),
+	}
+	ipv4ZeroIPNet = net.IPNet{
+		IP:   net.IPv4zero,
+		Mask: net.CIDRMask(32, 32),
+	}
+
+	testMACAddr, _ = net.ParseMAC("aa:bb:cc:dd:ee:ff")
+
+	testInvalidErr = fmt.Errorf("invalid")
 )
 
 func TestGenerateContainerInterfaceName(t *testing.T) {
@@ -52,20 +70,255 @@ func TestGenerateContainerInterfaceName(t *testing.T) {
 	}
 }
 
-func TestGetDefaultLocalNodeAddr(t *testing.T) {
-	conn, err := net.Dial("udp", "8.8.8.8:80")
-	if err != nil {
-		t.Error(err)
+func TestGetIPNetDeviceFromIP(t *testing.T) {
+	testNetInterfaces := generateNetInterfaces()
+	tests := []struct {
+		name                string
+		localIPs            *ip.DualStackIPs
+		ignoredInterfaces   sets.String
+		testNetInterfaceErr error
+		wantIPv4IPNet       *net.IPNet
+		wantIPv6IPNet       *net.IPNet
+	}{
+		{
+			name:              "IPv4 Interface",
+			localIPs:          &ip.DualStackIPs{IPv4: ipv4Public},
+			ignoredInterfaces: sets.String{},
+			wantIPv4IPNet:     &ipv4PublicIPNet,
+		},
+		{
+			name:              "IPv6 Interface",
+			localIPs:          &ip.DualStackIPs{IPv6: ipv6Global},
+			ignoredInterfaces: sets.String{},
+			wantIPv6IPNet: &net.IPNet{
+				IP:   ipv6Global,
+				Mask: net.CIDRMask(128, 128),
+			},
+		},
+		{
+			name: "Exclude IPv6 Interface",
+			localIPs: &ip.DualStackIPs{
+				IPv4: ipv4Public,
+				IPv6: ipv6Global,
+			},
+			ignoredInterfaces: make(sets.String).Insert("1"),
+			wantIPv4IPNet: &net.IPNet{
+				IP:   ipv4Public,
+				Mask: net.CIDRMask(32, 32),
+			},
+		},
+		{
+			name:                "LocalIP Error",
+			testNetInterfaceErr: fmt.Errorf("IPs of localIPs should be on the same device"),
+			localIPs: &ip.DualStackIPs{
+				IPv4: ipv4Public,
+				IPv6: ipv6Global,
+			},
+			ignoredInterfaces: sets.String{},
+		},
+		{
+			name:                "Invalid",
+			testNetInterfaceErr: testInvalidErr,
+		},
 	}
-	defer conn.Close()
-	localAddr := conn.LocalAddr().(*net.UDPAddr).IP
 
-	nodeIPs := &ip.DualStackIPs{IPv4: localAddr}
-	_, _, dev, err := GetIPNetDeviceFromIP(nodeIPs, sets.NewString())
-	if err != nil {
-		t.Error(err)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			defer mockNetInterfaceGet(testNetInterfaces, tc.testNetInterfaceErr)()
+			defer mockNetInterfaceAddrsMultiple(testNetInterfaces, true, nil)()
+			gotIPv4IPNet, gotIPv6IPNet, _, gotErr := GetIPNetDeviceFromIP(tc.localIPs, tc.ignoredInterfaces)
+			assert.Equal(t, tc.wantIPv4IPNet, gotIPv4IPNet)
+			assert.Equal(t, tc.wantIPv6IPNet, gotIPv6IPNet)
+			assert.Equal(t, tc.testNetInterfaceErr, gotErr)
+		})
 	}
-	t.Logf("IP obtained %s, %v", localAddr, dev)
+}
+
+func TestGetAllIPNetsByName(t *testing.T) {
+	tests := []struct {
+		name                 string
+		testNetInterfaceName string
+		testNetInterface     net.Interface
+		testNetInterfaceErr  error
+		wantIPNets           []*net.IPNet
+	}{
+		{
+			name:                 "IPv4",
+			testNetInterfaceName: "0",
+			wantIPNets:           []*net.IPNet{&ipv4PublicIPNet},
+		},
+		{
+			name:                 "IPv6",
+			testNetInterfaceName: "1",
+			wantIPNets: []*net.IPNet{
+				{
+					IP:   ipv6Global,
+					Mask: net.CIDRMask(128, 128),
+				},
+			},
+		},
+		{
+			name:                 "Invalid",
+			testNetInterfaceName: "0",
+			testNetInterfaceErr:  testInvalidErr,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.testNetInterface = generateNetInterface(tc.testNetInterfaceName)
+			defer mockNetInterfaceByName(&tc.testNetInterface, tc.testNetInterfaceErr)()
+			defer mockNetInterfaceAddrs(tc.testNetInterface, nil)()
+			gotIPNets, gotErr := GetAllIPNetsByName(tc.name)
+			assert.Equal(t, tc.wantIPNets, gotIPNets)
+			assert.Equal(t, tc.testNetInterfaceErr, gotErr)
+		})
+	}
+}
+
+func TestGetIPNetDeviceByName(t *testing.T) {
+	tests := []struct {
+		name                 string
+		testNetInterfaceName string
+		testNetInterface     net.Interface
+		testNetInterfaceErr  error
+		wantIPv4IPNet        *net.IPNet
+		wantIPv6IPNet        *net.IPNet
+	}{
+		{
+			name:                 "IPv4",
+			testNetInterfaceName: "0",
+			wantIPv4IPNet:        &ipv4PublicIPNet,
+		},
+		{
+			name:                 "IPv6",
+			testNetInterfaceName: "1",
+			wantIPv6IPNet: &net.IPNet{
+				IP:   ipv6Global,
+				Mask: net.CIDRMask(128, 128),
+			},
+		},
+		{
+			name:                 "Invalid",
+			testNetInterfaceName: "0",
+			testNetInterfaceErr:  testInvalidErr,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.testNetInterface = generateNetInterface(tc.testNetInterfaceName)
+			defer mockNetInterfaceByName(&tc.testNetInterface, tc.testNetInterfaceErr)()
+			defer mockNetInterfaceAddrs(tc.testNetInterface, nil)()
+			gotIPv4IPNet, gotIPv6IPNet, gotLink, gotErr := GetIPNetDeviceByName(tc.name)
+			assert.Equal(t, tc.wantIPv4IPNet, gotIPv4IPNet)
+			assert.Equal(t, tc.wantIPv6IPNet, gotIPv6IPNet)
+			if tc.testNetInterfaceErr == nil {
+				assert.EqualValues(t, tc.testNetInterface, *gotLink)
+			} else {
+				assert.Nil(t, gotLink)
+			}
+			assert.Equal(t, tc.testNetInterfaceErr, gotErr)
+		})
+	}
+}
+
+func TestGetIPNetDeviceByCIDRs(t *testing.T) {
+	testNetInterfaces := generateNetInterfacesDual()
+	tests := []struct {
+		name                string
+		cidrsList           []string
+		testNetInterfaceErr error
+		wantIPv4IPNet       *net.IPNet
+		wantIPv6IPNet       *net.IPNet
+	}{
+		{
+			name:          "Dual Stack",
+			cidrsList:     []string{"8.8.8.8/30", "2000::/3"},
+			wantIPv4IPNet: &ipv4PublicIPNet,
+			wantIPv6IPNet: &net.IPNet{
+				IP:   ipv6Global,
+				Mask: net.CIDRMask(128, 128),
+			},
+		},
+		{
+			name:                "Multiple IPv4 CIDRs",
+			testNetInterfaceErr: fmt.Errorf("len of cidrs is 2 and they are not configured as dual stack (at least one from each IPFamily)"),
+			cidrsList:           []string{"8.8.8.8/30", "0.0.0.0/31"},
+		},
+		{
+			name:                "Exceed Max CIDRs",
+			testNetInterfaceErr: fmt.Errorf("length of cidrs is 3 more than max allowed of 2"),
+			cidrsList:           []string{"8.8.8.8/30", "0.0.0.0/31", "2000::/64"},
+		},
+		{
+			name:                "Invalid",
+			testNetInterfaceErr: testInvalidErr,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			defer mockNetInterfaceGet(testNetInterfaces, tc.testNetInterfaceErr)()
+			defer mockNetInterfaceAddrsMultiple(testNetInterfaces, true, nil)()
+			gotIPv4IPNet, gotIPv6IPNet, _, gotErr := GetIPNetDeviceByCIDRs(tc.cidrsList)
+			assert.Equal(t, tc.wantIPv4IPNet, gotIPv4IPNet)
+			assert.Equal(t, tc.wantIPv6IPNet, gotIPv6IPNet)
+			assert.Equal(t, tc.testNetInterfaceErr, gotErr)
+		})
+	}
+}
+
+func TestGetIPv4Addr(t *testing.T) {
+	testIPs := []net.IP{net.IPv4zero, net.IPv6zero}
+	gotIP := GetIPv4Addr(testIPs)
+	assert.Equal(t, net.IPv4zero, gotIP)
+
+	gotIP = GetIPv4Addr([]net.IP{})
+	assert.Nil(t, gotIP)
+}
+
+func TestGetIPWithFamily(t *testing.T) {
+	tests := []struct {
+		name       string
+		testIPs    []net.IP
+		testFamily uint8
+		wantIP     net.IP
+		wantErr    error
+	}{
+		{
+			name:       "IPv6 AddressFamily",
+			testIPs:    []net.IP{net.IPv4zero, net.IPv6zero},
+			testFamily: FamilyIPv6,
+			wantIP:     net.IPv6zero,
+		},
+		{
+			name:       "IPv4 AddressFamily",
+			testIPs:    []net.IP{net.IPv4zero, net.IPv6zero},
+			testFamily: FamilyIPv4,
+			wantIP:     net.IPv4zero,
+		},
+		{
+			name:       "IPv6 AddressFamily not found",
+			testIPs:    []net.IP{net.IPv4zero},
+			testFamily: FamilyIPv6,
+			wantErr:    fmt.Errorf("no IP found with IPv6 AddressFamily"),
+		},
+		{
+			name:       "IPv4 AddressFamily not found",
+			testIPs:    []net.IP{net.IPv6zero},
+			testFamily: FamilyIPv4,
+			wantErr:    fmt.Errorf("no IP found with IPv4 AddressFamily"),
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			gotIP, err := GetIPWithFamily(tc.testIPs, tc.testFamily)
+			assert.Equal(t, tc.wantIP, gotIP)
+			assert.Equal(t, tc.wantErr, err)
+		})
+	}
 }
 
 func TestExtendCIDRWithIP(t *testing.T) {
@@ -115,4 +368,190 @@ func TestGenerateRandomMAC(t *testing.T) {
 	localBit, mcastBit := validateBits(mac1)
 	assert.Equal(t, uint8(1), localBit)
 	assert.Equal(t, uint8(0), mcastBit)
+}
+
+func TestGetAllNodeAddresses(t *testing.T) {
+	testNetInterfaces := generateNetInterfaces()
+	tests := []struct {
+		name                string
+		excludeDevices      []string
+		testNetInterfaceErr error
+		wantNodeAddrsIPv4   []net.IP
+		wantNodeAddrsIPv6   []net.IP
+	}{
+		{
+			name:              "All Node Addrs",
+			excludeDevices:    []string{},
+			wantNodeAddrsIPv4: []net.IP{ipv4Public},
+			wantNodeAddrsIPv6: []net.IP{ipv6Global},
+		},
+		{
+			name:              "Exclude Node Addrs",
+			excludeDevices:    []string{"1"},
+			wantNodeAddrsIPv4: []net.IP{ipv4Public},
+		},
+		{
+			name:                "Invalid",
+			testNetInterfaceErr: testInvalidErr,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			defer mockNetInterfaceGet(testNetInterfaces, tc.testNetInterfaceErr)()
+			defer mockNetInterfaceAddrsMultiple(testNetInterfaces, true, nil)()
+			gotNodeAddrsIPv4, gotNodeAddrsIPv6, gotErr := GetAllNodeAddresses(tc.excludeDevices)
+			assert.Equal(t, tc.wantNodeAddrsIPv4, gotNodeAddrsIPv4)
+			assert.Equal(t, tc.wantNodeAddrsIPv6, gotNodeAddrsIPv6)
+			assert.Equal(t, tc.testNetInterfaceErr, gotErr)
+		})
+	}
+}
+
+func TestNewIPNet(t *testing.T) {
+	gotIPNet := NewIPNet(net.IPv4allrouter)
+	assert.Equal(t, net.IPv4allrouter.To4(), gotIPNet.IP.To4())
+	assert.Equal(t, net.CIDRMask(32, 32), gotIPNet.Mask)
+
+	gotIPNet = NewIPNet(net.IPv6linklocalallrouters)
+	assert.Equal(t, net.IPv6linklocalallrouters, gotIPNet.IP)
+	assert.Equal(t, net.CIDRMask(128, 128), gotIPNet.Mask)
+}
+
+func TestPortToUint16(t *testing.T) {
+	gotUint16 := PortToUint16(1)
+	assert.Equal(t, uint16(1), gotUint16)
+
+	gotUint16 = PortToUint16(-1)
+	assert.Equal(t, uint16(0), gotUint16)
+}
+
+func TestGenerateUplinkInterfaceName(t *testing.T) {
+	testUplinkName := "t0"
+	gotName := GenerateUplinkInterfaceName(testUplinkName)
+	assert.Equal(t, testUplinkName+bridgedUplinkSuffix, gotName)
+}
+
+func TestGetIPNetsByLink(t *testing.T) {
+	testNetInterface := generateNetInterface("0")
+	tests := []struct {
+		name                string
+		testNetInterfaceErr error
+		wantIPNets          []*net.IPNet
+	}{
+		{
+			name:       "IPv4",
+			wantIPNets: []*net.IPNet{&ipv4PublicIPNet},
+		},
+		{
+			name:                "Invalid",
+			testNetInterfaceErr: testInvalidErr,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			defer mockNetInterfaceAddrs(testNetInterface, tc.testNetInterfaceErr)()
+			gotIPNets, gotErr := GetIPNetsByLink(&testNetInterface)
+			assert.Equal(t, tc.wantIPNets, gotIPNets)
+			assert.Equal(t, tc.testNetInterfaceErr, gotErr)
+		})
+	}
+}
+
+func generateNetInterfaceAddrs(idx int) []net.Addr {
+	netAddrsIPv4 := []net.Addr{&ipv4PublicIPNet}
+	netAddrsIPv6 := []net.Addr{
+		&net.IPNet{
+			IP:   ipv6Global,
+			Mask: net.CIDRMask(128, 128),
+		},
+	}
+	netAddrsDualStack := []net.Addr{
+		&ipv4PublicIPNet,
+		&net.IPNet{
+			IP:   ipv6Global,
+			Mask: net.CIDRMask(128, 128),
+		},
+	}
+	mockNetAddrs := [][]net.Addr{netAddrsIPv4, netAddrsIPv6, netAddrsDualStack}
+	return mockNetAddrs[idx]
+}
+
+func generateNetInterface(name string) net.Interface {
+	testIdx, _ := strconv.Atoi(name)
+	testInterface := net.Interface{
+		Index:        testIdx,
+		Name:         name,
+		HardwareAddr: testMACAddr,
+	}
+	return testInterface
+}
+
+func generateNetInterfaces() []net.Interface {
+	return []net.Interface{generateNetInterface("0"), generateNetInterface("1")}
+}
+
+func generateNetInterfacesDual() []net.Interface {
+	return []net.Interface{generateNetInterface("2")}
+}
+
+func mockNetInterfaceGet(testNetInterfaces []net.Interface, err error) func() {
+	originalNetInterface := netInterfaces
+	netInterfaces = func() ([]net.Interface, error) {
+		return testNetInterfaces, err
+	}
+	return func() {
+		netInterfaces = originalNetInterface
+	}
+}
+
+func mockNetInterfaceByName(testNetInterface *net.Interface, err error) func() {
+	originalNetInterfaceByName := netInterfaceByName
+	netInterfaceByName = func(name string) (*net.Interface, error) {
+		return testNetInterface, err
+	}
+	return func() {
+		netInterfaceByName = originalNetInterfaceByName
+	}
+}
+
+func mockNetInterfaceByIndex(testNetInterface *net.Interface, err error) func() {
+	originalNetInterfaceByIndex := netInterfaceByIndex
+	netInterfaceByIndex = func(index int) (*net.Interface, error) {
+		return testNetInterface, err
+	}
+	return func() {
+		netInterfaceByIndex = originalNetInterfaceByIndex
+	}
+}
+
+func mockNetInterfaceAddrsMultiple(testNetInterfaces []net.Interface, valid bool, err error) func() {
+	originalNetInterfaceAddrs := netInterfaceAddrs
+	netInterfaceAddrs = func(i *net.Interface) ([]net.Addr, error) {
+		if valid {
+			for _, itf := range testNetInterfaces {
+				if itf.Name == i.Name {
+					return generateNetInterfaceAddrs(itf.Index), err
+				}
+			}
+		}
+		return []net.Addr{}, err
+	}
+	return func() {
+		netInterfaceAddrs = originalNetInterfaceAddrs
+	}
+}
+
+func mockNetInterfaceAddrs(testNetInterface net.Interface, err error) func() {
+	originalNetInterfaceAddrs := netInterfaceAddrs
+	netInterfaceAddrs = func(i *net.Interface) ([]net.Addr, error) {
+		if i != nil {
+			return generateNetInterfaceAddrs(testNetInterface.Index), err
+		}
+		return nil, err
+	}
+	return func() {
+		netInterfaceAddrs = originalNetInterfaceAddrs
+	}
 }
