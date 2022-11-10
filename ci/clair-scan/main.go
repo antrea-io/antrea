@@ -20,7 +20,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"os"
 )
 
 const (
@@ -28,7 +28,7 @@ const (
 )
 
 func parseReport(jsonPath string) (*vulnerabilityReport, error) {
-	reportData, err := ioutil.ReadFile(jsonPath)
+	reportData, err := os.ReadFile(jsonPath)
 	if err != nil {
 		return nil, fmt.Errorf("error when reading report file: %v", err)
 	}

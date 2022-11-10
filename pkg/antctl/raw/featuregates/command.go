@@ -18,8 +18,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/url"
-	"strings"
 
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -33,6 +33,8 @@ import (
 )
 
 var Command *cobra.Command
+var getClients = getConfigAndClients
+var getRestClient = getRestClientByMode
 
 func init() {
 	Command = &cobra.Command{
@@ -41,12 +43,12 @@ func init() {
 	}
 	if runtime.Mode == runtime.ModeAgent {
 		Command.RunE = agentRunE
-		Command.Long = "Get current Antrea agent feature gates info"
+		Command.Long = "Print current Antrea agent feature gates info"
 	} else if runtime.Mode == runtime.ModeController && runtime.InPod {
 		Command.RunE = controllerLocalRunE
-		Command.Long = "Get Antrea feature gates info including Controller and Agent"
+		Command.Long = "Print Antrea feature gates info including Controller and Agent"
 	} else if runtime.Mode == runtime.ModeController && !runtime.InPod {
-		Command.Long = "Get Antrea feature gates info including Controller and Agent"
+		Command.Long = "Print Antrea feature gates info including Controller and Agent"
 		Command.RunE = controllerRemoteRunE
 	}
 }
@@ -64,35 +66,17 @@ func controllerRemoteRunE(cmd *cobra.Command, _ []string) error {
 }
 
 func featureGateRequest(cmd *cobra.Command, mode string) error {
-	kubeconfig, err := raw.ResolveKubeconfig(cmd)
+	kubeconfig, k8sClientset, antreaClientset, err := getClients(cmd)
 	if err != nil {
 		return err
 	}
-	kubeconfig.GroupVersion = &schema.GroupVersion{Group: "", Version: ""}
-	restconfigTmpl := rest.CopyConfig(kubeconfig)
-	raw.SetupKubeconfig(restconfigTmpl)
-	if server, err := Command.Flags().GetString("server"); err != nil {
-		kubeconfig.Host = server
-	}
 
-	k8sClientset, antreaClientset, err := raw.SetupClients(kubeconfig)
+	client, err := getRestClient(kubeconfig, k8sClientset, antreaClientset, mode)
 	if err != nil {
-		return fmt.Errorf("failed to create clientset: %w", err)
+		return err
 	}
 
 	var resp []featuregates.Response
-	var client *rest.RESTClient
-
-	switch mode {
-	case runtime.ModeAgent, runtime.ModeController:
-		client, err = rest.RESTClientFor(restconfigTmpl)
-	case "remote":
-		client, err = getControllerClient(k8sClientset, antreaClientset, restconfigTmpl)
-	}
-	if err != nil {
-		return fmt.Errorf("fail to create rest client: %w", err)
-	}
-
 	if resp, err = getFeatureGatesRequest(client); err != nil {
 		return err
 	}
@@ -106,12 +90,46 @@ func featureGateRequest(cmd *cobra.Command, mode string) error {
 		}
 	}
 	if len(agentGates) > 0 {
-		fmt.Println(output(agentGates, runtime.ModeAgent))
+		output(agentGates, runtime.ModeAgent, cmd.OutOrStdout())
 	}
 	if len(controllerGates) > 0 {
-		fmt.Println(output(controllerGates, runtime.ModeController))
+		fmt.Println()
+		output(controllerGates, runtime.ModeController, cmd.OutOrStdout())
 	}
 	return nil
+}
+
+func getConfigAndClients(cmd *cobra.Command) (*rest.Config, kubernetes.Interface, antrea.Interface, error) {
+	kubeconfig, err := raw.ResolveKubeconfig(cmd)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	if server, _ := Command.Flags().GetString("server"); server != "" {
+		kubeconfig.Host = server
+	}
+	k8sClientset, antreaClientset, err := raw.SetupClients(kubeconfig)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to create clientset: %w", err)
+	}
+	return kubeconfig, k8sClientset, antreaClientset, nil
+}
+
+func getRestClientByMode(kubeconfig *rest.Config, k8sClientset kubernetes.Interface, antreaClientset antrea.Interface, mode string) (*rest.RESTClient, error) {
+	kubeconfig.GroupVersion = &schema.GroupVersion{Group: "", Version: ""}
+	restconfigTmpl := rest.CopyConfig(kubeconfig)
+	raw.SetupKubeconfig(restconfigTmpl)
+	var err error
+	var client *rest.RESTClient
+	switch mode {
+	case runtime.ModeAgent, runtime.ModeController:
+		client, err = rest.RESTClientFor(restconfigTmpl)
+	case "remote":
+		client, err = getControllerClient(k8sClientset, antreaClientset, restconfigTmpl)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to create rest client: %w", err)
+	}
+	return client, nil
 }
 
 func getControllerClient(k8sClientset kubernetes.Interface, antreaClientset antrea.Interface, cfgTmpl *rest.Config) (*rest.RESTClient, error) {
@@ -136,13 +154,12 @@ func getFeatureGatesRequest(client *rest.RESTClient) ([]featuregates.Response, e
 	}
 	err = json.Unmarshal(rawResp, &resp)
 	if err != nil {
-		return nil, fmt.Errorf("fail to unmarshal feature gates list: %w", err)
+		return nil, fmt.Errorf("failed to unmarshal feature gates list: %w", err)
 	}
 	return resp, nil
 }
 
-func output(resps []featuregates.Response, runtimeMode string) string {
-	var output strings.Builder
+func output(resps []featuregates.Response, runtimeMode string, output io.Writer) {
 	switch runtimeMode {
 	case runtime.ModeAgent:
 		output.Write([]byte("Antrea Agent Feature Gates\n"))
@@ -152,7 +169,6 @@ func output(resps []featuregates.Response, runtimeMode string) string {
 	formatter := "%-25s%-15s%-10s\n"
 	output.Write([]byte(fmt.Sprintf(formatter, "FEATUREGATE", "STATUS", "VERSION")))
 	for _, r := range resps {
-		fmt.Fprintf(&output, formatter, r.Name, r.Status, r.Version)
+		fmt.Fprintf(output, formatter, r.Name, r.Status, r.Version)
 	}
-	return output.String()
 }
