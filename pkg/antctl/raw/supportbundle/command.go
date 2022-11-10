@@ -524,7 +524,7 @@ func controllerRemoteRunE(cmd *cobra.Command, args []string) error {
 	kubeconfig.GroupVersion = &systemv1beta1.SchemeGroupVersion
 	restconfigTmpl := rest.CopyConfig(kubeconfig)
 	raw.SetupKubeconfig(restconfigTmpl)
-	if server, err := Command.Flags().GetString("server"); err != nil {
+	if server, _ := Command.Flags().GetString("server"); server != "" {
 		kubeconfig.Host = server
 	}
 
