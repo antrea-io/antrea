@@ -349,7 +349,6 @@ endif
 .PHONY: build-windows
 build-windows:
 	@echo "===> Building Antrea bins and antrea/antrea-windows Docker image <==="
-	docker build --cache-from antrea/base-windows:$(WIN_BUILD_TAG) -t antrea/base-windows:$(WIN_BUILD_TAG) -f build/images/base-windows/Dockerfile --network $(DOCKER_NETWORK) $(WIN_BUILD_ARGS) .
 ifneq ($(NO_PULL),)
 	docker build -t antrea/antrea-windows:$(DOCKER_IMG_VERSION) -f build/images/Dockerfile.build.windows --network $(DOCKER_NETWORK) $(WIN_BUILD_ARGS) .
 else
