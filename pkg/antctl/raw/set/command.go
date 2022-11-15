@@ -17,7 +17,7 @@ package set
 import (
 	"github.com/spf13/cobra"
 
-	flow_aggregator "antrea.io/antrea/pkg/antctl/raw/set/flow-aggregator"
+	flowaggregator "antrea.io/antrea/pkg/antctl/raw/set/flowaggregator"
 )
 
 var SetCmd = &cobra.Command{
@@ -26,5 +26,5 @@ var SetCmd = &cobra.Command{
 }
 
 func init() {
-	SetCmd.AddCommand(flow_aggregator.NewFlowAggregatorSetCommand())
+	SetCmd.AddCommand(flowaggregator.NewFlowAggregatorSetCommand())
 }
