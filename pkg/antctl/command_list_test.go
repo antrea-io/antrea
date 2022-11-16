@@ -54,3 +54,35 @@ func TestCommandListApplyToCommand(t *testing.T) {
 	assert.Contains(t, testRoot.Short, fmt.Sprintf("The component is %s", runtime.Mode))
 	assert.Contains(t, testRoot.Long, fmt.Sprintf("The component is %s", runtime.Mode))
 }
+
+func TestGetDebugCommands(t *testing.T) {
+
+	tc := []struct {
+		name     string
+		mode     string
+		expected [][]string
+	}{
+		{
+			name:     "Antctl running against controller mode",
+			mode:     "controller",
+			expected: [][]string{{"version"}, {"get", "networkpolicy"}, {"get", "appliedtogroup"}, {"get", "addressgroup"}, {"get", "controllerinfo"}, {"supportbundle"}, {"traceflow"}, {"get", "featuregates"}},
+		},
+		{
+			name:     "Antctl running against agent mode",
+			mode:     "agent",
+			expected: [][]string{{"version"}, {"get", "podmulticaststats"}, {"log-level"}, {"get", "networkpolicy"}, {"get", "appliedtogroup"}, {"get", "addressgroup"}, {"get", "agentinfo"}, {"get", "podinterface"}, {"get", "ovsflows"}, {"trace-packet"}, {"get", "serviceexternalip"}, {"supportbundle"}, {"traceflow"}, {"get", "featuregates"}},
+		},
+		{
+			name:     "Antctl running against flow-aggregator mode",
+			mode:     "flowaggregator",
+			expected: [][]string{{"version"}, {"log-level"}, {"get", "flowrecords"}, {"get", "recordmetrics"}},
+		},
+	}
+	for _, tt := range tc {
+		t.Run(tt.name, func(t *testing.T) {
+			generated := CommandList.GetDebugCommands(tt.mode)
+			assert.Equal(t, tt.expected, generated)
+		})
+	}
+
+}
