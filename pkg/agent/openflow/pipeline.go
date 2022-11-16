@@ -391,6 +391,7 @@ type OFEntryOperations interface {
 	BundleOps(adds []binding.Flow, mods []binding.Flow, dels []binding.Flow) error
 	DeleteAll(flows []binding.Flow) error
 	AddOFEntries(ofEntries []binding.OFEntry) error
+	ModifyOFEntries(ofEntries []binding.OFEntry) error
 	DeleteOFEntries(ofEntries []binding.OFEntry) error
 }
 
@@ -541,6 +542,10 @@ func (c *client) changeOFEntries(ofEntries []binding.OFEntry, action ofAction) e
 
 func (c *client) AddOFEntries(ofEntries []binding.OFEntry) error {
 	return c.changeOFEntries(ofEntries, add)
+}
+
+func (c *client) ModifyOFEntries(ofEntries []binding.OFEntry) error {
+	return c.changeOFEntries(ofEntries, mod)
 }
 
 func (c *client) DeleteOFEntries(ofEntries []binding.OFEntry) error {
