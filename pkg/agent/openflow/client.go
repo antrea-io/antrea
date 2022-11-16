@@ -278,9 +278,6 @@ type Client interface {
 	AddAddressToDNSConjunction(id uint32, addrs []types.Address) error
 	// DeleteAddressFromDNSConjunction removes addresses from the toAddresses of the dns packetIn conjunction.
 	DeleteAddressFromDNSConjunction(id uint32, addrs []types.Address) error
-	// InstallMulticastInitialFlows installs OpenFlow to packetIn the IGMP messages and output the Multicast traffic to
-	// antrea-gw0 so that local Pods could access external Multicast servers.
-	InstallMulticastInitialFlows(pktInReason uint8) error
 
 	// InstallMulticastFlows installs the flow to forward Multicast traffic normally, and output it to antrea-gw0
 	// to ensure it can be forwarded to the external addresses.
@@ -1215,19 +1212,6 @@ func (c *client) SendUDPPacketOut(
 
 	packetOutObj := packetOutBuilder.Done()
 	return c.bridge.SendPacketOut(packetOutObj)
-}
-
-func (c *client) InstallMulticastInitialFlows(pktInReason uint8) error {
-	flows := c.featureMulticast.igmpPktInFlows(pktInReason)
-	flows = append(flows, c.featureMulticast.externalMulticastReceiverFlow())
-	flows = append(flows, c.featureMulticast.multicastSkipIGMPMetricFlows()...)
-	if c.enableAntreaPolicy {
-		flows = append(flows, c.featureMulticast.igmpEgressFlow())
-	}
-	cacheKey := "multicast"
-	c.replayMutex.RLock()
-	defer c.replayMutex.RUnlock()
-	return c.addFlows(c.featureMulticast.cachedFlows, cacheKey, flows)
 }
 
 func (c *client) InstallMulticastFlows(multicastIP net.IP, groupID binding.GroupIDType) error {
