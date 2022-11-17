@@ -19,10 +19,14 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"sort"
+	"strings"
+	"sync"
 	"time"
 
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/conversion"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -115,6 +119,12 @@ type Controller struct {
 	// supportBundleCollectionAppliedToStore is the storage where the required Nodes or ExternalNodes of a
 	// SupportBundleCollection are stored.
 	supportBundleCollectionAppliedToStore cache.Indexer
+
+	// statuses is a nested map that keeps the realization statuses reported by antrea-agents.
+	// The outer map's keys are the SupportBundleCollection names. The inner map's keys are the Node names. The inner
+	// map's values are statuses reported by each Node for a SupportBundleCollection.
+	statuses     map[string]map[string]*controlplane.SupportBundleCollectionNodeStatus
+	statusesLock sync.RWMutex
 }
 
 func NewSupportBundleCollectionController(
@@ -141,6 +151,7 @@ func NewSupportBundleCollectionController(
 			processingNodesIndex:         processingNodesIndexFunc,
 			processingExternalNodesIndex: processingExternalNodesIndexFunc,
 		}),
+		statuses: make(map[string]map[string]*controlplane.SupportBundleCollectionNodeStatus),
 	}
 	c.supportBundleCollectionInformer.Informer().AddEventHandlerWithResyncPeriod(
 		cache.ResourceEventHandlerFuncs{
@@ -170,6 +181,32 @@ func (c *Controller) Run(stopCh <-chan struct{}) {
 	go wait.Until(c.worker, time.Second, stopCh)
 
 	<-stopCh
+}
+
+// UpdateStatus is called when Agent reports status to the internal SupportBundleCollection resource.
+func (c *Controller) UpdateStatus(status *controlplane.SupportBundleCollectionStatus) error {
+	key := status.Name
+	_, found, _ := c.supportBundleCollectionStore.Get(key)
+	if !found {
+		klog.InfoS("SupportBundleCollection has been deleted, skip updating its status", "supportBundleCollection", key)
+		return nil
+	}
+	func() {
+		c.statusesLock.Lock()
+		defer c.statusesLock.Unlock()
+		statusPerNode, exists := c.statuses[key]
+		if !exists {
+			statusPerNode = map[string]*controlplane.SupportBundleCollectionNodeStatus{}
+			c.statuses[key] = statusPerNode
+		}
+		for i := range status.Nodes {
+			nodeStatus := status.Nodes[i]
+			nodeStatusKey := getNodeKey(&nodeStatus)
+			statusPerNode[nodeStatusKey] = &nodeStatus
+		}
+	}()
+	c.queue.Add(key)
+	return nil
 }
 
 func (c *Controller) addSupportBundleCollection(obj interface{}) {
@@ -223,7 +260,7 @@ func (c *Controller) reconcileSupportBundleCollections() error {
 	for _, bundle := range bundleList {
 		if isCollectionProcessing(bundle) {
 			// Continue processing the started SupportBundleCollection request if it is not completed before restart.
-			if err := c.createInternalSupportBundleCollection(bundle); err != nil {
+			if _, err := c.createInternalSupportBundleCollection(bundle); err != nil {
 				klog.ErrorS(err, "Failed to reconcile SupportBundleCollection", "name", bundle.Name)
 			}
 		}
@@ -277,79 +314,93 @@ func (c *Controller) syncSupportBundleCollection(key string) error {
 		}
 		return nil
 	}
-	if err := c.createInternalSupportBundleCollection(bundle); err != nil {
-		return err
+	internalBundleCollectionObj, found, _ := c.supportBundleCollectionStore.Get(key)
+	if !found {
+		internalBundleCollectionObj, err = c.createInternalSupportBundleCollection(bundle)
+		if err != nil {
+			return err
+		}
+	}
+	if internalBundleCollectionObj != nil {
+		return c.updateStatus(internalBundleCollectionObj.(*types.SupportBundleCollection))
 	}
 	return nil
 }
 
 // createInternalSupportBundleCollection creates internal SupportBundle object and saves it into the storage.
-func (c *Controller) createInternalSupportBundleCollection(bundle *v1alpha1.SupportBundleCollection) error {
+func (c *Controller) createInternalSupportBundleCollection(bundle *v1alpha1.SupportBundleCollection) (*types.SupportBundleCollection, error) {
 	// Calculate the expiration time with ExpirationMinutes and the created time of the resource.
 	// It is to ensure the expiration time of the internal support bundle collection resource is constant, and to
 	// ensure the processing is atomic even if SupportBundleCollectionController is restarted.
 	expiredDuration, err := time.ParseDuration(fmt.Sprintf("%dm", bundle.Spec.ExpirationMinutes))
 	if err != nil {
 		klog.ErrorS(err, "Failed to parse expiration minute", "expirationMinute", bundle.Spec.ExpirationMinutes)
-		return err
+		return nil, err
 	}
 	expiredAt := bundle.ObjectMeta.CreationTimestamp.Add(expiredDuration)
 	now := time.Now()
+	transitionTime := metav1.Now()
 
 	// Create a CollectionStarted failure condition on the CRD if time is expired. Return nil to avoid the event
 	// to be re-enqueued.
 	if !now.Before(expiredAt) {
 		conditions := []v1alpha1.SupportBundleCollectionCondition{
 			{
+				Type:               v1alpha1.CollectionStarted,
+				Status:             metav1.ConditionFalse,
+				Reason:             string(metav1.StatusReasonExpired),
+				LastTransitionTime: transitionTime,
+			},
+			{
+				Type:               v1alpha1.BundleCollected,
+				Status:             metav1.ConditionFalse,
+				LastTransitionTime: transitionTime,
+			},
+			{
 				Type:               v1alpha1.CollectionFailure,
 				Status:             metav1.ConditionTrue,
 				Reason:             string(metav1.StatusReasonExpired),
-				LastTransitionTime: metav1.NewTime(time.Now()),
+				LastTransitionTime: transitionTime,
 			},
 			{
 				Type:               v1alpha1.CollectionCompleted,
 				Status:             metav1.ConditionTrue,
-				LastTransitionTime: metav1.NewTime(time.Now()),
+				LastTransitionTime: transitionTime,
 			},
 		}
 		if err := c.addConditions(bundle.Name, conditions); err != nil {
 			klog.ErrorS(err, "Failed to create a CollectionFailure condition")
-			return err
+			return nil, err
 		}
 		klog.InfoS("SupportBundleCollection is expired", "expiredAt", expiredAt, "now", now)
-		return nil
+		return nil, nil
 	}
 	// Get expected Kubernetes Nodes defined in the CRD.
 	nodeNames, err := c.getBundleNodes(bundle.Spec.Nodes)
 	if err != nil {
 		klog.ErrorS(err, "Failed to get Nodes defined in the support bundle", "name", bundle.Name)
-		return err
+		return nil, err
 	}
 	// Get expected external Nodes defined in the CRD.
 	externalNodeNames, err := c.getBundleExternalNodes(bundle.Spec.ExternalNodes)
 	if err != nil {
 		klog.ErrorS(err, "Failed to get ExternalNodes defined in the support bundle", "name", bundle.Name)
-		return err
+		return nil, err
 	}
 	nodeSpan := nodeNames.Union(externalNodeNames)
-	_, oldInternalBundleExists, _ := c.supportBundleCollectionStore.Get(bundle.Name)
-	if oldInternalBundleExists {
-		klog.InfoS("Internal SupportBundleCollection already exists", "name", bundle.Name)
-		return nil
-	}
 	// Get authentication from the Secret provided in authentication field in the CRD
 	authentication, err := c.parseBundleAuth(bundle.Spec.Authentication)
 	if err != nil {
 		klog.ErrorS(err, "Failed to get authentication defined in the SupportBundleCollection CR", "name", bundle.Name, "authentication", bundle.Spec.Authentication)
-		return err
+		return nil, err
 	}
-	c.addInternalSupportBundleCollection(bundle, nodeSpan, authentication, metav1.NewTime(expiredAt))
+	internalBundleCollection := c.addInternalSupportBundleCollection(bundle, nodeSpan, authentication, metav1.NewTime(expiredAt))
 	// Process the support bundle collection when time is up, this will create a CollectionFailure condition if the
 	// bundle collection is not completed in time because any Agent fails to upload the files and does not report
 	// the failure.
 	c.queue.AddAfter(bundle.Name, expiredAt.Sub(now))
 	klog.InfoS("Created internal SupportBundleCollection", "name", bundle.Name)
-	return nil
+	return internalBundleCollection, nil
 }
 
 // getBundleNodes returns the names of the Nodes configured in the SupportBundleCollection.
@@ -453,6 +504,7 @@ func (c *Controller) deleteInternalSupportBundleCollection(key string) error {
 	if obj, exists, _ := c.supportBundleCollectionAppliedToStore.GetByKey(key); exists {
 		c.supportBundleCollectionAppliedToStore.Delete(obj)
 	}
+	c.clearStatuses(key)
 	klog.InfoS("Deleted internal SupportBundleCollection", "name", key)
 	return nil
 }
@@ -517,7 +569,7 @@ func (c *Controller) addInternalSupportBundleCollection(
 	bundleCollection *v1alpha1.SupportBundleCollection,
 	nodeSpan sets.String,
 	authentication *controlplane.BundleServerAuthConfiguration,
-	expiredAt metav1.Time) {
+	expiredAt metav1.Time) *types.SupportBundleCollection {
 	var processNodes bool
 	if bundleCollection.Spec.Nodes == nil {
 		processNodes = false
@@ -550,19 +602,36 @@ func (c *Controller) addInternalSupportBundleCollection(
 		Authentication: *authentication,
 	}
 	_ = c.supportBundleCollectionStore.Create(internalBundleCollection)
+	return internalBundleCollection
 }
 
 // processConflictedCollection adds a Started failure condition on the conflicted the SupportBundleCollection request,
 // and re-enqueue the request after 10s.
 func (c *Controller) processConflictedCollection(bundle *v1alpha1.SupportBundleCollection) error {
 	message := "another SupportBundleCollection is processing on Nodes or on ExternalNodes in the same namespace, retry in 10s"
+	now := metav1.Now()
 	condition := []v1alpha1.SupportBundleCollectionCondition{
 		{
 			Type:               v1alpha1.CollectionStarted,
 			Status:             metav1.ConditionFalse,
 			Reason:             string(metav1.StatusReasonConflict),
 			Message:            message,
-			LastTransitionTime: metav1.NewTime(time.Now()),
+			LastTransitionTime: now,
+		},
+		{
+			Type:               v1alpha1.BundleCollected,
+			Status:             metav1.ConditionFalse,
+			LastTransitionTime: now,
+		},
+		{
+			Type:               v1alpha1.CollectionFailure,
+			Status:             metav1.ConditionFalse,
+			LastTransitionTime: now,
+		},
+		{
+			Type:               v1alpha1.CollectionCompleted,
+			Status:             metav1.ConditionFalse,
+			LastTransitionTime: now,
 		},
 	}
 	if err := c.addConditions(bundle.Name, condition); err != nil {
@@ -583,9 +652,9 @@ func (c *Controller) addConditions(bundleCollectionName string, conditions []v1a
 	}
 	toUpdate := bundleCollection.DeepCopy()
 	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		updatedConditions := appendConditions(toUpdate.Status.Conditions, conditions)
+		updatedConditions := mergeConditions(toUpdate.Status.Conditions, conditions)
 		toUpdate.Status.Conditions = updatedConditions
-		klog.V(2).InfoS("Updating SupportBundleCollection", "SupportBundleCollection", klog.KObj(toUpdate))
+		klog.V(2).InfoS("Updating SupportBundleCollection", "SupportBundleCollection", bundleCollectionName)
 		_, updateErr := c.crdClient.CrdV1alpha1().SupportBundleCollections().UpdateStatus(context.TODO(), toUpdate, metav1.UpdateOptions{})
 		if updateErr != nil && k8serrors.IsConflict(updateErr) {
 			if toUpdate, getErr = c.crdClient.CrdV1alpha1().SupportBundleCollections().Get(context.TODO(), bundleCollectionName, metav1.GetOptions{}); getErr != nil {
@@ -625,6 +694,159 @@ func (c *Controller) isCollectionAvailable(bundleCollection *v1alpha1.SupportBun
 		}
 	}
 	return true
+}
+
+func (c *Controller) updateStatus(internalBundleCollection *types.SupportBundleCollection) error {
+	now := metav1.Now()
+	desiredNodes := len(internalBundleCollection.SpanMeta.NodeNames)
+	collectedNodes := 0
+	failedNodeReasons := make(map[string][]string)
+	failedNodes := 0
+	statuses := c.getNodeStatuses(internalBundleCollection.Name)
+	for _, status := range statuses {
+		nodeKey := getNodeKey(status)
+		// The node is no longer in the span of this Support Bundle Collection, delete its status.
+		if !internalBundleCollection.NodeNames.Has(nodeKey) {
+			c.deleteNodeStatus(internalBundleCollection.Name, nodeKey)
+			continue
+		}
+		if status.Completed {
+			collectedNodes += 1
+		} else {
+			failedNodes += 1
+			failedReason := status.Error
+			if failedReason == "" {
+				failedReason = "unknown error"
+			}
+			_, exists := failedNodeReasons[failedReason]
+			if !exists {
+				failedNodeReasons[failedReason] = make([]string, 0)
+			}
+			failedNodeReasons[failedReason] = append(failedNodeReasons[failedReason], nodeKey)
+		}
+	}
+
+	newConditions := []v1alpha1.SupportBundleCollectionCondition{
+		// Mark the support bundle collection as started since the internal resource successfully created.
+		// It will not be added as a duplication if it already exists.
+		{Type: v1alpha1.CollectionStarted, Status: metav1.ConditionTrue, LastTransitionTime: metav1.Now()},
+	}
+	bundleCollectedStatus, collectionCompleted := metav1.ConditionFalse, metav1.ConditionFalse
+	if collectedNodes > 0 {
+		bundleCollectedStatus = metav1.ConditionTrue
+	}
+	newConditions = append(newConditions,
+		v1alpha1.SupportBundleCollectionCondition{
+			Type:               v1alpha1.BundleCollected,
+			Status:             bundleCollectedStatus,
+			LastTransitionTime: now,
+		},
+	)
+	if failedNodes > 0 {
+		failedNodeErrors := make([]string, 0, len(failedNodeReasons))
+		for k, v := range failedNodeReasons {
+			sort.Strings(v)
+			failedNodeErrors = append(failedNodeErrors, fmt.Sprintf(`"%s":[%s]`, k, strings.Join(v, ", ")))
+		}
+		sort.Strings(failedNodeErrors)
+		failedConditionMessage := fmt.Sprintf("Failed Agent count: %d, %s", failedNodes, strings.Join(failedNodeErrors, ", "))
+		newConditions = append(newConditions,
+			v1alpha1.SupportBundleCollectionCondition{
+				Type:               v1alpha1.CollectionFailure,
+				Status:             metav1.ConditionTrue,
+				Reason:             string(metav1.StatusReasonInternalError),
+				Message:            failedConditionMessage,
+				LastTransitionTime: now,
+			},
+		)
+	} else {
+		newConditions = append(newConditions,
+			v1alpha1.SupportBundleCollectionCondition{
+				Type:               v1alpha1.CollectionFailure,
+				Status:             metav1.ConditionFalse,
+				LastTransitionTime: now,
+			},
+		)
+	}
+	if collectedNodes+failedNodes == desiredNodes {
+		collectionCompleted = metav1.ConditionTrue
+	}
+	newConditions = append(newConditions,
+		v1alpha1.SupportBundleCollectionCondition{
+			Type:               v1alpha1.CollectionCompleted,
+			Status:             collectionCompleted,
+			LastTransitionTime: now,
+		},
+	)
+	status := &v1alpha1.SupportBundleCollectionStatus{
+		CollectedNodes: int32(collectedNodes),
+		DesiredNodes:   int32(desiredNodes),
+		Conditions:     newConditions,
+	}
+	klog.V(2).InfoS("Updating SupportBundleCollection status", "supportBundleCollection", internalBundleCollection.Name, "status", status)
+	return c.updateSupportBundleCollectionStatus(internalBundleCollection.Name, status)
+}
+
+func (c *Controller) getNodeStatuses(key string) []*controlplane.SupportBundleCollectionNodeStatus {
+	c.statusesLock.RLock()
+	defer c.statusesLock.RUnlock()
+	statusPerNode, exists := c.statuses[key]
+	if !exists {
+		return nil
+	}
+	statuses := make([]*controlplane.SupportBundleCollectionNodeStatus, 0, len(c.statuses[key]))
+	for _, status := range statusPerNode {
+		statuses = append(statuses, status)
+	}
+	return statuses
+}
+
+func (c *Controller) deleteNodeStatus(key string, nodeName string) {
+	c.statusesLock.Lock()
+	defer c.statusesLock.Unlock()
+	statusPerNode, exists := c.statuses[key]
+	if !exists {
+		return
+	}
+	delete(statusPerNode, nodeName)
+}
+
+func (c *Controller) clearStatuses(key string) {
+	c.statusesLock.Lock()
+	defer c.statusesLock.Unlock()
+	delete(c.statuses, key)
+}
+
+func (c *Controller) updateSupportBundleCollectionStatus(name string, updatedStatus *v1alpha1.SupportBundleCollectionStatus) error {
+	bundleCollection, err := c.supportBundleCollectionLister.Get(name)
+	if err != nil {
+		klog.InfoS("Didn't find the original SupportBundleCollection, skip updating status", "supportBundleCollection", name)
+		return nil
+	}
+	toUpdate := bundleCollection.DeepCopy()
+	if err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		updatedConditions := mergeConditions(toUpdate.Status.Conditions, updatedStatus.Conditions)
+		updatedStatus.Conditions = updatedConditions
+		// If the current status equals to the desired status, no need to update.
+		if supportBundleCollectionStatusEqual(toUpdate.Status, *updatedStatus) {
+			return nil
+		}
+		toUpdate.Status = *updatedStatus
+		klog.V(2).InfoS("Updating SupportBundleCollection", "supportBundleCollection", name)
+		_, updateErr := c.crdClient.CrdV1alpha1().SupportBundleCollections().UpdateStatus(context.TODO(), toUpdate, metav1.UpdateOptions{})
+		if updateErr != nil && k8serrors.IsConflict(updateErr) {
+			var getErr error
+			if toUpdate, getErr = c.crdClient.CrdV1alpha1().SupportBundleCollections().Get(context.TODO(), name, metav1.GetOptions{}); getErr != nil {
+				return getErr
+			}
+		}
+		// Return the error from UPDATE.
+		return updateErr
+	}); err != nil {
+		return err
+	}
+	klog.V(2).InfoS("Updated SupportBundleCollection", "supportBundleCollection", name)
+	return nil
 }
 
 // isCollectionCompleted check if CollectionCompleted condition with status ConditionTrue is added in the bundleCollection or not.
@@ -667,13 +889,62 @@ func conditionExistsIgnoreLastTransitionTime(conditions []v1alpha1.SupportBundle
 	return false
 }
 
-func appendConditions(oldConditions, updatedConditions []v1alpha1.SupportBundleCollectionCondition) []v1alpha1.SupportBundleCollectionCondition {
-	newConditions := oldConditions
-	for _, c := range updatedConditions {
-		if conditionExistsIgnoreLastTransitionTime(newConditions, c) {
+func mergeConditions(oldConditions, newConditions []v1alpha1.SupportBundleCollectionCondition) []v1alpha1.SupportBundleCollectionCondition {
+	finalConditions := make([]v1alpha1.SupportBundleCollectionCondition, 0)
+	newConditionMap := make(map[v1alpha1.SupportBundleCollectionConditionType]v1alpha1.SupportBundleCollectionCondition)
+	addedConditions := sets.NewString()
+	for _, condition := range newConditions {
+		newConditionMap[condition.Type] = condition
+	}
+	for _, oldCondition := range oldConditions {
+		newCondition, exists := newConditionMap[oldCondition.Type]
+		if !exists {
+			finalConditions = append(finalConditions, oldCondition)
 			continue
 		}
-		newConditions = append(newConditions, c)
+		// Use the original Condition if the only change is about lastTransition time
+		if conditionEqualsIgnoreLastTransitionTime(newCondition, oldCondition) {
+			finalConditions = append(finalConditions, oldCondition)
+		} else {
+			// Use the latest Condition.
+			finalConditions = append(finalConditions, newCondition)
+		}
+		addedConditions.Insert(string(newCondition.Type))
 	}
-	return newConditions
+	for key, newCondition := range newConditionMap {
+		if !addedConditions.Has(string(key)) {
+			finalConditions = append(finalConditions, newCondition)
+		}
+	}
+	return finalConditions
+}
+
+func getNodeKey(status *controlplane.SupportBundleCollectionNodeStatus) string {
+	// TODO: use NodeNamespace/NodeName for ExternalNode after the Namespace is added in the connection key between
+	// antrea-agent and antrea-controller.
+	return status.NodeName
+}
+
+var semanticIgnoreLastTransitionTime = conversion.EqualitiesOrDie(
+	conditionSliceEqualsIgnoreLastTransitionTime,
+)
+
+// supportBundleCollectionStatusEqual compares two SupportBundleCollectionStatus objects. It disregards
+// the LastTransitionTime field in the status Conditions.
+func supportBundleCollectionStatusEqual(oldStatus, newStatus v1alpha1.SupportBundleCollectionStatus) bool {
+	return semanticIgnoreLastTransitionTime.DeepEqual(oldStatus, newStatus)
+}
+
+func conditionSliceEqualsIgnoreLastTransitionTime(as, bs []v1alpha1.SupportBundleCollectionCondition) bool {
+	if len(as) != len(bs) {
+		return false
+	}
+	for i := range as {
+		a := as[i]
+		b := bs[i]
+		if !conditionEqualsIgnoreLastTransitionTime(a, b) {
+			return false
+		}
+	}
+	return true
 }
