@@ -457,7 +457,7 @@ func createAPIServerConfig(kubeconfig string,
 
 	secureServing.BindPort = bindPort
 	secureServing.BindAddress = net.IPv4zero
-	// kubeconfig file is useful when antrea-controller isn't not running as a pod, like during development.
+	// kubeconfig file is useful when antrea-controller is not running as a pod, like during development.
 	if len(kubeconfig) > 0 {
 		authentication.RemoteKubeConfigFile = kubeconfig
 		authorization.RemoteKubeConfigFile = kubeconfig

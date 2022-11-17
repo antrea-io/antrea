@@ -32,7 +32,7 @@ import (
 	"antrea.io/antrea/pkg/controller/types"
 )
 
-// REST implements rest.Storage for NetworkPolicies.
+// REST implements rest.Storage for SupportBundleCollections.
 type REST struct {
 	supportBundleCollectionStore storage.Interface
 }
