@@ -362,11 +362,15 @@ func run(o *Options) error {
 		tunPort = nodeConfig.TunnelOFPort
 	}
 
+	nodeKey := nodeConfig.Name
+	if o.nodeType == config.ExternalNode {
+		nodeKey = k8s.NamespacedName(o.config.ExternalNode.ExternalNodeNamespace, nodeKey)
+	}
 	networkPolicyController, err := networkpolicy.NewNetworkPolicyController(
 		antreaClientProvider,
 		ofClient,
 		ifaceStore,
-		nodeConfig.Name,
+		nodeKey,
 		podUpdateChannel,
 		externalEntityUpdateChannel,
 		groupCounters,

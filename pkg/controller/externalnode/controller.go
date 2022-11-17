@@ -362,7 +362,7 @@ func (c *ExternalNodeController) deleteExternalEntity(namespace string, name str
 func genExternalEntity(eeName string, en *v1alpha1.ExternalNode) (*v1alpha2.ExternalEntity, error) {
 	ownerRef := &metav1.OwnerReference{
 		APIVersion: "crd.antrea.io/v1alpha1",
-		Kind:       "ExternalNode",
+		Kind:       externalnode.EntityOwnerKind,
 		Name:       en.GetName(),
 		UID:        en.GetUID(),
 	}
