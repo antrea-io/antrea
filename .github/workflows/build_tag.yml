@@ -35,7 +35,7 @@ jobs:
         docker tag antrea/antrea-ubuntu:"${VERSION}" antrea/antrea-ubuntu-amd64:"${VERSION}"
         docker push antrea/antrea-ubuntu-amd64:"${VERSION}"
     - name: Trigger Antrea arm builds and multi-arch manifest update
-      uses: benc-uk/workflow-dispatch@v1
+      uses: benc-uk/workflow-dispatch@v121
       with:
         repo: vmware-tanzu/antrea-build-infra
         ref: refs/heads/main

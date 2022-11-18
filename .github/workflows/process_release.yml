@@ -321,7 +321,7 @@ jobs:
         version=${TAG:10}
         echo "::set-output name=version::$version"
     - name: Update website source
-      uses: benc-uk/workflow-dispatch@v1
+      uses: benc-uk/workflow-dispatch@v121
       with:
         repo: antrea-io/website
         ref: refs/heads/main
@@ -329,7 +329,7 @@ jobs:
         token: ${{ secrets.ANTREA_WEBSITE_WORKFLOW_DISPATCH_PAT }}
         inputs: ${{ format('{{ "antrea-repository":"antrea-io/antrea", "antrea-ref":"{0}" }}', steps.get-version.outputs.version) }}
     - name: Update Helm index with Antrea archive
-      uses: benc-uk/workflow-dispatch@v1
+      uses: benc-uk/workflow-dispatch@v121
       with:
         repo: antrea-io/website
         ref: refs/heads/main
@@ -337,7 +337,7 @@ jobs:
         token: ${{ secrets.ANTREA_WEBSITE_WORKFLOW_DISPATCH_PAT }}
         inputs: ${{ format('{{ "archive-url":"https://github.com/antrea-io/antrea/releases/download/{0}/antrea-chart.tgz" }}', steps.get-version.outputs.version) }}
     - name: Update Helm index with Flow Aggregator archive
-      uses: benc-uk/workflow-dispatch@v1
+      uses: benc-uk/workflow-dispatch@v121
       with:
         repo: antrea-io/website
         ref: refs/heads/main

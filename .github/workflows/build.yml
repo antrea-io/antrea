@@ -49,7 +49,7 @@ jobs:
         docker push antrea/antrea-ubuntu-amd64:latest
     - name: Trigger Antrea arm builds and multi-arch manifest update
       if: ${{ github.repository == 'antrea-io/antrea' && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
-      uses: benc-uk/workflow-dispatch@v1
+      uses: benc-uk/workflow-dispatch@v121
       with:
         repo: vmware-tanzu/antrea-build-infra
         ref: refs/heads/main
