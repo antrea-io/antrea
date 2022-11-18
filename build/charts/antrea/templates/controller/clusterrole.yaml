@@ -304,3 +304,11 @@ rules:
       - supportbundlecollections/status
     verbs:
       - update
+  - apiGroups:
+      - multicluster.crd.antrea.io
+    resources:
+      - labelidentities
+    verbs:
+      - get
+      - list
+      - watch

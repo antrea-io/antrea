@@ -1532,6 +1532,21 @@ func schema_pkg_apis_controlplane_v1beta2_NetworkPolicyPeer(ref common.Reference
 							},
 						},
 					},
+					"labelIdentities": {
+						SchemaProps: spec.SchemaProps{
+							Description: "A list of labelIdentities selected as ingress peers for stretched policy. This field can only be possibly set for NetworkPolicyPeer of ingress rules.",
+							Type:        []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: 0,
+										Type:    []string{"integer"},
+										Format:  "int64",
+									},
+								},
+							},
+						},
+					},
 				},
 			},
 		},

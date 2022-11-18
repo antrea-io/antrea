@@ -359,6 +359,9 @@ spec:
                                   type: array
                                 matchLabels:
                                   x-kubernetes-preserve-unknown-fields: true
+                            scope:
+                              type: string
+                              enum: ['Cluster', 'ClusterSet']
                       name:
                         type: string
                       enableLogging:

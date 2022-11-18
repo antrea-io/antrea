@@ -730,6 +730,9 @@ spec:
                                   type: array
                                 matchLabels:
                                   x-kubernetes-preserve-unknown-fields: true
+                            scope:
+                              type: string
+                              enum: ['Cluster', 'ClusterSet']
                       name:
                         type: string
                       enableLogging:
@@ -1332,11 +1335,12 @@ spec:
       storage: true
   scope: Namespaced
   names:
-    kind: ExternalNode
     plural: externalnodes
+    singular: externalnode
+    kind: ExternalNode
     shortNames:
       - en
-    singular: externalnode---
+---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -1773,6 +1777,9 @@ spec:
                                   x-kubernetes-preserve-unknown-fields: true
                             group:
                               type: string
+                            scope:
+                              type: string
+                              enum: ['Cluster', 'ClusterSet']
                       name:
                         type: string
                       enableLogging:

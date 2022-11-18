@@ -37,6 +37,7 @@ import (
 	aggregatorclientset "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 	netutils "k8s.io/utils/net"
 
+	mcinformers "antrea.io/antrea/multicluster/pkg/client/informers/externalversions"
 	antreaapis "antrea.io/antrea/pkg/apis"
 	"antrea.io/antrea/pkg/apiserver"
 	"antrea.io/antrea/pkg/apiserver/certificate"
@@ -51,6 +52,7 @@ import (
 	"antrea.io/antrea/pkg/controller/externalnode"
 	"antrea.io/antrea/pkg/controller/grouping"
 	antreaipam "antrea.io/antrea/pkg/controller/ipam"
+	"antrea.io/antrea/pkg/controller/labelidentity"
 	"antrea.io/antrea/pkg/controller/metrics"
 	"antrea.io/antrea/pkg/controller/networkpolicy"
 	"antrea.io/antrea/pkg/controller/networkpolicy/store"
@@ -116,7 +118,7 @@ func run(o *Options) error {
 	// Create K8s Clientset, Aggregator Clientset, CRD Clientset and SharedInformerFactory for the given config.
 	// Aggregator Clientset is used to update the CABundle of the APIServices backed by antrea-controller so that
 	// the aggregator can verify its serving certificate.
-	client, aggregatorClient, crdClient, apiExtensionClient, _, err := k8s.CreateClients(o.config.ClientConnection, "")
+	client, aggregatorClient, crdClient, apiExtensionClient, mcClient, err := k8s.CreateClients(o.config.ClientConnection, "")
 	if err != nil {
 		return fmt.Errorf("error creating K8s clients: %v", err)
 	}
@@ -152,10 +154,13 @@ func run(o *Options) error {
 	groupStore := store.NewGroupStore()
 	groupEntityIndex := grouping.NewGroupEntityIndex()
 	groupEntityController := grouping.NewGroupEntityController(groupEntityIndex, podInformer, namespaceInformer, eeInformer)
+	labelIdentityIndex := labelidentity.NewLabelIdentityIndex()
 
+	multiclusterEnabled := features.DefaultFeatureGate.Enabled(features.Multicluster) && o.config.Multicluster.Enable
 	networkPolicyController := networkpolicy.NewNetworkPolicyController(client,
 		crdClient,
 		groupEntityIndex,
+		labelIdentityIndex,
 		namespaceInformer,
 		serviceInformer,
 		networkPolicyInformer,
@@ -168,7 +173,8 @@ func run(o *Options) error {
 		addressGroupStore,
 		appliedToGroupStore,
 		networkPolicyStore,
-		groupStore)
+		groupStore,
+		multiclusterEnabled)
 
 	var externalNodeController *externalnode.ExternalNodeController
 	if features.DefaultFeatureGate.Enabled(features.ExternalNode) {
@@ -310,6 +316,17 @@ func run(o *Options) error {
 	go groupEntityIndex.Run(stopCh)
 
 	go groupEntityController.Run(stopCh)
+
+	if multiclusterEnabled {
+		mcInformerFactoty := mcinformers.NewSharedInformerFactory(mcClient, informerDefaultResync)
+		labelIdentityInformer := mcInformerFactoty.Multicluster().V1alpha1().LabelIdentities()
+		labelIdentityController := labelidentity.NewLabelIdentityController(labelIdentityIndex, labelIdentityInformer)
+		mcInformerFactoty.Start(stopCh)
+
+		go labelIdentityIndex.Run(stopCh)
+
+		go labelIdentityController.Run(stopCh)
+	}
 
 	go networkPolicyController.Run(stopCh)
 

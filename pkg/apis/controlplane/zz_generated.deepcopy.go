@@ -781,6 +781,11 @@ func (in *NetworkPolicyPeer) DeepCopyInto(out *NetworkPolicyPeer) {
 		*out = make([]ServiceReference, len(*in))
 		copy(*out, *in)
 	}
+	if in.LabelIdentities != nil {
+		in, out := &in.LabelIdentities, &out.LabelIdentities
+		*out = make([]uint32, len(*in))
+		copy(*out, *in)
+	}
 	return
 }
 

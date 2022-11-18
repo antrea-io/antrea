@@ -42,8 +42,8 @@ spec:
       storage: true
   scope: Namespaced
   names:
-    kind: ExternalNode
     plural: externalnodes
+    singular: externalnode
+    kind: ExternalNode
     shortNames:
       - en
-    singular: externalnode

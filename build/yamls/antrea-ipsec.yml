@@ -737,6 +737,9 @@ spec:
                                   type: array
                                 matchLabels:
                                   x-kubernetes-preserve-unknown-fields: true
+                            scope:
+                              type: string
+                              enum: ['Cluster', 'ClusterSet']
                       name:
                         type: string
                       enableLogging:
@@ -1347,11 +1350,12 @@ spec:
       storage: true
   scope: Namespaced
   names:
-    kind: ExternalNode
     plural: externalnodes
+    singular: externalnode
+    kind: ExternalNode
     shortNames:
       - en
-    singular: externalnode
+
 ---
 # Source: crds/ippool.yaml
 apiVersion: apiextensions.k8s.io/v1
@@ -1792,6 +1796,9 @@ spec:
                                   x-kubernetes-preserve-unknown-fields: true
                             group:
                               type: string
+                            scope:
+                              type: string
+                              enum: ['Cluster', 'ClusterSet']
                       name:
                         type: string
                       enableLogging:
@@ -3224,6 +3231,9 @@ data:
     # Enable collecting support bundle files with SupportBundleCollection CRD.
     #  SupportBundleCollection: false
 
+    # Enable multi-cluster features.
+    #  Multicluster: false
+
     # The port for the antrea-controller APIServer to serve on.
     # Note that if it's set to another value, the `containerPort` of the `api` port of the
     # `antrea-controller` container must be set to the same value.
@@ -3279,6 +3289,11 @@ data:
       #   tls.crt: <CA certificate>
       #   tls.key: <CA private key>
       selfSignedCA: true
+
+    multicluster:
+      # Enable Multicluster which allow Antrea-native policies to select peers
+      # from other clusters in a ClusterSet.
+      enable: false
 ---
 # Source: antrea/templates/crds/group.yaml
 apiVersion: apiextensions.k8s.io/v1
@@ -4001,6 +4016,14 @@ rules:
       - supportbundlecollections/status
     verbs:
       - update
+  - apiGroups:
+      - multicluster.crd.antrea.io
+    resources:
+      - labelidentities
+    verbs:
+      - get
+      - list
+      - watch
 ---
 # Source: antrea/templates/crds-rbac/clusterroles.yaml
 apiVersion: rbac.authorization.k8s.io/v1
@@ -4178,7 +4201,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 19d1abdf4209cb57d22d60c3c4318bc8f822b4ad028faa1f18521a194db726fd
+        checksum/config: 3276ac7809f4f3c6ab0d9b9730b46b35cd398d1f9ab7475b8bf47ad757a58f94
         checksum/ipsec-secret: d0eb9c52d0cd4311b6d252a951126bf9bea27ec05590bed8a394f0f792dcb2a4
       labels:
         app: antrea
@@ -4464,7 +4487,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 19d1abdf4209cb57d22d60c3c4318bc8f822b4ad028faa1f18521a194db726fd
+        checksum/config: 3276ac7809f4f3c6ab0d9b9730b46b35cd398d1f9ab7475b8bf47ad757a58f94
       labels:
         app: antrea
         component: antrea-controller

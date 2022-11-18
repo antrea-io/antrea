@@ -67,6 +67,17 @@ type ControllerConfig struct {
 	NodeIPAM NodeIPAMConfig `yaml:"nodeIPAM"`
 	// IPsec CSR signer configuration
 	IPsecCSRSignerConfig IPsecCSRSignerConfig `yaml:"ipsecCSRSigner"`
+	// Multicluster configuration options.
+	Multicluster MulticlusterConfig `yaml:"multicluster,omitempty"`
+}
+
+type MulticlusterConfig struct {
+	// Enable Multicluster which allow Antrea-native policies to select peers
+	// from other clusters in a ClusterSet.
+	Enable bool `yaml:"enable,omitempty"`
+	// The Namespace where the Antrea Multi-cluster controller is running.
+	// The default is antrea-agent's Namespace.
+	Namespace string `yaml:"namespace,omitempty"`
 }
 
 type IPsecCSRSignerConfig struct {
