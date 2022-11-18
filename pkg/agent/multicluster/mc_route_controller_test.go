@@ -177,6 +177,23 @@ func TestMCRouteControllerAsGateway(t *testing.T) {
 		c.ofClient.EXPECT().UninstallMulticlusterFlows(clusterInfoImport2.Name).Times(1)
 		c.processNextWorkItem()
 
+		// Update Gateway1's GatewayIP
+		updatedGateway1a := gateway1.DeepCopy()
+		updatedGateway1a.GatewayIP = "10.16.0.100"
+		updatedGateway1aIP := net.ParseIP("10.16.0.100")
+		c.mcClient.MulticlusterV1alpha1().Gateways(updatedGateway1a.GetNamespace()).Update(context.TODO(),
+			updatedGateway1a, metav1.UpdateOptions{})
+		c.ofClient.EXPECT().InstallMulticlusterGatewayFlows(clusterInfoImport1.Name,
+			gomock.Any(), peerNodeIP1, updatedGateway1aIP).Times(1)
+		c.processNextWorkItem()
+
+		// Update Gateway1's InternalIP
+		updatedGateway1b := updatedGateway1a.DeepCopy()
+		updatedGateway1b.InternalIP = "17.162.0.10"
+		c.mcClient.MulticlusterV1alpha1().Gateways(updatedGateway1b.GetNamespace()).Update(context.TODO(),
+			updatedGateway1b, metav1.UpdateOptions{})
+		c.processNextWorkItem()
+
 		// Create Gateway2 as active Gateway
 		c.mcClient.MulticlusterV1alpha1().Gateways(gateway2.GetNamespace()).Create(context.TODO(),
 			&gateway2, metav1.CreateOptions{})
@@ -191,7 +208,7 @@ func TestMCRouteControllerAsGateway(t *testing.T) {
 		c.ofClient.EXPECT().UninstallMulticlusterFlows(clusterInfoImport1.Name).Times(1)
 		c.ofClient.EXPECT().InstallMulticlusterClassifierFlows(uint32(1), true).Times(1)
 		c.ofClient.EXPECT().InstallMulticlusterGatewayFlows(clusterInfoImport1.Name,
-			gomock.Any(), peerNodeIP1, gw1GatewayIP).Times(1)
+			gomock.Any(), peerNodeIP1, updatedGateway1aIP).Times(1)
 		c.processNextWorkItem()
 
 		// Delete last Gateway
@@ -256,6 +273,23 @@ func TestMCRouteControllerAsRegularNode(t *testing.T) {
 		c.ofClient.EXPECT().UninstallMulticlusterFlows(clusterInfoImport2.Name).Times(1)
 		c.processNextWorkItem()
 
+		// Update Gateway1's GatewayIP
+		updatedGateway1a := gateway1.DeepCopy()
+		updatedGateway1a.GatewayIP = "10.16.0.100"
+		c.mcClient.MulticlusterV1alpha1().Gateways(updatedGateway1a.GetNamespace()).Update(context.TODO(),
+			updatedGateway1a, metav1.UpdateOptions{})
+		c.processNextWorkItem()
+
+		// Update Gateway1's InternalIP
+		updatedGateway1b := updatedGateway1a.DeepCopy()
+		updatedGateway1b.InternalIP = "17.162.0.10"
+		updatedGateway1bIP := net.ParseIP("17.162.0.10")
+		c.mcClient.MulticlusterV1alpha1().Gateways(updatedGateway1b.GetNamespace()).Update(context.TODO(),
+			updatedGateway1b, metav1.UpdateOptions{})
+		c.ofClient.EXPECT().InstallMulticlusterNodeFlows(clusterInfoImport1.Name,
+			gomock.Any(), updatedGateway1bIP).Times(1)
+		c.processNextWorkItem()
+
 		// Create Gateway2 as the active Gateway
 		c.mcClient.MulticlusterV1alpha1().Gateways(gateway2.GetNamespace()).Create(context.TODO(),
 			&gateway2, metav1.CreateOptions{})
@@ -270,7 +304,7 @@ func TestMCRouteControllerAsRegularNode(t *testing.T) {
 		c.ofClient.EXPECT().UninstallMulticlusterFlows(clusterInfoImport1.Name).Times(1)
 		c.ofClient.EXPECT().InstallMulticlusterClassifierFlows(uint32(1), false).Times(1)
 		c.ofClient.EXPECT().InstallMulticlusterNodeFlows(clusterInfoImport1.Name,
-			gomock.Any(), peerNodeIP1).Times(1)
+			gomock.Any(), updatedGateway1bIP).Times(1)
 		c.processNextWorkItem()
 
 		// Delete last Gateway
