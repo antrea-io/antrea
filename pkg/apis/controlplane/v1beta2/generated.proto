@@ -282,6 +282,10 @@ message NetworkPolicyPeer {
   // A list of ServiceReference.
   // This field can only be possibly set for NetworkPolicyPeer of egress rules.
   repeated ServiceReference toServices = 4;
+
+  // A list of labelIdentities selected as ingress peers for stretched policy.
+  // This field can only be possibly set for NetworkPolicyPeer of ingress rules.
+  repeated uint32 labelIdentities = 5;
 }
 
 message NetworkPolicyReference {

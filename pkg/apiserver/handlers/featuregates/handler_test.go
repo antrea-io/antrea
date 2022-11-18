@@ -185,6 +185,7 @@ func Test_getControllerGatesResponse(t *testing.T) {
 				{Component: "controller", Name: "NetworkPolicyStats", Status: "Enabled", Version: "BETA"},
 				{Component: "controller", Name: "NodeIPAM", Status: "Disabled", Version: "ALPHA"},
 				{Component: "controller", Name: "ServiceExternalIP", Status: "Disabled", Version: "ALPHA"},
+				{Component: "controller", Name: "Multicluster", Status: "Disabled", Version: "ALPHA"},
 			},
 		},
 	}

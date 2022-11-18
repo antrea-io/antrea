@@ -313,6 +313,9 @@ type NetworkPolicyPeer struct {
 	// A list of ServiceReference.
 	// This field can only be possibly set for NetworkPolicyPeer of egress rules.
 	ToServices []ServiceReference `json:"toServices,omitempty" protobuf:"bytes,4,rep,name=toServices"`
+	// A list of labelIdentities selected as ingress peers for stretched policy.
+	// This field can only be possibly set for NetworkPolicyPeer of ingress rules.
+	LabelIdentities []uint32 `json:"labelIdentities,omitempty" protobuf:"bytes,5,rep,name=labelIdentities"`
 }
 
 // IPBlock describes a particular CIDR (Ex. "192.168.1.1/24"). The except entry describes CIDRs that should

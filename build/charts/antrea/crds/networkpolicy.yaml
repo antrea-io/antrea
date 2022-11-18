@@ -302,6 +302,9 @@ spec:
                                   x-kubernetes-preserve-unknown-fields: true
                             group:
                               type: string
+                            scope:
+                              type: string
+                              enum: ['Cluster', 'ClusterSet']
                       name:
                         type: string
                       enableLogging:

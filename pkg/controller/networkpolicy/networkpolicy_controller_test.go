@@ -41,6 +41,8 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 
+	fakemcsversioned "antrea.io/antrea/multicluster/pkg/client/clientset/versioned/fake"
+	mcsinformers "antrea.io/antrea/multicluster/pkg/client/informers/externalversions"
 	"antrea.io/antrea/pkg/apis/controlplane"
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
@@ -49,6 +51,7 @@ import (
 	fakeversioned "antrea.io/antrea/pkg/client/clientset/versioned/fake"
 	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions"
 	"antrea.io/antrea/pkg/controller/grouping"
+	"antrea.io/antrea/pkg/controller/labelidentity"
 	"antrea.io/antrea/pkg/controller/networkpolicy/store"
 	antreatypes "antrea.io/antrea/pkg/controller/types"
 )
@@ -91,14 +94,17 @@ type networkPolicyController struct {
 	informerFactory            informers.SharedInformerFactory
 	crdInformerFactory         crdinformers.SharedInformerFactory
 	groupingController         *grouping.GroupEntityController
+	labelIdentityController    *labelidentity.Controller
 }
 
 // objects is an initial set of K8s objects that is exposed through the client.
 func newController(objects ...runtime.Object) (*fake.Clientset, *networkPolicyController) {
 	client := newClientset(objects...)
 	crdClient := fakeversioned.NewSimpleClientset()
+	mcsClient := fakemcsversioned.NewSimpleClientset()
 	informerFactory := informers.NewSharedInformerFactory(client, informerDefaultResync)
 	crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, informerDefaultResync)
+	mcsInformerFactory := mcsinformers.NewSharedInformerFactory(mcsClient, informerDefaultResync)
 	appliedToGroupStore := store.NewAppliedToGroupStore()
 	addressGroupStore := store.NewAddressGroupStore()
 	internalNetworkPolicyStore := store.NewNetworkPolicyStore()
@@ -110,9 +116,14 @@ func newController(objects ...runtime.Object) (*fake.Clientset, *networkPolicyCo
 		informerFactory.Core().V1().Pods(),
 		informerFactory.Core().V1().Namespaces(),
 		crdInformerFactory.Crd().V1alpha2().ExternalEntities())
+	labelIndex := labelidentity.NewLabelIdentityIndex()
+	labelIdentityController := labelidentity.NewLabelIdentityController(
+		labelIndex,
+		mcsInformerFactory.Multicluster().V1alpha1().LabelIdentities())
 	npController := NewNetworkPolicyController(client,
 		crdClient,
 		groupEntityIndex,
+		labelIndex,
 		informerFactory.Core().V1().Namespaces(),
 		informerFactory.Core().V1().Services(),
 		informerFactory.Networking().V1().NetworkPolicies(),
@@ -125,7 +136,8 @@ func newController(objects ...runtime.Object) (*fake.Clientset, *networkPolicyCo
 		addressGroupStore,
 		appliedToGroupStore,
 		internalNetworkPolicyStore,
-		internalGroupStore)
+		internalGroupStore,
+		true)
 	npController.namespaceLister = informerFactory.Core().V1().Namespaces().Lister()
 	npController.namespaceListerSynced = alwaysReady
 	npController.networkPolicyListerSynced = alwaysReady
@@ -153,6 +165,7 @@ func newController(objects ...runtime.Object) (*fake.Clientset, *networkPolicyCo
 		informerFactory,
 		crdInformerFactory,
 		groupingController,
+		labelIdentityController,
 	}
 }
 
@@ -222,6 +235,7 @@ func newControllerWithoutEventHandler(k8sObjects, crdObjects []runtime.Object) (
 		internalNetworkPolicyStore,
 		informerFactory,
 		crdInformerFactory,
+		nil,
 		nil,
 	}
 }
