@@ -93,7 +93,7 @@ func TestStaleController_CleanupService(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithLists(tt.existSvcList, tt.existSvcImpList).Build()
 			fakeRemoteClient := fake.NewClientBuilder().WithScheme(scheme).WithLists(tt.existingResImpList).Build()
-			commonArea := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", localClusterID, "default")
+			commonArea := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", localClusterID, "default", nil)
 			mcReconciler := NewMemberClusterSetReconciler(fakeClient, scheme, "default")
 			mcReconciler.SetRemoteCommonArea(commonArea)
 			c := NewStaleResCleanupController(fakeClient, scheme, "default", mcReconciler, MemberCluster)
@@ -187,7 +187,7 @@ func TestStaleController_CleanupACNP(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithLists(tt.existingACNPList).Build()
 			fakeRemoteClient := fake.NewClientBuilder().WithScheme(scheme).WithLists(tt.existingResImpList).Build()
-			commonArea := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", localClusterID, "default")
+			commonArea := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", localClusterID, "default", nil)
 
 			mcReconciler := NewMemberClusterSetReconciler(fakeClient, scheme, "default")
 			mcReconciler.SetRemoteCommonArea(commonArea)
@@ -382,7 +382,7 @@ func TestStaleController_CleanupResourceExport(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithLists(tt.existSvcExpList, tt.existPodList, tt.existNamespaceList).Build()
 			fakeRemoteClient := fake.NewClientBuilder().WithScheme(scheme).WithLists(tt.existResExpList).Build()
-			commonArea := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", localClusterID, "default")
+			commonArea := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", localClusterID, "default", nil)
 
 			mcReconciler := NewMemberClusterSetReconciler(fakeClient, scheme, "default")
 			mcReconciler.SetRemoteCommonArea(commonArea)
@@ -459,7 +459,7 @@ func TestStaleController_CleanupClusterInfoImport(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithLists(tt.existCIImpList).Build()
 			fakeRemoteClient := fake.NewClientBuilder().WithScheme(scheme).WithLists(tt.existingResImpList).Build()
-			commonarea := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", localClusterID, "antrea-mcs")
+			commonarea := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", localClusterID, "antrea-mcs", nil)
 
 			mcReconciler := NewMemberClusterSetReconciler(fakeClient, scheme, "default")
 			mcReconciler.SetRemoteCommonArea(commonarea)
@@ -657,7 +657,7 @@ func TestStaleController_CleanupLabelIdentites(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithLists(tt.existLabelIdentityList).Build()
 			fakeRemoteClient := fake.NewClientBuilder().WithScheme(scheme).WithLists(tt.existingResImpList).Build()
-			ca := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", localClusterID, "antrea-mcs")
+			ca := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", localClusterID, "antrea-mcs", nil)
 
 			mcReconciler := NewMemberClusterSetReconciler(fakeClient, scheme, "default")
 			mcReconciler.SetRemoteCommonArea(ca)

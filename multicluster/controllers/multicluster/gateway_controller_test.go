@@ -137,7 +137,7 @@ func TestGatewayReconciler(t *testing.T) {
 		if tt.resExport != nil {
 			fakeRemoteClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects(tt.resExport).Build()
 		}
-		commonArea := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", localClusterID, leaderNamespace)
+		commonArea := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", localClusterID, leaderNamespace, nil)
 		mcReconciler := NewMemberClusterSetReconciler(fakeClient, scheme, "default")
 		mcReconciler.SetRemoteCommonArea(commonArea)
 		commonAreaGatter := mcReconciler

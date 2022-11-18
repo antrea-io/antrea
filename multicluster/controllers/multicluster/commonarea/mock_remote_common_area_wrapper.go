@@ -19,10 +19,16 @@ package commonarea
 import (
 	"context"
 
+	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 
 	multiclusterv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
 	"antrea.io/antrea/multicluster/controllers/multicluster/common"
+	"antrea.io/antrea/multicluster/test/mocks"
 )
 
 // fakeRemoteCommonArea is a fake RemoteCommonArea for unit test purpose
@@ -31,6 +37,7 @@ type fakeRemoteCommonArea struct {
 	ClusterID      common.ClusterID
 	LocalClusterID string
 	Namespace      string
+	status         []multiclusterv1alpha1.ClusterCondition
 }
 
 func (c *fakeRemoteCommonArea) GetClusterID() common.ClusterID {
@@ -60,7 +67,7 @@ func (c *fakeRemoteCommonArea) StopWatching() {
 }
 
 func (c *fakeRemoteCommonArea) GetStatus() []multiclusterv1alpha1.ClusterCondition {
-	return nil
+	return c.status
 }
 
 func (c *fakeRemoteCommonArea) GetLocalClusterID() string {
@@ -68,12 +75,24 @@ func (c *fakeRemoteCommonArea) GetLocalClusterID() string {
 }
 
 // NewFakeRemoteCommonArea creates a new fakeRemoteCommonArea for unit test purpose only
-func NewFakeRemoteCommonArea(fakeClient client.Client, clusterID string, localClusterID string, namespace string) RemoteCommonArea {
+func NewFakeRemoteCommonArea(fakeClient client.Client, clusterID string, localClusterID string, namespace string, status []multiclusterv1alpha1.ClusterCondition) RemoteCommonArea {
 	fakeRemoteCommonArea := &fakeRemoteCommonArea{
 		Client:         fakeClient,
 		ClusterID:      common.ClusterID(clusterID),
 		LocalClusterID: localClusterID,
 		Namespace:      namespace,
+		status:         status,
 	}
 	return fakeRemoteCommonArea
+}
+
+func GetFakeRemoteConfigAndClient(secretObj *v1.Secret, url string, clusterID common.ClusterID, clusterSet *multiclusterv1alpha1.ClusterSet, scheme *runtime.Scheme) (*rest.Config,
+	manager.Manager, client.Client, error) {
+	_, _, err := getSecretCACrtAndToken(secretObj)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	mockManager := mocks.NewMockManager(nil)
+	fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects().Build()
+	return nil, mockManager, fakeClient, nil
 }
