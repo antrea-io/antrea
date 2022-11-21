@@ -17,6 +17,8 @@ package openflow
 import (
 	"net"
 
+	"antrea.io/libOpenflow/openflow15"
+
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/openflow/cookie"
 	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
@@ -126,7 +128,7 @@ func newFeaturePodConnectivity(
 	}
 }
 
-func (f *featurePodConnectivity) initFlows() []binding.Flow {
+func (f *featurePodConnectivity) initFlows() []*openflow15.FlowMod {
 	var flows []binding.Flow
 	gatewayMAC := f.nodeConfig.GatewayConfig.MAC
 
@@ -181,15 +183,15 @@ func (f *featurePodConnectivity) initFlows() []binding.Flow {
 	if f.enableTrafficControl {
 		flows = append(flows, f.trafficControlCommonFlows()...)
 	}
-	return flows
+	return GetFlowModMessages(flows, binding.AddMessage)
 }
 
-func (f *featurePodConnectivity) replayFlows() []binding.Flow {
-	var flows []binding.Flow
+func (f *featurePodConnectivity) replayFlows() []*openflow15.FlowMod {
+	var flows []*openflow15.FlowMod
 
 	// Get cached flows.
 	for _, cachedFlows := range []*flowCategoryCache{f.nodeCachedFlows, f.podCachedFlows, f.tcCachedFlows} {
-		flows = append(flows, getCachedFlows(cachedFlows)...)
+		flows = append(flows, getCachedFlowMessages(cachedFlows)...)
 	}
 
 	return flows

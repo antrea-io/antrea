@@ -15,8 +15,6 @@
 package openflow
 
 import (
-	"fmt"
-
 	"antrea.io/libOpenflow/openflow15"
 	"antrea.io/libOpenflow/util"
 	"antrea.io/ofnet/ofctrl"
@@ -45,10 +43,6 @@ func (m *ofMeter) Delete() error {
 
 func (m *ofMeter) Type() EntryType {
 	return MeterEntry
-}
-
-func (m *ofMeter) KeyString() string {
-	return fmt.Sprintf("meter_id:%d", m.ofctrl.ID)
 }
 
 func (m *ofMeter) GetBundleMessages(entryOper OFOperation) ([]ofctrl.OpenFlowModMessage, error) {

@@ -26,6 +26,7 @@ import (
 	openflow "antrea.io/antrea/pkg/ovs/openflow"
 	ip "antrea.io/antrea/pkg/util/ip"
 	proxy "antrea.io/antrea/third_party/proxy"
+	openflow15 "antrea.io/libOpenflow/openflow15"
 	protocol "antrea.io/libOpenflow/protocol"
 	util "antrea.io/libOpenflow/util"
 	ofctrl "antrea.io/ofnet/ofctrl"
@@ -1072,22 +1073,8 @@ func (m *MockOFEntryOperations) EXPECT() *MockOFEntryOperationsMockRecorder {
 	return m.recorder
 }
 
-// Add mocks base method
-func (m *MockOFEntryOperations) Add(arg0 openflow.Flow) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Add", arg0)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// Add indicates an expected call of Add
-func (mr *MockOFEntryOperationsMockRecorder) Add(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Add", reflect.TypeOf((*MockOFEntryOperations)(nil).Add), arg0)
-}
-
 // AddAll mocks base method
-func (m *MockOFEntryOperations) AddAll(arg0 []openflow.Flow) error {
+func (m *MockOFEntryOperations) AddAll(arg0 []*openflow15.FlowMod) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "AddAll", arg0)
 	ret0, _ := ret[0].(error)
@@ -1115,7 +1102,7 @@ func (mr *MockOFEntryOperationsMockRecorder) AddOFEntries(arg0 interface{}) *gom
 }
 
 // BundleOps mocks base method
-func (m *MockOFEntryOperations) BundleOps(arg0, arg1, arg2 []openflow.Flow) error {
+func (m *MockOFEntryOperations) BundleOps(arg0, arg1, arg2 []*openflow15.FlowMod) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "BundleOps", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
@@ -1128,22 +1115,8 @@ func (mr *MockOFEntryOperationsMockRecorder) BundleOps(arg0, arg1, arg2 interfac
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BundleOps", reflect.TypeOf((*MockOFEntryOperations)(nil).BundleOps), arg0, arg1, arg2)
 }
 
-// Delete mocks base method
-func (m *MockOFEntryOperations) Delete(arg0 openflow.Flow) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Delete", arg0)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// Delete indicates an expected call of Delete
-func (mr *MockOFEntryOperationsMockRecorder) Delete(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Delete", reflect.TypeOf((*MockOFEntryOperations)(nil).Delete), arg0)
-}
-
 // DeleteAll mocks base method
-func (m *MockOFEntryOperations) DeleteAll(arg0 []openflow.Flow) error {
+func (m *MockOFEntryOperations) DeleteAll(arg0 []*openflow15.FlowMod) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "DeleteAll", arg0)
 	ret0, _ := ret[0].(error)
@@ -1170,22 +1143,8 @@ func (mr *MockOFEntryOperationsMockRecorder) DeleteOFEntries(arg0 interface{}) *
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteOFEntries", reflect.TypeOf((*MockOFEntryOperations)(nil).DeleteOFEntries), arg0)
 }
 
-// Modify mocks base method
-func (m *MockOFEntryOperations) Modify(arg0 openflow.Flow) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Modify", arg0)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// Modify indicates an expected call of Modify
-func (mr *MockOFEntryOperationsMockRecorder) Modify(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Modify", reflect.TypeOf((*MockOFEntryOperations)(nil).Modify), arg0)
-}
-
 // ModifyAll mocks base method
-func (m *MockOFEntryOperations) ModifyAll(arg0 []openflow.Flow) error {
+func (m *MockOFEntryOperations) ModifyAll(arg0 []*openflow15.FlowMod) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ModifyAll", arg0)
 	ret0, _ := ret[0].(error)

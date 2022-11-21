@@ -16,7 +16,6 @@ package openflow
 
 import (
 	"fmt"
-	"strings"
 
 	"antrea.io/libOpenflow/openflow15"
 	"antrea.io/ofnet/ofctrl"
@@ -35,29 +34,27 @@ type ofFlow struct {
 	// to Flow.Table should hold the replayMutex read lock.
 	*ofctrl.Flow
 
-	// matchers is string slice, it is used to generate a readable match string of the Flow.
-	matchers []string
 	// protocol adds a readable protocol type in the match string of ofFlow.
 	protocol Protocol
-	// ctStateString is a temporary variable for the readable ct_state configuration. Its value is changed when the client
-	// updates the matching condition of "ct_states". When FlowBuilder.Done is called, its value is added into the matchers.
-	ctStateString string
 	// ctStates is a temporary variable to maintain openflow15.CTStates. When FlowBuilder.Done is called, it is used to
 	// set the CtStates field in ofctrl.Flow.Match.
 	ctStates *openflow15.CTStates
-	// isDropFlow is true if this flow actions contain "drop"
-	isDropFlow bool
 }
 
 func (f *ofFlow) String() string {
-	s := strings.Join([]string{`&ofFlow{`,
-		`table:` + fmt.Sprintf("%v", f.table.id) + `,`,
-		`matchers:` + fmt.Sprintf("%v", f.matchers) + `,`,
-		`protocol:` + fmt.Sprintf("%v", f.protocol) + `,`,
-		`flow:` + fmt.Sprintf("%v", f.Flow) + `,`,
-		`}`,
-	}, "")
-	return s
+	flowMod, _ := f.getFlowMod()
+	return FlowModToString(flowMod)
+}
+
+func (f *ofFlow) getFlowMod() (*openflow15.FlowMod, error) {
+	flowMods, err := f.GetBundleMessages(AddMessage)
+	if err != nil {
+		return nil, err
+	}
+	if len(flowMods) == 0 {
+		return nil, fmt.Errorf("no flowMod message is generated")
+	}
+	return flowMods[0].GetMessage().(*openflow15.FlowMod), nil
 }
 
 // Reset updates the ofFlow.Flow.Table field with ofFlow.table.Table.
@@ -100,20 +97,9 @@ func (f *ofFlow) Type() EntryType {
 	return FlowEntry
 }
 
-func (f *ofFlow) KeyString() string {
-	return f.MatchString()
-}
-
 func (f *ofFlow) MatchString() string {
-	repr := fmt.Sprintf("table=%d", f.table.id)
-	if f.protocol != "" {
-		repr = fmt.Sprintf("%s,%s", repr, f.protocol)
-	}
-
-	if len(f.matchers) > 0 {
-		repr = fmt.Sprintf("%s,%s", repr, strings.Join(f.matchers, ","))
-	}
-	return repr
+	flowMod, _ := f.getFlowMod()
+	return FlowModMatchString(flowMod)
 }
 
 func (f *ofFlow) FlowPriority() uint16 {
@@ -162,17 +148,9 @@ func (f *ofFlow) CopyToBuilder(priority uint16, copyActions bool) FlowBuilder {
 	newFlow := ofFlow{
 		table:    f.table,
 		Flow:     flow,
-		matchers: f.matchers,
 		protocol: f.protocol,
 	}
-	if copyActions {
-		newFlow.isDropFlow = f.isDropFlow
-	}
 	return &ofFlowBuilder{newFlow}
-}
-
-func (f *ofFlow) IsDropFlow() bool {
-	return f.isDropFlow
 }
 
 func (r *Range) ToNXRange() *openflow15.NXRange {

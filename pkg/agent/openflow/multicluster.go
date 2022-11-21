@@ -17,6 +17,8 @@ package openflow
 import (
 	"net"
 
+	"antrea.io/libOpenflow/openflow15"
+
 	"antrea.io/antrea/pkg/agent/openflow/cookie"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 )
@@ -60,12 +62,12 @@ func newFeatureMulticluster(cookieAllocator cookie.Allocator, ipProtocols []bind
 	}
 }
 
-func (f *featureMulticluster) initFlows() []binding.Flow {
-	return []binding.Flow{}
+func (f *featureMulticluster) initFlows() []*openflow15.FlowMod {
+	return []*openflow15.FlowMod{}
 }
 
-func (f *featureMulticluster) replayFlows() []binding.Flow {
-	return getCachedFlows(f.cachedFlows)
+func (f *featureMulticluster) replayFlows() []*openflow15.FlowMod {
+	return getCachedFlowMessages(f.cachedFlows)
 }
 
 func (f *featureMulticluster) l3FwdFlowToRemoteGateway(

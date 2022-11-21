@@ -18,6 +18,7 @@ import (
 	"net"
 	"sync"
 
+	"antrea.io/libOpenflow/openflow15"
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent/config"
@@ -133,7 +134,7 @@ func (f *featureService) serviceNoEndpointFlow() binding.Flow {
 		Done()
 }
 
-func (f *featureService) initFlows() []binding.Flow {
+func (f *featureService) initFlows() []*openflow15.FlowMod {
 	var flows []binding.Flow
 	if f.enableProxy {
 		flows = append(flows, f.conntrackFlows()...)
@@ -157,16 +158,11 @@ func (f *featureService) initFlows() []binding.Flow {
 		// they are DNATed to backend Pods.
 		flows = append(flows, f.serviceCIDRDNATFlows()...)
 	}
-	return flows
+	return GetFlowModMessages(flows, binding.AddMessage)
 }
 
-func (f *featureService) replayFlows() []binding.Flow {
-	var flows []binding.Flow
-
-	// Get cached flows.
-	flows = append(flows, getCachedFlows(f.cachedFlows)...)
-
-	return flows
+func (f *featureService) replayFlows() []*openflow15.FlowMod {
+	return getCachedFlowMessages(f.cachedFlows)
 }
 
 func (f *featureService) replayGroups() {

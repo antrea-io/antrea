@@ -26,6 +26,7 @@ import (
 	"antrea.io/libOpenflow/protocol"
 	"antrea.io/ofnet/ofctrl"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/metrics"
@@ -369,19 +370,37 @@ var (
 )
 
 type OFEntryOperations interface {
-	Add(flow binding.Flow) error
-	Modify(flow binding.Flow) error
-	Delete(flow binding.Flow) error
-	AddAll(flows []binding.Flow) error
-	ModifyAll(flows []binding.Flow) error
-	BundleOps(adds []binding.Flow, mods []binding.Flow, dels []binding.Flow) error
-	DeleteAll(flows []binding.Flow) error
+	AddAll(flows []*openflow15.FlowMod) error
+	ModifyAll(flows []*openflow15.FlowMod) error
+	BundleOps(adds, mods, dels []*openflow15.FlowMod) error
+	DeleteAll(flows []*openflow15.FlowMod) error
 	AddOFEntries(ofEntries []binding.OFEntry) error
 	ModifyOFEntries(ofEntries []binding.OFEntry) error
 	DeleteOFEntries(ofEntries []binding.OFEntry) error
 }
 
-type flowCache map[string]binding.Flow
+func copyFlowWithNewPriority(flowMod *openflow15.FlowMod, priority uint16) *openflow15.FlowMod {
+	newFlow := *flowMod
+	newFlow.Priority = priority
+	return &newFlow
+}
+
+func flowMessageMatched(oldFlow, newFlow *openflow15.FlowMod) bool {
+	return oldFlow.Priority == newFlow.Priority && getFlowKey(oldFlow) == getFlowKey(newFlow)
+}
+
+// isDropFlow returns true if no instructions are defined in the OpenFlow modification message.
+// According to the OpenFlow spec, there is no explicit action to represent drops. Instead, the action of dropping
+// packets could come from empty instruction sets.
+func isDropFlow(f *openflow15.FlowMod) bool {
+	return len(f.Instructions) == 0
+}
+
+func getFlowKey(fm *openflow15.FlowMod) string {
+	return binding.FlowModMatchString(fm)
+}
+
+type flowMessageCache map[string]*openflow15.FlowMod
 
 type flowCategoryCache struct {
 	sync.Map
@@ -417,8 +436,8 @@ type client struct {
 
 	pipelines map[binding.PipelineID]binding.Pipeline
 
-	// ofEntryOperations is a wrapper interface for OpenFlow entry Add / Modify / Delete operations. It
-	// enables convenient mocking in unit tests.
+	// ofEntryOperations is a wrapper interface for operating multiple OpenFlow entries with action AddAll / ModifyAll / DeleteAll.
+	// It enables convenient mocking in unit tests.
 	ofEntryOperations OFEntryOperations
 	// replayMutex provides exclusive access to the OFSwitch to the ReplayFlows method.
 	replayMutex           sync.RWMutex
@@ -442,7 +461,7 @@ func (c *client) GetTunnelVirtualMAC() net.HardwareAddr {
 	return GlobalVirtualMAC
 }
 
-func (c *client) changeAll(flowsMap map[ofAction][]binding.Flow) error {
+func (c *client) changeAll(flowsMap map[ofAction][]*openflow15.FlowMod) error {
 	if len(flowsMap) == 0 {
 		return nil
 	}
@@ -473,32 +492,20 @@ func (c *client) changeAll(flowsMap map[ofAction][]binding.Flow) error {
 	return nil
 }
 
-func (c *client) Add(flow binding.Flow) error {
-	return c.AddAll([]binding.Flow{flow})
+func (c *client) AddAll(flowMessages []*openflow15.FlowMod) error {
+	return c.changeAll(map[ofAction][]*openflow15.FlowMod{add: flowMessages})
 }
 
-func (c *client) Modify(flow binding.Flow) error {
-	return c.ModifyAll([]binding.Flow{flow})
+func (c *client) ModifyAll(flowMessages []*openflow15.FlowMod) error {
+	return c.changeAll(map[ofAction][]*openflow15.FlowMod{mod: flowMessages})
 }
 
-func (c *client) Delete(flow binding.Flow) error {
-	return c.DeleteAll([]binding.Flow{flow})
+func (c *client) DeleteAll(flowMessages []*openflow15.FlowMod) error {
+	return c.changeAll(map[ofAction][]*openflow15.FlowMod{del: flowMessages})
 }
 
-func (c *client) AddAll(flows []binding.Flow) error {
-	return c.changeAll(map[ofAction][]binding.Flow{add: flows})
-}
-
-func (c *client) ModifyAll(flows []binding.Flow) error {
-	return c.changeAll(map[ofAction][]binding.Flow{mod: flows})
-}
-
-func (c *client) DeleteAll(flows []binding.Flow) error {
-	return c.changeAll(map[ofAction][]binding.Flow{del: flows})
-}
-
-func (c *client) BundleOps(adds []binding.Flow, mods []binding.Flow, dels []binding.Flow) error {
-	return c.changeAll(map[ofAction][]binding.Flow{add: adds, mod: mods, del: dels})
+func (c *client) BundleOps(adds, mods, dels []*openflow15.FlowMod) error {
+	return c.changeAll(map[ofAction][]*openflow15.FlowMod{add: adds, mod: mods, del: dels})
 }
 
 func (c *client) changeOFEntries(ofEntries []binding.OFEntry, action ofAction) error {
@@ -540,7 +547,7 @@ func (c *client) DeleteOFEntries(ofEntries []binding.OFEntry) error {
 	return c.changeOFEntries(ofEntries, del)
 }
 
-func (c *client) defaultFlows() []binding.Flow {
+func (c *client) defaultFlows() []*openflow15.FlowMod {
 	cookieID := c.cookieAllocator.Request(cookie.Default).Raw()
 	var flows []binding.Flow
 	for id, pipeline := range c.pipelines {
@@ -583,7 +590,7 @@ func (c *client) defaultFlows() []binding.Flow {
 		}
 	}
 
-	return flows
+	return GetFlowModMessages(flows, binding.AddMessage)
 }
 
 // tunnelClassifierFlow generates the flow to mark the packets from tunnel port.
@@ -1004,7 +1011,7 @@ func (f *featurePodConnectivity) flowsToTrace(dataplaneTag uint8,
 	}
 
 	// This generates Traceflow specific flows that outputs traceflow non-hairpin packets to OVS port and Antrea Agent after
-	// L2forwarding calculation.
+	// L2 forwarding calculation.
 	for _, ipProtocol := range f.ipProtocols {
 		if f.networkConfig.TrafficEncapMode.SupportsEncap() {
 			// SendToController and Output if output port is tunnel port.
@@ -1140,9 +1147,15 @@ func (f *featureNetworkPolicy) flowsToTrace(dataplaneTag uint8,
 	defer f.conjMatchFlowLock.Unlock()
 	for _, ctx := range f.globalConjMatchFlowCache {
 		if ctx.dropFlow != nil {
-			copyFlowBuilder := ctx.dropFlow.CopyToBuilder(priorityNormal+2, false)
-			if ctx.dropFlow.FlowProtocol() == "" {
-				copyFlowBuilderIPv6 := ctx.dropFlow.CopyToBuilder(priorityNormal+2, false)
+			table, err := f.bridge.GetTableByID(ctx.dropFlow.TableId)
+			if err != nil {
+				klog.ErrorS(err, "Failed to get OpenFlow table by tableID", "id", ctx.dropFlow.TableId)
+				continue
+			}
+			dropFlow := f.defaultDropFlow(table, ctx.matchPairs, ctx.dropFlowEnableLogging)
+			copyFlowBuilder := dropFlow.CopyToBuilder(priorityNormal+2, false)
+			if dropFlow.FlowProtocol() == "" {
+				copyFlowBuilderIPv6 := dropFlow.CopyToBuilder(priorityNormal+2, false)
 				copyFlowBuilderIPv6 = copyFlowBuilderIPv6.MatchProtocol(binding.ProtocolIPv6)
 				if f.ovsMetersAreSupported {
 					copyFlowBuilderIPv6 = copyFlowBuilderIPv6.Action().Meter(PacketInMeterIDTF)
@@ -1165,25 +1178,34 @@ func (f *featureNetworkPolicy) flowsToTrace(dataplaneTag uint8,
 		}
 	}
 	// Copy Antrea NetworkPolicy drop rules.
-	for _, conj := range f.policyCache.List() {
-		for _, flow := range conj.(*policyRuleConjunction).metricFlows {
-			if flow.IsDropFlow() {
-				copyFlowBuilder := flow.CopyToBuilder(priorityNormal+2, false)
+	for _, obj := range f.policyCache.List() {
+		conj := obj.(*policyRuleConjunction)
+		for _, flow := range conj.metricFlows {
+			table, err := f.bridge.GetTableByID(flow.TableId)
+			if err != nil {
+				klog.ErrorS(err, "Failed to get OpenFlow table by tableID", "id", flow.TableId)
+				continue
+			}
+			if isDropFlow(flow) {
+				conjID := conj.id
+
 				// Generate both IPv4 and IPv6 flows if the original drop flow doesn't match IP/IPv6.
 				// DSCP field is in IP/IPv6 headers so IP/IPv6 match is required in a flow.
-				if flow.FlowProtocol() == "" {
-					copyFlowBuilderIPv6 := flow.CopyToBuilder(priorityNormal+2, false)
-					copyFlowBuilderIPv6 = copyFlowBuilderIPv6.MatchProtocol(binding.ProtocolIPv6)
-					if f.ovsMetersAreSupported {
-						copyFlowBuilderIPv6 = copyFlowBuilderIPv6.Action().Meter(PacketInMeterIDTF)
-					}
-					flows = append(flows, copyFlowBuilderIPv6.MatchIPDSCP(dataplaneTag).
-						SetHardTimeout(timeout).
-						Cookie(cookieID).
-						Action().SendToController([]byte{uint8(PacketInCategoryTF)}, false).
-						Done())
-					copyFlowBuilder = copyFlowBuilder.MatchProtocol(binding.ProtocolIP)
+				copyFlowBuilderIPv6 := table.BuildFlow(priorityNormal+2).
+					MatchRegMark(APDenyRegMark).
+					MatchRegFieldWithValue(APConjIDField, conjID).
+					MatchProtocol(binding.ProtocolIPv6)
+				if f.ovsMetersAreSupported {
+					copyFlowBuilderIPv6 = copyFlowBuilderIPv6.Action().Meter(PacketInMeterIDTF)
 				}
+				flows = append(flows, copyFlowBuilderIPv6.MatchIPDSCP(dataplaneTag).
+					SetHardTimeout(timeout).
+					Cookie(cookieID).
+					Action().SendToController([]byte{uint8(PacketInCategoryTF)}, false).
+					Done())
+				copyFlowBuilder := table.BuildFlow(priorityNormal+2).
+					MatchRegMark(APDenyRegMark).
+					MatchRegFieldWithValue(APConjIDField, conjID).MatchProtocol(binding.ProtocolIP)
 				if f.ovsMetersAreSupported {
 					copyFlowBuilder = copyFlowBuilder.Action().Meter(PacketInMeterIDTF)
 				}
@@ -2985,12 +3007,11 @@ func (f *featureService) gatewaySNATFlows() []binding.Flow {
 	return flows
 }
 
-func getCachedFlows(cache *flowCategoryCache) []binding.Flow {
-	var flows []binding.Flow
+func getCachedFlowMessages(cache *flowCategoryCache) []*openflow15.FlowMod {
+	var flows []*openflow15.FlowMod
 	cache.Range(func(key, value interface{}) bool {
-		fCache := value.(flowCache)
+		fCache := value.(flowMessageCache)
 		for _, flow := range fCache {
-			flow.Reset()
 			flows = append(flows, flow)
 		}
 		return true
