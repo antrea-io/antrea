@@ -11,4 +11,4 @@ linters:
   enable:
     - misspell
     - gofmt
-    - deadcode
+    - unused

@@ -109,7 +109,6 @@ var (
 
 // supportBundleREST implements REST interfaces for bundle status querying.
 type supportBundleREST struct {
-	bridge       string
 	mode         string
 	statusLocker sync.RWMutex
 	cancelFunc   context.CancelFunc

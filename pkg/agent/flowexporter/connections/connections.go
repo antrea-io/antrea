@@ -15,7 +15,6 @@
 package connections
 
 import (
-	"container/heap"
 	"fmt"
 	"sync"
 	"time"
@@ -141,17 +140,6 @@ func lookupServiceProtocol(protoID uint8) (corev1.Protocol, error) {
 		return "", fmt.Errorf("unknown protocol identifier: %d", protoID)
 	}
 	return serviceProto, nil
-}
-
-func (cs *connectionStore) addItemToQueue(connKey flowexporter.ConnectionKey, conn *flowexporter.Connection) {
-	currTime := time.Now()
-	pqItem := &flowexporter.ItemToExpire{
-		Conn:             conn,
-		ActiveExpireTime: currTime.Add(cs.expirePriorityQueue.ActiveFlowTimeout),
-		IdleExpireTime:   currTime.Add(cs.expirePriorityQueue.IdleFlowTimeout),
-	}
-	heap.Push(cs.expirePriorityQueue, pqItem)
-	cs.expirePriorityQueue.KeyToItem[connKey] = pqItem
 }
 
 func (cs *connectionStore) AcquireConnStoreLock() {

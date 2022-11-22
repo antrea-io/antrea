@@ -17,7 +17,6 @@ package exporter
 import (
 	"fmt"
 	"hash/fnv"
-	"sync"
 
 	"github.com/google/uuid"
 	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
@@ -49,8 +48,6 @@ type IPFIXExporter struct {
 	templateIDv6               uint16
 	set                        ipfixentities.Set
 	registry                   ipfix.IPFIXRegistry
-	// mutex protects configuration state from concurrent access
-	mutex sync.Mutex
 }
 
 // genObservationDomainID generates an IPFIX Observation Domain ID when one is not provided by the

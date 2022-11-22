@@ -70,10 +70,6 @@ func (f *XXRegField) GetNXFieldName() string {
 	return fmt.Sprintf("%s%d", NxmFieldXXReg, f.regID)
 }
 
-func (f *XXRegField) isFullRange() bool {
-	return f.rng.Length() == 128
-}
-
 func NewXXRegField(id int, start, end uint32) *XXRegField {
 	return &XXRegField{regID: id, rng: &Range{start, end}}
 }
@@ -86,10 +82,6 @@ func (m *CtMark) GetRange() *Range {
 // value of this function is 0b1000.
 func (m *CtMark) GetValue() uint32 {
 	return m.value << m.field.rng.Offset()
-}
-
-func (m *CtMark) isFullRange() bool {
-	return m.field.rng.Length() == 32
 }
 
 func NewCTMarkField(start, end uint32) *CtMarkField {

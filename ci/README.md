@@ -50,11 +50,11 @@ run them locally:
 | **e2e tests**                 | [test/e2e]            | see [test/e2e/README.md]                           | [Github Actions] ([Kind] cluster) + [Jenkins] |
 | **Kubernetes upstream tests** | [upstream Kubernetes] | see [ci/jenkins/README.md]                         | [Jenkins] |
 
-[test/integration]: /test/integration
-[test/e2e]: /test/e2e
-[test/e2e/README.md]: /test/e2e/README.md
-[ci/jenkins/README.md]: /ci/jenkins/README.md
-[Jenkins]: /ci/jenkins/README.md
+[test/integration]: ../test/integration
+[test/e2e]: ../test/e2e
+[test/e2e/README.md]: ../test/e2e/README.md
+[ci/jenkins/README.md]: jenkins/README.md
+[Jenkins]: jenkins/README.md
 [Kind]: https://kind.sigs.k8s.io/
 [upstream Kubernetes]: https://github.com/kubernetes/community/blob/master/contributors/devel/sig-testing/e2e-tests.md
 [`testing`]: https://golang.org/pkg/testing/
@@ -67,7 +67,7 @@ As part of CI, we run the following linters via
 
 * [`misspell`](https://github.com/client9/misspell) - Finds commonly misspelled English words in comments.
 * [`gofmt`](https://golang.org/cmd/gofmt/) - Checks whether code was gofmt-ed.
-* [`deadcode`](https://github.com/remyoudompheng/go-misc/tree/master/deadcode) - Finds unused code.
+* [`unused`](https://github.com/dominikh/go-tools/tree/master/unused) - Finds unused code.
 * [`staticcheck`](https://staticcheck.io/) - Static analysis toolset with a large number of tests.
 * [`gosec`](https://github.com/securego/gosec) - Checks for common security problems.
 * [`goimports`](https://godoc.org/golang.org/x/tools/cmd/goimports) - A superset of `gofmt` organizes imports and checks for unused ones.
