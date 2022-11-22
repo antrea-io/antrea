@@ -42,8 +42,8 @@ function apply_patch() {
         git apply "$@"
 }
 
-if version_lt "$OVS_VERSION" "2.13.0" || version_gt "$OVS_VERSION" "2.17.0"; then
-    echoerr "OVS_VERSION $OVS_VERSION is not supported (must be >= 2.13.0 and <= 2.17.0)"
+if version_lt "$OVS_VERSION" "2.13.0" || version_gt "$OVS_VERSION" "2.17.3"; then
+    echoerr "OVS_VERSION $OVS_VERSION is not supported (must be >= 2.13.0 and <= 2.17.3)"
     exit 1
 fi
 
