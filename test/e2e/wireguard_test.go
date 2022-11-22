@@ -17,7 +17,6 @@ package e2e
 import (
 	"fmt"
 	"net"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -64,38 +63,6 @@ func TestWireGuard(t *testing.T) {
 
 	t.Run("testPodConnectivity", func(t *testing.T) { testPodConnectivity(t, data) })
 	t.Run("testServiceConnectivity", func(t *testing.T) { testServiceConnectivity(t, data) })
-}
-
-func (data *TestData) getWireGuardPeerEndpointsWithHandshake(nodeName string) ([]string, error) {
-	var peerEndpoints []string
-	antreaPodName, err := data.getAntreaPodOnNode(nodeName)
-	if err != nil {
-		return peerEndpoints, err
-	}
-	cmd := []string{"wg"}
-	stdout, stderr, err := data.RunCommandFromPod(antreaNamespace, antreaPodName, "wireguard", cmd)
-	if err != nil {
-		return peerEndpoints, fmt.Errorf("error when running 'wg' on '%s': %v - stdout: %s - stderr: %s", nodeName, err, stdout, stderr)
-	}
-	peerConfigs := strings.Split(stdout, "\n\n")
-	if len(peerConfigs) < 1 {
-		return peerEndpoints, fmt.Errorf("invalid 'wg' output on '%s': %v - stdout: %s - stderr: %s", nodeName, err, stdout, stderr)
-	}
-
-	for _, p := range peerConfigs[1:] {
-		lines := strings.Split(p, "\n")
-		if len(lines) < 2 {
-			return peerEndpoints, fmt.Errorf("invalid WireGuard peer config output - %s", p)
-		}
-		peerEndpoint := strings.TrimPrefix(strings.TrimSpace(lines[1]), "endpoint: ")
-		for _, l := range lines {
-			if strings.Contains(l, "latest handshake") {
-				peerEndpoints = append(peerEndpoints, peerEndpoint)
-				break
-			}
-		}
-	}
-	return peerEndpoints, nil
 }
 
 func testPodConnectivity(t *testing.T, data *TestData) {

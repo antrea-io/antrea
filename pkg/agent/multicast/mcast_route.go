@@ -11,6 +11,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
+// nolint: unused // a lot of this code is unused for Windows since the multicast feature is not implemented yet
 package multicast
 
 import (

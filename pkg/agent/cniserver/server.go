@@ -302,12 +302,6 @@ func (s *CNIServer) unsupportedFieldResponse(key string, value interface{}) *cni
 	return s.generateCNIErrorResponse(cniErrorCode, cniErrorMsg)
 }
 
-func (s *CNIServer) unknownContainerResponse(containerID string) *cnipb.CniCmdResponse {
-	cniErrorCode := cnipb.ErrorCode_UNKNOWN_CONTAINER
-	cniErrorMsg := fmt.Sprintf("Container id  %s is unknown or non-existent", containerID)
-	return s.generateCNIErrorResponse(cniErrorCode, cniErrorMsg)
-}
-
 func (s *CNIServer) tryAgainLaterResponse() *cnipb.CniCmdResponse {
 	cniErrorCode := cnipb.ErrorCode_TRY_AGAIN_LATER
 	cniErrorMsg := "Server is busy, please retry later"

@@ -113,7 +113,6 @@ type flowAggregator struct {
 	k8sClient                   kubernetes.Interface
 	podInformer                 coreinformers.PodInformer
 	numRecordsExported          int64
-	numRecordsReceived          int64
 	updateCh                    chan *options.Options
 	configFile                  string
 	configWatcher               *fsnotify.Watcher
