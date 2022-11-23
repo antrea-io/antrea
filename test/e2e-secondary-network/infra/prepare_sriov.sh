@@ -88,17 +88,17 @@ function validateOptions() {
         fi
         #If interface and vfs_num is provided, ensure that the base interface (with VF ability) is present at the remote cluster.
         if [ "$sriov_interface" != '' ] && [ "$vfs_num" != '' ]; then
-                if [[ $hostIP = '' ]]; then
+                if [[ $hostName = '' ]]; then
                        echoerr "Host Name/IP must be providied . Configuration failed."
                        exit 1
                 fi
-                ssh $hostIP <<EOF
+                ssh $hostName <<EOF
                    export interface=$sriov_interface
                    $(declare -f checkInterface)
                    checkInterface
 EOF
                if [ $? -eq 255 ]; then
-                     echoerr "SSH to $hostIP failed. Ensure ssh configuration needs are met"
+                     echoerr "SSH to $hostName failed. Ensure ssh configuration needs are met"
                      print_ssh_config_info
                      exit 1
                elif [ $? -eq 0 ]; then
@@ -165,13 +165,13 @@ function SriovDevicePlugin() {
         echo "$action ConfigMap and SriovDevicePlugin done!"
 }
 function updateKubeConfigForTargetCluster() {
-        mkdir -p /tmp/kubernetes/$hostIP
-        scp $hostIP:/etc/kubernetes/admin.conf /tmp/kubernetes/$hostIP/.
+        mkdir -p /tmp/kubernetes/$hostName
+        scp $hostName:/etc/kubernetes/admin.conf /tmp/kubernetes/$hostName/.
         if [ $? -ne 0 ]; then
                 echoerr "Failed to copy the downloaded configuration files!"
                 exit 1
         fi
-	export KUBECONFIG=/tmp/kubernetes/$hostIP/admin.conf
+	export KUBECONFIG=/tmp/kubernetes/$hostName/admin.conf
 }
 
 
