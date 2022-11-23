@@ -25,6 +25,7 @@ import (
 
 	admv1 "k8s.io/api/admission/v1"
 	authenticationv1 "k8s.io/api/authentication/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -448,6 +449,10 @@ func (v *antreaPolicyValidator) createValidate(curObj interface{}, userInfo auth
 	if !allowed {
 		return reason, allowed
 	}
+	reason, allowed = v.validateL7Protocols(ingress, egress)
+	if !allowed {
+		return reason, allowed
+	}
 	if err := v.validatePort(ingress, egress); err != nil {
 		return err.Error(), false
 	}
@@ -760,6 +765,39 @@ func (v *antreaPolicyValidator) validateMulticastIGMP(ingressRules, egressRules 
 	return "", true
 }
 
+// validateL7Protocols validates the L7Protocols field set in Antrea-native policy
+// rules are valid, and compatible with the ports or protocols fields.
+func (v *antreaPolicyValidator) validateL7Protocols(ingressRules, egressRules []crdv1alpha1.Rule) (string, bool) {
+	for _, r := range append(ingressRules, egressRules...) {
+		if len(r.L7Protocols) == 0 {
+			continue
+		}
+		if *r.Action != crdv1alpha1.RuleActionAllow {
+			return "layer 7 protocols only support Allow", false
+		}
+		if len(r.ToServices) != 0 {
+			return "layer 7 protocols can not be used with toServices", false
+		}
+		haveHTTP := false
+		for _, p := range r.L7Protocols {
+			if p.HTTP != nil {
+				haveHTTP = true
+			}
+		}
+		for _, port := range r.Ports {
+			if haveHTTP && (port.Protocol != nil && *port.Protocol != v1.ProtocolTCP) {
+				return "HTTP protocol can only be used when layer 4 protocol is TCP or unset", false
+			}
+		}
+		for _, protocol := range r.Protocols {
+			if haveHTTP && (protocol.IGMP != nil || protocol.ICMP != nil) {
+				return "HTTP protocol can not be used with protocol IGMP or ICMP", false
+			}
+		}
+	}
+	return "", true
+}
+
 // validateFQDNSelectors validates the toFQDN field set in Antrea-native policy egress rules are valid.
 func (v *antreaPolicyValidator) validateFQDNSelectors(egressRules []crdv1alpha1.Rule) (string, bool) {
 	for _, r := range egressRules {
@@ -811,6 +849,10 @@ func (v *antreaPolicyValidator) updateValidate(curObj, oldObj interface{}, userI
 		return reason, allowed
 	}
 	reason, allowed = v.validateMulticastIGMP(ingress, egress)
+	if !allowed {
+		return reason, allowed
+	}
+	reason, allowed = v.validateL7Protocols(ingress, egress)
 	if !allowed {
 		return reason, allowed
 	}

@@ -384,6 +384,54 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 			expectedAddressGroups:   1,
 		},
 		{
+			name: "with-l7Protocol",
+			inputPolicy: &crdv1alpha1.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Namespace: "", Name: "cnpE", UID: "uidE"},
+				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
+					AppliedTo: []crdv1alpha1.AppliedTo{
+						{PodSelector: &selectorA},
+					},
+					Priority: p10,
+					Ingress: []crdv1alpha1.Rule{
+						{
+							L7Protocols: []crdv1alpha1.L7Protocol{{HTTP: &crdv1alpha1.HTTPProtocol{Host: "test.com", Method: "GET", Path: "/admin"}}},
+							From: []crdv1alpha1.NetworkPolicyPeer{
+								{
+									PodSelector: &selectorB,
+								},
+							},
+							Action: &allowAction,
+						},
+					},
+				},
+			},
+			expectedPolicy: &antreatypes.NetworkPolicy{
+				UID:  "uidE",
+				Name: "uidE",
+				SourceRef: &controlplane.NetworkPolicyReference{
+					Type: controlplane.AntreaClusterNetworkPolicy,
+					Name: "cnpE",
+					UID:  "uidE",
+				},
+				Priority:     &p10,
+				TierPriority: &DefaultTierPriority,
+				Rules: []controlplane.NetworkPolicyRule{
+					{
+						Direction: controlplane.DirectionIn,
+						From: controlplane.NetworkPolicyPeer{
+							AddressGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", &selectorB, nil, nil, nil).NormalizedName)},
+						},
+						L7Protocols: []controlplane.L7Protocol{{HTTP: &controlplane.HTTPProtocol{Host: "test.com", Method: "GET", Path: "/admin"}}},
+						Priority:    0,
+						Action:      &allowAction,
+					},
+				},
+				AppliedToGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", &selectorA, nil, nil, nil).NormalizedName)},
+			},
+			expectedAppliedToGroups: 1,
+			expectedAddressGroups:   1,
+		},
+		{
 			name: "appliedTo-per-rule",
 			inputPolicy: &crdv1alpha1.ClusterNetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{Name: "cnpH", UID: "uidH"},

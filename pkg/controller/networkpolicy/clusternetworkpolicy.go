@@ -371,6 +371,7 @@ func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *crdv1alpha1.C
 					Priority:        int32(idx),
 					EnableLogging:   cnpRule.EnableLogging,
 					AppliedToGroups: getAppliedToGroupNames(ruleAppliedTos),
+					L7Protocols:     toAntreaL7ProtocolsForCRD(cnpRule.L7Protocols),
 				}
 				if dir == controlplane.DirectionIn {
 					rule.From = *peer
