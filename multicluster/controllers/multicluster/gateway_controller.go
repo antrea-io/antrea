@@ -19,7 +19,6 @@ package multicluster
 import (
 	"context"
 	"fmt"
-	"reflect"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -104,15 +103,18 @@ func (r *GatewayReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 
 	createOrUpdate := func(gwIP string) error {
 		existingResExport := &mcsv1alpha1.ResourceExport{}
-		if err := commonArea.Get(ctx, resExportNamespacedName, existingResExport); err != nil {
-			if !apierrors.IsNotFound(err) {
-				return err
-			}
+		err := commonArea.Get(ctx, resExportNamespacedName, existingResExport)
+		if err != nil && !apierrors.IsNotFound(err) {
+			return err
+		}
+		if apierrors.IsNotFound(err) || !existingResExport.DeletionTimestamp.IsZero() {
 			if err = r.createResourceExport(ctx, req, commonArea, gwIP); err != nil {
 				return err
 			}
 			return nil
 		}
+		// updateResourceExport will update latest Gateway information with the existing ResourceExport's resourceVersion.
+		// It will return an error and retry when there is a version conflict.
 		if err = r.updateResourceExport(ctx, req, commonArea, existingResExport, &mcsv1alpha1.GatewayInfo{GatewayIP: gwIP}); err != nil {
 			return err
 		}
@@ -149,11 +151,6 @@ func (r *GatewayReconciler) updateResourceExport(ctx context.Context, req ctrl.R
 		ServiceCIDR:  r.serviceCIDR,
 		PodCIDRs:     r.podCIDRs,
 		GatewayInfos: []mcsv1alpha1.GatewayInfo{*gwInfo},
-	}
-	if reflect.DeepEqual(existingResExport.Spec, resExportSpec) {
-		klog.V(2).InfoS("Skip updating ClusterInfo kind of ResourceExport due to no change", "clusterinfo", klog.KObj(existingResExport),
-			"gateway", req.NamespacedName)
-		return nil
 	}
 	klog.V(2).InfoS("Updating ClusterInfo kind of ResourceExport", "clusterinfo", klog.KObj(existingResExport),
 		"gateway", req.NamespacedName)

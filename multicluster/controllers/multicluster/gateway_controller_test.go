@@ -17,10 +17,12 @@ limitations under the License.
 package multicluster
 
 import (
+	"context"
 	"reflect"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -74,14 +76,15 @@ var (
 func TestGatewayReconciler(t *testing.T) {
 	gwNode1New := gwNode1
 	gwNode1New.GatewayIP = "10.10.10.12"
-
+	staleExistingResExport := existingResExport.DeepCopy()
+	staleExistingResExport.DeletionTimestamp = &metav1.Time{Time: time.Now()}
 	tests := []struct {
 		name           string
-		te             mcsv1alpha1.Gateway
 		namespacedName types.NamespacedName
 		gateway        []mcsv1alpha1.Gateway
 		resExport      *mcsv1alpha1.ResourceExport
 		expectedInfo   []mcsv1alpha1.GatewayInfo
+		expectedErr    string
 		isDelete       bool
 	}{
 		{
@@ -98,6 +101,18 @@ func TestGatewayReconciler(t *testing.T) {
 					GatewayIP: "10.10.10.10",
 				},
 			},
+		},
+		{
+			name: "error creating a ResourceExport when existing ResourceExport is being deleted",
+			namespacedName: types.NamespacedName{
+				Namespace: "default",
+				Name:      "node-1",
+			},
+			gateway: []mcsv1alpha1.Gateway{
+				gwNode1,
+			},
+			resExport:   staleExistingResExport,
+			expectedErr: "resourceexports.multicluster.crd.antrea.io \"cluster-a-clusterinfo\" already exists",
 		},
 		{
 			name: "update a ResourceExport successfully by updating an existing Gateway",
@@ -145,7 +160,11 @@ func TestGatewayReconciler(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			req := ctrl.Request{NamespacedName: tt.namespacedName}
 			if _, err := r.Reconcile(ctx, req); err != nil {
-				t.Errorf("Gateway Reconciler should handle ResourceExports events successfully but got error = %v", err)
+				if tt.expectedErr != "" {
+					assert.Equal(t, tt.expectedErr, err.Error())
+				} else {
+					t.Errorf("Gateway Reconciler should handle ResourceExports events successfully but got error = %v", err)
+				}
 			} else {
 				ciExport := mcsv1alpha1.ResourceExport{}
 				ciExportName := types.NamespacedName{
@@ -165,4 +184,11 @@ func TestGatewayReconciler(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestGetServiceCIDR(t *testing.T) {
+	fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects().Build()
+	r := NewGatewayReconciler(fakeClient, scheme, "default", "", []string{"10.200.1.1/16"}, nil)
+	err := r.getServiceCIDR(context.TODO())
+	assert.Contains(t, err.Error(), "expected a specific error but none was returned")
 }
