@@ -268,6 +268,7 @@ func run(o *Options) error {
 			k8sClient,
 			informerFactory,
 			ofClient,
+			ovsctl.NewClient(o.config.OVSBridge),
 			ovsBridgeClient,
 			routeClient,
 			ifaceStore,
