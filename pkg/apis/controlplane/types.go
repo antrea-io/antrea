@@ -258,6 +258,8 @@ type NetworkPolicyRule struct {
 	// Cannot be set in conjunction with NetworkPolicy.AppliedToGroups of the NetworkPolicy
 	// that this Rule is referred to.
 	AppliedToGroups []string
+	// L7Protocols is a list of application layer protocols which should be matched.
+	L7Protocols []L7Protocol
 }
 
 // Protocol defines network protocols supported for things like container ports.
@@ -299,6 +301,25 @@ type Service struct {
 	// IGMPType and GroupAddress can only be specified when the Protocol is IGMP.
 	IGMPType     *int32
 	GroupAddress string
+}
+
+// L7Protocol defines application layer protocol to match.
+type L7Protocol struct {
+	HTTP *HTTPProtocol
+}
+
+// HTTPProtocol matches HTTP requests with specific host, method, and path. All
+// fields could be used alone or together. If all fields are not provided, this
+// matches all HTTP requests.
+type HTTPProtocol struct {
+	// Host represents the hostname present in the URI or the HTTP Host header to match.
+	// It does not contain the port associated with the host.
+	Host string
+	// Method represents the HTTP method to match.
+	// It could be GET, POST, PUT, HEAD, DELETE, TRACE, OPTIONS, CONNECT and PATCH.
+	Method string
+	// Path represents the URI path to match (Ex. "/index.html", "/admin").
+	Path string
 }
 
 // NetworkPolicyPeer describes a peer of NetworkPolicyRules.
