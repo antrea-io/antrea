@@ -151,11 +151,15 @@ func (n *NetworkPolicyController) initTier(t *secv1alpha1.Tier) {
 	backoff := 1 * time.Second
 	retryAttempt := 1
 	for {
-		klog.V(2).Infof("Creating %s Tier", t.Name)
+		klog.V(2).InfoS("Creating system Tier", "tier", t.Name)
 		_, err = n.crdClient.CrdV1alpha1().Tiers().Create(context.TODO(), t, metav1.CreateOptions{})
 		// Attempt to recreate Tier after a backoff only if it does not exist.
-		if err != nil && !errors.IsAlreadyExists(err) {
-			klog.Warningf("Failed to create %s Tier on init: %v. Retry attempt: %d", t.Name, err, retryAttempt)
+		if err != nil {
+			if errors.IsAlreadyExists(err) {
+				klog.InfoS("System Tier already exists", "tier", t.Name)
+				return
+			}
+			klog.InfoS("Failed to create system Tier on init, will retry", "tier", t.Name, "attempts", retryAttempt, "err", err)
 			// Tier creation may fail because antrea APIService is not yet ready
 			// to accept requests for validation. Retry fixed number of times
 			// not exceeding 8s.
@@ -167,6 +171,7 @@ func (n *NetworkPolicyController) initTier(t *secv1alpha1.Tier) {
 			retryAttempt += 1
 			continue
 		}
+		klog.InfoS("Created system Tier", "tier", t.Name)
 		return
 	}
 }
