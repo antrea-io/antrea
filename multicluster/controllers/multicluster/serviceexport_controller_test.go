@@ -68,7 +68,7 @@ func TestServiceExportReconciler_handleDeleteEvent(t *testing.T) {
 	fakeRemoteClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(existSvcResExport, existEpResExport).Build()
 
 	commonArea := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", localClusterID, "default", nil)
-	mcReconciler := NewMemberClusterSetReconciler(fakeClient, scheme, "default")
+	mcReconciler := NewMemberClusterSetReconciler(fakeClient, scheme, "default", false)
 	mcReconciler.SetRemoteCommonArea(commonArea)
 	r := NewServiceExportReconciler(fakeClient, scheme, mcReconciler, "ClusterIP")
 	r.installedSvcs.Add(&svcInfo{
@@ -205,7 +205,7 @@ func TestServiceExportReconciler_CheckExportStatus(t *testing.T) {
 	fakeRemoteClient := fake.NewClientBuilder().WithScheme(scheme).Build()
 	commonArea := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", localClusterID, "default", nil)
 
-	mcReconciler := NewMemberClusterSetReconciler(fakeClient, scheme, "default")
+	mcReconciler := NewMemberClusterSetReconciler(fakeClient, scheme, "default", false)
 	mcReconciler.SetRemoteCommonArea(commonArea)
 	r := NewServiceExportReconciler(fakeClient, scheme, mcReconciler, "ClusterIP")
 	for _, tt := range tests {
@@ -236,7 +236,7 @@ func TestServiceExportReconciler_handleServiceExportCreateEvent(t *testing.T) {
 	fakeRemoteClient := fake.NewClientBuilder().WithScheme(scheme).Build()
 
 	commonArea := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", localClusterID, "default", nil)
-	mcReconciler := NewMemberClusterSetReconciler(fakeClient, scheme, "default")
+	mcReconciler := NewMemberClusterSetReconciler(fakeClient, scheme, "default", false)
 	mcReconciler.SetRemoteCommonArea(commonArea)
 	r := NewServiceExportReconciler(fakeClient, scheme, mcReconciler, "ClusterIP")
 	if _, err := r.Reconcile(ctx, nginxReq); err != nil {
@@ -400,7 +400,7 @@ func TestServiceExportReconciler_handleUpdateEvent(t *testing.T) {
 			fakeRemoteClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(existSvcRe, existEpRe).Build()
 
 			commonArea := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", localClusterID, "default", nil)
-			mcReconciler := NewMemberClusterSetReconciler(fakeClient, scheme, "default")
+			mcReconciler := NewMemberClusterSetReconciler(fakeClient, scheme, "default", false)
 			mcReconciler.SetRemoteCommonArea(commonArea)
 			r := NewServiceExportReconciler(fakeClient, scheme, mcReconciler, tt.endpointIPType)
 			r.installedSvcs.Add(sinfo)
