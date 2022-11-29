@@ -230,22 +230,25 @@ support BGP.
 
 MetalLB will automatically allocate external IPs for every Service of type
 LoadBalancer, and it sets the allocated IP to the `loadBalancer.ingress` field
-in the Service resource `status`. MetalLB also supports user specified `loadBalancerIP`
-in the Service spec. For more information, please refer to the [MetalLB usage](https://metallb.universe.tf/usage).
+in the Service resource `status`. MetalLB supports `spec.loadBalancerIP` and a custom `metallb.universe.tf/loadBalancerIPs`
+annotation in the Service spec.
+
+Please note that `spec.LoadBalancerIP` is planned to be deprecated in [k8s apis](https://github.com/kubernetes/kubernetes/pull/107235).
+
+For more information, please refer to the [MetalLB usage](https://metallb.universe.tf/usage).
 
 To learn more about MetalLB concepts and functionalities, you can read the
 [MetalLB concepts](https://metallb.universe.tf/concepts).
 
 ### Install MetalLB
 
-You can run the following commands to install MetalLB using the YAML manifests:
+You can run the following command to install MetalLB using the YAML manifests:
 
 ```bash
-kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.11.0/manifests/namespace.yaml
-kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.11.0/manifests/metallb.yaml
+kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.13.7/config/manifests/metallb-native.yaml
 ```
 
-The commands will deploy MetalLB of version 0.11.0 into Namespace
+The command will deploy MetalLB of version 0.13.7 into Namespace
 `metallb-system`. You can also refer to this [MetalLB installation guide](https://metallb.universe.tf/installation)
 for other ways of installing MetalLB.
 
@@ -264,25 +267,29 @@ you are using `kube-proxy` IPVS. Please refer to the [Interoperability with
 kube-proxy IPVS mode](#interoperability-with-kube-proxy-ipvs-mode) section for
 more information.
 
-MetalLB is configured through a ConfigMap. To configure MetalLB to work in the
+MetalLB is configured through custom resources (before release 0.13.0, it was configured through a ConfigMap). To configure MetalLB to work in the
 layer 2 mode, you just need to provide the IP ranges to allocate external IPs.
 The IP ranges should be from the Node network subnet.
 
-For example:
+For example, the following configuration gives MetalLB control over IPs from 192.168.1.240 to 192.168.1.250, and configures layer 2 mode:
 
-```yaml
-apiVersion: v1
-kind: ConfigMap
+```
+apiVersion: metallb.io/v1beta1
+kind: IPAddressPool
 metadata:
+  name: first-pool
   namespace: metallb-system
-  name: config
-data:
-  config: |
-    address-pools:
-    - name: default
-      protocol: layer2
-      addresses:
-      - 10.10.0.2-10.10.0.10
+spec:
+  addresses:
+  - 192.168.1.240-192.168.1.250
+```
+
+```
+apiVersion: metallb.io/v1beta1
+kind: L2Advertisement
+metadata:
+  name: example
+  namespace: metallb-system
 ```
 
 ### Configure MetalLB with BGP mode
@@ -291,23 +298,41 @@ The BGP mode of MetalLB requires more configuration parameters to establish BGP
 peering to the router. The example below configures MetalLB using AS number
 64500 to connect to peer router 10.0.0.1 with AS number 64501:
 
-```yaml
-apiVersion: v1
-kind: ConfigMap
+```
+apiVersion: metallb.io/v1beta2
+kind: BGPPeer
 metadata:
+  name: sample
   namespace: metallb-system
-  name: config
-data:
-  config: |
-    peers:
-    - peer-address: 10.0.0.1
-      peer-asn: 64501
-      my-asn: 64500
-    address-pools:
-    - name: default
-      protocol: bgp
-      addresses:
-      - 10.10.0.2-10.10.0.10
+spec:
+  myASN: 64500
+  peerASN: 64501
+  peerAddress: 10.0.0.1
+```
+
+Given an IPAddressPool like :
+
+```yaml
+apiVersion: metallb.io/v1beta1
+kind: IPAddressPool
+metadata:
+  name: first-pool
+  namespace: metallb-system
+spec:
+  addresses:
+  - 192.168.1.240-192.168.1.250
+```
+
+MetalLB must be configured to advertise the IPs coming from it via BGP.
+
+This is done via the `BGPAdvertisement`custom resource :
+
+```yaml
+apiVersion: metallb.io/v1beta1
+kind: BGPAdvertisement
+metadata:
+  name: example
+  namespace: metallb-system
 ```
 
 In addition to the basic layer 2 and BGP mode configurations described in this
