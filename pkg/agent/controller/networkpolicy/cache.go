@@ -67,6 +67,8 @@ type rule struct {
 	To v1beta.NetworkPolicyPeer
 	// Protocols and Ports of this rule.
 	Services []v1beta.Service
+	// Layer 7 protocols of this rule.
+	L7Protocols []v1beta.Protocol
 	// Name of this rule. Empty for k8s NetworkPolicy.
 	Name string
 	// Action of this rule. nil for k8s NetworkPolicy.

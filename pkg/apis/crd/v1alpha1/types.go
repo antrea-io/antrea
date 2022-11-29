@@ -393,6 +393,12 @@ type Rule struct {
 	// empty, this rule matches all protocols supported.
 	// +optional
 	Protocols []NetworkPolicyProtocol `json:"protocols,omitempty"`
+	// Set of layer 7 protocols matched by the rule. If this field is set, action can only be Allow.
+	// When this field is used in a rule, any traffic matching the other layer 3/4 criteria of the rule (typically the
+	// 5-tuple) will be forwarded to an application-aware engine for protocol detection and rule enforcement, and the
+	// traffic will be allowed if the layer 7 criteria is also matched, otherwise it will be dropped. Therefore, any
+	// rules after a layer 7 rule will not be enforced for the traffic.
+	L7Protocols []L7Protocol `json:"l7Protocols,omitempty"`
 	// Rule is matched if traffic originates from workloads selected by
 	// this field. If this field is empty, this rule matches all sources.
 	// +optional
@@ -879,4 +885,21 @@ type BundleServerAuthConfiguration struct {
 	AuthType BundleServerAuthType `json:"authType"`
 	// AuthSecret is a Secret reference which stores the authentication value.
 	AuthSecret *v1.SecretReference `json:"authSecret"`
+}
+
+type L7Protocol struct {
+	HTTP *HTTPProtocol `json:"http,omitempty"`
+}
+
+// HTTPProtocol matches HTTP requests with specific host, method, and path. All fields could be used alone or together.
+// If all fields are not provided, it matches all HTTP requests.
+type HTTPProtocol struct {
+	// Host represents the hostname present in the URI or the HTTP Host header to match.
+	// It does not contain the port associated with the host.
+	Host string `json:"host,omitempty"`
+	// Method represents the HTTP method to match.
+	// It could be GET, POST, PUT, HEAD, DELETE, TRACE, OPTIONS, CONNECT and PATCH.
+	Method string `json:"method,omitempty"`
+	// Path represents the URI path to match (Ex. "/index.html", "/admin").
+	Path string `json:"path,omitempty"`
 }

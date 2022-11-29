@@ -181,6 +181,21 @@ message GroupReference {
   optional string uid = 3;
 }
 
+// HTTPProtocol matches HTTP requests with specific host, method, and path. All fields could be used alone or together.
+// If all fields are not provided, it matches all HTTP requests.
+message HTTPProtocol {
+  // Host represents the hostname present in the URI or the HTTP Host header to match.
+  // It does not contain the port associated with the host.
+  optional string host = 1;
+
+  // Method represents the HTTP method to match.
+  // It could be GET, POST, PUT, HEAD, DELETE, TRACE, OPTIONS, CONNECT and PATCH.
+  optional string method = 2;
+
+  // Path represents the URI path to match (Ex. "/index.html", "/admin").
+  optional string path = 3;
+}
+
 // IPBlock describes a particular CIDR (Ex. "192.168.1.1/24"). The except entry describes CIDRs that should
 // not be included within this rule.
 message IPBlock {
@@ -198,6 +213,11 @@ message IPNet {
   optional bytes ip = 1;
 
   optional int32 prefixLength = 2;
+}
+
+// L7Protocol defines application layer protocol to match.
+message L7Protocol {
+  optional HTTPProtocol http = 1;
 }
 
 // MulticastGroupInfo contains the list of Pods that have joined a multicast group, for a given Node.
@@ -338,6 +358,9 @@ message NetworkPolicyRule {
   // Name describes the intention of this rule.
   // Name should be unique within the policy.
   optional string name = 9;
+
+  // L7Protocols is a list of application layer protocols which should be matched.
+  repeated L7Protocol l7Protocols = 10;
 }
 
 // NetworkPolicyStats contains the information and traffic stats of a NetworkPolicy.
