@@ -73,8 +73,19 @@ func multicastPipelineClassifyFlow(cookieID uint64, pipeline binding.Pipeline) b
 }
 
 func (f *featureMulticast) initFlows() []binding.Flow {
-	cookieID := f.cookieAllocator.Request(f.category).Raw()
-	return f.multicastOutputFlows(cookieID)
+	// Install flows to send the IGMP report messages to Antrea Agent.
+	flows := f.igmpPktInFlows(uint8(PacketInReasonMC))
+	// Install flow to forward the IGMP query messages to all local Pods.
+	flows = append(flows, f.externalMulticastReceiverFlow())
+	// Install flows to forward the multicast traffic to antrea-gw0 if no local Pods have joined in the group, and this
+	// is to ensure local Pods can access the external multicast receivers.
+	flows = append(flows, f.multicastSkipIGMPMetricFlows()...)
+	if f.enableAntreaPolicy {
+		flows = append(flows, f.igmpEgressFlow())
+	}
+	// Install flows to output multicast packets.
+	flows = append(flows, f.multicastOutputFlows()...)
+	return flows
 }
 
 func (f *featureMulticast) replayFlows() []binding.Flow {
@@ -114,7 +125,8 @@ func (f *featureMulticast) multicastReceiversGroup(groupID binding.GroupIDType, 
 	return nil
 }
 
-func (f *featureMulticast) multicastOutputFlows(cookieID uint64) []binding.Flow {
+func (f *featureMulticast) multicastOutputFlows() []binding.Flow {
+	cookieID := f.cookieAllocator.Request(f.category).Raw()
 	flows := []binding.Flow{
 		MulticastOutputTable.ofTable.BuildFlow(priorityNormal).
 			Cookie(cookieID).
