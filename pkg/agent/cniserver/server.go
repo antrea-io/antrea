@@ -25,7 +25,7 @@ import (
 	"time"
 
 	cnitypes "github.com/containernetworking/cni/pkg/types"
-	"github.com/containernetworking/cni/pkg/types/current"
+	current "github.com/containernetworking/cni/pkg/types/100"
 	"github.com/containernetworking/cni/pkg/version"
 	"github.com/containernetworking/plugins/pkg/ip"
 	"google.golang.org/grpc"
@@ -176,7 +176,7 @@ func updateResultIfaceConfig(result *current.Result, defaultIPv4Gateway net.IP, 
 	}
 }
 
-func resultToResponse(result *current.Result) *cnipb.CniCmdResponse {
+func resultToResponse(result cnitypes.Result) *cnipb.CniCmdResponse {
 	var resultBytes bytes.Buffer
 	_ = result.PrintTo(&resultBytes)
 	return &cnipb.CniCmdResponse{CniResult: resultBytes.Bytes()}
@@ -358,6 +358,7 @@ func (s *CNIServer) parsePrevResultFromRequest(networkConfig *types.NetworkConfi
 		klog.Errorf("Failed to construct prevResult using previous network configuration")
 		return nil, s.unsupportedFieldResponse("prevResult", networkConfig.PrevResult)
 	}
+	prevResult.CNIVersion = networkConfig.CNIVersion
 	return prevResult, nil
 }
 
@@ -402,8 +403,9 @@ func (s *CNIServer) ipamAdd(cniConfig *CNIConfig) (*cnipb.CniCmdResponse, error)
 	if err != nil {
 		return s.ipamFailureResponse(err), nil
 	}
+	cniResult, _ := ipamResult.GetAsVersion(cniConfig.CNIVersion)
 	klog.InfoS("Allocated IP addresses", "container", cniConfig.ContainerId, "result", ipamResult)
-	return resultToResponse(ipamResult), nil
+	return resultToResponse(cniResult), nil
 }
 
 func (s *CNIServer) ipamDel(cniConfig *CNIConfig) (*cnipb.CniCmdResponse, error) {
@@ -445,8 +447,7 @@ func (s *CNIServer) CmdAdd(ctx context.Context, request *cnipb.CniCmdRequest) (*
 	case <-s.networkReadyCh:
 	}
 
-	cniVersion := cniConfig.CNIVersion
-	result := &ipam.IPAMResult{Result: current.Result{CNIVersion: cniVersion}}
+	result := &ipam.IPAMResult{Result: current.Result{CNIVersion: current.ImplementedSpecVersion}}
 	netNS := s.hostNetNsPath(cniConfig.Netns)
 	isInfraContainer := isInfraContainer(netNS)
 
@@ -519,6 +520,8 @@ func (s *CNIServer) CmdAdd(ctx context.Context, request *cnipb.CniCmdRequest) (*
 		klog.Errorf("Failed to configure interfaces for container %s: %v", cniConfig.ContainerId, err)
 		return s.configInterfaceFailureResponse(err), nil
 	}
+	cniVersion := cniConfig.CNIVersion
+	cniResult, _ := result.Result.GetAsVersion(cniVersion)
 
 	klog.Infof("CmdAdd for container %v succeeded", cniConfig.ContainerId)
 	// mark success as true to avoid rollback
@@ -532,7 +535,7 @@ func (s *CNIServer) CmdAdd(ctx context.Context, request *cnipb.CniCmdRequest) (*
 		s.podConfigurator.podInfoStore.AddCNIConfigInfo(cniInfo)
 	}
 
-	return resultToResponse(&result.Result), nil
+	return resultToResponse(cniResult), nil
 }
 
 func (s *CNIServer) CmdDel(_ context.Context, request *cnipb.CniCmdRequest) (

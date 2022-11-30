@@ -14,7 +14,7 @@
 
 package cniserver
 
-import "github.com/containernetworking/cni/pkg/types/current"
+import current "github.com/containernetworking/cni/pkg/types/100"
 
 // updateResultDNSConfig updates the DNS config from CNIConfig.
 func updateResultDNSConfig(result *current.Result, cniConfig *CNIConfig) {
