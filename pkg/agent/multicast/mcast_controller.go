@@ -340,16 +340,6 @@ func (c *Controller) Initialize() error {
 	if err != nil {
 		return err
 	}
-	// Install flows on OVS for IGMP packets and multicast traffic forwarding:
-	// 1) send the IGMP report messages to Antrea Agent,
-	// 2) forward the IGMP query messages to all local Pods,
-	// 3) forward the multicast traffic to antrea-gw0 if no local Pods have joined in the group, and this is to ensure
-	//    local Pods can access the external multicast receivers.
-	err = c.ofClient.InstallMulticastInitialFlows(uint8(openflow.PacketInReasonMC))
-	if err != nil {
-		klog.ErrorS(err, "Failed to install multicast initial flows")
-		return err
-	}
 	err = c.initQueryGroup()
 	if err != nil {
 		return err

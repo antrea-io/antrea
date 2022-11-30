@@ -775,7 +775,6 @@ func newMockMulticastController(t *testing.T, isEncap bool) *Controller {
 }
 
 func (c *Controller) initialize(t *testing.T) error {
-	mockOFClient.EXPECT().InstallMulticastInitialFlows(uint8(0)).Times(1)
 	mockOFClient.EXPECT().InstallMulticastGroup(c.queryGroupId, gomock.Any(), gomock.Any()).Times(1)
 	mockOFClient.EXPECT().InstallMulticastFlows(gomock.Any(), gomock.Any())
 	mockIfaceStore.EXPECT().GetInterfacesByType(interfacestore.InterfaceType(0)).Times(1).Return([]*interfacestore.InterfaceConfig{})
