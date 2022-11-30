@@ -3,6 +3,7 @@ bin
 .cache
 .golangci-bin
 .coverage/
+.trivy-bin
 
 .DS_Store
 
