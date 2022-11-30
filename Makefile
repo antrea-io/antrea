@@ -15,6 +15,7 @@ NANOSERVER_VERSION := $(shell head -n 1 build/images/deps/nanoserver-version)
 WIN_BUILD_TAG      := $(shell echo $(GO_VERSION) $(CNI_BINARIES_VERSION) $(NANOSERVER_VERSION)|md5sum|head -c 10)
 GIT_HOOKS := $(shell find hack/git_client_side_hooks -type f -print)
 DOCKER_NETWORK     ?= default
+TRIVY_TARGET_IMAGE ?=
 
 DOCKER_BUILD_ARGS = --build-arg OVS_VERSION=$(OVS_VERSION)
 DOCKER_BUILD_ARGS += --build-arg GO_VERSION=$(GO_VERSION)
@@ -49,6 +50,16 @@ uninstall-hooks:
 bin:
 	@mkdir -p $(BINDIR)
 	GOOS=linux $(GO) build -o $(BINDIR) $(GOFLAGS) -ldflags '$(LDFLAGS)' antrea.io/antrea/cmd/...
+
+.trivy-bin:
+	curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b $@ v0.34.0
+
+check-%:
+	@: $(if $(value $*),,$(error $* is undefined))
+
+.PHONY: trivy-scan
+trivy-scan: .trivy-bin check-TRIVY_TARGET_IMAGE
+	$(CURDIR)/.trivy-bin/trivy image --exit-code 1 --severity CRITICAL,HIGH --ignore-unfixed $(TRIVY_TARGET_IMAGE)
 
 .PHONY: antrea-agent
 antrea-agent:
@@ -301,6 +312,7 @@ clean:
 	@rm -rf $(DOCKER_CACHE)
 	@rm -rf .golangci-bin
 	@rm -rf .coverage
+	@rm -rf .trivy-bin
 
 .PHONY: codegen
 codegen:
