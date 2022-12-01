@@ -48,6 +48,7 @@ type OVSPortData struct {
 	OFPort      int32
 	ExternalIDs map[string]string
 	Options     map[string]string
+	MAC         net.HardwareAddr
 }
 
 const (
@@ -694,6 +695,19 @@ func buildPortDataCommon(port, intf map[string]interface{}, portData *OVSPortDat
 	} else { // ofport not assigned by OVS yet
 		portData.OFPort = 0
 	}
+	var macStr string
+	if field, ok := intf["mac"].(string); ok {
+		macStr = field
+	} else if fields, ok := intf["mac"].([]interface{}); ok {
+		if len(fields) > 0 {
+			macStr = fields[0].(string)
+		}
+	}
+	if macStr != "" {
+		if mac, err := net.ParseMAC(macStr); err == nil {
+			portData.MAC = mac
+		}
+	}
 }
 
 // GetPortData retrieves port data given the OVS port UUID and interface name.
@@ -709,7 +723,7 @@ func (br *OVSBridge) GetPortData(portUUID, ifName string) (*OVSPortData, Error) 
 	})
 	tx.Select(dbtransaction.Select{
 		Table:   "Interface",
-		Columns: []string{"_uuid", "type", "ofport", "options"},
+		Columns: []string{"_uuid", "type", "ofport", "options", "mac"},
 		Where:   [][]interface{}{{"name", "==", ifName}},
 	})
 
@@ -762,7 +776,7 @@ func (br *OVSBridge) GetPortList() ([]OVSPortData, Error) {
 	})
 	tx.Select(dbtransaction.Select{
 		Table:   "Interface",
-		Columns: []string{"_uuid", "type", "name", "ofport", "options"},
+		Columns: []string{"_uuid", "type", "name", "ofport", "options", "mac"},
 	})
 
 	res, err, temporary := tx.Commit()
@@ -1096,4 +1110,25 @@ func (br *OVSBridge) SetInterfaceMTU(name string, MTU int) error {
 	}
 
 	return nil
+}
+
+func (br *OVSBridge) SetInterfaceMAC(name string, mac net.HardwareAddr) Error {
+	tx := br.ovsdb.Transaction(openvSwitchSchema)
+
+	tx.Update(dbtransaction.Update{
+		Table: "Interface",
+		Where: [][]interface{}{{"name", "==", name}},
+		Row: map[string]interface{}{
+			"mac": mac.String(),
+		},
+	})
+
+	_, err, temporary := tx.Commit()
+	if err != nil {
+		klog.Error("Transaction failed: ", err)
+		return NewTransactionError(err, temporary)
+	}
+
+	return nil
+
 }

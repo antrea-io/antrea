@@ -89,7 +89,7 @@ func testContainerInterface(t *testing.T) {
 }
 
 func testGatewayInterface(t *testing.T) {
-	gatewayInterface := NewGatewayInterface("antrea-gw0")
+	gatewayInterface := NewGatewayInterface("antrea-gw0", util.GenerateRandomMAC())
 	gatewayInterface.IPs = []net.IP{gwIP}
 	gatewayInterface.OVSPortConfig = &OVSPortConfig{
 		OFPort:   13,
