@@ -411,8 +411,9 @@ func GenerateRandomMAC() net.HardwareAddr {
 	if _, err := rand.Read(buf); err != nil {
 		klog.ErrorS(err, "Failed to generate a random MAC")
 	}
-	// Set the local bit
-	buf[0] |= 2
+	// Unset the multicast bit.
+	buf[0] &= 0xfe
+	buf[0] |= 0x02
 	return buf
 }
 
