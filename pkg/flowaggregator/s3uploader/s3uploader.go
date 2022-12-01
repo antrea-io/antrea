@@ -316,7 +316,7 @@ func (p *S3UploadProcess) batchUploadAll(ctx context.Context) error {
 		reader := bytes.NewReader(buf.Bytes())
 		err := p.uploadFile(ctx, reader)
 		if err != nil {
-			p.bufferQueue = p.bufferQueue[uploaded:]
+			p.buffersToUpload = p.buffersToUpload[uploaded:]
 			return err
 		}
 		uploaded += 1
