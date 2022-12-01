@@ -36,6 +36,7 @@ import (
 	"antrea.io/antrea/pkg/agent/util/ethtool"
 	cnipb "antrea.io/antrea/pkg/apis/cni/v1beta1"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
+	cniip "antrea.io/antrea/third_party/containernetworking/ip"
 )
 
 // NetDeviceType type Enum
@@ -253,13 +254,14 @@ func (ic *ifConfigurator) configureContainerLinkVeth(
 	containerIface := &current.Interface{Name: containerIfaceName, Sandbox: containerNetNS}
 	result.Interfaces = []*current.Interface{hostIface, containerIface}
 
+	podMAC := util.GenerateRandomMAC()
 	if err := ns.WithNetNSPath(containerNetNS, func(hostNS ns.NetNS) error {
 		klog.V(2).Infof("Creating veth devices (%s, %s) for container %s", containerIfaceName, hostIfaceName, containerID)
-		hostVeth, containerVeth, err := ip.SetupVethWithName(containerIfaceName, hostIfaceName, mtu, hostNS)
+		hostVeth, containerVeth, err := cniip.SetupVethWithName(containerIfaceName, hostIfaceName, mtu, podMAC.String(), hostNS)
 		if err != nil {
 			return fmt.Errorf("failed to create veth devices for container %s: %v", containerID, err)
 		}
-		containerIface.Mac = containerVeth.HardwareAddr.String()
+		containerIface.Mac = podMAC.String()
 		hostIface.Mac = hostVeth.HardwareAddr.String()
 		// Disable TX checksum offloading when it's configured explicitly or the datapath is netdev.
 		// OVS netdev datapath doesn't support TX checksum offloading, i.e. if packet
