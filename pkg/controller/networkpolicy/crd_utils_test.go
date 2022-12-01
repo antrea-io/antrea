@@ -455,6 +455,9 @@ func TestToAntreaPeerForCRD(t *testing.T) {
 			},
 			outPeer: controlplane.NetworkPolicyPeer{
 				LabelIdentities: []uint32{1},
+				AddressGroups: []string{
+					getNormalizedUID(antreatypes.NewGroupSelector("", &selectorA, nil, nil, nil).NormalizedName),
+				},
 			},
 			direction:       controlplane.DirectionIn,
 			clusterSetScope: true,
