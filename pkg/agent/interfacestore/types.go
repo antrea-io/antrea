@@ -146,8 +146,8 @@ func NewContainerInterface(
 }
 
 // NewGatewayInterface creates InterfaceConfig for the host gateway interface.
-func NewGatewayInterface(gatewayName string) *InterfaceConfig {
-	gatewayConfig := &InterfaceConfig{InterfaceName: gatewayName, Type: GatewayInterface}
+func NewGatewayInterface(gatewayName string, gatewayMAC net.HardwareAddr) *InterfaceConfig {
+	gatewayConfig := &InterfaceConfig{InterfaceName: gatewayName, Type: GatewayInterface, MAC: gatewayMAC}
 	return gatewayConfig
 }
 
