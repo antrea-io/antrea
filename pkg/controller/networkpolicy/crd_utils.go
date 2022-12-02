@@ -108,6 +108,18 @@ func toAntreaServicesForCRD(npPorts []v1alpha1.NetworkPolicyPort, npProtocols []
 	return antreaServices, namedPortExists
 }
 
+// toAntreaL7ProtocolsForCRD converts a slice of v1alpha1.L7Protocol objects to
+// a slice of Antrea L7Protocol objects.
+func toAntreaL7ProtocolsForCRD(l7Protocols []v1alpha1.L7Protocol) []controlplane.L7Protocol {
+	var antreaL7Protocols []controlplane.L7Protocol
+	for _, l7p := range l7Protocols {
+		antreaL7Protocols = append(antreaL7Protocols, controlplane.L7Protocol{
+			HTTP: (*controlplane.HTTPProtocol)(l7p.HTTP),
+		})
+	}
+	return antreaL7Protocols
+}
+
 // toAntreaIPBlockForCRD converts a v1alpha1.IPBlock to an Antrea IPBlock.
 func toAntreaIPBlockForCRD(ipBlock *v1alpha1.IPBlock) (*controlplane.IPBlock, error) {
 	// Convert the allowed IPBlock to networkpolicy.IPNet.

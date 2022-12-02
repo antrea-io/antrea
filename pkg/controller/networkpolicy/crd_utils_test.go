@@ -206,6 +206,26 @@ func TestToAntreaServicesForCRD(t *testing.T) {
 	}
 }
 
+func TestToAntreaL7ProtocolsForCRD(t *testing.T) {
+	tables := []struct {
+		l7Protocol []crdv1alpha1.L7Protocol
+		expValue   []controlplane.L7Protocol
+	}{
+		{
+			[]crdv1alpha1.L7Protocol{
+				{HTTP: &crdv1alpha1.HTTPProtocol{Host: "test.com", Method: "GET", Path: "/admin"}},
+			},
+			[]controlplane.L7Protocol{
+				{HTTP: &controlplane.HTTPProtocol{Host: "test.com", Method: "GET", Path: "/admin"}},
+			},
+		},
+	}
+	for _, table := range tables {
+		gotValue := toAntreaL7ProtocolsForCRD(table.l7Protocol)
+		assert.Equal(t, table.expValue, gotValue)
+	}
+}
+
 func TestToAntreaIPBlockForCRD(t *testing.T) {
 	expIPNet := controlplane.IPNet{
 		IP:           ipStrToIPAddress("10.0.0.0"),
