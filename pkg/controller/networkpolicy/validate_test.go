@@ -1166,7 +1166,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 			name: "acnp-appliedto-service-from-psel",
 			policy: &crdv1alpha1.ClusterNetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "egress-rule-appliedto-service",
+					Name: "ingress-rule-appliedto-service",
 				},
 				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
 					AppliedTo: []crdv1alpha1.AppliedTo{
@@ -1197,7 +1197,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 			name: "acnp-appliedto-service-valid",
 			policy: &crdv1alpha1.ClusterNetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "egress-rule-appliedto-service",
+					Name: "ingress-rule-appliedto-service",
 				},
 				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
 					AppliedTo: []crdv1alpha1.AppliedTo{
@@ -1223,6 +1223,182 @@ func TestValidateAntreaPolicy(t *testing.T) {
 				},
 			},
 			expectedReason: "",
+		},
+		{
+			name: "acnp-l7protocols-used-with-allow",
+			policy: &crdv1alpha1.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "ingress-rule-l7protocols",
+				},
+				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
+					AppliedTo: []crdv1alpha1.AppliedTo{
+						{
+							Service: &crdv1alpha1.NamespacedName{
+								Namespace: "foo1",
+								Name:      "bar1",
+							},
+						},
+					},
+					Ingress: []crdv1alpha1.Rule{
+						{
+							Action: &allowAction,
+							L7Protocols: []crdv1alpha1.L7Protocol{
+								{
+									HTTP: &crdv1alpha1.HTTPProtocol{
+										Host:   "test.com",
+										Method: "GET",
+										Path:   "/admin",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedReason: "",
+		},
+		{
+			name: "acnp-l7protocols-used-with-pass",
+			policy: &crdv1alpha1.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "ingress-rule-l7protocols",
+				},
+				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
+					AppliedTo: []crdv1alpha1.AppliedTo{
+						{
+							Service: &crdv1alpha1.NamespacedName{
+								Namespace: "foo1",
+								Name:      "bar1",
+							},
+						},
+					},
+					Ingress: []crdv1alpha1.Rule{
+						{
+							Action: &passAction,
+							L7Protocols: []crdv1alpha1.L7Protocol{
+								{
+									HTTP: &crdv1alpha1.HTTPProtocol{
+										Host:   "test.com",
+										Method: "GET",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedReason: "layer 7 protocols only support Allow",
+		},
+		{
+			name: "acnp-l7protocols-HTTP-used-with-UDP",
+			policy: &crdv1alpha1.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "ingress-rule-l7protocols",
+				},
+				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
+					AppliedTo: []crdv1alpha1.AppliedTo{
+						{
+							Service: &crdv1alpha1.NamespacedName{
+								Namespace: "foo1",
+								Name:      "bar1",
+							},
+						},
+					},
+					Ingress: []crdv1alpha1.Rule{
+						{
+							Action: &allowAction,
+							Ports: []crdv1alpha1.NetworkPolicyPort{
+								{
+									Protocol: &k8sProtocolUDP,
+								},
+							},
+							L7Protocols: []crdv1alpha1.L7Protocol{
+								{
+									HTTP: &crdv1alpha1.HTTPProtocol{
+										Host:   "test.com",
+										Method: "GET",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedReason: "HTTP protocol can only be used when layer 4 protocol is TCP or unset",
+		},
+		{
+			name: "acnp-l7protocols-HTTP-used-with-ICMP",
+			policy: &crdv1alpha1.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "ingress-rule-l7protocols",
+				},
+				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
+					AppliedTo: []crdv1alpha1.AppliedTo{
+						{
+							Service: &crdv1alpha1.NamespacedName{
+								Namespace: "foo1",
+								Name:      "bar1",
+							},
+						},
+					},
+					Ingress: []crdv1alpha1.Rule{
+						{
+							Action: &allowAction,
+							Protocols: []crdv1alpha1.NetworkPolicyProtocol{
+								{
+									ICMP: &crdv1alpha1.ICMPProtocol{},
+								},
+							},
+							L7Protocols: []crdv1alpha1.L7Protocol{
+								{
+									HTTP: &crdv1alpha1.HTTPProtocol{
+										Host:   "test.com",
+										Method: "GET",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedReason: "HTTP protocol can not be used with protocol IGMP or ICMP",
+		},
+		{
+			name: "acnp-l7protocols-used-with-toService",
+			policy: &crdv1alpha1.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "egress-rule-l7protocols",
+				},
+				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
+					AppliedTo: []crdv1alpha1.AppliedTo{
+						{
+							NamespaceSelector: &metav1.LabelSelector{
+								MatchLabels: map[string]string{"foo1": "bar1"},
+							},
+						},
+					},
+					Egress: []crdv1alpha1.Rule{
+						{
+							Action: &allowAction,
+							L7Protocols: []crdv1alpha1.L7Protocol{
+								{
+									HTTP: &crdv1alpha1.HTTPProtocol{
+										Host:   "test.com",
+										Method: "GET",
+									},
+								},
+							},
+							ToServices: []crdv1alpha1.NamespacedName{
+								{
+									Name:      "foo",
+									Namespace: "bar",
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedReason: "layer 7 protocols can not be used with toServices",
 		},
 	}
 	for _, tt := range tests {
