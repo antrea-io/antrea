@@ -40,8 +40,19 @@ rm "${YAMLS[@]}"
 make manifest
 diff="$(git status --porcelain ${YAMLS[@]})"
 
-if [ ! -z "$diff" ]; then
+MULTICLUSTER_YAMLS=(
+    "multicluster/build/yamls/antrea-multicluster-leader-global.yml"
+    "multicluster/build/yamls/antrea-multicluster-leader-namespaced.yml"
+    "multicluster/build/yamls/antrea-multicluster-member.yml"
+)
+
+rm "${MULTICLUSTER_YAMLS[@]}"
+cd multicluster; make manifests; cd ..
+mcdiff="$(git status --porcelain ${MULTICLUSTER_YAMLS[@]})"
+
+if [[ ! -z "$diff" || ! -z "$mcdiff" ]]; then
     echoerr "The generated manifest YAMLs are not up-to-date"
-    echoerr "You can regenerate them with 'make manifest' and commit the changes"
+    echoerr "Out-of-date manifests are: \n${diff}${mcdiff}"
+    echoerr "You can regenerate them with 'make manifest' or 'cd multicluster; make manifests', and commit the changes"
     exit 1
 fi

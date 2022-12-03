@@ -88,15 +88,15 @@ spec:
                     description: Select workloads on which the rules will be applied
                       to. Cannot be set in conjunction with AppliedTo in each rule.
                     items:
-                      description: NetworkPolicyPeer describes the grouping selector
-                        of workloads.
+                      description: AppliedTo describes the grouping selector of workloads
+                        in AppliedTo field.
                       properties:
                         externalEntitySelector:
                           description: Select ExternalEntities from NetworkPolicy's
-                            Namespace as workloads in AppliedTo/To/From fields. If
-                            set with NamespaceSelector, ExternalEntities are matched
-                            from Namespaces matched by the NamespaceSelector. Cannot
-                            be set with any other selector except NamespaceSelector.
+                            Namespace as workloads in AppliedTo fields. If set with
+                            NamespaceSelector, ExternalEntities are matched from Namespaces
+                            matched by the NamespaceSelector. Cannot be set with any
+                            other selector except NamespaceSelector.
                           properties:
                             matchExpressions:
                               description: matchExpressions is a list of label selector
@@ -140,35 +140,14 @@ spec:
                                 contains only "value". The requirements are ANDed.
                               type: object
                           type: object
-                        fqdn:
-                          description: 'Restrict egress access to the Fully Qualified
-                            Domain Names prescribed by name or by wildcard match patterns.
-                            This field can only be set for NetworkPolicyPeer of egress
-                            rules. Supported formats are: Exact FQDNs, i.e. "google.com",
-                            "db-svc.default.svc.cluster.local" Wildcard expressions,
-                            i.e. "*wayfair.com".'
-                          type: string
                         group:
                           description: Group is the name of the ClusterGroup which
-                            can be set as an AppliedTo or within an Ingress or Egress
-                            rule in place of a stand-alone selector. A Group cannot
-                            be set with any other selector.
+                            can be set as an AppliedTo in place of a stand-alone selector.
+                            A Group cannot be set with any other selector.
                           type: string
-                        ipBlock:
-                          description: IPBlock describes the IPAddresses/IPBlocks
-                            that is matched in to/from. IPBlock cannot be set as part
-                            of the AppliedTo field. Cannot be set with any other selector.
-                          properties:
-                            cidr:
-                              description: CIDR is a string representing the IP Block
-                                Valid examples are "192.168.1.1/24".
-                              type: string
-                          required:
-                          - cidr
-                          type: object
                         namespaceSelector:
                           description: Select all Pods from Namespaces matched by
-                            this selector, as workloads in To/From fields. If set
+                            this selector, as workloads in AppliedTo fields. If set
                             with PodSelector, Pods are matched from Namespaces matched
                             by the NamespaceSelector. Cannot be set with any other
                             selector except PodSelector or ExternalEntitySelector.
@@ -216,74 +195,11 @@ spec:
                                 contains only "value". The requirements are ANDed.
                               type: object
                           type: object
-                        namespaces:
-                          description: 'Select Pod/ExternalEntity from Namespaces
-                            matched by specifc criteria. Current supported criteria
-                            is match: Self, which selects from the same Namespace
-                            of the appliedTo workloads. Cannot be set with any other
-                            selector except PodSelector or ExternalEntitySelector.
-                            This field can only be set when NetworkPolicyPeer is created
-                            for ClusterNetworkPolicy ingress/egress rules. Cannot
-                            be set with NamespaceSelector.'
-                          properties:
-                            match:
-                              description: NamespaceMatchType describes Namespace
-                                matching strategy.
-                              type: string
-                          type: object
-                        nodeSelector:
-                          description: Select certain Nodes which match the label
-                            selector. A NodeSelector cannot be set in AppliedTo field
-                            or set with any other selector.
-                          properties:
-                            matchExpressions:
-                              description: matchExpressions is a list of label selector
-                                requirements. The requirements are ANDed.
-                              items:
-                                description: A label selector requirement is a selector
-                                  that contains values, a key, and an operator that
-                                  relates the key and values.
-                                properties:
-                                  key:
-                                    description: key is the label key that the selector
-                                      applies to.
-                                    type: string
-                                  operator:
-                                    description: operator represents a key's relationship
-                                      to a set of values. Valid operators are In,
-                                      NotIn, Exists and DoesNotExist.
-                                    type: string
-                                  values:
-                                    description: values is an array of string values.
-                                      If the operator is In or NotIn, the values array
-                                      must be non-empty. If the operator is Exists
-                                      or DoesNotExist, the values array must be empty.
-                                      This array is replaced during a strategic merge
-                                      patch.
-                                    items:
-                                      type: string
-                                    type: array
-                                required:
-                                - key
-                                - operator
-                                type: object
-                              type: array
-                            matchLabels:
-                              additionalProperties:
-                                type: string
-                              description: matchLabels is a map of {key,value} pairs.
-                                A single {key,value} in the matchLabels map is equivalent
-                                to an element of matchExpressions, whose key field
-                                is "key", the operator is "In", and the values array
-                                contains only "value". The requirements are ANDed.
-                              type: object
-                          type: object
                         podSelector:
                           description: Select Pods from NetworkPolicy's Namespace
-                            as workloads in AppliedTo/To/From fields. If set with
-                            NamespaceSelector, Pods are matched from Namespaces matched
-                            by the NamespaceSelector. Cannot be set with any other
-                            selector except NamespaceSelector.
+                            as workloads in AppliedTo fields. If set with NamespaceSelector,
+                            Pods are matched from Namespaces matched by the NamespaceSelector.
+                            Cannot be set with any other selector except NamespaceSelector.
                           properties:
                             matchExpressions:
                               description: matchExpressions is a list of label selector
@@ -327,10 +243,6 @@ spec:
                                 contains only "value". The requirements are ANDed.
                               type: object
                           type: object
-                        scope:
-                          description: Define scope of the Pod/NamespaceSelector(s)
-                            of this peer. Can only be used in ingress NetworkPolicyPeers.
-                          type: string
                         service:
                           description: Select a certain Service which matches the
                             NamespacedName. A Service can only be set in either policy
@@ -346,8 +258,8 @@ spec:
                           type: object
                         serviceAccount:
                           description: Select all Pods with the ServiceAccount matched
-                            by this field, as workloads in AppliedTo/To/From fields.
-                            Cannot be set with any other selector.
+                            by this field, as workloads in AppliedTo fields. Cannot
+                            be set with any other selector.
                           properties:
                             name:
                               type: string
@@ -374,14 +286,14 @@ spec:
                           description: Select workloads on which this rule will be
                             applied to. Cannot be set in conjunction with NetworkPolicySpec/ClusterNetworkPolicySpec.AppliedTo.
                           items:
-                            description: NetworkPolicyPeer describes the grouping
-                              selector of workloads.
+                            description: AppliedTo describes the grouping selector
+                              of workloads in AppliedTo field.
                             properties:
                               externalEntitySelector:
                                 description: Select ExternalEntities from NetworkPolicy's
-                                  Namespace as workloads in AppliedTo/To/From fields.
-                                  If set with NamespaceSelector, ExternalEntities
-                                  are matched from Namespaces matched by the NamespaceSelector.
+                                  Namespace as workloads in AppliedTo fields. If set
+                                  with NamespaceSelector, ExternalEntities are matched
+                                  from Namespaces matched by the NamespaceSelector.
                                   Cannot be set with any other selector except NamespaceSelector.
                                 properties:
                                   matchExpressions:
@@ -428,36 +340,14 @@ spec:
                                       The requirements are ANDed.
                                     type: object
                                 type: object
-                              fqdn:
-                                description: 'Restrict egress access to the Fully
-                                  Qualified Domain Names prescribed by name or by
-                                  wildcard match patterns. This field can only be
-                                  set for NetworkPolicyPeer of egress rules. Supported
-                                  formats are: Exact FQDNs, i.e. "google.com", "db-svc.default.svc.cluster.local"
-                                  Wildcard expressions, i.e. "*wayfair.com".'
-                                type: string
                               group:
                                 description: Group is the name of the ClusterGroup
-                                  which can be set as an AppliedTo or within an Ingress
-                                  or Egress rule in place of a stand-alone selector.
-                                  A Group cannot be set with any other selector.
+                                  which can be set as an AppliedTo in place of a stand-alone
+                                  selector. A Group cannot be set with any other selector.
                                 type: string
-                              ipBlock:
-                                description: IPBlock describes the IPAddresses/IPBlocks
-                                  that is matched in to/from. IPBlock cannot be set
-                                  as part of the AppliedTo field. Cannot be set with
-                                  any other selector.
-                                properties:
-                                  cidr:
-                                    description: CIDR is a string representing the
-                                      IP Block Valid examples are "192.168.1.1/24".
-                                    type: string
-                                required:
-                                - cidr
-                                type: object
                               namespaceSelector:
                                 description: Select all Pods from Namespaces matched
-                                  by this selector, as workloads in To/From fields.
+                                  by this selector, as workloads in AppliedTo fields.
                                   If set with PodSelector, Pods are matched from Namespaces
                                   matched by the NamespaceSelector. Cannot be set
                                   with any other selector except PodSelector or ExternalEntitySelector.
@@ -507,76 +397,12 @@ spec:
                                       The requirements are ANDed.
                                     type: object
                                 type: object
-                              namespaces:
-                                description: 'Select Pod/ExternalEntity from Namespaces
-                                  matched by specifc criteria. Current supported criteria
-                                  is match: Self, which selects from the same Namespace
-                                  of the appliedTo workloads. Cannot be set with any
-                                  other selector except PodSelector or ExternalEntitySelector.
-                                  This field can only be set when NetworkPolicyPeer
-                                  is created for ClusterNetworkPolicy ingress/egress
-                                  rules. Cannot be set with NamespaceSelector.'
-                                properties:
-                                  match:
-                                    description: NamespaceMatchType describes Namespace
-                                      matching strategy.
-                                    type: string
-                                type: object
-                              nodeSelector:
-                                description: Select certain Nodes which match the
-                                  label selector. A NodeSelector cannot be set in
-                                  AppliedTo field or set with any other selector.
-                                properties:
-                                  matchExpressions:
-                                    description: matchExpressions is a list of label
-                                      selector requirements. The requirements are
-                                      ANDed.
-                                    items:
-                                      description: A label selector requirement is
-                                        a selector that contains values, a key, and
-                                        an operator that relates the key and values.
-                                      properties:
-                                        key:
-                                          description: key is the label key that the
-                                            selector applies to.
-                                          type: string
-                                        operator:
-                                          description: operator represents a key's
-                                            relationship to a set of values. Valid
-                                            operators are In, NotIn, Exists and DoesNotExist.
-                                          type: string
-                                        values:
-                                          description: values is an array of string
-                                            values. If the operator is In or NotIn,
-                                            the values array must be non-empty. If
-                                            the operator is Exists or DoesNotExist,
-                                            the values array must be empty. This array
-                                            is replaced during a strategic merge patch.
-                                          items:
-                                            type: string
-                                          type: array
-                                      required:
-                                      - key
-                                      - operator
-                                      type: object
-                                    type: array
-                                  matchLabels:
-                                    additionalProperties:
-                                      type: string
-                                    description: matchLabels is a map of {key,value}
-                                      pairs. A single {key,value} in the matchLabels
-                                      map is equivalent to an element of matchExpressions,
-                                      whose key field is "key", the operator is "In",
-                                      and the values array contains only "value".
-                                      The requirements are ANDed.
-                                    type: object
-                                type: object
                               podSelector:
                                 description: Select Pods from NetworkPolicy's Namespace
-                                  as workloads in AppliedTo/To/From fields. If set
-                                  with NamespaceSelector, Pods are matched from Namespaces
-                                  matched by the NamespaceSelector. Cannot be set
-                                  with any other selector except NamespaceSelector.
+                                  as workloads in AppliedTo fields. If set with NamespaceSelector,
+                                  Pods are matched from Namespaces matched by the
+                                  NamespaceSelector. Cannot be set with any other
+                                  selector except NamespaceSelector.
                                 properties:
                                   matchExpressions:
                                     description: matchExpressions is a list of label
@@ -622,10 +448,6 @@ spec:
                                       The requirements are ANDed.
                                     type: object
                                 type: object
-                              scope:
-                                description: Define scope of the Pod/NamespaceSelector(s)
-                                  of this peer. Can only be used in ingress NetworkPolicyPeers.
-                                type: string
                               service:
                                 description: Select a certain Service which matches
                                   the NamespacedName. A Service can only be set in
@@ -642,7 +464,7 @@ spec:
                                 type: object
                               serviceAccount:
                                 description: Select all Pods with the ServiceAccount
-                                  matched by this field, as workloads in AppliedTo/To/From
+                                  matched by this field, as workloads in AppliedTo
                                   fields. Cannot be set with any other selector.
                                 properties:
                                   name:
@@ -667,9 +489,9 @@ spec:
                             properties:
                               externalEntitySelector:
                                 description: Select ExternalEntities from NetworkPolicy's
-                                  Namespace as workloads in AppliedTo/To/From fields.
-                                  If set with NamespaceSelector, ExternalEntities
-                                  are matched from Namespaces matched by the NamespaceSelector.
+                                  Namespace as workloads in To/From fields. If set
+                                  with NamespaceSelector, ExternalEntities are matched
+                                  from Namespaces matched by the NamespaceSelector.
                                   Cannot be set with any other selector except NamespaceSelector.
                                 properties:
                                   matchExpressions:
@@ -726,9 +548,9 @@ spec:
                                 type: string
                               group:
                                 description: Group is the name of the ClusterGroup
-                                  which can be set as an AppliedTo or within an Ingress
-                                  or Egress rule in place of a stand-alone selector.
-                                  A Group cannot be set with any other selector.
+                                  which can be set within an Ingress or Egress rule
+                                  in place of a stand-alone selector. A Group cannot
+                                  be set with any other selector.
                                 type: string
                               ipBlock:
                                 description: IPBlock describes the IPAddresses/IPBlocks
@@ -797,13 +619,13 @@ spec:
                                 type: object
                               namespaces:
                                 description: 'Select Pod/ExternalEntity from Namespaces
-                                  matched by specifc criteria. Current supported criteria
-                                  is match: Self, which selects from the same Namespace
-                                  of the appliedTo workloads. Cannot be set with any
-                                  other selector except PodSelector or ExternalEntitySelector.
-                                  This field can only be set when NetworkPolicyPeer
-                                  is created for ClusterNetworkPolicy ingress/egress
-                                  rules. Cannot be set with NamespaceSelector.'
+                                  matched by specific criteria. Current supported
+                                  criteria is match: Self, which selects from the
+                                  same Namespace of the appliedTo workloads. Cannot
+                                  be set with any other selector except PodSelector
+                                  or ExternalEntitySelector. This field can only be
+                                  set when NetworkPolicyPeer is created for ClusterNetworkPolicy
+                                  ingress/egress rules. Cannot be set with NamespaceSelector.'
                                 properties:
                                   match:
                                     description: NamespaceMatchType describes Namespace
@@ -861,10 +683,10 @@ spec:
                                 type: object
                               podSelector:
                                 description: Select Pods from NetworkPolicy's Namespace
-                                  as workloads in AppliedTo/To/From fields. If set
-                                  with NamespaceSelector, Pods are matched from Namespaces
-                                  matched by the NamespaceSelector. Cannot be set
-                                  with any other selector except NamespaceSelector.
+                                  as workloads in To/From fields. If set with NamespaceSelector,
+                                  Pods are matched from Namespaces matched by the
+                                  NamespaceSelector. Cannot be set with any other
+                                  selector except NamespaceSelector.
                                 properties:
                                   matchExpressions:
                                     description: matchExpressions is a list of label
@@ -913,29 +735,52 @@ spec:
                               scope:
                                 description: Define scope of the Pod/NamespaceSelector(s)
                                   of this peer. Can only be used in ingress NetworkPolicyPeers.
+                                  Defaults to "Cluster".
                                 type: string
-                              service:
-                                description: Select a certain Service which matches
-                                  the NamespacedName. A Service can only be set in
-                                  either policy level AppliedTo field in a policy
-                                  that only has ingress rules or rule level AppliedTo
-                                  field in an ingress rule. Only a NodePort Service
-                                  can be referred by this field. Cannot be set with
-                                  any other selector.
+                              serviceAccount:
+                                description: Select all Pods with the ServiceAccount
+                                  matched by this field, as workloads in To/From fields.
+                                  Cannot be set with any other selector.
                                 properties:
                                   name:
                                     type: string
                                   namespace:
                                     type: string
                                 type: object
-                              serviceAccount:
-                                description: Select all Pods with the ServiceAccount
-                                  matched by this field, as workloads in AppliedTo/To/From
-                                  fields. Cannot be set with any other selector.
+                            type: object
+                          type: array
+                        l7Protocols:
+                          description: Set of layer 7 protocols matched by the rule.
+                            If this field is set, action can only be Allow. When this
+                            field is used in a rule, any traffic matching the other
+                            layer 3/4 criteria of the rule (typically the 5-tuple)
+                            will be forwarded to an application-aware engine for protocol
+                            detection and rule enforcement, and the traffic will be
+                            allowed if the layer 7 criteria is also matched, otherwise
+                            it will be dropped. Therefore, any rules after a layer
+                            7 rule will not be enforced for the traffic.
+                          items:
+                            properties:
+                              http:
+                                description: HTTPProtocol matches HTTP requests with
+                                  specific host, method, and path. All fields could
+                                  be used alone or together. If all fields are not
+                                  provided, it matches all HTTP requests.
                                 properties:
-                                  name:
+                                  host:
+                                    description: Host represents the hostname present
+                                      in the URI or the HTTP Host header to match.
+                                      It does not contain the port associated with
+                                      the host.
                                     type: string
-                                  namespace:
+                                  method:
+                                    description: Method represents the HTTP method
+                                      to match. It could be GET, POST, PUT, HEAD,
+                                      DELETE, TRACE, OPTIONS, CONNECT and PATCH.
+                                    type: string
+                                  path:
+                                    description: Path represents the URI path to match
+                                      (Ex. "/index.html", "/admin").
                                     type: string
                                 type: object
                             type: object
@@ -1024,9 +869,9 @@ spec:
                             properties:
                               externalEntitySelector:
                                 description: Select ExternalEntities from NetworkPolicy's
-                                  Namespace as workloads in AppliedTo/To/From fields.
-                                  If set with NamespaceSelector, ExternalEntities
-                                  are matched from Namespaces matched by the NamespaceSelector.
+                                  Namespace as workloads in To/From fields. If set
+                                  with NamespaceSelector, ExternalEntities are matched
+                                  from Namespaces matched by the NamespaceSelector.
                                   Cannot be set with any other selector except NamespaceSelector.
                                 properties:
                                   matchExpressions:
@@ -1083,9 +928,9 @@ spec:
                                 type: string
                               group:
                                 description: Group is the name of the ClusterGroup
-                                  which can be set as an AppliedTo or within an Ingress
-                                  or Egress rule in place of a stand-alone selector.
-                                  A Group cannot be set with any other selector.
+                                  which can be set within an Ingress or Egress rule
+                                  in place of a stand-alone selector. A Group cannot
+                                  be set with any other selector.
                                 type: string
                               ipBlock:
                                 description: IPBlock describes the IPAddresses/IPBlocks
@@ -1154,13 +999,13 @@ spec:
                                 type: object
                               namespaces:
                                 description: 'Select Pod/ExternalEntity from Namespaces
-                                  matched by specifc criteria. Current supported criteria
-                                  is match: Self, which selects from the same Namespace
-                                  of the appliedTo workloads. Cannot be set with any
-                                  other selector except PodSelector or ExternalEntitySelector.
-                                  This field can only be set when NetworkPolicyPeer
-                                  is created for ClusterNetworkPolicy ingress/egress
-                                  rules. Cannot be set with NamespaceSelector.'
+                                  matched by specific criteria. Current supported
+                                  criteria is match: Self, which selects from the
+                                  same Namespace of the appliedTo workloads. Cannot
+                                  be set with any other selector except PodSelector
+                                  or ExternalEntitySelector. This field can only be
+                                  set when NetworkPolicyPeer is created for ClusterNetworkPolicy
+                                  ingress/egress rules. Cannot be set with NamespaceSelector.'
                                 properties:
                                   match:
                                     description: NamespaceMatchType describes Namespace
@@ -1218,10 +1063,10 @@ spec:
                                 type: object
                               podSelector:
                                 description: Select Pods from NetworkPolicy's Namespace
-                                  as workloads in AppliedTo/To/From fields. If set
-                                  with NamespaceSelector, Pods are matched from Namespaces
-                                  matched by the NamespaceSelector. Cannot be set
-                                  with any other selector except NamespaceSelector.
+                                  as workloads in To/From fields. If set with NamespaceSelector,
+                                  Pods are matched from Namespaces matched by the
+                                  NamespaceSelector. Cannot be set with any other
+                                  selector except NamespaceSelector.
                                 properties:
                                   matchExpressions:
                                     description: matchExpressions is a list of label
@@ -1270,25 +1115,12 @@ spec:
                               scope:
                                 description: Define scope of the Pod/NamespaceSelector(s)
                                   of this peer. Can only be used in ingress NetworkPolicyPeers.
+                                  Defaults to "Cluster".
                                 type: string
-                              service:
-                                description: Select a certain Service which matches
-                                  the NamespacedName. A Service can only be set in
-                                  either policy level AppliedTo field in a policy
-                                  that only has ingress rules or rule level AppliedTo
-                                  field in an ingress rule. Only a NodePort Service
-                                  can be referred by this field. Cannot be set with
-                                  any other selector.
-                                properties:
-                                  name:
-                                    type: string
-                                  namespace:
-                                    type: string
-                                type: object
                               serviceAccount:
                                 description: Select all Pods with the ServiceAccount
-                                  matched by this field, as workloads in AppliedTo/To/From
-                                  fields. Cannot be set with any other selector.
+                                  matched by this field, as workloads in To/From fields.
+                                  Cannot be set with any other selector.
                                 properties:
                                   name:
                                     type: string
@@ -1336,14 +1168,14 @@ spec:
                           description: Select workloads on which this rule will be
                             applied to. Cannot be set in conjunction with NetworkPolicySpec/ClusterNetworkPolicySpec.AppliedTo.
                           items:
-                            description: NetworkPolicyPeer describes the grouping
-                              selector of workloads.
+                            description: AppliedTo describes the grouping selector
+                              of workloads in AppliedTo field.
                             properties:
                               externalEntitySelector:
                                 description: Select ExternalEntities from NetworkPolicy's
-                                  Namespace as workloads in AppliedTo/To/From fields.
-                                  If set with NamespaceSelector, ExternalEntities
-                                  are matched from Namespaces matched by the NamespaceSelector.
+                                  Namespace as workloads in AppliedTo fields. If set
+                                  with NamespaceSelector, ExternalEntities are matched
+                                  from Namespaces matched by the NamespaceSelector.
                                   Cannot be set with any other selector except NamespaceSelector.
                                 properties:
                                   matchExpressions:
@@ -1390,36 +1222,14 @@ spec:
                                       The requirements are ANDed.
                                     type: object
                                 type: object
-                              fqdn:
-                                description: 'Restrict egress access to the Fully
-                                  Qualified Domain Names prescribed by name or by
-                                  wildcard match patterns. This field can only be
-                                  set for NetworkPolicyPeer of egress rules. Supported
-                                  formats are: Exact FQDNs, i.e. "google.com", "db-svc.default.svc.cluster.local"
-                                  Wildcard expressions, i.e. "*wayfair.com".'
-                                type: string
                               group:
                                 description: Group is the name of the ClusterGroup
-                                  which can be set as an AppliedTo or within an Ingress
-                                  or Egress rule in place of a stand-alone selector.
-                                  A Group cannot be set with any other selector.
+                                  which can be set as an AppliedTo in place of a stand-alone
+                                  selector. A Group cannot be set with any other selector.
                                 type: string
-                              ipBlock:
-                                description: IPBlock describes the IPAddresses/IPBlocks
-                                  that is matched in to/from. IPBlock cannot be set
-                                  as part of the AppliedTo field. Cannot be set with
-                                  any other selector.
-                                properties:
-                                  cidr:
-                                    description: CIDR is a string representing the
-                                      IP Block Valid examples are "192.168.1.1/24".
-                                    type: string
-                                required:
-                                - cidr
-                                type: object
                               namespaceSelector:
                                 description: Select all Pods from Namespaces matched
-                                  by this selector, as workloads in To/From fields.
+                                  by this selector, as workloads in AppliedTo fields.
                                   If set with PodSelector, Pods are matched from Namespaces
                                   matched by the NamespaceSelector. Cannot be set
                                   with any other selector except PodSelector or ExternalEntitySelector.
@@ -1469,76 +1279,12 @@ spec:
                                       The requirements are ANDed.
                                     type: object
                                 type: object
-                              namespaces:
-                                description: 'Select Pod/ExternalEntity from Namespaces
-                                  matched by specifc criteria. Current supported criteria
-                                  is match: Self, which selects from the same Namespace
-                                  of the appliedTo workloads. Cannot be set with any
-                                  other selector except PodSelector or ExternalEntitySelector.
-                                  This field can only be set when NetworkPolicyPeer
-                                  is created for ClusterNetworkPolicy ingress/egress
-                                  rules. Cannot be set with NamespaceSelector.'
-                                properties:
-                                  match:
-                                    description: NamespaceMatchType describes Namespace
-                                      matching strategy.
-                                    type: string
-                                type: object
-                              nodeSelector:
-                                description: Select certain Nodes which match the
-                                  label selector. A NodeSelector cannot be set in
-                                  AppliedTo field or set with any other selector.
-                                properties:
-                                  matchExpressions:
-                                    description: matchExpressions is a list of label
-                                      selector requirements. The requirements are
-                                      ANDed.
-                                    items:
-                                      description: A label selector requirement is
-                                        a selector that contains values, a key, and
-                                        an operator that relates the key and values.
-                                      properties:
-                                        key:
-                                          description: key is the label key that the
-                                            selector applies to.
-                                          type: string
-                                        operator:
-                                          description: operator represents a key's
-                                            relationship to a set of values. Valid
-                                            operators are In, NotIn, Exists and DoesNotExist.
-                                          type: string
-                                        values:
-                                          description: values is an array of string
-                                            values. If the operator is In or NotIn,
-                                            the values array must be non-empty. If
-                                            the operator is Exists or DoesNotExist,
-                                            the values array must be empty. This array
-                                            is replaced during a strategic merge patch.
-                                          items:
-                                            type: string
-                                          type: array
-                                      required:
-                                      - key
-                                      - operator
-                                      type: object
-                                    type: array
-                                  matchLabels:
-                                    additionalProperties:
-                                      type: string
-                                    description: matchLabels is a map of {key,value}
-                                      pairs. A single {key,value} in the matchLabels
-                                      map is equivalent to an element of matchExpressions,
-                                      whose key field is "key", the operator is "In",
-                                      and the values array contains only "value".
-                                      The requirements are ANDed.
-                                    type: object
-                                type: object
                               podSelector:
                                 description: Select Pods from NetworkPolicy's Namespace
-                                  as workloads in AppliedTo/To/From fields. If set
-                                  with NamespaceSelector, Pods are matched from Namespaces
-                                  matched by the NamespaceSelector. Cannot be set
-                                  with any other selector except NamespaceSelector.
+                                  as workloads in AppliedTo fields. If set with NamespaceSelector,
+                                  Pods are matched from Namespaces matched by the
+                                  NamespaceSelector. Cannot be set with any other
+                                  selector except NamespaceSelector.
                                 properties:
                                   matchExpressions:
                                     description: matchExpressions is a list of label
@@ -1584,10 +1330,6 @@ spec:
                                       The requirements are ANDed.
                                     type: object
                                 type: object
-                              scope:
-                                description: Define scope of the Pod/NamespaceSelector(s)
-                                  of this peer. Can only be used in ingress NetworkPolicyPeers.
-                                type: string
                               service:
                                 description: Select a certain Service which matches
                                   the NamespacedName. A Service can only be set in
@@ -1604,7 +1346,7 @@ spec:
                                 type: object
                               serviceAccount:
                                 description: Select all Pods with the ServiceAccount
-                                  matched by this field, as workloads in AppliedTo/To/From
+                                  matched by this field, as workloads in AppliedTo
                                   fields. Cannot be set with any other selector.
                                 properties:
                                   name:
@@ -1629,9 +1371,9 @@ spec:
                             properties:
                               externalEntitySelector:
                                 description: Select ExternalEntities from NetworkPolicy's
-                                  Namespace as workloads in AppliedTo/To/From fields.
-                                  If set with NamespaceSelector, ExternalEntities
-                                  are matched from Namespaces matched by the NamespaceSelector.
+                                  Namespace as workloads in To/From fields. If set
+                                  with NamespaceSelector, ExternalEntities are matched
+                                  from Namespaces matched by the NamespaceSelector.
                                   Cannot be set with any other selector except NamespaceSelector.
                                 properties:
                                   matchExpressions:
@@ -1688,9 +1430,9 @@ spec:
                                 type: string
                               group:
                                 description: Group is the name of the ClusterGroup
-                                  which can be set as an AppliedTo or within an Ingress
-                                  or Egress rule in place of a stand-alone selector.
-                                  A Group cannot be set with any other selector.
+                                  which can be set within an Ingress or Egress rule
+                                  in place of a stand-alone selector. A Group cannot
+                                  be set with any other selector.
                                 type: string
                               ipBlock:
                                 description: IPBlock describes the IPAddresses/IPBlocks
@@ -1759,13 +1501,13 @@ spec:
                                 type: object
                               namespaces:
                                 description: 'Select Pod/ExternalEntity from Namespaces
-                                  matched by specifc criteria. Current supported criteria
-                                  is match: Self, which selects from the same Namespace
-                                  of the appliedTo workloads. Cannot be set with any
-                                  other selector except PodSelector or ExternalEntitySelector.
-                                  This field can only be set when NetworkPolicyPeer
-                                  is created for ClusterNetworkPolicy ingress/egress
-                                  rules. Cannot be set with NamespaceSelector.'
+                                  matched by specific criteria. Current supported
+                                  criteria is match: Self, which selects from the
+                                  same Namespace of the appliedTo workloads. Cannot
+                                  be set with any other selector except PodSelector
+                                  or ExternalEntitySelector. This field can only be
+                                  set when NetworkPolicyPeer is created for ClusterNetworkPolicy
+                                  ingress/egress rules. Cannot be set with NamespaceSelector.'
                                 properties:
                                   match:
                                     description: NamespaceMatchType describes Namespace
@@ -1823,10 +1565,10 @@ spec:
                                 type: object
                               podSelector:
                                 description: Select Pods from NetworkPolicy's Namespace
-                                  as workloads in AppliedTo/To/From fields. If set
-                                  with NamespaceSelector, Pods are matched from Namespaces
-                                  matched by the NamespaceSelector. Cannot be set
-                                  with any other selector except NamespaceSelector.
+                                  as workloads in To/From fields. If set with NamespaceSelector,
+                                  Pods are matched from Namespaces matched by the
+                                  NamespaceSelector. Cannot be set with any other
+                                  selector except NamespaceSelector.
                                 properties:
                                   matchExpressions:
                                     description: matchExpressions is a list of label
@@ -1875,29 +1617,52 @@ spec:
                               scope:
                                 description: Define scope of the Pod/NamespaceSelector(s)
                                   of this peer. Can only be used in ingress NetworkPolicyPeers.
+                                  Defaults to "Cluster".
                                 type: string
-                              service:
-                                description: Select a certain Service which matches
-                                  the NamespacedName. A Service can only be set in
-                                  either policy level AppliedTo field in a policy
-                                  that only has ingress rules or rule level AppliedTo
-                                  field in an ingress rule. Only a NodePort Service
-                                  can be referred by this field. Cannot be set with
-                                  any other selector.
+                              serviceAccount:
+                                description: Select all Pods with the ServiceAccount
+                                  matched by this field, as workloads in To/From fields.
+                                  Cannot be set with any other selector.
                                 properties:
                                   name:
                                     type: string
                                   namespace:
                                     type: string
                                 type: object
-                              serviceAccount:
-                                description: Select all Pods with the ServiceAccount
-                                  matched by this field, as workloads in AppliedTo/To/From
-                                  fields. Cannot be set with any other selector.
+                            type: object
+                          type: array
+                        l7Protocols:
+                          description: Set of layer 7 protocols matched by the rule.
+                            If this field is set, action can only be Allow. When this
+                            field is used in a rule, any traffic matching the other
+                            layer 3/4 criteria of the rule (typically the 5-tuple)
+                            will be forwarded to an application-aware engine for protocol
+                            detection and rule enforcement, and the traffic will be
+                            allowed if the layer 7 criteria is also matched, otherwise
+                            it will be dropped. Therefore, any rules after a layer
+                            7 rule will not be enforced for the traffic.
+                          items:
+                            properties:
+                              http:
+                                description: HTTPProtocol matches HTTP requests with
+                                  specific host, method, and path. All fields could
+                                  be used alone or together. If all fields are not
+                                  provided, it matches all HTTP requests.
                                 properties:
-                                  name:
+                                  host:
+                                    description: Host represents the hostname present
+                                      in the URI or the HTTP Host header to match.
+                                      It does not contain the port associated with
+                                      the host.
                                     type: string
-                                  namespace:
+                                  method:
+                                    description: Method represents the HTTP method
+                                      to match. It could be GET, POST, PUT, HEAD,
+                                      DELETE, TRACE, OPTIONS, CONNECT and PATCH.
+                                    type: string
+                                  path:
+                                    description: Path represents the URI path to match
+                                      (Ex. "/index.html", "/admin").
                                     type: string
                                 type: object
                             type: object
@@ -1986,9 +1751,9 @@ spec:
                             properties:
                               externalEntitySelector:
                                 description: Select ExternalEntities from NetworkPolicy's
-                                  Namespace as workloads in AppliedTo/To/From fields.
-                                  If set with NamespaceSelector, ExternalEntities
-                                  are matched from Namespaces matched by the NamespaceSelector.
+                                  Namespace as workloads in To/From fields. If set
+                                  with NamespaceSelector, ExternalEntities are matched
+                                  from Namespaces matched by the NamespaceSelector.
                                   Cannot be set with any other selector except NamespaceSelector.
                                 properties:
                                   matchExpressions:
@@ -2045,9 +1810,9 @@ spec:
                                 type: string
                               group:
                                 description: Group is the name of the ClusterGroup
-                                  which can be set as an AppliedTo or within an Ingress
-                                  or Egress rule in place of a stand-alone selector.
-                                  A Group cannot be set with any other selector.
+                                  which can be set within an Ingress or Egress rule
+                                  in place of a stand-alone selector. A Group cannot
+                                  be set with any other selector.
                                 type: string
                               ipBlock:
                                 description: IPBlock describes the IPAddresses/IPBlocks
@@ -2116,13 +1881,13 @@ spec:
                                 type: object
                               namespaces:
                                 description: 'Select Pod/ExternalEntity from Namespaces
-                                  matched by specifc criteria. Current supported criteria
-                                  is match: Self, which selects from the same Namespace
-                                  of the appliedTo workloads. Cannot be set with any
-                                  other selector except PodSelector or ExternalEntitySelector.
-                                  This field can only be set when NetworkPolicyPeer
-                                  is created for ClusterNetworkPolicy ingress/egress
-                                  rules. Cannot be set with NamespaceSelector.'
+                                  matched by specific criteria. Current supported
+                                  criteria is match: Self, which selects from the
+                                  same Namespace of the appliedTo workloads. Cannot
+                                  be set with any other selector except PodSelector
+                                  or ExternalEntitySelector. This field can only be
+                                  set when NetworkPolicyPeer is created for ClusterNetworkPolicy
+                                  ingress/egress rules. Cannot be set with NamespaceSelector.'
                                 properties:
                                   match:
                                     description: NamespaceMatchType describes Namespace
@@ -2180,10 +1945,10 @@ spec:
                                 type: object
                               podSelector:
                                 description: Select Pods from NetworkPolicy's Namespace
-                                  as workloads in AppliedTo/To/From fields. If set
-                                  with NamespaceSelector, Pods are matched from Namespaces
-                                  matched by the NamespaceSelector. Cannot be set
-                                  with any other selector except NamespaceSelector.
+                                  as workloads in To/From fields. If set with NamespaceSelector,
+                                  Pods are matched from Namespaces matched by the
+                                  NamespaceSelector. Cannot be set with any other
+                                  selector except NamespaceSelector.
                                 properties:
                                   matchExpressions:
                                     description: matchExpressions is a list of label
@@ -2232,25 +1997,12 @@ spec:
                               scope:
                                 description: Define scope of the Pod/NamespaceSelector(s)
                                   of this peer. Can only be used in ingress NetworkPolicyPeers.
+                                  Defaults to "Cluster".
                                 type: string
-                              service:
-                                description: Select a certain Service which matches
-                                  the NamespacedName. A Service can only be set in
-                                  either policy level AppliedTo field in a policy
-                                  that only has ingress rules or rule level AppliedTo
-                                  field in an ingress rule. Only a NodePort Service
-                                  can be referred by this field. Cannot be set with
-                                  any other selector.
-                                properties:
-                                  name:
-                                    type: string
-                                  namespace:
-                                    type: string
-                                type: object
                               serviceAccount:
                                 description: Select all Pods with the ServiceAccount
-                                  matched by this field, as workloads in AppliedTo/To/From
-                                  fields. Cannot be set with any other selector.
+                                  matched by this field, as workloads in To/From fields.
+                                  Cannot be set with any other selector.
                                 properties:
                                   name:
                                     type: string

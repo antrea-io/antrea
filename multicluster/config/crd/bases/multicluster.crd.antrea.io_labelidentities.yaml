@@ -15,7 +15,19 @@ spec:
     singular: labelidentity
   scope: Cluster
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - description: Normalized string of a label identity
+      jsonPath: .spec.label
+      name: Label
+      type: string
+    - description: ID allocated for the label identity by the leader cluster
+      jsonPath: .spec.id
+      name: ID
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
     schema:
       openAPIV3Schema:
         description: LabelIdentity is an imported label identity from the ClusterSet.
@@ -50,3 +62,4 @@ spec:
         type: object
     served: true
     storage: true
+    subresources: {}
