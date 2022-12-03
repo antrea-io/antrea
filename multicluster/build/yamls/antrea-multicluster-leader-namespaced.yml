@@ -365,7 +365,7 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/config: ab74dc9fd6d27a934c61d50e51dbf331ef6d57ab28c1121df3520bef6aad1f79
+        checksum/config: 5da3da29da98cffcad8b7b40bbfcbff1273c65ce5205f4bcc9290f6bd532e9bb
       labels:
         app: antrea
         component: antrea-mc-controller
