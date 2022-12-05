@@ -21,7 +21,7 @@ uploaded to all the Nodes. If you install the Multi-cluster Controller manually,
 you can run the tests from the top-level directory with `go test -v antrea.io/antrea/multicluster/test/e2e --mc-gateway`
 or run `bash ci/jenkins/test-mc.sh --testcase e2e --mc-gateway`. If you'd like
 to run test with Kind clusters, you can run `bash ci/jenkins/test-mc.sh --testcase e2e --mc-gateway --kind`.
-The command will create three Kind clusters and deploy Multi-cluster controllers
+The command will create three Kind clusters and deploy Multi-cluster Controllers
 into the Kind clusters before running e2e tests.
 
 When you use `test-mc.sh`, make sure your kubeconfig files of the clusters are placed

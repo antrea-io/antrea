@@ -81,8 +81,13 @@ antrea-agent.conf: |
     namespace: "" # Change to the Namespace where antrea-mc-controller is deployed.
 ```
 
-At the moment, Multi-cluster Gateway only works with the Antrea `encap` traffic
-mode, and all member clusters in a ClusterSet must use the same tunnel type.
+Prior to Antrea v1.11.0, Multi-cluster Gateway only works with Antrea `encap` traffic
+mode, and all member clusters in a ClusterSet must use the same tunnel type. Since
+Antrea v1.11.0, Multi-cluster Gateway also works with the Antrea `noEncap`, `hybrid`
+and `networkPolicyOnly` modes. For `noEncap` and `hybrid` modes, Antrea Multi-cluster
+deployment is the same as `encap` mode. For `networkPolicyOnly` mode, we need extra
+Antrea configuration changes to support Multi-cluster Gateway. Please check
+[the deployment guide](./policy-only-mode.md) for more information.
 
 ### Deploy Antrea Multi-cluster Controller
 
