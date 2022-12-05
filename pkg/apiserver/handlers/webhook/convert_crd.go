@@ -178,10 +178,10 @@ func HandleCRDConversion(crdConvertFunc convertFunc) http.HandlerFunc {
 			http.Error(w, html.EscapeString(msg), http.StatusBadRequest)
 			return
 		}
-		err = outSerializer.Encode(responseObj, w) // lgtm[go/reflected-xss]
+		err = outSerializer.Encode(responseObj, w)
 		if err != nil {
 			klog.Error(err)
-			http.Error(w, err.Error(), http.StatusInternalServerError) // lgtm[go/reflected-xss]
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 	}

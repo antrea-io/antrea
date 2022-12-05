@@ -73,5 +73,5 @@ func ovsVSwitchdUDS() string {
 }
 
 func getOVSCommand(cmdStr string) *exec.Cmd {
-	return exec.Command("/bin/sh", "-c", cmdStr) // lgtm[go/command-injection]
+	return exec.Command("/bin/sh", "-c", cmdStr)
 }
