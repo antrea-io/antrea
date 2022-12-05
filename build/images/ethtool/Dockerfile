@@ -17,6 +17,17 @@ FROM ubuntu:20.04
 LABEL maintainer="Antrea <projectantrea-dev@googlegroups.com>"
 LABEL description="A Docker image based on Ubuntu 20.04 which includes ethtool, ip tools and iptables."
 
+# See https://github.com/kubernetes-sigs/iptables-wrappers
+# /iptables-wrapper-installer.sh will have permissions of 600.
+# --chmod=700 doesn't work with older versions of Docker and requires DOCKER_BUILDKIT=1, so we use
+# chmod in the RUN command below instead.
+ADD https://raw.githubusercontent.com/kubernetes-sigs/iptables-wrappers/e139a115350974aac8a82ec4b815d2845f86997e/iptables-wrapper-installer.sh /iptables-wrapper-installer.sh
+
+# We run /iptables-wrapper-installer.sh with --no-sanity-check to avoid an issue
+# when building the arm64 version of this docker image with qemu:
+# Failed to initialize nft: Protocol not supported
 RUN apt-get update && \
     apt-get install -y --no-install-recommends ethtool iproute2 iptables && \
-    rm -rf /var/cache/apt/* /var/lib/apt/lists/*
+    rm -rf /var/cache/apt/* /var/lib/apt/lists/* && \
+    chmod +x /iptables-wrapper-installer.sh && \
+    /iptables-wrapper-installer.sh --no-sanity-check
