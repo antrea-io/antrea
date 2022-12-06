@@ -49,6 +49,8 @@ type leaderClusterInfo struct {
 	secretName string
 }
 
+var getRemoteConfigAndClient = commonarea.GetRemoteConfigAndClient
+
 // MemberClusterSetReconciler reconciles a ClusterSet object in the member cluster deployment.
 type MemberClusterSetReconciler struct {
 	client.Client
@@ -207,8 +209,13 @@ func (r *MemberClusterSetReconciler) createOrUpdateRemoteCommonArea(clusterSet *
 		return err
 	}
 
-	r.remoteCommonArea, err = commonarea.NewRemoteCommonArea(clusterID, r.clusterSetID, common.ClusterSetID(r.clusterID), url, secret, r.Scheme,
-		r.Client, clusterSet.Spec.Namespace, r.Namespace)
+	config, remoteCommonAreaMgr, remoteClient, err := getRemoteConfigAndClient(secret, url, clusterID, clusterSet, r.Scheme)
+	if err != nil {
+		return err
+	}
+
+	r.remoteCommonArea, err = commonarea.NewRemoteCommonArea(clusterID, r.clusterSetID, common.ClusterSetID(r.clusterID), remoteCommonAreaMgr, remoteClient, r.Scheme,
+		r.Client, clusterSet.Spec.Namespace, r.Namespace, config)
 	if err != nil {
 		klog.ErrorS(err, "Unable to create RemoteCommonArea", "cluster", clusterID)
 		return err

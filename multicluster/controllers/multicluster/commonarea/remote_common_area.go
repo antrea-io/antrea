@@ -133,37 +133,10 @@ type remoteCommonArea struct {
 
 // NewRemoteCommonArea returns a RemoteCommonArea instance which will use access credentials from the Secret to
 // connect to the leader cluster's CommonArea.
-func NewRemoteCommonArea(clusterID common.ClusterID, clusterSetID common.ClusterSetID, localClusterID common.ClusterSetID, url string, secret *v1.Secret,
-	scheme *runtime.Scheme, localClusterClient client.Client, clusterSetNamespace string, localNamespace string) (RemoteCommonArea, error) {
+func NewRemoteCommonArea(clusterID common.ClusterID, clusterSetID common.ClusterSetID, localClusterID common.ClusterSetID, mgr manager.Manager, remoteClient client.Client,
+	scheme *runtime.Scheme, localClusterClient client.Client, clusterSetNamespace string, localNamespace string, config *rest.Config) (RemoteCommonArea, error) {
 	klog.InfoS("Create a RemoteCommonArea", "cluster", clusterID)
 
-	crtData, token, err := GetSecretCACrtAndToken(secret)
-	if err != nil {
-		return nil, err
-	}
-
-	// Create manager for the RemoteCommonArea
-	klog.InfoS("Connecting to RemoteCommonArea", "cluster", clusterID, "url", url)
-	config, err := clientcmd.BuildConfigFromFlags(url, "")
-	if err != nil {
-		return nil, err
-	}
-	config.BearerToken = string(token)
-	config.CAData = crtData
-	mgr, err := ctrl.NewManager(config, ctrl.Options{
-		Scheme:             scheme,
-		MetricsBindAddress: "0",
-		Namespace:          clusterSetNamespace,
-	})
-	if err != nil {
-		klog.ErrorS(err, "Error creating manager for RemoteCommonArea", "cluster", clusterID)
-		return nil, err
-	}
-
-	remoteClient, e := client.New(config, client.Options{Scheme: scheme})
-	if e != nil {
-		return nil, e
-	}
 	remote := &remoteCommonArea{
 		Client:             remoteClient,
 		ClusterManager:     mgr,
@@ -189,10 +162,40 @@ func NewRemoteCommonArea(clusterID common.ClusterID, clusterSetID common.Cluster
 	return remote, nil
 }
 
+func GetRemoteConfigAndClient(secretObj *v1.Secret, url string, clusterID common.ClusterID, clusterSet *multiclusterv1alpha1.ClusterSet, scheme *runtime.Scheme) (*rest.Config,
+	manager.Manager, client.Client, error) {
+	crtData, token, err := getSecretCACrtAndToken(secretObj)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	config, err := clientcmd.BuildConfigFromFlags(url, "")
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	config.BearerToken = string(token)
+	config.CAData = crtData
+
+	remoteCommonAreaMgr, err := ctrl.NewManager(config, ctrl.Options{
+		Scheme:             scheme,
+		MetricsBindAddress: "0",
+		Namespace:          clusterSet.Spec.Namespace,
+	})
+	if err != nil {
+		klog.ErrorS(err, "Error creating manager for RemoteCommonArea", "cluster", clusterID)
+		return nil, nil, nil, err
+	}
+
+	remoteClient, e := client.New(config, client.Options{Scheme: scheme})
+	if e != nil {
+		return nil, nil, nil, e
+	}
+	return config, remoteCommonAreaMgr, remoteClient, nil
+}
+
 /**
  * GetSecretCACrtAndToken returns the access credentials from Secret.
  */
-func GetSecretCACrtAndToken(secretObj *v1.Secret) ([]byte, []byte, error) {
+func getSecretCACrtAndToken(secretObj *v1.Secret) ([]byte, []byte, error) {
 	caData, found := secretObj.Data[v1.ServiceAccountRootCAKey]
 	if !found {
 		return nil, nil, fmt.Errorf("ca.crt data not found in Secret %v", secretObj.GetName())
