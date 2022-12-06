@@ -45,6 +45,7 @@ import (
 	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions/crd/v1alpha1"
 	crdlisters "antrea.io/antrea/pkg/client/listers/crd/v1alpha1"
 	"antrea.io/antrea/pkg/controller/types"
+	"antrea.io/antrea/pkg/util/k8s"
 )
 
 const (
@@ -461,7 +462,8 @@ func (c *Controller) getBundleExternalNodes(en *v1alpha1.BundleExternalNodes) (s
 		}
 		enNames := sets.NewString()
 		for _, n := range allExternalNodes {
-			enNames.Insert(n.Name)
+			enNameKey := k8s.NamespacedName(n.Namespace, n.Name)
+			enNames.Insert(enNameKey)
 		}
 		return enNames, nil
 	}
@@ -475,7 +477,7 @@ func (c *Controller) getBundleExternalNodes(en *v1alpha1.BundleExternalNodes) (s
 			}
 			return nil, fmt.Errorf("unable to get existing ExternalNode %s/%s: %v", en.Namespace, name, err)
 		}
-		enNames.Insert(name)
+		enNames.Insert(k8s.NamespacedName(en.Namespace, name))
 	}
 	if en.NodeSelector != nil {
 		nodeSelector, _ := metav1.LabelSelectorAsSelector(en.NodeSelector)
@@ -484,7 +486,7 @@ func (c *Controller) getBundleExternalNodes(en *v1alpha1.BundleExternalNodes) (s
 			return nil, fmt.Errorf("failed to list ExternalNodes with labels %s in namespace %s: %v", nodeSelector.String(), en.Namespace, err)
 		}
 		for _, n := range selectedNodes {
-			enNames.Insert(n.Name)
+			enNames.Insert(k8s.NamespacedName(n.Namespace, n.Name))
 		}
 	}
 	return enNames, nil
@@ -920,8 +922,9 @@ func mergeConditions(oldConditions, newConditions []v1alpha1.SupportBundleCollec
 }
 
 func getNodeKey(status *controlplane.SupportBundleCollectionNodeStatus) string {
-	// TODO: use NodeNamespace/NodeName for ExternalNode after the Namespace is added in the connection key between
-	// antrea-agent and antrea-controller.
+	if status.NodeType == controlplane.SupportBundleCollectionNodeTypeExternalNode {
+		return k8s.NamespacedName(status.NodeNamespace, status.NodeName)
+	}
 	return status.NodeName
 }
 

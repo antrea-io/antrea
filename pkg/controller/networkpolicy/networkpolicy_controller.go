@@ -59,6 +59,7 @@ import (
 	"antrea.io/antrea/pkg/controller/networkpolicy/store"
 	antreatypes "antrea.io/antrea/pkg/controller/types"
 	"antrea.io/antrea/pkg/features"
+	"antrea.io/antrea/pkg/util/externalnode"
 	"antrea.io/antrea/pkg/util/k8s"
 	utilsets "antrea.io/antrea/pkg/util/sets"
 )
@@ -1283,17 +1284,18 @@ func (n *NetworkPolicyController) syncAppliedToGroup(key string) error {
 				appGroupNodeNames.Insert(pod.Spec.NodeName)
 			}
 			for _, extEntity := range externalEntities {
-				if extEntity.Spec.ExternalNode == "" {
+				entityNodeKey := externalnode.GenerateEntityNodeKey(extEntity)
+				if entityNodeKey == "" {
 					continue
 				}
 				scheduledExtEntityNum++
-				entitySet := memberSetByNode[extEntity.Spec.ExternalNode]
+				entitySet := memberSetByNode[entityNodeKey]
 				if entitySet == nil {
 					entitySet = controlplane.GroupMemberSet{}
 				}
 				entitySet.Insert(externalEntityToGroupMember(extEntity, false))
-				memberSetByNode[extEntity.Spec.ExternalNode] = entitySet
-				appGroupNodeNames.Insert(extEntity.Spec.ExternalNode)
+				memberSetByNode[entityNodeKey] = entitySet
+				appGroupNodeNames.Insert(entityNodeKey)
 			}
 			updatedAppliedToGroup = &antreatypes.AppliedToGroup{
 				UID:               appliedToGroup.UID,

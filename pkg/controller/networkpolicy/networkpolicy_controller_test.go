@@ -31,6 +31,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -54,6 +55,7 @@ import (
 	"antrea.io/antrea/pkg/controller/labelidentity"
 	"antrea.io/antrea/pkg/controller/networkpolicy/store"
 	antreatypes "antrea.io/antrea/pkg/controller/types"
+	"antrea.io/antrea/pkg/util/externalnode"
 )
 
 var alwaysReady = func() bool { return true }
@@ -3389,6 +3391,107 @@ func TestSyncInternalNetworkPolicyWithGroups(t *testing.T) {
 				return reflect.DeepEqual(tt.expectedPolicy, gotPolicy), nil
 			})
 			assert.NoError(t, err, "Expected %#v\ngot %#v", tt.expectedPolicy, gotPolicy)
+		})
+	}
+}
+
+func TestSyncAppliedToGroupWithExternalEntity(t *testing.T) {
+	selectorSpec := metav1.LabelSelector{
+		MatchLabels: map[string]string{"group": "appliedTo"},
+	}
+	tests := []struct {
+		name                string
+		addedExternalEntity *v1alpha2.ExternalEntity
+		entityNodeKey       string
+		addedInSpan         bool
+	}{
+		{
+			name: "match-external-entity-created-by-external-node",
+			addedExternalEntity: &v1alpha2.ExternalEntity{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "entityA",
+					Namespace: "nsA",
+					Labels:    map[string]string{"group": "appliedTo"},
+					OwnerReferences: []metav1.OwnerReference{
+						{
+							APIVersion: "crd.antrea.io/v1alpha1",
+							Kind:       externalnode.EntityOwnerKind,
+							Name:       "nodeA",
+						},
+					},
+				},
+				Spec: v1alpha2.ExternalEntitySpec{
+					ExternalNode: "nodeA",
+				},
+			},
+			entityNodeKey: "nsA/nodeA",
+			addedInSpan:   true,
+		},
+		{
+			name: "match-external-entity-created-by-other-modules",
+			addedExternalEntity: &v1alpha2.ExternalEntity{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "entityB",
+					Namespace: "nsA",
+					Labels:    map[string]string{"group": "appliedTo"},
+					OwnerReferences: []metav1.OwnerReference{
+						{
+							APIVersion: "crd.antrea.io/v1alpha1",
+							Kind:       "external-modules",
+							Name:       "nodeB",
+						},
+					},
+				},
+				Spec: v1alpha2.ExternalEntitySpec{
+					ExternalNode: "nodeB",
+				},
+			},
+			entityNodeKey: "nodeB",
+			addedInSpan:   true,
+		},
+		{
+			name: "match-external-entity-not-set-external-node",
+			addedExternalEntity: &v1alpha2.ExternalEntity{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "entityA",
+					Namespace: "nsA",
+					Labels:    map[string]string{"group": "appliedTo"},
+					OwnerReferences: []metav1.OwnerReference{
+						{
+							APIVersion: "crd.antrea.io/v1alpha1",
+							Kind:       "external-modules",
+							Name:       "nodeB",
+						},
+					},
+				},
+				Spec: v1alpha2.ExternalEntitySpec{},
+			},
+			entityNodeKey: "nodeB",
+			addedInSpan:   false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, npc := newController()
+			npc.groupingInterface.AddExternalEntity(tt.addedExternalEntity)
+			groupSelector := antreatypes.NewGroupSelector("nsA", nil, nil, &selectorSpec, nil)
+			appGroupID := getNormalizedUID(groupSelector.NormalizedName)
+			appliedToGroup := &antreatypes.AppliedToGroup{
+				Name:     appGroupID,
+				UID:      types.UID(appGroupID),
+				Selector: groupSelector,
+			}
+			npc.appliedToGroupStore.Create(appliedToGroup)
+			npc.groupingInterface.AddGroup(appliedToGroupType, appliedToGroup.Name, appliedToGroup.Selector)
+			npc.syncAppliedToGroup(appGroupID)
+			appGroupObj, _, _ := npc.appliedToGroupStore.Get(appGroupID)
+			appGroup := appGroupObj.(*antreatypes.AppliedToGroup)
+			entitiesAdded := appGroup.GroupMemberByNode[tt.entityNodeKey]
+			if tt.addedInSpan {
+				assert.Equal(t, 1, len(entitiesAdded), "expected Entity Node to add into AppliedToGroup span")
+			} else {
+				assert.Equal(t, 0, len(entitiesAdded), "expected Entity Node not to add into AppliedToGroup span")
+			}
 		})
 	}
 }

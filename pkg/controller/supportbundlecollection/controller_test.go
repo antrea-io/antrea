@@ -43,6 +43,7 @@ import (
 	crdinformers "antrea.io/antrea/pkg/client/informers/externalversions"
 	bundlecollectionstore "antrea.io/antrea/pkg/controller/supportbundlecollection/store"
 	"antrea.io/antrea/pkg/controller/types"
+	"antrea.io/antrea/pkg/util/k8s"
 )
 
 const (
@@ -621,7 +622,7 @@ func TestGetBundleExternalNodes(t *testing.T) {
 				Namespace: "ns1",
 				NodeNames: []string{"n1", "n2"},
 			},
-			expectedNodes: sets.NewString("n1", "n2"),
+			expectedNodes: sets.NewString("ns1/n1", "ns1/n2"),
 		}, {
 			bundleNodes: &v1alpha1.BundleExternalNodes{
 				Namespace: "ns1",
@@ -630,12 +631,12 @@ func TestGetBundleExternalNodes(t *testing.T) {
 					MatchLabels: map[string]string{"test": "selected"},
 				},
 			},
-			expectedNodes: sets.NewString("n1", "n3"),
+			expectedNodes: sets.NewString("ns1/n1", "ns1/n3"),
 		}, {
 			bundleNodes: &v1alpha1.BundleExternalNodes{
 				Namespace: "ns1",
 			},
-			expectedNodes: sets.NewString("n1", "n2", "n3", "n4"),
+			expectedNodes: sets.NewString("ns1/n1", "ns1/n2", "ns1/n3", "ns1/n4"),
 		}, {
 			bundleNodes:   nil,
 			expectedNodes: sets.NewString(),
@@ -806,7 +807,7 @@ func TestCreateAndDeleteInternalSupportBundleCollection(t *testing.T) {
 				},
 				authType: v1alpha1.APIKey,
 			},
-			expectedNodes: sets.NewString("en1", "en2", "en3"),
+			expectedNodes: sets.NewString("ns1/en1", "ns1/en2", "ns1/en3"),
 			expectedAuth: controlplane.BundleServerAuthConfiguration{
 				APIKey: testKeyString,
 			},
@@ -822,7 +823,7 @@ func TestCreateAndDeleteInternalSupportBundleCollection(t *testing.T) {
 				},
 				authType: v1alpha1.APIKey,
 			},
-			expectedNodes: sets.NewString("n1", "n2", "en5"),
+			expectedNodes: sets.NewString("n1", "n2", "ns2/en5"),
 			expectedAuth: controlplane.BundleServerAuthConfiguration{
 				APIKey: testKeyString,
 			},
@@ -1603,10 +1604,15 @@ func TestUpdateSupportBundleCollectionStatus(t *testing.T) {
 
 func TestUpdateStatus(t *testing.T) {
 	var controller *Controller
+	namespace := "ns1"
 	getSpan := func(nodesCount int) []string {
 		nodes := make([]string, nodesCount)
 		for i := 0; i < nodesCount; i++ {
-			nodes[i] = fmt.Sprintf("n%d", i)
+			nodeKey := fmt.Sprintf("n%d", i)
+			if i%2 == 0 {
+				nodeKey = k8s.NamespacedName(namespace, nodeKey)
+			}
+			nodes[i] = nodeKey
 		}
 		return nodes
 	}
@@ -1662,7 +1668,6 @@ func TestUpdateStatus(t *testing.T) {
 		assert.NoError(t, err)
 	}
 
-	namespace := "ns1"
 	agentReportStatus := func(nodesCount, failedNodes int, collectionName string) {
 		for i := 0; i < nodesCount; i++ {
 			nodeName := fmt.Sprintf("n%d", i)
@@ -1740,7 +1745,7 @@ func TestUpdateStatus(t *testing.T) {
 			Type:    v1alpha1.CollectionFailure,
 			Status:  metav1.ConditionTrue,
 			Reason:  string(metav1.StatusReasonInternalError),
-			Message: fmt.Sprintf(`Failed Agent count: 2, "unknown error":[n0, n1]`),
+			Message: fmt.Sprintf(`Failed Agent count: 2, "unknown error":[n1, ns1/n0]`),
 		}
 		assert.True(t, conditionExistsIgnoreLastTransitionTime(bundleCollection.Status.Conditions, failureStatus))
 		// Test merging failure message.
@@ -1752,7 +1757,7 @@ func TestUpdateStatus(t *testing.T) {
 			Type:    v1alpha1.CollectionFailure,
 			Status:  metav1.ConditionTrue,
 			Reason:  string(metav1.StatusReasonInternalError),
-			Message: fmt.Sprintf(`Failed Agent count: 3, "agent internal error":[n5], "unknown error":[n0, n1]`),
+			Message: fmt.Sprintf(`Failed Agent count: 3, "agent internal error":[n5], "unknown error":[n1, ns1/n0]`),
 		}))
 		assert.False(t, conditionExistsIgnoreLastTransitionTime(bundleCollection.Status.Conditions, failureStatus))
 		assert.True(t, conditionExistsIgnoreLastTransitionTime(bundleCollection.Status.Conditions, v1alpha1.SupportBundleCollectionCondition{
