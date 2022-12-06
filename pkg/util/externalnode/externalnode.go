@@ -21,9 +21,15 @@ import (
 	"io"
 
 	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
+	"antrea.io/antrea/pkg/apis/crd/v1alpha2"
+	"antrea.io/antrea/pkg/util/k8s"
 )
 
-const interfaceNameLength = 5
+const (
+	EntityOwnerKind = "ExternalNode"
+
+	interfaceNameLength = 5
+)
 
 func GenExternalEntityName(externalNode *v1alpha1.ExternalNode) (string, error) {
 	if len(externalNode.Spec.Interfaces) == 0 {
@@ -41,4 +47,19 @@ func GenExternalEntityName(externalNode *v1alpha1.ExternalNode) (string, error) 
 		hashedIfName := hex.EncodeToString(hash.Sum(nil))
 		return externalNode.Name + "-" + hashedIfName[:interfaceNameLength], nil
 	}
+}
+
+func GenerateEntityNodeKey(externalEntity *v1alpha2.ExternalEntity) string {
+	if externalEntity.Spec.ExternalNode == "" {
+		return ""
+	}
+	entityNodeKey := externalEntity.Spec.ExternalNode
+	if len(externalEntity.OwnerReferences) == 0 {
+		return entityNodeKey
+	}
+	ownerRef := externalEntity.OwnerReferences[0]
+	if ownerRef.Kind == EntityOwnerKind {
+		entityNodeKey = k8s.NamespacedName(externalEntity.Namespace, entityNodeKey)
+	}
+	return entityNodeKey
 }
