@@ -578,3 +578,72 @@ func TestSetupDefaultTunnelInterface(t *testing.T) {
 		})
 	}
 }
+
+func TestSetupGatewayInterface(t *testing.T) {
+	fakeMAC, _ := net.ParseMAC("12:34:56:78:76:54")
+	defer mockSetLinkUp(fakeMAC, 10, nil)()
+	defer mockConfigureLinkAddress(nil)()
+	defer mockSetInterfaceMTU(nil)()
+
+	controller := mock.NewController(t)
+	defer controller.Finish()
+
+	podCIDRStr := "172.16.10.0/24"
+	_, podCIDR, _ := net.ParseCIDR(podCIDRStr)
+	nodeConfig := &config.NodeConfig{
+		Name:        "n1",
+		Type:        config.K8sNode,
+		OVSBridge:   "br-int",
+		PodIPv4CIDR: podCIDR,
+		NodeMTU:     1450,
+	}
+	networkConfig := &config.NetworkConfig{
+		TrafficEncapMode: config.TrafficEncapModeEncap,
+		TunnelType:       ovsconfig.GeneveTunnel,
+		TunnelCsum:       false,
+	}
+
+	mockOVSBridgeClient := ovsconfigtest.NewMockOVSBridgeClient(controller)
+	client := fake.NewSimpleClientset()
+	ifaceStore := interfacestore.NewInterfaceStore()
+	stopCh := make(chan struct{})
+	initializer := &Initializer{
+		client:          client,
+		ifaceStore:      ifaceStore,
+		ovsBridgeClient: mockOVSBridgeClient,
+		ovsBridge:       "br-int",
+		networkConfig:   networkConfig,
+		nodeConfig:      nodeConfig,
+		hostGateway:     "antrea-gw0",
+		stopCh:          stopCh,
+	}
+	close(stopCh)
+	portUUID := "123456780a"
+	ofport := int32(config.HostGatewayOFPort)
+	mockOVSBridgeClient.EXPECT().CreateInternalPort(initializer.hostGateway, ofport, mock.Any(), mock.Any()).Return(portUUID, nil)
+	mockOVSBridgeClient.EXPECT().SetInterfaceMAC(initializer.hostGateway, fakeMAC).Return(nil)
+	mockOVSBridgeClient.EXPECT().GetOFPort(initializer.hostGateway, false).Return(ofport, nil)
+	mockOVSBridgeClient.EXPECT().SetInterfaceMTU(initializer.hostGateway, nodeConfig.NodeMTU).Return(nil)
+	err := initializer.setupGatewayInterface()
+	assert.NoError(t, err)
+}
+
+func mockSetLinkUp(returnedMAC net.HardwareAddr, returnIndex int, returnErr error) func() {
+	originalSetLinkUp := setLinkUp
+	setLinkUp = func(name string) (net.HardwareAddr, int, error) {
+		return returnedMAC, returnIndex, returnErr
+	}
+	return func() {
+		setLinkUp = originalSetLinkUp
+	}
+}
+
+func mockConfigureLinkAddress(returnedErr error) func() {
+	originalConfigureLinkAddresses := configureLinkAddresses
+	configureLinkAddresses = func(idx int, ipNets []*net.IPNet) error {
+		return returnedErr
+	}
+	return func() {
+		configureLinkAddresses = originalConfigureLinkAddresses
+	}
+}

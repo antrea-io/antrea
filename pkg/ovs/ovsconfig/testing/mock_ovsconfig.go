@@ -22,6 +22,7 @@ package testing
 import (
 	ovsconfig "antrea.io/antrea/pkg/ovs/ovsconfig"
 	gomock "github.com/golang/mock/gomock"
+	net "net"
 	reflect "reflect"
 )
 
@@ -453,6 +454,20 @@ func (m *MockOVSBridgeClient) SetExternalIDs(arg0 map[string]interface{}) ovscon
 func (mr *MockOVSBridgeClientMockRecorder) SetExternalIDs(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetExternalIDs", reflect.TypeOf((*MockOVSBridgeClient)(nil).SetExternalIDs), arg0)
+}
+
+// SetInterfaceMAC mocks base method
+func (m *MockOVSBridgeClient) SetInterfaceMAC(arg0 string, arg1 net.HardwareAddr) ovsconfig.Error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetInterfaceMAC", arg0, arg1)
+	ret0, _ := ret[0].(ovsconfig.Error)
+	return ret0
+}
+
+// SetInterfaceMAC indicates an expected call of SetInterfaceMAC
+func (mr *MockOVSBridgeClientMockRecorder) SetInterfaceMAC(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetInterfaceMAC", reflect.TypeOf((*MockOVSBridgeClient)(nil).SetInterfaceMAC), arg0, arg1)
 }
 
 // SetInterfaceMTU mocks base method

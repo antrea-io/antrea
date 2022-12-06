@@ -104,3 +104,15 @@ func TestExtendCIDRWithIP(t *testing.T) {
 		assert.Equal(t, expectedIPNet, gotIPNet)
 	}
 }
+
+func TestGenerateRandomMAC(t *testing.T) {
+	validateBits := func(mac net.HardwareAddr) (byte, byte) {
+		localBit := mac[0] & 0x2 >> 1
+		mcastBit := mac[0] & 0x1
+		return localBit, mcastBit
+	}
+	mac1 := GenerateRandomMAC()
+	localBit, mcastBit := validateBits(mac1)
+	assert.Equal(t, uint8(1), localBit)
+	assert.Equal(t, uint8(0), mcastBit)
+}
