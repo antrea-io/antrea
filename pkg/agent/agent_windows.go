@@ -34,6 +34,11 @@ import (
 	utilip "antrea.io/antrea/pkg/util/ip"
 )
 
+var (
+	// setInterfaceMTU is meant to be overridden for testing
+	setInterfaceMTU = util.SetInterfaceMTU
+)
+
 func (i *Initializer) prepareHostNetwork() error {
 	if i.nodeConfig.Type == config.K8sNode {
 		return i.prepareHNSNetworkAndOVSExtension()
@@ -419,7 +424,7 @@ func (i *Initializer) setInterfaceMTU(iface string, mtu int) error {
 	if err := i.ovsBridgeClient.SetInterfaceMTU(iface, mtu); err != nil {
 		return err
 	}
-	return util.SetInterfaceMTU(iface, mtu)
+	return setInterfaceMTU(iface, mtu)
 }
 
 func (i *Initializer) setVMNodeConfig(en *v1alpha1.ExternalNode, nodeName string) error {
