@@ -272,15 +272,13 @@ network connectivity for these VLANs.
 The `Multicast` feature enables forwarding multicast traffic within the cluster network (i.e., between Pods) and between
 the external network and the cluster network.
 
-More documentation will be coming in the future.
-
 #### Requirements for this Feature
 
 This feature is only supported:
 
 * on Linux Nodes
 * for IPv4 traffic
-* in `noEncap` mode
+* in `noEncap` and `encap` traffic modes
 
 ### SecondaryNetwork
 
