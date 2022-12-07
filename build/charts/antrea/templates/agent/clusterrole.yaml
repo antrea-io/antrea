@@ -90,6 +90,20 @@ rules:
       - create
       - get
   - apiGroups:
+      - controlplane.antrea.io
+    resources:
+      - supportbundlecollections
+    verbs:
+      - get
+      - watch
+      - list
+  - apiGroups:
+      - controlplane.antrea.io
+    resources:
+      - supportbundlecollections/status
+    verbs:
+      - create
+  - apiGroups:
       - authentication.k8s.io
     resources:
       - tokenreviews
