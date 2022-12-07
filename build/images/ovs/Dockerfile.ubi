@@ -51,10 +51,13 @@ COPY charon-logging.conf /tmp
 COPY --from=ovs-rpms /tmp/ovs-rpms/* /tmp/ovs-rpms/
 RUN rm -f /etc/yum.repos.d/* && mv /tmp/CentOS.repo /etc/yum.repos.d/CentOS.repo && \
     curl https://www.centos.org/keys/RPM-GPG-KEY-CentOS-Official -o /etc/pki/rpm-gpg/RPM-GPG-KEY-centosofficial && \
-    subscription-manager config --rhsm.manage_repos=0 && \
+    # Disable the default redhat.repo. This substitutes `subscription-manager config --rhsm.manage_repos=0`
+    # as subscription-manager is not supported running in containers.
+    sed -i.bak "s/^manage_repos = .$/manage_repos = 0/g" /etc/rhsm/rhsm.conf && \
     yum clean all -y && yum reinstall yum -y && \
     yum install /tmp/ovs-rpms/* -y && yum install epel-release -y && \
     yum install iptables logrotate strongswan -y && \
     mv /etc/logrotate.d/openvswitch /etc/logrotate.d/openvswitch-switch && \
     sed -i "/rotate /a\    #size 100M" /etc/logrotate.d/openvswitch-switch && \
+    rm /etc/rhsm/rhsm.conf.bak && \
     rm -rf /tmp/* && yum clean all
