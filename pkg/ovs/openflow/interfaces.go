@@ -322,7 +322,6 @@ type LearnAction interface {
 	LoadRegMark(marks ...*RegMark) LearnAction
 	LoadFieldToField(fromField, toField *RegField) LearnAction
 	LoadXXRegToXXReg(fromXXField, toXXField *XXRegField) LearnAction
-	SetDstMAC(mac net.HardwareAddr) LearnAction
 	Done() FlowBuilder
 }
 
