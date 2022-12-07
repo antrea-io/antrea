@@ -2982,6 +2982,9 @@ data:
     # Enable certificated-based authentication for IPsec.
     #  IPsecCertAuth: false
 
+    # Enable collecting support bundle files with SupportBundleCollection CRD.
+    #  SupportBundleCollection: false
+
     # Name of the OpenVSwitch bridge antrea-agent will create and use.
     # Make sure it doesn't conflict with your existing OpenVSwitch bridges.
     ovsBridge: "br-int"
@@ -3572,6 +3575,20 @@ rules:
     verbs:
       - create
       - get
+  - apiGroups:
+      - controlplane.antrea.io
+    resources:
+      - supportbundlecollections
+    verbs:
+      - get
+      - watch
+      - list
+  - apiGroups:
+      - controlplane.antrea.io
+    resources:
+      - supportbundlecollections/status
+    verbs:
+      - create
   - apiGroups:
       - authentication.k8s.io
     resources:
@@ -4256,7 +4273,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 4e2311619bbb44c5903fc863c0df9616409367bdc5316eb4c8f677cbab5bad04
+        checksum/config: 5ff20899f04440bb5318887c6743bdd2cf4d784ab7d790812bdb106dde147547
       labels:
         app: antrea
         component: antrea-agent
@@ -4497,7 +4514,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 4e2311619bbb44c5903fc863c0df9616409367bdc5316eb4c8f677cbab5bad04
+        checksum/config: 5ff20899f04440bb5318887c6743bdd2cf4d784ab7d790812bdb106dde147547
       labels:
         app: antrea
         component: antrea-controller

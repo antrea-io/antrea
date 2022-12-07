@@ -12,18 +12,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package fake
+package compress
 
 import (
-	"context"
+	"testing"
 
-	"k8s.io/client-go/testing"
-
-	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
+	"github.com/spf13/afero"
+	"github.com/stretchr/testify/assert"
 )
 
-func (c *FakeSupportBundleCollections) UpdateStatus(ctx context.Context, name string, status *v1beta2.SupportBundleCollectionStatus) error {
-	_, err := c.Fake.
-		Invokes(testing.NewUpdateSubresourceAction(supportbundlecollectionsResource, "status", "", status), &v1beta2.SupportBundleCollectionStatus{})
-	return err
+var testFS = new(afero.MemMapFs)
+
+func TestPackDir(t *testing.T) {
+	basedir, err := afero.TempDir(testFS, "", "bundle_tmp_")
+	assert.NoError(t, err)
+	defer testFS.RemoveAll(basedir)
+
+	outputFile, err := afero.TempFile(testFS, "", "bundle_*.tar.gz")
+	assert.NoError(t, err)
+	defer outputFile.Close()
+
+	_, err = PackDir(testFS, basedir, outputFile)
+	assert.NoError(t, err)
+	_, err = PackDir(testFS, "/noexist", outputFile)
+	assert.Error(t, err)
 }
