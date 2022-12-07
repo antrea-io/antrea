@@ -772,6 +772,8 @@ func TestFlowWithCTMatchers(t *testing.T) {
 	ofctlClient := ovsctl.NewClient(br)
 	ctIPSrc, ctIPSrcNet, _ := net.ParseCIDR("1.1.1.1/24")
 	ctIPDst, ctIPDstNet, _ := net.ParseCIDR("2.2.2.2/24")
+	ctIPv6Src, ctIPv6SrcNet, _ := net.ParseCIDR("1:1:1::1/64")
+	ctIPv6Dst, ctIPv6DstNet, _ := net.ParseCIDR("2:2:2::2/64")
 	ctPortSrc := uint16(10001)
 	ctPortDst := uint16(20002)
 	priority := uint16(200)
@@ -793,6 +795,24 @@ func TestFlowWithCTMatchers(t *testing.T) {
 		MatchCTProtocol(binding.ProtocolTCP).
 		Action().NextTable().
 		Done()
+	flow3 := table.BuildFlow(priority).
+		MatchProtocol(binding.ProtocolIPv6).
+		MatchCTStateNew(true).
+		MatchCTSrcIP(ctIPv6Src).
+		MatchCTDstIP(ctIPv6Dst).
+		MatchCTSrcPort(ctPortSrc).
+		MatchCTDstPort(ctPortDst).
+		MatchCTProtocol(binding.ProtocolTCPv6).
+		Action().NextTable().
+		Done()
+	flow4 := table.BuildFlow(priority).
+		MatchProtocol(binding.ProtocolIPv6).
+		MatchCTStateEst(true).
+		MatchCTSrcIPNet(*ctIPv6SrcNet).
+		MatchCTDstIPNet(*ctIPv6DstNet).
+		MatchCTProtocol(binding.ProtocolTCPv6).
+		Action().NextTable().
+		Done()
 	expectFlows := []*ExpectFlow{
 		{fmt.Sprintf("priority=%d,ct_state=+new,ct_nw_src=%s,ct_nw_dst=%s,ct_nw_proto=6,ct_tp_src=%d,ct_tp_dst=%d,ip",
 			priority, ctIPSrc.String(), ctIPDst.String(), ctPortSrc, ctPortDst),
@@ -803,13 +823,22 @@ func TestFlowWithCTMatchers(t *testing.T) {
 				priority, ctIPSrcNet.String(), ctIPDstNet.String()),
 			fmt.Sprintf("goto_table:%d", table.GetNext()),
 		},
+		{fmt.Sprintf("priority=%d,ct_state=+new,ct_ipv6_src=%s,ct_ipv6_dst=%s,ct_nw_proto=6,ct_tp_src=%d,ct_tp_dst=%d,ipv6",
+			priority, ctIPv6Src.String(), ctIPv6Dst.String(), ctPortSrc, ctPortDst),
+			fmt.Sprintf("goto_table:%d", table.GetNext()),
+		},
+		{
+			fmt.Sprintf("priority=%d,ct_state=+est,ct_ipv6_src=%s,ct_ipv6_dst=%s,ct_nw_proto=6,ipv6",
+				priority, ctIPv6SrcNet.String(), ctIPv6DstNet.String()),
+			fmt.Sprintf("goto_table:%d", table.GetNext()),
+		},
 	}
-	for _, f := range []binding.Flow{flow1, flow2} {
+	for _, f := range []binding.Flow{flow1, flow2, flow3, flow4} {
 		err = f.Add()
 		assert.Nil(t, err, "no error returned when adding flow")
 	}
 	CheckFlowExists(t, ofctlClient, "", table.GetID(), true, expectFlows)
-	for _, f := range []binding.Flow{flow1, flow2} {
+	for _, f := range []binding.Flow{flow1, flow2, flow3, flow4} {
 		err = f.Delete()
 		assert.Nil(t, err, "no error returned when deleting flow")
 	}
