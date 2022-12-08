@@ -1,3 +1,5 @@
+#!/usr/bin/env bash
+
 # Copyright 2022 Antrea Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,13 +14,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG BUILD_TAG
-FROM antrea/base-ubuntu:${BUILD_TAG}
+# build_tag is used to generate the tag for all the base images
+# (e.g. antrea/openvswitch) used as part of the build chain to produce the
+# Antrea (Linux) images.
+function build_tag() {
+    local this_dir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+    local antrea_version=$(head -n 1 $this_dir/../../VERSION | cut -f1,2 -d'.')
+    local tag="antrea-${antrea_version}"
+    echo "$tag"
+}
 
-LABEL maintainer="Antrea <projectantrea-dev@googlegroups.com>"
-LABEL description="The Docker image to deploy the Antrea CNI."
-
-USER root
-
-COPY build/images/scripts/* /usr/local/bin/
-COPY bin/* /usr/local/bin/
+echo "$(build_tag "$@")"
