@@ -166,7 +166,7 @@ func checkNPLRulesForPod(t *testing.T, data *TestData, r *require.Assertions, np
 			rules = append(rules, rule)
 		}
 	}
-	checkForNPLRuleInIPTables(t, data, r, antreaPod, rules, present)
+	checkForNPLRuleInIPTables(t, data, r, antreaPod, rules, present, false)
 	checkForNPLListeningSockets(t, data, r, antreaPod, rules, present)
 }
 
@@ -198,10 +198,11 @@ func protocolToString(p corev1.Protocol) string {
 	return strings.ToLower(string(p))
 }
 
-func checkForNPLRuleInIPTables(t *testing.T, data *TestData, r *require.Assertions, antreaPod string, rules []nplRuleData, present bool) {
+func checkForNPLRuleInIPTables(t *testing.T, data *TestData, r *require.Assertions, antreaPod string, rules []nplRuleData, present bool, print bool) {
 	cmd := []string{"iptables", "-t", "nat", "-S"}
 	t.Logf("Verifying iptables rules %v, present: %v", rules, present)
-	const timeout = 60 * time.Second
+	const timeout = 30 * time.Second
+	cnt := 0
 	err := wait.Poll(time.Second, timeout, func() (bool, error) {
 		stdout, _, err := data.RunCommandFromPod(antreaNamespace, antreaPod, agentContainerName, cmd)
 		if err != nil {
@@ -209,6 +210,10 @@ func checkForNPLRuleInIPTables(t *testing.T, data *TestData, r *require.Assertio
 			// Retry, as sometimes error can occur due to concurrent operations on iptables.
 			return false, nil
 		}
+		if cnt == 3 && print {
+			fmt.Println(stdout)
+		}
+		cnt++
 		for _, rule := range rules {
 			// For simplicity's sake, we only look for that one rule.
 			ruleSpec := buildRuleForPod(rule)
@@ -699,7 +704,7 @@ func testNPLChangePortRangeAgentRestart(t *testing.T, data *TestData) {
 		time.Sleep(10 * time.Second)
 		checkForNPLRuleInNetNat(t, data, r, antreaPod, node, rules, false)
 	} else {
-		checkForNPLRuleInIPTables(t, data, r, antreaPod, rules, false)
+		checkForNPLRuleInIPTables(t, data, r, antreaPod, rules, false, true)
 		checkForNPLListeningSockets(t, data, r, antreaPod, rules, false)
 	}
 
