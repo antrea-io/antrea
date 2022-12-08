@@ -24,7 +24,7 @@ function echoerr {
 }
 
 _usage="Usage: $0 [--pull] [--push] [--platform <PLATFORM>] [--distro [ubuntu|ubi]]
-Build the antrea/base-ubuntu:<OVS_VERSION> image.
+Build the antrea base image.
         --pull                  Always attempt to pull a newer version of the base images
         --push                  Push the built image to the registry
         --platform <PLATFORM>   Target platform for the image if server is multi-platform capable
@@ -90,28 +90,29 @@ THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
 pushd $THIS_DIR > /dev/null
 
-OVS_VERSION=$(head -n 1 ../deps/ovs-version)
 CNI_BINARIES_VERSION=$(head -n 1 ../deps/cni-binaries-version)
+
+BUILD_TAG=$(../build-tag.sh)
 
 if $PULL; then
     if [[ ${DOCKER_REGISTRY} == "" ]]; then
-        docker pull $PLATFORM_ARG ubuntu:20.04
+        docker pull $PLATFORM_ARG ubuntu:22.04
     else
-        docker pull ${DOCKER_REGISTRY}/antrea/ubuntu:20.04
-        docker tag ${DOCKER_REGISTRY}/antrea/ubuntu:20.04 ubuntu:20.04
+        docker pull ${DOCKER_REGISTRY}/antrea/ubuntu:22.04
+        docker tag ${DOCKER_REGISTRY}/antrea/ubuntu:22.04 ubuntu:22.04
     fi
 
     if [ "$DISTRO" == "ubuntu" ]; then
         IMAGES_LIST=(
-            "antrea/openvswitch:$OVS_VERSION"
+            "antrea/openvswitch:$BUILD_TAG"
             "antrea/cni-binaries:$CNI_BINARIES_VERSION"
-            "antrea/base-ubuntu:$OVS_VERSION"
+            "antrea/base-ubuntu:$BUILD_TAG"
         )
     elif [ "$DISTRO" == "ubi" ]; then
         IMAGES_LIST=(
-            "antrea/openvswitch-ubi:$OVS_VERSION"
+            "antrea/openvswitch-ubi:$BUILD_TAG"
             "antrea/cni-binaries:$CNI_BINARIES_VERSION"
-            "antrea/base-ubi:$OVS_VERSION"
+            "antrea/base-ubi:$BUILD_TAG"
         )
     fi
     for image in "${IMAGES_LIST[@]}"; do
@@ -131,28 +132,28 @@ docker build $PLATFORM_ARG --target cni-binaries \
        --cache-from antrea/cni-binaries:$CNI_BINARIES_VERSION \
        -t antrea/cni-binaries:$CNI_BINARIES_VERSION \
        --build-arg CNI_BINARIES_VERSION=$CNI_BINARIES_VERSION \
-       --build-arg OVS_VERSION=$OVS_VERSION .
+       --build-arg BUILD_TAG=$BUILD_TAG .
 
 if [ "$DISTRO" == "ubuntu" ]; then
     docker build $PLATFORM_ARG \
            --cache-from antrea/cni-binaries:$CNI_BINARIES_VERSION \
-           --cache-from antrea/base-ubuntu:$OVS_VERSION \
-           -t antrea/base-ubuntu:$OVS_VERSION \
+           --cache-from antrea/base-ubuntu:$BUILD_TAG \
+           -t antrea/base-ubuntu:$BUILD_TAG \
            --build-arg CNI_BINARIES_VERSION=$CNI_BINARIES_VERSION \
-           --build-arg OVS_VERSION=$OVS_VERSION .
+           --build-arg BUILD_TAG=$BUILD_TAG .
 elif [ "$DISTRO" == "ubi" ]; then
     docker build $PLATFORM_ARG \
            --cache-from antrea/cni-binaries:$CNI_BINARIES_VERSION \
-           --cache-from antrea/base-ubuntu:$OVS_VERSION \
-           -t antrea/base-ubi:$OVS_VERSION \
+           --cache-from antrea/base-ubi:$BUILD_TAG \
+           -t antrea/base-ubi:$BUILD_TAG \
            -f Dockerfile.ubi \
            --build-arg CNI_BINARIES_VERSION=$CNI_BINARIES_VERSION \
-           --build-arg OVS_VERSION=$OVS_VERSION .
+           --build-arg BUILD_TAG=$BUILD_TAG .
 fi
 
 if $PUSH; then
     docker push antrea/cni-binaries:$CNI_BINARIES_VERSION
-    docker push antrea/base-$DISTRO:$OVS_VERSION
+    docker push antrea/base-$DISTRO:$BUILD_TAG
 fi
 
 popd > /dev/null

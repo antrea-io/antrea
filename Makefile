@@ -12,14 +12,16 @@ OVS_VERSION        := $(shell head -n 1 build/images/deps/ovs-version)
 GO_VERSION         := $(shell head -n 1 build/images/deps/go-version)
 CNI_BINARIES_VERSION := $(shell head -n 1 build/images/deps/cni-binaries-version)
 NANOSERVER_VERSION := $(shell head -n 1 build/images/deps/nanoserver-version)
+BUILD_TAG          := $(shell build/images/build-tag.sh)
 WIN_BUILD_TAG      := $(shell echo $(GO_VERSION) $(CNI_BINARIES_VERSION) $(NANOSERVER_VERSION)|md5sum|head -c 10)
 GIT_HOOKS := $(shell find hack/git_client_side_hooks -type f -print)
 DOCKER_NETWORK     ?= default
 TRIVY_TARGET_IMAGE ?=
 
-DOCKER_BUILD_ARGS = --build-arg OVS_VERSION=$(OVS_VERSION)
+DOCKER_BUILD_ARGS := --build-arg OVS_VERSION=$(OVS_VERSION)
 DOCKER_BUILD_ARGS += --build-arg GO_VERSION=$(GO_VERSION)
-WIN_BUILD_ARGS = --build-arg GO_VERSION=$(GO_VERSION)
+DOCKER_BUILD_ARGS += --build-arg BUILD_TAG=$(BUILD_TAG)
+WIN_BUILD_ARGS := --build-arg GO_VERSION=$(GO_VERSION)
 WIN_BUILD_ARGS += --build-arg CNI_BINARIES_VERSION=$(CNI_BINARIES_VERSION)
 WIN_BUILD_ARGS += --build-arg NANOSERVER_VERSION=$(NANOSERVER_VERSION)
 WIN_BUILD_ARGS += --build-arg WIN_BUILD_TAG=$(WIN_BUILD_TAG)
