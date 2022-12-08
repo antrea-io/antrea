@@ -17,6 +17,7 @@ package ipam
 import (
 	"fmt"
 	"regexp"
+	"sync"
 	"testing"
 	"time"
 
@@ -49,6 +50,8 @@ var (
 	testPear           = "pear"
 	testNoAnnotation   = "empty"
 	testJunkAnnotation = "junk"
+
+	testCNIVersion = "0.4.0"
 )
 
 func createIPPools(crdClient *fakepoolclient.IPPoolClientset) {
@@ -531,4 +534,114 @@ func TestAntreaIPAMDriver(t *testing.T) {
 
 	// Make sure repeated call without previous container results in error
 	testAddError("pear3")
+}
+
+func TestSecondaryNetworkAdd(t *testing.T) {
+	testCases := []struct {
+		name        string
+		networkConf *argtypes.NetworkConfig
+		args        *invoke.Args
+		k8sArgs     *argtypes.K8sArgs
+		initFunc    func(stopCh chan struct{}) *AntreaIPAM
+		expectedRes error
+	}{
+		{
+			name: "Both Antrea IPPool and static address are empty",
+			networkConf: &argtypes.NetworkConfig{
+				CNIVersion: testCNIVersion,
+				IPAM: &argtypes.IPAMConfig{
+					IPPools: []string{},
+				},
+			},
+			expectedRes: fmt.Errorf("at least one Antrea IPPool or static address must be specified"),
+		},
+		{
+			name: "Specify the static IP Address",
+			networkConf: &argtypes.NetworkConfig{
+				CNIVersion: testCNIVersion,
+				IPAM: &argtypes.IPAMConfig{
+					Addresses: []argtypes.Address{
+						{Address: "192.168.1.1/24"},
+					},
+				},
+			},
+		},
+		{
+			name: "Antrea IPAM driver not ready",
+			networkConf: &argtypes.NetworkConfig{
+				CNIVersion: testCNIVersion,
+				IPAM: &argtypes.IPAMConfig{
+					IPPools: []string{
+						testApple,
+					},
+				},
+			},
+			expectedRes: fmt.Errorf("Antrea IPAM driver not ready: timed out waiting for the condition"),
+		},
+		{
+			name: "Add secondary network successfully",
+			networkConf: &argtypes.NetworkConfig{
+				CNIVersion: testCNIVersion,
+				IPAM: &argtypes.IPAMConfig{
+					IPPools: []string{
+						testApple,
+					},
+				},
+			},
+			k8sArgs: &argtypes.K8sArgs{
+				CommonArgs:        cnitypes.CommonArgs{},
+				K8S_POD_NAME:      "test-pod",
+				K8S_POD_NAMESPACE: "test-ns",
+			},
+			args: &invoke.Args{
+				ContainerID: "container-id",
+			},
+			expectedRes: nil,
+			initFunc: func(stopCh chan struct{}) *AntreaIPAM {
+				k8sClient, crdClient := initTestClients()
+
+				informerFactory := informers.NewSharedInformerFactory(k8sClient, 0)
+				crdInformerFactory := crdinformers.NewSharedInformerFactory(crdClient, 0)
+				listOptions := func(options *metav1.ListOptions) {
+					options.FieldSelector = fields.OneTermEqualSelector("spec.nodeName", "fakeNode").String()
+				}
+				localPodInformer := coreinformers.NewFilteredPodInformer(
+					k8sClient,
+					metav1.NamespaceAll,
+					0,
+					cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, // NamespaceIndex is used in NPLController.
+					listOptions,
+				)
+
+				antreaIPAMController, err := InitializeAntreaIPAMController(crdClient, informerFactory, crdInformerFactory, localPodInformer, true)
+				require.NoError(t, err, "Expected no error in initialization for Antrea IPAM Controller")
+				createIPPools(crdClient)
+
+				go antreaIPAMController.Run(stopCh)
+				crdInformerFactory.Start(stopCh)
+				crdInformerFactory.WaitForCacheSync(stopCh)
+
+				return &AntreaIPAM{
+					controller:      antreaIPAMController,
+					controllerMutex: sync.RWMutex{},
+				}
+			},
+		},
+	}
+
+	for _, tt := range testCases {
+		t.Run(tt.name, func(t *testing.T) {
+			var d *AntreaIPAM
+			if tt.initFunc == nil {
+				d = &AntreaIPAM{}
+			} else {
+				stopCh := make(chan struct{})
+				d = tt.initFunc(stopCh)
+				defer close(stopCh)
+			}
+
+			_, err := d.secondaryNetworkAdd(tt.args, tt.k8sArgs, tt.networkConf)
+			assert.Equal(t, tt.expectedRes, err)
+		})
+	}
 }
