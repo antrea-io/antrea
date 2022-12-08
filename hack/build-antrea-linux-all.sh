@@ -21,9 +21,9 @@ function echoerr {
 }
 
 _usage="Usage: $0 [--pull] [--push-base-images] [--coverage] [--platform <PLATFORM>] [--distro [ubuntu|ubi]]
-Build the antrea/antrea-ubuntu image, as well as all the base images in the build chain. This is
-typically used in CI to build the image with the latest version of all dependencies, taking into
-account changes to all Dockerfiles.
+Build the antrea image, as well as all the base images in the build chain. This is typically used in
+CI to build the image with the latest version of all dependencies, taking into account changes to
+all Dockerfiles.
         --pull                  Always attempt to pull a newer version of the base images.
         --push-base-images      Push built images to the registry. Only base images will be pushed.
         --coverage              Build the image with support for code coverage.
@@ -101,9 +101,11 @@ if [ "$DISTRO" == "ubi" ]; then
     ARGS="$ARGS --distro ubi"
 fi
 
-OVS_VERSION=$(head -n 1 build/images/deps/ovs-version)
 CNI_BINARIES_VERSION=$(head -n 1 build/images/deps/cni-binaries-version)
 GO_VERSION=$(head -n 1 build/images/deps/go-version)
+
+BUILD_TAG=$(build/images/build-tag.sh)
+echo "BUILD_TAG: $BUILD_TAG"
 
 # We pull all images ahead of time, instead of calling the independent build.sh
 # scripts with "--pull". We do not want to overwrite the antrea/openvswitch
@@ -112,27 +114,27 @@ GO_VERSION=$(head -n 1 build/images/deps/go-version)
 # new base images in the build chain.
 if $PULL; then
     if [[ ${DOCKER_REGISTRY} == "" ]]; then
-        docker pull $PLATFORM_ARG ubuntu:20.04
+        docker pull $PLATFORM_ARG ubuntu:22.04
         docker pull $PLATFORM_ARG golang:$GO_VERSION
     else
-        docker pull ${DOCKER_REGISTRY}/antrea/ubuntu:20.04
-        docker tag ${DOCKER_REGISTRY}/antrea/ubuntu:20.04 ubuntu:20.04
+        docker pull ${DOCKER_REGISTRY}/antrea/ubuntu:22.04
+        docker tag ${DOCKER_REGISTRY}/antrea/ubuntu:22.04 ubuntu:22.04
         docker pull ${DOCKER_REGISTRY}/antrea/golang:$GO_VERSION
         docker tag ${DOCKER_REGISTRY}/antrea/golang:$GO_VERSION golang:$GO_VERSION
     fi
     if [ "$DISTRO" == "ubuntu" ]; then
         IMAGES_LIST=(
-            "antrea/openvswitch-debs:$OVS_VERSION"
-            "antrea/openvswitch:$OVS_VERSION"
+            "antrea/openvswitch-debs:$BUILD_TAG"
+            "antrea/openvswitch:$BUILD_TAG"
             "antrea/cni-binaries:$CNI_BINARIES_VERSION"
-            "antrea/base-ubuntu:$OVS_VERSION"
+            "antrea/base-ubuntu:$BUILD_TAG"
         )
     elif [ "$DISTRO" == "ubi" ]; then
         IMAGES_LIST=(
-            "antrea/openvswitch-rpms:$OVS_VERSION"
-            "antrea/openvswitch-ubi:$OVS_VERSION"
+            "antrea/openvswitch-rpms:$BUILD_TAG"
+            "antrea/openvswitch-ubi:$BUILD_TAG"
             "antrea/cni-binaries:$CNI_BINARIES_VERSION"
-            "antrea/base-ubi:$OVS_VERSION"
+            "antrea/base-ubi:$BUILD_TAG"
         )
     fi
     for image in "${IMAGES_LIST[@]}"; do

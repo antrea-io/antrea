@@ -1,4 +1,18 @@
-FROM ubuntu:20.04 as ovs-debs
+# Copyright 2022 Antrea Authors
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+FROM ubuntu:22.04 as ovs-debs
 
 # Some patches may not apply cleanly if a non-default version is provided.
 # See build/images/deps/ovs-version for the default version.
@@ -25,10 +39,10 @@ RUN wget -q -O - https://www.openvswitch.org/releases/openvswitch-$OVS_VERSION.t
     cd / && rm -rf /tmp/openvswitch*
 
 
-FROM ubuntu:20.04
+FROM ubuntu:22.04
 
 LABEL maintainer="Antrea <projectantrea-dev@googlegroups.com>"
-LABEL description="A Docker image based on Ubuntu 20.04 which includes Open vSwitch built from source."
+LABEL description="A Docker image based on Ubuntu 22.04 which includes Open vSwitch built from source."
 
 COPY --from=ovs-debs /tmp/ovs-debs/* /tmp/ovs-debs/
 COPY charon-logging.conf /tmp
@@ -39,7 +53,7 @@ COPY charon-logging.conf /tmp
 # final image.
 RUN apt-get update && \
     apt-get install -y --no-install-recommends iptables logrotate libstrongswan-standard-plugins && \
-    (dpkg -i /tmp/ovs-debs/*.deb || apt-get -f -y --no-install-recommends install) && \
+    apt-get -f -y --no-install-recommends install /tmp/ovs-debs/*.deb && \
     rm -rf /var/cache/apt/* /var/lib/apt/lists/* && \
     sed -i "/rotate /a\    #size 100M" /etc/logrotate.d/openvswitch-switch && \
     sed -i "/^.*filelog.*{/r /tmp/charon-logging.conf" /etc/strongswan.d/charon-logging.conf && \

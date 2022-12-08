@@ -24,7 +24,7 @@ function echoerr {
 }
 
 _usage="Usage: $0 [--pull] [--push] [--platform <PLATFORM>] [--distro [ubuntu|ubi]]
-Build the antrea/base-ubuntu:<OVS_VERSION> image.
+Build the antrea openvswitch image.
         --pull                  Always attempt to pull a newer version of the base images
         --push                  Push the built image to the registry
         --platform <PLATFORM>   Target platform for the image if server is multi-platform capable
@@ -92,6 +92,8 @@ pushd $THIS_DIR > /dev/null
 
 OVS_VERSION=$(head -n 1 ../deps/ovs-version)
 
+BUILD_TAG=$(../build-tag.sh)
+
 # This is a bit complicated but we make sure that we only build OVS if
 # necessary, and at the moment --cache-from does not play nicely with multistage
 # builds: we need to push the intermediate image to the registry. Note that the
@@ -101,20 +103,20 @@ OVS_VERSION=$(head -n 1 ../deps/ovs-version)
 
 if $PULL; then
     if [[ ${DOCKER_REGISTRY} == "" ]]; then
-        docker pull $PLATFORM_ARG ubuntu:20.04
+        docker pull $PLATFORM_ARG ubuntu:22.04
     else
-        docker pull ${DOCKER_REGISTRY}/antrea/ubuntu:20.04
-        docker tag ${DOCKER_REGISTRY}/antrea/ubuntu:20.04 ubuntu:20.04
+        docker pull ${DOCKER_REGISTRY}/antrea/ubuntu:22.04
+        docker tag ${DOCKER_REGISTRY}/antrea/ubuntu:22.04 ubuntu:22.04
     fi
     if [ "$DISTRO" == "ubuntu" ]; then
         IMAGES_LIST=(
-            "antrea/openvswitch-debs:$OVS_VERSION"
-            "antrea/openvswitch:$OVS_VERSION"
+            "antrea/openvswitch-debs:$BUILD_TAG"
+            "antrea/openvswitch:$BUILD_TAG"
         )
     elif [ "$DISTRO" == "ubi" ]; then
         IMAGES_LIST=(
-            "antrea/openvswitch-rpms:$OVS_VERSION"
-            "antrea/openvswitch-ubi:$OVS_VERSION"
+            "antrea/openvswitch-rpms:$BUILD_TAG"
+            "antrea/openvswitch-ubi:$BUILD_TAG"
         )
     fi
     for image in "${IMAGES_LIST[@]}"; do
@@ -132,37 +134,37 @@ fi
 
 if [ "$DISTRO" == "ubuntu" ]; then
     docker build $PLATFORM_ARG --target ovs-debs \
-           --cache-from antrea/openvswitch-debs:$OVS_VERSION \
-           -t antrea/openvswitch-debs:$OVS_VERSION \
+           --cache-from antrea/openvswitch-debs:$BUILD_TAG \
+           -t antrea/openvswitch-debs:$BUILD_TAG \
            --build-arg OVS_VERSION=$OVS_VERSION .
 
     docker build $PLATFORM_ARG \
-           --cache-from antrea/openvswitch-debs:$OVS_VERSION \
-           --cache-from antrea/openvswitch:$OVS_VERSION \
-           -t antrea/openvswitch:$OVS_VERSION \
+           --cache-from antrea/openvswitch-debs:$BUILD_TAG \
+           --cache-from antrea/openvswitch:$BUILD_TAG \
+           -t antrea/openvswitch:$BUILD_TAG \
            --build-arg OVS_VERSION=$OVS_VERSION .
 elif [ "$DISTRO" == "ubi" ]; then
     docker build $PLATFORM_ARG --target ovs-rpms \
-           --cache-from antrea/openvswitch-rpms:$OVS_VERSION \
-           -t antrea/openvswitch-rpms:$OVS_VERSION \
+           --cache-from antrea/openvswitch-rpms:$BUILD_TAG \
+           -t antrea/openvswitch-rpms:$BUILD_TAG \
            --build-arg OVS_VERSION=$OVS_VERSION \
            -f Dockerfile.ubi .
 
     docker build \
-           --cache-from antrea/openvswitch-rpms:$OVS_VERSION \
-           --cache-from antrea/openvswitch-ubi:$OVS_VERSION \
-           -t antrea/openvswitch-ubi:$OVS_VERSION \
+           --cache-from antrea/openvswitch-rpms:$BUILD_TAG \
+           --cache-from antrea/openvswitch-ubi:$BUILD_TAG \
+           -t antrea/openvswitch-ubi:$BUILD_TAG \
            --build-arg OVS_VERSION=$OVS_VERSION \
            -f Dockerfile.ubi .
 fi
 
 if $PUSH; then
     if [ "$DISTRO" == "ubuntu" ]; then
-        docker push antrea/openvswitch-debs:$OVS_VERSION
-        docker push antrea/openvswitch:$OVS_VERSION
+        docker push antrea/openvswitch-debs:$BUILD_TAG
+        docker push antrea/openvswitch:$BUILD_TAG
     elif [ "$DISTRO" == "ubi" ]; then
-        docker push antrea/openvswitch-rpms:$OVS_VERSION
-        docker push antrea/openvswitch-ubi:$OVS_VERSION
+        docker push antrea/openvswitch-rpms:$BUILD_TAG
+        docker push antrea/openvswitch-ubi:$BUILD_TAG
     fi
 fi
 
