@@ -13,7 +13,7 @@
 # limitations under the License.
 
 ARG GO_VERSION
-ARG OVS_VERSION
+ARG BUILD_TAG
 FROM golang:${GO_VERSION} as antrea-build
 
 WORKDIR /antrea
@@ -27,7 +27,7 @@ COPY . /antrea
 RUN make antrea-agent antrea-controller antrea-cni antctl-linux
 RUN mv bin/antctl-linux bin/antctl
 
-FROM antrea/base-ubuntu:${OVS_VERSION}
+FROM antrea/base-ubuntu:${BUILD_TAG}
 
 LABEL maintainer="Antrea <projectantrea-dev@googlegroups.com>"
 LABEL description="The Docker image to deploy the Antrea CNI."

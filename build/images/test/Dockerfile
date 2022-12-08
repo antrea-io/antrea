@@ -12,8 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG OVS_VERSION
-FROM antrea/openvswitch:${OVS_VERSION}
+ARG BUILD_TAG
+FROM antrea/openvswitch:${BUILD_TAG}
 
 LABEL maintainer="Antrea <projectantrea-dev@googlegroups.com>"
 LABEL description="A Docker image for Antrea integration tests."
