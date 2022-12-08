@@ -41,7 +41,7 @@ type Options struct {
 	// Services' Endpoints.
 	EndpointIPType string
 	// Enable StretchedNetworkPolicy to exchange labelIdentities info among the whole
-	// clusterSet.
+	// ClusterSet.
 	EnableStretchedNetworkPolicy bool
 }
 

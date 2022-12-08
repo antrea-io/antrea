@@ -155,8 +155,6 @@ func run(o *Options) error {
 	groupEntityIndex := grouping.NewGroupEntityIndex()
 	groupEntityController := grouping.NewGroupEntityController(groupEntityIndex, podInformer, namespaceInformer, eeInformer)
 	labelIdentityIndex := labelidentity.NewLabelIdentityIndex()
-
-	stretchedNetworkPolicyEnabled := features.DefaultFeatureGate.Enabled(features.Multicluster) && o.config.Multicluster.EnableStretchedNetworkPolicy
 	networkPolicyController := networkpolicy.NewNetworkPolicyController(client,
 		crdClient,
 		groupEntityIndex,
@@ -174,7 +172,7 @@ func run(o *Options) error {
 		appliedToGroupStore,
 		networkPolicyStore,
 		groupStore,
-		stretchedNetworkPolicyEnabled)
+		o.config.Multicluster.EnableStretchedNetworkPolicy)
 
 	var externalNodeController *externalnode.ExternalNodeController
 	if features.DefaultFeatureGate.Enabled(features.ExternalNode) {
@@ -317,7 +315,7 @@ func run(o *Options) error {
 
 	go groupEntityController.Run(stopCh)
 
-	if stretchedNetworkPolicyEnabled {
+	if o.config.Multicluster.EnableStretchedNetworkPolicy {
 		mcInformerFactoty := mcinformers.NewSharedInformerFactory(mcClient, informerDefaultResync)
 		labelIdentityInformer := mcInformerFactoty.Multicluster().V1alpha1().LabelIdentities()
 		labelIdentityController := labelidentity.NewLabelIdentityController(labelIdentityIndex, labelIdentityInformer)

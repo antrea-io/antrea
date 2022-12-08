@@ -85,6 +85,10 @@ func (o *Options) validate(args []string) error {
 		klog.InfoS("The legacyCRDMirroring config option is deprecated and will be ignored (no CRD mirroring)")
 	}
 
+	if o.config.Multicluster.EnableStretchedNetworkPolicy && !features.DefaultFeatureGate.Enabled(features.Multicluster) {
+		return fmt.Errorf("EnableStretchedNetworkPolicy requires Multicluster feature gate is enabled")
+	}
+
 	return nil
 }
 
