@@ -17,6 +17,7 @@ package networkpolicy
 import (
 	"encoding/binary"
 	"fmt"
+	"net"
 
 	"antrea.io/libOpenflow/protocol"
 	"antrea.io/ofnet/ofctrl"
@@ -89,6 +90,7 @@ const (
 // rejectRequest sends reject response to the requesting client, based on the
 // packet-in message.
 func (c *Controller) rejectRequest(pktIn *ofctrl.PacketIn) error {
+	// All src/dst mean the source/destination of the reject packet, which are destination/source of the incoming packet.
 	// Get ethernet data.
 	ethernetPkt, err := getEthernetPacket(pktIn)
 	if err != nil {
@@ -118,8 +120,25 @@ func (c *Controller) rejectRequest(pktIn *ofctrl.PacketIn) error {
 		isIPv6 = true
 	}
 
-	sIface, srcFound := c.ifaceStore.GetInterfaceByIP(srcIP)
-	dIface, dstFound := c.ifaceStore.GetInterfaceByIP(dstIP)
+	sIface, srcIsLocal := c.ifaceStore.GetInterfaceByIP(srcIP)
+	dIface, dstIsLocal := c.ifaceStore.GetInterfaceByIP(dstIP)
+	// dstIsDirect means that the reject packet destination is on the same Node and the reject packet can be forwarded
+	// without leaving the OVS bridge.
+	dstIsDirect := dstIsLocal
+	matches := pktIn.GetMatches()
+	if c.antreaProxyEnabled && dstIsLocal {
+		// Check if OVS InPort matches dIface.
+		// If port doesn't match, set dstIsDirect to false since the reject packet destination should not be sent to
+		// local Pod directly.
+		if match := matches.GetMatchByName(binding.OxmFieldInPort); match != nil {
+			dstIsDirect = match.GetValue().(uint32) == uint32(dIface.OFPort)
+		}
+	}
+	isFlexibleIPAMSrc, isFlexibleIPAMDst, ctZone, err := parseFlexibleIPAMStatus(pktIn, c.nodeConfig, srcIP, srcIsLocal, dstIP, dstIsLocal)
+	if err != nil {
+		return err
+	}
+
 	// isServiceTraffic checks if it's a Service traffic when the destination of the
 	// reject response is on local Node. When the destination of the reject response is
 	// remote, isServiceTraffic will always return false. Because there is no
@@ -128,6 +147,7 @@ func (c *Controller) rejectRequest(pktIn *ofctrl.PacketIn) error {
 	// There are two situations in which it can be determined that this is a service
 	// traffic:
 	// 1. When AntreaProxy is enabled, EpSelectedRegMark is set in ServiceEPStateField.
+	//    AntreaProxy is required for FlexibleIPAM feature.
 	// 2. When AntreaProxy is disabled, dstIP of reject response is on the local Node
 	//    and dstMAC of reject response is antrea-gw's MAC. In this case, the reject
 	//    response is being generated for locally-originated traffic that went through
@@ -148,9 +168,9 @@ func (c *Controller) rejectRequest(pktIn *ofctrl.PacketIn) error {
 			return false
 		}
 		gwIfaces := c.ifaceStore.GetInterfacesByType(interfacestore.GatewayInterface)
-		return dstFound && dstMAC == gwIfaces[0].MAC.String()
+		return dstIsLocal && dstMAC == gwIfaces[0].MAC.String()
 	}
-	packetOutType := getRejectType(isServiceTraffic(), c.antreaProxyEnabled, srcFound, dstFound)
+	packetOutType := getRejectType(isServiceTraffic(), c.antreaProxyEnabled, srcIsLocal, dstIsDirect)
 	if packetOutType == Unsupported {
 		return fmt.Errorf("error when generating reject response for the packet from: %s to %s: neither source nor destination are on this Node", dstIP, srcIP)
 	}
@@ -169,7 +189,7 @@ func (c *Controller) rejectRequest(pktIn *ofctrl.PacketIn) error {
 	}
 
 	inPort, outPort := getRejectOFPorts(packetOutType, sIface, dIface, c.gwPort, c.tunPort)
-	mutateFunc := getRejectPacketOutMutateFunc(packetOutType, c.nodeType)
+	mutateFunc := getRejectPacketOutMutateFunc(packetOutType, c.nodeType, isFlexibleIPAMSrc, isFlexibleIPAMDst, ctZone)
 
 	if proto == protocol.Type_TCP {
 		// Get TCP data.
@@ -309,8 +329,8 @@ func getRejectOFPorts(rejectType RejectType, sIface, dIface *interfacestore.Inte
 	return inPort, outPort
 }
 
-// getRejectPacketOutMutateFunc returns the mutate-func of a packetOut based on the RejectType.
-func getRejectPacketOutMutateFunc(rejectType RejectType, nodeType config.NodeType) func(binding.PacketOutBuilder) binding.PacketOutBuilder {
+// getRejectPacketOutMutateFunc returns the mutate func of a packetOut based on the RejectType.
+func getRejectPacketOutMutateFunc(rejectType RejectType, nodeType config.NodeType, isFlexibleIPAMSrc, isFlexibleIPAMDst bool, ctZone uint32) func(binding.PacketOutBuilder) binding.PacketOutBuilder {
 	var mutatePacketOut func(binding.PacketOutBuilder) binding.PacketOutBuilder
 	mutatePacketOut = func(packetOutBuilder binding.PacketOutBuilder) binding.PacketOutBuilder {
 		return packetOutBuilder.AddLoadRegMark(openflow.CustomReasonRejectRegMark)
@@ -318,9 +338,18 @@ func getRejectPacketOutMutateFunc(rejectType RejectType, nodeType config.NodeTyp
 	switch rejectType {
 	case RejectServiceLocal:
 		tableID := openflow.ConntrackTable.GetID()
-		mutatePacketOut = func(packetOutBuilder binding.PacketOutBuilder) binding.PacketOutBuilder {
-			return packetOutBuilder.AddLoadRegMark(openflow.CustomReasonRejectRegMark).
-				AddResubmitAction(nil, &tableID)
+		if isFlexibleIPAMSrc {
+			mutatePacketOut = func(packetOutBuilder binding.PacketOutBuilder) binding.PacketOutBuilder {
+				return packetOutBuilder.AddLoadRegMark(openflow.CustomReasonRejectRegMark).
+					AddLoadRegMark(openflow.AntreaFlexibleIPAMRegMark).AddLoadRegMark(binding.NewRegMark(openflow.CtZoneField, ctZone)).
+					AddResubmitAction(nil, &tableID)
+			}
+		} else {
+			mutatePacketOut = func(packetOutBuilder binding.PacketOutBuilder) binding.PacketOutBuilder {
+				return packetOutBuilder.AddLoadRegMark(openflow.CustomReasonRejectRegMark).
+					AddLoadRegMark(binding.NewRegMark(openflow.CtZoneField, ctZone)).
+					AddResubmitAction(nil, &tableID)
+			}
 		}
 	case RejectPodLocalToRemote:
 		tableID := openflow.L3ForwardingTable.GetID()
@@ -328,10 +357,50 @@ func getRejectPacketOutMutateFunc(rejectType RejectType, nodeType config.NodeTyp
 		if nodeType == config.ExternalNode {
 			tableID = openflow.L2ForwardingCalcTable.GetID()
 		}
-		mutatePacketOut = func(packetOutBuilder binding.PacketOutBuilder) binding.PacketOutBuilder {
-			return packetOutBuilder.AddLoadRegMark(openflow.CustomReasonRejectRegMark).
-				AddResubmitAction(nil, &tableID)
+		if isFlexibleIPAMSrc {
+			mutatePacketOut = func(packetOutBuilder binding.PacketOutBuilder) binding.PacketOutBuilder {
+				return packetOutBuilder.AddLoadRegMark(openflow.CustomReasonRejectRegMark).
+					AddLoadRegMark(openflow.AntreaFlexibleIPAMRegMark).AddLoadRegMark(binding.NewRegMark(openflow.CtZoneField, ctZone)).
+					AddResubmitAction(nil, &tableID)
+			}
+		} else {
+			mutatePacketOut = func(packetOutBuilder binding.PacketOutBuilder) binding.PacketOutBuilder {
+				return packetOutBuilder.AddLoadRegMark(openflow.CustomReasonRejectRegMark).
+					AddLoadRegMark(binding.NewRegMark(openflow.CtZoneField, ctZone)).
+					AddResubmitAction(nil, &tableID)
+			}
+		}
+	case RejectServiceRemoteToLocal:
+		if isFlexibleIPAMDst {
+			tableID := openflow.ConntrackTable.GetID()
+			mutatePacketOut = func(packetOutBuilder binding.PacketOutBuilder) binding.PacketOutBuilder {
+				return packetOutBuilder.AddLoadRegMark(openflow.CustomReasonRejectRegMark).
+					AddLoadRegMark(binding.NewRegMark(openflow.CtZoneField, ctZone)).
+					AddResubmitAction(nil, &tableID)
+			}
 		}
 	}
 	return mutatePacketOut
+}
+
+func parseFlexibleIPAMStatus(pktIn *ofctrl.PacketIn, nodeConfig *config.NodeConfig, srcIP string, srcIsLocal bool, dstIP string, dstIsLocal bool) (isFlexibleIPAMSrc bool, isFlexibleIPAMDst bool, ctZone uint32, err error) {
+	// isFlexibleIPAMSrc is true if srcIP belongs to a local FlexibleIPAM Pod.
+	// isFlexibleIPAMDst is true if dstIP belongs to a local FlexibleIPAM Pod.
+	// ctZone is not zero if FlexibleIPAM is enabled.
+	if srcIsLocal && nodeConfig.PodIPv4CIDR != nil && !nodeConfig.PodIPv4CIDR.Contains(net.ParseIP(srcIP)) {
+		isFlexibleIPAMSrc = true
+	}
+	if dstIsLocal && nodeConfig.PodIPv4CIDR != nil && !nodeConfig.PodIPv4CIDR.Contains(net.ParseIP(dstIP)) {
+		isFlexibleIPAMDst = true
+	}
+	// ctZone is read from the incoming packet.
+	// The generated reject packet should have same ctZone with the incoming packet, otherwise the conntrack cannot work properly.
+	matches := pktIn.GetMatches()
+	if match := getMatchRegField(matches, openflow.CtZoneField); match != nil {
+		ctZone, err = getInfoInReg(match, openflow.CtZoneField.GetRange().ToNXRange())
+		if err != nil {
+			return false, false, 0, err
+		}
+	}
+	return
 }

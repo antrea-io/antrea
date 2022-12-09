@@ -410,6 +410,58 @@ COMMIT
 `, false, true)
 			},
 		},
+		{
+			name:                  "noencap,connectUplinkToBridge=true",
+			connectUplinkToBridge: true,
+			networkConfig: &config.NetworkConfig{
+				TrafficEncapMode: config.TrafficEncapModeNoEncap,
+				IPv4Enabled:      true,
+			},
+			nodeConfig: &config.NodeConfig{
+				PodIPv4CIDR: ip.MustParseCIDR("172.16.10.0/24"),
+				GatewayConfig: &config.GatewayConfig{
+					Name: "antrea-gw0",
+				},
+			},
+			expectedCalls: func(mockIPTables *iptablestest.MockInterfaceMockRecorder) {
+				mockIPTables.EnsureChain(iptables.ProtocolDual, iptables.RawTable, antreaPreRoutingChain)
+				mockIPTables.AppendRule(iptables.ProtocolDual, iptables.RawTable, iptables.PreRoutingChain, []string{"-j", antreaPreRoutingChain, "-m", "comment", "--comment", "Antrea: jump to Antrea prerouting rules"})
+				mockIPTables.EnsureChain(iptables.ProtocolDual, iptables.RawTable, antreaOutputChain)
+				mockIPTables.AppendRule(iptables.ProtocolDual, iptables.RawTable, iptables.OutputChain, []string{"-j", antreaOutputChain, "-m", "comment", "--comment", "Antrea: jump to Antrea output rules"})
+				mockIPTables.EnsureChain(iptables.ProtocolDual, iptables.FilterTable, antreaForwardChain)
+				mockIPTables.AppendRule(iptables.ProtocolDual, iptables.FilterTable, iptables.ForwardChain, []string{"-j", antreaForwardChain, "-m", "comment", "--comment", "Antrea: jump to Antrea forwarding rules"})
+				mockIPTables.EnsureChain(iptables.ProtocolDual, iptables.NATTable, antreaPostRoutingChain)
+				mockIPTables.AppendRule(iptables.ProtocolDual, iptables.NATTable, iptables.PostRoutingChain, []string{"-j", antreaPostRoutingChain, "-m", "comment", "--comment", "Antrea: jump to Antrea postrouting rules"})
+				mockIPTables.EnsureChain(iptables.ProtocolDual, iptables.MangleTable, antreaMangleChain)
+				mockIPTables.AppendRule(iptables.ProtocolDual, iptables.MangleTable, iptables.PreRoutingChain, []string{"-j", antreaMangleChain, "-m", "comment", "--comment", "Antrea: jump to Antrea mangle rules"})
+				mockIPTables.EnsureChain(iptables.ProtocolDual, iptables.MangleTable, antreaOutputChain)
+				mockIPTables.AppendRule(iptables.ProtocolDual, iptables.MangleTable, iptables.OutputChain, []string{"-j", antreaOutputChain, "-m", "comment", "--comment", "Antrea: jump to Antrea output rules"})
+				mockIPTables.Restore(`*raw
+:ANTREA-PREROUTING - [0:0]
+:ANTREA-OUTPUT - [0:0]
+COMMIT
+*mangle
+:ANTREA-MANGLE - [0:0]
+:ANTREA-OUTPUT - [0:0]
+-A ANTREA-OUTPUT -m comment --comment "Antrea: mark LOCAL output packets" -m addrtype --src-type LOCAL -o antrea-gw0 -j MARK --or-mark 0x80000000
+-A ANTREA-OUTPUT -m comment --comment "Antrea: mark LOCAL output packets" -m addrtype --src-type LOCAL -o  -j MARK --or-mark 0x80000000
+COMMIT
+*filter
+:ANTREA-FORWARD - [0:0]
+-A ANTREA-FORWARD -m comment --comment "Antrea: accept packets from local Pods" -i antrea-gw0 -j ACCEPT
+-A ANTREA-FORWARD -m comment --comment "Antrea: accept packets to local Pods" -o antrea-gw0 -j ACCEPT
+-A ANTREA-FORWARD -m comment --comment "Antrea: accept packets from local AntreaFlexibleIPAM Pods" -m set --match-set LOCAL-FLEXIBLE-IPAM-POD-IP src -j ACCEPT
+-A ANTREA-FORWARD -m comment --comment "Antrea: accept packets to local AntreaFlexibleIPAM Pods" -m set --match-set LOCAL-FLEXIBLE-IPAM-POD-IP dst -j ACCEPT
+COMMIT
+*nat
+:ANTREA-POSTROUTING - [0:0]
+-A ANTREA-POSTROUTING -m comment --comment "Antrea: masquerade Pod to external packets" -s 172.16.10.0/24 -m set ! --match-set ANTREA-POD-IP dst ! -o antrea-gw0 -j MASQUERADE
+-A ANTREA-POSTROUTING -m comment --comment "Antrea: masquerade LOCAL traffic" -o antrea-gw0 -m addrtype ! --src-type LOCAL --limit-iface-out -m addrtype --src-type LOCAL -j MASQUERADE --random-fully
+-A ANTREA-POSTROUTING -m comment --comment "Antrea: masquerade traffic to local AntreaIPAM hostPort Pod" ! -s 172.16.10.0/24 -m set --match-set LOCAL-FLEXIBLE-IPAM-POD-IP dst -j MASQUERADE
+COMMIT
+`, false, false)
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

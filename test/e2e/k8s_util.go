@@ -176,13 +176,15 @@ func DecideProbeResult(stderr string, probeNum int) PodConnectivityMark {
 	// For our other protocols rejection cases, agnhost will return 'REFUSED'.
 	countRejected := strings.Count(stderr, "REFUSED") + strings.Count(stderr, "no route to host") + strings.Count(stderr, "permission denied")
 
+	countSCTPInProgress := strings.Count(stderr, "OTHER: operation already in progress")
+
 	if countRejected == 0 && countConnected > 0 {
 		return Connected
 	}
 	if countConnected == 0 && countRejected > 0 {
 		return Rejected
 	}
-	if countDropped == probeNum {
+	if countDropped+countSCTPInProgress == probeNum {
 		return Dropped
 	}
 	return Error
@@ -1077,11 +1079,13 @@ func (k *KubernetesUtils) Validate(allPods []Pod, reachability *Reachability, po
 	}
 }
 
-func (k *KubernetesUtils) Bootstrap(namespaces map[string]string, pods []string) (*map[string][]string, error) {
+func (k *KubernetesUtils) Bootstrap(namespaces map[string]string, pods []string, createNamespaces bool) (*map[string][]string, error) {
 	for _, ns := range namespaces {
-		_, err := k.CreateOrUpdateNamespace(ns, map[string]string{"ns": ns})
-		if err != nil {
-			return nil, errors.WithMessagef(err, "unable to create/update ns %s", ns)
+		if createNamespaces {
+			_, err := k.CreateOrUpdateNamespace(ns, map[string]string{"ns": ns})
+			if err != nil {
+				return nil, errors.WithMessagef(err, "unable to create/update ns %s", ns)
+			}
 		}
 		for _, pod := range pods {
 			log.Infof("Creating/updating Pod '%s/%s'", ns, pod)

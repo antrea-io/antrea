@@ -1798,8 +1798,8 @@ func (data *TestData) createAgnhostNodePortService(serviceName string, affinity,
 }
 
 // createNginxNodePortService creates a NodePort nginx service with the given name.
-func (data *TestData) createNginxNodePortService(serviceName string, affinity, nodeLocalExternal bool, ipFamily *corev1.IPFamily) (*corev1.Service, error) {
-	return data.CreateService(serviceName, data.testNamespace, 80, 80, map[string]string{"app": "nginx"}, affinity, nodeLocalExternal, corev1.ServiceTypeNodePort, ipFamily)
+func (data *TestData) createNginxNodePortService(serviceName, namespace string, affinity, nodeLocalExternal bool, ipFamily *corev1.IPFamily) (*corev1.Service, error) {
+	return data.CreateService(serviceName, namespace, 80, 80, map[string]string{"app": "nginx"}, affinity, nodeLocalExternal, corev1.ServiceTypeNodePort, ipFamily)
 }
 
 func (data *TestData) updateServiceExternalTrafficPolicy(serviceName string, nodeLocalExternal bool) (*corev1.Service, error) {

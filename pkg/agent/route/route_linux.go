@@ -773,16 +773,18 @@ func (c *Client) restoreIptablesData(podCIDR *net.IPNet,
 	//   - underlay gateway sends traffic back with a vlan tag.
 	//   - SNAT is required to guarantee the reply traffic can be sent to Node to de-DNAT.
 	// Corresponding traffic models are:
-	//   01. Regular Pod              -- hostPort [request]              --> AntreaIPAM VLAN Pod
+	//   01. Regular Pod (remote)     -- hostPort [request]              --> AntreaIPAM VLAN Pod
 	//   02. AntreaIPAM Pod           -- hostPort [request]              --> AntreaIPAM VLAN Pod
 	//   03. AntreaIPAM VLAN Pod      -- hostPort [request]              --> AntreaIPAM VLAN Pod (different subnet/VLAN)
 	//   04. External                 -- hostPort [request]              --> AntreaIPAM VLAN Pod
 	// Below traffic models are already covered by portmap CNI:
 	//   01. AntreaIPAM VLAN Pod      -- hostPort [request]              --> AntreaIPAM VLAN Pod (same subnet)
+	//   02. Regular Pod (local)      -- hostPort [request]              --> AntreaIPAM VLAN Pod
 	if c.connectUplinkToBridge {
 		writeLine(iptablesData, []string{
 			"-A", antreaPostRoutingChain,
 			"-m", "comment", "--comment", `"Antrea: masquerade traffic to local AntreaIPAM hostPort Pod"`,
+			"!", "-s", podCIDR.String(),
 			"-m", "set", "--match-set", localAntreaFlexibleIPAMPodIPSet, "dst",
 			"-j", iptables.MasqueradeTarget,
 		}...)
