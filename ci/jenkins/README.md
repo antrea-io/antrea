@@ -139,6 +139,24 @@ DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
 ./ci/jenkins/test.sh --testcase e2e --registry ${DOCKER_REGISTRY} --testbed-type "flexible-ipam"
 ```
 
+* Kind conformance: conformance tests in a kind cluster
+
+```shell
+#!/bin/bash
+set -e
+DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
+./ci/jenkins/test.sh --testcase conformance --registry ${DOCKER_REGISTRY} --testbed-type "kind" --kind-cluster-name "${{JOB_NAME}}-${{BUILD_NUMBER}}"
+```
+
+* Kind NetworkPolicy: NetworkPolicy tests in a kind cluster
+
+```shell
+#!/bin/bash
+set -e
+DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
+./ci/jenkins/test.sh --testcase networkpolicy --registry ${DOCKER_REGISTRY} --testbed-type "kind" --kind-cluster-name "${{JOB_NAME}}-${{BUILD_NUMBER}}"
+```
+
 * [whole-conformance [daily]](https://jenkins.antrea-ci.rocks/job/antrea-whole-conformance-for-pull-request/):
   community tests using sonobuoy, with certified-conformance mode.
 

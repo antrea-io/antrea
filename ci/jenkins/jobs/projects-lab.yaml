@@ -820,3 +820,55 @@
               default-excludes: true
               fingerprint: false
               only-if-success: false
+      - '{name}-{test_name}-for-pull-request':
+          test_name: kind-conformance
+          node: 'antrea-kind-testbed'
+          description: 'This is for running conformance tests on kind.'
+          branches:
+          - ${{sha1}}
+          builders:
+            - builder-conformance-kind:
+               conformance_type: 'conformance'
+          trigger_phrase: ^(?!Thanks for your PR).*/test-kind-conformance.*
+          white_list_target_branches: []
+          allow_whitelist_orgs_as_admins: true
+          admin_list: '{antrea_admin_list}'
+          org_list: '{antrea_org_list}'
+          white_list: '{antrea_white_list}'
+          only_trigger_phrase: true
+          trigger_permit_all: true
+          status_context: jenkins-kind-conformance
+          status_url: --none--
+          success_status: Build finished.
+          failure_status: Failed. Add comment /test-kind-conformance to re-trigger.
+          error_status: Failed. Add comment /test-kind-conformance to re-trigger.
+          triggered_status: null
+          started_status: null
+          publishers: []
+          wrappers: []
+      - '{name}-{test_name}-for-pull-request':
+          test_name: kind-networkpolicy
+          node: 'antrea-kind-testbed'
+          description: 'This is for running networkpolicy tests on kind.'
+          branches:
+          - ${{sha1}}
+          builders:
+            - builder-conformance-kind:
+               conformance_type: 'networkpolicy'
+          trigger_phrase: ^(?!Thanks for your PR).*/test-kind-networkpolicy.*
+          white_list_target_branches: []
+          allow_whitelist_orgs_as_admins: true
+          admin_list: '{antrea_admin_list}'
+          org_list: '{antrea_org_list}'
+          white_list: '{antrea_white_list}'
+          only_trigger_phrase: true
+          trigger_permit_all: true
+          status_context: jenkins-kind-networkpolicy
+          status_url: --none--
+          success_status: Build finished.
+          failure_status: Failed. Add comment /test-kind-networkpolicy to re-trigger.
+          error_status: Failed. Add comment /test-kind-networkpolicy to re-trigger.
+          triggered_status: null
+          started_status: null
+          publishers: []
+          wrappers: []    
