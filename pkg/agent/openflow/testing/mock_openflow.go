@@ -1140,3 +1140,17 @@ func (mr *MockOFEntryOperationsMockRecorder) ModifyAll(arg0 interface{}) *gomock
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ModifyAll", reflect.TypeOf((*MockOFEntryOperations)(nil).ModifyAll), arg0)
 }
+
+// ModifyOFEntries mocks base method
+func (m *MockOFEntryOperations) ModifyOFEntries(arg0 []openflow.OFEntry) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ModifyOFEntries", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// ModifyOFEntries indicates an expected call of ModifyOFEntries
+func (mr *MockOFEntryOperationsMockRecorder) ModifyOFEntries(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ModifyOFEntries", reflect.TypeOf((*MockOFEntryOperations)(nil).ModifyOFEntries), arg0)
+}

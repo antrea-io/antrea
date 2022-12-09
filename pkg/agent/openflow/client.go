@@ -622,11 +622,11 @@ func (c *client) InstallServiceGroup(groupID binding.GroupIDType, withSessionAff
 	group := c.featureService.serviceEndpointGroup(groupID, withSessionAffinity, endpoints...)
 	_, installed := c.featureService.groupCache.Load(groupID)
 	if !installed {
-		if err := group.Add(); err != nil {
+		if err := c.ofEntryOperations.AddOFEntries([]binding.OFEntry{group}); err != nil {
 			return fmt.Errorf("error when installing Service Endpoints Group %d: %w", groupID, err)
 		}
 	} else {
-		if err := group.Modify(); err != nil {
+		if err := c.ofEntryOperations.ModifyOFEntries([]binding.OFEntry{group}); err != nil {
 			return fmt.Errorf("error when modifying Service Endpoints Group %d: %w", groupID, err)
 		}
 	}
@@ -637,10 +637,13 @@ func (c *client) InstallServiceGroup(groupID binding.GroupIDType, withSessionAff
 func (c *client) UninstallServiceGroup(groupID binding.GroupIDType) error {
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
-	if err := c.bridge.DeleteGroup(groupID); err != nil {
-		return fmt.Errorf("error when deleting Service Endpoints Group %d: %w", groupID, err)
+	gCache, ok := c.featureService.groupCache.Load(groupID)
+	if ok {
+		if err := c.ofEntryOperations.DeleteOFEntries([]binding.OFEntry{gCache.(binding.Group)}); err != nil {
+			return fmt.Errorf("error when deleting Service Endpoints Group %d: %w", groupID, err)
+		}
+		c.featureService.groupCache.Delete(groupID)
 	}
-	c.featureService.groupCache.Delete(groupID)
 	return nil
 }
 
@@ -1309,24 +1312,36 @@ func (c *client) SendIGMPRemoteReportPacketOut(
 func (c *client) InstallMulticastGroup(groupID binding.GroupIDType, localReceivers []uint32, remoteNodeReceivers []net.IP) error {
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
-	table := MulticastOutputTable
+	nextTable := MulticastOutputTable.GetID()
 	if c.enableAntreaPolicy {
-		table = MulticastIngressRuleTable
+		nextTable = MulticastIngressRuleTable.GetID()
 	}
 
-	if err := c.featureMulticast.multicastReceiversGroup(groupID, table.GetID(), localReceivers, remoteNodeReceivers); err != nil {
-		return err
+	group := c.featureMulticast.multicastReceiversGroup(groupID, nextTable, localReceivers, remoteNodeReceivers)
+	_, installed := c.featureMulticast.groupCache.Load(groupID)
+	if !installed {
+		if err := c.ofEntryOperations.AddOFEntries([]binding.OFEntry{group}); err != nil {
+			return fmt.Errorf("error when installing Multicast receiver Group %d: %w", groupID, err)
+		}
+	} else {
+		if err := c.ofEntryOperations.ModifyOFEntries([]binding.OFEntry{group}); err != nil {
+			return fmt.Errorf("error when modifying Multicast receiver Group %d: %w", groupID, err)
+		}
 	}
+	c.featureMulticast.groupCache.Store(groupID, group)
 	return nil
 }
 
 func (c *client) UninstallMulticastGroup(groupID binding.GroupIDType) error {
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
-	if err := c.bridge.DeleteGroup(groupID); err != nil {
-		return fmt.Errorf("error when deleting Multicast receiver Group %d: %w", groupID, err)
+	gCache, ok := c.featureMulticast.groupCache.Load(groupID)
+	if ok {
+		if err := c.ofEntryOperations.DeleteOFEntries([]binding.OFEntry{gCache.(binding.Group)}); err != nil {
+			return fmt.Errorf("error when deleting Multicast receiver Group %d: %w", groupID, err)
+		}
+		c.featureMulticast.groupCache.Delete(groupID)
 	}
-	c.featureMulticast.groupCache.Delete(groupID)
 	return nil
 }
 
