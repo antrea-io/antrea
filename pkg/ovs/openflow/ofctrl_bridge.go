@@ -324,14 +324,11 @@ func (b *OFBridge) PacketRcvd(sw *ofctrl.OFSwitch, packet *ofctrl.PacketIn) {
 // SwitchConnected is a callback when the remote OFSwitch is connected.
 func (b *OFBridge) SwitchConnected(sw *ofctrl.OFSwitch) {
 	klog.Infof("OFSwitch is connected: %v", sw.DPID())
-	func() {
-		b.ofSwitchMutex.Lock()
-		defer b.ofSwitchMutex.Unlock()
-		b.ofSwitch = sw
-	}()
+	b.SetOFSwitch(sw)
 	b.ofSwitch.EnableMonitor()
 	// initialize tables.
-	b.initialize()
+	b.Initialize()
+	b.queryTableFeatures()
 	go func() {
 		// b.connected is nil if it is an automatic reconnection but not triggered by OFSwitch.Connect.
 		if b.connected != nil {
@@ -339,6 +336,12 @@ func (b *OFBridge) SwitchConnected(sw *ofctrl.OFSwitch) {
 		}
 		b.connCh <- struct{}{}
 	}()
+}
+
+func (b *OFBridge) SetOFSwitch(sw *ofctrl.OFSwitch) {
+	b.ofSwitchMutex.Lock()
+	defer b.ofSwitchMutex.Unlock()
+	b.ofSwitch = sw
 }
 
 // MultipartReply is a callback when multipartReply message is received on ofctrl.OFSwitch is connected.
@@ -353,8 +356,8 @@ func (b *OFBridge) SwitchDisconnected(sw *ofctrl.OFSwitch) {
 	klog.Infof("OFSwitch is disconnected: %v", sw.DPID())
 }
 
-// initialize creates ofctrl.Table for each table in the tableCache.
-func (b *OFBridge) initialize() {
+// Initialize creates ofctrl.Table for each table in the tableCache.
+func (b *OFBridge) Initialize() {
 	b.Lock()
 	defer b.Unlock()
 
@@ -371,8 +374,6 @@ func (b *OFBridge) initialize() {
 		// reset flow counts, which is needed for reconnections
 		table.ResetStatus()
 	}
-
-	b.queryTableFeatures()
 
 	metrics.OVSTotalFlowCount.Set(0)
 }

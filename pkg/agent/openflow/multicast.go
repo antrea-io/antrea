@@ -15,7 +15,6 @@
 package openflow
 
 import (
-	"fmt"
 	"net"
 	"sync"
 
@@ -93,7 +92,7 @@ func (f *featureMulticast) replayFlows() []binding.Flow {
 	return getCachedFlows(f.cachedFlows)
 }
 
-func (f *featureMulticast) multicastReceiversGroup(groupID binding.GroupIDType, tableID uint8, ports []uint32, remoteIPs []net.IP) error {
+func (f *featureMulticast) multicastReceiversGroup(groupID binding.GroupIDType, tableID uint8, ports []uint32, remoteIPs []net.IP) binding.Group {
 	group := f.bridge.CreateGroupTypeAll(groupID).ResetBuckets()
 	for i := range ports {
 		group = group.Bucket().
@@ -110,19 +109,7 @@ func (f *featureMulticast) multicastReceiversGroup(groupID binding.GroupIDType, 
 			ResubmitToTable(MulticastOutputTable.GetID()).
 			Done()
 	}
-
-	_, installed := f.groupCache.Load(groupID)
-	if !installed {
-		if err := group.Add(); err != nil {
-			return fmt.Errorf("error when installing Multicast receiver Group %d: %w", groupID, err)
-		}
-	} else {
-		if err := group.Modify(); err != nil {
-			return fmt.Errorf("error when modifying Multicast receiver Group %d: %w", groupID, err)
-		}
-	}
-	f.groupCache.Store(groupID, group)
-	return nil
+	return group
 }
 
 func (f *featureMulticast) multicastOutputFlows() []binding.Flow {
