@@ -1077,11 +1077,13 @@ func (k *KubernetesUtils) Validate(allPods []Pod, reachability *Reachability, po
 	}
 }
 
-func (k *KubernetesUtils) Bootstrap(namespaces map[string]string, pods []string) (*map[string][]string, error) {
+func (k *KubernetesUtils) Bootstrap(namespaces map[string]string, pods []string, isCreateNamespace bool) (*map[string][]string, error) {
 	for _, ns := range namespaces {
-		_, err := k.CreateOrUpdateNamespace(ns, map[string]string{"ns": ns})
-		if err != nil {
-			return nil, errors.WithMessagef(err, "unable to create/update ns %s", ns)
+		if isCreateNamespace {
+			_, err := k.CreateOrUpdateNamespace(ns, map[string]string{"ns": ns})
+			if err != nil {
+				return nil, errors.WithMessagef(err, "unable to create/update ns %s", ns)
+			}
 		}
 		for _, pod := range pods {
 			log.Infof("Creating/updating Pod '%s/%s'", ns, pod)

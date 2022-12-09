@@ -72,6 +72,23 @@ var (
 					}}},
 			},
 		},
+		testAntreaIPAMNamespaceX: {
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "test-ippool-ipv4-x",
+			},
+			Spec: crdv1alpha2.IPPoolSpec{
+				IPVersion: crdv1alpha2.IPv4,
+				IPRanges: []crdv1alpha2.SubnetIPRange{{IPRange: crdv1alpha2.IPRange{
+					CIDR:  "",
+					Start: "192.168.240.140",
+					End:   "192.168.240.149",
+				},
+					SubnetInfo: crdv1alpha2.SubnetInfo{
+						Gateway:      "192.168.240.1",
+						PrefixLength: 24,
+					}}},
+			},
+		},
 		testAntreaIPAMNamespace11: {
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "test-ippool-ipv4-11",
@@ -90,6 +107,24 @@ var (
 					}}},
 			},
 		},
+		testAntreaIPAMNamespaceX11: {
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "test-ippool-ipv4-x11",
+			},
+			Spec: crdv1alpha2.IPPoolSpec{
+				IPVersion: crdv1alpha2.IPv4,
+				IPRanges: []crdv1alpha2.SubnetIPRange{{IPRange: crdv1alpha2.IPRange{
+					CIDR:  "",
+					Start: "192.168.241.140",
+					End:   "192.168.241.149",
+				},
+					SubnetInfo: crdv1alpha2.SubnetInfo{
+						Gateway:      "192.168.241.1",
+						PrefixLength: 24,
+						VLAN:         11,
+					}}},
+			},
+		},
 		testAntreaIPAMNamespace12: {
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "test-ippool-ipv4-12",
@@ -100,6 +135,24 @@ var (
 					CIDR:  "",
 					Start: "192.168.242.100",
 					End:   "192.168.242.129",
+				},
+					SubnetInfo: crdv1alpha2.SubnetInfo{
+						Gateway:      "192.168.242.1",
+						PrefixLength: 24,
+						VLAN:         12,
+					}}},
+			},
+		},
+		testAntreaIPAMNamespaceX12: {
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "test-ippool-ipv4-x12",
+			},
+			Spec: crdv1alpha2.IPPoolSpec{
+				IPVersion: crdv1alpha2.IPv4,
+				IPRanges: []crdv1alpha2.SubnetIPRange{{IPRange: crdv1alpha2.IPRange{
+					CIDR:  "",
+					Start: "192.168.242.140",
+					End:   "192.168.242.149",
 				},
 					SubnetInfo: crdv1alpha2.SubnetInfo{
 						Gateway:      "192.168.242.1",

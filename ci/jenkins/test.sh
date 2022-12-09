@@ -147,6 +147,13 @@ function export_govc_env_var {
 function clean_antrea {
     echo "====== Cleanup Antrea Installation ======"
     clean_up_one_ns "monitoring"
+    clean_up_one_ns "antrea-ipam-test-x12"
+    clean_up_one_ns "antrea-ipam-test-y12"
+    clean_up_one_ns "antrea-ipam-test-x11"
+    clean_up_one_ns "antrea-ipam-test-y11"
+    clean_up_one_ns "antrea-ipam-test-x"
+    clean_up_one_ns "antrea-ipam-test-y"
+    clean_up_one_ns "antrea-ipam-test-z"
     clean_up_one_ns "antrea-ipam-test-11"
     clean_up_one_ns "antrea-ipam-test-12"
     clean_up_one_ns "antrea-ipam-test"
@@ -432,6 +439,13 @@ function deliver_antrea_windows {
 function deliver_antrea {
     echo "====== Cleanup Antrea Installation ======"
     clean_up_one_ns "monitoring" || true
+    clean_up_one_ns "antrea-ipam-test-x12" || true
+    clean_up_one_ns "antrea-ipam-test-y12" || true
+    clean_up_one_ns "antrea-ipam-test-x11" || true
+    clean_up_one_ns "antrea-ipam-test-y11" || true
+    clean_up_one_ns "antrea-ipam-test-x" || true
+    clean_up_one_ns "antrea-ipam-test-y" || true
+    clean_up_one_ns "antrea-ipam-test-z" || true
     clean_up_one_ns "antrea-ipam-test-11" || true
     clean_up_one_ns "antrea-ipam-test-12" || true
     clean_up_one_ns "antrea-ipam-test" || true
@@ -564,7 +578,7 @@ function run_e2e {
     # HACK: see https://github.com/antrea-io/antrea/issues/2292
     go mod edit -replace github.com/moby/spdystream=github.com/antoninbas/spdystream@v0.2.1 && go mod tidy
     if [[ $TESTBED_TYPE == "flexible-ipam" ]]; then
-        go test -v antrea.io/antrea/test/e2e --logs-export-dir `pwd`/antrea-test-logs --provider remote -timeout=100m --prometheus --antrea-ipam
+        go test -v -run=TestAntreaIPAMAntreaPolicy antrea.io/antrea/test/e2e --logs-export-dir `pwd`/antrea-test-logs --provider remote -timeout=100m --prometheus --antrea-ipam
     else
         go test -v antrea.io/antrea/test/e2e --logs-export-dir `pwd`/antrea-test-logs --provider remote -timeout=100m --prometheus
     fi

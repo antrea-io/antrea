@@ -140,7 +140,7 @@ func initialize(t *testing.T, data *TestData) {
 	// k8sUtils is a global var
 	k8sUtils, err = NewKubernetesUtils(data)
 	failOnError(err, t)
-	ips, err := k8sUtils.Bootstrap(namespaces, pods)
+	ips, err := k8sUtils.Bootstrap(namespaces, pods, true)
 	failOnError(err, t)
 	podIPs = *ips
 }
