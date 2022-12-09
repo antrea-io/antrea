@@ -83,7 +83,7 @@ func setupVMAgentTest(t *testing.T, data *TestData) ([]vmInfo, error) {
 	t.Logf("Using ServiceAccount %s, Namespace %s", serviceAccount, namespace)
 	var vmList []vmInfo
 	if testOptions.linuxVMs != "" {
-		vms := strings.Split(testOptions.linuxVMs, ",")
+		vms := strings.Split(testOptions.linuxVMs, " ")
 		for _, vm := range vms {
 			t.Logf("Get info for Linux VM: %s", vm)
 			tempVM := getVMInfo(t, data, vm)
@@ -91,7 +91,7 @@ func setupVMAgentTest(t *testing.T, data *TestData) ([]vmInfo, error) {
 		}
 	}
 	if testOptions.windowsVMs != "" {
-		vms := strings.Split(testOptions.windowsVMs, ",")
+		vms := strings.Split(testOptions.windowsVMs, " ")
 		for _, vm := range vms {
 			t.Logf("Get info for Windows VM: %s", vm)
 			tempVM := getWindowsVMInfo(t, data, vm)
