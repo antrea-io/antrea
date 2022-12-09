@@ -60,26 +60,31 @@ func initMockManager(mockManager *mocks.MockManager) {
 }
 
 func TestRunLeader(t *testing.T) {
-	mockCtrl := gomock.NewController(t)
-	mockLeaderManager := mocks.NewMockManager(mockCtrl)
-	initMockManager(mockLeaderManager)
-
-	testCase := struct {
-		name      string
-		setupFunc func(o *Options) (ctrl.Manager, error)
+	testCases := []struct {
+		name    string
+		options *Options
 	}{
-		name: "Start leader controller successfully",
-		setupFunc: func(o *Options) (ctrl.Manager, error) {
-			return mockLeaderManager, nil
+		{
+			name:    "Start leader controller successfully with default options",
+			options: &Options{},
+		},
+		{
+			name:    "Start leader controller successfully with stretchedNetworkPolicy enabled",
+			options: &Options{EnableStretchedNetworkPolicy: true},
 		},
 	}
 
-	t.Run(testCase.name, func(t *testing.T) {
-		if testCase.setupFunc != nil {
-			setupManagerAndCertControllerFunc = testCase.setupFunc
+	for _, tc := range testCases {
+		mockCtrl := gomock.NewController(t)
+		mockLeaderManager := mocks.NewMockManager(mockCtrl)
+		initMockManager(mockLeaderManager)
+		setupManagerAndCertControllerFunc = func(o *Options) (ctrl.Manager, error) {
+			return mockLeaderManager, nil
 		}
 		ctrl.SetupSignalHandler = mockSetupSignalHandler
-		err := runLeader(&Options{})
-		assert.NoError(t, err, "got error when running runLeader")
-	})
+		t.Run(tc.name, func(t *testing.T) {
+			err := runLeader(tc.options)
+			assert.NoError(t, err, "got error when running runLeader")
+		})
+	}
 }
