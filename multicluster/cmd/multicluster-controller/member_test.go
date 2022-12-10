@@ -63,24 +63,31 @@ func TestCommands(t *testing.T) {
 }
 
 func TestRunMember(t *testing.T) {
-	mockCtrl := gomock.NewController(t)
-	mockMemberManager := mocks.NewMockManager(mockCtrl)
-	initMockManager(mockMemberManager)
-
-	testCase := struct {
-		name      string
-		setupFunc func(o *Options) (ctrl.Manager, error)
+	testCases := []struct {
+		name    string
+		options *Options
 	}{
-		name: "Start member controller successfully",
-		setupFunc: func(o *Options) (ctrl.Manager, error) {
-			return mockMemberManager, nil
+		{
+			name:    "Start member controller successfully with default options",
+			options: &Options{},
+		},
+		{
+			name:    "Start member controller successfully with stretchedNetworkPolicy enabled",
+			options: &Options{EnableStretchedNetworkPolicy: true},
 		},
 	}
 
-	t.Run(testCase.name, func(t *testing.T) {
-		setupManagerAndCertControllerFunc = testCase.setupFunc
+	for _, tc := range testCases {
+		mockCtrl := gomock.NewController(t)
+		mockMemberManager := mocks.NewMockManager(mockCtrl)
+		initMockManager(mockMemberManager)
+		setupManagerAndCertControllerFunc = func(o *Options) (ctrl.Manager, error) {
+			return mockMemberManager, nil
+		}
 		ctrl.SetupSignalHandler = mockSetupSignalHandler
-		err := runMember(&Options{})
-		assert.NoError(t, err, "got error when running runMember")
-	})
+		t.Run(tc.name, func(t *testing.T) {
+			err := runMember(tc.options)
+			assert.NoError(t, err, "got error when running runMember")
+		})
+	}
 }

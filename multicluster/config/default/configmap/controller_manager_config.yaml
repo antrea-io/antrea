@@ -13,3 +13,4 @@ podCIDRs:
   - ""
 gatewayIPPrecedence: "private"
 endpointIPType: "ClusterIP"
+enableStretchedNetworkPolicy: false

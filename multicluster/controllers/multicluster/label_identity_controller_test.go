@@ -171,7 +171,7 @@ func TestLabelIdentityReconciler(t *testing.T) {
 			fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithLists(tt.existingPods).WithObjects(ns).Build()
 			fakeRemoteClient := fake.NewClientBuilder().WithScheme(scheme).Build()
 			commonArea := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", localClusterID, leaderNamespace, nil)
-			mcReconciler := NewMemberClusterSetReconciler(fakeClient, scheme, "default")
+			mcReconciler := NewMemberClusterSetReconciler(fakeClient, scheme, "default", true)
 			mcReconciler.SetRemoteCommonArea(commonArea)
 			r := NewLabelIdentityReconciler(fakeClient, scheme, mcReconciler)
 			go r.Run(stopCh)
@@ -238,7 +238,7 @@ func TestNamespaceMapFunc(t *testing.T) {
 	fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(podA, podC, ns).Build()
 	fakeRemoteClient := fake.NewClientBuilder().WithScheme(scheme).Build()
 	commonArea := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", localClusterID, leaderNamespace, nil)
-	mcReconciler := NewMemberClusterSetReconciler(fakeClient, scheme, "default")
+	mcReconciler := NewMemberClusterSetReconciler(fakeClient, scheme, "default", true)
 	mcReconciler.SetRemoteCommonArea(commonArea)
 
 	r := NewLabelIdentityReconciler(fakeClient, scheme, mcReconciler)

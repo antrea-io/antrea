@@ -40,6 +40,9 @@ type Options struct {
 	// The type of IP address (ClusterIP or PodIP) to be used as the Multi-cluster
 	// Services' Endpoints.
 	EndpointIPType string
+	// Enable StretchedNetworkPolicy to exchange labelIdentities info among the whole
+	// ClusterSet.
+	EnableStretchedNetworkPolicy bool
 }
 
 func newOptions() *Options {
@@ -83,6 +86,7 @@ func (o *Options) complete(args []string) error {
 		} else {
 			o.EndpointIPType = ctrlConfig.EndpointIPType
 		}
+		o.EnableStretchedNetworkPolicy = ctrlConfig.EnableStretchedNetworkPolicy
 		klog.InfoS("Using config from file", "config", o.options)
 	} else {
 		klog.InfoS("Using default config", "config", o.options)

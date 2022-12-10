@@ -72,9 +72,9 @@ type ControllerConfig struct {
 }
 
 type MulticlusterConfig struct {
-	// Enable Multicluster which allow Antrea-native policies to select peers
+	// Enable StretchedNetworkPolicy which allow Antrea-native policies to select peers
 	// from other clusters in a ClusterSet.
-	Enable bool `yaml:"enable,omitempty"`
+	EnableStretchedNetworkPolicy bool `yaml:"enableStretchedNetworkPolicy,omitempty"`
 	// The Namespace where the Antrea Multi-cluster controller is running.
 	// The default is antrea-agent's Namespace.
 	Namespace string `yaml:"namespace,omitempty"`

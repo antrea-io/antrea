@@ -90,14 +90,16 @@ func runLeader(o *Options) error {
 	if err = resExportReconciler.SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("error creating ResourceExport controller: %v", err)
 	}
-	labelExportReconciler := multiclustercontrollers.NewLabelIdentityExportReconciler(
-		mgr.GetClient(),
-		mgr.GetScheme(),
-		env.GetPodNamespace())
-	if err = labelExportReconciler.SetupWithManager(mgr); err != nil {
-		return fmt.Errorf("error creating LabelIdentityExport controller: %v", err)
+	if o.EnableStretchedNetworkPolicy {
+		labelExportReconciler := multiclustercontrollers.NewLabelIdentityExportReconciler(
+			mgr.GetClient(),
+			mgr.GetScheme(),
+			env.GetPodNamespace())
+		if err = labelExportReconciler.SetupWithManager(mgr); err != nil {
+			return fmt.Errorf("error creating LabelIdentityExport controller: %v", err)
+		}
+		go labelExportReconciler.Run(stopCh)
 	}
-	go labelExportReconciler.Run(stopCh)
 
 	if err = (&multiclusterv1alpha1.ResourceExport{}).SetupWebhookWithManager(mgr); err != nil {
 		return fmt.Errorf("error creating ResourceExport webhook: %v", err)
