@@ -53,6 +53,10 @@ type MultiClusterConfig struct {
 	// PodIP type requires Multi-cluster Gateway too when there is no direct Pod-to-Pod
 	// connectivity across member clusters.
 	EndpointIPType string `json:"endpointIPType,omitempty"`
+	// Enable StretchedNetworkPolicy which will export and import labelIdentities in the
+	// ClusterSet and allow Antrea-native policies to select peers from other clusters
+	// in a ClusterSet.
+	EnableStretchedNetworkPolicy bool `json:"enableStretchedNetworkPolicy,omitempty"`
 }
 
 func init() {

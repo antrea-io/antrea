@@ -307,6 +307,10 @@ multicluster:
   # -- The Namespace where Antrea Multi-cluster Controller is running.
   # The default is antrea-agent's Namespace.
   namespace: ""
+  # -- Enable Multicluster which allow Antrea-native policies to select peers
+  # from other clusters in a ClusterSet.
+  # This feature is supported only with encap mode when the tunnel type is Geneve.
+  enableStretchedNetworkPolicy: false
 
 testing:
   ## -- enable code coverage measurement (used when testing Antrea only).

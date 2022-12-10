@@ -129,26 +129,32 @@ type remoteCommonArea struct {
 
 	// managerStopFunc to stop the manager when the RemoteCommonArea is stopped.
 	managerStopFunc context.CancelFunc
+
+	// Enable StretchedNetworkPolicy which will export and import labelIdentities in the
+	// ClusterSet and allow Antrea-native policies to select peers from other clusters
+	// in a ClusterSet.
+	enableStretchedNetworkPolicy bool
 }
 
 // NewRemoteCommonArea returns a RemoteCommonArea instance which will use access credentials from the Secret to
 // connect to the leader cluster's CommonArea.
 func NewRemoteCommonArea(clusterID common.ClusterID, clusterSetID common.ClusterSetID, localClusterID common.ClusterSetID, mgr manager.Manager, remoteClient client.Client,
-	scheme *runtime.Scheme, localClusterClient client.Client, clusterSetNamespace string, localNamespace string, config *rest.Config) (RemoteCommonArea, error) {
+	scheme *runtime.Scheme, localClusterClient client.Client, clusterSetNamespace string, localNamespace string, config *rest.Config, enableStretchedNetworkPolicy bool) (RemoteCommonArea, error) {
 	klog.InfoS("Create a RemoteCommonArea", "cluster", clusterID)
 
 	remote := &remoteCommonArea{
-		Client:             remoteClient,
-		ClusterManager:     mgr,
-		ClusterSetID:       clusterSetID,
-		ClusterID:          clusterID,
-		config:             config,
-		scheme:             scheme,
-		Namespace:          clusterSetNamespace,
-		connected:          false,
-		localClusterClient: localClusterClient,
-		localNamespace:     localNamespace,
-		localClusterID:     localClusterID,
+		Client:                       remoteClient,
+		ClusterManager:               mgr,
+		ClusterSetID:                 clusterSetID,
+		ClusterID:                    clusterID,
+		config:                       config,
+		scheme:                       scheme,
+		Namespace:                    clusterSetNamespace,
+		connected:                    false,
+		localClusterClient:           localClusterClient,
+		localNamespace:               localNamespace,
+		localClusterID:               localClusterID,
+		enableStretchedNetworkPolicy: enableStretchedNetworkPolicy,
 	}
 	remote.clusterStatus.Type = multiclusterv1alpha1.ClusterReady
 	remote.clusterStatus.Status = v1.ConditionUnknown
@@ -387,16 +393,18 @@ func (r *remoteCommonArea) StartWatching() error {
 	if err := resImportReconciler.SetupWithManager(r.ClusterManager); err != nil {
 		return fmt.Errorf("error creating ResourceImport controller for RemoteCommonArea: %v", err)
 	}
-	labelIdentityImpReconciler := NewLabelIdentityResourceImportReconciler(
-		r.ClusterManager.GetClient(),
-		r.ClusterManager.GetScheme(),
-		r.localClusterClient,
-		string(r.ClusterID),
-		r.Namespace,
-		r,
-	)
-	if err := labelIdentityImpReconciler.SetupWithManager(r.ClusterManager); err != nil {
-		return fmt.Errorf("error creating LabelIdentityResourceImport controller for RemoteCommonArea: %v", err)
+	if r.enableStretchedNetworkPolicy {
+		labelIdentityImpReconciler := NewLabelIdentityResourceImportReconciler(
+			r.ClusterManager.GetClient(),
+			r.ClusterManager.GetScheme(),
+			r.localClusterClient,
+			string(r.ClusterID),
+			r.Namespace,
+			r,
+		)
+		if err := labelIdentityImpReconciler.SetupWithManager(r.ClusterManager); err != nil {
+			return fmt.Errorf("error creating LabelIdentityResourceImport controller for RemoteCommonArea: %v", err)
+		}
 	}
 
 	go func() {

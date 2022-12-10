@@ -65,6 +65,7 @@ func runMember(o *Options) error {
 	clusterSetReconciler := multiclustercontrollers.NewMemberClusterSetReconciler(mgr.GetClient(),
 		mgr.GetScheme(),
 		env.GetPodNamespace(),
+		o.EnableStretchedNetworkPolicy,
 	)
 	if err = clusterSetReconciler.SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("error creating ClusterSet controller: %v", err)
@@ -79,15 +80,16 @@ func runMember(o *Options) error {
 	if err = svcExportReconciler.SetupWithManager(mgr); err != nil {
 		return fmt.Errorf("error creating ServiceExport controller: %v", err)
 	}
-	labelIdentityReconciler := multiclustercontrollers.NewLabelIdentityReconciler(
-		mgr.GetClient(),
-		mgr.GetScheme(),
-		commonAreaGetter)
-	if err = labelIdentityReconciler.SetupWithManager(mgr); err != nil {
-		return fmt.Errorf("error creating LabelIdentity controller: %v", err)
+	if o.EnableStretchedNetworkPolicy {
+		labelIdentityReconciler := multiclustercontrollers.NewLabelIdentityReconciler(
+			mgr.GetClient(),
+			mgr.GetScheme(),
+			commonAreaGetter)
+		if err = labelIdentityReconciler.SetupWithManager(mgr); err != nil {
+			return fmt.Errorf("error creating LabelIdentity controller: %v", err)
+		}
+		go labelIdentityReconciler.Run(stopCh)
 	}
-
-	go labelIdentityReconciler.Run(stopCh)
 
 	gwReconciler := multiclustercontrollers.NewGatewayReconciler(
 		mgr.GetClient(),

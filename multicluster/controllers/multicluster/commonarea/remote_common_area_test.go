@@ -193,7 +193,7 @@ func TestMemberAnnounceNewRemoteCommonArea(t *testing.T) {
 	}
 
 	actualRemoteCommonArea, err := NewRemoteCommonArea(expectedRemoteCommonArea.ClusterID, expectedRemoteCommonArea.ClusterSetID, expectedRemoteCommonArea.localClusterID, mockManager, fakeRemoteClient, scheme, nil,
-		"cluster-a-ns", "localnamespace", nil)
+		"cluster-a-ns", "localnamespace", nil, false)
 	assert.Equal(t, nil, err)
 	clusterStatus, leaderStatus := actualRemoteCommonArea.GetStatus()[0], actualRemoteCommonArea.GetStatus()[1]
 	// Assign LastTransitionTime to clusterStatus and leaderStatus of expectedRemoteCommonArea to simply the following comparison.

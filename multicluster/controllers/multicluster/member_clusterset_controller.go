@@ -65,16 +65,20 @@ type MemberClusterSetReconciler struct {
 	installedLeader  leaderClusterInfo
 
 	remoteCommonArea commonarea.RemoteCommonArea
+
+	enableStretchedNetworkPolicy bool
 }
 
 func NewMemberClusterSetReconciler(client client.Client,
 	scheme *runtime.Scheme,
 	namespace string,
+	enableStretchedNetworkPolicy bool,
 ) *MemberClusterSetReconciler {
 	return &MemberClusterSetReconciler{
-		Client:    client,
-		Scheme:    scheme,
-		Namespace: namespace,
+		Client:                       client,
+		Scheme:                       scheme,
+		Namespace:                    namespace,
+		enableStretchedNetworkPolicy: enableStretchedNetworkPolicy,
 	}
 }
 
@@ -215,7 +219,7 @@ func (r *MemberClusterSetReconciler) createOrUpdateRemoteCommonArea(clusterSet *
 	}
 
 	r.remoteCommonArea, err = commonarea.NewRemoteCommonArea(clusterID, r.clusterSetID, common.ClusterSetID(r.clusterID), remoteCommonAreaMgr, remoteClient, r.Scheme,
-		r.Client, clusterSet.Spec.Namespace, r.Namespace, config)
+		r.Client, clusterSet.Spec.Namespace, r.Namespace, config, r.enableStretchedNetworkPolicy)
 	if err != nil {
 		klog.ErrorS(err, "Unable to create RemoteCommonArea", "cluster", clusterID)
 		return err

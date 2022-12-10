@@ -326,6 +326,7 @@ data:
       - ""
     gatewayIPPrecedence: "private"
     endpointIPType: "ClusterIP"
+    enableStretchedNetworkPolicy: false
 kind: ConfigMap
 metadata:
   labels:
@@ -365,7 +366,7 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/config: 5da3da29da98cffcad8b7b40bbfcbff1273c65ce5205f4bcc9290f6bd532e9bb
+        checksum/config: 7eb0f1e65f7eb3e35b0739d6064b92b7621af0f4e41813c35bfdee71ceaefbe2
       labels:
         app: antrea
         component: antrea-mc-controller
