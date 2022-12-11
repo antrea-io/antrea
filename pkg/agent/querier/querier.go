@@ -225,6 +225,6 @@ func (aq agentQuerier) GetAgentInfo(agentInfo *v1beta1.AntreaAgentInfo, partial 
 		agentInfo.NodeSubnets = nodeSubnets
 		agentInfo.OVSInfo.BridgeName = aq.nodeConfig.OVSBridge
 		agentInfo.APIPort = aq.apiPort
-		agentInfo.NodePortLocalRange = aq.nplRange
+		agentInfo.NodePortLocalPortRange = aq.nplRange
 	}
 }

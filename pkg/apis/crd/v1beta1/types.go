@@ -45,7 +45,7 @@ type AntreaAgentInfo struct {
 	// The port of antrea agent API Server
 	APIPort int `json:"apiPort,omitempty"`
 	// The port range used by NodePortLocal
-	NodePortLocalRange string `json:"nodePortLocalRange,omitempty"`
+	NodePortLocalPortRange string `json:"nodePortLocalPortRange,omitempty"`
 }
 
 type OVSInfo struct {
