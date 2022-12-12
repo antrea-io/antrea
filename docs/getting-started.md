@@ -135,7 +135,7 @@ following:
 
 1. Delete Flannel with `kubectl delete -f <path to your Flannel YAML manifest>`.
 2. Delete Flannel bridge and tunnel interface with `ip link delete flannel.1 &&
-ip link delete flannel cni0` **on each Node**.
+ip link delete cni0` **on each Node**.
 3. Ensure [requirements](#ensuring-requirements-are-satisfied) are satisfied.
 4. [Deploy Antrea](#installation).
 5. Drain and uncordon Nodes one-by-one. For each Node, run `kubectl drain
