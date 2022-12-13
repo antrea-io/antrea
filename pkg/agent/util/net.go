@@ -15,6 +15,7 @@
 package util
 
 import (
+	"crypto/rand"
 	"crypto/sha1" // #nosec G505: not used for security purposes
 	"encoding/hex"
 	"errors"
@@ -403,4 +404,15 @@ func PortToUint16(port int) uint16 {
 // GenerateUplinkInterfaceName generates the uplink interface name after bridged to OVS
 func GenerateUplinkInterfaceName(name string) string {
 	return name + bridgedUplinkSuffix
+}
+
+func GenerateRandomMAC() net.HardwareAddr {
+	buf := make([]byte, 6)
+	if _, err := rand.Read(buf); err != nil {
+		klog.ErrorS(err, "Failed to generate a random MAC")
+	}
+	// Unset the multicast bit.
+	buf[0] &= 0xfe
+	buf[0] |= 0x02
+	return buf
 }

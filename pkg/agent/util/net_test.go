@@ -20,6 +20,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	"antrea.io/antrea/pkg/util/ip"
@@ -65,4 +66,16 @@ func TestGetDefaultLocalNodeAddr(t *testing.T) {
 		t.Error(err)
 	}
 	t.Logf("IP obtained %s, %v", localAddr, dev)
+}
+
+func TestGenerateRandomMAC(t *testing.T) {
+	validateBits := func(mac net.HardwareAddr) (byte, byte) {
+		localBit := mac[0] & 0x2 >> 1
+		mcastBit := mac[0] & 0x1
+		return localBit, mcastBit
+	}
+	mac1 := GenerateRandomMAC()
+	localBit, mcastBit := validateBits(mac1)
+	assert.Equal(t, uint8(1), localBit)
+	assert.Equal(t, uint8(0), mcastBit)
 }

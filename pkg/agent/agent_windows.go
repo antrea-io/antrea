@@ -32,6 +32,11 @@ import (
 	"antrea.io/antrea/pkg/util/ip"
 )
 
+var (
+	// setInterfaceMTU is meant to be overridden for testing
+	setInterfaceMTU = util.SetInterfaceMTU
+)
+
 // prepareHostNetwork creates HNS Network for containers.
 func (i *Initializer) prepareHostNetwork() error {
 	// If the HNS Network already exists, return immediately.
@@ -292,5 +297,5 @@ func (i *Initializer) setInterfaceMTU(iface string, mtu int) error {
 	if err := i.ovsBridgeClient.SetInterfaceMTU(iface, mtu); err != nil {
 		return err
 	}
-	return util.SetInterfaceMTU(iface, mtu)
+	return setInterfaceMTU(iface, mtu)
 }
