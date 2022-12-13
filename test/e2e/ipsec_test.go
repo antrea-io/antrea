@@ -58,6 +58,8 @@ func TestIPSec(t *testing.T) {
 			t.Fatalf("Failed to enable IPsecCertAuth feature: %v", err)
 		}
 		t.Run("testIPSecTunnelConnectivity", func(t *testing.T) { testIPSecTunnelConnectivity(t, data, false) })
+		// Export logs if the test fails as the following test would redeploy antrea.
+		exportLogs(t, data, "testIPSecPSKAuth", false)
 	})
 
 	t.Run("testIPSecCertificateAuth", func(t *testing.T) {
