@@ -156,9 +156,6 @@ func TestCluster_Run(t *testing.T) {
 				res, err := fakeCluster.cluster.ShouldSelectIP(tCase.egress.Spec.EgressIP, eip.Name)
 				return err == nil && res == tCase.expectEgressSelectResult, nil
 			}), "select Node result for Egress does not match")
-			allMembers, err := fakeCluster.cluster.allClusterMembers()
-			assert.NoError(t, err)
-			assert.Len(t, allMembers, 1, "expected Node member num is 1")
 			assert.Equal(t, 1, fakeCluster.cluster.mList.NumMembers(), "expected alive Node num is 1")
 		})
 	}
