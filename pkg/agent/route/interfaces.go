@@ -29,7 +29,7 @@ type Interface interface {
 
 	// Reconcile should remove orphaned routes and related configuration based on the desired podCIDRs and Service IPs.
 	// If IPv6 is enabled in the cluster, Reconcile should also remove the orphaned IPv6 neighbors.
-	Reconcile(podCIDRs []string, svcIPs map[string]bool) error
+	Reconcile(podCIDRs []string) error
 
 	// AddRoutes should add routes to the provided podCIDR.
 	// It should override the routes if they already exist, without error.

@@ -43,7 +43,6 @@ import (
 	"antrea.io/antrea/pkg/ovs/ovsctl"
 	utilip "antrea.io/antrea/pkg/util/ip"
 	"antrea.io/antrea/pkg/util/k8s"
-	"antrea.io/antrea/pkg/util/runtime"
 )
 
 const (
@@ -74,7 +73,6 @@ type Controller struct {
 	nodeInformer     coreinformers.NodeInformer
 	nodeLister       corelisters.NodeLister
 	nodeListerSynced cache.InformerSynced
-	svcLister        corelisters.ServiceLister
 	queue            workqueue.RateLimitingInterface
 	// installedNodes records routes and flows installation states of Nodes.
 	// The key is the host name of the Node, the value is the nodeRouteInfo of the Node.
@@ -105,7 +103,6 @@ func NewNodeRouteController(
 	ipsecCertificateManager ipseccertificate.Manager,
 ) *Controller {
 	nodeInformer := informerFactory.Core().V1().Nodes()
-	svcLister := informerFactory.Core().V1().Services()
 	controller := &Controller{
 		kubeClient:              kubeClient,
 		ovsBridgeClient:         ovsBridgeClient,
@@ -118,7 +115,6 @@ func NewNodeRouteController(
 		nodeInformer:            nodeInformer,
 		nodeLister:              nodeInformer.Lister(),
 		nodeListerSynced:        nodeInformer.Informer().HasSynced,
-		svcLister:               svcLister.Lister(),
 		queue:                   workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "noderoute"),
 		installedNodes:          cache.NewIndexer(nodeRouteInfoKeyFunc, cache.Indexers{nodeRouteInfoPodCIDRIndexName: nodeRouteInfoPodCIDRIndexFunc}),
 		wireGuardClient:         wireguardClient,
@@ -207,27 +203,10 @@ func (c *Controller) removeStaleGatewayRoutes() error {
 		desiredPodCIDRs = append(desiredPodCIDRs, podCIDRs...)
 	}
 
-	// TODO: This is not the best place to keep the ClusterIP Service routes.
-	desiredClusterIPSvcIPs := map[string]bool{}
-	if c.proxyAll && runtime.IsWindowsPlatform() {
-		// The route for virtual IP -> antrea-gw0 should be always kept.
-		desiredClusterIPSvcIPs[config.VirtualServiceIPv4.String()] = true
-
-		svcs, err := c.svcLister.List(labels.Everything())
-		for _, svc := range svcs {
-			for _, ip := range svc.Spec.ClusterIPs {
-				desiredClusterIPSvcIPs[ip] = true
-			}
-		}
-		if err != nil {
-			return fmt.Errorf("error when listing ClusterIP Service IPs: %v", err)
-		}
-	}
-
 	// routeClient will remove orphaned routes whose destinations are not in desiredPodCIDRs.
 	// If proxyAll enabled, it will also remove routes that are for Windows ClusterIP Services
 	// which no longer exist.
-	if err := c.routeClient.Reconcile(desiredPodCIDRs, desiredClusterIPSvcIPs); err != nil {
+	if err := c.routeClient.Reconcile(desiredPodCIDRs); err != nil {
 		return err
 	}
 	return nil
