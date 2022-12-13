@@ -581,7 +581,7 @@ func (f *fqdnController) runRuleSyncTracker(stopCh <-chan struct{}) {
 // parseDNSResponse returns the FQDN, IP query result and lowest applicable TTL of a DNS response.
 func (f *fqdnController) parseDNSResponse(msg *dns.Msg) (string, map[string]net.IP, uint32, error) {
 	if len(msg.Question) == 0 {
-		return "", nil, 0, fmt.Errorf("invalid DNS message")
+		return "", nil, 0, fmt.Errorf("invalid DNS response")
 	}
 	fqdn := strings.ToLower(msg.Question[0].Name)
 	lowestTTL := uint32(math.MaxUint32) // a TTL must exist in the RRs
@@ -604,8 +604,13 @@ func (f *fqdnController) parseDNSResponse(msg *dns.Msg) (string, map[string]net.
 			}
 		}
 	}
+	// TODO: Support inspecting DNS over TCP, otherwise rule with FQDN may not work as expected if client switches to
+	// DNS over TCP.
+	if msg.MsgHdr.Truncated {
+		klog.InfoS("Received a truncated DNS response, client may retry over TCP and NetworkPolicy rule with FQDN may not work properly", "FQDN", fqdn)
+	}
 	if len(responseIPs) > 0 {
-		klog.V(4).InfoS("Received DNS Packet with valid Answer", "IPs", responseIPs, "TTL", lowestTTL)
+		klog.V(4).InfoS("Received a DNS response with valid Answer", "FQDN", fqdn, "IPs", responseIPs, "TTL", lowestTTL)
 	}
 	if strings.HasSuffix(fqdn, ".") {
 		fqdn = fqdn[:len(fqdn)-1]
