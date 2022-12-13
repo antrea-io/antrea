@@ -833,7 +833,7 @@ func (c *Client) initServiceIPRoutes() error {
 
 // Reconcile removes orphaned podCIDRs from ipset and removes routes to orphaned podCIDRs
 // based on the desired podCIDRs. svcIPs are used for Windows only.
-func (c *Client) Reconcile(podCIDRs []string, svcIPs map[string]bool) error {
+func (c *Client) Reconcile(podCIDRs []string) error {
 	desiredPodCIDRs := sets.NewString(podCIDRs...)
 	// Get the peer IPv6 gateways from pod CIDRs
 	desiredIPv6GWs := getIPv6Gateways(podCIDRs)
