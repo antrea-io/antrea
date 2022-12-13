@@ -15,6 +15,7 @@
 package agent
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -77,6 +78,12 @@ var (
 
 	// getTransportIPNetDeviceByName is meant to be overridden for testing.
 	getTransportIPNetDeviceByName = GetTransportIPNetDeviceByName
+
+	// setLinkUp is meant to be overridden for testing
+	setLinkUp = util.SetLinkUp
+
+	// configureLinkAddresses is meant to be overridden for testing
+	configureLinkAddresses = util.ConfigureLinkAddresses
 )
 
 // otherConfigKeysForIPsecCertificates are configurations added to OVS bridge when AuthenticationMode is "cert" and
@@ -243,6 +250,7 @@ func (i *Initializer) initInterfaceStore() error {
 		intf := &interfacestore.InterfaceConfig{
 			Type:          interfacestore.GatewayInterface,
 			InterfaceName: port.Name,
+			MAC:           port.MAC,
 			OVSPortConfig: ovsPort}
 		if intf.InterfaceName != i.hostGateway {
 			klog.Warningf("The discovered gateway interface name %s is different from the configured value: %s",
@@ -643,7 +651,8 @@ func (i *Initializer) setupGatewayInterface() error {
 		externalIDs := map[string]interface{}{
 			interfacestore.AntreaInterfaceTypeKey: interfacestore.AntreaGateway,
 		}
-		gwPortUUID, err := i.ovsBridgeClient.CreateInternalPort(i.hostGateway, config.HostGatewayOFPort, "", externalIDs)
+		mac := util.GenerateRandomMAC()
+		gwPortUUID, err := i.ovsBridgeClient.CreateInternalPort(i.hostGateway, config.HostGatewayOFPort, mac.String(), externalIDs)
 		if err != nil {
 			klog.ErrorS(err, "Failed to create gateway port on OVS bridge", "port", i.hostGateway)
 			return err
@@ -654,7 +663,7 @@ func (i *Initializer) setupGatewayInterface() error {
 			return err
 		}
 		klog.InfoS("Allocated OpenFlow port for gateway interface", "port", i.hostGateway, "ofPort", gwPort)
-		gatewayIface = interfacestore.NewGatewayInterface(i.hostGateway)
+		gatewayIface = interfacestore.NewGatewayInterface(i.hostGateway, mac)
 		gatewayIface.OVSPortConfig = &interfacestore.OVSPortConfig{PortUUID: gwPortUUID, OFPort: gwPort}
 		i.ifaceStore.AddInterface(gatewayIface)
 	} else {
@@ -662,7 +671,7 @@ func (i *Initializer) setupGatewayInterface() error {
 	}
 
 	// Idempotent operation to set the gateway's MTU: we perform this operation regardless of
-	// whether or not the gateway interface already exists, as the desired MTU may change across
+	// whether the gateway interface already exists, as the desired MTU may change across
 	// restarts.
 	klog.V(4).Infof("Setting gateway interface %s MTU to %d", i.hostGateway, i.nodeConfig.NodeMTU)
 
@@ -683,7 +692,7 @@ func (i *Initializer) configureGatewayInterface(gatewayIface *interfacestore.Int
 	// Host link might not be queried at once after creating OVS internal port; retry max 5 times with 1s
 	// delay each time to ensure the link is ready.
 	for retry := 0; retry < maxRetryForHostLink; retry++ {
-		gwMAC, gwLinkIdx, err = util.SetLinkUp(i.hostGateway)
+		gwMAC, gwLinkIdx, err = setLinkUp(i.hostGateway)
 		if err == nil {
 			break
 		}
@@ -699,9 +708,17 @@ func (i *Initializer) configureGatewayInterface(gatewayIface *interfacestore.Int
 		klog.Errorf("Failed to find host link for gateway %s: %v", i.hostGateway, err)
 		return err
 	}
-
+	// Persist the MAC configured in the network interface when the gatewayIface.MAC is not set. This may
+	// happen in upgrade case.
+	// Note the "mac" field in Windows OVS internal Interface has no impact on the network adapter's actual MAC,
+	// set it to the same value just to keep consistency.
+	if bytes.Compare(gatewayIface.MAC, gwMAC) != 0 {
+		gatewayIface.MAC = gwMAC
+		if err := i.ovsBridgeClient.SetInterfaceMAC(gatewayIface.InterfaceName, gwMAC); err != nil {
+			klog.ErrorS(err, "Failed to persist interface MAC address", "interface", gatewayIface.InterfaceName, "mac", gwMAC)
+		}
+	}
 	i.nodeConfig.GatewayConfig = &config.GatewayConfig{Name: i.hostGateway, MAC: gwMAC, OFPort: uint32(gatewayIface.OFPort)}
-	gatewayIface.MAC = gwMAC
 	gatewayIface.IPs = []net.IP{}
 	if i.networkConfig.TrafficEncapMode.IsNetworkPolicyOnly() {
 		// Assign IP to gw as required by SpoofGuard.
@@ -1148,13 +1165,13 @@ func (i *Initializer) allocateGatewayAddresses(localSubnets []*net.IPNet, gatewa
 	// (i.e. portExists is false). Indeed, it may be possible for the interface to exist even if the OVS bridge does
 	// not exist.
 	// Configure any missing IP address on the interface. Remove any extra IP address that may exist.
-	if err := util.ConfigureLinkAddresses(i.nodeConfig.GatewayConfig.LinkIndex, gwIPs); err != nil {
+	if err := configureLinkAddresses(i.nodeConfig.GatewayConfig.LinkIndex, gwIPs); err != nil {
 		return err
 	}
 	// Periodically check whether IP configuration of the gateway is correct.
 	// Terminate when stopCh is closed.
 	go wait.Until(func() {
-		if err := util.ConfigureLinkAddresses(i.nodeConfig.GatewayConfig.LinkIndex, gwIPs); err != nil {
+		if err := configureLinkAddresses(i.nodeConfig.GatewayConfig.LinkIndex, gwIPs); err != nil {
 			klog.Errorf("Failed to check IP configuration of the gateway: %v", err)
 		}
 	}, 60*time.Second, i.stopCh)

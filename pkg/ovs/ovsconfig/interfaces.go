@@ -14,6 +14,10 @@
 
 package ovsconfig
 
+import (
+	"net"
+)
+
 type TunnelType string
 
 type OVSDatapathType string
@@ -65,4 +69,5 @@ type OVSBridgeClient interface {
 	GetOVSDatapathType() OVSDatapathType
 	SetInterfaceType(name, ifType string) Error
 	SetPortExternalIDs(portName string, externalIDs map[string]interface{}) Error
+	SetInterfaceMAC(name string, mac net.HardwareAddr) Error
 }
