@@ -32,7 +32,10 @@ import (
 	queriertest "antrea.io/antrea/pkg/querier/testing"
 )
 
-const ovsVersion = "2.10.0"
+const (
+	ovsVersion          = "2.10.0"
+	defaultNPLPortRange = "61000-62001"
+)
 
 func getIPNet(ip string) *net.IPNet {
 	_, ipNet, _ := net.ParseCIDR(ip)
@@ -114,8 +117,9 @@ func TestAgentQuerierGetAgentInfo(t *testing.T) {
 						Status: corev1.ConditionTrue,
 					},
 				},
-				APIPort: 10350,
-				Version: "UNKNOWN",
+				APIPort:                10350,
+				NodePortLocalPortRange: defaultNPLPortRange,
+				Version:                "UNKNOWN",
 			},
 		},
 		{
@@ -162,8 +166,9 @@ func TestAgentQuerierGetAgentInfo(t *testing.T) {
 						Status: corev1.ConditionTrue,
 					},
 				},
-				APIPort: 10350,
-				Version: "UNKNOWN",
+				APIPort:                10350,
+				NodePortLocalPortRange: defaultNPLPortRange,
+				Version:                "UNKNOWN",
 			},
 		},
 	}
@@ -176,6 +181,7 @@ func TestAgentQuerierGetAgentInfo(t *testing.T) {
 				ovsBridgeClient:          ovsBridgeClient,
 				networkPolicyInfoQuerier: networkPolicyInfoQuerier,
 				apiPort:                  tt.apiPort,
+				nplRange:                 defaultNPLPortRange,
 			}
 			agentInfo := &v1beta1.AntreaAgentInfo{}
 			aq.GetAgentInfo(agentInfo, tt.partial)

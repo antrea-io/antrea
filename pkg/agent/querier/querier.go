@@ -54,6 +54,7 @@ type agentQuerier struct {
 	proxier                  proxy.Proxier
 	networkPolicyInfoQuerier querier.AgentNetworkPolicyInfoQuerier
 	apiPort                  int
+	nplRange                 string
 }
 
 func NewAgentQuerier(
@@ -66,6 +67,7 @@ func NewAgentQuerier(
 	proxier proxy.Proxier,
 	networkPolicyInfoQuerier querier.AgentNetworkPolicyInfoQuerier,
 	apiPort int,
+	nplRange string,
 ) *agentQuerier {
 	return &agentQuerier{
 		nodeConfig:               nodeConfig,
@@ -76,7 +78,9 @@ func NewAgentQuerier(
 		ovsBridgeClient:          ovsBridgeClient,
 		proxier:                  proxier,
 		networkPolicyInfoQuerier: networkPolicyInfoQuerier,
-		apiPort:                  apiPort}
+		apiPort:                  apiPort,
+		nplRange:                 nplRange,
+	}
 }
 
 // GetNodeConfig returns NodeConfig.
@@ -205,7 +209,7 @@ func (aq agentQuerier) GetAgentInfo(agentInfo *v1beta1.AntreaAgentInfo, partial 
 	}
 	agentInfo.AgentConditions = aq.getAgentConditions(ovsConnected)
 
-	// Some other fields are needed when partial if false.
+	// Some other fields are needed when partial is false.
 	if !partial {
 		agentInfo.Version = querier.GetVersion()
 		agentInfo.PodRef = querier.GetSelfPod()
@@ -221,5 +225,6 @@ func (aq agentQuerier) GetAgentInfo(agentInfo *v1beta1.AntreaAgentInfo, partial 
 		agentInfo.NodeSubnets = nodeSubnets
 		agentInfo.OVSInfo.BridgeName = aq.nodeConfig.OVSBridge
 		agentInfo.APIPort = aq.apiPort
+		agentInfo.NodePortLocalPortRange = aq.nplRange
 	}
 }
