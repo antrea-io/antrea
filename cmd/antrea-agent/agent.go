@@ -750,7 +750,9 @@ func run(o *Options) error {
 		ovsBridgeClient,
 		proxier,
 		networkPolicyController,
-		o.config.APIPort)
+		o.config.APIPort,
+		o.config.NodePortLocal.PortRange,
+	)
 
 	agentMonitor := monitor.NewAgentMonitor(crdClient, agentQuerier)
 

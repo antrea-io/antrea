@@ -2479,6 +2479,13 @@ func schema_pkg_apis_crd_v1beta1_AntreaAgentInfo(ref common.ReferenceCallback) c
 							Format:      "int32",
 						},
 					},
+					"nodePortLocalPortRange": {
+						SchemaProps: spec.SchemaProps{
+							Description: "The port range used by NodePortLocal",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
 				},
 			},
 		},
