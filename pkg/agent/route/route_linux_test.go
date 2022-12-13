@@ -622,7 +622,7 @@ func TestReconcile(t *testing.T) {
 		{IP: net.ParseIP("2001:ab03:cd04:55ee:100b::1")}, // non-existing podCIDR, should be deleted.
 	}, nil)
 	mockNetlink.EXPECT().NeighDel(&netlink.Neigh{IP: net.ParseIP("2001:ab03:cd04:55ee:100b::1")})
-	assert.NoError(t, c.Reconcile(podCIDRs, nil))
+	assert.NoError(t, c.Reconcile(podCIDRs))
 }
 
 func TestAddRoutes(t *testing.T) {
