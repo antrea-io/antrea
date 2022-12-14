@@ -91,6 +91,7 @@ THIS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 pushd $THIS_DIR > /dev/null
 
 CNI_BINARIES_VERSION=$(head -n 1 ../deps/cni-binaries-version)
+SURICATA_VERSION=$(head -n 1 ../deps/suricata-version)
 
 BUILD_TAG=$(../build-tag.sh)
 
@@ -140,6 +141,7 @@ if [ "$DISTRO" == "ubuntu" ]; then
            --cache-from antrea/base-ubuntu:$BUILD_TAG \
            -t antrea/base-ubuntu:$BUILD_TAG \
            --build-arg CNI_BINARIES_VERSION=$CNI_BINARIES_VERSION \
+           --build-arg SURICATA_VERSION=$SURICATA_VERSION \
            --build-arg BUILD_TAG=$BUILD_TAG .
 elif [ "$DISTRO" == "ubi" ]; then
     docker build $PLATFORM_ARG \
@@ -148,6 +150,7 @@ elif [ "$DISTRO" == "ubi" ]; then
            -t antrea/base-ubi:$BUILD_TAG \
            -f Dockerfile.ubi \
            --build-arg CNI_BINARIES_VERSION=$CNI_BINARIES_VERSION \
+           --build-arg SURICATA_VERSION=$SURICATA_VERSION \
            --build-arg BUILD_TAG=$BUILD_TAG .
 fi
 

@@ -39,11 +39,16 @@ RUN set -eux; \
 
 FROM antrea/openvswitch-ubi:${BUILD_TAG}
 
+ARG SURICATA_VERSION
+
 LABEL maintainer="Antrea <projectantrea-dev@googlegroups.com>"
 LABEL description="An UBI8 based Docker base image for Antrea."
 
 USER root
 
-RUN yum install ipset jq -y && yum clean all 
+# Skip installing weak dependencies (geolite2-city and geolite2-country) for Suricata as they are not required for Antrea's use case.
+RUN yum install ipset jq yum-plugin-copr -y && \
+    yum copr enable @oisf/suricata-${SURICATA_VERSION} -y && yum install suricata --setopt=install_weak_deps=False -y && \
+    yum remove yum-plugin-copr -y && yum clean all
 
 COPY --from=cni-binaries /opt/cni/bin /opt/cni/bin
