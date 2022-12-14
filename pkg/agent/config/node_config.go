@@ -200,16 +200,40 @@ type NetworkConfig struct {
 	IPv6Enabled           bool
 }
 
-// IsIPv4Enabled returns true if the cluster network supports IPv4.
-func IsIPv4Enabled(nodeConfig *NodeConfig, trafficEncapMode TrafficEncapModeType) bool {
-	return nodeConfig.PodIPv4CIDR != nil ||
-		(trafficEncapMode.IsNetworkPolicyOnly() && nodeConfig.NodeIPv4Addr != nil)
+// IsIPv4Enabled returns true if the cluster network supports IPv4. Legal cases are:
+// - NetworkPolicyOnly, NodeIPv4Addr != nil, IPv4 is enabled
+// - NetworkPolicyOnly, NodeIPv4Addr == nil, IPv4 is disabled
+// - Non-NetworkPolicyOnly, PodIPv4CIDR != nil, NodeIPv4Addr != nil, IPv4 is enabled
+// - Non-NetworkPolicyOnly, PodIPv4CIDR == nil, IPv4 is disabled
+func IsIPv4Enabled(nodeConfig *NodeConfig, trafficEncapMode TrafficEncapModeType) (bool, error) {
+	if trafficEncapMode.IsNetworkPolicyOnly() {
+		return nodeConfig.NodeIPv4Addr != nil, nil
+	}
+	if nodeConfig.PodIPv4CIDR != nil {
+		if nodeConfig.NodeIPv4Addr != nil {
+			return true, nil
+		}
+		return false, fmt.Errorf("K8s Node should have an IPv4 address if IPv4 Pod CIDR is defined")
+	}
+	return false, nil
 }
 
-// IsIPv6Enabled returns true if the cluster network supports IPv6.
-func IsIPv6Enabled(nodeConfig *NodeConfig, trafficEncapMode TrafficEncapModeType) bool {
-	return nodeConfig.PodIPv6CIDR != nil ||
-		(trafficEncapMode.IsNetworkPolicyOnly() && nodeConfig.NodeIPv6Addr != nil)
+// IsIPv6Enabled returns true if the cluster network supports IPv6. Legal cases are:
+// - NetworkPolicyOnly, NodeIPv6Addr != nil, IPv6 is enabled
+// - NetworkPolicyOnly, NodeIPv6Addr == nil, IPv6 is disabled
+// - Non-NetworkPolicyOnly, PodIPv6CIDR != nil, NodeIPv6Addr != nil, IPv6 is enabled
+// - Non-NetworkPolicyOnly, PodIPv6CIDR == nil, IPv6 is disabled
+func IsIPv6Enabled(nodeConfig *NodeConfig, trafficEncapMode TrafficEncapModeType) (bool, error) {
+	if trafficEncapMode.IsNetworkPolicyOnly() {
+		return nodeConfig.NodeIPv6Addr != nil, nil
+	}
+	if nodeConfig.PodIPv6CIDR != nil {
+		if nodeConfig.NodeIPv6Addr != nil {
+			return true, nil
+		}
+		return false, fmt.Errorf("K8s Node should have an IPv6 address if IPv6 Pod CIDR is defined")
+	}
+	return false, nil
 }
 
 // NeedsTunnelToPeer returns true if Pod traffic to peer Node needs to be encapsulated by OVS tunneling.
