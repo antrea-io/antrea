@@ -23,11 +23,13 @@ import (
 	"testing"
 	"time"
 
+	"antrea.io/libOpenflow/openflow15"
 	"antrea.io/libOpenflow/protocol"
 	"antrea.io/libOpenflow/util"
 	"antrea.io/ofnet/ofctrl"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	apitypes "k8s.io/apimachinery/pkg/types"
@@ -36,6 +38,7 @@ import (
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/util/workqueue"
 
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/interfacestore"
@@ -45,6 +48,7 @@ import (
 	openflowtest "antrea.io/antrea/pkg/agent/openflow/testing"
 	"antrea.io/antrea/pkg/agent/types"
 	typestest "antrea.io/antrea/pkg/agent/types/testing"
+	agentutil "antrea.io/antrea/pkg/agent/util"
 	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	ovsconfigtest "antrea.io/antrea/pkg/ovs/ovsconfig/testing"
@@ -66,6 +70,7 @@ var (
 		OVSPortConfig: &interfacestore.OVSPortConfig{
 			OFPort: 1,
 		},
+		ContainerInterfaceConfig: &interfacestore.ContainerInterfaceConfig{PodName: "pod4", PodNamespace: "ns2", ContainerID: "container4"},
 	}
 	if2 = &interfacestore.InterfaceConfig{
 		Type:          interfacestore.ContainerInterface,
@@ -74,6 +79,7 @@ var (
 		OVSPortConfig: &interfacestore.OVSPortConfig{
 			OFPort: 2,
 		},
+		ContainerInterfaceConfig: &interfacestore.ContainerInterfaceConfig{PodName: "pod3", PodNamespace: "ns1", ContainerID: "container3"},
 	}
 	nodeIf1IP = net.ParseIP("192.168.20.22")
 )
@@ -91,7 +97,7 @@ func TestAddGroupMemberStatus(t *testing.T) {
 	mctrl.mRouteClient.multicastInterfaceConfigs = []multicastInterfaceConfig{
 		{Name: if1.InterfaceName, IPv4Addr: &net.IPNet{IP: nodeIf1IP, Mask: net.IPv4Mask(255, 255, 255, 0)}},
 	}
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	mctrl.addGroupMemberStatus(event)
 	groupCache := mctrl.groupCache
 	compareGroupStatus(t, groupCache, event)
@@ -104,14 +110,14 @@ func TestAddGroupMemberStatus(t *testing.T) {
 	mockOFClient.EXPECT().InstallMulticastFlows(mgroup, gomock.Any()).Times(1)
 	mockMulticastSocket.EXPECT().MulticastInterfaceJoinMgroup(mgroup.To4(), nodeIf1IP.To4(), if1.InterfaceName).Times(1)
 	err = mctrl.syncGroup(key)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	mctrl.queue.Forget(obj)
 }
 
 func TestUpdateGroupMemberStatus(t *testing.T) {
 	mctrl := newMockMulticastController(t, false)
 	err := mctrl.initialize(t)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	mgroup := net.ParseIP("224.96.1.4")
 	event := &mcastGroupEvent{
 		group: mgroup,
@@ -121,26 +127,132 @@ func TestUpdateGroupMemberStatus(t *testing.T) {
 	}
 	mctrl.addGroupMemberStatus(event)
 	mockOFClient.EXPECT().SendIGMPQueryPacketOut(igmpQueryDstMac, types.McastAllHosts, uint32(0), gomock.Any()).Times(len(queryVersions))
-	for _, e := range []*mcastGroupEvent{
-		{group: mgroup, eType: groupJoin, time: event.time.Add(time.Second * 20), iface: if1},
-		{group: mgroup, eType: groupJoin, time: event.time.Add(time.Second * 40), iface: if1},
-		{group: mgroup, eType: groupJoin, time: event.time.Add(time.Second * 60), iface: if2},
-		{group: mgroup, eType: groupLeave, time: event.time.Add(time.Second * 61), iface: if1},
-		{group: mgroup, eType: groupLeave, time: event.time.Add(time.Second * 62), iface: if2},
+	for _, e := range []struct {
+		name       string
+		groupEvent mcastGroupEvent
+	}{
+		{
+			name: "if1 joins group after 20 seconds",
+			groupEvent: mcastGroupEvent{
+				group: mgroup, eType: groupJoin, time: event.time.Add(time.Second * 20), iface: if1,
+			},
+		},
+		{
+			name: "if1 joins group after 40 seconds",
+			groupEvent: mcastGroupEvent{
+				group: mgroup, eType: groupJoin, time: event.time.Add(time.Second * 40), iface: if1,
+			},
+		},
+		{
+			name: "if2 joins group after 60 seconds",
+			groupEvent: mcastGroupEvent{
+				group: mgroup, eType: groupJoin, time: event.time.Add(time.Second * 60), iface: if2,
+			},
+		},
+		{
+			name: "if1 leaves group after 61 seconds",
+			groupEvent: mcastGroupEvent{
+				group: mgroup, eType: groupLeave, time: event.time.Add(time.Second * 61), iface: if1,
+			},
+		},
+		{
+			name: "if2 leaves group after 62 seconds",
+			groupEvent: mcastGroupEvent{
+				group: mgroup, eType: groupLeave, time: event.time.Add(time.Second * 62), iface: if2,
+			},
+		},
 	} {
-		obj, _, _ := mctrl.groupCache.GetByKey(event.group.String())
-		if e.eType == groupLeave {
-			mockIfaceStore.EXPECT().GetInterfaceByName(e.iface.InterfaceName).Return(e.iface, true)
-		}
-		mctrl.updateGroupMemberStatus(obj, e)
-		groupCache := mctrl.groupCache
-		compareGroupStatus(t, groupCache, e)
-		groups := mctrl.getGroupMemberStatusesByPod(e.iface.InterfaceName)
-		if e.eType == groupJoin {
-			assert.True(t, len(groups) > 0)
-		} else {
-			assert.True(t, len(groups) == 0)
-		}
+		t.Run(e.name, func(t *testing.T) {
+			obj, _, _ := mctrl.groupCache.GetByKey(event.group.String())
+			if e.groupEvent.eType == groupLeave {
+				mockIfaceStore.EXPECT().GetInterfaceByName(e.groupEvent.iface.InterfaceName).Return(e.groupEvent.iface, true)
+			}
+			mctrl.updateGroupMemberStatus(obj, &e.groupEvent)
+			groupCache := mctrl.groupCache
+			compareGroupStatus(t, groupCache, &e.groupEvent)
+			groups := mctrl.getGroupMemberStatusesByPod(e.groupEvent.iface.InterfaceName)
+			if e.groupEvent.eType == groupJoin {
+				assert.True(t, len(groups) > 0)
+			} else {
+				assert.True(t, len(groups) == 0)
+			}
+		})
+	}
+}
+
+func TestCheckNodeUpdate(t *testing.T) {
+	mockController := newMockMulticastController(t, false)
+	err := mockController.initialize(t)
+	require.NoError(t, err)
+
+	for _, tc := range []struct {
+		name        string
+		oldNode     *corev1.Node
+		curNode     *corev1.Node
+		nodeUpdated bool
+	}{
+		{
+			name: "same name, different internal IPs",
+			oldNode: &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "node0",
+				},
+				Status: corev1.NodeStatus{
+					Addresses: []corev1.NodeAddress{{Type: corev1.NodeInternalIP, Address: "192.168.50.102"}},
+				},
+			},
+			curNode: &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "node0",
+				},
+				Status: corev1.NodeStatus{
+					Addresses: []corev1.NodeAddress{{Type: corev1.NodeInternalIP, Address: "192.168.50.101"}},
+				},
+			},
+			nodeUpdated: true,
+		},
+		{
+			name: "same name, different IPs in annotation",
+			oldNode: &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        "node0",
+					Annotations: map[string]string{types.NodeTransportAddressAnnotationKey: "172.16.0.1,1::1"},
+				},
+			},
+			curNode: &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        "node0",
+					Annotations: map[string]string{types.NodeTransportAddressAnnotationKey: "172.16.0.2,1::1"},
+				},
+			},
+			nodeUpdated: true,
+		},
+		{
+			name: "same name, same IP",
+			oldNode: &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        "node0",
+					Annotations: map[string]string{types.NodeTransportAddressAnnotationKey: "172.16.0.1,1::1"},
+				},
+			},
+			curNode: &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        "node0",
+					Annotations: map[string]string{types.NodeTransportAddressAnnotationKey: "172.16.0.1,1::1"},
+				},
+			},
+			nodeUpdated: false,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			mockController.nodeUpdateQueue = workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "nodeUpdate")
+			mockController.checkNodeUpdate(tc.oldNode, tc.curNode)
+			if tc.nodeUpdated {
+				assert.Equal(t, 1, mockController.nodeUpdateQueue.Len())
+			} else {
+				assert.Zero(t, mockController.nodeUpdateQueue.Len())
+			}
+		})
 	}
 }
 
@@ -185,9 +297,9 @@ func TestCheckLastMember(t *testing.T) {
 		assert.True(t, ok)
 		assert.Equal(t, status.group.String(), key)
 		err := mctrl.syncGroup(key)
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 		_, exists, err := mctrl.groupCache.GetByKey(key)
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 		assert.Equal(t, expExist, exists)
 		// Clear cache to avoid affecting the next test.
 		if _, ok, _ := mctrl.groupCache.GetByKey(key); ok {
@@ -198,22 +310,182 @@ func TestCheckLastMember(t *testing.T) {
 	mockIfaceStore.EXPECT().GetInterfaceByName(if1.InterfaceName).Return(if1, true).Times(1)
 	mockOFClient.EXPECT().InstallMulticastGroup(gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
 	for _, tc := range []struct {
+		name   string
 		ev     *mcastGroupEvent
 		exists bool
 	}{
-		{ev: &mcastGroupEvent{group: net.ParseIP("224.96.1.5"), eType: groupJoin, time: lastProbe.Add(time.Second * 1), iface: if1}, exists: true},
-		{ev: &mcastGroupEvent{group: net.ParseIP("224.96.1.6"), eType: groupLeave, time: lastProbe.Add(time.Second * 1), iface: if1}, exists: false},
-		{ev: nil, exists: false},
+		{
+			name: "group join event",
+			ev: &mcastGroupEvent{
+				group: net.ParseIP("224.96.1.5"),
+				eType: groupJoin,
+				time:  lastProbe.Add(time.Second * 1),
+				iface: if1,
+			},
+			exists: true,
+		},
+		{
+			name: "group leave event",
+			ev: &mcastGroupEvent{
+				group: net.ParseIP("224.96.1.6"),
+				eType: groupLeave,
+				time:  lastProbe.Add(time.Second * 1),
+				iface: if1,
+			},
+			exists: false,
+		},
+		{
+			name:   "no event",
+			ev:     nil,
+			exists: false,
+		},
 	} {
-		testCheckLastMember(tc.ev, tc.exists)
+		t.Run(tc.name, func(t *testing.T) {
+			testCheckLastMember(tc.ev, tc.exists)
+		})
 	}
+}
+
+func TestGetGroupPods(t *testing.T) {
+	now := time.Now()
+
+	mctrl := newMockMulticastController(t, false)
+	err := mctrl.initialize(t)
+	require.NoError(t, err)
+	groupMemberStatuses := []*GroupMemberStatus{
+		{
+			group:        net.ParseIP("224.96.1.2"),
+			localMembers: map[string]time.Time{if1.InterfaceName: now.Add(-10 * time.Second), if2.InterfaceName: now.Add(-20 * time.Second)},
+		},
+		{
+			group:        net.ParseIP("224.96.1.3"),
+			localMembers: map[string]time.Time{if2.InterfaceName: now.Add(-20 * time.Second)},
+		},
+	}
+	interfaceNameMap := map[string]*interfacestore.InterfaceConfig{
+		if2.InterfaceName: if2,
+		if1.InterfaceName: if1,
+	}
+	expectedGroupPodsMap := map[string][]v1beta2.PodReference{
+		"224.96.1.2": {{Name: if2.PodName, Namespace: if2.PodNamespace}, {Name: if1.PodName, Namespace: if1.PodNamespace}},
+		"224.96.1.3": {{Name: if2.PodName, Namespace: if2.PodNamespace}},
+	}
+	for _, g := range groupMemberStatuses {
+		err := mctrl.groupCache.Add(g)
+		assert.NoError(t, err)
+	}
+	for k, v := range interfaceNameMap {
+		mockIfaceStore.EXPECT().GetInterfaceByName(k).AnyTimes().Return(v, true)
+	}
+	groupPodsMap := mctrl.GetGroupPods()
+	assert.Equal(t, len(expectedGroupPodsMap), len(groupPodsMap))
+	for k, v := range groupPodsMap {
+		assert.ElementsMatch(t, expectedGroupPodsMap[k], v)
+	}
+}
+
+func TestGetPodStats(t *testing.T) {
+	mctrl := newMockMulticastController(t, false)
+	err := mctrl.initialize(t)
+	require.NoError(t, err)
+
+	iface := if1
+	egressPodStats := &types.RuleMetric{Packets: 2, Bytes: 30}
+	ingressPodStats := &types.RuleMetric{Packets: 4, Bytes: 50}
+	expectedPodStats := &PodTrafficStats{Inbound: 4, Outbound: 2}
+
+	mockIfaceStore.EXPECT().GetContainerInterfacesByPod(iface.PodName, iface.PodNamespace).Return([]*interfacestore.InterfaceConfig{iface})
+	mockOFClient.EXPECT().MulticastEgressPodMetricsByIP(iface.IPs[0]).Return(egressPodStats)
+	mockOFClient.EXPECT().MulticastIngressPodMetricsByOFPort(iface.OVSPortConfig.OFPort).Return(ingressPodStats)
+	podStats := mctrl.GetPodStats(iface.PodName, iface.PodNamespace)
+	assert.Equal(t, expectedPodStats, podStats)
+}
+
+func TestGetAllPodStats(t *testing.T) {
+	mctrl := newMockMulticastController(t, false)
+	err := mctrl.initialize(t)
+	require.NoError(t, err)
+
+	for _, tc := range []struct {
+		name            string
+		egressPodStats  map[string]*types.RuleMetric
+		ingressPodStats map[uint32]*types.RuleMetric
+		ifaceByIPMap    map[string]*interfacestore.InterfaceConfig
+		ifaceByPortMap  map[uint32]*interfacestore.InterfaceConfig
+		expectedStats   map[*interfacestore.InterfaceConfig]*PodTrafficStats
+	}{
+		{
+			name:            "one iterface with inbound and outbound stats",
+			egressPodStats:  map[string]*types.RuleMetric{if1.IPs[0].String(): {Packets: 2, Bytes: 30}},
+			ingressPodStats: map[uint32]*types.RuleMetric{uint32(if1.OFPort): {Packets: 4, Bytes: 50}},
+			ifaceByIPMap:    map[string]*interfacestore.InterfaceConfig{if1.IPs[0].String(): if1},
+			ifaceByPortMap:  map[uint32]*interfacestore.InterfaceConfig{uint32(if1.OFPort): if1},
+			expectedStats:   map[*interfacestore.InterfaceConfig]*PodTrafficStats{if1: {Inbound: uint64(4), Outbound: uint64(2)}},
+		}, {
+			name:            "two interfaces",
+			egressPodStats:  map[string]*types.RuleMetric{if1.IPs[0].String(): {Packets: 2, Bytes: 30}},
+			ingressPodStats: map[uint32]*types.RuleMetric{uint32(if2.OFPort): {Packets: 4, Bytes: 50}},
+			ifaceByIPMap:    map[string]*interfacestore.InterfaceConfig{if1.IPs[0].String(): if1},
+			ifaceByPortMap:  map[uint32]*interfacestore.InterfaceConfig{uint32(if2.OFPort): if2},
+			expectedStats:   map[*interfacestore.InterfaceConfig]*PodTrafficStats{if2: {Inbound: uint64(4)}, if1: {Outbound: uint64(2)}},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			mockOFClient.EXPECT().MulticastEgressPodMetrics().Return(tc.egressPodStats)
+			mockOFClient.EXPECT().MulticastIngressPodMetrics().Return(tc.ingressPodStats)
+			for k, v := range tc.ifaceByIPMap {
+				mockIfaceStore.EXPECT().GetInterfaceByIP(k).Return(v, true)
+			}
+			for k, v := range tc.ifaceByPortMap {
+				mockIfaceStore.EXPECT().GetInterfaceByOFPort(k).Return(v, true)
+			}
+			stats := mctrl.GetAllPodsStats()
+			assert.Equal(t, tc.expectedStats, stats)
+		})
+	}
+}
+
+func TestClearStaleGroupsCreatingLeaveEvent(t *testing.T) {
+	mctrl := newMockMulticastController(t, false)
+	workerCount = 1
+	err := mctrl.initialize(t)
+	require.NoError(t, err)
+	now := time.Now()
+	staleTime := now.Add(-mctrl.mcastGroupTimeout - time.Second)
+	activeTime := now.Add(-mctrl.mcastGroupTimeout + time.Second)
+	groups := []*GroupMemberStatus{
+		{
+			group:          net.ParseIP("224.96.1.4"),
+			localMembers:   map[string]time.Time{"p1": staleTime, "p3": activeTime},
+			lastIGMPReport: activeTime,
+		},
+		{
+			group:          net.ParseIP("224.96.1.5"),
+			localMembers:   map[string]time.Time{},
+			lastIGMPReport: activeTime,
+		},
+	}
+	for _, g := range groups {
+		err := mctrl.groupCache.Add(g)
+		assert.NoError(t, err)
+	}
+	mctrl.clearStaleGroups()
+	assert.Equal(t, 1, len(mctrl.groupEventCh))
+	e := <-mctrl.groupEventCh
+	assert.Equal(t, net.ParseIP("224.96.1.4"), e.group)
+	assert.Equal(t, groupLeave, e.eType)
+	expectedIface := &interfacestore.InterfaceConfig{
+		InterfaceName: "p1",
+		Type:          interfacestore.ContainerInterface,
+	}
+	assert.Equal(t, expectedIface, e.iface)
 }
 
 func TestClearStaleGroups(t *testing.T) {
 	mctrl := newMockMulticastController(t, false)
 	workerCount = 1
 	err := mctrl.initialize(t)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	mctrl.mRouteClient.multicastInterfaceConfigs = []multicastInterfaceConfig{
 		{Name: if1.InterfaceName, IPv4Addr: &net.IPNet{IP: nodeIf1IP, Mask: net.IPv4Mask(255, 255, 255, 0)}},
 	}
@@ -252,14 +524,14 @@ func TestClearStaleGroups(t *testing.T) {
 	}
 	for _, g := range validGroups {
 		err := mctrl.groupCache.Add(g)
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 		mctrl.addInstalledGroup(g.group.String())
 		mctrl.addInstalledLocalGroup(g.group.String())
 	}
 	fakePort := int32(1)
 	for _, g := range staleGroups {
 		err := mctrl.groupCache.Add(g)
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 		mctrl.addInstalledGroup(g.group.String())
 		mctrl.addInstalledLocalGroup(g.group.String())
 		for m := range g.localMembers {
@@ -306,6 +578,7 @@ func TestProcessPacketIn(t *testing.T) {
 	acnp := v1beta2.AntreaClusterNetworkPolicy
 	drop := v1alpha1.RuleActionDrop
 	for _, tc := range []struct {
+		name             string
 		iface            *interfacestore.InterfaceConfig
 		version          uint8
 		joinedGroups     sets.String
@@ -316,6 +589,7 @@ func TestProcessPacketIn(t *testing.T) {
 		expGroups        sets.String
 	}{
 		{
+			name:         "join multiple groups groups",
 			iface:        createInterface("p1", 1),
 			joinedGroups: sets.NewString("224.1.101.2", "224.1.101.3", "224.1.101.4"),
 			joinedGroupItems: map[string]*types.IGMPNPRuleInfo{
@@ -335,6 +609,7 @@ func TestProcessPacketIn(t *testing.T) {
 			version:       1,
 		},
 		{
+			name:         "join multiple groups and block one group",
 			iface:        createInterface("p11", 1),
 			joinedGroups: sets.NewString("224.1.101.20", "224.1.101.21", "224.1.101.22", "224.1.101.23"),
 			joinedGroupItems: map[string]*types.IGMPNPRuleInfo{
@@ -364,6 +639,7 @@ func TestProcessPacketIn(t *testing.T) {
 			version:       1,
 		},
 		{
+			name:         "join multiple groups and leave one group",
 			iface:        createInterface("p2", 2),
 			joinedGroups: sets.NewString("224.1.102.2", "224.1.102.3", "224.1.102.4"),
 			joinedGroupItems: map[string]*types.IGMPNPRuleInfo{
@@ -378,6 +654,7 @@ func TestProcessPacketIn(t *testing.T) {
 			version:       2,
 		},
 		{
+			name:         "join multiple groups groups, leave one group and block one group",
 			iface:        createInterface("p22", 2),
 			joinedGroups: sets.NewString("224.1.102.21", "224.1.102.22", "224.1.102.23", "224.1.102.24"),
 			joinedGroupItems: map[string]*types.IGMPNPRuleInfo{
@@ -398,6 +675,7 @@ func TestProcessPacketIn(t *testing.T) {
 			expGroups:     sets.NewString("224.1.102.21", "224.1.102.22"),
 		},
 		{
+			name:         "mixed case",
 			iface:        createInterface("p33", 3),
 			joinedGroups: sets.NewString("224.1.103.2", "224.1.103.3", "224.1.103.4"),
 			joinedGroupItems: map[string]*types.IGMPNPRuleInfo{
@@ -422,33 +700,68 @@ func TestProcessPacketIn(t *testing.T) {
 			version:       3,
 		},
 	} {
-		mockIfaceStore.EXPECT().GetInterfaceByName(tc.iface.InterfaceName).Return(tc.iface, true).AnyTimes()
-		packets := createIGMPReportPacketIn(getIPs(tc.joinedGroups.List()), getIPs(tc.leftGroups.List()), tc.version, uint32(tc.iface.OFPort))
-		mockOFClient.EXPECT().SendIGMPQueryPacketOut(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+		t.Run(tc.name, func(t *testing.T) {
+			mockIfaceStore.EXPECT().GetInterfaceByName(tc.iface.InterfaceName).Return(tc.iface, true).AnyTimes()
+			packets := createIGMPReportPacketIn(getIPs(tc.joinedGroups.List()), getIPs(tc.leftGroups.List()), tc.version, uint32(tc.iface.OFPort))
+			mockOFClient.EXPECT().SendIGMPQueryPacketOut(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
-		if tc.version == 3 {
-			for _, leftGroup := range tc.leftGroups.List() {
-				mockMulticastValidator.EXPECT().GetIGMPNPRuleInfo(tc.iface.InterfaceName, tc.iface.PodNamespace, net.ParseIP(leftGroup).To4(), gomock.Any()).Times(1)
+			if tc.version == 3 {
+				for _, leftGroup := range tc.leftGroups.List() {
+					mockMulticastValidator.EXPECT().GetIGMPNPRuleInfo(tc.iface.InterfaceName, tc.iface.PodNamespace, net.ParseIP(leftGroup).To4(), gomock.Any()).Times(1)
+				}
 			}
-		}
-		for _, joinedGroup := range tc.joinedGroups.List() {
-			mockMulticastValidator.EXPECT().GetIGMPNPRuleInfo(tc.iface.InterfaceName, tc.iface.PodNamespace, net.ParseIP(joinedGroup).To4(), gomock.Any()).Return(tc.joinedGroupItems[joinedGroup], nil).Times(1)
-		}
-		for _, pkt := range packets {
-			mockIfaceStore.EXPECT().GetInterfaceByOFPort(uint32(tc.iface.OFPort)).Return(tc.iface, true)
-			err := snooper.processPacketIn(pkt)
-			assert.Nil(t, err)
-		}
+			for _, joinedGroup := range tc.joinedGroups.List() {
+				mockMulticastValidator.EXPECT().GetIGMPNPRuleInfo(tc.iface.InterfaceName, tc.iface.PodNamespace, net.ParseIP(joinedGroup).To4(), gomock.Any()).Return(tc.joinedGroupItems[joinedGroup], nil).Times(1)
+			}
+			for _, pkt := range packets {
+				mockIfaceStore.EXPECT().GetInterfaceByOFPort(uint32(tc.iface.OFPort)).Return(tc.iface, true)
+				err := snooper.processPacketIn(pkt)
+				assert.NoError(t, err)
+			}
 
-		assert.Equal(t, tc.igmpACNPStats, snooper.igmpReportACNPStats)
-		assert.Equal(t, tc.igmpANPStats, snooper.igmpReportANPStats)
+			assert.Equal(t, tc.igmpACNPStats, snooper.igmpReportACNPStats)
+			assert.Equal(t, tc.igmpANPStats, snooper.igmpReportANPStats)
 
-		time.Sleep(time.Second)
-		statuses := mockController.getGroupMemberStatusesByPod(tc.iface.InterfaceName)
-		assert.Equal(t, tc.expGroups.Len(), len(statuses))
-		for _, s := range statuses {
-			assert.True(t, tc.expGroups.Has(s.group.String()))
-		}
+			time.Sleep(time.Second)
+			statuses := mockController.getGroupMemberStatusesByPod(tc.iface.InterfaceName)
+			assert.Equal(t, tc.expGroups.Len(), len(statuses))
+			for _, s := range statuses {
+				assert.True(t, tc.expGroups.Has(s.group.String()))
+			}
+		})
+	}
+}
+
+func TestHandlePacketInWithErrorCases(t *testing.T) {
+	mockController := newMockMulticastController(t, false)
+	snooper := mockController.igmpSnooper
+
+	for _, tc := range []struct {
+		name  string
+		pktIn ofctrl.PacketIn
+		err   error
+	}{
+		{
+			name: "wrong custom reasons",
+			pktIn: generatePacketWithMatches(protocol.NewIGMPv3Report(make([]protocol.IGMPv3GroupRecord, 0)), 3, nil, []openflow15.MatchField{*openflow15.NewInPortField(3), {
+				Class:   openflow15.OXM_CLASS_PACKET_REGS,
+				Field:   openflow15.OXM_FIELD_IN_PORT,
+				HasMask: true,
+				Mask:    &openflow15.ByteArrayField{Data: []byte{255, 255, 255, 255, 0, 0, 0, 0}, Length: 8},
+				Value:   &openflow15.ByteArrayField{Data: []byte{0, 0, 0, 0, 0, 0, 0, 0}, Length: 8},
+			}}),
+			err: nil,
+		},
+		{
+			name:  "error getting match",
+			pktIn: generatePacketWithMatches(protocol.NewIGMPv3Report(make([]protocol.IGMPv3GroupRecord, 0)), 3, nil, []openflow15.MatchField{*openflow15.NewInPortField(3)}),
+			err:   fmt.Errorf("error getting match from IGMP marks in CustomField"),
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := snooper.HandlePacketIn(&tc.pktIn)
+			assert.Equal(t, err, tc.err)
+		})
 	}
 }
 
@@ -456,7 +769,7 @@ func TestEncapModeInitialize(t *testing.T) {
 	mockController := newMockMulticastController(t, true)
 	assert.True(t, mockController.nodeGroupID != 0)
 	err := mockController.initialize(t)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 }
 
 func TestEncapLocalReportAndNotifyRemote(t *testing.T) {
@@ -474,63 +787,96 @@ func TestEncapLocalReportAndNotifyRemote(t *testing.T) {
 	iface2 := createInterface("pod2", 4)
 	mgroup := net.ParseIP("224.2.100.4")
 	for _, tc := range []struct {
+		name         string
 		e            *mcastGroupEvent
 		interfaces   []*interfacestore.InterfaceConfig
 		groupChanged bool
 		ifaceCheck   bool
 	}{
-		{e: &mcastGroupEvent{group: mgroup, eType: groupJoin, time: time.Now(), iface: iface1}, interfaces: []*interfacestore.InterfaceConfig{iface1}, groupChanged: true, ifaceCheck: true},
-		{e: &mcastGroupEvent{group: mgroup, eType: groupJoin, time: time.Now(), iface: iface1}, interfaces: []*interfacestore.InterfaceConfig{iface1}, groupChanged: false, ifaceCheck: false},
-		{e: &mcastGroupEvent{group: mgroup, eType: groupJoin, time: time.Now(), iface: iface2}, interfaces: []*interfacestore.InterfaceConfig{iface1, iface2}, groupChanged: false, ifaceCheck: true},
-		{e: &mcastGroupEvent{group: mgroup, eType: groupLeave, time: time.Now(), iface: iface2}, interfaces: []*interfacestore.InterfaceConfig{iface1, iface2}, groupChanged: false, ifaceCheck: true},
-		{e: &mcastGroupEvent{group: mgroup, eType: groupLeave, time: time.Now(), iface: iface1}, interfaces: []*interfacestore.InterfaceConfig{iface1}, groupChanged: true, ifaceCheck: true},
+		{
+			name:         "group join event",
+			e:            &mcastGroupEvent{group: mgroup, eType: groupJoin, time: time.Now(), iface: iface1},
+			interfaces:   []*interfacestore.InterfaceConfig{iface1},
+			groupChanged: true,
+			ifaceCheck:   true,
+		},
+		{
+			name:         "group join event to same group",
+			e:            &mcastGroupEvent{group: mgroup, eType: groupJoin, time: time.Now(), iface: iface1},
+			interfaces:   []*interfacestore.InterfaceConfig{iface1},
+			groupChanged: false,
+			ifaceCheck:   false,
+		},
+		{
+			name:         "group join event to existing group",
+			e:            &mcastGroupEvent{group: mgroup, eType: groupJoin, time: time.Now(), iface: iface2},
+			interfaces:   []*interfacestore.InterfaceConfig{iface1, iface2},
+			groupChanged: false,
+			ifaceCheck:   true,
+		},
+		{
+			name:         "group leave event to existing group",
+			e:            &mcastGroupEvent{group: mgroup, eType: groupLeave, time: time.Now(), iface: iface2},
+			interfaces:   []*interfacestore.InterfaceConfig{iface1, iface2},
+			groupChanged: false,
+			ifaceCheck:   true,
+		},
+		{
+			name:         "group leave event to existing group with single member",
+			e:            &mcastGroupEvent{group: mgroup, eType: groupLeave, time: time.Now(), iface: iface1},
+			interfaces:   []*interfacestore.InterfaceConfig{iface1},
+			groupChanged: true,
+			ifaceCheck:   true,
+		},
 	} {
-		groupKey := tc.e.group.String()
-		if tc.e.eType == groupJoin {
-			if tc.groupChanged {
-				mockMulticastSocket.EXPECT().MulticastInterfaceJoinMgroup(mgroup.To4(), nodeIf1IP.To4(), if1.InterfaceName).Times(1)
-				mockOFClient.EXPECT().SendIGMPRemoteReportPacketOut(igmpReportDstMac, types.IGMPv3Router, gomock.Any())
-				mockOFClient.EXPECT().InstallMulticastFlows(mgroup, gomock.Any()).Times(1)
-			}
-			if tc.ifaceCheck {
-				for _, iface := range tc.interfaces {
-					mockIfaceStore.EXPECT().GetInterfaceByName(iface.InterfaceName).Return(iface, true)
+		t.Run(tc.name, func(t *testing.T) {
+			groupKey := tc.e.group.String()
+			if tc.e.eType == groupJoin {
+				if tc.groupChanged {
+					mockMulticastSocket.EXPECT().MulticastInterfaceJoinMgroup(mgroup.To4(), nodeIf1IP.To4(), if1.InterfaceName).Times(1)
+					mockOFClient.EXPECT().SendIGMPRemoteReportPacketOut(igmpReportDstMac, types.IGMPv3Router, gomock.Any())
+					mockOFClient.EXPECT().InstallMulticastFlows(mgroup, gomock.Any()).Times(1)
 				}
-				mockOFClient.EXPECT().InstallMulticastGroup(gomock.Any(), gomock.Any(), gomock.Any())
-			}
-		} else {
-			if tc.ifaceCheck {
-				for _, iface := range tc.interfaces {
-					mockIfaceStore.EXPECT().GetInterfaceByName(iface.InterfaceName).Return(iface, true)
-				}
-				if len(tc.interfaces) == 1 {
-					mockOFClient.EXPECT().SendIGMPQueryPacketOut(igmpQueryDstMac, types.McastAllHosts, gomock.Any(), gomock.Any()).AnyTimes()
-				}
-				if !tc.groupChanged {
+				if tc.ifaceCheck {
+					for _, iface := range tc.interfaces {
+						mockIfaceStore.EXPECT().GetInterfaceByName(iface.InterfaceName).Return(iface, true)
+					}
 					mockOFClient.EXPECT().InstallMulticastGroup(gomock.Any(), gomock.Any(), gomock.Any())
 				}
-			}
-			if tc.groupChanged {
-				mockOFClient.EXPECT().UninstallMulticastGroup(gomock.Any())
-				mockOFClient.EXPECT().UninstallMulticastFlows(tc.e.group)
-				mockMulticastSocket.EXPECT().MulticastInterfaceLeaveMgroup(gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
-				mockOFClient.EXPECT().SendIGMPRemoteReportPacketOut(igmpReportDstMac, types.IGMPv3Router, gomock.Any())
-			}
-		}
-		mockController.addOrUpdateGroupEvent(tc.e)
-
-		if tc.groupChanged {
-			err := wait.PollImmediate(time.Millisecond*100, time.Second*3, func() (done bool, err error) {
-				if tc.e.eType == groupJoin {
-					return mockController.localGroupHasInstalled(groupKey) && mockController.groupHasInstalled(groupKey), nil
-				} else {
-					return !mockController.localGroupHasInstalled(groupKey) && !mockController.groupHasInstalled(groupKey), nil
+			} else {
+				if tc.ifaceCheck {
+					for _, iface := range tc.interfaces {
+						mockIfaceStore.EXPECT().GetInterfaceByName(iface.InterfaceName).Return(iface, true)
+					}
+					if len(tc.interfaces) == 1 {
+						mockOFClient.EXPECT().SendIGMPQueryPacketOut(igmpQueryDstMac, types.McastAllHosts, gomock.Any(), gomock.Any()).AnyTimes()
+					}
+					if !tc.groupChanged {
+						mockOFClient.EXPECT().InstallMulticastGroup(gomock.Any(), gomock.Any(), gomock.Any())
+					}
 				}
-			})
-			assert.Nil(t, err)
-		} else {
-			time.Sleep(time.Millisecond * 200)
-		}
+				if tc.groupChanged {
+					mockOFClient.EXPECT().UninstallMulticastGroup(gomock.Any())
+					mockOFClient.EXPECT().UninstallMulticastFlows(tc.e.group)
+					mockMulticastSocket.EXPECT().MulticastInterfaceLeaveMgroup(gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
+					mockOFClient.EXPECT().SendIGMPRemoteReportPacketOut(igmpReportDstMac, types.IGMPv3Router, gomock.Any())
+				}
+			}
+			mockController.addOrUpdateGroupEvent(tc.e)
+
+			if tc.groupChanged {
+				err := wait.PollImmediate(time.Millisecond*100, time.Second*3, func() (done bool, err error) {
+					if tc.e.eType == groupJoin {
+						return mockController.localGroupHasInstalled(groupKey) && mockController.groupHasInstalled(groupKey), nil
+					} else {
+						return !mockController.localGroupHasInstalled(groupKey) && !mockController.groupHasInstalled(groupKey), nil
+					}
+				})
+				assert.NoError(t, err)
+			} else {
+				time.Sleep(time.Millisecond * 200)
+			}
+		})
 	}
 }
 
@@ -544,11 +890,13 @@ func TestNodeUpdate(t *testing.T) {
 
 	wg := sync.WaitGroup{}
 	for _, tc := range []struct {
+		name          string
 		addedNodes    map[string]map[string]string
 		deletedNodes  []string
 		expectedNodes sets.String
 	}{
 		{
+			name: "add two nodes to empty install nodes",
 			addedNodes: map[string]map[string]string{
 				"n1": {"ip": "10.10.10.11"},
 				"n2": {"ip": "10.10.10.12"},
@@ -556,18 +904,21 @@ func TestNodeUpdate(t *testing.T) {
 			expectedNodes: sets.NewString("10.10.10.11", "10.10.10.12"),
 		},
 		{
+			name: "add one node to installed nodes",
 			addedNodes: map[string]map[string]string{
 				"n3": {"ip": "10.10.10.13"},
 			},
 			expectedNodes: sets.NewString("10.10.10.11", "10.10.10.12", "10.10.10.13"),
 		},
 		{
+			name: "delete one node from installed nodes",
 			deletedNodes: []string{
 				"n1",
 			},
 			expectedNodes: sets.NewString("10.10.10.12", "10.10.10.13"),
 		},
 		{
+			name: "delete and add nodes to installed nodes",
 			addedNodes: map[string]map[string]string{
 				"n4": {"ip": "10.10.10.14", "label": "10.10.10.24"},
 			},
@@ -577,47 +928,106 @@ func TestNodeUpdate(t *testing.T) {
 			expectedNodes: sets.NewString("10.10.10.13", "10.10.10.24"),
 		},
 	} {
-		times := len(tc.addedNodes) + len(tc.deletedNodes)
-		mockOFClient.EXPECT().InstallMulticastGroup(mockController.nodeGroupID, nil, gomock.Any()).Return(nil).Times(times)
-		mockOFClient.EXPECT().SendIGMPRemoteReportPacketOut(igmpReportDstMac, types.IGMPv3Router, gomock.Any()).Times(times)
-		wg.Add(1)
+		t.Run(tc.name, func(t *testing.T) {
+			times := len(tc.addedNodes) + len(tc.deletedNodes)
+			mockOFClient.EXPECT().InstallMulticastGroup(mockController.nodeGroupID, nil, gomock.Any()).Return(nil).Times(times)
+			mockOFClient.EXPECT().SendIGMPRemoteReportPacketOut(igmpReportDstMac, types.IGMPv3Router, gomock.Any()).Times(times)
+			wg.Add(1)
 
-		go func() {
-			for name, cfg := range tc.addedNodes {
-				node := &corev1.Node{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: name,
-					},
-				}
-				ip, exist := cfg["ip"]
-				if exist {
-					node.Status = corev1.NodeStatus{
-						Addresses: []corev1.NodeAddress{
-							{
-								Type:    corev1.NodeInternalIP,
-								Address: ip,
-							},
+			go func() {
+				for name, cfg := range tc.addedNodes {
+					node := &corev1.Node{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: name,
 						},
 					}
-				}
-				label, exist := cfg["label"]
-				if exist {
-					node.Annotations = map[string]string{
-						types.NodeTransportAddressAnnotationKey: label,
+					ip, exist := cfg["ip"]
+					if exist {
+						node.Status = corev1.NodeStatus{
+							Addresses: []corev1.NodeAddress{
+								{
+									Type:    corev1.NodeInternalIP,
+									Address: ip,
+								},
+							},
+						}
 					}
+					label, exist := cfg["label"]
+					if exist {
+						node.Annotations = map[string]string{
+							types.NodeTransportAddressAnnotationKey: label,
+						}
+					}
+					clientset.CoreV1().Nodes().Create(context.TODO(), node, metav1.CreateOptions{})
+					mockController.processNextNodeItem()
 				}
-				clientset.CoreV1().Nodes().Create(context.TODO(), node, metav1.CreateOptions{})
-				mockController.processNextNodeItem()
-			}
-			for _, name := range tc.deletedNodes {
-				clientset.CoreV1().Nodes().Delete(context.TODO(), name, metav1.DeleteOptions{})
-				mockController.processNextNodeItem()
-			}
-			wg.Done()
-		}()
+				for _, name := range tc.deletedNodes {
+					clientset.CoreV1().Nodes().Delete(context.TODO(), name, metav1.DeleteOptions{})
+					mockController.processNextNodeItem()
+				}
+				wg.Done()
+			}()
 
-		wg.Wait()
-		assert.Equal(t, tc.expectedNodes, mockController.installedNodes, fmt.Sprintf("installedNodes: %v, expectedNodes: %v", mockController.installedNodes, tc.expectedNodes))
+			wg.Wait()
+			assert.Equal(t, tc.expectedNodes, mockController.installedNodes, fmt.Sprintf("installedNodes: %v, expectedNodes: %v", mockController.installedNodes, tc.expectedNodes))
+		})
+	}
+}
+
+func TestMemberChanged(t *testing.T) {
+	mockController := newMockMulticastController(t, false)
+	_ = mockController.initialize(t)
+
+	containerA := &interfacestore.ContainerInterfaceConfig{PodNamespace: "nameA", PodName: "podA", ContainerID: "tttt"}
+	containerB := &interfacestore.ContainerInterfaceConfig{PodNamespace: "nameA", PodName: "podB", ContainerID: "mmmm"}
+	containerInterfaceNameMap := make(map[*interfacestore.ContainerInterfaceConfig]string)
+	for _, iface := range []*interfacestore.ContainerInterfaceConfig{containerA, containerB} {
+		containerInterfaceNameMap[iface] = agentutil.GenerateContainerInterfaceName(iface.PodName, iface.PodNamespace, iface.ContainerID)
+	}
+	for _, tc := range []struct {
+		name                 string
+		podUpdateEvent       types.PodUpdate
+		podJoinGroups        map[string][]*interfacestore.ContainerInterfaceConfig
+		groupLeaveEventCount int
+	}{
+		{
+			name:                 "pod add event",
+			podUpdateEvent:       types.PodUpdate{PodNamespace: containerA.PodNamespace, PodName: containerA.PodName, IsAdd: true, ContainerID: containerA.ContainerID},
+			groupLeaveEventCount: 0,
+		},
+		{
+			name:           "pod update event with two groups joined",
+			podUpdateEvent: types.PodUpdate{PodNamespace: containerA.PodNamespace, PodName: containerA.PodName, IsAdd: false, ContainerID: containerA.ContainerID},
+			podJoinGroups: map[string][]*interfacestore.ContainerInterfaceConfig{
+				"224.4.5.5": {containerA, containerB},
+				"224.4.5.6": {containerA},
+			},
+			groupLeaveEventCount: 2,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			mockController.groupEventCh = make(chan *mcastGroupEvent, 100)
+			for group, containers := range tc.podJoinGroups {
+				podTimeMap := make(map[string]time.Time)
+				for _, container := range containers {
+					podTimeMap[containerInterfaceNameMap[container]] = time.Now().Add(-10 * time.Second)
+				}
+				status := &GroupMemberStatus{
+					group:        net.ParseIP(group),
+					localMembers: podTimeMap,
+				}
+				mockController.groupCache.Add(status)
+			}
+			mockController.memberChanged(tc.podUpdateEvent)
+			assert.Equal(t, 1+tc.groupLeaveEventCount, len(mockController.groupEventCh))
+			e := <-mockController.groupEventCh
+			assert.Equal(t, types.McastAllHosts, e.group)
+			for i := 0; i < tc.groupLeaveEventCount; i++ {
+				e := <-mockController.groupEventCh
+				podUpdateEventInterfaceName := agentutil.GenerateContainerInterfaceName(tc.podUpdateEvent.PodName, tc.podUpdateEvent.PodNamespace, tc.podUpdateEvent.ContainerID)
+				assert.Equal(t, podUpdateEventInterfaceName, e.iface.InterfaceName)
+			}
+		})
 	}
 }
 
@@ -645,21 +1055,44 @@ func TestRemoteMemberJoinLeave(t *testing.T) {
 	go eventHandler(stopCh)
 
 	for _, tc := range []struct {
+		name      string
 		groupStrs []string
 		nodeStr   string
 		isJoin    bool
 	}{
-		{groupStrs: []string{"224.2.100.2", "224.2.100.3"}, nodeStr: "10.10.10.11", isJoin: true},
-		{groupStrs: []string{"224.2.100.3"}, nodeStr: "10.10.10.11", isJoin: true},
-		{groupStrs: []string{"224.2.100.2", "224.2.100.5"}, nodeStr: "10.10.10.12", isJoin: true},
-		{groupStrs: []string{"224.2.100.2"}, nodeStr: "10.10.10.12", isJoin: false},
+		{
+			name:      "node joins two groups",
+			groupStrs: []string{"224.2.100.2", "224.2.100.3"},
+			nodeStr:   "10.10.10.11",
+			isJoin:    true,
+		},
+		{
+			name:      "node joins one group",
+			groupStrs: []string{"224.2.100.3"},
+			nodeStr:   "10.10.10.11",
+			isJoin:    true,
+		},
+		{
+			name:      "another node joins two groups",
+			groupStrs: []string{"224.2.100.2", "224.2.100.5"},
+			nodeStr:   "10.10.10.12",
+			isJoin:    true,
+		},
+		{
+			name:      "another node leaves group",
+			groupStrs: []string{"224.2.100.2"},
+			nodeStr:   "10.10.10.12",
+			isJoin:    false,
+		},
 	} {
-		groups := make([]net.IP, len(tc.groupStrs))
-		for i, g := range tc.groupStrs {
-			groups[i] = net.ParseIP(g)
-		}
-		node := net.ParseIP(tc.nodeStr)
-		testRemoteReport(t, mockController, groups, node, tc.isJoin, stopStr)
+		t.Run(tc.name, func(t *testing.T) {
+			groups := make([]net.IP, len(tc.groupStrs))
+			for i, g := range tc.groupStrs {
+				groups[i] = net.ParseIP(g)
+			}
+			node := net.ParseIP(tc.nodeStr)
+			testRemoteReport(t, mockController, groups, node, tc.isJoin, stopStr)
+		})
 	}
 }
 
@@ -712,7 +1145,7 @@ func testRemoteReport(t *testing.T, mockController *Controller, groups []net.IP,
 	}()
 
 	err := processRemoteReport(t, mockController, groups, node, proto, tunnelPort)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	mockController.groupEventCh <- &mcastGroupEvent{group: net.IPv4zero}
 	wg.Wait()
 
@@ -739,7 +1172,7 @@ func processRemoteReport(t *testing.T, mockController *Controller, groups []net.
 
 func compareGroupStatus(t *testing.T, cache cache.Indexer, event *mcastGroupEvent) {
 	obj, exits, err := cache.GetByKey(event.group.String())
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Truef(t, exits, "failed to add group to cache")
 	status, ok := obj.(*GroupMemberStatus)
 	assert.Equal(t, true, ok)
@@ -805,11 +1238,11 @@ func createIGMPReportPacketIn(joinedGroups []net.IP, leftGroups []net.IP, versio
 	leaveMessages := createIGMPLeaveMessage(leftGroups, version)
 	pkts := make([]*ofctrl.PacketIn, 0)
 	for _, m := range joinMessages {
-		pkt := generatePacket(m, ofport, nil)
+		pkt := generatePacketWithMatches(m, ofport, nil, []openflow15.MatchField{*openflow15.NewInPortField(ofport)})
 		pkts = append(pkts, &pkt)
 	}
 	for _, m := range leaveMessages {
-		pkt := generatePacket(m, ofport, nil)
+		pkt := generatePacketWithMatches(m, ofport, nil, []openflow15.MatchField{*openflow15.NewInPortField(ofport)})
 		pkts = append(pkts, &pkt)
 	}
 	return pkts
