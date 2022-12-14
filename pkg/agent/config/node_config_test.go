@@ -163,3 +163,115 @@ func TestNetworkConfig_NeedsDirectRoutingToPeer(t *testing.T) {
 		})
 	}
 }
+
+func TestIsIPv4Enabled(t *testing.T) {
+	_, podIPv4CIDR, _ := net.ParseCIDR("10.10.0.0/24")
+	_, nodeIPv4Addr, _ := net.ParseCIDR("192.168.77.100/24")
+	tests := []struct {
+		name                string
+		nodeConfig          *NodeConfig
+		trafficEncapMode    TrafficEncapModeType
+		expectedErrString   string
+		expectedWithError   bool
+		expectedIPv4Enabled bool
+	}{
+		{
+			name: "Non-NetworkPolicyOnly, with IPv4PodCIDR, without NodeIPv4Addr",
+			nodeConfig: &NodeConfig{
+				PodIPv4CIDR: podIPv4CIDR,
+			},
+			expectedWithError:   true,
+			expectedErrString:   "K8s Node should have an IPv4 address if IPv4 Pod CIDR is defined",
+			expectedIPv4Enabled: false,
+		},
+		{
+			name: "Non-NetworkPolicyOnly, with IPv4PodCIDR, with NodeIPv4Addr",
+			nodeConfig: &NodeConfig{
+				PodIPv4CIDR:  podIPv4CIDR,
+				NodeIPv4Addr: nodeIPv4Addr,
+			},
+			expectedIPv4Enabled: true,
+		},
+		{
+			name:                "NetworkPolicyOnly, without NodeIPv4Addr",
+			nodeConfig:          &NodeConfig{},
+			trafficEncapMode:    TrafficEncapModeNetworkPolicyOnly,
+			expectedIPv4Enabled: false,
+		},
+		{
+			name: "NetworkPolicyOnly, with NodeIPv4Addr",
+			nodeConfig: &NodeConfig{
+				NodeIPv4Addr: nodeIPv4Addr,
+			},
+			trafficEncapMode:    TrafficEncapModeNetworkPolicyOnly,
+			expectedIPv4Enabled: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ipv4Enabled, err := IsIPv4Enabled(tt.nodeConfig, tt.trafficEncapMode)
+			if tt.expectedWithError {
+				assert.ErrorContains(t, err, tt.expectedErrString)
+			} else {
+				assert.NoError(t, err)
+			}
+			assert.Equal(t, tt.expectedIPv4Enabled, ipv4Enabled)
+		})
+	}
+}
+
+func TestIsIPv6Enabled(t *testing.T) {
+	_, podIPv6CIDR, _ := net.ParseCIDR("10:10::/64")
+	_, nodeIPv6Addr, _ := net.ParseCIDR("192:168:77::100/80")
+	tests := []struct {
+		name                string
+		nodeConfig          *NodeConfig
+		trafficEncapMode    TrafficEncapModeType
+		expectedWithError   bool
+		expectedErrString   string
+		expectedIPv6Enabled bool
+	}{
+		{
+			name: "Non-NetworkPolicyOnly, with IPv6PodCIDR, without NodeIPv6Addr",
+			nodeConfig: &NodeConfig{
+				PodIPv6CIDR: podIPv6CIDR,
+			},
+			expectedWithError:   true,
+			expectedErrString:   "K8s Node should have an IPv6 address if IPv6 Pod CIDR is defined",
+			expectedIPv6Enabled: false,
+		},
+		{
+			name: "Non-NetworkPolicyOnly, with IPv6PodCIDR, with NodeIPv6Addr",
+			nodeConfig: &NodeConfig{
+				PodIPv6CIDR:  podIPv6CIDR,
+				NodeIPv6Addr: nodeIPv6Addr,
+			},
+			expectedIPv6Enabled: true,
+		},
+		{
+			name:                "NetworkPolicyOnly, without NodeIPv6Addr",
+			nodeConfig:          &NodeConfig{},
+			trafficEncapMode:    TrafficEncapModeNetworkPolicyOnly,
+			expectedIPv6Enabled: false,
+		},
+		{
+			name: "NetworkPolicyOnly, with NodeIPv6Addr",
+			nodeConfig: &NodeConfig{
+				NodeIPv6Addr: nodeIPv6Addr,
+			},
+			trafficEncapMode:    TrafficEncapModeNetworkPolicyOnly,
+			expectedIPv6Enabled: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ipv6Enabled, err := IsIPv6Enabled(tt.nodeConfig, tt.trafficEncapMode)
+			if tt.expectedWithError {
+				assert.ErrorContains(t, err, tt.expectedErrString)
+			} else {
+				assert.NoError(t, err)
+			}
+			assert.Equal(t, tt.expectedIPv6Enabled, ipv6Enabled)
+		})
+	}
+}
