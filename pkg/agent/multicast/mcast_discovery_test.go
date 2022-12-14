@@ -15,6 +15,7 @@
 package multicast
 
 import (
+	"errors"
 	"net"
 	"sync"
 	"testing"
@@ -25,11 +26,13 @@ import (
 	"antrea.io/ofnet/ofctrl"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
+	apitypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	ifaceStoretest "antrea.io/antrea/pkg/agent/interfacestore/testing"
 	openflowtest "antrea.io/antrea/pkg/agent/openflow/testing"
+	"antrea.io/antrea/pkg/agent/types"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 )
 
@@ -63,6 +66,89 @@ func (v *snooperValidator) processPackets(expectedPackets int) {
 				v.groupLeftNodes = appendSrcNode(groupKey, v.groupLeftNodes, e.srcNode)
 			}
 		}
+	}
+}
+
+func TestCollectStats(t *testing.T) {
+	curANPStats := map[apitypes.UID]map[string]*types.RuleMetric{"anp": {"block10120": {Bytes: 42, Packets: 1}, "allow_1014": {Bytes: 42, Packets: 1}}}
+	curACNPStats := map[apitypes.UID]map[string]*types.RuleMetric{"anp": {"allow_10122": {Bytes: 42, Packets: 1}}}
+	snooper := &IGMPSnooper{igmpReportANPStats: curANPStats, igmpReportACNPStats: curACNPStats}
+	igmpANPStats, igmpACNPStats := snooper.collectStats()
+	assert.Equal(t, curACNPStats, igmpACNPStats)
+	assert.Equal(t, curANPStats, igmpANPStats)
+	assert.Equal(t, map[apitypes.UID]map[string]*types.RuleMetric{}, snooper.igmpReportANPStats)
+	assert.Equal(t, map[apitypes.UID]map[string]*types.RuleMetric{}, snooper.igmpReportACNPStats)
+}
+
+func TestParseIGMPPacket(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		packet  protocol.Ethernet
+		igmpMsg protocol.IGMPMessage
+		err     error
+	}{
+		{
+			name: "IPv6 packet",
+			packet: protocol.Ethernet{
+				Ethertype: protocol.IPv6_MSG,
+			},
+			err: errors.New("not IPv4 packet"),
+		},
+		{
+			name: "IPv4 packet with wrong data",
+			packet: protocol.Ethernet{
+				Ethertype: protocol.IPv4_MSG,
+				Data:      &protocol.IPv6{},
+			},
+			err: errors.New("failed to parse IPv4 packet"),
+		},
+		{
+			name: "not IGMP packet",
+			packet: protocol.Ethernet{
+				Ethertype: protocol.IPv4_MSG,
+				Data:      &protocol.IPv4{Protocol: 3},
+			},
+			err: errors.New("not IGMP packet"),
+		},
+		{
+			name: "wrong IGMP packet",
+			packet: protocol.Ethernet{
+				Ethertype: protocol.IPv4_MSG,
+				Data: &protocol.IPv4{
+					Protocol: 2,
+					Data:     protocol.NewIGMPv1Report(net.ParseIP("224.3.4.5")),
+				},
+			},
+			err: errors.New("unknown IGMP packet"),
+		},
+		{
+			name: "correct IGMP packet",
+			packet: protocol.Ethernet{
+				Ethertype: protocol.IPv4_MSG,
+				Data: &protocol.IPv4{
+					Protocol: 2,
+					Data:     protocol.NewIGMPv3Query(net.ParseIP("224.3.4.5"), 3, 10, []net.IP{net.ParseIP("10.3.4.5")}),
+				},
+			},
+			igmpMsg: &protocol.IGMPv3Query{
+				Type:                     17,
+				MaxResponseTime:          3,
+				Checksum:                 0,
+				GroupAddress:             net.IP{224, 3, 4, 5},
+				Reserved:                 0,
+				SuppressRouterProcessing: false,
+				RobustnessValue:          0,
+				IntervalTime:             10,
+				NumberOfSources:          1,
+				SourceAddresses:          []net.IP{{10, 3, 4, 5}},
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			igmpMsg, err := parseIGMPPacket(tc.packet)
+			assert.Equal(t, tc.igmpMsg, igmpMsg)
+			assert.Equal(t, tc.err, err)
+		})
 	}
 }
 
@@ -116,7 +202,7 @@ func TestIGMPRemoteReport(t *testing.T) {
 		for i := range packets {
 			pkt := &packets[i]
 			err := snooper.processPacketIn(pkt)
-			assert.Nil(t, err, "Failed to process IGMP Report message")
+			assert.NoError(t, err, "Failed to process IGMP Report message")
 		}
 
 		wg.Wait()
@@ -148,10 +234,11 @@ func TestIGMPRemoteReport(t *testing.T) {
 	}
 }
 
-func generatePacket(m util.Message, ofport uint32, srcNodeIP net.IP) ofctrl.PacketIn {
+func generatePacketWithMatches(m util.Message, ofport uint32, srcNodeIP net.IP, matches []openflow15.MatchField) ofctrl.PacketIn {
 	pkt := openflow15.NewPacketIn()
-	matchInport := openflow15.NewInPortField(ofport)
-	pkt.Match.AddField(*matchInport)
+	for i := range matches {
+		pkt.Match.AddField(matches[i])
+	}
 	if srcNodeIP != nil {
 		matchTunSrc := openflow15.NewTunnelIpv4SrcField(srcNodeIP, nil)
 		pkt.Match.AddField(*matchTunSrc)
@@ -175,8 +262,8 @@ func generatePacket(m util.Message, ofport uint32, srcNodeIP net.IP) ofctrl.Pack
 
 func generatePacketInForRemoteReport(t *testing.T, snooper *IGMPSnooper, groups []net.IP, srcNode net.IP, igmpMsgType uint8, tunnelPort uint32) ofctrl.PacketIn {
 	msg, err := snooper.generateIGMPReportPacket(igmpMsgType, groups)
-	assert.Nil(t, err, "Failed to generate IGMP Report message")
-	return generatePacket(msg, tunnelPort, srcNode)
+	assert.NoError(t, err, "Failed to generate IGMP Report message")
+	return generatePacketWithMatches(msg, tunnelPort, srcNode, []openflow15.MatchField{*openflow15.NewInPortField(tunnelPort)})
 }
 
 func createTunnelInterface(tunnelPort uint32, localNodeIP net.IP) *interfacestore.InterfaceConfig {
