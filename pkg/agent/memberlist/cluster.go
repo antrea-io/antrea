@@ -275,23 +275,6 @@ func (c *Cluster) newClusterMember(node *corev1.Node) (string, error) {
 	return nodeAddr.String(), nil
 }
 
-func (c *Cluster) allClusterMembers() (clusterNodes []string, err error) {
-	nodes, err := c.nodeLister.List(labels.Everything())
-	if err != nil {
-		return nil, fmt.Errorf("listing Nodes error: %v", err)
-	}
-
-	for _, node := range nodes {
-		member, err := c.newClusterMember(node)
-		if err != nil {
-			klog.ErrorS(err, "Get Node failed")
-			continue
-		}
-		clusterNodes = append(clusterNodes, member)
-	}
-	return
-}
-
 func (c *Cluster) filterEIPsFromNodeLabels(node *corev1.Node) sets.String {
 	pools := sets.NewString()
 	eips, err := c.externalIPPoolLister.List(labels.Everything())
@@ -323,16 +306,6 @@ func (c *Cluster) Run(stopCh <-chan struct{}) {
 
 	if !cache.WaitForNamedCacheSync(controllerName, stopCh, c.externalIPPoolInformerHasSynced, c.nodeListerSynced) {
 		return
-	}
-
-	members, err := c.allClusterMembers()
-	if err != nil {
-		klog.ErrorS(err, "List cluster members failed")
-	} else if members != nil {
-		_, err := c.mList.Join(members)
-		if err != nil {
-			klog.ErrorS(err, "Join cluster failed")
-		}
 	}
 
 	for i := 0; i < defaultWorkers; i++ {
