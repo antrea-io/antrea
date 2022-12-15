@@ -1104,7 +1104,7 @@ func setBasePacketOutBuilder(packetOutBuilder binding.PacketOutBuilder, srcMAC s
 	return packetOutBuilder, nil
 }
 
-// SendTCPReject generates TCP packet as a packet-out and sends it to OVS.
+// SendTCPPacketOut generates TCP packet as a packet-out and sends it to OVS.
 func (c *client) SendTCPPacketOut(
 	srcMAC string,
 	dstMAC string,
@@ -1143,7 +1143,7 @@ func (c *client) SendTCPPacketOut(
 	return c.bridge.SendPacketOut(packetOutObj)
 }
 
-// SendICMPReject generates ICMP packet as a packet-out and send it to OVS.
+// SendICMPPacketOut generates ICMP packet as a packet-out and send it to OVS.
 func (c *client) SendICMPPacketOut(
 	srcMAC string,
 	dstMAC string,

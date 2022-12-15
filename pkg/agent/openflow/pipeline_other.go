@@ -33,23 +33,26 @@ func (f *featurePodConnectivity) hostBridgeUplinkFlows() []binding.Flow {
 	outputToBridgeRegMark := binding.NewRegMark(TargetOFPortField, f.hostIfacePort)
 	cookieID := f.cookieAllocator.Request(f.category).Raw()
 	flows := f.hostBridgeLocalFlows()
+	if f.networkConfig.IPv4Enabled {
+		flows = append(flows,
+			// This generates the flow to forward ARP packets from uplink port in normal way since uplink port is set to enable
+			// flood.
+			ARPSpoofGuardTable.ofTable.BuildFlow(priorityHigh).
+				Cookie(cookieID).
+				MatchInPort(f.uplinkPort).
+				MatchProtocol(binding.ProtocolARP).
+				Action().Normal().
+				Done(),
+			// This generates the flow to forward ARP from bridge local port in normal way since bridge port is set to enable
+			// flood.
+			ARPSpoofGuardTable.ofTable.BuildFlow(priorityHigh).
+				Cookie(cookieID).
+				MatchInPort(f.hostIfacePort).
+				MatchProtocol(binding.ProtocolARP).
+				Action().Normal().
+				Done())
+	}
 	flows = append(flows,
-		// This generates the flow to forward ARP packets from uplink port in normal way since uplink port is set to enable
-		// flood.
-		ARPSpoofGuardTable.ofTable.BuildFlow(priorityHigh).
-			Cookie(cookieID).
-			MatchInPort(f.uplinkPort).
-			MatchProtocol(binding.ProtocolARP).
-			Action().Normal().
-			Done(),
-		// This generates the flow to forward ARP from bridge local port in normal way since bridge port is set to enable
-		// flood.
-		ARPSpoofGuardTable.ofTable.BuildFlow(priorityHigh).
-			Cookie(cookieID).
-			MatchInPort(f.hostIfacePort).
-			MatchProtocol(binding.ProtocolARP).
-			Action().Normal().
-			Done(),
 		// Handle packet to Node.
 		// Must use a separate flow to Output(config.BridgeOFPort), otherwise OVS will drop the packet:
 		//   output:NXM_NX_REG1[]

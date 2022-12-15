@@ -28,22 +28,23 @@ import (
 func (f *featurePodConnectivity) hostBridgeUplinkFlows() []binding.Flow {
 	cookieID := f.cookieAllocator.Request(f.category).Raw()
 	flows := f.hostBridgeLocalFlows()
-	flows = append(flows,
-		// This generates the flow to forward ARP packets from uplink port to bridge local port since uplink port is set
-		// to disable flood.
-		ARPSpoofGuardTable.ofTable.BuildFlow(priorityNormal).
-			Cookie(cookieID).
-			MatchInPort(f.uplinkPort).
-			Action().Output(f.hostIfacePort).
-			Done(),
-		// This generates the flow to forward ARP packets from bridge local port to uplink port since uplink port is set
-		// to disable flood.
-		ARPSpoofGuardTable.ofTable.BuildFlow(priorityNormal).
-			Cookie(cookieID).
-			MatchInPort(f.hostIfacePort).
-			Action().Output(f.uplinkPort).
-			Done(),
-	)
+	if f.networkConfig.IPv4Enabled {
+		flows = append(flows,
+			// This generates the flow to forward ARP packets from uplink port to bridge local port since uplink port is set
+			// to disable flood.
+			ARPSpoofGuardTable.ofTable.BuildFlow(priorityNormal).
+				Cookie(cookieID).
+				MatchInPort(f.uplinkPort).
+				Action().Output(f.hostIfacePort).
+				Done(),
+			// This generates the flow to forward ARP packets from bridge local port to uplink port since uplink port is set
+			// to disable flood.
+			ARPSpoofGuardTable.ofTable.BuildFlow(priorityNormal).
+				Cookie(cookieID).
+				MatchInPort(f.hostIfacePort).
+				Action().Output(f.uplinkPort).
+				Done())
+	}
 	if f.networkConfig.TrafficEncapMode.SupportsNoEncap() {
 		// TODO: support IPv6
 		localSubnetMap := map[binding.Protocol]net.IPNet{binding.ProtocolIP: *f.nodeConfig.PodIPv4CIDR}
