@@ -145,7 +145,7 @@ spec:
   - cidr: 10.10.1.0/28
   nodeSelector:
     matchLabels:
-    network-role: egress-gateway
+      network-role: egress-gateway
 ```
 
 ### IPRanges
