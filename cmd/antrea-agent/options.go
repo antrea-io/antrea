@@ -23,6 +23,7 @@ import (
 
 	"github.com/spf13/pflag"
 	"gopkg.in/yaml.v2"
+	cliflag "k8s.io/component-base/cli/flag"
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent/config"
@@ -58,6 +59,8 @@ type Options struct {
 	configFile string
 	// The configuration object
 	config *agentconfig.AgentConfig
+	// tlsCipherSuites is a slice of TLSCipherSuites mapped to input provided by user.
+	tlsCipherSuites []string
 	// IPFIX flow collector address
 	flowCollectorAddr string
 	// IPFIX flow collector protocol
@@ -137,6 +140,10 @@ func (o *Options) validate(args []string) error {
 
 	// Check if the enabled features are supported on the OS.
 	if err := o.checkUnsupportedFeatures(); err != nil {
+		return err
+	}
+
+	if err := o.validateTLSOptions(); err != nil {
 		return err
 	}
 
@@ -309,6 +316,23 @@ func (o *Options) setDefaults() {
 			o.igmpQueryInterval = defaultIGMPQueryInterval
 		}
 	}
+}
+
+func (o *Options) validateTLSOptions() error {
+	_, err := cliflag.TLSVersion(o.config.TLSMinVersion)
+	if err != nil {
+		return fmt.Errorf("invalid TLSMinVersion: %v", err)
+	}
+	trimmedTLSCipherSuites := strings.ReplaceAll(o.config.TLSCipherSuites, " ", "")
+	if trimmedTLSCipherSuites != "" {
+		tlsCipherSuites := strings.Split(trimmedTLSCipherSuites, ",")
+		_, err = cliflag.TLSCipherSuites(tlsCipherSuites)
+		if err != nil {
+			return fmt.Errorf("invalid TLSCipherSuites: %v", err)
+		}
+		o.tlsCipherSuites = tlsCipherSuites
+	}
+	return nil
 }
 
 func (o *Options) validateAntreaProxyConfig() error {
