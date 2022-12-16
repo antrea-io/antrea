@@ -100,7 +100,7 @@ if version_lt "$OVS_VERSION" "2.18.0" ; then
 fi
 
 # OVS hardcodes the installation path to /usr/lib/python3.7/dist-packages/ but this location
-# does not seem to be in the Python path in Ubuntu 20.04. There may be a better way to do this,
+# does not seem to be in the Python path in Ubuntu 22.04. There may be a better way to do this,
 # but this seems like an acceptable workaround.
-sed -i 's/python3\.7/python3\.8/' debian/openvswitch-test.install
-sed -i 's/python3\.7/python3\.8/' debian/python3-openvswitch.install
+sed -i 's/python3\.7/python3\.10/' debian/openvswitch-test.install
+sed -i 's/python3\.7/python3\.10/' debian/python3-openvswitch.install
