@@ -1,5 +1,22 @@
 # Changelog 1.7
 
+## 1.7.2 - 2022-12-19
+
+### Changed
+- Upgrade Antrea base image to ubuntu 22.04. ([#4459](https://github.com/antrea-io/antrea/pull/4459), [@antoninbas])
+- Add OFSwitch connection check to Agent's liveness probes. ([#4126](https://github.com/antrea-io/antrea/pull/4126), [@tnqn])
+- Improve install_cni_chaining to support updates to CNI config file. ([#4012](https://github.com/antrea-io/antrea/pull/4012), [@antoninbas])
+
+### Fixed
+- Add a periodic job to rejoin dead Nodes to fix Egress not working properly after long network downtime. ([#4491](https://github.com/antrea-io/antrea/pull/4491), [@tnqn])
+- Fix connectivity issues caused by MAC address changes with systemd v242 and later. ([#4428](https://github.com/antrea-io/antrea/pull/4428), [@wenyingd])
+- Fix potential deadlocks and memory leaks of memberlist maintenance in large-scale clusters. ([#4469](https://github.com/antrea-io/antrea/pull/4469), [@wenyingd])
+- Fix Windows AddNodePort parameter error. ([#4103](https://github.com/antrea-io/antrea/pull/4103), [@XinShuYang])
+- Set no-flood config with ports for TrafficControl after Agent restarting. ([#4318](https://github.com/antrea-io/antrea/pull/4318), [@hongliangl])
+- Fix multicast group not removed from cache when it is uninstalled. ([#4176](https://github.com/antrea-io/antrea/pull/4176), [@wenyingd])
+- Remove redundant Openflow messages when syncing an updated group to OVS. ([#4160](https://github.com/antrea-io/antrea/pull/4160), [@hongliangl])
+- Fix Antrea Octant plugin build. ([#4107](https://github.com/antrea-io/antrea/pull/4107), [@antoninbas])
+
 ## 1.7.1 - 2022-07-14
 
 ### Fixed
