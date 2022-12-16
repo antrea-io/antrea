@@ -20,6 +20,7 @@ import (
 	"strings"
 
 	"antrea.io/libOpenflow/openflow15"
+	"antrea.io/libOpenflow/protocol"
 	"antrea.io/ofnet/ofctrl"
 )
 
@@ -42,8 +43,27 @@ func (b *ofFlowBuilder) MatchTunMetadata(index int, data uint32) FlowBuilder {
 
 // MatchVLAN matches the VLAN VID. It holds the VLAN VID in its least significant 12 bits.
 func (b *ofFlowBuilder) MatchVLAN(nonVLAN bool, vlanID uint16, vlanMask *uint16) FlowBuilder {
-	// TODO(gran): correct matchStr
-	matchStr := fmt.Sprintf("dl_vlan=%d", vlanID)
+	defaultVLANMask := uint16(openflow15.OFPVID_PRESENT | protocol.VID_MASK)
+
+	// When VLAN ID is 0, there are cases:
+	// - to match VLAN ID 0 only, the mask should be 0x1fff (openflow15.OFPVID_PRESENT | protocol.VID_MASK)
+	// - to match all VLAN IDs, the mask should be 0x1000 (openflow15.OFPVID_PRESENT)
+	// When VLAN ID is not 0, the mask can be nil or 0x1fff, and patch it to 0x1fff
+	if !nonVLAN && vlanID != 0 {
+		vlanMask = &defaultVLANMask
+	}
+
+	value := vlanID | openflow15.OFPVID_PRESENT
+	mask := uint16(0)
+	if vlanMask != nil && nonVLAN {
+		mask = *vlanMask
+	}
+	var matchStr string
+	if (mask & defaultVLANMask) == defaultVLANMask {
+		matchStr = fmt.Sprintf("dl_vlan=%d", value&protocol.VID_MASK)
+	} else {
+		matchStr = fmt.Sprintf("vlan_tci=0x%04x/0x%04x", value&openflow15.OFPVID_PRESENT, openflow15.OFPVID_PRESENT)
+	}
 	b.matchers = append(b.matchers, matchStr)
 	b.Match.NonVlan = nonVLAN
 	b.Match.VlanId = &vlanID

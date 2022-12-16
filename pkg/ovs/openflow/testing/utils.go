@@ -20,6 +20,7 @@ import (
 	"strings"
 
 	"antrea.io/libOpenflow/openflow15"
+	"antrea.io/libOpenflow/protocol"
 	"antrea.io/libOpenflow/util"
 	"antrea.io/ofnet/ofctrl"
 	"k8s.io/klog/v2"
@@ -353,7 +354,15 @@ func matchInPortToString(field *openflow15.MatchField) string {
 }
 
 func matchVlanToString(field *openflow15.MatchField) string {
-	return fmt.Sprintf("dl_vlan=%d", field.Value.(*openflow15.VlanIdField).VlanId&0xfff)
+	value := field.Value.(*openflow15.VlanIdField).VlanId
+	mask := uint16(openflow15.OFPVID_PRESENT)
+	if field.HasMask {
+		mask |= field.Mask.(*openflow15.VlanIdField).VlanId
+	}
+	if (mask & (protocol.VID_MASK | openflow15.OFPVID_PRESENT)) == (protocol.VID_MASK | openflow15.OFPVID_PRESENT) {
+		return fmt.Sprintf("dl_vlan=%d", value&protocol.VID_MASK)
+	}
+	return fmt.Sprintf("vlan_tci=0x%04x/0x%04x", value&openflow15.OFPVID_PRESENT, mask&openflow15.OFPVID_PRESENT)
 }
 
 func matchIpAddrToString(field *openflow15.MatchField, isCt, isSrc, isIPv6 bool) string {
