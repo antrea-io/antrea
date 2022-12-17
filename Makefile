@@ -10,9 +10,11 @@ DOCKER_CACHE       := $(CURDIR)/.cache
 ANTCTL_BINARY_NAME ?= antctl
 OVS_VERSION        := $(shell head -n 1 build/images/deps/ovs-version)
 GO_VERSION         := $(shell head -n 1 build/images/deps/go-version)
+BUILD_TAG          := $(shell build/images/build-tag.sh)
 
-DOCKER_BUILD_ARGS = --build-arg OVS_VERSION=$(OVS_VERSION)
+DOCKER_BUILD_ARGS := --build-arg OVS_VERSION=$(OVS_VERSION)
 DOCKER_BUILD_ARGS += --build-arg GO_VERSION=$(GO_VERSION)
+DOCKER_BUILD_ARGS += --build-arg BUILD_TAG=$(BUILD_TAG)
 
 .PHONY: all
 all: build
