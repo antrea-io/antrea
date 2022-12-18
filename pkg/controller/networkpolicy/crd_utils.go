@@ -189,11 +189,12 @@ func (n *NetworkPolicyController) toAntreaPeerForCRD(peers []v1alpha1.NetworkPol
 		} else if peer.NodeSelector != nil {
 			addressGroup := n.createAddressGroup("", nil, nil, nil, peer.NodeSelector)
 			addressGroups = append(addressGroups, addressGroup)
-		} else if peer.Scope == v1alpha1.ScopeClusterSet {
-			clusterSetScopeSelectors = append(clusterSetScopeSelectors, antreatypes.NewGroupSelector(np.GetNamespace(), peer.PodSelector, peer.NamespaceSelector, nil, nil))
 		} else {
 			addressGroup := n.createAddressGroup(np.GetNamespace(), peer.PodSelector, peer.NamespaceSelector, peer.ExternalEntitySelector, nil)
 			addressGroups = append(addressGroups, addressGroup)
+		}
+		if peer.Scope == v1alpha1.ScopeClusterSet {
+			clusterSetScopeSelectors = append(clusterSetScopeSelectors, antreatypes.NewGroupSelector(np.GetNamespace(), peer.PodSelector, peer.NamespaceSelector, nil, nil))
 		}
 	}
 	var labelIdentities []uint32
