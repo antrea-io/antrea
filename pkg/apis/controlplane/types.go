@@ -323,7 +323,7 @@ type HTTPProtocol struct {
 }
 
 // NetworkPolicyPeer describes a peer of NetworkPolicyRules.
-// It could be a list of names of AddressGroups and/or a list of IPBlock.
+// It could contain one of the subfields or a combination of them.
 type NetworkPolicyPeer struct {
 	// A list of names of AddressGroups.
 	AddressGroups []string
