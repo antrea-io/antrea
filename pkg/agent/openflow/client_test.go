@@ -1218,7 +1218,7 @@ func Test_client_InstallPodSNATFlows(t *testing.T) {
 		{
 			name: "SNAT on Remote",
 			expectedFlows: []string{
-				"cookie=0x1040000000000, table=EgressMark, priority=200,ip,in_port=100 actions=set_field:0a:00:00:00:00:01->eth_src,set_field:aa:bb:cc:dd:ee:ff->eth_dst,set_field:192.168.77.101->tun_dst,set_field:0x10/0xf0->reg0,goto_table:L2ForwardingCalc",
+				"cookie=0x1040000000000, table=EgressMark, priority=200,ip,in_port=100 actions=set_field:0a:00:00:00:00:01->eth_src,set_field:aa:bb:cc:dd:ee:ff->eth_dst,set_field:192.168.77.101->tun_dst,set_field:0x10/0xf0->reg0,set_field:0x40000/0x40000->reg0,goto_table:L2ForwardingCalc",
 			},
 		},
 	}

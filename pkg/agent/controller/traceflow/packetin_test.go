@@ -15,18 +15,42 @@
 package traceflow
 
 import (
+	"encoding/binary"
 	"net"
 	"reflect"
 	"testing"
 
+	"antrea.io/libOpenflow/openflow15"
 	"antrea.io/libOpenflow/protocol"
 	"antrea.io/libOpenflow/util"
 	"antrea.io/ofnet/ofctrl"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 
+	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/openflow"
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 )
+
+var (
+	egressName = "dummyEgress"
+	egressIP   = "192.168.100.100"
+)
+
+type fakeEgressQuerier struct {
+	egressName string
+	egressIP   string
+}
+
+func (f *fakeEgressQuerier) GetEgress(podNamespace, podName string) (string, error) {
+	return f.egressName, nil
+}
+
+func (f *fakeEgressQuerier) GetEgressIPByMark(mark uint32) (string, error) {
+	return f.egressIP, nil
+}
 
 func prepareMockTables() {
 	openflow.InitMockTables(
@@ -178,6 +202,258 @@ func TestParseCapturedPacket(t *testing.T) {
 			pktIn := ofctrl.PacketIn{Data: util.NewBuffer(pktBytes)}
 			packet := parseCapturedPacket(&pktIn)
 			assert.True(t, reflect.DeepEqual(packet, tt.pktCap), "parsed packet does not match the expected")
+		})
+	}
+}
+
+func TestParsePacketIn(t *testing.T) {
+	xreg0 := make([]byte, 8)
+	binary.BigEndian.PutUint32(xreg0[0:4], 262144) // RemoteSNATRegMark in 32bit reg0
+	binary.BigEndian.PutUint32(xreg0[4:8], 2)      // outputPort in 32bit reg1
+	matchOutPort := &openflow15.MatchField{
+		Class: openflow15.OXM_CLASS_PACKET_REGS,
+		Field: openflow15.NXM_NX_REG0,
+		Value: &openflow15.ByteArrayField{
+			Data: xreg0,
+		},
+	}
+	matchPktMark := &openflow15.MatchField{
+		Class: openflow15.OXM_CLASS_NXM_1,
+		Field: openflow15.NXM_NX_PKT_MARK,
+		Value: &openflow15.Uint32Message{
+			Data: 1,
+		},
+	}
+	matchTunDst := openflow15.NewTunnelIpv4DstField(net.ParseIP(egressIP), nil)
+
+	ipPacket := &protocol.IPv4{
+		Version:  0x4,
+		IHL:      5,
+		Protocol: uint8(8),
+		DSCP:     1,
+		Length:   20,
+		NWSrc:    net.IP(pod1IPv4),
+		NWDst:    net.IP(dstIPv4),
+	}
+	ethernetPkt := protocol.NewEthernet()
+	ethernetPkt.HWSrc = pod1MAC
+	ethernetPkt.Ethertype = protocol.IPv4_MSG
+	ethernetPkt.Data = ipPacket
+	pktBytes, _ := ethernetPkt.MarshalBinary()
+
+	egressQuerier := &fakeEgressQuerier{
+		egressName: egressName,
+		egressIP:   egressIP,
+	}
+
+	tests := []struct {
+		name               string
+		networkConfig      *config.NetworkConfig
+		nodeConfig         *config.NodeConfig
+		tfState            *traceflowState
+		pktIn              *ofctrl.PacketIn
+		expectedTf         *crdv1alpha1.Traceflow
+		expectedNodeResult *crdv1alpha1.NodeResult
+	}{
+		{
+			name: "packet at source node for local Egress",
+			networkConfig: &config.NetworkConfig{
+				TrafficEncapMode: 0,
+			},
+			nodeConfig: &config.NodeConfig{
+				TunnelOFPort: 1,
+				GatewayConfig: &config.GatewayConfig{
+					OFPort: 2,
+				},
+			},
+			tfState: &traceflowState{
+				name:     "dummy-traceflow-pod-to-ipv4",
+				tag:      1,
+				isSender: true,
+			},
+			pktIn: &ofctrl.PacketIn{
+				TableId: openflow.L2ForwardingOutTable.GetID(),
+				Match: openflow15.Match{
+					Fields: []openflow15.MatchField{*matchOutPort, *matchPktMark},
+				},
+				Data: util.NewBuffer(pktBytes),
+			},
+			expectedTf: &crdv1alpha1.Traceflow{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "dummy-traceflow-pod-to-ipv4",
+				},
+				Spec: crdv1alpha1.TraceflowSpec{
+					Source: crdv1alpha1.Source{
+						Namespace: pod1.Namespace,
+						Pod:       pod1.Name,
+					},
+					Destination: crdv1alpha1.Destination{
+						IP: dstIPv4,
+					},
+				},
+				Status: crdv1alpha1.TraceflowStatus{
+					Phase:        crdv1alpha1.Running,
+					DataplaneTag: 1,
+				},
+			},
+			expectedNodeResult: &crdv1alpha1.NodeResult{
+				Observations: []crdv1alpha1.Observation{
+					{
+						Component: crdv1alpha1.ComponentSpoofGuard,
+						Action:    crdv1alpha1.ActionForwarded,
+					},
+					{
+						Component: crdv1alpha1.ComponentEgress,
+						Action:    crdv1alpha1.ActionMarkedForSNAT,
+						Egress:    egressName,
+						EgressIP:  egressIP,
+					},
+					{
+						Component:     crdv1alpha1.ComponentForwarding,
+						ComponentInfo: openflow.L2ForwardingOutTable.GetName(),
+						Action:        crdv1alpha1.ActionForwardedOutOfOverlay,
+					},
+				},
+			},
+		},
+		{
+			name: "packet at source node for remote Egress",
+			networkConfig: &config.NetworkConfig{
+				TrafficEncapMode: 0,
+			},
+			nodeConfig: &config.NodeConfig{
+				TunnelOFPort: 2,
+				GatewayConfig: &config.GatewayConfig{
+					OFPort: 1,
+				},
+			},
+			tfState: &traceflowState{
+				name:     "dummy-traceflow-pod-to-ipv4",
+				tag:      1,
+				isSender: true,
+			},
+			pktIn: &ofctrl.PacketIn{
+				TableId: openflow.L2ForwardingOutTable.GetID(),
+				Match: openflow15.Match{
+					Fields: []openflow15.MatchField{*matchTunDst, *matchOutPort},
+				},
+				Data: util.NewBuffer(pktBytes),
+			},
+			expectedTf: &crdv1alpha1.Traceflow{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "dummy-traceflow-pod-to-ipv4",
+				},
+				Spec: crdv1alpha1.TraceflowSpec{
+					Source: crdv1alpha1.Source{
+						Namespace: pod1.Namespace,
+						Pod:       pod1.Name,
+					},
+					Destination: crdv1alpha1.Destination{
+						IP: dstIPv4,
+					},
+				},
+				Status: crdv1alpha1.TraceflowStatus{
+					Phase:        crdv1alpha1.Running,
+					DataplaneTag: 1,
+				},
+			},
+			expectedNodeResult: &crdv1alpha1.NodeResult{
+				Observations: []crdv1alpha1.Observation{
+					{
+						Component: crdv1alpha1.ComponentSpoofGuard,
+						Action:    crdv1alpha1.ActionForwarded,
+					},
+					{
+						Component: crdv1alpha1.ComponentEgress,
+						Action:    crdv1alpha1.ActionForwardedToEgressNode,
+						Egress:    egressName,
+						EgressIP:  egressIP,
+					},
+					{
+						Component:     crdv1alpha1.ComponentForwarding,
+						ComponentInfo: openflow.L2ForwardingOutTable.GetName(),
+						Action:        crdv1alpha1.ActionForwarded,
+						TunnelDstIP:   egressIP,
+					},
+				},
+			},
+		},
+		{
+			name: "packet at remote node for remote Egress",
+			networkConfig: &config.NetworkConfig{
+				TrafficEncapMode: 0,
+			},
+			nodeConfig: &config.NodeConfig{
+				TunnelOFPort: 1,
+				GatewayConfig: &config.GatewayConfig{
+					OFPort: 2,
+				},
+			},
+			tfState: &traceflowState{
+				name: "dummy-traceflow-pod-to-ipv4",
+				tag:  1,
+			},
+			pktIn: &ofctrl.PacketIn{
+				TableId: openflow.L2ForwardingOutTable.GetID(),
+				Match: openflow15.Match{
+					Fields: []openflow15.MatchField{*matchOutPort, *matchTunDst, *matchPktMark},
+				},
+				Data: util.NewBuffer(pktBytes),
+			},
+			expectedTf: &crdv1alpha1.Traceflow{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "dummy-traceflow-pod-to-ipv4",
+				},
+				Spec: crdv1alpha1.TraceflowSpec{
+					Source: crdv1alpha1.Source{
+						Namespace: pod1.Namespace,
+						Pod:       pod1.Name,
+					},
+					Destination: crdv1alpha1.Destination{
+						IP: dstIPv4,
+					},
+				},
+				Status: crdv1alpha1.TraceflowStatus{
+					Phase:        crdv1alpha1.Running,
+					DataplaneTag: 1,
+				},
+			},
+			expectedNodeResult: &crdv1alpha1.NodeResult{
+				Observations: []crdv1alpha1.Observation{
+					{
+						Component: crdv1alpha1.ComponentForwarding,
+						Action:    crdv1alpha1.ActionReceived,
+					},
+					{
+						Component: crdv1alpha1.ComponentEgress,
+						Action:    crdv1alpha1.ActionMarkedForSNAT,
+						EgressIP:  egressIP,
+					},
+					{
+						Component:     crdv1alpha1.ComponentForwarding,
+						ComponentInfo: openflow.L2ForwardingOutTable.GetName(),
+						Action:        crdv1alpha1.ActionForwardedOutOfOverlay,
+					},
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+
+			tfc := newFakeTraceflowController(t, []runtime.Object{tt.expectedTf}, tt.networkConfig, tt.nodeConfig, nil, egressQuerier)
+			defer tfc.mockController.Finish()
+			stopCh := make(chan struct{})
+			defer close(stopCh)
+			tfc.crdInformerFactory.Start(stopCh)
+			tfc.crdInformerFactory.WaitForCacheSync(stopCh)
+			tfc.runningTraceflows[tt.expectedTf.Status.DataplaneTag] = tt.tfState
+
+			tf, nodeResult, _, err := tfc.parsePacketIn(tt.pktIn)
+			require.NoError(t, err)
+			assert.Equal(t, tt.expectedNodeResult.Observations, nodeResult.Observations)
+			assert.Equal(t, tt.expectedTf, tf)
 		})
 	}
 }

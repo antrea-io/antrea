@@ -45,6 +45,7 @@ import (
 var (
 	pod1IPv4   = "192.168.10.10"
 	pod2IPv4   = "192.168.11.10"
+	dstIPv4    = "192.168.99.99"
 	pod1MAC, _ = net.ParseMAC("aa:bb:cc:dd:ee:0f")
 	pod2MAC, _ = net.ParseMAC("aa:bb:cc:dd:ee:00")
 	ofPortPod1 = uint32(1)
@@ -80,7 +81,7 @@ type fakeTraceflowController struct {
 	ovsClient          *ovsconfigtest.MockOVSBridgeClient
 }
 
-func newFakeTraceflowController(t *testing.T, initObjects []runtime.Object, networkConfig *config.NetworkConfig, nodeConfig *config.NodeConfig, npQuerier querier.AgentNetworkPolicyInfoQuerier) *fakeTraceflowController {
+func newFakeTraceflowController(t *testing.T, initObjects []runtime.Object, networkConfig *config.NetworkConfig, nodeConfig *config.NodeConfig, npQuerier querier.AgentNetworkPolicyInfoQuerier, egressQuerier querier.EgressQuerier) *fakeTraceflowController {
 	controller := gomock.NewController(t)
 	kubeClient := fake.NewSimpleClientset(&pod1, &pod2)
 	mockOFClient := openflowtest.NewMockClient(controller)
@@ -103,6 +104,7 @@ func newFakeTraceflowController(t *testing.T, initObjects []runtime.Object, netw
 		traceflowListerSynced: traceflowInformer.Informer().HasSynced,
 		ofClient:              mockOFClient,
 		networkPolicyQuerier:  npQuerier,
+		egressQuerier:         egressQuerier,
 		ovsBridgeClient:       ovsClient,
 		interfaceStore:        ifaceStore,
 		networkConfig:         networkConfig,
@@ -301,7 +303,7 @@ func TestPreparePacket(t *testing.T) {
 
 	for _, tt := range tcs {
 		t.Run(tt.name, func(t *testing.T) {
-			tfc := newFakeTraceflowController(t, []runtime.Object{tt.tf}, nil, nil, nil)
+			tfc := newFakeTraceflowController(t, []runtime.Object{tt.tf}, nil, nil, nil, nil)
 			defer tfc.mockController.Finish()
 
 			podInterfaces := tfc.interfaceStore.GetContainerInterfacesByPod(pod1.Name, pod1.Namespace)
@@ -343,7 +345,7 @@ func TestErrTraceflowCRD(t *testing.T) {
 	expectedTf.Status.Phase = crdv1alpha1.Failed
 	expectedTf.Status.Reason = reason
 
-	tfc := newFakeTraceflowController(t, []runtime.Object{tf}, nil, nil, nil)
+	tfc := newFakeTraceflowController(t, []runtime.Object{tf}, nil, nil, nil, nil)
 	defer tfc.mockController.Finish()
 
 	gotTf, err := tfc.errorTraceflowCRD(tf, reason)
@@ -358,7 +360,6 @@ func TestStartTraceflow(t *testing.T) {
 		ofPort       uint32
 		receiverOnly bool
 		packet       *binding.Packet
-		expectedErr  string
 	}{
 		{
 			name: "pod-to-pod traceflow",
@@ -400,7 +401,7 @@ func TestStartTraceflow(t *testing.T) {
 						Pod:       pod1.Name,
 					},
 					Destination: crdv1alpha1.Destination{
-						IP: "192.168.13.3",
+						IP: dstIPv4,
 					},
 				},
 				Status: crdv1alpha1.TraceflowStatus{
@@ -412,7 +413,7 @@ func TestStartTraceflow(t *testing.T) {
 			packet: &binding.Packet{
 				SourceIP:      net.ParseIP(pod1IPv4),
 				SourceMAC:     pod1MAC,
-				DestinationIP: net.ParseIP("192.168.13.3"),
+				DestinationIP: net.ParseIP(dstIPv4),
 				IPProto:       1,
 				TTL:           64,
 				ICMPType:      8,
@@ -422,7 +423,7 @@ func TestStartTraceflow(t *testing.T) {
 
 	for _, tt := range tcs {
 		t.Run(tt.name, func(t *testing.T) {
-			tfc := newFakeTraceflowController(t, []runtime.Object{tt.tf}, nil, nil, nil)
+			tfc := newFakeTraceflowController(t, []runtime.Object{tt.tf}, nil, nil, nil, nil)
 			defer tfc.mockController.Finish()
 
 			stopCh := make(chan struct{})
@@ -434,11 +435,7 @@ func TestStartTraceflow(t *testing.T) {
 			tfc.mockOFClient.EXPECT().SendTraceflowPacket(tt.tf.Status.DataplaneTag, tt.packet, tt.ofPort, int32(-1))
 
 			err := tfc.startTraceflow(tt.tf)
-			if tt.expectedErr == "" {
-				require.NoError(t, err)
-			} else {
-				require.EqualError(t, err, tt.expectedErr)
-			}
+			require.NoError(t, err)
 		})
 	}
 }
@@ -505,7 +502,7 @@ func TestSyncTraceflow(t *testing.T) {
 
 	for _, tt := range tcs {
 		t.Run(tt.name, func(t *testing.T) {
-			tfc := newFakeTraceflowController(t, []runtime.Object{tt.tf}, nil, nil, nil)
+			tfc := newFakeTraceflowController(t, []runtime.Object{tt.tf}, nil, nil, nil, nil)
 			defer tfc.mockController.Finish()
 			tfc.runningTraceflows[tt.tf.Status.DataplaneTag] = tt.tfState
 			stopCh := make(chan struct{})
@@ -560,7 +557,7 @@ func TestProcessTraceflowItem(t *testing.T) {
 		},
 		expected: true,
 	}
-	tfc := newFakeTraceflowController(t, []runtime.Object{tc.tf}, nil, nil, nil)
+	tfc := newFakeTraceflowController(t, []runtime.Object{tc.tf}, nil, nil, nil, nil)
 	defer tfc.mockController.Finish()
 
 	stopCh := make(chan struct{})

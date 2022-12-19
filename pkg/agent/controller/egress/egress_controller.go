@@ -905,3 +905,27 @@ func (c *EgressController) deleteEgressGroup(group *cpv1b2.EgressGroup) {
 	delete(c.egressGroups, group.Name)
 	c.queue.Add(group.Name)
 }
+
+// GetEgressIPByMark returns the Egress IP associated with the snatMark.
+func (c *EgressController) GetEgressIPByMark(mark uint32) (string, error) {
+	c.egressIPStatesMutex.Lock()
+	defer c.egressIPStatesMutex.Unlock()
+	for _, e := range c.egressIPStates {
+		if e.mark == mark {
+			return e.egressIP.String(), nil
+		}
+	}
+	return "", fmt.Errorf("no EgressIP associated with mark %v", mark)
+}
+
+// GetEgress returns effective Egress applied on a Pod.
+func (c *EgressController) GetEgress(ns, podName string) (string, error) {
+	c.egressBindingsMutex.RLock()
+	defer c.egressBindingsMutex.RUnlock()
+	pod := k8s.NamespacedName(ns, podName)
+	binding, exists := c.egressBindings[pod]
+	if !exists {
+		return "", fmt.Errorf("no Egress applied to Pod %v", pod)
+	}
+	return binding.effectiveEgress, nil
+}

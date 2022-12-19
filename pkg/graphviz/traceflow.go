@@ -201,6 +201,12 @@ func getTraceflowMessage(o *crdv1alpha1.Observation, spec *crdv1alpha1.Traceflow
 	if o.Action != crdv1alpha1.ActionDropped && len(o.TunnelDstIP) > 0 {
 		str += "\nTunnel Destination IP : " + o.TunnelDstIP
 	}
+	if o.Action != crdv1alpha1.ActionDropped && len(o.EgressIP) > 0 {
+		str += "\nEgress IP : " + o.EgressIP
+	}
+	if o.Action != crdv1alpha1.ActionDropped && len(o.Egress) > 0 {
+		str += "\nEgress : " + o.Egress
+	}
 	return str
 }
 
