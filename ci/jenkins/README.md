@@ -181,6 +181,30 @@ DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
 ./ci/jenkins/test.sh --testcase windows-install-ovs
 ```
 
+* Rancher e2e: e2e tests in a Rancher cluster
+
+```shell
+#!/bin/bash
+DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
+./ci/jenkins/test-rancher.sh --registry ${DOCKER_REGISTRY} --testcase e2e --cluster-name rancher-test
+```
+
+* Rancher conformance: conformance tests in a Rancher cluster
+
+```shell
+#!/bin/bash
+DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
+./ci/jenkins/test-rancher.sh --cluster-name rancher-test --testcase conformance --registry ${DOCKER_REGISTRY}
+```
+
+* Rancher NetworkPolicy: NetworkPolicy tests in a Rancher cluster
+
+```shell
+#!/bin/bash
+DOCKER_REGISTRY="$(head -n1 ci/docker-registry)"
+./ci/jenkins/test-rancher.sh --cluster-name rancher-test --testcase networkpolicy --registry ${DOCKER_REGISTRY}
+```
+
 * [EKS conformance/network policy [bi-daily]](http://jenkins.antrea-ci.rocks/view/cloud/job/cloud-antrea-eks-conformance-net-policy/)
   community tests on EKS cluster using sonobuoy, focusing on "Conformance" and "Feature:NetworkPolicy", skipping the same regexes as in job __conformance__ above, as well as "NodePort" (See [#690](https://github.com/antrea-io/antrea/issues/690)).\
   Current test environment matrix:
@@ -273,3 +297,4 @@ updated with new code.
 ## Tips for Developer
 
 * [macro.yaml](jobs/macros.yaml): Use "{{}}" instead of "{}" in "builder-list-tests" and "builder-conformance".
+* While setting up the Rancher testbed, delete the cattle-cluster-agent deployment and use cattle-node-agent because cluster-agent adds extra watchers for all the resources. Antrea Controller counts connected Antrea Agent from watcher connections. Extra watchers lead to wrong Antrea Agent number in AntreaControllerInfo CR.
