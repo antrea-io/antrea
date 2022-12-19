@@ -22,7 +22,7 @@ COPY . /antrea
 RUN make flow-aggregator antctl-linux flow-aggregator-instr-binary antctl-instr-binary
 RUN mv bin/antctl-linux bin/antctl
 
-FROM ubuntu:20.04
+FROM ubuntu:22.04
 
 LABEL maintainer="Antrea <projectantrea-dev@googlegroups.com>"
 LABEL description="The docker image for the flow aggregator with code coverage measurement enabled for testing purposes."

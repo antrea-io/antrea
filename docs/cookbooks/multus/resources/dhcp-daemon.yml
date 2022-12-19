@@ -21,7 +21,7 @@ spec:
       hostNetwork: true
       initContainers:
       - name: sock-cleanup
-        image: ubuntu:20.04
+        image: ubuntu:22.04
         command: ["rm", "-f", "/run/cni/dhcp.sock"]
         volumeMounts:
         - name: run

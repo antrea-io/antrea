@@ -12,10 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM ubuntu:20.04
+FROM ubuntu:22.04
 
 LABEL maintainer="Antrea <projectantrea-dev@googlegroups.com>"
-LABEL description="A Docker image based on Ubuntu 20.04 which is used for performance tests."
+LABEL description="A Docker image based on Ubuntu 22.04 which is used for performance tests."
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends apache2-utils iperf3 && \
