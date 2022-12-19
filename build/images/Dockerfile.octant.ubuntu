@@ -24,7 +24,7 @@ WORKDIR /antrea/plugins/octant
 #14 87.20 make: *** [Makefile:16: octant-plugins] Error 2
 RUN CGO_ENABLED=0 make octant-plugins
 
-FROM ubuntu:20.04
+FROM ubuntu:22.04
 
 LABEL maintainer="Antrea <projectantrea-dev@googlegroups.com>"
 LABEL description="A docker image to deploy octant and antrea related octant plugins."

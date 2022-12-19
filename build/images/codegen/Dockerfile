@@ -1,5 +1,5 @@
 ARG GO_VERSION
-FROM ubuntu:20.04 as protoc
+FROM ubuntu:22.04 as protoc
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends wget ca-certificates unzip
