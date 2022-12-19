@@ -445,6 +445,30 @@ func TestReconcilerReconcile(t *testing.T) {
 			false,
 		},
 		{
+			"ingress-rule-with-label-identity",
+			&CompletedRule{
+				rule: &rule{
+					ID:        "ingress-rule",
+					Direction: v1beta2.DirectionIn,
+					From:      v1beta2.NetworkPolicyPeer{LabelIdentities: []uint32{1}},
+					SourceRef: &np1,
+				},
+				FromAddresses: nil,
+				ToAddresses:   nil,
+				TargetMembers: appliedToGroup1,
+			},
+			[]*types.PolicyRule{
+				{
+					Direction: v1beta2.DirectionIn,
+					From:      labelIDToOFAddresses([]uint32{1}),
+					To:        ofPortsToOFAddresses(sets.NewInt32(1)),
+					Service:   nil,
+					PolicyRef: &np1,
+				},
+			},
+			false,
+		},
+		{
 			"egress-rule",
 			&CompletedRule{
 				rule:          &rule{ID: "egress-rule", Direction: v1beta2.DirectionOut, SourceRef: &np1},

@@ -105,7 +105,7 @@ func (r *LabelIdentityReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		klog.ErrorS(err, "Cannot get corresponding Namespace of the Pod", "pod", req.NamespacedName)
 		return ctrl.Result{}, err
 	}
-	normalizedLabel := getNormalizedLabel(ns.Labels, pod.Labels, ns.Name)
+	normalizedLabel := GetNormalizedLabel(ns.Labels, pod.Labels, ns.Name)
 	r.onPodCreateOrUpdate(req.NamespacedName.String(), normalizedLabel)
 	return ctrl.Result{}, nil
 }
@@ -317,7 +317,7 @@ func (r *LabelIdentityReconciler) getLabelIdentityResourceExport(name, normalize
 	}
 }
 
-func getNormalizedLabel(nsLabels, podLabels map[string]string, ns string) string {
+func GetNormalizedLabel(nsLabels, podLabels map[string]string, ns string) string {
 	if _, ok := nsLabels[v1.LabelMetadataName]; !ok {
 		// NamespaceDefaultLabelName is supported from K8s v1.21. For K8s versions before v1.21,
 		// we append the Namespace name label to the Namespace label set, so that the exported

@@ -167,7 +167,7 @@ var (
 
 // Marks using CT.
 var (
-	//TODO: There is a bug in libOpenflow when CT_MARK range is from 0 to 0, and a wrong mask will be got. As a result,
+	// TODO: There is a bug in libOpenflow when CT_MARK range is from 0 to 0, and a wrong mask will be got. As a result,
 	// don't just use bit 0 of CT_MARK.
 
 	// CTMark (NXM_NX_CT_MARK)

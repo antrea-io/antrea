@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package noderoute
+package multicluster
 
 import (
 	"fmt"
@@ -75,7 +75,8 @@ type MCRouteController struct {
 	// events.
 	installedActiveGW *mcv1alpha1.Gateway
 	// The Namespace where Antrea Multi-cluster Controller is running.
-	namespace string
+	namespace                    string
+	enableStretchedNetworkPolicy bool
 }
 
 func NewMCRouteController(
@@ -87,22 +88,24 @@ func NewMCRouteController(
 	interfaceStore interfacestore.InterfaceStore,
 	nodeConfig *config.NodeConfig,
 	namespace string,
+	enableStretchedNetworkPolicy bool,
 ) *MCRouteController {
 	controller := &MCRouteController{
-		mcClient:             mcClient,
-		ovsBridgeClient:      ovsBridgeClient,
-		ofClient:             client,
-		interfaceStore:       interfaceStore,
-		nodeConfig:           nodeConfig,
-		gwInformer:           gwInformer,
-		gwLister:             gwInformer.Lister(),
-		gwListerSynced:       gwInformer.Informer().HasSynced,
-		ciImportInformer:     ciImportInformer,
-		ciImportLister:       ciImportInformer.Lister(),
-		ciImportListerSynced: ciImportInformer.Informer().HasSynced,
-		queue:                workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "gatewayroute"),
-		installedCIImports:   make(map[string]*mcv1alpha1.ClusterInfoImport),
-		namespace:            namespace,
+		mcClient:                     mcClient,
+		ovsBridgeClient:              ovsBridgeClient,
+		ofClient:                     client,
+		interfaceStore:               interfaceStore,
+		nodeConfig:                   nodeConfig,
+		gwInformer:                   gwInformer,
+		gwLister:                     gwInformer.Lister(),
+		gwListerSynced:               gwInformer.Informer().HasSynced,
+		ciImportInformer:             ciImportInformer,
+		ciImportLister:               ciImportInformer.Lister(),
+		ciImportListerSynced:         ciImportInformer.Informer().HasSynced,
+		queue:                        workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "gatewayroute"),
+		installedCIImports:           make(map[string]*mcv1alpha1.ClusterInfoImport),
+		namespace:                    namespace,
+		enableStretchedNetworkPolicy: enableStretchedNetworkPolicy,
 	}
 	controller.gwInformer.Informer().AddEventHandlerWithResyncPeriod(
 		cache.ResourceEventHandlerFuncs{
@@ -372,7 +375,8 @@ func (c *MCRouteController) addMCFlowsForSingleCIImp(activeGW *mcv1alpha1.Gatewa
 			ciImport.Name,
 			peerConfigs,
 			tunnelPeerIPToRemoteGW,
-			localGatewayIP); err != nil {
+			localGatewayIP,
+			c.enableStretchedNetworkPolicy); err != nil {
 			return fmt.Errorf("failed to install flows to remote Gateway in ClusterInfoImport %s: %v", ciImport.Name, err)
 		}
 	} else {
@@ -381,7 +385,8 @@ func (c *MCRouteController) addMCFlowsForSingleCIImp(activeGW *mcv1alpha1.Gatewa
 		if err := c.ofClient.InstallMulticlusterNodeFlows(
 			ciImport.Name,
 			peerConfigs,
-			tunnelPeerIPToLocalGW); err != nil {
+			tunnelPeerIPToLocalGW,
+			c.enableStretchedNetworkPolicy); err != nil {
 			return fmt.Errorf("failed to install flows to Gateway %s: %v", activeGW.Name, err)
 		}
 	}

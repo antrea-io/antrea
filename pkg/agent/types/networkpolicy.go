@@ -56,6 +56,7 @@ const (
 	ICMPAddr
 	ServiceGroupIDAddr
 	IGMPAddr
+	LabelIDAddr
 	UnSupported
 )
 

@@ -340,31 +340,31 @@ func (mr *MockClientMockRecorder) InstallMulticlusterClassifierFlows(arg0, arg1 
 }
 
 // InstallMulticlusterGatewayFlows mocks base method
-func (m *MockClient) InstallMulticlusterGatewayFlows(arg0 string, arg1 map[*net.IPNet]net.IP, arg2, arg3 net.IP) error {
+func (m *MockClient) InstallMulticlusterGatewayFlows(arg0 string, arg1 map[*net.IPNet]net.IP, arg2, arg3 net.IP, arg4 bool) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "InstallMulticlusterGatewayFlows", arg0, arg1, arg2, arg3)
+	ret := m.ctrl.Call(m, "InstallMulticlusterGatewayFlows", arg0, arg1, arg2, arg3, arg4)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // InstallMulticlusterGatewayFlows indicates an expected call of InstallMulticlusterGatewayFlows
-func (mr *MockClientMockRecorder) InstallMulticlusterGatewayFlows(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+func (mr *MockClientMockRecorder) InstallMulticlusterGatewayFlows(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallMulticlusterGatewayFlows", reflect.TypeOf((*MockClient)(nil).InstallMulticlusterGatewayFlows), arg0, arg1, arg2, arg3)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallMulticlusterGatewayFlows", reflect.TypeOf((*MockClient)(nil).InstallMulticlusterGatewayFlows), arg0, arg1, arg2, arg3, arg4)
 }
 
 // InstallMulticlusterNodeFlows mocks base method
-func (m *MockClient) InstallMulticlusterNodeFlows(arg0 string, arg1 map[*net.IPNet]net.IP, arg2 net.IP) error {
+func (m *MockClient) InstallMulticlusterNodeFlows(arg0 string, arg1 map[*net.IPNet]net.IP, arg2 net.IP, arg3 bool) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "InstallMulticlusterNodeFlows", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "InstallMulticlusterNodeFlows", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // InstallMulticlusterNodeFlows indicates an expected call of InstallMulticlusterNodeFlows
-func (mr *MockClientMockRecorder) InstallMulticlusterNodeFlows(arg0, arg1, arg2 interface{}) *gomock.Call {
+func (mr *MockClientMockRecorder) InstallMulticlusterNodeFlows(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallMulticlusterNodeFlows", reflect.TypeOf((*MockClient)(nil).InstallMulticlusterNodeFlows), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallMulticlusterNodeFlows", reflect.TypeOf((*MockClient)(nil).InstallMulticlusterNodeFlows), arg0, arg1, arg2, arg3)
 }
 
 // InstallNodeFlows mocks base method
@@ -382,17 +382,17 @@ func (mr *MockClientMockRecorder) InstallNodeFlows(arg0, arg1, arg2, arg3, arg4 
 }
 
 // InstallPodFlows mocks base method
-func (m *MockClient) InstallPodFlows(arg0 string, arg1 []net.IP, arg2 net.HardwareAddr, arg3 uint32, arg4 uint16) error {
+func (m *MockClient) InstallPodFlows(arg0 string, arg1 []net.IP, arg2 net.HardwareAddr, arg3 uint32, arg4 uint16, arg5 *uint32) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "InstallPodFlows", arg0, arg1, arg2, arg3, arg4)
+	ret := m.ctrl.Call(m, "InstallPodFlows", arg0, arg1, arg2, arg3, arg4, arg5)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // InstallPodFlows indicates an expected call of InstallPodFlows
-func (mr *MockClientMockRecorder) InstallPodFlows(arg0, arg1, arg2, arg3, arg4 interface{}) *gomock.Call {
+func (mr *MockClientMockRecorder) InstallPodFlows(arg0, arg1, arg2, arg3, arg4, arg5 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallPodFlows", reflect.TypeOf((*MockClient)(nil).InstallPodFlows), arg0, arg1, arg2, arg3, arg4)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallPodFlows", reflect.TypeOf((*MockClient)(nil).InstallPodFlows), arg0, arg1, arg2, arg3, arg4, arg5)
 }
 
 // InstallPodSNATFlows mocks base method

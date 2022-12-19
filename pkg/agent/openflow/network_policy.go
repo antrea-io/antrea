@@ -69,6 +69,7 @@ var (
 	MatchICMPv6Code     = types.NewMatchKey(binding.ProtocolICMPv6, types.ICMPAddr, "icmpv6_code")
 	MatchServiceGroupID = types.NewMatchKey(binding.ProtocolIP, types.ServiceGroupIDAddr, "reg7[0..31]")
 	MatchIGMPProtocol   = types.NewMatchKey(binding.ProtocolIGMP, types.IGMPAddr, "igmp")
+	MatchLabelID        = types.NewMatchKey(binding.ProtocolIP, types.LabelIDAddr, "tun_id")
 	Unsupported         = types.NewMatchKey(binding.ProtocolIP, types.UnSupported, "unknown")
 
 	// metricFlowIdentifier is used to identify metric flows in metric table.
@@ -271,6 +272,25 @@ func (a *CTIPNetAddress) GetValue() interface{} {
 func NewCTIPNetAddress(addr net.IPNet) *CTIPNetAddress {
 	ia := CTIPNetAddress(addr)
 	return &ia
+}
+
+type LabelIDAddress uint32
+
+func (a *LabelIDAddress) GetMatchKey(addrType types.AddressType) *types.MatchKey {
+	return MatchLabelID
+}
+
+func (a *LabelIDAddress) GetMatchValue() string {
+	return fmt.Sprintf("%d", uint32(*a))
+}
+
+func (a *LabelIDAddress) GetValue() interface{} {
+	return uint32(*a)
+}
+
+func NewLabelIDAddress(labelID uint32) *LabelIDAddress {
+	a := LabelIDAddress(labelID)
+	return &a
 }
 
 // ConjunctionNotFound is an error response when the specified policyRuleConjunction is not found from the local cache.
