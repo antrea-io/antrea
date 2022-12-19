@@ -12,10 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM ubuntu:20.04
+FROM ubuntu:22.04
 
 LABEL maintainer="Antrea <projectantrea-dev@googlegroups.com>"
-LABEL description="A Docker image based on Ubuntu 20.04 which includes ethtool, ip tools and iptables."
+LABEL description="A Docker image based on Ubuntu 22.04 which includes ethtool, ip tools and iptables."
 
 # See https://github.com/kubernetes-sigs/iptables-wrappers
 # /iptables-wrapper-installer.sh will have permissions of 600.
