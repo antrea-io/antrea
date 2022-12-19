@@ -2483,6 +2483,10 @@ spec:
                               type: string
                             tunnelDstIP:
                               type: string
+                            egressIP:
+                              type: string
+                            egress:
+                              type: string
                 capturedPacket:
                   properties:
                     srcIP:

@@ -502,6 +502,7 @@ func run(o *Options) error {
 			traceflowInformer,
 			ofClient,
 			networkPolicyController,
+			egressController,
 			ovsBridgeClient,
 			ifaceStore,
 			networkConfig,
