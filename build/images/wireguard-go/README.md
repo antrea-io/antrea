@@ -1,6 +1,6 @@
 # images/wireguard-go
 
-This Docker image is a very lightweight image based on Ubuntu 20.04 which
+This Docker image is a very lightweight image based on Ubuntu 22.04 which
 includes WireGuard golang implementation and wireguard-tools. It can be used
 for Kind clusters for tests when injected as a sidecar to antrea-agent.
 The version is available at <https://github.com/WireGuard/wireguard-go/releases>.
