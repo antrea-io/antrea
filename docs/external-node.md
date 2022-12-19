@@ -13,6 +13,8 @@
   - [Installation on Linux VM](#installation-on-linux-vm)
     - [Prerequisites on Linux VM](#prerequisites-on-linux-vm)
     - [Installation steps on Linux VM](#installation-steps-on-linux-vm)
+      - [Service Installation](#service-installation)
+      - [Container Installation](#container-installation)
   - [Installation on Windows VM](#installation-on-windows-vm)
     - [Prerequisites on Windows VM](#prerequisites-on-windows-vm)
     - [Installation steps on Windows VM](#installation-steps-on-windows-vm)
@@ -262,7 +264,11 @@ please refer to the [getting-started guide](getting-started.md#open-vswitch).
 
 #### Installation steps on Linux VM
 
-1. Build `antrea-agent` binary in the root of the antrea code tree and copy the
+`Antrea Agent` can be installed as a native service or can be installed in a container.
+
+##### Service Installation
+
+1. Build `antrea-agent` binary in the root of the Antrea code tree and copy the
    `antrea-agent` binary from the `bin` directory to the Linux VM.
 
    ```bash
@@ -277,7 +283,7 @@ please refer to the [getting-started guide](getting-started.md#open-vswitch).
 3. Bootstrap `antrea-agent` using one of these 2 methods:
 
    1. Bootstrap `antrea-agent` using the [installation script](../hack/externalnode/install-vm.sh)
-      as shown below (Ubuntu 18.04 and 20.04 only).
+      as shown below (Ubuntu 18.04 and 20.04, and Red Hat Enterprise Linux 8.4).
 
       ```bash
       ./install-vm.sh --ns vm-ns --bin ./antrea-agent --config ./antrea-agent.conf \
@@ -333,6 +339,66 @@ please refer to the [getting-started guide](getting-started.md#open-vswitch).
       sudo systemctl enable antrea-agent
       sudo systemctl start antrea-agent
       ```
+
+##### Container Installation
+
+1. `Docker` is used as the container runtime for Linux VMs. The Docker image can be built from source code
+   or can be downloaded from the Antrea repository.
+
+   1. From Source
+
+      Build `antrea-ubuntu` Docker image in the root of the Antrea code tree.
+
+      ```bash
+      make
+      ```
+
+      Note: The image repository name should be `antrea/antrea-ubuntu` and tag should be `latest`.
+
+      Copy the `antrea/antrea-ubuntu:latest` image to the target VM. Please follow
+      the below steps.
+
+      ```bash
+      # Save it in a tar file
+      docker save -o <tar file path in source host machine> antrea/antrea-ubuntu:latest
+
+      # Copy this tar file to the target VM.
+      # Then load that image on the target VM.
+      docker load -i <path to image tar file>
+      ```
+
+   2. Docker Repository
+
+      The released version of `antrea-ubuntu` Docker image can be downloaded from Antrea `Dockerhub`
+      repository. Pick a version from the [list of releases](https://github.com/antrea-io/antrea/releases). For any given
+      release `<TAG>` (e.g. `v1.9.0`), download `antrea-ubuntu` Docker image as follows:
+
+      ```bash
+      docker pull antrea/antrea-ubuntu:<TAG>
+      ```
+
+      The [installation script](../hack/externalnode/install-vm.sh) automatically downloads the specific released
+      version of `antrea-ubuntu` Docker image on VM by specifying the installation argument `--antrea-version`.
+      Also, the script automatically loads that image into Docker. For any given release `<TAG>` (e.g. `v1.9.0`), specify
+      it in the --antrea-version argument as follows.
+
+      ```bash
+         --antrea-version <TAG>
+      ```
+
+2. Copy configuration files to the VM, including [antrea-agent.conf](../build/yamls/externalnode/conf/antrea-agent.conf),
+   which specifies agent configuration parameters;
+   `antrea-agent.antrea.kubeconfig` and `antrea-agent.kubeconfig`, which were
+   generated in steps 4 and 5 of [Prerequisites on Kubernetes cluster](#prerequisites-on-kubernetes-cluster).
+
+3. Bootstrap `antrea-agent` using the [installation script](../hack/externalnode/install-vm.sh)
+   as shown below (Ubuntu 18.04, 20.04, and Rhel 8.4).
+
+    ```bash
+      ./install-vm.sh --ns vm-ns --config ./antrea-agent.conf \
+      --kubeconfig ./antrea-agent.kubeconfig \
+      --antrea-kubeconfig ./antrea-agent.antrea.kubeconfig --containerize --antrea-version v1.9.0
+    ```
 
 ### Installation on Windows VM
 
