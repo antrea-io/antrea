@@ -1,6 +1,6 @@
 # images/ethtool
 
-This Docker image is a very lightweight image based on Ubuntu 20.04 which
+This Docker image is a very lightweight image based on Ubuntu 22.04 which
 includes ethtool, the ip tools and iptables.
 
 If you need to build a new version of the image locally, you can run the following:

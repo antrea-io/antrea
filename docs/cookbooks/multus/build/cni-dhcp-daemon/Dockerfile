@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM ubuntu:20.04 as cni-binary
+FROM ubuntu:22.04 as cni-binary
 
 LABEL maintainer="Antrea <projectantrea-dev@googlegroups.com>"
 LABEL description="A Docker which runs the dhcp daemon from the containernetworking project."
@@ -26,7 +26,7 @@ ENV CNI_PLUGINS="./dhcp"
 RUN mkdir -p /opt/cni/bin && \
     wget -q -O - https://github.com/containernetworking/plugins/releases/download/v0.8.6/cni-plugins-linux-amd64-v0.8.6.tgz | tar xz -C /opt/cni/bin $CNI_PLUGINS
 
-FROM ubuntu:20.04
+FROM ubuntu:22.04
 
 COPY --from=cni-binary /opt/cni/bin/* /usr/local/bin
 
