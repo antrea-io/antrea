@@ -299,14 +299,18 @@ func getRejectOFPorts(rejectType RejectType, sIface, dIface *interfacestore.Inte
 	return inPort, outPort
 }
 
-// getRejectPacketOutMutateFunc returns the mutate func of a packetOut based on the RejectType.
+// getRejectPacketOutMutateFunc returns the mutate-func of a packetOut based on the RejectType.
 func getRejectPacketOutMutateFunc(rejectType RejectType, nodeType config.NodeType) func(binding.PacketOutBuilder) binding.PacketOutBuilder {
 	var mutatePacketOut func(binding.PacketOutBuilder) binding.PacketOutBuilder
+	mutatePacketOut = func(packetOutBuilder binding.PacketOutBuilder) binding.PacketOutBuilder {
+		return packetOutBuilder.AddLoadRegMark(openflow.CustomReasonRejectRegMark)
+	}
 	switch rejectType {
 	case RejectServiceLocal:
 		tableID := openflow.ConntrackTable.GetID()
 		mutatePacketOut = func(packetOutBuilder binding.PacketOutBuilder) binding.PacketOutBuilder {
-			return packetOutBuilder.AddResubmitAction(nil, &tableID)
+			return packetOutBuilder.AddLoadRegMark(openflow.CustomReasonRejectRegMark).
+				AddResubmitAction(nil, &tableID)
 		}
 	case RejectLocalToRemote:
 		tableID := openflow.L3ForwardingTable.GetID()
@@ -315,7 +319,8 @@ func getRejectPacketOutMutateFunc(rejectType RejectType, nodeType config.NodeTyp
 			tableID = openflow.L2ForwardingCalcTable.GetID()
 		}
 		mutatePacketOut = func(packetOutBuilder binding.PacketOutBuilder) binding.PacketOutBuilder {
-			return packetOutBuilder.AddResubmitAction(nil, &tableID)
+			return packetOutBuilder.AddLoadRegMark(openflow.CustomReasonRejectRegMark).
+				AddResubmitAction(nil, &tableID)
 		}
 	}
 	return mutatePacketOut

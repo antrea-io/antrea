@@ -69,6 +69,7 @@ var (
 	protocolICMP = v1beta2.ProtocolICMP
 	priority100  = uint16(100)
 	priority200  = uint16(200)
+	priority201  = uint16(201)
 	icmpType8    = int32(8)
 	icmpCode0    = int32(0)
 
@@ -453,6 +454,22 @@ func TestBatchInstallPolicyRuleFlows(t *testing.T) {
 						UID:       "id3",
 					},
 				},
+				{
+					Direction: v1beta2.DirectionIn,
+					From:      parseLabelIdentityAddresses([]uint32{1, 2}),
+					Action:    &actionDrop,
+					Priority:  &priority201,
+					To:        []types.Address{NewOFPortAddress(1)},
+					Service:   []v1beta2.Service{},
+					FlowID:    uint32(13),
+					TableID:   AntreaPolicyIngressRuleTable.GetID(),
+					PolicyRef: &v1beta2.NetworkPolicyReference{
+						Type:      v1beta2.AntreaNetworkPolicy,
+						Namespace: "ns1",
+						Name:      "np4",
+						UID:       "id4",
+					},
+				},
 			},
 			expectedFlowsFn: func(c *client) []binding.Flow {
 				cookiePolicy := c.cookieAllocator.Request(cookie.NetworkPolicy).Raw()
@@ -471,6 +488,11 @@ func TestBatchInstallPolicyRuleFlows(t *testing.T) {
 						Action().LoadToRegField(CNPConjIDField, 12).
 						Action().LoadRegMark(CnpDenyRegMark).
 						Action().GotoTable(IngressMetricTable.GetID()).Done(),
+					AntreaPolicyIngressRuleTable.ofTable.BuildFlow(priority201).Cookie(cookiePolicy).
+						MatchConjID(13).
+						Action().LoadToRegField(CNPConjIDField, 13).
+						Action().LoadRegMark(CnpDenyRegMark).
+						Action().GotoTable(IngressMetricTable.GetID()).Done(),
 					AntreaPolicyIngressRuleTable.ofTable.BuildFlow(priority100).Cookie(cookiePolicy).
 						MatchProtocol(binding.ProtocolIP).MatchSrcIP(net.ParseIP("192.168.1.40")).
 						Action().Conjunction(10, 1, 2).
@@ -484,6 +506,12 @@ func TestBatchInstallPolicyRuleFlows(t *testing.T) {
 					AntreaPolicyIngressRuleTable.ofTable.BuildFlow(priority100).Cookie(cookiePolicy).
 						MatchProtocol(binding.ProtocolIP).MatchSrcIP(net.ParseIP("192.168.1.51")).
 						Action().Conjunction(11, 1, 3).Done(),
+					AntreaPolicyIngressRuleTable.ofTable.BuildFlow(priority201).Cookie(cookiePolicy).
+						MatchTunnelID(1).
+						Action().Conjunction(13, 1, 3).Done(),
+					AntreaPolicyIngressRuleTable.ofTable.BuildFlow(priority201).Cookie(cookiePolicy).
+						MatchTunnelID(2).
+						Action().Conjunction(13, 1, 3).Done(),
 					AntreaPolicyIngressRuleTable.ofTable.BuildFlow(priority100).Cookie(cookiePolicy).
 						MatchRegFieldWithValue(TargetOFPortField, uint32(1)).
 						Action().Conjunction(10, 2, 2).
@@ -497,6 +525,9 @@ func TestBatchInstallPolicyRuleFlows(t *testing.T) {
 					AntreaPolicyIngressRuleTable.ofTable.BuildFlow(priority100).Cookie(cookiePolicy).
 						MatchRegFieldWithValue(TargetOFPortField, uint32(3)).
 						Action().Conjunction(11, 2, 3).Done(),
+					AntreaPolicyIngressRuleTable.ofTable.BuildFlow(priority201).Cookie(cookiePolicy).
+						MatchRegFieldWithValue(TargetOFPortField, uint32(1)).
+						Action().Conjunction(13, 2, 3).Done(),
 					AntreaPolicyIngressRuleTable.ofTable.BuildFlow(priority100).Cookie(cookiePolicy).
 						MatchProtocol(binding.ProtocolTCP).MatchDstPort(8080, nil).
 						Action().Conjunction(11, 3, 3).Done(),
@@ -517,6 +548,9 @@ func TestBatchInstallPolicyRuleFlows(t *testing.T) {
 						Action().Drop().Done(),
 					IngressMetricTable.ofTable.BuildFlow(priorityNormal).Cookie(cookiePolicy).
 						MatchRegMark(CnpDenyRegMark).MatchRegFieldWithValue(CNPConjIDField, 12).
+						Action().Drop().Done(),
+					IngressMetricTable.ofTable.BuildFlow(priorityNormal).Cookie(cookiePolicy).
+						MatchRegMark(CnpDenyRegMark).MatchRegFieldWithValue(CNPConjIDField, 13).
 						Action().Drop().Done(),
 				}
 			},
@@ -973,6 +1007,14 @@ func parseAddresses(addrs []string) []types.Address {
 			ip := net.ParseIP(addr)
 			addresses = append(addresses, NewIPAddress(ip))
 		}
+	}
+	return addresses
+}
+
+func parseLabelIdentityAddresses(labelIdentities []uint32) []types.Address {
+	var addresses = make([]types.Address, 0)
+	for _, labelIdentity := range labelIdentities {
+		addresses = append(addresses, NewLabelIDAddress(labelIdentity))
 	}
 	return addresses
 }

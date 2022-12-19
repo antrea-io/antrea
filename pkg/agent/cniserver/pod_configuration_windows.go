@@ -44,7 +44,7 @@ func (pc *podConfigurator) connectInterfaceToOVSAsync(ifConfig *interfacestore.I
 		}
 		containerID := ifConfig.ContainerID
 		klog.V(2).Infof("Setting up Openflow entries for container %s", containerID)
-		if err := pc.ofClient.InstallPodFlows(ovsPortName, ifConfig.IPs, ifConfig.MAC, uint32(ofPort), ifConfig.VLANID); err != nil {
+		if err := pc.ofClient.InstallPodFlows(ovsPortName, ifConfig.IPs, ifConfig.MAC, uint32(ofPort), ifConfig.VLANID, nil); err != nil {
 			return fmt.Errorf("failed to add Openflow entries for container %s: %v", containerID, err)
 		}
 		// Update interface config with the ofPort.

@@ -1216,6 +1216,20 @@ func (mr *MockActionMockRecorder) SetTunnelDst(arg0 interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetTunnelDst", reflect.TypeOf((*MockAction)(nil).SetTunnelDst), arg0)
 }
 
+// SetTunnelID mocks base method
+func (m *MockAction) SetTunnelID(arg0 uint64) openflow.FlowBuilder {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetTunnelID", arg0)
+	ret0, _ := ret[0].(openflow.FlowBuilder)
+	return ret0
+}
+
+// SetTunnelID indicates an expected call of SetTunnelID
+func (mr *MockActionMockRecorder) SetTunnelID(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetTunnelID", reflect.TypeOf((*MockAction)(nil).SetTunnelID), arg0)
+}
+
 // SetVLAN mocks base method
 func (m *MockAction) SetVLAN(arg0 uint16) openflow.FlowBuilder {
 	m.ctrl.T.Helper()
@@ -2070,6 +2084,20 @@ func (m *MockFlowBuilder) MatchTunnelDst(arg0 net.IP) openflow.FlowBuilder {
 func (mr *MockFlowBuilderMockRecorder) MatchTunnelDst(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchTunnelDst", reflect.TypeOf((*MockFlowBuilder)(nil).MatchTunnelDst), arg0)
+}
+
+// MatchTunnelID mocks base method
+func (m *MockFlowBuilder) MatchTunnelID(arg0 uint64) openflow.FlowBuilder {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MatchTunnelID", arg0)
+	ret0, _ := ret[0].(openflow.FlowBuilder)
+	return ret0
+}
+
+// MatchTunnelID indicates an expected call of MatchTunnelID
+func (mr *MockFlowBuilderMockRecorder) MatchTunnelID(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MatchTunnelID", reflect.TypeOf((*MockFlowBuilder)(nil).MatchTunnelID), arg0)
 }
 
 // MatchVLAN mocks base method

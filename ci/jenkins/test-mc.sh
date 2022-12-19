@@ -248,6 +248,24 @@ function run_codecov { (set -e
     rm -f trustedkeys.gpg codecov
 )}
 
+function modify_config {
+  if [[ ${ENABLE_MC_GATEWAY} == "true" ]]; then
+  cat > build/yamls/chart-values/antrea.yml << EOF
+multicluster:
+  enable: true
+  enableStretchedNetworkPolicy: true
+featureGates: {
+  Multicluster: true
+}
+EOF
+  make manifest
+  cd multicluster
+  sed -i 's/enableStretchedNetworkPolicy: false/enableStretchedNetworkPolicy: true/g' config/default/configmap/controller_manager_config.yaml
+  make manifests
+  cd ..
+  fi
+}
+
 function deliver_antrea_multicluster {
     echo "====== Building Antrea for the Following Commit ======"
     export GO111MODULE=on
@@ -357,16 +375,6 @@ function run_multicluster_e2e {
     export GOCACHE=${WORKDIR}/.cache/go-build
     export PATH=$GOROOT/bin:$PATH
 
-    if [[ ${ENABLE_MC_GATEWAY} == "true" ]]; then
-    cat > build/yamls/chart-values/antrea.yml <<EOF
-multicluster:
-  enable: true
-featureGates: {
-  Multicluster: true
-}
-EOF
-    make manifest
-    fi
     wait_for_antrea_multicluster_pods_ready "${LEADER_CLUSTER_CONFIG}"
     wait_for_antrea_multicluster_pods_ready "${EAST_CLUSTER_CONFIG}"
     wait_for_antrea_multicluster_pods_ready "${WEST_CLUSTER_CONFIG}"
@@ -471,6 +479,7 @@ set -e
 
 if [[ ${TESTCASE} =~ "e2e" ]]; then
     deliver_antrea_multicluster
+    modify_config
     deliver_multicluster_controller
     run_multicluster_e2e
     if $COVERAGE;then

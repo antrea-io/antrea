@@ -296,6 +296,13 @@ func (b *ofFlowBuilder) MatchTunnelDst(dstIP net.IP) FlowBuilder {
 	return b
 }
 
+// MatchTunnelID adds match condition for matching tun_id.
+func (b *ofFlowBuilder) MatchTunnelID(tunnelID uint64) FlowBuilder {
+	b.matchers = append(b.matchers, fmt.Sprintf("tun_id=%d", tunnelID))
+	b.ofFlow.Match.TunnelId = tunnelID
+	return b
+}
+
 func ctLabelRange(high, low uint64, rng *Range, match *ofctrl.FlowMatch) {
 	// [127..64] [63..0]
 	//   high     low
