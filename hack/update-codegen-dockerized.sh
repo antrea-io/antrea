@@ -42,6 +42,7 @@ function generate_mocks {
     "pkg/agent/cniserver/ipam IPAMDriver testing"
     "pkg/agent/flowexporter/connections ConnTrackDumper,NetFilterConnTrack testing"
     "pkg/agent/interfacestore InterfaceStore testing"
+    "pkg/agent/memberlist Memberlist testing"
     "pkg/agent/multicast RouteInterface testing"
     "pkg/agent/types MulticastValidator testing"
     "pkg/agent/nodeportlocal/portcache LocalPortOpener testing"
