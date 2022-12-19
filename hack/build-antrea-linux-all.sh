@@ -114,9 +114,12 @@ echo "BUILD_TAG: $BUILD_TAG"
 # new base images in the build chain.
 if $PULL; then
     if [[ ${DOCKER_REGISTRY} == "" ]]; then
+        docker pull $PLATFORM_ARG ubuntu:20.04
         docker pull $PLATFORM_ARG ubuntu:22.04
         docker pull $PLATFORM_ARG golang:$GO_VERSION
     else
+        docker pull ${DOCKER_REGISTRY}/antrea/ubuntu:20.04
+        docker tag ${DOCKER_REGISTRY}/antrea/ubuntu:20.04 ubuntu:20.04
         docker pull ${DOCKER_REGISTRY}/antrea/ubuntu:22.04
         docker tag ${DOCKER_REGISTRY}/antrea/ubuntu:22.04 ubuntu:22.04
         docker pull ${DOCKER_REGISTRY}/antrea/golang:$GO_VERSION
