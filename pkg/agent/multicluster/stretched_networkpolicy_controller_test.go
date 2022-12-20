@@ -222,7 +222,7 @@ func TestStretchedNetworkPolicyControllerPodEvent(t *testing.T) {
 		},
 	}
 
-	clientset := fake.NewSimpleClientset()
+	clientset := fake.NewSimpleClientset(ns)
 	mcClient := mcfake.NewSimpleClientset()
 	c, closeFn := newStretchedNetworkPolicyController(t, clientset, mcClient)
 	defer closeFn()
@@ -240,11 +240,6 @@ func TestStretchedNetworkPolicyControllerPodEvent(t *testing.T) {
 	finishCh := make(chan struct{})
 	go func() {
 		defer close(finishCh)
-		c.clientset.CoreV1().Namespaces().Create(context.TODO(), ns, metav1.CreateOptions{})
-		if err := waitForNSRealized(c, ns); err != nil {
-			t.Errorf("error when waiting for Namespace '%s' to be realized: %v", ns.Name, err)
-		}
-
 		// Create a Pod whose LabelIdentity doesn't exist.
 		c.clientset.CoreV1().Pods(pod.Namespace).Create(context.TODO(), pod, metav1.CreateOptions{})
 		if err := waitForPodRealized(c, pod); err != nil {
@@ -366,8 +361,8 @@ func TestStretchedNetworkPolicyControllerNSEvent(t *testing.T) {
 		},
 	}
 
-	clientset := fake.NewSimpleClientset()
-	mcClient := mcfake.NewSimpleClientset()
+	clientset := fake.NewSimpleClientset(ns)
+	mcClient := mcfake.NewSimpleClientset(labelIdentity1, labelIdentity2, labelIdentity3, labelIdentity4)
 	c, closeFn := newStretchedNetworkPolicyController(t, clientset, mcClient)
 	defer closeFn()
 	defer c.queue.ShutDown()
@@ -384,29 +379,6 @@ func TestStretchedNetworkPolicyControllerNSEvent(t *testing.T) {
 	finishCh := make(chan struct{})
 	go func() {
 		defer close(finishCh)
-
-		c.mcClient.MulticlusterV1alpha1().LabelIdentities().Create(context.TODO(), labelIdentity1, metav1.CreateOptions{})
-		if err := waitForLabelIdentityRealized(c, labelIdentity1); err != nil {
-			t.Errorf("error when waiting for LabelIdentity '%s' to be realized: %v", labelIdentity1.Name, err)
-		}
-		c.mcClient.MulticlusterV1alpha1().LabelIdentities().Create(context.TODO(), labelIdentity2, metav1.CreateOptions{})
-		if err := waitForLabelIdentityRealized(c, labelIdentity2); err != nil {
-			t.Errorf("error when waiting for LabelIdentity '%s' to be realized: %v", labelIdentity2.Name, err)
-		}
-		c.mcClient.MulticlusterV1alpha1().LabelIdentities().Create(context.TODO(), labelIdentity3, metav1.CreateOptions{})
-		if err := waitForLabelIdentityRealized(c, labelIdentity3); err != nil {
-			t.Errorf("error when waiting for LabelIdentity '%s' to be realized: %v", labelIdentity3.Name, err)
-		}
-		c.mcClient.MulticlusterV1alpha1().LabelIdentities().Create(context.TODO(), labelIdentity4, metav1.CreateOptions{})
-		if err := waitForLabelIdentityRealized(c, labelIdentity4); err != nil {
-			t.Errorf("error when waiting for LabelIdentity '%s' to be realized: %v", labelIdentity4.Name, err)
-		}
-
-		c.clientset.CoreV1().Namespaces().Create(context.TODO(), ns, metav1.CreateOptions{})
-		if err := waitForNSRealized(c, ns); err != nil {
-			t.Errorf("error when waiting for Namespace '%s' to be realized: %v", ns.Name, err)
-		}
-
 		c.clientset.CoreV1().Pods(pod1.Namespace).Create(context.TODO(), pod1, metav1.CreateOptions{})
 		if err := waitForPodRealized(c, pod1); err != nil {
 			t.Errorf("error when waiting for Pod '%s/%s' to be realized: %v", pod1.Namespace, pod1.Name, err)
@@ -479,7 +451,7 @@ func TestStretchedNetworkPolicyControllerLabelIdentityEvent(t *testing.T) {
 			ID:    1,
 		},
 	}
-	clientset := fake.NewSimpleClientset()
+	clientset := fake.NewSimpleClientset(ns)
 	mcClient := mcfake.NewSimpleClientset()
 	c, closeFn := newStretchedNetworkPolicyController(t, clientset, mcClient)
 	defer closeFn()
@@ -497,11 +469,6 @@ func TestStretchedNetworkPolicyControllerLabelIdentityEvent(t *testing.T) {
 	finishCh := make(chan struct{})
 	go func() {
 		defer close(finishCh)
-		c.clientset.CoreV1().Namespaces().Create(context.TODO(), ns, metav1.CreateOptions{})
-		if err := waitForNSRealized(c, ns); err != nil {
-			t.Errorf("error when waiting for Namespace '%s' to be realized: %v", ns.Name, err)
-		}
-
 		c.clientset.CoreV1().Pods(pod.Namespace).Create(context.TODO(), pod, metav1.CreateOptions{})
 		if err := waitForPodRealized(c, pod); err != nil {
 			t.Errorf("error when waiting for Pod '%s/%s' to be realized: %v", pod.Namespace, pod.Name, err)
@@ -559,16 +526,6 @@ func toPodAddEvent(pod *corev1.Pod) antreatypes.PodUpdate {
 func waitForPodRealized(c *fakeStretchedNetworkPolicyController, pod *corev1.Pod) error {
 	return wait.Poll(interval, timeout, func() (bool, error) {
 		_, err := c.podLister.Pods(pod.Namespace).Get(pod.Name)
-		if err != nil {
-			return false, nil
-		}
-		return true, err
-	})
-}
-
-func waitForNSRealized(c *fakeStretchedNetworkPolicyController, ns *corev1.Namespace) error {
-	return wait.Poll(interval, timeout, func() (bool, error) {
-		_, err := c.namespaceLister.Get(ns.Name)
 		if err != nil {
 			return false, nil
 		}
