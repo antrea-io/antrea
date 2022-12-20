@@ -142,7 +142,7 @@ func (r *ResourceImportReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 func (r *ResourceImportReconciler) handleResImpUpdateForService(ctx context.Context, resImp *multiclusterv1alpha1.ResourceImport) (ctrl.Result, error) {
 	svcImpName := types.NamespacedName{Namespace: resImp.Spec.Namespace, Name: resImp.Spec.Name}
-	svcName := types.NamespacedName{Namespace: resImp.Spec.Namespace, Name: common.AntreaMCSPrefix + resImp.Spec.Name}
+	svcName := types.NamespacedName{Namespace: resImp.Spec.Namespace, Name: common.ToMCResourceName(resImp.Spec.Name)}
 	klog.InfoS("Updating Service and ServiceImport corresponding to ResourceImport",
 		"service", svcName.String(), "serviceimport", svcImpName.String(), "resourceimport", klog.KObj(resImp))
 
@@ -224,14 +224,14 @@ func (r *ResourceImportReconciler) handleResImpUpdateForService(ctx context.Cont
 
 func (r *ResourceImportReconciler) handleResImpDeleteForService(ctx context.Context, resImp *multiclusterv1alpha1.ResourceImport) (ctrl.Result, error) {
 	svcImpName := common.NamespacedName(resImp.Spec.Namespace, resImp.Spec.Name)
-	svcName := common.NamespacedName(resImp.Spec.Namespace, common.AntreaMCSPrefix+resImp.Spec.Name)
+	svcName := common.NamespacedName(resImp.Spec.Namespace, common.ToMCResourceName(resImp.Spec.Name))
 	klog.InfoS("Deleting Service and ServiceImport corresponding to ResourceImport", "service", svcName,
 		"serviceImport", svcImpName, "resourceimport", klog.KObj(resImp))
 
 	svc := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: resImp.Spec.Namespace,
-			Name:      common.AntreaMCSPrefix + resImp.Spec.Name,
+			Name:      common.ToMCResourceName(resImp.Spec.Name),
 		},
 	}
 	err := r.localClusterClient.Delete(ctx, svc, &client.DeleteOptions{})
@@ -256,7 +256,7 @@ func (r *ResourceImportReconciler) handleResImpDeleteForService(ctx context.Cont
 }
 
 func (r *ResourceImportReconciler) handleResImpUpdateForEndpoints(ctx context.Context, resImp *multiclusterv1alpha1.ResourceImport) (ctrl.Result, error) {
-	epName := common.AntreaMCSPrefix + resImp.Spec.Name
+	epName := common.ToMCResourceName(resImp.Spec.Name)
 	epNamespaced := types.NamespacedName{Namespace: resImp.Spec.Namespace, Name: epName}
 	klog.InfoS("Updating Endpoints corresponding to ResourceImport", "endpoints", epNamespaced.String(),
 		"resourceimport", klog.KObj(resImp))
@@ -311,7 +311,7 @@ func (r *ResourceImportReconciler) handleResImpUpdateForEndpoints(ctx context.Co
 }
 
 func (r *ResourceImportReconciler) handleResImpDeleteForEndpoints(ctx context.Context, resImp *multiclusterv1alpha1.ResourceImport) (ctrl.Result, error) {
-	epName := common.AntreaMCSPrefix + resImp.Spec.Name
+	epName := common.ToMCResourceName(resImp.Spec.Name)
 	epNamespacedName := common.NamespacedName(resImp.Spec.Namespace, epName)
 	klog.InfoS("Deleting Endpoints corresponding to ResourceImport", "endpoints", epNamespacedName,
 		"resourceimport", klog.KObj(resImp))
@@ -342,7 +342,7 @@ func getMCService(resImp *multiclusterv1alpha1.ResourceImport) *corev1.Service {
 	}
 	mcs := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      common.AntreaMCSPrefix + resImp.Spec.Name,
+			Name:      common.ToMCResourceName(resImp.Spec.Name),
 			Namespace: resImp.Spec.Namespace,
 			Annotations: map[string]string{
 				common.AntreaMCServiceAnnotation: "true",

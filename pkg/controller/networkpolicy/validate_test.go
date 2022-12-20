@@ -696,7 +696,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 									},
 								},
 							},
-							ToServices: []crdv1alpha1.NamespacedName{
+							ToServices: []crdv1alpha1.PeerService{
 								{
 									Name:      "foo",
 									Namespace: "bar",
@@ -706,7 +706,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
-			expectedReason: "`toServices` can't be used with `to`, `ports` or `protocols`",
+			expectedReason: "`toServices` cannot be used with `to`, `ports` or `protocols`",
 		},
 		{
 			name: "acnp-toservice-set-with-ports",
@@ -730,7 +730,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 									Port: &int80,
 								},
 							},
-							ToServices: []crdv1alpha1.NamespacedName{
+							ToServices: []crdv1alpha1.PeerService{
 								{
 									Name:      "foo",
 									Namespace: "bar",
@@ -740,7 +740,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
-			expectedReason: "`toServices` can't be used with `to`, `ports` or `protocols`",
+			expectedReason: "`toServices` cannot be used with `to`, `ports` or `protocols`",
 		},
 		{
 			name: "acnp-toservice-set-with-protocols",
@@ -764,7 +764,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 									ICMP: &crdv1alpha1.ICMPProtocol{},
 								},
 							},
-							ToServices: []crdv1alpha1.NamespacedName{
+							ToServices: []crdv1alpha1.PeerService{
 								{
 									Name:      "foo",
 									Namespace: "bar",
@@ -774,7 +774,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					},
 				},
 			},
-			expectedReason: "`toServices` can't be used with `to`, `ports` or `protocols`",
+			expectedReason: "`toServices` cannot be used with `to`, `ports` or `protocols`",
 		},
 		{
 			name: "acnp-toservice-alone",
@@ -793,7 +793,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 					Egress: []crdv1alpha1.Rule{
 						{
 							Action: &allowAction,
-							ToServices: []crdv1alpha1.NamespacedName{
+							ToServices: []crdv1alpha1.PeerService{
 								{
 									Name:      "foo",
 									Namespace: "bar",
@@ -1388,7 +1388,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 									},
 								},
 							},
-							ToServices: []crdv1alpha1.NamespacedName{
+							ToServices: []crdv1alpha1.PeerService{
 								{
 									Name:      "foo",
 									Namespace: "bar",

@@ -1133,18 +1133,24 @@ spec:
                           type: array
                         toServices:
                           description: Rule is matched if traffic is intended for
-                            a Service listed in this field. Currently only ClusterIP
-                            types Services are supported in this field. This field
-                            can only be used when AntreaProxy is enabled. This field
-                            can't be used with To or Ports. If this field and To are
-                            both empty or missing, this rule matches all destinations.
+                            a Service listed in this field. Currently, only ClusterIP
+                            types Services are supported in this field. When scope
+                            is set to ClusterSet, it matches traffic intended for
+                            a multi-cluster Service listed in this field. Service
+                            name and Namespace provided should match the original
+                            exported Service. This field can only be used when AntreaProxy
+                            is enabled. This field can't be used with To or Ports.
+                            If this field and To are both empty or missing, this rule
+                            matches all destinations.
                           items:
-                            description: NamespacedName refers to a Namespace scoped
-                              resource. All fields must be used together.
+                            description: PeerService refers to a Service, which can
+                              be a in-cluster Service or imported multi-cluster service.
                             properties:
                               name:
                                 type: string
                               namespace:
+                                type: string
+                              scope:
                                 type: string
                             type: object
                           type: array
@@ -2015,18 +2021,24 @@ spec:
                           type: array
                         toServices:
                           description: Rule is matched if traffic is intended for
-                            a Service listed in this field. Currently only ClusterIP
-                            types Services are supported in this field. This field
-                            can only be used when AntreaProxy is enabled. This field
-                            can't be used with To or Ports. If this field and To are
-                            both empty or missing, this rule matches all destinations.
+                            a Service listed in this field. Currently, only ClusterIP
+                            types Services are supported in this field. When scope
+                            is set to ClusterSet, it matches traffic intended for
+                            a multi-cluster Service listed in this field. Service
+                            name and Namespace provided should match the original
+                            exported Service. This field can only be used when AntreaProxy
+                            is enabled. This field can't be used with To or Ports.
+                            If this field and To are both empty or missing, this rule
+                            matches all destinations.
                           items:
-                            description: NamespacedName refers to a Namespace scoped
-                              resource. All fields must be used together.
+                            description: PeerService refers to a Service, which can
+                              be a in-cluster Service or imported multi-cluster service.
                             properties:
                               name:
                                 type: string
                               namespace:
+                                type: string
+                              scope:
                                 type: string
                             type: object
                           type: array

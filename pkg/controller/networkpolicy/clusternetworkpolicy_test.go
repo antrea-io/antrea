@@ -26,6 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/sets"
 
+	"antrea.io/antrea/multicluster/controllers/multicluster/common"
 	"antrea.io/antrea/pkg/apis/controlplane"
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	crdv1alpha3 "antrea.io/antrea/pkg/apis/crd/v1alpha3"
@@ -936,7 +937,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 					Priority: p10,
 					Egress: []crdv1alpha1.Rule{
 						{
-							ToServices: []crdv1alpha1.NamespacedName{
+							ToServices: []crdv1alpha1.PeerService{
 								{
 									Namespace: "nsA",
 									Name:      "svcA",
@@ -978,6 +979,59 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 			expectedAddressGroups:   0,
 		},
 		{
+			name: "rule-with-to-mc-service",
+			inputPolicy: &crdv1alpha1.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{Name: "cnpM", UID: "uidM"},
+				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
+					AppliedTo: []crdv1alpha1.AppliedTo{
+						{PodSelector: &selectorA},
+					},
+					Priority: p10,
+					Egress: []crdv1alpha1.Rule{
+						{
+							ToServices: []crdv1alpha1.PeerService{
+								{
+									Namespace: "nsA",
+									Name:      "svcA",
+									Scope:     crdv1alpha1.ScopeClusterSet,
+								},
+							},
+							Action: &dropAction,
+						},
+					},
+				},
+			},
+			expectedPolicy: &antreatypes.NetworkPolicy{
+				UID:  "uidM",
+				Name: "uidM",
+				SourceRef: &controlplane.NetworkPolicyReference{
+					Type: controlplane.AntreaClusterNetworkPolicy,
+					Name: "cnpM",
+					UID:  "uidM",
+				},
+				Priority:     &p10,
+				TierPriority: &DefaultTierPriority,
+				Rules: []controlplane.NetworkPolicyRule{
+					{
+						Direction: controlplane.DirectionOut,
+						To: controlplane.NetworkPolicyPeer{
+							ToServices: []controlplane.ServiceReference{
+								{
+									Namespace: "nsA",
+									Name:      common.ToMCResourceName("svcA"),
+								},
+							},
+						},
+						Priority: 0,
+						Action:   &dropAction,
+					},
+				},
+				AppliedToGroups: []string{getNormalizedUID(antreatypes.NewGroupSelector("", &selectorA, nil, nil, nil).NormalizedName)},
+			},
+			expectedAppliedToGroups: 1,
+			expectedAddressGroups:   0,
+		},
+		{
 			name: "applied-to-with-service-account-namespaced-name",
 			inputPolicy: &crdv1alpha1.ClusterNetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{Name: "cnpL", UID: "uidL"},
@@ -993,7 +1047,7 @@ func TestProcessClusterNetworkPolicy(t *testing.T) {
 					Priority: p10,
 					Egress: []crdv1alpha1.Rule{
 						{
-							ToServices: []crdv1alpha1.NamespacedName{
+							ToServices: []crdv1alpha1.PeerService{
 								{
 									Namespace: "nsA",
 									Name:      "svcA",
