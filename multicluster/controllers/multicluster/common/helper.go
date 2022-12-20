@@ -50,6 +50,10 @@ func NamespacedName(namespace, name string) string {
 	return namespace + "/" + name
 }
 
+func ToMCResourceName(originalResourceName string) string {
+	return AntreaMCSPrefix + originalResourceName
+}
+
 func StringExistsInSlice(slice []string, s string) bool {
 	for _, item := range slice {
 		if item == s {

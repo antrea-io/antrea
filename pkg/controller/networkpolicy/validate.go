@@ -589,7 +589,7 @@ func (v *antreaPolicyValidator) validatePeers(ingress, egress []crdv1alpha1.Rule
 				return fmt.Sprintf("`toServices` can only be used when AntreaProxy is enabled"), false
 			}
 			if (rule.To != nil && len(rule.To) > 0) || rule.Ports != nil || rule.Protocols != nil {
-				return fmt.Sprintf("`toServices` can't be used with `to`, `ports` or `protocols`"), false
+				return fmt.Sprintf("`toServices` cannot be used with `to`, `ports` or `protocols`"), false
 			}
 		}
 		msg, isValid := checkPeers(rule.To)
