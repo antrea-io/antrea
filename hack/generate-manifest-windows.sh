@@ -41,6 +41,7 @@ function print_help {
     echoerr "Try '$0 --help' for more information."
 }
 
+RUNTIME=""
 MODE="dev"
 KEEP=false
 
@@ -55,6 +56,10 @@ case $key in
     ;;
     --keep)
     KEEP=true
+    shift
+    ;;
+    --containerd)
+    RUNTIME="containerd"
     shift
     ;;
     -h|--help)
@@ -108,9 +113,16 @@ BASE=../../base
 
 mkdir $MODE && cd $MODE
 touch kustomization.yml
-$KUSTOMIZE edit add base $BASE
 # ../../patches/$MODE may be empty so we use find and not simply cp
 find ../../patches/$MODE -name \*.yml -exec cp {} . \;
+
+if [ "$RUNTIME" == "containerd" ]; then
+    sed -i.bak "s/agent.yml/agent-containerd.yml/g" $BASE/kustomization.yml
+    sed -i.bak "s/Run-AntreaAgent.ps1/Run-AntreaAgent-Containerd.ps1/g" $BASE/kustomization.yml
+    sed -i.bak "/name: antrea-agent-windows/i\  - conf/Install-WindowsCNI-Containerd.ps1" $BASE/kustomization.yml
+fi
+
+$KUSTOMIZE edit add base $BASE
 
 if [ "$MODE" == "dev" ]; then
     $KUSTOMIZE edit set image antrea-windows=antrea/antrea-windows:latest
@@ -122,6 +134,11 @@ if [ "$MODE" == "release" ]; then
 fi
 
 $KUSTOMIZE build
+
+if [ "$RUNTIME" == "containerd" ]; then
+    rm $BASE/kustomization.yml
+    mv $BASE/kustomization.yml.bak $BASE/kustomization.yml
+fi
 
 popd > /dev/null
 

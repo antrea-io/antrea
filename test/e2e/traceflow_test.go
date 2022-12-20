@@ -113,6 +113,9 @@ func testTraceflowIntraNodeANP(t *testing.T, data *TestData) {
 	node1 := nodeName(nodeIdx)
 	node1Pods, _, node1CleanupFn := createTestAgnhostPods(t, data, 3, data.testNamespace, node1)
 	defer node1CleanupFn()
+	// Give a little time for Windows Containerd Nodes to setup OVS.
+	// Containerd configures port asynchronously, which could cause execution time of installing flow longer than docker.
+	time.Sleep(time.Second * 1)
 
 	var denyIngress *v1alpha1.NetworkPolicy
 	denyIngressName := "test-anp-deny-ingress"
@@ -310,6 +313,9 @@ func testTraceflowIntraNode(t *testing.T, data *TestData) {
 	agentPod, _ := data.getAntreaPodOnNode(node1)
 	node1Pods, node1IPs, node1CleanupFn := createTestAgnhostPods(t, data, 3, data.testNamespace, node1)
 	defer node1CleanupFn()
+	// Give a little time for Windows Containerd Nodes to setup OVS.
+	// Containerd configures port asynchronously, which could cause execution time of installing flow longer than docker.
+	time.Sleep(time.Second * 1)
 	var pod0IPv4Str, pod1IPv4Str, dstPodIPv4Str, dstPodIPv6Str string
 	if node1IPs[0].ipv4 != nil {
 		pod0IPv4Str = node1IPs[0].ipv4.String()
@@ -2022,6 +2028,9 @@ func testTraceflowExternalIP(t *testing.T, data *TestData) {
 	nodeIP := nodeIP(nodeIdx)
 	podNames, _, cleanupFn := createTestAgnhostPods(t, data, 1, data.testNamespace, node)
 	defer cleanupFn()
+	// Give a little time for Windows Containerd Nodes to setup OVS.
+	// Containerd configures port asynchronously, which could cause execution time of installing flow longer than docker.
+	time.Sleep(time.Second * 1)
 
 	testcase := testcase{
 		name:      "nodeIPDestination",
