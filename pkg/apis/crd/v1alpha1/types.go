@@ -761,6 +761,8 @@ type ExternalNodeSpec struct {
 	// Only one network interface is supported now.
 	// Other interfaces except interfaces[0] will be ignored if there are more than one interfaces.
 	Interfaces []NetworkInterface `json:"interfaces,omitempty"`
+	// Secret name bound with the token that Agent is using.
+	Secret string `json:"secret,omitempty"`
 }
 
 type NetworkInterface struct {

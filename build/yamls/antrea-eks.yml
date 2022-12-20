@@ -1382,6 +1382,8 @@ spec:
                             - format: ipv6
                       name:
                         type: string
+                secret:
+                  type: string
       served: true
       storage: true
   scope: Namespaced
