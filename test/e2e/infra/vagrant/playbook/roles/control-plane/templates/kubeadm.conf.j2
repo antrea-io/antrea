@@ -9,7 +9,7 @@ skipPhases:
 - addon/kube-proxy
 {% endif %}
 ---
-apiVersion: kubeadm.k8s.io/v1beta2
+apiVersion: kubeadm.k8s.io/v1beta3
 kind: ClusterConfiguration
 networking:
   podSubnet: "{{ k8s_pod_network_cidr }}"
@@ -29,3 +29,8 @@ ipvs:
   strictARP: true
 {% endif %}
 {% endif %}
+---
+apiVersion: kubelet.config.k8s.io/v1beta1
+kind: KubeletConfiguration
+# this is the default starting with v1.22, but we prefer to set it explicitly
+cgroupDriver: systemd
