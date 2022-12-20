@@ -109,11 +109,11 @@ Start-Service kube-proxy
 Start-Service antrea-agent
 ```
 
-### Installation via wins (Docker based runtimes)
+### Installation as a Pod (Docker/Containerd based runtimes)
 
-Installing Antrea using [wins](https://github.com/rancher/wins) gives you a lot of flexibility to manage it as a Pod, but
-currently this only works with Docker due to a bug in the way Containerd handles host networking for Windows Pods ([Issue](https://github.com/containerd/containerd/issues/4856)).
-In any case, if you are using Docker on Windows, this is how you can run Antrea in a Pod.
+Installing Antrea using [wins](https://github.com/rancher/wins) gives you a lot
+of flexibility to manage it as a Pod if you are using Docker on Windows, this is
+how you can run Antrea in a Pod.
 
 #### Download & Configure Antrea for Linux
 
@@ -138,7 +138,7 @@ curl -L "https://github.com/kubernetes-sigs/sig-windows-tools/releases/download/
 ```
 
 Replace the content of `run-script.ps1` in configmap named `kube-proxy-windows`
-as following:
+with following:
 
 ```yaml
 apiVersion: v1
@@ -154,6 +154,27 @@ data:
 
     wins cli process run --path /k/kube-proxy/kube-proxy.exe --args "--v=3 --config=/var/lib/kube-proxy/config.conf --proxy-mode=userspace --hostname-override=$env:NODE_NAME"
 
+kind: ConfigMap
+metadata:
+  labels:
+    app: kube-proxy
+  name: kube-proxy-windows
+  namespace: kube-system
+```
+
+For Containerd runtime, replace the content of `run-script.ps1` with following:
+
+```yaml
+apiVersion: v1
+data:
+  run-script.ps1: |-
+    $mountPath = $env:CONTAINER_SANDBOX_MOUNT_POINT
+    $mountPath =  ($mountPath.Replace('\', '/')).TrimEnd('/') 
+    New-Item -Path "c:/var/lib" -Name "kube-proxy" -ItemType "directory" -Force
+    ((Get-Content -path $mountPath/var/lib/kube-proxy/kubeconfig.conf -Raw) -replace '/var',"$($mountPath)/var") | Set-Content -Path /var/lib/kube-proxy/kubeconfig.conf
+    ((Get-Content -path /var/lib/kube-proxy/kubeconfig.conf -Raw) -replace '\/',"/") | Set-Content -Path /var/lib/kube-proxy/kubeconfig.conf
+    sed -i 's/mode: iptables/mode: \"\"/g' $mountPath/var/lib/kube-proxy/config.conf
+    & "$mountPath/k/kube-proxy/kube-proxy.exe" --config=$mountPath/var/lib/kube-proxy/config.conf --v=10 --proxy-mode=userspace --hostname-override=$env:NODE_NAME
 kind: ConfigMap
 metadata:
   labels:
@@ -184,6 +205,39 @@ spec:
       hostNetwork: true
 ```
 
+For Containerd runtime, Set `hostNetwork` as true and add options in spec and command.
+
+```yaml
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  labels:
+    k8s-app: kube-proxy
+  name: kube-proxy-windows
+  namespace: kube-system
+spec:
+  selector:
+    matchLabels:
+      k8s-app: kube-proxy-windows
+  template:
+    metadata:
+      labels:
+        k8s-app: kube-proxy-windows
+    spec:
+      securityContext:
+        windowsOptions:
+          hostProcess: true
+          runAsUserName: "NT AUTHORITY\\SYSTEM"
+      hostNetwork: true
+      serviceAccountName: kube-proxy
+      containers:
+      - command:
+        - pwsh
+        args:
+        - -file
+        - $env:CONTAINER_SANDBOX_MOUNT_POINT/var/lib/kube-proxy-windows/run-script.ps1
+```
+
 Then apply the `kube-proxy.yml`.
 
 ```bash
@@ -192,13 +246,22 @@ kubectl apply -f kube-proxy.yml
 
 #### Add Windows antrea-agent DaemonSet
 
-Now you can deploy antrea-agent Windows DaemonSet by applying file `antrea-windows.yml`.
+Now you can deploy antrea-agent Windows DaemonSet with Docker runtime by applying file `antrea-windows.yml`.
 
 Download and apply `antrea-windows.yml`.
 
 ```bash
 # Example:
 kubectl apply -f https://github.com/antrea-io/antrea/releases/download/<TAG>/antrea-windows.yml
+```
+
+Since Antrea 1.10, you can also deploy antrea-agent Windows DaemonSet with Containerd runtime by
+applying file `antrea-windows-containerd.yml`.
+
+Download and apply `antrea-windows-containerd.yml`.
+
+```bash
+kubectl apply -f https://github.com/antrea-io/antrea/releases/download/<TAG>/antrea-windows-containerd.yml
 ```
 
 #### Join Windows worker Nodes

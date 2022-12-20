@@ -282,7 +282,7 @@ function deliver_antrea_multicluster {
     chmod -R g-w build/images/base
 
     DOCKER_REGISTRY="${DOCKER_REGISTRY}" ./hack/build-antrea-linux-all.sh --pull
-    echo "====== Delivering Antrea to all the Nodes ======"
+    echo "====== Delivering Antrea to all Nodes ======"
     docker save -o ${WORKDIR}/antrea-ubuntu.tar antrea/antrea-ubuntu:latest
 
 
