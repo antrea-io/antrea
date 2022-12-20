@@ -29,5 +29,5 @@ RUN git clone https://git.zx2c4.com/wireguard-tools && \
     make && \
     make install
 
-FROM ubuntu:20.04
+FROM ubuntu:22.04
 COPY --from=builder /usr/bin/wireguard-go /usr/bin/wg /usr/bin/

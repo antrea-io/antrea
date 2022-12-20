@@ -26,7 +26,7 @@ COPY . /antrea
 RUN make antrea-agent-simulator
 
 
-FROM ubuntu:20.04
+FROM ubuntu:22.04
 
 LABEL maintainer="Antrea <projectantrea-dev@googlegroups.com>"
 LABEL description="The Docker image to deploy the Antrea simulator."
