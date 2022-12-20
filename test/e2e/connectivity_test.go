@@ -25,6 +25,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/util/k8s"
@@ -190,7 +191,7 @@ func testHostPortPodConnectivity(t *testing.T, data *TestData) {
 // alternating in this podInfo slice so that the test can cover different connectivity cases between different OSes.
 func createPodsOnDifferentNodes(t *testing.T, data *TestData, namespace, tag string) (podInfos []podInfo, cleanup func() error) {
 	dsName := "connectivity-test" + tag
-	_, cleanup, err := data.createDaemonSet(dsName, namespace, agnhostContainerName, agnhostImage, []string{"sleep", "3600"}, nil)
+	_, deleteDaemonSet, err := data.createDaemonSet(dsName, namespace, agnhostContainerName, agnhostImage, []string{"sleep", "3600"}, nil)
 	if err != nil {
 		t.Fatalf("Error when creating DaemonSet '%s': %v", dsName, err)
 	}
@@ -199,9 +200,13 @@ func createPodsOnDifferentNodes(t *testing.T, data *TestData, namespace, tag str
 	}
 
 	piMap := map[string][]podInfo{"linux": {}, "windows": {}}
-	pods, err := data.clientset.CoreV1().Pods(namespace).List(context.TODO(), metav1.ListOptions{
-		LabelSelector: "antrea-e2e=" + dsName,
-	})
+
+	getDaemonSetPods := func() (*corev1.PodList, error) {
+		return data.clientset.CoreV1().Pods(namespace).List(context.TODO(), metav1.ListOptions{
+			LabelSelector: "antrea-e2e=" + dsName,
+		})
+	}
+	pods, err := getDaemonSetPods()
 	if err != nil {
 		t.Fatalf("Error when getting connectivity test Pods: %v", err)
 	}
@@ -222,6 +227,21 @@ func createPodsOnDifferentNodes(t *testing.T, data *TestData, namespace, tag str
 	}
 	for ; winIdx != len(piMap["windows"]); winIdx++ {
 		podInfos = append(podInfos, piMap["windows"][winIdx])
+	}
+
+	cleanup = func() error {
+		if err := deleteDaemonSet(); err != nil {
+			return fmt.Errorf("error deleting DaemonSet")
+		}
+		// Wait for all Pods managed by DaemonSet to be deleted to avoid affecting following tests.
+		err := wait.Poll(defaultInterval, timeout, func() (bool, error) {
+			pods, err := getDaemonSetPods()
+			if err != nil {
+				return false, fmt.Errorf("error getting Pods managed by DaemonSet")
+			}
+			return len(pods.Items) == 0, nil
+		})
+		return err
 	}
 
 	return podInfos, cleanup
