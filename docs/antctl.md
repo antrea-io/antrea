@@ -160,6 +160,10 @@ included over time):
 The `antctl supportbundle` command can also be run inside a Controller or Agent
 Pod, in which case only local information will be collected.
 
+Since v1.10.0, Antrea also supports collecting information by applying a
+`SupportBundleCollection` CRD, you can refer to the [support bundle guide](./support-bundle-guide.md)
+for more information.
+
 ### controllerinfo and agentinfo commands
 
 `antctl` controller command `get controllerinfo` (or `get ci`) and agent command
