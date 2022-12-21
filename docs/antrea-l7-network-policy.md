@@ -1,0 +1,205 @@
+# Antrea Layer 7 NetworkPolicy
+
+## Table of Contents
+
+<!-- toc -->
+- [Introduction](#introduction)
+- [Prerequisites](#prerequisites)
+- [Usage](#usage)
+  - [HTTP](#http)
+    - [More examples](#more-examples)
+- [Limitations](#limitations)
+<!-- /toc -->
+
+## Introduction
+
+NetworkPolicy was initially used to restrict network access at layer 3 (Network) and 4 (Transport) in the OSI model,
+based on IP address, transport protocol, and port. Securing applications at IP and port level provides limited security
+capabilities, as the service an application provides is either entirely exposed to a client or not accessible by that
+client at all. Starting with v1.10, Antrea introduces support for layer 7 NetworkPolicy, an application-aware policy
+which provides fine-grained control over the network traffic beyond IP, transport protocol, and port. It enables users
+to protect their applications by specifying how they are allowed to communicate with others, taking into account
+application context. For example, you can enforce policies to:
+
+- Grant access of privileged URLs to specific clients while make other URLs publicly accessible.
+- Prevent applications from accessing unauthorized domains.
+- Block network traffic using an unauthorized application protocol regardless of port used.
+
+This guide demonstrates how to configure layer 7 NetworkPolicy.
+
+## Prerequisites
+
+Layer 7 NetworkPolicy was introduced in v1.10 as an alpha feature and is disabled by default. A feature gate,
+`L7NetworkPolicy`, must be enabled in antrea-controller.conf and antrea-agent.conf in the `antrea-config` ConfigMap.
+Additionally, due to the constraint of the application detection engine, TX checksum offloading must be disabled via the
+`disableTXChecksumOffload` option in antrea-agent.conf for the feature to work. An example configuration is as below:
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: antrea-config
+  namespace: kube-system
+data:
+  antrea-agent.conf: |
+    disableTXChecksumOffload: true
+    featureGates:
+      L7NetworkPolicy: true
+  antrea-controller.conf: |
+    featureGates:
+      L7NetworkPolicy: true
+```
+
+Alternatively, you can use the following helm installation command to configure the above options:
+
+```bash
+helm install antrea antrea/antrea --namespace kube-system --set featureGates.L7NetworkPolicy=true,disableTXChecksumOffload=true
+```
+
+## Usage
+
+There isn't a separate resource type for layer 7 NetworkPolicy. It is one kind of Antrea-native policies, which has the
+`l7Protocols` field specified in the rules. Like layer 3 and layer 4 policies, the `l7Protocols` field can be specified
+for ingress and egress rules in Antrea ClusterNetworkPolicy and Antrea NetworkPolicy. It can be used with the `from` or
+`to` field to select the network peer, and the `ports` to select the transport protocol and/or port for which the layer
+7 rule applies to. The `action` of a layer 7 rule can only be `Allow`.
+
+**Note**: Any traffic matching the layer 3/4 criteria (specified by `from`, `to`, and `port`) of a layer 7 rule will be
+forwarded to an application-aware engine for protocol detection and rule enforcement, and the traffic will be allowed if
+the layer 7 criteria is also matched, otherwise it will be dropped. Therefore, any rules after a layer 7 rule will not
+be enforced for the traffic that match the layer 7 rule's layer 3/4 criteria.
+
+As of now, the only supported layer 7 protocol is HTTP. More protocols will be supported in the near future, and we
+welcome feature requests for protocols that you are interested in.
+
+### HTTP
+
+A typical layer 7 NetworkPolicy for HTTP protocol is as below:
+
+```yaml
+apiVersion: crd.antrea.io/v1alpha1
+kind: NetworkPolicy
+metadata:
+  name: ingress-allow-http-request-to-api-v2
+spec:
+  priority: 5
+  tier: application
+  appliedTo:
+    - podSelector:
+        matchLabels:
+          app: web
+  ingress:
+    - name: allow-http   # Allow inbound HTTP GET requests to "/api/v2" from Pods with app=client label.
+      action: Allow      # All other traffic from these Pods will be automatically dropped, and subsequent rules will not be considered.
+      from:
+        - podSelector:
+            matchLabels:
+              app: client
+      l7Protocols:
+        - http:
+            path: "/api/v2/*"
+            host: "foo.bar.com"
+            method: "GET"
+    - name: drop-other   # Drop all other inbound traffic (i.e., from Pods without the app=client label or from external clients).
+      action: Drop
+```
+
+**path**: The `path` field represents the URI path to match. Both exact matches and wildcards are supported, e.g.
+`/api/v2/*`, `*/v2/*`, `/index.html`. If not set, the rule matches all URI paths.
+
+**host**: The `host` field represents the hostname present in the URI or the HTTP Host header to match. It does not
+contain the port associated with the host. Both exact matches and wildcards are supported, e.g. `*.foo.com`, `*.foo.*`,
+`foo.bar.com`. If not set, the rule matches all hostnames.
+
+**method**: The `method` field represents the HTTP method to match. It could be GET, POST, PUT, HEAD, DELETE, TRACE,
+OPTIONS, CONNECT and PATCH. If not set, the rule matches all methods.
+
+#### More examples
+
+The following NetworkPolicy grants access of privileged URLs to specific clients while make other URLs publicly
+accessible:
+
+```yaml
+apiVersion: crd.antrea.io/v1alpha1
+kind: NetworkPolicy
+metadata:
+  name: allow-privileged-url-to-admin-role
+spec:
+  priority: 5
+  tier: securityops
+  appliedTo:
+    - podSelector:
+        matchLabels:
+          app: web
+  ingress:
+    - name: for-admin    # Allow inbound HTTP GET requests to "/admin" and "/public" from Pods with role=admin label.
+      action: Allow
+      from:
+        - podSelector:
+            matchLabels:
+              role: admin
+      l7Protocols:
+        - http:
+            path: "/admin/*"
+        - http:
+            path: "/public/*"
+    - name: for-public   # Allow inbound HTTP GET requests to "/public" from Pods with app=client label.
+      action: Allow      # All other inbound traffic will be automatically dropped.
+      l7Protocols:
+        - http:
+            path: "/public/*"
+```
+
+The following NetworkPolicy prevents applications from accessing unauthorized domains:
+
+```yaml
+apiVersion: crd.antrea.io/v1alpha1
+kind: ClusterNetworkPolicy
+metadata:
+  name: allow-web-access-to-internal-domain
+spec:
+  priority: 5
+  tier: securityops
+  appliedTo:
+    - podSelector:
+        matchLabels:
+          egress-restriction: internal-domain-only
+  egress:
+    - name: allow-dns          # Allow outbound DNS requests.
+      action: Allow
+      ports:
+        - protocol: TCP
+          port: 53
+        - protocol: UDP
+          port: 53
+    - name: allow-http-only    # Allow outbound HTTP requests towards foo.bar.com. 
+      action: Allow            # As the rule's "to" and "ports" are empty, which means it selects traffic to any network
+      l7Protocols:             # peer's any port using any transport protocol, all outbound HTTP requests towards other
+        - http:                # domains and non-HTTP requests will be automatically dropped, and subsequent rules will
+            host: "*.bar.com"  # not be considered.
+```
+
+The following NetworkPolicy blocks network traffic using an unauthorized application protocol regardless of port used.
+
+```yaml
+apiVersion: crd.antrea.io/v1alpha1
+kind: NetworkPolicy
+metadata:
+  name: allow-http-only
+spec:
+  priority: 5
+  tier: application
+  appliedTo:
+    - podSelector:
+        matchLabels:
+          app: web
+  ingress:
+    - name: http-only    # Allow inbound HTTP requests only.
+      action: Allow      # As the rule's "from" and "ports" are empty, which means it selects traffic from any network
+      l7Protocols:       # peer to any port of the Pods this policy applies to, all inbound non-HTTP requests will be
+        - http: {}       # automatically dropped, and subsequent rules will not be considered.
+```
+
+## Limitations
+
+This feature is currently only supported for Nodes running Linux.
