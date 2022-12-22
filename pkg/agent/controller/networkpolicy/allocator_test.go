@@ -254,3 +254,31 @@ func TestIdAllocatorWorker(t *testing.T) {
 		})
 	}
 }
+
+func TestVlanIDAllocator(t *testing.T) {
+	vlanIDAllocator := newL7VlanIDAllocator()
+	ruleID1 := "rule1"
+	ruleID2 := "rule2"
+	ruleID3 := "rule3"
+	ruleID4 := "rule4"
+
+	vlanID1 := vlanIDAllocator.allocate(ruleID1)
+	assert.Equal(t, vlanID1, vlanIDAllocator.query(ruleID1))
+
+	vlanID2 := vlanIDAllocator.allocate(ruleID2)
+	assert.Equal(t, vlanID2, vlanIDAllocator.query(ruleID2))
+
+	vlanIDAllocator.release(ruleID1)
+	assert.Equal(t, uint32(0), vlanIDAllocator.query(ruleID1))
+
+	vlanIDAllocator.release(ruleID2)
+	assert.Equal(t, uint32(0), vlanIDAllocator.query(ruleID2))
+
+	vlanID3 := vlanIDAllocator.allocate(ruleID3)
+	assert.Equal(t, vlanID3, vlanIDAllocator.query(ruleID3))
+	assert.Equal(t, vlanID2, vlanID3)
+
+	vlanID4 := vlanIDAllocator.allocate(ruleID4)
+	assert.Equal(t, vlanID4, vlanIDAllocator.query(ruleID4))
+	assert.Equal(t, vlanID1, vlanID4)
+}

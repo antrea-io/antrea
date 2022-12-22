@@ -190,6 +190,11 @@ var (
 	// CTMark[6]: Mark to indicate the connection is hairpin.
 	// This CT mark is used in CtZone / CtZoneV6 and SNATCtZone / SNATCtZoneV6.
 	HairpinCTMark = binding.NewOneBitCTMark(6)
+
+	// CTMark[7]: Mark to indicate the connection should be redirected to an application-aware engine. This mark is only
+	// for L7 NetworkPolicy.
+	// This CT mark is used in CtZone / CtZoneV6.
+	L7NPRedirectCTMark = binding.NewOneBitCTMark(7)
 )
 
 // Fields using CT label.
@@ -199,4 +204,7 @@ var (
 
 	// Field to store the egress rule ID.
 	EgressRuleCTLabel = binding.NewCTLabel(32, 63)
+
+	// Field to store the VLAN ID allocated for a L7 NetworkPolicy rule.
+	L7NPRuleVlanIDCTLabel = binding.NewCTLabel(64, 75)
 )

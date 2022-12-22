@@ -95,6 +95,7 @@ type Initializer struct {
 	client                clientset.Interface
 	crdClient             versioned.Interface
 	ovsBridgeClient       ovsconfig.OVSBridgeClient
+	ovsCtlClient          ovsctl.OVSCtlClient
 	ofClient              openflow.Client
 	routeClient           route.Interface
 	wireGuardClient       wireguard.Interface
@@ -107,6 +108,7 @@ type Initializer struct {
 	wireGuardConfig       *config.WireGuardConfig
 	egressConfig          *config.EgressConfig
 	serviceConfig         *config.ServiceConfig
+	l7NetworkPolicyConfig *config.L7NetworkPolicyConfig
 	enableProxy           bool
 	connectUplinkToBridge bool
 	// networkReadyCh should be closed once the Node's network is ready.
@@ -122,6 +124,7 @@ func NewInitializer(
 	k8sClient clientset.Interface,
 	crdClient versioned.Interface,
 	ovsBridgeClient ovsconfig.OVSBridgeClient,
+	ovsCtlClient ovsctl.OVSCtlClient,
 	ofClient openflow.Client,
 	routeClient route.Interface,
 	ifaceStore interfacestore.InterfaceStore,
@@ -142,6 +145,7 @@ func NewInitializer(
 ) *Initializer {
 	return &Initializer{
 		ovsBridgeClient:       ovsBridgeClient,
+		ovsCtlClient:          ovsCtlClient,
 		client:                k8sClient,
 		crdClient:             crdClient,
 		ifaceStore:            ifaceStore,
@@ -154,6 +158,7 @@ func NewInitializer(
 		wireGuardConfig:       wireGuardConfig,
 		egressConfig:          egressConfig,
 		serviceConfig:         serviceConfig,
+		l7NetworkPolicyConfig: &config.L7NetworkPolicyConfig{},
 		networkReadyCh:        networkReadyCh,
 		stopCh:                stopCh,
 		nodeType:              nodeType,
@@ -386,6 +391,11 @@ func (i *Initializer) Initialize() error {
 		return err
 	}
 
+	// prepareL7NetworkPolicyInterfaces must be executed after setupOVSBridge since it requires interfaceStore.
+	if err := i.prepareL7NetworkPolicyInterfaces(); err != nil {
+		return err
+	}
+
 	// initializeWireGuard must be executed after setupOVSBridge as it requires gateway addresses on the OVS bridge.
 	if i.networkConfig.TrafficEncryptionMode == config.TrafficEncryptionModeWireGuard {
 		if err := i.initializeWireGuard(); err != nil {
@@ -511,7 +521,7 @@ func (i *Initializer) initOpenFlowPipeline() error {
 	roundInfo := getRoundInfo(i.ovsBridgeClient)
 
 	// Set up all basic flows.
-	ofConnCh, err := i.ofClient.Initialize(roundInfo, i.nodeConfig, i.networkConfig, i.egressConfig, i.serviceConfig)
+	ofConnCh, err := i.ofClient.Initialize(roundInfo, i.nodeConfig, i.networkConfig, i.egressConfig, i.serviceConfig, i.l7NetworkPolicyConfig)
 	if err != nil {
 		klog.Errorf("Failed to initialize openflow client: %v", err)
 		return err

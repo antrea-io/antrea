@@ -89,6 +89,9 @@ const (
 // IPDSCPToSRange stores the DSCP bits in ToS field of IP header.
 var IPDSCPToSRange = &Range{2, 7}
 
+// VLANVIDRange stores the VLAN VID range
+var VLANVIDRange = &Range{0, 11}
+
 // Bridge defines operations on an openflow bridge.
 type Bridge interface {
 	CreateTable(table Table, next uint8, missAction MissActionType) Table

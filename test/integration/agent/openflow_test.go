@@ -284,7 +284,7 @@ func TestReplayFlowsNetworkPolicyFlows(t *testing.T) {
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge: %v", err))
 
 	config := prepareConfiguration(true, false, false)
-	_, err = c.Initialize(roundInfo, config.nodeConfig, &agentconfig.NetworkConfig{TrafficEncapMode: agentconfig.TrafficEncapModeEncap, IPv4Enabled: true}, &agentconfig.EgressConfig{}, &agentconfig.ServiceConfig{})
+	_, err = c.Initialize(roundInfo, config.nodeConfig, &agentconfig.NetworkConfig{TrafficEncapMode: agentconfig.TrafficEncapModeEncap, IPv4Enabled: true}, &agentconfig.EgressConfig{}, &agentconfig.ServiceConfig{}, &agentconfig.L7NetworkPolicyConfig{})
 	require.Nil(t, err, "Failed to initialize OFClient")
 
 	defer func() {
@@ -369,7 +369,7 @@ func testReplayFlows(t *testing.T) {
 }
 
 func testInitialize(t *testing.T, config *testConfig) {
-	if _, err := c.Initialize(roundInfo, config.nodeConfig, &agentconfig.NetworkConfig{TrafficEncapMode: agentconfig.TrafficEncapModeEncap, IPv4Enabled: config.enableIPv4, IPv6Enabled: config.enableIPv6}, &agentconfig.EgressConfig{}, &agentconfig.ServiceConfig{}); err != nil {
+	if _, err := c.Initialize(roundInfo, config.nodeConfig, &agentconfig.NetworkConfig{TrafficEncapMode: agentconfig.TrafficEncapModeEncap, IPv4Enabled: config.enableIPv4, IPv6Enabled: config.enableIPv6}, &agentconfig.EgressConfig{}, &agentconfig.ServiceConfig{}, &agentconfig.L7NetworkPolicyConfig{}); err != nil {
 		t.Errorf("Failed to initialize openflow client: %v", err)
 	}
 	for _, tableFlow := range prepareDefaultFlows(config) {
@@ -467,7 +467,7 @@ func TestNetworkPolicyFlows(t *testing.T) {
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge %s", br))
 
 	config := prepareConfiguration(true, true, false)
-	_, err = c.Initialize(roundInfo, config.nodeConfig, &agentconfig.NetworkConfig{TrafficEncapMode: agentconfig.TrafficEncapModeEncap, IPv4Enabled: true, IPv6Enabled: true}, &agentconfig.EgressConfig{}, &agentconfig.ServiceConfig{})
+	_, err = c.Initialize(roundInfo, config.nodeConfig, &agentconfig.NetworkConfig{TrafficEncapMode: agentconfig.TrafficEncapModeEncap, IPv4Enabled: true, IPv6Enabled: true}, &agentconfig.EgressConfig{}, &agentconfig.ServiceConfig{}, &agentconfig.L7NetworkPolicyConfig{})
 	require.Nil(t, err, "Failed to initialize OFClient")
 
 	defer func() {
@@ -629,7 +629,7 @@ func TestProxyServiceFlowsAntreaPolicyDisabled(t *testing.T) {
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge %s", br))
 
 	config := prepareConfiguration(true, false, false)
-	_, err = c.Initialize(roundInfo, config.nodeConfig, &agentconfig.NetworkConfig{TrafficEncapMode: agentconfig.TrafficEncapModeEncap, IPv4Enabled: true}, &agentconfig.EgressConfig{}, &agentconfig.ServiceConfig{})
+	_, err = c.Initialize(roundInfo, config.nodeConfig, &agentconfig.NetworkConfig{TrafficEncapMode: agentconfig.TrafficEncapModeEncap, IPv4Enabled: true}, &agentconfig.EgressConfig{}, &agentconfig.ServiceConfig{}, &agentconfig.L7NetworkPolicyConfig{})
 	require.Nil(t, err, "Failed to initialize OFClient")
 
 	defer func() {
@@ -719,7 +719,7 @@ func TestProxyServiceFlowsAntreaPoilcyEnabled(t *testing.T) {
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge %s", br))
 
 	config := prepareConfiguration(true, false, false)
-	_, err = c.Initialize(roundInfo, config.nodeConfig, &agentconfig.NetworkConfig{TrafficEncapMode: agentconfig.TrafficEncapModeEncap, IPv4Enabled: true}, &agentconfig.EgressConfig{}, &agentconfig.ServiceConfig{})
+	_, err = c.Initialize(roundInfo, config.nodeConfig, &agentconfig.NetworkConfig{TrafficEncapMode: agentconfig.TrafficEncapModeEncap, IPv4Enabled: true}, &agentconfig.EgressConfig{}, &agentconfig.ServiceConfig{}, &agentconfig.L7NetworkPolicyConfig{})
 	require.Nil(t, err, "Failed to initialize OFClient")
 
 	defer func() {
@@ -1788,7 +1788,7 @@ func TestEgressMarkFlows(t *testing.T) {
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge %s", br))
 
 	config := prepareConfiguration(true, true, false)
-	_, err = c.Initialize(roundInfo, config.nodeConfig, &agentconfig.NetworkConfig{TrafficEncapMode: agentconfig.TrafficEncapModeEncap}, &agentconfig.EgressConfig{}, &agentconfig.ServiceConfig{})
+	_, err = c.Initialize(roundInfo, config.nodeConfig, &agentconfig.NetworkConfig{TrafficEncapMode: agentconfig.TrafficEncapModeEncap}, &agentconfig.EgressConfig{}, &agentconfig.ServiceConfig{}, &agentconfig.L7NetworkPolicyConfig{})
 	require.Nil(t, err, "Failed to initialize OFClient")
 
 	defer func() {
@@ -1845,7 +1845,7 @@ func TestTrafficControlFlows(t *testing.T) {
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge %s", br))
 
 	config := prepareConfiguration(true, false, false)
-	_, err = c.Initialize(roundInfo, config.nodeConfig, &agentconfig.NetworkConfig{TrafficEncapMode: agentconfig.TrafficEncapModeEncap, IPv4Enabled: config.enableIPv4}, &agentconfig.EgressConfig{}, &agentconfig.ServiceConfig{})
+	_, err = c.Initialize(roundInfo, config.nodeConfig, &agentconfig.NetworkConfig{TrafficEncapMode: agentconfig.TrafficEncapModeEncap, IPv4Enabled: config.enableIPv4}, &agentconfig.EgressConfig{}, &agentconfig.ServiceConfig{}, &agentconfig.L7NetworkPolicyConfig{})
 	require.Nil(t, err, "Failed to initialize OFClient")
 
 	defer func() {
