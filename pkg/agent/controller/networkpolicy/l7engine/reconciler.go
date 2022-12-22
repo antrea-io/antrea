@@ -153,16 +153,36 @@ func writeConfigFile(path string, data *bytes.Buffer) error {
 	return nil
 }
 
+// By default, Suricata performs pattern-matching for provided content. To support exact match, prefix match, and suffix
+// match, we use wildcards to indicate whether an exact match is expected.
+// - A string starting with * means suffix match. For example, "*.foo.com" matches "www.foo.com".
+// - A string ending with * means prefix match. For example, "/public/*" matches "/public/index.html".
+// - A string starting with and ending with * means pattern-matching. For example, "*/v2/*" matches "/api/v2/pods".
+// - A string having no * means exact match. For example, "/index.html" can only match "/index.html".
+func convertContent(content string) string {
+	startsWith := " startswith;"
+	if strings.HasPrefix(content, "*") {
+		startsWith = ""
+		content = content[1:]
+	}
+	endsWith := " endswith;"
+	if strings.HasSuffix(content, "*") {
+		endsWith = ""
+		content = content[:len(content)-1]
+	}
+	return fmt.Sprintf(`content:"%s";%s%s`, content, startsWith, endsWith)
+}
+
 func convertProtocolHTTP(http *v1beta.HTTPProtocol) string {
 	var keywords []string
 	if http.Path != "" {
-		keywords = append(keywords, fmt.Sprintf(`http.uri; content:"%s";`, http.Path))
+		keywords = append(keywords, fmt.Sprintf("http.uri; %s", convertContent(http.Path)))
 	}
 	if http.Method != "" {
 		keywords = append(keywords, fmt.Sprintf(`http.method; content:"%s";`, http.Method))
 	}
 	if http.Host != "" {
-		keywords = append(keywords, fmt.Sprintf(`http.host; content:"%s";`, http.Host))
+		keywords = append(keywords, fmt.Sprintf("http.host; %s", convertContent(http.Host)))
 	}
 	return strings.Join(keywords, " ")
 }
