@@ -21,6 +21,7 @@ import (
 	"strings"
 	"sync"
 
+	"antrea.io/libOpenflow/openflow15"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/klog/v2"
@@ -1156,7 +1157,7 @@ func (f *featureNetworkPolicy) calculateActionFlowChangesForRule(rule *types.Pol
 			actionFlows = append(actionFlows, f.conjunctionActionPassFlow(ruleOfID, ruleTable, rule.Priority, rule.EnableLogging))
 		} else {
 			metricFlows = append(metricFlows, f.allowRulesMetricFlows(ruleOfID, isIngress, rule.TableID)...)
-			actionFlows = append(actionFlows, f.conjunctionActionFlow(ruleOfID, ruleTable, dropTable.GetNext(), rule.Priority, rule.EnableLogging)...)
+			actionFlows = append(actionFlows, f.conjunctionActionFlow(ruleOfID, ruleTable, dropTable.GetNext(), rule.Priority, rule.EnableLogging, rule.L7RuleVlanID)...)
 		}
 		conj.actionFlows = actionFlows
 		conj.metricFlows = metricFlows
@@ -1993,10 +1994,11 @@ func (c *client) NetworkPolicyMetrics() map[uint32]*types.RuleMetric {
 }
 
 type featureNetworkPolicy struct {
-	cookieAllocator cookie.Allocator
-	ipProtocols     []binding.Protocol
-	bridge          binding.Bridge
-	nodeType        config.NodeType
+	cookieAllocator       cookie.Allocator
+	ipProtocols           []binding.Protocol
+	bridge                binding.Bridge
+	nodeType              config.NodeType
+	l7NetworkPolicyConfig *config.L7NetworkPolicyConfig
 
 	// globalConjMatchFlowCache is a global map for conjMatchFlowContext. The key is a string generated from the
 	// conjMatchFlowContext.
@@ -2030,6 +2032,7 @@ func newFeatureNetworkPolicy(
 	cookieAllocator cookie.Allocator,
 	ipProtocols []binding.Protocol,
 	bridge binding.Bridge,
+	l7NetworkPolicyConfig *config.L7NetworkPolicyConfig,
 	ovsMetersAreSupported,
 	enableDenyTracking,
 	enableAntreaPolicy bool,
@@ -2042,6 +2045,7 @@ func newFeatureNetworkPolicy(
 		ipProtocols:              ipProtocols,
 		bridge:                   bridge,
 		nodeType:                 nodeType,
+		l7NetworkPolicyConfig:    l7NetworkPolicyConfig,
 		globalConjMatchFlowCache: make(map[string]*conjMatchFlowContext),
 		policyCache:              cache.NewIndexer(policyConjKeyFunc, cache.Indexers{priorityIndex: priorityIndexFunc}),
 		enableMulticast:          enableMulticast,
@@ -2065,6 +2069,9 @@ func (f *featureNetworkPolicy) initFlows() []binding.Flow {
 	var flows []binding.Flow
 	if f.nodeType == config.K8sNode {
 		flows = append(flows, f.ingressClassifierFlows()...)
+		if f.enableAntreaPolicy {
+			flows = append(flows, f.l7NPTrafficControlFlows()...)
+		}
 	}
 	flows = append(flows, f.skipPolicyRuleCheckFlows()...)
 	return flows
@@ -2117,4 +2124,40 @@ func (f *featureNetworkPolicy) skipPolicyRuleCheckFlows() []binding.Flow {
 		)
 	}
 	return flows
+}
+
+func (f *featureNetworkPolicy) l7NPTrafficControlFlows() []binding.Flow {
+	cookieID := f.cookieAllocator.Request(f.category).Raw()
+	vlanMask := uint16(openflow15.OFPVID_PRESENT)
+	return []binding.Flow{
+		// This generates the flow to output the packets marked with L7NPRedirectCTMark to an application-aware engine
+		// via the target ofPort. Note that, before outputting the packets, VLAN ID stored on field L7NPRuleVlanIDCTMarkField
+		// will be copied to VLAN ID register (OXM_OF_VLAN_VID) to set VLAN ID of the packets.
+		L2ForwardingOutTable.ofTable.BuildFlow(priorityHigh+1).
+			Cookie(cookieID).
+			MatchRegMark(OFPortFoundRegMark).
+			MatchCTMark(L7NPRedirectCTMark).
+			Action().PushVLAN(EtherTypeDot1q).
+			Action().MoveRange(binding.NxmFieldCtLabel, binding.OxmFieldVLANVID, *L7NPRuleVlanIDCTLabel.GetRange(), *binding.VLANVIDRange).
+			Action().Output(f.l7NetworkPolicyConfig.TargetOFPort).
+			Done(),
+		// This generates the flow to mark the packets from an application-aware engine via the return ofPort and forward
+		// the packets to stageRouting directly. Note that, for the packets which are originally to be output to a tunnel
+		// port, value of NXM_NX_TUN_IPV4_DST needs to be loaded in L3ForwardingTable of stageRouting.
+		ClassifierTable.ofTable.BuildFlow(priorityNormal).
+			Cookie(f.cookieAllocator.Request(f.category).Raw()).
+			MatchInPort(f.l7NetworkPolicyConfig.ReturnOFPort).
+			MatchVLAN(false, 0, &vlanMask).
+			Action().PopVLAN().
+			Action().LoadRegMark(FromTCReturnRegMark).
+			Action().GotoStage(stageRouting).
+			Done(),
+		// This generates the flow to forward the returned packets (with FromTCReturnRegMark) to stageOutput directly
+		// after loading output port number to reg1 in L2ForwardingCalcTable.
+		TrafficControlTable.ofTable.BuildFlow(priorityHigh).
+			Cookie(cookieID).
+			MatchRegMark(OFPortFoundRegMark, FromTCReturnRegMark).
+			Action().GotoStage(stageOutput).
+			Done(),
+	}
 }

@@ -63,6 +63,9 @@ var (
 
 	_, fakeEgressExceptIPv4CIDR, _ = net.ParseCIDR("192.168.78.0/24")
 	_, fakeEgressExceptIPv6CIDR, _ = net.ParseCIDR("fec0:192:168:78::/80")
+
+	fakeL7NPTargetOFPort = uint32(10)
+	fakeL7NPReturnOFPort = uint32(11)
 )
 
 func skipTest(tb testing.TB, skipLinux, skipWindows bool) {
@@ -360,6 +363,7 @@ func newFakeClient(mockOFEntryOperations *oftest.MockOFEntryOperations,
 	var serviceIPv4CIDR, serviceIPv6CIDR *net.IPNet
 	var nodePortAddressesIPv4, nodePortAddressesIPv6 []net.IP
 	var ipProtocols []binding.Protocol
+	var l7NetworkPolicyConfig *config.L7NetworkPolicyConfig
 
 	if enableIPv4 {
 		fakeNodeIPv4Addr.IP = fakeNodeIPv4
@@ -425,6 +429,13 @@ func newFakeClient(mockOFEntryOperations *oftest.MockOFEntryOperations,
 		NodePortAddressesIPv6: nodePortAddressesIPv6,
 	}
 
+	if o.enableAntreaPolicy {
+		l7NetworkPolicyConfig = &config.L7NetworkPolicyConfig{
+			TargetOFPort: fakeL7NPTargetOFPort,
+			ReturnOFPort: fakeL7NPReturnOFPort,
+		}
+	}
+
 	client.cookieAllocator = cookie.NewAllocator(1)
 	client.ofEntryOperations = mockOFEntryOperations
 	client.nodeConfig = nodeConfig
@@ -432,6 +443,7 @@ func newFakeClient(mockOFEntryOperations *oftest.MockOFEntryOperations,
 	client.networkConfig = networkConfig
 	client.egressConfig = egressConfig
 	client.serviceConfig = serviceConfig
+	client.l7NetworkPolicyConfig = l7NetworkPolicyConfig
 	client.ipProtocols = ipProtocols
 	client.generatePipelines()
 	client.realizePipelines()
@@ -628,7 +640,7 @@ func Test_client_InstallPodFlows(t *testing.T) {
 				"cookie=0x1010000000000, table=Classifier, priority=190,in_port=100 actions=set_field:0x3/0xf->reg0,goto_table:SpoofGuard",
 				"cookie=0x1010000000000, table=SpoofGuard, priority=200,ip,in_port=100,dl_src=00:00:10:10:00:66,nw_src=10.10.0.66 actions=goto_table:UnSNAT",
 				"cookie=0x1010000000000, table=L3Forwarding, priority=200,ip,reg0=0x200/0x200,nw_dst=10.10.0.66 actions=set_field:0a:00:00:00:00:01->eth_src,set_field:00:00:10:10:00:66->eth_dst,goto_table:L3DecTTL",
-				"cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=00:00:10:10:00:66 actions=set_field:0x64->reg1,set_field:0x100/0x100->reg0,goto_table:IngressSecurityClassifier",
+				"cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=00:00:10:10:00:66 actions=set_field:0x64->reg1,set_field:0x100/0x100->reg0,goto_table:TrafficControl",
 			},
 		},
 		{
@@ -641,7 +653,7 @@ func Test_client_InstallPodFlows(t *testing.T) {
 				"cookie=0x1010000000000, table=SpoofGuard, priority=200,ip,in_port=100,dl_src=00:00:10:10:00:66,nw_src=10.10.0.66 actions=goto_table:PipelineIPClassifier",
 				"cookie=0x1010000000000, table=Classifier, priority=190,in_port=100 actions=set_field:0x3/0xf->reg0,goto_table:SpoofGuard",
 				"cookie=0x1010000000000, table=L3Forwarding, priority=200,ip,reg0=0x200/0x200,nw_dst=10.10.0.66 actions=set_field:0a:00:00:00:00:01->eth_src,set_field:00:00:10:10:00:66->eth_dst,goto_table:L3DecTTL",
-				"cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=00:00:10:10:00:66 actions=set_field:0x64->reg1,set_field:0x100/0x100->reg0,goto_table:IngressSecurityClassifier",
+				"cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=00:00:10:10:00:66 actions=set_field:0x64->reg1,set_field:0x100/0x100->reg0,goto_table:TrafficControl",
 				"cookie=0x1050000000000, table=MulticastEgressPodMetric, priority=200,ip,nw_src=10.10.0.66 actions=goto_table:MulticastRouting",
 				"cookie=0x1050000000000, table=MulticastIngressPodMetric, priority=200,ip,reg1=0x64 actions=goto_table:MulticastOutput",
 			},
@@ -654,7 +666,7 @@ func Test_client_InstallPodFlows(t *testing.T) {
 				"cookie=0x1010000000000, table=Classifier, priority=190,in_port=100 actions=set_field:0x3/0xf->reg0,goto_table:SpoofGuard",
 				"cookie=0x1010000000000, table=SpoofGuard, priority=200,ipv6,in_port=100,dl_src=00:00:10:10:00:66,ipv6_src=fec0:10:10::66 actions=goto_table:IPv6",
 				"cookie=0x1010000000000, table=L3Forwarding, priority=200,ipv6,reg0=0x200/0x200,ipv6_dst=fec0:10:10::66 actions=set_field:0a:00:00:00:00:01->eth_src,set_field:00:00:10:10:00:66->eth_dst,goto_table:L3DecTTL",
-				"cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=00:00:10:10:00:66 actions=set_field:0x64->reg1,set_field:0x100/0x100->reg0,goto_table:IngressSecurityClassifier",
+				"cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=00:00:10:10:00:66 actions=set_field:0x64->reg1,set_field:0x100/0x100->reg0,goto_table:TrafficControl",
 			},
 		},
 		{
@@ -669,7 +681,7 @@ func Test_client_InstallPodFlows(t *testing.T) {
 				"cookie=0x1010000000000, table=SpoofGuard, priority=200,ipv6,in_port=100,dl_src=00:00:10:10:00:66,ipv6_src=fec0:10:10::66 actions=goto_table:IPv6",
 				"cookie=0x1010000000000, table=L3Forwarding, priority=200,ip,reg0=0x200/0x200,nw_dst=10.10.0.66 actions=set_field:0a:00:00:00:00:01->eth_src,set_field:00:00:10:10:00:66->eth_dst,goto_table:L3DecTTL",
 				"cookie=0x1010000000000, table=L3Forwarding, priority=200,ipv6,reg0=0x200/0x200,ipv6_dst=fec0:10:10::66 actions=set_field:0a:00:00:00:00:01->eth_src,set_field:00:00:10:10:00:66->eth_dst,goto_table:L3DecTTL",
-				"cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=00:00:10:10:00:66 actions=set_field:0x64->reg1,set_field:0x100/0x100->reg0,goto_table:IngressSecurityClassifier",
+				"cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=00:00:10:10:00:66 actions=set_field:0x64->reg1,set_field:0x100/0x100->reg0,goto_table:TrafficControl",
 			},
 		},
 		{
@@ -683,7 +695,7 @@ func Test_client_InstallPodFlows(t *testing.T) {
 				"cookie=0x1010000000000, table=SpoofGuard, priority=200,ip,in_port=100,dl_src=00:00:10:10:00:66,nw_src=10.10.0.66 actions=goto_table:UnSNAT",
 				"cookie=0x1010000000000, table=L3Forwarding, priority=200,ip,reg0=0x200/0x200,nw_dst=10.10.0.66 actions=set_field:0a:00:00:00:00:01->eth_src,set_field:00:00:10:10:00:66->eth_dst,goto_table:L3DecTTL",
 				"cookie=0x1010000000000, table=L3Forwarding, priority=200,ip,nw_dst=10.10.0.66 actions=set_field:00:00:10:10:00:66->eth_dst,goto_table:L3DecTTL",
-				"cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=00:00:10:10:00:66 actions=set_field:0x64->reg1,set_field:0x100/0x100->reg0,goto_table:IngressSecurityClassifier",
+				"cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=00:00:10:10:00:66 actions=set_field:0x64->reg1,set_field:0x100/0x100->reg0,goto_table:TrafficControl",
 			},
 		},
 		{
@@ -696,7 +708,7 @@ func Test_client_InstallPodFlows(t *testing.T) {
 				"cookie=0x1010000000000, table=SpoofGuard, priority=200,ipv6,in_port=100,dl_src=00:00:10:10:00:66,ipv6_src=fec0:10:10::66 actions=goto_table:IPv6",
 				"cookie=0x1010000000000, table=L3Forwarding, priority=200,ipv6,reg0=0x200/0x200,ipv6_dst=fec0:10:10::66 actions=set_field:0a:00:00:00:00:01->eth_src,set_field:00:00:10:10:00:66->eth_dst,goto_table:L3DecTTL",
 				"cookie=0x1010000000000, table=L3Forwarding, priority=200,ipv6,ipv6_dst=fec0:10:10::66 actions=set_field:00:00:10:10:00:66->eth_dst,goto_table:L3DecTTL",
-				"cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=00:00:10:10:00:66 actions=set_field:0x64->reg1,set_field:0x100/0x100->reg0,goto_table:IngressSecurityClassifier",
+				"cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=00:00:10:10:00:66 actions=set_field:0x64->reg1,set_field:0x100/0x100->reg0,goto_table:TrafficControl",
 			},
 		},
 		{
@@ -714,7 +726,7 @@ func Test_client_InstallPodFlows(t *testing.T) {
 				"cookie=0x1010000000000, table=L3Forwarding, priority=200,ipv6,ipv6_dst=fec0:10:10::66 actions=set_field:00:00:10:10:00:66->eth_dst,goto_table:L3DecTTL",
 				"cookie=0x1010000000000, table=L3Forwarding, priority=200,ip,reg0=0x200/0x200,nw_dst=10.10.0.66 actions=set_field:0a:00:00:00:00:01->eth_src,set_field:00:00:10:10:00:66->eth_dst,goto_table:L3DecTTL",
 				"cookie=0x1010000000000, table=L3Forwarding, priority=200,ip,nw_dst=10.10.0.66 actions=set_field:00:00:10:10:00:66->eth_dst,goto_table:L3DecTTL",
-				"cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=00:00:10:10:00:66 actions=set_field:0x64->reg1,set_field:0x100/0x100->reg0,goto_table:IngressSecurityClassifier",
+				"cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=00:00:10:10:00:66 actions=set_field:0x64->reg1,set_field:0x100/0x100->reg0,goto_table:TrafficControl",
 			},
 		},
 		{
@@ -725,12 +737,12 @@ func Test_client_InstallPodFlows(t *testing.T) {
 			trafficEncapMode: config.TrafficEncapModeNoEncap,
 			expectedFlows: []string{
 				"cookie=0x1010000000000, table=ARPSpoofGuard, priority=200,arp,in_port=100,arp_spa=192.168.77.200,arp_sha=00:00:10:10:00:66 actions=goto_table:ARPResponder",
-				"cookie=0x1010000000000, table=Classifier, priority=210,ip,in_port=4,dl_vlan=0,dl_dst=00:00:10:10:00:66 actions=set_field:0x1000/0xf000->reg8,set_field:0x4/0xf->reg0,set_field:0x0/0xfff->reg8,goto_table:UnSNAT",
-				"cookie=0x1010000000000, table=Classifier, priority=210,ip,in_port=4294967294,dl_vlan=0,dl_dst=00:00:10:10:00:66 actions=set_field:0x1000/0xf000->reg8,set_field:0x5/0xf->reg0,goto_table:UnSNAT",
+				"cookie=0x1010000000000, table=Classifier, priority=210,ip,in_port=4,vlan_tci=0x0000/0x1000,dl_dst=00:00:10:10:00:66 actions=set_field:0x1000/0xf000->reg8,set_field:0x4/0xf->reg0,set_field:0x0/0xfff->reg8,goto_table:UnSNAT",
+				"cookie=0x1010000000000, table=Classifier, priority=210,ip,in_port=4294967294,vlan_tci=0x0000/0x1000,dl_dst=00:00:10:10:00:66 actions=set_field:0x1000/0xf000->reg8,set_field:0x5/0xf->reg0,goto_table:UnSNAT",
 				"cookie=0x1010000000000, table=Classifier, priority=190,in_port=100 actions=set_field:0x3/0xf->reg0,set_field:0x100000/0x100000->reg4,set_field:0x200/0x200->reg0,goto_table:SpoofGuard",
 				"cookie=0x1010000000000, table=SpoofGuard, priority=200,ip,in_port=100,dl_src=00:00:10:10:00:66,nw_src=192.168.77.200 actions=set_field:0x1000/0xf000->reg8,set_field:0x0/0xfff->reg8,goto_table:UnSNAT",
 				"cookie=0x1010000000000, table=L3Forwarding, priority=200,ip,reg8=0x0/0xfff,nw_dst=192.168.77.200 actions=set_field:00:00:10:10:00:66->eth_dst,goto_table:L3DecTTL",
-				"cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=00:00:10:10:00:66 actions=set_field:0x64->reg1,set_field:0x100/0x100->reg0,goto_table:IngressSecurityClassifier",
+				"cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=00:00:10:10:00:66 actions=set_field:0x64->reg1,set_field:0x100/0x100->reg0,goto_table:TrafficControl",
 			},
 		},
 		{
@@ -746,7 +758,7 @@ func Test_client_InstallPodFlows(t *testing.T) {
 				"cookie=0x1010000000000, table=Classifier, priority=190,in_port=100 actions=set_field:0x3/0xf->reg0,set_field:0x100000/0x100000->reg4,set_field:0x200/0x200->reg0,goto_table:SpoofGuard",
 				"cookie=0x1010000000000, table=SpoofGuard, priority=200,ip,in_port=100,dl_src=00:00:10:10:00:66,nw_src=192.168.77.200 actions=set_field:0x1000/0xf000->reg8,set_field:0x1/0xfff->reg8,goto_table:UnSNAT",
 				"cookie=0x1010000000000, table=L3Forwarding, priority=200,ip,reg8=0x1/0xfff,nw_dst=192.168.77.200 actions=set_field:00:00:10:10:00:66->eth_dst,goto_table:L3DecTTL",
-				"cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=00:00:10:10:00:66 actions=set_field:0x64->reg1,set_field:0x100/0x100->reg0,goto_table:IngressSecurityClassifier",
+				"cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=00:00:10:10:00:66 actions=set_field:0x64->reg1,set_field:0x100/0x100->reg0,goto_table:TrafficControl",
 				"cookie=0x1010000000000, table=VLAN, priority=190,reg1=0x4,in_port=100 actions=push_vlan:0x8100,set_field:4097->vlan_vid,goto_table:Output",
 			},
 		},
@@ -2123,7 +2135,7 @@ func Test_client_InstallMulticlusterClassifierFlows(t *testing.T) {
 	tunnelOFPort := uint32(200)
 	expectedFlows := []string{
 		"cookie=0x1060000000000, table=Classifier, priority=210,in_port=200,dl_dst=aa:bb:cc:dd:ee:f0 actions=set_field:0x1/0xf->reg0,set_field:0x200/0x200->reg0,goto_table:UnSNAT",
-		"cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=aa:bb:cc:dd:ee:f0 actions=set_field:0xc8->reg1,set_field:0x100/0x100->reg0,goto_table:IngressSecurityClassifier",
+		"cookie=0x1010000000000, table=L2ForwardingCalc, priority=200,dl_dst=aa:bb:cc:dd:ee:f0 actions=set_field:0xc8->reg1,set_field:0x100/0x100->reg0,goto_table:TrafficControl",
 		"cookie=0x1060000000000, table=Output, priority=210,reg1=0xc8,in_port=200 actions=IN_PORT",
 	}
 

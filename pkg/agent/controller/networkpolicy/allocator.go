@@ -213,3 +213,63 @@ func (a *idAllocator) release(id uint32) error {
 	a.availableSlice = append(a.availableSlice, id)
 	return nil
 }
+
+// l7VlanIDAllocator provides interfaces to allocate and release VLAN IDs for L7 rules. It also caches the mapping of
+// rule IDs to released VLAN IDs and provides an interface for L7 rule to query its allocated VLAN ID.
+type l7VlanIDAllocator struct {
+	sync.RWMutex
+
+	idCounter      uint32
+	recycled       []uint32
+	ruleIDToVlanID map[string]uint32
+}
+
+func newL7VlanIDAllocator() *l7VlanIDAllocator {
+	return &l7VlanIDAllocator{
+		ruleIDToVlanID: make(map[string]uint32),
+	}
+}
+
+func (l *l7VlanIDAllocator) allocate(ruleID string) uint32 {
+	l.Lock()
+	defer l.Unlock()
+
+	if vlanID, ok := l.ruleIDToVlanID[ruleID]; ok {
+		return vlanID
+	}
+
+	var vlanID uint32
+	if len(l.recycled) != 0 {
+		vlanID = l.recycled[len(l.recycled)-1]
+		l.recycled = l.recycled[:len(l.recycled)-1]
+	} else {
+		l.idCounter += 1
+		vlanID = l.idCounter
+	}
+	l.ruleIDToVlanID[ruleID] = vlanID
+	return vlanID
+}
+
+func (l *l7VlanIDAllocator) release(ruleID string) {
+	l.Lock()
+	defer l.Unlock()
+
+	vlanID, ok := l.ruleIDToVlanID[ruleID]
+	if !ok {
+		return
+	}
+
+	l.recycled = append(l.recycled, vlanID)
+	delete(l.ruleIDToVlanID, ruleID)
+}
+
+func (l *l7VlanIDAllocator) query(ruleID string) uint32 {
+	l.RLock()
+	defer l.RUnlock()
+
+	vlanID, ok := l.ruleIDToVlanID[ruleID]
+	if ok {
+		return vlanID
+	}
+	return 0
+}

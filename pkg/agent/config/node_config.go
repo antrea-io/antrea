@@ -44,6 +44,11 @@ const (
 	IPv6ExtraOverhead = 20
 )
 
+const (
+	L7NetworkPolicyTargetPortName = "antrea-l7-tap0"
+	L7NetworkPolicyReturnPortName = "antrea-l7-tap1"
+)
+
 var (
 	// VirtualServiceIPv4 or VirtualServiceIPv6 is used in the following scenarios:
 	// - The IP is used to perform SNAT for packets of Service sourced from Antrea gateway and destined for external
@@ -232,4 +237,10 @@ type ServiceConfig struct {
 	ServiceCIDRv6         *net.IPNet // K8s Service ClusterIP CIDR in IPv6
 	NodePortAddressesIPv4 []net.IP
 	NodePortAddressesIPv6 []net.IP
+}
+
+// L7NetworkPolicyConfig includes target and return ofPorts for L7 NetworkPolicy.
+type L7NetworkPolicyConfig struct {
+	TargetOFPort uint32 // Matched L7 NetworkPolicy traffic is forwarded to an application-aware engine via this ofPort.
+	ReturnOFPort uint32 // Scanned L7 NetworkPolicy traffic is returned from an application-aware engine via this ofPort.
 }
