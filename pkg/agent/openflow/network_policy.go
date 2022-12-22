@@ -2013,6 +2013,7 @@ type featureNetworkPolicy struct {
 	ovsMetersAreSupported bool
 	enableDenyTracking    bool
 	enableAntreaPolicy    bool
+	enableL7NetworkPolicy bool
 	enableMulticast       bool
 	proxyAll              bool
 	ctZoneSrcField        *binding.RegField
@@ -2036,6 +2037,7 @@ func newFeatureNetworkPolicy(
 	ovsMetersAreSupported,
 	enableDenyTracking,
 	enableAntreaPolicy bool,
+	enableL7NetworkPolicy bool,
 	enableMulticast bool,
 	proxyAll bool,
 	connectUplinkToBridge bool,
@@ -2045,6 +2047,7 @@ func newFeatureNetworkPolicy(
 		ipProtocols:              ipProtocols,
 		bridge:                   bridge,
 		nodeType:                 nodeType,
+		enableL7NetworkPolicy:    enableL7NetworkPolicy,
 		l7NetworkPolicyConfig:    l7NetworkPolicyConfig,
 		globalConjMatchFlowCache: make(map[string]*conjMatchFlowContext),
 		policyCache:              cache.NewIndexer(policyConjKeyFunc, cache.Indexers{priorityIndex: priorityIndexFunc}),
@@ -2069,7 +2072,7 @@ func (f *featureNetworkPolicy) initFlows() []binding.Flow {
 	var flows []binding.Flow
 	if f.nodeType == config.K8sNode {
 		flows = append(flows, f.ingressClassifierFlows()...)
-		if f.enableAntreaPolicy {
+		if f.enableL7NetworkPolicy {
 			flows = append(flows, f.l7NPTrafficControlFlows()...)
 		}
 	}

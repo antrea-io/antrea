@@ -405,6 +405,7 @@ type client struct {
 	enableProxy           bool
 	proxyAll              bool
 	enableAntreaPolicy    bool
+	enableL7NetworkPolicy bool
 	enableDenyTracking    bool
 	enableEgress          bool
 	enableMulticast       bool
@@ -2698,6 +2699,7 @@ func NewClient(bridgeName string,
 	mgmtAddr string,
 	enableProxy bool,
 	enableAntreaPolicy bool,
+	enableL7NetworkPolicy bool,
 	enableEgress bool,
 	enableDenyTracking bool,
 	proxyAll bool,
@@ -2711,6 +2713,7 @@ func NewClient(bridgeName string,
 		enableProxy:           enableProxy,
 		proxyAll:              proxyAll,
 		enableAntreaPolicy:    enableAntreaPolicy,
+		enableL7NetworkPolicy: enableL7NetworkPolicy,
 		enableDenyTracking:    enableDenyTracking,
 		enableEgress:          enableEgress,
 		enableMulticast:       enableMulticast,

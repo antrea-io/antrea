@@ -561,7 +561,7 @@ func TestBatchInstallPolicyRuleFlows(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 			mockOperations := oftest.NewMockOFEntryOperations(ctrl)
-			ofClient := NewClient(bridgeName, bridgeMgmtAddr, false, true, false, false, false, false, false, false, false)
+			ofClient := NewClient(bridgeName, bridgeMgmtAddr, false, true, false, false, false, false, false, false, false, false)
 			c = ofClient.(*client)
 			c.cookieAllocator = cookie.NewAllocator(0)
 			c.ofEntryOperations = mockOperations
@@ -1391,9 +1391,9 @@ func Test_featureNetworkPolicy_initFlows(t *testing.T) {
 		expectedFlows []string
 	}{
 		{
-			name:          "K8s Node",
+			name:          "K8s Node with Multicast and L7NetworkPolicy",
 			nodeType:      config.K8sNode,
-			clientOptions: []clientOptionsFn{enableMulticast},
+			clientOptions: []clientOptionsFn{enableMulticast, enableL7NetworkPolicy},
 			expectedFlows: []string{
 				"cookie=0x1020000000000, table=Classifier, priority=200,in_port=11,vlan_tci=0x1000/0x1000 actions=pop_vlan,set_field:0x6/0xf->reg0,goto_table:L3Forwarding",
 				"cookie=0x1020000000000, table=IngressSecurityClassifier, priority=200,reg0=0x20/0xf0 actions=goto_table:IngressMetric",
@@ -1407,7 +1407,20 @@ func Test_featureNetworkPolicy_initFlows(t *testing.T) {
 				"cookie=0x1020000000000, table=Output, priority=211,ct_mark=0x80/0x80,reg0=0x100/0x100 actions=push_vlan:0x8100,move:NXM_NX_CT_LABEL[64..75]->OXM_OF_VLAN_VID[0..11],output:10",
 			},
 		},
-
+		{
+			name:          "K8s Node with Multicast",
+			nodeType:      config.K8sNode,
+			clientOptions: []clientOptionsFn{enableMulticast},
+			expectedFlows: []string{
+				"cookie=0x1020000000000, table=IngressSecurityClassifier, priority=200,reg0=0x20/0xf0 actions=goto_table:IngressMetric",
+				"cookie=0x1020000000000, table=IngressSecurityClassifier, priority=200,reg0=0x10/0xf0 actions=goto_table:IngressMetric",
+				"cookie=0x1020000000000, table=IngressSecurityClassifier, priority=200,reg0=0x40/0xf0 actions=goto_table:IngressMetric",
+				"cookie=0x1020000000000, table=AntreaPolicyEgressRule, priority=64990,ct_state=-new+est,ip actions=goto_table:EgressMetric",
+				"cookie=0x1020000000000, table=AntreaPolicyEgressRule, priority=64990,ct_state=-new+rel,ip actions=goto_table:EgressMetric",
+				"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64990,ct_state=-new+est,ip actions=goto_table:IngressMetric",
+				"cookie=0x1020000000000, table=AntreaPolicyIngressRule, priority=64990,ct_state=-new+rel,ip actions=goto_table:IngressMetric",
+			},
+		},
 		{
 			name:     "External Node",
 			nodeType: config.ExternalNode,

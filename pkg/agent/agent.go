@@ -109,6 +109,7 @@ type Initializer struct {
 	egressConfig          *config.EgressConfig
 	serviceConfig         *config.ServiceConfig
 	l7NetworkPolicyConfig *config.L7NetworkPolicyConfig
+	enableL7NetworkPolicy bool
 	enableProxy           bool
 	connectUplinkToBridge bool
 	// networkReadyCh should be closed once the Node's network is ready.
@@ -142,6 +143,7 @@ func NewInitializer(
 	enableProxy bool,
 	proxyAll bool,
 	connectUplinkToBridge bool,
+	enableL7NetworkPolicy bool,
 ) *Initializer {
 	return &Initializer{
 		ovsBridgeClient:       ovsBridgeClient,
@@ -166,6 +168,7 @@ func NewInitializer(
 		enableProxy:           enableProxy,
 		proxyAll:              proxyAll,
 		connectUplinkToBridge: connectUplinkToBridge,
+		enableL7NetworkPolicy: enableL7NetworkPolicy,
 	}
 }
 
@@ -391,9 +394,11 @@ func (i *Initializer) Initialize() error {
 		return err
 	}
 
-	// prepareL7NetworkPolicyInterfaces must be executed after setupOVSBridge since it requires interfaceStore.
-	if err := i.prepareL7NetworkPolicyInterfaces(); err != nil {
-		return err
+	if i.enableL7NetworkPolicy {
+		// prepareL7NetworkPolicyInterfaces must be executed after setupOVSBridge since it requires interfaceStore.
+		if err := i.prepareL7NetworkPolicyInterfaces(); err != nil {
+			return err
+		}
 	}
 
 	// initializeWireGuard must be executed after setupOVSBridge as it requires gateway addresses on the OVS bridge.

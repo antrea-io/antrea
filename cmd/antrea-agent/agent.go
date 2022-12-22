@@ -136,6 +136,7 @@ func run(o *Options) error {
 	enableBridgingMode := enableAntreaIPAM && o.config.EnableBridgingMode
 	enableNodePortLocal := features.DefaultFeatureGate.Enabled(features.NodePortLocal) && o.config.NodePortLocal.Enable
 	enableMulticluster := features.DefaultFeatureGate.Enabled(features.Multicluster) && o.config.Multicluster.Enable
+	l7NetworkPolicyEnabled := features.DefaultFeatureGate.Enabled(features.L7NetworkPolicy)
 	// Bridging mode will connect the uplink interface to the OVS bridge.
 	connectUplinkToBridge := enableBridgingMode
 
@@ -147,6 +148,7 @@ func run(o *Options) error {
 	ofClient := openflow.NewClient(o.config.OVSBridge, ovsBridgeMgmtAddr,
 		features.DefaultFeatureGate.Enabled(features.AntreaProxy),
 		features.DefaultFeatureGate.Enabled(features.AntreaPolicy),
+		l7NetworkPolicyEnabled,
 		egressEnabled,
 		features.DefaultFeatureGate.Enabled(features.FlowExporter),
 		o.config.AntreaProxy.ProxyAll,
@@ -254,7 +256,8 @@ func run(o *Options) error {
 		o.config.ExternalNode.ExternalNodeNamespace,
 		features.DefaultFeatureGate.Enabled(features.AntreaProxy),
 		o.config.AntreaProxy.ProxyAll,
-		connectUplinkToBridge)
+		connectUplinkToBridge,
+		l7NetworkPolicyEnabled)
 	err = agentInitializer.Initialize()
 	if err != nil {
 		return fmt.Errorf("error initializing agent: %v", err)
@@ -413,6 +416,7 @@ func run(o *Options) error {
 		groupCounters,
 		groupIDUpdates,
 		antreaPolicyEnabled,
+		l7NetworkPolicyEnabled,
 		antreaProxyEnabled,
 		statusManagerEnabled,
 		multicastEnabled,

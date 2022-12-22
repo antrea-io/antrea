@@ -2993,6 +2993,10 @@ data:
     # Enable collecting support bundle files with SupportBundleCollection CRD.
     #  SupportBundleCollection: false
 
+    # Enable users to protect their applications by specifying how they are allowed to communicate with others, taking
+    # into account application context.
+    #  L7NetworkPolicy: false
+
     # Name of the OpenVSwitch bridge antrea-agent will create and use.
     # Make sure it doesn't conflict with your existing OpenVSwitch bridges.
     ovsBridge: "br-int"
@@ -3302,6 +3306,10 @@ data:
 
     # Enable multi-cluster features.
     #  Multicluster: false
+
+    # Enable users to protect their applications by specifying how they are allowed to communicate with others, taking
+    # into account application context.
+    #  L7NetworkPolicy: false
 
     # The port for the antrea-controller APIServer to serve on.
     # Note that if it's set to another value, the `containerPort` of the `api` port of the
@@ -4285,7 +4293,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 9cc0b9fc56a3c8beefd61514e7d47380bc869178220c910b62a469c06b248167
+        checksum/config: 6bc6fed86e4df994535621c00a170538a98d2b818693866bd415b6e8e621e318
       labels:
         app: antrea
         component: antrea-agent
@@ -4526,7 +4534,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 9cc0b9fc56a3c8beefd61514e7d47380bc869178220c910b62a469c06b248167
+        checksum/config: 6bc6fed86e4df994535621c00a170538a98d2b818693866bd415b6e8e621e318
       labels:
         app: antrea
         component: antrea-controller

@@ -27,11 +27,13 @@ import (
 
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	agentconfig "antrea.io/antrea/pkg/config/agent"
+	"antrea.io/antrea/pkg/features"
 	. "antrea.io/antrea/test/e2e/utils"
 )
 
 func TestL7NetworkPolicy(t *testing.T) {
 	skipIfHasWindowsNodes(t)
+	skipIfFeatureDisabled(t, features.L7NetworkPolicy, true, true)
 
 	data, err := setupTest(t)
 	if err != nil {
