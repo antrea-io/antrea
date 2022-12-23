@@ -692,6 +692,10 @@ func setupReceivers(t *testing.T, data *TestData, mc multicastTestcase, mcjoinWa
 			res, _, err := data.RunCommandFromPod(data.testNamespace, r, mcjoinContainerName, receiveMulticastCommand)
 			failOnError(err, t)
 			assert.Contains(t, res, "Total: 10 packets")
+			if !strings.Contains(res, "Total: 10 packets") {
+				t.Logf("********* Note!!! ********: Receiver do not receive packets")
+				time.Sleep(time.Minute * 30)
+			}
 		}()
 	}
 	return receiverNames, cleanupFuncs
