@@ -10,8 +10,11 @@
   - [Create ClusterSet](#create-clusterset)
 - [Multi-cluster Gateway Configuration](#multi-cluster-gateway-configuration)
 - [Multi-cluster Service](#multi-cluster-service)
-- [Multi-cluster ClusterNetworkPolicy Replication](#multi-cluster-clusternetworkpolicy-replication)
 - [Multi-cluster Pod to Pod Connectivity](#multi-cluster-pod-to-pod-connectivity)
+- [Multi-cluster ClusterNetworkPolicy Replication](#multi-cluster-clusternetworkpolicy-replication)
+- [NetworkPolicy for Cross-cluster Traffic](#networkpolicy-for-cross-cluster-traffic)
+  - [Egress NetworkPolicy to Multi-cluster Services](#egress-networkpolicy-to-multi-cluster-services)
+  - [Ingress NetworkPolicy for Cross-cluster Traffic](#ingress-networkpolicy-for-cross-cluster-traffic)
 - [Build Antrea Multi-cluster Image](#build-antrea-multi-cluster-image)
 - [Known Issue](#known-issue)
 <!-- /toc -->
@@ -502,6 +505,44 @@ clusters, and it also requires Multi-cluster Gateways when there is no direct Po
 connectivity across clusters. Also refer to [Multi-cluster Pod-to-Pod Connectivity](#multi-cluster-pod-to-pod-connectivity)
 for more information.
 
+## Multi-cluster Pod-to-Pod Connectivity
+
+Since Antrea v1.9.0, Multi-cluster supports routing Pod traffic across clusters
+through Multi-cluster Gateways. Pod IPs can be reached in all member clusters
+within a ClusterSet. To enable this feature, the cluster's Pod CIDRs must be set in
+ConfigMap `antrea-mc-controller-config` of each member cluster like the example
+below. Note, **Pod CIDRs must not overlap among clusters to enable cross-cluster
+Pod-to-Pod connectivity**.
+
+```yaml
+apiVersion: v1
+data:
+  controller_manager_config.yaml: |
+    apiVersion: multicluster.crd.antrea.io/v1alpha1
+    kind: MultiClusterConfig
+    ...
+    podCIDRs:
+      - "10.10.1.1/16"
+kind: ConfigMap
+metadata:
+  labels:
+    app: antrea
+  name: antrea-mc-controller-config
+  namespace: kube-system
+```
+
+You can edit [antrea-multicluster-member.yml](../../multicluster/build/yamls/antrea-multicluster-member.yml),
+or use `kubectl edit` to change the ConfigMap:
+
+```bash
+kubectl edit configmap -n kube-system antrea-mc-controller-config
+```
+
+Normally, `podCIDRs` should be the value of `kube-controller-manager`'s
+`cluster-cidr` option. If it's left empty, the Pod-to-Pod connectivity feature
+will not be enabled. If you use `kubectl edit` to edit the ConfigMap, then you
+need to restart the `antrea-mc-controller` Pod to load the latest configuration.
+
 ## Multi-cluster ClusterNetworkPolicy Replication
 
 Since Antrea v1.6.0, Multi-cluster admins can specify certain
@@ -592,43 +633,150 @@ In future releases, some additional tooling may become available to automate the
 creation of ResourceExports for ACNPs, and provide a user-friendly way to define
 Multi-cluster NetworkPolicies to be enforced in the ClusterSet.
 
-## Multi-cluster Pod-to-Pod Connectivity
+## NetworkPolicy for Cross-cluster Traffic
 
-Since Antrea v1.9.0, Multi-cluster supports routing Pod traffic across clusters
-through Multi-cluster Gateways. Pod IPs can be reached in all member clusters
-within a ClusterSet. To enable this feature, the cluster's Pod CIDRs must be set in
-ConfigMap `antrea-mc-controller-config` of each member cluster like the example
-below. Note, **Pod CIDRs must not overlap among clusters to enable cross-cluster
-Pod-to-Pod connectivity**.
+Antrea-native policies can be enforced on cross-cluster traffic in a ClusterSet.
+To use this feature set, make sure to check the Antrea controller and agent ConfigMaps
+and confirm that `enableStretchedNetworkPolicy` is set to `true` in addition to enabling
+the `multicluster` feature:
 
 ```yaml
-apiVersion: v1
-data:
+antrea-agent.conf: |
+  # FeatureGates is a map of feature names to bools that enable or disable experimental features.
+  featureGates:
+...
+    Multicluster: true
+...
+  multicluster:
+    enable: true
+    namespace: ""
+    enableStretchedNetworkPolicy: true
+```
+
+```yaml
+antrea-controller.conf: |
+  # FeatureGates is a map of feature names to bools that enable or disable experimental features.
+  featureGates:
+...
+    Multicluster: true
+...
+  multicluster:
+    enableStretchedNetworkPolicy: true
+```
+
+### Egress NetworkPolicy to Multi-cluster Services
+
+Restricting Pod egress traffic to backends of a Multi-cluster Service (which can be on the
+same cluster of the source Pod or on a different cluster) is supported by Antrea-native
+policy's `toServices` feature in egress rules. To define such a policy, simply put the exported
+Service name and Namespace in the `toServices` field of an Antrea-native policy, and set `scope`
+of the `toServices` peer to `clusterSet`:
+
+```yaml
+apiVersion: crd.antrea.io/v1alpha1
+kind: ClusterNetworkPolicy
+metadata:
+  name: acnp-drop-tenant-to-secured-mc-service
+spec:
+  priority: 1
+  tier: securityops
+  appliedTo:
+    - podSelector:
+        matchLabels:
+          role: tenant
+  egress:
+    - action: Drop
+      toServices:
+        - name: secured-service   # an exported Multi-cluster Service
+          namespace: svcNamespace
+          scope: clusterSet
+```
+
+The `scope` field of `toServices` rules is supported since Antrea v1.10. For earlier versions
+of Antrea, an equivalent rule can be written by not specifying `scope` and providing the
+imported Service name instead (i.e. `antrea-mc-[svcName]`).
+
+Note that the scope of policy's `appliedTo` field will still be restricted to the cluster
+where the policy is created in. To enforce such a policy for all `role=tenant` Pods in the
+entire ClusterSet, use the [ClusterNetworkPolicy Replication](#multi-cluster-clusternetworkpolicy-replication)
+feature mentioned in the previous section, and set the `clusterNetworkPolicy` field of
+the ResourceExport to the `acnp-drop-tenant-to-secured-mc-service` spec above. Such
+replication should only be performed by ClusterSet admins, who have clearance of creating
+ClusterNetworkPolicies in all clusters of a ClusterSet.
+
+### Ingress NetworkPolicy for Cross-cluster Traffic
+
+Antrea-native policies now support selecting ingress peers in the ClusterSet scope (since v1.10.0).
+Policy rules can be created to enforce security postures on ingress traffic from all member
+clusters in a ClusterSet:
+
+```yaml
+apiVersion: crd.antrea.io/v1alpha1
+kind: ClusterNetworkPolicy
+metadata:
+  name: drop-tenant-access-to-admin-namespace
+spec:
+  appliedTo:
+  - namespaceSelector:
+      matchLabels:
+        role: admin
+  priority: 1
+  tier: securityops
+  ingress:
+  - action: Deny
+    from:
+    # Select all Pods in role=tenant Namespaces in the ClusterSet
+    - scope: clusterSet
+      namespaceSelector:        
+        matchLabels:
+          role: tenant
+```
+
+```yaml
+apiVersion: crd.antrea.io/v1alpha1
+kind: AntreaNetworkPolicy
+metadata:
+  name: db-svc-allow-ingress-from-client-only
+  namespace: prod-us-west
+spec:
+  appliedTo:
+  - podSelector:
+      matchLabels:
+        app: db
+  priority: 1
+  tier: application 
+  ingress:
+  - action: Allow
+    from:
+    # Select all Pods in Namespace "prod-us-west" from all clusters in the ClusterSet (if the 
+    # Namespace exists in that cluster) whose labels match app=client
+    - scope: clusterSet
+      podSelector:        
+        matchLabels:
+          app: client
+  - action: Deny
+```
+
+As shown in the examples above, setting `scope` to `clusterSet` expands the scope of the
+`podSelector` or `namespaceSelector` of an ingress peer to the entire ClusterSet that the
+policy is created in. Similar to Egress NetworkPolicy, the scope of `appliedTo`
+is also restricted to the local cluster.
+
+To use the ingress cross-cluster NetworkPolicy feature, the `enableStretchedNetworkPolicy`
+option needs to be set to `true` in `antrea-mc-controller-config`, for each `antrea-mc-controller`
+running in the ClusterSet. Refer to the [previous section](#multi-cluster-pod-to-pod-connectivity)
+on how to change the ConfigMap:
+
+```yaml
   controller_manager_config.yaml: |
     apiVersion: multicluster.crd.antrea.io/v1alpha1
     kind: MultiClusterConfig
     ...
-    podCIDRs:
-      - "10.10.1.1/16"
-kind: ConfigMap
-metadata:
-  labels:
-    app: antrea
-  name: antrea-mc-controller-config
-  namespace: kube-system
+    enableStretchedNetworkPolicy: true
 ```
 
-You can edit [antrea-multicluster-member.yml](../../multicluster/build/yamls/antrea-multicluster-member.yml),
-or use `kubectl edit` to change the ConfigMap:
-
-```bash
-kubectl edit configmap -n kube-system antrea-mc-controller-config
-```
-
-Normally, `podCIDRs` should be the value of `kube-controller-manager`'s
-`cluster-cidr` option. If it's left empty, the Pod-to-Pod connectivity feature
-will not be enabled. If you use `kubectl edit` to edit the ConfigMap, then you
-need to restart the `antrea-mc-controller` Pod to load the latest configuration.
+Note that currently ingress stretched NetworkPolicy only works with the Antrea `encap`
+traffic mode.
 
 ## Build Antrea Multi-cluster Image
 
