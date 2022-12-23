@@ -113,9 +113,14 @@ const (
 	// Enable running agent on an unmanaged VM/BM.
 	ExternalNode featuregate.Feature = "ExternalNode"
 
-	// alpha: v1.9
+	// alpha: v1.10
 	// Enable collecting support bundle files with SupportBundleCollection CRD.
 	SupportBundleCollection featuregate.Feature = "SupportBundleCollection"
+
+	// alpha: v1.10
+	// Enable users to protect their applications by specifying how they are allowed to communicate with others, taking
+	// into account application context.
+	L7NetworkPolicy featuregate.Feature = "L7NetworkPolicy"
 )
 
 var (
@@ -149,6 +154,7 @@ var (
 		IPsecCertAuth:           {Default: false, PreRelease: featuregate.Alpha},
 		ExternalNode:            {Default: false, PreRelease: featuregate.Alpha},
 		SupportBundleCollection: {Default: false, PreRelease: featuregate.Alpha},
+		L7NetworkPolicy:         {Default: false, PreRelease: featuregate.Alpha},
 	}
 
 	// UnsupportedFeaturesOnWindows records the features not supported on
@@ -170,7 +176,8 @@ var (
 		IPsecCertAuth:     {},
 		// Multicluster feature is not validated on Windows yet. This can removed
 		// in the future if it's fully tested on Windows.
-		Multicluster: {},
+		Multicluster:    {},
+		L7NetworkPolicy: {},
 	}
 	// supportedFeaturesOnExternalNode records the features supported on an external
 	// Node. Antrea Agent checks the enabled features if it is running on an
@@ -180,6 +187,7 @@ var (
 		AntreaPolicy:            {},
 		NetworkPolicyStats:      {},
 		SupportBundleCollection: {},
+		L7NetworkPolicy:         {},
 	}
 )
 

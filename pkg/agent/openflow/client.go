@@ -840,6 +840,7 @@ func (c *client) generatePipelines() {
 		c.ovsMetersAreSupported,
 		c.enableDenyTracking,
 		c.enableAntreaPolicy,
+		c.enableL7NetworkPolicy,
 		c.enableMulticast,
 		c.proxyAll,
 		c.connectUplinkToBridge,

@@ -77,7 +77,8 @@ var emptyWatch = watch.NewEmptyWatch()
 type Controller struct {
 	// antreaPolicyEnabled indicates whether Antrea NetworkPolicy and
 	// ClusterNetworkPolicy are enabled.
-	antreaPolicyEnabled bool
+	antreaPolicyEnabled    bool
+	l7NetworkPolicyEnabled bool
 	// antreaProxyEnabled indicates whether Antrea proxy is enabled.
 	antreaProxyEnabled bool
 	// statusManagerEnabled indicates whether a statusManager is configured.
@@ -136,6 +137,7 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 	groupCounters []proxytypes.GroupCounter,
 	groupIDUpdates <-chan string,
 	antreaPolicyEnabled bool,
+	l7NetworkPolicyEnabled bool,
 	antreaProxyEnabled bool,
 	statusManagerEnabled bool,
 	multicastEnabled bool,
@@ -148,19 +150,23 @@ func NewNetworkPolicyController(antreaClientGetter agent.AntreaClientProvider,
 	gwPort, tunPort uint32) (*Controller, error) {
 	idAllocator := newIDAllocator(asyncRuleDeleteInterval, dnsInterceptRuleID)
 	c := &Controller{
-		antreaClientProvider: antreaClientGetter,
-		queue:                workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "networkpolicyrule"),
-		ofClient:             ofClient,
-		nodeType:             nodeType,
-		antreaPolicyEnabled:  antreaPolicyEnabled,
-		antreaProxyEnabled:   antreaProxyEnabled,
-		statusManagerEnabled: statusManagerEnabled,
-		multicastEnabled:     multicastEnabled,
-		loggingEnabled:       loggingEnabled,
-		gwPort:               gwPort,
-		tunPort:              tunPort,
-		l7RuleReconciler:     l7engine.NewReconciler(),
-		l7VlanIDAllocator:    newL7VlanIDAllocator(),
+		antreaClientProvider:   antreaClientGetter,
+		queue:                  workqueue.NewNamedRateLimitingQueue(workqueue.NewItemExponentialFailureRateLimiter(minRetryDelay, maxRetryDelay), "networkpolicyrule"),
+		ofClient:               ofClient,
+		nodeType:               nodeType,
+		antreaPolicyEnabled:    antreaPolicyEnabled,
+		l7NetworkPolicyEnabled: l7NetworkPolicyEnabled,
+		antreaProxyEnabled:     antreaProxyEnabled,
+		statusManagerEnabled:   statusManagerEnabled,
+		multicastEnabled:       multicastEnabled,
+		loggingEnabled:         loggingEnabled,
+		gwPort:                 gwPort,
+		tunPort:                tunPort,
+	}
+
+	if l7NetworkPolicyEnabled {
+		c.l7RuleReconciler = l7engine.NewReconciler()
+		c.l7VlanIDAllocator = newL7VlanIDAllocator()
 	}
 
 	if antreaPolicyEnabled {
@@ -614,11 +620,13 @@ func (c *Controller) syncRule(key string) error {
 			// harmless to delete it.
 			c.statusManager.DeleteRuleRealization(key)
 		}
-		if vlanID := c.l7VlanIDAllocator.query(key); vlanID != 0 {
-			if err := c.l7RuleReconciler.DeleteRule(key, vlanID); err != nil {
-				return err
+		if c.l7NetworkPolicyEnabled {
+			if vlanID := c.l7VlanIDAllocator.query(key); vlanID != 0 {
+				if err := c.l7RuleReconciler.DeleteRule(key, vlanID); err != nil {
+					return err
+				}
+				c.l7VlanIDAllocator.release(key)
 			}
-			c.l7VlanIDAllocator.release(key)
 		}
 		return nil
 	}
@@ -629,7 +637,7 @@ func (c *Controller) syncRule(key string) error {
 		return nil
 	}
 
-	if len(rule.L7Protocols) != 0 {
+	if c.l7NetworkPolicyEnabled && len(rule.L7Protocols) != 0 {
 		// Allocate VLAN ID for the L7 rule.
 		vlanID := c.l7VlanIDAllocator.allocate(key)
 		rule.L7RuleVlanID = &vlanID
@@ -674,7 +682,7 @@ func (c *Controller) syncRules(keys []string) error {
 		} else if !realizable {
 			klog.Errorf("Rule %s is effective but not realizable", key)
 		} else {
-			if len(rule.L7Protocols) != 0 {
+			if c.l7NetworkPolicyEnabled && len(rule.L7Protocols) != 0 {
 				// Allocate VLAN ID for the L7 rule.
 				vlanID := c.l7VlanIDAllocator.allocate(key)
 				rule.L7RuleVlanID = &vlanID

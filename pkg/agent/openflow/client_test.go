@@ -86,6 +86,7 @@ type clientOptions struct {
 	enableMulticast       bool
 	enableTrafficControl  bool
 	enableMulticluster    bool
+	enableL7NetworkPolicy bool
 }
 
 type clientOptionsFn func(*clientOptions)
@@ -114,6 +115,10 @@ func enableConnectUplinkToBridge(o *clientOptions) {
 
 func enableMulticast(o *clientOptions) {
 	o.enableMulticast = true
+}
+
+func enableL7NetworkPolicy(o *clientOptions) {
+	o.enableL7NetworkPolicy = true
 }
 
 func enableTrafficControl(o *clientOptions) {
@@ -341,6 +346,7 @@ func newFakeClient(mockOFEntryOperations *oftest.MockOFEntryOperations,
 		enableMulticast:       false,
 		enableTrafficControl:  false,
 		enableMulticluster:    false,
+		enableL7NetworkPolicy: false,
 	}
 	for _, fn := range options {
 		fn(o)
@@ -350,6 +356,7 @@ func newFakeClient(mockOFEntryOperations *oftest.MockOFEntryOperations,
 		bridgeMgmtAddr,
 		o.enableProxy,
 		o.enableAntreaPolicy,
+		o.enableL7NetworkPolicy,
 		o.enableEgress,
 		false,
 		o.proxyAll,
@@ -429,7 +436,7 @@ func newFakeClient(mockOFEntryOperations *oftest.MockOFEntryOperations,
 		NodePortAddressesIPv6: nodePortAddressesIPv6,
 	}
 
-	if o.enableAntreaPolicy {
+	if o.enableL7NetworkPolicy {
 		l7NetworkPolicyConfig = &config.L7NetworkPolicyConfig{
 			TargetOFPort: fakeL7NPTargetOFPort,
 			ReturnOFPort: fakeL7NPReturnOFPort,
@@ -1525,7 +1532,7 @@ func Test_client_setBasePacketOutBuilder(t *testing.T) {
 }
 
 func prepareSetBasePacketOutBuilder(ctrl *gomock.Controller, success bool) *client {
-	ofClient := NewClient(bridgeName, bridgeMgmtAddr, true, true, false, false, false, false, false, false, false)
+	ofClient := NewClient(bridgeName, bridgeMgmtAddr, true, true, false, false, false, false, false, false, false, false)
 	c := ofClient.(*client)
 	m := ovsoftest.NewMockBridge(ctrl)
 	c.bridge = m
