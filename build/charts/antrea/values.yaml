@@ -329,7 +329,7 @@ multicluster:
   namespace: ""
   # -- Enable StretchedNetworkPolicy which allow Antrea-native policies to select peers
   # from other clusters in a ClusterSet.
-  # This feature is supported only with encap mode when the tunnel type is Geneve.
+  # This feature is supported only with encap mode.
   enableStretchedNetworkPolicy: false
 
 testing:
