@@ -51,6 +51,7 @@ edit the Agent configuration in the
 | `TrafficControl`          | Agent              | `false` | Alpha | v1.7          | N/A          | N/A        | No                 |       |
 | `ExternalNode`            | Agent              | `false` | Alpha | v1.8          | N/A          | N/A        | Yes                |       |
 | `SupportBundleCollection` | Agent + Controller | `false` | Alpha | v1.10         | N/A          | N/A        | Yes                |       |
+| `L7NetworkPolicy`         | Agent + Controller | `false` | Alpha | v1.10         | N/A          | N/A        | Yes                |       |
 
 ## Description and Requirements of Features
 
@@ -341,3 +342,14 @@ More documentation will be coming in the future.
 
 User should provide a file server with this feature, and store its authentication credential in a Secret. Antrea
 Controller is required to be configured with the permission to read the Secret.
+
+### L7NetworkPolicy
+
+`L7NetworkPolicy` enables users to protect their applications by specifying how they are allowed to communicate with
+others, taking into account application context, providing fine-grained control over the network traffic beyond IP,
+transport protocol, and port. Refer to this [document](antrea-l7-network-policy.md) for more information.
+
+#### Requirements for this Feature
+
+This feature is currently only supported for Nodes running Linux, and TX checksum offloading must be disabled. Refer to
+this [document](antrea-l7-network-policy.md#prerequisites) for more information and how it can be configured.

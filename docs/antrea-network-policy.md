@@ -19,6 +19,7 @@
     - [ACNP for ICMP traffic](#acnp-for-icmp-traffic)
     - [ACNP for IGMP traffic](#acnp-for-igmp-traffic)
     - [ACNP for multicast egress traffic](#acnp-for-multicast-egress-traffic)
+    - [ACNP for HTTP traffic](#acnp-for-http-traffic)
   - [Behavior of <em>to</em> and <em>from</em> selectors](#behavior-of-to-and-from-selectors)
   - [Key differences from K8s NetworkPolicy](#key-differences-from-k8s-networkpolicy)
   - [<em>kubectl</em> commands for Antrea ClusterNetworkPolicy](#kubectl-commands-for-antrea-clusternetworkpolicy)
@@ -476,6 +477,65 @@ spec:
               cidr: 225.1.2.3/32
         name: dropMcastUDPTraffic
 ```
+
+#### ACNP for HTTP traffic
+
+```yaml
+apiVersion: crd.antrea.io/v1alpha1
+kind: NetworkPolicy
+metadata:
+  name: ingress-allow-http-request-to-api-v2
+spec:
+  priority: 5
+  tier: application
+  appliedTo:
+    - podSelector:
+        matchLabels:
+          app: web
+  ingress:
+    - name: allow-http   # Allow inbound HTTP GET requests to "/api/v2" from Pods with app=client label.
+      action: Allow      # All other traffic from these Pods will be automatically dropped, and subsequent rules will not be considered.
+      from:
+        - podSelector:
+            matchLabels:
+              app: client
+      l7Protocols:
+        - http:
+            path: "/api/v2/*"
+            host: "foo.bar.com"
+            method: "GET"
+    - name: drop-other   # Drop all other inbound traffic (i.e., from Pods without the app=client label or from external clients).
+      action: Drop
+```
+
+```yaml
+apiVersion: crd.antrea.io/v1alpha1
+kind: ClusterNetworkPolicy
+metadata:
+  name: allow-web-access-to-internal-domain
+spec:
+  priority: 5
+  tier: securityops
+  appliedTo:
+    - podSelector:
+        matchLabels:
+          egress-restriction: internal-domain-only
+  egress:
+    - name: allow-dns          # Allow outbound DNS requests.
+      action: Allow
+      ports:
+        - protocol: TCP
+          port: 53
+        - protocol: UDP
+          port: 53
+    - name: allow-http-only    # Allow outbound HTTP requests towards foo.bar.com.
+      action: Allow            # As the rule's "to" and "ports" are empty, which means it selects traffic to any network
+      l7Protocols:             # peer's any port using any transport protocol, all outbound HTTP requests towards other
+        - http:                # domains and non-HTTP requests will be automatically dropped, and subsequent rules will
+            host: "*.bar.com"  # not be considered.
+```
+
+Please refer to [Antrea Layer 7 NetworkPolicy](antrea-l7-network-policy.md) for extra information.
 
 **spec**: The ClusterNetworkPolicy `spec` has all the information needed to
 define a cluster-wide security policy.
