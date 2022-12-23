@@ -58,20 +58,28 @@ func TestConvertProtocolHTTP(t *testing.T) {
 			expected: "",
 		},
 		{
-			name: "with host,method,path",
+			name: "with host,method,exact path",
 			http: &v1beta.HTTPProtocol{
 				Host:   "www.google.com",
 				Method: "GET",
-				Path:   "index.html",
+				Path:   "/index.html",
 			},
-			expected: "http.uri; content:\"index.html\"; http.method; content:\"GET\"; http.host; content:\"www.google.com\";",
+			expected: `http.uri; content:"/index.html"; startswith; endswith; http.method; content:"GET"; http.host; content:"www.google.com"; startswith; endswith;`,
 		},
 		{
-			name: "with host",
+			name: "with host suffix, path prefix",
 			http: &v1beta.HTTPProtocol{
-				Host: "www.google.com",
+				Host: "*.foo.com",
+				Path: "/api/v2/*",
 			},
-			expected: "http.host; content:\"www.google.com\";",
+			expected: `http.uri; content:"/api/v2/"; startswith; http.host; content:".foo.com"; endswith;`,
+		},
+		{
+			name: "with host pattern",
+			http: &v1beta.HTTPProtocol{
+				Host: "*.foo.*",
+			},
+			expected: `http.host; content:".foo.";`,
 		},
 	}
 	for _, tc := range testCases {
@@ -149,7 +157,7 @@ func TestRuleLifecycle(t *testing.T) {
 					HTTP: &v1beta.HTTPProtocol{
 						Host:   "www.google.com",
 						Method: "GET",
-						Path:   "index.html",
+						Path:   "/index.html",
 					},
 				},
 			},
@@ -158,7 +166,7 @@ func TestRuleLifecycle(t *testing.T) {
 					HTTP: &v1beta.HTTPProtocol{},
 				},
 			},
-			expectedRules:        `pass http any any -> any any (msg: "Allow http by AntreaNetworkPolicy:test-l7"; http.uri; content:"index.html"; http.method; content:"GET"; http.host; content:"www.google.com"; sid: 2;)`,
+			expectedRules:        `pass http any any -> any any (msg: "Allow http by AntreaNetworkPolicy:test-l7"; http.uri; content:"/index.html"; startswith; endswith; http.method; content:"GET"; http.host; content:"www.google.com"; startswith; endswith; sid: 2;)`,
 			expectedUpdatedRules: `pass http any any -> any any (msg: "Allow http by AntreaNetworkPolicy:test-l7"; sid: 2;)`,
 		},
 	}
