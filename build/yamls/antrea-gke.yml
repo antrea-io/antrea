@@ -3229,7 +3229,7 @@ data:
     # The default is antrea-agent's Namespace.
       namespace: ""
     # Enable StretchedNetworkPolicy which could be enforced on cross-cluster traffic.
-    # This feature is supported only with encap mode when the tunnel type is Geneve.
+    # This feature is supported only with encap mode.
       enableStretchedNetworkPolicy: false
   antrea-cni.conflist: |
     {
@@ -4285,7 +4285,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 4c94da583c601f67c4369808e59e884c0ea07d35b3f295e7a9fe3e14b80221a5
+        checksum/config: b783fa11acb1c5a1f5890715575f83b6e00c2a88c6f571d78a815ed651832a29
       labels:
         app: antrea
         component: antrea-agent
@@ -4525,7 +4525,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 4c94da583c601f67c4369808e59e884c0ea07d35b3f295e7a9fe3e14b80221a5
+        checksum/config: b783fa11acb1c5a1f5890715575f83b6e00c2a88c6f571d78a815ed651832a29
       labels:
         app: antrea
         component: antrea-controller
