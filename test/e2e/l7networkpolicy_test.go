@@ -150,7 +150,7 @@ func testL7NetworkPolicyHTTP(t *testing.T, data *TestData) {
 		{
 			HTTP: &crdv1alpha1.HTTPProtocol{
 				Method: "GET",
-				Path:   "/hostname",
+				Path:   "/host*",
 			},
 		},
 	}
