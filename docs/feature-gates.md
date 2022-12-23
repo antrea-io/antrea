@@ -49,6 +49,7 @@ edit the Agent configuration in the
 | `SecondaryNetwork`        | Agent              | `false` | Alpha | v1.5          | N/A          | N/A        | Yes                |       |
 | `ServiceExternalIP`       | Agent + Controller | `false` | Alpha | v1.5          | N/A          | N/A        | Yes                |       |
 | `TrafficControl`          | Agent              | `false` | Alpha | v1.7          | N/A          | N/A        | No                 |       |
+| `Multicluster`            | Agent + Controller | `false` | Alpha | v1.7          | N/A          | N/A        | Yes                | Controller side feature gate added in v1.10.0 |
 | `ExternalNode`            | Agent              | `false` | Alpha | v1.8          | N/A          | N/A        | Yes                |       |
 | `SupportBundleCollection` | Agent + Controller | `false` | Alpha | v1.10         | N/A          | N/A        | Yes                |       |
 | `L7NetworkPolicy`         | Agent + Controller | `false` | Alpha | v1.10         | N/A          | N/A        | Yes                |       |
@@ -314,6 +315,18 @@ users to mirror or redirect traffic originating from specific Pods or destined f
 device or a remote destination via a tunnel of various types. It enables a monitoring solution to get full visibility
 into network traffic, including both north-south and east-west traffic. Refer to this [document](traffic-control.md)
 for more information.
+
+### Multicluster
+
+The `Multicluster` feature gate of Antrea Agent enables [Antrea Multi-cluster Gateways](multicluster/user-guide.md#multi-cluster-gateway-configuration)
+which route Multi-cluster Service and Pod traffic through tunnels across clusters. The `Multicluster` feature gate
+of Antrea Controller enables support for [Multi-cluster NetworkPolicy](multicluster/user-guide.md#networkpolicy-for-cross-cluster-traffic).
+
+#### Requirements for this Feature
+
+User should install Antrea Multi-cluster controllers in a ClusterSet to enable multi-cluster Service and Pod access
+across a group of member clusters. This feature is currently only supported for IPv4. Refer to this
+[document](multicluster/architecture.md) for more details.
 
 ### ExternalNode
 
