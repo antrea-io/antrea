@@ -61,7 +61,7 @@ func newTestController() (*Controller, *fake.Clientset, *mockReconciler) {
 	ch2 := make(chan string, 100)
 	groupIDAllocator := openflow.NewGroupAllocator(false)
 	groupCounters := []proxytypes.GroupCounter{proxytypes.NewGroupCounter(groupIDAllocator, ch2)}
-	controller, _ := NewNetworkPolicyController(&antreaClientGetter{clientset}, nil, nil, "node1", podUpdateChannel, nil, groupCounters, ch2, true, true, true, false, true, testAsyncDeleteInterval, "8.8.8.8:53", config.K8sNode, true, false, config.HostGatewayOFPort, config.DefaultTunOFPort)
+	controller, _ := NewNetworkPolicyController(&antreaClientGetter{clientset}, nil, nil, "node1", podUpdateChannel, nil, groupCounters, ch2, true, true, true, true, false, true, testAsyncDeleteInterval, "8.8.8.8:53", config.K8sNode, true, false, config.HostGatewayOFPort, config.DefaultTunOFPort)
 	reconciler := newMockReconciler()
 	controller.reconciler = reconciler
 	controller.antreaPolicyLogger = nil

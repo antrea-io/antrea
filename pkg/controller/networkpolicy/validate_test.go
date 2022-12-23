@@ -21,10 +21,13 @@ import (
 	admv1 "k8s.io/api/admission/v1"
 	authenticationv1 "k8s.io/api/authentication/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/component-base/featuregate"
+	featuregatetesting "k8s.io/component-base/featuregate/testing"
 
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	crdv1alpha2 "antrea.io/antrea/pkg/apis/crd/v1alpha2"
 	crdv1alpha3 "antrea.io/antrea/pkg/apis/crd/v1alpha3"
+	"antrea.io/antrea/pkg/features"
 )
 
 func TestValidateAntreaPolicy(t *testing.T) {
@@ -34,6 +37,7 @@ func TestValidateAntreaPolicy(t *testing.T) {
 
 	tests := []struct {
 		name           string
+		featureGates   map[featuregate.Feature]bool
 		policy         *crdv1alpha1.ClusterNetworkPolicy
 		expectedReason string
 	}{
@@ -1225,7 +1229,8 @@ func TestValidateAntreaPolicy(t *testing.T) {
 			expectedReason: "",
 		},
 		{
-			name: "acnp-l7protocols-used-with-allow",
+			name:         "acnp-l7protocols-used-with-allow",
+			featureGates: map[featuregate.Feature]bool{features.L7NetworkPolicy: true},
 			policy: &crdv1alpha1.ClusterNetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "ingress-rule-l7protocols",
@@ -1258,7 +1263,8 @@ func TestValidateAntreaPolicy(t *testing.T) {
 			expectedReason: "",
 		},
 		{
-			name: "acnp-l7protocols-used-with-pass",
+			name:         "acnp-l7protocols-used-with-pass",
+			featureGates: map[featuregate.Feature]bool{features.L7NetworkPolicy: true},
 			policy: &crdv1alpha1.ClusterNetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "ingress-rule-l7protocols",
@@ -1290,7 +1296,8 @@ func TestValidateAntreaPolicy(t *testing.T) {
 			expectedReason: "layer 7 protocols only support Allow",
 		},
 		{
-			name: "acnp-l7protocols-HTTP-used-with-UDP",
+			name:         "acnp-l7protocols-HTTP-used-with-UDP",
+			featureGates: map[featuregate.Feature]bool{features.L7NetworkPolicy: true},
 			policy: &crdv1alpha1.ClusterNetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "ingress-rule-l7protocols",
@@ -1327,7 +1334,8 @@ func TestValidateAntreaPolicy(t *testing.T) {
 			expectedReason: "HTTP protocol can only be used when layer 4 protocol is TCP or unset",
 		},
 		{
-			name: "acnp-l7protocols-HTTP-used-with-ICMP",
+			name:         "acnp-l7protocols-HTTP-used-with-ICMP",
+			featureGates: map[featuregate.Feature]bool{features.L7NetworkPolicy: true},
 			policy: &crdv1alpha1.ClusterNetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "ingress-rule-l7protocols",
@@ -1364,7 +1372,8 @@ func TestValidateAntreaPolicy(t *testing.T) {
 			expectedReason: "HTTP protocol can not be used with protocol IGMP or ICMP",
 		},
 		{
-			name: "acnp-l7protocols-used-with-toService",
+			name:         "acnp-l7protocols-used-with-toService",
+			featureGates: map[featuregate.Feature]bool{features.L7NetworkPolicy: true},
 			policy: &crdv1alpha1.ClusterNetworkPolicy{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "egress-rule-l7protocols",
@@ -1400,9 +1409,40 @@ func TestValidateAntreaPolicy(t *testing.T) {
 			},
 			expectedReason: "layer 7 protocols can not be used with toServices",
 		},
+		{
+			name:         "L7NetworkPolicy-disabled",
+			featureGates: map[featuregate.Feature]bool{features.L7NetworkPolicy: false},
+			policy: &crdv1alpha1.ClusterNetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "egress-rule-l7protocols",
+				},
+				Spec: crdv1alpha1.ClusterNetworkPolicySpec{
+					AppliedTo: []crdv1alpha1.AppliedTo{
+						{
+							NamespaceSelector: &metav1.LabelSelector{},
+						},
+					},
+					Egress: []crdv1alpha1.Rule{
+						{
+							Action: &allowAction,
+							L7Protocols: []crdv1alpha1.L7Protocol{
+								{
+									HTTP: nil,
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedReason: "layer 7 protocols can only be used when L7NetworkPolicy is enabled",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			for feature, value := range tt.featureGates {
+				defer featuregatetesting.SetFeatureGateDuringTest(t, features.DefaultFeatureGate, feature, value)()
+			}
+
 			_, c := newController()
 			v := NewNetworkPolicyValidator(c.NetworkPolicyController)
 			actualReason, allowed := v.validateAntreaPolicy(tt.policy, nil, admv1.Create, authenticationv1.UserInfo{})

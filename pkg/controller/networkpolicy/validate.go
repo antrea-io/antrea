@@ -772,6 +772,9 @@ func (v *antreaPolicyValidator) validateL7Protocols(ingressRules, egressRules []
 		if len(r.L7Protocols) == 0 {
 			continue
 		}
+		if !features.DefaultFeatureGate.Enabled(features.L7NetworkPolicy) {
+			return fmt.Sprintf("layer 7 protocols can only be used when L7NetworkPolicy is enabled"), false
+		}
 		if *r.Action != crdv1alpha1.RuleActionAllow {
 			return "layer 7 protocols only support Allow", false
 		}
