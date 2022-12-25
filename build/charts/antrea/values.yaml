@@ -319,7 +319,7 @@ logVerbosity: 0
 whereabouts:
   enable: false
 
-## -- Configure Multicluster defaults for both Antrea controller and agent.
+## -- Configure Multicluster defaults for both Antrea Controller and Agent.
 multicluster:
   # -- Enable Antrea Multi-cluster Gateway to support cross-cluster traffic.
   # This feature is supported only with encap mode.
@@ -327,7 +327,7 @@ multicluster:
   # -- The Namespace where Antrea Multi-cluster Controller is running.
   # The default is antrea-agent's Namespace.
   namespace: ""
-  # -- Enable StretchedNetworkPolicy which allow Antrea-native policies to select peers
+  # -- Enable StretchedNetworkPolicy which allows Antrea-native policies to select peers
   # from other clusters in a ClusterSet.
   # This feature is supported only with encap mode.
   enableStretchedNetworkPolicy: false

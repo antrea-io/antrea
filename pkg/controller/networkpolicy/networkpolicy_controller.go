@@ -240,7 +240,7 @@ type NetworkPolicyController struct {
 	groupingInterfaceSynced func() bool
 
 	labelIdentityInterface labelidentity.Interface
-	// Enable Stretched Networkpolicy feature which allow Antrea-native policies to select peer
+	// Enable Stretched Networkpolicy feature which allows Antrea-native policies to select peer
 	// from other clusters in a ClusterSet.
 	stretchNPEnabled bool
 	// heartbeatCh is an internal channel for testing. It's used to know whether all tasks have been

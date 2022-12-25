@@ -279,7 +279,7 @@ type IPsecConfig struct {
 }
 
 type MulticlusterConfig struct {
-	// Enable Multicluster which allow cross-cluster traffic between member clusters
+	// Enable Multicluster which allows cross-cluster traffic between member clusters
 	// in a ClusterSet.
 	Enable bool `yaml:"enable,omitempty"`
 	// The Namespace where the Antrea Multi-cluster controller is running.

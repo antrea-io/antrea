@@ -447,12 +447,12 @@ func validateContainerVFInterface(intf *current.Interface, sriovVFDeviceID strin
 	if err != nil {
 		return nil, fmt.Errorf("failed to find netdevice to PCI address %s: %v", sriovVFDeviceID, err)
 	}
-	// the check makes sure that the SR-IOV VF netdevice is not in the host namespace
-	// the GetNetDevicesFromPci is using linux sysfs to find the VF netdevice
-	// the method is running in container network namespace, but we are still in the antrea agent filesystem
-	// the antrea agent container is privileged, which allow access to the host sysfs
-	// therefore the validation is to make sure that the VF netdevice is not in the host network
-	// namespace
+	// The check makes sure that the SR-IOV VF netdevice is not in the host namespace.
+	// GetNetDevicesFromPci is using linux sysfs to find the VF netdevice. The method
+	// is running in container network namespace, but we are still in the antrea-agent
+	// filesystem. The antrea-agent container is privileged, which allows access to
+	// the host sysfs, therefore the validation is to make sure that the VF netdevice
+	// is not in the host network namespace.
 	if len(netdevices) != 0 {
 		return nil, fmt.Errorf("VF netdevice still in host network namespace %s %+v", sriovVFDeviceID, netdevices)
 	}
