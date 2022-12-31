@@ -3368,7 +3368,7 @@ data:
       selfSignedCA: true
 
     multicluster:
-      # Enable StretchedNetworkPolicy which allow Antrea-native policies to select peers
+      # Enable StretchedNetworkPolicy which allows Antrea-native policies to select peers
       # from other clusters in a ClusterSet.
       enableStretchedNetworkPolicy: false
 ---
@@ -4293,7 +4293,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 6bc6fed86e4df994535621c00a170538a98d2b818693866bd415b6e8e621e318
+        checksum/config: 7b21809cc047cd7464cdb8789428396de9dcf2684166821d8e5dbd7816e005c4
       labels:
         app: antrea
         component: antrea-agent
@@ -4536,7 +4536,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 6bc6fed86e4df994535621c00a170538a98d2b818693866bd415b6e8e621e318
+        checksum/config: 7b21809cc047cd7464cdb8789428396de9dcf2684166821d8e5dbd7816e005c4
       labels:
         app: antrea
         component: antrea-controller
