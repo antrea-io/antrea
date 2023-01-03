@@ -237,7 +237,8 @@ func (c *Controller) parsePacketIn(pktIn *ofctrl.PacketIn) (*crdv1alpha1.Tracefl
 	if tableID == openflow.L2ForwardingOutTable.GetID() {
 		ob := new(crdv1alpha1.Observation)
 		tunnelDstIP := ""
-		isIPv6 := c.nodeConfig.NodeIPv6Addr != nil
+		// decide according to packet.
+		isIPv6 := etherData.Ethertype == protocol.IPv6_MSG
 		if match := getMatchTunnelDstField(matchers, isIPv6); match != nil {
 			tunnelDstIP, err = getTunnelDstValue(match)
 			if err != nil {
