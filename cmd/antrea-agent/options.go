@@ -307,13 +307,17 @@ func (o *Options) validateAntreaIPAMConfig() error {
 }
 
 func (o *Options) validateMulticlusterConfig(encapMode config.TrafficEncapModeType) error {
-	if !o.config.Multicluster.Enable {
-		o.config.Multicluster.EnableStretchedNetworkPolicy = false
+	if !o.config.Multicluster.EnableGateway && !o.config.Multicluster.EnableStretchedNetworkPolicy {
 		return nil
 	}
 
 	if !features.DefaultFeatureGate.Enabled(features.Multicluster) {
-		return fmt.Errorf("Multicluster can only be enabled when Multicluster feature gate is enabled")
+		klog.InfoS("Multicluster feature gate is disabled. Multi-cluster options are ignored")
+		return nil
+	}
+
+	if !o.config.Multicluster.EnableGateway && o.config.Multicluster.EnableStretchedNetworkPolicy {
+		return fmt.Errorf("Multi-cluster Gateway must be enabled to enable StretchedNetworkPolicy")
 	}
 
 	if encapMode != config.TrafficEncapModeEncap {
@@ -397,6 +401,13 @@ func (o *Options) setK8sNodeDefaultOptions() {
 		if o.config.Multicast.IGMPQueryInterval == "" {
 			o.igmpQueryInterval = defaultIGMPQueryInterval
 		}
+	}
+
+	if features.DefaultFeatureGate.Enabled(features.Multicluster) && o.config.Multicluster.Enable {
+		// Multicluster.Enable is deprecated but it may be set by an earlier version
+		// deployment manifest. If it is set to true, pass the value to
+		// Multicluster.EnableGateway.
+		o.config.Multicluster.EnableGateway = true
 	}
 }
 

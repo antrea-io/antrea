@@ -323,13 +323,13 @@ whereabouts:
 multicluster:
   # -- Enable Antrea Multi-cluster Gateway to support cross-cluster traffic.
   # This feature is supported only with encap mode.
-  enable: false
+  enableGateway: false
   # -- The Namespace where Antrea Multi-cluster Controller is running.
   # The default is antrea-agent's Namespace.
   namespace: ""
   # -- Enable StretchedNetworkPolicy which allows Antrea-native policies to select peers
   # from other clusters in a ClusterSet.
-  # This feature is supported only with encap mode.
+  # Multi-cluster Gateway must be enabled to enable StretchedNetworkPolicy.
   enableStretchedNetworkPolicy: false
 
 testing:

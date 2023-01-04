@@ -252,7 +252,7 @@ function modify_config {
   if [[ ${ENABLE_MC_GATEWAY} == "true" ]]; then
   cat > build/yamls/chart-values/antrea.yml << EOF
 multicluster:
-  enable: true
+  enableGateway: true
   enableStretchedNetworkPolicy: true
 featureGates: {
   Multicluster: true

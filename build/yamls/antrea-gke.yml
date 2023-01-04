@@ -2972,8 +2972,7 @@ data:
     # Enable multicast traffic.
     #  Multicast: false
 
-    # Enable Antrea Multi-cluster Gateway to support cross-cluster traffic.
-    # This feature is supported only with encap mode.
+    # Enable Antrea Multi-cluster features.
     #  Multicluster: false
 
     # Enable support for provisioning secondary network interfaces for Pods (using
@@ -3228,12 +3227,13 @@ data:
     multicluster:
     # Enable Antrea Multi-cluster Gateway to support cross-cluster traffic.
     # This feature is supported only with encap mode.
-      enable: false
+      enableGateway: false
     # The Namespace where Antrea Multi-cluster Controller is running.
     # The default is antrea-agent's Namespace.
       namespace: ""
-    # Enable StretchedNetworkPolicy which could be enforced on cross-cluster traffic.
-    # This feature is supported only with encap mode.
+    # Enable StretchedNetworkPolicy which allows Antrea-native policies to select peers
+    # from other clusters in a ClusterSet.
+    # Multi-cluster Gateway must be enabled to enable StretchedNetworkPolicy.
       enableStretchedNetworkPolicy: false
   antrea-cni.conflist: |
     {
@@ -3304,7 +3304,7 @@ data:
     # Enable collecting support bundle files with SupportBundleCollection CRD.
     #  SupportBundleCollection: false
 
-    # Enable multi-cluster features.
+    # Enable Antrea Multi-cluster features.
     #  Multicluster: false
 
     # Enable users to protect their applications by specifying how they are allowed to communicate with others, taking
@@ -4293,7 +4293,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: f6d41cf17b8d26efc6cc18a1609cf3fb5f1a86c538423ae2925b689bf153937a
+        checksum/config: 91c75022e7c9a8203230275e9cccae335c2590ebd03432e97c62db5318bda8f1
       labels:
         app: antrea
         component: antrea-agent
@@ -4533,7 +4533,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: f6d41cf17b8d26efc6cc18a1609cf3fb5f1a86c538423ae2925b689bf153937a
+        checksum/config: 91c75022e7c9a8203230275e9cccae335c2590ebd03432e97c62db5318bda8f1
       labels:
         app: antrea
         component: antrea-controller
