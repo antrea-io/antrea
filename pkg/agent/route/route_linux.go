@@ -137,7 +137,7 @@ func NewClient(networkConfig *config.NetworkConfig, noSNAT, proxyAll, connectUpl
 		multicastEnabled:      multicastEnabled,
 		connectUplinkToBridge: connectUplinkToBridge,
 		ipset:                 ipset.NewClient(),
-		netlink:               utilnetlink.NewClient(),
+		netlink:               &netlink.Handle{},
 		isCloudEKS:            env.IsCloudEKS(),
 	}, nil
 }

@@ -191,7 +191,7 @@ func (e *IPFIXExporter) initExportingProcess() error {
 			SendJSONRecord:      e.sendJSONRecord,
 		}
 	}
-	ep, err := ipfix.NewIPFIXExportingProcess(expInput)
+	ep, err := exporter.InitExportingProcess(expInput)
 	if err != nil {
 		return fmt.Errorf("got error when initializing IPFIX exporting process: %v", err)
 	}

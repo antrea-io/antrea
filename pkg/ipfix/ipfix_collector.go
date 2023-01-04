@@ -15,13 +15,8 @@
 package ipfix
 
 import (
-	"fmt"
-
-	ipfixcollect "github.com/vmware/go-ipfix/pkg/collector"
 	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
 )
-
-var _ IPFIXCollectingProcess = new(ipfixCollectingProcess)
 
 // IPFIXCollectingProcess interface is added to facilitate unit testing without involving the code from go-ipfix library.
 type IPFIXCollectingProcess interface {
@@ -30,39 +25,4 @@ type IPFIXCollectingProcess interface {
 	GetMsgChan() chan *ipfixentities.Message
 	GetNumRecordsReceived() int64
 	GetNumConnToCollector() int64
-}
-
-type ipfixCollectingProcess struct {
-	CollectingProcess *ipfixcollect.CollectingProcess
-}
-
-func NewIPFIXCollectingProcess(input ipfixcollect.CollectorInput) (*ipfixCollectingProcess, error) {
-	cp, err := ipfixcollect.InitCollectingProcess(input)
-	if err != nil {
-		return nil, fmt.Errorf("error while initializing IPFIX collecting process: %v", err)
-	}
-
-	return &ipfixCollectingProcess{
-		CollectingProcess: cp,
-	}, nil
-}
-
-func (cp *ipfixCollectingProcess) Start() {
-	cp.CollectingProcess.Start()
-}
-
-func (cp *ipfixCollectingProcess) Stop() {
-	cp.CollectingProcess.Stop()
-}
-
-func (cp *ipfixCollectingProcess) GetMsgChan() chan *ipfixentities.Message {
-	return cp.CollectingProcess.GetMsgChan()
-}
-
-func (cp *ipfixCollectingProcess) GetNumRecordsReceived() int64 {
-	return cp.CollectingProcess.GetNumRecordsReceived()
-}
-
-func (cp *ipfixCollectingProcess) GetNumConnToCollector() int64 {
-	return cp.CollectingProcess.GetNumConnToCollector()
 }
