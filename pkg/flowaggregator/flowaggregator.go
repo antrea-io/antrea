@@ -266,7 +266,7 @@ func (fa *flowAggregator) InitCollectingProcess() error {
 	cpInput.NumExtraElements = len(infoelements.AntreaSourceStatsElementList) + len(infoelements.AntreaDestinationStatsElementList) + len(infoelements.AntreaLabelsElementList) +
 		len(infoelements.AntreaFlowEndSecondsElementList) + len(infoelements.AntreaThroughputElementList) + len(infoelements.AntreaSourceThroughputElementList) + len(infoelements.AntreaDestinationThroughputElementList)
 	var err error
-	fa.collectingProcess, err = ipfix.NewIPFIXCollectingProcess(cpInput)
+	fa.collectingProcess, err = collector.InitCollectingProcess(cpInput)
 	return err
 }
 
@@ -280,7 +280,7 @@ func (fa *flowAggregator) InitAggregationProcess() error {
 		InactiveExpiryTimeout: fa.inactiveFlowRecordTimeout,
 		AggregateElements:     aggregationElements,
 	}
-	fa.aggregationProcess, err = ipfix.NewIPFIXAggregationProcess(apInput)
+	fa.aggregationProcess, err = ipfixintermediate.InitAggregationProcess(apInput)
 	return err
 }
 
@@ -385,11 +385,11 @@ func (fa *flowAggregator) sendFlowKeyRecord(key ipfixintermediate.FlowKey, recor
 	isRecordIPv4 := fa.aggregationProcess.IsAggregatedRecordIPv4(*record)
 	if !fa.aggregationProcess.AreCorrelatedFieldsFilled(*record) {
 		fa.fillK8sMetadata(key, record.Record)
-		fa.aggregationProcess.SetCorrelatedFieldsFilled(record)
+		fa.aggregationProcess.SetCorrelatedFieldsFilled(record, true)
 	}
 	if fa.includePodLabels && !fa.aggregationProcess.AreExternalFieldsFilled(*record) {
 		fa.fillPodLabels(key, record.Record)
-		fa.aggregationProcess.SetExternalFieldsFilled(record)
+		fa.aggregationProcess.SetExternalFieldsFilled(record, true)
 	}
 	if fa.ipfixExporter != nil {
 		if err := fa.ipfixExporter.AddRecord(record.Record, !isRecordIPv4); err != nil {

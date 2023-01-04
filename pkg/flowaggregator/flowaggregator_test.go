@@ -153,7 +153,7 @@ func TestFlowAggregator_sendFlowKeyRecord(t *testing.T) {
 		mockRecord.EXPECT().GetInfoElementWithValue("sourcePodName").Return(sourcePodNameElem, 0, false)
 		destPodNameElem, _ := ipfixentities.DecodeAndCreateInfoElementWithValue(ipfixentities.NewInfoElement("destinationPodName", 0, 0, ipfixregistry.AntreaEnterpriseID, 0), emptyStr)
 		mockRecord.EXPECT().GetInfoElementWithValue("destinationPodName").Return(destPodNameElem, 0, false)
-		mockAggregationProcess.EXPECT().SetCorrelatedFieldsFilled(tc.flowRecord)
+		mockAggregationProcess.EXPECT().SetCorrelatedFieldsFilled(tc.flowRecord, true)
 		if tc.includePodLabels {
 			mockAggregationProcess.EXPECT().AreExternalFieldsFilled(*tc.flowRecord).Return(false)
 			sourcePodLabelsElement := ipfixentities.NewInfoElement("sourcePodLabels", 0, 0, ipfixregistry.AntreaEnterpriseID, 0)
@@ -164,7 +164,7 @@ func TestFlowAggregator_sendFlowKeyRecord(t *testing.T) {
 			mockIPFIXRegistry.EXPECT().GetInfoElement("destinationPodLabels", ipfixregistry.AntreaEnterpriseID).Return(ipfixentities.NewInfoElement("destinationPodLabels", 0, 0, ipfixregistry.AntreaEnterpriseID, 0), nil)
 			destinationPodLabelsIE, _ := ipfixentities.DecodeAndCreateInfoElementWithValue(destinationPodLabelsElement, bytes.NewBufferString("").Bytes())
 			mockRecord.EXPECT().AddInfoElement(destinationPodLabelsIE).Return(nil)
-			mockAggregationProcess.EXPECT().SetExternalFieldsFilled(tc.flowRecord)
+			mockAggregationProcess.EXPECT().SetExternalFieldsFilled(tc.flowRecord, true)
 		}
 		mockAggregationProcess.EXPECT().IsAggregatedRecordIPv4(*tc.flowRecord).Return(!tc.isIPv6)
 

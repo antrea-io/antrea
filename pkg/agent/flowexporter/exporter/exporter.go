@@ -281,7 +281,7 @@ func (exp *FlowExporter) initFlowExporter() error {
 		// For UDP transport, hardcoding tempRefTimeout value as 1800s.
 		exp.exporterInput.TempRefTimeout = 1800
 	}
-	expProcess, err := ipfix.NewIPFIXExportingProcess(exp.exporterInput)
+	expProcess, err := exporter.InitExportingProcess(exp.exporterInput)
 	if err != nil {
 		return fmt.Errorf("error when starting exporter: %v", err)
 	}
