@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"strings"
@@ -44,12 +45,34 @@ const (
 
 	protocolHTTP = "http"
 
-	scCmdOK = "OK"
+	scCmdRetOK = "OK"
+
+	scCmdReloadTenant            = "reload-tenant"
+	scCmdRegisterTenant          = "register-tenant"
+	scCmdUnregisterTenant        = "unregister-tenant"
+	scCmdRegisterTenantHandler   = "register-tenant-handler"
+	scCmdUnregisterTenantHandler = "unregister-tenant-handler"
+
+	scCmdVersion = "0.2"
 )
 
 type scCmdRet struct {
-	Message string `json:"message"`
+	Message string `json:"message,omitempty"`
 	Return  string `json:"return"`
+}
+
+type scCmdArguments struct {
+	ID       uint32 `json:"id,omitempty"`
+	Filename string `json:"filename,omitempty"`
+	VLAN     string `json:"vlan,omitempty"`
+	Type     string `json:"htype,omitempty"`
+	Args     uint32 `json:"hargs,omitempty"`
+}
+
+type scCmd struct {
+	Command   string         `json:"command,omitempty"`
+	Arguments scCmdArguments `json:"arguments,omitempty"`
+	Version   string         `json:"version,omitempty"`
 }
 
 var (
@@ -83,7 +106,7 @@ func (g *threadSafeInt32Set) delete(key uint32) {
 type Reconciler struct {
 	// Declared as member variables for testing.
 	startSuricataFn func()
-	suricataScFn    func(scCmd string) (*scCmdRet, error)
+	suricataSCFn    func(scCmd *scCmd) (*scCmdRet, error)
 
 	suricataTenantCache        *threadSafeInt32Set
 	suricataTenantHandlerCache *threadSafeInt32Set
@@ -93,7 +116,7 @@ type Reconciler struct {
 
 func NewReconciler() *Reconciler {
 	return &Reconciler{
-		suricataScFn:    suricataSc,
+		suricataSCFn:    suricataSCFn,
 		startSuricataFn: startSuricata,
 		suricataTenantCache: &threadSafeInt32Set{
 			cached: sets.NewInt32(),
@@ -259,7 +282,7 @@ func (r *Reconciler) addBindingSuricataTenant(vlanID uint32, rulesPath string) e
 		if err != nil {
 			return err
 		}
-		if resp.Return != scCmdOK {
+		if resp.Return != scCmdRetOK {
 			return fmt.Errorf("failed to reload Suricata tenant %d with config file %s: %v", vlanID, tenantConfigPath, resp.Message)
 		}
 		klog.V(4).InfoS("Reloaded Suricata tenant successfully", "TenantID", vlanID, "TenantConfigPath", tenantConfigPath, "ResponseMsg", resp.Message)
@@ -271,10 +294,10 @@ func (r *Reconciler) addBindingSuricataTenant(vlanID uint32, rulesPath string) e
 	tenantConfigData := bytes.NewBuffer([]byte(fmt.Sprintf(`%%YAML 1.1
 
 ---
-default-rule-path: /etc/suricata/rules
+default-rule-path: %s
 rule-files:
   - %s
-`, rulesPath)))
+`, tenantRulesDir, rulesPath)))
 	if err = writeConfigFile(tenantConfigPath, tenantConfigData); err != nil {
 		return fmt.Errorf("failed to write config file %s for Suricata tenant %d: %w", tenantConfigPath, vlanID, err)
 	}
@@ -291,7 +314,7 @@ rule-files:
 		if err != nil {
 			return err
 		}
-		if resp.Return != scCmdOK {
+		if resp.Return != scCmdRetOK {
 			return fmt.Errorf("failed to register Suricata tenant %d with config file %s: %v", vlanID, tenantConfigPath, resp.Message)
 		}
 		klog.V(4).InfoS("Registered Suricata tenant successfully", "TenantID", vlanID, "TenantConfigPath", tenantConfigPath, "ResponseMsg", resp.Message)
@@ -304,7 +327,7 @@ rule-files:
 		if err != nil {
 			return err
 		}
-		if resp.Return != scCmdOK {
+		if resp.Return != scCmdRetOK {
 			return fmt.Errorf("failed to register Suricata tenant %d handler to VLAN %d: %v", vlanID, vlanID, resp.Message)
 		}
 		klog.V(4).InfoS("Registered Suricata tenant handler successfully", "TenantID", vlanID, "VLANID", vlanID, "ResponseMsg", resp.Message)
@@ -323,7 +346,7 @@ func (r *Reconciler) deleteBindingSuricataTenant(vlanID uint32) error {
 		if err != nil {
 			return err
 		}
-		if resp.Return != scCmdOK {
+		if resp.Return != scCmdRetOK {
 			return fmt.Errorf("failed to unregister Suricata tenant %d handler: %v", vlanID, resp.Message)
 		}
 		klog.V(4).InfoS("Unregistered Suricata tenant handler successfully", "TenantID", vlanID, "VLANID", vlanID, "ResponseMsg", resp.Message)
@@ -336,7 +359,7 @@ func (r *Reconciler) deleteBindingSuricataTenant(vlanID uint32) error {
 		if err != nil {
 			return err
 		}
-		if resp.Return != scCmdOK {
+		if resp.Return != scCmdRetOK {
 			return fmt.Errorf("failed to unregister Suricata tenant %d: %v", vlanID, resp.Message)
 		}
 		klog.V(4).InfoS("Unregistered Suricata tenant successfully", "TenantID", vlanID, "ResponseMsg", resp.Message)
@@ -354,28 +377,59 @@ func (r *Reconciler) deleteBindingSuricataTenant(vlanID uint32) error {
 }
 
 func (r *Reconciler) reloadSuricataTenant(tenantID uint32, tenantConfigPath string) (*scCmdRet, error) {
-	scCmd := fmt.Sprintf("reload-tenant %d %s", tenantID, tenantConfigPath)
-	return r.suricataScFn(scCmd)
+	cmd := &scCmd{
+		Command: scCmdReloadTenant,
+		Arguments: scCmdArguments{
+			ID:       tenantID,
+			Filename: tenantConfigPath,
+		},
+	}
+	return r.suricataSCFn(cmd)
 }
 
 func (r *Reconciler) registerSuricataTenant(tenantID uint32, tenantConfigPath string) (*scCmdRet, error) {
-	scCmd := fmt.Sprintf("register-tenant %d %s", tenantID, tenantConfigPath)
-	return r.suricataScFn(scCmd)
+	cmd := &scCmd{
+		Command: scCmdRegisterTenant,
+		Arguments: scCmdArguments{
+			ID:       tenantID,
+			Filename: tenantConfigPath,
+		},
+	}
+	return r.suricataSCFn(cmd)
 }
 
 func (r *Reconciler) unregisterSuricataTenant(tenantID uint32) (*scCmdRet, error) {
-	scCmd := fmt.Sprintf("unregister-tenant %d", tenantID)
-	return r.suricataScFn(scCmd)
+	cmd := &scCmd{
+		Command: scCmdUnregisterTenant,
+		Arguments: scCmdArguments{
+			ID: tenantID,
+		},
+	}
+	return r.suricataSCFn(cmd)
 }
 
 func (r *Reconciler) registerSuricataTenantHandler(tenantID, vlanID uint32) (*scCmdRet, error) {
-	scCmd := fmt.Sprintf("register-tenant-handler %d vlan %d", tenantID, vlanID)
-	return r.suricataScFn(scCmd)
+	cmd := &scCmd{
+		Command: scCmdRegisterTenantHandler,
+		Arguments: scCmdArguments{
+			ID:   tenantID,
+			Type: "vlan",
+			Args: vlanID,
+		},
+	}
+	return r.suricataSCFn(cmd)
 }
 
 func (r *Reconciler) unregisterSuricataTenantHandler(tenantID, vlanID uint32) (*scCmdRet, error) {
-	scCmd := fmt.Sprintf("unregister-tenant-handler %d vlan %d", tenantID, vlanID)
-	return r.suricataScFn(scCmd)
+	cmd := &scCmd{
+		Command: scCmdUnregisterTenantHandler,
+		Arguments: scCmdArguments{
+			ID:   tenantID,
+			Type: "vlan",
+			Args: vlanID,
+		},
+	}
+	return r.suricataSCFn(cmd)
 }
 
 func (r *Reconciler) startSuricata() {
@@ -456,15 +510,71 @@ func startSuricata() {
 	}
 }
 
-func suricataSc(scCmd string) (*scCmdRet, error) {
-	cmd := exec.Command("suricatasc", "-c", scCmd)
-	retBytes, err := cmd.CombinedOutput()
+func suricataSCFn(cmd *scCmd) (*scCmdRet, error) {
+	conn, err := newSuricataSC()
 	if err != nil {
-		return nil, fmt.Errorf("failed to run Suricata command '%s': %w", scCmd, err)
-	}
-	var ret scCmdRet
-	if err = json.Unmarshal(retBytes, &ret); err != nil {
 		return nil, err
 	}
+	defer conn.Close()
+
+	if err = conn.connect(); err != nil {
+		return nil, err
+	}
+
+	return conn.sendCommand(cmd)
+}
+
+type suricataSC struct {
+	net.Conn
+}
+
+func newSuricataSC() (*suricataSC, error) {
+	var err error
+	var conn net.Conn
+
+	timeOut := 1
+	for {
+		conn, err = net.Dial("unix", suricataCommandSocket)
+		if err != nil {
+			klog.V(4).ErrorS(err, "failed to dial to Suricata socket file")
+			time.Sleep(time.Duration(timeOut) * time.Second)
+			timeOut = timeOut * 2
+			continue
+		}
+		break
+	}
+
+	return &suricataSC{conn}, nil
+}
+
+func (s *suricataSC) sendCommand(cmd *scCmd) (*scCmdRet, error) {
+	cmdBytes, err := json.Marshal(cmd)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal Suricata command %v: %w", cmd, err)
+	}
+	cmdBytes = append(cmdBytes, '\n')
+	if _, err = s.Write(cmdBytes); err != nil {
+		return nil, fmt.Errorf("failed to send command to Suricata socket file: %w", err)
+	}
+
+	retBytes := make([]byte, 1024)
+	n, err := s.Read(retBytes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read message from Suricata socket file: %w", err)
+	}
+
+	var ret scCmdRet
+	if err = json.Unmarshal(retBytes[:n], &ret); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal returned message %s: %w", string(retBytes), err)
+	}
 	return &ret, nil
+}
+
+func (s *suricataSC) connect() error {
+	// Before sending command to the socket file, send version to it.
+	cmd := &scCmd{Version: scCmdVersion}
+	if _, err := s.sendCommand(cmd); err != nil {
+		return err
+	}
+	return nil
 }

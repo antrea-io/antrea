@@ -15,6 +15,7 @@
 package l7engine
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/spf13/afero"
@@ -36,9 +37,10 @@ func newFakeSuricata() *fakeSuricata {
 	}
 }
 
-func (f *fakeSuricata) suricataScFunc(scCmd string) (*scCmdRet, error) {
-	f.calledScCommands.Insert(scCmd)
-	return &scCmdRet{Return: scCmdOK}, nil
+func (f *fakeSuricata) suricataSCFn(cmd *scCmd) (*scCmdRet, error) {
+	cmdBytes, _ := json.Marshal(cmd)
+	f.calledScCommands.Insert(string(cmdBytes))
+	return &scCmdRet{Return: scCmdRetOK}, nil
 }
 
 func (f *fakeSuricata) startSuricataFn() {
@@ -100,7 +102,7 @@ func TestStartSuricata(t *testing.T) {
 
 	fe := NewReconciler()
 	fs := newFakeSuricata()
-	fe.suricataScFn = fs.suricataScFunc
+	fe.suricataSCFn = fs.suricataSCFn
 	fe.startSuricataFn = fs.startSuricataFn
 
 	fe.startSuricata()
@@ -183,7 +185,7 @@ func TestRuleLifecycle(t *testing.T) {
 
 			fe := NewReconciler()
 			fs := newFakeSuricata()
-			fe.suricataScFn = fs.suricataScFunc
+			fe.suricataSCFn = fs.suricataSCFn
 			fe.startSuricataFn = fs.startSuricataFn
 
 			// Test add a L7 NetworkPolicy.
@@ -199,19 +201,19 @@ func TestRuleLifecycle(t *testing.T) {
 			assert.NoError(t, err)
 			assert.True(t, ok)
 
-			expectedScCommands := sets.NewString("register-tenant 1 /etc/suricata/antrea-tenant-1.yaml", "register-tenant-handler 1 vlan 1")
+			expectedSCCommands := sets.NewString(`{"command":"register-tenant","arguments":{"id":1,"filename":"/etc/suricata/antrea-tenant-1.yaml"}}`, `{"command":"register-tenant-handler","arguments":{"id":1,"htype":"vlan","hargs":1}}`)
 			assert.True(t, fs.startSuricataFnCalled)
-			assert.Equal(t, expectedScCommands, fs.calledScCommands)
+			assert.Equal(t, expectedSCCommands, fs.calledScCommands)
 
 			// Update the added L7 NetworkPolicy.
 			assert.NoError(t, fe.AddRule(ruleID, policyName, vlanID, tc.updatedL7Protocols))
-			expectedScCommands.Insert("reload-tenant 1 /etc/suricata/antrea-tenant-1.yaml")
-			assert.Equal(t, expectedScCommands, fs.calledScCommands)
+			expectedSCCommands.Insert(`{"command":"reload-tenant","arguments":{"id":1,"filename":"/etc/suricata/antrea-tenant-1.yaml"}}`)
+			assert.Equal(t, expectedSCCommands, fs.calledScCommands)
 
 			// Delete the L7 NetworkPolicy.
 			assert.NoError(t, fe.DeleteRule(ruleID, vlanID))
-			expectedScCommands.Insert("unregister-tenant-handler 1 vlan 1", "unregister-tenant 1")
-			assert.Equal(t, expectedScCommands, fs.calledScCommands)
+			expectedSCCommands.Insert(`{"command":"unregister-tenant-handler","arguments":{"id":1,"htype":"vlan","hargs":1}}`, `{"command":"unregister-tenant","arguments":{"id":1}}`)
+			assert.Equal(t, expectedSCCommands, fs.calledScCommands)
 
 			exists, err := afero.Exists(defaultFS, rulesPath)
 			assert.NoError(t, err)
