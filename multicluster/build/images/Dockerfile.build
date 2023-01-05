@@ -28,7 +28,7 @@ RUN cd multicluster && make build
 FROM gcr.io/distroless/static:nonroot
 
 LABEL maintainer="Antrea <projectantrea-dev@googlegroups.com>"
-LABEL description="The Docker image to deploy the Antrea Multicluster controller."
+LABEL description="The Docker image to deploy the Antrea Multi-cluster Controller."
 
 USER root
 

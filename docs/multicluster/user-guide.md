@@ -75,8 +75,8 @@ antrea-agent.conf: |
     Multicluster: true
 ...
   multicluster:
-    enable: true
-    namespace: ""
+    enableGateway: true
+    namespace: "" # Change to the Namespace where antrea-mc-controller is deployed.
 ```
 
 At the moment, Multi-cluster Gateway only works with the Antrea `encap` traffic

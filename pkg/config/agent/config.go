@@ -279,13 +279,16 @@ type IPsecConfig struct {
 }
 
 type MulticlusterConfig struct {
-	// Enable Multicluster which allows cross-cluster traffic between member clusters
-	// in a ClusterSet.
+	// Deprecated and replaced by "enableGateway". Keep the field in MulticlusterConfig to be
+	// compatible with earlier version (<= v1.10) Antrea deployment manifests.
 	Enable bool `yaml:"enable,omitempty"`
-	// The Namespace where the Antrea Multi-cluster controller is running.
+	// Enable Multi-cluster Gateway.
+	EnableGateway bool `yaml:"enableGateway,omitempty"`
+	// The Namespace where Antrea Multi-cluster Controller is running.
 	// The default is antrea-agent's Namespace.
 	Namespace string `yaml:"namespace,omitempty"`
-	// Enable StretchedNetworkPolicy which could be enforced on cross-cluster traffic.
+	// Enable StretchedNetworkPolicy which allows Antrea-native policies to select peers from
+	// other clusters in a ClusterSet.
 	EnableStretchedNetworkPolicy bool `yaml:"enableStretchedNetworkPolicy,omitempty"`
 }
 

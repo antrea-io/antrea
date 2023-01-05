@@ -135,11 +135,12 @@ func run(o *Options) error {
 	enableAntreaIPAM := features.DefaultFeatureGate.Enabled(features.AntreaIPAM)
 	enableBridgingMode := enableAntreaIPAM && o.config.EnableBridgingMode
 	enableNodePortLocal := features.DefaultFeatureGate.Enabled(features.NodePortLocal) && o.config.NodePortLocal.Enable
-	enableMulticluster := features.DefaultFeatureGate.Enabled(features.Multicluster) && o.config.Multicluster.Enable
 	l7NetworkPolicyEnabled := features.DefaultFeatureGate.Enabled(features.L7NetworkPolicy)
+	enableMulticlusterGW := features.DefaultFeatureGate.Enabled(features.Multicluster) && o.config.Multicluster.EnableGateway
+	enableMulticlusterNP := features.DefaultFeatureGate.Enabled(features.Multicluster) && o.config.Multicluster.EnableStretchedNetworkPolicy
+
 	// Bridging mode will connect the uplink interface to the OVS bridge.
 	connectUplinkToBridge := enableBridgingMode
-
 	ovsDatapathType := ovsconfig.OVSDatapathType(o.config.OVSDatapathType)
 	ovsBridgeClient := ovsconfig.NewOVSBridge(o.config.OVSBridge, ovsDatapathType, ovsdbConnection)
 	ovsCtlClient := ovsctl.NewClient(o.config.OVSBridge)
@@ -155,7 +156,7 @@ func run(o *Options) error {
 		connectUplinkToBridge,
 		multicastEnabled,
 		features.DefaultFeatureGate.Enabled(features.TrafficControl),
-		features.DefaultFeatureGate.Enabled(features.Multicluster),
+		enableMulticlusterGW,
 	)
 
 	var serviceCIDRNet *net.IPNet
@@ -304,7 +305,7 @@ func run(o *Options) error {
 	// Initialize localPodInformer for NPLAgent, AntreaIPAMController,
 	// StretchedNetworkPolicyController, and secondary network controller.
 	var localPodInformer cache.SharedIndexInformer
-	if enableNodePortLocal || enableBridgingMode || enableMulticluster ||
+	if enableNodePortLocal || enableBridgingMode || enableMulticlusterNP ||
 		features.DefaultFeatureGate.Enabled(features.SecondaryNetwork) ||
 		features.DefaultFeatureGate.Enabled(features.TrafficControl) {
 		listOptions := func(options *metav1.ListOptions) {
@@ -322,8 +323,7 @@ func run(o *Options) error {
 	var mcRouteController *mcroute.MCRouteController
 	var mcStrechedNetworkPolicyController *mcroute.StretchedNetworkPolicyController
 	var mcInformerFactory mcinformers.SharedInformerFactory
-
-	if enableMulticluster {
+	if enableMulticlusterGW {
 		mcNamespace := env.GetPodNamespace()
 		if o.config.Multicluster.Namespace != "" {
 			mcNamespace = o.config.Multicluster.Namespace
@@ -331,7 +331,6 @@ func run(o *Options) error {
 		mcInformerFactory = mcinformers.NewSharedInformerFactory(mcClient, informerDefaultResync)
 		gwInformer := mcInformerFactory.Multicluster().V1alpha1().Gateways()
 		ciImportInformer := mcInformerFactory.Multicluster().V1alpha1().ClusterInfoImports()
-		labelIDInformer := mcInformerFactory.Multicluster().V1alpha1().LabelIdentities()
 		mcRouteController = mcroute.NewMCRouteController(
 			mcClient,
 			gwInformer,
@@ -343,17 +342,19 @@ func run(o *Options) error {
 			mcNamespace,
 			o.config.Multicluster.EnableStretchedNetworkPolicy,
 		)
-		if o.config.Multicluster.EnableStretchedNetworkPolicy {
-			mcStrechedNetworkPolicyController = mcroute.NewMCAgentStretchedNetworkPolicyController(
-				ofClient,
-				ifaceStore,
-				localPodInformer,
-				informerFactory.Core().V1().Namespaces(),
-				labelIDInformer,
-				podUpdateChannel,
-			)
-		}
 	}
+	if enableMulticlusterNP {
+		labelIDInformer := mcInformerFactory.Multicluster().V1alpha1().LabelIdentities()
+		mcStrechedNetworkPolicyController = mcroute.NewMCAgentStretchedNetworkPolicyController(
+			ofClient,
+			ifaceStore,
+			localPodInformer,
+			informerFactory.Core().V1().Namespaces(),
+			labelIDInformer,
+			podUpdateChannel,
+		)
+	}
+
 	var groupCounters []proxytypes.GroupCounter
 	groupIDUpdates := make(chan string, 100)
 	v4GroupIDAllocator := openflow.NewGroupAllocator(false)
@@ -751,12 +752,12 @@ func run(o *Options) error {
 		go mcastController.Run(stopCh)
 	}
 
-	if enableMulticluster {
+	if enableMulticlusterGW {
 		mcInformerFactory.Start(stopCh)
 		go mcRouteController.Run(stopCh)
-		if o.config.Multicluster.EnableStretchedNetworkPolicy {
-			go mcStrechedNetworkPolicyController.Run(stopCh)
-		}
+	}
+	if enableMulticlusterNP {
+		go mcStrechedNetworkPolicyController.Run(stopCh)
 	}
 
 	// statsCollector collects stats and reports to the antrea-controller periodically. For now it's only used for
