@@ -86,6 +86,13 @@ func deletePodWrapper(tb testing.TB, data *MCTestData, clusterName string, names
 	}
 }
 
+func deletePodAndWaitWrapper(tb testing.TB, data *MCTestData, clusterName string, namespace string, name string) {
+	tb.Logf("Deleting Pod '%s' in Namespace %s of cluster %s", name, namespace, clusterName)
+	if err := data.deletePodAndWait(clusterName, namespace, name); err != nil {
+		tb.Logf("Error when deleting Pod: %v", err)
+	}
+}
+
 func deleteServiceWrapper(tb testing.TB, data *MCTestData, clusterName string, namespace string, name string) {
 	tb.Logf("Deleting Service '%s' in Namespace %s of cluster %s", name, namespace, clusterName)
 	if err := data.deleteService(clusterName, namespace, name); err != nil {

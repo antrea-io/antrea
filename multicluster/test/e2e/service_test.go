@@ -127,6 +127,10 @@ func testStretchedNetworkPolicy(t *testing.T, data *MCTestData) {
 	data.testStretchedNetworkPolicy(t)
 }
 
+func testStretchedNetworkPolicyReject(t *testing.T, data *MCTestData) {
+	data.testStretchedNetworkPolicyReject(t)
+}
+
 func testStretchedNetworkPolicyUpdatePod(t *testing.T, data *MCTestData) {
 	data.testStretchedNetworkPolicyUpdatePod(t)
 }
@@ -228,17 +232,17 @@ func (data *MCTestData) testStretchedNetworkPolicy(t *testing.T) {
 	acnpBuilder1 = acnpBuilder1.SetName("drop-client-pod-sel").
 		SetPriority(1.0).
 		SetAppliedToGroup([]e2euttils.ACNPAppliedToSpec{{PodSelector: map[string]string{"app": "nginx"}}}).
-		AddStretchedIngressRule(map[string]string{"antrea-e2e": eastGwClientName}, nil, "", nil, crdv1alpha1.RuleActionReject).
-		AddStretchedIngressRule(map[string]string{"antrea-e2e": eastRegularClientName}, map[string]string{"kubernetes.io/metadata.name": multiClusterTestNamespace}, "", nil, crdv1alpha1.RuleActionReject)
+		AddStretchedIngressRule(map[string]string{"antrea-e2e": eastGwClientName}, nil, "", nil, crdv1alpha1.RuleActionDrop).
+		AddStretchedIngressRule(map[string]string{"antrea-e2e": eastRegularClientName}, map[string]string{"kubernetes.io/metadata.name": multiClusterTestNamespace}, "", nil, crdv1alpha1.RuleActionDrop)
 	if _, err := data.createOrUpdateACNP(westCluster, acnpBuilder1.Get()); err != nil {
 		t.Fatalf("Error creating ACNP %s: %v", acnpBuilder1.Name, err)
 	}
 
 	connectivity := data.probeFromPodInCluster(eastCluster, multiClusterTestNamespace, eastGwClientName, "client", westExpSvcIP, mcWestClusterTestService, 80, corev1.ProtocolTCP)
-	assert.Equal(t, antreae2e.Rejected, connectivity, getStretchedNetworkPolicyErrorMessage(eastGwClientName))
+	assert.Equal(t, antreae2e.Dropped, connectivity, getStretchedNetworkPolicyErrorMessage(eastGwClientName))
 
 	connectivity = data.probeFromPodInCluster(eastCluster, multiClusterTestNamespace, eastRegularClientName, "client", westExpSvcIP, mcWestClusterTestService, 80, corev1.ProtocolTCP)
-	assert.Equal(t, antreae2e.Rejected, connectivity, getStretchedNetworkPolicyErrorMessage(eastRegularClientName))
+	assert.Equal(t, antreae2e.Dropped, connectivity, getStretchedNetworkPolicyErrorMessage(eastRegularClientName))
 	data.deleteACNP(westCluster, acnpBuilder1.Name)
 
 	// Verify that Stretched NetworkPolicy works fine with nsSelect.
@@ -258,6 +262,49 @@ func (data *MCTestData) testStretchedNetworkPolicy(t *testing.T) {
 
 	connectivity = data.probeFromPodInCluster(eastCluster, multiClusterTestNamespace, eastRegularClientName, "client", westExpSvcIP, mcWestClusterTestService, 80, corev1.ProtocolTCP)
 	assert.Equal(t, antreae2e.Dropped, connectivity, getStretchedNetworkPolicyErrorMessage(eastRegularClientName))
+}
+
+func (data *MCTestData) testStretchedNetworkPolicyReject(t *testing.T) {
+	westExpSvcInEast, err := data.getService(eastCluster, multiClusterTestNamespace, mcWestClusterTestService)
+	if err != nil {
+		t.Fatalf("Error when getting the imported Service %s: %v", mcWestClusterTestService, err)
+	}
+	westExpSvcInEastIP := westExpSvcInEast.Spec.ClusterIP
+
+	eastGwClientName := getClusterGatewayClientPodName(eastCluster)
+	eastRegularClientName := getClusterRegularClientPodName(eastCluster)
+
+	acnpBuilder := &e2euttils.ClusterNetworkPolicySpecBuilder{}
+	acnpBuilder = acnpBuilder.SetName("drop-client-pod-sel").
+		SetPriority(1.0).
+		SetAppliedToGroup([]e2euttils.ACNPAppliedToSpec{{PodSelector: map[string]string{"app": "nginx"}}}).
+		AddStretchedIngressRule(map[string]string{"app": "client"}, nil, "", nil, crdv1alpha1.RuleActionReject)
+	if _, err := data.createOrUpdateACNP(westCluster, acnpBuilder.Get()); err != nil {
+		t.Fatalf("Error creating ACNP %s: %v", acnpBuilder.Name, err)
+	}
+	defer data.deleteACNP(westCluster, acnpBuilder.Name)
+
+	testConnectivity := func() {
+		connectivity := data.probeFromPodInCluster(eastCluster, multiClusterTestNamespace, eastGwClientName, "client", westExpSvcInEastIP, mcWestClusterTestService, 80, corev1.ProtocolTCP)
+		assert.Equal(t, antreae2e.Rejected, connectivity, getStretchedNetworkPolicyErrorMessage(eastGwClientName))
+
+		connectivity = data.probeFromPodInCluster(eastCluster, multiClusterTestNamespace, eastRegularClientName, "client", westExpSvcInEastIP, mcWestClusterTestService, 80, corev1.ProtocolTCP)
+		assert.Equal(t, antreae2e.Rejected, connectivity, getStretchedNetworkPolicyErrorMessage(eastRegularClientName))
+	}
+
+	// Test when the server Pod is created and running on the Gateway Node.
+	deletePodAndWaitWrapper(t, data, westCluster, multiClusterTestNamespace, testServerPod)
+	if err := createPodWrapper(t, data, westCluster, multiClusterTestNamespace, testServerPod+"-gw", data.clusterGateways[westCluster], nginxImage, "nginx", nil, nil, nil, nil, false, nil); err != nil {
+		t.Fatalf("Error when creating nginx Pod in cluster %s: %v", westCluster, err)
+	}
+	testConnectivity()
+
+	// Test when the server Pod is created and running on the regular Node.
+	deletePodAndWaitWrapper(t, data, westCluster, multiClusterTestNamespace, testServerPod+"-gw")
+	if err := createPodWrapper(t, data, westCluster, multiClusterTestNamespace, testServerPod+"-regular", data.clusterRegularNodes[westCluster], nginxImage, "nginx", nil, nil, nil, nil, false, nil); err != nil {
+		t.Fatalf("Error when creating nginx Pod in cluster %s: %v", westCluster, err)
+	}
+	testConnectivity()
 }
 
 func (data *MCTestData) testStretchedNetworkPolicyUpdatePod(t *testing.T) {

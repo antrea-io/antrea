@@ -579,7 +579,7 @@ func testExternalIPAccess(t *testing.T, data *TestData) {
 			// Create agnhost Pods on each Node.
 			for idx, node := range nodes {
 				createAgnhostPod(t, data, agnhosts[idx], node, false)
-				defer data.deletePodAndWait(defaultTimeout, agnhosts[idx], data.testNamespace)
+				defer data.DeletePodAndWait(defaultTimeout, agnhosts[idx], data.testNamespace)
 			}
 			var port int32 = 8080
 			externalIPTestCases := []struct {
@@ -670,7 +670,7 @@ sleep 3600`, tt.clientName, tt.clientIP, tt.localIP, tt.clientIPMaskLen)
 						return false, nil
 					})
 					require.NoError(t, err)
-					defer data.deletePodAndWait(defaultTimeout, tt.clientName, data.testNamespace)
+					defer data.DeletePodAndWait(defaultTimeout, tt.clientName, data.testNamespace)
 
 					hostNameUrl := fmt.Sprintf("%s/%s", baseUrl, "hostname")
 					probeCmd := fmt.Sprintf("ip netns exec %s curl --connect-timeout 1 --retry 5 --retry-connrefused %s", tt.clientName, hostNameUrl)

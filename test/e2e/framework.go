@@ -1361,7 +1361,7 @@ func (data *TestData) DeletePod(namespace, name string) error {
 
 // Deletes a Pod in the test namespace then waits us to timeout for the Pod not to be visible to the
 // client anymore.
-func (data *TestData) deletePodAndWait(timeout time.Duration, name string, ns string) error {
+func (data *TestData) DeletePodAndWait(timeout time.Duration, name string, ns string) error {
 	if err := data.DeletePod(ns, name); err != nil {
 		return err
 	}
