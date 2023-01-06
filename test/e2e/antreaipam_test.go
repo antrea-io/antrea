@@ -336,7 +336,7 @@ func testAntreaIPAMStatefulSet(t *testing.T, data *TestData, dedicatedIPPoolKey 
 	if err != nil {
 		t.Fatalf("Error when creating Pod '%s': %v", podName, err)
 	}
-	defer data.deletePodAndWait(defaultTimeout, podName, testAntreaIPAMNamespace)
+	defer data.DeletePodAndWait(defaultTimeout, podName, testAntreaIPAMNamespace)
 	podIPs, err := data.podWaitForIPs(defaultTimeout, podName, testAntreaIPAMNamespace)
 	if err != nil {
 		t.Fatalf("Error when waiting Pod IPs: %v", err)
@@ -376,7 +376,7 @@ func testAntreaIPAMStatefulSet(t *testing.T, data *TestData, dedicatedIPPoolKey 
 	}
 	checkStatefulSetIPPoolAllocation(t, data, stsName, testAntreaIPAMNamespace, ipPoolName, ipOffsets, reservedIPOffsets)
 
-	data.deletePodAndWait(defaultTimeout, podName, testAntreaIPAMNamespace)
+	data.DeletePodAndWait(defaultTimeout, podName, testAntreaIPAMNamespace)
 	_, err = data.restartStatefulSet(stsName, testAntreaIPAMNamespace)
 	if err != nil {
 		t.Fatalf("Error when restarting StatefulSet '%s': %v", stsName, err)

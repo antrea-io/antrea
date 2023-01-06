@@ -211,7 +211,7 @@ func (data *TestData) testDeletePod(t *testing.T, podName string, nodeName strin
 	}
 
 	t.Logf("Deleting Pod '%s'", podName)
-	if err := data.deletePodAndWait(defaultTimeout, podName, namespace); err != nil {
+	if err := data.DeletePodAndWait(defaultTimeout, podName, namespace); err != nil {
 		t.Fatalf("Error when deleting Pod: %v", err)
 	}
 
