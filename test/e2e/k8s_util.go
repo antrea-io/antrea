@@ -38,6 +38,8 @@ import (
 	"antrea.io/antrea/test/e2e/utils"
 )
 
+var ErrPodNotFound = errors.New("pod not found")
+
 type KubernetesUtils struct {
 	*TestData
 	podCache map[string][]v1.Pod
@@ -89,7 +91,11 @@ type probeResult struct {
 	err          error
 }
 
-var ErrPodNotFound = errors.New("Pod not found")
+// TestNamespaceMeta holds the relevant metadata of a test Namespace during initialization.
+type TestNamespaceMeta struct {
+	Name   string
+	Labels map[string]string
+}
 
 // GetPodByLabel returns a Pod with the matching Namespace and "pod" label if it's found.
 // If the pod is not found, GetPodByLabel returns "ErrPodNotFound".
@@ -736,9 +742,9 @@ func (data *TestData) DeleteNetworkPolicy(ns, name string) error {
 }
 
 // CleanNetworkPolicies is a convenience function for deleting NetworkPolicies in the provided namespaces.
-func (data *TestData) CleanNetworkPolicies(namespaces map[string]string) error {
+func (data *TestData) CleanNetworkPolicies(namespaces map[string]TestNamespaceMeta) error {
 	for _, ns := range namespaces {
-		if err := data.clientset.NetworkingV1().NetworkPolicies(ns).DeleteCollection(context.TODO(), metav1.DeleteOptions{}, metav1.ListOptions{}); err != nil {
+		if err := data.clientset.NetworkingV1().NetworkPolicies(ns.Name).DeleteCollection(context.TODO(), metav1.DeleteOptions{}, metav1.ListOptions{}); err != nil {
 			return fmt.Errorf("unable to delete NetworkPolicies in Namespace '%s': %w", ns, err)
 		}
 	}
@@ -830,6 +836,35 @@ func (k *KubernetesUtils) CreateOrUpdateGroup(g *crdv1beta1.Group) (*crdv1beta1.
 // GetCG is a convenience function for getting ClusterGroups
 func (k *KubernetesUtils) GetCG(name string) (*crdv1beta1.ClusterGroup, error) {
 	return k.crdClient.CrdV1beta1().ClusterGroups().Get(context.TODO(), name, metav1.GetOptions{})
+}
+
+// CreateGroup is a convenience function for creating an Antrea Group by namespace, name and selector.
+func (k *KubernetesUtils) CreateGroup(namespace, name string, pSelector, nSelector *metav1.LabelSelector, ipBlocks []crdv1beta1.IPBlock) (*crdv1beta1.Group, error) {
+	log.Infof("Creating group %s/%s", namespace, name)
+	_, err := k.crdClient.CrdV1alpha3().Groups(namespace).Get(context.TODO(), name, metav1.GetOptions{})
+	if err != nil {
+		g := &crdv1beta1.Group{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: namespace,
+				Name:      name,
+			},
+		}
+		if pSelector != nil {
+			g.Spec.PodSelector = pSelector
+		}
+		if nSelector != nil {
+			g.Spec.NamespaceSelector = nSelector
+		}
+		if len(ipBlocks) > 0 {
+			g.Spec.IPBlocks = ipBlocks
+		}
+		g, err = k.crdClient.CrdV1beta1().Groups(namespace).Create(context.TODO(), g, metav1.CreateOptions{})
+		if err != nil {
+			log.Debugf("Unable to create group %s/%s: %s", namespace, name, err)
+		}
+		return g, err
+	}
+	return nil, fmt.Errorf("group with name %s/%s already exists", namespace, name)
 }
 
 // GetGroup is a convenience function for getting Groups
@@ -1101,10 +1136,15 @@ func (k *KubernetesUtils) ValidateRemoteCluster(remoteCluster *KubernetesUtils, 
 	}
 }
 
-func (k *KubernetesUtils) Bootstrap(namespaces map[string]string, pods []string, createNamespaces bool, nodeNames map[string]string, hostNetworks map[string]bool) (map[string][]string, error) {
+func (k *KubernetesUtils) Bootstrap(namespaces map[string]TestNamespaceMeta, pods []string, createNamespaces bool, nodeNames map[string]string, hostNetworks map[string]bool) (map[string][]string, error) {
 	for key, ns := range namespaces {
 		if createNamespaces {
-			_, err := k.CreateOrUpdateNamespace(ns, map[string]string{"ns": ns})
+			if ns.Labels == nil {
+				ns.Labels = make(map[string]string)
+			}
+			// convenience label for testing
+			ns.Labels["ns"] = ns.Name
+			_, err := k.CreateOrUpdateNamespace(ns.Name, ns.Labels)
 			if err != nil {
 				return nil, fmt.Errorf("unable to create/update ns %s: %w", ns, err)
 			}
@@ -1119,8 +1159,8 @@ func (k *KubernetesUtils) Bootstrap(namespaces map[string]string, pods []string,
 		}
 		for _, pod := range pods {
 			log.Infof("Creating/updating Pod '%s/%s'", ns, pod)
-			deployment := ns + pod
-			_, err := k.CreateOrUpdateDeployment(ns, deployment, 1, map[string]string{"pod": pod, "app": pod}, nodeName, hostNetwork)
+			deployment := ns.Name + pod
+			_, err := k.CreateOrUpdateDeployment(ns.Name, deployment, 1, map[string]string{"pod": pod, "app": pod}, nodeName, hostNetwork)
 			if err != nil {
 				return nil, fmt.Errorf("unable to create/update Deployment '%s/%s': %w", ns, pod, err)
 			}
@@ -1130,7 +1170,7 @@ func (k *KubernetesUtils) Bootstrap(namespaces map[string]string, pods []string,
 	podIPs := make(map[string][]string, len(pods)*len(namespaces))
 	for _, podName := range pods {
 		for _, ns := range namespaces {
-			allPods = append(allPods, NewPod(ns, podName))
+			allPods = append(allPods, NewPod(ns.Name, podName))
 		}
 	}
 	for _, pod := range allPods {
@@ -1150,7 +1190,7 @@ func (k *KubernetesUtils) Bootstrap(namespaces map[string]string, pods []string,
 	return podIPs, nil
 }
 
-func (k *KubernetesUtils) Cleanup(namespaces map[string]string) {
+func (k *KubernetesUtils) Cleanup(namespaces map[string]TestNamespaceMeta) {
 	// Cleanup any cluster-scoped resources.
 	if err := k.CleanACNPs(); err != nil {
 		log.Errorf("Error when cleaning up ACNPs: %v", err)
@@ -1161,7 +1201,7 @@ func (k *KubernetesUtils) Cleanup(namespaces map[string]string) {
 
 	for _, ns := range namespaces {
 		log.Infof("Deleting test Namespace %s", ns)
-		if err := k.DeleteNamespace(ns, defaultTimeout); err != nil {
+		if err := k.DeleteNamespace(ns.Name, defaultTimeout); err != nil {
 			log.Errorf("Error when deleting Namespace '%s': %v", ns, err)
 		}
 	}
