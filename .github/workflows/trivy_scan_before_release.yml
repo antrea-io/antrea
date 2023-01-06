@@ -1,0 +1,25 @@
+name: Scan Antrea Docker image for vulnerabilities before release
+
+on:
+  pull_request:
+    branches:
+      - release-*
+
+jobs:
+  build:
+    if: startsWith(github.event.pull_request.title, 'Release ')
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - uses: actions/setup-go@v3
+      with:
+        go-version-file: 'go.mod'
+    - name: Build Antrea Docker image
+      run: |
+        ./hack/build-antrea-linux-all.sh --pull
+    - name: Run Trivy vulnerability scanner on Antrea Docker image
+      uses: aquasecurity/trivy-action@0.8.0
+      with:
+        scan-type: 'image'
+        image-ref: 'antrea/antrea-ubuntu:latest'
+        trivy-config: '.trivy.yml'
