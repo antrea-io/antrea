@@ -29,6 +29,9 @@
         },
         {
             "pattern": "https://avinetworks.com/*"
+        },
+        {
+            "pattern": "https://suricata.io/"
         }
     ],
     "retryOn429": false,
