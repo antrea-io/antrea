@@ -656,6 +656,9 @@ func (v *antreaPolicyValidator) validatePeers(ingress, egress []crdv1beta1.Rule)
 			if peer.NamespaceSelector != nil && peer.Namespaces != nil {
 				return "namespaces and namespaceSelector cannot be set at the same time for a single NetworkPolicyPeer", false
 			}
+			if peer.Namespaces != nil && numFieldsSetInStruct(*peer.Namespaces) > 1 {
+				return "only one matching criteria can be specified in a single peer namespaces field", false
+			}
 			peerFieldsNum := numFieldsSetInStruct(peer)
 			if peer.Group != "" && peerFieldsNum > 1 {
 				return "group cannot be set with other peers in rules", false

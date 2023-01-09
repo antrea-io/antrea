@@ -325,6 +325,26 @@ func (r *Reachability) ExpectEgressToNamespace(pod Pod, namespace string, connec
 	}
 }
 
+func (r *Reachability) ExpectNamespaceIngressFromNamespace(dstNamespace, srcNamespace string, connectivity PodConnectivityMark) {
+	dstPods, ok := r.PodsByNamespace[dstNamespace]
+	if !ok {
+		panic(fmt.Errorf("destination Namespace %s is not found", dstNamespace))
+	}
+	for _, p := range dstPods {
+		r.ExpectIngressFromNamespace(p, srcNamespace, connectivity)
+	}
+}
+
+func (r *Reachability) ExpectNamespaceEgressToNamespace(srcNamespace, dstNamespace string, connectivity PodConnectivityMark) {
+	srcPods, ok := r.PodsByNamespace[srcNamespace]
+	if !ok {
+		panic(fmt.Errorf("src Namespace %s is not found", srcNamespace))
+	}
+	for _, p := range srcPods {
+		r.ExpectEgressToNamespace(p, dstNamespace, connectivity)
+	}
+}
+
 func (r *Reachability) Observe(pod1 Pod, pod2 Pod, connectivity PodConnectivityMark) {
 	r.Observed.Set(string(pod1), string(pod2), connectivity)
 }

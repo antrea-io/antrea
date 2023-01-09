@@ -117,7 +117,7 @@ func (n *NetworkPolicyController) filterPerNamespaceRuleACNPsByNSLabels(nsLabels
 
 	peerNamespacesSelectorExists := func(peers []crdv1beta1.NetworkPolicyPeer) bool {
 		for _, peer := range peers {
-			if peer.Namespaces != nil && peer.Namespaces.Match == crdv1beta1.NamespaceMatchSelf {
+			if peer.Namespaces != nil {
 				return true
 			}
 		}

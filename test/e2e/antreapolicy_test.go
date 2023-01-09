@@ -137,10 +137,10 @@ func initNamespaceMeta(formFactor string) map[string]TestNamespaceMeta {
 			}
 			allNamespaceMeta["dev"+strconv.Itoa(i)] = devNS
 		}
-		allNamespaceMeta["no-tier-label"] = TestNamespaceMeta{
-			Name: "no-tier-label-" + suffix,
+		allNamespaceMeta["no-tier"] = TestNamespaceMeta{
+			Name: "no-tier-" + suffix,
 			Labels: map[string]string{
-				"purpose": "test",
+				"purpose": "test-exclusion",
 			},
 		}
 	} else if formFactor == formFactorNormal {
@@ -3249,7 +3249,93 @@ func testACNPStrictNamespacesIsolation(t *testing.T) {
 	}
 
 	testCase := []*TestCase{
-		{"ACNP strict Namespace isolation for all namespaces", []*TestStep{testStep1, testStep2}},
+		{"ACNP strict Namespace isolation for all Namespaces", []*TestStep{testStep1, testStep2}},
+	}
+	executeTests(t, testCase)
+}
+
+func testACNPStrictNamespacesIsolationByLabels(t *testing.T) {
+	samePurposeTierLabels := &crdv1beta1.PeerNamespaces{
+		SameLabels: []string{"purpose", "tier"},
+	}
+	builder := &ClusterNetworkPolicySpecBuilder{}
+	builder = builder.SetName("test-acnp-strict-ns-isolation-by-labels").
+		SetTier("securityops").
+		SetPriority(1.0).
+		SetAppliedToGroup([]ACNPAppliedToSpec{{NSSelector: map[string]string{}}})
+	builder.AddIngress(ProtocolTCP, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+		samePurposeTierLabels, nil, crdv1beta1.RuleActionPass, "", "", nil)
+	builder.AddIngress(ProtocolTCP, nil, nil, nil, nil, nil, nil, nil, nil, nil, map[string]string{}, nil, nil, nil, nil,
+		nil, nil, crdv1beta1.RuleActionDrop, "", "", nil)
+	// prod1 and prod2 Namespaces should be able to connect to each other. The same goes for dev1 and
+	// dev2 Namespaces. However, any prod Namespace should not be able to connect to any dev Namespace
+	// due to different "tier" label values. For the "no-tier" Namespace, the first ingress rule will
+	// have no effect because the Namespace does not have a "tier" label. So every Pod in that Namespace
+	// will be isolated according to the second rule of the ACNP.
+	reachability := NewReachability(allPods, Dropped)
+	reachability.ExpectNamespaceIngressFromNamespace(getNS("prod1"), getNS("prod2"), Connected)
+	reachability.ExpectNamespaceEgressToNamespace(getNS("prod1"), getNS("prod2"), Connected)
+	reachability.ExpectNamespaceIngressFromNamespace(getNS("prod2"), getNS("prod1"), Connected)
+	reachability.ExpectNamespaceEgressToNamespace(getNS("prod2"), getNS("prod1"), Connected)
+	reachability.ExpectNamespaceIngressFromNamespace(getNS("dev1"), getNS("dev2"), Connected)
+	reachability.ExpectNamespaceEgressToNamespace(getNS("dev1"), getNS("dev2"), Connected)
+	reachability.ExpectNamespaceIngressFromNamespace(getNS("dev2"), getNS("dev1"), Connected)
+	reachability.ExpectNamespaceEgressToNamespace(getNS("dev2"), getNS("dev1"), Connected)
+	reachability.ExpectAllSelfNamespace(Connected)
+	reachability.ExpectSelfNamespace(getNS("no-tier"), Dropped)
+	reachability.ExpectSelf(allPods, Connected)
+
+	testStep1 := &TestStep{
+		"Namespace isolation by label, Port 80",
+		reachability,
+		[]metav1.Object{builder.Get()},
+		[]int32{80},
+		ProtocolTCP,
+		0,
+		nil,
+	}
+	testCase := []*TestCase{
+		{"ACNP strict Namespace isolation by Namespace purpose and tier labels", []*TestStep{testStep1}},
+	}
+	executeTests(t, testCase)
+}
+
+func testACNPStrictNamespacesIsolationBySingleLabel(t *testing.T) {
+	samePurposeTierLabels := &crdv1beta1.PeerNamespaces{
+		SameLabels: []string{"purpose"},
+	}
+	builder := &ClusterNetworkPolicySpecBuilder{}
+	builder = builder.SetName("test-acnp-strict-ns-isolation-by-single-label").
+		SetTier("securityops").
+		SetPriority(1.0).
+		SetAppliedToGroup([]ACNPAppliedToSpec{{NSSelector: map[string]string{}}})
+	builder.AddIngress(ProtocolTCP, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil,
+		samePurposeTierLabels, nil, crdv1beta1.RuleActionPass, "", "", nil)
+	builder.AddIngress(ProtocolTCP, nil, nil, nil, nil, nil, nil, nil, nil, nil, map[string]string{}, nil, nil, nil, nil,
+		nil, nil, crdv1beta1.RuleActionDrop, "", "", nil)
+	// Namespaces are split into two logical groups, purpose=test (prod1,2 and dev1,2) and purpose=test-exclusion
+	// (no-tier). The two groups of Namespace should not be able to connect to each other.
+	reachability := NewReachability(allPods, Connected)
+	reachability.ExpectNamespaceEgressToNamespace(getNS("prod1"), getNS("no-tier"), Dropped)
+	reachability.ExpectNamespaceEgressToNamespace(getNS("prod2"), getNS("no-tier"), Dropped)
+	reachability.ExpectNamespaceEgressToNamespace(getNS("dev1"), getNS("no-tier"), Dropped)
+	reachability.ExpectNamespaceEgressToNamespace(getNS("dev2"), getNS("no-tier"), Dropped)
+	reachability.ExpectNamespaceIngressFromNamespace(getNS("prod1"), getNS("no-tier"), Dropped)
+	reachability.ExpectNamespaceIngressFromNamespace(getNS("prod2"), getNS("no-tier"), Dropped)
+	reachability.ExpectNamespaceIngressFromNamespace(getNS("dev1"), getNS("no-tier"), Dropped)
+	reachability.ExpectNamespaceIngressFromNamespace(getNS("dev2"), getNS("no-tier"), Dropped)
+
+	testStep1 := &TestStep{
+		"Namespace isolation by single label, Port 80",
+		reachability,
+		[]metav1.Object{builder.Get()},
+		[]int32{80},
+		ProtocolTCP,
+		0,
+		nil,
+	}
+	testCase := []*TestCase{
+		{"ACNP strict Namespace isolation by Namespace purpose label", []*TestStep{testStep1}},
 	}
 	executeTests(t, testCase)
 }
@@ -4497,6 +4583,25 @@ func testMulticastNP(t *testing.T, data *TestData, testNamespace string) {
 	t.Run("Case=MulticastNPIGMPQueryDrop", func(t *testing.T) { testACNPIGMPQueryDrop(t, data, testNamespace) })
 	t.Run("Case=MulticastNPPolicyEgressAllow", func(t *testing.T) { testACNPMulticastEgressAllow(t, data, testNamespace) })
 	t.Run("Case=MulticastNPPolicyEgressDrop", func(t *testing.T) { testACNPMulticastEgressDrop(t, data, testNamespace) })
+}
+
+func TestAntreaPolicyExtendedNamespaces(t *testing.T) {
+	skipIfHasWindowsNodes(t)
+	skipIfAntreaPolicyDisabled(t)
+
+	data, err := setupTest(t)
+	if err != nil {
+		t.Fatalf("Error when setting up test: %v", err)
+	}
+	defer teardownTest(t, data)
+
+	initialize(t, data, formFactorLarge)
+
+	t.Run("TestGroupACNPNamespaceLabelSelections", func(t *testing.T) {
+		t.Run("Case=ACNPStrictNamespacesIsolationByLabels", func(t *testing.T) { testACNPStrictNamespacesIsolationByLabels(t) })
+		t.Run("Case=ACNPStrictNamespacesIsolationBySingleLabel", func(t *testing.T) { testACNPStrictNamespacesIsolationBySingleLabel(t) })
+	})
+	k8sUtils.Cleanup(namespaces)
 }
 
 func TestAntreaPolicyStatus(t *testing.T) {
