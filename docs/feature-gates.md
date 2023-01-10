@@ -319,8 +319,9 @@ for more information.
 ### Multicluster
 
 The `Multicluster` feature gate of Antrea Agent enables [Antrea Multi-cluster Gateways](multicluster/user-guide.md#multi-cluster-gateway-configuration)
-which route Multi-cluster Service and Pod traffic through tunnels across clusters. The `Multicluster` feature gate
-of Antrea Controller enables support for [Multi-cluster NetworkPolicy](multicluster/user-guide.md#networkpolicy-for-cross-cluster-traffic).
+which route Multi-cluster Service and Pod traffic through tunnels across clusters, and support for
+[Multi-cluster NetworkPolicy ingress rules](multicluster/user-guide.md#ingress-rule).
+The `Multicluster` feature gate of Antrea Controller enables support for [Multi-cluster NetworkPolicy](multicluster/user-guide.md#multi-cluster-networkpolicy).
 
 #### Requirements for this Feature
 
