@@ -636,19 +636,19 @@ func nxActionConnTrackToString(action openflow15.Action) string {
 		parts = append(parts, fmt.Sprintf("zone=%s", fieldStr))
 	}
 
-	var ctActionStrs []string
+	var ctExecActionStrs []string
 	for _, ctAction := range a.Actions {
 		switch ctAction.(type) {
 		case *openflow15.ActionSetField:
-			ctActionStrs = append(ctActionStrs, actionSetFieldToString(ctAction))
+			ctExecActionStrs = append(ctExecActionStrs, actionSetFieldToString(ctAction))
 		case *openflow15.ActionCopyField:
-			ctActionStrs = append(ctActionStrs, actionCopyFieldToString(ctAction))
+			ctExecActionStrs = append(ctExecActionStrs, actionCopyFieldToString(ctAction))
 		case *openflow15.NXActionCTNAT:
-			ctActionStrs = append(ctActionStrs, nxActionCTNATToString(ctAction))
+			parts = append(parts, nxActionCTNATToString(ctAction))
 		}
 	}
-	if len(ctActionStrs) != 0 {
-		parts = append(parts, fmt.Sprintf("exec(%s)", strings.Join(ctActionStrs, ",")))
+	if len(ctExecActionStrs) != 0 {
+		parts = append(parts, fmt.Sprintf("exec(%s)", strings.Join(ctExecActionStrs, ",")))
 	}
 	return fmt.Sprintf("ct(%s)", strings.Join(parts, ","))
 }
