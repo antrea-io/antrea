@@ -296,7 +296,7 @@ func TestOFctrlGroup(t *testing.T) {
 			}
 			for _, bucket := range buckets {
 				require.NotZero(t, bucket.weight, "Weight value of a bucket must be specified")
-				bucketBuilder := group.Bucket()
+				bucketBuilder := group.Bucket(nil)
 				if name == "Normal" {
 					bucketBuilder = bucketBuilder.Weight(bucket.weight)
 				}
@@ -553,12 +553,12 @@ func TestBundleWithGroupAndFlow(t *testing.T) {
 	field2 := binding.NewRegField(2, 0, 31)
 	field3 := binding.NewRegField(3, 0, 31)
 	group := bridge.CreateGroup(groupID).
-		Bucket().Weight(100).
+		Bucket(nil).Weight(100).
 		LoadToRegField(field1, uint32(0xa0a0002)).
 		LoadToRegField(field2, uint32(0x35)).
 		LoadToRegField(field3, uint32(0xfff1)).
 		ResubmitToTable(table.GetNext()).Done().
-		Bucket().Weight(100).
+		Bucket(nil).Weight(100).
 		LoadToRegField(field1, uint32(0xa0a0202)).
 		LoadToRegField(field2, uint32(0x35)).
 		LoadToRegField(field3, uint32(0xfff1)).
@@ -962,7 +962,7 @@ func TestLoadToLabelFieldAction(t *testing.T) {
 	}
 }
 
-func TestBundleWithGroupInsertBucket(t *testing.T) {
+func TestBundleWithGroupLifecycle(t *testing.T) {
 	br := "br12"
 	err := PrepareOVSBridge(br)
 	require.Nil(t, err, fmt.Sprintf("Failed to prepare OVS bridge: %v", err))
@@ -984,58 +984,99 @@ func TestBundleWithGroupInsertBucket(t *testing.T) {
 	ovsCtlClient := ovsctl.NewClient(br)
 	groupID := binding.GroupIDType(4)
 
-	group := bridge.CreateGroup(groupID)
-	expectedGroupBuckets := []string{}
-	err = bridge.AddOFEntriesInBundle([]binding.OFEntry{group}, nil, nil)
-	require.Nil(t, err)
-	CheckGroupExists(t, ovsCtlClient, groupID, "select", expectedGroupBuckets, true)
+	bucketID1 := binding.BucketIDType(1)
+	bucketID2 := binding.BucketIDType(2)
+	bucketID3 := binding.BucketIDType(3)
+	bucketID4 := binding.BucketIDType(4)
+	bucketID5 := binding.BucketIDType(5)
+	bucketID6 := binding.BucketIDType(6)
+	bucketID7 := binding.BucketIDType(7)
+
+	bucket1 := "weight:100,actions=set_field:0xa0a0002->reg1,set_field:0x1->reg2,set_field:0xfff1->reg3,resubmit(,3)"
+	bucket2 := "weight:100,actions=set_field:0xa0a0202->reg1,set_field:0x2->reg2,set_field:0xfff1->reg3,resubmit(,3)"
+	bucket3 := "weight:100,actions=set_field:0xa0a0202->reg1,set_field:0x3->reg2,set_field:0xfff1->reg3,resubmit(,3)"
+	bucket4 := "weight:100,actions=set_field:0xa0a0202->reg1,set_field:0x4->reg2,set_field:0xfff1->reg3,resubmit(,3)"
+	bucket5 := "weight:100,actions=set_field:0xa0a0202->reg1,set_field:0x5->reg2,set_field:0xfff1->reg3,resubmit(,3)"
+	bucket6 := "weight:100,actions=set_field:0xa0a0202->reg1,set_field:0x6->reg2,set_field:0xfff1->reg3,resubmit(,3)"
+	bucket7 := "weight:100,actions=set_field:0xa0a0202->reg1,set_field:0x7->reg2,set_field:0xfff1->reg3,resubmit(,3)"
 
 	field1 := binding.NewRegField(1, 0, 31)
 	field2 := binding.NewRegField(2, 0, 31)
 	field3 := binding.NewRegField(3, 0, 31)
-	group = group.
-		Bucket().Weight(100).
+
+	group := bridge.CreateGroup(groupID).
+		Bucket(&bucketID1).Weight(100).
 		LoadToRegField(field1, uint32(0xa0a0002)).
 		LoadToRegField(field2, uint32(0x1)).
 		LoadToRegField(field3, uint32(0xfff1)).
 		ResubmitToTable(table.GetNext()).Done().
-		Bucket().Weight(100).
+		Bucket(&bucketID2).Weight(100).
 		LoadToRegField(field1, uint32(0xa0a0202)).
 		LoadToRegField(field2, uint32(0x2)).
 		LoadToRegField(field3, uint32(0xfff1)).
 		ResubmitToTable(table.GetNext()).Done().
-		Bucket().Weight(100).
+		Bucket(&bucketID3).Weight(100).
 		LoadToRegField(field1, uint32(0xa0a0202)).
 		LoadToRegField(field2, uint32(0x3)).
 		LoadToRegField(field3, uint32(0xfff1)).
 		ResubmitToTable(table.GetNext()).Done()
 
-	bucket1 := "weight:100,actions=set_field:0xa0a0002->reg1,set_field:0x1->reg2,set_field:0xfff1->reg3,resubmit(,3)"
-	bucket2 := "weight:100,actions=set_field:0xa0a0202->reg1,set_field:0x2->reg2,set_field:0xfff1->reg3,resubmit(,3)"
-	bucket3 := "weight:100,actions=set_field:0xa0a0202->reg1,set_field:0x3->reg2,set_field:0xfff1->reg3,resubmit(,3)"
-	expectedGroupBuckets = []string{bucket1, bucket2, bucket3}
-	err = bridge.AddOFEntriesInBundle(nil, []binding.OFEntry{group}, nil)
+	expectedGroupBuckets := []string{bucket1, bucket2, bucket3}
+	err = bridge.AddOFEntriesInBundle([]binding.OFEntry{group}, nil, nil)
 	require.Nil(t, err)
 	CheckGroupExists(t, ovsCtlClient, groupID, "select", expectedGroupBuckets, true)
 
-	group = group.
-		Bucket().Weight(100).
+	insertBucketMessage := binding.InsertBucketsMessage
+	removeBucketMessage := binding.RemoveBucketsMessage
+	group = group.ResetBuckets().OFOperation(&insertBucketMessage).
+		Bucket(&bucketID4).Weight(100).
 		LoadToRegField(field1, uint32(0xa0a0202)).
 		LoadToRegField(field2, uint32(0x4)).
 		LoadToRegField(field3, uint32(0xfff1)).
+		ResubmitToTable(table.GetNext()).Done().
+		Bucket(&bucketID5).Weight(100).
+		LoadToRegField(field1, uint32(0xa0a0202)).
+		LoadToRegField(field2, uint32(0x5)).
+		LoadToRegField(field3, uint32(0xfff1)).
+		ResubmitToTable(table.GetNext()).Done().
+		Bucket(&bucketID6).Weight(100).
+		LoadToRegField(field1, uint32(0xa0a0202)).
+		LoadToRegField(field2, uint32(0x6)).
+		LoadToRegField(field3, uint32(0xfff1)).
 		ResubmitToTable(table.GetNext()).Done()
 
-	bucket4 := "weight:100,actions=set_field:0xa0a0202->reg1,set_field:0x4->reg2,set_field:0xfff1->reg3,resubmit(,3)"
-	expectedGroupBuckets = []string{bucket1, bucket2, bucket3, bucket4}
+	expectedGroupBuckets = []string{bucket1, bucket2, bucket3, bucket4, bucket5, bucket6}
 	err = bridge.AddOFEntriesInBundle(nil, []binding.OFEntry{group}, nil)
 	require.Nil(t, err)
 	CheckGroupExists(t, ovsCtlClient, groupID, "select", expectedGroupBuckets, true)
 
-	group.ResetBuckets()
-	expectedGroupBuckets = []string{}
-	err = bridge.AddOFEntriesInBundle(nil, []binding.OFEntry{group}, nil)
+	group = group.ResetBuckets().OFOperation(&insertBucketMessage).
+		Bucket(&bucketID7).Weight(100).
+		LoadToRegField(field1, uint32(0xa0a0202)).
+		LoadToRegField(field2, uint32(0x7)).
+		LoadToRegField(field3, uint32(0xfff1)).
+		ResubmitToTable(table.GetNext()).Done()
+	groupToRemoveBucket3 := bridge.CreateGroupToRemoveBucket(groupID, bucketID3).OFOperation(&removeBucketMessage)
+	groupToRemoveBucket4 := bridge.CreateGroupToRemoveBucket(groupID, bucketID4).OFOperation(&removeBucketMessage)
+	groupToRemoveBucket5 := bridge.CreateGroupToRemoveBucket(groupID, bucketID5).OFOperation(&removeBucketMessage)
+	expectedGroupBuckets = []string{bucket1, bucket2, bucket6, bucket7}
+	err = bridge.AddOFEntriesInBundle(nil, []binding.OFEntry{groupToRemoveBucket3, groupToRemoveBucket4, groupToRemoveBucket5, group}, nil)
 	require.Nil(t, err)
 	CheckGroupExists(t, ovsCtlClient, groupID, "select", expectedGroupBuckets, true)
+
+	group.ResetBuckets().OFOperation(&insertBucketMessage).
+		Bucket(&bucketID3).Weight(100).
+		LoadToRegField(field1, uint32(0xa0a0202)).
+		LoadToRegField(field2, uint32(0x3)).
+		LoadToRegField(field3, uint32(0xfff1)).
+		ResubmitToTable(table.GetNext()).Done()
+	groupToRemoveBucket7 := bridge.CreateGroupToRemoveBucket(groupID, bucketID7).OFOperation(&removeBucketMessage)
+
+	expectedGroupBuckets = []string{bucket1, bucket2, bucket6, bucket3}
+	err = bridge.AddOFEntriesInBundle(nil, []binding.OFEntry{groupToRemoveBucket7, group}, nil)
+	require.Nil(t, err)
+	CheckGroupExists(t, ovsCtlClient, groupID, "select", expectedGroupBuckets, true)
+
 }
 
 func prepareFlows(table binding.Table) ([]binding.Flow, []*ExpectFlow) {

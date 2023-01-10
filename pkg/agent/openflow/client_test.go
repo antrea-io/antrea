@@ -840,11 +840,14 @@ func Test_client_GetPodFlowKeys(t *testing.T) {
 
 func Test_client_InstallServiceGroup(t *testing.T) {
 	groupID := binding.GroupIDType(100)
+	bucketID1 := binding.BucketIDType(100)
+	bucketID2 := binding.BucketIDType(101)
 
 	testCases := []struct {
 		name                string
 		withSessionAffinity bool
 		endpoints           []proxy.Endpoint
+		bucketIDs           map[string]*binding.BucketIDType
 		expectedGroup       string
 	}{
 		{
@@ -853,9 +856,13 @@ func Test_client_InstallServiceGroup(t *testing.T) {
 				proxy.NewBaseEndpointInfo("10.10.0.100", "", "", 80, false, true, false, false, nil),
 				proxy.NewBaseEndpointInfo("10.10.0.101", "", "", 80, false, true, false, false, nil),
 			},
+			bucketIDs: map[string]*binding.BucketIDType{
+				"10.10.0.100:80": &bucketID1,
+				"10.10.0.101:80": &bucketID2,
+			},
 			expectedGroup: "group_id=100,type=select," +
-				"bucket=bucket_id:0,weight:100,actions=set_field:0xa0a0064->reg3,set_field:0x50/0xffff->reg4,resubmit:EndpointDNAT," +
-				"bucket=bucket_id:1,weight:100,actions=set_field:0xa0a0065->reg3,set_field:0x50/0xffff->reg4,resubmit:EndpointDNAT",
+				"bucket=bucket_id:100,weight:100,actions=set_field:0xa0a0064->reg3,set_field:0x50/0xffff->reg4,resubmit:EndpointDNAT," +
+				"bucket=bucket_id:101,weight:100,actions=set_field:0xa0a0065->reg3,set_field:0x50/0xffff->reg4,resubmit:EndpointDNAT",
 		},
 		{
 			name: "IPv6 Endpoints",
@@ -863,9 +870,13 @@ func Test_client_InstallServiceGroup(t *testing.T) {
 				proxy.NewBaseEndpointInfo("fec0:10:10::100", "", "", 80, false, true, false, false, nil),
 				proxy.NewBaseEndpointInfo("fec0:10:10::101", "", "", 80, false, true, false, false, nil),
 			},
+			bucketIDs: map[string]*binding.BucketIDType{
+				"[fec0:10:10::100]:80": &bucketID1,
+				"[fec0:10:10::101]:80": &bucketID2,
+			},
 			expectedGroup: "group_id=100,type=select," +
-				"bucket=bucket_id:0,weight:100,actions=set_field:0xfec00010001000000000000000000100->xxreg3,set_field:0x50/0xffff->reg4,resubmit:EndpointDNAT," +
-				"bucket=bucket_id:1,weight:100,actions=set_field:0xfec00010001000000000000000000101->xxreg3,set_field:0x50/0xffff->reg4,resubmit:EndpointDNAT",
+				"bucket=bucket_id:100,weight:100,actions=set_field:0xfec00010001000000000000000000100->xxreg3,set_field:0x50/0xffff->reg4,resubmit:EndpointDNAT," +
+				"bucket=bucket_id:101,weight:100,actions=set_field:0xfec00010001000000000000000000101->xxreg3,set_field:0x50/0xffff->reg4,resubmit:EndpointDNAT",
 		},
 		{
 			name:                "IPv4 Endpoints,SessionAffinity",
@@ -874,9 +885,13 @@ func Test_client_InstallServiceGroup(t *testing.T) {
 				proxy.NewBaseEndpointInfo("10.10.0.100", "", "", 80, false, true, false, false, nil),
 				proxy.NewBaseEndpointInfo("10.10.0.101", "", "", 80, false, true, false, false, nil),
 			},
+			bucketIDs: map[string]*binding.BucketIDType{
+				"10.10.0.100:80": &bucketID1,
+				"10.10.0.101:80": &bucketID2,
+			},
 			expectedGroup: "group_id=100,type=select," +
-				"bucket=bucket_id:0,weight:100,actions=set_field:0xa0a0064->reg3,set_field:0x50/0xffff->reg4,resubmit:ServiceLB," +
-				"bucket=bucket_id:1,weight:100,actions=set_field:0xa0a0065->reg3,set_field:0x50/0xffff->reg4,resubmit:ServiceLB",
+				"bucket=bucket_id:100,weight:100,actions=set_field:0xa0a0064->reg3,set_field:0x50/0xffff->reg4,resubmit:ServiceLB," +
+				"bucket=bucket_id:101,weight:100,actions=set_field:0xa0a0065->reg3,set_field:0x50/0xffff->reg4,resubmit:ServiceLB",
 		},
 		{
 			name:                "IPv6 Endpoints,SessionAffinity",
@@ -885,9 +900,13 @@ func Test_client_InstallServiceGroup(t *testing.T) {
 				proxy.NewBaseEndpointInfo("fec0:10:10::100", "", "", 80, false, true, false, false, nil),
 				proxy.NewBaseEndpointInfo("fec0:10:10::101", "", "", 80, false, true, false, false, nil),
 			},
+			bucketIDs: map[string]*binding.BucketIDType{
+				"[fec0:10:10::100]:80": &bucketID1,
+				"[fec0:10:10::101]:80": &bucketID2,
+			},
 			expectedGroup: "group_id=100,type=select," +
-				"bucket=bucket_id:0,weight:100,actions=set_field:0xfec00010001000000000000000000100->xxreg3,set_field:0x50/0xffff->reg4,resubmit:ServiceLB," +
-				"bucket=bucket_id:1,weight:100,actions=set_field:0xfec00010001000000000000000000101->xxreg3,set_field:0x50/0xffff->reg4,resubmit:ServiceLB",
+				"bucket=bucket_id:100,weight:100,actions=set_field:0xfec00010001000000000000000000100->xxreg3,set_field:0x50/0xffff->reg4,resubmit:ServiceLB," +
+				"bucket=bucket_id:101,weight:100,actions=set_field:0xfec00010001000000000000000000101->xxreg3,set_field:0x50/0xffff->reg4,resubmit:ServiceLB",
 		},
 	}
 
@@ -903,7 +922,7 @@ func Test_client_InstallServiceGroup(t *testing.T) {
 			m.EXPECT().AddOFEntries(gomock.Any()).Return(nil).Times(1)
 			m.EXPECT().DeleteOFEntries(gomock.Any()).Return(nil).Times(1)
 
-			assert.NoError(t, fc.InstallServiceGroup(groupID, tc.withSessionAffinity, tc.endpoints))
+			assert.NoError(t, fc.InstallServiceGroup(groupID, tc.withSessionAffinity, tc.endpoints, tc.endpoints, nil, tc.bucketIDs))
 			gCacheI, ok := fc.featureService.groupCache.Load(groupID)
 			require.True(t, ok)
 			group := getGroupFromCache(gCacheI.(binding.Group))

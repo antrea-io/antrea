@@ -96,6 +96,8 @@ type proxier struct {
 	endpointReferenceCounter map[string]int
 	// groupCounter is used to allocate groupID.
 	groupCounter types.GroupCounter
+	// bucketCounter is used to allocate bucketID.
+	bucketCounter types.BucketCounter
 	// serviceStringMap provides map from serviceString(ClusterIP:Port/Proto) to ServicePortName.
 	serviceStringMap map[string]k8sproxy.ServicePortName
 	// serviceStringMapMutex protects serviceStringMap object.
@@ -175,6 +177,7 @@ func (p *proxier) removeStaleServices() {
 					continue
 				}
 				p.groupCounter.Recycle(svcPortName, true)
+				p.bucketCounter.Recycle(svcPortName, nil)
 			}
 		}
 		// Remove Service group which has all Endpoints.
@@ -184,6 +187,7 @@ func (p *proxier) removeStaleServices() {
 				continue
 			}
 			p.groupCounter.Recycle(svcPortName, false)
+			p.bucketCounter.Recycle(svcPortName, nil)
 		}
 
 		delete(p.serviceInstalledMap, svcPortName)
@@ -353,12 +357,12 @@ func (p *proxier) installServices() {
 			endpointsInstalled = map[string]k8sproxy.Endpoint{}
 			p.endpointsInstalledMap[svcPortName] = endpointsInstalled
 		}
-		endpoints := p.endpointsMap[svcPortName]
+		endpointsToInstall := p.endpointsMap[svcPortName]
 		if p.topologyAwareHintsEnabled {
-			endpoints = filterEndpoints(endpoints, svcInfo, p.nodeLabels)
+			endpointsToInstall = filterEndpoints(endpointsToInstall, svcInfo, p.nodeLabels)
 		}
 		// If both expected Endpoints number and installed Endpoints number are 0, we don't need to take care of this Service.
-		if len(endpoints) == 0 && len(endpointsInstalled) == 0 {
+		if len(endpointsToInstall) == 0 && len(endpointsInstalled) == 0 {
 			continue
 		}
 
@@ -406,27 +410,67 @@ func (p *proxier) installServices() {
 			externalNodeLocal = true
 		}
 
-		var allEndpointUpdateList, localEndpointUpdateList []k8sproxy.Endpoint
-		// Check if there is any installed Endpoint which is not expected anymore. If internalTrafficPolicy and externalTrafficPolicy
-		// are both Local, only local Endpoints should be installed and checked; if internalTrafficPolicy or externalTrafficPolicy
-		// is Cluster, all Endpoints should be installed and checked.
-		for _, endpoint := range endpoints {
-			if internalNodeLocal && externalNodeLocal && endpoint.GetIsLocal() || !internalNodeLocal || !externalNodeLocal {
-				if _, ok := endpointsInstalled[endpoint.String()]; !ok { // There is an expected Endpoint which is not installed.
-					needUpdateEndpoints = true
+		// bucketIDs stores the bucket IDs allocated for Endpoints.
+		bucketIDs := make(map[string]*binding.BucketIDType)
+		// allEndpointsToRemove and localEndpointsToRemove store the Endpoints to be removed from the Service.
+		var allEndpointsToRemove, localEndpointsToRemove []k8sproxy.Endpoint
+		// endpointsToRecycleBucketIDs stores the Endpoints whose bucket IDs to be recycled.
+		var endpointsToRecycleBucketIDs []k8sproxy.Endpoint
+		for _, endpoint := range endpointsInstalled {
+			if _, ok = endpointsToInstall[endpoint.String()]; !ok {
+				// If an installed Endpoint is not in the map of Endpoints to be installed, the Endpoint should be removed
+				// and the Endpoint list of the Service should be updated.
+				klog.V(4).InfoS("Endpoint of Service is to remove, updating Endpoints", "Service", svcInfo, "Endpoint", endpoint)
+				needUpdateEndpoints = true
+
+				// Get the bucket ID allocated for the Endpoint to be removed. The bucket ID will be used in Openflow 1.5
+				// `remove-bucket` operation.
+				bucketID, exist := p.bucketCounter.Get(svcPortName, endpoint)
+				if !exist {
+					klog.InfoS("Bucket ID allocated for Endpoint to be removed was not found", "Endpoint", endpoint)
+					continue
 				}
-			}
-			allEndpointUpdateList = append(allEndpointUpdateList, endpoint)
-			if endpoint.GetIsLocal() {
-				localEndpointUpdateList = append(localEndpointUpdateList, endpoint)
+				bucketIDs[endpoint.String()] = &bucketID
+
+				endpointsToRecycleBucketIDs = append(endpointsToRecycleBucketIDs, endpoint)
+				allEndpointsToRemove = append(allEndpointsToRemove, endpoint)
+				if endpoint.GetIsLocal() {
+					localEndpointsToRemove = append(localEndpointsToRemove, endpoint)
+				}
 			}
 		}
 
-		// If there are expired Endpoints, Endpoints installed should be updated.
-		if internalNodeLocal && externalNodeLocal && len(localEndpointUpdateList) < len(endpointsInstalled) ||
-			!(internalNodeLocal && externalNodeLocal) && len(allEndpointUpdateList) < len(endpointsInstalled) {
-			klog.V(2).Infof("Some Endpoints of Service %s removed, updating Endpoints", svcInfo.String())
-			needUpdateEndpoints = true
+		var allEndpointsToAdd, localEndpointsToAdd []k8sproxy.Endpoint
+		var allEndpoints, localEndpoints []k8sproxy.Endpoint
+		for _, endpoint := range endpointsToInstall {
+			// Check if there is any installed Endpoint which is not expected anymore. If internalTrafficPolicy and externalTrafficPolicy
+			// are both Local for NodePort, only local Endpoints should be installed and checked; if internalTrafficPolicy or externalTrafficPolicy
+			// is Cluster, all Endpoints should be installed and checked.
+			if internalNodeLocal && (externalNodeLocal || svcInfo.NodePort() == 0) && endpoint.GetIsLocal() || !internalNodeLocal || !externalNodeLocal && svcInfo.NodePort() > 0 {
+				var bucketID binding.BucketIDType
+				if _, ok := endpointsInstalled[endpoint.String()]; !ok { // There is an expected Endpoint which is not installed.
+					klog.V(4).InfoS("Endpoint of Service is to install, updating Endpoints", "Service", svcInfo, "Endpoint", endpoint)
+					needUpdateEndpoints = true
+					bucketID = p.bucketCounter.AllocateIfNotExist(svcPortName, endpoint)
+					allEndpointsToAdd = append(allEndpointsToAdd, endpoint)
+					if endpoint.GetIsLocal() {
+						localEndpointsToAdd = append(localEndpointsToAdd, endpoint)
+					}
+				} else {
+					var exist bool
+					bucketID, exist = p.bucketCounter.Get(svcPortName, endpoint)
+					if !exist {
+						klog.InfoS("Bucket ID allocated for Endpoint was not found", "Endpoint", endpoint)
+						continue
+					}
+				}
+
+				bucketIDs[endpoint.String()] = &bucketID
+				allEndpoints = append(allEndpoints, endpoint)
+				if endpoint.GetIsLocal() {
+					localEndpoints = append(localEndpoints, endpoint)
+				}
+			}
 		}
 
 		var deletedLoadBalancerIPs, addedLoadBalancerIPs []string
@@ -455,54 +499,53 @@ func (p *proxier) installServices() {
 		}
 
 		if needUpdateEndpoints {
-			var endpointUpdateList []k8sproxy.Endpoint
+			var endpointsToAdd, endpointsToRemove, endpoints []k8sproxy.Endpoint
 			// If the type of the Service is NodePort or LoadBalancer and both internalTrafficPolicy and externalTrafficPolicy
 			// are Local, or the type of the Service is ClusterIP and internalTrafficPolicy is Local, then only local
 			// Endpoints should be installed, otherwise all Endpoints should be installed.
 			if internalNodeLocal && (externalNodeLocal || svcInfo.NodePort() == 0) {
-				endpointUpdateList = localEndpointUpdateList
+				endpointsToAdd = localEndpointsToAdd
+				endpointsToRemove = localEndpointsToRemove
+				endpoints = localEndpoints
 			} else {
-				endpointUpdateList = allEndpointUpdateList
+				endpointsToAdd = allEndpointsToAdd
+				endpointsToRemove = allEndpointsToRemove
+				endpoints = allEndpoints
 			}
-			// Install Endpoints.
-			err := p.ofClient.InstallEndpointFlows(svcInfo.OFProtocol, endpointUpdateList)
-			if err != nil {
-				klog.ErrorS(err, "Error when installing Endpoints flows")
-				continue
+			// Only install flows for the added Endpoints since the flows of installed Endpoints has already been installed.
+			if len(endpointsToAdd) > 0 {
+				err := p.ofClient.InstallEndpointFlows(svcInfo.OFProtocol, endpointsToAdd)
+				if err != nil {
+					klog.ErrorS(err, "Error when installing Endpoints flows")
+					continue
+				}
 			}
-			if internalNodeLocal != externalNodeLocal {
-				if svcInfo.NodePort() > 0 {
-					// If the type of the Service is NodePort or LoadBalancer, when internalTrafficPolicy and externalTrafficPolicy
-					// of the Service are different, install two groups. One group has all Endpoints, the other has only
-					// local Endpoints.
-					groupID := p.groupCounter.AllocateIfNotExist(svcPortName, true)
-					if err = p.ofClient.InstallServiceGroup(groupID, affinityTimeout != 0, localEndpointUpdateList); err != nil {
-						klog.ErrorS(err, "Error when installing Group of local Endpoints for Service", "Service", svcPortName)
-						continue
-					}
-					groupID = p.groupCounter.AllocateIfNotExist(svcPortName, false)
-					if err = p.ofClient.InstallServiceGroup(groupID, affinityTimeout != 0, allEndpointUpdateList); err != nil {
-						klog.ErrorS(err, "Error when installing Group of all Endpoints for Service", "Service", svcPortName)
-						continue
-					}
-				} else {
-					// If the type of the Service is ClusterIP, install a group according to internalTrafficPolicy.
-					groupID := p.groupCounter.AllocateIfNotExist(svcPortName, internalNodeLocal)
-					if err = p.ofClient.InstallServiceGroup(groupID, affinityTimeout != 0, endpointUpdateList); err != nil {
-						klog.ErrorS(err, "Error when installing Group of Endpoints for Service", "Service", svcPortName)
-						continue
-					}
+			if (internalNodeLocal != externalNodeLocal) && svcInfo.NodePort() > 0 {
+				// If the type of the Service is NodePort or LoadBalancer, when internalTrafficPolicy and externalTrafficPolicy
+				// of the Service are different, install two groups. One group has all Endpoints, the other has only
+				// local Endpoints.
+				groupID := p.groupCounter.AllocateIfNotExist(svcPortName, true)
+				if err := p.ofClient.InstallServiceGroup(groupID, affinityTimeout != 0, localEndpoints, localEndpointsToAdd, localEndpointsToRemove, bucketIDs); err != nil {
+					klog.ErrorS(err, "Error when installing Group of local Endpoints for Service", "Service", svcPortName)
+					continue
+				}
+				groupID = p.groupCounter.AllocateIfNotExist(svcPortName, false)
+				if err := p.ofClient.InstallServiceGroup(groupID, affinityTimeout != 0, allEndpoints, allEndpointsToAdd, allEndpointsToRemove, bucketIDs); err != nil {
+					klog.ErrorS(err, "Error when installing Group of all Endpoints for Service", "Service", svcPortName)
+					continue
 				}
 			} else {
-				// Regardless of the type of the Service, when internalTrafficPolicy and externalTrafficPolicy of the Service
-				// are the same, only install one group and unconditionally uninstall another group. If both internalTrafficPolicy
-				// and externalTrafficPolicy are Local, install the group that has only local Endpoints and unconditionally
-				// uninstall the group which has all Endpoints; if both internalTrafficPolicy and externalTrafficPolicy are
-				// Cluster, install the group which has all Endpoints and unconditionally uninstall the group which has
-				// only local Endpoints. Note that, if a group doesn't exist on OVS, then the return value will be nil.
-				nodeLocalVal := internalNodeLocal && externalNodeLocal
+				// If the type of the Service is NodePort or LoadBalancer, when internalTrafficPolicy and externalTrafficPolicy
+				// of the Service are the same, or the type of the Service is ClusterIP, only install one group and unconditionally
+				// uninstall another group.
+				// If type of the Service is NodePort or LoadBalancer and both internalTrafficPolicy and externalTrafficPolicy
+				// are Local, or type of the Service is ClusterIP and internalTrafficPolicy is Local, install the group that
+				// has only local Endpoints and unconditionally uninstall the group which has all Endpoints; otherwise,
+				// install the group which has all Endpoints and unconditionally uninstall the group which has only local Endpoints.
+				// Note that, if a group doesn't exist on OVS, then the return value will be nil.
+				nodeLocalVal := internalNodeLocal && (externalNodeLocal || svcInfo.NodePort() == 0)
 				groupID := p.groupCounter.AllocateIfNotExist(svcPortName, nodeLocalVal)
-				if err = p.ofClient.InstallServiceGroup(groupID, affinityTimeout != 0, endpointUpdateList); err != nil {
+				if err := p.ofClient.InstallServiceGroup(groupID, affinityTimeout != 0, endpoints, endpointsToAdd, endpointsToRemove, bucketIDs); err != nil {
 					klog.ErrorS(err, "Error when installing Group of local Endpoints for Service", "Service", svcPortName)
 					continue
 				}
@@ -515,13 +558,18 @@ func (p *proxier) installServices() {
 				}
 			}
 
-			for _, e := range endpointUpdateList {
-				// If the Endpoint is newly installed, add a reference.
-				if _, ok := endpointsInstalled[e.String()]; !ok {
-					key := endpointKey(e, svcInfo.OFProtocol)
-					p.endpointReferenceCounter[key] = p.endpointReferenceCounter[key] + 1
-					endpointsInstalled[e.String()] = e
-				}
+			// For every newly installed Endpoint, add a reference and add it to `endpointsInstalled` which is the value
+			// of map `p.endpointsInstalledMap` by indexing `svcPortName`. Note that, there might be stale Endpoints in
+			// `endpointsInstalled` and the stale Endpoints will be removed in `p.removeStaleEndpoints()` by comparing
+			// with actually installed Endpoints map.
+			for _, e := range endpointsToAdd {
+				key := endpointKey(e, svcInfo.OFProtocol)
+				p.endpointReferenceCounter[key] = p.endpointReferenceCounter[key] + 1
+				endpointsInstalled[e.String()] = e
+			}
+
+			for _, e := range endpointsToRecycleBucketIDs {
+				p.bucketCounter.Recycle(svcPortName, e)
 			}
 		}
 
@@ -914,7 +962,8 @@ func NewProxier(
 	proxyAllEnabled bool,
 	skipServices []string,
 	proxyLoadBalancerIPs bool,
-	groupCounter types.GroupCounter) *proxier {
+	groupCounter types.GroupCounter,
+	bucketCounter types.BucketCounter) *proxier {
 	recorder := record.NewBroadcaster().NewRecorder(
 		runtime.NewScheme(),
 		corev1.EventSource{Component: componentName, Host: hostname},
@@ -951,6 +1000,7 @@ func NewProxier(
 		nodeLabels:                map[string]string{},
 		serviceStringMap:          map[string]k8sproxy.ServicePortName{},
 		groupCounter:              groupCounter,
+		bucketCounter:             bucketCounter,
 		ofClient:                  ofClient,
 		routeClient:               routeClient,
 		nodePortAddresses:         nodePortAddresses,
@@ -1020,14 +1070,16 @@ func NewDualStackProxier(
 	proxyAllEnabled bool,
 	skipServices []string,
 	proxyLoadBalancerIPs bool,
-	v4groupCounter types.GroupCounter,
-	v6groupCounter types.GroupCounter) *metaProxierWrapper {
+	v4GroupCounter types.GroupCounter,
+	v6GroupCounter types.GroupCounter,
+	v4BucketCounter types.BucketCounter,
+	v6BucketCounter types.BucketCounter) *metaProxierWrapper {
 
 	// Create an IPv4 instance of the single-stack proxier.
-	ipv4Proxier := NewProxier(hostname, informerFactory, ofClient, false, routeClient, nodePortAddressesIPv4, proxyAllEnabled, skipServices, proxyLoadBalancerIPs, v4groupCounter)
+	ipv4Proxier := NewProxier(hostname, informerFactory, ofClient, false, routeClient, nodePortAddressesIPv4, proxyAllEnabled, skipServices, proxyLoadBalancerIPs, v4GroupCounter, v4BucketCounter)
 
 	// Create an IPv6 instance of the single-stack proxier.
-	ipv6Proxier := NewProxier(hostname, informerFactory, ofClient, true, routeClient, nodePortAddressesIPv6, proxyAllEnabled, skipServices, proxyLoadBalancerIPs, v6groupCounter)
+	ipv6Proxier := NewProxier(hostname, informerFactory, ofClient, true, routeClient, nodePortAddressesIPv6, proxyAllEnabled, skipServices, proxyLoadBalancerIPs, v6GroupCounter, v6BucketCounter)
 
 	// Create a meta-proxier that dispatch calls between the two
 	// single-stack proxier instances.

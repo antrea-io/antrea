@@ -1,4 +1,4 @@
-// Copyright 2022 Antrea Authors
+// Copyright 2023 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -466,17 +466,17 @@ func (mr *MockClientMockRecorder) InstallServiceFlows(arg0, arg1, arg2, arg3, ar
 }
 
 // InstallServiceGroup mocks base method
-func (m *MockClient) InstallServiceGroup(arg0 openflow.GroupIDType, arg1 bool, arg2 []proxy.Endpoint) error {
+func (m *MockClient) InstallServiceGroup(arg0 openflow.GroupIDType, arg1 bool, arg2, arg3, arg4 []proxy.Endpoint, arg5 map[string]*openflow.BucketIDType) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "InstallServiceGroup", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "InstallServiceGroup", arg0, arg1, arg2, arg3, arg4, arg5)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // InstallServiceGroup indicates an expected call of InstallServiceGroup
-func (mr *MockClientMockRecorder) InstallServiceGroup(arg0, arg1, arg2 interface{}) *gomock.Call {
+func (mr *MockClientMockRecorder) InstallServiceGroup(arg0, arg1, arg2, arg3, arg4, arg5 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallServiceGroup", reflect.TypeOf((*MockClient)(nil).InstallServiceGroup), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InstallServiceGroup", reflect.TypeOf((*MockClient)(nil).InstallServiceGroup), arg0, arg1, arg2, arg3, arg4, arg5)
 }
 
 // InstallTraceflowFlows mocks base method

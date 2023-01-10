@@ -24,6 +24,7 @@ import (
 
 type Protocol string
 type GroupIDType uint32
+type BucketIDType uint32
 type MeterIDType uint32
 
 type MissActionType uint32
@@ -84,6 +85,8 @@ const (
 	AddMessage OFOperation = iota
 	ModifyMessage
 	DeleteMessage
+	InsertBucketsMessage
+	RemoveBucketsMessage OFOperation = 5
 )
 
 // IPDSCPToSRange stores the DSCP bits in ToS field of IP header.
@@ -99,6 +102,7 @@ type Bridge interface {
 	DeleteTable(id uint8) bool
 	CreateGroupTypeAll(id GroupIDType) Group
 	CreateGroup(id GroupIDType) Group
+	CreateGroupToRemoveBucket(groupID GroupIDType, bucketID BucketIDType) Group
 	DeleteGroup(id GroupIDType) error
 	CreateMeter(id MeterIDType, flags ofctrl.MeterFlag) Meter
 	DeleteMeter(id MeterIDType) bool
@@ -333,7 +337,9 @@ type LearnAction interface {
 type Group interface {
 	OFEntry
 	ResetBuckets() Group
-	Bucket() BucketBuilder
+	Bucket(id *BucketIDType) BucketBuilder
+	ResetOFOperation() Group
+	OFOperation(operation *OFOperation) Group
 }
 
 type BucketBuilder interface {

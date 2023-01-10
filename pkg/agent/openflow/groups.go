@@ -25,12 +25,25 @@ type GroupAllocator interface {
 	Release(id binding.GroupIDType)
 }
 
+type BucketAllocator interface {
+	Allocate() binding.BucketIDType
+	Release(id binding.BucketIDType)
+}
+
 type groupAllocator struct {
 	// mu is a lock for the groupAllocator.
 	mu sync.Mutex
 
 	groupIDCounter binding.GroupIDType
 	recycled       []binding.GroupIDType
+}
+
+type bucketAllocator struct {
+	// mu is a lock for the bucketAllocator.
+	mu sync.Mutex
+
+	bucketIDCounter binding.BucketIDType
+	recycled        []binding.BucketIDType
 }
 
 // Allocate allocates a new group ID. It allocates id from the "recycled" slices first, then increases the groupIDCounter if no
@@ -62,4 +75,31 @@ func NewGroupAllocator(isIPv6 bool) GroupAllocator {
 		groupIDCounter = 0x10000000
 	}
 	return &groupAllocator{groupIDCounter: groupIDCounter}
+}
+
+// Allocate allocates a new bucket ID. It allocates id from the "recycled" slices first, then increases the bucketIDCounter if no
+// recycled ids exist.
+func (a *bucketAllocator) Allocate() binding.BucketIDType {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	var id binding.BucketIDType
+	if len(a.recycled) != 0 {
+		id = a.recycled[len(a.recycled)-1]
+		a.recycled = a.recycled[:len(a.recycled)-1]
+	} else {
+		a.bucketIDCounter += 1
+		id = a.bucketIDCounter
+	}
+	return id
+}
+
+func (a *bucketAllocator) Release(id binding.BucketIDType) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	a.recycled = append(a.recycled, id)
+}
+
+func NewBucketAllocator() BucketAllocator {
+	return &bucketAllocator{}
 }

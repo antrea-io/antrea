@@ -28,8 +28,9 @@ var (
 )
 
 type ofGroup struct {
-	ofctrl *ofctrl.Group
-	bridge *OFBridge
+	ofctrl      *ofctrl.Group
+	ofOperation *OFOperation
+	bridge      *OFBridge
 }
 
 // Reset creates a new ofctrl.Group object for the updated ofSwitch. The
@@ -66,11 +67,17 @@ func (g *ofGroup) KeyString() string {
 	return fmt.Sprintf("group_id:%d", g.ofctrl.ID)
 }
 
-func (g *ofGroup) Bucket() BucketBuilder {
-	id := uint32(len(g.ofctrl.Buckets))
+func (g *ofGroup) Bucket(id *BucketIDType) BucketBuilder {
+	var bucketID uint32
+	if id == nil {
+		bucketID = uint32(len(g.ofctrl.Buckets))
+	} else {
+		bucketID = uint32(*id)
+	}
+
 	return &bucketBuilder{
 		group:  g,
-		bucket: openflow15.NewBucket(id),
+		bucket: openflow15.NewBucket(bucketID),
 	}
 }
 
@@ -86,6 +93,10 @@ func (g *ofGroup) GetBundleMessages(entryOper OFOperation) ([]ofctrl.OpenFlowMod
 		// If the operation is to delete the group, empty the slice storing buckets since the number of buckets could
 		// be greater than MaxBucketsPerMessage.
 		g.ofctrl.Buckets = nil
+	case InsertBucketsMessage:
+		operation = openflow15.OFPGC_INSERT_BUCKET
+	case RemoveBucketsMessage:
+		operation = openflow15.OFPGC_REMOVE_BUCKET
 	}
 
 	var messages []ofctrl.OpenFlowModMessage
@@ -97,7 +108,10 @@ func (g *ofGroup) GetBundleMessages(entryOper OFOperation) ([]ofctrl.OpenFlowMod
 		}
 		// For the message which is not the first, insert_buckets is used to add buckets to the group on OVS.
 		if start != 0 {
-			operation = openflow15.OFPGC_INSERT_BUCKET
+			if entryOper == AddMessage || entryOper == InsertBucketsMessage {
+				operation = openflow15.OFPGC_INSERT_BUCKET
+			}
+
 			// There is no need to generate an insert_buckets message without bucket.
 			if start == end {
 				break
@@ -118,6 +132,16 @@ func (g *ofGroup) GetBundleMessages(entryOper OFOperation) ([]ofctrl.OpenFlowMod
 
 func (g *ofGroup) ResetBuckets() Group {
 	g.ofctrl.Buckets = nil
+	return g
+}
+
+func (g *ofGroup) OFOperation(operation *OFOperation) Group {
+	g.ofOperation = operation
+	return g
+}
+
+func (g *ofGroup) ResetOFOperation() Group {
+	g.ofOperation = nil
 	return g
 }
 

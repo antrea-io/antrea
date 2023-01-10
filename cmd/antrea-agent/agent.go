@@ -362,6 +362,9 @@ func run(o *Options) error {
 	v6GroupIDAllocator := openflow.NewGroupAllocator(true)
 	v6GroupCounter := proxytypes.NewGroupCounter(v6GroupIDAllocator, groupIDUpdates)
 
+	v4BucketCounter := proxytypes.NewBucketCounter()
+	v6BucketCounter := proxytypes.NewBucketCounter()
+
 	v4Enabled := networkConfig.IPv4Enabled
 	v6Enabled := networkConfig.IPv6Enabled
 	var proxier proxy.Proxier
@@ -372,13 +375,13 @@ func run(o *Options) error {
 
 		switch {
 		case v4Enabled && v6Enabled:
-			proxier = proxy.NewDualStackProxier(nodeConfig.Name, informerFactory, ofClient, routeClient, nodePortAddressesIPv4, nodePortAddressesIPv6, proxyAll, skipServices, proxyLoadBalancerIPs, v4GroupCounter, v6GroupCounter)
+			proxier = proxy.NewDualStackProxier(nodeConfig.Name, informerFactory, ofClient, routeClient, nodePortAddressesIPv4, nodePortAddressesIPv6, proxyAll, skipServices, proxyLoadBalancerIPs, v4GroupCounter, v6GroupCounter, v4BucketCounter, v6BucketCounter)
 			groupCounters = append(groupCounters, v4GroupCounter, v6GroupCounter)
 		case v4Enabled:
-			proxier = proxy.NewProxier(nodeConfig.Name, informerFactory, ofClient, false, routeClient, nodePortAddressesIPv4, proxyAll, skipServices, proxyLoadBalancerIPs, v4GroupCounter)
+			proxier = proxy.NewProxier(nodeConfig.Name, informerFactory, ofClient, false, routeClient, nodePortAddressesIPv4, proxyAll, skipServices, proxyLoadBalancerIPs, v4GroupCounter, v4BucketCounter)
 			groupCounters = append(groupCounters, v4GroupCounter)
 		case v6Enabled:
-			proxier = proxy.NewProxier(nodeConfig.Name, informerFactory, ofClient, true, routeClient, nodePortAddressesIPv6, proxyAll, skipServices, proxyLoadBalancerIPs, v6GroupCounter)
+			proxier = proxy.NewProxier(nodeConfig.Name, informerFactory, ofClient, true, routeClient, nodePortAddressesIPv6, proxyAll, skipServices, proxyLoadBalancerIPs, v6GroupCounter, v4BucketCounter)
 			groupCounters = append(groupCounters, v6GroupCounter)
 		default:
 			return fmt.Errorf("at least one of IPv4 or IPv6 should be enabled")

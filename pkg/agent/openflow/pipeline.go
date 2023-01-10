@@ -2428,8 +2428,16 @@ func (f *featureService) endpointDNATFlow(endpointIP net.IP, endpointPort uint16
 // serviceEndpointGroup creates/modifies the group/buckets of Endpoints. If the withSessionAffinity is true, then buckets
 // will resubmit packets back to ServiceLBTable to trigger the learn flow, the learn flow will then send packets to
 // EndpointDNATTable. Otherwise, buckets will resubmit packets to EndpointDNATTable directly.
-func (f *featureService) serviceEndpointGroup(groupID binding.GroupIDType, withSessionAffinity bool, endpoints ...proxy.Endpoint) binding.Group {
-	group := f.bridge.CreateGroup(groupID).ResetBuckets()
+func (f *featureService) serviceEndpointGroup(groupID binding.GroupIDType,
+	withSessionAffinity bool,
+	endpoints []proxy.Endpoint,
+	bucketIDs map[string]*binding.BucketIDType,
+	ofOperation *binding.OFOperation) binding.Group {
+	group := f.bridge.CreateGroup(groupID).ResetBuckets().ResetOFOperation()
+	if ofOperation != nil {
+		group = group.OFOperation(ofOperation)
+	}
+
 	var resubmitTableID uint8
 	if withSessionAffinity {
 		resubmitTableID = ServiceLBTable.GetID()
@@ -2441,17 +2449,18 @@ func (f *featureService) serviceEndpointGroup(groupID binding.GroupIDType, withS
 		endpointIP := net.ParseIP(endpoint.IP())
 		portVal := util.PortToUint16(endpointPort)
 		ipProtocol := getIPProtocol(endpointIP)
+		bucketID := bucketIDs[endpoint.String()]
 
 		if ipProtocol == binding.ProtocolIP {
 			ipVal := binary.BigEndian.Uint32(endpointIP.To4())
-			group = group.Bucket().Weight(100).
+			group = group.Bucket(bucketID).Weight(100).
 				LoadToRegField(EndpointIPField, ipVal).
 				LoadToRegField(EndpointPortField, uint32(portVal)).
 				ResubmitToTable(resubmitTableID).
 				Done()
 		} else if ipProtocol == binding.ProtocolIPv6 {
 			ipVal := []byte(endpointIP)
-			group = group.Bucket().Weight(100).
+			group = group.Bucket(bucketID).Weight(100).
 				LoadXXReg(EndpointIP6Field.GetRegID(), ipVal).
 				LoadToRegField(EndpointPortField, uint32(portVal)).
 				ResubmitToTable(resubmitTableID).
@@ -2459,6 +2468,15 @@ func (f *featureService) serviceEndpointGroup(groupID binding.GroupIDType, withS
 		}
 	}
 	return group
+}
+
+func (f *featureService) serviceEndpointToRemoveGroup(groupID binding.GroupIDType,
+	endpoint proxy.Endpoint,
+	bucketIDs map[string]*binding.BucketIDType) binding.Group {
+	bucketID := bucketIDs[endpoint.String()]
+	removeBucketMessage := binding.RemoveBucketsMessage
+	return f.bridge.CreateGroupToRemoveBucket(groupID, *bucketID).
+		OFOperation(&removeBucketMessage)
 }
 
 // decTTLFlows generates the flow to process TTL. For the packets forwarded across Nodes, TTL should be decremented by one;

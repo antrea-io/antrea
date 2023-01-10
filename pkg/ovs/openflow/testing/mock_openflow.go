@@ -1,4 +1,4 @@
-// Copyright 2022 Antrea Authors
+// Copyright 2023 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -133,6 +133,20 @@ func (m *MockBridge) CreateGroup(arg0 openflow.GroupIDType) openflow.Group {
 func (mr *MockBridgeMockRecorder) CreateGroup(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateGroup", reflect.TypeOf((*MockBridge)(nil).CreateGroup), arg0)
+}
+
+// CreateGroupToRemoveBucket mocks base method
+func (m *MockBridge) CreateGroupToRemoveBucket(arg0 openflow.GroupIDType, arg1 openflow.BucketIDType) openflow.Group {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateGroupToRemoveBucket", arg0, arg1)
+	ret0, _ := ret[0].(openflow.Group)
+	return ret0
+}
+
+// CreateGroupToRemoveBucket indicates an expected call of CreateGroupToRemoveBucket
+func (mr *MockBridgeMockRecorder) CreateGroupToRemoveBucket(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateGroupToRemoveBucket", reflect.TypeOf((*MockBridge)(nil).CreateGroupToRemoveBucket), arg0, arg1)
 }
 
 // CreateGroupTypeAll mocks base method
@@ -2194,17 +2208,17 @@ func (mr *MockGroupMockRecorder) Add() *gomock.Call {
 }
 
 // Bucket mocks base method
-func (m *MockGroup) Bucket() openflow.BucketBuilder {
+func (m *MockGroup) Bucket(arg0 *openflow.BucketIDType) openflow.BucketBuilder {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Bucket")
+	ret := m.ctrl.Call(m, "Bucket", arg0)
 	ret0, _ := ret[0].(openflow.BucketBuilder)
 	return ret0
 }
 
 // Bucket indicates an expected call of Bucket
-func (mr *MockGroupMockRecorder) Bucket() *gomock.Call {
+func (mr *MockGroupMockRecorder) Bucket(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Bucket", reflect.TypeOf((*MockGroup)(nil).Bucket))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Bucket", reflect.TypeOf((*MockGroup)(nil).Bucket), arg0)
 }
 
 // Delete mocks base method
@@ -2264,6 +2278,20 @@ func (mr *MockGroupMockRecorder) Modify() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Modify", reflect.TypeOf((*MockGroup)(nil).Modify))
 }
 
+// OFOperation mocks base method
+func (m *MockGroup) OFOperation(arg0 *openflow.OFOperation) openflow.Group {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "OFOperation", arg0)
+	ret0, _ := ret[0].(openflow.Group)
+	return ret0
+}
+
+// OFOperation indicates an expected call of OFOperation
+func (mr *MockGroupMockRecorder) OFOperation(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OFOperation", reflect.TypeOf((*MockGroup)(nil).OFOperation), arg0)
+}
+
 // Reset mocks base method
 func (m *MockGroup) Reset() {
 	m.ctrl.T.Helper()
@@ -2288,6 +2316,20 @@ func (m *MockGroup) ResetBuckets() openflow.Group {
 func (mr *MockGroupMockRecorder) ResetBuckets() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResetBuckets", reflect.TypeOf((*MockGroup)(nil).ResetBuckets))
+}
+
+// ResetOFOperation mocks base method
+func (m *MockGroup) ResetOFOperation() openflow.Group {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ResetOFOperation")
+	ret0, _ := ret[0].(openflow.Group)
+	return ret0
+}
+
+// ResetOFOperation indicates an expected call of ResetOFOperation
+func (mr *MockGroupMockRecorder) ResetOFOperation() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResetOFOperation", reflect.TypeOf((*MockGroup)(nil).ResetOFOperation))
 }
 
 // Type mocks base method

@@ -215,6 +215,17 @@ func (b *OFBridge) CreateGroup(id GroupIDType) Group {
 	return b.createGroupWithType(id, ofctrl.GroupSelect)
 }
 
+func (b *OFBridge) CreateGroupToRemoveBucket(groupID GroupIDType, bucketID BucketIDType) Group {
+	curOfctrlGroup := b.ofSwitch.GetGroup(uint32(groupID))
+	ofctrlGroup := &ofctrl.Group{
+		ID:      curOfctrlGroup.ID,
+		Switch:  curOfctrlGroup.Switch,
+		Buckets: []*openflow15.Bucket{openflow15.NewBucket(uint32(bucketID))},
+	}
+	g := &ofGroup{bridge: b, ofctrl: ofctrlGroup}
+	return g
+}
+
 func (b *OFBridge) createGroupWithType(id GroupIDType, groupType ofctrl.GroupType) Group {
 	ofctrlGroup, err := b.ofSwitch.NewGroup(uint32(id), groupType)
 	if err != nil { // group already exists
@@ -547,6 +558,9 @@ func (b *OFBridge) AddOFEntriesInBundle(addEntries []OFEntry, modEntries []OFEnt
 				})
 			case GroupEntry:
 				group := entry.(*ofGroup)
+				if group.ofOperation != nil {
+					operation = *group.ofOperation
+				}
 				groupSet = append(groupSet, entryOperation{
 					entry:     group,
 					operation: operation,

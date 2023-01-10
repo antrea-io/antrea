@@ -84,7 +84,7 @@ type Client interface {
 
 	// InstallServiceGroup installs a group for Service LB. Each endpoint
 	// is a bucket of the group. For now, each bucket has the same weight.
-	InstallServiceGroup(groupID binding.GroupIDType, withSessionAffinity bool, endpoints []proxy.Endpoint) error
+	InstallServiceGroup(groupID binding.GroupIDType, withSessionAffinity bool, allEndpoints, endpointsToAdd, endpointsToRemove []proxy.Endpoint, bucketIDs map[string]*binding.BucketIDType) error
 	// UninstallServiceGroup removes the group and its buckets that are
 	// installed by InstallServiceGroup.
 	UninstallServiceGroup(groupID binding.GroupIDType) error
@@ -618,21 +618,35 @@ func (c *client) GetPodFlowKeys(interfaceName string) []string {
 	return c.getFlowKeysFromCache(c.featurePodConnectivity.podCachedFlows, interfaceName)
 }
 
-func (c *client) InstallServiceGroup(groupID binding.GroupIDType, withSessionAffinity bool, endpoints []proxy.Endpoint) error {
+func (c *client) InstallServiceGroup(groupID binding.GroupIDType, withSessionAffinity bool, allEndpoints, endpointsToAdd, endpointsToRemove []proxy.Endpoint, bucketIDs map[string]*binding.BucketIDType) error {
 	c.replayMutex.RLock()
 	defer c.replayMutex.RUnlock()
 
-	group := c.featureService.serviceEndpointGroup(groupID, withSessionAffinity, endpoints...)
 	_, installed := c.featureService.groupCache.Load(groupID)
 	if !installed {
-		if err := c.ofEntryOperations.AddOFEntries([]binding.OFEntry{group}); err != nil {
+		groups := []binding.OFEntry{
+			c.featureService.serviceEndpointGroup(groupID, withSessionAffinity, allEndpoints, bucketIDs, nil),
+		}
+		if err := c.ofEntryOperations.AddOFEntries(groups); err != nil {
 			return fmt.Errorf("error when installing Service Endpoints Group %d: %w", groupID, err)
 		}
 	} else {
-		if err := c.ofEntryOperations.ModifyOFEntries([]binding.OFEntry{group}); err != nil {
+		var groups []binding.OFEntry
+		if endpointsToRemove != nil {
+			for _, endpoint := range endpointsToRemove {
+				group := c.featureService.serviceEndpointToRemoveGroup(groupID, endpoint, bucketIDs)
+				groups = append(groups, group)
+			}
+		}
+		if endpointsToAdd != nil {
+			insertBucketMessage := binding.InsertBucketsMessage
+			groups = append(groups, c.featureService.serviceEndpointGroup(groupID, withSessionAffinity, endpointsToAdd, bucketIDs, &insertBucketMessage))
+		}
+		if err := c.ofEntryOperations.ModifyOFEntries(groups); err != nil {
 			return fmt.Errorf("error when modifying Service Endpoints Group %d: %w", groupID, err)
 		}
 	}
+	group := c.featureService.serviceEndpointGroup(groupID, withSessionAffinity, allEndpoints, bucketIDs, nil)
 	c.featureService.groupCache.Store(groupID, group)
 	return nil
 }
