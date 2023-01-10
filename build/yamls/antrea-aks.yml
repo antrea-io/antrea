@@ -3231,8 +3231,7 @@ data:
     # The Namespace where Antrea Multi-cluster Controller is running.
     # The default is antrea-agent's Namespace.
       namespace: ""
-    # Enable StretchedNetworkPolicy which allows Antrea-native policies to select peers
-    # from other clusters in a ClusterSet.
+    # Enable Multi-cluster NetworkPolicy (ingress rules).
     # Multi-cluster Gateway must be enabled to enable StretchedNetworkPolicy.
       enableStretchedNetworkPolicy: false
   antrea-cni.conflist: |
@@ -3368,8 +3367,7 @@ data:
       selfSignedCA: true
 
     multicluster:
-      # Enable StretchedNetworkPolicy which allows Antrea-native policies to select peers
-      # from other clusters in a ClusterSet.
+      # Enable Multi-cluster NetworkPolicy.
       enableStretchedNetworkPolicy: false
 ---
 # Source: antrea/templates/crds/group.yaml
@@ -4293,7 +4291,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 5863dc7db71990f4adebcf03cd8311ce14d9a233129c909a872f2f14e0e022fa
+        checksum/config: c538ad921f7162e309b647e9de6e157b870cbee880c139994f62ab7f26a57bdc
       labels:
         app: antrea
         component: antrea-agent
@@ -4534,7 +4532,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: 5863dc7db71990f4adebcf03cd8311ce14d9a233129c909a872f2f14e0e022fa
+        checksum/config: c538ad921f7162e309b647e9de6e157b870cbee880c139994f62ab7f26a57bdc
       labels:
         app: antrea
         component: antrea-controller
