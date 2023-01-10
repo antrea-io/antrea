@@ -31,7 +31,7 @@ Kubernetes: `>= 1.16.0-0`
 | agent.antreaOVS.logFileMaxSize | int | `100` | Max size in MBs of any single log file. |
 | agent.antreaOVS.resources | object | `{"requests":{"cpu":"200m"}}` | Resource requests and limits for the antrea-ovs container. |
 | agent.apiPort | int | `10350` | Port for the antrea-agent APIServer to serve on. |
-| agent.dnsPolicy | string | `"ClusterFirstWithHostNet"` | DNS Policy for the antrea-agent Pods. |
+| agent.dnsPolicy | string | `""` | DNS Policy for the antrea-agent Pods. If empty, the Kubernetes default will be used. |
 | agent.enablePrometheusMetrics | bool | `true` | Enable metrics exposure via Prometheus. |
 | agent.extraVolumes | list | `[]` | Additional volumes for antrea-agent Pods. |
 | agent.installCNI.resources | object | `{"requests":{"cpu":"100m"}}` | Resource requests and limits for the install-cni initContainer. |
@@ -70,7 +70,7 @@ Kubernetes: `>= 1.16.0-0`
 | enableBridgingMode | bool | `false` | Enable bridging mode of Pod network on Nodes, in which the Node's transport interface is connected to the OVS bridge. |
 | featureGates | object | `{}` | To explicitly enable or disable a FeatureGate and bypass the Antrea defaults, add an entry to the dictionary with the FeatureGate's name as the key and a boolean as the value. |
 | flowCollector.activeFlowExportTimeout | string | `"5s"` | timeout after which a flow record is sent to the collector for active flows. |
-| flowCollector.collectorAddr | string | `"flow-aggregator.flow-aggregator.svc:4739:tls"` | IPFIX collector address as a string with format <HOST>:[<PORT>][:<PROTO>]. |
+| flowCollector.collectorAddr | string | `"flow-aggregator/flow-aggregator:4739:tls"` | IPFIX collector address as a string with format <HOST>:[<PORT>][:<PROTO>]. If the collector is running in-cluster as a Service, set <HOST> to <Service namespace>/<Service name>. |
 | flowCollector.flowPollInterval | string | `"5s"` | Determines how often the flow exporter polls for new connections. |
 | flowCollector.idleFlowExportTimeout | string | `"15s"` | timeout after which a flow record is sent to the collector for idle flows. |
 | hostGateway | string | `"antrea-gw0"` | Name of the interface antrea-agent will create and use for host <-> Pod communication. |

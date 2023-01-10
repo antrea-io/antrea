@@ -177,7 +177,7 @@ func (e *IPFIXExporter) initExportingProcess() error {
 			CollectorProtocol:   e.externalFlowCollectorProto,
 			ObservationDomainID: e.observationDomainID,
 			TempRefTimeout:      0,
-			IsEncrypted:         false,
+			TLSClientConfig:     nil,
 			SendJSONRecord:      e.sendJSONRecord,
 		}
 	} else {
@@ -187,7 +187,7 @@ func (e *IPFIXExporter) initExportingProcess() error {
 			CollectorProtocol:   e.externalFlowCollectorProto,
 			ObservationDomainID: e.observationDomainID,
 			TempRefTimeout:      1800,
-			IsEncrypted:         false,
+			TLSClientConfig:     nil,
 			SendJSONRecord:      e.sendJSONRecord,
 		}
 	}

@@ -15,6 +15,7 @@
 package exporter
 
 import (
+	"context"
 	"net"
 	"strings"
 	"testing"
@@ -23,6 +24,7 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
 	ipfixentitiestesting "github.com/vmware/go-ipfix/pkg/entities/testing"
 	"github.com/vmware/go-ipfix/pkg/exporter"
@@ -264,22 +266,14 @@ func testSendDataSet(t *testing.T, v4Enabled bool, v6Enabled bool) {
 func TestFlowExporter_initFlowExporter(t *testing.T) {
 	metrics.InitializeConnectionMetrics()
 	udpAddr, err := net.ResolveUDPAddr("udp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("Error when resolving UDP address: %v", err)
-	}
+	require.NoError(t, err, "Error when resolving UDP address")
 	conn1, err := net.ListenUDP("udp", udpAddr)
-	if err != nil {
-		t.Fatalf("Error when creating a local server: %v", err)
-	}
+	require.NoError(t, err, "Error when creating a local UDP server")
 	defer conn1.Close()
 	tcpAddr, err := net.ResolveTCPAddr("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("Error when resolving TCP address: %v", err)
-	}
+	require.NoError(t, err, "Error when resolving TCP address")
 	conn2, err := net.ListenTCP("tcp", tcpAddr)
-	if err != nil {
-		t.Fatalf("Error when creating a local server: %v", err)
-	}
+	require.NoError(t, err, "Error when creating a local TCP server")
 	defer conn2.Close()
 
 	for _, tc := range []struct {
@@ -291,14 +285,15 @@ func TestFlowExporter_initFlowExporter(t *testing.T) {
 		{conn2.Addr().Network(), conn2.Addr().String(), uint32(0)},
 	} {
 		exp := &FlowExporter{
-			process: nil,
+			collectorAddr: tc.address,
+			process:       nil,
 			exporterInput: exporter.ExporterInput{
 				CollectorProtocol: tc.protocol,
-				CollectorAddress:  tc.address,
 			},
 		}
-		err = exp.initFlowExporter()
-		assert.NoError(t, err)
+		err = exp.initFlowExporter(context.Background())
+		require.NoError(t, err)
+		assert.Equal(t, tc.address, exp.exporterInput.CollectorAddress)
 		assert.Equal(t, tc.expectedTempRefTimeout, exp.exporterInput.TempRefTimeout)
 		checkTotalReconnectionsMetric(t)
 		metrics.ReconnectionsToFlowCollector.Dec()
@@ -675,21 +670,19 @@ func createElement(name string, enterpriseID uint32) ipfixentities.InfoElementWi
 
 func TestFlowExporter_prepareExporterInputArgs(t *testing.T) {
 	for _, tc := range []struct {
-		collectorAddr               string
 		collectorProto              string
 		nodeName                    string
 		expectedObservationDomainID uint32
 		expectedIsEncrypted         bool
 		expectedProto               string
 	}{
-		{"10.10.0.79:4739", "tls", "kind-worker", 801257890, true, "tcp"},
-		{"10.10.0.80:4739", "tcp", "kind-worker", 801257890, false, "tcp"},
-		{"10.10.0.81:4739", "udp", "kind-worker", 801257890, false, "udp"},
+		{"tls", "kind-worker", 801257890, true, "tcp"},
+		{"tcp", "kind-worker", 801257890, false, "tcp"},
+		{"udp", "kind-worker", 801257890, false, "udp"},
 	} {
-		expInput := prepareExporterInputArgs(tc.collectorAddr, tc.collectorProto, tc.nodeName)
-		assert.Equal(t, tc.collectorAddr, expInput.CollectorAddress)
+		expInput := prepareExporterInputArgs(tc.collectorProto, tc.nodeName)
 		assert.Equal(t, tc.expectedObservationDomainID, expInput.ObservationDomainID)
-		assert.Equal(t, tc.expectedIsEncrypted, expInput.IsEncrypted)
+		assert.Equal(t, tc.expectedIsEncrypted, expInput.TLSClientConfig != nil)
 		assert.Equal(t, tc.expectedProto, expInput.CollectorProtocol)
 	}
 }
