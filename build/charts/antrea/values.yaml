@@ -327,8 +327,7 @@ multicluster:
   # -- The Namespace where Antrea Multi-cluster Controller is running.
   # The default is antrea-agent's Namespace.
   namespace: ""
-  # -- Enable StretchedNetworkPolicy which allows Antrea-native policies to select peers
-  # from other clusters in a ClusterSet.
+  # -- Enable Multi-cluster NetworkPolicy.
   # Multi-cluster Gateway must be enabled to enable StretchedNetworkPolicy.
   enableStretchedNetworkPolicy: false
 
