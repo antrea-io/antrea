@@ -1962,10 +1962,29 @@ func (c *client) MulticastEgressPodMetricsByIP(ip net.IP) *types.RuleMetric {
 
 func (c *client) NetworkPolicyMetrics() map[uint32]*types.RuleMetric {
 	result := map[uint32]*types.RuleMetric{}
-	collectMetricsFromFlows := func(table *Table, getMetricAndID func(flowMap map[string]string) (uint32, types.RuleMetric)) {
+	verifyFlow := func(flow string, mandatoryKeys, optionalKeys []string) bool {
+		// Target flow should contain all mandatoryKeys.
+		for _, k := range mandatoryKeys {
+			if !strings.Contains(flow, k) {
+				return false
+			}
+		}
+		// Return true if there is no optional key
+		if optionalKeys == nil {
+			return true
+		}
+		// Target flow should contain at least one optionalKey.
+		for _, k := range optionalKeys {
+			if strings.Contains(flow, k) {
+				return true
+			}
+		}
+		return false
+	}
+	collectMetricsFromFlows := func(table *Table, mandatoryKeys, optionalKeys []string, getMetricAndID func(flowMap map[string]string) (uint32, types.RuleMetric)) {
 		dumpedFlows, _ := c.ovsctlClient.DumpTableFlows(table.ofTable.GetID())
 		for _, flow := range dumpedFlows {
-			if !strings.Contains(flow, metricFlowIdentifier) {
+			if !verifyFlow(flow, mandatoryKeys, optionalKeys) {
 				continue
 			}
 			flowMap := parseFlowToMap(flow)
@@ -1979,8 +1998,8 @@ func (c *client) NetworkPolicyMetrics() map[uint32]*types.RuleMetric {
 	}
 	if c.enableMulticast {
 		// We need to collect NP statistics matching IGMP query messages and egress multicast traffic.
-		collectMetricsFromFlows(MulticastIngressMetricTable, parseMulticastMetricFlow)
-		collectMetricsFromFlows(MulticastEgressMetricTable, parseMulticastMetricFlow)
+		collectMetricsFromFlows(MulticastIngressMetricTable, []string{metricFlowIdentifier, "reg3"}, nil, parseMulticastMetricFlow)
+		collectMetricsFromFlows(MulticastEgressMetricTable, []string{metricFlowIdentifier, "reg3"}, nil, parseMulticastMetricFlow)
 	}
 	// We have two flows for each allow rule. One matches 'ct_state=+new'
 	// and counts the number of first packets, which is also the number
@@ -1988,8 +2007,8 @@ func (c *client) NetworkPolicyMetrics() map[uint32]*types.RuleMetric {
 	// matches 'ct_state=-new' and is used to count all subsequent
 	// packets in the session. We need to merge metrics from these 2
 	// flows to get the correct number of total packets.
-	collectMetricsFromFlows(EgressMetricTable, parseMetricFlow)
-	collectMetricsFromFlows(IngressMetricTable, parseMetricFlow)
+	collectMetricsFromFlows(EgressMetricTable, []string{metricFlowIdentifier}, []string{"reg0", "ct_label"}, parseMetricFlow)
+	collectMetricsFromFlows(IngressMetricTable, []string{metricFlowIdentifier}, []string{"reg0", "ct_label"}, parseMetricFlow)
 	return result
 }
 
