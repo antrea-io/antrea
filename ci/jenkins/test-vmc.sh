@@ -188,7 +188,7 @@ function release_static_ip() {
 function setup_cluster() {
     export KUBECONFIG=$KUBECONFIG_PATH
     if [ -z $K8S_VERSION ]; then
-      export K8S_VERSION=v1.23.5
+      export K8S_VERSION=v1.25.5
     fi
     if [ -z $TEST_OS ]; then
       export TEST_OS=ubuntu-2004
