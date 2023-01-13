@@ -31,14 +31,18 @@ import (
 	ipfixintermediate "github.com/vmware/go-ipfix/pkg/intermediate"
 	ipfixregistry "github.com/vmware/go-ipfix/pkg/registry"
 	"gopkg.in/yaml.v2"
+	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
+	"k8s.io/client-go/tools/cache"
 
 	flowaggregatorconfig "antrea.io/antrea/pkg/config/flowaggregator"
 	"antrea.io/antrea/pkg/flowaggregator/exporter"
 	exportertesting "antrea.io/antrea/pkg/flowaggregator/exporter/testing"
 	"antrea.io/antrea/pkg/flowaggregator/options"
+	"antrea.io/antrea/pkg/flowaggregator/querier"
 	"antrea.io/antrea/pkg/ipfix"
 	ipfixtesting "antrea.io/antrea/pkg/ipfix/testing"
 )
@@ -577,4 +581,273 @@ func TestFlowAggregator_closeUpdateChBeforeFlowExportLoopReturns(t *testing.T) {
 	wg1.Wait()
 	close(stopCh2)
 	wg2.Wait()
+}
+
+func TestFlowAggregator_podInfoIndexFunc(t *testing.T) {
+	node := &v1.Node{}
+	pendingPod := &v1.Pod{
+		Status: v1.PodStatus{
+			Phase: v1.PodPending,
+			PodIPs: []v1.PodIP{
+				{
+					IP: "192.168.1.2",
+				},
+			},
+		},
+	}
+	succeededPod := &v1.Pod{
+		Status: v1.PodStatus{
+			Phase: v1.PodSucceeded,
+			PodIPs: []v1.PodIP{
+				{
+					IP: "192.168.1.3",
+				},
+			},
+		},
+	}
+
+	tests := []struct {
+		name        string
+		obj         interface{}
+		want        []string
+		expectedErr string
+	}{
+		{
+			name:        "object is not pod",
+			obj:         node,
+			expectedErr: "obj is not pod: ",
+		},
+		{
+			name: "pod status in pending phase",
+			obj:  pendingPod,
+			want: []string{"192.168.1.2"},
+		},
+		{
+			name: "pod status in succeeded phase",
+			obj:  succeededPod,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := podInfoIndexFunc(tt.obj)
+			if tt.expectedErr != "" {
+				assert.ErrorContains(t, err, tt.expectedErr)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tt.want, got)
+			}
+		})
+	}
+}
+
+func TestFlowAggregator_fetchPodLabels(t *testing.T) {
+	pod := &v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "default",
+			Name:      "testPod",
+			Labels: map[string]string{
+				"test": "ut",
+			},
+		},
+		Status: v1.PodStatus{
+			Phase: v1.PodPending,
+			PodIPs: []v1.PodIP{
+				{
+					IP: "192.168.1.2",
+				},
+			},
+		},
+	}
+
+	client := fake.NewSimpleClientset()
+	informerFactory := informers.NewSharedInformerFactory(client, 0)
+	informerFactory.Core().V1().Pods().Informer().AddIndexers(cache.Indexers{podInfoIndex: podInfoIndexFunc})
+
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+
+	informerFactory.Start(stopCh)
+	informerFactory.Core().V1().Pods().Informer().GetIndexer().Add(pod)
+
+	tests := []struct {
+		name       string
+		podAddress string
+		want       string
+	}{
+		{
+			name:       "no pod object",
+			podAddress: "192.168.1.3",
+		},
+		{
+			name:       "pod with label",
+			podAddress: "192.168.1.2",
+			want:       "{\"test\":\"ut\"}",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fa := &flowAggregator{
+				k8sClient:        client,
+				includePodLabels: true,
+				podInformer:      informerFactory.Core().V1().Pods(),
+			}
+			got := fa.fetchPodLabels(tt.podAddress)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestFlowAggregator_GetRecordMetrics(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockCollectingProcess := ipfixtesting.NewMockIPFIXCollectingProcess(ctrl)
+	mockAggregationProcess := ipfixtesting.NewMockIPFIXAggregationProcess(ctrl)
+	want := querier.Metrics{
+		NumRecordsExported: 1,
+		NumRecordsReceived: 1,
+		NumFlows:           1,
+		NumConnToCollector: 1,
+	}
+
+	fa := &flowAggregator{
+		collectingProcess:  mockCollectingProcess,
+		aggregationProcess: mockAggregationProcess,
+		numRecordsExported: 1,
+	}
+
+	mockCollectingProcess.EXPECT().GetNumRecordsReceived().Return(int64(1))
+	mockAggregationProcess.EXPECT().GetNumFlows().Return(int64(1))
+	mockCollectingProcess.EXPECT().GetNumConnToCollector().Return(int64(1))
+
+	got := fa.GetRecordMetrics()
+	assert.Equal(t, want, got)
+}
+
+func TestFlowAggregator_InitCollectingProcess(t *testing.T) {
+	tests := []struct {
+		name                        string
+		aggregatorTransportProtocol flowaggregatorconfig.AggregatorTransportProtocol
+		flowAggregatorAddress       string
+		k8sClient                   kubernetes.Interface
+	}{
+		{
+			name:                        "TLS protocol",
+			aggregatorTransportProtocol: flowaggregatorconfig.AggregatorTransportProtocolTLS,
+			k8sClient:                   fake.NewSimpleClientset(),
+			flowAggregatorAddress:       "192.168.1.2",
+		},
+		{
+			name:                        "TCP protocol",
+			aggregatorTransportProtocol: flowaggregatorconfig.AggregatorTransportProtocolTCP,
+			k8sClient:                   fake.NewSimpleClientset(),
+		},
+		{
+			name:      "neither TLS nor TCP protocol",
+			k8sClient: fake.NewSimpleClientset(),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fa := &flowAggregator{
+				aggregatorTransportProtocol: tt.aggregatorTransportProtocol,
+				flowAggregatorAddress:       tt.flowAggregatorAddress,
+				k8sClient:                   tt.k8sClient,
+			}
+			err := fa.InitCollectingProcess()
+			require.NoError(t, err)
+		})
+	}
+}
+
+func TestFlowAggregator_InitAggregationProcess(t *testing.T) {
+	fa := &flowAggregator{
+		activeFlowRecordTimeout:     testActiveTimeout,
+		inactiveFlowRecordTimeout:   testInactiveTimeout,
+		aggregatorTransportProtocol: flowaggregatorconfig.AggregatorTransportProtocolTCP,
+	}
+	err := fa.InitCollectingProcess()
+	require.NoError(t, err)
+
+	err = fa.InitAggregationProcess()
+	require.NoError(t, err)
+}
+
+func TestFlowAggregator_fillK8sMetadata(t *testing.T) {
+	srcPod := &v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "default",
+			Name:      "sourcePod",
+		},
+		Spec: v1.PodSpec{
+			NodeName: "sourceNode",
+		},
+		Status: v1.PodStatus{
+			PodIPs: []v1.PodIP{
+				{
+					IP: "192.168.1.2",
+				},
+			},
+		},
+	}
+	dstPod := &v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "default",
+			Name:      "destinationPod",
+		},
+		Spec: v1.PodSpec{
+			NodeName: "destinationNode",
+		},
+		Status: v1.PodStatus{
+			PodIPs: []v1.PodIP{
+				{
+					IP: "192.168.1.3",
+				},
+			},
+		},
+	}
+	emptyStr := make([]byte, 0)
+	sourcePodNameElem, err := ipfixentities.DecodeAndCreateInfoElementWithValue(ipfixentities.NewInfoElement("sourcePodName", uint16(0), ipfixentities.String, ipfixregistry.AntreaEnterpriseID, uint16(0)), emptyStr)
+	require.NoError(t, err)
+	sourcePodNamespaceElem, err := ipfixentities.DecodeAndCreateInfoElementWithValue(ipfixentities.NewInfoElement("sourcePodNamespace", uint16(0), ipfixentities.String, ipfixregistry.AntreaEnterpriseID, uint16(0)), emptyStr)
+	require.NoError(t, err)
+	sourceNodeNameElem, err := ipfixentities.DecodeAndCreateInfoElementWithValue(ipfixentities.NewInfoElement("sourceNodeName", uint16(0), ipfixentities.String, ipfixregistry.AntreaEnterpriseID, uint16(0)), emptyStr)
+	require.NoError(t, err)
+	destinationPodNameElem, err := ipfixentities.DecodeAndCreateInfoElementWithValue(ipfixentities.NewInfoElement("destinationPodName", uint16(0), ipfixentities.String, ipfixregistry.AntreaEnterpriseID, uint16(0)), emptyStr)
+	require.NoError(t, err)
+	destinationPodNamespaceElem, err := ipfixentities.DecodeAndCreateInfoElementWithValue(ipfixentities.NewInfoElement("destinationPodNamespace", uint16(0), ipfixentities.String, ipfixregistry.AntreaEnterpriseID, uint16(0)), emptyStr)
+	require.NoError(t, err)
+	destinationNodeNameElem, err := ipfixentities.DecodeAndCreateInfoElementWithValue(ipfixentities.NewInfoElement("destinationNodeName", uint16(0), ipfixentities.String, ipfixregistry.AntreaEnterpriseID, uint16(0)), emptyStr)
+	require.NoError(t, err)
+
+	ctrl := gomock.NewController(t)
+	mockRecord := ipfixentitiestesting.NewMockRecord(ctrl)
+	client := fake.NewSimpleClientset()
+	informerFactory := informers.NewSharedInformerFactory(client, 0)
+	informerFactory.Core().V1().Pods().Informer().AddIndexers(cache.Indexers{podInfoIndex: podInfoIndexFunc})
+
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+
+	informerFactory.Start(stopCh)
+	informerFactory.Core().V1().Pods().Informer().GetIndexer().Add(srcPod)
+	informerFactory.Core().V1().Pods().Informer().GetIndexer().Add(dstPod)
+
+	ipv4Key := ipfixintermediate.FlowKey{
+		SourceAddress:      "192.168.1.2",
+		DestinationAddress: "192.168.1.3",
+	}
+
+	fa := &flowAggregator{
+		podInformer: informerFactory.Core().V1().Pods(),
+	}
+
+	mockRecord.EXPECT().GetInfoElementWithValue("sourcePodName").Return(sourcePodNameElem, 0, true)
+	mockRecord.EXPECT().GetInfoElementWithValue("sourcePodNamespace").Return(sourcePodNamespaceElem, 0, true)
+	mockRecord.EXPECT().GetInfoElementWithValue("sourceNodeName").Return(sourceNodeNameElem, 0, true)
+	mockRecord.EXPECT().GetInfoElementWithValue("destinationPodName").Return(destinationPodNameElem, 0, true)
+	mockRecord.EXPECT().GetInfoElementWithValue("destinationPodNamespace").Return(destinationPodNamespaceElem, 0, true)
+	mockRecord.EXPECT().GetInfoElementWithValue("destinationNodeName").Return(destinationNodeNameElem, 0, true)
+
+	fa.fillK8sMetadata(ipv4Key, mockRecord)
 }
