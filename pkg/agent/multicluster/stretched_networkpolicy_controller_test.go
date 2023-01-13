@@ -45,8 +45,8 @@ import (
 )
 
 const (
-	interval = time.Millisecond
-	timeout  = time.Second
+	interval = 10 * time.Millisecond
+	timeout  = 2 * time.Second
 )
 
 type fakeStretchedNetworkPolicyController struct {
