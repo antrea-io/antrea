@@ -147,8 +147,10 @@ func addrSliceDifference(s1, s2 []netlink.Addr) []*netlink.Addr {
 // they are missing from the interface. Any other existing address already configured for the
 // interface will be removed, unless it is a link-local address.
 func ConfigureLinkAddresses(idx int, ipNets []*net.IPNet) error {
-	// No need to check the error here, since the link is found in previous steps.
-	link, _ := netlink.LinkByIndex(idx)
+	link, err := netlink.LinkByIndex(idx)
+	if err != nil {
+		return err
+	}
 	ifaceName := link.Attrs().Name
 	var newAddrs []netlink.Addr
 	for _, ipNet := range ipNets {

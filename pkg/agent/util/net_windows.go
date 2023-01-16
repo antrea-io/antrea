@@ -341,7 +341,10 @@ func addrSliceDifference(s1, s2 []*net.IPNet) []*net.IPNet {
 // interface will be removed, unless it is a link-local address. At the moment, this function only
 // supports IPv4 addresses and will ignore any address in ipNets that is not IPv4.
 func ConfigureLinkAddresses(idx int, ipNets []*net.IPNet) error {
-	iface, _ := net.InterfaceByIndex(idx)
+	iface, err := net.InterfaceByIndex(idx)
+	if err != nil {
+		return err
+	}
 	ifaceName := iface.Name
 	var addrs []*net.IPNet
 	ifaceAddrs, err := iface.Addrs()
