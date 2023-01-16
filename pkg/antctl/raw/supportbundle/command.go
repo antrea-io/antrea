@@ -390,7 +390,7 @@ func createControllerClient(k8sClientset kubernetes.Interface, antreaClientset a
 	var controllerNodeIPs *ip.DualStackIPs
 	controllerNodeIPs, err = k8s.GetNodeAddrs(controllerNode)
 	if err != nil {
-		return nil, fmt.Errorf("error when parsing controllre IP: %w", err)
+		return nil, fmt.Errorf("error when parsing controller IP: %w", err)
 	}
 
 	cfg := rest.CopyConfig(cfgTmpl)
