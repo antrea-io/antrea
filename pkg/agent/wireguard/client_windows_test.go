@@ -1,7 +1,7 @@
 //go:build windows
 // +build windows
 
-// Copyright 2021 Antrea Authors
+// Copyright 2023 Antrea Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,13 +18,12 @@
 package wireguard
 
 import (
-	"fmt"
+	"testing"
 
-	clientset "k8s.io/client-go/kubernetes"
-
-	"antrea.io/antrea/pkg/agent/config"
+	"github.com/stretchr/testify/assert"
 )
 
-func New(clientSet clientset.Interface, nodeConfig *config.NodeConfig, wireGuardConfig *config.WireGuardConfig) (Interface, error) {
-	return nil, fmt.Errorf("WireGuard is not implemented for windows")
+func TestNew(t *testing.T) {
+	_, err := New(nil, nil, nil)
+	assert.Equal(t, "WireGuard is not implemented for windows", err.Error())
 }

@@ -18,13 +18,19 @@
 package wireguard
 
 import (
+	"errors"
 	"net"
 	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/vishvananda/netlink"
+	"golang.org/x/sys/unix"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes/fake"
 
 	"antrea.io/antrea/pkg/agent/config"
 )
@@ -376,5 +382,76 @@ func Test_DeletePeer(t *testing.T) {
 		_, ok := client.peerPublicKeyByNodeName.Load("fake-node-1")
 		assert.False(t, ok)
 	})
+}
 
+func Test_New(t *testing.T) {
+	client := fake.NewSimpleClientset()
+	_, err := New(client, &config.NodeConfig{Name: "test"}, &config.WireGuardConfig{})
+	require.NoError(t, err)
+}
+
+func Test_Init(t *testing.T) {
+	tests := []struct {
+		name          string
+		linkAddErr    error
+		lindSetupErr  error
+		utilConfigErr error
+		expectedErr   string
+	}{
+		{
+			name: "init successfully",
+		},
+		{
+			name:        "failed to init due to unix.EOPNOTSUPP error",
+			linkAddErr:  unix.EOPNOTSUPP,
+			expectedErr: "WireGuard not supported by the Linux kernel (netlink: operation not supported), make sure the WireGuard kernel module is loaded",
+		},
+		{
+			name:        "failed to init due to link add error",
+			linkAddErr:  errors.New("link add failed"),
+			expectedErr: "link add failed",
+		},
+		{
+			name:         "failed to init due to link setup error",
+			lindSetupErr: errors.New("link setup failed"),
+			expectedErr:  "link setup failed",
+		},
+		{
+			name:          "failed to init due to link address config error",
+			utilConfigErr: errors.New("link address config failed"),
+			expectedErr:   "link address config failed",
+		},
+	}
+
+	client := getFakeClient()
+	client.k8sClient = fake.NewSimpleClientset(&corev1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "fake-node-1",
+		},
+	})
+	client.gatewayConfig = &config.GatewayConfig{
+		IPv4: net.ParseIP("192.168.0.2"),
+		IPv6: net.ParseIP("fd12:ab:34:a001::11"),
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			linkAdd = func(link netlink.Link) error {
+				return tt.linkAddErr
+			}
+			linkSetUp = func(link netlink.Link) error {
+				return tt.lindSetupErr
+			}
+			utilConfigureLinkAddresses = func(idx int, ipNets []*net.IPNet) error {
+				return tt.utilConfigErr
+			}
+
+			err := client.Init()
+			if tt.expectedErr != "" {
+				assert.Equal(t, tt.expectedErr, err.Error())
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
 }

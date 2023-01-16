@@ -56,6 +56,12 @@ type wgctrlClient interface {
 
 var _ Interface = (*client)(nil)
 
+var (
+	linkAdd                    = netlink.LinkAdd
+	linkSetUp                  = netlink.LinkSetUp
+	utilConfigureLinkAddresses = util.ConfigureLinkAddresses
+)
+
 type client struct {
 	wgClient                wgctrlClient
 	nodeName                string
@@ -87,15 +93,15 @@ func New(clientSet clientset.Interface, nodeConfig *config.NodeConfig, wireGuard
 
 func (client *client) Init() error {
 	link := &netlink.Wireguard{LinkAttrs: netlink.LinkAttrs{Name: client.wireGuardConfig.Name, MTU: client.wireGuardConfig.MTU}}
-	err := netlink.LinkAdd(link)
-	// ignore existing link as it may have already been created or managed by userspace process.
+	err := linkAdd(link)
+	// Ignore existing link as it may have already been created or managed by userspace process.
 	if err != nil && !errors.Is(err, unix.EEXIST) {
 		if errors.Is(err, unix.EOPNOTSUPP) {
 			return fmt.Errorf("WireGuard not supported by the Linux kernel (netlink: %w), make sure the WireGuard kernel module is loaded", err)
 		}
 		return err
 	}
-	if err := netlink.LinkSetUp(link); err != nil {
+	if err := linkSetUp(link); err != nil {
 		return err
 	}
 	// Configure the IP addresses same as Antrea gateway so iptables MASQUERADE target will select it as source address.
@@ -116,7 +122,7 @@ func (client *client) Init() error {
 		})
 	}
 	// This must be executed after netlink.LinkSetUp as the latter ensures link.Attrs().Index is set.
-	if err := util.ConfigureLinkAddresses(link.Attrs().Index, gatewayIPs); err != nil {
+	if err := utilConfigureLinkAddresses(link.Attrs().Index, gatewayIPs); err != nil {
 		return err
 	}
 	client.wireGuardConfig.LinkIndex = link.Attrs().Index
