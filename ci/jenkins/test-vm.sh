@@ -47,9 +47,9 @@ Run K8s e2e community tests (Conformance & Network Policy) or Antrea e2e tests o
 # VM configuration
 declare -A LINUX_HOSTS_TO_IP
 declare -A WINDOWS_HOSTS_TO_IP
-declare -a LIN_HOSTNAMES=("vmbmtest0-1")
+declare -a LIN_HOSTNAMES=("vmbmtest0-1" "vmbmtest0-redhat-0")
 declare -a WIN_HOSTNAMES=("vmbmtest0-win-0")
-declare -A LINUX_HOSTS_TO_USERNAME=(["vmbmtest0-1"]="ubuntu")
+declare -A LINUX_HOSTS_TO_USERNAME=(["vmbmtest0-1"]="ubuntu" ["vmbmtest0-redhat-0"]="root")
 declare -A WINDOWS_HOSTS_TO_USERNAME=(["vmbmtest0-win-0"]="Administrator")
 
 # To run kubectl cmds
@@ -142,7 +142,7 @@ function apply_antrea {
 }
 
 function clean_vm_agent {
-    declare -a host_names=$1
+    host_names=( "$@" )
     echo "Host names ${host_names[@]}"
     kubectl delete sa $SERVICE_ACCOUNT -n $TEST_NAMESPACE --ignore-not-found=true
     clean_up_one_ns $TEST_NAMESPACE
