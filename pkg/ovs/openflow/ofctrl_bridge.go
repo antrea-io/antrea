@@ -218,6 +218,7 @@ func (b *OFBridge) CreateGroup(id GroupIDType) Group {
 func (b *OFBridge) createGroupWithType(id GroupIDType, groupType ofctrl.GroupType) Group {
 	ofctrlGroup, err := b.ofSwitch.NewGroup(uint32(id), groupType)
 	if err != nil { // group already exists
+		klog.Infof("group already exists %+v", ofctrlGroup)
 		ofctrlGroup = b.ofSwitch.GetGroup(uint32(id))
 	}
 	g := &ofGroup{bridge: b, ofctrl: ofctrlGroup}

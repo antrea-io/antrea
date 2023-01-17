@@ -27,6 +27,7 @@ import (
 	"antrea.io/ofnet/ofctrl"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/metrics"
@@ -2403,6 +2404,7 @@ func (f *featureService) endpointDNATFlow(endpointIP net.IP, endpointPort uint16
 // EndpointDNATTable. Otherwise, buckets will resubmit packets to EndpointDNATTable directly.
 func (f *featureService) serviceEndpointGroup(groupID binding.GroupIDType, withSessionAffinity bool, endpoints ...proxy.Endpoint) binding.Group {
 	group := f.bridge.CreateGroup(groupID).ResetBuckets()
+	klog.Infof("service endpoint group %+v", group)
 	var resubmitTableID uint8
 	if withSessionAffinity {
 		resubmitTableID = ServiceLBTable.GetID()

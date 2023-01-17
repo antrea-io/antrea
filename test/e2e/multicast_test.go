@@ -688,7 +688,7 @@ func setupReceivers(t *testing.T, data *TestData, mc multicastTestcase, mcjoinWa
 			defer wg.Done()
 			// The following command joins a multicast group and sets the timeout to 100 seconds(-W 100) before exit.
 			// The command will return after receiving 10 packet(-c 10).
-			receiveMulticastCommand := []string{"/bin/sh", "-c", fmt.Sprintf("mcjoin -c 10 -o -p %d -W %d %s", mc.port, mcjoinWaitTimeout, mc.group.String())}
+			receiveMulticastCommand := []string{"/bin/sh", "-c", fmt.Sprintf("mcjoin -c 10 -o -p %d -W %d %s", mc.port, mcjoinWaitTimeout*10, mc.group.String())}
 			res, _, err := data.RunCommandFromPod(data.testNamespace, r, mcjoinContainerName, receiveMulticastCommand)
 			failOnError(err, t)
 			captureEnv(t, data)

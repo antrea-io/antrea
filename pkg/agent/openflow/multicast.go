@@ -94,6 +94,7 @@ func (f *featureMulticast) replayFlows() []binding.Flow {
 
 func (f *featureMulticast) multicastReceiversGroup(groupID binding.GroupIDType, tableID uint8, ports []uint32, remoteIPs []net.IP) binding.Group {
 	group := f.bridge.CreateGroupTypeAll(groupID).ResetBuckets()
+	klog.Infof("multicast receiver group %+v", group)
 	for i := range ports {
 		group = group.Bucket().
 			LoadToRegField(OFPortFoundRegMark.GetField(), OFPortFoundRegMark.GetValue()).

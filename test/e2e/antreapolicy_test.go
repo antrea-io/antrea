@@ -3825,6 +3825,46 @@ func captureEnv(t *testing.T, data *TestData) {
 	if err != nil {
 		t.Logf(err.Error())
 	}
+
+	node0groups, _, err := data.RunCommandFromPod(metav1.NamespaceSystem, agentName0, "antrea-agent", []string{"ovs-ofctl", "dump-groups", defaultBridgeName})
+	t.Logf("groups on node 0: %s", node0groups)
+	if err != nil {
+		t.Logf(err.Error())
+	}
+	node1groups, _, err := data.RunCommandFromPod(metav1.NamespaceSystem, agentName1, "antrea-agent", []string{"ovs-ofctl", "dump-groups", defaultBridgeName})
+	t.Logf("groups on node 1: %s", node1groups)
+	if err != nil {
+		t.Logf(err.Error())
+	}
+
+	node0podMstats, _, err := data.RunCommandFromPod(metav1.NamespaceSystem, agentName0, "antrea-agent", []string{"antctl", "get", "podmulticaststats"})
+	t.Logf("pod stats on node 0: %s", node0podMstats)
+	if err != nil {
+		t.Logf(err.Error())
+	}
+	node1podMstats, _, err := data.RunCommandFromPod(metav1.NamespaceSystem, agentName1, "antrea-agent", []string{"antctl", "get", "podmulticaststats"})
+	t.Logf("ovsflows on node 1: %s", node1podMstats)
+	if err != nil {
+		t.Logf(err.Error())
+	}
+
+	_, iptablesResult1, stderr, err := data.RunCommandOnNode(nodeName(0), fmt.Sprintf("iptables-save"))
+	t.Logf("iptables on node 0: %s", iptablesResult1)
+	if err != nil {
+		t.Logf(err.Error())
+	}
+	if stderr != "" {
+		t.Logf(stderr)
+	}
+	_, iptablesResult2, stderr, err := data.RunCommandOnNode(nodeName(1), fmt.Sprintf("iptables-save"))
+	t.Logf("iptables on node 1: %s", iptablesResult2)
+	if err != nil {
+		t.Logf(err.Error())
+	}
+	if stderr != "" {
+		t.Logf(stderr)
+	}
+
 }
 
 func testACNPIGMPQuery(t *testing.T, data *TestData, acnpName, caseName, groupAddress string, action crdv1alpha1.RuleAction) {
