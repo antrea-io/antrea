@@ -34,6 +34,7 @@ import (
 	systemv1beta1 "antrea.io/antrea/pkg/apis/system/v1beta1"
 	controllerapiserver "antrea.io/antrea/pkg/apiserver"
 	clientset "antrea.io/antrea/pkg/client/clientset/versioned"
+	"antrea.io/antrea/test/e2e/utils/portforwarder"
 )
 
 // getAccessToken retrieves the local access token of an antrea component API server.
@@ -56,18 +57,19 @@ func testSupportBundle(name string, t *testing.T) {
 	}
 	defer teardownTest(t, data)
 
-	var podName, podPort, tokenPath string
+	var podName, tokenPath string
+	var podPort int
 	if name == "controller" {
 		var pod *v1.Pod
 		pod, err = data.getAntreaController()
 		require.NoError(t, err)
 		podName = pod.Name
-		podPort = fmt.Sprint(apis.AntreaControllerAPIPort)
+		podPort = apis.AntreaControllerAPIPort
 		tokenPath = controllerapiserver.TokenPath
 	} else {
 		podName, err = data.getAntreaPodOnNode(controlPlaneNodeName())
 		require.NoError(t, err)
-		podPort = fmt.Sprint(apis.AntreaAgentAPIPort)
+		podPort = apis.AntreaAgentAPIPort
 		tokenPath = agentapiserver.TokenPath
 	}
 	// Acquire token.
@@ -77,14 +79,18 @@ func testSupportBundle(name string, t *testing.T) {
 	require.NoError(t, err)
 
 	for _, podIPStr := range podIP.ipStrings {
-		getAndCheckSupportBundle(t, name, podIPStr, podPort, token, data)
+		getAndCheckSupportBundle(t, name, podIPStr, podPort, token, podName, data)
 	}
 }
 
-func getAndCheckSupportBundle(t *testing.T, name, podIP, podPort, token string, data *TestData) {
+func getAndCheckSupportBundle(t *testing.T, name, podIP string, podPort int, token string, podName string, data *TestData) {
 	// Setup clients.
 	localConfig := rest.CopyConfig(data.kubeConfig)
-	localConfig.Host = net.JoinHostPort(podIP, podPort)
+	pf, err := portforwarder.NewPortForwarder(localConfig, metav1.NamespaceSystem, podName, podPort, "localhost", 8080)
+	require.NoError(t, err)
+	pf.Start()
+	defer pf.Stop()
+	localConfig.Host = net.JoinHostPort("localhost", "8080")
 	localConfig.BearerToken = token
 	localConfig.Insecure = true
 	localConfig.CAFile = ""

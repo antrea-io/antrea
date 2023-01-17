@@ -1117,6 +1117,8 @@ func getImageName(uri string) string {
 type PodBuilder struct {
 	Name               string
 	Namespace          string
+	VolumeMounts       []corev1.VolumeMount
+	Volumes            []corev1.Volume
 	Image              string
 	ContainerName      string
 	Command            []string
@@ -1212,6 +1214,31 @@ func (b *PodBuilder) WithResources(ResourceRequests, ResourceLimits corev1.Resou
 	return b
 }
 
+func (b *PodBuilder) AddVolume(volume []corev1.Volume) *PodBuilder {
+	b.Volumes = volume
+	return b
+}
+
+func (b *PodBuilder) AddVolumeMount(volumeMount []corev1.VolumeMount) *PodBuilder {
+	b.VolumeMounts = volumeMount
+	return b
+}
+
+func (b *PodBuilder) MountConfigMap(configMapName string, mountPath string, volumeName string) *PodBuilder {
+	volumeMount := corev1.VolumeMount{Name: volumeName, MountPath: mountPath}
+	volume := corev1.Volume{
+		Name: volumeName,
+		VolumeSource: corev1.VolumeSource{
+			ConfigMap: &corev1.ConfigMapVolumeSource{
+				LocalObjectReference: corev1.LocalObjectReference{
+					Name: configMapName,
+				},
+			},
+		},
+	}
+	return b.AddVolume([]corev1.Volume{volume}).AddVolumeMount([]corev1.VolumeMount{volumeMount})
+}
+
 func (b *PodBuilder) Create(data *TestData) error {
 	containerName := b.ContainerName
 	if containerName == "" {
@@ -1234,8 +1261,10 @@ func (b *PodBuilder) Create(data *TestData) error {
 				SecurityContext: &corev1.SecurityContext{
 					Privileged: &b.IsPrivileged,
 				},
+				VolumeMounts: b.VolumeMounts,
 			},
 		},
+		Volumes:            b.Volumes,
 		RestartPolicy:      corev1.RestartPolicyNever,
 		HostNetwork:        b.HostNetwork,
 		ServiceAccountName: b.ServiceAccountName,
