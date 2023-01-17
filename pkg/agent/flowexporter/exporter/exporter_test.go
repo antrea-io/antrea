@@ -29,6 +29,9 @@ import (
 	ipfixentitiestesting "github.com/vmware/go-ipfix/pkg/entities/testing"
 	"github.com/vmware/go-ipfix/pkg/exporter"
 	ipfixregistry "github.com/vmware/go-ipfix/pkg/registry"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/component-base/metrics/legacyregistry"
 
 	"antrea.io/antrea/pkg/agent/flowexporter"
@@ -260,6 +263,101 @@ func testSendDataSet(t *testing.T, v4Enabled bool, v6Enabled bool) {
 	}
 	if v6Enabled {
 		sendDataSet(elemListv6, testTemplateIDv6, *connv6)
+	}
+}
+
+func TestFlowExporter_resolveCollectorAddress(t *testing.T) {
+	ctx := context.Background()
+
+	k8sClient := fake.NewSimpleClientset(
+		&corev1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "svc1",
+				Namespace: "ns",
+			},
+			Spec: corev1.ServiceSpec{
+				Type:       corev1.ServiceTypeClusterIP,
+				ClusterIP:  "10.96.1.201",
+				ClusterIPs: []string{"10.96.1.201"},
+			},
+		},
+		&corev1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "svc2",
+				Namespace: "ns",
+			},
+			Spec: corev1.ServiceSpec{
+				Type: corev1.ServiceTypeClusterIP,
+				// missing ClusterIP
+			},
+		},
+	)
+
+	testCases := []struct {
+		name               string
+		inputAddr          string
+		withTLS            bool
+		expectedAddr       string
+		expectedServerName string
+		expectedErr        string
+	}{
+		{
+			name:         "IP address",
+			inputAddr:    "10.96.1.100:4739",
+			expectedAddr: "10.96.1.100:4739",
+		},
+		{
+			name:         "Service name",
+			inputAddr:    "ns/svc1:4739",
+			expectedAddr: "10.96.1.201:4739",
+		},
+		{
+			name:               "Service name with TLS",
+			inputAddr:          "ns/svc1:4739",
+			withTLS:            true,
+			expectedAddr:       "10.96.1.201:4739",
+			expectedServerName: "svc1.ns.svc",
+		},
+		{
+			name:        "Service without ClusterIP",
+			inputAddr:   "ns/svc2:4739",
+			expectedErr: "ClusterIP is not available for FlowAggregator Service",
+		},
+		{
+			name:        "Missing Service",
+			inputAddr:   "ns/svc3:4739",
+			expectedErr: "failed to resolve FlowAggregator Service",
+		},
+	}
+
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			exp := &FlowExporter{
+				collectorAddr: tc.inputAddr,
+				exporterInput: exporter.ExporterInput{
+					CollectorProtocol: "tcp",
+				},
+				k8sClient: k8sClient,
+			}
+			if tc.withTLS {
+				exp.exporterInput.TLSClientConfig = &exporter.ExporterTLSClientConfig{}
+			}
+
+			err := exp.resolveCollectorAddress(ctx)
+			if tc.expectedErr != "" {
+				assert.ErrorContains(t, err, tc.expectedErr)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tc.expectedAddr, exp.exporterInput.CollectorAddress)
+				if tc.withTLS {
+					assert.Equal(t, tc.expectedServerName, exp.exporterInput.TLSClientConfig.ServerName)
+				} else {
+					// should stay nil
+					assert.Nil(t, exp.exporterInput.TLSClientConfig)
+				}
+			}
+		})
 	}
 }
 
