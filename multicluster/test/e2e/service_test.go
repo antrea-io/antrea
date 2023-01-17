@@ -170,25 +170,48 @@ func (data *MCTestData) testANPToServices(t *testing.T) {
 	eastGwClientName := getClusterGatewayClientPodName(eastCluster)
 	eastRegularClientName := getClusterRegularClientPodName(eastCluster)
 
-	// Verify that ACNP ToServices works fine with the new Multi-cluster Service.
-	anpBuilder := &e2euttils.AntreaNetworkPolicySpecBuilder{}
-	anpBuilder = anpBuilder.SetName(multiClusterTestNamespace, "block-west-exported-service").
+	// Verify that ANP ToServices works fine with the new Multi-cluster Service.
+	anpBuilder1 := &e2euttils.AntreaNetworkPolicySpecBuilder{}
+	anpBuilder1 = anpBuilder1.SetName(multiClusterTestNamespace, "block-west-exported-service").
 		SetPriority(1.0).
 		SetAppliedToGroup([]e2euttils.ANPAppliedToSpec{{PodSelector: map[string]string{"app": "client"}}}).
 		AddToServicesRule([]crdv1alpha1.PeerService{{
 			Name:      mcWestClusterTestService,
 			Namespace: multiClusterTestNamespace},
 		}, "", nil, crdv1alpha1.RuleActionDrop)
-	if _, err := data.createOrUpdateANP(eastCluster, anpBuilder.Get()); err != nil {
-		t.Fatalf("Error creating ANP %s: %v", anpBuilder.Name, err)
+	if _, err := data.createOrUpdateANP(eastCluster, anpBuilder1.Get()); err != nil {
+		t.Fatalf("Error creating ANP %s: %v", anpBuilder1.Name, err)
 	}
-	defer data.deleteANP(eastCluster, multiClusterTestNamespace, anpBuilder.Name)
 
 	connectivity := data.probeFromPodInCluster(eastCluster, multiClusterTestNamespace, eastGwClientName, "client", eastIP, mcWestClusterTestService, 80, corev1.ProtocolTCP)
 	assert.Equal(t, antreae2e.Dropped, connectivity, "Failure -- wrong result from probing exported Service from gateway clientPod after applying toServices AntreaNetworkPolicy")
 
 	connectivity = data.probeFromPodInCluster(eastCluster, multiClusterTestNamespace, eastRegularClientName, "client", eastIP, mcWestClusterTestService, 80, corev1.ProtocolTCP)
 	assert.Equal(t, antreae2e.Dropped, connectivity, "Failure -- wrong result from probing exported Service from regular clientPod after applying toServices AntreaNetworkPolicy")
+
+	data.deleteANP(eastCluster, multiClusterTestNamespace, anpBuilder1.Name)
+
+	// Verify that ANP ToServices with scope works fine.
+	anpBuilder2 := &e2euttils.AntreaNetworkPolicySpecBuilder{}
+	anpBuilder2 = anpBuilder2.SetName(multiClusterTestNamespace, "block-west-service-clusterset-scope").
+		SetPriority(1.0).
+		SetAppliedToGroup([]e2euttils.ANPAppliedToSpec{{PodSelector: map[string]string{"app": "client"}}}).
+		AddToServicesRule([]crdv1alpha1.PeerService{{
+			Name:      westClusterTestService,
+			Namespace: multiClusterTestNamespace,
+			Scope:     "ClusterSet",
+		}}, "", nil, crdv1alpha1.RuleActionDrop)
+	if _, err := data.createOrUpdateANP(eastCluster, anpBuilder2.Get()); err != nil {
+		t.Fatalf("Error creating ANP %s: %v", anpBuilder2.Name, err)
+	}
+	defer data.deleteANP(eastCluster, multiClusterTestNamespace, anpBuilder2.Name)
+
+	connectivity = data.probeFromPodInCluster(eastCluster, multiClusterTestNamespace, eastGwClientName, "client", eastIP, mcWestClusterTestService, 80, corev1.ProtocolTCP)
+	assert.Equal(t, antreae2e.Dropped, connectivity, "Failure -- wrong result from probing exported Service from gateway clientPod after applying toServices AntreaNetworkPolicy")
+
+	connectivity = data.probeFromPodInCluster(eastCluster, multiClusterTestNamespace, eastRegularClientName, "client", eastIP, mcWestClusterTestService, 80, corev1.ProtocolTCP)
+	assert.Equal(t, antreae2e.Dropped, connectivity, "Failure -- wrong result from probing exported Service from regular clientPod after applying toServices AntreaNetworkPolicy")
+
 }
 
 func (data *MCTestData) testStretchedNetworkPolicy(t *testing.T) {
