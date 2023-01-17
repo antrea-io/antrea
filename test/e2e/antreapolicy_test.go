@@ -3780,6 +3780,53 @@ func testACNPIGMPQueryDrop(t *testing.T, data *TestData) {
 	testACNPIGMPQuery(t, data, "test-acnp-igmp-query-drop", "testMulticastIGMPQueryDrop", "224.3.4.14", crdv1alpha1.RuleActionDrop)
 }
 
+func captureEnv(t *testing.T, data *TestData) {
+	_, podStatus, stderr, err := data.RunCommandOnNode(controlPlaneNodeName(), fmt.Sprintf("kubectl get pods -A -owide"))
+	t.Logf("podStatus: %s", podStatus)
+	if err != nil {
+		t.Logf(err.Error())
+	}
+	if stderr != "" {
+		t.Logf(stderr)
+	}
+	_, routeStatus0, stderr, err := data.RunCommandOnNode(nodeName(0), fmt.Sprintf("ip mroute"))
+	t.Logf("mroute on node 0: %s", routeStatus0)
+	if err != nil {
+		t.Logf(err.Error())
+	}
+	if stderr != "" {
+		t.Logf(stderr)
+	}
+	_, routeStatus1, stderr, err := data.RunCommandOnNode(nodeName(1), fmt.Sprintf("ip mroute"))
+	t.Logf("mroute on node 1: %s", routeStatus1)
+	if err != nil {
+		t.Logf(err.Error())
+	}
+	if stderr != "" {
+		t.Logf(stderr)
+	}
+	nodeName0 := nodeName(0)
+	agentName0, err := data.getAntreaPodOnNode(nodeName0)
+	if err != nil {
+		t.Logf(err.Error())
+	}
+	node0OvsFlows, _, err := data.RunCommandFromPod(metav1.NamespaceSystem, agentName0, "antrea-agent", []string{"ovs-ofctl", "dump-flows", defaultBridgeName})
+	t.Logf("ovsflows on node 0: %s", node0OvsFlows)
+	if err != nil {
+		t.Logf(err.Error())
+	}
+	nodeName1 := nodeName(1)
+	agentName1, err := data.getAntreaPodOnNode(nodeName1)
+	if err != nil {
+		t.Logf(err.Error())
+	}
+	node1OvsFlows, _, err := data.RunCommandFromPod(metav1.NamespaceSystem, agentName1, "antrea-agent", []string{"ovs-ofctl", "dump-flows", defaultBridgeName})
+	t.Logf("ovsflows on node 1: %s", node1OvsFlows)
+	if err != nil {
+		t.Logf(err.Error())
+	}
+}
+
 func testACNPIGMPQuery(t *testing.T, data *TestData, acnpName, caseName, groupAddress string, action crdv1alpha1.RuleAction) {
 	mcjoinWaitTimeout := defaultTimeout / time.Second
 	testNamespace := data.testNamespace

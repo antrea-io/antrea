@@ -691,6 +691,7 @@ func setupReceivers(t *testing.T, data *TestData, mc multicastTestcase, mcjoinWa
 			receiveMulticastCommand := []string{"/bin/sh", "-c", fmt.Sprintf("mcjoin -c 10 -o -p %d -W %d %s", mc.port, mcjoinWaitTimeout, mc.group.String())}
 			res, _, err := data.RunCommandFromPod(data.testNamespace, r, mcjoinContainerName, receiveMulticastCommand)
 			failOnError(err, t)
+			captureEnv(t, data)
 			assert.Contains(t, res, "Total: 10 packets")
 		}()
 	}
