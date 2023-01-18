@@ -16,9 +16,16 @@ package route
 
 import (
 	"net"
+	"time"
 
 	"antrea.io/antrea/pkg/agent/config"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
+)
+
+var (
+	// SyncInterval is exported so that sync interval can be configured for running integration test with
+	// smaller values. It is meant to be used internally by Run.
+	SyncInterval = 60 * time.Second
 )
 
 // Interface is the interface for routing container packets in host network.
@@ -27,7 +34,7 @@ type Interface interface {
 	// It should be idempotent and can be safely called on every startup.
 	Initialize(nodeConfig *config.NodeConfig, done func()) error
 
-	// Reconcile should remove orphaned routes and related configuration based on the desired podCIDRs and Service IPs.
+	// Reconcile should remove orphaned routes and related configuration based on the desired podCIDRs.
 	// If IPv6 is enabled in the cluster, Reconcile should also remove the orphaned IPv6 neighbors.
 	Reconcile(podCIDRs []string) error
 
@@ -57,13 +64,6 @@ type Interface interface {
 
 	// DeleteNodePort deletes related configurations when a NodePort Service is deleted.
 	DeleteNodePort(nodePortAddresses []net.IP, port uint16, protocol binding.Protocol) error
-
-	// AddClusterIPRoute adds route on K8s node for Service ClusterIP.
-	AddClusterIPRoute(svcIP net.IP) error
-
-	// DeleteClusterIPRoute deletes route for a Service IP when AntreaProxy is configured to handle
-	// ClusterIP Service traffic from host network.
-	DeleteClusterIPRoute(svcIP net.IP) error
 
 	// AddLoadBalancer adds configurations when a LoadBalancer IP is added.
 	AddLoadBalancer(externalIP net.IP) error

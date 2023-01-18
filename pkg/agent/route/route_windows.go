@@ -21,9 +21,12 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"reflect"
+	"strings"
 	"sync"
 
 	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/pkg/agent/config"
@@ -40,6 +43,8 @@ const (
 	outboundFirewallRuleName = "Antrea: accept packets to local Pods"
 
 	antreaNatNodePort = "antrea-nat-nodeport"
+
+	serviceIPv4CIDRKey = "serviceIPv4CIDRKey"
 )
 
 var (
@@ -50,23 +55,33 @@ var (
 )
 
 type Client struct {
-	nodeConfig     *config.NodeConfig
-	networkConfig  *config.NetworkConfig
-	hostRoutes     *sync.Map
-	fwClient       *winfirewall.Client
-	bridgeInfIndex int
-	noSNAT         bool
-	proxyAll       bool
+	nodeConfig    *config.NodeConfig
+	networkConfig *config.NetworkConfig
+	// nodeRoutes caches ip routes to remote Pods. It's a map of podCIDR to routes.
+	nodeRoutes *sync.Map
+	// serviceRoutes caches ip routes about Services.
+	serviceRoutes *sync.Map
+	// netNatStaticMappings caches Windows NetNat for NodePort.
+	netNatStaticMappings *sync.Map
+	fwClient             *winfirewall.Client
+	bridgeInfIndex       int
+	noSNAT               bool
+	proxyAll             bool
+	// The latest calculated Service CIDRs can be got from serviceCIDRProvider.
+	serviceCIDRProvider servicecidr.Interface
 }
 
 // NewClient returns a route client.
-func NewClient(networkConfig *config.NetworkConfig, noSNAT, proxyAll, connectUplinkToBridge, multicastEnabled bool, _ servicecidr.Interface) (*Client, error) {
+func NewClient(networkConfig *config.NetworkConfig, noSNAT, proxyAll, connectUplinkToBridge, multicastEnabled bool, serviceCIDRProvider servicecidr.Interface) (*Client, error) {
 	return &Client{
-		networkConfig: networkConfig,
-		hostRoutes:    &sync.Map{},
-		fwClient:      winfirewall.NewClient(),
-		noSNAT:        noSNAT,
-		proxyAll:      proxyAll,
+		networkConfig:        networkConfig,
+		nodeRoutes:           &sync.Map{},
+		serviceRoutes:        &sync.Map{},
+		netNatStaticMappings: &sync.Map{},
+		fwClient:             winfirewall.NewClient(),
+		noSNAT:               noSNAT,
+		proxyAll:             proxyAll,
+		serviceCIDRProvider:  serviceCIDRProvider,
 	}, nil
 }
 
@@ -103,6 +118,10 @@ func (c *Client) Initialize(nodeConfig *config.NodeConfig, done func()) error {
 		if err := c.initServiceIPRoutes(); err != nil {
 			return fmt.Errorf("failed to initialize Service IP routes: %v", err)
 		}
+		// For NodePort Service, a NetNatStaticMapping is needed.
+		if err := util.NewNetNat(antreaNatNodePort, virtualNodePortDNATIPv4Net); err != nil {
+			return err
+		}
 	}
 	done()
 
@@ -114,10 +133,20 @@ func (c *Client) initServiceIPRoutes() error {
 		if err := c.addVirtualServiceIPRoute(false); err != nil {
 			return err
 		}
+		if err := c.addVirtualNodePortDNATIPRoute(false); err != nil {
+			return err
+		}
 	}
 	if c.networkConfig.IPv6Enabled {
 		return fmt.Errorf("IPv6 is not supported on Windows")
 	}
+	c.serviceCIDRProvider.AddEventHandler(func(serviceCIDRs []*net.IPNet) {
+		for _, serviceCIDR := range serviceCIDRs {
+			if err := c.addServiceCIDRRoute(serviceCIDR); err != nil {
+				klog.ErrorS(err, "Failed to install route for Service CIDR", "ServiceCIDR", serviceCIDR)
+			}
+		}
+	})
 	return nil
 }
 
@@ -125,17 +154,19 @@ func (c *Client) initServiceIPRoutes() error {
 // the route entries on the host gateway interface are stored in the cache.
 func (c *Client) Reconcile(podCIDRs []string) error {
 	desiredPodCIDRs := sets.NewString(podCIDRs...)
-	routes, err := c.listRoutes()
+	routes, err := c.listIPRoutesOnGW()
 	if err != nil {
 		return err
 	}
 	for dst, rt := range routes {
-		if desiredPodCIDRs.Has(dst) {
-			c.hostRoutes.Store(dst, rt)
+		if reflect.DeepEqual(rt.DestinationSubnet, c.nodeConfig.PodIPv4CIDR) {
 			continue
 		}
-		// Don't delete the routes which are added by AntreaProxy.
-		if c.isServiceRoute(rt) {
+		if desiredPodCIDRs.Has(dst) {
+			continue
+		}
+		// Don't delete the routes which are added by AntreaProxy when proxyAll is enabled.
+		if c.proxyAll && c.isServiceRoute(rt) {
 			continue
 		}
 		err := util.RemoveNetRoute(rt)
@@ -149,7 +180,7 @@ func (c *Client) Reconcile(podCIDRs []string) error {
 // AddRoutes adds routes to the provided podCIDR.
 // It overrides the routes if they already exist, without error.
 func (c *Client) AddRoutes(podCIDR *net.IPNet, nodeName string, peerNodeIP, peerGwIP net.IP) error {
-	obj, found := c.hostRoutes.Load(podCIDR.String())
+	obj, found := c.nodeRoutes.Load(podCIDR.String())
 	route := &util.Route{
 		DestinationSubnet: podCIDR,
 		RouteMetric:       util.MetricDefault,
@@ -187,7 +218,7 @@ func (c *Client) AddRoutes(podCIDR *net.IPNet, nodeName string, peerNodeIP, peer
 		return err
 	}
 
-	c.hostRoutes.Store(podCIDR.String(), route)
+	c.nodeRoutes.Store(podCIDR.String(), route)
 	klog.V(2).Infof("Added route with destination %s via %s on host gateway on %s (%s)", podCIDR.String(), peerGwIP.String(), nodeName, peerNodeIP)
 	return nil
 }
@@ -195,7 +226,7 @@ func (c *Client) AddRoutes(podCIDR *net.IPNet, nodeName string, peerNodeIP, peer
 // DeleteRoutes deletes routes to the provided podCIDR.
 // It does nothing if the routes don't exist, without error.
 func (c *Client) DeleteRoutes(podCIDR *net.IPNet) error {
-	obj, found := c.hostRoutes.Load(podCIDR.String())
+	obj, found := c.nodeRoutes.Load(podCIDR.String())
 	if !found {
 		klog.V(2).Infof("Route with destination %s not exists", podCIDR.String())
 		return nil
@@ -205,118 +236,98 @@ func (c *Client) DeleteRoutes(podCIDR *net.IPNet) error {
 	if err := util.RemoveNetRoute(rt); err != nil {
 		return err
 	}
-	c.hostRoutes.Delete(podCIDR.String())
+	c.nodeRoutes.Delete(podCIDR.String())
 	klog.V(2).Infof("Deleted route with destination %s from host gateway", podCIDR.String())
 	return nil
 }
 
-// addVirtualServiceIPRoute adds routes on a Windows Node for redirecting ClusterIP and NodePort
-// Service traffic from host network to OVS via antrea-gw0.
+// addVirtualServiceIPRoute is used to add a route for a virtual IP. The virtual IP is used as the next hop IP for ClusterIP,
+// NodePort and LoadBalancer routes. Without this route, routes for Service cannot be installed on Windows host.
 func (c *Client) addVirtualServiceIPRoute(isIPv6 bool) error {
 	linkIndex := c.nodeConfig.GatewayConfig.LinkIndex
+	svcIP := config.VirtualServiceIPv4
 
-	// This route is for 2 purposes:
-	// - If for each ClusterIP Service, a route is installed to direct traffic to antrea-gw0, there will be too many
-	//   neighbor cache entries. While with one virtual IP to antrea-gw0 and ClusterIP Services to the virtual IP,
-	//   there will be only one neighbor cache entry.
-	// - For ClusterIP Service requests from host, reply traffic needs a route entry to route packet to VirtualServiceIPv4
-	//   via antrea-gw0. If the NextHop of a route is antrea-gw0, then set it as 0.0.0.0. As a result, on-link/0.0.0.0
-	//   is in PersistentStore.
-	// - For NodePort Service, it is the same.
-	vRoute := &util.Route{
-		LinkIndex:         linkIndex,
-		DestinationSubnet: virtualServiceIPv4Net,
-		GatewayAddress:    net.IPv4zero,
-		RouteMetric:       util.MetricHigh,
+	neigh := generateNeigh(svcIP, linkIndex)
+	if err := util.ReplaceNetNeighbor(neigh); err != nil {
+		return fmt.Errorf("failed to add new IP neighbour for %s: %w", svcIP, err)
 	}
-	if err := util.ReplaceNetRoute(vRoute); err != nil {
-		return err
-	}
-	klog.InfoS("Added virtual Service IP route", "route", vRoute)
+	klog.InfoS("Added virtual Service IP neighbor", "neighbor", neigh)
 
-	// Service replies will be sent to OVS bridge via openflow.GlobalVirtualMAC. This NetNeighbor is for
-	// creating a neighbor cache entry to config.VirtualServiceIPv4.
-	vNeighbor := &util.Neighbor{
-		LinkIndex:        linkIndex,
-		IPAddress:        config.VirtualServiceIPv4,
-		LinkLayerAddress: openflow.GlobalVirtualMAC,
-		State:            "Permanent",
-	}
-	if err := util.ReplaceNetNeighbor(vNeighbor); err != nil {
-		return err
-	}
-	klog.InfoS("Added virtual Service IP neighbor", "neighbor", vNeighbor)
-
-	if err := c.addServiceRoute(config.VirtualNodePortDNATIPv4); err != nil {
-		return err
-	}
-	// For NodePort Service, a new NetNat for NetNatStaticMapping is needed.
-	err := util.NewNetNat(antreaNatNodePort, virtualNodePortDNATIPv4Net)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// TODO: Follow the code style in Linux that maintains one Service CIDR.
-func (c *Client) addServiceRoute(svcIP net.IP) error {
-	svcIPNet := util.NewIPNet(svcIP)
-	obj, found := c.hostRoutes.Load(svcIPNet.String())
-
-	// Route: Service IP -> VirtualServiceIPv4 (169.254.0.253)
-	route := &util.Route{
-		LinkIndex:         c.nodeConfig.GatewayConfig.LinkIndex,
-		DestinationSubnet: svcIPNet,
-		GatewayAddress:    config.VirtualServiceIPv4,
-		RouteMetric:       util.MetricHigh,
-	}
-	if found {
-		existingRoute := obj.(*util.Route)
-		if existingRoute.GatewayAddress.Equal(route.GatewayAddress) && existingRoute.RouteMetric == route.RouteMetric {
-			klog.V(2).InfoS("Service route already exists", "DestinationIP", route.DestinationSubnet,
-				"Gateway", route.GatewayAddress, "RouteMetric", route.RouteMetric)
-			return nil
-		}
-		// Remove the existing route if gateway or metric is not as expected.
-		if err := util.RemoveNetRoute(existingRoute); err != nil {
-			return fmt.Errorf("failed to delete existing Service route entry, DestinationIP: %s, Gateway: %s, RouteMetric: %d, err: %v",
-				existingRoute.DestinationSubnet, existingRoute.GatewayAddress, existingRoute.RouteMetric, err)
-		}
-	}
-
+	route := generateRoute(virtualServiceIPv4Net, net.IPv4zero, linkIndex, util.MetricHigh)
 	if err := util.ReplaceNetRoute(route); err != nil {
-		return err
+		return fmt.Errorf("failed to install route for virtual Service IP %s: %w", svcIP.String(), err)
 	}
+	c.serviceRoutes.Store(svcIP.String(), route)
+	klog.InfoS("Added virtual Service IP route", "route", route)
 
-	c.hostRoutes.Store(svcIPNet.String(), route)
-	klog.V(2).InfoS("Added Service route", "ServiceIP", route.DestinationSubnet, "GatewayIP", route.GatewayAddress)
 	return nil
 }
 
-func (c *Client) deleteServiceRoute(svcIP net.IP) error {
-	svcIPNet := util.NewIPNet(svcIP)
-	obj, found := c.hostRoutes.Load(svcIPNet.String())
-	if !found {
-		klog.V(2).InfoS("Service route does not exist", "DestinationIP", svcIP)
-		return nil
+func (c *Client) addServiceCIDRRoute(serviceCIDR *net.IPNet) error {
+	linkIndex := c.nodeConfig.GatewayConfig.LinkIndex
+	gw := config.VirtualServiceIPv4
+	metric := util.MetricHigh
+
+	oldServiceCIDRRoute, serviceCIDRRouteExists := c.serviceRoutes.Load(serviceIPv4CIDRKey)
+	// Generate a route with the new ClusterIP CIDR and install it.
+	route := generateRoute(serviceCIDR, gw, linkIndex, metric)
+	if err := util.ReplaceNetRoute(route); err != nil {
+		return fmt.Errorf("failed to install a new Service CIDR route: %w", err)
 	}
 
-	rt := obj.(*util.Route)
-	if err := util.RemoveNetRoute(rt); err != nil {
-		return err
+	// Store the new ClusterIP CIDR and the new generated route to serviceRoutes. Then the calculated route can be restored
+	// when it was deleted since members of serviceRoutes are synchronized periodically.
+	c.serviceRoutes.Store(serviceIPv4CIDRKey, route)
+
+	// Collect stale routes.
+	var staleRoutes []*util.Route
+	// If current destination CIDR is not nil, the route with current destination CIDR should be uninstalled since
+	// a new route with a newly calculated destination CIDR has been installed.
+	if serviceCIDRRouteExists {
+		staleRoutes = append(staleRoutes, oldServiceCIDRRoute.(*util.Route))
 	}
-	c.hostRoutes.Delete(svcIPNet.String())
-	klog.V(2).InfoS("Deleted Service route from host gateway", "DestinationIP", svcIP)
+	routes, err := c.listIPRoutesOnGW()
+	if err != nil {
+		return fmt.Errorf("error listing ip routes: %w", err)
+	}
+	// Collect stale per-IP routes for ClusterIPs before this patch.
+	for _, rt := range routes {
+		ones, _ := rt.DestinationSubnet.Mask.Size()
+		if ones == net.IPv4len*8 && serviceCIDR.Contains(rt.DestinationSubnet.IP) {
+			staleRoutes = append(staleRoutes, rt)
+		}
+	}
+
+	// Remove stale routes.
+	for _, rt := range staleRoutes {
+		if err := util.RemoveNetRoute(rt); err != nil {
+			if err.Error() == "No matching MSFT_NetRoute objects" {
+				klog.InfoS("Failed to delete stale Service CIDR route since the route has been deleted", "route", rt)
+			} else {
+				return fmt.Errorf("failed to delete stale Service CIDR route %s: %w", rt.String(), err)
+			}
+		} else {
+			klog.V(4).InfoS("Deleted stale Service CIDR route successfully", "route", rt)
+		}
+	}
+
 	return nil
 }
 
-func (c *Client) AddClusterIPRoute(svcIP net.IP) error {
-	return c.addServiceRoute(svcIP)
-}
+// addVirtualNodePortDNATIPRoute is used to add a route which is used to route DNATed NodePort traffic to Antrea gateway.
+func (c *Client) addVirtualNodePortDNATIPRoute(isIPv6 bool) error {
+	linkIndex := c.nodeConfig.GatewayConfig.LinkIndex
+	vIP := config.VirtualNodePortDNATIPv4
+	gw := config.VirtualServiceIPv4
 
-func (c *Client) DeleteClusterIPRoute(svcIP net.IP) error {
-	return c.deleteServiceRoute(svcIP)
+	route := generateRoute(virtualNodePortDNATIPv4Net, gw, linkIndex, util.MetricHigh)
+	if err := util.ReplaceNetRoute(route); err != nil {
+		return fmt.Errorf("failed to install route for NodePort DNAT IP %s: %w", vIP.String(), err)
+	}
+	c.serviceRoutes.Store(vIP.String(), route)
+	klog.InfoS("Added NodePort DNAT IP route", "route", route)
+
+	return nil
 }
 
 // MigrateRoutesToGw is not supported on Windows.
@@ -329,12 +340,76 @@ func (c *Client) UnMigrateRoutesFromGw(route *net.IPNet, linkName string) error 
 	return errors.New("UnMigrateRoutesFromGw is unsupported on Windows")
 }
 
-// Run is not supported on Windows and returns immediately.
+// Run periodically syncs netNatStaticMapping and route. It will not return until stopCh is closed.
 func (c *Client) Run(stopCh <-chan struct{}) {
+	klog.InfoS("Starting netNatStaticMapping and route sync", "interval", SyncInterval)
+	wait.Until(c.syncIPInfra, SyncInterval, stopCh)
+}
+
+// syncIPInfra is idempotent and can be safely called on every sync operation.
+func (c *Client) syncIPInfra() {
+	if err := c.syncRoute(); err != nil {
+		klog.ErrorS(err, "Failed to sync route")
+	}
+
+	if c.proxyAll {
+		if err := c.syncNetNatStaticMapping(); err != nil {
+			klog.ErrorS(err, "Failed to sync netNatStaticMapping")
+		}
+	}
+	klog.V(3).Info("Successfully synced netNatStaticMapping and route")
+}
+
+func (c *Client) syncRoute() error {
+	restoreRoute := func(route *util.Route) bool {
+		if err := util.ReplaceNetRoute(route); err != nil {
+			klog.ErrorS(err, "Failed to sync route", "Route", route)
+			return false
+		}
+		return true
+	}
+	c.nodeRoutes.Range(func(_, v interface{}) bool {
+		route := v.(*util.Route)
+		return restoreRoute(route)
+	})
+	if c.proxyAll {
+		c.serviceRoutes.Range(func(_, v interface{}) bool {
+			route := v.(*util.Route)
+			return restoreRoute(route)
+		})
+	}
+	// The route is installed automatically by the kernel when the address is configured on the interface. If the route
+	// is deleted manually by mistake, we restore it.
+	gwAutoconfRoute := &util.Route{
+		LinkIndex:         c.nodeConfig.GatewayConfig.LinkIndex,
+		DestinationSubnet: c.nodeConfig.PodIPv4CIDR,
+		GatewayAddress:    c.nodeConfig.GatewayConfig.IPv4,
+		RouteMetric:       util.MetricDefault,
+	}
+	restoreRoute(gwAutoconfRoute)
+
+	return nil
+}
+
+func (c *Client) syncNetNatStaticMapping() error {
+	if err := util.NewNetNat(antreaNatNodePort, virtualNodePortDNATIPv4Net); err != nil {
+		return err
+	}
+
+	c.netNatStaticMappings.Range(func(_, v interface{}) bool {
+		mapping := v.(*util.NetNatStaticMapping)
+		if err := util.ReplaceNetNatStaticMapping(mapping); err != nil {
+			klog.ErrorS(err, "Failed to add netNatStaticMapping", "netNatStaticMapping", mapping)
+			return false
+		}
+		return true
+	})
+
+	return nil
 }
 
 func (c *Client) isServiceRoute(route *util.Route) bool {
-	// If the destination IP or gateway IP is the virtual Service IP, then it is the Service route added by AntreaProxy.
+	// If the gateway IP or the destination IP is the virtual Service IP, then it is a route added by AntreaProxy.
 	if route.DestinationSubnet != nil && route.DestinationSubnet.IP.Equal(config.VirtualServiceIPv4) ||
 		route.GatewayAddress != nil && route.GatewayAddress.Equal(config.VirtualServiceIPv4) {
 		return true
@@ -342,7 +417,7 @@ func (c *Client) isServiceRoute(route *util.Route) bool {
 	return false
 }
 
-func (c *Client) listRoutes() (map[string]*util.Route, error) {
+func (c *Client) listIPRoutesOnGW() (map[string]*util.Route, error) {
 	routes, err := util.GetNetRoutesAll()
 	if err != nil {
 		return nil, err
@@ -364,8 +439,14 @@ func (c *Client) listRoutes() (map[string]*util.Route, error) {
 		if !rt.DestinationSubnet.IP.IsGlobalUnicast() {
 			continue
 		}
-		// Windows adds an active route entry for the local broadcast address automatically when a new IP address
-		// is configured on the interface. This route entry should be ignored in the list.
+		// When configuring an IP address to an interface on Windows, three route entries will be automatically added.
+		// For example, if the IP address is 10.10.0.1/24, the following three routes will be created:
+		// Network Destination   Netmask          Gateway  Interface  Metric
+		// 10.10.0.1             255.255.255.255  On-link  10.10.0.1  281
+		// 10.10.0.0             255.255.255.0    On-link  10.10.0.1  281
+		// 10.10.0.255           255.255.255.255  On-link  10.10.0.1  281
+		// The host (10.10.0.1) and broadcast (10.10.0.255) routes should be ignored since they are not supposed to be
+		// managed by Antrea. We can ignore them by comparing them to the calculated broadcast IP.
 		if !rt.GatewayAddress.Equal(config.VirtualServiceIPv4) && rt.DestinationSubnet.IP.Equal(iputil.GetLocalBroadcastIP(rt.DestinationSubnet)) {
 			continue
 		}
@@ -397,19 +478,73 @@ func (c *Client) DeleteSNATRule(mark uint32) error {
 
 // TODO: nodePortAddresses is not supported currently.
 func (c *Client) AddNodePort(nodePortAddresses []net.IP, port uint16, protocol binding.Protocol) error {
-	return util.ReplaceNetNatStaticMapping(antreaNatNodePort, "0.0.0.0", port, config.VirtualNodePortDNATIPv4.String(), port, string(protocol))
+	netNatStaticMapping := &util.NetNatStaticMapping{
+		Name:         antreaNatNodePort,
+		ExternalIP:   net.ParseIP("0.0.0.0"),
+		ExternalPort: port,
+		InternalIP:   config.VirtualNodePortDNATIPv4,
+		InternalPort: port,
+		Protocol:     protocol,
+	}
+	if err := util.ReplaceNetNatStaticMapping(netNatStaticMapping); err != nil {
+		return err
+	}
+	c.netNatStaticMappings.Store(fmt.Sprintf("%d-%s", port, protocol), netNatStaticMapping)
+	klog.V(4).InfoS("Added NetNatStaticMapping for NodePort", "NetNatStaticMapping", netNatStaticMapping)
+	return nil
 }
 
 func (c *Client) DeleteNodePort(nodePortAddresses []net.IP, port uint16, protocol binding.Protocol) error {
-	return util.RemoveNetNatStaticMapping(antreaNatNodePort, "0.0.0.0", port, string(protocol))
+	key := fmt.Sprintf("%d-%s", port, protocol)
+	obj, found := c.netNatStaticMappings.Load(key)
+	if !found {
+		klog.V(2).InfoS("Didn't find corresponding NetNatStaticMapping for NodePort", "port", port, "protocol", protocol)
+		return nil
+	}
+	netNatStaticMapping := obj.(*util.NetNatStaticMapping)
+	if err := util.RemoveNetNatStaticMapping(netNatStaticMapping); err != nil {
+		return err
+	}
+	c.netNatStaticMappings.Delete(key)
+	klog.V(4).InfoS("Deleted NetNatStaticMapping for NodePort", "NetNatStaticMapping", netNatStaticMapping)
+	return nil
 }
 
 func (c *Client) AddLoadBalancer(externalIP net.IP) error {
-	return c.addServiceRoute(externalIP)
+	svcIPStr := externalIP.String()
+	linkIndex := c.nodeConfig.GatewayConfig.LinkIndex
+	gw := config.VirtualServiceIPv4
+	metric := util.MetricHigh
+	_, svcIPNet, _ := net.ParseCIDR(svcIPStr)
+
+	route := generateRoute(svcIPNet, gw, linkIndex, metric)
+	if err := util.ReplaceNetRoute(route); err != nil {
+		return fmt.Errorf("failed to install route for LoadBalancer ingress IP %s: %w", svcIPStr, err)
+	}
+	klog.V(4).InfoS("Added LoadBalancer ingress IP route", "route", route)
+	c.serviceRoutes.Store(svcIPStr, route)
+
+	return nil
 }
 
 func (c *Client) DeleteLoadBalancer(externalIP net.IP) error {
-	return c.deleteServiceRoute(externalIP)
+	svcIPStr := externalIP.String()
+	route, found := c.serviceRoutes.Load(svcIPStr)
+	if !found {
+		klog.V(2).InfoS("Didn't find route for LoadBalancer ingress IP", "ingressIP", svcIPStr)
+		return nil
+	}
+	if err := util.RemoveNetRoute(route.(*util.Route)); err != nil {
+		if strings.Contains(err.Error(), "No matching MSFT_NetRoute objects") {
+			klog.InfoS("Failed to delete route for LoadBalancer ingress IP since it doesn't exist", "route", route)
+		} else {
+			return fmt.Errorf("failed to delete route for LoadBalancer ingress IP %s: %w", svcIPStr, err)
+		}
+	}
+	klog.V(4).InfoS("Deleted LoadBalancer ingress IP route", "route", route)
+	c.serviceRoutes.Delete(svcIPStr)
+
+	return nil
 }
 
 func (c *Client) AddLocalAntreaFlexibleIPAMPodRule(podAddresses []net.IP) error {
@@ -418,4 +553,22 @@ func (c *Client) AddLocalAntreaFlexibleIPAMPodRule(podAddresses []net.IP) error 
 
 func (c *Client) DeleteLocalAntreaFlexibleIPAMPodRule(podAddresses []net.IP) error {
 	return nil
+}
+
+func generateRoute(ipNet *net.IPNet, gw net.IP, linkIndex int, metric int) *util.Route {
+	return &util.Route{
+		DestinationSubnet: ipNet,
+		GatewayAddress:    gw,
+		RouteMetric:       metric,
+		LinkIndex:         linkIndex,
+	}
+}
+
+func generateNeigh(ip net.IP, linkIndex int) *util.Neighbor {
+	return &util.Neighbor{
+		LinkIndex:        linkIndex,
+		IPAddress:        ip,
+		LinkLayerAddress: openflow.GlobalVirtualMAC,
+		State:            "Permanent",
+	}
 }
