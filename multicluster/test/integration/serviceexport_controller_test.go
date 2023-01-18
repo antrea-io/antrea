@@ -26,8 +26,8 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	k8smcsv1alpha1 "sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
 
+	"antrea.io/antrea/multicluster/apis/multicluster/constants"
 	mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
-	"antrea.io/antrea/multicluster/controllers/multicluster/common"
 )
 
 // This file contains test cases for below basic scenarios:
@@ -97,7 +97,7 @@ var _ = Describe("ServiceExport controller", func() {
 			ClusterID: LocalClusterID,
 			Name:      svc.Name,
 			Namespace: svc.Namespace,
-			Kind:      common.EndpointsKind,
+			Kind:      constants.EndpointsKind,
 		},
 	}
 

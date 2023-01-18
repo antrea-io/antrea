@@ -28,7 +28,6 @@ import (
 
 	multiclusterv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
 	"antrea.io/antrea/multicluster/controllers/multicluster/common"
-	"antrea.io/antrea/multicluster/test/mocks"
 )
 
 // fakeRemoteCommonArea is a fake RemoteCommonArea for unit test purpose
@@ -74,6 +73,9 @@ func (c *fakeRemoteCommonArea) GetLocalClusterID() string {
 	return c.LocalClusterID
 }
 
+func (c *fakeRemoteCommonArea) AddImportReconciler(reconciler ImportReconciler) {
+}
+
 // NewFakeRemoteCommonArea creates a new fakeRemoteCommonArea for unit test purpose only
 func NewFakeRemoteCommonArea(fakeClient client.Client, clusterID string, localClusterID string, namespace string, status []multiclusterv1alpha1.ClusterCondition) RemoteCommonArea {
 	fakeRemoteCommonArea := &fakeRemoteCommonArea{
@@ -86,13 +88,19 @@ func NewFakeRemoteCommonArea(fakeClient client.Client, clusterID string, localCl
 	return fakeRemoteCommonArea
 }
 
-func GetFakeRemoteConfigAndClient(secretObj *v1.Secret, url string, clusterID common.ClusterID, clusterSet *multiclusterv1alpha1.ClusterSet, scheme *runtime.Scheme) (*rest.Config,
-	manager.Manager, client.Client, error) {
-	_, _, err := getSecretCACrtAndToken(secretObj)
-	if err != nil {
-		return nil, nil, nil, err
+type funcGetRemoteConfigAndClient func(secretObj *v1.Secret, url string, clusterID common.ClusterID,
+	clusterSet *multiclusterv1alpha1.ClusterSet, scheme *runtime.Scheme) (*rest.Config,
+	manager.Manager, client.Client, error)
+
+func FuncGetFakeRemoteConfigAndClient(mgr manager.Manager) funcGetRemoteConfigAndClient {
+	return func(secretObj *v1.Secret, url string, clusterID common.ClusterID,
+		clusterSet *multiclusterv1alpha1.ClusterSet, scheme *runtime.Scheme) (*rest.Config,
+		manager.Manager, client.Client, error) {
+		_, _, err := getSecretCACrtAndToken(secretObj)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects().Build()
+		return nil, mgr, fakeClient, nil
 	}
-	mockManager := mocks.NewMockManager(nil)
-	fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects().Build()
-	return nil, mockManager, fakeClient, nil
 }

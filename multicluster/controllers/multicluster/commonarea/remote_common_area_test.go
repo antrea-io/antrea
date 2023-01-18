@@ -31,14 +31,14 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
-
+	"antrea.io/antrea/multicluster/controllers/multicluster/common"
 	"antrea.io/antrea/multicluster/test/mocks"
 )
 
 func TestMemberAnnounce(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	mockManager := mocks.NewMockManager(mockCtrl)
-	fakeRemoteClient := fake.NewClientBuilder().WithScheme(scheme).Build()
+	fakeRemoteClient := fake.NewClientBuilder().WithScheme(common.TestScheme).Build()
 
 	remoteCommonAreaUnderTest := &remoteCommonArea{
 		Client:             fakeRemoteClient,
@@ -47,7 +47,7 @@ func TestMemberAnnounce(t *testing.T) {
 		ClusterID:          "leaderA",
 		localClusterID:     "clusterA",
 		config:             nil, // Not used for this test
-		scheme:             scheme,
+		scheme:             common.TestScheme,
 		Namespace:          "cluster-a-ns",
 		connected:          false,
 		localClusterClient: nil, // Not used for this test
@@ -98,7 +98,7 @@ func TestMemberAnnounceWithExistingMemberAnnounce(t *testing.T) {
 			Generation: 1,
 		},
 	}
-	fakeRemoteClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(existingMemberClusterAnnounce).Build()
+	fakeRemoteClient := fake.NewClientBuilder().WithScheme(common.TestScheme).WithObjects(existingMemberClusterAnnounce).Build()
 
 	remoteCommonAreaUnderTest := &remoteCommonArea{
 		Client:             fakeRemoteClient,
@@ -107,7 +107,7 @@ func TestMemberAnnounceWithExistingMemberAnnounce(t *testing.T) {
 		ClusterID:          "leaderA",
 		localClusterID:     "clusterA",
 		config:             nil, // Not used for this test
-		scheme:             scheme,
+		scheme:             common.TestScheme,
 		Namespace:          "cluster-a-ns",
 		connected:          false,
 		localClusterClient: nil, // Not used for this test
@@ -166,7 +166,7 @@ func TestMemberAnnounceWithExistingMemberAnnounce(t *testing.T) {
 func TestMemberAnnounceNewRemoteCommonArea(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	mockManager := mocks.NewMockManager(mockCtrl)
-	fakeRemoteClient := fake.NewClientBuilder().WithScheme(scheme).Build()
+	fakeRemoteClient := fake.NewClientBuilder().WithScheme(common.TestScheme).Build()
 
 	expectedRemoteCommonArea := &remoteCommonArea{
 		Client:             fakeRemoteClient,
@@ -174,7 +174,7 @@ func TestMemberAnnounceNewRemoteCommonArea(t *testing.T) {
 		ClusterSetID:       "clusterSetA",
 		ClusterID:          "leaderA",
 		config:             nil,
-		scheme:             scheme,
+		scheme:             common.TestScheme,
 		Namespace:          "cluster-a-ns",
 		connected:          false,
 		localClusterClient: nil,
@@ -192,7 +192,7 @@ func TestMemberAnnounceNewRemoteCommonArea(t *testing.T) {
 		},
 	}
 
-	actualRemoteCommonArea, err := NewRemoteCommonArea(expectedRemoteCommonArea.ClusterID, expectedRemoteCommonArea.ClusterSetID, expectedRemoteCommonArea.localClusterID, mockManager, fakeRemoteClient, scheme, nil,
+	actualRemoteCommonArea, err := NewRemoteCommonArea(expectedRemoteCommonArea.ClusterID, expectedRemoteCommonArea.ClusterSetID, expectedRemoteCommonArea.localClusterID, mockManager, fakeRemoteClient, common.TestScheme, nil,
 		"cluster-a-ns", "localnamespace", nil, false)
 	assert.Equal(t, nil, err)
 	clusterStatus, leaderStatus := actualRemoteCommonArea.GetStatus()[0], actualRemoteCommonArea.GetStatus()[1]
