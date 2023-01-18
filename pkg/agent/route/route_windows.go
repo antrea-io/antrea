@@ -28,6 +28,7 @@ import (
 
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/openflow"
+	"antrea.io/antrea/pkg/agent/servicecidr"
 	"antrea.io/antrea/pkg/agent/util"
 	"antrea.io/antrea/pkg/agent/util/winfirewall"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
@@ -59,7 +60,7 @@ type Client struct {
 }
 
 // NewClient returns a route client.
-func NewClient(networkConfig *config.NetworkConfig, noSNAT, proxyAll, connectUplinkToBridge, multicastEnabled bool) (*Client, error) {
+func NewClient(networkConfig *config.NetworkConfig, noSNAT, proxyAll, connectUplinkToBridge, multicastEnabled bool, _ servicecidr.Interface) (*Client, error) {
 	return &Client{
 		networkConfig: networkConfig,
 		hostRoutes:    &sync.Map{},
