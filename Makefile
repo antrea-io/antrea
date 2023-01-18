@@ -14,9 +14,13 @@ CNI_BINARIES_VERSION := $(shell head -n 1 build/images/deps/cni-binaries-version
 NANOSERVER_VERSION := $(shell head -n 1 build/images/deps/nanoserver-version)
 BUILD_TAG          := $(shell build/images/build-tag.sh)
 WIN_BUILD_TAG      := $(shell echo $(GO_VERSION) $(CNI_BINARIES_VERSION) $(NANOSERVER_VERSION)|md5sum|head -c 10)
-GIT_HOOKS := $(shell find hack/git_client_side_hooks -type f -print)
+GIT_HOOKS          := $(shell find hack/git_client_side_hooks -type f -print)
 DOCKER_NETWORK     ?= default
 TRIVY_TARGET_IMAGE ?=
+
+GOLANGCI_LINT_VERSION := v1.50.1
+GOLANGCI_LINT_BINDIR  := $(CURDIR)/.golangci-bin
+GOLANGCI_LINT_BIN     := $(GOLANGCI_LINT_BINDIR)/$(GOLANGCI_LINT_VERSION)/golangci-lint
 
 DOCKER_BUILD_ARGS := --build-arg OVS_VERSION=$(OVS_VERSION)
 DOCKER_BUILD_ARGS += --build-arg GO_VERSION=$(GO_VERSION)
@@ -282,37 +286,38 @@ fmt:
 	@echo "===> Formatting Go files <==="
 	@gofmt -s -l -w $(GO_FILES)
 
-.golangci-bin:
+$(GOLANGCI_LINT_BIN):
 	@echo "===> Installing Golangci-lint <==="
-	@curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $@ v1.50.0
+	@rm -rf $(GOLANGCI_LINT_BINDIR)/* # remove old versions
+	@curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(GOLANGCI_LINT_BINDIR)/$(GOLANGCI_LINT_VERSION) $(GOLANGCI_LINT_VERSION)
 
 .PHONY: golangci
-golangci: .golangci-bin
+golangci: $(GOLANGCI_LINT_BIN)
 	@echo "===> Running golangci (linux) <==="
-	@GOOS=linux $(CURDIR)/.golangci-bin/golangci-lint run -c $(CURDIR)/.golangci.yml
+	@GOOS=linux $(GOLANGCI_LINT_BIN) run -c $(CURDIR)/.golangci.yml
 	@echo "===> Running golangci (windows) <==="
-	@GOOS=windows $(CURDIR)/.golangci-bin/golangci-lint run -c $(CURDIR)/.golangci.yml
+	@GOOS=windows $(GOLANGCI_LINT_BIN) run -c $(CURDIR)/.golangci.yml
 	@echo "===> Running golangci for Octant plugin (linux) <==="
-	@cd plugins/octant && GOOS=linux CGO_ENABLED=0 $(CURDIR)/.golangci-bin/golangci-lint run -c $(CURDIR)/.golangci.yml
+	@cd plugins/octant && GOOS=linux CGO_ENABLED=0 $(GOLANGCI_LINT_BIN) run -c $(CURDIR)/.golangci.yml
 	@echo "===> Running golangci for Octant plugin (windows) <==="
-	@cd plugins/octant && GOOS=windows CGO_ENABLED=0 $(CURDIR)/.golangci-bin/golangci-lint run -c $(CURDIR)/.golangci.yml
+	@cd plugins/octant && GOOS=windows CGO_ENABLED=0 $(GOLANGCI_LINT_BIN) run -c $(CURDIR)/.golangci.yml
 
 .PHONY: golangci-fix
-golangci-fix: .golangci-bin
+golangci-fix: $(GOLANGCI_LINT_BIN)
 	@echo "===> Running golangci (linux) <==="
-	@GOOS=linux $(CURDIR)/.golangci-bin/golangci-lint run -c $(CURDIR)/.golangci.yml --fix
+	@GOOS=linux $(GOLANGCI_LINT_BIN) run -c $(CURDIR)/.golangci.yml --fix
 	@echo "===> Running golangci (windows) <==="
-	@GOOS=windows $(CURDIR)/.golangci-bin/golangci-lint run -c $(CURDIR)/.golangci.yml --fix
+	@GOOS=windows $(GOLANGCI_LINT_BIN) run -c $(CURDIR)/.golangci.yml --fix
 	@echo "===> Running golangci for Octant plugin (linux) <==="
-	@cd plugins/octant && GOOS=linux CGO_ENABLED=0 $(CURDIR)/.golangci-bin/golangci-lint run -c $(CURDIR)/.golangci.yml --fix
+	@cd plugins/octant && GOOS=linux CGO_ENABLED=0 $(GOLANGCI_LINT_BIN) run -c $(CURDIR)/.golangci.yml --fix
 	@echo "===> Running golangci for Octant plugin (windows) <==="
-	@cd plugins/octant && GOOS=windows CGO_ENABLED=0 $(CURDIR)/.golangci-bin/golangci-lint run -c $(CURDIR)/.golangci.yml --fix
+	@cd plugins/octant && GOOS=windows CGO_ENABLED=0 $(GOLANGCI_LINT_BIN) run -c $(CURDIR)/.golangci.yml --fix
 
 .PHONY: clean
 clean:
 	@rm -rf $(BINDIR)
 	@rm -rf $(DOCKER_CACHE)
-	@rm -rf .golangci-bin
+	@rm -rf $(GOLANGCI_LINT_BINDIR)
 	@rm -rf .coverage
 	@rm -rf .trivy-bin
 
