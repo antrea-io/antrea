@@ -192,8 +192,9 @@ agent:
   priorityClassName: "system-node-critical"
   # -- Affinity for the antrea-agent Pods.
   affinity: {}
-  # -- DNS Policy for the antrea-agent Pods.
-  dnsPolicy: "ClusterFirstWithHostNet"
+  # -- DNS Policy for the antrea-agent Pods. If empty, the Kubernetes default
+  # will be used.
+  dnsPolicy: ""
   # -- Update strategy for the antrea-agent DaemonSet.
   updateStrategy:
     type: RollingUpdate
@@ -286,7 +287,9 @@ controller:
 
 flowCollector:
   # -- IPFIX collector address as a string with format <HOST>:[<PORT>][:<PROTO>].
-  collectorAddr: "flow-aggregator.flow-aggregator.svc:4739:tls"
+  # If the collector is running in-cluster as a Service, set <HOST> to
+  # <Service namespace>/<Service name>.
+  collectorAddr: "flow-aggregator/flow-aggregator:4739:tls"
   # -- Determines how often the flow exporter polls for new connections.
   flowPollInterval: "5s"
   # -- timeout after which a flow record is sent to the collector for active

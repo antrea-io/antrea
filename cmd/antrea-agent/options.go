@@ -45,7 +45,7 @@ const (
 	defaultHostProcPathPrefix      = "/host"
 	defaultServiceCIDR             = "10.96.0.0/12"
 	defaultTunnelType              = ovsconfig.GeneveTunnel
-	defaultFlowCollectorAddress    = "flow-aggregator.flow-aggregator.svc:4739:tls"
+	defaultFlowCollectorAddress    = "flow-aggregator/flow-aggregator:4739:tls"
 	defaultFlowCollectorTransport  = "tls"
 	defaultFlowCollectorPort       = "4739"
 	defaultFlowPollInterval        = 5 * time.Second

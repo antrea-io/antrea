@@ -41,8 +41,7 @@ type FlowAggregatorConfig struct {
 	// Transport protocol over which the aggregator collects IPFIX records from all Agents.
 	// Defaults to "tls"
 	AggregatorTransportProtocol AggregatorTransportProtocol `yaml:"aggregatorTransportProtocol,omitempty"`
-	// Provide DNS name or IP address of flow aggregator for generating TLS certificate.
-	// Defaults to "flow-aggregator.flow-aggregator.svc"
+	// Provide an extra DNS name or IP address of flow aggregator for generating TLS certificate.
 	FlowAggregatorAddress string `yaml:"flowAggregatorAddress,omitempty"`
 	// recordContents enables configuring some fields in the flow records. Fields can be
 	// excluded to reduce record size.

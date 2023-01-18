@@ -72,15 +72,17 @@ parameters have to be set in the Antrea Agent ConfigMap:
       FlowExporter: true
 
     # Provide the IPFIX collector address as a string with format <HOST>:[<PORT>][:<PROTO>].
-    # HOST can either be the DNS name or the IP of the Flow Collector. For example,
-    # "flow-aggregator.flow-aggregator.svc" can be provided as a DNS name to connect
-    # to the Antrea Flow Aggregator Service. If IP, it can be either IPv4 or IPv6.
-    # However, IPv6 address should be wrapped with [].
+    # HOST can either be the DNS name, IP, or Service name of the Flow Collector. If
+    # using an IP, it can be either IPv4 or IPv6. However, IPv6 address should be
+    # wrapped with []. When the collector is running in-cluster as a Service, set
+    # <HOST> to <Service namespace>/<Service name>. For example,
+    # "flow-aggregator/flow-aggregator" can be provided to connect to the Antrea
+    # Flow Aggregator Service.
     # If PORT is empty, we default to 4739, the standard IPFIX port.
     # If no PROTO is given, we consider "tls" as default. We support "tls", "tcp" and
     # "udp" protocols. "tls" is used for securing communication between flow exporter and
     # flow aggregator.
-    #flowCollectorAddr: "flow-aggregator.flow-aggregator.svc:4739:tls"
+    #flowCollectorAddr: "flow-aggregator/flow-aggregator:4739:tls"
     
     # Provide flow poll interval as a duration string. This determines how often the
     # flow exporter dumps connections from the conntrack module. Flow poll interval
@@ -102,16 +104,10 @@ parameters have to be set in the Antrea Agent ConfigMap:
     #idleFlowExportTimeout: "15s"
 ```
 
-Please note that the default value for `flowCollectorAddr` is `"flow-aggregator.flow-aggregator.svc:4739:tls"`,
-which uses the DNS name of the Flow Aggregator Service, if the Service is deployed
-with the Name and Namespace set to `flow-aggregator`. For Antrea Agent running on
-a Windows node, the user is required to change the default value of `HOST` in `flowCollectorAddr`
-from DNS name to the Cluster IP of the Flow Aggregator Service. The reason is because
-on Windows the Antrea Agent runs as a process, it uses the host's default DNS setting and the DNS
-resolver will not be configured to talk to the CoreDNS Service for cluster local DNS queries like
-`flow-aggregator.flow-aggregator.svc`. In addition, if you deploy the Flow Aggregator Service
-with a different Name and Namespace, then either use the appropriate DNS name or the Cluster IP of
-the Service.
+Please note that the default value for `flowCollectorAddr` is `"flow-aggregator/flow-aggregator:4739:tls"`,
+which enables the Flow Exporter to connect the Flow Aggregator Service, assuming it is running in
+the same K8 cluster with the Name and Namespace set to `flow-aggregator`. If you deploy the Flow
+Aggregator Service with a different Name and Namespace, then set `flowCollectorAddr` appropriately.
 
 Please note that the default values for
 `flowPollInterval`, `activeFlowExportTimeout`, and `idleFlowExportTimeout` parameters are set to 5s, 60s, and 15s, respectively.
@@ -288,9 +284,8 @@ flow-aggregator.conf: |
   # Provide the transport protocol for the flow aggregator collecting process, which is tls, tcp or udp.
   aggregatorTransportProtocol: "tls"
 
-  # Provide DNS name or IP address of flow aggregator for generating TLS certificate. It must match
-  # the flowCollectorAddr parameter in the antrea-agent config.
-  flowAggregatorAddress: "flow-aggregator.flow-aggregator.svc"
+  # Provide an extra DNS name or IP address of flow aggregator for generating TLS certificate.
+  flowAggregatorAddress: ""
 
   # recordContents enables configuring some fields in the flow records. Fields can
   # be excluded to reduce record size, but some features or external tooling may
@@ -357,14 +352,13 @@ flow-aggregator.conf: |
 ```
 
 Please note that the default values for `activeFlowRecordTimeout`,
-`inactiveFlowRecordTimeout`, `aggregatorTransportProtocol`, and
-`flowAggregatorAddress` parameters are set to `60s`, `90s`, `tls` and
-`flow-aggregator.flow-aggregator.svc`, respectively. Please make sure that
+`inactiveFlowRecordTimeout`, `aggregatorTransportProtocol` parameters are set to
+`60s`, `90s` and `tls` respectively. Please make sure that
 `aggregatorTransportProtocol` and protocol of `flowCollectorAddr` in
 `agent-agent.conf` are set to `tls` to guarantee secure communication works
-properly. Protocol of `flowCollectorAddr` and `aggregatorTransportProtocol`
-must always match, so TLS must either be enabled for both sides or disabled
-for both sides. Please modify the parameters as per your requirements.
+properly. Protocol of `flowCollectorAddr` and `aggregatorTransportProtocol` must
+always match, so TLS must either be enabled for both sides or disabled for both
+sides. Please modify the parameters as per your requirements.
 
 Please note that the default value for `recordContents.podLabels` is `false`,
 which indicates source and destination Pod labels will not be included in the

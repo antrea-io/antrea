@@ -15,6 +15,7 @@
 package exporter
 
 import (
+	"context"
 	"fmt"
 	"hash/fnv"
 	"net"
@@ -23,6 +24,7 @@ import (
 	ipfixentities "github.com/vmware/go-ipfix/pkg/entities"
 	"github.com/vmware/go-ipfix/pkg/exporter"
 	ipfixregistry "github.com/vmware/go-ipfix/pkg/registry"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
 
@@ -39,6 +41,7 @@ import (
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 	"antrea.io/antrea/pkg/querier"
 	"antrea.io/antrea/pkg/util/env"
+	k8sutil "antrea.io/antrea/pkg/util/k8s"
 )
 
 // When initializing flowExporter, a slice is allocated with a fixed size to
@@ -102,6 +105,7 @@ var (
 )
 
 type FlowExporter struct {
+	collectorAddr          string
 	conntrackConnStore     *connections.ConntrackConnectionStore
 	denyConnStore          *connections.DenyConnectionStore
 	process                ipfix.IPFIXExportingProcess
@@ -130,17 +134,16 @@ func genObservationID(nodeName string) uint32 {
 	return h.Sum32()
 }
 
-func prepareExporterInputArgs(collectorAddr, collectorProto, nodeName string) exporter.ExporterInput {
+func prepareExporterInputArgs(collectorProto, nodeName string) exporter.ExporterInput {
 	expInput := exporter.ExporterInput{}
 	// Exporting process requires domain observation ID.
 	expInput.ObservationDomainID = genObservationID(nodeName)
 
-	expInput.CollectorAddress = collectorAddr
 	if collectorProto == "tls" {
-		expInput.IsEncrypted = true
+		expInput.TLSClientConfig = &exporter.ExporterTLSClientConfig{}
 		expInput.CollectorProtocol = "tcp"
 	} else {
-		expInput.IsEncrypted = false
+		expInput.TLSClientConfig = nil
 		expInput.CollectorProtocol = collectorProto
 	}
 
@@ -159,13 +162,14 @@ func NewFlowExporter(ifaceStore interfacestore.InterfaceStore, proxier proxy.Pro
 	if err != nil {
 		return nil, err
 	}
-	expInput := prepareExporterInputArgs(o.FlowCollectorAddr, o.FlowCollectorProto, nodeName)
+	expInput := prepareExporterInputArgs(o.FlowCollectorProto, nodeName)
 
 	connTrackDumper := connections.InitializeConnTrackDumper(nodeConfig, serviceCIDRNet, serviceCIDRNetv6, ovsDatapathType, proxyEnabled)
 	denyConnStore := connections.NewDenyConnectionStore(ifaceStore, proxier, o)
 	conntrackConnStore := connections.NewConntrackConnectionStore(connTrackDumper, v4Enabled, v6Enabled, npQuerier, ifaceStore, proxier, o)
 
 	return &FlowExporter{
+		collectorAddr:          o.FlowCollectorAddr,
 		conntrackConnStore:     conntrackConnStore,
 		denyConnStore:          denyConnStore,
 		registry:               registry,
@@ -206,7 +210,9 @@ func (exp *FlowExporter) Run(stopCh <-chan struct{}) {
 			return
 		case <-expireTimer.C:
 			if exp.process == nil {
-				err := exp.initFlowExporter()
+				ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+				err := exp.initFlowExporter(ctx)
+				cancel()
 				if err != nil {
 					klog.ErrorS(err, "Error when initializing flow exporter")
 					// There could be other errors while initializing flow exporter
@@ -257,16 +263,46 @@ func (exp *FlowExporter) sendFlowRecords() (time.Duration, error) {
 	return nextExpireTime, nil
 }
 
-func (exp *FlowExporter) initFlowExporter() error {
+func (exp *FlowExporter) resolveCollectorAddress(ctx context.Context) error {
+	exp.exporterInput.CollectorAddress = ""
+	host, port, err := net.SplitHostPort(exp.collectorAddr)
+	if err != nil {
+		return err
+	}
+	ns, name := k8sutil.SplitNamespacedName(host)
+	if ns == "" {
+		exp.exporterInput.CollectorAddress = exp.collectorAddr
+		return nil
+	}
+	svc, err := exp.k8sClient.CoreV1().Services(ns).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to resolve FlowAggregator Service: %s/%s", ns, name)
+	}
+	if svc.Spec.ClusterIP == "" {
+		return fmt.Errorf("ClusterIP is not available for FlowAggregator Service: %s/%s", ns, name)
+	}
+	exp.exporterInput.CollectorAddress = net.JoinHostPort(svc.Spec.ClusterIP, port)
+	if exp.exporterInput.TLSClientConfig != nil {
+		exp.exporterInput.TLSClientConfig.ServerName = fmt.Sprintf("%s.%s.svc", name, ns)
+	}
+	klog.V(2).InfoS("Resolved FlowAggregator Service address", "address", exp.exporterInput.CollectorAddress)
+	return nil
+}
+
+func (exp *FlowExporter) initFlowExporter(ctx context.Context) error {
+	if err := exp.resolveCollectorAddress(ctx); err != nil {
+		return err
+	}
 	var err error
-	if exp.exporterInput.IsEncrypted {
+	if exp.exporterInput.TLSClientConfig != nil {
+		tlsConfig := exp.exporterInput.TLSClientConfig
 		// if CA certificate, client certificate and key do not exist during initialization,
 		// it will retry to obtain the credentials in next export cycle
-		exp.exporterInput.CACert, err = getCACert(exp.k8sClient)
+		tlsConfig.CAData, err = getCACert(ctx, exp.k8sClient)
 		if err != nil {
 			return fmt.Errorf("cannot retrieve CA cert: %v", err)
 		}
-		exp.exporterInput.ClientCert, exp.exporterInput.ClientKey, err = getClientCertKey(exp.k8sClient)
+		tlsConfig.CertData, tlsConfig.KeyData, err = getClientCertKey(ctx, exp.k8sClient)
 		if err != nil {
 			return fmt.Errorf("cannot retrieve client cert and key: %v", err)
 		}

@@ -26,7 +26,6 @@ const (
 	DefaultActiveFlowRecordTimeout        = "60s"
 	DefaultInactiveFlowRecordTimeout      = "90s"
 	DefaultAggregatorTransportProtocol    = "TLS"
-	DefaultFlowAggregatorAddress          = "flow-aggregator.flow-aggregator.svc"
 	DefaultRecordFormat                   = "IPFIX"
 	DefaultClickHouseDatabase             = "default"
 	DefaultClickHouseCommitInterval       = "8s"
@@ -48,9 +47,6 @@ func SetConfigDefaults(flowAggregatorConf *FlowAggregatorConfig) {
 	}
 	if flowAggregatorConf.AggregatorTransportProtocol == "" {
 		flowAggregatorConf.AggregatorTransportProtocol = DefaultAggregatorTransportProtocol
-	}
-	if flowAggregatorConf.FlowAggregatorAddress == "" {
-		flowAggregatorConf.FlowAggregatorAddress = DefaultFlowAggregatorAddress
 	}
 	if flowAggregatorConf.APIServer.APIPort == 0 {
 		flowAggregatorConf.APIServer.APIPort = apis.FlowAggregatorAPIPort

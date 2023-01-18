@@ -172,9 +172,8 @@ data:
     # Provide the transport protocol for the flow aggregator collecting process, which is tls, tcp or udp.
     aggregatorTransportProtocol: "tls"
 
-    # Provide DNS name or IP address of flow aggregator for generating TLS certificate. It must match
-    # the flowCollectorAddr parameter in the antrea-agent config.
-    flowAggregatorAddress: "flow-aggregator.flow-aggregator.svc"
+    # Provide an extra DNS name or IP address of flow aggregator for generating TLS certificate.
+    flowAggregatorAddress: ""
 
     # recordContents enables configuring some fields in the flow records. Fields can
     # be excluded to reduce record size, but some features or external tooling may
