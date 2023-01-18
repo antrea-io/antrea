@@ -55,8 +55,8 @@ type Interface interface {
 	DeleteSelector(selectorKey string, policyKey string)
 	// GetLabelIdentityIDs retrieves the label identity IDs selected by the provided selectorItem keys.
 	GetLabelIdentityIDs(selectorKey string) []uint32
-	// SetPolicySelectors registers a policy's selectors with the index.
-	SetPolicySelectors(selectors []*types.GroupSelector, policyKey string) []uint32
+	// SetPolicySelectors registers a policy's latest selectors with the index.
+	SetPolicySelectors(selectors []*types.GroupSelector, policyKey string)
 	// DeletePolicySelectors removes any selectors from referring to the policy being deleted.
 	DeletePolicySelectors(policyKey string)
 	// AddLabelIdentity adds LabelIdentity-ID mapping to the index.
@@ -272,6 +272,20 @@ func (i *LabelIdentityIndex) AddSelector(selector *types.GroupSelector, policyKe
 	return i.getMatchedLabelIdentityIDs(sItem)
 }
 
+// Dedup LabelIdentity IDs in-place.
+func DedupLabelIdentites(labelIdentityIDs []uint32) []uint32 {
+	seen := map[uint32]struct{}{}
+	idx := 0
+	for _, id := range labelIdentityIDs {
+		if _, exists := seen[id]; !exists {
+			seen[id] = struct{}{}
+			labelIdentityIDs[idx] = id
+			idx++
+		}
+	}
+	return labelIdentityIDs[:idx]
+}
+
 // DeleteSelector removes a selectorItem from referring to the policy being deleted.
 func (i *LabelIdentityIndex) DeleteSelector(selectorKey string, policyKey string) {
 	i.lock.Lock()
@@ -299,45 +313,26 @@ func (i *LabelIdentityIndex) deleteSelector(selectorKey string, policyKey string
 	}
 }
 
-// SetPolicySelectors registers ClusterSet-scope policy selectors with the labelIdentityIndex,
-// and then retrieves all the LabelIdentity IDs that currently match these selectors.
-func (i *LabelIdentityIndex) SetPolicySelectors(selectors []*types.GroupSelector, policyKey string) []uint32 {
-	var labelIdentityIDs []uint32
+// SetPolicySelectors registers a policy's latest selectors with the index.
+// For the selectors that the policy no longer possess, it removes the policy key
+// from those selectorItems.
+func (i *LabelIdentityIndex) SetPolicySelectors(selectors []*types.GroupSelector, policyKey string) {
 	newSelectors := map[string]*types.GroupSelector{}
 	for _, s := range selectors {
-		klog.V(4).InfoS("Getting matched LabelIdentity for policy selector", "selector", s.NormalizedName, "policy", policyKey)
 		newSelectors[s.NormalizedName] = s
 	}
 	originalSelectors := i.getPolicySelectors(policyKey)
-	for selKey, sel := range newSelectors {
+	for selKey := range newSelectors {
 		if _, exists := originalSelectors[selKey]; exists {
-			// These clusterset-scoped selectors are already bound to the policy in labelIdentityIndex.
-			// We can simply read matched label identity IDs from the index.
-			selectedLabelIDs := i.GetLabelIdentityIDs(selKey)
-			labelIdentityIDs = append(labelIdentityIDs, selectedLabelIDs...)
-			// Remove matched clusterset-scoped selectors of the policy before and after the update.
-			// The selectors remaining in originalSelectors will need to be removed from the policy.
+			// Remove matched ClusterSet-scoped selectors of the policy before and after the update.
+			// The selectors remaining in originalSelectors will need to be unbounded from the policy.
 			delete(originalSelectors, selKey)
-		} else {
-			selectedLabelIDs := i.AddSelector(sel, policyKey)
-			labelIdentityIDs = append(labelIdentityIDs, selectedLabelIDs...)
 		}
 	}
 	// The policy no longer has these selectors.
 	for selectorKey := range originalSelectors {
 		i.DeleteSelector(selectorKey, policyKey)
 	}
-	// Dedup label identity IDs in-place.
-	seen := map[uint32]struct{}{}
-	idx := 0
-	for _, id := range labelIdentityIDs {
-		if _, exists := seen[id]; !exists {
-			seen[id] = struct{}{}
-			labelIdentityIDs[idx] = id
-			idx++
-		}
-	}
-	return labelIdentityIDs[:idx]
 }
 
 func (i *LabelIdentityIndex) getPolicySelectors(policyKey string) map[string]*types.GroupSelector {

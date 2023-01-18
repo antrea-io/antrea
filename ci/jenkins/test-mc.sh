@@ -430,6 +430,8 @@ function run_multicluster_e2e {
     fi
     set +x
     set -e
+
+    tar -zcf antrea-test-logs.tar.gz antrea-multicluster-test-logs
 }
 
 function collect_coverage {

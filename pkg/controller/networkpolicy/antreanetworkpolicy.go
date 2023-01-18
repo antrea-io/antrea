@@ -86,6 +86,11 @@ func (n *NetworkPolicyController) processAntreaNetworkPolicy(np *crdv1alpha1.Net
 	appliedToGroups := map[string]*antreatypes.AppliedToGroup{}
 	addressGroups := map[string]*antreatypes.AddressGroup{}
 	rules := make([]controlplane.NetworkPolicyRule, 0, len(np.Spec.Ingress)+len(np.Spec.Egress))
+	// clusterSetScopeSelectors keeps track of all the ClusterSet scoped selectors (either regular pod/ns
+	// selectors or selectors per-namespace) of the policy. After all peers are processed, this set of
+	// selectors are registered with the labelIdentityInterface so that updates the policy <-> selectorItem
+	// relationship accordingly.
+	var clusterSetScopeSelectors []*antreatypes.GroupSelector
 	// Create AppliedToGroup for each AppliedTo present in AntreaNetworkPolicy spec.
 	atgs := n.processAppliedTo(np.Namespace, np.Spec.AppliedTo)
 	appliedToGroups = mergeAppliedToGroups(appliedToGroups, atgs...)
@@ -96,7 +101,7 @@ func (n *NetworkPolicyController) processAntreaNetworkPolicy(np *crdv1alpha1.Net
 		// Create AppliedToGroup for each AppliedTo present in the ingress rule.
 		atgs := n.processAppliedTo(np.Namespace, ingressRule.AppliedTo)
 		appliedToGroups = mergeAppliedToGroups(appliedToGroups, atgs...)
-		peer, ags := n.toAntreaPeerForCRD(ingressRule.From, np, controlplane.DirectionIn, namedPortExists)
+		peer, ags := n.toAntreaPeerForCRD(ingressRule.From, np, controlplane.DirectionIn, namedPortExists, &clusterSetScopeSelectors)
 		addressGroups = mergeAddressGroups(addressGroups, ags...)
 		rules = append(rules, controlplane.NetworkPolicyRule{
 			Direction:       controlplane.DirectionIn,
@@ -122,7 +127,7 @@ func (n *NetworkPolicyController) processAntreaNetworkPolicy(np *crdv1alpha1.Net
 			peer = n.svcRefToPeerForCRD(egressRule.ToServices, np.Namespace)
 		} else {
 			var ags []*antreatypes.AddressGroup
-			peer, ags = n.toAntreaPeerForCRD(egressRule.To, np, controlplane.DirectionOut, namedPortExists)
+			peer, ags = n.toAntreaPeerForCRD(egressRule.To, np, controlplane.DirectionOut, namedPortExists, &clusterSetScopeSelectors)
 			addressGroups = mergeAddressGroups(addressGroups, ags...)
 		}
 		rules = append(rules, controlplane.NetworkPolicyRule{
@@ -153,6 +158,9 @@ func (n *NetworkPolicyController) processAntreaNetworkPolicy(np *crdv1alpha1.Net
 		Priority:         &np.Spec.Priority,
 		TierPriority:     &tierPriority,
 		AppliedToPerRule: appliedToPerRule,
+	}
+	if n.stretchNPEnabled {
+		n.labelIdentityInterface.SetPolicySelectors(clusterSetScopeSelectors, internalNetworkPolicyKeyFunc(np))
 	}
 	return internalNetworkPolicy, appliedToGroups, addressGroups
 }
