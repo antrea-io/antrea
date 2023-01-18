@@ -5,7 +5,7 @@ go 1.19
 require (
 	antrea.io/antrea v0.0.0
 	github.com/vmware-tanzu/octant v0.24.0
-	k8s.io/apimachinery v0.24.0
+	k8s.io/apimachinery v0.24.9
 )
 
 require (
@@ -49,7 +49,7 @@ require (
 	github.com/google/uuid v1.3.0 // indirect
 	github.com/googleapis/gnostic v0.5.5 // indirect
 	github.com/gorilla/mux v1.8.0 // indirect
-	github.com/hashicorp/errwrap v1.0.0 // indirect
+	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-hclog v0.16.2 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/hashicorp/go-plugin v1.4.2 // indirect
@@ -119,10 +119,10 @@ require (
 	gopkg.in/ini.v1 v1.62.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	k8s.io/api v0.24.0 // indirect
+	k8s.io/api v0.24.9 // indirect
 	k8s.io/apiextensions-apiserver v0.24.0 // indirect
-	k8s.io/client-go v0.24.0 // indirect
-	k8s.io/klog/v2 v2.60.1 // indirect
+	k8s.io/client-go v0.24.9 // indirect
+	k8s.io/klog/v2 v2.80.1 // indirect
 	k8s.io/kube-aggregator v0.24.0 // indirect
 	k8s.io/kube-openapi v0.0.0-20220328201542-3ee0da9b0b42 // indirect
 	k8s.io/metrics v0.24.0 // indirect

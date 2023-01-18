@@ -32,21 +32,32 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
+
+	"antrea.io/antrea/pkg/util/env"
 )
 
 const (
-	CAConfigMapName       = "flow-aggregator-ca"
-	CAConfigMapKey        = "ca.crt"
-	CAConfigMapNamespace  = "flow-aggregator"
-	ClientSecretNamespace = "flow-aggregator"
+	DefaultNamespace = "flow-aggregator"
+
+	CAConfigMapName = "flow-aggregator-ca"
+	CAConfigMapKey  = "ca.crt"
 	// #nosec G101: false positive triggered by variable name which includes "Secret"
 	ClientSecretName = "flow-aggregator-client-tls"
+	ServiceName      = "flow-aggregator"
 )
 
 var (
 	validFrom = time.Now().Add(-time.Hour) // valid an hour earlier to avoid flakes due to clock skew
 	maxAge    = time.Hour * 24 * 365       // one year self-signed certs
 )
+
+func getFlowAggregatorNamespace() string {
+	namespace := env.GetPodNamespace()
+	if namespace == "" {
+		namespace = DefaultNamespace
+	}
+	return namespace
+}
 
 func generateCACertKey() (*x509.Certificate, *rsa.PrivateKey, []byte, error) {
 	cert := &x509.Certificate{
@@ -80,6 +91,11 @@ func generateCACertKey() (*x509.Certificate, *rsa.PrivateKey, []byte, error) {
 	return cert, caKey, caPEM.Bytes(), err
 }
 
+func getFlowAggregatorServerNames() []string {
+	namespace := getFlowAggregatorNamespace()
+	return []string{ServiceName + "." + namespace + ".svc"}
+}
+
 func generateCertKey(caCert *x509.Certificate, caKey *rsa.PrivateKey, isServer bool, flowAggregatorAddress string) ([]byte, []byte, error) {
 	var cert *x509.Certificate
 	if isServer {
@@ -92,17 +108,14 @@ func generateCertKey(caCert *x509.Certificate, caKey *rsa.PrivateKey, isServer b
 			NotAfter:    validFrom.Add(maxAge),
 			ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 			KeyUsage:    x509.KeyUsageDigitalSignature,
+			DNSNames:    getFlowAggregatorServerNames(),
 		}
-		if ip := net.ParseIP(flowAggregatorAddress); ip != nil {
-			cert.IPAddresses = []net.IP{ip}
-		} else {
-			cert.DNSNames = []string{flowAggregatorAddress}
-			// add IP in certicate since flow exporter on Windows Node can't resolve DNS name
-			flowAggregatorIPs, err := net.LookupIP(flowAggregatorAddress)
-			if err != nil {
-				return nil, nil, err
+		if flowAggregatorAddress != "" {
+			if ip := net.ParseIP(flowAggregatorAddress); ip != nil {
+				cert.IPAddresses = []net.IP{ip}
+			} else {
+				cert.DNSNames = append(cert.DNSNames, flowAggregatorAddress)
 			}
-			cert.IPAddresses = flowAggregatorIPs
 		}
 	} else {
 		cert = &x509.Certificate{
@@ -144,7 +157,10 @@ func generateCertKey(caCert *x509.Certificate, caKey *rsa.PrivateKey, isServer b
 
 func syncCAAndClientCert(caCert, clientCert, clientKey []byte, k8sClient kubernetes.Interface) error {
 	klog.Info("Syncing CA certificate, client certificate and client key with ConfigMap")
-	caConfigMap, err := k8sClient.CoreV1().ConfigMaps(CAConfigMapNamespace).Get(context.TODO(), CAConfigMapName, metav1.GetOptions{})
+	namespace := getFlowAggregatorNamespace()
+	caConfigMapNamespace := namespace
+	clientSecretNamespace := namespace
+	caConfigMap, err := k8sClient.CoreV1().ConfigMaps(caConfigMapNamespace).Get(context.TODO(), CAConfigMapName, metav1.GetOptions{})
 	exists := true
 	if err != nil {
 		if !errors.IsNotFound(err) {
@@ -154,7 +170,7 @@ func syncCAAndClientCert(caCert, clientCert, clientKey []byte, k8sClient kuberne
 		caConfigMap = &v1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      CAConfigMapName,
-				Namespace: CAConfigMapNamespace,
+				Namespace: caConfigMapNamespace,
 				Labels: map[string]string{
 					"app": "flow-aggregator",
 				},
@@ -165,16 +181,16 @@ func syncCAAndClientCert(caCert, clientCert, clientKey []byte, k8sClient kuberne
 		CAConfigMapKey: string(caCert),
 	}
 	if exists {
-		if _, err := k8sClient.CoreV1().ConfigMaps(CAConfigMapNamespace).Update(context.TODO(), caConfigMap, metav1.UpdateOptions{}); err != nil {
+		if _, err := k8sClient.CoreV1().ConfigMaps(caConfigMapNamespace).Update(context.TODO(), caConfigMap, metav1.UpdateOptions{}); err != nil {
 			return fmt.Errorf("error updating ConfigMap %s: %v", CAConfigMapName, err)
 		}
 	} else {
-		if _, err := k8sClient.CoreV1().ConfigMaps(CAConfigMapNamespace).Create(context.TODO(), caConfigMap, metav1.CreateOptions{}); err != nil {
+		if _, err := k8sClient.CoreV1().ConfigMaps(caConfigMapNamespace).Create(context.TODO(), caConfigMap, metav1.CreateOptions{}); err != nil {
 			return fmt.Errorf("error creating ConfigMap %s: %v", CAConfigMapName, err)
 		}
 	}
 
-	secret, err := k8sClient.CoreV1().Secrets(ClientSecretNamespace).Get(context.TODO(), ClientSecretName, metav1.GetOptions{})
+	secret, err := k8sClient.CoreV1().Secrets(clientSecretNamespace).Get(context.TODO(), ClientSecretName, metav1.GetOptions{})
 	exists = true
 	if err != nil {
 		exists = false
@@ -185,7 +201,7 @@ func syncCAAndClientCert(caCert, clientCert, clientKey []byte, k8sClient kuberne
 			},
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      ClientSecretName,
-				Namespace: ClientSecretNamespace,
+				Namespace: clientSecretNamespace,
 			},
 			Type: v1.SecretTypeTLS,
 		}
@@ -195,11 +211,11 @@ func syncCAAndClientCert(caCert, clientCert, clientKey []byte, k8sClient kuberne
 		"tls.key": clientKey,
 	}
 	if exists {
-		if _, err := k8sClient.CoreV1().Secrets(ClientSecretNamespace).Update(context.TODO(), secret, metav1.UpdateOptions{}); err != nil {
+		if _, err := k8sClient.CoreV1().Secrets(clientSecretNamespace).Update(context.TODO(), secret, metav1.UpdateOptions{}); err != nil {
 			return fmt.Errorf("failed to update Secret %s: %v", ClientSecretName, err)
 		}
 	} else {
-		if _, err := k8sClient.CoreV1().Secrets(ClientSecretNamespace).Create(context.TODO(), secret, metav1.CreateOptions{}); err != nil {
+		if _, err := k8sClient.CoreV1().Secrets(clientSecretNamespace).Create(context.TODO(), secret, metav1.CreateOptions{}); err != nil {
 			return fmt.Errorf("failed to create Secret %s: %v", ClientSecretName, err)
 		}
 	}

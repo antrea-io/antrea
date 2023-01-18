@@ -37,7 +37,9 @@ spec:
         {{- end }}
     spec:
       hostNetwork: true
+      {{- if .Values.agent.dnsPolicy }}
       dnsPolicy: {{ .Values.agent.dnsPolicy }}
+      {{- end }}
       priorityClassName: {{ .Values.agent.priorityClassName }}
       {{- with .Values.agent.nodeSelector }}
       nodeSelector:

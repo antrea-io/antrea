@@ -19,6 +19,7 @@ package exporter
 
 import (
 	"container/heap"
+	"context"
 	"crypto/rand"
 	"flag"
 	"fmt"
@@ -92,7 +93,7 @@ func BenchmarkExportConntrackConns(b *testing.B) {
 	}
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		exp.initFlowExporter()
+		exp.initFlowExporter(context.Background())
 		for i := 0; i < int(math.Ceil(testNumOfConns/maxConnsToExport)); i++ {
 			exp.sendFlowRecords()
 		}
@@ -143,7 +144,7 @@ func BenchmarkExportDenyConns(b *testing.B) {
 	}
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		exp.initFlowExporter()
+		exp.initFlowExporter(context.Background())
 		for i := 0; i < int(math.Ceil(testNumOfDenyConns/maxConnsToExport)); i++ {
 			exp.sendFlowRecords()
 		}
@@ -159,7 +160,7 @@ func NewFlowExporterForTest(o *flowexporter.FlowExporterOptions) *FlowExporter {
 
 	// Prepare input args for IPFIX exporting process.
 	nodeName := "test-node"
-	expInput := prepareExporterInputArgs(o.FlowCollectorAddr, o.FlowCollectorProto, nodeName)
+	expInput := prepareExporterInputArgs(o.FlowCollectorProto, nodeName)
 
 	v4Enabled := true
 	v6Enabled := false
@@ -168,6 +169,7 @@ func NewFlowExporterForTest(o *flowexporter.FlowExporterOptions) *FlowExporter {
 	conntrackConnStore := connections.NewConntrackConnectionStore(nil, v4Enabled, v6Enabled, nil, nil, nil, o)
 
 	return &FlowExporter{
+		collectorAddr:          o.FlowCollectorAddr,
 		conntrackConnStore:     conntrackConnStore,
 		denyConnStore:          denyConnStore,
 		registry:               registry,
