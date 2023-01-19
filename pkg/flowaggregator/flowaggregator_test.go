@@ -667,6 +667,7 @@ func TestFlowAggregator_fetchPodLabels(t *testing.T) {
 	defer close(stopCh)
 
 	informerFactory.Start(stopCh)
+	informerFactory.WaitForCacheSync(stopCh)
 	informerFactory.Core().V1().Pods().Informer().GetIndexer().Add(pod)
 
 	tests := []struct {
@@ -830,6 +831,7 @@ func TestFlowAggregator_fillK8sMetadata(t *testing.T) {
 	defer close(stopCh)
 
 	informerFactory.Start(stopCh)
+	informerFactory.WaitForCacheSync(stopCh)
 	informerFactory.Core().V1().Pods().Informer().GetIndexer().Add(srcPod)
 	informerFactory.Core().V1().Pods().Informer().GetIndexer().Add(dstPod)
 
