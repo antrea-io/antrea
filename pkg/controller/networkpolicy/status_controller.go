@@ -51,7 +51,7 @@ var (
 	// maxConditionMessageLength defines the max length of the message field in one Condition. If the actual message
 	// length is over size, truncate the string and use "..." in the end.
 	// Use a variable for test.
-	maxConditionMessageLength = 100
+	maxConditionMessageLength = 256
 )
 
 // StatusController is responsible for synchronizing the status of Antrea ClusterNetworkPolicy and Antrea NetworkPolicy.
