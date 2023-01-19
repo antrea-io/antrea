@@ -46,41 +46,6 @@ var (
 	ReasonDisconnected = "Disconnected"
 )
 
-// CommonArea is an interface that provides access to the Common Area of a ClusterSet.
-// Common Area of a ClusterSet is a Namespace in the leader cluster.
-type CommonArea interface {
-	// Client grants read/write to the Namespace of the cluster that is backing this CommonArea.
-	client.Client
-
-	// GetClusterID returns the clusterID of the leader cluster.
-	GetClusterID() common.ClusterID
-
-	// GetNamespace returns the Namespace backing this CommonArea.
-	GetNamespace() string
-}
-
-// RemoteCommonArea is an abstraction to connect to CommonArea of the leader cluster.
-type RemoteCommonArea interface {
-	CommonArea
-
-	Start() context.CancelFunc
-
-	Stop()
-
-	// IsConnected returns whether the RemoteCommonArea is accessible or not.
-	IsConnected() bool
-
-	// StartWatching sets up a Manager to reconcile resource crud operations from CommonArea of RemoteCommonArea.
-	StartWatching() error
-
-	// StopWatching stops the Manager so the crud operations in RemoteCommonArea no longer invoke the reconcilers.
-	StopWatching()
-
-	GetStatus() []multiclusterv1alpha1.ClusterCondition
-
-	GetLocalClusterID() string
-}
-
 // remoteCommonArea implements the CommonArea interface and allows local cluster to read/write into
 // the CommonArea of RemoteCommonArea.
 type remoteCommonArea struct {
@@ -134,6 +99,9 @@ type remoteCommonArea struct {
 	// ClusterSet and allow Antrea-native policies to select peers from other clusters
 	// in a ClusterSet.
 	enableStretchedNetworkPolicy bool
+
+	// A list of ImportReconcilers to reconcile ResourceImports.
+	importReconcilers []ImportReconciler
 }
 
 // NewRemoteCommonArea returns a RemoteCommonArea instance which will use access credentials from the Secret to
@@ -324,7 +292,7 @@ func (r *remoteCommonArea) Start() context.CancelFunc {
 	go func() {
 		klog.InfoS("Starting MemberAnnounce to RemoteCommonArea", "cluster", r.GetClusterID())
 		r.doMemberAnnounce()
-		startedImporter := false
+		startedImporters := false
 		for {
 			select {
 			case <-stopCtx.Done():
@@ -333,13 +301,13 @@ func (r *remoteCommonArea) Start() context.CancelFunc {
 				return
 			case <-ticker.C:
 				r.doMemberAnnounce()
-				if !startedImporter && r.connected {
+				if !startedImporters && r.connected {
 					if err := r.StartWatching(); err != nil {
 						// Will retry in next tick.
 						klog.ErrorS(err, "Failed to start watching events")
 						return
 					}
-					startedImporter = true
+					startedImporters = true
 				}
 			}
 		}
@@ -374,36 +342,21 @@ func (r *remoteCommonArea) IsConnected() bool {
 	return r.connected
 }
 
+func (r *remoteCommonArea) AddImportReconciler(reconciler ImportReconciler) {
+	r.importReconcilers = append(r.importReconcilers, reconciler)
+}
+
 func (r *remoteCommonArea) StartWatching() error {
 	if r.managerStopFunc != nil {
 		klog.InfoS("Manager already watching resources from RemoteCommonArea", "cluster", r.ClusterID)
 		return nil
 	}
 
-	klog.V(2).InfoS("Start monitoring ResourceImport from RemoteCommonArea", "cluster", r.ClusterID)
+	klog.V(2).InfoS("Start watching ResourceImports from RemoteCommonArea", "cluster", r.ClusterID)
 
-	resImportReconciler := NewResourceImportReconciler(
-		r.ClusterManager.GetClient(),
-		r.ClusterManager.GetScheme(),
-		r.localClusterClient,
-		r.GetLocalClusterID(),
-		r.localNamespace,
-		r,
-	)
-	if err := resImportReconciler.SetupWithManager(r.ClusterManager); err != nil {
-		return fmt.Errorf("error creating ResourceImport controller for RemoteCommonArea: %v", err)
-	}
-	if r.enableStretchedNetworkPolicy {
-		labelIdentityImpReconciler := NewLabelIdentityResourceImportReconciler(
-			r.ClusterManager.GetClient(),
-			r.ClusterManager.GetScheme(),
-			r.localClusterClient,
-			string(r.ClusterID),
-			r.Namespace,
-			r,
-		)
-		if err := labelIdentityImpReconciler.SetupWithManager(r.ClusterManager); err != nil {
-			return fmt.Errorf("error creating LabelIdentityResourceImport controller for RemoteCommonArea: %v", err)
+	for _, rc := range r.importReconcilers {
+		if err := rc.SetupWithManager(r.ClusterManager); err != nil {
+			return fmt.Errorf("error setting up ResourceImport controller for RemoteCommonArea: %v", err)
 		}
 	}
 

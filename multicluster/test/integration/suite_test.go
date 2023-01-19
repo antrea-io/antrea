@@ -38,6 +38,8 @@ import (
 	mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
 	mcsv1alpha2 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha2"
 	multiclustercontrollers "antrea.io/antrea/multicluster/controllers/multicluster"
+	"antrea.io/antrea/multicluster/controllers/multicluster/leader"
+	"antrea.io/antrea/multicluster/controllers/multicluster/member"
 	antreamcscheme "antrea.io/antrea/multicluster/pkg/client/clientset/versioned/scheme"
 	antreascheme "antrea.io/antrea/pkg/client/clientset/versioned/scheme"
 	"antrea.io/antrea/pkg/signals"
@@ -133,7 +135,7 @@ var _ = BeforeSuite(func() {
 	k8sClient.Create(ctx, leaderNS)
 	k8sClient.Create(ctx, testNS)
 	k8sClient.Create(ctx, testNSStale)
-	clusterSetReconciler := multiclustercontrollers.NewMemberClusterSetReconciler(
+	clusterSetReconciler := member.NewMemberClusterSetReconciler(
 		k8sManager.GetClient(),
 		k8sManager.GetScheme(),
 		LeaderNamespace,
@@ -143,7 +145,7 @@ var _ = BeforeSuite(func() {
 	Expect(err).ToNot(HaveOccurred())
 
 	By("Creating ServiceExportReconciler")
-	svcExportReconciler := multiclustercontrollers.NewServiceExportReconciler(
+	svcExportReconciler := member.NewServiceExportReconciler(
 		k8sManager.GetClient(),
 		k8sManager.GetScheme(),
 		clusterSetReconciler,
@@ -175,7 +177,7 @@ var _ = BeforeSuite(func() {
 	}()
 
 	By("Creating ResourceExportReconciler")
-	resExportReconciler := multiclustercontrollers.NewResourceExportReconciler(
+	resExportReconciler := leader.NewResourceExportReconciler(
 		k8sManager.GetClient(),
 		k8sManager.GetScheme())
 	err = resExportReconciler.SetupWithManager(k8sManager)

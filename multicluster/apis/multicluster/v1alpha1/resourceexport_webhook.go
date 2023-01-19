@@ -21,7 +21,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
-	"antrea.io/antrea/multicluster/controllers/multicluster/common"
+	"antrea.io/antrea/multicluster/apis/multicluster/constants"
 )
 
 func (r *ResourceExport) SetupWebhookWithManager(mgr ctrl.Manager) error {
@@ -44,16 +44,25 @@ func (r *ResourceExport) Default() {
 	if len(r.Labels) == 0 {
 		r.Labels = map[string]string{}
 	}
-	if nameLabelVal, exists := r.Labels[common.SourceName]; !exists || nameLabelVal != r.Spec.Name {
-		r.Labels[common.SourceName] = r.Spec.Name
+	if nameLabelVal, exists := r.Labels[constants.SourceName]; !exists || nameLabelVal != r.Spec.Name {
+		r.Labels[constants.SourceName] = r.Spec.Name
 	}
-	if namespaceLabelVal, exists := r.Labels[common.SourceNamespace]; !exists || namespaceLabelVal != "" {
-		r.Labels[common.SourceNamespace] = ""
+	if namespaceLabelVal, exists := r.Labels[constants.SourceNamespace]; !exists || namespaceLabelVal != "" {
+		r.Labels[constants.SourceNamespace] = ""
 	}
-	if kindLabelVal, exists := r.Labels[common.SourceKind]; !exists || kindLabelVal != common.AntreaClusterNetworkPolicyKind {
-		r.Labels[common.SourceKind] = common.AntreaClusterNetworkPolicyKind
+	if kindLabelVal, exists := r.Labels[constants.SourceKind]; !exists || kindLabelVal != constants.AntreaClusterNetworkPolicyKind {
+		r.Labels[constants.SourceKind] = constants.AntreaClusterNetworkPolicyKind
 	}
-	if r.DeletionTimestamp.IsZero() && !common.StringExistsInSlice(r.Finalizers, common.ResourceExportFinalizer) {
-		r.Finalizers = append(r.Finalizers, common.ResourceExportFinalizer)
+	if r.DeletionTimestamp.IsZero() && !stringExistsInSlice(r.Finalizers, constants.ResourceExportFinalizer) {
+		r.Finalizers = append(r.Finalizers, constants.ResourceExportFinalizer)
 	}
+}
+
+func stringExistsInSlice(slice []string, s string) bool {
+	for _, item := range slice {
+		if item == s {
+			return true
+		}
+	}
+	return false
 }

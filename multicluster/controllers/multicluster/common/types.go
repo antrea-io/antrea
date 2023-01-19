@@ -20,6 +20,15 @@ type ClusterID string
 type ClusterSetID string
 
 const (
+	AntreaMCServiceAnnotation = "multicluster.antrea.io/imported-service"
+	AntreaMCACNPAnnotation    = "multicluster.antrea.io/imported-acnp"
+	GatewayAnnotation         = "multicluster.antrea.io/gateway"
+	GatewayIPAnnotation       = "multicluster.antrea.io/gateway-ip"
+
+	AntreaMCSPrefix = "antrea-mc-"
+
 	InvalidClusterID    = ClusterID("invalid")
 	InvalidClusterSetID = ClusterSetID("invalid")
+
+	DefaultWorkerCount = 5
 )

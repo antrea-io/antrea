@@ -26,6 +26,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	k8smcsv1alpha1 "sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
 
+	"antrea.io/antrea/multicluster/apis/multicluster/constants"
 	mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
 	"antrea.io/antrea/multicluster/controllers/multicluster/common"
 )
@@ -66,7 +67,7 @@ var _ = Describe("Stale controller", func() {
 			Spec: mcsv1alpha1.ResourceImportSpec{
 				Name:          "nginxnodelete",
 				Namespace:     testNSForStale,
-				Kind:          common.ServiceImportKind,
+				Kind:          constants.ServiceImportKind,
 				ServiceImport: svcImpNoDelete,
 			},
 		}
@@ -170,16 +171,16 @@ var _ = Describe("Stale controller", func() {
 				Name:      "cluster-a-testns-stale-nginx-service",
 				Namespace: LeaderNamespace,
 				Labels: map[string]string{
-					common.SourceClusterID: "cluster-a",
-					common.SourceNamespace: testNSForStale,
-					common.SourceName:      "nginx",
-					common.SourceKind:      "Service",
+					constants.SourceClusterID: "cluster-a",
+					constants.SourceNamespace: testNSForStale,
+					constants.SourceName:      "nginx",
+					constants.SourceKind:      "Service",
 				},
 			},
 			Spec: mcsv1alpha1.ResourceExportSpec{
 				Name:      "nginx",
 				Namespace: testNSForStale,
-				Kind:      common.ServiceKind,
+				Kind:      constants.ServiceKind,
 				Service: &mcsv1alpha1.ServiceExport{
 					ServiceSpec: corev1.ServiceSpec{
 						Ports: svcPorts,
@@ -200,16 +201,16 @@ var _ = Describe("Stale controller", func() {
 				Name:      "cluster-a-testns-stale-busybus-service",
 				Namespace: LeaderNamespace,
 				Labels: map[string]string{
-					common.SourceClusterID: "cluster-a",
-					common.SourceNamespace: testNSForStale,
-					common.SourceName:      "busybus",
-					common.SourceKind:      "Service",
+					constants.SourceClusterID: "cluster-a",
+					constants.SourceNamespace: testNSForStale,
+					constants.SourceName:      "busybus",
+					constants.SourceKind:      "Service",
 				},
 			},
 			Spec: mcsv1alpha1.ResourceExportSpec{
 				Name:      "busybus",
 				Namespace: testNSForStale,
-				Kind:      common.ServiceKind,
+				Kind:      constants.ServiceKind,
 				Service: &mcsv1alpha1.ServiceExport{
 					ServiceSpec: corev1.ServiceSpec{
 						Ports: svcPorts,
@@ -223,16 +224,16 @@ var _ = Describe("Stale controller", func() {
 				Name:      "cluster-b-testns-stale-nginx-service",
 				Namespace: LeaderNamespace,
 				Labels: map[string]string{
-					common.SourceClusterID: "cluster-b",
-					common.SourceNamespace: testNSForStale,
-					common.SourceName:      "nginx",
-					common.SourceKind:      "Service",
+					constants.SourceClusterID: "cluster-b",
+					constants.SourceNamespace: testNSForStale,
+					constants.SourceName:      "nginx",
+					constants.SourceKind:      "Service",
 				},
 			},
 			Spec: mcsv1alpha1.ResourceExportSpec{
 				Name:      "nginx",
 				Namespace: testNSForStale,
-				Kind:      common.ServiceKind,
+				Kind:      constants.ServiceKind,
 				Service: &mcsv1alpha1.ServiceExport{
 					ServiceSpec: corev1.ServiceSpec{
 						Ports: svcPorts,

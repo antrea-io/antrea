@@ -24,6 +24,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	multiclustercontrollers "antrea.io/antrea/multicluster/controllers/multicluster"
+	"antrea.io/antrea/multicluster/controllers/multicluster/member"
 	"antrea.io/antrea/pkg/log"
 	"antrea.io/antrea/pkg/signals"
 	"antrea.io/antrea/pkg/util/env"
@@ -62,7 +63,7 @@ func runMember(o *Options) error {
 			Client:    mgr.GetClient(),
 			namespace: env.GetPodNamespace()}})
 
-	clusterSetReconciler := multiclustercontrollers.NewMemberClusterSetReconciler(mgr.GetClient(),
+	clusterSetReconciler := member.NewMemberClusterSetReconciler(mgr.GetClient(),
 		mgr.GetScheme(),
 		env.GetPodNamespace(),
 		o.EnableStretchedNetworkPolicy,
@@ -72,7 +73,7 @@ func runMember(o *Options) error {
 	}
 
 	commonAreaGetter := clusterSetReconciler
-	svcExportReconciler := multiclustercontrollers.NewServiceExportReconciler(
+	svcExportReconciler := member.NewServiceExportReconciler(
 		mgr.GetClient(),
 		mgr.GetScheme(),
 		commonAreaGetter,
@@ -81,7 +82,7 @@ func runMember(o *Options) error {
 		return fmt.Errorf("error creating ServiceExport controller: %v", err)
 	}
 	if o.EnableStretchedNetworkPolicy {
-		labelIdentityReconciler := multiclustercontrollers.NewLabelIdentityReconciler(
+		labelIdentityReconciler := member.NewLabelIdentityReconciler(
 			mgr.GetClient(),
 			mgr.GetScheme(),
 			commonAreaGetter)
@@ -91,7 +92,7 @@ func runMember(o *Options) error {
 		go labelIdentityReconciler.Run(stopCh)
 	}
 
-	gwReconciler := multiclustercontrollers.NewGatewayReconciler(
+	gwReconciler := member.NewGatewayReconciler(
 		mgr.GetClient(),
 		mgr.GetScheme(),
 		env.GetPodNamespace(),
@@ -102,7 +103,7 @@ func runMember(o *Options) error {
 		return fmt.Errorf("error creating Gateway controller: %v", err)
 	}
 
-	nodeReconciler := multiclustercontrollers.NewNodeReconciler(
+	nodeReconciler := member.NewNodeReconciler(
 		mgr.GetClient(),
 		mgr.GetScheme(),
 		env.GetPodNamespace(),
