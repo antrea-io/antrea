@@ -37,8 +37,8 @@ package util
 
 import v1 "k8s.io/api/core/v1"
 
-// RequestsOnlyLocalTraffic checks if service requests OnlyLocal traffic.
-func RequestsOnlyLocalTraffic(service *v1.Service) bool {
+// ExternalPolicyLocal checks if service has ETP = Local.
+func ExternalPolicyLocal(service *v1.Service) bool {
 	if service.Spec.Type != v1.ServiceTypeLoadBalancer &&
 		service.Spec.Type != v1.ServiceTypeNodePort {
 		return false
@@ -46,9 +46,8 @@ func RequestsOnlyLocalTraffic(service *v1.Service) bool {
 	return service.Spec.ExternalTrafficPolicy == v1.ServiceExternalTrafficPolicyTypeLocal
 }
 
-// RequestsOnlyLocalTrafficForInternal checks if service prefers Node Local
-// endpoints for internal traffic
-func RequestsOnlyLocalTrafficForInternal(service *v1.Service) bool {
+// InternalPolicyLocal checks if service has ITP = Local.
+func InternalPolicyLocal(service *v1.Service) bool {
 	if service.Spec.InternalTrafficPolicy == nil {
 		return false
 	}
@@ -60,5 +59,5 @@ func NeedsHealthCheck(service *v1.Service) bool {
 	if service.Spec.Type != v1.ServiceTypeLoadBalancer {
 		return false
 	}
-	return RequestsOnlyLocalTraffic(service)
+	return ExternalPolicyLocal(service)
 }

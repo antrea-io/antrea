@@ -1080,7 +1080,7 @@ func Test_client_InstallServiceFlows(t *testing.T) {
 			},
 		},
 		{
-			name:            "Service ClusterIP,NodeLocalExternal true,SessionAffinity",
+			name:            "Service ClusterIP,ExternalPolicyLocal true,SessionAffinity",
 			protocol:        binding.ProtocolTCPv6,
 			svcIP:           svcIPv6,
 			affinityTimeout: uint16(100),
@@ -1102,7 +1102,7 @@ func Test_client_InstallServiceFlows(t *testing.T) {
 			},
 		},
 		{
-			name:            "Service NodePort,NodeLocalExternal true,SessionAffinity",
+			name:            "Service NodePort,ExternalPolicyLocal true,SessionAffinity",
 			protocol:        binding.ProtocolUDPv6,
 			svcIP:           svcIPv6,
 			affinityTimeout: uint16(100),
@@ -1124,7 +1124,7 @@ func Test_client_InstallServiceFlows(t *testing.T) {
 			},
 		},
 		{
-			name:            "Service LoadBalancer,NodeLocalExternal true,SessionAffinity",
+			name:            "Service LoadBalancer,ExternalPolicyLocal true,SessionAffinity",
 			protocol:        binding.ProtocolSCTPv6,
 			svcIP:           svcIPv6,
 			affinityTimeout: uint16(100),
