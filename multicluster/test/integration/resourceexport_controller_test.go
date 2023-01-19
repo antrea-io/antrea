@@ -27,9 +27,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	mcs "sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
 
+	"antrea.io/antrea/multicluster/apis/multicluster/constants"
 	mcsv1alpha1 "antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
-	multiclustercontrollers "antrea.io/antrea/multicluster/controllers/multicluster"
-	"antrea.io/antrea/multicluster/controllers/multicluster/common"
+	"antrea.io/antrea/multicluster/controllers/multicluster/leader"
 )
 
 // This file contains test cases for below basic scenarios:
@@ -66,19 +66,19 @@ var _ = Describe("ResourceExport controller", func() {
 			Name:      svcResExportNameA,
 			Namespace: testLeaderNS,
 			Labels: map[string]string{
-				common.SourceNamespace: namespace,
-				common.SourceName:      svcName,
-				common.SourceKind:      common.ServiceKind,
-				common.SourceClusterID: clusteraID,
+				constants.SourceNamespace: namespace,
+				constants.SourceName:      svcName,
+				constants.SourceKind:      constants.ServiceKind,
+				constants.SourceClusterID: clusteraID,
 			},
 			Generation: 1,
-			Finalizers: []string{common.ResourceExportFinalizer},
+			Finalizers: []string{constants.ResourceExportFinalizer},
 		},
 		Spec: mcsv1alpha1.ResourceExportSpec{
 			ClusterID: clusteraID,
 			Name:      svcName,
 			Namespace: namespace,
-			Kind:      common.ServiceKind,
+			Kind:      constants.ServiceKind,
 			Service: &mcsv1alpha1.ServiceExport{
 				ServiceSpec: corev1.ServiceSpec{
 					Ports: svcPorts,
@@ -91,19 +91,19 @@ var _ = Describe("ResourceExport controller", func() {
 			Name:      epResExportNameA,
 			Namespace: testLeaderNS,
 			Labels: map[string]string{
-				common.SourceNamespace: namespace,
-				common.SourceName:      epName,
-				common.SourceKind:      common.EndpointsKind,
-				common.SourceClusterID: clusteraID,
+				constants.SourceNamespace: namespace,
+				constants.SourceName:      epName,
+				constants.SourceKind:      constants.EndpointsKind,
+				constants.SourceClusterID: clusteraID,
 			},
 			Generation: 1,
-			Finalizers: []string{common.ResourceExportFinalizer},
+			Finalizers: []string{constants.ResourceExportFinalizer},
 		},
 		Spec: mcsv1alpha1.ResourceExportSpec{
 			ClusterID: clusteraID,
 			Name:      epName,
 			Namespace: namespace,
-			Kind:      common.EndpointsKind,
+			Kind:      constants.EndpointsKind,
 			Endpoints: &mcsv1alpha1.EndpointsExport{
 				Subsets: []corev1.EndpointSubset{
 					{
@@ -121,19 +121,19 @@ var _ = Describe("ResourceExport controller", func() {
 			Name:      svcResExportNameB,
 			Namespace: testLeaderNS,
 			Labels: map[string]string{
-				common.SourceNamespace: namespace,
-				common.SourceName:      svcName,
-				common.SourceKind:      common.ServiceKind,
-				common.SourceClusterID: clusterbID,
+				constants.SourceNamespace: namespace,
+				constants.SourceName:      svcName,
+				constants.SourceKind:      constants.ServiceKind,
+				constants.SourceClusterID: clusterbID,
 			},
 			Generation: 1,
-			Finalizers: []string{common.ResourceExportFinalizer},
+			Finalizers: []string{constants.ResourceExportFinalizer},
 		},
 		Spec: mcsv1alpha1.ResourceExportSpec{
 			ClusterID: clusterbID,
 			Name:      epName,
 			Namespace: namespace,
-			Kind:      common.ServiceKind,
+			Kind:      constants.ServiceKind,
 			Service: &mcsv1alpha1.ServiceExport{
 				ServiceSpec: corev1.ServiceSpec{
 					Ports: svcPorts,
@@ -146,19 +146,19 @@ var _ = Describe("ResourceExport controller", func() {
 			Name:      epResExportNameB,
 			Namespace: testLeaderNS,
 			Labels: map[string]string{
-				common.SourceNamespace: namespace,
-				common.SourceName:      epName,
-				common.SourceKind:      common.EndpointsKind,
-				common.SourceClusterID: clusterbID,
+				constants.SourceNamespace: namespace,
+				constants.SourceName:      epName,
+				constants.SourceKind:      constants.EndpointsKind,
+				constants.SourceClusterID: clusterbID,
 			},
 			Generation: 1,
-			Finalizers: []string{common.ResourceExportFinalizer},
+			Finalizers: []string{constants.ResourceExportFinalizer},
 		},
 		Spec: mcsv1alpha1.ResourceExportSpec{
 			ClusterID: clusterbID,
 			Name:      epName,
 			Namespace: namespace,
-			Kind:      common.EndpointsKind,
+			Kind:      constants.EndpointsKind,
 			Endpoints: &mcsv1alpha1.EndpointsExport{
 				Subsets: []corev1.EndpointSubset{
 					{
@@ -172,10 +172,10 @@ var _ = Describe("ResourceExport controller", func() {
 			},
 		},
 	}
-	svcResImportName := multiclustercontrollers.GetResourceImportName(svcResExportA)
-	epResImportName := multiclustercontrollers.GetResourceImportName(epResExportA)
+	svcResImportName := leader.GetResourceImportName(svcResExportA)
+	epResImportName := leader.GetResourceImportName(epResExportA)
 	expectedSvcImportSpec := mcs.ServiceImportSpec{
-		Ports: multiclustercontrollers.SvcPortsConverter(svcPorts),
+		Ports: leader.SvcPortsConverter(svcPorts),
 		Type:  mcs.ClusterSetIP,
 	}
 	ctx := context.Background()

@@ -31,7 +31,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"antrea.io/antrea/multicluster/apis/multicluster/v1alpha1"
-	"antrea.io/antrea/multicluster/controllers/multicluster"
+	"antrea.io/antrea/multicluster/controllers/multicluster/member"
 	mcinformers "antrea.io/antrea/multicluster/pkg/client/informers/externalversions/multicluster/v1alpha1"
 	mclisters "antrea.io/antrea/multicluster/pkg/client/listers/multicluster/v1alpha1"
 	"antrea.io/antrea/pkg/agent/interfacestore"
@@ -211,7 +211,7 @@ func (s *StretchedNetworkPolicyController) syncPodClassifierFlow(podRef types.Na
 	if err != nil {
 		return fmt.Errorf("can't get Namespace %s: %v", podRef.Namespace, err)
 	}
-	normalizedLabel := multicluster.GetNormalizedLabel(podNS.Labels, pod.Labels, podNS.Name)
+	normalizedLabel := member.GetNormalizedLabel(podNS.Labels, pod.Labels, podNS.Name)
 	labelID := s.getLabelIdentity(podRef, normalizedLabel)
 	return s.ofClient.InstallPodFlows(
 		containerConfigs[0].InterfaceName,

@@ -20,30 +20,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 )
 
-const (
-	AntreaMCServiceAnnotation = "multicluster.antrea.io/imported-service"
-	AntreaMCACNPAnnotation    = "multicluster.antrea.io/imported-acnp"
-	GatewayAnnotation         = "multicluster.antrea.io/gateway"
-	GatewayIPAnnotation       = "multicluster.antrea.io/gateway-ip"
-
-	AntreaMCSPrefix                = "antrea-mc-"
-	ServiceKind                    = "Service"
-	EndpointsKind                  = "Endpoints"
-	AntreaClusterNetworkPolicyKind = "AntreaClusterNetworkPolicy"
-	LabelIdentityKind              = "LabelIdentity"
-	ServiceImportKind              = "ServiceImport"
-	ClusterInfoKind                = "ClusterInfo"
-
-	SourceName      = "sourceName"
-	SourceNamespace = "sourceNamespace"
-	SourceClusterID = "sourceClusterID"
-	SourceKind      = "sourceKind"
-
-	DefaultWorkerCount      = 5
-	labelIdentityHashLength = 16
-
-	ResourceExportFinalizer = "resourceexport.finalizers.antrea.io"
-)
+const labelIdentityHashLength = 16
 
 // TODO: Use NamespacedName stringer method instead of this. e.g. nsName.String()
 func NamespacedName(namespace, name string) string {
