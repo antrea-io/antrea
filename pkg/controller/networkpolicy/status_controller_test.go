@@ -274,10 +274,14 @@ func TestCreateAntreaNetworkPolicy(t *testing.T) {
 			},
 		},
 	}
-	maxConditionMessageLength = 45
-	defer func() {
-		maxConditionMessageLength = 100
-	}()
+	updateMaxConditionMessageLength := func() func() {
+		originalMaxConditionMessageLength := maxConditionMessageLength
+		maxConditionMessageLength = 45
+		return func() {
+			maxConditionMessageLength = originalMaxConditionMessageLength
+		}
+	}
+	defer updateMaxConditionMessageLength()()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var initObjects []runtime.Object
