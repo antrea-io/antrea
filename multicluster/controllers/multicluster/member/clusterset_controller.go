@@ -215,8 +215,9 @@ func (r *MemberClusterSetReconciler) createOrUpdateRemoteCommonArea(clusterSet *
 	}
 
 	remoteNamespace := clusterSet.Spec.Namespace
-	r.remoteCommonArea, err = commonarea.NewRemoteCommonArea(clusterID, r.clusterSetID, common.ClusterSetID(r.clusterID), remoteCommonAreaMgr, remoteClient, r.Scheme,
-		r.Client, remoteNamespace, r.Namespace, config, r.enableStretchedNetworkPolicy)
+	r.remoteCommonArea, err = commonarea.NewRemoteCommonArea(clusterID, r.clusterSetID, r.clusterID,
+		remoteCommonAreaMgr, remoteClient, r.Scheme, r.Client, remoteNamespace, r.Namespace,
+		config, r.enableStretchedNetworkPolicy)
 	if err != nil {
 		klog.ErrorS(err, "Unable to create RemoteCommonArea", "cluster", clusterID)
 		return err
@@ -224,7 +225,7 @@ func (r *MemberClusterSetReconciler) createOrUpdateRemoteCommonArea(clusterSet *
 
 	// Create import reconcilers and add them to RemoteCommonArea (to be started with
 	// RemoteCommonArea.StartWatching).
-	resImportReconciler := NewResourceImportReconciler(
+	resImportReconciler := newResourceImportReconciler(
 		remoteCommonAreaMgr.GetClient(),
 		remoteCommonAreaMgr.GetScheme(),
 		r.Client,
@@ -235,7 +236,7 @@ func (r *MemberClusterSetReconciler) createOrUpdateRemoteCommonArea(clusterSet *
 	r.remoteCommonArea.AddImportReconciler(resImportReconciler)
 
 	if r.enableStretchedNetworkPolicy {
-		labelIdentityImpReconciler := NewLabelIdentityResourceImportReconciler(
+		labelIdentityImpReconciler := newLabelIdentityResourceImportReconciler(
 			remoteCommonAreaMgr.GetClient(),
 			remoteCommonAreaMgr.GetScheme(),
 			r.Client,

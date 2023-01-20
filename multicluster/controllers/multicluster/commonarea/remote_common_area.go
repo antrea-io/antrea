@@ -81,7 +81,7 @@ type remoteCommonArea struct {
 	leaderStatus  multiclusterv1alpha1.ClusterCondition
 
 	// The ID of the local member cluster
-	localClusterID common.ClusterSetID
+	localClusterID common.ClusterID
 
 	// client that provides read/write access into the local cluster
 	localClusterClient client.Client
@@ -106,7 +106,7 @@ type remoteCommonArea struct {
 
 // NewRemoteCommonArea returns a RemoteCommonArea instance which will use access credentials from the Secret to
 // connect to the leader cluster's CommonArea.
-func NewRemoteCommonArea(clusterID common.ClusterID, clusterSetID common.ClusterSetID, localClusterID common.ClusterSetID, mgr manager.Manager, remoteClient client.Client,
+func NewRemoteCommonArea(clusterID common.ClusterID, clusterSetID common.ClusterSetID, localClusterID common.ClusterID, mgr manager.Manager, remoteClient client.Client,
 	scheme *runtime.Scheme, localClusterClient client.Client, clusterSetNamespace string, localNamespace string, config *rest.Config, enableStretchedNetworkPolicy bool) (RemoteCommonArea, error) {
 	klog.InfoS("Create a RemoteCommonArea", "cluster", clusterID)
 
