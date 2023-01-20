@@ -339,10 +339,10 @@ func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *crdv1alpha1.C
 	var clusterAppliedToAffectedNS []string
 	// atgForNamespace is the appliedToGroups split by Namespaces.
 	var atgForNamespace []*antreatypes.AppliedToGroup
-	// clusterSetScopeSelectors keeps track of all the ClusterSet scoped selectors (either regular pod/ns
-	// selectors or selectors per-namespace) of the policy. After all peers are processed, this set of
-	// selectors are registered with the labelIdentityInterface so that updates the policy <-> selectorItem
-	// relationship accordingly.
+	// clusterSetScopeSelectors keeps track of all the ClusterSet-scoped selectors (including per-Namespace
+	// selectors) of the policy. During policy peer processing, any ClusterSet-scoped selector will be
+	// registered with the labelIdentityInterface and added to this list. By the end of the function, this
+	// list will be used to remove any stale selector from the policy in the labelIdentityInterface.
 	var clusterSetScopeSelectors []*antreatypes.GroupSelector
 	if hasPerNamespaceRule && len(cnp.Spec.AppliedTo) > 0 {
 		for _, at := range cnp.Spec.AppliedTo {
@@ -460,7 +460,7 @@ func (n *NetworkPolicyController) processClusterNetworkPolicy(cnp *crdv1alpha1.C
 		AppliedToPerRule: appliedToPerRule,
 	}
 	if n.stretchNPEnabled {
-		n.labelIdentityInterface.SetPolicySelectors(clusterSetScopeSelectors, internalNetworkPolicyKeyFunc(cnp))
+		n.labelIdentityInterface.RemoveStalePolicySelectors(clusterSetScopeSelectors, internalNetworkPolicyKeyFunc(cnp))
 	}
 	return internalNetworkPolicy, appliedToGroups, addressGroups
 }

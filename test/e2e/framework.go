@@ -207,6 +207,7 @@ type podInfo struct {
 
 // TestData stores the state required for each test case.
 type TestData struct {
+	ClusterName        string
 	provider           providers.ProviderInterface
 	kubeConfig         *restclient.Config
 	clientset          kubernetes.Interface

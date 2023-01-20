@@ -79,6 +79,13 @@ type CustomProbe struct {
 	ExpectConnectivity PodConnectivityMark
 }
 
+type probeResult struct {
+	podFrom      Pod
+	podTo        Pod
+	connectivity PodConnectivityMark
+	err          error
+}
+
 // GetPodByLabel returns a Pod with the matching Namespace and "pod" label.
 func (k *KubernetesUtils) GetPodByLabel(ns string, name string) (*v1.Pod, error) {
 	pods, err := k.getPodsUncached(ns, "pod", name)
@@ -209,11 +216,11 @@ func (k *KubernetesUtils) pingProbe(
 	log.Tracef("Running: kubectl exec %s -c %s -n %s -- %s", pod.Name, containerName, pod.Namespace, strings.Join(cmd, " "))
 	stdout, stderr, err := k.RunCommandFromPod(pod.Namespace, pod.Name, containerName, cmd)
 	log.Tracef("%s -> %s: error when running command: err - %v /// stdout - %s /// stderr - %s", podName, dstName, err, stdout, stderr)
-	return DecidePingProbeResult(stdout, 3)
+	return decidePingProbeResult(stdout, 3)
 }
 
-// DecidePingProbeResult uses the pingProbe stdout to decide the connectivity.
-func DecidePingProbeResult(stdout string, probeNum int) PodConnectivityMark {
+// decidePingProbeResult uses the pingProbe stdout to decide the connectivity.
+func decidePingProbeResult(stdout string, probeNum int) PodConnectivityMark {
 	// Provide stdout example for different connectivity:
 	// ================== Connected stdout ==================
 	// PING 10.10.1.2 (10.10.1.2) 56(84) bytes of data.
@@ -265,11 +272,12 @@ func DecidePingProbeResult(stdout string, probeNum int) PodConnectivityMark {
 	return Error
 }
 
-// Probe execs into a Pod and checks its connectivity to another Pod. Of course it
-// assumes that the target Pod is serving on the input port, and also that agnhost
-// is installed. The connectivity from source Pod to all IPs of the target Pod
+// Probe execs into a Pod and checks its connectivity to another Pod. It assumes
+// that the target Pod is serving on the input port, and also that agnhost is
+// installed. The connectivity from source Pod to all IPs of the target Pod
 // should be consistent. Otherwise, Error PodConnectivityMark will be returned.
-func (k *KubernetesUtils) Probe(ns1, pod1, ns2, pod2 string, port int32, protocol utils.AntreaPolicyProtocol) (PodConnectivityMark, error) {
+func (k *KubernetesUtils) Probe(ns1, pod1, ns2, pod2 string, port int32, protocol utils.AntreaPolicyProtocol,
+	remoteCluster *KubernetesUtils) (PodConnectivityMark, error) {
 	fromPods, err := k.GetPodsByLabel(ns1, "pod", pod1)
 	if err != nil {
 		return Error, fmt.Errorf("unable to get Pods from Namespace %s: %v", ns1, err)
@@ -279,15 +287,28 @@ func (k *KubernetesUtils) Probe(ns1, pod1, ns2, pod2 string, port int32, protoco
 	}
 	fromPod := fromPods[0]
 
-	toPods, err := k.GetPodsByLabel(ns2, "pod", pod2)
+	var toPods []v1.Pod
+	var clusterType string
+	if remoteCluster != nil {
+		toPods, err = remoteCluster.GetPodsByLabel(ns2, "pod", pod2)
+		clusterType = "remote"
+	} else {
+		toPods, err = k.GetPodsByLabel(ns2, "pod", pod2)
+		clusterType = "local"
+	}
 	if err != nil {
-		return Error, fmt.Errorf("unable to get Pods from Namespace %s: %v", ns2, err)
+		return Error, fmt.Errorf("unable to get Pods from Namespace %s in %s cluster: %v", ns2, clusterType, err)
 	}
 	if len(toPods) == 0 {
-		return Error, fmt.Errorf("no Pod of label pod=%s in Namespace %s found", pod2, ns2)
+		return Error, fmt.Errorf("no Pod of label pod=%s in Namespace %s found in %s cluster", pod2, ns2, clusterType)
 	}
 	toPod := toPods[0]
+	fromPodName, toPodName := fmt.Sprintf("%s/%s", ns1, pod1), fmt.Sprintf("%s/%s", ns2, pod2)
+	return k.prodeAndDecideConnectivity(fromPod, toPod, fromPodName, toPodName, port, protocol)
+}
 
+func (k *KubernetesUtils) prodeAndDecideConnectivity(fromPod, toPod v1.Pod,
+	fromPodName, toPodName string, port int32, protocol utils.AntreaPolicyProtocol) (PodConnectivityMark, error) {
 	// Both IPv4 and IPv6 address should be tested.
 	connectivity := Unknown
 	for _, eachIP := range toPod.Status.PodIPs {
@@ -296,9 +317,9 @@ func (k *KubernetesUtils) Probe(ns1, pod1, ns2, pod2 string, port int32, protoco
 		if strings.Contains(toIP, ":") {
 			toIP = fmt.Sprintf("[%s]", toIP)
 		}
-		// HACK: inferring container name as c80, c81, etc, for simplicity.
+		// HACK: inferring container name as c80, c81 etc., for simplicity.
 		containerName := fmt.Sprintf("c%v", port)
-		curConnectivity := k.probe(&fromPod, fmt.Sprintf("%s/%s", ns1, pod1), containerName, toIP, fmt.Sprintf("%s/%s", ns2, pod2), port, protocol)
+		curConnectivity := k.probe(&fromPod, fromPodName, containerName, toIP, toPodName, port, protocol)
 		if connectivity == Unknown {
 			connectivity = curConnectivity
 		} else if connectivity != curConnectivity {
@@ -1018,18 +1039,12 @@ func (k *KubernetesUtils) waitForHTTPServers(allPods []Pod) error {
 }
 
 func (k *KubernetesUtils) validateOnePort(allPods []Pod, reachability *Reachability, port int32, protocol utils.AntreaPolicyProtocol) {
-	type probeResult struct {
-		podFrom      Pod
-		podTo        Pod
-		connectivity PodConnectivityMark
-		err          error
-	}
 	numProbes := len(allPods) * len(allPods)
 	resultsCh := make(chan *probeResult, numProbes)
 	// TODO: find better metrics, this is only for POC.
 	oneProbe := func(podFrom, podTo Pod, port int32) {
 		log.Tracef("Probing: %s -> %s", podFrom, podTo)
-		connectivity, err := k.Probe(podFrom.Namespace(), podFrom.PodName(), podTo.Namespace(), podTo.PodName(), port, protocol)
+		connectivity, err := k.Probe(podFrom.Namespace(), podFrom.PodName(), podTo.Namespace(), podTo.PodName(), port, protocol, nil)
 		resultsCh <- &probeResult{podFrom, podTo, connectivity, err}
 	}
 	for _, pod1 := range allPods {
@@ -1076,6 +1091,34 @@ func (k *KubernetesUtils) Validate(allPods []Pod, reachability *Reachability, po
 		// ports 80, 81, 8080, 8081, 8082, 8083, 8084 and 8085, we would end up with
 		// potentially 9*9*8 = 648 simultaneous probes.
 		k.validateOnePort(allPods, reachability, port, protocol)
+	}
+}
+
+func (k *KubernetesUtils) ValidateRemoteCluster(remoteCluster *KubernetesUtils, allPods []Pod, reachability *Reachability, port int32, protocol utils.AntreaPolicyProtocol) {
+	numProbes := len(allPods) * len(allPods)
+	resultsCh := make(chan *probeResult, numProbes)
+	oneProbe := func(podFrom, podTo Pod, port int32) {
+		log.Tracef("Probing: %s -> %s", podFrom, podTo)
+		connectivity, err := k.Probe(podFrom.Namespace(), podFrom.PodName(), podTo.Namespace(), podTo.PodName(), port, protocol, remoteCluster)
+		resultsCh <- &probeResult{podFrom, podTo, connectivity, err}
+	}
+	for _, pod1 := range allPods {
+		for _, pod2 := range allPods {
+			go oneProbe(pod1, pod2, port)
+		}
+	}
+	for i := 0; i < numProbes; i++ {
+		r := <-resultsCh
+		if r.err != nil {
+			log.Errorf("unable to perform probe %s -> %s in %s: %v", r.podFrom, r.podTo, k.ClusterName, r.err)
+		}
+		prevConn := reachability.Observed.Get(r.podFrom.String(), r.podTo.String())
+		if prevConn == Unknown {
+			reachability.Observe(r.podFrom, r.podTo, r.connectivity)
+		}
+		if r.connectivity != Connected && reachability.Expected.Get(r.podFrom.String(), r.podTo.String()) == Connected {
+			log.Warnf("FAILED CONNECTION FOR ALLOWED PODS %s -> %s:%d:%s in %s !!!! ", r.podFrom, r.podTo, port, protocol, k.ClusterName)
+		}
 	}
 }
 

@@ -25,9 +25,11 @@ import (
 
 const (
 	// Provide enough time for policies to be enforced & deleted by the CNI plugin.
-	networkPolicyDelay          = 2 * time.Second
-	acnpIsolationResourceExport = "test-acnp-copy-span-ns-isolation.yml"
-	acnpName                    = "antrea-mc-strict-namespace-isolation"
+	networkPolicyDelay                 = 2 * time.Second
+	acnpIsolationResourceExport        = "test-acnp-copy-span-ns-isolation.yml"
+	acnpIsolationName                  = "antrea-mc-strict-namespace-isolation"
+	acnpCrossClusterIsolationResExport = "test-acnp-cross-cluster-ns-isolation.yml"
+	acnpCrossClusterIsolationName      = "antrea-mc-strict-namespace-isolation-cross-cluster"
 )
 
 var (
@@ -70,8 +72,10 @@ func initializeForPolicyTest(t *testing.T, data *MCTestData) {
 		d := data.clusterTestDataMap[clusterName]
 		k8sUtils, err := antreae2e.NewKubernetesUtils(&d)
 		failOnError(err, t)
-		_, err = k8sUtils.Bootstrap(perClusterNamespaces, perNamespacePods, true)
-		failOnError(err, t)
+		if clusterName != leaderCluster {
+			_, err = k8sUtils.Bootstrap(perClusterNamespaces, perNamespacePods, true)
+			failOnError(err, t)
+		}
 		clusterK8sUtilsMap[clusterName] = k8sUtils
 	}
 }
@@ -83,13 +87,9 @@ func tearDownForPolicyTest() {
 	}
 }
 
-func testMCAntreaPolicy(t *testing.T, data *MCTestData) {
-	data.testAntreaPolicyCopySpanNSIsolation(t)
-}
-
 // testAntreaPolicyCopySpanNSIsolation tests that after applying a ResourceExport of an ACNP
 // for Namespace isolation, strict Namespace isolation is enforced in each of the member clusters.
-func (data *MCTestData) testAntreaPolicyCopySpanNSIsolation(t *testing.T) {
+func testAntreaPolicyCopySpanNSIsolation(t *testing.T, data *MCTestData) {
 	setup := func() {
 		err := data.deployACNPResourceExport(t, acnpIsolationResourceExport)
 		failOnError(err, t)
@@ -114,10 +114,38 @@ func (data *MCTestData) testAntreaPolicyCopySpanNSIsolation(t *testing.T) {
 			Steps: []*antreae2e.TestStep{testStep},
 		},
 	}
-	executeTestsOnAllMemberClusters(t, testCaseList, setup, teardown)
+	executeTestsOnAllMemberClusters(t, testCaseList, acnpIsolationName, setup, teardown, false)
 }
 
-func executeTestsOnAllMemberClusters(t *testing.T, testList []*antreae2e.TestCase, setup, teardown func()) {
+func testAntreaPolicyCrossClusterNSIsolation(t *testing.T, data *MCTestData) {
+	setup := func() {
+		err := data.deployACNPResourceExport(t, acnpCrossClusterIsolationResExport)
+		failOnError(err, t)
+		// Sleep 5s to wait resource export/import process to finish resource exchange.
+		time.Sleep(5 * time.Second)
+	}
+	teardown := func() {
+		err := data.deleteACNPResourceExport(acnpCrossClusterIsolationResExport)
+		failOnError(err, t)
+	}
+	reachability := antreae2e.NewReachability(allPodsPerCluster, antreae2e.Dropped)
+	reachability.ExpectAllSelfNamespace(antreae2e.Connected)
+	testStep := &antreae2e.TestStep{
+		Name:         "Port 80",
+		Reachability: reachability,
+		Ports:        []int32{80},
+		Protocol:     utils.ProtocolTCP,
+	}
+	testCaseList := []*antreae2e.TestCase{
+		{
+			Name:  "ACNP strict cross-cluster Namespace isolation",
+			Steps: []*antreae2e.TestStep{testStep},
+		},
+	}
+	executeTestsOnAllMemberClusters(t, testCaseList, acnpCrossClusterIsolationName, setup, teardown, true)
+}
+
+func executeTestsOnAllMemberClusters(t *testing.T, testList []*antreae2e.TestCase, acnpName string, setup, teardown func(), testCrossCluster bool) {
 	setup()
 	time.Sleep(networkPolicyDelay)
 	for _, testCase := range testList {
@@ -125,22 +153,34 @@ func executeTestsOnAllMemberClusters(t *testing.T, testList []*antreae2e.TestCas
 		for _, step := range testCase.Steps {
 			t.Logf("Running step %s of test case %s", step.Name, testCase.Name)
 			reachability := step.Reachability
-			if reachability != nil {
-				for clusterName, k8sUtils := range clusterK8sUtilsMap {
-					if clusterName == leaderCluster {
-						// skip traffic test for the leader cluster
-						continue
-					}
-					if _, err := k8sUtils.GetACNP(acnpName); err != nil {
-						t.Errorf("Failed to get ACNP to be replicated in cluster %s", clusterName)
-					}
-					start := time.Now()
-					k8sUtils.Validate(allPodsPerCluster, reachability, step.Ports, step.Protocol)
-					step.Duration = time.Since(start)
-					_, wrong, _ := step.Reachability.Summary()
-					if wrong != 0 {
-						t.Errorf("Failure in cluster %s -- %d wrong results", clusterName, wrong)
-						reachability.PrintSummary(true, true, true)
+			for clusterName, k8sUtils := range clusterK8sUtilsMap {
+				if clusterName == leaderCluster {
+					// skip traffic test for the leader cluster
+					continue
+				}
+				if _, err := k8sUtils.GetACNP(acnpName); err != nil {
+					t.Errorf("Failed to get ACNP to be replicated in cluster %s", clusterName)
+				}
+				start := time.Now()
+				k8sUtils.Validate(allPodsPerCluster, reachability, step.Ports, step.Protocol)
+				step.Duration = time.Since(start)
+				_, wrong, _ := step.Reachability.Summary()
+				if wrong != 0 {
+					t.Errorf("Failure in cluster %s -- %d wrong results", clusterName, wrong)
+					reachability.PrintSummary(true, true, true)
+				}
+				if testCrossCluster {
+					for remoteClusterName, remoteClusterK8s := range clusterK8sUtilsMap {
+						if remoteClusterName == leaderCluster || remoteClusterName == clusterName {
+							continue
+						}
+						newReachability := reachability.NewReachabilityWithSameExpectations()
+						k8sUtils.ValidateRemoteCluster(remoteClusterK8s, allPodsPerCluster, newReachability, step.Ports[0], step.Protocol)
+						_, wrong, _ = newReachability.Summary()
+						if wrong != 0 {
+							t.Errorf("Failure from cluster %s to cluster %s -- %d wrong results", clusterName, remoteClusterName, wrong)
+							newReachability.PrintSummary(true, true, true)
+						}
 					}
 				}
 			}

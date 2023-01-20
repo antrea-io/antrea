@@ -28,7 +28,6 @@ import (
 	"antrea.io/antrea/pkg/apis/controlplane"
 	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	crdv1alpha3 "antrea.io/antrea/pkg/apis/crd/v1alpha3"
-	"antrea.io/antrea/pkg/controller/labelidentity"
 	antreatypes "antrea.io/antrea/pkg/controller/types"
 	"antrea.io/antrea/pkg/util/k8s"
 )
@@ -137,16 +136,15 @@ func toAntreaIPBlockForCRD(ipBlock *v1alpha1.IPBlock) (*controlplane.IPBlock, er
 	return antreaIPBlock, nil
 }
 
-// toAntreaPeerForCRD creates a Antrea controlplane NetworkPolicyPeer for crdv1alpha1 NetworkPolicyPeer.
+// toAntreaPeerForCRD creates an Antrea controlplane NetworkPolicyPeer for crdv1alpha1 NetworkPolicyPeer.
 // It is used when peer's Namespaces are not matched by NamespaceMatchTypes, for which the controlplane
-// NetworkPolicyPeers will need to be created on a per Namespace basis.
+// NetworkPolicyPeers will need to be created on a per-Namespace basis.
+// Any ClusterSet scoped selector in this peer will also be registered with the labelIdentityInterface
+// for the policy.
 func (n *NetworkPolicyController) toAntreaPeerForCRD(peers []v1alpha1.NetworkPolicyPeer,
 	np metav1.Object, dir controlplane.Direction, namedPortExists bool,
 	clusterSetScopeSelectors *[]*antreatypes.GroupSelector) (*controlplane.NetworkPolicyPeer, []*antreatypes.AddressGroup) {
 	var addressGroups []*antreatypes.AddressGroup
-	var ipBlocks []controlplane.IPBlock
-	var fqdns []string
-	var labelIdentities []uint32
 	// NetworkPolicyPeer is supposed to match all addresses when it is empty and no clusterGroup is present.
 	// It's treated as an IPBlock "0.0.0.0/0".
 	if len(peers) == 0 {
@@ -165,6 +163,10 @@ func (n *NetworkPolicyController) toAntreaPeerForCRD(peers []v1alpha1.NetworkPol
 		podsPeer.AddressGroups = append(podsPeer.AddressGroups, allPodsGroup.Name)
 		return &podsPeer, addressGroups
 	}
+	var ipBlocks []controlplane.IPBlock
+	var fqdns []string
+	var labelIdentities []uint32
+	uniqueLabelIDs := map[uint32]struct{}{}
 	for _, peer := range peers {
 		// A v1alpha1.NetworkPolicyPeer will have exactly one of the following fields set:
 		// - podSelector and/or namespaceSelector (in-cluster scope or ClusterSet scope)
@@ -199,15 +201,22 @@ func (n *NetworkPolicyController) toAntreaPeerForCRD(peers []v1alpha1.NetworkPol
 		if n.stretchNPEnabled && peer.Scope == v1alpha1.ScopeClusterSet {
 			newClusterSetScopeSelector := antreatypes.NewGroupSelector(np.GetNamespace(), peer.PodSelector, peer.NamespaceSelector, nil, nil)
 			*clusterSetScopeSelectors = append(*clusterSetScopeSelectors, newClusterSetScopeSelector)
-			labelIdentities = append(labelIdentities, n.labelIdentityInterface.AddSelector(newClusterSetScopeSelector, internalNetworkPolicyKeyFunc(np))...)
+			// In addition to getting the matched Label Identity IDs, AddSelector also registers the selector
+			// with the labelIdentityInterface.
+			matchedLabelIDs := n.labelIdentityInterface.AddSelector(newClusterSetScopeSelector, internalNetworkPolicyKeyFunc(np))
+			for _, id := range matchedLabelIDs {
+				uniqueLabelIDs[id] = struct{}{}
+			}
 		}
 	}
-	klog.Info("Matched the following label identities ", labelIdentities)
+	for id := range uniqueLabelIDs {
+		labelIdentities = append(labelIdentities, id)
+	}
 	return &controlplane.NetworkPolicyPeer{
 		AddressGroups:   getAddressGroupNames(addressGroups),
 		IPBlocks:        ipBlocks,
 		FQDNs:           fqdns,
-		LabelIdentities: labelidentity.DedupLabelIdentites(labelIdentities),
+		LabelIdentities: labelIdentities,
 	}, addressGroups
 }
 
@@ -218,17 +227,26 @@ func (n *NetworkPolicyController) toNamespacedPeerForCRD(peers []v1alpha1.Networ
 	np metav1.Object, namespace string, clusterSetScopeSelectors *[]*antreatypes.GroupSelector) (*controlplane.NetworkPolicyPeer, []*antreatypes.AddressGroup) {
 	var addressGroups []*antreatypes.AddressGroup
 	var labelIdentities []uint32
+	uniqueLabelIDs := map[uint32]struct{}{}
 	for _, peer := range peers {
 		addressGroup := n.createAddressGroup(namespace, peer.PodSelector, nil, peer.ExternalEntitySelector, nil)
 		addressGroups = append(addressGroups, addressGroup)
 		if n.stretchNPEnabled && peer.Scope == v1alpha1.ScopeClusterSet {
 			newClusterSetScopeSelector := antreatypes.NewGroupSelector(namespace, peer.PodSelector, nil, peer.ExternalEntitySelector, nil)
 			*clusterSetScopeSelectors = append(*clusterSetScopeSelectors, newClusterSetScopeSelector)
-			labelIdentities = append(labelIdentities, n.labelIdentityInterface.AddSelector(newClusterSetScopeSelector, internalNetworkPolicyKeyFunc(np))...)
+			// In addition to getting the matched Label Identity IDs, AddSelector also registers the selector
+			// with the labelIdentityInterface.
+			matchedLabelIDs := n.labelIdentityInterface.AddSelector(newClusterSetScopeSelector, internalNetworkPolicyKeyFunc(np))
+			for _, id := range matchedLabelIDs {
+				uniqueLabelIDs[id] = struct{}{}
+			}
 		}
 	}
+	for id := range uniqueLabelIDs {
+		labelIdentities = append(labelIdentities, id)
+	}
 	return &controlplane.NetworkPolicyPeer{
-		AddressGroups: getAddressGroupNames(addressGroups), LabelIdentities: labelidentity.DedupLabelIdentites(labelIdentities),
+		AddressGroups: getAddressGroupNames(addressGroups), LabelIdentities: labelIdentities,
 	}, addressGroups
 }
 

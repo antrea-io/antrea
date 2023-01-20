@@ -86,10 +86,10 @@ func (n *NetworkPolicyController) processAntreaNetworkPolicy(np *crdv1alpha1.Net
 	appliedToGroups := map[string]*antreatypes.AppliedToGroup{}
 	addressGroups := map[string]*antreatypes.AddressGroup{}
 	rules := make([]controlplane.NetworkPolicyRule, 0, len(np.Spec.Ingress)+len(np.Spec.Egress))
-	// clusterSetScopeSelectors keeps track of all the ClusterSet scoped selectors (either regular pod/ns
-	// selectors or selectors per-namespace) of the policy. After all peers are processed, this set of
-	// selectors are registered with the labelIdentityInterface so that updates the policy <-> selectorItem
-	// relationship accordingly.
+	// clusterSetScopeSelectors keeps track of all the ClusterSet-scoped selectors of the policy.
+	// During policy peer processing, any ClusterSet-scoped selector will be registered with the
+	// labelIdentityInterface and added to this list. By the end of the function, this list will
+	// be used to remove any stale selector from the policy in the labelIdentityInterface.
 	var clusterSetScopeSelectors []*antreatypes.GroupSelector
 	// Create AppliedToGroup for each AppliedTo present in AntreaNetworkPolicy spec.
 	atgs := n.processAppliedTo(np.Namespace, np.Spec.AppliedTo)
@@ -160,7 +160,7 @@ func (n *NetworkPolicyController) processAntreaNetworkPolicy(np *crdv1alpha1.Net
 		AppliedToPerRule: appliedToPerRule,
 	}
 	if n.stretchNPEnabled {
-		n.labelIdentityInterface.SetPolicySelectors(clusterSetScopeSelectors, internalNetworkPolicyKeyFunc(np))
+		n.labelIdentityInterface.RemoveStalePolicySelectors(clusterSetScopeSelectors, internalNetworkPolicyKeyFunc(np))
 	}
 	return internalNetworkPolicy, appliedToGroups, addressGroups
 }

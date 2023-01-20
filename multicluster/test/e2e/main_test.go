@@ -122,9 +122,10 @@ func TestConnectivity(t *testing.T) {
 	t.Run("TestAntreaPolicy", func(t *testing.T) {
 		defer tearDownForPolicyTest()
 		initializeForPolicyTest(t, data)
-		testMCAntreaPolicy(t, data)
+		t.Run("Case=CopySpanNSIsolation", func(t *testing.T) { testAntreaPolicyCopySpanNSIsolation(t, data) })
+		t.Run("Case=CrossClusterNSIsolation", func(t *testing.T) { testAntreaPolicyCrossClusterNSIsolation(t, data) })
 	})
 	// Wait 5 seconds to let both member and leader controllers clean up all resources,
-	// otherwise, Namespace deletion may stuck into termininating status.
+	// otherwise, Namespace deletion may be stuck in terminating status.
 	time.Sleep(5 * time.Second)
 }

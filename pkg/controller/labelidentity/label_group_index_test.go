@@ -339,7 +339,7 @@ func TestSetPolicySelectors(t *testing.T) {
 			for _, sel := range tt.selectors {
 				labelIDs = append(labelIDs, i.AddSelector(sel, tt.policyKey)...)
 			}
-			i.SetPolicySelectors(tt.selectors, tt.policyKey)
+			i.RemoveStalePolicySelectors(tt.selectors, tt.policyKey)
 			assert.ElementsMatch(t, tt.expIDs, DedupLabelIdentites(labelIDs))
 			assert.Equalf(t, len(tt.expSelectorItems), len(i.selectorItems.List()), "Unexpected number of cached selectorItems")
 			for selKey, expSelItem := range tt.expSelectorItems {

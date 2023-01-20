@@ -230,6 +230,19 @@ func NewReachability(pods []Pod, defaultExpectation PodConnectivityMark) *Reacha
 	return r
 }
 
+func (r *Reachability) NewReachabilityWithSameExpectations() *Reachability {
+	var items []string
+	for _, pod := range r.Pods {
+		items = append(items, string(pod))
+	}
+	return &Reachability{
+		Expected:        r.Expected,
+		Observed:        NewConnectivityTable(items, nil),
+		Pods:            r.Pods,
+		PodsByNamespace: r.PodsByNamespace,
+	}
+}
+
 // ExpectConn is an experimental way to describe connectivity with named fields
 func (r *Reachability) ExpectConn(spec *Connectivity) {
 	if spec.From == "" && spec.To == "" {
