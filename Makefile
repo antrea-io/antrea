@@ -65,7 +65,7 @@ check-%:
 
 .PHONY: trivy-scan
 trivy-scan: .trivy-bin check-TRIVY_TARGET_IMAGE
-	$(CURDIR)/.trivy-bin/trivy image --exit-code 1 --severity CRITICAL,HIGH --ignore-unfixed $(TRIVY_TARGET_IMAGE)
+	$(CURDIR)/.trivy-bin/trivy image -c .trivy.yml $(TRIVY_TARGET_IMAGE)
 
 .PHONY: antrea-agent
 antrea-agent:
