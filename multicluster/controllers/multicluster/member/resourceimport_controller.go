@@ -69,7 +69,7 @@ type ResourceImportReconciler struct {
 	manager ctrl.Manager
 }
 
-func NewResourceImportReconciler(client client.Client, scheme *runtime.Scheme, localClusterClient client.Client,
+func newResourceImportReconciler(client client.Client, scheme *runtime.Scheme, localClusterClient client.Client,
 	localClusterID string, namespace string, remoteCommonArea commonarea.RemoteCommonArea) *ResourceImportReconciler {
 	return &ResourceImportReconciler{
 		Client:             client,
