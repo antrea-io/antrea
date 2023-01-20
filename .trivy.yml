@@ -1,0 +1,9 @@
+# fail in case of vulnerabilities
+exit-code: 1
+
+severity:
+  - HIGH
+  - CRITICAL
+
+vulnerability:
+  ignore-unfixed: true
