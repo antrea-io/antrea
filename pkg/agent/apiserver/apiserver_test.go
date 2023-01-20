@@ -19,12 +19,14 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	genericapiserver "k8s.io/apiserver/pkg/server"
 	"k8s.io/apiserver/pkg/server/options"
 
 	"antrea.io/antrea/pkg/agent/config"
@@ -103,14 +105,14 @@ current-context: cluster
 
 func TestAPIServerLivezCheck(t *testing.T) {
 	tests := []struct {
-		name         string
-		setupFunc    func(*fakeAgentAPIServer)
-		expectedCode int
-		expectedBody string
+		name                 string
+		registerExpectations func(*fakeAgentAPIServer)
+		expectedCode         int
+		expectedBody         string
 	}{
 		{
 			name: "ovs connected",
-			setupFunc: func(apiserver *fakeAgentAPIServer) {
+			registerExpectations: func(apiserver *fakeAgentAPIServer) {
 				apiserver.ofClient.EXPECT().IsConnected().Return(true)
 			},
 			expectedCode: 200,
@@ -118,7 +120,7 @@ func TestAPIServerLivezCheck(t *testing.T) {
 		},
 		{
 			name: "ovs disconnected",
-			setupFunc: func(apiserver *fakeAgentAPIServer) {
+			registerExpectations: func(apiserver *fakeAgentAPIServer) {
 				apiserver.ofClient.EXPECT().IsConnected().Return(false)
 			},
 			expectedCode: 500,
@@ -126,6 +128,7 @@ func TestAPIServerLivezCheck(t *testing.T) {
 [+]log ok
 [-]ovs failed: reason withheld
 [+]poststarthook/max-in-flight-filter ok
+[+]poststarthook/test-server-ready ok
 livez check failed
 `,
 		},
@@ -134,18 +137,36 @@ livez check failed
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			apiserver := newFakeAPIServer(t)
+			// we use this post-start hook to avoid a rare race condition where
+			// getResponse(apiserver, "/healthz") is called while the healthz check is
+			// still being installed. This happens when the server is queried before
+			// PrepareRun() returns. Because post-start hooks are called much later, by
+			// Run(), we ensure that we only query the server after checks have been
+			// installed.
+			var wg sync.WaitGroup
+			wg.Add(1)
+			apiserver.GenericAPIServer.AddPostStartHook(
+				"test-server-ready",
+				func(_ genericapiserver.PostStartHookContext) error {
+					wg.Done()
+					return nil
+				},
+			)
 			stopCh := make(chan struct{})
 			defer close(stopCh)
 			go func() {
 				apiserver.Run(stopCh)
 			}()
-			// Wait for APIServer to be healthy so checks installed by default are ensured ok.
+			wg.Wait()
+
+			// Wait for APIServer to be healthy.
+			// After that, all built-in health checks will be guaranteed to return "ok".
 			assert.Eventuallyf(t, func() bool {
 				response := getResponse(apiserver, "/healthz")
 				return response.Body.String() == "ok"
-			}, time.Second*5, time.Millisecond*100, "APIServer didn't become health in 5 seconds")
+			}, 5*time.Second, 100*time.Millisecond, "APIServer didn't become healthy within 5 seconds")
 
-			tt.setupFunc(apiserver)
+			tt.registerExpectations(apiserver)
 			response := getResponse(apiserver, "/livez")
 			assert.Equal(t, tt.expectedBody, response.Body.String())
 			assert.Equal(t, tt.expectedCode, response.Code)
