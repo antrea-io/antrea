@@ -47,7 +47,7 @@ type LabelIdentityResourceImportReconciler struct {
 	manager ctrl.Manager
 }
 
-func NewLabelIdentityResourceImportReconciler(client client.Client, scheme *runtime.Scheme, localClusterClient client.Client,
+func newLabelIdentityResourceImportReconciler(client client.Client, scheme *runtime.Scheme, localClusterClient client.Client,
 	localClusterID string, namespace string, remoteCommonArea commonarea.RemoteCommonArea) *LabelIdentityResourceImportReconciler {
 	return &LabelIdentityResourceImportReconciler{
 		Client:             client,

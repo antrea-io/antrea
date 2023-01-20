@@ -209,7 +209,7 @@ func TestResourceImportReconciler_handleClusterInfo(t *testing.T) {
 				fakeRemoteClient = fake.NewClientBuilder().WithScheme(scheme).WithObjects().Build()
 			}
 			remoteCluster := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", "cluster-d", "default", nil)
-			r := NewResourceImportReconciler(fakeClient, scheme, fakeClient, "cluster-d", "default", remoteCluster)
+			r := newResourceImportReconciler(fakeClient, scheme, fakeClient, "cluster-d", "default", remoteCluster)
 			if tt.existingCIResImport != nil {
 				r.installedResImports.Add(*tt.existingCIResImport)
 			}

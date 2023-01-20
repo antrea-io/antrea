@@ -124,7 +124,7 @@ func TestLabelIdentityResourceImportReconcile(t *testing.T) {
 			fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(tt.existLabelIdentity).Build()
 			fakeRemoteClient := fake.NewClientBuilder().WithScheme(scheme).WithLists(&tt.existResImp).Build()
 			remoteCluster := commonarea.NewFakeRemoteCommonArea(fakeRemoteClient, "leader-cluster", localClusterID, "default", nil)
-			r := NewLabelIdentityResourceImportReconciler(fakeClient, scheme, fakeClient, localClusterID, "default", remoteCluster)
+			r := newLabelIdentityResourceImportReconciler(fakeClient, scheme, fakeClient, localClusterID, "default", remoteCluster)
 
 			resImpReq := ctrl.Request{NamespacedName: tt.resImportNamespacedName}
 			_, err := r.Reconcile(ctx, resImpReq)
