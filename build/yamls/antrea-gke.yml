@@ -1018,6 +1018,7 @@ spec:
                               type: string
                             scope:
                               type: string
+                              enum: [ 'Cluster', 'ClusterSet' ]
                       name:
                         type: string
                       enableLogging:
@@ -3232,8 +3233,8 @@ data:
     # The Namespace where Antrea Multi-cluster Controller is running.
     # The default is antrea-agent's Namespace.
       namespace: ""
-    # Enable StretchedNetworkPolicy which could be enforced on cross-cluster traffic.
-    # This feature is supported only with encap mode.
+    # Enable Multi-cluster NetworkPolicy (ingress rules).
+    # Multi-cluster Gateway must be enabled to enable StretchedNetworkPolicy.
       enableStretchedNetworkPolicy: false
   antrea-cni.conflist: |
     {
@@ -3368,8 +3369,7 @@ data:
       selfSignedCA: true
 
     multicluster:
-      # Enable StretchedNetworkPolicy which allow Antrea-native policies to select peers
-      # from other clusters in a ClusterSet.
+      # Enable Multi-cluster NetworkPolicy.
       enableStretchedNetworkPolicy: false
 ---
 # Source: antrea/templates/crds/group.yaml
@@ -4293,7 +4293,7 @@ spec:
         kubectl.kubernetes.io/default-container: antrea-agent
         # Automatically restart Pods with a RollingUpdate if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: ef7e200112f4a2485602ef04eaa2221ef0664a15293aed270de7d56c2514f010
+        checksum/config: 59cf5853d3998c658fbb4802c7cf2025e4836a7c366db04e8a8f2eed2bce8fcc
       labels:
         app: antrea
         component: antrea-agent
@@ -4533,7 +4533,7 @@ spec:
       annotations:
         # Automatically restart Pod if the ConfigMap changes
         # See https://helm.sh/docs/howto/charts_tips_and_tricks/#automatically-roll-deployments
-        checksum/config: ef7e200112f4a2485602ef04eaa2221ef0664a15293aed270de7d56c2514f010
+        checksum/config: 59cf5853d3998c658fbb4802c7cf2025e4836a7c366db04e8a8f2eed2bce8fcc
       labels:
         app: antrea
         component: antrea-controller

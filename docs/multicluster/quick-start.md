@@ -187,8 +187,9 @@ $kubectl annotate node node-b1 multicluster.antrea.io/gateway=true
 
 So far, we set up an Antrea Multi-cluster ClusterSet with two clusters following
 the above sections of this guide. Next, you can start to consume the Antrea
-Multi-cluster features with the ClusterSet, including [Multi-cluster Services](user-guide.md#multi-cluster-service)
-and [ClusterNetworkPolicy Replication](user-guide.md#multi-cluster-clusternetworkpolicy-replication).
+Multi-cluster features with the ClusterSet, including [Multi-cluster Services](user-guide.md#multi-cluster-service),
+[Multi-cluster NetworkPolicy](user-guide.md#multi-cluster-networkpolicy), and
+[ClusterNetworkPolicy replication](user-guide.md#clusternetworkpolicy-replication),
 Please check the relevant Antrea Multi-cluster User Guide sections to learn more.
 
 If you want to add a new member cluster to your ClusterSet, you can follow the
