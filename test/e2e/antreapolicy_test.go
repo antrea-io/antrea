@@ -460,13 +460,11 @@ func testACNPAllowXBtoA(t *testing.T) {
 
 	testStep := []*TestStep{
 		{
-			"Port 80",
-			reachability,
-			[]metav1.Object{builder.Get()},
-			[]int32{80},
-			ProtocolTCP,
-			0,
-			nil,
+			Name:          "Port 80",
+			Reachability:  reachability,
+			TestResources: []metav1.Object{builder.Get()},
+			Ports:         []int32{80},
+			Protocol:      ProtocolTCP,
 		},
 	}
 	testCase := []*TestCase{
@@ -520,6 +518,8 @@ func testACNPSourcePort(t *testing.T) {
 			ProtocolTCP,
 			0,
 			nil,
+			nil,
+			nil,
 		},
 		{
 			"Port 81",
@@ -529,6 +529,8 @@ func testACNPSourcePort(t *testing.T) {
 			ProtocolTCP,
 			0,
 			nil,
+			nil,
+			nil,
 		},
 		{
 			"Port range 80-81",
@@ -537,6 +539,8 @@ func testACNPSourcePort(t *testing.T) {
 			[]int32{80, 81},
 			ProtocolTCP,
 			0,
+			nil,
+			nil,
 			nil,
 		},
 	}
@@ -563,13 +567,11 @@ func testACNPAllowXBtoYA(t *testing.T) {
 
 	testStep := []*TestStep{
 		{
-			"NamedPort 81",
-			reachability,
-			[]metav1.Object{builder.Get()},
-			[]int32{81},
-			ProtocolTCP,
-			0,
-			nil,
+			Name:          "NamedPort 81",
+			Reachability:  reachability,
+			TestResources: []metav1.Object{builder.Get()},
+			Ports:         []int32{81},
+			Protocol:      ProtocolTCP,
 		},
 	}
 	testCase := []*TestCase{
@@ -608,13 +610,11 @@ func testACNPPriorityOverrideDefaultDeny(t *testing.T) {
 
 	testStep := []*TestStep{
 		{
-			"Both ACNP",
-			reachabilityBothACNP,
-			[]metav1.Object{builder1.Get(), builder2.Get()},
-			[]int32{80},
-			ProtocolTCP,
-			0,
-			nil,
+			Name:          "Both ACNP",
+			Reachability:  reachabilityBothACNP,
+			TestResources: []metav1.Object{builder1.Get(), builder2.Get()},
+			Ports:         []int32{80},
+			Protocol:      ProtocolTCP,
 		},
 	}
 	testCase := []*TestCase{
@@ -645,13 +645,11 @@ func testACNPAllowNoDefaultIsolation(t *testing.T, protocol AntreaPolicyProtocol
 	reachability := NewReachability(allPods, Connected)
 	testStep := []*TestStep{
 		{
-			"Port 81",
-			reachability,
-			[]metav1.Object{builder.Get()},
-			[]int32{81},
-			protocol,
-			0,
-			nil,
+			Name:          "Port 81",
+			Reachability:  reachability,
+			TestResources: []metav1.Object{builder.Get()},
+			Ports:         []int32{81},
+			Protocol:      protocol,
 		},
 	}
 	testCase := []*TestCase{
@@ -684,13 +682,11 @@ func testACNPDropEgress(t *testing.T, protocol AntreaPolicyProtocol) {
 	reachability.Expect(getPod("z", "a"), getPod("z", "c"), Dropped)
 	testStep := []*TestStep{
 		{
-			"Port 80",
-			reachability,
-			[]metav1.Object{builder.Get()},
-			[]int32{80},
-			protocol,
-			0,
-			nil,
+			Name:          "Port 80",
+			Reachability:  reachability,
+			TestResources: []metav1.Object{builder.Get()},
+			Ports:         []int32{80},
+			Protocol:      protocol,
 		},
 	}
 	testCase := []*TestCase{
@@ -717,13 +713,11 @@ func testACNPDropIngressInSelectedNamespace(t *testing.T) {
 	reachability.ExpectSelf(allPods, Connected)
 	testStep := []*TestStep{
 		{
-			"Port 80",
-			reachability,
-			[]metav1.Object{builder.Get()},
-			[]int32{80},
-			ProtocolTCP,
-			0,
-			nil,
+			Name:          "Port 80",
+			Reachability:  reachability,
+			TestResources: []metav1.Object{builder.Get()},
+			Ports:         []int32{80},
+			Protocol:      ProtocolTCP,
 		},
 	}
 	testCase := []*TestCase{
@@ -755,22 +749,18 @@ func testACNPNoEffectOnOtherProtocols(t *testing.T) {
 
 	testStep := []*TestStep{
 		{
-			"Port 80",
-			reachability1,
-			[]metav1.Object{builder.Get()},
-			[]int32{80},
-			ProtocolTCP,
-			0,
-			nil,
+			Name:          "Port 80",
+			Reachability:  reachability1,
+			TestResources: []metav1.Object{builder.Get()},
+			Ports:         []int32{80},
+			Protocol:      ProtocolTCP,
 		},
 		{
-			"Port 80",
-			reachability2,
-			[]metav1.Object{builder.Get()},
-			[]int32{80},
-			ProtocolUDP,
-			0,
-			nil,
+			Name:          "Port 80",
+			Reachability:  reachability2,
+			TestResources: []metav1.Object{builder.Get()},
+			Ports:         []int32{80},
+			Protocol:      ProtocolUDP,
 		},
 	}
 	testCase := []*TestCase{
@@ -800,14 +790,12 @@ func testACNPAppliedToDenyXBtoCGWithYA(t *testing.T) {
 
 	testStep := []*TestStep{
 		{
-			"NamedPort 81",
-			reachability,
+			Name:         "NamedPort 81",
+			Reachability: reachability,
 			// Note in this testcase the ClusterGroup is created after the ACNP
-			[]metav1.Object{builder.Get(), cgBuilder.Get()},
-			[]int32{81},
-			ProtocolTCP,
-			0,
-			nil,
+			TestResources: []metav1.Object{builder.Get(), cgBuilder.Get()},
+			Ports:         []int32{81},
+			Protocol:      ProtocolTCP,
 		},
 	}
 	testCase := []*TestCase{
@@ -837,13 +825,11 @@ func testACNPIngressRuleDenyCGWithXBtoYA(t *testing.T) {
 
 	testStep := []*TestStep{
 		{
-			"NamedPort 81",
-			reachability,
-			[]metav1.Object{cgBuilder.Get(), builder.Get()},
-			[]int32{81},
-			ProtocolTCP,
-			0,
-			nil,
+			Name:          "NamedPort 81",
+			Reachability:  reachability,
+			TestResources: []metav1.Object{cgBuilder.Get(), builder.Get()},
+			Ports:         []int32{81},
+			Protocol:      ProtocolTCP,
 		},
 	}
 	testCase := []*TestCase{
@@ -870,14 +856,12 @@ func testACNPAppliedToRuleCGWithPodsAToNsZ(t *testing.T) {
 	reachability.Expect(getPod("z", "a"), getPod("z", "c"), Dropped)
 	testStep := []*TestStep{
 		{
-			"Port 80",
-			reachability,
+			Name:         "Port 80",
+			Reachability: reachability,
 			// Note in this testcase the ClusterGroup is created after the ACNP
-			[]metav1.Object{builder.Get(), cgBuilder.Get()},
-			[]int32{80},
-			ProtocolTCP,
-			0,
-			nil,
+			TestResources: []metav1.Object{builder.Get(), cgBuilder.Get()},
+			Ports:         []int32{80},
+			Protocol:      ProtocolTCP,
 		},
 	}
 	testCase := []*TestCase{
@@ -905,14 +889,12 @@ func testACNPEgressRulePodsAToCGWithNsZ(t *testing.T) {
 	reachability.Expect(getPod("z", "a"), getPod("z", "c"), Dropped)
 	testStep := []*TestStep{
 		{
-			"Port 80",
-			reachability,
+			Name:         "Port 80",
+			Reachability: reachability,
 			// Note in this testcase the ClusterGroup is created after the ACNP
-			[]metav1.Object{builder.Get(), cgBuilder.Get()},
-			[]int32{80},
-			ProtocolTCP,
-			0,
-			nil,
+			TestResources: []metav1.Object{builder.Get(), cgBuilder.Get()},
+			Ports:         []int32{80},
+			Protocol:      ProtocolTCP,
 		},
 	}
 	testCase := []*TestCase{
@@ -948,22 +930,18 @@ func testACNPClusterGroupUpdateAppliedTo(t *testing.T) {
 	updatedReachability.Expect(getPod("z", "c"), getPod("z", "b"), Dropped)
 	testStep := []*TestStep{
 		{
-			"CG Pods A",
-			reachability,
-			[]metav1.Object{cgBuilder.Get(), builder.Get()},
-			[]int32{80},
-			ProtocolTCP,
-			0,
-			nil,
+			Name:          "CG Pods A",
+			Reachability:  reachability,
+			TestResources: []metav1.Object{cgBuilder.Get(), builder.Get()},
+			Ports:         []int32{80},
+			Protocol:      ProtocolTCP,
 		},
 		{
-			"CG Pods C - update",
-			updatedReachability,
-			[]metav1.Object{updatedCgBuilder.Get()},
-			[]int32{80},
-			ProtocolTCP,
-			0,
-			nil,
+			Name:          "CG Pods C - update",
+			Reachability:  updatedReachability,
+			TestResources: []metav1.Object{updatedCgBuilder.Get()},
+			Ports:         []int32{80},
+			Protocol:      ProtocolTCP,
 		},
 	}
 	testCase := []*TestCase{
@@ -999,22 +977,18 @@ func testACNPClusterGroupUpdate(t *testing.T) {
 	updatedReachability.Expect(getPod("y", "a"), getPod("y", "c"), Dropped)
 	testStep := []*TestStep{
 		{
-			"Port 80",
-			reachability,
-			[]metav1.Object{cgBuilder.Get(), builder.Get()},
-			[]int32{80},
-			ProtocolTCP,
-			0,
-			nil,
+			Name:          "Port 80",
+			Reachability:  reachability,
+			TestResources: []metav1.Object{cgBuilder.Get(), builder.Get()},
+			Ports:         []int32{80},
+			Protocol:      ProtocolTCP,
 		},
 		{
-			"Port 80 - update",
-			updatedReachability,
-			[]metav1.Object{updatedCgBuilder.Get()},
-			[]int32{80},
-			ProtocolTCP,
-			0,
-			nil,
+			Name:          "Port 80 - update",
+			Reachability:  updatedReachability,
+			TestResources: []metav1.Object{updatedCgBuilder.Get()},
+			Ports:         []int32{80},
+			Protocol:      ProtocolTCP,
 		},
 	}
 	testCase := []*TestCase{
@@ -1051,13 +1025,11 @@ func testACNPClusterGroupAppliedToPodAdd(t *testing.T, data *TestData) {
 	}
 	testStep := []*TestStep{
 		{
-			"Port 80",
-			nil,
-			[]metav1.Object{cgBuilder.Get(), builder.Get()},
-			[]int32{80},
-			ProtocolTCP,
-			0,
-			cp,
+			Name:          "Port 80",
+			TestResources: []metav1.Object{cgBuilder.Get(), builder.Get()},
+			Ports:         []int32{80},
+			Protocol:      ProtocolTCP,
+			CustomProbes:  cp,
 		},
 	}
 	testCase := []*TestCase{
@@ -1099,14 +1071,12 @@ func testACNPClusterGroupRefRulePodAdd(t *testing.T, data *TestData) {
 	}
 	testStep := []*TestStep{
 		{
-			"Port 80",
-			nil,
+			Name: "Port 80",
 			// Note in this testcase the ClusterGroup is created after the ACNP
-			[]metav1.Object{builder.Get(), cgBuilder.Get()},
-			[]int32{80},
-			ProtocolTCP,
-			0,
-			cp,
+			TestResources: []metav1.Object{builder.Get(), cgBuilder.Get()},
+			Ports:         []int32{80},
+			Protocol:      ProtocolTCP,
+			CustomProbes:  cp,
 		},
 	}
 	testCase := []*TestCase{
@@ -1169,13 +1139,11 @@ func testACNPClusterGroupRefRuleIPBlocks(t *testing.T) {
 	reachability.Expect(getPod("z", "a"), getPod("y", "a"), Dropped)
 	testStep := []*TestStep{
 		{
-			"Port 80",
-			reachability,
-			[]metav1.Object{builder.Get(), cgBuilder.Get(), cgBuilder2.Get()},
-			[]int32{80},
-			ProtocolTCP,
-			0,
-			nil,
+			Name:          "Port 80",
+			Reachability:  reachability,
+			TestResources: []metav1.Object{builder.Get(), cgBuilder.Get(), cgBuilder2.Get()},
+			Ports:         []int32{80},
+			Protocol:      ProtocolTCP,
 		},
 	}
 	testCase := []*TestCase{
@@ -1200,14 +1168,12 @@ func testANNPEgressRulePodsAToGrpWithPodsC(t *testing.T) {
 	reachability.Expect(getPod("x", "a"), getPod("x", "c"), Dropped)
 	testStep := []*TestStep{
 		{
-			"Port 80",
-			reachability,
+			Name:         "Port 80",
+			Reachability: reachability,
 			// Note in this testcase the Group is created after the ANNP
-			[]metav1.Object{builder.Get(), grpBuilder.Get()},
-			[]int32{80},
-			ProtocolTCP,
-			0,
-			nil,
+			TestResources: []metav1.Object{builder.Get(), grpBuilder.Get()},
+			Ports:         []int32{80},
+			Protocol:      ProtocolTCP,
 		},
 	}
 	testCase := []*TestCase{
@@ -1235,13 +1201,11 @@ func testANNPIngressRuleDenyGrpWithXCtoXA(t *testing.T) {
 
 	testStep := []*TestStep{
 		{
-			"NamedPort 81",
-			reachability,
-			[]metav1.Object{grpBuilder.Get(), builder.Get()},
-			[]int32{81},
-			ProtocolTCP,
-			0,
-			nil,
+			Name:          "NamedPort 81",
+			Reachability:  reachability,
+			TestResources: []metav1.Object{grpBuilder.Get(), builder.Get()},
+			Ports:         []int32{81},
+			Protocol:      ProtocolTCP,
 		},
 	}
 	testCase := []*TestCase{
@@ -1271,22 +1235,18 @@ func testANNPGroupUpdate(t *testing.T) {
 	updatedReachability.Expect(getPod("x", "a"), getPod("x", "b"), Dropped)
 	testStep := []*TestStep{
 		{
-			"Port 80",
-			reachability,
-			[]metav1.Object{grpBuilder.Get(), builder.Get()},
-			[]int32{80},
-			ProtocolTCP,
-			0,
-			nil,
+			Name:          "Port 80",
+			Reachability:  reachability,
+			TestResources: []metav1.Object{grpBuilder.Get(), builder.Get()},
+			Ports:         []int32{80},
+			Protocol:      ProtocolTCP,
 		},
 		{
-			"Port 80 - update",
-			updatedReachability,
-			[]metav1.Object{updatedGrpBuilder.Get()},
-			[]int32{80},
-			ProtocolTCP,
-			0,
-			nil,
+			Name:          "Port 80 - update",
+			Reachability:  updatedReachability,
+			TestResources: []metav1.Object{updatedGrpBuilder.Get()},
+			Ports:         []int32{80},
+			Protocol:      ProtocolTCP,
 		},
 	}
 	testCase := []*TestCase{
@@ -1314,14 +1274,12 @@ func testANNPAppliedToDenyXBtoGrpWithXA(t *testing.T) {
 
 	testStep := []*TestStep{
 		{
-			"NamedPort 81",
-			reachability,
+			Name:         "NamedPort 81",
+			Reachability: reachability,
 			// Note in this testcase the Group is created after the ANNP
-			[]metav1.Object{builder.Get(), grpBuilder.Get()},
-			[]int32{81},
-			ProtocolTCP,
-			0,
-			nil,
+			TestResources: []metav1.Object{builder.Get(), grpBuilder.Get()},
+			Ports:         []int32{81},
+			Protocol:      ProtocolTCP,
 		},
 	}
 	testCase := []*TestCase{
@@ -1345,14 +1303,12 @@ func testANNPAppliedToRuleGrpWithPodsAToPodsC(t *testing.T) {
 	reachability.Expect(getPod("x", "a"), getPod("x", "c"), Dropped)
 	testStep := []*TestStep{
 		{
-			"Port 80",
-			reachability,
+			Name:         "Port 80",
+			Reachability: reachability,
 			// Note in this testcase the Group is created after the ANNP
-			[]metav1.Object{builder.Get(), grpBuilder.Get()},
-			[]int32{80},
-			ProtocolTCP,
-			0,
-			nil,
+			TestResources: []metav1.Object{builder.Get(), grpBuilder.Get()},
+			Ports:         []int32{80},
+			Protocol:      ProtocolTCP,
 		},
 	}
 	testCase := []*TestCase{
@@ -1382,22 +1338,18 @@ func testANNPGroupUpdateAppliedTo(t *testing.T) {
 	updatedReachability.Expect(getPod("x", "b"), getPod("x", "c"), Dropped)
 	testStep := []*TestStep{
 		{
-			"GRP Pods X/C",
-			reachability,
-			[]metav1.Object{grpBuilder.Get(), builder.Get()},
-			[]int32{80},
-			ProtocolTCP,
-			0,
-			nil,
+			Name:          "GRP Pods X/C",
+			Reachability:  reachability,
+			TestResources: []metav1.Object{grpBuilder.Get(), builder.Get()},
+			Ports:         []int32{80},
+			Protocol:      ProtocolTCP,
 		},
 		{
-			"GRP Pods X/B - update",
-			updatedReachability,
-			[]metav1.Object{updatedGrpBuilder.Get()},
-			[]int32{80},
-			ProtocolTCP,
-			0,
-			nil,
+			Name:          "GRP Pods X/B - update",
+			Reachability:  updatedReachability,
+			TestResources: []metav1.Object{updatedGrpBuilder.Get()},
+			Ports:         []int32{80},
+			Protocol:      ProtocolTCP,
 		},
 	}
 	testCase := []*TestCase{
@@ -1432,13 +1384,11 @@ func testANNPGroupAppliedToPodAdd(t *testing.T, data *TestData) {
 	}
 	testStep := []*TestStep{
 		{
-			"Port 80",
-			nil,
-			[]metav1.Object{grpBuilder.Get(), builder.Get()},
-			[]int32{80},
-			ProtocolTCP,
-			0,
-			cp,
+			Name:          "Port 80",
+			TestResources: []metav1.Object{grpBuilder.Get(), builder.Get()},
+			Ports:         []int32{80},
+			Protocol:      ProtocolTCP,
+			CustomProbes:  cp,
 		},
 	}
 	testCase := []*TestCase{
@@ -1482,13 +1432,12 @@ func testANNPGroupServiceRefPodAdd(t *testing.T, data *TestData) {
 	reachability := NewReachability(allPods, Connected)
 	reachability.Expect(getPod("x", "b"), getPod("x", "a"), Dropped)
 	testStep := &TestStep{
-		"Port 80 updated",
-		reachability,
-		[]metav1.Object{svc1, svc2, grpBuilder1.Get(), grpBuilder2.Get(), builder.Get()},
-		[]int32{80},
-		ProtocolTCP,
-		0,
-		cp,
+		Name:          "Port 80 updated",
+		Reachability:  reachability,
+		TestResources: []metav1.Object{svc1, svc2, grpBuilder1.Get(), grpBuilder2.Get(), builder.Get()},
+		Ports:         []int32{80},
+		Protocol:      ProtocolTCP,
+		CustomProbes:  cp,
 	}
 
 	testSteps := []*TestStep{testStep}
@@ -1568,13 +1517,11 @@ func testANNPGroupServiceRefCreateAndUpdate(t *testing.T) {
 	reachability := NewReachability(allPods, Connected)
 	reachability.Expect(getPod("x", "b"), getPod("x", "a"), Dropped)
 	testStep1 := &TestStep{
-		"Port 80",
-		reachability,
-		[]metav1.Object{svc1, svc2, grpBuilder1.Get(), grpBuilder2.Get(), builder.Get()},
-		[]int32{80},
-		ProtocolTCP,
-		0,
-		nil,
+		Name:          "Port 80",
+		Reachability:  reachability,
+		TestResources: []metav1.Object{svc1, svc2, grpBuilder1.Get(), grpBuilder2.Get(), builder.Get()},
+		Ports:         []int32{80},
+		Protocol:      ProtocolTCP,
 	}
 
 	// Test update selector of Service referred in grp-svc1, and update serviceReference of grp-svc2.
@@ -1586,13 +1533,11 @@ func testANNPGroupServiceRefCreateAndUpdate(t *testing.T) {
 	reachability2 := NewReachability(allPods, Connected)
 	reachability2.Expect(getPod("x", "c"), getPod("x", "b"), Dropped)
 	testStep2 := &TestStep{
-		"Port 80 updated",
-		reachability2,
-		[]metav1.Object{svc1Updated, svc3, grpBuilder1.Get(), grpBuilder2Updated.Get()},
-		[]int32{80},
-		ProtocolTCP,
-		0,
-		nil,
+		Name:          "Port 80 updated",
+		Reachability:  reachability2,
+		TestResources: []metav1.Object{svc1Updated, svc3, grpBuilder1.Get(), grpBuilder2Updated.Get()},
+		Ports:         []int32{80},
+		Protocol:      ProtocolTCP,
 	}
 
 	testSteps := []*TestStep{testStep1, testStep2}
@@ -1638,13 +1583,11 @@ func testANNPGroupRefRuleIPBlocks(t *testing.T) {
 	reachability.Expect(getPod("x", "c"), getPod("x", "a"), Dropped)
 	testStep := []*TestStep{
 		{
-			"Port 80",
-			reachability,
-			[]metav1.Object{builder.Get(), grpBuilder.Get()},
-			[]int32{80},
-			ProtocolTCP,
-			0,
-			nil,
+			Name:          "Port 80",
+			Reachability:  reachability,
+			TestResources: []metav1.Object{builder.Get(), grpBuilder.Get()},
+			Ports:         []int32{80},
+			Protocol:      ProtocolTCP,
 		},
 	}
 	testCase := []*TestCase{
@@ -1681,14 +1624,12 @@ func testANNPNestedGroupCreateAndUpdate(t *testing.T, data *TestData) {
 	reachability.ExpectSelf(allPods, Connected)
 
 	testStep1 := &TestStep{
-		"Port 80",
-		reachability,
+		Name:         "Port 80",
+		Reachability: reachability,
 		// Note in this testcase the Group is created after the ANNP
-		[]metav1.Object{builder.Get(), svc1, grpBuilder1.Get(), grpBuilderNested.Get()},
-		[]int32{80},
-		ProtocolTCP,
-		0,
-		nil,
+		TestResources: []metav1.Object{builder.Get(), svc1, grpBuilder1.Get(), grpBuilderNested.Get()},
+		Ports:         []int32{80},
+		Protocol:      ProtocolTCP,
 	}
 
 	// Test update "grp-nested" to include "grp-select-x-b" as well.
@@ -1714,13 +1655,12 @@ func testANNPNestedGroupCreateAndUpdate(t *testing.T, data *TestData) {
 		},
 	}
 	testStep2 := &TestStep{
-		"Port 80 updated",
-		reachability2,
-		[]metav1.Object{grpBuilder2.Get(), grpBuilderNested.Get()},
-		[]int32{80},
-		ProtocolTCP,
-		0,
-		cp,
+		Name:          "Port 80 updated",
+		Reachability:  reachability2,
+		TestResources: []metav1.Object{grpBuilder2.Get(), grpBuilderNested.Get()},
+		Ports:         []int32{80},
+		Protocol:      ProtocolTCP,
+		CustomProbes:  cp,
 	}
 
 	// In this testStep grp3 is created. It's members should reflect in grp-nested
@@ -1731,13 +1671,11 @@ func testANNPNestedGroupCreateAndUpdate(t *testing.T, data *TestData) {
 	reachability3.ExpectEgressToNamespace(getPod("x", "c"), getNS("x"), Dropped)
 	reachability3.ExpectSelf(allPods, Connected)
 	testStep3 := &TestStep{
-		"Port 80 updated",
-		reachability3,
-		[]metav1.Object{grpBuilder3.Get()},
-		[]int32{80},
-		ProtocolTCP,
-		0,
-		nil,
+		Name:          "Port 80 updated",
+		Reachability:  reachability3,
+		TestResources: []metav1.Object{grpBuilder3.Get()},
+		Ports:         []int32{80},
+		Protocol:      ProtocolTCP,
 	}
 
 	testSteps := []*TestStep{testStep1, testStep2, testStep3}
@@ -1786,13 +1724,11 @@ func testBaselineNamespaceIsolation(t *testing.T) {
 	reachability.ExpectIngressFromNamespace(getPod("x", "c"), getNS("z"), Dropped)
 	testStep := []*TestStep{
 		{
-			"Port 80",
-			reachability,
-			[]metav1.Object{builder.Get(), k8sNPBuilder.Get()},
-			[]int32{80},
-			ProtocolTCP,
-			0,
-			nil,
+			Name:          "Port 80",
+			Reachability:  reachability,
+			TestResources: []metav1.Object{builder.Get(), k8sNPBuilder.Get()},
+			Ports:         []int32{80},
+			Protocol:      ProtocolTCP,
 		},
 	}
 	testCase := []*TestCase{
@@ -1850,25 +1786,21 @@ func testACNPPriorityOverride(t *testing.T) {
 
 	testStepTwoACNP := []*TestStep{
 		{
-			"Two Policies with different priorities",
-			reachabilityTwoACNPs,
-			[]metav1.Object{builder3.Get(), builder2.Get()},
-			[]int32{80},
-			ProtocolTCP,
-			0,
-			nil,
+			Name:          "Two Policies with different priorities",
+			Reachability:  reachabilityTwoACNPs,
+			TestResources: []metav1.Object{builder3.Get(), builder2.Get()},
+			Ports:         []int32{80},
+			Protocol:      ProtocolTCP,
 		},
 	}
 	// Create the Policies in specific order to make sure that priority re-assignments work as expected.
 	testStepAll := []*TestStep{
 		{
-			"All three Policies",
-			reachabilityAllACNPs,
-			[]metav1.Object{builder3.Get(), builder1.Get(), builder2.Get()},
-			[]int32{80},
-			ProtocolTCP,
-			0,
-			nil,
+			Name:          "All three Policies",
+			Reachability:  reachabilityAllACNPs,
+			TestResources: []metav1.Object{builder3.Get(), builder1.Get(), builder2.Get()},
+			Ports:         []int32{80},
+			Protocol:      ProtocolTCP,
 		},
 	}
 	testCase := []*TestCase{
@@ -1927,24 +1859,20 @@ func testACNPTierOverride(t *testing.T) {
 
 	testStepTwoACNP := []*TestStep{
 		{
-			"Two Policies in different tiers",
-			reachabilityTwoACNPs,
-			[]metav1.Object{builder3.Get(), builder2.Get()},
-			[]int32{80},
-			ProtocolTCP,
-			0,
-			nil,
+			Name:          "Two Policies in different tiers",
+			Reachability:  reachabilityTwoACNPs,
+			TestResources: []metav1.Object{builder3.Get(), builder2.Get()},
+			Ports:         []int32{80},
+			Protocol:      ProtocolTCP,
 		},
 	}
 	testStepAll := []*TestStep{
 		{
-			"All three Policies in different tiers",
-			reachabilityAllACNPs,
-			[]metav1.Object{builder3.Get(), builder1.Get(), builder2.Get()},
-			[]int32{80},
-			ProtocolTCP,
-			0,
-			nil,
+			Name:          "All three Policies in different tiers",
+			Reachability:  reachabilityAllACNPs,
+			TestResources: []metav1.Object{builder3.Get(), builder1.Get(), builder2.Get()},
+			Ports:         []int32{80},
+			Protocol:      ProtocolTCP,
 		},
 	}
 	testCase := []*TestCase{
@@ -1992,13 +1920,11 @@ func testACNPCustomTiers(t *testing.T) {
 	reachabilityTwoACNPs.Expect(getPod("z", "c"), getPod("x", "c"), Dropped)
 	testStepTwoACNP := []*TestStep{
 		{
-			"Two Policies in different tiers",
-			reachabilityTwoACNPs,
-			[]metav1.Object{builder2.Get(), builder1.Get()},
-			[]int32{80},
-			ProtocolTCP,
-			0,
-			nil,
+			Name:          "Two Policies in different tiers",
+			Reachability:  reachabilityTwoACNPs,
+			TestResources: []metav1.Object{builder2.Get(), builder1.Get()},
+			Ports:         []int32{80},
+			Protocol:      ProtocolTCP,
 		},
 	}
 	testCase := []*TestCase{
@@ -2036,13 +1962,11 @@ func testACNPPriorityConflictingRule(t *testing.T) {
 	reachabilityBothACNP.ExpectEgressToNamespace(getPod("z", "c"), getNS("x"), Dropped)
 	testStep := []*TestStep{
 		{
-			"Both ACNP",
-			reachabilityBothACNP,
-			[]metav1.Object{builder1.Get(), builder2.Get()},
-			[]int32{80},
-			ProtocolTCP,
-			0,
-			nil,
+			Name:          "Both ACNP",
+			Reachability:  reachabilityBothACNP,
+			TestResources: []metav1.Object{builder1.Get(), builder2.Get()},
+			Ports:         []int32{80},
+			Protocol:      ProtocolTCP,
 		},
 	}
 	testCase := []*TestCase{
@@ -2083,13 +2007,11 @@ func testACNPRulePriority(t *testing.T) {
 	reachabilityBothACNP.ExpectIngressFromNamespace(getPod("y", "c"), getNS("x"), Dropped)
 	testStep := []*TestStep{
 		{
-			"Both ACNP",
-			reachabilityBothACNP,
-			[]metav1.Object{builder2.Get(), builder1.Get()},
-			[]int32{80},
-			ProtocolTCP,
-			0,
-			nil,
+			Name:          "Both ACNP",
+			Reachability:  reachabilityBothACNP,
+			TestResources: []metav1.Object{builder2.Get(), builder1.Get()},
+			Ports:         []int32{80},
+			Protocol:      ProtocolTCP,
 		},
 	}
 	testCase := []*TestCase{
@@ -2114,13 +2036,11 @@ func testACNPPortRange(t *testing.T) {
 	reachability.Expect(getPod("z", "a"), getPod("z", "c"), Dropped)
 	testSteps := []*TestStep{
 		{
-			fmt.Sprintf("ACNP Drop Ports 8080:8082"),
-			reachability,
-			[]metav1.Object{builder.Get()},
-			[]int32{8080, 8081, 8082},
-			ProtocolTCP,
-			0,
-			nil,
+			Name:          fmt.Sprintf("ACNP Drop Ports 8080:8082"),
+			Reachability:  reachability,
+			TestResources: []metav1.Object{builder.Get()},
+			Ports:         []int32{8080, 8081, 8082},
+			Protocol:      ProtocolTCP,
 		},
 	}
 
@@ -2146,13 +2066,11 @@ func testACNPRejectEgress(t *testing.T) {
 	reachability.Expect(getPod("z", "a"), getPod("z", "c"), Rejected)
 	testStep := []*TestStep{
 		{
-			"Port 80",
-			reachability,
-			[]metav1.Object{builder.Get()},
-			[]int32{80},
-			ProtocolTCP,
-			0,
-			nil,
+			Name:          "Port 80",
+			Reachability:  reachability,
+			TestResources: []metav1.Object{builder.Get()},
+			Ports:         []int32{80},
+			Protocol:      ProtocolTCP,
 		},
 	}
 	testCase := []*TestCase{
@@ -2177,13 +2095,11 @@ func testACNPRejectIngress(t *testing.T, protocol AntreaPolicyProtocol) {
 	reachability.Expect(getPod("z", "c"), getPod("z", "a"), Rejected)
 	testStep := []*TestStep{
 		{
-			"Port 80",
-			reachability,
-			[]metav1.Object{builder.Get()},
-			[]int32{80},
-			protocol,
-			0,
-			nil,
+			Name:          "Port 80",
+			Reachability:  reachability,
+			TestResources: []metav1.Object{builder.Get()},
+			Ports:         []int32{80},
+			Protocol:      protocol,
 		},
 	}
 	testCase := []*TestCase{
@@ -2400,13 +2316,11 @@ func testANNPPortRange(t *testing.T) {
 
 	var testSteps []*TestStep
 	testSteps = append(testSteps, &TestStep{
-		fmt.Sprintf("ANNP Drop Ports 8080:8082"),
-		reachability,
-		[]metav1.Object{builder.Get()},
-		[]int32{8080, 8081, 8082},
-		ProtocolTCP,
-		0,
-		nil,
+		Name:          fmt.Sprintf("ANNP Drop Ports 8080:8082"),
+		Reachability:  reachability,
+		TestResources: []metav1.Object{builder.Get()},
+		Ports:         []int32{8080, 8081, 8082},
+		Protocol:      ProtocolTCP,
 	})
 
 	testCase := []*TestCase{
@@ -2429,13 +2343,11 @@ func testANNPBasic(t *testing.T) {
 	reachability.Expect(getPod("x", "b"), getPod("y", "a"), Dropped)
 	testStep := []*TestStep{
 		{
-			"Port 80",
-			reachability,
-			[]metav1.Object{builder.Get()},
-			[]int32{80},
-			ProtocolTCP,
-			0,
-			nil,
+			Name:          "Port 80",
+			Reachability:  reachability,
+			TestResources: []metav1.Object{builder.Get()},
+			Ports:         []int32{80},
+			Protocol:      ProtocolTCP,
 		},
 	}
 	// build a K8s NetworkPolicy that has the same appliedTo but allows all traffic.
@@ -2446,13 +2358,11 @@ func testANNPBasic(t *testing.T) {
 		nil, nil, nil, nil)
 	testStep2 := []*TestStep{
 		{
-			"Port 80",
-			reachability,
-			[]metav1.Object{builder.Get(), k8sNPBuilder.Get()},
-			[]int32{80},
-			ProtocolTCP,
-			0,
-			nil,
+			Name:          "Port 80",
+			Reachability:  reachability,
+			TestResources: []metav1.Object{builder.Get(), k8sNPBuilder.Get()},
+			Ports:         []int32{80},
+			Protocol:      ProtocolTCP,
 		},
 	}
 	testCase := []*TestCase{
@@ -2845,13 +2755,11 @@ func testAppliedToPerRule(t *testing.T) {
 	reachability.Expect(getPod("z", "b"), getPod("y", "b"), Dropped)
 	testStep := []*TestStep{
 		{
-			"Port 80",
-			reachability,
-			[]metav1.Object{builder.Get()},
-			[]int32{80},
-			ProtocolTCP,
-			0,
-			nil,
+			Name:          "Port 80",
+			Reachability:  reachability,
+			TestResources: []metav1.Object{builder.Get()},
+			Ports:         []int32{80},
+			Protocol:      ProtocolTCP,
 		},
 	}
 
@@ -2873,16 +2781,13 @@ func testAppliedToPerRule(t *testing.T) {
 	reachability2.Expect(getPod("z", "b"), getPod("y", "b"), Dropped)
 	testStep2 := []*TestStep{
 		{
-			"Port 80",
-			reachability2,
-			[]metav1.Object{builder2.Get()},
-			[]int32{80},
-			ProtocolTCP,
-			0,
-			nil,
+			Name:          "Port 80",
+			Reachability:  reachability2,
+			TestResources: []metav1.Object{builder2.Get()},
+			Ports:         []int32{80},
+			Protocol:      ProtocolTCP,
 		},
 	}
-
 	testCase := []*TestCase{
 		{"ANNP AppliedTo per rule", testStep},
 		{"ACNP AppliedTo per rule", testStep2},
@@ -2909,13 +2814,11 @@ func testACNPClusterGroupServiceRefCreateAndUpdate(t *testing.T, data *TestData)
 	reachability := NewReachability(allPods, Connected)
 	reachability.Expect(getPod("y", "b"), getPod("x", "a"), Dropped)
 	testStep1 := &TestStep{
-		"Port 80",
-		reachability,
-		[]metav1.Object{svc1, svc2, cgBuilder1.Get(), cgBuilder2.Get(), builder.Get()},
-		[]int32{80},
-		ProtocolTCP,
-		0,
-		nil,
+		Name:          "Port 80",
+		Reachability:  reachability,
+		TestResources: []metav1.Object{svc1, svc2, cgBuilder1.Get(), cgBuilder2.Get(), builder.Get()},
+		Ports:         []int32{80},
+		Protocol:      ProtocolTCP,
 	}
 
 	// Test update selector of Service referred in cg-svc1, and update serviceReference of cg-svc2.
@@ -2943,13 +2846,12 @@ func testACNPClusterGroupServiceRefCreateAndUpdate(t *testing.T, data *TestData)
 	reachability2 := NewReachability(allPods, Connected)
 	reachability2.Expect(getPod("y", "a"), getPod("x", "b"), Dropped)
 	testStep2 := &TestStep{
-		"Port 80 updated",
-		reachability2,
-		[]metav1.Object{svc1Updated, svc3, cgBuilder1.Get(), cgBuilder2Updated.Get()},
-		[]int32{80},
-		ProtocolTCP,
-		0,
-		cp,
+		Name:          "Port 80 updated",
+		Reachability:  reachability2,
+		TestResources: []metav1.Object{svc1Updated, svc3, cgBuilder1.Get(), cgBuilder2Updated.Get()},
+		Ports:         []int32{80},
+		Protocol:      ProtocolTCP,
+		CustomProbes:  cp,
 	}
 
 	builderUpdated := &ClusterNetworkPolicySpecBuilder{}
@@ -2960,13 +2862,11 @@ func testACNPClusterGroupServiceRefCreateAndUpdate(t *testing.T, data *TestData)
 
 	// Pod x/a should not allow ingress from y/b per the updated ACNP spec.
 	testStep3 := &TestStep{
-		"Port 80 ACNP spec updated to selector",
-		reachability,
-		[]metav1.Object{builderUpdated.Get()},
-		[]int32{80},
-		ProtocolTCP,
-		0,
-		nil,
+		Name:          "Port 80 ACNP spec updated to selector",
+		Reachability:  reachability,
+		TestResources: []metav1.Object{builderUpdated.Get()},
+		Ports:         []int32{80},
+		Protocol:      ProtocolTCP,
 	}
 
 	testSteps := []*TestStep{testStep1, testStep2, testStep3}
@@ -3007,14 +2907,12 @@ func testACNPNestedClusterGroupCreateAndUpdate(t *testing.T, data *TestData) {
 	reachability.ExpectEgressToNamespace(getPod("x", "a"), getNS("z"), Dropped)
 
 	testStep1 := &TestStep{
-		"Port 80",
-		reachability,
+		Name:         "Port 80",
+		Reachability: reachability,
 		// Note in this testcase the ClusterGroup is created after the ACNP
-		[]metav1.Object{builder.Get(), svc1, cgBuilder1.Get(), cgBuilderNested.Get()},
-		[]int32{80},
-		ProtocolTCP,
-		0,
-		nil,
+		TestResources: []metav1.Object{builder.Get(), svc1, cgBuilder1.Get(), cgBuilderNested.Get()},
+		Ports:         []int32{80},
+		Protocol:      ProtocolTCP,
 	}
 
 	// Test update "cg-nested" to include "cg-select-y-b" as well.
@@ -3039,13 +2937,12 @@ func testACNPNestedClusterGroupCreateAndUpdate(t *testing.T, data *TestData) {
 		},
 	}
 	testStep2 := &TestStep{
-		"Port 80 updated",
-		reachability2,
-		[]metav1.Object{cgBuilder2.Get(), cgBuilderNested.Get()},
-		[]int32{80},
-		ProtocolTCP,
-		0,
-		cp,
+		Name:          "Port 80 updated",
+		Reachability:  reachability2,
+		TestResources: []metav1.Object{cgBuilder2.Get(), cgBuilderNested.Get()},
+		Ports:         []int32{80},
+		Protocol:      ProtocolTCP,
+		CustomProbes:  cp,
 	}
 
 	// In this testStep cg3 is created. It's members should reflect in cg-nested
@@ -3055,13 +2952,11 @@ func testACNPNestedClusterGroupCreateAndUpdate(t *testing.T, data *TestData) {
 	reachability3.ExpectEgressToNamespace(getPod("y", "b"), getNS("z"), Dropped)
 	reachability3.ExpectEgressToNamespace(getPod("y", "c"), getNS("z"), Dropped)
 	testStep3 := &TestStep{
-		"Port 80 updated",
-		reachability3,
-		[]metav1.Object{cgBuilder3.Get()},
-		[]int32{80},
-		ProtocolTCP,
-		0,
-		nil,
+		Name:          "Port 80 updated",
+		Reachability:  reachability3,
+		TestResources: []metav1.Object{cgBuilder3.Get()},
+		Ports:         []int32{80},
+		Protocol:      ProtocolTCP,
 	}
 
 	testSteps := []*TestStep{testStep1, testStep2, testStep3}
@@ -3114,13 +3009,11 @@ func testACNPNestedIPBlockClusterGroupCreateAndUpdate(t *testing.T) {
 	reachability.Expect(getPod("x", "a"), getPod("y", "a"), Dropped)
 	reachability.Expect(getPod("x", "b"), getPod("y", "a"), Dropped)
 	testStep := &TestStep{
-		"Port 80",
-		reachability,
-		[]metav1.Object{builder.Get(), cgBuilder1.Get(), cgBuilder2.Get(), cgParent.Get()},
-		[]int32{80},
-		ProtocolTCP,
-		0,
-		nil,
+		Name:          "Port 80",
+		Reachability:  reachability,
+		TestResources: []metav1.Object{builder.Get(), cgBuilder1.Get(), cgBuilder2.Get(), cgParent.Get()},
+		Ports:         []int32{80},
+		Protocol:      ProtocolTCP,
 	}
 
 	cgBuilder3 := &ClusterGroupSpecBuilder{}
@@ -3134,13 +3027,11 @@ func testACNPNestedIPBlockClusterGroupCreateAndUpdate(t *testing.T) {
 	reachability2.Expect(getPod("x", "a"), getPod("y", "a"), Dropped)
 	reachability2.Expect(getPod("x", "c"), getPod("y", "a"), Dropped)
 	testStep2 := &TestStep{
-		"Port 80, updated",
-		reachability2,
-		[]metav1.Object{cgBuilder3.Get(), updatedCGParent.Get()},
-		[]int32{80},
-		ProtocolTCP,
-		0,
-		nil,
+		Name:          "Port 80, updated",
+		Reachability:  reachability2,
+		TestResources: []metav1.Object{cgBuilder3.Get(), updatedCGParent.Get()},
+		Ports:         []int32{80},
+		Protocol:      ProtocolTCP,
 	}
 
 	testCase := []*TestCase{
@@ -3164,13 +3055,11 @@ func testACNPNamespaceIsolation(t *testing.T) {
 	reachability := NewReachability(allPods, Dropped)
 	reachability.ExpectAllSelfNamespace(Connected)
 	testStep1 := &TestStep{
-		"Port 80",
-		reachability,
-		[]metav1.Object{builder.Get()},
-		[]int32{80},
-		ProtocolTCP,
-		0,
-		nil,
+		Name:          "Port 80",
+		Reachability:  reachability,
+		TestResources: []metav1.Object{builder.Get()},
+		Ports:         []int32{80},
+		Protocol:      ProtocolTCP,
 	}
 
 	builder2 := &ClusterNetworkPolicySpecBuilder{}
@@ -3190,13 +3079,11 @@ func testACNPNamespaceIsolation(t *testing.T) {
 	reachability2.ExpectEgressToNamespace(getPod("x", "c"), getNS("y"), Dropped)
 	reachability2.ExpectEgressToNamespace(getPod("x", "c"), getNS("z"), Dropped)
 	testStep2 := &TestStep{
-		"Port 80",
-		reachability2,
-		[]metav1.Object{builder2.Get()},
-		[]int32{80},
-		ProtocolTCP,
-		0,
-		nil,
+		Name:          "Port 80",
+		Reachability:  reachability2,
+		TestResources: []metav1.Object{builder2.Get()},
+		Ports:         []int32{80},
+		Protocol:      ProtocolTCP,
 	}
 
 	testCase := []*TestCase{
@@ -3221,13 +3108,11 @@ func testACNPStrictNamespacesIsolation(t *testing.T) {
 	reachability := NewReachability(allPods, Dropped)
 	reachability.ExpectAllSelfNamespace(Connected)
 	testStep1 := &TestStep{
-		"Namespace isolation, Port 80",
-		reachability,
-		[]metav1.Object{builder.Get()},
-		[]int32{80},
-		ProtocolTCP,
-		0,
-		nil,
+		Name:          "Namespace isolation, Port 80",
+		Reachability:  reachability,
+		TestResources: []metav1.Object{builder.Get()},
+		Ports:         []int32{80},
+		Protocol:      ProtocolTCP,
 	}
 
 	// Add a K8s namespaced NetworkPolicy in ns x that isolates all Pods in that namespace.
@@ -3239,13 +3124,11 @@ func testACNPStrictNamespacesIsolation(t *testing.T) {
 	reachability2.ExpectSelfNamespace(getNS("x"), Dropped)
 	reachability2.ExpectSelf(allPods, Connected)
 	testStep2 := &TestStep{
-		"Namespace isolation with K8s NP, Port 80",
-		reachability2,
-		[]metav1.Object{builder2.Get()},
-		[]int32{80},
-		ProtocolTCP,
-		0,
-		nil,
+		Name:          "Namespace isolation with K8s NP, Port 80",
+		Reachability:  reachability2,
+		TestResources: []metav1.Object{builder2.Get()},
+		Ports:         []int32{80},
+		Protocol:      ProtocolTCP,
 	}
 
 	testCase := []*TestCase{
@@ -3285,27 +3168,25 @@ func testACNPStrictNamespacesIsolationByLabels(t *testing.T) {
 	reachability.ExpectSelfNamespace(getNS("no-tier"), Dropped)
 	reachability.ExpectSelf(allPods, Connected)
 
-	testStep1 := &TestStep{
-		"Namespace isolation by label, Port 80",
-		reachability,
-		[]metav1.Object{builder.Get()},
-		[]int32{80},
-		ProtocolTCP,
-		0,
-		nil,
+	testStep := &TestStep{
+		Name:          "Namespace isolation by label, Port 80",
+		Reachability:  reachability,
+		TestResources: []metav1.Object{builder.Get()},
+		Ports:         []int32{80},
+		Protocol:      ProtocolTCP,
 	}
 	testCase := []*TestCase{
-		{"ACNP strict Namespace isolation by Namespace purpose and tier labels", []*TestStep{testStep1}},
+		{"ACNP strict Namespace isolation by Namespace purpose and tier labels", []*TestStep{testStep}},
 	}
 	executeTests(t, testCase)
 }
 
-func testACNPStrictNamespacesIsolationBySingleLabel(t *testing.T) {
+func testACNPStrictNamespacesIsolationBySingleLabel(t *testing.T, data *TestData) {
 	samePurposeTierLabels := &crdv1beta1.PeerNamespaces{
 		SameLabels: []string{"purpose"},
 	}
 	builder := &ClusterNetworkPolicySpecBuilder{}
-	builder = builder.SetName("test-acnp-strict-ns-isolation-by-single-label").
+	builder = builder.SetName("test-acnp-strict-ns-isolation-by-single-purpose-label").
 		SetTier("securityops").
 		SetPriority(1.0).
 		SetAppliedToGroup([]ACNPAppliedToSpec{{NSSelector: map[string]string{}}})
@@ -3325,19 +3206,52 @@ func testACNPStrictNamespacesIsolationBySingleLabel(t *testing.T) {
 	reachability.ExpectNamespaceIngressFromNamespace(getNS("dev1"), getNS("no-tier"), Dropped)
 	reachability.ExpectNamespaceIngressFromNamespace(getNS("dev2"), getNS("no-tier"), Dropped)
 
-	testStep1 := &TestStep{
-		"Namespace isolation by single label, Port 80",
-		reachability,
-		[]metav1.Object{builder.Get()},
-		[]int32{80},
-		ProtocolTCP,
-		0,
-		nil,
+	testStep := &TestStep{
+		Name:          "Namespace isolation by single label, Port 80",
+		Reachability:  reachability,
+		TestResources: []metav1.Object{builder.Get()},
+		Ports:         []int32{80},
+		Protocol:      ProtocolTCP,
+	}
+
+	labelNoTierNS := func() {
+		nsReturned, err := data.clientset.CoreV1().Namespaces().Get(context.TODO(), getNS("no-tier"), metav1.GetOptions{})
+		if err != nil {
+			t.Errorf("failed to get the Namespace that has no tier label")
+		}
+		nsReturned.Labels = map[string]string{
+			"purpose": "test",
+		}
+		log.Infof("Updating no-tier Namespace purpose label")
+		if _, err = data.clientset.CoreV1().Namespaces().Update(context.TODO(), nsReturned, metav1.UpdateOptions{}); err != nil {
+			t.Errorf("failed to update the no-tier Namespace with purpose=test label")
+		}
+	}
+	revertLabel := func() {
+		nsReturned, err := data.clientset.CoreV1().Namespaces().Get(context.TODO(), getNS("no-tier"), metav1.GetOptions{})
+		if err != nil {
+			t.Errorf("failed to get the no-tier Namespace")
+		}
+		nsReturned.Labels = map[string]string{
+			"purpose": "test-exclusion",
+		}
+		if _, err = data.clientset.CoreV1().Namespaces().Update(context.TODO(), nsReturned, metav1.UpdateOptions{}); err != nil {
+			t.Errorf("failed to revert the purpose label for the no-tier Namespace")
+		}
+	}
+	newReachability := NewReachability(allPods, Connected)
+	testSetp2 := &TestStep{
+		Name:           "Namespace isolation after Namespace label update, Port 80",
+		Reachability:   newReachability,
+		Ports:          []int32{80},
+		Protocol:       ProtocolTCP,
+		CustomSetup:    labelNoTierNS,
+		CustomTeardown: revertLabel,
 	}
 	testCase := []*TestCase{
-		{"ACNP strict Namespace isolation by Namespace purpose label", []*TestStep{testStep1}},
+		{"ACNP strict Namespace isolation by Namespace purpose label", []*TestStep{testStep, testSetp2}},
 	}
-	executeTests(t, testCase)
+	executeTestsWithData(t, testCase, data)
 }
 
 func testFQDNPolicy(t *testing.T) {
@@ -4250,7 +4164,9 @@ func executeTestsWithData(t *testing.T, testList []*TestCase, data *TestData) {
 		for _, step := range testCase.Steps {
 			log.Infof("running step %s of test case %s", step.Name, testCase.Name)
 			applyTestStepResources(t, step)
-
+			if step.CustomSetup != nil {
+				step.CustomSetup()
+			}
 			reachability := step.Reachability
 			if reachability != nil {
 				start := time.Now()
@@ -4269,6 +4185,9 @@ func executeTestsWithData(t *testing.T, testList []*TestCase, data *TestData) {
 			}
 			for _, p := range step.CustomProbes {
 				doProbe(t, data, p, step.Protocol)
+			}
+			if step.CustomTeardown != nil {
+				step.CustomTeardown()
 			}
 		}
 		log.Debug("Cleaning-up all policies and groups created by this Testcase")
@@ -4599,7 +4518,7 @@ func TestAntreaPolicyExtendedNamespaces(t *testing.T) {
 
 	t.Run("TestGroupACNPNamespaceLabelSelections", func(t *testing.T) {
 		t.Run("Case=ACNPStrictNamespacesIsolationByLabels", func(t *testing.T) { testACNPStrictNamespacesIsolationByLabels(t) })
-		t.Run("Case=ACNPStrictNamespacesIsolationBySingleLabel", func(t *testing.T) { testACNPStrictNamespacesIsolationBySingleLabel(t) })
+		t.Run("Case=ACNPStrictNamespacesIsolationBySingleLabel", func(t *testing.T) { testACNPStrictNamespacesIsolationBySingleLabel(t, data) })
 	})
 	k8sUtils.Cleanup(namespaces)
 }

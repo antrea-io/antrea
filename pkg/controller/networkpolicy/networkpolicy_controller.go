@@ -93,8 +93,9 @@ const (
 	addressGroupType   grouping.GroupType = "addressGroup"
 	internalGroupType  grouping.GroupType = "internalGroup"
 
-	perNamespaceRuleIndex = "hasPerNamespaceRule"
-	HasPerNamespaceRule   = "true"
+	perNamespaceRuleIndex   = "hasPerNamespaceRule"
+	namespaceLabelRuleIndex = "hasNamespaceLabelRule"
+	hasSuchRule             = "true"
 )
 
 var (
@@ -333,9 +334,18 @@ var acnpIndexers = cache.Indexers{
 		if !ok {
 			return []string{}, nil
 		}
-		has := hasPerNamespaceRule(acnp)
-		if has {
-			return []string{HasPerNamespaceRule}, nil
+		if hasPerNSRule := hasPerNamespaceRule(acnp); hasPerNSRule {
+			return []string{hasSuchRule}, nil
+		}
+		return []string{}, nil
+	},
+	namespaceLabelRuleIndex: func(obj interface{}) ([]string, error) {
+		cnp, ok := obj.(*secv1alpha1.ClusterNetworkPolicy)
+		if !ok {
+			return []string{}, nil
+		}
+		if hasNSLabelRule := hasNamespaceLabelRule(cnp); hasNSLabelRule {
+			return []string{hasSuchRule}, nil
 		}
 		return []string{}, nil
 	},

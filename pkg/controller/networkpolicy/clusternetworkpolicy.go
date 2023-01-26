@@ -125,7 +125,7 @@ func (n *NetworkPolicyController) filterPerNamespaceRuleACNPsByNSLabels(nsLabels
 	}
 
 	affectedPolicies := sets.New[string]()
-	objs, _ := n.acnpInformer.Informer().GetIndexer().ByIndex(perNamespaceRuleIndex, HasPerNamespaceRule)
+	objs, _ := n.acnpInformer.Informer().GetIndexer().ByIndex(perNamespaceRuleIndex, hasSuchRule)
 	for _, obj := range objs {
 		cnp := obj.(*crdv1beta1.ClusterNetworkPolicy)
 		if affected := func() bool {
