@@ -619,18 +619,18 @@ func (mr *MockClientMockRecorder) NetworkPolicyMetrics() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NetworkPolicyMetrics", reflect.TypeOf((*MockClient)(nil).NetworkPolicyMetrics))
 }
 
-// NewDNSpacketInConjunction mocks base method
-func (m *MockClient) NewDNSpacketInConjunction(arg0 uint32) error {
+// NewDNSPacketInConjunction mocks base method
+func (m *MockClient) NewDNSPacketInConjunction(arg0 uint32) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "NewDNSpacketInConjunction", arg0)
+	ret := m.ctrl.Call(m, "NewDNSPacketInConjunction", arg0)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// NewDNSpacketInConjunction indicates an expected call of NewDNSpacketInConjunction
-func (mr *MockClientMockRecorder) NewDNSpacketInConjunction(arg0 interface{}) *gomock.Call {
+// NewDNSPacketInConjunction indicates an expected call of NewDNSPacketInConjunction
+func (mr *MockClientMockRecorder) NewDNSPacketInConjunction(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NewDNSpacketInConjunction", reflect.TypeOf((*MockClient)(nil).NewDNSpacketInConjunction), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NewDNSPacketInConjunction", reflect.TypeOf((*MockClient)(nil).NewDNSPacketInConjunction), arg0)
 }
 
 // ReassignFlowPriorities mocks base method
@@ -669,6 +669,20 @@ func (m *MockClient) ReplayFlows() {
 func (mr *MockClientMockRecorder) ReplayFlows() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReplayFlows", reflect.TypeOf((*MockClient)(nil).ReplayFlows))
+}
+
+// SendEthPacketOut mocks base method
+func (m *MockClient) SendEthPacketOut(arg0, arg1 uint32, arg2 util.Message, arg3 func(openflow.PacketOutBuilder) openflow.PacketOutBuilder) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SendEthPacketOut", arg0, arg1, arg2, arg3)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SendEthPacketOut indicates an expected call of SendEthPacketOut
+func (mr *MockClientMockRecorder) SendEthPacketOut(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendEthPacketOut", reflect.TypeOf((*MockClient)(nil).SendEthPacketOut), arg0, arg1, arg2, arg3)
 }
 
 // SendICMPPacketOut mocks base method
@@ -714,17 +728,17 @@ func (mr *MockClientMockRecorder) SendIGMPRemoteReportPacketOut(arg0, arg1, arg2
 }
 
 // SendTCPPacketOut mocks base method
-func (m *MockClient) SendTCPPacketOut(arg0, arg1, arg2, arg3 string, arg4, arg5 uint32, arg6 bool, arg7, arg8 uint16, arg9 uint32, arg10 byte, arg11 func(openflow.PacketOutBuilder) openflow.PacketOutBuilder) error {
+func (m *MockClient) SendTCPPacketOut(arg0, arg1, arg2, arg3 string, arg4, arg5 uint32, arg6 bool, arg7, arg8 uint16, arg9, arg10 uint32, arg11, arg12 byte, arg13 uint16, arg14 []byte, arg15 func(openflow.PacketOutBuilder) openflow.PacketOutBuilder) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SendTCPPacketOut", arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11)
+	ret := m.ctrl.Call(m, "SendTCPPacketOut", arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11, arg12, arg13, arg14, arg15)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // SendTCPPacketOut indicates an expected call of SendTCPPacketOut
-func (mr *MockClientMockRecorder) SendTCPPacketOut(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11 interface{}) *gomock.Call {
+func (mr *MockClientMockRecorder) SendTCPPacketOut(arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11, arg12, arg13, arg14, arg15 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendTCPPacketOut", reflect.TypeOf((*MockClient)(nil).SendTCPPacketOut), arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendTCPPacketOut", reflect.TypeOf((*MockClient)(nil).SendTCPPacketOut), arg0, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10, arg11, arg12, arg13, arg14, arg15)
 }
 
 // SendTraceflowPacket mocks base method

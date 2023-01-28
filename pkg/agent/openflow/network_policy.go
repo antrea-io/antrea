@@ -71,6 +71,8 @@ var (
 	MatchServiceGroupID = types.NewMatchKey(binding.ProtocolIP, types.ServiceGroupIDAddr, "reg7[0..31]")
 	MatchIGMPProtocol   = types.NewMatchKey(binding.ProtocolIGMP, types.IGMPAddr, "igmp")
 	MatchLabelID        = types.NewMatchKey(binding.ProtocolIP, types.LabelIDAddr, "tun_id")
+	MatchTCPFlags       = types.NewMatchKey(binding.ProtocolTCP, types.TCPFlagsAddr, "tcp_flags")
+	MatchTCPv6Flags     = types.NewMatchKey(binding.ProtocolTCPv6, types.TCPFlagsAddr, "tcp_flags")
 	Unsupported         = types.NewMatchKey(binding.ProtocolIP, types.UnSupported, "unknown")
 
 	// metricFlowIdentifier is used to identify metric flows in metric table.
@@ -79,8 +81,14 @@ var (
 	metricFlowIdentifier = fmt.Sprintf("priority=%d,", priorityNormal)
 
 	protocolUDP = v1beta2.ProtocolUDP
+	protocolTCP = v1beta2.ProtocolTCP
 	dnsPort     = intstr.FromInt(53)
 )
+
+type TCPFlags struct {
+	Flag uint16
+	Mask uint16
+}
 
 // IP address calculated from Pod's address.
 type IPAddress net.IP
@@ -682,7 +690,7 @@ type clause struct {
 	dropTable binding.Table
 }
 
-func (c *client) NewDNSpacketInConjunction(id uint32) error {
+func (c *client) NewDNSPacketInConjunction(id uint32) error {
 	existingConj := c.featureNetworkPolicy.getPolicyRuleConjunction(id)
 	if existingConj != nil {
 		klog.InfoS("DNS Conjunction has already been added to cache", "id", id)
@@ -703,13 +711,40 @@ func (c *client) NewDNSpacketInConjunction(id uint32) error {
 		Protocol: &protocolUDP,
 		Port:     &dnsPort,
 	}
+	tcpService := v1beta2.Service{
+		Protocol: &protocolTCP,
+		Port:     &dnsPort,
+	}
 	dnsPriority := priorityDNSIntercept
 	conj.serviceClause = conj.newClause(1, 2, getTableByID(conj.ruleTableID), nil)
 	conj.toClause = conj.newClause(2, 2, getTableByID(conj.ruleTableID), nil)
-
 	c.featureNetworkPolicy.conjMatchFlowLock.Lock()
 	defer c.featureNetworkPolicy.conjMatchFlowLock.Unlock()
 	ctxChanges := conj.serviceClause.addServiceFlows(c.featureNetworkPolicy, []v1beta2.Service{udpService}, &dnsPriority, true, false)
+	dnsTCPMatchPairs := getServiceMatchPairs(tcpService, c.featureNetworkPolicy.ipProtocols, true)
+	for _, dnsTCPMatchPair := range dnsTCPMatchPairs {
+		tcpFlagsMatchPair := matchPair{
+			matchKey: MatchTCPFlags,
+			matchValue: TCPFlags{
+				// URG|ACK|PSH|RST|SYN|FIN|
+				Flag: 0b011000,
+				Mask: 0b011000,
+			},
+		}
+		if dnsTCPMatchPair[0].matchKey.GetOFProtocol() == binding.ProtocolTCPv6 {
+			tcpFlagsMatchPair.matchKey = MatchTCPv6Flags
+		}
+		tcpServiceMatch := &conjunctiveMatch{
+			tableID: conj.serviceClause.ruleTable.GetID(),
+			matchPairs: []matchPair{
+				dnsTCPMatchPair[0],
+				tcpFlagsMatchPair,
+			},
+			priority: &dnsPriority,
+		}
+		ctxChange := conj.serviceClause.addConjunctiveMatchFlow(c.featureNetworkPolicy, tcpServiceMatch, false, false)
+		ctxChanges = append(ctxChanges, ctxChange)
+	}
 	if err := c.featureNetworkPolicy.applyConjunctiveMatchFlows(ctxChanges); err != nil {
 		return err
 	}

@@ -243,8 +243,12 @@ type Client interface {
 		isIPv6 bool,
 		tcpSrcPort uint16,
 		tcpDstPort uint16,
+		tcpSeqNum uint32,
 		tcpAckNum uint32,
+		tcpHdrLen uint8,
 		tcpFlag uint8,
+		tcpWinSize uint16,
+		tcpData []byte,
 		mutatePacketOut func(builder binding.PacketOutBuilder) binding.PacketOutBuilder) error
 	// SendICMPPacketOut sends ICMP packet as a packet-out to OVS.
 	SendICMPPacketOut(
@@ -272,8 +276,10 @@ type Client interface {
 		udpDstPort uint16,
 		udpData []byte,
 		mutatePacketOut func(builder binding.PacketOutBuilder) binding.PacketOutBuilder) error
-	// NewDNSpacketInConjunction creates a policyRuleConjunction for the dns response interception flows.
-	NewDNSpacketInConjunction(id uint32) error
+	// SendEthPacketOut sends ethernet packet as a packet-out to OVS.
+	SendEthPacketOut(inPort, outPort uint32, ethPkt ofutil.Message, mutatePacketOut func(builder binding.PacketOutBuilder) binding.PacketOutBuilder) error
+	// NewDNSPacketInConjunction creates a policyRuleConjunction for the dns response interception flows.
+	NewDNSPacketInConjunction(id uint32) error
 	// AddAddressToDNSConjunction adds addresses to the toAddresses of the dns packetIn conjunction,
 	// so that dns response packets sent towards these addresses will be intercepted and parsed by
 	// the fqdnController.
@@ -1129,8 +1135,12 @@ func (c *client) SendTCPPacketOut(
 	isIPv6 bool,
 	tcpSrcPort uint16,
 	tcpDstPort uint16,
+	tcpSeqNum uint32,
 	tcpAckNum uint32,
+	tcpHdrLen uint8,
 	tcpFlag uint8,
+	tcpWinSize uint16,
+	tcpData []byte,
 	mutatePacketOut func(builder binding.PacketOutBuilder) binding.PacketOutBuilder) error {
 	// Generate a base IP PacketOutBuilder.
 	packetOutBuilder, err := setBasePacketOutBuilder(c.bridge.BuildPacketOut(), srcMAC, dstMAC, srcIP, dstIP, inPort, outPort)
@@ -1144,10 +1154,15 @@ func (c *client) SendTCPPacketOut(
 		packetOutBuilder = packetOutBuilder.SetIPProtocol(binding.ProtocolTCP)
 	}
 	// Set TCP header data.
-	packetOutBuilder = packetOutBuilder.SetTCPSrcPort(tcpSrcPort)
-	packetOutBuilder = packetOutBuilder.SetTCPDstPort(tcpDstPort)
-	packetOutBuilder = packetOutBuilder.SetTCPAckNum(tcpAckNum)
-	packetOutBuilder = packetOutBuilder.SetTCPFlags(tcpFlag)
+	packetOutBuilder = packetOutBuilder.
+		SetTCPSrcPort(tcpSrcPort).
+		SetTCPDstPort(tcpDstPort).
+		SetTCPSeqNum(tcpSeqNum).
+		SetTCPAckNum(tcpAckNum).
+		SetTCPHdrLen(tcpHdrLen).
+		SetTCPFlags(tcpFlag).
+		SetTCPWinSize(tcpWinSize).
+		SetTCPData(tcpData)
 
 	if mutatePacketOut != nil {
 		packetOutBuilder = mutatePacketOut(packetOutBuilder)
@@ -1227,6 +1242,20 @@ func (c *client) SendUDPPacketOut(
 		packetOutBuilder = mutatePacketOut(packetOutBuilder)
 	}
 
+	packetOutObj := packetOutBuilder.Done()
+	return c.bridge.SendPacketOut(packetOutObj)
+}
+
+func (c *client) SendEthPacketOut(inPort, outPort uint32, ethPkt ofutil.Message, mutatePacketOut func(builder binding.PacketOutBuilder) binding.PacketOutBuilder) error {
+	packetOutBuilder := c.bridge.BuildPacketOut()
+	packetOutBuilder = packetOutBuilder.SetInport(inPort)
+	if outPort != 0 {
+		packetOutBuilder = packetOutBuilder.SetOutport(outPort)
+	}
+	if mutatePacketOut != nil {
+		packetOutBuilder = mutatePacketOut(packetOutBuilder)
+	}
+	packetOutBuilder.SetEthPacket(ethPkt)
 	packetOutObj := packetOutBuilder.Done()
 	return c.bridge.SendPacketOut(packetOutObj)
 }

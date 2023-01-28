@@ -1592,8 +1592,12 @@ func Test_client_SendPacketOut(t *testing.T) {
 		igmp       util.Message
 		tcpSrcPort uint16
 		tcpDstPort uint16
+		tcpSeqNum  uint32
 		tcpAckNum  uint32
+		tcpHdrLen  uint8
 		tcpFlag    uint8
+		tcpWinSize uint16
+		tcpData    []byte
 		udpSrcPort uint16
 		udpDstPort uint16
 		udpData    []byte
@@ -1603,8 +1607,12 @@ func Test_client_SendPacketOut(t *testing.T) {
 			protocol:   binding.ProtocolTCP,
 			tcpSrcPort: uint16(50000),
 			tcpDstPort: uint16(80),
+			tcpSeqNum:  uint32(7654321),
 			tcpAckNum:  uint32(1234567),
+			tcpHdrLen:  uint8(5),
 			tcpFlag:    uint8(0b000100),
+			tcpWinSize: uint16(123),
+			tcpData:    []byte{1, 2, 3},
 		},
 		{
 			name:       "SendTCPPacketOut IPv6",
@@ -1612,8 +1620,12 @@ func Test_client_SendPacketOut(t *testing.T) {
 			isIPv6:     true,
 			tcpSrcPort: uint16(50000),
 			tcpDstPort: uint16(443),
+			tcpSeqNum:  uint32(7654321),
 			tcpAckNum:  uint32(1234567),
+			tcpHdrLen:  uint8(8),
 			tcpFlag:    uint8(0b000100),
+			tcpWinSize: uint16(123),
+			tcpData:    []byte{1, 2, 3},
 		},
 		{
 			name:       "SendUDPPacketOut IPv4",
@@ -1712,8 +1724,12 @@ func Test_client_SendPacketOut(t *testing.T) {
 			case binding.ProtocolTCP, binding.ProtocolTCPv6:
 				mockPacketOutBuilder.EXPECT().SetTCPSrcPort(tc.tcpSrcPort).Return(mockPacketOutBuilder)
 				mockPacketOutBuilder.EXPECT().SetTCPDstPort(tc.tcpDstPort).Return(mockPacketOutBuilder)
+				mockPacketOutBuilder.EXPECT().SetTCPSeqNum(tc.tcpSeqNum).Return(mockPacketOutBuilder)
 				mockPacketOutBuilder.EXPECT().SetTCPAckNum(tc.tcpAckNum).Return(mockPacketOutBuilder)
+				mockPacketOutBuilder.EXPECT().SetTCPHdrLen(tc.tcpHdrLen).Return(mockPacketOutBuilder)
 				mockPacketOutBuilder.EXPECT().SetTCPFlags(tc.tcpFlag).Return(mockPacketOutBuilder)
+				mockPacketOutBuilder.EXPECT().SetTCPWinSize(tc.tcpWinSize).Return(mockPacketOutBuilder)
+				mockPacketOutBuilder.EXPECT().SetTCPData(tc.tcpData).Return(mockPacketOutBuilder)
 				assert.NoError(t, fc.SendTCPPacketOut(srcMAC.String(),
 					dstMAC.String(),
 					srcIP.String(),
@@ -1723,8 +1739,12 @@ func Test_client_SendPacketOut(t *testing.T) {
 					tc.isIPv6,
 					tc.tcpSrcPort,
 					tc.tcpDstPort,
+					tc.tcpSeqNum,
 					tc.tcpAckNum,
+					tc.tcpHdrLen,
 					tc.tcpFlag,
+					tc.tcpWinSize,
+					tc.tcpData,
 					nil))
 			case binding.ProtocolUDP, binding.ProtocolUDPv6:
 				mockPacketOutBuilder.EXPECT().SetUDPSrcPort(tc.udpSrcPort).Return(mockPacketOutBuilder)
