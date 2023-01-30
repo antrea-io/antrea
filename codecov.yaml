@@ -51,6 +51,8 @@ coverage:
         base: auto
         # Only post a status to pull requests.
         only_pulls: true
+        flags:
+          - unit-tests
     project:
       default:
         # `auto` will use the coverage from the base commit (pull request base or parent commit) coverage to compare against.
@@ -64,10 +66,7 @@ coverage:
 
 flag_management:
   default_rules:
-    carryforward: false
- # individual_flags:
- #   - name: unit-tests
- #     carryforward: false
+    carryforward: true
 
 # Exclude files from being collected by Codecov. Ignored files will be skipped during processing.
 ignore:
