@@ -28,6 +28,7 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
 
+	agentconfig "antrea.io/antrea/cmd/antrea-agent/app/config"
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/interfacestore"
 	"antrea.io/antrea/pkg/agent/openflow"
@@ -35,7 +36,6 @@ import (
 	"antrea.io/antrea/pkg/apis/controlplane/v1beta2"
 	"antrea.io/antrea/pkg/apis/crd/v1alpha1"
 	enlister "antrea.io/antrea/pkg/client/listers/crd/v1alpha1"
-	agentConfig "antrea.io/antrea/pkg/config/agent"
 	binding "antrea.io/antrea/pkg/ovs/openflow"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 	"antrea.io/antrea/pkg/ovs/ovsctl"
@@ -81,11 +81,11 @@ type ExternalNodeController struct {
 	externalEntityUpdateNotifier channel.Notifier
 	nodeName                     string
 	externalNodeNamespace        string
-	policyBypassRules            []agentConfig.PolicyBypassRule
+	policyBypassRules            []agentconfig.PolicyBypassRule
 }
 
 func NewExternalNodeController(ovsBridgeClient ovsconfig.OVSBridgeClient, ofClient openflow.Client, externalNodeInformer cache.SharedIndexInformer,
-	ifaceStore interfacestore.InterfaceStore, externalEntityUpdateNotifier channel.Notifier, externalNodeNamespace string, policyBypassRules []agentConfig.PolicyBypassRule) (*ExternalNodeController, error) {
+	ifaceStore interfacestore.InterfaceStore, externalEntityUpdateNotifier channel.Notifier, externalNodeNamespace string, policyBypassRules []agentconfig.PolicyBypassRule) (*ExternalNodeController, error) {
 	c := &ExternalNodeController{
 		ovsBridgeClient:              ovsBridgeClient,
 		ovsctlClient:                 ovsctl.NewClient(ovsBridgeClient.GetBridgeName()),

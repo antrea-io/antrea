@@ -15,15 +15,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package options
 
 import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 
+	agentconfig "antrea.io/antrea/cmd/antrea-agent/app/config"
 	"antrea.io/antrea/pkg/agent/config"
-	agentconfig "antrea.io/antrea/pkg/config/agent"
 	"antrea.io/antrea/pkg/ovs/ovsconfig"
 )
 
@@ -80,8 +80,8 @@ func TestCheckUnsupportedFeatures(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.desc, func(t *testing.T) {
-			o := &Options{config: &tc.config}
-			err := o.complete(nil)
+			o := &Options{Config: &tc.config}
+			err := o.Complete()
 			assert.Nil(t, err, tc.desc)
 			err = o.checkUnsupportedFeatures()
 			if tc.pass {

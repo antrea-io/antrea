@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package util
 
 import (
 	"fmt"
@@ -25,7 +25,7 @@ import (
 
 var getAllNodeAddresses = util.GetAllNodeAddresses
 
-func getAvailableNodePortAddresses(nodePortAddressesFromConfig []string, excludeDevices []string) ([]net.IP, []net.IP, error) {
+func GetAvailableNodePortAddresses(nodePortAddressesFromConfig []string, excludeDevices []string) ([]net.IP, []net.IP, error) {
 	// Get all IP addresses of Node
 	nodeAddressesIPv4, nodeAddressesIPv6, err := getAllNodeAddresses(excludeDevices)
 	if err != nil {
@@ -58,8 +58,8 @@ func getAvailableNodePortAddresses(nodePortAddressesFromConfig []string, exclude
 	return nodePortAddressesIPv4, nodePortAddressesIPv6, nil
 }
 
-// parsePortRange parses a port range ("<start>-<end>") and checks that it is valid.
-func parsePortRange(portRangeStr string) (start, end int, err error) {
+// ParsePortRange parses a port range ("<start>-<end>") and checks that it is valid.
+func ParsePortRange(portRangeStr string) (start, end int, err error) {
 	portsRange := strings.Split(portRangeStr, "-")
 	if len(portsRange) != 2 {
 		return 0, 0, fmt.Errorf("wrong port range format: %s", portRangeStr)

@@ -29,9 +29,9 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 
+	agentconfig "antrea.io/antrea/cmd/antrea-agent/app/config"
 	npltesting "antrea.io/antrea/pkg/agent/nodeportlocal/testing"
 	"antrea.io/antrea/pkg/agent/nodeportlocal/types"
-	agentconfig "antrea.io/antrea/pkg/config/agent"
 	"antrea.io/antrea/pkg/features"
 )
 

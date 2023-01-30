@@ -12,14 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package options
 
 import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 
-	agentconfig "antrea.io/antrea/pkg/config/agent"
+	agentconfig "antrea.io/antrea/cmd/antrea-agent/app/config"
 )
 
 func TestOptionsValidateTLSOptions(t *testing.T) {
@@ -63,7 +63,7 @@ func TestOptionsValidateTLSOptions(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			o := &Options{config: tt.config}
+			o := &Options{Config: tt.config}
 			err := o.validateTLSOptions()
 			if tt.expectedErr == "" {
 				assert.NoError(t, err)

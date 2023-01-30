@@ -15,14 +15,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package options
 
 import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 
-	agentconfig "antrea.io/antrea/pkg/config/agent"
+	agentconfig "antrea.io/antrea/cmd/antrea-agent/app/config"
 	"antrea.io/antrea/pkg/features"
 )
 
@@ -104,17 +104,17 @@ func TestMulticlusterOptions(t *testing.T) {
 				TrafficEncapMode: tt.encapMode,
 				Multicluster:     tt.mcConfig,
 			}
-			o := &Options{config: config}
-			features.DefaultMutableFeatureGate.SetFromMap(o.config.FeatureGates)
+			o := &Options{Config: config}
+			features.DefaultMutableFeatureGate.SetFromMap(o.Config.FeatureGates)
 			o.setDefaults()
 			if tt.mcConfig.Enable && tt.featureGate {
-				assert.True(t, o.config.Multicluster.EnableGateway)
+				assert.True(t, o.Config.Multicluster.EnableGateway)
 			}
 			if !tt.mcConfig.Enable && !tt.mcConfig.EnableGateway {
-				assert.False(t, o.config.Multicluster.EnableGateway)
+				assert.False(t, o.Config.Multicluster.EnableGateway)
 			}
 
-			err := o.validate(nil)
+			err := o.Validate(nil)
 			if tt.expectedErr == "" {
 				assert.NoError(t, err)
 			} else {

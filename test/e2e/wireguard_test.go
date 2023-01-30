@@ -23,8 +23,8 @@ import (
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 
+	agentconfig "antrea.io/antrea/cmd/antrea-agent/app/config"
 	"antrea.io/antrea/pkg/agent/config"
-	agentconfig "antrea.io/antrea/pkg/config/agent"
 )
 
 // TestWireGuard checks that Pod traffic across two Nodes over the WireGuard tunnel by creating

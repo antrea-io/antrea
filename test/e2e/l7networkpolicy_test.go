@@ -25,8 +25,8 @@ import (
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	agentconfig "antrea.io/antrea/cmd/antrea-agent/app/config"
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
-	agentconfig "antrea.io/antrea/pkg/config/agent"
 	"antrea.io/antrea/pkg/features"
 	. "antrea.io/antrea/test/e2e/utils"
 )

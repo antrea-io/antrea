@@ -30,10 +30,10 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 
+	agentconfig "antrea.io/antrea/cmd/antrea-agent/app/config"
 	"antrea.io/antrea/pkg/agent/config"
 	"antrea.io/antrea/pkg/agent/multicast"
 	crdv1alpha1 "antrea.io/antrea/pkg/apis/crd/v1alpha1"
-	agentconfig "antrea.io/antrea/pkg/config/agent"
 	"antrea.io/antrea/pkg/features"
 )
 

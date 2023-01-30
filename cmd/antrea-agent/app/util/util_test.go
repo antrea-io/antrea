@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package util
 
 import (
 	"net"
@@ -55,7 +55,7 @@ func TestGetAvailableNodePortAddresses(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			gotIPv4, gotIPv6, err := getAvailableNodePortAddresses(tc.nodePortAddressesFromConfig, []string{"antrea-egress0", "antrea-ingress0", "kube-ipvs0", "antrea-gw0"})
+			gotIPv4, gotIPv6, err := GetAvailableNodePortAddresses(tc.nodePortAddressesFromConfig, []string{"antrea-egress0", "antrea-ingress0", "kube-ipvs0", "antrea-gw0"})
 			require.NoError(t, err)
 			assert.Equal(t, tc.expectedIPv4, gotIPv4)
 			assert.Equal(t, tc.expectedIPv6, gotIPv6)
@@ -110,7 +110,7 @@ func TestParsePortRange(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			start, end, err := parsePortRange(tc.portRangeStr)
+			start, end, err := ParsePortRange(tc.portRangeStr)
 			if tc.expectedErr != "" {
 				assert.EqualError(t, err, tc.expectedErr)
 			} else {

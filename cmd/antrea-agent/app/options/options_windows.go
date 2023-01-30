@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package options
 
 import (
 	"fmt"
@@ -33,27 +33,27 @@ func (o *Options) checkUnsupportedFeatures() error {
 	var unsupported []string
 
 	// First check feature gates.
-	for f, enabled := range o.config.FeatureGates {
+	for f, enabled := range o.Config.FeatureGates {
 		if enabled && !features.SupportedOnWindows(featuregate.Feature(f)) {
 			unsupported = append(unsupported, f)
 		}
 	}
 
-	if o.config.OVSDatapathType != string(ovsconfig.OVSDatapathSystem) {
-		unsupported = append(unsupported, "OVSDatapathType: "+o.config.OVSDatapathType)
+	if o.Config.OVSDatapathType != string(ovsconfig.OVSDatapathSystem) {
+		unsupported = append(unsupported, "OVSDatapathType: "+o.Config.OVSDatapathType)
 	}
-	_, encapMode := config.GetTrafficEncapModeFromStr(o.config.TrafficEncapMode)
+	_, encapMode := config.GetTrafficEncapModeFromStr(o.Config.TrafficEncapMode)
 	if encapMode == config.TrafficEncapModeNetworkPolicyOnly {
 		unsupported = append(unsupported, "TrafficEncapMode: "+encapMode.String())
 	}
-	if o.config.TunnelType == ovsconfig.GRETunnel {
-		unsupported = append(unsupported, "TunnelType: "+o.config.TunnelType)
+	if o.Config.TunnelType == ovsconfig.GRETunnel {
+		unsupported = append(unsupported, "TunnelType: "+o.Config.TunnelType)
 	}
-	_, encryptionMode := config.GetTrafficEncryptionModeFromStr(o.config.TrafficEncryptionMode)
+	_, encryptionMode := config.GetTrafficEncryptionModeFromStr(o.Config.TrafficEncryptionMode)
 	if encryptionMode != config.TrafficEncryptionModeNone {
 		unsupported = append(unsupported, "TrafficEncryptionMode: "+encryptionMode.String())
 	}
-	if o.config.EnableBridgingMode {
+	if o.Config.EnableBridgingMode {
 		unsupported = append(unsupported, "EnableBridgingMode")
 	}
 	if unsupported != nil {

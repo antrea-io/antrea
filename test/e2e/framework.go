@@ -52,10 +52,10 @@ import (
 	aggregatorclientset "k8s.io/kube-aggregator/pkg/client/clientset_generated/clientset"
 	utilnet "k8s.io/utils/net"
 
+	agentconfig "antrea.io/antrea/cmd/antrea-agent/app/config"
 	controllerconfig "antrea.io/antrea/cmd/antrea-controller/app/config"
 	"antrea.io/antrea/pkg/agent/config"
 	crdclientset "antrea.io/antrea/pkg/client/clientset/versioned"
-	agentconfig "antrea.io/antrea/pkg/config/agent"
 	flowaggregatorconfig "antrea.io/antrea/pkg/config/flowaggregator"
 	"antrea.io/antrea/pkg/features"
 	"antrea.io/antrea/test/e2e/providers"

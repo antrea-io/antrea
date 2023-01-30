@@ -23,9 +23,13 @@ import (
 	"github.com/spf13/cobra"
 	"k8s.io/klog/v2"
 
+	"antrea.io/antrea/cmd/antrea-agent/app"
+	"antrea.io/antrea/cmd/antrea-agent/app/options"
 	"antrea.io/antrea/pkg/log"
 	"antrea.io/antrea/pkg/version"
 )
+
+var runAntreaAgentFunc = app.Run
 
 func main() {
 	command := newAgentCommand()
@@ -35,7 +39,7 @@ func main() {
 }
 
 func newAgentCommand() *cobra.Command {
-	opts := newOptions()
+	opts := options.NewOptions()
 
 	cmd := &cobra.Command{
 		Use:  "antrea-agent",
@@ -43,13 +47,13 @@ func newAgentCommand() *cobra.Command {
 		Run: func(cmd *cobra.Command, args []string) {
 			log.InitLogs(cmd.Flags())
 			defer log.FlushLogs()
-			if err := opts.complete(args); err != nil {
+			if err := opts.Complete(); err != nil {
 				klog.Fatalf("Failed to complete: %v", err)
 			}
-			if err := opts.validate(args); err != nil {
+			if err := opts.Validate(args); err != nil {
 				klog.Fatalf("Failed to validate: %v", err)
 			}
-			if err := run(opts); err != nil {
+			if err := runAntreaAgentFunc(opts); err != nil {
 				klog.Fatalf("Error running agent: %v", err)
 			}
 		},
@@ -57,7 +61,7 @@ func newAgentCommand() *cobra.Command {
 	}
 
 	flags := cmd.Flags()
-	opts.addFlags(flags)
+	opts.AddFlags(flags)
 	log.AddFlags(flags)
 	return cmd
 }
