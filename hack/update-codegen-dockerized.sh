@@ -36,85 +36,39 @@ ANTREA_PKG="antrea.io/antrea"
 # https://github.com/kubernetes-sigs/gateway-api/issues/11
 ANTREA_PROTO_PKG="antrea_io.antrea"
 
-function generate_mocks {
-  # Generate mocks for testing with mockgen.
-  MOCKGEN_TARGETS=(
-    "pkg/agent/cniserver/ipam IPAMDriver testing"
-    "pkg/agent/flowexporter/connections ConnTrackDumper,NetFilterConnTrack testing"
-    "pkg/agent/interfacestore InterfaceStore testing"
-    "pkg/agent/memberlist Memberlist testing"
-    "pkg/agent/multicast RouteInterface testing"
-    "pkg/agent/types McastNetworkPolicyController testing"
-    "pkg/agent/nodeportlocal/portcache LocalPortOpener testing"
-    "pkg/agent/nodeportlocal/rules PodPortRules testing"
-    "pkg/agent/openflow Client,OFEntryOperations testing"
-    "pkg/agent/proxy Proxier testing"
-    "pkg/agent/querier AgentQuerier testing"
-    "pkg/agent/route Interface testing"
-    "pkg/agent/ipassigner IPAssigner testing"
-    "pkg/agent/secondarynetwork/podwatch InterfaceConfigurator testing"
-    "pkg/agent/secondarynetwork/ipam IPAMDelegator testing"
-    "pkg/agent/util/ipset Interface testing"
-    "pkg/agent/util/iptables Interface testing mock_iptables_linux.go" # Must specify linux.go suffix, otherwise compilation would fail on windows platform as source file has linux build tag.
-    "pkg/agent/util/netlink Interface testing mock_netlink_linux.go"
-    "pkg/antctl AntctlClient ."
-    "pkg/controller/networkpolicy EndpointQuerier testing"
-    "pkg/controller/querier ControllerQuerier testing"
-    "pkg/flowaggregator/exporter Interface testing"
-    "pkg/ipfix IPFIXExportingProcess,IPFIXRegistry,IPFIXCollectingProcess,IPFIXAggregationProcess testing"
-    "pkg/ovs/openflow Bridge,Table,Flow,Action,CTAction,FlowBuilder,Group,BucketBuilder,PacketOutBuilder testing"
-    "pkg/ovs/ovsconfig OVSBridgeClient testing"
-    "pkg/ovs/ovsctl OVSCtlClient testing"
-    "pkg/querier AgentNetworkPolicyInfoQuerier,AgentMulticastInfoQuerier testing"
-    "pkg/flowaggregator/querier FlowAggregatorQuerier testing"
-    "third_party/proxy Provider testing"
-  )
+MOCKGEN_TARGETS=(
+  "pkg/agent/cniserver/ipam IPAMDriver testing"
+  "pkg/agent/flowexporter/connections ConnTrackDumper,NetFilterConnTrack testing"
+  "pkg/agent/interfacestore InterfaceStore testing"
+  "pkg/agent/memberlist Memberlist testing"
+  "pkg/agent/multicast RouteInterface testing"
+  "pkg/agent/types McastNetworkPolicyController testing"
+  "pkg/agent/nodeportlocal/portcache LocalPortOpener testing"
+  "pkg/agent/nodeportlocal/rules PodPortRules testing"
+  "pkg/agent/openflow Client,OFEntryOperations testing"
+  "pkg/agent/proxy Proxier testing"
+  "pkg/agent/querier AgentQuerier testing"
+  "pkg/agent/route Interface testing"
+  "pkg/agent/ipassigner IPAssigner testing"
+  "pkg/agent/secondarynetwork/podwatch InterfaceConfigurator testing"
+  "pkg/agent/secondarynetwork/ipam IPAMDelegator testing"
+  "pkg/agent/util/ipset Interface testing"
+  "pkg/agent/util/iptables Interface testing mock_iptables_linux.go" # Must specify linux.go suffix, otherwise compilation would fail on windows platform as source file has linux build tag.
+  "pkg/agent/util/netlink Interface testing mock_netlink_linux.go"
+  "pkg/antctl AntctlClient ."
+  "pkg/controller/networkpolicy EndpointQuerier testing"
+  "pkg/controller/querier ControllerQuerier testing"
+  "pkg/flowaggregator/exporter Interface testing"
+  "pkg/ipfix IPFIXExportingProcess,IPFIXRegistry,IPFIXCollectingProcess,IPFIXAggregationProcess testing"
+  "pkg/ovs/openflow Bridge,Table,Flow,Action,CTAction,FlowBuilder,Group,BucketBuilder,PacketOutBuilder testing"
+  "pkg/ovs/ovsconfig OVSBridgeClient testing"
+  "pkg/ovs/ovsctl OVSCtlClient testing"
+  "pkg/querier AgentNetworkPolicyInfoQuerier,AgentMulticastInfoQuerier testing"
+  "pkg/flowaggregator/querier FlowAggregatorQuerier testing"
+  "third_party/proxy Provider testing"
+)
 
-  # Command mockgen does not automatically replace variable YEAR with current year
-  # like others do, e.g. client-gen.
-  current_year=$(date +"%Y")
-  sed -i "s/YEAR/${current_year}/g" hack/boilerplate/license_header.raw.txt
-  for target in "${MOCKGEN_TARGETS[@]}"; do
-    read -r src_package interfaces dst_package_name dst_file_name <<<"${target}"
-    src_package_name=$(basename "${src_package}")
-    # Generate mocks in the same package as src if dst_file_name is ".", otherwise create a sub package.
-    if [[ "${dst_package_name}" == "." ]]; then
-      package="${src_package_name}"
-      if [ -n "${dst_file_name}" ]; then
-        destination="${src_package}/${dst_file_name}"
-      else
-        destination="${src_package}/mock_${src_package_name}_test.go"
-      fi
-    else
-      package="${dst_package_name}"
-      if [ -n "${dst_file_name}" ]; then
-        destination="${src_package}/${dst_package_name}/${dst_file_name}"
-      else
-        destination="${src_package}/${dst_package_name}/mock_${src_package_name}.go"
-      fi
-    fi
-    $GOPATH/bin/mockgen \
-      -copyright_file hack/boilerplate/license_header.raw.txt \
-      -destination "${destination}" \
-      -package "${package}" \
-      "${ANTREA_PKG}/${src_package}" "${interfaces}"
-  done
-  git checkout HEAD -- hack/boilerplate/license_header.raw.txt
-}
-
-function reset_year_change {
-  set +x
-  echo "=== Start resetting changes introduced by YEAR ==="
-  # The call to 'tac' ensures that we cannot have concurrent git processes, by
-  # waiting for the call to 'git diff  --numstat' to complete before iterating
-  # over the files and calling 'git diff ${file}'.
-  git diff  --numstat | awk '$1 == "1" && $2 == "1" {print $3}' | tac | while read file; do
-    if [[ "$(git diff ${file})" == *"-// Copyright "*" Antrea Authors"* ]]; then
-      git checkout HEAD -- "${file}"
-      echo "=== ${file} is reset ==="
-    fi
-  done
-}
+source hack/update-codegen-common.sh
 
 if [[ "$#" -eq 1 && $1 == "mockgen" ]]; then
   generate_mocks
@@ -122,77 +76,80 @@ if [[ "$#" -eq 1 && $1 == "mockgen" ]]; then
   exit 0
 fi
 
-# Generate protobuf code for CNI gRPC service with protoc.
-protoc --go_out=plugins=grpc:. pkg/apis/cni/v1beta1/cni.proto
+function generate_antrea_client_code {
+  # Generate protobuf code for CNI gRPC service with protoc.
+  protoc --go_out=plugins=grpc:. pkg/apis/cni/v1beta1/cni.proto
+  
+  # Generate clientset and apis code with K8s codegen tools.
+  $GOPATH/bin/client-gen \
+    --clientset-name versioned \
+    --input-base "${ANTREA_PKG}/pkg/apis/" \
+    --input "controlplane/v1beta2" \
+    --input "system/v1beta1" \
+    --input "crd/v1alpha1" \
+    --input "crd/v1alpha2" \
+    --input "crd/v1alpha3" \
+    --input "crd/v1beta1" \
+    --input "stats/v1alpha1" \
+    --output-package "${ANTREA_PKG}/pkg/client/clientset" \
+    --plural-exceptions "NetworkPolicyStats:NetworkPolicyStats" \
+    --plural-exceptions "AntreaNetworkPolicyStats:AntreaNetworkPolicyStats" \
+    --plural-exceptions "AntreaClusterNetworkPolicyStats:AntreaClusterNetworkPolicyStats" \
+    --plural-exceptions "ClusterGroupMembers:ClusterGroupMembers" \
+    --go-header-file hack/boilerplate/license_header.go.txt
+  
+  # Generate listers with K8s codegen tools.
+  $GOPATH/bin/lister-gen \
+    --input-dirs "${ANTREA_PKG}/pkg/apis/crd/v1alpha1" \
+    --input-dirs "${ANTREA_PKG}/pkg/apis/crd/v1alpha2" \
+    --input-dirs "${ANTREA_PKG}/pkg/apis/crd/v1alpha3" \
+    --input-dirs "${ANTREA_PKG}/pkg/apis/crd/v1beta1" \
+    --output-package "${ANTREA_PKG}/pkg/client/listers" \
+    --go-header-file hack/boilerplate/license_header.go.txt
+  
+  # Generate informers with K8s codegen tools.
+  $GOPATH/bin/informer-gen \
+    --input-dirs "${ANTREA_PKG}/pkg/apis/crd/v1alpha1" \
+    --input-dirs "${ANTREA_PKG}/pkg/apis/crd/v1alpha2" \
+    --input-dirs "${ANTREA_PKG}/pkg/apis/crd/v1alpha3" \
+    --input-dirs "${ANTREA_PKG}/pkg/apis/crd/v1beta1" \
+    --versioned-clientset-package "${ANTREA_PKG}/pkg/client/clientset/versioned" \
+    --listers-package "${ANTREA_PKG}/pkg/client/listers" \
+    --output-package "${ANTREA_PKG}/pkg/client/informers" \
+    --go-header-file hack/boilerplate/license_header.go.txt
+  
+  $GOPATH/bin/deepcopy-gen \
+    --input-dirs "${ANTREA_PKG}/pkg/apis/controlplane" \
+    --input-dirs "${ANTREA_PKG}/pkg/apis/controlplane/v1beta2" \
+    --input-dirs "${ANTREA_PKG}/pkg/apis/system/v1beta1" \
+    --input-dirs "${ANTREA_PKG}/pkg/apis/crd/v1alpha1" \
+    --input-dirs "${ANTREA_PKG}/pkg/apis/crd/v1alpha2" \
+    --input-dirs "${ANTREA_PKG}/pkg/apis/crd/v1alpha3" \
+    --input-dirs "${ANTREA_PKG}/pkg/apis/crd/v1beta1" \
+    --input-dirs "${ANTREA_PKG}/pkg/apis/stats" \
+    --input-dirs "${ANTREA_PKG}/pkg/apis/stats/v1alpha1" \
+    -O zz_generated.deepcopy \
+    --go-header-file hack/boilerplate/license_header.go.txt
+  
+  $GOPATH/bin/conversion-gen  \
+    --input-dirs "${ANTREA_PKG}/pkg/apis/controlplane/v1beta2,${ANTREA_PKG}/pkg/apis/controlplane/" \
+    --input-dirs "${ANTREA_PKG}/pkg/apis/stats/v1alpha1,${ANTREA_PKG}/pkg/apis/stats/" \
+    -O zz_generated.conversion \
+    --go-header-file hack/boilerplate/license_header.go.txt
+  
+  $GOPATH/bin/openapi-gen  \
+    --input-dirs "${ANTREA_PKG}/pkg/apis/controlplane/v1beta2" \
+    --input-dirs "${ANTREA_PKG}/pkg/apis/system/v1beta1" \
+    --input-dirs "${ANTREA_PKG}/pkg/apis/stats/v1alpha1" \
+    --input-dirs "${ANTREA_PKG}/pkg/apis/crd/v1beta1" \
+    --input-dirs "k8s.io/apimachinery/pkg/apis/meta/v1,k8s.io/apimachinery/pkg/runtime,k8s.io/apimachinery/pkg/util/intstr" \
+    --input-dirs "k8s.io/api/core/v1" \
+    --output-package "${ANTREA_PKG}/pkg/apiserver/openapi" \
+    -O zz_generated.openapi \
+    --go-header-file hack/boilerplate/license_header.go.txt
+}
 
-# Generate clientset and apis code with K8s codegen tools.
-$GOPATH/bin/client-gen \
-  --clientset-name versioned \
-  --input-base "${ANTREA_PKG}/pkg/apis/" \
-  --input "controlplane/v1beta2" \
-  --input "system/v1beta1" \
-  --input "crd/v1alpha1" \
-  --input "crd/v1alpha2" \
-  --input "crd/v1alpha3" \
-  --input "crd/v1beta1" \
-  --input "stats/v1alpha1" \
-  --output-package "${ANTREA_PKG}/pkg/client/clientset" \
-  --plural-exceptions "NetworkPolicyStats:NetworkPolicyStats" \
-  --plural-exceptions "AntreaNetworkPolicyStats:AntreaNetworkPolicyStats" \
-  --plural-exceptions "AntreaClusterNetworkPolicyStats:AntreaClusterNetworkPolicyStats" \
-  --plural-exceptions "ClusterGroupMembers:ClusterGroupMembers" \
-  --go-header-file hack/boilerplate/license_header.go.txt
-
-# Generate listers with K8s codegen tools.
-$GOPATH/bin/lister-gen \
-  --input-dirs "${ANTREA_PKG}/pkg/apis/crd/v1alpha1" \
-  --input-dirs "${ANTREA_PKG}/pkg/apis/crd/v1alpha2" \
-  --input-dirs "${ANTREA_PKG}/pkg/apis/crd/v1alpha3" \
-  --input-dirs "${ANTREA_PKG}/pkg/apis/crd/v1beta1" \
-  --output-package "${ANTREA_PKG}/pkg/client/listers" \
-  --go-header-file hack/boilerplate/license_header.go.txt
-
-# Generate informers with K8s codegen tools.
-$GOPATH/bin/informer-gen \
-  --input-dirs "${ANTREA_PKG}/pkg/apis/crd/v1alpha1" \
-  --input-dirs "${ANTREA_PKG}/pkg/apis/crd/v1alpha2" \
-  --input-dirs "${ANTREA_PKG}/pkg/apis/crd/v1alpha3" \
-  --input-dirs "${ANTREA_PKG}/pkg/apis/crd/v1beta1" \
-  --versioned-clientset-package "${ANTREA_PKG}/pkg/client/clientset/versioned" \
-  --listers-package "${ANTREA_PKG}/pkg/client/listers" \
-  --output-package "${ANTREA_PKG}/pkg/client/informers" \
-  --go-header-file hack/boilerplate/license_header.go.txt
-
-$GOPATH/bin/deepcopy-gen \
-  --input-dirs "${ANTREA_PKG}/pkg/apis/controlplane" \
-  --input-dirs "${ANTREA_PKG}/pkg/apis/controlplane/v1beta2" \
-  --input-dirs "${ANTREA_PKG}/pkg/apis/system/v1beta1" \
-  --input-dirs "${ANTREA_PKG}/pkg/apis/crd/v1alpha1" \
-  --input-dirs "${ANTREA_PKG}/pkg/apis/crd/v1alpha2" \
-  --input-dirs "${ANTREA_PKG}/pkg/apis/crd/v1alpha3" \
-  --input-dirs "${ANTREA_PKG}/pkg/apis/crd/v1beta1" \
-  --input-dirs "${ANTREA_PKG}/pkg/apis/stats" \
-  --input-dirs "${ANTREA_PKG}/pkg/apis/stats/v1alpha1" \
-  -O zz_generated.deepcopy \
-  --go-header-file hack/boilerplate/license_header.go.txt
-
-$GOPATH/bin/conversion-gen  \
-  --input-dirs "${ANTREA_PKG}/pkg/apis/controlplane/v1beta2,${ANTREA_PKG}/pkg/apis/controlplane/" \
-  --input-dirs "${ANTREA_PKG}/pkg/apis/stats/v1alpha1,${ANTREA_PKG}/pkg/apis/stats/" \
-  -O zz_generated.conversion \
-  --go-header-file hack/boilerplate/license_header.go.txt
-
-$GOPATH/bin/openapi-gen  \
-  --input-dirs "${ANTREA_PKG}/pkg/apis/controlplane/v1beta2" \
-  --input-dirs "${ANTREA_PKG}/pkg/apis/system/v1beta1" \
-  --input-dirs "${ANTREA_PKG}/pkg/apis/stats/v1alpha1" \
-  --input-dirs "${ANTREA_PKG}/pkg/apis/crd/v1beta1" \
-  --input-dirs "k8s.io/apimachinery/pkg/apis/meta/v1,k8s.io/apimachinery/pkg/runtime,k8s.io/apimachinery/pkg/util/intstr" \
-  --input-dirs "k8s.io/api/core/v1" \
-  --output-package "${ANTREA_PKG}/pkg/apiserver/openapi" \
-  -O zz_generated.openapi \
-  --go-header-file hack/boilerplate/license_header.go.txt
-
+generate_antrea_client_code
 generate_mocks
 
 # Download vendored modules to the vendor directory so it's easier to
